@@ -140,6 +140,11 @@ static short const os_nr[][3] = {
                                                  * empty path and AT_EMPTY_PATH */
   {60,               NR_fb_exit,          1},   /* exit and exit_group are one act here */
   {NR_wait4,         NR_fb_wait4,       449},
+  /* getrusage: freebsd's struct agrees through the two timevals, which is the whole
+   * of what the member reads. netbsd versioned the call away (__getrusage50) and
+   * narrowed suseconds_t with it, so it stays off the map until a box says otherwise.
+   * statfs has no row at all: all three shapes disagree past the first field. */
+  {NR_getrusage,     NR_fb_getrusage,    -1},
   {NR_kill,          NR_fb_kill,         37},
   {NR_fcntl,         NR_fb_fcntl,        92},
   {NR_fsync,         NR_fb_fsync,        95},

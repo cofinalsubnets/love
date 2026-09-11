@@ -50,7 +50,7 @@ the letter is the tool's own or POSIX and GNU spell it otherwise (`grep -h`, `du
 the long forms only. echo, test and `[` read no options at all and are not at the door;
 cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (105 tools, 108 names)
+## the inventory (107 tools, 110 names)
 
 | where | tools |
 | --- | --- |
@@ -68,14 +68,14 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | core.l, the trivia | seq yes true false basename dirname test [ uname arch nproc printf |
 | fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod install readlink cmp |
 | fs.l, the paths and the two bare calls | realpath link unlink |
-| fs.l, what they report | stat du chown mktemp |
+| fs.l, what they report | stat du df chown mktemp |
 | expr.l, the little language | expr (arithmetic, the six comparisons, \| and &, and `:` over the BRE engine) |
 | patch.l, the diff read back | patch (unified only; -pN -R -i -o --dry-run, offsets, rejects) |
 | re.l, the matcher | grep (-n -v -c -l) over the lawed BRE engine |
 | sed.l, the editor | sed (-n; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
-| proc.l, the processes and the world | env printenv sleep kill xargs date id whoami groups |
+| proc.l, the processes and the world | env printenv sleep kill xargs time date id whoami groups |
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
@@ -193,7 +193,9 @@ space.
 
 ## the process tools (a/kore/proc.l)
 
-No new nifs — environ/getenv/setenv, spawn (pid | the failure's nom; a child that cannot exec
+One nif of their own — `rusage` (i/posix.c: `(rusage who)` -> the user and sys microseconds
+of this process or of the children it has reaped) — and otherwise environ/getenv/setenv,
+spawn (pid | the failure's nom; a child that cannot exec
 _exit(127)s) + wait, still (pty.c's kill), rest (core sleep, ms). env prints the world or
 assigns K=V.. and runs the command with the child's exit; sleep sums decimal durations with
 s/m/h/d suffixes (udur, lawed); kill sends -N or -NAME (default TERM) per pid, exit 0/1; xargs
@@ -205,6 +207,13 @@ thin faces, so they read /etc/passwd and /etc/group exactly as id does. `arch` a
 live in core.l beside uname, which is the other tool that reads the machine: arch IS uname -m
 and nproc counts what /proc/cpuinfo names, which is GNU's `--all` — nothing here reads an
 affinity mask.
+
+`time [-p] CMD [ARG..]` costs a command: **real** off the wall clock, **user** and **sys** out
+of the children's rusage read on both sides of the spawn — the child is the only one reaped in
+between, so the difference is its own. Three lines on stderr, after the command's own output,
+seconds to two places; the status answered is the command's. `-p` is the spelling of the one
+face, not a switch between two. A kernel with no `rusage` row (netbsd, and inle) reports real
+and dashes the other two rather than call two zeroes a measurement.
 
 ## awk (a/kore/awk.l)
 
@@ -306,7 +315,7 @@ STRICTER than GNU's (it wants the path to exist), which is GNU's `readlink -e`; 
 the GNU-shaped door. `link` and `unlink` are the two syscalls said plainly, no face on them.
 
 `stat -c FORMAT` (or `--printf=`, which reads the escapes and adds no newline where `-c` does
-neither), `du`, `chown`, `mktemp`. They read the **stat tail**: i/posix.c's `stat` answers
+neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: i/posix.c's `stat` answers
 `(size mtime mode ns uid gid nlink blocks ino)` and `lstat` the same of the link itself. The tail
 is append-only and the KERNEL's own stat (i/kmain.c) answers the first four alone — an image
 tree has no ownership to tell about — so it is asked by `tally` and a world without it says so.
@@ -319,8 +328,20 @@ tree has no ownership to tell about — so it is asked by `tally` and a world wi
   size counts a FILE's `st_size` and a directory's **not at all**, which is GNU's rule and not a
   guess: an empty directory whose st_size is 40 reports 0. A hard link is counted once per run,
   keyed by inode alone (this stat carries no device). Like find's, the walk sorts each directory.
+* **`%N` is shell-quoted, and a link says what it points at.** `'name'`, `"name"` where the
+  only trouble is a quote of its own, `'$'\t''` for a control byte — the shell's own rules, so
+  the answer pastes back. A byte over 127 rides through: there is no locale here to tell text
+  from a stray byte, which is the one place GNU's answer and this one part.
 * **`mktemp` MAKES the name** — `openfd` mode 3 is O_EXCL at 0600, and `-d` an exclusive mkdir —
   so the answer is a fact by the time it is printed, not a proposal.
+* **`df` reads `/proc/self/mounts` and `statfs(2)`**, which is LINUX's call and no one else's:
+  the BSDs spell it over another struct and the syscall map leaves the row out, so a kernel
+  without it never gets past the mount list. 1K blocks by default, `-h` the same three-figure
+  face as `du -h`, `-i` the inode counts, `-a` the filesystems with no blocks. Every figure
+  rounds up and `Use%` is taken off the RAW counts, not the rounded ones. A filesystem whose
+  `statfs` refuses is dropped from the bare face and dashed by `-a` — a row of zeroes there
+  would read as an answer. GNU's `-a` dashes a few by TYPE (autofs and the rest of its dummy
+  list) without asking at all; this one asks, so an automount placeholder reports its zeroes.
 * **`id`'s supplementary groups are read out of `/etc/group`**: there is no `getgroups` here and
   no NSS anywhere. The primary comes first, then the rest ascending, which is the order the
   kernel keeps its credential list in and so the order GNU prints.

@@ -18,14 +18,14 @@
 ;   kore cksum|md5sum|sha256sum [-c] [F..]   the checksums (a/kore/sum.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (a/kore/fs.l)
 ;   kore realpath|link|unlink        a path made canonical, and the two bare calls
-;   kore stat|du|chown|mktemp                        ... and what they report
+;   kore stat|du|df|chown|mktemp                     ... and what they report
 ;   kore expr expression             the little language (a/kore/expr.l)
 ;   kore patch [-pN] [-R] [-i F]     unified diffs laid on a tree (a/kore/patch.l)
 ;   kore grep [-nvclqhaixwfeo] [-e P] [-m N] pattern [F..]   BRE/ERE (a/kore/re.l)
 ;   kore sed [-nEi] [-e script].. script [F..]   the stream editor (a/kore/sed.l)
 ;   kore awk [-F fs] [-v v=x].. 'PROG' [F..]     the language (a/kore/awk.l)
 ;   kore find [PATH..] [EXPR]                    the tree walk (a/kore/find.l)
-;   kore env|printenv|sleep|kill|xargs|date|id   the process and world tools
+;   kore env|printenv|sleep|kill|xargs|time|date|id   the process and world tools
 ;                                                 (a/kore/proc.l)
 ;   kore ps|free|uptime|pidof|pgrep|pkill|killall|pwdx   the /proc family
 ;   kore whoami|groups|arch|nproc    the four one-line answers
@@ -59,7 +59,7 @@
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main readlink-main realpath-main rebre refind refold
         rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main sleep-main
-        sort-main sparse split-main srun stat-main sync-main tac-main tail-main tee-main test-main
+        sort-main sparse split-main srun stat-main sync-main df-main time-main tac-main tail-main tee-main test-main
         touch-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
@@ -283,7 +283,7 @@
             'install install-main 'readlink readlink-main
             'realpath realpath-main 'link link-main 'unlink unlink-main
             'cmp cmp-main
-            'stat stat-main 'du du-main 'chown chown-main 'mktemp mktemp-main
+            'stat stat-main 'du du-main 'df df-main 'chown chown-main 'mktemp mktemp-main
             'expr expr-main 'date date-main 'id id-main
             'bc bc-main
             'patch patch-main
@@ -306,7 +306,7 @@
             'ps ps-main 'free free-main 'uptime uptime-main
             'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
             'killall killall-main 'pwdx pwdx-main
-            'kill kill-main 'xargs xargs-main
+            'kill kill-main 'xargs xargs-main 'time time-main
             ; the shell: lush's wrap registered ahead of this file in the cat, so sh-main
             ; folds here. `kore sh ..` and a /bin/sh symlink both land it (the
             ; symlink usually through lush's own seat, which fires first at
@@ -381,6 +381,7 @@
     'cmp "usage: cmp [-s] A B"
     'stat "usage: stat [-L] -c FORMAT | --printf=FORMAT   FILE.."
     'du "usage: du [-sabchk] [-d N] [FILE..]"
+    'df "usage: df [-h|-k] [-i] [-a] [-P] [FILE..]"
     'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
     'mktemp "usage: mktemp [-d] [-u] [-q] [-p DIR] [TEMPLATE]"
     'sync "usage: sync   (the bare call; no operands here)"
@@ -417,6 +418,7 @@
     'pwdx "usage: pwdx PID.."
     'kill "usage: kill [-SIG] PID.."
     'xargs "usage: xargs [-n N] [CMD ARGS..]"
+    'time "usage: time [-p] CMD [ARG..]"
     'date "usage: date [-u] [-d TIME] [-r FILE] [+FORMAT]"
     'id "usage: id [-u|-g|-G] [-n] [-r]"
     'dos2unix "usage: dos2unix [-fkqn] [FILE..]"
@@ -432,7 +434,7 @@
    korenoflag ['echo 'test (name "[") 'make 'cook 'sh 'lush]
    ; -h and -v are not free everywhere. the tools below spell one of them themselves,
    ; or posix and gnu do, so they answer the long forms only and the letter stays theirs.
-   korenoh '(grep du ls sort touch chown ln free)
+   korenoh '(grep du df ls sort touch chown ln free)
    korenov '(grep awk od join nl uname cat head tail cp mv rm ln mkdir rmdir chmod
              chown install mount umount readlink patch pgrep pkill killall)
    ; the tools that read no options at all, and the few dash words the two of them
@@ -494,6 +496,7 @@ every tool answers --help and --version, and -h and -v where the letter is free
   ps [-e] | free [-m|-g] | uptime         what /proc says about the machine
   pidof NAME.. | pgrep [-fx] PAT          .. and about who is running
   pkill [-SIG] [-fx] PAT | killall [-SIG] NAME.. | pwdx PID..
+  time [-p] CMD [ARG..]                   what a command costs: real, user, sys
   date [-u] [-d @SEC] [-r F] [+FMT]       the clock, UTC (no tz database here)
   id [-u|-g|-G] [-n]                      who this process is
   vi [FILE]                               the editor (a/vi/)
@@ -505,7 +508,7 @@ every tool answers --help and --version, and -h and -v where the letter is free
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (a/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
   realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
-  stat -c FMT | du [-sabhc] | chown | mktemp   ... and what they report
+  stat -c FMT | du [-sabhc] | df [-hia] | chown | mktemp   ... and what they report
   echo seq yes true false basename dirname     ... and the trivia
 "
    (usage _) (: _ (say err kore-usage) 2)

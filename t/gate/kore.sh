@@ -1283,6 +1283,23 @@ both "stat link"     stat -c '%n %F %A' "$dt/lk"
 both "stat -L link"  stat -L -c '%n %F %A' "$dt/lk"
 both "stat many"     stat -c '%s %n' "$dt/f1" "$dt/a/f2"
 both "stat empty"    stat -c '%F' "$dt/a/b/f3"
+# %N is the name SHELL-QUOTED and, where the stat was the LINK's, an arrow and its
+# target -- so -L drops the arrow by following. the plain name was the only one asked
+# for above, which is exactly how a link's half of %N went missing.
+both "stat %N link"    stat -c '%N' "$dt/lk"
+both "stat %N -L link" stat -L -c '%N' "$dt/lk"
+# ..and every branch of the quoting: the plain single quotes, a space inside them, the
+# quote of its own that turns the whole thing into double quotes, the pair that cannot
+# (so the quote splices instead), a byte the shell writes as $'..', and a link whose
+# TARGET takes the second face. a stray byte over 127 is the one name left out: GNU
+# reads the locale to tell text from rubbish and this quoting does not.
+qd=$ho/.kore-q; rm -rf "$qd"; mkdir -p "$qd"   # outside $dt: du walks that tree below
+: > "$qd/plain"; : > "$qd/with space"; : > "$qd/sq'ote"; : > "$qd/dq\"ote"
+: > "$qd/both'and\"q"; : > "$qd/back\\slash"; : > "$qd/dollar\$x"; : > "$qd/back\`tick"
+: > "$qd/$(printf 'tab\there')"; : > "$qd/$(printf 'a\001b')"
+ln -sf "sq'ote" "$qd/lkq"
+i=0
+for n in "$qd"/*; do i=$((i + 1)); both "stat %N q$i" stat -c '%N' "$n"; done
 # -c adds a newline and reads no escapes; --printf reads them and adds none
 both "stat --printf" stat --printf='a\t%s\n' "$dt/f1"
 korerun stat -c %s "$dt/nope" > /dev/null 2>&1; r=$?
@@ -1312,6 +1329,65 @@ both "du hard link" du -s "$dt/hl"
 rm -rf "$dt/hs"; mkdir "$dt/hs"
 for sz in 1 5000 11000 100000 1500000 20000000; do head -c $sz /dev/zero > "$dt/hs/f$sz"; done
 dusort "-ah over a scale" du -ah "$dt/hs"
+# df: the figures MOVE while the gate runs -- something on a build box is always
+# writing -- so the comparison is of what does not. the header pins the column names
+# and GNU's minimum widths, which is the fussy half; the device, the SIZE (a filesystem
+# is resized on purpose, never by accident) and the mount point pin the rest. the
+# arithmetic behind used/available/use% is lawed in t/law/kore.l, where nothing moves.
+dfstable() { awk '{ print $1, $2, $NF }'; }
+if [ -r /proc/self/mounts ]; then
+  for fl in '' -k -h -i; do
+    # shellcheck disable=SC2086
+    df $fl 2>/dev/null | dfstable > "$g"
+    # shellcheck disable=SC2086
+    korerun df $fl 2>/dev/null | dfstable > "$o"
+    same "df $fl"
+  done
+  # a named path reports the one filesystem holding it, found by the longest mount
+  # point its RESOLVED path starts with -- so a bind mount names itself, not its twin
+  for p in / "$HO" "$dt/f1"; do
+    for fl in -k -h -i; do
+      df $fl "$p" 2>/dev/null | dfstable > "$g"
+      korerun df $fl "$p" 2>/dev/null | dfstable > "$o"
+      same "df $fl $p"
+    done
+  done
+  # -a keeps the filesystems with no blocks at all. the ROWS are what both agree on:
+  # GNU dashes a few by TYPE (autofs and the rest of its dummy list) without asking
+  # statfs at all, where this one asks and reports the zeroes it hears back
+  df -a 2>/dev/null | awk '{ print $1, $NF }' | LC_ALL=C sort > "$g"
+  korerun df -a 2>/dev/null | awk '{ print $1, $NF }' | LC_ALL=C sort > "$o"
+  same "df -a rows"
+  # a missing path costs the status and prints no table at all -- a lone header would
+  # say a filesystem was found
+  korerun df "$dt/nope" > "$o" 2>/dev/null; r=$?
+  [ $r -eq 1 ] || fail "kore df missing file (exit $r)"
+  [ -s "$o" ] && fail "kore df laid a table for a missing file"
+  korerun df -Z > /dev/null 2>&1; r=$?
+  [ $r -eq 2 ] || fail "kore df unknown option (exit $r)"
+  echo "kore: df (the three faces, a named path, -a's rows, GNU's columns) ok"
+fi
+# time: the clock is the subject, so the SHAPE and the status are the check -- three
+# lines on err, seconds to two places, after the command's own output, and a real no
+# shorter than the sleep it was handed
+korerun time -p "$K" kore sleep 1 2> "$o"; r=$?
+[ $r -eq 0 ] || fail "kore time status (exit $r)"
+[ "$(wc -l < "$o")" -eq 3 ] || fail "kore time report is not three lines"
+grep -q '^real [0-9][0-9]*\.[0-9][0-9]$' "$o" || fail "kore time real"
+grep -q '^user [0-9][0-9]*\.[0-9][0-9]$' "$o" || fail "kore time user"
+grep -q '^sys [0-9][0-9]*\.[0-9][0-9]$' "$o" || fail "kore time sys"
+awk '/^real/ { exit !($2 >= 1.0) }' "$o" || fail "kore time real under the sleep"
+# the status answered is the command's, and the report comes after what it printed
+korerun time "$K" kore false > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] || fail "kore time carries the command's status (exit $r)"
+korerun time "$K" kore echo mid > "$o" 2>&1
+[ "$(head -n 1 "$o")" = mid ] || fail "kore time reported before the command's output"
+# a command that will not start costs 127, and no command at all is usage
+korerun time "$dt/nope" > /dev/null 2>&1; r=$?
+[ $r -eq 127 ] || fail "kore time missing command (exit $r)"
+korerun time > /dev/null 2>&1; r=$?
+[ $r -eq 2 ] || fail "kore time usage (exit $r)"
+echo "kore: time (the three lines, the status, the ordering, 127) ok"
 # date: -d @SECONDS is what makes this gateable at all -- `now` differs by the second
 for s in 0 1 1000000000 1700000000 1234567890 951782400 2147483647 4102444800; do
   for f in '' '+%Y-%m-%d %H:%M:%S' \

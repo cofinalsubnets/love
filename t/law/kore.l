@@ -255,7 +255,33 @@
       (= (ustamp 1700000000073610912) "2023-11-14 22:13:20.073610912 +0000")
       (= (uhuman 0) "0") (= (uhuman 1023) "1023")
       (= (uhuman 1024) "1.0K") (= (uhuman 4096) "4.0K") (= (uhuman 12288) "12K")
-      (= (uhuman 102400) "100K") (= (uhuman 1500160) "1.5M") (= (uhuman 3000000000) "2.8G")))
+      (= (uhuman 102400) "100K") (= (uhuman 1500160) "1.5M") (= (uhuman 3000000000) "2.8G")
+      ; %N's shell quoting: single quotes, double where the only trouble IS the quote,
+      ; a splice where it is not, and $'..' for a control byte
+      (= (ushq "plain") "'plain'") (= (ushq "with space") "'with space'")
+      (= (ushq "sq'ote") "\"sq'ote\"") (= (ushq "dq\"ote") "'dq\"ote'")
+      (= (ushq "both'and\"q") "'both'\\''and\"q'")
+      (= (ushq "sq'ote$x") "'sq'\\''ote$x'")   ; a $ inside "" would expand, so it splices
+      (= (ushq "back\\slash") "'back\\slash'") (= (ushq "dollar$x") "'dollar$x'")
+      (= (ushq ("tab" + string 9 + "here")) "'tab'$'\\t''here'")
+      (= (ushq ("a" + string 1 + "b")) "'a'$'\\001''b'")
+      (= (ushq "") "''")
+      ; df's arithmetic: every figure rounds UP, and a filesystem with nothing used and
+      ; nothing free has no percentage to report
+      (= (udf-up 0 1024) 0) (= (udf-up 1 1024) 1) (= (udf-up 1024 1024) 1)
+      (= (udf-up 1025 1024) 2) (= (udf-up 12123 1024) 12) (= (udf-up 113829 1024) 112)
+      (= (udf-up 5 0) 0)
+      (= (udf-pct 12123 113829) "10%") (= (udf-pct 22091993 2714191) "90%")
+      (= (udf-pct 0 1024) "0%") (= (udf-pct 1 1) "50%") (= (udf-pct 0 0) "-")
+      ; a mount line's octal escapes, read back
+      (= (udf-esc "/mnt/plain") "/mnt/plain")
+      (= (udf-esc "/mnt/a\\040b") "/mnt/a b")
+      (= (udf-esc "/mnt/a\\011b\\012c\\134d") ("/mnt/a" + string 9 + "b" + string 10 + "c\\d"))
+      (= (udf-esc "/mnt/a\\09b") "/mnt/a\\09b")     ; not three octal digits: the text stands
+      (= (udf-esc "trail\\04") "trail\\04")
+      ; time's two places, rounded to nearest
+      (= (utsec 0) "0.00") (= (utsec 5000) "0.01") (= (utsec 4999) "0.00")
+      (= (utsec 1000000) "1.00") (= (utsec 340000) "0.34") (= (utsec 90200000) "90.20")))
 
 ; --- the expr floor (a/kore/expr.l): every value is a TEXT, a text that reads as a
 ; whole number is a number where one is wanted, and the division truncates ---

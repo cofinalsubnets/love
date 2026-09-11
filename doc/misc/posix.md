@@ -66,7 +66,8 @@ processes, this surface answered against a ramfs.
 | file descriptor                | **port** via `ai_io_alloc` + the `k_sources[]` vtable  |
 | `open`/`read`/`write`/`close`  | `open`/`close` + getc/putc; `lseek` over the raw-fd `openfd` lane |
 | `dup2`/`pipe`                  | `dup` `dup2` `pipe` (a pair of fds)                    |
-| `stat`/`mkdir`/`unlink`/readdir| `stat` `lstat` `mkdir` `rmdir` `unlink` `readdir` `rename` `symlink` `readlink` `hardlink` `chmod` `chown` `utime` `umask` |
+| `stat`/`mkdir`/`unlink`/readdir| `stat` `lstat` `statfs` `mkdir` `rmdir` `unlink` `readdir` `rename` `symlink` `readlink` `hardlink` `chmod` `chown` `utime` `umask` |
+| `getrusage`                    | `rusage` — `(rusage 0)` this process, `(rusage -1)` the children reaped |
 | `cwd` — `chdir`/`getcwd`       | `chdir` `cwd`                                           |
 | signals — `sigaction`/`kill`   | **the condition system**: `signal`, `sigfd`/`sigtake`, `still` |
 | environment                    | `getenv` `setenv` `environ`; cli.l parses argv          |
@@ -109,7 +110,12 @@ whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is 
 `'eacces` unreadable). `lstat` answers the same of the LINK itself. **the tail is append-only and a reader asks `tally` before reading past
 `ns`**: the kernel's own stat (i/kmain.c) answers the first four alone, an image tree having no
 ownership to tell about, and kore's `stat`/`du` say so rather than reading a 0 someone might
-believe. `openfd`'s mode 3 is O_CREAT|O_EXCL at 0600 — the one that FAILS on an existing name,
+believe. `statfs` answers `(bsize blocks bfree bavail files ffree frsize)` of the filesystem
+holding a path, which `df` lays out — LINUX's call and no one else's: the BSDs spell it over
+another struct, the syscall map leaves the row out, and one asks and hears `'enosys`. `rusage`
+is the same shape of question about cpu: `(user sys)` in microseconds, of this process (0) or of
+the children it has reaped (-1), which is how `time` prices a command it did not itself run.
+`openfd`'s mode 3 is O_CREAT|O_EXCL at 0600 — the one that FAILS on an existing name,
 which is what makes a `mktemp` a claim and not a guess. `spawn` answers a pid or the
 failure's nom, and a child that cannot exec `_exit(127)`s. `setenv` with a non-string value
 unsets (the absence lane). Wrap at the call boundary — readdir/stat struct layouts and errno

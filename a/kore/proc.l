@@ -576,5 +576,35 @@
               (go >rs (? (w = 127) 127
                               (w && !(bad = 127)) 123
                               bad))))
-       (go runs 0)))
+       (go runs 0))
+
+   ; -- time: what a command costs. real off the wall clock; user and sys out of the
+   ; rusage the kernel keeps for reaped children, read on both sides of the spawn --
+   ; the child is the only one reaped in between, so the difference is its own. the
+   ; three lines go to err, after the command's own output, and the status answered is
+   ; the command's (127 for one that would not start). one face, posix's: -p is the
+   ; spelling for it and not a switch, there being no second format to choose.
+   ; a kernel with no rusage row (netbsd, and inle) reports the real line and dashes the
+   ; other two, rather than call a pair of zeroes a measurement.
+   (utsec us)                          ; microseconds -> seconds, two places
+    (: cs (// (us + 5000) 10000)
+       ((show (// cs 100)) + "." + (uzpad 2 (show (% cs 100)))))
+   (utline nm v) (: _ (say err (nm + " " + v)) (put err 10))
+   (time-main as)
+    (: cmd (? (two? as && (<as = "-p")) >as as)
+       _ (? (two? cmd) () (udie 2 "usage: time [-p] CMD [ARG..]"))
+       r0 (rusage -1)
+       t0 (clock 0)
+       p (spawn cmd)
+       st (? (nom? p) 127 (wait p))
+       ms (clock t0)
+       r1 (rusage -1)
+       cpu? ((two? r0) && (two? r1))
+       _ (? (nom? p) (: _ (say err ("time: cannot run " + <cmd)) (put err 10)) ())
+       _ (flush out)
+       _ (utline "real" (utsec (ms * 1000)))
+       _ (? cpu? (: _ (utline "user" (utsec (<r1 - <r0)))
+                     (utline "sys" (utsec (<>r1 - <>r0))))
+            (: _ (utline "user" "-") (utline "sys" "-")))
+       st))
 ) ; module 'kore

@@ -525,6 +525,34 @@
    ; and birth times and a device number, and this stat carries none of them -- printing
    ; a block with the modify time standing in three times over would be a fabrication,
    ; so the tool asks for -c instead of inventing one.
+   ; %N is the name shell-quoted, and a link's own target after an arrow.
+   ; the quoting is the shell's: single quotes, '\'' for a quote of its own, $'\t' for a
+   ; control byte, and double quotes for a name whose only trouble IS the quote. a byte
+   ; over 127 rides through -- there is no locale here to tell text from a stray byte,
+   ; and text is what a name usually is.
+   (ushq-esc c)                        ; the text after the backslash in $'..'
+    (c @ 7 "a" 8 "b" 9 "t" 10 "n" 11 "v" 12 "f" 13 "r" (uzpad 3 (uradix c 8)))
+   (ushq-ctl? c) (c < 32 || c = 127)
+   (ushq w)
+    (: n #w
+       (scan k q? hard?)                ; holds a quote? holds anything a "" would escape?
+        (? (n <= k) [q? hard?]
+           (: c (w k)
+              (scan (k + 1) (q? || c = 39)
+                    (hard? || (ushq-ctl? c) || elem c '(34 36 92 96)))))
+       (sq k o)
+        (? (n <= k) (slurp o)
+           (: c (w k)
+              _ (? (c = 39) (say o "'\\''")
+                   (ushq-ctl? c) (say o ("'$'\\" + (ushq-esc c) + "''"))
+                   (put o c))
+              (sq (k + 1) o)))
+       r (scan 0 0 0)
+       (? (<r && !<>r) ("\"" + w + "\"") ("'" + (sq 0 (jug 0)) + "'")))
+   (ust-name p md)
+    (: q (ushq p)
+       (? !(40960 = md & 61440) q
+          (: t (readlink p) (? (string? t) (q + " -> " + (ushq t)) q))))
    (ust-kindc m) (m & 61440 @
     32768 "-" 16384 "d" 40960 "l" 8192 "c"
     24576 "b" 4096 "p" 49152 "s"
@@ -569,7 +597,7 @@
        (fmt (k + 1) @
         37 (put o 37)
         110 (say o p)
-        78 (say o ("'" + p + "'"))
+        78 (say o (ust-name p md))
         115 (say o (show sz))
         98 (say o (num blk))
         66 (say o "512")
@@ -671,6 +699,101 @@
        (c? && emit total "total",
         flush out,
         !!(peep t 'bad 0)))
+
+   ; -- df: what each filesystem holds. the mount list is /proc/self/mounts, the same
+   ; place `mount` reads and the only one there is here, and the numbers are statfs(2)'s
+   ; -- linux's call alone, so a kernel without it never gets past the mount list.
+   ; 1K blocks by default; -h the three-figure human face du -h already spells, -i the
+   ; inode counts instead, -a the filesystems with no blocks at all (proc, sysfs, the
+   ; cgroups), which the bare face drops the way GNU's does. every figure rounds UP, and
+   ; Use% is taken off the raw counts rather than the rounded ones -- a filesystem whose
+   ; used and available are both nothing has no percentage, and says so with a dash.
+   ; a named FILE reports the one filesystem holding it: statfs answers the numbers, and
+   ; the longest mount point its resolved path starts with names the device.
+   ; every mount here is asked, GNU's -a dashes a few by TYPE (autofs and the rest of its
+   ; dummy list) without asking at all -- so an automount placeholder reports the zeroes
+   ; statfs really answered instead of a dash.
+   (udf-esc w)                         ; a mount line's \040 \011 \012 \134, read back
+    (: n #w o (jug 0)
+       (oct? c) ((47 < c) && (c < 56))
+       (go k) (? (n <= k) (slurp o)
+                 (: a (? (k + 3 < n && w k = 92) (w (k + 1)) 0)
+                    b (? a (w (k + 2)) 0) c (? a (w (k + 3)) 0)
+                    (? ((oct? a) && (oct? b) && (oct? c))
+                       (: _ (put o (((a - 48) * 64 + (b - 48) * 8) + (c - 48))) (go (k + 4)))
+                       (: _ (put o (w k)) (go (k + 1))))))
+       (go 0))
+   (udf-mounts _)                      ; ((dev point)..) in the kernel's order, or ()
+    (: r (uread "/proc/self/mounts")
+       (go l acc) (? !(two? l) (rev acc)
+                     (: w (words <l)
+                        (go >l (? (2 <= #w) ([(udf-esc (w 0)) (udf-esc (w 1))] . acc) acc))))
+       (? (two? r) (go (filter (\ s #s) (lines <>r)) ()) ()))
+   (udf-up a b) (? (b <= 0) 0 ((a + b - 1) // b))
+   (udf-pct u a) (? ((u + a) <= 0) "-" ((show (udf-up (u * 100) (u + a))) + "%"))
+   (udf-cells dev pt fs h? i?)         ; a statfs tuple -> the six cells of its row
+    (: bs (fs 0) blk (fs 1) fre (fs 2) av (fs 3) ino (fs 4) ifr (fs 5)
+       frs (: f (fs 6) (? ((charm? f) && (0 < f)) f bs))
+       (sz n) (? h? (uhuman (n * frs)) (show (udf-up (n * frs) 1024)))
+       (? i? [dev (show ino) (show (ino - ifr)) (show ifr) (udf-pct (ino - ifr) ifr) pt]
+          [dev (sz blk) (sz (blk - fre)) (sz av) (udf-pct (blk - fre) av) pt]))
+   ; the table: every column as wide as its widest cell but never under the floor below,
+   ; one space between, the ends ragged -- the first column reads left and the last is
+   ; never padded at all. the floors are GNU's, and they are why a table of short names
+   ; still lines up with one of long ones.
+   udf-min '(14 5 5 5 4 0)
+   (udf-show rows)
+    (: n #<rows
+       ws (map (\ k (foldl (\ w r (: c #(r k) (? (w < c) c w))) (udf-min k) rows)) ^n)
+       (line r) (: (go k acc) (? (n <= k) acc
+                                 (: s (r k)
+                                    p (? (k + 1 = n) s (? k (upad (ws k) s) (urpad (ws k) s)))
+                                    (go (k + 1) (? k (acc + " " + p) p))))
+                   (go 0 ""))
+       (go rs) (? (two? rs) (: _ (say out (line <rs)) _ (put out 10) (go >rs)) 0)
+       (go rows))
+   (df-main as)
+    (: t {}
+       (fl a fs) (? (one? a) (rev fs)
+                    (#<a < 2 || <a 0 != 45) (fl >a (<a . fs))
+                    (:- (cl 1) w <a (cl k) (#w <= k ? (fl >a fs) (w k @
+                     104 (pin t 'h 1, cl (k + 1))
+                     105 (pin t 'i 1, cl (k + 1))
+                     97 (pin t 'a 1, cl (k + 1))
+                     107 (cl (k + 1))   ; -k is the default, and -P names this very face
+                     80 (cl (k + 1))    ; (posix's, and the only one laid out here)
+                     c (udie 2 $ "df: unknown option -" + string c)))))
+       fs (fl as ())
+       h? (t 'h) i? (t 'i) a? (t 'a)
+       hdr (? i? '("Filesystem" "Inodes" "IUsed" "IFree" "IUse%" "Mounted on")
+              h? '("Filesystem" "Size" "Used" "Avail" "Use%" "Mounted on")
+              '("Filesystem" "1K-blocks" "Used" "Available" "Use%" "Mounted on"))
+       ms (udf-mounts ())
+       _ (? ((two? fs) || (two? ms)) () (udie 1 "df: cannot read /proc/self/mounts"))
+       (holds p)                        ; the mount point p sits under, longest first
+        (: c (: q (rp-canon p 40) (? (two? q) <>q p))
+           (fits m) (: pt <>m n #pt
+                       ((snip c 0 n = pt) && ((n = #c) || (pt = "/") || (c n = 47))))
+           (foldl (\ b m (? ((fits m) && ((nil? b) || (#<>b < #<>m))) m b)) () ms))
+       (named p acc)
+        (: r (statfs p)
+           (? (two? r) (: m (holds p) ((udf-cells (? m <m "-") (? m <>m p) r h? i?) . acc))
+              (: _ (say err ("df: " + p + ": "
+                             + (? (= r 'eacces) "Permission denied" "No such file or directory")))
+                 _ (put err 10) _ (pin t 'bad 1) acc)))
+       ; a filesystem the call refuses (a mount someone else owns) is dropped from the
+       ; bare face and kept by -a, its figures dashed -- there is nothing to report and
+       ; a row of zeroes would read as an answer.
+       (scan mm acc)
+        (? !(two? mm) acc
+           (: m <mm r (statfs <>m)
+              (scan >mm (? (two? r) (? (a? || (r 1)) ((udf-cells <m <>m r h? i?) . acc) acc)
+                           a? ([<m "-" "-" "-" "-" <>m] . acc)
+                           acc))))
+       rows (rev (? (two? fs) (foldl (\ a p (named p a)) () fs) (scan ms ())))
+       _ (? (two? rows) (udf-show (hdr . rows)) ())
+       _ (flush out)
+       !!(peep t 'bad 0))
 
    ; -- chown: owner[:group] onto every named path, -R down the tree. a name is looked
    ; up in /etc/passwd / /etc/group, a numeral is taken as itself, and an empty side is

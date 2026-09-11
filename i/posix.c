@@ -31,6 +31,7 @@
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <sys/mman.h>       // madvise (the spawn guard)
+#include <sys/resource.h>   // getrusage, RUSAGE_SELF/CHILDREN (the cpu clocks)
 #include <time.h>           // clock_gettime, for ai_clock
 
 // --- what this LIBC carries, asked once -------------------------------------
@@ -59,6 +60,7 @@
 #if defined(__moonlibc__) || defined(__linux__)
 # define LvHaveMount      1
 # define LvHaveNamespaces 1
+# define LvHaveStatfs     1   // linux's struct; the BSDs carry the name over another shape
 #endif
 
 #if defined(LvHaveSignalfd)
@@ -75,6 +77,9 @@
 #endif
 #if defined(LvHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
+#endif
+#if defined(LvHaveStatfs)
+#include <sys/vfs.h>        // statfs(2), the block and inode counts df reports
 #endif
 // OUTSIDE every guard: what follows is called unconditionally below (argv_marshal,
 // sigtake, the pty pair), so putting any of it under one kernel's feature is a build that
@@ -791,6 +796,56 @@ static lvm(lvm_posix_lstat) {
 static lvm(lvm_posix_stat) {
  LvmCall(g, host_posix_stat) }
 
+// (statfs path) -> (bsize blocks bfree bavail files ffree frsize) | a nom | 'badarg.
+//                  what the filesystem holding the path has, in blocks of frsize (bsize
+//                  where a kernel leaves frsize at 0). bavail is what an ordinary user
+//                  may still take and sits under bfree by the reserve root keeps -- df
+//                  reports both, and its Use% is the reserve's side of the difference.
+//                  files/ffree are the inode counts, 0 where the filesystem has none.
+//                  linux's shape alone: the BSDs spell the call over another struct, and
+//                  the syscall map leaves the row out, so one asks and hears 'enosys.
+#if defined(LvHaveStatfs)
+ai_noinline static struct ai *host_posix_statfs(struct ai *g) {
+ char const *p = str_c(g->sp[0]);
+ if (!p) return g->sp[0] = ai_badarg(g), g;
+ struct statfs fs;
+ if (statfs(p, &fs)) return g->sp[0] = ai_err(g, errno), g;
+ if (!ai_ok(g = ai_have(g, 7 * Width(struct ai_chain)))) return g;
+ size_t const C = Width(struct ai_chain);
+ struct ai_chain *c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_frsize), ZeroPoint);
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_ffree), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_files), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_bavail), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_bfree), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_blocks), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_bsize), word(c));
+ return g->sp[0] = word(c), g; }
+#else
+ai_noinline static struct ai *host_posix_statfs(struct ai *g) {
+ return g->sp[0] = ai_err(g, ENOSYS), g; }
+#endif
+static lvm(lvm_posix_statfs) {
+ LvmCall(g, host_posix_statfs) }
+
+// (rusage who) -> (user sys), cpu microseconds. who: 0 this process, -1 the children
+//                 it has already reaped. `time` reads the children's pair on either
+//                 side of a spawn and prints the difference -- the child is the only
+//                 one reaped in between, so the difference is the child's.
+ai_noinline static struct ai *host_posix_rusage(struct ai *g) {
+ word x = g->sp[0];
+ if (!charmp(x)) return g->sp[0] = ai_badarg(g), g;
+ struct rusage ru;
+ if (getrusage((int) getcharm(x), &ru)) return g->sp[0] = ai_err(g, errno), g;
+ intptr_t u = (intptr_t) ru.ru_utime.tv_sec * 1000000 + ru.ru_utime.tv_usec,
+          s = (intptr_t) ru.ru_stime.tv_sec * 1000000 + ru.ru_stime.tv_usec;
+ if (!ai_ok(g = ai_have(g, 2 * Width(struct ai_chain)))) return g;
+ size_t const C = Width(struct ai_chain);
+ struct ai_chain *c = ini_chain(bump(g, C), putcharm(s), ZeroPoint);
+ c = ini_chain(bump(g, C), putcharm(u), word(c));
+ return g->sp[0] = word(c), g; }
+static lvm(lvm_posix_rusage) {
+ LvmCall(g, host_posix_rusage) }
+
 static ai_inline struct ai *host_posix_readdir(struct ai *g) {
  char const *p = str_c(g->sp[0]);
  if (!p) return g->sp[0] = ai_badarg(g), g;
@@ -891,6 +946,8 @@ static union u const
   nif_newns[]   = {{lvm_newns}, {lvm_ret0}},
   nif_posix_stat[]    = {{lvm_posix_stat}, {lvm_ret0}},
   nif_posix_lstat[]   = {{lvm_posix_lstat}, {lvm_ret0}},
+  nif_posix_statfs[]  = {{lvm_posix_statfs}, {lvm_ret0}},
+  nif_posix_rusage[]  = {{lvm_posix_rusage}, {lvm_ret0}},
   nif_posix_readdir[] = {{lvm_posix_readdir}, {lvm_ret0}},
   nif_posix_unlink[]  = {{lvm_posix_unlink}, {lvm_ret0}},
   nif_posix_lseek[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lseek}, {lvm_ret0}},
@@ -939,6 +996,8 @@ LvNif("mknod", nif_mknod, "posix");
 LvNif("newns", nif_newns, "posix");
 LvNif("stat", nif_posix_stat, "posix");
 LvNif("lstat", nif_posix_lstat, "posix");
+LvNif("statfs", nif_posix_statfs, "posix");
+LvNif("rusage", nif_posix_rusage, "posix");
 LvNif("readdir", nif_posix_readdir, "posix");
 LvNif("unlink", nif_posix_unlink, "posix");
 LvNif("lseek", nif_posix_lseek, "posix");

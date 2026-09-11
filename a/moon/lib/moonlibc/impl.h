@@ -126,6 +126,7 @@ struct _IO_FILE {
 #define NR_fb_execve         59
 #define NR_fb_fexecve       492   /* nb: 465, the os_nr row. both BSDs have the call */
 #define NR_fb_wait4           7
+#define NR_fb_getrusage     117   /* the first two timevals agree, which is all a caller reads */
 #define NR_fb_kill           37
 #define NR_fb_fcntl          92
 #define NR_fb_fsync          95
@@ -256,6 +257,9 @@ struct _IO_FILE {
 #define NR_mprotect       226
 #define NR_madvise        233
 #define NR_wait4          260
+#define NR_getrusage      165
+#define NR_statfs          43
+#define NR_fstatfs         44
 #define NR_memfd_create   279
 #define NR_execveat       281
 #else
@@ -299,6 +303,9 @@ struct _IO_FILE {
 #define NR_execve          59
 #define NR_execveat       322
 #define NR_wait4           61
+#define NR_getrusage       98
+#define NR_statfs         137
+#define NR_fstatfs        138
 #define NR_kill            62
 #define NR_fcntl           72
 #define NR_fsync           74
