@@ -1837,6 +1837,93 @@
 
 ) ; module 're
 
+; grid -- a list of cells laid across a terminal, ls's shape. the columns are
+; RAGGED, each as wide as its own entries, and the count is the largest whose
+; ragged widths still fit; the fill runs DOWN the columns (ls's own order, where
+; sorted reads top to bottom) or ACROSS the rows (ls -x). a cell is (text . width)
+; because sgr colour parts the two -- the escape bytes sit in the text and take up
+; no screen. answers the lines, with no trailing blanks: a row's pad is written
+; ahead of the NEXT cell and never behind the last one on the row.
+; this is GNU's own search and its tab-eliding pad, not an approximation of either,
+; so `ls -C` and `ls -x` compare byte for byte (t/gate/lscmp.sh).
+(module '(grid lay screen)
+(: gmin 3                            ; the narrowest a column may be: one char and its gap
+   gpad 2                            ; the gap between two columns
+   gtab 8                            ; the pad rides tab stops where two fit, as GNU's does
+   (gind f t) (? (t <= f) ""
+                 ((f + 1) // gtab < t // gtab) ("\t" + gind (f + gtab - (f % gtab)) t)
+                 (" " + gind (f + 1) t))
+   ; the cells by index: both walks JUMP, so a list would cost a walk per cell
+   (gvec cs) (: t {}
+                (go l j) (? !(two? l) t (: _ (pin t j <l) (go >l (j + 1))))
+                (go cs 0))
+   ; the slot cell j takes when the row is i+1 columns wide
+   (gslot j i n down?) (? down? (j // ((n + i) // (i + 1))) (j % (i + 1)))
+   ; the search: every column count is measured over ONE pass of the cells, and a
+   ; count dies the moment its running line outgrows w -- a dead one is never
+   ; revived, which is what keeps the pass single. the slot widths ride a tablet
+   ; keyed (count * mx + slot), a list per count per cell being that work squared.
+   ; answers the widths of the widest count that lived; one column always does.
+   (gfit cs n w down?)
+    (: mx (: m (w // gmin) (? (m < 1) 1 (m < n) m n))
+       aw {}                         ; a slot's width so far, gmin until something widens it
+       ln {}                         ; the line a count of i+1 has claimed
+       ok {}                         ; is it still inside w?
+       (gwide j i c)
+        (: k (gslot j i n down?)
+           r (>c + (? (k = i) 0 gpad))            ; the last column on a row owes no gap
+           o (peep aw ((i * mx) + k) gmin)
+           (? (o < r) (: l ((peep ln i (gmin * (i + 1))) + r - o)
+                         _ (pin aw ((i * mx) + k) r)
+                         _ (pin ln i l)
+                         (pin ok i (l < w)))
+              ()))
+       (gone c j i) (? (mx <= i) ()
+                       (: _ (? (peep ok i 1) (gwide j i c) ()) (gone c j (i + 1))))
+       (gall l j) (? !(two? l) () (: _ (gone <l j 0) (gall >l (j + 1))))
+       _ (gall cs 0)
+       (gpick i) (? (i < 1) 1 (peep ok i 1) (i + 1) (gpick (i - 1)))
+       k (gpick (mx - 1))
+       (gwid j) (? (k <= j) () ((peep aw (((k - 1) * mx) + j) gmin) . (gwid (j + 1))))
+       (gwid 0))
+   ; down the columns: a row is cell r, r + rows, r + 2 * rows, ..
+   (gdown v n cw)
+    (: rows ((n + #cw - 1) // #cw)
+       (row j col pos acc)
+        (: c (v j) s (acc + <c) nj (j + rows)
+           (? (n <= nj) s
+              (: mw (cw col)
+                 (row nj (col + 1) (pos + mw) (s + gind (pos + >c) (pos + mw))))))
+       (go r) (? (rows <= r) () ((row r 0 0 "") . (go (r + 1))))
+       (go 0))
+   ; across the rows: a row is a run of #cw cells, in order
+   (gacross v n cw)
+    (: k #cw
+       (row j col pos acc)
+        (: c (v j) s (acc + <c) nj (j + 1)
+           (? (n <= nj) s
+              (k <= col + 1) s
+              (: mw (cw col)
+                 (row nj (col + 1) (pos + mw) (s + gind (pos + >c) (pos + mw))))))
+       (go j) (? (n <= j) () ((row j 0 0 "") . (go (j + k))))
+       (go 0))
+   ; (screen fd) -- how wide the screen on fd is: $COLUMNS, then the terminal itself
+   ; where fd is one (GNU's order, and what lets a gate pin a width with no terminal
+   ; to ask), 80 where neither says. a COLUMNS that is not a plain count is ignored.
+   (screen fd)
+    (: e (getenv "COLUMNS")
+       c (? (string? e) (: n ((cite 'cli 'unum) e) (? (charm? n && 0 < n) n 80)) 80)
+       t (tty fd)
+       (? (two? t && 0 < >t) >t c))
+   ; (lay cs w down?) -- the cells over a terminal w columns wide, as lines
+   (lay cs w down?)
+    (: n #cs
+       (? (n < 1) ()
+          (: cw (gfit cs n w down?) v (gvec cs)
+             (? down? (gdown v n cw) (gacross v n cw))))))
+
+) ; module grid
+
 ; verbs -- the registry behind `love mooncc ..`, `love cook ..`, and a `sed` symlink onto
 ; the artifact. one symbol-keyed tablet, mutated in place: (cite 'verbs 'tab) hands the
 ; real tablet, not a copy, and `pin` is the door. registered, never spliced -- tab/word/
@@ -1872,16 +1959,23 @@
    ; ..and never the artifact's own name: argv[0] `love` is THIS BINARY, not a verb
    ; called love, so the front door keeps its flags, its tty test and its stdin.
    (seat p)  (: w (bn p) (w = "love" ? () (get (name w))))
-   (putln k) (puts (string k), putc 10)
-   ; `love verbs` -- one name per line, for a pipe. sorted: a tablet's key order is its own
-   ; business and would read like a change.
+   ; the listing: a grid onto a terminal, one name a line into a pipe, so
+   ; `love verbs | grep` reads what it always read. the grid is ls's own (grid).
+   (vlist ks) (: ns (map string ks)
+                 G (cite 'grid)
+                 (? (two? (tty 1))
+                    (each ((G 'lay) (map (\ n (n . #n)) ns) ((G 'screen) 1) 1)
+                          (\ l (puts l, putc 10)))
+                    (each ns (\ n (puts n, putc 10)))))
+   ; `love verbs` -- the names this artifact answers to. sorted: a tablet's key order is
+   ; its own business and would read like a change.
    (vsort ws) (ws @- ws (p . s)
                (: r (vsort s)
                 (ins x l) (l @- [x] (a . u) (string x < string a ? (x . l) (a . ins x u)))
                 (ins p r)))
    ; the lister reads nothing: --help says the one line, any other word is a mistake
    _ (pin tab 'verbs
-        (\ as (? !(two? as) (map putln * vsort $ keys tab, flush out)
+        (\ as (? !(two? as) (vlist (vsort (keys tab)), flush out)
                  (<as = "--help")
                   (puts "usage: verbs   (the names this artifact answers to)\n", flush out, 0)
                  (say err ("verbs: unknown option " + <as + "\n"), flush err, 2))))

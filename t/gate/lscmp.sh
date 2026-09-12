@@ -8,9 +8,15 @@
 #
 # the tree is BUILT here, never a real directory: a stray file, an ACL or an
 # SELinux label would move GNU's mode column by one character and read as a bug.
+#
+# the grid rows set COLUMNS on both sides, which is the only way to compare a
+# layout at all: neither ls columns into a pipe unless asked, and $COLUMNS is
+# what both read when there is no terminal to ask. TABSIZE is unset for the same
+# reason -- the pad elides onto tab stops and ours are 8, GNU's default.
 set -u
 m=${1:-./b/love}
 LC_ALL=C TZ=UTC; export LC_ALL TZ
+unset COLUMNS TABSIZE 2>/dev/null || :
 w=${TMPDIR:-/tmp}/lscmp.$$; mkdir -p "$w"; trap 'rm -rf "$w"' EXIT
 fail=0; ran=0
 
@@ -43,6 +49,13 @@ try() {   # try FLAGS.. -- the tree is the last operand unless one is given
   fi
 }
 
+tryw() {  # tryw COLS FLAGS.. -- the same row with $COLUMNS pinned on both sides
+  cols=$1; shift
+  COLUMNS=$cols; export COLUMNS
+  try "$@"
+  unset COLUMNS
+}
+
 for f in "" -a -A -l -la -al -lA -1 -r -lr -t -lt -ltr -d -ld; do
   # shellcheck disable=SC2086
   try $f "$t"
@@ -65,6 +78,23 @@ try -l "$t/old"
 # what is not there
 try "$w/nope"
 try -l "$t/a" "$w/nope"
+
+# -C down and -x across, over a width sweep: 1 and 2 are narrower than a column
+# may be, 24 and 80 straddle the longest name, and the odd ones catch a pad that
+# rounds onto a tab stop it did not earn.
+for c in 1 2 3 5 8 9 16 17 23 24 25 31 32 33 40 60 79 80 81 120 200; do
+  tryw "$c" -C "$t"
+  tryw "$c" -x "$t"
+  tryw "$c" -aC "$t"
+  tryw "$c" -Cr "$t"
+  tryw "$c" -Ct "$t"
+done
+# -1 wins over a grid, and the command-line block grids the same way a directory does
+tryw 40 -1 "$t"
+tryw 40 -C "$t/a" "$t/bbb" "$t/zero"
+tryw 40 -x "$t/a" "$t/bbb" "$t/zero"
+tryw 40 -C "$t/a" "$t/sub"
+tryw 12 -C "$t/empty"
 
 echo "lscmp: $ran rows, $fail failed"
 [ "$fail" = 0 ]

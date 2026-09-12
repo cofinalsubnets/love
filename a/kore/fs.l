@@ -104,8 +104,13 @@
    ; a file argument answers its own name --
    ;   -a all   -A all but . and ..   -l long   -d the directory itself
    ;   -r reverse   -t newest first
-   ;   -1 one per line, which is what this ls always does: GNU writes one name a line
-   ;      whenever stdout is not a terminal, and columns are still absent here
+   ;   -1 one per line   -C columns down   -x columns across
+   ; the format with none of those spelled is the terminal's: columns onto one, a
+   ; name a line into a pipe. GNU lets the LAST format flag win; uopt keeps presence
+   ; and not order, so they rank instead -- -l, then -1, then -x, then -C.
+   ; the screen and the grid on it are both grid's: $COLUMNS then the terminal, ragged
+   ; columns, a pad that elides onto tab stops. all three are GNU's own and not an
+   ; imitation of them, and t/gate/lscmp.sh is where the two are compared.
    ; several operands print GNU's `name:` headers, files before directories.
    ; THE LONG ROW'S CLOCK IS UTC. this tree carries no timezone database (see
    ; date's own note), so `ls -l` reads local time only where local time is UTC, and
@@ -113,8 +118,8 @@
    ; colour is automatic and goes only onto a terminal -- (tty 1) answers a pair for
    ; one and 'enotty for anything else, so a pipe keeps the plain name and `ls | grep`
    ; reads what it always read. there is no --color to ask for it or refuse it.
-   ; absent and said so: -C/-x columns, -R, -S, -h, -i and -F.
-   uls-opts "aAldrt1"
+   ; absent and said so: -R, -S, -h, -i and -F.
+   uls-opts "aACldrtx1"
    ; GNU shows the clock for the last six months and the year outside them. six
    ; months is 31556952/2 -- the average Gregorian year halved, coreutils' own
    ; constant, not 180 days.
@@ -153,6 +158,12 @@
      (show <st)
      (uls-when (// (st 3) 1000000000) now)
      (uls-nom p nm (st 2) (? tty? (uls-hue p (st 2)) ""))]
+   ; the names as a grid. a cell's width is the NAME's and not the coloured text's:
+   ; the sgr bytes ride along and take up no screen.
+   (uls-grid es tty? w down?)
+    (: cs (map (\ e ((uls-name e tty?) . #<e)) es)
+       (go l) (? !(two? l) () (: _ (say out <l) _ (put out 10) (go >l)))
+       (go ((cite 'grid 'lay) cs w down?)))
    (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)
    ; the widths come from `ws` and not from `rs`. GNU sizes the command-line block's
    ; columns over EVERY operand, directories included -- even though a directory
@@ -190,13 +201,18 @@
        _ (: k (uoptun t uls-opts) (? (nil? k) () (udie 2 ("ls: unknown option -- " + (string k)))))
        a? (peep t 97 0) aa? (peep t 65 0) l? (peep t 108 0) d? (peep t 100 0)
        r? (peep t 114 0) tm? (peep t 116 0)
+       c? (peep t 67 0) x? (peep t 120 0) o1? (peep t 49 0)
        now (// (clock 0) 1000)
        tty? (two? (tty 1))                  ; colour only onto a terminal
+       w ((cite 'grid 'screen) 1)
+       grid? (? l? 0 o1? 0 (x? || c? || tty?) 1 0)
+       down? !x?
        fs (? (two? ops) ops '("."))
        hdr? (two? >fs)
        (rows es) (map (\ e (uls-row (e 2) <e <>e now tty?)) es)
-       (show1 es ws0)                    ; a run of entries, long or bare
+       (show1 es ws0)                    ; a run of entries: long, gridded, or a name a line
         (? l? (uls-emit (rows es) ws0)
+           grid? (uls-grid es tty? w down?)
            (: (go l) (? !(two? l) ()
                         (: e <l _ (say out (uls-name e tty?)) _ (put out 10) (go >l)))
               (go es)))
