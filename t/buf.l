@@ -36,3 +36,57 @@
 
  ; --- a cask equals itself; law.l's =-total corpus carries no cask, so it is said here ---
  (: b (cask 2) (b = b)))
+
+; --- peepv / pinv: a whole tray in or out, at a width and a stride -------------------
+; the range doors above move bytes; these move ELEMENTS, and carry the two numbers a byte
+; run cannot -- how wide one is and how far apart they sit. a stride wider than the width
+; is an interleave, which is the shape a frame of stereo PCM has (a/harp/play.l's pack
+; lays each channel with one call). they sit in `guts` beside peepw/pinw and are read the
+; same way: through cite, never a (borrow 'guts) splice, the corpus being one scope. the
+; bootstrap egg never mops, so ask the module first and the book after.
+(: bufv-G (cite 'guts)
+   (bufv k) (: v (? (tablet? bufv-G) (peep bufv-G k ())) (nil? v ? (book k) v))
+   lay (bufv 'pinv)  see (bufv 'peepv)
+   neg (0 - 1)
+   _ (test lay see)
+
+   ; a run laid contiguously reads back as itself, and the lay answers the cask it wrote
+   _ (: c (cask 16) v ((iota 4) + 1)
+        g (: _ (test (c = lay c 0 4 4 v)) (see c 0 4 4 4))
+        (test (4 = #g) (1 = peep g 0 0) (2 = peep g 1 0) (4 = peep g 3 0)))
+
+   ; little-endian, low bytes first: 0x01020304 lands 04 03 02 01
+   _ (: c (cask 4) _ (lay c 0 4 4 ((iota 1) + 16909060))
+        (test (4 = peep c 0 0) (3 = peep c 1 0) (2 = peep c 2 0) (1 = peep c 3 0)))
+
+   ; a stride wider than the width INTERLEAVES: two channels into one frame run, and each
+   ; reads back on its own -- which is the whole reason the door carries a stride
+   _ (: c (cask 16) l ((iota 4) + 10) r ((iota 4) + 20)
+        _ (lay c 0 2 4 l)  _ (lay c 2 2 4 r)
+        gl (see c 0 2 4 4)  gr (see c 2 2 4 4)
+        (test (10 = peep gl 0 0) (13 = peep gl 3 0)
+              (20 = peep gr 0 0) (23 = peep gr 3 0)))
+
+   ; a float element truncates TOWARD ZERO, the answer `int` gives -- so a tray of samples
+   ; goes down with no pass to round it, and the low bytes are what a narrow width keeps
+   _ (: c (cask 8) t (((iota 4) - 2) * 1.5)           ; -3.0 -1.5 0.0 1.5
+        _ (lay c 0 2 2 t)
+        g (see c 0 2 2 4)
+        (test (65533 = peep g 0 0) (65535 = peep g 1 0)
+              (0 = peep g 2 0) (1 = peep g 3 0)))
+
+   ; the empty run fits anywhere inside the cask, and lays nothing
+   _ (: c (cask 4) (test (c = lay c 4 1 1 (iota 0))))
+
+   ; misuse is the silent () these doors answer, never a trampled heap
+   _ (: c (cask 8) v ((iota 2) + 1)
+        (test !(lay c 0 0 4 v)                        ; no width
+              !(lay c 0 9 9 v)                        ; wider than a word
+              !(lay c 0 4 2 v)                        ; a stride under the width overlaps
+              !(lay c 5 4 4 v)                        ; the run would leave the cask
+              !(lay c neg 4 4 v)                      ; a negative offset
+              !(lay "abc" 0 1 1 v)                    ; not a cask
+              !(lay c 0 1 1 [1 2])                    ; not a tray
+              !(see c 0 4 4 3)                        ; three words do not fit in eight bytes
+              !(see c 0 4 4 neg)))                    ; nor a negative count
+   ())

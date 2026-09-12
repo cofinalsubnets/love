@@ -183,5 +183,37 @@
            _ (test (dt >= 400) (dt < 8000))
            (setenv "HORN" ()))))
 
+; --- pack: the two ways of laying a chunk answer the same bytes ---------------------
+; pack has a fast path (guts' pinv, a channel a call, the stride doing the interleave)
+; and a byte loop for a seat that carries no such door. one is the other's reading, so
+; the law is that they agree -- over the saturation at both rails, the truncation toward
+; zero either side of it, and a run long enough to be worth the fast path at all.
+(:
+   lay (cite 'guts 'pinv)
+   ; the byte loop, transcribed: pack's own slow arm, so a drift in either is caught
+   (slowpack lr n g)
+    (: L <lr  R >lr  c (cask (n * 4))
+       (clip1 x) (: v (int (x * g))
+                    (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
+       (go i) (? (i >= n) c
+                 (: l (clip1 (peep L i 0))  r (clip1 (peep R i 0))  o (i * 4)
+                    _ (pin c o (l & 255))         _ (pin c (o + 1) ((l >> 8) & 255))
+                    _ (pin c (o + 2) (r & 255))   _ (pin c (o + 3) ((r >> 8) & 255))
+                    (go (i + 1))))
+       (string (go 0)))
+   n 600
+   ix ((iota n) * 1.0)
+   ; a ramp that leaves the rails at both ends and a sine that does not, so the law
+   ; reads the clamp, the sign and the ordinary middle in one pass
+   L (((ix / (n * 1.0)) * 5.0) - 2.5)
+   R (sin (ix * 0.017))
+   _ (test lay                                            ; the door is here at all
+           (pack (L . R) n 20000.0 = slowpack (L . R) n 20000.0)
+           ((n * 4) = #(pack (L . R) n 20000.0)))
+   ; ..and at a gain that rails almost everything, where the two clamps must agree
+   _ (test (pack (L . R) n 900000.0 = slowpack (L . R) n 900000.0))
+   ; ..and at one that rails nothing
+   (test (pack (L . R) n 100.0 = slowpack (L . R) n 100.0)))
+
 ; the sentinel the gate reads
 (say out "t/law/harp: patterns, mini-notation, voices\n")

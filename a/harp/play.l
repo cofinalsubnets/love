@@ -118,16 +118,29 @@
    harp-scale 20000.0
    (clip g x) (: v (int (x * g))
                  (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
-   ; the one scalar pass in the program: two trays of floats out as interleaved
-   ; 16-bit little-endian frames, which is what the horn's write path wants.
+   ; ..and the same saturation over a whole tray, as arithmetic: `// 1` truncates toward
+   ; zero exactly where `int` does, and the two comparisons are masks.
+   (clipv g t) (: v (t * g // 1)
+                  hi (v > 32767)  lo (v < -32768)
+                  ((v * (1 - hi) * (1 - lo)) + (hi * 32767) + (lo * -32768)))
+   ; two trays of floats out as interleaved 16-bit little-endian frames, which is what
+   ; the horn's write path wants. guts' pinv lays a whole channel in one call: its stride
+   ; is the frame and its width the sample, so THE INTERLEAVE IS THE CALL. the byte loop
+   ; below is the same answer a dispatch at a time -- it is what a seat with no host glob
+   ; runs, and what the fast path is read against (t/law/harp.l asks them of each other).
    (pack lr n g)
     (: L <lr  R >lr  c (cask (n * 4))
+       lay (cite 'guts 'pinv)
+       whole (lay && tray? L && tray? R && #L = n && #R = n)
        (go i) (? (i >= n) c
                  (: l (clip g (peep L i 0))  r (clip g (peep R i 0))  o (i * 4)
                     _ (pin c o (l & 255))         _ (pin c (o + 1) ((l >> 8) & 255))
                     _ (pin c (o + 2) (r & 255))   _ (pin c (o + 3) ((r >> 8) & 255))
                     (go (i + 1))))
-       (string (go 0)))
+       (? whole (: _ (lay c 0 2 4 (clipv g L))
+                   _ (lay c 2 2 4 (clipv g R))
+                   (string c))
+          (string (go 0))))
 
    ; --- the run: cycles in, chunks out ---------------------------------------
    harp-chunk 2048
