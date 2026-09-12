@@ -1369,7 +1369,18 @@
    ; only _exit(127). so an unfindable word is answered here, before the fork, where
    ; there is still a shell to say it -- see sh-simple's spawn arm.
    (sh-saynf w) (say err ("lush: " + (w + ": not found\n")))
-   (sh-nofound w) (: _ (sh-saynf w) _ (pin sh-status () 127) (sh-echk 127))
+   ; the word is ours to say; the line's redirections are the child's. this is the one
+   ; line that child ever writes, so `cmd 2>/dev/null` has to swallow it the way it would
+   ; swallow anything else it said. the map goes over our own fds for the length of one
+   ; message, as sh-withrs lays one for a builtin: `err` writes the fd, so a 2> follows it
+   ; and a 2>&1 follows whatever 1 became.
+   (sh-nfsay w fm)
+     (? (one? fm) (sh-saynf w)
+        (: saves (map (\ e (<e . dup <e)) fm)
+           _ (each fm (\ e (? (charm? >e) (dup2 >e <e) (close <e))))
+           _ (sh-saynf w)
+           _ (flush err)
+           (each saves (\ e (? (nom? >e) (close <e) (dup2 >e <e, close >e))))))
 
    ; --- redirects -> the fdmap ------------------------------------------------
    ; (sh-rdmap redirs) -> (1 fdmap opens writes) | ('err . msg). opens close in
@@ -1505,10 +1516,12 @@
                    (sh-onpath? w))
    ; can this seat run the word at all? PATH answers wherever there is a seat to
    ; exec -- a hosted love resolves a word to a file. a seat with none never execs:
-   ; the kernel's spawn hands the word to the verb registry, so that is the authority
-   ; there, and asking PATH would call every tool it carries missing. autonomous
-   ; mode knows its own verbs the same way.
-   (sh-known? w) (? !(sh-seat ()) (sh-verbw? w)
+   ; the kernel's spawn hands a bare word to the verb registry and a spelled path to
+   ; the file at it, which is the same split `word` makes, so both are asked here --
+   ; the registry alone would call every script on such a machine missing, and PATH
+   ; would call every tool it carries missing. autonomous mode knows its verbs the same way.
+   (sh-known? w) (? !(sh-seat ())
+                      (? (sh-slashed? w || sh-dotl? w) (two? (stat w)) (sh-verbw? w))
                     (!(sh-greg? 0) && sh-verbw? w) 1
                     (two? (sh-whichp w)))
    ; the argv a spawn execs: autonomous mode spawns this binary under a bare verb
@@ -1881,7 +1894,7 @@
                  ; foreign, or an explicit path: spawned as ever -- its 127 is the
                  ; child's own and the pipeline's status bookkeeping wants a real
                  ; pid; only the word is ours to say
-                 (: _ (? (sh-known? w) 0 (sh-saynf w))
+                 (: _ (? (sh-known? w) 0 (sh-nfsay w fm))
                     (spawnmap (sh-spawnv (st 1)) fm allclose pg fgi))))
            (: p (fork 0)
               (? (p = 0)
@@ -2021,14 +2034,17 @@
                     ; child stays in the shell's group, which keeps it the terminal.
                     fk (? (sh-forkok? argv (rm 1)) (sh-forkfn <argv) 0)
                     ; the redirects are already open, which is where a shell answers an
-                    ; unfindable word from -- `nope > f` still makes f, then says so
+                    ; unfindable word from -- `nope > f` still makes f, then says so, and
+                    ; says it through the map, `nope 2> f` putting the word in f. it has to
+                    ; be said here and not at the status below: the opens close first.
+                    _ (? (fk || sh-known? <argv) 0 (sh-nfsay <argv (rm 1)))
                     pid (? fk (sh-fork1 argv (rm 1) ac)
                            (sh-known? <argv) (spawnmap (sh-spawnv argv) (rm 1) ac (sh-pgm 0) (sh-fgm 0))
                            ())
                     (each opens close,
                      sh-hwrite wrs,
                      (? (nom? pid) (cmderr (<argv + ": cannot spawn"))
-                        !(charm? pid) (sh-nofound <argv)
+                        !(charm? pid) (: _ (pin sh-status () 127) (sh-echk 127))
                         (sh-waitfg [pid] (sh-unwords argv), sh-echk (sh-status ())))))))))
    (sh-fncall body argv)
      (: op (sh-pos ())

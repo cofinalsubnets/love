@@ -612,6 +612,11 @@ static int k_dev_slot(char const *p, uintptr_t n) {
   return 0; }
 static intptr_t k_zero_readn(int fd, unsigned char *dst, uintptr_t n) {
   return memset(dst, 0, n), (intptr_t) n; }
+// null takes every byte. k_row_write would swallow them for want of a writen anyway, but a
+// row with no hook at all is not a row: k_dup_row refuses to clone one, and `2>/dev/null`
+// is a dup of exactly that onto a child's stderr.
+static intptr_t k_null_writen(int fd, unsigned char const *src, uintptr_t n) {
+  return (intptr_t) n; }
 static bool k_dev_ready(int fd) { return true; }
 
 // 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale.
@@ -640,8 +645,11 @@ static bool k_fs_init(void) {
   if (!t) return false;
   for (int i = 0; i < n; i++) {
     struct k_file const *f = k_bake_row(i);
+    // a dateless blob row reads as this boot: the dist tarball stamps every mtime 0
+    // for reproducibility, and 0 is how a stat says "not there" -- cook reads it that
+    // way and refuses to make a source leaf that is sitting right there.
     t[i] = (struct k_ent) { .path = f->path, .bake = i,
-                            .ms = f->ms, .mode = 0644, .live = true }; }
+                            .ms = f->ms ? f->ms : k_clock_ms(), .mode = 0644, .live = true }; }
   t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
                           .mode = 0755, .own = true, .dir = true, .live = true };
   // the console's two colours, as files. own with no bytes yet: empty until the first
@@ -1098,8 +1106,11 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
       int dfd = k_fd_free();
       struct k_source *ds = k_source_open(dfd);
       if (!ds) return -ENOMEM;
+      // null keeps no readn -- k_row_read answers end for want of one -- but it still
+      // says READY: end is an answer, and a source that never answers ready parks its
+      // reader for good. both devices are always ready, for opposite reasons.
       *ds = dv == 2 ? (struct k_source) { .readn = k_zero_readn, .ready = k_dev_ready }
-                    : (struct k_source) {0};
+                    : (struct k_source) { .writen = k_null_writen, .ready = k_dev_ready };
       return dfd; } }
   int i = k_find(cp, (uintptr_t) cn);
   if (src && (i < 0 || k_ents[i].bake < 0)) return -ENOENT;   // only what the bake laid
@@ -2172,15 +2183,13 @@ void kmain(void) {
   // shadows (raw, signal, setenv, environ, and the no-op roster below), and those are
   // the whole reason this seat can run a crew written for a host.
  "(: open (cite 'posix 'open) close (cite 'posix 'close) stat (cite 'posix 'stat)"
+ "   unlink (cite 'posix 'unlink)"
  "   (k-bn p) (: n (tally p)"
  "     (go i r) (? (< i n) (go (+ i 1) (? (= (p i) 47) (+ i 1) r)) (snip p r n))"
  "     (go 0 0))"
- "   (k-run-file p) (\\ as (: q (open p \"r\")"
- "     (? (port? q)"
- "        (: t (slurp q) _ (close q)"
- "           (go cl) (: r (sound cl) (? (two? r) (: _ (ev (cap r)) (go (cup r))) 0))"
- "           (go t))"
- "        127)))"
+ "   (k-slurp p) (: q (open p \"r\") (? (port? q) (: t (slurp q) _ (close q) t) ()))"
+ "   (k-run-text t) (\\ as"
+ "     ((: (go cl) (: r (sound cl) (? (two? r) (: _ (ev (cap r)) (go (cup r))) 0))) t))"
  "   (k-tool nm as) (? (elem nm (names ())) (. (ev nm) as) ())"
   // the crew is NOT in the kernel's cat, so a verb nobody asks for costs nothing. the
   // load reads the roster's files off /proc/src -- where the bake laid them and no write
@@ -2205,7 +2214,17 @@ void kmain(void) {
  // (cite 'verbs 'tab), and `word` applies the shadow rules -- a slashed word or
  // a .l name is a file and never a verb, which is what leaves the two lanes
  // below reachable. a verb takes the args AFTER its name, kore's convention.
- "   (k-prog argv) (: a0 (cap argv) b (k-bn a0) as (cup argv)"
+ "   (k-prog argv) (k-proga argv 1)"
+ // a script says who reads it: `#!`, the words after it, then this path and the args.
+ // the reader is taken by BASENAME -- every program here is a verb and usr/bin is
+ // empty, so /bin/sh is sh. one hop, as a kernel's own loader allows.
+ "   (k-bangv t p as)"
+ "    (? (! (&& (string? t) (&& (< 2 (tally t)) (= \"#!\" (snip t 0 2))))) ()"
+ "       (: n (tally t)"
+ "          (go i) (? (< i n) (? (= 10 (peep t i 0)) i (go (+ i 1))) n)"
+ "          w (cwords (snip t 2 (go 0)) 0 0 ())"
+ "          (? (two? w) (. (k-bn (cap w)) (+ (cup w) (. p as))) ())))"
+ "   (k-proga argv h) (: a0 (cap argv) b (k-bn a0) as (cup argv)"
  "     v (cite 'verbs 'word a0)"
  "     (? !(nil? v) (. v as)"
  "        (: k (k-tool (intern (+ b \"-main\")) as)"
@@ -2214,7 +2233,11 @@ void kmain(void) {
  // which bakes the applet files and not kore.l
  "              (&& (= b \"kore\") (two? as))"
  "                (k-tool (intern (+ (cap as) \"-main\")) (cup as))"
- "              (two? (stat a0)) (. (k-run-file a0) as)"
+ "              (two? (stat a0)) (: t (k-slurp a0)"
+ "                 g (? (< 0 h) (k-bangv t a0 as) ())"
+ "                 (? (two? g) (k-proga g (- h 1))"
+ "                    (string? t) (. (k-run-text t) as)"
+ "                    ()))"
  "              ()))))"
  "   (k-slot w n) (? (! (two? w)) () (n = 0) (cap w) (k-slot (cup w) (n - 1)))"
  // a console-numbered fd means the PARENT's view of it, so 2>&1 follows what the parent
@@ -2243,6 +2266,12 @@ void kmain(void) {
  "     p)"
  "   (k-fdw x) (? (charm? x) (? (< x 0) (- 0 1) x) (- 0 1))"
  "   (spawn argv) (k-spawn1 argv (- 0 1) (- 0 1) (- 0 1))"
+ // exec at task granularity: this task BECOMES the program and never comes back, which
+ // is the whole of what a hosted execve promises less the pid. the no-op roster below
+ // leaves the name alone now that it is bound here.
+ "   (exec argv) (: pr (k-prog argv)"
+ "     (? (two? pr) (: r ((cap pr) (cup pr)) (quit (? (charm? r) r 0)))"
+ "        (: _ (say err (+ (cap argv) \": not found\")) _ (put err 10) (quit 127))))"
  "   (spawnio argv i o e cl pg fg) (k-spawn1 argv (k-fdw i) (k-fdw o) (k-fdw e))"
  "   (spawnmap argv fdm cl pg fg)"
  "     ((: (go m a b c)"
@@ -2259,7 +2288,38 @@ void kmain(void) {
  "                   (go (cup m) a b c))))"
  "        go)"
  "      fdm (- 0 1) (- 0 1) (- 0 1))"
- "   (wait p) (catch p))"
+ "   (wait p) (catch p)"
+ // hark and herald on a seat with no fork. the capture is a scratch file worn as the
+ // child's stdout -- a bare spawn takes the parent's worn slots -- and herald's relay
+ // is a dump at the end, which is the most a cooperative seat has.
+ // stderr is left on the console, as the hosted pair leave it. `$(shell ..)` is the
+ // caller that matters: without this every one of them answers empty, which reads as a
+ // probe that found nothing rather than as a door that is not there.
+ "   hark-n {}"
+ // a word nothing answers is an ANSWER here, never a line on the console: that is what
+ // a hosted hark's errno is, and `$(shell command -v cc)` is the caller asking.
+ "   (hark1 argv tee) (? (! (two? (k-prog argv))) ()"
+ "      (: w (worn ())"
+ "         k (+ 1 (peep hark-n 0 0))"
+ "         _ (pin hark-n 0 k)"
+ "         p (+ \"/tmp/.hark\" (show k))"
+ "         q (open p \"w\")"
+ "         (? (! (port? q)) ()"
+ // the child reads nothing, the way a hosted hark hands its own /dev/null
+ "            (: z (open \"/dev/null\" \"r\")"
+ "               _ (wear [(? (port? z) z (k-slot w 0)) q (k-slot w 2)])"
+ "               d (spawn argv)"
+ "               st (? (&& (charm? d) (<= 0 d)) (wait d) 127)"
+ "               _ (wear w)"
+ "               _ (close q)"
+ "               _ (? (port? z) (close z) 0)"
+ "               r (open p \"r\")"
+ "               t (? (port? r) (: b (slurp r) _ (close r) b) \"\")"
+ "               _ (unlink p)"
+ "               _ (? tee (puts t) 0)"
+ "               (. (? (charm? st) st 0) t)))))"
+ "   (hark argv) (hark1 argv 0)"
+ "   (herald argv) (hark1 argv 1))"
   );
   // a woken image's crew captured the seat-doors wrappers (i/main.c), which
   // read the live door off the tablet -- aim them at this seat's task shim, so

@@ -50,8 +50,10 @@
        n #s
        _ (? (0 < n) 0 (mkblob-die (src + " is empty")))
        lsym (sym + "_len")
+       ; the payload rides as a BLOB -- the string itself, one item holding every byte
+       ; (holo.l's item-len) -- so a wad costs a cell here and not four million
        forms [['label (nom lsym)] ['raw (mkblob-le8 n 0 ())]
-              ['label (nom sym)]  ['raw (mkblob-bytes s (n - 1) ())]]
+              ['label (nom sym)]  ['raw [s]]]
        ob (objelf arch () () () [sym lsym] () () () () () forms)
        (write-bytes dst ob))
 

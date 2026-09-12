@@ -42,6 +42,9 @@
    rr-call  19                                      ; R_RISCV_CALL_PLT  S + A - P across the auipc pair
 
    (o-has? tab k) (peep tab k 'no !== 'no)    ; is key k bound in the tablet?
+   ; a lane's file size. not `tally`: an item may be a blob (holo.l's item-len), and a
+   ; blob is one cell holding many bytes.
+   (o-blen l) (:- (go l 0) (go l n) (? !(two? l) n (go >l (n + item-len <l))))
    (o-strbytes s) (: (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc)))
                      (go (#s - 1) ()))         ; a string -> its byte list. this one
                      ; is a real encode, not a bytes-through-text leak: an ELF string
@@ -93,8 +96,12 @@
                        ; x64 opcode: E8/e9 (call/jmp) vs a lea's modrm, so reltext can tell a
                        ; control transfer (PLT32) from an address-of (PC32) for an external ref.
                        (o-walkr be >items labels wkset internal? rset (off + w)
-                                (rev fill + bacc) ([off k lbl (fix-a x) (two? bacc ? <bacc 0)] . racc)))))
-             (o-walkr be >items labels wkset internal? rset (off + 1) (x . bacc) racc))))
+                                (rev fill + bacc)
+                                ; the byte before the field, when there IS one: a blob's
+                                ; head is a string and says nothing about an opcode
+                                ([off k lbl (fix-a x) (two? bacc && charm? <bacc ? <bacc 0)] . racc)))))
+             ; item-len, not 1: a blob is one cell and many bytes
+             (o-walkr be >items labels wkset internal? rset (off + item-len x) (x . bacc) racc))))
    (o-zeros n) (n >= 1 ? (0 . o-zeros (n - 1)))
    ; splice a 4-byte little-endian value into a byte list at off (the ARM REL in-place addend: a
    ; pooled abs32 field carries S's section offset there, since rel has no addend column).
@@ -191,7 +198,7 @@
               secs)
        (ln i) (lanes i)
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
-       (ln-fsz l) (ln-ty l = 8 ? 0 #(ln-bs l))     ; a NOBITS lane owns no file bytes
+       (ln-fsz l) (ln-ty l = 8 ? 0 (o-blen (ln-bs l)))     ; a NOBITS lane owns no file bytes
        (sec-exec? si) (exec? (secs (si - 1)))            ; by 1-based shndx, as o-where answers
        allrel (foldl (a \ l \ a + ln-rl l) () lanes)
        exts (o-exts lanes allrel)
@@ -353,7 +360,7 @@
        sht-off (shs-off + shs-sz)
        sht (catall ([(o-zeros 40)]                                             ; 0 NULL
               + (o-mapi (\ i l (sh32 (shname i) (ln-ty l) (l 2)             ; 1..nsec the content sections
-                                     (coffs i) #(ln-bs l) 0 0 (l 3) 0))
+                                     (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
                         lanes)
               + [(sh32 (shname nsec) 2 0 sym-off sym-sz i-str (1 + nsec + nloc) 4 16)   ; .symtab link=.strtab info=first-global
                  (sh32 (shname (nsec + 1)) 3 0 str-off str-sz 0 0 1 0)]                   ; .strtab
@@ -533,7 +540,7 @@
               secs)
        (ln i) (lanes i)
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
-       (ln-fsz l) (ln-ty l = 8 ? 0 #(ln-bs l))     ; a NOBITS lane owns no file bytes
+       (ln-fsz l) (ln-ty l = 8 ? 0 (o-blen (ln-bs l)))     ; a NOBITS lane owns no file bytes
        allrel (foldl (a \ l \ a + ln-rl l) () lanes)
        exts (o-exts lanes allrel)
 
@@ -687,7 +694,7 @@
                   (le64 off) (le64 sz) (le32 link) (le32 info) (le64 align) (le64 entsz)])
        sht (catall ([(o-zeros 64)]                                         ; 0 NULL
               + (o-mapi (\ i l (sh (shname i) (ln-ty l) (l 2)           ; 1..nsec the content sections
-                                   (coffs i) #(ln-bs l) 0 0 (l 3) 0))
+                                   (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
                         lanes)
               + [(sh (shname nsec) 2 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
                  (sh (shname (nsec + 1)) 3 0 str-off str-sz 0 0 1 0)]                    ; .strtab

@@ -81,7 +81,11 @@
    (fix-k x)  (x 2)
    (fix-l x)  (x 3)
    (fix-a x)  (x 4)
-   (item-len x) (? (fix? x) (fix-w x) 1)              ; a byte is 1; a fixup is its field width
+   ;; a byte is 1; a fixup is its field width; a STRING is a blob -- those bytes verbatim,
+   ;; carried as ONE item. mksrc and mkrt lay megabytes through here, and a cons per byte is
+   ;; the whole cost of such an object: laying the 3 MB source archive as a list peaked at
+   ;; 461 MB, as a blob at 120 MB, because revonto and the rev behind it each copy it.
+   (item-len x) (? (fix? x) (fix-w x) (string? x) #x 1)
    ;; -- fold a freshly lowered chunk onto the reversed item stream, answering (len . items).
    ;; measure-then-rev-then-append walks the chunk three times and conses it twice; this walks
    ;; once and conses once. the assembler's hottest loop -- one per instruction per pass. --

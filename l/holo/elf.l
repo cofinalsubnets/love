@@ -129,8 +129,19 @@
          res {'bytes img 'entry org 'dataddr dataddr})
    (elf32 target mkprog data) (elf32-at elf-base target mkprog data)
 
-   ;; write a byte list to a file. the blob rides a cask, not a string: a cask is the
+   ;; write a byte list to a file. the bytes ride a cask, not a string: a cask is the
    ;; byte array and says raw, where a string is text that merely happens to be bytes
-   ;; today.
-   (write-bytes path bs) (: q (open path "w") _ (say q (cask bs)) (close q)))
+   ;; today. a BLOB item (holo.l's item-len) is already those bytes, so it goes to the
+   ;; port whole -- casking it would rebuild the list the blob exists to avoid.
+   (write-bytes path bs)
+    (: q (open path "w")
+       ;; the runs between blobs: short by construction (a header, a length word), so the
+       ;; copy `rev` makes is bounded by them and not by the object
+       (go l acc) (? !(two? l) (say q (cask (rev acc)))
+                     (string? <l) (: _ (say q (cask (rev acc))) _ (say q <l) (go >l ()))
+                     (go >l (<l . acc)))
+       ;; ..and an object with no blob in it goes out in one cask, untouched. the walk
+       ;; that asks costs no cell, where running it through `go` would copy the lot twice.
+       _ (? (any string? bs) (go bs ()) (say q (cask bs)))
+       (close q)))
 ) ; module 'holo

@@ -103,6 +103,15 @@
         each (keys (cite 'verbs 'tab))
              (k \ (d + "/" + string k @ p (unlink p, symlink exe p))),
         d))
+   ; this binary as a path, or () where there is none: on inle the artifact IS the
+   ; kernel, so there is nothing to exec, no path to name and no farm worth laying --
+   ; the verb registry is that machine's PATH already. every door below asks this.
+   (src-me _) (: p (selfpath 0) (string? p ? p ()))
+   ; the build's driver. a hosted seat execs the binary and reads the status back; a
+   ; seat with none spawns a task, which is this same program under the same registry.
+   (src-run exe as)
+    (? (string? exe) (: s (herald (exe . as)) (two? s ? <s s))
+       (: p (spawn as) (? (charm? p && 0 <= p) (wait p) 127)))
    ; the autonomous arming, what a seed sets before its build: the farm of our verbs
    ; first on PATH, lush autonomous, CC our mooncc. `love serve` and `love doom` build
    ; under the same, so a nest or a page is ours throughout whatever PATH holds -- a
@@ -178,17 +187,18 @@
    ; would otherwise hold through the whole build, and no collection gives it back -- free
    ; coalesces into a list and never unmaps, so tightening the budget only raises rss. exec
    ; is the one thing that returns the pages; the waiter boots at ~57 MB. PATH, CC and the
-   ; cwd all ride the environment across it, so only the root has to be said.
+   ; cwd all ride the environment across it, so only the root has to be said. a seat
+   ; with no exec pays those pages: seed-lay calls this one straight through instead.
    (seed-wait root xa dst)
-    (: exe (selfpath 0)
-       _ (string? exe ? 0 (src-die "can't find seed path"))
+    (: exe (src-me 0)
        here (cwd 0)
        _ (? !(chdir root) 0 (src-die ("can't enter " + root)))
        xm (? (string? xa) (show (nom xa)) ())     ; make's word for it
+       os (: o (seed-os 0) (nom? o ? [("xos=" + show o)] ()))
        ; -j with no count: cook reads this machine's width, and answers 1 where it
        ; cannot -- so the seed is as wide as the box and never wider.
-       s (herald (string? xa ? [exe "make" "-j" ("xa=" + xm) ("b/x-" + xm + "/love")]
-                              [exe "make" "-j" "dist"]))
+       s (src-run exe (string? xa ? (["make" "-j" ("xa=" + xm)] + os + [("b/x-" + xm + "/love")])
+                                    ["make" "-j" "dist"]))
        st (two? s ? <s s)
        _ (chdir here)
        _ (0 != st ? (src-die ("the build failed (exit " + show st + ")")))
@@ -246,6 +256,12 @@
                              (w i @ 47 0 (go (i + 1)))))
    ; this machine's arch: love-arch is already canonical, which is seed-arches' spelling.
    (seed-native _) love-arch
+   ; the OS a cross lay is for, named only where this machine cannot be asked. we are
+   ; the kernel on inle, so a compile there owes the target a named OS rather than
+   ; whichever hosted one reads closest (a/moon/moon.l) -- linux is the word, and the
+   ; make line carries it where nothing else can say it.
+   (seed-os _) (: n (elem 'love-os (names ()) && ev 'love-os)
+                  (nom? n && !(elem n '(linux freebsd netbsd)) ? 'linux ()))
 
    (seed-usage _) (puts $
     "usage: love seed [-g] [ARCH] [DIR]\n" +
@@ -271,38 +287,51 @@
        as (nom? xa0 ? >as1 as1)
        dir (two? as ? <as ".")
        _ (src-dash? dir ? (src-not-dir "seed" dir))
+       exe (src-me 0)
+       ; a seat with no path to itself lays an egg for another machine and nothing
+       ; else: a native seed's claim is that the rebuild IS this binary, and there is
+       ; no file here to hold it to.
+       _ (!(string? exe) && !(nom? xa) ?
+          (src-die "this seat has no path to itself -- name a machine: `love seed x64`"))
        r (src-lay dir)
        root <>r
        _ (puts (";; laid " + root + "\n"))
-       exe (selfpath 0)
-       _ (string? exe ? 0 (src-die "can't find seed path"))
-       farm (src-farm root exe)
+       farm (string? exe ? (src-farm root exe) "")
        path ("" + getenv "PATH")
        ; ours lead, so ours win wherever we carry a tool of that name; -g puts them
        ; last, where they fill the gaps only. the build's shells read the same choice
        ; off LUSHFLAGS: -g (gregarious) makes a bare word PATH's business (the bootstrap
        ; through an ambient cc and userland), -a keeps lush autonomous, PATH deciding nothing
-       _ (setenv "PATH" (greg? ? (path + ":" + farm) (farm + ":" + path)))
+       _ (string? exe ? (setenv "PATH" (greg? ? (path + ":" + farm) (farm + ":" + path))) 0)
        _ (setenv "LUSHFLAGS" (greg? ? "-g" "-a"))
+       ; naming ourselves where there is no path to name: `love` is a verb like every
+       ; other (l/boot/cli), so the Makefile's driving-love lane reaches this binary by
+       ; word. no love0 is compiled under it -- there is no seat here to run one.
+       _ (string? exe ? 0 (setenv "LOVE" "love"))
        env (getenv "CC")
        ; the probe writes into the laid tree's root: it is the one directory a lay
        ; is known to have made, and the two scratch files go straight back out
-       amb (greg? && !(string? env) ? (src-cc root))
+       amb (greg? && string? exe && !(string? env) ? (src-cc root))
        ; something has to be named. the tree carries no love, so an unnamed CC is the
        ; ambient cc and nothing else -- right as make's default, wrong as this verb's
        ; answer where the probe just found no cc that works. a working ambient one is the
        ; stronger claim, a foreign compiler holding the scaffold being the one thing a self
        ; build cannot say; this binary's own mooncc is the fallback, and the default
        ; takes it outright. naming CC reaches any other mix: `CC="<love> mooncc" love seed`
-       ; is our compiler under an ambient userland.
+       ; is our compiler under an ambient userland. `cc` is that compiler's own verb
+       ; row, which is the whole of CC on a seat whose PATH is the registry.
        _ (string? env ? 0
-          (two? amb ? (setenv "CC" <>amb) (setenv "CC" (exe + " mooncc"))))
+          (two? amb ? (setenv "CC" <>amb)
+           (setenv "CC" (string? exe ? (exe + " mooncc") "cc"))))
        _ (? !greg? (puts ";; using own tools throughout\n")
             (: ours (src-ours src-needs)
                (two? ours ? (puts $ ";; using own tools: " + (src-words ours) + "\n") 0)))
        cc (? (string? env) env (two? amb) <>amb "this binary")
-       _ (puts (";; seeding " + (nom? xa ? (show xa + " ") "") + "with " + cc + "\n"))
+       ; the OS rides the word where we had to pick one, because nothing else here says it
+       tgt (nom? xa ? (: o (seed-os 0) (show xa + (nom? o ? ("-" + show o) "") + " ")) "")
+       _ (puts (";; seeding " + tgt + "with " + cc + "\n"))
        dst (nom? xa ? (dir + "/love-" + show xa) ())
+       _ (string? exe ? 0 (quit (seed-wait root (show xa) dst)))   ; nothing to exec: wait here
        e (nom? xa ? (exec [exe "seed" "-wait" root (show xa) dst])
                     (exec [exe "seed" "-wait" root]))
        (src-die ("can't wait for the build (exec: " + show e + ")")))
