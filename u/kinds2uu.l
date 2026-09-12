@@ -31,6 +31,8 @@
    (k2-codes km) (map (p \ p 1) km)
    (k2-upto n) (: (go i) (i < n ? (i . go (i + 1))) (go 0))   ; 0..n-1
    (k2-kc km s) (: p (assoc s km) (two? p ? (p 1) -1))
+   (k2-nom km c) (: (go l) (one? l ? () (<l 1 = c ? <<l (go >l)))   ; the kind wearing code c
+                    (go km))
 
    ; --- the translation. ty = the uu result type at this position ---
    (k2-tx km e ty)
@@ -70,6 +72,7 @@
    ps (k2-pairs >big)
    km0 (k2-rankmap ((k2-find 'rank ps) 1))
    km  (['str (k2-max (k2-codes km0) + 1)] . km0)          ; str: the branch off rank
+   ucodes (k2-upto (k2-max (k2-codes km) + 1))          ; the carrier, 0..str
    nump (k2-find 'num? ps) joinp (k2-find 'join ps)
    numq  (k2-op km ><nump  nump  'bool 'bool)
    kjoin (k2-op km ><joinp joinp 'nat  'nat)
@@ -85,10 +88,14 @@
    _ (pl "; (str the branch off the spine). t/uukindlaw.l proves the semilattice laws")
    _ (pl "; of these terms at corpus time -- a law-breaking kinds.l edit fails a check.")
    _ (pl "; Substrate: t/uu.l (natgtb / nateqb / andb / bool_rect).")
+   _ (pl "; a name is emitted per code, so t/uukindlaw.l cites a kind rather than its rank:")
+   _ (pl "; the ranks are kinds.l's to renumber, and a law spelling one as an integer would")
+   _ (pl "; go on passing about a different kind.")
    _ (pl "(test")
+   _ (map (c \ pl (" (defn uk" + string (k2-nom km c) + " nat " + show c + ")")) ucodes)
    _ (pdefn "numq" numq ")")
    _ (pdefn "kjoin" kjoin "))")
    ; the carrier codes 0..str, for the law file (derived, so drift follows kinds.l)
-   _ (pl ("(: uk-codes '" + show (k2-upto (k2-max (k2-codes km) + 1))))
+   _ (pl ("(: uk-codes '" + show ucodes))
    _ (puts ")\n")
    0)

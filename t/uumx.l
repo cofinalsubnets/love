@@ -145,6 +145,10 @@
  (defn mxbandtbl nlist
    (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 3 (ncons 4 (ncons 4 nnil)))))))))))))))
 
+ ; mx.l's own mx-numk roster: which kinds take the arithmetic lane
+ (defn mxnumtbl nlist
+   (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 0 (ncons 0 (ncons 0 (ncons 0 nnil)))))))))))))))
+
  ; mirror: the argument swap's action on lanes, in code order
  (defn mxmirtbl nlist
    (ncons 0 (ncons 1 (ncons 4 (ncons 3 (ncons 2 (ncons 5 (ncons 6 (ncons 7 (ncons 8 (ncons 9 (ncons 10 (ncons 11 nnil)))))))))))))
@@ -177,10 +181,11 @@
    (mcons (ncons 7 (ncons 10 (ncons 10 (ncons 10 (ncons 10 nnil)))))
     mnil))))))
 
- ; --- and the six lookups they carry ---
+ ; --- and the seven lookups they carry ---
  (defn mxadd (pi a nat (pi b nat nat)) (lam a (lam b (mxnth b (mxrow a mxaddgrid)))))
  (defn mxmul (pi a nat (pi b nat nat)) (lam a (lam b (mxnth b (mxrow a mxmulgrid)))))
  (defn mxband (pi k nat nat) (lam k (mxnth k mxbandtbl)))
+ (defn mxnumeric (pi k nat bool) (lam k (nateqb (mxnth k mxnumtbl) 1)))
  (defn mxmirror (pi l nat nat) (lam l (mxnth l mxmirtbl)))
  (defn mxaddband (pi x nat (pi y nat nat))
    (lam x (lam y (mxnth y (mxrow x mxaddbgrid)))))
