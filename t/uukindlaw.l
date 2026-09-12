@@ -16,8 +16,10 @@
    (uk-all f)  (foldl (\ acc x (acc && f x)) 1 uk-codes) ; forall over the carrier
    (uk-all2 f) (uk-all (\ a (uk-all (\ b (f a b)))))
    (uk-all3 f) (uk-all (\ a (uk-all (\ b (uk-all (\ c (f a b c)))))))
-   uk-bot <uk-codes         ; the floor  (bot, code 0)
-   uk-top <>(rev uk-codes)) ; the ceiling (top, below str)
+   ; the codes by name, read back out of the kernel: uukind.l emits one defn per
+   ; kind, so nothing here recovers a code by its position in the carrier
+   uk-bot (vof 0 'ukbot) uk-top (vof 0 'uktop)
+   uk-str (vof 0 'ukstr) uk-charm (vof 0 'ukcharm))
 
 (test
  ; --- a bounded join-semilattice, exhaustively over uk-codes ---
@@ -28,14 +30,14 @@
  (uk-all  (\ a ((uk-jj uk-top a = uk-top) && (uk-jj a uk-top = uk-top)))) ; top absorbs
  ; --- str (the last code) is the incomparable branch: it joins up to top against
  ;     any numeric, so it is not the spine's max (that is the whole point of str) ---
- (vof 0 '(numq 6) = vof 0 'false) ; str is not numeric
- (uk-jj 6 1 = uk-top))            ; str `join` charm = top, not str
+ (vof 0 '(numq ukstr) = vof 0 'false)   ; str is not numeric
+ (uk-jj uk-str uk-charm = uk-top))      ; str `join` charm = top, not str
 
 ; --- the bridge: kinds.l's four driver cases as uu idpath lemmas. these are real
 ;     kernel proof terms (paths over a computing join), so they export axiom-free
 ;     through u/uu2coq.l + uu2lean.l to Rocq and Lean alongside the uu corpus. ---
 (test
- (defq kjoin-tier-wins  (paths nat (kjoin 1 4) 4) (idpath 4))   ; A. higher tier wins
- (defq kjoin-bot-unit   (paths nat (kjoin 0 3) 3) (idpath 3))   ; B. bot is the unit
- (defq kjoin-top-cap    (paths nat (kjoin 4 5) 5) (idpath 5))   ; C. top caps the spine
- (defq kjoin-str-widens (paths nat (kjoin 6 1) 5) (idpath 5)))  ; D. str widens to top
+ (defq kjoin-tier-wins  (paths nat (kjoin ukcharm ukcplx) ukcplx) (idpath ukcplx)) ; A. higher tier wins
+ (defq kjoin-bot-unit   (paths nat (kjoin ukbot ukreal) ukreal)   (idpath ukreal)) ; B. bot is the unit
+ (defq kjoin-top-cap    (paths nat (kjoin ukcplx uktop) uktop)    (idpath uktop))  ; C. top caps the spine
+ (defq kjoin-str-widens (paths nat (kjoin ukstr ukcharm) uktop)   (idpath uktop))) ; D. str widens to top

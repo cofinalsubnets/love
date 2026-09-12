@@ -15,10 +15,12 @@
 ; says it does. the table is the interface; love.c is the other side of it.
 (test (elem 'vof (names ())))
 
-; --- the roster every forall below ranges over. a kind added or a lane merged
-; --- moves these numbers first ---
+; --- the roster's shape, said once and nowhere else. every forall below ranges over
+; --- mxnk itself and names its subject with a predicate, so a kind added or a lane
+; --- merged moves these three numbers and nothing further down. a range written as a
+; --- count is the trap: too long fails loudly, too short is GREEN and says nothing ---
 (test
- (15 = (vof 0 'mxnk))
+ (14 = (vof 0 'mxnk))
  (12 = (vof 0 'mxnl))
  (5 = (vof 0 'mxnb)))
 
@@ -52,10 +54,19 @@
 
 ; --- the partition, named: the numeric band, the text band, and kmint alone ---
 (test
- ; the nine numeric kinds -- the scalar gem tower and the parallel tray tower --
- ; route identically. that is "every numeric kind is one band"
+ ; the two notions the claims here are about. a kind is a point if it lands in kmint's
+ ; band; mxnumeric is mx.l's mx-numk, lifted, so neither claim counts to its subject
+ (defn mxiff (pi a bool (pi b bool bool))            ; uuval's beqb sorts after this file
+   (lam a (lam b (orb (andb a b) (andb (negb a) (negb b))))))
+ (defn mxpoint (pi k nat bool) (lam k (nateqb (mxband k) (mxband mxKMint))))
+ ; the scalar gem tower and the parallel tray tower route identically -- and it is
+ ; EXACTLY mx-numk that does. mx.l writes that roster and the row rosters (mx-add-of,
+ ; mx-mul-of) separately, and the band quotient is derived from neither, so the iff is
+ ; those three agreeing; counting a block off from KCharm asked none of it
  (defq mx-numerics-one-band
-   (paths bool (mxall 9 (lam i (nateqb (mxband (add mxKCharm i)) (mxband mxKCharm)))) true)
+   (paths bool
+     (mxall mxnk (lam k (mxiff (mxnumeric k) (nateqb (mxband k) (mxband mxKCharm)))))
+     true)
    (idpath true))
  ; a symbol is a POINT, not text: it shares kmint's lane, is the identity under +
  ; and annihilates under *. the string algebra is reached by pulling the name out
@@ -68,7 +79,9 @@
  ; told apart by that early-out and not by the matrix this corpus models. alone, the
  ; matrix decides the whole lane and the early-out stays the fast path
  (defq mx-points-alone
-   (paths bool (mxall 13 (lam k (negb (nateqb (mxband (add mxKCharm k)) (mxband mxKMint))))) true)
+   (paths bool
+     (mxall mxnk (lam k (mxiff (mxpoint k) (orb (nateqb k mxKMint) (nateqb k mxKNom)))))
+     true)
    (idpath true)))
 
 ; --- () is the unit under + and the zero under *, in every lane at once ---
@@ -114,8 +127,7 @@
  (defq mx-num-str-repeats (paths nat (mxmul mxKCharm mxKString) mxLmul_rep) (idpath mxLmul_rep))
  ; a tablet or a lambda wins over everything but a point -- row and column both the
  ; Church lane, a tablet being a lookup lambda here. "point" is the band, not the
- ; kind: a mint and a nom are both excused, by one predicate
- (defn mxpoint (pi k nat bool) (lam k (nateqb (mxband k) (mxband mxKMint))))
+ ; kind: a mint and a nom are both excused, by mxpoint above
  (defq mx-tablet-dominates
    (paths bool
      (mxall mxnk (lam b (orb (mxpoint b) (nateqb (mxadd mxKTablet b) mxLaddh))))
@@ -163,6 +175,13 @@
  ('rejected = (rejects (\ z (defq mx-bad-band
     (paths bool
       (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband (succ b)))))))
+      true)
+    (idpath true)))))
+ ; and the numeric band is mx-numk itself, not a roster slid one kind along the
+ ; lattice -- the guard on the RANGE, which is the shape a count-from-KCharm took
+ ('rejected = (rejects (\ z (defq mx-bad-numeric
+    (paths bool
+      (mxall mxnk (lam k (mxiff (mxnumeric (succ k)) (nateqb (mxband k) (mxband mxKCharm)))))
       true)
     (idpath true)))))
  ; and mirror is not the identity: the positional pair really does trade places

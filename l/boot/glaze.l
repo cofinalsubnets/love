@@ -336,7 +336,8 @@
                  acc)
    aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = == .)   ; the heads that are ops, not calls
    ; every head the amble reads by NAME: aopheads, the ones carrying their own arm, and the
-   ; two reads asafe rules a call-out out for. a frame that rebinds one of these does not mean
+   ; two reads asafe rules a call-out out for. list/&&/|| are here for the mask alone -- no arm
+   ; reads them, but a frame that takes one of the words still may not be read as meaning it. a frame that rebinds one of these does not mean
    ; the op by it, so njit-amble masks the taken ones out of all three recognizers at once.
    ; ? and : stay off the roster -- they are the reader's syntax, not names a body can take.
    aopnames '(two? cap cup + - * // % & | ^ < <= > >= = == . || && tally list
@@ -384,7 +385,6 @@
                                as env))
               (elem oop '(two? cap cup)) (n = 1 && amble-ok? env shd gn go k 0 <as)
               (aop2? oop) (n = 2 && amble-ok? env shd gn go k 0 <as && amble-ok? env shd gn go k 0 <>as)
-              (= oop '||) (2 <= n && all (x \ amble-ok? env shd gn go k 0 x) as)
               (= op amble-lam) (all (v \ elem v env) >>as)                 ; an inner lambda site: its imports are frame reads
               (= op go) (tl && n = k && all (x \ amble-ok? env shd gn go k 0 x) as)
               (nom? op) ((0 < n) && (elem op env || elem op gn)
@@ -402,8 +402,6 @@
           (? (= op '?) (amax (amble-depth go cx <as) (amax (amble-depth go cx <>as) (amble-depth go cx <>>as)))
              (= op ':) (admax go cx as)                             ; lets ride their own slots; parts run sequentially
              (elem op '(two? cap cup)) (amble-depth go cx <as)
-             (= op '||) (#as + admax go cx as)                      ; aor needs no spills, but a shadowed || is a call, and
-                                                                      ; the call formula covers both -- over-reserving is safe
              (= op amble-lam) 0                                     ; the site lays its chain straight onto the heap
              (= op '=) (2 + (amax (amble-depth go cx <as) (1 + (amble-depth go cx <>as))))   ; aeq2's slow lane spills the partial + the operand
              (aop2? op) (amax (amble-depth go cx <as) (1 + (amble-depth go cx <>as)))
@@ -441,17 +439,22 @@
    ; nom, ==-keyed, and only when the nom is not env-shadowed: a param named link must win, as it
    ; does in bytecode. a miss falls through to `opnom`, the glued lane's own value -> word map
    ; (prel), so every sigil-backed head is named without this list carrying all fourteen.
-   aopv [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.]
+   aopv [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep]
            [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
            [(>) '>] [(>=) '>=] [(=) '=] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]]
    (aopn x l) (atom? l ? (opnom x)  (= x <<l) <><l  (aopn x >l))
+   ; gopword: a head as its canonical word, for every recognizer in the file. the roster of words
+   ; a gate reads is `aopnames`, and t/glaze.l holds each of them to a row here, so a word read by
+   ; name is a word nameable from its value. a compound head (a partial) and an unmapped value
+   ; pass through unchanged; shadowing is the caller's, since a value has no name to shadow.
+   (gopword h) (? (nom? h) h  (two? h) h  (: w (aopn h aopv) (w ? w h)))
    ; adesug: rewrite what amble can own by pure source identity, so the twin/deopt story is
    ; untouched. (X) is X -- an infix span reads as the wrapped application, (k < n) -> ((k < n)),
-   ; so every infix-written body wears these singletons -- a value head is its nom, (list a..) is
-   ; nested links, and (&& a..) is nested (? a .. ()), short-circuit included, since && answers
-   ; its last value or the unit. env-shadowed names stay calls and quoted data stays inert.
-   ; (|| ..) is not rewritten: its value is the first truthy arg, so a rewrite would double-eval.
-   ; aor emits it.
+   ; so every infix-written body wears these singletons, and a value head is its nom.
+   ; env-shadowed names stay calls and quoted data stays inert.
+   ; list, && and || have no arm. all three are macros, and each has already lowered itself before
+   ; this surface exists -- list to the spliced link nif, the connectives to a bound operand and a
+   ; `?` -- so a head here is never one of those words and an arm for one could never run.
    (adesug env ti ta e)
     (? (aquote? e) e
        (atom? e) e
@@ -472,9 +475,7 @@
           vn (nom? op0 || two? op0 ? 0 (aopn op0 aopv))
           op (vn && !(elem vn env) ? vn op0)
           as >e
-          (? (= op 'list && 0 < #as && !(elem op env))
-               ((: (go l) (two? l ? ['. (adesug env ti ta <l) (go >l)] ())) as)
-             (= op '? && 3 < #as)                                            ; a cond chain nests: (? c a c2 b e) is (? c a (? c2 b e))
+          (? (= op '? && 3 < #as)                                            ; a cond chain nests: (? c a c2 b e) is (? c a (? c2 b e))
                ((: (go l) (atom? >l ? (adesug env ti ta <l)
                              (['? (adesug env ti ta <l) (adesug env ti ta <>l)] + (two? >>l ? [(go >>l)] ()))))
                 as)
@@ -486,8 +487,6 @@
                ['? ['= (adesug env ti ta <as) (adesug env ti ta <>as)] 0 1]
              (op = '!== && 2 = #as && !(elem op env))          ; and identity's, the same shape
                ['? ['== (adesug env ti ta <as) (adesug env ti ta <>as)] 0 1]
-             (= op '&& && 2 <= #as && !(elem op env))
-               ((: (go l) (two? >l ? ['? (adesug env ti ta <l) (go >l) ()] (adesug env ti ta <l))) as)
              ((= op op0 ? (adesug env ti ta op0) op) . map (x \ adesug env ti ta x) as))))
    ; njit-amble: the hook entry -- compile s (deopt -> e) or answer 0 (decline; the hook keeps e).
    ; farq = ala's letrec-local predicate (see hook.l): a truthy (farq nom) names a binding that
@@ -568,7 +567,7 @@
        ; all mask through it, so a rebound word stays a call in all four.
        shd  (filter (nm \ elem nm env || farq nm) aopnames)
        denv (env + shd)
-       body (adesug denv ti ta body)                         ; own list/&& by definition (nested links / nested ?s) + untag
+       body (adesug denv ti ta body)                         ; own the cond chain and the negations, + untag
        inits (map (i \ adesug denv ti ta (ainl i inl st)) inits)
        ins  (st 'l)
        nin  #ins
@@ -671,7 +670,6 @@
                     (elem oop '(two? ==)) (aseq cl as)
                     (= oop '= && (aqnom? <as || aqnom? <>as || lit? eqv)) (aseq cl as)
                     (= oop 'tally && elem 'tally gn && atom? >as) (aseq cl as)
-                    (= oop '|| && two? >as) (fbk ? (aseq cl as) (aguard (aseq cl as)))
                     (= op amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
                     (elem oop '(cap cup . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
                     (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
@@ -767,14 +765,6 @@
              (acq st sth sel d) (: le (mint 0)  ln (mint 0)  tr (atruth 0)
               ((acg st d) + <tr + [['cmp A 1] ['br 'le le]]                                       ; heap truth -> net -> twin, or the bit stub; tag(x)<=1 <=> x<=0
                + (acg sth d) + [['jmp ln]] + <>tr + [['label le]] + (acg sel d) + [['label ln]]))
-             (aor as d) (: en (mint 0)                                                                      ; (|| a..): the first truthy value, single-eval, short-circuit --
-              (((: (go l) (atom? >l ? (acg <l d)                                                 ; each arg lands in A; charm truth keeps it (heap truth -> the twin,
-                             (: tr (atruth 0) nx (mint 0)                                                 ; acq's bet); the last arg is the value either way
-                                ((acg <l d)
-                                 + <tr + [['cmp A 1] ['br 'gt en]]
-                                 + (fbk ? ([['jmp nx]] + <>tr + [['label nx]]) ())
-                                 + (go >l))))) as)
-               + [['label en]]))
              (adrive cso) (: bb (mint 0)                                                                    ; apply the value at Sp[cso] to the arg in A, via the walkable resume:
               [['st SP -32 A] ['ld T SP cso] ['st SP -24 T]                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
                  ['lar T bb] ['lar X 'entry0] ['subs T T X] ['leax T T T 1 1]                       ; pool code base, so a GC with the call pending walks it clean (no retB)
@@ -923,7 +913,6 @@
                        (elem oop '(& | ^)) (abit op <as <>as d)
                        (= oop 'tally && elem 'tally gn && atom? >as)
                         (atally <as d)                                       ; the tally fast lane (a taken name or multi-arg falls to the call paths)
-                       (= oop '|| && two? >as) (aor as d)
                        (= op amble-lam) (asite as d)
                        (= op go) (ago as d)
                        (acall op as d))))
@@ -2168,7 +2157,7 @@
    (debool e)                                                                                   ; recursively lower &&/||/abs to ?
     (? (atom? e) e  (dquote? e) e
        (two? e && (= <e '@) && two? >e) ('@ . ((debool <>e) . dbarms >>e))
-       (: y (map debool e) h (opword <y) as >y                    ; lower operands first (bottom-up); opword names a glued value head
+       (: y (map debool e) h (gopword <y) as >y                   ; lower operands first (bottom-up); gopword names a value head
           (? (= h '&&) (dband as)  (= h '||) (dbor as)
              (= h 'abs && 1 = #as) (dbabs <as)  y)))
    ; --- specialization (autospec): mix wired in as a recognizer -- the 1st
@@ -2468,7 +2457,10 @@
    (cmlook nm cm) (? (atom? cm) () (= nm <<cm) ><cm (cmlook nm >cm))          ; (name . chain-param-INDEX-list) -> indices (() absent)
    ; cok? -- e is chain-valued: a raw chain word, not an untagged int. such a word must never reach an
    ; arith/cmp operand, where the body would read it as an int; it may only flow to two?/cap/cup or a
-   ; callee's chain slot.
+   ; callee's chain slot. cap/cup are read by NAME here and nowhere else in the file, because chps
+   ; picks a fn's chain params with cuse? (above), which reads the same two words the same way.
+   ; the pair is one classification: name a value head in only one of them and a param counted int
+   ; there is read raw here, so gopword belongs in both or in neither.
    (cok? cm cands cps ps e) (? (elem e cps) 1
                                (two? e && elem <e '(cap cup) && tally e = 2) (cok? cm cands cps ps <>e)
                                0)
@@ -2514,7 +2506,7 @@
              (= op '?)       (4 = #e && groupok? cm pm icands cps pps ps <>e && vok? cm pm icands vcands cps pps ps <>>e && vok? cm pm icands vcands cps pps ps <>>>e)
              0))
        0)
-   (chps body ps) (filter (k \ cuse? body (ps k)) (rangeL 0 #ps))                ; chain-param indices: params used in cap/cup/two? (cuse? from emit.l)
+   (chps body ps) (filter (k \ cuse? body (ps k)) (rangeL 0 #ps))                ; chain-param indices: params used in cap/cup/two?, cok?'s other half
    (grpok-1 fns cm pm icands vcands vnames c) (: p (afind (q \ (= <<q <c)) fns)
                                 cps (map (k \ ><p k) (cmlook <c cm))      ; this fn's chain-param names (its index list -> names)
                                 pps (map (k \ ><p k) (cmlook <c pm))      ; ... and its point-param names (same alist shape)
@@ -2749,7 +2741,7 @@
    ; identity, so the value table is one peep.
    gvbox {}
    gone (mint 0)
-   canon-names '(+ - * // % & | ^ < <= > >= = twin re im cap cup . two? one? tally peep pin   ; the tree's canonical spellings, one per value:
+   canon-names '(+ - * // % & | ^ < <= > >= = == twin re im cap cup . two? one? tally peep pin   ; the tree's canonical spellings, one per value:
                  map filter foldl foldr jot iota net string list && ||)                       ; link reads ., atom? reads one?, ~ reads twin
    ctab {}
    (ctable gv) (? (peep ctab 'ok 0) ctab
@@ -2778,7 +2770,9 @@
                                                       (. b (. (cw <>bs (ps + bnd2)) (cbs >>bs)))))
                                        (': . cbs >x))
                           (nom? <x) ((cnom <x bnd 1) . map (y \ cw y bnd) >x)                       ; the head may take an operator spelling
-                          (map (y \ cw y bnd) x))
+                          (: hc (two? <x ? 0 (peep tab <x 0))                                     ; ..or arrive as the op VALUE a macro or opfix spliced,
+                             (hc && !(elem hc bnd) ? (hc . map (y \ cw y bnd) >x)                 ; which reads as its word unless a binder took that word
+                                                     (map (y \ cw y bnd) x))))
                          (cw e ()))
                    e))
    (auto-ev e) (? !x86? (? (qual e)  (memo e (l \ jitir l arch))        ; a64: integer + scalar-float lanes native

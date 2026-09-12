@@ -211,7 +211,7 @@ static ai_noinline void mag_divmod(ai_limb *q, ai_limb *r,
 static int load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg) {
  if (bigp(x)) { struct ai_big *b = big(x); intptr_t s = b->slen;
   *neg = s < 0, *out = b->limb; return (int) (s < 0 ? -s : s); }
- intptr_t v = charmp(x) ? (intptr_t) getcharm(x) : sun_get(x);
+ intptr_t v = toint(x);
  *neg = v < 0;
  uintptr_t u = *neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
  int k = 0;
@@ -231,15 +231,6 @@ ai_flo_t ai_big_to_flo(word x) {
 // the bignum's two's-complement value mod 2^W (its low machine word). used when
 // an integer-array elementwise op must broadcast a bignum scalar down to one
 // machine-int element ("arrays win; demote the bignum by its low bits").
-static intptr_t ai_big_low(word x) {
- struct ai_big *b = big(x);
- intptr_t sl = b->slen;
- bool neg = sl < 0;
- int n = (int) (neg ? -sl : sl);
- uintptr_t u = 0;
- for (int i = 0; i < n && i < wlimbs; i++) u |= (uintptr_t) b->limb[i] << (limb_bits * i);
- return (intptr_t) (neg ? (uintptr_t) 0 - u : u); }
-
 int ai_big_cmp(word a, word b) {
  ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool na, nb;
  int nla = load_int_mag(a, sa, &la, &na), nlb = load_int_mag(b, sb, &lb, &nb);
@@ -253,22 +244,12 @@ int ai_big_cmp(word a, word b) {
 word ai_big_canon(word **hp, ai_limb const *limb, int n, bool neg) {
  while (n > 0 && limb[n-1] == 0) n--;
  if (n == 0) return zero;
- if (n <= wlimbs) {
+ if (n <= wlimbs) {                        // small enough to weigh against the charm range
   uintptr_t u = 0;
   for (int i = 0; i < n; i++) u |= (uintptr_t) limb[i] << (limb_bits * i);   // combine limbs into a word
-  uintptr_t const fixmag = (uintptr_t) 1 << (Bits - 2),   // |mincharm|  = 2^(W-2)
-                  boxmag = (uintptr_t) 1 << (Bits - 1);   // |INT_MIN|  = 2^(W-1)
-  intptr_t val;
-  if (!neg) {
-   if (u <= fixmag - 1) return putcharm((intptr_t) u);       // maxcharm = 2^(W-2)-1
-   if (u > boxmag - 1) goto big;                            // > INTPTR_MAX -> bignum
-   val = (intptr_t) u; }
-  else {
-   if (u <= fixmag) return putcharm((intptr_t) ((uintptr_t) 0 - u));   // incl mincharm
-   if (u > boxmag) goto big;                                          // < INTPTR_MIN -> bignum
-   val = (intptr_t) ((uintptr_t) 0 - u); }                            // incl INTPTR_MIN
-  return mk_sun(hp, val); }
-big: ;                                   // C11 wants a statement before a declaration
+  uintptr_t const fixmag = (uintptr_t) 1 << (Bits - 2);   // |mincharm| = 2^(W-2)
+  if (!neg) { if (u <= fixmag - 1) return putcharm((intptr_t) u); }          // maxcharm = 2^(W-2)-1
+  else if (u <= fixmag) return putcharm((intptr_t) ((uintptr_t) 0 - u)); }   // incl mincharm
  struct ai_big *b = ini_big(big(*hp), neg ? -n : n);
  for (int i = 0; i < n; i++) b->limb[i] = limb[i];
  *hp += b2w(sizeof(struct ai_big) + (size_t) n * sizeof(ai_limb));
@@ -451,8 +432,8 @@ bool ai_ratio_exact(struct ai *g, word x) {
  word p = coin_load(x);
  if (!chainp(p) || !chainp(B(p))) return false;
  word n = A(p), d = A(B(p));
- if (!(charmp(n) || sunp(n) || bigp(n)) || !(charmp(d) || sunp(d) || bigp(d))) return false;
- return charmp(d) ? d != putcharm(0) : sunp(d) ? sun_get(d) != 0 : true; }
+ if (!intp(n) || !intp(d)) return false;
+ return charmp(d) ? d != putcharm(0) : true; }   // a canonical bignum is never 0
 // ..the lane: trunc(n/d) by long division, clamped to the charm bounds like every
 // rung (the codomain law), then the rung's own adjustment -- ceil rounds a dropped
 // remainder up, saturate is ceil with its floor raised to 0. the operand rides
@@ -838,7 +819,7 @@ lvm(lvm_trayctor) {
  // the type is read off the witness's kind -- a value inhabiting the tier: 0 -> Z,
  // 0.0 -> R, ~(0 0) -> C, and anything else (canonically (), the O floor) -> O.
  intptr_t ty = twinp(t) ? ai_C : gemp(t) ? ai_R
-             : (charmp(t) || sunp(t) || bigp(t)) ? ai_Z : ai_O;
+             : intp(t) ? ai_Z : ai_O;
  uintptr_t rank = 0, nelem = 1;
  for (word l = shp; chainp(l); l = B(l)) {
   word d = A(l);
@@ -1244,7 +1225,7 @@ static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb) {
 // exactly (near-equal rationals order right where the float quotient ties);
 // anything wider falls to the sign-exact net quotients.
 static ai_inline bool ratio_ifit(word x, int64_t *v) {
- if (charmp(x) || sunp(x)) return *v = toint(x), true;
+ if (charmp(x)) return *v = toint(x), true;
  if (!bigp(x)) return false;
  struct ai_big *b = big(x);
  int n = big_nlimbs(x);
@@ -1527,8 +1508,8 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
     #undef VBF
    }
   } else if (!fdom && (!atray || va->type == ai_Z) && (!btray || vb->type == ai_Z)) {
-   intptr_t sia = atray ? 0 : (charmp(a) ? (intptr_t) getcharm(a) : sun_get(a)),
-            sib = btray ? 0 : (charmp(b) ? (intptr_t) getcharm(b) : sun_get(b)),
+   intptr_t sia = atray ? 0 : toint(a),
+            sib = btray ? 0 : toint(b),
             *ap = atray ? (intptr_t*) tray_data(va) : 0, *bp = btray ? (intptr_t*) tray_data(vb) : 0,
             *rp = (intptr_t*) tray_data(r);   // r is ai_Z for both int-arith and the mask
    if (cmpf) {
@@ -1550,8 +1531,7 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
  // the int domain demotes a bignum scalar by low bits for arithmetic, but a
  // comparison against one is decided exactly by its sign below
  ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
- intptr_t ia = atray ? 0 : charmp(a) ? getcharm(a) : bigp(a) ? ai_big_low(a) : sun_get(a),
-          ib = btray ? 0 : charmp(b) ? getcharm(b) : bigp(b) ? ai_big_low(b) : sun_get(b);
+ intptr_t ia = atray ? 0 : toint(a), ib = btray ? 0 : toint(b);
  bool abig = !atray && bigp(a), bbig = !btray && bigp(b);   // at most one (the other is an array)
  int asign = abig ? (big(a)->slen < 0 ? -1 : 1) : 0,
      bsign = bbig ? (big(b)->slen < 0 ? -1 : 1) : 0;

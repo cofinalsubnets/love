@@ -10,23 +10,24 @@
    ; --- the kinds. this roster is `enum q`, so the order here is the dispatch lattice
    ; itself, each lane a contiguous block; love.h's narrative argues that order. dispatch
    ; only -- a tray enters as its four tiers and never as the bare rep.
-   mx-kinds '(KMint KNom KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO
+   mx-kinds '(KMint KNom KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO
               KString KChain KTablet KCoin)
    ; the rows' love names, in the same order: what `kind` answers for a built-in. the coin
    ; row is the one `kind` refines: a struck coin's own name, else lambda, cask, port.
-   mx-kind-noms '(mint nom charm sun gem twin big trayz trayr trayc trayo string chain tablet coin)
+   mx-kind-noms '(mint nom charm sun gem twin trayz trayr trayc trayo string chain tablet coin)
    _ (assert (= #mx-kind-noms #mx-kinds))
    ; the arithmetic lane: every numeric kind routes identically, gem tower and tray alike
-   mx-numk '(KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO)
+   mx-numk '(KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
 
    ; --- the reps: what a heap object's hot says it is, a different question from which lane
-   ; it dispatches down. `ai_typ` answers these nine and nothing else, so a switch over them
+   ; it dispatches down. `ai_typ` answers these eight and nothing else, so a switch over them
    ; is exhaustive. the tray differs: one rep, refined by element tier into four kinds.
-   mx-reps '(DMint DNom DSun DGem DTwin DBig DTray DString DChain)
+   mx-reps '(DMint DNom DGem DTwin DBig DTray DString DChain)
    ; each rep's dispatch kind. DTray's entry is the tier ladder's floor and is never read:
-   ; ai_kind branches on the tray first and adds the tier itself.
-   mx-repq '((DMint KMint) (DNom KNom) (DSun KSun) (DGem KGem) (DTwin KTwin)
-             (DBig KBig) (DTray KTrayZ) (DString KString) (DChain KChain))
+   ; ai_kind branches on the tray first and adds the tier itself. DBig -> KSun is the one
+   ; row where the two rosters disagree by name: one boxed integer, limbs in C, `sun` to love.
+   mx-repq '((DMint KMint) (DNom KNom) (DGem KGem) (DTwin KTwin)
+             (DBig KSun) (DTray KTrayZ) (DString KString) (DChain KChain))
 
    ; --- the rows. one per (name numk KMint KNom KString KChain KTablet KCoin): the numeric
    ; lane, then the six kinds one at a time -- fifteen, so every row is total.
@@ -59,10 +60,10 @@
    ; --- which row each kind takes. a KTablet or KCoin operand wins over everything, so their
    ; rows and columns are both the Church lanes: a tablet is a lookup lambda here.
    mx-add-of '((ADD_MINT KMint KNom)
-               (ADD_NUM KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO)
+               (ADD_NUM KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
                (ADD_STR KString) (ADD_TWO KChain) (ADD_H KTablet KCoin))
    mx-mul-of '((MUL_MINT KMint KNom) (MUL_REP KString)
-               (MUL_NUM KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO)
+               (MUL_NUM KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
                (MUL_CHAIN KChain) (MUL_H KTablet KCoin))
 
    ; --- expanding the table ------------------------------------------------------

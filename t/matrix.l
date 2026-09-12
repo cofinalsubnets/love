@@ -1,13 +1,14 @@
 ; === the generic-op dispatch matrices, walked cell by cell ====================
 ; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
-; (l.h enum q): kcharm | ksun kgem ktwin (the lean scalar-star boxes) | KBig |
-; ktrayZ ktrayR ktrayC ktrayO (the tray tower -- ONE rep, DTray, refined by element
-; tier) | kstring kmint | kchain(chain) | ktablet khot.
+; (l.h enum q): kcharm | ksun kgem ktwin (the boxed scalars) | ktrayZ ktrayR
+; ktrayC ktrayO (the tray tower -- ONE rep, DTray, refined by element tier) |
+; kstring kmint | kchain(chain) | ktablet khot.
 ; a monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
 ; < <= = >= >) are lane aps that refine the same lattice internally.
-; This file holds the fine within-category cells: fix vs box/float/complex vs
-; bignum, the four array tiers, the rep pairings a coarse law folds together. The
+; This file holds the fine within-category cells: fix vs box/float/complex, a box
+; one word wide vs wider, the four array tiers, the rep pairings a coarse law
+; folds together. The
 ; coarse cell of each row -- what the band law already says -- is spec.l's, and
 ; the church-numeral rows are functions.l's; a row that is wholly theirs is a
 ; pointer here, not a copy. So a dispatch regression (e.g. a data-sentinel stride
@@ -15,12 +16,13 @@
 ; asserting one cell twice.
 
 ; one representative value per kind -- the legend a row is read against. The three
-; scalar-star boxes are distinct kinds (KGem/KTwin/KSun) but share one apply cell.
+; boxed scalars are distinct kinds (KGem/KTwin/KSun) but share one apply cell, and
+; KSun is one kind at two widths: mx-box fits a word, mx-big does not.
 (: mx-fix 5                              ; kcharm
    mx-real 2.5                            ; kgem, the gem (float box)
    mx-cpx (2 ~ 3)                       ; ktwin, complex scalar (Cp)
-   mx-box (<< 1 62)                      ; ksun, the sun (wide int)
-   mx-big (100 2)                     ; KBig
+   mx-box (<< 1 62)                      ; ksun, a boxed int one word wide
+   mx-big (100 2)                     ; ksun again, past the word
    mx-az  @(10 20)                       ; ktrayZ (int tray)
    mx-ar  @(1.5 2.5)                     ; ktrayR (float tray)
    mx-ac  (array 2 (1 ~ 2) (3 ~ 4))    ; ktrayC (packed complex tray)
@@ -55,13 +57,11 @@
  ; --- row kmint: a point applies as every unit does, const-1 -- spec.l's mints section
  ;     says it for both the bare mint and the named symbol, so the row is a pointer.
 
- ; --- the scalar-star + array rows (KGem/KTwin/KSun/KTray*, all -> data_num_apply):
- ;     a star or tray is a Church numeral (operand ** operator, or operator-fold over a
- ;     function). The whole tower, saturation included, is functions.l's. ---
-
- ; --- row KBig: a bignum is also a Church numeral, but its magnitude is always
- ;     astronomical (>= 2^62), so (bignum x) cannot terminate in a finite test.
- ;     The row exists (-> data_num_apply, same as the tray tiers) but is not exercised. ---
+ ; --- the boxed-scalar + array rows (KGem/KTwin/KSun/KTray*, all -> data_num_apply):
+ ;     a box or tray is a Church numeral (operand ** operator, or operator-fold over a
+ ;     function). The whole tower, saturation included, is functions.l's. A KSun past
+ ;     the word is a Church numeral too, but its magnitude is astronomical, so
+ ;     (bignum x) cannot terminate in a finite test and that half of the row is unexercised. ---
 
  ; --- non-matrix apply paths: the charm numeral, the lambda and the cask take their own
  ;     routes and are said elsewhere; the nif partial and the tablet miss are here ---
@@ -79,7 +79,7 @@
  (7.5 = (5 + 2.5))   (7.5 = (2.5 + 5))         ; fix + float (both orders)
  (5.0 = (2.5 + 2.5))                           ; float + float
  (? word ((63 2) = ((<< 1 62) + (<< 1 62))) 1) ; box + box -> 2^63 (64-bit word only)
- (? word (big? ((<< 1 62) + (<< 1 62))) 1)
+ (? word (sun? ((<< 1 62) + (<< 1 62))) 1)
  (? word (sun? ((<< 1 62) + 1)) 1)              ; box + fix stays a box
  (? word (((<< 1 62) + 1) = (1 + (<< 1 62))) 1) ; ...and commutes
  ((1 + (100 2)) = ((100 2) + 1))                ; big + fix == fix + big (commutes)

@@ -14,12 +14,15 @@
    _ (? !cd () (: _ (puts "sbtest: chdir failed\n") (quit 1)))
    ; the same-text equality for list-shaped store values
    (seq a b) (show a = show b)
-   ; the tree: two files, one ignored dir
+   ; the tree: two files and two ignored dirs -- junk/ by the file below, b/ by the
+   ; built-in, which is a DIRECTORY rule (the file called b further down stays)
    _ (mkdir "sub" 493)
    _ (lay "a.txt" "one\ntwo\nthree\n")
    _ (lay "sub/b.txt" "hello\n")
    _ (mkdir "junk" 493)
    _ (lay "junk/x" "never\n")
+   _ (mkdir "b" 493)
+   _ (lay "b/out" "built\n")
    _ (mk ())
    _ (lay ".sbignore" "junk\npr\nnest2\nmrg\n")   ; junk/ + the nests we sync with
    p1 (sb-record "first")
@@ -29,7 +32,7 @@
 (test
  (64 = tally p1)                                       ; a real content address
  (seq (tips ()) [p1])                               ; the one tip
- (3 = tally s1)                                        ; junk/ stayed out; .sbignore is a file like any other
+ (3 = tally s1)                                        ; junk/ and b/ stayed out; .sbignore is a file like any other
  (".sbignore" = <<s1)                                  ; path-sorted
  (blob <>(s1 1) = "one\ntwo\nthree\n")               ; the blob rides its hash
  !again                                                ; a clean tree records nothing
@@ -223,6 +226,8 @@
 (: _ (mkdir "mrg/e" 493) _ (chdir "mrg/e") _ (mk ())
    _ (lay "a" "v1\n") pa (sb-record "a born")
    _ (lay "a" "v2\n") pb (sb-record "a edited")
+   ; "b" on purpose: a built-in ignore names it, and those are directory-only, so a
+   ; FILE by that name is an ordinary file. this line is what says so.
    _ (lay "b" "x\n")  pc (sb-record "b born -- independent")
    n1 (sb-apply [pa])                                  ; checkout: the tree as OF pa
    a1 (<>(look "a")) b1 (look "b")

@@ -111,3 +111,31 @@
    (go n acc) (n <= 0 ? acc (go (n - 1) [(two? n) (cap n) (cup n) (. n n) (|| n n) (tally n)]))
    _ (test (all (x \ x = 7) (go 40 0)))
    0)
+
+; --- a head read by name is nameable from its value -----------------------------------
+; a head arrives as a nom or as the raw op VALUE a macro or opfix splices. gopword is the
+; file's one bridge between the two, and aopnames is the roster of words the recognizers
+; read. every word on it either has a row below or is wordless -- a macro, the reader's
+; syntax, or a module-local read with no global value. adding a word to aopnames without
+; classifying it turns this red, which is the whole reason the roster is stated once.
+(: G (cite 'glaze)
+   (? G (: gw (G 'gopword)
+           named [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep] [tally 'tally]
+                  [(+) '+] [(-) '-] [(*) '*] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]
+                  [(<) '<] [(<=) '<=] [(>) '>] [(>=) '>=] [(=) '=] [one? 'one?] [nil? 'nil?]]
+           wordless '(list && || atom? != !== mpeep)
+           _ (test
+              (all (r \ (<>r = gw <r)) named)                                 ; a value answers its word
+              ('zz = gw 'zz)                                                   ; a nom is its own word
+              (sort ((map (r \ <>r) named) + wordless) = sort (G 'aopnames))) ; and the two halves ARE the roster
+           0)
+      0))
+; and the carrier makes no difference to the answer. a recognizer that takes a value head
+; the lowering behind it cannot name does not decline -- it emits a body reading a binder
+; that never got laid, so hold the two spellings to the same number rather than to a verdict.
+(: plus (+)
+   (mk h) (list ': (list 'f 'n 'acc)
+                  (list '? (list '= 'n 0) 'acc (list 'f (list '- 'n 1) (list h 'acc 'n)))
+                  (list 'f 10 0))
+   _ (test (55 = ev (mk '+)) (55 = ev (mk plus)) (ev (mk '+) = ev (mk plus)))
+   0)

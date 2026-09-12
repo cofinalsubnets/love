@@ -18,8 +18,12 @@
 ; at O(index), so a 225-long row costs 225x what a 15-long one does and the whole
 ; corpus feels it. hence mvec/mlist, nvec/nlist's shape one type up.
 ; names are emitted for every kind and lane (mxKCharm, mxLaddn) so t/uumxlaw.l
-; can name a cell instead of counting to it. untrusted like every translator here:
-; a wrong lift can miss a law, never fake one, and each row prints under its kind.
+; can name a cell instead of counting to it, and mxnumeric lifts mx-numk for the
+; same reason: a law ranges over mxnk and asks, never over a block reached by
+; offset. a roster that grows leaves such a range short, and a bounded forall
+; that stopped covering its carrier is green for the wrong reason.
+; untrusted like every translator here: a wrong lift can miss a law, never fake
+; one, and each row prints under its kind.
 ;
 ; load the table first, in its own top-level form: the next form's bare mx-kinds /
 ; mx-add / mx-mul references resolve at its compile, which must follow this run.
@@ -145,6 +149,8 @@
                     (join ["`*`: " (show nk) " kinds square, " (show (nk * nk)) " cells"])))
    _ (puts (flatdef "mxbandtbl" (map band ridx)
                     "the band partition, DERIVED by row+column equality over both squares"))
+   _ (puts (flatdef "mxnumtbl" (map (i \ (elem (kinds i) mx-numk ? 1 0)) ridx)
+                    "mx.l's own mx-numk roster: which kinds take the arithmetic lane"))
    _ (puts (flatdef "mxmirtbl" (map (x \ lcode (mir x)) lanes)
                     "mirror: the argument swap's action on lanes, in code order"))
    _ (puts (griddef "mxaddbgrid" (rowsof addm bimg bimg) blabs
@@ -152,10 +158,11 @@
    _ (puts (griddef "mxmulbgrid" (rowsof mulm bimg bimg) blabs
                     (join ["`*` on the band quotient, " (show (nb * nb)) " cells"])))
    _ (pl "")
-   _ (pl " ; --- and the six lookups they carry ---")
+   _ (pl " ; --- and the seven lookups they carry ---")
    _ (pl " (defn mxadd (pi a nat (pi b nat nat)) (lam a (lam b (mxnth b (mxrow a mxaddgrid)))))")
    _ (pl " (defn mxmul (pi a nat (pi b nat nat)) (lam a (lam b (mxnth b (mxrow a mxmulgrid)))))")
    _ (pl " (defn mxband (pi k nat nat) (lam k (mxnth k mxbandtbl)))")
+   _ (pl " (defn mxnumeric (pi k nat bool) (lam k (nateqb (mxnth k mxnumtbl) 1)))")
    _ (pl " (defn mxmirror (pi l nat nat) (lam l (mxnth l mxmirtbl)))")
    _ (pl " (defn mxaddband (pi x nat (pi y nat nat))")
    _ (pl "   (lam x (lam y (mxnth y (mxrow x mxaddbgrid)))))")

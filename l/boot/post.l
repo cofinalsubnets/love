@@ -537,7 +537,7 @@
                 (gem? x) (pgem o x)
                 (tray? x) (ptray o x sn)
                 (twin? x) (ptwin o x)
-                (sun? x || big? x) (pnum o x)
+                (sun? x) (pnum o x)
                 o)
   px)))
 
