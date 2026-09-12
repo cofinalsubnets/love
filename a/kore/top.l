@@ -51,9 +51,6 @@
        ((show (// s 60)) + ":" + (uzpad 2 (show (% s 60)))
                         + "." + (uzpad 2 (show (% tk tp-hz)))))
    (tp-cut s w) (? (w < #s) (snip s 0 w) s)
-   ; snip is a STRING knife: handed a list it answers 0 and says nothing, so the
-   ; rows that fit are taken by a walk
-   (tp-take l n) (? ((n < 1) || !(two? l)) () (<l . (tp-take >l (n - 1))))
 
    ; ---- the samples -------------------------------------------------------------
    ; /proc/stat's first line without its name: user nice system idle iowait irq
@@ -171,7 +168,7 @@
        _ (pin st 'cpu cpu)
        top (hd + (tp-mem mi) + ["" tp-head])
        room (: n (h - #top) (? (0 < n) n 0))
-       body (map (\ r (tp-line r w)) (? (h < 1) rs (tp-take rs room)))
+       body (map (\ r (tp-line r w)) (? (h < 1) rs (snip rs 0 room)))
        ((tp-join (map (\ s (tp-cut s w)) top)) + (tp-join body)))
 
    ; ---- the two faces -----------------------------------------------------------
