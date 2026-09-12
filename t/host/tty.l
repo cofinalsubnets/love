@@ -98,7 +98,7 @@
 ; which is why its key cannot be typed up front -- ink asks `cue?` BEFORE its first
 ; frame, so a waiting key ends it having drawn nothing. read until a painted cell is
 ; on the wire, then type: the app says when, and no timer is involved.
- t (spawn "b/love -l a/ink.l -e '(ink ())'" 12 40)
+ t (spawn "b/love ink" 12 40)
  m >t
  seen (: (upto acc) (? (has? acc "\e[48;5;") acc
                        (: ch (see m) (? (= ch -1) acc (upto (acc + string ch)))))
@@ -119,6 +119,29 @@
     (0 = (count itx "\e[48;5;") % 440)
     (0 < cbg is 0)                                           ; ..and it really is painted
     (0 = cbg is 440))                                        ; with the last row spared
+
+; --- slop: the shimmer with a player under it, and only forward moves him ---
+; slop paints before it reads, and then keeps painting whether a key comes or not, so
+; the same rule as ink applies: wait for the wire to show a painted cell, then type.
+; at 12x40 the map is 11 rows -- 5 of slop, 6 bare -- and the first square is one press.
+ st (spawn "b/love slop" 12 40)
+ sm >st
+ sseen (: (upto acc) (? (has? acc "\e[48;5;") acc
+                        (: ch (see sm) (? (= ch -1) acc (upto (acc + string ch)))))
+          (upto ""))
+ _ (say sm "k")                                             ; gap 6, cost 1: one square
+ _ (rest 200)
+ _ (say sm "jlq")                                           ; back, sideways, then ashore
+ stx (sseen + slurp sm)
+ _ (waitfor <st)
+ ss (: s (mkscr 12 40) _ (scribe s (held stx)) s)
+ _ (test
+    (has? stx "\e[?1049h") (has? stx "\e[?1049l")            ; on the alternate screen
+    (0 < cbg ss 0)                                           ; row 0 is slop, painted
+    (0 = cbg ss (5 * 40))                                    ; row 5 is bare, the halves split
+    ((9 . 20) = at ss)                                       ; one square north of the bottom row
+    (has? (rowtx ss 11) "you turn back")                     ; the bar, on the last row of 12
+    (has? stx "you turn back, 1 press in"))                  ; j and l spent nothing
 
 ; --- the story: a level file is a fixed map, so this one place IS a law ---
  d (run "b/love story" ":q\r" 14 60)
