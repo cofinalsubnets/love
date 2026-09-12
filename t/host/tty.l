@@ -151,7 +151,7 @@
 ; it lays down while nobody is reading the pty fill the thing and stand at five.
  sgt (spawn "b/love slop phone 38" 14 64)
  sgm >sgt
- sgseen (: (upto acc) (? (has? acc "one journey yet remains") acc
+ sgseen (: (upto acc) (? (has? acc "one way forward remains") acc
                          (: ch (see sgm) (? (= ch -1) acc (upto (acc + string ch)))))
            (upto ""))
  _ (say sgm "z")                                            ; typed into the deaf half
@@ -163,10 +163,10 @@
     (has? sgtx "what you carry")                            ; the box, titled
     (has? sgtx "phone")                                     ; ..naming what came up
     (has? sgtx "38 pennies")
-    (has? sgtx "one journey yet remains")
+    (has? sgtx "one way forward remains")
     (4 > count sgtx "\e[H"))                                ; ..and it stood while deaf
  sn (run "b/love slop" "q" 14 64)
- _ (test !(has? <sn "one journey yet remains"))
+ _ (test !(has? <sn "one way forward remains"))
 
 ; --- slop: the shimmer with a player under it, and only forward moves him ---
 ; slop paints before it reads, and then keeps painting whether a key comes or not, so

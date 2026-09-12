@@ -102,10 +102,10 @@
                  pl {'x 1 'y 1 'gl 64 'hue 228 'hp 40 'mx 40 'penny 0}
                  {'d hd 'lvl 1 'tn 0 'sb sb 'p pl 'ms () 'loot (tablet 0) 'msg "" 'over 0}))
 
-; the tower holds: a stride into rock stands you still
+; the floor holds: a stride into rock stands you still, and the floor says its own name
 (: g (hand-g ())
    _ (crawl-turn g [0 -1])
- (test (1 = g 'p 'x) (1 = g 'p 'y) (find (g 'msg) "the tower holds" 0)))
+ (test (1 = g 'p 'x) (1 = g 'p 'y) (find (g 'msg) "the garden holds" 0)))
 
 ; pennies weigh in, and they are the only thing on the floor
 (: g (hand-g ())

@@ -64,11 +64,11 @@
  ; fill and fit doing the work, so these lines are the whole of it.
  sign-ttl  "what you carry"
  sign-both '("with {~} in hand, and ~ pennies besides,"
-             "one journey yet remains")
+             "one way forward remains")
  sign-tok  '("with {~} in hand,"
-             "one journey yet remains")
+             "one way forward remains")
  sign-pnn  '("with ~ pennies in hand,"
-             "one journey yet remains")
+             "one way forward remains")
  sign-rest '(""
              "forward  k   or up"
              "leave    q   or esc"
@@ -83,26 +83,26 @@
  ; --- the lie of the land: sines across the columns, a hash within them ---
  ; two multiply-shift rounds masked to 32 bits, for the grass
  lim 4294967296
- (mix a) (: h ((a * 2654435761) % lim)
+ (mix a) (: h (a * 2654435761 % lim)
             h2 ((h ^ (h >> 15)) * 2246822519 % lim)
             (h2 ^ (h2 >> 13)))
  (dice w x k) ((mix ((w * 374761393) + (x * 668265263) + 1)) % k)
  ; the road wanders on two sines a screen and a few screens long -- so it bends where
  ; you can see it, never repeats, and never leaves the width
  (slop-road g w) (: mid ((g 'c) // 2)
-                    (mid + int ((3.0 * sin (w * 0.21)) + (2.0 * sin (w * 0.063)))))
+                    (mid + int (3.0 * sin (w * 0.21) + 2.0 * sin (w * 0.063))))
  ; the shoreline and the depth of beach behind it: two sines each, wavy the way the road
  ; is wavy. the amplitude-times-frequency sum is what matters -- keep it under one row a
  ; column and the quantized edge steps one row at a time and reads as a coast; let it
  ; over and the edge drops two rows at once and the whole thing reads as a skyline.
  ; here the shore is 0.61 and the sand 0.42.
- (shore-wave x) (int ((3.0 * sin (x * 0.17)) + (1.8 * sin (x * 0.058))))
- (sand-deep x) (6 + int ((2.2 * sin (x * 0.23)) + (1.4 * sin (x * 0.081))))
+ (shore-wave x) (int (3.0 * sin (x * 0.17) + 1.8 * sin (x * 0.058)))
+ (sand-deep x) (6 + int (2.2 * sin (x * 0.23) + 1.4 * sin (x * 0.081)))
  ; the mean shoreline: three screens above the first frame's top, which is what leaves
  ; the walk its grass -- two screens for the song to fall quiet over and one more to
  ; hold it there and come back up in. never nearer than the deepest beach the columns
  ; actually laid, so the opening screen is field and nothing else on a short terminal.
- (shore0 r top) (: v (0 - (3 * r)) w (0 - (1 + top)) (v < w ? v w))
+ (shore0 r top) (: v (-3 * r) w -(1 + top) (v < w ? v w))
 
  ; a shoreline row is a world row and world rows go negative, so these are tablets and
  ; not casks -- a cask holds bytes, and -15 in one reads back 241
@@ -119,7 +119,7 @@
  (slop-turf g w x)
   (: h (dice w x 120)
      s ((slop-shore g x) + slop-sand g x)        ; this column's last row of beach
-   (? (w <= s) [46 (sand-pens (h % 4))]
+   (w <= s ? [46 (sand-pens (h % 4))]
       (: rx (slop-road g w)
          d (w - ((slop-shore g rx) + slop-sand g rx))    ; rows of grass the road has left
          hw (? (d < 0) 6 (d < 4) (6 - d) 2)              ; five columns wide, thirteen at the sand
@@ -149,7 +149,7 @@
      ; sand -- and the foot of the waveform's ramp, so the two move together. keyed off
      ; the same arithmetic the rise is: the screen's top reaches a row, and you stand
      ; climb rows below the top.
-     gedge ((top + climb) + (r // 2))
+     gedge (top + climb + r // 2)
      g {'r r 'c c 'wtop 0 'w (r - 1) 'shore0 sh0 'shores shores 'sands sands
         'wetto wetto 'climb climb 'drag (r - 3) 'bt bt 'gedge gedge
         'push 0 'spent 0 't 0.0 'msg "" 'over 0
@@ -206,9 +206,9 @@
   (: j (jug 0)
      (go x f) (? (x < (g 'c))
                  (: cell (slop-turf g w x)
-                    gl (? (x = px) 64 <cell)
-                    hue (? (x = px) 231 <>cell)
-                    _ (? (hue = f) () (say j (esc + "[38;5;" + show hue + "m")))
+                    gl (x = px ? 64 <cell)
+                    hue (x = px ? 231 <>cell)
+                    _ (hue != f ? (say j (esc + "[38;5;" + show hue + "m")))
                     _ (say j (string gl))
                   (go (x + 1) hue))
                  ())
@@ -230,15 +230,15 @@
       (? (x < (g 'c))
          (? (slop-wet? g w x)
             (: n (int (peep k [i x] 0))
-               _ (? wet () (say j (esc + "[0m")))
-               _ (? (wet && (n = p)) () (say j (pal n)))
+               _ (!wet && say j (esc + "[0m"))
+               _ (!wet || n != p ? (say j (pal n)))
                _ (say j (? (x = px) sunk (w = slop-shore g x) surf " "))
              (go (x + 1) 1 n -1))
             (: cell (slop-turf g w x)
-               gl (? (x = px) 64 <cell)
-               hue (? (x = px) 231 <>cell)
+               gl (x = px ? 64 <cell)
+               hue (x = px ? 231 <>cell)
                _ (? wet (say j (esc + "[0m")) ())
-               _ (? (hue = f) () (say j (esc + "[38;5;" + show hue + "m")))
+               _ (hue != f ? (say j (esc + "[38;5;" + show hue + "m")))
                _ (say j (string gl))
              (go (x + 1) 0 -1 hue)))
          ())
@@ -247,7 +247,7 @@
 
  ; the skin is asked for at the world row on the screen's top, not at row zero, so the
  ; slop drifts with the ground under it rather than sitting still against a moving shore
- (slop-skin g) (((((g 'field) (g 't) (g 'wtop)) + 4.001) * 2.9) // 1)
+ (slop-skin g) (((g 'field (g 't) (g 'wtop) + 4.001) * 2.9) // 1)
 
  (slop-frame g) (:
    j (jug 0) r (g 'r) wtop (g 'wtop) wetto (g 'wetto)
@@ -256,7 +256,7 @@
    ; where the shore has closed over you, a dark mark is all that says so
    sunk (esc + "[38;5;52m@" + esc + "[39m")
    (line i) (: w (wtop + i) me (? (i = sy) px -1)
-             (? (wetto < w) (turf-row g w me) (wet-line g w i k me sunk)))
+             (wetto < w ? (turf-row g w me) (wet-line g w i k me sunk)))
    (lines i) (i < r ? (say j (line i + esc + "[0m" + esc + "[K\r\n"), lines (i + 1)))
    _ (say j (esc + "[H"))
    _ (lines 0)
@@ -267,9 +267,9 @@
  ; ground, no road, no you -- the bar under it is the only thing left standing.
  (slop-flood g t) (:
    j (jug 0) r (g 'r) c (g 'c)
-   k (((((g 'field) t (g 'wtop)) + 4.001) * 2.9) // 1)
+   k (((g 'field t (g 'wtop) + 4.001) * 2.9) // 1)
    (row i q p) (q < c ? (: n (int (peep k [i q] 0))
-                         (n = p ? () (say j (pal n)), say j " ", row i (q + 1) n)))
+                         (n != p && say j (pal n), say j " ", row i (q + 1) n)))
    (rows i) (i < r ? (row i 0 -1, say j (esc + "[0m" + esc + "[K\r\n"), rows (i + 1)))
    _ (say j (esc + "[H"))
    _ (rows 0)
@@ -325,8 +325,8 @@
  (slop-song-edge g)
   (: gap (slop-gap g) lo (g 'gedge)
      m (? (lo <= gap) 0.0
-          (1 < gap) (: u (((lo - gap) * 1.0) / ((lo - 1) * 1.0))
-                     ((u * u) * (3.0 - (2.0 * u))))
+          (1 < gap) (: u ((lo - gap) * 1.0 / ((lo - 1) * 1.0))
+                     (u * u * (3.0 - 2.0 * u)))
           1.0)
    (? (m < 0.0) 0.0 (1.0 < m) 1.0 m))
 
@@ -345,10 +345,10 @@
      h ((g 'r) // 2)
      v (? (sp <= gap) 1.0
           (lo < gap) (: q (((gap - lo) * 1.0) / ((sp - lo) * 1.0))
-                        s ((q * q) * (3.0 - (2.0 * q)))
-                      (song-floor + ((1.0 - song-floor) * s)))
+                        s (q * q * (3.0 - (2.0 * q)))
+                      (song-floor + (1.0 - song-floor) * s))
           (h <= d) song-floor
-          (0 < d) (: u (((h - d) * 1.0) / (h * 1.0))
+          (0 < d) (: u ((h - d) * 1.0 / (h * 1.0))
                    (song-floor + ((1.0 - song-floor) * u)))
           1.0)
    (? (v < song-floor) song-floor (1.0 < v) 1.0 v))
@@ -415,8 +415,8 @@
                   (fill ())))
      _ (fill ())
      base (s 'fpos)
-     live (filter (p \ (((p 1) 0) >= base)) (s 'vs))       ; not finished
-     now (filter (p \ ((p 0) < (base + song-chunk))) live) ; ..and already begun
+     live (filter (p \ p 1 0 >= base) (s 'vs))       ; not finished
+     now (filter (p \ p 0 < base + song-chunk) live) ; ..and already begun
      _ (pins s 'vs live 'fpos (base + song-chunk))
    (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
 
@@ -504,14 +504,12 @@
  ; the two optional words, in either order: a number is pennies and anything else is
  ; the token. given either, the walk opens on a sign saying what you came in with.
  (digits? t) (: n #t
-                (go i) (? (i >= n) 1 (&& (48 <= (t i) <= 57) (go (i + 1))))
-                (&& (0 < n) (go 0)))
- (num-of t) (: (go i a) (? (i >= #t) a (go (i + 1) ((a * 10) + (t i) - 48))) (go 0 0))
- (slop-args as) (: (go l tk pn) (? !(two? l) [tk pn]
-                                    (: t <l (digits? t ? (go >l tk (num-of t))
-                                                         (go >l t pn))))
-                   (go as () ()))
- (slop-main as) (? (2 < #as) (say err ("slop: " + slop-usage + "\n"), flush err, 2)
+                (go i) (i >= n ? 1 (48 <= t i <= 57 && go (i + 1)))
+                (0 < n && go 0))
+ (num-of t) (:- (go 0 0) (go i a) (i >= #t ? a (go (i + 1) (a * 10 + t i - 48))))
+ (slop-args as) (:- (go as () ()) (go l tk pn) (one? l ? [tk pn]
+                 (: t <l (digits? t ? (go >l tk (num-of t)) (go >l t pn)))))
+ (slop-main as) (2 < #as ? (say err ("slop: " + slop-usage + "\n"), flush err, 2)
                     (: p (slop-args as) (slop-run <p <>p)))
  _ (pins (cite 'verbs 'tab) 'slop (udoor 'slop slop-main slop-usage 1 1)))
 ) ; module slop

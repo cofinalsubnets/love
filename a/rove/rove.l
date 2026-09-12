@@ -1,35 +1,21 @@
 ; rove -- quay's roguelike engine, and the tower it carries.
 ;
-; a floor is one level of the tower: tiles in a cask (0 rock, 1 floor, 2 the
-; stair up), carved by delve -- rooms lashed by L-corridors, the functional
-; rng threaded through so a seed reproduces the floor -- with a seen cask
-; remembering what the climber has been shown. each tier is built of its own
-; stuff, and what is strewn over its ground is the cell's own dice, so a floor's
-; litter reproduces with its rooms. fov is line-of-sight over bresenham
-; strides (walls light up as line endpoints); the painter says one frame of
-; painted cells into any port, so frames gate headless; the helm turns a key into a
-; steer (hjkl + yubn + arrows). the climb is the proving game riding it all:
-; the garden, the middle and heaven, pennies underfoot and a stair above, and
-; over them the circle -- pure state in, pure state out, one key per turn.
+; a floor is tiles in a cask (0 rock, 1 floor, 2 the stair up) carved by delve, with a
+; seen cask for what the climber has been shown; fov is line-of-sight over bresenham
+; strides; the painter says a frame of painted cells into any port, so frames gate
+; headless; the helm turns a key into a steer. each tier is built of its own stuff and
+; its litter is the cell's own dice, so a floor reproduces with its rooms.
 ;
-; it is not a game about fighting. a turn spent acting mends the bar and a turn
-; passed does not, so a climber dies only by standing still beside something; and
-; heaven's shapes stir at half a climber's pace, so they can be walked past.
+; the climb rides all of it: the garden, the middle and heaven, pennies underfoot and a
+; stair above, then the circle. pure state in, pure state out, one key per turn. it is
+; not a game about fighting -- a turn spent acting mends the bar and a turn passed does
+; not, so a climber dies only by standing still beside something.
 ;
-; each floor's music is a RULE and not a recording: a bar is built off the cycle
-; number through the same dice the floors are strewn with, so the garden's chimes are
-; struck by nobody, the middle's horns come when they come, heaven takes one of its
-; long sequences, and the circle is a heart that slows as the ring closes. it goes out
-; the card a chunk at a time from the climb's own loop -- the card takes a chunk at the
-; speed it plays one, so feeding it while no key is waiting is what keeps the time in a
-; game that otherwise only moves when you do.
+; a floor's music is a rule and not a recording, built off the cycle number through the
+; same dice that strews it, and fed to the card from the climb's own loop.
 ;
-; run: love tower
-; the engine core is pure love (delve/fov/paint/crawl-* run headless, gated by
-; t/host/rove.l); only tower-run ties the tty (cli's stage over
-; i/posix.c), so the climb never joins the corpus -- t/host/tty.l plays it on a pty
-; instead. a module, and the name is the engine's: slop rides its roll and its
-; steer, and story.l's hatch reaches tower-run by name.
+; run: love tower. the engine is pure love and gates headless in t/host/rove.l; only
+; tower-run ties the tty, and t/host/tty.l plays it on a pty.
 (module (rove tower-run tower-main dat open? dput delve fov clear? paint steer
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
          mend ascend fill fit circle? circle-new circle-stride circle-frame
@@ -38,9 +24,8 @@
          flavour mutter underfoot sign-box sign-over
          songs tower-bars tower-tune song-vol song-new song-feed drain-keys
          garden-bars middle-bars sky-bars heart-bars heart-rate tune?)
-; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
-; there. ask before splicing -- an absent module is a scare, and the names below that
-; want a tty go missing on that seat exactly as they did before there was a module.
+; posix is optional -- the page's seat (i/wasm) links none of it and this file runs
+; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
 ; and ink, which the last floor paints with: the shader the walk runs, stopped
 (borrow 'ink)
@@ -151,11 +136,9 @@
             (h2 ^ (h2 >> 13)))
  (dice x y s k) ((mix ((y * 374761393) + (x * 668265263) + (s * 2654435761) + 1)) % k)
 
- ; --- THE MAKE OF EACH FLOOR: what a tier is built of, and the only place its look
- ; is written. rock, then the ground, then what is strewn over the ground, then the
- ; plan its rooms are cut to. a face is (glyph lit dim) -- lit for what the lantern
- ; shows, dim for what is only remembered; a strewing carries a fourth number, how
- ; many cells in a hundred wear it.
+ ; --- the make of each floor: rock, the ground, what is strewn over it, and the plan
+ ; its rooms are cut to -- the only place a tier's look is written. a face is
+ ; (glyph lit dim), and a strewing carries a fourth number: cells in a hundred.
  th-garden '((38 28 22) (46 143 58)                     ; hedge and earth
              ((44 71 65 26 "tuft") (34 34 22 12 "grass") (42 212 89 6 "aster")
               (42 220 136 5 "marigold") (126 38 24 3 "runnel"))
@@ -215,16 +198,15 @@
        (121 || 377) '(-1 -1) (117 || 373) '(1 -1) (98 || 354) '(-1 1) (110 || 366) '(1 1)
        k)
 
- ; --- THE WORDS: every line the climb says, and every table it reads from. a ~ takes
- ; the next value, {braces} are the token's pen, and no sentence is built anywhere
- ; below -- so this block is the whole of the text, and the only place to edit it.
+ ; --- the words: every line the climb says. a ~ takes the next value and {braces} are
+ ; the token's pen; nothing below is built, so this block is the whole of the text.
  w-open   "the tower stands over you. get the {token}"
- w-floor  "~. get the {token}"
+ w-floor  "this is ~. get the {token}"
  w-strike "you strike the ~ (~)"
  w-kill   "the ~ is done for"
  w-bite   "the ~ bites you (~)"
  w-dead   "you are done for"
- w-wall   "the tower holds"
+ w-wall   "~ holds"
  w-stair  "no stair here"
  w-penny  "you pocket ~ pennies"
  w-ring   "you strike the circle"
@@ -235,11 +217,9 @@
  w-lost   "the tower keeps you, in ~"
  w-args   "tower: takes no arguments, not ~\n"
  floors   '("the garden" "the middle" "heaven" "the circle")
- ; the sign the tower holds up before you take a step. its lines are the box's, so
- ; nothing here is built either -- a {brace} is the token's pen, and the last line is
- ; the only instruction the box itself gives.
- ; it is kept short on purpose: a terminal of twenty rows leaves eighteen for the map,
- ; and a box taller than that is a box with its foot cut off.
+ (here g) (floors (g 'lvl - 1))                         ; the floor, by name
+ ; the sign the tower opens on; a {brace} is the token's pen. kept short: twenty rows
+ ; leave eighteen for the map, and a taller box is one with its foot cut off.
  sign-ttl "the tower"
  sign-open '("you are @, at the foot of the tower."
              ""
@@ -272,20 +252,15 @@
           "the gearworn watch" "the lowlife battery" "the treasured index card")
  token-pen 201                                          ; and the pen it is named in
 
- ; --- THE MUSIC: a floor's bar, BUILT and not looked up. a SLOT is a voice tablet
- ; play can sound -- instrument, note in semitones off middle c, how loud, how long it
- ; rings -- or () for silence; a BAR is a list of slots laid across one cycle; and a
- ; floor answers a LIST of bars, sounded together. everything below is the cycle number
- ; put through the same dice the floors are strewn with, so a bar always sounds the
- ; same and no note anywhere is stored. `songs` is how loud a floor is; the circle's
- ; loudness is not here, it is the ring's own size.
+ ; --- the music: a slot is a voice tablet play can sound or () for silence, a bar is
+ ; slots across one cycle, and a floor answers a list of bars sounded together. all of
+ ; it off the cycle number through the floors' own dice, so nothing is stored.
+ ; `songs` is how loud a floor is; the circle's is the ring's size instead.
  songs '(2.00 1.60 2.60 2.60)
  (vox nm nt gn lg) {'s nm 'note nt 'gain gn 'legato lg}
 
- ; the garden: chimes, and nobody striking them. mostly nothing, now and then one note,
- ; now and then a gust that takes three slots together. the tones are a pentatonic --
- ; no two of them can sound wrong against each other, which is why chimes are cut to
- ; one -- and the voices are the round ones, held long enough to ring into the next.
+ ; the garden: chimes nobody strikes -- mostly nothing, now and then a note, now and
+ ; then a gust of three. a pentatonic has no interval in it that can sound wrong.
  chime-tones [0 2 4 7 9 12 14 16 19 21 24 26]
  chime-slots 16
  (gust? c i) (0 <= i && dice i c 12 100 < 7)
@@ -299,11 +274,9 @@
           (1.30 + dice i c 16 120 / 100.0)))
  (garden-bars c) [(map (chime-slot c) ^chime-slots)]
 
- ; the middle: traffic. a horn is two notes a major third apart, up where it hurts, on
- ; for a moment and gone. about a third of the time the noise settles into something
- ; that was a tune all along -- five phrases, sounded an octave down, in a minor nobody
- ; is cheered up by, square and triangle taking a note each. the roll is on the RUN of
- ; five and not the bar, so it arrives as a tune and leaves as one.
+ ; the middle: traffic, a horn being two notes a major third apart and gone. a third
+ ; of the time it settles into five minor phrases instead -- and the roll is on the run
+ ; of five, not the bar, so a tune arrives as one and leaves as one.
  horn-tones [24 26 27 29 31]
  horn-slots 12
  blue-phrases '((-3 0 4 2 0 -1) (-3 -1 0 2 4 2) (5 4 2 0 -1 -3)
@@ -323,9 +296,8 @@
                     [(map (i \ horn-slot c i 0) ^horn-slots)
                      (map (i \ horn-slot c i 1) ^horn-slots)])
 
- ; heaven: long sequences, four bars each, and which one is a roll on the block -- so
- ; the city goes round something without going round it to a schedule. two of them are
- ; hopeful about it and one is not sure.
+ ; heaven: long sequences, four bars each, rolled per block so the city goes round
+ ; something but not to a schedule. two are hopeful about it and one is not sure.
  sky-songs
  '((((12 16 19 24 19 16) (14 17 21 26 21 17) (16 19 23 28 23 19) (12 19 24 31 24 19))
     "tri" 1.00)
@@ -339,16 +311,10 @@
                  ph (phs (c % sky-run))
                  [(map (n \ vox (s 1) n (s 2) 0.55) ph)])
 
- ; the circle: a heart. lub, then dub a quarter of a beat behind it, and the beats
- ; themselves further apart the smaller the ring gets -- three to a bar while it is
- ; wide, one when it is a point. the fade is the ring's too, so it slows and goes at
- ; the same time.
- ; the kick alone is the whole of a heart and NONE of it comes out of a small speaker:
- ; its sine falls from 134 Hz to 46 and a laptop reproduces neither. so the beat is two
- ; voices -- the kick for the body, felt where there is something to feel it on, and a
- ; snare cut to an eighth of a second over it. a snare is mostly noise, and noise is
- ; the one sound with something in every band, so there is nothing a speaker can fail
- ; to answer. that is the knock you actually hear; the kick is what you feel.
+ ; the circle: a heart, lub then dub a quarter-beat behind, three beats to a bar while
+ ; the ring is wide and one at the point. the fade is the ring's too.
+ ; two voices to a beat because the kick alone runs 134 Hz down to 46 and a small
+ ; speaker answers none of it; the snare over it is noise, which every speaker answers.
  heart-lub {'s "bd" 'gain 0.90}
  heart-dub {'s "bd" 'gain 0.55 'speed 1.25}
  knock-lub {'s "sn" 'gain 0.40 'legato 0.13}
@@ -371,10 +337,9 @@
  song-chunk 1600                                        ; a frame's worth, thirty a second
  song-gain 5200.0
 
- ; --- THE FLAVOUR: what a thing has to say when you meet it. a row is the name a
- ; strewing or a mob is known by, and then its lines. which line you get is the cell's
- ; own dice (a mob's is a draw), so one tuft always says the same thing and the tuft
- ; beside it says another. a name with no row here is simply silent.
+ ; --- the flavour: a row is a strewing's or a mob's name, then its lines. which line
+ ; is the cell's own dice, so one tuft always says the same thing and its neighbour
+ ; says another. a name with no row here is silent.
  flavour
  '(("tuft"       "the grass here has gone to seed"
                  "a beetle leaves the way you came"
@@ -479,10 +444,8 @@
                         (go (i + 1) (n + 1) (acc + string c)))))
               (go 0 0 ""))
 
- ; --- the sign: a box over the frame, the way story's lighthouse says a thing. the
- ; braces cost no width, so the box is measured in what a reader sees; the frame is cut
- ; where the box starts and the box runs to the end of the row, which is what keeps the
- ; pens either side of it from meeting.
+ ; --- the sign: a box over the frame, story's lighthouse way. braces cost no width, so
+ ; it is measured in what a reader sees, and it runs to the row's end so no pen meets.
  sign-pen 252
  (vlen s) (: (go i n) (? (i >= #s) n
                          (: c (s i) (go (i + 1) (? ((c = 123) || (c = 125)) n (n + 1)))))
@@ -492,45 +455,40 @@
    w (foldl (\ a l (vlen l @ v (a < v ? v a))) (vlen ttl) ls)
    ww (w + 4)
    top ("+-" + pad (ttl + " ") (ww - 3) "-" + "+")
-   bot ("+" + ((ww - 2 (t / (t + "-")) "") + "+")
+   bot ("+" + ((ww - 2) (t \ t + "-") "") + "+")
    ([top] + (map (l \ "| " + pad l (ww - 4) " " + " |") ls) + [bot]))
  ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs
  (cells-cut r n) (:- (go 0 0 "")
                   (past i) (r i @ 109 (i + 1) (past (i + 1)))
-                  (go i k acc) (i >= #r || k >= n ? acc
-                                (r i @ 27 (: e (past i) (go e k (acc + snip r i e)))
-                                 (go (i + 1) (k + 1) (acc + string (r i))))))
+                  (go i k acc)
+                   (i >= #r || k >= n ? acc
+                    (r i @ 27 (past i @ e (go e k (acc + snip r i e)))
+                     (go (i + 1) (k + 1) (acc + string (r i))))))
  ; a frame with the box centred over its rows a .. a+n, for a screen w wide
- (sign-over f ttl ls a n w) (:
+ (sign-over f ttl ls a n w) (:- (go 0 "")
    rs (split "\r\n" f)
    box (sign-box ttl ls)
    ww (vlen <box)
    x0 (: q ((w - ww) // 2) (0 < q ? q 0))
-   y0 (: q (a + ((n - #box) // 2)) (a < q ? q a))
+   y0 (: q (a + (n - #box) // 2) (a < q ? q a))
    ; ..and never past the rows it was given: a box too tall for the screen loses its
    ; foot, which is the screen's doing, but the bar under it is not the box's to take
-   (lay i) (: r (rs i)
-              (? ((y0 <= i < (y0 + #box)) && (i < (a + n)))
-                 ((cells-cut r x0) + "\e[0m" + (pen sign-pen) + (fit (box (i - y0)) 400))
-                 r))
-   (go i acc) (? (i >= #rs) acc (go (i + 1) (acc + (0 < i ? "\r\n" "") + lay i)))
-   (go 0 ""))
+   (lay i) (rs i @ r
+            (!(y0 <= i < y0 + #box && i < a + n) ? r
+             (cells-cut r x0 + "\e[0m" + pen sign-pen + fit (box (i - y0)) 400)))
+   (go i acc) (i >= #rs ? acc (go (i + 1) (acc + (0 < i ? "\r\n" "") + lay i))))
 
- ; keys typed at a game are not typed at the shell. raw mode does not echo them, so
- ; they sit in the terminal's queue unseen, and whoever reads next -- a prompt, the line
- ; editor -- takes them as a line typed at it. anything still waiting goes in the bin
- ; before cooked mode comes back.
- (drain-keys _) (? (cue? 0) (: _ (see in) (drain-keys ())))
+ ; keys typed at a game are not typed at the shell: raw mode does not echo them, so
+ ; whatever is left takes the next reader's line. the bin, before cooked mode returns.
+ (drain-keys _) (cue? 0 ? (see in, drain-keys ()))
 
  ; --- the climb: the proving game. state in a tablet, one key per turn ---
- ; the bar is not a resource: a turn spent acting mends, a turn passed does not, so a
- ; climber dies only by standing still while something is next to them -- and the bar
- ; is deep enough that one thing beside you is a nuisance and not an accident. two of
- ; them out-bite the mending and three settle it, which is the whole of the arithmetic.
+ ; the bar is not a resource: a turn spent acting mends and a turn passed does not.
+ ; forty against a worst bite of three means one mob is a nuisance and two are a death.
  regen 2
  (mend g) (: p (g 'p) h ((p 'hp) + regen) (pin p 'hp (h < p 'mx ? h (p 'mx))))
  (mob-row k) (peep mob-book k <mob-book)
- (mob-name k) (<(mob-row k))
+ (mob-name k) <(mob-row k)
  (mob-new k x y) (: r (mob-row k)
                    {'x x 'y y 'gl (peep r 1 114) 'hue (peep r 2 137)
                     'hp (peep r 3 3) 'dm (peep r 4 1) 'pc (peep r 5 1) 'nm <r})
@@ -549,10 +507,8 @@
                         (mobs rm (n - 1) (mob-new (peep ks (roll sb #ks) 0) x y . acc))
                         (mobs rm (n - 1) acc)))
                     acc)
-   ; pennies are the point of the place, so every room has some: a handful of piles,
-   ; and a pile is worth carrying
-   ; the tile through `dat`: a cask does not answer to being applied, so (d 't i) is
-   ; () and every pile ever dropped was dropped on the strength of a miss
+   ; every room has pennies, which are the point of the place. the tile is read through
+   ; `dat`: a cask does not answer to being applied, so (d 't i) is () for every cell
    (treasure rm n) (? (0 < n)
                     (: xy (drop-at rm) x <xy y <>xy
                        _ (? (1 = dat d x y)
@@ -593,8 +549,8 @@
                  (s ? (note g s))))
  ; ..and what it was carrying, which is pennies and always pennies. a pile already on
  ; the cell takes them up rather than being written over
- (drop g m) (: i ((m 'x) + (g 'd 'w) * (m 'y))
-               it (peep (g 'loot) i ())
+ (drop g m) (: i (m 'x + g 'd 'w * m 'y)
+               it (g 'loot i)
                n ((two? it ? <>it 0) + 1 + roll (g 'sb) (2 + 2 * g 'lvl))
                (pin (g 'loot) i ['penny n]))
  (strike g m) (: _ (meet g m)
@@ -609,7 +565,7 @@
      _ (pull (g 'loot) i ())
      _ (pin (g 'p) 'penny (g 'p 'penny + <>it))
      _ (note g (fill w-penny [<>it]))
-     s (mutter (dice (i % (d 'w)) (i // (d 'w)) (2 + peep d 'sd 0) 97) "pennies")
+     s (mutter (dice (i % d 'w) (i // d 'w) (2 + peep d 'sd 0) 97) "pennies")
      (s ? (note g s)))
 
  ; what the ground underfoot has to say for itself -- "" where nothing is strewn. the
@@ -623,10 +579,10 @@
  (stride g mv) (: p (g 'p) nx (p 'x + <mv) ny (p 'y + <>mv)
                   m (mob-at g nx ny)
                   (? m (strike g m)
-                     !(open? (g 'd) nx ny) (note g w-wall)
+                     !(open? (g 'd) nx ny) (note g (fill w-wall [(here g)]))
                      (: _ (pin p 'x nx, pin p 'y ny)
                         i (nx + (g 'd 'w) * ny)
-                        it (peep (g 'loot) i ())
+                        it (g 'loot i)
                         _ (it ? (take g i it))
                         (tread g nx ny))))
 
@@ -663,7 +619,7 @@
                  _ (dress d (g 'lvl) (g 'sb))
                  _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
                  _ (stock g)
-                 (note g (fill w-floor [(floors (g 'lvl - 1))]))))
+                 (note g (fill w-floor [(here g)]))))
 
  ; --- the circle: the last floor, and not a delve at all. the ring is cells and not
  ; a mob -- it does not strike back, and every hit draws it in one step with the wall
@@ -674,18 +630,13 @@
  disc-pen 244
  wall-glyph 35
  grass-glyph 34
- ; the last field is the walk's own shimmer with the clock taken out of it: ink's skin
- ; at one frame, graded and not flat. no dice anywhere in it; the grade IS the wave.
- ; slop's own ramp is a loop, because a shimmer that moves must not seam; a still one
- ; never wraps, so these run pale to deep and the whole of either shows. span is the
- ; band of skin a ramp covers -- the four sines reach +-4 but seldom leave +-3, and
- ; past the span it clamps.
+ ; the last field is one frame of the walk's shimmer, held still -- no dice in it, the
+ ; grade is the wave. these ramps run pale to deep rather than looping: a still frame
+ ; never wraps. span is the band of skin they cover, the four sines seldom leaving +-3.
  ;
- ; WHICH ramp is the ring's doing. a cell near the middle takes the green, which is
- ; what the climber came up through; the pink of slop's own stretch waits out past the
- ; corner of the board and does not start in until the ring is down to HALF what it
- ; was. so the first half of the work is done on grass with no pink anywhere on it,
- ; and what the second half buys is the shore arriving early.
+ ; which ramp is the ring's doing: the middle takes the grass the climber came up
+ ; through, and slop's pink waits past the corner of the board until the ring is down
+ ; to half, so the first half of the work is grass and the second is the shore early.
  grass-ramp [194 157 120 114 78 71 34 22]
  pink-ramp [224 218 217 212 211 206 205 199]
  pink-span 3.0
@@ -705,40 +656,39 @@
                     (rp (? (n < 0) 0 (m < n) m n)))
  (skin-pen g x y) (: v (peep (g 'sk) [y x] 0.0)
                      f (pink-front g)
-                     (ramp-pen ((circle-q g x y) > (f * f * (circle-far g))
+                     (ramp-pen ((circle-q g x y) > (f * f * circle-far g)
                                 ? pink-ramp grass-ramp)
                                v))
 
  (circle? g) (last-floor < g 'lvl)
- (circle-new g) (: d (g 'd) cx ((d 'w) // 2) cy ((d 'h) // 2)
-                   ph ((roll (g 'sb) 1000) / 10.0)      ; where in the drift it stopped
+ (circle-new g) (: d (g 'd) cx (d 'w // 2) cy (d 'h // 2)
+                   ph (roll (g 'sb) 1000 / 10.0)      ; where in the drift it stopped
                    _ (pins g 'lvl (1 + last-floor) 'cx cx 'cy cy 'st 0 'ms () 'loot {}
-                            'sk ((ink-drift (d 'h) (d 'w)) ph 0.0))
+                            'sk (ink-drift (d 'h) (d 'w) ph 0.0))
                    _ (pins (g 'p) 'x cx 'y (cy - circle-r0 - 1))
-                   (note g (fill w-floor [(floors last-floor)])))
+                   (note g (fill w-floor [(here g)])))
  (circle-r g) (: st (g 'st) (st < circle-r0 ? (circle-r0 - st) 0))
- ; a terminal cell is about twice as tall as it is wide, so a circle ON THE SCREEN is
- ; an ellipse in cells: the measure counts a row twice and works in quarter units, where
- ; a radius r stands at (2r)^2. that is what makes the ring read as round and not tall.
+ ; a cell is about twice as tall as it is wide, so a round ring is an ellipse in cells:
+ ; the measure counts a row twice, in quarter units, where radius r stands at (2r)^2.
  (sq n) (n * n)
  (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) ((dx * dx) + (4 * dy * dy)))
  ; a cell is on the ring when its measure falls in the radius's own band -- a circle of
  ; grid squares, not a box, so it stays round at every size it passes through
  (on-ring? g x y) (: r (circle-r g) q (circle-q g x y)
-                     (r = 0 ? (q = 0)
-                      ((sq ((2 * r) - 1)) <= q < (sq ((2 * r) + 1)))))
+                     (r @ 0 (q = 0)
+                      (sq (2 * r - 1) <= q < sq (2 * r + 1))))
  (circle-wall g) (3 + circle-r g)
  (circle-wq g) (sq (2 * circle-wall g))
  disc-q 36                                              ; the grey floor left at the end
  (ring-glyph g) (: st (g 'st)
-                   (? (st <= circle-r0) 79 (st = (circle-r0 + 1)) 111 46))
- (reveal? g) ((circle-r0 + 2) <= g 'st)
- (done? g) ((circle-r0 + 2) < g 'st)
+                   (? (st <= circle-r0) 79 (st = circle-r0 + 1) 111 46))
+ (reveal? g) (circle-r0 + 2 <= g 'st)
+ (done? g) (circle-r0 + 2 < g 'st)
 
  ; the wall follows the ring down, so a climber standing where it now stands is carried
  ; in with it -- toward the middle until the floor is under them again
  (circle-push g) (: p (g 'p) wq (circle-wq g)
-                    (go x y) (? ((circle-q g x y) < wq) (pins p 'x x 'y y)
+                    (go x y) (? (circle-q g x y < wq) (pins p 'x x 'y y)
                                 (go (x + sgn (g 'cx - x)) (y + sgn (g 'cy - y))))
                     (go (p 'x) (p 'y)))
  (circle-stride g mv)
@@ -749,9 +699,9 @@
              _ (done? g ? (pin g 'over 'won) (note g w-ring))
              (g 'over ? () (circle-push g)))
         ; the board's own edge counts as wall too: the room may reach past the view
-        ((0 <= nx < d 'w) && (0 <= ny < d 'h) && ((circle-q g nx ny) < wq))
+        (0 <= nx < d 'w && 0 <= ny < d 'h && circle-q g nx ny < wq)
          (pins p 'x nx 'y ny)
-        (note g w-wall)))
+        (note g (fill w-wall [(here g)]))))
 
  ; --- the painter's other face: the circle's room, which has no lantern in it ---
  (circle-frame g) (:
@@ -759,9 +709,9 @@
    rv (reveal? g) wq (circle-wq g)
    _ (say j $ "\e[H\e[0m" + (fit (g 'msg) w) + "\e[K\r\n")
    (cell x y) (: q (circle-q g x y)
-                 (? ((x = p 'x) && (y = p 'y)) [(p 'gl) (p 'hue)]
+                 (? (x = p 'x && y = p 'y) [(p 'gl) (p 'hue)]
                     (on-ring? g x y) [(ring-glyph g) ring-pen]
-                    rv ((q <= disc-q) ? [46 disc-pen] [grass-glyph (skin-pen g x y)])
+                    rv (q <= disc-q ? [46 disc-pen] [grass-glyph (skin-pen g x y)])
                     (wq <= q) [wall-glyph (skin-pen g x y)]
                     '(46 240)))
    (row y x pn) (x >= w ? pn
@@ -769,49 +719,46 @@
                   (pn != p2 ? (say j (pen p2)),
                    say j (string <gh),
                    row y (x + 1) p2)))
-   (rows y pn) (y >= h ? pn (rows (y + 1) (: p2 (row y 0 pn) _ (say j "\r\n") p2)))
+   (rows y pn) (y >= h ? pn (rows (y + 1) (: p2 (row y 0 pn) (say j "\r\n", p2))))
    _ (rows 0 -1)
    _ (say j "\e[0m", say j (crawl-bar g), say j "\e[K")
    (slurp j))
 
  ; one turn: the climber's steer, then every mob its pace is due, then the lantern
  (crawl-turn g k) (:
-   _ (pin g 'msg "")
-   _ (pin g 'tn (1 + g 'tn))
+   _ (pins g 'msg "" 'tn (1 + g 'tn))
    ; a sign standing is what the key buys: it comes down, and the turn is not taken
    sg (g 'sign)
-   _ (sg ? (pin g 'sign ()))
-   _ (? (sg || (g 'over || k = 46)) ()
+   _ (sg && pin g 'sign ())
+   _ (? (sg || g 'over || k = 46) ()
         (circle? g) (two? k ? (circle-stride g k))
         (two? k) (stride g k, mend g)
         (k = 60) (: _ (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair))
                     (mend g)))
    _ ((sg || (g 'over || circle? g)) ? ()
-      (each (g 'ms) (m \ ((!(g 'over)) && (due? g m)) ? (stir g m))))
+      (each (g 'ms) (m \ !(g 'over) && due? g m && stir g m)))
    (circle? g ? g (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))))
 
  ; the bar, and on a stair the one thing worth saying there
  (crawl-bar g) (: p (g 'p)
-                  up (!(circle? g) && (2 = dat (g 'd) (p 'x) (p 'y)))
+                  up (!(circle? g) && 2 = dat (g 'd) (p 'x) (p 'y))
                   (fill (up ? w-bar-up w-bar)
-                        [(floors (g 'lvl - 1)) (p 'hp) (p 'mx) (p 'penny)]))
+                        [(here g) (p 'hp) (p 'mx) (p 'penny)]))
  (crawl-frame g) (: f (circle? g ? (circle-frame g)
-                      (: j (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
-                                 (g 'p . g 'ms) (g 'msg) (crawl-bar g))
-                         (slurp j)))
+                      (:- (slurp j) j
+                       (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
+                        (g 'p . g 'ms) (g 'msg) (crawl-bar g))))
                     sg (g 'sign)
                     (two? sg ? (sign-over f <sg >sg 1 (g 'd 'h) (g 'd 'w)) f))
 
  ; --- the song: a floor's bar, out the card a chunk at a time -----------------------
  ; it stands below the circle because song-vol reads circle-r0, and a value read from
  ; above where it is bound answers () rather than scaring -- a silent song, in silence.
- ; harp and play are cited BY NAME inside these, never borrowed: borrowing harp would
- ; put its rev and every over prel's for everything below, and a seat carrying neither
- ; never reaches a name it has not got.
+ ; harp and play are cited by name, never borrowed: borrowing harp would put its rev
+ ; and every over prel's for everything below.
  ;
- ; and the harp of it is one line: the floors say what a bar HOLDS, in slots, and this
- ; lays the slots across the cycle and sounds the bars together. a slot's tablet is
- ; exactly what mkvoice reads, so no control word is wanted anywhere.
+ ; the harp of it is one line -- lay the slots across the cycle, sound the bars
+ ; together. a slot's tablet is what mkvoice reads, so no control word is wanted.
  (tower-tune lvl c r) (:
    hush (cite 'harp 'hush) pure (cite 'harp 'pure)
    fastcat (cite 'harp 'fastcat) stack (cite 'harp 'stack)
@@ -833,17 +780,17 @@
  ; dropped once their end frame is behind it, so the live list is what is sounding.
  (song-feed s vol) (:
    spc (int (song-rate / song-cps))
-   (fill _) (? ((s 'next) <= ((s 'fpos) + song-chunk))
+   (fill _) (? (s 'next <= s 'fpos + song-chunk)
                (: p (tower-tune (s 'lvl) (s 'cyc) (s 'rad))
                   _ (pin s 'vs (cat (s 'vs)
-                                    ((s 'voices) p (s 'cyc) 0 spc song-rate)))
-                  _ (pins s 'cyc ((s 'cyc) + 1) 'next ((s 'next) + spc))
+                                    (s 'voices p (s 'cyc) 0 spc song-rate)))
+                  _ (pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc))
                 (fill ())))
    _ (fill ())
    base (s 'fpos)
-   live (filter (\ v ((v 0) >= base)) (s 'vs))
+   live (filter (v \ v 0 >= base) (s 'vs))
    _ (pins s 'vs live 'fpos (base + song-chunk))
-   (say (s 'h) ((s 'pk) ((s 'mix) live base song-chunk) song-chunk (song-gain * vol))))
+   (say (s 'h) (s 'pk (s 'mix live base song-chunk) song-chunk (song-gain * vol))))
 
  ; --- tower: the climb on cli's stage. any seed climbs; q or esc leaves ---
  ; the token is the last thing the tower says, and the field it opens onto is the next
@@ -855,7 +802,7 @@
                   _ (say out (crawl-frame g), flush out, rest 2200)
                   _ (drain-keys ())
                   walk (cite 'slop 'slop-walk)
-                  (walk ? (walk tk (g 'p 'penny)) ()))
+                  (walk && walk tk (g 'p 'penny)))
  ; the climb keeps its own stage rather than cli's: stage blocks on a key, and a card
  ; with nothing coming out of it is a card that stops. the raising and the putting back
  ; are stage's, line for line; what is different is the wait in the middle.
@@ -894,13 +841,13 @@
              _ (drain-keys ())
              _ (raw 0)
              ; won: the token line is still in the note row, and goes to the shell too
-             (g 'over = 'won ? (puts $ (fit (g 'msg) 200) + "\n", 0)
-              (puts $ (g 'over @ 'dead (fill w-lost [(floors (g 'lvl - 1))])
+             (g 'over @ 'won (puts $ fit (g 'msg) 200 + "\n", 0)
+              (puts $ (g 'over @ 'dead (fill w-lost [(here g)])
                                        (fill w-fled [(g 'p 'penny)])) + "\n",
-               (g 'p 'penny))))
+               g 'p 'penny)))
  tower-usage "usage: love tower   (no options; q or esc leaves the tower)"
  ; tower takes nothing: a word here is a mistake, and the climb would swallow it
- (tower-main as) (? !(two? as) (tower-run ())
+ (tower-main as) (one? as ? (tower-run ())
                     (say err (fill w-args [<as]), flush err, 2))
  _ (pins (cite 'verbs 'tab) 'tower (udoor 'tower tower-main tower-usage 1 1)))
 ) ; module rove
