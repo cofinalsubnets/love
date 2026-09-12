@@ -59,7 +59,7 @@ static word
 // ============================================================================
 // lvm_* that appear as an object's ap but are not in ai_def1[]
 static lvm_t *const image_extra_aps[] = {
- lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_sunbox, lvm_twinbox,  // data sentinels
+ lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox,  // data sentinels
  lvm_map_lookup, lvm_map_data, lvm_cask, lvm_coin, lvm_port_io,                       // thread aps
  lvm_cur, lvm_help, lvm_ret0, lvm_ap, lvm_ret,                                         // dispatchers
  // instruction fns a compiled thread embeds directly (no ai_def1 cell); odd on
@@ -76,12 +76,11 @@ static uintptr_t image_datasize(union u *d, void const *s) {
   case DMint:  return Width(struct ai_mint);
   case DNom:   return Width(struct ai_nom);
   case DGem:   return Width(struct ai_gem);
-  case DSun:   return Width(struct ai_sun);
   case DTwin:  return Width(struct ai_twin);
   case DString:return str_width(((struct ai_str const*) s)->len);
   case DBig:   return b2w(ai_big_bytes((struct ai_big*)(word) s));
   case DTray:  return b2w(ai_tray_bytes((struct ai_tray*)(word) s)); }
- return 0; }                                                     // unreachable: ai_typ covers the 9
+ return 0; }                                                     // unreachable: ai_typ covers the 8
 static uintptr_t image_objsize(struct ai *g, union u *p) {
  if (in_data(p->ap)) return image_datasize(p, p);
  word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
@@ -838,7 +837,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
                    if (w) memset((char*)(blob + off + str_type_width) + n, 0,
                                  w * sizeof(word) - n);
                    break; }
-   default: break; }                                     // DMint/DBig/DGem/DSun/DTwin: flat leaves
+   default: break; }                                     // DMint/DBig/DGem/DTwin: flat leaves
   else { for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ptr(p)[i]);   // thread interior + terminator
          if (p->ap == lvm_map_lookup) {                                                // a tablet's serial, a charm
           if (nslot < ncap) slots[nslot++] = (off + 2) | SlotCharm; else slotover = true; } }

@@ -433,7 +433,7 @@ bool ai_ratio_exact(struct ai *g, word x) {
  if (!chainp(p) || !chainp(B(p))) return false;
  word n = A(p), d = A(B(p));
  if (!intp(n) || !intp(d)) return false;
- return charmp(d) ? d != putcharm(0) : sunp(d) ? sun_get(d) != 0 : true; }
+ return charmp(d) ? d != putcharm(0) : true; }   // a canonical bignum is never 0
 // ..the lane: trunc(n/d) by long division, clamped to the charm bounds like every
 // rung (the codomain law), then the rung's own adjustment -- ceil rounds a dropped
 // remainder up, saturate is ceil with its floor raised to 0. the operand rides
@@ -1225,7 +1225,7 @@ static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb) {
 // exactly (near-equal rationals order right where the float quotient ties);
 // anything wider falls to the sign-exact net quotients.
 static ai_inline bool ratio_ifit(word x, int64_t *v) {
- if (charmp(x) || sunp(x)) return *v = toint(x), true;
+ if (charmp(x)) return *v = toint(x), true;
  if (!bigp(x)) return false;
  struct ai_big *b = big(x);
  int n = big_nlimbs(x);

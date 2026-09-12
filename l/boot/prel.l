@@ -63,8 +63,8 @@
      _ (place (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    ;; FIXME rename | -> bit-or to free | for pipe operator
-   (constellation? x) (| (charm? x) (| (packp x) (big? x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
-   (whole? n) (| (charm? n) (| (sun? n) (big? n)))       ; integer-valued numeral (exact power exponent / composition count)
+   (constellation? x) (| (charm? x) (packp x))   ; whole tower: fixnum / float / boxed int / complex / array
+   (whole? n) (| (charm? n) (sun? n))       ; integer-valued numeral (exact power exponent / composition count)
    ; this build's machine word, off the fixnum bound C publishes: a charm spends one bit,
    ; so the word reaches exactly twice as far. what fits here fits an int tray cell.
    max-word (+ (* max-charm 2) 1)

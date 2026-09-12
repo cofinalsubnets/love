@@ -41,7 +41,7 @@
  ; the bound is owed by both fold lanes. a pure-fn head cleared by pure-head? still reaches
  ; church application by over-application, and that is the unbounded one: (+ 1 200000 2) is
  ; ((200001) 2), a 60207-digit bignum. the safe prefix folds, the growing step residualizes.
- (big? (: (f x) (+ 1 200000 2) (f 0)))          ; big?, not (tally (show ..)) -- rendering 60207 digits cost the gate 2.5s
+ (sun? (: (f x) (+ 1 200000 2) (f 0)))          ; sun?, not (tally (show ..)) -- rendering 60207 digits cost the gate 2.5s
  ('(1 2 3 4) = (: (f x) ('(1 2) x) (f '(3 4)))) ; a chain joins like text, and folds the same way
  ; --- readset: peep and pin fold on an immutable container, never on a tablet ---
  ("aXcd" = (: (f x) (pin "abcd" 1 x) (f 88)))      ; pin on text -- the functional update, folded whole

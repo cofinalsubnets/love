@@ -116,7 +116,6 @@
       (nif_inner         "inner"         2 lvm_inner)
       (nif_outer         "outer"         2 lvm_outer)
       (nif_packp         "packp"         1 lvm_packp)
-      (nif_bigp          "big?"          1 lvm_bigp)
       (nif_sunp          "sun?"          1 lvm_sunp)
       (nif_setp          "tray?"         1 lvm_setp)
       (nif_intf          "int"           1 lvm_intf)

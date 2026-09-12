@@ -47,7 +47,6 @@ static void evac_data(struct ai *g, struct ai_gcx *X) {
   case DString: X->cp += str_width(str(X->cp)->len); return;
   case DBig: X->cp += b2w(ai_big_bytes(big(X->cp))); return;
   case DGem: X->cp += gem_req; return;
-  case DSun: X->cp += sun_req; return;
   case DTwin: X->cp += twin_req; return; }
  __builtin_trap(); }                            // a hot outside enum d: the object is not what its ap says
 
@@ -107,7 +106,7 @@ static void gen_scan_inplace(struct ai *g, struct ai_gcx *X, word obj) {
     for (word *e = ptr(tray_data(v)); ne--; e[ne] = gcp(g, X, e[ne]));
    break; }
   case DNom: nom(p)->name = gcp(g, X, nom(p)->name); break;
-  default: break; } }                              // DMint/DString/DBig/DGem/DSun/DTwin: pointer-free leaves
+  default: break; } }                              // DMint/DString/DBig/DGem/DTwin: pointer-free leaves
 
 // relocate finalizer nodes out of the dead minor into the major. a minor never
 // runs a finalizer; that waits for a major's compact.
@@ -441,9 +440,6 @@ static ai_inline word copy_data(struct ai *g, union u *src) {
   case DGem: {
    struct ai_gem *s = gem(src), *d = gbump(g, gem_req);
    return word(s->ap = memcpy(d, s, sizeof(struct ai_gem))); }
-  case DSun: {
-   struct ai_sun *s = sun(src), *d = gbump(g, sun_req);
-   return word(s->ap = memcpy(d, s, sizeof(struct ai_sun))); }
   case DTwin: {
    struct ai_twin *s = twin(src), *d = gbump(g, twin_req);
    return word(s->ap = memcpy(d, s, sizeof(struct ai_twin))); } }

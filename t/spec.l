@@ -89,7 +89,7 @@
  (!"" = (0 = $"")) (!-5 = (0 = $-5)))            ; the invariant !x == (0 = $x). the parens are
                                                  ; load-bearing now: bare, an = run chains
 
-; --- types & predicates --- storage: charm? big? sun? gem? twin? tray? string? nom? name? mint? two? tablet?;
+; --- types & predicates --- storage: charm? sun? gem? twin? tray? string? nom? name? mint? two? tablet?;
 ; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, ai_kind>=KTablet); hot? the opaque cask/port subset.
 ; a predicate answers a bit -- 0 on false, never the zero point. both are blue, so nothing that
 ; tests one can tell them apart, which is precisely why this is a law and not a habit: the two that
@@ -101,7 +101,7 @@
 ; the zero point is the right answer there and stays.
 (test
  (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? {1 2})
- (big? (100 2)) (big? (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))   ; one boxed integer tier, whatever the word
+ (sun? (100 2)) (sun? (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))   ; one boxed integer tier, whatever the word
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (cask 4)) (hot? out) (hot? (tap '(104)))   ; the hot zoo, named
  !(hot? {}) !(hot? cap) !(hot? 5) !(hot? "s")    ; maps/functions/data are not hots
@@ -437,7 +437,7 @@
  ; the width law: a galaxy's cells are machine words, so its arithmetic wraps
  (@(8 9) = (@(3 4) + ((200 2) + 5)))              ; a big truncates into the cell (2^200 = 0 mod 2^w)
  (star-tray = (tier (@(3 4) + (200 2))))          ; ...and the result never leaves the tray band
- (big? (3 + (200 2)))                             ; where the star lane grows exact instead
+ (sun? (3 + (200 2)))                             ; where the star lane grows exact instead
  (: o (array '(2) (200 2) (200 2))                ; ...as does an object tray: boxed cells, not limbs
     (aall (o = ((o + (array '(2) 1 1)) - (array '(2) 1 1)))))   ; exact round trip at 2^200
  (? word ("@(infinity infinity)" = show (@(1.0e308 1.0e308) * @(10.0 10.0))) 1)    ; a gem-tray saturates, never wraps

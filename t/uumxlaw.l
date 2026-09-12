@@ -18,7 +18,7 @@
 ; --- the roster every forall below ranges over. a kind added or a lane merged
 ; --- moves these numbers first ---
 (test
- (15 = (vof 0 'mxnk))
+ (14 = (vof 0 'mxnk))
  (12 = (vof 0 'mxnl))
  (5 = (vof 0 'mxnb)))
 
@@ -52,10 +52,10 @@
 
 ; --- the partition, named: the numeric band, the text band, and kmint alone ---
 (test
- ; the nine numeric kinds -- the scalar gem tower and the parallel tray tower --
+ ; the eight numeric kinds -- the scalar gem tower and the parallel tray tower --
  ; route identically. that is "every numeric kind is one band"
  (defq mx-numerics-one-band
-   (paths bool (mxall 9 (lam i (nateqb (mxband (add mxKCharm i)) (mxband mxKCharm)))) true)
+   (paths bool (mxall 8 (lam i (nateqb (mxband (add mxKCharm i)) (mxband mxKCharm)))) true)
    (idpath true))
  ; a symbol is a POINT, not text: it shares kmint's lane, is the identity under +
  ; and annihilates under *. the string algebra is reached by pulling the name out
@@ -68,7 +68,7 @@
  ; told apart by that early-out and not by the matrix this corpus models. alone, the
  ; matrix decides the whole lane and the early-out stays the fast path
  (defq mx-points-alone
-   (paths bool (mxall 13 (lam k (negb (nateqb (mxband (add mxKCharm k)) (mxband mxKMint))))) true)
+   (paths bool (mxall 12 (lam k (negb (nateqb (mxband (add mxKCharm k)) (mxband mxKMint))))) true)
    (idpath true)))
 
 ; --- () is the unit under + and the zero under *, in every lane at once ---
