@@ -20,8 +20,19 @@
 ; touches and is simply dropped once its end frame is behind the write head.
 ; the module where it is already registered (a baked artifact, or a cat'd corpus),
 ; and this tree's file where it is not -- so the verb runs from either.
+; the voice layer is a MODULE: this file rides the crew roster, and a roster file
+; is catted into the global scope -- so a splice at its top level (harp's rev and
+; every, here) would shadow the prel for everything compiled after it. a module
+; enters its own layer, and the borrow below is confined to it.
+(module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
+         harp-scale harp-chunk mkvoice cyc-voices mixdown pack
+         twopi ln2-12 venv vnum vnoise instr vname)
 (borrow (: m (cite 'harp) (? m m "a/harp/harp.l")))
 (:
+   ; the fs doors by VALUE, off their module: a module layer does not see the
+   ; session's posix splice, and a seat carrying none (i/wasm) holds () here --
+   ; which only the two paths that want a file ever ask for.
+   open (cite 'posix 'open) close (cite 'posix 'close)
    twopi 6.283185307179586
    ln2-12 0.05776226504666211               ; ln 2 / 12, one semitone
    ; white noise off the frame number: the same frame always draws the same sample,
@@ -218,7 +229,8 @@
           (o 'print) (: _ (harp-print p c0 ncyc) 0)
           (peep o 'wav ()) (: _ (harp-wav p c0 ncyc rate cps tail g (o 'wav)) 0)
           (: _ (harp-horn p c0 ncyc rate cps tail g) 0))))
+) ; module play
 
 ; the seat: fire only when this file is the program on the real command line.
 (: s (cite 'verbs 'fire ["harp" "play.l"])
-   (two? s ? (quit (harp-main >s))))
+   (two? s ? (quit ((cite 'play 'harp-main) >s))))

@@ -8,6 +8,7 @@
 ; timed sink keeps time, and one cycle into a .wav has the right header and puts
 ; its energy where the pattern said. no gate can listen.
 (borrow 'harp)
+(borrow 'play)                                  ; the voices, off their own module
 (:
    ; an event, flattened for comparison: begin, end, value
    (we x)   [(qnum (evwb x)) (qnum (evwe x)) (evv x)]

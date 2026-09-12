@@ -41,11 +41,11 @@
 ; harp is OPTIONAL the way posix is: the song wants its cycle algebra, the walk wants
 ; none of it, and a seat carrying no harp plays the game in silence. every name off it
 ; is spelled inside a lambda, so an absent one costs nothing until the song is asked
-; for. a/harp/play.l rides beside it in the same roster and is NOT a module -- it is a
-; bare letrec, so the crew cat splices mkvoice, mixdown and pack ambiently and harp
-; being a module is the whole test. borrowing harp shadows prel's rev and every with
-; the pattern ones, so the list reverse is lrev from here down.
+; for. play is harp's voice layer -- vnum, venv, mixdown and pack come off it, and the
+; two ride the same roster. borrowing harp shadows prel's rev and every with the
+; pattern ones, so the list reverse is lrev from here down.
 (? (tablet? (cite 'harp)) (borrow 'harp) ())
+(? (tablet? (cite 'play)) (borrow 'play) ())
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.

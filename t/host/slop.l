@@ -285,6 +285,9 @@
 ; it has seven: e minor is 4 7 11 16 19 23 28. pinkyup sounds the top after each of
 ; the others (twelve notes), down just falls (seven), and jux rev doubles the lot.
 (: tune (slop-tune ())
+   ; harp by VALUE, not spliced: the gate wants prel's rev above, and a borrow
+   ; would hand it the pattern one
+   qi (cite 'harp 'qi)  evv (cite 'harp 'evv)  onset? (cite 'harp 'onset?)
    (notes c) (map (x \ peep (evv x) 'note 'none) (filter onset? (tune (qi c) (qi (c + 1)))))
    c0 (notes 0) c2 (notes 2)
    one (take 38 c0)                              ; one channel of it; jux rev is the other
@@ -364,7 +367,7 @@
 ; the dip falls smoothly and never goes under the floor, and every point of the walk is
 ; between the floor and full
 (: g (slop-new 23 80 (wheel 11))
-   vs (: (go acc) (? (g 'over) (lrev acc)
+   vs (: (go acc) (? (g 'over) (rev acc)
                      (: _ (slop-key g 107) (go ((slop-song-vol g) . acc))))
          (go ()))
    (rising? l) (l @- 1 (a . b . r) (? (b < a) 0 (rising? (b . r))))
@@ -374,7 +377,7 @@
   (0 < tally (filter (v \ (v <= 0.07)) vs))      ; there is a quiet stretch
   (0 < tally (filter (v \ (0.99 <= v)) vs))      ; and a loud one
   (falling? (take 20 vs))                        ; it only falls at the start
-  (rising? (lrev (take 20 (lrev vs))))))         ; and only rises at the end
+  (rising? (rev (take 20 (rev vs))))))         ; and only rises at the end
 
 ; the dial itself: play.l's i-sin at one end, its i-sqr at the other, crossfaded. the
 ; two share a phase -- a square built on the half of the period has the sine's sign --
@@ -405,6 +408,9 @@
 
 ; the voices go out a port, so a jug plays the part of the card: real PCM, not silence
 (: tune (slop-tune ())
+   ; harp by VALUE, not spliced: the gate wants prel's rev above, and a borrow
+   ; would hand it the pattern one
+   qi (cite 'harp 'qi)  evv (cite 'harp 'evv)  onset? (cite 'harp 'onset?)
    j (jug 0)
    s (slop-song-new tune j)
    (feed n) (? (0 < n) (: _ (slop-song-feed s 1.0 0.0 1.0) (feed (n - 1))))
