@@ -7,7 +7,7 @@
 ;
 ; every square you pay for carries you one world row forward. below the climb line, a
 ; third of the way up, the row is yours and you rise on the screen. at it or above, one
-; square in ten is still yours and the other nine scroll the ground down under you --
+; square in twenty-seven is still yours and the rest scroll the ground down under you --
 ; which is what brings the shore into view, and then down the screen to meet you. the
 ; gap closes either way -- by one, or by two where the road meets a headland, or by
 ; none at all across the mouth of a bay. within a screen of the shore a square costs
@@ -33,7 +33,8 @@
 ; the palette, rove the helm and the die.
 (module (slop slop-run slop-main slop-new slop-sy slop-gap slop-cost slop-rate
          slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-road slop-turf
-         slop-tune slop-song-speed slop-song-edge slop-song-wave slop-song-new slop-song-feed
+         slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave
+         slop-song-new slop-song-feed
          slop-shore slop-sand slop-wet?)
 (borrow 'ink)
 (borrow 'rove)
@@ -57,9 +58,11 @@
  pal (ink-pal slop-ramp)
  esc (string 27)
  beat 0.06                              ; the phase one frame advances at full rate
- ; past the climb line one square in ten is your own step; the other nine scroll, and
- ; that ratio is what lands the shore on you just past the middle of the screen
- own-odds 10
+ ; past the climb line one square in twenty-seven is your own step; the rest scroll,
+ ; and that ratio is what lands the shore on you just past the middle of the screen. it
+ ; goes with the length of the walk: you rise climb-minus-(contested/odds) rows, so a
+ ; walk twice as long wants odds twice as long to meet in the same place.
+ own-odds 27
 
  ; --- the lie of the land: sines across the columns, a hash within them ---
  ; two multiply-shift rounds masked to 32 bits, for the grass
@@ -79,10 +82,11 @@
  ; here the shore is 0.61 and the sand 0.42.
  (shore-wave x) (int ((3.0 * sin (x * 0.17)) + (1.8 * sin (x * 0.058))))
  (sand-deep x) (6 + int ((2.2 * sin (x * 0.23)) + (1.4 * sin (x * 0.081))))
- ; the mean shoreline: half a screen and a little more above the first frame's top, but
- ; never nearer than the deepest beach the columns actually laid, so the opening screen
- ; is field and nothing else on a short terminal too
- (shore0 r top) (: v ((0 - (r // 2)) - 4) w (0 - (1 + top)) (v < w ? v w))
+ ; the mean shoreline: three screens above the first frame's top, which is what leaves
+ ; the walk its grass -- two screens for the song to fall quiet over and one more to
+ ; hold it there and come back up in. never nearer than the deepest beach the columns
+ ; actually laid, so the opening screen is field and nothing else on a short terminal.
+ (shore0 r top) (: v (0 - (3 * r)) w (0 - (1 + top)) (v < w ? v w))
 
  ; a shoreline row is a world row and world rows go negative, so these are tablets and
  ; not casks -- a cask holds bytes, and -15 in one reads back 241
@@ -120,11 +124,25 @@
      sh0 (shore0 r top)
      _ (each ^c (x \ pin shores x (sh0 + peep waves x 0)))
      wetto (foldl (\ a x (: v (peep shores x 0) (a < v ? v a))) (sh0 - 9) ^c)
+     climb ((r - 1) - (r // 3))
+     ; the beach's nearest world row: the sand shows on the screen the moment wtop
+     ; reaches it, which is a fact about the screen and not about your distance to the
+     ; shore -- the song's rise is keyed to it rather than to a gap, and so is exact
+     bt (sh0 + top)
+     ; the gap the song starts coming back up at, half a screen of scroll short of the
+     ; sand -- and the foot of the waveform's ramp, so the two move together. keyed off
+     ; the same arithmetic the rise is: the screen's top reaches a row, and you stand
+     ; climb rows below the top.
+     gedge ((top + climb) + (r // 2))
      g {'r r 'c c 'wtop 0 'w (r - 1) 'shore0 sh0 'shores shores 'sands sands
-        'wetto wetto 'climb ((r - 1) - (r // 3)) 'drag (r - 3)
+        'wetto wetto 'climb climb 'drag (r - 3) 'bt bt 'gedge gedge
         'push 0 'spent 0 't 0.0 'msg "" 'over 0
         'sb {st} 'rows {} 'field (ink-drift r c)}
-   (pin g 'span (slop-gap g), g))
+     _ (pin g 'span (slop-gap g))
+   ; the bottom of the dip, a screen and a third into the walk -- and the foot of the
+   ; edge's ramp. a third nearer the start than the two screens the fall would take,
+   ; which is what buys the quiet valley behind it its length
+   (pin g 'gmin ((g 'span) - ((4 * r) // 3)), g))
 
  ; where you stand on the screen, and the rows between you and the slop at your own
  ; column. a square costs ceil(drag / gap), so it is one press until the shore is about
@@ -275,30 +293,81 @@
  ; the music slows with the walk -- but only to a third of tempo. slop-rate falls to a
  ; twentieth by the shore, and a twentieth of a tempo is not a tempo any more.
  (slop-song-speed g) (0.3 + (0.7 * slop-rate g))
- ; ..and it thickens with it: how far from a sine toward a square the voices are, nil
- ; while a square is one press and the whole way over by the last one. linear in the
- ; cost rather than in the rate, because the rate halves on the first rung and a
- ; waveform half way to a square on the first rung is not a walk into anything.
- (slop-song-edge g) (: d ((g 'drag) - 1)
-                       m (? (d < 1) 0.0 ((((slop-cost g) - 1) * 1.0) / d))
-                     (? (m < 0.0) 0.0 (1.0 < m) 1.0 m))
+ ; ..and it thickens with it: how far from a sine toward a square the voices are. the
+ ; ramp runs the whole way from the bottom of the volume's dip to the slop itself, so
+ ; the sound hardens over everything that happens after the song goes quiet. linear in
+ ; the GAP and not in the cost -- the cost is a reciprocal of the gap, so a ramp linear
+ ; in it would sit near a sine for the whole walk and turn square inside the last square.
+ ; a smoothstep along the way, not a square and not a straight line: flat at both ends,
+ ; so the sine holds while the ramp gets going and the square eases in rather than
+ ; arriving. squared put all the change in the last stretch and read as a jump; straight
+ ; put it evenly everywhere, including right at the two ends where it is most heard.
+ ; the ramp's foot is where the song starts coming back, NOT the bottom of its dip: the
+ ; valley between the two is nearly silent, and a waveform that turns there turns where
+ ; nobody can hear it -- the volume would then return onto a sound already most of the
+ ; way to a square, which is the jump this is meant to avoid.
+ (slop-song-edge g)
+  (: gap (slop-gap g) lo (g 'gedge)
+     m (? (lo <= gap) 0.0
+          (1 < gap) (: u (((lo - gap) * 1.0) / ((lo - 1) * 1.0))
+                     ((u * u) * (3.0 - (2.0 * u))))
+          1.0)
+   (? (m < 0.0) 0.0 (1.0 < m) 1.0 m))
 
- ; the dial: m of the way from play.l's i-sin to its i-sqr, crossfaded, which is the one
- ; shape that hits both ends true. the two are already in phase -- a square built on the
- ; half of the period shares the sine's sign -- so they cross rather than cancel.
+ ; the volume, over the four stretches of the walk: two screens of grass to fall quiet
+ ; over, then a stretch to stay quiet across, then the half screen of scroll before the
+ ; sand shows to come back up in, then the whole approach to the shore at full. the fall
+ ; is a smoothstep, flat at both ends -- a plain parabola spent its first half dropping
+ ; to a third and read as a cliff rather than a fade; the rise is a straight line over
+ ; half the distance, which is what makes it abrupt beside the fall.
+ ; the fall is keyed to the gap, which is how far there is left to walk; the rise to the
+ ; rows of scroll still owed before the sand shows, which is when it is asked to happen.
+ song-floor 0.06                        ; the bottom of the dip: not silence, near it
+ (slop-song-vol g)
+  (: gap (slop-gap g) sp (g 'span) lo (g 'gmin)
+     d ((g 'wtop) - (g 'bt))            ; rows of scroll still to come before the sand
+     h ((g 'r) // 2)
+     v (? (sp <= gap) 1.0
+          (lo < gap) (: q (((gap - lo) * 1.0) / ((sp - lo) * 1.0))
+                        s ((q * q) * (3.0 - (2.0 * q)))
+                      (song-floor + ((1.0 - song-floor) * s)))
+          (h <= d) song-floor
+          (0 < d) (: u (((h - d) * 1.0) / (h * 1.0))
+                   (song-floor + ((1.0 - song-floor) * u)))
+          1.0)
+   (? (v < song-floor) song-floor (1.0 < v) 1.0 v))
+
+ ; a triangle IN PHASE with the sine: zero and rising at the period's start, one at a
+ ; quarter, minus one at three. play.l's own i-tri starts at minus one, a quarter period
+ ; behind -- nothing on its own and wrong in a blend, where the two would cancel toward
+ ; the middle rather than cross. harp's i-sqr already shares the sine's sign.
+ (song-tri u) (: v (u * 4.0)
+                 (((u < 0.25) * v)
+                  + (((u >= 0.25) * (u < 0.75)) * (2.0 - v))
+                  + ((u >= 0.75) * (v - 4.0))))
+ ; the dial: sine to triangle over the first half of it, triangle to square over the
+ ; second. straight from a sine to a square is a wide jump to cross in one crossfade;
+ ; the triangle sits between them in harmonic content and gives the ear a waypoint, and
+ ; the ramp is long enough now to spend real time on each leg. each half is a plain
+ ; crossfade, so the three shapes land exact at 0, a half and 1. m is per-voice and
+ ; scalar, so the branch is taken once and not per sample.
  (slop-song-wave tp f m)
-  (: q (((((tp * f) % 1.0) < 0.5) * 2.0) - 1.0)
-   (((sin (tp * (twopi * f))) * (1.0 - m)) + (q * m)))
+  (: u ((tp * f) % 1.0)
+     tr (song-tri u)
+   (? (m < 0.5) (: a (m * 2.0)
+                 (((sin (tp * (twopi * f))) * (1.0 - a)) + (tr * a)))
+      (: a ((m - 0.5) * 2.0)
+         q (((u < 0.5) * 2.0) - 1.0)
+       ((tr * (1.0 - a)) + (q * a)))))
 
- ; a voice m of the way along that dial. built here rather than taken off harp's
- ; mkvoice because an instrument there is a name, and this one is a dial. a square
- ; carries far more than a sine at the same peak, so the gain comes off as the edge
- ; goes on.
- (song-voice st v rate m)
+ ; a voice m of the way along that dial, at the volume the dip puts there. built here
+ ; rather than taken off harp's mkvoice because an instrument there is a name, and this
+ ; one is a dial.
+ (song-voice st v rate m vol)
   (: dur (vnum v 'legato 0.30)
      nt  (vnum v 'note (vnum v 'n 0))
      f   (261.6255653005986 * (exp (nt * ln2-12)))
-     amp ((vnum v 'gain 1.0) * (1.0 - (0.45 * m)))
+     amp ((vnum v 'gain 1.0) * vol)
      pn  (vnum v 'pan 0.5)
      end (st + (int (dur * rate)) + 2)
      fn  (\ ix (: t  ((ix - st) * (1.0 / rate))
@@ -311,10 +380,10 @@
  ; scheduled at once and a voice that has not begun is silent but not free -- its
  ; closure still runs over every frame of the chunk -- so the mixdown wants the start
  ; to drop it by, and only the end is in the voice itself.
- (song-voices s c st spc m)
+ (song-voices s c st spc m vol)
   (filter two?
           (map (\ x (: at (st + (int (spc * (qnum ((evwb x) - (qi c))))))
-                       v (song-voice at (evv x) song-rate m)
+                       v (song-voice at (evv x) song-rate m vol)
                      (? (two? v) [at v] ())))
                (filter onset? ((s 'tune) (qi c) (qi (c + 1))))))
  ; one chunk out the horn. whole cycles are scheduled ahead of the write head at the
@@ -322,10 +391,10 @@
  ; note's pitch bends with it -- the onsets move, the oscillators do not.
  ; the write is also the clock: the card takes a chunk at the rate it plays one, so a
  ; frame loop that feeds it needs no rest of its own.
- (slop-song-feed s sp m)
+ (slop-song-feed s sp m vol)
   (: spc (int (song-rate / (song-cps * sp)))
      (fill _) (? ((s 'next) <= ((s 'fpos) + song-chunk))
-                 (: _ (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc m)))
+                 (: _ (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc m vol)))
                     _ (pins s 'cyc ((s 'cyc) + 1) 'next ((s 'next) + spc))
                   (fill ())))
      _ (fill ())
@@ -356,13 +425,13 @@
              sng (? hn (slop-song-new tune hn) ())
              ; a chunk of song is a frame's worth and the card takes it at playing
              ; speed, so with a horn the music is the clock; without one, rest is
-             (beat-out sp m) (? sng (slop-song-feed sng sp m) (rest 33))
+             (beat-out sp m vol) (? sng (slop-song-feed sng sp m vol) (rest 33))
              (drain _) (cue? 0 ? (slop-key g (edkey in), drain ()))
              (swim _) (? (g 'over) ()
                          (: _ (drain ())
                             _ (g 'over ? () (slop-tick g))
                             (say out (slop-frame g), flush out,
-                             beat-out (slop-song-speed g) (slop-song-edge g), swim ())))
+                             beat-out (slop-song-speed g) (slop-song-edge g) (slop-song-vol g), swim ())))
              _ (raw 1)
              _ (say out (esc + "[?1049h" + esc + "[?25l" + esc + "[2J"))
              _ (swim ())
@@ -370,7 +439,7 @@
              ; no gap left to slow it -- for half a second before the stage is left
              ; the flood runs at full rate and so does the song under it: there is no
              ; gap left to slow either one
-             (flood n t) (? (0 < n) (: _ (say out (slop-flood g t), flush out, beat-out 1.0 1.0)
+             (flood n t) (? (0 < n) (: _ (say out (slop-flood g t), flush out, beat-out 1.0 1.0 1.0)
                                      (flood (n - 1) (t + beat))))
              _ (g 'over = 'taken ? (flood 15 (g 't)))
              _ (? hn (: _ (flush hn) (close hn)) ())

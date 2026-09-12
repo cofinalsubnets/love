@@ -89,7 +89,7 @@
 ; the gap is read off the shore at the road's own column, so setting it means finding
 ; the world row that has it -- the road crosses a wavy line and a gap can be skipped
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (? (w < -30) ()
+   (row-at gp) (: (go w) (? (w < -70) ()
                             (: q (w - slop-shore g (slop-road g w))
                              (? (q = gp) w (go (w - 1)))))
                   (go 22))
@@ -103,8 +103,8 @@
    (rising? l) (l @- 1 (a . b . r) (? (b < a) 0 (rising? (b . r))))
  (test
   (20 = g 'drag)                                 ; the ladder's reach, about a screen
-  (1 = at 30) (1 = at 20)                        ; beyond it, a square is a square
-  (2 = at 10) (10 = at 2)
+  (1 = at 66) (1 = at 20)                        ; beyond it, a square is a square
+  (2 = at 10)
   (20 = at 1)                                    ; at the shore, a screen's worth of presses
   (rising? ladder)                               ; and it never falls as you close
   (1.0 = rate-at 20)
@@ -118,7 +118,7 @@
    _ (slop-push g)
    y2 (slop-sy g)
  (test
-  (35 = g 'span)                                 ; the walk you are given
+  (89 = g 'span)                                 ; the walk you are given
   (21 = y1) (20 = y2)                            ; far out, a press is a square
   (2 = g 'spent)))
 
@@ -153,7 +153,7 @@
   (15 = slop-sy g)                               ; you walked up to the line
   (7 = n)                                        ; seven squares at a press each
   (0 = g 'wtop)                                  ; and nothing has scrolled
-  (27 = slop-gap g)))                            ; seven rows closer, and a bay's worth more
+  (81 = slop-gap g)))                            ; seven rows closer, and a bay's worth more
 
 ; --- at the line a square is one of two things, and the gap closes either way ---
 ; yours: you rise a row and the world holds still. not yours: the ground scrolls under
@@ -173,7 +173,7 @@
    (steps n ok) (? (g 'over) [n ok] (: k (lawful? g) (steps (n + 1) (ok && k))))
    r (steps 0 1)
  (test
-  (29 = r 0)                                     ; twenty-nine squares from the line
+  (82 = r 0)                                     ; eighty-two squares from the line
   (r 1)                                          ; every one of them lawful
   ('taken = g 'over)
   (g 'wtop < -20)                                ; the ground scrolled most of the way
@@ -196,7 +196,7 @@
    (col j) (map (r \ r j) runs)
    mid (23 // 2)                                 ; 11: the middle row of the screen
  (test
-  (all (p \ (p = 98)) (col 0))                   ; 98 presses for 35 squares, every seed
+  (all (p \ (p = 151)) (col 0))                  ; 151 presses for 89 squares, every seed
   (all (b \ (2 < b < 22)) (col 1))               ; the shore never reaches the foot
   (mid < ((net (col 1)) / 12.0))                 ; ..and on the whole lands past the middle
   (all (s \ (10 < s)) (col 2))                   ; the sand is a good walk away
@@ -228,7 +228,7 @@
 
 ; --- the frame at the shore: slop, surf, sand, grass, and you on the road ---
 (: g (slop-new 23 80 (wheel 11))
-   _ (drive g (h \ ((h 'wtop) < -18)))
+   _ (drive g (h \ ((h 'wtop) < -67)))
    _ (slop-tick g)
    f (slop-frame g)
  (test
@@ -246,7 +246,7 @@
 ; --- the skin drifts with the ground: the same phase over a scrolled world is a
 ; different picture, and it is the picture the unscrolled world had one row up ---
 (: g (slop-new 23 80 (wheel 11))
-   _ (drive g (h \ ((h 'wtop) < -18)))
+   _ (drive g (h \ ((h 'wtop) < -67)))
    t0 (g 't)
    k0 (peep ((g 'field) t0 (g 'wtop)) [0 0] 0)         ; the skin's top-left cell, where we are
    k1 (peep ((g 'field) t0 ((g 'wtop) + 1)) [0 0] 0)   ; ..and one row of drift along
@@ -273,7 +273,7 @@
    f1 (slop-frame g)
    f2 (slop-frame g)
    kept (tally (keys (g 'rows)))
-   _ (drive g (h \ ((h 'wtop) < -18)))
+   _ (drive g (h \ ((h 'wtop) < -67)))
    _ (slop-frame g)
    cut (tally (filter (w \ (w <= (g 'wetto))) (keys (g 'rows))))
  (test (f1 = f2) (0 < kept) (0 = cut)))
@@ -306,29 +306,75 @@
 
 ; the tempo falls with the cost, but only to a third: a twentieth of a tempo is none
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (? (w < -30) ()
+   (row-at gp) (: (go w) (? (w < -70) ()
                             (: q (w - slop-shore g (slop-road g w))
                              (? (q = gp) w (go (w - 1)))))
                   (go 22))
    (sp gp) (: w (row-at gp) (? (charm? w) (: _ (pin g 'w w) (slop-song-speed g)) 'none))
  (test
-  (1.0 = sp 30) (1.0 = sp 20)                    ; out in the field it runs at tempo
+  (1.0 = sp 66) (1.0 = sp 20)                    ; out in the field it runs at tempo
   (sp 1 < sp 10) (sp 10 < sp 20)                 ; and drags all the way in
   (0.3 <= sp 1 <= 0.4)))                         ; ..to a third of it, and no further
 
-; and the waveform thickens with it: a sine while a square is one press, the whole way
-; to a square by the last one, and never past either end
+; and the waveform thickens with it: a clean sine at the start, a square at the shore,
+; and half way over at the knee. linear in the GAP either side of the knee, not in the
+; cost -- the cost is a reciprocal, so a dial linear in it spends nineteen of the
+; twenty-one squares reaching half way and does the rest inside the last one.
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (? (w < -30) ()
+   (row-at gp) (: (go w) (? (w < -70) ()
                             (: q (w - slop-shore g (slop-road g w))
                              (? (q = gp) w (go (w - 1)))))
                   (go 22))
    (ed gp) (: w (row-at gp) (? (charm? w) (: _ (pin g 'w w) (slop-song-edge g)) 'none))
  (test
-  (0.0 = ed 30) (0.0 = ed 20)                    ; out in the field, a clean sine
-  (ed 20 < ed 10) (ed 10 < ed 2) (ed 2 < ed 1)   ; and it hardens the whole way in
-  (1.0 = ed 1)                                   ; a square exactly, on the last square
-  (all (gp \ (0.0 <= ed gp <= 1.0)) [30 20 10 2 1])))
+  (0.0 = ed 66) (0.0 = ed 50)                    ; the whole first screen is a clean sine
+  (0.0 = ed (g 'gmin))                           ; the ramp starts at the volume's floor
+  (1.0 = ed 1)                                   ; and lands square exactly at the slop
+  (ed (g 'gmin) < ed 20)                         ; hardening the whole way between
+  (ed 20 < ed 10) (ed 10 < ed 5) (ed 5 < ed 1)
+  (all (gp \ (0.0 <= ed gp <= 1.0)) [66 50 20 10 5 1])))
+
+; --- the volume over the four stretches of the walk ---
+; a screen of grass to fall quiet over, a stretch to stay quiet across, the half screen
+; of scroll before the sand shows to come back up in, and the whole approach at full.
+; the rise is keyed to the rows of scroll still owed before the beach shows, not to a
+; gap, so it lands on the sand appearing exactly rather than near it.
+(: g (slop-new 23 80 (wheel 11))
+   (walk-to p) (: (go _) (? (g 'over) () (p g) () (slop-key g 107, go ())) (go ()))
+   v0 (slop-song-vol g)                          ; the first frame
+   _ (walk-to (h \ ((slop-gap h) <= (h 'gmin))))
+   vmin (slop-song-vol g)                        ; the bottom of the dip
+   emin (slop-song-edge g)
+   _ (walk-to (h \ (((h 'wtop) - (h 'bt)) <= ((h 'r) // 2))))
+   vhalf (slop-song-vol g)                       ; half a screen of scroll short of the sand
+   _ (walk-to (h \ ((h 'wtop) <= (h 'bt))))
+   vsand (slop-song-vol g)                       ; the sand on the screen
+   esand (slop-song-edge g)
+ (test
+  (1.0 = v0)                                     ; full at the first frame
+  (vmin <= 0.07)                                 ; almost silent a screen in
+  (0.0 = emin)                                   ; ..which is where the waveform starts to turn
+  (|(vhalf - vmin) < 0.0001)                     ; still there half a screen out from the sand
+  (0.99 <= vsand)                                ; and back to full the moment it shows
+  ; the waveform has barely started by then: the ramp is squared, so its knee sits
+  ; toward the square end and the sine holds most of the way down the beach
+  (0.12 <= esand <= 0.45)
+  (esand < 1.0)))
+
+; the dip falls smoothly and never goes under the floor, and every point of the walk is
+; between the floor and full
+(: g (slop-new 23 80 (wheel 11))
+   vs (: (go acc) (? (g 'over) (lrev acc)
+                     (: _ (slop-key g 107) (go ((slop-song-vol g) . acc))))
+         (go ()))
+   (rising? l) (l @- 1 (a . b . r) (? (b < a) 0 (rising? (b . r))))
+   (falling? l) (l @- 1 (a . b . r) (? (a < b) 0 (falling? (b . r))))
+ (test
+  (all (v \ (0.06 <= v <= 1.0)) vs)              ; nothing under the floor, nothing over full
+  (0 < tally (filter (v \ (v <= 0.07)) vs))      ; there is a quiet stretch
+  (0 < tally (filter (v \ (0.99 <= v)) vs))      ; and a loud one
+  (falling? (take 20 vs))                        ; it only falls at the start
+  (rising? (lrev (take 20 (lrev vs))))))         ; and only rises at the end
 
 ; the dial itself: play.l's i-sin at one end, its i-sqr at the other, crossfaded. the
 ; two share a phase -- a square built on the half of the period has the sine's sign --
@@ -345,8 +391,15 @@
   ; than cancel. to a tolerance: sin of pi is not zero, it is -1.2e-16, and the square
   ; has already flipped there
   (all (p \ (-0.000001 <= ((w p 0.0) * (w p 1.0)))) phs)
-  ; a plain crossfade, so half way is the mean of the two ends
-  (all (p \ (near (w p 0.5) (((w p 0.0) + (w p 1.0)) / 2.0))) phs)
+  ; half way is the triangle, in phase with both -- zero rising at the period's start,
+  ; one at a quarter, minus one at three. play.l's own i-tri is a quarter period behind,
+  ; and a triangle out of phase would cancel against the sine rather than cross with it.
+  (near (w 0.0 0.5) 0.0) (near (w 0.25 0.5) 1.0)
+  (near (w 0.5 0.5) 0.0) (near (w 0.75 0.5) -1.0)
+  (near (w 0.125 0.5) 0.5)                       ; straight between the corners
+  ; each half is a plain crossfade, so a quarter turn is the mean of the two it is between
+  (all (p \ (near (w p 0.25) (((w p 0.0) + (w p 0.5)) / 2.0))) phs)
+  (all (p \ (near (w p 0.75) (((w p 0.5) + (w p 1.0)) / 2.0))) phs)
   ; and nothing anywhere on the dial leaves the rails
   (all (p \ (all (m \ (-1.0001 <= (w p m) <= 1.0001)) [0.0 0.25 0.5 0.75 1.0])) phs)))
 
@@ -354,7 +407,7 @@
 (: tune (slop-tune ())
    j (jug 0)
    s (slop-song-new tune j)
-   (feed n) (? (0 < n) (: _ (slop-song-feed s 1.0 0.0) (feed (n - 1))))
+   (feed n) (? (0 < n) (: _ (slop-song-feed s 1.0 0.0 1.0) (feed (n - 1))))
    _ (feed 10)
    pcm (slurp j)
    (samp i) (: v ((peep pcm (i * 2) 0) + ((peep pcm ((i * 2) + 1) 0) << 8))
