@@ -81,8 +81,6 @@ don't automatically construct a list for you.</p>
 <dl class="glossary">
   <dt id="g-apply"><a href="#g-apply">📋 apply</a></dt>
     <dd>(verb) the binary operation of calling a function with an argument. corresponds to exponentiation in <a href="#g-church">church arithmetic</a>. written <code>(f x)</code> meaning apply <code>f</code> to <code>x</code>. see also: <a href="#g-curry">curry</a></dd>
-  <dt id="g-big"><a href="#g-big">💥 big</a></dt>
-    <dd>a big integer aka bignum. a type of <a href="#g-star">star</a></dd>
   <dt id="g-blue"><a href="#g-blue">🔵 blue</a></dt>
     <dd><a href="#g-color">color</a> of a value whose net has no positive real part: (<code>0</code>, <code>()</code>, <code>""</code>, <code>'(1 2 -3)</code>, and every pure phase &mdash; <code>i</code> has magnitude but no amount). boolean false.</dd>
   <dt id="g-book"><a href="#g-book">📒 book</a></dt>
@@ -136,11 +134,11 @@ don't automatically construct a list for you.</p>
   <dt id="g-sat"><a href="#g-sat">🌊 saturate (<code>$</code>)</a></dt>
     <dd>retraction of a value's <a href="#g-net">net</a> (a <a href="#g-star">star</a>-typed value) onto the <span class="hi blue"><a href="#g-blue">blue</a></span>-<span class="hi green"><a href="#g-green">green</a></span> <a href="#g-charm">charms</a>, ie. an integer in the interval [0, max-charm]. overflow and underflow go to the limit instead of wrapping (saturation). thus <span class="hi green"><a href="#g-green">green</a></span> saturates to <span class="hi green"><a href="#g-green">green</a></span> while both <span class="hi red"><a href="#g-red">red</a></span> and <span class="hi blue"><a href="#g-blue">blue</a></span> saturate to <span class="hi blue"><a href="#g-blue">blue</a></span>.</dd>
   <dt id="g-star"><a href="#g-star">🌟 star</a></dt>
-    <dd>a scalar fixpoint of <a href="#g-net">net</a>: <a href="#g-charm">charm</a>, <a href="#g-sun">sun</a>, <a href="#g-big">big</a>, <a href="#g-gem">gem</a> or <a href="#g-twin">twin</a>.</dd>
+    <dd>a scalar fixpoint of <a href="#g-net">net</a>: <a href="#g-charm">charm</a>, <a href="#g-sun">sun</a>, <a href="#g-gem">gem</a> or <a href="#g-twin">twin</a>.</dd>
   <dt id="g-string"><a href="#g-string">🧵 string</a></dt>
     <dd>a byte vector: indexes its bytes (<code>("abc" -1)</code> is <code>99</code>, counting from the end), joins on another string (<code>("ab" "cd")</code> is <code>"abcd"</code>), nets its charm-sum.</dd>
   <dt id="g-sun"><a href="#g-sun">☀️ sun</a></dt>
-    <dd>a pointer-width integer (<code>intptr_t</code>). a type of <a href="#g-star">star</a></dd>
+    <dd>an integer too large for a <a href="#g-charm">charm</a>, at any width &mdash; one boxed tier, arbitrary precision. a type of <a href="#g-star">star</a></dd>
   <dt id="g-tablet"><a href="#g-tablet">📱 tablet</a></dt>
     <dd>see: <a href="#g-book">book</a></dd>
   <dt id="g-tally"><a href="#g-tally">🧮 tally</a></dt>
