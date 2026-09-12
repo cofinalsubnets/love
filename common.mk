@@ -93,8 +93,11 @@ override HCC := $(filter-out 0,$(HCC))
 
 # ai_tco for the builds that can take it: 1 = the tail-threaded VM (aps tail-jump, never
 # return -- `make vmret` verifies it per binary), 0 = the trampoline loop. The host runs
-# $(tco). PINNED to 0 elsewhere: love0 and wasm (the deliberate trampoline-coverage lanes),
-# and the two seats with no sibcall -- mps2's thumb1 face and the playdate simulator.
+# $(tco); the kernel lane and the wasm seat take l/love.h's own default of 1 -- wasm's tails
+# are return_call, the engines' tail-call law (node 26, firefox 121, chrome 112, safari 18),
+# worth 1.31x over the trampoline. PINNED to 0 elsewhere: love0 (the deliberate
+# trampoline-coverage lane) and the two seats with no sibcall -- mps2's thumb1 face
+# and the playdate simulator.
 tco ?= 1
 
 # tco EARNS A TREE THE SAME WAY HCC does, and for the same reason: a tco=0 love is a

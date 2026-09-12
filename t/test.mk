@@ -793,10 +793,11 @@ test_virt_build: host
 # and the lay law over what an OS loader maps: t/gate/lay.l, which needs no kernel to ask
 # it -- the kernels and boards above are placed by something that is not a loader.
 .PHONY: test_links
-test_links: host $(ho)/front $(ho)/frontseat $(love0) b/love-wasm.wasm
+test_links: host $(ho)/front $(ho)/frontseat $(love0)
 	@$(MAKE) -s $(ko)/love-x64.elf
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
+	@$(MAKE) -s a=wasm $(ko)/love-wasm.wasm
 	@$(MAKE) -s test_boards
 	@$m t/gate/lay.l $(ho)/love $(ho)/front $(ho)/frontseat || { echo "FAIL lay"; exit 1; }
 	@echo "test_links: hosted, bootstrap, front and its seat-horn twin, the wasm machine, three kernels, six boards"
@@ -1250,7 +1251,7 @@ test_kernel_wasm:
 	@echo "test_kernel_wasm: skipped (needs node)"
 else
 test_kernel_wasm: host
-	@$(MAKE) -s b/wasm/love-wasm.image
+	@$(MAKE) -s wasm
 	@echo TEST b/love-wasm.wasm "(node: the kernel corpus on the woken image, serial, headless)"
 	@INLE_RAM=768 $(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love-wasm.image $(R)/b/love-wasm.wasm t/kernel/all.l \
 	   < /dev/null > b/wasm/kernel.log 2>&1; \
@@ -1278,7 +1279,7 @@ test_seedwasm:
 	@echo "test_seedwasm: skipped (needs node)"
 else
 test_seedwasm: host
-	@$(MAKE) -s b/wasm/love-wasm.image
+	@$(MAKE) -s wasm
 	@echo TEST "love seed x64 (the wasm seat, nothing under it)"
 	@rm -f b/wasm/love-x64
 	@INLE_RAM=1024 $(NODE) $(R)/i/wasm/inle.mjs --lift /s/love-x64:b/wasm/love-x64 \

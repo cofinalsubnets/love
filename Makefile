@@ -10,7 +10,7 @@ endif
 # bootstrap interpreter
 love0 = b/love0
 
-.PHONY: all install uninstall clean distclean host kernel wasm love0 lint ulp fonts web \
+.PHONY: all install uninstall clean distclean host kernel wasm wasm_seat love0 lint ulp fonts web \
   site serve site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
 
 # an unpacked release builds the product; a checkout keeps the fast gate
@@ -526,18 +526,24 @@ mooncc_dep = $(mdep)
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
 k_arch_c = $(wildcard $(R)/i/$a/*.c)
 k_free_c = $R/i/kmain.c $R/i/blk.c $R/i/hda.c $R/i/sys.c
+# the runtime slice moonlibc's own roster names, member by member -- the way a link with
+# addresses names one. $a=wasm empties it: that link pulls a member when its defs meet an
+# owed symbol, so spelling the set here would only compile what the ledger already answers.
+k_libc_c = $(c_c)
 # the whole kernel compile, in link order: the runtime and its math floor, the console
 # engine with its two fonts, moonlibc, the metal, the free trio -- and $(host_c) itself,
 # because the kernel runs the same frontend the host does. taking that roster rather than
 # copying it is what lets a new i/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
   $R/l/quay/cga_8x8.c $R/l/quay/cleat_8x16.c $R/l/quay/paint.c \
-  $(c_c) $(k_arch_c) $(k_free_c) $(host_c)
-k_h = $(love_h) $(R)/i/k.h $(R)/i/ustar.h $(wildcard $(R)/i/$a/*.h)
+  $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
+k_h = $(love_h) $(R)/i/k.h $(R)/i/ustar.h $(R)/i/asmops.h $(wildcard $(R)/i/$a/*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
 k_pie = $(k_odir)/love.pie
+# ..and the wasm seat's own end of the lane: one module, no elf to project out of it.
+k_mod = $(ko)/love-$a.wasm
 
 # the lays and the machine tail live under $(k_odir)/$a/ so vec.o and sys.o do not
 # collide with the core objects of the same name.
@@ -546,8 +552,11 @@ k_boot_o = $(k_odir)/$a/boot.o
 k_tail_o = $(k_odir)/$a/sys.o
 # $(k_free_o) alone is named apart: `make kmain_o` is the ports' door to it.
 k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
-k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_lay_o) $(k_tail_o) \
-  $(k_odir)/moonlibc.o $(k_odir)/src.o $(k_doom_o)
+# what a link WITH ADDRESSES carries beside the TUs: the vector lay, the machine tail,
+# the roster runtime. a wasm module has none, so lay and resolve never see it and $a=wasm
+# empties this too -- the source blob stays, the one object both lanes want.
+k_mach_o = $(k_lay_o) $(k_tail_o) $(k_odir)/moonlibc.o $(k_doom_o)
+k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_mach_o) $(k_odir)/src.o
 
 kcppflags := \
   -I$(k_odir) \
@@ -571,6 +580,19 @@ $(k_pie): $(k_o) $m
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -pie -t $a $(k_o) -o $@
+
+# THE WASM SEAT, and the whole of what it does differently: two rosters emptied above,
+# and this link in place of the -pie one -- everything up to `-t $a` is the lane the metal
+# seats take. the module is where it ends; there is no address space to project an elf out
+# of, so $(k_elf) and its kproject have no wasm twin.
+ifeq ($a,wasm)
+k_libc_c =
+k_mach_o =
+$(k_mod): $(k_o) $m
+	@echo 'MOON	'$@
+	@mkdir -p "$(dir $@)"
+	@$(mooncc) -t $a $(k_o) -o $@
+endif
 kproject_l = $R/a/kore/text.l $R/a/kore/u.l $R/a/kore/asbook.l \
   $R/l/holo/elf.l $R/l/holo/obj.l $R/l/holo/link.l $R/u/kproject.l
 $(k_odir)/kproject.list: force_dist_list
@@ -614,10 +636,12 @@ b/lib/crewlist.h: Makefile
 	 $(note)
 
 # every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
+# `test -s`: an empty object reaches the link as a shape error naming neither file, and
+# no object of either flavour is ever legitimately empty.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(mooncc_dep) b/lib/baked.h b/lib/distlist.h b/lib/korelist.h b/lib/crewlist.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(kcc) -c $< -o $@
+	@$(kcc) -c $< -o $@ && test -s $@
 
 # kmain_o -- the kernel frontend, COMPILED AND NOTHING MORE, at whatever arch the caller's
 # `a=` says; the odir is spelled here so a caller never re-derives it.
@@ -1041,15 +1065,16 @@ SERVEPORT ?= 8080
 serve: host
 	@$(ho)/love serve -p $(SERVEPORT) $R
 
-# `make wasm` is the machine: the kernel module below, and the heap image beside it.
-# tco=1 on both -- the vm's tails are return_call, the engines' tail-call law (node 26,
-# firefox 121, chrome 112, safari 18), and the corpus runs 1.31x faster than on the
-# trampoline. the loader (i/wasm/loader.js) is the runtime under a bare module.
-ifeq ($(NODE),)
-wasm: b/love-wasm.wasm
-else
-wasm: b/love-wasm.wasm b/wasm/love-wasm.image
-endif
+# `make wasm` is the machine: the kernel module, and the heap image beside it. the module
+# is the KERNEL LANE at $a=wasm -- one roster, one flag set, per-TU objects under b/wasm/
+# the way every other seat lays them -- so this target is a recursion and nothing else, and
+# the seat parts from the metal only where the link does. an arch is how the tree asks for
+# a second machine, and wasm is one; the split really is at `-t $a`.
+wasm:
+	@$(MAKE) -s a=wasm wasm_seat
+# ..and that seat, spelled where NODE is known: the module always, the image when there is
+# a node to bake it under. the loader (i/wasm/loader.js) is the runtime under a bare module.
+wasm_seat: $(k_mod) $(if $(NODE),b/wasm/love-wasm.image,)
 # by hand: bytes every C edit would otherwise churn. ONE PAIR IS COPIED OUT to w/ beside
 # the fonts and the stylesheet -- generated files committed for one reason, that github
 # pages serves what it is given and builds nothing.
@@ -1059,24 +1084,6 @@ site-wasm: wasm
 	@cp b/love-wasm.wasm w/wasm/love-wasm.wasm
 	@echo '$(t_cp)	'w/wasm/love-wasm.image
 	@cp b/wasm/love-wasm.image w/wasm/love-wasm.image
-# the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
-# console painter with its fonts, i/sys.c under moonlibc, the host frontend whole -- with
-# i/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
-# text lane). one module beside b/love-$a.elf; the runtime rides in by need, and no
-# the heap image is baked below. the CPU under it is i/wasm/cpu.mjs, a worker;
-# the terminals are i/wasm/inle.mjs (node) and i/wasm/inle.html (the page).
-kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/cleat_8x16.c $R/l/quay/paint.c \
-  $(k_free_c) $(host_c) $R/i/wasm/arch.c
-kw_h = $(love_h) $R/i/k.h $R/i/ustar.h $R/i/asmops.h $R/i/wasm/asmops.h
-b/wasm/src.o: $(dist_source) u/mksrc.l $m
-	@echo 'HOLO	'$@
-	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m u/mksrc.l $(dist_source) $@ wasm
-b/love-wasm.wasm: $(kw_c) $(kw_h) b/wasm/src.o b/lib/baked.h b/lib/distlist.h \
-  b/lib/korelist.h b/lib/crewlist.h b/lib/love_version.h $(mooncc_dep)
-	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Ib/lib \
-	  -Il/quay -Ia/moon/include -o $@ $(kw_c) b/wasm/src.o
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker

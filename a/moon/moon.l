@@ -462,7 +462,15 @@
                             fnames gnames weaks lnames)))
              (udie 1 ("cc: the code generator answered an unexpected shape for " + src))))
        (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
-   (cc-obj src dst t) (write-bytes dst (cc-objbytes src t))
+   ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:
+   ; write-bytes walks a BYTE LIST, and a string handed to it lands as an empty file.
+   (cc-obj src dst (t @ {'tgt tgt}))
+    (: b (cc-objbytes src t)
+       (tgt != 'wasm ? (write-bytes dst b)
+        (: q (open dst "w")
+           _ (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)))
+           _ (say q b)
+           (close q))))
    ; the link path (rung 3, l/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides first (its
    ; text is the entry), and ldlink binds the static exe -- no system linker.
