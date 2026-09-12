@@ -31,7 +31,7 @@
 ; and state out, gated headless by t/host/slop.l; only slop-run ties the tty (raw /
 ; tty / cue?, over i/posix.c), so slop never joins the corpus. ink lends the skin and
 ; the palette, rove the helm and the die.
-(module (slop slop-run slop-main slop-new slop-sy slop-gap slop-cost slop-rate
+(module (slop slop-run slop-walk slop-main slop-new slop-sy slop-gap slop-cost slop-rate
          slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-road slop-turf
          slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave
          slop-song-new slop-song-feed
@@ -413,8 +413,11 @@
 
  ; --- slop on the tty: the shimmer's swim loop with the keys drained per frame ---
  ; stage would block on a key and the slop has to keep moving while you do not, so
- ; this polls the way ink does: drain what is waiting, tick, paint, rest a beat
- (slop-run _) (: ws (tty 1)
+ ; this polls the way ink does: drain what is waiting, tick, paint, rest a beat.
+ ; the walk takes the screen as it finds it -- raw and the alternate screen belong to
+ ; whoever raised them, which is how the tower opens the slop on the screen its circle
+ ; left standing -- and answers the game it played.
+ (slop-walk _) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 1) 23)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (slop-new r c (wheel (clock 0)))
@@ -432,8 +435,7 @@
                             _ (g 'over ? () (slop-tick g))
                             (say out (slop-frame g), flush out,
                              beat-out (slop-song-speed g) (slop-song-edge g) (slop-song-vol g), swim ())))
-             _ (raw 1)
-             _ (say out (esc + "[?1049h" + esc + "[?25l" + esc + "[2J"))
+             _ (say out (esc + "[?25l"))
              _ (swim ())
              ; taken: the slop closes over the whole screen and runs at full rate --
              ; no gap left to slow it -- for half a second before the stage is left
@@ -443,12 +445,19 @@
                                      (flood (n - 1) (t + beat))))
              _ (g 'over = 'taken ? (flood 15 (g 't)))
              _ (? hn (: _ (flush hn) (close hn)) ())
-             _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
-             _ (flush out)
-             _ (raw 0)
-             (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in")
-                                     ("you turn back, " + presses (g 'spent) + " in")),
-              0))
+             g)
+
+ ; ..and the verb around it: the screen is raised here and put back here, and the
+ ; walk between the two neither knows nor cares which door it came in by
+ (slop-run _) (: _ (raw 1)
+                 _ (say out (esc + "[?1049h" + esc + "[2J"))
+                 g (slop-walk ())
+                 _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
+                 _ (flush out)
+                 _ (raw 0)
+                 (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in")
+                                         ("you turn back, " + presses (g 'spent) + " in")),
+                  0))
  slop-usage "usage: love slop   (no options; forward is k or up, q or esc leaves)"
  ; slop takes nothing: a word here is a mistake, and the game would swallow it
  (slop-main as) (? !(two? as) (slop-run ())

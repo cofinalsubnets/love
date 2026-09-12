@@ -2,7 +2,8 @@
 ; not in the t/*.l corpus (it loads a crew file and leaks its helpers).
 ; the engine core is pure love, so everything but the tty runner gates here:
 ; delve (seeded, connected, bordered), fov (strides, walls, memory), the
-; painter (a frame into a jug), the helm decoder, the words and their holes, and
+; painter (a frame into a jug), the make of each floor, the helm decoder, the
+; words and their holes, and
 ; the climb end to end -- combat, pennies, the mending, the pace, the stair,
 ; death, and the circle that ends it. the tty side (tower-run) is berth-thin over
 ; what this file proves, and t/host/tty.l plays it on a real pty.
@@ -16,9 +17,9 @@
                   0))
 
 ; --- delve: a seed reproduces its floor; floors are connected and bordered ---
-(: p1 (delve 60 20 (wheel 11))
-   p2 (delve 60 20 (wheel 11))
-   p3 (delve 60 20 (wheel 12))
+(: p1 (delve 60 20 (wheel 11) (plan 2))
+   p2 (delve 60 20 (wheel 11) (plan 2))
+   p3 (delve 60 20 (wheel 12) (plan 2))
    d <p1
    (teq a b) (: (go i ok) (? (i < 1200) (go (i + 1) (&& ok (peep (a 't) i 0 = peep (b 't) i 0)))
                            ok)
@@ -160,6 +161,41 @@
   (all-in? (kinds 2) '(gnome goblin hobgoblin))
   (all-in? (kinds 3) '(d4 d6 d8 d12 d20 triangle square hexagon))))
 
+; --- the make of a floor: a tier is built of its own stuff, and what a cell wears is
+; the cell's own dice -- so a floor strews the same way twice, never out of another
+; tier's table, and the two tiers never come out looking alike
+(: (kit th) ((<(th 1)) . map (r \ <r) (th 2))    ; the ground, and what lies on it
+   (marks th) (map (i \ <(tile-face th 1 1 (i % 40) (i // 40) 5)) ^400)
+   (all-of? l ks) (foldl (\ a x (&& a (elem x ks))) 1 l)
+ (test
+  (all-of? (marks (themes 0)) (kit (themes 0)))
+  (all-of? (marks (themes 1)) (kit (themes 1)))
+  (all-of? (marks (themes 2)) (kit (themes 2)))
+  ((marks (themes 0)) = (marks (themes 0)))      ; the dice are the cell's, not the clock's
+  !((marks (themes 0)) = (marks (themes 1)))     ; and no two tiers wear the same face
+  (elem 44 (marks (themes 0)))                   ; the garden does grow tufts
+  (38 = <(tile-face (themes 0) 0 1 0 0 0))       ; hedge, stone, marble
+  (35 = <(tile-face (themes 1) 0 1 0 0 0))
+  (35 = <(tile-face (themes 2) 0 1 0 0 0))
+  (28 = ((tile-face (themes 0) 0 1 0 0 0) 1))    ; lit and remembered are two pens
+  (22 = ((tile-face (themes 0) 0 0 0 0 0) 1))
+  (60 = <(tile-face (themes 0) 2 1 0 0 0))       ; and the stair is gold on every floor
+  (220 = ((tile-face (themes 2) 2 1 0 0 0) 1))))
+
+; ..nor are the tiers laid out alike: the garden is a patch of small beds, heaven a
+; few long blocks, and the plan is the whole of the difference
+(: gd <(delve 70 20 (wheel 5) (plan 1))
+   hv <(delve 70 20 (wheel 5) (plan 3))
+   (span rs) ((net (map (r \ (r 2) * (r 3)) rs)) // #rs)
+ (test (#(hv 'rooms) < #(gd 'rooms))
+         ((span (gd 'rooms)) < (span (hv 'rooms)))))
+
+; ..and a floor is dressed when it is cut, the stair changing what the next one is made of
+(: g (crawl-new 40 16 (wheel 7))
+   t1 (g 'd 'th)
+   _ (ascend g)
+ (test ((themes 0) = t1) ((themes 1) = (g 'd 'th)) (charm? (g 'd 'sd))))
+
 ; the stair: < climbs only where the stair is cut, and restocks the floor. the
 ; imperative is restated on arrival, every time.
 (: g (hand-g ())
@@ -185,6 +221,7 @@
              (on-ring? g (g 'cx) ((g 'cy) - 8))          ; the ring stands at the radius
              (on-ring? g ((g 'cx) + 16) (g 'cy))         ; ..twice as wide, so it reads round
              !(on-ring? g ((g 'cx) + 8) (g 'cy)))
+   row0 (map (x \ skin-pen g x 4) ^60)                  ; the field, before any of it
    _ (hit! ())
    _ (test (7 = circle-r g) (10 = circle-wall g)         ; one hit, one step, wall follows
              (find (g 'msg) "strike the circle" 0))
@@ -192,8 +229,17 @@
    n (sink 1)
  (test ('won = (g 'over)) (11 = n)                       ; eight steps in, then O, o, point
          (0 = circle-r g) (reveal? g)
-         ; ..and the field it opens onto is the walk's own: tufts, bare and shrub
-         (elem (<(turf 3 5)) '(34 46 35))))
+         ; ..and the field it opens onto is the walk's own shimmer with the clock
+         ; taken out of it: every pen off the pink ramp, graded and not flat, and the
+         ; same frame it was when the floor opened, eleven strikes ago
+         (: row1 (map (x \ skin-pen g x 4) ^60)
+            (&& (row0 = row1)
+                (1 < #(keys (foldl (\ t v (pin t v 1)) {} row1)))
+                (foldl (\ a v (&& a (elem v pink-ramp))) 1 row1)))))
+
+; ..and the door the last hit opens: the walk PROPER, not the verb, since the stage
+; the climb raised is the one the slop is to run on. a missed cite is a silent end.
+(test !(() = (cite 'slop 'slop-walk)))
 
 ; --- the whole game, generated: a seeded random walk holds every invariant ---
 (: g (crawl-new 60 20 (wheel 3))
@@ -216,7 +262,8 @@
  (test
   (string? f)
   (find f "@" 0)                                 ; you are on the map
-  (find f "#" 0) (find f "." 0)                  ; walls and floor in the light
+  (find f "&" 0) (find f "." 0)                  ; the garden's hedge and its earth
+  (find f "\e[38;5;143m" 0)                      ; ..in the earth's own pen
   (find f "the garden" 0) (find f "hp 20/20" 0)  ; the bar tells the tale
   (find f "\e[38;5;228m" 0)                      ; your hue, respecified on change
   (find f "\r\n" 0)))                            ; frames ride \r\n

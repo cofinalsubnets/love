@@ -3,7 +3,9 @@
 ; a floor is one level of the tower: tiles in a cask (0 rock, 1 floor, 2 the
 ; stair up), carved by delve -- rooms lashed by L-corridors, the functional
 ; rng threaded through so a seed reproduces the floor -- with a seen cask
-; remembering what the climber has been shown. fov is line-of-sight over bresenham
+; remembering what the climber has been shown. each tier is built of its own
+; stuff, and what is strewn over its ground is the cell's own dice, so a floor's
+; litter reproduces with its rooms. fov is line-of-sight over bresenham
 ; strides (walls light up as line endpoints); the painter says one frame of
 ; painted cells into any port, so frames gate headless; the helm turns a key into a
 ; steer (hjkl + yubn + arrows). the climb is the proving game riding it all:
@@ -23,11 +25,14 @@
 (module (rove tower-run tower-main dat open? dput delve fov clear? paint steer
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
          mend ascend fill fit circle? circle-new circle-stride circle-frame
-         circle-r circle-wall on-ring? reveal? done? turf tokens floors due?)
+         circle-r circle-wall on-ring? reveal? done? tokens floors due?
+         themes plan tile-face strewn pink-ramp skin-pen)
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
 (? (cite 'posix) (borrow 'posix) ())
+; and ink, which the last floor paints with: the shader the walk runs, stopped
+(borrow 'ink)
 (:
  ; --- the floor: tiles in a cask, (x y) indexed; 0 rock, 1 floor, 2 the stair ---
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
@@ -41,7 +46,10 @@
  ; a room is [x y rw rh]; its center anchors the corridors. rooms keep a
  ; one-cell gap so no two merge; each new room tunnels to the previous one,
  ; so the whole floor is connected by construction. answers (floor . st').
- (delve w h st) (:
+ ; the plan is the tier's own -- wide from, wide by, tall from, tall by, and one
+ ; try per so many cells -- which is what makes the garden a patch of small beds
+ ; and heaven a few long blocks.
+ (delve w h st pl) (:
    d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
    sb {st}
    (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
@@ -58,7 +66,7 @@
                          1 + peep rm 1 0 + peep rm 3 1 <= peep o 1 0 ||
                          1 + peep o 1 0 + peep o 3 1 <= peep rm 1 0))
    (try n) (? (0 < n)
-            (: rw (4 + roll sb 7) rh (3 + roll sb 4)
+            (: rw ((pl 0) + roll sb (pl 1)) rh ((pl 2) + roll sb (pl 3))
                (? (w <= rw + 2 || h <= rh + 2) (try (n - 1))
                 ; the span a room of width rw can start at, keeping a 1-cell border: x is
                 ; 1 + roll(w - rw - 1), so the far edge lands at w-2 at worst. (this read `+ 1`
@@ -71,7 +79,7 @@
                    d 'rooms ? (lash (mid rm) (mid <(d 'rooms))),
                    pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
-   _ (try ((w * h) // 24))
+   _ (try ((w * h) // (pl 4)))
    ; a cramped floor can come up short: guarantee two joined rooms
    _ (#(d 'rooms) < 2 ?
       (: r1 '(1 1 3 3) r2 [(w - 4) (h - 4) 3 3]
@@ -124,12 +132,45 @@
  pens {}
  (pen n) (: s (pens n) (string? s ? s
           (: s2 ("\e[38;5;" + show n + "m") (pin pens n s2, s2))))
- tile-gl "#.<"
- (tile-hue t lit) (? lit (t @ 2 51 1 242 250)
-                         (t @ 2 24 1 236 240))
+ ; two multiply-shift rounds masked to 32 bits: the dice a cell throws for itself,
+ ; so the same cell of the same floor always throws the same number.
+ lim 4294967296
+ (mix a) (: h ((a * 2654435761) % lim)
+            h2 ((h ^ (h >> 15)) * 2246822519 % lim)
+            (h2 ^ (h2 >> 13)))
+ (dice x y s k) ((mix ((y * 374761393) + (x * 668265263) + (s * 2654435761) + 1)) % k)
+
+ ; --- THE MAKE OF EACH FLOOR: what a tier is built of, and the only place its look
+ ; is written. rock, then the ground, then what is strewn over the ground, then the
+ ; plan its rooms are cut to. a face is (glyph lit dim) -- lit for what the lantern
+ ; shows, dim for what is only remembered; a strewing carries a fourth number, how
+ ; many cells in a hundred wear it.
+ th-garden '((38 28 22) (46 143 58)                     ; hedge and earth
+             ((44 71 65 26) (34 34 22 12) (42 212 89 6) (42 220 136 5) (126 38 24 3))
+             (3 5 2 3 18))                              ; small beds, a great many
+ th-middle '((35 246 238) (46 245 239)                  ; stone and flagstone
+             ((44 241 237 16) (58 240 236 10) (37 187 95 6) (42 251 244 4))
+             (4 7 3 4 24))                              ; rooms, the middling sort
+ th-heaven '((35 255 249) (46 252 245)                  ; marble and paving
+             ((58 250 244 20) (43 226 136 7) (61 180 94 5) (111 45 24 4) (42 231 145 5))
+             (8 9 4 5 40))                              ; blocks, and streets between
+ themes [th-garden th-middle th-heaven]
+ (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
+ stair-face '(60 220 136)                               ; < the stair, gold on every floor
  (loot-face _) '(36 172)                                ; pennies: $ in copper
+
+ ; a cell's face: the stair, the rock, or the ground with whatever it was strewn with
+ (wear r lit) [<r (lit ? (r 1) (r 2))]
+ (strewn th x y s) (: (go l h) (? !(two? l) ()
+                                  (: r <l w (r 3) (? (h < w) r (go >l (h - w)))))
+                      (go (th 2) (dice x y s 100)))
+ (tile-face th t lit x y s)
+  (t @ 2 (wear stair-face lit)
+       0 (wear <th lit)
+         (: r (strewn th x y s) (wear (two? r ? r (th 1)) lit)))
  (paint j d vis loot ents msg bar) (:
    w (d 'w) h (d 'h) sn (d 'seen)
+   th (peep d 'th th-middle) sd (peep d 'sd 0)   ; a floor nobody dressed is stone
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees
@@ -139,7 +180,7 @@
                    (? e [(e 'gl) (e 'hue)]
                       it (loot-face it)
                       (peep sn i 0)
-                       (: t (peep (d 't) i 0) [(tile-gl t) (tile-hue t lit)])
+                       (tile-face th (peep (d 't) i 0) lit (i % w) (i // w) sd)
                       '(32 0)))
    (row y x i p) (x >= w ? p
                   (: gh (cell i (peep vis i 0))
@@ -183,7 +224,7 @@
  mob-book '(("rat" 114 137 3 1 1) ("lanternfly" 108 175 3 1 1)
             ("gnome" 119 101 6 2 1) ("goblin" 103 71 8 2 1) ("hobgoblin" 71 64 11 3 1)
             ("d4" 52 189 4 1 2) ("d6" 54 189 6 2 2) ("d8" 56 189 8 2 2)
-            ("d12" 50 189 12 3 2) ("d20" 48 189 20 3 2)
+            ("d12" 100 189 12 3 2) ("d20" 118 189 20 3 2)  ; duodecimal, vigesimal
             ("triangle" 94 213 8 2 2) ("square" 37 213 11 2 2) ("hexagon" 38 213 15 3 2))
  ; which rows of it a floor bears
  (mob-set lvl) (lvl @ 1 '(0 1) 2 '(2 3 4) '(5 6 7 8 9 10 11 12))
@@ -248,10 +289,15 @@
              () (init (d 'rooms)))
    (pins g 'ms ms 'loot loot))
 
+ ; a floor wears its tier: the make it is built of, and the salt its litter is dealt
+ ; from -- one draw, so the same seed strews the same floor
+ (dress d lvl sb) (pins d 'th (peep themes (lvl - 1) th-heaven) 'sd (roll sb 1000000))
+
  ; a fresh climb: the garden delved from the seed state, the climber at 'in
  (crawl-new w h st) (:
-   p0 (delve w h st) d <p0
+   p0 (delve w h st (plan 1)) d <p0
    st1 >p0 sb {st1}                                 ; the brace boxes; #st1 would count it
+   _ (dress d 1 sb)
    pl {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue 228 'hp 20 'mx 20 'penny 0}
    g {'d d 'lvl 1 'tn 0 'sb sb 'p pl 'msg "" 'over 0}
    _ (stock g)
@@ -309,10 +355,11 @@
 
  ; up the stair: a fresh floor restocked, or the circle if heaven is behind you
  (ascend g) (? (last-floor <= g 'lvl) (circle-new g)
-              (: p0 (delve (g 'd 'w) (g 'd 'h) (peep (g 'sb) () 0))
+              (: p0 (delve (g 'd 'w) (g 'd 'h) (peep (g 'sb) () 0) (plan (1 + g 'lvl)))
                  d <p0
                  _ (pin (g 'sb) () >p0)
                  _ (pins g 'd d 'lvl (1 + g 'lvl))
+                 _ (dress d (g 'lvl) (g 'sb))
                  _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
                  _ (stock g)
                  (note g (fill w-floor [(floors (g 'lvl - 1))]))))
@@ -325,22 +372,25 @@
  ring-pen 231
  disc-pen 244
  wall-glyph 35
- turf-pens [22 28 34 65 71]                       ; grass, dark to bright
- ; the field is slop's: two multiply-shift rounds masked to 32 bits, so the last screen
- ; of the tower is the first screen of the walk it opens onto.
- lim 4294967296
- (mix a) (: h ((a * 2654435761) % lim)
-            h2 ((h ^ (h >> 15)) * 2246822519 % lim)
-            (h2 ^ (h2 >> 13)))
- (turf-dice x y k) ((mix ((y * 374761393) + (x * 668265263) + 1)) % k)
- (turf x y) (: h (turf-dice x y 120)
-               (? (h < 9)  [35 (turf-pens (h % 2))]
-                  (h < 27) [46 (turf-pens (h % 3))]
-                           [34 (turf-pens (2 + (h % 3)))]))
+ grass-glyph 34
+ ; the last field is the walk's own shimmer with the clock taken out of it: ink's skin
+ ; at one frame, laid on the pink stretch of slop's ramp -- pale on the crest of a wave,
+ ; magenta in the trough. no dice anywhere in it; the grade IS the wave. slop's own ramp
+ ; is a loop, because a shimmer that moves must not seam; a still one never wraps, so
+ ; this one runs pale to deep and the whole of it shows. span is the band of skin it
+ ; covers -- the four sines reach +-4 but seldom leave +-3, and past the span it clamps.
+ pink-ramp [224 218 217 212 211 206 205 199]
+ pink-span 3.0
+ (skin-pen g x y) (: v (peep (g 'sk) [y x] 0.0)
+                     m (#pink-ramp - 1)
+                     n (int (((v + pink-span) * #pink-ramp) / (2.0 * pink-span)))
+                     (pink-ramp (? (n < 0) 0 (m < n) m n)))
 
  (circle? g) (last-floor < g 'lvl)
  (circle-new g) (: d (g 'd) cx ((d 'w) // 2) cy ((d 'h) // 2)
-                   _ (pins g 'lvl (1 + last-floor) 'cx cx 'cy cy 'st 0 'ms () 'loot {})
+                   ph ((roll (g 'sb) 1000) / 10.0)      ; where in the drift it stopped
+                   _ (pins g 'lvl (1 + last-floor) 'cx cx 'cy cy 'st 0 'ms () 'loot {}
+                            'sk ((ink-drift (d 'h) (d 'w)) ph 0.0))
                    _ (pins (g 'p) 'x cx 'y (cy - circle-r0 - 1))
                    (note g (fill w-floor [(floors last-floor)])))
  (circle-r g) (: st (g 'st) (st < circle-r0 ? (circle-r0 - st) 0))
@@ -385,11 +435,12 @@
    j (jug 0) d (g 'd) w (d 'w) h (d 'h) p (g 'p)
    rv (reveal? g) wq (circle-wq g)
    _ (say j $ "\e[H\e[0m" + (fit (g 'msg) w) + "\e[K\r\n")
-   (cell x y) (? ((x = p 'x) && (y = p 'y)) [(p 'gl) (p 'hue)]
-                 (on-ring? g x y) [(ring-glyph g) ring-pen]
-                 rv ((circle-q g x y) <= disc-q ? [46 disc-pen] (turf x y))
-                 (wq <= (circle-q g x y)) [wall-glyph (turf-pens (turf-dice x y 5))]
-                 '(46 240))
+   (cell x y) (: q (circle-q g x y)
+                 (? ((x = p 'x) && (y = p 'y)) [(p 'gl) (p 'hue)]
+                    (on-ring? g x y) [(ring-glyph g) ring-pen]
+                    rv ((q <= disc-q) ? [46 disc-pen] [grass-glyph (skin-pen g x y)])
+                    (wq <= q) [wall-glyph (skin-pen g x y)]
+                    '(46 240)))
    (row y x pn) (x >= w ? pn
                  (: gh (cell x y) p2 <>gh
                   (pn != p2 ? (say j (pen p2)),
@@ -420,22 +471,27 @@
                      (slurp j)))
 
  ; --- tower: the climb on cli's stage. any seed climbs; q or esc leaves ---
- ; the token is the last thing the tower says, and then the field it opens onto: slop
- ; is cited at the door, not borrowed, so a seat that carries no walk still climbs.
+ ; the token is the last thing the tower says, and the field it opens onto is the next
+ ; thing on the same screen: the walk takes the stage the climb already raised, so
+ ; nothing between the circle and the slop is torn down. slop is cited at the door,
+ ; not borrowed, so a seat that carries no walk still climbs.
  (tower-win g) (: tk (tokens (roll (g 'sb) #tokens))
-                  _ (puts $ (fit (fill w-won [tk (g 'p 'penny)]) 200) + "\n",
-                     flush out, rest 2200)
-                  run (cite 'slop 'slop-run)
-                  (run ? (run ()) (g 'p 'penny)))
+                  _ (pin g 'msg (fill w-won [tk (g 'p 'penny)]))
+                  _ (say out (crawl-frame g), flush out, rest 2200)
+                  walk (cite 'slop 'slop-walk)
+                  (walk ? (walk ()) ()))
  (tower-run _) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
              ; an end shows its frame for a beat before the stage is left
              (turn k) (k @ (113 || 27) (pin g 'over 'fled)
-                       (crawl-turn g (steer k), g 'over ? (say out (crawl-frame g), flush out, rest 1200)))
+                       (crawl-turn g (steer k),
+                        g 'over ? (say out (crawl-frame g), flush out, rest 1200,
+                                   (g 'over = 'won ? (tower-win g)))))
              _ (stage (w \ h \ crawl-frame g) turn (\ _ (g 'over)))
-             (g 'over = 'won ? (tower-win g)
+             ; won: the token line is still in the note row, and goes to the shell too
+             (g 'over = 'won ? (puts $ (fit (g 'msg) 200) + "\n", 0)
               (puts $ (g 'over @ 'dead (fill w-lost [(floors (g 'lvl - 1))])
                                        (fill w-fled [(g 'p 'penny)])) + "\n",
                (g 'p 'penny))))
