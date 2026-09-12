@@ -16,10 +16,13 @@
 ; passed does not, so a climber dies only by standing still beside something; and
 ; heaven's shapes stir at half a climber's pace, so they can be walked past.
 ;
-; each floor has phrases of its own, taken a cycle each and played out the card a
-; chunk at a time by the climb's own loop -- the card takes a chunk at the speed it
-; plays one, so feeding it while no key is waiting is what keeps the time in a game
-; that otherwise only moves when you do.
+; each floor's music is a RULE and not a recording: a bar is built off the cycle
+; number through the same dice the floors are strewn with, so the garden's chimes are
+; struck by nobody, the middle's horns come when they come, heaven takes one of its
+; long sequences, and the circle is a heart that slows as the ring closes. it goes out
+; the card a chunk at a time from the climb's own loop -- the card takes a chunk at the
+; speed it plays one, so feeding it while no key is waiting is what keeps the time in a
+; game that otherwise only moves when you do.
 ;
 ; run: love tower
 ; the engine core is pure love (delve/fov/paint/crawl-* run headless, gated by
@@ -31,9 +34,10 @@
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
          mend ascend fill fit circle? circle-new circle-stride circle-frame
          circle-r circle-wall on-ring? reveal? done? tokens floors due?
-         themes plan tile-face strewn pink-ramp skin-pen
+         themes plan tile-face strewn pink-ramp grass-ramp pink-front skin-pen
          flavour mutter underfoot sign-box sign-over
-         songs tower-tune song-vol song-new song-feed drain-keys)
+         songs tower-bars tower-tune song-vol song-new song-feed drain-keys
+         garden-bars middle-bars sky-bars heart-bars heart-rate tune?)
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
@@ -269,20 +273,90 @@
           "the corner-softened card")
  token-pen 201                                          ; and the pen it is named in
 
- ; --- THE MUSIC: a floor's phrases -- the notes in semitones off middle c, the voice
- ; (one of play's pitched four), how loud, and how long a note is held. a phrase IS a
- ; cycle, so a longer list is a busier bar and not a longer one, and the phrases of a
- ; floor take a cycle each in turn: two of them is a two-bar round. a sine carries less
- ; than a square at the same gain, which is what the numbers are for.
- ; the circle's volume is not from here, it is the ring's own size.
- songs '((((0 4 7 12 7 4) (0 5 9 12 9 5))               ; the garden, in no hurry
-          "sin" 2.00 0.42)
-         (((-12 -8 -5 -8) (-14 -10 -7 -10))             ; the middle, low and boxed in
-          "sqr" 0.70 0.55)
-         (((12 19 16 23 19 14) (12 19 18 23 21 16))     ; heaven, thin and up in the air
-          "tri" 1.30 0.40)
-         (((0 -5) (0 -7))                               ; the circle, going down with it
-          "tri" 1.60 1.30))
+ ; --- THE MUSIC: a floor's bar, BUILT and not looked up. a SLOT is a voice tablet
+ ; play can sound -- instrument, note in semitones off middle c, how loud, how long it
+ ; rings -- or () for silence; a BAR is a list of slots laid across one cycle; and a
+ ; floor answers a LIST of bars, sounded together. everything below is the cycle number
+ ; put through the same dice the floors are strewn with, so a bar always sounds the
+ ; same and no note anywhere is stored. `songs` is how loud a floor is; the circle's
+ ; loudness is not here, it is the ring's own size.
+ songs '(2.00 1.60 2.60 2.60)
+ (vox nm nt gn lg) {'s nm 'note nt 'gain gn 'legato lg}
+
+ ; the garden: chimes, and nobody striking them. mostly nothing, now and then one note,
+ ; now and then a gust that takes three slots together. the tones are a pentatonic --
+ ; no two of them can sound wrong against each other, which is why chimes are cut to
+ ; one -- and the voices are the round ones, held long enough to ring into the next.
+ chime-tones [0 2 4 7 9 12 14 16 19 21 24 26]
+ chime-slots 16
+ (gust? c i) ((0 <= i) && ((dice i c 12 100) < 7))
+ (chime-slot c i)
+  (? (((dice i c 11 100) < 11) || ((gust? c (i - 1)) || (gust? c (i - 2))))
+     (vox ((dice i c 14 3) = 0 ? "tri" "sin")
+          (chime-tones (dice i c 13 #chime-tones))
+          (0.55 + ((dice i c 15 45) / 100.0))
+          (1.30 + ((dice i c 16 120) / 100.0)))
+     ())
+ (garden-bars c) [(map (i \ chime-slot c i) (jot chime-slots))]
+
+ ; the middle: traffic. a horn is two notes a major third apart, up where it hurts, on
+ ; for a moment and gone. about a third of the time the noise settles into something
+ ; that was a tune all along -- five phrases, sounded an octave down, in a minor nobody
+ ; is cheered up by, square and triangle taking a note each. the roll is on the RUN of
+ ; five and not the bar, so it arrives as a tune and leaves as one.
+ horn-tones [24 26 27 29 31]
+ horn-slots 12
+ blue-phrases '((-3 0 4 2 0 -1) (-3 -1 0 2 4 2) (5 4 2 0 -1 -3)
+                (-3 4 2 -1 0 -3) (0 2 4 5 4 2))
+ blue-drop 12                                           ; ..sounded below where it is written
+ (horn-on? c i) ((dice i c 21 100) < 9)
+ (horn-slot c i k)
+  (? (horn-on? c i)
+     (vox "sqr" ((horn-tones (dice i c 22 #horn-tones)) + (4 * k))
+          0.40 (0.20 + ((dice i c 23 45) / 100.0)))
+     ())
+ (tune? c) ((dice (c // #blue-phrases) 0 31 100) < 34)
+ (blue-bars c) (: ph (blue-phrases (c % #blue-phrases))
+                  (v i) (vox ((i % 2) = 0 ? "tri" "sqr")
+                             ((ph i) - blue-drop) 0.95 0.52)
+                  [(map v (jot #ph))])
+ (middle-bars c) (? (tune? c) (blue-bars c)
+                    [(map (i \ horn-slot c i 0) (jot horn-slots))
+                     (map (i \ horn-slot c i 1) (jot horn-slots))])
+
+ ; heaven: long sequences, four bars each, and which one is a roll on the block -- so
+ ; the city goes round something without going round it to a schedule. two of them are
+ ; hopeful about it and one is not sure.
+ sky-songs
+ '((((12 16 19 24 19 16) (14 17 21 26 21 17) (16 19 23 28 23 19) (12 19 24 31 24 19))
+    "tri" 1.00)
+   (((12 15 19 22 19 15) (13 17 20 25 20 17) (10 14 17 22 17 14) (8 15 20 24 20 15))
+    "sin" 1.24)
+   (((19 24 26 31 26 24) (17 22 26 29 26 22) (16 19 24 28 24 19) (12 19 24 28 31 24))
+    "tri" 0.90))
+ sky-run 4                                              ; bars to a sequence
+ (sky-bars c) (: s (sky-songs (dice (c // sky-run) 0 41 #sky-songs))
+                 phs <s
+                 ph (phs (c % sky-run))
+                 [(map (n \ vox (s 1) n (s 2) 0.55) ph)])
+
+ ; the circle: a heart. lub, then dub a quarter of a beat behind it, and the beats
+ ; themselves further apart the smaller the ring gets -- three to a bar while it is
+ ; wide, one when it is a point. the fade is the ring's too, so it slows and goes at
+ ; the same time.
+ heart-lub {'s "bd" 'gain 1.00}
+ heart-dub {'s "bd" 'gain 0.62 'speed 1.25}
+ heart-div 8                                            ; slots to a beat
+ (heart-rate r) (1 + (r // 3))
+ (heart-bars r) (: n (heart-rate r)
+                   (slot i) (: j (i % heart-div)
+                               (? (j = 0) heart-lub (j = 2) heart-dub ()))
+                   [(map slot (jot (heart-div * n)))])
+
+ ; the floor's bars: which cycle it is, and how wide the ring is if it is the ring's
+ (tower-bars lvl c r) (lvl @ 1 (garden-bars c) 2 (middle-bars c) 3 (sky-bars c)
+                               (heart-bars r))
+
  song-rate 48000
  song-cps 0.5                                           ; cycles a second
  song-chunk 1600                                        ; a frame's worth, thirty a second
@@ -588,17 +662,39 @@
  wall-glyph 35
  grass-glyph 34
  ; the last field is the walk's own shimmer with the clock taken out of it: ink's skin
- ; at one frame, laid on the pink stretch of slop's ramp -- pale on the crest of a wave,
- ; magenta in the trough. no dice anywhere in it; the grade IS the wave. slop's own ramp
- ; is a loop, because a shimmer that moves must not seam; a still one never wraps, so
- ; this one runs pale to deep and the whole of it shows. span is the band of skin it
- ; covers -- the four sines reach +-4 but seldom leave +-3, and past the span it clamps.
+ ; at one frame, graded and not flat. no dice anywhere in it; the grade IS the wave.
+ ; slop's own ramp is a loop, because a shimmer that moves must not seam; a still one
+ ; never wraps, so these run pale to deep and the whole of either shows. span is the
+ ; band of skin a ramp covers -- the four sines reach +-4 but seldom leave +-3, and
+ ; past the span it clamps.
+ ;
+ ; WHICH ramp is the ring's doing. a cell near the middle takes the green, which is
+ ; what the climber came up through; the pink of slop's own stretch waits out past the
+ ; corner of the board and does not start in until the ring is down to HALF what it
+ ; was. so the first half of the work is done on grass with no pink anywhere on it,
+ ; and what the second half buys is the shore arriving early.
+ grass-ramp [194 157 120 114 78 71 34 22]
  pink-ramp [224 218 217 212 211 206 205 199]
  pink-span 3.0
+ ; the board's reach from the middle, in the ring's own quarter-unit measure
+ (circle-far g) (: d (g 'd) dx ((d 'w) // 2) dy ((d 'h) // 2)
+                   ((dx * dx) + (4 * dy * dy)))
+ ; how far out the pink front stands, as a share of that reach: past the corner --
+ ; which is to say nowhere on the board -- until the ring is half its first size, and
+ ; then in to a little under half the board by the time the ring is a point
+ pink-start (circle-r0 // 2)
+ pink-floor 0.45
+ (pink-front g) (: r (circle-r g)
+                   (? (pink-start <= r) 1.0
+                      (pink-floor + (((1.0 - pink-floor) * r) / pink-start))))
+ (ramp-pen rp v) (: m (#rp - 1)
+                    n (int (((v + pink-span) * #rp) / (2.0 * pink-span)))
+                    (rp (? (n < 0) 0 (m < n) m n)))
  (skin-pen g x y) (: v (peep (g 'sk) [y x] 0.0)
-                     m (#pink-ramp - 1)
-                     n (int (((v + pink-span) * #pink-ramp) / (2.0 * pink-span)))
-                     (pink-ramp (? (n < 0) 0 (m < n) m n)))
+                     f (pink-front g)
+                     (ramp-pen ((circle-q g x y) > (f * f * (circle-far g))
+                                ? pink-ramp grass-ramp)
+                               v))
 
  (circle? g) (last-floor < g 'lvl)
  (circle-new g) (: d (g 'd) cx ((d 'w) // 2) cy ((d 'h) // 2)
@@ -693,41 +789,41 @@
                     sg (g 'sign)
                     (two? sg ? (sign-over f <sg >sg 1 (g 'd 'h) (g 'd 'w)) f))
 
- ; --- the song: a floor's phrase, out the card a chunk at a time ---------------------
+ ; --- the song: a floor's bar, out the card a chunk at a time -----------------------
  ; it stands below the circle because song-vol reads circle-r0, and a value read from
  ; above where it is bound answers () rather than scaring -- a silent song, in silence.
  ; harp and play are cited BY NAME inside these, never borrowed: borrowing harp would
  ; put its rev and every over prel's for everything below, and a seat carrying neither
  ; never reaches a name it has not got.
- (tower-tune lvl) (:
-   row (peep songs (lvl - 1) <songs)
-   note (cite 'harp 'note) pure (cite 'harp 'pure) fastcat (cite 'harp 'fastcat)
-   slowcat (cite 'harp 'slowcat)
-   pset (cite 'harp 'pset) hit (cite 'harp 'hit) legato (cite 'harp 'legato)
-   ; fastcat lays a phrase's notes across one cycle; slowcat gives each phrase a
-   ; cycle of its own, so the floor goes round its phrases and comes back
-   p (slowcat (map (ph \ fastcat (map (v \ note (pure v)) ph)) <row))
-   (pset (pset p (hit (pure (row 1)))) (legato (pure (row 3)))))
+ ;
+ ; and the harp of it is one line: the floors say what a bar HOLDS, in slots, and this
+ ; lays the slots across the cycle and sounds the bars together. a slot's tablet is
+ ; exactly what mkvoice reads, so no control word is wanted anywhere.
+ (tower-tune lvl c r) (:
+   hush (cite 'harp 'hush) pure (cite 'harp 'pure)
+   fastcat (cite 'harp 'fastcat) stack (cite 'harp 'stack)
+   (bar sl) (fastcat (map (v \ (tablet? v ? (pure v) hush)) sl))
+   (stack (map bar (tower-bars lvl c r))))
 
  ; how loud this floor is. the first three are their own row's; the circle's is the
- ; ring, so the drone goes quiet exactly as the circle closes and is gone at the point.
+ ; ring, so the heart goes quiet exactly as the circle closes and is gone at the point.
  (song-vol g) (? (circle? g) (: r (circle-r g) ((r * 1.0) / (circle-r0 * 1.0)))
-                  ((peep songs ((g 'lvl) - 1) <songs) 2))
+                  (peep songs ((g 'lvl) - 1) <songs))
 
- (song-new tune h) {'tune tune 'h h 'fpos 0 'cyc 0 'next 0 'vs () 'lvl 0
-                    'voices (cite 'play 'cyc-voices)
-                    'mix (cite 'play 'mixdown) 'pk (cite 'play 'pack)}
- ; the stair changes the record: the cycle count runs on, so the new phrase comes in
- ; at the next bar line rather than cutting the one sounding
- (song-tier s g) (: l (g 'lvl)
-                    (? (l = (s 'lvl)) () (pins s 'tune (tower-tune l) 'lvl l)))
+ (song-new h) {'h h 'fpos 0 'cyc 0 'next 0 'vs () 'lvl 1 'rad circle-r0
+               'voices (cite 'play 'cyc-voices)
+               'mix (cite 'play 'mixdown) 'pk (cite 'play 'pack)}
+ ; where the game is, read off it each frame. only a bar not yet built reads them, so
+ ; a stair or a struck ring lands at the next bar line and never cuts the one sounding.
+ (song-tier s g) (pins s 'lvl (g 'lvl) 'rad (circle? g ? (circle-r g) 0))
  ; one chunk out the card. whole cycles are pulled in ahead of the write head and
  ; dropped once their end frame is behind it, so the live list is what is sounding.
  (song-feed s vol) (:
    spc (int (song-rate / song-cps))
    (fill _) (? ((s 'next) <= ((s 'fpos) + song-chunk))
-               (: _ (pin s 'vs (cat (s 'vs)
-                                    ((s 'voices) (s 'tune) (s 'cyc) 0 spc song-rate)))
+               (: p (tower-tune (s 'lvl) (s 'cyc) (s 'rad))
+                  _ (pin s 'vs (cat (s 'vs)
+                                    ((s 'voices) p (s 'cyc) 0 spc song-rate)))
                   _ (pins s 'cyc ((s 'cyc) + 1) 'next ((s 'next) + spc))
                 (fill ())))
    _ (fill ())
@@ -757,7 +853,7 @@
              ; the card, if this seat has one: no harp or no horn and the tower is quiet
              hn (? (tablet? (cite 'harp))
                    (: q (horn song-rate 2) (? (nom? q) () q)) ())
-             sng (? hn (: s (song-new (tower-tune 1) hn) (pin s 'lvl 1)) ())
+             sng (? hn (song-new hn) ())
              ; the wait IS the song: a chunk goes out at the speed the card plays it, so
              ; a loop that feeds one while no key is waiting keeps time without a rest.
              ; with no card it is a plain poll, and the tower is silent as it was.

@@ -139,14 +139,32 @@
          !(has? dr "zzzz"))                                 ; ..and ate what was behind it
 
 ; --- slop takes what the tower hands it: a token, a purse, and a sign saying so ---
-; the walk holds the sign until a key comes, so the first of these is what buys the
-; frame behind it; with nothing handed over there is no sign and no wait at all
- sg (run "b/love slop phone 38" "\rq" 14 64)
+; the walk holds the sign until a key comes -- but it will not HEAR one for half a
+; second, because the keys behind the circle's last ring are sitting in the queue when
+; the box goes up and are not an answer to it. so the keys cannot be typed up front
+; here: wait for the box on the wire, type one INTO the deaf half second, and only
+; then the two that take it down and leave.
+;
+; and the frame count is what convicts it: every frame is one cursor-home. eaten, the
+; box is ONE frame and the key that ends it buys one more -- the screen stood still for
+; the whole of the wait. heard, the walk is swimming through all of it, and the frames
+; it lays down while nobody is reading the pty fill the thing and stand at five.
+ sgt (spawn "b/love slop phone 38" 14 64)
+ sgm >sgt
+ sgseen (: (upto acc) (? (has? acc "one journey yet remains") acc
+                         (: ch (see sgm) (? (= ch -1) acc (upto (acc + string ch)))))
+           (upto ""))
+ _ (say sgm "z")                                            ; typed into the deaf half
+ _ (rest 800)
+ _ (say sgm "\rq")                                          ; ..and these are heard
+ sgtx (sgseen + slurp sgm)
+ _ (waitfor <sgt)
  _ (test
-    (has? <sg "what you carry")                             ; the box, titled
-    (has? <sg "phone")                                      ; ..naming what came up
-    (has? <sg "38 pennies")
-    (has? <sg "one journey yet remains"))
+    (has? sgtx "what you carry")                            ; the box, titled
+    (has? sgtx "phone")                                     ; ..naming what came up
+    (has? sgtx "38 pennies")
+    (has? sgtx "one journey yet remains")
+    (4 > count sgtx "\e[H"))                                ; ..and it stood while deaf
  sn (run "b/love slop" "q" 14 64)
  _ (test !(has? <sn "one journey yet remains"))
 

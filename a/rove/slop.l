@@ -433,7 +433,16 @@
  ; the walk takes the screen as it finds it -- raw and the alternate screen belong to
  ; whoever raised them, which is how the tower opens the slop on the screen its circle
  ; left standing -- and answers the game it played.
- ; what the walk was handed, said once before it starts
+ ; what the walk was handed, said once before it starts.
+ ; the last keys of the circle are not an answer to this box -- they were typed at a
+ ; ring, and raw mode does not echo, so they are sitting in the queue when it goes up
+ ; and would take it straight down again. so the box eats the queue for half a second
+ ; before it will hear anything: what takes it down is typed AT it.
+ sign-settle 500                                        ; ms the sign is deaf for
+ sign-slice 25
+ (settle ms) (? (0 < ms) (: _ (drain-keys ())
+                            _ (rest sign-slice)
+                            (settle (ms - sign-slice))))
  (slop-sign g tk pn)
   (: both ((&& tk pn) ? 1 0)
      vs (both ? [tk pn] (tk ? [tk] [pn]))
@@ -441,6 +450,7 @@
      head (map (l \ fill l vs) rows)
      _ (say out (sign-over (slop-frame g) sign-ttl (head + sign-rest) 0 (g 'r) (g 'c)))
      _ (flush out)
+     _ (settle sign-settle)
      (edkey in))
 
  (slop-walk tk pn) (: ws (tty 1)

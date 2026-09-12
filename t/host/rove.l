@@ -255,20 +255,44 @@
              (on-ring? g ((g 'cx) + 16) (g 'cy))         ; ..twice as wide, so it reads round
              !(on-ring? g ((g 'cx) + 8) (g 'cy)))
    row0 (map (x \ skin-pen g x 4) ^60)                  ; the field, before any of it
+   sk0 (peep (g 'sk) [4 30] 0.0)
+   ; while the ring is wide the front stands past the far corner, so the floor is
+   ; grass all the way out and the pink is nowhere on it yet
+   _ (test (1.0 = pink-front g)
+             (foldl (\ a v (&& a (elem v grass-ramp))) 1 row0)
+             (1 < #(keys (foldl (\ t v (pin t v 1)) {} row0))))
    _ (hit! ())
    _ (test (7 = circle-r g) (10 = circle-wall g)         ; one hit, one step, wall follows
-             (find (g 'msg) "strike the circle" 0))
+             (find (g 'msg) "strike the circle" 0)
+             (1.0 = pink-front g))                       ; ..and the floor is grass still
    (sink n) (? (g 'over) n (32 < n) n (: _ (hit! ()) (sink (n + 1))))
    n (sink 1)
  (test ('won = (g 'over)) (11 = n)                       ; eight steps in, then O, o, point
          (0 = circle-r g) (reveal? g)
-         ; ..and the field it opens onto is the walk's own shimmer with the clock
-         ; taken out of it: every pen off the pink ramp, graded and not flat, and the
-         ; same frame it was when the floor opened, eleven strikes ago
-         (: row1 (map (x \ skin-pen g x 4) ^60)
-            (&& (row0 = row1)
-                (1 < #(keys (foldl (\ t v (pin t v 1)) {} row1)))
-                (foldl (\ a v (&& a (elem v pink-ramp))) 1 row1)))))
+         (0.45 = pink-front g)
+         ; the wave itself never moved: it is one frame of the walk's shimmer, held
+         ; still, and the same frame it was eleven strikes ago
+         (sk0 = peep (g 'sk) [4 30] 0.0)
+         ; what moved is which ramp a cell reads off. the middle is still the grass
+         ; the climber came up through and the far ends have gone over to slop's pink,
+         ; and both are graded and neither is flat
+         ; the middle row -- the ring is an ellipse in cells, and row 4 is far enough
+         ; off the middle of it to be out past the front on its own
+         (: row1 (map (x \ skin-pen g x 11) ^60)
+            (&& (elem (row1 30) grass-ramp)
+                (&& (elem (row1 0) pink-ramp) (elem (row1 59) pink-ramp))
+                (1 < #(keys (foldl (\ t v (pin t v 1)) {} row1)))))))
+
+; ..and the front itself, which is the whole of the grading law: past the corner of
+; the board -- which is to say nowhere on it -- for as long as the ring is at half the
+; size it started, and in only as the second half of the work is done
+(: g (crawl-new 60 22 (wheel 3))
+   _ (ascend g) _ (ascend g) _ (ascend g)
+   (front st) (: _ (pin g 'st st) (pink-front g))        ; st strikes in, so r is 8 - st
+ (test (1.0 = front 0) (1.0 = front 1) (1.0 = front 4)   ; r 8, 7, 4: no pink anywhere
+         ((front 5) < 1.0)                               ; r 3: it starts in
+         ((front 6) < (front 5)) ((front 8) < (front 6))  ; ..and keeps coming
+         (0.45 = front 8)))                              ; r 0: and stops well short
 
 ; ..and the door the last hit opens: the walk PROPER, not the verb, since the stage
 ; the climb raised is the one the slop is to run on. a missed cite is a silent end.
@@ -316,21 +340,53 @@
 (: g (crawl-new 60 20 (wheel 3))
  (test (#(g 'd 'rooms) <= #(keys (g 'loot)))))
 
-; --- the music: a phrase to the floor, and the circle's goes down with the ring. no
-; gate can listen, so what is held is the table's shape and the shape of the fade
+; --- the music: a floor's bar is built off the cycle, and the circle's off the ring.
+; no gate can listen, so what is held is what a bar HOLDS -- the slots, their count,
+; and the way each floor's rule answers a different bar as the cycle runs on
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g) _ (ascend g) _ (ascend g)
    (vat st) (: _ (pin g 'st st) (song-vol g))
+   (hits bs) (foldl (\ a b (a + (foldl (\ t v (t + (tablet? v ? 1 0))) 0 b))) 0 bs)
+   (slots bs) (foldl (\ a b (a + #b)) 0 bs)
+   ; every slot is a voice play can sound, or nothing at all -- there is no third thing
+   (sane? bs) (foldl (\ a b (&& a (foldl (\ t v (&& t (? (tablet? v) (string? (v 's)) !v))) 1 b))) 1 bs)
+   (over n f) (foldl (\ a c (a + (f c))) 0 ^n)
  (test
-  (#floors = #songs)                             ; a floor, a phrase
-  (foldl (\ a r (&& a (1 < #<r))) 1 songs)       ; ..more than one phrase to it
-  (foldl (\ a r (&& a (foldl (\ b ph (&& b (0 < #ph))) 1 <r))) 1 songs)   ; ..each with notes
-  (foldl (\ a r (&& a (string? (r 1)))) 1 songs) ; ..on a voice with a name
-  (1.0 = vat 0)                                  ; the ring at its widest: the drone full
-  ((vat 4) < (vat 0)) ((vat 6) < (vat 4))        ; it goes down as the circle draws in
-  (0.0 = vat 8)                                  ; ..and is gone once it is a point
+  (#floors = #songs)                             ; a floor, a loudness
+  (foldl (\ a v (&& a (0.0 < v))) 1 songs)
+  ; the garden: sixteen slots to the bar, mostly empty, and never the same two bars
+  (16 = slots (garden-bars 0)) (16 = slots (garden-bars 7))
+  (sane? (garden-bars 3))
+  (0 < over 40 (c \ hits (garden-bars c)))
+  (0 < over 40 (c \ (16 > hits (garden-bars c)) ? 1 0))
+  ((garden-bars 0) != (garden-bars 1))
+  ; the middle: two bars to a horn, struck in the SAME slots -- one horn, two notes
+  (: bs (middle-bars 4)
+     (&& (2 = #bs)
+         (foldl (\ a i (&& a ((tablet? (<bs i)) = (tablet? ((bs 1) i))))) 1 ^12)))
+  ; ..and now and then it is a tune instead, which holds for a whole run of bars
+  (0 < over 200 (c \ (tune? c) ? 1 0))
+  (0 < over 200 (c \ (tune? c) ? 0 1))
+  (foldl (\ a c (&& a ((tune? c) = (tune? (5 * (c // 5)))))) 1 ^40)
+  ; heaven: one bar of one sequence, and the four bars of a block are that sequence
+  ; taken in order -- so bar 0 and bar 4 are different bars of it, or another one
+  (1 = #(sky-bars 0)) (sane? (sky-bars 0))
+  (0 < hits (sky-bars 0))
+  ((sky-bars 0) != (sky-bars 1))
+  ; the circle: a heart, and the beats further apart the smaller the ring is
+  ((heart-rate 2) < (heart-rate 5)) ((heart-rate 5) < (heart-rate 8))
+  (1 = heart-rate 0)
+  ((slots (heart-bars 2)) < (slots (heart-bars 8)))
+  (2 = hits (heart-bars 0))                      ; lub and dub, and nothing else
+  (sane? (heart-bars 8))
+  ; the fade is the ring's own size
+  (1.0 = vat 0)
+  ((vat 4) < (vat 0)) ((vat 6) < (vat 4))
+  (0.0 = vat 8)
   (: h (crawl-new 20 10 (wheel 1)) (0 < song-vol h))   ; a floor with rooms just plays
-  !(() = tower-tune 1) !(() = tower-tune 4)))    ; and every floor's phrase is built
+  ; and every floor's bar goes through harp and comes out a pattern
+  !(() = tower-tune 1 0 0) !(() = tower-tune 2 0 0)
+  !(() = tower-tune 3 0 0) !(() = tower-tune 4 0 8)))
 
 ; --- the whole game, generated: a seeded random walk holds every invariant ---
 ; the keys come out of a BOXED wheel state -- {wheel 99} boxes the wheel itself, whose
