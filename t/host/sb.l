@@ -223,11 +223,12 @@
 (: _ (mkdir "mrg/e" 493) _ (chdir "mrg/e") _ (mk ())
    _ (lay "a" "v1\n") pa (sb-record "a born")
    _ (lay "a" "v2\n") pb (sb-record "a edited")
-   _ (lay "b" "x\n")  pc (sb-record "b born -- independent")
+   ; not "b": that is one of sb's built-in ignores, so such a path never reaches a hunk
+   _ (lay "bb" "x\n") pc (sb-record "bb born -- independent")
    n1 (sb-apply [pa])                                  ; checkout: the tree as OF pa
-   a1 (<>(look "a")) b1 (look "b")
+   a1 (<>(look "a")) b1 (look "bb")
    n2 (sb-apply [pa pc])                               ; cherry-pick: pc taken, pb skipped
-   a2 (<>(look "a")) b2 (look "b")
+   a2 (<>(look "a")) b2 (look "bb")
    n3 (sb-apply [pb])                                  ; the closure drags pa in behind pb
    n4 (sb-apply ())                                    ; no id: the way back
    a4 (<>(look "a"))
@@ -289,7 +290,7 @@
 ;     thing psid hashes, so a release and its goods line up ---
 (: _ (mkdir "mrg/k" 493) _ (chdir "mrg/k") _ (mk ())
    _ (lay "a" "1\n") _ (sb-record "a born")
-   _ (lay "b" "2\n") _ (sb-record "b born -- independent, so BOTH stay tips")
+   _ (lay "bb" "2\n") _ (sb-record "bb born -- independent, so BOTH stay tips")   ; not "b", a built-in ignore
    ntip (tally (tips ()))
    b1 (sb-bank '("v1"))
    b2 (sb-bank '("v1"))                                ; the same head again: idempotent
