@@ -484,12 +484,33 @@ op11(lvm_strp, strp(Sp[0]) ? putcharm(1) : zero)
 // a cask snips as the string of its bytes, the way `pour` already reads one: swig
 // fills a buffer and the caller wants the prefix it filled, and (string b) first
 // copies the whole buffer to take a corner of it -- 64K a read for a 12-byte file.
+// text and charlist are one sequence in two spellings -- + splices across them --
+// so one knife cuts both: (string (snip l i j)) is (snip (string l) i j).
 static lvm(lvm_snip) {
- if (!strp(Sp[0]) && !caskp(Sp[0])) Sp[2] = zero;
+ intptr_t i = oddp(Sp[1]) ? getcharm(Sp[1]) : 0,
+          j = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
+ // a chain is text's other spelling, so it takes the same knife: the same clamps
+ // over the same half-open range, and the element where the byte was. () is the
+ // charlist "" and snips to itself.
+ if (Sp[0] == ZeroPoint) Sp[2] = ZeroPoint;
+ else if (chainp(Sp[0]) && !nomp(Sp[0])) {
+  intptr_t n = (intptr_t) llen(Sp[0]);
+  i = max(i, 0), i = min(i, n);
+  j = max(j, i), j = min(j, n);
+  if (j == i) Sp[2] = ZeroPoint;                 // the empty of the kind, as "" is below
+  else {
+   uintptr_t req = (uintptr_t) (j - i) * Width(struct ai_chain);
+   Have(req);
+   word y = Sp[0];                               // re-read post-Have (GC may have moved it)
+   for (intptr_t k = 0; k < i; k++) y = B(y);
+   struct ai_chain *base = (struct ai_chain*) Hp, *w = base;
+   Hp += req;
+   for (intptr_t k = i; k < j; k++, y = B(y), w++) ini_chain(w, A(y), word(w + 1));
+   w[-1].b = ZeroPoint;                          // a fresh spine, so only its own tail is cut
+   Sp[2] = word(base); } }
+ else if (!strp(Sp[0]) && !caskp(Sp[0])) Sp[2] = zero;
  else {
   struct ai_str *s = bytes_of(Sp[0]), *t;
-  intptr_t i = oddp(Sp[1]) ? getcharm(Sp[1]) : 0,
-           j = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
   i = max(i, 0), i = min(i, (word) len(s));
   j = max(j, i), j = min(j, (word) len(s));
   // an empty range (i == j) answers a string, the closest form of nothing for this

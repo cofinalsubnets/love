@@ -283,7 +283,7 @@ lushfiles = a/lush.l
 # the three drift. the parts are named once here; each roster below is the order it
 # wants them in, and a new file joins one part rather than three lists.
 kore_head = a/kore/text.l a/kore/u.l a/kore/core.l a/kore/fs.l a/kore/sum.l a/kore/re.l \
-  a/kore/sed.l a/kore/awk.l a/kore/expr.l a/kore/bc.l a/kore/proc.l a/kore/less.l \
+  a/kore/sed.l a/kore/awk.l a/kore/expr.l a/kore/bc.l a/kore/proc.l a/kore/top.l a/kore/less.l \
   a/libra/lint.l a/vi/config.l a/vi/hue.l a/vi/core.l a/vi/vi.l \
   a/kore/diff.l a/kore/patch.l a/dns.l a/ain.l $(lushfiles) \
   a/kore/find.l a/cook.l a/kore/asbook.l a/kore/man.l a/kore/lens.l

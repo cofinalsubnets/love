@@ -27,7 +27,7 @@
 ;   kore find [PATH..] [EXPR]                    the tree walk (a/kore/find.l)
 ;   kore env|printenv|sleep|kill|xargs|time|date|id   the process and world tools
 ;                                                 (a/kore/proc.l)
-;   kore ps|free|uptime|pidof|pgrep|pkill|killall|pwdx   the /proc family
+;   kore ps|top|free|uptime|pidof|pgrep|pkill|killall|pwdx   the /proc family
 ;   kore whoami|groups|arch|nproc    the four one-line answers
 ;   kore vi [file]                   the editor (a/vi/)
 ;   kore less|more [-Nise] [+N|+/P] [F..]   the pager (a/kore/less.l; one pager,
@@ -59,7 +59,8 @@
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main readlink-main realpath-main rebre refind refold
         rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main sleep-main
-        sort-main sparse split-main srun stat-main sync-main df-main time-main tac-main tail-main tee-main test-main
+        sort-main sparse split-main srun stat-main sync-main df-main time-main tac-main tail-main
+        tee-main test-main top-main
         touch-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
@@ -303,7 +304,7 @@
             'sync sync-main 'mkfifo mkfifo-main 'mknod mknod-main
             'whoami whoami-main 'groups groups-main
             ; the /proc family -- no nif of their own, /proc is a filesystem
-            'ps ps-main 'free free-main 'uptime uptime-main
+            'ps ps-main 'free free-main 'uptime uptime-main 'top top-main
             'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
             'killall killall-main 'pwdx pwdx-main
             'kill kill-main 'xargs xargs-main 'time time-main
@@ -362,8 +363,8 @@
     'cksum "usage: cksum [FILE..]"
     'md5sum "usage: md5sum [-c] [FILE..]"
     'sha256sum "usage: sha256sum [-c] [FILE..]"
-    'ls "usage: ls [-aAldrt1] [FILE..]"
-    'dir "usage: dir [-aAldrt1] [FILE..]"
+    'ls "usage: ls [-aACdlrtx1] [FILE..]"
+    'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-f] [-p] SRC DST"
     'mv "usage: mv [-f] SRC DST"
     'rm "usage: rm [-r] [-f] FILE.."
@@ -409,6 +410,12 @@
     'whoami "usage: whoami"
     'groups "usage: groups"
     'ps "usage: ps [-e]"
+    'top "usage: top [-b] [-n FRAMES] [-d SECS] [-p PID]..
+  -b  batch: no terminal wanted, every process, a frame per iteration
+  -n  stop after N frames (-b alone is one frame)
+  -d  seconds between frames (3 by default)
+  -p  one process, spelled again for each
+  keys: q quit, space or r repaint, c the command line, P M T N the orders"
     'free "usage: free [-m|-g]"
     'uptime "usage: uptime"
     'pidof "usage: pidof NAME.."
@@ -494,6 +501,7 @@ every tool answers --help and --version, and -h and -v where the letter is free
   mkfifo [-m MODE] NAME.. | mknod [-m MODE] NAME p|b|c|u [MAJOR MINOR]
   whoami | groups | arch | nproc          the four one-line answers
   ps [-e] | free [-m|-g] | uptime         what /proc says about the machine
+  top [-b] [-n N] [-d SECS] [-p PID]      the process table, repainted
   pidof NAME.. | pgrep [-fx] PAT          .. and about who is running
   pkill [-SIG] [-fx] PAT | killall [-SIG] NAME.. | pwdx PID..
   time [-p] CMD [ARG..]                   what a command costs: real, user, sys

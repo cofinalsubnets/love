@@ -470,15 +470,23 @@
    ; is no `N users` field and there will not be one: it comes out of utmp, which this
    ; tree does not keep, and a fabricated 0 is worse than an absent field. the time
    ; of day is utc, for the reason `date` gives --
-   (uptime-main as)
-    (: r (uread "/proc/uptime")
-       secs (? (two? r) (: w (words <>r)
-                           (? (two? w) (uatoi <(usplit 46 <w)) 0))
-              0)
-       l (uread "/proc/loadavg")
+   (uupticks _)                        ; /proc/uptime's first number in centiseconds --
+    (: r (uread "/proc/uptime")         ; user_hz, the scale a starttime is already in
+       (? !(two? r) 0
+          (: w (words <>r)
+             (? !(two? w) 0
+                (: p (usplit 46 <w)
+                   fr (? (two? >p) (snip (<>p + "00") 0 2) "00")
+                   (((uatoi <p) * 100) + (uatoi fr)))))))
+   (uupsecs _) (// (uupticks 0) 100)   ; ..and the whole seconds uptime prints
+   (uloadav _)                         ; /proc/loadavg's three figures, as one phrase
+    (: l (uread "/proc/loadavg")
        ws (? (two? l) (words <>l) ())
-       ld (? (2 < (tally ws)) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
-              "0.00, 0.00, 0.00")
+       (? (2 < (tally ws)) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
+          "0.00, 0.00, 0.00"))
+   (uptime-main as)
+    (: secs (uupsecs 0)
+       ld (uloadav 0)
        tod (uclk (% (// (clock 0) 1000) 86400))
        _ (say out (((" " + tod) + (" up " + (uupsay secs))) + (",  load average: " + ld)))
        _ (put out 10) _ (flush out) 0)

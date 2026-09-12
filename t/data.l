@@ -69,3 +69,22 @@
  (= '("q" "R" "r" "r")
   (rep (alt (lit "r") (lit "R")) (.) 0 "Rrrq"))))
 
+
+; snip is one knife over both spellings of a sequence, text and its charlist. the grid
+; below cuts every window of a six-byte word both ways and wants the same answer back,
+; overshoots and negatives included -- that equation IS the hom.
+(:
+ snip-s "forbid"
+ snip-l (map snip-s (jot #snip-s))
+ snip-ix [-3 0 1 2 3 6 9]
+ (snip-grid f) (map (\ i (map (\ j (f i j)) snip-ix)) snip-ix)
+ (test
+  ([1 2 3] = snip [1 2 3 4 5] 0 3)
+  ([3 4 5] = snip [1 2 3 4 5] 2 99)
+  ([1 2] = snip [1 2 3 4 5] -3 2)
+  (["b" [1 2]] = snip ['a "b" [1 2]] 1 3)      ; the elements, whatever they are
+  ; an empty window answers the empty of the kind: () where text answers ""
+  (() = snip [1 2 3] 3 3) (() = snip [1 2 3] 4 1) (() = snip () 0 3)
+  ("" = snip "abc" 3 3)
+  ([1 2] = snip (. 1 (. 2 3)) 0 2)             ; an improper tail is no element of it
+  ((snip-grid (\ i j (string (snip snip-l i j)))) = (snip-grid (\ i j (snip snip-s i j))))))
