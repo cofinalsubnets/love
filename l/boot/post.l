@@ -2467,11 +2467,17 @@
    ; the eval as a scare, and the frontend prints the same face and quits 1
    (hface a b) (say err ";; ", print err a, say err " ", print err b, put err 10)
    (shell-help a b) (hface a b, welp a b)
+   ; the handler is the repl's own, and it goes back on the way out: a rail that
+   ; reached the repl through the `love` verb leaves by scaring 'cli-leave, and a
+   ; shell-help still standing would print that door as a raise.
    (shell _)
-    (hear shell-help,             ; the prompt survives every raise; a script must not
-     raw 1,
-     puts $ ";3 love " love-version "\n",
-     repl 0 0)
+    (: prev (heard ())
+       _ (hear shell-help)        ; the prompt survives every raise; a script must not
+       _ (raw 1)
+       _ (puts $ ";3 love " love-version "\n")
+       r (repl 0 0)
+       _ (hear prev)
+     r)
 
    ; (edraw ip pr) -- read one line off port `ip`, with in-line editing: the charlist, or eofsym
    (edraw ip pr) (:- (loop ())
