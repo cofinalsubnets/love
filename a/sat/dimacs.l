@@ -1,17 +1,9 @@
 ; dimacs -- a dimacs cnf reader for the sat solver, built from the parser combinators in l/boot/post.l
-; (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a failure
-; continuation n = rest; payloads are lists that `seq` concatenates). peg shares that set
-; (eps/lit/span/alt/seq/seqs/skip/many/runp) with cook; here we add only a signed-int leaf `pint` (love
-; has no regex) and the grammar. `dimacs text` -> (formula . nvars): skip `c` comment lines, read the
-; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
-; The self-tests below read `cdcl` for the parse->solve leg, so this file is run behind the solver:
-; cat a/sat/sat.l a/sat/dimacs.l | b/love.
-; the combinators (l/boot/post.l) -- its own top-level form; this reader is all lenient `runp`.
+; (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a
+; failure continuation n = rest; payloads are lists that `seq` concatenates).
 (borrow 'peg)
 
 (:
-   ; -- the parser combinators (eps/lit/span/alt/seq/seqs/skip/many + the lenient runner runp) come from
-   ;    l/boot/post.l via the (borrow 'peg) above -- shared with cook, not re-derived here.
    ; -- character classes + the signed-integer leaf --
    (ws? c)   (c @ (32 || 9 || 13 || 10) 1 0)     ; space/tab/cr/lf -- a ?-name owes a bit
    (dig? c)  (47 < c < 58)                 ; '0'..'9'
@@ -44,25 +36,25 @@ p cnf 3 3
 1 -2 0
 2 3 -1 0
 -3 0
-")  ((= 3 >r) && (= '((1 -2) (2 3 -1) (-3)) <r)))
+")  (>r = 3 && <r = '((1 -2) (2 3 -1) (-3))))
     ; no leading comments, a clause split across whitespace, a missing final 0 (lenient flush)
     (: r (dimacs "p cnf 4 2
 1 2 -3 0
-4 -1")  ((= 4 >r) && (= '((1 2 -3) (4 -1)) <r)))
+4 -1")  (>r = 4 && <r = '((1 2 -3) (4 -1))))
     ; tabs + extra blank lines + a big var number parse
     (: r (dimacs "p cnf 100 1
 	42	-99	0
-")  ((= 100 >r) && (= '((42 -99)) <r))))
- ; -- integration self-test. `cdcl` is a/sat/sat.l's, and this file is catted after it --
- ; a name that is not there is missing at compile, so no predicate can stand in front of one.
+")  (>r = 100 && <r = '((42 -99)))))
+ ; -- integration self-test. `cdcl` is a/sat/sat.l's, catted before this file; a missing
+ ; name fails at compile, so no predicate can guard this --
  _ (assert
      (: r (dimacs "p cnf 3 3
 1 2 0
 -1 3 0
 -2 -3 0
-") f <r nv >r m (cdcl f nv) (!(= m 'unsat) && sat? m f))   ; SAT -- model checks
-     (= (cdcl <(dimacs "p cnf 1 2
+") f <r nv >r m (cdcl f nv) (m != 'unsat && sat? m f))   ; SAT -- model checks
+     (cdcl <(dimacs "p cnf 1 2
 1 0
 -1 0
-") 1) 'unsat))                                                             ; (x)(-x) -> UNSAT
+") 1 = 'unsat))                                                             ; (x)(-x) -> UNSAT
  _ (say err "a/sat/dimacs: ok -- DIMACS reader (parser combinators) + parse->solve\n"))
