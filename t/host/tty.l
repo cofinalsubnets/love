@@ -120,6 +120,24 @@
     (0 < cbg is 0)                                           ; ..and it really is painted
     (0 = cbg is 440))                                        ; with the last row spared
 
+; --- what was typed at the game is not typed at the shell ---
+; raw mode does not echo, so keys the game never reads sit in the terminal's queue and
+; are read by whatever comes next -- a prompt takes them as a line typed at it. the tower
+; reads exactly one key a turn, so a burst behind the quit is a burst left over: z takes
+; the sign down, q leaves, and the four behind them are the ones that must not survive.
+; the reader after it is non-blocking (min 0 time), so it answers whether or not there
+; is anything there, which is the whole question.
+ dr (: t (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; b/love tower; "
+                             + "stty -icanon min 0 time 3; cat")])
+       m >t
+       ; the keys wait for raw mode: typed before it, the tty ECHOES them back and the
+       ; leftovers cannot be told from the echo of the ones that were read
+       _ (rest 500)
+       _ (say m "zqzzzz")
+       (slurp m))
+ _ (test (has? dr "you leave the tower")                    ; it did play and did leave
+         !(has? dr "zzzz"))                                 ; ..and ate what was behind it
+
 ; --- slop takes what the tower hands it: a token, a purse, and a sign saying so ---
 ; the walk holds the sign until a key comes, so the first of these is what buys the
 ; frame behind it; with nothing handed over there is no sign and no wait at all

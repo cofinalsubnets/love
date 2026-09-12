@@ -468,7 +468,11 @@
              ; no gap left to slow it -- for half a second before the stage is left
              ; the flood runs at full rate and so does the song under it: there is no
              ; gap left to slow either one
-             (flood n t) (? (0 < n) (: _ (say out (slop-flood g t), flush out, beat-out 1.0 1.0 1.0)
+             ; the flood answers to nothing, but it still drains: a key pressed at it is
+             ; a key that would otherwise be sitting in the queue when the shell reads
+             (flood n t) (? (0 < n) (: _ (drain-keys ())
+                                       _ (say out (slop-flood g t), flush out,
+                                          beat-out 1.0 1.0 1.0)
                                      (flood (n - 1) (t + beat))))
              _ (g 'over = 'taken ? (flood 15 (g 't)))
              _ (? hn (: _ (flush hn) (close hn)) ())
@@ -481,6 +485,7 @@
                  g (slop-walk tk pn)
                  _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
                  _ (flush out)
+                 _ (drain-keys ())
                  _ (raw 0)
                  (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in")
                                          ("you turn back, " + presses (g 'spent) + " in")),

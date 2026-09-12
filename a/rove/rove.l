@@ -16,6 +16,11 @@
 ; passed does not, so a climber dies only by standing still beside something; and
 ; heaven's shapes stir at half a climber's pace, so they can be walked past.
 ;
+; each floor has phrases of its own, taken a cycle each and played out the card a
+; chunk at a time by the climb's own loop -- the card takes a chunk at the speed it
+; plays one, so feeding it while no key is waiting is what keeps the time in a game
+; that otherwise only moves when you do.
+;
 ; run: love tower
 ; the engine core is pure love (delve/fov/paint/crawl-* run headless, gated by
 ; t/host/rove.l); only tower-run ties the tty (cli's stage over
@@ -27,7 +32,8 @@
          mend ascend fill fit circle? circle-new circle-stride circle-frame
          circle-r circle-wall on-ring? reveal? done? tokens floors due?
          themes plan tile-face strewn pink-ramp skin-pen
-         flavour mutter underfoot sign-box sign-over)
+         flavour mutter underfoot sign-box sign-over
+         songs tower-tune song-vol song-new song-feed drain-keys)
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
@@ -263,6 +269,25 @@
           "the corner-softened card")
  token-pen 201                                          ; and the pen it is named in
 
+ ; --- THE MUSIC: a floor's phrases -- the notes in semitones off middle c, the voice
+ ; (one of play's pitched four), how loud, and how long a note is held. a phrase IS a
+ ; cycle, so a longer list is a busier bar and not a longer one, and the phrases of a
+ ; floor take a cycle each in turn: two of them is a two-bar round. a sine carries less
+ ; than a square at the same gain, which is what the numbers are for.
+ ; the circle's volume is not from here, it is the ring's own size.
+ songs '((((0 4 7 12 7 4) (0 5 9 12 9 5))               ; the garden, in no hurry
+          "sin" 2.00 0.42)
+         (((-12 -8 -5 -8) (-14 -10 -7 -10))             ; the middle, low and boxed in
+          "sqr" 0.70 0.55)
+         (((12 19 16 23 19 14) (12 19 18 23 21 16))     ; heaven, thin and up in the air
+          "tri" 1.30 0.40)
+         (((0 -5) (0 -7))                               ; the circle, going down with it
+          "tri" 1.60 1.30))
+ song-rate 48000
+ song-cps 0.5                                           ; cycles a second
+ song-chunk 1600                                        ; a frame's worth, thirty a second
+ song-gain 5200.0
+
  ; --- THE FLAVOUR: what a thing has to say when you meet it. a row is the name a
  ; strewing or a mob is known by, and then its lines. which line you get is the cell's
  ; own dice (a mob's is a draw), so one tuft always says the same thing and the tuft
@@ -405,6 +430,12 @@
                  r))
    (go i acc) (? (i >= #rs) acc (go (i + 1) (acc + (0 < i ? "\r\n" "") + lay i)))
    (go 0 ""))
+
+ ; keys typed at a game are not typed at the shell. raw mode does not echo them, so
+ ; they sit in the terminal's queue unseen, and whoever reads next -- a prompt, the line
+ ; editor -- takes them as a line typed at it. anything still waiting goes in the bin
+ ; before cooked mode comes back.
+ (drain-keys _) (? (cue? 0) (: _ (see in) (drain-keys ())))
 
  ; --- the climb: the proving game. state in a tablet, one key per turn ---
  ; the bar is not a resource: a turn spent acting mends, a turn passed does not, so a
@@ -662,6 +693,49 @@
                     sg (g 'sign)
                     (two? sg ? (sign-over f <sg >sg 1 (g 'd 'h) (g 'd 'w)) f))
 
+ ; --- the song: a floor's phrase, out the card a chunk at a time ---------------------
+ ; it stands below the circle because song-vol reads circle-r0, and a value read from
+ ; above where it is bound answers () rather than scaring -- a silent song, in silence.
+ ; harp and play are cited BY NAME inside these, never borrowed: borrowing harp would
+ ; put its rev and every over prel's for everything below, and a seat carrying neither
+ ; never reaches a name it has not got.
+ (tower-tune lvl) (:
+   row (peep songs (lvl - 1) <songs)
+   note (cite 'harp 'note) pure (cite 'harp 'pure) fastcat (cite 'harp 'fastcat)
+   slowcat (cite 'harp 'slowcat)
+   pset (cite 'harp 'pset) hit (cite 'harp 'hit) legato (cite 'harp 'legato)
+   ; fastcat lays a phrase's notes across one cycle; slowcat gives each phrase a
+   ; cycle of its own, so the floor goes round its phrases and comes back
+   p (slowcat (map (ph \ fastcat (map (v \ note (pure v)) ph)) <row))
+   (pset (pset p (hit (pure (row 1)))) (legato (pure (row 3)))))
+
+ ; how loud this floor is. the first three are their own row's; the circle's is the
+ ; ring, so the drone goes quiet exactly as the circle closes and is gone at the point.
+ (song-vol g) (? (circle? g) (: r (circle-r g) ((r * 1.0) / (circle-r0 * 1.0)))
+                  ((peep songs ((g 'lvl) - 1) <songs) 2))
+
+ (song-new tune h) {'tune tune 'h h 'fpos 0 'cyc 0 'next 0 'vs () 'lvl 0
+                    'voices (cite 'play 'cyc-voices)
+                    'mix (cite 'play 'mixdown) 'pk (cite 'play 'pack)}
+ ; the stair changes the record: the cycle count runs on, so the new phrase comes in
+ ; at the next bar line rather than cutting the one sounding
+ (song-tier s g) (: l (g 'lvl)
+                    (? (l = (s 'lvl)) () (pins s 'tune (tower-tune l) 'lvl l)))
+ ; one chunk out the card. whole cycles are pulled in ahead of the write head and
+ ; dropped once their end frame is behind it, so the live list is what is sounding.
+ (song-feed s vol) (:
+   spc (int (song-rate / song-cps))
+   (fill _) (? ((s 'next) <= ((s 'fpos) + song-chunk))
+               (: _ (pin s 'vs (cat (s 'vs)
+                                    ((s 'voices) (s 'tune) (s 'cyc) 0 spc song-rate)))
+                  _ (pins s 'cyc ((s 'cyc) + 1) 'next ((s 'next) + spc))
+                (fill ())))
+   _ (fill ())
+   base (s 'fpos)
+   live (filter (\ v ((v 0) >= base)) (s 'vs))
+   _ (pins s 'vs live 'fpos (base + song-chunk))
+   (say (s 'h) ((s 'pk) ((s 'mix) live base song-chunk) song-chunk (song-gain * vol))))
+
  ; --- tower: the climb on cli's stage. any seed climbs; q or esc leaves ---
  ; the token is the last thing the tower says, and the field it opens onto is the next
  ; thing on the same screen: the walk takes the stage the climb already raised, so
@@ -670,18 +744,46 @@
  (tower-win g) (: tk (tokens (roll (g 'sb) #tokens))
                   _ (pin g 'msg (fill w-won [tk (g 'p 'penny)]))
                   _ (say out (crawl-frame g), flush out, rest 2200)
+                  _ (drain-keys ())
                   walk (cite 'slop 'slop-walk)
                   (walk ? (walk tk (g 'p 'penny)) ()))
+ ; the climb keeps its own stage rather than cli's: stage blocks on a key, and a card
+ ; with nothing coming out of it is a card that stops. the raising and the putting back
+ ; are stage's, line for line; what is different is the wait in the middle.
  (tower-run _) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
-             ; an end shows its frame for a beat before the stage is left
-             (turn k) (k @ (113 || 27) (pin g 'over 'fled)
-                       (crawl-turn g (steer k),
-                        g 'over ? (say out (crawl-frame g), flush out, rest 1200,
-                                   (g 'over = 'won ? (tower-win g)))))
-             _ (stage (w \ h \ crawl-frame g) turn (\ _ (g 'over)))
+             ; the card, if this seat has one: no harp or no horn and the tower is quiet
+             hn (? (tablet? (cite 'harp))
+                   (: q (horn song-rate 2) (? (nom? q) () q)) ())
+             sng (? hn (: s (song-new (tower-tune 1) hn) (pin s 'lvl 1)) ())
+             ; the wait IS the song: a chunk goes out at the speed the card plays it, so
+             ; a loop that feeds one while no key is waiting keeps time without a rest.
+             ; with no card it is a plain poll, and the tower is silent as it was.
+             (hold _) (? (cue? 0) ()
+                         (: _ (? sng (song-feed sng (song-vol g)) (rest 30))
+                            (hold ())))
+             (turn k) (k @ (113 || 27 || -7) (pin g 'over 'fled)
+                       (crawl-turn g (steer k)))
+             (loop _) (? (g 'over) ()
+                         (: _ (say out (crawl-frame g), flush out)
+                            _ (hold ())
+                            _ (turn (edkey in))
+                            _ (? sng (song-tier sng g) ())
+                            (loop ())))
+             _ (raw 1)
+             _ (say out "\e[?1049h\e[?25l\e[2J")
+             _ (loop ())
+             ; an end shows its frame for a beat before the screen is given back
+             _ (say out (crawl-frame g), flush out, rest 1200)
+             ; ..and the card goes back before the walk asks for it
+             _ (? hn (: _ (flush hn) (close hn)) ())
+             _ (g 'over = 'won ? (tower-win g))
+             _ (say out "\e[0m\e[?25h\e[?1049l")
+             _ (flush out)
+             _ (drain-keys ())
+             _ (raw 0)
              ; won: the token line is still in the note row, and goes to the shell too
              (g 'over = 'won ? (puts $ (fit (g 'msg) 200) + "\n", 0)
               (puts $ (g 'over @ 'dead (fill w-lost [(floors (g 'lvl - 1))])

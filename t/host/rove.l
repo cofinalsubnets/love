@@ -316,6 +316,22 @@
 (: g (crawl-new 60 20 (wheel 3))
  (test (#(g 'd 'rooms) <= #(keys (g 'loot)))))
 
+; --- the music: a phrase to the floor, and the circle's goes down with the ring. no
+; gate can listen, so what is held is the table's shape and the shape of the fade
+(: g (crawl-new 60 22 (wheel 3))
+   _ (ascend g) _ (ascend g) _ (ascend g)
+   (vat st) (: _ (pin g 'st st) (song-vol g))
+ (test
+  (#floors = #songs)                             ; a floor, a phrase
+  (foldl (\ a r (&& a (1 < #<r))) 1 songs)       ; ..more than one phrase to it
+  (foldl (\ a r (&& a (foldl (\ b ph (&& b (0 < #ph))) 1 <r))) 1 songs)   ; ..each with notes
+  (foldl (\ a r (&& a (string? (r 1)))) 1 songs) ; ..on a voice with a name
+  (1.0 = vat 0)                                  ; the ring at its widest: the drone full
+  ((vat 4) < (vat 0)) ((vat 6) < (vat 4))        ; it goes down as the circle draws in
+  (0.0 = vat 8)                                  ; ..and is gone once it is a point
+  (: h (crawl-new 20 10 (wheel 1)) (0 < song-vol h))   ; a floor with rooms just plays
+  !(() = tower-tune 1) !(() = tower-tune 4)))    ; and every floor's phrase is built
+
 ; --- the whole game, generated: a seeded random walk holds every invariant ---
 ; the keys come out of a BOXED wheel state -- {wheel 99} boxes the wheel itself, whose
 ; roll answers () forever, and a walk of three hundred passes holds anything you like
