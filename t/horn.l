@@ -2,16 +2,16 @@
 ; the laws are the port's shape, not the sound: a full device refuses at the door,
 ; the writer parks and the scheduler runs on, what has played drains at the rate.
 ; on the host HORN=none picks the sink, a ring that keeps time and discards -- so
-; the gate needs no card and wakes no speaker. under inle the same laws meet the
-; real driver (i/hda.c) where the machine has a controller, and its absence
-; on the other seats is the errno nom.
+; the gate needs no card and wakes no speaker. under inle the same laws meet a real
+; card: i/hda.c's where the machine has a controller, the page's own where it is a
+; wasm module (i/wasm/horn.c). a seat with neither is the errno nom.
 
 (: _ (? hosted (setenv "HORN" "none") ())        ; inle and the browser read no policy word
    h (horn 48000 2)
    _ (test ('badarg = horn 100 2) ('badarg = horn 48000 3) ('badarg = horn "a" 2))
    _ (? (nom? h)
-        ; no device: only inle on a machine with no HDA controller may say so
-        (test (h = 'enodev) (love-os = 'inle) !(love-arch = 'x64))
+        ; no device: only inle on a machine with no card of its own may say so
+        (test (h = 'enodev) (love-os = 'inle) !(elem love-arch '(x64 wasm)))
         (: ; one second of silence, 4K at a time: the sink holds a quarter second, the
            ; card's ring under two thirds, so the loop must WAIT for most of it -- and
            ; while it waits another task gets to run

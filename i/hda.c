@@ -413,14 +413,17 @@ void k_hda_init(void *dma) {
     hputs(" pin\r\n"); } }
 
 #else
-// no PCI walk on this machine, so no controller -- and the horn's four faces are this
-// file's to answer either way: a machine without a card has a horn that refuses, which
-// is a fact about the hardware and belongs beside the driver rather than in a default
-// somebody else carries.
+// no PCI walk on this machine, so no controller, and nothing to poll for a head that
+// never moves. the horn's four faces are this file's wherever the seat has no card of
+// its own: a machine without one has a horn that refuses, which is a fact about the
+// hardware and belongs beside the driver rather than in a default somebody else carries.
+// wasm's card is the page (i/wasm/horn.c), and answers them there.
 void k_hda_init(void *dma) { (void) dma; }
 void k_horn_poll(void) { }
+#ifndef __wasm__
 int k_horn_open(int rate) { return -1; }
 intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
 uintptr_t k_horn_lag(void) { return 0; }
 void k_horn_close(void) { }
+#endif
 #endif

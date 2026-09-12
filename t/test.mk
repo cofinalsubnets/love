@@ -1262,6 +1262,14 @@ test_kernel_wasm: host
 	@grep "tests pass" b/wasm/kernel.log
 	@echo TEST t/kernel/glass.l "(the console's grid: real pixels in, rows and columns out)"
 	@sh $(R)/t/gate/glass.sh $(NODE) $(R)/b/love-wasm.wasm b/wasm/love-wasm.image b/wasm/glass.log
+	@echo TEST t/gate/worklet.mjs "(the page's speaker, asked without a page)"
+	@$(NODE) $(R)/t/gate/worklet.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST t/kernel/horn.l "(the horn: a ramp through the port and out of the machine)"
+	@INLE_RAM=256 $(NODE) $(R)/i/wasm/inle.mjs --horn b/wasm/horn.raw --image b/wasm/love-wasm.image \
+	   $(R)/b/love-wasm.wasm t/kernel/horn.l < /dev/null > b/wasm/horn.log 2>&1; \
+	 grep -q "horn wrote 80000" b/wasm/horn.log \
+	   || { tail -20 b/wasm/horn.log; echo "FAIL test_kernel_wasm (the horn refused the machine)"; exit 1; }
+	@$m $(R)/t/gate/horn.l b/wasm/horn.raw || { echo "FAIL test_kernel_wasm"; exit 1; }
 endif
 
 # test_seedwasm -- `love seed x64` ON THE WASM SEAT: the machine lays the source it

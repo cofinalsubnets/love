@@ -1,6 +1,8 @@
 <!doctype html>
 <!-- i/wasm/inle.html -- love-wasm.wasm as a machine in the page: the kernel runs in a
-     worker (cpu.mjs), the canvas is its framebuffer, the keyboard its serial line. serve
+     worker (cpu.mjs), the canvas is its framebuffer, the keyboard its serial line, and
+     an AudioWorklet (horn.js) its speaker -- which starts at the first click, a page
+     having no say in that. serve
      the tree root (`make serve`) and open /i/wasm/inle.html; the module is read from
      b/love-wasm.wasm, so `make b/love-wasm.wasm` first. coi.js makes the page
      cross-origin isolated on a static host, which SharedArrayBuffer wants.
@@ -33,6 +35,7 @@
 <script type="module">
   import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
   import { glass } from './glass.mjs';
+  import { hearing } from './hear.mjs';
   const $ = (id) => document.getElementById(id);
   const note = $('note'), canvas = $('fb');
   // ONE CONSOLE DOOR: the canvas is it -- the worker is handed the framebuffer and quay
@@ -70,6 +73,11 @@
         b = e.ctrlKey && c >= 64 && c < 128 ? [c & 31] : e.ctrlKey || e.metaKey || e.altKey ? null : [...new TextEncoder().encode(e.key)]; }
       if (!b) return;
       e.preventDefault(); push(b); });
+    // SOUND: the samples come out of the shared ring and hear.mjs's worklet plays them,
+    // from the first touch of the screen, which is the earliest a page is allowed to
+    const hear = hearing(ring, ctl, say);
+    canvas.addEventListener('pointerdown', hear);
+    canvas.addEventListener('keydown', hear);
     // the canvas stays on THIS thread and the worker sends frames (cpu.mjs's blit): a
     // transferred canvas only reaches its placeholder at a task checkpoint, and the worker
     // never has one -- its idle is an Atomics.wait inside the boot's own task.

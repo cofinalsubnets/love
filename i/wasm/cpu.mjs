@@ -3,8 +3,9 @@
 // (inle.mjs under node, inle.html in the browser); the two share one ring of key bytes
 // in a SharedArrayBuffer, which is what lets the kernel's idle really block: nanosleep is
 // an Atomics.wait on the ring, one tick or the next key. moonlibc's calls never arrive --
-// kmain writes __ai_osv = -1 and they take i/sys.c -- so what comes through the one
-// import is i/wasm/arch.c's five hypercalls, wearing linux's numbers.
+// kmain writes __ai_osv = -1 and they take i/sys.c -- so what comes through the one import
+// is i/wasm/arch.c's five hypercalls wearing linux's numbers, and i/wasm/horn.c's four
+// wearing none, whose samples go into a second ring for the terminal's AudioWorklet.
 //
 //   in:  { wasm, ring, ram, cmd, fb,      the module's bytes, the shared ring, RAM in MiB,
 //          image }                        the boot line, { w, h, scale, canvas } or null, and
@@ -17,16 +18,26 @@
 //        { fault }                        the module trapped: the message, and the worker stops
 //        { lift, bytes | error }          a ramfs file the terminal asked for (see lift below)
 
-const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228 };
+// the five wear linux's numbers; the horn's four are ours -- sound has no call to borrow
+// one from, so the block sits well clear of any syscall table (i/wasm/horn.c).
+const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
+             horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003 };
 const ENOSYS = 38;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
-// asks for; then ring_n bytes of keys from ring_at, then lift_n bytes holding the path of
-// the file asked for. inle.mjs and inle.html write it, this file reads it.
+// asks for, [8] the horn's rate (0 closed) with [9] frames written and [10] played, and
+// [11] whether something real is playing them; then ring_n bytes of keys from ring_at,
+// lift_n bytes holding the path of the file asked for, and the horn's own samples.
+// inle.mjs and inle.html write it, this file reads it.
 // the ring is the only door into the worker: it blocks inside k_start and idles in an
 // Atomics.wait, so it never returns to an event loop and a postMessage cannot reach it.
-export const ctl_n = 8, ring_n = 4096, ring_at = ctl_n * 4, lift_n = 256, lift_at = ring_at + ring_n;
-export const shared_n = lift_at + lift_n;
+export const ctl_n = 12, ring_n = 4096, ring_at = ctl_n * 4, lift_n = 256, lift_at = ring_at + ring_n;
+export const c_rate = 8, c_wrote = 9, c_played = 10, c_live = 11;
+// the horn's ring: 16-bit stereo frames, a third of a second at 48k, which is about what
+// a small card holds. a power of two, so `& horn_mask` indexes it even once the written
+// count has wrapped past 2^31 -- the counts are int32 and their DIFFERENCE is the lag.
+export const horn_n = 16384, horn_mask = horn_n - 1, horn_at = lift_at + lift_n;
+export const shared_n = horn_at + horn_n * 4;
 
 // the way out of the machine: a ramfs file, read through the kernel's own fs faces --
 // k_fs_open, k_fd_stat, k_fd_read, k_fd_close are plain C over kernel memory, exported like
@@ -79,7 +90,7 @@ const post = (m, t) => port.postMessage(m, t);
 
 class Reboot extends Error { }
 
-let memory, ctl, kb, seen = 0;
+let memory, ctl, kb, pcm, seen = 0;
 let fb = null, fbAt = 0, fbImg = null, fbCtx = null, blitAt = 0;
 const mono0 = (typeof performance !== 'undefined' ? performance : Date).now();
 const dec = new TextDecoder('utf-8', { fatal: false });
@@ -138,6 +149,25 @@ const blit = (force) => {
       out[o] = v >>> 16, out[o + 1] = (v >>> 8) & 0xff, out[o + 2] = v & 0xff; }
     writeFileSync(fb.dump, out); } };
 
+// the horn, where nothing real is draining it -- node, or a page whose audio has not been
+// let in yet. the worker keeps the played count off its own clock, so the ring still
+// fills, refuses and drains at the rate and the guest sees the shape a card gives. the
+// remainder is kept: at 48k a millisecond is 48 frames and a bit, and dropping the bit
+// every poll would run the clock slow.
+let sinkAt = 0, sinkAcc = 0;
+const hornSink = () => {
+  const rate = Atomics.load(ctl, c_rate);
+  if (!rate || Atomics.load(ctl, c_live)) return;
+  const now = performance.now();
+  sinkAcc += (now - sinkAt) * rate / 1000;
+  sinkAt = now;
+  const step = Math.floor(sinkAcc);
+  sinkAcc -= step;
+  const w = Atomics.load(ctl, c_wrote);
+  let p = (Atomics.load(ctl, c_played) + step) | 0;
+  if (((p - w) | 0) > 0) p = w;                           // the clock passed the writer
+  Atomics.store(ctl, c_played, p); };
+
 const sys1 = (n, a, b, c) => {
   switch (Number(n)) {
     case NR.write: {                                    // the serial line: fds 1 and 2 alike
@@ -168,6 +198,31 @@ const sys1 = (n, a, b, c) => {
       Atomics.store(ctl, 0, head);
       return BigInt(k); }
     case NR.reboot: flush(); throw new Reboot();
+    // the horn: the rate the page will take, then the ring empty behind it -- what a
+    // closed run left unplayed is not the new one's lag
+    case NR.horn_open: {
+      const rate = Number(a);
+      if (rate < 8000 || rate > 192000) return -1n;
+      Atomics.store(ctl, c_played, Atomics.load(ctl, c_wrote));
+      sinkAt = performance.now(), sinkAcc = 0;
+      Atomics.store(ctl, c_rate, rate);
+      return 0n; }
+    case NR.horn_write: {                               // 16-bit stereo, what fits behind the head
+      if (!Atomics.load(ctl, c_rate)) return -1n;
+      hornSink();
+      const w = Atomics.load(ctl, c_wrote), room = horn_n - ((w - Atomics.load(ctl, c_played)) | 0);
+      const frames = Math.min(Number(b) >>> 2, room > 0 ? room : 0);
+      const src = new Uint8Array(memory.buffer, Number(a), frames * 4), at = (w & horn_mask) * 4;
+      const head = Math.min(frames * 4, horn_n * 4 - at);
+      pcm.set(src.subarray(0, head), at);
+      pcm.set(src.subarray(head), 0);
+      Atomics.store(ctl, c_wrote, (w + frames) | 0);
+      return BigInt(frames * 4); }
+    case NR.horn_lag:
+      if (!Atomics.load(ctl, c_rate)) return 0n;
+      hornSink();
+      return BigInt((Atomics.load(ctl, c_wrote) - Atomics.load(ctl, c_played)) | 0);
+    case NR.horn_close: Atomics.store(ctl, c_rate, 0); return 0n;
     default: return BigInt(-ENOSYS); } };
 
 // moon's convention: 16 params in (8 i64, 8 f64), (i64 i64 f64 f64) out
@@ -224,8 +279,11 @@ if (port) isNode ? port.on('message', run) : port.addEventListener('message', (e
 async function run(msg) {
   ctl = new Int32Array(msg.ring, 0, ctl_n);
   kb = new Uint8Array(msg.ring, ring_at, ring_n);
+  pcm = new Uint8Array(msg.ring, horn_at, horn_n * 4);
   for (;;) {
     try { await boot(msg); return; }
     catch (e) {
-      if (e instanceof Reboot) { lift(2); post({ reset: true }); continue; }   // a lift asked for at the end
+      // a lift asked for at the end, and the card shut: a machine that has gone does not
+      // leave a rate standing for the next one's first frames to be played under
+      if (e instanceof Reboot) { Atomics.store(ctl, c_rate, 0); lift(2); post({ reset: true }); continue; }
       flush(); post({ fault: String(e?.stack ?? e) }); return; } } }

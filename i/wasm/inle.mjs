@@ -10,26 +10,30 @@
 // a ramfs file the machine's program leaves behind, and where to put it on this side, once
 // the program has quit (the reset). --image hands the machine a heap image to wake (the one
 // `bake PATH` on the boot line writes, lifted out: `make b/wasm/love-wasm.image`).
+// --horn names a file to lay what the machine PLAYS in, as raw 16-bit stereo at the
+// horn's own rate: the AudioWorklet a page has, headless.
 //   usage: node i/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm]
-//                                  [--lift /in/machine:b/here]
+//                                  [--lift /in/machine:b/here] [--horn sound.raw]
 //                                  [--image love-wasm.image] love-wasm.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
+import { openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
+import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n,
+         horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
 
 const args = process.argv.slice(2);
-let fb = null, dump = null, scale = 0, liftReq = null, image = null;
+let fb = null, dump = null, scale = 0, liftReq = null, image = null, hornFile = null;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
   else if (o === '--scale') scale = Number(args.shift());
   else if (o === '--dump') dump = args.shift();
   else if (o === '--lift') { const [from, to] = args.shift().split(':'); liftReq = { from, to: to ?? from.split('/').pop() }; }
+  else if (o === '--horn') hornFile = args.shift();
   else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump, fb.scale = scale;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
 
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
@@ -46,6 +50,33 @@ const push = (bytes) => {
   Atomics.store(ctl, 1, tail);
   Atomics.add(ctl, 2, 1);
   Atomics.notify(ctl, 2); };
+
+// --horn FILE: the browser's AudioWorklet, headless. it takes the machine's samples off
+// the ring AT THE RATE, so the ring fills and refuses exactly as it does under a real one
+// and the run is timed the way a player times it -- and what it takes goes to a file as
+// raw 16-bit stereo, which is what a gate can look at where a page would make a sound.
+// c_live is set before the machine boots: it says the ring has a drainer, and without it
+// cpu.mjs would keep the count off its own clock and these samples would never be read.
+const pcm = new Uint8Array(ring, horn_at, horn_n * 4);
+let hornAt = 0, hornAcc = 0, hornOut = null;
+const hornDrain = () => {
+  const rate = Atomics.load(ctl, c_rate);
+  if (!rate) { hornAt = 0; return; }
+  const now = performance.now();
+  if (!hornAt) { hornAt = now; return; }                  // the first tick only starts the clock
+  hornAcc += (now - hornAt) * rate / 1000;
+  hornAt = now;
+  let want = Math.floor(hornAcc);
+  hornAcc -= want;
+  const p = Atomics.load(ctl, c_played), have = (Atomics.load(ctl, c_wrote) - p) | 0;
+  if (want > have) want = have;                           // an underrun: real time, nothing to play
+  if (want > 0) {
+    const at = (p & (horn_n - 1)) * 4, head = Math.min(want * 4, horn_n * 4 - at);
+    hornOut ??= openSync(hornFile, 'w');
+    writeSync(hornOut, pcm.slice(at, at + head));          // sliced: the fd wants unshared bytes
+    if (want * 4 > head) writeSync(hornOut, pcm.slice(0, want * 4 - head));
+    Atomics.store(ctl, c_played, (p + want) | 0); } };
+if (hornFile) { Atomics.store(ctl, c_live, 1); setInterval(hornDrain, 5).unref(); }
 
 const cpu = new Worker(new URL('./cpu.mjs', import.meta.url));
 const leave = (code) => { if (process.stdin.isTTY) process.stdin.setRawMode(false); process.exit(code); };

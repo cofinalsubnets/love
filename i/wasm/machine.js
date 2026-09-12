@@ -1,7 +1,7 @@
 // i/wasm/machine.js -- the machine island: love-wasm.wasm as inle, booted on the page.
 // the kernel runs in a worker (cpu.mjs) because it never returns, the canvas is its
-// framebuffer and the keyboard its serial line; the two threads share one ring of key
-// bytes, which is what lets the kernel's idle really block. one island per .machine on
+// framebuffer, the keyboard its serial line and an AudioWorklet its speaker; the two
+// threads share one ring, which is what lets the kernel's idle really block. one island per .machine on
 // the page, its parts found by class under it, so a page carries the markup
 // (i/wasm/machine.html) and this script and no glue.
 // a shared ring means the page must be CROSS-ORIGIN ISOLATED. a server that sends the
@@ -15,6 +15,7 @@
 // data-ram="1024", and ooms under 768.
 import { ctl_n, ring_n, ring_at, shared_n } from './cpu.mjs';
 import { glass } from './glass.mjs';
+import { hearing } from './hear.mjs';
 
 // the module is wasm64: an engine without memory64 says so instead of failing in silence
 const memory64 = () => WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 0]));
@@ -45,9 +46,10 @@ export async function loveMachine(root) {
   const url = p => new URL(p, import.meta.url);
 
   // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count,
-  // [3] a lift request (unused here), [4] a resize request and [5] [6] [7] its size; then
-  // ring_n bytes of keys. cpu.mjs reads it -- and it is the only door, the worker having
-  // no event loop to deliver a postMessage to.
+  // [3] a lift request (unused here), [4] a resize request and [5] [6] [7] its size,
+  // [8]..[11] the horn's; then ring_n bytes of keys, and the horn's samples past those.
+  // cpu.mjs reads it -- and it is the only door, the worker having no event loop to
+  // deliver a postMessage to.
   const ring = new SharedArrayBuffer(shared_n);
   const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
   const push = bytes => {
@@ -67,6 +69,12 @@ export async function loveMachine(root) {
         : [...new TextEncoder().encode(e.key)]; }
     if (!b) return;
     e.preventDefault(); push(b); });
+  // SOUND: the samples come out of the same ring and hear.mjs's worklet plays them, from
+  // the first touch of the screen, which is the earliest a page is allowed to. no sound is
+  // not the island failing, so a refusal goes to the console and the machine runs on.
+  const hear = hearing(ring, ctl);
+  canvas.addEventListener('pointerdown', hear);
+  canvas.addEventListener('keydown', hear);
   // a chip types its line at the machine, the way the repl island's chips ran theirs
   for (const ch of root.querySelectorAll('[data-type]'))
     ch.addEventListener('click', () => { push([...new TextEncoder().encode(ch.dataset.type), 13]);
