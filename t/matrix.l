@@ -80,7 +80,7 @@
  (5.0 = (2.5 + 2.5))                           ; float + float
  (? word ((63 2) = ((<< 1 62) + (<< 1 62))) 1) ; box + box -> 2^63 (64-bit word only)
  (? word (big? ((<< 1 62) + (<< 1 62))) 1)
- (? word (sun? ((<< 1 62) + 1)) 1)              ; box + fix stays a box
+ (? word (big? ((<< 1 62) + 1)) 1)              ; box + fix stays a box
  (? word (((<< 1 62) + 1) = (1 + (<< 1 62))) 1) ; ...and commutes
  ((1 + (100 2)) = ((100 2) + 1))                ; big + fix == fix + big (commutes)
  ((2 * (100 2)) = ((100 2) + (100 2)))          ; big + big

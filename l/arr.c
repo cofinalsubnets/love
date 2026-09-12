@@ -1029,9 +1029,9 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
    default:       of = __builtin_add_overflow(av, bv, &t); break; }   // vop_add
   if (!of) {                                    // demote-or-box the result
    if (t >= mincharm && t <= maxcharm) return putcharm(t);
-   if (!ai_ok(g = ai_have(g, sun_req))) return *fp = g, zero;
+   if (!ai_ok(g = ai_have(g, wbig_req))) return *fp = g, zero;
    *fp = g;
-   return mk_sun(&g->hp, t); } }
+   return mk_wbig(&g->hp, t); } }
  // bignum lane: ai_big_binop computes sp[0] (op) sp[1], leaves it at sp[1],
  // pops one, and advances ip -- so save/restore ip and pop the net result.
  if (!ai_ok(g = ai_push(g, 2, a, b))) return *fp = g, zero;
@@ -1063,11 +1063,11 @@ static struct ai *tray_to_obj(struct ai *g, int slot) {
    ai_flo_t e = tray_get_flo(s, i);
    if (!ai_ok(g = ai_have(g, gem_req))) return g;
    v = mk_gem(&g->hp, e); }
-  else {                                                       // int -> fixnum or sun box
+  else {                                                       // int -> fixnum or boxed
    intptr_t e = tray_get_int(s, i);
    if (e >= mincharm && e <= maxcharm) v = putcharm(e);
-   else { if (!ai_ok(g = ai_have(g, sun_req))) return g;
-    v = mk_sun(&g->hp, e); } }
+   else { if (!ai_ok(g = ai_have(g, wbig_req))) return g;
+    v = mk_wbig(&g->hp, e); } }
   tray_put_obj(tray(g->sp[0]), i, v);                            // re-fetch dst post-box
   gen_wb(g, g->sp[0], v); }                                    // ... and barrier it: see obin_run
  word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root

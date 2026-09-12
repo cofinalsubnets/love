@@ -1047,10 +1047,11 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 // --- numeric tower helpers ---
 #define isnum(x) (charmp(x) || gemp(x) || sunp(x) || bigp(x))
 #define intp(x) (charmp(x) || sunp(x) || bigp(x))   // the integer tier, all three tiers of it
-// integer value of a fixnum-or-box operand (callers exclude floats and bignums)
-#define toint(x) (charmp(x) ? (intptr_t) getcharm(x) : sun_get(x))
+// integer value of a fixnum-or-box operand (callers exclude floats); a magnitude
+// past the word truncates to its low word, which is what a tray cell takes too
+#define toint(x) (charmp(x) ? (intptr_t) getcharm(x) : wbig_get(x))
 // double value of any numeric operand (a bignum widens via ai_big_to_flo)
-#define toflo(x) (charmp(x) ? (ai_flo_t) getcharm(x) : gemp(x) ? gem_get(x) : sunp(x) ? (ai_flo_t) sun_get(x) : ai_big_to_flo(x))
+#define toflo(x) (charmp(x) ? (ai_flo_t) getcharm(x) : gemp(x) ? gem_get(x) : ai_big_to_flo(x))
 #define twin_req Width(struct ai_twin)
 // the tagged fixnum range: putcharm spends one bit
 #define mincharm (INTPTR_MIN >> 1)
@@ -1059,7 +1060,7 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 // caller holds Have(box_req); takes no &local, so the caller keeps its tail call.
 #define emit_int(r, R) do { intptr_t _r = (R); \
  if (_r >= mincharm && _r <= maxcharm) r = putcharm(_r); \
- else r = mk_sun(&Hp, _r); } while (0)
+ else r = mk_wbig(&Hp, _r); } while (0)
 #define emit_gem(r, R) do { r = mk_gem(&Hp, (R)); } while (0)
 
 // RNG: state is a rank-1 i64 tray of length 4 (xoshiro256++), its payload raw
@@ -1086,7 +1087,8 @@ struct ai_gem { lvm_t *ap; word w; };
 struct ai_sun { lvm_t *ap; intptr_t w; };    // raw intptr_t payload, no bit pun
 #define sun_req Width(struct ai_sun)
 #define sun(_) ((struct ai_sun*)(_))
-#define box_req (gem_req > sun_req ? gem_req : sun_req)     // what emit_int/emit_gem reserve
+#define wbig_req b2w(sizeof(struct ai_big) + wlimbs * sizeof(ai_limb))   // a word-sized magnitude, boxed
+#define box_req (gem_req > wbig_req ? gem_req : wbig_req)   // what emit_int/emit_gem reserve
 struct ai_twin { lvm_t *ap; word re, im; };   // two punned-double payload words
 #define twin(_) ((struct ai_twin*)(_))
 // pun through a union, not memcpy(&local,..): the memcpy form escapes a stack
@@ -1131,6 +1133,30 @@ static ai_inline word mk_twin(word **hpp, ai_flo_t re, ai_flo_t im) {
 
 static ai_inline intptr_t sun_get(word x) { return ((struct ai_sun*) x)->w; }
 
+// the low machine word of a boxed integer, two's complement -- exact for anything
+// that fits a word and the truncating cell value for anything wider (a tray cell
+// takes a magnitude mod 2^w by the same rule).
+static ai_inline intptr_t wbig_get(word x) {
+ struct ai_big *b = (struct ai_big*) x;
+ intptr_t sl = b->slen;
+ int n = (int) (sl < 0 ? -sl : sl);
+ uintptr_t u = 0;
+ for (int i = 0; i < n && i < wlimbs; i++) u |= (uintptr_t) b->limb[i] << (limb_bits * i);
+ return (intptr_t) (sl < 0 ? (uintptr_t) 0 - u : u); }
+// a machine-word magnitude past the charm range, as a bignum of wlimbs or fewer:
+// one boxed integer tier, whatever the limb width. caller holds Have(wbig_req).
+// v is never 0 here -- every caller demotes the charm range first, and a zero-valued
+// bignum is not canonical.
+static ai_inline word mk_wbig(word **hpp, intptr_t v) {
+ struct ai_big *b = (struct ai_big*) *hpp;
+ bool neg = v < 0;
+ uintptr_t m = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;   // |INTPTR_MIN| survives unsigned
+ int n = wlimbs;
+ for (int i = 0; i < wlimbs; i++) b->limb[i] = (ai_limb) (m >> (limb_bits * i));
+ while (n > 1 && b->limb[n-1] == 0) n--;
+ ini_big(b, neg ? -n : n);
+ *hpp += b2w(sizeof(struct ai_big) + (size_t) n * sizeof(ai_limb));
+ return word(b); }
 // allocate a sun box at *hpp (caller holds Have(sun_req)); no &local taken
 static ai_inline word mk_sun(word **hpp, intptr_t v) {
  struct ai_sun *w = (struct ai_sun*) *hpp; *hpp += sun_req;
@@ -1168,8 +1194,7 @@ static ai_inline bool tray_put(struct ai_tray *v, uintptr_t i, word x) {
   return true; }
  if (!isnum(x)) return false;
  if (v->type >= ai_R) tray_put_flo(v, i, toflo(x));
- else tray_put_int(v, i, charmp(x) ? (intptr_t) getcharm(x)
-                      : gemp(x) ? (intptr_t) gem_get(x) : sun_get(x));
+ else tray_put_int(v, i, gemp(x) ? (intptr_t) gem_get(x) : toint(x));
  return true; }
 
 // equality comparisons inline the fast identity check. eqv is declared HERE, not with the

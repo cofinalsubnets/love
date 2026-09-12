@@ -101,7 +101,7 @@
 ; the zero point is the right answer there and stays.
 (test
  (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? {1 2})
- (big? (100 2)) ((? word sun? big?) (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))
+ (big? (100 2)) (big? (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))   ; one boxed integer tier, whatever the word
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (cask 4)) (hot? out) (hot? (tap '(104)))   ; the hot zoo, named
  !(hot? {}) !(hot? cap) !(hot? 5) !(hot? "s")    ; maps/functions/data are not hots
