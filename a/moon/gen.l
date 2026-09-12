@@ -1913,15 +1913,24 @@
        (bi = "__builtin_expect") (cgexpr g env <args ())
        ; the frame's own two addresses, level 0 only -- above that wants a frame walk,
        ; and a wrong answer there is a backtrace pointing at the wrong function. the
-       ; return address sits one word above the frame base on every target here (the
-       ; x64 push-rbp link and the arm/riscv lr+fp pair both lay it there). touching r4
-       ; at an offset no object claims is what keeps unframe off this function
+       ; return address sits one word above the frame base (the x64 push-rbp link and
+       ; the arm/riscv lr+fp pair both lay it there), so both answers want the link to
+       ; still be there: fpin says so, because a base slot is exactly what unframe is
+       ; entitled to rewrite. wasm has no answer to give -- its return address lives on
+       ; the engine's call stack, which linear memory cannot see, and the builtin has no
+       ; error value to return (gcc: "an unspecified value"), so it refuses by name.
        (elem bi '("__builtin_return_address" "__builtin_frame_address"))
         (: lvl (? (two? args && two? <args && (= <<args 'num)) <><args 'no)
            fb (fbase g)
-           w (? (t32? g) 4 8)
+           ; one PUSH SLOT above the base, which is not one word: a64 and riscv pad each
+           ; push to 16 (unframe's link bytes, 32 for the pair, say so), x64's push is 8
+           ; and the call-pushed address sits just above the saved base
+           w (? (t32? g) 4 (a64? g || rv64? g) 16 8)
            (? !(= lvl 0) (nolane g (bi + " above level 0" + ontgt g))
+              (wasm? g && bi = "__builtin_return_address")
+               (nolane g (bi + " -- no return address in linear memory" + ontgt g))
               (: _ (pin g 'fesc 1)
+                 _ (pin g 'fpin 1)
                  (? (bi = "__builtin_frame_address") (mkv '(ptr void) 'r0 [['lean 'r0 fb 0]])
                     (mkv '(ptr void) 'r0 [['ld 'r0 fb w]])))))
        ; a prefetch is a hint: the address is evaluated for its effects and no insn
@@ -4199,7 +4208,8 @@
                                    (r3f || (!a64 && elem 'r3 >f))
                                    live))))))))
        vr (? (pro && charm? K) (scan body 0 () () 1) 'no)
-       (? (= vr 'no || (!a64 && <>vr && !sv3)) fs    ; r3 in use with no save to ride
+       (? (g 'fpin) fs                              ; the frame's own address was taken: keep the link
+          (= vr 'no || (!a64 && <>vr && !sv3)) fs    ; r3 in use with no save to ride
           (: r3f (!a64 && <>vr)
              vs (<vr || r3f)                         ; the save is a slot: r3f forces the sub
              K9 (K + (? a64 32 8))
@@ -7251,6 +7261,7 @@
      'inlrb () 'inlrbs ()      ; splice decl-license + its reg roster
      'rpin ()                  ; splice bind pins
      'hasasm ()                ; an asm statement pins it (homing off)
+     'fpin ()                  ; the frame link is asked for by name (unframe stands off)
      'cssv ()                  ; the callee-saved save forms (a cs grant pins)
      'sret ())                 ; the memory-return slot (the driver re-pins under sr6f)
 
