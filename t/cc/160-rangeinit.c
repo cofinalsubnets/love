@@ -1,6 +1,7 @@
 /* gcc's `[a ... b] =` range designator, and the frame's own two addresses.
  * the kernel writes both: a range fills a table of defaults, and _RET_IP_ is
- * __builtin_return_address(0). */
+ * __builtin_return_address(0). both addresses are asked something a wrong one
+ * fails: two call sites disagree, and a frame base outranks its own locals. */
 #include <stdio.h>
 
 int tbl[10] = { [0 ... 3] = 7, [5] = 9, [7 ... 8] = -1 };
@@ -14,6 +15,19 @@ static int sum(int *p, int n) { int s = 0, i; for (i = 0; i < n; i++) s += p[i];
 
 static void *ra(void) { return __builtin_return_address(0); }
 static void *fa(void) { return __builtin_frame_address(0); }
+
+/* a frame base stands above the function's own locals -- a stack that grows down puts
+ * them below it. an address read from INSIDE the frame, which is what a dropped frame
+ * link leaves behind, fails this where `!= 0` passes on any stack address at all. */
+static int abovelocals(void)
+{
+  volatile char pad[256];
+  char *f = (char *) __builtin_frame_address(0);
+  char *p = (char *) &pad[255];
+  pad[0] = 1;
+  pad[255] = 2;
+  return f > p && (f - p) < 65536;
+}
 
 /* two call sites in one function report two different return addresses, and each
  * lies after the call that made it -- which is what a caller-identifying builtin
@@ -32,6 +46,7 @@ int main(void)
   for (i = 0; i < 6; i++) cn += cs[i];
   for (i = 0; i < 4; i++) pn += ps[i].a * 10 + ps[i].b;
   for (i = 0; i < 4; i++) on += over[i];
-  printf("%d %d %d %d %d %d\n", sum(tbl, 10), cn, pn, on, callsite(), f1 != 0);
+  printf("%d %d %d %d %d %d %d\n", sum(tbl, 10), cn, pn, on, callsite(), f1 != 0,
+         abovelocals());
   return (sum(tbl, 10) + cn + pn + on) & 0x7f;
 }

@@ -365,10 +365,10 @@
    (kernel-main as)
     ; the operand is a path to WRITE, so the flags are asked before it: a `-h` taken
     ; for one lays a kernel in a file called -h
-    (: u "usage: love kernel OUT.elf"
-       _ (two? as && src-help? <as ? (puts (u + "\n"), quit 0))
+    (: usage "usage: love kernel OUT.elf"
+       _ (two? as && src-help? <as ? (puts (usage + "\n"), quit 0))
        _ (two? as && src-vers? <as ? (src-vers "kernel"))
-       _ (? (two? as) 0 (src-die u))
+       _ (? (two? as) 0 (src-die usage))
        out <as
        exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't read the seed path"))

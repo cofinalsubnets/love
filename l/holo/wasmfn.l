@@ -409,7 +409,10 @@
                  (two? f && <f = 'align) (go >l cur name acc)
                  (go >l (f . cur) name acc))))
        (go forms () () () . als))
-   ;; a data stream laid at addr: (addr' items) with items ((addr . bytes) | (addr fix-sym aux))
+   ;; a data stream laid at addr: (addr' items) with items ((addr . bytes) | (addr fix-sym aux)),
+   ;; where bytes is one byte or a BLOB -- a string standing for every byte in it, which is
+   ;; what holo.l's item-len already reads a raw operand's string as. a megabyte of archive
+   ;; is one item here and not a cons and an address per byte.
    (w-lay-data forms addr syms items)
     (forms @- [addr items] (f . fs)
      (<f @ 'label (pin syms <>f ['data addr], w-lay-data >forms addr syms items)
@@ -417,8 +420,9 @@
                           (w-lay-data >forms a2 syms items))
            'raw (:- (go <>f addr items) (go xs a acc)
                  (xs @- (w-lay-data >forms a syms acc)
-                  (x . xs) (x @ (_ . _) (go xs (a + 8) ([a (x 3) (x 4)] . acc))
-                                        (go xs (a + 1) ((a . x) . acc)))))
+                  (x . xs) (? (two? x)   (go xs (a + 8) ([a (x 3) (x 4)] . acc))
+                              (string? x) (go xs (a + #x) ((a . x) . acc))
+                              (go xs (a + 1) ((a . x) . acc)))))
            x (scare 'wasm-data-form x)))
    (w-align16 a) (a + ((16 - (a % 16)) % 16))
    ;; opts: 'imports (name ..) the functions the environment supplies; 'exports (name ..) | 'all;
@@ -536,6 +540,8 @@
        _ (map (\ it (? (two? >it)                             ; (addr sym aux): an abs64 pointer
                         (: v ((symval (it 1)) + (it 2)) a (<it - base)
                            (map (j \ pin img (a + j) ((v // (256 ** j)) % 256)) ^8))
+                        ; a blob goes in whole; pour clamps to the image either side
+                        (string? >it) (pour img (<it - base) >it 0 #>it)
                         (? (<it < dend) (pin img (<it - base) >it) 0)))   ; bss stays zero
               items)
        ;; 7. the stack above the data, sp at its top; the memory holds it all

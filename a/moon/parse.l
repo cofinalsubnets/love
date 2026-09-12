@@ -13,7 +13,7 @@
 ; (e->x desugars to (dot (deref e) x)), ('switch e items) with ('case v) and
 ; ('dflt) markers inline (fallthrough is the flat list), ('do body cond),
 ; ('goto name) ('lbl name), ('tdef) (a typedef, gen skips it). stage 4b adds
-; the function-pointer declarator ('ptr ('fn ret), a table ('arr ('ptr ('fn ret)) n))
+; the function-pointer declarator ('ptr ('fn ret ptys), a table ('arr ('ptr ('fn ret ptys)) n))
 ; and generalizes a call head to any postfix expr ('call headexpr args).
 ; stage 4c adds brace/designated initializers ('init (item..), item plain |
 ; ('dfield name val) | ('didx n val), nesting), the flexible array member
