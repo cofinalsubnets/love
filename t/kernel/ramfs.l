@@ -70,6 +70,12 @@
  (test
    (= "ram-words " (snip (rd "/proc/meminfo") 0 10))
    (= "pool-words " (snip (rd "/proc/gauge") 0 11))
+   ; the boot line, the row that says what this machine was asked to run. love's own
+   ; `cmdline` is (. "love" bootargv), so the file opens on that word whatever the
+   ; line after it, and ends the way a line does
+   (= "love" (snip (rd "/proc/cmdline") 0 4))
+   (: c (rd "/proc/cmdline") (= 10 (c (- (tally c) 1))))
+   (! (wr "/proc/cmdline" "no"))
    ; nobody's to set: the ramfs never reads its own mode bits, so 0444 is a label and
    ; the refusal has to be the open's
    (! (wr "/proc/meminfo" "no"))

@@ -600,6 +600,8 @@ static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg",
 // and the two the open fills from the running machine -- see k_proc_fill, below the
 // grow door it needs.
 static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
+// and the boot line, the one row that answers what this machine was asked to run.
+static char const k_pcmd[] = "proc/cmdline";
 // /dev/{null,zero} -- the two a POSIX userland asks the machine for. NEITHER HOLDS
 // BYTES: the source table's empty slot already discards writes and answers the end, so
 // null is that slot, and zero is that slot with a read door that fills. the table rows
@@ -668,6 +670,11 @@ static bool k_fs_init(void) {
                               .mode = 0444, .own = true, .live = true };
   t[n + 4] = (struct k_ent) { .path = k_pgauge, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0444, .own = true, .live = true };
+  // the boot line beside them, read-only the same way and filled at every open, so a
+  // reset onto another line changes what the file answers. n + 9, past the numbered
+  // rows, the way the glyph scale sits at n + 8.
+  t[n + 9] = (struct k_ent) { .path = k_pcmd, .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0444, .own = true, .live = true };
   // and the two devices, 0666 and always empty -- `dev` comes free as their prefix,
   // the way `proc` does. the open never touches these rows; see k_dev_slot.
   t[n + 5] = (struct k_ent) { .path = k_dnull, .bake = -1, .ms = k_clock_ms(),
@@ -680,7 +687,7 @@ static bool k_fs_init(void) {
   t[n + 7] = (struct k_ent) { .path = "usr/bin", .bake = -1, .ms = k_clock_ms(),
                               .mode = 0755, .own = true, .dir = true, .live = true };
   static char const *const compat[] = { "bin", "sbin", "usr/sbin" };
-  int m = n + 9;
+  int m = n + 10;
   for (uintptr_t c = 0; c < countof(compat); c++) {
     char *to = k_strdup("/usr/bin", 8);
     t[m] = (struct k_ent) { .path = compat[c], .bake = -1, .ms = k_clock_ms(),
@@ -968,6 +975,7 @@ static void k_vt_write(int i, int slot) {
 static int k_proc_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_pmem - 1 && !memcmp(p, k_pmem, n)) return 1;
   if (n == sizeof k_pgauge - 1 && !memcmp(p, k_pgauge, n)) return 2;
+  if (n == sizeof k_pcmd - 1 && !memcmp(p, k_pcmd, n)) return 3;
   return 0; }
 
 static int k_dec(char *b, int at, uintptr_t v) {
@@ -1016,12 +1024,24 @@ static int k_gauge(char *b, struct ai const *g) {
   at = k_row(b, at, "minor-peak", g->minor_hi);
   return k_row(b, at, "major-peak", g->major_hi); }
 
+// the boot line as love spells it: `cmdline` is (. "love" bootargv), so the file says
+// the program word and then the line the machine was booted with -- raw, the way linux
+// writes its own, so the quoting a reader sees is the quoting the boot handed over.
+static int k_bootline(char *b) {
+  int at = 0;
+  for (char const *k = "love"; *k; k++) b[at++] = *k;
+  if (kboot.cmdline[0]) {
+    b[at++] = ' ';
+    for (char const *s = kboot.cmdline; *s; s++) b[at++] = *s; }
+  b[at++] = '\n';
+  return at; }
+
 // entry i's bytes <- the machine, at the open of a read. memory refusing leaves the last
 // content standing: a stale row is answerable, an open that failed for want of one is not.
 static void k_proc_read(int i, int slot) {
   if (slot == 2 && !ai_system) return;          // no process to ask; meminfo is ours alone
   char b[768];
-  int n = slot == 1 ? k_meminfo(b) : k_gauge(b, ai_system);
+  int n = slot == 1 ? k_meminfo(b) : slot == 3 ? k_bootline(b) : k_gauge(b, ai_system);
   if (!k_fit(i, (uintptr_t) n)) return;
   memcpy(k_ents[i].bytes, b, (uintptr_t) n);
   k_ents[i].len = (uintptr_t) n; }
