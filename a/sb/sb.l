@@ -63,12 +63,16 @@
    ;     every other rule is a path prefix at a segment boundary: `out` takes out
    ;     and b/love, never output. blank lines and # comments are skipped.
    ;     u/selfpack.l reads these too, so the dist cut and the walk agree.
-   igs0 '(".sb" ".git" "b")
+   ; the built-ins, and every one of them is a DIRECTORY: sb's own store, git's, and the
+   ; build tree. the walk asks them only of a directory, so a file that happens to be
+   ; called b is a file -- gitignore spells this rule `/b/`. rules are matched whole or
+   ; at a segment boundary from position 0, which is the leading slash already.
+   igsdir '(".sb" ".git" "b")
    ig-glob? (cite 'glob 'anyglob)
    ig-match (cite 'glob 'match)
    (ig-live? l) (0 < #l && l 0 != 35)
    (igs _) (: t (look ".sbignore")
-                 (two? t ? (igs0 + filter ig-live? (lines <>t)) igs0))
+                 (two? t ? (filter ig-live? (lines <>t)) ()))
    (ign1? p g) (: n #g (ig-glob? g ? (ig-match g p)
                         (p = g || n + 1 < #p && snip p 0 (n + 1) = (g + "/"))))
    (ign? p igs) (? (one? igs) 0 (ign1? p <igs) 1 (ign? p >igs))
@@ -82,7 +86,7 @@
               (? (ign? p igs) (go >m acc)
                  (: st (stat p)
                     md (two? st ? (61440 & <>>st) 0)
-                  (md @ 16384 (go >m (walk p igs acc))
+                  (md @ 16384 (? (ign? p igsdir) (go >m acc) (go >m (walk p igs acc)))
                         32768 (go >m (p . acc))
                               (go >m acc))))))
        (go es acc))
