@@ -120,6 +120,18 @@
     (0 < cbg is 0)                                           ; ..and it really is painted
     (0 = cbg is 440))                                        ; with the last row spared
 
+; --- slop takes what the tower hands it: a token, a purse, and a sign saying so ---
+; the walk holds the sign until a key comes, so the first of these is what buys the
+; frame behind it; with nothing handed over there is no sign and no wait at all
+ sg (run "b/love slop phone 38" "\rq" 14 64)
+ _ (test
+    (has? <sg "what you carry")                             ; the box, titled
+    (has? <sg "phone")                                      ; ..naming what came up
+    (has? <sg "38 pennies")
+    (has? <sg "one journey yet remains"))
+ sn (run "b/love slop" "q" 14 64)
+ _ (test !(has? <sn "one journey yet remains"))
+
 ; --- slop: the shimmer with a player under it, and only forward moves him ---
 ; slop paints before it reads, and then keeps painting whether a key comes or not, so
 ; the same rule as ink applies: wait for the wire to show a painted cell, then type.

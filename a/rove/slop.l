@@ -58,6 +58,22 @@
  pal (ink-pal slop-ramp)
  esc (string 27)
  beat 0.06                              ; the phase one frame advances at full rate
+
+ ; the sign the walk opens with when it is handed something -- a token, a purse, or
+ ; both. a ~ takes the next value and a {brace} is the token's pen, the tower's own
+ ; fill and fit doing the work, so these lines are the whole of it.
+ sign-ttl  "what you carry"
+ sign-both '("with {~} in hand, and ~ pennies besides,"
+             "one journey yet remains")
+ sign-tok  '("with {~} in hand,"
+             "one journey yet remains")
+ sign-pnn  '("with ~ pennies in hand,"
+             "one journey yet remains")
+ sign-rest '(""
+             "forward  k   or up"
+             "leave    q   or esc"
+             ""
+             "-- any key --")
  ; past the climb line one square in twenty-seven is your own step; the rest scroll,
  ; and that ratio is what lands the shore on you just past the middle of the screen. it
  ; goes with the length of the walk: you rise climb-minus-(contested/odds) rows, so a
@@ -417,7 +433,17 @@
  ; the walk takes the screen as it finds it -- raw and the alternate screen belong to
  ; whoever raised them, which is how the tower opens the slop on the screen its circle
  ; left standing -- and answers the game it played.
- (slop-walk _) (: ws (tty 1)
+ ; what the walk was handed, said once before it starts
+ (slop-sign g tk pn)
+  (: both ((&& tk pn) ? 1 0)
+     vs (both ? [tk pn] (tk ? [tk] [pn]))
+     rows (both ? sign-both (tk ? sign-tok sign-pnn))
+     head (map (l \ fill l vs) rows)
+     _ (say out (sign-over (slop-frame g) sign-ttl (head + sign-rest) 0 (g 'r) (g 'c)))
+     _ (flush out)
+     (edkey in))
+
+ (slop-walk tk pn) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 1) 23)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (slop-new r c (wheel (clock 0)))
@@ -436,6 +462,7 @@
                             (say out (slop-frame g), flush out,
                              beat-out (slop-song-speed g) (slop-song-edge g) (slop-song-vol g), swim ())))
              _ (say out (esc + "[?25l"))
+             _ (? (|| tk pn) (slop-sign g tk pn) ())
              _ (swim ())
              ; taken: the slop closes over the whole screen and runs at full rate --
              ; no gap left to slow it -- for half a second before the stage is left
@@ -449,18 +476,27 @@
 
  ; ..and the verb around it: the screen is raised here and put back here, and the
  ; walk between the two neither knows nor cares which door it came in by
- (slop-run _) (: _ (raw 1)
+ (slop-run tk pn) (: _ (raw 1)
                  _ (say out (esc + "[?1049h" + esc + "[2J"))
-                 g (slop-walk ())
+                 g (slop-walk tk pn)
                  _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
                  _ (flush out)
                  _ (raw 0)
                  (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in")
                                          ("you turn back, " + presses (g 'spent) + " in")),
                   0))
- slop-usage "usage: love slop   (no options; forward is k or up, q or esc leaves)"
- ; slop takes nothing: a word here is a mistake, and the game would swallow it
- (slop-main as) (? !(two? as) (slop-run ())
-                    (say err ("slop: takes no arguments, not " + <as + "\n"), flush err, 2))
+ slop-usage "usage: love slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
+ ; the two optional words, in either order: a number is pennies and anything else is
+ ; the token. given either, the walk opens on a sign saying what you came in with.
+ (digits? t) (: n #t
+                (go i) (? (i >= n) 1 (&& (48 <= (t i) <= 57) (go (i + 1))))
+                (&& (0 < n) (go 0)))
+ (num-of t) (: (go i a) (? (i >= #t) a (go (i + 1) ((a * 10) + (t i) - 48))) (go 0 0))
+ (slop-args as) (: (go l tk pn) (? !(two? l) [tk pn]
+                                    (: t <l (digits? t ? (go >l tk (num-of t))
+                                                         (go >l t pn))))
+                   (go as () ()))
+ (slop-main as) (? (2 < #as) (say err ("slop: " + slop-usage + "\n"), flush err, 2)
+                    (: p (slop-args as) (slop-run <p <>p)))
  _ (pins (cite 'verbs 'tab) 'slop (udoor 'slop slop-main slop-usage 1 1)))
 ) ; module slop

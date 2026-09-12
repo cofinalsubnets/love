@@ -27,7 +27,7 @@
          mend ascend fill fit circle? circle-new circle-stride circle-frame
          circle-r circle-wall on-ring? reveal? done? tokens floors due?
          themes plan tile-face strewn pink-ramp skin-pen
-         flavour mutter underfoot)
+         flavour mutter underfoot sign-box sign-over)
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
@@ -219,11 +219,32 @@
  w-penny  "you pocket ~ pennies"
  w-ring   "you strike the circle"
  w-bar    "~  hp ~/~  pennies ~"
+ w-bar-up "~  hp ~/~  pennies ~  < climbs"
  w-won    "the {token} is yours: {~} -- and ~ pennies besides"
  w-fled   "you leave the tower with ~ pennies"
  w-lost   "the tower keeps you, in ~"
  w-args   "tower: takes no arguments, not ~\n"
  floors   '("the garden" "the middle" "heaven" "the circle")
+ ; the sign the tower holds up before you take a step. its lines are the box's, so
+ ; nothing here is built either -- a {brace} is the token's pen, and the last line is
+ ; the only instruction the box itself gives.
+ ; it is kept short on purpose: a terminal of twenty rows leaves eighteen for the map,
+ ; and a box taller than that is a box with its foot cut off.
+ sign-ttl "the tower"
+ sign-open '("you are @, at the foot of the tower."
+             ""
+             "move     h j k l    or the arrow keys"
+             "         y u b n    for the corners"
+             "wait     .          a turn passes, nothing mends"
+             "climb    <          while you stand on a stair"
+             "leave    q          or esc"
+             ""
+             "a stair is a gold < set in one of the rooms:"
+             "walk onto it and press < to take it up."
+             ""
+             "get the {token}, and the pennies on the way."
+             ""
+             "-- any key --")
  ; the tower's fauna: name, glyph, pen, hp, bite, pace. pace is turns per stir, so
  ; heaven's shapes take two and a climber who would rather not fight walks past them.
  mob-book '(("rat" 114 137 3 1 1) ("lanternfly" 108 175 3 1 1)
@@ -289,6 +310,13 @@
    ("star"       "a star, at ankle height"
                  "it does not move when you do"
                  "the floor is a sky here, briefly")
+   ("stair"      "a stair, and it goes up into the dark"
+                 "the steps are worn hollow in the middle"
+                 "it is colder on the stair than off it")
+   ("pennies"    "copper, gone green at the rims"
+                 "somebody counted these out and left them"
+                 "they have been here longer than you have"
+                 "warm, which is the strange part")
    ("rat"        "a rat, and it has seen worse than you"
                  "it does not hurry")
    ("lanternfly" "a lanternfly, spotted and slow"
@@ -341,6 +369,43 @@
                         (go (i + 1) (n + 1) (acc + string c)))))
               (go 0 0 ""))
 
+ ; --- the sign: a box over the frame, the way story's lighthouse says a thing. the
+ ; braces cost no width, so the box is measured in what a reader sees; the frame is cut
+ ; where the box starts and the box runs to the end of the row, which is what keeps the
+ ; pens either side of it from meeting.
+ sign-pen 252
+ (vlen s) (: (go i n) (? (i >= #s) n
+                         (: c (s i) (go (i + 1) (? ((c = 123) || (c = 125)) n (n + 1)))))
+             (go 0 0))
+ (pad s n c) (: v (vlen s) (v >= n ? s (s + ((n - v) (\ t (t + c)) ""))))
+ (sign-box ttl ls) (:
+   w (foldl (\ a l (: v (vlen l) (a < v ? v a))) (vlen ttl) ls)
+   ww (w + 4)
+   top ("+-" + pad (ttl + " ") (ww - 3) "-" + "+")
+   bot ("+" + ((ww - 2) (\ t (t + "-")) "") + "+")
+   ([top] + (map (l \ "| " + pad l (ww - 4) " " + " |") ls) + [bot]))
+ ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs
+ (cells-cut r n) (: (past i) (r i @ 109 (i + 1) (past (i + 1)))
+                    (go i k acc) (? ((i >= #r) || (k >= n)) acc
+                                    (r i @ 27 (: e (past i) (go e k (acc + snip r i e)))
+                                     (go (i + 1) (k + 1) (acc + string (r i)))))
+                    (go 0 0 ""))
+ ; a frame with the box centred over its rows a .. a+n, for a screen w wide
+ (sign-over f ttl ls a n w) (:
+   rs (split "\r\n" f)
+   box (sign-box ttl ls)
+   ww (vlen <box)
+   x0 (: q ((w - ww) // 2) (0 < q ? q 0))
+   y0 (: q (a + ((n - #box) // 2)) (a < q ? q a))
+   ; ..and never past the rows it was given: a box too tall for the screen loses its
+   ; foot, which is the screen's doing, but the bar under it is not the box's to take
+   (lay i) (: r (rs i)
+              (? ((y0 <= i < (y0 + #box)) && (i < (a + n)))
+                 ((cells-cut r x0) + "\e[0m" + (pen sign-pen) + (fit (box (i - y0)) 400))
+                 r))
+   (go i acc) (? (i >= #rs) acc (go (i + 1) (acc + (0 < i ? "\r\n" "") + lay i)))
+   (go 0 ""))
+
  ; --- the climb: the proving game. state in a tablet, one key per turn ---
  ; the bar is not a resource: a turn spent acting mends, a turn passed does not, so a
  ; climber dies only by standing still while something is next to them.
@@ -366,10 +431,16 @@
                         (mobs rm (n - 1) (mob-new (peep ks (roll sb #ks) 0) x y . acc))
                         (mobs rm (n - 1) acc)))
                     acc)
-   (treasure rm) (: xy (drop-at rm) i (<xy + (d 'w) * <>xy)
-                    (? (d 't i != 1) ()
-                       (roll sb 10 < 6) (pin loot i ['penny (3 + roll sb 12)])))
-   ms (foldl (\ acc rm (treasure rm, mobs rm (roll sb (2 + lvl)) acc))
+   ; pennies are the point of the place, so every room has some: a handful of piles,
+   ; and a pile is worth carrying
+   ; the tile through `dat`: a cask does not answer to being applied, so (d 't i) is
+   ; () and every pile ever dropped was dropped on the strength of a miss
+   (treasure rm n) (? (0 < n)
+                    (: xy (drop-at rm) x <xy y <>xy
+                       _ (? (1 = dat d x y)
+                            (pin loot (x + (d 'w) * y) ['penny (3 + roll sb 12)]))
+                       (treasure rm (n - 1))))
+   ms (foldl (\ acc rm (treasure rm (2 + roll sb 2), mobs rm (roll sb (2 + lvl)) acc))
              () (init (d 'rooms)))
    (pins g 'ms ms 'loot loot))
 
@@ -386,6 +457,7 @@
    g {'d d 'lvl 1 'tn 0 'sb sb 'p pl 'msg "" 'over 0}
    _ (stock g)
    _ (note g w-open)
+   _ (pin g 'sign (sign-ttl . sign-open))
    (pin g 'vis (fov d (pl 'x) (pl 'y) 8)))
 
  (note g s) (pin g 'msg (g 'msg ? (g 'msg + "; " + s) s))
@@ -401,22 +473,33 @@
               (: _ (pin m 'met 1)
                  s (mutter (roll (g 'sb) 97) (m 'nm))
                  (s ? (note g s))))
+ ; ..and what it was carrying, which is pennies and always pennies. a pile already on
+ ; the cell takes them up rather than being written over
+ (drop g m) (: i ((m 'x) + (g 'd 'w) * (m 'y))
+               it (peep (g 'loot) i ())
+               n ((two? it ? <>it 0) + 1 + roll (g 'sb) (2 + 2 * g 'lvl))
+               (pin (g 'loot) i ['penny n]))
  (strike g m) (: _ (meet g m)
                  dm (1 + roll (g 'sb) 3)
                  _ (pin m 'hp (m 'hp - dm))
                  (? (0 < m 'hp) (note g (fill w-strike [(m 'nm) dm]))
                   (pin g 'ms (filter (\ o !(= o m)) (g 'ms)),
+                   drop g m,
                    note g (fill w-kill [(m 'nm)]))))
  (take g i it)
-  (pull (g 'loot) i (),
-   pin (g 'p) 'penny (g 'p 'penny + <>it),
-   note g (fill w-penny [<>it]))
+  (: d (g 'd)
+     _ (pull (g 'loot) i ())
+     _ (pin (g 'p) 'penny (g 'p 'penny + <>it))
+     _ (note g (fill w-penny [<>it]))
+     s (mutter (dice (i % (d 'w)) (i // (d 'w)) (2 + peep d 'sd 0) 97) "pennies")
+     (s ? (note g s)))
 
  ; what the ground underfoot has to say for itself -- "" where nothing is strewn. the
  ; line is the cell's, off a second salt, so it does not follow which thing lies there
- (underfoot g x y) (: d (g 'd) sd (peep d 'sd 0)
-                      r (strewn (make d) x y sd)
-                      (two? r ? (mutter (dice x y (1 + sd) 97) (r 4)) ""))
+ (underfoot g x y) (: d (g 'd) sd (peep d 'sd 0) k (dice x y (1 + sd) 97)
+                      (? (2 = dat d x y) (mutter k "stair")
+                         (: r (strewn (make d) x y sd)
+                            (two? r ? (mutter k (r 4)) ""))))
  (tread g x y) (: s (underfoot g x y) (s ? (note g s)))
 
  (stride g mv) (: p (g 'p) nx (p 'x + <mv) ny (p 'y + <>mv)
@@ -555,20 +638,29 @@
  (crawl-turn g k) (:
    _ (pin g 'msg "")
    _ (pin g 'tn (1 + g 'tn))
-   _ (? (g 'over || k = 46) ()
+   ; a sign standing is what the key buys: it comes down, and the turn is not taken
+   sg (g 'sign)
+   _ (sg ? (pin g 'sign ()))
+   _ (? (sg || (g 'over || k = 46)) ()
         (circle? g) (two? k ? (circle-stride g k))
         (two? k) (stride g k, mend g)
         (k = 60) (: _ (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair))
                     (mend g)))
-   _ ((g 'over || circle? g) ? ()
+   _ ((sg || (g 'over || circle? g)) ? ()
       (each (g 'ms) (m \ ((!(g 'over)) && (due? g m)) ? (stir g m))))
    (circle? g ? g (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))))
 
- (crawl-bar g) (fill w-bar [(floors (g 'lvl - 1)) (g 'p 'hp) (g 'p 'mx) (g 'p 'penny)])
- (crawl-frame g) (circle? g ? (circle-frame g)
-                  (: j (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
-                             (g 'p . g 'ms) (g 'msg) (crawl-bar g))
-                     (slurp j)))
+ ; the bar, and on a stair the one thing worth saying there
+ (crawl-bar g) (: p (g 'p)
+                  up (!(circle? g) && (2 = dat (g 'd) (p 'x) (p 'y)))
+                  (fill (up ? w-bar-up w-bar)
+                        [(floors (g 'lvl - 1)) (p 'hp) (p 'mx) (p 'penny)]))
+ (crawl-frame g) (: f (circle? g ? (circle-frame g)
+                      (: j (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
+                                 (g 'p . g 'ms) (g 'msg) (crawl-bar g))
+                         (slurp j)))
+                    sg (g 'sign)
+                    (two? sg ? (sign-over f <sg >sg 1 (g 'd 'h) (g 'd 'w)) f))
 
  ; --- tower: the climb on cli's stage. any seed climbs; q or esc leaves ---
  ; the token is the last thing the tower says, and the field it opens onto is the next
@@ -579,7 +671,7 @@
                   _ (pin g 'msg (fill w-won [tk (g 'p 'penny)]))
                   _ (say out (crawl-frame g), flush out, rest 2200)
                   walk (cite 'slop 'slop-walk)
-                  (walk ? (walk ()) ()))
+                  (walk ? (walk tk (g 'p 'penny)) ()))
  (tower-run _) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)

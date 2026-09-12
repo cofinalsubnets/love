@@ -2,9 +2,8 @@
 ; not in the t/*.l corpus (it loads a crew file and leaks its helpers).
 ; the engine core is pure love, so everything but the tty runner gates here:
 ; delve (seeded, connected, bordered), fov (strides, walls, memory), the
-; painter (a frame into a jug), the make of each floor and what it says, the
-; helm decoder, the
-; words and their holes, and
+; painter (a frame into a jug), the make of each floor and what it says, the helm
+; decoder, the words and their holes, the sign the tower opens with, and
 ; the climb end to end -- combat, pennies, the mending, the pace, the stair,
 ; death, and the circle that ends it. the tty side (tower-run) is berth-thin over
 ; what this file proves, and t/host/tty.l plays it on a real pty.
@@ -275,6 +274,48 @@
 ; the climb raised is the one the slop is to run on. a missed cite is a silent end.
 (test !(() = (cite 'slop 'slop-walk)))
 
+; --- the sign: the tower holds one up before a step is taken, the first key buys its
+; coming down and nothing else, and the bar under it is never covered
+(: g (crawl-new 40 16 (wheel 7))
+   f (crawl-frame g)
+   x (g 'p 'x) y (g 'p 'y)
+   _ (crawl-turn g [1 0])
+   f2 (crawl-frame g)
+ (test (find f "+-the tower " 0)                ; the box, titled the way story titles
+         (find f "h j k l" 0)                    ; the keys are on it
+         (find f "climb" 0)                      ; ..and so is the stair
+         (find f "the garden  hp 20/20" 0)       ; the bar is not covered
+         (#(split "\r\n" f) = #(split "\r\n" f2))   ; a sign costs no rows
+         (x = g 'p 'x) (y = g 'p 'y)             ; the key that took it down took no turn
+         !(find f2 "+-the tower " 0)))
+
+; --- the stair says what it is when you stand on it, and the bar says what to do
+(: g (hand-g ())
+   _ (pins (g 'd) 'th (themes 0) 'sd 3)
+   _ (dput (g 'd) 2 1 2)                         ; a stair cut to the right of you
+   s (underfoot g 2 1)
+   _ (crawl-turn g [1 0])
+ (test (0 < #s) (find (g 'msg) s 0)
+         (find (crawl-bar g) "< climbs" 0)       ; ..only while you are on it
+         (: h (hand-g ()) !(find (crawl-bar h) "< climbs" 0))))
+
+; --- pennies: a thing that goes down leaves some, the ground carries more, and they
+; say something for themselves when you pick them up
+(: g (hand-g ())
+   _ (pin g 'ms [(mob-new 0 2 1)])
+   (fight i) (? (&& (i < 8) (g 'ms)) (crawl-turn g [1 0], fight (i + 1)) i)
+   _ (fight 0)
+   it (peep (g 'loot) (2 + 9 * 1) ())
+   _ (test (two? it) ('penny = <it) (0 < <>it))  ; it dropped them where it stood
+   n <>it
+   _ (crawl-turn g [1 0])
+   (says? t) (foldl (\ a k (|| a (find t (mutter k "pennies") 0))) 0 ^4)
+ (test (n = g 'p 'penny) (find (g 'msg) "pennies" 0) (says? (g 'msg))))
+
+; ..and a fresh floor is not miserly: every room bar your own carries a pile or more
+(: g (crawl-new 60 20 (wheel 3))
+ (test (#(g 'd 'rooms) <= #(keys (g 'loot)))))
+
 ; --- the whole game, generated: a seeded random walk holds every invariant ---
 ; the keys come out of a BOXED wheel state -- {wheel 99} boxes the wheel itself, whose
 ; roll answers () forever, and a walk of three hundred passes holds anything you like
@@ -293,7 +334,10 @@
          (|| (g 'over) (0 < g 'p 'hp))))
 
 ; --- the painter: one frame into a jug, glyphs and hues where they belong ---
+; the sign comes down first: it is laid OVER the frame, and a garden behind a box is
+; not what this is looking at
 (: g (crawl-new 60 20 (wheel 3))
+   _ (pin g 'sign ())
    f (crawl-frame g)
  (test
   (string? f)
