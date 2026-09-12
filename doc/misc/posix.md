@@ -68,7 +68,7 @@ processes, this surface answered against a ramfs.
 | `dup2`/`pipe`                  | `dup` `dup2` `pipe` (a pair of fds)                    |
 | `stat`/`mkdir`/`unlink`/readdir| `stat` `lstat` `statfs` `mkdir` `rmdir` `unlink` `readdir` `rename` `symlink` `readlink` `hardlink` `chmod` `chown` `utime` `umask` |
 | `getrusage`                    | `rusage` — `(rusage 0)` this process, `(rusage -1)` the children reaped |
-| `statx` — the birth time       | `birth` — `(birth path follow)`; `()` where the filesystem keeps none |
+| the birth time                 | `birth` — `(birth path follow)`; `()` where the filesystem keeps none |
 | `cwd` — `chdir`/`getcwd`       | `chdir` `cwd`                                           |
 | signals — `sigaction`/`kill`   | **the condition system**: `signal`, `sigfd`/`sigtake`, `still` |
 | environment                    | `getenv` `setenv` `environ`; cli.l parses argv          |
@@ -116,10 +116,18 @@ holding a path, which `df` lays out — LINUX's call and no one else's: the BSDs
 another struct, the syscall map leaves the row out, and one asks and hears `'enosys`. `rusage`
 is the same shape of question about cpu: `(user sys)` in microseconds, of this process (0) or of
 the children it has reaped (-1), which is how `time` prices a command it did not itself run.
-`birth` answers a file's creation time in nanoseconds, `()` where the filesystem keeps none —
-`statx(2)`, and therefore linux's, because `struct stat` has no field for one. **Its own call
-rather than a fifteenth seat in the stat tuple**: `du` and `ls` walk that tuple a million times
-a tree and owe nothing for a field only `stat`'s report reads.
+`birth` answers a file's creation time in nanoseconds, `()` where the filesystem keeps none.
+No `struct stat` here has a seat for one, so which call answers is the kernel's business and
+moonlibc's to know (`sys/birth.c`, one door, `__ai_osv` deciding): **the BSDs have carried it in
+`struct stat` since 2003 and it comes out of the stat they already do** — the twin holds it and
+the translators drop it — while linux, the one Unix that left it out, needs `statx(2)`. Each
+spells "none" differently AND EVERY SPELLING READS AS A DATE: freebsd writes VNOVAL, -1, which
+is 1969 (every devfs node); netbsd writes 0, which is 1970 (an FFSv1 inode has no field at all,
+and that is what its install images lay); linux says so in the mask. All three are measured on
+the osbox guests, and the nofollow bit is 0x200 on a BSD where linux's is 0x100 — lstat.c's
+trap, and this call's. **Its own call rather than a fifteenth seat in the stat tuple**: `du`
+and `ls` walk that tuple a million times a tree and owe nothing for a field only `stat`'s
+report reads.
 `openfd`'s mode 3 is O_CREAT|O_EXCL at 0600 — the one that FAILS on an existing name,
 which is what makes a `mktemp` a claim and not a guess. `spawn` answers a pid or the
 failure's nom, and a child that cannot exec `_exit(127)`s. `setenv` with a non-string value

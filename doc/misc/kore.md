@@ -325,10 +325,10 @@ tree has no ownership to tell about — so it is asked by `tally` and a world wi
   reason was real: the tuple had no access time, no change time and no device number, so a
   block would have printed the modify time three times over. The last five fields of the tuple
   are those facts, and they cost nothing — one `struct stat` already held them. The birth line
-  is the exception: `struct stat` has no field for one, so it is `statx(2)`'s own call through
-  the `birth` nif, asked once per file by this report alone and never by the `stat`/`lstat`
-  every tree walk leans on. Off Linux, and on a filesystem keeping no birth, it is the dash
-  GNU prints there too.
+  is the exception: no `struct stat` has a seat for one, so it is the `birth` nif's own call,
+  asked once per file by this report alone and never by the `stat`/`lstat` every tree walk
+  leans on. It answers on every kernel here — the BSDs out of the stat they already do, linux
+  through `statx(2)` — and on a filesystem keeping none it is the dash GNU prints there too.
 * **`%t`/`%T` are hex and the block's `Device type:` is decimal** — GNU's own split, and the
   only place the packed device word is taken apart. An unrecognised directive is a bare `?`.
 * **du counts `st_blocks`, which is allocation and not size** — a sparse file costs less than it

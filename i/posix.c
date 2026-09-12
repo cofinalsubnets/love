@@ -61,7 +61,6 @@
 # define LvHaveMount      1
 # define LvHaveNamespaces 1
 # define LvHaveStatfs     1   // linux's struct; the BSDs carry the name over another shape
-# define LvHaveStatx      1   // ..and the only call that answers a birth time
 #endif
 
 #if defined(LvHaveSignalfd)
@@ -845,28 +844,28 @@ static lvm(lvm_posix_statfs) {
  LvmCall(g, host_posix_statfs) }
 
 // (birth path follow) -> the file's creation time in nanoseconds | () where the
-//                  filesystem keeps none | a nom | 'badarg. struct stat has no field
-//                  for one, so this is statx(2) and therefore linux's: elsewhere the
-//                  map has no row and the answer is 'enosys, which `stat` prints as the
-//                  dash GNU prints on a filesystem with no birth to tell about.
-//                  ITS OWN CALL, not a fourteenth seat in the stat tuple, because du
+//                  filesystem keeps none | a nom | 'badarg. no struct stat here has a
+//                  seat for one, so which call answers is the kernel's business and
+//                  moonlibc's to know: __ai_birth reads the BSDs' own stat and linux's
+//                  statx, and the () lane is every way a filesystem can keep none.
+//                  ITS OWN CALL, not a fifteenth seat in the stat tuple, because du
 //                  and ls walk that tuple a million times a tree and owe nothing for a
 //                  field only this one report reads.
-#if defined(LvHaveStatx)
+#if defined(__moonlibc__)
 ai_noinline static word host_posix_birth(struct ai *g, word pw, word fw) {
  char const *p = str_c(pw);
  if (!p) return ai_badarg(g);
- struct statx sx;
- int fl = (charmp(fw) && getcharm(fw)) ? 0 : AT_SYMLINK_NOFOLLOW;
- if (statx(AT_FDCWD, p, fl | AT_STATX_SYNC_AS_STAT, STATX_BTIME, &sx)) return ai_err(g, errno);
- return sx.stx_mask & STATX_BTIME
-  ? putcharm((intptr_t) sx.stx_btime.tv_sec * 1000000000 + sx.stx_btime.tv_nsec)
-  : ZeroPoint; }
+ struct timespec b;
+ int r = __ai_birth(p, charmp(fw) && getcharm(fw), &b);
+ return r < 0 ? ai_err(g, errno)
+      : r     ? ZeroPoint
+      : putcharm((intptr_t) b.tv_sec * 1000000000 + b.tv_nsec); }
 static lvm(lvm_posix_birth) {
  Sp[1] = host_posix_birth(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 #else
-// a linux mechanism; elsewhere the name stands and refuses.
+// moonlibc is where the three kernels are known; the bootstrap love0 is not it, and a
+// build that lays the artifact has no birth to report on. the name stands and refuses.
 static lvm(lvm_posix_birth) { Sp[1] = ai_err(g, ENOSYS); ai_musttail return Nextp(1, 1); }
 #endif
 

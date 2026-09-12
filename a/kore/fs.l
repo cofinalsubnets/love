@@ -650,7 +650,7 @@
    (ust-block p st L?)
     (: sz <st md <>>st ns (st 3)
        kind (& md 61440)
-       rdev (ust-at st 12)
+       dev (ust-at st 11) rdev (ust-at st 12)
        dev? ((kind = 8192) || (kind = 24576))
        ; -L followed, so a link's own mode can only be here when it did not: the kind
        ; alone says whether there is an arrow to draw, and asks readlink only then
@@ -665,8 +665,8 @@
                 + "Blocks: " + (urpad 10 (num (ust-at st 7)))
                 + " IO Block: " + (urpad 6 (num (ust-at st 13)))
                 + " " + (ust-kind md sz)))
-       _ (line ("Device: " + (num (? (charm? (ust-at st 11)) (ust-major (ust-at st 11)) ()))
-                + "," + (num (? (charm? (ust-at st 11)) (ust-minor (ust-at st 11)) ()))
+       _ (line ("Device: " + (num (? (charm? dev) (ust-major dev) ()))
+                + "," + (num (? (charm? dev) (ust-minor dev) ()))
                 + string 9 + "Inode: " + (urpad 10 (num (ust-at st 8)))
                 + "  Links: " + (? dev? (urpad 5 (num (ust-at st 6))) (num (ust-at st 6)))
                 ; the block spells a device type in DECIMAL; only %t and %T are hex
