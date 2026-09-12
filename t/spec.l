@@ -700,10 +700,11 @@
 (:: 'unless (a \ ['? <a 0 <>a]))
 (test
  ('ok = (unless 0 'ok)) (0 = (unless 1 'ok)) (3 = (&& 1 2 3)) !(&& 1 0 3)
- ; the false answer is the unit, never a 0-fossil: a && with any failing
- ; operand, or a || with none passing, reads () -- blue like 0, but
- ; nothing, not a number
- ((() && 5) = ()) ((&& 1 0 3) = ()) ((() || ()) = ()) ((() || 0) = ())
+ ; a connective answers one of its operands, never an invented value: && the first
+ ; falsy operand, || the first truthy one, either falling through to the last. so a
+ ; falsy answer carries which operand failed, and -1 stays -1 rather than flattening
+ ((() && 5) = ()) ((&& 1 0 3) = 0) ((() || ()) = ()) ((() || 0) = 0)
+ ((-1 && 5) = -1) ((5 && -1) = -1) ((5 && 0) = 0) ((0 || -1) = -1)
  (2 = (|| 0 2 3)) ('(1 2 3) = [1 2 3]) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
  (1 = (quote 1)) ('a = (quote a))                                  ; quote, the macro spelling of '
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (x \ x * 2)) 4))

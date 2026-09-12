@@ -2149,15 +2149,15 @@
           hasbody (1 = (#>form % 2))                                               ; as delet-body reads it: even is body-less
           pairs2 (map (pr \ <pr . (? (two? <pr) (delet-body >pr) >pr)) pairs)
           (': . (? hasbody (unpair pairs2 body) (cbflat pairs2)))))                      ; cbflat keeps a body-less `:` body-less
-   ; --- booleans & clamps (debool): (&& a b)=(? a b 0), (|| a b)=(? a a (? b b 0)),
-   ;     (abs x)=(? (x < 0) (0 - x) x) -- exact, because &&/|| carry the floor-clamp semantics that make
-   ;     them these forms and not the looser (? a b a). ||/abs duplicate their operand, so they reuse
-   ;     delet's dcheap? guard and leave a call-valued form un-lowered. bottom-up, so nested compounds
+   ; --- booleans & clamps (debool): (&& a b)=(? a b a), (|| a b)=(? a a b),
+   ;     (abs x)=(? (x < 0) (0 - x) x) -- a connective answers one of its operands, so both dup theirs
+   ;     and reuse delet's dcheap? guard, leaving a call-valued form un-lowered. bottom-up, so nested compounds
    ;     collapse; runs inside autogroup, so autonat still sees a raw (&& (it < L) ..) escape test.
    ;     `min`/`max` are array reducers, not binary scalar ops -- (min 7 3) is (7 3), the tower -- so a
    ;     binary (min a b) is no language feature and is not lowered here.
-   (dband as) (? (atom? as) 1  (atom? >as) <as  ['? <as (dband >as) 0])    ; (&& a R..) = (? a (&& R..) 0)
-   (dbor as)  (? (atom? as) 0  !(dcheap? <as) ('|| . as)                             ; (|| a R..) = (? a a (|| R..)); a dup'd, so guard
+   (dband as) (? (atom? as) 1  (atom? >as) <as  !(dcheap? <as) ('&& . as)            ; (&& a R..) = (? a (&& R..) a); a dup'd, so guard
+                 ['? <as (dband >as) <as])
+   (dbor as)  (? (atom? as) 0  (atom? >as) <as  !(dcheap? <as) ('|| . as)            ; (|| a R..) = (? a a (|| R..)); a dup'd, so guard
                  ['? <as <as (dbor >as)])
    (dbabs x) (? !(dcheap? x) ['abs x] ['? ['< x 0] ['- 0 x] x])                           ; (abs x) = (? (x < 0) (0 - x) x)
    ; an `@` clause's odd operands are patterns: `(b && lx-ws? b)` there is a guard, and a lowered `&&`

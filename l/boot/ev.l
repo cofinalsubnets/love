@@ -190,7 +190,7 @@
   ; a cond in 8 sites out of 2497 -- those runtime adjacencies come from branch joins and
   ; let bodies, where the cell after the accessor was not yet the cond. Two opcodes that
   ; fire ~never are worse than none.
-  (cfuse2 h h2) (h2 == lvm_cond && h == lvm_two_ && lvm_argtwocond)
+  (cfuse2 h h2) (h2 == lvm_cond && h == lvm_two_ ? lvm_argtwocond ())   ; the () miss is the guard's, so spell it
   (fuse a o t sp pc tc gs x k n)
    (: tail (k (2 + n)) h (pick 0 tail)
       cf (gs = 1 ? (cfuse h))              ; arg only; () when the head is not a known consumer

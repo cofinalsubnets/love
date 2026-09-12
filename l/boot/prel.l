@@ -211,10 +211,12 @@
 )
 
 (: l (foldr (\ a l (. (.) (. a (. l ())))) ()) (:: 'list l))
-; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
-; reads (). test a result with ? or ==, not arithmetic.
-(:: '&& (\ l (: (and l) (? (two? (cup l)) (list '? (cap l) (and (cup l)) ()) (cap l)) (? (two? l) (and l) 1))))
-(:: '|| (\ l (: (or l) (? (two? l) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) ()) (or l))))
+; both are connectives: they answer one of their operands, never an invented value -- && the
+; first falsy one, || the first truthy one, either falling through to the last. an operand that
+; is a form is bound so it evaluates once. a falsy answer is whatever the operand was, so a
+; caller wanting a particular miss value must spell it (see ev.l's cfuse2).
+(:: '&& (\ l (: (and l) (? (two? (cup l)) (: y (nom 0) (list ': y (cap l) (list '? y (and (cup l)) y))) (cap l)) (? (two? l) (and l) 1))))
+(:: '|| (\ l (: (or l) (? (two? (cup l)) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) (cap l)) (? (two? l) (or l) 0))))
 ; end weighting: the head argument moves to the tail, so the form a long body would
 ; have buried -- a `:` body, a `?` fallthrough -- is read first instead of last.
 ; a `:` these build cannot carry a destructuring binding head: the pattern rewrite
