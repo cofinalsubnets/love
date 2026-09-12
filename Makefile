@@ -168,12 +168,19 @@ moon0_dep = b/mooncc0.image
 # image is never baked and no love0 is compiled -- the tree builds with nothing but the
 # binary that carried it. lcat runs on it bare: the prel is already there. rtlove is the
 # love that runs a moon-side tool (mkrt) either way.
+# the cat that hands an UNBAKED love holo: love0 carries no assembler and mksrc, mkblob and
+# mksys all want one. a baked love finds it itself, so a driving LOVE takes none -- and $m
+# never did: laying the source archive is 830 MB through the preload and 56 MB without it.
+holocat = -l b/.mksys-cat.l
+holocat_dep = b/.mksys-cat.l
 ifdef LOVE
 moon0 = $(LOVE) mooncc $(GCDBG)
 moon0_dep =
 rtlove = $(LOVE)
 rtlove_dep =
 lcat_love = $(LOVE)
+holocat =
+holocat_dep =
 # ..and the tool lane with them: a rule that RUNS a love-written tool (the man pages, the
 # fonts, the page) wants a working love, not this tree's. naming one says which, and mdep
 # is the prerequisite that goes with it -- there is nothing to wait for.
@@ -227,10 +234,10 @@ $$($(1)_math_o): $$($(2))/moonlibc/%.o: a/moon/lib/moonlibc/%.c $$(moon0_dep)
 	@$$($(3)) -Ia/moon/include -c $$< $$@
 # the machine tail rides the host's own cat, one cut for every consumer; only the entry
 # names the arch.
-$$($(2))/sys.o: b/.mksys-cat.l $$(love0)
+$$($(2))/sys.o: $$(holocat_dep) $$(love0)
 	@echo 'HOLO	'$$@
 	@mkdir -p $$(dir $$@)
-	@LOVE_NO_IMAGE= $$(love0) -l b/.mksys-cat.l -q -e "((cite 'moon 'mksys-$$($(4))) \"$$@\")" && test -s $$@
+	@LOVE_NO_IMAGE= $$(love0) $$(holocat) -q -e "((cite 'moon 'mksys-$$($(4))) \"$$@\")" && test -s $$@
 endef
 
 moon_d = $(ho)/moon
@@ -300,6 +307,10 @@ crewfiles = a/sb/merge.l a/sb/http.l a/sb/sb.l a/kiosko/kiosko.l \
   a/rove/rove.l a/rove/story.l a/rove/design.l \
   a/lux/wire.l a/doom.l a/lupa.l a/mc.l
 korefiles = $(kore_head) $(holo_obj) l/holo/copy.l $(kore_net)
+# the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
+# ambient toolchain, so the one it carries is the only one there is -- `love seed` and
+# `cc` on inle are this line. the backends ride because the baked set is x64/a64/rv64.
+kcrewfiles = $(holo_be) l/holo/gas.l $(moon_mid) $(crewfiles)
 moonfiles = a/kore/text.l a/kore/u.l a/kore/asbook.l $(holo_be) l/holo/gas.l $(holo_obj) $(moon_mid)
 $(ho)/.mooncc-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
@@ -365,9 +376,9 @@ $(dist_source): force_src $(love0)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) u/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
-b/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $(love0)
+b/src.o: $(dist_source) u/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(love0) -l b/.mksys-cat.l u/mksrc.l $(dist_source) $@ $(hosta)
+	@$(love0) $(holocat) u/mksrc.l $(dist_source) $@ $(hosta)
 
 # this roster must cover what mcsrctext walks (a/moon/moon.l): the carried archives are
 # stamped with an identity hashed over include/ and lib/ ENTIRE, so a source file the roster
@@ -390,12 +401,16 @@ ifeq ($(filter $(xa),x64 a64 rv64),)
 $(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64)
 endif
 xd = b/x-$(xa)
-moonx = $(moon0) -t $(xa)
+# the OS the cross lay is for. empty is this machine's, which mooncc reads off love-os --
+# the answer on every hosted seat, and no answer at all on inle, where we ARE the kernel.
+# a seed from such a seat names one (a/source.l) and it rides in here.
+xos ?=
+moonx = $(moon0) -t $(xa) $(if $(xos),-os $(xos))
 $(eval $(call moonlane,x,xd,moonx,xa))
 
-$(xd)/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $(love0)
+$(xd)/src.o: $(dist_source) u/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(love0) -l b/.mksys-cat.l u/mksrc.l $(dist_source) $@ $(xa)
+	@$(love0) $(holocat) u/mksrc.l $(dist_source) $@ $(xa)
 $(xd)/moonlibc.o: $(rt_slice) u/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) u/mkrt.l $@ $(xa)
@@ -547,10 +562,10 @@ $(k_odir)/moonlibc.o: $(rt_slice) u/mkrt.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m u/mkrt.l $@ $a
-$(k_odir)/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $m
+$(k_odir)/src.o: $(dist_source) u/mksrc.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l b/.mksys-cat.l u/mksrc.l $(dist_source) $@ $a
+	@LOVE_NO_IMAGE= $m u/mksrc.l $(dist_source) $@ $a
 $(k_pie): $(k_o) $m
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
@@ -594,7 +609,7 @@ b/lib/korelist.h: Makefile
 # a/rove/, xwire in a/lux/wire.l, and sb spans three that must load in order.
 b/lib/crewlist.h: Makefile
 	@mkdir -p b/lib
-	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(crewfiles)' > $$tf; \
+	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(kcrewfiles)' > $$tf; \
 	 $(note)
 
 # every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
@@ -659,10 +674,10 @@ $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-$(k_odir)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l b/.mksys-cat.l $m
+$(k_odir)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l b/.mksys-cat.l u/mkblob.l $< $@ doom_wad $a
+	@LOVE_NO_IMAGE= $m u/mkblob.l $< $@ doom_wad $a
 # and the same set on the KART lane, which is where the host's own kernel is
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
@@ -674,10 +689,10 @@ $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
-$(moon_d)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l b/.mksys-cat.l $(love0)
+$(moon_d)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(love0) -l b/.mksys-cat.l u/mkblob.l $< $@ doom_wad $(hosta)
+	@LOVE_NO_IMAGE= $(love0) $(holocat) u/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
 $(ho)/love.raw $(ho)/love.cand.raw: $(kart_o) b/.doom.flag
@@ -711,10 +726,10 @@ $(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $m
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.
-$(k_tail_o): b/.mksys-cat.l $m
+$(k_tail_o): $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m -l b/.mksys-cat.l -q -e "((cite 'moon 'mksys-$a) \"$@\")" && test -s $@
+	@$m -q -e "((cite 'moon 'mksys-$a) \"$@\")" && test -s $@
 
 k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x64,$a),$(filter x64,$(hosta))),-enable-kvm -cpu host,)
 # the sound card: an HDA controller with one output codec, on the host's own audio.
@@ -1052,10 +1067,10 @@ site-wasm: wasm
 kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/cleat_8x16.c $R/l/quay/paint.c \
   $(k_free_c) $(host_c) $R/i/wasm/arch.c
 kw_h = $(love_h) $R/i/k.h $R/i/ustar.h $R/i/asmops.h $R/i/wasm/asmops.h
-b/wasm/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $m
+b/wasm/src.o: $(dist_source) u/mksrc.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l b/.mksys-cat.l u/mksrc.l $(dist_source) $@ wasm
+	@LOVE_NO_IMAGE= $m u/mksrc.l $(dist_source) $@ wasm
 b/love-wasm.wasm: $(kw_c) $(kw_h) b/wasm/src.o b/lib/baked.h b/lib/distlist.h \
   b/lib/korelist.h b/lib/crewlist.h b/lib/love_version.h $(mooncc_dep)
 	@echo 'MOON	'$@
@@ -1065,9 +1080,11 @@ b/love-wasm.wasm: $(kw_c) $(kw_h) b/wasm/src.o b/lib/baked.h b/lib/distlist.h \
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker
 # hands it to k_start; a stale one is refused and the egg bakes, the host's own law.
+# the bake's own RAM: the crew warm plus the image being written is more than the
+# terminal's default span, and the fault it takes there is a wild write in gen_major.
 b/wasm/love-wasm.image: b/love-wasm.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
 	@echo 'BAKE	'$@
-	@$(NODE) i/wasm/inle.mjs --lift /love.image:$@ b/love-wasm.wasm bake /love.image < /dev/null > b/wasm/bake.log 2>&1 \
+	@INLE_RAM=1024 $(NODE) i/wasm/inle.mjs --lift /love.image:$@ b/love-wasm.wasm bake /love.image < /dev/null > b/wasm/bake.log 2>&1 \
 	   || { cat b/wasm/bake.log; exit 1; }
 
 clean:

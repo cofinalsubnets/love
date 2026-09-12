@@ -28,6 +28,10 @@
 
    ; text -> the byte list `raw` takes. Built from the tail so the walk is a tail call
    ; and the list comes out in order; ~0.25 s over a 3.6 MB archive.
+   ; the ELF lane does not want it: there a `raw` operand may hold a BLOB -- the string
+   ; itself, one item carrying every byte (holo.l's item-len) -- and the archive rides
+   ; through lay, the walk and the write without ever becoming cells. this is still the
+   ; wasm lane's shape, where the data layer places a byte at a time.
    (mksrc-bytes s i acc) (i < 0 ? acc (mksrc-bytes s (i - 1) (s i . acc)))
    ; a little-endian 8-byte word, the width i/src.c reads it at
    (mksrc-le8 v i acc) (i = 8 ? acc (mksrc-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
@@ -67,7 +71,7 @@
        n #s
        _ (n < 1 ? (mksrc-die (src + " is empty")))
        forms ['(label ai_srcgz_len) ['raw (mksrc-le8 n 0 ())]
-              '(label ai_srcgz)     ['raw (mksrc-bytes s (n - 1) ())]]
+              '(label ai_srcgz)     ['raw (arch = 'wasm ? (mksrc-bytes s (n - 1) ()) [s])]]
        (arch = 'wasm ? (mksrc-wasm dst forms)
         (write-bytes dst (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms))))
 

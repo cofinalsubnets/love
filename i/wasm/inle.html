@@ -5,7 +5,9 @@
      b/love-wasm.wasm, so `make b/love-wasm.wasm` first. coi.js makes the page
      cross-origin isolated on a static host, which SharedArrayBuffer wants.
      ?boot= is the boot line, ?ram= the RAM in MiB, ?cols= the fewest columns the
-     console should have -- which is what settles how large a glyph is drawn. -->
+     console should have -- which is what settles how large a glyph is drawn.
+     the machine takes its RAM at boot and never gives it back, so the default is a
+     shell's and not a build's: `love seed` wants ?ram=1024, and ooms under 768. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">

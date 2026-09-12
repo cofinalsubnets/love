@@ -84,13 +84,16 @@
 
    ; one member: label len, label bytes, zero-padded so the next len lands
    ; 8-aligned (a riscv core may trap an unaligned word; the pad is free)
+   ; the archive rides as a BLOB -- the string itself, one item holding every byte
+   ; (holo.l's item-len) -- so a megabyte member costs a cell and not a million.
    (rt-forms nm s)
     (: n #s
        pad ((8 - (n & 7)) & 7)
        [['label (name ("ai_rtgz_" + nm + "_len"))]
         ['raw (rt-le8 n 0 ())]
         ['label (name ("ai_rtgz_" + nm))]
-        ['raw (rt-bytes s (n - 1) (rt-zeros pad ()))]])
+        ['raw [s (rt-zerostr pad "")]]])
+   (rt-zerostr k acc) (k < 1 ? acc (rt-zerostr (k - 1) (string 0 + acc)))
 
    (mkrt arch dst)
     ; every archive arch joins, not just the object's: the image bakes the

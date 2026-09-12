@@ -1505,10 +1505,12 @@
                    (sh-onpath? w))
    ; can this seat run the word at all? PATH answers wherever there is a seat to
    ; exec -- a hosted love resolves a word to a file. a seat with none never execs:
-   ; the kernel's spawn hands the word to the verb registry, so that is the authority
-   ; there, and asking PATH would call every tool it carries missing. autonomous
-   ; mode knows its own verbs the same way.
-   (sh-known? w) (? !(sh-seat ()) (sh-verbw? w)
+   ; the kernel's spawn hands a bare word to the verb registry and a spelled path to
+   ; the file at it, which is the same split `word` makes, so both are asked here --
+   ; the registry alone would call every script on such a machine missing, and PATH
+   ; would call every tool it carries missing. autonomous mode knows its verbs the same way.
+   (sh-known? w) (? !(sh-seat ())
+                      (? (sh-slashed? w || sh-dotl? w) (two? (stat w)) (sh-verbw? w))
                     (!(sh-greg? 0) && sh-verbw? w) 1
                     (two? (sh-whichp w)))
    ; the argv a spawn execs: autonomous mode spawns this binary under a bare verb

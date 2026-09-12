@@ -20,7 +20,7 @@
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
-  test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
+  test_seedwasm test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_xfixpoint uuhomgen uukind uumx uusplgen \
@@ -1261,6 +1261,33 @@ test_kernel_wasm: host
 	@grep "tests pass" b/wasm/kernel.log
 	@echo TEST t/kernel/glass.l "(the console's grid: real pixels in, rows and columns out)"
 	@sh $(R)/t/gate/glass.sh $(NODE) $(R)/b/love-wasm.wasm b/wasm/love-wasm.image b/wasm/glass.log
+endif
+
+# test_seedwasm -- `love seed x64` ON THE WASM SEAT: the machine lays the source it
+# carries, drives cook with the artifact itself as the bootstrap (LOVE=, so no love0 is
+# compiled -- there is no seat here to run one) and cross-builds a hosted x64 love with
+# its own mooncc. nothing under it but wasm: no cc, no shell, no toolchain. the lift
+# brings the egg out and, on an x64 box, it has to run.
+# RAM: the seat's collector is bounded at an eighth of the machine (i/kmain.c), so the
+# machine has to be big enough that an eighth of it holds the largest live set. that is
+# selfpack's, laying the dist tarball: 512 ooms there, 768 carries it, and this is the
+# round number above. ~6 minutes. opt-in by name -- the compile set is the whole
+# artifact, interpreted.
+ifeq ($(NODE),)
+test_seedwasm:
+	@echo "test_seedwasm: skipped (needs node)"
+else
+test_seedwasm: host
+	@$(MAKE) -s b/wasm/love-wasm.image
+	@echo TEST "love seed x64 (the wasm seat, nothing under it)"
+	@rm -f b/wasm/love-x64
+	@INLE_RAM=1024 $(NODE) $(R)/i/wasm/inle.mjs --lift /s/love-x64:b/wasm/love-x64 \
+	   --image b/wasm/love-wasm.image $(R)/b/love-wasm.wasm seed x64 /s \
+	   < /dev/null > b/wasm/seed.log 2>&1; \
+	 grep -q "a raw egg for x64" b/wasm/seed.log && test -s b/wasm/love-x64 \
+	   || { tail -20 b/wasm/seed.log; echo "FAIL test_seedwasm"; exit 1; }
+	@chmod +x b/wasm/love-x64
+	@$(if $(filter x64,$(hosta)),b/wasm/love-x64 -v,echo "  the egg is x64 and this box is $(hosta): laid, not run")
 endif
 
 # the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine, and
