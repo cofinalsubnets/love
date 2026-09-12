@@ -1,44 +1,16 @@
 ; a/sb/sb.l -- svalbard: the patch-set vcs (doc/misc/sb.md the interface,
-; t/patch.l + t/proof/rocq/patch.v the laws). this cut
-; is the MVP's local half: `record` (working changes -> a patch in the store),
-; `log`, `diff`; `sync` rides the same store next (patches + blobs are immutable
-; content-addressed files, so union = copy what's missing + re-derive tips).
-;
-; the store (.sb/ at the working root):
-;   blob/<sha256>    file content, immutable
-;   patch/<sha256>   one patch, immutable -- (patch (note S) (time MS)
-;                    (deps ID..) (hunks (PATH OLD NEW)..)), id = sha256 of the
-;                    file's bytes; hunks path-sorted, deps sorted, so the text
-;                    is deterministic and the address honest
-;   tips             the maximal patches (the growth ends) -- (ID ..)
-;   snap             the recorded state -- ((PATH CHASH PATCHID) ..) path-sorted
-;   ignore           optional: one path prefix per line, atop (".sb" ".git" "b")
-;
-; a hunk is the proven named-slot patch (t/patch.l's chg): slot = the path,
-; context = the old content hash, value = the new -- () for absent (a birth or a
-; death). patches touching disjoint paths commute (L3a), so sync's union needs
-; no order; removal is a new patch whose hunk goes to () (the inverse-patch law:
-; the set only grows). deps = for each touched path, the patch that wrote its
-; context. finer-than-file hunks slot in later (the sequence slices are proven
-; too); the store format doesn't care what a hunk's old/new mean.
-;
-; loads after a/kore/text.l (lines) + a/kore/diff.l (udiff) in the svalbard
-; cat -- the floors ride module 'kore, read here through the scoped use. every
-; lane rides module 'sb: the engine binds in the module, never the cat's scope;
 ; the seat form at the tail is the only thing that fires as a program.
 (module 'sb
 (borrow 'kore)
 (borrow 'posix)
 (:
    ; --- files ---
-   ; presence is the (1 _) wrapper, content is always a string: an empty file
-   ; slurps to () -- the zero point -- and `+ ""` folds it back onto the shared
-   ; identity, so a 0-byte file hashes honestly instead of to ().
-   ; the port is minded, not closed at the tail: a torn read raises, and the close has
-   ; to ride that way out too or the fd sits until a major compact.
+   ; an empty file slurps to (), so `+ ""` folds it back onto the string identity and a
+   ; 0-byte file hashes honestly. the port is minded, not closed at the tail: a torn read
+   ; raises, and the close has to leave that way too or the fd sits until a major compact.
    (look p) (: q (open p "r")                                            ; (1 text) | ()
                  (? (hot? q) (mind (_ \ (: s (slurp q) [1 (s + "")])) () (_ \ close q)) ()))
-   (lay p s) (: q (open p "w") (? (hot? q) (mind (_ \ (: _ (say q s) 1)) () (_ \ close q)) 0))
+   (lay p s) (: q (open p "w") (? (hot? q) (mind (_ \ (say q s, 1)) () (_ \ close q)) 0))
    (form p) (: q (open p "r")                                 ; the file's one form | ()
                   (? (hot? q) (mind (_ \ (: r (sound (slurp q))
                                      d (two? r ? <r)
@@ -52,21 +24,12 @@
    ; the patch-set ID: the name of a head DAG state. the tips are a set -- sort
    ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (show (sort tp)))
-   (blob h) (: t (look (".sb/blob/" + h)) (? (two? t) <>t ()))
+   (blob h) (: t (look (".sb/blob/" + h)) (two? t ? <>t))
    (keep s) (: h (sha256 s) _ (lay (".sb/blob/" + h) s) h)
    (patch id) (form (".sb/patch/" + id))
    (fld f k) (:- (go >f) (go m) (? (one? m) () (two? <m && <<m = k) ><m (go >m)))
 
    ; --- ignores: one rule a line in .sbignore, over the built-ins. a rule holding
-   ;     * ? [ is a glob against the whole relative path -- `*` crosses `/`, so
-   ;     `*.vo` catches one at any depth and wants no basename rule of its own.
-   ;     every other rule is a path prefix at a segment boundary: `out` takes out
-   ;     and b/love, never output. blank lines and # comments are skipped.
-   ;     u/selfpack.l reads these too, so the dist cut and the walk agree.
-   ; the built-ins, and every one of them is a DIRECTORY: sb's own store, git's, and the
-   ; build tree. the walk asks them only of a directory, so a file that happens to be
-   ; called b is a file -- gitignore spells this rule `/b/`. rules are matched whole or
-   ; at a segment boundary from position 0, which is the leading slash already.
    igsdir '(".sb" ".git" "b")
    ig-glob? (cite 'glob 'anyglob)
    ig-match (cite 'glob 'match)
@@ -115,22 +78,21 @@
     (: _ (mk ())
        sn (snap ())
        st {}                                             ; path -> (chash pid)
-       _ (: (go m) (? (two? m) (: _ (pin st <<m ><m) (go >m)) ()) (go sn))
+       _ (: (go m) (? (two? m) (pin st <<m ><m, go >m) ()) (go sn))
        hunks (scan (sort (walk () (igs ()) ())) sn ())
        (? !(two? hunks) (: _ (puts "sb: nothing to record\n") ())
           (: ; the blobs: keep every hunk's new content
              _ (: (go m) (two? m ?  (: h <m _ (? !<>>h () (keep <>(look <h))) (go >m)))
                   (go hunks))
              ; the deps: the patches whose writes this one's contexts read
-             deps (: (go m acc)
-                      (? !(two? m) (sort acc)
-                         (: old <><m
-                            (? !old (go >m acc)
-                               (: e (peep st <<m ())
-                                  pid (? (two? e) <>e ())
-                                  (? (!pid || elem pid acc) (go >m acc)
-                                     (go >m (pid . acc)))))))
-                      (go hunks ()))
+             deps (:- (go hunks ()) (go m acc)
+                   (? (one? m) (sort acc)
+                    (: old <><m
+                     (? !old (go >m acc)
+                      (: e (st <<m)
+                         pid (two? e ? <>e)
+                       (!pid || elem pid acc ? (go >m acc)
+                        (go >m (pid . acc))))))))
              ptext (show (list 'patch (list 'note note) (list 'time (clock 0))
                                ('deps . deps) ('hunks . hunks)))
              pid (sha256 ptext)
@@ -160,13 +122,10 @@
    (sb-log _)
     (: tp (tips ())
        (go m acc)
-        (? (one? m) acc
-           (: id <m f (patch id)
-              (? (one? f) (go >m acc)
-                 (go >m (ins (list <(fld f 'time) id
-                                      <(fld f 'note)
-                                      #(fld f 'hunks))
-                                acc)))))
+        (one? m ? acc
+         (: id <m f (patch id)
+          (one? f ? (go >m acc)
+           (go >m (ins [<(fld f 'time) id <(fld f 'note) #(fld f 'hunks)] acc)))))
        es (go (readdir ".sb/patch") ())
        (pr m)
         (two? m ?
@@ -205,11 +164,6 @@
        (pr hunks 0))
 
    ; --- sync: union a peer nest's store. blobs + patches are immutable and
-   ;     content-addressed, so the union is just "copy what's missing"; then
-   ;     re-derive tips + snap from the whole patch set (order-free -- the DAG is
-   ;     a pure function of its patches) and materialize the merged snap onto a
-   ;     clean working tree. peer = a directory holding a .sb/ (a peer or a
-   ;     cutting); same-path divergence warns and the topo-latest write wins ---
    (dirty _) #(scan (sort (walk () (igs ()) ())) (snap ()) ())
    ; one direction of the store exchange: copy the sha256-named files `to` lacks,
    ; verifying every address on the way. a nest root is "." or a peer path.
@@ -228,30 +182,20 @@
                        (lay (td + h) <>t) (go >m (n + 1) bad)
                        (go >m n (bad + 1)))))))
        (go (readdir fd) 0 0))
-   ; bring this nest to the state a given patch set implies: re-derive tips +
-   ; snap over those ids and materialize. cwd-relative, so it settles whichever
-   ; nest we stand in -- both ends of a sync run it, over the whole store. the
-   ; ids are a parameter because the tree is a pure function of a patch set, so
-   ; realizing a subset is the same fold with a shorter list -- which is all
-   ; `apply` is. answers (npatches nfiles conflicts)
-   ; the divergence report a settle owes its caller: a clean merge is news, a
-   ; marker is a stop. answers how many are unresolved, so the caller's exit code
-   ; can say so -- sync and apply both settle, so both tell it the same way.
+   ; bring this nest to the state a given patch set implies
    (tell cfs)
     (: (go m n) (? (one? m) n
           (: e <m p <e k <>e
-             _ (say (? (0 = k) out err)
-                    ("sb: " + (? (0 = k) "merged " "CONFLICT in ") + p + " -- " + <>>e + "\n"))
-             (go >m (? (0 = k) n (n + 1)))))
+             _ (say (k @ 0 out err)
+                    ("sb: " + (k @ 0 "merged " "CONFLICT in ") + p + " -- " + <>>e + "\n"))
+             (go >m (k @ 0 n (n + 1)))))
        (go cfs 0))
    (settle ids)
     (: oldsnap (snap ())
        _ (lay ".sb/tips" (show (derive-tips ids)))
        dr (derive-snap ids)
        newsnap <dr
-       ; the derive replays the whole set every time, so a merge settled long ago
-       ; recomputes and would be announced forever: a clean merge is news only
-       ; when it moved the file this time. an unresolved conflict always is.
+       ; the derive replays the whole set every time
        ix (: (go m t) (two? m ? (pin t <<m <><m, go >m t) t))
        op (ix oldsnap {}) np (ix newsnap {})
        cfs (filter (e \ 0 < <>e || op <e != np <e) <>dr)
@@ -282,14 +226,7 @@
               (: _ (: (mk m) (two? m ? (pin have <m 1, mk >m)) (mk b))
                  (pass (acc + b)))))
        (pass ()))
-   ; --- a diverged write: two patches wrote one path from a shared base. the
-   ;     base is free -- the incoming hunk names the content hash it expected --
-   ;     so the three-way merge has all three sides in the store and most
-   ;     divergence resolves itself (a/sb/merge.l). answers
-   ;     (chash nconflicts note): nconflicts 0 is a clean merge, and the note is
-   ;     what the report tells. a side that is absent (a delete meeting an edit)
-   ;     or binary cannot line-merge: keep the content, never the deletion, and
-   ;     call it a conflict -- the loser stays addressable in the store ---
+   ; --- a diverged write: two patches wrote one path from a shared base
    (bin? s) (: n #s (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
    (bl h) (? !h '(1 "") (look (".sb/blob/" + h)))        ; (1 text) | () -- presence, not net
@@ -309,27 +246,25 @@
                     [mh n (show n + " region" + (? (1 = n) "" "s") + " left in markers")]))))))
    (derive-snap ids)                                          ; fold the DAG -> (snap conflicts)
     (: order (topo ids) snap {} cf {}
-       _ (: (go m) (? (one? m) ()
+       _ (:- (go order) (go m) (? (one? m) ()
                (: pid <m f (patch pid)
-                  _ (: (h1 hs) (? (one? hs) ()
+                  _ (:- (h1 (fld f 'hunks)) (h1 hs) (? (one? hs) ()
                           (: h <hs p <h old <>h nw <>>h
                              cur (snap p) curh (two? cur ? <cur)
                              curpid (two? cur ? <>cur)
                              _ (? (curh = old || nw = curh)    ; the expected base, or convergent
-                                  (: _ (pull cf p 0)               ; a later patch can settle an earlier clash
-                                     (? !nw (pull snap p 0) (pin snap p (list nw pid))))
+                                  (pull cf p 0,               ; a later patch can settle an earlier clash
+                                   (!nw ? (pull snap p 0) (pin snap p [nw pid])))
                                   (: m (mend old curh nw curpid pid)
-                                     _ (pin snap p (list <m pid))
-                                     _ (pin cf p (list <>m <>>m))
-                                     ()))
-                             (h1 >hs)))
-                       (h1 (fld f 'hunks)))
-                  (go >m)))
-            (go order))
+                                     (pin snap p [<m pid],
+                                      pin cf p [<>m <>>m],
+                                      ())))
+                             (h1 >hs))))
+                  (go >m))))
        (: (em ps a) (? (one? ps) (rev a)
-            (: p <ps e (peep snap p ()) (em >ps (list p <e <>e . a))))
+            (: p <ps e (peep snap p ()) (em >ps [p <e <>e . a])))
           (cm ps a) (? (one? ps) (rev a)
-            (: p <ps e (peep cf p ()) (cm >ps (list p <e <>e . a))))
+            (: p <ps e (peep cf p ()) (cm >ps [p <e <>e . a])))
           [(em (sort (keys snap)) ()) (cm (sort (keys cf)) ())]))
    (mkparents p)                                              ; mkdir every "/"-prefix of a nested path
     (:- (go 0) (go i) (i < #p ? (p i @ 47 (mkdir (snip p 0 i) 493), go (i + 1))))
@@ -347,20 +282,7 @@
               (: p <<m (? (peep np p 0) (go >m n) (: _ (unlink p) (go >m (n + 1))))))
             (go oldsnap 0))
        (w + d))
-   ; --- the http remote: pull only. the store is content-addressed and
-   ;     immutable, so a remote is a plain static file tree and every fetch is a
-   ;     cacheable get on a name we already know, sha256-verified on arrival.
-   ;
-   ;     there is no listing endpoint and none is needed: a patch is
-   ;     self-describing. start at /tips, and each patch names its `deps` (the
-   ;     DAG edges) and its `hunks` (the blob hashes), so the whole reachable
-   ;     store is discovered by walking what we have already read. that falls out
-   ;     of the format rather than being added to it, and it means the far side
-   ;     runs nothing -- any static host is a complete remote.
-   ;
-   ;     push would need put or an endpoint, so a URL peer is read-only. that is
-   ;     not a new case: sync already degrades to pull-only and says so when a
-   ;     peer will not take a write ---
+   ; --- the http remote: pull only
    (pull-http base)
     (: n {}
        seen {}
@@ -382,15 +304,13 @@
        (walk ids ok)                                   ; the transitive closure, by reading as we go
         (? (one? ids) ok
            (: id <ids
-              (? (peep seen id 0) (walk >ids ok)
+              (? (seen id) (walk >ids ok)
                  (: _ (pin seen id 1)
                     f (getpatch id)
                     (? (one? f) (walk >ids 0)
                        (: hs (fld f 'hunks)
-                          ; fetch first, then combine. `&&` short-circuits, so
-                          ; folding the calls into the accumulator would stop
-                          ; fetching the moment one object failed -- a partial
-                          ; pull that then blames every later object for missing.
+                          ; fetch first, then combine: && short-circuits, so folding the
+                          ; calls into the accumulator would stop fetching at the first miss
                           bo (: (hb m a) (? !(two? m) a
                                    (: h <m x (getblob <>h) y (getblob <>>h)
                                       (hb >m (a && x && y))))
@@ -420,8 +340,8 @@
                    nref <>>>r
                    _ (puts ("sb: pulled -- " + show <st + " patches (" + show <>r
                             + " in), " + show <>>r + " blobs, " + show <>st + " files here"
-                            + (? (0 = nleft) "" (", " + show nleft + " conflicted"))
-                            + (? (0 = nref) "" (", " + show nref + " ref clash")) + "\n"))
+                            + (nleft @ 0 "" (", " + show nleft + " conflicted"))
+                            + (nref @ 0 "" (", " + show nref + " ref clash")) + "\n"))
                    _ (? <r () (say err "sb: some objects did not arrive -- the pull is INCOMPLETE\n"))
                    _ (say err "sb: pulled only -- an http remote takes no push\n")
                    (? (<r && (0 = nleft) && (0 = nref)) <st 0))))))
@@ -439,10 +359,7 @@
        (? (0 < dirty ())
           (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: home (cwd 0)
-             pd (: c (chdir peer)
-                   (? !c
-                      (: _ (mk ()) d (dirty ()) _ (chdir home) d)
-                      -1))
+             pd (chdir peer @ c (c ? -1 (: _ (mk ()) d (dirty ()) (chdir home, d))))
              (? (pd < 0) (: _ (say err ("sb: cannot reach " + peer + "\n")) 0)
                 (: inb (copy "blob" peer ".") inp (copy "patch" peer ".")
                    ; the push: only onto a clean peer, and only if every write lands
@@ -466,30 +383,20 @@
                             + show <inp + " in, " + show <out2 + " out), "
                             + show (<inb + <out1) + " blobs, " + show <>st + " files here"
                             + (? (two? pst) (", " + show <>pst + " files there") "")
-                            + (? (0 = nleft) "" (", " + show nleft + " conflicted"))
-                            + (? (0 = nref) "" (", " + show nref + " ref clash"
-                                                + (? (1 = nref) "" "es"))) + "\n"))
+                            + (nleft @ 0 "" (", " + show nleft + " conflicted"))
+                            + (nref @ 0 "" (", " + show nref + " ref clash"
+                                                + (nref @ 1 "" "es"))) + "\n"))
                    _ (? pushed ()
                         (say err ("sb: pulled only -- the peer "
                                   + (? (0 < pd) "has unrecorded changes" "would not take the write")
                                   + "; run sync from its side to finish\n")))
-                   _ (? (0 = nleft) ()
-                        (say err "sb: settle the flagged paths, then record -- the resolution is a patch\n"))
-                   _ (? (0 = nref) ()
-                        (say err "sb: a banked name is immutable, so each nest kept its own -- rename one, then sync\n"))
-                   (? (pushed && (0 = nleft) && (0 = nref)) <st 0)))))))
+                   _ (nleft @ 0 ()
+                      (say err "sb: settle the flagged paths, then record\n"))
+                   _ (nref @ 0 ()
+                      (say err "sb: a banked name is immutable\n"))
+                   (? (pushed && 0 = nleft && 0 = nref) <st 0)))))))
 
    ; --- apply: realize a dep-consistent subset of the store into the working
-   ;     tree. this is git's checkout and its cherry-pick, which are one act here:
-   ;     the tree is a pure function of a patch set, so "the state as of P" and
-   ;     "what I have plus P" differ only in the set you name -- there is no
-   ;     replay-a-diff-onto-a-foreign-state step to conflict. a patch may not
-   ;     travel without the patches that wrote its context, so the DEP closure
-   ;     comes along automatically: naming a subset that leaves a dep behind would
-   ;     otherwise drop it silently (topo only readies a patch whose deps are all
-   ;     present). apply is a view -- the store never shrinks, and the next sync
-   ;     re-derives the whole union. to remove a patch for good you `undo` it,
-   ;     which grows an inverse rather than forgetting ---
    (idpfx pfx)                                                   ; one patch from a prefix | ()
     (: n #pfx
        hits (filter (i \ #i = 64 && snip i 0 n = pfx) (readdir ".sb/patch"))
@@ -497,18 +404,11 @@
           (one? hits) (say err ("sb: no ref or patch matches " + pfx + "\n"), ())
           (say err ("sb: " + show #hits + " patches match " + pfx + "\n"), ())))
    (idsof a)                                                     ; a ref -> its whole tip set;
-    (: r (refof a)                                               ; else one patch from a prefix
-       (two? r ? r (: i (idpfx a) (? i [i] ()))))
+    (refof a @ r (two? r ? r (idpfx a @ i (i ? [i]))))
    (closure ids)                                                 ; ids + every dep, transitively
-    (: seen {}
-       (go m) (? (one? m) ()
-                 (: id <m
-                    (? (peep seen id 0) (go >m)
-                       (: _ (pin seen id 1)
-                          _ (go (fld (patch id) 'deps))
-                          (go >m)))))
-       _ (go ids)
-       (sort (keys seen)))
+    (:- (go ids, sort (keys seen)) seen {}
+     (go m) (two? m ?  (<m @ id (peep seen id 0 ? (go >m)
+                                (pin seen id 1, go (fld (patch id) 'deps), go >m)))))
    (sb-apply args)
     (: _ (mk ())
        (? (0 < dirty ())
@@ -529,35 +429,9 @@
                    (? (0 = nleft) #ids 0))))))
 
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
-   ;     unit you propagate. git's tag.
-   ;
-   ;     hatch.md asks for a single-tip head here ("reconcile tips before
-   ;     cutting a release") and that is git thinking that does not survive this
-   ;     model. deps are per PATH, so a patch only depends on what it touched --
-   ;     an independent birth is never depended upon and stays maximal forever.
-   ;     three tips is what ordinary parallel work looks like, not a fork to be
-   ;     repaired, and the only way to collapse them is to write a patch touching
-   ;     every path every tip touched, i.e. to edit files to appease the check.
-   ;     so a ref freezes the tip set, which is the head DAG state whatever its
-   ;     shape -- exactly what psid hashes, and it never
-   ;     demanded one tip either.
-   ;
-   ;     a banked name is immutable: re-banking at the same head is a no-op, at a
-   ;     different head an error. the dep closure derives the patch set from the
-   ;     tips, so `apply NAME` realizes the release and needs nothing stored but
-   ;     the tips. refs travel: sync unions them by name, which is what makes a
-   ;     release the unit you propagate rather than a local bookmark ---
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
    (refof nm) (refof-in (refs ()) nm)
    ; --- the ref exchange. a ref is a single file, not a content-addressed one,
-   ;     so sync cannot gap-fill it the way it does blobs and patches: it has to
-   ;     union by name. a name both nests banked to the same head is one entry --
-   ;     idempotent, the ordinary case. a name banked to different heads is a
-   ;     genuine human error, since a banked name is immutable and neither nest
-   ;     may unilaterally repoint the other's: so each side keeps its own and the
-   ;     clash is reported. the union is therefore per-side, not one merged set
-   ;     written to both -- writing one set would silently drop a real release.
-   ;     answers (merged nclash) ---
    (refadd base extra loud)                                     ; loud: only one side tells it
     (: (go m acc n)
         (? (one? m) [(sort acc) n]
@@ -590,22 +464,6 @@
                          1)))))))
 
    ; --- undo: add the inverse patch. removal is growth here, never deletion --
-   ;     the patch stays, its dependents stay valid, and the store only gets
-   ;     bigger, which is what keeps releases inclusion-ordered (R0 <= R1 <= R2)
-   ;     and "upgrade = move to a superset" well-defined. so undo is git's
-   ;     `revert`, never its `reset`.
-   ;
-   ;     it works through the working tree and hands off to `record`: put every
-   ;     path P touched back the way P found it, then record that. record then
-   ;     computes deps, blobs and tips against reality, so the inverse is a patch
-   ;     like any other and needs no special case anywhere downstream.
-   ;
-   ;     the interesting case is a path that moved on since P wrote it. undoing
-   ;     wholesale would silently discard the later work (a hunk is file-grain,
-   ;     so P's hunk is the whole file). instead it is a three-way merge, and the
-   ;     three sides are already named: base = what P wrote, ours = what the path
-   ;     holds now, theirs = what P replaced. that keeps the later edits and lifts
-   ;     out P's, which is what a revert means; a true overlap lands in markers ---
    (sb-undo args)
     (: _ (mk ())
        (? (0 < dirty ())
@@ -615,32 +473,29 @@
                 (: hs (fld (patch id) 'hunks)
                    ix (: (go m t) (two? m ? (pin t <<m <><m, go >m t) t))
                    sn (ix (snap ()) {})
-                   nc (: (go m n)
-                          (? (one? m) n
+                   nc (:- (go hs 0) (go m n)
+                          (one? m ? n
                              (: h <m p <h pold <>h pnew <>>h
                                 cur (sn p)             ; the index maps path -> chash directly
                                 (? (cur = pnew)                ; P still owns the path: a clean lift
                                    (: _ (? !pold (unlink p)
-                                           (: _ (mkparents p) (lay p (blob pold))))
+                                           (mkparents p, lay p (blob pold)))
                                       (go >m n))
                                    ; it moved on -- merge P's write out of what is there now
                                    (: bw (bl pnew) ow (bl cur) tw (bl pold)
                                       (? !(two? bw && two? ow && two? tw)
-                                         (: _ (say err ("sb: CONFLICT on " + p
-                                                        + " -- a birth or death moved on; kept what is there\n"))
-                                            (go >m (n + 1)))
+                                         (say err $ "sb: CONFLICT on " + p + " -- a birth or death moved on; kept what is there\n",
+                                          go >m (n + 1))
                                          (bin? <>bw || bin? <>ow || bin? <>tw)
-                                         (: _ (say err ("sb: CONFLICT on " + p
-                                                        + " -- binary, cannot merge; kept what is there\n"))
-                                            (go >m (n + 1)))
+                                         (say err $ "sb: CONFLICT on " + p + " -- binary, cannot merge; kept what is there\n",
+                                          go >m (n + 1))
                                          (: r (diff3 <>bw <>ow <>tw "here now" ("undone " + sh id))
                                             _ (lay p <r)
                                             k <>r
                                             _ (? (0 = k) (puts ("sb: merged " + p + " -- the later edits kept\n"))
                                                  (say err ("sb: CONFLICT in " + p + " -- " + show k
                                                            + " region" + (? (1 = k) "" "s") + " left in markers\n")))
-                                            (go >m (+ n k))))))))
-                        (go hs 0))
+                                            (go >m (+ n k)))))))))
                    _ (? (0 = nc) ()
                         (say err "sb: settle the flagged paths before recording the undo\n"))
                    (? (0 < nc) 0
@@ -671,15 +526,15 @@ usage: sb VERB ..
   diff            working tree vs the recorded state (unified; exit 1 on change)
 "
    ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
-   (usage _) (: _ (say err sb-usage) (quit 2))
-   (sb-main as) (? (one? as) (usage ())
-    (<as @ "record" (sb-record (? (two? >as) <>as ""), quit 0)
-           "sync" (? (two? >as) (: r (sb-sync <>as) (quit (? r 0 1))) (usage ()))
-           "apply" (: r (sb-apply >as) (quit (? r 0 1)))
-           "bank" (? (two? >as) (: r (sb-bank >as) (quit (? r 0 1))) (usage ()))
-           "undo" (? (two? >as) (: r (sb-undo >as) (quit (? r 0 1))) (usage ()))
-           "log" (: _ (sb-log ()) (quit 0))
-           "diff" (: n (sb-diff ()) (quit (? (0 < n) 1 0)))
+   (usage _) (say err sb-usage, quit 2)
+   (sb-main as) (one? as ? (usage ())
+    (<as @ "record" (sb-record (two? >as ? <>as ""), quit 0)
+           "sync" (one? >as ? (usage ()) (sb-sync <>as @ r (quit !r)))
+           "apply" (sb-apply >as @ r (quit !r))
+           "bank" (one? >as ? (usage ()) (sb-bank >as @ r (quit !r)))
+           "undo" (one? >as ? (usage ()) (sb-undo >as @ r (quit !r)))
+           "log" (sb-log (), quit 0)
+           "diff" (sb-diff () @ n (quit (0 < n)))
            (usage ()))))
 
 ; the seat (cook.l's shape): fire sb-main iff this file -- or the installed
@@ -691,8 +546,8 @@ usage: sb VERB ..
 ; this file's binds and is still the head when this form compiles. body-having:
 ; the seat leaks nothing.
 (: door (udoor 'sb sb-main sb-usage 1 1)
-   _ (pins (cite 'verbs 'tab) 'sb door)
-   s ((cite 'verbs 'fire) ["sb" "sb.l"])
-   (? (two? s) (door >s) ()))
+   s (pins (cite 'verbs 'tab) 'sb door,
+      cite 'verbs 'fire ["sb" "sb.l"])
+   (two? s && door >s))
 
 ) ; module 'sb
