@@ -68,8 +68,8 @@
    ; type, `tdef 0 2` is cparse's empty marker and clay's real typedef.
    clay-tags
     ; `fn` is overloaded in moon's grammar: (fn name params body [ret]) is a
-    ; definition and (fn ret) the function type under a pointer, so the range admits
-    ; both and cannot catch a truncated definition.
+    ; definition and (fn ret [ptys]) the function type under a pointer, so the range
+    ; admits both and cannot catch a truncated definition.
     ; edef, sdef and sassert are emit-only -- parse reduces each to the bare (tdef)
     ; marker, so one only ever comes from a generator. sdef's fields take the shape
     ; parse's own pmembers answers, ((name ty)..), and its 3rd slot is 'union: a
@@ -116,6 +116,9 @@
                                (kids l))
                     (kids (h @ ('gdecl || 'xdecl) [<>x]
                                'edef ()
+                               ; ('fn ret ptys), the type under a pointer: a definition
+                               ; names itself at slot 1. ptys ride as a list, not a node.
+                               ('fn && !(string? (x 1))) (. (x 1) (x 2))
                                ('fn && 4 < n) [(x 2) (x 3) (x 4)]
                                ('proto && 3 < n) [(x 2) (x 3)]
                                >x))))))
@@ -160,12 +163,15 @@
           'arr (cty-dtor a ((? p ("(" + s + ")") s) + "[" + cdim <u + "]") 0)
           ; a VLA: the bound is an expression, never a fold
           'varr (cty-dtor a ((? p ("(" + s + ")") s) + "[" + ce <u 0 + "]") 0)
-          'fn (cty-dtor a ((? p ("(" + s + ")") s) + "()") 0)
+          'fn (cty-dtor a ((? p ("(" + s + ")") s) + cptys <u) 0)
           s)
      s)
    ; an array bound: a charm prints, 0 is the unsized `[]`, anything else is a clay
    ; expression -- the generator's `[KN]`
    (cdim n) (charm? n ? (n = 0 ? "" (show n)) (ce n 0))
+   ; a function pointer's param types -- the one place a type carries a list of types.
+   ; none is C's unspecified `()`, which is what a bare (fn ret) means too.
+   (cptys l) (? (two? l) ("(" + sepby ", " (map (\ t (cty t "")) l) + ")") "()")
    ; a full declaration: type wrapped around s; s empty is the abstract declarator
    ; a cast wants
    (cty t s) (: d (cty-dtor t s 0) b (cty-base t) (d @ "" b (b + " " + d)))
