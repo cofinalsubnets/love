@@ -2741,7 +2741,7 @@
    ; identity, so the value table is one peep.
    gvbox {}
    gone (mint 0)
-   canon-names '(+ - * // % & | ^ < <= > >= = twin re im cap cup . two? one? tally peep pin   ; the tree's canonical spellings, one per value:
+   canon-names '(+ - * // % & | ^ < <= > >= = == twin re im cap cup . two? one? tally peep pin   ; the tree's canonical spellings, one per value:
                  map filter foldl foldr jot iota net string list && ||)                       ; link reads ., atom? reads one?, ~ reads twin
    ctab {}
    (ctable gv) (? (peep ctab 'ok 0) ctab
@@ -2770,7 +2770,9 @@
                                                       (. b (. (cw <>bs (ps + bnd2)) (cbs >>bs)))))
                                        (': . cbs >x))
                           (nom? <x) ((cnom <x bnd 1) . map (y \ cw y bnd) >x)                       ; the head may take an operator spelling
-                          (map (y \ cw y bnd) x))
+                          (: hc (two? <x ? 0 (peep tab <x 0))                                     ; ..or arrive as the op VALUE a macro or opfix spliced,
+                             (hc && !(elem hc bnd) ? (hc . map (y \ cw y bnd) >x)                 ; which reads as its word unless a binder took that word
+                                                     (map (y \ cw y bnd) x))))
                          (cw e ()))
                    e))
    (auto-ev e) (? !x86? (? (qual e)  (memo e (l \ jitir l arch))        ; a64: integer + scalar-float lanes native
