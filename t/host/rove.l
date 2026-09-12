@@ -2,7 +2,8 @@
 ; not in the t/*.l corpus (it loads a crew file and leaks its helpers).
 ; the engine core is pure love, so everything but the tty runner gates here:
 ; delve (seeded, connected, bordered), fov (strides, walls, memory), the
-; painter (a frame into a jug), the make of each floor, the helm decoder, the
+; painter (a frame into a jug), the make of each floor and what it says, the
+; helm decoder, the
 ; words and their holes, and
 ; the climb end to end -- combat, pennies, the mending, the pace, the stair,
 ; death, and the circle that ends it. the tty side (tower-run) is berth-thin over
@@ -182,6 +183,39 @@
   (60 = <(tile-face (themes 0) 2 1 0 0 0))       ; and the stair is gold on every floor
   (220 = ((tile-face (themes 2) 2 1 0 0 0) 1))))
 
+; --- the flavour: nothing on a floor is silent, and nothing says one thing only
+(: (says? nm) (0 < #(mutter 0 nm))
+   (all-say? l) (foldl (\ a nm (&& a (says? nm))) 1 l)
+   (strewings th) (map (r \ (r 4)) (th 2))
+ (test
+  (all-say? (strewings (themes 0)))                ; every strewing of every tier
+  (all-say? (strewings (themes 1)))
+  (all-say? (strewings (themes 2)))
+  (all-say? (map (k \ ((mob-new k 0 0) 'nm)) ^13)) ; ..and every mob in the book
+  !(says? "the man in the moon")                   ; a name with no row is silent
+  (: t (foldl (\ t k (pin t (mutter k "tuft") 1)) {} ^9)
+     (1 < #(keys t)))))                            ; and one thing says several
+
+; ..and it is said when you stand on it: the cell picks the line, so the same cell
+; says the same thing every time you cross it
+(: g (hand-g ())
+   _ (pin (g 'd) 'th (themes 0))
+   (salt n) (? (99 < n) 0
+               (: _ (pin (g 'd) 'sd n) (0 < #(underfoot g 2 1)) n (salt (n + 1))))
+   _ (pin (g 'd) 'sd (salt 0))
+   s (underfoot g 2 1)
+   _ (crawl-turn g [1 0])
+ (test (0 < #s) (find (g 'msg) s 0) (s = underfoot g 2 1)))
+
+; ..and a mob says its piece the first time you lay into it, and only then
+(: g (hand-g ())
+   _ (pin g 'ms [(mob-new 0 2 1)])
+   (rat? t) (|| (find t (mutter 0 "rat") 0) (find t (mutter 1 "rat") 0))
+   _ (crawl-turn g [1 0])
+   f (g 'msg)
+   _ (crawl-turn g [1 0])
+ (test (rat? f) !(rat? (g 'msg))))
+
 ; ..nor are the tiers laid out alike: the garden is a patch of small beds, heaven a
 ; few long blocks, and the plan is the whole of the difference
 (: gd <(delve 70 20 (wheel 5) (plan 1))
@@ -242,8 +276,10 @@
 (test !(() = (cite 'slop 'slop-walk)))
 
 ; --- the whole game, generated: a seeded random walk holds every invariant ---
+; the keys come out of a BOXED wheel state -- {wheel 99} boxes the wheel itself, whose
+; roll answers () forever, and a walk of three hundred passes holds anything you like
 (: g (crawl-new 60 20 (wheel 3))
-   kb {wheel 99}
+   kb {(wheel 99)}
    dirs [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 -1] [1 -1] [-1 1] 46 62]
    (turn i ok) (? (&& (i < 300) !(g 'over)) (: k (peep dirs (roll kb 10) 46)
                    _ (crawl-turn g k)

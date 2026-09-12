@@ -26,7 +26,8 @@
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
          mend ascend fill fit circle? circle-new circle-stride circle-frame
          circle-r circle-wall on-ring? reveal? done? tokens floors due?
-         themes plan tile-face strewn pink-ramp skin-pen)
+         themes plan tile-face strewn pink-ramp skin-pen
+         flavour mutter underfoot)
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
@@ -146,13 +147,16 @@
  ; shows, dim for what is only remembered; a strewing carries a fourth number, how
  ; many cells in a hundred wear it.
  th-garden '((38 28 22) (46 143 58)                     ; hedge and earth
-             ((44 71 65 26) (34 34 22 12) (42 212 89 6) (42 220 136 5) (126 38 24 3))
+             ((44 71 65 26 "tuft") (34 34 22 12 "grass") (42 212 89 6 "aster")
+              (42 220 136 5 "marigold") (126 38 24 3 "runnel"))
              (3 5 2 3 18))                              ; small beds, a great many
  th-middle '((35 246 238) (46 245 239)                  ; stone and flagstone
-             ((44 241 237 16) (58 240 236 10) (37 187 95 6) (42 251 244 4))
+             ((44 241 237 16 "rubble") (58 240 236 10 "gravel")
+              (37 187 95 6 "bones") (42 251 244 4 "quartz"))
              (4 7 3 4 24))                              ; rooms, the middling sort
  th-heaven '((35 255 249) (46 252 245)                  ; marble and paving
-             ((58 250 244 20) (43 226 136 7) (61 180 94 5) (111 45 24 4) (42 231 145 5))
+             ((58 250 244 20 "cobbles") (43 226 136 7 "lamp") (61 180 94 5 "bench")
+              (111 45 24 4 "fountain") (42 231 145 5 "star"))
              (8 9 4 5 40))                              ; blocks, and streets between
  themes [th-garden th-middle th-heaven]
  (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
@@ -160,6 +164,7 @@
  (loot-face _) '(36 172)                                ; pennies: $ in copper
 
  ; a cell's face: the stair, the rock, or the ground with whatever it was strewn with
+ (make d) (peep d 'th th-middle)                        ; a floor nobody dressed is stone
  (wear r lit) [<r (lit ? (r 1) (r 2))]
  (strewn th x y s) (: (go l h) (? !(two? l) ()
                                   (: r <l w (r 3) (? (h < w) r (go >l (h - w)))))
@@ -170,7 +175,7 @@
          (: r (strewn th x y s) (wear (two? r ? r (th 1)) lit)))
  (paint j d vis loot ents msg bar) (:
    w (d 'w) h (d 'h) sn (d 'seen)
-   th (peep d 'th th-middle) sd (peep d 'sd 0)   ; a floor nobody dressed is stone
+   th (make d) sd (peep d 'sd 0)
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees
@@ -236,6 +241,85 @@
           "the wrist-warmed watch" "the lid-lost pen" "the long-charged battery"
           "the corner-softened card")
  token-pen 201                                          ; and the pen it is named in
+
+ ; --- THE FLAVOUR: what a thing has to say when you meet it. a row is the name a
+ ; strewing or a mob is known by, and then its lines. which line you get is the cell's
+ ; own dice (a mob's is a draw), so one tuft always says the same thing and the tuft
+ ; beside it says another. a name with no row here is simply silent.
+ flavour
+ '(("tuft"       "the grass here has gone to seed"
+                 "a beetle leaves the way you came"
+                 "something slept here and is gone")
+   ("grass"      "the grass comes up past your ankles"
+                 "seed heads stick to your legs"
+                 "it is wet down where the light does not get")
+   ("aster"      "an aster, pink and past its best"
+                 "the petals are going brown at the edge"
+                 "it is facing the way the light was")
+   ("marigold"   "marigolds, and the smell of them on your hands"
+                 "the yellow is louder than the flower"
+                 "one is open and the rest are waiting")
+   ("runnel"     "a thread of water, going somewhere"
+                 "colder and quicker than it looks"
+                 "it has cut its own small channel here")
+   ("rubble"     "stone that used to be somewhere higher"
+                 "it turns underfoot"
+                 "someone swept it into this corner, once")
+   ("gravel"     "gravel, and the sound of you on it"
+                 "it has been walked before"
+                 "small stones, worn round")
+   ("bones"      "bones, picked clean and set down tidily"
+                 "not lately"
+                 "small ones: a rat, or a rat's dinner")
+   ("quartz"     "a seam of quartz takes your light and keeps it"
+                 "it is warmer than the stone around it"
+                 "the wall is brighter here for a step")
+   ("cobbles"    "cobbles, laid by someone with time"
+                 "worn hollow down the middle"
+                 "the joints are packed with nothing at all")
+   ("lamp"       "a lamp, lit, with nobody to have lit it"
+                 "the light does not flicker"
+                 "it is warm and gives nothing off")
+   ("bench"      "a bench, facing the street"
+                 "it has been sat on"
+                 "nothing is carved into it, which is strange")
+   ("fountain"   "a fountain runs with nobody to hear it"
+                 "the water goes up as fast as it comes down"
+                 "there is money in the bottom, and it is not pennies")
+   ("star"       "a star, at ankle height"
+                 "it does not move when you do"
+                 "the floor is a sky here, briefly")
+   ("rat"        "a rat, and it has seen worse than you"
+                 "it does not hurry")
+   ("lanternfly" "a lanternfly, spotted and slow"
+                 "it lands on you as though you were furniture")
+   ("gnome"      "a gnome: a worm the length of your arm"
+                 "it goes on longer than it looks")
+   ("goblin"     "a goblin, in something it took off someone"
+                 "it is working out whether you are worth it")
+   ("hobgoblin"  "a hobgoblin, and it is not working anything out"
+                 "bigger than the door it came through")
+   ("d4"         "a d4, which lands wrong whatever it does"
+                 "it is the one that hurts to stand on")
+   ("d6"         "a d6, honest and unremarkable"
+                 "the pips are worn smooth on the six")
+   ("d8"         "a d8, turning to show you every face"
+                 "it has settled on nothing")
+   ("d12"        "a d12, with more faces than it has any use for"
+                 "it rolls a long way")
+   ("d20"        "a d20, and it knows what it is for"
+                 "it is waiting on the one number")
+   ("triangle"   "a triangle, and it has made its mind up"
+                 "three sides and no argument")
+   ("square"     "a square, sat exactly where it is"
+                 "it will not be moved a hair")
+   ("hexagon"    "a hexagon, eyed the whole way round"
+                 "every eye is on you, which is the point of it"))
+
+ ; a name's lines, and the one it says this time
+ (lines-of nm) (: (go l) (? !(two? l) () (: r <l (? (nm = <r) >r (go >l))))
+                  (go flavour))
+ (mutter k nm) (: ls (lines-of nm) (two? ls ? (peep ls (k % #ls) "") ""))
 
  ; a line and its holes: each ~ takes the next value, a string as itself and anything
  ; else as show, so a table line reads as the line it prints.
@@ -311,7 +395,14 @@
                    mob-at g x y)
 
  ; the climber's stride: bump a mob to strike it, step onto pennies to take them
- (strike g m) (: dm (1 + roll (g 'sb) 3)
+ ; the first blow is also an introduction, whoever throws it, and a thing introduces
+ ; itself once
+ (meet g m) (? (m 'met) ()
+              (: _ (pin m 'met 1)
+                 s (mutter (roll (g 'sb) 97) (m 'nm))
+                 (s ? (note g s))))
+ (strike g m) (: _ (meet g m)
+                 dm (1 + roll (g 'sb) 3)
                  _ (pin m 'hp (m 'hp - dm))
                  (? (0 < m 'hp) (note g (fill w-strike [(m 'nm) dm]))
                   (pin g 'ms (filter (\ o !(= o m)) (g 'ms)),
@@ -321,6 +412,13 @@
    pin (g 'p) 'penny (g 'p 'penny + <>it),
    note g (fill w-penny [<>it]))
 
+ ; what the ground underfoot has to say for itself -- "" where nothing is strewn. the
+ ; line is the cell's, off a second salt, so it does not follow which thing lies there
+ (underfoot g x y) (: d (g 'd) sd (peep d 'sd 0)
+                      r (strewn (make d) x y sd)
+                      (two? r ? (mutter (dice x y (1 + sd) 97) (r 4)) ""))
+ (tread g x y) (: s (underfoot g x y) (s ? (note g s)))
+
  (stride g mv) (: p (g 'p) nx (p 'x + <mv) ny (p 'y + <>mv)
                   m (mob-at g nx ny)
                   (? m (strike g m)
@@ -328,11 +426,13 @@
                      (: _ (pin p 'x nx, pin p 'y ny)
                         i (nx + (g 'd 'w) * ny)
                         it (peep (g 'loot) i ())
-                        (it ? (take g i it)))))
+                        _ (it ? (take g i it))
+                        (tread g nx ny))))
 
  ; the floor stirs: a mob that sees you closes in; struck close, it bites
  (sgn n) (? (0 < n) 1 (n < 0) -1 0)
- (bite g m) (: dm (1 + roll (g 'sb) (m 'dm))
+ (bite g m) (: _ (meet g m)
+               dm (1 + roll (g 'sb) (m 'dm))
                _ (pin (g 'p) 'hp (g 'p 'hp - dm))
                _ (note g (fill w-bite [(m 'nm) dm]))
                (0 >= g 'p 'hp ? (pin g 'over 'dead, note g w-dead)))
