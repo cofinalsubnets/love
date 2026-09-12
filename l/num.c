@@ -1419,15 +1419,18 @@ static lvm(lvm_cmp_ord) {
  else if (bigp(a) || bigp(b)) r = vcmp_int(op, ai_big_cmp(a, b), 0);
  else r = vcmp_int(op, toint(a), toint(b));
  ai_musttail return Push(r ? putcharm(1) : zero); }
-// `<` `<=` are the implemented side (both-fixnum fast path: tagged order is
-// monotonic); `>` `>=` reverse the operands. cond fusion: when the fast path sees
+// all four carry their own vop (both-fixnum fast path: tagged order is monotonic),
+// and every lane under them takes the op -- cmp_ord, vbin_fill, cbin_fill, obin_elem --
+// so no one of them reaches another by reversing its operands. NOR MAY IT: Have
+// restarts the instruction it sits under, and Ip does not move between a nif and the
+// tray lane's allocation, so a body that swaps Sp swaps again after a collection and
+// answers the other comparison, in silence. cond fusion: when the fast path sees
 // lvm_cond next it branches directly (true -> Ip+3, false -> Ip[2].m) instead of
-// materializing a boolean and paying a second dispatch; the slow path falls
-// through to the retained lvm_cond. the gt/ge reversers fuse for free.
+// materializing a boolean and paying a second dispatch; the slow path falls through
+// to the retained lvm_cond.
 cmp_lt(lvm_lt, vop_lt) cmp_lt(lvm_le, vop_le)
+cmp_lt(lvm_gt, vop_gt) cmp_lt(lvm_ge, vop_ge)
 #undef cmp_lt
-lvm(lvm_gt) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; ai_musttail return Ap(lvm_lt, g); }  // a > b == b < a
-lvm(lvm_ge) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; ai_musttail return Ap(lvm_le, g); }  // a >= b == b <= a
 
 // comparison from a 3-way sign: a bignum is always out of machine-int range, so
 // it orders against any int element by its sign alone -- exactly

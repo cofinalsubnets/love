@@ -18,7 +18,7 @@
   test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
-  test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
+  test_objcopy test_ord test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_seedwasm test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
@@ -29,7 +29,7 @@
 # the three gates. `make test` is the fast one an edit loop runs, test_slow the
 # merge gate, test_extra the really slow one (qemu boots, cross-arch, boards).
 # Everything below is a member of one of them, or opt-in by name.
-test_phases = test_host test_love0
+test_phases = test_ord test_host test_love0
 # fast gate
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
@@ -471,6 +471,12 @@ $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 	 else touch $$@; fi
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
+# test_ord -- the four orderings on a tray, asked with a collection inside them. THE
+# SMALL BUDGET IS THE WHOLE POINT: at a roomy heap a collect lands in the middle of a
+# comparison too rarely to be a law, and what one answers there is the question.
+test_ord: host
+	@echo TEST t/gate/ord.l "(the four orderings on a tray, under the collector)"
+	@LOVE_BUDGET_MB=32 $m $(R)/t/gate/ord.l < /dev/null || { echo "FAIL test_ord"; exit 1; }
 # test_clay -- G1, clay's faithfulness gate (a/moon/clay.l, doc/misc/clay.md): for every file
 # in t/cc/, (cparse (clay-show ast)) == ast, structurally. the run partitions and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
