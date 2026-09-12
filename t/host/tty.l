@@ -123,14 +123,16 @@
 ; --- slop: the shimmer with a player under it, and only forward moves him ---
 ; slop paints before it reads, and then keeps painting whether a key comes or not, so
 ; the same rule as ink applies: wait for the wire to show a painted cell, then type.
-; at 12x40 the map is 11 rows -- 3 of slop on the skyline, 8 of ground -- the climb
-; line is row 7, and the first square, far from the slop, is one press.
+; at 12x40 the map is 11 rows of open field: the shore is nineteen world rows off and
+; nothing of it is on the screen, so unlike ink there is no painted cell to wait for --
+; wait for the road's own pen instead. the climb line is row 7 and a square out here is
+; one press.
  st (spawn "b/love slop" 12 40)
  sm >st
- sseen (: (upto acc) (? (has? acc "\e[48;5;") acc
+ sseen (: (upto acc) (? (has? acc "\e[38;5;94m") acc
                         (: ch (see sm) (? (= ch -1) acc (upto (acc + string ch)))))
           (upto ""))
- _ (say sm "k")                                             ; gap 8, cost 1: one square
+ _ (say sm "k")                                             ; gap 19, cost 1: one square
  _ (rest 200)
  _ (say sm "jlq")                                           ; back, sideways, then ashore
  stx (sseen + slurp sm)
@@ -138,11 +140,11 @@
  ss (: s (mkscr 12 40) _ (scribe s (held stx)) s)
  _ (test
     (has? stx "\e[?1049h") (has? stx "\e[?1049l")            ; on the alternate screen
-    (0 < cbg ss 0)                                           ; row 0 is slop, a painted cell
-    (0 = cbg ss (3 * 40))                                    ; row 3 is ground, right under it
+    !(has? stx "\e[48;5;")                                   ; no slop: the walk starts in a field
+    !(has? stx "\e[38;5;180m")                               ; and no sand either
+    (0 = cbg ss 0)                                           ; which the grid says too
     ((9 . 23) = at ss)                                       ; one square up, and on the road
     (46 = chat ss (9 * 40 + 24))                             ; the road is three columns wide
-    (has? stx "\e[38;5;94m")                                 ; ..and painted in dirt
     (has? (rowtx ss 11) "you turn back")                     ; the bar, on the last row of 12
     (has? stx "you turn back, 1 press in"))                  ; j and l spent nothing
 
