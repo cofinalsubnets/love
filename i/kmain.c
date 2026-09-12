@@ -612,6 +612,11 @@ static int k_dev_slot(char const *p, uintptr_t n) {
   return 0; }
 static intptr_t k_zero_readn(int fd, unsigned char *dst, uintptr_t n) {
   return memset(dst, 0, n), (intptr_t) n; }
+// null takes every byte. k_row_write would swallow them for want of a writen anyway, but a
+// row with no hook at all is not a row: k_dup_row refuses to clone one, and `2>/dev/null`
+// is a dup of exactly that onto a child's stderr.
+static intptr_t k_null_writen(int fd, unsigned char const *src, uintptr_t n) {
+  return (intptr_t) n; }
 static bool k_dev_ready(int fd) { return true; }
 
 // 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale.
@@ -1105,7 +1110,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
       // says READY: end is an answer, and a source that never answers ready parks its
       // reader for good. both devices are always ready, for opposite reasons.
       *ds = dv == 2 ? (struct k_source) { .readn = k_zero_readn, .ready = k_dev_ready }
-                    : (struct k_source) { .ready = k_dev_ready };
+                    : (struct k_source) { .writen = k_null_writen, .ready = k_dev_ready };
       return dfd; } }
   int i = k_find(cp, (uintptr_t) cn);
   if (src && (i < 0 || k_ents[i].bake < 0)) return -ENOENT;   // only what the bake laid
