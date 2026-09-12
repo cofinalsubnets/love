@@ -451,7 +451,7 @@ bool ai_ratio_exact(struct ai *g, word x) {
  word p = coin_load(x);
  if (!chainp(p) || !chainp(B(p))) return false;
  word n = A(p), d = A(B(p));
- if (!(charmp(n) || sunp(n) || bigp(n)) || !(charmp(d) || sunp(d) || bigp(d))) return false;
+ if (!intp(n) || !intp(d)) return false;
  return charmp(d) ? d != putcharm(0) : sunp(d) ? sun_get(d) != 0 : true; }
 // ..the lane: trunc(n/d) by long division, clamped to the charm bounds like every
 // rung (the codomain law), then the rung's own adjustment -- ceil rounds a dropped
@@ -838,7 +838,7 @@ lvm(lvm_trayctor) {
  // the type is read off the witness's kind -- a value inhabiting the tier: 0 -> Z,
  // 0.0 -> R, ~(0 0) -> C, and anything else (canonically (), the O floor) -> O.
  intptr_t ty = twinp(t) ? ai_C : gemp(t) ? ai_R
-             : (charmp(t) || sunp(t) || bigp(t)) ? ai_Z : ai_O;
+             : intp(t) ? ai_Z : ai_O;
  uintptr_t rank = 0, nelem = 1;
  for (word l = shp; chainp(l); l = B(l)) {
   word d = A(l);
