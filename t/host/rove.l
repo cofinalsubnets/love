@@ -99,7 +99,7 @@
                  _ (map (\ y (map (\ x (? (x = 4) () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
                  _ (pin hd 'in [1 1], pin hd 'stair [7 3])
                  st (wheel 5) sb {st}
-                 pl {'x 1 'y 1 'gl 64 'hue 228 'hp 20 'mx 20 'penny 0}
+                 pl {'x 1 'y 1 'gl 64 'hue 228 'hp 40 'mx 40 'penny 0}
                  {'d hd 'lvl 1 'tn 0 'sb sb 'p pl 'ms () 'loot (tablet 0) 'msg "" 'over 0}))
 
 ; the tower holds: a stride into rock stands you still
@@ -121,9 +121,20 @@
    _ (test (7 = g 'p 'hp))                       ; a step mends
    _ (crawl-turn g 46)
    _ (test (7 = g 'p 'hp))                       ; a pass does not
-   _ (pin (g 'p) 'hp 19)
+   _ (pin (g 'p) 'hp 39)
    _ (crawl-turn g [1 0])
- (test (20 = g 'p 'hp)))                         ; and never past the brim
+ (test (40 = g 'p 'hp)))                         ; and never past the brim
+
+; ..and the bar is deep enough that one thing beside you is a nuisance: mending is two
+; a turn and the heaviest bite in the book is three, so at the very worst a single mob
+; takes a point a turn off forty. two of them bite four against the two and settle it,
+; which is the death the climb keeps -- here with the climber standing still, which is
+; the only way it ever happens.
+(: g (hand-g ())
+   _ (pin g 'ms [(mob-new 4 2 1) (mob-new 4 2 2)])   ; two hobgoblins, either side
+   (go n) (? (g 'over) n (60 < n) n (: _ (crawl-turn g 46) (go (n + 1))))
+   n (go 0)
+ (test ('dead = g 'over) (n <= 30) (find (g 'msg) "done for" 0)))
 
 ; bump combat: the rat goes down inside its hit points
 (: g (hand-g ())
@@ -308,7 +319,7 @@
  (test (find f "+-the tower " 0)                ; the box, titled the way story titles
          (find f "h j k l" 0)                    ; the keys are on it
          (find f "climb" 0)                      ; ..and so is the stair
-         (find f "the garden  hp 20/20" 0)       ; the bar is not covered
+         (find f "the garden  hp 40/40" 0)       ; the bar is not covered
          (#(split "\r\n" f) = #(split "\r\n" f2))   ; a sign costs no rows
          (x = g 'p 'x) (y = g 'p 'y)             ; the key that took it down took no turn
          !(find f2 "+-the tower " 0)))
@@ -377,7 +388,8 @@
   ((heart-rate 2) < (heart-rate 5)) ((heart-rate 5) < (heart-rate 8))
   (1 = heart-rate 0)
   ((slots (heart-bars 2)) < (slots (heart-bars 8)))
-  (2 = hits (heart-bars 0))                      ; lub and dub, and nothing else
+  (4 = hits (heart-bars 0))                      ; lub and dub, two voices each
+  (2 = #(heart-bars 0))                          ; ..the kick you feel and the knock you hear
   (sane? (heart-bars 8))
   ; the fade is the ring's own size
   (1.0 = vat 0)
@@ -416,7 +428,7 @@
   (find f "@" 0)                                 ; you are on the map
   (find f "&" 0) (find f "." 0)                  ; the garden's hedge and its earth
   (find f "\e[38;5;143m" 0)                      ; ..in the earth's own pen
-  (find f "the garden" 0) (find f "hp 20/20" 0)  ; the bar tells the tale
+  (find f "the garden" 0) (find f "hp 40/40" 0)  ; the bar tells the tale
   (find f "\e[38;5;228m" 0)                      ; your hue, respecified on change
   (find f "\r\n" 0)))                            ; frames ride \r\n
 

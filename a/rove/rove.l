@@ -265,12 +265,11 @@
  ; which rows of it a floor bears
  (mob-set lvl) (lvl @ 1 '(0 1) 2 '(2 3 4) '(5 6 7 8 9 10 11 12))
  ; and what the token turns out to have been, drawn once at the end
- tokens '("the well-thumbed phone" "the down-sharpened pencil" "the sun-bleached receipt"
-          "the heel-worn shoe" "the dog-eared paperback" "the thumb-smoothed coin"
-          "the half-burnt candle" "the pocket-rounded key" "the oft-folded map"
-          "the cord-frayed lamp" "the rain-spotted glasses" "the salt-crusted kettle"
-          "the wrist-warmed watch" "the lid-lost pen" "the long-charged battery"
-          "the corner-softened card")
+ tokens '("the thumbworn phone" "the stubnibbed pencil" "the faded script"
+          "the solebare shoe" "the handpaged book" "the rubbed coin"
+          "the relit candle" "the lockmachined key" "the refolded map"
+          "the carbonized lamp" "the residual spectacles" "the steamset kettle"
+          "the gearworn watch" "the lowlife battery" "the treasured index card")
  token-pen 201                                          ; and the pen it is named in
 
  ; --- THE MUSIC: a floor's bar, BUILT and not looked up. a SLOT is a voice tablet
@@ -289,15 +288,16 @@
  ; one -- and the voices are the round ones, held long enough to ring into the next.
  chime-tones [0 2 4 7 9 12 14 16 19 21 24 26]
  chime-slots 16
- (gust? c i) ((0 <= i) && ((dice i c 12 100) < 7))
+ (gust? c i) (0 <= i && dice i c 12 100 < 7)
  (chime-slot c i)
-  (? (((dice i c 11 100) < 11) || ((gust? c (i - 1)) || (gust? c (i - 2))))
-     (vox ((dice i c 14 3) = 0 ? "tri" "sin")
+  (dice i c 11 100 < 11 ||
+      gust? c (i - 1) ||
+      gust? c (i - 2) ?
+     (vox (dice i c 14 3 = 0 ? "tri" "sin")
           (chime-tones (dice i c 13 #chime-tones))
-          (0.55 + ((dice i c 15 45) / 100.0))
-          (1.30 + ((dice i c 16 120) / 100.0)))
-     ())
- (garden-bars c) [(map (i \ chime-slot c i) (jot chime-slots))]
+          (0.55 + dice i c 15 45 / 100.0)
+          (1.30 + dice i c 16 120 / 100.0)))
+ (garden-bars c) [(map (chime-slot c) ^chime-slots)]
 
  ; the middle: traffic. a horn is two notes a major third apart, up where it hurts, on
  ; for a moment and gone. about a third of the time the noise settles into something
@@ -311,18 +311,17 @@
  blue-drop 12                                           ; ..sounded below where it is written
  (horn-on? c i) ((dice i c 21 100) < 9)
  (horn-slot c i k)
-  (? (horn-on? c i)
-     (vox "sqr" ((horn-tones (dice i c 22 #horn-tones)) + (4 * k))
-          0.40 (0.20 + ((dice i c 23 45) / 100.0)))
-     ())
+  (horn-on? c i ?
+   (vox "sqr" (horn-tones (dice i c 22 #horn-tones) + 4 * k)
+        0.40 (0.20 + dice i c 23 45 / 100.0)))
  (tune? c) ((dice (c // #blue-phrases) 0 31 100) < 34)
  (blue-bars c) (: ph (blue-phrases (c % #blue-phrases))
-                  (v i) (vox ((i % 2) = 0 ? "tri" "sqr")
-                             ((ph i) - blue-drop) 0.95 0.52)
-                  [(map v (jot #ph))])
+                  (v i) (vox (i % 2 = 0 ? "tri" "sqr")
+                             (ph i - blue-drop) 0.95 0.52)
+                  [(map v ^#ph)])
  (middle-bars c) (? (tune? c) (blue-bars c)
-                    [(map (i \ horn-slot c i 0) (jot horn-slots))
-                     (map (i \ horn-slot c i 1) (jot horn-slots))])
+                    [(map (i \ horn-slot c i 0) ^horn-slots)
+                     (map (i \ horn-slot c i 1) ^horn-slots)])
 
  ; heaven: long sequences, four bars each, and which one is a roll on the block -- so
  ; the city goes round something without going round it to a schedule. two of them are
@@ -344,14 +343,24 @@
  ; themselves further apart the smaller the ring gets -- three to a bar while it is
  ; wide, one when it is a point. the fade is the ring's too, so it slows and goes at
  ; the same time.
- heart-lub {'s "bd" 'gain 1.00}
- heart-dub {'s "bd" 'gain 0.62 'speed 1.25}
+ ; the kick alone is the whole of a heart and NONE of it comes out of a small speaker:
+ ; its sine falls from 134 Hz to 46 and a laptop reproduces neither. so the beat is two
+ ; voices -- the kick for the body, felt where there is something to feel it on, and a
+ ; snare cut to an eighth of a second over it. a snare is mostly noise, and noise is
+ ; the one sound with something in every band, so there is nothing a speaker can fail
+ ; to answer. that is the knock you actually hear; the kick is what you feel.
+ heart-lub {'s "bd" 'gain 0.90}
+ heart-dub {'s "bd" 'gain 0.55 'speed 1.25}
+ knock-lub {'s "sn" 'gain 0.40 'legato 0.13}
+ knock-dub {'s "sn" 'gain 0.26 'legato 0.10 'speed 1.30}
  heart-div 8                                            ; slots to a beat
  (heart-rate r) (1 + (r // 3))
  (heart-bars r) (: n (heart-rate r)
-                   (slot i) (: j (i % heart-div)
-                               (? (j = 0) heart-lub (j = 2) heart-dub ()))
-                   [(map slot (jot (heart-div * n)))])
+                   (beat lub dub i) (: j (i % heart-div)
+                                       (? (j = 0) lub (j = 2) dub ()))
+                   ix (jot (heart-div * n))
+                   [(map (beat heart-lub heart-dub) ix)
+                    (map (beat knock-lub knock-dub) ix)])
 
  ; the floor's bars: which cycle it is, and how wide the ring is if it is the ring's
  (tower-bars lvl c r) (lvl @ 1 (garden-bars c) 2 (middle-bars c) 3 (sky-bars c)
@@ -444,9 +453,11 @@
                  "every eye is on you, which is the point of it"))
 
  ; a name's lines, and the one it says this time
- (lines-of nm) (: (go l) (? !(two? l) () (: r <l (? (nm = <r) >r (go >l))))
-                  (go flavour))
- (mutter k nm) (: ls (lines-of nm) (two? ls ? (peep ls (k % #ls) "") ""))
+ (lines-of nm)
+  (:- (go flavour) (go l)
+   (two? l ? (: r <l (? (nm = <r) >r (go >l)))))
+ (mutter k nm)
+  (lines-of nm @ ls (two? ls ? (peep ls (k % #ls) "") ""))
 
  ; a line and its holes: each ~ takes the next value, a string as itself and anything
  ; else as show, so a table line reads as the line it prints.
@@ -454,7 +465,7 @@
  (fill s vs) (: (go i acc vs)
                  (? (i >= #s) acc
                     (: c (s i)
-                       (? ((c = 126) && (two? vs)) (go (i + 1) (acc + hole <vs) >vs)
+                       (? (c = 126 && two? vs) (go (i + 1) (acc + hole <vs) >vs)
                           (go (i + 1) (acc + string c) vs))))
                 (go 0 "" vs))
  ; ..and its braces, put on at the port. an escape is no width, so this is also where
@@ -478,17 +489,17 @@
              (go 0 0))
  (pad s n c) (: v (vlen s) (v >= n ? s (s + ((n - v) (\ t (t + c)) ""))))
  (sign-box ttl ls) (:
-   w (foldl (\ a l (: v (vlen l) (a < v ? v a))) (vlen ttl) ls)
+   w (foldl (\ a l (vlen l @ v (a < v ? v a))) (vlen ttl) ls)
    ww (w + 4)
    top ("+-" + pad (ttl + " ") (ww - 3) "-" + "+")
-   bot ("+" + ((ww - 2) (\ t (t + "-")) "") + "+")
+   bot ("+" + ((ww - 2 (t / (t + "-")) "") + "+")
    ([top] + (map (l \ "| " + pad l (ww - 4) " " + " |") ls) + [bot]))
  ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs
- (cells-cut r n) (: (past i) (r i @ 109 (i + 1) (past (i + 1)))
-                    (go i k acc) (? ((i >= #r) || (k >= n)) acc
-                                    (r i @ 27 (: e (past i) (go e k (acc + snip r i e)))
-                                     (go (i + 1) (k + 1) (acc + string (r i)))))
-                    (go 0 0 ""))
+ (cells-cut r n) (:- (go 0 0 "")
+                  (past i) (r i @ 109 (i + 1) (past (i + 1)))
+                  (go i k acc) (i >= #r || k >= n ? acc
+                                (r i @ 27 (: e (past i) (go e k (acc + snip r i e)))
+                                 (go (i + 1) (k + 1) (acc + string (r i))))))
  ; a frame with the box centred over its rows a .. a+n, for a screen w wide
  (sign-over f ttl ls a n w) (:
    rs (split "\r\n" f)
@@ -513,7 +524,9 @@
 
  ; --- the climb: the proving game. state in a tablet, one key per turn ---
  ; the bar is not a resource: a turn spent acting mends, a turn passed does not, so a
- ; climber dies only by standing still while something is next to them.
+ ; climber dies only by standing still while something is next to them -- and the bar
+ ; is deep enough that one thing beside you is a nuisance and not an accident. two of
+ ; them out-bite the mending and three settle it, which is the whole of the arithmetic.
  regen 2
  (mend g) (: p (g 'p) h ((p 'hp) + regen) (pin p 'hp (h < p 'mx ? h (p 'mx))))
  (mob-row k) (peep mob-book k <mob-book)
@@ -558,7 +571,7 @@
    p0 (delve w h st (plan 1)) d <p0
    st1 >p0 sb {st1}                                 ; the brace boxes; #st1 would count it
    _ (dress d 1 sb)
-   pl {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue 228 'hp 20 'mx 20 'penny 0}
+   pl {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue 228 'hp 40 'mx 40 'penny 0}
    g {'d d 'lvl 1 'tn 0 'sb sb 'p pl 'msg "" 'over 0}
    _ (stock g)
    _ (note g w-open)
