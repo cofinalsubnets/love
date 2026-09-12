@@ -11,7 +11,7 @@
 ; (a/rove/slop.l does); only the tty runner (ink) ties raw / tty / cue?, which
 ; ride i/posix.c, so ink never joins the test corpus (love0 links no host nifs)
 ; -- t/host/tty.l gives it a pty instead.
-(module (ink ink-main ink-scene ink-field ink-pal)
+(module (ink ink-main ink-scene ink-field ink-drift ink-pal)
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
@@ -28,23 +28,28 @@
    ramp [17 18 19 20 26 32 38 44 45 51 87 123 159 195 189 183 147 111 75 69 63 57 25 24]
    pal (ink-pal ramp)
 
-   ; the skin at size (r c): the grid built once, closed into a field(t) answering
-   ; a tray of the whole window. (r 1) + (1 c) broadcasts to (r c); cy doubles y so
-   ; the ripple is round in cell aspect (a cell is about twice as tall as wide).
-   ; the net of the four waves lands in [-4, 4]
-   (ink-field r c) (:
+   ; the skin at size (r c): the grid built once, closed into a field(t dy) answering
+   ; a tray of the whole window, dy rows down the pattern. (r 1) + (1 c) broadcasts to
+   ; (r c); cy doubles y so the ripple is round in cell aspect (a cell is about twice
+   ; as tall as wide). the net of the four waves lands in [-4, 4].
+   ; dy is what lets a caller nail the skin to a world that scrolls under it (a/rove/
+   ; slop.l): the row grid is built once and only the two y terms are laid again.
+   (ink-drift r c) (:
      ycol (star-tray [r 1] ^r)
      xrow (star-tray [1 c] ^c)
      y2 (ycol * 1.0 + xrow * 0.0)
      x2 (ycol * 0.0 + xrow * 1.0)
      cx (x2 - c / 2.0)
-     cy ((y2 - r / 2.0) * 2.0)
-     rr (1 / 2 $ cx * cx + cy * cy)
-     (field t) (sin (x2 * 0.09 + t) +
-                sin (y2 * 0.16 - t * 0.7) +
-                sin ((x2 + y2) * 0.06 + t * 0.4) +
-                sin (rr * 0.11 - t))
+     (field t dy) (: yy (y2 + (dy * 1.0))
+                     cy ((yy - r / 2.0) * 2.0)
+                     rr (1 / 2 $ cx * cx + cy * cy)
+                   (sin (x2 * 0.09 + t) +
+                    sin (yy * 0.16 - t * 0.7) +
+                    sin ((x2 + yy) * 0.06 + t * 0.4) +
+                    sin (rr * 0.11 - t)))
      field)
+   ; the same skin, nailed to the screen: what ink itself wants
+   (ink-field r c) (: d (ink-drift r c) (\ t (d t 0.0)))
 
    ; the scene: the ocean ramp over the skin, as a frame(t) that runs headless
    ; into a jug -- the wasm console drives it. quantize to 24 ramp indices, say

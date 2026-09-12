@@ -60,7 +60,7 @@
   (all (s \ (s <= 1)) steps)                     ; never a two-row drop
   (0 < tally (filter (s \ (s = 1)) steps))       ; but it does move
   (2 < ((last srt) - cap srt))                   ; bays and headlands, not a straight line
-  (all (x \ (2 <= (slop-sand g x) <= 6)) ^80)))  ; and a beach of two to six rows behind it
+  (all (x \ (3 <= (slop-sand g x) <= 9)) ^80)))  ; and a beach of three to nine rows behind it
 
 ; --- the ground in three bands: sand behind the line, grass in front, road through ---
 (: g (slop-new 23 80 (wheel 11))
@@ -79,9 +79,9 @@
    rx (slop-road g 20)
    near ((slop-shore g rx) + slop-sand g rx)     ; the beach's last row at the road
  (test
-  (3 = road-width g 20)                          ; out in the field it is a track
-  (road-width g 20 < road-width g (near + 2))    ; nearer the sand it fans
-  (road-width g (near + 2) < road-width g (near + 1))
+  (5 = road-width g 20)                          ; out in the field it is a track
+  (road-width g 20 < road-width g (near + 3))    ; nearer the sand it fans
+  (road-width g (near + 3) < road-width g (near + 2))
   (46 = <(slop-turf g 20 rx))                    ; and you are always on bare dirt
   (all (w \ (brown? (slop-turf g w (slop-road g w)))) (map (i \ (i + 2)) ^30))))
 
@@ -243,6 +243,30 @@
   (has? f "\e[K") (has? f "\r\n")
   (has? f "to go")))
 
+; --- the skin drifts with the ground: the same phase over a scrolled world is a
+; different picture, and it is the picture the unscrolled world had one row up ---
+(: g (slop-new 23 80 (wheel 11))
+   _ (drive g (h \ ((h 'wtop) < -18)))
+   t0 (g 't)
+   k0 (peep ((g 'field) t0 (g 'wtop)) [0 0] 0)         ; the skin's top-left cell, where we are
+   k1 (peep ((g 'field) t0 ((g 'wtop) + 1)) [0 0] 0)   ; ..and one row of drift along
+   k2 (peep ((g 'field) t0 (g 'wtop)) [1 0] 0)         ; the cell below it, undrifted
+ (test
+  !(k0 = k1)                                     ; a scroll moves the skin
+  (|(k1 - k2) < 0.000001)))                      ; by exactly one row of it
+
+; --- the flood: the end is slop over the whole screen and nothing else ---
+(: g (slop-new 23 80 (wheel 11))
+   f (slop-flood g 1.0)
+ (test
+  (string? f)
+  (has? f "\e[H")
+  (has? f "\e[48;5;")                            ; slop
+  !(has? f "\e[38;5;34m") !(has? f "\e[38;5;94m")    ; no grass, no road
+  !(has? f "\e[38;5;180m") !(has? f "@") !(has? f "~")  ; no sand, no you, no surf
+  (has? f "to go")                               ; the bar is the one thing left standing
+  !((slop-flood g 1.0) = (slop-flood g 2.0))))   ; and it runs: a phase is a picture
+
 ; a row with no slop in it is the same string every time, so it is painted once and
 ; kept; a row the shore cuts is laid fresh every frame, because the shimmer moves
 (: g (slop-new 23 80 (wheel 11))
@@ -253,6 +277,62 @@
    _ (slop-frame g)
    cut (tally (filter (w \ (w <= (g 'wetto))) (keys (g 'rows))))
  (test (f1 = f2) (0 < kept) (0 = cut)))
+
+; --- the song: gwen's tidal line, note for note, and a tempo the walk drags on ---
+;   chunk 4 (|- n 5) . jux rev . arp "pinkyup down"
+;     $ n "e'min'7 e'maj'7 d'min'7 d'maj'7"
+; tidal's '7 is the count of notes, so each triad runs out through the octaves until
+; it has seven: e minor is 4 7 11 16 19 23 28. pinkyup sounds the top after each of
+; the others (twelve notes), down just falls (seven), and jux rev doubles the lot.
+(: tune (slop-tune ())
+   (notes c) (map (x \ peep (evv x) 'note 'none) (filter onset? (tune (qi c) (qi (c + 1)))))
+   c0 (notes 0) c2 (notes 2)
+   one (take 38 c0)                              ; one channel of it; jux rev is the other
+ (test
+  (76 = tally c0)                                ; 12 + 12 + 7 + 7, twice over
+  (76 = tally c2)
+  ; cycle 0 drops its FIRST quarter five semitones -- that is chunk 4 (|- n 5)
+  ('(-1 23 2 23 6 23 11 23 14 23 18 23) = take 12 one)
+  ; the second quarter is e major, pinkyup, untouched
+  ('(4 28 8 28 11 28 16 28 20 28 23 28) = take 12 (drop 12 one))
+  ; the third and fourth fall: d minor then d major
+  ('(26 21 17 14 9 5 2) = take 7 (drop 24 one))
+  ('(26 21 18 14 9 6 2) = take 7 (drop 31 one))
+  ; cycle 2 leaves the first two alone and drops the THIRD
+  ('(4 28 7 28 11 28 16 28 19 28 23 28) = take 12 c2)
+  ('(21 16 12 9 4 0 -3) = take 7 (drop 24 c2))
+  ; a sine, and a note that rings a third of a second
+  ("sin" = peep (evv (cap (filter onset? (tune (qi 0) (qi 1))))) 's 'none)))
+
+; the tempo falls with the cost, but only to a third: a twentieth of a tempo is none
+(: g (slop-new 23 80 (wheel 11))
+   (row-at gp) (: (go w) (? (w < -30) ()
+                            (: q (w - slop-shore g (slop-road g w))
+                             (? (q = gp) w (go (w - 1)))))
+                  (go 22))
+   (sp gp) (: w (row-at gp) (? (charm? w) (: _ (pin g 'w w) (slop-song-speed g)) 'none))
+ (test
+  (1.0 = sp 30) (1.0 = sp 20)                    ; out in the field it runs at tempo
+  (sp 1 < sp 10) (sp 10 < sp 20)                 ; and drags all the way in
+  (0.3 <= sp 1 <= 0.4)))                         ; ..to a third of it, and no further
+
+; the voices go out a port, so a jug plays the part of the card: real PCM, not silence
+(: tune (slop-tune ())
+   j (jug 0)
+   s (slop-song-new tune j)
+   (feed n) (? (0 < n) (: _ (slop-song-feed s 1.0) (feed (n - 1))))
+   _ (feed 10)
+   pcm (slurp j)
+   (samp i) (: v ((peep pcm (i * 2) 0) + ((peep pcm ((i * 2) + 1) 0) << 8))
+             (? (v > 32767) (v - 65536) v))
+   n (#pcm // 2)
+   peak (foldl (\ a i (: v |(samp i) (a < v ? v a))) 0 ^n)
+ (test
+  (64000 = #pcm)                                 ; ten chunks of 1600 stereo frames
+  (0 < peak)                                     ; something sounded
+  (peak < 32768)                                 ; and it did not clip
+  (0 < tally (s 'vs))                            ; voices are live
+  (0 < s 'cyc)))                                 ; and a cycle has been scheduled
 
 ; --- the clock slows with the walk: the same beat buys less phase further in ---
 (: g (slop-new 23 80 (wheel 11))

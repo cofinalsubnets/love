@@ -18,7 +18,13 @@
 ; into grass, sand and road, slop-road puts the path on two sines, and the shoreline and
 ; the depth of beach behind it are two more, laid out per column at the start. so
 ; scrolling costs nothing and the same shore is there when it comes back. a row with no
-; slop in it is painted once and kept by world row.
+; slop in it is painted once and kept by world row, and the skin is asked for at the
+; world row on top rather than at zero, so it drifts with the ground under it.
+;
+; the song is harp's (a/harp): gwen's tidal line, arpeggiated chords over four cycles,
+; scheduled a cycle at a time at whatever tempo the walk is down to -- so the music
+; drags with everything else and no note's pitch bends. the card takes a chunk at the
+; rate it plays one, which is what paces the frame loop when there is a card at all.
 ;
 ; run: love slop
 ; the game is pure love -- slop-new, slop-key, slop-tick and slop-frame are state in
@@ -26,10 +32,19 @@
 ; tty / cue?, over i/posix.c), so slop never joins the corpus. ink lends the skin and
 ; the palette, rove the helm and the die.
 (module (slop slop-run slop-main slop-new slop-sy slop-gap slop-cost slop-rate
-         slop-step slop-push slop-key slop-tick slop-frame slop-bar slop-road slop-turf
+         slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-road slop-turf
+         slop-tune slop-song-speed slop-song-new slop-song-feed
          slop-shore slop-sand slop-wet?)
 (borrow 'ink)
 (borrow 'rove)
+; harp is OPTIONAL the way posix is: the song wants its cycle algebra, the walk wants
+; none of it, and a seat carrying no harp plays the game in silence. every name off it
+; is spelled inside a lambda, so an absent one costs nothing until the song is asked
+; for. a/harp/play.l rides beside it in the same roster and is NOT a module -- it is a
+; bare letrec, so the crew cat splices mkvoice, mixdown and pack ambiently and harp
+; being a module is the whole test. borrowing harp shadows prel's rev and every with
+; the pattern ones, so the list reverse is lrev from here down.
+(? (tablet? (cite 'harp)) (borrow 'harp) ())
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
@@ -63,7 +78,7 @@
  ; over and the edge drops two rows at once and the whole thing reads as a skyline.
  ; here the shore is 0.61 and the sand 0.42.
  (shore-wave x) (int ((3.0 * sin (x * 0.17)) + (1.8 * sin (x * 0.058))))
- (sand-deep x) (4 + int ((1.5 * sin (x * 0.23)) + (0.9 * sin (x * 0.081))))
+ (sand-deep x) (6 + int ((2.2 * sin (x * 0.23)) + (1.4 * sin (x * 0.081))))
  ; the mean shoreline: half a screen and a little more above the first frame's top, but
  ; never nearer than the deepest beach the columns actually laid, so the opening screen
  ; is field and nothing else on a short terminal too
@@ -87,7 +102,7 @@
    (? (w <= s) [46 (sand-pens (h % 4))]
       (: rx (slop-road g w)
          d (w - ((slop-shore g rx) + slop-sand g rx))    ; rows of grass the road has left
-         hw (? (d < 0) 4 (d < 4) (4 - d) 1)
+         hw (? (d < 0) 6 (d < 4) (6 - d) 2)              ; five columns wide, thirteen at the sand
        (? (|(x - rx) <= hw) [46 (road-pens (h % 3))]
           (h < 9)   [35 (turf-pens (h % 2))]
           (h < 27)  [46 (turf-pens (h % 3))]
@@ -108,7 +123,7 @@
      g {'r r 'c c 'wtop 0 'w (r - 1) 'shore0 sh0 'shores shores 'sands sands
         'wetto wetto 'climb ((r - 1) - (r // 3)) 'drag (r - 3)
         'push 0 'spent 0 't 0.0 'msg "" 'over 0
-        'sb {st} 'rows {} 'field (ink-field r c)}
+        'sb {st} 'rows {} 'field (ink-drift r c)}
    (pin g 'span (slop-gap g), g))
 
  ; where you stand on the screen, and the rows between you and the slop at your own
@@ -196,9 +211,13 @@
      _ (go 0 0 -1 -1)
    (slurp j))
 
+ ; the skin is asked for at the world row on the screen's top, not at row zero, so the
+ ; slop drifts with the ground under it rather than sitting still against a moving shore
+ (slop-skin g) (((((g 'field) (g 't) (g 'wtop)) + 4.001) * 2.9) // 1)
+
  (slop-frame g) (:
-   j (jug 0) r (g 'r) wtop (g 'wtop) wetto (g 'wetto) fld (g 'field)
-   k (((fld (g 't) + 4.001) * 2.9) // 1)
+   j (jug 0) r (g 'r) wtop (g 'wtop) wetto (g 'wetto)
+   k (slop-skin g)
    sy (slop-sy g) px (slop-road g (g 'w))
    ; where the shore has closed over you, a dark mark is all that says so
    sunk (esc + "[38;5;52m@" + esc + "[39m")
@@ -210,11 +229,86 @@
    _ (say j (slop-bar g + esc + "[K"))
    (slurp j))
 
+ ; the end: the shore closed over you, so the screen is slop and nothing else. no
+ ; ground, no road, no you -- the bar under it is the only thing left standing.
+ (slop-flood g t) (:
+   j (jug 0) r (g 'r) c (g 'c)
+   k (((((g 'field) t (g 'wtop)) + 4.001) * 2.9) // 1)
+   (row i q p) (q < c ? (: n (int (peep k [i q] 0))
+                         (n = p ? () (say j (pal n)), say j " ", row i (q + 1) n)))
+   (rows i) (i < r ? (row i 0 -1, say j (esc + "[0m" + esc + "[K\r\n"), rows (i + 1)))
+   _ (say j (esc + "[H"))
+   _ (rows 0)
+   _ (say j (slop-bar g + esc + "[K"))
+   (slurp j))
+
+ ; --- the song -----------------------------------------------------------------
+ ; gwen's tidal line, note for note:
+ ;   chunk 4 (|- n 5) . jux rev . arp "pinkyup down"
+ ;     $ n "e'min'7 e'maj'7 d'min'7 d'maj'7" # s "notes" # sus 2
+ ; tidal's `'7` is the count of notes, not a seventh: each triad is run out through
+ ; the octaves until it has seven. harp has no arp and no chord names, so the four
+ ; are written out and the two arp modes are list walks.
+ chords [[4 7 11 16 19 23 28]           ; e minor
+         [4 8 11 16 20 23 28]           ; e major
+         [2 5 9 14 17 21 26]            ; d minor
+         [2 6 9 14 18 21 26]]           ; d major
+ ; pinkyup sounds the top note after each of the others; down just falls
+ (pinkyup l) (: top (cap (lrev l))
+                (go k acc) (? ((k + 1) < #l) (go (k + 1) (top . (l k) . acc)) (lrev acc))
+                (go 0 ()))
+ (arp-of q) (? (q < 2) pinkyup lrev)    ; "pinkyup down": the first half, then the second
+ ; the tune, built on first use so a seat without harp never reaches these names.
+ ; four quarters to the cycle and four cycles to the round, the k'th cycle dropping
+ ; its k'th quarter five semitones -- which is what chunk 4 does. sine, because the
+ ; piano it was written for is not the point; the notes are.
+ (slop-tune _)
+  (: (quarter q sh) (fastcat (map (v \ note (pure (v + sh))) ((arp-of q) (chords q))))
+     (cyc k) (fastcat (map (q \ quarter q (? (q = k) -5 0)) ^4))
+   (jux rev (pset (pset (slowcat (map cyc ^4)) (hit (pure "sin")))
+                  (legato (pure 0.34)))))
+
+ song-rate 48000
+ song-cps 0.55                          ; cycles a second at full speed
+ song-chunk 1600                        ; a frame's worth of frames, thirty a second
+ song-gain 6500.0
+ ; the music slows with the walk -- but only to a third of tempo. slop-rate falls to a
+ ; twentieth by the shore, and a twentieth of a tempo is not a tempo any more.
+ (slop-song-speed g) (0.3 + (0.7 * slop-rate g))
+ (slop-song-new tune h) {'tune tune 'h h 'fpos 0 'cyc 0 'next 0 'vs ()}
+ ; one cycle's onsets as voices, the cycle starting at frame st and spc frames long.
+ ; each is kept as [start voice] rather than harp's bare voice: a whole cycle is
+ ; scheduled at once and a voice that has not begun is silent but not free -- its
+ ; closure still runs over every frame of the chunk -- so the mixdown wants the start
+ ; to drop it by, and only the end is in the voice itself.
+ (song-voices s c st spc)
+  (filter two?
+          (map (\ x (: at (st + (int (spc * (qnum ((evwb x) - (qi c))))))
+                       v (mkvoice at (evv x) song-rate)
+                     (? (two? v) [at v] ())))
+               (filter onset? ((s 'tune) (qi c) (qi (c + 1))))))
+ ; one chunk out the horn. whole cycles are scheduled ahead of the write head at the
+ ; speed in force when their turn comes, so a tempo change lands on a bar line and no
+ ; note's pitch bends with it -- the onsets move, the oscillators do not.
+ ; the write is also the clock: the card takes a chunk at the rate it plays one, so a
+ ; frame loop that feeds it needs no rest of its own.
+ (slop-song-feed s sp)
+  (: spc (int (song-rate / (song-cps * sp)))
+     (fill _) (? ((s 'next) <= ((s 'fpos) + song-chunk))
+                 (: _ (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc)))
+                    _ (pins s 'cyc ((s 'cyc) + 1) 'next ((s 'next) + spc))
+                  (fill ())))
+     _ (fill ())
+     base (s 'fpos)
+     live (filter (p \ (((p 1) 0) >= base)) (s 'vs))       ; not finished
+     now (filter (p \ ((p 0) < (base + song-chunk))) live) ; ..and already begun
+     _ (pins s 'vs live 'fpos (base + song-chunk))
+   (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
+
  (presses n) (show n + (n = 1 ? " press" " presses"))
  (slop-bar g) (? (g 'over = 'taken) ("the slop has you -- " + presses (g 'spent) + " spent")
                  (g 'over) ("you turn back -- " + presses (g 'spent) + " spent")
-                 ("press " + show (slop-cost g) + " for a square  "
-                  + show (slop-gap g) + " to go  "
+                 (show (slop-gap g) + " to go  "
                   + show (g 'spent) + " spent  "
                   + (g 'msg || "forward: k or up; q leaves")))
 
@@ -225,15 +319,31 @@
              r (two? ws && 7 < <ws ? (<ws - 1) 23)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (slop-new r c (wheel (clock 0)))
+             ; the song, if this seat has one: harp for the notes, a horn to put them
+             ; out of. no harp or no card and the walk is silent, which is all it is.
+             tune (? (tablet? (cite 'harp)) (slop-tune ()) ())
+             hn (? tune (: r (horn song-rate 2) (? (nom? r) () r)) ())
+             sng (? hn (slop-song-new tune hn) ())
+             ; a chunk of song is a frame's worth and the card takes it at playing
+             ; speed, so with a horn the music is the clock; without one, rest is
+             (beat-out sp) (? sng (slop-song-feed sng sp) (rest 33))
              (drain _) (cue? 0 ? (slop-key g (edkey in), drain ()))
              (swim _) (? (g 'over) ()
                          (: _ (drain ())
                             _ (g 'over ? () (slop-tick g))
-                            (say out (slop-frame g), flush out, rest 33, swim ())))
+                            (say out (slop-frame g), flush out,
+                             beat-out (slop-song-speed g), swim ())))
              _ (raw 1)
              _ (say out (esc + "[?1049h" + esc + "[?25l" + esc + "[2J"))
              _ (swim ())
-             _ (g 'over = 'taken ? (rest 1200))   ; the end holds its frame for a beat
+             ; taken: the slop closes over the whole screen and runs at full rate --
+             ; no gap left to slow it -- for half a second before the stage is left
+             ; the flood runs at full rate and so does the song under it: there is no
+             ; gap left to slow either one
+             (flood n t) (? (0 < n) (: _ (say out (slop-flood g t), flush out, beat-out 1.0)
+                                     (flood (n - 1) (t + beat))))
+             _ (g 'over = 'taken ? (flood 15 (g 't)))
+             _ (? hn (: _ (flush hn) (close hn)) ())
              _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
              _ (flush out)
              _ (raw 0)
