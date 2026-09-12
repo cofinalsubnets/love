@@ -37,7 +37,9 @@
    ; `make install` generates the three man pages from doc/{love,cook,lush}.md.
    sp-own '("bin" "dl" "doc/misc" ".*")
    sp-ign? (cite 'sb 'ign?)
-   (sp-rules drops) (((cite 'sb 'igs) 0) + sp-own + drops)
+   ; sb's directory-only built-ins ride as plain rules here: this walk has no stat to
+   ; ask, and the cut knows its own tree holds no file by those names
+   (sp-rules drops) (((cite 'sb 'igs) 0) + (cite 'sb 'igsdir) + sp-own + drops)
    ; handed to the walk, not run after it, so a rejected directory is never descended
    ; into. .sbignore itself has to ride: a seeded tree cuts itself with the same law.
    (sp-keep? rules nom) ((nom = ".sbignore") || !(sp-ign? nom rules))
