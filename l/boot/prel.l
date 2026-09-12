@@ -63,8 +63,12 @@
      _ (place (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    ;; FIXME rename | -> bit-or to free | for pipe operator
-   (constellation? x) (| (charm? x) (| (packp x) (big? x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
-   (whole? n) (| (charm? n) (| (sun? n) (big? n)))       ; integer-valued numeral (exact power exponent / composition count)
+   (constellation? x) (| (charm? x) (packp x))   ; whole tower: fixnum / float / boxed int / complex / array
+   (whole? n) (| (charm? n) (sun? n))       ; integer-valued numeral (exact power exponent / composition count)
+   ; this build's machine word, off the fixnum bound C publishes: a charm spends one bit,
+   ; so the word reaches exactly twice as far. what fits here fits an int tray cell.
+   max-word (+ (* max-charm 2) 1)
+   min-word (* min-charm 2)
    ; apcap: a public tunable ceiling. a numeral compose count above it scares instead of
    ; allocating O(k), so (bignum f) asks for help where it would oom. retune: (pin apcap 0 n).
    apcap (pin (tablet 0) 0 1048576)              ; (a raw box: the brace's hash isn't built yet)
@@ -714,7 +718,12 @@
 ; a-type answers a witness star of the highest tier present -- an inhabitant, not a code, since
 ; the generic `tray` ctor reads the tier off a witness. past the numeric tower the whole array
 ; lifts to an object array. a shape dimension may be any numeric and saturates to a nat.
-(: (a-rank x) (? (gem? x) 1 (charm? x || sun? x) 0 (twin? x) 2 3)
+(: ; the int tier takes a cell one machine word wide, so what belongs in it is a question
+   ; of magnitude, not of which box the numeral came in. anything wider lifts to O, where
+   ; the cell holds the value itself.
+   ; whole? first: love orders across kinds, so a bare magnitude test would seat a twin
+   ; in the int tier and say nothing about it.
+   (a-rank x) (? (gem? x) 1 (twin? x) 2 (whole? x && (min-word <= x <= max-word)) 0 3)
    (a-emax m x) (: k (a-rank x) (m < k ? k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (k = 0) 0 (k = 1) 0.0 (k = 2) (twin 0 0) ()))   ; a witness star of the tier
    (a-dim d) (two? d ? #d $d)

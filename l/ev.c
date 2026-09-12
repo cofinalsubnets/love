@@ -1934,13 +1934,12 @@ struct ai_zn ai_net(struct ai *g, word x) {
       return s; }
     case DBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
     case DGem: return zn(gem_get(x), 0);                         // a boxed float nets its value
-    case DSun: return zn((ai_flo_t) sun_get(x), 0);             // a sun nets its value
     case DTwin: return zn(twin_re(x), twin_im(x));               // a complex nets itself (phase intact)
     case DMint: return zn(0, 0);                                 // a bare point nets nothing (the distinct nothing)
     case DNom: { ai_flo_t t = 0; struct ai_str *s = str(nom(x)->name);  // a named point nets its spelling's charms
       for (uintptr_t i = 0; i < s->len; i++) t += (uint8_t) txt(s)[i];
       return zn(t, 0); }
-    case DTray: { struct ai_tray *v = tray(x);                 // a rank>=1 tray (the scalar stars are DGem/DSun/DTwin)
+    case DTray: { struct ai_tray *v = tray(x);                 // a rank>=1 tray (the scalar stars are DGem/DBig/DTwin)
       uintptr_t i, n = tray_nelem(v);
       struct ai_zn s = zn(0, 0);                                  // rank>=1 array -> Σ elem
       if (v->type == ai_C) { ai_flo_t *d = tray_data(v);

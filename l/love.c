@@ -21,7 +21,7 @@ static intptr_t seq_byte(word x);
 // the nifs.h table lands mid-file and names these, so the whole set is declared up here
 // (lvm_subn's body comes out of avm_slow, which carries no storage class of its own).
 static lvm_t
- lvm_apof, lvm_bigp, lvm_stack, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
+ lvm_apof, lvm_stack, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
  lvm_gauge, lvm_intf, lvm_key, lvm_kreg, lvm_link, lvm_mint, lvm_mintp, lvm_lib, lvm_namep,
  lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setstack, lvm_setp,
  lvm_snip, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
@@ -785,9 +785,8 @@ op11(lvm_namep, namep(Sp[0]) ? putcharm(1) : zero)
 // mint? and name? partition nom?, and () is in neither. the only way to ask, since
 // `string` answers text for every point alike and a mint's spelling is "".
 op11(lvm_mintp, (mintp(Sp[0]) && Sp[0] != ZeroPoint) ? putcharm(1) : zero)
-op11(lvm_packp, (packp(Sp[0]) || gemp(Sp[0]) || sunp(Sp[0]) || twinp(Sp[0])) ? putcharm(1) : zero)  // the pack family: arrays + the lean gem/sun/twin scalar boxes
-op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : zero)
-op11(lvm_sunp, sunp(Sp[0]) ? putcharm(1) : zero)
+op11(lvm_packp, (packp(Sp[0]) || gemp(Sp[0]) || bigp(Sp[0]) || twinp(Sp[0])) ? putcharm(1) : zero)  // the pack family: arrays + every boxed number, gem/sun/twin
+op11(lvm_sunp, bigp(Sp[0]) ? putcharm(1) : zero)
 op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
 // (int x): truncate a float scalar to a fixnum; other numbers pass through. used by
 // num-ap to get an integer composition count from a non-integer numeral operator.
@@ -1065,13 +1064,12 @@ uintptr_t ai_tray_bytes(struct ai_tray *v) {
  lvm(name) { ai_musttail return Ap(handler, g); }
 DSENT(0,  lvm_sym,     data_sym_apply)
 DSENT(1,  lvm_nom,     data_sym_apply)
-DSENT(2,  lvm_sunbox,  data_num_apply)
-DSENT(3,  lvm_gembox,  data_num_apply)
-DSENT(4,  lvm_twinbox, data_num_apply)
-DSENT(5,  lvm_big,     data_num_apply)
-DSENT(6,  lvm_tray,    data_num_apply)
-DSENT(7,  lvm_str,     data_string_apply)
-DSENT(8,  lvm_chain,   data_pair_apply)
+DSENT(2,  lvm_gembox,  data_num_apply)
+DSENT(3,  lvm_twinbox, data_num_apply)
+DSENT(4,  lvm_big,     data_num_apply)
+DSENT(5,  lvm_tray,    data_num_apply)
+DSENT(6,  lvm_str,     data_string_apply)
+DSENT(7,  lvm_chain,   data_pair_apply)
 #else
 lvm(lvm_tray)   { ai_musttail return Ap(data_num_apply, g); }
 lvm(lvm_big)   { ai_musttail return Ap(data_num_apply, g); }
@@ -1080,7 +1078,6 @@ lvm(lvm_sym)   { ai_musttail return Ap(data_sym_apply, g); }
 lvm(lvm_nom)   { ai_musttail return Ap(data_sym_apply, g); }
 lvm(lvm_chain) { ai_musttail return Ap(data_pair_apply, g); }
 lvm(lvm_gembox)   { ai_musttail return Ap(data_num_apply, g); }
-lvm(lvm_sunbox)  { ai_musttail return Ap(data_num_apply, g); }
 lvm(lvm_twinbox)  { ai_musttail return Ap(data_num_apply, g); }
 #endif
 

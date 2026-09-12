@@ -778,7 +778,6 @@ static enum eqstep eqv_leaf(struct ai *g, word a, word b) {
    size_t la = ai_tray_bytes(tray(a)), lb = ai_tray_bytes(tray(b));
    return la == lb && !memcmp(tray(a), tray(b), la) ? eq_yes : eq_no; }
   case DGem: return gem_get(a) == gem_get(b) ? eq_yes : eq_no;   // the float payload (parallels = / cmp)
-  case DSun: return sun_get(a) == sun_get(b) ? eq_yes : eq_no;
   case DTwin: return twin_re(a) == twin_re(b) && twin_im(a) == twin_im(b) ? eq_yes : eq_no;
   case DBig: { struct ai_big *x = big(a), *y = big(b);
    size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(ai_limb);
@@ -1029,9 +1028,9 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
    default:       of = __builtin_add_overflow(av, bv, &t); break; }   // vop_add
   if (!of) {                                    // demote-or-box the result
    if (t >= mincharm && t <= maxcharm) return putcharm(t);
-   if (!ai_ok(g = ai_have(g, sun_req))) return *fp = g, zero;
+   if (!ai_ok(g = ai_have(g, wbig_req))) return *fp = g, zero;
    *fp = g;
-   return mk_sun(&g->hp, t); } }
+   return mk_wbig(&g->hp, t); } }
  // bignum lane: ai_big_binop computes sp[0] (op) sp[1], leaves it at sp[1],
  // pops one, and advances ip -- so save/restore ip and pop the net result.
  if (!ai_ok(g = ai_push(g, 2, a, b))) return *fp = g, zero;
@@ -1063,11 +1062,11 @@ static struct ai *tray_to_obj(struct ai *g, int slot) {
    ai_flo_t e = tray_get_flo(s, i);
    if (!ai_ok(g = ai_have(g, gem_req))) return g;
    v = mk_gem(&g->hp, e); }
-  else {                                                       // int -> fixnum or sun box
+  else {                                                       // int -> fixnum or boxed
    intptr_t e = tray_get_int(s, i);
    if (e >= mincharm && e <= maxcharm) v = putcharm(e);
-   else { if (!ai_ok(g = ai_have(g, sun_req))) return g;
-    v = mk_sun(&g->hp, e); } }
+   else { if (!ai_ok(g = ai_have(g, wbig_req))) return g;
+    v = mk_wbig(&g->hp, e); } }
   tray_put_obj(tray(g->sp[0]), i, v);                            // re-fetch dst post-box
   gen_wb(g, g->sp[0], v); }                                    // ... and barrier it: see obin_run
  word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root
@@ -1439,14 +1438,7 @@ lvm(lvm_conj) {
   ai_musttail return Next(1); }
  ai_musttail return Answer(ZeroPoint); }
 
-// (abs z): magnitude in its own tier; |INTPTR_MIN| promotes to a bignum (the one
-// magnitude the box can't hold), its limb scratch out of line per the lvm scratch rule.
-static ai_noinline word abs_wmin(struct ai *g) {
- uintptr_t u = (uintptr_t) 1 << (Bits - 1);
- ai_limb lb[wlimbs];
- for (int i = 0; i < wlimbs; i++) lb[i] = (ai_limb) (u >> (limb_bits * i));
- return ai_big_canon(&g->hp, lb, wlimbs, false); }
-
+// (abs z): magnitude in its own tier; a boxed integer copies with its sign word flipped.
 lvm(lvm_abs) {
  word a = Sp[0], _res;
  if (charmp(a)) {
@@ -1463,16 +1455,6 @@ lvm(lvm_abs) {
   ai_flo_t v = gem_get(a); if (v < 0) v = -v;
   Have(box_req);
   emit_gem(_res, v);
-  ai_musttail return Answer(_res); }
- if (sunp(a)) {
-  intptr_t n = sun_get(a);
-  if (n == INTPTR_MIN) {                              // |INTPTR_MIN| = 2^(W-1): the bignum lane
-   Have(b2w(sizeof(struct ai_big) + wlimbs * sizeof(ai_limb)));
-   Pack(g);                                           // canon bumps the synced g->hp, lvm_bmul's law
-   word r = abs_wmin(g);
-   Unpack(g);
-   ai_musttail return Answer(r); }
-  Have(box_req); emit_int(_res, n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
   ai_musttail return Answer(_res); }
  if (bigp(a)) {
   struct ai_big *x = big(a);

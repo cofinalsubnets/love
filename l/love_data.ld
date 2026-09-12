@@ -15,9 +15,8 @@ SECTIONS {
     KEEP(*(love.data.5))  . = __start_love_data + 96;
     KEEP(*(love.data.6))  . = __start_love_data + 112;
     KEEP(*(love.data.7))  . = __start_love_data + 128;
-    KEEP(*(love.data.8))  . = __start_love_data + 144;
     __stop_love_data = .;
   }
 } INSERT AFTER .text;
-ASSERT(__stop_love_data - __start_love_data == 9 * 16,
+ASSERT(__stop_love_data - __start_love_data == 8 * 16,
        "love_data: slot count moved -- sync love.h's ai_data_n and mx.l")

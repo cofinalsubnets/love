@@ -172,7 +172,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
  else if (lamp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // a bare mint (DMint) is not indexable
   case DGem:                                    // a rank-0 scalar float: a zero key derefs to itself
-  case DSun:                                   // ... same for a sun
+  case DBig:                                    // ... same for a boxed integer
   case DTwin:                                   // ... and a complex scalar
    if (zerop(k)) z = x;
    break;
@@ -314,10 +314,6 @@ int hash_leaf(struct ai *g, word x, uintptr_t *out, word *src) {
     return *out = h, 0; }
    case DGem: {                                 // hash the lean box (ap is GC-stable, payload is the value)
     uintptr_t len = gem_req * sizeof(word), h = mix;
-    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, 0; }
-   case DSun: {                                // same: hash the lean box bytes
-    uintptr_t len = sun_req * sizeof(word), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return *out = h, 0; }
    case DTwin: {                                // same: hash the lean (ap, re, im) box bytes

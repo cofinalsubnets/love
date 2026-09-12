@@ -42,8 +42,6 @@
   [
    ['apply "📋" "apply"
     ("(verb) the binary operation of calling a function with an argument. corresponds to exponentiation in " + ref 'church "church arithmetic" + ". written <code>(f x)</code> meaning apply <code>f</code> to <code>x</code>. see also: " + g 'curry)]
-   ['big "💥" "big"
-    ("a big integer aka bignum. a type of " + g 'star)]
    ['blue "🔵" "blue"
     (g 'color + " of a value whose net has no positive real part: (<code>0</code>, <code>()</code>, <code>\"\"</code>, <code>'(1 2 -3)</code>, and every pure phase &mdash; <code>i</code> has magnitude but no amount). boolean false.")]
    ['book "📒" "book"
@@ -98,11 +96,11 @@
    ['sat "🌊" "saturate (<code>$</code>)"
     ("retraction of a value's " + g 'net + " (a " + g 'star + "-typed value) onto the " + hi 'blue "blue" + "-" + hi 'green "green" + " " + ref 'charm "charms" + ", ie. an integer in the interval [0, max-charm]. overflow and underflow go to the limit instead of wrapping (saturation). thus " + hi 'green "green" + " saturates to " + hi 'green "green" + " while both " + hi 'red "red" + " and " + hi 'blue "blue" + " saturate to " + hi 'blue "blue" + ".")]
    ['star "🌟" "star"
-    ("a scalar fixpoint of " + g 'net + ": " + g 'charm + ", " + g 'sun + ", " + g 'big + ", " + g 'gem + " or " + g 'twin + ".")]
+    ("a scalar fixpoint of " + g 'net + ": " + g 'charm + ", " + g 'sun + ", " + g 'gem + " or " + g 'twin + ".")]
    ['string "🧵" "string"
     "a byte vector: indexes its bytes (<code>(\"abc\" -1)</code> is <code>99</code>, counting from the end), joins on another string (<code>(\"ab\" \"cd\")</code> is <code>\"abcd\"</code>), nets its charm-sum."]
    ['sun "☀️" "sun"
-    ("a pointer-width integer (<code>intptr_t</code>). a type of " + g 'star)]
+    ("an integer too large for a " + g 'charm + ", at any width &mdash; one boxed tier, arbitrary precision. a type of " + g 'star)]
    ['tablet "📱" "tablet"
     ("see: " + g 'book)]
    ['tally "🧮" "tally"

@@ -601,7 +601,7 @@ uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 // both the +/* matrices and the apply sentinels dispatch on this.
 enum q ai_kind(word);
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_sunbox, lvm_twinbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and ai_typ
+lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and ai_typ
 // recover a data value's rep from its ap. the sentinels tile one section at
 // ai_data_stride in enum d order, so the slot is the kind: one subtract answers both
 // questions, and the compiler shares it between a datp and the typ after it. the base
@@ -614,11 +614,11 @@ static ai_inline enum d ai_typ(union u *o) {
 #else
 // the seats with no section to lay ask by name instead. the order is measured frequency,
 // not enum d's -- over a corpus run: chain 62%, nom 19%, string 13%, mint 5%, big 1.6%,
-// the other three under a tenth of a percent each.
+// the other two under a tenth of a percent each.
 static ai_inline bool in_data(void *a) {
  lvm_t *p = (lvm_t*) a;
  return p == lvm_chain || p == lvm_nom || p == lvm_str || p == lvm_sym || p == lvm_big
-     || p == lvm_tray || p == lvm_sunbox || p == lvm_gembox || p == lvm_twinbox; }
+     || p == lvm_tray || p == lvm_gembox || p == lvm_twinbox; }
 static ai_inline enum d ai_typ(union u *o) {
  lvm_t *p = o->ap;
  return p == lvm_chain  ? DChain
@@ -627,9 +627,8 @@ static ai_inline enum d ai_typ(union u *o) {
       : p == lvm_sym    ? DMint
       : p == lvm_big    ? DBig
       : p == lvm_tray   ? DTray
-      : p == lvm_sunbox ? DSun
       : p == lvm_gembox ? DGem
-      :                   DTwin; }   // the 9th and last: lvm_twinbox
+      :                   DTwin; }   // the 8th and last: lvm_twinbox
 #endif
 #define str(_) ((struct ai_str*)(_))
 #define lamp evenp
@@ -865,7 +864,7 @@ ai_noinline ai_noicf lvm_t
  // tail-jumps straight to its apply handler -- the sentinel is the rep (enum d).
  // bodies are byte-identical, kept distinct by address (ai_noicf).
  data_num_apply, data_sym_apply, data_string_apply, data_pair_apply,
- lvm_sym, lvm_nom, lvm_sunbox, lvm_gembox, lvm_twinbox,
+ lvm_sym, lvm_nom, lvm_gembox, lvm_twinbox,
  lvm_big, lvm_tray, lvm_str, lvm_chain,
  lvm_addn, lvm_fquotn, lvm_muln,
  lvm_remn, _lvm_yieldk;
@@ -929,16 +928,16 @@ enum { KnName, KnAdd, KnMul, KnApply, KnHot, KnSub, KnNet, KnStar, KnDiv,
 // read a kind table's slot, or () if absent / the kind is not a tablet.
 static ai_inline word kind_get(struct ai *g, word kind, intptr_t i) {
  return tabp(kind) ? ai_mapget(g, zero, ai_core_of(g)->knom[i], kind) : zero; }
-// arbitrary-precision integer, its own sentinel kind: flat raw limbs, moved by
-// memcpy (a thread sound would misread even-and-in-pool limb words). slen = signed
-// limb count, little-endian, top limb nonzero; zero always demotes, so slen is
-// never 0. canonical demotion keeps charmp/sunp/bigp mutually exclusive.
+// the boxed integer -- love's `sun`, one kind at every width past a charm: flat raw
+// limbs, moved by memcpy (a thread sound would misread even-and-in-pool limb words).
+// slen = signed limb count, little-endian, top limb nonzero; zero always demotes, so
+// slen is never 0. canonical demotion keeps charmp and bigp mutually exclusive.
 struct ai_big { lvm_t *ap; intptr_t slen; ai_limb limb[]; };
 static ai_inline bool bigp(word _) { return lamp(_) && cell(_)->ap == lvm_big; }
 static ai_inline struct ai_big *ini_big(struct ai_big *b, intptr_t slen) {
  return b->ap = lvm_big, b->slen = slen, b; }
 uintptr_t ai_big_bytes(struct ai_big*);
-// canonicalize a magnitude into the smallest tier: fixnum, sun box, bignum
+// canonicalize a magnitude into the smaller tier: fixnum, else bignum
 // (bumps *hp when it boxes); one sink shared by the reader and the arith slow paths
 word ai_big_canon(word **hp, ai_limb const *limb, int n, bool neg);
 ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo)
@@ -961,7 +960,6 @@ struct ai
 
 // a boxed scalar float: a lean {ap, payload} box, two words
 static ai_inline bool gemp(word _) { return lamp(_) && cell(_)->ap == lvm_gembox; }
-static ai_inline bool sunp(word _) { return lamp(_) && cell(_)->ap == lvm_sunbox; }
 static ai_inline bool twinp(word _) { return lamp(_) && cell(_)->ap == lvm_twinbox; }
 static ai_inline bool trayp(word _) { return packp(_) && tray(_)->rank >= 1; }
 static ai_inline bool galaxyp(word _) { return trayp(_) && tray(_)->type != ai_O; }
@@ -1045,12 +1043,13 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
  return a - ai_trunc(a / b) * b; }
 
 // --- numeric tower helpers ---
-#define isnum(x) (charmp(x) || gemp(x) || sunp(x) || bigp(x))
-#define intp(x) (charmp(x) || sunp(x) || bigp(x))   // the integer tier, all three tiers of it
-// integer value of a fixnum-or-box operand (callers exclude floats and bignums)
-#define toint(x) (charmp(x) ? (intptr_t) getcharm(x) : sun_get(x))
+#define isnum(x) (charmp(x) || gemp(x) || bigp(x))
+#define intp(x) (charmp(x) || bigp(x))   // the integer tier, both tiers of it
+// integer value of a fixnum-or-box operand (callers exclude floats); a magnitude
+// past the word truncates to its low word, which is what a tray cell takes too
+#define toint(x) (charmp(x) ? (intptr_t) getcharm(x) : wbig_get(x))
 // double value of any numeric operand (a bignum widens via ai_big_to_flo)
-#define toflo(x) (charmp(x) ? (ai_flo_t) getcharm(x) : gemp(x) ? gem_get(x) : sunp(x) ? (ai_flo_t) sun_get(x) : ai_big_to_flo(x))
+#define toflo(x) (charmp(x) ? (ai_flo_t) getcharm(x) : gemp(x) ? gem_get(x) : ai_big_to_flo(x))
 #define twin_req Width(struct ai_twin)
 // the tagged fixnum range: putcharm spends one bit
 #define mincharm (INTPTR_MIN >> 1)
@@ -1059,7 +1058,7 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 // caller holds Have(box_req); takes no &local, so the caller keeps its tail call.
 #define emit_int(r, R) do { intptr_t _r = (R); \
  if (_r >= mincharm && _r <= maxcharm) r = putcharm(_r); \
- else r = mk_sun(&Hp, _r); } while (0)
+ else r = mk_wbig(&Hp, _r); } while (0)
 #define emit_gem(r, R) do { r = mk_gem(&Hp, (R)); } while (0)
 
 // RNG: state is a rank-1 i64 tray of length 4 (xoshiro256++), its payload raw
@@ -1083,10 +1082,8 @@ size_t strlen(char const*);
 struct ai_gem { lvm_t *ap; word w; };
 #define gem_req Width(struct ai_gem)
 #define gem(_) ((struct ai_gem*)(_))
-struct ai_sun { lvm_t *ap; intptr_t w; };    // raw intptr_t payload, no bit pun
-#define sun_req Width(struct ai_sun)
-#define sun(_) ((struct ai_sun*)(_))
-#define box_req (gem_req > sun_req ? gem_req : sun_req)     // what emit_int/emit_gem reserve
+#define wbig_req b2w(sizeof(struct ai_big) + wlimbs * sizeof(ai_limb))   // a word-sized magnitude, boxed
+#define box_req (gem_req > wbig_req ? gem_req : wbig_req)   // what emit_int/emit_gem reserve
 struct ai_twin { lvm_t *ap; word re, im; };   // two punned-double payload words
 #define twin(_) ((struct ai_twin*)(_))
 // pun through a union, not memcpy(&local,..): the memcpy form escapes a stack
@@ -1129,12 +1126,30 @@ static ai_inline word mk_twin(word **hpp, ai_flo_t re, ai_flo_t im) {
  twin_set(v, re, im);
  return word(v); }
 
-static ai_inline intptr_t sun_get(word x) { return ((struct ai_sun*) x)->w; }
-
-// allocate a sun box at *hpp (caller holds Have(sun_req)); no &local taken
-static ai_inline word mk_sun(word **hpp, intptr_t v) {
- struct ai_sun *w = (struct ai_sun*) *hpp; *hpp += sun_req;
- w->ap = lvm_sunbox; w->w = v; return word(w); }
+// the low machine word of a boxed integer, two's complement -- exact for anything
+// that fits a word and the truncating cell value for anything wider (a tray cell
+// takes a magnitude mod 2^w by the same rule).
+static ai_inline intptr_t wbig_get(word x) {
+ struct ai_big *b = (struct ai_big*) x;
+ intptr_t sl = b->slen;
+ int n = (int) (sl < 0 ? -sl : sl);
+ uintptr_t u = 0;
+ for (int i = 0; i < n && i < wlimbs; i++) u |= (uintptr_t) b->limb[i] << (limb_bits * i);
+ return (intptr_t) (sl < 0 ? (uintptr_t) 0 - u : u); }
+// a machine-word magnitude past the charm range, as a bignum of wlimbs or fewer:
+// one boxed integer tier, whatever the limb width. caller holds Have(wbig_req).
+// v is never 0 here -- every caller demotes the charm range first, and a zero-valued
+// bignum is not canonical.
+static ai_inline word mk_wbig(word **hpp, intptr_t v) {
+ struct ai_big *b = (struct ai_big*) *hpp;
+ bool neg = v < 0;
+ uintptr_t m = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;   // |INTPTR_MIN| survives unsigned
+ int n = wlimbs;
+ for (int i = 0; i < wlimbs; i++) b->limb[i] = (ai_limb) (m >> (limb_bits * i));
+ while (n > 1 && b->limb[n-1] == 0) n--;
+ ini_big(b, neg ? -n : n);
+ *hpp += b2w(sizeof(struct ai_big) + (size_t) n * sizeof(ai_limb));
+ return word(b); }
 
 // a tray key -> a row-major element offset: a fixnum on a rank-1 tray, else a
 // shape-list of `rank` fixnums. -1 = wrong rank or out of bounds (the caller's miss
@@ -1168,8 +1183,7 @@ static ai_inline bool tray_put(struct ai_tray *v, uintptr_t i, word x) {
   return true; }
  if (!isnum(x)) return false;
  if (v->type >= ai_R) tray_put_flo(v, i, toflo(x));
- else tray_put_int(v, i, charmp(x) ? (intptr_t) getcharm(x)
-                      : gemp(x) ? (intptr_t) gem_get(x) : sun_get(x));
+ else tray_put_int(v, i, gemp(x) ? (intptr_t) gem_get(x) : toint(x));
  return true; }
 
 // equality comparisons inline the fast identity check. eqv is declared HERE, not with the

@@ -1662,7 +1662,7 @@
    ; fold pinned max-charm -1 and flipped spec.l's `word`). uext? is the
    ; parse-level unsignedness read: an unsigned cast, or a bin riding one on its
    ; left -- an approximation, honest for the putcharm-style word math images use.
-   (cint? x) (charm? x || sun? x || big? x)
+   (cint? x) (charm? x || sun? x)
    (uext? e) (? !(two? e) ()
                 (<e = 'cast) (elem <>e '(uchar ushort uint ulong ullong))
                 (<e = 'bin) (uext? <>>e)
