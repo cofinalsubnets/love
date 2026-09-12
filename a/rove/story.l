@@ -113,9 +113,9 @@
                (<s @- (window-say g $ "?? " + show s)
                 'say (each >s (window-say g))
                 'ask (pin w 'prompt 1)
-                'hatch (: run (cite 'rove 'rove-run)
-                        (? run (run (), window-say g "you climb back out of the hold.")
-                           (window-say g "the hatch is sealed on this seat.")))))))
+                'hatch (: run (cite 'rove 'tower-run)
+                        (? run (run (), window-say g "you climb back out.")
+                           (window-say g "the way up is sealed on this seat.")))))))
  (mod nm k) (cite nm k)
  ; the interpreter, inside a window: a book to read or open off the thing's shelf, a
  ; look, a help, or a love form evaluated and shown -- every answer lands in the window
@@ -260,7 +260,7 @@
                   _ (pin th 'books (foldl (\ t f (pin t (nom (snip f 0 (#f - 2))) (b + "/" + f))) {} fs))
                   th)
    things (foldl (\ t i (: th (shelf i (wings i)) (pin t (th 'id) th))) {} (jot n))
-   _ (pin things 'hatch (thing 'hatch (w // 2) (h - 2) ">" 220 -1 "the hatch" '((say "a grating in the floor, and the hold below.") (hatch))))
+   _ (pin things 'hatch (thing 'hatch (w // 2) (h - 2) "<" 220 -1 "the stair" '((say "a stair in the corner, and the tower above.") (hatch))))
    (level "the library" 1 1 rows {} things))
 
  ; --- the runner: the story on cli's stage, a key a turn -----------------------------

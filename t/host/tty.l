@@ -1,5 +1,5 @@
 ; --- t/host/tty.l: the tty app runners, on a real terminal ---
-; the engines gate headless -- t/host/rove.l the crawl, t/host/story.l the fiction,
+; the engines gate headless -- t/host/rove.l the climb, t/host/story.l the fiction,
 ; a/ink.l's shimmer into a jug -- and each of those files says the same thing about
 ; what it leaves out: the RUNNER, the loop that asks the terminal its size, puts the
 ; app on the alternate screen, reads keys and steps ashore. that lane wants a
@@ -16,7 +16,7 @@
 ; TWO RULES, both learned here:
 ;
 ; THE SIZE IS SET FROM INSIDE THE CHILD. a fresh pty is 0x0 and the parent's
-; settty races the child's first `tty` -- rove reads its size ONCE and falls
+; settty races the child's first `tty` -- the climb reads its size ONCE and falls
 ; back to 22x80, so a lost race is a quiet 22-row deck and a gate that reddens one run
 ; in fifty. `stty` on the child's own tty before the exec cannot race.
 ;
@@ -48,7 +48,7 @@
    (rowtx s r) (: c (gaze s 2)
                   (foldl (\ a i (+ a (string (: ch (chat s (+ (* r c) i)) (? (= 0 ch) 32 ch)))))
                          "" (jot c)))
-   ; the crawl's deck is seeded off the clock, so where @ stands is nobody's law --
+   ; the climb's floor is seeded off the clock, so where @ stands is nobody's law --
    ; that it stands somewhere is
    (at s) (: c (gaze s 2) r (gaze s 1)
              (go i) (? ((r * c) <= i) () (64 = chat s i) ((i // c) . (i % c)) (go (i + 1)))
@@ -67,32 +67,32 @@
        _ (scribe s (held txt))
        [txt s])
 
-; --- rove: the crawl takes the terminal's size, and a key is a turn ---
+; --- tower: the climb takes the terminal's size, and a key is a turn ---
 ; the bar is the LAST row, which is the geometry law -- but only away from 80x24. a
-; sizeless rove falls back to a 22-row deck, which with the note and the bar is 24
+; sizeless climb falls back to a 22-row floor, which with the note and the bar is 24
 ; lines exactly, so the same grid comes out whether the tty was read or missed and
 ; the law at 24 rows is vacuous. 20x70 is nobody's fallback.
- a (run "b/love rove" "q" 20 70)
+ a (run "b/love tower" "q" 20 70)
  _ (test
     (has? <a "\e[?1049h")                                   ; the alternate screen
-    ("the hold is dark" = snip (rowtx <>a 0) 0 16)           ; the note, no turn taken
-    ("deck 1/" = snip (rowtx <>a 19) 0 7)                    ; the bar, on row 19 of 20
-    (at <>a)                                                 ; and you stand on the deck
-    (has? <a "ashore with"))                                 ; q steps ashore
+    ("the tower stands" = snip (rowtx <>a 0) 0 16)           ; the note, no turn taken
+    ("the garden" = snip (rowtx <>a 19) 0 10)                ; the bar, on row 19 of 20
+    (at <>a)                                                 ; and you stand on the floor
+    (has? <a "you leave the tower"))                         ; q leaves
 
 ; --- ..and a turn spends the note. the boot message stands until the first one, so a
-;     blank row 0 is the crawl saying it read a key -- nothing else here can say it
- b (run "b/love rove" "hjklq" 20 70)
+;     blank row 0 is the climb saying it read a key -- nothing else here can say it
+ b (run "b/love tower" "hjklq" 20 70)
  _ (test
     (blank? (rowtx <>b 0))
-    ("deck 1/" = snip (rowtx <>b 19) 0 7)
+    ("the garden" = snip (rowtx <>b 19) 0 10)
     (at <>b))
 
 ; --- ..and an arrow's three bytes are ONE key. read as a bare ESC they would be quit
-;     (rove's own second quit key), the h behind them unread and the note still on row
-;     0 -- so a spent note is exactly the law that the CSI was decoded
- c (run "b/love rove" "\e[Chq" 20 70)
- _ (test (blank? (rowtx <>c 0)) (has? <c "ashore with"))
+;     (the climb's own second quit key), the h behind them unread and the note still on
+;     row 0 -- so a spent note is exactly the law that the CSI was decoded
+ c (run "b/love tower" "\e[Chq" 20 70)
+ _ (test (blank? (rowtx <>c 0)) (has? <c "you leave the tower"))
 
 ; --- ink: the shimmer paints while no key waits ---
 ; which is why its key cannot be typed up front -- ink asks `cue?` BEFORE its first

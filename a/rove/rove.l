@@ -1,29 +1,35 @@
-; rove -- quay's roguelike engine: delving below decks.
+; rove -- quay's roguelike engine, and the tower it carries.
 ;
-; a deck is one floor of the hold: tiles in a cask (0 rock, 1 floor, 2 the
-; hatch down), carved by delve -- rooms lashed by L-corridors, the functional
-; rng threaded through so a seed reproduces the deck -- with a seen cask
-; remembering what the lantern has shown. fov is line-of-sight over bresenham
+; a floor is one level of the tower: tiles in a cask (0 rock, 1 floor, 2 the
+; stair up), carved by delve -- rooms lashed by L-corridors, the functional
+; rng threaded through so a seed reproduces the floor -- with a seen cask
+; remembering what the climber has been shown. fov is line-of-sight over bresenham
 ; strides (walls light up as line endpoints); the painter says one frame of
 ; painted cells into any port, so frames gate headless; the helm turns a key into a
-; steer (hjkl + yubn + arrows). the crawl is the proving game riding it all:
-; rats, crabs and morays below decks, grog and gold, the pearl three decks
-; down -- pure state in, pure state out, one key per turn.
+; steer (hjkl + yubn + arrows). the climb is the proving game riding it all:
+; the garden, the middle and heaven, pennies underfoot and a stair above, and
+; over them the circle -- pure state in, pure state out, one key per turn.
 ;
-; run: love rove
+; it is not a game about fighting. a turn spent acting mends the bar and a turn
+; passed does not, so a climber dies only by standing still beside something; and
+; heaven's shapes stir at half a climber's pace, so they can be walked past.
+;
+; run: love tower
 ; the engine core is pure love (delve/fov/paint/crawl-* run headless, gated by
-; t/host/rove.l); only rove-run ties the tty (cli's stage over
-; i/posix.c), so rove never joins the corpus -- t/host/tty.l plays it on a pty
-; instead. a module: the crawl's words are
-; its own, and story.l's hatch reaches rove-run by name.
-(module (rove rove-run rove-main dat open? dput delve fov clear? paint steer
-         crawl-new crawl-turn crawl-frame note mob-new mob-at roll stock)
+; t/host/rove.l); only tower-run ties the tty (cli's stage over
+; i/posix.c), so the climb never joins the corpus -- t/host/tty.l plays it on a pty
+; instead. a module, and the name is the engine's: slop rides its roll and its
+; steer, and story.l's hatch reaches tower-run by name.
+(module (rove tower-run tower-main dat open? dput delve fov clear? paint steer
+         crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
+         mend ascend fill fit circle? circle-new circle-stride circle-frame
+         circle-r circle-wall on-ring? reveal? done? turf tokens floors due?)
 ; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
 (? (cite 'posix) (borrow 'posix) ())
 (:
- ; --- the deck: tiles in a cask, (x y) indexed; 0 rock, 1 floor, 2 the hatch ---
+ ; --- the floor: tiles in a cask, (x y) indexed; 0 rock, 1 floor, 2 the stair ---
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
  (open? d x y) (0 < dat d x y)
  (dput d x y v) (pin (d 't) (x + (d 'w) * y) v)
@@ -34,7 +40,7 @@
  ; --- delve: carve rooms, lash them with corridors ---
  ; a room is [x y rw rh]; its center anchors the corridors. rooms keep a
  ; one-cell gap so no two merge; each new room tunnels to the previous one,
- ; so the whole deck is connected by construction. answers (deck . st').
+ ; so the whole floor is connected by construction. answers (floor . st').
  (delve w h st) (:
    d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
    sb {st}
@@ -66,14 +72,14 @@
                    pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
    _ (try ((w * h) // 24))
-   ; a cramped deck can come up short: guarantee two moored rooms
+   ; a cramped floor can come up short: guarantee two joined rooms
    _ (#(d 'rooms) < 2 ?
       (: r1 '(1 1 3 3) r2 [(w - 4) (h - 4) 3 3]
          (carve 1 1 3 3, carve (w - 4) (h - 4) 3 3,
           lash (mid r1) (mid r2), pin d 'rooms [r2 r1])))
    _ (pins d 'in (mid (last (d 'rooms)))
-             'down (mid <(d 'rooms)))
-   _ (dput d <(d 'down) <>(d 'down) 2)
+             'stair (mid <(d 'rooms)))
+   _ (dput d <(d 'stair) <>(d 'stair) 2)
    (d . peep sb () 0))
 
  ; --- the lantern: line-of-sight fov over bresenham strides ---
@@ -93,7 +99,7 @@
    (go x0 y0 (dx + dy)))
 
  ; the visible set: a tablet of cell indices, radius-bounded and stride-clear;
- ; each visible cell is also pinned into the deck's seen cask (the memory).
+ ; each visible cell is also pinned into the floor's seen cask (the memory).
  ; a closing pass glows the rock beside every lit floor cell, so corridors
  ; wear their walls (a bare stride only catches rock end-on)
  (fov d px py r) (:
@@ -118,16 +124,16 @@
  pens {}
  (pen n) (: s (pens n) (string? s ? s
           (: s2 ("\e[38;5;" + show n + "m") (pin pens n s2, s2))))
- tile-gl "#.>"
+ tile-gl "#.<"
  (tile-hue t lit) (? lit (t @ 2 51 1 242 250)
                          (t @ 2 24 1 236 240))
- (loot-face it) (<it @ 'gold '(36 220)
-                       'grog '(33 213)
-                       '(42 159))                       ; the pearl: *
+ (loot-face _) '(36 172)                                ; pennies: $ in copper
  (paint j d vis loot ents msg bar) (:
    w (d 'w) h (d 'h) sn (d 'seen)
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
-   _ (say j $ "\e[H\e[0m" + (w < #msg ? (snip msg 0 w) msg) + "\e[K\r\n")
+   ; the note row through `fit`: a message may carry the token's braces, and an
+   ; escape is no width, so the cut is made in what a reader sees
+   _ (say j $ "\e[H\e[0m" + (fit msg w) + "\e[K\r\n")
    (cell i lit) (: e (lit ? (spot i))
                    it (lit ? (loot i))
                    (? e [(e 'gl) (e 'hue)]
@@ -153,48 +159,103 @@
        (121 || 377) '(-1 -1) (117 || 373) '(1 -1) (98 || 354) '(-1 1) (110 || 366) '(1 1)
        k)
 
- ; --- the crawl: the proving game. state in a tablet, one key per turn ---
- ; the hold's fauna: a kind is (glyph hue hp bite), deeper decks bare more teeth
- (mob-name k) (peep '("rat" "crab" "moray") k "rat")
- (mob-row k) (peep '((114 137 3 1) (99 173 5 2) (109 71 9 3)) k '(114 137 3 1))
- (mob-kinds lvl) (lvl @ 1 '(0 0 0 1) 2 '(0 1 1 2) '(1 2 2 2))
- (mob-new k x y) (: r (mob-row k)
-                   {'x x 'y y 'gl (peep r 0 114) 'hue (peep r 1 137)
-                    'hp (peep r 2 3) 'dm (peep r 3 1) 'nm (mob-name k)})
+ ; --- THE WORDS: every line the climb says, and every table it reads from. a ~ takes
+ ; the next value, {braces} are the token's pen, and no sentence is built anywhere
+ ; below -- so this block is the whole of the text, and the only place to edit it.
+ w-open   "the tower stands over you. get the {token}"
+ w-floor  "~. get the {token}"
+ w-strike "you strike the ~ (~)"
+ w-kill   "the ~ is done for"
+ w-bite   "the ~ bites you (~)"
+ w-dead   "you are done for"
+ w-wall   "the tower holds"
+ w-stair  "no stair here"
+ w-penny  "you pocket ~ pennies"
+ w-ring   "you strike the circle"
+ w-bar    "~  hp ~/~  pennies ~"
+ w-won    "the {token} is yours: {~} -- and ~ pennies besides"
+ w-fled   "you leave the tower with ~ pennies"
+ w-lost   "the tower keeps you, in ~"
+ w-args   "tower: takes no arguments, not ~\n"
+ floors   '("the garden" "the middle" "heaven" "the circle")
+ ; the tower's fauna: name, glyph, pen, hp, bite, pace. pace is turns per stir, so
+ ; heaven's shapes take two and a climber who would rather not fight walks past them.
+ mob-book '(("rat" 114 137 3 1 1) ("lanternfly" 108 175 3 1 1)
+            ("gnome" 119 101 6 2 1) ("goblin" 103 71 8 2 1) ("hobgoblin" 71 64 11 3 1)
+            ("d4" 52 189 4 1 2) ("d6" 54 189 6 2 2) ("d8" 56 189 8 2 2)
+            ("d12" 50 189 12 3 2) ("d20" 48 189 20 3 2)
+            ("triangle" 94 213 8 2 2) ("square" 37 213 11 2 2) ("hexagon" 38 213 15 3 2))
+ ; which rows of it a floor bears
+ (mob-set lvl) (lvl @ 1 '(0 1) 2 '(2 3 4) '(5 6 7 8 9 10 11 12))
+ ; and what the token turns out to have been, drawn once at the end
+ tokens '("the well-thumbed phone" "the down-sharpened pencil" "the sun-bleached receipt"
+          "the heel-worn shoe" "the dog-eared paperback" "the thumb-smoothed coin"
+          "the half-burnt candle" "the pocket-rounded key" "the oft-folded map"
+          "the cord-frayed lamp" "the rain-spotted glasses" "the salt-crusted kettle"
+          "the wrist-warmed watch" "the lid-lost pen" "the long-charged battery"
+          "the corner-softened card")
+ token-pen 201                                          ; and the pen it is named in
 
- ; stock a fresh deck: mobs and loot in every room but the player's own;
- ; the last deck trades its hatch for the pearl
- last-deck 3
+ ; a line and its holes: each ~ takes the next value, a string as itself and anything
+ ; else as show, so a table line reads as the line it prints.
+ (hole v) (string? v ? v (show v))
+ (fill s vs) (: (go i acc vs)
+                 (? (i >= #s) acc
+                    (: c (s i)
+                       (? ((c = 126) && (two? vs)) (go (i + 1) (acc + hole <vs) >vs)
+                          (go (i + 1) (acc + string c) vs))))
+                (go 0 "" vs))
+ ; ..and its braces, put on at the port. an escape is no width, so this is also where
+ ; a line is cut to fit: the row's span is what a reader sees, not what a cask holds.
+ (fit s w) (: on ("\e[38;5;" + show token-pen + "m") off "\e[0m"
+              (go i n acc)
+               (? ((i >= #s) || (n >= w)) acc
+                  (: c (s i)
+                     (? (c = 123) (go (i + 1) n (acc + on))
+                        (c = 125) (go (i + 1) n (acc + off))
+                        (go (i + 1) (n + 1) (acc + string c)))))
+              (go 0 0 ""))
+
+ ; --- the climb: the proving game. state in a tablet, one key per turn ---
+ ; the bar is not a resource: a turn spent acting mends, a turn passed does not, so a
+ ; climber dies only by standing still while something is next to them.
+ regen 2
+ (mend g) (: p (g 'p) h ((p 'hp) + regen) (pin p 'hp (h < p 'mx ? h (p 'mx))))
+ (mob-row k) (peep mob-book k <mob-book)
+ (mob-name k) (<(mob-row k))
+ (mob-new k x y) (: r (mob-row k)
+                   {'x x 'y y 'gl (peep r 1 114) 'hue (peep r 2 137)
+                    'hp (peep r 3 3) 'dm (peep r 4 1) 'pc (peep r 5 1) 'nm <r})
+
+ ; stock a fresh floor: mobs and pennies in every room but the climber's own. the
+ ; token is not on any floor -- it is what the circle turns out to have been.
+ last-floor 3
  (stock g) (:
-   d (g 'd) sb (g 'sb) lvl (g 'lvl) loot {}
+   d (g 'd) sb (g 'sb) lvl (g 'lvl) loot {} ks (mob-set lvl)
    (drop-at rm) [(peep rm 0 0 + roll sb (peep rm 2 1)) (peep rm 1 0 + roll sb (peep rm 3 1))]
    (mobs rm n acc) (? (0 < n)
                     (: xy (drop-at rm) x <xy y <>xy
                        (? (dat d x y = 1 &&
                            !(loot (x + d 'w * y)) &&
                            !(any ({'x ^x 'y ^y} \ 1) acc))
-                        (mobs rm (n - 1) (mob-new (peep (mob-kinds lvl) (roll sb 4) 0) x y . acc))
+                        (mobs rm (n - 1) (mob-new (peep ks (roll sb #ks) 0) x y . acc))
                         (mobs rm (n - 1) acc)))
                     acc)
    (treasure rm) (: xy (drop-at rm) i (<xy + (d 'w) * <>xy)
                     (? (d 't i != 1) ()
-                       (roll sb 10 < 5) (pin loot i ['gold (5 + roll sb 16)])
-                       (roll sb 10 < 3) (pin loot i '(grog 0))))
+                       (roll sb 10 < 6) (pin loot i ['penny (3 + roll sb 12)])))
    ms (foldl (\ acc rm (treasure rm, mobs rm (roll sb (2 + lvl)) acc))
              () (init (d 'rooms)))
-   _ (lvl = last-deck ?
-      (: dn (d 'down)
-       (dput d <dn <>dn 1,
-        pin loot (<dn + (d 'w) * <>dn) '(pearl 0))))
    (pins g 'ms ms 'loot loot))
 
- ; a fresh game: deck one delved from the seed state, the player moored at 'in
+ ; a fresh climb: the garden delved from the seed state, the climber at 'in
  (crawl-new w h st) (:
    p0 (delve w h st) d <p0
    st1 >p0 sb {st1}                                 ; the brace boxes; #st1 would count it
-   pl {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue 228 'hp 12 'mx 12 'gold 0}
-   g {'d d 'lvl 1 'sb sb 'p pl 'msg "" 'over 0}
+   pl {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue 228 'hp 20 'mx 20 'penny 0}
+   g {'d d 'lvl 1 'tn 0 'sb sb 'p pl 'msg "" 'over 0}
    _ (stock g)
+   _ (note g w-open)
    (pin g 'vis (fov d (pl 'x) (pl 'y) 8)))
 
  (note g s) (pin g 'msg (g 'msg ? (g 'msg + "; " + s) s))
@@ -203,37 +264,32 @@
                    (x = g 'p 'x && y = g 'p 'y) ||
                    mob-at g x y)
 
- ; the player's stride: bump a mob to strike it, step onto loot to take it
+ ; the climber's stride: bump a mob to strike it, step onto pennies to take them
  (strike g m) (: dm (1 + roll (g 'sb) 3)
                  _ (pin m 'hp (m 'hp - dm))
-                 (? (0 < m 'hp) (note g $ "you strike the " + m 'nm + " (" + show dm + ")")
+                 (? (0 < m 'hp) (note g (fill w-strike [(m 'nm) dm]))
                   (pin g 'ms (filter (\ o !(= o m)) (g 'ms)),
-                   note g ("the " + m 'nm + " is done for"))))
+                   note g (fill w-kill [(m 'nm)]))))
  (take g i it)
   (pull (g 'loot) i (),
-   <it @ 'gold (pin (g 'p) 'gold (g 'p 'gold + <>it),
-                note g ("you pocket " + show <>it + " gold"))
-         'grog (: mend (g 'p 'hp + 5 < g 'p 'mx ? 5 (g 'p 'mx - g 'p 'hp))
-                (pin (g 'p) 'hp (g 'p 'hp + mend),
-                 note g ("you swig the grog (+" + show mend + ")")))
-         (pin g 'over 'won,
-          note g "the pearl! yours, and the long climb home"))
+   pin (g 'p) 'penny (g 'p 'penny + <>it),
+   note g (fill w-penny [<>it]))
 
  (stride g mv) (: p (g 'p) nx (p 'x + <mv) ny (p 'y + <>mv)
                   m (mob-at g nx ny)
                   (? m (strike g m)
-                     !(open? (g 'd) nx ny) (note g "the hull holds")
+                     !(open? (g 'd) nx ny) (note g w-wall)
                      (: _ (pin p 'x nx, pin p 'y ny)
                         i (nx + (g 'd 'w) * ny)
                         it (peep (g 'loot) i ())
                         (it ? (take g i it)))))
 
- ; the hold stirs: a mob that sees you closes in; struck close, it bites
+ ; the floor stirs: a mob that sees you closes in; struck close, it bites
  (sgn n) (? (0 < n) 1 (n < 0) -1 0)
  (bite g m) (: dm (1 + roll (g 'sb) (m 'dm))
                _ (pin (g 'p) 'hp (g 'p 'hp - dm))
-               _ (note g ("the " + m 'nm + " bites you (" + show dm + ")"))
-               (0 >= g 'p 'hp ? (pin g 'over 'dead, note g "you are done for")))
+               _ (note g (fill w-bite [(m 'nm) dm]))
+               (0 >= g 'p 'hp ? (pin g 'over 'dead, note g w-dead)))
  (shift g m mv) (: nx (m 'x + <mv) ny (m 'y + <>mv)
                  (blocked? g nx ny ? () (pin m 'x nx, pin m 'y ny)))
  (stir g m) (: p (g 'p) dx ((p 'x) - m 'x) dy ((p 'y) - m 'y)
@@ -248,49 +304,144 @@
                         ox = m 'x && oy = m 'y ? (shift g m [0 sy]))))
                   (roll (g 'sb) 3 < 1)
                    (shift g m [(roll (g 'sb) 3 - 1) (roll (g 'sb) 3 - 1)])))
+ ; a mob stirs on the turns its pace divides, so heaven moves at half a climber's rate
+ (due? g m) (: q ((g 'tn) % (m 'pc)) (0 = q))
 
- ; down the hatch: a fresh deck, the crew and cargo restocked
- (descend g) (: p0 (delve (g 'd 'w) (g 'd 'h) (peep (g 'sb) () 0))
-                d <p0
-                _ (pin (g 'sb) () >p0)
-                _ (pins g 'd d 'lvl (1 + g 'lvl))
-                _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
-                _ (stock g)
-                (note g ("you climb down to deck " + show (g 'lvl))))
+ ; up the stair: a fresh floor restocked, or the circle if heaven is behind you
+ (ascend g) (? (last-floor <= g 'lvl) (circle-new g)
+              (: p0 (delve (g 'd 'w) (g 'd 'h) (peep (g 'sb) () 0))
+                 d <p0
+                 _ (pin (g 'sb) () >p0)
+                 _ (pins g 'd d 'lvl (1 + g 'lvl))
+                 _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
+                 _ (stock g)
+                 (note g (fill w-floor [(floors (g 'lvl - 1))]))))
 
- ; one turn: the player's steer, then every mob stirs, then the lantern
+ ; --- the circle: the last floor, and not a delve at all. the ring is cells and not
+ ; a mob -- it does not strike back, and every hit draws it in one step with the wall
+ ; following it down. at the middle it is one square, then a smaller one, then the
+ ; field opens and there is only the point.
+ circle-r0 8
+ ring-pen 231
+ disc-pen 244
+ wall-glyph 35
+ turf-pens [22 28 34 65 71]                       ; grass, dark to bright
+ ; the field is slop's: two multiply-shift rounds masked to 32 bits, so the last screen
+ ; of the tower is the first screen of the walk it opens onto.
+ lim 4294967296
+ (mix a) (: h ((a * 2654435761) % lim)
+            h2 ((h ^ (h >> 15)) * 2246822519 % lim)
+            (h2 ^ (h2 >> 13)))
+ (turf-dice x y k) ((mix ((y * 374761393) + (x * 668265263) + 1)) % k)
+ (turf x y) (: h (turf-dice x y 120)
+               (? (h < 9)  [35 (turf-pens (h % 2))]
+                  (h < 27) [46 (turf-pens (h % 3))]
+                           [34 (turf-pens (2 + (h % 3)))]))
+
+ (circle? g) (last-floor < g 'lvl)
+ (circle-new g) (: d (g 'd) cx ((d 'w) // 2) cy ((d 'h) // 2)
+                   _ (pins g 'lvl (1 + last-floor) 'cx cx 'cy cy 'st 0 'ms () 'loot {})
+                   _ (pins (g 'p) 'x cx 'y (cy - circle-r0 - 1))
+                   (note g (fill w-floor [(floors last-floor)])))
+ (circle-r g) (: st (g 'st) (st < circle-r0 ? (circle-r0 - st) 0))
+ ; a terminal cell is about twice as tall as it is wide, so a circle ON THE SCREEN is
+ ; an ellipse in cells: the measure counts a row twice and works in quarter units, where
+ ; a radius r stands at (2r)^2. that is what makes the ring read as round and not tall.
+ (sq n) (n * n)
+ (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) ((dx * dx) + (4 * dy * dy)))
+ ; a cell is on the ring when its measure falls in the radius's own band -- a circle of
+ ; grid squares, not a box, so it stays round at every size it passes through
+ (on-ring? g x y) (: r (circle-r g) q (circle-q g x y)
+                     (r = 0 ? (q = 0)
+                      ((sq ((2 * r) - 1)) <= q < (sq ((2 * r) + 1)))))
+ (circle-wall g) (3 + circle-r g)
+ (circle-wq g) (sq (2 * circle-wall g))
+ disc-q 36                                              ; the grey floor left at the end
+ (ring-glyph g) (: st (g 'st)
+                   (? (st <= circle-r0) 79 (st = (circle-r0 + 1)) 111 46))
+ (reveal? g) ((circle-r0 + 2) <= g 'st)
+ (done? g) ((circle-r0 + 2) < g 'st)
+
+ ; the wall follows the ring down, so a climber standing where it now stands is carried
+ ; in with it -- toward the middle until the floor is under them again
+ (circle-push g) (: p (g 'p) wq (circle-wq g)
+                    (go x y) (? ((circle-q g x y) < wq) (pins p 'x x 'y y)
+                                (go (x + sgn (g 'cx - x)) (y + sgn (g 'cy - y))))
+                    (go (p 'x) (p 'y)))
+ (circle-stride g mv)
+  (: p (g 'p) nx (p 'x + <mv) ny (p 'y + <>mv)
+     d (g 'd) wq (circle-wq g)
+     (? (on-ring? g nx ny)
+          (: _ (pin g 'st (1 + g 'st))
+             _ (done? g ? (pin g 'over 'won) (note g w-ring))
+             (g 'over ? () (circle-push g)))
+        ; the board's own edge counts as wall too: the room may reach past the view
+        ((0 <= nx < d 'w) && (0 <= ny < d 'h) && ((circle-q g nx ny) < wq))
+         (pins p 'x nx 'y ny)
+        (note g w-wall)))
+
+ ; --- the painter's other face: the circle's room, which has no lantern in it ---
+ (circle-frame g) (:
+   j (jug 0) d (g 'd) w (d 'w) h (d 'h) p (g 'p)
+   rv (reveal? g) wq (circle-wq g)
+   _ (say j $ "\e[H\e[0m" + (fit (g 'msg) w) + "\e[K\r\n")
+   (cell x y) (? ((x = p 'x) && (y = p 'y)) [(p 'gl) (p 'hue)]
+                 (on-ring? g x y) [(ring-glyph g) ring-pen]
+                 rv ((circle-q g x y) <= disc-q ? [46 disc-pen] (turf x y))
+                 (wq <= (circle-q g x y)) [wall-glyph (turf-pens (turf-dice x y 5))]
+                 '(46 240))
+   (row y x pn) (x >= w ? pn
+                 (: gh (cell x y) p2 <>gh
+                  (pn != p2 ? (say j (pen p2)),
+                   say j (string <gh),
+                   row y (x + 1) p2)))
+   (rows y pn) (y >= h ? pn (rows (y + 1) (: p2 (row y 0 pn) _ (say j "\r\n") p2)))
+   _ (rows 0 -1)
+   _ (say j "\e[0m", say j (crawl-bar g), say j "\e[K")
+   (slurp j))
+
+ ; one turn: the climber's steer, then every mob its pace is due, then the lantern
  (crawl-turn g k) (:
    _ (pin g 'msg "")
+   _ (pin g 'tn (1 + g 'tn))
    _ (? (g 'over || k = 46) ()
-      (two? k) (stride g k)
-      (k = 62) (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (descend g) (note g "no hatch here")))
-   _ (!(g 'over) ? (each (g 'ms) (m \ !(g 'over) ? (stir g m))))
-   (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8)))
+        (circle? g) (two? k ? (circle-stride g k))
+        (two? k) (stride g k, mend g)
+        (k = 60) (: _ (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair))
+                    (mend g)))
+   _ ((g 'over || circle? g) ? ()
+      (each (g 'ms) (m \ ((!(g 'over)) && (due? g m)) ? (stir g m))))
+   (circle? g ? g (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))))
 
- (crawl-bar g) ("deck " + show (g 'lvl) + "/" + show last-deck
-                + "  hp " + show (g 'p 'hp) + "/" + show (g 'p 'mx)
-                + "  gold " + show (g 'p 'gold))
- (crawl-frame g) (: j (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
-                            (g 'p . g 'ms) (g 'msg) (crawl-bar g))
-                    (slurp j))
+ (crawl-bar g) (fill w-bar [(floors (g 'lvl - 1)) (g 'p 'hp) (g 'p 'mx) (g 'p 'penny)])
+ (crawl-frame g) (circle? g ? (circle-frame g)
+                  (: j (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
+                             (g 'p . g 'ms) (g 'msg) (crawl-bar g))
+                     (slurp j)))
 
- ; --- rove: the crawl on cli's stage. any seed sails; q or esc steps ashore ---
- (rove-run _) (: ws (tty 1)
+ ; --- tower: the climb on cli's stage. any seed climbs; q or esc leaves ---
+ ; the token is the last thing the tower says, and then the field it opens onto: slop
+ ; is cited at the door, not borrowed, so a seat that carries no walk still climbs.
+ (tower-win g) (: tk (tokens (roll (g 'sb) #tokens))
+                  _ (puts $ (fit (fill w-won [tk (g 'p 'penny)]) 200) + "\n",
+                     flush out, rest 2200)
+                  run (cite 'slop 'slop-run)
+                  (run ? (run ()) (g 'p 'penny)))
+ (tower-run _) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
-             _ (note g "the hold is dark; the pearl waits three decks down")
              ; an end shows its frame for a beat before the stage is left
              (turn k) (k @ (113 || 27) (pin g 'over 'fled)
                        (crawl-turn g (steer k), g 'over ? (say out (crawl-frame g), flush out, rest 1200)))
              _ (stage (w \ h \ crawl-frame g) turn (\ _ (g 'over)))
-             (puts (g 'over @ 'won  ("the pearl is yours -- and " + show (g 'p 'gold) + " gold besides")
-                              'dead ("the hold keeps you, deck " + show (g 'lvl))
-                                    ("ashore with " + show (g 'p 'gold) + " gold")),
-              (g 'p 'gold)))
- rove-usage "usage: love rove   (no options; q or esc steps ashore)"
- ; rove takes nothing: a word here is a mistake, and the game would swallow it
- (rove-main as) (? !(two? as) (rove-run ())
-                   (say err ("rove: takes no arguments, not " + <as + "\n"), flush err, 2))
- _ (pins (cite 'verbs 'tab) 'rove (udoor 'rove rove-main rove-usage 1 1)))
+             (g 'over = 'won ? (tower-win g)
+              (puts $ (g 'over @ 'dead (fill w-lost [(floors (g 'lvl - 1))])
+                                       (fill w-fled [(g 'p 'penny)])) + "\n",
+               (g 'p 'penny))))
+ tower-usage "usage: love tower   (no options; q or esc leaves the tower)"
+ ; tower takes nothing: a word here is a mistake, and the climb would swallow it
+ (tower-main as) (? !(two? as) (tower-run ())
+                    (say err (fill w-args [<as]), flush err, 2))
+ _ (pins (cite 'verbs 'tab) 'tower (udoor 'tower tower-main tower-usage 1 1)))
 ) ; module rove

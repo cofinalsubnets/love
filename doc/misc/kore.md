@@ -40,7 +40,7 @@ The file discipline, two shapes:
 kore.l wraps every applet on both dispatch lanes (the verb registry and the symlink), so
 one synopsis table — `korehelp` — is where a tool's shape is written down, and the two
 lanes cannot drift. The door itself is cli's, `udoor` in post.l, and the crew's own verbs
-(mc, lupa, rove, story, design, slop, ink, libra, sb, tar, fat, doom) stand at the same one; what
+(mc, lupa, tower, story, design, slop, ink, libra, sb, tar, fat, doom) stand at the same one; what
 kore keeps is the policy below. The walk reads only the leading flag words and stops at
 the first operand and at `--`. It is NOT getopt: a value word that looks like a flag is walked
 over, so `grep -e --help f` answers the help rather than searching for `--help` — glue
