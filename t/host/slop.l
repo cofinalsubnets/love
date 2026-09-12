@@ -316,11 +316,45 @@
   (sp 1 < sp 10) (sp 10 < sp 20)                 ; and drags all the way in
   (0.3 <= sp 1 <= 0.4)))                         ; ..to a third of it, and no further
 
+; and the waveform thickens with it: a sine while a square is one press, the whole way
+; to a square by the last one, and never past either end
+(: g (slop-new 23 80 (wheel 11))
+   (row-at gp) (: (go w) (? (w < -30) ()
+                            (: q (w - slop-shore g (slop-road g w))
+                             (? (q = gp) w (go (w - 1)))))
+                  (go 22))
+   (ed gp) (: w (row-at gp) (? (charm? w) (: _ (pin g 'w w) (slop-song-edge g)) 'none))
+ (test
+  (0.0 = ed 30) (0.0 = ed 20)                    ; out in the field, a clean sine
+  (ed 20 < ed 10) (ed 10 < ed 2) (ed 2 < ed 1)   ; and it hardens the whole way in
+  (1.0 = ed 1)                                   ; a square exactly, on the last square
+  (all (gp \ (0.0 <= ed gp <= 1.0)) [30 20 10 2 1])))
+
+; the dial itself: play.l's i-sin at one end, its i-sqr at the other, crossfaded. the
+; two share a phase -- a square built on the half of the period has the sine's sign --
+; so they cross rather than cancel, which is the law worth holding here.
+(: twopi 6.283185307179586
+   (w ph m) (slop-song-wave ph 1.0 m)            ; f of 1, so the phase IS the argument
+   (near a b) (|(a - b) < 0.000001)
+   phs [0.0 0.125 0.25 0.375 0.5 0.625 0.75 0.875]
+ (test
+  ; m 0 is i-sin, note for note; m 1 is i-sqr
+  (all (p \ (near (w p 0.0) (sin (p * twopi)))) phs)
+  (all (p \ (near (w p 1.0) (? (p < 0.5) 1.0 -1.0))) phs)
+  ; they share a sign the whole way round, which is what lets the blend cross rather
+  ; than cancel. to a tolerance: sin of pi is not zero, it is -1.2e-16, and the square
+  ; has already flipped there
+  (all (p \ (-0.000001 <= ((w p 0.0) * (w p 1.0)))) phs)
+  ; a plain crossfade, so half way is the mean of the two ends
+  (all (p \ (near (w p 0.5) (((w p 0.0) + (w p 1.0)) / 2.0))) phs)
+  ; and nothing anywhere on the dial leaves the rails
+  (all (p \ (all (m \ (-1.0001 <= (w p m) <= 1.0001)) [0.0 0.25 0.5 0.75 1.0])) phs)))
+
 ; the voices go out a port, so a jug plays the part of the card: real PCM, not silence
 (: tune (slop-tune ())
    j (jug 0)
    s (slop-song-new tune j)
-   (feed n) (? (0 < n) (: _ (slop-song-feed s 1.0) (feed (n - 1))))
+   (feed n) (? (0 < n) (: _ (slop-song-feed s 1.0 0.0) (feed (n - 1))))
    _ (feed 10)
    pcm (slurp j)
    (samp i) (: v ((peep pcm (i * 2) 0) + ((peep pcm ((i * 2) + 1) 0) << 8))

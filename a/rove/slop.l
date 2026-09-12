@@ -33,7 +33,7 @@
 ; the palette, rove the helm and the die.
 (module (slop slop-run slop-main slop-new slop-sy slop-gap slop-cost slop-rate
          slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-road slop-turf
-         slop-tune slop-song-speed slop-song-new slop-song-feed
+         slop-tune slop-song-speed slop-song-edge slop-song-wave slop-song-new slop-song-feed
          slop-shore slop-sand slop-wet?)
 (borrow 'ink)
 (borrow 'rove)
@@ -275,16 +275,46 @@
  ; the music slows with the walk -- but only to a third of tempo. slop-rate falls to a
  ; twentieth by the shore, and a twentieth of a tempo is not a tempo any more.
  (slop-song-speed g) (0.3 + (0.7 * slop-rate g))
+ ; ..and it thickens with it: how far from a sine toward a square the voices are, nil
+ ; while a square is one press and the whole way over by the last one. linear in the
+ ; cost rather than in the rate, because the rate halves on the first rung and a
+ ; waveform half way to a square on the first rung is not a walk into anything.
+ (slop-song-edge g) (: d ((g 'drag) - 1)
+                       m (? (d < 1) 0.0 ((((slop-cost g) - 1) * 1.0) / d))
+                     (? (m < 0.0) 0.0 (1.0 < m) 1.0 m))
+
+ ; the dial: m of the way from play.l's i-sin to its i-sqr, crossfaded, which is the one
+ ; shape that hits both ends true. the two are already in phase -- a square built on the
+ ; half of the period shares the sine's sign -- so they cross rather than cancel.
+ (slop-song-wave tp f m)
+  (: q (((((tp * f) % 1.0) < 0.5) * 2.0) - 1.0)
+   (((sin (tp * (twopi * f))) * (1.0 - m)) + (q * m)))
+
+ ; a voice m of the way along that dial. built here rather than taken off harp's
+ ; mkvoice because an instrument there is a name, and this one is a dial. a square
+ ; carries far more than a sine at the same peak, so the gain comes off as the edge
+ ; goes on.
+ (song-voice st v rate m)
+  (: dur (vnum v 'legato 0.30)
+     nt  (vnum v 'note (vnum v 'n 0))
+     f   (261.6255653005986 * (exp (nt * ln2-12)))
+     amp ((vnum v 'gain 1.0) * (1.0 - (0.45 * m)))
+     pn  (vnum v 'pan 0.5)
+     end (st + (int (dur * rate)) + 2)
+     fn  (\ ix (: t  ((ix - st) * (1.0 / rate))
+                  tp (t * (t > 0.0))
+                ((slop-song-wave tp f m) * (venv tp dur) * (t >= 0.0) * (t < dur))))
+   [end fn (amp * (1.0 - pn)) (amp * pn)])
  (slop-song-new tune h) {'tune tune 'h h 'fpos 0 'cyc 0 'next 0 'vs ()}
  ; one cycle's onsets as voices, the cycle starting at frame st and spc frames long.
  ; each is kept as [start voice] rather than harp's bare voice: a whole cycle is
  ; scheduled at once and a voice that has not begun is silent but not free -- its
  ; closure still runs over every frame of the chunk -- so the mixdown wants the start
  ; to drop it by, and only the end is in the voice itself.
- (song-voices s c st spc)
+ (song-voices s c st spc m)
   (filter two?
           (map (\ x (: at (st + (int (spc * (qnum ((evwb x) - (qi c))))))
-                       v (mkvoice at (evv x) song-rate)
+                       v (song-voice at (evv x) song-rate m)
                      (? (two? v) [at v] ())))
                (filter onset? ((s 'tune) (qi c) (qi (c + 1))))))
  ; one chunk out the horn. whole cycles are scheduled ahead of the write head at the
@@ -292,10 +322,10 @@
  ; note's pitch bends with it -- the onsets move, the oscillators do not.
  ; the write is also the clock: the card takes a chunk at the rate it plays one, so a
  ; frame loop that feeds it needs no rest of its own.
- (slop-song-feed s sp)
+ (slop-song-feed s sp m)
   (: spc (int (song-rate / (song-cps * sp)))
      (fill _) (? ((s 'next) <= ((s 'fpos) + song-chunk))
-                 (: _ (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc)))
+                 (: _ (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc m)))
                     _ (pins s 'cyc ((s 'cyc) + 1) 'next ((s 'next) + spc))
                   (fill ())))
      _ (fill ())
@@ -326,13 +356,13 @@
              sng (? hn (slop-song-new tune hn) ())
              ; a chunk of song is a frame's worth and the card takes it at playing
              ; speed, so with a horn the music is the clock; without one, rest is
-             (beat-out sp) (? sng (slop-song-feed sng sp) (rest 33))
+             (beat-out sp m) (? sng (slop-song-feed sng sp m) (rest 33))
              (drain _) (cue? 0 ? (slop-key g (edkey in), drain ()))
              (swim _) (? (g 'over) ()
                          (: _ (drain ())
                             _ (g 'over ? () (slop-tick g))
                             (say out (slop-frame g), flush out,
-                             beat-out (slop-song-speed g), swim ())))
+                             beat-out (slop-song-speed g) (slop-song-edge g), swim ())))
              _ (raw 1)
              _ (say out (esc + "[?1049h" + esc + "[?25l" + esc + "[2J"))
              _ (swim ())
@@ -340,7 +370,7 @@
              ; no gap left to slow it -- for half a second before the stage is left
              ; the flood runs at full rate and so does the song under it: there is no
              ; gap left to slow either one
-             (flood n t) (? (0 < n) (: _ (say out (slop-flood g t), flush out, beat-out 1.0)
+             (flood n t) (? (0 < n) (: _ (say out (slop-flood g t), flush out, beat-out 1.0 1.0)
                                      (flood (n - 1) (t + beat))))
              _ (g 'over = 'taken ? (flood 15 (g 't)))
              _ (? hn (: _ (flush hn) (close hn)) ())
