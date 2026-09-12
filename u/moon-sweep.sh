@@ -20,7 +20,7 @@
 # accepted moon-userland precedent); mooncc compiles every object here.
 set -e
 
-ho=out
+ho=b
 mc="$ho/love mooncc"
 inc=a/moon/include
 PKGSRC=${PKGSRC:-dl/gzip-1.13}

@@ -9,8 +9,7 @@
 (borrow 'sb)
 (borrow 'kore)          ; sb splices the text floor below itself, so the session must ask for it too
 
-(: _ (mkdir "out" 493)
-   _ (mkdir "b/.sbtest" 493)
+(: _ (mkdir "b/.sbtest" 493)
    cd (chdir "b/.sbtest")
    _ (? !cd () (: _ (puts "sbtest: chdir failed\n") (quit 1)))
    ; the same-text equality for list-shaped store values

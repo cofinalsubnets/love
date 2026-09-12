@@ -55,7 +55,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
   return 0
 }
 
-ho=out
+ho=b
 mc="$ho/love mooncc"
 love=$ho/love
 GZIPSRC=${GZIPSRC:-$(pkgfind 'gzip-1.2.4*' gzip.c)}

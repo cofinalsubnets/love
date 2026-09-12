@@ -86,7 +86,7 @@
                  (: x (pick l) (x . pick-n (filter (\ y !(y = x)) l) (k - 1))))
 
  ; ---- subprocess plumbing: sh with redirection; bytes laid via printf octal ----
- tmpd "out"
+ tmpd "b"
  (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
  (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
  (wrf p t) (: q (open p "w") _ (say q t) (close q))

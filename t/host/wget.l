@@ -13,7 +13,7 @@
    wget (cite 'kore 'wget-main)
    root "b/.wget"
    _ (hark (list "rm" "-rf" root))
-   _ (mkdir "out" 493) _ (mkdir root 493) _ (mkdir (root + "/site") 493)
+   _ (mkdir root 493) _ (mkdir (root + "/site") 493)
    home (cwd 0)
    sroot (home + "/" + root + "/site")
    ; a 70000-byte file: bigger than one socket gulp, so the read runs to the peer's close

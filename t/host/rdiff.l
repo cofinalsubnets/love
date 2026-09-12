@@ -46,7 +46,7 @@
 ; --- the input set: every .l under the root, off readdir --------------------
 ; b/ is generated, dot-directories are not ours. stat's mode word decides
 ; directory-or-not: (two? (readdir p)) would call an empty directory a file.
-(: rd-skip '("out")
+(: rd-skip '("b")
    (rd-dir? p) (: st (stat p) (&& (two? st) (= 16384 (& 61440 (cauup st)))))
    (rd-dot? n) (= 46 (peep n 0 0))
    (rd-dotl? n) (: t (tally n) (&& (2 < t) (= ".l" (snip n (t - 2) t))))

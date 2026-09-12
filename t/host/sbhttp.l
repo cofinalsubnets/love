@@ -22,7 +22,7 @@
    urlsplit (SD 'url-split) urlp (SD 'url?) digits (SD 'digits) readform (SD 'readform)
    root "b/.sbhttp"
    _ (hark (list "rm" "-rf" root))
-   _ (mkdir "out" 493) _ (mkdir root 493)
+   _ (mkdir root 493)
    _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)
    home (cwd 0)
    ; the server task shares this process's cwd, and the client chdirs into the
