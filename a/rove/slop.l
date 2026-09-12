@@ -89,7 +89,7 @@
  (dice w x k) ((mix ((w * 374761393) + (x * 668265263) + 1)) % k)
  ; the road wanders on two sines a screen and a few screens long -- so it bends where
  ; you can see it, never repeats, and never leaves the width
- (slop-road g w) (: mid ((g 'c) // 2)
+ (slop-road g w) (: mid (g 'c // 2)
                     (mid + int (3.0 * sin (w * 0.21) + 2.0 * sin (w * 0.063))))
  ; the shoreline and the depth of beach behind it: two sines each, wavy the way the road
  ; is wavy. the amplitude-times-frequency sum is what matters -- keep it under one row a
@@ -140,7 +140,7 @@
      sh0 (shore0 r top)
      _ (each ^c (x \ pin shores x (sh0 + peep waves x 0)))
      wetto (foldl (\ a x (: v (peep shores x 0) (a < v ? v a))) (sh0 - 9) ^c)
-     climb ((r - 1) - (r // 3))
+     climb (r - 1 - r // 3)
      ; the beach's nearest world row: the sand shows on the screen the moment wtop
      ; reaches it, which is a fact about the screen and not about your distance to the
      ; shore -- the song's rise is keyed to it rather than to a gap, and so is exact
@@ -158,23 +158,23 @@
    ; the bottom of the dip, a screen and a third into the walk -- and the foot of the
    ; edge's ramp. a third nearer the start than the two screens the fall would take,
    ; which is what buys the quiet valley behind it its length
-   (pin g 'gmin ((g 'span) - ((4 * r) // 3)), g))
+   (pin g 'gmin (g 'span - 4 * r // 3), g))
 
  ; where you stand on the screen, and the rows between you and the slop at your own
  ; column. a square costs ceil(drag / gap), so it is one press until the shore is about
  ; a screen out and a screen's worth for the last one; rate is squares per press.
- (slop-sy g) ((g 'w) - (g 'wtop))
- (slop-gap g) ((g 'w) - slop-shore g (slop-road g (g 'w)))
- (slop-cost g) (: gap (slop-gap g) (gap < 1 ? (g 'drag) (((g 'drag) + gap - 1) // gap)))
+ (slop-sy g) (g 'w - g 'wtop)
+ (slop-gap g) (g 'w - slop-shore g (slop-road g (g 'w)))
+ (slop-cost g) (: gap (slop-gap g) (gap < 1 ? (g 'drag) ((g 'drag + gap - 1) // gap)))
  (slop-rate g) (1.0 / slop-cost g)
 
  ; one square forward. you always cross a world row; what differs is who the row on the
  ; screen goes to. below the climb line it is yours and you rise; at it or above it is
  ; mostly not, and then the ground scrolls under you instead and the shore comes on.
  (slop-step g)
-  (: own (? ((slop-sy g) > (g 'climb)) 1 (0 = roll (g 'sb) own-odds))
-     seen ((g 'wtop) <= (g 'wetto))              ; is any of it on the screen yet?
-     _ (pin g 'w ((g 'w) - 1))
+  (: own (slop-sy g > g 'climb ? 1 (0 = roll (g 'sb) own-odds))
+     seen (g 'wtop <= g 'wetto)              ; is any of it on the screen yet?
+     _ (pin g 'w (g 'w - 1))
      _ (? own (pin g 'msg "a square")
               (pins g 'wtop ((g 'wtop) - 1)
                       'msg (seen ? "the slop comes on" "you walk on")))
@@ -183,7 +183,7 @@
  ; one press of forward effort: bank it, and spend a bankful on a square
  (slop-push g) (: n ((g 'push) + 1)
                   _ (pin g 'spent ((g 'spent) + 1))
-                  (? (n < slop-cost g) (pins g 'push n 'msg "")
+                  (n < slop-cost g ? (pins g 'push n 'msg "")
                      (pin g 'push 0, slop-step g)))
 
  ; the helm is rove's: forward is any steer that climbs, and nothing else moves you.
@@ -191,7 +191,7 @@
  (slop-key g k) (: mv (steer k)
                    (? (g 'over) g
                       (k @ (113 || 27) 1 0) (pin g 'over 'fled)
-                      !(two? mv) g
+                      (one? mv) g
                       (<>mv < 0) (slop-push g)
                       (pin g 'msg "only forward")))
 
@@ -288,17 +288,16 @@
          [2 5 9 14 17 21 26]            ; d minor
          [2 6 9 14 18 21 26]]           ; d major
  ; pinkyup sounds the top note after each of the others; down just falls
- (pinkyup l) (: top (cap (lrev l))
-                (go k acc) (? ((k + 1) < #l) (go (k + 1) (top . (l k) . acc)) (lrev acc))
-                (go 0 ()))
+ (pinkyup l) (:- (go 0 ()) top <(lrev l)
+              (go k acc) (k + 1 < #l ? (go (k + 1) (top . l k . acc)) (lrev acc)))
  (arp-of q) (? (q < 2) pinkyup lrev)    ; "pinkyup down": the first half, then the second
  ; the tune, built on first use so a seat without harp never reaches these names.
  ; four quarters to the cycle and four cycles to the round, the k'th cycle dropping
  ; its k'th quarter five semitones -- which is what chunk 4 does. sine, because the
  ; piano it was written for is not the point; the notes are.
  (slop-tune _)
-  (: (quarter q sh) (fastcat (map (v \ note (pure (v + sh))) ((arp-of q) (chords q))))
-     (cyc k) (fastcat (map (q \ quarter q (? (q = k) -5 0)) ^4))
+  (: (quarter q sh) (fastcat (map (v \ note (pure (v + sh))) (arp-of q (chords q))))
+     (cyc k) (fastcat (map (q \ quarter q (q @ ^k -5 0)) ^4))
    (jux rev (pset (pset (slowcat (map cyc ^4)) (hit (pure "sin")))
                   (legato (pure 0.34)))))
 
@@ -308,7 +307,7 @@
  song-gain 6500.0
  ; the music slows with the walk -- but only to a third of tempo. slop-rate falls to a
  ; twentieth by the shore, and a twentieth of a tempo is not a tempo any more.
- (slop-song-speed g) (0.3 + (0.7 * slop-rate g))
+ (slop-song-speed g) (0.3 + 0.7 * slop-rate g)
  ; ..and it thickens with it: how far from a sine toward a square the voices are. the
  ; ramp runs the whole way from the bottom of the volume's dip to the slop itself, so
  ; the sound hardens over everything that happens after the song goes quiet. linear in
@@ -341,8 +340,8 @@
  song-floor 0.06                        ; the bottom of the dip: not silence, near it
  (slop-song-vol g)
   (: gap (slop-gap g) sp (g 'span) lo (g 'gmin)
-     d ((g 'wtop) - (g 'bt))            ; rows of scroll still to come before the sand
-     h ((g 'r) // 2)
+     d (g 'wtop - g 'bt)            ; rows of scroll still to come before the sand
+     h (g 'r // 2)
      v (? (sp <= gap) 1.0
           (lo < gap) (: q (((gap - lo) * 1.0) / ((sp - lo) * 1.0))
                         s (q * q * (3.0 - (2.0 * q)))
@@ -368,7 +367,7 @@
  ; crossfade, so the three shapes land exact at 0, a half and 1. m is per-voice and
  ; scalar, so the branch is taken once and not per sample.
  (slop-song-wave tp f m)
-  (: u ((tp * f) % 1.0)
+  (: u (tp * f % 1.0)
      tr (song-tri u)
    (? (m < 0.5) (: a (m * 2.0)
                  (((sin (tp * (twopi * f))) * (1.0 - a)) + (tr * a)))
@@ -382,13 +381,13 @@
  (song-voice st v rate m vol)
   (: dur (vnum v 'legato 0.30)
      nt  (vnum v 'note (vnum v 'n 0))
-     f   (261.6255653005986 * (exp (nt * ln2-12)))
-     amp ((vnum v 'gain 1.0) * vol)
+     f   (261.6255653005986 * exp (nt * ln2-12))
+     amp (vnum v 'gain 1.0 * vol)
      pn  (vnum v 'pan 0.5)
      end (st + (int (dur * rate)) + 2)
      fn  (\ ix (: t  ((ix - st) * (1.0 / rate))
                   tp (t * (t > 0.0))
-                ((slop-song-wave tp f m) * (venv tp dur) * (t >= 0.0) * (t < dur))))
+                (slop-song-wave tp f m * venv tp dur * (t >= 0.0) * (t < dur))))
    [end fn (amp * (1.0 - pn)) (amp * pn)])
  (slop-song-new tune h) {'tune tune 'h h 'fpos 0 'cyc 0 'next 0 'vs ()}
  ; one cycle's onsets as voices, the cycle starting at frame st and spc frames long.
@@ -398,9 +397,9 @@
  ; to drop it by, and only the end is in the voice itself.
  (song-voices s c st spc m vol)
   (filter two?
-          (map (\ x (: at (st + (int (spc * (qnum ((evwb x) - (qi c))))))
+          (map (\ x (: at (st + (int (spc * qnum (evwb x - qi c))))
                        v (song-voice at (evv x) song-rate m vol)
-                     (? (two? v) [at v] ())))
+                     (two? v ? [at v])))
                (filter onset? ((s 'tune) (qi c) (qi (c + 1))))))
  ; one chunk out the horn. whole cycles are scheduled ahead of the write head at the
  ; speed in force when their turn comes, so a tempo change lands on a bar line and no
@@ -444,7 +443,7 @@
                             _ (rest sign-slice)
                             (settle (ms - sign-slice))))
  (slop-sign g tk pn)
-  (: both ((&& tk pn) ? 1 0)
+  (: both (tk && pn)
      vs (both ? [tk pn] (tk ? [tk] [pn]))
      rows (both ? sign-both (tk ? sign-tok sign-pnn))
      head (map (l \ fill l vs) rows)
