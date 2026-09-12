@@ -447,11 +447,11 @@
    (aopn x l) (atom? l ? (opnom x)  (= x <<l) <><l  (aopn x >l))
    ; adesug: rewrite what amble can own by pure source identity, so the twin/deopt story is
    ; untouched. (X) is X -- an infix span reads as the wrapped application, (k < n) -> ((k < n)),
-   ; so every infix-written body wears these singletons -- a value head is its nom, (list a..) is
-   ; nested links, and (&& a..) is nested (? a .. ()), short-circuit included, since && answers
-   ; its last value or the unit. env-shadowed names stay calls and quoted data stays inert.
-   ; (|| ..) is not rewritten: its value is the first truthy arg, so a rewrite would double-eval.
-   ; aor emits it.
+   ; so every infix-written body wears these singletons -- a value head is its nom, and (list a..)
+   ; is nested links. env-shadowed names stay calls and quoted data stays inert.
+   ; &&/|| are not rewritten. they are connectives -- each answers one of its operands -- so a
+   ; lowering would either duplicate an operand or invent a value, and prel's macros have already
+   ; bound and lowered them before this surface exists: a head here is never one of those words.
    (adesug env ti ta e)
     (? (aquote? e) e
        (atom? e) e
@@ -486,8 +486,6 @@
                ['? ['= (adesug env ti ta <as) (adesug env ti ta <>as)] 0 1]
              (op = '!== && 2 = #as && !(elem op env))          ; and identity's, the same shape
                ['? ['== (adesug env ti ta <as) (adesug env ti ta <>as)] 0 1]
-             (= op '&& && 2 <= #as && !(elem op env))
-               ((: (go l) (two? >l ? ['? (adesug env ti ta <l) (go >l) ()] (adesug env ti ta <l))) as)
              ((= op op0 ? (adesug env ti ta op0) op) . map (x \ adesug env ti ta x) as))))
    ; njit-amble: the hook entry -- compile s (deopt -> e) or answer 0 (decline; the hook keeps e).
    ; farq = ala's letrec-local predicate (see hook.l): a truthy (farq nom) names a binding that
@@ -568,7 +566,7 @@
        ; all mask through it, so a rebound word stays a call in all four.
        shd  (filter (nm \ elem nm env || farq nm) aopnames)
        denv (env + shd)
-       body (adesug denv ti ta body)                         ; own list/&& by definition (nested links / nested ?s) + untag
+       body (adesug denv ti ta body)                         ; own list by definition (nested links) + untag
        inits (map (i \ adesug denv ti ta (ainl i inl st)) inits)
        ins  (st 'l)
        nin  #ins
