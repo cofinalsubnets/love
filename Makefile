@@ -544,7 +544,7 @@ k_elf = $(ko)/love-$a.elf
 k_pie = $(k_odir)/love.pie
 # ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
 # and one name -- wasm is nobody's arch, so the seat's letter is not in it
-k_mod = $(ko)/love-wasm.wasm
+k_mod = $(ko)/love.wasm
 
 # the lays and the machine tail live under $(k_odir)/$a/ so vec.o and sys.o do not
 # collide with the core objects of the same name.
@@ -1075,25 +1075,25 @@ wasm:
 	@$(MAKE) -s a=wasm wasm_seat
 # ..and that seat, spelled where NODE is known: the module always, the image when there is
 # a node to bake it under. the loader (i/wasm/loader.js) is the runtime under a bare module.
-wasm_seat: $(k_mod) $(if $(NODE),b/wasm/love-wasm.image,)
+wasm_seat: $(k_mod) $(if $(NODE),b/wasm/love.image,)
 # by hand: bytes every C edit would otherwise churn. ONE PAIR IS COPIED OUT to w/ beside
 # the fonts and the stylesheet -- generated files committed for one reason, that github
 # pages serves what it is given and builds nothing.
 site-wasm: wasm
 	@mkdir -p w/wasm
-	@echo '$(t_cp)	'w/wasm/love-wasm.wasm
-	@cp b/love-wasm.wasm w/wasm/love-wasm.wasm
-	@echo '$(t_cp)	'w/wasm/love-wasm.image
-	@cp b/wasm/love-wasm.image w/wasm/love-wasm.image
+	@echo '$(t_cp)	'w/wasm/love.wasm
+	@cp b/love.wasm w/wasm/love.wasm
+	@echo '$(t_cp)	'w/wasm/love.image
+	@cp b/wasm/love.image w/wasm/love.image
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker
 # hands it to k_start; a stale one is refused and the egg bakes, the host's own law.
 # the bake's own RAM: the crew warm plus the image being written is more than the
 # terminal's default span, and the fault it takes there is a wild write in gen_major.
-b/wasm/love-wasm.image: b/love-wasm.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
+b/wasm/love.image: b/love.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
 	@echo 'BAKE	'$@
-	@INLE_RAM=1024 $(NODE) i/wasm/inle.mjs --lift /love.image:$@ b/love-wasm.wasm bake /love.image < /dev/null > b/wasm/bake.log 2>&1 \
+	@INLE_RAM=1024 $(NODE) i/wasm/inle.mjs --lift /love.image:$@ b/love.wasm bake /love.image < /dev/null > b/wasm/bake.log 2>&1 \
 	   || { cat b/wasm/bake.log; exit 1; }
 
 clean:

@@ -1,4 +1,4 @@
-// i/wasm/inle.mjs -- the serial terminal for love-wasm.wasm under node: the machine
+// i/wasm/inle.mjs -- the serial terminal for love.wasm under node: the machine
 // runs in a worker (cpu.mjs), this thread is its console. stdin's bytes go into the shared
 // key ring, the serial line comes out on stdout, and the kernel's reset ends the run --
 // which is how t/kernel/all.l's (reset) quits the gate, as -no-reboot does under qemu.
@@ -9,12 +9,12 @@
 // pixels a glyph pixel gets, and without one the console picks from the size. --lift names
 // a ramfs file the machine's program leaves behind, and where to put it on this side, once
 // the program has quit (the reset). --image hands the machine a heap image to wake (the one
-// `bake PATH` on the boot line writes, lifted out: `make b/wasm/love-wasm.image`).
+// `bake PATH` on the boot line writes, lifted out: `make b/wasm/love.image`).
 // --horn names a file to lay what the machine PLAYS in, as raw 16-bit stereo at the
 // horn's own rate: the AudioWorklet a page has, headless.
 //   usage: node i/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm]
 //                                  [--lift /in/machine:b/here] [--horn sound.raw]
-//                                  [--image love-wasm.image] love-wasm.wasm [boot line ..]
+//                                  [--image love.image] love.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
 import { openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n,
@@ -34,7 +34,7 @@ while (args[0]?.startsWith('--')) {
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump, fb.scale = scale;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--deaf] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
 
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);

@@ -1,4 +1,4 @@
-// i/wasm/cpu.mjs -- the CPU under love-wasm.wasm: a worker that instantiates the
+// i/wasm/cpu.mjs -- the CPU under love.wasm: a worker that instantiates the
 // module, answers its hypercalls, and never yields. the terminal is the other thread
 // (inle.mjs under node, inle.html in the browser); the two share one ring of key bytes
 // in a SharedArrayBuffer, which is what lets the kernel's idle really block: nanosleep is

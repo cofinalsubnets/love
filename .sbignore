@@ -32,8 +32,8 @@ index.html
 w/style.css
 w/favicon.png
 w/fonts
-w/wasm/love-wasm.wasm
-w/wasm/love-wasm.image
+w/wasm/love.wasm
+w/wasm/love.image
 
 # editor and debugger leavings
 vgcore.*

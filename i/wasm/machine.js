@@ -1,4 +1,4 @@
-// i/wasm/machine.js -- the machine island: love-wasm.wasm as inle, booted on the page.
+// i/wasm/machine.js -- the machine island: love.wasm as inle, booted on the page.
 // the kernel runs in a worker (cpu.mjs) because it never returns, the canvas is its
 // framebuffer, the keyboard its serial line and an AudioWorklet its speaker; the two
 // threads share one ring, which is what lets the kernel's idle really block. one island per .machine on
@@ -88,8 +88,8 @@ export async function loveMachine(root) {
   status.textContent = 'fetching the machine...';
   let wasm, image;
   try {
-    wasm = await (await fetch(url(at('wasm', '../../w/wasm/love-wasm.wasm')))).arrayBuffer();
-    image = await fetch(url(at('image', '../../w/wasm/love-wasm.image')))
+    wasm = await (await fetch(url(at('wasm', '../../w/wasm/love.wasm')))).arrayBuffer();
+    image = await fetch(url(at('image', '../../w/wasm/love.image')))
       .then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
   } catch (e) { return halt(`the machine did not load (${e.message}); the page needs to be served over http.`); }
 

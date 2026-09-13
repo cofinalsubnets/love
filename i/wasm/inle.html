@@ -1,10 +1,10 @@
 <!doctype html>
-<!-- i/wasm/inle.html -- love-wasm.wasm as a machine in the page: the kernel runs in a
+<!-- i/wasm/inle.html -- love.wasm as a machine in the page: the kernel runs in a
      worker (cpu.mjs), the canvas is its framebuffer, the keyboard its serial line, and
      an AudioWorklet (horn.js) its speaker -- which starts at the first click, a page
      having no say in that. serve
      the tree root (`make serve`) and open /i/wasm/inle.html; the module is read from
-     b/love-wasm.wasm, so `make b/love-wasm.wasm` first. coi.js makes the page
+     b/love.wasm, so `make b/love.wasm` first. coi.js makes the page
      cross-origin isolated on a static host, which SharedArrayBuffer wants.
      ?boot= is the boot line, ?ram= the RAM in MiB, ?cols= the most columns the
      console should have -- which is what settles how large a glyph is drawn.
@@ -103,10 +103,10 @@
         $('lifted').replaceChildren(a); a.click(); }
       else if (m.fault) say('the machine faulted: ' + m.fault); };
     cpu.onerror = (e) => say('the machine stopped: ' + e.message);
-    const wasm = await (await fetch(new URL('../../b/love-wasm.wasm', import.meta.url))).arrayBuffer();
+    const wasm = await (await fetch(new URL('../../b/love.wasm', import.meta.url))).arrayBuffer();
     // the heap image beside the module (`make wasm` bakes it): a wake is a moment where the
     // egg boot is many seconds. absent, the kernel bakes the egg.
-    const image = await fetch(new URL('../../b/wasm/love-wasm.image', import.meta.url))
+    const image = await fetch(new URL('../../b/wasm/love.image', import.meta.url))
       .then((r) => r.ok ? r.arrayBuffer() : null).catch(() => null);
     // the canvas measured as real pixels, and the zoom a glyph pixel gets there; ?cols
     // is the most columns worth reading, which is what picks the zoom

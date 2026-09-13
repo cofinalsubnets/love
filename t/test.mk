@@ -783,7 +783,7 @@ test_rp2040: host
 # against ~35 s in a row, each port's own make being single-threaded.
 # mps2 and virt want nothing foreign to build, only to boot, so their build halves are here.
 # i/wasm is not a board and never joins: it is the machine, and the module the page carries
-# is b/love-wasm.wasm, from test_links.
+# is b/love.wasm, from test_links.
 test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_teensy41 test_playdate
 	@echo "test_boards: six ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build: host
@@ -803,7 +803,7 @@ test_links: host $(ho)/front $(ho)/frontseat $(love0)
 	@$(MAKE) -s $(ko)/love-x64.elf
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
-	@$(MAKE) -s a=wasm $(ko)/love-wasm.wasm
+	@$(MAKE) -s a=wasm $(ko)/love.wasm
 	@$(MAKE) -s test_boards
 	@$m t/gate/lay.l $(ho)/love $(ho)/front $(ho)/frontseat || { echo "FAIL lay"; exit 1; }
 	@echo "test_links: hosted, bootstrap, front and its seat-horn twin, the wasm machine, three kernels, six boards"
@@ -1248,7 +1248,7 @@ NODE ?= $(shell command -v node 2>/dev/null)
 # seat's room is a number here, not a policy. 256 (the default) is short of the corpus: the
 # collector's doubling asks 4480156 words and the grow refuses, at the same length whichever
 # member is running, the live set being what crossed the line.
-# test_kernel_wasm -- the wasm inle seat (b/love-wasm.wasm) under node: the image baked
+# test_kernel_wasm -- the wasm inle seat (b/love.wasm) under node: the image baked
 # (the egg lane, `bake PATH` on the boot line), then the kernel corpus off the ramfs on the
 # woken image, the serial line captured, the (reset) that ends it read as the exit -- what
 # u/ktest.l reads off qemu, with no qemu and no browser.
@@ -1258,8 +1258,8 @@ test_kernel_wasm:
 else
 test_kernel_wasm: host
 	@$(MAKE) -s wasm
-	@echo TEST b/love-wasm.wasm "(node: the kernel corpus on the woken image, serial, headless)"
-	@INLE_RAM=768 $(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love-wasm.image $(R)/b/love-wasm.wasm t/kernel/all.l \
+	@echo TEST b/love.wasm "(node: the kernel corpus on the woken image, serial, headless)"
+	@INLE_RAM=768 $(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love.image $(R)/b/love.wasm t/kernel/all.l \
 	   < /dev/null > b/wasm/kernel.log 2>&1; \
 	 grep -q "image awake" b/wasm/kernel.log \
 	   && grep -q "tests pass" b/wasm/kernel.log && ! grep -q "failed:" b/wasm/kernel.log \
@@ -1267,32 +1267,32 @@ test_kernel_wasm: host
 	   || { tail -20 b/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
 	@grep "tests pass" b/wasm/kernel.log
 	@echo TEST t/kernel/glass.l "(the console's grid: real pixels in, rows and columns out)"
-	@sh $(R)/t/gate/glass.sh $(NODE) $(R)/b/love-wasm.wasm b/wasm/love-wasm.image b/wasm/glass.log
+	@sh $(R)/t/gate/glass.sh $(NODE) $(R)/b/love.wasm b/wasm/love.image b/wasm/glass.log
 	@echo TEST t/gate/glass.mjs "(the page's half of the grid, asked without a page)"
 	@$(NODE) $(R)/t/gate/glass.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST t/gate/worklet.mjs "(the page's speaker, asked without a page)"
 	@$(NODE) $(R)/t/gate/worklet.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST t/kernel/horn.l "(the horn: a ramp through the port and out of the machine)"
-	@INLE_RAM=256 $(NODE) $(R)/i/wasm/inle.mjs --horn b/wasm/horn.raw --image b/wasm/love-wasm.image \
-	   $(R)/b/love-wasm.wasm t/kernel/horn.l < /dev/null > b/wasm/horn.log 2>&1; \
+	@INLE_RAM=256 $(NODE) $(R)/i/wasm/inle.mjs --horn b/wasm/horn.raw --image b/wasm/love.image \
+	   $(R)/b/love.wasm t/kernel/horn.l < /dev/null > b/wasm/horn.log 2>&1; \
 	 grep -q "horn wrote 80000" b/wasm/horn.log \
 	   || { tail -20 b/wasm/horn.log; echo "FAIL test_kernel_wasm (the horn refused the machine)"; exit 1; }
 	@$m $(R)/t/gate/horn.l b/wasm/horn.raw || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST t/kernel/horn.l "(--deaf: the machine outlives a speaker that stopped taking)"
-	@timeout 120 $(NODE) $(R)/i/wasm/inle.mjs --deaf --image b/wasm/love-wasm.image \
-	   $(R)/b/love-wasm.wasm t/kernel/horn.l < /dev/null > b/wasm/deaf.log 2>&1; \
+	@timeout 120 $(NODE) $(R)/i/wasm/inle.mjs --deaf --image b/wasm/love.image \
+	   $(R)/b/love.wasm t/kernel/horn.l < /dev/null > b/wasm/deaf.log 2>&1; \
 	 grep -q "horn wrote 80000" b/wasm/deaf.log \
 	   || { tail -5 b/wasm/deaf.log; echo "FAIL test_kernel_wasm (a dead speaker stopped the machine)"; exit 1; }
 	@echo "  deaf: ok -- the ring fills, nobody empties it, and the walk goes on"
 	@echo TEST t/kernel/lift.l "(the lift: a path written to /proc/lift, and the file lands outside)"
-	@rm -f lifted.txt b/wasm/lifted.txt; INLE_RAM=256 $(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love-wasm.image \
-	   $(R)/b/love-wasm.wasm t/kernel/lift.l < /dev/null > b/wasm/lift.log 2>&1; \
+	@rm -f lifted.txt b/wasm/lifted.txt; INLE_RAM=256 $(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love.image \
+	   $(R)/b/love.wasm t/kernel/lift.l < /dev/null > b/wasm/lift.log 2>&1; \
 	 mv -f lifted.txt b/wasm/lifted.txt 2>/dev/null; \
 	 grep -q "lift asked" b/wasm/lift.log && grep -q "carried out of the machine, whole" b/wasm/lifted.txt \
 	   || { tail -5 b/wasm/lift.log; echo "FAIL test_kernel_wasm (the lift did not land)"; exit 1; }
 	@echo "  lift: ok -- the file came out under its own name"
 	@echo TEST t/kernel/pkcheck.l "(harp's pack: the two arms answer the same bytes HERE)"
-	@$(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love-wasm.image $(R)/b/love-wasm.wasm \
+	@$(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love.image $(R)/b/love.wasm \
 	   t/kernel/pkcheck.l < /dev/null > b/wasm/pack.log 2>&1; \
 	 grep -q "gain 20000     1" b/wasm/pack.log && grep -q "gain 900000    1" b/wasm/pack.log \
 	   && grep -q "gain 100       1" b/wasm/pack.log \
@@ -1319,7 +1319,7 @@ test_seedwasm: host
 	@echo TEST "love seed x64 (the wasm seat, nothing under it)"
 	@rm -f b/wasm/love-x64
 	@INLE_RAM=1024 $(NODE) $(R)/i/wasm/inle.mjs --lift /s/love-x64:b/wasm/love-x64 \
-	   --image b/wasm/love-wasm.image $(R)/b/love-wasm.wasm seed x64 /s \
+	   --image b/wasm/love.image $(R)/b/love.wasm seed x64 /s \
 	   < /dev/null > b/wasm/seed.log 2>&1; \
 	 grep -q "a raw egg for x64" b/wasm/seed.log && test -s b/wasm/love-x64 \
 	   || { tail -20 b/wasm/seed.log; echo "FAIL test_seedwasm"; exit 1; }
