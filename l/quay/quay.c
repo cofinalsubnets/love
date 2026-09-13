@@ -450,7 +450,11 @@ void cb_putc(struct cb *c, char _i) {
     if (i >= 0x80 && i < 0xc0) {
       c->ucp = c->ucp << 6 | (i & 0x3fu);
       if (--c->un) return;
-      return cb_put1(c, cb_fold(c->ucp)); }      // complete: fold and deliver
+      uint8_t g = cb_fold(c->ucp);
+      // a codepoint folded onto a low glyph (► ▲ ♪ ..) is a picture, not the control
+      // that byte would be: in the ground state it goes straight to the cell
+      if (g < ' ' || g == 0x7f) { if (!c->esc) cb_glyph(c, g); return; }
+      return cb_put1(c, g); }                    // complete: fold and deliver
     c->un = 0;                                   // torn: a ■, and i rides on
     cb_put1(c, 0xfe); }
   if (i >= 0x80) {

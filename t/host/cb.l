@@ -325,7 +325,10 @@
  _ (test (= 254 (chat s 14)))
  _ (scribe s "\xc3\e[Dx")                         ; torn mid-sequence: a ■ lands,
  _ (test (= 120 (chat s 15))                    ; the ESC rides on -- cub steps
-           (= 16 (cur s))))                       ; back and x overwrites the ■
+           (= 16 (cur s)))                        ; back and x overwrites the ■
+ _ (scribe s "\xe2\x96\xba\xe2\x96\xb2\xe2\x99\xaa")   ; ► ▲ ♪: pictures on LOW bytes, cells
+ _ (test (= 16 (chat s 16)) (= 30 (chat s 17)) (= 13 (chat s 18))   ; ..not the controls
+           (= 19 (cur s))))                       ; those bytes would be (no CR for ♪)
 
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)

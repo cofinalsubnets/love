@@ -22,7 +22,8 @@
          circle-r circle-wall on-ring? reveal? done? tokens floors due?
          themes plan tile-face strewn pink-ramp grass-ramp pink-front skin-pen
          flavour mutter underfoot sign-box sign-over stream feat-book her-floors ents loot-face
-         songs tower-bars tower-tune song-vol song-new song-feed drain-keys
+         city carve-floor car-new car-head drive run-down climb-hp deal first-n
+         songs tower-bars tower-tune song-vol song-new song-feed song-tier song-sfx drain-keys
          garden-bars middle-bars sky-bars heart-bars heart-rate tune?)
 ; posix is optional -- the page's seat (i/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
@@ -84,7 +85,61 @@
    _ (pins d 'in (mid (last (d 'rooms)))
              'stair (mid <(d 'rooms)))
    _ (dput d <(d 'stair) <>(d 'stair) 2)
+   ; ..and a second stair in another room, where the floor has one to spare
+   _ (? (2 < #(d 'rooms)) (: s2 (mid ((d 'rooms) 1)) (dput d <s2 <>s2 2)))
    (d . peep sb () 0))
+
+ ; --- city: the middle is not delved but laid -- streets on a grid, two cells across
+ ; and one along, and the blocks between them buildings: a wall ring with a floor
+ ; inside, and two or three doors on different walls, every wall facing a street. the
+ ; climber arrives inside the last building; the stairs are inside two others. a
+ ; block too small to hold a room stays solid. answers (floor . st') like delve. ---
+ street-x 12                                            ; a block's stride across, and along
+ street-y 6
+ (city w h st) (:
+   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
+   sb {st}
+   (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
+   ; where the streets start: from a, at the stride and a jitter, the last one at lim
+   (spine a lim step jit) (:- (go a [a])
+     (go x acc) (: nx (x + step + roll sb jit)
+                   (nx + (step // 2) < lim ? (go nx (nx . acc)) (rev (lim . acc)))))
+   xs (spine 1 (w - 3) street-x 6)
+   ys (spine 1 (h - 2) street-y 2)
+   _ (each xs (x \ each ^(h - 2) (y \ (dput d x (y + 1) 1, dput d (x + 1) (y + 1) 1))))
+   _ (each ys (y \ each ^(w - 2) (x \ dput d (x + 1) y 1)))
+   ; a block between four streets: the wall ring is left as rock, the inside is floor
+   (build xa xb ya yb) (: x0 (xa + 2) x1 (xb - 1) y0 (ya + 1) y1 (yb - 1)
+                          bw (x1 - x0 + 1) bh (y1 - y0 + 1)
+                          (? (bw >= 5 && bh >= 3)
+                             (: _ (each ^(bh - 2) (j \ each ^(bw - 2) (i \ dput d (x0 + 1 + i) (y0 + 1 + j) 4)))
+                                ; the doors: two or three walls of the four, one door each
+                                walls (deal sb '(n s w e))
+                                (door wl) (wl @ 'n (dput d (x0 + 1 + roll sb (bw - 2)) y0 5)
+                                                's (dput d (x0 + 1 + roll sb (bw - 2)) y1 5)
+                                                'w (dput d x0 (y0 + 1 + roll sb (bh - 2)) 5)
+                                                   (dput d x1 (y0 + 1 + roll sb (bh - 2)) 5))
+                                _ (each (first-n (2 + roll sb 2) walls) door)
+                                (pin d 'rooms ([(x0 + 1) (y0 + 1) (bw - 2) (bh - 2)] . d 'rooms)))))
+   (pairs l) (two? >l ? ([<l (l 1)] . pairs >l) ())
+   _ (each (pairs ys) (yy \ each (pairs xs) (xx \ build <xx <>xx <yy <>yy)))
+   rms (d 'rooms)
+   ; a floor too small for three buildings is delved instead, like any other
+   (#rms < 3 ? (delve w h st (plan 2))
+    (: _ (pins d 'in (mid (last rms)) 'stair (mid <rms))
+       _ (dput d <(d 'stair) <>(d 'stair) 2)
+       s2 (mid (rms 1))
+       _ (dput d <s2 <>s2 2)
+       (d . peep sb () 0))))
+ ; a floor is delved or laid by its tier
+ (carve-floor w h st lvl) (lvl = 2 ? (city w h st) (delve w h st (plan lvl)))
+
+ ; a list dealt out in a random order, and the first n of one
+ (deal sb l) (:- (go l ())
+   (go l acc) (two? l ? (: k (roll sb #l) (go (cat (snip-l l 0 k) (nth-on l (k + 1))) ((l k) . acc))) acc))
+ (snip-l l a b) (a >= b ? () ((l a) . snip-l l (a + 1) b))
+ (nth-on l k) (k <= 0 ? l (nth-on >l (k - 1)))
+ (first-n n l) (0 < n && two? l ? (<l . first-n (n - 1) >l) ())
 
  ; --- the lantern: line-of-sight fov over bresenham strides ---
  ; a stride is clear when every cell strictly between the ends is open; the
@@ -165,13 +220,29 @@
  (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
  stair-face '(60 220 136)                               ; < the stair, gold on every floor
  water-face '(126 39 24)                                ; ~ the stream, where it shows
+ floor-face '(46 240 236)                               ; . a building's floor, dark
+ door-face '(43 137 94)                                 ; + a door, brown
  ; what lies on a cell besides pennies: furniture, which stands there to be bumped and
  ; says one thing. glyph, pen lit, pen dim, the line. a glyph here is a string, so
  ; the page's own letters serve (quay folds them onto its face).
+ ; ..and a fifth thing where there is one: the lines of a box the piece opens instead
  feat-book {'table ["π" 240 236 "an overgrown stone table stained with dark liquid"]
-            'throne ["H" 130 94 "a large tree stump carved into an ornate throne sits empty"]}
- (feat-face k) (init (peep feat-book k '("?" 250 244 "")))
- (feat-line k) (last (peep feat-book k '("?" 250 244 "")))
+            'throne ["H" 130 94 "a large tree stump carved into an ornate throne sits empty"]
+            'chair ["h" 137 94 "a chair, pushed back from nothing"]
+            'bed ["=" 131 95 "a bed, made, and cold"]
+            'crate ["x" 136 94 "a crate. it has been opened and closed again"]
+            'shelf ["≡" 180 137 "a bookshelf"
+                    '("a bookshelf, and every book on it is the same book."
+                     ""
+                     "you take one down. the pages are blank."
+                     ""
+                     "-- any key --")]}
+ (feat-of k) (peep feat-book k '("?" 250 244 ""))
+ (feat-face k) (: r (feat-of k) [(r 0) (r 1) (r 2)])
+ (feat-line k) ((feat-of k) 3)
+ (feat-lines k) (peep (feat-of k) 4 ())
+ (bump-feat g k) (: ls (feat-lines k)
+                    (two? ls ? (pin g 'sign (feat-line k . ls)) (note g (feat-line k))))
  ; a pile of pennies is bright and only under the lantern; furniture is remembered
  (loot-face it lit) (<it @ 'penny '(36 172) (wear (feat-face <it) lit))
 
@@ -190,13 +261,16 @@
  (tile-face th t lit x y s)
   (t @ 2 (wear stair-face lit)
        3 (wear water-face lit)
+       4 (wear floor-face lit)
+       5 (wear door-face lit)
        0 (wear <th lit)
          (: r (strewn th x y s) (wear (two? r ? r (th 1)) lit)))
  (paint j d vis loot ents msg bar) (:
    w (d 'w) h (d 'h) sn (d 'seen)
    th (make d) sd (peep d 'sd 0)
    skin (d 'skin)
-   (shade gh x y) (tablet? skin ? (garden-greens <>gh) () @- gh
+   ; the scrutinee in its own parens: an infix ? left bare would take the @- as its arm
+   (shade gh x y) ((tablet? skin ? (garden-greens <>gh) ()) @- gh
                    'hedge [<gh (ramp-pen hedge-ramp (peep (skin 'hedge) [y x] 0.0))]
                    'lawn [<gh (ramp-pen lawn-ramp (peep (skin 'ground) [y x] 0.0))]
                    'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))])
@@ -248,6 +322,7 @@
  w-kill   "the ~ is done for"
  w-bite   "the ~ bites you (~)"
  w-dead   "you are done for"
+ w-car    "a car takes you off your feet (~)"
  w-wall   "~ holds"
  w-stair  "no stair here"
  w-penny  "you pocket ~ pennies"
@@ -399,6 +474,12 @@
                  "minnows, a swarm of them, turn as one away from your foot"
                  "clear to the bottom, and the bottom is all small fish, moving"
                  "cold through your shoes, and the noise of it is the calmest thing here")
+   ("floor"      "a floor nobody has swept in a while"
+                 "boards, and they give a little"
+                 "dust, and your prints in it")
+   ("door"       "a door, and it stands open"
+                 "the frame is lower than you are"
+                 "you turn sideways to get through")
    ("runnel"     "a thread of water, going somewhere"
                  "colder and quicker than it looks"
                  "it has cut its own small channel here")
@@ -548,12 +629,47 @@
  ; the bar is not a resource: a turn spent acting mends and a turn passed does not.
  ; forty against a worst bite of three means one mob is a nuisance and two are a death.
  regen 2
+ climb-hp 20
  (mend g) (: p (g 'p) h ((p 'hp) + regen) (pin p 'hp (h < p 'mx ? h (p 'mx))))
  (mob-row k) (peep mob-book k <mob-book)
  (mob-name k) <(mob-row k)
  (mob-new k x y) (: r (mob-row k)
                    {'x x 'y y 'gl (peep r 1 114) 'hue (peep r 2 137)
                     'hp (peep r 3 3) 'dm (peep r 4 1) 'pc (peep r 5 1) 'nm <r})
+
+ ; --- the cars: the middle's traffic, on the streets and never off them. a car keeps
+ ; its heading and its speed, turns at a crossing now and then, and turns back at a
+ ; kerb; one that reaches you takes you off your feet, sounds its horn twice, and
+ ; turns back. it does not stop for you, and cannot be struck. ---
+ car-speed 3
+ car-dm 10
+ car-pens '(196 226 39 250 208 201)
+ (car-glyph dx dy) (? (0 < dx) "►" (dx < 0) "◄" (0 < dy) "▼" "▲")   ; the face's own arrows
+ (car-new x y dx dy hue) {'x x 'y y 'dx dx 'dy dy 'gl (car-glyph dx dy) 'hue hue
+                          'car 1 'nm "car" 'hp 99 'dm car-dm 'pc 1}
+ (car-head m dx dy) (pins m 'dx dx 'dy dy 'gl (car-glyph dx dy))
+ (car-back m) (car-head m (0 - m 'dx) (0 - m 'dy))
+ (street? d x y) (1 = dat d x y)
+ ; the horn, twice, and the hurt: what a car does when it reaches you either way
+ (run-down g m) (: p (g 'p)
+                   _ (pin p 'hp (p 'hp - car-dm))
+                   _ (note g (fill w-car [car-dm]))
+                   _ (pin g 'sfx ('horn . g 'sfx))
+                   _ (car-back m)
+                   (0 >= p 'hp ? (pin g 'over 'dead, note g w-dead)))
+ (swerve g m) (: d (g 'd) sb (g 'sb)
+                 c (roll sb 2 = 0 ? [(m 'dy) (0 - m 'dx)] [(0 - m 'dy) (m 'dx)])
+                 (street? d (m 'x + <c) (m 'y + <>c) ? (car-head m <c <>c)))
+ (drive g m) (:- (go car-speed)
+   d (g 'd) p (g 'p)
+   (go n) (? (0 < n)
+             (: nx (m 'x + m 'dx) ny (m 'y + m 'dy)
+                (? (nx = p 'x && ny = p 'y) (run-down g m)
+                   (street? d nx ny && !(mob-at g nx ny))
+                    (: _ (pins m 'x nx 'y ny)
+                       _ (? (roll (g 'sb) 4 = 0) (swerve g m))
+                       (go (n - 1)))
+                   (car-back m, go (n - 1))))))
 
  ; --- her: on the first floors, somewhere, once. bumped, she has her say in a box
  ; over the map and is gone; the box is a sign, so the next key takes it down. ---
@@ -579,9 +695,10 @@
  (stock g) (:
    d (g 'd) sb (g 'sb) lvl (g 'lvl) loot {} ks (mob-set lvl)
    (drop-at rm) [(peep rm 0 0 + roll sb (peep rm 2 1)) (peep rm 1 0 + roll sb (peep rm 3 1))]
+   (ground? x y) (: t (dat d x y) (t = 1 || t = 4))
    (mobs rm n acc) (? (0 < n)
                     (: xy (drop-at rm) x <xy y <>xy
-                       (? (dat d x y = 1 &&
+                       (? (ground? x y &&
                            !(loot (x + d 'w * y)) &&
                            !(any ({'x ^x 'y ^y} \ 1) acc))
                         (mobs rm (n - 1) (mob-new (peep ks (roll sb #ks) 0) x y . acc))
@@ -591,21 +708,35 @@
    ; `dat`: a cask does not answer to being applied, so (d 't i) is () for every cell
    (treasure rm n) (? (0 < n)
                     (: xy (drop-at rm) x <xy y <>xy
-                       _ (? (1 = dat d x y)
+                       _ (? (ground? x y)
                             (pin loot (x + (d 'w) * y) ['penny (3 + roll sb 12)]))
                        (treasure rm (n - 1))))
    rms (init (d 'rooms))
    ms (foldl (\ acc rm (treasure rm (2 + roll sb 2), mobs rm (roll sb (2 + lvl)) acc))
              () rms)
    ; a cell in some room with nothing on it yet, or () when the dice will not give one
-   (free? x y) (dat d x y = 1 && !(loot (x + d 'w * y)) && !(any ({'x ^x 'y ^y} \ 1) ms))
-   (spot n) (? (0 < n) (: xy (drop-at (rms (roll sb #rms)))
-                          (free? <xy <>xy ? xy (spot (n - 1)))))
-   (furnish k) (: xy (spot 40) (xy ? (pin loot (<xy + d 'w * <>xy) [k])))
+   (free? x y) (ground? x y && !(loot (x + d 'w * y)) && !(any ({'x ^x 'y ^y} \ 1) ms))
+   (spot-in rm n) (? (0 < n) (: xy (drop-at rm)
+                                (free? <xy <>xy ? xy (spot-in rm (n - 1)))))
+   (spot n) (two? rms ? (spot-in (rms (roll sb #rms)) n) ())
+   (furnish-in rm k) (: xy (spot-in rm 40) (xy ? (pin loot (<xy + d 'w * <>xy) [k])))
+   (furnish k) (two? rms ? (furnish-in (rms (roll sb #rms)) k) ())
    _ (? (1 = lvl) (furnish 'table, furnish 'throne))
+   ; the middle's buildings are lived in: a few pieces each, and one holds the shelf
+   pieces '(chair bed crate)
+   _ (? (2 = lvl)
+        (: _ (each rms (rm \ each ^(1 + roll sb 3) (_ \ furnish-in rm (pieces (roll sb #pieces)))))
+           (furnish 'shelf)))
+   ; ..and its streets driven: a car for so many cells of street, headed along it
+   streets (? (2 = lvl) (filter (i \ street? d (i % d 'w) (i // d 'w)) ^(d 'w * d 'h)) ())
+   (car-at i) (: x (i % d 'w) y (i // d 'w)
+                 along (street? d x (y - 1) && street? d x (y + 1))
+                 sg (roll sb 2 = 0 ? 1 -1)
+                 (car-new x y (along ? 0 sg) (along ? sg 0) (car-pens (roll sb #car-pens))))
+   cars (two? streets ? (map (_ \ car-at (streets (roll sb #streets))) ^(2 + #streets // 40)) ())
    her (? (lvl <= her-floors) (: xy (spot 40)
                                  (xy ? {'x <xy 'y <>xy 'gl her-glyph 'hue her-pen})))
-   (pins g 'ms ms 'loot loot 'her her))
+   (pins g 'ms (cat cars ms) 'loot loot 'her her))
 
  ; the garden's hedge, worn thin: an inner rock cell with four or more open neighbours
  ; of its eight becomes ground on a roll, over a few passes. every pass reads the floor
@@ -648,7 +779,7 @@
 
  ; a fresh climb: the garden delved from the seed state, the climber at 'in
  (crawl-new w h st) (:
-   p0 (delve w h st (plan 1)) d <p0
+   p0 (carve-floor w h st 1) d <p0
    st1 >p0 sb {st1}                                 ; the brace boxes; #st1 would count it
    _ (dress d 1 sb)
    pl {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue 228 'hp 40 'mx 40 'penny 0}
@@ -699,6 +830,8 @@
  (underfoot g x y) (: d (g 'd) sd (peep d 'sd 0) k (dice x y (1 + sd) 97)
                       (? (2 = dat d x y) (mutter k "stair")
                          (3 = dat d x y) (mutter k "stream")
+                         (4 = dat d x y) (mutter k "floor")
+                         (5 = dat d x y) (mutter k "door")
                          (: r (strewn (make d) x y sd)
                             (two? r ? (mutter k (r 4)) ""))))
  (tread g x y) (: s (underfoot g x y) (s ? (note g s)))
@@ -708,8 +841,9 @@
                   i (nx + (g 'd 'w) * ny)
                   it (g 'loot i)
                   (? (her-at? g nx ny) (meet-her g)
+                     (m && m 'car) (run-down g m)
                      m (strike g m)
-                     (it && <it != 'penny) (note g (feat-line <it))
+                     (it && <it != 'penny) (bump-feat g <it)
                      !(open? (g 'd) nx ny) (note g (fill w-wall [(here g)]))
                      (: _ (pin p 'x nx, pin p 'y ny)
                         _ (it ? (take g i it))
@@ -742,12 +876,14 @@
 
  ; up the stair: a fresh floor restocked, or the circle if heaven is behind you
  (ascend g) (? (last-floor <= g 'lvl) (circle-new g)
-              (: p0 (delve (g 'd 'w) (g 'd 'h) (peep (g 'sb) () 0) (plan (1 + g 'lvl)))
+              (: p0 (carve-floor (g 'd 'w) (g 'd 'h) (peep (g 'sb) () 0) (1 + g 'lvl))
                  d <p0
                  _ (pin (g 'sb) () >p0)
                  _ (pins g 'd d 'lvl (1 + g 'lvl))
                  _ (dress d (g 'lvl) (g 'sb))
                  _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
+                 ; a floor climbed is twenty more of the bar, and the bar filled by it
+                 _ (pins (g 'p) 'mx (g 'p 'mx + climb-hp) 'hp (g 'p 'hp + climb-hp))
                  _ (stock g)
                  (note g (fill w-floor [(here g)]))))
 
@@ -867,7 +1003,7 @@
          (: _ (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair))
             (mend g)))
    _ ((sg || (g 'over || circle? g)) ? ()
-      (each (g 'ms) (m \ !(g 'over) && due? g m && stir g m)))
+      (each (g 'ms) (m \ !(g 'over) && due? g m && (m 'car ? (drive g m) (stir g m)))))
    (circle? g ? g (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))))
 
  ; the bar, and on a stair the one thing worth saying there
@@ -906,7 +1042,19 @@
                'mix (cite 'play 'mixdown) 'pk (cite 'play 'pack)}
  ; where the game is, read off it each frame. only a bar not yet built reads them, so
  ; a stair or a struck ring lands at the next bar line and never cuts the one sounding.
- (song-tier s g) (pins s 'lvl (g 'lvl) 'rad (circle? g ? (circle-r g) 0))
+ (song-tier s g) (pins s 'lvl (g 'lvl) 'rad (circle? g ? (circle-r g) 0), song-sfx s g)
+ ; what the game asked to hear this turn, put in at the write head so it sounds in the
+ ; next chunk: a horn is two short square beeps, a driver's double tap
+ beep-note 8
+ beep-gap 0.11
+ beep-len 0.07
+ (song-sfx s g) (: fx (g 'sfx)
+                   mk (cite 'play 'mkvoice)
+                   (beep k) (mk (s 'fpos + int (k * beep-gap * song-rate))
+                                {'s "sqr" 'note beep-note 'gain 0.8 'legato beep-len} song-rate)
+                   vs (foldl (\ acc f (f @ 'horn (cat acc [(beep 0) (beep 1)]) acc)) () fx)
+                   _ (pin g 'sfx ())
+                   (pin s 'vs (cat (s 'vs) (filter two? vs))))
  ; one chunk out the card. whole cycles are pulled in ahead of the write head and
  ; dropped once their end frame is behind it, so the live list is what is sounding.
  (song-feed s vol) (:

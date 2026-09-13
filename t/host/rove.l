@@ -154,6 +154,81 @@
    _ (climb ())
  (test (circle? g) !(g 'her)))
 
+; --- the city: streets on a grid, buildings between them with a floor and doors on
+; different walls, the climber inside one, the two stairs inside two others, and all
+; of it joined -- every open cell reachable from where you arrive
+(: p (city 60 20 (wheel 7))
+   d <p w 60 h 20
+   rms (d 'rooms)
+   (t x y) (dat d x y)
+   (inside? rm x y) (peep rm 0 0 <= x && x < peep rm 0 0 + peep rm 2 1 &&
+                     peep rm 1 0 <= y && y < peep rm 1 0 + peep rm 3 1)
+   (in-room? x y) (any (rm \ inside? rm x y) rms)
+   ; the doors of a room: the wall ring's cells that are doors, by the wall they are on
+   (doors rm) (: x0 (peep rm 0 0 - 1) y0 (peep rm 1 0 - 1)
+                 x1 (x0 + peep rm 2 1 + 1) y1 (y0 + peep rm 3 1 + 1)
+                 (wall x y) (? (y = y0) 'n (y = y1) 's (x = x0) 'w 'e)
+                 (filter two? (map (\ xy (5 = t <xy <>xy ? [(wall <xy <>xy)] ()))
+                                   (cat (map (\ i [(x0 + i) y0]) ^(x1 - x0 + 1))
+                                        (map (\ i [(x0 + i) y1]) ^(x1 - x0 + 1))
+                                        (map (\ j [x0 (y0 + j)]) ^(y1 - y0 + 1))
+                                        (map (\ j [x1 (y0 + j)]) ^(y1 - y0 + 1))))))
+   (walls-of rm) (sort (keys (foldl (\ t dr (pin t <dr 1)) {} (doors rm))))
+   flood (: mk (cask (w * h))
+            (go stk n) (? !stk n
+                        (: xy <stk x <xy y <>xy i (x + w * y)
+                           (? (|| !(open? d x y) (peep mk i 0)) (go >stk n)
+                            (: _ (pin mk i 1)
+                               (go (cat [[(x + 1) y] [(x - 1) y] [x (y + 1)] [x (y - 1)]] >stk)
+                                   (n + 1))))))
+            (go [(d 'in)] 0))
+   opens (tally (filter (i \ open? d (i % w) (i // w)) ^(w * h)))
+   stairs (filter (i \ 2 = t (i % w) (i // w)) ^(w * h))
+ (test
+  (2 < #rms)                                             ; buildings enough
+  (all (rm \ 2 <= #(walls-of rm)) rms)                   ; doors on two walls at least, each
+  (all (rm \ (: m [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
+                  (elem (t <m <>m) '(4 2)))) rms)        ; a floor inside, dark
+  (in-room? <(d 'in) <>(d 'in))                          ; you arrive indoors
+  (2 = #stairs)                                          ; two stairs up
+  (all (i \ in-room? (i % w) (i // w)) stairs)           ; ..both of them in a building
+  (flood = opens)                                        ; and every open cell reachable
+  (0 < tally (filter (i \ 1 = t (i % w) (i // w)) ^(w * h)))))  ; streets, which cars want
+
+; ..and every delved floor has its second stair too
+(: d <(delve 60 20 (wheel 11) (plan 2))
+ (test (2 = tally (filter (i \ 2 = dat d (i % 60) (i // 60)) ^(60 * 20)))))
+
+; a car reaches you: ten off the bar, the horn asked for twice, and the car turned back;
+; walking into one is the same hurt. it is never struck.
+(: g (hand-g ())
+   c (car-new 2 1 -1 0 196)
+   _ (pin g 'ms [c])
+   _ (crawl-turn g 46)                                  ; a turn passed: the car comes
+   _ (test (30 = g 'p 'hp) (find (g 'msg) "car" 0) (elem 'horn (g 'sfx))
+           (1 = c 'dx) ("►" = c 'gl) (2 = c 'x))         ; ..and it is headed back, from beside you
+   _ (pin g 'sfx ())
+   _ (car-head c -1 0)
+   _ (pins c 'x 2 'y 1)
+   _ (crawl-turn g [1 0])                               ; you walk into it
+ (test (20 <= g 'p 'hp && g 'p 'hp <= 22) (elem 'horn (g 'sfx)) (99 = c 'hp) (1 = g 'p 'x)))
+
+; the horn the game asked for is two voices in the song, at the write head, and the
+; asking is spent by it
+(: s (song-new ())
+   g {'sfx '(horn) 'lvl 2 'st 0}
+   _ (pin s 'fpos 4000)
+   _ (song-tier s g)
+ (test (2 = #(s 'vs)) !(g 'sfx)
+       (all (v \ 4000 < v 0) (s 'vs))                  ; both end past the head
+       (!(= (<(s 'vs) 0) ((s 'vs) 1 0)))))             ; ..and not together: one, then the other
+
+; the shelf opens a box rather than saying a line
+(: g (hand-g ())
+   _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
+   _ (crawl-turn g [1 0])
+ (test (1 = g 'p 'x) (two? (g 'sign)) (find <(g 'sign) "bookshelf" 0)))
+
 ; pennies weigh in, and they are the only thing on the floor
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) ['penny 7])
@@ -216,7 +291,7 @@
    (all-in? ks nms) (foldl (\ a k (&& a (elem k nms))) 1 ks)
  (test
   (all-in? (kinds 1) '(rat lanternfly))
-  (all-in? (kinds 2) '(gnome goblin hobgoblin))
+  (all-in? (kinds 2) '(gnome goblin hobgoblin car))   ; ..and the middle's traffic
   (all-in? (kinds 3) '(d4 d6 d8 d12 d20 triangle square hexagon))))
 
 ; --- the make of a floor: a tier is built of its own stuff, and what a cell wears is
@@ -295,7 +370,8 @@
    _ (dput (g 'd) 1 1 2)
    _ (crawl-turn g 60)
  (test (2 = g 'lvl) (find (g 'msg) "the middle" 0) (find (g 'msg) "get the" 0)
-         (1 = dat (g 'd) (g 'p 'x) (g 'p 'y))    ; standing on the fresh floor
+         (elem (dat (g 'd) (g 'p 'x) (g 'p 'y)) '(1 4))   ; standing on the fresh floor, or in a building
+         (60 = g 'p 'mx) (60 = g 'p 'hp)         ; a climb is twenty more of the bar
          (tablet? (g 'loot))))
 
 ; ..and the same climb by the keys a seat with no < to hand has: enter, return, space
