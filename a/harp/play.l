@@ -33,7 +33,7 @@
    ; session's posix splice, and a seat carrying none (i/wasm) holds () here --
    ; which only the two paths that want a file ever ask for.
    open (cite 'posix 'open) close (cite 'posix 'close)
-   twopi 6.283185307179586
+   twopi tau
    ln2-12 0.05776226504666211               ; ln 2 / 12, one semitone
    ; white noise off the frame number: the same frame always draws the same sample,
    ; so a re-render is identical and a voice may be evaluated in any chunk.
@@ -47,22 +47,21 @@
    ;     absolute frame numbers, and the note's frequency. all three are trays. ---
    ; a kick is one falling sine: the phase is the integral of 46 + 88e^(-34t), in
    ; closed form, because a per-sample oscillator would need state and this does not.
-   (i-bd t ix f) ((sin (((t * 46.0) + (2.6 * (1.0 - (exp (t * -34.0))))) * twopi))
-                  * (exp (t * -8.0)))
-   (i-sn t ix f) ((((vnoise ix) * 0.75) + ((sin (t * (twopi * 190.0))) * 0.5))
-                  * (exp (t * -24.0)))
-   (i-hh t ix f) ((vnoise ix) * 0.5 * (exp (t * -95.0)))
-   (i-oh t ix f) ((vnoise ix) * 0.4 * (exp (t * -13.0)))
+   (i-bd t ix f) (sin ((t * 46.0 + 2.6 * (1.0 - exp (t * -34.0))) * tau)
+                  * exp (t * -8.0))
+   (i-sn t ix f) ((vnoise ix * 0.75 + sin (t * tau * 190.0) * 0.5) * exp (t * -24.0))
+   (i-hh t ix f) (vnoise ix * 0.5 * exp (t * -95.0))
+   (i-oh t ix f) (vnoise ix * 0.4 * exp (t * -13.0))
    ; a clap is a short chatter then a tail: the chatter is a duty cycle on t, so it
    ; is still one expression
    (i-cp t ix f) (: g (((((t * 220.0) % 1.0) < 0.45) * (t < 0.028)) + (t >= 0.028))
                     ((vnoise ix) * 0.55 * g * (exp (t * -17.0))))
-   (i-rim t ix f) ((sin (t * (twopi * 1650.0))) * 0.7 * (exp (t * -150.0)))
-   (i-tom t ix f) ((sin (((t * 96.0) + (1.4 * (1.0 - (exp (t * -22.0))))) * twopi))
+   (i-rim t ix f) ((sin (t * (tau * 1650.0))) * 0.7 * (exp (t * -150.0)))
+   (i-tom t ix f) ((sin ((t * 96.0 + (1.4 * (1.0 - (exp (t * -22.0))))) * tau))
                    * (exp (t * -11.0)))
    ; the pitched four, each with one attack-decay envelope
    (venv t d) ((1.0 - (exp (t * -420.0))) * (exp ((t / d) * -2.6)))
-   (i-sin t ix f) (sin (t * (twopi * f)))
+   (i-sin t ix f) (sin (t * (tau * f)))
    (i-saw t ix f) ((((t * f) % 1.0) * 2.0) - 1.0)
    (i-sqr t ix f) (((((t * f) % 1.0) < 0.5) * 2.0) - 1.0)
    (i-tri t ix f) (: u ((t * f) % 1.0)

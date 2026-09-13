@@ -378,7 +378,7 @@
  ; chunk. the hardening is what the dial says, and a step still says it.
  ; m is per-voice and scalar, so the arm is taken once and not per sample.
  (slop-song-wave tp f m)
-  (? (m < 0.34) (sin (tp * (twopi * f)))
+  (? (m < 0.34) (sin (tp * tau * f))
      (m < 0.67) (song-tri (tp * f % 1.0))
      (: u (tp * f % 1.0) (((u < 0.5) * 2.0) - 1.0)))
 
