@@ -301,9 +301,16 @@
    (jux rev (pset (pset (slowcat (map cyc ^4)) (hit (pure "sin")))
                   (legato (pure 0.34)))))
 
- song-rate 48000
+ ; the bill for a chunk is onsets * ops * (legato * rate + chunk), so it is the RATE
+ ; that the song costs, not the chunk and not the cycle: a note lives 0.34s whatever
+ ; the rate, and that is how many samples every one of its tray ops lays. a third of
+ ; 48k is a third of the work. 16k is one of the card's own formats (i/hda.c's hda_fmt,
+ ; 48k/3) and the page's worklet takes any rate under the context's, so the seat is not
+ ; what settles it -- the ear is: nyquist lands at 8k, which the top note's square
+ ; reaches past, and the grit that folds back is the walk's own direction of travel.
+ song-rate 16000
  song-cps 0.55                          ; cycles a second at full speed
- song-chunk 1600                        ; a frame's worth of frames, thirty a second
+ song-chunk 500                         ; a frame's worth of frames, thirty-two a second
  song-gain 6500.0
  ; the music slows with the walk -- but only to a third of tempo. slop-rate falls to a
  ; twentieth by the shore, and a twentieth of a tempo is not a tempo any more.
@@ -365,9 +372,9 @@
  ; waypoint stays -- it is the SLIDE between them that goes. a crossfade builds BOTH of
  ; its shapes and mixes them, and a voice here is paid for by the OPERATION rather than
  ; by the sample: each tray op lays a fresh chunk-long array, and the walk carries a
- ; dozen voices at once where the tower carries five. on the wasm seat, twenty voices a
- ; chunk cost 26.75 ms crossfaded against 15.25 for one plain shape, out of the 33 ms a
- ; chunk IS. the hardening is what the dial says, and a step still says it.
+ ; dozen voices at once where the tower carries five. a crossfade costs the wasm seat
+ ; about three quarters again what one plain shape does, measured at twenty voices a
+ ; chunk. the hardening is what the dial says, and a step still says it.
  ; m is per-voice and scalar, so the arm is taken once and not per sample.
  (slop-song-wave tp f m)
   (? (m < 0.34) (sin (tp * (twopi * f)))

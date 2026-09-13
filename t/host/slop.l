@@ -428,7 +428,7 @@
    n (#pcm // 2)
    peak (foldl (\ a i (: v |(samp i) (a < v ? v a))) 0 ^n)
  (test
-  (64000 = #pcm)                                 ; ten chunks of 1600 stereo frames
+  (20000 = #pcm)                                 ; ten chunks of 500 stereo frames
   (0 < peak)                                     ; something sounded
   (peak < 32768)                                 ; and it did not clip
   (0 < tally (s 'vs))                            ; voices are live
