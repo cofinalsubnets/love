@@ -107,6 +107,53 @@
    _ (crawl-turn g [0 -1])
  (test (1 = g 'p 'x) (1 = g 'p 'y) (find (g 'msg) "the garden holds" 0)))
 
+; the stream underfoot has its own lines, and they are about water
+(: g (hand-g ())
+   _ (dput (g 'd) 2 1 3)
+   _ (crawl-turn g [1 0])
+ (test (2 = g 'p 'x)                                    ; water is walked
+       (any (w \ find (g 'msg) w 0) '("stream" "minnows" "fish" "cold"))))
+
+; furniture stands where it is: bumped for its line, never walked onto, and
+; remembered once seen
+(: g (hand-g ())
+   _ (pin (g 'loot) (2 + 9 * 1) '(table))
+   _ (crawl-turn g [1 0])
+ (test (1 = g 'p 'x) (find (g 'msg) "stone table" 0)
+       ("π" = <(loot-face '(table) 1))
+       ("π" = <(loot-face '(table) 0))
+       (36 = <(loot-face '(penny 3) 1))))
+
+; she is met, not struck: the bump puts up her sign and takes her off the floor, and
+; the next key takes the sign down without moving you
+(: g (hand-g ())
+   _ (pin g 'her {'x 2 'y 1 'gl "x" 'hue 1})
+   _ (crawl-turn g [1 0])
+   _ (test (1 = g 'p 'x) (two? (g 'sign)) !(g 'her) (1 = #(ents g)))
+   _ (crawl-turn g [1 0])
+   _ (test (1 = g 'p 'x) !(g 'sign))
+   _ (crawl-turn g [1 0])
+ (test (2 = g 'p 'x)))
+
+; a real climb: the garden has a stream and its two pieces of furniture, she is on the
+; first three floors and not the circle, and the stream is never the stair
+(: g (crawl-new 60 20 (wheel 11))
+   d (g 'd)
+   (wet _) (tally (filter (i \ 3 = dat d (i % 60) (i // 60)) ^(60 * 20)))
+   (kind k) (any (i \ k = <(g 'loot i)) (keys (g 'loot)))
+   (climb _) (: d (g 'd)                              ; this floor's stair, not the first's
+                _ (pins (g 'p) 'x <(d 'stair) 'y <>(d 'stair))
+                (crawl-turn g 60))
+   _ (crawl-turn g 46)                                ; the opening sign, down
+   _ (test (0 < wet ()) (kind 'table) (kind 'throne) (tablet? (g 'her))
+           (2 = dat d <(d 'stair) <>(d 'stair)))
+   _ (climb ())
+   _ (test (2 = g 'lvl) (tablet? (g 'her)) !(kind 'table))
+   _ (climb ())
+   _ (test (3 = g 'lvl) (tablet? (g 'her)))
+   _ (climb ())
+ (test (circle? g) !(g 'her)))
+
 ; pennies weigh in, and they are the only thing on the floor
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) ['penny 7])
@@ -449,7 +496,8 @@
   (string? f)
   (find f "@" 0)                                 ; you are on the map
   (find f "&" 0) (find f "." 0)                  ; the garden's hedge and its earth
-  (find f "\e[38;5;143m" 0)                      ; ..in the earth's own pen
+  (any (n \ find f ("\e[38;5;" + show n + "m") 0)  ; ..the dirt in one of its browns
+       '(180 137 136 94 95 58))
   (find f "the garden" 0) (find f "hp 40/40" 0)  ; the bar tells the tale
   (find f "\e[38;5;228m" 0)                      ; your hue, respecified on change
   (find f "\r\n" 0)))                            ; frames ride \r\n

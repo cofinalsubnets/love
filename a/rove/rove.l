@@ -21,7 +21,7 @@
          mend ascend fill fit circle? circle-new circle-stride circle-frame
          circle-r circle-wall on-ring? reveal? done? tokens floors due?
          themes plan tile-face strewn pink-ramp grass-ramp pink-front skin-pen
-         flavour mutter underfoot sign-box sign-over
+         flavour mutter underfoot sign-box sign-over stream feat-book her-floors ents loot-face
          songs tower-bars tower-tune song-vol song-new song-feed drain-keys
          garden-bars middle-bars sky-bars heart-bars heart-rate tune?)
 ; posix is optional -- the page's seat (i/wasm) links none of it and this file runs
@@ -92,7 +92,7 @@
  (clear? d x0 y0 x1 y1) (:
    dx |(x1 - x0) dy (0 - |(y1 - y0))
    sx (? (x0 < x1) 1 -1) sy (? (y0 < y1) 1 -1)
-   (go x y e) (? ((x = x1) && (y = y1)) 1
+   (go x y e) (? (x = x1 && y = y1) 1
                (: e2 (2 * e)
                   mx (dy <= e2) my (e2 <= dx)
                   nx (? mx (x + sx) x) ny (? my (y + sy) y)
@@ -134,15 +134,16 @@
  (mix a) (: h ((a * 2654435761) % lim)
             h2 ((h ^ (h >> 15)) * 2246822519 % lim)
             (h2 ^ (h2 >> 13)))
- (dice x y s k) ((mix ((y * 374761393) + (x * 668265263) + (s * 2654435761) + 1)) % k)
+ (dice x y s k) ((mix (y * 374761393 + x * 668265263 + s * 2654435761 + 1)) % k)
 
  ; --- the make of each floor: rock, the ground, what is strewn over it, and the plan
  ; its rooms are cut to -- the only place a tier's look is written. a face is
- ; (glyph lit dim), and a strewing carries a fourth number: cells in a hundred.
- th-garden '((38 28 22) (46 143 58)                     ; hedge and earth
-             ((44 71 65 26 "tuft") (34 34 22 12 "grass") (42 212 89 6 "aster")
-              (42 220 136 5 "marigold") (126 38 24 3 "runnel"))
-             (3 5 2 3 18))                              ; small beds, a great many
+ ; (glyph lit dim), and a strewing carries a fourth number: cells in a hundred -- and
+ ; may carry a sixth, its weight inside a bed, where flowers grow together.
+ th-garden '((38 28 22) (46 137 94)                     ; hedge and dirt
+             ((42 212 89 1 "aster" 30) (42 220 136 1 "marigold" 30)
+              (44 71 65 34 "tuft") (34 34 22 30 "grass") (126 38 24 3 "runnel"))
+             (4 7 2 4 14))                              ; beds, wide and a good many
  th-middle '((35 246 238) (46 245 239)                  ; stone and flagstone
              ((44 241 237 16 "rubble") (58 240 236 10 "gravel")
               (37 187 95 6 "bones") (42 251 244 4 "quartz"))
@@ -152,33 +153,65 @@
               (111 45 24 4 "fountain") (42 231 145 5 "star"))
              (8 9 4 5 40))                              ; blocks, and streets between
  themes [th-garden th-middle th-heaven]
+ ; the garden's greens are not one green, nor its browns one brown: the hedge wears a
+ ; still frame of the walk's shimmer -- the circle's field -- and the ground another,
+ ; out of phase, so a bed is one shade here and another there in bands, not the mottle
+ ; dice would give. the ramps run pale to deep, keyed by the pen the theme gave the
+ ; cell; only the lantern's light shows a grade, memory is flat.
+ hedge-ramp [70 34 34 28 28 22 22 22]
+ lawn-ramp [118 112 76 70 40 34 28 22]
+ dirt-ramp [180 137 137 136 94 94 95 58]
+ garden-greens {28 'hedge 137 'dirt 34 'lawn 71 'lawn}
  (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
  stair-face '(60 220 136)                               ; < the stair, gold on every floor
- (loot-face _) '(36 172)                                ; pennies: $ in copper
+ water-face '(126 39 24)                                ; ~ the stream, where it shows
+ ; what lies on a cell besides pennies: furniture, which stands there to be bumped and
+ ; says one thing. glyph, pen lit, pen dim, the line. a glyph here is a string, so
+ ; the page's own letters serve (quay folds them onto its face).
+ feat-book {'table ["π" 240 236 "an overgrown stone table stained with dark liquid"]
+            'throne ["H" 130 94 "a large tree stump carved into an ornate throne sits empty"]}
+ (feat-face k) (init (peep feat-book k '("?" 250 244 "")))
+ (feat-line k) (last (peep feat-book k '("?" 250 244 "")))
+ ; a pile of pennies is bright and only under the lantern; furniture is remembered
+ (loot-face it lit) (<it @ 'penny '(36 172) (wear (feat-face <it) lit))
 
  ; a cell's face: the stair, the rock, or the ground with whatever it was strewn with
  (make d) (peep d 'th th-middle)                        ; a floor nobody dressed is stone
  (wear r lit) [<r (lit ? (r 1) (r 2))]
- (strewn th x y s) (: (go l h) (? !(two? l) ()
-                                  (: r <l w (r 3) (? (h < w) r (go >l (h - w)))))
+ ; a bed is a block of cells that throws one die together, so what clusters, clusters
+ bed-w 5
+ bed-h 3
+ bed-share 30
+ (bed? x y s) ((dice (x // bed-w) (y // bed-h) (s + 7) 100) < bed-share)
+ (strewn th x y s) (: bed (bed? x y s)
+                      (wt r) (bed && 5 < #r ? (r 5) (r 3))
+                      (go l h) (two? l ?  (: r <l w (wt r) (h < w ? r (go >l (h - w)))))
                       (go (th 2) (dice x y s 100)))
  (tile-face th t lit x y s)
   (t @ 2 (wear stair-face lit)
+       3 (wear water-face lit)
        0 (wear <th lit)
          (: r (strewn th x y s) (wear (two? r ? r (th 1)) lit)))
  (paint j d vis loot ents msg bar) (:
    w (d 'w) h (d 'h) sn (d 'seen)
    th (make d) sd (peep d 'sd 0)
+   skin (d 'skin)
+   (shade gh x y) (tablet? skin ? (garden-greens <>gh) () @- gh
+                   'hedge [<gh (ramp-pen hedge-ramp (peep (skin 'hedge) [y x] 0.0))]
+                   'lawn [<gh (ramp-pen lawn-ramp (peep (skin 'ground) [y x] 0.0))]
+                   'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))])
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees
    _ (say j $ "\e[H\e[0m" + (fit msg w) + "\e[K\r\n")
    (cell i lit) (: e (lit ? (spot i))
-                   it (lit ? (loot i))
+                   l (loot i)
+                   it (l && (lit || (<l != 'penny && peep sn i 0)) ? l ())
                    (? e [(e 'gl) (e 'hue)]
-                      it (loot-face it)
+                      it (loot-face it lit)
                       (peep sn i 0)
-                       (tile-face th (peep (d 't) i 0) lit (i % w) (i // w) sd)
+                       (: gh (tile-face th (peep (d 't) i 0) lit (i % w) (i // w) sd)
+                          (lit ? (shade gh (i % w) (i // w)) gh))
                       '(32 0)))
    (row y x i p) (x >= w ? p
                   (: gh (cell i (peep vis i 0))
@@ -362,6 +395,10 @@
    ("marigold"   "marigolds, and the smell of them on your hands"
                  "the yellow is louder than the flower"
                  "one is open and the rest are waiting")
+   ("stream"     "the stream runs quick over the stones, and the sound of it settles you"
+                 "minnows, a swarm of them, turn as one away from your foot"
+                 "clear to the bottom, and the bottom is all small fish, moving"
+                 "cold through your shoes, and the noise of it is the calmest thing here")
    ("runnel"     "a thread of water, going somewhere"
                  "colder and quicker than it looks"
                  "it has cut its own small channel here")
@@ -518,6 +555,24 @@
                    {'x x 'y y 'gl (peep r 1 114) 'hue (peep r 2 137)
                     'hp (peep r 3 3) 'dm (peep r 4 1) 'pc (peep r 5 1) 'nm <r})
 
+ ; --- her: on the first floors, somewhere, once. bumped, she has her say in a box
+ ; over the map and is gone; the box is a sign, so the next key takes it down. ---
+ her-glyph "Φ"
+ her-pen 219
+ her-floors 3
+ her-ttl "Orozcalia"
+ her-lines '("A wizened gnome enjoys the garden."
+             ""
+             "\"The rats tend the hedges from the roots.\" She points claw downward."
+             ""
+             "\"Ye'd not believe how far their holes descend.\""
+             ""
+             "-- any key --")
+ (her-at? g x y) (: h (g 'her) (h && x = h 'x && y = h 'y))
+ (meet-her g) (pins g 'her () 'sign (her-ttl . her-lines))
+ ; everything the painter draws over the floor: the climber, her, the mobs
+ (ents g) (: h (g 'her) (g 'p . (h ? (h . g 'ms) (g 'ms))))
+
  ; stock a fresh floor: mobs and pennies in every room but the climber's own. the
  ; token is not on any floor -- it is what the circle turns out to have been.
  last-floor 3
@@ -539,13 +594,57 @@
                        _ (? (1 = dat d x y)
                             (pin loot (x + (d 'w) * y) ['penny (3 + roll sb 12)]))
                        (treasure rm (n - 1))))
+   rms (init (d 'rooms))
    ms (foldl (\ acc rm (treasure rm (2 + roll sb 2), mobs rm (roll sb (2 + lvl)) acc))
-             () (init (d 'rooms)))
-   (pins g 'ms ms 'loot loot))
+             () rms)
+   ; a cell in some room with nothing on it yet, or () when the dice will not give one
+   (free? x y) (dat d x y = 1 && !(loot (x + d 'w * y)) && !(any ({'x ^x 'y ^y} \ 1) ms))
+   (spot n) (? (0 < n) (: xy (drop-at (rms (roll sb #rms)))
+                          (free? <xy <>xy ? xy (spot (n - 1)))))
+   (furnish k) (: xy (spot 40) (xy ? (pin loot (<xy + d 'w * <>xy) [k])))
+   _ (? (1 = lvl) (furnish 'table, furnish 'throne))
+   her (? (lvl <= her-floors) (: xy (spot 40)
+                                 (xy ? {'x <xy 'y <>xy 'gl her-glyph 'hue her-pen})))
+   (pins g 'ms ms 'loot loot 'her her))
+
+ ; the garden's hedge, worn thin: an inner rock cell with four or more open neighbours
+ ; of its eight becomes ground on a roll, over a few passes. every pass reads the floor
+ ; it started from, so the wearing has no direction and the border stays hedge.
+ wear-passes 2
+ wear-share 50
+ (wear-thin d sb) (: w (d 'w) h (d 'h)
+   (around x y) #(filter (o \ open? d (x + <o) (y + <>o))
+                               '((-1 -1) (0 -1) (1 -1) (-1 0) (1 0) (-1 1) (0 1) (1 1)))
+   (pass n) (? (0 < n)
+               (: cut (filter (i \ (: x (i % w) y (i // w)
+                                      (0 < x && x < (w - 1) && 0 < y && y < (h - 1) &&
+                                       0 = dat d x y && 4 <= around x y &&
+                                       roll sb 100 < wear-share)))
+                              ^(w * h))
+                  _ (each cut (i \ dput d (i % w) (i // w) 1))
+                  (pass (n - 1))))
+   (pass wear-passes))
+
+ ; the garden's stream: from the top edge to the bottom, a row a step and now and then
+ ; a column's drift, cut through hedge and bed alike -- water is ground you can cross,
+ ; so it is also a way through. the stair is never in it.
+ (stream d sb) (: w (d 'w) h (d 'h)
+                  (go x y) (? (y < h)
+                              (: _ (? (2 != dat d x y) (dput d x y 3))
+                                 nx (roll sb 2 = 0 ? (x + roll sb 3 - 1) x)
+                                 (go (nx < 1 ? 1 (nx > (w - 2) ? (w - 2) nx)) (y + 1))))
+                  (go (2 + roll sb (w - 4)) 0))
 
  ; a floor wears its tier: the make it is built of, and the salt its litter is dealt
  ; from -- one draw, so the same seed strews the same floor
- (dress d lvl sb) (pins d 'th (peep themes (lvl - 1) th-heaven) 'sd (roll sb 1000000))
+ (dress d lvl sb) (: _ (pins d 'th (peep themes (lvl - 1) th-heaven) 'sd (roll sb 1000000))
+                     (1 = lvl ? (: _ (wear-thin d sb)
+                                   _ (stream d sb)
+                                   ph (roll sb 1000 / 10.0)
+                                   ph2 (roll sb 1000 / 10.0)
+                                   (pin d 'skin {'hedge (ink-drift (d 'h) (d 'w) ph 0.0)
+                                                 'ground (ink-drift (d 'h) (d 'w) ph2 0.0)}))
+                          d))
 
  ; a fresh climb: the garden delved from the seed state, the climber at 'in
  (crawl-new w h st) (:
@@ -563,6 +662,8 @@
  (mob-at g x y) <(filter (m \ x = m 'x && y = m 'y) (g 'ms))
  (blocked? g x y) (!(open? (g 'd) x y) ||
                    (x = g 'p 'x && y = g 'p 'y) ||
+                   her-at? g x y ||
+                   (: l (g 'loot (x + g 'd 'w * y)) (l && <l != 'penny)) ||
                    mob-at g x y)
 
  ; the climber's stride: bump a mob to strike it, step onto pennies to take them
@@ -597,19 +698,23 @@
  ; line is the cell's, off a second salt, so it does not follow which thing lies there
  (underfoot g x y) (: d (g 'd) sd (peep d 'sd 0) k (dice x y (1 + sd) 97)
                       (? (2 = dat d x y) (mutter k "stair")
+                         (3 = dat d x y) (mutter k "stream")
                          (: r (strewn (make d) x y sd)
                             (two? r ? (mutter k (r 4)) ""))))
  (tread g x y) (: s (underfoot g x y) (s ? (note g s)))
 
  (stride g mv) (: p (g 'p) nx (p 'x + <mv) ny (p 'y + <>mv)
                   m (mob-at g nx ny)
-                  (? m (strike g m)
+                  i (nx + (g 'd 'w) * ny)
+                  it (g 'loot i)
+                  (? (her-at? g nx ny) (meet-her g)
+                     m (strike g m)
+                     (it && <it != 'penny) (note g (feat-line <it))
                      !(open? (g 'd) nx ny) (note g (fill w-wall [(here g)]))
                      (: _ (pin p 'x nx, pin p 'y ny)
-                        i (nx + (g 'd 'w) * ny)
-                        it (g 'loot i)
                         _ (it ? (take g i it))
                         (tread g nx ny))))
+
 
  ; the floor stirs: a mob that sees you closes in; struck close, it bites
  (sgn n) (? (0 < n) 1 (n < 0) -1 0)
@@ -688,7 +793,7 @@
  (circle? g) (last-floor < g 'lvl)
  (circle-new g) (: d (g 'd) cx (d 'w // 2) cy (d 'h // 2)
                    ph (roll (g 'sb) 1000 / 10.0)      ; where in the drift it stopped
-                   _ (pins g 'lvl (1 + last-floor) 'cx cx 'cy cy 'st 0 'ms () 'loot {}
+                   _ (pins g 'lvl (1 + last-floor) 'cx cx 'cy cy 'st 0 'ms () 'loot {} 'her ()
                             'sk (ink-drift (d 'h) (d 'w) ph 0.0))
                    _ (pins (g 'p) 'x cx 'y (cy - circle-r0 - 1))
                    (note g (fill w-floor [(here g)])))
@@ -773,7 +878,7 @@
  (crawl-frame g) (: f (circle? g ? (circle-frame g)
                       (:- (slurp j) j
                        (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
-                        (g 'p . g 'ms) (g 'msg) (crawl-bar g))))
+                        (ents g) (g 'msg) (crawl-bar g))))
                     sg (g 'sign)
                     (two? sg ? (sign-over f <sg >sg 1 (g 'd 'h) (g 'd 'w)) f))
 
