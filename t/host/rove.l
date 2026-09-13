@@ -273,6 +273,25 @@
  (test (8 = #rs) (all (r \ #(bare r) <= 30) rs)
        (find out "the quick brown" 0) (find out "screen" 0)))
 
+; a cell is a character and not a byte: a box laid over rows of the face's blocks --
+; three bytes to a cell -- still leaves every row as wide as the screen, with the
+; blocks either side of it and none doubled
+(: blk "\xe2\x96\x88"
+   row (30 (\ t (t + blk)) "")
+   f (: (go i acc) (i < 6 ? (go (i + 1) (acc + (0 < i ? "\r\n" "") + "\e[38;5;33m" + row)) acc) (go 0 ""))
+   out (sign-over f "t" ["a line"] 0 6 30)
+   (bare s) (: (go i acc) (? (i >= #s) acc
+                             (27 = s i) (go (1 + find-m s i) acc)
+                             (go (i + 1) (acc + string (s i))))
+               (go 0 ""))
+   (find-m s i) (109 = s i ? i (find-m s (i + 1)))
+   (chars s) (tally (filter (c \ !(128 <= c && c < 192)) (map (i \ s i) ^#s)))
+   rs (map bare (split "\r\n" out))
+ (test (6 = #rs) (all (r \ 30 = chars r) rs)
+       (find out "a line" 0)
+       (find (rs 1) (blk + "+") 0) (find (rs 1) ("+" + blk) 0)   ; blocks meet the box's corners whole
+       (30 = chars (rs 0))))
+
 ; glass is looked through and not walked: the lantern reaches past it, a stride does not
 (: g (hand-g ())
    _ (dput (g 'd) 4 2 6)

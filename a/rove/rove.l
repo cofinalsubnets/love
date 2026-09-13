@@ -721,22 +721,27 @@
                        (? (c = 126 && two? vs) (go (i + 1) (acc + hole <vs) >vs)
                           (go (i + 1) (acc + string c) vs))))
                 (go 0 "" vs))
+ ; a cell is a character and not a byte: the face's blocks and arrows are three bytes
+ ; each, and only the first of them is a cell -- the tails ride along with it
+ (tail? c) (128 <= c && c < 192)
+ (lead c) (tail? c ? 0 1)
  ; ..and its braces, put on at the port. an escape is no width, so this is also where
  ; a line is cut to fit: the row's span is what a reader sees, not what a cask holds.
  (fit s w) (: on ("\e[38;5;" + show token-pen + "m") off "\e[0m"
               (go i n acc)
-               (? ((i >= #s) || (n >= w)) acc
+               (? (i >= #s) acc
                   (: c (s i)
-                     (? (c = 123) (go (i + 1) n (acc + on))
+                     (? (n >= w && !(tail? c)) acc
+                        (c = 123) (go (i + 1) n (acc + on))
                         (c = 125) (go (i + 1) n (acc + off))
-                        (go (i + 1) (n + 1) (acc + string c)))))
+                        (go (i + 1) (n + lead c) (acc + string c)))))
               (go 0 0 ""))
 
  ; --- the sign: a box over the frame, story's lighthouse way. braces cost no width, so
  ; it is measured in what a reader sees, and it runs to the row's end so no pen meets.
  sign-pen 252
  (vlen s) (: (go i n) (? (i >= #s) n
-                         (: c (s i) (go (i + 1) (? ((c = 123) || (c = 125)) n (n + 1)))))
+                         (: c (s i) (go (i + 1) (? ((c = 123) || (c = 125)) n (n + lead c)))))
              (go 0 0))
  (pad s n c) (: v (vlen s) (v >= n ? s (s + ((n - v) (\ t (t + c)) ""))))
  (sign-box ttl ls) (:
@@ -745,14 +750,18 @@
    top ("+-" + pad (ttl + " ") (ww - 3) "-" + "+")
    bot ("+" + ((ww - 2) (t \ t + "-") "") + "+")
    ([top] + (map (l \ "| " + pad l (ww - 4) " " + " |") ls) + [bot]))
- ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs.
+ ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs,
+ ; and a glyph's tail bytes belong to the cell its lead began -- k is the leads so far.
  ; a painted row ends on \e[K, an escape with no m, so the skip stops at the end too
+ (cell-of c k) (tail? c ? (k - 1) k)
  (cells-cut r n) (:- (go 0 0 "")
                   (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                   (go i k acc)
-                   (i >= #r || k >= n ? acc
-                    (r i @ 27 (past i @ e (go e k (acc + snip r i e)))
-                     (go (i + 1) (k + 1) (acc + string (r i))))))
+                   (i >= #r ? acc
+                    (: c (r i)
+                       (? (n <= cell-of c k) acc
+                          (c = 27) (past i @ e (go e k (acc + snip r i e)))
+                          (go (i + 1) (k + lead c) (acc + string c))))))
  ; ..and the other side of the same cut: the cells from n on. EVERY escape is kept, from
  ; the row's start and not from n, because a colour is a state and the one in force at
  ; cell n was set somewhere to its left -- drop those and the tail wears whatever the
@@ -761,8 +770,9 @@
                    (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                    (go i k acc)
                     (i >= #r ? acc
-                     (r i @ 27 (past i @ e (go e k (acc + snip r i e)))
-                      (go (i + 1) (k + 1) (k >= n ? (acc + string (r i)) acc)))))
+                     (: c (r i)
+                        (? (c = 27) (past i @ e (go e k (acc + snip r i e)))
+                           (go (i + 1) (k + lead c) (n <= cell-of c k ? (acc + string c) acc))))))
  ; a frame with the box centred over its rows a .. a+n, for a screen w wide. a line
  ; wider than the screen is reflowed at its words -- story's own wrap -- and the box
  ; takes the rows it makes
