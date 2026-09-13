@@ -457,13 +457,24 @@
    top ("+-" + pad (ttl + " ") (ww - 3) "-" + "+")
    bot ("+" + ((ww - 2) (t \ t + "-") "") + "+")
    ([top] + (map (l \ "| " + pad l (ww - 4) " " + " |") ls) + [bot]))
- ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs
+ ; the first n cells of a painted row: an SGR has no width, so the count is of glyphs.
+ ; a painted row ends on \e[K, an escape with no m, so the skip stops at the end too
  (cells-cut r n) (:- (go 0 0 "")
-                  (past i) (r i @ 109 (i + 1) (past (i + 1)))
+                  (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                   (go i k acc)
                    (i >= #r || k >= n ? acc
                     (r i @ 27 (past i @ e (go e k (acc + snip r i e)))
                      (go (i + 1) (k + 1) (acc + string (r i))))))
+ ; ..and the other side of the same cut: the cells from n on. EVERY escape is kept, from
+ ; the row's start and not from n, because a colour is a state and the one in force at
+ ; cell n was set somewhere to its left -- drop those and the tail wears whatever the
+ ; caller happened to leave on.
+ (cells-from r n) (:- (go 0 0 "")
+                   (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
+                   (go i k acc)
+                    (i >= #r ? acc
+                     (r i @ 27 (past i @ e (go e k (acc + snip r i e)))
+                      (go (i + 1) (k + 1) (k >= n ? (acc + string (r i)) acc)))))
  ; a frame with the box centred over its rows a .. a+n, for a screen w wide
  (sign-over f ttl ls a n w) (:- (go 0 "")
    rs (split "\r\n" f)
@@ -475,7 +486,12 @@
    ; foot, which is the screen's doing, but the bar under it is not the box's to take
    (lay i) (rs i @ r
             (!(y0 <= i < y0 + #box && i < a + n) ? r
-             (cells-cut r x0 + "\e[0m" + pen sign-pen + fit (box (i - y0)) 400)))
+             ; the field either side of the box, and the box between them. the tail is
+             ; not decoration: a row that stops at the box leaves the cells past it
+             ; holding whatever the LAST frame put there, and the floor before this one
+             ; is where that comes from.
+             (cells-cut r x0 + "\e[0m" + pen sign-pen + fit (box (i - y0)) 400
+              + "\e[0m" + cells-from r (x0 + ww))))
    (go i acc) (i >= #rs ? acc (go (i + 1) (acc + (0 < i ? "\r\n" "") + lay i))))
 
  ; keys typed at a game are not typed at the shell: raw mode does not echo them, so

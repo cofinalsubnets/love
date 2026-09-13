@@ -432,5 +432,30 @@
   (find f "\e[38;5;228m" 0)                      ; your hue, respecified on change
   (find f "\r\n" 0)))                            ; frames ride \r\n
 
+; --- the sign covers the field, and does not eat it ---------------------------------
+; sign-over lays a box over the middle rows of a frame. the rows it covers must still
+; carry every cell they did: a row that stops at the box leaves the cells past it holding
+; whatever the LAST frame wrote there, and the floor before this one is where that comes
+; from -- which reads as the level before standing in colour beside the box.
+; the row ends on \e[K the way a painted one does: an escape with no m, which a skip
+; that only looks for the m walks off the end of.
+(: sw 40
+   srow ("\e[38;5;34m" + (string (map (\ _ 46) ^sw)) + "\e[0m\e[K")
+   sf (: (go k acc) (? (6 <= k) acc (go (k + 1) (acc + (0 < k ? "\r\n" "") + srow)))
+         (go 0 ""))
+   sout (sign-over sf "sign" ["a line"] 0 6 sw)
+   ; cells, counting a whole escape run as none of them
+   (scells r) (: (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
+                 (go i k) (? (i >= #r) k
+                             (r i @ 27 (past i @ e (go e k)) (go (i + 1) (k + 1))))
+                 (go 0 0))
+   srs (split "\r\n" sout)
+ (test
+  (6 = #srs)
+  (all (r \ sw = scells r) srs)                  ; every row, its whole width
+  (find sout "sign" 0)                           ; ..and the box is really on it
+  (all (r \ find r "\e[38;5;34m" 0) srs)         ; the field's pen survives the box
+  (all (r \ find r "\e[K" 0) srs)))            ; ..and so does the erase it ends on
+
 (test_fin ())
 (puts "tower: ok")
