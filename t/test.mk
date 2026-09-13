@@ -1268,6 +1268,8 @@ test_kernel_wasm: host
 	@grep "tests pass" b/wasm/kernel.log
 	@echo TEST t/kernel/glass.l "(the console's grid: real pixels in, rows and columns out)"
 	@sh $(R)/t/gate/glass.sh $(NODE) $(R)/b/love-wasm.wasm b/wasm/love-wasm.image b/wasm/glass.log
+	@echo TEST t/gate/glass.mjs "(the page's half of the grid, asked without a page)"
+	@$(NODE) $(R)/t/gate/glass.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST t/gate/worklet.mjs "(the page's speaker, asked without a page)"
 	@$(NODE) $(R)/t/gate/worklet.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST t/kernel/horn.l "(the horn: a ramp through the port and out of the machine)"
@@ -1276,6 +1278,19 @@ test_kernel_wasm: host
 	 grep -q "horn wrote 80000" b/wasm/horn.log \
 	   || { tail -20 b/wasm/horn.log; echo "FAIL test_kernel_wasm (the horn refused the machine)"; exit 1; }
 	@$m $(R)/t/gate/horn.l b/wasm/horn.raw || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST t/kernel/horn.l "(--deaf: the machine outlives a speaker that stopped taking)"
+	@timeout 120 $(NODE) $(R)/i/wasm/inle.mjs --deaf --image b/wasm/love-wasm.image \
+	   $(R)/b/love-wasm.wasm t/kernel/horn.l < /dev/null > b/wasm/deaf.log 2>&1; \
+	 grep -q "horn wrote 80000" b/wasm/deaf.log \
+	   || { tail -5 b/wasm/deaf.log; echo "FAIL test_kernel_wasm (a dead speaker stopped the machine)"; exit 1; }
+	@echo "  deaf: ok -- the ring fills, nobody empties it, and the walk goes on"
+	@echo TEST t/kernel/pkcheck.l "(harp's pack: the two arms answer the same bytes HERE)"
+	@$(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love-wasm.image $(R)/b/love-wasm.wasm \
+	   t/kernel/pkcheck.l < /dev/null > b/wasm/pack.log 2>&1; \
+	 grep -q "gain 20000     1" b/wasm/pack.log && grep -q "gain 900000    1" b/wasm/pack.log \
+	   && grep -q "gain 100       1" b/wasm/pack.log \
+	   || { cat b/wasm/pack.log; echo "FAIL test_kernel_wasm (pack differs on this seat)"; exit 1; }
+	@echo "  pack: ok -- pinv and the byte loop agree where the float-to-int is not the host's"
 endif
 
 # test_seedwasm -- `love seed x64` ON THE WASM SEAT: the machine lays the source it

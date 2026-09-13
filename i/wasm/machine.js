@@ -9,7 +9,7 @@
 // with a service worker and one reload. no isolation, no machine -- said, not left blank.
 // the module and its image are fetched from w/wasm/ -- where the tracked, committed
 // pair lives -- unless data-wasm/data-image name them; data-boot is the boot line (default
-// the shell), data-ram the RAM in MiB, data-cols the fewest columns worth reading, which
+// the shell), data-ram the RAM in MiB, data-cols the most columns worth reading, which
 // is what settles how large a glyph is drawn. the machine takes its RAM at boot and never
 // gives it back, so the default is a shell's and not a build's: `love seed` wants
 // data-ram="1024", and ooms under 768.

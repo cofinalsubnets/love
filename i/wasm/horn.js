@@ -21,6 +21,10 @@ class Horn extends AudioWorkletProcessor {
   // the context's: the step is their ratio, nearest-sample, and it is exactly 1 wherever
   // the two do agree -- which is every browser at 48k, the rate harp writes.
   process(_in, out) {
+    // a processor that THROWS is never called again -- the node is disabled for the life
+    // of the page, and the machine meets that as a device that stopped emptying. so the
+    // shape of the block is asked rather than assumed.
+    if (!out.length || !out[0].length) return true;
     const L = out[0][0], R = out[0][1] ?? out[0][0];
     const rate = Atomics.load(this.ctl, this.c_rate);
     if (!rate) { this.frac = 0; return true; }            // closed: the block is already silent

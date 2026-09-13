@@ -36,10 +36,12 @@ const frame_cap = 2 << 20;
 const reservation = (r) => Math.min(pixel_cap,
   Math.round(screen.width * r) * Math.round(screen.height * r));
 
-// `cols` is the fewest columns worth reading: the zoom is the largest that still leaves
-// that many, so a wide box gets bigger text rather than more of it. it is the same law
-// kmain's fbscale runs when no door names a scale -- in the reader's pixels, which is
-// the part a page knows and the kernel does not.
+// `cols` is the MOST columns worth reading: the zoom is the smallest that keeps the grid
+// inside it, so a wide box gets bigger text rather than more of it. a cap and not a floor
+// -- a box one glyph short of the next zoom would otherwise carry twice the columns asked
+// for at half the size, which is the reading kmain's fbscale gives and a page can better,
+// the pixels being the part a page knows and the kernel does not. /proc/vt/scale retunes
+// it aboard, so this is the opening zoom and not a ceiling on one.
 export function glass(canvas, cols = 80) {
   const n = cols > 0 ? cols : 80;             // a query string's nonsense falls back, never NaN
   const box = canvas.getBoundingClientRect();
@@ -51,5 +53,5 @@ export function glass(canvas, cols = 80) {
   while (r > 1 && w * h * r * r > Math.min(cap, frame_cap)) r--;
   // 1..8 is the kernel's own range for a glyph scale (kmain's fbscale, and what
   // k_fb_reseat will take): past it a huge screen would be refused outright
-  const scale = Math.min(8, Math.max(1, Math.floor(w / (8 * n))) * r);
+  const scale = Math.min(8, Math.max(1, Math.ceil(w / (8 * n))) * r);
   return { w: w * r, h: h * r, scale, cap }; }

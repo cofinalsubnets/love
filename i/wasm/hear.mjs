@@ -9,13 +9,17 @@
 import { ctl_n, horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
 
 export function hearing(ring, ctl, said = (s) => console.warn(s)) {
-  let audio = null;
+  // the context AND the node are held here for the life of the page, and the node is why:
+  // it takes no input, so nothing but this reference keeps it reachable, and a collected
+  // worklet stops draining without saying so -- which the machine would meet as a device
+  // that never empties. cpu.mjs survives that now; it should still not happen.
+  let audio = null, horn = null;
   return async () => {
     if (audio) return;
     try {
       audio = new AudioContext();
       await audio.audioWorklet.addModule(new URL('./horn.js', import.meta.url));
-      const horn = new AudioWorkletNode(audio, 'horn', {
+      horn = new AudioWorkletNode(audio, 'horn', {
         numberOfInputs: 0, outputChannelCount: [2],
         processorOptions: { ring, ctl_n, horn_at, horn_n, c_rate, c_wrote, c_played } });
       horn.connect(audio.destination);

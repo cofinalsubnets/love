@@ -21,7 +21,7 @@ import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
 
 const args = process.argv.slice(2);
-let fb = null, dump = null, scale = 0, liftReq = null, image = null, hornFile = null;
+let fb = null, dump = null, scale = 0, liftReq = null, image = null, hornFile = null, deaf = false;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
@@ -29,11 +29,12 @@ while (args[0]?.startsWith('--')) {
   else if (o === '--dump') dump = args.shift();
   else if (o === '--lift') { const [from, to] = args.shift().split(':'); liftReq = { from, to: to ?? from.split('/').pop() }; }
   else if (o === '--horn') hornFile = args.shift();
+  else if (o === '--deaf') deaf = true;
   else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump, fb.scale = scale;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--deaf] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
 
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
@@ -77,6 +78,10 @@ const hornDrain = () => {
     if (want * 4 > head) writeSync(hornOut, pcm.slice(0, want * 4 - head));
     Atomics.store(ctl, c_played, (p + want) | 0); } };
 if (hornFile) { Atomics.store(ctl, c_live, 1); setInterval(hornDrain, 5).unref(); }
+// --deaf: a speaker that says it is there and then takes nothing, which is what a worklet
+// the browser collected -- or one whose process threw, and so is never called again --
+// looks like from the machine's side. the machine has to outlive it (cpu.mjs's horn_deaf).
+else if (deaf) Atomics.store(ctl, c_live, 1);
 
 const cpu = new Worker(new URL('./cpu.mjs', import.meta.url));
 const leave = (code) => { if (process.stdin.isTTY) process.stdin.setRawMode(false); process.exit(code); };

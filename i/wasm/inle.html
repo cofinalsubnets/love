@@ -6,7 +6,7 @@
      the tree root (`make serve`) and open /i/wasm/inle.html; the module is read from
      b/love-wasm.wasm, so `make b/love-wasm.wasm` first. coi.js makes the page
      cross-origin isolated on a static host, which SharedArrayBuffer wants.
-     ?boot= is the boot line, ?ram= the RAM in MiB, ?cols= the fewest columns the
+     ?boot= is the boot line, ?ram= the RAM in MiB, ?cols= the most columns the
      console should have -- which is what settles how large a glyph is drawn.
      the machine takes its RAM at boot and never gives it back, so the default is a
      shell's and not a build's: `love seed` wants ?ram=1024, and ooms under 768. -->
@@ -103,7 +103,7 @@
     const image = await fetch(new URL('../../b/wasm/love-wasm.image', import.meta.url))
       .then((r) => r.ok ? r.arrayBuffer() : null).catch(() => null);
     // the canvas measured as real pixels, and the zoom a glyph pixel gets there; ?cols
-    // is the fewest columns worth reading, which is what picks the zoom
+    // is the most columns worth reading, which is what picks the zoom
     const cols = Number(q.get('cols') ?? 80);
     const fb = { ...glass(canvas, cols), post: true };
     cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 256), cmd, fb, image },

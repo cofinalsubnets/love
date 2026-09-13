@@ -154,11 +154,22 @@ const blit = (force) => {
 // fills, refuses and drains at the rate and the guest sees the shape a card gives. the
 // remainder is kept: at 48k a millisecond is 48 frames and a bit, and dropping the bit
 // every poll would run the clock slow.
-let sinkAt = 0, sinkAcc = 0;
+// ..and THE MACHINE OUTLIVES ITS SPEAKER. c_live is the page's word that something is
+// playing, and a page can stop being true to it without saying so: a worklet the browser
+// collected, or one whose process threw and so will never be called again, leaves the flag
+// standing and takes nothing. the guest would then park on a full ring for ever -- not
+// slow, stopped, with the last of the audio going round. so a drainer that has taken
+// nothing while the guest sat refused is deaf, and the clock takes the samples back: the
+// sound stops and the game does not.
+const horn_deaf = 250;
+let sinkAt = 0, sinkAcc = 0, sawPlayed = 0, sawAt = 0, deaf = false;
 const hornSink = () => {
   const rate = Atomics.load(ctl, c_rate);
-  if (!rate || Atomics.load(ctl, c_live)) return;
+  if (!rate) return;
   const now = performance.now();
+  const seen = Atomics.load(ctl, c_played);
+  if (seen !== sawPlayed) sawPlayed = seen, sawAt = now, deaf = false;
+  if (Atomics.load(ctl, c_live) && !deaf) { sinkAt = now, sinkAcc = 0; return; }
   sinkAcc += (now - sinkAt) * rate / 1000;
   sinkAt = now;
   const step = Math.floor(sinkAcc);
@@ -204,13 +215,17 @@ const sys1 = (n, a, b, c) => {
       const rate = Number(a);
       if (rate < 8000 || rate > 192000) return -1n;
       Atomics.store(ctl, c_played, Atomics.load(ctl, c_wrote));
-      sinkAt = performance.now(), sinkAcc = 0;
+      sinkAt = sawAt = performance.now(), sinkAcc = 0;
+      sawPlayed = Atomics.load(ctl, c_played), deaf = false;
       Atomics.store(ctl, c_rate, rate);
       return 0n; }
     case NR.horn_write: {                               // 16-bit stereo, what fits behind the head
       if (!Atomics.load(ctl, c_rate)) return -1n;
       hornSink();
       const w = Atomics.load(ctl, c_wrote), room = horn_n - ((w - Atomics.load(ctl, c_played)) | 0);
+      // refused is the one moment the question matters: the guest is waiting on a drainer
+      // that has taken nothing since sawAt, and past horn_deaf that is not a busy speaker
+      if (room <= 0 && performance.now() - sawAt > horn_deaf) deaf = true;
       const frames = Math.min(Number(b) >>> 2, room > 0 ? room : 0);
       const src = new Uint8Array(memory.buffer, Number(a), frames * 4), at = (w & horn_mask) * 4;
       const head = Math.min(frames * 4, horn_n * 4 - at);
