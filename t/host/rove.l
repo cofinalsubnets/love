@@ -556,13 +556,14 @@
        (1 = t fx (fy + 3))                               ; grass about the fire
        (9 = t (fx + 1) fy) ('fire = <(g 'loot (fx + w * fy)))   ; the fire on its dirt
        (7 = #stones) (10 = t <spot <>spot)               ; seven stand; the eighth's place is lighter grass
-       (<spot < fx) (<>spot < fy)                        ; ..and it is the upper left
+       (<spot < fx) (<>spot < fy)                        ; ..and it is the upper left:
+       (= <>spot <>(oct-pt fx fy 0)) (fx < <(oct-pt fx fy 0))   ; the left of the top pair, the first stone its right
        (tablet? (g 'her)) (= (g 'her 'x) (fx + 2)) (= (g 'her 'y) fy)
        (5 = t <door (<>door - 1)) (11 = t (<door - 1) (<>door - 1))   ; the cottage: timber, a door south
        (12 = t fx (<>door - 7))                          ; ..and the garden behind it
        ('house = <(exit-at g <door (<>door - 1)))
        (tablet? (g 'scenes 'house)) (tablet? (g 'scenes 'attic))
-       (all (i \ peep (g 'vis) i 0) ^(w * h))))          ; all of it lit
+       (d 'lit) (all (i \ peep (d 'seen) i 0) ^(w * h))))   ; all of it lit, and all of it seen
 
 ; ..and the story of it: in at the door, up the stair, the box opened and the token
 ; named there; down and out with it, the ground shudders, the sign, and she is gone
@@ -629,8 +630,8 @@
        (= (g 'p 'x) (g 'cx)) (= (g 'p 'y) (g 'cy))))     ; the point, and you on it
 
 ; ..and her tree by the fire: a bump opens the root, a digit takes a branch, another key
-; shows the page again, a leaf closes on any key and she stays; spoken to, she is there
-; when you come out with the token
+; shows the page again, a leaf closes on any key and she stays -- until you come out
+; with the token, spoken to or not
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g) _ (ascend g) _ (ascend g)
    h (g 'her)
@@ -654,7 +655,7 @@
    _ (pin g 'token "the rubbed coin")
    _ (enter g 'house (19 // 2) (9 - 2))
    _ (crawl-turn g [0 1])                              ; out with the token, having spoken to her
- (test ('vale = g 'scene) (g 'doom) (tablet? (g 'her)) ('close = g 'phase)))
+ (test ('vale = g 'scene) (g 'doom) !(g 'her) ('close = g 'phase)))   ; ..and she is gone all the same
 
 ; the frame of a floor taller than the screen is the screen's height, about the climber,
 ; and a room shorter than it is padded to it
@@ -665,8 +666,20 @@
    d (g 'd)
    _ (test (24 = #(split "\r\n" f)) (44 = d 'vy))       ; the foot: the last screen of it
    _ (enter g 'house (19 // 2) (9 - 2))
+   _ (pin g 'msg "a line longer than the room is wide, every word of it")
    f2 (crawl-frame g)
- (test (24 = #(split "\r\n" f2)) (find f2 "\xe2\x96\x93" 0)))   ; the hearth is in it
+   hd (g 'd)
+   rs (split "\r\n" f2)
+ (test (24 = #rs) (find f2 "\xe2\x96\x93" 0)              ; the hearth is in it
+       (find (rs 0) "every word of it" 0)                 ; the note row is the screen's width, not the room's
+       (0 < hd 'vx) (hd 'vy < 0)                          ; ..and the room sits in the middle of the screen
+       (find (rs 1) "\e[K" 0) !(find (rs 1) "#" 0)        ; the rows above it blank, and cleared
+       (find (rs 7) "#" 0) (find (rs 7) "\e[K" 0)         ; ..and a row of it cleared past its edge
+       ; ..and a sign over the attic, eleven cells wide, is laid at the screen's width
+       (: _ (enter g 'attic 2 3)
+          _ (pin g 'sign '("t" "a line of some length, laid whole across the box"))
+          f3 (crawl-frame g)
+          (find f3 "a line of some length, laid whole across the box" 0))))
 
 ; ..and the front itself, which is the whole of the grading law: past the corner of
 ; the board -- which is to say nowhere on it -- while there is no ring and while the
