@@ -255,7 +255,7 @@
 ; `make` is a hook, not a route table: kiosko still knows nothing about what it
 ; serves. it is handed the decoded path and the request head, and answers [ctype body]
 ; to serve, or () to say "not mine" -- and it is asked first, so a caller can answer
-; for a path that is also a file on disk (`love serve` paints a .l that is right there).
+; for a path that is also a file on disk (`love web` paints a .l that is right there).
 ; the head rides along for the one thing such a hook has to negotiate: whether the
 ; client navigated here or fetched this as data. () is the ordinary static server.
 (: (serve1 root make c)

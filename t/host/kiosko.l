@@ -86,7 +86,7 @@
                  ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
 
    ; --- the maker hook -------------------------------------------------------------------
-   ; it is asked first, before the file on disk, which is the whole point: `love serve`
+   ; it is asked first, before the file on disk, which is the whole point: `love web`
    ; paints a .l that is sitting right there. a hook that answers () is the ordinary
    ; static server, and every case below proves that half.
    _ (test

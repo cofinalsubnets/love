@@ -375,6 +375,15 @@
        (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
        (? (two? fs) (go fs 1) (udie 2 "usage: touch FILE..")))
 
+   ; -- lift: hand a file to whatever is outside the machine -- the page's downloads,
+   ; the node runner's directory -- by way of /proc/lift. a seat with no outside has
+   ; no such file, and says so.
+   (lift-main as)
+    (: f (two? as && one? >as ? <as (udie 2 "usage: lift FILE"))
+       _ (two? (stat f) ? () (udie 1 ("lift: no such file: " + f)))
+       p (open "/proc/lift" "w")
+       (hot? p ? (say p f, close p, 0) (udie 1 "lift: nothing outside this seat to lift to")))
+
    ; -- chmod: the octal bits onto every named path --
    (chmod-main as)
     (? !(two? >as) (udie 2 "usage: chmod OCTAL FILE..")

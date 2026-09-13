@@ -20,6 +20,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_write 1
 #define hc_nanosleep 35
 #define hc_reboot 169
+#define hc_lift 0x4010
 #define hc_clock_gettime 228
 
 void archinit(void) { }
@@ -68,6 +69,10 @@ void k_idle(void) {
 
 // the reset: the worker unwinds the module and boots it again
 void k_reset(void) { for (;;) __ai_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
+// a path for the page to carry out: it lands in the shared lift slot and the request is
+// raised, and the worker's loop reads the file and posts it at its next idle
+void k_lift_ask(unsigned char const *p, uintptr_t n) {
+  __ai_sys(hc_lift, (long) p, (long) n, 0, 0, 0, 0); }
 
 // (fault n) backend: wasm has one trap, `unreachable`, and every n is it
 void k_fault_trigger(intptr_t n) { (void) n; __builtin_trap(); }

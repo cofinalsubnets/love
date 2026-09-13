@@ -1284,6 +1284,13 @@ test_kernel_wasm: host
 	 grep -q "horn wrote 80000" b/wasm/deaf.log \
 	   || { tail -5 b/wasm/deaf.log; echo "FAIL test_kernel_wasm (a dead speaker stopped the machine)"; exit 1; }
 	@echo "  deaf: ok -- the ring fills, nobody empties it, and the walk goes on"
+	@echo TEST t/kernel/lift.l "(the lift: a path written to /proc/lift, and the file lands outside)"
+	@rm -f lifted.txt b/wasm/lifted.txt; INLE_RAM=256 $(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love-wasm.image \
+	   $(R)/b/love-wasm.wasm t/kernel/lift.l < /dev/null > b/wasm/lift.log 2>&1; \
+	 mv -f lifted.txt b/wasm/lifted.txt 2>/dev/null; \
+	 grep -q "lift asked" b/wasm/lift.log && grep -q "carried out of the machine, whole" b/wasm/lifted.txt \
+	   || { tail -5 b/wasm/lift.log; echo "FAIL test_kernel_wasm (the lift did not land)"; exit 1; }
+	@echo "  lift: ok -- the file came out under its own name"
 	@echo TEST t/kernel/pkcheck.l "(harp's pack: the two arms answer the same bytes HERE)"
 	@$(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love-wasm.image $(R)/b/love-wasm.wasm \
 	   t/kernel/pkcheck.l < /dev/null > b/wasm/pack.log 2>&1; \

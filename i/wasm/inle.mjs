@@ -89,7 +89,10 @@ cpu.on('message', (m) => {
   if (m.serial !== undefined) process.stdout.write(m.serial);
   else if (m.lift !== undefined) {
     if (m.error) { process.stderr.write(`inle: lift ${m.lift}: errno ${m.error}\n`); process.exitCode = 1; }
-    else { writeFileSync(liftReq.to, m.bytes); process.stderr.write(`inle: ${m.lift} -> ${liftReq.to} (${m.bytes.length} bytes)\n`); } }
+    else {
+      // asked for by --lift it goes where that said; asked for aboard, beside the runner
+      const to = liftReq ? liftReq.to : (m.lift.split('/').pop() || 'lift');
+      writeFileSync(to, m.bytes); process.stderr.write(`inle: ${m.lift} -> ${to} (${m.bytes.length} bytes)\n`); } }
   else if (m.reset) leave(process.exitCode ?? 0);
   else if (m.fault) { process.stderr.write('\ninle: ' + m.fault + '\n'); leave(1); } });
 cpu.on('error', (e) => { process.stderr.write('\ninle: ' + e + '\n'); leave(1); });

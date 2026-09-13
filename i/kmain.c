@@ -605,6 +605,11 @@ static int k_ents_n, k_ents_cap;
 // open refreshes a read off the live pen and the close applies a write.
 static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg",
                   k_vtscale[] = "proc/vt/scale";
+// /proc/lift -- a path written here asks the seat to carry that file out of the machine:
+// the page saves it as a download, the node runner writes it beside itself, a seat with
+// nowhere to put it does nothing. the same door the wasm runner's --lift comes in by.
+static char const k_plift[] = "proc/lift";
+__attribute__((weak)) void k_lift_ask(unsigned char const *p, uintptr_t n) { (void) p; (void) n; }
 // and the two the open fills from the running machine -- see k_proc_fill, below the
 // grow door it needs.
 static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
@@ -629,11 +634,12 @@ static intptr_t k_null_writen(int fd, unsigned char const *src, uintptr_t n) {
   return (intptr_t) n; }
 static bool k_dev_ready(int fd) { return true; }
 
-// 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale.
+// 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale, 4 the lift.
 static int k_vt_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_vtfg - 1 && !memcmp(p, k_vtfg, n)) return 1;
   if (n == sizeof k_vtbg - 1 && !memcmp(p, k_vtbg, n)) return 2;
   if (n == sizeof k_vtscale - 1 && !memcmp(p, k_vtscale, n)) return 3;
+  if (n == sizeof k_plift - 1 && !memcmp(p, k_plift, n)) return 4;
   return 0; }
 
 static char *k_strdup(char const *p, uintptr_t n);   // below, with the entry doors
@@ -683,6 +689,9 @@ static bool k_fs_init(void) {
   // rows, the way the glyph scale sits at n + 8.
   t[n + 9] = (struct k_ent) { .path = k_pcmd, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0444, .own = true, .live = true };
+  // and the lift, a file written and never read, at n + 10 past the boot line
+  t[n + 10] = (struct k_ent) { .path = k_plift, .bake = -1, .ms = k_clock_ms(),
+                               .mode = 0644, .own = true, .live = true };
   // and the two devices, 0666 and always empty -- `dev` comes free as their prefix,
   // the way `proc` does. the open never touches these rows; see k_dev_slot.
   t[n + 5] = (struct k_ent) { .path = k_dnull, .bake = -1, .ms = k_clock_ms(),
@@ -695,7 +704,7 @@ static bool k_fs_init(void) {
   t[n + 7] = (struct k_ent) { .path = "usr/bin", .bake = -1, .ms = k_clock_ms(),
                               .mode = 0755, .own = true, .dir = true, .live = true };
   static char const *const compat[] = { "bin", "sbin", "usr/sbin" };
-  int m = n + 10;
+  int m = n + 11;
   for (uintptr_t c = 0; c < countof(compat); c++) {
     char *to = k_strdup("/usr/bin", 8);
     t[m] = (struct k_ent) { .path = compat[c], .bake = -1, .ms = k_clock_ms(),
@@ -948,7 +957,7 @@ static bool k_fit(int i, uintptr_t need) {
 static void k_vt_read(int i, int slot) {
   // serial-only: no console to ask, and the file reads EMPTY rather than handing back
   // whatever a write left in it -- a colour nothing is wearing would be a lie.
-  if (!kcb) { k_ents[i].len = 0; return; }
+  if (!kcb || slot == 4) { k_ents[i].len = 0; return; }   // ..and the lift is written, never read
   // the colours come off the pen; the scale off the paper, kfb being what a glyph pixel
   // is measured against.
   unsigned v = slot == 3 ? kfb.scale : slot == 1 ? kcb->def_fg : kcb->def_bg;
@@ -965,9 +974,14 @@ static void k_vt_read(int i, int slot) {
 // grammar; anything past it is ignored, and no number at all -- or one past the 256 the
 // palette holds -- leaves the console alone rather than blanking it on a typo.
 static void k_vt_write(int i, int slot) {
-  if (!kcb) return;
   unsigned char const *b = k_ents[i].bytes;
   uintptr_t len = k_ents[i].len, j = 0;
+  // the lift takes the bytes as a path, less a trailing newline, and needs no console
+  if (slot == 4) {
+    while (len && (b[len - 1] == '\n' || b[len - 1] == '\r')) len--;
+    if (len) k_lift_ask(b, len);
+    return; }
+  if (!kcb) return;
   unsigned v = 0;
   while (j < len && b[j] >= '0' && b[j] <= '9' && v < 256) v = v * 10 + (unsigned) (b[j++] - '0');
   if (!j || v > 255) return;

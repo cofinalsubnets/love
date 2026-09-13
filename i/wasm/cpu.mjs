@@ -21,7 +21,8 @@
 // the five wear linux's numbers; the horn's four are ours -- sound has no call to borrow
 // one from, so the block sits well clear of any syscall table (i/wasm/horn.c).
 const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
-             horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003 };
+             horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003,
+             lift: 0x4010 };
 const ENOSYS = 38;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
@@ -238,6 +239,15 @@ const sys1 = (n, a, b, c) => {
       hornSink();
       return BigInt((Atomics.load(ctl, c_wrote) - Atomics.load(ctl, c_played)) | 0);
     case NR.horn_close: Atomics.store(ctl, c_rate, 0); return 0n;
+    // the machine asks for a file to be carried out: the path into the lift slot, the
+    // request raised, and the next idle reads the file and posts it
+    case NR.lift: {
+      const p = Number(a), n = Math.min(Number(b), lift_n - 1);
+      const raw = new Uint8Array(ctl.buffer, lift_at, lift_n);
+      raw.fill(0);
+      raw.set(u8().subarray(p, p + n));
+      Atomics.store(ctl, 3, 1);
+      return 0n; }
     default: return BigInt(-ENOSYS); } };
 
 // moon's convention: 16 params in (8 i64, 8 f64), (i64 i64 f64 f64) out

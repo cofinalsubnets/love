@@ -119,8 +119,17 @@ export async function loveMachine(root) {
     if (canvas.width !== m.w || canvas.height !== m.h) canvas.width = m.w, canvas.height = m.h;
     ctx.putImageData(new ImageData(new Uint8ClampedArray(m.frame), m.w, m.h), 0, 0);
     if (!woke) { woke = true; status.hidden = true; } };
+  // a file the machine asked carried out (a path written to /proc/lift aboard) is
+  // handed to the browser as a download under its own name
+  const lifted = (m) => {
+    if (m.error) { console.warn('lift ' + m.lift + ': errno ' + m.error); return; }
+    const a = document.createElement('a'), url = URL.createObjectURL(new Blob([m.bytes]));
+    a.href = url; a.download = m.lift.split('/').pop() || 'lift';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000); };
   cpu.onmessage = ({ data: m }) => {
     if (m.frame) { latest = m; if (!due) due = requestAnimationFrame(draw); }
+    else if (m.lift !== undefined) lifted(m);
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
   // the canvas measured as REAL pixels -- its own box times the device ratio -- and the

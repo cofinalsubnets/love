@@ -31,7 +31,7 @@
 <main>
   <canvas id="fb" tabindex="0"></canvas>
   <div class="hint">click the screen, then type. the boot line: <code id="boot"></code></div>
-  <div class="hint">lift a file out of the machine: <input id="path" size="40" placeholder="/tmp/love-x64.elf"> <button id="lift">lift</button> <span id="lifted"></span></div>
+  <div class="hint">to carry a file out of the machine, aboard: <code>lift FILE</code> -- it arrives as a download <span id="lifted"></span></div>
   <p id="note" class="hint"></p>
 </main>
 <script type="module">
@@ -51,14 +51,8 @@
     $('boot').textContent = cmd || '(the console shell)';
     const ring = new SharedArrayBuffer(shared_n);
     const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
-    // the way out: the path goes into the shared buffer, the worker reads the file off the
-    // ramfs at its next idle, and the bytes come back as a download
-    $('lift').addEventListener('click', () => {
-      const p = new TextEncoder().encode($('path').value.trim()).subarray(0, lift_n - 1);
-      if (!p.length) return;
-      const raw = new Uint8Array(ring, lift_at, lift_n); raw.fill(0); raw.set(p);
-      Atomics.store(ctl, 3, 1); Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2);
-      $('lifted').textContent = 'asked..'; });
+    // the way out is the machine's own: `lift FILE` aboard writes /proc/lift, the worker
+    // reads the file off the ramfs at its next idle, and the bytes come back below
     const push = (bytes) => {
       let tail = Atomics.load(ctl, 1);
       for (const b of bytes) { const n = (tail + 1) % ring_n; if (n === Atomics.load(ctl, 0)) break; kb[tail] = b; tail = n; }

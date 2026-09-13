@@ -303,7 +303,7 @@ crewfiles = a/sb/merge.l a/sb/http.l a/sb/sb.l a/kiosko/kiosko.l \
   a/gz.l a/tar.l a/cpio/cpio.l \
   a/cpio/cpiocmd.l a/fat/fat.l a/fat/fatcmd.l \
   a/source.l a/lapiz.l \
-  a/libra/salt.l a/libra/libra.l a/vi/hueweb.l a/kiosko/serve.l \
+  a/libra/salt.l a/libra/libra.l a/vi/hueweb.l a/kiosko/web.l \
   a/harp/harp.l a/harp/play.l \
   a/ink.l a/rove/rove.l a/rove/story.l a/rove/design.l a/rove/slop.l \
   a/lux/wire.l a/doom.l a/lupa.l a/mc.l
@@ -366,7 +366,7 @@ endif
 dist: dist-source dist-seed   # a release is both
 
 # what a release is not: the benches and the board seats. the wasm seat rides -- a
-# laid tree serves its own page (`love serve`) -- and the page's generated files are
+# laid tree serves its own page (`love web`) -- and the page's generated files are
 # .sbignore's to drop, which selfpack reads too. each nom is matched as a path prefix
 # at a segment boundary (u/selfpack.l).
 dist_drop = bench
@@ -1063,7 +1063,7 @@ site-serve: host b/toolmd.stamp
 # headers, which is what lets i/wasm/inle.html's machine run without a service worker.
 SERVEPORT ?= 8080
 serve: host
-	@$(ho)/love serve -p $(SERVEPORT) $R
+	@$(ho)/love web -p $(SERVEPORT) $R
 
 # `make wasm` is the machine: the kernel module, and the heap image beside it. the module
 # is the KERNEL LANE at $a=wasm -- one roster, one flag set, per-TU objects under b/wasm/

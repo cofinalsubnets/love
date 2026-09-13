@@ -569,7 +569,7 @@
  sign-open '("is this the tower?  it must be.  where else could the tower be?"
              ""
              "move     h j k l    or the arrow keys"
-             "         y u b n    for diagonalss"
+             "         y u b n    for diagonals"
              "wait     .          a turn passes, nothing mends"
              "climb    < or enter while you stand on a stair"
              "leave    q          or esc"

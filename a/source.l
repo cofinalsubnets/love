@@ -113,7 +113,7 @@
     (? (string? exe) (: s (herald (exe . as)) (two? s ? <s s))
        (: p (spawn as) (? (charm? p && 0 <= p) (wait p) 127)))
    ; the autonomous arming, what a seed sets before its build: the farm of our verbs
-   ; first on PATH, lush autonomous, CC our mooncc. `love serve` and `love doom` build
+   ; first on PATH, lush autonomous, CC our mooncc. `love web` and `love doom` build
    ; under the same, so a nest or a page is ours throughout whatever PATH holds -- a
    ; tree our mooncc built and an object the ambient cc made link neither way.
    (src-arm root exe)

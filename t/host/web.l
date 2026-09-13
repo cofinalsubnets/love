@@ -1,9 +1,9 @@
-; --- t/host/serve.l: `love serve`'s hook (a/kiosko/serve.l) ---
+; --- t/host/web.l: `love web`'s hook (a/kiosko/web.l) ---
 ; not in the t/*.l corpus (it loads crew modules and splices them).
 ;
 ; the server half is kiosko's and gated there (t/host/kiosko.l drives a real
 ; socket, the maker hook included). what is gated here is the maker: the four
-; things `love serve` answers for and the ones it refuses, driven directly --
+; things `love web` answers for and the ones it refuses, driven directly --
 ; no port, no socket, no timing, because none of that is this file's claim.
 ;
 ;   *.l        the painted source
@@ -20,14 +20,14 @@
 (borrow 'libra)                                ; ..and the header lifter, likewise
 (borrow 'hueweb)
 (borrow 'kiosko)
-(borrow 'serve)
+(borrow 'web)
 
 ; --- the seam -----------------------------------------------------------------
 (test
- (elem 'serve (cite ()))
- (elem 'serve-main (keys (cite 'serve)))
- ; the verb is registered, which is what makes `love serve` a word on the artifact
- (lit? (peep (cite 'verbs 'tab) 'serve ())))
+ (elem 'web (cite ()))
+ (elem 'web-main (keys (cite 'web)))
+ ; the verb is registered, which is what makes `love web` a word on the artifact
+ (lit? (peep (cite 'verbs 'tab) 'web ())))
 
 ; a scratch tree to answer for. the maker takes a root and a path and joins them
 ; itself, so the fixture is a real directory and the test asks for real paths.

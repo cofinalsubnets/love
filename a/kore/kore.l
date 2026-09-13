@@ -61,7 +61,7 @@
         rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main sleep-main
         sort-main sparse split-main srun stat-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
-        touch-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
+        touch-main lift-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
@@ -279,7 +279,7 @@
             'ls ls-main 'dir ls-main   ; one lister, and the name DOS and coreutils ask it by
             'cp cp-main 'mv mv-main
             'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
-            'ln ln-main 'touch touch-main
+            'ln ln-main 'touch touch-main 'lift lift-main
             'pwd pwd-main 'chmod chmod-main
             'install install-main 'readlink readlink-main
             'realpath realpath-main 'link link-main 'unlink unlink-main
@@ -372,6 +372,7 @@
     'rmdir "usage: rmdir DIR.."
     'ln "usage: ln [-s] [-f] TARGET LINKNAME"
     'touch "usage: touch FILE.."
+    'lift "usage: lift FILE   -- carry FILE out of the machine: the page's downloads, the runner's directory"
     'pwd "usage: pwd"
     'chmod "usage: chmod OCTAL FILE.."
     'install "usage: install [-D] [-m OCTAL] [-s] SRC DST  |  install -d DIR.."

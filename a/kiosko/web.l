@@ -1,6 +1,6 @@
-; a/kiosko/serve.l -- `love serve`: the tree, in a browser, painted on the way out.
+; a/kiosko/web.l -- `love web`: the tree, in a browser, painted on the way out.
 ;
-;   love serve [-p port] [DIR]      DIR defaults to the working directory
+;   love web [-p port] [DIR]      DIR defaults to the working directory
 ;
 ; kiosko already serves a directory and lists what it holds. what this adds is one
 ; hook, and three answers through it:
@@ -30,7 +30,7 @@
 ;
 ; kiosko is a module: `cite` is the reach, and its miss is checked by name -- () applied
 ; to operands is 1, a miss that would read as a server that started.
-(module (serve serve-main sv-make)
+(module (web web-main sv-make)
 (borrow 'libra)
 (borrow 'hueweb)
 (borrow 'lapiz)
@@ -111,8 +111,8 @@
                            md? (sv-doc p <>r ())
                            (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
 
-   sv-usage "love serve -- the tree in a browser, painted on the way out
-usage: love serve [-p PORT] [-n] [DIR]
+   sv-usage "love web -- the tree in a browser, painted on the way out
+usage: love web [-p PORT] [-n] [DIR]
   -p, --port PORT   the port to listen on (default 8080)
   -n, --no-build    serve DIR as it is
   DIR               the tree to serve (default .)
@@ -122,7 +122,7 @@ is at /i/wasm/inle.html. where DIR is no tree, this binary's own source is laid 
 as `love source` lays it (love-VERSION/), and that tree is the one served. this binary
 drives that build: no love is rebuilt to serve a page.
 "
-   (sv-die c m) (: _ (say err ("serve: " + m)) _ (put err 10) (quit c))
+   (sv-die c m) (: _ (say err ("web: " + m)) _ (put err 10) (quit c))
 
    ; no tree at DIR: LAY one there -- the source this binary carries, and nothing more.
    ; the page is what a serve owes, and this binary already builds it; rebuilding love to
@@ -130,11 +130,11 @@ drives that build: no love is rebuilt to serve a page.
    (sv-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
    (sv-seed dir)
    (: exe (selfpath 0)
-      _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
+      _ (string? exe ? 0 (say err "web: can't find my own path\n", quit 1))
       _ (say err (";; no tree at " + dir + ": laying " + sv-root dir + "\n"))
       p (spawn [exe "source" dir])
       st (charm? p && 0 <= p ? (wait p) 1)
-      _ (0 = st ? 0 (say err ("serve: the lay did not take (" + show st + ")\n"), quit 1))
+      _ (0 = st ? 0 (say err ("web: the lay did not take (" + show st + ")\n"), quit 1))
       (sv-root dir))
 
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
@@ -146,14 +146,16 @@ drives that build: no love is rebuilt to serve a page.
    ; only the wasm module, which is the one thing here that is not already aboard.
    (sv-build dir)
    (: exe (selfpath 0)
-      _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
+      _ (string? exe ? 0 (say err "web: can't find my own path\n", quit 1))
       _ ((cite 'source 'src-arm) dir exe)
-      _ (say err ";; laying the page: make web wasm site-wasm b/love-wasm.wasm\n")
-      p (spawn [exe "make" "-C" dir ("LOVE=" + exe) "web" "wasm" "site-wasm" "b/love-wasm.wasm"])
+      ; the module is site-wasm's to build, through its own seat: asked for by name at
+      ; the top it would be laid with the x64 lane's recipe and fail a file at a time
+      _ (say err ";; laying the page: make web site-wasm\n")
+      p (spawn [exe "make" "-C" dir ("LOVE=" + exe) "web" "site-wasm"])
       st (charm? p && 0 <= p ? (wait p) 1)
-      (0 = st ? 0 (say err ("serve: the page did not build (" + show st + ")\n"), quit 1)))
+      (0 = st ? 0 (say err ("web: the page did not build (" + show st + ")\n"), quit 1)))
 
-   (serve-main as)
+   (web-main as)
    (: box (tablet 0)
       t (tablet 0)
       o (uopt as t '(112) () {"port" 112 "no-build" 110})
@@ -177,17 +179,17 @@ drives that build: no love is rebuilt to serve a page.
              dir0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
-      _ (nil? serve5 ? (say err "serve: no kiosko aboard\n", quit 1))
-      _ (sv-tree? dir ? (say err ("serve: " + dir + " -- the page is http://127.0.0.1:" + show port
+      _ (nil? serve5 ? (say err "web: no kiosko aboard\n", quit 1))
+      _ (sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://127.0.0.1:" + show port
                                   + "/ and the machine /i/wasm/inle.html\n")) 0)
       _ (? (serve5 dir port 0 () (sv-make dir box)) 0
-           (: _ (say err ("serve: cannot listen on :" + show port)) _ (put err 10) (quit 1)))
+           (: _ (say err ("web: cannot listen on :" + show port)) _ (put err 10) (quit 1)))
       (quit 0))
 
-   ; the verb, and the seat (kiosko's shape): `love serve ..` on the artifact, or
+   ; the verb, and the seat (kiosko's shape): `love web ..` on the artifact, or
    ; this file named on a command line, and neither needs a script
-   door (udoor 'serve serve-main sv-usage 1 1)
-   _ (pins (cite 'verbs 'tab) 'serve door)
+   door (udoor 'web web-main sv-usage 1 1)
+   _ (pins (cite 'verbs 'tab) 'web door)
    s ((cite 'verbs 'fire) ["serve" "serve.l"])
    _ (two? s && door >s))
 ) ; module serve
