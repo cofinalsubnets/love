@@ -18,8 +18,9 @@
 ; tower-run ties the tty, and t/host/tty.l plays it on a pty.
 (module (rove tower-run tower-main dat open? dput delve fov clear? paint steer tap-steer
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
-         mend ascend fill fit circle? circle-new circle-stride circle-frame
-         circle-r circle-wall on-ring? reveal? done? tokens floors due?
+         mend ascend fill fit circle? vale-new vale-tick walled? on-ring? done? enter exit-at
+         circle-r circle-q circle-far ring-in talk talk-key talk-node her-tree open-box doom oct-pt
+         tokens floors due?
          themes plan tile-face strewn pink-ramp grass-ramp pink-front skin-pen
          flavour mutter underfoot sign-box sign-over stream feat-book her-floors ents loot-face
          city carve-floor car-new car-head drive run-down corner? road? lit? climb-hp deal first-n
@@ -305,6 +306,30 @@
  lawn-ramp [118 112 76 70 40 34 28 22]
  dirt-ramp [180 137 137 136 94 94 95 58]
  garden-greens {28 'hedge 137 'dirt 34 'lawn 71 'lawn}
+ ; the vale's last field is one frame of the walk's shimmer too, held still, and as the
+ ; ring closes the grass past a front goes over to slop's pink. these ramps run pale to
+ ; deep rather than looping: a still frame never wraps. span is the band of skin they
+ ; cover, the four sines seldom leaving +-3; the front waits beyond the corner of the
+ ; board until the ring is half its scale, then comes in to under half the board.
+ circle-r0 8                                            ; the ring's scale, for the song and the pink
+ grass-ramp [194 157 120 114 78 71 34 22]
+ pink-ramp [224 218 217 212 211 206 205 199]
+ pink-span 3.0
+ pink-start (circle-r0 // 2)
+ pink-floor 0.45
+ ; the vale: trees for rock, grass for ground and the garden's flowers in it, in beds;
+ ; and the house: timber for rock, boards for ground
+ th-vale '(("♣" 28 22) (46 34 22)
+           ((42 212 89 1 "aster" 20) (42 220 136 1 "marigold" 20)
+            (44 71 65 20 "tuft") (34 34 22 20 "grass"))
+           (4 7 2 4 14))
+ th-house '(("#" 130 94) (46 137 94) ((44 137 94 10 "boards")) (4 7 2 4 14))
+ road-pens [94 130 137]                                 ; the road's dirt, three shades
+ spot-face '(34 120 114)                                ; the eighth stone's place, grass a shade lighter
+ timber-face '("#" 130 94)                              ; the cottage's walls from outside
+ down-face '(62 220 136)                                ; > a stair down, gold like the other
+ garden-bed '((42 212 89 30 "aster") (42 220 136 30 "marigold") (44 71 65 25 "tuft") (34 34 22 15 "grass"))
+ fire-pens '(208 196 220)                               ; the fire, frame to frame
  (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
  stair-face '(60 220 136)                               ; < the stair, gold on every floor
  water-face '(126 39 24)                                ; ~ the stream, where it shows
@@ -321,6 +346,14 @@
             'bed ["=" 131 95 "a bed, made, and cold"]
             'crate ["x" 136 94 "a crate. it has been opened and closed again"]
             'fountain ["☼" 226 136 "a fountain, and what it throws up and catches is stars"]
+            'fire ["^" 208 130 "a fire, and it has been burning a while"]
+            'hearth ["▓" 196 88 "a hearth, and the embers in it are still bright"]
+            'box ["■" 137 94 "a simple wooden box"]
+            'pot ["u" 180 137 "a clay pot, and something dry in the bottom of it"]
+            'bronze ["o" 178 136 "a bronze bowl, gone green at the rim"]
+            'iron ["/" 245 240 "an iron poker, leant where it was last used"]
+            'book ["≡" 180 137 "a book, bound by hand, and somebody loved it"]
+            'cloth ["~" 175 133 "a cloth, woven fine, folded and put by"]
             'mirror ["@" 93 54 "a mirror, and the one in it is not quite you"]
             'shelf ["≡" 180 137 "a bookshelf, and one book on it: Muse"
                     '("Muse"
@@ -390,7 +423,9 @@
                         pgs (map page ^n)
                         (pins g 'sign <pgs 'pages >pgs))))
  ; a pile of pennies is bright and only under the lantern; furniture is remembered
- (loot-face it lit) (<it @ 'penny '(36 172) (wear (feat-face <it) lit))
+ (loot-face it lit) (<it @ 'penny '(36 172)
+                          'stone [(string (48 + <>it)) (lit ? 252 245)]
+                          (wear (feat-face <it) lit))
 
  ; a cell's face: the stair, the rock, or the ground with whatever it was strewn with
  (make d) (peep d 'th th-middle)                        ; a floor nobody dressed is stone
@@ -412,6 +447,11 @@
        6 (: r (strew (peep th 4 ()) x y (s + 3) 0) (wear (two? r ? r (th 1)) lit))
        7 (wear step-face lit)
        8 (plat-face x y lit plat-blue)
+       9 (: k (dice x y (s + 9) 3) [46 (road-pens k)])
+       10 (wear spot-face lit)
+       11 (wear timber-face lit)
+       12 (: r (strew garden-bed x y (s + 5) 1) (wear (two? r ? r (th 1)) lit))
+       13 (wear down-face lit)
        0 (wear <th lit)
          (: r (strewn th x y s) (wear (two? r ? r (th 1)) lit)))
  (paint j d vis loot ents msg bar) (:
@@ -419,19 +459,28 @@
    th (make d) sd (peep d 'sd 0)
    skin (d 'skin)
    ; the scrutinee in its own parens: an infix ? left bare would take the @- as its arm
+   ; ..and on the vale the grass past the pink front takes slop's ramp instead
+   fr (peep d 'front ()) fc (peep d 'fire ())
+   (pinkish? x y) (fr && fc && fr < sq (x - <fc) + 4 * sq (y - <>fc))
    (shade gh x y) ((tablet? skin ? (garden-greens <>gh) ()) @- gh
                    'hedge [<gh (ramp-pen hedge-ramp (peep (skin 'hedge) [y x] 0.0))]
-                   'lawn [<gh (ramp-pen lawn-ramp (peep (skin 'ground) [y x] 0.0))]
+                   'lawn [<gh (ramp-pen (pinkish? x y ? pink-ramp lawn-ramp) (peep (skin 'ground) [y x] 0.0))]
                    'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))])
    tint (peep d 'tint ())                             ; heaven's, a colour to a platform
+   ov (peep d 'over ())                               ; the vale's: a face laid over a lit cell, or ()
+   ; the screen's rows of a floor taller than it: from the view's top, and a row past
+   ; the floor's foot is blank
+   rows-n (peep d 'rows h) vy (peep d 'vy 0)
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees
    _ (say j $ "\e[H\e[0m" + (fit msg w) + "\e[K\r\n")
    (cell i lit) (: e (lit ? (spot i))
+                   o (lit && ov ? (ov (i % w) (i // w)))
                    l (loot i)
                    it (l && (lit || (<l != 'penny && peep sn i 0)) ? l ())
                    (? e [(e 'gl) (e 'hue)]
+                      o o
                       it (loot-face it lit)
                       (peep sn i 0)
                        (: t (peep (d 't) i 0) x (i % w) y (i // w)
@@ -445,8 +494,11 @@
                    (p != p2 ? (say j (pen p2)),
                     say j (string <gh),
                     row y (x + 1) (i + 1) p2)))
-   (rows y p) (y >= h ? p (rows (y + 1) (: p2 (row y 0 (w * y) p) _ (say j "\r\n") p2)))
-   (rows 0 -1,
+   (rows y p) (y >= vy + rows-n ? p
+               (rows (y + 1) (: p2 (y >= h ? (say j "\e[K", p) (row y 0 (w * y) p))
+                                _ (say j "\r\n")
+                                p2)))
+   (rows vy -1,
     say j "\e[0m", say j bar, say j "\e[K",
     j))
 
@@ -463,7 +515,7 @@
  (toward a b) (a < b ? 1 (a > b ? -1 0))
  (tap-steer g c) (: p (g 'p)
                     dx (toward (p 'x) <c)
-                    dy (toward (p 'y) (<>c - 1))
+                    dy (toward (p 'y) (<>c - 1 + peep (g 'd) 'vy 0))
                     (dx = 0 && dy = 0 ? 60 [dx dy]))
 
  ; --- the words: every line the climb says. a ~ takes the next value and {braces} are
@@ -481,7 +533,11 @@
  w-alone  "the mirror shows you yourself, and keeps you"
  w-stair  "no stair here"
  w-penny  "you pocket ~ pennies"
- w-ring   "you strike the circle"
+ w-ring   "you strike the circle, and it puts you back"
+ w-circle "and there it is, at the edge of everything: the circle"
+ w-empty  "the box, and nothing in it now"
+ w-stone  "a standing stone, and cut into it: ~"
+ w-shut   "the door will not open now"
  w-bar    "~  hp ~/~  pennies ~"
  w-bar-up "~  hp ~/~  pennies ~  < climbs"
  w-won    "the {token} is yours: {~} -- and ~ pennies besides"
@@ -601,8 +657,9 @@
                     (map (beat knock-lub knock-dub) ix)])
 
  ; the floor's bars: which cycle it is, and how wide the ring is if it is the ring's
+ ; ..the vale's is the garden's chimes until the ring is there, and then the heart
  (tower-bars lvl c r) (lvl @ 1 (garden-bars c) 2 (middle-bars c) 3 (sky-bars c)
-                               (heart-bars r))
+                               (r < 0 ? (garden-bars c) (heart-bars r)))
 
  song-rate 48000
  song-cps 0.5                                           ; cycles a second
@@ -1013,6 +1070,7 @@
  (note g s) (pin g 'msg (g 'msg ? (g 'msg + "; " + s) s))
  (mob-at g x y) <(filter (m \ x = m 'x && y = m 'y) (g 'ms))
  (blocked? g x y) (!(open? (g 'd) x y) ||
+                   walled? g x y ||
                    (x = g 'p 'x && y = g 'p 'y) ||
                    her-at? g x y ||
                    (: l (g 'loot (x + g 'd 'w * y)) (l && <l != 'penny)) ||
@@ -1077,13 +1135,20 @@
                   m (mob-at g nx ny)
                   i (nx + (g 'd 'w) * ny)
                   it (g 'loot i)
-                  (? (her-at? g nx ny) (meet-her g)
+                  ex (exit-at g nx ny)
+                  (? (her-at? g nx ny) (circle? g ? (meet-her-vale g) (meet-her g))
                      (m && m 'car) (run-down g m)
                      m (strike g m)
+                     (walled? g nx ny) ('ring = g 'phase ? (ring-bump g) (note g w-glass))
                      (it && <it = 'mirror) (mirror g i)
+                     (it && <it = 'stone) (note g (fill w-stone [<>it]))
+                     (it && <it = 'box) (open-box g)
                      (it && <it != 'penny) (bump-feat g <it)
                      (6 = dat (g 'd) nx ny) (note g w-glass)
                      !(open? (g 'd) nx ny) (note g (fill w-wall [(here g)]))
+                     ; a door into another scene, shut once the closing has begun
+                     (ex && g 'doom && 'house = <ex) (note g w-shut)
+                     ex (enter g <ex (ex 1) (ex 2))
                      (: _ (pin p 'x nx, pin p 'y ny)
                         _ (it ? (take g i it))
                         (tread g nx ny))))
@@ -1114,7 +1179,7 @@
  (due? g m) (: q ((g 'tn) % (m 'pc)) (0 = q))
 
  ; up the stair: a fresh floor restocked, or the circle if heaven is behind you
- (ascend g) (? (last-floor <= g 'lvl) (circle-new g)
+ (ascend g) (? (last-floor <= g 'lvl) (vale-new g)
               (: p0 (carve-floor (g 'd 'w) (g 'd 'h) (peep (g 'sb) () 0) (1 + g 'lvl))
                  d <p0
                  _ (pin (g 'sb) () >p0)
@@ -1126,35 +1191,83 @@
                  _ (stock g)
                  (note g (fill w-floor [(here g)]))))
 
- ; --- the circle: the last floor, and not a delve at all. the ring is cells and not
- ; a mob -- it does not strike back, and every hit draws it in one step with the wall
- ; following it down. at the middle it is one square, then a smaller one, then the
- ; field opens and there is only the point.
- circle-r0 8
+ ; --- the vale: the last floor, and not a delve at all. a road up through the trees
+ ; to a clearing; in it an octagon of stones round a fire with her beside it, and past
+ ; it a cottage with the token in its attic. the floor is three screens tall and the
+ ; painter shows the rows about the climber; it is lit end to end, and nothing on it
+ ; bites. once the token is out of the house the vale closes: walls nobody sees draw
+ ; in on the fire, then the ring is there at the screen's edge and draws in too, and
+ ; the ring is the end. all of it is measured from the fire, the way the ring always
+ ; was: a cell is about twice as tall as it is wide, so the measure counts a row
+ ; twice, in quarter units, where radius r stands at (2r)^2.
  ring-pen 231
- disc-pen 244
- wall-glyph 35
- grass-glyph 34
- ; the last field is one frame of the walk's shimmer, held still -- no dice in it, the
- ; grade is the wave. these ramps run pale to deep rather than looping: a still frame
- ; never wraps. span is the band of skin they cover, the four sines seldom leaving +-3.
- ;
- ; which ramp is the ring's doing: the middle takes the grass the climber came up
- ; through, and slop's pink waits past the corner of the board until the ring is down
- ; to half, so the first half of the work is grass and the second is the shore early.
- grass-ramp [194 157 120 114 78 71 34 22]
- pink-ramp [224 218 217 212 211 206 205 199]
- pink-span 3.0
- ; the board's reach from the middle, in the ring's own quarter-unit measure
- (circle-far g) (: d (g 'd) dx ((d 'w) // 2) dy ((d 'h) // 2)
+ ring-glyph 79
+ oct-x 9                                                ; the octagon's reach, across and down
+ oct-y 4
+ close-step 2                                           ; rows the walls draw in a turn
+ knock 2                                                ; cells a strike on the ring costs you
+ house-w 19
+ house-h 9
+ attic-w 11
+ attic-h 5
+ ; what she says by the fire is a tree: a node is its lines and its choices, a choice a
+ ; key, its words and the node it leads to; a node with no choices closes on any key.
+ ; she is bumped for it and stays, and a second bump starts it over.
+ her-tree '((start ("Orozcalia sits by the fire and does not look up."
+                    "\"Ye came the long way. They all do.\"")
+                   ((1 "Who are you?" who)
+                    (2 "What is this place?" here)
+                    (3 "What are the stones?" stones)
+                    (4 "Nothing. I'll go on." bye)))
+            (who ("\"A name is a leash, and ye'd not hold mine.\"")
+                 ((1 "Then what should I call you?" name)
+                  (2 "Fair enough." start)))
+            (name ("\"Orozcalia will do. It is not the one cut in the stone.\"")
+                  ((1 "Which stone?" stones)
+                   (2 "I see." start)))
+            (here ("\"The middle of it. Ye can feel that, surely.\""
+                   "She pokes the fire.")
+                  ((1 "The middle of what?" what)
+                   (2 "Go on." start)))
+            (what ("\"Of the circle. It is not drawn yet.\"")
+                  ((1 "..." start)))
+            (stones ("\"Seven that stand, and one that does not. Count them.\"")
+                    ((1 "Where is the eighth?" eighth)
+                     (2 "..." start)))
+            (eighth ("\"Where the grass is greener. Where else.\"")
+                    ((1 "..." start)))
+            (bye ("\"Aye. The house is open. Mind the box.\""
+                  "She turns back to the fire.")
+                 ()))
+ talk-foot "-- ~ --"
+ doom-ttl "the vale"
+ doom-lines '("the ground shudders under you, once, and is still."
+              ""
+              "you feel eligible for death."
+              ""
+              "-- any key --")
+ box-ttl "a simple wooden box"
+ box-lines '("you lift the lid. inside, wrapped in a cloth that was"
+             "somebody's, is what you came for:"
+             ""
+             "{~}"
+             ""
+             "-- any key --")
+ house-goods '(pot bronze iron book cloth table chair bed)
+ (sq n) (n * n)
+ (circle? g) (last-floor < g 'lvl)
+ (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) ((dx * dx) + (4 * dy * dy)))
+ ; the board's reach from the fire, in the ring's own quarter-unit measure
+ (circle-far g) (: d (g 'd) w (d 'w) h (d 'h) cx (g 'cx) cy (g 'cy)
+                   dx (cx < w - cx ? (w - cx) cx) dy (cy < h - cy ? (h - cy) cy)
                    ((dx * dx) + (4 * dy * dy)))
- ; how far out the pink front stands, as a share of that reach: past the corner --
- ; which is to say nowhere on the board -- until the ring is half its first size, and
- ; then in to a little under half the board by the time the ring is a point
- pink-start (circle-r0 // 2)
- pink-floor 0.45
+ ; the ring's radius in rows, and -1 while there is no ring
+ (circle-r g) ('ring = g 'phase ? (g 'r) -1)
+ ; how far out the pink front stands, as a share of the board's reach: past the corner
+ ; -- which is to say nowhere on the board -- until the ring is half its scale, and then
+ ; in to a little under half the board by the time the ring is a point
  (pink-front g) (: r (circle-r g)
-                   (? (pink-start <= r) 1.0
+                   (? (r < 0 || pink-start <= r) 1.0
                       (pink-floor + (((1.0 - pink-floor) * r) / pink-start))))
  (ramp-pen rp v) (: m (#rp - 1)
                     n (int (((v + pink-span) * #rp) / (2.0 * pink-span)))
@@ -1164,70 +1277,185 @@
                      (ramp-pen ((circle-q g x y) > (f * f * circle-far g)
                                 ? pink-ramp grass-ramp)
                                v))
-
- (circle? g) (last-floor < g 'lvl)
- (circle-new g) (: d (g 'd) cx (d 'w // 2) cy (d 'h // 2)
-                   ph (roll (g 'sb) 1000 / 10.0)      ; where in the drift it stopped
-                   _ (pins g 'lvl (1 + last-floor) 'cx cx 'cy cy 'st 0 'ms () 'loot {} 'her ()
-                            'sk (ink-drift (d 'h) (d 'w) ph 0.0))
-                   _ (pins (g 'p) 'x cx 'y (cy - circle-r0 - 1))
-                   (note g (fill w-floor [(here g)])))
- (circle-r g) (: st (g 'st) (st < circle-r0 ? (circle-r0 - st) 0))
- ; a cell is about twice as tall as it is wide, so a round ring is an ellipse in cells:
- ; the measure counts a row twice, in quarter units, where radius r stands at (2r)^2.
- (sq n) (n * n)
- (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) ((dx * dx) + (4 * dy * dy)))
  ; a cell is on the ring when its measure falls in the radius's own band -- a circle of
  ; grid squares, not a box, so it stays round at every size it passes through
  (on-ring? g x y) (: r (circle-r g) q (circle-q g x y)
-                     (r @ 0 (q = 0)
-                      (sq (2 * r - 1) <= q < sq (2 * r + 1))))
- (circle-wall g) (3 + circle-r g)
- (circle-wq g) (sq (2 * circle-wall g))
- disc-q 36                                              ; the grey floor left at the end
- (ring-glyph g) (: st (g 'st)
-                   (? (st <= circle-r0) 79 (st = circle-r0 + 1) 111 46))
- (reveal? g) (circle-r0 + 2 <= g 'st)
- (done? g) (circle-r0 + 2 < g 'st)
+                     (? (r < 0) 0 (r = 0) (q = 0)
+                        (sq (2 * r - 1) <= q < sq (2 * r + 1))))
+ (ring-in g) (sq (2 * circle-r g - 1))                  ; the measure the ring starts at
+ ; the walls nobody sees: past them is not walked. the closing's own, then the ring's
+ (walled? g x y) (circle? g && 'vale = g 'scene &&
+                  (: q (circle-q g x y)
+                     (g 'phase @ 'close (g 'wq <= q)
+                                 'ring (ring-in g <= q)
+                                 0)))
+ (done? g) ('ring = g 'phase && g 'r <= 0)
+ ; a strike on the ring: it gives nothing, and you go back toward the fire
+ (ring-bump g) (: p (g 'p)
+                  (go n) (? (0 < n)
+                            (: nx (p 'x + sgn (g 'cx - p 'x)) ny (p 'y + sgn (g 'cy - p 'y))
+                               (? (open? (g 'd) nx ny && !(g 'loot (nx + g 'd 'w * ny)))
+                                  (pins p 'x nx 'y ny, go (n - 1)))))
+                  _ (go knock)
+                  (note g w-ring))
+ ; the walls and the ring draw in over you, so a climber standing where one now stands
+ ; is carried in with it -- toward the fire until the floor is under them again
+ (push-in g wq) (: p (g 'p)
+                   (go x y) (? (circle-q g x y < wq || (x = g 'cx && y = g 'cy)) (pins p 'x x 'y y)
+                               (go (x + sgn (g 'cx - x)) (y + sgn (g 'cy - y))))
+                   (go (p 'x) (p 'y)))
+ ; a turn of the closing: the walls in by a step until the octagon holds you, and then
+ ; the ring, in a row a turn until it is the point, which is the end
+ (vale-tick g) (g 'phase @
+   'close (: wr (g 'wr - close-step)
+             _ (? (wr <= oct-y + 1)
+                  (pins g 'phase 'ring 'r (g 'r0) 'wq (sq (2 * (oct-y + 1))), note g w-circle)
+                  (pins g 'wr wr 'wq (sq (2 * wr))))
+             (push-in g (g 'wq)))
+   'ring (: _ (pin g 'r (g 'r - 1))
+            _ (0 < g 'r ? (push-in g (ring-in g)))
+            (done? g ? (pin g 'over 'won)))
+   ())
 
- ; the wall follows the ring down, so a climber standing where it now stands is carried
- ; in with it -- toward the middle until the floor is under them again
- (circle-push g) (: p (g 'p) wq (circle-wq g)
-                    (go x y) (? (circle-q g x y < wq) (pins p 'x x 'y y)
-                                (go (x + sgn (g 'cx - x)) (y + sgn (g 'cy - y))))
-                    (go (p 'x) (p 'y)))
- (circle-stride g mv)
-  (: p (g 'p) nx (p 'x + <mv) ny (p 'y + <>mv)
-     d (g 'd) wq (circle-wq g)
-     (? (on-ring? g nx ny)
-          (: _ (pin g 'st (1 + g 'st))
-             _ (done? g ? (pin g 'over 'won) (note g w-ring))
-             (g 'over ? () (circle-push g)))
-        ; the board's own edge counts as wall too: the room may reach past the view
-        (0 <= nx < d 'w && 0 <= ny < d 'h && circle-q g nx ny < wq)
-         (pins p 'x nx 'y ny)
-        (note g (fill w-wall [(here g)]))))
+ ; --- the scenes: the vale, the house and its attic are floors under one climber, and
+ ; a cell of one may be a door into another. a scene is its floor, its loot and her.
+ (scene-of g k) (peep (g 'scenes) k ())
+ (scene-save g) (pins (scene-of g (g 'scene)) 'loot (g 'loot) 'her (g 'her))
+ (lit-all d) (: n (d 'w * d 'h) sn (d 'seen)
+                (foldl (\ t i (pin sn i 1, pin t i 1)) {} ^n))
+ (enter g k x y) (: _ (scene-save g)
+                    sc (scene-of g k) d (sc 'd)
+                    _ (pins g 'scene k 'd d 'loot (sc 'loot) 'her (sc 'her) 'ms ())
+                    _ (pins (g 'p) 'x x 'y y)
+                    _ (pin g 'vis (lit-all d))
+                    (k @ 'vale (doom g) ()))
+ (exit-at g x y) (peep (peep (g 'd) 'exits {}) (x + g 'd 'w * y) ())
+ ; out of the house with the token: the shudder, the sign, and the closing begun; and
+ ; she is gone from the fire unless she was spoken to
+ (doom g) (? (g 'token && !(g 'doom))
+             (: far (circle-far g)
+                wr (1 + int (sqrt (far * 1.0) / 2.0))
+                d (g 'd)
+                r0 (: a (d 'rows // 2) b (d 'w // 4) (1 + (a < b ? b a)))
+                _ (pins g 'doom 1 'rumble 1 'phase 'close 'wr wr 'wq (sq (2 * wr)) 'r0 r0
+                        'sign (doom-ttl . doom-lines))
+                (g 'talked ? () (pin g 'her ()))))
+ ; the box, opened: the token is drawn here and named here, and the box is empty after
+ (open-box g) (? (g 'token) (note g w-empty)
+                 (: tk (tokens (roll (g 'sb) #tokens))
+                    _ (pin g 'token tk)
+                    (pin g 'sign (box-ttl . map (l \ fill l [tk]) box-lines))))
+ ; the tree: a node's sign is its lines, then its choices numbered, then the foot
+ (talk-node k) (:- (go her-tree)
+   (go l) (two? l ? (: e <l (k = <e ? e (go >l))) ()))
+ (joins-with sp l) (? (one? l) "" (one? >l) <l (<l + sp + joins-with sp >l))
+ (talk g k) (: nd (talk-node k)
+               txt (nd 1) chs (nd 2)
+               ks (map (c \ show <c) chs)
+               lines (txt + (two? chs ? [""] ()) + (map (c \ show <c + "  " + (c 1)) chs)
+                          + ["" (fill talk-foot [(two? chs ? (joins-with ", " ks) "any key")])])
+               (pins g 'talk k 'sign (her-ttl . lines)))
+ ; the key at a node: a digit picks its choice, anything else at a node with choices
+ ; shows it again, and a node without them closes
+ (talk-key g k) (: nd (talk-node (g 'talk)) chs (nd 2)
+                   (? !(two? chs) (pin g 'talk ())
+                      (: c (filter (c \ 48 + <c = k) chs)
+                         (talk g (two? c ? (<c 2) (g 'talk))))))
+ (meet-her-vale g) (: _ (pin g 'talked 1) (talk g 'start))
 
- ; --- the painter's other face: the circle's room, which has no lantern in it ---
- (circle-frame g) (:
-   j (jug 0) d (g 'd) w (d 'w) h (d 'h) p (g 'p)
-   rv (reveal? g) wq (circle-wq g)
-   _ (say j $ "\e[H\e[0m" + (fit (g 'msg) w) + "\e[K\r\n")
-   (cell x y) (: q (circle-q g x y)
-                 (? (x = p 'x && y = p 'y) [(p 'gl) (p 'hue)]
-                    (on-ring? g x y) [(ring-glyph g) ring-pen]
-                    rv (q <= disc-q ? [46 disc-pen] [grass-glyph (skin-pen g x y)])
-                    (wq <= q) [wall-glyph (skin-pen g x y)]
-                    '(46 240)))
-   (row y x pn) (x >= w ? pn
-                 (: gh (cell x y) p2 <>gh
-                  (pn != p2 ? (say j (pen p2)),
-                   say j (string <gh),
-                   row y (x + 1) p2)))
-   (rows y pn) (y >= h ? pn (rows (y + 1) (: p2 (row y 0 pn) (say j "\r\n", p2))))
-   _ (rows 0 -1)
-   _ (say j "\e[0m", say j (crawl-bar g), say j "\e[K")
-   (slurp j))
+ ; --- laying the vale: the road, the clearing, the stones, the fire, the cottage ---
+ ; the road wanders on two sines the way the walk's does, five cells wide
+ (road-x cx y) (cx + int (3.0 * sin (y * 0.21) + 2.0 * sin (y * 0.063)))
+ ; a point of the octagon: k of eight, clockwise from the top; the eighth is upper left
+ (oct-pt fx fy k) (: a (k * 0.7853981633974483 - 1.5707963267948966)
+                     c (cos a) s (sin a)
+                     [(fx + int (oct-x * c + (0.0 < c ? 0.5 -0.5)))
+                      (fy + int (oct-y * s + (0.0 < s ? 0.5 -0.5)))])
+ (vale w h rows) (:
+   d {'w w 'h h 'rows rows 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'exits {}}
+   cx (w // 2)
+   cy (h // 2 - rows // 2) ry (rows * 2 // 3)
+   rx (: m (w // 2 - 2) n (2 * ry + 4) (m < n ? m n))
+   fx cx fy (cy + ry // 5)
+   (fill-box x0 y0 bw bh t) (each ^bh (j \ each ^bw (i \ dput d (x0 + i) (y0 + j) t)))
+   ; the clearing: an ellipse of grass
+   _ (each ^h (y \ each ^w (x \ (: dx (x - cx) dy (y - cy)
+                                    (? (dx * dx * ry * ry + dy * dy * rx * rx <= rx * rx * ry * ry)
+                                       (dput d x y 1))))))
+   ; the road up from the foot to the clearing, grass two cells either side of it
+   _ (each ^(h - 1) (j \ (: y (h - 1 - j) mx (road-x cx y)
+                            (? (cy + ry - 2 <= y)
+                               (each ^9 (i \ (: x (mx - 4 + i)
+                                                (? (0 < x && x < w - 1 && 0 < y && y < h - 1)
+                                                   (dput d x y (|(x - mx) <= 2 ? 9 1))))))))))
+   ; the fire on its dirt, and the stones about it, seven and a bare spot
+   _ (fill-box (fx - 2) (fy - 1) 5 3 9)
+   spot (oct-pt fx fy 7)
+   _ (dput d <spot <>spot 10)
+   ; the cottage: timber, a door in its south wall, and the garden behind it
+   cy0 (fy - oct-y - 7)
+   _ (fill-box (fx - 4) cy0 9 5 11)
+   _ (dput d fx (cy0 + 4) 5)
+   _ (fill-box (fx - 4) (cy0 - 3) 9 3 12)
+   _ (pin (d 'exits) (fx + w * (cy0 + 4)) ['house (house-w // 2) (house-h - 2)])
+   foot (road-x cx (h - 2))
+   _ (pins d 'in [foot (h - 2)] 'fire [fx fy] 'door [fx (cy0 + 5)] 'th th-vale 'sd 1)
+   d)
+ ; the house: one room of boards with a door south and a stair up; the attic over it.
+ ; each is painted at the screen's height, the rows past it blank
+ (room w h rows) (: d {'w w 'h h 'rows rows 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'exits {}}
+                    _ (each ^(h - 2) (j \ each ^(w - 2) (i \ dput d (1 + i) (1 + j) 1)))
+                    (pins d 'th th-house 'sd 2))
+ (house rows) (: d (room house-w house-h rows)
+                 _ (dput d (house-w // 2) (house-h - 1) 5)
+                 _ (dput d (house-w - 3) 1 2)
+                 _ (pin (d 'exits) (house-w - 3 + house-w * 1) ['attic 2 (attic-h - 2)])
+                 d)
+ (attic rows) (: d (room attic-w attic-h rows)
+                 _ (dput d 1 (attic-h - 2) 13)
+                 _ (pin (d 'exits) (1 + attic-w * (attic-h - 2)) ['house (house-w - 3) 2])
+                 d)
+ (vale-new g) (: rows (g 'd 'h) w (g 'd 'w) h (3 * rows)
+   sb (g 'sb)
+   d (vale w h rows)
+   fx <(d 'fire) fy <>(d 'fire)
+   ph (roll sb 1000 / 10.0)                            ; where in the drift it stopped
+   sk (ink-drift h w ph 0.0)
+   _ (pin d 'skin {'ground sk 'hedge sk})
+   loot {}
+   _ (pin loot (fx + w * fy) '(fire))
+   _ (each ^7 (k \ (: pt (oct-pt fx fy k) (pin loot (<pt + w * <>pt) ['stone (k + 1)]))))
+   her {'x (fx + 2) 'y fy 'gl her-glyph 'hue her-pen}
+   hs (house rows)
+   ; ..whose door lets out onto the vale, on the cottage's step
+   _ (pin (hs 'exits) (house-w // 2 + house-w * (house-h - 1)) ['vale <(d 'door) <>(d 'door)])
+   hl {}
+   ; a free cell of the house, off the door's step and the stair
+   (spot n) (? (0 < n) (: x (1 + roll sb (house-w - 2)) y (1 + roll sb (house-h - 2))
+                          i (x + house-w * y)
+                          (1 = dat hs x y && !(hl i) &&
+                           !(x = house-w // 2 && y = house-h - 2) &&
+                           !(x = house-w - 3 && y = 2) ? i (spot (n - 1)))))
+   ; the hearth on the north wall, lit: the one red thing in the house
+   _ (pin hl (house-w // 2 + house-w * 1) '(hearth))
+   _ (each house-goods (k \ (: i (spot 40) (i ? (pin hl i [k])))))
+   at (attic rows)
+   al {}
+   _ (pin al (attic-w - 2 + attic-w * (attic-h // 2)) '(box))
+   _ (pins g 'lvl (1 + last-floor) 'cx fx 'cy fy 'phase 'walk 'r -1 'ms () 'token () 'talked ()
+           'doom () 'talk ()
+           'scenes {'vale {'d d 'loot loot 'her her}
+                    'house {'d hs 'loot hl 'her ()}
+                    'attic {'d at 'loot al 'her ()}}
+           'scene 'vale 'd d 'loot loot 'her her
+           'sk sk
+           'vis (lit-all d))
+   _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
+   ; the painter's overlay: the ring where it stands, and the fire's flicker
+   _ (pin d 'over (\ x y (? (on-ring? g x y) [ring-glyph ring-pen]
+                            (x = fx && y = fy) ["^" (fire-pens (g 'tn % #fire-pens))]
+                            ())))
+   (note g (fill w-floor [(here g)])))
 
  ; one turn: the climber's steer, then every mob its pace is due, then the lantern
  (crawl-turn g k) (:
@@ -1237,14 +1465,17 @@
    _ (sg && pin g 'sign ())
    ; ..unless it was a page and the book has another: that one goes up in its place
    _ (? (sg && two? (g 'pages)) (pins g 'sign <(g 'pages) 'pages >(g 'pages)))
-   _ (? (sg || g 'over || k = 46) ()
-        (circle? g) (two? k ? (circle-stride g k))
+   ; ..and a page of her tree takes the key as its answer
+   _ (? (sg || g 'over || k = 46) (sg && g 'talk ? (talk-key g k))
         (two? k) (stride g k, mend g)
         (k @ (60 || 32 || 13 || 10) 1 0)
          (: _ (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair))
             (mend g)))
    _ ((sg || (g 'over || circle? g)) ? ()
       (each (g 'ms) (m \ !(g 'over) && due? g m && (m 'car ? (drive g m) (stir g m)))))
+   ; the vale's closing takes a turn for every turn taken, and none for a sign's key
+   _ (? (circle? g && !sg && !(g 'over)) (vale-tick g))
+   _ (? (circle? g) (pin (g 'd) 'front (: f (pink-front g) (f * f * circle-far g))))
    (circle? g ? g (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))))
 
  ; the bar, and on a stair the one thing worth saying there
@@ -1252,12 +1483,19 @@
                   up (!(circle? g) && 2 = dat (g 'd) (p 'x) (p 'y))
                   (fill (up ? w-bar-up w-bar)
                         [(here g) (p 'hp) (p 'mx) (p 'penny)]))
- (crawl-frame g) (: f (circle? g ? (circle-frame g)
-                      (:- (slurp j) j
-                       (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
-                        (ents g) (g 'msg) (crawl-bar g))))
+ ; a floor taller than the screen is shown about the climber: the view's top row,
+ ; clamped to the floor, and a jolt of a row either way while the ground shudders
+ (view! g) (: d (g 'd) rows (peep d 'rows (d 'h)) h (d 'h)
+              (? (rows < h)
+                 (: v (g 'p 'y - rows // 2 + peep d 'jolt 0)
+                    (pin d 'vy (? (v < 0) 0 (h - rows < v) (h - rows) v)))))
+ (crawl-frame g) (: d (g 'd) rows (peep d 'rows (d 'h))
+                    _ (view! g)
+                    f (:- (slurp j) j
+                       (paint (jug 0) d (g 'vis) (g 'loot)
+                        (ents g) (g 'msg) (crawl-bar g)))
                     sg (g 'sign)
-                    (two? sg ? (sign-over f <sg >sg 1 (g 'd 'h) (g 'd 'w)) f))
+                    (two? sg ? (sign-over f <sg >sg 1 rows (d 'w)) f))
 
  ; --- the song: a floor's bar, out the card a chunk at a time -----------------------
  ; it stands below the circle because song-vol reads circle-r0, and a value read from
@@ -1275,7 +1513,8 @@
 
  ; how loud this floor is. the first three are their own row's; the circle's is the
  ; ring, so the heart goes quiet exactly as the circle closes and is gone at the point.
- (song-vol g) (? (circle? g) (: r (circle-r g) ((r * 1.0) / (circle-r0 * 1.0)))
+ (song-vol g) (? (circle? g && 0 <= circle-r g)
+                  (: v ((circle-r g * 1.0) / (g 'r0 * 1.0)) (v < 1.0 ? v 1.0))
                   (peep songs ((g 'lvl) - 1) <songs))
 
  (song-new h) {'h h 'fpos 0 'cyc 0 'next 0 'vs () 'lvl 1 'rad circle-r0
@@ -1283,7 +1522,11 @@
                'mix (cite 'play 'mixdown) 'pk (cite 'play 'pack)}
  ; where the game is, read off it each frame. only a bar not yet built reads them, so
  ; a stair or a struck ring lands at the next bar line and never cuts the one sounding.
- (song-tier s g) (pins s 'lvl (g 'lvl) 'rad (circle? g ? (circle-r g) 0), song-sfx s g)
+ ; the ring's radius is scaled to the heart's own eight, so a wide one races and the
+ ; point is a beat a bar; -1 is no ring yet
+ (song-tier s g) (pins s 'lvl (g 'lvl)
+                         'rad (circle? g && 0 <= circle-r g ? ((circle-r g * circle-r0) // g 'r0) -1),
+                  song-sfx s g)
  ; what the game asked to hear this turn, put in at the write head so it sounds in the
  ; next chunk: a horn is two short square beeps, a driver's double tap
  beep-note 8
@@ -1317,7 +1560,7 @@
  ; thing on the same screen: the walk takes the stage the climb already raised, so
  ; nothing between the circle and the slop is torn down. slop is cited at the door,
  ; not borrowed, so a seat that carries no walk still climbs.
- (tower-win g) (: tk (tokens (roll (g 'sb) #tokens))
+ (tower-win g) (: tk (g 'token || tokens (roll (g 'sb) #tokens))
                   _ (pin g 'msg (fill w-won [tk (g 'p 'penny)]))
                   _ (say out (crawl-frame g), flush out, rest 2200)
                   _ (drain-keys ())
@@ -1343,10 +1586,18 @@
              (turn k) (k @ (113 || 27 || -7) (pin g 'over 'fled)
                        -12 (crawl-turn g (tap-steer g (edtap ())))
                        (crawl-turn g (steer k)))
+             ; the ground shudders: the view jolts a row either way for half a second,
+             ; with whatever sign the turn raised held back until it is still
+             (rumble! _) (: d (g 'd) sg (g 'sign)
+                            _ (pin g 'sign ())
+                            _ (each ^6 (k \ (pin d 'jolt (k % 2 = 0 ? 1 -1),
+                                             say out (crawl-frame g), flush out, rest 80)))
+                            (pin d 'jolt 0, pin g 'sign sg, pin g 'rumble ()))
              (loop _) (? (g 'over) ()
                          (: _ (say out (crawl-frame g), flush out)
                             _ (hold ())
                             _ (turn (edkey in))
+                            _ (? (g 'rumble) (rumble! ()))
                             _ (? sng (song-tier sng g) ())
                             (loop ())))
              _ (raw 1)

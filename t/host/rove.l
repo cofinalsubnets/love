@@ -152,7 +152,7 @@
    _ (climb ())
    _ (test (3 = g 'lvl) (tablet? (g 'her)) (kind 'mirror) (kind 'fountain))
    _ (climb ())
- (test (circle? g) !(g 'her)))
+ (test (circle? g) (tablet? (g 'her))))                 ; ..and by the fire on the last
 
 ; --- the city: streets on a grid, buildings between them with a floor and doors on
 ; different walls, the climber inside one, the two stairs inside two others, and all
@@ -539,59 +539,146 @@
        ('(-1 -1) = tap (p 'x - 2) (p 'y - 2))
        ('(1 1) = tap (p 'x + 9) (p 'y + 9))))
 
-; --- the circle: the last floor is not a delve, and every hit draws the ring in one
-; step with the wall following it down. it does not strike back; it only gives.
+; --- the vale: the last floor is three screens tall, lit end to end, and laid rather
+; than delved: a road from the foot, the clearing, seven stones and a bare spot round
+; the fire with her beside it, the cottage's door a way into the house and the house's
+; stair a way into the attic, where the box is
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g) _ (ascend g) _ (ascend g)
-   ; stand due north of the ring, one cell outside it, and step in
-   (hit! _) (: r (circle-r g)
-             _ (pins (g 'p) 'x (g 'cx) 'y ((g 'cy) - (? (0 < r) (r + 1) 1)))
-             (circle-stride g '(0 1)))
-   _ (test (circle? g) (4 = g 'lvl) !(g 'ms) !(keys (g 'loot))
-             (8 = circle-r g) (11 = circle-wall g) !(reveal? g)
-             (find (g 'msg) "the circle" 0) (find (g 'msg) "get the" 0)
-             (on-ring? g (g 'cx) ((g 'cy) - 8))          ; the ring stands at the radius
-             (on-ring? g ((g 'cx) + 16) (g 'cy))         ; ..twice as wide, so it reads round
-             !(on-ring? g ((g 'cx) + 8) (g 'cy)))
-   row0 (map (x \ skin-pen g x 4) ^60)                  ; the field, before any of it
-   sk0 (peep (g 'sk) [4 30] 0.0)
-   ; while the ring is wide the front stands past the far corner, so the floor is
-   ; grass all the way out and the pink is nowhere on it yet
-   _ (test (1.0 = pink-front g)
-             (foldl (\ a v (&& a (elem v grass-ramp))) 1 row0)
-             (1 < #(keys (foldl (\ t v (pin t v 1)) {} row0))))
-   _ (hit! ())
-   _ (test (7 = circle-r g) (10 = circle-wall g)         ; one hit, one step, wall follows
-             (find (g 'msg) "strike the circle" 0)
-             (1.0 = pink-front g))                       ; ..and the floor is grass still
-   (sink n) (? (g 'over) n (32 < n) n (: _ (hit! ()) (sink (n + 1))))
-   n (sink 1)
- (test ('won = (g 'over)) (11 = n)                       ; eight steps in, then O, o, point
-         (0 = circle-r g) (reveal? g)
-         (0.45 = pink-front g)
-         ; the wave itself never moved: it is one frame of the walk's shimmer, held
-         ; still, and the same frame it was eleven strikes ago
-         (sk0 = peep (g 'sk) [4 30] 0.0)
-         ; what moved is which ramp a cell reads off. the middle is still the grass
-         ; the climber came up through and the far ends have gone over to slop's pink,
-         ; and both are graded and neither is flat
-         ; the middle row -- the ring is an ellipse in cells, and row 4 is far enough
-         ; off the middle of it to be out past the front on its own
-         (: row1 (map (x \ skin-pen g x 11) ^60)
-            (&& (elem (row1 30) grass-ramp)
-                (&& (elem (row1 0) pink-ramp) (elem (row1 59) pink-ramp))
-                (1 < #(keys (foldl (\ t v (pin t v 1)) {} row1)))))))
+   d (g 'd) w 60 h (d 'h)
+   fx (g 'cx) fy (g 'cy)
+   (t x y) (dat d x y)
+   stones (filter (i \ 'stone = <(g 'loot i)) (keys (g 'loot)))
+   spot (oct-pt fx fy 7)
+   door (d 'door)
+ (test (circle? g) (4 = g 'lvl) (66 = h) (22 = d 'rows) ('walk = g 'phase) (-1 = circle-r g)
+       (9 = t (g 'p 'x) (g 'p 'y)) (h - 2 = g 'p 'y)      ; you start on the road, at the foot
+       (1 = t fx (fy + 3))                               ; grass about the fire
+       (9 = t (fx + 1) fy) ('fire = <(g 'loot (fx + w * fy)))   ; the fire on its dirt
+       (7 = #stones) (10 = t <spot <>spot)               ; seven stand; the eighth's place is lighter grass
+       (<spot < fx) (<>spot < fy)                        ; ..and it is the upper left
+       (tablet? (g 'her)) (= (g 'her 'x) (fx + 2)) (= (g 'her 'y) fy)
+       (5 = t <door (<>door - 1)) (11 = t (<door - 1) (<>door - 1))   ; the cottage: timber, a door south
+       (12 = t fx (<>door - 7))                          ; ..and the garden behind it
+       ('house = <(exit-at g <door (<>door - 1)))
+       (tablet? (g 'scenes 'house)) (tablet? (g 'scenes 'attic))
+       (all (i \ peep (g 'vis) i 0) ^(w * h))))          ; all of it lit
+
+; ..and the story of it: in at the door, up the stair, the box opened and the token
+; named there; down and out with it, the ground shudders, the sign, and she is gone
+; from the fire -- nobody spoke to her. then the walls draw in and carry you with them,
+; the ring stands at the screen's edge, a strike on it puts you back, the push keeps
+; you inside it, and the point is the end
+(: g (crawl-new 60 22 (wheel 3))
+   _ (ascend g) _ (ascend g) _ (ascend g)
+   d (g 'd) w 60
+   door (d 'door)
+   _ (crawl-turn g 46)                                 ; the opening sign, down
+   _ (pins (g 'p) 'x <door 'y <>door)
+   _ (crawl-turn g [0 -1])                             ; through the front door
+   _ (test ('house = g 'scene) !(g 'her) (19 = g 'd 'w) (22 = g 'd 'rows))
+   hearth (g 'loot (19 // 2 + 19 * 1))
+   _ (pins (g 'p) 'x (19 - 3) 'y 2)
+   _ (crawl-turn g [0 -1])                             ; onto the stair: the attic
+   _ (test ('attic = g 'scene) (11 = g 'd 'w) ('hearth = <hearth))
+   _ (pins (g 'p) 'x (11 - 3) 'y 2)
+   _ (crawl-turn g [1 0])                              ; the box
+   _ (test (string? (g 'token)) (elem (g 'token) tokens) (two? (g 'sign))
+           (find (last (g 'sign)) "any key" 0)
+           (any (l \ find l (g 'token) 0) (g 'sign)))   ; ..named in the sign
+   _ (crawl-turn g 46)                                 ; the sign down
+   _ (crawl-turn g [1 0])                              ; again: empty now
+   _ (test (find (g 'msg) "nothing in it" 0) !(g 'sign))
+   _ (pins (g 'p) 'x 2 'y 3)
+   _ (crawl-turn g [-1 0])                             ; down the stair
+   _ (test ('house = g 'scene))
+   _ (pins (g 'p) 'x (19 // 2) 'y (9 - 2))
+   _ (crawl-turn g [0 1])                              ; out the door, with the token
+   wr0 (g 'wr)
+   _ (test ('vale = g 'scene) (g 'doom) (g 'rumble) ('close = g 'phase) (0 < wr0)
+           !(g 'her)                                   ; she is gone: nobody spoke to her
+           (two? (g 'sign)) (any (l \ find l "eligible" 0) (g 'sign))
+           (= (g 'p 'x) <door) (= (g 'p 'y) <>door)
+           !(walled? g 1 1))                            ; the walls start past the corner
+   _ (crawl-turn g 46)                                 ; the sign down: no turn passes
+   _ (test (= wr0 (g 'wr)))
+   _ (crawl-turn g [0 -1])                             ; the door is shut now
+   _ (test ('vale = g 'scene) (find (g 'msg) "will not open" 0) (= (wr0 - 2) (g 'wr)))
+   (until-wall n) (? (walled? g 1 1) n ('ring = g 'phase) -1 (40 < n) -2
+                     (: _ (crawl-turn g 46) (until-wall (n + 1))))
+   nw (until-wall 0)
+   _ (test (0 <= nw) ('close = g 'phase) !(walled? g (g 'cx) (g 'cy)))   ; the corner goes past them before the ring; the fire never
+   (until-ring n) (? ('ring = g 'phase) n (200 < n) n (: _ (crawl-turn g 46) (until-ring (n + 1))))
+   n (until-ring 0)
+   r (circle-r g)
+   _ (test ('ring = g 'phase) (n < 60) (find (g 'msg) "the circle" 0)
+           (11 <= r) (on-ring? g (g 'cx) (g 'cy - r)) (walled? g (g 'cx) (g 'cy - r))
+           (circle-q g (g 'p 'x) (g 'p 'y) < ring-in g))   ; you are inside it
+   ; a strike on it: stand just inside and step out
+   _ (pins (g 'p) 'x (g 'cx) 'y (g 'cy - r + 1))
+   py0 (g 'p 'y)
+   _ (crawl-turn g [0 -1])
+   _ (test (find (g 'msg) "strike the circle" 0) (py0 < g 'p 'y)   ; put back toward the fire
+           (circle-q g (g 'p 'x) (g 'p 'y) < ring-in g))
+   (sink n) (? (g 'over) n (100 < n) n
+               (: _ (crawl-turn g 46)
+                  ok (circle-q g (g 'p 'x) (g 'p 'y) < ring-in g || done? g)
+                  (ok ? (sink (n + 1)) -1)))
+   m (sink 0)
+ (test ('won = g 'over) (0 <= m) (m < 40) (0 = circle-r g) (done? g)
+       (= (g 'p 'x) (g 'cx)) (= (g 'p 'y) (g 'cy))))     ; the point, and you on it
+
+; ..and her tree by the fire: a bump opens the root, a digit takes a branch, another key
+; shows the page again, a leaf closes on any key and she stays; spoken to, she is there
+; when you come out with the token
+(: g (crawl-new 60 22 (wheel 3))
+   _ (ascend g) _ (ascend g) _ (ascend g)
+   h (g 'her)
+   _ (crawl-turn g 46)                                 ; the opening sign, down
+   _ (pins (g 'p) 'x (h 'x + 1) 'y (h 'y))
+   _ (crawl-turn g [-1 0])                             ; bump her
+   root (talk-node 'start)
+   c1 ((root 2) 0)
+   _ (test (two? (g 'sign)) ('start = g 'talk) (g 'talked) (tablet? (g 'her))
+           (find ((g 'sign) 1) ((root 1) 0) 0)         ; the root's first line
+           (any (l \ find l (show <c1 + "  ") 0) (g 'sign)))   ; ..and its choices numbered
+   _ (crawl-turn g (48 + <c1))                         ; the first branch
+   _ (test (= (c1 2) (g 'talk)) (two? (g 'sign)))
+   _ (crawl-turn g 120)                                ; x: not a choice, the page again
+   _ (test (= (c1 2) (g 'talk)) (two? (g 'sign)))
+   leaf <(filter (n \ !(two? (n 2))) her-tree)
+   _ (talk g <leaf)
+   _ (test (find (last (g 'sign)) "any key" 0))
+   _ (crawl-turn g 46)                                 ; closes
+   _ (test !(g 'talk) !(g 'sign) (tablet? (g 'her)) (= (g 'p 'x) (h 'x + 1)))   ; ..and you never moved
+   _ (pin g 'token "the rubbed coin")
+   _ (enter g 'house (19 // 2) (9 - 2))
+   _ (crawl-turn g [0 1])                              ; out with the token, having spoken to her
+ (test ('vale = g 'scene) (g 'doom) (tablet? (g 'her)) ('close = g 'phase)))
+
+; the frame of a floor taller than the screen is the screen's height, about the climber,
+; and a room shorter than it is padded to it
+(: g (crawl-new 60 22 (wheel 3))
+   _ (ascend g) _ (ascend g) _ (ascend g)
+   _ (crawl-turn g 46)                                 ; the opening sign, down
+   f (crawl-frame g)
+   d (g 'd)
+   _ (test (24 = #(split "\r\n" f)) (44 = d 'vy))       ; the foot: the last screen of it
+   _ (enter g 'house (19 // 2) (9 - 2))
+   f2 (crawl-frame g)
+ (test (24 = #(split "\r\n" f2)) (find f2 "\xe2\x96\x93" 0)))   ; the hearth is in it
 
 ; ..and the front itself, which is the whole of the grading law: past the corner of
-; the board -- which is to say nowhere on it -- for as long as the ring is at half the
-; size it started, and in only as the second half of the work is done
+; the board -- which is to say nowhere on it -- while there is no ring and while the
+; ring is at half its scale, and in only as the second half of the closing is done
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g) _ (ascend g) _ (ascend g)
-   (front st) (: _ (pin g 'st st) (pink-front g))        ; st strikes in, so r is 8 - st
- (test (1.0 = front 0) (1.0 = front 1) (1.0 = front 4)   ; r 8, 7, 4: no pink anywhere
-         ((front 5) < 1.0)                               ; r 3: it starts in
-         ((front 6) < (front 5)) ((front 8) < (front 6))  ; ..and keeps coming
-         (0.45 = front 8)))                              ; r 0: and stops well short
+   (front r) (: _ (pins g 'phase 'ring 'r r) (pink-front g))
+ (test (1.0 = pink-front g)                              ; no ring, no pink
+       (1.0 = front 8) (1.0 = front 4)                   ; r 8, 4: none anywhere
+       ((front 3) < 1.0)                                 ; r 3: it starts in
+       ((front 2) < (front 3)) ((front 0) < (front 2))   ; ..and keeps coming
+       (0.45 = front 0)))                                ; r 0: and stops well short
 
 ; ..and the door the last hit opens: the walk PROPER, not the verb, since the stage
 ; the climb raised is the one the slop is to run on. a missed cite is a silent end.
@@ -644,7 +731,7 @@
 ; and the way each floor's rule answers a different bar as the cycle runs on
 (: g (crawl-new 60 22 (wheel 3))
    _ (ascend g) _ (ascend g) _ (ascend g)
-   (vat st) (: _ (pin g 'st st) (song-vol g))
+   (vat st) (: _ (pins g 'phase 'ring 'r (8 - st) 'r0 8) (song-vol g))   ; the ring in by st of its scale
    (hits bs) (foldl (\ a b (a + (foldl (\ t v (t + (tablet? v ? 1 0))) 0 b))) 0 bs)
    (slots bs) (foldl (\ a b (a + #b)) 0 bs)
    ; every slot is a voice play can sound, or nothing at all -- there is no third thing
