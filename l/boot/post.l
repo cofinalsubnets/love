@@ -2237,21 +2237,35 @@
    ; motion is relative, so terminal scrolling never desyncs us. pl is the prompt's
    ; column; the topmost line shares it, later lines start at column 0.
    (csi n f) (putc 27, putc 91, putn n, putc f)   ; ESC [ n f -- the one cursor verb
+   ; the screen already carries this line but for its last character: one row, nothing
+   ; above or below it, the cursor at its end, and an l that is the drawn one with a
+   ; character pushed on top. l grows by prepending, so the drawn one IS the tail and the
+   ; question is an identity, not a walk. 'was is what the row was last left showing.
+   (edgrew pra t)
+     (: l (t 'l)
+        (0 = pra && !(t 'u) && !(t 'd) && !(t 'r) && two? l && cup l == (t 'was)))
+   ; a repaint puts the whole line out again, which costs the line's length a keystroke --
+   ; quadratic over a typed-ahead or pasted run, and 800 characters is a third of a
+   ; megabyte of escapes. a seat that paints those into a framebuffer spends that long
+   ; looking hung, so the one character is worth telling from the line.
    (edrender pl pra t)
      (: u (t 'u) l (t 'l) r (t 'r) d (t 'd)
-        _ (0 < pra ? (csi pra 65),
-           putc 13,
-           0 < pl ? (csi pl 67),
-           putc 27, putc 91, putc 74, ; clear to end of screen
-           each (rev u) (\ ln (each ln prc, putc 10)),
-           each (revcat l r) prc,
-           each d (\ ln (putc 10, each ln prc)))
-        ld #d
-        col ((two? u ? 0 pl) + #l)
-        (0 < ld ? (csi ld 65),
-         putc 13,
-         0 < col ? (csi col 67),
-         flush out))
+        grew (edgrew pra t)
+        _ (pin t 'was l)
+        (? grew (prc <l, flush out)
+           (: _ (0 < pra ? (csi pra 65),
+                 putc 13,
+                 0 < pl ? (csi pl 67),
+                 putc 27, putc 91, putc 74, ; clear to end of screen
+                 each (rev u) (\ ln (each ln prc, putc 10)),
+                 each (revcat l r) prc,
+                 each d (\ ln (putc 10, each ln prc)))
+              ld #d
+              col ((two? u ? 0 pl) + #l)
+              (0 < ld ? (csi ld 65),
+               putc 13,
+               0 < col ? (csi col 67),
+               flush out))))
 
    ; an sgr run at i -- ESC [ digits-and-semicolons m -- as its length, or 0 for no run
    (edsgr s i)
