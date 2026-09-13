@@ -251,6 +251,28 @@
          (1 = dat (g 'd) (g 'p 'x) (g 'p 'y))    ; standing on the fresh floor
          (tablet? (g 'loot))))
 
+; ..and the same climb by the keys a seat with no < to hand has: enter, return, space
+(: (climbs? k) (: g (hand-g ())
+                  _ (dput (g 'd) 1 1 2)
+                  _ (crawl-turn g k)
+                  (2 = g 'lvl))
+ (test (climbs? 60) (climbs? 32) (climbs? 13) (climbs? 10)
+       !(climbs? 46)))                           ; a turn passed is still a turn passed
+
+; a tap is a place: one step of the eight toward the cell it landed on, however far off
+; it lands, and the cell you stand on is the stair. the note row is the screen's first,
+; so a floor y is a screen y less one.
+(: g (hand-g ())
+   p (g 'p)
+   (tap x y) (tap-steer g [x y])
+ (test (60 = tap (p 'x) (p 'y + 1))
+       ('(1 0) = tap (p 'x + 4) (p 'y + 1))
+       ('(-1 0) = tap (p 'x - 4) (p 'y + 1))
+       ('(0 -1) = tap (p 'x) (p 'y - 3))
+       ('(0 1) = tap (p 'x) (p 'y + 6))
+       ('(-1 -1) = tap (p 'x - 2) (p 'y - 2))
+       ('(1 1) = tap (p 'x + 9) (p 'y + 9))))
+
 ; --- the circle: the last floor is not a delve, and every hit draws the ring in one
 ; step with the wall following it down. it does not strike back; it only gives.
 (: g (crawl-new 60 22 (wheel 3))

@@ -2011,7 +2011,7 @@
 ; must be up before this compiles: @ reads here, and a macro reaches a reader only once its
 ; layer is spliced.
 
-(module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey
+(module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey edtap
           uopt uopt1 uoptv uoptun uoptstray unum uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
@@ -2198,12 +2198,25 @@
    ; 0 is the miss, read with == -- an event code nets red, so truth cannot tell hit from miss
    arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6}    ; ESC [ F -- the plain finals
    modarrow {68 -1 67 -2 65 -8 66 -9 72 -10 70 -11}  ; ESC [ 1 ; M F -- modified home/end jump the buffer
+   ; a tap is a place and not a letter: xterm's SGR report (ESC [ < b ; col ; row M, and
+   ; m for the release) carries the cell it landed on. the press is the key -12 and the
+   ; cell waits in edtap, so an app that wants one asks for it and an app that does not
+   ; reads a key it has no arm for and drops it. the cell answers 0-based, screen order.
+   edtap-at {'x 0 'y 0}
+   (edtap _) [(edtap-at 'x) (edtap-at 'y)]
+   (ednum p a) (: c (see p) (48 <= c <= 57 ? (ednum p (a * 10 + c - 48)) [a c]))
+   (edmouse p) (: _ (ednum p 0)                     ; the button, which no app here reads
+                  x (ednum p 0)
+                  y (ednum p 0)
+                  _ (pins edtap-at 'x (<x - 1) 'y (<y - 1))
+                  (<>y = 77 ? -12 0))               ; M is the press, m the release
    (edcsi p) (: c (see p) e (peep arrow c 0)
                (? (e != 0) e
                   (c @ 49 (see p @ 126 -5  59 (see p, peep modarrow (see p) 0)  0)
                        55 (see p, -5)
                        (52 || 56) (see p, -6)
                        51 (see p, -4)
+                       60 (edmouse p)
                        0)))
    (edkey p) (: c (see p)
                (? (c = -1) -7

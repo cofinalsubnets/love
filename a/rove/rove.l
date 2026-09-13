@@ -16,7 +16,7 @@
 ;
 ; run: love tower. the engine is pure love and gates headless in t/host/rove.l; only
 ; tower-run ties the tty, and t/host/tty.l plays it on a pty.
-(module (rove tower-run tower-main dat open? dput delve fov clear? paint steer
+(module (rove tower-run tower-main dat open? dput delve fov clear? paint steer tap-steer
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
          mend ascend fill fit circle? circle-new circle-stride circle-frame
          circle-r circle-wall on-ring? reveal? done? tokens floors due?
@@ -198,6 +198,15 @@
        (121 || 377) '(-1 -1) (117 || 373) '(1 -1) (98 || 354) '(-1 1) (110 || 366) '(1 1)
        k)
 
+ ; ..and a tap is a place rather than a letter: one step of the eight toward the cell it
+ ; landed on, and a tap on the cell you stand on is the stair. the note row is the
+ ; screen's first, so a screen y is a floor y and one. c is [x y], cli's edtap.
+ (toward a b) (a < b ? 1 (a > b ? -1 0))
+ (tap-steer g c) (: p (g 'p)
+                    dx (toward (p 'x) <c)
+                    dy (toward (p 'y) (<>c - 1))
+                    (dx = 0 && dy = 0 ? 60 [dx dy]))
+
  ; --- the words: every line the climb says. a ~ takes the next value and {braces} are
  ; the token's pen; nothing below is built, so this block is the whole of the text.
  w-open   "the tower stands over you. get the {token}"
@@ -226,7 +235,7 @@
              "move     h j k l    or the arrow keys"
              "         y u b n    for the corners"
              "wait     .          a turn passes, nothing mends"
-             "climb    <          while you stand on a stair"
+             "climb    < or enter while you stand on a stair"
              "leave    q          or esc"
              ""
              "a stair is a gold < set in one of the rooms:"
@@ -749,8 +758,9 @@
    _ (? (sg || g 'over || k = 46) ()
         (circle? g) (two? k ? (circle-stride g k))
         (two? k) (stride g k, mend g)
-        (k = 60) (: _ (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair))
-                    (mend g)))
+        (k @ (60 || 32 || 13 || 10) 1 0)
+         (: _ (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair))
+            (mend g)))
    _ ((sg || (g 'over || circle? g)) ? ()
       (each (g 'ms) (m \ !(g 'over) && due? g m && stir g m)))
    (circle? g ? g (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))))
@@ -837,6 +847,7 @@
                          (: _ (? sng (song-feed sng (song-vol g)) (rest 30))
                             (hold ())))
              (turn k) (k @ (113 || 27 || -7) (pin g 'over 'fled)
+                       -12 (crawl-turn g (tap-steer g (edtap ())))
                        (crawl-turn g (steer k)))
              (loop _) (? (g 'over) ()
                          (: _ (say out (crawl-frame g), flush out)

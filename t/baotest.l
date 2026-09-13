@@ -18,6 +18,7 @@
    edup (B 'edup)         eddown (B 'eddown)     uphist (B 'uphist)     downhist (B 'downhist)
    eddetach (B 'eddetach) edempty? (B 'edempty?) edframe (B 'edframe)   edparses? (B 'edparses?)
    edchars (B 'edchars)   edtext (B 'edtext)     edcol (B 'edcol)       edkey (B 'edkey)
+   edtap (B 'edtap)
    joinln (B 'joinln)     splitat (B 'splitat)   parseall (B 'parseall)
    (ed u l r d) (pins (ednew ()) 'u u 'l l 'r r 'd d)
    (edh u l r d hu hd cur) (pins (ed u l r d) 'hu hu 'hd hd 'cur cur)
@@ -127,6 +128,12 @@
   (-10 = (edkey (tap [27 91 49 59 53 72])))                       ; ctrl-home
   (377 = (edkey (tap [27 121])))                                  ; alt-y
   (: p (tap [27 58]) a (edkey p) b (edkey p) ([27 58] = [a b]))      ; esc, then a colon: two keys
+   ; a tap is a PLACE: the SGR report decoded whole, the press answering -12 with the
+   ; cell waiting in edtap, and the release answering the miss and moving nothing
+  (: p (tap [27 91 60 48 59 49 50 59 53 77])                         ; ESC [ <0;12;5M
+     (-12 = (edkey p) && [11 4] = edtap ()))
+  (: p (tap [27 91 60 48 59 49 59 49 109])                           ; ..and the release
+     (0 = (edkey p) && [0 0] = edtap ()))
    ; --- parseall: a line is one expression; floats; the more-sentinel ---
    ; a single datum is returned as-is in a one-list (no extra wrap), so a leading
    ; monadic stays fused: "+(-3)" -> (mono (+ (-3))) -> -3, not the head-position (+ -3).

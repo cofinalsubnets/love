@@ -187,8 +187,9 @@
                      (pin g 'push 0, slop-step g)))
 
  ; the helm is rove's: forward is any steer that climbs, and nothing else moves you.
- ; q or esc steps back off the map
- (slop-key g k) (: mv (steer k)
+ ; q or esc steps back off the map. one way forward is one thing to tap, so a tap
+ ; anywhere (cli's -12) is the step -- there is nowhere else on this map to mean.
+ (slop-key g k) (: mv (steer (k = -12 ? 107 k))
                    (? (g 'over) g
                       (k @ (113 || 27) 1 0) (pin g 'over 'fled)
                       (one? mv) g

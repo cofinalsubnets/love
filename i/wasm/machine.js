@@ -128,6 +128,24 @@ export async function loveMachine(root) {
   // the island's shape is a layout question and nothing the console has to live inside.
   const cols = Number(at('cols', 80));
   const fb = { ...glass(canvas, cols), post: true };
+  // A TAP IS A PLACE. the report is xterm's SGR form (ESC [ < b ; col ; row M) -- what a
+  // terminal sends an app that asked for one, and a key an app that did not reads as
+  // unknown and drops. the PRESS only: nothing aboard drags, and the release is another
+  // escape for the guest's key reader to wait a beat on and then throw away.
+  // the cell is the canvas's own pixels over the glyph box, so it follows the zoom;
+  // `zoom` is the last one this page handed the machine, which a /proc/vt/scale aboard
+  // would leave behind until the next reflow.
+  let zoom = fb.scale;
+  canvas.style.touchAction = 'none';               // a finger on the screen steers, never scrolls
+  const digits = n => [...String(n)].map(c => c.charCodeAt(0));
+  const tap = e => {
+    const box = canvas.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) return;
+    const x = (e.clientX - box.left) * canvas.width / box.width,
+          y = (e.clientY - box.top) * canvas.height / box.height,
+          col = 1 + Math.floor(x / (8 * zoom)), row = 1 + Math.floor(y / (16 * zoom));
+    push([27, 91, 60, 48, 59, ...digits(col), 59, ...digits(row), 77]); };
+  canvas.addEventListener('pointerdown', e => (canvas.focus({ preventScroll: true }), tap(e)));
   cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'sh'), fb, image },
                   image ? [wasm, image] : [wasm]);
   // the box reflowed -- the window resized, or the island's column did. the new size goes
@@ -139,6 +157,7 @@ export async function loveMachine(root) {
     if (canvas.hidden || box.width < 1 || box.height < 1) return;
     const g = glass(canvas, cols);
     Atomics.store(ctl, 5, g.w); Atomics.store(ctl, 6, g.h); Atomics.store(ctl, 7, g.scale);
+    zoom = g.scale;
     Atomics.store(ctl, 4, 1);
     Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2); };
   // a drag is hundreds of reflows and each one re-makes a console and frees a grid, so the
