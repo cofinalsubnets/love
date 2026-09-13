@@ -184,7 +184,15 @@
             (go [(d 'in)] 0))
    opens (tally (filter (i \ open? d (i % w) (i // w)) ^(w * h)))
    stairs (filter (i \ 2 = t (i % w) (i // w)) ^(w * h))
+   ; every road cell has a lane, and its lane-mate beside it runs the other way
+   roads (filter (i \ elem (t (i % w) (i // w)) '(1 6)) ^(w * h))
+   (ln x y) (lane-at d x y)
+   (two-lane? i) (: x (i % w) y (i // w) l (ln x y)
+                    ((<l != 0 || <>l != 0) &&
+                     (<l = 0 || any (o \ <(ln x (y + o)) = 0 - <l) '(-1 1)) &&
+                     (<>l = 0 || any (o \ <>(ln (x + o) y) = 0 - <>l) '(-1 1))))
  (test
+  (all two-lane? roads)
   (2 < #rms)                                             ; buildings enough
   (all (rm \ 2 <= #(walls-of rm)) rms)                   ; doors on two walls at least, each
   (all (rm \ (: m [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
@@ -213,21 +221,36 @@
    _ (crawl-turn g [1 0])                               ; you walk into it
  (test (20 <= g 'p 'hp && g 'p 'hp <= 22) (elem 'horn (g 'sfx)) (99 = c 'hp) (1 = g 'p 'x)))
 
-; a car turns only at a corner -- the lane beside it is not one -- and goes off the map
-; where its road does, to come in again at a gate, headed in
-(: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms ()}
-   _ (each ^9 (x \ dput hd x 2 1))                     ; a road across, off the map both ends
-   _ (each ^5 (y \ dput hd 4 y 1))                     ; ..and one along, crossing it
+; a car turns only at a corner -- a cell whose lane runs the way of the turn, which is
+; not the lane beside it and not the oncoming one -- and goes off the map where its road
+; does, to come in again at a gate, headed in
+(: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms () 'lane {}}
+   _ (each ^9 (x \ (dput hd x 2 1, pin (hd 'lane) (x + 9 * 2) '(1 0))))   ; a road across, eastbound
+   _ (each ^5 (y \ (dput hd 4 y 1, pin (hd 'lane) (4 + 9 * y) '(0 -1)))) ; ..and one along, northbound
+   _ (pin (hd 'lane) (4 + 9 * 2) '(1 -1))                                 ; the crossing, both
    _ (each '((0 2) (8 2) (4 0) (4 4)) (c \ dput hd <c <>c 6))
    g {'d hd 'lvl 2 'tn 0 'sb {(wheel 5)} 'p {'x 1 'y 3 'gl 64 'hue 228 'hp 40 'mx 40 'penny 0}
-      'ms () 'loot (tablet 0) 'msg "" 'over 0 'gates '((0 2 1 0) (8 2 -1 0) (4 0 0 1) (4 4 0 -1))}
+      'ms () 'loot (tablet 0) 'msg "" 'over 0 'gates '((0 2 1 0) (4 4 0 -1))}
    c (car-new 6 2 1 0 196)
    _ (pin g 'ms [c])
-   _ (test !(corner? hd 2 2 0 -1) (corner? hd 4 2 0 -1) (corner? hd 4 2 0 1)
+   _ (test !(corner? hd 2 2 0 -1) (corner? hd 4 2 0 -1) !(corner? hd 4 2 0 1)
            !(open? hd 8 2) (lit? hd 8 2) (road? hd 8 2))
    _ (crawl-turn g 46)                                  ; three cells: 7, 8, and off
  (test (6 = dat hd (c 'x) (c 'y))                      ; it is at a gate
        (road? hd (c 'x + c 'dx) (c 'y + c 'dy))))      ; ..headed in
+
+; a fresh middle's cars are on the road and headed the way their lane runs, every one,
+; and every gate lets in along its lane
+(: g (crawl-new 60 20 (wheel 11))
+   _ (crawl-turn g 46)
+   _ (pins (g 'p) 'x <(g 'd 'stair) 'y <>(g 'd 'stair))
+   _ (crawl-turn g 60)
+   d (g 'd)
+   cars (filter (m \ m 'car) (g 'ms))
+   (on-lane? x y dx dy) (: l (lane-at d x y) (dx != 0 ? (<l = dx) (<>l = dy)))
+ (test (2 = g 'lvl) (two? cars) (two? (g 'gates))
+       (all (m \ road? d (m 'x) (m 'y) && on-lane? (m 'x) (m 'y) (m 'dx) (m 'dy)) cars)
+       (all (e \ 6 = dat d <e (e 1) && on-lane? <e (e 1) (e 2) (e 3)) (g 'gates))))
 
 ; she says the floor's page: the middle's is not the garden's
 (: g (hand-g ())
@@ -277,7 +300,9 @@
    (count k) (tally (filter (i \ k = t (i % w) (i // w)) ^(w * h)))
    opens (tally (filter (i \ open? d (i % w) (i // w)) ^(w * h)))
    stairs (filter (i \ 2 = t (i % w) (i // w)) ^(w * h))
+   tints (map (rm \ (: m (mid rm) (peep (d 'tint) (<m + w * <>m) ()))) rms)
  (test (1 < #rms)
+       (all two? tints) !(= (tints 0) (tints 1))                        ; a colour each, and no two the same
        (all (rm \ (: m (mid rm) (elem (t <m <>m) '(8 2)))) rms)          ; a platform under each middle
        (any (rm \ 6 = t (peep rm 0 0) (peep rm 1 0)) rms)                 ; ..and void at a corner: a rhombus, not a block
        (2 = #stairs) (flood = opens) (0 < count 7) (0 < count 6) (0 = count 0)
@@ -469,7 +494,8 @@
    _ (crawl-turn g 60)
  (test (2 = g 'lvl) (find (g 'msg) "the middle" 0) (find (g 'msg) "get the" 0)
          (elem (dat (g 'd) (g 'p 'x) (g 'p 'y)) '(1 4 8))   ; standing on the fresh floor, in a building, on a platform
-         (60 = g 'p 'mx) (60 = g 'p 'hp)         ; a climb is twenty more of the bar
+         (60 = g 'p 'mx)                         ; a climb is twenty more of the bar
+         (60 = g 'p 'hp || find (g 'msg) "bites" 0)   ; ..and the bar is full, unless something met you there
          (tablet? (g 'loot))))
 
 ; ..and the same climb by the keys a seat with no < to hand has: enter, return, space

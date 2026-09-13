@@ -23,7 +23,7 @@
          themes plan tile-face strewn pink-ramp grass-ramp pink-front skin-pen
          flavour mutter underfoot sign-box sign-over stream feat-book her-floors ents loot-face
          city carve-floor car-new car-head drive run-down corner? road? lit? climb-hp deal first-n
-         sky her-lines mirror
+         sky her-lines mirror lane-at
          songs tower-bars tower-tune song-vol song-new song-feed song-tier song-sfx drain-keys
          garden-bars middle-bars sky-bars heart-bars heart-rate tune?)
 ; posix is optional -- the page's seat (i/wasm) links none of it and this file runs
@@ -98,26 +98,33 @@
  ; inside, and two or three doors on different walls, every wall facing a street. the
  ; climber arrives inside the last building; the stairs are inside two others. a
  ; block too small to hold a room stays solid. answers (floor . st') like delve. ---
- street-x 12                                            ; a block's stride across, and along
+ street-x 9                                             ; a block's stride across, and along
  street-y 6
  (city w h st) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
+   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'lane {}}
    sb {st}
    (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    ; where the streets start: from a, at the stride and a jitter, the last one at lim
    (spine a lim step jit) (:- (go a [a])
      (go x acc) (: nx (x + step + roll sb jit)
                    (nx + (step // 2) < lim ? (go nx (nx . acc)) (rev (lim . acc)))))
-   xs (spine 1 (w - 3) street-x 6)
-   ys (spine 1 (h - 2) street-y 2)
-   _ (each xs (x \ each ^h (y \ (dput d x y 1, dput d (x + 1) y 1))))
-   _ (each ys (y \ each ^w (x \ dput d x y 1)))
+   xs (spine 1 (w - 3) street-x 4)
+   ys (spine 1 (h - 3) street-y 2)
+   ; every street is two lanes, one each way, and a cell knows its lane: the way
+   ; along it, and at a crossing the way along each. driving keeps to the right, so
+   ; the west lane runs south and the south lane runs east
+   (lane x y dx dy) (: i (x + w * y) l (peep (d 'lane) i '(0 0))
+                       (pin (d 'lane) i [(dx = 0 ? <l dx) (dy = 0 ? <>l dy)]))
+   _ (each xs (x \ each ^h (y \ (dput d x y 1, lane x y 0 1,
+                                  dput d (x + 1) y 1, lane (x + 1) y 0 -1))))
+   _ (each ys (y \ each ^w (x \ (dput d x y 1, lane x y -1 0,
+                                  dput d x (y + 1) 1, lane x (y + 1) 1 0))))
    ; every road runs off the map: its border cell is glass, driven through and not walked
    (glass x y) (? (1 = dat d x y) (dput d x y 6))
    _ (each xs (x \ (glass x 0, glass (x + 1) 0, glass x (h - 1), glass (x + 1) (h - 1))))
-   _ (each ys (y \ (glass 0 y, glass (w - 1) y)))
+   _ (each ys (y \ (glass 0 y, glass (w - 1) y, glass 0 (y + 1), glass (w - 1) (y + 1))))
    ; a block between four streets: the wall ring is left as rock, the inside is floor
-   (build xa xb ya yb) (: x0 (xa + 2) x1 (xb - 1) y0 (ya + 1) y1 (yb - 1)
+   (build xa xb ya yb) (: x0 (xa + 2) x1 (xb - 1) y0 (ya + 2) y1 (yb - 1)
                           bw (x1 - x0 + 1) bh (y1 - y0 + 1)
                           (? (bw >= 5 && bh >= 3)
                              (: _ (each ^(bh - 2) (j \ each ^(bw - 2) (i \ dput d (x0 + 1 + i) (y0 + 1 + j) 4)))
@@ -145,15 +152,26 @@
  ; step. the void between is glass: looked across, never entered. answers like delve ---
  plat-from 4                                            ; a platform's half-width, from and by
  plat-by 5
+ ; the coloured squares of a platform's checker, one colour to a platform: x11's names,
+ ; at the nearest pen the face has, lit and remembered. dealt out, so no two platforms
+ ; share one while there are enough to go round.
+ plat-hues '(("█" 99 61)                                ; medium slate blue
+             ("█" 48 29)                                ; medium spring green
+             ("█" 92 54)                                ; dark violet
+             ("█" 198 125)                              ; deep pink
+             ("█" 170 133)                              ; orchid
+             ("█" 168 132))                             ; pale violet red
  (sky w h st) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
+   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'tint {}}
    sb {st}
    _ (each ^(w * h) (i \ pin (d 't) i 6))
    (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    (rhomb cx cy a b f) (each ^(2 * b + 1) (j \ each ^(2 * a + 1)
                                                 (i \ (: x (cx - a + i) y (cy - b + j)
                                                         (|(x - cx) * b + |(y - cy) * a <= a * b ? (f x y))))))
-   (plat cx cy a b) (rhomb cx cy a b (\ x y (dput d x y 8)))
+   pal (deal sb plat-hues)
+   (plat cx cy a b k) (: c (pal (k % #pal))
+                         (rhomb cx cy a b (\ x y (dput d x y 8, pin (d 'tint) (x + w * y) c))))
    ; the stairway: bresenham from middle to middle, a step laid on the void either side
    (step x y) (? (6 = dat d x y) (dput d x y 7))
    (walk [ax ay] [bx by]) (:
@@ -181,7 +199,7 @@
                  (? !(apart? rm (d 'rooms)) (try (n - 1))
                     (d 'rooms && !(askew? (mid rm) (mid <(d 'rooms)))) (try (n - 1))
                   (d 'rooms ? (walk (mid rm) (mid <(d 'rooms))),
-                   plat cx cy a b,
+                   plat cx cy a b #(d 'rooms),
                    pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
    _ (try ((w * h) // 25))
@@ -277,7 +295,7 @@
  plat-grey '("█" 252 245)
  plat-blue '("█" 33 24)
  step-face '("▒" 245 239)
- (plat-face x y lit) (wear ((x + y) % 2 = 0 ? plat-grey plat-blue) lit)
+ (plat-face x y lit c) (wear ((x + y) % 2 = 0 ? plat-grey c) lit)
  ; the garden's greens are not one green, nor its browns one brown: the hedge wears a
  ; still frame of the walk's shimmer -- the circle's field -- and the ground another,
  ; out of phase, so a bed is one shade here and another there in bands, not the mottle
@@ -393,7 +411,7 @@
        5 (wear door-face lit)
        6 (: r (strew (peep th 4 ()) x y (s + 3) 0) (wear (two? r ? r (th 1)) lit))
        7 (wear step-face lit)
-       8 (plat-face x y lit)
+       8 (plat-face x y lit plat-blue)
        0 (wear <th lit)
          (: r (strewn th x y s) (wear (two? r ? r (th 1)) lit)))
  (paint j d vis loot ents msg bar) (:
@@ -405,6 +423,7 @@
                    'hedge [<gh (ramp-pen hedge-ramp (peep (skin 'hedge) [y x] 0.0))]
                    'lawn [<gh (ramp-pen lawn-ramp (peep (skin 'ground) [y x] 0.0))]
                    'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))])
+   tint (peep d 'tint ())                             ; heaven's, a colour to a platform
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees
@@ -415,8 +434,10 @@
                    (? e [(e 'gl) (e 'hue)]
                       it (loot-face it lit)
                       (peep sn i 0)
-                       (: gh (tile-face th (peep (d 't) i 0) lit (i % w) (i // w) sd)
-                          (lit ? (shade gh (i % w) (i // w)) gh))
+                       (: t (peep (d 't) i 0) x (i % w) y (i // w)
+                          gh (t = 8 && tablet? tint ? (plat-face x y lit (peep tint i plat-blue))
+                                                      (tile-face th t lit x y sd))
+                          (lit ? (shade gh x y) gh))
                       '(32 0)))
    (row y x i p) (x >= w ? p
                   (: gh (cell i (peep vis i 0))
@@ -748,7 +769,8 @@
  (sign-over f ttl ls a n w) (:- (go 0 "")
    rs (split "\r\n" f)
    wr (cite 'story 'wrap)
-   (flow l) (wr && (w - 4) < vlen l ? (wr l (w - 4)) [l])
+   ; ..to a cell short of the screen's edge either side, so no row of it runs full
+   (flow l) (wr && (w - 6) < vlen l ? (wr l (w - 6)) [l])
    box (sign-box ttl (foldl (+) () (map flow ls)))
    ww (vlen <box)
    x0 (: q ((w - ww) // 2) (0 < q ? q 0))
@@ -796,9 +818,10 @@
  (car-back m) (car-head m (0 - m 'dx) (0 - m 'dy))
  (street? d x y) (1 = dat d x y)
  (road? d x y) (: t (dat d x y) (t = 1 || t = 6))
- ; a corner is where the road across runs two cells that way: the other lane of your
- ; own road is one cell of it, and a building's wall none
- (corner? d x y dx dy) (road? d (x + dx) (y + dy) && road? d (x + 2 * dx) (y + 2 * dy))
+ ; a corner is a cell whose lane runs the way of the turn: only a crossing has a lane
+ ; across, and a turn into the oncoming lane is no corner either
+ (lane-at d x y) (peep (peep d 'lane {}) (x + d 'w * y) '(0 0))
+ (corner? d x y dx dy) (: l (lane-at d x y) (dx != 0 ? (<l = dx) (<>l = dy)))
  ; the horn, twice, and the hurt: what a car does when it reaches you either way
  (run-down g m) (: p (g 'p)
                    _ (pin p 'hp (p 'hp - car-dm))
@@ -899,24 +922,28 @@
    ; the middle's buildings are lived in: a few pieces each, and one holds the shelf
    pieces '(chair bed crate)
    _ (? (2 = lvl)
-        (: _ (each rms (rm \ each ^(1 + roll sb 3) (_ \ furnish-in rm (pieces (roll sb #pieces)))))
+        (: _ (each rms (rm \ each ^(roll sb 2) (_ \ furnish-in rm (pieces (roll sb #pieces)))))
            (furnish 'shelf)))
    ; heaven's platforms: fountains, and mirrors on platforms of their own -- one mirror
    ; lets out of another, so there are two at least where there are two platforms
    _ (? (3 = lvl)
         (: _ (each ^(2 + roll sb 2) (_ \ furnish 'fountain))
            (each (first-n (2 + roll sb 2) (deal sb rms)) (rm \ furnish-in rm 'mirror))))
-   ; ..and its streets driven: a car for so many cells of street, headed along it
-   streets (? (2 = lvl) (filter (i \ street? d (i % d 'w) (i // d 'w)) ^(d 'w * d 'h)) ())
-   (car-at i) (: x (i % d 'w) y (i // d 'w)
-                 along (road? d x (y - 1) && road? d x (y + 1))
-                 sg (roll sb 2 = 0 ? 1 -1)
-                 (car-new x y (along ? 0 sg) (along ? sg 0) (car-pens (roll sb #car-pens))))
+   ; ..and its streets driven: a car for so many cells of street, headed along it. a
+   ; middle delved for want of room has no lanes, and no traffic
+   pi (g 'p 'x + d 'w * g 'p 'y)
+   streets (? (2 = lvl && tablet? (d 'lane))
+              (filter (i \ i != pi && street? d (i % d 'w) (i // d 'w)) ^(d 'w * d 'h)) ())
+   ; ..each headed the way its lane runs, either way at a crossing
+   (car-at i) (: x (i % d 'w) y (i // d 'w) l (lane-at d x y)
+                 hd (<l != 0 && (<>l = 0 || roll sb 2 = 0) ? [<l 0] [0 <>l])
+                 (car-new x y <hd <>hd (car-pens (roll sb #car-pens))))
    cars (two? streets ? (map (_ \ car-at (streets (roll sb #streets))) ^(2 + #streets // 40)) ())
-   ; the gates: every road's glass end, and the way in from it
+   ; the gates: a road's glass end whose lane runs in, and that way
    w (d 'w) h (d 'h)
-   (gate i) (: x (i % w) y (i // w)
-               (6 = dat d x y ? [x y (? (x = 0) 1 (x = w - 1) -1 0) (? (y = 0) 1 (y = h - 1) -1 0)] ()))
+   (gate i) (: x (i % w) y (i // w) l (lane-at d x y)
+               ix (? (x = 0) 1 (x = w - 1) -1 0) iy (? (y = 0) 1 (y = h - 1) -1 0)
+               (6 = dat d x y && ((ix != 0 && <l = ix) || (iy != 0 && <>l = iy)) ? [x y <l <>l] ()))
    gates (? (2 = lvl) (filter two? (map gate ^(w * h))) ())
    her (? (lvl <= her-floors) (: xy (spot 40)
                                  (xy ? {'x <xy 'y <>xy 'gl her-glyph 'hue her-pen})))
