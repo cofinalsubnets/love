@@ -4,8 +4,9 @@
      isolation headers on. w/index.l lays it on the front page.
      the boot line and the two artifacts ride data- attributes, so a page can aim it
      elsewhere (data-wasm, data-image, data-boot, data-ram, data-cols); the defaults are
-     w/wasm/, which is where `make site-wasm` puts them. the canvas carries no size: its
-     box is the stylesheet's and its pixels are that box's own, measured at boot. -->
+     w/wasm/, which is where `make site-wasm` puts them, and a query string names the same
+     four and wins where it does. the canvas carries no size: its box is the stylesheet's
+     and its pixels are that box's own, measured at boot. -->
 <div class="machine">
 <p class="status">waking the machine...</p>
 <canvas class="fb" tabindex="0"></canvas>

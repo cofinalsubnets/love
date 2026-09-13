@@ -9,7 +9,9 @@
      ?boot= is the boot line, ?ram= the RAM in MiB, ?cols= the most columns the
      console should have -- which is what settles how large a glyph is drawn.
      the machine takes its RAM at boot and never gives it back, so the default is a
-     shell's and not a build's: `love seed` wants ?ram=1024, and ooms under 768. -->
+     tower's and not a shell's: at 256 the walk answers a keypress in twenty-odd SECONDS
+     and the floor is somewhere under 512, while `love seed` wants the same 1024 and ooms
+     under 768 -- so one number covers both. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -83,12 +85,22 @@
     // never has one -- its idle is an Atomics.wait inside the boot's own task.
     const ctx = canvas.getContext('2d');
     const cpu = new Worker(new URL('./cpu.mjs', import.meta.url), { type: 'module' });
+    // only the NEWEST frame is worth drawing: the worker posts as it paints and never
+    // waits to be told the page kept up, so drawing them in order would queue, and a queue
+    // here is latency the reader reads as a machine that answers late. the latch holds one
+    // and the display's own clock takes it -- what is late is dropped, not shown.
+    let latest = null, due = 0;
+    const draw = () => {
+      due = 0;
+      const m = latest;
+      latest = null;
+      if (!m) return;
+      // the backing store follows the FRAME and not the measurement: the machine may
+      // refuse a size, and resizing the canvas clears it, so only on a real change
+      if (canvas.width !== m.w || canvas.height !== m.h) canvas.width = m.w, canvas.height = m.h;
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(m.frame), m.w, m.h), 0, 0); };
     cpu.onmessage = ({ data: m }) => {
-      if (m.frame) {
-        // the backing store follows the FRAME and not the measurement: the machine may
-        // refuse a size, and resizing the canvas clears it, so only on a real change
-        if (canvas.width !== m.w || canvas.height !== m.h) canvas.width = m.w, canvas.height = m.h;
-        ctx.putImageData(new ImageData(new Uint8ClampedArray(m.frame), m.w, m.h), 0, 0); }
+      if (m.frame) { latest = m; if (!due) due = requestAnimationFrame(draw); }
       else if (m.lift !== undefined) {
         if (m.error) { $('lifted').textContent = `${m.lift}: errno ${m.error}`; return; }
         const a = document.createElement('a');
@@ -106,7 +118,7 @@
     // is the most columns worth reading, which is what picks the zoom
     const cols = Number(q.get('cols') ?? 80);
     const fb = { ...glass(canvas, cols), post: true };
-    cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 256), cmd, fb, image },
+    cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 1024), cmd, fb, image },
                     image ? [wasm, image] : [wasm]);
     // the window resized: the new size goes into the ring and the kernel re-makes its
     // console at it. debounced, a drag being hundreds of reflows and each one a new grid.

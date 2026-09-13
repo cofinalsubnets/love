@@ -10,9 +10,13 @@
 // the module and its image are fetched from w/wasm/ -- where the tracked, committed
 // pair lives -- unless data-wasm/data-image name them; data-boot is the boot line (default
 // the shell), data-ram the RAM in MiB, data-cols the most columns worth reading, which
-// is what settles how large a glyph is drawn. the machine takes its RAM at boot and never
-// gives it back, so the default is a shell's and not a build's: `love seed` wants
-// data-ram="1024", and ooms under 768.
+// is what settles how large a glyph is drawn. a query string names the same four, and wins
+// where it does: the attributes are the page's and the link is the reader's.
+//
+// the machine takes its RAM at boot and never gives it back, so a default is a promise
+// about what runs on it. 1024 is what the tower wants, measured: at 256 the walk answers a
+// keypress in twenty-odd SECONDS, and the floor is somewhere under 512. `love seed` wants
+// the same 1024 and ooms under 768, so one number covers both.
 import { ctl_n, ring_n, ring_at, shared_n } from './cpu.mjs';
 import { glass } from './glass.mjs';
 import { hearing } from './hear.mjs';
@@ -42,7 +46,8 @@ export async function loveMachine(root) {
   if (!window.crossOriginIsolated)
     return halt('this page is not cross-origin isolated, so there is no shared memory for the machine to run on. reloading usually fixes it.');
 
-  const at = (k, d) => root.dataset[k] ?? d;
+  const link = new URLSearchParams(location.search);
+  const at = (k, d) => link.get(k) ?? root.dataset[k] ?? d;
   const url = p => new URL(p, import.meta.url);
 
   // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count,
@@ -97,15 +102,25 @@ export async function loveMachine(root) {
   // the machine's proof of life, and the page owes the reader that: `status` stays up
   // until the machine has spoken once, so a machine that never boots says so instead of
   // leaving a black rectangle. a reset boots it again, which the canvas shows itself.
-  let woke = false;
+  // ONLY THE NEWEST FRAME IS WORTH DRAWING. the worker posts as it paints and never waits
+  // to be told the page kept up, so drawing them in order would queue: a page a few frames
+  // behind stays behind, and every frame it owes is latency the reader reads as a machine
+  // that answers late -- while the machine was current the whole time. the latch holds one
+  // frame and the display's own clock takes it, so what is late is dropped, not shown.
+  let woke = false, latest = null, due = 0;
+  const draw = () => {
+    due = 0;
+    const m = latest;
+    latest = null;
+    if (!m) return;
+    // the backing store follows the FRAME, never the measurement: the machine may refuse
+    // a size (k_fb_reseat's bounds), and a canvas sized to what was asked for would then
+    // show the frame in a corner of itself. resizing it also clears it, so only on a change.
+    if (canvas.width !== m.w || canvas.height !== m.h) canvas.width = m.w, canvas.height = m.h;
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(m.frame), m.w, m.h), 0, 0);
+    if (!woke) { woke = true; status.hidden = true; } };
   cpu.onmessage = ({ data: m }) => {
-    if (m.frame) {
-      // the backing store follows the FRAME, never the measurement: the machine may refuse
-      // a size (k_fb_reseat's bounds), and a canvas sized to what was asked for would then
-      // show the frame in a corner of itself. resizing it also clears it, so only on a change.
-      if (canvas.width !== m.w || canvas.height !== m.h) canvas.width = m.w, canvas.height = m.h;
-      ctx.putImageData(new ImageData(new Uint8ClampedArray(m.frame), m.w, m.h), 0, 0);
-      if (!woke) { woke = true; status.hidden = true; } }
+    if (m.frame) { latest = m; if (!due) due = requestAnimationFrame(draw); }
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
   // the canvas measured as REAL pixels -- its own box times the device ratio -- and the
@@ -113,7 +128,7 @@ export async function loveMachine(root) {
   // the island's shape is a layout question and nothing the console has to live inside.
   const cols = Number(at('cols', 80));
   const fb = { ...glass(canvas, cols), post: true };
-  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 256)), cmd: at('boot', 'sh'), fb, image },
+  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'sh'), fb, image },
                   image ? [wasm, image] : [wasm]);
   // the box reflowed -- the window resized, or the island's column did. the new size goes
   // into the ring and the kernel re-makes its console at it; the canvas itself is left
