@@ -302,16 +302,12 @@
    (jux rev (pset (pset (slowcat (map cyc ^4)) (hit (pure "sin")))
                   (legato (pure 0.34)))))
 
- ; the bill for a chunk is onsets * ops * (legato * rate + chunk), so it is the RATE
- ; that the song costs, not the chunk and not the cycle: a note lives 0.34s whatever
- ; the rate, and that is how many samples every one of its tray ops lays. a third of
- ; 48k is a third of the work. 16k is one of the card's own formats (i/hda.c's hda_fmt,
- ; 48k/3) and the page's worklet takes any rate under the context's, so the seat is not
- ; what settles it -- the ear is: nyquist lands at 8k, which the top note's square
- ; reaches past, and the grit that folds back is the walk's own direction of travel.
- song-rate 16000
+ ; the song costs by rate: a note lives 0.34s whatever the rate, so its tray ops lay
+ ; that many samples. 48k is what every card takes -- an HD-Audio HDMI port refuses
+ ; 16k outright (ENODEV), and the page's worklet resamples any rate anyway.
+ song-rate 48000
  song-cps 0.55                          ; cycles a second at full speed
- song-chunk 500                         ; a frame's worth of frames, thirty-two a second
+ song-chunk 1600                        ; a frame's worth of frames, thirty a second
  song-gain 6500.0
  ; the music slows with the walk -- but only to a third of tempo. slop-rate falls to a
  ; twentieth by the shore, and a twentieth of a tempo is not a tempo any more.
