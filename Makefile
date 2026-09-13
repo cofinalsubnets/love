@@ -542,8 +542,9 @@ k_h = $(love_h) $(R)/i/k.h $(R)/i/ustar.h $(R)/i/asmops.h $(wildcard $(R)/i/$a/*
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
 k_pie = $(k_odir)/love.pie
-# ..and the wasm seat's own end of the lane: one module, no elf to project out of it.
-k_mod = $(ko)/love-$a.wasm
+# ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
+# and one name -- wasm is nobody's arch, so the seat's letter is not in it
+k_mod = $(ko)/love-wasm.wasm
 
 # the lays and the machine tail live under $(k_odir)/$a/ so vec.o and sys.o do not
 # collide with the core objects of the same name.

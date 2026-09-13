@@ -117,25 +117,15 @@ usage: love web [-p PORT] [-n] [DIR]
   -n, --no-build    serve DIR as it is
   DIR               the tree to serve (default .)
 a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
-page is laid first -- make web wasm site-wasm and the wasm inle seat -- and the machine
-is at /i/wasm/inle.html. where DIR is no tree, this binary's own source is laid under it
-as `love source` lays it (love-VERSION/), and that tree is the one served. this binary
-drives that build: no love is rebuilt to serve a page.
+page is laid first -- make web site-wasm -- and the machine is at /i/wasm/inle.html.
+where DIR is no tree it is served as it is, and nothing is seeded or built: `love seed`
+is the verb that lays a tree. this binary drives the page's build, and no love is
+rebuilt to serve a page.
 "
    (sv-die c m) (: _ (say err ("web: " + m)) _ (put err 10) (quit c))
 
-   ; no tree at DIR: LAY one there -- the source this binary carries, and nothing more.
-   ; the page is what a serve owes, and this binary already builds it; rebuilding love to
-   ; get there is a fixpoint's business, which `love seed` is still the verb for.
+   ; a tree laid under DIR before (`love seed`, `love source`) is served in its stead
    (sv-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
-   (sv-seed dir)
-   (: exe (selfpath 0)
-      _ (string? exe ? 0 (say err "web: can't find my own path\n", quit 1))
-      _ (say err (";; no tree at " + dir + ": laying " + sv-root dir + "\n"))
-      p (spawn [exe "source" dir])
-      st (charm? p && 0 <= p ? (wait p) 1)
-      _ (0 = st ? 0 (say err ("web: the lay did not take (" + show st + ")\n"), quit 1))
-      (sv-root dir))
 
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
@@ -172,10 +162,11 @@ drives that build: no love is rebuilt to serve a page.
       port (: v (unum pt) (? (nil? pt) 8080 (charm? v) v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
-      ; the tree: DIR itself, or the one laid and seeded under it
+      ; the tree: DIR itself, or one laid under it before; anything else is served as it
+      ; is. nothing is seeded and nothing bootstrapped here -- a page wanted of a bare
+      ; directory is `love seed` first, and then this
       dir (? (sv-tree? dir0) dir0
              (sv-tree? (sv-root dir0)) (sv-root dir0)
-             build? (sv-seed dir0)
              dir0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
