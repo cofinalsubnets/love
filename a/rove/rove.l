@@ -1235,25 +1235,26 @@
  ; key, its words and the node it leads to; a node with no choices closes on any key.
  ; she is bumped for it and stays, and a second bump starts it over.
  her-tree '((start ("Orozcalia sits by the fire and does not look up."
-                    "\"Ye came the long way. They all do.\"")
+                    "\"This place look familiar to you?\"")
                    ((1 "Who are you?" who)
                     (2 "What is this place?" here)
-                    (3 "Nothing. I'll go on." bye)))
+                    (3 "Nope." bye)))
             (who ("\"Orozcalia the calculator.\"")
                  ((1 "Calculator?" name)
                   (2 "Ok." start)))
-            (name ("\"Number in, number out.\" She gestures at the stones.")
+            (name ("\"Number in, number out.\"  She gestures at the stones.")
                   ((1 "What?" card)
                    (2 "I see." start)))
-            (here ("\"If you don't know that, pumpkin, then I dread we're in a pickle.\" She pokes the fire.")
+            (here ("\"If you don't know that, pumpkin, then I dread we're in a pickle.\""
+                   "She pokes the fire.")
                   ((1 "Oh..." start)))
-            (card ("\"Recursive or coinductive, no job too big. Take my card\""
+            (card ("\"Recursive or coinductive, no job too big. Take my card.\""
                    "She hands you a tasteful business card:"
                    "  Orozcalia the Calculator -- Ranked Numeromatrix -- No Job Too Big"
                    "  [beyond city limits, well-bottom at forest-edge, no appt. needed]")
              ((1 "Gosh." start)))
-            (bye ("\"Aye. The house is open. Mind the box.\""
-                  "She turns back to the fire.")
+            (bye ("\"You know what to do.\""
+                  "She pokes the fire.")
                  ()))
  talk-foot "-- ~ --"
  doom-ttl "the vale"
