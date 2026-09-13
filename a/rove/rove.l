@@ -277,7 +277,7 @@
  ; (glyph lit dim), and a strewing carries a fourth number: cells in a hundred -- and
  ; may carry a sixth, its weight inside a bed, where flowers grow together.
  th-garden '((38 28 22) (46 137 94)                     ; hedge and dirt
-             ((42 212 89 1 "aster" 30) (42 220 136 1 "marigold" 30)
+             ((42 212 89 1 "aster" 30) (42 220 136 1 "goldenrod" 30)
               (44 71 65 34 "tuft") (34 34 22 30 "grass") (126 38 24 3 "runnel"))
              (4 7 2 4 14))                              ; beds, wide and a good many
  th-middle '((35 246 238) (46 245 239)                  ; stone and flagstone
@@ -333,7 +333,7 @@
  spot-face '(34 120 114)                                ; the eighth stone's place, grass a shade lighter
  timber-face '("#" 130 94)                              ; the cottage's walls from outside
  down-face '(62 220 136)                                ; > a stair down, gold like the other
- garden-bed '((42 212 89 30 "aster") (42 220 136 30 "marigold") (44 71 65 25 "tuft") (34 34 22 15 "grass"))
+ garden-bed '((42 212 89 30 "aster") (42 220 136 30 "goldenrod") (44 71 65 25 "tuft") (34 34 22 15 "grass"))
  fire-pens '(208 196 220)                               ; the fire, frame to frame
  (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
  stair-face '(60 220 136)                               ; < the stair, gold on every floor
@@ -695,26 +695,25 @@
                  "the grass canopy of blades emits the smell of earthen mildew")
    ("aster"      "an aster, pink and past its best"
                  "the petals are going brown at the edge"
-                 "it is facing the way the light was")
-   ("marigold"   "marigolds, and the smell of them on your hands"
-                 "the yellow is louder than the flower"
-                 "one is open and the rest are waiting")
-   ("stream"     "the stream runs quick over the stones, and the sound of it settles you"
-                 "minnows, a swarm of them, turn as one away from your foot"
-                 "clear to the bottom, and the bottom is all small fish, moving"
-                 "cold through your shoes, and the noise of it is the calmest thing here")
-   ("floor"      "a floor nobody has swept in a while"
-                 "boards, and they give a little"
-                 "dust, and your prints in it")
+                 "it tries to face the light that shone when it first blossomed")
+   ("goldenrod"  "it stands out from the grass like a vein of yellow ore"
+                 "you've heard it causes allergies"
+                 "the air around it charged with pollen")
+   ("stream"     "the still sound of the stream runs motionlessly quick above the stones"
+                 "to the minnows in the stream your passing is like a fast moving rock"
+                 "you feel as though you've stepped in this stream before")
+   ("floor"      "a floor not trodden nor swept"
+                 "the floorboards give a little, like they used to, for the wind"
+                 "you tread on well-settled dust")
    ("door"       "a door, and it stands open"
                  "the frame is lower than you are"
                  "you turn sideways to get through")
-   ("platform"   "a floor of squares, and nothing under every one of them"
-                 "the stars are below you as well as above"
-                 "the checkers do not ring underfoot, which they should")
-   ("steps"      "steps, going down to the next floor, or up -- it is hard to say"
-                 "there is no rail on the steps, and the void either side"
-                 "the steps are wide enough. you do not look over")
+   ("platform"   "you notice the floor is made of squares"
+                 "stars above and below keep drawing your eyes"
+                 "every step is a move in a game, right?  who's playing?")
+   ("steps"      "steps to the next floor. steps down? up? in? out?"
+                 "nothing is on either side of the steps, no rail, nothing"
+                 "the steps are wide enough, if you don't look over")
    ("runnel"     "a thread of water, going somewhere"
                  "colder and quicker than it looks"
                  "it has cut its own small channel here")
@@ -724,60 +723,65 @@
    ("gravel"     "gravel, and the sound of you on it"
                  "it has been walked before"
                  "small stones, worn round")
-   ("bones"      "bones, picked clean and set down tidily"
-                 "not lately"
-                 "small ones: a rat, or a rat's dinner")
-   ("quartz"     "a seam of quartz takes your light and keeps it"
-                 "it is warmer than the stone around it"
-                 "the wall is brighter here for a step")
-   ("cobbles"    "cobbles, laid by someone with time"
-                 "worn hollow down the middle"
-                 "the joints are packed with nothing at all")
-   ("lamp"       "a lamp, lit, with nobody to have lit it"
-                 "the light does not flicker"
-                 "it is warm and gives nothing off")
+   ("bones"      "bones picked clean and dropped regardless of original shape"
+                 "apparently even the wormlike gnomish denizens have bones"
+                 "rats came up from below and ate this misfortunate denizen")
+   ("quartz"     "a seam of quartz retains a fraction of your light"
+                 "it channels light, making it warmer than the stone around it"
+                 "a quartz deposit brightens the wall here for a step")
+   ("cobbles"    "cobbles, laid long ago to harden muddy earth"
+                 "worn hollow to the ancient seams"
+                 "the joints are packed with pale composite")
+   ("lamp"       "a lamp, lit by no one present"
+                 "the luminosity varies circularly with time"
+                 "it's bright so logically it also feels warm")
    ("bench"      "a bench, facing the street"
-                 "it has been sat on"
-                 "nothing is carved into it, which is strange")
+                 "a bench, made to be sat on"
+                 "names are carved into it, inviting your own")
    ("fountain"   "a fountain runs with nobody to hear it"
                  "the water goes up as fast as it comes down"
                  "there is money in the bottom, and it is not pennies")
-   ("star"       "a star, at ankle height"
-                 "it does not move when you do"
-                 "the floor is a sky here, briefly")
-   ("stair"      "a stair, and it goes up into the dark"
+   ("star"       "a star misplaced from the outer void levitates here at ankle height"
+                 "is it hot? you dare not touch and see"
+                 "you thought the stars were merely far away, but some it seems are truly small")
+   ("stair"      "a Stair to the Next Level. watch your step"
                  "the steps are worn hollow in the middle"
-                 "it is colder on the stair than off it")
-   ("pennies"    "copper, gone green at the rims"
-                 "somebody counted these out and left them"
-                 "they have been here longer than you have"
-                 "warm, which is the strange part")
-   ("rat"        "a rat, and it has seen worse than you"
-                 "it does not hurry")
-   ("lanternfly" "a lanternfly, spotted and slow"
+                 "the chill on the steps defies narration")
+   ("pennies"    "copper stamped by time with verdigris"
+                 "how many counted these pennies in times past? what's one more banker to eternity"
+                 "this particular number of pennies is eternal"
+                 "the pennies bear the warm residual of another thumb's eager tallying")
+   ("rat"        "a rat, it looks diseased"
+                 "a feral rat, its skin aboil with fungating neoplasms"
+                 "a feral rat, its tail a tentacle of muscle over linked bone, gleaming"
+                 "it meets your eye and does not hurrtd")
+   ("lanternfly" "a lanternfly, brown black red and white."
                  "it lands on you as though you were furniture")
-   ("gnome"      "a gnome: a worm the length of your arm"
+   ("gnome"      "the gnomes of this land have grown verminous"
+                 "a worm the length of your arm, you feel bad for it"
                  "it goes on longer than it looks")
-   ("goblin"     "a goblin, in something it took off someone"
-                 "it is working out whether you are worth it")
-   ("hobgoblin"  "a hobgoblin, and it is not working anything out"
-                 "bigger than the door it came through")
-   ("d4"         "a d4, which lands wrong whatever it does"
-                 "it is the one that hurts to stand on")
-   ("d6"         "a d6, honest and unremarkable"
+   ("goblin"     "a goblin wearing someone's stolen work uniform"
+                 "it's working really hard at its job and it wants you to know that")
+   ("hobgoblin"  "it's like a goblin but more of a team player"
+                 "earned every ounce of its success")
+   ("d4"         "a d4, a hedged bet"
+                 "does it like being the minimum?"
+                 "four tetrahedral tips gleam menacingly")
+   ("d6"         "a d6, a square deal"
                  "the pips are worn smooth on the six")
-   ("d8"         "a d8, turning to show you every face"
+   ("d8"         "a d8, it's somehow six yet more"
                  "it has settled on nothing")
-   ("d12"        "a d12, with more faces than it has any use for"
+   ("d12"        "a d12, with more faces than meanings"
                  "it rolls a long way")
-   ("d20"        "a d20, and it knows what it is for"
-                 "it is waiting on the one number")
-   ("triangle"   "a triangle, and it has made its mind up"
-                 "three sides and no argument")
-   ("square"     "a square, sat exactly where it is"
-                 "it will not be moved a hair")
-   ("hexagon"    "a hexagon, eyed the whole way round"
-                 "every eye is on you, which is the point of it"))
+   ("d20"        "a d20, waiting for a natural"
+                 "it's waiting for one number")
+   ("triangle"   "a triangle"
+                 "arguably the first shape"
+                 "its three angles always add up to 180 degrees")
+   ("square"     "a square"
+                 "arguably the first or second shape")
+   ("hexagon"    "a hexagon"
+                 "it sees you with seven eyes"))
 
  ; a name's lines, and the one it says this time
  (lines-of nm)

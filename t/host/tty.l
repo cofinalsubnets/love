@@ -77,8 +77,9 @@
     (has? <a "\e[?1049h")                                   ; the alternate screen
     ("the tower stands" = snip (rowtx <>a 0) 0 16)           ; the note, no turn taken
     ("the garden" = snip (rowtx <>a 19) 0 10)                ; the bar, on row 19 of 20
-    (at <>a)                                                 ; and you stand on the floor
     (has? <a "you leave the tower"))                         ; q leaves
+ ; (the opening sign covers most of the floor, so where you stand is asked of the
+ ; run below, once a key has taken the sign down)
 
 ; --- ..and a turn spends the note. the boot message stands until the first one, so a
 ;     blank row 0 is the climb saying it read a key -- nothing else here can say it
