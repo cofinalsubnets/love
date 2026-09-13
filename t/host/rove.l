@@ -150,7 +150,7 @@
    _ (climb ())
    _ (test (2 = g 'lvl) (tablet? (g 'her)) !(kind 'table))
    _ (climb ())
-   _ (test (3 = g 'lvl) (tablet? (g 'her)))
+   _ (test (3 = g 'lvl) (tablet? (g 'her)) (kind 'mirror) (kind 'fountain))
    _ (climb ())
  (test (circle? g) !(g 'her)))
 
@@ -199,19 +199,109 @@
 (: d <(delve 60 20 (wheel 11) (plan 2))
  (test (2 = tally (filter (i \ 2 = dat d (i % 60) (i // 60)) ^(60 * 20)))))
 
-; a car reaches you: ten off the bar, the horn asked for twice, and the car turned back;
-; walking into one is the same hurt. it is never struck.
+; a car reaches you: ten off the bar, the horn asked for twice, you a step aside and the
+; car still headed the way it was; walking into one is the same hurt. it is never struck.
 (: g (hand-g ())
    c (car-new 2 1 -1 0 196)
    _ (pin g 'ms [c])
    _ (crawl-turn g 46)                                  ; a turn passed: the car comes
    _ (test (30 = g 'p 'hp) (find (g 'msg) "car" 0) (elem 'horn (g 'sfx))
-           (1 = c 'dx) ("►" = c 'gl) (2 = c 'x))         ; ..and it is headed back, from beside you
+           (-1 = c 'dx) ("◄" = c 'gl) (2 = c 'x)          ; ..and it is where it was, still headed your way
+           (1 = g 'p 'x) (2 = g 'p 'y))                  ; you are off its line, the one way you could be
    _ (pin g 'sfx ())
-   _ (car-head c -1 0)
-   _ (pins c 'x 2 'y 1)
+   _ (pins (g 'p) 'x 1 'y 1)
    _ (crawl-turn g [1 0])                               ; you walk into it
  (test (20 <= g 'p 'hp && g 'p 'hp <= 22) (elem 'horn (g 'sfx)) (99 = c 'hp) (1 = g 'p 'x)))
+
+; a car turns only at a corner -- the lane beside it is not one -- and goes off the map
+; where its road does, to come in again at a gate, headed in
+(: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms ()}
+   _ (each ^9 (x \ dput hd x 2 1))                     ; a road across, off the map both ends
+   _ (each ^5 (y \ dput hd 4 y 1))                     ; ..and one along, crossing it
+   _ (each '((0 2) (8 2) (4 0) (4 4)) (c \ dput hd <c <>c 6))
+   g {'d hd 'lvl 2 'tn 0 'sb {(wheel 5)} 'p {'x 1 'y 3 'gl 64 'hue 228 'hp 40 'mx 40 'penny 0}
+      'ms () 'loot (tablet 0) 'msg "" 'over 0 'gates '((0 2 1 0) (8 2 -1 0) (4 0 0 1) (4 4 0 -1))}
+   c (car-new 6 2 1 0 196)
+   _ (pin g 'ms [c])
+   _ (test !(corner? hd 2 2 0 -1) (corner? hd 4 2 0 -1) (corner? hd 4 2 0 1)
+           !(open? hd 8 2) (lit? hd 8 2) (road? hd 8 2))
+   _ (crawl-turn g 46)                                  ; three cells: 7, 8, and off
+ (test (6 = dat hd (c 'x) (c 'y))                      ; it is at a gate
+       (road? hd (c 'x + c 'dx) (c 'y + c 'dy))))      ; ..headed in
+
+; she says the floor's page: the middle's is not the garden's
+(: g (hand-g ())
+   _ (pin g 'lvl 2)
+   _ (pin g 'her {'x 2 'y 1 'gl "x" 'hue 1})
+   _ (crawl-turn g [1 0])
+ (test (= >(g 'sign) (her-lines 2)) !(= (her-lines 1) (her-lines 2)) (= (her-lines 1) (her-lines 9))))
+
+; a line wider than the screen is reflowed at its words, and the box still fits it
+(: ln "the quick brown fox jumps over the lazy dog and keeps going past the edge of the screen"
+   row (30 (\ t (t + ".")) "")
+   f (: (go i acc) (i < 8 ? (go (i + 1) (acc + (0 < i ? "\r\n" "") + row)) acc) (go 0 ""))
+   out (sign-over f "t" [ln] 0 8 30)
+   (bare s) (: (go i acc) (? (i >= #s) acc
+                             (27 = s i) (go (1 + find-m s i) acc)
+                             (go (i + 1) (acc + string (s i))))
+               (go 0 ""))
+   (find-m s i) (109 = s i ? i (find-m s (i + 1)))
+   rs (split "\r\n" out)
+ (test (8 = #rs) (all (r \ #(bare r) <= 30) rs)
+       (find out "the quick brown" 0) (find out "screen" 0)))
+
+; glass is looked through and not walked: the lantern reaches past it, a stride does not
+(: g (hand-g ())
+   _ (dput (g 'd) 4 2 6)
+   _ (pins (g 'p) 'x 3 'y 2)
+   _ (crawl-turn g [1 0])
+ (test (3 = g 'p 'x) (find (g 'msg) "nothing is there" 0)
+       (clear? (g 'd) 3 2 5 2) (peep (g 'vis) (5 + 9 * 2) 0) !(open? (g 'd) 4 2) (lit? (g 'd) 4 2)))
+
+; --- heaven: platforms in the void, every one a checkered rhombus with a stairway to the
+; last, the void glass all round -- looked across and never entered -- and both stairs on
+; a platform; every open cell reachable from where you arrive
+(: p (sky 60 20 (wheel 11))
+   d <p w 60 h 20
+   rms (d 'rooms)
+   (t x y) (dat d x y)
+   (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
+   flood (: mk (cask (w * h))
+            (go stk n) (? !stk n
+                        (: xy <stk x <xy y <>xy i (x + w * y)
+                           (? (|| !(open? d x y) (peep mk i 0)) (go >stk n)
+                            (: _ (pin mk i 1)
+                               (go (cat [[(x + 1) y] [(x - 1) y] [x (y + 1)] [x (y - 1)]] >stk)
+                                   (n + 1))))))
+            (go [(d 'in)] 0))
+   (count k) (tally (filter (i \ k = t (i % w) (i // w)) ^(w * h)))
+   opens (tally (filter (i \ open? d (i % w) (i // w)) ^(w * h)))
+   stairs (filter (i \ 2 = t (i % w) (i // w)) ^(w * h))
+ (test (1 < #rms)
+       (all (rm \ (: m (mid rm) (elem (t <m <>m) '(8 2)))) rms)          ; a platform under each middle
+       (any (rm \ 6 = t (peep rm 0 0) (peep rm 1 0)) rms)                 ; ..and void at a corner: a rhombus, not a block
+       (2 = #stairs) (flood = opens) (0 < count 7) (0 < count 6) (0 = count 0)
+       (all (i \ lit? d (i % w) (i // w)) ^(w * h))))                     ; all of it looked through
+
+; a mirror lets you out beside another, and alone it keeps you
+(: g (hand-g ())
+   _ (pin (g 'loot) (2 + 9 * 1) '(mirror))
+   _ (crawl-turn g [1 0])
+   _ (test (1 = g 'p 'x) (find (g 'msg) "keeps you" 0))
+   _ (pin (g 'loot) (6 + 9 * 2) '(mirror))
+   _ (crawl-turn g [1 0])
+ (test (find (g 'msg) "takes you" 0)
+       (|(g 'p 'x - 6) <= 1) (|(g 'p 'y - 2) <= 1) !(6 = g 'p 'x && 2 = g 'p 'y)))
+
+; the platforms and the steps say what they are
+(: g (hand-g ())
+   _ (dput (g 'd) 2 1 8)
+   _ (dput (g 'd) 3 1 7)
+   _ (crawl-turn g [1 0])
+   m1 (g 'msg)
+   _ (crawl-turn g [1 0])
+ (test (find m1 "squares" 0 || find m1 "stars" 0 || find m1 "checkers" 0)
+       (find (g 'msg) "steps" 0)))
 
 ; the horn the game asked for is two voices in the song, at the write head, and the
 ; asking is spent by it
@@ -370,7 +460,7 @@
    _ (dput (g 'd) 1 1 2)
    _ (crawl-turn g 60)
  (test (2 = g 'lvl) (find (g 'msg) "the middle" 0) (find (g 'msg) "get the" 0)
-         (elem (dat (g 'd) (g 'p 'x) (g 'p 'y)) '(1 4))   ; standing on the fresh floor, or in a building
+         (elem (dat (g 'd) (g 'p 'x) (g 'p 'y)) '(1 4 8))   ; standing on the fresh floor, in a building, on a platform
          (60 = g 'p 'mx) (60 = g 'p 'hp)         ; a climb is twenty more of the bar
          (tablet? (g 'loot))))
 
