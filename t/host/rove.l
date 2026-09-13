@@ -313,11 +313,19 @@
        (all (v \ 4000 < v 0) (s 'vs))                  ; both end past the head
        (!(= (<(s 'vs) 0) ((s 'vs) 1 0)))))             ; ..and not together: one, then the other
 
-; the shelf opens a box rather than saying a line
+; the shelf opens its book a page at a time: a key turns the page and takes no step, and
+; the key after the last page closes it
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
    _ (crawl-turn g [1 0])
- (test (1 = g 'p 'x) (two? (g 'sign)) (find <(g 'sign) "bookshelf" 0)))
+   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "bookshelf" 0)
+           (find (last (g 'sign)) "1 of 6" 0) (5 = #(g 'pages)))
+   _ (crawl-turn g [1 0])
+   _ (test (1 = g 'p 'x) (two? (g 'sign)) (find (last (g 'sign)) "2 of 6" 0))
+   _ (each ^4 (_ \ crawl-turn g 46))
+   _ (test (two? (g 'sign)) (find (last (g 'sign)) "6 of 6" 0) !(g 'pages))
+   _ (crawl-turn g 46)
+ (test !(g 'sign) (1 = g 'p 'x)))
 
 ; pennies weigh in, and they are the only thing on the floor
 (: g (hand-g ())

@@ -295,7 +295,8 @@
  ; what lies on a cell besides pennies: furniture, which stands there to be bumped and
  ; says one thing. glyph, pen lit, pen dim, the line. a glyph here is a string, so
  ; the page's own letters serve (quay folds them onto its face).
- ; ..and a fifth thing where there is one: the lines of a box the piece opens instead
+ ; ..and a fifth thing where there is one: a book the piece opens, its title then its
+ ; pages, a stanza to a page
  feat-book {'table ["π" 240 236 "an overgrown stone table stained with dark liquid"]
             'throne ["H" 130 94 "a large tree stump carved into an ornate throne sits empty"]
             'chair ["h" 137 94 "a chair, pushed back from nothing"]
@@ -303,18 +304,73 @@
             'crate ["x" 136 94 "a crate. it has been opened and closed again"]
             'fountain ["☼" 226 136 "a fountain, and what it throws up and catches is stars"]
             'mirror ["@" 93 54 "a mirror, and the one in it is not quite you"]
-            'shelf ["≡" 180 137 "a bookshelf"
-                    '("a bookshelf, and every book on it is the same book."
-                     ""
-                     "you take one down. the pages are blank."
-                     ""
-                     "-- any key --")]}
+            'shelf ["≡" 180 137 "a bookshelf, and one book on it: Muse"
+                    '("Muse"
+                      ("by Donald Revell"
+                       ""
+                       "You are somewhere very close to the porch."
+                       "The evening makes crazy sounds, but makes sense."
+                       "The unpackaged, greeny neighborhood settles"
+                       "into true night far from the expressway"
+                       "and farther from the calligrams of the downtown."
+                       "The visits to the paintings failed me."
+                       "The new music faded underground with the last trains,"
+                       "with stripped hours and many lovers.")
+                      ("I did not imagine a stronger life,"
+                       "listening for your step on the porch step,"
+                       "imagining your dress a size too large"
+                       "billowing the obscene print of summer."
+                       "Anything composed is an obscenity:"
+                       "a painter's phlox in vertical brushstrokes,"
+                       "a dressmaker's parody of stupid earth,"
+                       "a radio's jazz clawed by cats.")
+                      ("A stronger life exists but is no one's friend."
+                       "She lives in the crook of the expressway"
+                       "in a high building. She tucks her hair behind"
+                       "her ears and carries a clear drink to the window."
+                       "No one ever paints her portrait. Her name"
+                       "is ugly and can't be put to music."
+                       "And at her neck and ankles a long dress"
+                       "blackens calligrams I read with my fingers.")
+                      ("The truth of those black messages is cold."
+                       "The imagination has no power over life,"
+                       "and between inspirations that are lovers"
+                       "and inspirations that are a kind of machinery"
+                       "repainted every year but irreparable"
+                       "the only thing actual at day's end"
+                       "is night's uncomposed, leafy tunelessness."
+                       "I will not open the door when you arrive.")
+                      ("I will not call my lost loves to wish them well."
+                       "In my house in darkness behind the porch"
+                       "I pound the walls and make an animal noise"
+                       "as the neighborhood rises and runs en masse"
+                       "onto the expressway to be destroyed"
+                       "or dragged downtown to touch the calligrams"
+                       "and feel nothing that is green, made, or harmonious."
+                       "It is loveless time, the neck and ankles of time.")
+                      ("I need more loneliness than alone is,"
+                       "the deep, uninspired dark of America"
+                       "where sexy lawns, the phlox, the print dresses"
+                       "and hymn stanzas like tiny, circular railroads"
+                       "ask for no response and no love"
+                       "but a clear drink in the solitary evening"
+                       "when no muse visits, when crazy animal sounds"
+                       "make sense and I read the truth with my hands."))]}
  (feat-of k) (peep feat-book k '("?" 250 244 ""))
  (feat-face k) (: r (feat-of k) [(r 0) (r 1) (r 2)])
  (feat-line k) ((feat-of k) 3)
  (feat-lines k) (peep (feat-of k) 4 ())
- (bump-feat g k) (: ls (feat-lines k)
-                    (two? ls ? (pin g 'sign (feat-line k . ls)) (note g (feat-line k))))
+ ; a piece with a book opens it a page at a time: every page is a sign under the book's
+ ; title, and the key that takes one down puts the next up. the foot is read here and
+ ; not in the words below: a lambda reads a value bound above it, never one below
+ page-foot "-- ~ of ~, any key --"
+ (bump-feat g k) (: bk (feat-lines k)
+                    _ (note g (feat-line k))
+                    (two? bk ?
+                     (: n #>bk
+                        (page i) (<bk . ((>bk i) + ["" (fill page-foot [(i + 1) n])]))
+                        pgs (map page ^n)
+                        (pins g 'sign <pgs 'pages >pgs))))
  ; a pile of pennies is bright and only under the lantern; furniture is remembered
  (loot-face it lit) (<it @ 'penny '(36 172) (wear (feat-face <it) lit))
 
@@ -791,19 +847,15 @@
              "\"Ye'd blanch to ken their deepwrought burrowings.\" "
              "You blink and she's gone."
              "-- any key --")
-            ("A wizened gnome sits on the kerb, out of the traffic."
-             ""
-             "\"They drive as if the streets were theirs.\" She shrugs. \"Well. They are.\""
-             ""
-             "\"Nothing here brakes for a climber. Mind the crossings.\""
-             ""
+            ("A wizened gnome leans on a lamppost."
+             "\"Ash and metal oxen rule the pathways of this poisoned land.\""
+             "\"Even the gnomes of this unhallowed district grew verminous.\""
+             "She snatches a squirming-by gnome and slurps it down in one heroic swallow."
+             "\"Disgusting.\" Orozcalia sublimates into an oily mephitis and vanishes."
              "-- any key --")
-            ("A wizened gnome stands at the platform's edge, looking down."
-             ""
-             "\"Ye can see the garden from here, if ye lean far enough.\""
-             ""
-             "\"The mirrors go somewhere. I never asked where.\""
-             ""
+            ("\"My tongue won't shape the sound these poor shapes call this dirtened nowhere.\""
+             "Orozcalia signs a cantrip of warding."
+             "\"Mere quantities. Hurry on, get on now.\""
              "-- any key --"))
  (her-lines lvl) (peep her-book (lvl - 1) <her-book)
  (her-at? g x y) (: h (g 'her) (h && x = h 'x && y = h 'y))
@@ -817,7 +869,7 @@
  (stock g) (:
    d (g 'd) sb (g 'sb) lvl (g 'lvl) loot {} ks (mob-set lvl)
    (drop-at rm) [(peep rm 0 0 + roll sb (peep rm 2 1)) (peep rm 1 0 + roll sb (peep rm 3 1))]
-   (ground? x y) (: t (dat d x y) (t = 1 || t = 4 || t = 8))
+   (ground? x y) (elem (dat d x y) '(1 4 8))
    (mobs rm n acc) (? (0 < n)
                     (: xy (drop-at rm) x <xy y <>xy
                        (? (ground? x y &&
@@ -1146,6 +1198,8 @@
    ; a sign standing is what the key buys: it comes down, and the turn is not taken
    sg (g 'sign)
    _ (sg && pin g 'sign ())
+   ; ..unless it was a page and the book has another: that one goes up in its place
+   _ (? (sg && two? (g 'pages)) (pins g 'sign <(g 'pages) 'pages >(g 'pages)))
    _ (? (sg || g 'over || k = 46) ()
         (circle? g) (two? k ? (circle-stride g k))
         (two? k) (stride g k, mend g)
