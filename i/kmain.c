@@ -154,19 +154,22 @@ struct k_source {
        *state; };
 
 // a seat with no keyboard interrupt (wasm) is asked to go and look, here, whenever a
-// task asks after a key: a guest that never idles still hears one. metal has nothing to do.
-__attribute__((weak)) void k_kb_sync(void) { }
+// task asks after a key -- a guest that never idles still hears one -- and told the
+// room the queue has, so a burst waits in the seat's own buffer rather than falling
+// out of this one. metal has nothing to do.
+__attribute__((weak)) void k_kb_sync(int room) { (void) room; }
+void k_kb_poll(void) { k_kb_sync(15 - ((kkb.qt - kkb.qh) & 15)); }
 
 // slot 0: PS/2 keyboard. drains what the interrupt queued and answers 0 when there is
 // nothing -- never the end, the kb queue being endless on bare metal. the scheduler owns
 // the wait.
 static intptr_t kb_readn(int fd, unsigned char *dst, uintptr_t n) {
-  k_kb_sync();
+  k_kb_poll();
   uintptr_t k = 0;
   for (int b; k < n && (b = kqpop()) >= 0; ) dst[k++] = (unsigned char) b;
   return (intptr_t) k; }
 
-static bool kb_ready(int fd) { return k_kb_sync(), kkb.qh != kkb.qt; }
+static bool kb_ready(int fd) { return k_kb_poll(), kkb.qh != kkb.qt; }
 
 // Slot 1: serial console. Output goes to the framebuffer when one is
 // present and is always mirrored to COM1. Flush triggers a frame draw.
