@@ -379,9 +379,12 @@
   (falling? (take 20 vs))                        ; it only falls at the start
   (rising? (rev (take 20 (rev vs))))))         ; and only rises at the end
 
-; the dial itself: play.l's i-sin at one end, its i-sqr at the other, crossfaded. the
-; two share a phase -- a square built on the half of the period has the sine's sign --
-; so they cross rather than cancel, which is the law worth holding here.
+; the dial itself: play.l's i-sin at one end, its i-sqr at the other, and the triangle
+; between them -- in three STEPS, not a slide, because a crossfade builds both of its
+; shapes and a voice is paid for by the operation (a/rove/slop.l says the numbers). the
+; three share a phase -- a square built on the half of the period has the sine's sign --
+; so a step lands on the same side of zero as the one before it rather than against it,
+; which is the law worth holding here whether they cross or jump.
 (: twopi 6.283185307179586
    (w ph m) (slop-song-wave ph 1.0 m)            ; f of 1, so the phase IS the argument
    (near a b) (|(a - b) < 0.000001)
@@ -400,9 +403,13 @@
   (near (w 0.0 0.5) 0.0) (near (w 0.25 0.5) 1.0)
   (near (w 0.5 0.5) 0.0) (near (w 0.75 0.5) -1.0)
   (near (w 0.125 0.5) 0.5)                       ; straight between the corners
-  ; each half is a plain crossfade, so a quarter turn is the mean of the two it is between
-  (all (p \ (near (w p 0.25) (((w p 0.0) + (w p 0.5)) / 2.0))) phs)
-  (all (p \ (near (w p 0.75) (((w p 0.5) + (w p 1.0)) / 2.0))) phs)
+  ; a step, not a slide: a quarter turn is the shape its third of the dial names, whole
+  ; -- the sine below a third, the triangle to two thirds, the square above
+  (all (p \ (near (w p 0.25) (w p 0.0))) phs)
+  (all (p \ (near (w p 0.6) (w p 0.5))) phs)
+  (all (p \ (near (w p 0.75) (w p 1.0))) phs)
+  ; ..and the steps really are three different shapes, not one repeated
+  !(near (w 0.125 0.0) (w 0.125 0.5)) !(near (w 0.125 0.5) (w 0.125 1.0))
   ; and nothing anywhere on the dial leaves the rails
   (all (p \ (all (m \ (-1.0001 <= (w p m) <= 1.0001)) [0.0 0.25 0.5 0.75 1.0])) phs)))
 

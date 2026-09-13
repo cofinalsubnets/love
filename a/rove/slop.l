@@ -360,20 +360,19 @@
                  (((u < 0.25) * v)
                   + (((u >= 0.25) * (u < 0.75)) * (2.0 - v))
                   + ((u >= 0.75) * (v - 4.0))))
- ; the dial: sine to triangle over the first half of it, triangle to square over the
- ; second. straight from a sine to a square is a wide jump to cross in one crossfade;
- ; the triangle sits between them in harmonic content and gives the ear a waypoint, and
- ; the ramp is long enough now to spend real time on each leg. each half is a plain
- ; crossfade, so the three shapes land exact at 0, a half and 1. m is per-voice and
- ; scalar, so the branch is taken once and not per sample.
+ ; the dial, in three steps: sine, then triangle, then square. straight from a sine to a
+ ; square is a wide jump and the triangle sits between them in harmonic content, so the
+ ; waypoint stays -- it is the SLIDE between them that goes. a crossfade builds BOTH of
+ ; its shapes and mixes them, and a voice here is paid for by the OPERATION rather than
+ ; by the sample: each tray op lays a fresh chunk-long array, and the walk carries a
+ ; dozen voices at once where the tower carries five. on the wasm seat, twenty voices a
+ ; chunk cost 26.75 ms crossfaded against 15.25 for one plain shape, out of the 33 ms a
+ ; chunk IS. the hardening is what the dial says, and a step still says it.
+ ; m is per-voice and scalar, so the arm is taken once and not per sample.
  (slop-song-wave tp f m)
-  (: u (tp * f % 1.0)
-     tr (song-tri u)
-   (? (m < 0.5) (: a (m * 2.0)
-                 (((sin (tp * (twopi * f))) * (1.0 - a)) + (tr * a)))
-      (: a ((m - 0.5) * 2.0)
-         q (((u < 0.5) * 2.0) - 1.0)
-       ((tr * (1.0 - a)) + (q * a)))))
+  (? (m < 0.34) (sin (tp * (twopi * f)))
+     (m < 0.67) (song-tri (tp * f % 1.0))
+     (: u (tp * f % 1.0) (((u < 0.5) * 2.0) - 1.0)))
 
  ; a voice m of the way along that dial, at the volume the dip puts there. built here
  ; rather than taken off harp's mkvoice because an instrument there is a name, and this
@@ -385,9 +384,12 @@
      amp (vnum v 'gain 1.0 * vol)
      pn  (vnum v 'pan 0.5)
      end (st + (int (dur * rate)) + 2)
+     ; no (t >= 0.0) gate: tp is already zero for every frame before the onset, and venv
+     ; is zero at zero -- so the envelope has answered that question by the time a mask
+     ; could ask it, and a mask is two more tray ops a voice a chunk
      fn  (\ ix (: t  ((ix - st) * (1.0 / rate))
                   tp (t * (t > 0.0))
-                (slop-song-wave tp f m * venv tp dur * (t >= 0.0) * (t < dur))))
+                (slop-song-wave tp f m * venv tp dur * (t < dur))))
    [end fn (amp * (1.0 - pn)) (amp * pn)])
  (slop-song-new tune h) {'tune tune 'h h 'fpos 0 'cyc 0 'next 0 'vs ()}
  ; one cycle's onsets as voices, the cycle starting at frame st and spc frames long.
