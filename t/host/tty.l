@@ -194,7 +194,9 @@
     ((9 . 23) = at ss)                                       ; one square up, and on the road
     (46 = chat ss (9 * 40 + 24))                             ; the road is three columns wide
     (has? (rowtx ss 11) "you turn back")                     ; the bar, on the last row of 12
-    (has? stx "you turn back, 1 press in"))                  ; j and l spent nothing
+    (has? stx "you turn back, 1 press in\r\n"))              ; j and l spent nothing -- and the
+                                                            ; line ends, so a prompt after it
+                                                            ; starts a row of its own
 
 ; --- the story: a level file is a fixed map, so this one place IS a law ---
  d (run "b/love story" ":q\r" 14 60)

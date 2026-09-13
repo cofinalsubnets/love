@@ -46,17 +46,23 @@ void k_tick_sync(void) {
   kticks += (now - last) / 10;
   last += (now - last) / 10 * 10; }
 
-// the idle: sleep one tick or until a key, then drain the keys the worker queued while
-// we were away -- read on fd 0 never blocks here, it answers what is there, and the
-// worker skips the sleep while its ring holds more. eight at a time: kmain's queue holds
-// sixteen and the reader drains it between idles, so a pasted line arrives whole where
-// a uart would have dropped it.
+// no keyboard interrupt either: the keys the worker queued are taken when a task asks
+// after one (kmain's k_kb_sync) and after every idle -- read on fd 0 never blocks here, it
+// answers what is there. eight at a time: kmain's queue holds sixteen and the reader
+// drains it between asks, so a pasted line arrives whole where a uart would have dropped
+// it. asking is the one way a guest that never idles -- a frame loop the horn paces --
+// hears a key at all.
+void k_kb_sync(void) {
+  unsigned char b[8];
+  long n = __ai_sys(hc_read, 0, (long) b, (long) sizeof b, 0, 0, 0);
+  for (long i = 0; i < n; i++) kq(b[i]); }
+
+// the idle: sleep one tick or until a key, then take the keys that came while we were
+// away; the worker skips the sleep while its ring holds more
 void k_idle(void) {
   long ts[2] = { 0, 10 * 1000000 };
-  unsigned char b[8];
   __ai_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
-  long n = __ai_sys(hc_read, 0, (long) b, (long) sizeof b, 0, 0, 0);
-  for (long i = 0; i < n; i++) kq(b[i]);
+  k_kb_sync();
   k_tick_sync(); }
 
 // the reset: the worker unwinds the module and boots it again

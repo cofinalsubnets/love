@@ -506,8 +506,8 @@
                  _ (flush out)
                  _ (drain-keys ())
                  _ (raw 0)
-                 (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in")
-                                         ("you turn back, " + presses (g 'spent) + " in")),
+                 (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in\n")
+                                         ("you turn back, " + presses (g 'spent) + " in\n")),
                   0))
  slop-usage "usage: love slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
  ; the two optional words, in either order: a number is pennies and anything else is
