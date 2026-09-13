@@ -305,7 +305,12 @@
  hedge-ramp [70 34 34 28 28 22 22 22]
  lawn-ramp [118 112 76 70 40 34 28 22]
  dirt-ramp [180 137 137 136 94 94 95 58]
- garden-greens {28 'hedge 137 'dirt 34 'lawn 71 'lawn}
+ ; ..and the middle's stone the same way, walls and flags each on a band of greys. one
+ ; frame serves a whole floor: hedge and lawn, or wall and flag, read off the same
+ ; wave, so the bands run through both and nothing is mottled
+ stone-ramp [252 250 248 247 246 245 244 243]
+ flag-ramp [250 249 248 247 246 245 244 243]
+ skin-kinds {28 'hedge 137 'dirt 34 'lawn 71 'lawn 246 'stone 245 'flag}
  ; the vale's last field is one frame of the walk's shimmer too, held still, and as the
  ; ring closes the grass past a front goes over to slop's pink. these ramps run pale to
  ; deep rather than looping: a still frame never wraps. span is the band of skin they
@@ -465,10 +470,12 @@
    ; front is () until there is pink anywhere, so the walk never pays for this
    fr (peep d 'front ()) fc (peep d 'fire '(0 0)) fcx <fc fcy <>fc
    (pinkish? x y) (fr && (: dx (x - fcx) dy (y - fcy) (fr < dx * dx + 4 * dy * dy)))
-   (shade gh x y) ((tablet? skin ? (garden-greens <>gh) ()) @- gh
-                   'hedge [<gh (ramp-pen hedge-ramp (peep (skin 'hedge) [y x] 0.0))]
+   (shade gh x y) ((tablet? skin ? (skin-kinds <>gh) ()) @- gh
+                   'hedge [<gh (ramp-pen hedge-ramp (peep (skin 'ground) [y x] 0.0))]
                    'lawn [<gh (ramp-pen (pinkish? x y ? pink-ramp lawn-ramp) (peep (skin 'ground) [y x] 0.0))]
-                   'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))])
+                   'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))]
+                   'stone [<gh (ramp-pen stone-ramp (peep (skin 'ground) [y x] 0.0))]
+                   'flag [<gh (ramp-pen flag-ramp (peep (skin 'ground) [y x] 0.0))])
    tint (peep d 'tint ())                             ; heaven's, a colour to a platform
    ov (peep d 'over ())                               ; the vale's: a face laid over a lit cell, or ()
    ; the screen's rows of a floor taller than it: from the view's top, and a row past
@@ -559,10 +566,10 @@
  ; the sign the tower opens on; a {brace} is the token's pen. kept short: twenty rows
  ; leave eighteen for the map, and a taller box is one with its foot cut off.
  sign-ttl "the tower"
- sign-open '("you are @, at the foot of the tower."
+ sign-open '("is this the tower?  it must be.  where else could the tower be?"
              ""
              "move     h j k l    or the arrow keys"
-             "         y u b n    for the corners"
+             "         y u b n    for diagonalss"
              "wait     .          a turn passes, nothing mends"
              "climb    < or enter while you stand on a stair"
              "leave    q          or esc"
@@ -681,11 +688,11 @@
  ; says another. a name with no row here is silent.
  flavour
  '(("tuft"       "the grass here has gone to seed"
-                 "a beetle leaves the way you came"
-                 "something slept here and is gone")
-   ("grass"      "the grass comes up past your ankles"
-                 "seed heads stick to your legs"
-                 "it is wet down where the light does not get")
+                 "a rat discorporates a fat lanternfly nymph"
+                 "lanternfly larvae swarm the carcass of a rat")
+   ("grass"      "the brush tips of the grass tickle below your knees"
+                 "seed clusters cling tenaciously to your legs"
+                 "the grass canopy of blades emits the smell of earthen mildew")
    ("aster"      "an aster, pink and past its best"
                  "the petals are going brown at the edge"
                  "it is facing the way the light was")
@@ -821,10 +828,12 @@
  ; and a glyph's tail bytes belong to the cell its lead began -- k is the leads so far.
  ; a painted row ends on \e[K, an escape with no m, so the skip stops at the end too
  (cell-of c k) (tail? c ? (k - 1) k)
+ ; ..and a row shorter than n cells -- a blank one beside a small room -- is padded
+ ; out to n, so what is laid after it lands where it was measured to
  (cells-cut r n) (:- (go 0 0 "")
                   (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                   (go i k acc)
-                   (i >= #r ? acc
+                   (i >= #r ? (acc + ((n - k) (\ t (t + " ")) ""))
                     (: c (r i)
                        (? (n <= cell-of c k) acc
                           (c = 27) (past i @ e (go e k (acc + snip r i e)))
@@ -846,8 +855,9 @@
  (sign-over f ttl ls a n w) (:- (go 0 "")
    rs (split "\r\n" f)
    wr (cite 'story 'wrap)
-   ; ..to a cell short of the screen's edge either side, so no row of it runs full
-   (flow l) (wr && (w - 6) < vlen l ? (wr l (w - 6)) [l])
+   ; ..to a few cells short of the screen's edge either side, so no row of it runs
+   ; full and a word never sits against the frame
+   (flow l) (wr && (w - 10) < vlen l ? (wr l (w - 10)) [l])
    box (sign-box ttl (foldl (+) () (map flow ls)))
    ww (vlen <box)
    x0 (: q ((w - ww) // 2) (0 < q ? q 0))
@@ -1068,13 +1078,13 @@
  ; a floor wears its tier: the make it is built of, and the salt its litter is dealt
  ; from -- one draw, so the same seed strews the same floor
  (dress d lvl sb) (: _ (pins d 'th (peep themes (lvl - 1) th-heaven) 'sd (roll sb 1000000))
-                     (1 = lvl ? (: _ (wear-thin d sb)
-                                   _ (stream d sb)
-                                   ph (roll sb 1000 / 10.0)
-                                   ph2 (roll sb 1000 / 10.0)
-                                   (pin d 'skin {'hedge (ink-drift (d 'h) (d 'w) ph 0.0)
-                                                 'ground (ink-drift (d 'h) (d 'w) ph2 0.0)}))
-                          d))
+                     ; the garden and the middle each wear one still frame of the shimmer
+                     (skin _) (pin d 'skin {'ground (ink-drift (d 'h) (d 'w) (roll sb 1000 / 10.0) 0.0)})
+                     (? (1 = lvl) (: _ (wear-thin d sb)
+                                     _ (stream d sb)
+                                     (skin ()))
+                        (2 = lvl) (skin ())
+                        d))
 
  ; a fresh climb: the garden delved from the seed state, the climber at 'in
  (crawl-new w h st) (:
@@ -1407,7 +1417,7 @@
    _ (each ^(h - 1) (j \ (: y (h - 1 - j) mx (road-x cx y)
                             (? (cy + ry - 2 <= y)
                                (each ^9 (i \ (: x (mx - 4 + i)
-                                                (? (0 < x && x < w - 1 && 0 < y && y < h - 1)
+                                                (? (0 < x && x < w - 1 && 0 < y)
                                                    (dput d x y (|(x - mx) <= 2 ? 9 1))))))))))
    ; the fire on its dirt, and the stones about it, seven and a bare spot
    _ (fill-box (fx - 2) (fy - 1) 5 3 9)
@@ -1443,7 +1453,7 @@
    fx <(d 'fire) fy <>(d 'fire)
    ph (roll sb 1000 / 10.0)                            ; where in the drift it stopped
    sk (ink-drift h w ph 0.0)
-   _ (pin d 'skin {'ground sk 'hedge sk})
+   _ (pin d 'skin {'ground sk})
    loot {}
    _ (pin loot (fx + w * fy) '(fire))
    _ (each ^7 (k \ (: pt (oct-pt fx fy k) (pin loot (<pt + w * <>pt) ['stone (k + 1)]))))
@@ -1595,6 +1605,8 @@
  ; the climb keeps its own stage rather than cli's: stage blocks on a key, and a card
  ; with nothing coming out of it is a card that stops. the raising and the putting back
  ; are stage's, line for line; what is different is the wait in the middle.
+ repeat-gap 120                                         ; ms a held key's repeats are dropped for, after a turn
+ sign-gap 600                                           ; ..and while a sign stands
  (tower-run _) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)
@@ -1606,9 +1618,15 @@
              ; the wait IS the song: a chunk goes out at the speed the card plays it, so
              ; a loop that feeds one while no key is waiting keeps time without a rest.
              ; with no card it is a plain poll, and the tower is silent as it was.
-             (hold _) (? (cue? 0) ()
-                         (: _ (? sng (song-feed sng (song-vol g)) (rest 30))
-                            (hold ())))
+             ; ..and a key held down is not a key pressed again: the same key within a
+             ; short gap of the last turn is dropped, and a longer one while a sign
+             ; stands, so a held key cannot run through a scene's pages. a different
+             ; key passes at once. answers the key to turn on.
+             (hold t0 last gap) (? (cue? 0)
+                                   (: k (edkey in)
+                                      (k = last && (clock 0 - t0) < gap ? (hold t0 last gap) k))
+                                   (: _ (? sng (song-feed sng (song-vol g)) (rest 30))
+                                      (hold t0 last gap)))
              (turn k) (k @ (113 || 27 || -7) (pin g 'over 'fled)
                        -12 (crawl-turn g (tap-steer g (edtap ())))
                        (crawl-turn g (steer k)))
@@ -1619,16 +1637,16 @@
                             _ (each ^6 (k \ (pin d 'jolt (k % 2 = 0 ? 1 -1),
                                              say out (crawl-frame g), flush out, rest 80)))
                             (pin d 'jolt 0, pin g 'sign sg, pin g 'rumble ()))
-             (loop _) (? (g 'over) ()
-                         (: _ (say out (crawl-frame g), flush out)
-                            _ (hold ())
-                            _ (turn (edkey in))
-                            _ (? (g 'rumble) (rumble! ()))
-                            _ (? sng (song-tier sng g) ())
-                            (loop ())))
+             (loop last t0) (? (g 'over) ()
+                               (: _ (say out (crawl-frame g), flush out)
+                                  k (hold t0 last (g 'sign ? sign-gap repeat-gap))
+                                  _ (turn k)
+                                  _ (? (g 'rumble) (rumble! ()))
+                                  _ (? sng (song-tier sng g) ())
+                                  (loop k (clock 0))))
              _ (raw 1)
              _ (say out "\e[?1049h\e[?25l\e[2J")
-             _ (loop ())
+             _ (loop 0 0)
              ; an end shows its frame for a beat before the screen is given back
              _ (say out (crawl-frame g), flush out, rest 1200)
              ; ..and the card goes back before the walk asks for it

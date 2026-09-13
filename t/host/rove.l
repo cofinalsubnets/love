@@ -570,6 +570,7 @@
    door (d 'door)
  (test (circle? g) (4 = g 'lvl) (66 = h) (22 = d 'rows) ('walk = g 'phase) (-1 = circle-r g)
        (9 = t (g 'p 'x) (g 'p 'y)) (h - 2 = g 'p 'y)      ; you start on the road, at the foot
+       (any (x \ 9 = t x (h - 1)) ^w)                    ; ..and the road runs off the floor's last row
        (1 = t fx (fy + 3))                               ; grass about the fire
        (9 = t (fx + 1) fy) ('fire = <(g 'loot (fx + w * fy)))   ; the fire on its dirt
        (7 = #stones) (10 = t <spot <>spot)               ; seven stand; the eighth's place is lighter grass
@@ -694,9 +695,22 @@
        (find (rs 7) "#" 0) (find (rs 7) "\e[K" 0)         ; ..and a row of it cleared past its edge
        ; ..and a sign over the attic, eleven cells wide, is laid at the screen's width
        (: _ (enter g 'attic 2 3)
-          _ (pin g 'sign '("t" "a line of some length, laid whole across the box"))
+          _ (pin g 'sign '("t" "a line of some length, laid whole across the box" "" "" "" "" "" "" "" "" "" "" "and a foot"))
           f3 (crawl-frame g)
-          (find f3 "a line of some length, laid whole across the box" 0))))
+          (bare s) (: (go i acc) (? (i >= #s) acc
+                                    (27 = s i) (go (1 + find-m s i) acc)
+                                    (go (i + 1) (acc + string (s i))))
+                      (go 0 ""))
+          ; an escape ends at its first letter: \e[K as much as \e[..m
+          (letter? c) (? (65 <= c <= 90) 1 (97 <= c <= 122) 1 0)
+          (find-m s i) (i >= #s || letter? (s i) ? i (find-m s (i + 1)))
+          ; every row of the box starts at one column, over the room and over the blank
+          ; rows beside it alike
+          (find-l r i) (i >= #r || 124 = r i ? i (find-l r (i + 1)))
+          lefts (map (r \ find-l r 0) (filter (r \ find r "|" 0) (map bare (split "\r\n" f3))))
+          (&& (find f3 "a line of some length, laid whole across the box" 0)
+              (12 = #lefts)                              ; the box's twelve barred rows
+              (all (l \ l = <lefts) lefts)))))
 
 ; ..and the front itself, which is the whole of the grading law: past the corner of
 ; the board -- which is to say nowhere on it -- while there is no ring and while the
@@ -837,6 +851,24 @@
   (find f "the garden" 0) (find f "hp 40/40" 0)  ; the bar tells the tale
   (find f "\e[38;5;228m" 0)                      ; your hue, respecified on change
   (find f "\r\n" 0)))                            ; frames ride \r\n
+
+; the middle's stone is graded under one still frame of the shimmer, lit walls and
+; flags off the same wave -- and the garden's hedge and lawn read off one frame too
+(: g (crawl-new 60 20 (wheel 11))
+   _ (crawl-turn g 46)
+   gsk (g 'd 'skin)
+   _ (pins (g 'p) 'x <(g 'd 'stair) 'y <>(g 'd 'stair))
+   _ (crawl-turn g 60)
+   d (g 'd) n (60 * 20)
+   _ (each ^n (i \ pin (d 'seen) i 1))
+   _ (pin g 'vis (foldl (\ t i (pin t i 1)) {} ^n))
+   _ (pin g 'sign ())
+   f (crawl-frame g)
+   (pen n) ("\e[38;5;" + show n + "m")
+   greys (filter (n \ find f (pen n) 0) '(252 250 248 247 245 244 243))
+ (test (2 = g 'lvl) (tablet? (d 'skin)) !(= () (d 'skin 'ground)) !(d 'skin 'hedge)
+       (1 < #greys)                                    ; more than one grey on the walls: a grade, not a flat
+       (tablet? gsk) !(gsk 'hedge) !(= () (gsk 'ground))))   ; the garden: one frame, no second
 
 ; --- the sign covers the field, and does not eat it ---------------------------------
 ; sign-over lays a box over the middle rows of a frame. the rows it covers must still
