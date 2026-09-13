@@ -347,6 +347,8 @@
             'crate ["x" 136 94 "a crate. it has been opened and closed again"]
             'fountain ["☼" 226 136 "a fountain, and what it throws up and catches is stars"]
             'fire ["^" 208 130 "a fire, and it has been burning a while"]
+            'lamp ["¡" 226 178 "a lamp on the wall, sodium yellow, and the buzz of it"]
+            'brazier ["▒" 88 52 "a brazier, and the coals in it are still red, just"]
             'hearth ["▓" 196 88 "a hearth, and the embers in it are still bright"]
             'box ["■" 137 94 "a simple wooden box"]
             'pot ["u" 180 137 "a clay pot, and something dry in the bottom of it"]
@@ -999,6 +1001,17 @@
    _ (? (2 = lvl)
         (: _ (each rms (rm \ each ^(roll sb 2) (_ \ furnish-in rm (pieces (roll sb #pieces)))))
            (furnish 'shelf)))
+   ; ..and lit: a brazier in every other building, the one red thing there and dim, and a
+   ; sodium lamp on one wall of each, facing its street -- on the wall ring, where nobody
+   ; walks and every car passes under
+   (lamp-on rm) (: x0 (peep rm 0 0 - 1) y0 (peep rm 1 0 - 1)
+                   x1 (x0 + peep rm 2 1 + 1) y1 (y0 + peep rm 3 1 + 1)
+                   c (roll sb 4 @ 0 [(x0 + 1 + roll sb (x1 - x0 - 1)) y0]
+                                  1 [(x0 + 1 + roll sb (x1 - x0 - 1)) y1]
+                                  2 [x0 (y0 + 1 + roll sb (y1 - y0 - 1))]
+                                    [x1 (y0 + 1 + roll sb (y1 - y0 - 1))])
+                   (0 = dat d <c <>c ? (pin loot (<c + d 'w * <>c) '(lamp))))
+   _ (? (2 = lvl) (each rms (rm \ (lamp-on rm, roll sb 2 = 0 ? (furnish-in rm 'brazier)))))
    ; heaven's platforms: fountains, and mirrors on platforms of their own -- one mirror
    ; lets out of another, so there are two at least where there are two platforms
    _ (? (3 = lvl)
@@ -1225,25 +1238,20 @@
                     "\"Ye came the long way. They all do.\"")
                    ((1 "Who are you?" who)
                     (2 "What is this place?" here)
-                    (3 "What are the stones?" stones)
-                    (4 "Nothing. I'll go on." bye)))
-            (who ("\"A name is a leash, and ye'd not hold mine.\"")
-                 ((1 "Then what should I call you?" name)
-                  (2 "Fair enough." start)))
-            (name ("\"Orozcalia will do. It is not the one cut in the stone.\"")
-                  ((1 "Which stone?" stones)
+                    (3 "Nothing. I'll go on." bye)))
+            (who ("\"Orozcalia the calculator.\"")
+                 ((1 "Calculator?" name)
+                  (2 "Ok." start)))
+            (name ("\"Number in, number out.\" She gestures at the stones.")
+                  ((1 "What?" card)
                    (2 "I see." start)))
-            (here ("\"The middle of it. Ye can feel that, surely.\""
-                   "She pokes the fire.")
-                  ((1 "The middle of what?" what)
-                   (2 "Go on." start)))
-            (what ("\"Of the circle. It is not drawn yet.\"")
-                  ((1 "..." start)))
-            (stones ("\"Seven that stand, and one that does not. Count them.\"")
-                    ((1 "Where is the eighth?" eighth)
-                     (2 "..." start)))
-            (eighth ("\"Where the grass is greener. Where else.\"")
-                    ((1 "..." start)))
+            (here ("\"If you don't know that, pumpkin, then I dread we're in a pickle.\" She pokes the fire.")
+                  ((1 "Oh..." start)))
+            (card ("\"Recursive or coinductive, no job too big. Take my card\""
+                   "She hands you a tasteful business card:"
+                   "  Orozcalia the Calculator -- Ranked Numeromatrix -- No Job Too Big"
+                   "  [beyond city limits, well-bottom at forest-edge, no appt. needed]")
+             ((1 "Gosh." start)))
             (bye ("\"Aye. The house is open. Mind the box.\""
                   "She turns back to the fire.")
                  ()))

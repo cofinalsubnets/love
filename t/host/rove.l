@@ -252,6 +252,23 @@
        (all (m \ road? d (m 'x) (m 'y) && on-lane? (m 'x) (m 'y) (m 'dx) (m 'dy)) cars)
        (all (e \ 6 = dat d <e (e 1) && on-lane? <e (e 1) (e 2) (e 3)) (g 'gates))))
 
+; the middle is lit: a sodium lamp on a wall of every building, on the ring where
+; nobody walks, and a brazier in some, the one red thing in there and inside always
+(: g (crawl-new 60 20 (wheel 11))
+   _ (crawl-turn g 46)
+   _ (pins (g 'p) 'x <(g 'd 'stair) 'y <>(g 'd 'stair))
+   _ (crawl-turn g 60)
+   d (g 'd) w 60
+   (of k) (filter (i \ k = <(g 'loot i)) (keys (g 'loot)))
+   lamps (of 'lamp) coals (of 'brazier)
+   (t i) (dat d (i % w) (i // w))
+   (by-street? i) (: x (i % w) y (i // w)
+                     (any (o \ 1 = dat d (x + <o) (y + <>o)) '((-1 0) (1 0) (0 -1) (0 1))))
+ (test (2 = g 'lvl) (two? lamps) (two? coals)
+       (all (i \ 0 = t i) lamps) (all by-street? lamps)   ; on a wall, and the wall faces a street
+       (all (i \ 4 = t i) coals)                          ; ..and the coals are indoors
+       (88 = (loot-face '(brazier) 1) 1) (226 = (loot-face '(lamp) 1) 1)))   ; dim red, and sodium
+
 ; she says the floor's page: the middle's is not the garden's
 (: g (hand-g ())
    _ (pin g 'lvl 2)
