@@ -707,7 +707,10 @@
    e ((a = 1 ? k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
    os (assq exp (rootc c 'src))
    s ('\ . (d 'imp + (? (two? os) >>os exp)))
-   hk (poke -1 s e,                                  ; value[-1] = source \-expr
+   ; value[-1] = source \-expr, for a lambda the text spelled. one an expansion made has no
+   ; surface entry and keeps none: nothing prints or compares it, and its expansion is a
+   ; third of an image. the hook still reads s either way
+   hk (poke -1 (two? os ? s 0) e,
        trim (seek -1 e),                             ; tag head spans [src .. body]; value stays e
        gv 'natjit 0)
    r ((!hk ? e (hq ? (hk e s a gv (farq c) (c 'lam) nm iop apx (ic 'l)) e)) . d 'imp)
