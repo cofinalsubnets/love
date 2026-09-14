@@ -35,9 +35,10 @@
 (:
  ; --- the floor: tiles in a cask, (x y) indexed; 0 rock, 1 ground, 2 the stair, 3 water,
  ; 4 a building's floor, 5 a door, 6 glass -- looked through and never entered: a road's
- ; end off the map, heaven's void -- 7 a step and 8 a platform ---
+ ; end off the map, heaven's void -- 7 a step and 8 a platform; the vale's 9 dirt, 10 the
+ ; bare spot, 11 timber -- the cottage seen from outside, a wall -- 12 garden, 13 a stair down
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
- (open? d x y) (: t (dat d x y) (0 < t && t != 6))     ; walked
+ (open? d x y) (: t (dat d x y) (0 < t && t != 6 && t != 11))     ; walked
  (lit? d x y) (0 < dat d x y)                           ; looked through
  (dput d x y v) (pin (d 't) (x + (d 'w) * y) v)
 
@@ -1027,10 +1028,21 @@
                    (0 = dat d <c <>c ? (pin loot (<c + d 'w * <>c) '(lamp))))
    _ (? (2 = lvl) (each rms (rm \ (lamp-on rm, roll sb 2 = 0 ? (furnish-in rm 'brazier)))))
    ; heaven's platforms: fountains, and mirrors on platforms of their own -- one mirror
-   ; lets out of another, so there are two at least where there are two platforms
+   ; lets out of another, so there are two at least where there are two platforms.
+   ; heaven's furniture is walked round, never through: only where the ring about it is
+   ; all walked and bare, so a stairway's mouth or a rim is never the one way past it
+   (ringed? x y) (all (o \ (: nx (x + <o) ny (y + <>o) l (loot (nx + d 'w * ny))
+                             (open? d nx ny && !(l && <l != 'penny))))
+                      '((-1 -1) (0 -1) (1 -1) (-1 0) (1 0) (-1 1) (0 1) (1 1)))
+   (furnish-ringed rm k n) (? (0 < n) (: xy (spot-in rm 40)
+                                        (? (xy && ringed? <xy <>xy) (pin loot (<xy + d 'w * <>xy) [k])
+                                           (furnish-ringed rm k (n - 1)))))
+   ; mirrors first, each on a platform of its own; one too small to ring a mirror hands
+   ; it on to the next, so there are two at least wherever two platforms can hold them
+   (mirrors ps n) (? (0 < n && two? ps) (mirrors >ps (n - (furnish-ringed <ps 'mirror 40 ? 1 0))))
    _ (? (3 = lvl)
-        (: _ (each ^(2 + roll sb 2) (_ \ furnish 'fountain))
-           (each (first-n (2 + roll sb 2) (deal sb rms)) (rm \ furnish-in rm 'mirror))))
+        (: _ (mirrors (deal sb rms) (2 + roll sb 2))
+           (each ^(2 + roll sb 2) (_ \ (two? rms ? (furnish-ringed (rms (roll sb #rms)) 'fountain 40))))))
    ; ..and its streets driven: a car for so many cells of street, headed along it. a
    ; middle delved for want of room has no lanes, and no traffic
    pi (g 'p 'x + d 'w * g 'p 'y)
