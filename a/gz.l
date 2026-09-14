@@ -1050,9 +1050,11 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gunzip-main as) (: t (tablet 0) _ (pin t 'd 1) (gzc-run as t))
    (zcat-main as) (: t (tablet 0) _ (pin t 'd 1) _ (pin t 'c 1) (gzc-run as t))
 
-   (pins (cite 'verbs 'tab)
-    'gzip   gzip-main
-    'gunzip gunzip-main
-    'zcat   zcat-main))
+   ; bound, not the body: a bodyless letrec leaks its names onto the module, which is
+   ; how kore's registry cites these three (tarcmd is spelled the same way)
+   _ (pins (cite 'verbs 'tab)
+      'gzip   gzip-main
+      'gunzip gunzip-main
+      'zcat   zcat-main))
 
 ) ; module 'gzcmd

@@ -65,42 +65,74 @@
                             (47 < (w k) < 58) (go (k + 1))
                             0)
                   (go 1))
-   (uclip-args who as)                      ; -> (n files many?)
+   ; a count word -> [n sign], sign 1 for a written +, -1 for a written -, 0 for neither.
+   ; the sign is the clip's other reading: head -n -N drops the last N, tail -n +N opens
+   ; at line N. uatoi has no sign to read, so it is taken off here.
+   (uclip-n w) (: n (tally w) c (? (0 < n) (w 0) 0)
+                 (? (c = 43) [(uatoi (snip w 1 n)) 1]
+                    (c = 45) [(uatoi (snip w 1 n)) -1]
+                    [(uatoi w) 0]))
+   (uclip-args who as)                      ; -> (n files many? sign)
     (: nr (? (two? as && (<as = "-n"))
-             (? (two? >as) [(uatoi <>as) >>as]
+             (? (two? >as) (: q (uclip-n <>as) [<q >>as <>q])
                 (udie 2 (who + ": -n wants a count")))
              (two? as && ((<as 0) = 45) && (digits? <as))
-             [(uatoi (snip <as 1 (tally <as))) >as]
-             [10 as])
-       n <nr fs <>nr
-       [n fs (? (two? fs && two? >fs) 1 0)])
+             [(uatoi (snip <as 1 (tally <as))) >as 0]
+             [10 as 0])
+       n <nr fs <>nr sign <>>nr
+       [n fs (? (two? fs && two? >fs) 1 0) sign])
    (uclip-hdr many first f)
     (? many (say out (uhdr first (? (f = "-") "standard input" f))) 0)
+   (uclip-say l) (: _ (say out <l) (? <>l (put out 10) 0))   ; a read line, its own ending
    ; head stops -- it used to `lines` the whole input and take n off the front, so
    ; one line of a 100 MB file cost 7.2 GB. uhead is still the spec for where the
    ; last newline goes (t/law/kore.l holds it); this answers the same text, a line at a time.
    (head-main as)
-    (: p (uclip-args "head" as) n <p fs <>p many <>>p
-       (body f first rd)
-        (: _ (uclip-hdr many first f)
-           (go k) (? (n <= k) 1
+    (: p (uclip-args "head" as) n <p fs <>p many <>>p sign <>>>p
+       ; -n -N is the other clip: hold a queue of N, and a line leaves only once N
+       ; newer ones have come in. two stacks, so the hold costs N and not N a line.
+       (drop-last rd)
+        (: (go fr bk k)
+            (: l (urd-line rd)
+               (? !(two? l) 1
+                  (: bk2 (l . bk) k2 (k + 1)
+                     (? (k2 <= n) (go fr bk2 k2)
+                        (: f2 (? (two? fr) fr (rev bk2))
+                           b2 (? (two? fr) bk2 ())
+                           _ (uclip-say <f2)
+                           (go >f2 b2 (k2 - 1)))))))
+           (go () () 0))
+       (first-n rd)
+        (: (go k) (? (n <= k) 1
                      (: l (urd-line rd)
                         (? (! (two? l)) 1
-                           (: _ (say out <l) _ (? <>l (put out 10) 0) (go (k + 1))))))
+                           (: _ (uclip-say l) (go (k + 1))))))
            (go 0))
+       (body f first rd)
+        (: _ (uclip-hdr many first f)
+           (? (sign = -1) (drop-last rd) (first-n rd)))
        (ureach "head" body fs))
    ; tail cannot stop reading but need not hold: a ring of the last n lines is the
    ; whole answer. trimmed at 2n, so the trim costs n every n lines, not n a line.
    (tail-main as)
-    (: p (uclip-args "tail" as) n <p fs <>p many <>>p
-       (body f first rd)
-        (: _ (uclip-hdr many first f)
-           (go acc k) (: l (urd-line rd)
+    (: p (uclip-args "tail" as) n <p fs <>p many <>>p sign <>>>p
+       ; -n +N opens at line N instead, counted from 1; +0 reads as +1, as GNU has it
+       (from-n rd)
+        (: st (? (n < 1) 1 n)
+           (go k) (: l (urd-line rd)
+                     (? (! (two? l)) 1
+                        (: _ (? (st <= k) (uclip-say l) 0) (go (k + 1)))))
+           (go 1))
+       (last-n rd)
+        (: (go acc k) (: l (urd-line rd)
                          (? (! (two? l)) acc
                             (: a2 (l . acc)
                                (? ((* 2 n) <= (k + 1)) (go (take n a2) n) (go a2 (k + 1))))))
-           (out1 m) (? (two? m) (: _ (say out (<(<m))) _ (? (<>(<m)) (put out 10) 0) (out1 >m)) 1)
+           (out1 m) (? (two? m) (: _ (uclip-say <m) (out1 >m)) 1)
            (out1 (rev (take n (go () 0)))))
+       (body f first rd)
+        (: _ (uclip-hdr many first f)
+           (? (sign = 1) (from-n rd) (last-n rd)))
        (ureach "tail" body fs))
 
    ; -- wc: lines, words, bytes (flags pick; bare wc reads all three) --
@@ -775,11 +807,26 @@
 
    ; -- tr: set1 set2 translates (SET2 pads with its last charm), -d deletes, -s
    ; squeezes same-charm runs; stdin only, like the real one --
+   ; the flags cluster: -c (or -C) reads SET1 as its complement, -d deletes, -s
+   ; squeezes. a dash word that is none of them is refused and not read as a set --
+   ; `tr -c a-z .` used to translate the literal set "-c". `--` ends the walk.
+   (tr-flags a c? d? s?)
+    (? !(two? a) [c? d? s? a]
+       (<a = "--") [c? d? s? >a]
+       (: w <a n (tally w)
+          (? (!(2 <= n) || !(w 0 = 45)) [c? d? s? a]
+             (: (cl k C D S)
+                 (? (n <= k) (tr-flags >a C D S)
+                    (: ch (w k)
+                       (? ((ch = 99) || (ch = 67)) (cl (k + 1) 1 D S)
+                          (ch = 100) (cl (k + 1) C 1 S)
+                          (ch = 115) (cl (k + 1) C D 1)
+                          (udie 2 ("tr: unknown option " + w)))))
+                (cl 1 c? d? s?)))))
    (tr-main as)
-    (: d? (two? as && (<as = "-d"))
-       s? (two? as && (<as = "-s"))
-       rest (? (d? || s?) >as as)
-       _ (? (two? rest) () (udie 2 "usage: tr SET1 SET2 | tr -d SET1 | tr -s SET1"))
+    (: fp (tr-flags as 0 0 0)
+       c? <fp d? <>fp s? <>>fp rest <>>>fp
+       _ (? (two? rest) () (udie 2 "usage: tr [-cds] SET1 [SET2]"))
        one (uset <rest)
        two (? (two? >rest) (uset <>rest) ())
        (mem ls) (: t (tablet 0)
@@ -791,13 +838,23 @@
                                          _ (pin t <m v)
                                          (go >m (? (two? w) >w ()) v)))
                      (go a b 0))
+       st (mem one)
+       (in? c) (: v (? (peep st c 0) 1 0) (? c? (1 - v) v))
+       twot (mem two)
+       ; a charm's image. under -c a translation has no pair to walk, so everything
+       ; outside SET1 goes to SET2's last -- what the padding means once SET1 is infinite
+       mt (? (two? two) (tmap one two) ())
+       last2 (? (two? two) <(rev two) 0)
+       (image c) (? !(two? two) c  c? (? (in? c) last2 c)  (peep mt c c))
        src (slurp in)
        n (tally src)
-       ; the reading as kxlat's table: -d drops the set, -s squeezes it, else the map
-       tbl (? d? (: dt (mem one) (ktable (\ c [c (? (peep dt c 0) 0 1)])))
-              s? (: st (mem one) (ktable (\ c [c (? (peep st c 0) 2 1)])))
-              !two (udie 2 "tr: SET2 wanted")
-              (: mt (tmap one two) (ktable (\ c [(peep mt c c) 1]))))
+       ; the reading as kxlat's table: image, then mode -- 0 dropped, 1 written, 2
+       ; written unless it repeats. -s squeezes what SET1 names when it stands alone
+       ; and what SET2 names beside a translation, which is how GNU reads the pair
+       tbl (? d? (ktable (\ c [c (? (in? c) 0 1)]))
+              (!(two? two) && !s?) (udie 2 "tr: SET2 wanted")
+              !(two? two) (ktable (\ c [c (? (in? c) 2 1)]))
+              (ktable (\ c (: v (image c) [v (? (s? && (peep twot v 0)) 2 1)]))))
        _ (? (0 < n)
             (: dst (cask n) k (xlat src tbl dst) (say out (snip dst 0 k)))
             0)
@@ -1519,5 +1576,145 @@
                     (walk (k + cnt) left2 blk 0)))))
        nb (walk 0 (? (charm? lim) lim -1) () 0)
        _ (? (ad = 110) () (: _ (say out (adr (skip + nb))) (put out 10)))
-       _ (flush out) 0))
+       _ (flush out) 0)
+
+   ; ---- the byte tools: xxd, strings, dd ---------------------------------------
+   ; od above can say all three things and nobody remembers how to ask it. these are
+   ; the spellings people actually type, and they share od's joined byte reader.
+
+   ; -- xxd: the canonical dump, and -r to read one back. 16 bytes a row, the offset
+   ; in 8 hex digits, the bytes in pairs of two, then the ascii gutter --
+   (uxx-esc c) (? ((32 <= c) && (c < 127)) c 46)     ; a dot for anything unprintable
+   (uxx-row off blk)
+    (: n (tally blk) o (jug 0)
+       _ (say o (uzpad 8 (uradix off 16))) _ (say o ": ")
+       (hex i) (? (16 <= i) 0
+                  (: _ (? (i < n) (say o (uzpad 2 (uradix (blk i) 16))) (say o "  "))
+                     _ (? (1 = (% i 2)) (put o 32) 0)
+                     (hex (i + 1))))
+       _ (hex 0) _ (put o 32)
+       (asc i) (? ((16 <= i) || (n <= i)) 0 (: _ (put o (uxx-esc (blk i))) (asc (i + 1))))
+       _ (asc 0)
+       (slurp o))
+   (uxx-nib c) (? ((48 <= c) && (c <= 57)) (c - 48)
+                  ((97 <= c) && (c <= 102)) ((c - 97) + 10)
+                  ((65 <= c) && (c <= 70)) ((c - 65) + 10) -1)
+   ; -r reads the dump back: the offset up to the colon is skipped, the gutter past
+   ; two spaces is not hex and stops the row. a line with no colon is all hex
+   (uxx-unrow ln)
+    (: n (tally ln)
+       (col k) (? (n <= k) 0 (ln k = 58) (k + 1) (col (k + 1)))
+       s (col 0)
+       (go k acc hi)
+        (? (n <= k) (rev acc)
+           (: c (ln k) v (uxx-nib c)
+              (? (v < 0) (? ((32 = c) && !(charm? hi)) (go (k + 1) acc hi) (rev acc))
+                 (charm? hi) (go (k + 1) (((* 16 hi) + v) . acc) ())
+                 (go (k + 1) acc v))))
+       (go s () ()))
+   (xxd-main as)
+    (: r? (two? as && (<as = "-r"))
+       fs (? r? >as as)
+       _ (? (two? fs && ((<fs 0) = 45)) (udie 2 "usage: xxd [-r] [FILE..]") ())
+       (? r?
+          (: (dot ln term?) (: _ (map (\ b (put out b)) (uxx-unrow ln)) 1)
+             _ (ulines "xxd" dot fs) _ (flush out) 0)
+          (: rd (urdb (\ f (udie 1 ("xxd: cannot open " + f))) fs)
+             (go off) (: blk (urdj-take rd 16)
+                         (? !(tally blk) 0
+                            (: _ (say out (uxx-row off blk)) _ (put out 10)
+                               (go (off + (tally blk))))))
+             _ (go 0) _ (flush out) 0)))
+
+   ; -- strings: the printable runs of 4 or more (-n changes the floor). a run ends
+   ; at the first byte outside print-or-tab, which is what makes it useful on an
+   ; object file: the noms come out and the code does not --
+   (ustr-ink? c) (((32 <= c) && (c < 127)) || (c = 9))
+   (strings-main as)
+    (: (fl a n fs) (? !(two? a) [n (rev fs)]
+                      (<a = "-n") (? (two? >a) (fl >>a (uatoi <>a) fs)
+                                     (udie 2 "strings: -n wants a length"))
+                      ((2 < tally <a) && (snip <a 0 2 = "-n"))
+                       (fl >a (uatoi (snip <a 2 (tally <a))) fs)
+                      ; -a is GNU's default here: there are no sections to choose between
+                      (<a = "-a") (fl >a n fs)
+                      ((1 < tally <a) && ((<a 0) = 45)) (udie 2 ("strings: unknown option " + <a))
+                      (fl >a n (<a . fs)))
+       p (fl as 4 ())
+       lo <p fs <>p
+       rd (urdb (\ f (udie 1 ("strings: cannot open " + f))) fs)
+       ; the run is held in a jug and only spoken once it is long enough, so a 200 MB
+       ; input costs the longest run and not the file
+       (go run)
+        (: blk (urdj-take rd 65536)
+           n (tally blk)
+           (walk k acc)
+            (? (n <= k) acc
+               (: c (blk k)
+                  (? (ustr-ink? c) (walk (k + 1) (c . acc))
+                     (: _ (? (lo <= (tally acc))
+                             (: _ (say out (string (cask (rev acc)))) (put out 10)) 0)
+                        (walk (k + 1) ())))))
+           (? !n (? (lo <= (tally run))
+                    (: _ (say out (string (cask (rev run)))) (put out 10) 0) 0)
+              (go (walk 0 run))))
+       _ (go ())
+       _ (flush out) 0)
+
+   ; -- dd: blocks in, blocks out. if=/of= default to the streams, bs= sizes the
+   ; block (512 unsaid), count= stops, skip= reads past that many blocks first.
+   ; no seek=: lseek here takes a raw fd and a port's read buffer desyncs under one,
+   ; and every other operand is a stream walk that works on a pipe too. the record
+   ; report goes to err, GNU's shape, and status=none holds it --
+   (udd-eq w)                          ; "bs=512" -> ("bs" "512"), () for a bare word
+    (: n (tally w)
+       (go k) (? (n <= k) () (w k = 61) [(snip w 0 k) (snip w (k + 1) n)] (go (k + 1)))
+       (go 0))
+   (dd-main as)
+    (: t {'bs 512 'count () 'skip 0 'if () 'of () 'quiet 0}
+       (fl a) (? !(two? a) 0
+                 (: kv (udd-eq <a)
+                    _ (? !(two? kv) (udie 1 ("dd: unknown operand " + <a))
+                         (: k <kv v <>kv
+                            (? (k = "bs") (pin t 'bs (usize v))
+                               (k = "count") (pin t 'count (usize v))
+                               (k = "skip") (pin t 'skip (usize v))
+                               (k = "if") (pin t 'if v)
+                               (k = "of") (pin t 'of v)
+                               (k = "status") (? (v = "none") (pin t 'quiet 1) 0)
+                               (k = "conv") 0          ; the conversions are not here
+                               (udie 1 ("dd: unknown operand " + k)))))
+                    (fl >a)))
+       _ (fl as)
+       bs (: b (peep t 'bs 512) (? (0 < b) b (udie 1 "dd: invalid block size")))
+       cnt (peep t 'count ()) skip (peep t 'skip 0)
+       inf (peep t 'if ()) outf (peep t 'of ())
+       rd (urdb (\ f (udie 1 ("dd: cannot open " + f))) (? (string? inf) [inf] ()))
+       q (? (string? outf) (: h (open outf "w")
+                               (? (hot? h) h (udie 1 ("dd: cannot write " + outf))))
+            out)
+       ; skip is READ past, not sought: it works the same on a pipe, which a seek
+       ; would not. a short input mid-skip is GNU's own diagnostic
+       (drop k) (? (k <= 0) 1 (: g (urdj-take rd bs) (? (tally g) (drop (k - 1)) 0)))
+       _ (? (drop skip) 0 (udie 1 "dd: cannot skip past end of input"))
+       ; full and part are GNU's two record columns: a short block is a partial one
+       (go n full part got)
+        (? ((charm? cnt) && !(n < cnt)) [full part got]
+           (: blk (urdj-take rd bs)
+              c (tally blk)
+              (? !c [full part got]
+                 (: _ (say q blk)
+                    (go (n + 1) (? (c = bs) (full + 1) full) (? (c = bs) part (part + 1))
+                        (got + c))))))
+       r (go 0 0 0 0)
+       _ (flush q)
+       _ (? (string? outf) (close q) 0)
+       ; the two record lines and the byte count. GNU adds a duration and a rate; no
+       ; two runs agree on those, so no gate could hold them and they are not spoken
+       _ (? (peep t 'quiet 0) 0
+            (: ln ((show <r) + "+" + (show <>r) + " records ")
+               _ (say err (ln + "in")) _ (put err 10)
+               _ (say err (ln + "out")) _ (put err 10)
+               _ (say err ((show <>>r) + " bytes copied")) _ (put err 10) (flush err)))
+       0))
 ) ; module 'kore

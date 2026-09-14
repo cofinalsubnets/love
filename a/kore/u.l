@@ -158,15 +158,29 @@
     (: n (tally s)
        (esc c) (? (c = 110) 10 (c = 116) 9 (c = 114) 13 (c = 48) 0 c)
        (span a b acc) (? (b < a) acc (span a (b - 1) (b . acc)))
-       ; the everyday POSIX classes read as their ranges ([:lower:] [:upper:] [:digit:])
-       (cls? k nm) (: m (tally nm)
-                      (((k + m) <= n) && (nm = snip s k (k + m))))
+       ; the POSIX classes as their C-locale spans; an unknown [:x:] stays literal
+       clstab {"alpha" '((65 90) (97 122))  "alnum" '((48 57) (65 90) (97 122))
+               "digit" '((48 57))           "lower" '((97 122))
+               "upper" '((65 90))           "space" '((9 13) (32 32))
+               "blank" '((9 9) (32 32))     "punct" '((33 47) (58 64) (91 96) (123 126))
+               "print" '((32 126))          "graph" '((33 126))
+               "cntrl" '((0 31) (127 127))  "xdigit" '((48 57) (65 70) (97 102))}
+       (spans rs acc) (? !(two? rs) acc
+                         (spans >rs (rev (span (<(<rs)) (<>(<rs)) ()) + acc)))
+       ; a [:name:] opening at k -> (spans past-the-]); () when it is not one
+       (cls k)
+        (? !(((k + 3) < n) && (s k = 91) && (s (k + 1) = 58)) ()
+           (: (fin j) (? (n <= (j + 1)) -1
+                         ((s j = 58) && (s (j + 1) = 93)) j
+                         (fin (j + 1)))
+              e (fin (k + 2))
+              (? (e < 0) ()
+                 (: rs (peep clstab (snip s (k + 2) e) ())
+                    (? (two? rs) [rs (e + 2)] ())))))
        (go k acc)
         (? (n <= k) (rev acc)
-           (: c (s k)
-              (? (cls? k "[:lower:]") (go (k + 9) (rev (span 97 122 ()) + acc))
-                 (cls? k "[:upper:]") (go (k + 9) (rev (span 65 90 ()) + acc))
-                 (cls? k "[:digit:]") (go (k + 9) (rev (span 48 57 ()) + acc))
+           (: c (s k) hit (cls k)
+              (? (two? hit) (go <>hit (spans <hit acc))
                  ((c = 92) && ((k + 1) < n)) (go (k + 2) (esc (s (k + 1)) . acc))
                  (((k + 2) < n) && (s (k + 1) = 45) && !(s (k + 2) < c))
                   (go (k + 3) (rev (span c (s (k + 2)) ()) + acc))

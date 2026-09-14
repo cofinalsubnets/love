@@ -184,6 +184,8 @@
              _ (two? <>o && cpioc-moan "the names come in on stdin, not on the line")
            (m @ 'o (cpioc-o t) 'i (cpioc-i t) 't (cpioc-t t) (cpioc-moan cpioc-usage, 2)))))
 
-   (pins (cite 'verbs 'tab) 'cpio cpio-main))
+   ; bound, not the body: a bodyless letrec leaks cpio-main onto the module, which is
+   ; how kore's registry cites it (gzcmd and tarcmd are spelled the same way)
+   _ (pins (cite 'verbs 'tab) 'cpio cpio-main))
 
 ) ; module 'cpiocmd

@@ -1063,7 +1063,7 @@
    ; a signal that walks out of a call has no answer-place, so it goes the old
    ; way. `rk` below says whether any function can do this; where it cannot, not
    ; one trap is armed for the whole run
-   (aw-esc sig)
+   (aw-flee sig)
     (sig @ 'nxt (scare 'awk-next ())
          'brk (scare 'awk-break ())
          'cnt (scare 'awk-cont ())
@@ -1102,7 +1102,7 @@
        _ (pin E 'loc old)
        r (? (sig == 0) ()
             (two? sig && <sig == 'ret) <>sig
-            (aw-esc sig))
+            (aw-flee sig))
        ; an untyped name handed in (g(A) with a never touched) becomes an array
        ; iff the callee subscripted it -- awk decides late, so the answer only
        ; exists now. carry the tablet back to the caller's name
