@@ -373,9 +373,9 @@
             'iron ["/" 245 240 "an iron poker for the fire, it smells like rust"]
             'cloth ["~" 175 133 "a large square of colored cloth, carefully folded"]
             'mirror ["@" 93 54 "a mirror, and the one in it is not quite you"]
-            'sign ["¶" 137 94 "a hand-painted wooden sign, the letters now illegible"]
-            'bells ["≡" 180 137 "a bookshelf, and one book on it: OEIS A000110"]
-            'shelf ["≡" 180 137 "a bookshelf, and one book on it: Muse"
+            'sign ["¶" 137 94 "a hand-painted wooden sign, the letters are illegible"]
+            'bells ["≡" 180 137 "a heavily thumbed technical manual gathers dust on the top shelf"]
+            'shelf ["≡" 180 137 "one book stands out from a shelf of water-damaged magazines"
                     '("Muse"
                       ("by Donald Revell"
                        ""
@@ -455,8 +455,7 @@
  mark-lines '("a paper scrap slips out from in between the pages."
               "neat handwriting spells the message:"
               ""
-              "  it's important for you to start doing what you want"
-              "  as soon as you can"
+              "it's important for you to start doing what you want as soon as you can"
               ""
               "-- any key --")
  (bell-row r) (: (go a l acc) (one? l ? (rev acc) (go (a + <l) >l ((a + <l) . acc)))
@@ -810,7 +809,7 @@
                  "the grass canopy of blades emits the smell of earthen mildew")
    ("aster"      "an aster, pink and past its best"
                  "the petals are going brown at the edge"
-                 "it tries to face the light that shone when it first blossomed")
+                 "it tries to face the light it remembers")
    ("goldenrod"  "it stands out from the grass like a vein of yellow ore"
                  "you've heard it causes allergies"
                  "the air is thick with pollen")
