@@ -1094,8 +1094,8 @@ wasm:
 # a node to bake it under. the loader (i/wasm/loader.js) is the runtime under a bare module.
 wasm_seat: $(k_mod) $(if $(NODE),b/wasm/love.image,)
 # by hand: bytes every C edit would otherwise churn. ONE PAIR IS COPIED OUT to w/ beside
-# the fonts and the stylesheet -- generated files committed for one reason, that github
-# pages serves what it is given and builds nothing.
+# the fonts -- generated files committed for one reason, that github pages serves what it
+# is given and builds nothing.
 site-wasm: wasm
 	@mkdir -p w/wasm
 	@echo '$(t_cp)	'w/wasm/love.wasm
@@ -1121,10 +1121,11 @@ distclean: clean
 valg: host
 	@cat $t > $(ho)/.valg-corpus.l
 	valgrind --error-exitcode=1 --suppressions=$R/u/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
-# the site's faces and its stylesheet, laid and checked in: github pages serves
-# the tree as it is, so a generated file still has to be committed. the front page
-# itself, index.html, is written by hand, its island the markup machine.js drives
-web: fonts w/style.css w/favicon.png
+# the site's faces, laid and checked in: github pages serves the tree as it is, so a
+# generated file still has to be committed. the front page, index.html, and its
+# stylesheet, w/style.css, are written by hand; the page's island is the markup
+# machine.js drives
+web: fonts w/favicon.png
 fonts: w/fonts/quay16.woff w/fonts/quay8.woff
 w/fonts/quay16.woff: l/quay/cleat_8x16.c u/mkfont.l $(mdep)
 	@echo 'LOVE	'$@
@@ -1134,10 +1135,6 @@ w/fonts/quay8.woff: l/quay/cga_8x8.c u/mkfont.l $(mdep)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 6 $@ "Quay 8"
-# ..the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
-w/style.css: w/style.l a/vi/config.l a/vi/hueweb.l $(mdep)
-	@mkdir -p $(dir $@)
-	@env -u LOVE_NO_IMAGE $m w/style.l $@
 # ..the favicon: cp437's heart off the 8x8 face, in the palette's red
 w/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(mdep)
 	@mkdir -p $(dir $@)

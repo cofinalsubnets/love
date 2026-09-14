@@ -27,9 +27,8 @@ t/proof/rocq/uugen.v
 t/proof/lean/uugen.lean
 
 # what the project's web page alone links: generated, committed for github pages,
-# never shipped (the machine's pair is `make site-wasm`'s copy out of b/). the page
-# itself, index.html, is written by hand and ships with the source
-w/style.css
+# never shipped (the machine's pair is `make site-wasm`'s copy out of b/). the page,
+# index.html, and its stylesheet, w/style.css, are written by hand and ship with the source
 w/favicon.png
 w/fonts
 w/wasm/love.wasm
