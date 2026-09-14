@@ -450,10 +450,11 @@
  bell-foot "-- page ~: 1, 2 --"
  bell-choices '((1 "turn the page") (2 "put it back"))
  mark-ttl "a bookmark"
- mark-lines '("it slips out from between the pages. on it, in neat handwriting:"
+ mark-lines '("a paper scrap slips out from in between the pages."
+              "neat handwriting spells the message:"
               ""
               "  it's important for you to start doing what you want"
-              "  as soon as you can"
+              "  as soon as you can :)"
               ""
               "-- any key --")
  (bell-row r) (: (go a l acc) (one? l ? (rev acc) (go (a + <l) >l ((a + <l) . acc)))
@@ -583,8 +584,10 @@
                                     (: _ (say j padding) (row y 0 (w * y) p)))
                                 _ (say j "\e[K\r\n")
                                 p2)))
+   ; ..and the bar a column short of the screen: a console that wraps at its edge would
+   ; scroll the floor for a bar that reached it
    (rows (vy + #notes - 1) -1,
-    say j "\e[0m", say j bar, say j "\e[K",
+    say j "\e[0m", say j (fit bar (cols - 1)), say j "\e[K",
     j))
  ; the cells a floor keeps moving, found once and kept on it: water, a star, the fire
  ; and the coals
@@ -621,8 +624,9 @@
  ; ..and a tap is a place rather than a letter: one step of the eight toward the cell it
  ; landed on -- the nearest of the eight as the screen shows them, a cell being twice
  ; as tall as it is wide, so a tap a little off a row is still along it -- and a tap on
- ; the cell you stand on is the stair. the note row is the screen's first, so a
- ; screen y is a floor y and one. c is [x y], cli's edtap.
+ ; the cell you stand on is the stair; standing on one, so are the eight about it, a
+ ; finger being wider than a cell. the note row is the screen's first, so a screen y
+ ; is a floor y and one. c is [x y], cli's edtap.
  (toward a b) (a < b ? 1 (a > b ? -1 0))
  (tap-steer g c) (: p (g 'p) d (g 'd)
                     ex (<c - peep d 'vx 0 - (p 'x))
@@ -631,7 +635,9 @@
                     ; within 22.5 degrees of a row or a column is along it: tan is 5/12
                     dx (12 * ax < 5 * ay ? 0 (toward 0 ex))
                     dy (12 * ay < 5 * ax ? 0 (toward 0 ey))
-                    (dx = 0 && dy = 0 ? 60 [dx dy]))
+                    (? (dx = 0 && dy = 0) 60
+                       (ax <= 1 && ay <= 2 && 2 = dat d (p 'x) (p 'y)) 60
+                       [dx dy]))
  ; ..and a tap on a page with choices -- hers, or the book's -- is the choice it lands
  ; on: the digit that picks it, or 0, which shows the page again. any other tap steers.
  (tap-key g c) (: sg (g 'sign) d (g 'd)

@@ -508,6 +508,20 @@ static lvm(lvm_snip) {
    for (intptr_t k = i; k < j; k++, y = B(y), w++) ini_chain(w, A(y), word(w + 1));
    w[-1].b = ZeroPoint;                          // a fresh spine, so only its own tail is cut
    Sp[2] = word(base); } }
+ // a rank-1 tray cuts the same way: the range copied into a fresh tray of its type
+ else if (trayp(Sp[0]) && tray(Sp[0])->rank == 1) {
+  struct ai_tray *v = tray(Sp[0]);
+  intptr_t n = (intptr_t) v->shape[0];
+  i = max(i, 0), i = min(i, n);
+  j = max(j, i), j = min(j, n);
+  uintptr_t m = (uintptr_t) (j - i), req = b2w(tray_bytes(v->type, 1, m));
+  Have(req);
+  v = tray(Sp[0]);                               // re-read post-Have (GC may have moved it)
+  struct ai_tray *t = (struct ai_tray*) Hp;
+  Hp += req;
+  ini_tray(t, v->type, 1), t->shape[0] = m;
+  memcpy(tray_data(t), (char*) tray_data(v) + (uintptr_t) i * ai_T[v->type], m * ai_T[v->type]);
+  Sp[2] = word(t); }
  else if (!strp(Sp[0]) && !caskp(Sp[0])) Sp[2] = zero;
  else {
   struct ai_str *s = bytes_of(Sp[0]), *t;

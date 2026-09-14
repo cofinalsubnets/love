@@ -411,7 +411,7 @@
    _ (test ("B(4) = 15" = line ()) (find (last (g 'sign)) "page 5" 0))
    (turn n) (? ("a bookmark" = <(g 'sign)) n (crawl-turn g 49, turn (n + 1)))
    n (turn 0)
-   _ (test (10 < n < 40) !(g 'bell) (find ((g 'sign) 1) "handwriting" 0))
+   _ (test (10 < n < 40) !(g 'bell) (any (l \ find l "handwriting" 0) (g 'sign)))
    _ (crawl-turn g 46)
  (test !(g 'sign) !(g 'bell) (1 = g 'p 'x)
        ('(1 2) = bell-row [1]) ('(2 3 5) = bell-row [1 2]) ('(5 7 10 15) = bell-row [2 3 5])))
@@ -449,6 +449,17 @@
               (past i) (: c (s (i + 1)) (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
  (test (#r1 = #r2) (find (r2 1) "screen" 0) (bare (r1 2) = bare (r2 2)) (bare (last r1) = bare (last r2))
        (60 = tap-steer g [(g 'p 'x + peep (g 'd) 'vx 0) (g 'p 'y + 1)])))
+
+; ..and standing on a stair, a tap on any of the nine cells about you is the stair
+(: g (hand-g ())
+   d (g 'd)
+   _ (pins (g 'p) 'x 7 'y 3)
+   _ (dput d 7 3 2)
+   (tap dx dy) (tap-steer g [(7 + dx) (4 + dy)])
+   on [(tap 1 1) (tap -1 0) (tap 0 -1) (tap 0 0)]
+   off [(tap 2 0) (tap 0 2)]
+   _ (dput d 7 3 1)
+ (test (all (= 60) on) !(any (= 60) off) ('(1 1) = tap 1 1) (60 = tap 0 0)))
 
 ; the floor's live cells: water and coals, found once; the count on the floor moves
 ; the water's pen a row a count; and the live painter lays those cells alone, each

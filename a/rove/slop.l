@@ -32,9 +32,9 @@
 ; tty / cue?, over i/posix.c), so slop never joins the corpus. ink lends the skin and
 ; the palette, rove the helm and the die.
 (module (slop slop-run slop-walk slop-main slop-new slop-sy slop-gap slop-cost slop-rate
-         slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-road slop-turf
+         slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-bar-fit slop-road slop-turf
          slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave
-         slop-song-new slop-song-feed
+         slop-song-new slop-song-feed song-wave-of frame-due?
          slop-shore slop-sand slop-wet?)
 (borrow 'ink)
 (borrow 'rove)
@@ -261,7 +261,7 @@
    (lines i) (i < r ? (say j (line i + esc + "[0m" + esc + "[K\r\n"), lines (i + 1)))
    _ (say j (esc + "[H"))
    _ (lines 0)
-   _ (say j (slop-bar g + esc + "[K"))
+   _ (say j (slop-bar-fit g + esc + "[K"))
    (slurp j))
 
  ; the end: the shore closed over you, so the screen is slop and nothing else. no
@@ -274,7 +274,7 @@
    (rows i) (i < r ? (row i 0 -1, say j (esc + "[0m" + esc + "[K\r\n"), rows (i + 1)))
    _ (say j (esc + "[H"))
    _ (rows 0)
-   _ (say j (slop-bar g + esc + "[K"))
+   _ (say j (slop-bar-fit g + esc + "[K"))
    (slurp j))
 
  ; --- the song -----------------------------------------------------------------
@@ -310,6 +310,14 @@
  song-cps 0.55                          ; cycles a second at full speed
  song-chunk (song-rate // 30)           ; a frame's worth of frames, thirty a second
  song-gain 6500.0
+ ; the wasm seat's ring is a second deep and its frames are the cost, so there a frame
+ ; gives way while the song has run down to under a quarter of that: the song keeps
+ ; time and the shimmer takes what is left -- but a beat that took a key shows it, and
+ ; one beat in four is shown whatever the ring holds, so the walk is never still. a
+ ; card's own ring is not known, so on every other seat a frame is always due
+ song-yield (love-arch = 'wasm ? song-rate // 4 0)
+ frame-skip 4
+ (frame-due? yield lag keyed since) (!yield || keyed || frame-skip <= since || yield <= lag)
  ; the music slows with the walk -- but only to a third of tempo. slop-rate falls to a
  ; twentieth by the shore, and a twentieth of a tempo is not a tempo any more.
  (slop-song-speed g) (0.3 + 0.7 * slop-rate g)
@@ -378,6 +386,22 @@
   (? (m < 0.34) (sin (tp * tau * f))
      (m < 0.67) (song-tri (tp * f % 1.0))
      (: u (tp * f % 1.0) (((u < 0.5) * 2.0) - 1.0)))
+ ; a voice is its note, its shape and how long it lasts, and from its onset every voice
+ ; of a kind is the one waveform -- so each kind is laid once, the first time the walk
+ ; meets it, and kept: a chunk of a voice is then a cut of it, one tray op, where the
+ ; shape and the envelope again are twenty. a chunk of silence is laid at either end,
+ ; so the chunk a voice starts in and the one it ends in are cuts too; a chunk that
+ ; reaches past the silence is laid the long way, and is the same values either way
+ song-waves {}
+ (song-wave-of nt f m dur rate)
+  (: k [nt (m < 0.34 ? 0 (m < 0.67 ? 1 2)) dur]
+     w (song-waves k)
+     (? (tray? w) w
+        (: t (((iota (int (dur * rate) + 2 + 2 * song-chunk)) - song-chunk) * (1.0 / rate))
+           tp (t * (t > 0.0))
+           v (slop-song-wave tp f m * venv tp dur * (t < dur))
+           _ (pin song-waves k v)
+           v)))
 
  ; a voice m of the way along that dial, at the volume the dip puts there. built here
  ; rather than taken off harp's mkvoice because an instrument there is a name, and this
@@ -389,12 +413,15 @@
      amp (vnum v 'gain 1.0 * vol)
      pn  (vnum v 'pan 0.5)
      end (st + (int (dur * rate)) + 2)
+     w   (song-wave-of nt f m dur rate)
      ; no (t >= 0.0) gate: tp is already zero for every frame before the onset, and venv
      ; is zero at zero -- so the envelope has answered that question by the time a mask
      ; could ask it, and a mask is two more tray ops a voice a chunk
-     fn  (\ ix (: t  ((ix - st) * (1.0 / rate))
-                  tp (t * (t > 0.0))
-                (slop-song-wave tp f m * venv tp dur * (t < dur))))
+     fn  (\ ix (: k0 ((peep ix 0 0) - st + song-chunk) n #ix
+                  (? (0 <= k0 && k0 + n <= #w) (snip w k0 (k0 + n))
+                     (: t  ((ix - st) * (1.0 / rate))
+                        tp (t * (t > 0.0))
+                      (slop-song-wave tp f m * venv tp dur * (t < dur))))))
    [end fn (amp * (1.0 - pn)) (amp * pn)])
  (slop-song-new tune h) {'tune tune 'h h 'fpos 0 'cyc 0 'next 0 'vs ()}
  ; one cycle's onsets as voices, the cycle starting at frame st and spc frames long.
@@ -427,6 +454,9 @@
    (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
 
  (presses n) (show n + (n = 1 ? " press" " presses"))
+ ; the bar stops a column short of the screen: a console that wraps at its edge would
+ ; scroll the map for a bar that reached it
+ (slop-bar-fit g) (snip (slop-bar g) 0 (g 'c - 1))
  (slop-bar g) (? (g 'over = 'taken) ("the slop has you -- " + presses (g 'spent) + " spent")
                  (g 'over) ("you turn back -- " + presses (g 'spent) + " spent")
                  (show (slop-gap g) + " to go  "
@@ -471,15 +501,18 @@
              ; a chunk of song is a frame's worth and the card takes it at playing
              ; speed, so with a horn the music is the clock; without one, rest is
              (beat-out sp m vol) (? sng (slop-song-feed sng sp m vol) (rest 33))
-             (drain _) (cue? 0 ? (slop-key g (edkey in), drain ()))
-             (swim _) (? (g 'over) ()
-                         (: _ (drain ())
+             (drain n) (cue? 0 ? (slop-key g (edkey in), drain (n + 1)) n)
+             ; since is beats since the last frame
+             (swim since) (? (g 'over) ()
+                         (: keys (drain 0)
                             _ (g 'over ? () (slop-tick g))
-                            (say out (slop-frame g), flush out,
-                             beat-out (slop-song-speed g) (slop-song-edge g) (slop-song-vol g), swim ())))
+                            due (!hn || frame-due? song-yield (horn-lag hn) (0 < keys) since)
+                            _ (? due (say out (slop-frame g), flush out))
+                            (beat-out (slop-song-speed g) (slop-song-edge g) (slop-song-vol g),
+                             swim (due ? 0 (since + 1)))))
              _ (say out (esc + "[?25l"))
              _ (? (|| tk pn) (slop-sign g tk pn) ())
-             _ (swim ())
+             _ (swim 0)
              ; taken: the slop closes over the whole screen and runs at full rate --
              ; no gap left to slow it -- for half a second before the stage is left
              ; the flood runs at full rate and so does the song under it: there is no

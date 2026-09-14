@@ -105,12 +105,14 @@
    ; --- mixing and packing ---------------------------------------------------
    ; every live voice is evaluated over the whole chunk and summed. the cost is one
    ; pass per voice per chunk in C, so a busy cycle is a handful of tray ops.
+   ; ..and a voice panned hard adds nothing to its far side, so that side is left as it is
    (mixdown vs base n)
     (: ix ((iota n) + base)
        z  (ix * 0.0)
+       (side acc y g) (g = 0.0 ? acc (acc + (y * g)))
        (go l L R) (? !(two? l) (L . R)
                      (: y ((<l 1) ix)
-                        (go >l (L + (y * (<l 2))) (R + (y * (<l 3))))))
+                        (go >l (side L y (<l 2)) (side R y (<l 3)))))
        (go vs z z))
    ; one voice at full scale reaches 0.6 of the range, so a handful may stack before
    ; the saturation bites. -g moves the whole mix under that ceiling.

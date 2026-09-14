@@ -428,7 +428,7 @@
    n (#pcm // 2)
    peak (foldl (\ a i (: v |(samp i) (a < v ? v a))) 0 ^n)
  (test
-  (20000 = #pcm)                                 ; ten chunks of 500 stereo frames
+  ((40 * ((love-arch = 'wasm ? 16000 48000) // 30)) = #pcm)   ; ten chunks, a thirtieth of a second at the seat's rate
   (0 < peak)                                     ; something sounded
   (peak < 32768)                                 ; and it did not clip
   (0 < tally (s 'vs))                            ; voices are live
@@ -452,3 +452,33 @@
 
 (test_fin ())
 (puts "slop: ok")
+
+; a voice's kind is laid once and kept, and a chunk inside it is a cut of that: the same
+; values the long way lays, and the same tray the second time it is asked for
+(: f 391.99543598174927
+   venv (cite 'play 'venv)
+   w (song-wave-of 7 f 0.5 0.34 16000)
+   w2 (song-wave-of 7 f 0.5 0.34 16000)
+   pad ((#w - 5442) // 2)                          ; the silence either end
+   ix ((iota 533) + 1200)
+   st 1000
+   c (snip w (200 + pad) (733 + pad))
+   t ((ix - st) * (1.0 / 16000))
+   long (slop-song-wave t f 0.5 * venv t 0.34 * (t < 0.34))
+   ; ..and the chunk it starts in is a cut too, silent before the onset
+   ix0 ((iota 533) + 700)
+   c0 (snip w (700 - st + pad) (700 - st + pad + 533))
+   t0 ((ix0 - st) * (1.0 / 16000))
+   tp0 (t0 * (t0 > 0.0))
+   long0 (slop-song-wave tp0 f 0.5 * venv tp0 0.34 * (t0 < 0.34))
+ (test (tray? w) (5442 < #w) (= w w2) (533 = #c) (= c long) (0.0 = peep w 0 0) (= c0 long0)))
+
+; the bar stops a column short of the screen
+(: g (slop-new 10 20 (wheel 3))
+   rows (split "\r\n" (slop-frame g))
+ (test (19 = #(slop-bar-fit g)) ((slop-bar-fit g + "\e[K") = last rows)))
+
+; a frame gives way to a low ring only on a seat with a yield, and never on a beat that
+; took a key, nor a fourth beat running; with no yield it is always due
+(test (frame-due? 0 0 0 0) !(frame-due? 4000 100 0 0) (frame-due? 4000 100 1 0)
+      (frame-due? 4000 100 0 4) !(frame-due? 4000 100 0 3) (frame-due? 4000 4000 0 0))

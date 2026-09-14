@@ -46,6 +46,10 @@
   (4 = tally "slen")
   ("bidden" = snip "forbidden planet" 3 9)
   ("all of it" = snip "all of it" -9 100)
+  ; ..and a rank-1 tray, the same clamps, a tray of its own type
+  (: s (snip ((iota 6) * 1.5) 2 4) z (snip (iota 6) 4 9)
+   (tray? s && 2 = #s && 3.0 = peep s 0 0 && 4.5 = peep s 1 0 && tray? z && 2 = #z && 4 = peep z 0 0
+    && 0 = #(snip (iota 6) 9 12)))
   ; applying a string indexes it: a byte 0..255, or 1 when out of range --
   ; matching the empty string, where ("" k) is Church-numeral k**0 == 1
   (104 = ("hi" 0))         ; 'h'
