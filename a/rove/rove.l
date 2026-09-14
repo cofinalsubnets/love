@@ -32,13 +32,14 @@
 (? (cite 'posix) (borrow 'posix) ())
 ; and ink, which the last floor paints with: the shader the walk runs, stopped
 (borrow 'ink)
+(borrow 'x11)
 (:
  ; --- the floor: tiles in a cask, (x y) indexed; 0 rock, 1 ground, 2 the stair, 3 water,
  ; 4 a building's floor, 5 a door, 6 glass -- looked through and never entered: a road's
  ; end off the map, heaven's void -- 7 a step and 8 a platform; the vale's 9 dirt, 10 the
  ; bare spot, 11 timber -- the cottage seen from outside, a wall -- 12 garden, 13 a stair down
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
- (open? d x y) (: t (dat d x y) (0 < t && t != 6 && t != 11))     ; walked
+ (open? d x y) (: t (dat d x y) (0 < t && t != 6 && t != 11 && t != 12))   ; walked: the cottage and its bed are not
  (lit? d x y) (0 < dat d x y)                           ; looked through
  (dput d x y v) (pin (d 't) (x + (d 'w) * y) v)
 
@@ -572,11 +573,11 @@
              "move     h j k l    or the arrow keys"
              "         y u b n    for diagonals"
              "wait     .          a turn passes, nothing mends"
-             "climb    < or enter while you stand on a stair"
+             "climb    space      while you stand on a stair"
              "leave    q          or esc"
              ""
              "a stair is a gold < set in one of the rooms:"
-             "walk onto it and press < to take it up."
+             "walk onto it and press space to take it up."
              ""
              "get the {token}, and the pennies on the way."
              ""
@@ -818,7 +819,8 @@
 
  ; --- the sign: a box over the frame, story's lighthouse way. braces cost no width, so
  ; it is measured in what a reader sees, and it runs to the row's end so no pen meets.
- sign-pen 252
+ sign-pen (x11-256 "lavender")                          ; the frame, and the title in its own
+ sign-tpen (x11-256 "honeydew")
  (vlen s) (: (go i n) (? (i >= #s) n
                          (: c (s i) (go (i + 1) (? ((c = 123) || (c = 125)) n (n + lead c)))))
              (go 0 0))
@@ -875,8 +877,11 @@
              ; not decoration: a row that stops at the box leaves the cells past it
              ; holding whatever the LAST frame put there, and the floor before this one
              ; is where that comes from.
-             (cells-cut r x0 + "\e[0m" + pen sign-pen + fit (box (i - y0)) 400
+             (cells-cut r x0 + "\e[0m" + pen sign-pen + fit (row i) 400
               + "\e[0m" + cells-from r (x0 + ww))))
+   ; the top row's tab, +-title, wears its own pen; the cells were counted before the pens went in
+   (row i) (: s (box (i - y0))
+              (i = y0 && 0 < #ttl ? (pen sign-tpen + snip s 0 (3 + #ttl) + pen sign-pen + snip s (3 + #ttl) #s) s))
    (go i acc) (i >= #rs ? acc (go (i + 1) (acc + (0 < i ? "\r\n" "") + lay i))))
 
  ; keys typed at a game are not typed at the shell: raw mode does not echo them, so
@@ -1258,7 +1263,7 @@
  ; key, its words and the node it leads to; a node with no choices closes on any key.
  ; she is bumped for it and stays, and a second bump starts it over.
  her-tree '((start ("Orozcalia sits by the fire and does not look up."
-                    "\"This place look familiar to you?\"")
+                    "\"This place seem familiar to you?\"")
                    ((1 "Who are you?" who)
                     (2 "What is this place?" here)
                     (3 "Nope." bye)))

@@ -45,7 +45,8 @@
   // paints the guest's own terminal into it, cursor motion and erases obeyed. this side
   // says only what the canvas cannot: the machine failing to start, or stopping.
   const say = (s) => { note.textContent = s; };
-  if (!window.crossOriginIsolated) { say('not cross-origin isolated: SharedArrayBuffer is unavailable, reloading under coi.js..\n'); }
+  if (!window.isSecureContext) { say('the machine cannot run on this page: a browser only gives a page the memory it needs over https or from localhost -- open it as http://localhost:PORT/ (an ssh tunnel from another machine), or serve it over https.\n'); }
+  else if (!window.crossOriginIsolated) { say('the page arrived without the two headers that give it its memory; reloading under coi.js..\n'); }
   else {
     const q = new URLSearchParams(location.search);
     const cmd = q.get('boot') ?? 'sh';

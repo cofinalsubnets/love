@@ -312,7 +312,7 @@ crewfiles = a/sb/merge.l a/sb/http.l a/sb/sb.l a/kiosko/kiosko.l \
   a/source.l a/lapiz.l \
   a/libra/salt.l a/libra/libra.l a/vi/hueweb.l a/kiosko/web.l \
   a/harp/harp.l a/harp/play.l \
-  a/ink.l a/rove/rove.l a/rove/story.l a/rove/design.l a/rove/slop.l \
+  a/x11.l a/ink.l a/rove/rove.l a/rove/story.l a/rove/design.l a/rove/slop.l \
   a/lux/wire.l a/doom.l a/lupa.l a/mc.l
 korefiles = $(kore_head) $(holo_obj) l/holo/copy.l $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no

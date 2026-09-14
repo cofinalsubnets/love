@@ -43,10 +43,16 @@ export async function loveMachine(root) {
   const halt = t => { status.textContent = t; status.hidden = false; canvas.hidden = true; };
 
   if (!memory64()) return halt('this browser has no wasm memory64; the machine cannot boot here.');
-  // coi.js reloads once to get the headers, so a page that arrives here unisolated has
-  // already had its turn -- a service worker it could not install, or a file:// open.
+  // a browser hands a page the memory the machine runs on only from a SECURE origin --
+  // https, or localhost -- so over plain http from another box nothing on this side can
+  // help, and the reader is told the two ways in. under a secure origin, coi.js reloads
+  // once to get the headers, so a page that arrives here unisolated has already had its
+  // turn: a service worker it could not install, or a file:// open.
+  const port = location.port ? ':' + location.port : '';
+  if (!window.isSecureContext)
+    return halt(`the machine cannot run on this page: a browser only gives a page the memory it needs over https or from localhost. open it as http://localhost${port}/ -- from another machine an ssh tunnel gets you there (ssh -L ${location.port || 80}:127.0.0.1:${location.port || 80} ${location.hostname}) -- or serve it over https.`);
   if (!window.crossOriginIsolated)
-    return halt('this page is not cross-origin isolated, so there is no shared memory for the machine to run on. reloading usually fixes it.');
+    return halt('the machine cannot run on this page: it arrived without the two headers that give it its memory, and the helper that adds them could not be installed. reloading once usually mends it.');
 
   const link = new URLSearchParams(location.search);
   const at = (k, d) => link.get(k) ?? root.dataset[k] ?? d;

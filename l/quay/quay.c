@@ -189,6 +189,7 @@ static void cb_restore(struct cb *c) {  // DECRC
 // SGR: the pen. colours by index (8 + bright 8 + 256), faces in the
 // font byte's high nibble; 38;2 truecolour quantizes onto the 6x6x6
 // cube rather than lying about a palette cb doesn't carry.
+static uint8_t cb_cube(uint16_t v) { return v < 48 ? 0 : (uint8_t) ((v - 35) / 40); }
 static void cb_sgr(struct cb *c) {
   for (uint8_t k = 0; k < c->pn; k++) {
     uint16_t p = c->pv[k];
@@ -210,8 +211,9 @@ static void cb_sgr(struct cb *c) {
       if (p == 38) c->cur_fg = v; else c->cur_bg = v;
       k += 2; }
     else if ((p == 38 || p == 48) && k + 4 < c->pn && c->pv[k + 1] == 2) {
-      uint8_t v = (uint8_t) (16 + 36 * (c->pv[k + 2] / 51) + 6 * (c->pv[k + 3] / 51)
-                                + c->pv[k + 4] / 51);
+      // the cube's levels are 0 95 135 175 215 255: each channel to the nearest one
+      uint8_t v = (uint8_t) (16 + 36 * cb_cube(c->pv[k + 2]) + 6 * cb_cube(c->pv[k + 3])
+                                + cb_cube(c->pv[k + 4]));
       if (p == 38) c->cur_fg = v; else c->cur_bg = v;
       k += 4; } } }
 
