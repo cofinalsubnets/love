@@ -533,6 +533,14 @@ mooncc_dep = $(mdep)
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
 k_arch_c = $(wildcard $(R)/i/$a/*.c)
 k_free_c = $R/i/kmain.c $R/i/blk.c $R/i/hda.c $R/i/sys.c
+# ..and doom, named here and not in its lane below: a rule's targets and prerequisites
+# are fixed where the rule is read, and every rule that links these is above that lane
+ifdef DOOM
+k_free_c += $R/i/doom.c $R/i/doomsnd.c
+doom_d = $R/dl/doomgeneric/doomgeneric
+doom_drop = $(wildcard $(doom_d)/doomgeneric_*.c $(doom_d)/i_allegro*.c $(doom_d)/i_sdl*.c)
+doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
+endif
 # the runtime slice moonlibc's own roster names, member by member -- the way a link with
 # addresses names one. $a=wasm empties it: that link pulls a member when its defs meet an
 # owed symbol, so spelling the set here would only compile what the ledger already answers.
@@ -563,6 +571,7 @@ k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
 # what a link WITH ADDRESSES carries beside the TUs: the vector lay, the machine tail,
 # the roster runtime. a wasm module has none, so lay and resolve never see it and $a=wasm
 # empties this too -- the source blob stays, the one object both lanes want.
+k_doom_o = $(if $(DOOM),$(patsubst $(doom_d)/%.c,$(k_odir)/doom/%.o,$(doom_c)) $(k_odir)/doom/wad.o,)
 k_mach_o = $(k_lay_o) $(k_tail_o) $(k_odir)/moonlibc.o $(k_doom_o)
 k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_mach_o) $(k_odir)/src.o
 
@@ -589,14 +598,15 @@ $(k_pie): $(k_o) $m
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -pie -t $a $(k_o) -o $@
 
-# THE WASM SEAT, and the whole of what it does differently: two rosters emptied above,
-# and this link in place of the -pie one -- everything up to `-t $a` is the lane the metal
-# seats take. the module is where it ends; there is no address space to project an elf out
-# of, so $(k_elf) and its kproject have no wasm twin.
+# THE WASM SEAT, and the whole of what it does differently: two rosters emptied above
+# (the doom objects stay: they are C like any other, and the flag is a link input here
+# as it is for the host), and this link in place of the -pie one -- everything up to
+# `-t $a` is the lane the metal seats take. the module is where it ends; there is no
+# address space to project an elf out of, so $(k_elf) and its kproject have no wasm twin.
 ifeq ($a,wasm)
 k_libc_c =
-k_mach_o =
-$(k_mod): $(k_o) $m
+k_mach_o = $(k_doom_o)
+$(k_mod): $(k_o) $m b/.doom.flag
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -t $a $(k_o) -o $@
@@ -697,11 +707,6 @@ $(eval $(call kart,kart,moon_d,moon0,hosta))
 $(eval $(call kart,xkart,xd,moonx,xa))
 
 ifdef DOOM
-doom_d = $R/dl/doomgeneric/doomgeneric
-doom_drop = $(wildcard $(doom_d)/doomgeneric_*.c $(doom_d)/i_allegro*.c $(doom_d)/i_sdl*.c)
-doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
-k_doom_o = $(patsubst $(doom_d)/%.c,$(k_odir)/doom/%.o,$(doom_c)) $(k_odir)/doom/wad.o
-k_free_c += $R/i/doom.c $R/i/doomsnd.c
 kcppflags += -I$(doom_d) -I$R/i/doom -DFEATURE_SOUND
 $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
@@ -1079,7 +1084,7 @@ serve: host
 # the seat parts from the metal only where the link does. an arch is how the tree asks for
 # a second machine, and wasm is one; the split really is at `-t $a`.
 wasm:
-	@$(MAKE) -s a=wasm $(if $(LOVE),LOVE=$(LOVE),) wasm_seat
+	@$(MAKE) -s a=wasm $(if $(LOVE),LOVE=$(LOVE),) $(if $(DOOM),DOOM=$(DOOM),) wasm_seat
 # ..and that seat, spelled where NODE is known: the module always, the image when there is
 # a node to bake it under. the loader (i/wasm/loader.js) is the runtime under a bare module.
 wasm_seat: $(k_mod) $(if $(NODE),b/wasm/love.image,)

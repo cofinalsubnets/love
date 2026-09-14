@@ -21,6 +21,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_nanosleep 35
 #define hc_reboot 169
 #define hc_lift 0x4010
+#define hc_scan 0x4011
 #define hc_clock_gettime 228
 
 void archinit(void) { }
@@ -58,6 +59,14 @@ void k_kb_sync(int room) {
   if (room <= 0) return;
   long n = __ai_sys(hc_read, 0, (long) b, room < (int) sizeof b ? room : (long) sizeof b, 0, 0, 0);
   for (long i = 0; i < n; i++) kq(b[i]); }
+
+// the scancodes the page queued on their own lane (i/wasm/scan.mjs), for the tap when a
+// game armed it (kmain's k_scan_put) and dropped otherwise, so the lane never fills
+void k_scan_put(uint8_t b);
+void k_scan_sync(void) {
+  unsigned char b[16];
+  long n = __ai_sys(hc_scan, (long) b, sizeof b, 0, 0, 0, 0);
+  for (long i = 0; i < n; i++) k_scan_put(b[i]); }
 
 // the idle: sleep one tick or until a key, then take the keys that came while we were
 // away; the worker skips the sleep while its ring holds more

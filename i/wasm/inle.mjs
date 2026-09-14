@@ -11,17 +11,23 @@
 // the program has quit (the reset). --image hands the machine a heap image to wake (the one
 // `bake PATH` on the boot line writes, lifted out: `make b/wasm/love.image`).
 // --horn names a file to lay what the machine PLAYS in, as raw 16-bit stereo at the
-// horn's own rate: the AudioWorklet a page has, headless.
+// horn's own rate: the AudioWorklet a page has, headless. --press names keys (scan.mjs's
+// names, e.code's spelling) pressed and released in turn on the scan lane, --after
+// seconds into the run: a game's keys, which no tty byte can carry. --for ends the run
+// after that many seconds, with the status timeout(1) gives, for a program that never quits.
 //   usage: node i/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm]
 //                                  [--lift /in/machine:b/here] [--horn sound.raw]
+//                                  [--press "Escape Enter" --after S] [--for S]
 //                                  [--image love.image] love.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
 import { openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
-import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n,
+import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n, scan_at, scan_n, c_sh, c_st,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
+import { scanlane, codes } from './scan.mjs';
 
 const args = process.argv.slice(2);
 let fb = null, dump = null, scale = 0, liftReq = null, image = null, hornFile = null, deaf = false;
+let press = [], after = 0, forS = 0;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
@@ -30,11 +36,14 @@ while (args[0]?.startsWith('--')) {
   else if (o === '--lift') { const [from, to] = args.shift().split(':'); liftReq = { from, to: to ?? from.split('/').pop() }; }
   else if (o === '--horn') hornFile = args.shift();
   else if (o === '--deaf') deaf = true;
+  else if (o === '--press') press = args.shift().split(/\s+/).filter(Boolean);
+  else if (o === '--after') after = Number(args.shift());
+  else if (o === '--for') forS = Number(args.shift());
   else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump, fb.scale = scale;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--press KEYS --after S] [--for S] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
 
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
@@ -101,6 +110,15 @@ cpu.on('error', (e) => { process.stderr.write('\ninle: ' + e + '\n'); leave(1); 
 const word = (a) => !/[\s"']/.test(a) ? a : !a.includes('"') ? '"' + a + '"' : "'" + a + "'";
 cpu.postMessage({ wasm: readFileSync(wasm), ring, ram: Number(process.env.INLE_RAM ?? 256),
                   cmd: cmd.map(word).join(' '), fb, image });
+
+// the presses: a make, the break 60 ms behind it, the next key 300 ms on
+if (press.length) {
+  const send = scanlane(ring, ctl, { scan_at, scan_n, c_sh, c_st });
+  for (const k of press) if (!(k in codes)) { console.error('inle.mjs: --press: no key ' + k); process.exit(2); }
+  press.forEach((k, i) => {
+    setTimeout(() => send(k, 0), after * 1000 + i * 300).unref();
+    setTimeout(() => send(k, 1), after * 1000 + i * 300 + 60).unref(); }); }
+if (forS) setTimeout(() => { process.stderr.write('inle: the machine outran --for\n'); leave(124); }, forS * 1000).unref();
 
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 process.stdin.on('data', (d) => { if (process.stdin.isTTY && d.includes(29)) leave(0); push(d); });

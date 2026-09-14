@@ -18,7 +18,8 @@
 // about what runs on it. 1024 is what the tower wants, measured: at 256 the walk answers a
 // keypress in twenty-odd SECONDS, and the floor is somewhere under 512. `love seed` wants
 // the same 1024 and ooms under 768, so one number covers both.
-import { ctl_n, ring_n, ring_at, shared_n } from './cpu.mjs';
+import { ctl_n, ring_n, ring_at, shared_n, scan_at, scan_n, c_sh, c_st } from './cpu.mjs';
+import { scanning } from './scan.mjs';
 import { glass } from './glass.mjs';
 import { hearing } from './hear.mjs';
 
@@ -81,6 +82,7 @@ export async function loveMachine(root) {
   const hear = hearing(ring, ctl);
   canvas.addEventListener('pointerdown', hear);
   canvas.addEventListener('keydown', hear);
+  scanning(ring, ctl, canvas, { scan_at, scan_n, c_sh, c_st });   // and as scancodes, for a game
   // a chip types its line at the machine, the way the repl island's chips ran theirs
   for (const ch of root.querySelectorAll('[data-type]'))
     ch.addEventListener('click', () => { push([...new TextEncoder().encode(ch.dataset.type), 13]);

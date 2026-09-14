@@ -1,6 +1,6 @@
 ; a/kiosko/web.l -- `love web`: the tree, in a browser, painted on the way out.
 ;
-;   love web [-p port] [DIR]      DIR defaults to the working directory
+;   love web [-p port] [--doom] [DIR]      DIR defaults to the working directory
 ;
 ; kiosko already serves a directory and lists what it holds. what this adds is one
 ; hook, and three answers through it:
@@ -27,6 +27,9 @@
 ; the tree (a Makefile and w/index.l), this lays them through our own make first; where
 ; it is a bare directory the source aboard is laid under it (`love source`) and that tree
 ; is built and served. this binary drives the build and no love is compiled for it. the
+; --doom fetches doomgeneric and the shareware IWAD into the nest's dl/ (a/doom.l's pair),
+; and a nest that carries them -- by this flag or by `love doom` -- gets its module laid
+; DOOM=1, so the game is aboard the page and `doom` at its shell runs it. the
 ; two isolation headers kiosko's reply sends are what let inle.html's machine run here
 ; without its service worker.
 ;
@@ -143,17 +146,18 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       _ ((cite 'source 'src-arm) dir exe)
       ; the module is site-wasm's to build, through its own seat: asked for by name at
       ; the top it would be laid with the x64 lane's recipe and fail a file at a time
-      _ (say err ";; laying the page: make web site-wasm\n")
-      p (spawn [exe "make" "-C" dir ("LOVE=" + exe) "web" "site-wasm"])
+      doom (? ((cite 'doom 'doom-aboard?) (dir + "/dl")) ["DOOM=1"] ())
+      _ (say err (";; laying the page: make web site-wasm" + (two? doom ? " DOOM=1" "") + "\n"))
+      p (spawn ([exe "make" "-C" dir ("LOVE=" + exe)] + doom + ["web" "site-wasm"]))
       st (charm? p && 0 <= p ? (wait p) 1)
       (0 = st ? 0 (say err ("web: the page did not build (" + show st + ")\n"), quit 1)))
 
    (web-main as)
    (: box (tablet 0)
       t (tablet 0)
-      o (uopt as t '(112) () {"port" 112 "no-build" 110})
+      o (uopt as t '(112) () {"port" 112 "no-build" 110 "doom" 100})
       _ (two? o ? 0 (sv-die 2 (last as + " needs an argument")))
-      un (uoptun t '(112 110))
+      un (uoptun t '(112 110 100))
       _ (nil? un ? 0 (sv-die 2 ("unknown option -" + string un)))
       rest <>>o
       ; DIR is positional, so a flag that fell through would become one and a whole tree
@@ -165,12 +169,16 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       port (: v (unum pt) (? (nil? pt) 8080 (charm? v) v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
+      doom? (peep t 100 0)
       ; the tree: DIR itself, the nest laid under it before, or laid there now.
       ; -n serves a bare directory as it is
       dir (? (sv-tree? dir0) dir0
              (sv-tree? (sv-root dir0)) (sv-root dir0)
              build? (sv-lay dir0)
              dir0)
+      _ (? (doom? && build? && sv-tree? dir)
+           ((cite 'doom 'doom-fetch) (dir + "/dl") ? (sv-die 1 "the doom downloads did not land") 0)
+           0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
       _ (nil? serve5 ? (say err "web: no kiosko aboard\n", quit 1))

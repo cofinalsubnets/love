@@ -2,12 +2,12 @@
 // and the nifs that drive it.
 //
 // on inle the doors are the kernel's own -- framebuffer, scancode tap, clock -- and
-//   (doom ())      runs the game whole; it answers when doom quits, which on this
-//                  machine means exit() reached (quit), so it resets.
+//   (doom ())      runs the game whole; it answers when doom quits from its own menu.
 // on the host the doors are a frame flag, a key queue and ai_clock, and love drives
 // the loop from a/doom.l over an X window:
 //   (doom-start wad)      set up, with the IWAD at that path -> 1 | 0 (already running)
-//   (doom-tick ())        one frame of the game -> 1 when a frame was drawn, else 0
+//   (doom-tick ())        one frame of the game -> 1 when a frame was drawn, 0 when
+//                         not, -1 once the game has quit
 //   (doom-frame cask)     copy the frame (640x400 BGRX) into the cask -> bytes copied
 //   (doom-key k pressed)  queue a key (doomkeys.h's codes) -> ()
 //
@@ -24,6 +24,7 @@
 #include <string.h>
 #include "doomgeneric.h"
 #include "doomkeys.h"
+#include "i_system.h"
 
 // the kernel's doors (kmain.c)
 bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch);
@@ -56,12 +57,21 @@ static struct {
  uintptr_t epoch;
  int keys[dh_keys];                  // pressed << 8 | key
  unsigned kh, kt;
- int frame, started;
+ int frame, started, quit;
  char wad[256];
 } dh;
 
+// doom's quit runs its exit hooks and returns -- the platform ends the game. this hook
+// is registered first, so it runs last, behind the config save and the shutdowns
+static void dg_quit(void) { dh.quit = 1; }
+
+// doom's ENDOOM hook (d_main.c) ends in exit(), which is no door on the kernel and would
+// end the process before the window closed on the host -- and the text screen it would
+// show is not drawn on either seat
+extern int show_endoom;
 void DG_Init(void) {
  dh.epoch = hosted() ? ai_clock() : k_clock_ms();
+ show_endoom = 0;
  if (!hosted()) k_scan_arm(1); }
 
 // blit the 640x400 frame into the middle of whatever the door handed over. no
@@ -139,11 +149,13 @@ int DG_GetKey(int *pressed, unsigned char *key) {
 static char *dg_argv[4];
 static void dg_create(void) {
  dg_argv[0] = (char*) "doom", dg_argv[1] = (char*) "-iwad", dg_argv[2] = dh.wad, dg_argv[3] = 0;
+ I_AtExit(dg_quit, true);
  doomgeneric_Create(3, dg_argv); }
 
 static void doom_run(void) {
  memcpy(dh.wad, "doom1.wad", 10);
- for (dg_create();;) doomgeneric_Tick(); }
+ for (dg_create(); !dh.quit;) doomgeneric_Tick();
+ k_scan_arm(0); }
 
 static lvm(lvm_doom) {
  doom_run();
@@ -160,8 +172,10 @@ static lvm(lvm_doom_start) {
  dg_create();
  ai_musttail return Answer(putcharm(1)); }
 
+// (doom-tick ()): 1 when a frame was drawn, 0 when not, -1 once the game has quit
 static lvm(lvm_doom_tick) {
  if (!dh.started) ai_musttail return Answer(putcharm(0));
+ if (dh.quit) ai_musttail return Answer(putcharm(-1));
  dh.frame = 0;
  doomgeneric_Tick();
  ai_musttail return Answer(putcharm(dh.frame)); }

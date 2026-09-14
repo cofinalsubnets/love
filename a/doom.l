@@ -5,7 +5,9 @@
 ;
 ; from a love with no doom in it, the verb lays this binary's source under ./love-<ver>/,
 ; fetches doomgeneric and the shareware IWAD there, builds DOOM=1 once and runs that binary
-; (doom-nest below); from one built with DOOM=1 it is the window right away.
+; (doom-nest below); from one built with DOOM=1 it is the window right away. on inle
+; there is no window and nothing to fetch with: the game is in the kernel (a page laid by
+; `love web -doom`) and runs whole on the console, or it is not there.
 ;
 ; the game is C, linked into this binary by the DOOM=1 lane (i/doom.c's host
 ; doors: doom-start / doom-tick / doom-frame / doom-key); this file is the window.
@@ -110,9 +112,10 @@
                             (gone ? 1 (events 0))))))
        (loop n) (? (events 0) n
                    (frames && n >= frames) n
-                   (: drew (doom-tick ())
-                      _ (drew ? (doom-frame buf, x-putframe s win gc depth buf))
-                    (loop (n + drew))))
+                   (: drew (doom-tick ())                                     ; -1: the game quit itself
+                      (? (drew < 0) n
+                         (: _ (drew ? (doom-frame buf, x-putframe s win gc depth buf))
+                            (loop (n + drew))))))
        (loop 0))
 
    ; --- the nest: a love with doom in it, laid in ./love-<ver>/ off this binary's source --
@@ -144,6 +147,21 @@
    (nest-doom? nest)
     (: q (open (nest + "/b/.doom.flag") "r")
        (hot? q && (: s (slurp q) _ (close q) (string? s && s = "DOOM=1\n"))))
+   ; the pair the DOOM=1 lane wants, fetched into DL once: 0 when both stand there.
+   ; `love web -doom` calls it too, for a page with the game inside
+   (doom-fetch dl)
+    (: _ (mkdir dl 493)
+       r1 (fetch wad-url (dl + "/doom1.wad"))
+       r2 (? (two? (stat (dl + "/doomgeneric"))) 0
+             (: r (fetch dg-url (dl + "/doomgeneric.tgz"))
+              (r != 0 ? r
+               (cite 'tarcmd 'tar-main ["xzf" (dl + "/doomgeneric.tgz") dl],
+                rename (dl + "/doomgeneric-master") (dl + "/doomgeneric"),
+                unlink (dl + "/doomgeneric.tgz"),
+                unlink (dl + "/pax_global_header"),              ; the tarball's pax row, laid as a file
+                two? (stat (dl + "/doomgeneric")) ? 0 1))))
+       (r1 != 0 || r2 != 0 ? 1 0))
+   (doom-aboard? dl) (two? (stat (dl + "/doom1.wad")) && two? (stat (dl + "/doomgeneric")))
    (doom-nest as)
     (: exe (selfpath 0)
        here (cwd 0)
@@ -160,25 +178,16 @@
             (fail $ "cannot run " + bin + " (" + show e + ")"))
           (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
              (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
-                (: _ (mkdir dl 493)
-                   r1 (fetch wad-url (dl + "/doom1.wad"))
-                   r2 (? (two? (stat (dl + "/doomgeneric"))) 0
-                         (: r (fetch dg-url (dl + "/doomgeneric.tgz"))
-                          (r != 0 ? r
-                           (cite 'tarcmd 'tar-main ["xzf" (dl + "/doomgeneric.tgz") dl],
-                            rename (dl + "/doomgeneric-master") (dl + "/doomgeneric"),
-                            unlink (dl + "/doomgeneric.tgz"),
-                            unlink (dl + "/pax_global_header"),              ; the tarball's pax row, laid as a file
-                            two? (stat (dl + "/doomgeneric")) ? 0 1))))
-                   (r1 != 0 || r2 != 0 ? (fail "the downloads did not land")
-                      (: _ (cite 'source 'src-arm nest exe)                     ; autonomous: ours throughout
-                         _ (note "building the nest's love with doom inside -- this binary is the toolchain")
-                         st2 (run-in nest [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
-                         (st2 != 0 ? (fail "the doom build failed")
-                          (: e (setenv "LOVE_DOOM_NEST" "1",
-                                exec (bin . ("doom" . (nest-args dl as))))
-                           (fail ("cannot run " + bin + " (" + show e + ")")))))))))))
+                (? (doom-fetch dl) (fail "the downloads did not land")
+                   (: _ (cite 'source 'src-arm nest exe)                     ; autonomous: ours throughout
+                      _ (note "building the nest's love with doom inside -- this binary is the toolchain")
+                      st2 (run-in nest [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
+                      (st2 != 0 ? (fail "the doom build failed")
+                       (: e (setenv "LOVE_DOOM_NEST" "1",
+                             exec (bin . ("doom" . (nest-args dl as))))
+                        (fail ("cannot run " + bin + " (" + show e + ")"))))))))))
 
+   (inle? _) (? (elem 'love-os (names ())) (elem (ev 'love-os) '(inle wasm)) 0)
    (digits s) (:- (go 0 0) n #s (go i a) (n <= i ? a
                (: c (s i) (47 < c < 58 ? (go (i + 1) (a * 10 + c - 48)) a))))
    doom-usage "usage: love doom [-iwad FILE] [-display :N] [-frames N]"
@@ -188,7 +197,11 @@
        wad (opt as "-iwad" (two? (stat "dl/doom1.wad") ? "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))
-       (? !(elem 'doom-start (names ())) (doom-nest as)
+       ; on inle the game is linked in or it is not: no window, no nest, and nothing to
+       ; fetch with -- the WAD is a baked file and (doom ()) runs it whole
+       (? (inle? 0) (? (elem 'doom (names ())) (doom ())
+                       (say err "doom: this machine carries no doom -- a page laid by `love web --doom` does\n", 1))
+          !(elem 'doom-start (names ())) (doom-nest as)
           (one? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (: dn (dispof (string? disp ? disp ""))
              s (x-connect ("/tmp/.X11-unix/X" + dn))
@@ -211,5 +224,5 @@
    door (udoor 'doom doom-main doom-usage 1 1)
    _ (pins (cite 'verbs 'tab) 'doom door)
    s (cite 'verbs 'fire ["doom" "doom.l"])
-   (two? s ? (quit (door >s))))
+   _ (two? s ? (quit (door >s)) 0))              ; a binding, so the module exports
 ) ; module doom

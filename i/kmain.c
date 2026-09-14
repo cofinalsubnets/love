@@ -391,7 +391,10 @@ _Static_assert(countof(kb2ascii) == countof(shift_kb2ascii), "one scancode table
 // prefix folded onto the one that follows it (bit 7 is the break bit, so an
 // extended key wears 0x100) -- one word out, no state for the reader to keep.
 void k_scan_arm(int on) { kkb.raw = on ? 1 : 0, kkb.rh = kkb.rt = 0; }
+// a seat whose codes are polled rather than interrupted (i/wasm) fills the tap here
+__attribute__((weak)) void k_scan_sync(void) { }
 int k_scan_pop(void) {
+  if (kkb.rh == kkb.rt) k_scan_sync();
   if (kkb.rh == kkb.rt) return -1;
   int b = kkb.r[kkb.rh];
   kkb.rh = (kkb.rh + 1) & 63;
@@ -402,6 +405,8 @@ int k_scan_pop(void) {
 static void kraw(uint8_t b) {
   uint8_t n = (kkb.rt + 1) & 63;
   if (n != kkb.rh) kkb.r[kkb.rt] = b, kkb.rt = n; }
+// the tap alone: a code whose text arrives on its own lane (i/wasm's scan ring)
+void k_scan_put(uint8_t b) { if (kkb.raw) kraw(b); }
 
 // decode a PS/2 scancode (interrupt context) and enqueue input bytes. arrows, Home, End and
 // Delete become the ANSI escapes the line editor decodes, and with Ctrl held Home/End emit

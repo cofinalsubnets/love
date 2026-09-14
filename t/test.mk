@@ -20,7 +20,7 @@
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_ord test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
-  test_seedwasm test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
+  test_doomwasm test_seedwasm test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_xfixpoint uuhomgen uukind uumx uusplgen \
@@ -1298,6 +1298,30 @@ test_kernel_wasm: host
 	   && grep -q "gain 100       1" b/wasm/pack.log \
 	   || { cat b/wasm/pack.log; echo "FAIL test_kernel_wasm (pack differs on this seat)"; exit 1; }
 	@echo "  pack: ok -- pinv and the byte loop agree where the float-to-int is not the host's"
+endif
+
+# doom on the wasm seat (i/doom.c's kernel doors under the module): opt-in for the same
+# reason. the game boots off doomrun.l, draws into the framebuffer and plays through
+# the horn, and is quit from its own menu over the scan lane -- Escape, up to QUIT GAME,
+# Enter, y -- which is the keys proven make and break: exit() aboard is the reset, and the
+# reset ends the run, where a game that never heard the keys outruns --for.
+ifeq ($(NODE),)
+test_doomwasm:
+	@echo "test_doomwasm: skipped (needs node)"
+else
+test_doomwasm:
+	@$(MAKE) -s wasm DOOM=1
+	@echo TEST t/kernel/doomrun.l "(doom on the wasm seat: a frame, the horn, and quit by key)"
+	@rm -f b/wasm/doom.ppm b/wasm/doom.raw
+	@INLE_RAM=512 $(NODE) $(R)/i/wasm/inle.mjs --fb 640x400 --dump b/wasm/doom.ppm --horn b/wasm/doom.raw \
+	   --after 12 --press "Escape ArrowUp Enter KeyY" --for 60 \
+	   --image b/wasm/love.image $(R)/b/love.wasm t/kernel/doomrun.l \
+	   < /dev/null > b/wasm/doom.log 2>&1 \
+	 && grep -q "I_InitGraphics: DOOM screen size" b/wasm/doom.log \
+	 && grep -q "doomsnd: the horn is open" b/wasm/doom.log \
+	 && test -s b/wasm/doom.ppm && test -s b/wasm/doom.raw \
+	   || { tail -20 b/wasm/doom.log; echo "FAIL test_doomwasm"; exit 1; }
+	@echo "  doomwasm: ok -- drew, sounded, and quit from the menu"
 endif
 
 # test_seedwasm -- `love seed x64` ON THE WASM SEAT: the machine lays the source it

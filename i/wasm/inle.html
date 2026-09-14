@@ -35,7 +35,8 @@
   <p id="note" class="hint"></p>
 </main>
 <script type="module">
-  import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
+  import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n, scan_at, scan_n, c_sh, c_st } from './cpu.mjs';
+  import { scanning } from './scan.mjs';
   import { glass } from './glass.mjs';
   import { hearing } from './hear.mjs';
   const $ = (id) => document.getElementById(id);
@@ -74,6 +75,7 @@
     const hear = hearing(ring, ctl, say);
     canvas.addEventListener('pointerdown', hear);
     canvas.addEventListener('keydown', hear);
+    scanning(ring, ctl, canvas, { scan_at, scan_n, c_sh, c_st });   // and as scancodes, for a game
     // the canvas stays on THIS thread and the worker sends frames (cpu.mjs's blit): a
     // transferred canvas only reaches its placeholder at a task checkpoint, and the worker
     // never has one -- its idle is an Atomics.wait inside the boot's own task.

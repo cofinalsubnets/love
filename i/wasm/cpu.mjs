@@ -22,17 +22,21 @@
 // one from, so the block sits well clear of any syscall table (i/wasm/horn.c).
 const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003,
-             lift: 0x4010 };
+             lift: 0x4010, scan: 0x4011 };
 const ENOSYS = 38;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
 // asks for, [8] the horn's rate (0 closed) with [9] frames written and [10] played, and
-// [11] whether something real is playing them; then ring_n bytes of keys from ring_at,
+// [11] whether something real is playing them, [12] [13] the scan ring's head and tail;
+// then ring_n bytes of keys from ring_at, scan_n bytes of scancodes (PS/2 set 1, make and
+// break, what the kernel's tap reads and a game wants: a key's release is not a byte),
 // lift_n bytes holding the path of the file asked for, and the horn's own samples.
 // inle.mjs and inle.html write it, this file reads it.
 // the ring is the only door into the worker: it blocks inside k_start and idles in an
 // Atomics.wait, so it never returns to an event loop and a postMessage cannot reach it.
-export const ctl_n = 12, ring_n = 4096, ring_at = ctl_n * 4, lift_n = 256, lift_at = ring_at + ring_n;
+export const ctl_n = 14, ring_n = 4096, ring_at = ctl_n * 4;
+export const scan_n = 256, scan_at = ring_at + ring_n, c_sh = 12, c_st = 13;
+export const lift_n = 256, lift_at = scan_at + scan_n;
 export const c_rate = 8, c_wrote = 9, c_played = 10, c_live = 11;
 // the horn's ring: 16-bit stereo frames, a third of a second at 48k, which is about what
 // a small card holds. a power of two, so `& horn_mask` indexes it even once the written
@@ -91,7 +95,7 @@ const post = (m, t) => port.postMessage(m, t);
 
 class Reboot extends Error { }
 
-let memory, ctl, kb, pcm, seen = 0;
+let memory, ctl, kb, sc, pcm, seen = 0;
 let fb = null, fbAt = 0, fbImg = null, fbCtx = null, blitAt = 0;
 const mono0 = (typeof performance !== 'undefined' ? performance : Date).now();
 const dec = new TextDecoder('utf-8', { fatal: false });
@@ -200,7 +204,8 @@ const sys1 = (n, a, b, c) => {
       flush(); resize(); blit(true); lift(1);
       // a key still queued is a wake already: the kernel drains a few per idle, so the
       // sleep is skipped until the ring is empty, and a pasted line lands at speed
-      if (Atomics.load(ctl, 0) === Atomics.load(ctl, 1)) Atomics.wait(ctl, 2, seen, ms);
+      if (Atomics.load(ctl, 0) === Atomics.load(ctl, 1) && Atomics.load(ctl, c_sh) === Atomics.load(ctl, c_st))
+        Atomics.wait(ctl, 2, seen, ms);
       seen = Atomics.load(ctl, 2);
       return 0n; }
     case NR.read: {                                     // the keys queued since the last read, never waiting
@@ -208,6 +213,12 @@ const sys1 = (n, a, b, c) => {
       let head = Atomics.load(ctl, 0), k = 0;
       while (k < max && head !== tail) { h[p + k++] = kb[head]; head = (head + 1) % ring_n; }
       Atomics.store(ctl, 0, head);
+      return BigInt(k); }
+    case NR.scan: {                                     // the scancodes queued, the same way
+      const p = Number(a), max = Number(b), h = u8(), tail = Atomics.load(ctl, c_st);
+      let head = Atomics.load(ctl, c_sh), k = 0;
+      while (k < max && head !== tail) { h[p + k++] = sc[head]; head = (head + 1) % scan_n; }
+      Atomics.store(ctl, c_sh, head);
       return BigInt(k); }
     case NR.reboot: flush(); throw new Reboot();
     // the horn: the rate the page will take, then the ring empty behind it -- what a
@@ -304,6 +315,7 @@ if (port) isNode ? port.on('message', run) : port.addEventListener('message', (e
 async function run(msg) {
   ctl = new Int32Array(msg.ring, 0, ctl_n);
   kb = new Uint8Array(msg.ring, ring_at, ring_n);
+  sc = new Uint8Array(msg.ring, scan_at, scan_n);
   pcm = new Uint8Array(msg.ring, horn_at, horn_n * 4);
   for (;;) {
     try { await boot(msg); return; }

@@ -42,8 +42,16 @@
     (sound cl @ 'torn (mkblob-die "torn backend text")
                 (a . u) (ev a, mkblob-rdev u))
 
+   ; a wasm object is the gen tuple as text (a/moon/moon.l), the same label/raw forms
+   ; in its data slot and the two names in its globals slot -- u/mksrc.l's lane
+   (mkblob-wasm dst forms syms)
+    (: q (open dst "w")
+       _ (!(hot? q) ? (mkblob-die ("cannot write " + dst)))
+       _ (say q (show [() forms () syms () () () () () () () ()]))
+       (close q))
+
    (mkblob arch src dst sym)
-    (: _ (mkblob-be arch)
+    (: _ (arch = 'wasm ? 0 (mkblob-be arch))
        g (mkblob-slurp src)
        _ (one? g ? (mkblob-die $ "cannot read " + src))
        s <>g
@@ -54,8 +62,8 @@
        ; (holo.l's item-len) -- so a wad costs a cell here and not four million
        forms [['label (nom lsym)] ['raw (mkblob-le8 n 0 ())]
               ['label (nom sym)]  ['raw [s]]]
-       ob (objelf arch () () () [sym lsym] () () () () () forms)
-       (write-bytes dst ob))
+       (arch = 'wasm ? (mkblob-wasm dst forms [sym lsym])
+        (write-bytes dst (objelf arch () () () [sym lsym] () () () () () forms))))
 
    ; `argv` is a list whose head is this script's own path, so the arguments
    ; start at the tail. the arch arrives as TEXT and `name` interns it, so the
