@@ -32,8 +32,18 @@
                   (? (hot? q) (: s (slurp q) _ (close q) s)
                      (: _ (say err ("index: cannot open " + f + "\n")) (quit 1))))
    wasm        "i/wasm"                                       ; as the page links it
-   (island _)  (slurpf (wasm + "/machine.html")
-                + "\n<script type=\"module\" src=\"" + wasm + "/machine.js\"></script>\n")
+   ; the doom page (DOOM=1, `love web --doom`): the game's build aboard links under a
+   ; 256 MB budget, an eighth of 2048 MiB, and a chip starts it
+   doom?       (elem "doom" >argv)
+   (splice s a b) (: n #s m #a
+                     (go i) (? (n - m < i) s (snip s i (i + m) = a) (snip s 0 i + b + snip s (i + m) n) (go (i + 1)))
+                     (go 0))
+   (island _)  (: h (slurpf (wasm + "/machine.html"))
+                  h2 (doom? ? (splice (splice h "<div class=\"machine\">" "<div class=\"machine\" data-ram=\"2048\">")
+                                      "data-type=\"love\">love</span>"
+                                      "data-type=\"love\">love</span>\n<span class=\"chip\" data-type=\"doom\">doom</span>")
+                              h)
+                  (h2 + "\n<script type=\"module\" src=\"" + wasm + "/machine.js\"></script>\n"))
 
    ; --- the glossary: id, emoji, the term as shown, the body; 'gray for a word that wears
    ; the empty colour. a body names another entry through the dsl, never by hand, so the
