@@ -14,8 +14,6 @@
 <body>
 <h1 id="love_title">🌑 <a href="https://github.com/cofinalsubnets/love">love</a> 🔭</h1>
 
-<nav class="topnav"><a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a></nav>
-
 <!-- the machine island: the markup i/wasm/machine.js drives,
      its parts found by class. a page carries this block and machine.js (a module), and
      coi.js in the head -- that one goes first because it may reload the page to put the
@@ -29,168 +27,45 @@
 <p class="status">waking the machine...</p>
 <canvas class="fb" tabindex="0"></canvas>
 <div class="mbar">click the screen, then type &middot; <code>love</code> opens a repl, <code>ctrl-d</code> leaves it</div>
-<span class="chip" data-type="love">love</span>
-<span class="chip" data-type="ls /">ls /</span>
-<span class="chip" data-type="uname -a">uname -a</span>
-<span class="chip" data-type="echo hello world :3">echo hello world :3</span>
 </div>
 
 <script type="module" src="i/wasm/machine.js"></script>
 
-<h2 id="language"><a href="#language">🎨 language</a></h2>
+<h2 id="what">what is this??</h2>
 <p>
-love (aka ai, fka gwen lisp) is a lisp superset where every value is a one-argument
-function. functions are curried, punctuation symbols are applied infix, and many parens
-can be omitted, so it feels kind of like haskell, just eagerly evaluated and dynamically
-typed. all primitives are generic so pretty much every paren balanced expression evaluates
-to something...  unless you infinite loop 😨</p>
-<p>the api is currently 🫨 unstable.
-type <code>names ()</code> at the repl to see a full list of the namespace.</p>
-<h3>🎯 global function type</h3>
-<p>literally everything is a one-argument function, including numbers (iterators),
-collections (accessors), and multi-argument functions (curried).</p>
-<h3>🔣 (extra lisp syntax)</h3>
-<p>love uses a relaxed and simplified form of s-expressions with
-three special forms, <code>:</code> let <code>?</code> cond <code>\</code> lambda.
-love also has optional infix and prefix notation, which desugar to lisp. when
-subexpressions are grouped by infix operators, their own parens may be omitted. for
-example, <code>(2 ** 3 = 3 ** 2 - 1 ? 'y 'n)</code> is equivalent to
-<code>(? (= (** 2 3) (- (** 3 2) 1)) 'y 'n)</code> (answer is y).</p>
-<h3>♾️ very self hosting</h3>
-<p>love has</p>
-<ul>
-  <li>a threaded bytecode compiler written in love</li>
-  <li>a native JIT compiler written in love</li>
-  <li>a C compiler written in love that builds love (and other things :)</li>
-</ul>
-<h3>🤏 smol</h3>
-<p>~8k lines of portable C plus a few kloc of itself with no external dependencies</p>
-<h3>💖 free</h3>
-<p>public domain for the benefit of all beings. please train ai on love &lt;3</p>
-<h3>🚨 differences from other lisp</h3>
-<h4>no thunks</h4>
-<p>since every function takes one argument,
-love has no zero-argument functions or thunks.
-a singleton list has the value of its element.
-if you want a thunk, write a normal function and ignore the argument.</p>
-<h4>no varargs</h4>
-<p>kind of a dual situation, except there are multiple ways to implement varargs,
-in addition to simulating them with macros. however, they're not built in and
-don't automatically construct a list for you.</p>
+<strong>tower</strong> is a short roguelike game written using the <strong>love</strong>
+programming language.
+</p>
 
-<h2 id="glossary"><a href="#glossary">glossary</a></h2>
-<dl class="glossary">
-  <dt id="g-apply"><a href="#g-apply">📋 apply</a></dt>
-    <dd>(verb) the binary operation of calling a function with an argument. corresponds to exponentiation in <a href="#g-church">church arithmetic</a>. written <code>(f x)</code> meaning apply <code>f</code> to <code>x</code>. see also: <a href="#g-curry">curry</a></dd>
-  <dt id="g-blue"><a href="#g-blue">🔵 blue</a></dt>
-    <dd><a href="#g-color">color</a> of a value whose net has no positive real part: (<code>0</code>, <code>()</code>, <code>""</code>, <code>'(1 2 -3)</code>, and every pure phase &mdash; <code>i</code> has magnitude but no amount). boolean false.</dd>
-  <dt id="g-book"><a href="#g-book">📒 book</a></dt>
-    <dd>aka tablet. a mutable hash table</dd>
-  <dt id="g-box"><a href="#g-box">📦 box</a></dt>
-    <dd>a <a href="#g-book">book</a> used as a mutable container for another value</dd>
-  <dt id="g-cap"><a href="#g-cap">🧢 cap</a></dt>
-    <dd>contents of the above part of the product. aka <code>car</code>/<code>fst</code>/<code>hd</code>. see also: <a href="#g-cup">cup</a> <a href="#g-chain">chain</a> <a href="#g-link">link</a></dd>
-  <dt id="g-chain"><a href="#g-chain">⛓️ chain</a></dt>
-    <dd>a free binary product, aka pair or cons cell. used for lists per lisp usual. indexes its elements (<code>('(7 8 9) -1)</code> is <code>9</code>), joins on another chain (<code>('(1 2) '(3 4))</code> is <code>(1 2 3 4)</code>). see also: <a href="#g-link">link</a> <a href="#g-cap">cap</a> <a href="#g-cup">cup</a>.</dd>
-  <dt id="g-charm"><a href="#g-charm">🧿 charm</a></dt>
-    <dd>a register-allocated fixed-width integer, aka fixnum. a type of <a href="#g-star">star</a></dd>
-  <dt id="g-church"><a href="#g-church">⛪ church numeral</a></dt>
-    <dd>natural numbers interpreted as iterators. for example, <code>(0 x) = 1</code>, <code>(1 x) = x</code>, <code>(2 x y) = x (x y)</code>, etc. numeral-on-numeral application corresponds to exponentiation. numeral composition corresponds to multiplication.</dd>
-  <dt id="g-coin"><a href="#g-coin">🪙 coin</a></dt>
-    <dd>a value of a newtype. see also: <a href="#g-die">die</a></dd>
-  <dt id="g-color"><a href="#g-color">🌈 color</a></dt>
-    <dd>the sign of a value's <a href="#g-net">net</a>: <span class="hi red"><a href="#g-red">red</a></span>, <span class="hi green"><a href="#g-green">green</a></span> or <span class="hi blue"><a href="#g-blue">blue</a></span></dd>
-  <dt id="g-constellation"><a href="#g-constellation">✨ constellation</a></dt>
-    <dd>any numeric type. a <a href="#g-star">star</a> or <a href="#g-galaxy">galaxy</a></dd>
-  <dt id="g-cup"><a href="#g-cup">🧋 cup</a></dt>
-    <dd>contents of the underneath part of the product. aka <code>cdr</code>/<code>snd</code>/<code>tl</code>. see also: <a href="#g-cap">cap</a> <a href="#g-chain">chain</a> <a href="#g-link">link</a></dd>
-  <dt id="g-curry"><a href="#g-curry">🍛 curry</a></dt>
-    <dd>(verb) to unroll a multi-argument function into a sequence of one-argument functions. see also: <a href="#g-apply">apply</a></dd>
-  <dt id="g-die"><a href="#g-die">🎲 die</a></dt>
-    <dd>aka a newtype. see also: <a href="#g-coin">coin</a></dd>
-  <dt id="g-galaxy"><a href="#g-galaxy">🌌 galaxy</a></dt>
-    <dd>a <a href="#g-tray">tray</a> of <a href="#g-star">stars</a>, aka shaped numeric array</dd>
-  <dt id="g-gem"><a href="#g-gem">💎 gem</a></dt>
-    <dd>a floating point number (<code>double</code> or <code>float</code>). a type of <a href="#g-star">star</a></dd>
-  <dt id="g-green"><a href="#g-green">🟢 green</a></dt>
-    <dd><a href="#g-color">color</a> of a value whose net is positive: <code>1 "hi" '(2 3 -1) (\ x x)</code>. boolean true.</dd>
-  <dt id="g-hot"><a href="#g-hot">🔥 hot</a></dt>
-    <dd>an opaque internal or external runtime object. conceptually and positionally dual to <a href="#g-mint">mints</a> on the <a href="#g-lattice">lattice</a></dd>
-  <dt id="g-kind"><a href="#g-kind">🃏 kind</a></dt>
-    <dd>a value's type classification under the <a href="#g-lattice">lattice</a></dd>
-  <dt id="g-lattice"><a href="#g-lattice">🔷 lattice</a></dt>
-    <dd>the runtime-reflective partial order over all values that guides generic dispatch and comparison</dd>
-  <dt id="g-link"><a href="#g-link">🔗 link</a></dt>
-    <dd>the <a href="#g-chain">chain</a> constructor, aka <code>cons</code>/<code>(,)</code></dd>
-  <dt id="g-mint"><a href="#g-mint">🍬 mint</a></dt>
-    <dd>an otherwise empty unique identifier, aka gensym. conceptually, the non-zero mints fill a plane directly above <span class="hi gray"><a href="#g-nil"><code>()</code></a></span> in the <a href="#g-lattice">lattice</a>.</dd>
-  <dt id="g-name"><a href="#g-name">🪪 name</a></dt>
-    <dd>aka a lisp symbol or erlang atom. formally considered as a <a href="#g-die">die</a> over a <a href="#g-chain">chain</a> of <a href="#g-string">string</a> and <a href="#g-mint">mint</a>. inherits algebra from strings.</dd>
-  <dt id="g-net"><a href="#g-net">🌐 net (<code>+</code>)</a></dt>
-    <dd>a value's content measure, a <a href="#g-star">star</a></dd>
-  <dt id="g-nil"><span class="hi gray"><a href="#g-nil">🈚 nil</a></span></dt>
-    <dd>the initial <a href="#g-mint">mint</a>, acting as a global <span class="hi gray">empty</span> element <code>()</code>. <span class="hi blue"><a href="#g-blue">blue</a></span>, algebraically neutral, conceptually the lowest inhabited point of the <a href="#g-lattice">lattice</a>.</dd>
-  <dt id="g-red"><a href="#g-red">🔴 red</a></dt>
-    <dd><a href="#g-color">color</a> of a value whose net is negative: <code>-1 '(1 2 3 -99999)</code>. boolean false.</dd>
-  <dt id="g-sat"><a href="#g-sat">🌊 saturate (<code>$</code>)</a></dt>
-    <dd>retraction of a value's <a href="#g-net">net</a> (a <a href="#g-star">star</a>-typed value) onto the <span class="hi blue"><a href="#g-blue">blue</a></span>-<span class="hi green"><a href="#g-green">green</a></span> <a href="#g-charm">charms</a>, ie. an integer in the interval [0, max-charm]. overflow and underflow go to the limit instead of wrapping (saturation). thus <span class="hi green"><a href="#g-green">green</a></span> saturates to <span class="hi green"><a href="#g-green">green</a></span> while both <span class="hi red"><a href="#g-red">red</a></span> and <span class="hi blue"><a href="#g-blue">blue</a></span> saturate to <span class="hi blue"><a href="#g-blue">blue</a></span>.</dd>
-  <dt id="g-star"><a href="#g-star">🌟 star</a></dt>
-    <dd>a scalar fixpoint of <a href="#g-net">net</a>: <a href="#g-charm">charm</a>, <a href="#g-sun">sun</a>, <a href="#g-gem">gem</a> or <a href="#g-twin">twin</a>.</dd>
-  <dt id="g-string"><a href="#g-string">🧵 string</a></dt>
-    <dd>a byte vector: indexes its bytes (<code>("abc" -1)</code> is <code>99</code>, counting from the end), joins on another string (<code>("ab" "cd")</code> is <code>"abcd"</code>), nets its charm-sum.</dd>
-  <dt id="g-sun"><a href="#g-sun">☀️ sun</a></dt>
-    <dd>an integer too large for a <a href="#g-charm">charm</a>, at any width &mdash; one boxed tier, arbitrary precision. a type of <a href="#g-star">star</a></dd>
-  <dt id="g-tablet"><a href="#g-tablet">📱 tablet</a></dt>
-    <dd>see: <a href="#g-book">book</a></dd>
-  <dt id="g-tally"><a href="#g-tally">🧮 tally</a></dt>
-    <dd>surface level item count. length of a <a href="#g-chain">chain</a>, <a href="#g-string">string</a>, <a href="#g-tray">tray</a> or <a href="#g-book">book</a></dd>
-  <dt id="g-tray"><a href="#g-tray">📥 tray</a></dt>
-    <dd>a shaped array. see also <a href="#g-chain">chain</a>, <a href="#g-galaxy">galaxy</a></dd>
-  <dt id="g-truth"><a href="#g-truth">⚖️ truth value</a></dt>
-    <dd>given by the <a href="#g-color">color</a> of a value's <a href="#g-sat">saturated</a> <a href="#g-net">net</a>: <span class="hi blue"><a href="#g-blue">blue</a></span> false, <span class="hi green"><a href="#g-green">green</a></span> true.</dd>
-  <dt id="g-twin"><a href="#g-twin">💠 twin</a></dt>
-    <dd>a <a href="#g-gem">gem</a>-based complex number, written <code>~(re im)</code>. a type of <a href="#g-star">star</a></dd>
-  <dt id="g-unit"><span class="hi gray"><a href="#g-unit">1️⃣ unit</a></span></dt>
-    <dd>see: <a href="#g-nil">nil</a></dd>
-  <dt id="g-zero-point"><span class="hi gray"><a href="#g-zero-point">0️⃣ zero point</a></span></dt>
-    <dd>see: <a href="#g-nil">nil</a></dd>
-</dl>
+<p>
+<strong>love</strong> is a dynamic programming language where every value is a one-argument
+function.  love is written in C, and includes a C compiler called <strong>moon</strong>,
+which is written in love.  love targets a wide range of platforms, such as wasm.
+</p>
 
-<h2 id="crew"><a href="#crew">the crew</a></h2>
-<dl class="crew">
-  <dt>🌑 inle ◦ the vessel</dt>
-    <dd>a hybrid of desolate human longing and mysterious alien technology</dd>
-  <dt>🔭 tele ◦ the pilot</dt>
-    <dd>big telescope. pilot face of inle. pytorch clone</dd>
-  <dt>🐇 bellberry ◦ the navigator</dt>
-    <dd>brown rabbit with dark eyes and light stripes</dd>
-  <dt>🕊 gwen ◦ the synthesist</dt>
-    <dd>mourning dove friend of bellberry and tele</dd>
-  <dt>🐈 ain ◦ the netcat</dt>
-    <dd>white cat. ambivalently misanthropic. openbsd netcat clone</dd>
-  <dt>🐕 bao ◦ the shell</dt>
-    <dd>corgi shiba inu mix. very eager to please. rlwrap clone</dd>
-  <dt>🐀 cook ◦ the build system</dt>
-    <dd>large albino rat. gnu make clone</dd>
-  <dt>🌱 svalbard ◦ the vcs</dt>
-    <dd>the spirit of the svalbard global seed vault. version control and installer, one verb set</dd>
-  <dt>🐐 mow ◦ the grass chewer (garbage collector)</dt>
-    <dd>goat. formerly gregarious, now solitary. two-gen two-space copying</dd>
-  <dt>🕷️ holo ◦ the assembler</dt>
-    <dd>cave spider. short for holophrasm</dd>
-  <dt>🦇 thom ◦ the SAT bat</dt>
-    <dd>cave bat friend of holo. they often discuss their inner lives</dd>
-  <dt>🍄 moon ◦ the C compiler</dt>
-    <dd>luminescent mycelial network transmits light from the surface to holo's cave</dd>
-  <dt>🦐 lux ◦ the window manager</dt>
-    <dd>mantis shrimp. keeps a brine pool in holo's cave, but is usually out in pulchritude's reef. xmonad clone</dd>
-  <dt>🦨 kore ◦ the utility skunk</dt>
-    <dd>spotted skunk. busybox clone</dd>
-  <dt>🦑 quay ◦ the terminal emulator</dt>
-    <dd>cuttlefish. 256 color skin. likes writing screensavers</dd>
-  <dt>🪸 pulchritude ◦ the editor</dt>
-    <dd>coral reef beside the island that holds holo's cave. vi clone</dd>
-</dl>
+<p>
+<strong>inle</strong> is a bare-metal OS kernel written in C and love,  which provides a
+single-user posix-like system.  inle is running in the box above.  <strong>lush</strong>
+is love's posix-compatible command shell, and acts as the main entry point to the love
+ecosystem of programs.
+</p>
+
+<p>
+love is distributed as a single binary,  which runs natively on linux, freebsd and netbsd.
+the binary may be invoked as <code>love</code> or <code>lush</code>, and includes a busybox-like
+set of tools, including <code>cc</code>, <code>vi</code> and <code>make</code>, as well as several
+love-specific programs.
+</p>
+
+<p>
+the api is currently <em>🫨 unstable</em>.
+to get a love repl in lush, type <code>love</code>.
+type <code>names ()</code> at the repl to see a list of the default namespace.
+</p>
+<p>
+for a nice example of idiomatic love code, try <code>vi /proc/src/a/rove/rove.l</code>.
+for another cool demo, try typing <code>doom</code>.
+</p>
 
 <footer>
   <span class="note">set in the quay bitmaps &middot; for ()</span>

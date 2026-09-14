@@ -345,7 +345,7 @@
  ember-pens {'brazier '(88 124 52 88) 'hearth '(196 160 202 196)}
  star-bright 231
  star-dim 240
- (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
+ (plan lvl) (peep themes (lvl - 1) th-heaven 3)
  stair-face '(60 220 136)                               ; < the stair, gold on every floor
  water-face '(126 39 24)                                ; ~ the stream, where it shows
  choice-fg (x11-256 "honeydew")                         ; a choice's button: text on ground
@@ -357,23 +357,23 @@
  ; the page's own letters serve (quay folds them onto its face).
  ; ..and a fifth thing where there is one: a book the piece opens, its title then its
  ; pages, a stanza to a page
- feat-book {'table ["π" 240 236 "an overgrown stone table stained with dark liquid"]
+ feat-book {'table ["π" 240 236 "an worn stone table stained with dark liquid"]
             'throne ["H" 130 94 "a large tree stump carved into an ornate throne sits empty"]
-            'chair ["h" 137 94 "a chair, pushed back from nothing"]
-            'bed ["=" 131 95 "a bed, made, and cold"]
-            'crate ["x" 136 94 "a crate. it has been opened and closed again"]
-            'fountain ["☼" 226 136 "a fountain, and what it throws up and catches is stars"]
-            'fire ["w" 208 130 "a fire, and it has been burning a while"]
-            'lamp ["¡" 226 178 "a lamp on the wall, sodium yellow, and the buzz of it"]
-            'brazier ["▒" 88 52 "a brazier, and the coals in it are still red, just"]
+            'chair ["h" 137 94 "a chair with one leg splintered"]
+            'bed ["=" 131 95 "a bed, made and cold"]
+            'crate ["x" 136 94 "a crate holding nothing of value"]
+            'fountain ["☼" 226 136 "galaxies whirl in the dazzling spray of this fountain"]
+            'fire ["w" 208 130 "a fire burned low and red at the coals"]
+            'lamp ["¡" 226 178 "the wall-mounted lamp emits a buzzing sodium glow"]
+            'brazier ["▒" 88 52 "a brazier, the coals have been cooling for a while"]
             'hearth ["▓" 196 88 "a hearth, and the embers in it are still bright"]
             'box ["■" 137 94 "a simple wooden box"]
-            'pot ["u" 180 137 "a clay pot, and something dry in the bottom of it"]
-            'bronze ["o" 178 136 "a bronze bowl, gone green at the rim"]
-            'iron ["/" 245 240 "an iron poker, leant where it was last used"]
-            'cloth ["~" 175 133 "a cloth, woven fine, folded and put by"]
+            'pot ["u" 180 137 "a clay pot, with brown crust dried at the bottom"]
+            'bronze ["o" 178 136 "a bronze bowl, greenish at the rim"]
+            'iron ["/" 245 240 "an iron poker for the fire, it smells like rust"]
+            'cloth ["~" 175 133 "a large square of colored cloth, carefully folded"]
             'mirror ["@" 93 54 "a mirror, and the one in it is not quite you"]
-            'sign ["¶" 137 94 "a wooden sign, and whatever it said has weathered past reading"]
+            'sign ["¶" 137 94 "a hand-painted wooden sign, the letters now illegible"]
             'bells ["≡" 180 137 "a bookshelf, and one book on it: OEIS A000110"]
             'shelf ["≡" 180 137 "a bookshelf, and one book on it: Muse"
                     '("Muse"
@@ -429,7 +429,7 @@
                        "make sense and I read the truth with my hands."))]}
  (feat-of k) (peep feat-book k '("?" 250 244 ""))
  (feat-face k) (: r (feat-of k) [(r 0) (r 1) (r 2)])
- (feat-line k) ((feat-of k) 3)
+ (feat-line k) (feat-of k 3)
  (feat-lines k) (peep (feat-of k) 4 ())
  ; a piece with a book opens it a page at a time: every page is a sign under the book's
  ; title, and the key that takes one down puts the next up. the foot is read here and
@@ -456,7 +456,7 @@
               "neat handwriting spells the message:"
               ""
               "  it's important for you to start doing what you want"
-              "  as soon as you can :)"
+              "  as soon as you can"
               ""
               "-- any key --")
  (bell-row r) (: (go a l acc) (one? l ? (rev acc) (go (a + <l) >l ((a + <l) . acc)))
@@ -485,7 +485,7 @@
  bed-w 5
  bed-h 3
  bed-share 30
- (bed? x y s) ((dice (x // bed-w) (y // bed-h) (s + 7) 100) < bed-share)
+ (bed? x y s) (dice (x // bed-w) (y // bed-h) (s + 7) 100 < bed-share)
  (strew l x y s bed) (: (wt r) (bed && 5 < #r ? (r 5) (r 3))
                         (go l h) (two? l ?  (: r <l w (wt r) (h < w ? r (go >l (h - w)))))
                         (go l (dice x y s 100)))
@@ -518,7 +518,7 @@
    ; front is () until there is pink anywhere, so the walk never pays for this
    fr (peep d 'front ()) fc (peep d 'fire '(0 0)) fcx <fc fcy <>fc
    (pinkish? x y) (fr && (: dx (x - fcx) dy (y - fcy) (fr < dx * dx + 4 * dy * dy)))
-   (shade gh x y) ((tablet? skin ? (skin-kinds <>gh) ()) @- gh
+   (shade gh x y) ((tablet? skin ? (skin-kinds <>gh)) @- gh
                    'hedge [<gh (ramp-pen hedge-ramp (peep (skin 'ground) [y x] 0.0))]
                    'lawn [<gh (ramp-pen (pinkish? x y ? pink-ramp lawn-ramp) (peep (skin 'ground) [y x] 0.0))]
                    'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))]
@@ -538,7 +538,7 @@
            e (lit ? (spot i))
            o (lit && ov ? (ov (i % w) (i // w)))
            l (loot i)
-           it (l && (lit || (<l != 'penny && peep sn i 0)) ? l ())
+           it (l && (lit || <l != 'penny && peep sn i 0) ? l ())
            (? e [(e 'gl) (e 'hue)]
               o o
               it (: k <it gh (loot-face it lit)
@@ -561,7 +561,7 @@
    ; the floor's foot is blank. a floor smaller than the screen sits in the middle of
    ; it, padded left and the rows above and below it blank
    rows-n (peep d 'rows h) vy (peep d 'vy 0)
-   padding ((peep d 'vx 0) (\ t (t + " ")) "")
+   padding (peep d 'vx 0 (t \ t + " ") "")
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees. a long one wraps
    ; onto a second row, which covers the floor's first: the floor does not move.
@@ -583,7 +583,7 @@
    ; last floor past its edge
    (rows y p) (y >= vy + rows-n ? p
                (rows (y + 1) (: p2 (y < 0 || y >= h ? p
-                                    (: _ (say j padding) (row y 0 (w * y) p)))
+                                    (say j padding, row y 0 (w * y) p))
                                 _ (say j "\e[K\r\n")
                                 p2)))
    ; ..and the bar a column short of the screen: a console that wraps at its edge would
@@ -594,13 +594,12 @@
  ; the cells a floor keeps moving, found once and kept on it: water, a star, the fire
  ; and the coals
  (live-cells d loot) (: l (peep d 'live 0)
-   (l = 0 ? (: w (d 'w) th (make d) sd (peep d 'sd 0)
+   (l @- l 0 (: w (d 'w) th (make d) sd (peep d 'sd 0)
               (live? i) (: t (peep (d 't) i 0) k (loot i) x (i % w) y (i // w)
-                           (t = 3 || (t = 6 && <(tile-face th 6 1 x y sd) != <(th 1))
-                                  || (k && (<k = 'fire || ember-pens <k))))
+                           (t = 3 || t = 6 && <(tile-face th 6 1 x y sd) != <(th 1)
+                                  || k && (<k = 'fire || ember-pens <k)))
               ls (filter live? ^(w * d 'h))
-              (pin d 'live ls, ls))
-     l))
+              (pin d 'live ls, ls))))
  ; the live cells alone, each under a cursor move, as the last frame laid the floor:
  ; a cell off the screen, under the note, unlit or under a sign's box is left be
  (paint-live j d vis loot ents) (:
@@ -646,13 +645,13 @@
                   (? (sg && (g 'talk || g 'bell))
                      (: j (sign-line <sg >sg 1 (peep d 'rows (d 'h)) (peep d 'cols (d 'w)) <>c)
                         l (0 <= j ? (>sg j) "")
-                        ((2 < #l && l 0 = 1) ? (l 2) 0))  ; a choice's line opens on 1, its digit next
+                        (2 < #l && l 0 = 1 ? (l 2) 0))  ; a choice's line opens on 1, its digit next
                      (tap-steer g c)))
 
  ; --- the words: every line the climb says. a ~ takes the next value and {braces} are
  ; the token's pen; nothing below is built, so this block is the whole of the text.
- w-open   "the tower stands over you. get the {token}"
- w-floor  "this is ~. get the {token}"
+ w-open   "finally, the tower, at last. get the {token}"
+ w-floor  "you climb the stairs to ~. get the {token}"
  w-strike "you strike the ~ (~)"
  w-kill   "the ~ is done for"
  w-bite   "the ~ bites you (~)"
@@ -667,7 +666,7 @@
  w-ring   "you strike the circle, and it puts you back"
  w-circle "and there it is, at the edge of everything: the circle"
  w-empty  "the box, and nothing in it now"
- w-stone  "a standing stone, and cut into it: ~"
+ w-stone  "a standing stone carved deeply with the numeral ~"
  w-shut   "the door will not open now"
  w-bar    "~  hp ~/~  pennies ~"
  w-bar-up "~  hp ~/~  pennies ~  < climbs"
@@ -680,18 +679,19 @@
  ; the sign the tower opens on; a {brace} is the token's pen. kept short: twenty rows
  ; leave eighteen for the map, and a taller box is one with its foot cut off.
  sign-ttl "the tower"
- sign-open '("is this the tower?  it must be.  where else could the tower be?"
+ sign-open '("at last, the tower.  doesn't look much like a tower."
+             "you knew not to take the name too literally, though."
              ""
              "move     h j k l    or the arrow keys"
              "         y u b n    for diagonals"
-             "wait     .          a turn passes, nothing mends"
              "climb    space      while you stand on a stair"
              "leave    q          or esc"
              ""
-             "a stair is a gold < set in one of the rooms:"
-             "walk onto it and press space to take it up."
+             "the stairs are a yellow <."
+             "walk onto it and press space to go up."
              ""
-             "get the {token}, and the pennies on the way."
+             "within the tower lies the fabled {token}"
+             "whose boon is said to pass all understanding."
              ""
              "-- any key --")
  ; the tower's fauna: name, glyph, pen, hp, bite, pace. pace is turns per stir, so
@@ -704,11 +704,11 @@
  ; which rows of it a floor bears
  (mob-set lvl) (lvl @ 1 '(0 1) 2 '(2 3 4) '(5 6 7 8 9 10 11 12))
  ; and what the token turns out to have been, drawn once at the end
- tokens '("the thumbworn phone" "the stubnibbed pencil" "the faded script"
-          "the solebare shoe" "the handpaged book" "the rubbed coin"
-          "the relit candle" "the lockmachined key" "the refolded map"
-          "the carbonized lamp" "the residual spectacles" "the steamset kettle"
-          "the gearworn watch" "the lowlife battery" "the treasured index card")
+ tokens '("the bitten phone" "the gnawed pencil" "the faded script"
+          "the tinebent fork" "the pagetorn book" "the flipped-out coin"
+          "the two-ended candle" "the toothless key" "the manyfolded map"
+          "the carbonized lamp" "the greasy spectacles" "the seasoned kettle"
+          "the murmuring wristwatch" "the lowlife battery" "the treasured index card")
  token-pen 201                                          ; and the pen it is named in
 
  ; --- the music: a slot is a voice tablet play can sound or () for silence, a bar is
@@ -779,11 +779,10 @@
  knock-lub {'s "sn" 'gain 0.40 'legato 0.13}
  knock-dub {'s "sn" 'gain 0.26 'legato 0.10 'speed 1.30}
  heart-div 8                                            ; slots to a beat
- (heart-rate r) (1 + (r // 3))
+ (heart-rate r) (1 + r // 3)
  (heart-bars r) (: n (heart-rate r)
-                   (beat lub dub i) (: j (i % heart-div)
-                                       (? (j = 0) lub (j = 2) dub ()))
-                   ix (jot (heart-div * n))
+                   (beat lub dub i) (i % heart-div @ 0 lub 2 dub)
+                   ix ^(heart-div * n)
                    [(map (beat heart-lub heart-dub) ix)
                     (map (beat knock-lub knock-dub) ix)])
 
@@ -804,8 +803,8 @@
  ; says another. a name with no row here is silent.
  flavour
  '(("tuft"       "the grass here has gone to seed"
-                 "a rat discorporates a fat lanternfly nymph"
-                 "lanternfly larvae swarm the carcass of a rat")
+                 "a rat chews the legs of a fat lanternfly"
+                 "lanternflies swarm the moldering carcass of a rat")
    ("grass"      "the brush tips of the grass tickle below your knees"
                  "seed clusters cling tenaciously to your legs"
                  "the grass canopy of blades emits the smell of earthen mildew")
@@ -814,34 +813,34 @@
                  "it tries to face the light that shone when it first blossomed")
    ("goldenrod"  "it stands out from the grass like a vein of yellow ore"
                  "you've heard it causes allergies"
-                 "the air around it charged with pollen")
-   ("stream"     "the still sound of the stream runs motionlessly quick above the stones"
+                 "the air is thick with pollen")
+   ("stream"     "the calm sound of the stream runs silver quick above the stones"
                  "to the minnows in the stream your passing is like a fast moving rock"
-                 "you feel as though you've stepped in this stream before")
-   ("floor"      "a floor not trodden nor swept"
-                 "the floorboards give a little, like they used to, for the wind"
-                 "you tread on well-settled dust")
-   ("door"       "a door, and it stands open"
-                 "the frame is lower than you are"
+                 "you feel like you've stepped in this stream before")
+   ("floor"      "filth adheres to sticky gnomish slime trails on the floor and walls"
+                 "the floorboards give a little, as if remembering wind"
+                 "dim light spins through the motes kicked up by your passage")
+   ("door"       "a door, broken-hinged and swinging from its frame"
+                 "a low-set doggy door so gnomes can come and go as they please"
                  "you turn sideways to get through")
-   ("platform"   "you notice the floor is made of squares"
+   ("platform"   "you wonder what happens if you step on the wrong color square"
                  "stars above and below keep drawing your eyes"
                  "every step is a move in a game, right?  who's playing?")
    ("steps"      "steps to the next floor. steps down? up? in? out?"
                  "nothing is on either side of the steps, no rail, nothing"
                  "the steps are wide enough, if you don't look over")
-   ("runnel"     "a thread of water, going somewhere"
-                 "colder and quicker than it looks"
+   ("runnel"     "a thread of water, leaving as it came"
+                 "colder than the air and quicker than it looks"
                  "it has cut its own small channel here")
    ("rubble"     "stone that used to be somewhere higher"
                  "it turns underfoot"
-                 "someone swept it into this corner, once")
-   ("gravel"     "gravel, and the sound of you on it"
-                 "it has been walked before"
+                 "someone swept it into this corner")
+   ("gravel"     "gravel crunches underfoot"
+                 "you recall a poem about a pebble"
                  "small stones, worn round")
-   ("bones"      "bones picked clean and dropped regardless of original shape"
-                 "apparently even the wormlike gnomish denizens have bones"
-                 "rats came up from below and ate this misfortunate denizen")
+   ("bones"      "the cars have crushed these bones past hope of recognition"
+                 "apparently even gnomes have bones"
+                 "rats from the level below consumed this misfortunate denizen")
    ("quartz"     "a seam of quartz retains a fraction of your light"
                  "it channels light, making it warmer than the stone around it"
                  "a quartz deposit brightens the wall here for a step")
@@ -851,14 +850,14 @@
    ("lamp"       "a lamp, lit by no one present"
                  "the luminosity varies circularly with time"
                  "it's bright so logically it also feels warm")
-   ("bench"      "a bench, facing the street"
-                 "a bench, made to be sat on"
-                 "names are carved into it, inviting your own")
-   ("fountain"   "the fountain's spray forms a constant shape out of running water"
-                 "you wonder how long the pump behind the fountain can last"
-                 "the pennies at the bottom of the fountain have hardened to a mineral crust")
-   ("star"       "a star misplaced from the outer void levitates here at ankle height"
-                 "is it hot? you dare not touch and see"
+   ("bench"      "a bench, facing the wall"
+                 "a bench, with spikes, so no one sits"
+                 "goblins carved their stolen names into it")
+   ("fountain"   "the playing fountain charms a constant shape from water's natural flow"
+                 "you wonder where the water pressure comes from"
+                 "the pennies at the bottom have hardened to a mineral crust")
+   ("star"       "a wandering star levitates here at ankle height"
+                 "is it hot? you dare not touch"
                  "you thought the stars were merely far away, but some it seems are truly small")
    ("stair"      "a stair to the next level. watch your step"
                  "the steps are worn hollow in the middle"
@@ -867,11 +866,12 @@
                  "how many others counted these pennies before?"
                  "the pennies are not the number of pennies"
                  "pennies still warm from another thumb's eager tallying")
-   ("rat"        "a rat, it looks diseased"
-                 "a feral rat, its warty skin aboil with festering neoplasms"
-                 "a feral rat, its tail a wet tentacle of muscle ringing linked bone"
+   ("rat"        "a plump rat, it looks healthy and happy"
+                 "a dirty rat, its paws leave little black prints"
+                 "a feral rat, licking open wounds"
                  "it meets your eye and does not hurry")
-   ("lanternfly" "a lanternfly, brown black red and white."
+   ("lanternfly" "a lanternfly, brown black red and white"
+                 "they're said to be invasive, but they seem quite at home here now"
                  "it lands on you as though you were furniture")
    ("gnome"      "the gnomes of this land have grown verminous"
                  "a worm the length of your arm, you feel bad for it"
@@ -881,43 +881,42 @@
    ("hobgoblin"  "it's like a goblin but more of a team player"
                  "earned every ounce of its success")
    ("d4"         "a d4, a hedged bet"
-                 "does it like being the minimum?"
+                 "does it like being least?"
                  "four tetrahedral tips gleam menacingly")
    ("d6"         "a d6, a square deal"
                  "the pips are worn smooth on the six")
-   ("d8"         "a d8, it's somehow six yet more"
+   ("d8"         "a d8, somehow still six yet more"
                  "it has settled on nothing")
    ("d12"        "a d12, with more faces than meanings"
-                 "it rolled far to get here")
+                 "it rolled so far to get here")
    ("d20"        "a d20, waiting for a natural"
-                 "it's waiting for its number to come up")
+                 "it waits for its number to come up")
    ("triangle"   "a triangle"
-                 "arguably the first shape"
-                 "its three angles always add up to 180 degrees")
+                 "its three angles always add up to 180 degrees"
+                 "this triangle has one eye")
    ("square"     "a square"
-                 "arguably the first or second shape")
+                 "the square looks to be in its element here")
    ("hexagon"    "a hexagon"
-                 "the average hexagon has seven eyes"))
+                 "the hexagon has seven eyes"))
 
  ; a name's lines, and the one it says this time
  (lines-of nm)
   (:- (go flavour) (go l)
-   (two? l ? (: r <l (? (nm = <r) >r (go >l)))))
+   (two? l ? (: r <l (nm = <r ? >r (go >l)))))
  (mutter k nm)
   (lines-of nm @ ls (two? ls ? (peep ls (k % #ls) "") ""))
 
  ; a line and its holes: each ~ takes the next value, a string as itself and anything
  ; else as show, so a table line reads as the line it prints.
  (hole v) (string? v ? v (show v))
- (fill s vs) (: (go i acc vs)
-                 (? (i >= #s) acc
-                    (: c (s i)
-                       (? (c = 126 && two? vs) (go (i + 1) (acc + hole <vs) >vs)
-                          (go (i + 1) (acc + string c) vs))))
-                (go 0 "" vs))
+ (fill s vs) (:- (go 0 "" vs) (go i acc vs)
+              (i >= #s ? acc
+               (: c (s i)
+                (c = 126 && two? vs ? (go (i + 1) (acc + hole <vs) >vs)
+                 (go (i + 1) (acc + string c) vs)))))
  ; a cell is a character and not a byte: the face's blocks and arrows are three bytes
  ; each, and only the first of them is a cell -- the tails ride along with it
- (tail? c) (128 <= c && c < 192)
+ (tail? c) (128 <= c < 192)
  (lead c) (tail? c ? 0 1)
  ; ..and its braces, put on at the port, and a choice between the bytes 1 and 2 on its
  ; own ground. an escape is no width, so this is also where a line is cut to fit: the
@@ -940,9 +939,8 @@
  ; it is measured in what a reader sees, and it runs to the row's end so no pen meets.
  sign-pen (x11-256 "lavender")                          ; the frame, and the title in its own
  sign-tpen (x11-256 "honeydew")
- (vlen s) (: (go i n) (? (i >= #s) n
-                         (: c (s i) (go (i + 1) (? ((c = 123) || (c = 125) || (c = 1) || (c = 2)) n (n + lead c)))))
-             (go 0 0))
+ (vlen s) (:- (go 0 0) (go i n) (i >= #s ? n
+           (s i @ c (go (i + 1) (c @ (123 || 125 || 1 || 2) n (n + lead c))))))
  (pad s n c) (: v (vlen s) (v >= n ? s (s + ((n - v) (\ t (t + c)) ""))))
  (sign-box ttl ls) (:
    w (foldl (\ a l (vlen l @ v (a < v ? v a))) (vlen ttl) ls)
@@ -959,7 +957,7 @@
  (cells-cut r n) (:- (go 0 0 "")
                   (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                   (go i k acc)
-                   (i >= #r ? (acc + ((n - k) (\ t (t + " ")) ""))
+                   (i >= #r ? (acc + ((n - k) (t \ t + " ") ""))
                     (: c (r i)
                        (? (n <= cell-of c k) acc
                           (c = 27) (past i @ e (go e k (acc + snip r i e)))
@@ -972,9 +970,8 @@
                    (past i) (i >= #r ? i (r i @ 109 (i + 1) (past (i + 1))))
                    (go i k acc)
                     (i >= #r ? acc
-                     (: c (r i)
-                        (? (c = 27) (past i @ e (go e k (acc + snip r i e)))
-                           (go (i + 1) (k + lead c) (n <= cell-of c k ? (acc + string c) acc))))))
+                     (r i @ 27 (past i @ e (go e k (acc + snip r i e)))
+                       c (go (i + 1) (k + lead c) (n <= cell-of c k ? (acc + string c) acc)))))
  ; a line wider than the screen is reflowed at its words -- story's own wrap -- to a
  ; few cells short of the edge either side, so no row runs full and a word never sits
  ; against the frame. one list of rows per line
