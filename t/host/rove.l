@@ -374,15 +374,12 @@
        (all (v \ 4000 < v 0) (s 'vs))                  ; both end past the head
        (!(= (<(s 'vs) 0) ((s 'vs) 1 0)))))             ; ..and not together: one, then the other
 
-; the shelf asks which book: a key picks one, and Muse opens a page at a time: a key
-; turns the page and takes no step, and the key after the last page closes it
+; the shelf opens its book a page at a time: a key turns the page and takes no step, and
+; the key after the last page closes it
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
    _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("the bookshelf" = <(g 'sign)) ('shelf = g 'talk)
-           (find (g 'msg) "bookshelf" 0))
-   _ (crawl-turn g 49)
-   _ (test (two? (g 'sign)) ("Muse" = <(g 'sign)) !(g 'talk)
+   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "bookshelf" 0)
            (find (last (g 'sign)) "1 of 6" 0) (5 = #(g 'pages)))
    _ (crawl-turn g [1 0])
    _ (test (1 = g 'p 'x) (two? (g 'sign)) (find (last (g 'sign)) "2 of 6" 0))
@@ -391,25 +388,45 @@
    _ (crawl-turn g 46)
  (test !(g 'sign) (1 = g 'p 'x)))
 
-; ..and the other book never ends: a page a Bell number, made as it is turned, until
-; one would not fit the box -- then the bookmark, and after it nothing
+; the cottage's shelf holds the book that never ends: a page a Bell number, made as it
+; is turned, and a page offers the next page or the shelf. 1 turns, 2 puts it back,
+; another key shows the page again -- until a number would not fit the box: then the
+; bookmark, and after it nothing
 (: g (hand-g ())
    _ (pins (g 'd) 'cols 40)
-   _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
+   _ (pin (g 'loot) (2 + 9 * 1) '(bells))
    _ (crawl-turn g [1 0])
-   _ (crawl-turn g 50)
    (line _) ((g 'sign) 2)
-   _ (test ("OEIS A000110" = <(g 'sign)) ("B(0) = 1" = line ()) ('(0 (1)) = g 'bell) !(g 'talk))
-   _ (crawl-turn g 46)
+   _ (test (1 = g 'p 'x) ("OEIS A000110" = <(g 'sign)) ("B(0) = 1" = line ()) ('(0 (1)) = g 'bell)
+           (find (g 'msg) "bookshelf" 0) (any (l \ find l "put it back" 0) (g 'sign)))
+   _ (crawl-turn g 49)
    _ (test ("B(1) = 1" = line ()))
-   _ (crawl-turn g 46) _ (crawl-turn g 46) _ (crawl-turn g 46)
+   _ (crawl-turn g 46)
+   _ (test ("B(1) = 1" = line ()) ('(1 (1 2)) = g 'bell))
+   _ (crawl-turn g 50)
+   _ (test !(g 'sign) !(g 'bell) (1 = g 'p 'x))
+   _ (crawl-turn g [1 0])
+   _ (test ("B(0) = 1" = line ()))
+   _ (each ^4 (_ \ crawl-turn g 49))
    _ (test ("B(4) = 15" = line ()) (find (last (g 'sign)) "page 5" 0))
-   (turn n) (? ("a bookmark" = <(g 'sign)) n (crawl-turn g 46, turn (n + 1)))
+   (turn n) (? ("a bookmark" = <(g 'sign)) n (crawl-turn g 49, turn (n + 1)))
    n (turn 0)
    _ (test (10 < n < 40) !(g 'bell) (find ((g 'sign) 1) "handwriting" 0))
    _ (crawl-turn g 46)
  (test !(g 'sign) !(g 'bell) (1 = g 'p 'x)
        ('(1 2) = bell-row [1]) ('(2 3 5) = bell-row [1 2]) ('(5 7 10 15) = bell-row [2 3 5])))
+
+; ..and a tap on one of its choices is that choice: the page's row of "put it back"
+(: g (hand-g ())
+   _ (pins (g 'd) 'rows 12 'cols 40)
+   _ (pin (g 'loot) (2 + 9 * 1) '(bells))
+   _ (crawl-turn g [1 0])
+   ls >(g 'sign)
+   (row-of s) (: (go i) (find (ls i) s 0 ? i (go (i + 1))) (go 0))
+   (tap-at i) (: (go y) (i = sign-line <(g 'sign) ls 1 12 40 y ? y (go (y + 1))) (go 0))
+ (test (50 = tap-key g [20 (tap-at (row-of "put it back"))])
+       (49 = tap-key g [20 (tap-at (row-of "turn the page"))])
+       (0 = tap-key g [20 (tap-at (row-of "= 1"))])))
 
 ; a choice is marked off between the bytes 1 and 2: no width, and fit paints the ground
 ; between them and puts the pen it was given back
@@ -418,17 +435,20 @@
  (test (find f "\e[48;5;" 0) (find f "abX" 0) ("c" = snip f (#f - 1) #f)
        (find (fit s 400) "ab\e[0m" 0)))
 
-; a long note wraps onto a second row, the floor gives up its last row for it and the
-; frame is no taller; a tap then counts from under both
+; a long note wraps onto a second row, which covers the floor's first row: the frame is
+; no taller and the floor does not move under it, so a tap counts from the same row
 (: g (hand-g ())
    _ (pins (g 'd) 'rows 5 'cols 20)
    _ (pin g 'msg "short")
-   f1 (crawl-frame g)
+   r1 (split "\r\n" (crawl-frame g))
    _ (pin g 'msg "a note far too long for a screen twenty cells wide")
-   f2 (crawl-frame g)
-   rs (split "\r\n" f2)
- (test (#(split "\r\n" f1) = #rs) (2 = g 'd 'top) (find (rs 1) "screen" 0)
-       (60 = tap-steer g [(g 'p 'x + peep (g 'd) 'vx 0) (g 'p 'y + 2)])))
+   r2 (split "\r\n" (crawl-frame g))
+   ; the same cells, whatever pen each row was entered on
+   (bare s) (:- (go 0 "")
+              (go i acc) (? (i >= #s) acc (s i = 27) (go (1 + past i) acc) (go (i + 1) (acc + string (s i))))
+              (past i) (: c (s (i + 1)) (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
+ (test (#r1 = #r2) (find (r2 1) "screen" 0) (bare (r1 2) = bare (r2 2)) (bare (last r1) = bare (last r2))
+       (60 = tap-steer g [(g 'p 'x + peep (g 'd) 'vx 0) (g 'p 'y + 1)])))
 
 ; pennies weigh in, and they are the only thing on the floor
 (: g (hand-g ())
