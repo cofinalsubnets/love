@@ -32,6 +32,7 @@ void k_scan_arm(int on);
 int k_scan_pop(void);
 uintptr_t k_clock_ms(void);
 void k_sleep(uintptr_t ms);
+void k_fb_touch(void);
 
 // the IWAD, laid into .rodata by u/mkblob.l
 extern unsigned char const doom_wad[];
@@ -88,7 +89,8 @@ void DG_DrawFrame(void) {
  for (int y = 0; y < ch; y++) {
   volatile uint32_t *d = fb + (uintptr_t) (y + oy) * pitch + ox;
   uint32_t const *s = DG_ScreenBuffer + (uintptr_t) y * DOOMGENERIC_RESX;
-  for (int x = 0; x < cw; x++) d[x] = s[x]; } }
+  for (int x = 0; x < cw; x++) d[x] = s[x]; }
+ k_fb_touch(); }
 
 void DG_SleepMs(uint32_t ms) { if (hosted()) ai_sleep(ms); else k_sleep(ms); }
 

@@ -22,6 +22,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_reboot 169
 #define hc_lift 0x4010
 #define hc_scan 0x4011
+#define hc_drew 0x4012
 #define hc_clock_gettime 228
 
 void archinit(void) { }
@@ -75,6 +76,17 @@ void k_idle(void) {
   __ai_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
   k_kb_poll();
   k_tick_sync(); }
+
+// a sleep under the tick, exact: kmain's k_sleep asks before it rounds to ticks
+bool k_nap(uintptr_t ms) {
+  long ts[2] = { 0, (long) ms * 1000000 };
+  __ai_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
+  k_kb_poll();
+  k_tick_sync();
+  return true; }
+
+// the paper was drawn on by something other than the console: the worker blits it
+void k_fb_touch(void) { __ai_sys(hc_drew, 0, 0, 0, 0, 0, 0); }
 
 // the reset: the worker unwinds the module and boots it again
 void k_reset(void) { for (;;) __ai_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }

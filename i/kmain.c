@@ -352,7 +352,11 @@ uintptr_t k_clock_ms(void) {
 
 // Pure time-wait. ms=0 means infinite (caller is expected to chain with an
 // input wait via ai_in->wait, so this should only be hit when no I/O is intended).
+// a seat that can sleep finer than the tick (i/wasm's nanosleep) takes a short sleep
+// whole and answers true; metal wakes on the timer and rounds up to the tick
+__attribute__((weak)) bool k_nap(uintptr_t ms) { return (void) ms, false; }
 void k_sleep(uintptr_t ms) {
+  if (ms && ms < k_tick_ms && k_nap(ms)) return;
   k_tick_sync();
   uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
@@ -407,6 +411,9 @@ static void kraw(uint8_t b) {
   if (n != kkb.rh) kkb.r[kkb.rt] = b, kkb.rt = n; }
 // the tap alone: a code whose text arrives on its own lane (i/wasm's scan ring)
 void k_scan_put(uint8_t b) { if (kkb.raw) kraw(b); }
+// the paper changed under a writer of its own (i/doom.c's frame): a seat whose paper a
+// page shows, rather than a display scanning it out, wants to hear (i/wasm)
+__attribute__((weak)) void k_fb_touch(void) { }
 
 // decode a PS/2 scancode (interrupt context) and enqueue input bytes. arrows, Home, End and
 // Delete become the ANSI escapes the line editor decodes, and with Ctrl held Home/End emit
