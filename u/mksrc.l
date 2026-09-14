@@ -49,11 +49,14 @@
 
    ; a wasm object is the gen tuple as text (a/moon/moon.l), and the link's data lane
    ; reads the same label/raw forms objelf takes -- so this one is the forms in the data
-   ; slot, the two names in the globals slot, and nothing else. no backend to join.
-   (mksrc-wasm dst forms)
+   ; slot, the two names in the globals slot, and nothing else. no backend to join. the
+   ; archive rides behind the text as (blob 0), the container moon.l's wasm-tu reads:
+   ; a megabyte of string literal is what its reader would cons per byte
+   (mksrc-wasm dst forms s)
     (: q (open dst "w")
        _ (!(hot? q) ? (mksrc-die ("cannot write " + dst)))
-       _ (say q (show [() forms () '("ai_srcgz" "ai_srcgz_len") () () () () () () () ()]))
+       t (show [() forms () '("ai_srcgz" "ai_srcgz_len") () () () () () () () ()])
+       _ (say q ("wo1 " + show #t + " " + show #s + "\n" + t + s))
        (close q))
 
    (mksrc arch src dst)
@@ -66,8 +69,8 @@
        ; the archive rides as a BLOB -- the string itself, one item carrying every byte
        ; (holo.l's item-len) -- through lay, the walk and the write, on either lane
        forms ['(label ai_srcgz_len) ['raw (mksrc-le8 n 0 ())]
-              '(label ai_srcgz)     ['raw [s]]]
-       (arch = 'wasm ? (mksrc-wasm dst forms)
+              '(label ai_srcgz)     ['raw [(arch = 'wasm ? '(blob 0) s)]]]
+       (arch = 'wasm ? (mksrc-wasm dst forms s)
         (write-bytes dst (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms))))
 
    ; `argv` is a list and its head is this script's own path, so the arguments

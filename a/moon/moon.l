@@ -928,7 +928,8 @@
    ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
    ; __ai_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
    ; its answer through the import; the weak default calls main outright.
-   (wasm-tu text) (: r (sound text) (? (two? r && two? <r) <r (udie 1 "cc: not a wasm object")))
+   ; ..or a container with the blobs behind the text (wasmfn.l's wasm-tu-read)
+   (wasm-tu text) (: r (wasm-tu-read text) (? (two? r) r (udie 1 "cc: not a wasm object")))
    crt0-wasm '(((label _start) (la r0 __ai_osstack) (call __ai_start) (mov r1 r0) (li r0 231) (call __ai_sys) (ret)
                 (label __ai_start) (push lr) (lea r1 r0 8) (ld r0 r0 0) (call main) (pop lr) (ret))
                ((label __ai_osstack) (raw (1 0 0 0 0 0 0 0 (fix 8 abs64 __ai_argv0 0) 0 0 0 0 0 0 0 0
@@ -948,37 +949,44 @@
                  _ (string? k && mcput cd (k + ".wrt") ("wrt1\n" + s))
                  s))
        <(sound txt))
+   ; the inputs stay TEXT until the link reads them, and what is held of each here is its
+   ; ledger alone: the link's live set is one copy of the program, not three
    (cc-wasm ins dst (t @ {'tgt tgt 'os os 'nostd nostd 'vb vb}))
     (: os9 (!os ? 'linux os)                          ; the loader speaks linux's numbers
        t9 (pin t 'os os9)
-       tus (map (f \ (? (dotc? f) (wasm-tu (cc-objbytes f t9))
-                        (doto? f) (: r (uread f) (two? r ? (wasm-tu <>r) (udie 1 ("cc: cannot open " + f))))
-                        (udie 2 ("cc: not a .c/.o input for wasm: " + f))))
-                ins)
+       texts (map (f \ (? (dotc? f) (cc-objbytes f t9)
+                          (doto? f) (: r (uread f) (two? r ? <>r (udie 1 ("cc: cannot open " + f))))
+                          (udie 2 ("cc: not a .c/.o input for wasm: " + f))))
+                  ins)
+       tsyms (map (x \ wasm-tu-syms (wasm-tu x)) texts)          ; (defs . refs) each
        ; the runtime by need: a member whose defs meet an owed name joins, and its own
        ; wants join the owe, until nothing more is owed or nothing more answers
-       ledger (tus \ (: defs {} refs {}
-                        _ (map (tu \ (: s (wasm-tu-syms tu)
-                                        _ (map (d \ pin defs d 1) <s)
-                                        (map (r \ pin refs r 1) >s)))
-                               tus)
-                        (filter (r \ !(defs r)) (keys refs))))
+       ledger (ss \ (: defs {} refs {}
+                       _ (map (s \ (: _ (map (d \ pin defs d 1) <s)
+                                       (map (r \ pin refs r 1) >s)))
+                              ss)
+                       (filter (r \ !(defs r)) (keys refs))))
        ; crt0 rides when an input defines main; a module with a face of its own (the wasm
        ; seat's host.c, which the page enters at ai_init) links without an entry
-       base (foldl (\ a tu (a || elem "main" (tu 2))) 0 tus ? (crt0-wasm . tus) tus)
-       owed0 (ledger base)
+       entry? (foldl (\ a s (a || elem 'main <s)) 0 tsyms)      ; a ledger names noms
+       base (entry? ? (crt0-wasm . texts) texts)
+       bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
+       owed0 (ledger bsyms)
        home (two? owed0 && !nostd && mhome ())
        rt (two? owed0 && !nostd && wasm-rt home os9 vb)
-       mems (map (m \ [(m 0) (wasm-tu (m 1)) (<(wasm-tu-syms (wasm-tu (m 1))))]) rt)
+       mems (map (m \ [(m 0) (m 1) (wasm-tu-syms (wasm-tu (m 1)))]) rt)   ; name, text, ledger
        (pull set owed)
-        (: hit (filter (m \ foldl (\ a d (a || elem d owed)) 0 (m 2)) mems)
+        (: hit (filter (m \ foldl (\ a d (a || elem d owed)) 0 <(m 2)) mems)
            new (filter (m \ !(elem m set)) hit)
            (!(two? new) ? set
-              (: set2 (set + new) (pull set2 (ledger (base + map (m \ m 1) set2))))))
+              (: set2 (set + new) (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
        m (wasm-link all {'imports '("__ai_sys") 'exports 'all})
-       nw (write-bytes dst (wasm-emit m))
+       q (open dst "w")
+       _ (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)))
+       _ (say q (wasm-emit m))
+       _ (close q)
        0)
    (cc-link ins dst t) (t 'tgt = 'wasm ? (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg

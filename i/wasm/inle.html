@@ -100,7 +100,7 @@
       else if (m.lift !== undefined) {
         if (m.error) { $('lifted').textContent = `${m.lift}: errno ${m.error}`; return; }
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([m.bytes])); a.download = m.lift.split('/').pop();
+        a.href = URL.createObjectURL(new Blob([m.bytes], { type: 'application/octet-stream' })); a.download = m.lift.split('/').pop();
         a.textContent = `${a.download} (${m.bytes.length} bytes)`;
         $('lifted').replaceChildren(a); a.click(); }
       else if (m.fault) say('the machine faulted: ' + m.fault); };

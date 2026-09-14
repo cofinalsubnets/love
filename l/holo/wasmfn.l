@@ -379,7 +379,8 @@
                 'raw [<f (map (\ x (? (two? x && <x = 'fix) [<x (x 1) (x 2) (m (x 3)) (x 4)] x)) (f 1))]
                 f)))
    ;; the noms a stream defines (its labels) and the ones it names
-   (w-labels forms) (foldl (\ a f (? (two? f && <f = 'label) (pin a (f 1) 1) a)) {} forms)
+   (w-labels-into t forms) (foldl (\ a f (? (two? f && <f = 'label) (pin a (f 1) 1) a)) t forms)
+   (w-labels forms) (w-labels-into {} forms)
    (w-refs forms t)
     (:- (foldl f1 t forms)
      (f2 a2 x) (x @- a2 ('fix . u) (pin a2 <>>u 1))
@@ -418,65 +419,83 @@
      (<f @ 'label (pin syms <>f ['data addr], w-lay-data >forms addr syms items)
            'align (: n <>f a2 (addr + ((n - (addr % n)) % n))
                           (w-lay-data >forms a2 syms items))
-           'raw (:- (go <>f addr items) (go xs a acc)
-                 (xs @- (w-lay-data >forms a syms acc)
-                  (x . xs) (? (two? x)   (go xs (a + 8) ([a (x 3) (x 4)] . acc))
-                              (string? x) (go xs (a + #x) ((a . x) . acc))
-                              (go xs (a + 1) ((a . x) . acc)))))
+           ; a run of plain bytes lands as one string item, not a cons and an address per byte
+           'raw (:- (go <>f addr items () addr) (go xs a acc run r0)
+                 (: (flush _) (two? run ? ((r0 . string (rev run)) . acc) acc)
+                    (xs @- (w-lay-data >forms a syms (flush 0))
+                     (x . xs) (? (two? x)   (go xs (a + 8) ([a (x 3) (x 4)] . flush 0) () (a + 8))
+                                 (string? x) (go xs (a + #x) ((a . x) . flush 0) () (a + #x))
+                                 (go xs (a + 1) acc (x . run) (two? run ? r0 a))))))
            x (scare 'wasm-data-form x)))
    (w-align16 a) (a + ((16 - (a % 16)) % 16))
+   ;; an object off disk: the gen tuple as text, or a container -- `wo1 TEXTLEN BLOBLEN..` on
+   ;; the first line, the text, then the blobs (a carried archive, a wad) behind it, each
+   ;; standing as (blob k) in its raw form: a megabyte of string literal is what the reader
+   ;; would cons per byte. () when the text is not an object.
+   (wo-head text)                                   ; -> [(textlen bloblen ..) start]
+    (:- (go 4 0 () 0) (go i n acc any)
+     (: c (text i)
+        (? (c = 10) [(rev (any ? (n . acc) acc)) (i + 1)]
+           (c = 32) (go (i + 1) 0 (any ? (n . acc) acc) 0)
+           (go (i + 1) (n * 10 + c - 48) acc 1))))
+   (wo-blobs text lens at)
+    (:- (go lens at ()) (go ls a acc) (? !(two? ls) (rev acc) (go >ls (a + <ls) (snip text a (a + <ls) . acc))))
+   (wo-fill tu blobs)
+    (: (item x) (? (two? x && <x = 'blob) (blobs (x 1)) x)
+       (form f) (? (two? f && <f = 'raw) ['raw (map item (f 1))] f)
+       (<tu . (map form (tu 1)) . >>tu))
+   (wasm-tu-read text)
+    (: h (4 <= #text && snip text 0 4 = "wo1 " ? (wo-head text) ())
+       r (sound (two? h ? (snip text <>h (<>h + <<h)) text))
+       (? !(two? r && two? <r) () (two? h) (wo-fill <r (wo-blobs text >(<h) (<>h + <<h))) <r))
    ;; opts: 'imports (name ..) the functions the environment supplies; 'exports (name ..) | 'all;
-   ;; 'stack bytes; 'base addr
-   (wasm-link tus opts)
-    (: ntu (tally tus)
-       ;; 1. every tu-local label wears the tu's number, so two statics never meet
-       ren1 (map (\ i (: tu (tus i)
+   ;; 'stack bytes; 'base addr. an input is a tu, or its text -- read here, so nothing holds
+   ;; the forms but the functions they split into: the link's live set is one copy of the program
+   (wasm-link tus0 opts)
+    (: ntu (tally tus0)
+       ;; 1. per object: every tu-local label wears the tu's number, so two statics never meet,
+       ;;    and the text streams split into functions at once. a part: [fns names gnames weaks
+       ;;    dforms nforms iforms xsecs bforms rforms aliases]
+       parts (map (\ i (: tu (: t (tus0 i) (string? t ? (wasm-tu-read t) t))
+                          _ (two? tu || scare 'wasm-object i)
                           glob (: t {} _ (map (s \ pin t (nom s) 1) (tu 2 + tu 3)) t)
                           labs (w-labels (w-tu-streams tu))
                           r {}
                           _ (map (\ l (? (peep glob l 0) 0 (pin r l (nom (show l + "." + show i))))) (keys labs))
-                          r))
-                 (jot ntu))
-       (rn i forms) (map (\ f (w-symap f (ren1 i))) forms)
-       tus1 (map (\ i (: tu (tus i)
-                           [(rn i (tu 0)) (rn i (tu 1)) (tu 2) (tu 3) (rn i (tu 4)) (rn i (tu 5)) (tu 6)
-                            (map (\ x [(x 0) (rn i (x 1)) (x 2)]) (tu 7))
-                            (rn i (tu 8)) (rn i (tu 9))
-                            (map (\ x [(x 0) (rn i (x 1)) (x 2)]) (tu 10)) (tu 11)]))
-                 (jot ntu))
+                          (rn forms) (map (\ f (w-symap f r)) forms)
+                          ;; every label of a text stream that is a function symbol opens one (the
+                          ;; rest are the function's own); a static wears its tu
+                          fs (: t {} _ (map (s \ pin t (peep r (nom s) (nom s)) 1) (tu 2 + tu 6))
+                                   _ (map (\ x (map (\ f (? (two? f && <f = 'label) (pin t (f 1) 1) 0)) (x 1))) (tu 10))
+                                   t)
+                          sp ((w-split (rn (tu 0)) fs) . map (\ x (w-split (rn (x 1)) fs)) (tu 10))
+                          [(catmap cap sp) (tu 2) (tu 3) (tu 11)
+                           (rn (tu 1)) (rn (tu 4)) (rn (tu 5)) (map (\ x [(x 0) (rn (x 1)) (x 2)]) (tu 7))
+                           (rn (tu 8)) (rn (tu 9))
+                           (catmap (\ s (map (\ k [k (peep >s k ())]) (keys >s))) sp)]))
+                   ^ntu)
        ;; 2. weak against strong: a weak definition with a strong twin elsewhere keeps its
-       ;;    body under a private name; two weak ones, the first stands
-       strong (: t {} _ (map (\ tu (map (\ s (? (elem s (tu 11)) 0 (pin t (nom s) 1))) ((tu 2) + (tu 3)))) tus1) t)
+       ;;    body under a private name; two weak ones, the first stands. a function is renamed
+       ;;    at its head, a data label in its stream
+       strong (: t {} _ (map (\ p (map (\ s (? (elem s (p 3)) 0 (pin t (nom s) 1))) (p 1 + p 2))) parts) t)
        wkseen {}
-       ren2 (map (\ i (: tu (tus1 i) r {}
+       ren2 (map (\ i (: p (parts i) r {}
                           _ (map (\ s (: l (nom s)
-                                         (? !(elem s (tu 11)) 0
+                                         (? !(elem s (p 3)) 0
                                             (peep strong l 0) (pin r l (nom (show l + ".wk." + show i)))
                                             (peep wkseen l 0) (pin r l (nom (show l + ".wk." + show i)))
                                             (pin wkseen l 1))))
-                                 (tu 2 + tu 3))
+                                 (p 1 + p 2))
                           r))
-                 (jot ntu))
-       (rd i forms) (map (\ f (? (two? f && <f = 'label) (w-symap f (ren2 i)) f)) forms)   ; the definition alone
-       tus2 (map (\ i (: tu (tus1 i)
-                           [(rd i (tu 0)) (rd i (tu 1)) (tu 2) (tu 3) (rd i (tu 4)) (rd i (tu 5)) (tu 6)
-                            (map (\ x [(x 0) (rd i (x 1)) (x 2)]) (tu 7))
-                            (rd i (tu 8)) (rd i (tu 9))
-                            (map (\ x [(x 0) (rd i (x 1)) (x 2)]) (tu 10)) (tu 11)]))
                  ^ntu)
-       ;; 3. the functions, in tu order and stream order; every label of a text stream that is
-       ;;    a function symbol opens one (the rest are the function's own)
-       fnsets (map (\ i (: tu (tus2 i) t {}
-                           _ (map (s \ pin t (peep (ren1 i) (nom s) (nom s)) 1) ((tu 2) + (tu 6)))   ; a static wears its tu
-                           _ (map (\ x (map (\ f (? (two? f && <f = 'label) (pin t (f 1) 1) 0)) (x 1))) (tu 10))
-                           _ (map (k \ pin t (peep (ren2 i) k 0) 1) (keys (ren2 i)))   ; a renamed weak keeps its slot
-                           t))
-                   (jot ntu))
-       splits (catmap (\ i (: tu (tus2 i) fs (fnsets i)
-                              ((w-split (tu 0) fs) . map (\ x (w-split (x 1) fs)) (tu 10))))
-                      (jot ntu))
-       fns (catmap cap splits)
-       als (catmap (\ s (map (\ k [k (peep >s k ())]) (keys >s))) splits)   ; (alias . name) pairs
+       (rd i forms) (map (\ f (? (two? f && <f = 'label) (w-symap f (ren2 i)) f)) forms)   ; the definition alone
+       (r2 i x) (peep (ren2 i) x x)
+       ;; 3. the functions, in tu order and stream order
+       fns (catmap (\ i (map (\ fn ((r2 i <fn) . >fn)) ((parts i) 0))) ^ntu)
+       als (catmap (\ i (map (\ a [(r2 i (a 0)) (r2 i (a 1))]) ((parts i) 10))) ^ntu)   ; (alias . name) pairs
+       (dl k) (map (\ i (rd i ((parts i) k))) ^ntu)                 ; one data lane across the tus
+       d1 (dl 4)  d4 (dl 5)  d5 (dl 6)  d8 (dl 8)  d9 (dl 9)
+       d7 (map (\ i (map (\ x [(x 0) (rd i (x 1)) (x 2)]) ((parts i) 7))) ^ntu)
        ;; 4. the data, section-major across the tus: rodata, data, love_nifs, .love.image, then
        ;;    the named sections grouped by name, then every bss. a lane the ELF linker brackets
        ;;    (love_nifs, love_rela, every named section) gets its __start_/__stop_ pair here.
@@ -494,28 +513,32 @@
            _ (pin syms (nom ("__stop_" + nm)) ['data <r])
            r)
        xnames (: (go l acc) (? !(two? l) (rev acc) (go >l (? (elem <l acc) acc (<l . acc))))
-                 (go (catmap (tu \ map cap (tu 7)) tus2) ()))
-       st1 (lane [base ()] (map (tu \ tu 9) tus2))
-       st2 (lane st1 (map caup tus2))
-       st3 (bracket "love_nifs" st2 (map (tu \ tu 4) tus2))
+                 (go (catmap (x \ map cap x) d7) ()))
+       st1 (lane [base ()] d9)
+       st2 (lane st1 d1)
+       st3 (bracket "love_nifs" st2 d4)
        st4 (bracket "love_rela" st3 ())
-       st5 (lane st4 (map (tu \ tu 5) tus2))
-       st6 (foldl (\ st nm (bracket nm st (catmap (tu \ catmap (x \ <x @ ^nm [(x 1)]) (tu 7)) tus2)))
+       st5 (lane st4 d5)
+       st6 (foldl (\ st nm (bracket nm st (catmap (xs \ catmap (x \ <x @ ^nm [(x 1)]) xs) d7)))
                   st5 xnames)
        dend <st6
        _ (pin syms '__data_start__ ['data base]) _ (pin syms '__data_load__ ['data base])
        _ (pin syms '__data_end__ ['data dend])
-       st7 (lane [(w-align16 dend) (st6 1)] (map (\ tu (tu 8)) tus2))
+       st7 (lane [(w-align16 dend) (st6 1)] d8)
        bend <st7
        _ (pin syms '__bss_start__ ['data (w-align16 dend)]) _ (pin syms '__bss_end__ ['data bend])
        _ (pin syms '__load_size__ ['data (bend - base)])
        items (rev (st7 1))
-       ;; 5. the index space: the imports the program names, then the functions
-       defd (foldl (\ a tu (: t (w-labels (w-tu-streams tu)) _ (map (\ k (pin a k 1)) (keys t)) a)) {} tus2)
-       refs (keys (foldl (\ a tu (w-refs (w-tu-streams tu) a)) {} tus2))
+       ;; 5. the index space: the imports the program names, then the functions. what is
+       ;;    defined: every function's name and its own labels, every data label
+       dlanes (d1 + d4 + d5 + d8 + d9 + catmap (xs \ map (x \ x 1) xs) d7)
+       defd (: t {} _ (map (\ fn (pin t <fn 1, w-labels-into t <>fn)) fns)
+               _ (map (\ d (w-labels-into t d)) dlanes)
+               t)
+       refs (keys (: t {} _ (map (\ fn (w-refs <>fn t)) fns) _ (map (\ d (w-refs d t)) dlanes) t))
        owed0 (filter (\ x (!(peep defd x 0) && !(two? (peep syms x ())))) refs)   ; a bracket is the link's
        ;; a weak reference nothing defines is null, as at a static link; the rest are imports
-       wkall (foldl (\ a tu (: _ (map (\ s (pin a (nom s) 1)) (tu 11)) a)) {} tus2)
+       wkall (foldl (\ a p (: _ (map (\ s (pin a (nom s) 1)) (p 3)) a)) {} parts)
        _ (pin wkall 'main 1)                            ; a module with a face of its own has no main; the runtime's start never runs
        _ (map (\ x (? (peep wkall x 0) (pin syms x '(null)) 0)) owed0)
        owed (filter (\ x !(peep wkall x 0)) owed0)
@@ -540,9 +563,9 @@
        _ (map (\ it (? (two? >it)                             ; (addr sym aux): an abs64 pointer
                         (: v ((symval (it 1)) + (it 2)) a (<it - base)
                            (map (j \ pin img (a + j) ((v // (256 ** j)) % 256)) ^8))
-                        ; a blob goes in whole; pour clamps to the image either side
+                        ; a run goes in whole; pour clamps to the image either side, so bss stays zero
                         (string? >it) (pour img (<it - base) >it 0 #>it)
-                        (? (<it < dend) (pin img (<it - base) >it) 0)))   ; bss stays zero
+                        (? (<it < dend) (pin img (<it - base) >it) 0)))
               items)
        ;; 7. the stack above the data, sp at its top; the memory holds it all
        stack (peep opts 'stack 4194304)
@@ -551,11 +574,12 @@
        exports (: e (peep opts 'exports 'all)
                   seen {}                                 ; a weak twin names the same export once
                   (ff s) (seen s @ () (pin seen s 1, two? (syms (nom s))))
-                  (cf tu) (filter ff <>>tu)
-                  (? (= e 'all) (catmap cf tus2) e))
+                  (? (= e 'all) (catmap (p \ filter ff (p 1)) parts) e))
+       ;; each function lowered and encoded as it comes: a body is a string from here on
+       funcs (map (\ f (: r (wasm-fn (f 1) 'uni syms) [0 (wentry <r >r)])) fns)
        {'types '(((i64 i64 i64 i64 i64 i64 i64 i64 f64 f64 f64 f64 f64 f64 f64 f64) (i64 i64 f64 f64)))
         'imports (map (\ x ["env" (show x) '(func 0)]) imps)
-        'funcs (map (\ f (: r (wasm-fn (f 1) 'uni syms) [0 <r >r])) fns)
+        'funcs funcs
         'table (ni + tally fns) 'elem (jot (ni + tally fns))
         'memory [pages]
         'globals [['i64 1 [['i64.const sp0]]]]

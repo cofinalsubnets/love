@@ -20,7 +20,7 @@
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_ord test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
-  test_doomwasm test_seedwasm test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
+  test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_xfixpoint uuhomgen uukind uumx uusplgen \
@@ -1368,6 +1368,26 @@ test_seedwasm: host
 	   || { tail -20 b/wasm/seed.log; echo "FAIL test_seedwasm"; exit 1; }
 	@chmod +x b/wasm/love-x64
 	@$(if $(filter x64,$(hosta)),b/wasm/love-x64 -v,echo "  the egg is x64 and this box is $(hosta): laid, not run")
+endif
+
+# test_nestwasm -- the artifact rebuilds its own wasm MODULE aboard the wasm seat: the
+# source laid off the carried tarball, cook driven with the kernel as the toolchain
+# (LOVE=love on cook's line: a task shares no environment with its spawner there), and
+# the link under the seat's collector budget -- what `love web` and `love doom` do on the
+# page. ~15 minutes, opt-in by name.
+ifeq ($(NODE),)
+test_nestwasm:
+	@echo "test_nestwasm: skipped (needs node)"
+else
+test_nestwasm:
+	@$(MAKE) -s wasm
+	@echo TEST t/kernel/nest.l "(the wasm module rebuilt aboard the wasm seat)"
+	@INLE_RAM=1024 $(NODE) $(R)/i/wasm/inle.mjs --for 2400 \
+	   --image b/wasm/love.image $(R)/b/love.wasm t/kernel/nest.l \
+	   < /dev/null > b/wasm/nest.log 2>&1; \
+	 grep -q "nest: cook wasm answered 0, the module stands" b/wasm/nest.log \
+	   || { tail -20 b/wasm/nest.log; echo "FAIL test_nestwasm"; exit 1; }
+	@echo "  nestwasm: ok -- laid, built and linked aboard"
 endif
 
 # the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine, and

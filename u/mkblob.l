@@ -43,11 +43,13 @@
                 (a . u) (ev a, mkblob-rdev u))
 
    ; a wasm object is the gen tuple as text (a/moon/moon.l), the same label/raw forms
-   ; in its data slot and the two names in its globals slot -- u/mksrc.l's lane
-   (mkblob-wasm dst forms syms)
+   ; in its data slot and the two names in its globals slot -- u/mksrc.l's lane, the
+   ; bytes behind the text as (blob 0) in moon.l's wasm-tu container
+   (mkblob-wasm dst forms syms s)
     (: q (open dst "w")
        _ (!(hot? q) ? (mkblob-die ("cannot write " + dst)))
-       _ (say q (show [() forms () syms () () () () () () () ()]))
+       t (show [() forms () syms () () () () () () () ()])
+       _ (say q ("wo1 " + show #t + " " + show #s + "\n" + t + s))
        (close q))
 
    (mkblob arch src dst sym)
@@ -61,8 +63,8 @@
        ; the payload rides as a BLOB -- the string itself, one item holding every byte
        ; (holo.l's item-len) -- so a wad costs a cell here and not four million
        forms [['label (nom lsym)] ['raw (mkblob-le8 n 0 ())]
-              ['label (nom sym)]  ['raw [s]]]
-       (arch = 'wasm ? (mkblob-wasm dst forms [sym lsym])
+              ['label (nom sym)]  ['raw [(arch = 'wasm ? '(blob 0) s)]]]
+       (arch = 'wasm ? (mkblob-wasm dst forms [sym lsym] s)
         (write-bytes dst (objelf arch () () () [sym lsym] () () () () () forms))))
 
    ; `argv` is a list whose head is this script's own path, so the arguments

@@ -126,7 +126,7 @@ export async function loveMachine(root) {
   // handed to the browser as a download under its own name
   const lifted = (m) => {
     if (m.error) { console.warn('lift ' + m.lift + ': errno ' + m.error); return; }
-    const a = document.createElement('a'), url = URL.createObjectURL(new Blob([m.bytes]));
+    const a = document.createElement('a'), url = URL.createObjectURL(new Blob([m.bytes], { type: 'application/octet-stream' }));
     a.href = url; a.download = m.lift.split('/').pop() || 'lift';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000); };

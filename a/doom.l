@@ -214,12 +214,10 @@
           (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
              (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
                 (doom-fetch dl "/dl/doom1.wad" "/dl/doomgeneric.tgz") (fail "the page does not serve the pair -- `love web --doom` lays one that does")
-                (: _ (setenv "LOVE" "love")
-                   _ (setenv "LUSHFLAGS" "-a")
-                   _ (setenv "CC" "cc")
-                   _ (setenv "LOVE_ARMED" "1")
-                   _ (note "building this machine's love with doom inside -- the machine is the toolchain")
-                   st (run-in nest ["cook" "wasm" "DOOM=1"])
+                ; a task shares no environment with its spawner on this seat, so what cook
+                ; is told goes on its line
+                (: _ (note "building this machine's love with doom inside -- the machine is the toolchain")
+                   st (run-in nest ["cook" "wasm" "DOOM=1" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])
                    (? (st != 0) (fail "the doom build failed")
                       (one? (stat mod)) (fail ("the build left no module at " + mod))
                       (: _ (note ("booting " + mod))
