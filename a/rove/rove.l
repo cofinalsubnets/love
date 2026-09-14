@@ -959,16 +959,16 @@
  ; what she says is the floor's: one page each, and the box reflows a long line
  her-book '(("A wizened gnome enjoys the garden."
              "\"Rats tend the hedges underneath the roots.\" She aims a bony claw below."
-             "\"Ye'd blanch aken their burrowings' depthwroughtnesses.\" "
+             "\"Ye'd blanch to ken their deepwrought burrowings.\" "
              "When you blink she's gone."
              "-- any key --")
             ("A wizened gnome leans on a lamppost."
              "\"Ash and metal oxen rule the pathways of this poisoned land.\""
              "\"Even the gnomes of this unhallowed district grew verminous.\""
-             "She slurps a bysquirming gnome and swallows it away in one heroic gulp."
+             "She snatches a bysquirming gnome and slurps it down in one heroic gulp."
              "\"Disgusting.\" Orozcalia sublimates into an oily mephitis and vanishes."
              "-- any key --")
-            ("\"This tongue won't form the syllables these poor shapes call their dirtened nowhere.\""
+            ("\"This tongue won't form the sound these poor shapes call their dirtened nowhere.\""
              "Orozcalia spits and signs a cantrip of warding."
              "\"Mere quantities. Hurry and get on now.\""
              "-- any key --"))
@@ -1010,7 +1010,7 @@
    (spot n) (two? rms ? (spot-in (rms (roll sb #rms)) n) ())
    (furnish-in rm k) (: xy (spot-in rm 40) (xy ? (pin loot (<xy + d 'w * <>xy) [k])))
    (furnish k) (two? rms ? (furnish-in (rms (roll sb #rms)) k) ())
-   _ (? (1 = lvl) (furnish 'table, furnish 'throne))
+   _ (lvl @ 1 (furnish 'table, furnish 'throne))
    ; the middle's buildings are lived in: a few pieces each, and one holds the shelf
    pieces '(chair bed crate)
    _ (? (2 = lvl)
@@ -1026,7 +1026,7 @@
                                   2 [x0 (y0 + 1 + roll sb (y1 - y0 - 1))]
                                     [x1 (y0 + 1 + roll sb (y1 - y0 - 1))])
                    (0 = dat d <c <>c ? (pin loot (<c + d 'w * <>c) '(lamp))))
-   _ (? (2 = lvl) (each rms (rm \ (lamp-on rm, roll sb 2 = 0 ? (furnish-in rm 'brazier)))))
+   _ (? (2 = lvl) (each rms (rm \ (lamp-on rm, roll sb 2 @ 0 (furnish-in rm 'brazier)))))
    ; heaven's platforms: fountains, and mirrors on platforms of their own -- one mirror
    ; lets out of another, so there are two at least where there are two platforms.
    ; heaven's furniture is walked round, never through: only where the ring about it is
@@ -1034,9 +1034,9 @@
    (ringed? x y) (all (o \ (: nx (x + <o) ny (y + <>o) l (loot (nx + d 'w * ny))
                              (open? d nx ny && !(l && <l != 'penny))))
                       '((-1 -1) (0 -1) (1 -1) (-1 0) (1 0) (-1 1) (0 1) (1 1)))
-   (furnish-ringed rm k n) (? (0 < n) (: xy (spot-in rm 40)
-                                        (? (xy && ringed? <xy <>xy) (pin loot (<xy + d 'w * <>xy) [k])
-                                           (furnish-ringed rm k (n - 1)))))
+   (furnish-ringed rm k n) (0 < n ? (: xy (spot-in rm 40)
+                                     (xy && ringed? <xy <>xy ? (pin loot (<xy + d 'w * <>xy) [k])
+                                      (furnish-ringed rm k (n - 1)))))
    ; mirrors first, each on a platform of its own; one too small to ring a mirror hands
    ; it on to the next, so there are two at least wherever two platforms can hold them
    (mirrors ps n) (? (0 < n && two? ps) (mirrors >ps (n - (furnish-ringed <ps 'mirror 40 ? 1 0))))
@@ -1046,18 +1046,18 @@
    ; ..and its streets driven: a car for so many cells of street, headed along it. a
    ; middle delved for want of room has no lanes, and no traffic
    pi (g 'p 'x + d 'w * g 'p 'y)
-   streets (? (2 = lvl && tablet? (d 'lane))
-              (filter (i \ i != pi && street? d (i % d 'w) (i // d 'w)) ^(d 'w * d 'h)) ())
+   streets (2 = lvl && tablet? (d 'lane) ?
+            (filter (i \ i != pi && street? d (i % d 'w) (i // d 'w)) ^(d 'w * d 'h)))
    ; ..each headed the way its lane runs, either way at a crossing
    (car-at i) (: x (i % d 'w) y (i // d 'w) l (lane-at d x y)
                  hd (<l != 0 && (<>l = 0 || roll sb 2 = 0) ? [<l 0] [0 <>l])
                  (car-new x y <hd <>hd (car-pens (roll sb #car-pens))))
-   cars (two? streets ? (map (_ \ car-at (streets (roll sb #streets))) ^(2 + #streets // 40)) ())
+   cars (two? streets ? (map (_ \ car-at (streets (roll sb #streets))) ^(2 + #streets // 40)))
    ; the gates: a road's glass end whose lane runs in, and that way
    w (d 'w) h (d 'h)
    (gate i) (: x (i % w) y (i // w) l (lane-at d x y)
                ix (? (x = 0) 1 (x = w - 1) -1 0) iy (? (y = 0) 1 (y = h - 1) -1 0)
-               (6 = dat d x y && ((ix != 0 && <l = ix) || (iy != 0 && <>l = iy)) ? [x y <l <>l] ()))
+               (6 = dat d x y && (ix != 0 && <l = ix || iy != 0 && <>l = iy) ? [x y <l <>l]))
    gates (? (2 = lvl) (filter two? (map gate ^(w * h))) ())
    her (? (lvl <= her-floors) (: xy (spot 40)
                                  (xy ? {'x <xy 'y <>xy 'gl her-glyph 'hue her-pen})))
@@ -1073,7 +1073,7 @@
                                '((-1 -1) (0 -1) (1 -1) (-1 0) (1 0) (-1 1) (0 1) (1 1)))
    (pass n) (? (0 < n)
                (: cut (filter (i \ (: x (i % w) y (i // w)
-                                      (0 < x && x < (w - 1) && 0 < y && y < (h - 1) &&
+                                      (0 < x && x < w - 1 && 0 < y && y < h - 1 &&
                                        0 = dat d x y && 4 <= around x y &&
                                        roll sb 100 < wear-share)))
                               ^(w * h))
@@ -1096,11 +1096,8 @@
  (dress d lvl sb) (: _ (pins d 'th (peep themes (lvl - 1) th-heaven) 'sd (roll sb 1000000))
                      ; the garden and the middle each wear one still frame of the shimmer
                      (skin _) (pin d 'skin {'ground (ink-drift (d 'h) (d 'w) (roll sb 1000 / 10.0) 0.0)})
-                     (? (1 = lvl) (: _ (wear-thin d sb)
-                                     _ (stream d sb)
-                                     (skin ()))
-                        (2 = lvl) (skin ())
-                        d))
+                     (lvl @- d 1 (wear-thin d sb, stream d sb, skin ())
+                               2 (skin ())))
 
  ; a fresh climb: the garden delved from the seed state, the climber at 'in
  (crawl-new w h st) (:
@@ -1140,7 +1137,7 @@
                  dm (1 + roll (g 'sb) 3)
                  _ (pin m 'hp (m 'hp - dm))
                  (? (0 < m 'hp) (note g (fill w-strike [(m 'nm) dm]))
-                  (pin g 'ms (filter (\ o !(= o m)) (g 'ms)),
+                  (pin g 'ms (filter (!= m) (g 'ms)),
                    drop g m,
                    note g (fill w-kill [(m 'nm)]))))
  (take g i it)
@@ -1154,15 +1151,15 @@
  ; what the ground underfoot has to say for itself -- "" where nothing is strewn. the
  ; line is the cell's, off a second salt, so it does not follow which thing lies there
  (underfoot g x y) (: d (g 'd) sd (peep d 'sd 0) k (dice x y (1 + sd) 97)
-                      (? (2 = dat d x y) (mutter k "stair")
-                         (3 = dat d x y) (mutter k "stream")
-                         (4 = dat d x y) (mutter k "floor")
-                         (5 = dat d x y) (mutter k "door")
-                         (7 = dat d x y) (mutter k "steps")
-                         (8 = dat d x y) (mutter k "platform")
-                         (: r (strewn (make d) x y sd)
-                            (two? r ? (mutter k (r 4)) ""))))
- (tread g x y) (: s (underfoot g x y) (s ? (note g s)))
+                    (dat d x y @ 2 (mutter k "stair")
+                                 3 (mutter k "stream")
+                                 4 (mutter k "floor")
+                                 5 (mutter k "door")
+                                 7 (mutter k "steps")
+                                 8 (mutter k "platform")
+                                 (strewn (make d) x y sd @ r
+                                  (two? r ? (mutter k (r 4)) ""))))
+ (tread g x y) (underfoot g x y @ s (s && note g s))
 
  ; a mirror bumped lets you out beside another one, whichever the dice pick; alone on
  ; its floor, or hemmed in, it keeps you where you are
@@ -1209,7 +1206,7 @@
                _ (note g (fill w-bite [(m 'nm) dm]))
                (0 >= g 'p 'hp ? (pin g 'over 'dead, note g w-dead)))
  (shift g m mv) (: nx (m 'x + <mv) ny (m 'y + <>mv)
-                 (blocked? g nx ny ? () (pin m 'x nx, pin m 'y ny)))
+                 (blocked? g nx ny ? () (pins m 'x nx 'y ny)))
  (stir g m) (: p (g 'p) dx ((p 'x) - m 'x) dy ((p 'y) - m 'y)
                (? (|dx <= 1 && |dy <= 1) (bite g m)
                   (dx * dx + dy * dy <= 65 &&
@@ -1299,11 +1296,11 @@
  house-goods '(pot bronze iron book cloth table chair bed)
  (sq n) (n * n)
  (circle? g) (last-floor < g 'lvl)
- (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) ((dx * dx) + (4 * dy * dy)))
+ (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) (dx * dx + 4 * dy * dy))
  ; the board's reach from the fire, in the ring's own quarter-unit measure
  (circle-far g) (: d (g 'd) w (d 'w) h (d 'h) cx (g 'cx) cy (g 'cy)
                    dx (cx < w - cx ? (w - cx) cx) dy (cy < h - cy ? (h - cy) cy)
-                   ((dx * dx) + (4 * dy * dy)))
+                   (dx * dx + 4 * dy * dy))
  ; the ring's radius in rows, and -1 while there is no ring
  (circle-r g) ('ring = g 'phase ? (g 'r) -1)
  ; how far out the pink front stands, as a share of the board's reach: past the corner
@@ -1344,7 +1341,7 @@
  ; the walls and the ring draw in over you, so a climber standing where one now stands
  ; is carried in with it -- toward the fire until the floor is under them again
  (push-in g wq) (: p (g 'p)
-                   (go x y) (? (circle-q g x y < wq || (x = g 'cx && y = g 'cy)) (pins p 'x x 'y y)
+                   (go x y) (? (circle-q g x y < wq || x = g 'cx && y = g 'cy) (pins p 'x x 'y y)
                                (go (x + sgn (g 'cx - x)) (y + sgn (g 'cy - y))))
                    (go (p 'x) (p 'y)))
  ; a turn of the closing: the walls in by a step until the octagon holds you, and then
@@ -1362,7 +1359,7 @@
 
  ; --- the scenes: the vale, the house and its attic are floors under one climber, and
  ; a cell of one may be a door into another. a scene is its floor, its loot and her.
- (scene-of g k) (peep (g 'scenes) k ())
+ (scene-of g k) (g 'scenes k)
  (scene-save g) (pins (scene-of g (g 'scene)) 'loot (g 'loot) 'her (g 'her))
  ; lit end to end: the seen cask filled, the floor marked so, and no table of cells
  (lit-all d) (: sn (d 'seen)
@@ -1387,26 +1384,25 @@
                         'sign (doom-ttl . doom-lines) 'her ())))
  ; the box, opened: the token is drawn here and named here, and the box is empty after
  (open-box g) (? (g 'token) (note g w-empty)
-                 (: tk (tokens (roll (g 'sb) #tokens))
-                    _ (pin g 'token tk)
-                    (pin g 'sign (box-ttl . map (l \ fill l [tk]) box-lines))))
+                 (tokens (roll (g 'sb) #tokens) @ tk
+                  (pins g 'token tk 'sign (box-ttl . map (l \ fill l [tk]) box-lines))))
  ; the tree: a node's sign is its lines, then its choices numbered, then the foot
  (talk-node k) (:- (go her-tree)
    (go l) (two? l ? (: e <l (k = <e ? e (go >l))) ()))
  (joins-with sp l) (? (one? l) "" (one? >l) <l (<l + sp + joins-with sp >l))
  (talk g k) (: nd (talk-node k)
                txt (nd 1) chs (nd 2)
-               ks (map (c \ show <c) chs)
-               lines (txt + (two? chs ? [""] ()) + (map (c \ show <c + "  " + (c 1)) chs)
+               ks (map (show * cap) chs)
+               lines (txt + (two? chs ? [""] ()) + (map (c \ show <c + "  " + c 1) chs)
                           + ["" (fill talk-foot [(two? chs ? (joins-with ", " ks) "any key")])])
                (pins g 'talk k 'sign (her-ttl . lines)))
  ; the key at a node: a digit picks its choice, anything else at a node with choices
  ; shows it again, and a node without them closes
  (talk-key g k) (: nd (talk-node (g 'talk)) chs (nd 2)
-                   (? !(two? chs) (pin g 'talk ())
-                      (: c (filter (c \ 48 + <c = k) chs)
-                         (talk g (two? c ? (<c 2) (g 'talk))))))
- (meet-her-vale g) (: _ (pin g 'talked 1) (talk g 'start))
+                 (one? chs ? (pin g 'talk ())
+                  (: c (filter (c \ 48 + <c = k) chs)
+                   (talk g (two? c ? (<c 2) (g 'talk))))))
+ (meet-her-vale g) (pin g 'talked 1, talk g 'start)
 
  ; --- laying the vale: the road, the clearing, the stones, the fire, the cottage ---
  ; the road wanders on two sines the way the walk's does, five cells wide
@@ -1522,8 +1518,8 @@
    _ ((sg || (g 'over || circle? g)) ? ()
       (each (g 'ms) (m \ !(g 'over) && due? g m && (m 'car ? (drive g m) (stir g m)))))
    ; the vale's closing takes a turn for every turn taken, and none for a sign's key
-   _ (? (circle? g && !sg && !(g 'over)) (vale-tick g))
-   _ (? (circle? g) (pin (g 'd) 'front (: f (pink-front g) (f < 1.0 ? (f * f * circle-far g) ()))))
+   _ (circle? g && !sg && !(g 'over) && vale-tick g)
+   _ (circle? g && pin (g 'd) 'front (: f (pink-front g) (f < 1.0 && f * f * circle-far g)))
    (circle? g ? g (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))))
 
  ; the bar, and on a stair the one thing worth saying there
@@ -1590,7 +1586,7 @@
                                 {'s "sqr" 'note beep-note 'gain 0.8 'legato beep-len} song-rate)
                    vs (foldl (\ acc f (f @ 'horn (cat acc [(beep 0) (beep 1)]) acc)) () fx)
                    _ (pin g 'sfx ())
-                   (pin s 'vs (cat (s 'vs) (filter two? vs))))
+                   (pin s 'vs (s 'vs + filter two? vs)))
  ; one chunk out the card. whole cycles are pulled in ahead of the write head and
  ; dropped once their end frame is behind it, so the live list is what is sounding.
  (song-feed s vol) (:
