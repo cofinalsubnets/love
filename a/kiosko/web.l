@@ -27,12 +27,11 @@
 ; the tree (a Makefile and w/index.l), this lays them through our own make first; where
 ; it is a bare directory the source aboard is laid under it (`love source`) and that tree
 ; is built and served. this binary drives the build and no love is compiled for it. the
-; --doom fetches doomgeneric and the shareware IWAD into the nest's dl/ (a/doom.l's pair),
-; and a nest that carries them -- by this flag or by `love doom` -- gets its module laid
-; DOOM=1, so the game is aboard the page and `doom` at its shell runs it; a page without
-; it serves the pair all the same, and `doom` at its shell builds the game aboard. the
-; two isolation headers kiosko's reply sends are what let inle.html's machine run here
-; without its service worker.
+; --doom fetches doomgeneric and the shareware IWAD into the nest's dl/ (a/doom.l's pair)
+; for the machine to fetch: `doom` at its shell lays the source, builds the game aboard
+; and boots what it built. the page's own module is laid plain either way -- a game inside
+; it would answer `doom` at once and the build would never run. the two isolation headers
+; kiosko's reply sends are what let inle.html's machine run here without its service worker.
 ;
 ; kiosko is a module: `cite` is the reach, and its miss is checked by name -- () applied
 ; to operands is 1, a miss that would read as a server that started.
@@ -147,9 +146,8 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       _ ((cite 'source 'src-arm) dir exe)
       ; the module is site-wasm's to build, through its own seat: asked for by name at
       ; the top it would be laid with the x64 lane's recipe and fail a file at a time
-      doom (? ((cite 'doom 'doom-aboard?) (dir + "/dl")) ["DOOM=1"] ())
-      _ (say err (";; laying the page: make web site-wasm" + (two? doom ? " DOOM=1" "") + "\n"))
-      p (spawn ([exe "make" "-C" dir ("LOVE=" + exe)] + doom + ["web" "site-wasm"]))
+      _ (say err ";; laying the page: make web site-wasm\n")
+      p (spawn [exe "make" "-C" dir ("LOVE=" + exe) "web" "site-wasm"])
       st (charm? p && 0 <= p ? (wait p) 1)
       (0 = st ? 0 (say err ("web: the page did not build (" + show st + ")\n"), quit 1)))
 

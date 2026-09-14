@@ -342,8 +342,8 @@
                (two? ours ? (puts $ ";; using own tools: " + (src-words ours) + "\n") 0)))
        cc (? (string? env) env (two? amb) <>amb "this binary")
        ; the OS rides the word where we had to pick one, because nothing else here says it
-       tgt (nom? xa ? (: o (seed-os 0) (show xa + (nom? o ? ("-" + show o) "") + " ")) "")
-       _ (puts (";; seeding " + tgt + "with " + cc + "\n"))
+       tgt (nom? xa ? (: o (seed-os 0) (" " + show xa + (nom? o ? ("-" + show o) ""))) "")
+       _ (puts (";; seeding" + tgt + " -- the compiler is " + cc + "\n"))
        dst (nom? xa ? (dir + "/love-" + show xa) ())
        _ (string? exe ? 0 (quit (seed-wait root (show xa) dst)))   ; nothing to exec: wait here
        e (nom? xa ? (exec [exe "seed" "-wait" root (show xa) dst])

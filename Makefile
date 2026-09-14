@@ -1137,8 +1137,10 @@ w/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(mdep)
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m u/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment machine.js drives
-index.html: w/index.l i/wasm/machine.html $(mdep) b/.doom.flag
-	@$m w/index.l $@ $(if $(DOOM),doom,)
+# ..a nest carrying the doom pair in dl/ (`love web --doom`) gets the island the build
+# aboard wants: 2048 MiB and a chip
+index.html: w/index.l i/wasm/machine.html $(mdep) $(wildcard dl/doom1.wad)
+	@$m w/index.l $@ $(if $(wildcard dl/doom1.wad),doom,)
 .PHONY: ulp
 ulp:
 	@mkdir -p b

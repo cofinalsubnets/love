@@ -32,8 +32,8 @@
                   (? (hot? q) (: s (slurp q) _ (close q) s)
                      (: _ (say err ("index: cannot open " + f + "\n")) (quit 1))))
    wasm        "i/wasm"                                       ; as the page links it
-   ; the doom page (DOOM=1, `love web --doom`): the game's build aboard links under a
-   ; 256 MB budget, an eighth of 2048 MiB, and a chip starts it
+   ; the doom page (the pair in dl/, `love web --doom`): the game's build aboard links
+   ; under a 256 MB budget, an eighth of 2048 MiB, and a chip starts it
    doom?       (elem "doom" >argv)
    (splice s a b) (: n #s m #a
                      (go i) (? (n - m < i) s (snip s i (i + m) = a) (snip s 0 i + b + snip s (i + m) n) (go (i + 1)))
