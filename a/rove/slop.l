@@ -62,13 +62,10 @@
  ; the sign the walk opens with when it is handed something -- a token, a purse, or
  ; both. a ~ takes the next value and a {brace} is the token's pen, the tower's own
  ; fill and fit doing the work, so these lines are the whole of it.
- sign-ttl  "what you carry"
- sign-both '("with {~} in hand, and ~ pennies besides,"
-             "one way forward remains")
- sign-tok  '("with {~} in hand,"
-             "one way forward remains")
- sign-pnn  '("with ~ pennies in hand,"
-             "one way forward remains")
+ sign-ttl  "is this still the tower?"
+ sign-both '("with {~} in hand, and ~ pennies besides, one way forward remains")
+ sign-tok  '("with {~} in hand, one way forward remains")
+ sign-pnn  '("with ~ pennies in hand, one way forward remains")
  sign-rest '(""
              "forward  k   or up"
              "leave    q   or esc"
@@ -479,6 +476,7 @@
  ; ring, and raw mode does not echo, so they are sitting in the queue when it goes up
  ; and would take it straight down again. so the box eats the queue for half a second
  ; before it will hear anything: what takes it down is typed AT it.
+ key-gap 120                                            ; ms a held key's repeats are dropped for
  sign-settle 500                                        ; ms the sign is deaf for
  sign-slice 25
  (settle ms) (? (0 < ms) (: _ (drain-keys ())
@@ -506,7 +504,14 @@
              ; a chunk of song is a frame's worth and the card takes it at playing
              ; speed, so with a horn the music is the clock; without one, rest is
              (beat-out sp m vol) (? sng (slop-song-feed sng sp m vol) (rest 33))
-             (drain n) (cue? 0 ? (slop-key g (edkey in), drain (n + 1)) n)
+             ; ..and a key held down is not a key pressed again, the tower's rule: the
+             ; same key within a short gap of the last one taken is dropped, so a held
+             ; key walks at the tower's pace and not the keyboard's
+             (drain n) (? (cue? 0)
+                          (: k (edkey in)
+                             (? (k = g 'lk && (clock 0 - g 'lt) < key-gap) (drain n)
+                                (slop-key g k, pins g 'lk k 'lt (clock 0), drain (n + 1))))
+                          n)
              ; since is beats since the last frame
              (swim since) (? (g 'over) ()
                          (: keys (drain 0)

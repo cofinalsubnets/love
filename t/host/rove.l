@@ -361,7 +361,7 @@
    _ (crawl-turn g [1 0])
    m1 (g 'msg)
    _ (crawl-turn g [1 0])
- (test (find m1 "squares" 0 || find m1 "stars" 0 || find m1 "checkers" 0)
+ (test (find m1 "square" 0 || find m1 "stars" 0 || find m1 "game" 0)
        (find (g 'msg) "steps" 0)))
 
 ; the horn the game asked for is two voices in the song, at the write head, and the
@@ -379,7 +379,7 @@
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
    _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "bookshelf" 0)
+   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "shelf" 0)
            (find (last (g 'sign)) "1 of 6" 0) (5 = #(g 'pages)))
    _ (crawl-turn g [1 0])
    _ (test (1 = g 'p 'x) (two? (g 'sign)) (find (last (g 'sign)) "2 of 6" 0))
@@ -398,7 +398,7 @@
    _ (crawl-turn g [1 0])
    (line _) ((g 'sign) 2)
    _ (test (1 = g 'p 'x) ("OEIS A000110" = <(g 'sign)) ("B(0) = 1" = line ()) ('(0 (1)) = g 'bell)
-           (find (g 'msg) "bookshelf" 0) (any (l \ find l "put it back" 0) (g 'sign)))
+           (find (g 'msg) "shelf" 0) (any (l \ find l "put it back" 0) (g 'sign)))
    _ (crawl-turn g 49)
    _ (test ("B(1) = 1" = line ()))
    _ (crawl-turn g 46)

@@ -678,19 +678,16 @@
  ; the sign the tower opens on; a {brace} is the token's pen. kept short: twenty rows
  ; leave eighteen for the map, and a taller box is one with its foot cut off.
  sign-ttl "the tower"
- sign-open '("at last, the tower.  doesn't look much like a tower."
-             "you knew not to take the name too literally, though."
+ sign-open '("at last, the tower.  doesn't look much like a tower.  you knew not to take the name too literally, though."
              ""
              "move     h j k l    or the arrow keys"
              "         y u b n    for diagonals"
              "climb    space      while you stand on a stair"
              "leave    q          or esc"
              ""
-             "the stairs are a yellow <."
-             "walk onto it and press space to go up."
+             "the stairs are a yellow <.  walk onto it and press space to go up."
              ""
-             "within the tower lies the fabled {token}"
-             "whose boon is said to pass all understanding."
+             "within the tower lies the fabled {token}, whose boon is said to pass all understanding."
              ""
              "-- any key --")
  ; the tower's fauna: name, glyph, pen, hp, bite, pace. pace is turns per stir, so
@@ -806,7 +803,7 @@
                  "lanternflies swarm the moldering carcass of a rat")
    ("grass"      "the brush tips of the grass tickle below your knees"
                  "seed clusters cling tenaciously to your legs"
-                 "the grass canopy of blades emits the smell of earthen mildew")
+                 "the low grass canopy smells of earthen mildew")
    ("aster"      "an aster, pink and past its best"
                  "the petals are going brown at the edge"
                  "it tries to face the light it remembers")
@@ -824,13 +821,13 @@
                  "you turn sideways to get through")
    ("platform"   "you wonder what happens if you step on the wrong color square"
                  "stars above and below keep drawing your eyes"
-                 "every step is a move in a game, right?  who's playing?")
-   ("steps"      "steps to the next floor. steps down? up? in? out?"
-                 "nothing is on either side of the steps, no rail, nothing"
-                 "the steps are wide enough, if you don't look over")
-   ("runnel"     "a thread of water, leaving as it came"
-                 "colder than the air and quicker than it looks"
-                 "it has cut its own small channel here")
+                 "every step is a move in a game")
+   ("steps"      "the stairs between the platforms baffle your sense of geometry"
+                 "you know in your heart the plot won't let you fall"
+                 "the arching pathways through the void look almost procedurally generated")
+   ("runnel"     "a quick thread of water leaves as it came"
+                 "cooler than the air, deeper than it looks"
+                 "light shimmers on the submerged roots of the hedges")
    ("rubble"     "stone that used to be somewhere higher"
                  "it turns underfoot"
                  "someone swept it into this corner")
@@ -1784,9 +1781,12 @@
                                    (: _ (? sng (song-feed sng (song-vol g)) (rest 30))
                                       _ (flick! ())
                                       (hold t0 last gap)))
-             (turn k) (k @ (113 || 27 || -7) (pin g 'over 'fled)
-                       -12 (crawl-turn g (tap-key g (edtap ())))
-                       (crawl-turn g (steer k)))
+             ; ..but escape at a standing sign takes the sign down, and nothing else:
+             ; a page of the book or her tree is left, not the tower
+             (turn k) (? (k = 27 && g 'sign) (pins g 'sign () 'pages () 'bell () 'talk ())
+                         (k @ (113 || 27 || -7) (pin g 'over 'fled)
+                          -12 (crawl-turn g (tap-key g (edtap ())))
+                          (crawl-turn g (steer k))))
              ; the ground shudders: the view jolts a row either way for half a second,
              ; with whatever sign the turn raised held back until it is still
              ; ..and the song is fed through it: two chunks are the beat a jolt holds for

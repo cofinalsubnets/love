@@ -75,7 +75,7 @@
  a (run "b/love tower" "q" 20 70)
  _ (test
     (has? <a "\e[?1049h")                                   ; the alternate screen
-    ("the tower stands" = snip (rowtx <>a 0) 0 16)           ; the note, no turn taken
+    ("finally, the tower" = snip (rowtx <>a 0) 0 18)         ; the note, no turn taken
     ("the garden" = snip (rowtx <>a 19) 0 10)                ; the bar, on row 19 of 20
     (has? <a "you leave the tower"))                         ; q leaves
  ; (the opening sign covers most of the floor, so where you stand is asked of the
