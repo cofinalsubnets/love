@@ -32,7 +32,7 @@
 ; tty / cue?, over i/posix.c), so slop never joins the corpus. ink lends the skin and
 ; the palette, rove the helm and the die.
 (module (slop slop-run slop-walk slop-main slop-new slop-sy slop-gap slop-cost slop-rate
-         slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-bar-fit slop-road slop-turf
+         slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-bar-fit slop-road slop-turf slop-post
          slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave
          slop-song-new slop-song-feed song-wave-of frame-due?
          slop-shore slop-sand slop-wet?)
@@ -116,10 +116,15 @@
  ; one cell of ground: (glyph . pen). behind the shore is bare sand; in front of it
  ; grass, mostly tufts with a shrub here and there, and the road's bare dots through
  ; it. the road fans out over its last four rows, so the path opens onto the beach.
+ ; a wooden sign a third of a screen in, a cell off the road's right edge: not on the
+ ; way, so never reached and never read, and the slop takes it like any turf
+ (slop-post g) (: w (g 'r // 3) [(slop-road g w + 4) w])
  (slop-turf g w x)
   (: h (dice w x 120)
      s ((slop-shore g x) + slop-sand g x)        ; this column's last row of beach
-   (w <= s ? [46 (sand-pens (h % 4))]
+     sg (slop-post g)
+   (? (w <= s) [46 (sand-pens (h % 4))]
+      (x = <sg && w = <>sg) '("¶" 137)
       (: rx (slop-road g w)
          d (w - ((slop-shore g rx) + slop-sand g rx))    ; rows of grass the road has left
          hw (? (d < 0) 6 (d < 4) (6 - d) 2)              ; five columns wide, thirteen at the sand
