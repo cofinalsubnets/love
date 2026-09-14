@@ -8,6 +8,7 @@
 // import here: kmain writes __ai_osv = -1 first, so they take i/sys.c's C answer.
 #include <stdint.h>
 #include <stdbool.h>
+#include <errno.h>
 #include "asmops.h"
 #include "k.h"
 
@@ -23,6 +24,9 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_lift 0x4010
 #define hc_scan 0x4011
 #define hc_drew 0x4012
+#define hc_fetch_open 0x4020                // (url, n) -> the body's length, or -errno
+#define hc_fetch_read 0x4021                // (buf, n) -> bytes copied, on from the last
+#define hc_fetch_close 0x4022
 #define hc_clock_gettime 228
 
 void archinit(void) { }
@@ -87,6 +91,25 @@ bool k_nap(uintptr_t ms) {
 
 // the paper was drawn on by something other than the console: the worker blits it
 void k_fb_touch(void) { __ai_sys(hc_drew, 0, 0, 0, 0, 0, 0); }
+
+// the page's network (kmain's k_fetch): the worker takes URL whole -- the page's own
+// origin, or a file under --origin under node -- and hands it over in pieces, laid as
+// the ramfs file at PATH
+int k_fs_open(char const *p, uintptr_t pn, char m);
+long k_fd_write(int fd, void const *b, long n);
+long k_fd_close(int fd);
+long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
+  long n = __ai_sys(hc_fetch_open, (long) url, (long) un, 0, 0, 0, 0), r = 0;
+  if (n < 0) return n;
+  int fd = k_fs_open(path, pn, 'w');
+  if (fd < 0) r = fd;
+  else {
+    unsigned char b[4096];
+    for (long got; r == 0 && (got = __ai_sys(hc_fetch_read, (long) b, sizeof b, 0, 0, 0, 0)) != 0; )
+      if (got < 0 || k_fd_write(fd, b, got) != got) r = got < 0 ? got : -EIO;
+    k_fd_close(fd); }
+  __ai_sys(hc_fetch_close, 0, 0, 0, 0, 0, 0);
+  return r; }
 
 // the reset: the worker unwinds the module and boots it again
 void k_reset(void) { for (;;) __ai_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }

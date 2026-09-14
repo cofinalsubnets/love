@@ -15,10 +15,12 @@
 // names, e.code's spelling) pressed and released in turn on the scan lane, --after
 // seconds into the run: a game's keys, which no tty byte can carry. --for ends the run
 // after that many seconds, with the status timeout(1) gives, for a program that never quits.
+// --origin DIR is the page's network: what the machine fetches (kmain's fetch door) is read
+// as a file under DIR, where a page would ask its own origin.
 //   usage: node i/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm]
 //                                  [--lift /in/machine:b/here] [--horn sound.raw]
 //                                  [--press "Escape Enter" --after S] [--for S]
-//                                  [--image love.image] love.wasm [boot line ..]
+//                                  [--origin DIR] [--image love.image] love.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
 import { openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n, scan_at, scan_n, c_sh, c_st,
@@ -27,7 +29,7 @@ import { scanlane, codes } from './scan.mjs';
 
 const args = process.argv.slice(2);
 let fb = null, dump = null, scale = 0, liftReq = null, image = null, hornFile = null, deaf = false;
-let press = [], after = 0, forS = 0;
+let press = [], after = 0, forS = 0, origin = null;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
@@ -39,11 +41,12 @@ while (args[0]?.startsWith('--')) {
   else if (o === '--press') press = args.shift().split(/\s+/).filter(Boolean);
   else if (o === '--after') after = Number(args.shift());
   else if (o === '--for') forS = Number(args.shift());
+  else if (o === '--origin') origin = args.shift();
   else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump, fb.scale = scale;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--press KEYS --after S] [--for S] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--press KEYS --after S] [--for S] [--origin DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
 
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
@@ -109,7 +112,7 @@ cpu.on('error', (e) => { process.stderr.write('\ninle: ' + e + '\n'); leave(1); 
 // word with a space in it is quoted back the way a shell had it
 const word = (a) => !/[\s"']/.test(a) ? a : !a.includes('"') ? '"' + a + '"' : "'" + a + "'";
 cpu.postMessage({ wasm: readFileSync(wasm), ring, ram: Number(process.env.INLE_RAM ?? 256),
-                  cmd: cmd.map(word).join(' '), fb, image });
+                  cmd: cmd.map(word).join(' '), fb, image, origin });
 
 // the presses: a make, the break 60 ms behind it, the next key 300 ms on
 if (press.length) {

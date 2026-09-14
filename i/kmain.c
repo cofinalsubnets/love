@@ -1532,6 +1532,18 @@ static lvm(lvm_disk_write) {
   Sp[1] = k_disk_write(Sp[0], Sp[1]);
   ai_musttail return Nextp(1, 1); }
 
+// (fetch url path): the page's network where a seat has one (i/wasm) -- the bytes at
+// URL laid as the ramfs file at PATH, 0 or -errno; metal has no door and says so
+__attribute__((weak)) long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
+  return (void) url, (void) un, (void) path, (void) pn, -ENOSYS; }
+ai_noinline static word k_lvm_fetch(word uw, word pw) {
+  if (!strp(uw) || !strp(pw)) return ZeroPoint;
+  struct ai_str *u = (struct ai_str*) uw, *p = (struct ai_str*) pw;
+  return putcharm((intptr_t) k_fetch(u->bytes, u->len, p->bytes, p->len)); }
+static lvm(lvm_fetch) {
+  Sp[1] = k_lvm_fetch(Sp[0], Sp[1]);
+  ai_musttail return Nextp(1, 1); }
+
 // the bake door: the heap as image bytes, written whole to one ramfs file
 static void k_bake(struct ai *g, char const *path) {
   uintptr_t n = 0;
@@ -1998,6 +2010,7 @@ static union u
   nif_disk[] = {{lvm_disk}, {lvm_ret0}},
   nif_disk_read[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_read}, {lvm_ret0}},
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
+  nif_fetch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fetch}, {lvm_ret0}},
 #if defined(__x86_64__)
   nif_svm[] = {{lvm_svm}, {lvm_ret0}},
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
@@ -2085,7 +2098,8 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"color", {.k = nif_color}},
   // the console's own size. the no-op roster below pins `tty` only where the seat
   // lacks it, so landing it here takes the stub off by existing.
-  {"tty", {.k = nif_tty}} };
+  {"tty", {.k = nif_tty}},
+  {"fetch", {.k = nif_fetch}} };
 
 // the kore cat is CATTED FROM THE RAMFS at boot -- the blob initrd carries every
 // member, so only the ORDER is baked: the korefiles roster, one line.

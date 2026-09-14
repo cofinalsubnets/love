@@ -119,7 +119,15 @@
                        (go >a q o <a))
        r (go as () () ())
        quiet <r out <>r url (r 2)
+       ; a seat with a page's network and no socket (inle under a browser, i/wasm): the
+       ; kernel's fetch door lays the file itself, whole, and -O - has no door there
        (? !(string? url) (say err "usage: wget [-q] [-O FILE] URL\n", 1)
+          (elem 'fetch (names ()))
+           (: nm (? (string? out) out (wg-name url))
+              (? (nm = "-") (say err "wget: -O - is not a door on this machine\n", 3)
+                 (: c ((ev 'fetch) url nm)
+                    (? (charm? c && c = 0) (? quiet 0 (say err ("wget: fetched -> " + nm + "\n")), 0)
+                       (say err ("wget: cannot fetch " + url + (charm? c ? (" (errno " + show (0 - c) + ")") "") + "\n"), 4)))))
           (: f (wg-fetch url 8 quiet)
              (? !(<f = 0) (say err (<>f + "\n"), <f)
                 (: nm (? (string? out) out (wg-name url))

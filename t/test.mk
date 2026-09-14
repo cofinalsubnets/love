@@ -1278,6 +1278,12 @@ test_kernel_wasm: host
 	 grep -q "horn wrote 80000" b/wasm/horn.log \
 	   || { tail -20 b/wasm/horn.log; echo "FAIL test_kernel_wasm (the horn refused the machine)"; exit 1; }
 	@$m $(R)/t/gate/horn.l b/wasm/horn.raw || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST "the fetch door (wget aboard, off --origin, the tree standing in for the page)"
+	@INLE_RAM=256 $(NODE) $(R)/i/wasm/inle.mjs --origin $(R) --image b/wasm/love.image $(R)/b/love.wasm \
+	   sh -c 'mkdir -p /s; wget -O /s/v /VERSION && cmp /s/v /VERSION && echo fetch: ok; wget -q -O /s/no /no-such-file; echo missing: $$?' \
+	   < /dev/null > b/wasm/fetch.log 2>&1; \
+	 grep -q "fetch: ok" b/wasm/fetch.log && grep -q "missing: 4" b/wasm/fetch.log \
+	   || { tail -8 b/wasm/fetch.log; echo "FAIL test_kernel_wasm (the fetch door)"; exit 1; }
 	@echo TEST t/kernel/horn.l "(--deaf: the machine outlives a speaker that stopped taking)"
 	@timeout 120 $(NODE) $(R)/i/wasm/inle.mjs --deaf --image b/wasm/love.image \
 	   $(R)/b/love.wasm t/kernel/horn.l < /dev/null > b/wasm/deaf.log 2>&1; \
