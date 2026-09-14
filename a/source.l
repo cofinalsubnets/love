@@ -55,6 +55,22 @@
        (src-lay-tgz root top gz,
         [1 root <>w]))
 
+   ; the nest every verb shares: love-<version> under dir, laid once. source, seed, doom
+   ; and web build in the one tree, in any order, and a tree laid before is taken as it
+   ; stands. the lay runs in a child where there is a path to one: the inflate leaves
+   ; ~200 MB of heap no collection gives back, and a server would hold it for good.
+   (src-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
+   (src-nest dir)
+    (: root (src-root dir)
+       exe (src-me 0)
+       (? (two? (stat (root + "/Makefile"))) root
+          (: _ (say err (";; laying the source under " + dir + "\n"))
+             st (? (string? exe) (: p (spawn [exe "source" dir]) (charm? p && 0 <= p ? (wait p) 1))
+                   (two? (src-lay dir) ? 0 1))
+             _ (0 = st && two? (stat (root + "/Makefile")) ? 0
+                (src-die ("the source did not lay under " + dir)))
+             root)))
+
    (src-usage _)
     (puts ("usage: love source [DIR]\n  lay this binary's carried source tree under DIR (default .)\n"))
 
@@ -293,9 +309,7 @@
        ; no file here to hold it to.
        _ (!(string? exe) && !(nom? xa) ?
           (src-die "this seat has no path to itself -- name a machine: `love seed x64`"))
-       r (src-lay dir)
-       root <>r
-       _ (puts (";; laid " + root + "\n"))
+       root (src-nest dir)
        farm (string? exe ? (src-farm root exe) "")
        path ("" + getenv "PATH")
        ; ours lead, so ours win wherever we carry a tool of that name; -g puts them

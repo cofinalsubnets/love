@@ -186,7 +186,7 @@ holocat_dep =
 # is the prerequisite that goes with it -- there is nothing to wait for.
 m = $(LOVE)
 mdep =
-$(love0):
+$(love0): b/.love0.mode
 	@echo '$(t_sh)	'$@
 	@mkdir -p $(dir $@)
 	@printf '#!/bin/sh\nexec %s "$$@"\n' '$(LOVE)' > $@
@@ -195,11 +195,18 @@ else
 mdep = $(ho)/love
 rtlove = $(love0) wake b/mooncc0.image
 rtlove_dep = b/mooncc0.image
-$(love0): $(love0_o)
+$(love0): $(love0_o) b/.love0.mode
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
 endif
+# which love0 stands here is a link input no timestamp can see -- the script onto a
+# driving LOVE, or the one linked from b/0/ -- so a witness that moves when the mode
+# flips remakes it either way: the one nest `love seed`, `love doom` and `love web` share
+b/.love0.mode: force_src
+	@mkdir -p b
+	@tf=$@.$$$$.tmp; echo 'LOVE=$(LOVE)' > $$tf; \
+	 $(note)
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one odir, worn twice -- at
 # the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
@@ -731,7 +738,7 @@ b/.doom.flag: force_dist_list
 	 $(note)
 
 $(k_odir)/l/love.o: b/lib/love_version.h
-$(k_odir)/l/love.o: kcppflags += -DLvHaveVersionH
+kcppflags += -DLvHaveVersionH      # only l/love.c reads it; cook has no target-specific variable
 
 klay_l = $R/a/kore/text.l $R/a/kore/u.l $R/a/kore/asbook.l \
   $R/l/holo/$a.l $R/l/holo/elf.l $R/l/holo/obj.l
@@ -1072,7 +1079,7 @@ serve: host
 # the seat parts from the metal only where the link does. an arch is how the tree asks for
 # a second machine, and wasm is one; the split really is at `-t $a`.
 wasm:
-	@$(MAKE) -s a=wasm wasm_seat
+	@$(MAKE) -s a=wasm $(if $(LOVE),LOVE=$(LOVE),) wasm_seat
 # ..and that seat, spelled where NODE is known: the module always, the image when there is
 # a node to bake it under. the loader (i/wasm/loader.js) is the runtime under a bare module.
 wasm_seat: $(k_mod) $(if $(NODE),b/wasm/love.image,)
@@ -1083,8 +1090,8 @@ site-wasm: wasm
 	@mkdir -p w/wasm
 	@echo '$(t_cp)	'w/wasm/love.wasm
 	@cp b/love.wasm w/wasm/love.wasm
-	@echo '$(t_cp)	'w/wasm/love.image
-	@cp b/wasm/love.image w/wasm/love.image
+	@if test -f b/wasm/love.image; then echo '$(t_cp)	'w/wasm/love.image; cp b/wasm/love.image w/wasm/love.image; \
+	   else echo "  no node, no image: the page boots the egg"; fi
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker

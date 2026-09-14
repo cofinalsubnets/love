@@ -24,7 +24,9 @@
 ; make wasm the module and its image, site-wasm copies them beside the loader, and the
 ; wasm inle seat (i/wasm/inle.html) is its own module -- and .sbignore drops every one
 ; from the source, so a checkout serves nothing of it until they are laid. where DIR is
-; the tree (a Makefile and w/index.l), this lays them through our own make first; the
+; the tree (a Makefile and w/index.l), this lays them through our own make first; where
+; it is a bare directory the source aboard is laid under it (`love source`) and that tree
+; is built and served. this binary drives the build and no love is compiled for it. the
 ; two isolation headers kiosko's reply sends are what let inle.html's machine run here
 ; without its service worker.
 ;
@@ -118,14 +120,15 @@ usage: love web [-p PORT] [-n] [DIR]
   DIR               the tree to serve (default .)
 a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
 page is laid first -- make web site-wasm -- and the machine is at /i/wasm/inle.html.
-where DIR is no tree it is served as it is, and nothing is seeded or built: `love seed`
-is the verb that lays a tree. this binary drives the page's build, and no love is
-rebuilt to serve a page.
+where DIR is no tree the source aboard is laid under it first (`love source`) and that
+tree is served. this binary drives the page's build; no love is compiled for it.
 "
    (sv-die c m) (: _ (say err ("web: " + m)) _ (put err 10) (quit c))
 
-   ; a tree laid under DIR before (`love seed`, `love source`) is served in its stead
-   (sv-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
+   ; the nest under DIR (a/source.l's src-nest): the tree seed, doom and web share, laid
+   ; once, and where there is none the source aboard is laid there now
+   (sv-root dir) ((cite 'source 'src-root) dir)
+   (sv-lay dir)  ((cite 'source 'src-nest) dir)
 
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
@@ -162,11 +165,11 @@ rebuilt to serve a page.
       port (: v (unum pt) (? (nil? pt) 8080 (charm? v) v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
-      ; the tree: DIR itself, or one laid under it before; anything else is served as it
-      ; is. nothing is seeded and nothing bootstrapped here -- a page wanted of a bare
-      ; directory is `love seed` first, and then this
+      ; the tree: DIR itself, the nest laid under it before, or laid there now.
+      ; -n serves a bare directory as it is
       dir (? (sv-tree? dir0) dir0
              (sv-tree? (sv-root dir0)) (sv-root dir0)
+             build? (sv-lay dir0)
              dir0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)

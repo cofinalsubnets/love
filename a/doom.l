@@ -139,6 +139,11 @@
           (rc @ 0 0 (unlink path, rc))))
    ; the nest's IWAD rides the exec unless the caller named one: the nest's cwd is the caller's
    (nest-args dl as) (any (= "-iwad") as ? as ("-iwad" . dl + "/doom1.wad" . as))
+   ; the nest is shared with seed and web, which link its love without doom: the flag the
+   ; link wrote says which love stands there, so a plain one is relinked rather than run
+   (nest-doom? nest)
+    (: q (open (nest + "/b/.doom.flag") "r")
+       (hot? q && (: s (slurp q) _ (close q) (string? s && s = "DOOM=1\n"))))
    (doom-nest as)
     (: exe (selfpath 0)
        here (cwd 0)
@@ -149,14 +154,11 @@
        (? !(string? exe) (fail "cannot find this binary's path")
           ((0 < #(getenv "LOVE_DOOM_NEST")) && two? (stat bin))
            (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
-          (two? (stat bin))
+          (two? (stat bin) && nest-doom? nest)
            (: e (setenv "LOVE_DOOM_NEST" "1",
                  exec (bin . "doom" . nest-args dl as))
             (fail $ "cannot run " + bin + " (" + show e + ")"))
-          (: _ (one? (stat (nest + "/Makefile")) ?
-                (note ("laying this love's source under " + nest),
-                 run-in here [exe "source" here],  ; the verb: its names are its own
-                 0))
+          (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
              (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
                 (: _ (mkdir dl 493)
                    r1 (fetch wad-url (dl + "/doom1.wad"))

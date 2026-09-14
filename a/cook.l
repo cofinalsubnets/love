@@ -379,10 +379,17 @@
             (puts $ "cook: " + show item + " is already up to date\n"))))
 
    ; resolve a command-line word to an item: the bare string when it names a file
-   ; recipe, the interned symbol when it names a phony one, else the default -- the
-   ; first recipe declared. an unknown word thus quietly cooks the default, as make's
-   ; trailing target does when nothing matches.
-   (pick a) (? (cards a) a (: s (nom a) (? (cards s) s (check 0))))
+   ; recipe (explicit, or one a pattern rule makes), the interned symbol when it names
+   ; a phony one, a file that is there as itself, else a refusal -- never the default,
+   ; which would cook the whole tree behind a typo or a flag cook does not know
+   (pick a) (? (cards a) a
+               (: s (nom a)
+                  f (pgen 0)
+                  g (? f (f a) 0)
+                  (? (cards s) s
+                     (two? g) a
+                     (date a) a
+                     (say err $ "cook: no recipe to make " + show a + "\n", quit 1))))
 
    ; the ticket to build: the first recipe word named on the command line (the
    ; `tickets` box, filled by the dispatch from the non-flag args), else the default.
@@ -1428,6 +1435,12 @@
              (w = "--emit")                                       (: _ (pin opt 'emit 1) (loop r opt))
              ((w = "-h") || (w = "--help") || (w = "help"))      (: _ (pin opt 'help 1) (loop r opt))
              ((w = "-v") || (w = "--version") || (w = "version")) (: _ (pin opt 'ver 1) (loop r opt))
+             ; make's -s is .SILENT for the run; the directory chatter flags have nothing to do
+             ((w = "-s") || (w = "--silent") || (w = "--quiet"))
+                                                  (: _ (pin opt 'var (peep opt 'var () + [(".SILENT" . "1")])) (loop r opt))
+             ((w = "--no-print-directory") || (w = "-w") || (w = "--print-directory")) (loop r opt)
+             ((0 < tally w) && (w 0 = 45))                     ; any other dash word is a flag, never a recipe
+                                                  (say err ("cook: unknown option " + w), put err 10, quit 2)
              (: vw (varw w)
                 (? (two? vw) (: _ (pin opt 'var (peep opt 'var () + [vw])) (loop r opt))
                    (: _ (pin opt 'pos (peep opt 'pos () + [w])) (loop r opt))))))))
