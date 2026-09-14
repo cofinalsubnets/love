@@ -2662,6 +2662,9 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
      (sh-snapign 0,                             ; first: what our caller had turned off
       pin sh-gflag () (sh-envflag 0),            ; the mode: LUSHFLAGS' now, a flag word's below
       sh-forget 0,                               ; a forked shell drops its parent's word verdicts
+      ; a task on inle shares this module with every other shell aboard: a child of a
+      ; login shell is not one, and a recipe's shell owns no tty
+      pin sh-login () 0, pin sh-tty () 0,
       sh-args args)
    (sh-args args)                              ; the argv walk, once the seat is set up
      (? !args (sh 0)
@@ -2709,6 +2712,5 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
              )
    s (cite 'verbs 'fire ["lush" "lush.l" "sh"])
    (two? s ? (: w (bn <s)
-              (#w && w 0 = 45 ? (pin sh-login () 1) 0,
-               sh-main >s))))
+              (sh-main (#w && w 0 = 45 ? ("--login" . >s) >s)))))
 ) ; module 'lush
