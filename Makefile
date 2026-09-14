@@ -1072,7 +1072,7 @@ site-serve: host b/toolmd.stamp
 	@$(ho)/love -l a/papel.l -t love -o b/site -s $(SITEPORT) README.md doc b/toolmd
 # ..and `make serve` is the TREE in a browser: kiosko under love's own painter, a .l
 # served syntax-coloured and a .md rendered. it lays the page first through this same
-# make -- index.html, w/ and the wasm pair -- and its reply carries the two isolation
+# make -- w/ and the wasm pair -- and its reply carries the two isolation
 # headers, which is what lets i/wasm/inle.html's machine run without a service worker.
 SERVEPORT ?= 8080
 serve: host
@@ -1117,8 +1117,9 @@ valg: host
 	@cat $t > $(ho)/.valg-corpus.l
 	valgrind --error-exitcode=1 --suppressions=$R/u/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 # the site's faces and its stylesheet, laid and checked in: github pages serves
-# the tree as it is, so a generated file still has to be committed
-web: fonts w/style.css w/favicon.png index.html
+# the tree as it is, so a generated file still has to be committed. the front page
+# itself, index.html, is written by hand, its island the markup machine.js drives
+web: fonts w/style.css w/favicon.png
 fonts: w/fonts/quay16.woff w/fonts/quay8.woff
 w/fonts/quay16.woff: l/quay/cleat_8x16.c u/mkfont.l $(mdep)
 	@echo 'LOVE	'$@
@@ -1136,11 +1137,6 @@ w/style.css: w/style.l a/vi/config.l a/vi/hueweb.l $(mdep)
 w/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(mdep)
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m u/mkicon.l $< 3 32 $@
-# ..and the front page itself, its island the fragment machine.js drives
-# ..a nest carrying the doom pair in dl/ (`love web --doom`) gets the island the build
-# aboard wants: 2048 MiB and a chip
-index.html: w/index.l i/wasm/machine.html $(mdep) $(wildcard dl/doom1.wad)
-	@$m w/index.l $@ $(if $(wildcard dl/doom1.wad),doom,)
 .PHONY: ulp
 ulp:
 	@mkdir -p b

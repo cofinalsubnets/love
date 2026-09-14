@@ -24,7 +24,7 @@
 ; make wasm the module and its image, site-wasm copies them beside the loader, and the
 ; wasm inle seat (i/wasm/inle.html) is its own module -- and .sbignore drops every one
 ; from the source, so a checkout serves nothing of it until they are laid. where DIR is
-; the tree (a Makefile and w/index.l), this lays them through our own make first; where
+; the tree (a Makefile and index.html), this lays them through our own make first; where
 ; it is a bare directory the source aboard is laid under it (`love source`) and that tree
 ; is built and served. this binary drives the build and no love is compiled for it. the
 ; --doom fetches doomgeneric and the shareware IWAD into the nest's dl/ (a/doom.l's pair)
@@ -135,7 +135,23 @@ tree is served. this binary drives the page's build; no love is compiled for it.
 
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
-   (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/w/index.l")))
+   (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/index.html")))
+   ; the doom page: the game's build aboard links under a 256 MB budget, an eighth of
+   ; 2048 MiB, and a chip starts it -- so the island on the nest's front page is given
+   ; both, the page being written by hand and the nest's copy its own to change
+   (splice s a b) (: n #s m #a
+                     (go i) (? (n - m < i) s (snip s i (i + m) = a) (snip s 0 i + b + snip s (i + m) n) (go (i + 1)))
+                     (go 0))
+   (sv-doom-page dir)
+   (: f (dir + "/index.html")
+      q (open f "r")
+      h (? (hot? q) (: s (slurp q) _ (close q) s) "")
+      h2 (splice (splice h "<div class=\"machine\">" "<div class=\"machine\" data-ram=\"2048\">")
+                 "data-type=\"love\">love</span>"
+                 "data-type=\"love\">love</span>\n<span class=\"chip\" data-type=\"doom\">doom</span>")
+      o (open f "w")
+      _ (? (hot? o) (say o h2, close o) (sv-die 1 ("cannot write " + f)))
+      0)
    ; autonomous throughout, as `love doom` is (a/source.l's src-arm): our verbs first on
    ; PATH, lush -a, CC our mooncc. LOVE= names US as the driving love, so love0 is a
    ; two-line script onto this binary and no second love is compiled to lay a page --
@@ -177,7 +193,7 @@ tree is served. this binary drives the page's build; no love is compiled for it.
              dir0)
       _ (? (doom? && build? && sv-tree? dir)
            ((cite 'doom 'doom-fetch) (dir + "/dl") (cite 'doom 'wad-url) (cite 'doom 'dg-url)
-            ? (sv-die 1 "the doom downloads did not land") 0)
+            ? (sv-die 1 "the doom downloads did not land") (sv-doom-page dir))
            0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)

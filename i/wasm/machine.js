@@ -2,8 +2,8 @@
 // the kernel runs in a worker (cpu.mjs) because it never returns, the canvas is its
 // framebuffer, the keyboard its serial line and an AudioWorklet its speaker; the two
 // threads share one ring, which is what lets the kernel's idle really block. one island per .machine on
-// the page, its parts found by class under it, so a page carries the markup
-// (i/wasm/machine.html) and this script and no glue.
+// the page, its parts found by class under it, so a page carries the markup (the
+// island on index.html) and this script and no glue.
 // a shared ring means the page must be CROSS-ORIGIN ISOLATED. a server that sends the
 // two headers has it already (kiosko does); on a host that will not, coi.js asks for them
 // with a service worker and one reload. no isolation, no machine -- said, not left blank.

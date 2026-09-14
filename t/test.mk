@@ -342,23 +342,22 @@ test_cli: host
 	@echo TEST t/gate/cli.sh "(the cli exit-status lane)"
 	@sh t/gate/cli.sh $m
 
-# the front page, its sheet and its icon are laid (w/index.l, w/style.l, u/mkicon.l)
+# the front page's sheet, icon and fonts are laid (w/style.l, u/mkicon.l, u/mkfont.l)
 # and checked in for github pages: a lay that differs from the tree means someone edited a
-# source without `make web`.
+# source without `make web`. the page itself is written by hand and lays nothing
 test_web: host
-	@echo TEST w/index.l w/style.l u/mkicon.l
+	@echo TEST w/style.l u/mkicon.l u/mkfont.l
 	@mkdir -p b/.w
-	@$m w/index.l b/.w/index.html
 	@env -u LOVE_NO_IMAGE $m w/style.l b/.w/style.css
 	@env -u LOVE_NO_IMAGE $m u/mkicon.l l/quay/cga_8x8.c 3 32 b/.w/favicon.png 2>/dev/null
 	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cleat_8x16.c 12 b/.w/quay16.woff "Quay 16"
 	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cga_8x8.c 6 b/.w/quay8.woff "Quay 8"
-	@cmp -s b/.w/index.html index.html && cmp -s b/.w/style.css w/style.css \
+	@cmp -s b/.w/style.css w/style.css \
 	  && cmp -s b/.w/favicon.png w/favicon.png \
 	  && cmp -s b/.w/quay16.woff w/fonts/quay16.woff \
 	  && cmp -s b/.w/quay8.woff w/fonts/quay8.woff \
 	  || { echo "  FAIL: a committed web asset is behind w/ -- run make web and commit"; exit 1; }
-	@echo "  web: ok -- the page, the stylesheet, the icon and both fonts are what w/ lays"
+	@echo "  web: ok -- the stylesheet, the icon and both fonts are what w/ lays"
 test_sb: host b$(hsuf)/sb
 	@echo TEST a/sb/sb.l + t/host/sb.l
 	@rm -rf b/.sbtest
