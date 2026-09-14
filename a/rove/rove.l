@@ -16,7 +16,7 @@
 ;
 ; run: love tower. the engine is pure love and gates headless in t/host/rove.l; only
 ; tower-run ties the tty, and t/host/tty.l plays it on a pty.
-(module (rove tower-run tower-main dat open? dput delve fov clear? paint steer tap-steer
+(module (rove tower-run tower-main dat open? dput delve fov clear? paint steer tap-steer tap-key sign-line
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
          mend ascend fill fit circle? vale-new vale-tick walled? on-ring? done? enter exit-at
          circle-r circle-q circle-far ring-in talk talk-key talk-node her-tree open-box doom oct-pt
@@ -529,13 +529,28 @@
        k)
 
  ; ..and a tap is a place rather than a letter: one step of the eight toward the cell it
- ; landed on, and a tap on the cell you stand on is the stair. the note row is the
- ; screen's first, so a screen y is a floor y and one. c is [x y], cli's edtap.
+ ; landed on -- the nearest of the eight as the screen shows them, a cell being twice
+ ; as tall as it is wide, so a tap a little off a row is still along it -- and a tap on
+ ; the cell you stand on is the stair. the note row is the screen's first, so a screen
+ ; y is a floor y and one. c is [x y], cli's edtap.
  (toward a b) (a < b ? 1 (a > b ? -1 0))
- (tap-steer g c) (: p (g 'p)
-                    dx (toward (p 'x) (<c - peep (g 'd) 'vx 0))
-                    dy (toward (p 'y) (<>c - 1 + peep (g 'd) 'vy 0))
+ (tap-steer g c) (: p (g 'p) d (g 'd)
+                    ex (<c - peep d 'vx 0 - (p 'x))
+                    ey (<>c - 1 + peep d 'vy 0 - (p 'y))
+                    ax (abs ex) ay (2 * abs ey)          ; in cell widths
+                    ; within 22.5 degrees of a row or a column is along it: tan is 5/12
+                    dx (12 * ax < 5 * ay ? 0 (toward 0 ex))
+                    dy (12 * ay < 5 * ax ? 0 (toward 0 ey))
                     (dx = 0 && dy = 0 ? 60 [dx dy]))
+ ; ..and a tap while she is speaking is the choice it lands on: the digit that picks
+ ; the choice, or 0, which shows the page again. any other tap steers.
+ (tap-key g c) (: sg (g 'sign) d (g 'd)
+                  (? (sg && g 'talk)
+                     (: nd (talk-node (g 'talk)) txt (nd 1) chs (nd 2)
+                        j (sign-line <sg >sg 1 (peep d 'rows (d 'h)) (peep d 'cols (d 'w)) <>c)
+                        ci (j - #txt - 1)                ; the choices follow the words and a blank
+                        (0 <= ci < #chs ? (48 + <(chs ci)) 0))
+                     (tap-steer g c)))
 
  ; --- the words: every line the climb says. a ~ takes the next value and {braces} are
  ; the token's pen; nothing below is built, so this block is the whole of the text.
@@ -856,19 +871,27 @@
                      (: c (r i)
                         (? (c = 27) (past i @ e (go e k (acc + snip r i e)))
                            (go (i + 1) (k + lead c) (n <= cell-of c k ? (acc + string c) acc))))))
- ; a frame with the box centred over its rows a .. a+n, for a screen w wide. a line
- ; wider than the screen is reflowed at its words -- story's own wrap -- and the box
- ; takes the rows it makes
+ ; a line wider than the screen is reflowed at its words -- story's own wrap -- to a
+ ; few cells short of the edge either side, so no row runs full and a word never sits
+ ; against the frame. one list of rows per line
+ (sign-flow ls w) (: wr (cite 'story 'wrap)
+                     (map (l \ (wr && (w - 10) < vlen l ? (wr l (w - 10)) [l])) ls))
+ ; the screen row the box's top takes, for a box of nb rows
+ (sign-top a n nb) (: q (a + (n - nb) // 2) (a < q ? q a))
+ ; the line under screen row y, as an index into ls, or -1 off the box and its frame
+ (sign-line ttl ls a n w y) (:- (go (y - sign-top a n (2 + net (map tally fl)) - 1) 0 fl)
+   fl (sign-flow ls w)
+   (go j i l) (? (j < 0 || one? l) -1
+                 (j < #<l) i
+                 (go (j - #<l) (i + 1) >l)))
+ ; a frame with the box centred over its rows a .. a+n, for a screen w wide; the box
+ ; takes the rows the reflow makes
  (sign-over f ttl ls a n w) (:- (go 0 "")
    rs (split "\r\n" f)
-   wr (cite 'story 'wrap)
-   ; ..to a few cells short of the screen's edge either side, so no row of it runs
-   ; full and a word never sits against the frame
-   (flow l) (wr && (w - 10) < vlen l ? (wr l (w - 10)) [l])
-   box (sign-box ttl (foldl (+) () (map flow ls)))
+   box (sign-box ttl (foldl (+) () (sign-flow ls w)))
    ww (vlen <box)
    x0 (: q ((w - ww) // 2) (0 < q ? q 0))
-   y0 (: q (a + (n - #box) // 2) (a < q ? q a))
+   y0 (sign-top a n #box)
    ; ..and never past the rows it was given: a box too tall for the screen loses its
    ; foot, which is the screen's doing, but the bar under it is not the box's to take
    (lay i) (rs i @ r
@@ -1645,7 +1668,7 @@
                                    (: _ (? sng (song-feed sng (song-vol g)) (rest 30))
                                       (hold t0 last gap)))
              (turn k) (k @ (113 || 27 || -7) (pin g 'over 'fled)
-                       -12 (crawl-turn g (tap-steer g (edtap ())))
+                       -12 (crawl-turn g (tap-key g (edtap ())))
                        (crawl-turn g (steer k)))
              ; the ground shudders: the view jolts a row either way for half a second,
              ; with whatever sign the turn raised held back until it is still

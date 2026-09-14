@@ -553,8 +553,30 @@
        ('(-1 0) = tap (p 'x - 4) (p 'y + 1))
        ('(0 -1) = tap (p 'x) (p 'y - 3))
        ('(0 1) = tap (p 'x) (p 'y + 6))
-       ('(-1 -1) = tap (p 'x - 2) (p 'y - 2))
-       ('(1 1) = tap (p 'x + 9) (p 'y + 9))))
+       ('(-1 -1) = tap (p 'x - 3) (p 'y - 2))
+       ('(1 1) = tap (p 'x + 9) (p 'y + 9))
+       ; ..the nearest of the eight as drawn, a cell twice as tall as wide: a little off
+       ; a row is along it, and three across by two down is the diagonal
+       ('(1 0) = tap (p 'x + 9) (p 'y + 2))
+       ('(0 1) = tap (p 'x + 1) (p 'y + 5))
+       ('(0 -1) = tap (p 'x - 1) (p 'y - 3))
+       ('(1 1) = tap (p 'x + 3) (p 'y + 3))
+       ('(-1 1) = tap (p 'x - 4) (p 'y + 3))))
+
+; a tap while she speaks is the choice it lands on: her first page is two lines, a
+; blank, three choices, a blank and the foot, framed, so on a 24-row screen the box
+; tops row 8 and the choices are rows 12 to 14. off a choice it shows the page again,
+; and a page without choices closes on any tap
+(: g (hand-g ())
+   _ (pins (g 'd) 'rows 24 'cols 80)
+   _ (talk g 'start)
+   (tap x y) (tap-key g [x y])
+ (test (49 = tap 40 12) (50 = tap 40 13) (51 = tap 40 14)
+       (0 = tap 40 10) (0 = tap 40 0) (0 = tap 40 23)
+       (: _ (crawl-turn g (tap 40 12)) ('who = g 'talk))
+       (: _ (crawl-turn g (tap 40 10)) ('who = g 'talk))
+       (: _ (talk g 'bye) _ (crawl-turn g (tap 40 12)) (one? (g 'talk)))
+       (: _ (talk g 'bye) _ (pin g 'talk ()) ('(1 0) = tap (g 'p 'x + 9) (g 'p 'y + 1)))))
 
 ; --- the vale: the last floor is three screens tall, lit end to end, and laid rather
 ; than delved: a road from the foot, the clearing, seven stones and a bare spot round
