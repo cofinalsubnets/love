@@ -25,6 +25,9 @@
 
 ; a member that will not open SCARES rather than skipping: a typo in the roster
 ; would otherwise drop a whole file's laws and leave the gate green.
+; the roster is spelled from the tree's top, which is where the corpus runs: every
+; member's relative path is a row under /home/g
+(chdir "/home/g")
 (: (feed p) (: q (open p "r")
                  (? (port? q) (: _ (reads q) (close q)) (scare 'no-corpus-member p)))
    ; the host corpus is common.mk's `t`, held back exactly where `t` holds back --

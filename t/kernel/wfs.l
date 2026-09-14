@@ -67,20 +67,21 @@
    ("1" = rd (d + "/ee/x"))
    (stat (d + "/dd") = 'enoent)
    ('einval = (rename d (d + "/in")))        ; a real einval: the name parts it from 'badarg
-   ; -- chdir/cwd: the cwd is a kernel string; "/" is the boot seat --
-   ("/" = cwd 0)
+   ; -- chdir/cwd: the cwd is a kernel string; /home is the boot seat and the corpus
+   ; stands at the tree's top --
+   ("/home/g" = cwd 0)
    !(chdir "a/kore")
-   ("/a/kore" = cwd 0)
+   ("/home/g/a/kore" = cwd 0)
    (0 < tally (rd "kore.l"))                  ; a relative path reads off the cwd
    (elem "kore.l" (readdir "."))
    !(chdir "..")
-   ("/a" = cwd 0)                      ; .. unwinds ONE component
-   ; the seat has to go back to / by hand. this file is one member of a corpus the
-   ; runner loads by RELATIVE path, so a cwd left anywhere else takes every member
-   ; after this one down with a no-corpus-member -- which reads as a missing file
-   ; and not as the walk that moved.
-   !(chdir "/")
-   (= "/" (cwd 0))
+   ("/home/g/a" = cwd 0)               ; .. unwinds ONE component
+   ; the seat has to go back to the tree's top by hand. this file is one member of a
+   ; corpus the runner loads by RELATIVE path, so a cwd left anywhere else takes every
+   ; member after this one down with a no-corpus-member -- which reads as a missing
+   ; file and not as the walk that moved.
+   !(chdir "/home/g")
+   (= "/home/g" (cwd 0))
    (nom? (chdir f))                             ; a file is no seat
    (nom? (chdir "/nope"))
    ('badarg = chdir 7)
@@ -93,7 +94,9 @@
    (1600000000000 < <>(stat f))
    ('badarg = chmod 7 384)
    ('enoent = chmod (d + "/ghost") 384)
-   ; -- the environment: a tablet behind the host's three doors --
+   ; -- the environment: a tablet behind the host's three doors. the seat carries
+   ; HOME from the boot, one row before anything is set --
+   ("/home" = getenv "HOME")
    (getenv "WFS" = ())                      ; unset is the real ()
    !(setenv "WFS" "1")
    ("1" = getenv "WFS")
@@ -101,10 +104,10 @@
    ("2" = getenv "WFS")
    (elem "WFS=2" (environ 0))
    !(setenv "WFS2" "x")
-   (2 = tally (environ 0))
+   (3 = tally (environ 0))
    !(setenv "WFS2" ())                  ; a non-string value unsets
    (getenv "WFS2" = ())
-   (1 = tally (environ 0))
+   (2 = tally (environ 0))
    ('badarg = setenv 7 "x")
    (getenv 7 = ())
    ; -- which kernel this is: the name a hosted seat probes for, said outright here --

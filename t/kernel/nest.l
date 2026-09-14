@@ -2,10 +2,10 @@
 ; the carried tarball, cook driven with this kernel as the toolchain, and the module linked
 ; under the seat's collector budget -- what `love web` and `love doom` do on the page. a
 ; task shares no environment with its spawner here, so what cook is told goes on its line.
-(: nest ("/love-" + love-version)
+(: nest ("/home/love-" + love-version)
    mod (nest + "/b/love.wasm")
    _ (puts "nest: laying the source\n")
-   _ ((cite 'source 'src-nest) "/")
+   _ ((cite 'source 'src-nest) "/home")
    _ (puts "nest: cook wasm LOVE=love\n")
    _ (flush out)
    st ((cite 'doom 'run-in) nest ["cook" "wasm" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])

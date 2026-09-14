@@ -47,14 +47,17 @@
    ; readdir hands over the baked names as strings
    (elem "json.l" (readdir d))
    (string? (cap (readdir d)))
-   ; "" and "." are both the root, as they are on the host: the tree's own top
-   ; names, each deduped across every row beneath it, plus tmp -- the scratch the
-   ; rung-2 tree seeds at boot, which no row carries
+   ; "" and "." are both the seat, the tree's top: its own top names, each deduped
+   ; across every row beneath it. the root holds the home the tree is under and tmp --
+   ; the scratch the rung-2 tree seeds at boot -- and no row of the tree
    (elem "a" (readdir "."))
-   (elem "a" (readdir ""))
-   (elem "t" (readdir ""))
-   (elem "tmp" (readdir ""))
-   !(elem f (readdir ""))                     ; components, never whole paths
+   (elem "a" (readdir "/home/g"))
+   (elem "t" (readdir "/home/g"))
+   (elem "g" (readdir "/home"))
+   (elem "home" (readdir "/"))
+   (elem "tmp" (readdir "/"))
+   !(elem "a" (readdir "/"))
+   !(elem f (readdir "/home/g"))              ; components, never whole paths
    ; a file is no directory, and neither is a prefix nothing lies under
    ((readdir f) = 'enotdir)
    ((readdir (d + "/nope")) = 'enoent)

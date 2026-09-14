@@ -517,8 +517,14 @@ struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 static struct k_file const *k_bakes;
 static int k_bakes_n;
 #include "ustar.h"
+// the tree's place: the baked rows live under it, so the root holds the machine's own
+// names and a home, and the shell starts in the home. the same rows read pristine under
+// /proc/src, below.
+static char const k_home[] = "home";
+static char const k_tree[] = "home/g";
+#define k_tree_n (sizeof k_tree - 1)
 // one ustar pass: count on the first, fill on the second. paths re-home below the archive's
-// top, so the tree looks the same from inside as a checkout. plain files land whole; a
+// top and under the tree, so the tree looks the same from inside as a checkout. plain files land whole; a
 // symlink lands as a row whose target rides lnks[k] for the caller to resolve -- lib/'s door
 // to the crew modules is symlinks, and dropping them would lose every module behind it.
 static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, char **lnks) {
@@ -530,10 +536,11 @@ static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, 
       if (rows) {
         char nm[256];
         uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);      // TOP stripped
-        char *p = kmallocw(b2w(ln + 1));
+        char *p = kmallocw(b2w(k_tree_n + 1 + ln + 1));
         if (!p) return -1;
-        memcpy(p, nm, ln);
-        p[ln] = 0;
+        memcpy(p, k_tree, k_tree_n), p[k_tree_n] = '/';
+        memcpy(p + k_tree_n + 1, nm, ln);
+        p[k_tree_n + 1 + ln] = 0;
         rows[k] = (struct k_file) { .path = p, .bytes = (char const *) t + o + 512,
                                     .len = sz, .ms = 1000 * ai_ustar_octal(h + 136, 12) };
         if (ai_ustar_islink(h)) {
@@ -657,9 +664,9 @@ static int k_vt_slot(char const *p, uintptr_t n) {
 static char *k_strdup(char const *p, uintptr_t n);   // below, with the entry doors
 static bool k_vt_rescale(unsigned v);                // below, with fbdraw's cached cursor
 
-// lay the table on first use: every baked row, live, reading off .rodata -- plus
-// tmp, the scratch a POSIX machine promises and no initrd carries. idempotent, and
-// a refusal leaves the console standing (the caller answers absence or ENOMEM).
+// lay the table on first use: every baked row, live, reading off .rodata -- plus tmp, the scratch a POSIX machine promises and no initrd carries, and the
+// home. idempotent, and a refusal leaves the console standing (the caller answers
+// absence or ENOMEM).
 static bool k_fs_init(void) {
   if (k_ents) return true;
   if (!k_bakes && !k_untar()) return false;
@@ -668,7 +675,7 @@ static bool k_fs_init(void) {
     struct k_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
     k_extra = xr, k_extra_n = k_baked(xr, xn); }
-  int n = k_bakes_n + k_extra_n, cap = n + 14;
+  int n = k_bakes_n + k_extra_n, cap = n + 15;
   struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
   if (!t) return false;
   for (int i = 0; i < n; i++) {
@@ -680,6 +687,9 @@ static bool k_fs_init(void) {
                             .ms = f->ms ? f->ms : k_clock_ms(), .mode = 0644, .live = true }; }
   t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
                           .mode = 0755, .own = true, .dir = true, .live = true };
+  // the home stands even with the tree unmade under it, and is where the shell starts
+  t[n + 14] = (struct k_ent) { .path = k_home, .bake = -1, .ms = k_clock_ms(),
+                               .mode = 0755, .own = true, .dir = true, .live = true };
   // the console's two colours, as files. own with no bytes yet: empty until the first
   // read refreshes them, and `proc` and `proc/vt` come free -- a name baked paths lie
   // under is a directory already, which is how the flat initrd carries `apps`.
@@ -723,13 +733,14 @@ static bool k_fs_init(void) {
                             .mode = 0777, .own = true, .live = true,
                             .dir = !to, .to = to };
     m++; }
-  k_ents = t, k_ents_n = m, k_ents_cap = cap;
+  k_ents = t, k_ents_n = m + 1, k_ents_cap = cap;
   return true; }
 
 // the cwd, a kernel string -- canonical ("" is the root), what k_canon resolves
-// every relative path against. chdir writes it; cwd wears the leading slash.
-static char k_cwd[256];
-static uintptr_t k_cwd_n;
+// every relative path against. chdir writes it; cwd wears the leading slash. the
+// boot seat is the home
+static char k_cwd[256] = "home";
+static uintptr_t k_cwd_n = 4;
 
 // resolve a path against the cwd into out (cap 256): absolute starts at the root.
 // -> the canonical length (0 is the root), or -1 for one longer than any entry could carry.
@@ -738,18 +749,19 @@ static intptr_t k_canon(char const *p, uintptr_t pn, char *out) {
   if (!(pn && p[0] == '/')) memcpy(out, k_cwd, n = k_cwd_n);
   return ai_path_canon(out, n, p, pn, 256); }
 
-// /proc/src -- the initrd under a second name. the same rows, read as the bake laid them,
+// /proc/src -- the tree under a second name. the same rows, read as the bake laid them,
 // so a module loads from a copy nobody can have edited: the guarantee is that the shell
-// cannot be broken by the tree it is editing. a path under the mount strips to the row's
-// own key. -1 is not under it, 0 is the mount itself, above that the stripped length.
+// cannot be broken by the tree it is editing. a path under the mount is respelled to
+// the row's own place under the tree. -1 is not under it, else the respelled length,
+// k_tree_n for the mount itself.
 static char const k_srcmnt[] = "proc/src";
 static intptr_t k_src_strip(char *cp, intptr_t cn) {
   uintptr_t m = sizeof k_srcmnt - 1;
   if ((uintptr_t) cn < m || memcmp(cp, k_srcmnt, m)) return -1;
-  if ((uintptr_t) cn == m) return 0;
-  if (cp[m] != '/') return -1;
-  memmove(cp, cp + m + 1, (uintptr_t) cn - m - 1);
-  return cn - (intptr_t) m - 1; }
+  if ((uintptr_t) cn > m && cp[m] != '/') return -1;
+  memmove(cp + k_tree_n, cp + m, (uintptr_t) cn - m);
+  memcpy(cp, k_tree, k_tree_n);
+  return cn - (intptr_t) m + (intptr_t) k_tree_n; }
 
 // one open file: which entry, where in it, and whether writes are allowed. `src` is the
 // /proc/src read, which takes the bake row past any copy. rides the k_source row's
@@ -1148,7 +1160,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   intptr_t sn = k_src_strip(cp, cn);
   if (sn >= 0) {                                 // under /proc/src: read-only, bake rows only
     if (m != 'r') return -EROFS;
-    if (!sn) return -EISDIR;                     // the mount itself
+    if (sn == (intptr_t) k_tree_n) return -EISDIR;   // the mount itself
     src = true, cn = sn; }
   // the filled rows report the machine and are nobody's to set; the ramfs does not read
   // its own mode bits, so 0444 is a label and this is the refusal.
@@ -1231,9 +1243,7 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool fol
   if ((cn = k_walk(p, pn, cp, follow)) < 0) return (int) cn;
   bool src = false;
   intptr_t sn = k_src_strip(cp, cn);
-  if (sn >= 0) {
-    if (!sn) return *st = (struct k_st) { 0, 0, k_mode_dir | 0555 }, 0;   // the mount itself
-    src = true, cn = sn; }
+  if (sn >= 0) src = true, cn = sn;              // the mount itself is the tree's own top
   int i = k_find(cp, (uintptr_t) cn);
   uintptr_t kid;
   *st = (struct k_st) { 0, 0, 0 };
@@ -2227,6 +2237,7 @@ void kmain(void) {
  // setenv () | 'badarg misuse (a non-string value UNSETS, the absence lane),
  // environ the raw "NAME=value" strings.
  "(: envt (tablet 0)"
+ "   _ (pin envt 0 (. (. \"HOME\" \"/home\") ()))"
  "   (envget l n) (? (two? l) (? (= n (cap (cap l))) (cup (cap l)) (envget (cup l) n)) ())"
  "   (envcut l n) (? (two? l) (? (= n (cap (cap l))) (envcut (cup l) n)"
  "                              (. (cap l) (envcut (cup l) n))) ())"
@@ -2316,12 +2327,18 @@ void kmain(void) {
  // which bakes the applet files and not kore.l
  "              (&& (= b \"kore\") (two? as))"
  "                (k-tool (intern (+ (cap as) \"-main\")) (cup as))"
- "              (two? (stat a0)) (: t (k-slurp a0)"
+ "              (two? (stat a0)) (k-progf a0 as h)"
+ // a path the seat has not got is looked for on the tarball, the way a bare word is
+ // looked for on the registry: `love t/kernel/all.l` names the corpus from any seat,
+ // and off the bake's own rows, never a tree somebody edited
+ "              (&& (! (= 47 (peep a0 0 0))) (two? (stat (+ \"/proc/src/\" a0))))"
+ "                (k-progf (+ \"/proc/src/\" a0) as h)"
+ "              ()))))"
+ "   (k-progf a0 as h) (: t (k-slurp a0)"
  "                 g (? (< 0 h) (k-bangv t a0 as) ())"
  "                 (? (two? g) (k-proga g (- h 1))"
  "                    (string? t) (. (k-run-text t) as)"
  "                    ()))"
- "              ()))))"
  "   (k-slot w n) (? (! (two? w)) () (n = 0) (cap w) (k-slot (cup w) (n - 1)))"
  // a console-numbered fd means the PARENT's view of it, so 2>&1 follows what the parent
  // wears; anything higher is duped, the port owning the copy from there.
@@ -2430,7 +2447,8 @@ void kmain(void) {
    "       accept udp-bind udp-send udp-recv hark tty))");
   // then the kore cat through the stream shell, quietly: the line is seatless here, so every
   // member's own seat sits out and the whole userland lands. the cat is built here member by
-  // member off the blob initrd, korelist being the baked space-separated roster.
+  // member off the blob initrd through /proc/src -- the blob's own face, never the tree at
+  // the seat -- korelist being the baked space-separated roster.
   // egg lane only: a woken image carries the crew baked, and re-loading over it would re-pin
   // every verb the bake sealed.
   if (!woke) {
@@ -2442,7 +2460,7 @@ void kmain(void) {
    "          (kwords s i (+ j 1) acc))"
    "       (? (< i j) (rev (. (snip s i j) acc)) (rev acc)))"
    "   open (cite 'posix 'open) close (cite 'posix 'close)"    // by value, as above
-   "   (kslurp p) (: h (open p \"r\") s (slurp h) _ (close h) s)"
+   "   (kslurp p) (: h (open (+ \"/proc/src/\" p) \"r\") s (slurp h) _ (close h) s)"
    "   (kcat l) (? (two? l) (+ (kslurp (cap l)) (kcat (cup l))) \"\")"
    "   korecat (kcat (kwords korelist 0 0 ())))");
   r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (. (peep korecat i 0) (g (+ 1 i))))) 0)))");

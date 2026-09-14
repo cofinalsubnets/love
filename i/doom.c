@@ -44,7 +44,7 @@ struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 // the corpus's stat laws could read.
 int k_baked(struct k_file *rows, int cap) {
  if (rows && cap > 0)
-  rows[0] = (struct k_file) { "doom1.wad", (char const *) doom_wad, doom_wad_len, 0 };
+  rows[0] = (struct k_file) { "home/g/doom1.wad", (char const *) doom_wad, doom_wad_len, 0 };
  return 1; }
 
 // --- the doors ------------------------------------------------------------
@@ -155,7 +155,7 @@ static void dg_create(void) {
  doomgeneric_Create(3, dg_argv); }
 
 static void doom_run(void) {
- memcpy(dh.wad, "doom1.wad", 10);
+ memcpy(dh.wad, "/home/g/doom1.wad", 18);     // the baked row, where the tree lives
  for (dg_create(); !dh.quit;) doomgeneric_Tick();
  k_scan_arm(0); }
 
