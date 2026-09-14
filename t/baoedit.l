@@ -19,6 +19,7 @@
 ; its `eofsym` global, so we name it by what edraw produces, not by its binding).
 (: edraw (cite 'cli 'edraw)              ; the editor primitives ride the bao module now
    edln (cite 'cli 'edln)
+   edlay (cite 'cli 'edlay)
    (ed-keys l) (tap l)
    abc [97 98 99]
    eof (edraw (ed-keys 0) ""))
@@ -63,3 +64,16 @@
 
 (test_fin ())
 (puts "baoedit: ok") (putc 10)
+
+; the layout under the redraw: [row col endrow] of the cursor on a screen w wide, rows
+; from the buffer's first. a line wraps at w; one ending on the margin leaves the
+; cursor pending, so it covers no extra row -- but the cursor itself is placed past it
+(: _ (test
+   ([0 3 0] = edlay 80 2 () ^1 () ())             ; "> a": row 0, column 3
+   ([1 0 0] = edlay 10 2 () ^8 () ())             ; the cursor on the margin: the row below, col 0
+   ([1 1 1] = edlay 10 2 () ^9 () ())             ; one past it: a second row
+   ([0 5 1] = edlay 10 2 () ^3 ^9 ())             ; the tail wraps behind the cursor
+   ([2 3 2] = edlay 10 2 [^15] ^3 () ())          ; a wrapped line above counts two rows
+   ([1 0 1] = edlay 10 0 [()] () () ())           ; an empty line above is one row
+   ([0 0 1] = edlay 10 0 () () () [^10])          ; a line below that fills its row
+   ([0 0 2] = edlay 10 0 () () () [^11])))        ; ..and one that wraps

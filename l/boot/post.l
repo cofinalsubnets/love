@@ -2011,7 +2011,7 @@
 ; must be up before this compiles: @ reads here, and a macro reaches a reader only once its
 ; layer is spliced.
 
-(module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey edtap
+(module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap
           uopt uopt1 uoptv uoptun uoptstray unum uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
@@ -2245,40 +2245,59 @@
         (raw 1, say out "\e[?1049h", loop (),
          say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0))
 
-   ; redraw the buffer in place. pra is rows above the cursor from the previous
-   ; render -- move up that many first, so we land back on the prompt's row. all
-   ; motion is relative, so terminal scrolling never desyncs us. pl is the prompt's
+   ; redraw the buffer in place. the cursor's row from the previous render is kept on
+   ; the buffer ('row) -- move up that many first, so we land back on the prompt's row.
+   ; all motion is relative, so terminal scrolling never desyncs us. pl is the prompt's
    ; column; the topmost line shares it, later lines start at column 0.
    (csi n f) (putc 27, putc 91, putn n, putc f)   ; ESC [ n f -- the one cursor verb
-   ; the screen already carries this line but for its last character: one row, nothing
-   ; above or below it, the cursor at its end, and an l that is the drawn one with a
-   ; character pushed on top. l grows by prepending, so the drawn one IS the tail and the
-   ; question is an identity, not a walk. 'was is what the row was last left showing.
-   (edgrew pra t)
+   ; the buffer on a screen w wide: the cursor's row and column and the row the last
+   ; character sits on, rows counted from the buffer's first. a line wraps at w, and one
+   ; that ends on the margin leaves the cursor pending there, so a line of n from column
+   ; s covers (s + n - 1) // w + 1 rows; the cursor itself is placed past any margin
+   (edlay w pl u l r d)
+     (: (rows s n) (0 < n ? (((s + n - 1) // w) + 1) 1)
+        (span top s) (? (one? top) 0 ((rows s (tally <top)) + (span >top 0)))
+        above (span (rev u) pl)
+        s0 (two? u ? 0 pl)
+        k (s0 + #l)
+        [(above + (k // w)) (k % w) (above + (rows s0 (#l + #r)) + (span d 0) - 1)])
+   ; the screen already carries this line but for its last character: nothing above or
+   ; below it, the cursor at its end, and an l that is the drawn one with a character
+   ; pushed on top. l grows by prepending, so the drawn one IS the tail and the question
+   ; is an identity, not a walk. 'was is what the row was last left showing.
+   (edgrew t)
      (: l (t 'l)
-        (0 = pra && !(t 'u) && !(t 'd) && !(t 'r) && two? l && cup l == (t 'was)))
+        (!(t 'u) && !(t 'd) && !(t 'r) && two? l && cup l == (t 'was)))
    ; a repaint puts the whole line out again, which costs the line's length a keystroke --
    ; quadratic over a typed-ahead or pasted run, and 800 characters is a third of a
    ; megabyte of escapes. a seat that paints those into a framebuffer spends that long
-   ; looking hung, so the one character is worth telling from the line.
-   (edrender pl pra t)
-     (: u (t 'u) l (t 'l) r (t 'r) d (t 'd)
-        grew (edgrew pra t)
+   ; looking hung, so the one character is worth telling from the line. a character
+   ; that lands on the margin is followed by a newline, so the cursor stands where the
+   ; layout says and not pending on the row above; a cursor past the last row is
+   ; given its row by a newline the same way (the screen scrolls, a move would not)
+   (edrender pl t)
+     (: ws (tty 1)
+        w (two? ws && 19 < <>ws ? <>ws 80)
+        u (t 'u) l (t 'l) r (t 'r) d (t 'd)
+        pra (peep t 'row 0)
+        grew (edgrew t)
         _ (pin t 'was l)
-        (? grew (prc <l, flush out)
+        lay (edlay w pl u l r d)
+        crow <lay ccol <>lay erow (lay 2)
+        _ (pins t 'row crow 'below (erow - crow))
+        (? grew (prc <l, 0 = ccol ? (putc 10), flush out)
            (: _ (0 < pra ? (csi pra 65),
                  putc 13,
                  0 < pl ? (csi pl 67),
                  putc 27, putc 91, putc 74, ; clear to end of screen
                  each (rev u) (\ ln (each ln prc, putc 10)),
                  each (revcat l r) prc,
-                 each d (\ ln (putc 10, each ln prc)))
-              ld #d
-              col ((two? u ? 0 pl) + #l)
-              (0 < ld ? (csi ld 65),
-               putc 13,
-               0 < col ? (csi col 67),
-               flush out))))
+                 each d (\ ln (putc 10, each ln prc)),
+                 putc 13)
+              (crow > erow ? (putc 10, flush out)
+               (crow < erow ? (csi (erow - crow) 65),
+                0 < ccol ? (csi ccol 67),
+                flush out)))))
 
    ; an sgr run at i -- ESC [ digits-and-semicolons m -- as its length, or 0 for no run
    (edsgr s i)
@@ -2452,25 +2471,24 @@
      (: pl (edwide ps1c)
         _ (puts ps1c)
         t (pins (ednew ()) 'hu hu 'hd hd 'cur ())
-        (loop pra)
-          (: _ (edrender pl pra t)
-             npra (tally (t 'u))
+        (loop _)
+          (: _ (edrender pl t)
              _ (edstep t (edkey in))
-             (t 'ev @ 0 (loop npra)
+             (t 'ev @ 0 (loop ())
                 (-7 || 4) eofsym
                 ; enter cashes the buffer as long as it parses complete
                 10 (parseall (edchars t) @
-                    ^no (ednl (eddetach t), loop npra)
+                    ^no (ednl (eddetach t), loop ())
                     vs (: _ (eddetach t)
                           h (revcat (t 'hd) (t 'hu))
-                          (two? (t 'd) ? (csi (tally (t 'd)) 66) (),
+                          (0 < (t 'below) ? (csi (t 'below) 66) (),   ; past the rows below the cursor
                            putc 10,
                            [vs (!vs ? h (take 100 (edframe t . h)))])))
-                -8 (uphist t, loop npra)
-                -9 (downhist t, loop npra)
+                -8 (uphist t, loop ())
+                -9 (downhist t, loop ())
                 3 (puts "^C\n", edempty? t ? eofsym (edline (t 'hu) (t 'hd)))
-                (loop npra)))
-        (loop 0))
+                (loop ())))
+        (loop ()))
    ; evaluate a single parsed datum cooperatively.
    (do_eval v)
      (: pid (twirl ev v)
@@ -2509,7 +2527,7 @@
    ; (edraw ip pr) -- read one line off port `ip`, with in-line editing: the charlist, or eofsym
    (edraw ip pr) (:- (loop ())
     pl (puts pr, edwide pr) t (ednew ())
-    (loop _) (edrender pl 0 t,
+    (loop _) (edrender pl t,
               edstep t (edkey ip),
               t 'ev @- (loop ()) (-7 || 4) eofsym 10 (putc 10, revcat (t 'l) (t 'r))))
 
@@ -2522,7 +2540,7 @@
              _ (pins t 'l (rev (ni = 0 ? nd (hnth (ni - 1)))) 'r ())
              (loop ni nd))
         (loop i draft)
-          (: _ (edrender pl 0 t)
+          (: _ (edrender pl t)
              _ (edstep t (edkey ip))
              (t 'ev @ 0 (loop i draft)
                 (-7 || 4) 'eof
