@@ -8,14 +8,15 @@
 ;
 ; kernel only -- t/kernel/all.l's roster, never $t: on the host `open` is the real
 ; filesystem and these laws would write the tree. The scratch is a real baked row on
-; purpose: a/json.l is a file the boot never loads, and the write laws put its
-; bytes back, so nothing downstream in the corpus sees a clobbered tree.
+; purpose: /etc/profile, the machine's own (i/rootfs/), which this boot never reads
+; -- the tree's rows under /proc/src refuse every write -- and the laws put its bytes
+; back.
 ;
 ; the `:` has a body -- the test itself -- so the helpers stay local; and each
 ; law is its own assert argument, since test maps over its args and a `do` would
 ; report only the last one.
 
-(: f "a/json.l"
+(: f "/etc/profile"
    ; slurp a path, closing behind -- () when it would not open, so presence rides
    ; `port?` and never the emptiness of what was read.
    (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
@@ -29,9 +30,9 @@
    (= orig (rd f))
    ; an unbaked path is absent for a read; a write creates it now (rung 2 --
    ; wfs.l holds those laws), so here it is unmade the moment it is proved
-   (! (port? (open "a/kore/no-such-thing.l" "r")))
-   (: q (open "a/kore/no-such-thing.l" "w")
-      (&& (port? q) (: _ (close q) !(unlink "a/kore/no-such-thing.l"))))
+   (! (port? (open "/tmp/no-such-thing.l" "r")))
+   (: q (open "/tmp/no-such-thing.l" "w")
+      (&& (port? q) (: _ (close q) !(unlink "/tmp/no-such-thing.l"))))
    ; the write copies the blob out of .rodata, and the next open sees it
    (wr f "hi" "w")
    (= "hi" (rd f))
@@ -44,10 +45,9 @@
    ; a write bigger than the baked blob grows the copy
    (wr f (+ orig orig) "w")
    (= (+ orig orig) (rd f))
-   ; /proc/src is the same row read past every write above -- the mount is what lets a
-   ; module load from bytes the tree it is editing cannot have reached
-   (= orig (rd (+ "/proc/src/" f)))
-   (! (wr (+ "/proc/src/" f) "no" "w"))
+   ; the tree under /proc/src is what a module loads from, and nobody's to write
+   (< 0 (tally (rd "/proc/src/a/json.l")))
+   (! (wr "/proc/src/a/json.l" "no" "w"))
    ; put it back, and the tree reads as the bake left it
    (wr f orig "w")
    (= orig (rd f))))

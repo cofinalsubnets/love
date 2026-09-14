@@ -1176,10 +1176,10 @@ test_kverb: host
 test_kboot: host $(R)/u/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(R)/u/kboot.l $(k_elf) "kore ls a/kore" "kore.l"
-	@$m $(R)/u/kboot.l $(k_elf) "kore wc a/json.l" "a/json.l" $$(wc -c < $(R)/a/json.l)
-	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"cd a/kore; pwd\"" "/a/kore"
-	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"kore ls a/kore | kore wc -l\"" $$(ls $(R)/a/kore | wc -l)
+	@$m $(R)/u/kboot.l $(k_elf) "kore ls /proc/src/a/kore" "kore.l"
+	@$m $(R)/u/kboot.l $(k_elf) "kore wc /proc/src/a/json.l" "/proc/src/a/json.l" $$(wc -c < $(R)/a/json.l)
+	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"cd /proc/src/a/kore; pwd\"" "/proc/src/a/kore"
+	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"kore ls /proc/src/a/kore | kore wc -l\"" $$(ls $(R)/a/kore | wc -l)
 else
 test_disk test_kboot:
 	@echo "$@: skipped (host arch $a is not x64)"

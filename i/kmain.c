@@ -517,17 +517,20 @@ struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 static struct k_file const *k_bakes;
 static int k_bakes_n;
 #include "ustar.h"
-// the tree's place: the baked rows live under it, so the root holds the machine's own
-// names and a home, and the shell starts in the home. the same rows read pristine under
-// /proc/src, below.
+// the tree's place: its rows live under /proc/src, read as the bake laid them and nobody's
+// to write, so a module loads from bytes the shell cannot have edited. the root holds the
+// machine's own names -- i/rootfs/, a second tar walked with no prefix -- and a home, where
+// the shell starts.
 static char const k_home[] = "home";
-static char const k_tree[] = "home/g";
+static char const k_tree[] = "proc/src";
 #define k_tree_n (sizeof k_tree - 1)
 // one ustar pass: count on the first, fill on the second. paths re-home below the archive's
-// top and under the tree, so the tree looks the same from inside as a checkout. plain files land whole; a
-// symlink lands as a row whose target rides lnks[k] for the caller to resolve -- lib/'s door
-// to the crew modules is symlinks, and dropping them would lose every module behind it.
-static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, char **lnks) {
+// top and under pre (the tree's mount; the machine's own rows take none), so the tree looks
+// the same from inside as a checkout. plain files land whole; a symlink lands as a row whose
+// target rides lnks[k] for the caller to resolve -- lib/'s door to the crew modules is
+// symlinks, and dropping them would lose every module behind it.
+static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, char **lnks,
+                      char const *pre, uintptr_t pn) {
   int k = 0;
   for (uintptr_t o = 0; o + 512 <= n && t[o];) {
     unsigned char const *h = t + o;
@@ -536,11 +539,12 @@ static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, 
       if (rows) {
         char nm[256];
         uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);      // TOP stripped
-        char *p = kmallocw(b2w(k_tree_n + 1 + ln + 1));
+        uintptr_t at = pn ? pn + 1 : 0;
+        char *p = kmallocw(b2w(at + ln + 1));
         if (!p) return -1;
-        memcpy(p, k_tree, k_tree_n), p[k_tree_n] = '/';
-        memcpy(p + k_tree_n + 1, nm, ln);
-        p[k_tree_n + 1 + ln] = 0;
+        if (pn) memcpy(p, pre, pn), p[pn] = '/';
+        memcpy(p + at, nm, ln);
+        p[at + ln] = 0;
         rows[k] = (struct k_file) { .path = p, .bytes = (char const *) t + o + 512,
                                     .len = sz, .ms = 1000 * ai_ustar_octal(h + 136, 12) };
         if (ai_ustar_islink(h)) {
@@ -561,13 +565,18 @@ static bool k_untar(void) {
   unsigned char *t = kmallocw(b2w(un + 1));
   if (!t || ai_inflate_raw(ai_srcgz + o, ai_srcgz_len - o - 8, t, un) != (intptr_t) un)
     return false;
-  int n = k_tar_walk(t, un, NULL, NULL);
-  if (n <= 0) return false;
+  int n1 = k_tar_walk(t, un, NULL, NULL, k_tree, k_tree_n);
+  if (n1 <= 0) return false;
+  // the machine's own rows ride a second, plain tar (i/rootfs/ through u/mkrootfs.l)
+  int n2 = ai_rootfs_len ? k_tar_walk(ai_rootfs, ai_rootfs_len, NULL, NULL, "", 0) : 0;
+  if (n2 < 0) return false;
+  int n = n1 + n2;
   struct k_file *rows = kmallocw(b2w((uintptr_t) n * sizeof *rows));
   char **lnks = kmallocw(b2w((uintptr_t) n * sizeof *lnks));
   if (!rows || !lnks) return false;
   memset(lnks, 0, (uintptr_t) n * sizeof *lnks);
-  if (k_tar_walk(t, un, rows, lnks) != n) return false;
+  if (k_tar_walk(t, un, rows, lnks, k_tree, k_tree_n) != n1) return false;
+  if (n2 && k_tar_walk(ai_rootfs, ai_rootfs_len, rows + n1, lnks + n1, "", 0) != n2) return false;
   // resolve the symlinks against the rows (two passes cover a link to a link),
   // then compact: a dangling or directory link has no bytes to serve and the
   // old bake never carried one either.
@@ -687,7 +696,7 @@ static bool k_fs_init(void) {
                             .ms = f->ms ? f->ms : k_clock_ms(), .mode = 0644, .live = true }; }
   t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
                           .mode = 0755, .own = true, .dir = true, .live = true };
-  // the home stands even with the tree unmade under it, and is where the shell starts
+  // the home, empty, is where the shell starts
   t[n + 14] = (struct k_ent) { .path = k_home, .bake = -1, .ms = k_clock_ms(),
                                .mode = 0755, .own = true, .dir = true, .live = true };
   // the console's two colours, as files. own with no bytes yet: empty until the first
@@ -749,24 +758,14 @@ static intptr_t k_canon(char const *p, uintptr_t pn, char *out) {
   if (!(pn && p[0] == '/')) memcpy(out, k_cwd, n = k_cwd_n);
   return ai_path_canon(out, n, p, pn, 256); }
 
-// /proc/src -- the tree under a second name. the same rows, read as the bake laid them,
-// so a module loads from a copy nobody can have edited: the guarantee is that the shell
-// cannot be broken by the tree it is editing. a path under the mount is respelled to
-// the row's own place under the tree. -1 is not under it, else the respelled length,
-// k_tree_n for the mount itself.
-static char const k_srcmnt[] = "proc/src";
-static intptr_t k_src_strip(char *cp, intptr_t cn) {
-  uintptr_t m = sizeof k_srcmnt - 1;
-  if ((uintptr_t) cn < m || memcmp(cp, k_srcmnt, m)) return -1;
-  if ((uintptr_t) cn > m && cp[m] != '/') return -1;
-  memmove(cp + k_tree_n, cp + m, (uintptr_t) cn - m);
-  memcpy(cp, k_tree, k_tree_n);
-  return cn - (intptr_t) m + (intptr_t) k_tree_n; }
+// the tree is nobody's to write: every mutating door refuses the mount and what lies under
+static bool k_ro(char const *cp, uintptr_t cn) {
+  return cn >= k_tree_n && !memcmp(cp, k_tree, k_tree_n)
+      && (cn == k_tree_n || cp[k_tree_n] == '/'); }
 
-// one open file: which entry, where in it, and whether writes are allowed. `src` is the
-// /proc/src read, which takes the bake row past any copy. rides the k_source row's
-// `state`; the close door frees it.
-struct k_fh { int i, vt; uintptr_t pos; bool w, src; };
+// one open file: which entry, where in it, and whether writes are allowed. rides the
+// k_source row's `state`; the close door frees it.
+struct k_fh { int i, vt; uintptr_t pos; bool w; };
 
 static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n);
 
@@ -781,12 +780,11 @@ static ai_inline struct k_fh *k_fh(int fd) {
 // `pristine` is /proc/src's read -- the bytes the bake laid, whatever the tree above has
 // been written since. a row the bake never laid has no pristine face at all, which is why
 // the mount refuses one at the open rather than reaching for a row that is not there.
-static unsigned char const *k_blob_at(int i, uintptr_t *len, bool pristine) {
+static unsigned char const *k_blob(int i, uintptr_t *len) {
   struct k_ent const *e = &k_ents[i];
-  if (e->own && !pristine) return *len = e->len, e->bytes;
+  if (e->own) return *len = e->len, e->bytes;
   struct k_file const *f = k_bake_row(e->bake);
   return *len = f->len, (unsigned char const*) f->bytes; }
-static unsigned char const *k_blob(int i, uintptr_t *len) { return k_blob_at(i, len, false); }
 
 // i/sys.c's seek. it answers a NEGATIVE errno, the one sign every C face in
 // this kernel wears; the love door upstairs names it (ai_err). whence 0/1/2
@@ -797,7 +795,7 @@ long k_fd_lseek(int fd, long off, int whence) {
   if (!h) return -29;                                    // ESPIPE: a console or a pipe
   if (whence < 0 || whence > 2) return -22;              // EINVAL
   uintptr_t len;
-  k_blob_at(h->i, &len, h->src);
+  k_blob(h->i, &len);
   intptr_t at = off + (whence == 1 ? (intptr_t) h->pos
                      : whence == 2 ? (intptr_t) len : 0);
   if (at < 0) return -22;
@@ -1096,7 +1094,7 @@ static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_fh *h = k_fh(fd);
   if (!h) return -1;
   uintptr_t len;
-  unsigned char const *p = k_blob_at(h->i, &len, h->src);
+  unsigned char const *p = k_blob(h->i, &len);
   // the end, never 0: a file does not grow under its reader, so "nothing waiting"
   // would park the scheduler on a source that will never speak.
   if (h->pos >= len) return -1;
@@ -1156,18 +1154,14 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   char cp[256];
   intptr_t cn = k_walk(p, pn, cp, true);
   if (cn < 0) return (int) cn;
-  bool src = false;
-  intptr_t sn = k_src_strip(cp, cn);
-  if (sn >= 0) {                                 // under /proc/src: read-only, bake rows only
+  if (k_ro(cp, (uintptr_t) cn)) {                // the tree: read only, and the mount a directory
     if (m != 'r') return -EROFS;
-    if (sn == (intptr_t) k_tree_n) return -EISDIR;   // the mount itself
-    src = true, cn = sn; }
+    if (cn == (intptr_t) k_tree_n) return -EISDIR; }
   // the filled rows report the machine and are nobody's to set; the ramfs does not read
   // its own mode bits, so 0444 is a label and this is the refusal.
-  if (!src && k_proc_slot(cp, (uintptr_t) cn) && m != 'r') return -EROFS;
+  if (k_proc_slot(cp, (uintptr_t) cn) && m != 'r') return -EROFS;
   if (!cn) return -EISDIR;                       // the root is a directory
-  if (!src) {
-    int dv = k_dev_slot(cp, (uintptr_t) cn);     // no handle, no bytes, no entry
+  { int dv = k_dev_slot(cp, (uintptr_t) cn);     // no handle, no bytes, no entry
     if (dv) {
       int dfd = k_fd_free();
       struct k_source *ds = k_source_open(dfd);
@@ -1179,7 +1173,6 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
                     : (struct k_source) { .writen = k_null_writen, .ready = k_dev_ready };
       return dfd; } }
   int i = k_find(cp, (uintptr_t) cn);
-  if (src && (i < 0 || k_ents[i].bake < 0)) return -ENOENT;   // only what the bake laid
   if (i >= 0 && k_ents[i].dir) return -EISDIR;
   bool made = false;
   if (i < 0) {
@@ -1203,14 +1196,14 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   // the truncate lands last, past every way this can still fail (same law).
   uintptr_t len = 0;
   struct k_ent *e = &k_ents[i];
-  int vt = src ? 0 : k_vt_slot(cp, (uintptr_t) cn);
+  int vt = k_vt_slot(cp, (uintptr_t) cn);
   if (vt && m == 'r') k_vt_read(i, vt);          // the pen, as of this open
-  int ps = src || m != 'r' ? 0 : k_proc_slot(cp, (uintptr_t) cn);
+  int ps = m != 'r' ? 0 : k_proc_slot(cp, (uintptr_t) cn);
   if (ps) k_proc_read(i, ps);                    // and the machine, as of this open
   if (m == 'w') e->own = true, e->len = 0, e->ms = k_clock_ms();
   if (m == 'a') k_blob(i, &len);
   e->refs++;
-  *h = (struct k_fh) { .i = i, .vt = vt, .pos = len, .w = m != 'r', .src = src };
+  *h = (struct k_fh) { .i = i, .vt = vt, .pos = len, .w = m != 'r' };
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
@@ -1241,9 +1234,6 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool fol
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, follow)) < 0) return (int) cn;
-  bool src = false;
-  intptr_t sn = k_src_strip(cp, cn);
-  if (sn >= 0) src = true, cn = sn;              // the mount itself is the tree's own top
   int i = k_find(cp, (uintptr_t) cn);
   uintptr_t kid;
   *st = (struct k_st) { 0, 0, 0 };
@@ -1253,12 +1243,11 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool fol
     return *st = (struct k_st) { strlen(k_ents[i].to), k_ents[i].ms,
                                  k_mode_lnk | 0777 }, 0;
   if (i >= 0 && !k_ents[i].dir) {
-    if (src && k_ents[i].bake < 0) return -ENOENT;   // a row the bake never laid
-    int vt = src ? 0 : k_vt_slot(cp, (uintptr_t) cn);
+    int vt = k_vt_slot(cp, (uintptr_t) cn);
     if (vt) k_vt_read(i, vt);                        // so a size is the pen's, not the last read's
-    int ps = src ? 0 : k_proc_slot(cp, (uintptr_t) cn);
+    int ps = k_proc_slot(cp, (uintptr_t) cn);
     if (ps) k_proc_read(i, ps);
-    k_blob_at(i, &st->size, src), st->ms = k_ents[i].ms,
+    k_blob(i, &st->size), st->ms = k_ents[i].ms,
     st->mode = k_mode_file | k_ents[i].mode; }
   else if (i >= 0) {
     st->mode = k_mode_dir | k_ents[i].mode;     // an explicit directory: its own date,
@@ -1405,7 +1394,7 @@ long k_fd_pipe(int fds[2]) {
 // a directory opens as a row with a close and a dents cursor and nothing else: read(2) on it
 // is EISDIR, and the love doors never make one. the cursor is the count of names already
 // handed out, and the scan re-walks and skips, so no enumeration state outlives the call.
-struct k_dh { uintptr_t pn; int at; bool src; char p[256]; };
+struct k_dh { uintptr_t pn; int at; char p[256]; };
 static void k_dir_close(int fd) {
  struct k_source *s = k_source(fd);
  if (!s) return;
@@ -1417,16 +1406,13 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
  intptr_t cn;
  if (!k_fs_init()) return -ENOMEM;
  if ((cn = k_walk(p, pn, cp, true)) < 0) return cn;
- bool src = false;
- intptr_t sn = k_src_strip(cp, cn);
- if (sn >= 0) src = true, cn = sn;                 // the mount lists the tree it shadows
  if (!k_dirp(cp, (uintptr_t) cn))
   return k_find(cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
  int fd = k_fd_free();
  struct k_dh *h = kmallocw(b2w(sizeof *h));
  struct k_source *s = h ? k_source_open(fd) : NULL;
  if (!s) { kfree(h); return -ENOMEM; }
- h->pn = (uintptr_t) cn, h->at = 0, h->src = src;
+ h->pn = (uintptr_t) cn, h->at = 0;
  memcpy(h->p, cp, (uintptr_t) cn);
  *s = (struct k_source) { .close = k_dir_close, .state = h };
  return fd; }
@@ -1446,7 +1432,6 @@ long k_fd_dents(int fd, void *buf, long cap) {
   uintptr_t k;
   char const *e = k_entry(i, h->p, h->pn, &k);
   if (!e) continue;
-  if (h->src && k_ents[i].bake < 0) continue;   // the mount shows what the bake laid
   bool seen = false;                          // one name per entry, k_readdir's rule
   for (int j = 0; j < i && !seen; j++) {
    uintptr_t k2;
@@ -1476,7 +1461,7 @@ long k_fd_stat(int fd, struct k_st *st) {
   *st = (struct k_st) { 0, 0, 0 };
   if (s->readn == ram_readn) {
     struct k_fh *h = s->state;
-    k_blob_at(h->i, &st->size, h->src);
+    k_blob(h->i, &st->size);
     st->ms = k_ents[h->i].ms;
     st->mode = k_mode_file | k_ents[h->i].mode;
     return 0; }
@@ -1656,6 +1641,7 @@ ai_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   uintptr_t junk;
   if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
     return -EEXIST;
@@ -1668,6 +1654,7 @@ ai_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   if (!cn) return -EBUSY;                         // the root stays
   int i = k_find(cp, (uintptr_t) cn);
   if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
@@ -1683,6 +1670,7 @@ ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   int i = cn ? k_find(cp, (uintptr_t) cn) : -1;
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? -EISDIR : -ENOENT;
   if (k_ents[i].dir) return -EISDIR;
@@ -1699,6 +1687,7 @@ ai_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr
   if (!k_fs_init()) return -ENOMEM;
   if (!tn || tn >= 256) return -ENAMETOOLONG;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
+  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   uintptr_t junk;
   if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
     return -EEXIST;
@@ -1738,6 +1727,7 @@ ai_noinline int k_fs_rename(char const *o, uintptr_t olen,
   if (!k_fs_init()) return -ENOMEM;
   if ((on = k_walk(o, olen, op, false)) < 0) return (int) on;
   if ((nn = k_walk(n, nlen, np, false)) < 0) return (int) nn;
+  if (k_ro(op, (uintptr_t) on) || k_ro(np, (uintptr_t) nn)) return -EROFS;
   if (!on) return -EBUSY;                         // the root does not move
   if (on == nn && !memcmp(op, np, (uintptr_t) on)) return 0;           // itself: done
   if (!nn) return -EEXIST;                        // onto the root
@@ -1816,6 +1806,7 @@ ai_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
+  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   int i = k_find(cp, (uintptr_t) cn);
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
   k_ents[i].mode = mode & 07777;
@@ -1826,6 +1817,7 @@ ai_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
+  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
   int i = k_find(cp, (uintptr_t) cn);
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
   k_ents[i].ms = ms;

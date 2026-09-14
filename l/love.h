@@ -435,6 +435,8 @@ intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr
          ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 extern unsigned char const ai_srcgz[];
 extern uintptr_t const ai_srcgz_len;
+extern unsigned char const ai_rootfs[];          // i/rootfs/ as a plain tar (u/mkrootfs.l)
+extern uintptr_t const ai_rootfs_len;
 
 uintptr_t ai_clock(void); // used by garbage collector
 intptr_t ai_nclock(void); // the fine interval clock (ns); a host gives a real source, the null seat degrades to ms

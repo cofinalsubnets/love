@@ -1,0 +1,9 @@
+# /etc/profile -- what a login shell does on this machine before it says anything.
+# lush sources this for `sh --login` (a/lush.l's sh-profiles), ahead of $HOME/.profile.
+# i/rootfs/ is the machine's own files, laid at the root of every inle boot; nothing
+# reads it on a host.
+#
+# the page boots `sh --login`, so the tower is what the machine opens on -- and quitting
+# it leaves a shell standing rather than starting it again, which is what a boot line
+# naming the game directly cannot do.
+tower

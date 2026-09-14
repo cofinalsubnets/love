@@ -7,8 +7,8 @@
 ; fetches doomgeneric and the shareware IWAD there, builds DOOM=1 once and runs that binary
 ; (doom-nest below); from one built with DOOM=1 it is the window right away. on inle the
 ; game is in the kernel and runs whole on the console, or the machine lays the nest off
-; its own tree, fetches the pair from the page that serves it, builds the module with
-; the game inside and boots that (doom-nest-inle).
+; its own tree, fetches the pair off the same hosts through the page's network, builds
+; the module with the game inside and boots that (doom-nest-inle).
 ;
 ; the game is C, linked into this binary by the DOOM=1 lane (i/doom.c's host
 ; doors: doom-start / doom-tick / doom-frame / doom-key); this file is the window.
@@ -129,6 +129,11 @@
    ; current directory is written.
    wad-url "https://raw.githubusercontent.com/Daivuk/PureDOOM/master/doom1.wad"
    dg-url "https://codeload.github.com/ozkl/doomgeneric/tar.gz/refs/heads/master"
+   ; the machine under a page fetches through the browser, and codeload answers no
+   ; cross-origin fetch: there the tree is laid a file at a time off the raw host, its
+   ; roster the api's listing (both answer any origin)
+   dg-tree "https://api.github.com/repos/ozkl/doomgeneric/git/trees/master?recursive=1"
+   dg-raw "https://raw.githubusercontent.com/ozkl/doomgeneric/master/"
    (note s) (say err (";; " + s + "\n"), flush err)
    ; spawn in dir, wait -> status. the cwd comes back only after the wait: on inle it is
    ; the machine's one cwd, and a task spawned there would be moved with it
@@ -139,11 +144,42 @@
        st (charm? p ? (wait p) 1)
        _ (chdir here)
        st)
-   (fetch url path)
+   (grab url path)
     (? (two? (stat path)) 0
-       (: _ (note ("fetching " + url))
-          rc (cite 'kore 'wget-main ["-q" "-O" path url])
+       (: rc (cite 'kore 'wget-main ["-q" "-O" path url])
           (rc @ 0 0 (unlink path, rc))))
+   (fetch url path) (? (two? (stat path)) 0 (note ("fetching " + url), grab url path))
+   ; the listing's blobs under doomgeneric/: the fields come in order, so each "path"
+   ; is the text between the next two quotes and its kind sits before the next "path"
+   (dg-blobs s)
+    (: (upto p i c) (i < #p && p i != c ? (upto p (i + 1) c) i)
+       (path p) (: a (upto p 0 34) b (upto p (a + 1) 34) (b < #p ? (snip p (a + 1) b) ""))
+       (blob? p) (two? >(split "\"blob\"" p))
+       (filter (q \ starts? q "doomgeneric/") (map path (filter blob? >(split "\"path\"" s)))))
+   (dg-lay dl)
+    (: d (dl + "/doomgeneric")
+       ls (dl + "/tree.json")
+       (? (two? (stat (d + "/doomgeneric"))) 0
+          (fetch dg-tree ls) 1
+          (: q (open ls "r")
+             s (? (hot? q) (: s (slurp q) _ (close q) s) "")
+             ps (dg-blobs s)
+             _ (unlink ls)
+             _ (mkdir d 493)
+             _ (mkdir (d + "/doomgeneric") 493)
+             _ (note ("laying " + show #ps + " files of doomgeneric off " + dg-raw))
+             bad (tally (filter (p \ (grab (dg-raw + p) (d + "/" + p) != 0)) ps))
+             (? (nil? ps) 1 bad 1 0))))
+   (dg-tar dl)
+    (: tgz (dl + "/doomgeneric.tgz")
+       r (fetch dg-url tgz)
+       (? (r != 0) r
+          (two? (stat (dl + "/doomgeneric"))) 0
+          (cite 'tarcmd 'tar-main ["xzf" tgz dl],
+           (two? (stat (dl + "/doomgeneric-master")) ?
+              (rename (dl + "/doomgeneric-master") (dl + "/doomgeneric")) 0),
+           unlink (dl + "/pax_global_header"),              ; the tarball's pax row, laid as a file
+           two? (stat (dl + "/doomgeneric")) ? 0 1)))
    ; the nest's IWAD rides the exec unless the caller named one: the nest's cwd is the caller's
    (nest-args dl as) (any (= "-iwad") as ? as ("-iwad" . dl + "/doom1.wad" . as))
    ; the nest is shared with seed and web, which link its love without doom: the flag the
@@ -151,21 +187,13 @@
    (nest-doom? nest)
     (: q (open (nest + "/b/.doom.flag") "r")
        (hot? q && (: s (slurp q) _ (close q) (string? s && s = "DOOM=1\n"))))
-   ; the pair the DOOM=1 lane wants, fetched into DL once from the two urls: 0 when both
-   ; stand there. `love web --doom` calls it too, for a page with the game inside -- and
-   ; the tarball is kept, because a machine under that page fetches it from there
-   ; (doom-nest-inle: the page's origin is that machine's whole network)
-   (doom-fetch dl wurl durl)
+   ; the pair the DOOM=1 lane wants, fetched into DL once: 0 when both stand there. the
+   ; tree comes as the tarball where a socket is ours, and file by file where the
+   ; network is a page's fetch door (kore's wget rides the same door)
+   (doom-fetch dl)
     (: _ (mkdir dl 493)
-       r1 (fetch wurl (dl + "/doom1.wad"))
-       r2 (? (two? (stat (dl + "/doomgeneric"))) 0
-             (: r (fetch durl (dl + "/doomgeneric.tgz"))
-              (r != 0 ? r
-               (cite 'tarcmd 'tar-main ["xzf" (dl + "/doomgeneric.tgz") dl],
-                (two? (stat (dl + "/doomgeneric-master")) ?
-                   (rename (dl + "/doomgeneric-master") (dl + "/doomgeneric")) 0),
-                unlink (dl + "/pax_global_header"),              ; the tarball's pax row, laid as a file
-                two? (stat (dl + "/doomgeneric")) ? 0 1))))
+       r1 (fetch wad-url (dl + "/doom1.wad"))
+       r2 (elem 'fetch (names ()) ? (dg-lay dl) (dg-tar dl))
        (r1 != 0 || r2 != 0 ? 1 0))
    (doom-aboard? dl) (two? (stat (dl + "/doom1.wad")) && two? (stat (dl + "/doomgeneric")))
    (doom-nest as)
@@ -184,7 +212,7 @@
             (fail $ "cannot run " + bin + " (" + show e + ")"))
           (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
              (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
-                (? (doom-fetch dl wad-url dg-url) (fail "the downloads did not land")
+                (? (doom-fetch dl) (fail "the downloads did not land")
                    (: _ (cite 'source 'src-arm nest exe)                     ; autonomous: ours throughout
                       _ (note "building the nest's love with doom inside -- this binary is the toolchain")
                       st2 (run-in nest [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
@@ -194,8 +222,8 @@
                         (fail ("cannot run " + bin + " (" + show e + ")"))))))))))
 
    (inle? _) (? (elem 'love-os (names ())) (elem (ev 'love-os) '(inle wasm)) 0)
-   ; --- the nest on inle: the same lay, off this machine's own tree, with the page as
-   ; the network (the pair served beside it, /dl/) and no binary to exec -- cook runs as
+   ; --- the nest on inle: the same lay, off this machine's own tree, with the page's
+   ; fetch door as the network and no binary to exec -- cook runs as
    ; a task under the same registry, seed's way, and LOVE=love names this kernel as the
    ; toolchain. the module it lays cannot be run from here, so the machine boots it
    ; (kexec) in place of this one, and that one carries the game
@@ -213,7 +241,7 @@
               (fail ("cannot boot " + mod + " (" + show e + ")")))
           (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
              (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
-                (doom-fetch dl "/dl/doom1.wad" "/dl/doomgeneric.tgz") (fail "the page does not serve the pair -- `love web --doom` lays one that does")
+                (doom-fetch dl) (fail "the downloads did not land")
                 ; a task shares no environment with its spawner on this seat, so what cook
                 ; is told goes on its line
                 (: _ (note "building this machine's love with doom inside -- the machine is the toolchain")

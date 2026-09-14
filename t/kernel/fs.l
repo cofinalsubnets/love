@@ -19,17 +19,19 @@
 ; law is its own assert argument, since test maps over its args and a `do` would
 ; report only the last one.
 
-(: f "a/json.l" d "a" g "a/dns.l"
+(: f "a/json.l" d "a" g "/tmp/l-fs-dns.l"
    (rd p) (: q (open p "r") s (slurp q) _ (close q) s)
    (wr p s) (: q (open p "w") _ (say q s) (close q))
    st (stat f)
    sz (tally (rd f))
-   orig (rd g)
+   orig (rd "a/dns.l")
+   _ (wr g orig)                                 ; the scratch: the tree itself refuses a write
    was (stat g)
    _ (wr g "abc")
    now (stat g)
    _ (wr g orig)
    back (stat g)
+   _ (unlink g)
  (test
    ; stat answers the four fields, and the size is the bytes a read hands over
    (two? st)
@@ -48,16 +50,21 @@
    (elem "json.l" (readdir d))
    (string? (cap (readdir d)))
    ; "" and "." are both the seat, the tree's top: its own top names, each deduped
-   ; across every row beneath it. the root holds the home the tree is under and tmp --
-   ; the scratch the rung-2 tree seeds at boot -- and no row of the tree
+   ; across every row beneath it. the root holds the home, empty, and tmp -- the scratch
+   ; the rung-2 tree seeds at boot -- and no row of the tree, which lists under /proc/src
    (elem "a" (readdir "."))
-   (elem "a" (readdir "/home/g"))
-   (elem "t" (readdir "/home/g"))
-   (elem "g" (readdir "/home"))
+   (elem "a" (readdir "/proc/src"))
+   (elem "t" (readdir "/proc/src"))
+   (elem "src" (readdir "/proc"))
+   (() = readdir "/home")
    (elem "home" (readdir "/"))
    (elem "tmp" (readdir "/"))
    !(elem "a" (readdir "/"))
-   !(elem f (readdir "/home/g"))              ; components, never whole paths
+   ; the machine's own files (i/rootfs/) stand at the root, no file of the tree
+   (elem "etc" (readdir "/"))
+   !(elem "etc" (readdir "/proc/src"))
+   (0 < tally (rd "/etc/profile"))
+   !(elem f (readdir "/proc/src"))              ; components, never whole paths
    ; a file is no directory, and neither is a prefix nothing lies under
    ((readdir f) = 'enotdir)
    ((readdir (d + "/nope")) = 'enoent)

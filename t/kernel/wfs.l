@@ -41,7 +41,11 @@
    (16384 = 61440 & <>>(stat e))
    (readdir e = ())                         ; empty, told from absent by stat
    ('eexist = mkdir e 493)                  ; again
-   ('eexist = mkdir "a" 493)             ; a baked prefix is a directory too
+   ('erofs = mkdir "a" 493)              ; the tree under /proc/src is nobody's to write
+   ('erofs = unlink "a/json.l")
+   ('erofs = rename "a/json.l" (d + "/j"))
+   ('erofs = chmod "a/json.l" 384)
+   ('eexist = mkdir "/usr/bin" 493)      ; a baked prefix is a directory too
    ('enotdir = mkdir (f + "/x") 493)       ; under a file
    ('enoent = mkdir "/hole/x" 493)         ; under a hole
    ('badarg = mkdir 7 493)
@@ -69,19 +73,19 @@
    ('einval = (rename d (d + "/in")))        ; a real einval: the name parts it from 'badarg
    ; -- chdir/cwd: the cwd is a kernel string; /home is the boot seat and the corpus
    ; stands at the tree's top --
-   ("/home/g" = cwd 0)
+   ("/proc/src" = cwd 0)
    !(chdir "a/kore")
-   ("/home/g/a/kore" = cwd 0)
+   ("/proc/src/a/kore" = cwd 0)
    (0 < tally (rd "kore.l"))                  ; a relative path reads off the cwd
    (elem "kore.l" (readdir "."))
    !(chdir "..")
-   ("/home/g/a" = cwd 0)               ; .. unwinds ONE component
+   ("/proc/src/a" = cwd 0)               ; .. unwinds ONE component
    ; the seat has to go back to the tree's top by hand. this file is one member of a
    ; corpus the runner loads by RELATIVE path, so a cwd left anywhere else takes every
    ; member after this one down with a no-corpus-member -- which reads as a missing
    ; file and not as the walk that moved.
-   !(chdir "/home/g")
-   (= "/home/g" (cwd 0))
+   !(chdir "/proc/src")
+   (= "/proc/src" (cwd 0))
    (nom? (chdir f))                             ; a file is no seat
    (nom? (chdir "/nope"))
    ('badarg = chdir 7)

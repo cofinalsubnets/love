@@ -273,10 +273,10 @@ moonlibc_src = $(wildcard a/moon/lib/moonlibc/*.c a/moon/lib/moonlibc/*.h \
 # b/moonlibc.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
 # (three ISAs' runtime members, ~30 s cold) -- behind the TU list it starts as they finish
 # and runs alone. ahead of them it rides beside them, and -j loses that time outright.
-$(ho)/love.raw $(ho)/love.cand.raw: b/moonlibc.o $(moon_o) b/src.o b/lib/readme.bin $(moonlibc_src)
+$(ho)/love.raw $(ho)/love.cand.raw: b/moonlibc.o $(moon_o) b/src.o b/rootfs.o b/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_o) b/src.o b/moonlibc.o -freadme=b/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_o) b/src.o b/rootfs.o b/moonlibc.o -freadme=b/lib/readme.bin -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md u/mkman.l a/lapiz.l b/lib/love_version.h $(mdep)
@@ -390,6 +390,17 @@ $(dist_source): force_src $(love0)
 b/src.o: $(dist_source) u/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) u/mksrc.l $(dist_source) $@ $(hosta)
+# the machine's own files (i/rootfs/): a second initrd, walked at the root of every inle
+# boot where the tree's is walked under /proc/src. one tar, carried under ai_rootfs
+# beside the source blob on every link that carries one.
+rootfs_files = $(wildcard i/rootfs/* i/rootfs/*/* i/rootfs/*/*/*)
+b/rootfs.tar: $(rootfs_files) u/mkrootfs.l $(love0)
+	@echo 'LOVE	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(love0) u/mkrootfs.l i/rootfs $@
+b/rootfs.o: b/rootfs.tar u/mkblob.l $(holocat_dep) $(love0)
+	@echo 'HOLO	'$@
+	@LOVE_NO_IMAGE= $(love0) $(holocat) u/mkblob.l $< $@ ai_rootfs $(hosta)
 
 # this roster must cover what mcsrctext walks (a/moon/moon.l): the carried archives are
 # stamped with an identity hashed over include/ and lib/ ENTIRE, so a source file the roster
@@ -422,12 +433,15 @@ $(eval $(call moonlane,x,xd,moonx,xa))
 $(xd)/src.o: $(dist_source) u/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) u/mksrc.l $(dist_source) $@ $(xa)
+$(xd)/rootfs.o: b/rootfs.tar u/mkblob.l $(holocat_dep) $(love0)
+	@echo 'HOLO	'$@
+	@LOVE_NO_IMAGE= $(love0) $(holocat) u/mkblob.l $< $@ ai_rootfs $(xa)
 $(xd)/moonlibc.o: $(rt_slice) u/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) u/mkrt.l $@ $(xa)
-$(xd)/love: $(x_o) $(xd)/src.o $(xd)/moonlibc.o b/lib/readme.bin
+$(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o b/lib/readme.bin
 	@echo 'MOON	'$@
-	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/moonlibc.o -freadme=b/lib/readme.bin -o $@
+	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=b/lib/readme.bin -o $@
 fat = b/dist/love-fat
 .PHONY: dist-fat
 dist-fat: $(ho)/love $(xd)/love u/fatpack.l
@@ -578,7 +592,7 @@ k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
 # empties this too -- the source blob stays, the one object both lanes want.
 k_doom_o = $(if $(DOOM),$(patsubst $(doom_d)/%.c,$(k_odir)/doom/%.o,$(doom_c)) $(k_odir)/doom/wad.o,)
 k_mach_o = $(k_lay_o) $(k_tail_o) $(k_odir)/moonlibc.o $(k_doom_o)
-k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_mach_o) $(k_odir)/src.o
+k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_mach_o) $(k_odir)/src.o $(k_odir)/rootfs.o
 
 kcppflags := \
   -I$(k_odir) \
@@ -598,6 +612,10 @@ $(k_odir)/src.o: $(dist_source) u/mksrc.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $m u/mksrc.l $(dist_source) $@ $a
+$(k_odir)/rootfs.o: b/rootfs.tar u/mkblob.l $(mdep)
+	@echo 'HOLO	'$@
+	@mkdir -p "$(dir $@)"
+	@LOVE_NO_IMAGE= $m u/mkblob.l $< $@ ai_rootfs $a
 $(k_pie): $(k_o) $(mdep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"

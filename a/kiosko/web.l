@@ -1,6 +1,6 @@
 ; a/kiosko/web.l -- `love web`: the tree, in a browser, painted on the way out.
 ;
-;   love web [-p port] [--doom] [DIR]      DIR defaults to the working directory
+;   love web [-p port] [-n] [DIR]          DIR defaults to the working directory
 ;
 ; kiosko already serves a directory and lists what it holds. what this adds is one
 ; hook, and three answers through it:
@@ -20,18 +20,18 @@
 ; no papel here, so a rendered .md is the document and not a site page: no title,
 ; anchors, contents nav or cross-link rewriting. `make site` still builds a site.
 ;
-; and the github page: its files are generated -- make web lays index.html and w/,
-; make wasm the module and its image, site-wasm copies them beside the loader, and the
-; wasm inle seat (i/wasm/inle.html) is its own module -- and .sbignore drops every one
-; from the source, so a checkout serves nothing of it until they are laid. where DIR is
-; the tree (a Makefile and index.html), this lays them through our own make first; where
+; and the github page: index.html and w/style.css are written by hand; make web lays the
+; icon and fonts, make wasm the module and its image, site-wasm copies them beside the
+; loader, and the wasm inle seat (i/wasm/inle.html) is its own module -- .sbignore drops
+; the laid ones from the source, so a checkout serves no machine until they are. where DIR
+; is the tree (a Makefile and index.html), this lays them through our own make first; where
 ; it is a bare directory the source aboard is laid under it (`love source`) and that tree
 ; is built and served. this binary drives the build and no love is compiled for it. the
-; --doom fetches doomgeneric and the shareware IWAD into the nest's dl/ (a/doom.l's pair)
-; for the machine to fetch: `doom` at its shell lays the source, builds the game aboard
-; and boots what it built. the page's own module is laid plain either way -- a game inside
-; it would answer `doom` at once and the build would never run. the two isolation headers
-; kiosko's reply sends are what let inle.html's machine run here without its service worker.
+; `doom` at the machine's shell lays the source, fetches doomgeneric and the shareware
+; IWAD off their own hosts, builds the game aboard and boots what it built. the page's
+; own module is laid plain -- a game inside it would answer `doom` at once and the build
+; would never run. the two isolation headers kiosko's reply sends are what let
+; inle.html's machine run here without its service worker.
 ;
 ; kiosko is a module: `cite` is the reach, and its miss is checked by name -- () applied
 ; to operands is 1, a miss that would read as a server that started.
@@ -136,22 +136,6 @@ tree is served. this binary drives the page's build; no love is compiled for it.
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
    (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/index.html")))
-   ; the doom page: the game's build aboard links under a 256 MB budget, an eighth of
-   ; 2048 MiB, and a chip starts it -- so the island on the nest's front page is given
-   ; both, the page being written by hand and the nest's copy its own to change
-   (splice s a b) (: n #s m #a
-                     (go i) (? (n - m < i) s (snip s i (i + m) = a) (snip s 0 i + b + snip s (i + m) n) (go (i + 1)))
-                     (go 0))
-   (sv-doom-page dir)
-   (: f (dir + "/index.html")
-      q (open f "r")
-      h (? (hot? q) (: s (slurp q) _ (close q) s) "")
-      h2 (splice (splice h "<div class=\"machine\">" "<div class=\"machine\" data-ram=\"2048\">")
-                 "data-type=\"love\">love</span>"
-                 "data-type=\"love\">love</span>\n<span class=\"chip\" data-type=\"doom\">doom</span>")
-      o (open f "w")
-      _ (? (hot? o) (say o h2, close o) (sv-die 1 ("cannot write " + f)))
-      0)
    ; autonomous throughout, as `love doom` is (a/source.l's src-arm): our verbs first on
    ; PATH, lush -a, CC our mooncc. LOVE= names US as the driving love, so love0 is a
    ; two-line script onto this binary and no second love is compiled to lay a page --
@@ -170,9 +154,9 @@ tree is served. this binary drives the page's build; no love is compiled for it.
    (web-main as)
    (: box (tablet 0)
       t (tablet 0)
-      o (uopt as t '(112) () {"port" 112 "no-build" 110 "doom" 100})
+      o (uopt as t '(112) () {"port" 112 "no-build" 110})
       _ (two? o ? 0 (sv-die 2 (last as + " needs an argument")))
-      un (uoptun t '(112 110 100))
+      un (uoptun t '(112 110))
       _ (nil? un ? 0 (sv-die 2 ("unknown option -" + string un)))
       rest <>>o
       ; DIR is positional, so a flag that fell through would become one and a whole tree
@@ -184,17 +168,12 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       port (: v (unum pt) (? (nil? pt) 8080 (charm? v) v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
-      doom? (peep t 100 0)
       ; the tree: DIR itself, the nest laid under it before, or laid there now.
       ; -n serves a bare directory as it is
       dir (? (sv-tree? dir0) dir0
              (sv-tree? (sv-root dir0)) (sv-root dir0)
              build? (sv-lay dir0)
              dir0)
-      _ (? (doom? && build? && sv-tree? dir)
-           ((cite 'doom 'doom-fetch) (dir + "/dl") (cite 'doom 'wad-url) (cite 'doom 'dg-url)
-            ? (sv-die 1 "the doom downloads did not land") (sv-doom-page dir))
-           0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
       _ (nil? serve5 ? (say err "web: no kiosko aboard\n", quit 1))
