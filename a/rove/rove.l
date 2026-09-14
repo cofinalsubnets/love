@@ -852,28 +852,28 @@
    ("bench"      "a bench, facing the street"
                  "a bench, made to be sat on"
                  "names are carved into it, inviting your own")
-   ("fountain"   "a fountain runs with nobody to hear it"
-                 "the water goes up as fast as it comes down"
-                 "there is money in the bottom, and it is not pennies")
+   ("fountain"   "the fountain's spray forms a constant shape out of running water"
+                 "you wonder how long the pump behind the fountain can last"
+                 "the pennies at the bottom of the fountain have hardened to a mineral crust")
    ("star"       "a star misplaced from the outer void levitates here at ankle height"
                  "is it hot? you dare not touch and see"
                  "you thought the stars were merely far away, but some it seems are truly small")
-   ("stair"      "a Stair to the Next Level. watch your step"
+   ("stair"      "a stair to the next level. watch your step"
                  "the steps are worn hollow in the middle"
                  "the chill on the steps defies narration")
    ("pennies"    "copper stamped by time with verdigris"
-                 "how many counted these pennies in times past? what's one more banker to eternity"
-                 "this particular number of pennies is eternal"
-                 "the pennies bear the warm residual of another thumb's eager tallying")
+                 "how many others counted these pennies before?"
+                 "the pennies are not the number of pennies"
+                 "pennies still warm from another thumb's eager tallying")
    ("rat"        "a rat, it looks diseased"
-                 "a feral rat, its skin aboil with fungating neoplasms"
-                 "a feral rat, its tail a tentacle of muscle over linked bone, gleaming"
-                 "it meets your eye and does not hurrtd")
+                 "a feral rat, its warty skin aboil with festering neoplasms"
+                 "a feral rat, its tail a wet tentacle of muscle ringing linked bone"
+                 "it meets your eye and does not hurry")
    ("lanternfly" "a lanternfly, brown black red and white."
                  "it lands on you as though you were furniture")
    ("gnome"      "the gnomes of this land have grown verminous"
                  "a worm the length of your arm, you feel bad for it"
-                 "it goes on longer than it looks")
+                 "even a gnome will turn, or so the saying goes")
    ("goblin"     "a goblin wearing someone's stolen work uniform"
                  "it's working really hard at its job and it wants you to know that")
    ("hobgoblin"  "it's like a goblin but more of a team player"
@@ -886,16 +886,16 @@
    ("d8"         "a d8, it's somehow six yet more"
                  "it has settled on nothing")
    ("d12"        "a d12, with more faces than meanings"
-                 "it rolls a long way")
+                 "it rolled far to get here")
    ("d20"        "a d20, waiting for a natural"
-                 "it's waiting for one number")
+                 "it's waiting for its number to come up")
    ("triangle"   "a triangle"
                  "arguably the first shape"
                  "its three angles always add up to 180 degrees")
    ("square"     "a square"
                  "arguably the first or second shape")
    ("hexagon"    "a hexagon"
-                 "it sees you with seven eyes"))
+                 "the average hexagon has seven eyes"))
 
  ; a name's lines, and the one it says this time
  (lines-of nm)
