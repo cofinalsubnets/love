@@ -348,6 +348,8 @@
  (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
  stair-face '(60 220 136)                               ; < the stair, gold on every floor
  water-face '(126 39 24)                                ; ~ the stream, where it shows
+ choice-fg (x11-256 "honeydew")                         ; a choice's button: text on ground
+ choice-bg (x11-256 "darkslategray")
  floor-face '(46 240 236)                               ; . a building's floor, dark
  door-face '(43 137 94)                                 ; + a door, brown
  ; what lies on a cell besides pennies: furniture, which stands there to be bumped and
@@ -921,8 +923,6 @@
  ; own ground. an escape is no width, so this is also where a line is cut to fit: the
  ; row's span is what a reader sees, not what a cask holds. off is what comes back
  ; after either, the pen the line was in
- choice-fg (x11-256 "honeydew")
- choice-bg (x11-256 "darkslategray")
  (fit-in s w off) (: on ("\e[38;5;" + show token-pen + "m")
                      on2 ("\e[48;5;" + show choice-bg + ";38;5;" + show choice-fg + "m")
               (go i n acc)
