@@ -18,8 +18,9 @@ class Horn extends AudioWorkletProcessor {
     this.frac = 0; }
 
   // the guest's rate and the context's need not agree, and a page does not get to pick
-  // the context's: the step is their ratio, nearest-sample, and it is exactly 1 wherever
-  // the two do agree -- which is every browser at 48k, the rate harp writes.
+  // the context's: the step is their ratio, and a sample between two of the guest's is
+  // the line between them. the step is exactly 1 where the two agree, and then frac
+  // stays 0 and every sample is its own.
   process(_in, out) {
     // a processor that THROWS is never called again -- the node is disabled for the life
     // of the page, and the machine meets that as a device that stopped emptying. so the
@@ -30,14 +31,17 @@ class Horn extends AudioWorkletProcessor {
     if (!rate) { this.frac = 0; return true; }            // closed: the block is already silent
     const step = rate / sampleRate, w = Atomics.load(this.ctl, this.c_wrote);
     let p = Atomics.load(this.ctl, this.c_played);
+    const pcm = this.pcm, mask = this.mask;
     for (let i = 0; i < L.length; i++) {
-      if (((w - p) | 0) <= 0) { L[i] = 0, R[i] = 0; continue; }   // underrun: silence, and hold
-      const j = (p & this.mask) * 2;
-      L[i] = this.pcm[j] / 32768, R[i] = this.pcm[j + 1] / 32768;
+      const n = (w - p) | 0;
+      if (n <= 0) { L[i] = 0, R[i] = 0; continue; }   // underrun: silence, and hold
+      const j = (p & mask) * 2, k = n > 1 ? ((p + 1) & mask) * 2 : j, f = this.frac;
+      L[i] = (pcm[j] + (pcm[k] - pcm[j]) * f) / 32768;
+      R[i] = (pcm[j + 1] + (pcm[k + 1] - pcm[j + 1]) * f) / 32768;
       this.frac += step;
-      const k = Math.floor(this.frac);
-      this.frac -= k;
-      p = (p + k) | 0; }
+      const d = Math.floor(this.frac);
+      this.frac -= d;
+      p = (p + d) | 0; }
     Atomics.store(this.ctl, this.c_played, p);
     return true; } }
 

@@ -67,14 +67,15 @@ run(24000, 256, (i) => 5000 + i);
 law(s16(L[0]) === 5000 && s16(L[2]) === 5001 && Atomics.load(ctl, c_played) === 64,
     'half the rate takes half the frames');
 
-// ..and a third of it, which is the rate the walk's song writes at. the ratio is not a
-// whole number of output frames, so the accumulator is what holds each source sample for
-// three and carries the remainder: 128 out at a third is 42 source frames and two thirds
-// of a third left over.
+// ..and a third of it, which is the rate the walk's song writes at. the line between two
+// source samples is walked rather than the near one held: at a third the second output
+// sits a third of the way up and the third two thirds, so a ramp climbs by thirds. the
+// ratio is not a whole number of output frames, so the accumulator carries the remainder:
+// 128 out at a third is 42 source frames and two thirds of a third left over.
 run(16000, 256, (i) => 7000 + i);
 [L] = block();
-law(s16(L[0]) === 7000 && s16(L[1]) === 7000 && s16(L[2]) === 7000 && s16(L[3]) === 7001,
-    'a third of the rate holds each frame for three');
+law(s16(L[0]) === 7000 && s16(L[1]) === 7000 && s16(L[2]) === 7001 && s16(L[3]) === 7001,
+    'a third of the rate walks the line between samples');
 law(Atomics.load(ctl, c_played) === 42, '..and takes a third of them, remainder carried');
 
 console.log(bad ? `FAIL worklet: ${bad} of the speaker's laws` : '  worklet: ok -- i/wasm/horn.js without a page');

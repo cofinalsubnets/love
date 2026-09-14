@@ -17,6 +17,7 @@
 ; run: love tower. the engine is pure love and gates headless in t/host/rove.l; only
 ; tower-run ties the tty, and t/host/tty.l plays it on a pty.
 (module (rove tower-run tower-main dat open? dput delve fov clear? paint steer tap-steer tap-key sign-line
+         bell-row bell-open bell-turn open-book fit-in
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
          mend ascend fill fit circle? vale-new vale-tick walled? on-ring? done? enter exit-at
          circle-r circle-q circle-far ring-in talk talk-key talk-node her-tree open-box doom oct-pt
@@ -364,7 +365,8 @@
             'book ["≡" 180 137 "a book, bound by hand, and somebody loved it"]
             'cloth ["~" 175 133 "a cloth, woven fine, folded and put by"]
             'mirror ["@" 93 54 "a mirror, and the one in it is not quite you"]
-            'shelf ["≡" 180 137 "a bookshelf, and one book on it: Muse"
+            'sign ["¶" 137 94 "a wooden sign, and whatever it said has weathered past reading"]
+            'shelf ["≡" 180 137 "a bookshelf, and two books on it: Muse, and OEIS A000110"
                     '("Muse"
                       ("by Donald Revell"
                        ""
@@ -424,13 +426,35 @@
  ; title, and the key that takes one down puts the next up. the foot is read here and
  ; not in the words below: a lambda reads a value bound above it, never one below
  page-foot "-- ~ of ~, any key --"
+ (open-book g bk) (: n #>bk
+                      (page i) (<bk . ((>bk i) + ["" (fill page-foot [(i + 1) n])]))
+                      pgs (map page ^n)
+                      (pins g 'sign <pgs 'pages >pgs))
  (bump-feat g k) (: bk (feat-lines k)
                     _ (note g (feat-line k))
-                    (two? bk ?
-                     (: n #>bk
-                        (page i) (<bk . ((>bk i) + ["" (fill page-foot [(i + 1) n])]))
-                        pgs (map page ^n)
-                        (pins g 'sign <pgs 'pages >pgs))))
+                    (? (k = 'shelf) (talk g 'shelf)
+                       (two? bk) (open-book g bk)
+                       0))
+ ; the other book: OEIS A000110, the Bell numbers, a page a number and no last page --
+ ; the next row of the Bell triangle is made as the page is turned, and B(n) heads it.
+ ; when a number would not fit the box a bookmark falls out instead, and the book ends
+ bell-ttl "OEIS A000110"
+ bell-foot "-- page ~, any key --"
+ mark-ttl "a bookmark"
+ mark-lines '("it slips out from between the pages. on it, in neat handwriting:"
+              ""
+              "  it's important for you to start doing what you want"
+              "  as soon as you can"
+              ""
+              "-- any key --")
+ (bell-row r) (: (go a l acc) (one? l ? (rev acc) (go (a + <l) >l ((a + <l) . acc)))
+                 (go (last r) r [(last r)]))
+ (bell-page g n r) (: line ("B(" + show n + ") = " + show <r)
+                      cols (peep (g 'd) 'cols (g 'd 'w))
+                      (? (cols - 10 < #line) (pins g 'bell () 'sign (mark-ttl . mark-lines))
+                         (pins g 'bell [n r] 'sign [bell-ttl "" line "" (fill bell-foot [(n + 1)])])))
+ (bell-open g) (bell-page g 0 [1])
+ (bell-turn g) (: b (g 'bell) (bell-page g (<b + 1) (bell-row (b 1))))
  ; a pile of pennies is bright and only under the lantern; furniture is remembered
  (loot-face it lit) (<it @ 'penny '(36 172)
                           'stone [(string (48 + <>it)) (lit ? 252 245)]
@@ -489,8 +513,16 @@
    lit-all? (peep d 'lit 0)
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    ; the note row through `fit`: a message may carry the token's braces, and an
-   ; escape is no width, so the cut is made in what a reader sees
-   _ (say j $ "\e[H\e[0m" + (fit msg (peep d 'cols w)) + "\e[K\r\n")
+   ; escape is no width, so the cut is made in what a reader sees. a long one wraps
+   ; onto a second row and the floor gives up its last for it; d 'top is how many,
+   ; for a tap to count from
+   cols (peep d 'cols w)
+   wr (cite 'story 'wrap)
+   notes (: ls (wr && cols < vlen msg ? (wr msg cols) [msg]) (two? >ls ? [<ls (ls 1)] ls))
+   _ (pin d 'top #notes)
+   rn (rows-n - (#notes - 1))
+   _ (say j "\e[H")
+   _ (each notes (l \ say j ("\e[0m" + fit l cols + "\e[K\r\n")))
    (cell i lit) (: e (lit ? (spot i))
                    o (lit && ov ? (ov (i % w) (i // w)))
                    l (loot i)
@@ -512,7 +544,7 @@
                     row y (x + 1) (i + 1) p2)))
    ; every row ends on \e[K: a floor narrower than the screen leaves nothing of the
    ; last floor past its edge
-   (rows y p) (y >= vy + rows-n ? p
+   (rows y p) (y >= vy + rn ? p
                (rows (y + 1) (: p2 (y < 0 || y >= h ? p
                                     (: _ (say j padding) (row y 0 (w * y) p)))
                                 _ (say j "\e[K\r\n")
@@ -531,12 +563,12 @@
  ; ..and a tap is a place rather than a letter: one step of the eight toward the cell it
  ; landed on -- the nearest of the eight as the screen shows them, a cell being twice
  ; as tall as it is wide, so a tap a little off a row is still along it -- and a tap on
- ; the cell you stand on is the stair. the note row is the screen's first, so a screen
- ; y is a floor y and one. c is [x y], cli's edtap.
+ ; the cell you stand on is the stair. the note rows are the screen's first, so a
+ ; screen y is a floor y and d 'top. c is [x y], cli's edtap.
  (toward a b) (a < b ? 1 (a > b ? -1 0))
  (tap-steer g c) (: p (g 'p) d (g 'd)
                     ex (<c - peep d 'vx 0 - (p 'x))
-                    ey (<>c - 1 + peep d 'vy 0 - (p 'y))
+                    ey (<>c - peep d 'top 1 + peep d 'vy 0 - (p 'y))
                     ax (abs ex) ay (2 * abs ey)          ; in cell widths
                     ; within 22.5 degrees of a row or a column is along it: tan is 5/12
                     dx (12 * ax < 5 * ay ? 0 (toward 0 ex))
@@ -695,9 +727,11 @@
  (tower-bars lvl c r) (lvl @ 1 (garden-bars c) 2 (middle-bars c) 3 (sky-bars c)
                                (r < 0 ? (garden-bars c) (heart-bars r)))
 
- song-rate 48000
+ ; every sample is a closure call, so the wasm seat -- slower, and its page resamples
+ ; any rate -- plays at a third of the 48k every card takes
+ song-rate (love-arch = 'wasm ? 16000 48000)
  song-cps 0.5                                           ; cycles a second
- song-chunk 1600                                        ; a frame's worth, thirty a second
+ song-chunk (song-rate // 30)                           ; a frame's worth, thirty a second
  song-gain 5200.0
 
  ; --- the flavour: a row is a strewing's or a mob's name, then its lines. which line
@@ -820,24 +854,31 @@
  ; each, and only the first of them is a cell -- the tails ride along with it
  (tail? c) (128 <= c && c < 192)
  (lead c) (tail? c ? 0 1)
- ; ..and its braces, put on at the port. an escape is no width, so this is also where
- ; a line is cut to fit: the row's span is what a reader sees, not what a cask holds.
- (fit s w) (: on ("\e[38;5;" + show token-pen + "m") off "\e[0m"
+ ; ..and its braces, put on at the port, and a choice between the bytes 1 and 2 on its
+ ; own ground. an escape is no width, so this is also where a line is cut to fit: the
+ ; row's span is what a reader sees, not what a cask holds. off is what comes back
+ ; after either, the pen the line was in
+ choice-fg (x11-256 "honeydew")
+ choice-bg (x11-256 "darkslategray")
+ (fit-in s w off) (: on ("\e[38;5;" + show token-pen + "m")
+                     on2 ("\e[48;5;" + show choice-bg + ";38;5;" + show choice-fg + "m")
               (go i n acc)
                (? (i >= #s) acc
                   (: c (s i)
                      (? (n >= w && !(tail? c)) acc
                         (c = 123) (go (i + 1) n (acc + on))
-                        (c = 125) (go (i + 1) n (acc + off))
+                        (c = 1) (go (i + 1) n (acc + on2))
+                        (c = 125 || c = 2) (go (i + 1) n (acc + off))
                         (go (i + 1) (n + lead c) (acc + string c)))))
               (go 0 0 ""))
+ (fit s w) (fit-in s w "\e[0m")
 
  ; --- the sign: a box over the frame, story's lighthouse way. braces cost no width, so
  ; it is measured in what a reader sees, and it runs to the row's end so no pen meets.
  sign-pen (x11-256 "lavender")                          ; the frame, and the title in its own
  sign-tpen (x11-256 "honeydew")
  (vlen s) (: (go i n) (? (i >= #s) n
-                         (: c (s i) (go (i + 1) (? ((c = 123) || (c = 125)) n (n + lead c)))))
+                         (: c (s i) (go (i + 1) (? ((c = 123) || (c = 125) || (c = 1) || (c = 2)) n (n + lead c)))))
              (go 0 0))
  (pad s n c) (: v (vlen s) (v >= n ? s (s + ((n - v) (\ t (t + c)) ""))))
  (sign-box ttl ls) (:
@@ -900,7 +941,7 @@
              ; not decoration: a row that stops at the box leaves the cells past it
              ; holding whatever the LAST frame put there, and the floor before this one
              ; is where that comes from.
-             (cells-cut r x0 + "\e[0m" + pen sign-pen + fit (row i) 400
+             (cells-cut r x0 + "\e[0m" + pen sign-pen + fit-in (row i) 400 ("\e[0m" + pen sign-pen)
               + "\e[0m" + cells-from r (x0 + ww))))
    ; the top row's tab, +-title, wears its own pen; the cells were counted before the pens went in
    (row i) (: s (box (i - y0))
@@ -1307,6 +1348,11 @@
             (bye ("\"You know what to do.\""
                   "She pokes the fire.")
                  ()))
+ ; the shelf's tree beside hers: a choice of book, and each is a door rather than a page
+ shelf-ttl "the bookshelf"
+ shelf-tree '((shelf ("two books, one loved and one that never ends. which?")
+                     ((1 "Muse" muse)
+                      (2 "OEIS A000110" bell))))
  talk-foot "-- ~ --"
  doom-ttl "the vale"
  doom-lines '("the ground shudders under you, once, and is still."
@@ -1415,15 +1461,20 @@
                  (tokens (roll (g 'sb) #tokens) @ tk
                   (pins g 'token tk 'sign (box-ttl . map (l \ fill l [tk]) box-lines))))
  ; the tree: a node's sign is its lines, then its choices numbered, then the foot
- (talk-node k) (:- (go her-tree)
+ (talk-node k) (:- (go (her-tree + shelf-tree))
    (go l) (two? l ? (: e <l (k = <e ? e (go >l))) ()))
+ (talk-ttl k) (elem k (map cap shelf-tree) ? shelf-ttl her-ttl)
  (joins-with sp l) (? (one? l) "" (one? >l) <l (<l + sp + joins-with sp >l))
- (talk g k) (: nd (talk-node k)
-               txt (nd 1) chs (nd 2)
-               ks (map (show * cap) chs)
-               lines (txt + (two? chs ? [""] ()) + (map (c \ show <c + "  " + c 1) chs)
-                          + ["" (fill talk-foot [(two? chs ? (joins-with ", " ks) "any key")])])
-               (pins g 'talk k 'sign (her-ttl . lines)))
+ ; a choice's line is marked off between the bytes 1 and 2, which fit paints as a button
+ (choice-line c) (string 1 + " " + show <c + "  " + c 1 + " " + string 2)
+ (talk g k) (k @ 'muse (pin g 'talk (), open-book g (feat-lines 'shelf))
+               'bell (pin g 'talk (), bell-open g)
+             (: nd (talk-node k)
+                txt (nd 1) chs (nd 2)
+                ks (map (show * cap) chs)
+                lines (txt + (two? chs ? [""] ()) + (map choice-line chs)
+                           + ["" (fill talk-foot [(two? chs ? (joins-with ", " ks) "any key")])])
+                (pins g 'talk k 'sign (talk-ttl k . lines))))
  ; the key at a node: a digit picks its choice, anything else at a node with choices
  ; shows it again, and a node without them closes
  (talk-key g k) (: nd (talk-node (g 'talk)) chs (nd 2)
@@ -1497,6 +1548,9 @@
    loot {}
    _ (pin loot (fx + w * fy) '(fire))
    _ (each ^7 (k \ (: pt (oct-pt fx fy k) (pin loot (<pt + w * <>pt) ['stone (k + 1)]))))
+   ; a wooden sign on the right of the road in, a few rows up from the foot
+   sy (h - 5)
+   _ (pin loot (road-x fx sy + 3 + w * sy) '(sign))
    her {'x (fx + 2) 'y fy 'gl her-glyph 'hue her-pen}
    hs (house rows w)
    ; ..whose door lets out onto the vale, on the cottage's step
@@ -1537,6 +1591,8 @@
    _ (sg && pin g 'sign ())
    ; ..unless it was a page and the book has another: that one goes up in its place
    _ (? (sg && two? (g 'pages)) (pins g 'sign <(g 'pages) 'pages >(g 'pages)))
+   ; ..and a page of the book that never ends makes the next
+   _ (? (sg && g 'bell) (bell-turn g))
    ; ..and a page of her tree takes the key as its answer
    _ (? (sg || g 'over || k = 46) (sg && g 'talk ? (talk-key g k))
         (two? k) (stride g k, mend g)
@@ -1672,10 +1728,12 @@
                        (crawl-turn g (steer k)))
              ; the ground shudders: the view jolts a row either way for half a second,
              ; with whatever sign the turn raised held back until it is still
+             ; ..and the song is fed through it: two chunks are the beat a jolt holds for
              (rumble! _) (: d (g 'd) sg (g 'sign)
                             _ (pin g 'sign ())
+                            (jolt _) (? sng (each ^2 (_ \ song-feed sng (song-vol g))) (rest 66))
                             _ (each ^6 (k \ (pin d 'jolt (k % 2 = 0 ? 1 -1),
-                                             say out (crawl-frame g), flush out, rest 80)))
+                                             say out (crawl-frame g), flush out, jolt ())))
                             (pin d 'jolt 0, pin g 'sign sg, pin g 'rumble ()))
              (loop last t0) (? (g 'over) ()
                                (: _ (say out (crawl-frame g), flush out)

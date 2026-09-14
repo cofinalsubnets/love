@@ -374,12 +374,15 @@
        (all (v \ 4000 < v 0) (s 'vs))                  ; both end past the head
        (!(= (<(s 'vs) 0) ((s 'vs) 1 0)))))             ; ..and not together: one, then the other
 
-; the shelf opens its book a page at a time: a key turns the page and takes no step, and
-; the key after the last page closes it
+; the shelf asks which book: a key picks one, and Muse opens a page at a time: a key
+; turns the page and takes no step, and the key after the last page closes it
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
    _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "bookshelf" 0)
+   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("the bookshelf" = <(g 'sign)) ('shelf = g 'talk)
+           (find (g 'msg) "bookshelf" 0))
+   _ (crawl-turn g 49)
+   _ (test (two? (g 'sign)) ("Muse" = <(g 'sign)) !(g 'talk)
            (find (last (g 'sign)) "1 of 6" 0) (5 = #(g 'pages)))
    _ (crawl-turn g [1 0])
    _ (test (1 = g 'p 'x) (two? (g 'sign)) (find (last (g 'sign)) "2 of 6" 0))
@@ -387,6 +390,45 @@
    _ (test (two? (g 'sign)) (find (last (g 'sign)) "6 of 6" 0) !(g 'pages))
    _ (crawl-turn g 46)
  (test !(g 'sign) (1 = g 'p 'x)))
+
+; ..and the other book never ends: a page a Bell number, made as it is turned, until
+; one would not fit the box -- then the bookmark, and after it nothing
+(: g (hand-g ())
+   _ (pins (g 'd) 'cols 40)
+   _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
+   _ (crawl-turn g [1 0])
+   _ (crawl-turn g 50)
+   (line _) ((g 'sign) 2)
+   _ (test ("OEIS A000110" = <(g 'sign)) ("B(0) = 1" = line ()) ('(0 (1)) = g 'bell) !(g 'talk))
+   _ (crawl-turn g 46)
+   _ (test ("B(1) = 1" = line ()))
+   _ (crawl-turn g 46) _ (crawl-turn g 46) _ (crawl-turn g 46)
+   _ (test ("B(4) = 15" = line ()) (find (last (g 'sign)) "page 5" 0))
+   (turn n) (? ("a bookmark" = <(g 'sign)) n (crawl-turn g 46, turn (n + 1)))
+   n (turn 0)
+   _ (test (10 < n < 40) !(g 'bell) (find ((g 'sign) 1) "handwriting" 0))
+   _ (crawl-turn g 46)
+ (test !(g 'sign) !(g 'bell) (1 = g 'p 'x)
+       ('(1 2) = bell-row [1]) ('(2 3 5) = bell-row [1 2]) ('(5 7 10 15) = bell-row [2 3 5])))
+
+; a choice is marked off between the bytes 1 and 2: no width, and fit paints the ground
+; between them and puts the pen it was given back
+(: s (string 1 + "ab" + string 2 + "c")
+   f (fit-in s 400 "X")
+ (test (find f "\e[48;5;" 0) (find f "abX" 0) ("c" = snip f (#f - 1) #f)
+       (find (fit s 400) "ab\e[0m" 0)))
+
+; a long note wraps onto a second row, the floor gives up its last row for it and the
+; frame is no taller; a tap then counts from under both
+(: g (hand-g ())
+   _ (pins (g 'd) 'rows 5 'cols 20)
+   _ (pin g 'msg "short")
+   f1 (crawl-frame g)
+   _ (pin g 'msg "a note far too long for a screen twenty cells wide")
+   f2 (crawl-frame g)
+   rs (split "\r\n" f2)
+ (test (#(split "\r\n" f1) = #rs) (2 = g 'd 'top) (find (rs 1) "screen" 0)
+       (60 = tap-steer g [(g 'p 'x + peep (g 'd) 'vx 0) (g 'p 'y + 2)])))
 
 ; pennies weigh in, and they are the only thing on the floor
 (: g (hand-g ())
@@ -603,7 +645,9 @@
        (12 = t fx (<>door - 7))                          ; ..and the garden behind it
        ('house = <(exit-at g <door (<>door - 1)))
        (tablet? (g 'scenes 'house)) (tablet? (g 'scenes 'attic))
-       (d 'lit) (all (i \ peep (d 'seen) i 0) ^(w * h))))   ; all of it lit, and all of it seen
+       (d 'lit) (all (i \ peep (d 'seen) i 0) ^(w * h))    ; all of it lit, and all of it seen
+       (: si (filter (i \ 'sign = <(g 'loot i)) (keys (g 'loot)))   ; the wooden sign: one, on grass, by the foot
+          (two? si && one? >si && 1 = t (<si % w) (<si // w) && (h - 5) = (<si // w)))))
 
 ; ..and the story of it: in at the door, up the stair, the box opened and the token
 ; named there; down and out with it, the ground shudders, the sign, and she is gone

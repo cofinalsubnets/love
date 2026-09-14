@@ -304,10 +304,11 @@
 
  ; the song costs by rate: a note lives 0.34s whatever the rate, so its tray ops lay
  ; that many samples. 48k is what every card takes -- an HD-Audio HDMI port refuses
- ; 16k outright (ENODEV), and the page's worklet resamples any rate anyway.
- song-rate 48000
+ ; 16k outright (ENODEV) -- but the wasm seat's page resamples any rate, and that
+ ; seat is the slow one, so it plays at a third
+ song-rate (love-arch = 'wasm ? 16000 48000)
  song-cps 0.55                          ; cycles a second at full speed
- song-chunk 1600                        ; a frame's worth of frames, thirty a second
+ song-chunk (song-rate // 30)           ; a frame's worth of frames, thirty a second
  song-gain 6500.0
  ; the music slows with the walk -- but only to a third of tempo. slop-rate falls to a
  ; twentieth by the shore, and a twentieth of a tempo is not a tempo any more.
