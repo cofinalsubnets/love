@@ -21,7 +21,7 @@
 ;   kore stat|du|df|chown|mktemp                     ... and what they report
 ;   kore expr expression             the little language (a/kore/expr.l)
 ;   kore patch [-pN] [-R] [-i F]     unified diffs laid on a tree (a/kore/patch.l)
-;   kore grep [-nvclqhaixwfeo] [-e P] [-m N] pattern [F..]   BRE/ERE (a/kore/re.l)
+;   kore grep [-nvclqhaixwFEo] [-e P] [-m N] pattern [F..]   BRE/ERE (a/kore/re.l)
 ;   kore sed [-nEi] [-e script].. script [F..]   the stream editor (a/kore/sed.l)
 ;   kore awk [-F fs] [-v v=x].. 'PROG' [F..]     the language (a/kore/awk.l)
 ;   kore find [PATH..] [EXPR]                    the tree walk (a/kore/find.l)
@@ -36,6 +36,15 @@
 ;                                    written in, read back through lapiz and paged by less
 ;   kore html2text [-w N] [F..]      a page's prose, laid out (a/kore/lens.l)
 ;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
+;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (a/gz.l); tar and cpio the
+;   kore tar czf|xzf|tzf ARCHIVE      two containers over it (a/tar.l, a/cpio/). these
+;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
+;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
+;   kore xxd [-r] [F..]              the canonical dump, and back again
+;   kore strings [-n LEN] [F..]      the printable runs of an object file
+;   kore cal [[MONTH] YEAR]          a month, off the same two calendar rows date reads
+;   kore timeout [-s SIG] [-k D] D CMD..   a command, and the clock that ends it (124)
+;   kore which [-a] NAME..           the PATH walk; tty, clear and hostname the rest
 ;   kore sh [-c CMD | file]          the shell, lush (a/lush.l; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
@@ -63,7 +72,9 @@
         tee-main test-main top-main
         touch-main lift-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
-        uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
+        uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main
+        cal-main clear-main dd-main hostname-main strings-main timeout-main tty-main
+        which-main xxd-main)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (borrow 'posix)
@@ -303,6 +314,16 @@
             'chroot chroot-main 'mount mount-main 'umount umount-main
             'sync sync-main 'mkfifo mkfifo-main 'mknod mknod-main
             'whoami whoami-main 'groups groups-main
+            ; the archives: gz.l and tar.l register into `verbs` for love's own rail,
+            ; and these rows are the same mains under kore's door. they sit in the cat
+            ; ahead of this file, so the cite reads now
+            'gzip (cite 'gzcmd 'gzip-main) 'gunzip (cite 'gzcmd 'gunzip-main)
+            'zcat (cite 'gzcmd 'zcat-main)
+            'tar (cite 'tarcmd 'tar-main) 'cpio (cite 'cpiocmd 'cpio-main)
+            ; the byte tools, the clock's other face, and the four one-liners
+            'dd dd-main 'xxd xxd-main 'strings strings-main
+            'cal cal-main 'timeout timeout-main
+            'which which-main 'tty tty-main 'clear clear-main 'hostname hostname-main
             ; the /proc family -- no nif of their own, /proc is a filesystem
             'ps ps-main 'free free-main 'uptime uptime-main 'top top-main
             'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
@@ -434,7 +455,16 @@
     'mac2unix "usage: mac2unix [-fkqn] [FILE..]"
     'man "usage: man [-w] [SECTION] NAME.."
     'html2text "usage: html2text [-w COLS] [FILE..]"
-    'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"}
+    'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
+    'dd "usage: dd [if=F] [of=F] [bs=N] [count=N] [skip=N] [status=none]"
+    'xxd "usage: xxd [-r] [FILE..]"
+    'strings "usage: strings [-n LEN] [FILE..]"
+    'cal "usage: cal [[MONTH] YEAR]"
+    'timeout "usage: timeout [-s SIG] [-k DURATION] DURATION CMD [ARG..]"
+    'which "usage: which [-a] NAME.."
+    'tty "usage: tty"
+    'clear "usage: clear"
+    'hostname "usage: hostname"}
 
    ; echo, test and [ read no options at all -- posix says so, and a script writing
    ; `echo --help` means the word. cook and lush answer the flags themselves, each
@@ -449,7 +479,7 @@
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
    ; is the leading words only, which leaves `ps aux` (no dash) exactly as it was.
-   korebare '(arch nproc whoami groups uptime pwd ps free)
+   korebare '(arch nproc whoami groups uptime pwd ps free tty clear hostname)
    korebareok {'ps '("-e" "-A" "-a" "-ax" "-x") 'free '("-g" "-m" "-h")}
    (kobare nm as)
     (: ok (peep korebareok nm ())
@@ -519,6 +549,14 @@ every tool answers --help and --version, and -h and -v where the letter is free
   realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
   stat [-c FMT] | du [-sabhc] | df [-hia] | chown | mktemp   ... and what they report
   echo seq yes true false basename dirname     ... and the trivia
+  gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (a/gz.l)
+  tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive (a/tar.l)
+  cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (a/cpio/)
+  dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
+  xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs
+  cal [[MONTH] YEAR]                           a month, laid out (weeks open Sunday)
+  timeout [-s SIG] [-k DUR] DUR CMD [ARG..]    a command, and the clock that ends it
+  which [-a] NAME.. | tty | clear | hostname   ... and the four short answers
 "
    (usage _) (: _ (say err kore-usage) 2)
    (bn p) (: n (tally p)

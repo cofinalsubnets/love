@@ -185,6 +185,63 @@
        fmt (? (string? <>p) <>p "%a %b %e %H:%M:%S %Z %Y")
        _ (say out (udatef fmt ms)) _ (put out 10) _ (flush out) 0)
 
+   ; -- cal: a month, laid out. the whole thing rides core.l's two calendar rows -- the
+   ; weekday of the 1st is its day count mod 7, and the length of the month is the gap
+   ; to the next 1st, so the leap year needs no table and no test. `cal` alone is this
+   ; month, `cal M Y` a named one, `cal Y` the twelve. weeks open on Sunday, as cal's do.
+   ; it sits here and not beside udays because the month names do: fs.l and core.l are
+   ; catted ahead of this file and neither wants the long spelling.
+   (ucal-wd y m) (% ((udays y m 1) + 4) 7)          ; the 1st's weekday, 0 Sunday
+   (ucal-len y m) ((udays (? (m = 12) (y + 1) y) (? (m = 12) 1 (m + 1)) 1) - (udays y m 1))
+   ucal-hdr "Su Mo Tu We Th Fr Sa"                  ; 20 wide, and so is every row under it
+   (ucal-mid w s) (: n (tally s) (urpad w (upad ((// ((w - n) + 1) 2) + n) s)))
+   ; SIX rows always, blank ones included, each the full 20 -- cal pads rather than
+   ; trims, which is the whole reason a month is a fixed block that tiles across
+   (ucal-weeks y m)
+    (: lead (ucal-wd y m) len (ucal-len y m)
+       (cell d) (? ((d < 1) || (len < d)) "  " (upad 2 (show d)))
+       (row r) (: o (jug 0)
+                  (go c) (? (7 <= c) (slurp o)
+                            (: _ (? c (put o 32) 0)
+                               _ (say o (cell (((* 7 r) + c) - (lead - 1))))
+                               (go (c + 1))))
+                  (go 0))
+       (go r acc) (? (6 <= r) (rev acc) (go (r + 1) ((row r) . acc)))
+       (go 0 ()))
+   (ucal-say l) (: _ (say out l) (put out 10))
+   (ucal-tri a b c) (a + "   " + b + "   " + c)     ; three columns -> the 66-wide line
+   (cal-main as)
+    (: ymd (ucivil (// (// (clock 0) 1000) 86400))
+       (bad _) (udie 2 "usage: cal [[MONTH] YEAR]")
+       ms (? !(two? as) [<>ymd <ymd]
+             !(two? >as) (: y (uatoi <as) _ (? (0 < y) 0 (bad 0)) ['all y])
+             (: m (uatoi <as) y (uatoi <>as)
+                _ (? ((1 <= m <= 12) && (0 < y)) 0 (bad 0))
+                [m y]))
+       m <ms y <>ms
+       ; a quarter: three titles, three headers, then the six week rows abreast
+       (quarter k)
+        (: ms3 [k (k + 1) (k + 2)]
+           (col f) (map f ms3)
+           ts (col (\ j (ucal-mid 20 (udt-mol (j - 1)))))
+           ws (col (\ j (ucal-weeks y j)))
+           w1 <ws w2 <>ws w3 <>>ws
+           _ (ucal-say (ucal-tri <ts <>ts <>>ts))
+           _ (ucal-say (ucal-tri ucal-hdr ucal-hdr ucal-hdr))
+           (go r) (? (6 <= r) 1
+                     (: _ (ucal-say (ucal-tri (w1 r) (w2 r) (w3 r)))
+                        (go (r + 1))))
+           (go 0))
+       _ (? (= m 'all)
+            (: _ (ucal-say (ucal-mid 66 (show y)))
+               _ (put out 10)
+               (: (go k) (? (12 < k) 1 (: _ (quarter k) (go (k + 3)))) (go 1)))
+            (: _ (ucal-say (ucal-mid 20 ((udt-mol (m - 1)) + " " + (show y))))
+               _ (ucal-say ucal-hdr)
+               _ (map ucal-say (ucal-weeks y m))
+               1))
+       _ (flush out) 0)
+
    ; -- id: who this process is. -u/-g/-G the ids, -n their names, and the bare face
    ; GNU's uid=/gid=/groups= line. the supplementary groups are read out of
    ; /etc/group -- there is no getgroups here and no nss anywhere, so a box whose groups
@@ -235,6 +292,97 @@
        gs (ugroups nm (getgid 0))
        _ (say out (ujoin (map (\ g (uidname "/etc/group" g)) gs)))
        _ (put out 10) _ (flush out) 0)
+
+   ; -- hostname: the name the kernel keeps. uname -n reads the same line, and this is
+   ; the spelling a script asks by; no setting, which wants privilege and a syscall --
+   (hostname-main _)
+    (: _ (say out (u-1line "/proc/sys/kernel/hostname" "unknown"))
+       _ (put out 10) _ (flush out) 0)
+
+   ; -- tty: the terminal on stdin, named. there is no ttyname(3) here, so the answer
+   ; comes off /proc/self/fd/0 -- the same link, by another road. GNU's exit codes:
+   ; 0 a terminal, 1 not one --
+   (tty-main _)
+    (: t? (two? (tty in))
+       r (readlink "/proc/self/fd/0")
+       _ (say out (? !t? "not a tty" (? (string? r) r "/dev/tty")))
+       _ (put out 10) _ (flush out)
+       (? t? 0 1))
+
+   ; -- clear: home, erase, and drop the scrollback. the third (xterm's 3J) is what a
+   ; modern clear sends and the reason `clear` and ^L are not the same key --
+   (clear-main _) (: _ (say out "\e[H\e[2J\e[3J") _ (flush out) 0)
+
+   ; -- which: the first PATH member holding NAME and letting us run it; -a names
+   ; every one. a NAME carrying a slash is a path already and answers for itself.
+   ; exit 1 where a name went unfound, as GNU's does --
+   (uwhich-try p) ((t-file "-f" p) && (t-file "-x" p))
+   (uwhich nm all?)                             ; -> the hits, in PATH order
+    (? (0 < (lastslash nm)) (? (uwhich-try nm) [nm] ())
+       (: pv (getenv "PATH")
+          ds (usplit 58 (? (string? pv) pv ""))
+          (go l acc) (? !(two? l) (rev acc)
+                        (: d (? (0 < tally <l) <l ".")
+                           p (d + "/" + nm)
+                           (? !(uwhich-try p) (go >l acc)
+                              all? (go >l (p . acc))
+                              (rev (p . acc)))))
+          (go ds ())))
+   (which-main as)
+    (: a? (two? as && (<as = "-a"))
+       ns (? a? >as as)
+       _ (? (two? ns) () (udie 2 "usage: which [-a] NAME.."))
+       (go l bad)
+        (? !(two? l) (: _ (flush out) bad)
+           (: hs (uwhich <l a?)
+              _ (map (\ p (: _ (say out p) (put out 10))) hs)
+              (go >l (? (two? hs) bad 1))))
+       (go ns 0))
+
+   ; -- timeout: run a command, and end it if it outruns the clock. `gather` polls
+   ; without blocking, so the wait and the deadline are the one loop; the signal is
+   ; TERM unless -s names another, and -k arms a KILL that far past it. GNU's status:
+   ; 124 for a command the clock ended, 125 for our own trouble, 126/127 for one that
+   ; would not start, and otherwise the command's own --
+   ; usignum wants the dash the command line writes; -s spells the bare name
+   (utmo-flags a sig kill)
+    (? !(two? a) [sig kill a]
+       (<a = "-s") (? (two? >a) (utmo-flags >>a (usignum ("-" + <>a)) kill)
+                      (udie 125 "timeout: -s wants a signal"))
+       (<a = "-k") (? (two? >a) (utmo-flags >>a sig (udur <>a))
+                      (udie 125 "timeout: -k wants a duration"))
+       [sig kill a])
+   ; the deadline and the wait are ONE loop: gather polls without blocking, so there
+   ; is no alarm to arm and no handler to run. `sent` is the elapsed reading the signal
+   ; went out at and () while the command still has its time; k? says the KILL followed
+   (utmo-wait p t0 lim sig kill)
+    (: (go sent k?)
+        (: r (gather p)
+           (? (two? r) (? (charm? sent) 124 <r)  ; a child we ended reads 124, not its own
+              (nom? r) 125
+              (: el (clock t0)
+                 fire (? (!(charm? sent) && (lim <= el)) el sent)
+                 _ (? (= fire sent) 0 (still p sig))
+                 k2 (? ((!k? && charm? fire) && (charm? kill && ((fire + kill) <= el)))
+                       (: _ (still p 9) 1)
+                       k?)
+                 _ (rest 20)
+                 (go fire k2))))
+       (go () 0))
+   (timeout-main as)
+    (: fp (utmo-flags as 15 ())
+       sig <fp kill <>fp ops <>>fp
+       _ (? (two? ops && two? >ops) ()
+            (udie 125 "usage: timeout [-s SIG] [-k DUR] DURATION CMD [ARG..]"))
+       _ (? (charm? sig) () (udie 125 "timeout: unknown signal"))
+       lim (udur <ops)
+       _ (? (charm? lim) () (udie 125 ("timeout: invalid duration '" + <ops + "'")))
+       cmd >ops
+       t0 (clock 0)
+       p (spawn cmd)
+       (? (nom? p) (: _ (say err ("timeout: cannot run " + <cmd)) _ (put err 10) (uleave 127))
+          (lim = 0) (wait p)                    ; a zero duration is no limit, as GNU has it
+          (utmo-wait p t0 lim sig kill)))
 
 
    ; ---- chroot, mount and umount: the three the distro's own boot asks for -------
@@ -564,12 +712,15 @@
    ; -- xargs: stdin's words onto the command's tail (echo when none), -n N a
    ; batch at a time. exits 0 clean, 123 when a run failed, 127 when one
    ; could not exec. quote-blind: words split on whitespace alone --
+   ; -n takes its count spaced or glued (-n2 and -n 2 both); a glued one is how every
+   ; script writes it, and read as the command it used to spawn the word `-n2`
    (xargs-main as)
-    (: nflag (two? as && (<as = "-n"))
-       _ (? (nflag && !(two? >as)) (udie 1 "usage: xargs [-n N] [CMD ARGS..]") ())
-       nn (? nflag (uatoi <>as) ())
+    (: g1 (two? as && (2 < tally <as) && (snip <as 0 2 = "-n"))
+       nflag (g1 || (two? as && (<as = "-n")))
+       _ (? ((nflag && !g1) && !(two? >as)) (udie 1 "usage: xargs [-n N] [CMD ARGS..]") ())
+       nn (? g1 (uatoi (snip <as 2 (tally <as))) nflag (uatoi <>as) ())
        _ (? (nflag && (nn < 1)) (udie 1 "xargs: invalid -n") ())
-       rest (? nflag >>as as)
+       rest (? g1 >as nflag >>as as)
        cmd (? (two? rest) rest '("echo"))
        ws (words (slurp in))
        (chunks k l) (? !(two? l) () (take k l . chunks k (drop k l)))

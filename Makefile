@@ -302,19 +302,22 @@ holo_obj = l/holo/elf.l l/holo/obj.l l/holo/link.l
 # the compiler over them
 moon_mid = a/moon/floor.l a/moon/lex.l a/moon/cpp.l a/moon/parse.l \
   a/moon/val.l a/moon/gen.l a/moon/lib/mksys.l a/moon/moon.l
+# the archives: the codec, then the two containers over it. a kore member rather than
+# a crew one because the distro's /bin IS the kore cat -- a userland that cannot open
+# a tarball is not one, and these are the tools that open every tarball there is.
+kore_arc = a/gz.l a/tar.l a/cpio/cpio.l a/cpio/cpiocmd.l
 # the tls stack and the multi-call door that ends kore's cat
 kore_net = a/tls/bytes.l a/tls/chacha.l a/tls/poly1305.l a/tls/client.l \
   a/kore/wget.l a/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = a/sb/merge.l a/sb/http.l a/sb/sb.l a/kiosko/kiosko.l \
-  a/gz.l a/tar.l a/cpio/cpio.l \
-  a/cpio/cpiocmd.l a/fat/fat.l a/fat/fatcmd.l \
+  a/fat/fat.l a/fat/fatcmd.l \
   a/source.l a/lapiz.l \
   a/libra/salt.l a/libra/libra.l a/vi/hueweb.l a/kiosko/web.l \
   a/harp/harp.l a/harp/play.l \
   a/x11.l a/ink.l a/rove/rove.l a/rove/story.l a/rove/design.l a/rove/slop.l \
   a/lux/wire.l a/doom.l a/lupa.l a/mc.l
-korefiles = $(kore_head) $(holo_obj) l/holo/copy.l $(kore_net)
+korefiles = $(kore_head) $(holo_obj) l/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
 # `cc` on inle are this line. the backends ride because the baked set is x64/a64/rv64.
@@ -345,7 +348,7 @@ b/mooncc0.image: b/.mooncc-cat.l $(love0)
 	@$(love0) -l b/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 distfiles = $(kore_head) $(holo_be) l/holo/decode.l l/holo/gas.l \
-            $(holo_obj) l/holo/copy.l $(moon_mid) $(kore_net) $(crewfiles)
+            $(holo_obj) l/holo/copy.l $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
@@ -465,7 +468,9 @@ distro_love    = $(wildcard b/love-raw)
 # kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
 distro_applets = ls cat head tail wc sort uniq grep sed awk find cut tr nl rev cp mv rm \
                  mkdir rmdir ln touch pwd chmod basename dirname seq yes true \
-                 false env sleep kill xargs diff
+                 false env sleep kill xargs diff \
+                 gzip gunzip zcat tar cpio \
+                 dd xxd strings cal timeout which tty clear hostname
 
 # The host kernel is the default imported artifact; override with `make BZIMAGE=...`.
 BZIMAGE ?= /boot/vmlinuz-linux

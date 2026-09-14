@@ -166,6 +166,22 @@ LC_ALL=C sort "$ho/.cu1" | uniq -c > "$g"
 korerun sort "$ho/.cu1" | korerun uniq -c > "$o"; same "uniq -c"
 both "head"     head -n 2 "$ho/.cu1" "$ho/.cu2"
 both "tail"     tail -n 2 "$ho/.cu1" "$ho/.cu2"
+# the SIGNED counts: `tail -n +N` opens at line N and `head -n -N` drops the last N.
+# both used to read as a plain count through uatoi, which has no sign, so each answered
+# an EMPTY stream and exit 0 -- the shape a gate that only ever writes `-n 2` cannot see.
+for c in "+1" "+2" "+9" "2" "-2"; do
+  both "tail -n $c"  tail -n "$c" "$ho/.cu1"
+  both "head -n $c"  head -n "$c" "$ho/.cu1"
+done
+both "tail -n +2 many"  tail -n +2 "$ho/.cu1" "$ho/.cu2"
+both "head -n -1 many"  head -n -1 "$ho/.cu1" "$ho/.cu2"
+printf 'x\ny' > "$ho/.cun"                  # no trailing newline: the clip must keep that
+both "head -n -1 no-nl" head -n -1 "$ho/.cun"
+both "tail -n +2 no-nl" tail -n +2 "$ho/.cun"
+pipe "tail -n +2 stdin" 'a
+b
+c
+'                       tail -n +2
 both "wc"       wc "$ho/.cu1" "$ho/.cu2"
 wc -l < "$ho/.cu1" > "$g"; korerun wc -l < "$ho/.cu1" > "$o"; same "wc -l stdin"
 both "cat"      cat "$ho/.cu1" "$ho/.cu2"
@@ -272,6 +288,22 @@ pipe "tr -d"     'hello world
 '                tr -d aeiou
 pipe "tr -s"     'aa  bb   cc
 '                tr -s ' '
+# -c reads SET1 as its COMPLEMENT. an unknown dash word used to be read as a set, so
+# `tr -c a-z .` translated the literal two-charm set "-c" and answered in silence.
+pipe "tr -c"     'hi there 42
+'                tr -c 'a-z' .
+pipe "tr -cd"    'hi there 42
+'                tr -cd 'a-z\n'
+pipe "tr -cs"    'one two  three
+'                tr -cs '[:alnum:]' '\n'
+# the classes past the three that were spelled: a [:name:] uset does not know stays
+# LITERAL, so `tr -d [:space:]` quietly deleted a, c, e, p, s and the colon instead
+for c in space alpha alnum punct blank xdigit cntrl print graph; do
+  pipe "tr -d [:$c:]" 'a b,c	1F!
+'                     tr -d "[:$c:]"
+done
+korerun tr -Z a b < /dev/null 2>&1 | grep -q 'unknown option' \
+  || fail "kore tr: an unknown flag must be refused, not read as a set"
 pipe "nl"        'a
 
 b
@@ -576,6 +608,17 @@ pipe "xargs -n 2" '1
 5
 '                 xargs -n 2 echo
 pipe "xargs empty" '' xargs echo
+# GLUED -n: every script writes -n1, and the word used to reach spawn as the COMMAND
+pipe "xargs -n1" '1
+2
+3
+'                xargs -n1 echo
+pipe "xargs -n3" '1
+2
+3
+4
+5
+'                xargs -n3 echo
 printf 'x\n' | korerun xargs false; r=$?
 [ $r -eq 123 ] || fail "kore xargs fail exit (rc $r)"
 printf 'x\n' | korerun xargs /no/such/cmd 2>/dev/null; r=$?
@@ -745,6 +788,22 @@ aw rebuild  'BEGIN{OFS="-"}{$1=$1; print}'
 aw setfield '{$2="X"; print}'
 aw nf-set   '{NF=2; print; print NF}'
 aw fs       -F' ' '{print NF}'
+# -F and -v take their value through awk's own string escapes, so a BACKSLASH in one
+# has to survive the walk. it used to reach a second aw-esc -- the SIGNAL escaper, a
+# duplicate name later in the same letrec -- and every such run died `;; awk-exit ()`.
+# -F'\t' is how the flag is nearly always written, and no check here ever held one.
+awktab=$ho/.kore-awktab
+printf 'a\tb\tc\nd\te\tf\n' > "$awktab"
+for spelling in '-F\t' '-F	'; do
+  awk "$spelling" '{print $2}' < "$awktab" > "$g" 2>/dev/null
+  korerun awk "$spelling" '{print $2}' < "$awktab" > "$o" 2>/dev/null
+  same "awk $spelling"
+done
+awk -F '\t' '{print NF}' < "$awktab" > "$g" 2>/dev/null
+korerun awk -F '\t' '{print NF}' < "$awktab" > "$o" 2>/dev/null
+same "awk -F spaced"
+aw vesc     -v 'x=a\tb' 'BEGIN{print x}'
+aw vplain   -v x=3 'BEGIN{print x+1}'
 aw substr   'BEGIN{print substr("hello",2,3), substr("hello",0,3), substr("hello",4)}'
 aw strfns   'BEGIN{print index("hello","ll"), length("hello"), toupper("aBc"), tolower("aBc")}'
 aw split    'BEGIN{n=split("a:b:c",A,":"); print n, A[1], A[3]}'
@@ -1682,3 +1741,128 @@ korerun ls -h > "$o" 2>&1; r=$?
 printf -- '--help\n' > "$g"; korerun echo --help > "$o" 2>/dev/null
 same "echo --help is the word"
 echo "kore: --help / --version at the door ok"
+
+# ---------------------------------------------- the archives, under kore's door
+# gz.l, tar.l and the two cpio files are kore members now, not crew ones: the distro's
+# /bin IS the kore cat, so a userland that cannot open a tarball wants them here. all
+# three cmd modules leak their mains off a BODYLESS letrec (the trailing `_ (pins ..)`),
+# which is the whole of how the registry's cite reaches them -- drop the `_` and the
+# verb falls through to kore's usage screen, silently and with a 2.
+printf 'alpha\nbeta\ngamma\n' > "$ho/.arc1"
+korerun gzip -c < "$ho/.arc1" > "$ho/.arc1.gz" || fail "kore gzip"
+korerun gunzip < "$ho/.arc1.gz" > "$o" || fail "kore gunzip"
+cmp -s "$ho/.arc1" "$o" || fail "kore gzip | gunzip round trip"
+korerun zcat "$ho/.arc1.gz" > "$o" 2>/dev/null || fail "kore zcat"
+cmp -s "$ho/.arc1" "$o" || fail "kore zcat"
+if command -v gzip >/dev/null 2>&1; then
+  gzip -c "$ho/.arc1" > "$ho/.arc1.ggz"
+  korerun gunzip < "$ho/.arc1.ggz" > "$o" || fail "kore gunzip of GNU's gzip"
+  cmp -s "$ho/.arc1" "$o" || fail "kore gunzip of GNU's gzip"
+  gunzip -c "$ho/.arc1.gz" > "$o" 2>/dev/null || fail "GNU gunzip of kore's gzip"
+  cmp -s "$ho/.arc1" "$o" || fail "GNU gunzip of kore's gzip"
+fi
+# tar and cpio: that the verb RESOLVES is the thing this file can go wrong about --
+# each has its own gate for the format. a missing row prints kore's usage, so the
+# check is that the answer is the listing and not the screen.
+rm -rf "$ho/.arcd"; mkdir -p "$ho/.arcd/sub"
+printf 'x\n' > "$ho/.arcd/one.txt"; printf 'y\n' > "$ho/.arcd/sub/two.txt"
+# the cd'd subshells want $K, the ABSOLUTE love: korerun's $m is relative to $PWD
+( cd "$ho" && "$K" kore tar czf .arc.tgz .arcd ) || fail "kore tar czf"
+korerun tar tzf "$ho/.arc.tgz" > "$o" 2>&1 || fail "kore tar tzf"
+grep -q 'one\.txt' "$o" || fail "kore tar: the verb fell through to the usage screen"
+( cd "$ho" && "$K" kore find .arcd | "$K" kore cpio -o --quiet > .arc.cpio ) || fail "kore cpio -o"
+korerun cpio -t < "$ho/.arc.cpio" > "$o" 2>/dev/null || fail "kore cpio -t"
+grep -q 'one\.txt' "$o" || fail "kore cpio: the verb fell through to the usage screen"
+echo "kore: gzip/gunzip/zcat/tar/cpio under kore's door ok"
+
+# ------------------------------------------- dd, xxd, strings, cal and the rest
+# dd: the data AND the two record lines. a partial block is the +1 column, which is
+# the half of dd's report that a `bs=` a file does not divide by is the only way to see
+for c in "bs=1 count=5" "bs=6 skip=1" "bs=7" "bs=1000" "bs=3 count=2"; do
+  # shellcheck disable=SC2086
+  dd if="$ho/.arc1" $c > "$g" 2>/dev/null
+  # shellcheck disable=SC2086
+  korerun dd if="$ho/.arc1" $c > "$o" 2>/dev/null
+  same "dd $c"
+  # shellcheck disable=SC2086
+  dd if="$ho/.arc1" $c of=/dev/null 2>&1 | head -2 > "$g"
+  # shellcheck disable=SC2086
+  korerun dd if="$ho/.arc1" $c of=/dev/null 2>&1 | head -2 > "$o"
+  same "dd records $c"
+done
+korerun dd if="$ho/.arc1" of="$ho/.ddout" bs=2 2>/dev/null || fail "kore dd of="
+cmp -s "$ho/.arc1" "$ho/.ddout" || fail "kore dd if=/of= is a copy"
+korerun dd if="$ho/.arc1" of=/dev/null status=none > "$o" 2>&1
+[ -s "$o" ] && fail "kore dd status=none still spoke" || true
+# xxd: vim's, where the box has it; the -r round trip stands on its own either way
+dd if=/dev/urandom of="$ho/.xxbin" bs=311 count=1 2>/dev/null
+if command -v xxd >/dev/null 2>&1; then
+  for f in .arc1 .xxbin .gs4 .gs5; do
+    xxd "$ho/$f" > "$g" 2>/dev/null; korerun xxd "$ho/$f" > "$o" 2>/dev/null
+    same "xxd $f"
+  done
+  xxd "$ho/.xxbin" | korerun xxd -r > "$o" 2>/dev/null
+  cmp -s "$ho/.xxbin" "$o" || fail "kore xxd -r over GNU's dump"
+fi
+korerun xxd "$ho/.xxbin" | korerun xxd -r > "$o" 2>/dev/null
+cmp -s "$ho/.xxbin" "$o" || fail "kore xxd | xxd -r round trip"
+# strings: the printable runs, the floor moving, and a real binary
+printf 'ab\0hello world\0\1\2cd\0longenough\n' > "$ho/.strbin"
+if command -v strings >/dev/null 2>&1; then
+  for n in "" "-n 2" "-n10"; do
+    # shellcheck disable=SC2086
+    strings $n "$ho/.strbin" > "$g" 2>/dev/null
+    # shellcheck disable=SC2086
+    korerun strings $n "$ho/.strbin" > "$o" 2>/dev/null
+    same "strings $n"
+  done
+  strings -n 12 "$m" > "$g" 2>/dev/null; korerun strings -n 12 "$m" > "$o" 2>/dev/null
+  same "strings over love itself"
+fi
+# cal: SIX week rows always, each padded to 20, and the year three abreast -- the
+# leap years come off udays and want no table, so february is where a wrong one shows
+if command -v cal >/dev/null 2>&1 && cal 9 2026 >/dev/null 2>&1; then
+  for d in "9 2026" "2 2024" "2 2100" "2 2000" "2 2021" "12 1999" "1 1970" "8 2027" "5 2026"; do
+    # shellcheck disable=SC2086
+    cal $d > "$g" 2>/dev/null
+    # shellcheck disable=SC2086
+    korerun cal $d > "$o" 2>/dev/null
+    same "cal $d"
+  done
+  cal 2026 > "$g" 2>/dev/null; korerun cal 2026 > "$o" 2>/dev/null; same "cal 2026 (the year)"
+fi
+# timeout: 124 when the clock wins, the command's own status when it does not, and
+# the whole point -- that it comes back at the deadline and not at the command's end
+t0=$(date +%s)
+korerun timeout 1 sleep 20 > /dev/null 2>&1; r=$?
+t1=$(date +%s)
+[ $r -eq 124 ] || fail "kore timeout: want 124 for a command the clock ended (got $r)"
+[ $((t1 - t0)) -le 5 ] || fail "kore timeout waited $((t1 - t0))s for a 1s limit"
+korerun timeout 9 sh -c 'exit 7' > /dev/null 2>&1; r=$?
+[ $r -eq 7 ] || fail "kore timeout: a command that finishes keeps its status (got $r)"
+[ "$(korerun timeout 9 echo hi 2>/dev/null)" = hi ] || fail "kore timeout: the output passes"
+[ "$(korerun timeout 0 echo hi 2>/dev/null)" = hi ] || fail "kore timeout 0 is no limit"
+korerun timeout -s KILL 1 sleep 20 > /dev/null 2>&1; r=$?
+[ $r -eq 124 ] || fail "kore timeout -s KILL (got $r)"
+korerun timeout -k 1 1 sleep 20 > /dev/null 2>&1; r=$?
+[ $r -eq 124 ] || fail "kore timeout -k (got $r)"
+korerun timeout 9 /nonexistent-xyzzy > /dev/null 2>&1; r=$?
+[ $r -eq 127 ] || fail "kore timeout: a command that will not start is 127 (got $r)"
+# which, tty, clear, hostname
+if command -v which >/dev/null 2>&1; then
+  both "which sh"    which sh
+  both "which -a sh" which -a sh
+fi
+korerun which no-such-tool-xyzzy > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] || fail "kore which: an unfound name exits 1 (got $r)"
+[ "$(korerun which /bin/sh 2>/dev/null)" = /bin/sh ] || fail "kore which: a path answers itself"
+[ "$(korerun hostname 2>/dev/null)" = "$(korerun uname -n 2>/dev/null)" ] \
+  || fail "kore hostname and uname -n read the one file"
+[ "$(korerun tty < /dev/null 2>/dev/null)" = "not a tty" ] || fail "kore tty off a pipe"
+korerun tty < /dev/null > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] || fail "kore tty: not a terminal is exit 1 (got $r)"
+[ "$(korerun clear 2>/dev/null | wc -c)" = 11 ] || fail "kore clear: home, 2J and 3J"
+# the three read no options at all, so a dash word is refused and not ignored
+korerun tty -Z > "$o" 2>&1; r=$?
+[ $r -eq 2 ] && grep -q 'unknown option' "$o" || fail "kore tty -Z must be refused"
+echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname ok"
