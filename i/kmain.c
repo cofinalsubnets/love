@@ -1544,6 +1544,19 @@ static lvm(lvm_fetch) {
   Sp[1] = k_lvm_fetch(Sp[0], Sp[1]);
   ai_musttail return Nextp(1, 1); }
 
+// (kexec path cmd): boot the module at the ramfs PATH with CMD as its boot line, in place
+// of this one -- a seat whose machine is a page's worker can (i/wasm); metal cannot yet.
+// answers only on refusal: -errno
+__attribute__((weak)) long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
+  return (void) p, (void) pn, (void) cmd, (void) cn, -ENOSYS; }
+ai_noinline static word k_lvm_kexec(word pw, word cw) {
+  if (!strp(pw) || !strp(cw)) return ZeroPoint;
+  struct ai_str *p = (struct ai_str*) pw, *c = (struct ai_str*) cw;
+  return putcharm((intptr_t) k_kexec(p->bytes, p->len, c->bytes, c->len)); }
+static lvm(lvm_kexec) {
+  Sp[1] = k_lvm_kexec(Sp[0], Sp[1]);
+  ai_musttail return Nextp(1, 1); }
+
 // the bake door: the heap as image bytes, written whole to one ramfs file
 static void k_bake(struct ai *g, char const *path) {
   uintptr_t n = 0;
@@ -2011,6 +2024,7 @@ static union u
   nif_disk_read[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_read}, {lvm_ret0}},
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
   nif_fetch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fetch}, {lvm_ret0}},
+  nif_kexec[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kexec}, {lvm_ret0}},
 #if defined(__x86_64__)
   nif_svm[] = {{lvm_svm}, {lvm_ret0}},
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
@@ -2099,7 +2113,8 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   // the console's own size. the no-op roster below pins `tty` only where the seat
   // lacks it, so landing it here takes the stub off by existing.
   {"tty", {.k = nif_tty}},
-  {"fetch", {.k = nif_fetch}} };
+  {"fetch", {.k = nif_fetch}},
+  {"kexec", {.k = nif_kexec}} };
 
 // the kore cat is CATTED FROM THE RAMFS at boot -- the blob initrd carries every
 // member, so only the ORDER is baked: the korefiles roster, one line.

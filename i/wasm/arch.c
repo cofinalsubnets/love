@@ -24,6 +24,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_lift 0x4010
 #define hc_scan 0x4011
 #define hc_drew 0x4012
+#define hc_kexec 0x4013                     // ("path\\0cmd", n): what the next reset boots
 #define hc_fetch_open 0x4020                // (url, n) -> the body's length, or -errno
 #define hc_fetch_read 0x4021                // (buf, n) -> bytes copied, on from the last
 #define hc_fetch_close 0x4022
@@ -113,6 +114,18 @@ long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
 
 // the reset: the worker unwinds the module and boots it again
 void k_reset(void) { for (;;) __ai_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
+// ..and into another module: the path and the boot line go into the lift slot, and the
+// worker reads the file at the reset the way it lifts one, then boots those bytes
+long k_kexec(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn) {
+  unsigned char b[256];
+  if (pn + 1 + cn >= sizeof b) return -ENAMETOOLONG;
+  for (uintptr_t i = 0; i < pn; i++) b[i] = (unsigned char) p[i];
+  b[pn] = 0;
+  for (uintptr_t i = 0; i < cn; i++) b[pn + 1 + i] = (unsigned char) cmd[i];
+  long r = __ai_sys(hc_kexec, (long) b, (long) (pn + 1 + cn), 0, 0, 0, 0);
+  if (r < 0) return r;
+  k_reset();
+  return 0; }
 // a path for the page to carry out: it lands in the shared lift slot and the request is
 // raised, and the worker's loop reads the file and posts it at its next idle
 void k_lift_ask(unsigned char const *p, uintptr_t n) {

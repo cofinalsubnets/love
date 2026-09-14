@@ -22,9 +22,9 @@
 // one from, so the block sits well clear of any syscall table (i/wasm/horn.c).
 const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003,
-             lift: 0x4010, scan: 0x4011, drew: 0x4012,
+             lift: 0x4010, scan: 0x4011, drew: 0x4012, kexec: 0x4013,
              fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022 };
-const ENOENT = 2, EBADF = 9, ENOSYS = 38;
+const ENOENT = 2, EBADF = 9, ENOSYS = 38, ENAMETOOLONG = 36;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
 // asks for, [8] the horn's rate (0 closed) with [9] frames written and [10] played, and
@@ -74,16 +74,24 @@ const fetchOpen = (url) => {
       body = new Uint8Array(x.response); } }
   catch (e) { body = null; return -ENOENT; }
   return body.length; };
-const lift = (when) => {
-  if (!ex || Atomics.load(ctl, 3) !== when) return;
+// ..and 3, at the reset, is a kexec: the slot holds a path, a NUL and a boot line, and
+// the file's bytes become the module the machine boots next, with that line, no image --
+// the way a page reloads what the machine built. the boot message is rewritten in place,
+// so every reset after it boots the new module too
+const lift = (when, msg) => {
+  if (!ex) return;
+  const kind = Atomics.load(ctl, 3);
+  if (kind !== when && !(kind === 3 && when === 2)) return;
   const raw = new Uint8Array(ctl.buffer, lift_at, lift_n);
   let n = 0; while (n < lift_n && raw[n]) n++;
   const path = dec.decode(raw.slice(0, n));
+  let cmd = null;
+  if (kind === 3) { let e = n + 1; while (e < lift_n && raw[e]) e++; cmd = dec.decode(raw.slice(n + 1, e)); }
   Atomics.store(ctl, 3, 0);
   const at = top + 256, buf = top + 512, bufn = 4096 - 512;
   u8().set(raw.subarray(0, n), at);
   const fd = Number(call(ex.k_fs_open, at, n, 114));     // 'r'
-  if (fd < 0) { post({ lift: path, error: -fd }); return; }
+  if (fd < 0) { post(kind === 3 ? { kexec: path, error: -fd } : { lift: path, error: -fd }); return; }
   const parts = [];
   for (;;) {
     const k = Number(call(ex.k_fd_read, fd, buf, bufn));
@@ -92,6 +100,7 @@ const lift = (when) => {
   call(ex.k_fd_close, fd);
   const bytes = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
   for (let o = 0, i = 0; i < parts.length; o += parts[i++].length) bytes.set(parts[i], o);
+  if (kind === 3) { msg.wasm = bytes.buffer; msg.image = null; msg.cmd = cmd; post({ kexec: path, cmd }); return path; }
   post({ lift: path, bytes }); };
 
 // the canvas was resized under the running machine: the page leaves the new size in the
@@ -290,6 +299,14 @@ const sys1 = (n, a, b, c) => {
       raw.set(u8().subarray(p, p + n));
       Atomics.store(ctl, 3, 1);
       return 0n; }
+    case NR.kexec: {                                    // the path, a NUL, the boot line: read at the reset
+      const p = Number(a), n = Number(b);
+      if (n >= lift_n) return BigInt(-ENAMETOOLONG);
+      const raw = new Uint8Array(ctl.buffer, lift_at, lift_n);
+      raw.fill(0);
+      raw.set(u8().subarray(p, p + n));
+      Atomics.store(ctl, 3, 3);
+      return 0n; }
     default: return BigInt(-ENOSYS); } };
 
 // moon's convention: 16 params in (8 i64, 8 f64), (i64 i64 f64 f64) out
@@ -355,5 +372,5 @@ async function run(msg) {
     catch (e) {
       // a lift asked for at the end, and the card shut: a machine that has gone does not
       // leave a rate standing for the next one's first frames to be played under
-      if (e instanceof Reboot) { Atomics.store(ctl, c_rate, 0); lift(2); post({ reset: true }); continue; }
+      if (e instanceof Reboot) { Atomics.store(ctl, c_rate, 0); const into = lift(2, msg); post({ reset: true, into }); continue; }
       flush(); post({ fault: String(e?.stack ?? e) }); return; } } }

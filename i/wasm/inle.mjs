@@ -13,8 +13,11 @@
 // --horn names a file to lay what the machine PLAYS in, as raw 16-bit stereo at the
 // horn's own rate: the AudioWorklet a page has, headless. --press names keys (scan.mjs's
 // names, e.code's spelling) pressed and released in turn on the scan lane, --after
-// seconds into the run: a game's keys, which no tty byte can carry. --for ends the run
-// after that many seconds, with the status timeout(1) gives, for a program that never quits.
+// seconds into the run, or five seconds after a line of the serial output holds that
+// text: a game's keys, which no tty byte can carry. --for ends the run after that many
+// seconds, with the status timeout(1) gives, for a program that never quits. a kexec
+// aboard (the machine booting a module it built) is reported and the run goes on; the
+// plain reset still ends it.
 // --origin DIR is the page's network: what the machine fetches (kmain's fetch door) is read
 // as a file under DIR, where a page would ask its own origin.
 //   usage: node i/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm]
@@ -39,7 +42,7 @@ while (args[0]?.startsWith('--')) {
   else if (o === '--horn') hornFile = args.shift();
   else if (o === '--deaf') deaf = true;
   else if (o === '--press') press = args.shift().split(/\s+/).filter(Boolean);
-  else if (o === '--after') after = Number(args.shift());
+  else if (o === '--after') { const v = args.shift(); after = /^[\d.]+$/.test(v) ? Number(v) : v; }
   else if (o === '--for') forS = Number(args.shift());
   else if (o === '--origin') origin = args.shift();
   else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
@@ -98,14 +101,21 @@ else if (deaf) Atomics.store(ctl, c_live, 1);
 const cpu = new Worker(new URL('./cpu.mjs', import.meta.url));
 const leave = (code) => { if (process.stdin.isTTY) process.stdin.setRawMode(false); process.exit(code); };
 cpu.on('message', (m) => {
-  if (m.serial !== undefined) process.stdout.write(m.serial);
+  if (m.serial !== undefined) {
+    process.stdout.write(m.serial);
+    if (typeof after === 'string' && !pressed) {
+      serialSeen = (serialSeen + m.serial).slice(-4096);
+      if (serialSeen.includes(after)) pressAll(5000); } }
+  else if (m.kexec !== undefined) {
+    if (m.error) { process.stderr.write(`inle: kexec ${m.kexec}: errno ${m.error}\n`); process.exitCode = 1; }
+    else process.stderr.write(`inle: booting ${m.kexec} -- ${m.cmd}\n`); }
   else if (m.lift !== undefined) {
     if (m.error) { process.stderr.write(`inle: lift ${m.lift}: errno ${m.error}\n`); process.exitCode = 1; }
     else {
       // asked for by --lift it goes where that said; asked for aboard, beside the runner
       const to = liftReq ? liftReq.to : (m.lift.split('/').pop() || 'lift');
       writeFileSync(to, m.bytes); process.stderr.write(`inle: ${m.lift} -> ${to} (${m.bytes.length} bytes)\n`); } }
-  else if (m.reset) leave(process.exitCode ?? 0);
+  else if (m.reset) { if (!m.into) leave(process.exitCode ?? 0); }   // a kexec's reset boots on
   else if (m.fault) { process.stderr.write('\ninle: ' + m.fault + '\n'); leave(1); } });
 cpu.on('error', (e) => { process.stderr.write('\ninle: ' + e + '\n'); leave(1); });
 // the boot line is one string the kernel splits quote-aware (kmain's bootargv), so a
@@ -114,13 +124,19 @@ const word = (a) => !/[\s"']/.test(a) ? a : !a.includes('"') ? '"' + a + '"' : "
 cpu.postMessage({ wasm: readFileSync(wasm), ring, ram: Number(process.env.INLE_RAM ?? 256),
                   cmd: cmd.map(word).join(' '), fb, image, origin });
 
-// the presses: a make, the break 60 ms behind it, the next key 300 ms on
-if (press.length) {
+// the presses: a make, the break 60 ms behind it, the next key 300 ms on -- from --after's
+// second, or five seconds after its text shows on the serial line
+let pressed = false, serialSeen = '';
+const pressAll = (delay) => {
+  if (pressed) return;
+  pressed = true;
   const send = scanlane(ring, ctl, { scan_at, scan_n, c_sh, c_st });
-  for (const k of press) if (!(k in codes)) { console.error('inle.mjs: --press: no key ' + k); process.exit(2); }
   press.forEach((k, i) => {
-    setTimeout(() => send(k, 0), after * 1000 + i * 300).unref();
-    setTimeout(() => send(k, 1), after * 1000 + i * 300 + 60).unref(); }); }
+    setTimeout(() => send(k, 0), delay + i * 300).unref();
+    setTimeout(() => send(k, 1), delay + i * 300 + 60).unref(); }); };
+if (press.length) {
+  for (const k of press) if (!(k in codes)) { console.error('inle.mjs: --press: no key ' + k); process.exit(2); }
+  if (typeof after === 'number') pressAll(after * 1000); }
 if (forS) setTimeout(() => { process.stderr.write('inle: the machine outran --for\n'); leave(124); }, forS * 1000).unref();
 
 if (process.stdin.isTTY) process.stdin.setRawMode(true);

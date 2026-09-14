@@ -585,15 +585,15 @@ kcc = $(mooncc) $(kcppflags) -t $a
 kernel: $(k_elf)
 
 $(k_odir)/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
-$(k_odir)/moonlibc.o: $(rt_slice) u/mkrt.l $m
+$(k_odir)/moonlibc.o: $(rt_slice) u/mkrt.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m u/mkrt.l $@ $a
-$(k_odir)/src.o: $(dist_source) u/mksrc.l $m
+$(k_odir)/src.o: $(dist_source) u/mksrc.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $m u/mksrc.l $(dist_source) $@ $a
-$(k_pie): $(k_o) $m
+$(k_pie): $(k_o) $(mdep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -pie -t $a $(k_o) -o $@
@@ -606,7 +606,7 @@ $(k_pie): $(k_o) $m
 ifeq ($a,wasm)
 k_libc_c =
 k_mach_o = $(k_doom_o)
-$(k_mod): $(k_o) $m b/.doom.flag
+$(k_mod): $(k_o) $(mdep) b/.doom.flag
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -t $a $(k_o) -o $@
@@ -634,7 +634,7 @@ ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
 endif
-$(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
+$(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a && test -s $@
@@ -712,7 +712,7 @@ $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-$(k_odir)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l $m
+$(k_odir)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $m u/mkblob.l $< $@ doom_wad $a
@@ -757,14 +757,14 @@ $(xd)/love: $(xkart_o)
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
-$(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $m
+$(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -q -e '(lay-$* "$@" "$a")' && test -s $@
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.
-$(k_tail_o): $m
+$(k_tail_o): $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m -q -e "((cite 'moon 'mksys-$a) \"$@\")" && test -s $@
@@ -821,7 +821,7 @@ $(k_uefid)/loader.o: $R/i/uefi/loader.c $(ho)/love
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(mooncc) -t $a -c $< $@
-$(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $m
+$(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $(mdep)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@{ echo "(borrow 'holo)"; cat $(uefi_l); echo '(mkboot "$@" "$a" (list "$<"))'; } | $m

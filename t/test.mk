@@ -1328,6 +1328,19 @@ test_doomwasm:
 	 && test -s b/wasm/doom.ppm && test -s b/wasm/doom.raw \
 	   || { tail -20 b/wasm/doom.log; echo "FAIL test_doomwasm"; exit 1; }
 	@echo "  doomwasm: ok -- drew, sounded, and quit from the menu"
+	@rm -rf b/wasm/origin && mkdir -p b/wasm/origin && cp b/love.wasm b/wasm/origin/doom.wasm
+	@$(MAKE) -s wasm
+	@echo TEST t/kernel/kexec.l "(the machine fetches the doom module off its origin and boots it in place of itself)"
+	@rm -f b/wasm/kexec.ppm
+	@INLE_RAM=512 $(NODE) $(R)/i/wasm/inle.mjs --fb 640x400 --dump b/wasm/kexec.ppm --origin b/wasm/origin \
+	   --after "I_InitGraphics: Auto-scaling" --press "Escape ArrowUp Enter KeyY" --for 300 \
+	   --image b/wasm/love.image $(R)/b/love.wasm t/kernel/kexec.l \
+	   < /dev/null > b/wasm/kexec.log 2>&1 \
+	 && grep -q "inle: booting /d.wasm" b/wasm/kexec.log \
+	 && grep -q "I_InitGraphics: DOOM screen size" b/wasm/kexec.log \
+	 && grep -q "doom-rc=0" b/wasm/kexec.log && test -s b/wasm/kexec.ppm \
+	   || { tail -20 b/wasm/kexec.log; echo "FAIL test_doomwasm (kexec)"; exit 1; }
+	@echo "  kexec: ok -- fetched, booted, drawn, and quit"
 endif
 
 # test_seedwasm -- `love seed x64` ON THE WASM SEAT: the machine lays the source it

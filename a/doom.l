@@ -5,9 +5,10 @@
 ;
 ; from a love with no doom in it, the verb lays this binary's source under ./love-<ver>/,
 ; fetches doomgeneric and the shareware IWAD there, builds DOOM=1 once and runs that binary
-; (doom-nest below); from one built with DOOM=1 it is the window right away. on inle
-; there is no window and nothing to fetch with: the game is in the kernel (a page laid by
-; `love web -doom`) and runs whole on the console, or it is not there.
+; (doom-nest below); from one built with DOOM=1 it is the window right away. on inle the
+; game is in the kernel and runs whole on the console, or the machine lays the nest off
+; its own tree, fetches the pair from the page that serves it, builds the module with
+; the game inside and boots that (doom-nest-inle).
 ;
 ; the game is C, linked into this binary by the DOOM=1 lane (i/doom.c's host
 ; doors: doom-start / doom-tick / doom-frame / doom-key); this file is the window.
@@ -129,12 +130,15 @@
    wad-url "https://raw.githubusercontent.com/Daivuk/PureDOOM/master/doom1.wad"
    dg-url "https://codeload.github.com/ozkl/doomgeneric/tar.gz/refs/heads/master"
    (note s) (say err (";; " + s + "\n"), flush err)
-   (run-in dir argv)                                                          ; spawn in dir, wait -> status
+   ; spawn in dir, wait -> status. the cwd comes back only after the wait: on inle it is
+   ; the machine's one cwd, and a task spawned there would be moved with it
+   (run-in dir argv)
     (: here (cwd 0)
        _ (chdir dir)
        p (spawn argv)
+       st (charm? p ? (wait p) 1)
        _ (chdir here)
-       (charm? p ? (wait p) 1))
+       st)
    (fetch url path)
     (? (two? (stat path)) 0
        (: _ (note ("fetching " + url))
@@ -147,17 +151,19 @@
    (nest-doom? nest)
     (: q (open (nest + "/b/.doom.flag") "r")
        (hot? q && (: s (slurp q) _ (close q) (string? s && s = "DOOM=1\n"))))
-   ; the pair the DOOM=1 lane wants, fetched into DL once: 0 when both stand there.
-   ; `love web -doom` calls it too, for a page with the game inside
-   (doom-fetch dl)
+   ; the pair the DOOM=1 lane wants, fetched into DL once from the two urls: 0 when both
+   ; stand there. `love web --doom` calls it too, for a page with the game inside -- and
+   ; the tarball is kept, because a machine under that page fetches it from there
+   ; (doom-nest-inle: the page's origin is that machine's whole network)
+   (doom-fetch dl wurl durl)
     (: _ (mkdir dl 493)
-       r1 (fetch wad-url (dl + "/doom1.wad"))
+       r1 (fetch wurl (dl + "/doom1.wad"))
        r2 (? (two? (stat (dl + "/doomgeneric"))) 0
-             (: r (fetch dg-url (dl + "/doomgeneric.tgz"))
+             (: r (fetch durl (dl + "/doomgeneric.tgz"))
               (r != 0 ? r
                (cite 'tarcmd 'tar-main ["xzf" (dl + "/doomgeneric.tgz") dl],
-                rename (dl + "/doomgeneric-master") (dl + "/doomgeneric"),
-                unlink (dl + "/doomgeneric.tgz"),
+                (two? (stat (dl + "/doomgeneric-master")) ?
+                   (rename (dl + "/doomgeneric-master") (dl + "/doomgeneric")) 0),
                 unlink (dl + "/pax_global_header"),              ; the tarball's pax row, laid as a file
                 two? (stat (dl + "/doomgeneric")) ? 0 1))))
        (r1 != 0 || r2 != 0 ? 1 0))
@@ -178,7 +184,7 @@
             (fail $ "cannot run " + bin + " (" + show e + ")"))
           (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
              (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
-                (? (doom-fetch dl) (fail "the downloads did not land")
+                (? (doom-fetch dl wad-url dg-url) (fail "the downloads did not land")
                    (: _ (cite 'source 'src-arm nest exe)                     ; autonomous: ours throughout
                       _ (note "building the nest's love with doom inside -- this binary is the toolchain")
                       st2 (run-in nest [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
@@ -188,6 +194,37 @@
                         (fail ("cannot run " + bin + " (" + show e + ")"))))))))))
 
    (inle? _) (? (elem 'love-os (names ())) (elem (ev 'love-os) '(inle wasm)) 0)
+   ; --- the nest on inle: the same lay, off this machine's own tree, with the page as
+   ; the network (the pair served beside it, /dl/) and no binary to exec -- cook runs as
+   ; a task under the same registry, seed's way, and LOVE=love names this kernel as the
+   ; toolchain. the module it lays cannot be run from here, so the machine boots it
+   ; (kexec) in place of this one, and that one carries the game
+   (doom-nest-inle _)
+    (: here (cwd 0)
+       nest ((here = "/" ? "" here) + "/love-" + love-version)     ; the page's shell sits at /
+       dl (nest + "/dl")
+       mod (nest + "/b/love.wasm")
+       boot "sh -c 'doom; sh'"
+       (fail s) (say err ("doom: " + s + "\n"), 1)
+       (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
+          (two? (stat mod) && nest-doom? nest)
+           (: _ (note ("booting " + mod))
+              e ((ev 'kexec) mod boot)
+              (fail ("cannot boot " + mod + " (" + show e + ")")))
+          (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
+             (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
+                (doom-fetch dl "/dl/doom1.wad" "/dl/doomgeneric.tgz") (fail "the page does not serve the pair -- `love web --doom` lays one that does")
+                (: _ (setenv "LOVE" "love")
+                   _ (setenv "LUSHFLAGS" "-a")
+                   _ (setenv "CC" "cc")
+                   _ (setenv "LOVE_ARMED" "1")
+                   _ (note "building this machine's love with doom inside -- the machine is the toolchain")
+                   st (run-in nest ["cook" "wasm" "DOOM=1"])
+                   (? (st != 0) (fail "the doom build failed")
+                      (one? (stat mod)) (fail ("the build left no module at " + mod))
+                      (: _ (note ("booting " + mod))
+                         e ((ev 'kexec) mod boot)
+                         (fail ("cannot boot " + mod + " (" + show e + ")")))))))))
    (digits s) (:- (go 0 0) n #s (go i a) (n <= i ? a
                (: c (s i) (47 < c < 58 ? (go (i + 1) (a * 10 + c - 48)) a))))
    doom-usage "usage: love doom [-iwad FILE] [-display :N] [-frames N]"
@@ -199,8 +236,7 @@
        frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))
        ; on inle the game is linked in or it is not: no window, no nest, and nothing to
        ; fetch with -- the WAD is a baked file and (doom ()) runs it whole
-       (? (inle? 0) (? (elem 'doom (names ())) (doom ())
-                       (say err "doom: this machine carries no doom -- a page laid by `love web --doom` does\n", 1))
+       (? (inle? 0) (? (elem 'doom (names ())) (doom ()) (doom-nest-inle 0))
           !(elem 'doom-start (names ())) (doom-nest as)
           (one? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (: dn (dispof (string? disp ? disp ""))

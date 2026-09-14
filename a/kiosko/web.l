@@ -29,7 +29,8 @@
 ; is built and served. this binary drives the build and no love is compiled for it. the
 ; --doom fetches doomgeneric and the shareware IWAD into the nest's dl/ (a/doom.l's pair),
 ; and a nest that carries them -- by this flag or by `love doom` -- gets its module laid
-; DOOM=1, so the game is aboard the page and `doom` at its shell runs it. the
+; DOOM=1, so the game is aboard the page and `doom` at its shell runs it; a page without
+; it serves the pair all the same, and `doom` at its shell builds the game aboard. the
 ; two isolation headers kiosko's reply sends are what let inle.html's machine run here
 ; without its service worker.
 ;
@@ -177,7 +178,8 @@ tree is served. this binary drives the page's build; no love is compiled for it.
              build? (sv-lay dir0)
              dir0)
       _ (? (doom? && build? && sv-tree? dir)
-           ((cite 'doom 'doom-fetch) (dir + "/dl") ? (sv-die 1 "the doom downloads did not land") 0)
+           ((cite 'doom 'doom-fetch) (dir + "/dl") (cite 'doom 'wad-url) (cite 'doom 'dg-url)
+            ? (sv-die 1 "the doom downloads did not land") 0)
            0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
