@@ -450,6 +450,38 @@
  (test (#r1 = #r2) (find (r2 1) "screen" 0) (bare (r1 2) = bare (r2 2)) (bare (last r1) = bare (last r2))
        (60 = tap-steer g [(g 'p 'x + peep (g 'd) 'vx 0) (g 'p 'y + 1)])))
 
+; the floor's live cells: water and coals, found once; the count on the floor moves
+; the water's pen a row a count; and the live painter lays those cells alone, each
+; under a cursor move, none under the note's second row or a sign's box
+(: g (hand-g ())
+   d (g 'd)
+   _ (pins d 'rows 5 'cols 20 'lit 1)
+   _ (each ^45 (i \ pin (d 'seen) i 1))
+   _ (dput d 2 2 3) _ (dput d 3 2 3) _ (dput d 1 0 3)
+   _ (pin (g 'loot) (5 + 9 * 1) '(brazier))
+   ls (live-cells d (g 'loot))
+   (live _) (:- (slurp j) j (paint-live (jug 0) d (g 'vis) (g 'loot) (ents g)))
+   (moves s) (: (go i n) (i >= #s ? n (go (i + 1) (n + (s i = 72 ? 1 0)))) (go 0 0))
+   (bare s) (:- (go 0 "")
+              (go i acc) (? (i >= #s) acc (s i = 27) (go (1 + past i) acc) (go (i + 1) (acc + string (s i))))
+              (past i) (: c (s (i + 1)) (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
+   _ (pin d 'ft 0)
+   f0 (crawl-frame g) l0 (live ())
+   _ (pin d 'ft 1)
+   f1 (crawl-frame g) l1 (live ())
+   _ (test ('(1 14 20 21) = ls) (4 = moves l0) (find l0 "\e[4;8H" 0) (find l0 "\e[3;11H" 0)
+           (bare f0 = bare f1) !(f0 = f1) !(l0 = l1)
+           (find l0 "\e[38;5;45m" 0) (find l0 "\e[38;5;38m" 0))    ; two rows of water, two pens
+   _ (pin g 'msg "a note far too long for a screen twenty cells wide")
+   _ (crawl-frame g)
+   l2 (live ())
+   _ (pin g 'msg "")
+   _ (pin g 'sign '("a sign" "over the floor"))
+   _ (crawl-frame g)
+   l3 (live ())
+ (test (3 = moves l2) !(find l2 "\e[2;7H" 0)             ; the water under the note is left
+       (two? (d 'box)) (moves l3 < 4)))                  ; ..and so is what the box covers
+
 ; pennies weigh in, and they are the only thing on the floor
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) ['penny 7])

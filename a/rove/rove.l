@@ -17,7 +17,7 @@
 ; run: love tower. the engine is pure love and gates headless in t/host/rove.l; only
 ; tower-run ties the tty, and t/host/tty.l plays it on a pty.
 (module (rove tower-run tower-main dat open? dput delve fov clear? paint steer tap-steer tap-key sign-line
-         bell-row bell-open bell-key open-book fit-in
+         bell-row bell-open bell-key open-book fit-in cell-face paint-live live-cells sign-rect
          crawl-new crawl-turn crawl-frame crawl-bar note mob-new mob-at mob-set roll stock
          mend ascend fill fit circle? vale-new vale-tick walled? on-ring? done? enter exit-at
          circle-r circle-q circle-far ring-in talk talk-key talk-node her-tree open-box doom oct-pt
@@ -337,7 +337,14 @@
  timber-face '("#" 130 94)                              ; the cottage's walls from outside
  down-face '(62 220 136)                                ; > a stair down, gold like the other
  garden-bed '((42 212 89 30 "aster") (42 220 136 30 "goldenrod") (44 71 65 25 "tuft") (34 34 22 15 "grass"))
- fire-pens '(208 196 220)                               ; the fire, frame to frame
+ fire-pens '(208 196 220)                               ; the fire, count to count
+ ; ..and what else moves while the climber stands still. the loop keeps a quarter-second
+ ; count on the floor, d 'ft, and these are picked by it: water runs a row a count, the
+ ; coals breathe on a phase of their own, a star now and then flares or fades
+ water-flow '(45 39 38)
+ ember-pens {'brazier '(88 124 52 88) 'hearth '(196 160 202 196)}
+ star-bright 231
+ star-dim 240
  (plan lvl) ((peep themes (lvl - 1) th-heaven) 3)
  stair-face '(60 220 136)                               ; < the stair, gold on every floor
  water-face '(126 39 24)                                ; ~ the stream, where it shows
@@ -441,7 +448,7 @@
  ; falls out instead, and the book ends
  bell-ttl "OEIS A000110"
  bell-foot "-- page ~: 1, 2 --"
- bell-choices '((1 "turn the page" turn) (2 "put it back" back))
+ bell-choices '((1 "turn the page") (2 "put it back"))
  mark-ttl "a bookmark"
  mark-lines '("it slips out from between the pages. on it, in neat handwriting:"
               ""
@@ -495,10 +502,14 @@
        13 (wear down-face lit)
        0 (wear <th lit)
          (: r (strewn th x y s) (wear (two? r ? r (th 1)) lit)))
- (paint j d vis loot ents msg bar) (:
-   w (d 'w) h (d 'h) sn (d 'seen)
+ ; the face of one cell: an ent on a lit cell, else what the floor lays over it, else
+ ; loot, else the tile -- lit bright, remembered dim, the dark bare. one closure a frame,
+ ; the live painter's too, so a cell is the same in both
+ (cell-face d vis loot ents) (:
+   w (d 'w) sn (d 'seen)
    th (make d) sd (peep d 'sd 0)
    skin (d 'skin)
+   ft (peep d 'ft 0)
    ; the scrutinee in its own parens: an infix ? left bare would take the @- as its arm
    ; ..and on the vale the grass past the pink front takes slop's ramp instead. the
    ; front is () until there is pink anywhere, so the walk never pays for this
@@ -510,39 +521,57 @@
                    'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))]
                    'stone [<gh (ramp-pen stone-ramp (peep (skin 'ground) [y x] 0.0))]
                    'flag [<gh (ramp-pen flag-ramp (peep (skin 'ground) [y x] 0.0))])
+   ; a lit cell that moves: the count's pen, or a star's dice
+   (fmod a m) (: r (a % m) (r < 0 ? (r + m) r))
+   (flow gh y) [<gh (water-flow (fmod (y - ft) 3))]
+   (ember k gl x y) [gl ((ember-pens k) ((ft // 2 + dice x y sd 4) % 4))]
+   (twinkle gh x y) (dice x y (sd + ft) 9 @ 0 [<gh star-bright] 1 [<gh star-dim] gh)
    tint (peep d 'tint ())                             ; heaven's, a colour to a platform
    ov (peep d 'over ())                               ; the vale's: a face laid over a lit cell, or ()
+   ; a floor lit end to end says so, and no table of every cell is asked per cell
+   lit-all? (peep d 'lit 0)
+   spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
+   (\ i (: lit (lit-all? || peep vis i 0)
+           e (lit ? (spot i))
+           o (lit && ov ? (ov (i % w) (i // w)))
+           l (loot i)
+           it (l && (lit || (<l != 'penny && peep sn i 0)) ? l ())
+           (? e [(e 'gl) (e 'hue)]
+              o o
+              it (: k <it gh (loot-face it lit)
+                    (? !lit gh
+                       (k = 'fire) ["w" (fire-pens (ft % 3))]
+                       (ember-pens k) (ember k <gh (i % w) (i // w))
+                       gh))
+              (peep sn i 0)
+               (: t (peep (d 't) i 0) x (i % w) y (i // w)
+                  gh (t = 8 && tablet? tint ? (plat-face x y lit (peep tint i plat-blue))
+                                              (tile-face th t lit x y sd))
+                  (? !lit gh
+                     (t = 3) (flow gh y)
+                     (t = 6 && <gh != <(th 1)) (twinkle gh x y)
+                     (shade gh x y)))
+              '(32 0)))))
+ (paint j d vis loot ents msg bar) (:
+   w (d 'w) h (d 'h)
    ; the screen's rows of a floor taller than it: from the view's top, and a row past
    ; the floor's foot is blank. a floor smaller than the screen sits in the middle of
    ; it, padded left and the rows above and below it blank
    rows-n (peep d 'rows h) vy (peep d 'vy 0)
    padding ((peep d 'vx 0) (\ t (t + " ")) "")
-   ; a floor lit end to end says so, and no table of every cell is asked per cell
-   lit-all? (peep d 'lit 0)
-   spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees. a long one wraps
-   ; onto a second row, which covers the floor's first: the floor does not move
+   ; onto a second row, which covers the floor's first: the floor does not move.
+   ; d 'top is the rows it took, for the live painter to keep under
    cols (peep d 'cols w)
    wr (cite 'story 'wrap)
    notes (: ls (wr && cols < vlen msg ? (wr msg cols) [msg]) (two? >ls ? [<ls (ls 1)] ls))
+   _ (pin d 'top #notes)
    _ (say j "\e[H")
    _ (each notes (l \ say j ("\e[0m" + fit l cols + "\e[K\r\n")))
-   (cell i lit) (: e (lit ? (spot i))
-                   o (lit && ov ? (ov (i % w) (i // w)))
-                   l (loot i)
-                   it (l && (lit || (<l != 'penny && peep sn i 0)) ? l ())
-                   (? e [(e 'gl) (e 'hue)]
-                      o o
-                      it (loot-face it lit)
-                      (peep sn i 0)
-                       (: t (peep (d 't) i 0) x (i % w) y (i // w)
-                          gh (t = 8 && tablet? tint ? (plat-face x y lit (peep tint i plat-blue))
-                                                      (tile-face th t lit x y sd))
-                          (lit ? (shade gh x y) gh))
-                      '(32 0)))
+   cell (cell-face d vis loot ents)
    (row y x i p) (x >= w ? p
-                  (: gh (cell i (lit-all? || peep vis i 0))
+                  (: gh (cell i)
                      p2 <>gh
                    (p != p2 ? (say j (pen p2)),
                     say j (string <gh),
@@ -557,6 +586,30 @@
    (rows (vy + #notes - 1) -1,
     say j "\e[0m", say j bar, say j "\e[K",
     j))
+ ; the cells a floor keeps moving, found once and kept on it: water, a star, the fire
+ ; and the coals
+ (live-cells d loot) (: l (peep d 'live 0)
+   (l = 0 ? (: w (d 'w) th (make d) sd (peep d 'sd 0)
+              (live? i) (: t (peep (d 't) i 0) k (loot i) x (i % w) y (i // w)
+                           (t = 3 || (t = 6 && <(tile-face th 6 1 x y sd) != <(th 1))
+                                  || (k && (<k = 'fire || ember-pens <k))))
+              ls (filter live? ^(w * d 'h))
+              (pin d 'live ls, ls))
+     l))
+ ; the live cells alone, each under a cursor move, as the last frame laid the floor:
+ ; a cell off the screen, under the note, unlit or under a sign's box is left be
+ (paint-live j d vis loot ents) (:
+   w (d 'w) h (d 'h) rows (peep d 'rows h) vy (peep d 'vy 0) vx (peep d 'vx 0)
+   top (peep d 'top 1) box (peep d 'box ())
+   lit-all? (peep d 'lit 0)
+   cell (cell-face d vis loot ents)
+   (boxed? sx sy) (box && (box 0 <= sx < box 0 + box 2) && (box 1 <= sy < box 1 + box 3))
+   (one i) (: x (i % w) y (i // w) sx (x + vx) sy (y - vy + 1)
+              (? (top <= sy < rows + 1 && (lit-all? || peep vis i 0) && !(boxed? sx sy))
+                 (: gh (cell i)
+                    (say j ("\e[" + show (sy + 1) + ";" + show (sx + 1) + "H" + pen <>gh + string <gh)))))
+   _ (each (live-cells d loot) one)
+   (say j "\e[0m", j))
 
  ; --- the helm: a key (cli's edkey: a byte, an arrow code, an alt letter) -> one steer,
  ; a move pair; any other key answers as itself ---
@@ -929,6 +982,10 @@
    (go j i l) (? (j < 0 || one? l) -1
                  (j < #<l) i
                  (go (j - #<l) (i + 1) >l)))
+ ; where the box lands on the screen: [x0 y0 w rows], as sign-over lays it
+ (sign-rect ttl ls a n w) (: box (sign-box ttl (foldl (+) () (sign-flow ls w)))
+                             ww (vlen <box)
+                             [(: q ((w - ww) // 2) (0 < q ? q 0)) (sign-top a n #box) ww #box])
  ; a frame with the box centred over its rows a .. a+n, for a screen w wide; the box
  ; takes the rows the reflow makes
  (sign-over f ttl ls a n w) (:- (go 0 "")
@@ -1573,10 +1630,8 @@
            'sk sk
            'vis (lit-all d))
    _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
-   ; the painter's overlay: the ring where it stands, and the fire's flicker
-   _ (pin d 'over (\ x y (? (x = fx && y = fy) ["w" (fire-pens (g 'tn % #fire-pens))]
-                            ('ring = g 'phase && on-ring? g x y) [ring-glyph ring-pen]
-                            ())))
+   ; the painter's overlay: the ring where it stands
+   _ (pin d 'over (\ x y (? ('ring = g 'phase && on-ring? g x y) [ring-glyph ring-pen] ())))
    (note g (fill w-floor [(here g)])))
 
  ; one turn: the climber's steer, then every mob its pace is due, then the lantern
@@ -1621,9 +1676,12 @@
                     f (:- (slurp j) j
                        (paint (jug 0) d (g 'vis) (g 'loot)
                         (ents g) (g 'msg) (crawl-bar g)))
-                    sg (g 'sign)
-                    ; ..laid at the screen's width, which a room may be narrower than
-                    (two? sg ? (sign-over f <sg >sg 1 rows (peep d 'cols (d 'w))) f))
+                    sg (g 'sign) cols (peep d 'cols (d 'w))
+                    ; ..laid at the screen's width, which a room may be narrower than;
+                    ; where it lands is kept, for the live painter to keep out of
+                    _ (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()))
+                    (two? sg ? (sign-over f <sg >sg 1 rows cols) f))
+ (live-frame g) (: d (g 'd) (:- (slurp j) j (paint-live (jug 0) d (g 'vis) (g 'loot) (ents g))))
 
  ; --- the song: a floor's bar, out the card a chunk at a time -----------------------
  ; it stands below the circle because song-vol reads circle-r0, and a value read from
@@ -1714,10 +1772,15 @@
              ; short gap of the last turn is dropped, and a longer one while a sign
              ; stands, so a held key cannot run through a scene's pages. a different
              ; key passes at once. answers the key to turn on.
+             ; ..and while it waits the floor's live cells go on: a quarter-second count
+             ; kept on the floor, and each count they are laid again, alone
+             (flick! _) (: d (g 'd) t (clock 0 // 250)
+                           (? (t != peep d 'ft ()) (pin d 'ft t, say out (live-frame g), flush out)))
              (hold t0 last gap) (? (cue? 0)
                                    (: k (edkey in)
                                       (k = last && (clock 0 - t0) < gap ? (hold t0 last gap) k))
                                    (: _ (? sng (song-feed sng (song-vol g)) (rest 30))
+                                      _ (flick! ())
                                       (hold t0 last gap)))
              (turn k) (k @ (113 || 27 || -7) (pin g 'over 'fled)
                        -12 (crawl-turn g (tap-key g (edtap ())))
