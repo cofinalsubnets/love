@@ -262,22 +262,32 @@
    ; and nothing here ever prompts, so forced is the behaviour. -p is the other kind --
    ; it changes what lands, so it is honoured. (ucopy already carries the mode; the
    ; mtime is the half that was missing.) a recipe saying `mv -f` fails without this.
-   (cpf-split as)                              ; -> (p? rest) off a leading -f/-p cluster
-    (: (fl a p) (? !(two? a) [p a]
-                    (elem <a '("-f" "-p" "-fp" "-pf"))
-                     (fl >a (? (elem <a '("-p" "-fp" "-pf")) 1 p))
-                    [p a])
-       (fl as 0))
+   ; a leading cluster of f p r R, in any order and any number of words
+   (cp-flag? w) (1 < #w && w 0 = 45 && all (\ i (elem (w i) '(102 112 114 82))) >^#w)
+   (cp-has w c) (elem c (map (\ i (w i)) ^#w))
+   (cpf-split as)                              ; -> (p? r? rest) off the cluster
+    (: (fl a p r) (? (two? a && cp-flag? <a)
+                     (fl >a (cp-has <a 112 ? 1 p) (cp-has <a 114 || cp-has <a 82 ? 1 r))
+                     [p r a])
+       (fl as 0 0))
+   ; -r walks a tree top-down: a directory is laid at the far end and its entries follow
+   ; it, a file is one copy
+   (cp-tree src dst)
+    (: _ (? (udirp dst) 0 (mkdir dst 493))
+       _ (? (udirp dst) 0 (udie 1 ("cp: cannot create " + dst)))
+       (each (readdir src) (nm \ (: s (src + "/" + nm) d (dst + "/" + nm)
+                                   (? (udirp s) (cp-tree s d) (ucopy "cp" s d))))))
    (cp-main as)
-    (: q (cpf-split as) p? <q rest <>q
-       (? !(two? >rest) (udie 2 "usage: cp [-f] [-p] SRC DST")
+    (: q (cpf-split as) p? <q r? <>q rest <>>q
+       (? !(two? >rest) (udie 2 "usage: cp [-f] [-p] [-r] SRC DST")
           (: src <rest dst (udest src <>rest)
-             _ (ucopy "cp" src dst)
+             _ (? (udirp src) (r? ? (cp-tree src dst) (udie 1 ("cp: -r not given; omitting directory " + src)))
+                  (ucopy "cp" src dst))
              s (? p? (stat src) ())
              _ (? (two? s) (utime dst <>s) 0)
              0)))
    (mv-main as)
-    (: rest (<>(cpf-split as))
+    (: rest (<>>(cpf-split as))
        (? !(two? >rest) (udie 2 "usage: mv [-f] SRC DST")
           (: src <rest dst (udest src <>rest)
              e (rename src dst)
