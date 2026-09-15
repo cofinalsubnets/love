@@ -1,19 +1,13 @@
-; love/holo/obj.l -- a relocatable elf64 object emitter (cc stage 7a). where elf.l
-; wraps assembled bytes in a static executable (one RWX segment, all labels
-; resolved), this lays a `.o` the system linker can consume: separate .text /
-; .data sections, a symbol table (each function a global FUNC, each global var a
-; global object, each external reference an undef), and RELA relocations for every
-; reference the assembler cannot resolve within a section -- an la into .data
-; (R_X86_64_PC32 via the .data section symbol), a call to a symbol defined
-; elsewhere (R_X86_64_PLT32), a data pointer to a label (R_X86_64_64). intra-.text
-; branches and calls stay pc-relative and resolve internally (both ends ride .text
-; and move together). a64 rides the same walk with its own reloc vocabulary
-; (CALL26/JUMP26, the ADRP/ADD pair, ABS64) -- see the type table and reltext --
-; and rv64 likewise (CALL_PLT over the auipc pair, JAL, R_RISCV_64).
-; loads after love/holo/elf.l in the au cat -- reads elf-machines / write-bytes
-; bare, and the assembler internals bare too: the cat leads with (borrow 'holo)
-; (apps/kore/asbook.l), so lay/laylax/patch-with/le*/catall resolve through the
-; spliced module. moon.l drives it: `mooncc -c foo.c foo.o`.
+; love/holo/obj.l -- a relocatable elf64 object emitter (cc stage 7a). where elf.l wraps
+; assembled bytes in a static executable, this lays a `.o` the system linker consumes:
+; separate sections, a symbol table, and a relocation for every reference the assembler
+; cannot resolve within a section. intra-.text branches stay pc-relative and resolve
+; internally -- both ends ride .text and move together. a64 and rv64 ride the same walk
+; with their own reloc vocabularies (the table below).
+; loads after love/holo/elf.l in the au cat, and reads elf-machines/write-bytes and the
+; assembler internals bare: the cat leads with (borrow 'holo) (apps/kore/asbook.l), so
+; lay/laylax/patch-with/le*/catall resolve through the spliced module.
+; moon.l drives it: `mooncc -c foo.c foo.o`.
 (module 'holo
 (:
    ; the ELF relocation types we emit (x86-64)
@@ -21,9 +15,8 @@
    r-pc32  2                                        ; R_X86_64_PC32   S + A - P (an la into .data)
    r-plt32 4                                        ; R_X86_64_PLT32  L + A - P (a call to an external fn)
    r-32    10                                       ; R_X86_64_32     S + A, truncated to 4 bytes -- the
-                                                    ; kernel's PVH note names its 32-bit entry, and the
-                                                    ; kernel links flat under 4 GiB so the address fits.
-                                                    ; the linker checks it; nothing hosted emits it.
+                                                    ; PVH note's 32-bit entry. the kernel links flat
+                                                    ; under 4 GiB so it fits; nothing hosted emits it.
    ; ... and a64. field relocs here patch bits of an instruction word, not a
    ; whole field -- the placeholder bytes carry the base opcode (the fixup's aux).
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
@@ -32,9 +25,8 @@
    ra-prel32 261                                    ; R_AARCH64_PREL32          S + A - P in four bytes (a jump table's entry)
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
    ra-lo12   277                                    ; R_AARCH64_ADD_ABS_LO12_NC   (S+A) & 0xfff into add
-   ; ... and rv64. the backend's 8-byte 'pcrel (one fixup across the auipc
-   ; pair) maps whole onto call_plt: S+a-p split hi20-into-auipc / lo12-into-the-
-   ; second-word -- and jalr/addi/ld share the I-form imm field, so the one type
+   ; ... and rv64. the backend's 8-byte 'pcrel (one fixup across the auipc pair) maps
+   ; whole onto call_plt, and jalr/addi/ld share the I-form imm field, so the one type
    ; serves call and la alike (the placeholder carries both base words).
    rr-64    2                                       ; r_rv64_64        S + A  (collides with R_X86_64_PC32: link.l dispatches by machine)
    rr-pc32  57                                      ; R_RISCV_32_PCREL  S + A - P in four bytes (a jump table's entry)
@@ -42,27 +34,19 @@
    rr-call  19                                      ; R_RISCV_CALL_PLT  S + A - P across the auipc pair
 
    (o-has? tab k) (peep tab k 'no !== 'no)    ; is key k bound in the tablet?
-   ; a lane's file size. not `tally`: an item may be a blob (holo.l's item-len), and a
-   ; blob is one cell holding many bytes.
+   ; a lane's file size. not `tally`: an item may be a blob, one cell holding many bytes.
    (o-blen l) (:- (go l 0) (go l n) (? !(two? l) n (go >l (n + item-len <l))))
    (o-strbytes s) (: (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc)))
-                     (go (#s - 1) ()))         ; a string -> its byte list. this one
-                     ; is a real encode, not a bytes-through-text leak: an ELF string
-                     ; table holds names, which are text. when the charm widens this
-                     ; becomes an explicit utf-8 encode.
+                     (go (#s - 1) ()))         ; a string -> its byte list. a real encode,
+                     ; not a bytes-through-text leak: an ELF string table holds text.
 
-   ; walk an assembled section's items (bytes + fixups) -> (bytes relocs). a fixup
-   ; is resolved in place when the section may (text-internal, a kind in rset --
-   ; the translation-invariant ones: a pc-relative delta moves with the section;
-   ; an adrp page delta or an abs-lo12 does not and always relocates); otherwise
-   ; it becomes a relocation record (off kind label addend) and placeholder bytes
-   ; hold its place -- zeros where RELA overwrites the field outright (x64, abs64),
-   ; the base opcode word where the reloc patches instruction bits (a64).
-   ; the addend is the fixup's aux -- a data pointer to &arr[i]/&s.field bakes the
-   ; constant byte offset there, and the RELA carries it (added to the section-sym
-   ; addend below), so the linker's S+a lands on the element, not the base.
-   ; a fixup-free section is this walk's identity, and one `any` says so -- a laid
-   ; blob (mksrc's tarball, mkrt's archives) skips a recursion per byte.
+   ; walk an assembled section's items (bytes + fixups) -> (bytes relocs). a fixup resolves
+   ; in place only where the section may: text-internal and a kind in rset, the translation-
+   ; invariant ones (a pc-relative delta moves with the section, an adrp page delta does not).
+   ; otherwise it becomes a record (off kind label addend) over placeholder bytes -- zeros
+   ; where RELA overwrites the field, the base opcode word where the reloc patches bits.
+   ; the addend is the fixup's aux, so a &arr[i] pointer's baked byte offset rides the RELA
+   ; and the linker's S+a lands on the element. the `any` spares a laid blob a walk per byte.
    (o-walk be items labels wkset internal? rset)
     (? (any fix? items) (o-walkr be items labels wkset internal? rset 0 () ())
        [items ()])
@@ -81,42 +65,33 @@
                                ; a surviving riscv 'pcrel: the aux packs both base words (auipc low,
                                ; the I-insn high) -- lay them as the 8-byte placeholder call_plt patches
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
-                               ; ARM is rel, not RELA: the addend rides in the field. a surviving thumb
+                               ; ARM is rel, not RELA: the addend rides in the field, so a surviving thumb
                                ; branch holds its base encoding with the -4 pipeline addend baked in (the
-                               ; field is pc=instr+4 relative, but the reloc's P is the instr address, so
-                               ; the -4 compensates -- gas emits the identical fff7feff for `bl sym`). the
-                               ; linker folds s-p into the imm bits and needs the opcode there already.
+                               ; field is pc=instr+4 relative where the reloc's P is the instr address).
                                (elem k '(b bcc bl)) (patch-with be k off off w (fix-a x))
-                               ; a surviving movw16/movt16 (thumb2 la) holds its base encoding with a
-                               ; zero imm16 -- absolute, so no pipeline addend; bakemw below re-encodes
-                               ; the section-relative addend into the field when the target binds one.
+                               ; a surviving movw16/movt16 (thumb2 la) holds its base encoding with a zero
+                               ; imm16 -- absolute, no pipeline addend; bakemw below fills the field.
                                (elem k '(movw16 movt16)) (patch-with be k 0 off w (fix-a x))
                                (o-zeros w))
-                       ; carry the byte just before the field (bacc's head, reversed) -- the
-                       ; x64 opcode: E8/e9 (call/jmp) vs a lea's modrm, so reltext can tell a
-                       ; control transfer (PLT32) from an address-of (PC32) for an external ref.
+                       ; carry the byte just before the field (bacc's head): the x64 opcode,
+                       ; which is how an external call (PLT32) is told from an address-of (PC32)
                        (o-walkr be >items labels wkset internal? rset (off + w)
                                 (rev fill + bacc)
-                                ; the byte before the field, when there IS one: a blob's
-                                ; head is a string and says nothing about an opcode
+                                ; ..when there is one: a blob's head is a string, not an opcode
                                 ([off k lbl (fix-a x) (two? bacc && charm? <bacc ? <bacc 0)] . racc)))))
              ; item-len, not 1: a blob is one cell and many bytes
              (o-walkr be >items labels wkset internal? rset (off + item-len x) (x . bacc) racc))))
    (o-zeros n) (n >= 1 ? (0 . o-zeros (n - 1)))
-   ; splice a 4-byte little-endian value into a byte list at off (the ARM REL in-place addend: a
-   ; pooled abs32 field carries S's section offset there, since rel has no addend column).
+   ; the ARM REL in-place addend: a pooled abs32 field carries S's section offset in the field.
    (o-take l n) (two? l && n >= 1 ? (<l . o-take >l (n - 1)))
    (o-drop l n) (n < 1 || atom? l ? l (o-drop >l (n - 1)))
    ; splice pre-encoded bytes (a re-encoded instruction) in at off -- the movw16/movt16 addend bake.
    (o-putbs bytes off bs) (catall [(o-take bytes off) bs (o-drop bytes (off + #bs))])
    (o-put32 bytes off val) (o-putbs bytes off (le32 val))
 
-   ; a lane is one laid section: (name type flags align bytes relocs labels).
-   ; both emitters build the same shape, so the two questions asked of a whole
-   ; object -- where is this label defined, and which labels are defined nowhere
-   ; -- are asked once here.
-   ; o-where: a label -> (section-index offset), the index 1-based (ELF's shndx,
-   ; where 0 is undef), or () for a label no lane defines.
+   ; a lane is one laid section: (name type flags align bytes relocs labels). both emitters
+   ; build that shape, so the two questions asked of a whole object are asked once here.
+   ; o-where: a label -> (section-index offset), 1-based (ELF's shndx, 0 being undef), or ().
    (o-where lanes lbl)
     (: (go ls i) (? !(two? ls) ()
                     (: lb (<ls 6)
@@ -154,11 +129,9 @@
    (o-idx ls i0) (: t {} (go es i) (atom? es ? t (pin t <es i, go >es (i + 1))) (go ls i0))
    (o-mapi f ls) (: (go l i acc) (atom? l ? (rev acc) (go >l (i + 1) (f i <l . acc))) (go ls 0 ()))
 
-   ; -- ELF32 / EM_ARM (the thumb backends). the 32-bit cousin of the emitter below,
-   ; and the same shape: a list of sections, one lay each. what differs is the wire --
-   ; a 52-byte header, 16-byte symbols, and rel (not RELA) relocations, since ARM's
-   ; ABI keeps the addend in the field, so a surviving thumb branch carries its base
-   ; encoding (o-walk fills it) and the .rel tables need no addend column. --
+   ; -- ELF32 / EM_ARM (the thumb backends): the emitter below's shape on another wire --
+   ; a 52-byte header, 16-byte symbols, and rel rather than RELA, ARM's ABI keeping the
+   ; addend in the field, so the .rel tables need no addend column. --
    arm32-targets '(thumb1 thumb2 thumb2sp arm)
    (arm32? t) (elem t arm32-targets)
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
@@ -184,8 +157,7 @@
        nsec (tally secs)
        _ (0 >= nsec ? (scare 'obj-no-sections target))
        (exec? s) (0 < s 2 & 4)
-       ; one section is one lay -- the executable ones through the relaxer, the rest
-       ; through plain lay. see objsecs below for why that split is the only one.
+       ; one section is one lay: the executable ones through the relaxer, the rest plain.
        lanes (map (\ s
                 (: fm (s 4)
                    p (? (exec? s)
@@ -204,16 +176,11 @@
        exts (o-exts lanes allrel)
        fnset (o-names funcnames)
        gset (o-names globnames)
-       ; a label defined here that a relocation names but no symbol of ours covers:
-       ; it would have to bind its section symbol, and rel's in-field addend cannot
-       ; carry the offset. a movw/movt half reads its field as a whole signed 16-bit
-       ; addend, so a target past 32K composes an address missing its middle bits
-       ; (the teensy boot's silent banner: main.o's 384K pool pushed every string
-       ; offset past 0x60000 and every la'd pointer landed 384K low; the qemu-m7
-       ; pc hijack was the same truncation on a static fn, 0x14ab for 0x114ab).
-       ; each gets its own local symbol instead, addend 0 -- the gcc convention.
-       ; abs32 fields stay on the section path where the label is data: a 32-bit
-       ; field carries any offset. a .text target never can -- it needs the thumb bit.
+       ; a label a relocation names that no symbol of ours covers would bind its section
+       ; symbol, and a movw/movt half reads its in-field addend as one signed 16 bits -- a
+       ; target past 32K composes an address missing its middle bits. each gets its own local
+       ; symbol instead, addend 0. abs32 stays on the section path where the label is data: a
+       ; 32-bit field carries any offset, where a .text target needs the thumb bit besides.
        ; -> ((label shndx offset) ..), in relocation order.
        (o-locs pick kinds)
         (: seen {}
@@ -226,29 +193,25 @@
                              (o-has? seen lbl) acc
                              (pin seen lbl 1, [lbl <w <>w] . acc)))))
            (rev (go allrel ())))
-       ; the branch kinds ride here too: a branch used to resolve in place, since
-       ; both ends shared .text -- but a fn that named its own section (love.c's
-       ; data sentinels) branches across one, and rel's in-field addend has no room
-       ; for the offset any more than movw16's does. without this the fixup binds
-       ; symbol 0 and the link answers `link-undef ""`, its cause a section away.
+       ; the branch kinds ride here too: a fn that named its own section (love.c's data
+       ; sentinels) branches across one, where rel's in-field addend has no more room for
+       ; the offset than movw16's. the fixup would bind symbol 0 -- `link-undef ""`.
        locfns (o-locs (\ si lbl (sec-exec? si && !(o-has? fnset lbl)))
                       '(movw16 movt16 abs32 b bcc bl))
        locdat (o-locs (\ si lbl (!(sec-exec? si) && !(o-has? gset lbl)))
                       '(movw16 movt16))
        locs (locfns + locdat)
-       ; -- symbol indices: NULL, one section symbol per section, then those locals
-       ; (ELF wants every local ahead of the first global -- .symtab's sh_info points
-       ; there), then funcs, globs, exts --
+       ; -- symbol indices: NULL, a section symbol each, those locals, funcs, globs, exts.
+       ; ELF wants every local ahead of the first global, where .symtab's sh_info points --
        nloc #locs nfun #funcnames nglob #globnames
        fstart (1 + nsec + nloc) gstart (fstart + nfun) estart (gstart + nglob)
        locidx (o-idx (map cap locs) (1 + nsec))
        extidx (o-idx exts estart)
        fnidx (o-idx (map intern funcnames) fstart)
        globidx (o-idx (map intern globnames) gstart)
-       ; an abs32 target -> (symidx field). a defined global / a function address binds
-       ; its own symbol (the addend rides the field, usually 0); a label with a local
-       ; symbol above binds that; anything else defined here binds its section symbol
-       ; with its offset in the field (REL has no addend column), and the rest is external.
+       ; an abs32 target -> (symidx field). a global or a function binds its own symbol, a
+       ; label with a local symbol above binds that, anything else defined here its section
+       ; symbol with the offset in the field (REL has no addend column); the rest is external.
        (a32loc lbl aux)
         (? (o-has? globidx lbl) [(peep globidx lbl 0) aux]
            (o-has? fnidx lbl)   [(peep fnidx lbl 0) aux]
@@ -258,8 +221,7 @@
        ; a movw16/movt16 (thumb2 la) target -> (symidx addend). the shape of a32loc, but
        ; the fixup's aux is Rd (not an addend), so the addend starts at 0.
        (mwloc lbl) (a32loc lbl 0)
-       ; bake each abs32 field (its addend + any section-relative offset) into the section
-       ; bytes, since rel has no addend column..
+       ; bake each abs32 field (addend + any section-relative offset) into the bytes..
        (bakeabs bytes rs)
         (: (go rs bs) (? !(two? rs) bs
                          (: r <rs
@@ -281,12 +243,10 @@
        symnames (map (string * cap) locs + funcnames + globnames + map string exts)
        str (o-strtab symnames)
        strblob <str stroffs <>str
-       ; -- the symbol table. a func symbol's value carries the thumb bit (bit 0): a
-       ; cross-object R_ARM_THM_CALL folds it into T, so the callee is entered in
-       ; Thumb state -- vital on m0 (no ARM state at all). data object syms stay even.
-       ; a named symbol's section is simply wherever its bytes went, which is what
-       ; lets a global live in a section the writer never heard of -- an rp2040
-       ; vector table, a bootloader's scanned-for block. --
+       ; -- the symbol table. a func symbol's value carries the thumb bit (bit 0), which a
+       ; cross-object R_ARM_THM_CALL folds into T so the callee enters Thumb state -- m0 has
+       ; no ARM state at all. data syms stay even. a named symbol's section is wherever its
+       ; bytes went, so a global may live in a section the writer never heard of. --
        (o-place nm) (: w (o-where lanes (name nm)) (two? w ? w '(1 0)))
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
@@ -311,12 +271,10 @@
            ssyms (catall (o-mapi (\ i l (o-sym32 0 0 3 (i + 1) 0)) lanes))
            (catall [(o-sym32 0 0 0 0 0) ssyms lsyms fsyms gsyms esyms]))    ; the NULL symbol leads
        nsym (1 + nsec + nloc + nfun + nglob + #exts)
-       ; -- the relocations, one emitter dispatching on the fixup's kind (the
-       ; text/data split the 64-bit twin dropped was never the real line here either). --
-       ; a branch's target as a symbol, never a section+offset: the thumb bit rides
-       ; the symbol's own value (lsyms bakes it), and rel has no addend column to
-       ; carry an offset in. the locidx rung is the cross-section case -- a static
-       ; fn a sectioned caller branches to has no other symbol to bind.
+       ; -- the relocations, one emitter dispatching on the fixup's kind. --
+       ; a branch's target is a symbol, never a section+offset: the thumb bit rides the
+       ; symbol's own value and rel has no addend column. the locidx rung is the cross-section
+       ; case -- a static fn a sectioned caller branches to has no other symbol to bind.
        (fnsym lbl) (? (o-has? wkset lbl) (peep fnidx lbl 0)
                       (o-has? locidx lbl) (peep locidx lbl 0)
                       (o-has? fnidx lbl) (peep fnidx lbl 0)
@@ -381,9 +339,8 @@
                 + rels
                 + [shstrblob sht])))
 
-   ; .data's placement grain: the caller's floor, or the widest ('align n) the
-   ; stream asks. an aligned(N) global (mooncc honoring __attribute__((aligned)))
-   ; pads within the section (lay, org 0), so the header must ask the linker for the
+   ; .data's placement grain: the caller's floor, or the widest ('align n) the stream asks.
+   ; an aligned(N) global pads within the section, so the header must ask the linker for the
    ; section's own start at that N -- or the inner pad aligns nothing.
    (o-dalign a0 forms)
     (: (go l a2) (? !(two? l) a2
@@ -391,30 +348,20 @@
                        (go >l (two? f && <f == 'align && f 1 > a2 ? <>f a2))))
        (go forms a0))
 
-   ; build the whole .o image. textforms/dataforms/nifforms/imgforms are cgen-obj's
-   ; split IR -- the two named streams are the ones where the address is the point
-   ; and a symbol alone cannot say it: nifforms are the LvNif registry entries,
-   ; laid in their own `love_nifs` section so the linker's __start_/__stop_ bracket
-   ; symbols bound them, and imgforms the `.image` bake slot, which link.l lays last
-   ; of all so `love bake` can grow it at the tail (inle/image.c). funcnames the
-   ; defined functions (global FUNC symbols), globnames the global variables (global
-   ; object symbols); locnames the static functions -- local func symbols, so a
-   ; linked binary's nm/objdump/gdb (and tools/vmret.l's symbol spans) see them;
-   ; static data stays local labels. -> a byte list.
-   ; these five sections are what a hosted object carries; objsecs below is the
-   ; general door, and the kernel's lays go through it for names a compiler never
-   ; emits (.boot, .note.pvh, the 2 KiB-aligned vector table).
-   ; the five descriptors are their own binding because a compiler has a sixth
-   ; kind of stream to add to them: a global wearing __attribute__((section(..)))
-   ; with a name that is neither love_nifs nor .image (a part's .vectors, which the
-   ; core reads before an instruction runs). moon.l appends those and
-   ; calls objsecs itself; everything else takes the five and nothing more.
-   ; .bss is nobits (8): its size rides the header and its zeros ride nothing, so
-   ; whoever loads the image owes them -- linux over p_memsz, the .lds ports over
-   ; their own startup loop. a lay that owns no loader must not use this lane.
-   ; .rodata is the one data lane at flags 2 (ALLOC, no WRITE). holo maps it writable
-   ; anyway -- one segment -- so the flag is what an external linker reads to give it a
-   ; read-only home, and it is a promise the stream has to keep: no relocation, ever.
+   ; build the whole .o image, as a byte list. textforms/dataforms/nifforms/imgforms are
+   ; cgen-obj's split IR; funcnames the defined functions, globnames the global variables,
+   ; locnames the static functions -- local func symbols, so a linked binary's nm/objdump/gdb
+   ; and tools/vmret.l's symbol spans see them, where static data stays local labels.
+   ; the two named streams are where the address is the point and a symbol alone cannot say
+   ; it: love_nifs for the linker's __start_/__stop_ bracket symbols, and .image the bake
+   ; slot, which link.l lays last of all so `love bake` can grow it at the tail.
+   ; the five descriptors are their own binding because a compiler has a sixth kind of
+   ; stream: a global wearing __attribute__((section(..))) named neither love_nifs nor
+   ; .image (a part's .vectors). moon.l appends those and calls objsecs itself.
+   ; .bss is nobits (8): its zeros ride nothing, so whoever loads the image owes them --
+   ; linux over p_memsz, the .lds ports their own startup loop. a lay that owns no loader
+   ; must not use this lane. .rodata at flags 2 is a promise to whatever linker reads it for
+   ; a read-only home: no relocation, ever. holo maps it writable anyway -- one segment.
    (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
     [[".text"   1 6 16 textforms]
      [".rodata" 1 2 (o-dalign 8 rodataforms) rodataforms]
@@ -422,37 +369,24 @@
      [".bss"    8 3 (o-dalign 8 bssforms) bssforms]
      ["love_nifs" 1 3 8 nifforms]
      [".love.image"  1 3 16 imgforms]]
-   ; a named section a compiler emits: progbits on the widest grain its own globals
-   ; ask for, allocated, and writable unless ro says the compiler found every global
-   ; in it const and reloc-free. the descriptor a hand-written lay needs is its own
-   ; business -- it says the flags outright.
+   ; a named section a compiler emits: progbits on the widest grain its globals ask for,
+   ; allocated, writable unless ro says every global in it is const and reloc-free.
    (objsec-named nm forms ro) [nm 1 (? ro 2 3) (o-dalign 8 forms) forms]
    ; ..and the code twin, for a function that named its own section (love.c's data
-   ; sentinels). flags 6 = alloc|execinstr, which is also what picks objsecs'
-   ; internal-resolve lane; a jump out to .text becomes a relocation, as it must.
-   ; the grain is the caller's: a run of one-fn sections at grain N tiles at N, which
-   ; is how love.h's ai_typ gets a stride out of a linker that was told no such thing.
+   ; sentinels). flags 6 = alloc|execinstr, which also picks objsecs' internal-resolve lane.
+   ; the grain is the caller's: a run of one-fn sections at grain N tiles at N, which is how
+   ; love.h's ai_typ gets a stride out of a linker that was told no such thing.
    (objsec-code nm forms al) [nm 1 6 al forms]
-   ; the arm32 twin of objsecs4: four, because there is no .image lane at 32 bits
-   ; (no bake), so a non-empty one is a caller's mistake and not a section. the grain
-   ; for code is 4 rather than objsecs4's 16 -- a thumb function is 2-byte aligned
-   ; and flash is the scarce thing on these parts, which is also why .bss rides
-   ; here: these ports copy .data out of flash and zero .bss themselves (rp2040.c,
-   ; teensy41.c, nucleo446.c), so a zero laid in .data is flash spent twice. the
-   ; data lanes ask o-dalign on a floor of 4: an aligned(N) global owes the linker
-   ; its N here exactly as at 64 bits, or the pad inside aligns nothing.
-   ; the ELF ABI attributes an arm32 object owes its linker. ld MERGES two objects by
-   ; these and refuses a pair that cannot merge, and Tag_ABI_enum_size and Tag_ABI_VFP_args
-   ; are the two questions where our objects meet gcc's on these parts -- libgcc rides
-   ; every thumb1 and thumb2sp link, the playdate its own SDK. an object carrying no such
-   ; section states nothing, so the check ld exists to make could not be made at all. we
-   ; answer only what we know: the architecture, the profile, the ISA, the FPU, wchar_t,
-   ; the enum width, the float model and the float-argument lane.
-   ; AN UNSTATED TAG IS NOT NEUTRAL. it reads 0, and a 0 can DISARM the check on a tag
-   ; that was stated: ld runs the VFP_args comparison -- the one that is a hard error and
-   ; not a warning -- only where Tag_ABI_FP_number_model says the object uses floats at
-   ; all. without tag 23 ours linked silently against a soft-float object while gcc's own
-   ; refused, so the tag we cared about was decorative. saying less is a position too.
+   ; the arm32 twin of objsecs4: four lanes, because there is no .image at 32 bits (no bake),
+   ; so a non-empty one is a caller's mistake. code sits at grain 4 rather than 16 -- a thumb
+   ; function is 2-byte aligned and flash is scarce, which is also why .bss rides here: these
+   ; ports copy .data out of flash and zero .bss themselves (rp2040.c, teensy41.c,
+   ; nucleo446.c), so a zero laid in .data is flash spent twice.
+   ; the ELF ABI attributes an arm32 object owes its linker -- ld merges two objects by these
+   ; and refuses a pair that cannot merge. an unstated tag is not neutral: it reads 0, and a 0
+   ; disarms the check on a tag that was stated. ld runs the VFP_args comparison, the hard
+   ; error, only where Tag_ABI_FP_number_model says the object uses floats at all, so without
+   ; tag 23 ours linked silently against a soft-float object that gcc's own refused.
    ; format: 'A', le32 over all that follows, "aeabi\0", then Tag_File (1) carrying its own
    ; le32 length, then (tag value) pairs -- uleb128 each, a string value NUL-terminated.
    ; every tag and value here is under 128, so one byte apiece.
@@ -488,46 +422,38 @@
        (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
                 funcnames globnames wknames locnames)))
 
-   ; -- the general object: a list of sections, each (name type flags align forms).
-   ; one section is one lay, which is exactly what a section boundary means: a
-   ; branch inside it resolves in place, a reference across it becomes a
-   ; relocation. shf_execinstr (flags & 4) picks the internal-resolve lane and the
-   ; relaxer; everything else relocates every fixup it carries. a NOBITS section
-   ; (type 8) still lays its forms -- that is where its labels and its size come
-   ; from -- but writes no file bytes, which is the whole meaning of .bss.
+   ; -- the general object: a list of sections, each (name type flags align forms). one
+   ; section is one lay, which is what a section boundary means -- a branch inside resolves
+   ; in place, a reference across becomes a relocation. shf_execinstr (flags & 4) picks the
+   ; internal-resolve lane and the relaxer. a NOBITS section (type 8) still lays its forms,
+   ; where its labels and its size come from, but writes no file bytes. --
    (objsecs target0 secs funcnames globnames wknames locnames)
     (: target (arch-nom target0)
        a64 (= target 'a64)
        rv (= target 'rv64)
        _ (? (= target 'x64 || a64 || rv) 0 (scare 'obj-target target))
-       ; the in-place-resolvable kinds (translation-invariant). riscv's both label
-       ; kinds are pure byte deltas (auipc is byte pc-relative by nature -- no page
-       ; math), so intra-.text la/call/jmp all resolve inside the .o.
+       ; the in-place-resolvable kinds. riscv's are pure byte deltas (auipc is byte
+       ; pc-relative, no page math), so intra-.text la/call/jmp all resolve inside the .o.
        rset (? a64 '(b26 b19) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
        machine (peep elf-machines target 0)
-       ; the backend must be registered, not merely named: a frontend bakes holo
-       ; with the native backend only, and a cross target joins the cat at runtime
-       ; ((borrow 'holo) then the backend's own text). unregistered, `lay` lowers
-       ; nothing and answers an empty stream -- so the object writes out whole,
-       ; with a 0-byte .text, and the failure only surfaces as a link or a boot
-       ; that goes nowhere. one lit? here turns that into a scare at the source.
+       ; the backend must be registered, not merely named: a frontend bakes holo with the
+       ; native backend only, and a cross target joins the cat at runtime. unregistered,
+       ; `lay` lowers nothing and the object writes out whole with a 0-byte .text -- the
+       ; failure would surface only as a link or a boot that goes nowhere.
        be (: b (backends target)
            (lit? b ? b (scare 'obj-no-backend target)))
-       ; a weak-defined function's callers must go through a relocation -- an
-       ; in-place resolve would pin them to the local body, and the linker could
-       ; never redirect to a strong override. built before lay: the relaxer needs
-       ; it too (a shortened branch could never survive as a relocation).
+       ; a weak-defined function's callers must go through a relocation: an in-place resolve
+       ; pins them to the local body past any strong override. built before lay -- the
+       ; relaxer needs it too, a shortened branch never surviving as a relocation.
        wkset (o-names wknames)
        nsec #secs
        _ (0 >= nsec ? (scare 'obj-no-sections target))
        (exec? s) (0 < s 2 & 4)
-       ; the relaxing layout -- obj.l is tree-fresh in the kore/mooncc cats while the holo
-       ; book rides the running binary's bake, and the build pairs them structurally (the
-       ; wake shims exec the sibling love; the Makefile). a bake too old to carry laylax
-       ; means a hand-mixed script/binary combo: scare loud, never lay quietly long.
-       ; the relaxer is the executable section's -- shortening a branch is only ever
-       ; sound where the branch may resolve internally in the first place.
-       ; a lane is one laid section: (name type flags align bytes relocs labels).
+       ; the relaxing layout. obj.l is tree-fresh in the kore/mooncc cats while the holo book
+       ; rides the running binary's bake, so a bake too old to carry laylax means a
+       ; hand-mixed script/binary pair: scare loud, never lay quietly long. the relaxer is
+       ; the executable section's -- shortening a branch is sound only where it may resolve
+       ; internally at all.
        lanes (map (\ s
                 (: fm (s 4)
                    p (? (exec? s)
@@ -544,9 +470,8 @@
        allrel (foldl (a \ l \ a + ln-rl l) () lanes)
        exts (o-exts lanes allrel)
 
-       ; -- symbol indices: NULL, one section symbol per section, then the
-       ; local statics (ELF wants every local ahead of the first global -- .symtab's
-       ; sh_info points there), then funcs, globs, exts --
+       ; -- symbol indices: NULL, a section symbol each, the local statics, funcs, globs,
+       ; exts. every local ahead of the first global, where .symtab's sh_info points --
        nloc #locnames nfun #funcnames nglob #globnames
        fstart (1 + nsec + nloc) gstart (fstart + nfun) estart (gstart + nglob)
        extidx (o-idx exts estart)
@@ -560,13 +485,11 @@
        strblob <str stroffs <>str
 
        ; -- the symbol table: locals (NULL + the section syms) then the globals --
-       ; (one catall per table -- a cat per entry re-copies it)
-       ; a named symbol's section is simply wherever its bytes went, found by the
-       ; same walk the relocations use -- which is what lets a global live in
-       ; .image or .rodata or .bss without the writer knowing those names.
-       ; the fallback is unreachable for a defined name (funcnames/globnames/
-       ; locnames are the defined sets by construction); it keeps a caller that
-       ; names one it never laid pointing at the first section, as before.
+       ; one catall per table; a cat per entry re-copies it.
+       ; a named symbol's section is wherever its bytes went, found by the walk the
+       ; relocations use, so a global may live in .image or .rodata or .bss unannounced.
+       ; o-place's fallback is unreachable for a defined name -- it keeps a caller that
+       ; names one it never laid pointing at the first section.
        (o-place nm) (: w (o-where lanes (name nm)) (two? w ? w '(1 0)))
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local func
@@ -577,9 +500,8 @@
                                              (elem fs wknames ? 2 1)   ; stb_weak: a strong def elsewhere wins
                                              2 <w <>w)))
                                  funcnames))
-           ; a data symbol honours wknames too: musl's __stdio_exit.c defines
-           ; __stdout_used weakly (aliasing a null dummy) so stdout.c's real one
-           ; wins -- a hardcoded strong binding made that pair a link-dup
+           ; a data symbol honours wknames too: musl defines __stdout_used weakly so
+           ; stdout.c's real one wins, where a strong binding makes the pair a link-dup
            gsyms (catall (o-mapi (\ i gs (: w (o-place gs)
                                             (o-sym (stroffs (nloc + nfun + i))
                                                    (elem gs wknames ? 2 1) 1 <w <>w)))
@@ -596,13 +518,9 @@
            (catall [(o-sym 0 0 0 0 0) ssyms lsyms fsyms gsyms esyms]))    ; the NULL symbol leads
        nsym (1 + nsec + nloc + nfun + nglob + #exts)
 
-       ; -- the relocations, one emitter dispatching on the fixup's kind. it used
-       ; to be two, split by section (text vs data), and the split was never the
-       ; real line: an executable section carries an abs64 too (the kernel's
-       ; `movabs $khop` / `ldr x9, =khop`, the hop from the low physical mapping
-       ; to the high linked one), and a data section's pointer and a text
-       ; section's are the same relocation. the kind says which; the section only
-       ; ever decided whether a fixup survived to here.
+       ; -- the relocations, one emitter dispatching on the fixup's kind, never on the
+       ; section: an executable section carries an abs64 too (the kernel's `movabs $khop`,
+       ; the hop from the low physical mapping to the high linked one). --
        ; a label -> (symidx base-addend): a weak fn binds its own symbol (base 0, so the
        ; linker can redirect), a section-bound label its section symbol + offset, anything
        ; else its undef. the emitters compose their own addend on the base.
@@ -620,17 +538,12 @@
                  'abs64 (o-rela off si rabs (sa + aux))
                  ; ..and its 4-byte twin, the PVH note's 32-bit entry
                  'abs32 (o-rela off si r-32 (sa + aux))
-                 ; x64: the field is measured from its own end, so every addend
-                 ; carries the -4. a weak-defined fn binds its own symbol through
-                 ; a plt32 -- section-relative would nail the call to this
-                 ; object's body and the linker could never redirect it to a
-                 ; strong override. so would a weak data symbol (musl's
-                 ; __stdout_used: bound to the section, the exit-time flush read
-                 ; its own null dummy and silently dropped everything buffered).
-                 ; for an external the byte before the field says which it is --
-                 ; E8/e9 (call/jmp) is a control transfer and wants plt32, a
-                 ; lea's modrm an address and wants pc32 (external DATA like
-                 ; `stdout` has no plt stub).
+                 ; x64: the field is measured from its own end, so every addend carries
+                 ; the -4. a weak-defined fn or data symbol binds its own symbol through a
+                 ; plt32, section-relative nailing it to this object's body past any strong
+                 ; override. for an external the byte before the field says which it is --
+                 ; E8/e9 is a control transfer and wants plt32, a lea's modrm an address and
+                 ; wants pc32 (external data like `stdout` has no plt stub).
                  'rel32
                   (o-rela off si
                           (? rv rr-pc32                        ; ..and each machine's own, 2 meaning
@@ -640,14 +553,12 @@
                              (elem pv '(232 233)) r-plt32
                              r-pc32)
                           ((sa + aux) - 4))
-                 ; a64: an adrp/add pair relocates by kind (a page delta never
-                 ; resolves inside a .o, even for a .text target); a b26 that
-                 ; survived the walk is weak, external, or in another section here.
+                 ; a64: an adrp/add pair relocates by kind, a page delta never resolving
+                 ; inside a .o; a b26 that survived is weak, external, or in another section.
                  'adrp21 (o-rela off si ra-pghi21 sa)
                  'addlo12 (o-rela off si ra-lo12 sa)
                  'b26 (o-rela off si (aux = 2483027968 ? ra-call26 ra-jump26) sa)   ; 0x94000000 = bl
-                 ; riscv: a 'pcrel pair (call/la, CALL_PLT) or a wide branch's
-                 ; 'j21 (JAL), both S+a-p through the same door.
+                 ; riscv: a 'pcrel pair (CALL_PLT) or a wide branch's 'j21 (JAL), both S+a-p
                  'pcrel (o-rela off si rr-call sa)
                  'j21 (o-rela off si rr-jal sa)
                  (scare 'obj-fix k))))
@@ -665,18 +576,14 @@
        shstrblob <shstr shoffs <>shstr
        shname shoffs
 
-       ; -- file layout: header, then section contents packed tight, then the sht.
-       ; the linker reads each section by (sh_offset, sh_size), so no in-file
-       ; alignment padding is needed; sh_addralign drives final placement. --
-       ; the section-header indices, one naming per shape: 0 NULL, then the
-       ; content sections, .symtab, .strtab, one .rela per content section,
-       ; .shstrtab last. with the standard four this is exactly the old layout
-       ; (symtab 5, strtab 6, relas 7..10, shstrtab 11, shnum 12).
+       ; -- file layout: header, then section contents packed tight, then the sht. the
+       ; linker reads each section by (sh_offset, sh_size), so no in-file padding is needed
+       ; and sh_addralign drives final placement. the indices: 0 NULL, the content sections,
+       ; .symtab, .strtab, one .rela per content section, .shstrtab last. --
        i-sym (1 + nsec) i-str (2 + nsec) i-rel0 (3 + nsec)
        i-shs (2 * nsec + 3) nsh (2 * nsec + 4)
        h-sz 64
-       ; the content offsets, in section order; a NOBITS section is skipped over
-       ; (it owns no file bytes, so its sh_offset is only a placeholder).
+       ; the content offsets, in section order; a NOBITS sh_offset is a placeholder.
        (o-offs i off acc) (nsec <= i ? [(rev acc) off]
                              (o-offs (i + 1) (off + ln-fsz (ln i)) (off . acc)))
        co (o-offs 0 h-sz ())    coffs <co

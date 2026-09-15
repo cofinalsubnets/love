@@ -1,31 +1,19 @@
-; apps/moon/parse.l -- the C parser (rung 3 stage 4a). tokens -> (1 ast stbl) |
-; (). recursive descent + a precedence ladder; the cursor a token list
-; threaded as (value rest) answers, () the parse error riding up. the parser
-; now carries state (ps, a tablet) -- C cannot be parsed without it: typedef
-; names ('types), enum constants ('enums, folded to numbers AT PARSE), and
-; the struct/union tag table ('stag: tag -> (fields size align), fields
-; ((name off ty)..) with C layout -- members aligned to their own alignment,
-; the whole rounded to the widest). the stag table rides out with the AST
-; for gen's sizing. types: 'char 'short 'int 'long 'void | ('ptr t)
-; | ('arr t n) | ('struct tag) -- unions flatten into 'struct entries whose
-; offsets are all zero. anonymous struct/union members splice their fields
-; into the parent (love.h's habit). the AST as before, plus: ('dot e name)
-; (e->x desugars to (dot (deref e) x)), ('switch e items) with ('case v) and
-; ('dflt) markers inline (fallthrough is the flat list), ('do body cond),
-; ('goto name) ('lbl name), ('tdef) (a typedef, gen skips it). stage 4b adds
-; the function-pointer declarator ('ptr ('fn ret ptys), a table ('arr ('ptr ('fn ret ptys)) n))
-; and generalizes a call head to any postfix expr ('call headexpr args).
-; stage 4c adds brace/designated initializers ('init (item..), item plain |
-; ('dfield name val) | ('didx n val), nesting), the flexible array member
-; ('arr t 0 from []), and [] size inference from the initializer (a string's
-; bytes+NUL, or the highest brace index). stage 4d lifts the star-array fence:
-; a declarator T *name[n] is an array of pointers ('arr ('ptr t) n), so a
-; string table char *m[] parses. still fenced: unsigned, struct params/returns
-; by VALUE (struct ASSIGNMENT walks), case labels past constants and enum
-; names, local typedefs, and a bare top-level fn-pointer array (ptop lays its
-; own declarators, does not route through pdtor). stage 6d adds the `float`
-; scalar (4-byte) and the compound literal ('clit ty init) -- an unnamed object
-; from a parenthesized type followed by a brace initializer, (type){ init }.
+; apps/moon/parse.l -- the C parser. tokens -> (1 ast stbl) | (); recursive descent
+; + a precedence ladder, the cursor a token list threaded as (value rest) answers,
+; () the parse error riding up. ps (a tablet) carries the state C cannot be parsed
+; without: typedef names ('types), enum constants ('enums, folded to numbers at
+; parse), and the struct/union tag table ('stag: tag -> (fields size align), fields
+; ((name off ty)..) with C layout -- members aligned to their own alignment, the
+; whole rounded to the widest). stag rides out with the AST for gen's sizing.
+; types: 'char 'short 'int 'long 'void | ('ptr t) | ('arr t n) | ('struct tag)
+; | ('ptr ('fn ret ptys)); unions flatten into 'struct entries whose offsets are all
+; zero, and an anonymous struct/union member splices its fields into the parent.
+; AST nodes beyond the obvious: ('dot e name) (e->x is (dot (deref e) x)), ('switch e items)
+; with ('case v)/('dflt) markers inline (fallthrough is the flat list), ('do body cond),
+; ('goto name) ('lbl name), ('tdef) (gen skips it), ('call headexpr args), ('clit ty init),
+; and ('init (item..)) with item plain | ('dfield name val) | ('didx n val). fenced: struct
+; params/returns by value (struct assignment walks), case labels past constants and enum
+; names, local typedefs, and a bare top-level fn-pointer array (ptop lays its own).
 ; a new node here is also clay's: clay.l validates and re-says what this file
 ; produces, so it wants an arity row, a precedence and a rendering (doc/misc/clay.md).
 (module 'moon
@@ -41,38 +29,29 @@
    (idat? ts) (two? ts && (tkk <ts = 'id))         ; an identifier heads ts
    (strat? ts) (two? ts && (tkk <ts = 'str))
    ; -- where a refusal stood --
-   ; cpp hands the spans -- ((index file)..), which file each stretch of the
-   ; flat stream came from -- on a marker token at the stream's head, laid by
-   ; the pass that was already rebuilding the spine. peel it in O(1); a caller
-   ; feeding raw lexer output has none and reads ().
-   ; the file has to be carried at all because an #include splices the
-   ; header's own line numbering into the one stream: a line number alone
-   ; can't say which file it means, and lines run backwards at a splice.
+   ; cpp hands the spans -- ((index file)..), which file each stretch of the flat stream
+   ; came from -- on a marker token at the head; a caller feeding raw lexer output reads ().
+   ; the file is carried because an #include splices the header's own line numbering in:
+   ; a line number alone cannot say which file it means, and lines run backwards at a splice.
    (fspans ts) (? (two? ts && (tkk <ts = 'fspans)) (tkv <ts) ())
    (fsbody ts) (? (two? ts && (tkk <ts = 'fspans)) >ts ts)
    (filat spans i)                                  ; the file in force at stream index i
     (: (go l cur) (? !(two? l) cur (i < <<l) cur (go >l <><l))
        (go spans ()))
-   ; a token the failing form's RE-PARSE stamped: (kind val line seq file).
-   ; slots 4 and 5 are free -- the cpp hideset and the lexer's glued-paren
-   ; flag both sit in slot 4 and are dead once parse holds the stream (parse
-   ; reads kind and val and nothing else).
+   ; a token the failing form's re-parse stamped: (kind val line seq file). slots 4 and 5
+   ; are free -- the cpp hideset and the lexer's glued-paren flag die once parse holds the
+   ; stream, which reads kind and val and nothing else.
    (stampf ts i spans)
     (? !(two? ts) ()
        (: t <ts
           ([(tkk t) (tkv t) <>>t i (filat spans i)] . stampf >ts (i + 1) spans)))
-   (stamped? t) (two? >>>>t)                       ; a 5th cell -- probed, never counted: mark runs on every lookahead of every parse
+   (stamped? t) (two? >>>>t)                       ; a 5th cell -- probed on every lookahead, never counted
    (seqof t) (? (stamped? t) <>>>t ())
    (filof t) (? (stamped? t) <>>>>t ())
-   ; the watermark. a recursive-descent refusal answers a bare () and unwinds
-   ; to the top carrying no position, so we remember the deepest token any
-   ; lookahead stood on and read the position back off that.
-   ; the successful parse must not pay for this. there is no cheap mutable
-   ; scalar here -- a tablet peep+pin per lookahead cost +25% on love.c -- so
-   ; only the RE-PARSE of an already-failing form runs on stamped tokens, and
-   ; an unstamped one (every token of every parse that is going to succeed)
-   ; costs mark a length test and nothing else. diagnostics are paid for out
-   ; of the failure path, where there is all the time in the world.
+   ; the watermark: a refusal answers a bare () and unwinds carrying no position, so the
+   ; deepest token any lookahead stood on is remembered and the position read off that.
+   ; only the re-parse of an already-failing form runs on stamped tokens -- an unstamped
+   ; one costs mark a length test and nothing else (a peep+pin per lookahead was +25%).
    far {}
    (mark ts)
     (: _ (? !(two? ts) ()
@@ -96,12 +75,9 @@
    asnops [["=" ()] '("+=" +) '("-=" -) '("*=" *) '("/=" /) '("%=" %)
              '("&=" &) '("|=" |) '("^=" ^) '("<<=" shl) '(">>=" shr)]
    scalars '(char short int long void double float)
-   ; a type-specifier run (char short int long void double float signed unsigned)
-   ; canonicalizes to one type symbol -- `unsigned long` -> 'ulong, `signed char`
-   ; -> 'char. the unsigned scalars are 'uchar 'ushort 'uint 'ulong (gen gives
-   ; them zero-extend loads + unsigned >> / compare / divide). `long long` folds
-   ; to 'long on the 64-bit targets (same width); on the 32-bit thumb ABI it is
-   ; its own 8-byte type, 'llong/'ullong -- the register pair.
+   ; a type-specifier run canonicalizes to one type symbol -- `unsigned long` -> 'ulong.
+   ; `long long` folds to 'long on the 64-bit targets (same width); on the 32-bit thumb
+   ; ABI it is its own 8-byte type, 'llong/'ullong -- the register pair.
    tyspec '(char short int long void double float signed unsigned _Bool _Complex __int128)
    (canon ps specs)
     (? (elem '_Complex specs)                   ; C99 complex: a seeded two-member struct
@@ -119,33 +95,26 @@
           (? !uns base
              (base = 'char) 'uchar (base = 'short) 'ushort
              (base = 'llong) 'ullong (base = 'long) 'ulong 'uint)))
-   ; ignorable specifiers: storage/qualifier keywords + gcc attribute ids. cc
-   ; keeps no linkage/qualifier state, so these are skipped wherever a type may
-   ; begin or a declarator may carry them -- __attribute__((..)) / _Alignas(..)
-   ; balance-skip their parens; _Noreturn / __inline stand alone.
+   ; ignorable specifiers: storage/qualifier keywords + gcc attribute ids, skipped wherever
+   ; a type may begin or a declarator may carry them -- __attribute__((..)) / _Alignas(..)
+   ; balance-skip their parens, _Noreturn / __inline stand alone.
    qualkw '(const volatile restrict register auto inline extern static)
-   ; _Alignof/__alignof__ are not here: they are operators (punary), and a skip ate
-   ; the parenthesized operand whole.
-   ; _Thread_local/__thread skip: no TLS, no threads (__STDC_NO_THREADS__), so a
-   ; thread-local is the one static object -- and would be shared, silently, the day threads land
+   ; _Alignof/__alignof__ are not here: they are operators (punary), and a skip would eat the
+   ; parenthesized operand whole. _Thread_local/__thread skip: no threads, so a thread-local is
+   ; the one static object -- and would be shared, silently, the day threads land
    qualid '("__attribute__" "__inline" "__inline__" "__restrict" "__restrict__"
             "__volatile__" "__volatile" "__const" "__const__" "_Noreturn" "_Alignas"
             "__extension__" "_Thread_local" "__thread")
-   ; typeof's three spellings; the bare one is gnu-mode's and c23's. not reserved in
-   ; C11, so an object named `typeof` reads as a declaration (the typedef table wins first)
-   ; typeof's spellings, plus C23's typeof_unqual -- which is the same operator here,
-   ; since a type in this compiler has never carried a qualifier to strip
+   ; typeof's spellings, plus C23's typeof_unqual -- the same operator here, since a type
+   ; has never carried a qualifier to strip. `typeof` is not reserved in C11, so an object
+   ; of that name reads as a declaration (the typedef table wins first)
    tyofid '("__typeof" "__typeof__" "typeof" "__typeof_unqual__" "typeof_unqual")
-   ; gcc's __auto_type: the declared type IS the initializer's, so it stands where a
-   ; type begins and is read by looking past the one name it allows
+   ; gcc's __auto_type: the declared type is the initializer's, so it stands where a type
+   ; begins and is read by looking past the one name it allows
    autoid "__auto_type"
-   ; gcc's library builtins: the prefix names the plain function and is nothing else.
-   ; libsig is the signature to declare on the way past, because a program that spells
-   ; the prefix is exactly the one that never included the header. the roster is a
-   ; constant -- built per identifier token, the table alone would cost more than the
-   ; whole feature saves. it sits up here with the other rosters and not beside the
-   ; type floor it reads: further down the block, love0's lane answers `;; missing
-   ; libbin` at bake time.
+   ; gcc's library builtins: the prefix names the plain function, and libsig declares it on
+   ; the way past (a program spelling the prefix never included the header). it sits up here
+   ; with the other rosters: further down the block, love0's lane answers `;; missing libbin`.
    libbin '("__builtin_memcpy" "__builtin_memmove" "__builtin_memset"
             "__builtin_memcmp" "__builtin_strlen" "__builtin_strcpy")
    ; ..and the shape test the builtin arms hide their string compares behind: pprim sees
@@ -162,42 +131,32 @@
    (qual? t) (? (tkk t = 'kw) (elem (tkv t) qualkw) (tkk t = 'id) (elem (tkv t) qualid) ())
    (qskip ts) (: r >ts (? ((tkk <ts = 'id) && peekp r "(") (skipbal >r 1) r))
    (pquals ts) (? (two? ts && qual? <ts) (pquals (qskip ts)) ts)
-   ; skip a trailing run of __attribute__((..)) / __asm__(..) -- the decoration
-   ; glibc hangs off a declarator's tail (`int f(void) __attribute__((__nothrow__));`,
-   ; `extern int x __asm__("y");`). balance-skip the parens; the codegen owes nothing.
-   ; the `(` is required to skip: a bare one of these names is not decoration, and
-   ; eating it strands whatever followed.
+   ; skip a trailing run of __attribute__((..)) / __asm__(..) -- the decoration glibc hangs
+   ; off a declarator's tail. the `(` is required to skip: a bare one of these names is not
+   ; decoration, and eating it strands whatever followed.
    (patt ts)
     (? !(two? ts) ts
        (((tkk <ts = 'id) && elem (tkv <ts) '("__attribute__" "__asm__" "__asm")) &&
         peekp >ts "(")
         (patt (skipbal >>ts 1))
        ts)
-   ; the statement-position skip, and __attribute__ is the whole of it. pstmt ran patt,
-   ; which meant a leading __asm__(..) -- the inline-asm statement -- was balance-skipped as
-   ; decoration and vanished without a word; the spellings that also carried `volatile`
-   ; refused on the stranded keyword instead. Only bare `asm` ever reached pasm.
+   ; the statement-position skip: __attribute__ only -- a leading __asm__(..) there is the
+   ; inline-asm statement, and patt would balance-skip it as decoration.
    (pattr ts)
     (? !(two? ts) ts
        ((idv? <ts "__attribute__") && peekp >ts "(")
         (pattr (skipbal >>ts 1))
        ts)
-   ; gcc's `__label__ a, b;` at a block head declares local labels. skipped: a label
-   ; already mangles to fn.NAME, so the declaration changes nothing -- until two blocks
-   ; of one function spell the same name, and that lands as a duplicate label, loudly.
+   ; gcc's `__label__ a, b;` declares local labels; skipped, since a label already mangles
+   ; to fn.NAME -- two blocks of one function spelling a name land as a duplicate, loudly.
    (plabs ts)
     (? !(two? ts) ts
        (peekp ts ";") >ts
        (plabs >ts))
-   ; does the leading declaration-specifier run carry keyword k? scans the front
-   ; run of qualifier + type-specifier keywords (and balance-skips attribute ids),
-   ; the same tokens pquals drops. the run is order-free, so `static char const`
-   ; and `const static char` answer alike -- which C says and main.c writes.
-   ; does the qualifier run pquals is about to drop carry `restrict`? the one qualifier the
-   ; codegen has a use for -- it is a promise about aliasing, not a property of the type, and
-   ; love.h already makes it on every lvm_'s Sp. read-only: pquals still drops the run, and
-   ; the fact rides out of band (ps 'rstrs) rather than in the type, which has never carried
-   ; a qualifier node and would need all 56 of gen.l's ptr dispatch sites to learn one.
+   ; does the leading declaration-specifier run carry keyword k? the run is order-free, so
+   ; `static char const` and `const static char` answer alike, which is what C says.
+   ; ..and does the run pquals is about to drop carry `restrict`? read-only: pquals still
+   ; drops it, and the fact rides out of band (ps 'rstrs) rather than in the type.
    (rstrq? ts)
     (? !(two? ts) ()
        (: t <ts
@@ -216,42 +175,33 @@
              ; enum head is not walked -- its tag, and a body, sit between it and the run.
              ((tkk t = 'id) && tkbty? ps t) (leadkw? ps >ts k)
              ())))
-   ; the `static` storage class -- so a block-scope `static` local is laid in .bss
-   ; (a real global), not a stack slot (a stack `static` is uninitialised garbage
-   ; every call -- the ai_pagesize bug).
+   ; the `static` storage class -- a block-scope `static` local is laid in .bss (a real
+   ; global), not a stack slot
    (leadstatic? ps ts) (leadkw? ps ts 'static)
    (leadextern? ps ts) (leadkw? ps ts 'extern)
    (leadregister? ps ts) (leadkw? ps ts 'register)
-   ; a file-scope `register T nm asm("R")` is GNU's GLOBAL register variable: the name
-   ; IS that machine register, so no storage is laid and every read answers it (vent
-   ; turns the spelling into a neutral register, as the local form's pin does). it must
-   ; be caught before patt, which would skip an asm name as decoration and rename the
-   ; object in silence
+   ; a file-scope `register T nm asm("R")` is GNU's global register variable: the name is
+   ; that machine register, so no storage is laid. it must be caught before patt, which
+   ; would skip the asm name as decoration and rename the object in silence
    (pgreg ps ts nm regv)
     (? (!regv || !(two? ts)) ts
        (!(asmid? <ts) || !(peekp >ts "(") || !(strat? >>ts) || !(peekp >>>ts ")")) ts
        (: s (tkv <>>ts)
-          ; only the STACK POINTER: gcc reserves a global register variable's register
-          ; for the whole translation unit and we cannot, so a read of any register the
-          ; allocator uses would answer whatever it last held
+          ; only the stack pointer: gcc reserves the register for the whole TU and we
+          ; cannot, so any register the allocator uses would answer whatever it last held
           (? !(elem s '("rsp" "sp" "esp"))
              (blame >>>>ts ("a global register variable is taken on the stack pointer only, not '" + s + "'"))
              (: _ (pin (ps 'gregs) nm [s 'long]) >>>>ts))))
-   ; `const` in the specifier run. it names the object only when the declarator
-   ; adds no pointer of its own, which cobj? decides per declarator.
+   ; `const` in the specifier run; it names the object only when the declarator adds no
+   ; pointer of its own, which cobj? decides per declarator.
    (leadconst? ps ts) (leadkw? ps ts 'const)
-   ; does a specifier-run `const` reach the object? arrays are transparent (`const
-   ; char a[3]` is three const chars), a pointer is not: `const char *p` qualifies
-   ; the pointee and p itself stays writable. a declarator-side `char * const p`
-   ; reads unqualified here and keeps its .data home -- conservative, and cgdata's
-   ; relocation guard answers the same for every one this tree actually has.
+   ; does a specifier-run `const` reach the object? arrays are transparent (`const char
+   ; a[3]` is three const chars), a pointer is not: `const char *p` qualifies the pointee.
+   ; a declarator-side `char * const p` reads unqualified here and keeps its .data home.
    (cobj? ty) (? !(two? ty) 1 (<ty = 'arr) (cobj? <>ty) !(<ty = 'ptr))
-   ; the declaration's alias attribute: `alias ( "TARGET" )` inside an
-   ; __attribute__ run, anywhere in the form (musl's weak_alias trails it:
-   ; `extern __typeof(old) new __attribute__((__weak__, __alias__("old")))`).
-   ; -> (TARGET weak?) | (). scans to the first depth-0 `;` or `{`, like
-   ; secat?, noting a `weak` in the same run -- binding matters: musl's
-   ; exit.c defines __stdio_exit weakly so __stdio_exit.c's real one wins.
+   ; the declaration's alias attribute: `alias("TARGET")` inside an __attribute__ run anywhere
+   ; in the form (musl's weak_alias), to the first depth-0 `;` or `{` like secat?, noting a
+   ; `weak` in the same run -- binding decides which definition wins. -> (TARGET weak?) | ()
    (aliasat? ts)
     (: (go s d tgt wk)
         (? !(two? s) (? tgt [tgt wk] ())
@@ -268,15 +218,10 @@
                               (go >s d (tkv <r2) wk) (go >s d tgt wk)))))
                  (go >s d tgt wk))))
        (go ts 0 () ()))
-   ; a `weak` attribute anywhere in the declaration -- musl writes `extern weak
-   ; hidden const size_t _DYNAMIC[];` (its `weak` macro sits after the storage
-   ; class), so a leading read is not enough. the binding matters even for a
-   ; declaration that defines nothing: a weak undefined symbol resolves to zero
-   ; at static link, which is how __init_tls tells static from dynamic.
-   ; an `always_inline` attribute anywhere in the declaration (love.h's
-   ; ai_inline) -- the gen admits the name to its inline table size-unbounded.
-   ; its mirror `noinline` (love.h's ai_noinline, every lvm_) bars the table:
-   ; the designed rets and the no-scratch helpers stay out-of-line by name.
+   ; an attribute anywhere in the declaration, not just leading -- musl's `weak` macro sits
+   ; after the storage class. weak matters even where nothing is defined: a weak undefined
+   ; symbol resolves to zero at static link. always_inline admits the name to gen's inline
+   ; table size-unbounded, noinline bars it.
    (attrany? ts a b)
     (: (go s d) (? !(two? s) ()
                    (: t <s
@@ -289,9 +234,8 @@
    (inlany? ts) (attrany? ts "always_inline" "__always_inline__")
    (wkany? ts) (attrany? ts "weak" "__weak__")
    (noinlany? ts) (attrany? ts "noinline" "__noinline__")
-   ; the declaration's section attribute, if any: scan this form's tokens (to
-   ; the first depth-0 `;` or `{`) for `section ( "NAME" )` -- inside a
-   ; declaration that shape only occurs in an __attribute__. -> NAME | ()
+   ; the declaration's section attribute: `section("NAME")` to the first depth-0 `;` or
+   ; `{` -- inside a declaration that shape only occurs in an __attribute__. -> NAME | ()
    (secat? ts)
     (: (go s d) (? !(two? s) ()
                    (: t <s
@@ -304,14 +248,10 @@
                              (go >s d))
                          (go >s d))))
        (go ts 0))
-   ; the declaration's alignment ask, both spellings at one door: gcc's `aligned(N)`
-   ; (bare `aligned` is the target's widest ask -- __BIGGEST_ALIGNMENT__, 8 under AAPCS32
-   ; where every other target says 16) and C11's `_Alignas(N|type-name)`,
-   ; scanned to the first depth-0 `;` or `{` like secat?. honored, not skipped --
-   ; cgdata lays the global on the boundary and the .o header asks the linker for the
-   ; same, where a skipped ask misaligns in silence (page tables, DMA). -> N | ()
-   ; `aligned` counts only inside parens: at depth 0 it is an ordinary identifier,
-   ; and reading it there over-aligned every global named `aligned`.
+   ; the alignment ask, both spellings at one door: gcc's `aligned(N)` (bare is the target's
+   ; widest -- 8 under AAPCS32, 16 elsewhere) and C11's `_Alignas(N|type-name)`, to the first
+   ; depth-0 `;` or `{` like secat?. `aligned` counts only inside parens, since at depth 0 it
+   ; is an ordinary identifier. -> N | ()
    (alignat? ps ts)
     (: (go s d) (? !(two? s) ()
                    (: t <s
@@ -333,9 +273,8 @@
 
    ; -- the parse state --
    (psnew tgt) (psnew-d tgt 'moon)                ; the short spelling: the default language
-   ; a new door rather than a wider one. psnew/cparse-t keep the arity every caller
-   ; already spells (test/law/moon.l alone holds dozens), so nothing shifts by a position -- and
-   ; under (f) == f a shifted call would hand back a closure without a word.
+   ; a new door rather than a wider one: under (f) == f a shifted call hands back a closure
+   ; without a word, so psnew/cparse-t keep the arity every caller already spells
    (psnew-d tgt dia) (: t {}
                 _ (pin t 'dia dia)                  ; the dialect: what grammar the front reads (moon | c)
                 _ (pin t 'tgt tgt)                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
@@ -367,8 +306,7 @@
                 _ (pin t 'qstage {})        ; ..staged by the declarator parse, consumed by the bind that follows
                 _ (pin t 'qtdef {})         ; typedef name -> the const/volatile mask its own leaf wears
                 _ (pin t 'qmem {})          ; "tag.member" -> the same mask, which playout has no slot for
-                ; gcc's builtin va_list, seeded so `typedef __builtin_va_list va_list;`
-                ; (musl's alltypes.h) parses: the same per-target tag stdarg.h lays --
+                ; gcc's builtin va_list, seeded so `typedef __builtin_va_list va_list;` parses --
                 ; gen bakes the va offsets, so only size/align/decay ride the type here
                 _ (pin (t 'stag) "__va_list_tag"
                        (? (pst32? t) '((("__ap" 0 (ptr void))) 4 4)
@@ -389,9 +327,8 @@
                 _ (pin (t 'sigs) "__builtin_popcount" '(int (uint) ()))
                 _ (pin (t 'sigs) "__builtin_popcountl" '(int (ulong) ()))
                 _ (pin (t 'sigs) "__builtin_popcountll" '(int (ulong) ()))
-                ; C99 _Complex, seeded as two-member structs (canon maps the
-                ; specifier run onto these tags): layout, copy, union membership
-                ; and the SysV (sse sse) / one-sse ABI all ride the struct lanes
+                ; C99 _Complex, seeded as two-member structs (canon maps the specifier run onto
+                ; these tags), so layout, copy, union membership and the ABI ride the struct lanes
                 _ (pin (t 'stag) "__cplx_double" '((("re" 0 double) ("im" 8 double)) 16 8))
                 _ (pin (t 'stag) "__cplx_float" '((("re" 0 float) ("im" 4 float)) 8 4))
                 _ (pin t 'vlan 0)                   ; the VLA decl-site counter (stamps each site's slot index)
@@ -408,21 +345,17 @@
 
    (tyat? ps ts) (tkbty? ps <(pquals ts))              ; a type begins at ts, past its qualifiers
    (ptyat? ps ts) (peekp ts "(" && tyat? ps >ts)       ; ..inside a `(`: a cast, a type-name operand
-   ; -- the type floor rides apps/moon/floor.l (shapes, sizes, the typing door), spelled once
-   ; and read from gen too. ps carries only the two things the floor takes as parameters:
-   ; the machine WORD and the tag table. --
+   ; -- the type floor rides apps/moon/floor.l (shapes, sizes, the typing door), read from
+   ; gen too. ps carries the two things it takes as parameters: the word and the tag table --
    (pst32? ps) (elem (peep ps 'tgt ()) '(thumb2 thumb2sp thumb1))
    (psword ps) (? (pst32? ps) 4 8)
    (szty ps) (? (pst32? ps) 'uint 'ulong)          ; size_t: sizeof folds wear this coat
    (tsz ps ty) (tysz (psword ps) (ps 'stag) ty)
    (talign ps ty) (tyalign (psword ps) (ps 'stag) ty)
 
-   ; -- parse-time expr typer (for sizeof folding) -- the undecayed type of an
-   ; lvalue/pointer expr, | () when unknown (the caller keeps a deferred 'szof
-   ; node then, and gen sizes it). only the forms whose type parse can settle
-   ; from ps 'locals + ps 'stag: a local/param var, a ->/. member, a *deref /
-   ; a[i] element, a cast. arrays stay undecayed (sizeof of an array is its span,
-   ; not a pointer) -- gen's szof lane reads the same undecayed type via clval.
+   ; -- parse-time expr typer (for sizeof folding): the undecayed type of an lvalue/pointer
+   ; expr, () when unknown (the caller keeps a deferred 'szof then, and gen sizes it). arrays
+   ; stay undecayed -- sizeof of an array is its span, and gen's szof reads the same via clval.
    (fldty ps sty nm) (: e (peep (ps 'stag) <>sty ())     ; the type of member nm off a struct type
                         (? !(two? e) ()
                            (: f (assoc nm <e) (? (two? f) <>>f ()))))
@@ -430,9 +363,8 @@
                        (: e (peep (ps 'stag) <>sty ())
                           (? !(two? e) ()
                              (: f (assoc nm <e) (? (two? f) [<>f <>>f] ())))))
-   ; &((T*)0)->fld (and a.b chains over it) folds to the member's byte offset --
-   ; the offsetof idiom, which sqlite carries as its own macro. the chain must
-   ; ground in a deref of a null pointer cast; anything else stays an address.
+   ; &((T*)0)->fld (and a.b chains over it) folds to the member's byte offset -- the offsetof
+   ; idiom. the chain must ground in a deref of a null pointer cast, else it stays an address.
    (nulloff ps e)
     (: (ground b)                                    ; -> (byte-offset struct-ty) | ()
         (? !(two? b) ()
@@ -447,10 +379,8 @@
                   (: f (fmof ps <>gr <>>b)
                      (? (two? f) [(<gr + <f) <>f] ()))))
            ())
-       ; a null-grounded pointer VALUE -> (byte-address stride) | (): the cast
-       ; ((T*)K), and + arithmetic over it scaled by the pointee (sqlite's
-       ; sqlite_int_to_ptr is &((char*)0)[X]). anything not grounded in a
-       ; constant null cast stays an address.
+       ; a null-grounded pointer value -> (byte-address stride) | (): the cast ((T*)K), and
+       ; + arithmetic over it scaled by the pointee. not so grounded stays an address.
        (pval x)
         (? !(two? x) ()
            ((<x = 'cast) && ptr? <>x)
@@ -482,9 +412,9 @@
    (ptrarg ps e) (? !(two? e && (<e = 'bin)) ()          ; the ptr/arr operand of a `bin + ptr idx` (a[i] desugars so)
                     (: a (ptype ps <>>e) b (ptype ps <>>>e)
                        (? (ptr? a || arr? a) a (ptr? b || arr? b) b ())))
-   ; a null pointer constant (C11 6.3.2.3p3): an integer constant expression that
-   ; folds to 0, with or without a cast to a pointer type -- cfold folds through a
-   ; cast whose target is not an integer type, so both spellings arrive here as 0
+   ; a null pointer constant (C11 6.3.2.3p3): an integer constant expression folding to 0,
+   ; with or without a cast to a pointer type -- cfold folds through a cast whose target is
+   ; not an integer type, so both spellings arrive here as 0
    (npc? e) (: v (cfold e) (? (cint? v && (v = 0)) 1 ()))
    (ptype ps e)
     (? !(two? e) ()
@@ -519,11 +449,9 @@
              (k = 'num) (? ((-2147483648 <= <>e) && (<>e <= 2147483647)) 'int 'long)
              (k = 'flo) 'double
              (k = 'flof) 'float
-             ; arithmetic rides the typing door: ptr - ptr is ptrdiff_t (a long
-             ; here, the 4-byte word on t32 -- same answer either way), ptr +- int
-             ; the decayed pointer, and a both-arithmetic result is puac of the
-             ; operands -- so sizeof(c + x) folds to 4, not the register's 8.
-             ; either side unknown defers to gen's szof, as ever.
+             ; arithmetic rides the typing door: ptr - ptr is ptrdiff_t, ptr +- int the
+             ; decayed pointer, both-arithmetic puac of the operands -- so sizeof(c + x)
+             ; folds to 4, not the register's 8. either side unknown defers to gen's szof.
              ((k = 'bin) && elem <>e '(+ - * / % & ^ |))
               (: a (ptype ps <>>e) b (ptype ps <>>>e)
                  (? ((ptr? a || arr? a) && (ptr? b || arr? b)) (? (= <>e '-) 'long ())
@@ -543,45 +471,36 @@
               (: a (ptype ps <>>e) b (ptype ps <>>>e)
                  (? (parith? a && parith? b) (puac !(pst32? ps) a b)
                     (two? a && (a = b)) a
-                    ; C11 6.5.15p6: with one operand a NULL POINTER CONSTANT the
-                    ; result takes the OTHER's type. that is what tells `(void *)
-                    ; ((long)(x) * 0l)` apart from a plain void pointer, and so what
-                    ; the linux kernel's __is_constexpr reads to decide whether x
-                    ; folded -- the whole trick is that the cast is a null pointer
-                    ; constant only when its operand is a constant expression
+                    ; C11 6.5.15p6: with one operand a null pointer constant the result
+                    ; takes the other's type -- the cast is a null pointer constant only
+                    ; when its operand folds, which is what the kernel's __is_constexpr reads
                     (npc? <>>e && ptr? b) b
                     (npc? <>>>e && ptr? a) a
                     ; both pointers, one of them to void: pointer to void, same paragraph
                     (ptr? a && ptr? b && (= a '(ptr void))) a
                     (ptr? a && ptr? b && (= b '(ptr void))) b
                     ()))
-             ; a truth value is an int (C11 6.5.3.3, 6.5.8, 6.5.13): !, the six
-             ; relations, && and || -- whatever the operand, so no operand typing
-             ; here (gen's wider carrier only ever holds 0/1 and is never asked)
+             ; a truth value is an int (C11 6.5.3.3, 6.5.8, 6.5.13): !, the six relations,
+             ; && and || -- whatever the operand, so no operand typing here
              ((k = 'un) && (= <>e 'not)) 'int
              ((k = 'bin) && elem <>e '(eq ne lt le gt ge)) 'int
              (elem k '(land lor)) 'int
              ())))
 
-   ; -- declarators: stars XOR one array suffix, plus the function-pointer
-   ; dragon -- T (*name)(..) and the dispatch-table T (*name[n])(..). a function
-   ; pointer is ('ptr ('fn ret ptys)) -- ret so an indirect call knows a double
-   ; result, ptys so it classifies its arguments by the PROTOTYPE, the only thing
-   ; that tells a float argument from the double it widened to. a table of them
-   ; is ('arr ('ptr ('fn ret ptys)) n).
+   ; -- declarators: stars xor one array suffix, plus T (*name)(..) and the dispatch table
+   ; T (*name[n])(..). a function pointer is ('ptr ('fn ret ptys)): ret so an indirect call
+   ; knows a double result, ptys so it classifies its arguments by the prototype -- the only
+   ; thing that tells a float argument from the double it widened to.
    (skipbal s d) (? (d < 1) s
                     !(two? s) ()
                     (peekp s "(") (skipbal >s (d + 1))
                     (peekp s ")") (skipbal >s (d - 1))
                     (skipbal >s d))
-   ; a run of [const-expr] / [] suffixes -> (dims rest) | (). the dimension is any
-   ; integer constant expression -- a literal, an enum constant, `64 / limb_bits` --
-   ; parsed by pexpr and folded by cfold. only the first (outer) dim may be [] (size 0).
-   ; a parameter's [static n] / [const n] (C99 6.7.6.3) drops its quals -- the
-   ; parameter decays to a pointer, so the promise costs nothing.
-   ; a dim that will not fold is a runtime dim (C99 VLA), carried as ('vdim expr)
-   ; -- the consumers judge: a local decl allocates, a pointee scales at runtime,
-   ; sizeof multiplies; anywhere else the varr type refuses downstream.
+   ; a run of [const-expr] / [] suffixes -> (dims rest) | (). the dimension is any integer
+   ; constant expression; only the first (outer) dim may be [] (size 0), and a parameter's
+   ; [static n] / [const n] (C99 6.7.6.3) drops its quals. a dim that will not fold is a
+   ; runtime dim (C99 VLA), carried as ('vdim expr) -- a local decl allocates, a pointee
+   ; scales at runtime, sizeof multiplies, anywhere else varr refuses downstream.
    (adims ps ts2 acc) (? !(peekp ts2 "[") [(rev acc) ts2]
                          (: t2 (pquals >ts2)
                             (? (peekp t2 "]") (adims ps >t2 (0 . acc))
@@ -600,37 +519,33 @@
                           (? (two? d && (= <d 'vdim)) ['varr (mkarr ety >dims) <>d]
                              ['arr (mkarr ety >dims) d])))
    (varr? ('varr . _)) 1
-   ; the (params)/[dims] suffix run on a direct declarator. each suffix wraps
-   ; inside w (the wrap-so-far: eventual-pointee -> declared type), so the type
-   ; grows inside-out; the name's own (params) ride out as dat (a fn DEF binds
-   ; them). bare = still just a (paren-wrapped) name, cleared by any suffix.
-   ; answers ((name w dat bare) rest).
+   ; the (params)/[dims] suffix run on a direct declarator -> ((name w dat bare) rest).
+   ; each suffix wraps inside w (the wrap-so-far: eventual-pointee -> declared type), so
+   ; the type grows inside-out; dat is the name's own (params), which a fn def binds;
+   ; bare = still just a (paren-wrapped) name, cleared by any suffix.
    (psufs ps ts name w dat bare)
     (? (peekp ts "(")
         (: rp (pparams ps >ts ())
-           ; the parameter TYPES, names dropped. a VARIADIC prototype parks () like an
-           ; unprototyped declarator: AAPCS-VFP keeps a variadic argument out of the
-           ; co-processor registers whatever it was declared as, and no `...` rides the
-           ; type for a call site to read that from, so the list would place them wrong.
+           ; the parameter types, names dropped. a variadic prototype parks () like an
+           ; unprototyped one: AAPCS-VFP keeps a variadic argument out of the co-processor
+           ; registers, and no `...` rides the type, so the list would place them wrong.
            pt9 (two? rp && !(rp 2) ? (map caup <rp))
            (? !(two? rp) () (psufs ps <>rp name (\ t (w ['fn t pt9])) (? bare rp dat) ())))
        (peekp ts "[")
         (: ar (adims ps ts ())
            (? !(two? ar) () (psufs ps <>ar name (\ t (w (mkarr t <ar))) dat ())))
        [[name w dat bare] ts])
-   ; direct declarator, recursive: name | ( *.. dtor ) , then suffixes -- covers
-   ; (*name)(params), the redundant (name), (*const p) (quals ride pquals), and
-   ; nested forms (`void (*(*x)(a))(b)`: x a ptr to fn(a) returning a ptr to
-   ; fn(b) returning void). a paren declarator's pointee is what trails its `)`.
-   ; the head may also be empty (abstract: `(*)(params)`). -> ((name w dat bare) rest) | ()
+   ; direct declarator, recursive: name | ( *.. dtor ), then suffixes -- covers (*name)(params),
+   ; the redundant (name), (*const p), and nested forms like `void (*(*x)(a))(b)`. a paren
+   ; declarator's pointee is what trails its `)`; the head may be empty (abstract `(*)(params)`).
+   ; -> ((name w dat bare) rest) | ()
    (pdirect ps ts)
     (: (nstars s k) (: s2 (pquals s) (? (peekp s2 "*") (nstars >s2 (k + 1)) [k s2]))
        (ptrk k t) (? (k < 1) t (ptrk (k - 1) ['ptr t]))
        (? (idat? ts) (psufs ps >ts (tkv <ts) (\ t t) () 1)
           !(peekp ts "(") (psufs ps ts () (\ t t) () ())
-          ; a `(` with a type inside opens a parameter list, not a nested declarator
-          ; (C11 6.7.7): `int f(int (int), int)`. psufs takes it from here, where the
-          ; star branch below would read `int` as a declarator and die on the `)`.
+          ; a `(` with a type inside opens a parameter list, not a nested declarator (C11
+          ; 6.7.7): `int f(int (int), int)`. the star branch below would die on the `)`.
           (tyat? ps >ts) (psufs ps ts () (\ t t) () ())
           (: sr (nstars >ts 0)
              k <sr t2 <>sr
@@ -694,23 +609,18 @@
    (pmembers ps ts acc)                             ; member pairs ((name ty)..); () name = anonymous splice; (name ty width) = a bitfield
     (? !(two? ts) ()
        (peekp ts "}") [(rev acc) >ts]
-       ; a bare `;` in a struct body declares nothing. C11 has no such struct-declaration
-       ; and gcc takes one anyway (C23 spells it); the kernel's DEFINE_LOCK_GUARD_0 lays
-       ; `struct { void *lock; ; }` through a macro that cannot know whether it is empty
+       ; a bare `;` in a struct body declares nothing. C11 has no such struct-declaration and
+       ; gcc takes one anyway (C23 spells it); a macro that cannot know whether it is empty lays one
        (peekp ts ";") (pmembers ps >ts acc)
-       ; C11 6.7.2.1: a static_assert-declaration is a struct-declaration, and it declares
-       ; no member. the kernel's const_true/BUILD_BUG_ON_ZERO idiom is `sizeof(struct
-       ; {_Static_assert(..);})`, so a whole struct body can be nothing but one
+       ; C11 6.7.2.1: a static_assert-declaration is a struct-declaration and declares no
+       ; member -- a whole struct body can be nothing but one (the kernel's BUILD_BUG_ON_ZERO)
        (sassert? ts)
         (: r (pstatic ps ts)
            (? (two? r) (pmembers ps <>r acc) ()))
        ; a struct label: `name:` where a member declaration would start -- a virtual member
-       ; naming an offset, holding nothing and taking no space. borrowed from HolyC, but the
-       ; first client is our own C, so it rides `moon` (the default) and not a HolyC front.
-       ; it is read before the type parse because a label has no type to parse; and only
-       ; where the dialect says so, since under -std=c this is a syntax error and stays one.
-       ; ..and it must not be a TYPE name: `s32:32` is an anonymous bitfield over a
-       ; typedef, which reads exactly like a label and is what linux/timex.h writes
+       ; naming an offset, holding nothing and taking no space. read before the type parse
+       ; (a label has no type to parse), and only under the `moon` dialect, since -std=c makes
+       ; it a syntax error. it must not be a type name: `s32:32` is an anonymous bitfield
        (moon? ps && plabel? ts && !(tkbty? ps <ts))
         (: nm (tkv <ts)
            (? (two? (want >ts ":")) (pmembers ps >>ts ([nm 'label] . acc)) ()))
@@ -740,19 +650,15 @@
                              ; `aligned` ask drops here as it does on the leading spelling
                              (dfin <dr (pattr <>dr) acc2))))
                       r (dts ts2 ())
-                      ; <r is reversed (dts links) -- and acc accumulates reversed
-                      ; too (pmembers revs at "}"), so prepend it as is: a second rev
-                      ; here laid `double re, im;` as im-then-re (an ABI break vs gcc)
+                      ; <r is reversed (dts links) and acc accumulates reversed too
+                      ; (pmembers revs at "}"), so prepend as is -- a second rev flips members
                       (? (two? r) (pmembers ps <>r (<r + acc)) ())))))))
-   ; lay a member list out; a union flattens every offset to 0. the cursor is a
-   ; bit position from the struct start: normal members byte-align to their own
-   ; alignment; a bitfield sits at the cursor, only bumped to the next declared-
-   ; type unit boundary to avoid straddling it -- the SysV/gcc x86 packing. its
-   ; stored (unit-byte-offset bitoff) let gen load the aligned word and extract.
+   ; lay a member list out; a union flattens every offset to 0. the cursor is a bit position
+   ; from the struct start: a bitfield sits at it, bumped to the next declared-type unit only
+   ; to avoid straddling (the SysV/gcc packing); its (unit-byte-offset bitoff) is gen's load.
    (bfmem? m) (two? >>m)                            ; a member pair carrying a width: (name ty width)
-   ; a trailing __attribute__((..)) run on a struct body: consume it, reading
-   ; whether `packed` rides inside (x64 epoll_event -- the kernel ABI needs
-   ; the packed layout, so skipping the attribute would mislay `data` at 8)
+   ; a trailing __attribute__((..)) run on a struct body: consume it, reading whether
+   ; `packed` rides inside (x64 epoll_event's kernel ABI needs it, or `data` mislays at 8)
    (pattpk ts)
     (? !(two? ts && idv? <ts "__attribute__") [0 ts]
        (: r >ts
@@ -773,18 +679,11 @@
               [(rev acc) (aup (>> (bit + 7) 3) a2) a2])
            (: m <l name <m ty <>m
               (? (= ty 'label)
-                 ; a struct label is a zero-width marker: the address of a position and
-                 ; nothing else. It is typed as a zero-length char array, so `s.hdr` decays
-                 ; to char* exactly as `char hdr[0]` does -- the address, with no `&` to
-                 ; write, which is the whole point of naming a position -- while staying an
-                 ; lvalue, so offsetof(S,hdr) still answers.
-                 ; it aligns as what follows it. Before a member: that member's own
-                 ; alignment, or the label names the padding and &s.hdr != &s.b (the bug the
-                 ; `char x[0]` idiom has -- gcc answers 4 where the member sits at 8).
-                 ; At the end: the struct's alignment, so a trailing label is one past the
-                 ; object and equals sizeof -- end()'s convention. One past the data would
-                 ; sit inside the trailing padding and point at nothing an array would reach.
-                 ; mx is final there by construction: nothing follows a trailing label.
+                 ; a struct label is a zero-width marker, typed as a zero-length char array so
+                 ; `s.hdr` decays to the address and stays an lvalue (offsetof still answers).
+                 ; it aligns as what follows it: before a member, that member's own alignment,
+                 ; or the label names the padding and &s.hdr != &s.b; at the end, the struct's
+                 ; alignment, so a trailing label equals sizeof and mx is already final.
                  (: (nxt r) (? !(two? r) () (: t2 <>(<r) (? (= t2 'label) (nxt >r) t2)))
                     nt (nxt >l)
                     la (? pk 1 nt (talign ps nt) (? (mx < 1) 1 mx))
@@ -823,13 +722,10 @@
                     (go >l nbit nmx ([name at ty] . acc))))))
        (go ms 0 0 ()))
    (panon ps) (: k (peep ps 'anon 0) _ (pin ps 'anon (k + 1)) (".anon" + show k))
-   ; a tag defined inside a block is that block's (C11 6.7.2.3), and it cannot be scoped
-   ; the way an enum constant is: the key is what the type node carries and what gen sizes
-   ; and lays members by, long after the brace closed. So mint a key of its own and bind
-   ; the spelling to it for the rest of the block -- the table only ever grows, and the
-   ; binding is what retires. the key leads with `.` like an anonymous tag's, so it is
-   ; not a C identifier and clay says the block is inexpressible rather than laying a name
-   ; no C compiler could read back. file scope keeps the bare spelling.
+   ; a tag defined inside a block is that block's (C11 6.7.2.3), and cannot be scoped the way
+   ; an enum constant is: the key is what gen sizes and lays members by, long after the brace
+   ; closed. so mint a key and bind the spelling to it for the rest of the block. the key leads
+   ; with `.`, so it is not a C identifier and clay says the block is inexpressible.
    ; a scoped binding into table tbl: the old value rides ps 'scopacc, a shadow entry
    ; whoever owns the scope drains (sdrain / note)
    (spin ps tbl nm v)
@@ -845,9 +741,7 @@
           key))
    ; ..and a bare `struct T` reads the innermost block tag of that spelling. with none in
    ; scope it answers the bare name rather than declaring a fresh incomplete tag as C says,
-   ; so `struct Node *p;` in a body still means the file-scope Node it was written to mean.
-   ; That accepts more than C spells, never less, and it is what keeps the forward reference
-   ; working without a lookahead to tell a declaration from a reference.
+   ; so `struct Node *p;` in a body still means the file-scope Node. accepts more, never less.
    (tagref ps nm) (peep (ps 'tags) nm nm)
    (pbty ps ts0)
     (: ts (pquals ts0)
@@ -887,23 +781,17 @@
                              [['struct tag2] <>pa])))
                     (? tag [['struct (tagref ps tag)] ts3] ())))
              (tkw? t 'enum)
-              ; the underlying type is unsigned when no enumerator is negative (gcc's
-              ; choice), and an enum bit-field is where that shows: `enum c code : 8`
-              ; holding 148 must load 148 back, not -108. the tag remembers which,
-              ; so a later `enum c` by tag alone reads the same signedness.
+              ; the underlying type is unsigned when no enumerator is negative (gcc's choice),
+              ; which shows in an enum bit-field: `enum c code : 8` holding 148 must load 148
+              ; back, not -108. the tag remembers, so a later `enum c` reads the same signedness.
               (: ts2 >ts
                  tag (? (idat? ts2) (tkv <ts2) ())
                  ts3 (? tag >ts2 ts2)
-                 ; an enum tag scopes by restoring, not by renaming: the type is a plain
-                 ; integer one from here on, so no tag key ever reaches gen to be resolved late.
-                 ; the WIDTH forks by ABI: AAPCS32 wants the smallest type holding every
-                 ; enumerator (gcc's -fshort-enums, its bare-metal arm default and what the
-                 ; objects we link beside carry), and every other target of ours says int.
-                 ; pk: a trailing __attribute__((packed)) on the body, which asks for the
-                 ; smallest type holding every enumerator -- the same answer AAPCS32 wants
-                 ; from every enum, so the two share one computation. past the 32-bit word
-                 ; the type widens either way: an enumerator that does not fit an int would
-                 ; otherwise be truncated by every load of a variable of this type
+                 ; an enum tag scopes by restoring, not by renaming: the type is a plain integer
+                 ; one from here on, so no tag key reaches gen to be resolved late. the width forks
+                 ; by ABI -- AAPCS32 wants the smallest type holding every enumerator (gcc's
+                 ; -fshort-enums), every other target says int, and pk (a trailing packed) asks the
+                 ; same. past the 32-bit word both widen, or a load would truncate the enumerator.
                  (ety pos lo hi pk)
                   (: wide (? (pos && 4294967295 < hi) 'ulong
                              (!pos && (hi > 2147483647 || lo < -2147483648)) 'long ())
@@ -927,9 +815,8 @@
                                     (: er (pasn ps >ts5)              ; = const-expr: fold it (enum consts, 1<<n, A+1) -- not just a literal
                                        (? !(two? er) ()
                                           (: cv (cfold <er)
-                                             ; a sun-sized enumerator is still a number: the kernel's
-                                             ; `(0xffffffffULL << 32)` is one, and gcc widens the
-                                             ; underlying type for it rather than refusing
+                                             ; a sun-sized enumerator is still a number, and gcc
+                                             ; widens the underlying type rather than refusing
                                              (? (cint? cv) [cv <>er] ()))))
                                     [v ts5])
                               (? !(two? vr) ()
@@ -945,9 +832,8 @@
                     [(peep (ps 'etag) tag 'int) ts3]))
              ((tkk t = 'id) && (? (peep (ps 'types) (tkv t) 0) 1 ()))
               [(peep (ps 'types) (tkv t) 0) >ts]
-             ; __auto_type NAME = init: the initializer's own type, read by parsing it
-             ; here and leaving the cursor at the name, so the ordinary declarator path
-             ; runs against a type that was written. gcc allows no other declarator
+             ; __auto_type NAME = init: the initializer's own type, parsed here with the cursor
+             ; left at the name so the ordinary declarator path runs. gcc allows no other declarator
              ((tkk t = 'id) && ((tkv t) = autoid))
               (: r1 >ts
                  (? !(idat? r1) ()
@@ -956,9 +842,8 @@
                        (? !(two? er) ()
                           (: ty (ptype ps <er)
                              (? ty [ty r1] ()))))))
-             ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time
-             ; type -- a type-name reads pcty, an expression ptype (whose 'sigs lane
-             ; carries musl's weak_alias: `extern __typeof(old) new __attribute__(..)`)
+             ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time type --
+             ; a type-name reads pcty, an expression ptype (whose 'sigs lane carries weak_alias)
              ((tkk t = 'id) && elem (tkv t) tyofid)
               (: r1 (want >ts "(")
                  (? !(two? r1) ()
@@ -968,8 +853,8 @@
                           (: ty (ptype ps <er)
                              (? ty [ty <>er] ()))))))
              ()))))
-   ; a type-name (casts, sizeof): base + an abstract declarator -- pdtor covers
-   ; stars, arrays, and the function-pointer form `T (*)(params)` (name = ()).
+   ; a type-name (casts, sizeof): base + an abstract declarator -- pdtor covers stars,
+   ; arrays, and the function-pointer form `T (*)(params)` (name = ()).
    (pcty ps ts)
     (: br (pbty ps ts)
        (? !(two? br) ()
@@ -977,15 +862,13 @@
              (? (two? dr) [<><dr <>dr] ()))))
 
    (pdecay ty) (? (arr? ty) ['ptr <>ty] (fn? ty) ['ptr ty] ty)   ; _Generic's lvalue conversion
-   ; -- the qualifiers _Generic needs, and why they live off to one side. 6.5.1.1
-   ; matches on compatible types, where `const char *` and `char *` are two; a type
-   ; here has never carried const/volatile, because a qualifier node would reach all
-   ; 56 of gen's ptr dispatch sites. So the one consumer that must tell them apart
-   ; keeps its own marked copy -- ('cq q t) over the leaf, q a mask of 1=const
-   ; 2=volatile -- parked in ps 'qtys beside 'locals and shadowed with it. Nothing
-   ; else reads a marked type.
-   ; only the specifier run's qualifier is seen: a mid-declarator one (`char *
-   ; const *p`) reads unqualified, which matches MORE than C does, never less.
+   ; -- the qualifiers _Generic needs. 6.5.1.1 matches on compatible types, where `const char
+   ; *` and `char *` are two, and a type here has never carried const/volatile (a qualifier node
+   ; would reach all 56 of gen's ptr dispatch sites). so the one consumer that must tell them
+   ; apart keeps a marked copy in ps 'qtys, shadowed with 'locals: ('cq q t) over the leaf, q a
+   ; mask of 1=const 2=volatile. nothing else reads a marked type.
+   ; only the specifier run's qualifier is seen: a mid-declarator `char * const *p` reads
+   ; unqualified, which matches more than C does, never less.
    (cq? ('cq . _)) 1
    (qmark q ty) (? !q ty
                    (ptr? ty) ['ptr (qmark q <>ty)]
@@ -996,20 +879,17 @@
                   (arr? ty) ['arr (qstrip <>ty) <>>ty]
                   ty)
    (qbare ty) (? (cq? ty) <>>ty ty)         ; lvalue conversion drops the top-level qualifier
-   ; one token's const/volatile bit. restrict is not in it -- that qualifies aliasing,
-   ; not the type's identity, and rides (ps 'rstrs) out of band.
+   ; one token's const/volatile bit. restrict is not in it -- that qualifies aliasing, not
+   ; the type's identity, and rides (ps 'rstrs) out of band.
    (cvq t) (? ((tkk t = 'kw) && (tkv t = 'const)) 1
               (idv? t "__const") 1
               ((tkk t = 'kw) && (tkv t = 'volatile)) 2
               ((tkk t = 'id) && elem (tkv t) '("__volatile__" "__volatile")) 2
               0)
-   ; the specifier run read twice over: its own const/volatile, and what a typedef
-   ; NAME in it brought with it (`typedef const char *ccp`). -> (own typedef's).
-   ; walks the run, never a token count -- a span taken by tally is O(the rest of
-   ; the stream) and this runs once per declaration.
-   ; sawty ends the walk at the declarator's NAME: once a type specifier has gone
-   ; by, the next id is the name, and reading it costs a 12-string scan plus a hash
-   ; lookup on every declaration in the TU for an answer that is always 0.
+   ; the specifier run read twice over: its own const/volatile, and what a typedef name in
+   ; it brought (`typedef const char *ccp`). -> (own typedef's). sawty ends the walk at the
+   ; declarator's name -- past a type specifier the next id is the name, and reading it costs
+   ; a string scan plus a hash lookup per declaration in the TU for an answer that is always 0.
    (qrun ps ts)
     (: (go l sawty)
         (? !(two? l) [0 0]
@@ -1023,10 +903,9 @@
                     r (go >l 1)
                     [<r (<>r | q)]))))
        (go ts ()))
-   ; a qualifier after the last star qualifies the pointer -- `int * const`, a type
-   ; no lvalue-converted controlling expression can be compatible with, so the row
-   ; is unreachable. stops at anything that is not a star or a qualifier, so the
-   ; shapes behind a `(` or a `[` are not this rung's.
+   ; a qualifier after the last star qualifies the pointer -- `int * const`, which no
+   ; lvalue-converted controlling expression is compatible with, so the row is unreachable.
+   ; stops at anything that is not a star or a qualifier.
    (qtop? ts)
     (: (go l q) (? !(two? l) q
                    (tp? <l "*") (go >l ())
@@ -1034,10 +913,9 @@
                    (qual? <l) (go >l q)
                    q)
        (go ts ()))
-   ; the mask a specifier run lays on the leaf of the type it names -- its own
-   ; const/volatile plus whatever its typedef already carried. over a pointer
-   ; typedef the run's own does not reach the leaf: `typedef char *cp; const cp x`
-   ; is a const pointer, where over an array typedef C qualifies the elements.
+   ; the mask a specifier run lays on the leaf of the type it names -- its own const/volatile
+   ; plus whatever its typedef carried. over a pointer typedef the run's own does not reach
+   ; the leaf: `typedef char *cp; const cp x` is a const pointer; over an array, the elements.
    (qspec ps ts base) (: r (qrun ps ts) (? (ptr? base) <>r (<r | <>r)))
    ; drain the marks pmembers staged for one body -- the run since qpre -- onto its
    ; tag, and restore the stage for whatever body encloses it.
@@ -1058,8 +936,8 @@
              (? !(two? dr) ()
                 (: ty <><dr
                    [(qmark bq ty) (qtop? dts) <>dr])))))
-   ; the controlling expression's marked type. Everything not on file falls back to
-   ; ptype -- an unqualified answer, which is what every arm here said before.
+   ; the controlling expression's marked type; everything not on file falls back to ptype,
+   ; an unqualified answer.
    (qtype ps e)
     (: p (ptype ps e)
        (? !(two? e) p
@@ -1071,9 +949,9 @@
                               (? !(stru? (qstrip bt)) p
                                  (qmark (peep (ps 'qmem) (<>(qstrip bt) + "." + <>>e) 0) p)))
                 p))))
-   ; ..and a cast is the one shape whose mark is on file nowhere: the ('cast ty ..)
-   ; node keeps the bare type and gen reads that slot, so re-read the type-name off
-   ; the tokens instead, taking the answer only when it strips back to what the node kept.
+   ; ..and a cast is the one shape whose mark is on file nowhere: the ('cast ty ..) node
+   ; keeps the bare type and gen reads that slot, so re-read the type-name off the tokens,
+   ; taking the answer only when it strips back to what the node kept.
    (qctl ps ts e)
     (: p (qtype ps e)
        (? !(two? e && (<e = 'cast)) p
@@ -1091,18 +969,17 @@
              (? !(peekp r ",") [[row] r]
                 (: more (pgarms ps >r)
                    (? (two? more) [(row . <more) <>more] ()))))))
-   ; the selected expression, presence-wrapped. equality is structural over the
-   ; marked type, so `const int *` and `int *` are two rows; a top-level-qualified
-   ; row matches nothing.
+   ; the selected expression, presence-wrapped. equality is structural over the marked type,
+   ; so `const int *` and `int *` are two rows; a top-level-qualified row matches nothing.
    (gpick rows ty)
     (: (go l w) (? !(two? l) w                       ; w carries the default: one pass settles it
                    (: r <l t <r q <>r e <>>r
                       (? (!q && (t = ty)) [1 e] (go >l (? (t = 'dflt) [1 e] w)))))
        (go rows ()))
 
-   ; complex usual-arithmetic conversion (C99 6.3.1.8): exactly one side
-   ; complex, the other arithmetic-real -> the real side rises to {x, 0}
-   ; (a clit, single-eval), so gen's complex lane only meets complex operands
+   ; complex usual-arithmetic conversion (C99 6.3.1.8): one side complex, the other
+   ; arithmetic-real -> the real side rises to {x, 0} (a clit, single-eval), so gen's
+   ; complex lane only meets complex operands
    (cxwrap ty x) ['clit ty ['init [x '(flo 0.0)]]]
    (mkbin ps op l r)
     (: tl (ptype ps l) tr (ptype ps r)
@@ -1141,25 +1018,21 @@
               [['cast (? (pst32? ps) 'ullong 'ulong) ['num (tkv t)]] >ts]
              (tkk t = 'llnum)                                   ; 1ll: llong on t32, long elsewhere
               [['cast (? (pst32? ps) 'llong 'long) ['num (tkv t)]] >ts]
-             ; C11 6.4.4.1: an l/L suffix makes the constant a long. untyped, sizeof(1L)
-             ; answered 4 and `i + 2L` computed in int -- the f-suffix row's twin
+             ; C11 6.4.4.1: an l/L suffix makes the constant a long -- untyped, `i + 2L` is int
              (tkk t = 'lnum) [['cast 'long ['num (tkv t)]] >ts]
              (tkk t = 'flo) [['flo (cflo (tkv t))] >ts]
              ; an f suffix makes a float constant (C11 6.4.4.2) -- the cast is what
              ; narrows it, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
              (tkk t = 'flof) [['cast 'float ['flo (cflo (tkv t))]] >ts]
-             ; an imaginary literal (1.0fi, _Complex_I's spelling) is the complex
-             ; constant {0, v} -- complex-double: complex floats compute as
-             ; doubles too (the float model), narrowing only at typed stores
+             ; an imaginary literal (1.0fi, _Complex_I's spelling) is the complex constant
+             ; {0, v}, complex-double -- complex floats compute as doubles too
              (tkk t = 'iflo)
               [['clit '(struct "__cplx_double") ['init ['(flo 0.0) ['flo (cflo (tkv t))]]]] >ts]
              (tkk t = 'str) [['str (tkv t)] >ts]
-             ; a wide literal desugars to a bounded compound literal of its element
-             ; type -- the init/layout machinery then lays elements, never bytes.
-             ; L -> wchar (int; unsigned on the arm targets, the predefine table's
-             ; fork), u -> char16 (ushort, a supplementary code point as its
-             ; surrogate pair), U -> char32 (uint). the token's value is canonical
-             ; UTF-8 (lex re-encoded the escapes); utf8dec answers the elements.
+             ; a wide literal desugars to a bounded compound literal of its element type, so
+             ; the init/layout machinery lays elements, never bytes. L -> wchar (int; unsigned
+             ; on the arm targets), u -> char16 (ushort, a supplementary code point as its
+             ; surrogate pair), U -> char32 (uint). the token's value is canonical UTF-8.
              (elem (tkk t) '(wstr str16 str32))
               (: ety (? (tkk t = 'str16) 'ushort
                         (tkk t = 'str32) 'uint
@@ -1217,12 +1090,10 @@
               (: nm (snip (tkv t) 10 (tally (tkv t)))
                  _ (? (peep (ps 'sigs) nm ()) 0 (pin (ps 'sigs) nm (libsig ps nm)))
                  [['var nm] >ts])
-             ; the type-level builtins: each answers a constant at parse, because its
-             ; operands are types (or an expression that is never evaluated), so none
-             ; of the three can ride the ordinary call path.
-             ; __builtin_offsetof: seed &((T*)0)->NAME and let the postfix ladder take
-             ; the `.b` / `[i]` tail, then fold the whole address the way the hand-written
-             ; idiom already folds -- one door, so the two spellings cannot disagree.
+             ; the type-level builtins each answer a constant at parse: their operands are
+             ; types, or an expression never evaluated, so none can ride the call path.
+             ; __builtin_offsetof seeds &((T*)0)->NAME, lets the postfix ladder take the
+             ; `.b` / `[i]` tail, then folds the address through nulloff like the hand idiom.
              ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_offsetof"))
               (: r1 (want >ts "(")
                  tr (? (two? r1) (pcty ps r1) ())
@@ -1232,32 +1103,28 @@
                  rest (? (two? dr) (want <>dr ")") ())
                  off (? (two? rest) (nulloff ps <dr) ())
                  (? (charm? off) [['cast (szty ps) ['num off]] rest] ()))
-             ; __builtin_types_compatible_p: structural equality over the two bare types,
-             ; and no decay -- an array is not its element pointer, which is the whole
-             ; question the linux kernel's __must_be_array asks it
+             ; __builtin_types_compatible_p: structural equality over the two bare types and
+             ; no decay -- an array is not its element pointer (the kernel's __must_be_array)
              ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_types_compatible_p"))
               (: r1 (want >ts "(")
                  ta (? (two? r1) (pcqty ps r1) ())
                  r2 (? (two? ta) (want <>>ta ",") ())
                  tb (? (two? r2) (pcqty ps r2) ())
                  rest (? (two? tb) (want <>>tb ")") ())
-                 ; _Generic's marked types, so an inner const tells `const char *` from
-                 ; `char *`; the top-level one is dropped, which is C11's own reading and
-                 ; gcc's for this builtin
+                 ; _Generic's marked types, so an inner const tells `const char *` from `char
+                 ; *`; the top-level one is dropped, C11's own reading and gcc's for this builtin
                  (? (two? rest) [['num (? ((qbare <ta) = (qbare <tb)) 1 0)] rest] ()))
-             ; __builtin_constant_p: 1 when the parse-time fold settles the operand, 0
-             ; whenever it does not. conservative by construction -- a miss sends the
-             ; consumer down its runtime lane, where a false 1 would hand it a wrong
-             ; constant one. the operand is not evaluated, so its side effects are gone.
+             ; __builtin_constant_p: 1 when the parse-time fold settles the operand, 0 when
+             ; it does not -- a miss sends the consumer down its runtime lane, the safe end.
+             ; the operand is not evaluated, so its side effects are gone.
              ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_constant_p"))
               (: r1 (want >ts "(")
                  ra (? (two? r1) (pasn ps r1) ())
                  rest (? (two? ra) (want <>ra ")") ())
                  (? (two? rest) [['num (? (charm? (cfold <ra)) 1 0)] rest] ()))
-             ; __builtin_object_size(p,t), and the dynamic spelling: the answer gcc gives
-             ; when it cannot see the object -- (size_t)-1 for types 0/1, 0 for 2/3. that is
-             ; the CONSERVATIVE end in both directions, and it is what the linux kernel's
-             ; fortify checks read to stand down. the operand is not evaluated
+             ; __builtin_object_size(p,t) and the dynamic spelling: the answer gcc gives when
+             ; it cannot see the object -- (size_t)-1 for types 0/1, 0 for 2/3, the conservative
+             ; end both ways, which is what the kernel's fortify checks read to stand down
              ((tkk t = 'id) && bib? (tkv t) &&
               elem (tkv t) '("__builtin_object_size" "__builtin_dynamic_object_size"))
               (: r1 (want >ts "(")
@@ -1268,9 +1135,8 @@
                  tv (? (two? rb) (cfold <rb) ())
                  (? !(two? rest) ()
                     [['cast (szty ps) ['num (? (charm? tv && 1 < tv) 0 -1)]] rest]))
-             ; __builtin_choose_expr(c,a,b): c must fold, and the unchosen arm is parsed
-             ; and dropped -- `_Generic`'s own lowering, so a call to an undefined function
-             ; in the arm not taken links clean. the arms are not required to type alike
+             ; __builtin_choose_expr(c,a,b): c must fold, the unchosen arm is parsed and
+             ; dropped, so a call to an undefined function in it links clean. arms need not type alike
              ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_choose_expr"))
               (: r1 (want >ts "(")
                  rc (? (two? r1) (pasn ps r1) ())
@@ -1283,26 +1149,21 @@
                  (? !(two? rest) ()
                     !(charm? cv) (blame r1 "__builtin_choose_expr wants a constant condition")
                     [(? (cv = 0) <rb <ra) rest]))
-             ; __func__ (C99 6.4.2.2): the enclosing function's name as a string.
-             ; pinned by the two body-parsing sites; outside a body there is no name
-             ; to give, so it stays an undeclared identifier.
+             ; __func__ (C99 6.4.2.2): the enclosing function's name as a string, pinned by the
+             ; two body-parsing sites; outside a body it stays an undeclared identifier.
              (idv? t "__func__" && string? (peep ps 'fnname ()))
               [['str (peep ps 'fnname ())] >ts]
-             ; A NAME being declared right now is not an enum constant. C11 6.2.1p7: a
-             ; declarator's scope begins at the end OF its declarator, so the initializers
-             ; that follow in the same declaration already see it -- `uintptr_t M = f(),
-             ; N = g(), n = M * N;` reads the local N. Fold it and the local is never read:
-             ; love.c has `enum { N = 4 }` in one function and that N as a local in another,
-             ; and lvm_outer's `n = M * N` compiled to `M * 4` in silence.
+             ; a name being declared right now is not an enum constant. C11 6.2.1p7: a
+             ; declarator's scope begins at the end of its declarator, so `uintptr_t M = f(),
+             ; N = g(), n = M * N;` reads the local N -- folding it reads the enum in silence.
              (tkk t = 'id)
               (: nm (tkv t)
                  ev (? (peep (ps 'declaring) nm ()) () (peep (ps 'enums) nm ()))
                  (? (cint? ev) [['num ev] >ts]
                     [['var nm] >ts]))
-             ; ({ .. }) -- gcc's statement expression. its value is the last statement when
-             ; that is an expression, void otherwise, so the node splits into the leading
-             ; STATEMENTS and that value expression: gen compiles the first in place and
-             ; the second as an ordinary expression against the env the decls built
+             ; ({ .. }) -- gcc's statement expression. its value is the last statement when that
+             ; is an expression, void otherwise, so the node splits into the leading statements
+             ; and that value expression, which gen compiles against the env the decls built
              (tp? t "(" && peekp >ts "{")
               (: br (pblock ps >ts)
                  (? !(two? br) ()
@@ -1326,9 +1187,8 @@
              (peekp <>r ",") (pargs ps ><>r (<r . acc))
              (: rest (want <>r ")")
                 (? (two? rest) [(rev (<r . acc)) rest] ())))))
-   ; the suffix run from a given seed -- ppost seeds with a primary; punary's
-   ; compound literal seeds with the clit ((struct kstat){0}.st_atime_sec,
-   ; (size_t [3]){..}[i] -- musl indexes and members straight off the literal)
+   ; the suffix run from a given seed -- ppost seeds with a primary, punary's compound
+   ; literal with the clit ((struct kstat){0}.st_atime_sec, (size_t [3]){..}[i])
    (ppostfrom ps e0 ts0)
     (: (more e ts2)
               (? (peekp ts2 "(")                     ; a call: the head is any postfix expr (fn pointers)
@@ -1355,16 +1215,11 @@
    (ppost ps ts)
     (: r (pprim ps ts)
        (? !(two? r) () (ppostfrom ps <r <>r)))
-   ; ++x desugars by duplicating x -- (asn x (bin + x 1)) evaluates the lvalue
-   ; twice, so a side-effecting one runs its effect twice and the store lands where
-   ; the load did not: `++*p++` stepped p twice and incremented the byte p had just
-   ; left, which is how pdclib's %f lost its last digit. a calm lvalue duplicates
-   ; harmlessly and keeps the lanes gen has for it (a bitfield, a pair, a wide --
-   ; `post` refuses all three); anything else rides `post`, which takes the address
-   ; once, and the step is added back to answer the new value rather than the old.
-   ; `op=` has the same wound and one door over: pasn's ('rmw op lv rhs), which
-   ; moors the address in a frame temp. ++/-- keep `post` -- it is the tighter code
-   ; and the two types it turns away are reachable by rmw's spelling, `x = x + 1`.
+   ; ++x desugars by duplicating x, and (asn x (bin + x 1)) evaluates the lvalue twice -- so a
+   ; side-effecting one runs its effect twice and the store lands where the load did not. a calm
+   ; lvalue duplicates harmlessly and keeps the lanes gen has for it (a bitfield, a pair, a wide
+   ; -- `post` refuses all three); anything else rides `post`, which takes the address once and
+   ; adds the step back. `op=` has the same wound and goes one door over, to pasn's ('rmw ..).
    (calm? e)
     (? !(two? e) 1
        (: k <e
@@ -1391,11 +1246,10 @@
                            (? (two? iv) (ppostfrom ps ['clit (fillarr ps cty <iv) <iv] <>iv) ()))
                        (: r (punary ps rest)
                           (? !(two? r) ()
-                             ; the complex cast lanes (C99 6.3.1.7, musl's creal/__CIMAG):
-                             ; same complex passes through; a width flip converts
-                             ; componentwise; real -> complex is {x, 0}; complex -> real
-                             ; reads .re. (a non-lvalue operand evaluates once per
-                             ; component read -- musl only casts vars and params.)
+                             ; the complex cast lanes (C99 6.3.1.7): same complex passes
+                             ; through, a width flip converts componentwise, real -> complex
+                             ; is {x, 0}, complex -> real reads .re. a non-lvalue operand
+                             ; evaluates once per component read.
                              (: sty (ptype ps <r)
                                 (? (cplxty? cty)
                                     (? (cplxty? sty && (<>sty = <>cty)) [<r <>r]
@@ -1418,9 +1272,8 @@
                        (? (two? r) (: ty (ptype ps <r)
                                       (? (ty && !(varr? ty))      ; a VLA's size is runtime: defer to gen's szof
                                          [['cast (szty ps) ['num (tsz ps ty)]] <>r] [['szof <r] <>r])) ()))))
-             ; _Alignof (C11 6.5.3.4) through talign, the door playout lays members with,
-             ; so it cannot drift from the layout it describes. the expression operand
-             ; is gcc's __alignof__ alone; C11's spelling takes a type-name only.
+             ; _Alignof (C11 6.5.3.4) through talign, the door playout lays members with, so it
+             ; cannot drift. the expression operand is gcc's __alignof__ alone, C11's a type-name.
              ((tkk t = 'id) && elem (tkv t) '("_Alignof" "__alignof__"))
               (: r1 >ts
                  (? (ptyat? ps r1)
@@ -1489,9 +1342,8 @@
                 (: r2 (pasn ps ><>r)
                    (? !(two? r2) ()
                       (: lv <r op <>hit
-                         ; a global register variable is READ-ONLY here: writing the stack
-                         ; pointer through a plain assignment is a program losing its frame,
-                         ; and gcc's own whole-unit reservation is what makes it sane there
+                         ; a global register variable is read-only here: writing the stack
+                         ; pointer through a plain assignment is a program losing its frame
                          greg (two? lv && (= <lv 'var) && two? (peep (ps 'gregs) <>lv ()))
                          (? greg (blame <>r2 "a write to a global register variable")
                             [(? !op ['asn lv <r2]                      ; plain =: no duplicate to make
@@ -1500,14 +1352,11 @@
                                <>r2]))))))))
    (pexpr ps ts) (pone ps pasn "," 'comma ts)
 
-   ; an initializer is an assignment-expr or a brace list. a brace list is
-   ; ('init (item..)); an item is a plain initializer, ('dfield name init),
-   ; or ('didx n init) -- a designator chain (.a.b = v, .a[i] = v, C99
-   ; 6.7.9) parses as a path and dbuild nests it, coalescing a consecutive
-   ; run that shares its head into one sub-init (musl's `.lim[0] = a,
-   ; .lim[1] = b` fills one member's two elements -- split items would
-   ; image the member twice, each zero-padding over the other). an
-   ; initializer nests (array of struct, struct of array). trailing comma ok.
+   ; an initializer is an assignment-expr or a brace list ('init (item..)); an item is plain,
+   ; ('dfield name init) or ('didx n init). a designator chain (.a.b = v, .a[i] = v, C99 6.7.9)
+   ; parses as a path and dbuild nests it, coalescing a consecutive run that shares its head
+   ; into one sub-init -- split items would image the member twice, each zero-padding over the
+   ; other. initializers nest, and a trailing comma is ok.
    (pinit ps ts)
     (? (peekp ts "{")
         (: (items ts2 acc)
@@ -1520,8 +1369,8 @@
                            (peekp ts3 "}") [['init (dbuild (rev (rcat es acc)))] >ts3]
                            ())))))
            (items >ts ()))
-       ; a scalar initializer that folds is its number -- `(Bits>>3)`-style macro
-       ; values image as constants (globals demand it; a local loses nothing)
+       ; a scalar initializer that folds is its number -- `(Bits>>3)`-style macro values
+       ; image as constants (globals demand it, a local loses nothing)
        (: r (pasn ps ts)
           (? !(two? r) ()
              (: e <r v (cfold e)
@@ -1536,10 +1385,9 @@
     (? (arr? ty && (<>>ty = 0) && charm? (initcount ps <>ty ini))
        ['arr <>ty (initcount ps <>ty ini)] ty)
    ; the plain items one object of `ty` takes when its braces are elided (C 6.7.9p20),
-   ; answering what is left over: a scalar takes one (a bitfield member too), an
-   ; aggregate takes its members in order, a union only its first, and a char array
-   ; takes one item when that item is a string. an incomplete tag or a [0] bound
-   ; takes nothing, which is how the caller's walk learns to stop.
+   ; answering what is left over: a scalar one, an aggregate its members in order, a union
+   ; its first, a char array one when that item is a string. an incomplete tag or a [0]
+   ; bound takes nothing, which is how the caller's walk learns to stop.
    (uni? ps ty) (stru? ty && peep (ps 'utag) <>ty 0)
    (chart? ty) (elem ty '(char uchar))
    (fills ps ty items)
@@ -1555,13 +1403,10 @@
            (? (uni? ps ty) (? (two? fs) (fills ps <>><fs items) items)
               (foldl (\ l f (fills ps <>>f l)) items fs)))
        >items)
-   ; how many array elements an initializer implies (for [] size inference):
-   ; a string is its bytes + NUL; a brace list is the highest index reached
-   ; (designated [k] sets the cursor to k). () if it implies nothing. `elt` is the
-   ; element type: when the items are a plain elided run (no braces, no designators)
-   ; they fill whole elements in order, so the count is how many times `fills` walks
-   ; one -- int a[][2] = {1,2,3,4} is 2 rows, and a seven-member struct takes seven
-   ; items an element, not one.
+   ; how many array elements an initializer implies (for [] size inference): a string is its
+   ; bytes + NUL, a brace list the highest index reached (designated [k] sets the cursor), ()
+   ; if it implies nothing. for a plain elided run over element type `elt` the count is how
+   ; many times `fills` walks one -- int a[][2] = {1,2,3,4} is 2 rows.
    (allplain? items) (foldl (\ ok it (ok && !(elem <it '(init didx dfield)))) 1 items)
    (initcount ps elt ini)
     (? (two? ini && (<ini = 'str)) (tally <>ini + 1)
@@ -1612,9 +1457,8 @@
        !(two? acc) ()
        (: r (want ts "=")
           (? (two? r) [(rev acc) r] ())))
-   ; the item stream carries (path value) pairs (path () = a plain item); dbuild
-   ; folds them into 'dfield/'didx items, one nested init per consecutive
-   ; same-head run, the value direct when a lone path exhausts (today's shape)
+   ; the item stream carries (path value) pairs (path () = a plain item); dbuild folds them
+   ; into 'dfield/'didx items, one nested init per consecutive same-head run
    (dbuild prs)
     (? !(two? prs) ()
        (: pv <prs path <pv v <>pv
@@ -1631,10 +1475,9 @@
                 sub (dbuild subs)
                 node (? (!(two? >subs) && !(two? <<subs)) <sub ['init sub])
                 ([(? (= <h 'f) 'dfield 'didx) <>h node] . dbuild <>gr)))))
-   ; -> (((path value)..) rest) | () -- a LIST, because a range designator is one item
-   ; per index. gcc takes a range as an array designator only, and only alone, which
-   ; is the whole of what the kernel writes; capped, so a wide one refuses rather than
-   ; imaging thousands of elements in silence
+   ; -> (((path value)..) rest) | () -- a list, because a range designator is one item per
+   ; index. gcc takes a range as an array designator only and only alone; capped, so a wide
+   ; one refuses rather than imaging thousands of elements in silence
    (rng1? p) (two? p && !(two? >p) && two? <p && (= <<p 'r))
    (rexp lo hi v acc) (? (hi < lo) (rev acc) (rexp (lo + 1) hi v ([[['i lo]] v] . acc)))
    (pinititem ps ts)
@@ -1653,27 +1496,20 @@
        (: v (pinit ps ts)
           (? (two? v) [[[() <v]] <>v] ())))
 
-   ; a constant-expression folder (for _Static_assert): an integer | () if the
-   ; expression is not a compile-time constant. sizeof/enum already folded to num.
-   ; values are 64-bit machine patterns (love's shifts and bitops wrap at the word,
-   ; so charms/suns fold like the hardware); a narrow cast masks to its width
-   ; (sign-extending the signed ones), and >> under an unsigned left goes logical
-   ; via mask -- (uintptr_t)-1 >> 2 is max-charm, not -1 (the arithmetic-shift
-   ; fold pinned max-charm -1 and flipped spec.l's `word`). uext? is the
-   ; parse-level unsignedness read: an unsigned cast, or a bin riding one on its
-   ; left -- an approximation, honest for the putcharm-style word math images use.
+   ; a constant-expression folder: an integer | () when the expression is not a compile-time
+   ; constant (sizeof/enum already folded to num). values are 64-bit machine patterns, love's
+   ; shifts and bitops wrapping at the word; a narrow cast masks to its width, sign-extending
+   ; the signed ones, and >> under an unsigned left goes logical via mask, so (uintptr_t)-1 >> 2
+   ; is max-charm, not -1. uext? reads that unsignedness: an unsigned cast, or a bin under one.
    (cint? x) (charm? x || sun? x)
    (uext? e) (? !(two? e) ()
                 (<e = 'cast) (elem <>e '(uchar ushort uint ulong ullong))
                 (<e = 'bin) (uext? <>>e)
                 ())
-   ; the folder carries no types, so it reads them off the casts the literal
-   ; lane already emits (`1u` parses as ('cast 'uint ..)). that is enough to
-   ; answer the one question that matters here: is this expression's C type
-   ; `unsigned int`, whose `+ - * <<` must wrap at 32 bits where a love integer
-   ; would just keep growing? it is, when a uint reaches the root and nothing
-   ; 64-bit does. everything else folds unbounded exactly as before -- signed
-   ; overflow is ub, and a 64-bit result already is the word pattern.
+   ; the folder carries no types, so it reads them off the casts the literal lane emits (`1u`
+   ; is ('cast 'uint ..)), which answers the one question here: is this expression's C type
+   ; `unsigned int`, whose `+ - * <<` must wrap at 32 bits where a love integer keeps growing?
+   ; it is, when a uint reaches the root and nothing 64-bit does. everything else folds unbounded.
    (w64c? e) (? !(two? e) ()
                 (<e = 'cast) (elem <>e '(long ulong llong ullong))
                 (<e = 'bin) (w64c? <>>e || w64c? <>>>e)
@@ -1685,9 +1521,8 @@
                (<e = 'un) (uic? <>>e)
                ())
    (u32w e v) (? (uic? e && !(w64c? e)) (v & 4294967295) v)
-   ; a const float expression -> its gem | 'bad, for the one place cfold above needs
-   ; one. gen.l's ffold is the image-time twin; this is the parse-time one, and both
-   ; stand on love's own doubles, which are the target's.
+   ; a const float expression -> its gem | 'bad, for the one place cfold needs one. gen.l's
+   ; ffold is the image-time twin; both stand on love's own doubles, which are the target's.
    (fcfold e)
     (? !(two? e) 'bad
        (: iv (cfold e)
@@ -1715,9 +1550,8 @@
               (op = 'lt) (? (a < b) 1 0) (op = 'le) (? (a <= b) 1 0)
               (op = 'gt) (? (b < a) 1 0) (op = 'ge) (? (b <= a) 1 0)
               (op = '&) (a & b) (op = '|) (a | b) (op = '^) (a ^ b)
-              ; shl multiplies by 2^b (the church exponent): love's << wraps at the word, and a
-              ; u128 constant (limb_base) must fold exact -- a bignum result rides, its guarded
-              ; consumers (charm?/cint?) decide; an unfoldable count answers no-fold
+              ; shl multiplies by 2^b (the church exponent): love's << wraps at the word and a
+              ; u128 constant must fold exact, so a bignum result rides and charm?/cint? decide
               (op = 'shl) (? ((0 <= b) && (b <= 256)) (u32w e (* a (b 2))) ())
               (op = 'shr) (? (uext? <>>e) (& (a >> b) ((<< 1 (64 - b)) - 1)) (a >> b))
               ()))
@@ -1728,11 +1562,9 @@
        (<e = 'cast)
         (: ty <>e
            v0 (cfold <>>e)
-           ; C11 6.6p6: a cast to an integer type may take a float constant, and that
-           ; is the one float an integer constant expression holds -- an array dim is
-           ; where it matters, since an unfoldable one reads as a VLA in silence.
-           ; the target must be an integer type and the roster has to be spelled:
-           ; a cast to `double` takes the same fold and must keep its fraction.
+           ; C11 6.6p6: a cast to an integer type may take a float constant -- an array dim is
+           ; where it matters, since an unfoldable one reads as a VLA in silence. the integer
+           ; roster has to be spelled: a cast to `double` takes the same fold and keeps its fraction.
            v (? (cint? v0 || !(elem ty '(bool char uchar short ushort int uint
                                             long ulong llong ullong))) v0
                 (: f (fcfold <>>e)
@@ -1749,25 +1581,22 @@
                   r (& v ((1 << w) - 1))
                   (? (r < (<< 1 (w - 1))) r (r - (1 << w))))
               v))                                   ; word-sized: the pattern is the value
-       ; land/lor are 3-element ('land l r), so l=<>e r=<>>e (NOT the 4-element bin accessors);
+       ; land/lor are 3-element ('land l r), so l=<>e r=<>>e, not the 4-element bin accessors;
        ; truthiness is != 0, not > 0 -- a negative operand is true in C (-1 && 1 == 1).
        (<e = 'land) (: a (cfold <>e) b (cfold <>>e)
                             (? (!(cint? a) || !(cint? b)) () (? (!(a = 0) && !(b = 0)) 1 0)))
        (<e = 'lor) (: a (cfold <>e) b (cfold <>>e)
                            (? (!(cint? a) || !(cint? b)) () (? (!(a = 0) || !(b = 0)) 1 0)))
-       ; ternary ('cond c a b): fold only the selected arm (C11 6.6) -- the dead arm need not be
-       ; constant (or even defined: 1 ? 0 : 1/0 is a valid constant expression).
+       ; ternary ('cond c a b): fold only the selected arm (C11 6.6) -- the dead arm need not
+       ; be constant or even defined (1 ? 0 : 1/0 is a valid constant expression).
        (<e = 'cond) (: c (cfold <>e)
                             (? !(cint? c) ()
                                (: v (? (c = 0) (cfold <>>>e) (cfold <>>e))
                                   (? (cint? v) v ()))))
        ())
-   ; _Static_assert ( const-expr [, "message"] ) ;  -> (('tdef) rest) | () -- an
-   ; assertion that folds to false fails the compile; a non-constant one is let by.
-   ; the message is optional (C23 made it so, and the kernel writes it that way):
-   ; the assertion is the whole point, and the string was only ever the
-   ; diagnostic's wording. so the comma-and-string is one optional step, and a `)`
-   ; where the comma would be is the short form, not a refusal.
+   ; _Static_assert ( const-expr [, "message"] ) ; -> (('tdef) rest) | () -- an assertion that
+   ; folds to false fails the compile, a non-constant one is let by. the message is optional
+   ; (C23), so a `)` where the comma would be is the short form, not a refusal.
    (pstatic ps ts)
     (: r1 (want >ts "(")
        re (? (two? r1) (pcond ps r1) ())
@@ -1775,9 +1604,8 @@
        r3 (? (strat? r2) >r2 ())
        r4 (? (two? r3) (want r3 ")")                ; the long form: expr, "message"
              (two? re) (want <>re ")") ())          ; ..and the short one: expr alone
-       ; peek for the `;`, then take the tail: want answers the remainder, which is
-       ; () when the matched token was the last one -- so a TU that is only an assert
-       ; read as "no `;` found" and refused (tdeflist carries the same idiom).
+       ; peek for the `;`, then take the tail: want answers the remainder, () when the matched
+       ; token was the last one -- a TU that is only an assert would read as no `;` found
        (? !(two? r4 && peekp r4 ";") ()
           (: v (cfold <re)
              (? (charm? v && (v <= 0)) () ['(tdef) >r4]))))
@@ -1787,11 +1615,8 @@
    (pdecl ps ts)
     (: br (pbty ps ts)
        stat (leadstatic? ps ts)                          ; block-scope `static` -> ('sdecl ..), laid in .bss
-       ; block-scope `extern` declares the file-scope object -- it lays no slot and takes
-       ; no local name, exactly as the function declaration below already reads. without
-       ; this the name bound a local and the body read a slot the linker never wrote:
-       ; doom's d_net.c says `extern boolean advancedemo;` inside a function, and the
-       ; object it tested was not the one d_main.c writes.
+       ; block-scope `extern` declares the file-scope object -- no slot laid, no local name,
+       ; exactly as the function declaration below already reads
        ext (leadextern? ps ts)
        regv (leadregister? ps ts)
        (? !(two? br) ()
@@ -1802,9 +1627,9 @@
                     (: dr (pdtor ps ts2 base)
                        (? !(two? dr) ()
                           (: name <<dr ty0 <><dr
-                             ; a VLA local: stamp the decl site's slot index onto the
-                             ; type (gen's prescan keys its ptr/size slots by it); an
-                             ; initializer or a `static` VLA refuses (invalid C)
+                             ; a VLA local: stamp the decl site's slot index onto the type
+                             ; (gen's prescan keys its ptr/size slots by it); an initializer
+                             ; or a `static` VLA refuses
                              ty (? !(varr? ty0) ty0
                                    (: ix (peep ps 'vlan 0)
                                       _ (pin ps 'vlan (ix + 1))
@@ -1820,17 +1645,13 @@
                              ; stage the marked type for the bind that follows; bindloc
                              ; consumes it, so a mark cannot outlive its declaration
                              _ (? bq (pin (ps 'qstage) name (qmark bq ty)) 0)
-                             ; a block-scope function declaration (`int f1(char *);` inside
-                             ; a body) declares an extern function -- no storage, no local
-                             ; slot. its sig joins the table, which is also what makes the
-                             ; name a known function at the call; a file-scope prototype
-                             ; said more, so it wins. the entry drops out below.
+                             ; a block-scope function declaration declares an extern function --
+                             ; no storage, no local slot. its sig joins the table unless a
+                             ; file-scope prototype already said more; the entry drops out below.
                              _ (? (!(fn? ty) || peep (ps 'sigs) name ()) 0
                                   (pin (ps 'sigs) name [<>ty () ()]))
                              ; the declarator is finished, so the name is in scope for every
-                             ; initializer after it -- marked before pinit runs (see the primary
-                             ; rule's note). the block's own shadowdecl still does the durable
-                             ; hiding and the restore; this only covers the declaration itself.
+                             ; initializer after it; the block's shadowdecl does the durable hiding
                              _ (pin (ps 'declaring) name 1)
                              (? (varr? ty && (stat || peekp ts3 "=")) ()
                                 (peekp ts3 "=")
@@ -1862,12 +1683,10 @@
                    _ (pin ps 'declaring olddecl)
                    res)))))
 
-   ; asm [volatile] ( "template" [: outputs [: inputs [: clobbers]]] ) ; -- the
-   ; GNU statement form (basic and extended), the template in holo's neutral
-   ; TEXT (love/holo/text.l; gen assembles it). adjacent template strings
-   ; concatenate (multi-line templates). operands ride as ((constraint expr)..),
-   ; clobbers as (string..) -- the constraint grammar is gen's business.
-   ; -> (('asm tmpl outs ins clobs) rest) | ()
+   ; asm [volatile] ( "template" [: outputs [: inputs [: clobbers]]] ) ; -- the GNU statement
+   ; form, the template in holo's neutral text (love/holo/text.l; gen assembles it). adjacent
+   ; template strings concatenate. operands ride as ((constraint expr)..), clobbers as
+   ; (string..) -- the constraint grammar is gen's. -> (('asm tmpl outs ins clobs) rest) | ()
    (asmid? t) (two? t && (tkk t = 'id) &&
                elem (tkv t) '("asm" "__asm__" "__asm"))
    ; `volatile` and `inline` may both stand between the keyword and the paren, in
@@ -1875,9 +1694,8 @@
    (asmqual? t) (? (tkk t = 'kw) (elem (tkv t) '(volatile inline))
                    (tkk t = 'id) (elem (tkv t) '("__volatile__" "__inline__" "__inline"))
                    ())
-   ; `%[name]` -> the operand's NUMBER, so no name reaches gen's asmsub. gcc numbers
-   ; outputs first and inputs after, which is the order nms arrives in; a name that
-   ; matches nothing is left alone for gen to refuse on
+   ; `%[name]` -> the operand's number, so no name reaches gen's asmsub. gcc numbers outputs
+   ; first and inputs after, the order nms arrives in; an unmatched name is left for gen
    (anynm? l) (? !(two? l) () (string? <l) 1 (anynm? >l))
    (asmnm tmpl nms)
     (: n (tally tmpl)
@@ -1901,9 +1719,8 @@
           (: (tmpl ts2 acc) (? (strat? ts2)
                                (tmpl >ts2 (acc + tkv <ts2))
                                [acc ts2])
-             ; an operand run: [name] "constraint" ( expr ) , .. -- empty before : or )
-             ; each entry carries its symbolic name (or ()) as a third element; the
-             ; names come off again below, so the ('asm ..) node gen reads is unchanged
+             ; an operand run: [name] "constraint" ( expr ) , .. -- empty before : or ). each
+             ; entry carries its symbolic name (or ()) third; the names come off again below
              (ops ts2 acc)
               (? (peekp ts2 "[")
                   (: nm (? (idat? >ts2) (tkv <>ts2) ())
@@ -1940,11 +1757,9 @@
                                (? (two? rest)
                                   [['asm tm (map opbare <s1) (map opbare <s2) <s3] rest] ()))))))))))
 
-   ; a statement-position __attribute__((..)) run skips (fallthrough..) -- except the two
-   ; whose semantic we owe: musttail lands in the ret's pre slot (clay's (ret e PRE)) and
-   ; gen's sibcall pass spells the marked tail jump or refuses the compile; holo marks an
-   ; asm statement's template as holo's neutral text (gen's cgasm). on any other statement
-   ; either annotation refuses -- never honored is never skipped in silence.
+   ; a statement-position __attribute__((..)) run skips, except two: musttail lands in the
+   ; ret's pre slot (clay's (ret e PRE)) and gen's sibcall pass spells the tail jump or refuses;
+   ; holo marks an asm template as holo's neutral text. on any other statement either refuses.
    (attrin a b nm) (? (= a b) ()                  ; a `nm` token before the b spine?
                       ((idv? <a nm) || attrin >a b nm))
    ; a bare non-zero integer constant returned where the enclosing sig says pointer.
@@ -1969,10 +1784,9 @@
                       (? (mt && (= <st 'ret && two? <>st)) [(st + '("__attribute__((musttail))")) <>r]
                          (ho && !mt && (= <st 'asm)) [(st + '(holo)) <>r]
                          ())))))))
-   ; a label is a flat marker (see pstmt2's rule) so a block can splice it beside the statement it
-   ; labels. an ARM -- an if/while/do/for body without braces -- has no list to splice into, and
-   ; the marker alone would BE the arm, leaving its statement to fall out past the arm's join.
-   ; so an arm takes the marker run with the statement under it, as one block.
+   ; a label is a flat marker so a block can splice it beside the statement it labels. an arm --
+   ; a brace-less if/while/do/for body -- has no list to splice into, and the marker alone would
+   ; be the arm, so an arm takes the marker run with the statement under it, as one block.
    (markerp s) (two? s && elem <s '(lbl case dflt))
    (parm ps ts)
     ((: (go ts acc)
@@ -1991,9 +1805,8 @@
               (? (peekp >ts ";") [['ret ()] >>ts]    ; bare `return;` -- a void return
                  (: r (pexpr ps >ts)
                     (? !(two? r) ()
-                       ; C11 6.8.6.4 hands `return` to the assignment constraints, and
-                       ; 6.5.16.1 takes an integer for a pointer only as a NULL pointer
-                       ; constant -- so `return 1;` from a T* is ill-formed, not address 1
+                       ; C11 6.8.6.4 hands `return` to the assignment constraints, and 6.5.16.1
+                       ; takes an integer for a pointer only as a null pointer constant
                        (intptr? ps <r) (blame <>r "an integer where a pointer is owed")
                        (: rest (want <>r ";")
                           (? (two? rest) [['ret <r] rest] ())))))
@@ -2039,11 +1852,9 @@
              (tkw? t 'switch)
               (: rc (pparen ps ts)
                  r2 (? (two? rc) <>rc ())
-                 ; a braced body is a block -- its declarations scope to it, case and
-                 ; default are statements pstmt reads -- and the switch keeps its flat
-                 ; items. `switch (e) STATEMENT`: a brace-less body is one labeled
-                 ; statement, and parm -- the if/while arms' own door -- takes the label
-                 ; run with it
+                 ; a braced body is a block (its declarations scope to it, case and default
+                 ; are statements pstmt reads) and the switch keeps its flat items. a brace-less
+                 ; body is one labeled statement, which parm takes with its label run
                  (? !(two? r2) ()
                     (peekp r2 "{")
                      (: rb (pblock ps r2)
@@ -2059,14 +1870,11 @@
               (: rest (want >ts ";") (? (two? rest) ['(brk) rest] ()))
              (tkw? t 'continue)
               (: rest (want >ts ";") (? (two? rest) ['(cont) rest] ()))
-             ; case/default are labels -- legal at any statement depth, not just as a
-             ; direct child of the switch body (the switch handler above catches the
-             ; top-level ones; these catch the nested coroutine-style ones -- bzip2's
-             ; get_bits drops `case lll:` inside a while, Duff's-device style). gen ties
-             ; each back to its nearest enclosing switch by case VALUE (g 'cases).
-             ; gcc's `case A ... B:` expands to one label per value -- sound here because
-             ; a switch dispatches by a compare chain, not a table. capped, so a wide
-             ; range refuses rather than laying thousands of compares in silence
+             ; case/default are labels, legal at any statement depth and not just as a direct
+             ; child of the switch body (Duff's-device style); gen ties each back to its nearest
+             ; enclosing switch by case value (g 'cases). gcc's `case A ... B:` expands to one
+             ; label per value -- sound because a switch dispatches by a compare chain, not a
+             ; table -- and is capped, so a wide range refuses rather than laying thousands.
              (tkw? t 'case)
               (: rv (pexpr ps >ts)
                  (? !(two? rv) ()
@@ -2092,21 +1900,17 @@
              (tp? t ";") ['(nop) >ts]
              ; a label: id ':' (a ternary's id is followed by '?', never ':')
              (plabel? ts)
-              ; C11 6.8.1p3: a label's scope is its whole function, so two of a name are
-              ; one label emitted twice and every goto to it takes the first -- silently.
-              ; gcc's `__label__` is the spelling that makes it easy to write by accident.
+              ; C11 6.8.1p3: a label's scope is its whole function, so two of a name are one
+              ; label emitted twice and every goto to it takes the first -- silently.
               (: nm (tkv t)
                  (? (peep (ps 'labs) nm ()) (blame ts ("duplicate label '" + nm + "'"))
                     (: _ (pin (ps 'labs) nm 1) [['lbl nm] >>ts])))
              (: r (thenw (pexpr ps ts) ";")
                 (? (two? r) [['expr <r] <>r] ())))))
-   ; block-scoped shadowing (C scope): a local variable whose NAME is a typedef or
-   ; an enum constant hides it for the rest of the block -- so a later `name op name`
-   ; reads as an expression (not a cast), and a read of the local stays a var (not a
-   ; folded number, which would also refuse as an lvalue). record (table name old);
-   ; a typedef pins to 0 (not-a-type), an enum constant is pulled (the fold site
-   ; tests charm?, and 0 is a charm); restore on block exit. love.h makes `num`/`word`
-   ; typedefs and love.c reuses `N` as a local over `enum { N = 13 }`.
+   ; block-scoped shadowing (C scope): a local whose name is a typedef or an enum constant
+   ; hides it for the rest of the block, so `name op name` reads as an expression and a read
+   ; of the local stays a var. record (table name old); a typedef pins to 0 (not-a-type), an
+   ; enum constant is pulled (the fold site tests charm?, and 0 is a charm); restore on exit.
    (declnames form) (? (two? form && (<form = 'decl)) (map cap <>form) ())
    (shadow1 ps nm shadows)
     (: s1 (: old (peep (ps 'types) nm 'none)
@@ -2117,13 +1921,11 @@
           (: _ (pull (ps 'enums) nm 0) (['enums nm olde] . s1))))
    (shadowdecl ps names shadows) (? !(two? names) shadows
                                      (shadowdecl ps >names (shadow1 ps <names shadows)))
-   ; a type specifier binds names wherever it is written -- an enum body's constants and
-   ; its tag's signedness, a block tag's spelling -- and at block scope C11 gives every one
-   ; of them that block. So move the run pbty staged since epre onto the block's shadow list
-   ; and hand the stage back to whatever encloses it. the entries are already shadow entries,
-   ; newest first, which is the order unshadow wants.
-   ; file scope drains nowhere: `note` clears the run per top-level form instead,
-   ; which is also what keeps this delta short enough to count by tally.
+   ; a type specifier binds names wherever it is written (an enum body's constants and its
+   ; tag's signedness, a block tag's spelling) and at block scope C11 gives every one of them
+   ; that block. so move the run pbty staged since epre onto the block's shadow list, newest
+   ; first as unshadow wants, and hand the stage back to whatever encloses it. file scope
+   ; drains nowhere -- `note` clears the run per top-level form instead.
    (sdrain ps epre shadows)
     (: now (peep ps 'scopacc ())
        (go l k) (? (k < 1) shadows (<l . go >l (k - 1)))
@@ -2133,14 +1935,11 @@
                             (: e <shadows
                                _ (? (<>>e = 'none) (pull (ps <e) <>e 0) (pin (ps <e) <>e <>>e))   ; 'none = the name was absent (a fresh local): remove it, don't pin the sentinel
                                (unshadow ps >shadows)))
-   ; record a local/param name -> type into ps 'locals, saving the old binding
-   ; ('none if fresh) on the block's shadow list so unshadow restores C scope.
+   ; record a local/param name -> type into ps 'locals, saving the old binding ('none if
+   ; fresh) on the block's shadow list so unshadow restores C scope; 'qtys shadows alongside.
    ; ent is (name ty ..) -- a decl entry (name ty ini) or a param (name ty).
-   ; 'qtys shadows alongside, and takes the staged mark only when it strips back to
-   ; the type actually bound -- a stage left unconsumed by some other lane cannot then
-   ; qualify a name it never described.
-   ; consume the mark a declarator parse staged for nm: it binds only when it strips
-   ; back to the type actually filed, else the name's old mark goes too
+   ; consume the mark a declarator parse staged for nm: it binds only when it strips back to
+   ; the type actually filed, else the name's old mark goes too
    (qtake ps nm ty)
     (: nq (peep (ps 'qstage) nm 'none)
        st !(= nq 'none)          ; a stage is there -- (== ..) not the datum's own truth
@@ -2156,11 +1955,9 @@
                                 (['locals nm old] . (['qtys nm oq] . shadows)))
    (bindlocs ps ents shadows) (? !(two? ents) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
    (loctypes form) (? (two? form && elem <form '(decl sdecl)) <>form ())       ; a block decl's entries, () otherwise
-   ; a block-scope typedef (sqlite's LOGFUNC_t): pin each declarator into ps
-   ; 'types, saving the old binding on the block's shadow list ('none = fresh) so
-   ; unshadow restores C scope; file scope (tdeflist) hands an empty list and drops
-   ; the answer. -> (rest sh2) | (); the typedef is a pure parse-time binding, no
-   ; AST form. peek for the `;`: the remainder may be empty (a typedef at EOF).
+   ; a block-scope typedef: pin each declarator into ps 'types, saving the old binding on the
+   ; block's shadow list ('none = fresh); file scope (tdeflist) hands an empty list and drops
+   ; the answer. -> (rest sh2) | (); peek for the `;`, the remainder may be empty (EOF).
    (btdefs ps base ts sh bq)
     (: dr (pdtor ps ts base)
        (? !(two? dr) ()
@@ -2177,7 +1974,7 @@
     (: ts0 (want ts "{")
        epre (peep ps 'scopacc ())
        ; the depth a tag definition reads to know it is not at file scope; bend restores it
-       ; alongside the shadow list, on every way out of the block
+       ; alongside the shadow list on every way out of the block
        d0 (peep ps 'blkd 0)
        _ (pin ps 'blkd (d0 + 1))
        (bend sh) (: _ (pin ps 'blkd d0) (unshadow ps sh))
@@ -2194,8 +1991,8 @@
                         (items <r acc <>r)))
                  (: r (? (tyat? ps ts2) (pdecl ps ts2) (pstmt ps ts2))
                     (? !(two? r) (: _ (bend sh) ())
-                       ; the enum body parses before the declarators bind, so its entries
-                       ; go under theirs -- unshadow walks newest first and the oldest wins
+                       ; the enum body parses before the declarators bind, so its entries go
+                       ; under theirs -- unshadow walks newest first and the oldest wins
                        (items <>r (<r . acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (sdrain ps epre sh)))))))
              (items ts0 () ()))))
 
@@ -2209,8 +2006,8 @@
              (: _ (pin ps 'sawrstr ())          ; clear before the report, so it cannot leak between params
                 dr (pdtor ps <>br <br)
                 (? !(two? dr) ()
-                   ; a parameter of array type decays to a pointer (the C rule) --
-                   ; so `int a[]`, and a va_list (an array typedef), ride as pointers
+                   ; a parameter of array type decays to a pointer, so `int a[]` and a
+                   ; va_list (an array typedef) both ride as pointers
                    (: e0 <dr ty0 <>e0
                       entry (? (arr? ty0) [<e0 (tdecay ty0)] e0)
                       _ (? (peep ps 'sawrstr () && <e0)   ; a named restrict param: file it for note
@@ -2227,14 +2024,11 @@
                          (: rest (want ts3 ")")
                             (? (two? rest) [(rev (entry . acc)) rest ()] ())))))))))
 
-   ; -- K&R (old-style) definitions: `f(a, b) int a; char *b; { .. }`. the parens
-   ; hold a bare identifier list; the parameter types follow as declarations before
-   ; the `{` (an undeclared id defaults to int, C's rule). answers the same
-   ; (entries rest variadic?) shape pparams does, with rest at the `{` -- so the fn
-   ; path flows straight into pblock. protos stay ansi (OF() expands with types), so
-   ; a bare non-type id after `(` is the sole K&R tell.
-   ; a K&R list holds bare parameter NAMES, so a qualifier spelled as an identifier
-   ; (`__const`, `__restrict`, `__extension__`) opens a prototype, not one
+   ; -- K&R definitions: `f(a, b) int a; char *b; { .. }`. the parens hold a bare identifier
+   ; list, the parameter types follow as declarations before the `{` (an undeclared id defaults
+   ; to int). answers pparams' (entries rest variadic?) with rest at the `{`. a bare non-type id
+   ; after `(` is the sole K&R tell -- and a qualifier spelled as an identifier (`__const`,
+   ; `__restrict`) is a name a K&R list cannot hold, so it opens a prototype.
    (krhead? ps ts) (idat? ts && !(tkbty? ps <ts) && !(qual? <ts))
    (kids ts acc)                                     ; the identifier list -> (names rest-after-`)`)
     (? (idat? ts)
@@ -2269,9 +2063,8 @@
    (addweak ps nm) (pin ps 'weaks (nm . ps 'weaks))   ; the .o binds nm's symbol weak
    ; a 'sigs row off pparams' answer: (rettype (paramty..) variadic?)
    (mksig rty rp) [rty (map caup <rp) <>>rp]
-   ; a function definition from its `{`: params bound for the body's parse (sizeof
-   ; folds, the marks), __func__ and the label table per function; all undone on the
-   ; way out. -> (('fn name params body) rest) | ()
+   ; a function definition from its `{`: params bound for the body's parse, __func__ and the
+   ; label table per function, all undone on the way out. -> (('fn name params body) rest) | ()
    (pfbody ps name prms ts)
     (: psh (bindlocs ps prms ())
        _ (pin ps 'fnname name)
@@ -2280,11 +2073,9 @@
        _ (pin ps 'fnname ())
        _ (unshadow ps psh)
        (? (two? b) [['fn name prms <b] <>b] ()))
-   ; a comma-list of `*.. name (params)` function prototypes sharing one base type.
-   ; each sibling's own stars ride into its sig's return slot -- dropping them read
-   ; `struct ai *ai_strof(..)` as a struct-by-value return, and every host-TU call
-   ; to an mproto sibling refused (invisible from love.c: the DEFINITIONS re-pin).
-   ; registers each sig; answers [rest-after-`;`] | ().
+   ; a comma-list of `*.. name (params)` prototypes sharing one base type; registers each sig,
+   ; answers [rest-after-`;`] | (). each sibling's own stars ride into its sig's return slot --
+   ; dropped, `struct ai *ai_strof(..)` reads as a struct-by-value return.
    (mproto ps base ts)
     (: sr (pstars ts base)
        rty <sr s0 <>sr
@@ -2296,19 +2087,18 @@
                       (: _ (pin (ps 'sigs) nm (mksig rty rp))
                          af <>rp
                          (? (peekp af ",") (mproto ps base >af)
-                            ; answer wrapped [rest]: a bare rest conflates the
-                            ; empty remainder (a proto list at EOF) with refusal
+                            ; answer wrapped [rest]: a bare rest conflates the empty
+                            ; remainder (a proto list at EOF) with refusal
                             (peekp af ";") [>af]
                             ()))))))))
 
-   ; a comma-list of typedef declarators sharing one base type (`typedef T a, b;`);
-   ; pins each name -> its declared type. answers ('tdef) rest | ().
-   ; btdefs' walk with nothing to shadow; bq = the specifier run's mask, _Generic's (qspec)
+   ; a comma-list of typedef declarators sharing one base type (`typedef T a, b;`), pinning
+   ; each name -> its declared type; btdefs' walk with nothing to shadow, bq the run's mask
    (tdeflist ps base ts bq) (: r (btdefs ps base ts () bq) (? (two? r) ['(tdef) <r] ()))
 
-   ; the top level: typedefs, functions, globals, bare type definitions.
-   ; staticness + the section attribute are noted at entry (the attribute-skip
-   ; lanes recurse, so the outermost sighting wins) and pinned per name by tops.
+   ; the top level: typedefs, functions, globals, bare type definitions. staticness + the
+   ; section attribute are noted at entry (the attribute-skip lanes recurse, so the outermost
+   ; sighting wins) and pinned per name by tops.
    (ptop ps ts)
     (: _ (? (peep ps 'curstat ()) () (? (leadstatic? ps ts) (pin ps 'curstat 1) ()))
        _ (? (peep ps 'cursect ()) () (: sc (secat? ts) (? sc (pin ps 'cursect sc) ())))
@@ -2324,12 +2114,11 @@
        ; glibc opens `__extension__ typedef` and the typedef lane reads the raw head
        (two? ts && idv? <ts "__extension__") (ptop9 ps >ts)
        (sassert? ts) (pstatic ps ts)
-       ; a leading __attribute__((..)) (weak, noinline, section, ..): the scans at
-       ; ptop's entry read the whole form, so skip it and parse the declaration proper
+       ; a leading __attribute__((..)): the scans at ptop's entry read the whole form, so
+       ; skip it and parse the declaration proper
        !(= (pattr ts) ts) (ptop ps (pattr ts))
-       ; `extern` data declares, never defines: an init-less gdecl under a leading
-       ; extern becomes ('xdecl pairs) -- addressable, no storage laid (the linker
-       ; binds the defining object's symbol). protos/typedefs pass through untouched.
+       ; `extern` data declares, never defines: an init-less gdecl under a leading extern
+       ; becomes ('xdecl pairs) -- addressable, no storage laid. protos/typedefs pass through.
        (tkw? <ts 'extern)
         (: r (ptop ps >ts)
            (? !(two? r) ()
@@ -2349,10 +2138,9 @@
                    (: sr (pstars ts0 base)
                       rty <sr ts1 (pquals <>sr)
                       ; the first declarator: a plain name, or a paren fn-pointer
-                      ; `(*name)(params)` (love.c's ai_image_absguard) -- routed
-                      ; through pdtor like the comma declarators below; the
-                      ; leading stars already rode into rty. -> (name rest ty),
-                      ; ty () on the plain path (the declarator's type is rty)
+                      ; `(*name)(params)` routed through pdtor like the comma declarators
+                      ; below; the leading stars already rode into rty. -> (name rest ty),
+                      ; ty () on the plain path, where the declarator's type is rty
                       fdr (? (idat? ts1) [(tkv <ts1) >ts1 () ()]
                              (peekp ts1 "(")
                               (: dr (pdtor ps ts1 rty)
@@ -2366,9 +2154,9 @@
                             fpty <>>fdr
                             fprm <>>>fdr                              ; the inner params when the declarator is a function
                             ; the object lanes sit here, not in the third arm: a function-first
-                            ; mixed list (`int f(int), a;`) reaches them from the lane above too
-                            ; the marked type stages here, where the entry is final; note's
-                            ; gogl consumes it, the way bindloc does for a local
+                            ; mixed list (`int f(int), a;`) reaches them from the lane above too.
+                            ; the marked type stages here, where the entry is final; note's gogl
+                            ; consumes it, the way bindloc does for a local
                             (one ts3 nm t2) (: r (one0 ts3 nm t2)
                                                _ (? (gbq && two? r) (pin (ps 'qstage) <<r (qmark gbq <><r)) 0)
                                                r)
@@ -2396,17 +2184,13 @@
                                 (peekp ts3 "=")
                                  (: r (pinit ps >ts3)
                                     (? !(two? r) ()
-                                       ; a later declarator arrives here with its dims already
-                                       ; parsed (`more` below runs pdtor first, so t2 is the whole
-                                       ; array type and ts3 sits on the `=`), where the first still
-                                       ; has its `[` ahead of it and takes the branch above. so a
-                                       ; lone [] bound has to be filled in here as well -- without
-                                       ; it `char a[]={1}, b[]={2,2};` left b incomplete, and every
-                                       ; later sizeof(b) answered 0 in silence (the bytes were laid
-                                       ; right; only the type was wrong, which is the worse half).
+                                       ; a later declarator arrives with its dims already parsed
+                                       ; (`more` runs pdtor first, so t2 is the whole array type and
+                                       ; ts3 sits on the `=`), where the first still has its `[`
+                                       ; ahead of it -- so a lone [] bound is filled in here too
                                        [[nm (fillarr ps t2 <r) <r] <>r]))
-                                ; a global register variable's row was pinned before its type
-                                ; was in hand; fill it in here, where the declarator is done
+                                ; a global register variable's row was pinned before its type was
+                                ; in hand; fill it in here, where the declarator is done
                                 (: gv (peep (ps 'gregs) nm ())
                                    _ (? (two? gv) (pin (ps 'gregs) nm [<gv t2]) ())
                                    [[nm t2 ()] ts3]))
@@ -2417,12 +2201,9 @@
                                          (: r (one (patt (pgreg ps <>dr <<dr (leadregister? ps ts))) <<dr <><dr)
                                             (? (two? r) (more <>r (<r . acc)) ()))))
                                    ; a declarator whose type is a function type (a function-type
-                                   ; typedef: love.h's `lvm_t lvm_ret0, lvm_cur, ..;`) declares a
-                                   ; function -- register its sig (the typedef carries the return),
-                                   ; lay no storage (a gdecl here laid duplicate .data symbols)
-                                   ; `;` ends the declaration -- peek for it: the remainder may
-                                   ; be empty (a global at EOF), which want's () would conflate
-                                   ; with the missing-semicolon refusal
+                                   ; typedef) declares a function -- register its sig, lay no
+                                   ; storage. `;` ends the declaration: peek, since the remainder
+                                   ; may be empty (a global at EOF), which want's () conflates
                                    (? !(peekp ts3 ";") ()
                                       (: rest >ts3
                                          (fnp? pr) (fn? <>pr)
@@ -2434,10 +2215,9 @@
                                                                   (pin (ps 'sigs) <p2
                                                                        [(? (two? ><>p2) <><>p2 'long) () ()])
                                                                   ())
-                                                             ; an alias declared through a function type (musl's
-                                                             ; weak_alias: `extern __typeof(old) new __attribute__
-                                                             ; ((alias("old")))`) answers a nameless 'tdef, so the
-                                                             ; name is recorded here, where it is still in hand
+                                                             ; an alias declared through a function type
+                                                             ; (musl's weak_alias) answers a nameless 'tdef,
+                                                             ; so the name is recorded here, still in hand
                                                              _ (: al (peep ps 'curalias ())
                                                                   (? !(two? al) ()
                                                                      (: _ (pin (ps 'alias) <p2 <al)
@@ -2448,10 +2228,10 @@
                                                               (go2 >l (? (fnp? <l || two? (peep (ps 'gregs) <<l ()))
                                                                          a2 (<l . a2))))
                                                 (go2 acc ()))
-                                         ; a const object with an initializer is a candidate for .rodata --
-                                         ; per declarator, since one specifier run serves them all and only
-                                         ; some carry a star. an init-less one is left alone: it rides .bss,
-                                         ; where it costs no file bytes at all.
+                                         ; a const object with an initializer is a candidate for
+                                         ; .rodata -- per declarator, since one specifier run serves
+                                         ; them all and only some carry a star. an init-less one
+                                         ; rides .bss, where it costs no file bytes.
                                          _ (? !(leadconst? ps ts) ()
                                               (: (goc l) (? !(two? l) 1
                                                             (: p <l
@@ -2467,12 +2247,10 @@
                                      (: _ (pin (ps 'sigs) name (mksig rty rp))
                                         aft (patt <>rp)                     ; a trailing __attribute__((..)) after the proto/fn declarator
                                         (? (peekp aft ";") [['proto name] >aft]
-                                           ; more comma-separated declarators sharing base -- each `* nm (params)`
-                                           ; is another prototype (register its sig); ends at `;`. (`void *malloc
-                                           ; (size_t), free(void*)` / love.h's `struct ai *ai_ini(void), *ai_ini_m(..)`)
-                                           ; a mixed list (`int f(int), a;`) is not mproto's shape: the object lane
-                                           ; takes the run, and answers a gdecl -- so a static f, whose linkage rode
-                                           ; the ('proto ..) through note, is filed here while the name is in hand
+                                           ; more comma-separated declarators sharing base -- each
+                                           ; `* nm (params)` is another prototype, ending at `;`. a
+                                           ; mixed list (`int f(int), a;`) is not mproto's shape: the
+                                           ; object lane takes it, so a static f is filed here
                                            (peekp aft ",")
                                             (: rest (mproto ps base >aft)
                                                (? (two? rest) [['proto name] <rest]
@@ -2488,17 +2266,12 @@
                                ; a global declaration; the first declarator's stars came off `sr`
                                (: first (one (patt (pgreg ps ts2 name (leadregister? ps ts))) name (? (two? fpty) fpty rty))
                                   (? (two? first) (more <>first [<first]) ())))))))))))
-   ; a parse refusal names where it stood. the first pass ran unstamped and so
-   ; left no trail -- so stamp just this form and run it through ptop again,
-   ; which is cheap (one form) and now marks as it goes. the furthest token
-   ; that re-parse reaches is the report site; the form's own first token is
-   ; the fallback, for a form that dies before any lookahead marks (and for
-   ; the re-parse that unexpectedly succeeds -- ps carries the first attempt's
-   ; half-registered typedefs, so that is possible, and its watermark would be
-   ; at the form's end, which would read as a nonsense position).
-   ; one position and no more: the stamped line is what the driver reports,
-   ; and a second line number baked into the message text would disagree
-   ; with it the day the stamping changes.
+   ; a parse refusal names where it stood. the first pass ran unstamped and left no trail, so
+   ; stamp just this form and run it through ptop again, marking as it goes. the furthest token
+   ; the re-parse reaches is the report site; the form's own first token is the fallback, both
+   ; for a form that dies before any lookahead marks and for a re-parse that unexpectedly
+   ; succeeds (ps carries the first attempt's half-registered typedefs). no line number in the
+   ; message text -- the stamped line is what the driver reports.
    (pfail ps ts2 spans toks)
     (: i0 (tally toks - tally ts2)       ; the failing form's index -- an O(n) walk, on the path that is already dying
        ft (? (two? ts2) <ts2 ())
@@ -2509,8 +2282,8 @@
        r (ptop ps (stampf ts2 i0 spans))
        dt (? (two? r) () (peep far 'tok ()))
        t (? (two? dt) dt ft)
-       ; a cause filed at the deepest token names the program's fault; anywhere
-       ; shallower it belongs to a branch that was abandoned, and does not
+       ; a cause filed at the deepest token names the program's fault; anywhere shallower it
+       ; belongs to a branch that was abandoned, and does not
        why (? ((peep far 'wseq ()) = (peep far 'seq ())) (peep far 'why ()) ())
        (? !(two? t) (gripe () () () "parse error at end of input")
           (gripe (? (two? dt) (filof t) (filat spans i0)) <>>t ()
@@ -2524,8 +2297,8 @@
        ; clear the stashes for the next form
        (note f)
         (: _ (? (elem <f '(gdecl xdecl))         ; register file-scope names -> types (ptype's global fallback)
-                ; ..and consume the mark ptop staged for each, on bindloc's terms:
-                ; only when it strips back to the type actually filed
+                ; ..and consume the mark ptop staged for each, on bindloc's terms: only
+                ; when it strips back to the type actually filed
                 (: (gogl prs) (? !(two? prs) 1
                                  (: nm <<prs
                                     _ (pin (ps 'globals) nm <><prs)
@@ -2536,9 +2309,8 @@
            st (peep ps 'curstat ()) sc (peep ps 'cursect ()) an (peep ps 'curalign ())
            fnp (elem <f '(fn proto))
            _ (? (st && fnp) (pin (ps 'sfns) <>f 1) ())
-           ; a function may name its section and its alignment too (love.c's data
-           ; sentinels): where the code lands is the point there exactly as it is
-           ; for a part's .vectors, and the align is what pins the spacing.
+           ; a function may name its section and its alignment too (love.c's data sentinels):
+           ; where the code lands is the point, and the align is what pins the spacing
            _ (? (sc && fnp) (pin (ps 'sects) <>f sc) ())
            _ (? (an && fnp) (pin (ps 'aligns) <>f an) ())
            _ (? ((<f = 'gdecl) && (st || sc || an))
@@ -2550,9 +2322,8 @@
                                    (go2 >prs)))
                    (go2 <>f))
                 ())
-           ; an alias declaration names no storage of its own: it is another
-           ; name for a symbol defined in this TU (musl's weak_alias, 189
-           ; files). record name -> target; cgen lays the extra label.
+           ; an alias declaration names no storage of its own: it is another name for a symbol
+           ; defined in this TU (musl's weak_alias). record name -> target; cgen lays the label.
            _ (: al (peep ps 'curalias ())
                 (? !(two? al) ()
                    (: nms (? (<f = 'gdecl) (map cap <>f) fnp [<>f] ())
@@ -2571,9 +2342,8 @@
                 (pin ps 'ainl (<>f . ps 'ainl)) ())
            _ (? (peep ps 'curnoinl () && fnp)
                 (pin ps 'noinl (<>f . ps 'noinl)) ())
-           ; the restrict params, filed under this function -- per-function, never a bare
-           ; name set: `p` may be restrict in one function and plain in the next, and a set
-           ; that forgets which would promise no-alias about a pointer that never promised it
+           ; the restrict params, filed under this function and never a bare name set: `p` may
+           ; be restrict in one function and plain in the next
            _ (: rs (peep ps 'currstr ())
                 (? (rs && fnp) (pin (ps 'rstrs) <>f (rev rs)) ()))
            _ (pin ps 'currstr ())
@@ -2586,8 +2356,8 @@
            _ (pin ps 'scopacc ())        ; what a file-scope specifier bound is nobody's to take back
            (pin ps 'cursect ()))
        (tops ts2 acc)
-        ; the hoisted block-scope externs lead the program: gen's global pass reads them,
-        ; and C's tentative rule lets a real definition later in the TU take the entry back
+        ; the hoisted block-scope externs lead the program: gen's global pass reads them, and
+        ; C's tentative rule lets a real definition later in the TU take the entry back
         (? !(two? ts2) [1 ['prog ((ps 'hoist) + (rev acc))] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                               (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                               (ps 'consts) (ps 'rstrs) (ps 'gregs)]

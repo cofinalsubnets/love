@@ -1,17 +1,12 @@
 
-; post -- the third egg stage. prel and ev are sat twice (ev compiles itself);
-; post is sat once, on the hatchling, after that and before the mop. it is the
-; one seat that sees both the finished compiler and the runtime-internal noms
-; (peek seek atype, and lamsrc/nifnom below) the mop is about to take off the book -- a
-; reference compiled here folds to a value and survives, the way ev's own
-; `feels` does. so: love that needs to read the heap raw belongs here.
-;
-; what lives here is the printer. it is the reader's mirror image: p0 is a floor
-; in C and p1 the real thing in love, and the printer splits the same way -- the
-; floor is love.c's facex (the scare face, which runs when the VM has stopped and
-; there is nobody left to call), the grammar is all below. `print` `dot` `show`
-; `putx` and the `.` sigil are pinned at the foot; prel leaves those four holes
-; for us, because a nif folded into prel's own compile could never be replaced.
+; post -- the third egg stage, sat once on the hatchling, after prel and ev and before
+; the mop. the one seat that sees both the finished compiler and the runtime-internal
+; noms (peek seek atype, lamsrc, nifnom) the mop is about to take off the book: a
+; reference compiled here folds to a value and survives, so love that needs to read the
+; heap raw belongs here.
+; the printer is the bulk of it, the reader's mirror image -- love.c's facex is the
+; floor, the grammar all below. `print` `dot` `show` `putx` and the `.` sigil are pinned
+; at the foot, in holes prel leaves: a nif folded into prel's compile could not be replaced.
 
 
 ; --- lowered from prel: nothing in the egg reads these, so they are sat once, here ---
@@ -27,21 +22,16 @@
    star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
    (tier v) (tray? v ? (: c (atype v) (? (c = 0) star-tray (c = 1) gem-tray (c = 2) twin-tray top-tray)))  ; a tray's tier is its ctor; nil off a tray
    zero? nil?
-   ; use: splice a registered module just below the head, so its names resolve on the walk but
-   ; never shadow yours. a missing name scares -- a silent ()-splice would be a silent no-op.
-   ; ..and only a TABLET is ever spliced. a scare ANSWERS wherever a help handler is
-   ; installed (a page, a task), so the miss would otherwise lay () in the chain -- and a
-   ; book the walk cannot read is a fault in map_probe, not the no-op the line above means.
+   ; splice a registered module just below the head, so its names resolve on the walk but
+   ; never shadow yours. a miss scares rather than splicing (): only a tablet is ever spliced,
+   ; and a book the walk cannot read is a fault in map_probe.
    (borrow m)    (: b (tablet? m ? m
                     (: r (lib () m) (? r r (scare 'no-module m))))
                (? (tablet? b) (setstack (<(stack ()) . b . >(stack ()))) b))
-   ; from: a module is its tablet. currying reaches a member because a tablet already indexes
-   ; itself, so (cite 'holo 'assemble) reads the same as ever; `keys` is the ordinary function,
-   ; not a reserved key; (cite ()) lists the registry; a missing module answers ().
-   ; the tablet is the real one -- pin it and you are doing surgery on a live runtime, which is
-   ; yours to do. it was never a safety wrapper: a module's members are folded into its consumers
-   ; at their compile, so gutting one changes nothing already compiled and everything compiled
-   ; after -- the hazard is divergence, and no closure here could have caught it.
+   ; a module is its tablet, and currying reaches a member: (cite 'holo 'assemble). (cite ())
+   ; lists the registry, a missing module answers (). the tablet handed back is the real one,
+   ; and members fold into consumers at their compile, so pinning over one changes only what
+   ; is compiled after.
    (cite k)   (? k (lib () k) (keys (lib ()))))
 
 (: putc (put out)
@@ -64,40 +54,33 @@
    (part p) (foldr (\ a m (p a ? ((a . <m) . >m)
                                  (<m . a . >m))) '(())))
 
-; the port head is three words -- ap, vt, ungetc -- and both languages know it: love.h declares
-; it, these build it. each poke answers the cell it wrote, so `poke -1` walks backwards. the vt
-; is the port's whole kind, so these stamp the one they mean; C hands the address over as ci-vt
-; and to-vt, and the egg mops both noms. a vt is a value word (poke), the head's ap an
-; instruction (place) -- the two cells of this head are the two doors, side by side.
+; the port head is three words -- ap, vt, ungetc -- declared in love.h and built here. each poke
+; answers the cell it wrote, so `poke -1` walks backwards; the vt is the port's whole kind, a
+; value word (poke), while the head's ap is an instruction (place).
 (: (tap cl)
  (place -1 (pick 0 in) (poke -1 ci-vt (poke -1 -1 (poke 3 cl (spin 4)))))
  (jug _)                                          ; the output dual of `tap`: say into it, slurp it back out
-  ; the backing starts empty, and that is the whole isolation: a literal here is
-  ; one string every jug would share, and to_writen fills a backing in place -- two
-  ; live jugs then write over each other until the first one grows.
+  ; the backing starts empty: a literal here is one string every jug would share, and
+  ; to_writen fills a backing in place, so two live jugs would write over each other.
   (place -1 (pick 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "" (poke 4 0 (spin 5))))))
- ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
- ; does. hot? goes first so the read only ever lands on a heap cell.
+ ; hot? names the zoo, the head's ap word the species. hot? first, so the read only ever
+ ; lands on a heap cell.
  (port? o) (? (hot? o) (== (pick 0 o) (pick 0 in)) 0)   ; the else arm is the bit: a two-armed ? answers the zero point
- ; drain a vessel to a value: a jug reads its backing buffer, everything else a gulp at a time.
- ; the drain accumulates, it does not recurse -- a recursion's stack depth is the gulp count, and
- ; on a parking port every task switch copies that stack.
- ; `see` is what makes the loop terminate: it is the one door that touches the device (chug
- ; never does), so every turn either lands its byte in the jug or reads the end. the byte goes
- ; to the jug rather than back to the vessel because a raw fd holds no pushback of its own.
+ ; drain a vessel to a value: a jug reads its backing, everything else a gulp at a time. it
+ ; accumulates rather than recursing -- the stack depth would be the gulp count, and a parking
+ ; port copies that stack per task switch. `see` is the one door that touches the device, so
+ ; every turn either lands a byte in the jug or reads the end, which is what terminates it.
  (slurp o) (? (? (port? o) (== to-vt (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug by its vt: a buffered fd port's word 3 is a string too
               (: j (jug 0)
                  (go u) (: c (see o) (? (= c -1) (slurp j)
                                         (: _ (put j c) _ (say j (chug o)) (go ()))))
                  (go ())))
- ; the promise, through a tablet -- the mutation door this tree sanctions. the answer is wrapped
- ; (1 v) and read with two?: a promise of nothing is ordinary (eof gives ()), and a bare pin would
- ; leave the slot reading like an unforced one, so f would re-run forever.
+ ; the promise, through a tablet. the answer is wrapped (1 v) and read with two?: a promise of
+ ; nothing is ordinary (eof gives ()), and a bare pin would read as unforced, so f would re-run.
  (once f) (: t (tablet 0) (\ u (: v (t 0) (two? v ? >v (: w (f ()) _ (pin t 0 (1 . w)) w)))))
- ; a port is a charlist: the run just gulped is realized, the tail a promise for the next.
- ; the tail must be a `once` -- p1 forces a position twice, and a re-drinking tail would lose the
- ; bytes between. one chug per gulp, and the run is whatever the port has in hand; the `see` is
- ; what refills, since chug never touches the device.
+ ; a port is a charlist: the run just gulped realized, the tail a promise for the next. the tail
+ ; must be a `once` -- p1 forces a position twice, and a re-drinking tail would lose the bytes
+ ; between. the `see` is what refills; chug never touches the device.
  (flow p) (: (gulp tl) (: c (see p)
                           (? (= c -1) tl
                              (: t (unsee p c, chug p)
@@ -105,43 +88,34 @@
                                 (go #t tl))))
              c (see p)
              (c != -1 ? (unsee p c, gulp (once (_ \ flow p)))))
- ; flow at one byte per force, for taking a port slowly where a whole run would read too far
- ; ahead. `in` already flows that way: it holds nothing in hand -- and still holds nothing
- ; where the device gulps behind it (chug asks the port, which is the static, not the run
- ; borrowed under it), so this stays the only door that reads stdin exactly.
+ ; flow at one byte per force, where a whole run would read too far ahead. the one door that
+ ; reads stdin exactly: `in` holds nothing in hand, though the device may gulp behind it.
  (trickle p) (: c (see p) (c != -1 ? (c . once (_ \ trickle p)))))
 
 (:: '>>= (\ l (. (last l) (init l))))
 (:: '<=< (\ g (: y (nom 0) ['\ y (foldr (\ f x [f x]) y g)])))
 (: pow ** power ** car cap cdr cup cons .)
 
-; --- the loader: use on a path ------------------------------------------------
+; --- the loader: borrow on a path ---------------------------------------------
 ; the `borrow` up top splices a module the runtime already holds; here it also loads one
-; from a PATH the caller writes out. the loader invents no path of its own, so a NAME
-; it lacks is a miss and the splice raises by name: what a frontend baked, and what a
-; cat registered, is the whole of what a name can mean.
-; a load is one fresh layer: enter, read-eval, leave registers it under the file's
-; basename -- and a file that made its own (module nm ..) keeps that registration, the
-; wrapper going out with the name it never wrote to.
-; the same path twice reads once, and the PATH is what marks it: a basename cannot,
-; because several files register one module (sb's parts, lush's, tls's) and a name-keyed
-; mark would drop every part after the first. it also reads what it is pointed at -- a
-; tree's own file over a baked older copy of it, which is what papel's want asks for.
-; `open` is captured off the posix module, so a fs-less frontend holds () there and every
-; path misses.
+; from a path the caller writes out. the loader invents no path of its own, so a name it
+; lacks is a miss: what a frontend baked and what a cat registered is all a name can mean.
+; a load is one fresh layer -- enter, read-eval, leave registers it under the file's
+; basename -- and a file that made its own (module nm ..) keeps that registration.
+; the same path twice reads once, marked by path and not basename: several files register
+; one module (sb's parts, lush's, tls's), and a name-keyed mark would drop every part after
+; the first. `open` is captured off the posix module, so a fs-less frontend misses every path.
 (: borrow
    (: prior borrow
-      ; read-eval every form of a module source; a torn form scares.
-      ; `flow`, never `slurp`: slurp conses the bytes, reverses, re-strings, and sound would cons
-      ; them again -- four copies of the module.
+      ; read-eval every form of a module source; a torn form scares. `flow`, never `slurp`:
+      ; slurp conses, reverses and re-strings, and sound conses again -- four copies.
       (rdev q) ((: (go cl) (: r (sound cl)
                               (? (two? r) (ev <r, go >r)
                                  (== r 'torn) (scare 'unfinished-form q)
                                  0)))
                 (flow q))
-      ; a layer holding no nom of its own is not a module: the file wrapped itself in a
-      ; (module nm ..) and registered elsewhere. the charm keys (0 the macros, 31337 the
-      ; parent chain) sit in every layer and are not noms.
+      ; a layer holding no nom of its own is not a module. the charm keys (0 the macros,
+      ; 31337 the parent chain) sit in every layer and are not noms.
       (bare? t) ((: (go ks) (two? ks ? (nom? <ks ? 0 (go >ks)) 1)) (keys t))
       (mname s) (: n #s
                    b ((: (go k r) (k >= n ? r (go (k + 1) (? (47 = peep s k 0) (k + 1) r)))) 0 0)
@@ -154,22 +128,19 @@
                  (? (peep (lib ()) m ()) (prior nm)          ; read already -- the path is the mark
                     (: q (? !fsopen () (fsopen m "r"))
                        (? !(hot? q) (prior m)
-                          ; a file whose own (module nm ..) registered wins: keep its tablet
-                          ; over the loader's wrapper layer, which leave would pin over it.
-                          ; the mark goes down before the read, so a file naming itself stops.
-                          ; t is read after the eval, so it holds either claim on the name --
-                          ; the file's, or a module that already stood there. a bare wrapper
-                          ; with neither is no module: pull the name and answer ().
+                          ; a file whose own (module nm ..) registered wins over the loader's
+                          ; wrapper layer, which leave would pin over it; the mark goes down
+                          ; before the read, so a file naming itself stops. a bare wrapper
+                          ; claiming nothing is no module: pull the name and answer ().
                           (: _ (pin (lib ()) m 1)
                              _ (enter nm) _ (rdev q) t (lib () nm) w (leave ())
                              _ (t && pin (lib ()) nm t)
                              (!t && bare? w ? (pull (lib ()) nm 0, ()) (prior nm)))))))
               (prior m)))))
 
-; a module's macros in the head layer, without its names. a macro rides its own
-; layer's table, which `macros` walks, so a consumer reaching a module through
-; `cite` rather than a splice has no other way to spell one. ks names them, ()
-; takes the lot; a macro table is a module's key 0, the one the export prune keeps.
+; a module's macros in the head layer, without its names -- the only way to spell one when
+; the module was reached through `cite` rather than a splice. ks names them, () takes the
+; lot; a macro table is a module's key 0, the one the export prune keeps.
 (: (transcribe m ks)
    (: M (cite m 0)
       (? (tablet? M)
@@ -210,12 +181,11 @@
 
 (: (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 
-; --- coin: a kind of the coin row -- a table of what its values answer to, keyed by the
-; noms the C side reads (love.h's Kn rows): name + * ap hot - net star /, net one of
-; payload tally ratio. (coin 'nm spec) registers the kind and answers its constructor; spec
-; is a tablet, or a function of the constructor when a method strikes its own kind:
-; (z \ {'+ ..}). a method takes both operands raw; (lift z f) lowers them and re-strikes
-; f's answer. the registry orders kinds by registration, which is their order under sort;
+; --- coin: a kind of the coin row -- a table of what its values answer to, keyed by the noms
+; the C side reads (love.h's Kn rows): name + * ap hot - net star /, net one of payload tally
+; ratio. (coin 'nm spec) registers the kind and answers its constructor; spec is a tablet, or
+; a function of the constructor when a method strikes its own kind: (z \ {'+ ..}). a method
+; takes both operands raw, (lift z f) lowers them and re-strikes. kinds sort by registration;
 ; (kinds ()) lists the names in that order, (kinds 'nm) answers the table.
 (: (coin nm spec)
     (: t {'name nm} z (strike t)
@@ -229,12 +199,11 @@
    (lift z f) (\ a b (z (f (load a) (load b)))))
 
 ;;; FIXME help/io setters below here. redesign the API with more structure
-; binary?: does f take exactly two operands? read two ways -- the arity off the n-ary closure
-; marker, else the param count off the source a compiled lambda stashes. one-sided on purpose:
-; a shape neither reads (a nif, a partial) passes.
-; the marker is read off a known binary rather than named: `pick`'s nom dies at the hatch but
-; the folded reference lives. and it must be lvm_cur -- the ap table has it. binding lvm_ret0
-; the same way (to catch a one-armed nif) segfaults the image bake, so the nif case stays open.
+; binary?: does f take exactly two operands? the arity off the n-ary closure marker, else the
+; param count off a compiled lambda's stashed source. one-sided on purpose: a shape neither
+; reads (a nif, a partial) passes. the marker is read off a known binary rather than named,
+; and must be lvm_cur -- binding lvm_ret0 the same way segfaults the image bake, so a
+; one-armed nif goes uncaught.
 (: hcur (pick 0 (\ a b a))
    (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
                   (== hcur (pick 0 f)) (2 = peek 1 f)
@@ -243,17 +212,13 @@
                (binary? f) (seal-hook 5 f)
                (scare 'help-arity f)))
 
-; the stdio door, the help's twin: (wear (i o e)) re-seats in/b/err for this task,
+; the stdio door, the help's twin: (wear (i o e)) re-seats in/out/err for this task,
 (: (wear l) (seal-hook 6 l))
 
-; trap -- (f x) under a help that escapes: the value on a clean run, (n a b) when a
-; scare landed here.
-; all three operands, always: two hand back a closure, which is truthy, and f never runs at
-; all. n's own arity is checked (binary?) before f runs -- so the refusal lands under the
-; ambient help, not inside the raise this form exists to catch.
-; nothing unwinds: the escape jumps past every pending restore between the raise and here, so
-; a cleanup belongs in n, never inside f -- or in `mind`'s c, which is the same cleanup owned by
-; the resource instead of by the catcher.
+; trap -- (f x) under a help that escapes: the value on a clean run, (n a b) when a scare
+; landed here. all three operands, always: two hand back a closure, which is truthy, and f
+; never runs at all. nothing unwinds -- the escape jumps past every pending restore between
+; the raise and here -- so a cleanup belongs in n, or in `mind`'s c.
 (: (trap f x n)
      (: _ (? (binary? n) 0 (scare 'help-arity n))   ; refuse before f runs, under the ambient help
         prev (heard ())
@@ -266,29 +231,22 @@
         (r ())))
 
 ; mind -- (f x) with c minded on the way out: c fires exactly once, clean or raised, the
-; condition rides on to the help outside, and the answer is f's. so a helper holds its own
-; port or its own restore, however far under a catcher it sits.
-; the n hands back a marked condition rather than re-raising in place, so the one (c ())
-; below serves both paths -- re-raise inside the n and a help that answers (the shell's
-; default, welp, any plain (hear f)) returns through it and the tail fires c a second time.
-; `mark` is minted once and closure-private, so no value f answers can pose as the raise.
-; all three operands, like trap, and c is a thunk fired with the unit.
-; raises only: a scare is what reaches a help, so a bare (k v) into a continuation
-; captured outside jumps clean past every c between there and here.
-; c runs with the displaced help back, so its own raise belongs to the trap outside --
-; and replaces the condition c was firing for, which is the one way out of a lost raise.
+; condition rides on to the help outside, and the answer is f's. the n hands back a marked
+; condition rather than re-raising in place, so the one (c ()) below serves both paths -- a
+; re-raise inside n returns through any help that answers and fires c a second time. `mark`
+; is minted once and closure-private, so no value f answers can pose as the raise. raises
+; only: a bare (k v) into a continuation captured outside jumps past every c between there
+; and here. c runs with the displaced help back, so a raise of its own belongs to the trap
+; outside and replaces the condition it was firing for.
 (: mind (: mark (mint 0)
            (\ f x c
               (: r (trap f x (\ a b (mark . [a b])))
                  _ (c ())
                  (? (two? r && == <r mark) (scare <>r <>>r) r)))))
 
-; the ISA vocabulary, and it is one word per machine: 'x64 'a64 'rv64, with the
-; embedded targets keeping theirs. Every other spelling anyone says -- a -t flag, a `seed`
-; argument, uname's answer, a gnu triple's head -- comes through `archof` and leaves
-; canonical, so nothing downstream normalizes a second time.
-; here because no crew file sits under all the readers: moon, holo, kore, source, forge
-; and sat share only the prel, which is also where love-arch is pinned.
+; the ISA vocabulary, one word per machine: 'x64 'a64 'rv64, with the embedded targets keeping
+; theirs. every other spelling -- a -t flag, a `seed` argument, uname's answer, a gnu triple's
+; head -- comes through `archof` and leaves canonical, so nothing downstream normalizes twice.
 (: arch-canon {'x64 'x64  'amd64 'x64  'x86_64 'x64  'x86-64 'x64
                'a64 'a64  'arm64 'a64  'aarch64 'a64
                'rv64 'rv64  'riscv 'rv64  'riscv64 'rv64
@@ -299,9 +257,8 @@
    ; the word the world outside says: uname's machine, and the head of a gnu triple. the
    ; embedded targets answer () -- no kernel is ever asked their name.
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64"}
-   ; and the same for the kernel. main.c pins `love-os` per run off __ai_osv, because
-   ; one binary meets four and the compile that made it cannot say which; this is only
-   ; the respelling, uname's capital where ours is a plain nom.
+   ; and the same for the kernel -- only the respelling. main.c pins `love-os` per run off
+   ; __ai_osv: one binary meets four, and the compile that made it cannot say which.
    os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'inle "Inle"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
@@ -331,10 +288,9 @@
   ; call is boxed too and its cell never filled, so every read of it raises `missing`:
   ;   (: f (: (a o) (f o) c (tablet 0) (\ o c)))   -> ;; missing c
   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1))
-  ; the float width is the seat's, never this file's: love.c gives a 32-bit seat
-  ; (wasm, mps2, teensy41, playdate, rp2040) binary32 for ai_flo_t. so ask the
-  ; arithmetic instead of spelling binary64's numbers -- a hard-coded 2^53 sends
-  ; norm's doubling loop past every float32 there is and it never returns.
+  ; the float width is the seat's, never this file's: a 32-bit seat gets binary32 for
+  ; ai_flo_t. so ask the arithmetic -- a hard-coded 2^53 sends norm's doubling loop past
+  ; every float32 there is and it never returns.
   p53 (: (go m) (? (m = (1.0 + m)) m (go (m * 2.0))) (go 1.0))   ; where +1 is lost = 2^mantissa
   p52 (p53 / 2.0)
   emin (: (go v e) (: h (v / 2.0) (? (h = 0) e (go h (e - 1)))) (go 1.0 0))   ; the denormal floor
@@ -349,9 +305,8 @@
 
   ; --- text ---
   (hexd d) (? (d < 10) (48 + d) (87 + d))
-  ; post compiles before any layer is spliced, so `@` has to be in the book already --
-  ; it is, from the half of this file above. an unaccompanied `@` folds to a plain
-  ; application and a run of charms church-towers into an apcap naming no seat.
+  ; post compiles before any layer is spliced, so `@` has to be in the book already -- it is,
+  ; from the half of this file above. an unaccompanied `@` folds to a plain application.
   (esc o c)
    (c @ (92 || 34) (put o 92, put o c)
         10 (say o "\\n")   9  (say o "\\t")
@@ -364,12 +319,10 @@
                 (go i) (? (i < n) (: _ (esc o (peep s i 0)) (go (1 + i))) 0)
                 _ (put o 34) _ (go 0) (put o 34))
 
-  ; --- gems: the shortest roundtrip, exact steele & white. C had to carry digit
-  ; arrays and its own x2/x5 carry walks; here 4m and the midpoints 4m±2 are
+  ; --- gems: the shortest roundtrip, exact steele & white. 4m and the midpoints 4m±2 are
   ; bignums at one shared scale and `//` does the rest.
-  ; v = m*2^e exactly, m an integer, normalized into [p52,p53) -- but never past the
-  ; denormal floor, where the true spacing stops halving and one more step would hand
-  ; the search an interval far too narrow.
+  ; v = m*2^e exactly, m an integer, normalized into [p52,p53) -- but never past the denormal
+  ; floor, where the spacing stops halving and the search interval would come out far too narrow.
   (norm m e) (? (p53 <= m) (norm (m / 2.0) (1 + e))
                 (m < p52 && emin < e) (norm (m * 2.0) (e - 1))
                 (int m . e))
@@ -377,10 +330,9 @@
   ; round-to-nearest-even is what reads it back.
   (fits c lo hi evn) ((lo < c ? 1 (evn && c = lo)) &&
                       (c < hi ? 1 (evn && c = hi)))
-  ; the fewest digits whose rounded form sits inside: pk is the place being cut,
-  ; walking down by ten a step, and at each one try the truncation and the bump,
-  ; the nearer first (a display nicety). at pk = 1 it terminates, dv itself being
-  ; inside by construction.
+  ; the fewest digits whose rounded form sits inside: pk is the place being cut, walking down
+  ; by ten a step, trying the truncation and the bump, the nearer first. at pk = 1 it
+  ; terminates, dv itself being inside by construction.
   (fewest dv lo hi evn pk) (? (pk < 1) dv
     (: t ((dv // pk) * pk)
        up (1 < pk && 5 <= (dv // (pk // 10) - (10 * (dv // pk))))
@@ -412,8 +364,7 @@
           _ (go 0) _ (put o 46)
           (? (dxp < sig) (say o (snip ss dxp sig)) (put o 48)))   ; integral: force "X.0", never a fixnum face
        (: _ (say o "0.") _ (zeros o (0 - dxp)) (say o ss))))
-  ; the sign is the bit, not v < 0: -0.0 < 0 is false, and a comparison there
-  ; printed "0.0" -- the one value the roundtrip law lost.
+  ; the sign is the bit, not v < 0: -0.0 < 0 is false, and a comparison there prints "0.0".
   (pgem o v)
      (: _ (? (v < 0 || (v = 0 && (1.0 / v) < 0)) (put o 45) 0) a (abs v)
         (? (a = inf) (say o "infinity") (a = 0) (say o "0.0") (pgem2 o a)))
@@ -460,12 +411,9 @@
                                 (go >l 0)) 0)
        (? !(two? ks) (say o "{}") (: _ (put o 123) _ (go ks 1) (put o 125)))))
 
-  ; --- coins show as (name 'payload): the kind's name applied
-  ; to what it was given, so the form evals back to an equal coin when the name is a
-  ; bound ctor. the payload is quoted where it would otherwise re-evaluate -- a chain
-  ; reads as an application and a nom as a variable. without that (q (1 2)) read back as
-  ; q applied to 2, which is not the number and was never a coin. a rational wears the
-  ; twin's face instead, (n /// d), which reads back through the operator.
+  ; --- coins show as (name 'payload), so the form evals back to an equal coin where the name
+  ; is a bound ctor. the payload is quoted where it would otherwise re-evaluate -- a chain
+  ; reads as an application, a nom as a variable. a rational wears the twin's face, (n /// d).
   (pcoin o x sn) (: p (load x)
     (? (kind x = '/// && two? p) (put o 40, px o <p sn, say o " /// ", px o <>p sn, put o 41)
        (put o 40, px o (kind x) sn,
@@ -487,16 +435,14 @@
   (sxch n a) (: q ((n - 1) // 26) c (97 + ((n - 1) % 26))
               (? (0 < q) (sxch q (c . a)) (c . a)))
   (lnom i) (name (string (sxch (1 + i) ())))
-  ; a binder takes the next letter not spelled free anywhere in the source -- a name kept
-  ; as written is a name a rename would capture, and skipping it is the whole guard.
-  ; (\ a b (+ a b)) canonicalizes to itself; a body naming e takes f in e's place. the
-  ; candidate index is what threads, so the letters are walked once across the whole term.
+  ; a binder takes the next letter not spelled free anywhere in the source: a name kept as
+  ; written is one a rename would capture. the candidate index threads, so the letters are
+  ; walked once across the whole term.
   (nxt i fv) (? (peep fv (lnom i) 0) (nxt (1 + i) fv) i)
   (lam? x) (two? x && == <x '\ && two? >x && two? >>x)
   (qot? x) (two? x && == <x '\ && two? >x && !(two? >>x))
-  ; the noms canon leaves spelled as written: free, global and :-bound. quoted data is
-  ; data, never a reference, so a binder cannot capture into it. one walk, into a tablet
-  ; the proposals then read by key; bd is the binders in scope, a stack, so it stays a list.
+  ; the noms canon leaves spelled as written: free, global and :-bound. quoted data is data,
+  ; never a reference, so a binder cannot capture into it; bd is the binders in scope, a stack.
   (fvs x bd t) (? (one? x) (? (nom? x) (? (inq x bd) t (pin t x 1)) t)
                   (qot? x) t
                   (lam? x) (fvl >x bd t)
@@ -550,14 +496,10 @@
 (seal-hook 7 show)
 (: (red? x) (+x < 0) (blue? x) (+x = 0) (green? x) (+x > 0))
 
-; --- the disassembler: a thread read back as data. the two halves of the question are
-; --- answered by different machinery. the BOUNDS are structural -- stem reads the head off
-; --- the terminator, span counts the cells to it, seek refuses a step over either -- so a
-; --- walk stays inside the object whatever the cells hold. the KIND of a cell is the op
-; --- table's answer, and is only as good as the table: pick hands back an index where the
-; --- word is one the table names and () where it is not. so read a cell you know to be an
-; --- operand with peek and one you know to be code with pick; where the two disagree the
-; --- cell was guessed wrong, and neither door lied.
+; --- the disassembler: a thread read back as data. the bounds are structural -- stem reads
+; --- the head off the terminator, span counts the cells to it, seek refuses a step over
+; --- either -- so a walk stays inside the object whatever the cells hold. a cell's kind is
+; --- only as good as the op table: read an operand cell with peek and a code cell with pick.
 (: ret0 (pick 1 cap) cur (pick 0 (+))
    ; a nif's run is [impl][ret0], or [cur][arity][impl][ret0]: the shape ev's own `opof` reads
    (nifop v) (? (ret0 = pick 1 v)                     (pick 0 v)
@@ -587,17 +529,13 @@
 ; --- the library layers, sat here with post so every seat carries them: rng and q are
 ; --- globals, and the rest register as modules a seat splices as it wants ---
 
-; rng -- the random layer, two faces over the pure C steps; C holds no state.
-; (wheel n) -> a fresh 256-bit state, turn/turnf step it. love/boot/prel.l first.
-;
-; functional, reproducible: (random st n) draws once -> (value . st'), the value's type
-; by n -- float -> float in [0,n), positive int -> int in [0,n), n <= 0 -> full-width int.
-; global, one hidden stream lazily clock-seeded: (rand n) -> int in [0,n), (randf n) ->
-; float in [0,n); n <= 0 widens both. rng-get reads the stream, (rng-set (wheel n)) pins
-; it so rand/randf reproduce -- a bad state answers 0 and leaves the stream alone.
-;
-; the stream is private mutable state: rng-box is bound once, not inlined --
-; separate copies would be separate streams.
+; rng -- the random layer, two faces over the pure C steps; C holds no state. (wheel n) -> a
+; fresh 256-bit state, turn/turnf step it.
+; functional, reproducible: (random st n) draws once -> (value . st'), the value's type by n --
+; float -> float in [0,n), positive int -> int in [0,n), n <= 0 -> full-width int. global, one
+; hidden clock-seeded stream: (rand n) and (randf n), the same widths; rng-get reads it,
+; (rng-set (wheel n)) pins it so rand/randf reproduce, a bad state answering 0 and leaving the
+; stream alone. rng-box is bound once, not inlined -- separate copies are separate streams.
 (: rng-box {}
    (random st n) (? (gem? n) (turnf st @ (a . u) (n * a . u))
                     (0 < n)  (turn  st @ (a . u) (a % n . u))
@@ -622,9 +560,8 @@
           (: g (gcd (abs n) (abs d)) s (? (d < 0) -1 1)
            [(s * n // g) (s * d // g)]))
         (parts v) (two? v ? v [v 1])                          ; a bare star is n/1
-        ; the domain test is the closed star (the fixpoint minus coins): star?
-        ; is open now, and an open star as an (n d) component would drag gcd
-        ; off the tower it terminates on -- a coin is never a coefficient.
+        ; the domain test is the closed star: an open star as an (n d) component would
+        ; drag gcd off the tower it terminates on -- a coin is never a coefficient.
         (nstar? v) ((nil? * coin?) v && v = +v)
         (ok? v) (nstar? v || (two? v && all nstar? v))
         c (coin '/// (z \ {'star 1 'net 'ratio                   ; a rational is a star; C truth by value
@@ -648,17 +585,13 @@
                        (c * reduce n)))))                     ; (/// n d) -- the curried form, and 3 /// 4 spaced
 
 
-; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname
-; expansion (readdir, the dotfile rule at the directory scan) stays in apps/lush.l,
-; where the substrate belongs. this half is a predicate over two strings, and more than
-; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law. sb
-; is catted without apps/lush.l and cites this directly, which is why the pattern language
-; stands at the floor and not inside the shell that reads it most.
-;
-; patterns travel as (text . mask) -- the mask a parallel string of '1'/'0' bytes, '1'
-; where the char came in unquoted (glob-live), '0' where a quote shielded it ('*' matches
-; a literal star) -- absence-of-specialness carried out of band, the quoting law made
-; byte-addressable. a caller with no quoting to express asks `match`, which is all-live.
+; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname expansion
+; (readdir, the dotfile rule at the directory scan) stays in apps/lush.l. this half is a
+; predicate over two strings, and more than the shell asks it -- lush's case patterns, kore's
+; find -name, the sb ignore law.
+; patterns travel as (text . mask) -- the mask a parallel string of '1'/'0' bytes, '1' where
+; the char came in unquoted (glob-live), '0' where a quote shielded it ('*' matches a literal
+; star). a caller with no quoting to express asks `match`, which is all-live.
 ;   (fmatch pat mask s) -> 1 | 0     * ? [a-z] [!..], quoted chars literal
 ;   (match pat s)       -> the all-live face
 ;   (anyglob t)         -> does t hold any * ? [ at all (the cheap pre-scan)
@@ -684,9 +617,8 @@
                 (fnd (k + 3) 0 (hit || b <= s j && s j <= p (k + 2)))
                (fnd (k + 1) 0 (hit || b = s j)))))
            r (fnd st 1 0)
-           ; presence is `two?`, never truth. a class that misses answers
-           ; (0 . past), and net drops an improper tail, so a falsy r would read
-           ; as "no class here" -- which negation then never gets to invert.
+           ; presence is `two?`, never truth: a class that misses answers (0 . past),
+           ; and net drops an improper tail, so a falsy r would read as no class here.
            (two? r ? ((neg ? !<r <r) . >r)))
       (fm i j)
         (? (i = np) (j = ns)
@@ -703,27 +635,21 @@
 
 ) ; module glob
 
-; path -- the clips five callers were each writing for themselves, and one more scan
-; than the tree should hold. these are the PRIMITIVES, not the faces. make's $(dir) and posix's dirname disagree
-; about a bare name ("./" against "."), so a caller still spells its own face -- over
-; one scan rather than a sixth copy of it. its own FACE: never its own scan.
+; path -- the primitives, not the faces. make's $(dir) and posix's dirname disagree about a
+; bare name ("./" against "."), so a caller spells its own face over this one shared scan.
 ;   (lastslash p) -> index just past the last '/', 0 for none
 ;   (lastdot p)   -> index of the last '.' after that, #p for none
 ;   (segs p)      -> the '/'-separated components, empties dropped
 ;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 ;   (pprefixes p) -> the directory prefixes of p, outermost first
-;
-; apart from glob because the callers say so: of the five that borrowed it for these,
-; three -- kiosko, serve and kore's basename/dirname -- never match a pattern at all.
 
 (module '(path lastslash lastdot segs pclean pprefixes)
 (: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
    (lastdot p) (: sl (lastslash p)
                   ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
-   ; "/a/b/c" -> ("/a" "/a/b"). a leading '/' is not a prefix of its own and the leaf
-   ; is not one either, so `mkdir -p` is this walk plus whatever the caller does about
-   ; the leaf -- helm and papel make it, cpio deliberately does not. splitting on '/'
-   ; and rejoining would not do: it drops the leading slash, and /tmp/x becomes tmp/x.
+   ; "/a/b/c" -> ("/a" "/a/b"): neither the leading '/' nor the leaf is a prefix, so `mkdir -p`
+   ; is this walk plus the caller's own mind about the leaf. splitting on '/' and rejoining
+   ; would not do -- it drops the leading slash, and /tmp/x becomes tmp/x.
    (pprefixes p)
     (: n #p
        (go i acc) (? (n <= i) (rev acc)
@@ -734,16 +660,13 @@
                 (? (i >= #s) (rev (st < i ? (snip s st i . acc) acc))
                    (s i = 47) (go (1 + i) (1 + i) (st < i ? (snip s st i . acc) acc))
                    (go (1 + i) st acc))) 0 0 0)
-   ; no filesystem asked: '..' pops lexically, which is what make's $(abspath) means
-   ; and what a symlink makes a lie. a caller that needs the real thing asks the fs.
-   ; lim is the climb this caller allows -- how many leading '..' may survive:
+   ; no filesystem asked: '..' pops lexically, which is what make's $(abspath) means and what
+   ; a symlink makes a lie. lim is the climb this caller allows -- how many leading '..' survive:
    ;   ()  unbounded, a '..' with nothing to pop stays one (the shell's own face)
-   ;   n   at most n survive; one that would climb past answers () -- REFUSED, not
-   ;       clamped, because a clamped path silently names a different file. a server
-   ;       rooting a request asks with 0 and answers the refusal 403.
-   ; a surviving '..' is not popped by the next one -- "a/../../b" climbs once and
-   ; stays (".." "b"). () answers both a refusal and an empty path, so a caller that
-   ; must tell them apart asks whether it handed anything in.
+   ;   n   at most n survive; one that would climb past answers () -- refused, not clamped,
+   ;       because a clamped path silently names a different file.
+   ; a surviving '..' is not popped by the next -- "a/../../b" climbs once and stays (".." "b").
+   ; () answers both a refusal and an empty path.
    (pclean l lim)
    ((: (go l acc up)
        (? (one? l) (rev acc)
@@ -756,31 +679,23 @@
 
 ) ; module path
 
-; lush 🐚 the word -- a word back into a command line, and the mask law's other half.
-; module 'lush begins here, at the floor, because the shell owns the idea of a shell
-; word and because two catted scripts that carry no apps/lush.l still need one: sb reads
-; the ignore patterns, helm shows what a unit will run. what stands here is the part
-; with no substrate under it -- pure love, no filesystem and no shell -- and the rest
-; of the module, everything that reads a directory or runs a process, is apps/lush.l's.
-;
-; the pair is a retraction and not a bijection -- many spellings say one word -- so the
-; law is one-sided: (sh-read (sh-show ws)) = ws for every ws, while (sh-show (sh-read s))
-; is a canonical s rather than s itself. the reading half is apps/lush.l's lexer, and
-; test/host/sh.l is where the two are checked against each other.
+; lush 🐚 the word -- a word back into a command line, and the mask law's other half. module
+; 'lush begins here because two catted scripts carrying no apps/lush.l still need one: sb reads
+; the ignore patterns, helm shows what a unit will run. what stands here has no substrate under
+; it; everything that reads a directory or runs a process is apps/lush.l's.
+; the pair is a retraction, not a bijection: (sh-read (sh-show ws)) = ws for every ws, while
+; (sh-show (sh-read s)) is a canonical s. test/host/sh.l checks the two against each other.
 ;   (sh-quote w)  -> the word as a shell reads it back: bare where it can be, in '..'
 ;                    where it cannot. a word holding a newline keeps it.
 ;   (sh-show ws)  -> the words as one line. the head of a line is where a keyword reads
 ;                    as syntax, so it takes quotes there and nowhere else.
 
 (module 'lush
-(: ; the bare set: bytes no shell reads as anything but themselves, in any position
-   ; and under every expansion. ~ $ * ? [ ] { } \ ' " ` ( ) | & ; < > # ! and the
-   ; blanks are all out, and so is everything over 127 -- a locale may letter them.
+(: ; the bare set: bytes no shell reads as anything but themselves, in any position and under
+   ; every expansion. everything over 127 is out as well -- a locale may letter them.
    (sh-tame? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || elem c "_-.,:/@+%=")
-   ; and two shapes whose bytes are tame and whose reading still is not: NAME=VAL is
-   ; an assignment in command position, and a leading = is zsh's command-path lookup
-   ; (`=x` there is /usr/bin/x, and a miss fails the whole line). both cost one pair
-   ; of quotes. `--port=8080` is neither: an assignment's name has to be a name.
+   ; two shapes whose bytes are tame and whose reading is not: NAME=VAL is an assignment in
+   ; command position, and a leading = is zsh's command-path lookup. both cost a pair of quotes.
    (sh-namec? c i) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || 0 < i && 48 <= c <= 57)
    (sh-plain? w)
     (: n #w
@@ -792,10 +707,8 @@
    (sh-quote w) (? !#w "''"
                    (all sh-tame? (chars w) && sh-plain? w) w
                    ("'" + sh-sqesc w + "'"))
-   ; the one thing a word cannot judge alone: a keyword bare in command position is
-   ; syntax and not a command name, and `if x` opens an if. so the line is where it
-   ; is known, and a later word pays nothing -- `grep -w in f` keeps its `in`. every
-   ; one of these fails with a syntax error where an assignment fails in silence.
+   ; the one thing a word cannot judge alone: a keyword bare in command position is syntax and
+   ; not a command name. only the line knows, and a later word pays nothing -- `grep -w in f`.
    sh-kw '("if" "then" "else" "elif" "fi" "do" "done" "case" "esac"
            "while" "until" "for" "in" "function" "select" "time")
    (sh-qhead w)  (elem w sh-kw ? ("'" + w + "'") (sh-quote w))
@@ -804,19 +717,14 @@
 
 ) ; module lush -- apps/lush.l carries the rest
 
-; kanren -- first-order unification + a lazy-colist search monad.
-; a post-egg layer: prel stays the language, this registers as a module. needs prel and
-; pat's @. overlay below reads unify/ufail?/var
-; from here and reaches the rest through the registry, so this must be evaled and
-; registered before overlay -- cat order.
-;
-; `unify s u v` is pure -- a substitution or `ufail` -- with no occurs check: love's values
-; are non-well-founded (a chain is a mu-type, the book holds the book), so a self-referential
-; binding is a rational tree, and walk_star mu-marks a back-edge to reify it without looping.
-; a goal is (\ st stream) over a state (substitution . constraints); est/=== unify, +
-; interleaves (disjunction), * binds (conjunction), so a relation is a polynomial in
-; unifications. a boot says (borrow 'kanren) to splice the bare names; internals -- subst,
-; walk, query, the dict kit -- answer to (cite 'kanren ..).
+; kanren -- first-order unification + a lazy-colist search monad. a post-egg layer: prel stays
+; the language, this registers as a module. overlay below reads unify/ufail?/var from here and
+; reaches the rest through the registry, so this must be evaled and registered before overlay.
+; `unify s u v` is pure -- a substitution or `ufail` -- with no occurs check: love's values are
+; non-well-founded, so a self-referential binding is a rational tree and walk_star mu-marks a
+; back-edge to reify it without looping. a goal is (\ st stream) over a state (substitution .
+; constraints); est/=== unify, + interleaves, * binds. a boot says (borrow 'kanren) to splice
+; the bare names; internals -- subst, walk, query, the dict kit -- answer to (cite 'kanren ..).
 (module '(kanren =/= === absent apt closed? con dif empty_dict est ifte inside mintp naf nay query rel
    residual rewrite s_app scount slist smap sno sole s_plus s_star st0 stake subst sun
    sX tie ufail ufail? unify untie var var? walk)
@@ -835,9 +743,8 @@
    (walk s u) (? (nil? (var? u)) u (: t (has_s s u) (? (two? t) (walk s <t) u)))
    ufail (nom 0)
    (ufail? x) (= x ufail)
-   ; a binder, and the whole nominal half: the abstraction is a love lambda, so
-   ; alpha-equivalence is the language's and instantiation is application -- nothing
-   ; to swap, rename, or capture.
+   ; a binder, and the whole nominal half: the abstraction is a love lambda, so alpha-equivalence
+   ; is the language's and instantiation is application -- nothing to swap, rename, or capture.
    (tie f) ('tie . f)
    (tie? t) (? (two? t) (= <t 'tie) 0)
    (untie t a) (>t a)                            ; open the binder at a
@@ -855,9 +762,8 @@
    (rewrite pat tpl x) (: r (unify '(()) pat x) (? (ufail? r) x (subst r tpl)))   ; pattern -> template, or x unchanged
 
    ; --- the constraint store -------------------------------------------------
-   ; the store rides beside `unify`, which keeps its signature and its purity. a
-   ; constraint is (kind . payload), re-verified against the whole store after every
-   ; successful unification -- cKanren's design.
+   ; the store rides beside `unify`, which keeps its signature and its purity. a constraint is
+   ; (kind . payload), re-verified against the whole store after every successful unification.
    st0 (empty_dict . ())
    (unify_all s p) (? (two? p) (: r (unify s <<p ><p) (? (ufail? r) ufail (unify_all r >p))) s)
    ; the bindings r has and s does not, as a (u . v) list -- ext_s prepends, so they lead
@@ -894,9 +800,8 @@
    (con st c) (: d (vet <st c) (? (ufail? d) ufail (<st . d)))   ; a state with c added, or ufail
 
    ; --- streams: a colist, love's lazy list (love/boot/p1.l's shape) --------------
-   ; () is empty, (x . s) is mature, a thunk is immature -- three shapes told apart by
-   ; lit?/two?. the church encoding this replaces cost 26-35% more instructions on every
-   ; shape measured.
+   ; () is empty, (x . s) is mature, a thunk is immature -- three shapes told apart by lit?/two?.
+   ; the church encoding this replaced cost 26-35% more instructions on every shape measured.
    sno ()
    (sX x s) (x . s)
    (sun x) [x]
@@ -916,9 +821,9 @@
    (scount s) (: (go a s) (: m (sfire s) (? (two? m) (go (a + 1) >m) a)) (go 0 s))
 
    ; --- goals ----------------------------------------------------------------
-   ; conj2/disj2 are the whole of the goal algebra: &&& and ||| expand to them, and the
-   ; ring's * and + are them under the coin. `load` at construction is what lets either
-   ; spelling take either operand, a bare goal or a rel-wrapped one.
+   ; conj2/disj2 are the whole of the goal algebra: &&& and ||| expand to them, and the ring's
+   ; * and + are them under the coin. `load` at construction is what lets either spelling take
+   ; either operand, a bare goal or a rel-wrapped one.
    (conj2 a b) (: g (load a) h (load b) (\ st (s_star (g st) h)))
    (disj2 a b) (: g (load a) h (load b) (\ st (s_plus (g st) (h st))))
    yea sun                               ; the goal that holds, once
@@ -926,9 +831,9 @@
    (est u v st) (: r (unify <st u v)
                    (ufail? r ? ()
                     (: c (vet r >st) (? (ufail? c) () (sun (r . c))))))
-   ; unify on a copy and read the outcome three ways -- ufail means the two can never be
-   ; equal and there is nothing to remember; no new binding means they are equal, so the
-   ; goal fails; anything else keeps the residual bindings as the constraint.
+   ; unify on a copy, three outcomes: ufail means the two can never be equal and there is
+   ; nothing to remember, no new binding means they are equal and the goal fails, anything
+   ; else keeps the residual bindings as the constraint.
    (dif u v st) (: r (unify <st u v)
                    (? (ufail? r) (sun st)
                       (: p (residual r <st)
@@ -939,10 +844,9 @@
    (absent x t st) (: r (con st (('abs . x . t) . >st)) (? (ufail? r) () (sun r)))
    ; a type constraint over any predicate -- symbolo/numbero and their kin in one goal
    (apt p x st) (: r (con st (('apt . p . x) . >st)) (? (ufail? r) () (sun r)))
-   ; --- the extra-logical three. `ifte` is the primitive (the soft cut): if c
-   ; holds at all, t runs over every answer of c and e is dropped. `sole` commits
-   ; to the first answer. `naf` is negation as failure -- it answers "not proved",
-   ; never "false", and only a ground terminating goal lets you read the two as one.
+   ; --- the extra-logical three. `ifte` is the soft cut: if c holds at all, t runs over every
+   ; answer of c and e is dropped. `sole` commits to the first answer. `naf` is negation as
+   ; failure -- "not proved", never "false", the two one only for a ground terminating goal.
    (ifte c t e st) (: m (sfire (c st)) (? (two? m) (s_star m t) (e st)))
    (sole g st) (: m (sfire (g st)) (? (two? m) (sun <m) ()))
    (naf g st) (ifte g nay yea st)
@@ -982,13 +886,11 @@
    (=/= u v) (rel (dif u v)))                       ; in prel's `operators`, which holds only the
 ; exceptions, and any all-punct head is already infix-dyadic at house band. =/= shares a band
 ; with ===, so a chain folds by hand and wants parens.
-; the goal language: `::` writes the head layer's macro table, so these four live in kanren's
-; own book, and a consumer's (borrow 'kanren) splice carries them -- stacklook_macro walks the chain's
-; macro slots, so &&&/|||/\\\/zz expand at the caller and the names their expansions emit
-; (var, s_plus, s_star) resolve down the same splice.
-; the tripled spellings are the point: a relation is the ordinary operator said three times --
-; === is =, =/= its negation, &&& and ||| are && and ||, \\\ is \ with its params minted fresh
-; as logic vars. all-punct, so all of them are infix at house band for free.
+; the goal language: `::` writes the head layer's macro table, so these four live in kanren's own
+; book and a consumer's (borrow 'kanren) splice carries them -- stacklook_macro walks the chain's
+; macro slots, so the expansions and the names they emit resolve down the same splice.
+; the tripled spellings: === is =, =/= its negation, &&& and ||| are && and ||, \\\ is \ with
+; its params minted fresh as logic vars. all-punct, so all of them are infix at house band.
 (:: 'zz (\ x (: s (nom 0) u (nom 0) x2 <x ['\ s u [x2 s]])))   ; delay a goal: the curried tail is the thunk
 (:: '&&& (\ xs (foldl (\ a b [conj2 a b]) <xs >xs)))   ; conj of goals -- the ring's *
 (:: '||| (\ xs (foldl (\ a b [disj2 a b]) <xs >xs)))   ; disj of goals -- the ring's +
@@ -1062,30 +964,25 @@
      (: v (ov-slot 0) (two? v ? (ov-eng <v <>v e, e0 e) (e0 e))))
 ) ; module overlay
 
-; uu -- the uu kernel's HOME: MLTT with the UniMath Preamble's seven
-; inductives (empty unit bool coprod nat paths total2), bidirectional checking,
-; NbE conversion (de bruijn levels as fresh vars, sigma- and pi-eta),
-; type-in-type -- the universe stance of the reference
-; (UniMath/Foundations/Init.v: Unset Universe Checking). an axiom is a book
-; entry with a type and no value: a sanctioned missing. names follow UniMath so
-; the port reads literally.
+; uu -- the uu kernel's home: MLTT with the UniMath Preamble's seven inductives (empty unit
+; bool coprod nat paths total2), bidirectional checking, NbE conversion (de bruijn levels as
+; fresh vars, sigma- and pi-eta), type-in-type -- the reference's own universe stance
+; (UniMath/Foundations/Init.v: Unset Universe Checking). an axiom is a book entry with a type
+; and no value: a sanctioned missing. names follow UniMath so the port reads literally.
 ;
 ; terms are quoted lists: UU nat bool unit empty zero tt true false <fixnum>
 ;   (pi x A B) (lam x b) (total2 x A B) (tpair a b) (pr1 w) (pr2 w) (succ n)
 ;   (coprod A B) (ii1 a) (ii2 b) (paths a a b) (idpath a) (the T t)
 ;   (nat_rect P z s n) (bool_rect P t f b) (unit_rect P u x)
 ;   (coprod_rect P f g v) (empty_rect P e) (paths_rect P pr e)
-;   (let x a b) -- definitional: x binds the VALUE of a, transparent to conv
+;   (let x a b) -- definitional: x binds the value of a, transparent to conv
 ; and any other list is an application spine. (f) == f here too.
 ;
-; a module on every corpus target (host + love0 + the inle kernel + wasm): the
-; frontend lists this source in its ai_libs table and its boot says (borrow 'uu), then
-; rebinds `uu` to the accessor -- (: uu (cite 'uu)) -- so the surface stays
-; (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every internal a probe away.
-; the layer is the module boundary now: the old uu-mark/sweep trailer retired
-; with the brackets. the UniMath theorem corpus rides in test/uu.l (and the
-; test/uu*.l ladder over it), binding this surface at its head; the defn/defq/
-; axm macros land in this layer's macro slot and ride the boot splice.
+; a module on every corpus target (host + love0 + the inle kernel + wasm): the frontend lists
+; this source in its ai_libs table and its boot says (borrow 'uu), then rebinds `uu` to the
+; accessor -- (: uu (cite 'uu)) -- so the surface stays (uu 'vof), (uu 'defn), (uu 'chk),
+; (uu 'lof), every internal a probe away. the UniMath theorem corpus rides in test/uu.l and
+; the test/uu*.l ladder over it; the defn/defq/axm macros land in this layer's macro slot.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
 ; the surface: what `cite`/`borrow` see. everything else is internal, a probe away.
@@ -1094,11 +991,9 @@
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
-   ; a uu closure carries a love function, so applying one is an application and not a
-   ; re-walk of the body's syntax. ('clo f) is opaque above this line: conv reaches a
-   ; closure only through capp (its lam/pi/sig branches all come before the spine case), and
-   ; lof prints terms, so these two lines plus comp's three ('clo ..) sites are the whole
-   ; representation.
+   ; a uu closure carries a love function, so applying one is an application and not a re-walk
+   ; of the body's syntax. ('clo f) is opaque above this line: conv reaches a closure only
+   ; through capp, and lof prints terms.
    (capp cl v) (<>cl v)
    (vapp f a) (f @ ['lam cl] (capp cl a) ['na f a])
    (dop1 v) (v @ ['chain a _] a ['np1 v])
@@ -1114,30 +1009,20 @@
    (vof-sym en x) (assq x en @ (_ y) y (GLOB x @ (_ y) y (scare 'uu-unbound x)))
 
    ; --- comp: the term walked once, into a love function of the env ---
-   ; every case below reads `(\ en ..)` where the old vof read the value directly, and that is
-   ; the whole change: the head dispatch, the destructuring and the arity all happen here, once
-   ; per term, where they used to happen once per evaluation. a lam's body becomes a love
-   ; closure over the compiled body, so capp is an application.
-   ; vof-sym stays dynamic. it reads glob, and a defn later in the corpus must be visible to
-   ; a term compiled earlier -- so the lookup rides the `(\ en ..)`, never the compile.
-   ; ordered by measured frequency, and the tail is never reached at all: over the UniMath
-   ; corpus lam and succ are 550740 and 526521 of 1102646 head dispatches, while total2 pr1 pr2
-   ; ii1 ii2 are zero -- the reader spells them, but every use arrives through a spine or a
-   ; rect. succ once sat at position 8 behind four of those zeros. The tests are mutually
-   ; exclusive symbols so the order is free; only `(two? h)` must stay first, the spine last.
-   ; the order matters less than it did (once per term, not per evaluation) and is kept
-   ; because compiling is itself on the hot path: chk and inf compile each subterm they visit.
+   ; the head dispatch, the destructuring and the arity all happen here, once per term rather
+   ; than once per evaluation; a lam's body becomes a love closure, so capp is an application.
+   ; vof-sym stays dynamic: it reads glob, and a defn later in the corpus must be visible to a
+   ; term compiled earlier, so the lookup rides the `(\ en ..)` and never the compile.
+   ; the arms are ordered by measured frequency -- lam and succ are half the corpus's head
+   ; dispatches -- and the tests are mutually exclusive symbols, so the order is free.
    (comp t)
    (? (charm? t) (en \ t)
       (nom? t) (? (memq t '(UU nat bool unit empty tt true false)) (en \ t)
                   (= t 'zero) (en \ 0)
                   (en \ vof-sym en t))
-      ; a pattern is the TERM grammar, so this dispatch now reads like the header's own
-      ; list of shapes. It costs the arity guards, and here they are nearly free: comp runs
-      ; 14778 times over the corpus where the old vof ran 1102646, so this whole chain is
-      ; 1.3% of one capp's traffic. the (two? h) fast PATH is gone with it: a list head is
-      ; never == to a tag, so a spine falls through every arm to the else on its own -- and
-      ; it is 259 of those 14778, which is not worth a branch or a second copy of the body.
+      ; a pattern is the term grammar, so this dispatch reads like the header's list of shapes.
+      ; a spine needs no fast path: a list head is never == to a tag, so it falls through
+      ; every arm to the else on its own.
       (t @
          ['lam x b]             (: cb (comp b) (en \ ['lam ['clo (v \ cb ([x v] . en))]]))
          ['succ a]              (: ca (comp a) (en \ vsucc (ca en)))
@@ -1176,12 +1061,10 @@
    ; the old door, kept for every caller (chk, inf, the globals, test/uu.l): compile, then run.
    vof (flip comp)
 
-   ; the scrutinee is a pair, which is why this one stays a `?`: an arm reads both
-   ; sides, and a pattern would build the [a b] per call to say less than the tests do.
-   ; ==, the one use outside the egg: same object -> 1 at once, else the arms convert.
-   ; `=` cannot stand in -- on two different terms it walks their closures, and the
-   ; shared environments make that exponential. the atom arm is a guard: reaching it
-   ; means unequal, and it keeps `<a` off a non-list below.
+   ; a `?` and not a pattern: an arm reads both sides, and a pattern would build the [a b] per
+   ; call. `==` is the one use outside the egg, and `=` cannot stand in -- on two different
+   ; terms it walks their closures, and the shared environments make that exponential. the
+   ; atom arm is a guard: reaching it means unequal, and it keeps `<a` off a non-list.
    (conv d a b)
    (? (== a b) 1
       (atom? a || atom? b) 0
@@ -1234,10 +1117,8 @@
       (: Ti (inf cx en d t)
        (conv d T Ti || scare 'uu-type-mismatch t)))
 
-   ; the else is the spine and needs no head test in front of it: a list head is never
-   ; == to a tag, and (inf .. <t) answers for a nom head and a nested spine alike.
-   ; a pattern carries the arity the old head test did not, so a tag at the wrong
-   ; length reaches the spine and comes back unbound instead of reading () for operands.
+   ; the else is the spine and needs no head test: a list head is never == to a tag, and a tag
+   ; at the wrong length reaches it too, coming back unbound rather than reading () for operands.
    (inf cx en d t)
    (? (charm? t) 'nat
       (nom? t) (inf-sym cx t)
@@ -1318,10 +1199,8 @@
    (chk 0 0 0 T 'UU,
     pin GLOB nm [(vof 0 T) ['nv nm]],
     nm)
-   ; the Qed driver: checked like defn, then sealed -- pinned with its own
-   ; neutral as value, so applying the proof never evaluates it. Coq's
-   ; Qed/Defined distinction, here because strict NbE would otherwise build
-   ; the proof's whole beta-normal form at every use.
+   ; the Qed driver: checked like defn, then sealed -- pinned with its own neutral as value, so
+   ; applying the proof never evaluates it. strict NbE would else build its beta-normal form.
    (defq nm T t)
    (: Tv (chk 0 0 0 T 'UU,
           vof 0 T)
@@ -1332,19 +1211,14 @@
    (: r (call-cc (\ k (pin HELPC () (\ a b (k 'rejected)), th 0, 'accepted)))
     (pin HELPC () 0, r)))
 
-; --- uu2l: the uu-to-l leg. uu2coq and uu2lean re-certify the corpus in two
-; --- foreign kernels; uu2l runs it HOME -- a closed term compiles to a love
-; --- form whose value is vof's answer (charms for nats, ('chain a b) for
-; --- pairs), at compiled-love speed; lof (l-of, vof's fast twin) evaluates one.
-; --- untrusted by design: chk/conv never touch it, so a uu2l bug can miss a
-; --- demo, never fake a theorem -- and the corpus asserts (vof t = lof t)
-; --- differentially wherever both lanes are tractable. generated code has no
-; --- free names: the runtime kit and every global embed as live literals
-; --- under the quote sigil, so nothing a uu binder spells can capture.
-; --- bridge maps standard names to native love (add is +, the eager-NbE O(n)
-; --- niszero is (= m 0)) -- each bridge rides the same differential gate.
-; --- defn feeds src; a defq/axm name compiles to its own neutral, exactly
-; --- the sealed book value.
+; --- uu2l: the uu-to-l leg. a closed term compiles to a love form whose value is vof's
+; --- answer (charms for nats, ('chain a b) for pairs), at compiled-love speed; lof
+; --- evaluates one. untrusted by design: chk/conv never touch it, so a uu2l bug can miss a
+; --- demo and never fake a theorem, and the corpus asserts (vof t = lof t) wherever both
+; --- lanes are tractable. generated code has no free names -- the runtime kit and every
+; --- global embed as live literals under the quote sigil, so nothing a uu binder spells can
+; --- capture. bridge maps standard names to native love. defn feeds src; a defq or axm name
+; --- compiles to its own neutral, exactly the sealed book value.
 (: (qlit v) ['\ v]
    (kchain a b) ['chain a b]
    (kp1 v) (v @ ['chain a _] a ['np1 v])
@@ -1399,15 +1273,12 @@
    (lof t) (ev (u2 t ()))
    (bridge nm f) (pin BRIDGE nm ['hit f], nm))
 
-; --- the arity door. defn/defq/axm are fully curried, so a paren slip that
-; --- hands one too few operands is not an error -- it is a truthy closure one
-; --- curry away from running, an assert paints it green, and nothing pins
-; --- (the (f)==f trap at proof grain; too many operands feed the returned nom
-; --- and vanish the same way). the macros guard call position: exactly the
-; --- right operand count, or the form scares carrying itself. the expansion
-; --- heads (1 defn) -- the identity's head is no macro, so no re-expansion --
-; --- and the functions keep their names, so the baked book still serves them
-; --- ((uu 'defn) is boot/post.l's door, and book calls bypass the macro).
+; --- the arity door. defn/defq/axm are fully curried, so a paren slip handing one too few
+; --- operands is not an error: it is a truthy closure one curry away from running, an assert
+; --- paints it green, and nothing pins. too many operands feed the returned nom and vanish
+; --- the same way. the macros guard call position -- the right count, or the form scares
+; --- carrying itself -- and expand heading (1 defn), the identity's head being no macro so
+; --- nothing re-expands. the functions keep their names, so the baked book still serves them.
 (: q (map qlit)
  (:: 'defn (l \ l @ [_ _ _] (defn . q l) (scare 'uu-defn-arity l)),
   :: 'defq (l \ l @ [_ _ _] (defq . q l) (scare 'uu-defq-arity l)),
@@ -1416,19 +1287,14 @@
 ) ; module uu
 
 ; peg -- gw.js-style parser combinators. a parser is (\ s y n) over a string s, with a success
-; continuation y = (\ rest payload) and a failure continuation n = (\ rest); payloads are lists that
-; `seq` concatenates. The leaves are `lit` (a literal prefix), `one` (one char by predicate) and `span`
-; (a maximal run) -- love has no regex. `parse` requires the whole input consumed; `runp` is the lenient
-; twin (keeps the payload, ignores trailing slack). An empty payload is the unit, never the 0 nil-tail
-; fossil: `cat` propagates whatever tail it is handed, so a single 0 from eps/opt/skip/many rides all the
-; way out and `=` tells the two terminators apart -- a payload that should equal a map-built list would
-; not. The unit is the only nil that leaves here.
-;
-; a module the boot never splices: it is registered with the rest, and each consumer opens with
-; its own top-level (borrow 'peg), then reads the names bare off that splice -- love/holo/text.l,
-; apps/cook.l, apps/lapiz.l, apps/sat/dimacs.l. the (use ..) must be its own
-; top-level form: a `:` body compiles as one unit, so a use nested inside the form that reads
-; the names runs too late to serve it.
+; continuation y = (\ rest payload) and a failure continuation n = (\ rest); payloads are lists
+; `seq` concatenates. the leaves are `lit` (a literal prefix), `one` (one char by predicate) and
+; `span` (a maximal run) -- love has no regex. `parse` requires the whole input consumed, `runp`
+; keeps the payload and ignores trailing slack. an empty payload is the unit, never the 0
+; nil-tail: `cat` propagates whatever tail it is handed, and `=` tells the two apart.
+; a module the boot never splices -- each consumer opens with its own top-level (borrow 'peg),
+; which must be its own top-level form: a `:` body compiles as one unit, so a borrow nested
+; inside the form that reads the names runs too late to serve it.
 
 (module 'peg
 (: (eps s y n) (y s ())
@@ -1454,8 +1320,7 @@
    (many a s y n) (a s
     (s1 \ p1 \ many a s1 (s2 \ p2 \ y s2 (p1 + p2)) (_ \ y s1 p1))
     (_ \ y s ()))
-   ; --- the set the consumers kept re-deriving (apps/lapiz.l had all of these
-   ; --- under a comment reading "the combinators peg's set lacked") ------------
+   ; --- the set the consumers kept re-deriving ---------------------------------
    (nope s y n) (n s)                                            ; the always-failing parser: alts' unit
    (notp a s y n) (a s (_ \ _ \ n s) (_ \ y s ()))              ; negative lookahead -- consumes nothing either way
    (many1 a) (seq a (many a))
@@ -1468,45 +1333,30 @@
 
 ) ; module peg
 
-; re -- the POSIX regex engine, BRE and ERE. love has no regex syntax, so this is
-; the door: (rebre p) / (reere p) compile a pattern, (rehas ns s) and
-; (refind ns s i) run it. pure -- no i/o, no seat -- and peg's peer: a module the
-; boot never splices, so each consumer opens with its own top-level (borrow 're).
-; grep lives on in apps/kore/re.l, which reads four names off this splice.
+; re -- the POSIX regex engine, BRE and ERE. love has no regex syntax, so this is the door:
+; (rebre p) / (reere p) compile a pattern, (rehas ns s) and (refind ns s i) run it. pure --
+; no i/o, no seat -- and peg's peer: a module the boot never splices, so each consumer opens
+; with its own top-level (borrow 're); grep reads four names off that splice, in apps/kore/re.l.
+; lawed in test/law/kore.l: hand laws plus a seeded differential fuzz against an independent
+; Brzozowski-derivative oracle, and grep is smoked byte-identical against GNU in test_kore.
 ;
-; lawed in test/law/kore.l: hand laws plus a seeded differential fuzz against an
-; independent Brzozowski-derivative oracle, and grep is smoked byte-identical
-; against GNU in `make test_kore`.
+; two dialects, one parser: BRE and ERE differ only in which sigils wear a backslash, so
+; `reparse` takes the dialect as a flag and `esc?` is the whole seam -- ( ) | { } + ? are bare
+; in ERE and \-escaped in BRE, while * . [ ^ $ are bare in both.
+; the surface: literals, `.`, `*`, `+`, `?`, `{n,m}` intervals, `|` alternation (an empty
+; branch is legal and matches the empty text), `^` and `$` (anchors anywhere in ERE; in BRE
+; where nothing is read yet or left, which is GNU's rule), ( ) groups, and [..] classes with
+; ranges, ^-negation and the twelve POSIX [:name:] classes. out of scope, refused by the
+; parser in both dialects: backrefs (\1..\9). the ragged edges were read off GNU, not guessed,
+; and each is commented where the parser makes it.
 ;
-; two dialects, one parser: BRE and ERE differ only in which sigils wear a
-; backslash, so `reparse` takes the dialect as a flag and `esc?` is the whole
-; seam -- ( ) | { } + ? are bare in ERE and \-escaped in BRE, while * . [ ^ $
-; are bare in both. (rebre p) and (reere p) are its two doors.
-;
-; the surface: literals, `.`, `*`, `+`, `?`, `{n,m}` intervals, `|` alternation,
-; `^` and `$` (anchors anywhere in ERE; in BRE where nothing is read yet or left,
-; which is GNU's rule -- see `bol?` and `eol?`),
-; ( ) groups, and [..] classes with ranges, ^-negation, and the twelve POSIX
-; [:name:] classes (a first `]` is literal, an edge `-` is literal). out of
-; scope, refused by the parser in both dialects: backrefs (\1..\9).
-;
-; the ragged edges were read off GNU, not guessed, because the differential is
-; what says so: a repeat with nothing to repeat is a literal in BRE (`\{2\}` is
-; the text {2}) and dropped in ERE (`-E '*a'` is `a`, GNU warns and carries on);
-; a brace that never closes and a `)` with nothing open are literals in ERE and
-; malformed in BRE. an empty alternative branch is legal in both and matches the
-; empty text. an inverted interval (`{3,2}`) is malformed in both.
-;
-; shapes: (rebre p) / (reere p) answer (1 nodes ngroups) or () on a malformed
-; pattern -- uread's success shape, since the empty pattern's nodes are
-; legitimately (). a node is ['chr c] | ['any] | ['cls neg ([lo hi]..)] | ['bol]
-; | ['eol] | ['grp idx nodes] | ['rep atom lo hi] | ['alt (nodes..)], hi () for
-; unbounded; groups number in ( order from 1. (rehas nodes s) answers the
-; boolean face; (refind nodes s i) the leftmost match at-or-after i as
-; (1 start end spans), spans an ([idx start end]..) with the newest pin of each
-; group first -- (..)*'s \1 is the last iteration, like GNU; read it with assoc.
-; matching is greedy backtracking in continuation style, so alternation is just
-; one more node that tries its branches in order on the winning path.
+; shapes: (rebre p) / (reere p) answer (1 nodes ngroups) or () on a malformed pattern --
+; uread's success shape, since the empty pattern's nodes are legitimately (). a node is
+; ['chr c] | ['any] | ['cls neg ([lo hi]..)] | ['bol] | ['eol] | ['grp idx nodes] |
+; ['rep atom lo hi] | ['alt (nodes..)], hi () for unbounded; groups number in ( order from 1.
+; (rehas nodes s) answers the boolean face, (refind nodes s i) the leftmost match at-or-after
+; i as (1 start end spans), spans an ([idx start end]..) with the newest pin of each group
+; first -- (..)*'s \1 is the last iteration, like GNU; read it with assoc.
 (module 're
 (:
    ; -- the twelve POSIX [:name:] classes, each written once as its ranges --
@@ -1539,9 +1389,8 @@
    ; -- the parser, both dialects: pattern text -> (1 nodes ngroups) | () --
    (reparse p ere?)
     (: n #p
-       ; the one seam between the dialects: ( ) | { } + ? are bare in ERE and
-       ; \-escaped in BRE, so they are asked for here and nowhere else. * . [ ^ $
-       ; are bare in both and are read straight off the byte.
+       ; the one seam between the dialects: ( ) | { } + ? are asked for here and nowhere
+       ; else; * . [ ^ $ are bare in both and are read straight off the byte.
        bw (ere? ? 1 2)
        ; an if/else, not (ere? && bare) || escaped: the || falls through to the
        ; BRE arm whenever ERE's own test fails, and `\(` is a literal paren in ERE
@@ -1559,13 +1408,11 @@
                                     (clo (j + 1) ? [lo () (j + 1 + bw)])))))
        ; can a repeat land? nothing repeats an anchor or an empty head
        (repable acc) (two? acc && !(elem <<acc '(bol eol)))
-       ; where a sigil is an anchor. POSIX leaves BRE's answer undefined outside
-       ; the head and the tail; GNU and busybox both read `^` wherever nothing has
-       ; been read yet -- the head, or just past `\(` or `\|`, which is exactly an
-       ; empty acc, since a group and a branch each open a fresh pseq -- and `$`
-       ; wherever nothing is left to read: the tail, or a `\)` or `\|` next. that
-       ; is purely syntactic, so `\(a$\)b` anchors and then cannot match. anywhere
-       ; else the sigil is ink. ERE anchors anywhere, so ere? short-circuits both
+       ; where a sigil is an anchor. POSIX leaves BRE undefined outside the head and the
+       ; tail; GNU reads `^` wherever nothing has been read yet -- an empty acc, since a
+       ; group and a branch each open a fresh pseq -- and `$` wherever nothing is left to
+       ; read. purely syntactic, so `\(a$\)b` anchors and then cannot match; anywhere else
+       ; the sigil is ink. ERE anchors anywhere, so ere? short-circuits both
        (bol? acc) (ere? || !(two? acc))
        (eol? i) (ere? || (i + 1 = n) || (esc? (i + 1) 41) || (esc? (i + 1) 124))
        ; where it cannot: BRE keeps the sigil as a literal charm, ERE drops it
@@ -1594,9 +1441,8 @@
            (esc? i 63) (? (repable acc)
                           (pseq (i + bw) (['rep <acc 0 1] . >acc) lvl gi)
                           (nofit i acc lvl gi 63 bw))
-           ; the ere drop is of the whole {n,m}, which is why rivl runs first even
-           ; when nothing can be repeated: skipping just the brace leaves `2}` behind
-           ; as literals, and `-E '{2}'` would match nothing where GNU matches all
+           ; the ere drop is of the whole {n,m}, which is why rivl runs first even when
+           ; nothing can be repeated: skipping just the brace leaves `2}` behind as literals
            (esc? i 123)
             (rivl (i + bw) @ [lo hi j]
               (? (hi && lo > hi) ()                    ; {3,2}: malformed in both
@@ -1646,12 +1492,12 @@
      (x <= y ? [[(x + d) (y + d)]]))
    (refoldr rs)
     (catmap (\ [lo hi] (cat (rovl lo hi 97 122 -32) (rovl lo hi 65 90 32))) rs)
-   ; a literal becomes the two-charm class, a class gains its mirror ranges, and
-   ; everything with children recurses. the matcher is untouched by -i
+   ; a literal becomes the two-charm class, a class gains its mirror ranges, and everything
+   ; with children recurses. the matcher is untouched by -i
    (refold nds)
     (map (\ nd
-           ; not (recase c @ () .. m ..): pat.l reads () as the form at zero, which
-           ; asks nothing and so fits everything. presence here is a plain test
+           ; not (recase c @ () .. m ..): pat.l reads () as the form at zero, which asks
+           ; nothing and so fits everything. presence here is a plain test
            (nd @ ['chr c]      (: m (recase c) (? m ['cls 0 [[c c] [m m]]] nd))
                  ['cls neg rs] ['cls neg (cat rs (refoldr rs))]
                  ['grp gi sub] ['grp gi (refold sub)]
@@ -1661,10 +1507,9 @@
          nds)
 
    ; -- the matcher: greedy backtracking in continuation style, compiled --
-   ; a node list becomes one lambda of (s i sp k), once, before any text is read.
-   ; the shape walk and the class ranges are spent there, so what a character costs
-   ; at match time is a call and a compare. the node vocabulary is renode's arm list
-   ; -- a shape with no arm there cannot be built above
+   ; a node list becomes one lambda of (s i sp k), once, before any text is read, so what a
+   ; character costs at match time is a call and a compare. the node vocabulary is renode's
+   ; arm list -- a shape with no arm there cannot be built above
    ; does charm c sit in a class of these ranges, negated or not?
    (rcls neg rs c)
     (: hit (any (\ [lo hi] (lo <= c <= hi)) rs) (? neg !hit hit))
@@ -1676,11 +1521,9 @@
                  (put o (? (rcls neg rs c) 1 0), go (c + 1)))
        tbl (go 0)
        (\ c (? (c <= 255) (tbl c) (rcls neg rs c))))
-   ; the program a caller holds: the matcher, whether the pattern can only match at
-   ; 0, and a skipper -- the walk's way of reaching the next position that could
-   ; start a match instead of asking the matcher about every one. `^` used to be
-   ; asked its one failing question at every byte of the line, and a literal used to
-   ; be asked its first charm at every byte too
+   ; the program a caller holds: the matcher, whether the pattern can only match at 0, and a
+   ; skipper -- the walk's way of reaching the next position that could start a match instead
+   ; of asking the matcher about every one
    (recomp ns) (: c (refirst ns)
                   [(recompm ns) (reanch ns)
                    (? (nil? c) ()
@@ -1688,39 +1531,26 @@
                          (\ s i n (: j (sc s c i)          ; module binding, which bakes
                                      (j < 0 ? n j)))))])
    ; -- the budget, and the one shape that needs it -------------------------------
-   ; THIS ENGINE'S ONE UNBOUNDED INPUT. matching is greedy backtracking in
-   ; continuation style, so a repeat whose atom can match one span MORE THAN ONE WAY
-   ; -- (a|aa)+ , (a*)* -- tries every split of a run and is exponential in its
-   ; length: `grep -E '^(a|aa)+b$'` against forty a's does not finish. GNU builds an
-   ; automaton and walks the string once; this does not, and making it do so is a
-   ; different engine, not a repair.
-   ; the budget is what this one can afford: a step count spent ONLY by the repeats
-   ; that can nest, reset once per find, and a scare when it runs out. A pattern that
-   ; says "too costly" out loud beats one that never comes back.
-   ; the cost lands on nothing else. `renests?` asks at COMPILE time, so an
-   ; ordinary repeat -- [0-9]+, .*, a\{2,5\} -- compiles to the same rrepc it always
-   ; did and its inner loop never reads the cell. `recomp`'s fourth word says whether
-   ; a matcher spends the budget at all, so the drivers do not even reset it for one
-   ; that cannot.
-   ; one cell, so a nested find (sed's s/// inside a walk that is itself matching)
-   ; shares it. the reset is per top-level find and the only cost of sharing is an
-   ; early "too costly" in a corner that is already pathological.
-   ; A FUNCTION, not `relimit 200000`. module 're is walked while post.l is itself
-   ; still loading, so a VALUE binding here is read before the letrec reaches it and
-   ; love0's boot floods `;; missing relimit` -- while the built love, whose image
-   ; already holds the module, is perfectly happy. A call defers, which is the same
-   ; rule a catted crew file lives under. (A module of one's own, loaded after the
-   ; boot, shows none of this: the shape only bites inside post.l.)
+   ; this engine's one unbounded input: a repeat whose atom can match one span more than one
+   ; way -- (a|aa)+ , (a*)* -- tries every split of a run and is exponential in its length.
+   ; an automaton would walk the string once, but that is a different engine and not a repair,
+   ; so instead there is a step count, spent only by the repeats that can nest, and a scare
+   ; when it runs out.
+   ; the cost lands on nothing else: `renests?` asks at compile time, so an ordinary repeat --
+   ; [0-9]+, .*, a\{2,5\} -- compiles to the same rrepc it always did and its inner loop never
+   ; reads the cell, and `recomp`'s fourth word says whether a matcher spends the budget at all.
+   ; a function, not `relimit 200000`: module 're is walked while post.l is itself still
+   ; loading, so a value binding here is read before the letrec reaches it and love0's boot
+   ; floods `;; missing relimit`. a call defers, the rule a catted crew file lives under.
    (relimit _) 200000
    (renests? nd)                                 ; can this ATOM match a span two ways?
     (nd @ ['alt _]     1
           ['rep _ _ _] 1
           ['grp _ sub] (any renests? sub)
           0)
-   ; the charm a match must open with, or (). only ever answered for a first node
-   ; that has to consume one -- a repeat that can take nothing answers (), so the
-   ; skip never steps over a match. nil? is zero?, so a NUL needle reads as absent
-   ; here and simply declines the skip
+   ; the charm a match must open with, or (). only ever answered for a first node that has to
+   ; consume one -- a repeat that can take nothing answers (), so the skip never steps over a
+   ; match. nil? is zero?, so a NUL needle reads as absent and simply declines the skip
    (refirst ns)
     (ns @ (nd . _) (nd @
      ['chr c]       c
@@ -1755,25 +1585,20 @@
                                   (l @ (b . more)
                                    (b s i sp (\ j sp2 (tail s j sp2 k)) || try more))
                                  (try bs))))
-          ; the budgeted twin is chosen HERE, once, off the atom's shape -- so a
-          ; repeat that cannot nest is compiled to exactly the loop it always was
-          ; the counter is born HERE, in the closure, so it is one per ENTRY to this
-          ; repeat -- per starting position for a top-level one -- and there is no
-          ; module-level cell to bake, to reset per find, or to share with a nested
-          ; match. A repeat inside another gets a fresh budget per outer step, which
-          ; is a looser bound than one counter would give and still a bound.
+          ; the budgeted twin is chosen here, once, off the atom's shape, and the counter is
+          ; born in the closure -- one per entry to this repeat, with no module-level cell to
+          ; bake or reset. a repeat inside another gets a fresh budget per outer step, a
+          ; looser bound than one counter would give and still a bound.
           ['rep a lo hi] (: ab (recompm [a])
                             (? (renests? a)
                                (\ s i sp k (: b (tablet 0)
                                               _ (pin b 0 (relimit ()))
                                               (rrepb b ab lo hi tail s i sp k 0)))
                                (\ s i sp k (rrepc ab lo hi tail s i sp k 0)))))
-   ; the repeat: try one more (progress required), else the tail once fed.
-   ; an empty iteration cannot repeat -- that guard is what stops `\(\)*` spinning
-   ; -- but it still satisfies the minimum, all at once. without that second half
-   ; `a*\+\+` demands an `a`, because the inner a* matches empty, the empty is
-   ; refused, and the outer's lo=1 is never met: GNU matches every line there and
-   ; we matched only the ones with an a. (the seeded fuzz found it, not a human.)
+   ; the repeat: try one more (progress required), else the tail once fed. an empty iteration
+   ; cannot repeat -- that guard is what stops `\(\)*` spinning -- but it still satisfies the
+   ; minimum, all at once, or `a*\+\+` demands an `a`: the inner a* matches empty, the empty
+   ; is refused, and the outer's lo=1 is never met.
    (rrepc ab lo hi tail s i sp k cnt)
     (: more (? (!hi || cnt < hi)
                (ab s i sp
@@ -1782,10 +1607,9 @@
        (? more more
           (cnt < lo) ()
           (tail s i sp k)))
-   ; rrepc's twin, one step poorer each turn. the ONLY difference is the two lines
-   ; at the top -- the loop below them is rrepc's, kept side by side rather than
-   ; folded together with a flag, because a flag would be read on every step of
-   ; every ordinary pattern and that is the cost this whole arrangement avoids.
+   ; rrepc's twin, one step poorer each turn: the two lines at the top are the only
+   ; difference. not folded together with a flag -- that would be read on every step of
+   ; every ordinary pattern, which is the cost this arrangement exists to avoid.
    (rrepb b ab lo hi tail s i sp k cnt)
     (: n (peep b 0 0)
        _ (? (n < 1) (scare 'regex-too-costly (relimit ())) (pin b 0 (n - 1)))
@@ -1810,16 +1634,11 @@
    ; the node-list faces: they compile and then match, for a caller with one text to
    ; ask about. a caller with many -- grep, sed, awk -- holds the matcher instead
    (rehas ns s) (rehasm (recomp ns) s)
-   ; the leftmost span at-or-after i: (1 start end spans) | () -- uread's success
-   ; shape, since the empty match at 0 is the span (0 0), blue by measure. greedy
-   ; end: the span the substitution tools take; spans feed \1
-   ; the leftmost span at-or-after i whose (start end) passes p. p rides inside
-   ; the continuation, which is the whole trick: a span it rejects makes `rem`
-   ; answer (), and the greedy backtracker then tries the other lengths at that
-   ; start before the start moves on. a filter applied to refind's answer cannot
-   ; do that -- it only ever sees the greedy span. -w is where it shows: `a*.` on
-   ; "a._c_" is word-bounded at "a" and not at the greedy "a.", and the outside
-   ; filter calls that line a miss where GNU calls it a hit
+   ; the leftmost span at-or-after i whose (start end) passes p: (1 start end spans) | () --
+   ; uread's success shape, since the empty match at 0 is the span (0 0), blue by measure.
+   ; p rides inside the continuation, which is the whole trick: a span it rejects makes `rem`
+   ; answer (), and the greedy backtracker then tries the other lengths at that start before
+   ; the start moves on. a filter over refind's answer only ever sees the greedy span.
    (refindpm m s i p)
     (: f <m n (<>m ? i #s)                        ; anchored: the walk ends where it starts
        sk <>>m
@@ -1837,15 +1656,13 @@
 
 ) ; module 're
 
-; grid -- a list of cells laid across a terminal, ls's shape. the columns are
-; RAGGED, each as wide as its own entries, and the count is the largest whose
-; ragged widths still fit; the fill runs DOWN the columns (ls's own order, where
-; sorted reads top to bottom) or ACROSS the rows (ls -x). a cell is (text . width)
-; because sgr colour parts the two -- the escape bytes sit in the text and take up
-; no screen. answers the lines, with no trailing blanks: a row's pad is written
-; ahead of the NEXT cell and never behind the last one on the row.
-; this is GNU's own search and its tab-eliding pad, not an approximation of either,
-; so `ls -C` and `ls -x` compare byte for byte (test/gate/lscmp.sh).
+; grid -- a list of cells laid across a terminal, ls's shape. the columns are ragged, each as
+; wide as its own entries, and the count is the largest whose ragged widths still fit; the fill
+; runs down the columns (ls's own order) or across the rows (ls -x). a cell is (text . width)
+; because sgr colour parts the two -- the escape bytes take up no screen. answers the lines
+; with no trailing blanks: a row's pad is written ahead of the next cell, never behind the last
+; one on the row. GNU's own search and tab-eliding pad, so `ls -C` and `ls -x` compare byte for
+; byte (test/gate/lscmp.sh).
 (module '(grid lay screen)
 (: gmin 3                            ; the narrowest a column may be: one char and its gap
    gpad 2                            ; the gap between two columns
@@ -1853,17 +1670,15 @@
    (gind f t) (? (t <= f) ""
                  ((f + 1) // gtab < t // gtab) ("\t" + gind (f + gtab - (f % gtab)) t)
                  (" " + gind (f + 1) t))
-   ; the cells by index: both walks JUMP, so a list would cost a walk per cell
+   ; the cells by index: both walks jump, so a list would cost a walk per cell
    (gvec cs) (: t {}
                 (go l j) (? !(two? l) t (: _ (pin t j <l) (go >l (j + 1))))
                 (go cs 0))
    ; the slot cell j takes when the row is i+1 columns wide
    (gslot j i n down?) (? down? (j // ((n + i) // (i + 1))) (j % (i + 1)))
-   ; the search: every column count is measured over ONE pass of the cells, and a
-   ; count dies the moment its running line outgrows w -- a dead one is never
-   ; revived, which is what keeps the pass single. the slot widths ride a tablet
-   ; keyed (count * mx + slot), a list per count per cell being that work squared.
-   ; answers the widths of the widest count that lived; one column always does.
+   ; the search: every column count is measured over one pass of the cells, and a count dies the
+   ; moment its running line outgrows w -- never revived, which keeps the pass single. the slot
+   ; widths ride a tablet keyed (count * mx + slot). answers the widest count that lived.
    (gfit cs n w down?)
     (: mx (: m (w // gmin) (? (m < 1) 1 (m < n) m n))
        aw {}                         ; a slot's width so far, gmin until something widens it
@@ -1924,26 +1739,22 @@
 
 ) ; module grid
 
-; verbs -- the registry behind `love mooncc ..`, `love cook ..`, and a `sed` symlink onto
-; the artifact. one symbol-keyed tablet, mutated in place: (cite 'verbs 'tab) hands the
-; real tablet, not a copy, and `pin` is the door. registered, never spliced -- tab/word/
-; seat are not names to reach bare, and `get` would shadow half the tree.
-;
+; verbs -- the registry behind `love mooncc ..`, `love cook ..`, and a `sed` symlink onto the
+; artifact. one symbol-keyed tablet, mutated in place: (cite 'verbs 'tab) hands the real tablet,
+; not a copy, and `pin` is the door. registered, never spliced -- `get` would shadow half the tree.
 ; two front doors, because the two dispatch lanes carry different shadow rules:
-;   (word w)  a leading positional -- cli's rail. refuses a `/` or a `.l`, so with
-;             fifty applets registered `make`, `env`, `true` and `cmp` cannot eat a local
-;             script of the same name; `love ./up` and `love -- up` stay the file.
-;   (seat p)  argv[0] -- inle/main.c's door, which fires before the cli runs at all (a bare
-;             `seed` at argc 1 wants its usage). always a path, so the basename decides.
-; a verb takes the args after its name and answers a status charm; the rail quits with it.
-; that is kore's convention, and it is why `love kore sed ..` nests.
+;   (word w)  a leading positional -- cli's rail. refuses a `/` or a `.l`, so `make`, `env`,
+;             `true` and `cmp` cannot eat a local script of the same name.
+;   (seat p)  argv[0] -- inle/main.c's door, which fires before the cli runs at all. always a
+;             path, so the basename decides.
+; a verb takes the args after its name and answers a status charm; the rail quits with it,
+; which is kore's convention and why `love kore sed ..` nests.
 (module '(verbs any? bn dash fills fire get seat seatof tab word)
 (: tab {}   ; nil? when empty, like every empty -- ask it with peep, not by testing it
-   ; a seat whose verbs are not all in the image installs a filler here, and the first MISS
-   ; runs it -- once, the slot cleared before the call so a fill registering through this
-   ; same door cannot re-enter. the registry is the one authority every asker walks -- the
-   ; rail, lush's lookup, `which` -- so a lazily-loaded verb has to arrive at the miss, not
-   ; at the spawn: lush answers "not found" from the lookup and never spawns at all.
+   ; a seat whose verbs are not all in the image installs a filler here, and the first miss runs
+   ; it -- once, the slot cleared before the call so a fill registering through this same door
+   ; cannot re-enter. a lazily-loaded verb must arrive at the miss, since the registry is what
+   ; every asker walks: lush answers "not found" off the lookup and never spawns at all.
    fill {}
    (fills f) (pin fill 'f f)
    (get k)   (: v (tab k)
@@ -1956,11 +1767,11 @@
    (dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sl? w)   (: n #w (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
    (word w)  (sl? w || dotl? w ? () (get (name w)))
-   ; ..and never the artifact's own name: argv[0] `love` is THIS BINARY, not a verb
-   ; called love, so the front door keeps its flags, its tty test and its stdin.
+   ; ..and never the artifact's own name: argv[0] `love` is this binary, not a verb called
+   ; love, so the front door keeps its flags, its tty test and its stdin.
    (seat p)  (: w (bn p) (w = "love" ? () (get (name w))))
-   ; the listing: a grid onto a terminal, one name a line into a pipe, so
-   ; `love verbs | grep` reads what it always read. the grid is ls's own (grid).
+   ; the listing: ls's own grid onto a terminal, one name a line into a pipe, so
+   ; `love verbs | grep` reads what it always read.
    (vlist ks) (: ns (map string ks)
                  G (cite 'grid)
                  (? (two? (tty 1))
@@ -1985,8 +1796,8 @@
    ; shebang's `-l`, a catted script under its own name. no name was typed, a path was.
    ;   (fire ws)      -> (seat-word . args-after) over this invocation's line, else ()
    ;   (seatof ws a)  the same over a list handed in
-   ; a bake pins no `cmdline` (inle/main.c), which leaves the read below a lookup: nothing
-   ; typed, nothing seats. () means "not seated", the presence answer -- ask it with two?.
+   ; a bake pins no `cmdline`, so the read below is a lookup: nothing typed, nothing seats.
+   ; () means not seated, the presence answer -- ask it with two?.
    (dash w)    (0 < #w && w 0 = 45 ? (snip w 1 #w) w)   ; -sh: login(1)'s mark
    (any? w (a . u)) (a = w || any? w u)
    (mine? ws w) (any? (dash (bn w)) ws)
@@ -1999,17 +1810,15 @@
 
 ) ; module verbs
 
-; cli -- the console and command line: the read-eval-print loop, its multi-line line
-; editor, the stream shell (read/reads), the floor handler (welp), the port-driven line
-; reader (edraw/edln/edlnc) that lush drives, and the host command line, read left to
-; right after the program-name head:
+; cli -- the console and command line: the read-eval-print loop, its multi-line editor, the
+; stream shell (read/reads), the floor handler (welp), the port-driven line reader
+; (edraw/edln/edlnc) that lush drives, and the host command line, read left to right after the
+; program-name head:
 ;   (cli-rail ln)     the walk over ln = (program-name . args)
 ;   (cli-line ln tty) a frontend's whole tail: the argv[0] door, the rail, the repl, stdin
-; inle/main.c calls cli-line, and so does a forked lush child -- a word whose PATH winner
-; is this binary need not exec, and what it would have exec'd is (cli-line its-line) on a
-; warm heap. the shadow rule lives in one place, verbs' `word`. prel and pat
-; must be up before this compiles: @ reads here, and a macro reaches a reader only once its
-; layer is spliced.
+; inle/main.c calls cli-line, and so does a forked lush child -- a word whose PATH winner is
+; this binary need not exec, and what it would have exec'd is (cli-line its-line) on a warm
+; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap
           uopt uopt1 uoptv uoptun uoptstray unum uask udoor edcmd edsgr edwide edcut edpad edfit
@@ -2024,8 +1833,8 @@
                               (a . b) (walk b (ev 'ev a))
                               z)
       ; the shared lane, for `in`: gulp for speed, hold nothing across an eval. box slot 0 counts
-      ; every byte drawn off p, so the walk can put the port where it belongs. no window on purpose:
-      ; a straddling `;` comment would end one cleanly and the next reads the prose as code.
+      ; every byte drawn off p, so the walk can put the port where it belongs. no window: a
+      ; straddling `;` comment would end one cleanly and the next reads the prose as code.
       box {}
       (drew u) (peep box 0 0)
       ; absolute, not relative -- p is already behind us, so a plain (unchug p rem) re-reads the run
@@ -2040,7 +1849,7 @@
          (go #t (once (u \ feed ())))))
       ; consumed, forwards and by identity. never (tally >r) -- the residue is lazy, so that
       ; forces the whole rest; and force at every step, or a plain `cup` walk stops dead at a
-      ; gulp boundary and spins on () forever. `once` memoizes, so re-forcing is free.
+      ; gulp boundary and spins on () forever.
       (frc x) (lit? x ? (x ()) x)
       (upto a b n) (: aa (frc a) bb (frc b)
                       (? (aa = bb) n
@@ -2091,18 +1900,16 @@
     ((_ . _)  @ d) [d])           ; many: the application; a blank line: ()
 
    ; --- the editor: one buffer in a tablet, one key at a time -------------------------
-   ; the buffer is a zipper of charlists: 'u the lines above (reversed), 'l the cursor's
-   ; left (reversed), 'r its right, 'd the lines below. every motion and edit is a
-   ; function of the tablet that answers it, so a caller with a loop of its own -- vi's
-   ; `:` line, a game's prompt -- drives the editor the repl does, a key at a time
+   ; the buffer is a zipper of charlists: 'u the lines above (reversed), 'l the cursor's left
+   ; (reversed), 'r its right, 'd the lines below. every motion and edit is a function of the
+   ; tablet that answers it, so a caller with a loop of its own drives the editor the repl does.
 
    ; intersperse a list of charlists with newlines, in order
    (joinln ls)
     (ls @ (a . b) (atom? b ? a (a + (10 . joinln b))))
 
-   ; walk xs forward taking n chars into acc (reversed); when done
-   ; call k with (rev (take n xs)) and (drop n xs). stops cleanly at
-   ; end-of-xs even if n exceeds the list length.
+   ; walk xs forward taking n chars into acc (reversed), then call k with (rev (take n xs))
+   ; and (drop n xs). stops cleanly at end-of-xs even where n exceeds the list length.
    (splitat k acc n xs)
     (xs @- (k acc xs) ((ax . ux) && 0 < n) (splitat k (ax . acc) (n - 1) ux))
 
@@ -2139,10 +1946,9 @@
    (edload t f) (pins t 'u <f 'l <>f 'r <>>f 'd >>>f)
 
    ; --- the history zipper, on the same tablet ---------------------------------------
-   ; 'hu the older frames, 'hd the newer, 'cur a pristine recall: an edit gives it back
-   ; to 'hu first, so the original survives. on a pop the buffer goes to the other side
-   ; (skipped when empty); on a real recall with no further side, the buffer is pushed
-   ; and a fresh empty line opens, as long as it parses
+   ; 'hu the older frames, 'hd the newer, 'cur a pristine recall: an edit gives it back to 'hu
+   ; first, so the original survives. on a pop the buffer goes to the other side (skipped when
+   ; empty); on a real recall with no further side it is pushed and a fresh line opens.
    (eddetach t) (one? (t 'cur) ? t (pins t 'hu (t 'cur . t 'hu) 'cur ()))
    (uphist t) (: hu (t 'hu)
      (? (two? hu) (edempty? t ? () (pin t 'hd (edframe t . t 'hd)),
@@ -2176,12 +1982,9 @@
            (pin t 'ev (c @ 13 10 c)))))
 
    ; --- a prompt on the buffer -------------------------------------------------------
-   ; the `:` line, which four apps spelled the same way: the editor sits at key k of a
-   ; state, the key is stepped into it, and an enter hands the caller the line while an
-   ; escape backs out. a tab is a tab -- nothing here completes. any other key answers
-   ; the state itself, which is what a stage loop wants back. a fresh buffer afterward
-   ; is the caller's business: most make one on the way in, and one reads the line it
-   ; just committed.
+   ; the `:` line: the editor sits at key k of a state, the key is stepped into it, and an
+   ; enter hands the caller the line while an escape backs out. a tab is a tab -- nothing here
+   ; completes. any other key answers the state itself, and a fresh buffer is the caller's.
    (edcmd t k c enter esc)
     (: e (t k)
        _ (edstep e c)
@@ -2191,17 +1994,16 @@
                 t))
 
    ; --- the key reader ---------------------------------------------------------------
-   ; one key off port p: a byte as itself, -7 at eof, and the escape family decoded. a
-   ; bare escape (no tail within a beat) is 27, the CSI arrows and jumps are the codes
-   ; in the tables, alt with a letter is 256 + the letter. any other byte after an
-   ; escape goes back for the next read, so esc x is two keys. an unknown sequence is 0
-   ; 0 is the miss, read with == -- an event code nets red, so truth cannot tell hit from miss
+   ; one key off port p: a byte as itself, -7 at eof, and the escape family decoded. a bare
+   ; escape (no tail within a beat) is 27, the CSI arrows and jumps are the codes in the
+   ; tables, alt with a letter is 256 + the letter, and any other byte after an escape goes
+   ; back for the next read. an unknown sequence is 0 -- the miss, read with ==, since an
+   ; event code nets red and truth cannot tell hit from miss
    arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6}    ; ESC [ F -- the plain finals
    modarrow {68 -1 67 -2 65 -8 66 -9 72 -10 70 -11}  ; ESC [ 1 ; M F -- modified home/end jump the buffer
-   ; a tap is a place and not a letter: xterm's SGR report (ESC [ < b ; col ; row M, and
-   ; m for the release) carries the cell it landed on. the press is the key -12 and the
-   ; cell waits in edtap, so an app that wants one asks for it and an app that does not
-   ; reads a key it has no arm for and drops it. the cell answers 0-based, screen order.
+   ; a tap is a place and not a letter: xterm's SGR report (ESC [ < b ; col ; row M, m for
+   ; the release) carries the cell it landed on. the press is the key -12 and the cell waits
+   ; in edtap, 0-based in screen order, so an app with no arm for -12 simply drops it.
    edtap-at {'x 0 'y 0}
    (edtap _) [(edtap-at 'x) (edtap-at 'y)]
    (ednum p a) (: c (see p) (48 <= c <= 57 ? (ednum p (a * 10 + c - 48)) [a c]))
@@ -2229,10 +2031,9 @@
                         (unsee p c2, 27)))))
 
    ; --- the stage: a full-screen tty app ---------------------------------------------
-   ; show answers the frame for a screen w by h, step takes a key, over? says when to
-   ; leave. the frame lives on the alternate screen (the scrollback survives the visit),
-   ; the tty is raw for the visit and cooked after, and eof leaves too. a frame places or
-   ; hides the cursor itself; it comes back shown
+   ; show answers the frame for a screen w by h, step takes a key, over? says when to leave.
+   ; the frame lives on the alternate screen, the tty is raw for the visit and cooked after,
+   ; and eof leaves too. a frame places or hides the cursor itself; it comes back shown
    (stage show step over?)
      (: (loop _) (: ws (tty 1)
                     h (two? ws && 7 < <ws ? <ws 24)
@@ -2245,15 +2046,13 @@
         (raw 1, say out "\e[?1049h", loop (),
          say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0))
 
-   ; redraw the buffer in place. the cursor's row from the previous render is kept on
-   ; the buffer ('row) -- move up that many first, so we land back on the prompt's row.
-   ; all motion is relative, so terminal scrolling never desyncs us. pl is the prompt's
-   ; column; the topmost line shares it, later lines start at column 0.
+   ; redraw the buffer in place. the cursor's row from the previous render is kept on the
+   ; buffer ('row) -- move up that many first, and all motion is relative, so terminal
+   ; scrolling never desyncs us. pl is the prompt's column, shared by the topmost line only.
    (csi n f) (putc 27, putc 91, putn n, putc f)   ; ESC [ n f -- the one cursor verb
-   ; the buffer on a screen w wide: the cursor's row and column and the row the last
-   ; character sits on, rows counted from the buffer's first. a line wraps at w, and one
-   ; that ends on the margin leaves the cursor pending there, so a line of n from column
-   ; s covers (s + n - 1) // w + 1 rows; the cursor itself is placed past any margin
+   ; the buffer on a screen w wide: the cursor's row and column and the row the last character
+   ; sits on, rows counted from the buffer's first. a line that ends on the margin leaves the
+   ; cursor pending there, so a line of n from column s covers (s + n - 1) // w + 1 rows
    (edlay w pl u l r d)
      (: (rows s n) (0 < n ? (((s + n - 1) // w) + 1) 1)
         (span top s) (? (one? top) 0 ((rows s (tally <top)) + (span >top 0)))
@@ -2261,20 +2060,18 @@
         s0 (two? u ? 0 pl)
         k (s0 + #l)
         [(above + (k // w)) (k % w) (above + (rows s0 (#l + #r)) + (span d 0) - 1)])
-   ; the screen already carries this line but for its last character: nothing above or
-   ; below it, the cursor at its end, and an l that is the drawn one with a character
-   ; pushed on top. l grows by prepending, so the drawn one IS the tail and the question
-   ; is an identity, not a walk. 'was is what the row was last left showing.
+   ; the screen already carries this line but for its last character: nothing above or below
+   ; it, the cursor at its end, and an l that is the drawn one with a character pushed on top.
+   ; l grows by prepending, so the drawn one is the tail and the question is an identity.
    (edgrew t)
      (: l (t 'l)
         (!(t 'u) && !(t 'd) && !(t 'r) && two? l && cup l == (t 'was)))
-   ; a repaint puts the whole line out again, which costs the line's length a keystroke --
-   ; quadratic over a typed-ahead or pasted run, and 800 characters is a third of a
-   ; megabyte of escapes. a seat that paints those into a framebuffer spends that long
-   ; looking hung, so the one character is worth telling from the line. a character
-   ; that lands on the margin is followed by a newline, so the cursor stands where the
-   ; layout says and not pending on the row above; a cursor past the last row is
-   ; given its row by a newline the same way (the screen scrolls, a move would not)
+   ; a repaint puts the whole line out again, costing the line's length a keystroke --
+   ; quadratic over a pasted run, and a seat painting that into a framebuffer looks hung -- so
+   ; the one grown character is worth telling from the line. a character landing on the margin
+   ; is followed by a newline, so the cursor stands where the layout says and not pending on
+   ; the row above; a cursor past the last row gets its row by a newline the same way, the
+   ; screen scrolling where a move would not
    (edrender pl t)
      (: ws (tty 1)
         w (two? ws && 19 < <>ws ? <>ws 80)
@@ -2308,11 +2105,9 @@
                        (47 < s k < 58 || s k = 59) (g (k + 1))
                        0)) (i + 2))))
 
-   ; a prompt's width on the screen, which is not its tally: an sgr run costs no
-   ; column (it is zero-width to both the host terminal and the inle console,
-   ; love/quay/quay.c) and a utf-8 tail byte is no character of its own. edrender's
-   ; cursor math is all relative motion off this number, so a prompt measured in
-   ; bytes lands the cursor one column per escape byte too far right.
+   ; a prompt's width on the screen, which is not its tally: an sgr run costs no column and a
+   ; utf-8 tail byte is no character of its own. edrender's cursor math is relative motion off
+   ; this number, so a prompt measured in bytes lands the cursor one column per escape byte out.
    (edwide s)
     (: n #s
        (go i c) (? (n <= i) c
@@ -2322,9 +2117,8 @@
                          (go (i + 1) (c + 1)))))
        (go 0 0))
 
-   ; the first n columns of s, by the same measure. an sgr run rides along free; a cut
-   ; that dropped part of a coloured string ends in a reset, so a pen cannot run on into
-   ; whatever is laid beside it. a string that already fits is answered as it stands.
+   ; the first n columns of s, by the same measure. a cut that dropped part of a coloured
+   ; string ends in a reset, so a pen cannot run on into whatever is laid beside it.
    (edcut s n)
     (: m #s
        (go i c pen) (? (m <= i) s
@@ -2335,24 +2129,18 @@
                              (go (i + 1) (c + 1) pen))))
        (go 0 0 0))
 
-   ; a string laid in a field n columns wide: edpad fills what the glyphs leave, edfit
-   ; cuts first so the answer is exactly n wide. three apps spelled this pair in bytes,
-   ; which is right until something wears colour.
+   ; a string laid in a field n columns wide: edpad fills what the glyphs leave, edfit cuts
+   ; first so the answer is exactly n wide -- both by column, not by byte.
    (edpad s n c) (: w (edwide s) (w < n ? (s + ((n - w) (t \ t + c) "")) s))
    (edfit s n c) (edpad (edcut s n) n c)
 
-   ; --- the option walk, lifted out of kore, whose floor and love's own coincide here:
-   ; both are collections of applets reading clustered short flags, and the walk was
-   ; unreachable outside kore (kore.l's export list prunes it).
-   ;
-   ; (uopt1 w flags vals) -- ONE word into its letters as words of their own, or () when
-   ; the word is not ours to read. the short flags cluster, so `-qe X` is `-q -e X`; a
-   ; letter in `vals` takes an argument and ENDS the chain, the rest of its own word being
-   ; the value (-m4m), and where there is no rest only the caller can see the next word.
-   ; `flags` names the letters that chain, and () there means any letter not in `vals`
-   ; does -- what an applet wants when it validates its own alphabet and owes its own
-   ; "unknown option -- x". a letter in NEITHER set refuses the whole word, so `love -qz`
-   ; stays one word, reaches the file lane, and says it cannot open it.
+   ; --- the option walk, shared by kore's applets and love's own rail ----------------
+   ; (uopt1 w flags vals) -- one word into its letters as words of their own, or () when the
+   ; word is not ours to read. the short flags cluster, so `-qe X` is `-q -e X`; a letter in
+   ; `vals` takes an argument and ends the chain, the rest of its own word being the value
+   ; (-m4m). `flags` names the letters that chain, and () there means any letter not in `vals`
+   ; does -- what an applet wants when it validates its own alphabet. a letter in neither set
+   ; refuses the whole word, so `love -qz` stays one word and reaches the file lane.
    (uopt1 w flags vals)
     (: n #w
        ; `flags` empty means every letter chains. spelled as the predicate and not as
@@ -2367,28 +2155,24 @@
                  (ours? c) (go (k + 1) (s . acc))
                  ())))
        (2 <= n && w 0 = 45 && !(w 1 = 45) ? (go 1 ()) ()))
-   ; (uopt as t vals reps longs) -> [t stacked rest]: every flag pinned on t under its own
-   ; key, a value flag pinning the (1 v) wrapper -- never the bare text, since `two?` is
-   ; false for a one-element list and a bare "" would read as absent -- and a key in `reps`
-   ; stacking into a list instead, that being the option a tool spells more than once.
-   ; `rest` is the operands, `--` ends the flags. () when a value flag is left without one,
-   ; which is why the answer is read with `two?` and not for truth.
-   ;
-   ; `longs` maps a long flag's NAME, no dashes, to the key it pins under: a charm, so that
-   ; --width and -w are ONE option with one reader, or any other value where there is no
-   ; letter to share (the name itself reads well). () is an applet with no long flags, and
-   ; a name the map does not carry is not ours -- that word ends the flags and becomes an
-   ; operand, which is what an unknown long flag did here before there was a map at all.
-   ; --name=VALUE is taken only where the name's key is in `vals`; a glued value on a flag
-   ; that takes none is not ours either, rather than a value silently dropped.
+   ; (uopt as t vals reps longs) -> [t stacked rest]: every flag pinned on t under its own key,
+   ; a value flag pinning the (1 v) wrapper -- never the bare text, since `two?` is false for a
+   ; one-element list and a bare "" would read as absent -- and a key in `reps` stacking into a
+   ; list instead. `rest` is the operands, `--` ends the flags, and the whole answer is () when
+   ; a value flag is left without one, so read it with `two?` and not for truth.
+   ; `longs` maps a long flag's name, no dashes, to the key it pins under: a charm, so --width
+   ; and -w are one option with one reader. () is an applet with no long flags, and a name the
+   ; map does not carry is not ours -- that word ends the flags and becomes an operand.
+   ; --name=VALUE is taken only where the name's key is in `vals`; a glued value on a flag that
+   ; takes none is not ours either, rather than a value silently dropped.
    (uopt as t vals reps longs)
     (: (pinv c v es) (? (elem c reps) (v . es) (: _ (pin t c [1 v]) es))
        (lgot nm) (? (tablet? longs) (peep longs nm ()) ())
        ; the key a flag word pins under: a long word's name through the map, a short word's
        ; own letter. one key per option however it was spelled.
        (ukey w) (? (w 1 = 45) (lgot (snip w 2 #w)) (w 1))
-       ; ONE long word into the shape uopt1 answers for a short cluster, so `eat` walks
-       ; either: the word alone, or the word and the value that was glued behind its `=`.
+       ; one long word into the shape uopt1 answers for a short cluster, so `eat` walks
+       ; either: the word alone, or the word and the value glued behind its `=`.
        (long1 a)
         (: n #a
            e ((: (go i) (? (n <= i) -1 (a i = 61) i (go (i + 1)))) 2)
@@ -2419,26 +2203,24 @@
    ; a value option's text, or () -- the presence read that pairs with uopt
    (uoptv t c) (: r (peep t c ()) (? (two? r) <>r ()))
    ; the first key the walk pinned that `ok` does not name, or () when every one is the
-   ; applet's own. the short lane takes ANY letter -- that is uopt1's `flags ()`, and an
-   ; alphabet is the applet's to state -- so the key comes back for a refusal to name it.
+   ; applet's own. the short lane takes any letter, an alphabet being the applet's to state,
+   ; so the key comes back for a refusal to name it.
    (uoptun t ok) (<(filter (c \ !(elem c ok)) (sort (keys t))))
-   ; an operand that still looks like a flag, or (). the walk stops at the first word that
-   ; is not one, so an applet whose operands are positional would take `-x` for a filename
-   ; and lay a whole tree under its name. () once `--` has been spelled: the words behind
-   ; it are literal by request, which is the whole of what `--` is for.
+   ; an operand that still looks like a flag, or (). the walk stops at the first word that is
+   ; not one, so an applet with positional operands would take `-x` for a filename. () once
+   ; `--` has been spelled: the words behind it are literal by request.
    (uoptstray as rest) (? (elem "--" as) () (<(filter (w \ 1 < #w && w 0 = 45) rest)))
-   ; a flag's text as a whole number, or () for anything that is not all digits. the
-   ; hand-rolled readers answer 0 for "abc" as they do for "", so a port typed wrong and
-   ; a port nobody typed read alike; `charm?` on the answer is the test.
+   ; a flag's text as a whole number, or () for anything that is not all digits: a hand-rolled
+   ; reader answers 0 for "abc" as for "", so a port typed wrong and one nobody typed read
+   ; alike. `charm?` on the answer is the test.
    (unum s) (: n #s
                (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
                (? (string? s && n) (go 0 0) ()))
 
    ; --- the two flags every applet answers, and the one place that answers them ------
-   ; the leading flag words only: the walk stops at the first operand and at `--`, so a
-   ; file really called --help still opens once something else has been named. it is not
-   ; getopt -- a value word that looks like a flag is walked over, so `grep -e --help f`
-   ; answers the help; glue it (`grep -e--help f`) to mean the pattern.
+   ; the leading flag words only: the walk stops at the first operand and at `--`, so a file
+   ; really called --help still opens once something else has been named. not getopt -- a
+   ; value word that looks like a flag is walked over, so `grep -e --help f` answers the help.
    (uask as h? v?)
     (? !(two? as) ()
        (: w <as
@@ -2449,10 +2231,9 @@
              ((w = "-v") && v?) 'vers
              ((1 < #w) && (w 0 = 45)) (uask >as h? v?)
              ())))
-   ; an applet as the world calls it: nm is its name, u its usage text, and h?/v? whether
-   ; the bare letters are free -- posix or gnu has already spoken for one in a few places,
-   ; and there the long form is the only answer. answers the main a verb registry takes,
-   ; so a whole userland's two flags are this walk and no other.
+   ; an applet as the world calls it: nm is its name, u its usage text, and h?/v? whether the
+   ; bare letters are free -- posix or gnu has spoken for one in a few places, and there the
+   ; long form is the only answer. answers the main a verb registry takes.
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
                    (puts (? (n && (x (n - 1) = 10)) x (x + "\n")), flush out, 0))
@@ -2512,9 +2293,8 @@
    ; the eval as a scare, and the frontend prints the same face and quits 1
    (hface a b) (say err ";; ", print err a, say err " ", print err b, put err 10)
    (shell-help a b) (hface a b, welp a b)
-   ; the handler is the repl's own, and it goes back on the way out: a rail that
-   ; reached the repl through the `love` verb leaves by scaring 'cli-leave, and a
-   ; shell-help still standing would print that door as a raise.
+   ; the handler is the repl's own and goes back on the way out: a rail that reached the repl
+   ; through the `love` verb leaves by scaring 'cli-leave, which this would print as a raise.
    (shell _)
     (: prev (heard ())
        _ (hear shell-help)        ; the prompt survives every raise; a script must not
@@ -2564,16 +2344,14 @@
 )
 
 
-; the command line. the defglobs go through `ev` of a built (: nm 'v), and the inner quote
-; is load-bearing -- without it ev takes the value apart as a form to run. argv reaches the
-; program's view before (run ()) fires, which a loaded program reads.
-;
-; the exit door: every leave -- a bad -m, a missing operand, an unopenable file, a
-; torn -e, a verb's own status -- scares 'cli-leave, and the trap handler answers its
-; charm: the rail's answer is the status, and the frontend quits with it (or a caller in
-; the same image reads it, where a spawn would hand it a dead process). nothing here
-; quits -- the core spells no host word. the handler is written twice because a leave
-; lands in either of two spans, `pre` and `run`, and the defglob has to sit between them.
+; the command line. the defglobs go through `ev` of a built (: nm 'v), and the inner quote is
+; load-bearing -- without it ev takes the value apart as a form to run. argv reaches the
+; program's view before (run ()) fires.
+; the exit door: every leave -- a bad -m, a missing operand, an unopenable file, a torn -e, a
+; verb's own status -- scares 'cli-leave, and the trap handler answers its charm, which the
+; frontend quits with. nothing here quits: the core spells no host word. the handler is
+; written twice because a leave lands in either of two spans, `pre` and `run`, and the
+; defglob has to sit between them.
 (: (cli-rail ln)
  (: (charm0 x) (charm? x ? x 0)
     cli2
@@ -2607,8 +2385,8 @@
     K 1024 M 1048576 G 1073741824
     wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit
     ; validate here: a bad value reaching `tune` writes a non-Z tray, which the nif refuses
-    ; whole and in silence, so the flag would read as accepted and do nothing. 0 is the
-    ; unbounded spelling, which is why this floors at 0 rather than 1.
+    ; whole and in silence, so the flag would read as accepted and do nothing. it floors at
+    ; 0, not 1, because 0 is the unbounded spelling.
     (size h s) (: n #s
                   u (peep s (n - 1) 0 @ (107 || 75) K
                                         (109 || 77) M
@@ -2621,8 +2399,8 @@
                    (say err $ "love: " + h + ": not a size: " + s,
                     cli-leave 2)))
     ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin / 'none.
-    ; 'none is the command line running out with no program named: -v and -h are not
-    ; terminal, so `love -v -h` prints both, reaches the end, and leaves 0.
+    ; 'none is the line running out with no program named: -v and -h are not terminal, so
+    ; `love -v -h` prints both, reaches the end, and leaves 0.
     (pre a) (a @ (h . t)
       (: bs (uopt1 h "vhq" "lem")
        (two? >bs ? (pre (bs + t))
@@ -2667,10 +2445,9 @@
                  tty        (shell 0)
                  (reads in, 0)))))         ; non-tty stdin: the stream face drinks the in port
 
- ; `love` is a verb like every other program this binary carries -- which is what lets a
- ; shell with no seat to exec reach the repl by name, an inle console being every such
- ; shell. a line rails, nothing opens the repl; a pipeline execs on a hosted seat and
- ; never arrives here. last in the letrec: the closure takes its free names as they stand.
+ ; `love` is a verb like every other program this binary carries, which is what lets a shell
+ ; with no seat to exec reach the repl by name. last in the letrec: the closure takes its free
+ ; names as they stand.
  _ (pins (cite 'verbs 'tab) 'love
      (\ as (two? as ? (cli-rail (. "love" as)) (shell 0))))
 ) ; module cli

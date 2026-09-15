@@ -94,9 +94,8 @@
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                  (fpow x n))
    ; church application across the tower: a numeric operand gives x ** n, a function composes
-   ; ($ n) times, saturation reducing any numeral to a fixnum nat. cmp2..cmp8 are cached
-   ; combinators; past them numfn assembles the thread. keep the straight-line bodies -- a
-   ; counting applier measures ~45% slower at k=2..8.
+   ; ($ n) times. cmp2..cmp8 are cached combinators; past them numfn assembles the thread.
+   ; keep the straight-line bodies -- a counting applier measures ~45% slower at k=2..8.
    _ (: (cmp2 f x) (f (f x))
         (cmp3 f x) (f (f (f x)))
         (cmp4 f x) (f (f (f (f x))))
@@ -107,11 +106,9 @@
         ; frequency-ordered, so it stays a chain: k=2/3 costs one or two compares. a table would
         ; only pay past k=6.
         (cmp k) (? (= k 2) cmp2 (= k 3) cmp3 (= k 4) cmp4 (= k 5) cmp5 (= k 6) cmp6 (= k 7) cmp7 (= k 8) cmp8 0)
-        ; past cmp8 the count still has to compose. numfn lays the thread -- straight-line, no
-        ; counter, the fast shape -- but the 3n+5 cells are the cost, and they are the one thing a
-        ; numeral can grow without bound: n=100000 is ~72MB, and apcap admits 2^20. so the thread
-        ; is for counts small enough to be free, and past nfcap nfloop composes by counting
-        ; instead -- one closure, O(1) cells, the same function.
+        ; past cmp8 numfn lays the thread -- straight-line, the fast shape -- but its 3n+5 cells
+        ; grow without bound (n=100000 is ~72MB, and apcap admits 2^20), so past nfcap nfloop
+        ; composes by counting instead: one closure, O(1) cells, the same function.
         (nfloop n f x) (? (< n 1) x (nfloop (+ -1 n) f (f x)))
         nfcap 1024
         ; an open star: a coin whose kind pins star is numeric by declaration, so a numeral powers
@@ -131,8 +128,7 @@
 ; seal-hook caches num-ap into the VM, so it must follow the pin above.
 (seal-hook 1 num-ap)
 ; the + and * of two functions, which is all church arithmetic is: the extra a-slot threaded into
-; both of arrange's operands is what makes + agree with addition, not the S combinator's (f x (g x)).
-; the C lanes (lvm_addh/lvm_mulh) read them by slot. arrange to compose as + is to *.
+; both of arrange's operands is what makes + agree with addition. lvm_addh/lvm_mulh read by slot.
 (: (arrange f g a x) (f a (g a x))                ; (+ f g)
    (compose f g x) (f (g x))                      ; (* f g)
    _ (seal-hook 2 arrange)
@@ -144,11 +140,9 @@
    ; (rev l) glued onto acc in one pass. a cat per step re-copies the whole accumulation;
    ; link plus one revcat keeps it linear.
    (revcat l acc) (? (two? l) (revcat (cup l) (. (cap l) acc)) acc))   ; no `!` here: not bound yet
-; the monadic words behind the glued sigils. net is the content measure -- `+` turned inward --
-; and a coin's lane is by declaration: a starred kind nets itself (so additivity lands in the
-; kind's own ring), else its tally under net-mode tally, else its payload signed.
-; one walk, tail-recursive: the spine's cars and then the tail, which a dotted link
-; carries and `()` nets away -- so net(. a b) = net a + net b at every link.
+; the monadic words behind the glued sigils. a coin's lane is by declaration: a starred kind
+; nets itself, else its tally under net-mode tally, else its payload signed. one walk over the
+; spine's cars then the tail, so net(. a b) = net a + net b at every link.
 (: (netsum a l) (? (two? l) (netsum (+ a (net (cap l))) (cup l)) (+ a (net l)))
    (net x) (? (tray? x) (asum x)
               (constellation? x) x
@@ -205,10 +199,9 @@
    ; the macro table and the unwind chain. it sits down here so catmap/foldl are already bound.
    (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (stack ())))))
 
-   ; the range 0..x-1 (iota its array twin), and lifted over a list so the glued run
-   ; composes: ^^3 is (jot (jot 3)), a list of lists, since a run factors greedily.
-   ; no glued sigil in here -- this sits above the operators table, where infix is not
-   ; yet live, so a `$x` would stay a bare nom and holo's fregs would lose a register.
+   ; the range 0..x-1 (iota its array twin), lifted over a list so the glued run composes:
+   ; ^^3 is (jot (jot 3)). no glued sigil in here -- this sits above the operators table,
+   ; where infix is not yet live, so a `$x` would stay a bare nom.
    (jot x) (? (two? x) (map jot x) (: n (saturate x) (go i) (? (< i n) (. i (go (+ i 1)))) (go 0)))
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (. (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
@@ -216,16 +209,13 @@
 
 (: l (foldr (\ a l (. (.) (. a (. l ())))) ()) (:: 'list l))
 ; both are connectives: they answer one of their operands, never an invented value -- && the
-; first falsy one, || the first truthy one, either falling through to the last. an operand that
-; is a form is bound so it evaluates once. a falsy answer is whatever the operand was, so a
-; caller wanting a particular miss value must spell it (see ev.l's cfuse2).
+; first falsy one, || the first truthy one, either falling through to the last; a form operand
+; is bound so it evaluates once. a caller wanting a particular miss value must spell it.
 (:: '&& (\ l (: (and l) (? (two? (cup l)) (: y (nom 0) (list ': y (cap l) (list '? y (and (cup l)) y))) (cap l)) (? (two? l) (and l) 1))))
 (:: '|| (\ l (: (or l) (? (two? (cup l)) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) (cap l)) (? (two? l) (or l) 0))))
-; end weighting: the head argument moves to the tail, so the form a long body would
-; have buried -- a `:` body, a `?` fallthrough -- is read first instead of last.
-; a `:` these build cannot carry a destructuring binding head: the pattern rewrite
-; that makes (f (a . u)) bind a and u runs in the read pass, ahead of `::`, so the
-; names compile as book lookups and miss. plain parameters are fine.
+; end weighting: the head argument moves to the tail, so the form a long body would have
+; buried is read first. a `:` these build cannot carry a destructuring binding head -- the
+; pattern rewrite runs in the read pass, ahead of `::`, so the names miss. plain params are fine.
 (:: ':- (\ a (. ': (cat (cup a) (. (cap a) ())))))
 (:: '?- (\ a (. '? (cat (cup a) (. (cap a) ())))))
 ; @ carries a subject the other two lack, so @- moves the second argument, not the
@@ -239,9 +229,8 @@
 
 (: (** a b) (b a)  
    $ 1 ! nil?  (!= a b) (nil? (= a b))
-   ; elem is the nif (love/arr.c); this is its negation, so `nelem x` partials the way
-   ; `nil? * elem x` composes. spelled `nil?`, not glued `!`: a glued sigil factors
-   ; through monofactor's (mono ..), and mono is bound further down than this.
+   ; elem is the nif (love/arr.c); this is its negation. spelled `nil?`, not glued `!`: a
+   ; glued sigil factors through monofactor's (mono ..), and mono is bound further down.
    (nelem x l) (nil? (elem x l)))                         ; the exponent answers to all three spellings
 
 ; lisp compatibility synonyms
@@ -253,24 +242,19 @@
    _ (:: 'quote lamx) _ (:: 'lambda lamx))
 
 ; --- module: filesystem-free definition --------------------------------------
-; (module 'nm form ..): open nm's layer -- the registered tablet on a reopen, a
-; fresh one otherwise -- eval each form there as the loader would, leave
-; registers; answers the tablet. text anywhere defines or reopens any module;
-; (module () ..) is a scratch layer, registered nowhere. each form compiles at
-; its eval, after the open, so bindings defglob into the module layer (a form
-; compiled early would defglob past it) and a macro form serves the next form,
-; not its own. the run rides the expansion as a VALUE: enter/leave are mopped.
+; (module 'nm form ..): open nm's layer -- the registered tablet on a reopen, a fresh one
+; otherwise -- eval each form there, leave registers; answers the tablet. (module () ..) is
+; a scratch layer, registered nowhere. each form compiles at its eval, after the open, so
+; bindings defglob into the module layer and a macro form serves the next form, not its own.
 (: _
  (: (mopen nm) (: r (? (nil? nm) () (peep (lib ()) nm ()))
                   F (? (tablet? r) r (: t (tablet 0) _ (pin t 0 (tablet 0)) t))
                   _ (pin F 31337 (. (stack ()) nm))
                   (setstack (. F (stack ()))))
-    ; a list head is (name export..): the body defglobs as ever, then every nom not
-    ; named is pulled off the tablet, so from and use each see only the exports. the
-    ; charm keys (0 the macros, 31337 the parent chain) are not noms and so survive.
-    ; quote the list head -- '(nm a b ..). unquoted it rides the opfix pass, and one
-    ; operator nom in it (===, =/=) re-associates the whole list: the prune then matches
-    ; nothing, pulls every name and the macro table, and the module leaves empty.
+    ; a list head is (name export..): the body defglobs as ever, then every nom not named
+    ; is pulled off the tablet. the charm keys (0 the macros, 31337 the parent chain) are
+    ; not noms and so survive. quote the list head -- unquoted it rides the opfix pass, and
+    ; one operator nom in it re-associates the whole list and the module leaves empty.
     (mrun nm fs) (: n  (? (two? nm) (cap nm) nm)
                      xs (? (two? nm) (cup nm) ())
                      _  (mopen n)
@@ -281,8 +265,7 @@
                            0)
                      (leave ()))
     ; the quote takes the forms list whole -- (\ (f ..)), one element per form; an extra
-    ; (. .. ()) here makes the body one application chain, each answer applied to the next.
-    ; the head takes a nom or a list, quoted or not: 'x reads as (\ x), so unwrap one if it is there.
+    ; (. .. ()) here makes the body one application chain. 'x reads as (\ x), so unwrap one.
     (:: 'module (\ l (: h (cap l)
                         n (? (two? h) (? (== (cap h) '\) (caup h) h) h)
                         (list mrun (list '\ n) (list '\ (cup l))))))))
@@ -294,10 +277,8 @@
  '% fraction '? bit '$ sat '! nil? '^ jot
  '# tally '~ conj                              ; the count, and the twin's flip
  '0? nil? '1? one? '2? two?)                   ; the arity predicates: a row is a word, so it may
-                                               ; spell digits -- 2?<>x is (two? (cap (cup x)))
-                                               ; ^ also rides arity 2 as xor: the lane is the
-                                               ; key, so glued ^x counts up and spaced a ^ b does
-                                               ; not -- $ and ~ are the same two-lane sigil
+                                               ; spell digits -- 2?<>x is (two? (cap (cup x))).
+                                               ; ^ also rides arity 2 as xor: the lane is the key
  1 (tablet 0)                                       ; --- arity 1: a right operand and no left. no walk yet
  2 (pins (tablet 0)                                 ; --- arity 2: spaced. a left operand and a right
  '~ '(twin 99)                                      ; the twin, tightest -- above house, so a complex
@@ -311,11 +292,9 @@
  '&& 31 '|| 30                                      ; logical, below comparison; also pat.l's guard and alternative
  '. 25                                              ; cons -- the loosest builder
  '$ 5 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate) and
-                                                    ; the lambda, one band. an infix lambda's body still runs to the end of
-                                                    ; the form and swallows a $ to its right, as haskell's does -- but at
-                                                    ; equal band the right hand yields, so `\` no longer steals everything
-                                                    ; left of it as its parameter: (map $ a \ f a) is (map (\ a (f a))),
-                                                    ; not a match against ($ map a). a looser `\` made that a silent trap.
+                                                    ; the lambda, one band. an infix lambda's body runs to the
+                                                    ; end of the form, but at equal band the right hand yields:
+                                                    ; (map $ a \ f a) is (map (\ a (f a))), not ($ map a).
  -1 (pins (tablet 0)                                ; --- arity -1: spaced, no bound. a left, then all of them
  '? 10 '@ 10 '@- 10                                 ; the clause forms: cond, and match -- every arm stays an operand
                                                     ; (@- rides @'s band so it reads infix; :- and ?- are prefix-only)
@@ -323,15 +302,12 @@
                                                     ; `:` and takes its band -- an alias cannot drift from it
  -2 (pins (tablet 0)                                ; --- arity -2: spaced, and it chains. a left and a right, but
  '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40 '== 40 '!== 40)))          ; a same-band neighbour joins the run instead of nesting
- ; the spaced rows are noms: the sigil is the name there, so a binding of it is visible in
- ; the text that uses it. the glued lane holds values instead -- `<x` is the function `cap`, not
- ; the word -- because that link is not visible, and a local `cap` would silently re-aim every
- ; `<x` under it. the price is spellability: a value head is a form no text can write. `opnom`
- ; buys it back.
+ ; the spaced rows are noms: the sigil is the name there, so a binding of it is visible in the
+ ; text that uses it. the glued lane holds values instead -- `<x` is the function `cap` -- so a
+ ; local `cap` cannot re-aim it; the price is spellability, which `opnom` buys back.
 
 ; value -> the word the glued sigil means, and the walk that puts the words back through a
-; factored form. every reader of post-opfix source (pat's pin, the glaze, spec2coq, wm2uu)
-; wants a tree of noms, and this is the one place that knows the map.
+; factored form. every reader of post-opfix source wants noms; this is the one place with the map.
 (: opnoms (pins (tablet 0)
    cap 'cap cup 'cup net 'net prod 'prod abs 'abs negate 'negate
    reciprocal 'reciprocal fraction 'fraction bit 'bit sat 'sat
@@ -371,19 +347,16 @@
        0) ;;; they may not even be semantically needed since ? fall-through returns ()
 
    ; a band is a signed charm: the magnitude is the level (higher binds tighter) and the sign is
-   ; the hand -- positive right, negative left. the arithmetic, shift and bitwise bands are the
-   ; left-handed ones, so the minus marks them and the hand stops being a slot anyone counts to.
-   ; zero can never be a band: a tablet miss answers 0, and a 0 band would read that miss as a
-   ; live row at the loosest level there is.
+   ; the hand -- positive right, negative left. zero can never be a band: a tablet miss answers
+   ; 0, and a 0 band would read that miss as a live row at the loosest level there is.
    (op-band? b) (&& (charm? b) (nil? (= 0 b)))   ; prefix-only region: != is not a function yet
    (op-row nm b ar) (. nm (. (abs b) (. (? (< b 0) 1 0) ar)))       ; -> (name band hand . arity)
    ; an alias tail. this table is compiled before `.` has its row, so up here source can only
    ; spell the list form -- a written (pin . 20) is the three-element list. a pair built with . reads too.
    (op-tail v) (? (charm? (cup v)) (cup v) (&& (two? (cup v)) (charm? (caup v))) (caup v) 0)
-   ; k's row in the spaced lane t of arity ar -> (name band hand . ar), or 0. the row is read by
-   ; kind, three shapes and no positions: a charm is the band and the sigil names itself; a nom is
-   ; an alias -- the sigil means that word and takes its band, one hop, so no alias can drift from
-   ; its target and no cycle can be spelled; a (nom band) pair is an alias carrying a band of its
+   ; k's row in the spaced lane t of arity ar -> (name band hand . ar), or 0. read by kind, three
+   ; shapes and no positions: a charm is the band and the sigil names itself; a nom is an alias,
+   ; one hop, so none can drift or cycle; a (nom band) pair is an alias carrying a band of its
    ; own, for a target that has no row to lend (`pin` and its kind).
    (op-lane k t ar)
     (: v (t k)
@@ -397,15 +370,9 @@
                  (? (two? d) d (: c (op-lane k chains -2) (? (two? c) c (op-lane k naries -1)))))
    (op-chain? k) (two? (op-lane k chains -2))
    ; factor nm[0..j) against the monadic table onto acc -> the word list (outermost first), or 0.
-   ; right to left: the sigil the reader glued to the datum matches first, longest first, so on
-   ; "abc" rows `a` `bc` beat `ab` `c`. single-char rows agree either way, which is why the stock
-   ; table cannot tell the directions apart. and it backtracks: a split whose leftover
-   ; dead-ends falls back to the next-shorter sigil, so a run factors iff some split exists.
-   ; that completeness is what a dead end cannot buy -- an unfactorable run must fall through
-   ; to the plain application (data and coined heads ride that), so there is no room to report
-   ; one, and a fresh `grip 0` row would silently unfactor runs that used to work.
-   ; the table holds word values, so a hit is asked out of band against the miss answer --
-   ; a truth test would drop any word that nets nothing.
+   ; right to left, longest first, so on "abc" rows `a` `bc` beat `ab` `c`; it backtracks, so a
+   ; run factors iff some split exists and an unfactorable one falls through to plain application.
+   ; a hit is asked out of band against the miss answer -- truth would drop a word netting nothing.
    (mono-go nm j acc)
     (? (< 0 j)
        ((: (try k)
@@ -416,11 +383,11 @@
         j)
        acc)
    (monofactor s) (: nm (string s) (mono-go nm (tally nm) ()))
-; the walk. a pending-operator frame is (orig name need band . got): the source symbol, the
-; resolved name, the operands still wanted, the captured band, and the operands so far, reversed.
-; need 0 means filled with the fold deferred, so a later operator can steal the last operand --
-; that deferral is right-associativity. -1 is that steal already spent, the right operand growing
-; as a span; -2 is N-ARY, which never fills and so never spans. out/pend thread as (out . pend).
+; the walk. a pending-operator frame is (orig name need band . got) -- source symbol, resolved
+; name, operands still wanted, captured band, operands so far reversed; out/pend = (out . pend).
+; need 0 is filled with the fold deferred, so a later operator can steal the last operand (that
+; deferral is right-associativity); -1 is that steal spent, growing a span; -2 is n-ary, never
+; fills.
    (op-fr o nm nd g gt) (. o (. nm (. nd (. g gt))))
    (op-fro f) (cap f) (op-frn f) (caup f)
    (op-frd f) (cap (cuup f)) (op-frband f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
@@ -433,28 +400,17 @@
    ; become the application (juxtaposition binds tighter than any infix operator).
    (op-span out) (? (two? (cup out)) (rev out) (cap out))
    ; the two binders fold back through op-core, so an infix spelling lowers exactly as the prefix
-   ; one does -- patterns to noms, the nested lambda flattened, the body factored. nothing is
-   ; added: (a : b) is the plain (: a b), body-less and leaking its binding, as it reads.
-   ; a `:` chain is one scope: the nesting op-steal builds is spliced flat here, so
-   ; (a : 1 b : 2 (a + b)) and (: a 1 b 2 (a + b)) are the same form, and a chain of bare
-   ; definitions is one body-less `:` carrying every pair. it is the body position that splices,
-   ; however that body was spelled -- and a wholly prefix `:` never reaches this fold, so no
-   ; extant form moves.
+   ; one does. a `:` chain is one scope: the nesting op-steal builds is spliced flat here, so
+   ; (a : 1 b : 2 (a + b)) and (: a 1 b 2 (a + b)) are the same form. the body position splices.
    (op-cl-splice fs)
     (? (one? (cup fs))
        (: b (cap fs)
           (? (&& (two? b) (== (cap b) ':)) (cup b) fs))
        (. (cap fs) (op-cl-splice (cup fs))))
-   ; a chain, arity -2: (a < b <= c) is (a < b) and (b <= c), and the shared operand is evaluated
-   ; once. the binds nest inside the conjunction so all three of python's promises hold at once --
-   ; left to right, once each, and && still short-circuits, so a false first link never reaches c.
-   ; the operators may differ per link; each carries its own. the emission is a `:` and an `&&`
-   ; and stops -- && is a macro `feel` expands later, which is where the laziness comes from.
-   ; os is (a b op c op d ..): the head operator is the frame's name, every later one is inline.
-   ; only a compound operand is bound. an atom -- a nom, a numeral, a string -- has no effect
-   ; and no cost to read twice, so binding it would buy nothing and spend an unwritable nom: a
-   ; fresh nom has no spelling, and a factored form carrying one is a form no text can say
-   ; (the same reason the table's rows are noms). so (a < b < c) stays plain.
+   ; a chain, arity -2: (a < b <= c) is (a < b) and (b <= c), the shared operand bound so it is
+   ; evaluated once, inside the conjunction so && still short-circuits. the operators may differ
+   ; per link. os is (a b op c op d ..): the head operator is the frame's name, later ones inline.
+   ; only a compound operand is bound -- an atom costs nothing twice and a fresh nom is unspellable.
    (op-chn-rest pv r)                                        ; r = (op z op z ..), or a dangling op
     (? (one? r) 0
        (: op (cap r)
@@ -463,11 +419,9 @@
                 e (. op (. pv (. v ()))) t (op-chn-rest v (cuup r))
                 bd (? (two? t) (. '&& (. e (. t ()))) e)
                 (? (== v z) bd (. ': (. v (. z (. bd ())))))))))
-   ; the whole run wears a `bit`, because a comparison answers a bit and a chain is still one.
-   ; `&&` hands back () for a false left and the failing operand otherwise, so a bare chain would
-   ; answer () when the first link failed, 0 when a later one did, and 1 when none did -- three
-   ; faces for one predicate. the clamp is outside the binds, so nothing about the short-circuit
-   ; or the evaluation order moves; only the answer is normalized.
+   ; the whole run wears a `bit`: `&&` hands back () for a false left and the failing operand
+   ; otherwise, so a bare chain would answer three different faces for one predicate. the clamp
+   ; is outside the binds, so nothing about the short-circuit or the evaluation order moves.
    (op-chn nm os)
     (: a (cap os) b (caup os) u (? (one? a) a (nom 0)) v (? (one? b) b (nom 0))
        e (. nm (. u (. v ()))) t (op-chn-rest v (cuup os))
@@ -476,10 +430,8 @@
        b3 (? (== u a) b2 (. ': (. u (. a (. b2 ())))))
        (. 'bit (. b3 ())))
    ; fold a frame with what it has: nothing collected gives the plain symbol, a shortfall the
-   ; partial application -- the curry law, with no case of its own.
-   ; kind tests throughout the walk, never truth -- an operand list like (0) or ("") nets zero.
-   ; a chainable frame with only its two operands is a plain comparison and folds as one -- the
-   ; chain is the join's doing, and it shows as the interleaved operators the join left in `got`.
+   ; partial application. kind tests throughout the walk, never truth -- an operand list like
+   ; (0) or ("") nets zero. a chain shows as the interleaved operators the join left in `got`.
    (op-fold f) (? (atom? (op-frg f)) (op-fro f)
                   (: nm (op-frn f) os (rev (op-frg f))
                      (? (== nm '\) (op-core (. '\ os))
@@ -500,13 +452,9 @@
                 f2 (op-frw f -1 (. nx (cup (op-frg f))))
                 (. out (. f2 (cup pend)))))))
    ; take a left operand for an incoming operator of band g and hand h -> (. (out' . pend')), or 0.
-   ; against a filled top frame the incomer either steals its last operand or folds it and retries
-   ; beneath. at equal band the incomer's hand decides: right-handed steals, left-handed yields.
-   ; at top level the whole leading span is taken: (a b = c) captures (a b), not just b.
-   ; an n-ary frame is never filled, so it yields a right operand or nothing: its left is the
-   ; scrutinee, and a frame holding only that has none to give -- the same refusal an unfilled
-   ; dyadic frame already makes, and what keeps (c ? a + b) reading (? c (+ a b)) instead of
-   ; swallowing the test. a looser operator still folds it, from the branch above.
+   ; at equal band the incomer's hand decides: right-handed steals, left-handed yields. at top
+   ; level the whole leading span is taken: (a b = c) captures (a b), not just b. an n-ary frame
+   ; holding only its scrutinee has none to give, which keeps (c ? a + b) reading (? c (+ a b)).
    (op-steal g h out pend)
     (? (two? pend)
        (: f (cap pend) nd (op-frd f)
@@ -519,11 +467,9 @@
              0))
        (two? out) (. (op-span out) (. () pend))
        0)
-   ; fold every pending frame tighter than an incoming (g,h) and answer (out . pend) -- the climb
-   ; op-steal makes before it can take anything, split out so the chain join can see the frame it
-   ; will actually meet. an operator between two links is such a frame: (a < b + c < d) reaches
+   ; fold every pending frame tighter than an incoming (g,h) and answer (out . pend) -- op-steal's
+   ; own climb, split out so the chain join can see the frame it will meet: (a < b + c < d) reaches
    ; the second `<` with the additive frame on top, and without this the join never fires.
-   ; op-steal repeats the climb and finds nothing left to do, so nothing else changes.
    (op-climb g h out pend)
     (? (&& (two? pend) (&& (< (op-frd (cap pend)) 1)
                            (? h (<= g (op-frband (cap pend))) (< g (op-frband (cap pend))))))
@@ -546,16 +492,10 @@
                 ; op-climb call read its own later binding and raise `missing out`.
                 cl (op-climb gp hd out pend) ou (cap cl) pd (cup cl)   ; fold what is tighter, then look
                 st (op-steal gp hd ou pd)   ; capture a left operand if one exists (at this band + hand)
-                ; the join, and it is the only place a chain can be seen. a chainable sigil
-                ; meeting a filled chainable frame at its own band does not steal the left operand
-                ; and nest -- it pushes its own nom into that frame's got and asks for one more,
-                ; so the run stays flat and op-fold reads the whole of it. a parenthesized
-                ; (a < (b < c)) arrives as one folded datum and never enters this list, which is
-                ; exactly why it stays the nested comparison -- the escape hatch is the parens,
-                ; and the factored form alone could never have told the two apart.
-                ; filled is op-steal's test (need below 1), not need 0: a right operand grown
-                ; into a span rides -1, and (97 <= s 0 <= 122) is that. a chainable frame never
-                ; carries -2 -- op-ent reads chains before naries, so its need starts at 1.
+                ; the join: a chainable sigil meeting a filled chainable frame at its own band
+                ; pushes its own nom into that frame's got and asks for one more, so the run
+                ; stays flat. filled is op-steal's test (need below 1), not need 0: a right
+                ; operand grown into a span rides -1, and (97 <= s 0 <= 122) is that.
                 (? (&& (= -2 (cup (cuup en)))
                        (&& (two? pd)
                            (&& (< (op-frd (cap pd)) 1)
@@ -583,13 +523,9 @@
     (? (one? (cup fs)) (. (op-core (cap fs)) ())        ; the last operand is the body
        (. (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
    ; a param that is not a nom is a pattern, and the body takes it apart: (\ [a b] x) is
-   ; (\ v (@ v [a b] x)), v fresh. Nothing is displaced -- such a param used to bind nothing
-   ; (the body read `missing a`), so no code can have meant anything by one.
-   ; it emits the `@` symbol and stops: pat is a module and expands it at the reader's own
-   ; compile, so neither compiler learns what a pattern is. a seat with no pat spliced has an
-   ; unbound `@` -- which is the seat's tiering answering, not this pass's business.
-   ; and it runs before the nested-lambda flatten, so that pass still only ever sees noms
-   ; and its shadow check stays a comparison of names. (\ [a b] (\ a x)) must not merge.
+   ; (\ v (@ v [a b] x)), v fresh. it emits the `@` symbol and stops -- pat expands it at the
+   ; reader's own compile. it runs before the nested-lambda flatten, so that pass only ever sees
+   ; noms and its shadow check stays a comparison of names: (\ [a b] (\ a x)) must not merge.
    (op-wrap ws b) (? (one? ws) b
                      (op-wrap (cup ws) (. (nom "@") (. (caap ws) (. (caup (cap ws))
                                                        (. b ()))))))
@@ -607,10 +543,8 @@
                 (. (. v (cap r)) (cup r))))))
    ; a define-sugar binder is a lambda: (: (f [a b]) V ..) is (: (f v) (@ v [a b] V) ..).
    ; position 0 is never a pattern -- it is the name, or (curried) the binder that carries it --
-   ; so every later position at every level is a param and lowers. That is also why the two
-   ; features cannot collide: `:` does not match patterns in an assignment, only under a binder.
-   ; a curried binder's levels are separate argument positions, and the inner binder's params
-   ; are the earlier arguments -- so its wraps go outside this level's. ws is innermost-first.
+   ; so every later position at every level is a param and lowers. a curried binder's inner params
+   ; are the earlier arguments, so its wraps go outside this level's. ws is innermost-first.
    (op-dpb b)
     (? (one? b) (. b ())
        (: hr (op-dpb (cap b)) pr (op-dp (cup b) ())
@@ -639,8 +573,7 @@
    (op-split l) (: c (op-take l) r (? (op-cm? l) (op-split (op-drop l)) ())
                    (? (two? c) (. c r) r))
    ; op-core: the factor pass. quote interiors stay verbatim, binding forms keep their binders,
-   ; everything else walks. idempotent. has-top-op? asks whether the original form carried a
-   ; top-level operator -- only then may a lone folded operand splice up, since a bare
+   ; everything else walks. idempotent. has-top-op? gates the lone-operand splice: a bare
    ; list-of-one like ((mov r3 r12)) is data and stays wrapped.
    (has-top-op? x) (? (one? x) 0 (op-puncp (cap x)) 1 (has-top-op? (cup x)))
    (op-core x)
@@ -665,16 +598,11 @@
    (opfix x) (op-core x)
 
    ; the grip door: the one sanctioned write into the compile table, and the only reach to
-   ; `operators` once birth mops the nom. one signature at every lane, (grip ar nm v), because a
-   ; curried door of two arities would hand back a closure and write nothing -- and it is curried,
-   ; so (grip 2) is the dyadic lane's own door and (grip 0) the glued one, which the sigil map never
-   ; had. it answers the row it replaced in the shape it takes, so (grip ar nm (grip ar nm new))
-   ; restores exactly; () clears a row. a shape the lane refuses rolls back and scares, and a lane
-   ; with no key is refused rather than minted -- a lane the walk never asks is a silent no-op
-   ; wearing a live row's face. the table is read live.
-   ; the glued lane accepts anything: its row becomes the emitted head, so a closure there evals
-   ; perfectly well and only costs the round trip -- opfix's output stops being spellable for that
-   ; sigil, and libra's two directions with it. a nom is what the tree writes; the rest is yours.
+   ; `operators` once birth mops the nom. (grip ar nm v) answers the row it replaced in the shape
+   ; it takes, so (grip ar nm (grip ar nm new)) restores exactly; () clears a row. a shape the lane
+   ; refuses rolls back and scares, and a lane with no key is refused rather than minted. the
+   ; glued lane accepts anything: a value there is the emitted head, so opfix's output for that
+   ; sigil stops being spellable.
    (op-lane-ok? t ar nm) (? (= ar 0) 1 (two? (op-lane nm t ar)))
    (grip ar nm v)
     (: t (operators ar)
@@ -690,19 +618,15 @@
                          (scare 'bad-grip nm))))))))
 
    ; --- this `:` has a body, so the helpers above are local ------------------
-   ; opfix and grip are the door; the rest is the factor pass's scaffolding.
-   ; `operators` and `pureset` stay global-and-mopped instead: ev.l holds them, and a
-   ; cross-file capture has only the book to go through.
+   ; opfix and grip are the door. `operators` and `pureset` stay global-and-mopped instead:
+   ; ev.l holds them, and a cross-file capture has only the book to go through.
    _ (pin book 'grip grip)
    (pin book 'opfix opfix))
 ; the last seal: opfix joins the other four in the g->hot_* fields, so no later rebind can reach it.
 (seal-hook 4 opfix)
 
 ; --- text + sequence batteries ------------------------------------------------
-; every one of these was being re-derived per app, with drifting signatures: join
-; three ways (cook, clay, cpp), lines twice (kore/text, cook), findsub twice
-; (cook, sb/http), nth four times where list application already indexes. one copy
-; here, `sep` first so a partial application reads, and -1 for absent.
+; one copy of each, `sep` first so a partial application reads, and -1 for absent.
 (: (fsub s sub i)                                       ; first index >= i of sub in s, or -1
     (? (i + #sub > #s) -1 (snip s i (i + #sub) = sub) i (fsub s sub (i + 1)))
 
@@ -715,14 +639,11 @@
 )    ; (a + 1 a) would read as a + (1 a)
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
-; a-type answers a witness star of the highest tier present -- an inhabitant, not a code, since
-; the generic `tray` ctor reads the tier off a witness. past the numeric tower the whole array
-; lifts to an object array. a shape dimension may be any numeric and saturates to a nat.
+; a-type answers a witness star of the highest tier present, since the generic `tray` ctor
+; reads the tier off a witness. a shape dimension may be any numeric and saturates to a nat.
 (: ; the int tier takes a cell one machine word wide, so what belongs in it is a question
-   ; of magnitude, not of which box the numeral came in. anything wider lifts to O, where
-   ; the cell holds the value itself.
-   ; whole? first: love orders across kinds, so a bare magnitude test would seat a twin
-   ; in the int tier and say nothing about it.
+   ; of magnitude, not of which box the numeral came in. whole? first: love orders across kinds,
+   ; so a bare magnitude test would seat a twin in the int tier and say nothing about it.
    (a-rank x) (? (gem? x) 1 (twin? x) 2 (whole? x && (min-word <= x <= max-word)) 0 3)
    (a-emax m x) (: k (a-rank x) (m < k ? k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (k = 0) 0 (k = 1) 0.0 (k = 2) (twin 0 0) ()))   ; a witness star of the tier
@@ -741,8 +662,7 @@
 (:: 'hash (\ a (hashtx a)))
 
 ; (array shape elem…): the N-D constructor. shape is a dimension list or a lone number; the
-; element type is inferred, so exactness is never silently lost. the shape fixes the count, so
-; the elements are ordinary trailing args and `array` curries them one at a time.
+; element type is inferred. the shape fixes the count, so elements are ordinary trailing args.
 (: (a-coll sh n acc) (n < 1 ? (: d (rev acc) (tray (a-type d) sh d))
                               (\ x (a-coll sh (n - 1) (x . acc))))
 )
@@ -770,16 +690,12 @@
     (: nd (dsug <bs <>bs) (? (w v >nd bnd u dm) 1 (wl v >>bs bnd u dm))))
    ; a name wants a cell when something that runs before its slot is filled can read it. two
    ; doors: a direct read from a binding at or before it (for a lambda name, only one not
-   ; shielded by a \ -- a call comes after the pin), and, for a VALUE name, a read from
-   ; anywhere the earlier bindings reach through the let's own names. the second door is
-   ; capture, not evaluation order: an earlier closure inherits a later sibling's captures, so
-   ; it wants the value's slot at construction, before that slot exists.
+   ; shielded by a \ -- a call comes after the pin), and, for a value name, a read from anywhere
+   ; the earlier bindings reach through the let's own names -- capture, not evaluation order.
    (boxset prs) (: nm (map cap prs)
      ; bref: one walk of a def collecting every sibling name it reads, each tagged with whether
-     ; the read sat under a \ (u) -- w's question asked for the whole row at once, so the pass
-     ; costs a walk per binding where the name-at-a-time form cost a walk per pair. \ and : bind,
-     ; a one-operand \ is quote, macros expand -- except a head this let binds, which is a
-     ; variable and never a macro (boxfix-core's sub reads it the same way).
+     ; the read sat under a \ (u). \ and : bind, a one-operand \ is quote, macros expand --
+     ; except a head this let binds, which is a variable and never a macro.
      (bref x bnd u acc) (?
       (nom? x) (elem x nm && !(elem x bnd) ? ((x . u) . acc) acc)
       (one? x) acc
@@ -813,10 +729,8 @@
    (cellbinds cs) (map (c \ <>c . list tablet 0) cs)
    ; the cell read boxfix emits. a filled cell answers its value; a pre-fill read is a map miss, so
    ; the missing condition carries the binder's own name and the help's result is the value there.
-   ; that name is the cell's only key -- cellbinds gives each binder a private one-entry tablet --
-   ; and it reaches the emitted read quoted, so it is a datum there and never a forward reference.
-   ; with no help heard it answers the zero point instead of raising -- a cell miss stays
-   ; survivable. `sent` is minted once and closure-private, so nothing a cell holds poses as absence.
+   ; that name reaches the emitted read quoted, so it is a datum there and never a forward ref.
+   ; `sent` is minted once and closure-private, so nothing a cell holds poses as absence.
    cellread (: sent (mint 0)
                (\ c nm (: v (peep c nm sent)
                           (? !(== v sent) v
@@ -824,11 +738,9 @@
                              (scare 'missing nm))))))
 
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
-; the law: eager reads see let*, closures see letrec*. a bare read before its name's pin
-; keeps the plain nom -- a boxed name's own binding is renamed _, so the nom resolves
-; outward, and (: s (trim s)) under a param s reads the param. a read under a \ takes the
-; cell, filled by the time the closure runs (or the cell-miss door when it runs early).
-; pn is the pinned-so-far set; u is 1 under a \.
+; the law: eager reads see let*, closures see letrec*. a bare read before its name's pin keeps
+; the plain nom -- a boxed name's own binding is renamed _, so (: s (trim s)) under a param s
+; reads the param. pn is the pinned-so-far set; u is 1 under a \.
 (: (boxfix-core prs body) (: (rmc cs ns) (filter (\ p !(elem <p ns)) cs)
    ; bnd: the lexical binder set, seeded with the scope's own names, so a locally-bound name is
    ; an ordinary variable and never a macro head.
@@ -867,144 +779,90 @@
        (? r (catmap (p \ list <p >p) <r + list >r) fs)))))
 
 ; --- scheme and common lisp spellings ---------------------------------------
-; a name you half-remember should work. every row here is the same function under
-; another name, so nothing below can drift; where the lisp semantics differ from
-; love's -- memq/assq/member answer a tail where elem answers a bit, for-each
-; takes its function first -- it is a definition and not an alias, and says so.
+; every row here is the same function under another name; where the lisp semantics differ
+; from love's it is a definition and not an alias, and says so.
 (: (assq x l)   (? (two? l) (? (== x (caap l)) (cap l) (assq x (cup l))))
 )
-; pat -- @ : pattern matching, one macro and no special form. a post-egg layer,
-; not part of the language: prel stays minimal and each frontend includes the
-; layers it wants (the host, love0, wasm and the kernel do, since love/boot/post.l is
-; written in it). its `borrow`
-; must precede every reader's compile -- a macro is only in the chain once its
-; layer is spliced, and a consumer folds its refs at its own compile.
-; the module exports no names: the macro is the surface, and it rides the splice
-; in this layer's macro slot. laws in test/pat.l.
+; pat -- @ : pattern matching, one macro and no special form. a post-egg layer, not part of
+; the language: each frontend includes the layers it wants. its `borrow` must precede every
+; reader's compile -- a macro is only in the chain once its layer is spliced, and a consumer
+; folds its refs at its own compile. the module exports no names: the macro is the surface,
+; and it rides the splice in this layer's macro slot. laws in test/pat.l.
 ;
-; (@ x pat body .. else) reads like `?` with a shape where the test goes: the
-; first pattern that fits x runs its body with the pattern's noms bound, an odd
-; trailing operand is the else, and no match with no else is the zero point.
-; the reader hands `@` over spaced (test/reader.l); glued it is still the tray
-; sigil, so @(1 2) never changed hands and `(@ @(a b) ..)` says both in a breath.
-; and it is infix at `?`'s own band, n-ary like it: (x @ p b .. else) is the same form,
-; scrutinee on the left, where a compound one spends no parens -- (vof en <t @ ..)
-; not (@ (vof en <t) ..). love/boot/prel.l's `operators` row; this file sees neither.
+; (@ x pat body .. else) reads like `?` with a shape where the test goes: the first pattern
+; that fits x runs its body with the pattern's noms bound, an odd trailing operand is the
+; else, and no match with no else is the zero point. the reader hands `@` over spaced; glued
+; it is still the tray sigil, so @(1 2) never changed hands. it is infix at `?`'s own band,
+; n-ary like it: (x @ p b .. else) is the same form with the scrutinee on the left.
 ;
-; a pattern also goes in A \ param, and that half is opfix's, not this file's: a param
-; that is not a nom becomes a fresh one and the body takes it apart, so (\ [a b] x) is
-; (\ v (@ v [a b] x)) and (map (\ [a b] (a * b)) ..) reads the way it should. A
-; define-sugar binder is a \ too, at every level. love/boot/prel.l's op-depat / op-dpb.
+; a pattern also goes in a \ param, and that half is opfix's: a param that is not a nom
+; becomes a fresh one and the body takes it apart, so (\ [a b] x) is (\ v (@ v [a b] x)).
+; a define-sugar binder is a \ too, at every level -- op-depat / op-dpb above.
 ;
-; a pattern is its constructor, read backwards: the same text that builds a value
-; matches it, so nothing has to be learned twice and a bracket is as closed in a
-; pattern as it is in a value. it is also ordinary surface, already factored --
-; opfix runs before macros, so the walk below sees core forms and never re-parses.
-; a nom binds, `_` swallows, any other atom matches itself, and a form's head is
-; its destructuring tag:
-;   (a b c)                a form: the shape of a chain, lax on the tail -- so it fits
-;                          at three or longer, and ([a b c] + _) is what it says. this
-;                          is the untagged case, the one a head that names no tag falls
-;                          to, and it is the common one: ('lam x b) fits (lam x b ..).
+; a pattern is its constructor, read backwards: the same text that builds a value matches it.
+; it is ordinary surface, already factored -- opfix runs before macros, so the walk below sees
+; core forms and never re-parses. a nom binds, `_` swallows, any other atom matches itself,
+; and a form's head is its destructuring tag:
+;   (a b c)                a form: a chain of three or longer, lax on the tail. the untagged
+;                          case, and the common one -- ('lam x b) fits (lam x b ..).
 ;   [a b]  (list a b)      a chain of exactly two        <- a bracket is its wrap
-;   (a . t)  (. a t)   the cons: head a, tail t. it chains, which is how a
-;                          pattern says "and more" -- ('lam . x . b . _) fits
-;                          (lam x b ..) at three or longer, ['lam x b] at three
-;                          exactly. [a b . t] is (. (list a b) t) -- the same
-;                          datum as ([a b] . t), so it reads the one way both
-;                          spellings can: a head that is the two-chain (a b).
-;   ([a b] + t)            a split: the leading run, then t over what is left.
-;                          a pattern is its constructor, so + means here what it
-;                          means there -- A + B is the value that a and B make.
-;                          the left side must be a bracket: its length is what
-;                          picks the split point, so nothing is searched for. and
-;                          it needs its own parens inside @'s operands, like any
-;                          infix -- a bare + would capture the whole span each side.
-;                          this is how a pattern says "at least": ([a b] + _).
+;   (a . t)  (. a t)       the cons: head a, tail t, and it chains. [a b . t] is
+;                          (. (list a b) t) -- a head that is the two-chain (a b).
+;   ([a b] + t)            a split: the leading run, then t over what is left. the left side
+;                          must be a bracket -- its length picks the split point -- and it
+;                          needs its own parens inside @'s operands, like any infix.
 ;   'a  (\ a)              the literal a, never a binding
-;   {'f x}  (hash 'f x)    a map carrying key 'f -- the key is an expression, the
-;                          value a pattern, and the match is by subset (the one
-;                          place a pattern is looser than its constructor)
+;   {'f x}  (hash 'f x)    a map carrying key 'f -- the key an expression, the value a
+;                          pattern, matched by subset (the one place a pattern is looser)
 ;   @(a b)  (tuple a b)    a tray of exactly two
-;   (pat & g)              a guard, left to right: pat must fit and g must hold.
-;                          the one operand a pattern reads as an expression, and it
+;   (pat & g)              a guard, left to right: pat must fit and g must hold, and it
 ;                          chains: (c & 0 < c & c < 10). `&&` is the same tag.
-;   (? g pat)              the guard the other way round -- (& ..) lowers to exactly
-;                          this, so they are one thing with two spellings
+;   (? g pat)              the guard the other way round; (& ..) lowers to exactly this
 ;   (? g)                  the guard alone -- fits anything g holds for
 ;   (p1 | p2)              alternatives: either shape fits. `||` is the same tag
-;   (v @ pat)              the as-pattern, haskell's v@pat, and the only and-pattern:
-;                          name the whole and take it apart, both sides patterns,
-;                          neither privileged. ([a _] @ [_ a]) is a pair of equals.
-;                          spaced. glued v@pat is one nom -- opfix splits only a
-;                          leading sigil -- and glued @( is already the tray below.
-;   ^x  (jot x)            the pin, elixir's ^x: x is read from outside and the value
-;                          must equal it. the one way a pattern spends a nom without
-;                          binding it, so (a ^a) fits a pair of equals against an
-;                          outer a, where (a a) would fit any pair.
+;   (v @ pat)              the as-pattern, haskell's v@pat, and the only and-pattern: both
+;                          sides patterns, neither privileged. spaced -- glued v@pat is one
+;                          nom, and glued @( is the tray above.
+;   ^x  (jot x)            the pin, elixir's ^x: x is read from outside and the value must
+;                          equal it -- the one way a pattern spends a nom without binding it.
 ;   ()                     the form at zero length: asks nothing, so it fits anything
 ;   []                     the list at zero length: the empty chain, exactly
-; a map key is read for presence, not truth: a pinned () matches, an absent
-; key does not.
+; a map key is read for presence, not truth: a pinned () matches, an absent key does not.
 ;
-; parens are the form, brackets are the list, and the pair is the whole of it:
-; [a b c] fits a chain of exactly three, (a b c) one of three or longer. Both read
-; as their constructor -- for the paren it is the constructor of the domain pat is
-; mostly used on, syntax: uu.l matches terms, a term is a form, and ('lam x b)
-; against (lam x b) is that form written down. lax on the tail because a term wears
-; annotations there, which is why every one of those arms used to end `+ _`.
-; `+` stays for the tail you want to NAME ((['a b] + t)); parens only drop the `_`.
-; this retires the unknown-tag scare, and that is the better half of the change: a
-; head naming no tag used to be a rejected program, and we do not reject programs --
-; the language is defined so every form can be read ((f) is f, an empty form is its
-; head, an undefined op answers the unit). a tag was the one place a pattern refused
-; to mean anything, and now it means the plain thing it looks like.
+; parens are the form, brackets are the list: [a b c] fits a chain of exactly three, (a b c)
+; one of three or longer -- lax on the tail because a term wears annotations there. `+` stays
+; for a tail you want to name; parens only drop the `_`. a head naming no tag is not a
+; rejected program: it means the plain thing it looks like.
 ;
-; the guard is the one pattern that is not a constructor -- the one operand read for
-; truth where every other is read for shape -- and that is why it needs a tag of its
-; own at all. a pattern is its constructor, so pattern text is expression text: (two? x)
-; is a fine untagged pattern (a form of two, binding both) as well as a fine call, and
-; nothing but the tag can pick. `&` is that tag, because (c & 0 < c) is the shape a hand
-; reaches for; `?` is the same thing written the other way, for a guard that reads better
-; in front. the and-pattern is `@` and only `@` -- it had three spellings and needed one,
-; so the other two went to the guard, where a wrong reading used to fit nothing in silence.
-; g is an ordinary expression, not a pattern: it is read for truth, it binds
-; nothing, and it sees every nom the whole arm binds -- `(? (a < b) [a b])` reads
-; the pair it is testing. That is because guards do not run where they are written:
-; like the non-linear `=` tests, they ride at the end of the conjunction, in source
-; order, once the structural tests have earned every accessor. So a guard costs
-; nothing on an arm whose shape already failed, and a positional one
-; (`[a (? (a > 0) b)]`) is a placement for the reader -- it does not short-circuit
-; any earlier. It is the body's own binder wrapped around g, so a nom the arm does
-; not bind still resolves outward, in the scope the `@` was written in.
+; the guard is the one pattern that is not a constructor -- its operand is read for truth
+; where every other is read for shape -- which is why it needs a tag at all: (two? x) is a
+; fine untagged pattern as well as a fine call, and nothing but the tag can pick. g binds
+; nothing and sees every nom the whole arm binds, because guards do not run where they are
+; written: like the non-linear `=` tests they ride at the end of the conjunction, in source
+; order, once the structural tests have earned every accessor. so a positional guard is a
+; placement for the reader and does not short-circuit any earlier.
 ;
-; a repeated nom matches non-linearly: the second sighting is an `=` against the
-; first's access form, not a second binding, so [a a] fits a pair of equals and
-; nothing else. the equality tests ride at the end of the conjunction, where the
-; structural ones have already earned every accessor they read.
+; a repeated nom matches non-linearly: the second sighting is an `=` against the first's
+; access form, not a second binding, so [a a] fits a pair of equals and nothing else.
 ;
-; the expansion is plain core: ((\ v (? test bound-body .. else)) x), each bound
-; body a lambda over the pattern's noms applied to the accessor forms. the
-; arguments are read in the outer scope, so a pattern nom may wear the name of an
-; accessor its own test needs -- [cap cup] binds both and still matches. cprop
-; beta-reduces the wrapper away when the scrutinee is already a value, and keeps
-; it when it is a call -- so the binding is free exactly when it is not needed.
+; the expansion is plain core: ((\ v (? test bound-body .. else)) x), each bound body a
+; lambda over the pattern's noms applied to the accessor forms. the arguments are read in the
+; outer scope, so a pattern nom may wear the name of an accessor its own test needs. cprop
+; beta-reduces the wrapper away when the scrutinee is already a value.
 (: gone (mint 0)                 ; absence out of band: no stored value poses as a fresh mint
    (lit d) ['\ d]               ; d, as the code that answers d
-   ; a literal is compared with `=` -- except a nom, which is interned, so == is
-   ; the same answer off one pointer where = walks the generic table. noms and
-   ; nothing else: = on a charm is numeric across the band (5 matches the gem 5.0),
-   ; and == would quietly narrow that to one representation.
+   ; a literal is compared with `=` -- except a nom, which is interned, so == is the same
+   ; answer off one pointer. noms and nothing else: = on a charm is numeric across the band
+   ; (5 matches the gem 5.0), and == would quietly narrow that to one representation.
    (weq d v) [['= (lit d) v]]
    wnil [() () ()]
    (wts ts) [ts () ()]
    (wgd g) [() () [g]]
    (wcat x y) [(<x + <y) (<>x + <>y) (<>>x + <>>y)]
 
-   ; `&&` is the guard, left to right: (p && g ..) is (? g .. p) and nothing else, so the
-   ; one operand a pattern reads as an expression is the one after the `&&`.
-   ; `&&` is right-handed, so a chain arrives nested -- (p && a && b) is (&& p (&& a b))
-   ; -- and that inner `&&` is the chain, never a guard on its own. flatten it.
+   ; `&&` is the guard, left to right: (p && g ..) is (? g .. p). it is right-handed, so a
+   ; chain arrives nested -- (p && a && b) is (&& p (&& a b)) -- and that inner `&&` is the
+   ; chain, never a guard on its own. flatten it.
    (gand? x) (two? x && == <x '&&)
    (gchain as) (? (one? >as) as
                   (gand? <>as) (<as . gchain ><>as)
@@ -1024,25 +882,18 @@
                           (wq as v))                         ; ..else every one but the last guards
               ; the guard, in the spelling a hand reaches for: (c && 0 < c) is (? (0 < c) c).
               (h = '&&) (pw (gnorm p) v)
-              ; the and-pattern, haskell's v@pat and the only spelling of it: both shapes must
-              ; fit, and the walks simply concatenate -- one conjunction, no winner to pick,
-              ; because both sides read the same value and their access forms are already
-              ; rooted there. neither side is privileged, so both stay patterns.
-              ; so a nom in both is the ordinary non-linear nom, and dedup makes the second
-              ; sighting an equality: ([a _] @ [_ a]) fits a pair of equals, for free.
-              ; the everyday one is naming the whole while taking it apart: (v @ ['lam x b]).
+              ; the and-pattern, haskell's v@pat: both shapes must fit and the walks simply
+              ; concatenate, since both sides read the same value. a nom in both is the ordinary
+              ; non-linear nom, so ([a _] @ [_ a]) fits a pair of equals for free.
               (h = '@) (foldl wcat wnil (map (q \ pw q v) as))
               ; the pin (elixir's ^x, glued to jot by the operators table): not a binding but
               ; an equality against x read from outside -- the same shape a bare literal takes
               ; above, which is what a pin is. one operand only; anything else is a plain form.
               (h = 'jot && 1 = #as) (wts [['= <as v]])
               ; alternatives, anywhere: one test, the branches ||ed. each branch owns its own
-              ; equalities and its own guards, so a disjunct is that branch entire.
-              ; a nom lives at a different place in each branch, so it cannot be one access
-              ; form -- it is read from whichever branch matched, and () where none binds it.
-              ; that conditional re-asks the branch tests. a branch that binds nothing adds
-              ; no nom and so asks nothing again, which is why the literal alternative -- the
-              ; common one -- stays exactly one test with no second look.
+              ; equalities and guards. a nom lives at a different place in each branch, so it is
+              ; read from whichever matched, and () where none binds it -- a conditional that
+              ; re-asks the branch tests, which a branch binding nothing never pays.
               (h = '||)
               (: ws (map (q \ pw q v) as)
                  ds (map (w \ dedup <>w ()) ws)
@@ -1070,22 +921,15 @@
                                  (widx as v 0))
               (wlist p v))))                               ; untagged: the form's own shape, exact
    (wq as v) (two? >as ? (wcat (wgd <as) (wq >as v)) (pw <as v))   ; guards, then the shape
-   ; a nom's access across an alternative. the first branch that matches wins, and it
-   ; supplies every nom -- one it does not bind reads (), it does not fall through to a
-   ; later branch. Otherwise one body could wear bindings from two different shapes at
-   ; once, and the arm would answer for a value no single branch described.
+   ; a nom's access across an alternative. the first branch that matches wins and supplies
+   ; every nom -- one it does not bind reads (), it does not fall through to a later branch.
    (across n bss ts) (one? bss ? (lit ())
                       (: e (assoc n <bss)
                          ['? <ts (one? e ? (lit ()) <>e) (across n >bss >ts)]))
-   ; a pattern longer than its value must never reach a `cap`, so the whole run is
-   ; claimed before any of it is read: `two?` on the head, then one `long?` for the rest
-   ; of the depth. asking `two?` per step instead spends a cup, a load and a dispatch at
-   ; each -- a quarter of what matching costs over hand-written accessors, measured.
-   ; the head's test stays first and separate, and is not folded into the long?: it is
-   ; what the decision tree hoists, and the tag compare has to be reachable before the
-   ; arity walk, or 20 arms of a 21-arm dispatch walk to learn they are the wrong tag.
-   ; one walk, two ends: a bracket ends on (== () rest) -- exact length -- a split on
-   ; the right pattern's own walk, wherever the run stopped.
+   ; a pattern longer than its value must never reach a `cap`, so the whole run is claimed
+   ; before any of it is read: `two?` on the head, then one `long?` for the rest of the depth.
+   ; the head's test stays first and separate, not folded into the long?: it is what the
+   ; decision tree hoists, and the tag compare must be reachable before the arity walk.
    (warity k v) (? (k = 1) [['two? v]] [['long? k v]])   ; at one, two? is the same answer and fuses
    (wrun ps v end)
      (one? ps ? (end v)
@@ -1112,38 +956,22 @@
 
    (pand ts) (? (one? ts) 1 (one? >ts) <ts  ('&& . ts))
 
-   ; the wrapper is ev's to remove, not ours. a nom read once could have its accessor
-   ; inlined here, and that is what love/boot/ev.l's read-once refinement already does to the
-   ; whole tree: a lone read of an effectful argument substitutes and the call is gone. A
-   ; second copy in this macro measured 3.5 M on a 32.5 G corpus -- noise -- so the one
-   ; mechanism lives in the compiler, where every caller gets it and not just `@`.
+   ; the wrapper is ev's to remove, not ours: ev.l's read-once refinement already inlines a
+   ; nom read once. a second copy in this macro measured 3.5 M on a 32.5 G corpus -- noise.
    (bind bs body) (one? bs ? body (('\ . map cap bs + [body]) . map caup bs))
 
    ; --- the decision tree -------------------------------------------------------
-   ; a clause is [tests body]. compiled flat, every clause re-runs the tests it
-   ; shares with its neighbours: a 21-arm tag dispatch asks `two?` 21 times where
-   ; the hand-written `?` asks once, and that repetition -- not the tag compare, not
-   ; the accessor -- is the whole gap (measured 1.91x flat, 1.01x as a tree).
-   ; so: factor the common prefix. every clause of a dispatch opens with the same
-   ; (two? v), so it is asked once outside the chain and dropped from each clause.
-   ; the else is then reached two ways and appears twice in the source, which is
-   ; why this only fires for a small else -- a big one would double the code.
-   ; and it is one level, never recursive: the duplication stays at exactly 2.
+   ; a clause is [tests body]. compiled flat, every clause re-runs the tests it shares with
+   ; its neighbours, so the common prefix is factored: asked once outside the chain and
+   ; dropped from each clause. the else is then reached two ways and written twice, which is
+   ; why this only fires for a small else, and it is one level, never recursive.
    (same? a b) (? (two? a) (? (two? b) (? (same? <a <b) (same? >a >b)))
                   (two? b) ()
                   (== a b))
    ; --- factoring, and its one safe shape --------------------------------------
-   ; a full decision tree groups each level's clauses by their next test and recurses
-   ; both ways -- into the group, and past it into the fallthrough. correct, and it
-   ; writes the fallthrough twice per level: with 21 distinct tags that is 2^21 nodes
-   ; and the compile never finishes (it did not loop -- it exploded). a real compiler
-   ; escapes by making the fallthrough a join point; the nearest thing here is a thunk
-   ; bound per level, which costs a closure per level per call -- more than the test
-   ; it saves. so factoring pays only where the fallthrough does not branch:
-   ; the prefix every clause shares. failing it fails the whole match, so its
-   ; fallthrough is the else -- one level, one extra copy, no tree to explode.
-   ; that is the whole win here anyway: uu's clauses share (two? v) and then differ
-   ; by tag, so the tree has exactly one interior node to find.
+   ; a full decision tree writes the fallthrough twice per level -- 21 distinct tags is 2^21
+   ; nodes -- so factoring pays only where the fallthrough does not branch: the prefix every
+   ; clause shares, whose failure fails the whole match, so one level and one extra copy.
    (cpx cs)                                         ; the test-prefix common to every clause
      (? (one? cs) ()
         (one? <<cs) ()                        ; a clause with no tests left: stop
@@ -1152,34 +980,21 @@
               (t . cpx (map (c \ [><c <>c]) cs)))))
    (nodes x) (one? x ? 1 (foldl (\ n e (n + (nodes e))) 1 x))
    (flat cs els) ('? . (catmap (\ c [(pand <c) <>c]) cs) + [els])
-   ; two clauses or more, or there is nothing to discriminate: at one clause cpx eats
-   ; all of its tests, so factoring would read (? p (? 1 body els) els) -- a vacuous test
-   ; and the else written twice, for nothing. uu's hot sites are exactly that shape.
+   ; two clauses or more, or there is nothing to discriminate: at one clause cpx eats all of
+   ; its tests, so factoring would read (? p (? 1 body els) els) -- vacuous, and the else twice.
    (tree cs els)
      (: p (cpx cs)
         (? (two? >cs && two? p && nodes els < 40)   ; >=2 clauses, a prefix, a small else
            ['? (pand p) (flat (map (\ c [(drop #p <c) <>c]) cs) els) els]
            (flat cs els)))
    ; --- alternatives, and why they split two ways ------------------------------
-   ; (p1 || p2) fits when either does -- `|` too, the way `.` and `link` are one tag.
-   ; a nom's access form is where it sat, and it sits somewhere else in every branch,
-   ; so one access cannot serve two shapes. Two lanes answer that, and which one runs is
-   ; decided by where the alternative is, both obeying first-branch-wins:
-   ;   at the top of an arm -> one clause per branch, sharing the body. a clause is a
-   ;     thing there can be more than one of, so each branch keeps its own plain accesses
-   ;     and nothing is asked twice. The body is then written once per branch -- the same
-   ;     trade `tree` makes for the else, and the reason an alternative is not the cheaper
-   ;     spelling of two arms: it is the spelling that says the bodies are the same one.
-   ;   nested          -> one clause, the branches `||`ed, each nom read from the winner
-   ;     (pw above). Costs a re-ask per bound nom, and a literal alternative binds none --
-   ;     so the common one is exactly one test, at any depth.
-   ; the body binds the union, and a nom this branch did not bind is the unit. That is
-   ; the whole of the different-noms question: binding it to () is what stops the body
-   ; reaching whatever wears that name outside, which is the one way this could answer
-   ; something wrong. absence reads as nothing here exactly as it does everywhere else.
-   ; the arm, normalised: its branches, each with the guards standing over it. a guard
-   ; wrapping an alternative belongs to every branch, so (? g (p1 || p2)) is two branches
-   ; guarded alike -- the guard is written once and asked once per branch.
+   ; (p1 || p2) fits when either does -- `|` too. a nom sits somewhere else in every branch,
+   ; so one access cannot serve two shapes. two lanes, both first-branch-wins:
+   ;   at the top of an arm -> one clause per branch, sharing the body, written once per branch
+   ;   nested -> one clause, the branches `||`ed, each nom read from the winner (pw above)
+   ; the body binds the union, and a nom this branch did not bind is bound to () -- which is
+   ; what stops it reaching whatever wears that name outside. the arm is normalised first: a
+   ; guard wrapping an alternative belongs to every branch, asked once per branch.
    (arms p) (? (one? p) [[p ()]]
                (: h <p as >p
                   (? (h = '||) (catmap arms as)

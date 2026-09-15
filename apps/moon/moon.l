@@ -1,27 +1,21 @@
 ; apps/moon/moon.l -- the C compiler's driver:
 ;   mooncc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a ..
-; reads C, rides lex -> cpp -> parse -> gen -> the holo book. two outcomes, the
-; cc shape: with -c it lays relocatable ELF objects (love/holo/obj.l --
-; separate sections, a symbol table, and relocations), several .c inputs each
-; landing in the cwd as x.o (gcc-shaped); without it every input (a .c compiled
-; on the way, a .o read off disk) goes to our own static linker
-; (love/holo/link.l, rung 3), which binds them with crt0 and the implicit
-; runtime into -o's exe, `a.out` bare. the old positional
-; pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
-; no .o). -I dirs search before our own headers on both include forms -- and
-; ours are the only standard set: there is no /usr/include tail (a header we
-; do not carry is refused, never resolved to whatever libc the box has); a -D
-; rides in as a synthesized #define line, so token bodies and function-like
-; -df(x)=.. take the one macro path. the driver wears the cc conventions: the
-; advisory flag families (-W.. -O.. -g.. -std= -f.. -pipe -static) ride through
-; ignored so `CC=mooncc` drives a gcc-shaped recipe unchanged -- less -fno-inline,
-; which is real here and bars every splice. a link owing
-; libc symbols pulls the runtime (moonlibc + am math + sys) by need from the
-; sources beside it -- -nostdlib/-ffreestanding turn that off. errors speak on
-; err and exit 1; usage exits 2. last in the mooncc cat (its own app, doc/misc/moon.md), after
-; love/holo/{elf,obj,link}.l and apps/moon/{lex,cpp,parse,gen}.l; rides the
-; u-floor (uread udie urun). its tail seat fires moon-main when mooncc is the program;
-; moon-run is the same compile answering its status, for a caller staying in the image.
+; reads C, rides lex -> cpp -> parse -> gen -> the holo book. two outcomes, the cc shape: -c
+; lays relocatable ELF objects (love/holo/obj.l), each .c landing in the cwd as x.o; without
+; it every input (a .c compiled on the way, a .o read off disk) goes to our own static linker
+; (love/holo/link.l, rung 3), bound with crt0 and the implicit runtime into -o's exe, `a.out`
+; bare. the positional pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and --
+; linking -- no .o). -I dirs search before our own headers on both include forms, and ours
+; are the only standard set: no /usr/include tail, so a header we do not carry is refused
+; rather than resolved to whatever libc the box has. a -D rides in as a synthesized #define
+; line. the advisory flag families (-W.. -O.. -g.. -std= -f.. -pipe -static) ride through
+; ignored so `CC=mooncc` drives a gcc-shaped recipe unchanged -- less -fno-inline, which is
+; real here and bars every splice. a link owing libc symbols pulls the runtime (moonlibc + am
+; math + sys) by need from the sources beside it; -nostdlib/-ffreestanding turn that off.
+; errors speak on err and exit 1, usage exits 2. last in the mooncc cat (its own app,
+; doc/misc/moon.md), after love/holo/{elf,obj,link}.l and apps/moon/{lex,cpp,parse,gen}.l;
+; rides the u-floor (uread udie urun). its tail seat fires moon-main when mooncc is the
+; program; moon-run is the same compile answering its status, for a caller in the image.
 ;
 (module 'moon
 (borrow 'kore)
@@ -34,30 +28,20 @@
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
    (cdir path) (: d (lastslash path) (0 < d ? (snip path 0 d) ""))
-   ; the toolchain slice's place in the tree, spelled once: the roots below and
-   ; the carried-blob filter both read it, and the filter reads its length too.
+   ; the toolchain slice's place in the tree, spelled once: the roots below and the
+   ; carried-blob filter both read it, and the filter reads its length too.
    mtree "apps/moon/"
-   ; the toolchain root -- where our own headers and the runtime sources live.
-   ; two rungs, tried in order: the dev tree off the cwd, then the installed
-   ; nest through the seat (love/boot/prel.l's own walk -- selfpath,
-   ; then <seat>/../lib/love/moon/, so ~/.love/bin/love finds ~/.love/lib/love/
-   ; moon/ and a distro's /usr/bin/love finds /usr/lib/love/moon/). without the
-   ; second rung mooncc only works with the repo root as the cwd: every path
-   ; here was cwd-relative, so an installed mooncc fell through to /usr/include
-   ; and could not even preprocess a hello-world (glibc's stdio.h wants the
-   ; compiler's own stddef.h).
-   ; read at each call, never bound: mooncc rides a baked image, and a
-   ; captured seat would fold the build tree's path into that image and ride it
-   ; forever -- prel.l carries the same warning because it learned this one the
-   ; hard way (the installed love walked out/lib instead of its own nest).
+   ; the toolchain root -- where our own headers and the runtime sources live. two rungs,
+   ; tried in order: the dev tree off the cwd, then the installed nest through the seat
+   ; (love/boot/prel.l's own walk -- selfpath, then <seat>/../lib/love/moon/). without the
+   ; second rung mooncc only works with the repo root as the cwd.
+   ; read at each call, never bound: mooncc rides a baked image, and a captured seat would
+   ; fold the build tree's path into that image and ride it forever.
    (mseat _) (: x (selfpath 0)
                 (string? x && cdir x + "../lib/love/moon/"))
    (mroots _) (: s (mseat ()) (string? s ? [mtree s] [mtree]))
-   ; the runtime home: the first root that actually carries the sources. by
-   ; read, not by a name test -- presence is the wrapper (uread answers
-   ; (1 text), an absent file the zero point), and an empty core.c would be
-   ; no runtime either. core.c is the one member every link takes, so it is
-   ; the one that says a root is real.
+   ; the runtime home: the first root that actually carries the sources, by read rather than
+   ; by a name test -- core.c is the one member every link takes, so it says a root is real.
    (mhome _) (: (go rs) (? !(two? rs) ()
                            (two? (uread (<rs + "lib/moonlibc/core.c"))) <rs
                            (go >rs))
@@ -77,10 +61,10 @@
                        (go (i + 1) st ps))
        (jn l a) (!(two? l) ? a (jn >l (<l + (#a ? ("/" + a) a))))
        (jn (go 0 0 ()) ""))
-   ; the carried archive is a .gz: the 10-byte header, the flagged optional
-   ; fields stepped over, the deflate stream to the C nif, the isize from the
-   ; trailer as its hint. apps/gz.l's walk, carried here read-only because moon
-   ; owes no module -- a `borrow` here would tie it to the bake order.
+   ; the carried archive is a .gz: the 10-byte header, the flagged optional fields stepped
+   ; over, the deflate stream to the C nif, the isize from the trailer as its hint.
+   ; apps/gz.l's walk, copied rather than borrowed -- a `borrow` here would tie moon to the
+   ; bake order.
    (gzskip s n i) (? (n <= i) () (s i = 0) (i + 1) (gzskip s n (i + 1)))
    (gzbody s)
     (: n #s
@@ -127,12 +111,10 @@
                                 acc)
                         (go (o + 512 + 512 * ((sz + 511) // 512)) acc2)))
        (go 0 ()))
-   ; no nest on disk, but a love carries its whole tree (source-gz): the
-   ; toolchain slice -- include/ and lib/, what the Makefile ships -- as an
-   ; in-memory table, key the nest-relative path, value the bytes. nothing is
-   ; written anywhere: the resolver and the runtime walk read the table where
-   ; they would have read the nest. () when there is nothing to carry (love0),
-   ; and the owed-nest diagnostic stands.
+   ; no nest on disk, but a love carries its whole tree (source-gz): the toolchain slice --
+   ; include/ and lib/, what the Makefile ships -- as an in-memory table, key the
+   ; nest-relative path, value the bytes. nothing is written anywhere; () when there is
+   ; nothing to carry (love0), and the owed-nest diagnostic stands.
    (mblob _)
     (: gz (source-gz "x")
        u (string? gz && gzbody gz)
@@ -152,15 +134,12 @@
                        (go >l (k + 1) (0 < k ? (acc + ", " + <l) <l)))
        s (go ns 0 "")
        (3 < n ? (s + " (+" + show (n - 3) + " more)") s))
-   ; #include resolver bound to a source dir + the -I list: "" searches relative
-   ; first (the src dir, then cwd) then the -I dirs; <> the -I dirs straight off;
-   ; both end at our headers -- the only standard set, no /usr tail: a name we
-   ; do not carry refuses here, never resolves to the box's own libc (whose
-   ; headers speak another compiler and, off linux, another kernel). `vb` is the
-   ; carried source's table (moon-cc pins it when no nest stands on disk): the
-   ; same order, in memory, and nothing written anywhere. answers
-   ; (1 text child) -- the child hook resolves the hit file's own quote
-   ; includes beside it (gcc's rule; cpp.l threads it). -> that | ().
+   ; #include resolver bound to a source dir + the -I list: "" searches relative first (the
+   ; src dir, then cwd) then the -I dirs; <> the -I dirs straight off; both end at our
+   ; headers, the only standard set, with no /usr tail. `vb` is the carried source's table
+   ; (moon-cc pins it when no nest stands on disk): the same order, in memory. answers (1
+   ; text child) -- the child hook resolves the hit file's own quote includes beside it
+   ; (gcc's rule; cpp.l threads it). -> that | ().
    (incload vb is srcdir name sys?)
     (: ours (map (r \ r + "include/") (mroots ()))
        dirs (sys? ? (is + ours) ([srcdir ""] + is + ours))
@@ -168,9 +147,9 @@
                   (: r (uread (<ds + name))
                      (? (two? r)
                         (: hd (cdir (<ds + name))
-                           ; the resolved PATH rides along as a fourth answer: cpp's
+                           ; the resolved path rides along as a fourth answer: cpp's
                            ; header memo keys on it beside the text, so two copies of
-                           ; one header in two trees never share an entry.
+                           ; one header never share an entry.
                            [1 <>r (\ n2 s2 (incload vb is hd n2 s2)) (<ds + name)])
                         (go >ds))))
        r (go dirs)
@@ -197,43 +176,37 @@
    ; as ('u name), which is how the two stay in the order the command line gave them
    (deftext ds) (foldl (\ a d (a + (string? d ? ("#define " + eqsp d)
                                                 ("#undef " + <>d)) + "\n")) "" ds)
-   ; the target -t names: 'x64 (the default), 'a64, 'rv64, or one of the embedded
-   ; three. the spellings are the prel's (arch-canon), which is also what uname's answer
-   ; and a `seed` argument come through -- so `-t x64` and `-t riscv` land where
-   ; `-t x64` and `-t rv64` do, and this file keeps no second list to drift.
-   ; the arch predefine (__x86_64__ / __aarch64__ / __arm__) rides the -D channel so cpp
-   ; stays target-blind.
+   ; the target -t names: 'x64 (the default), 'a64, 'rv64, or one of the embedded three. the
+   ; spellings are the prel's (arch-canon), which is also what uname's answer and a `seed`
+   ; argument come through, so this file keeps no second list to drift. the arch predefine
+   ; (__x86_64__ / __aarch64__ / __arm__) rides the -D channel, so cpp stays target-blind.
    (totgt s) (: t (archof s) (t || udie 2 ("cc: unknown target " + s)))
 
    ; the arch predefines, both spellings where gcc gives two -- pdclib's config asks
-   ; `defined(__x86_64)` for its varargs lane, and one spelling missing reads as an
-   ; unsupported machine rather than as a compiler that only knows the other word.
+   ; `defined(__x86_64)`, and one spelling missing reads as an unsupported machine.
    (archdefs tgt)
    (tgt @ 'a64                          '("__aarch64__")
           'rv64                        '("__riscv")
           'wasm                        '("__wasm__" "__wasm64__")
           ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
-   ; the OS predefines, the driver's like the arch's: -os picks, and unnamed is
-   ; the ground we stand on -- never a fixed kernel. all three spellings gcc
-   ; gives a linux ELF target: st.c asks `#if defined(__linux)` for <pty.h>, and
-   ; one missing is a header silently not included. the unprefixed `linux`/`unix`
-   ; stay out -- gcc drops them outside gnu89, and they collide with ordinary
-   ; identifiers. 'none is freestanding's word: a board owes no OS macro.
-   ; takes a flag's text or love-os's nom -- both doors, one row set. 'inle falls to the
-   ; refusal on purpose: we are the kernel there, and a compile owes a named -os rather
-   ; than whichever hosted kernel reads closest.
+   ; the OS predefines: -os picks, and unnamed is the ground we stand on, never a fixed
+   ; kernel. all three spellings gcc gives a linux ELF target -- st.c asks `#if
+   ; defined(__linux)` for <pty.h>, and one missing is a header silently not included. the
+   ; unprefixed `linux`/`unix` stay out: gcc drops them outside gnu89 and they collide with
+   ; ordinary identifiers. 'none is freestanding's word. takes a flag's text or love-os's
+   ; nom, one row set for both doors; 'inle falls to the refusal on purpose -- we are the
+   ; kernel there, so a compile owes a named -os.
    (toos s) ((string? s ? (name s) s) @
     'linux   'linux
     'none    'none
     'freebsd 'freebsd
     'netbsd  'netbsd
              (udie 2 ("cc: unknown os " + string s)))
-   ; the ground: main.c pins `love-os` per run, because one binary meets three
-   ; kernels and the compile that made it cannot say which. the nom is data,
-   ; for mcid's reason -- a bare ref folds the bake session's absence in forever.
-   ; nothing pinned means nothing could tell, and a compile owes a diagnostic
-   ; there rather than a guess at whichever kernel we happen to have started on.
+   ; the ground: main.c pins `love-os` per run, because one binary meets three kernels and
+   ; the compile that made it cannot say which. the nom is data, for mcid's reason -- a bare
+   ; ref folds the bake session's absence in forever. nothing pinned owes a diagnostic, not a
+   ; guess.
    (host-os _)
     (: n (elem 'love-os (names ()) && ev 'love-os)
        (nom? n ? (toos n)
@@ -245,8 +218,8 @@
              'netbsd  '("__NetBSD__" "__unix__" "__unix")
              'linux   '("__linux__" "__linux" "__unix__" "__unix")
                       (udie 2 ("cc: no predefines for os " + string os))))
-   ; C11's conditional features (6.10.8.3) -- saying an absence out loud is what makes
-   ; it conforming rather than a hole, and lets a portable source pick its other lane.
+   ; C11's conditional features (6.10.8.3) -- an absence said out loud is what makes it
+   ; conforming rather than a hole, and lets a portable source pick its other lane.
    ; every row is target-true: complex and VLAs each ride a subset (the parity table),
    ; so claiming an absence we don't have would send a consumer down a fallback for
    ; nothing. the utf pair is the positive claim: u"" is utf-16, U"" utf-32.
@@ -255,22 +228,17 @@
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
      + (tgt = 'x64 ? () '("__STDC_NO_COMPLEX__=1"))
      + (elem tgt '(x64 a64) ? () '("__STDC_NO_VLA__=1")))
-   ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) --
-   ; the <stdint>/<limits>/<float.h> family a library config reads instead of
-   ; probing: pdclib, gnulib and musl typedef straight off these names. one
-   ; table forked once on the word width (+ the wchar fork), every value gcc's
-   ; own spelling on that target, so a mooncc object and a gcc object agree on
-   ; every typedef. two deliberate deviations: __char_unsigned__ stays out
-   ; (gcc's arm/riscv char is unsigned, ours is signed on every target, and a
-   ; predefine describes this compiler), and the __ldbl_* rows answer double's
-   ; values -- no long double here -- so a consumer takes its double lane, the
-   ; one we can compile. a user -D lands after these and wins.
+   ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) -- the
+   ; <stdint>/<limits>/<float.h> family a library config reads instead of probing. one table
+   ; forked on the word width (+ the wchar fork), every value gcc's own spelling on that
+   ; target, so a mooncc object and a gcc object agree on every typedef. two deliberate
+   ; deviations: __char_unsigned__ stays out (ours is signed on every target), and the
+   ; __ldbl_* rows answer double's values -- there is no long double here. a user -D wins.
    stdcommon
-    ; __mooncc__ says which compiler, __moon__ says which dialect, __moonlibc__ which libc,
-    ; and a source wanting an extension must ask the second: under -std=c this is still
-    ; mooncc and the extension is still refused. cc-parse adds __moon__ because only it
-    ; knows the dialect. the libc is this compiler's by construction -- there is no second
-    ; one to link -- but it is its OWN fact and a source asks it by its own name.
+    ; __mooncc__ says which compiler, __moon__ which dialect, __moonlibc__ which libc: a
+    ; source wanting an extension must ask the second, since under -std=c this is still
+    ; mooncc and the extension is still refused. cc-parse adds __moon__, because only it
+    ; knows the dialect.
     '("__mooncc__=1" "__moonlibc__=1"
       "__CHAR_BIT__=8" "__SCHAR_MAX__=0x7f" "__SHRT_MAX__=0x7fff"
       "__SCHAR_WIDTH__=8" "__SHRT_WIDTH__=16" "__INT_WIDTH__=32"
@@ -372,18 +340,16 @@
       "__SIZE_TYPE__=unsigned int" "__SIZE_MAX__=0xffffffffU" "__SIZE_WIDTH__=32"
       "__PTRDIFF_TYPE__=int" "__PTRDIFF_MAX__=0x7fffffff" "__PTRDIFF_WIDTH__=32"
       "__BIGGEST_ALIGNMENT__=8")                     ; AAPCS's widest ask, and bare aligned
-   ; wchar_t forks by ABI, not by width: signed int on x64/rv64 (SysV),
-   ; unsigned int on a64/arm32 (AAPCS) -- gcc's values, so a header's typedef
-   ; lays the same type a gcc object carries.
+   ; wchar_t forks by ABI, not by width: signed int on x64/rv64 (SysV), unsigned int on
+   ; a64/arm32 (AAPCS) -- gcc's values, so a header's typedef lays what a gcc object carries.
    (wchdefs tgt)
     (? (= tgt 'a64 || arm32? tgt)
        '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"))
    (stddefs tgt) ((? (arm32? tgt) stdt32 stdlp64) + wchdefs tgt + stdcommon)
-   ; the diagnostic driver: a stage answered a gripe (a cause
-   ; it named itself) or a bare bad. a gripe prints "cc: <file>:<line>:<col>: msg"
-   ; -- an unknown file takes the source path, an unknown line/col elides; anything
-   ; else falls back to <plain>, so a not-yet-converted stage keeps today's line.
+   ; the diagnostic driver: a stage answered a gripe (a cause it named itself) or a bare bad.
+   ; a gripe prints "cc: <file>:<line>:<col>: msg" -- an unknown file takes the source path,
+   ; an unknown line/col elides; anything else falls back to <plain>.
    ; either way a fatal exit 1.
    (ccdie val src plain)
     (gripe? val ?
@@ -392,26 +358,22 @@
           loc (file + (ln ? (":" + show ln) "") + (col ? (":" + show col) ""))
           (udie 1 ("cc: " + loc + ": " + msg)))
        (udie 1 plain))
-   ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag
-   ; sigs ..) | a fatal exit. the -D lines prepend to the source text before the
-   ; one lex, so a define body runs to its line's end and the numbering stays
-   ; whole -- clexat stamps them 1-k..0 and the source itself from 1, so every
-   ; stamped line (a gripe, __LINE__) is true with no pay-back pass. an
-   ; #include lexes fresh at its own line 1 either way.
+   ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag sigs ..) | a
+   ; fatal exit. the -D lines prepend to the source text before the one lex, so a define body
+   ; runs to its line's end and the numbering stays whole -- clexat stamps them 1-k..0 and
+   ; the source itself from 1, so every stamped line is true with no pay-back pass.
    (cc-parse src {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia})
     (: ds9 (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
-                 ; our libc is the one in this link, and it carries its whole
-                 ; surface on every kernel it serves -- so a source asking what it
-                 ; may call asks this, never which kernel it is standing on.
+                 ; our libc is the one in this link and carries its whole surface on every
+                 ; kernel: a source asks it what it may call, never the kernel.
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
                  (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds))       ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
-       ; `-` is read here and nowhere else, so every door onto a TU gets stdin for
-       ; free -- and cdir answers "" for it, which is the cwd, gcc's own rule for a
-       ; source with no directory of its own.
-       ; the source itself may live in the carried table (a runtime member on
-       ; the blob lane): disk first, then vb by key
+       ; `-` is read here and nowhere else, so every door onto a TU gets stdin for free; cdir
+       ; answers "" for it, which is the cwd, gcc's rule for a source with no directory.
+       ; the source may instead live in the carried table (a runtime member on the blob
+       ; lane): disk first, then vb by key.
        r (src = "-" ? [1 (slurp in)]
             (: q (uread src)
                (? (two? q) q
@@ -426,24 +388,21 @@
        _ (okv? ps || ccdie ps src ("cc: parse error in " + src))
        ps)
    ; a relocatable object: text/data/.bss/love_nifs/.image sections + symbols + relocations
-   ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
-   ; both targets: obj.l picks the reloc vocabulary by tgt.
-   ; ..plus one section per other __attribute__((section(NAME))) name the TU
-   ; used, appended in declaration order (cgen-obj's tail). a section named at all
-   ; is a section whose address is the point -- inle/rp2040's .vectors is read by
-   ; the core before an instruction runs -- so both its existence and its order are
-   ; the program's to fix, never ours. objsecs is the door that takes them.
-   ; the two wide tuples are named once, here -- parse.l's `tops` answers fourteen fields
-   ; and gen.l's cgen-obj twelve. `[]` is the strict arity, so a shape that gains a member is
+   ; -- the bytes (`-c` writes them; the link path feeds them to ldlink), and obj.l picks the
+   ; reloc vocabulary by tgt. plus one section per other __attribute__((section(NAME))) name
+   ; the TU used, appended in declaration order (cgen-obj's tail): a named section's address
+   ; is the point -- inle/rp2040's .vectors is read by the core before an instruction runs --
+   ; so both its existence and its order are the program's to fix, never ours.
+   ; the two wide tuples are named once, here: parse.l's `tops` answers fourteen fields and
+   ; gen.l's cgen-obj twelve, and `[]` is the strict arity, so a shape that gains a member is
    ; a refusal naming the file rather than every site quietly reading its neighbour.
-   ; the gen's option list is the parser's nine tablets plus the driver's own word (-fno-inline).
    (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs]
        ; wasm rides gen's rv64 lane whole (love/holo/wasmfn.l is the machine under it) and
-       ; lays no ELF: its object is the gen tuple as text, read back by the wasm link.
-       ; gen takes the name itself -- rv64? covers both, and what wasm's machine lacks
-       ; (the wide multiply) needs a target of its own to decline
+       ; lays no ELF: its object is the gen tuple as text, read back by the wasm link. gen
+       ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
+       ; declined.
        (: ob (cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs] tgt)
           _ (okv? ob || ccdie ob src ("cc: codegen error in " + src))
@@ -452,7 +411,7 @@
                         + map ([nm forms al] \ objsec-code nm forms al) xfns)   ; ..and the fns that named a section
                 ; the two writers, one shape: the standard set for the width, plus whatever
                 ; the TU named. arm32 has no .image lane and no local func symbols for
-                ; statics -- objsecs3 refuses the first, and `lnames` simply doesn't ride.
+                ; statics -- objsecs3 refuses the first, and `lnames` does not ride.
                 (? (= tgt 'wasm)
                    (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks])
                    (arm32? tgt)
@@ -471,25 +430,18 @@
            _ (!(hot? q) ? (udie 1 ("cc: cannot write " + dst)))
            _ (say q b)
            (close q))))
-   ; the link path (rung 3, love/holo/link.l): every input lands as object
-   ; bytes (a .c compiled here, a .o read off disk), crt0 rides first (its
-   ; text is the entry), and ldlink binds the static exe -- no system linker.
-   ; the entry hands the OS stack pointer (argc sits at [rsp]) to __ai_start
-   ; and exits with its answer if it ever returns. __ai_start is defined here
-   ; weak -- the call-main tail every small link gets (the push 16-aligns the
-   ; call, and argc/argv unpack so an arg-taking main reads truth, not the raw
-   ; sp) -- so a libc object (apps/moon/lib/moonlibc/, rung 4) can override it
-   ; strong and unpack envp/auxv too. no conditional anywhere: the weak
-   ; machinery is the whole switch.
-   ; ..and the x64 entry serves both kernels (seed-universal rung UV1): linux
-   ; zeroes every register and lays argc at [rsp]; freebsd hands the vector
-   ; base in %rdi (its own crt1 reads argc at (%rdi)) with rsp only aligned
-   ; near it, sometimes a pad word below argc -- so a zero rdi says linux,
-   ; and the freebsd side pushes once to restore linux's entry parity
-   ; (rsp ≡ 8 mod 16 there, ≡ 0 here). each side exits by its own number;
-   ; the weak tail exits linux's way -- a link that rides freebsd carries
-   ; moonlibc's strong __ai_start, whose exit() goes through the one door. both
-   ; sides hand it a second word of 0: every kernel here answers the probe.
+   ; the link path (rung 3, love/holo/link.l): every input lands as object bytes (a .c
+   ; compiled here, a .o read off disk), crt0 rides first -- its text is the entry -- and
+   ; ldlink binds the static exe, no system linker. the entry hands the OS stack pointer
+   ; (argc at [rsp]) to __ai_start and exits with its answer if it ever returns. __ai_start
+   ; is weak here, the call-main tail every small link gets, so a libc object
+   ; (apps/moon/lib/moonlibc/, rung 4) can override it strong and unpack envp/auxv too: the
+   ; weak machinery is the whole switch, and there is no conditional anywhere.
+   ; the x64 entry serves both kernels (rung UV1): linux zeroes every register and lays argc
+   ; at [rsp]; freebsd hands the vector base in %rdi with rsp only aligned near it, sometimes
+   ; a pad word below argc -- so a zero rdi says linux, and the freebsd side pushes once to
+   ; restore linux's entry parity. each side exits by its own number, and both hand a second
+   ; word of 0.
    crt0 '((cmp r6 0)
            (br ne c0-fb)
            (mov r6 sp)
@@ -507,18 +459,15 @@
            (ld r6 r6 0)
            (call main)
            (mov r6 r0) (li r0 60) (sys))
-   ; the a64 twin, and it serves both kernels the way x64's does (rung UV1):
-   ; linux zeroes every register and lays argc at [sp], freebsd hands the vector
-   ; base in x0 with sp only near it -- a pad word below argc as often as not,
-   ; which is why a linux-shaped entry there is a coin flip: half the runs read
-   ; argc off the pad, find no program, and fall to stdin. So a zero x0 says
-   ; linux and sp is the vector; a non-zero x0 is the vector. Each side exits by
-   ; its own number (exit_group 93 / exit 1); a link riding freebsd carries
-   ; moonlibc's strong __ai_start, whose exit() goes through the one door.
-   ; the branch taken is also handed down in the second word: this arch's kernel
-   ; probe cannot run blind the way x64's can -- netbsd carries the number in the
-   ; svc immediate and freebsd sigills any immediate but zero -- so the freebsd
-   ; side answers 2 here and leaves only linux and netbsd to be asked.
+   ; the a64 twin, serving both kernels the way x64's does (rung UV1): linux zeroes every
+   ; register and lays argc at [sp], freebsd hands the vector base in x0 with sp only near
+   ; it, a pad word below argc as often as not -- so a zero x0 says linux and sp is the
+   ; vector, a non-zero x0 is the vector. each side exits by its own number (exit_group 93 /
+   ; exit 1).
+   ; the branch taken is handed down in the second word: this arch cannot probe blind the way
+   ; x64 can -- netbsd carries the number in the svc immediate and freebsd sigills any
+   ; immediate but zero -- so the freebsd side answers 2 and leaves linux and netbsd to be
+   ; asked.
    ; mov from sp must be lea -- orr reads xzr at 31.
    crt0-a64 '((cmp r0 0)
                (br ne c0a-fb)
@@ -548,29 +497,23 @@
               (ld r0 r0 0)
               (call main)
               (li r7 94) (sys))
-   ; the driver's libc (tolerance's other half): a link still owing strong
-   ; symbols after the given objects is the cue every cc answers by supplying
-   ; the runtime -- ours is moonlibc + the am math + the sys leaf, compiled from
-   ; the sources beside us and pulled member by need, archive-fashion: a member
-   ; whose every def the link already carries stays out, so a set bringing its
-   ; own am.o (love0's does) never meets a twin. the lane engages exactly where a
-   ; nom is owed; the -nostdlib family leaves it off whole. the
-   ; sources come from the toolchain root (mhome above), so an installed mooncc
-   ; pulls from its nest -- and owing symbols with no root in reach is its own
-   ; diagnostic below, never a silent miss.
-   ; the link came up short. noms that no input object defines and that no runtime
-   ; member could add: a misspelled name, a function declared and never defined, or
-   ; a `goto` to a label that is not there (gen spells the label main.<lbl> and it
-   ; reaches the symbol table as an undefined global, so an unresolvable label
-   ; arrives here rather than at the refusal it should be).
-   ; said here rather than left to holo's scare, which names a compiler-internal
-   ; label spelling with no cc: prefix -- and said about every owed nom at once,
-   ; not whichever the patcher reaches first.
+   ; the driver's libc: a link still owing strong symbols after the given objects is the cue
+   ; every cc answers by supplying the runtime -- ours is moonlibc + the am math + the sys
+   ; leaf, compiled from the sources beside us and pulled member by need, archive-fashion: a
+   ; member whose every def the link already carries stays out, so a set bringing its own
+   ; am.o (love0's does) never meets a twin. the lane engages exactly where a nom is owed;
+   ; the -nostdlib family leaves it off whole. the sources come from the toolchain root
+   ; (mhome above).
+   ; the link came up short: noms that no input object defines and that no runtime member
+   ; could add -- a misspelled name, a function declared and never defined, or a `goto` to a
+   ; label that is not there (gen spells the label main.<lbl>, so it reaches the symbol table
+   ; as an undefined global and arrives here rather than at the refusal it should be). said
+   ; here rather than left to holo's scare, and about every owed nom at once.
    (qfew ns) (mfew (map (n \ "'" + n + "'") ns))       ; a taste of the bag, each nom quoted
    (undie us) (udie 1 ("cc: undefined reference to " + qfew us))
-   ; every .a on the line: holo's ldarch resolves them by need, this reads them and
-   ; owns the sentence a reader gets when one will not open -- `cc: cannot open x`,
-   ; not the scare ldarch would raise, which names no file the user typed.
+   ; every .a on the line: holo's ldarch resolves them by need, this reads them and owns the
+   ; sentence a reader gets when one will not open -- `cc: cannot open x`, not ldarch's
+   ; scare.
    (arload srcs paths tgt)
     (? !(two? paths) ()
        (ldarch srcs
@@ -580,38 +523,28 @@
                               [p <>r]))
                     paths)
                tgt))
-   ; -- the runtime cache. a member must be compiled to know what it defines, so
-   ; the pull below cannot select without paying for all of them -- ~23s of the
-   ; ~23s a cold hello-world link costs. so the whole compiled runtime rides
-   ; out/cache/moon/<sha256>.a, one archive per (compiler, target), keyed on
-   ; everything that decides its bytes. the carried archives answer that for every
-   ; stock tree now (rtcarried), so what is left for this cache is the build itself --
-   ; tools/mkrt.l cutting the carried set under love0, which has none -- and a toolchain
-   ; edited past the stamp. an archive because the ranlib index is
-   ; what each member defines, written once and read back rather than recomputed
-   ; over 190 objects on every warm link -- and because one file is one
-   ; generation: whole the moment it lands, and countable when mcsweep asks
-   ; which generations to keep.
-   ; the compiler is one of those inputs and the costly one to get wrong -- a
-   ; stale entry is an old codegen worn silently, and the gates that compile
-   ; moonlibc by hand (test_raw, test_libc, test_fixpoint) would pass against it.
-   ; its identity is the baked image, which the wake strips from cmdline: we
-   ; cannot know which one we woke, so every *.image beside the love rides, by
-   ; name and stat. hashing the compiler's .l sources instead looks tighter and
-   ; is a hole -- edit gen.l, link once before the image catches up, and the
-   ; entry stored under the new sources holds the old image's codegen.
-   ; no identity, no cache: the digest is the only door, and a love with no image
-   ; in reach does not open it.
-   ; read at each call, never bound -- mhome's law, for mhome's reason.
+   ; -- the runtime cache. a member must be compiled to know what it defines, so the pull
+   ; below cannot select without paying for all of them -- most of the ~23 s a cold
+   ; hello-world link costs. so the whole compiled runtime rides out/cache/moon/<sha256>.a,
+   ; one archive per (compiler, target), keyed on everything that decides its bytes -- an
+   ; archive because the ranlib index is what each member defines, written once rather than
+   ; recomputed per warm link, and because one file is one generation. the carried archives
+   ; (rtcarried) answer every stock tree, so what is left for this cache is tools/mkrt.l
+   ; cutting that set under love0, and a toolchain edited past the stamp.
+   ; the compiler is one of those inputs and the costly one to get wrong -- a stale entry is
+   ; an old codegen worn silently, and the gates that compile moonlibc by hand (test_raw,
+   ; test_libc, test_fixpoint) would pass against it. its identity is the baked image, which
+   ; the wake strips from cmdline, so every *.image beside the love rides, by name and stat;
+   ; hashing the .l sources instead is a hole -- edit gen.l, link once before the image
+   ; catches up, and the entry holds the old image's codegen. no identity, no cache, and it
+   ; is read at each call.
    (sdir? st) (two? st && (st 2 & 61440) = 16384)
-   ; the cache seat is the build tree's own out/, never a home directory. who wants it:
-   ; tools/mkrt.l under love0, which carries no archives of its own (22 s of member
-   ; compiles against 0.2 s), and a toolchain tree edited past the carried stamp. both
-   ; are a checkout, and a checkout is what has an out/ -- so presence is the wrapper,
-   ; the way mhome reads its roots, and out/ itself is never created here.
+   ; the cache seat is the build tree's own out/, never a home directory: who wants it is a
+   ; checkout, and a checkout is what has an out/. presence is the wrapper, the way mhome
+   ; reads its roots, and out/ itself is never created here.
    (mcdir _)
     (: d "out/cache/moon/"
-       _ (sdir? (stat "b") && map (s \ mkdir s 493) '("out/cache" "out/cache/moon"))
+       _ (sdir? (stat "out") && map (s \ mkdir s 493) '("out/cache" "out/cache/moon"))
        (sdir? (stat d) && d))
    ; the input-name predicates, ahead of every reader of them.
    (dota? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 97))
@@ -620,14 +553,14 @@
    (dotim? p) (: n #p (6 < n && snip p (n - 6) n = ".image"))
    (dotcid? p) (: n #p (4 < n && snip p (n - 4) n = ".cid"))
    (dotrto? p) (: n #p (4 < n && snip p (n - 4) n = ".rto"))
-   ; the build tree keeps the images in the love's own directory, an installed
-   ; nest one rung over in lib/love/ -- the two seats mseat already knows.
-   ; not point-free: the mapped lambda reads `d` to build the path it hashes, so dropping
-   ; the parameter leaves that read free -- `;; missing d`, at the mooncc0 bake.
+   ; the build tree keeps the images in the love's own directory, an installed nest one rung
+   ; over in lib/love/ -- the two seats mseat already knows. not point-free: the mapped
+   ; lambda reads `d` to build the path it hashes, so dropping the parameter leaves that read
+   ; free.
    (mcims d) (map (f \ [f (mccid (d + f))]) (sort (filter dotim? (readdir d))))
-   ; a directory's whole text, names and bytes, sorted and recursive. the
-   ; headers are an input too: an edited stdio.h changes what moonlibc means, and
-   ; hashing the .c alone would not see it.
+   ; a directory's whole text, names and bytes, sorted and recursive. the headers are an
+   ; input too: an edited stdio.h changes what moonlibc means, and the .c alone would not see
+   ; it.
    (mctree d)
     (foldl (\ a f (: p (d + f)
                      st (stat p)
@@ -648,10 +581,9 @@
    ; one or the other of these and nothing else of the tree.
    (mcsrctext home) ((mctree (home + "include/")) + (mctree (home + "lib/")))
    (mcsrcshape home) ((mcshape (home + "include/")) + (mcshape (home + "lib/")))
-   ; a digest memoized under a shape -- mccid's law, one rung up from a file: the bytes are
-   ; the identity, and a stat says when to go read them. `mk` is the real read, taken only
-   ; on a miss; a touch re-reads and lands on the same digest, so a stale shape costs one
-   ; pass and no caller's answer moves. tag parts the memos sharing a shape.
+   ; a digest memoized under a shape -- mccid's law one rung up from a file: the bytes are
+   ; the identity, a stat says when to read them, `mk` is the real read. tag parts memos by
+   ; shape.
    (mcmemo tag shape mk)
     (: d (mcdir ())
        k (string? d && sha256 (tag + "\n" + shape))
@@ -663,18 +595,14 @@
              h)))
    (mcsrcid home)
     (mcmemo "moon-src 1" (mcsrcshape home) (\ _ (sha256 (mcsrctext home))))
-   ; the exe's PATH rides beside its content: two worktrees hold the same
-   ; cwd-relative include paths, and only the seat tells their headers apart.
-   ; the image is the one this session woke, which main.c pins as `love-image`.
-   ; the nom is data here, never a bare ref: a baked consumer folds its bare
-   ; globals at its own compile, and mooncc lives baked -- read `love-image`
-   ; straight and the image gets the bake session's answer wired in forever (a 0,
-   ; the bake egg-boots). (ev 'love-image) is the lookup that survives, and the
-   ; presence ask beside it is the same law -- the nom is pinned only when a
-   ; session woke something. unpinned is an egg boot or a love that does not say,
-   ; and every *.image beside the binary is the honest reading for both.
-   ; "<baked>" is the binary's own section: no file of its own, and the exe hash
-   ; above already carries its identity.
+   ; the exe's path rides beside its content: two worktrees hold the same cwd-relative
+   ; include paths, and only the seat tells their headers apart. the image is the one this
+   ; session woke, which main.c pins as `love-image` -- read as data, never a bare ref: a
+   ; baked consumer folds its bare globals at its own compile, and mooncc lives baked, so a
+   ; straight read would wire the bake session's 0 in forever. the presence ask beside it is
+   ; the same law -- unpinned is an egg boot or a love that does not say, and every *.image
+   ; beside the binary is the honest reading for both. "<baked>" is the binary's own section:
+   ; no file of its own, and the exe hash above already carries its identity.
    (mcid home)
     (: x (selfpath 0)
        d (string? x && cdir x)
@@ -690,17 +618,17 @@
        ab (: s (getenv "MOON_ABLATE") (string? s && 0 < #s ? ("\nabl " + s) ""))
        (!(two? ims) ? ()
           (sha256 ("moon-rt 2\n" + x + "\n" + (mccid x) + "\n" + show ims + "\n" + src + ab))))
-   ; an entry, read back and checked for its magic: the rename below lands it
-   ; whole, so a torn file cannot appear, and a mangled one is passed over rather
-   ; than linked. the (1 bytes) wrapper -- an empty entry is absence.
+   ; an entry, read back and checked for its magic: the rename below lands it whole, so a
+   ; torn file cannot appear and a mangled one is passed over. the (1 bytes) wrapper: empty
+   ; is a miss.
    (mcget d f mag)
     (: r (uread (d + f))
        s (two? r ? <>r "")
        (#mag <= #s && snip s 0 #mag = mag ? [1 s] ()))
-   ; write beside the entry, then rename onto it: two links racing under make -j
-   ; land the same bytes either way, and neither can read a half-written one.
-   ; every failure here is silent by design -- a read-only home costs speed, and
-   ; a cache is never owed a link's correctness.
+   ; write beside the entry, then rename onto it: two links racing under make -j land the
+   ; same bytes either way, and neither can read a half-written one. every failure here is
+   ; silent by design -- a read-only home costs speed, and a cache is never owed a link's
+   ; correctness.
    (mcput d f bs)
     (: p (d + f)
        t (p + "." + show (getpid ()))
@@ -709,10 +637,9 @@
        _ (hot? q && !(rename t p) ? () (unlink t))       ; anything but (): the rename lost
        ())
    ; a file's identity is its bytes: a relink that changed nothing is not a different
-   ; compiler, and an inode cannot say so. reading a whole exe per link would swamp
-   ; the door it serves, so the hash is memoized under the stat -- one read per
-   ; relink, a 69-byte one per link after it. with no cache in reach the stat stands
-   ; in, which keys nothing worse than itself.
+   ; compiler, and an inode cannot say so. reading a whole exe per link would swamp the door
+   ; it serves, so the hash is memoized under the stat; with no cache in reach the stat
+   ; stands in.
    (mccid p)
     (: st (stat p)
        d (mcdir ())
@@ -725,27 +652,21 @@
                 (: h (sha256 <>r)
                    _ (string? k && mcput d (k + ".cid") ("cid1 " + h + "\n"))
                    h)))))
-   ; the bound, and the cache keeps it itself: swept on every link, hit or miss,
-   ; so a folder grown fat under an older policy trims on the next one rather than
-   ; waiting for a rebuild to notice it. nothing here knows which generations are
-   ; dead, so count decides -- count and not age, because the rate is the tree's
-   ; own: a day of rebuilds mints more generations than a month of use, and a
-   ; clock cannot tell those apart. the order is by use, which is what the touch
-   ; on a hit is for -- a write time would evict the identity you link with daily
-   ; in favour of the ones you minted once.
+   ; the bound, and the cache keeps it itself: swept on every link, hit or miss, so a folder
+   ; grown fat under an older policy trims on the next one. nothing here knows which
+   ; generations are dead, so count decides -- count and not age, because a day of rebuilds
+   ; mints more generations than a month of use. the order is by use, which is what the touch
+   ; on a hit is for: a write time would evict the identity you link with daily.
    (mcsweep d)
     (: mckeep 32                                       ; ~400K each, so ~13M held.
-       ; a member object is a rung finer and there are ~600 to a generation, so its
-       ; own room is two of those -- the state you are on and the one you flip back
-       ; to. ~2.5K each, so ~3M held.
+       ; a member object is a rung finer and there are ~600 to a generation, so its own room
+       ; is two of those -- the state you are on and the one you flip back to. ~2.5K each.
        mckeepo 1200
-       ; the live set is one generation per (worktree, lane, target) -- a tree
-       ; carries the shim's love+mooncc.image and the build's love0+mooncc0.image
-       ; as two distinct compilers -- so the room here is deliberate, not slack.
-       ; three shapes are kept -- the archives, the members they index, and the .cid
-       ; memos naming the compiler that cut them -- each bounded on its own count.
-       ; Anything else goes: a pass that cannot say which generations are dead can
-       ; still say which shapes are.
+       ; the live set is one generation per (worktree, lane, target) -- a tree carries the
+       ; shim's love+mooncc.image and the build's love0+mooncc0.image as two distinct
+       ; compilers -- so the room here is deliberate. three shapes are kept: the archives,
+       ; the members they index, and the .cid memos naming the compiler that cut them, each
+       ; bounded on its own count. anything else goes.
        _ (foldl (\ a f (? (dota? f || dotcid? f || dotrto? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
        (ages pk) (foldl (\ a f (: st (stat (d + f))
                                   (pk f && two? st ? (a + [[(st 1) f]]) a)))
@@ -758,33 +679,28 @@
        _ (old dota? mckeep)
        _ (old dotrto? mckeepo)
        (old dotcid? mckeep))
-   ; the compiled runtime as one archive: the cache when it can answer, the
-   ; compiler otherwise -- and the compile is what fills the cache. a cache that
-   ; cannot open is invisible, and the link is the one that happens today, at
-   ; today's price.
-   ; the pure runtime identity: names and bytes of the headers + lib sources,
-   ; nothing of the machine -- what tools/mkrt.l stamps beside the carried
-   ; archives, and what a disk home must hash to for them to serve it. (mcid
-   ; below is a cache key and mixes in the binary's own path and stats; this
-   ; one must travel.)
-   ; the VALUE travels, so the formula is fixed: tools/mkrt.l stamps this number beside
-   ; the archives and a link compares against the stamp. the memo is around it, never in it.
+   ; the compiled runtime as one archive: the cache when it can answer, the compiler
+   ; otherwise -- and the compile is what fills the cache. a cache that cannot open is
+   ; invisible.
+   ; the pure runtime identity: names and bytes of the headers + lib sources, nothing of the
+   ; machine -- what tools/mkrt.l stamps beside the carried archives, and what a disk home
+   ; must hash to for them to serve it (mcid below is a cache key and mixes in the binary's
+   ; own path and stats; this one must travel). the value travels, so the formula is fixed
+   ; and a link compares against the stamp; the memo is around it, never in it.
    (rtcid home)
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
             (\ _ (sha256 ("moon-rtc 1\n" + (mcsrctext home)))))
-   ; the carried runtime: the build lays each ISA's compiled archive beside the
-   ; source blob (tools/mkrt.l; inle/src.c answers runtime-gz), so a link
-   ; owes no member compiles -- the bare door's ~28 s becomes a read. only when the
-   ; identity matches: the blob lane's identity is the carried source, a disk home
-   ; serves iff its slice hashes to the stamped id (a laid seed tree does; an edited
-   ; dev tree does not, and falls through to the compile).
+   ; the carried runtime: the build lays each ISA's compiled archive beside the source blob
+   ; (tools/mkrt.l; inle/src.c answers runtime-gz), so a link owes no member compiles -- the
+   ; bare door's ~28 s becomes a read. only when the identity matches: the blob lane's
+   ; identity is the carried source, and a disk home serves iff its slice hashes to the
+   ; stamped id (a laid seed tree does; an edited dev tree does not, and falls through to the
+   ; compile).
    ; the refusal is the target's, not the kernel's. one archive per ISA, all three cut
-   ; under -os linux -- and that pin does not reach the bytes, because impl.h parts the
-   ; kernels at run time on __ai_osv. os.c is the only member with an OS predefine in it
-   ; and its arms sit under #ifndef LvOsTranslate, so on x64 and arm64 linux, freebsd and
-   ; netbsd compile to the same object. riscv is where that stops: no translation tables,
-   ; so os.c reads -os and only linux has an answer -- the BSDs there owe a compile, which
-   ; refuses by #error rather than quietly linking linux's.
+   ; under -os linux, and that pin does not reach the bytes: impl.h parts the kernels at run
+   ; time on __ai_osv, and os.c, the only member with an OS predefine in it, sits under
+   ; #ifndef LvOsTranslate. riscv is where that stops -- no translation tables, so os.c reads
+   ; -os and only linux has an answer; the BSDs there owe a compile, which refuses by #error.
    (rtcarried home tgt os)
     (? (os = 'none) ()                                     ; freestanding owes no runtime
        (tgt = 'rv64 && elem os '(freebsd netbsd)) ()
@@ -793,19 +709,14 @@
              (: z (runtime-gz nm)
                 (? !(string? z) ()
                    (: ok (string? home ? ((rtcid home) = (runtime-gz "id")) 1)
-                      ; the carried bytes are a deflate stream -- no size hint,
-                      ; so inflate counts it first (~4ms on half a megabyte,
-                      ; against the compile it stands in for). inflate does
-                      ; not validate, so the magic is the check: bytes that are
-                      ; not a stream decode to nonsense, not to (), and mcget
-                      ; asks the same question of a cache file.
+                      ; the carried bytes are a deflate stream with no size hint, so inflate
+                      ; counts it first. inflate does not validate, so the magic is the
+                      ; check: bytes that are not a stream decode to nonsense, not ().
                       a (ok && inflate z 0)
                       (string? a && 8 <= #a && snip a 0 8 = "!<arch>\n" ? a ())))))))
    ; the carried archive first, and the whole default lane ends there: what the binary
-   ; carries is the stamped truth, so a cache entry could only ever agree with it. asking
-   ; the cache first meant every stock link built a key -- the tree digest, the exe digest,
-   ; a read that must miss, a sweep -- to be told what rtcid had already settled. the key
-   ; is now cut where it is used: on the lane the carried bytes refused.
+   ; carries is the stamped truth, so a cache entry could only ever agree with it. the key is
+   ; cut where it is used, on the lane the carried bytes refused.
    (rtarch home tgt os vb)
     (: cr (rtcarried home tgt os)
        (? (string? cr) cr
@@ -824,13 +735,11 @@
              bs)))
    ; the roster, ahead of any compile: [name source includes] a member, an empty source
    ; naming the one that is laid rather than compiled. apart from the compile so a
-   ; warmer can take a slice of it where the archive lane takes all of it.
-   ; moonlibc is a tree: every .c directly under lib/moonlibc/ and every .c one level down
-   ; (string/, ..), one function to a file where the file-scope state allows. one level,
-   ; not a walk -- the depth is the vocabulary, and a deeper tree would say nothing. the
-   ; member names flatten that tree with _: time.c and sys/time.c are two members of one
-   ; basename, and an archive resolves by name alone. math/ is one of those directories
-   ; and wears no prefix of its own.
+   ; warmer can take a slice of it where the archive lane takes all of it. moonlibc is a
+   ; tree: every .c directly under lib/moonlibc/ and every .c one level down (string/, ..),
+   ; one function to a file where the file-scope state allows -- one level, not a walk. the
+   ; member names flatten that tree with _, since an archive resolves by name alone and
+   ; time.c and sys/time.c share a basename.
    (rtplan home tgt os vb)
     (: disk (string? home)                ; () home = the blob lane: paths are vb keys
        ndir (disk ? (home + "lib/moonlibc/") "lib/moonlibc/")
@@ -864,8 +773,8 @@
    ; one member, through a cache cut a rung finer than the archive's: the same tree id
    ; and target, plus the member's own name. what that buys is a fan -- ~600 compiles
    ; that read nothing of each other, so any number of children can fill this and the
-   ; parent reads every one of them back. an edit anywhere in the slice still moves the
-   ; id and so every member, which is the archive key's law kept, not loosened.
+   ; parent reads every one back. an edit anywhere in the slice still moves the id, and so
+   ; every member.
    (rtmem1 tgt os vb id cd e)
     (: nm (e 0) src (e 1) is (e 2)
        k (string? cd && string? id
@@ -877,19 +786,18 @@
                         (string (cc-objbytes src (rtflags tgt os vb is))))
              _ (string? k && mcput cd (k + ".rto") ("rto1\n" + b))
              [nm b])))
-   ; every member compiled, ready to index -- the implicit runtime compiles like
-   ; everything else, our own sources reaching only our own headers. the id is the
-   ; caller's: it already cut one to key the archive, and mcid walks the slice.
+   ; every member compiled, ready to index -- our own sources reaching only our own headers.
+   ; the id is the caller's: it already cut one to key the archive, and mcid walks the slice.
    (rtmems home tgt os vb id)
     (: cd (string? id && mcdir ())
        (map (e \ rtmem1 tgt os vb id cd e) (rtplan home tgt os vb)))
    ; fill the member cache for one residue of the roster, over every target named --
    ; what a forked child runs. a child's whole answer is the entries it writes, so
-   ; nothing is returned; the parent reads them back through rtmems. with no cache in
-   ; reach there is nowhere to put the work, and the whole call is a no-op.
+   ; nothing is returned and the parent reads them back through rtmems; with no cache in
+   ; reach the call is a no-op.
    ; the residue is contiguous runs, not one member in w: cpp.l's header memo keys on a
-   ; TU's first include and holds three, so roster neighbours hit it where a stride misses
-   ; -- 597 members cost 682 G instructions split sixteen ways, 490 G taken in runs.
+   ; TU's first include and holds three, so roster neighbours hit it where a stride misses --
+   ; 597 members cost 682 G instructions split sixteen ways, 490 G taken in runs.
    (rtwarm home tgts os vb w i)
     (: run 8                     ; long enough to keep the memo, short enough to spread
        id (string? home && mcid home)
@@ -903,23 +811,21 @@
    (rtpull srcs tgt os nostd vb)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
-       ; -nostdlib and friends: no runtime by request, so there is nothing left to
-       ; consult and an owed nom is undefined, full stop -- and this is the lane
-       ; where a bad name is likeliest, freestanding code having no libc to have meant.
+       ; -nostdlib and friends: no runtime by request, so an owed nom is undefined, full stop
+       ; -- and this is the lane where a bad name is likeliest, freestanding code having no
+       ; libc.
        _ (nostd && two? owed && undie owed)
        home (two? owed && !nostd && mhome ())
-       ; owed symbols and no runtime in reach: both facts, the certain one first.
-       ; leading with the absent toolchain prescribes the wrong repair for a
-       ; misspelled label, and the two conditions read identically from here.
+       ; owed symbols and no runtime in reach: both facts, the certain one first -- leading
+       ; with the absent toolchain prescribes the wrong repair for a misspelled label.
        _ (two? owed && !(string? home) && !vb
           && udie 1 ("cc: undefined reference to " + qfew owed
                      + "; no runtime in reach to supply it either (looked in "
                      + mfew (mroots ()) + ") -- check the spelling, then the nest"))
        (? (nostd || (!(string? home) && !vb)) ()
           (: pr (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach)
-             ; the owe at termination is the answer: no member defines anything
-             ; left in it, so it is exactly the set nothing anywhere defines --
-             ; said here, whole, rather than one nom at a time by whichever holo
+             ; the owe at termination is the answer: exactly the set nothing anywhere
+             ; defines, said here whole rather than one nom at a time by whichever holo
              ; scares about first.
              _ (two? <>pr && undie <>pr)
              <pr)))
@@ -927,8 +833,8 @@
    ; runtime the same members compiled for wasm and pulled by need, and one function
    ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
    ; __ai_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
-   ; its answer through the import; the weak default calls main outright.
-   ; ..or a container with the blobs behind the text (wasmfn.l's wasm-tu-read)
+   ; its answer through the import; the weak default calls main outright. ..or a container
+   ; with the blobs behind the text (wasmfn.l's wasm-tu-read).
    (wasm-tu text) (: r (wasm-tu-read text) (? (two? r) r (udie 1 "cc: not a wasm object")))
    crt0-wasm '(((label _start) (la r0 __ai_osstack) (call __ai_start) (mov r1 r0) (li r0 231) (call __ai_sys) (ret)
                 (label __ai_start) (push lr) (lea r1 r0 8) (ld r0 r0 0) (call main) (pop lr) (ret))
@@ -1002,27 +908,24 @@
                                                 (udie 1 ("cc: cannot open " + f))))
                          (udie 2 ("cc: not a .c/.o/.a input: " + f))))
                  (filter (f \ !(dota? f)) ins))
-       ; an arm32 target has no hosted lane -- there is no OS on this side of the
-       ; toolchain that runs a thumb exe, so every thumb link is a board's: the
-       ; image lays at the address the core boots from, and no crt0 rides first
-       ; because the first text byte has to be the port's own vector table.
+       ; an arm32 target has no hosted lane -- nothing on this side of the toolchain runs a
+       ; thumb exe -- so every thumb link is a board's: the image lays at the address the
+       ; core boots from, and no crt0 rides first: the first text byte is the vector table.
        arm? (arm32? tgt)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
        _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
        ; the two ways --emit-relocs cannot be answered, said here rather than left to the
-       ; linker: a 64-bit seat has its own table under -pie, and thumb2's `la` is a
-       ; MOVW/MOVT pair -- an address split across two immediates, which no loader slides
-       ; by adding a base. thumb1 and thumb2sp pool it through a relocatable word.
+       ; linker: a 64-bit seat has its own table under -pie, and thumb2's `la` is a MOVW/MOVT
+       ; pair, an address split across two immediates that no loader slides. thumb1 and
+       ; thumb2sp pool it.
        _ (relo && !arm? && udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie")
        _ (relo && tgt = 'thumb2 && udie 2 "cc: --emit-relocs cannot answer -t thumb2: its `la` splits an address across MOVW/MOVT, which no loader can slide -- -t thumb2sp pools it")
-       ; the map the board's image lays under. -Ttext alone is the one-region
-       ; part (mps2's SSRAM, where code and data share a memory): everything at
-       ; org, and the file is the image. -Tdata splits it the way every xip mcu
-       ; wants -- code and literals run from flash where they are stored, .data
-       ; runs from sram but is stored after them, and the port's startup copies
-       ; it across at boot off __data_load__. a board with a real map (a ROM
-       ; header at a fixed offset, a lane order of its own) writes its own link
-       ; driver over ldbare32 instead, the way free/klink.l does over ldkern.
+       ; the map the board's image lays under. -Ttext alone is the one-region part (mps2's
+       ; SSRAM, where code and data share a memory): everything at org, and the file is the
+       ; image. -Tdata splits it the way every xip mcu wants -- code and literals run from
+       ; flash where they are stored, .data runs from sram but is stored after them and the
+       ; port's startup copies it across at boot off __data_load__. a board with a real map
+       ; writes its own link driver over ldbare32, the way free/klink.l does over ldkern.
        runs (charm? dorg ? [['at org 'text 'rodata 'nifs]
                             ['copy dorg 'data 'bss]]
                            [['at org 'text 'rodata 'data 'nifs 'bss]])
@@ -1054,47 +957,35 @@
                           _ (d < b || udie 2 usage)
                           (go (i + 1) (acc * b + d) b)))
        (hex ? (go 2 0 16) (go 0 0 10)))
-   ; the flag scan: -c, -pie, -t tgt / -ttgt, -Ttext addr, -I dir / -Idir,
-   ; -D def / -Ddef, -o out; every other bare arg is an input. -pie links an
-   ; et_dyn static-pie (the linker slides its abs64 pointers at startup); the
-   ; default is the fixed-base et_exec. -Ttext lays the image at addr instead
-   ; of the classic base (the bare-metal lane; it forces the link path like
-   ; -pie). the advisory cc families ride through ignored (tol? below), the
-   ; -nostdlib family turns the driver's libc off (n9 -- the runtime pull in
-   ; cc-link), and any other dash arg refuses. -> (c idirs defs out ins tgt
-   ; pie org nostd).
+   ; the flag scan: -c, -pie, -t tgt / -ttgt, -Ttext addr, -I dir / -Idir, -D def / -Ddef, -o
+   ; out; every other bare arg is an input. -pie links an et_dyn static-pie (the linker
+   ; slides its abs64 pointers at startup); the default is the fixed-base et_exec. -Ttext
+   ; lays the image at addr instead of the classic base (the bare-metal lane; it forces the
+   ; link path like -pie). the advisory cc families ride through ignored (tol? below), the
+   ; -nostdlib family turns the driver's libc off, and any other dash arg refuses.
    (glu? a ch) (2 < #a && a 0 = 45 && a 1 = ch)
-   ; the cc-driver tolerance: every cc accepts the advisory families -- warnings,
-   ; -O, -g, -pipe, -std= (we speak the one dialect we speak), -static (the
-   ; output already is), the -f codegen-hygiene family -- so `CC=mooncc` drives
-   ; a make recipe written for gcc/clang unchanged. what would change the
-   ; artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp, (their payload is
-   ; real arguments; dropping them is the silent no-op wearing a cc face).
+   ; the cc-driver tolerance: every cc accepts the advisory families -- warnings, -O, -g,
+   ; -pipe, -std= (we speak the one dialect we speak), -static (the output already is), the
+   ; -f codegen-hygiene family -- so `CC=mooncc` drives a make recipe written for gcc/clang
+   ; unchanged. what would change the artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp,,
+   ; whose payload is real arguments.
    (pfx? a p) (: n #p (n <= #a && snip a 0 n = p))
-   ; -lm and its family ride through too, and the reason is particular to us: the
-   ; driver pulls its runtime by need, so the libc/libm/libdl a recipe asks for is
-   ; already in the artifact before it asks. a name we cannot satisfy does not go
-   ; quiet either -- it lands at the link as a named undefined reference, the same
-   ; sentence a missing archive gets -- and a real third-party library still has its
-   ; door: name the .a as an input. -L likewise: we search no library path, and
-   ; saying so by refusing the whole compile helps nobody. glued only (glu? wants
-   ; a third charm), so a bare `-l` still refuses rather than eating the next word
-   ; as a library name and the word after it as an input.
+   ; -lm and its family ride through too: the driver pulls its runtime by need, so the
+   ; libc/libm/libdl a recipe asks for is already in the artifact before it asks. a name we
+   ; cannot satisfy lands at the link as a named undefined reference, and a real third-party
+   ; library still has its door -- name the .a as an input. -L likewise: we search no library
+   ; path. glued only (glu? wants a third charm), so a bare `-l` refuses rather than eating
+   ; the next word as a library name.
    ; -- the dialects ----------------------------------------------------------------
-   ; -std= is loud, and used to ride the tolerated family. That is the wrong answer for
-   ; the one flag that says what language the input is: reading one dialect as another, or
-   ; an unknown word as either, is worse than refusing.
-   ; `moon` is ours and it is the default -- modern C plus the extensions we can add without
-   ; contradicting it (struct labels today, borrowed from HolyC). Every one of them is
-   ; syntax C rejects outright, so moon is a strict superset: no C program means anything
-   ; different here, which is the whole licence for defaulting to it.
-   ; `c` is the fence for when that matters: strict C, no extensions, at whatever iteration
-   ; we hover around (C11, doc/misc/moon-c-gaps.md). The iso names are all one dialect -- we do
-   ; not distinguish them from a codegen point of view -- so they differ only in what we can
-   ; say we accept, and the bare `c` is the honest spelling of that.
-   ; no `holyc` row. It named one borrowed extension and would have refused u0, i64 and
-   ; class -- a parse error on line 1 of anything actually HolyC, which is the one input
-   ; that would reach for the name. It comes back when it is true.
+   ; -std= is loud rather than tolerated: it says what language the input is, and reading one
+   ; dialect as another, or an unknown word as either, is worse than refusing.
+   ; `moon` is ours and the default -- modern C plus the extensions we can add without
+   ; contradicting it (struct labels today, from HolyC). every one is syntax C rejects
+   ; outright, so moon is a strict superset, which is the licence for defaulting to it.
+   ; `c` is the fence: strict C, no extensions, at whatever iteration we hover around (C11,
+   ; doc/misc/moon-c-gaps.md), and the iso names are all one dialect to codegen, so they
+   ; differ only in what we can say we accept. no `holyc` row -- it named one borrowed
+   ; extension and would refuse u0, i64 and class, a parse error on line 1 of real HolyC.
    stds {"moon" 'moon
          "c" 'c "c89" 'c "c90" 'c "c99" 'c "c11" 'c "c17" 'c "c18" 'c "c23" 'c
          "gnu89" 'c "gnu90" 'c "gnu99" 'c "gnu11" 'c "gnu17" 'c "gnu18" 'c "gnu23" 'c}
@@ -1102,10 +993,9 @@
    ; sorted, because `keys` answers hash order -- a usage line that reshuffles itself
    ; between builds is a worse sentence than an alphabetical one.
    (stdnames _) (ujoin (sort (keys stds)))
-   ; a pre-pass, never a sixteenth accumulator. `flags` carries fifteen curried slots
-   ; across twenty-four call sites, and (f) == f -- so one mistyped site would hand back a
-   ; closure instead of a result, in silence. -std= interacts with nothing else on the line,
-   ; so it comes off the line here and the walk below keeps the arity it has.
+   ; a pre-pass, never one more accumulator on the walk below: -std= names the language and
+   ; interacts with nothing else on the line, so it comes off the line before the walk reads
+   ; it.
    (std-take as)                                   ; -> (dialect args-without-std)
     (: (go l dia acc)
         (? !(two? l) [dia (rev acc)]
@@ -1125,33 +1015,28 @@
              pfx? a "-f" || glu? a 108 || glu? a 76 ||
              (pfx? a "-W" &&
               !(pfx? a "-Wl," || pfx? a "-Wa," || pfx? a "-Wp,")))
-   ; the -nostdlib family: freestanding on any cc's surface -- the driver
-   ; supplies no runtime, and an owed symbol is an undefined reference outright
-   ; -- there is nothing left to consult, so rtpull says so rather than pulling.
+   ; the -nostdlib family: freestanding on any cc's surface -- the driver supplies no
+   ; runtime, and an owed symbol is an undefined reference, so rtpull says so rather than
+   ; pulling.
    (nostd? a) (a = "-nostdlib" || a = "-nostartfiles" ||
                a = "-nodefaultlibs" || a = "-ffreestanding")
    (dirn d) (: n #d (? !n d (d (n - 1) = 47) d (d + "/")))
    (obase p) (: n #p                               ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (p k = 47 ? (k + 1) r)) (snip p r (n - 1)))
                 (go 0 0 + "o"))
-   ; one tablet, not fifteen curried slots. The walk used to carry every accumulator by
-   ; position across twenty-four call sites: adding a flag meant editing all of them, and a
-   ; slip put the right value in the wrong slot -- in silence, since (f) == f makes a short
-   ; call a closure rather than an error. Now a flag is one `pin` at its own arm and nothing
-   ; anywhere else, and the reader asks for it by name. -std= came off this walk for exactly
-   ; the hazard the tablet retires; it stays a pre-pass because it names the language and
-   ; belongs before the line is read at all.
+   ; one tablet, not a row of positional accumulators: a flag is one `pin` at its own arm and
+   ; nothing anywhere else, and the reader asks for it by name. -std= is a pre-pass instead,
+   ; because it names the language and belongs before the line is read at all.
    ; the three lists (is ds ins) collect reversed and are righted at the end; every other key
    ; is last-one-wins.
    ; the one helper that is not already a primitive: prepend onto a keyed list. `pin`
    ; answers its tablet, so every arm below is a plain pin.
    (fpush t k v) (pin t k (v . t k))
-   ; every key, seeded -- and this is the manifest. The consumers destructure the set in
+   ; every key, seeded -- and this is the manifest. the consumers destructure the set in
    ; their own parameter, and a map pattern matches on presence: a key pinned only when its
    ; flag appears would fail to match exactly when the flag was absent, and the whole call
-   ; would answer the zero point. Seeding also puts the flag set in one readable place, which
-   ; the positional walk had and the bare tablet lost. it is not a wrapper on `{}`: the
-   ; literal has to be complete and it is wanted at two sites, so it is spelled once.
+   ; would answer the zero point. the literal has to be complete and is wanted at two sites,
+   ; so it is spelled once rather than wrapped on `{}`.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia}
    (flags as t)
@@ -1163,9 +1048,8 @@
        (: a <as r >as
           (? (a = "-c") (flags r (pin t 'c 1))
              ; the same string love answers, because they are one artifact: mooncc is a
-             ; verb on the love binary, not a separate program, and a build that reported
-             ; two versions would be reporting a thing that cannot happen. `love-version`
-             ; is that one id (the Makefile computes it: ./VERSION plus a VCS suffix).
+             ; verb on the love binary, not a separate program, and two reported versions
+             ; would report a thing that cannot happen.
              (a = "--version" || a = "-v")
               (: _ (puts ("mooncc (love " + love-version + ")")) _ (putc 10) (quit 0))
              (a = "--help" || a = "-h")
@@ -1173,8 +1057,7 @@
              (a = "-pie") (flags r (pin t 'pie 1))
              ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
              ; linked image, so a loader placing it at a base of its own can slide them.
-             ; the arm32 lane only -- ldlink's -pie already answers this on the 64-bit
-             ; seats, through its own table and our startup.
+             ; the arm32 lane only -- ldlink's -pie answers this on the 64-bit seats.
              (a = "--emit-relocs") (flags r (pin t 'relo 1))
              (a = "-I") (two? r ? (flags >r (fpush t 'is <r)) (udie 2 usage))
              (a = "-D") (two? r ? (flags >r (fpush t 'ds <r)) (udie 2 usage))
@@ -1187,17 +1070,14 @@
              ; which is what every xip part needs and what -Ttext alone cannot say.
              (a = "-Tdata") (two? r ? (flags >r (pin t 'dorg (tonum <r))) (udie 2 usage))
              ; -fno-inline bars the splice, fn-wide and TU-wide -- the same door
-             ; __attribute__((noinline)) opens one name at a time. it is an instrument
-             ; before it is an optimization flag: a splice rewrites the code you are
-             ; reading into its caller, so comparing one function against another cc's
-             ; needs a way to say don't. gcc's -fno-inline-functions is the same word.
+             ; __attribute__((noinline)) opens one name at a time. an instrument before it is
+             ; an optimization flag; gcc's -fno-inline-functions is the same word.
              (a = "-fno-inline" || a = "-fno-inline-functions")
               (flags r (pin t 'ni 1))
              ; -freadme=file -- plain text into the output's `.love.README` section, mapped by
-             ; nothing, for whoever opens the binary. The source is already in our artifact,
-             ; so what a reader lacks is not more data but a page telling them where to stand.
-             ; a link flag: with -c there is no output ELF to carry it and it is ignored.
-             ; ahead of tol?, which swallows every other -f.
+             ; nothing, for whoever opens the binary. a link flag: with -c there is no output
+             ; ELF to carry it and it is ignored. ahead of tol?, which swallows every other
+             ; -f.
              (pfx? a "-freadme=")
               (: f (snip a 9 #a) rt (uread f)
                  (two? rt ? (flags r (pin t 'rdme <>rt))
@@ -1205,74 +1085,64 @@
              (glu? a 73) (flags r (fpush t 'is (snip a 2 #a)))
              (glu? a 68) (flags r (fpush t 'ds (snip a 2 #a)))
              (glu? a 116) (flags r (pin t 'tgt (totgt (snip a 2 #a))))
-             ; -nostdinc's whole job is done by design now: the /usr/include
-             ; tail is gone, our headers are the only standard set, so a header
-             ; we do not carry refuses either way. accepted for CC= recipes.
+             ; -nostdinc's whole job is done by design now: our headers are the only standard
+             ; set, so a header we do not carry refuses either way. accepted for CC= recipes.
              (a = "-nostdinc") (flags r t)
              ; -ffreestanding is the one member of the -nostd* family that says
              ; something about the language and not just the link: it makes the
-             ; implementation freestanding, and __stdc_hosted__ is how the
-             ; standard lets a source ask. love.c asks exactly that, to choose
-             ; the w^x mmap arena over the freestanding heap copy -- so without
-             ; this a kernel build took the hosted lane and reached for sysconf.
-             ; it rides as a define (cpp applies -D after its predefines, so this
-             ; overrides). not the rest of the family: -nostdlib alone is a
-             ; hosted program that simply supplies its own runtime, and test_raw
-             ; is exactly that. freestanding also has no OS, so it pins -os none
-             ; (a later explicit -os wins, pin over pin -- nothing under free/
-             ; or inle/ reads an OS macro, so the kernel and the boards lose a
-             ; __linux__ they never asked for).
+             ; implementation freestanding, and __stdc_hosted__ is how the standard lets a
+             ; source ask -- love.c asks exactly that, to choose the w^x mmap arena over the
+             ; freestanding heap copy. it rides as a define (cpp applies -D after its
+             ; predefines, so this overrides). not the rest of the family: -nostdlib alone is
+             ; a hosted program supplying its own runtime (test_raw). freestanding also has
+             ; no OS, so it pins -os none, and a later explicit -os wins.
              (a = "-ffreestanding")
               (flags r (pin (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1) 'os 'none))
              (nostd? a) (flags r (pin t 'nostd 1))
              ; -x names the language of what follows, which is the whole reason an input
-             ; may arrive with no suffix to read. loud like -std=: `-x c++` and
-             ; `-x assembler` name compilers we are not, and taking either for C would
-             ; read one language as another -- the hazard -std= came off tol? for.
+             ; may arrive with no suffix to read. loud like -std=: `-x c++` and `-x
+             ; assembler` name compilers we are not, and taking either for C would read one
+             ; language as another.
              (a = "-x") (two? r ? (xlang? <r ? (flags >r t) (udie 2 (xdie <r))) (udie 2 usage))
              (glu? a 120) (: w (snip a 2 #a)
                              (xlang? w ? (flags r t) (udie 2 (xdie w))))
              (tol? a) (flags r t)
              ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
-             ; input, the source on stdin. every configure probe on earth writes
-             ; `cc -x c -c -o /dev/null -` before it trusts a flag, and a cc that cannot
-             ; be asked gets answered by the fallback -- ours is common.mk's, which
-             ; then hands us the one -std= spelling we refuse.
+             ; input, the source on stdin, which every configure probe writes before it
+             ; trusts a flag.
              (a = "-") (flags r (fpush t 'ins a))
              (0 < #a && a 0 = 45) (udie 2 usage)
              (flags r (fpush t 'ins a)))))
    ; every cc says its sentence, the internal ones too: gen and holo raise noms
    ; (musttail-not-a-tail, cs-unsaved, link-undef) that would otherwise reach the reader
-   ; as a bare love debug note -- no cc: prefix, nothing naming the input. it goes on
+   ; as a bare love debug note, with no cc: prefix and nothing naming the input. it goes on
    ; here rather than at the seat so every door below says the same thing.
-   ; moon-run is the in-image door: it answers the status charm, so a caller holding
-   ; this image compiles again after a failed compile instead of dying with it -- the
-   ; warm-compiler lane, where the cat is read once and every cc after it is free.
-   ; 'leave is the exit door, not a fault (apps/kore/u.l's floor, which a udie
-   ; anywhere in here rides out on): taking it as an internal raise would print a
-   ; nonsense sentence over every usage error and flatten its 2 to a 1.
+   ; moon-run is the in-image door: it answers the status charm, so a caller holding this
+   ; image compiles again after a failed compile instead of dying with it.
+   ; 'leave is the exit door, not a fault (apps/kore/u.l's floor, which a udie anywhere in
+   ; here rides out on): taking it as an internal raise would print a nonsense sentence over
+   ; every usage error and flatten its 2 to a 1.
    (moon-run as)
     (trap (x \ (: r (moon-cc x) (charm? r ? r 0))) as
           (\ a b (a = 'leave ? b
                     (say err ("cc: internal error: " + show a + " " + show b + "\n"),
                      flush err,
                      1))))
-   ; moon-main is the shims' door and quits, exactly as it always has -- the six -e
-   ; drives and svalbard's verb table call it straight, and a compile ends the same way
-   ; through all of them.
+   ; moon-main is the shims' door and quits: the six -e drives and svalbard's verb table call
+   ; it straight, and a compile ends the same way through all of them.
    (moon-main as) (quit (moon-run as))
    (moon-cc as)
-    ; the default target is the ground we stand on: love-arch (the C boot's pin)
-    ; names the running binary's arch, so a native mooncc emits native code and
-    ; -t stays what it always was, the cross flag. unknown grounds keep x64.
+    ; the default target is the ground we stand on: love-arch (the C boot's pin) names the
+    ; running binary's arch, so a native mooncc emits native code and -t stays the cross
+    ; flag.
     (: sd (std-take as)
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
        ntv (elem love-arch '(x64 a64 rv64) ? love-arch 'x64)     ; unknown grounds keep x64
        f (flags as9 (fseed ntv dia))       ; the flag set, seeded whole
-       ; normalise in the tablet, not at a reader. -I dirs want a trailing slash, and the
-       ; consumers now take `f` itself -- so a `dirn` applied on the way out of one reader
-       ; would leave every other consumer holding the raw list. one pin, before anything reads.
+       ; normalise in the tablet, not at a reader. -I dirs want a trailing slash and the
+       ; consumers take `f` itself, so a `dirn` on the way out of one reader would leave the
+       ; others holding the raw list. one pin, before anything reads.
        _ (pin f 'is (map dirn (f 'is)))
        ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
@@ -1280,23 +1150,19 @@
        ; pinned once here so every TU and the runtime share the one inflate.
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)
-       ; two outcomes, the cc shape: -c lays objects, anything else links. one exe
-       ; path and no shortcut around the linker -- `mooncc hello.c -o hello` is the
-       ; line every configure script writes, and it has to bind a libc.
-       ; the arms are ordered and two of them are not about `ins` at all, so the scrutinee
-       ; carries flag guards beside its shapes -- `(? g)` fits anything g holds for, and a
-       ; guard that fails falls through, which is the whole reason this can be one form.
-       ; What the match buys is the pair: `[a b]` is "exactly two inputs", where the test
-       ; spelled it (two? >ins && !(two? >>ins)) and then read both back out by hand.
+       ; two outcomes, the cc shape: -c lays objects, anything else links. one exe path and
+       ; no shortcut around the linker -- `mooncc hello.c -o hello` is the line every
+       ; configure script writes, and it has to bind a libc. the arms are ordered and two of
+       ; them are not about `ins` at all, so the scrutinee carries flag guards beside its
+       ; shapes: `(? g)` fits anything g holds for, and a guard that fails falls through.
        (ins @
         []      (udie 2 usage)
         (? o)   (c ? (two? >ins ? (udie 2 "cc: -o takes one input")
                                   (: _ (cc-obj <ins o f) 0))
                      (: _ (cc-link ins o f) 0))
-        ; the legacy pair: exactly two bare args, the second no .c -- in out
-        ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT). and a
-        ; .a is never an out: `mooncc a.o libgcc.a` reading as a pair would
-        ; write the library it was asked to read from.
+        ; the legacy pair: exactly two bare args, the second no .c -- in out. a .c/.o mix is
+        ; a link, never a pair (-c keeps its .o out), and a .a is never an out: `mooncc a.o
+        ; libgcc.a` as a pair would write the library it was asked to read from.
         (? (!(dotc? b) && !(dota? a) && !(dota? b)
             && (c || (!(doto? a) && !(doto? b)))) [a b])
                 (: _ (c ? (cc-obj a b f) (cc-link [a] b f)) 0)
@@ -1312,16 +1178,13 @@
 ; the seat: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the
 ; args after the seat. `cmdline` is the full C argv, read the same in both load orders.
-; mooncc is its own app (its own catted shebang script, doc/misc/moon.md): it does not ride the
-; au multi-call cat, so a cc edit rebuilds only mooncc, never au. matching mooncc/moon.l here
+; mooncc is its own app (its own catted shebang script, doc/misc/moon.md): it does not ride
+; the au multi-call cat, so a cc edit rebuilds only mooncc, and matching the three names here
 ; keeps the seat quiet under any other program name.
-; and the verb, pinned here rather than by whoever cats this file: the app owns its own
-; name, so every image carrying moon.l answers `love mooncc ..` and the baked mooncc.image
-; is a compiler without an `-e` shim to make it one. fn takes the args after the name and
-; answers a status charm -- moon-main quits instead, which is the same contract kept early.
-; `cc` is the same row. A Makefile's default CC is `cc`, so without this word an
-; artifact carrying a whole compiler still could not answer the name every recipe
-; reaches for -- and `CC=cc` on a box with no toolchain found nothing at all.
+; and the verb, pinned here rather than by whoever cats this file: every image carrying
+; moon.l answers `love mooncc ..`, and the baked mooncc.image is a compiler with no `-e` shim
+; to make it one. `cc` is the same row -- a Makefile's default CC is `cc`. fn takes the args
+; after the name and answers a status charm; moon-main quits instead, the same contract.
 (: _ (pins (cite 'verbs 'tab) 'mooncc moon-main 'cc moon-main)
    s ((cite 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"])
    (two? s && moon-main >s))

@@ -8,7 +8,7 @@
 (borrow 'salt)
 
 (: st-dir "out/.salt"
-   _ (mkdir "b" 493) _ (mkdir st-dir 493)
+   _ (mkdir "out" 493) _ (mkdir st-dir 493)
    (st-put nm text) (: p (st-dir + "/" + nm)
                        q (open p "w")
                        _ (say q text)
