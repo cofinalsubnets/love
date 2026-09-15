@@ -54,7 +54,7 @@
  street-x 9                                             ; a block's stride across, and along
  street-y 6
  (city w h st) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'lane {}}
+   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'lane {} 'solid '(6)}
    sb {st}
    (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    ; where the streets start: from a, at the stride and a jitter, the last one at lim
@@ -1486,7 +1486,8 @@
    _ (fill-box (fx - 4) (cy0 - 3) 9 3 12)
    _ (pin (d 'exits) (fx + w * (cy0 + 4)) ['house (house-w // 2) (house-h - 2)])
    foot (road-x cx (h - 2))
-   _ (pins d 'in [foot (h - 2)] 'fire [fx fy] 'door [fx (cy0 + 5)] 'th th-vale 'sd 1)
+   _ (pins d 'in [foot (h - 2)] 'fire [fx fy] 'door [fx (cy0 + 5)] 'th th-vale 'sd 1
+            'solid '(11))                                  ; the cottage's timber; its bed is not
    d)
 
 

@@ -25,7 +25,9 @@
  ; end off the map, heaven's void -- 7 a step and 8 a platform; the vale's 9 dirt, 10 the
  ; bare spot, 11 timber -- the cottage seen from outside, a wall -- 12 garden, 13 a stair down
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
- (open? d x y) (: t (dat d x y) (0 < t && t != 6 && t != 11))   ; walked: the cottage is not, its garden bed is
+ ; walked: anything laid, but for the tiles this floor calls solid. the engine lays 1 and
+ ; 2 and knows no other number -- a floor that lays a wall of its own names it in 'solid
+ (open? d x y) (: t (dat d x y) (0 < t && !(elem t (peep d 'solid ()))))
  (lit? d x y) (0 < dat d x y)                           ; looked through
  (dput d x y v) (pin (d 't) (x + (d 'w) * y) v)
 

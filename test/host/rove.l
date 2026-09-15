@@ -225,7 +225,7 @@
 ; a car turns only at a corner -- a cell whose lane runs the way of the turn, which is
 ; not the lane beside it and not the oncoming one -- and goes off the map where its road
 ; does, to come in again at a gate, headed in
-(: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms () 'lane {}}
+(: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms () 'lane {} 'solid '(6)}
    _ (each ^9 (x \ (dput hd x 2 1, pin (hd 'lane) (x + 9 * 2) '(1 0))))   ; a road across, eastbound
    _ (each ^5 (y \ (dput hd 4 y 1, pin (hd 'lane) (4 + 9 * y) '(0 -1)))) ; ..and one along, northbound
    _ (pin (hd 'lane) (4 + 9 * 2) '(1 -1))                                 ; the crossing, both
@@ -313,6 +313,7 @@
 ; glass is looked through and not walked: the lantern reaches past it, a stride does not
 (: g (hand-g ())
    _ (dput (g 'd) 4 2 6)
+   _ (pin (g 'd) 'solid '(6))                           ; the floor that lays glass names it
    _ (pins (g 'p) 'x 3 'y 2)
    _ (crawl-turn g [1 0])
  (test (3 = g 'p 'x) (find (g 'msg) "nothing is there" 0)
