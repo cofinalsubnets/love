@@ -55,8 +55,6 @@ roster_refuses='
 00150 the same, with designated initializers nested inside it
 00201 a ## paste that MAKES a macro name, which is then invoked with arguments
 00204 a register-exhausted SSE-class by-value argument -- five float HFAs (the gp twin landed, this one did not)
-00213 a statement expression, ({ ... })
-00214 a statement expression under __builtin_expect
 00216 designated RANGE initializers -- [1 ... 5] = v
 '
 # EMPTY, and worth keeping as a list rather than a comment: the day one of these

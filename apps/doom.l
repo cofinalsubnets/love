@@ -196,6 +196,15 @@
        r2 (elem 'fetch (names ()) ? (dg-lay dl) (dg-tar dl))
        (r1 != 0 || r2 != 0 ? 1 0))
    (doom-aboard? dl) (two? (stat (dl + "/doom1.wad")) && two? (stat (dl + "/doomgeneric")))
+   ; the three rungs both nests climb: source laid under here, downloads in dl, the build.
+   ; answers the sentence to fail with, or () when the nest stands ready; arm runs before cook
+   (nest-lay here nest dl arm cook)
+    (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
+       (? (one? (stat (nest + "/Makefile"))) ("the source did not lay under " + here)
+          (doom-fetch dl) "the downloads did not land"
+          (: _ (arm 0)
+             st (run-in nest cook)
+             (st != 0 ? "the doom build failed" ()))))
    (doom-nest as)
     (: exe (selfpath 0)
        here (cwd 0)
@@ -203,23 +212,18 @@
        bin (nest + "/out/love")
        dl (nest + "/dl")
        (fail s) (say err ("doom: " + s + "\n"), 1)
+       (enter _) (: e (setenv "LOVE_DOOM_NEST" "1",
+                       exec (bin . "doom" . nest-args dl as))
+                  (fail $ "cannot run " + bin + " (" + show e + ")"))
        (? !(string? exe) (fail "cannot find this binary's path")
           ((0 < #(getenv "LOVE_DOOM_NEST")) && two? (stat bin))
            (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
-          (two? (stat bin) && nest-doom? nest)
-           (: e (setenv "LOVE_DOOM_NEST" "1",
-                 exec (bin . "doom" . nest-args dl as))
-            (fail $ "cannot run " + bin + " (" + show e + ")"))
-          (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
-             (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
-                (? (doom-fetch dl) (fail "the downloads did not land")
-                   (: _ (cite 'source 'src-arm nest exe)                     ; autonomous: ours throughout
-                      _ (note "building the nest's love with doom inside -- this binary is the toolchain")
-                      st2 (run-in nest [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
-                      (st2 != 0 ? (fail "the doom build failed")
-                       (: e (setenv "LOVE_DOOM_NEST" "1",
-                             exec (bin . ("doom" . (nest-args dl as))))
-                        (fail ("cannot run " + bin + " (" + show e + ")"))))))))))
+          (two? (stat bin) && nest-doom? nest) (enter 0)
+          (: m (nest-lay here nest dl
+                         (\ _ (cite 'source 'src-arm nest exe,            ; autonomous: ours throughout
+                                note "building the nest's love with doom inside"))
+                         [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
+             (string? m ? (fail m) (enter 0)))))
 
    (inle? _) (? (elem 'love-os (names ())) (elem (ev 'love-os) '(inle wasm)) 0)
    ; --- the nest on inle: the same lay, off this machine's own tree, with the page's
@@ -232,25 +236,19 @@
        nest ((here = "/" ? "" here) + "/love-" + love-version)     ; the page's shell sits at /
        dl (nest + "/dl")
        mod (nest + "/out/love.wasm")
-       boot "sh -c 'doom; sh'"
        (fail s) (say err ("doom: " + s + "\n"), 1)
+       (enter _) (: _ (note ("booting " + mod))
+                    e ((ev 'kexec) mod "sh -c 'doom; sh'")
+                    (fail ("cannot boot " + mod + " (" + show e + ")")))
        (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
-          (two? (stat mod) && nest-doom? nest)
-           (: _ (note ("booting " + mod))
-              e ((ev 'kexec) mod boot)
-              (fail ("cannot boot " + mod + " (" + show e + ")")))
-          (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
-             (? (one? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
-                (doom-fetch dl) (fail "the downloads did not land")
-                ; a task shares no environment with its spawner on this seat, so what cook
-                ; is told goes on its line
-                (: _ (note "building this machine's love with doom inside -- the machine is the toolchain")
-                   st (run-in nest ["cook" "wasm" "DOOM=1" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])
-                   (? (st != 0) (fail "the doom build failed")
-                      (one? (stat mod)) (fail ("the build left no module at " + mod))
-                      (: _ (note ("booting " + mod))
-                         e ((ev 'kexec) mod boot)
-                         (fail ("cannot boot " + mod + " (" + show e + ")")))))))))
+          (two? (stat mod) && nest-doom? nest) (enter 0)
+          ; a task shares no environment with its spawner on this seat, so what cook is
+          ; told goes on its line
+          (: m (nest-lay here nest dl (\ _ (note "building this machine's love with doom inside"))
+                         ["cook" "wasm" "DOOM=1" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])
+             (? (string? m) (fail m)
+                (one? (stat mod)) (fail ("the build left no module at " + mod))
+                (enter 0)))))
    (digits s) (:- (go 0 0) n #s (go i a) (n <= i ? a
                (: c (s i) (47 < c < 58 ? (go (i + 1) (a * 10 + c - 48)) a))))
    doom-usage "usage: love doom [-iwad FILE] [-display :N] [-frames N]"

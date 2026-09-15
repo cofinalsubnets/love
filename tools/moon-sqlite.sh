@@ -60,7 +60,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
   return 0
 }
 
-ho=b
+ho=out
 mc="$ho/love mooncc"
 love=$ho/love
 

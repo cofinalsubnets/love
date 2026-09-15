@@ -464,17 +464,23 @@
     'which "usage: which [-a] NAME.."
     'tty "usage: tty"
     'clear "usage: clear"
-    'hostname "usage: hostname"}
+    'hostname "usage: hostname"
+    ; the three archives keep their own screens: the cmd modules leak them off the same
+    ; bodyless letrec the mains come through, so the door shows what the tool would
+    'cpio (cite 'cpiocmd 'cpioc-usage)
+    'tar (cite 'tarcmd 'usage)
+    'gzip (cite 'gzcmd 'gzc-help)
+    'gunzip (cite 'gzcmd 'gzc-help)
+    'zcat (cite 'gzcmd 'gzc-help)}
 
    ; echo, test and [ read no options at all -- posix says so, and a script writing
    ; `echo --help` means the word. cook and lush answer the flags themselves, each
    ; with more to say than a synopsis. none of them is at this door.
    korenoflag ['echo 'test (name "[") 'make 'cook 'sh 'lush]
-   ; -h and -v are not free everywhere. the tools below spell one of them themselves,
-   ; or posix and gnu do, so they answer the long forms only and the letter stays theirs.
+   ; -v is never the door's: gnu gives --version no short spelling, and the letter is the
+   ; tool's wherever it wants one (cpio -v names members, grep -v inverts, nl -v numbers).
+   ; -h is the door's where it is free -- these spell it themselves, or posix and gnu do.
    korenoh '(grep du df ls sort touch chown ln free)
-   korenov '(grep awk od join nl uname cat head tail cp mv rm ln mkdir rmdir chmod
-             chown install mount umount readlink patch pgrep pkill killall)
    ; the tools that read no options at all, and the few dash words the two of them
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
@@ -487,7 +493,7 @@
    ; the applet as the world calls it: cli's door, then the tool under urun. both
    ; dispatch lanes come through here -- the verb registry and the symlink -- so there
    ; is one answer and not two. what kore keeps is the policy: which names take no
-   ; flags at all, which have spoken for a letter themselves, and the usage text.
+   ; flags at all, which have spoken for -h themselves, and the usage text.
    (koredoor nm f)
     (: (run as) (? !(elem nm korebare) (urun f as)
                    (: w (kobare nm as)
@@ -495,11 +501,11 @@
                          (: _ (say err (string nm + ": unknown option " + w))
                             _ (put err 10) 2))))
        (? (elem nm korenoflag) run
-          (udoor nm run (peep korehelp nm ()) !(elem nm korenoh) !(elem nm korenov))))
+          (udoor nm run (peep korehelp nm ()) !(elem nm korenoh) 0)))
 
    kore-usage "kore -- the love multi-call toolbox
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
-every tool answers --help and --version, and -h and -v where the letter is free
+every tool answers --help and --version, and -h where the letter is free
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
   nc HOST PORT       netcat; nc -l PORT listens
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)

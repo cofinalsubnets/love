@@ -45,7 +45,7 @@
  (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
  (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
- tmpd "b"
+ tmpd "out"
 
  ; --- the ('key . ..) rows of a `name (tabof ...)` form in a64.l, source order ---
  a64src (rdf "love/holo/a64.l")

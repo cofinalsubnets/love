@@ -25,7 +25,13 @@ static lvm(lvm_mul_rep) {
  if (charmp(cnt)) {
    intptr_t v = getcharm(cnt);
    n = (uintptr_t) (v < 0 ? -v : v); }
- else n = (uintptr_t) maxcharm;                      // |big|: past addressable, dies in Have()
+ else n = (uintptr_t) maxcharm;                      // |big|: past addressable, refused below
+ // the apcap rule (prel.l) for the repeat lane: a count no heap could ever hold is
+ // refused here rather than asked for. it cannot be refused downstream -- Have() is
+ // pointer arithmetic, so Hp + n wraps at 2^61 words and reads as room, and an oom
+ // raised inside gen_major reaches no help. () is this lane's answer to every count
+ // it cannot use, so an impossible one lands there too
+ if (n > ((uintptr_t) 1 << 40)) ai_musttail return Push(ZeroPoint);
  if (chainp(seq)) {                                   // list -> n copies of the spine
   if (!n) ai_musttail return Push(ZeroPoint);   // 0 copies -> the empty list () (zero-ontology)
   uintptr_t m = llen(seq), total = m * n;

@@ -155,7 +155,7 @@ mkdir -p "$w/circle"
   > "$w/selfd.log" 2>&1 \
   || { tail -20 "$w/selfd.log"; fail "the seed-laid tree cannot rebuild the artifact"; }
 grep -q "was called" "$w/selfd.log" && { grep "was called" "$w/selfd.log" | head -3; fail "the artifact rebuild reached for an ambient compiler"; }
-grep -q "seeding with this binary" "$w/selfd.log" \
+grep -q "the compiler is this binary" "$w/selfd.log" \
   || { grep -a '^;; seeding' "$w/selfd.log"; fail "no ambient cc works here, and the seed did not fall back to its own mooncc"; }
 grep -q "fixpoint ok" "$w/selfd.log" || fail "the seed did not answer its own fixpoint"
 circled=$(echo "$w"/circle/love-*/)

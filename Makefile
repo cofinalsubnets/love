@@ -423,12 +423,15 @@ ifeq ($(filter $(xa),x64 a64 rv64),)
 $(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64)
 endif
 xd = out/x-$(xa)
+# the objects mirror the source tree, and this lane links its binary to $(xd)/love --
+# which love/*.c would land on. they get a root of their own, as the host lane's out/o is
+xod = $(xd)/o
 # the OS the cross lay is for. empty is this machine's, which mooncc reads off love-os --
 # the answer on every hosted seat, and no answer at all on inle, where we ARE the kernel.
 # a seed from such a seat names one (apps/source.l) and it rides in here.
 xos ?=
 moonx = $(moon0) -t $(xa) $(if $(xos),-os $(xos))
-$(eval $(call moonlane,x,xd,moonx,xa))
+$(eval $(call moonlane,x,xod,moonx,xa))
 
 $(xd)/src.o: $(dist_source) tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
@@ -727,7 +730,7 @@ $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 	@LOVE_NO_IMAGE= $$(love0) -l $$< -q -e '(lay-vec "$$@" "$$($(4))")' && test -s $$@
 endef
 $(eval $(call kart,kart,moon_d,moon0,hosta))
-$(eval $(call kart,xkart,xd,moonx,xa))
+$(eval $(call kart,xkart,xod,moonx,xa))
 
 ifdef DOOM
 kcppflags += -I$(doom_d) -I$R/inle/doom -DFEATURE_SOUND

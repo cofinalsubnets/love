@@ -105,8 +105,14 @@ grep -q '^[0-9][0-9]* blocks$' "$w/blocks" || fail "no 'N blocks' line on err"
 [ ! -s "$w/quiet" ] || fail "--quiet still said something"
 # -v names every member on err as it packs, and only on err (-t's own -v is GNU's
 # ls -l LISTING, a layout of its own, and is not here -- so -v is asked of -o)
-( cd "$t" && "$L" cpio -o -v --quiet < "$w/names" ) > /dev/null 2> "$w/verb" || fail "cpio -ov"
+( cd "$t" && "$L" cpio -o -v --quiet < "$w/names" ) > "$w/vO.cpio" 2> "$w/verb" || fail "cpio -ov"
 cmp -s "$w/names" "$w/verb" || fail "-v did not name every member on err"
+# the letter is cpio's, not the shared door's: --help and --version are answered long-form
+# only, so -v still writes the archive rather than a version line
+( cd "$t" && "$L" cpio -o --quiet < "$w/names" ) > "$w/pO.cpio" 2> /dev/null || fail "cpio -o"
+cmp -s "$w/pO.cpio" "$w/vO.cpio" || fail "-v did not write the archive"
+"$L" cpio --version 2> /dev/null | grep -q '(love ' || fail "cpio --version"
+"$L" cpio --help 2> /dev/null | grep -q '^usage: cpio' || fail "cpio --help"
 # -u overwrites; without it a newer file on disk stays. the archive's mtimes are the
 # tree's own, so "newer" here is arranged with touch and not with luck
 mkdir -p "$w/x3" && ( cd "$w/x3" && "$L" cpio -i --quiet < "$w/ours.cpio" )

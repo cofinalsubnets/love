@@ -422,7 +422,7 @@ ln -sf l1 "$P/l2"
 # realpath: the message on a miss is GNU's to the byte as well as the answer, and a
 # LAST component that is not there yet still answers -- GNU's default, and the case
 # a resolver written around stat gets wrong
-for q in "$P/l2" "$P/../$(basename "$P")/f1" "$P/inle/../i/n" "$P/nosuch"; do
+for q in "$P/l2" "$P/../$(basename "$P")/f1" "$P/i/../i/n" "$P/nosuch"; do
   [ "$(korerun realpath "$q")" = "$(realpath "$q")" ] || fail "kore realpath $q"
 done
 korerun realpath "$P/nope/x" > "$o" 2> "$ho/.rp-e"; r=$?
@@ -1756,6 +1756,17 @@ korerun gunzip < "$ho/.arc1.gz" > "$o" || fail "kore gunzip"
 cmp -s "$ho/.arc1" "$o" || fail "kore gzip | gunzip round trip"
 korerun zcat "$ho/.arc1.gz" > "$o" 2>/dev/null || fail "kore zcat"
 cmp -s "$ho/.arc1" "$o" || fail "kore zcat"
+# -v is gzip's own: the shared door answers --help and --version in their long spelling
+# alone, so -v reports the ratio on err and the file it replaced, and compresses
+cp "$ho/.arc1" "$ho/.arcv"
+korerun gzip -v "$ho/.arcv" 2> "$ho/.arcv.say" || fail "kore gzip -v"
+grep -q 'replaced with' "$ho/.arcv.say" || fail "gzip -v was answered as --version"
+korerun gunzip "$ho/.arcv.gz" || fail "kore gunzip of gzip -v"
+cmp -s "$ho/.arc1" "$ho/.arcv" || fail "gzip -v did not compress"
+hv "gzip --version" '^gzip (love' korerun gzip --version
+hv "gzip --help"    '^gzip -- the' korerun gzip --help
+hv "cpio --help"    '^usage: cpio {' korerun cpio --help
+hv "tar --help"     '^usage: tar '   korerun tar --help
 if command -v gzip >/dev/null 2>&1; then
   gzip -c "$ho/.arc1" > "$ho/.arc1.ggz"
   korerun gunzip < "$ho/.arc1.ggz" > "$o" || fail "kore gunzip of GNU's gzip"

@@ -195,7 +195,9 @@
                            ; index was the body, which is where a singleton warns
                            w1 (foldl (\ a p (: wr >p (<p = f 'ne ? (wr . a) a)))
                                      w0 (f 'pd))
-                           sw (sg && lsing src n f)
+                           ; the off path answers (), which is what the test below reads:
+                           ; && is transparent and would pass sg's own 0 through
+                           sw (sg ? (lsing src n f) ())
                            (? (= sw ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
                               (f 'am)     (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
                               (: dh (ldefer src n rest)

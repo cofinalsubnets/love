@@ -56,6 +56,9 @@
 ;   symbol name: `find out -name '<file>.o'`. objects under out/ go stale, so check an
 ;   mtime before reading one as evidence
 
+; our motto:
+; ce qui est tout à fait supérieur reproduit ce qui est tout à fait inférieur, mais transposé
+
 
 ;;; love language examples
 

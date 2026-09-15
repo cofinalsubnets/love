@@ -13,10 +13,16 @@
 ;   gauge[0]  len    the nursery in words, which is the region's size
 ;   (tune v)  the knobs: [0] budget [1] nursery floor [2] major step [3] ratio. a bounded
 ;             budget is what lets the floor bind -- unbounded, appel's rule hands the
-;             nursery everything the major pool is not using.
+;             nursery everything the major pool is not using. the budget is read off
+;             gauge[8], the live set, so it holds as the image's weight moves
 
 (: (spine n acc) (? (n < 1) acc (spine (n - 1) (. acc 1)))    ; a left spine: n levels of car
-   knobs (tune @(6000000 16384 65536 24))
+   knobs (tune @(0 16384 65536 24))              ; the floor, the step, the ratio; budget open
+   _ (please 1)                                  ; ..a major, so the count below is the live one
+   live (peep (gauge 0) 8 0)                     ; words the major pool holds live
+   ; appel hands the nursery (budget - 2*live)/4, so a budget at twice live leaves it
+   ; nothing but its floor. derived and not a constant: the live set moves with the image
+   _ (tune (pin (tune ()) 0 (2 * live)))
    _ (please 1)
    _ (please 1)
    gap (peep (gauge 0) 0 0)

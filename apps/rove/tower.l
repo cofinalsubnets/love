@@ -566,8 +566,8 @@
  (mob-set lvl) (lvl @ 1 '(0 1) 2 '(2 3 4) '(5 6 7 8 9 10 11 12))
 
  ; and what the token turns out to have been, drawn once at the end
- tokens '("the bitten phone" "the gnawed pencil" "the faded script"
-          "the tinebent fork" "the pagetorn book" "the flipped-out coin"
+ tokens '("the bitten phone" "the gnawed pencil" "the faded manuscript"
+          "the tinebent fork" "the handwritten book" "the flipped-out coin"
           "the two-ended candle" "the toothless key" "the manyfolded map"
           "the carbonized lamp" "the greasy spectacles" "the seasoned kettle"
           "the murmuring wristwatch" "the lowlife battery" "the treasured index card")
@@ -1235,8 +1235,7 @@
               ""
               "-- any key --")
  box-ttl "a simple wooden box"
- box-lines '("you lift the lid. inside, wrapped in a cloth that was"
-             "somebody's, is what you came for:"
+ box-lines '("you lift the lid. inside, wrapped in a threadbare cloth, is what you came for:"
              ""
              "{~}"
              ""

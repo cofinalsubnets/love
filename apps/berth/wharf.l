@@ -83,11 +83,12 @@
    ; which berth owns this cell, or () for none -- a zero-extent one owns nothing,
    ; since its half-open span is empty, so the mouse can never land on the unshowable
    (wharf-at bs row col)
-    (two? bs &&
+    (two? bs ?
      (: b <bs r0 (wharf-row b) c0 (wharf-col b)
         (? (r0 <= row < r0 + wharf-rows b && c0 <= col < c0 + wharf-cols b)
            (wharf-id b)
-           (wharf-at >bs row col))))
+           (wharf-at >bs row col)))
+     ())
 
    ; --- steering ---------------------------------------------------------------
    ; focus moves to the nearest showable berth past this one's edge whose other axis
