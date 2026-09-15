@@ -1,13 +1,15 @@
 # 🌑 love
 
-love is a self-reproducing software artifact composed of several related parts:
+love is a self-reproducing programming environment with several interlinked subprojects
 
-- love: a programming language and runtime environment written in C
-- moon: a cross-platform C compiler/assembler/linker/libc written in love
-- kore: a unix coreutils and userland including sh, vi, tar and make
+- love: a functional programming language written in C
+- moon: a C cross-compiler and toolchain written in love
+- kore: a posix-like userland including sh, vi, tar, make, and other apps
+- inle: a single-user posix-like OS kernel
 
 love folds these components along with its own source code into a single-binary
-interpreter, toolchain, and userland.
+interpreter, compiler, toolchain, and userland,  that can reproduce itself byte-identically
+from source with a single command.
 
 - <code>love source</code> extract the bundled source
 - <code>love seed</code> bootstrap a verified identical binary
@@ -28,7 +30,7 @@ common operations. other features include
 ### booleans
 
 love's rule for deciding truth value of rich data in conditionals is principled:
-sum the components of the datum x into a real number n; x is then true iff n is positive.
+sum the components of the datum x into a real number n; then x is true iff n is positive.
 this mostly agrees with lax rules like javascript and python that treat empty values as
 false. unlike other languages, love also considers negative values false.
 
@@ -59,7 +61,7 @@ i = 0.5 -1                   ; built in complex
 
 ```
 ; this example uses lambda def sugar, pattern matching, and church exponentiation
-; : is the let form, @ is pattern matching; :-/@- variants place the default branch first
+; : is the let form, @ is pattern matching; :-/@- variants place the last arm first
 (:- (100 fb 1)
  (fb n) (puts $ s n + "\n", n + 1)
  (s n) (n % 3 . n % 5 @- (show n) (0 . 0) "fizzbuzz" (0 . _) "fizz" (_ . 0) "buzz"))

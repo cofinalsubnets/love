@@ -1740,7 +1740,7 @@
    (umax a b) (? (charm? a && charm? b) (? (a < b) b a)            ; max of level exprs
                  (lle a b) b  (lle b a) a  ['lmax a b])
    (ulvl u) (? (u = 'UU) 0 (two? u && (<u = 'U)) <>u 'no) ; universe value -> level expr ('no = not a universe)
-   (umk l) (? (l = 0) 'UU ['U l])                         ; level expr -> universe value
+   (umk l) (l @ 0 'UU ['U l])                         ; level expr -> universe value
 
    ; --- the universe constraint solver: difference constraints + positive-cycle detection.
    ;     a level expr parses to (base offset): lparse (lsuc^k atom) = (atom k). a constraint
@@ -1751,18 +1751,18 @@
    ;     (a<=b, b<a) no local check sees. (Whole-corpus IMPLICIT inference -- generalize a def
    ;     over its level vars + instantiate per use -- is the remaining integration on top.)
    (lparse l) (? (charm? l) ['ground l]
-                 (two? l && (<l = 'lsuc)) (: p (lparse <>l) [<p (1 + <>p)])
-                 (two? l && (<l = 'lv)) [l 0]
+                 (two? l && <l = 'lsuc) (: p (lparse <>l) [<p (1 + <>p)])
+                 (two? l && <l = 'lv) [l 0]
                  ['ground 0])
-   (atomset prs) (: s (tablet 0) _ (map (\ e (: _ (pin s <e 1) (pin s <>e 1))) prs) (keys s))
+   (atomset prs) (: s {} _ (map (e \ pins s <e 1 <>e 1) prs) (keys s))
    (usat? cs)                                                          ; cs: list of [x y], each meaning x <= y
    (: prs (map (\ c (: x (lparse <c) y (lparse <>c) [<x <y (<>x - <>y)])) cs)
-      atoms (atomset prs) pot (tablet 0) _ (map (\ a (pin pot a 0)) atoms)
+      atoms (atomset prs) pot (tablet 0) _ (map (a \ pin pot a 0) atoms)
       (relax1 z) (foldl (\ ch e (: uu (peep pot <e 0) w <>>e v (peep pot <>e 0)
-                                   (? ((uu + w) > v) (: _ (pin pot <>e (uu + w)) 1) ch))) 0 prs)
-      (spin1 k) (? (k < tally atoms) (: _ (relax1 ()) (spin1 (k + 1))) 0)
+                                   (? (uu + w > v) (pin pot <>e (uu + w), 1) ch))) 0 prs)
+      (spin1 k) (? (k < #atoms) (relax1 (), spin1 (k + 1)) 0)
       _ (spin1 0)
-      (! (relax1 ())))                                                ; one more relaxation still moves => positive cycle => unsat
+      !(relax1 ()))                                                ; one more relaxation still moves => positive cycle => unsat
 
    ; --- implicit level inference: elaborate bare UU to a fresh level metavar, then check. So a
    ;     definition checks with no (UU l) annotation -- the levels are inferred (as metavars;
@@ -1774,7 +1774,7 @@
    MVC (tablet 0)                                                 ; fresh-metavar counter
    (freshmv z) (: i (peep MVC 0 0) _ (pin MVC 0 (i + 1)) ['mv i]) ; a fresh universe level metavariable (mv i)
    (elab t) (? (t = 'UU) ['UU (freshmv ())]                       ; bare UU -> (UU (mv i)); leave annotated (UU l) alone
-              (two? t && (<t = 'UU)) t  (two? t) (map elab t)  t)
+              (two? t && <t = 'UU) t  (two? t) (map elab t)  t)
 
    (psym cx x)                                                         ; UU0 : uu1
    (? (x = 'UU) '(U 1)
@@ -1782,10 +1782,10 @@
       (x = 'zero) 'nat (x = 'tt) 'unit (elem x '(true false)) 'bool
       (: e (assoc x cx) (? e <>e (: g (peep GLOB x 0) (? g <g (scare 'uu-unbound x))))))
 
-   (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (? (l = 'no) (scare 'uu-not-a-type T) l))
+   (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (l @ 'no (scare 'uu-not-a-type T) l))
 
    (cleq d ti t)
-   (? (&& !((ulvl ti) = 'no) !((ulvl t) = 'no)) (usat? [[(ulvl ti) (ulvl t)]]) (conv d ti t))
+   (ulvl ti != 'no && ulvl t != 'no ? (usat? [[(ulvl ti) (ulvl t)]]) (conv d ti t))
 
    (predpi cx en d t)                                                  ; pi / sigma formation -> U_max(i,j)
    (: i (sortof cx en d <>>t) fr ['nv d]
@@ -1793,7 +1793,7 @@
       (umk (umax i j)))
 
    (pinf-spine cx en d f as)
-   (? !(two? as) f
+   (? (one? as) f
       (<f = 'pi) (: a <as _ (pchk cx en d a <>f) (pinf-spine cx en d (capp <>>f (vof en a)) >as))
       (scare 'uu-not-a-pi as))
 
@@ -1801,7 +1801,7 @@
    (? (charm? t) 'nat
       (nom? t) (psym cx t)
       (: h <t
-         (? (two? h)        (pinf-spine cx en d (pinf cx en d h) >t)
+         (? (two? h)      (pinf-spine cx en d (pinf cx en d h) >t)
             (h = 'UU)     (umk (lsuc <>t))                          ; (UU l) : UU(l+1) -- l a level expr
             (h = 'pi)     (predpi cx en d t)
             (h = 'total2) (predpi cx en d t)
@@ -1814,16 +1814,16 @@
             (pinf-spine cx en d (pinf cx en d h) >t))))
 
    (pchk cx en d t T)
-   (? (two? t && (<t = 'lam))
-      (? (<T = 'pi)
-         (: x <>t fr ['nv d] (pchk (. [x <>T] cx) (. [x fr] en) (d + 1) <>>t (capp <>>T fr)))
-         (scare 'uu-lam-needs-pi t))
-      (two? t && (<t = 'idpath))
-      (? (<T = 'paths)
-         (: _ (pchk cx en d <>t <>T) v (vof en <>t) (? (conv d v <>>T && conv d v <>>>T) 1 (scare 'uu-idpath-mismatch t)))
-         (scare 'uu-idpath-needs-paths t))
-      (two? t && (<t = 'let))
-      (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pchk (. [x Av] cx) (. [x va] en) d <>>>t T))
+   (? (two? t && <t = 'lam)
+      (<T @ 'pi
+       (: x <>t fr ['nv d] (pchk (. [x <>T] cx) (. [x fr] en) (d + 1) <>>t (capp <>>T fr)))
+       (scare 'uu-lam-needs-pi t))
+      (two? t && <t = 'idpath)
+      (<T @ 'paths
+       (: _ (pchk cx en d <>t <>T) v (vof en <>t) (? (conv d v <>>T && conv d v <>>>T) 1 (scare 'uu-idpath-mismatch t)))
+       (scare 'uu-idpath-needs-paths t))
+      (two? t && <t = 'let)
+       (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pchk (. [x Av] cx) (. [x va] en) d <>>>t T))
       (: Ti (pinf cx en d t) (? (cleq d Ti T) 1 (scare 'uu-type-mismatch t))))
 
    (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (vof 0 T) _ (pchk 0 0 0 t Tv) nm)   ; vof now normalizes (UU l)
@@ -1838,27 +1838,27 @@
  (0 = ulvl (pinf 0 0 0 'nat))                                                                 ; nat : UU0
  (1 = sortof 0 0 0 '(pi T UU T))                                                              ; predicativity: forall(T:UU),T lives one level up, in uu1
  (0 = sortof 0 0 0 '(pi x nat nat))                                                           ; nat->nat stays in UU0
- ('p-const1 = (pdefn 'p-const1 '(pi x nat (paths nat (uu-app 0 x) 1)) '(lam x (idpath 1))))   ; the ported core laws check
- ('p-ident = (pdefn 'p-ident  '(pi x nat (paths nat (uu-app 1 x) x)) '(lam x (natmultr1 x)))) ; ... predicatively too
- (! (cleq 0 (pinf 0 0 0 'UU) 'UU))                                                            ; the keystone: UU's type does not fit in UU0 -- type-in-type gone
+ ('p-const1 = pdefn 'p-const1 '(pi x nat (paths nat (uu-app 0 x) 1)) '(lam x (idpath 1)))   ; the ported core laws check
+ ('p-ident = pdefn 'p-ident  '(pi x nat (paths nat (uu-app 1 x) x)) '(lam x (natmultr1 x))) ; ... predicatively too
+ !(cleq 0 (pinf 0 0 0 'UU) 'UU)                                                            ; the keystone: UU's type does not fit in UU0 -- type-in-type gone
  (cleq 0 (pinf 0 0 0 'UU) '(U 1))                                                             ; ... but UU : uu1 is accepted
  ; --- Stage 2: universe polymorphism (levels are exprs, incl. a level variable a) ---
- ('pidfun = (pdefn 'pidfun '(pi T (UU (lv a)) (pi x T T)) '(lam T (lam x x)))) ; idfun's body checks for an arbitrary level a
+ ('pidfun = pdefn 'pidfun '(pi T (UU (lv a)) (pi x T T)) '(lam T (lam x x))) ; idfun's body checks for an arbitrary level a
  ('(lsuc (lv a)) = sortof 0 0 0 '(pi T (UU (lv a)) (pi x T T)))                ; ... living one level up: forall(T:UU_a),T->T : UU_{a+1}
- ('idf0 = (pdefn 'idf0 '(pi T (UU 0) (pi x T T)) '(lam T (lam x x))))          ; the same body instantiates at UU0 ...
- ('idf1 = (pdefn 'idf1 '(pi T (UU 1) (pi x T T)) '(lam T (lam x x))))          ; ... and at uu1 (multi-level use Stage 1 concrete couldn't do)
- (! (cleq 0 (pinf 0 0 0 '(UU (lv a))) (vof 0 '(UU (lv a)))))                   ; soundness over a variable level: uu_a : uu_a rejected
+ ('idf0 = pdefn 'idf0 '(pi T (UU 0) (pi x T T)) '(lam T (lam x x)))          ; the same body instantiates at UU0 ...
+ ('idf1 = pdefn 'idf1 '(pi T (UU 1) (pi x T T)) '(lam T (lam x x)))          ; ... and at uu1 (multi-level use Stage 1 concrete couldn't do)
+ !(cleq 0 (pinf 0 0 0 '(UU (lv a))) (vof 0 '(UU (lv a))))                   ; soundness over a variable level: uu_a : uu_a rejected
  ; --- the constraint solver (usat?): global satisfiability, beyond the conservative lle ---
  (usat? [['(lv a) '(lv b)] ['(lv b) '(lv c)]])                                    ; a<=b<=c : satisfiable
  (usat? [['(lv a) '(lv b)] ['(lv b) '(lv a)]])                                    ; a<=b, b<=a : SAT (forces a=b)
- (! (usat? [['(lsuc (lv a)) '(lv a)]]))                                           ; a+1<=a : UNSAT (a<a)
- (! (usat? [['(lv a) '(lv b)] ['(lsuc (lv b)) '(lv a)]]))                         ; a<=b, b+1<=a : UNSAT -- a cross-site cycle no local check sees
- (! (usat? [[1 0]]))                                                              ; 1<=0 : UNSAT (the keystone constraint, concretely)
+ !(usat? [['(lsuc (lv a)) '(lv a)]])                                           ; a+1<=a : UNSAT (a<a)
+ !(usat? [['(lv a) '(lv b)] ['(lsuc (lv b)) '(lv a)]])                         ; a<=b, b+1<=a : UNSAT -- a cross-site cycle no local check sees
+ !(usat? [[1 0]])                                                              ; 1<=0 : UNSAT (the keystone constraint, concretely)
  ; --- implicit inference: real UniMath defs check with bare UU (no (UU l) annotations), levels inferred ---
- ('qidfun = (qdefn 'qidfun '(pi T UU (pi x T T)) '(lam T (lam x x))))           ; idfun: forall(T:UU),T->T -- UU's level inferred
- ('qfuncomp = (qdefn 'qfuncomp
+ ('qidfun = qdefn 'qidfun '(pi T UU (pi x T T)) '(lam T (lam x x)))           ; idfun: forall(T:UU),T->T -- UU's level inferred
+ ('qfuncomp = qdefn 'qfuncomp
     '(pi X UU (pi Y UU (pi Z UU (pi f (pi x X Y) (pi g (pi y Y Z) (pi x X Z))))))
-    '(lam X (lam Y (lam Z (lam f (lam g (lam x (g (f x)))))))))))                 ; funcomp: three independent UU levels, all inferred
+    '(lam X (lam Y (lam Z (lam f (lam g (lam x (g (f x))))))))))                 ; funcomp: three independent UU levels, all inferred
 
 ; naturalnumbers round 16 -- the order opens. natgtb by double rect (the
 ; inner induction ignores its IH, so (natgtb (succ n) (succ m)) and
@@ -2296,20 +2296,20 @@
               (lam k (lam IH (lam v (andb (negb (memb (pr1 v) (tpair k (pr2 v)))) (IH (pr2 v))))))
               (pr1 l))
             (pr2 l))))
- ((vof 0 'true)  = (vof 0 '(nateqb 3 3)))
- ((vof 0 'false) = (vof 0 '(nateqb 3 4)))
- ((vof 0 'true)  = (vof 0 '(memb 9 (ncons 7 (ncons 9 nnil)))))
- ((vof 0 'false) = (vof 0 '(memb 8 (ncons 7 (ncons 9 nnil))))))
+ (vof 0 'true  = vof 0 '(nateqb 3 3))
+ (vof 0 'false = vof 0 '(nateqb 3 4))
+ (vof 0 'true  = vof 0 '(memb 9 (ncons 7 (ncons 9 nnil))))
+ (vof 0 'false = vof 0 '(memb 8 (ncons 7 (ncons 9 nnil)))))
 
 ; --- the uu2l bridges: the arithmetic floor runs native through the lof lane
 ; --- (add is +, the eager-NbE O(n) niszero is one compare). a bridge is
 ; --- untrusted like the translator, so every pin rides the differential
 ; --- battery right here: vof the kernel's lane, lof the compiled one, and a
 ; --- wrong bridge (or a uu2l bug) reddens the gate -- never a theorem.
-(: _ (bridge 'add (\ n m (n + m)))
-   _ (bridge 'niszero (\ m (? (m = 0) 'true 'false)))
-   _ (bridge 'npred (\ m (? (m = 0) 0 (m - 1))))
-   _ (bridge 'nateqb (\ n m (? (n = m) 'true 'false)))
+(: _ (bridge 'add (n \ m \ n + m))
+   _ (bridge 'niszero (m \ m @ 0 'true 'false))
+   _ (bridge 'npred (m \ m @ 0 0 (m - 1)))
+   _ (bridge 'nateqb (n \ m \ n @ ^m 'true 'false))
    0)
 (test
  ; the bridged names, both lanes, edges included
@@ -2488,13 +2488,13 @@
 ; --- (install per the help law; the scare bit is the only one a help sees.)
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
 (test
- ('rejected = (rejects (\ z (defn uu-bad1 (paths nat 1 2) (idpath 1)))))
- ('rejected = (rejects (\ z (defn uu-bad2 (pi x nat nat) (lam x (succ y))))))
- ('rejected = (rejects (\ z (defn uu-bad3 nat (lam x x)))))
- ('rejected = (rejects (\ z (defn uu-bad4 (coprod nat bool) (ii1 true)))))
- ('rejected = (rejects (\ z (defn uu-bad5 nat (let x (lam y y) x)))))
- ('rejected = (rejects (\ z (defn uu-bad6 (pi x nat 5) (lam x x)))))  ; a non-type in the codomain
- ('accepted = (rejects (\ z (defn uu-good (paths nat 2 2) (idpath 2))))))
+ ('rejected = rejects (z \ defn uu-bad1 (paths nat 1 2) (idpath 1)))
+ ('rejected = rejects (z \ defn uu-bad2 (pi x nat nat) (lam x (succ y))))
+ ('rejected = rejects (z \ defn uu-bad3 nat (lam x x)))
+ ('rejected = rejects (z \ defn uu-bad4 (coprod nat bool) (ii1 true)))
+ ('rejected = rejects (z \ defn uu-bad5 nat (let x (lam y y) x)))
+ ('rejected = rejects (z \ defn uu-bad6 (pi x nat 5) (lam x x)))  ; a non-type in the codomain
+ ('accepted = rejects (z \ defn uu-good (paths nat 2 2) (idpath 2))))
 ; --- and the same question asked of conv, in pairs. the six above reach chk/inf; these reach
 ; the evaluator, through the one door a wrong answer is silent at: conv applies both closures
 ; to a fresh `('nv d)` and compares, so an evaluator that mixed up a captured env or a de
@@ -2503,21 +2503,21 @@
 ; nothing, and the accepted twin is what says conv can still say yes.
 (test
  ; the pi codomain, under one binder
- ('accepted = (rejects (\ z (defn uu-cv1 (pi x nat (paths nat x x))
-                    (the (pi x nat (paths nat x x)) (lam x (idpath x)))))))
- ('rejected = (rejects (\ z (defn uu-cv2 (pi x nat (paths nat x (succ x)))
-                    (the (pi x nat (paths nat x x)) (lam x (idpath x)))))))
+ ('accepted = rejects (z \ defn uu-cv1 (pi x nat (paths nat x x))
+                       (the (pi x nat (paths nat x x)) (lam x (idpath x)))))
+ ('rejected = rejects (z \ defn uu-cv2 (pi x nat (paths nat x (succ x)))
+                       (the (pi x nat (paths nat x x)) (lam x (idpath x)))))
  ; nested binders -- the level law: (paths nat x x) and (paths nat y y) are one shape and
  ; differ only by which fresh neutral each closure got
- ('accepted = (rejects (\ z (defn uu-cv3 (pi x nat (pi y nat (paths nat x x)))
-                    (the (pi x nat (pi y nat (paths nat x x))) (lam x (lam y (idpath x))))))))
- ('rejected = (rejects (\ z (defn uu-cv4 (pi x nat (pi y nat (paths nat y y)))
-                    (the (pi x nat (pi y nat (paths nat x x))) (lam x (lam y (idpath x))))))))
+ ('accepted = rejects (z \ defn uu-cv3 (pi x nat (pi y nat (paths nat x x)))
+                       (the (pi x nat (pi y nat (paths nat x x))) (lam x (lam y (idpath x))))))
+ ('rejected = rejects (z \ defn uu-cv4 (pi x nat (pi y nat (paths nat y y)))
+                       (the (pi x nat (pi y nat (paths nat x x))) (lam x (lam y (idpath x))))))
  ; the sigma codomain takes the same door (conv's sig branch is pi's twin)
- ('accepted = (rejects (\ z (defn uu-cv5 (total2 x nat (paths nat x x))
-                    (the (total2 x nat (paths nat x x)) (tpair 0 (idpath 0)))))))
- ('rejected = (rejects (\ z (defn uu-cv6 (total2 x nat (paths nat x (succ x)))
-                    (the (total2 x nat (paths nat x x)) (tpair 0 (idpath 0)))))))
+ ('accepted = rejects (z \ defn uu-cv5 (total2 x nat (paths nat x x))
+                       (the (total2 x nat (paths nat x x)) (tpair 0 (idpath 0)))))
+ ('rejected = rejects (z \ defn uu-cv6 (total2 x nat (paths nat x (succ x)))
+                       (the (total2 x nat (paths nat x x)) (tpair 0 (idpath 0)))))
  ; a constant codomain still has to be compared
- ('rejected = (rejects (\ z (defn uu-cv7 (pi x nat bool) (the (pi x nat nat) (lam x x)))))))
+ ('rejected = rejects (z \ defn uu-cv7 (pi x nat bool) (the (pi x nat nat) (lam x x)))))
 (hear test-strict)

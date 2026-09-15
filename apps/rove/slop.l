@@ -111,7 +111,7 @@
  ; it. the road fans out over its last four rows, so the path opens onto the beach.
  ; a wooden sign a third of a screen in, well off the road's right edge and lost in the
  ; weeds: not on the way, so never reached and never read, and the slop takes it like turf
- (slop-post g) (: w (g 'r // 3) [(slop-road g w + 7) w])
+ (slop-post g) (: w (g 'r // 3) [(slop-road g w + 12) w])
  (slop-turf g w x)
   (: h (dice w x 120)
      s ((slop-shore g x) + slop-sand g x)        ; this column's last row of beach
@@ -504,7 +504,7 @@
                             (beat-out (slop-song-speed g) (slop-song-edge g) (slop-song-vol g),
                              swim (due ? 0 (since + 1)))))
              _ (say out (esc + "[?25l"))
-             _ (? (|| tk pn) (slop-sign g tk pn) ())
+             _ (tk || pn ? (slop-sign g tk pn))
              _ (swim 0)
              ; taken: the slop closes over the whole screen and runs at full rate --
              ; no gap left to slow it -- for half a second before the stage is left

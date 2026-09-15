@@ -26,49 +26,60 @@
 <div class="machine">
 <p class="status">waking the machine...</p>
 <canvas class="fb" tabindex="0"></canvas>
-<div class="mbar">click the screen, then type &middot; <code>love</code> opens a repl, <code>ctrl-d</code> leaves it</div>
 </div>
 
 <script type="module" src="inle/wasm/machine.js"></script>
 
 <h2 id="what">what is this??</h2>
 <p>
-<strong>tower</strong> is a short roguelike game written using the <strong>love</strong>
-programming language.
-</p>
-
+<strong>tower</strong> is a roguelike interactive short story written in the
+<a href="https://github.com/cofinalsubnets/love">love programming language</a>.
+<strong>love</strong> is a dynamically typed functional language where every
+value is a one-argument function.</p>
 <p>
-<strong>love</strong> is a dynamic programming language where every value is a one-argument
-function.  love is written in C, and includes a C compiler called <strong>moon</strong>,
-which is written in love.  love targets a wide range of platforms, such as wasm.
-</p>
+love is written in C, and includes a C compiler called
+<strong>moon</strong>, which is written in love.  moon builds OS-agnostic
+(linux/freebsd/netbsd) statically linked binaries for amd64, arm64, riscv64, and also
+targets thumb32 and wasm. love has been ported to several embedded platforms such as
+teensy 4.1, rp2040, and the playdate handheld game console.  love and moon have no
+dependency on any other toolchain, such as gcc or llvm.</p>
 
 <p>
 <strong>inle</strong> is a bare-metal OS kernel written in C and love,  which provides a
-single-user posix-like system.  inle is running in the box above.  <strong>lush</strong>
-is love's posix-compatible command shell, and acts as the main entry point to the love
-ecosystem of programs.
+single-user posix-style system.  inle is the OS running in the box on this page.
 </p>
 
 <p>
-love is distributed as a single binary,  which runs natively on linux, freebsd and netbsd.
-the binary may be invoked as <code>love</code> or <code>lush</code>, and includes a busybox-like
-set of tools, including <code>cc</code>, <code>vi</code> and <code>make</code>, as well as several
-love-specific programs.
+<strong>lush</strong> is love's posix-like command shell, and acts as the main entry
+point to the love ecosystem.
+love is distributed via the lush binary,  which runs natively on linux, freebsd or netbsd,
+and includes a busybox-like set of default tools, including <code>cc</code>, <code>vi</code>
+and <code>make</code>, as well as many love-specific programs,  including <code>love</code>
+and <code>tower</code>;  <code>lux</code>, an X11 window manager; and <code>sb</code>, an
+experimental patch-based version control system.
 </p>
 
 <p>
-the api is currently <em>🫨 unstable</em>.
+the love/lush binary carries a compressed copy of its own source, which lets love rebuild
+itself deterministically from one command on any platform it supports. this can optionally
+be bootstrapped through the local C compiler (see <code>love seed -h</code>
+for details). <code>love seed x64</code> (or a64) in the lush shell on this page will build
+a targeted binary in the browser you can then download and run on linux/freebsd/netbsd.
+running <code>love web</code> from that binary will build and serve this page.
+</p>
+
+<p>
+the api is currently 🫨 unstable.
 to get a love repl in lush, type <code>love</code>.
 type <code>names ()</code> at the repl to see a list of the default namespace.
 </p>
-<p>
-for a nice example of idiomatic love code, try <code>vi /proc/src/apps/rove/rove.l</code>.
-for another cool demo, try typing <code>doom</code>.
-</p>
+<ul>
+  <li>for a nice example of love code, try typing <code>vi /proc/src/apps/rove/tower.l</code></li>
+  <li>for another cool demo, try typing <code>doom</code> (takes several minutes to build :)</li>
+</ul>
 
 <footer>
-  <span class="note">set in the quay bitmaps &middot; for ()</span>
+  <span class="note">for ()</span>
 </footer>
 </body>
 </html>

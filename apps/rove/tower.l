@@ -31,21 +31,6 @@
  ; --- the floor: tiles in a cask, (x y) indexed; 0 rock, 1 ground, 2 the stair, 3 water,
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
  ; --- city: the middle is not delved but laid -- streets on a grid, two cells across
  ; and one along, and the blocks between them buildings: a wall ring with a floor
  ; inside, and two or three doors on different walls, every wall facing a street. the
@@ -122,9 +107,9 @@
              ("█" 170 133)                              ; orchid
              ("█" 168 132))                             ; pale violet red
  (sky w h st) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'tint {}}
+   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'tint {} 'solid '(6)}
    sb {st}
-   _ (each ^(w * h) (i \ pin (d 't) i 6))
+   _ (each ^(w * h) (i \ pin (d 't) i 6))            ; the void this floor is carved out of
    (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    (rhomb cx cy a b f) (each ^(2 * b + 1) (j \ each ^(2 * a + 1)
                                                 (i \ (: x (cx - a + i) y (cy - b + j)
@@ -174,23 +159,6 @@
 
  ; a floor is delved or laid by its tier
  (carve-floor w h st lvl) (lvl @ 2 (city w h st) 3 (sky w h st) (delve w h st (plan lvl)))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
  ; --- the make of each floor: rock, the ground, what is strewn over it, and the plan
@@ -301,7 +269,7 @@
  ; the page's own letters serve (quay folds them onto its face).
  ; ..and a fifth thing where there is one: a book the piece opens, its title then its
  ; pages, a stanza to a page
- feat-book {'table ["π" 240 236 "an worn stone table stained with dark liquid"]
+ feat-book {'table ["π" 240 236 "a worn stone table stained with dark liquid"]
             'throne ["H" 130 94 "a large tree stump carved into an ornate throne sits empty"]
             'chair ["h" 137 94 "a chair with one leg splintered"]
             'bed ["=" 131 95 "a bed, made and cold"]
@@ -319,7 +287,7 @@
             'mirror ["@" 93 54 "a mirror, and the one in it is not quite you"]
             'sign ["¶" 137 94 "a hand-painted wooden sign, the letters are illegible"]
             'bells ["≡" 180 137 "a heavily thumbed technical manual gathers dust on the top shelf"]
-            'shelf ["≡" 180 137 "one book stands out from a shelf of water-damaged magazines"
+            'shelf ["≡" 180 137 "one book stands out on a shelf of water-damaged magazines"
                     '("Muse"
                       ("by Donald Revell"
                        ""
@@ -547,6 +515,7 @@
  w-bite   "the ~ bites you (~)"
  w-dead   "you are done for"
  w-car    "a car takes you off your feet (~)"
+ w-run    "a car runs the ~ down (~)"
  w-wall   "~ holds"
  w-glass  "nothing is there, and it holds"
  w-mirror "the mirror takes you, and lets you out of another"
@@ -571,7 +540,7 @@
  ; the sign the tower opens on; a {brace} is the token's pen. kept short: twenty rows
  ; leave eighteen for the map, and a taller box is one with its foot cut off.
  sign-ttl "the tower"
- sign-open '("at last, the tower.  doesn't look much like a tower.  you knew not to take the name too literally, though."
+ sign-open '("at last, you found the tower.  doesn't look much like a tower.  you knew not to take the name too literally, though."
              ""
              "move     h j k l    or the arrow keys"
              "         y u b n    for diagonals"
@@ -738,12 +707,12 @@
                  "a low-set doggy door so gnomes can come and go as they please"
                  "you turn sideways to get through")
    ("platform"   "you wonder what happens if you step on the wrong color square"
-                 "stars above and below keep drawing your eyes"
-                 "every step is a move in a game")
-   ("steps"      "the stairs between the platforms baffle your sense of geometry"
-                 "you know in your heart the plot won't let you fall"
-                 "the arching pathways through the void look almost procedurally generated")
-   ("runnel"     "a quick thread of water leaves as it came"
+                 "you try and keep your eyes on the platform"
+                 "you feel like a pawn in a game")
+   ("steps"      "the stairs between the levels baffle your sense of geometry"
+                 "you're sure the plot won't let you fall, better not tempt fate though"
+                 "the stairways arcing through the void look almost procedurally generated")
+   ("runnel"     "a quick thread of water leaves lightly as it came"
                  "cooler than the air, deeper than it looks"
                  "light shimmers on the submerged roots of the hedges")
    ("rubble"     "stone that used to be somewhere higher"
@@ -770,7 +739,7 @@
    ("fountain"   "the playing fountain charms a constant shape from water's natural flow"
                  "you wonder where the water pressure comes from"
                  "the pennies at the bottom have hardened to a mineral crust")
-   ("star"       "a wandering star levitates here at ankle height"
+   ("star"       "a wandering star levitates at ankle height"
                  "is it hot? you dare not touch"
                  "you thought the stars were merely far away, but some it seems are truly small")
    ("stair"      "a stair to the next level. watch your step"
@@ -822,52 +791,17 @@
   (lines-of nm @ ls (two? ls ? (peep ls (k % #ls) "") ""))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
  ; --- the climb: the proving game. state in a tablet, one key per turn ---
  ; the bar is not a resource: a turn spent acting mends and a turn passed does not.
  ; forty against a worst bite of three means one mob is a nuisance and two are a death.
  regen 2
  climb-hp 20
- (mend g) (: p (g 'p) h ((p 'hp) + regen) (pin p 'hp (h < p 'mx ? h (p 'mx))))
+ (mend g) (: p (g 'p) h (p 'hp + regen) (pin p 'hp (h < p 'mx ? h (p 'mx))))
  (mob-row k) (peep mob-book k <mob-book)
  (mob-name k) <(mob-row k)
- (mob-new k x y) (: r (mob-row k)
-                   {'x x 'y y 'gl (peep r 1 114) 'hue (peep r 2 137)
-                    'hp (peep r 3 3) 'dm (peep r 4 1) 'pc (peep r 5 1) 'nm <r})
-
-
-
-
+ (mob-new k x y) (mob-row k @ r
+                  {'x x 'y y 'gl (peep r 1 114) 'hue (peep r 2 137)
+                   'hp (peep r 3 3) 'dm (peep r 4 1) 'pc (peep r 5 1) 'nm <r})
 
 
  ; --- the cars: the middle's traffic, on the roads and never off them. a car keeps
@@ -897,16 +831,26 @@
                    _ (pin p 'hp (p 'hp - car-dm))
                    _ (note g (fill w-car [car-dm]))
                    _ (pin g 'sfx ('horn . g 'sfx))
-                   _ (shove g m)
+                   _ (shove g m p)
                    (0 >= p 'hp ? (pin g 'over 'dead, note g w-dead)))
 
+ ; ..and the same for anyone else in the street: the middle keeps nobody. what it was
+ ; carrying goes into the road where it falls, for whoever is still standing
+ (run-over g m o) (: _ (pin o 'hp (o 'hp - car-dm))
+                     _ (note g (fill w-run [(o 'nm) car-dm]))
+                     _ (pin g 'sfx ('horn . g 'sfx))
+                     _ (shove g m o)
+                     (0 >= o 'hp ? (pin g 'ms (filter (!= o) (g 'ms)),
+                                    drop g o,
+                                    note g (fill w-kill [(o 'nm)]))))
+
  ; ..and the step aside: to either side of the car's line, where a cell is free
- (shove g m) (: p (g 'p) sb (g 'sb)
-                cs (roll sb 2 = 0 ? [[(m 'dy) (0 - m 'dx)] [(0 - m 'dy) (m 'dx)]]
-                                    [[(0 - m 'dy) (m 'dx)] [(m 'dy) (0 - m 'dx)]])
-                (go l) (two? l ? (: c <l nx (p 'x + <c) ny (p 'y + <>c)
-                                    (blocked? g nx ny ? (go >l) (pins p 'x nx 'y ny))))
-                (go cs))
+ (shove g m o) (: sb (g 'sb)
+                  cs (roll sb 2 = 0 ? [[(m 'dy) (0 - m 'dx)] [(0 - m 'dy) (m 'dx)]]
+                                      [[(0 - m 'dy) (m 'dx)] [(m 'dy) (0 - m 'dx)]])
+                  (go l) (two? l ? (: c <l nx (o 'x + <c) ny (o 'y + <>c)
+                                      (blocked? g nx ny ? (go >l) (pins o 'x nx 'y ny))))
+                  (go cs))
  (swerve g m) (: d (g 'd) sb (g 'sb)
                  c (roll sb 2 = 0 ? [(m 'dy) (0 - m 'dx)] [(0 - m 'dy) (m 'dx)])
                  (corner? d (m 'x) (m 'y) <c <>c ? (car-head m <c <>c)))
@@ -921,12 +865,14 @@
    d (g 'd) p (g 'p)
    (go n) (? (0 < n)
              (: nx (m 'x + m 'dx) ny (m 'y + m 'dy)
+                o (mob-at g nx ny)
                 (? (nx = p 'x && ny = p 'y) (run-down g m)
                    !(0 <= nx < d 'w && 0 <= ny < d 'h) (car-gone g m)
-                   (mob-at g nx ny) ()
+                   (o && o 'car) ()                    ; a car gives way to a car alone
+                   o (run-over g m o)
                    (road? d nx ny)
                     (: _ (pins m 'x nx 'y ny)
-                       _ (? (roll (g 'sb) 4 = 0) (swerve g m))
+                       _ (roll (g 'sb) 4 @ 0 (swerve g m))
                        (go (n - 1)))
                    (car-back m)))))
 
@@ -971,14 +917,13 @@
    d (g 'd) sb (g 'sb) lvl (g 'lvl) loot {} ks (mob-set lvl)
    (drop-at rm) [(peep rm 0 0 + roll sb (peep rm 2 1)) (peep rm 1 0 + roll sb (peep rm 3 1))]
    (ground? x y) (elem (dat d x y) '(1 4 8))
-   (mobs rm n acc) (? (0 < n)
+   (mobs rm n acc) (0 >= n ? acc
                     (: xy (drop-at rm) x <xy y <>xy
                        (? (ground? x y &&
                            !(loot (x + d 'w * y)) &&
                            !(any ({'x ^x 'y ^y} \ 1) acc))
                         (mobs rm (n - 1) (mob-new (peep ks (roll sb #ks) 0) x y . acc))
-                        (mobs rm (n - 1) acc)))
-                    acc)
+                        (mobs rm (n - 1) acc))))
    ; every room has pennies, which are the point of the place. the tile is read through
    ; `dat`: a cask does not answer to being applied, so (d 't i) is () for every cell
    (treasure rm n) (? (0 < n)
@@ -995,13 +940,13 @@
                                 (free? <xy <>xy ? xy (spot-in rm (n - 1)))))
    (spot n) (two? rms ? (spot-in (rms (roll sb #rms)) n) ())
    (furnish-in rm k) (: xy (spot-in rm 40) (xy ? (pin loot (<xy + d 'w * <>xy) [k])))
-   (furnish k) (two? rms ? (furnish-in (rms (roll sb #rms)) k) ())
+   (furnish k) (two? rms && furnish-in (rms (roll sb #rms)) k)
    _ (lvl @ 1 (furnish 'table, furnish 'throne))
    ; the middle's buildings are lived in: a few pieces each, and one holds the shelf
    pieces '(chair bed crate)
-   _ (? (2 = lvl)
-        (: _ (each rms (rm \ each ^(roll sb 2) (_ \ furnish-in rm (pieces (roll sb #pieces)))))
-           (furnish 'shelf)))
+   _ (lvl @ 2
+      (each rms (rm \ each ^(roll sb 2) (_ \ furnish-in rm (pieces (roll sb #pieces)))),
+       furnish 'shelf))
    ; ..and lit: a brazier in every other building, the one red thing there and dim, and a
    ; sodium lamp on one wall of each, facing its street -- on the wall ring, where nobody
    ; walks and every car passes under
@@ -1012,7 +957,7 @@
                                   2 [x0 (y0 + 1 + roll sb (y1 - y0 - 1))]
                                     [x1 (y0 + 1 + roll sb (y1 - y0 - 1))])
                    (0 = dat d <c <>c ? (pin loot (<c + d 'w * <>c) '(lamp))))
-   _ (? (2 = lvl) (each rms (rm \ (lamp-on rm, roll sb 2 @ 0 (furnish-in rm 'brazier)))))
+   _ (lvl @ 2 (each rms (rm \ (lamp-on rm, roll sb 2 @ 0 (furnish-in rm 'brazier)))))
    ; heaven's platforms: fountains, and mirrors on platforms of their own -- one mirror
    ; lets out of another, so there are two at least where there are two platforms.
    ; heaven's furniture is walked round, never through: only where the ring about it is
@@ -1026,9 +971,9 @@
    ; mirrors first, each on a platform of its own; one too small to ring a mirror hands
    ; it on to the next, so there are two at least wherever two platforms can hold them
    (mirrors ps n) (? (0 < n && two? ps) (mirrors >ps (n - (furnish-ringed <ps 'mirror 40 ? 1 0))))
-   _ (? (3 = lvl)
-        (: _ (mirrors (deal sb rms) (2 + roll sb 2))
-           (each ^(2 + roll sb 2) (_ \ (two? rms ? (furnish-ringed (rms (roll sb #rms)) 'fountain 40))))))
+   _ (lvl @ 3
+      (mirrors (deal sb rms) (2 + roll sb 2),
+       each ^(2 + roll sb 2) (_ \ two? rms && furnish-ringed (rms (roll sb #rms)) 'fountain 40)))
    ; ..and its streets driven: a car for so many cells of street, headed along it. a
    ; middle delved for want of room has no lanes, and no traffic
    pi (g 'p 'x + d 'w * g 'p 'y)
@@ -1044,7 +989,7 @@
    (gate i) (: x (i % w) y (i // w) l (lane-at d x y)
                ix (? (x = 0) 1 (x = w - 1) -1 0) iy (? (y = 0) 1 (y = h - 1) -1 0)
                (6 = dat d x y && (ix != 0 && <l = ix || iy != 0 && <>l = iy) ? [x y <l <>l]))
-   gates (? (2 = lvl) (filter two? (map gate ^(w * h))) ())
+   gates (lvl @ 2 (filter two? (map gate ^(w * h))))
    her (? (lvl <= her-floors) (: xy (spot 40)
                                  (xy ? {'x <xy 'y <>xy 'gl her-glyph 'hue her-pen})))
    (pins g 'ms (cat cars ms) 'loot loot 'her her 'gates gates))
@@ -1078,7 +1023,7 @@
  ; so it is also a way through. the stair is never in it.
  (stream d sb) (: w (d 'w) h (d 'h)
                   (go x y) (? (y < h)
-                              (: _ (? (2 != dat d x y) (dput d x y 3))
+                              (: _ (2 != dat d x y && dput d x y 3)
                                  nx (roll sb 2 = 0 ? (x + roll sb 3 - 1) x)
                                  (go (nx < 1 ? 1 (nx > (w - 2) ? (w - 2) nx)) (y + 1))))
                   (go (2 + roll sb (w - 4)) 0))
@@ -1118,10 +1063,10 @@
  ; the climber's stride: bump a mob to strike it, step onto pennies to take them
  ; the first blow is also an introduction, whoever throws it, and a thing introduces
  ; itself once
- (meet g m) (? (m 'met) ()
-              (: _ (pin m 'met 1)
-                 s (mutter (roll (g 'sb) 97) (m 'nm))
-                 (s ? (note g s))))
+ (meet g m) (m 'met ? ()
+             (: _ (pin m 'met 1)
+                s (mutter (roll (g 'sb) 97) (m 'nm))
+              (s ? (note g s))))
 
 
  ; ..and what it was carrying, which is pennies and always pennies. a pile already on
@@ -1238,14 +1183,6 @@
                  (note g (fill w-floor [(here g)]))))
 
 
-
-
-
-
-
-
-
-
  ; --- the vale: the last floor, and not a delve at all. a road up through the trees
  ; to a clearing; in it an octagon of stones round a fire with her beside it, and past
  ; it a cottage with the token in its attic. the floor is three screens tall and the
@@ -1270,8 +1207,7 @@
  ; what she says by the fire is a tree: a node is its lines and its choices, a choice a
  ; key, its words and the node it leads to; a node with no choices closes on any key.
  ; she is bumped for it and stays, and a second bump starts it over.
- her-tree '((start ("Orozcalia sits by the fire and does not look up."
-                    "\"This place seem familiar to you?\"")
+ her-tree '((start ("Orozcalia sits by the fire and does not look up.  \"This place seem familiar to you?\"")
                    ((1 "Who are you?" who)
                     (2 "What is this place?" here)
                     (3 "Nope." bye)))
@@ -1281,13 +1217,12 @@
             (name ("\"Number in, number out.\"  She gestures at the stones.")
                   ((1 "What?" card)
                    (2 "I see." start)))
-            (here ("\"If you don't know that, pumpkin, then I dread we're in a pickle.\""
-                   "She pokes the fire.")
+            (here ("\"If you don't know that, pumpkin, then I dread we're in a pickle.\"  She pokes the fire.")
                   ((1 "Oh..." start)))
             (card ("\"Recursive or coinductive, no job too big. Take my card.\""
                    "She hands you a tasteful business card:"
-                   "  Orozcalia the Calculator -- Ranked Numeromatrix -- No Job Too Big"
-                   "  [beyond city limits, well-bottom at forest-edge, no appt. needed]")
+                   "Orozcalia the Calculator -- Ranked Numeromatrix -- No Job Too Big"
+                   "[beyond city limits, well-bottom at forest-edge, no appt. needed]")
              ((1 "Gosh." start)))
             (bye ("\"You know what to do.\""
                   "She pokes the fire.")
@@ -1380,8 +1315,7 @@
              (push-in g (g 'wq)))
    'ring (: _ (pin g 'r (g 'r - 1))
             _ (0 < g 'r ? (push-in g (ring-in g)))
-            (done? g ? (pin g 'over 'won)))
-   ())
+            (done? g ? (pin g 'over 'won))))
 
 
 
