@@ -1147,15 +1147,11 @@ valg: host
 # stylesheet, web/style.css, are written by hand; the page's island is the markup
 # machine.js drives
 web: fonts web/favicon.png
-fonts: web/fonts/quay16.woff web/fonts/quay8.woff
+fonts: web/fonts/quay16.woff
 web/fonts/quay16.woff: love/quay/cleat_8x16.c tools/mkfont.l $(mdep)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m tools/mkfont.l $< 12 $@ "Quay 16"
-web/fonts/quay8.woff: love/quay/cga_8x8.c tools/mkfont.l $(mdep)
-	@echo 'LOVE	'$@
-	@mkdir -p $(dir $@)
-	@$m tools/mkfont.l $< 6 $@ "Quay 8"
 # ..the favicon: cp437's heart off the 8x8 face, in the palette's red
 web/favicon.png: love/quay/cga_8x8.c tools/mkicon.l apps/vi/config.l $(mdep)
 	@mkdir -p $(dir $@)

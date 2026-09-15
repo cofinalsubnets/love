@@ -24,6 +24,6 @@ love/quay/cleat_8x16.c
   tools/mkpsf.l. A modified version may not wear the reserved name, so the
   table is named for the tree.
 
-web/fonts/quay16.woff, quay8.woff
-  Nothing vendored: tools/mkfont.l lays both from the bitmaps in love/quay,
-  which carry their own note on where they came from.
+web/fonts/quay16.woff
+  Nothing vendored: tools/mkfont.l lays it from the bitmap in love/quay,
+  which carries its own note on where it came from.

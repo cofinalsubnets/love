@@ -350,12 +350,10 @@ test_web: host
 	@mkdir -p out/.w
 	@env -u LOVE_NO_IMAGE $m tools/mkicon.l love/quay/cga_8x8.c 3 32 out/.w/favicon.png 2>/dev/null
 	@env -u LOVE_NO_IMAGE $m tools/mkfont.l love/quay/cleat_8x16.c 12 out/.w/quay16.woff "Quay 16"
-	@env -u LOVE_NO_IMAGE $m tools/mkfont.l love/quay/cga_8x8.c 6 out/.w/quay8.woff "Quay 8"
 	@cmp -s out/.w/favicon.png web/favicon.png \
 	  && cmp -s out/.w/quay16.woff web/fonts/quay16.woff \
-	  && cmp -s out/.w/quay8.woff web/fonts/quay8.woff \
 	  || { echo "  FAIL: a committed web asset is behind web/ -- run make web and commit"; exit 1; }
-	@echo "  web: ok -- the icon and both fonts are what web/ lays"
+	@echo "  web: ok -- the icon and the font are what web/ lays"
 test_sb: host out$(hsuf)/sb
 	@echo TEST apps/sb/sb.l + test/host/sb.l
 	@rm -rf out/.sbtest

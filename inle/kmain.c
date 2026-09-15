@@ -1754,9 +1754,19 @@ bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
 
 // (tty fd) -- the console as (rows . cols), off the framebuffer's pixels and the glyph scale
 // (cbinit); it is not 80x25 here. serial-only there is no grid and the answer is ENOTTY's
-// nom. the operand is not read: there is one console and every fd is it.
+// nom. the operand routes as every io op's does: the rows are one table shared by every
+// task, and 0 1 2 are the numeric spellings of in/out/err, so a task wearing a pipe is
+// asked about the pipe. only a charm past 2 is a raw row.
 ai_noinline static struct ai *k_tty(struct ai *g) {
-  if (!kcb) return g->sp[0] = ai_err(g, ENOTTY), g;
+  word x = g->sp[0];
+  if (charmp(x) && getcharm(x) >= 0 && getcharm(x) <= 2)
+    x = word(getcharm(x) == 0 ? &ai_stdin : getcharm(x) == 1 ? &ai_stdout : &ai_stderr);
+  if (*task_io(g) != zero) x = io_route(g, x);
+  intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);
+  if (fd < 0) return g->sp[0] = ai_badarg(g), g;
+  struct k_source const *s = k_source((int) fd);
+  if (!kcb || !s || !(s->putc == serial_putc1 || s->readn == kb_readn))
+   return g->sp[0] = ai_err(g, ENOTTY), g;
   if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
   struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(kcb->rows), putcharm(kcb->cols));
