@@ -10,7 +10,8 @@
 ;
 ;   cat t/00-init.l t/host/rove.l | b/love
 
-(borrow 'rove)   ; the artifact's module, warm from the tree
+(borrow 'rove)   ; the artifact's modules, warm from the tree
+(borrow 'tower)
 
 (: (find h n i) (? (i + tally n < 1 + tally h)
                   (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))
@@ -361,8 +362,11 @@
    _ (crawl-turn g [1 0])
    m1 (g 'msg)
    _ (crawl-turn g [1 0])
- (test (find m1 "square" 0 || find m1 "stars" 0 || find m1 "game" 0)
-       (find (g 'msg) "steps" 0)))
+ ; the platform mutters one of its lines, the step mutters one of its own, and the
+ ; two are not the same line -- the flavour text itself is the tower's to reword
+ (test (0 < tally m1)
+       (0 < tally (g 'msg))
+       (m1 != (g 'msg))))
 
 ; the horn the game asked for is two voices in the song, at the write head, and the
 ; asking is spent by it
@@ -471,7 +475,7 @@
    _ (dput d 2 2 3) _ (dput d 3 2 3) _ (dput d 1 0 3)
    _ (pin (g 'loot) (5 + 9 * 1) '(brazier))
    ls (live-cells d (g 'loot))
-   (live _) (:- (slurp j) j (paint-live (jug 0) d (g 'vis) (g 'loot) (ents g)))
+   (live _) (:- (slurp j) j (paint-live (jug 0) d (g 'vis) (cell-face d (g 'vis) (g 'loot) (ents g)) ls))
    (moves s) (: (go i n) (i >= #s ? n (go (i + 1) (n + (s i = 72 ? 1 0)))) (go 0 0))
    (bare s) (:- (go 0 "")
               (go i acc) (? (i >= #s) acc (s i = 27) (go (1 + past i) acc) (go (i + 1) (acc + string (s i))))

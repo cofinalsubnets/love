@@ -28,6 +28,14 @@
    (has? h n) (: k (tally n) m (tally h)
                  (go i) (? ((m - k) < i) 0 (n = snip h i (i + k)) 1 (go (i + 1)))
                  (go 0))
+   ; the wire read until a phrase has passed, as the text so far: chars kept newest
+   ; first and the phrase matched at the head, so a frame costs the frame, not its square
+   (wire p n) (: rn (rev (map n ^#n))
+                 (pre? a b) (? a (? b (? (<a = <b) (pre? >a >b) 0) 0) 1)
+                 (go acc) (: ch (see p)
+                             (? (ch = -1) acc
+                                (: acc2 (ch . acc) (? (pre? rn acc2) acc2 (go acc2)))))
+                 (string (rev (go ()))))
    (blank? t) (foldl (\ a ch (&& a (ch = 32))) 1 t)
    (count h n) (: k (tally n) m (tally h)
                   (go i c) (? ((m - k) < i) c
@@ -101,9 +109,7 @@
 ; on the wire, then type: the app says when, and no timer is involved.
  t (spawn "b/love ink" 12 40)
  m >t
- seen (: (upto acc) (? (has? acc "\e[48;5;") acc
-                       (: ch (see m) (? (= ch -1) acc (upto (acc + string ch)))))
-         (upto ""))
+ seen (wire m "\e[48;5;")
  _ (say m " ")
  itx (seen + slurp m)
  _ (waitfor <t)
@@ -152,22 +158,20 @@
 ; it lays down while nobody is reading the pty fill the thing and stand at five.
  sgt (spawn "b/love slop phone 38" 14 64)
  sgm >sgt
- sgseen (: (upto acc) (? (has? acc "one way forward remains") acc
-                         (: ch (see sgm) (? (= ch -1) acc (upto (acc + string ch)))))
-           (upto ""))
+ sgseen (wire sgm "-- any key --")
  _ (say sgm "z")                                            ; typed into the deaf half
  _ (rest 800)
  _ (say sgm "\rq")                                          ; ..and these are heard
  sgtx (sgseen + slurp sgm)
  _ (waitfor <sgt)
  _ (test
-    (has? sgtx "what you carry")                            ; the box, titled
+    (has? sgtx "is this still the tower?")                 ; the box, titled
     (has? sgtx "phone")                                     ; ..naming what came up
     (has? sgtx "38 pennies")
-    (has? sgtx "one way forward remains")
+    (has? sgtx "forward remains")                           ; ..the line, wrapped at 64
     (4 > count sgtx "\e[H"))                                ; ..and it stood while deaf
  sn (run "b/love slop" "q" 14 64)
- _ (test !(has? <sn "one way forward remains"))
+ _ (test !(has? <sn "forward remains"))
 
 ; --- slop: the shimmer with a player under it, and only forward moves him ---
 ; slop paints before it reads, and then keeps painting whether a key comes or not, so
@@ -178,9 +182,7 @@
 ; one press.
  st (spawn "b/love slop" 12 40)
  sm >st
- sseen (: (upto acc) (? (has? acc "\e[38;5;94m") acc
-                        (: ch (see sm) (? (= ch -1) acc (upto (acc + string ch)))))
-          (upto ""))
+ sseen (wire sm "\e[38;5;94m")
  _ (say sm "k")                                             ; gap 19, cost 1: one square
  _ (rest 200)
  _ (say sm "jlq")                                           ; back, sideways, then ashore

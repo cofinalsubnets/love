@@ -113,7 +113,7 @@
                (<s @- (window-say g $ "?? " + show s)
                 'say (each >s (window-say g))
                 'ask (pin w 'prompt 1)
-                'hatch (: run (cite 'rove 'tower-run)
+                'hatch (: run (cite 'tower 'tower-run)
                         (? run (run (), window-say g "you climb back out.")
                            (window-say g "the way up is sealed on this seat.")))))))
  (mod nm k) (cite nm k)
