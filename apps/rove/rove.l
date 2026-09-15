@@ -25,7 +25,7 @@
  ; end off the map, heaven's void -- 7 a step and 8 a platform; the vale's 9 dirt, 10 the
  ; bare spot, 11 timber -- the cottage seen from outside, a wall -- 12 garden, 13 a stair down
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
- (open? d x y) (: t (dat d x y) (0 < t && t != 6 && t != 11 && t != 12))   ; walked: the cottage and its bed are not
+ (open? d x y) (: t (dat d x y) (0 < t && t != 6 && t != 11))   ; walked: the cottage is not, its garden bed is
  (lit? d x y) (0 < dat d x y)                           ; looked through
  (dput d x y v) (pin (d 't) (x + (d 'w) * y) v)
 
@@ -155,11 +155,11 @@
    padding (peep d 'vx 0 (t \ t + " ") "")
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees. a long one wraps
-   ; onto a second row, which covers the floor's first: the floor does not move.
+   ; onto a second and a third row, each covering a floor row: the floor does not move.
    ; d 'top is the rows it took, for the live painter to keep under
    cols (peep d 'cols w)
    wr (cite 'story 'wrap)
-   notes (: ls (wr && cols < vlen msg ? (wr msg cols) [msg]) (two? >ls ? [<ls (ls 1)] ls))
+   notes (: ls (wr && cols < vlen msg ? (wr msg cols) [msg]) (first-n 3 ls))
    _ (pin d 'top #notes)
    _ (say j "\e[H")
    _ (each notes (l \ say j ("\e[0m" + fit l cols + "\e[K\r\n")))

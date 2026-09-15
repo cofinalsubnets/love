@@ -109,9 +109,9 @@
  ; one cell of ground: (glyph . pen). behind the shore is bare sand; in front of it
  ; grass, mostly tufts with a shrub here and there, and the road's bare dots through
  ; it. the road fans out over its last four rows, so the path opens onto the beach.
- ; a wooden sign a third of a screen in, a cell off the road's right edge: not on the
- ; way, so never reached and never read, and the slop takes it like any turf
- (slop-post g) (: w (g 'r // 3) [(slop-road g w + 4) w])
+ ; a wooden sign a third of a screen in, well off the road's right edge and lost in the
+ ; weeds: not on the way, so never reached and never read, and the slop takes it like turf
+ (slop-post g) (: w (g 'r // 3) [(slop-road g w + 7) w])
  (slop-turf g w x)
   (: h (dice w x 120)
      s ((slop-shore g x) + slop-sand g x)        ; this column's last row of beach

@@ -439,8 +439,8 @@
  (test (find f "\e[48;5;" 0) (find f "abX" 0) ("c" = snip f (#f - 1) #f)
        (find (fit s 400) "ab\e[0m" 0)))
 
-; a long note wraps onto a second row, which covers the floor's first row: the frame is
-; no taller and the floor does not move under it, so a tap counts from the same row
+; a long note wraps onto a second and a third row, each covering a floor row: the frame
+; is no taller and the floor does not move under it, so a tap counts from the same row
 (: g (hand-g ())
    _ (pins (g 'd) 'rows 5 'cols 20)
    _ (pin g 'msg "short")
@@ -451,7 +451,7 @@
    (bare s) (:- (go 0 "")
               (go i acc) (? (i >= #s) acc (s i = 27) (go (1 + past i) acc) (go (i + 1) (acc + string (s i))))
               (past i) (: c (s (i + 1)) (? (i + 1 >= #s) i (c = 91 || c < 64) (past (i + 1)) (i + 1))))
- (test (#r1 = #r2) (find (r2 1) "screen" 0) (bare (r1 2) = bare (r2 2)) (bare (last r1) = bare (last r2))
+ (test (#r1 = #r2) (find (r2 1) "screen" 0) (bare (r1 3) = bare (r2 3)) (bare (last r1) = bare (last r2))
        (60 = tap-steer g [(g 'p 'x + peep (g 'd) 'vx 0) (g 'p 'y + 1)])))
 
 ; ..and standing on a stair, a tap on any of the nine cells about you is the stair
@@ -467,7 +467,7 @@
 
 ; the floor's live cells: water and coals, found once; the count on the floor moves
 ; the water's pen a row a count; and the live painter lays those cells alone, each
-; under a cursor move, none under the note's second row or a sign's box
+; under a cursor move, none under the note's second or third row or a sign's box
 (: g (hand-g ())
    d (g 'd)
    _ (pins d 'rows 5 'cols 20 'lit 1)
@@ -494,7 +494,7 @@
    _ (pin g 'sign '("a sign" "over the floor"))
    _ (crawl-frame g)
    l3 (live ())
- (test (3 = moves l2) !(find l2 "\e[2;7H" 0)             ; the water under the note is left
+ (test (2 = moves l2) !(find l2 "\e[2;7H" 0) !(find l2 "\e[3;" 0)   ; the water under the note is left
        (two? (d 'box)) (moves l3 < 4)))                  ; ..and so is what the box covers
 
 ; pennies weigh in, and they are the only thing on the floor
