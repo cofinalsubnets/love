@@ -1,0 +1,139 @@
+; tools/mkrt.l -- lay the compiled moonlibc runtime into an ELF object, one
+; deflated archive per hosted ISA, so a bare `love cc` links without compiling
+; 197 members first (moon.l's rtcarried; inle/src.c answers runtime-gz).
+;
+;   love wake out/mooncc0.image tools/mkrt.l out.o [arch]
+;
+; the object holds, per name in {id, x64, a64, rv64}, mksrc.l's pair
+; shape 8-aligned:
+;
+;   ai_rtgz_<nm>_len   an 8-byte little-endian length
+;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
+;                      is moon.l's rtcid of the tree slice, plain text)
+;
+; a link carrying no runtime (love0, and the gate links) names inle/noblob.c, whose
+; zeros answer nothing and leave the compile-from-source lane standing. determinism is
+; load-bearing: arbytes and rtcid are all pure of the machine, so the
+; seed's fixpoint carries this object unchanged.
+; this rides the mooncc image (wake), not the mksys cat: the archives are
+; mooncc compiles, so the whole compiler must be aboard; arch names the object
+; format (the LINK's arch), and a cross backend joins from its tree text the
+; way mksrc.l joins one.
+
+(borrow 'posix)
+(: (rt-die m) (say err ("mkrt: " + m + "\n"), quit 1)
+   (rt-rdev cl)
+    (sound cl @ 'torn (rt-die "torn backend text")
+                (a . u) (ev a, rt-rdev u))
+   (rt-be arch)
+    (? (lit? (cite 'holo 'backends arch)) 0
+       ; the backend file is the canonical arch word now -- one spelling, no map
+       (: f ("love/holo/" + string arch + ".l")
+          q (open f "r")
+          (? (hot? q) (rt-rdev (flow q), close q)
+             (rt-die ("no backend aboard and no text at " + f)))))
+   (rt-bytes s i acc) (i < 0 ? acc (rt-bytes s (i - 1) (s i . acc)))
+   (rt-le8 v i acc) (i = 8 ? acc (rt-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
+   (rt-zeros k acc) (k < 1 ? acc (rt-zeros (k - 1) (0 . acc)))
+
+   ; the fan's width, cook's own down the environment -- a hint about the machine, and
+   ; with no jobserver no claim on its pool. only a width ABOVE ONE is a signal: cook
+   ; answers 1 whenever no -j was given, and a plain make exports nothing at all, so
+   ; either way read the machine here rather than let the fan be narrower than the box
+   ; merely because of how it was driven. what a worker adds is not the fork, which
+   ; is free, but mooncc warming per process -- rtwarm hands out contiguous runs to hold
+   ; that down, and a member's first compile in a fresh process still costs twice the rest.
+   (rt-width _)
+    (: w ("" + getenv "COOKJOBS")
+       n #w
+       (go k a) (? (n <= k) a
+                   (w k < 48 || 57 < w k) 0
+                   (go (k + 1) (a * 10 + w k - 48)))
+       v (0 < n ? (go 0 0) 0)
+       (1 < v ? v (rt-cores 0)))
+   ; half the cores /proc/cpuinfo names, plus one -- the same width rule cook's bare -j
+   ; takes. no /proc (the BSDs) is 1, the serial fan.
+   (rt-cores _)
+    (: q (open "/proc/cpuinfo" "r")
+       (? !(hot? q) 1
+          (: s (slurp q)
+             _ (close q)
+             n (foldl (a \ l \ 9 <= #l && snip l 0 9 = "processor" ? (a + 1) a)
+                      0 (lines s))
+             (0 < n ? (n // 2 + 1) 1))))
+   ; ~600 member compiles across the three archives and none reads another, so a pool of
+   ; children fills the member cache and `one` below indexes the archives out of it,
+   ; every member a hit. the cache IS the join -- without one a child's work dies with
+   ; it; a fork refused leaves its residue to `one`, that much slower.
+   (rt-fan rtwarm cd ts)
+    (? !(string? cd) ()
+       (: w (rt-width 0)
+          _ (flush out, flush err)
+          ps (rt-kids rtwarm ts w 1 ())
+          ; THE PARENT'S OWN RESIDUE GOES BESIDE THEM, never after the wait: waiting
+          ; first spends the children's cores and then runs one share alone, which is
+          ; half the width for the whole second half.
+          _ (rtwarm "apps/moon/" ts 'linux () w 0)
+          (foldl (_ \ wait) 0 ps)))
+   (rt-kids rtwarm ts w i acc)
+    (? (w <= i) acc
+       (: p (fork 0)
+          (? (p = 0) (rtwarm "apps/moon/" ts 'linux () w i, quit 0)
+             (0 < p) (rt-kids rtwarm ts w (i + 1) (p . acc))
+             (rt-kids rtwarm ts w (i + 1) acc))))
+
+   ; one member: label len, label bytes, zero-padded so the next len lands
+   ; 8-aligned (a riscv core may trap an unaligned word; the pad is free)
+   ; the archive rides as a BLOB -- the string itself, one item holding every byte
+   ; (holo.l's item-len) -- so a megabyte member costs a cell and not a million.
+   (rt-forms nm s)
+    (: n #s
+       pad ((8 - (n & 7)) & 7)
+       [['label (name ("ai_rtgz_" + nm + "_len"))]
+        ['raw (rt-le8 n 0 ())]
+        ['label (name ("ai_rtgz_" + nm))]
+        ['raw [s (rt-zerostr pad "")]]])
+   (rt-zerostr k acc) (k < 1 ? acc (rt-zerostr (k - 1) (string 0 + acc)))
+
+   (mkrt arch dst)
+    ; every archive arch joins, not just the object's: the image bakes the
+    ; native backend only, and each ISA's members ride its own obj writer
+    (: _ (rt-be 'x64, rt-be 'a64, rt-be 'rv64, rt-be arch)
+       rtcid (cite 'moon 'rtcid)
+       rtarch (cite 'moon 'rtarch)
+       rtwarm (cite 'moon 'rtwarm)
+       objelf (cite 'holo 'objelf)
+       cid (rtcid "apps/moon/")
+       _ (!(string? cid) ? (rt-die "no apps/moon/ slice to hash -- run from the tree root"))
+       ; through rtarch, so the runtime cache serves a repeat build (~instant)
+       ; and only a real slice or compiler change recompiles the members --
+       ; without this every seed and rebake paid three full runtime compiles.
+       cd ((cite 'moon 'mcdir) ())
+       _ (rt-fan rtwarm cd '(x64 a64 rv64))
+       ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
+       ; and rtcarried pays one inflate for the ISA it wants.
+       (one tgt) (: a (rtarch "apps/moon/" tgt 'linux ())
+                    _ (!(string? a) ? (rt-die (show tgt + ": no archive (a member refused?)")))
+                    z (deflate a)
+                    _ (!(string? z) ? (rt-die (show tgt + ": deflate refused the archive")))
+                    z)
+       zx (one 'x64)
+       za (one 'a64)
+       zr (one 'rv64)
+       forms ((rt-forms "id" cid)
+              + (rt-forms "x64" zx)
+              + (rt-forms "a64" za)
+              + (rt-forms "rv64" zr))
+       xs '("ai_rtgz_id" "ai_rtgz_id_len"
+            "ai_rtgz_x64" "ai_rtgz_x64_len"
+            "ai_rtgz_a64" "ai_rtgz_a64_len"
+            "ai_rtgz_rv64" "ai_rtgz_rv64_len")
+       ob (objelf arch () () () xs () () () () () forms)
+       ((cite 'holo 'write-bytes) dst ob))      ; ob is a byte list, not a string
+
+   (mkrt-main av)
+    (: n #av
+       (1 <= n ? (mkrt (2 <= n ? (name <>av) 'x64) <av)
+        (rt-die "usage: love wake out/mooncc0.image tools/mkrt.l OUT.o [ARCH]")))
+
+   (mkrt-main >argv))

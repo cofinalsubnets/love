@@ -1,8 +1,8 @@
 # svalbard's ignore list, one rule a line, read by sb's walk and by the dist cut
-# (u/selfpack.l). a rule holding * ? [ is a glob over the whole relative path
+# (tools/selfpack.l). a rule holding * ? [ is a glob over the whole relative path
 # and `*` crosses `/`; every other rule is a path prefix at a segment boundary.
-# the built-ins .sb .git b need no line here. those three are directories and are asked
-# only of a directory, so a file by one of those names is a file (gitignore's `/b/`).
+# the built-ins .sb .git out need no line here. those three are directories and are asked
+# only of a directory, so a file by one of those names is a file (gitignore's `/out/`).
 
 # downloaded, never built
 dl
@@ -11,28 +11,28 @@ dl
 # named here too so the dist cut agrees with git rather than relying on it.
 notes
 
-# rocq/lean build products. these sit UNDER t/proof, which the archive keeps
+# rocq/lean build products. these sit UNDER test/proof, which the archive keeps
 # for its 14 tracked sources -- so they are globs, not a prefix.
 *.vo
 *.vok
 *.vos
 *.glob
 *.cache
-t/proof/rocq/.*.aux
-t/proof/lean/*.olean
+test/proof/rocq/.*.aux
+test/proof/lean/*.olean
 
 # generated proof terms: their gates lay them from the corpus on every run
-t/proof/rocq/gen.v
-t/proof/rocq/uugen.v
-t/proof/lean/uugen.lean
+test/proof/rocq/gen.v
+test/proof/rocq/uugen.v
+test/proof/lean/uugen.lean
 
 # what the project's web page alone links: generated, committed for github pages,
-# never shipped (the machine's pair is `make site-wasm`'s copy out of b/). the page,
-# index.html, and its stylesheet, w/style.css, are written by hand and ship with the source
-w/favicon.png
-w/fonts
-w/wasm/love.wasm
-w/wasm/love.image
+# never shipped (the machine's pair is `make site-wasm`'s copy out of out/). the page,
+# index.html, and its stylesheet, web/style.css, are written by hand and ship with the source
+web/favicon.png
+web/fonts
+web/wasm/love.wasm
+web/wasm/love.image
 
 # editor and debugger leavings
 vgcore.*

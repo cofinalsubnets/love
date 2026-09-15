@@ -27,11 +27,11 @@ love-the-host-process already calls `read`/`write`/`malloc`. L0 widens that to t
 surface as nifs:
 
 > every host nif is `host_X` (an `ai_noinline` syscall worker) + `lvm_X` (the VM
-> tail wrapper) + a `nif_X[]` thread registered via `LvNif` in a `i/*.c` file
+> tail wrapper) + a `nif_X[]` thread registered via `LvNif` in a `inle/*.c` file
 > (auto-globbed — no love.c/love.h/main.c edit; main.c is core). The fd→port path is
 > free: `ai_io_alloc(g,fd)` wraps any fd as a port with a close finalizer, and
 > read/write then come free via getc/putc. The general-POSIX nifs wear the
-> `posix_` C-symbol prefix (i/posix.c: `lvm_posix_stat` &c); the love names stay
+> `posix_` C-symbol prefix (inle/posix.c: `lvm_posix_stat` &c); the love names stay
 > the plain POSIX words.
 
 The payoff: **lush is a real shell whose external commands are the host's programs** — love
@@ -62,7 +62,7 @@ processes, this surface answered against a ramfs.
 | POSIX                          | love surface / backing                                   |
 |--------------------------------|--------------------------------------------------------|
 | process / thread               | **task** — `spawn`/`wait`/`done?`/`chill` (the cooperative scheduler) |
-| `fork`/`exec`/`waitpid`/`_exit`| `fork` `exec` `wait` `quit` (i/posix.c)             |
+| `fork`/`exec`/`waitpid`/`_exit`| `fork` `exec` `wait` `quit` (inle/posix.c)             |
 | file descriptor                | **port** via `ai_io_alloc` + the `k_sources[]` vtable  |
 | `open`/`read`/`write`/`close`  | `open`/`close` + getc/putc; `lseek` over the raw-fd `openfd` lane |
 | `dup2`/`pipe`                  | `dup` `dup2` `pipe` (a pair of fds)                    |
@@ -74,7 +74,7 @@ processes, this surface answered against a ramfs.
 | environment                    | `getenv` `setenv` `environ`; cli.l parses argv          |
 | ids — `getuid`/`getgid`        | `getuid` `getgid` (the REAL pair; no effective ids here) |
 | exit codes / std streams       | `in`/`out`/`err` ports; `quit`                          |
-| sockets (BSD)                  | **ain** — `connect`/`listen`/`accept`/`shutdown`/DNS (i/sock.c) |
+| sockets (BSD)                  | **ain** — `connect`/`listen`/`accept`/`shutdown`/DNS (inle/sock.c) |
 | time — `clock_gettime`         | `ai_clock` / `(clock t)`                                |
 | `select`/`poll`                | `ai_wait_fds` / `ai_ready` (the scheduler's core)       |
 
@@ -109,7 +109,7 @@ word now: `'badarg`, retiring the positive-EINVAL / `-1` / `-EINVAL` split.
 whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is `st_blocks`,
 512-byte units, which is DISK USAGE and not the size — or the nom (`'enoent` absent,
 `'eacces` unreadable). `lstat` answers the same of the LINK itself. **the tail is append-only and a reader asks `tally` before reading past
-`ns`**: the kernel's own stat (i/kmain.c) answers the first four alone, an image tree having no
+`ns`**: the kernel's own stat (inle/kmain.c) answers the first four alone, an image tree having no
 ownership to tell about, and kore's `stat`/`du` say so rather than reading a 0 someone might
 believe. `statfs` answers `(bsize blocks bfree bavail files ffree frsize)` of the filesystem
 holding a path, which `df` lays out — LINUX's call and no one else's: the BSDs spell it over

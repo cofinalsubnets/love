@@ -4,7 +4,7 @@
 # it is a development instrument, run by hand while working on gen.l, and what it
 # prints is three readings of the same source, not a verdict.
 #
-# THE SUBJECT is i/hash.c and l/gz.c -- sha-256, md5,
+# THE SUBJECT is inle/hash.c and love/gz.c -- sha-256, md5,
 # crc32, cksum, DEFLATE and inflate. They are the widest C the tree owns and the
 # least like the rest of it: 32-bit rotates, a wrapping add carried over eight
 # registers, two table walks reading EIGHT INDEPENDENT lookups a step, a 64-bit
@@ -17,7 +17,7 @@
 # static, so a program that includes the source sees the algorithm whole and no
 # seam had to be cut into host/ to reach it. What the love-facing wrappers name is
 # stubbed (nif/stub.h) -- main() enters at the algorithm and the lvm ops are never
-# called, they only have to link. That trick works for any i/*.c nif.
+# called, they only have to link. That trick works for any inle/*.c nif.
 #
 # THREE READINGS, and they answer different questions:
 #
@@ -49,15 +49,15 @@
 #   reps    passes over the timed corpus per run (default 24)
 #   samples timed runs per row, median reported (default 3)
 #
-# x86-64 only -- mooncc emits x64 here. Needs `make host` first (b/love IS
+# x86-64 only -- mooncc emits x64 here. Needs `make host` first (out/love IS
 # the compiler under test) and whichever of gcc/clang are on PATH.
 set -u
 
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 REPS=${1:-24}
 SAMPLES=${2:-3}
-W=$R/b/bench/nif
-m=$R/b/love
+W=$R/out/bench/nif
+m=$R/out/love
 
 # a distro often symlinks gcc/clang through ccache; the time rows are the compiled
 # CODE and not the compile, but the build times below would clock a cache hit
@@ -67,9 +67,9 @@ export CCACHE_DISABLE=1
 [ "$(uname -m)" = x86_64 ] || { echo "ccnif: x86-64 only (mooncc emits x64)" >&2; exit 1; }
 
 rm -rf "$W"; mkdir -p "$W"
-inc="-Il -Ii -It/libc"
+inc="-Ilove -Iinle -Itest/libc"
 # the two subjects live in two folders now
-srcof() { case $1 in hash) echo i/hash.c;; gz) echo l/gz.c;; esac; }
+srcof() { case $1 in hash) echo inle/hash.c;; gz) echo love/gz.c;; esac; }
 
 # the lanes, in report order; mooncc first so it is the numerator everywhere
 lanes="mooncc gcc-O2 clang-O2 gcc-O0"

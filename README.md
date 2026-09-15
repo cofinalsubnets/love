@@ -69,8 +69,8 @@ i = 0.5 -1                   ; built in complex
 
 love's virtual machine, runtime and bootstrap interpreter are written in C and built by moon,
 a C compiler written in love. the virtual machine is a tail recursive direct threaded
-interpreter. threads are compiled by [c0](l/ev.c), a C implementation of a love analyzing
-evaluator. c0 hands off to [ev](l/boot/ev.l) in [egg](l/boot/egg.l).
+interpreter. threads are compiled by [c0](love/ev.c), a C implementation of a love analyzing
+evaluator. c0 hands off to [ev](love/boot/ev.l) in [egg](love/boot/egg.l).
 
 ## license
 

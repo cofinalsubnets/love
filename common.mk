@@ -1,6 +1,6 @@
 # Shared variables for the host, kernel and board builds. An includer sets R to the
-# project root first (the root Makefile sets R := ., a i/ makefile its own way up), so
-# these resolve from any cwd; per-frontend output lands in $R/b/<frontend>/.
+# project root first (the root Makefile sets R := ., a inle/ makefile its own way up), so
+# these resolve from any cwd; per-frontend output lands in $R/out/<frontend>/.
 R ?= .
 
 # THE RECIPE TAG COLUMN: `@echo 'MOON<TAB>'$@`, and the quote is load-bearing. A bare tab
@@ -12,7 +12,7 @@ R ?= .
 # reads as a list of the files it made.
 
 # ..and the tag names the tool that RAN, not the one that was spelled. `love seed` and
-# `love serve` ARM the build (a/source.l's src-arm): our verbs go first on PATH,
+# `love serve` ARM the build (apps/source.l's src-arm): our verbs go first on PATH,
 # LUSHFLAGS=-a, CC becomes our mooncc -- so a recipe's `cat` is kore's and its shell is
 # lush, in-process, no fork. An ordinary make takes the ambient ones. LOVE_ARMED is the
 # arm's own word for it; a build log then says which world it was built in.
@@ -27,9 +27,9 @@ t_cp   := $(if $(armed),KORE,CP)
 t_rm   := $(if $(armed),KORE,RM)
 t_ln   := $(if $(armed),KORE,LN)
 
-m = $R/b$(hsuf)/love
+m = $R/out$(hsuf)/love
 # the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and
-# anything under b reading $a then lays a cross artifact into the host tree.
+# anything under out reading $a then lays a cross artifact into the host tree.
 # AND `uname -m` IS NOT THE ISA. It answers the kernel's MACHINE, which only linux
 # spells the way free/<a>/, the mksys leaves and the holo backends do: the BSDs say
 # amd64 for x86_64, freebsd says arm64 and netbsd evbarm for aarch64. evbarm names a
@@ -57,7 +57,7 @@ ifeq ($(hosta),riscv64)
 hosta := rv64
 endif
 # `?=` MAKES A RECURSIVE VARIABLE, so `a ?= $(shell uname -m)` re-forks uname at every
-# single reference -- 203 of them before this build even reached b/lib/egg.h. Deferring
+# single reference -- 203 of them before this build even reached out/lib/egg.h. Deferring
 # to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
 a ?= $(hosta)
 
@@ -87,13 +87,13 @@ in_git := $(wildcard $R/.git)
 # instead -- the one differential a foreign cc still gets, the kernel having none. It is the
 # only build that puts a foreign cc on the vm at ai_tco=1, where ai_musttail is live and where
 # a prototype mismatch our own sibcall pass waves through is refused (doc/misc/moon-c-gaps.md).
-# ITS OWN TREE, because the two loves are the same path otherwise: b/cc keeps the
+# ITS OWN TREE, because the two loves are the same path otherwise: out/cc keeps the
 # objects and the binary apart, and $m follows it so a test runs the one you asked for.
 override HCC := $(filter-out 0,$(HCC))
 
 # ai_tco for the builds that can take it: 1 = the tail-threaded VM (aps tail-jump, never
 # return -- `make vmret` verifies it per binary), 0 = the trampoline loop. The host runs
-# $(tco); the kernel lane and the wasm seat take l/love.h's own default of 1 -- wasm's tails
+# $(tco); the kernel lane and the wasm seat take love/love.h's own default of 1 -- wasm's tails
 # are return_call, the engines' tail-call law (node 26, firefox 121, chrome 112, safari 18),
 # worth 1.31x over the trampoline. PINNED to 0 elsewhere: love0 (the deliberate
 # trampoline-coverage lane) and the two seats with no sibcall -- mps2's thumb1 face
@@ -101,7 +101,7 @@ override HCC := $(filter-out 0,$(HCC))
 tco ?= 1
 
 # tco EARNS A TREE THE SAME WAY HCC does, and for the same reason: a tco=0 love is a
-# different binary at the same path, so sharing b would make every following make
+# different binary at the same path, so sharing out would make every following make
 # rebuild the world, and a test would run whichever flavour was built last.
 hsuf := $(if $(HCC),/cc,)$(if $(filter 0,$(tco)),/tco0,)
 
@@ -110,15 +110,15 @@ hsuf := $(if $(HCC),/cc,)$(if $(filter 0,$(tco)),/tco0,)
 # the collation -- a locale `ls` orders uukind* first and the laws would run against an
 # unloaded kernel. glaze-x86 and glaze-hook are EXCLUDED: both EXECUTE native machine
 # code, so they ride their own arch-guarded targets, never the arch-neutral corpus.
-t = $R/t/00-init.l $R/t/spec.l $R/t/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/t/*.l)))
+t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
-# the runtime's own headers, and l/ is the roster: these four live there and
-# nothing else does. the metal seat's k.h and the per-ISA asmops sit under i/,
+# the runtime's own headers, and love/ is the roster: these four live there and
+# nothing else does. the metal seat's k.h and the per-ISA asmops sit under inle/,
 # so a touch on one of those rebuilds no love object.
-love_h = $(wildcard $R/l/*.h)
+love_h = $(wildcard $R/love/*.h)
 # the core rides with its math floor: our own transcendentals, no libm anywhere.
 # love.c broke into TUs so the biggest one is not the whole build's critical path;
-# l/love.h is what they share. this roster is a LINK ORDER, so it stays named
+# love/love.h is what they share. this roster is a LINK ORDER, so it stays named
 # where the other sets glob -- $(wildcard) answers readdir order, not link order.
 love_tu = love.c gc.c ev.c io.c map.c snap.c num.c arr.c
 # ..and the codec snap.c reaches unconditionally, to pack and unpack an image's code
@@ -126,59 +126,59 @@ love_tu = love.c gc.c ev.c io.c map.c snap.c num.c arr.c
 # it reads love_tu alone -- which is why the codec joins the roster here and not there.
 love_codec = gz.c
 core_tu = $(love_tu) $(love_codec)
-love_tu_c = $(patsubst %,$R/l/%,$(core_tu))
-love_c = $(love_tu_c) $R/a/moon/lib/moonlibc/math/am.c
+love_tu_c = $(patsubst %,$R/love/%,$(core_tu))
+love_c = $(love_tu_c) $R/apps/moon/lib/moonlibc/math/am.c
 # the per-ISA set ONE machine's build takes, and the directory is the roster: empty on
 # an arch with no seat, which is what the rebuild gates read to skip their kernel half.
-hosta_c = $(wildcard $R/i/$(hosta)/*.c)
-# ..and the hosted surface is i/ less the kernel's own six (kmain, the syscall table,
+hosta_c = $(wildcard $R/inle/$(hosta)/*.c)
+# ..and the hosted surface is inle/ less the kernel's own six (kmain, the syscall table,
 # the two drivers, doom), love0's own seat (main0.c) and the three a LINK names for
 # itself rather than a directory naming it: nokern.c (no kmain.c under it), noblob.c (no
-# laid archives). drop an i/<app>.c in and its nifs register
+# laid archives). drop an inle/<app>.c in and its nifs register
 # with no rule edit.
-host_c = $(filter-out $(addprefix $R/i/,kmain.c main0.c nokern.c noblob.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/i/*.c))
-# l/ vs i/ cuts language from SEATS, not portable from machine-specific: quay
+host_c = $(filter-out $(addprefix $R/inle/,kmain.c main0.c nokern.c noblob.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/inle/*.c))
+# love/ vs inle/ cuts language from SEATS, not portable from machine-specific: quay
 # draws into a buffer and names no device, so it stays here with the engines no machine
 # owns. a seat that wants its own nifs brings them through ai_defn, which is that door.
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
-f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/l/quay/*.c))
+f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/love/quay/*.c))
 # inle's libc is moonlibc's, named member by member; os.c is the map every syscall
 # reaches it through -- and a negative __ai_osv (written at kmain) takes the
-# __ai_inle arm, i/sys.c answering the canonical numbers in C. mooncc builds
+# __ai_inle arm, inle/sys.c answering the canonical numbers in C. mooncc builds
 # the kernel, so it builds
-# the kernel's libc too -- there is no second copy to drift. this is i/posix.c's
+# the kernel's libc too -- there is no second copy to drift. this is inle/posix.c's
 # closure (plan A3) plus the members love.c's hosted compile reaches (plan C1:
 # the mmap family behind the W^X arena's runtime branch, refused -ENOSYS on
 # metal). core.c stays OUT -- it carries malloc, the process entry and the
-# std streams, every one of which the kernel owns; i/sys.c answers its four
+# std streams, every one of which the kernel owns; inle/sys.c answers its four
 # seat symbols (environ, stdout/stderr, the sigaction restorer) instead.
 # NAMING A MEMBER HERE IS A DECISION, and stdio was the one weighed: printf and
-# friends write fd 1 themselves, and i/sys.c is seat-blind, so a seated task's
+# friends write fd 1 themselves, and inle/sys.c is seat-blind, so a seated task's
 # C-level printf reaches the console where its port reaches the pipe. That is the
-# documented divergence (i/sys.c) -- love code writes through ports, which seat.
-c_c = $(addprefix $R/a/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
-  $(addprefix $R/a/moon/lib/moonlibc/sys/,read.c write.c birth.c \
+# documented divergence (inle/sys.c) -- love code writes through ports, which seat.
+c_c = $(addprefix $R/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
+  $(addprefix $R/apps/moon/lib/moonlibc/sys/,read.c write.c birth.c \
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
     getgid.c getpgrp.c getpid.c getrusage.c getuid.c ioctl.c kevent.c kill.c kqueue.c \
     link.c lseek.c lstat.c madvise.c mkdir.c mmap.c mount.c mprotect.c munmap.c open.c pipe.c poll.c raise.c readlink.c \
     rename.c rmdir.c setpgid.c setsid.c stat.c statfs.c symlink.c sysconf.c sysctl.c umask.c \
     unlink.c unshare.c utimensat.c waitpid.c) \
-  $(addprefix $R/a/moon/lib/moonlibc/dirent/,closedir.c opendir.c readdir.c) \
-  $(addprefix $R/a/moon/lib/moonlibc/signal/,grantpt.c posix_openpt.c ptsname.c \
+  $(addprefix $R/apps/moon/lib/moonlibc/dirent/,closedir.c opendir.c readdir.c) \
+  $(addprefix $R/apps/moon/lib/moonlibc/signal/,grantpt.c posix_openpt.c ptsname.c \
     sigaction.c sigaddset.c sigemptyset.c signal.c signalfd.c sigprocmask.c \
     tcgetattr.c tcsetattr.c tcsetpgrp.c unlockpt.c) \
-  $(addprefix $R/a/moon/lib/moonlibc/proc/,atexit.c execv.c execvp.c exit.c fexecve.c) \
-  $(addprefix $R/a/moon/lib/moonlibc/env/,getenv.c setenv.c unsetenv.c) \
-  $(addprefix $R/a/moon/lib/moonlibc/stdio/,fflush.c femit.c pad.c semit.c) \
-  $R/a/moon/lib/moonlibc/fmt/fprintf.c \
-  $R/a/moon/lib/moonlibc/os.c
+  $(addprefix $R/apps/moon/lib/moonlibc/proc/,atexit.c execv.c execvp.c exit.c fexecve.c) \
+  $(addprefix $R/apps/moon/lib/moonlibc/env/,getenv.c setenv.c unsetenv.c) \
+  $(addprefix $R/apps/moon/lib/moonlibc/stdio/,fflush.c femit.c pad.c semit.c) \
+  $R/apps/moon/lib/moonlibc/fmt/fprintf.c \
+  $R/apps/moon/lib/moonlibc/os.c
 
 # CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
 # stands over every source file in this tree -- and where a `<name>.l` sits beside a real
 # `<name>.c`, make runs lex on it, fails, and DELETES THE C. An empty recipe unmakes the
-# rule. (l/quay/ is the pair that found it; nothing here has ever wanted lex.)
+# rule. (love/quay/ is the pair that found it; nothing here has ever wanted lex.)
 %.c: %.l
 %.r: %.l
 %.ln: %.l
@@ -193,7 +193,7 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fno-stack-protector
-# a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- i/main.c
+# a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- inle/main.c
 # owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only; the non-x86 seats have no CET to turn off and
 # take it as a no-op.
@@ -206,5 +206,5 @@ ai_cflags += -fcf-protection=none
 ifeq ($(filter FreeBSD NetBSD,$(shell uname -s)),)
 ai_cflags += -D_POSIX_C_SOURCE=200809L
 endif
-# the data-sentinel tiling l/love.h's ai_typ reads (l/love.c's DSENT), on every ld/lld link.
-data_ld = -Wl,-T,$R/l/love_data.ld
+# the data-sentinel tiling love/love.h's ai_typ reads (love/love.c's DSENT), on every ld/lld link.
+data_ld = -Wl,-T,$R/love/love_data.ld

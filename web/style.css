@@ -1,0 +1,150 @@
+/* the front page's stylesheet, written by hand: apps/vi/config.l's tokyo-night as it was laid.
+   periwinkle on polar-night blue, green = a kept answer; the crew fly the name space in
+   aurora teal/cyan. the quay bitmaps set everything: 8x16 cells, crisp at 16px native
+   (so 32px is a clean 2x), and the 8x8 face beside it. both are laid by tools/mkfont.l.
+   the font url is relative to THIS SHEET, not the page: at web/style.css it reaches
+   web/fonts/, so a leading web/ here would ask for web/web/ and quietly fall back. */
+:root{--bg:#04060e;--fg:#c0caf5;--dim:#565f89;--rule:#3b4261;--link:#7aa2f7;--pre:#1f2335;--code:#a9b1d6;--edge:#292e42;--slab:#16161e;--mute:#737aa2;--faint:#414868;--hash:#545c7e;--em:#9aa5ce;--glow:122,162,247;--rim:#34406e;--red:#f7768e;--cyan:#7dcfff;--teal:#73daca;}
+@font-face {
+  font-family: "Quay 16";
+  src: url("fonts/quay16.woff") format("woff");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Quay 8";
+  src: url("fonts/quay8.woff") format("woff");
+  font-display: swap;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: "Quay 16", monospace;
+  font-size: 32px; line-height: 1.5;
+  max-width: 54em; margin: 0 auto;
+  padding: 0.5em 1em 1em;
+}
+
+/* --- text --- */
+h1 { font-size: 1.2em; font-weight: bold; letter-spacing: .04em; }
+h1#love_title { text-align: center; }
+h2 { font-size: 1.15em; font-weight: bold; margin: 2.4em 0 .6em;
+     border-bottom: 1px solid var(--rule); padding-bottom: .3em; }
+h2 a, h3 a, .glossary dt a { color: inherit; }
+h2 a:hover, h3 a:hover, .glossary dt a:hover { text-decoration: none; }
+h2 a:hover::after, h3 a:hover::after,
+.glossary dt a:hover::after { content: " #"; color: var(--hash); }
+
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--fg); font-weight: 600; }
+em { color: var(--em); }
+hr { border: none; border-top: 1px solid var(--rule); margin: 2.4em 0; }
+
+p { margin: .7em 0; }
+ul, ol { margin: .7em 0 .7em 1.4em; }
+li { margin: .35em 0; }
+/* the reading copy sits on the same 16px cell as everything else: any size off a
+   multiple of it renders ragged, so the prose keeps the body's 2x. */
+p, li, dd { line-height: 1.65; text-align: justify; hyphens: auto; }
+p code, li code, dd code { font-family: inherit; font-size: 1em; }
+
+code { color: var(--code); background: var(--pre); border: 1px solid var(--edge);
+       border-radius: 3px; padding: .05em .35em; white-space: pre-wrap;
+       font-family: "Quay 16", monospace; }
+pre { background: var(--slab); border: 1px solid var(--rule); border-radius: 6px;
+      padding: .9em 1em; margin: 1em 0; overflow-x: auto; line-height: 1.5; }
+pre code { white-space: pre; color: var(--em); }
+pre code, td code, dd code { background: none; border: none; padding: 0; }
+
+table { border-collapse: collapse; width: 100%; margin: 1.1em 0; font-size: .93em; }
+th, td { border: 1px solid var(--rule); padding: .35em .6em; text-align: left;
+         vertical-align: top; }
+th { color: var(--mute); font-weight: normal; background: var(--pre); }
+
+/* --- chrome --- */
+.topnav { margin-bottom: 1.4em; text-align: center; hyphens: none; }
+.topnav a { color: var(--link); }
+footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
+         border-top: 1px solid var(--rule); padding-top: 1em; }
+.blue { color: var(--link); } .red { color: var(--red); }
+
+/* --- the terminal boxes: the live bao shell (.term) and the quay tty app
+   screen (.app). same chrome; the class-level display:flex would out-specify the
+   UA [hidden] rule, so hiding is restored at matching specificity. --- */
+.term, .app, .machine {
+  background: #000000; border: 1px solid var(--rim); border-radius: 6px;
+  box-shadow: 0 0 30px -4px rgba(var(--glow),.28), 0 0 90px -22px rgba(var(--glow),.22);
+  padding: .8em; margin-top: 0.5em; display: flex; flex-direction: column;
+  font-family: "Quay 16", monospace;
+}
+.term[hidden], .app[hidden] { display: none; }
+.term { position: relative; color: #ffffff; cursor: text;
+        height: 24em; font-size: 32px; line-height: 1; }
+.app { outline: none; height: 80vh; }
+.status { color: var(--dim); font-size: .9em; margin-top: .2em; }
+/* output and input share one scroll region, so the prompt flows directly under
+   the last line of output (a real terminal) rather than pinned to the box floor. */
+.scroll { flex: 1; overflow-y: auto; }
+.out { white-space: pre-wrap; word-break: break-word; }
+.clear { position: absolute; top: .5em; right: .5em; z-index: 1;
+         background: var(--pre); border: 1px solid var(--rule); border-radius: 4px;
+         color: var(--dim); font: inherit; font-size: .8em; padding: .1em .5em; cursor: pointer; }
+.clear:hover { border-color: var(--link); color: var(--fg); }
+.row { display: flex; align-items: flex-start; }
+.in { color: #aaaaaa; }
+.in::before, .row::before { content: "> "; color: #555555; }
+.row::before { white-space: pre; }
+.ans { color: #55ff55; }
+.cnd { color: #ff55ff; }
+.cmd { flex: 1; background: none; border: none; outline: none; resize: none;
+       color: #ffffff; font: inherit; line-height: inherit; overflow: hidden; }
+/* .screen is a <pre>: flex:1 + min-height:0 give it a bounded box the driver
+   measures and fills with a cell grid, and the resets undo the pre chrome. */
+.screen { flex: 1; min-height: 0; overflow: hidden;
+          background: none; border: none; border-radius: 0; padding: 0; margin: 0;
+          color: #ffffff; font: inherit; line-height: 1; white-space: pre; }
+.appbar { flex-shrink: 0; color: var(--dim); font-size: .8em; margin-top: .6em; }
+.appbar b { color: var(--link); font-weight: normal; }
+/* the machine island: the canvas IS the console -- the only one -- so it takes the box
+   and the console settles its own rows and columns inside it. the height is a layout
+   choice, not an aspect ratio to keep; the pixels are the box's own and stay square. */
+.machine .fb { width: 100%; height: min(64vh, 820px);
+               image-rendering: pixelated; background: #000000; outline: none;
+               border-radius: 3px; }
+.machine .fb[hidden] { display: none; }
+.mbar { flex-shrink: 0; color: var(--dim); font-size: .8em; margin-top: .6em; }
+
+/* --- chips (runnable examples) + the crew roster + the glossary --- */
+.chip { display: inline-block; background: var(--pre); border: 1px solid var(--rule);
+        border-radius: 4px; padding: .15em .55em; margin: .18em .25em .18em 0;
+        color: var(--code); cursor: pointer; white-space: pre; }
+.chip:hover { border-color: var(--link); color: var(--fg); }
+.note { color: var(--dim); font-size: .9em; margin-left: .4em; }
+/* the inle crew, flying the name space: call-signs in cyan navigation-light,
+   roles in aurora teal, the flavor left in the cold blue of distance. */
+.crew { margin: .9em 0; }
+.crew dt { margin-top: .7em; color: var(--cyan); }
+.crew dt a { font-weight: 600; }
+.crew dd { margin: 0 0 0 1.4em; color: var(--mute); }
+.crew dt + dd { color: var(--teal); }
+.glossary dt { color: var(--fg); font-weight: 600; margin-top: .85em; }
+.glossary dt code { font-weight: normal; }
+.glossary dd { margin: .1em 0 0 1.4em; }
+
+/* a word wears its color */
+.hi.red, .hi.red a, #g-red { color: #ff3b6b; }
+.hi.green, .hi.green a, #g-green { color: #34ff9e; }
+.hi.blue, .hi.blue a, #g-blue { color: #3a9dff; }
+.hi.gray, .hi.gray a { color: var(--dim); }
+
+/* --- mobile --- 32px overflows a phone, so drop to the 16px native cell: a
+   crisp 1x bitmap in the terminal, and the em-based sizes scale with it. */
+@media (max-width: 768px) {
+  body { font-size: 16px; padding: 1.4em .8em 4em; overflow-x: clip; }
+  .term { font-size: 16px; }
+  p, li, dd { font-size: 17px; }
+  code { overflow-wrap: anywhere; }
+  td { word-break: break-word; }
+}

@@ -7,7 +7,7 @@ love is released under 0BSD (see LICENSE).
 
 --- code ---
 
-t/uu.l, the ported section only (from "UniMath Foundations PartA")
+test/uu.l, the ported section only (from "UniMath Foundations PartA")
   Copyright (c) 2015 the UniMath Development Team.
   MIT License. https://github.com/UniMath/UniMath
   Definitions and theorem statements from Foundations/PartA.v et al, ported to
@@ -16,14 +16,14 @@ t/uu.l, the ported section only (from "UniMath Foundations PartA")
 
 --- fonts ---
 
-l/quay/cleat_8x16.c
+love/quay/cleat_8x16.c
   Terminus Font, Copyright (c) 2020 Dimitar Toshkov Zhekov,
   with Reserved Font Name "Terminus Font".
   SIL Open Font License 1.1. https://terminus-font.sourceforge.net/
   The cp437 console face (ter-i16n.psf) re-laid on quay's page order by
-  u/mkpsf.l. A modified version may not wear the reserved name, so the
+  tools/mkpsf.l. A modified version may not wear the reserved name, so the
   table is named for the tree.
 
-w/fonts/quay16.woff, quay8.woff
-  Nothing vendored: u/mkfont.l lays both from the bitmaps in l/quay,
+web/fonts/quay16.woff, quay8.woff
+  Nothing vendored: tools/mkfont.l lays both from the bitmaps in love/quay,
   which carry their own note on where they came from.

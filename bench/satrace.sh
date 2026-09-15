@@ -12,13 +12,13 @@
 #     the classic competition-era suite): uniform random 3-SAT at the phase
 #     transition, SATISFIABLE (uf) and PROVEN-UNSATISFIABLE (uuf) sets, plus flat
 #     graph 3-coloring; a fixed file prefix per row, summed, signature verdicts.
-#     Downloaded once into b/bench/satlib/ (rows silently skip if offline).
+#     Downloaded once into out/bench/satlib/ (rows silently skip if offline).
 # The rnd instances are drawn from love's own xoshiro (seed/random, reproducible), and
 # the SAME generator text feeds both the DIMACS dump and love's in-process lane, so
 # every solver sees identical instances by construction; the SATLIB rows feed love the
 # byte-identical files, converted to a formula literal by awk.
 #
-# love's `fcdcl` (a/sat/flat.l: flat-arena CDCL + the l/holo/-emitted native BCP kernel)
+# love's `fcdcl` (apps/sat/flat.l: flat-arena CDCL + the love/holo/-emitted native BCP kernel)
 # is timed by its OWN clock around the solve call, so the interpreter warmup + the
 # self-tests (which would otherwise dominate) are
 # excluded -- the honest "solve time". External solvers are timed by process
@@ -29,8 +29,8 @@
 # NB: no `set -e` -- SAT solvers exit non-zero by convention (minisat: 10=SAT,
 # 20=UNSAT), and `timeout` exits 124, all of which are normal control flow here.
 R=..
-GL=$R/b/love
-export LOVE_NO_IMAGE=1   # REQUIRED for the flat solver's native BCP kernel: a/sat/flat.l installs it
+GL=$R/out/love
+export LOVE_NO_IMAGE=1   # REQUIRED for the flat solver's native BCP kernel: apps/sat/flat.l installs it
                        # through the `nif` seam, which the glazed image mops from the book (the
                        # no-image book keeps it). the old glaze<->sat.l miscompile is gone.
 TIMEOUT=${1:-30}
@@ -38,7 +38,7 @@ INSTANCES="5 6 7 8"
 RNDN="100 150"        # random-3-SAT row sizes; m = round(4.26 n), seeds 1000..1004
 RNDK=5
 SOLVERS="minisat cadical kissat glucose picosat"   # external; love is special-cased
-CNF=$R/b/bench/cnf
+CNF=$R/out/bench/cnf
 mkdir -p "$CNF"
 
 # the ONE generator text (leaks gen2 from a body-less top-level `:`): standard random
@@ -60,7 +60,7 @@ GEN2='(: (gen2 sd n m)
 rndm() { awk -v n="$1" 'BEGIN{printf "%d", int(n*4.26+0.5)}'; }
 
 # -- generate the DIMACS once (php re-stated here, the textbook encoding, so the
-#    files match a/sat/sat.l's (php h) without loading its self-test). --
+#    files match apps/sat/sat.l's (php h) without loading its self-test). --
 gen() {
   cat <<'AI'
 (: (neg v) (- 0 v)
@@ -119,7 +119,7 @@ for h in $INSTANCES; do
   # to 0. So clock K solves in one span and report the total; the shell divides for a
   # fractional ms, matching the C solvers' %.3f. Reported as "RESULT <total-ms> <K> <verdict>".
   out=$(printf '(: _ (fcdcl (php %s) (php-vars %s)) K 32 t0 (clock 0) (rep i r) (? (>= i K) r (rep (+ i 1) (fcdcl (php %s) (php-vars %s)))) r (rep 0 ()) tot (- (clock 0) t0) _ (puts (+ "RESULT " (+ (show tot) (+ " " (+ (show K) (+ " " (show r))))))))' "$h" "$h" "$h" "$h" \
-        | cat "$R/a/sat/sat.l" "$R/a/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
+        | cat "$R/apps/sat/sat.l" "$R/apps/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
     echo "php$h love $(echo "$out" | awk '{printf "%.3f %s", $2/$3, $4}')"
   else
@@ -151,7 +151,7 @@ for n in $RNDN; do
   # then each solve clocked in-process and summed -- same accounting as the php rows.
   out=$({ printf '%s\n' "$GEN2"
           printf '%s\n' "$RNDDRV" | sed "s/@N@/$n/g; s/@M@/$m/g; s/@K@/$RNDK/g"; } \
-        | cat "$R/a/sat/sat.l" "$R/a/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
+        | cat "$R/apps/sat/sat.l" "$R/apps/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
     echo "rnd$n love $(echo "$out" | awk '{print $2, $3}')"
   else
@@ -174,7 +174,7 @@ done
 
 # -- the SATLIB rows: real benchmark-library instances, downloaded once and cached.
 #    Each row = a fixed set of files summed; verdict = the per-file signature.
-SLIB=$R/b/bench/satlib
+SLIB=$R/out/bench/satlib
 SATLIB_URL="https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT"
 # fetch <tarball-subpath> <glob-of-wanted-files> -- extract matching files FLAT into $SLIB
 fetch() {
@@ -217,7 +217,7 @@ slibrow() {
   out=$({ printf '(: MS {} SG {} W {})\n'
           printf '%s\n' "$drv"
           printf '(: _ (puts (+ "RESULT " (+ (show (peep MS 0 0)) (+ " " (+ (peep SG 0 "") "\n"))))))\n'; } \
-        | cat "$R/a/sat/sat.l" "$R/a/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
+        | cat "$R/apps/sat/sat.l" "$R/apps/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
     echo "$row love $(echo "$out" | awk '{print $2, $3}')"
   else

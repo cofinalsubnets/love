@@ -1,0 +1,171 @@
+#!/bin/sh
+# test/gate/distboot.sh -- the release claim, stated over the artifacts.
+#
+# THE CLAIM: take either artifact, type `make`, get the SAME binary. SOURCE bootstraps
+# through whatever C compiler the machine has; SEED carries its own source, is its own
+# toolchain, and touches no ambient compiler at all. Both answer the same bytes.
+#
+# WHY THAT IS EVEN POSSIBLE, and it is not something we engineered for this gate:
+# the local cc builds `love0` and NOTHING else (the Makefile). Every object in the
+# shipped binary is mooncc's, compiled by love0 waking mooncc0.image. The bootstrap
+# compiler is a scaffold that leaves no trace in the product -- which is the same
+# property test_fixpoint asserts within one tree, and whose DDC leg (a foreign
+# love0) was audited 2026-07-27. This gate says it ACROSS the artifacts, which is the
+# form a person downloading them can care about.
+#
+# THE ARTIFACTS ARE COMPARED TO EACH OTHER, not to the in-tree binary. That is the
+# claim as stated: the archive is cut from the tree itself (selfpack, no index and no
+# stage), so what you are looking at is what both artifacts carry.
+#
+# AND THE SEED LANE POISONS THE COMPILER. A gate that merely observes the build
+# succeed cannot tell whether the bundled love did the work or the ambient gcc quietly
+# did it: both produce a working binary. So cc/gcc/clang are shadowed by scripts that
+# fail loudly, and the build has to come out the far side anyway.
+#
+# THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
+# (tools/mksrc.l, inle/src.c) and lays it out itself, so one downloaded file needs no tar
+# and no second fetch. "It unpacked something" is not the claim -- the tree it lays has to
+# BUILD, compilers poisoned. and `love seed` is what drives that build, not a bare make:
+# the tree carries no love of its own now, so make alone can only mean the ambient cc (and
+# would find the poisoned one). A love driving knows its own selfpath and names CC.
+#
+# AND THE CIRCLE IS THE WHOLE CLAIM. The seed rebuilds ITSELF from the source it
+# laid, byte for byte -- so it carries everything it was made from and nothing of the
+# machine that made it. That leg only became possible once a bake stopped writing the
+# baker's ASLR base and hatch time into the image (test_bakerep guards the same law
+# cheaply, in the slow gate, so a regression does not wait for a release).
+#
+# THERE WAS A THIRD ARTIFACT, retired 2026-08-13: a FULL tarball, the source tree
+# with a baked love in bin/. The seed does that job strictly better -- one file, and
+# nothing needed to unpack it -- so its leg here was a third bootstrap proving what
+# the seed's already proves.
+#
+# THE SEED IS THE TREE'S OWN out/love (seed-universal U2: the host build
+# subsumed, the love-<arch> names dissolved). Two consequences ride here: the
+# lean tree's binary embeds an archive it must RE-CUT from itself (selfpack --
+# leg 4's compare is what holds that re-cut to the byte), and the claim compare
+# runs BEFORE the circle leg, whose `make dist` bakes the compared binary in
+# place.
+#
+# Two complete bootstraps and a self-rebuild -- minutes, not seconds. Opt-in, by name.
+# usage: distboot.sh SOURCE_TGZ SEED_EXE
+set -u
+
+src=$1
+seed=$2
+
+[ -f "$src" ] || { echo "distboot: no $src -- run 'make dist'"; exit 1; }
+[ -x "$seed" ] || { echo "distboot: no $seed -- run 'make dist'"; exit 1; }
+command -v make >/dev/null 2>&1 || { echo "distboot: no make, skipped"; exit 0; }
+
+R=$(pwd)
+w=$(mktemp -d)
+trap 'rm -rf "$w"' EXIT
+fail() { echo "FAIL distboot: $*" >&2; exit 1; }
+
+# our own extractor, so the gate leans on nothing it is not already testing
+love=$R/out/love
+[ -x "$love" ] || fail "no $love"
+
+echo "distboot: two bootstraps and a self-rebuild, this takes a few minutes"
+
+# ---- 1. SOURCE, through the machine's own compiler ---------------------------
+mkdir -p "$w/lean"
+"$love" "$R/tools/tgz.l" x "$src" "$w/lean" > /dev/null || fail "cannot unpack $src"
+lean=$(echo "$w"/lean/love-*/)
+[ -d "$lean" ] || fail "the source tarball unpacked no love-<ver>/ directory"
+[ -f "$lean/VERSION" ] || fail "the source tarball carries no VERSION (the binary would stamp 'unknown')"
+[ ! -e "$lean/.git" ] || fail "the source tarball shipped a .git"
+( cd "$lean" && make -j"$(nproc 2>/dev/null || echo 4)" out/love ) > "$w/lean.log" 2>&1 \
+  || { tail -20 "$w/lean.log"; fail "the source artifact does not build"; }
+[ -x "$lean/out/love" ] || fail "the source build produced no love"
+echo "  OK source: builds through the ambient cc"
+
+# ---- 2. SEED, which needs no tarball at all and no compiler ------------------
+mkdir -p "$w/nocc"
+for c in cc gcc clang c99 tcc; do
+  printf '#!/bin/sh\necho "distboot: the ambient %s was called -- the bundled love should have been the compiler" >&2\nexit 1\n' "$c" > "$w/nocc/$c"
+  chmod +x "$w/nocc/$c"
+done
+# run it from a COPY in the scratch dir. `love source` lays its tree beside the
+# binary's cwd, and the tree we are testing must not land in the repo.
+mkdir -p "$w/self"
+cp "$seed" "$w/self/love" || fail "cannot copy $seed"
+# LOVE_NO_IMAGE= (empty = UNSET) leads. The root Makefile EXPORTS it for the corpus,
+# and an egg-booted love has no verb table at all -- `source` then reads as a FILENAME
+# and the artifact answers "cannot open source", which looks like a missing verb
+# rather than a missing image. The build lanes lead with the same thing for `mooncc`.
+( cd "$w/self" && LOVE_NO_IMAGE= ./love source ) > "$w/self.log" 2>&1 \
+  || { tail -20 "$w/self.log"; fail "the seed could not lay its source"; }
+selfd=$(echo "$w"/self/love-*/)
+[ -d "$selfd" ] || fail "'love source' unpacked no love-<ver>/ directory"
+[ -f "$selfd/VERSION" ] || fail "the embedded source carries no VERSION"
+# NO BINARY IS LAID BESIDE THE SOURCE, and a tree that carried one would be the weaker
+# claim anyway -- the toolchain chosen by a file existing rather than by anyone deciding.
+[ ! -e "$selfd/bin" ] || fail "'love source' laid a bin/ -- the tree is source, nothing else"
+# THE BARE LINK, not `love seed`: the verb runs `make dist`, which BAKES, and leg 3
+# compares this against leg 1's unbaked out/love. So the target is named here and CC
+# with it -- which is the seed verb's own fallback spelled by hand (apps/source.l names
+# `<selfpath> mooncc` where its probe finds no cc that works), and the same claim: this
+# tree builds with no ambient compiler anywhere.
+( cd "$selfd" && PATH="$w/nocc:$PATH" LOVE_NO_IMAGE= \
+    make -j"$(nproc 2>/dev/null || echo 4)" CC="$w/self/love mooncc" out/love ) \
+  > "$w/selfb.log" 2>&1 \
+  || { tail -20 "$w/selfb.log"; fail "the seed-laid tree does not build without an ambient compiler"; }
+grep -q "was called" "$w/selfb.log" && { grep "was called" "$w/selfb.log" | head -3; fail "the seed-laid build reached for an ambient compiler"; }
+echo "  OK seed: one binary lays its own source and builds it, no tar and no ambient cc"
+
+# ---- 3. THE CLAIM ------------------------------------------------------------
+# Both binaries here are the bare LINKS (the explicit out/love target, no
+# .baked asked) -- and each embeds its archive, so this one cmp also proves the
+# lean tree's selfpack re-cut the very bytes the seed carried.
+if cmp -s "$lean/out/love" "$selfd/out/love"; then
+  echo "  OK both artifacts answer the SAME binary ($(wc -c < "$lean/out/love") bytes)"
+else
+  ls -l "$lean/out/love" "$selfd/out/love"
+  fail "source and seed built DIFFERENT binaries -- the release claim is false"
+fi
+
+# ---- 4. THE CIRCLE CLOSES: the artifact rebuilds ITSELF, to the byte ---------
+# The chain whole: cut a tarball, bootstrap it, build the artifact, extract the source
+# back OUT of the artifact, and rebuild -- and the second artifact is the first one's
+# bytes. That is a stronger claim than "it builds": it says the artifact carries
+# everything it was made from and nothing about the machine it was made on leaked in.
+# AND THE DECISION RIDES HERE TOO. This leg is a real `love seed`, not an open-coded
+# `make dist` -- the verb's own -wait half IS this leg (build dist in the laid tree, then
+# compare selfpath against out/love), so running it whole costs a lay more and buys
+# the one thing legs 2 and 3 cannot say: that the seed PICKS its own mooncc when no
+# ambient compiler works. Legs 2 and 3 name CC by hand and so supply the answer.
+# PATH IS THE POISON DIR ALONE, not $w/nocc:$PATH. src-cc walks every PATH entry for
+# each of cc/gcc/clang, so a prepended poison leaves the machine's real /usr/bin/cc
+# reachable and the probe rightly takes it -- the fallback would never fire. The farm
+# (apps/source.l) supplies make/sh/sed and the rest out of the binary itself.
+# it seeds a FRESH tree rather than rebuilding $selfd, which leg 3 compared: nothing
+# here disturbs that artifact, and this leg no longer has to run after it.
+#
+# IT NEEDS A REPRODUCIBLE BAKE, and that is the only reason this leg can exist. An
+# image used to carry the baker's ASLR base (raw kept absolutes, the header's address
+# pair, a dead JIT husk's W^X pointer) and `born`, the hatch duration -- so two bakes of
+# one tree differed by 180012 bytes and no artifact could ever equal another.
+# and the archive rides ALONG: `love source` lays the very bytes it carried, and a
+# re-cut (selfpack, the one cutter) answers the same bytes -- the cmp below is what
+# holds that to the byte. Same blob in, same binary out.
+mkdir -p "$w/circle"
+( cd "$w/self" && env PATH="$w/nocc" LOVE_NO_IMAGE= ./love seed "$w/circle" ) \
+  > "$w/selfd.log" 2>&1 \
+  || { tail -20 "$w/selfd.log"; fail "the seed-laid tree cannot rebuild the artifact"; }
+grep -q "was called" "$w/selfd.log" && { grep "was called" "$w/selfd.log" | head -3; fail "the artifact rebuild reached for an ambient compiler"; }
+grep -q "seeding with this binary" "$w/selfd.log" \
+  || { grep -a '^;; seeding' "$w/selfd.log"; fail "no ambient cc works here, and the seed did not fall back to its own mooncc"; }
+grep -q "fixpoint ok" "$w/selfd.log" || fail "the seed did not answer its own fixpoint"
+circled=$(echo "$w"/circle/love-*/)
+again=$circled/out/love
+[ -f "$again" ] || fail "the artifact rebuild produced no $again"
+if cmp -s "$seed" "$again"; then
+  echo "  OK circle: no cc here works, so the seed took its own mooncc -- and rebuilt ITSELF byte-for-byte ($(sha256sum < "$again" | cut -c1-16)..)"
+else
+  ls -l "$seed" "$again"
+  fail "the rebuilt artifact differs from the one that laid its source ($(cmp -l "$seed" "$again" 2>/dev/null | wc -l) bytes)"
+fi
+
+echo "distboot: two artifacts, one love -- and the seed rebuilds itself to the byte -- ok"

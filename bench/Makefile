@@ -3,7 +3,7 @@
 # inner loop (auto-scaling reps past a 200ms floor) so interpreter startup is
 # excluded; see bench.l / lib/bench.* for the shared protocol.
 #
-# Results are cached per language under b/bench/<lang>.txt. The user-facing
+# Results are cached per language under out/bench/<lang>.txt. The user-facing
 # targets DEPEND on those files and just pretty-print them -- a bench is only
 # (re)run when its result file is missing or older than the bench sources (or,
 # for love, the love binary). So `make bench` reformats instantly once the files
@@ -19,7 +19,7 @@
 #   make SAMPLES=5 …    timed windows per bench; the median ms/it is reported
 #                          (default 5; SAMPLES=1 = the old single-shot, fast but noisy)
 #   make raw            cat the raw "<name> <lang> <reps> <ms> <chk>" lines
-#   make clean          remove b/bench/
+#   make clean          remove out/bench/
 #
 # A language whose interpreter/compiler is not on PATH is skipped automatically, as
 # is any bench a language has no implementation file for (e.g. luajit/rust lack bell
@@ -29,9 +29,9 @@
 R := ..
 include $(R)/common.mk
 
-GL   := $(R)/b/love
+GL   := $(R)/out/love
 HARN := bench.l
-BDIR := $(R)/b/bench
+BDIR := $(R)/out/bench
 TIMEOUT ?= 30
 SAMPLES ?= 5
 
@@ -149,7 +149,7 @@ raw: $(call txt,$(PRESENT))
 # solvers on PHP(5..8). Cached like the language results -- re-run only when the
 # runner or the solver changes. `make satrace` to refresh it on its own.
 SATRACE := $(BDIR)/satrace.txt
-$(SATRACE): satrace.sh $(R)/a/sat/sat.l $(GL) | $(BDIR)
+$(SATRACE): satrace.sh $(R)/apps/sat/sat.l $(GL) | $(BDIR)
 	@./satrace.sh $(TIMEOUT) > $@
 satrace: $(SATRACE)
 	@cat $(SATRACE)
@@ -169,11 +169,11 @@ setup: $(SETUP)
 # columns the compilers. ai_cflags + the corpus come from the Makefile (one source of
 # truth); the mooncc lane runs THE ARTIFACT's own mooncc verb, so depend on `dist-seed`
 # beside `host`. that is not tidiness -- ccbench.sh's SEED note has the measurement:
-# through b/mooncc the build row read 2.2x high, because rebuilding mooncc.image
+# through out/mooncc the build row read 2.2x high, because rebuilding mooncc.image
 # invalidated the cached moonlibc archive on every run. Cached; `make ccbench` to refresh it
 # on its own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/l/love.c $(wildcard $(R)/i/*.c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/love/love.c $(wildcard $(R)/inle/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
 	@LOVE_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
@@ -189,7 +189,7 @@ ccsize: $(CCBENCH)
 ccdead: $(CCBENCH)
 	@$(GL) ccdead.l
 
-# mooncc against gcc and clang on the three files in i/ that ask the most of it --
+# mooncc against gcc and clang on the three files in inle/ that ask the most of it --
 # the checksum and gzip floors, compiled straight (no love runtime, no libc in the
 # picture) and read three ways: answers, .text, wall clock. Where ccbench times these
 # nifs through the shipped binary, this times the CODE. Not cached and not a gate: a
@@ -208,7 +208,7 @@ ccwasm: $(GL)
 # kore's applets against busybox, uutils and GNU coreutils on one generated corpus:
 # answers (GNU the oracle -- a divergence is a bug), the fixed per-invocation start
 # cost, and the per-corpus work. Not cached and not a gate, for the same reason ccnif
-# is not: a development instrument, run while working in a/kore/. The doc it
+# is not: a development instrument, run while working in apps/kore/. The doc it
 # fills is the kore gauge. `make korebench MB=32 SAMPLES=5` for a quieter
 # reading; a lane not on PATH drops out of every table.
 MB ?= 8

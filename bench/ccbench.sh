@@ -1,7 +1,7 @@
 #!/bin/sh
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports four wall-clock costs:
-#   build : compile every C translation unit (l/love.c + i/*.c + the am math floor)
+#   build : compile every C translation unit (love/love.c + inle/*.c + the am math floor)
 #           and link a working `love` -- source to runnable binary. the mooncc lane
 #           builds ONCE UNTIMED first; the note above that call says why, and the row read
 #           2.2x too high until it did.
@@ -10,7 +10,7 @@
 #           (subtracted) so it times the suite executing, not the compiler self-install.
 #   chacha / poly1305 : one C function each, same subtraction (bench/ccrypto.l).
 #           These are here because the corpus row averages a compiler's work over all
-#           of l/love.c, and the average is flattering: mooncc/clang reads ~1.1x there
+#           of love/love.c, and the average is flattering: mooncc/clang reads ~1.1x there
 #           and ~23x on chacha. chacha20 indexes a 16-word state ARRAY in its inner
 #           loop, poly1305 keeps five limbs as scalar LOCALS, and mooncc has register
 #           residency for the second shape only -- so the PAIR is the reading. Wide
@@ -26,9 +26,9 @@
 #           shapes in one function. A lane behind on inflate and level on crc32 is
 #           losing to branches, not to loads.
 # The three compilers, ALL THREE STATIC -- that is the whole point of the pairing:
-#   mooncc : love's OWN C compiler (a/moon/), run out of THE SHIPPED ARTIFACT's own
+#   mooncc : love's OWN C compiler (apps/moon/), run out of THE SHIPPED ARTIFACT's own
 #            `mooncc` verb -- no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits
-#            the syscall leaf, our linker (l/holo/) binds.
+#            the syscall leaf, our linker (love/holo/) binds.
 #   gcc-musl / clang-musl : the same translation units at the host's real -O2 cflags,
 #            through the musl-gcc/musl-clang wrappers and linked -static. Also
 #            egg-boot -- no `bake`, so all three lanes run the identical corpus off
@@ -47,7 +47,7 @@
 # net their sum (source to a tested and measured binary). A missing/failed lane
 # shows dnf.
 #
-# Requires `make host` first: the generated b/lib/*.h headers and b/love, which
+# Requires `make host` first: the generated out/lib/*.h headers and out/love, which
 # is also the ARTIFACT (the seed) -- the mooncc lane runs it and not an intermediate;
 # see the note on SEED.
 # x86-64 only (mooncc's native lane); off x86-64, or with no artifact built, the mooncc
@@ -60,12 +60,12 @@
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
 #   test subtracts two medians of `samples` runs each (corpus, then empty boot), default 3.
 # resolve the repo root ABSOLUTELY: the build lanes cd into it to reach the source
-# globs (l/love.c, i/*.c, a/...), so every output/include path below must be absolute.
+# globs (love/love.c, inle/*.c, apps/...), so every output/include path below must be absolute.
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
 ho=$R/out
-WORK=$R/b/bench/cc
+WORK=$R/out/bench/cc
 rm -rf "$WORK"; mkdir -p "$WORK"
 
 # HONEST build times: a distro often symlinks gcc/cc/clang through ccache, which would
@@ -75,10 +75,10 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 export CCACHE_DISABLE=1
 
 # the corpus, byte-identical to common.mk's `t`: 00-init/spec/uu front-loaded, then
-# every other t/*.l in byte order (glaze-x86 excluded -- it needs emit.l ahead and
+# every other test/*.l in byte order (glaze-x86 excluded -- it needs emit.l ahead and
 # runs x86 native under its own guard). The Makefile passes it in $CORPUS; recompute
 # it for a standalone run.
-CORPUS=${CORPUS:-"$R/t/00-init.l $R/t/spec.l $R/t/uu.l $(ls "$R"/t/*.l 2>/dev/null | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort)"}
+CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*.l 2>/dev/null | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort)"}
 
 # the host's real C flags come from the Makefile ($(ai_cflags)); fall back to a
 # matching set (common.mk) for a standalone run.
@@ -88,18 +88,18 @@ if [ -z "$LOVE_CFLAGS" ]; then
 fi
 # drop -Werror: this table times compile+link, and -Werror is a lint GATE, not a
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
-# throughput -- gcc's -Wall flags a benign construct in l/love.c (-Wmisleading-indentation)
+# throughput -- gcc's -Wall flags a benign construct in love/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
-CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/love -I$R/i -I$R/b/lib"
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/love -I$R/inle -I$R/out/lib"
 # the hosted TU roster, common.mk's spelling: the core (love_tu + the codec) under
-# l/, and the host set is i/ less the kernel's own six
+# love/, and the host set is inle/ less the kernel's own six
 love_tu="love gc ev io map snap num arr gz"
-host_cs=$(ls "$R"/i/*.c | grep -v '/\(kmain\|blk\|hda\|sys\|doom\|doomsnd\)\.c$')
+host_cs=$(ls "$R"/inle/*.c | grep -v '/\(kmain\|blk\|hda\|sys\|doom\|doomsnd\)\.c$')
 # common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
-# sentinels' tiling IS l/love.h's ai_typ, and ld left to itself keeps each love.data.N an
+# sentinels' tiling IS love/love.h's ai_typ, and ld left to itself keeps each love.data.N an
 # orphan in first-encountered order -- gcc emits love.data.7 first, so lvm_str lands
 # below lvm_sym and every string reads as a closure.
-LDFLAGS="-Wl,-T,$R/l/love_data.ld"
+LDFLAGS="-Wl,-T,$R/love/love_data.ld"
 
 # wall-clock (ms) of a command; echoes just the number. Runs in a subshell so a cd can't leak.
 wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
@@ -115,8 +115,8 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      $cc $CFLAGS $xf -c "l/$b.c" -o "$od/$b.o" || exit 1; done
-    $cc $CFLAGS $xf -c a/moon/lib/moonlibc/math/am.c -o "$od/am.o" || exit 1
+      $cc $CFLAGS $xf -c "love/$b.c" -o "$od/$b.o" || exit 1; done
+    $cc $CFLAGS $xf -c apps/moon/lib/moonlibc/math/am.c -o "$od/am.o" || exit 1
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
     $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/*.o "$od"/host/*.o ) || return 1
@@ -126,42 +126,42 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
 # THE COMPILER IS THE SHIPPED ARTIFACT, and it is not a preference -- it is the only
 # spelling of this lane that measures the same thing twice. mooncc's link pulls
-# a/moon/lib/moonlibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
+# apps/moon/lib/moonlibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
 # keyed on the compiler, its stat, AND ITS IMAGE (moon.l's mcrtkey). An image FILE puts
-# that file's stat in the key, so while the lane ran out of b/mooncc -- whose
+# that file's stat in the key, so while the lane ran out of out/mooncc -- whose
 # .image this file's own make target rebuilt as a prerequisite -- every run missed and
 # paid a one-time libc BUILD inside a per-build row: 43.8 s against 20.1 s warm, 54% of
 # the number. A BAKED image keys as the word "<baked>" instead, so the entry survives
-# every rebuild of the intermediates (measured then: `touch b/mooncc.image
-# b/love` left it at 18.9 s). The one-binary change has since retired that image
+# every rebuild of the intermediates (measured then: `touch out/mooncc.image
+# out/love` left it at 18.9 s). The one-binary change has since retired that image
 # file, which closes the same hole from the other side -- but the artifact is still what
 # this should race, because it is what a user runs. a one-line C file does NOT warm the
 # archive in its place: a program that needs no member pulls none.
 # LOVE_NO_IMAGE= (empty = UNSET) leads, the guard against an exported egg: an
 # egg-booted love has no verb table, so `mooncc` reads as a FILENAME.
-SEED=$R/b/love
+SEED=$R/out/love
 mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Il -Ii -Ib/lib -c "l/$b.c" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Ilove -Iinle -Iout/lib -c "love/$b.c" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Il -Ii -Ib/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Ilove -Iinle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no moonlibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a moonlibc.o.
-    for f in a/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
-      mc -Ia/moon/lib/moonlibc/math -Ia/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
-    { cat a/kore/text.l a/kore/u.l a/kore/asbook.l \
-          l/holo/elf.l l/holo/obj.l a/moon/lib/mksys.l
+    for f in apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
+      mc -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
+    { cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l \
+          love/holo/elf.l love/holo/obj.l apps/moon/lib/mksys.l
       echo "((cite 'moon 'mksys-x64) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
     mc "$od"/*.o -o "$bin" ) || return 1
 }
 
 # the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
 # the one-global-scope property), but a redirect is seekable and a pipe is not, and only
-# a seekable fd 0 gets a read run (i/main.c). Piping still costs 953K reads over this
+# a seekable fd 0 gets a read run (inle/main.c). Piping still costs 953K reads over this
 # corpus -- one per byte, which no pipe can be spared -- and syscall time is the SAME work
 # in all three lanes: kernel, not codegen, so it only dilutes what this table is seeing.
 CORPUS1=$WORK/corpus.l
@@ -200,13 +200,13 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# the inflate row's input, laid ONCE by the already-built host love -- a/gz.l is a
+# the inflate row's input, laid ONCE by the already-built host love -- apps/gz.l is a
 # module and the lane binaries have no module path, so the stream cannot be made where
 # it is used. INFN is the inflated size, handed to the nif so it allocates once.
 # if this fails the inflate row is dnf and the other two are unaffected: a missing
 # stream must not read as a compiler that could not build.
 INF=$WORK/bench.deflate
-INFN=$(cd "$R" && b/love bench/ccgen.l l/love.c "$INF" 2>/dev/null)
+INFN=$(cd "$R" && out/love bench/ccgen.l love/love.c "$INF" 2>/dev/null)
 case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
 # one compiler lane: build (timed once), verify, then time the corpus and the two
@@ -231,7 +231,7 @@ dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256; do echo 
 
 # A LANE THAT CANNOT BUILD REPORTS dnf, WHICH MEANS A BROKEN HARNESS RENDERS AS A
 # WELL-FORMED TABLE OF NOTHING. that is not hypothetical: the 2026-08-15 reorg broke the
-# root resolution and the -Il seam, and twelve dnf rows sat in the cached result for a
+# root resolution and the -Ilove seam, and twelve dnf rows sat in the cached result for a
 # day with the corpus reading simply unavailable. one missing compiler is a legitimate
 # skip; ZERO lanes is the harness, and it exits 1 below.
 LIVE=0

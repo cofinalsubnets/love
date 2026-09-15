@@ -1,6 +1,6 @@
 # kore — the multi-call toolbox
 
-a/kore/ orients here; the laws live in t/law/kore.l, the GNU-identical smokes in
+apps/kore/ orients here; the laws live in test/law/kore.l, the GNU-identical smokes in
 `make test_kore`, and every doubt settles by probing the built `kore`.
 Speed and adversarial inputs are a different page, filled by
 `make -C bench korebench` (kore against busybox, uutils and GNU).
@@ -10,27 +10,27 @@ same reach. A tool listed here answers to its name; which options it answers to 
 at the head of its own source, absences included. `make -C bench korebench` found the two
 worst of those absences by running the flags rather than reading the list — `sort` had no
 `-n` and `ls` no `-l`, each reading the flag as a filename — and both now carry a matrix
-against GNU (`t/gate/sortcmp.sh`, `t/gate/lscmp.sh`) inside `make test_kore`.
+against GNU (`test/gate/sortcmp.sh`, `test/gate/lscmp.sh`) inside `make test_kore`.
 
 kore is the distro's coreutils: the love-native POSIX environment over the Linux kernel is
 kernel + a static `love` + .l files, and kore is busybox's multi-call trick done natively.
 
 ## the shape
 
-ONE roster — the `$(korefiles)` list in the Makefile: kore's own toolboxes, a/libra/lint.l,
-a/vi/, a/ain.l, the lush files, a/cook.l and the holo linker files. The
+ONE roster — the `$(korefiles)` list in the Makefile: kore's own toolboxes, apps/libra/lint.l,
+apps/vi/, apps/ain.l, the lush files, apps/cook.l and the holo linker files. The
 crew rides IN the default binary's own layered image, so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a two-line verb
 shim — re-evaling the cat per spawn costs ~1.3s, so only the distro, which has no image
 to ship, still runs it as a shebang script.
-`a/kore/kore.l` loads LAST and dispatches off the program seat of `cmdline`: `kore TOOL
+`apps/kore/kore.l` loads LAST and dispatches off the program seat of `cmdline`: `kore TOOL
 ARGS..`, or symlink a tool's name to kore and argv[0] picks it (how the distro shadows at
 will). The registry is a tablet, so tool names never collide with the globals they call (the
 `mkdir` applet CALLS the `mkdir` nif; different namespaces).
 
 The file discipline, two shapes:
 
-* **a tool with a seat** (a/ain.l, a/cook.l): define-only, leaking
+* **a tool with a seat** (apps/ain.l, apps/cook.l): define-only, leaking
   one `<tool>-main`; a body-having tail fires it iff the file's own basename
   sits in the program seat — so the same file is a standalone tool AND a quiet
   cat member.
@@ -55,8 +55,8 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | where | tools |
 | --- | --- |
 | kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both) |
-| a/ain.l | nc / ain |
-| a/cook.l | make / cook |
+| apps/ain.l | nc / ain |
+| apps/cook.l | make / cook |
 | core.l, the line tools | cat tac echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
@@ -79,10 +79,10 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
-| a/vi/ | vi |
+| apps/vi/ | vi |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
-| a/lush.l | sh / lush |
+| apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
 
@@ -94,7 +94,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
   two forms and the boundary is 31556952/2 seconds, coreutils' own half-year. Effects
   (cp/mv/rm/..) are smoked by acting and then verifying with the shell, and the encodings are
   smoked over a BINARY file, which is the only input that says anything.
-* **the u-floor.** The shared helpers leak u-prefixed from core.l and are lawed pure in t/law/kore.l:
+* **the u-floor.** The shared helpers leak u-prefixed from core.l and are lawed pure in test/law/kore.l:
   uatoi uread udie upad ujoin uhdr uhead/utail ucount ubase/udir usplit ujoinc uspec/upick
   uset urev uwords upad/urpad ueach, core.l's ucol/utac/ufold/uexpand/uunexpand and the
   coder trio ubenc/ubdec/ubwrap, fs.l's uoct/udirp/udest/ucopy/rp-parts, and proc.l's
@@ -110,13 +110,13 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
   status. mooncc rides the same floor with two doors of its own — `moon-run` answers, `moon-main`
   quits with what it answers (doc/misc/moon.md). nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
-  t/gate/kore.sh and t/gate/moon.sh; a regression to `quit` passes every other check.
-* **the nif lane.** fs effects ride i/posix.c (app-glob LvNif, no core edit) and its
+  test/gate/kore.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
+* **the nif lane.** fs effects ride inle/posix.c (app-glob LvNif, no core edit) and its
   `posix_` conventions: an effect op answers () ok | an errno nom | 'badarg misuse; a
-  value op answers the value | () absence | a nom. i/posix.c holds rename symlink readlink chmod chown utime
-  umask rmdir hardlink (`link` the word belongs to the chain ctor). t/fs.l smokes them
+  value op answers the value | () absence | a nom. inle/posix.c holds rename symlink readlink chmod chown utime
+  umask rmdir hardlink (`link` the word belongs to the chain ctor). test/fs.l smokes them
   under test_hostnif. `!e` is the success test, `nom? e` the failure test, and a
-  specific errno matches by name (mv's `(id? e 'exdev)` lane). t/gate/kore.sh
+  specific errno matches by name (mv's `(id? e 'exdev)` lane). test/gate/kore.sh
   carries a failure row per tool.
 * **exit codes.** 0 clean, 1 something failed (reported on err, the loop continued), 2 usage;
   diff keeps its classic 0/1/2 triple.
@@ -137,7 +137,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
   it uread's (1 ..) success shape. And never name a local `err` or `out`; they are the PORTS,
   and the shadow says into a charm.
 
-## the column tools, the encodings, tsort and factor (a/kore/core.l)
+## the column tools, the encodings, tsort and factor (apps/kore/core.l)
 
 `fold`, `expand` and `unexpand` are one section because they share `ucol`: all three count
 COLUMNS, so a tab steps to the next stop, `\b` steps back one and `\r` starts the line over.
@@ -164,7 +164,7 @@ is named on err, broken at the first node still standing, and leaves 1. `factor`
 division by 2 and the odd numbers — exact for anything this tree spends, and a twenty-digit
 semiprime will simply sit there, which is what GNU keeps a Pollard rho for.
 
-## the regex engine (a/kore/re.l)
+## the regex engine (apps/kore/re.l)
 
 A POSIX-BRE dialect — literals, `.`, `*`, head-`^`/tail-`$`, [..] classes with
 ranges/negation (first-] and edge-- literal), \-escapes, \( \) groups, GNU's \+ \? — with
@@ -178,7 +178,7 @@ differential fuzz against an independent Brzozowski-derivative oracle. grep ride
 `refind` carries group SPANS (numbered in \( order, a repeated group reading as its LAST
 iteration, GNU's \1) — sed's food.
 
-## sed-lite (a/kore/sed.l)
+## sed-lite (apps/kore/sed.l)
 
 Over re.l. `sed [-n] SCRIPT [FILE..]`: ;/newline-separated commands, each [ADDR[,ADDR]] VERB;
 addresses number/$/(BRE)/re/, ranges open-at-first close-at-later (numeric end at-or-before
@@ -191,9 +191,9 @@ lawed; the whole face is smoked byte-identical vs GNU (a 12-script battery + -n 
 error faces). Out of dialect, deliberately: GNU's empty-pattern reuse, \n in replacements, hold
 space.
 
-## the process tools (a/kore/proc.l)
+## the process tools (apps/kore/proc.l)
 
-One nif of their own — `rusage` (i/posix.c: `(rusage who)` -> the user and sys microseconds
+One nif of their own — `rusage` (inle/posix.c: `(rusage who)` -> the user and sys microseconds
 of this process or of the children it has reaped) — and otherwise environ/getenv/setenv,
 spawn (pid | the failure's nom; a child that cannot exec
 _exit(127)s) + wait, still (pty.c's kill), rest (core sleep, ms). env prints the world or
@@ -215,7 +215,7 @@ seconds to two places; the status answered is the command's. `-p` is the spellin
 face, not a switch between two. A kernel with no `rusage` row (netbsd, and inle) reports real
 and dashes the other two rather than call two zeroes a measurement.
 
-## awk (a/kore/awk.l)
+## awk (apps/kore/awk.l)
 
 A POSIX awk: BEGIN/END, `pattern { action }` items, `expr, expr` ranges, fields with `$0`
 rebuilding on either side, the special variables (NR NF FS OFS ORS FILENAME FNR SUBSEP RSTART
@@ -248,7 +248,7 @@ than none); **output pipes** (`print | "cmd"` — plain `>` and `>>` to a file a
 **RS** other than newline; **ARGV/ARGC and ENVIRON** (the arguments are walked, not published);
 printf's `*` width and `#` flag.
 
-## find (a/kore/find.l)
+## find (apps/kore/find.l)
 
 `find [PATH..] [EXPR]`, PATH defaulting to `.`. Primaries `-name` `-path` (fnmatch, via lush's
 `sh-match`) `-type f|d|l` `-print` `-prune` `-exec CMD.. ;` `-true` `-false`, the global
@@ -265,7 +265,7 @@ action gets `-print`, exactly as GNU does.
   descend through it. A dangling link is still visited.
 * it loads late in the cat because it captures `sh-match` at its define; the Makefile says so.
 
-## expr, and the record tools (a/kore/expr.l, a/kore/core.l)
+## expr, and the record tools (apps/kore/expr.l, apps/kore/core.l)
 
 `expr` is the one applet with a grammar: `|`, `&`, the six comparisons, `+ -`, `* / %`, `:`,
 then the primaries (`( )`, `length`, `substr`, `index`, `match`, `+ TOKEN`, a bare word). Its
@@ -290,7 +290,7 @@ walks several at once. Three things are worth knowing:
 * **od takes ONE -t per run**, the last given winning. GNU's several-at-once lane re-widens every
   column to the widest type in the set, which is a whole layout of its own and not another row.
 
-## the checksums (a/kore/sum.l)
+## the checksums (apps/kore/sum.l)
 
 `cksum`, `md5sum`, `sha256sum` — the file whole, its bytes digested, one line said. The two
 faces are GNU's: cksum's `CRC BYTES NAME` (and no name at all reading stdin), the digest pair's
@@ -298,14 +298,14 @@ faces are GNU's: cksum's `CRC BYTES NAME` (and no name at all reading stdin), th
 `NAME: OK` / `NAME: FAILED` per line, leaving with 1 if any did not match; the gate holds both
 directions, GNU reading ours and ours reading GNU's.
 
-The digests themselves are **i/hash.c** (`sha256`, `md5`, `cksum` — the last being POSIX's
+The digests themselves are **inle/hash.c** (`sha256`, `md5`, `cksum` — the last being POSIX's
 own crc, a different polynomial from `crc32`'s and with the byte count folded in, which is why
 an empty file is `4294967295 0`). There is no love statement of any of the three, so an image
-that carries no host nif — the kernel's, which compiles no `i/*.c` — answers 2 and names the
+that carries no host nif — the kernel's, which compiles no `inle/*.c` — answers 2 and names the
 digest it is missing rather than saying a wrong number. The probe is asked at first call and
 kept, never at load: this file is baked by a love that HAS the nifs.
 
-## what the fs tools report (a/kore/fs.l)
+## what the fs tools report (apps/kore/fs.l)
 
 `realpath` walks a path COMPONENT BY COMPONENT — resolving each symlink as it arrives — so a
 last name that does not exist yet still answers, which is GNU's default face and the case a
@@ -315,10 +315,10 @@ STRICTER than GNU's (it wants the path to exist), which is GNU's `readlink -e`; 
 the GNU-shaped door. `link` and `unlink` are the two syscalls said plainly, no face on them.
 
 `stat` (bare, or `-c FORMAT` / `--printf=`, which reads the escapes and adds no newline where
-`-c` does neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: i/posix.c's `stat`
+`-c` does neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: inle/posix.c's `stat`
 answers `(size mtime mode ns uid gid nlink blocks ino atime ctime dev rdev blksize)` and `lstat`
 the same of the link itself. The tail
-is append-only and the KERNEL's own stat (i/kmain.c) answers the first four alone — an image
+is append-only and the KERNEL's own stat (inle/kmain.c) answers the first four alone — an image
 tree has no ownership to tell about — so it is asked by `tally` and a world without it says so.
 
 * **the default `stat` face is GNU's block, line for line.** It was refused once, and the
@@ -354,7 +354,7 @@ tree has no ownership to tell about — so it is asked by `tally` and a world wi
   no NSS anywhere. The primary comes first, then the rest ascending, which is the order the
   kernel keeps its credential list in and so the order GNU prints.
 
-## the /proc family (a/kore/proc.l)
+## the /proc family (apps/kore/proc.l)
 
 `ps`, `free`, `uptime`, `pidof`, `pgrep`, `pkill`, `killall` and `pwdx`. **No nif grew for
 any of them** — /proc is a filesystem, so the whole family is `uread` and a parser, and a
@@ -385,7 +385,7 @@ rather than as an error.
   under its own name, because `killall sleep` on a shared box reaches into other people's
   work.
 
-## the clock (a/kore/proc.l)
+## the clock (apps/kore/proc.l)
 
 **UTC and only UTC.** There is no tz database in this tree, so localtime IS gmtime — the same
 call moonlibc made, for the same reason. `date -u` is taken and changes nothing. `-d @SECONDS` and
@@ -394,7 +394,7 @@ against GNU at all; the gate runs the oracle under `TZ=UTC`. The calendar itself
 exact integer civil-from-days in core.l (`ucivil`/`udays`, lawed by the round trip), which stat's
 `%y` reads too.
 
-## patch (a/kore/patch.l)
+## patch (apps/kore/patch.l)
 
 The other half of diff.l: that file WRITES unified hunks, this reads them back and lays them on
 a tree. `-pN` (unsaid drops every leading directory, patch's own default), `-R`, `-i`, `-o`,
@@ -416,7 +416,7 @@ parsers for a shape nothing in this decade emits.
 * the gate's oracle is **the tree, not the message**: GNU patch's chatter has moved between
   releases; what it leaves on disk has not.
 
-## the line endings (a/kore/core.l)
+## the line endings (apps/kore/core.l)
 
 `dos2unix`, `unix2dos` and `mac2unix` are one walk under three names; what separates them is
 which break goes in and which comes out. The transform is the easy half — `tr -d '\r'` is most
@@ -439,7 +439,7 @@ of `dos2unix` — and it is not why these are tools.
 Not built: `-c` conversion modes (ascii/7bit/iso), BOM handling, `-b` backups, and the
 `--info` report.
 
-## html2text (a/kore/lens.l)
+## html2text (apps/kore/lens.l)
 
 `html2text [-w COLS] [FILE..]`, and the same three-part path `man` takes with the first part
 swapped: lapiz's html reader takes the page to the document AST, `ttyshow` lays it out at a
@@ -464,9 +464,9 @@ inline spans. `<b>` is `<strong>` and `<tt>` is `<code>` to a reader with one fo
   better than eating the word it was part of.
 
 None of this is law 1 — that says `htread` reads what `htshow` writes, and reading a page
-*nobody* wrote with `htshow` is a different promise. It is stated in `t/host/lapiz.l` instead.
+*nobody* wrote with `htshow` is a different promise. It is stated in `test/host/lapiz.l` instead.
 
-## markdown (a/kore/lens.l)
+## markdown (apps/kore/lens.l)
 
 `markdown [-t html|roff|text] [-w COLS] [FILE..]` — the same lens, driven the direction papel
 drives it. `-t html` (the default) is `md->ht`, `-t roff` is `md->rf`, `-t text` is `md->tty`
@@ -482,12 +482,12 @@ the document's front matter and lapiz reads front matter as the meta block.
   is dropped, a rule vanishes, a link flattens to its text with the url trailing. That is
   lapiz's stated rf behaviour, not this tool's.
 
-## man (a/kore/man.l)
+## man (apps/kore/man.l)
 
 `man [-w] [SECTION] NAME..`. The tree writes its pages in `doc/*.md` and the build shows them
-as roff (`u/mkman.l`, through `a/lapiz.l`); reading one back is the same lens run the other
+as roff (`tools/mkman.l`, through `apps/lapiz.l`); reading one back is the same lens run the other
 way. So man owns none of the three hard parts — lapiz's roff reader takes the page to the
-document AST, its `ttyshow` lays that out at a width, and `a/kore/less.l` pages the result.
+document AST, its `ttyshow` lays that out at a width, and `apps/kore/less.l` pages the result.
 What is man's own is the search path, the decompression, and the handing over.
 
 * **The search** is MANPATH if it is set, else `/usr/local/share/man`, `/usr/share/man`,
@@ -517,7 +517,7 @@ way still READS here).
 Left out of the coreutils batch deliberately: `fmt` `pr` `csplit` `ptx` `numfmt` (each its own
 layout language, not another row), `dir`/`vdir` (they are `ls -C` and `ls -l`, neither of which
 ls wears yet), `shuf` (it wants a decision about the seed before it wants code), `sha1sum` and
-the sha512 family (i/hash.c carries sha256, md5 and cksum alone), and `who`/`users`/`logname`
+the sha512 family (inle/hash.c carries sha256, md5 and cksum alone), and `who`/`users`/`logname`
 (no utmp here, and there will not be one).
 Out of the /proc family, deliberately: `top` (a full-screen loop, and its data is `ps`'s),
 `pmap` and `vmstat` (each its own layout), `dmesg` (the ring buffer wants a syscall, not a

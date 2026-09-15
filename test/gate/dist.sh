@@ -1,0 +1,162 @@
+#!/bin/sh
+# test/gate/dist.sh -- the artifact answers: verb dispatch (positional + argv[0]),
+# the nested kore dispatch, the bare cc door, the image chain, the in-image lane,
+# -e still evals and `--` still forces the file. seconds; rides test_slow.
+#
+# usage: dist.sh MODE DIST
+set -u
+
+mode=$1
+dist=$2
+name=test_dist
+
+fail() { echo "FAIL $name: $*" >&2; exit 1; }
+
+# the artifact NEEDS its baked image (the verbs live there), so every artifact run
+# clears LOVE_NO_IMAGE -- the guard against a caller's exported egg.
+run() { env -u LOVE_NO_IMAGE "$@"; }
+
+dabs=$(CDPATH= cd -- "$(dirname -- "$dist")" && pwd)/$(basename -- "$dist")
+
+case $mode in
+smoke)
+  s=out/dist/.smoke
+  rm -rf "$s"; mkdir -p "$s"
+
+  run "$dist" kore true                            || fail "kore true (the nested dispatch)"
+  # the source door, cheaply: the seed lays its tree and the very archive it carried,
+  # and lays NOTHING ELSE -- no binary beside the source. the fixpoint stays
+  # test_distboot's; THIS is the leg that keeps the verb from going dark between releases.
+  ( cd "$s" && run "$dabs" source ) > "$s/src.log" 2>&1 \
+                                                   || { tail -3 "$s/src.log"; fail "love source did not lay"; }
+  srcd=$(echo "$s"/love-*/)
+  [ ! -e "$srcd/bin" ]                             || fail "love source laid a bin/ -- the tree is source, nothing else"
+  ls "$srcd"/out/dist/love-*.tar.gz >/dev/null 2>&1 || fail "love source laid no archive"
+  run "$dist" sb 2>&1 | grep -q "patch-set vcs"  || fail "sb usage"
+  run "$dist" mooncc 2>&1 | grep -q "usage: mooncc" || fail "mooncc verb usage"
+  # the CC-under-make lane: the build recipes hand this command its image back
+  # with `LOVE_NO_IMAGE=` (empty = unset, main.c) -- pin that an empty value
+  # does not egg-boot the artifact (which would read "mooncc" as a filename).
+  LOVE_NO_IMAGE= "$dist" mooncc 2>&1 | grep -q "usage: mooncc" \
+                                                   || fail "empty LOVE_NO_IMAGE suppressed the image"
+  # the bare cc door: from an empty cwd with an empty HOME, the artifact
+  # compiles hello world from its CARRIED source, entirely in memory -- `love
+  # cc` anywhere, no tree, no install, and NOTHING written outside the cwd.
+  mkdir -p "$s/bare/home"
+  printf '#include <stdio.h>\nint main(void) { printf("bare door\\n"); return 0; }\n' > "$s/bare/hi.c"
+  # timeout 15: the carried runtime makes this ~0.2 s; a fall back to
+  # compiling 197 members (~28 s) is a regression this leg must SEE
+  ( cd "$s/bare" && HOME=$PWD/home timeout 15 env -u LOVE_NO_IMAGE "$dabs" cc hi.c && ./a.out ) > "$s/bare.log" 2>&1 \
+                                                   || { tail -3 "$s/bare.log"; fail "the bare cc door (or it took the 28 s compile lane)"; }
+  grep -q "bare door" "$s/bare.log"                || fail "bare cc: the exe did not answer"
+  [ -z "$(ls -A "$s/bare/home")" ]                 || fail "bare cc: wrote into HOME ($(ls -A "$s/bare/home"))"
+  # ..and nothing in the cwd but the two files this leg accounts for. the runtime cache
+  # seats itself at out/cache/moon under a BUILD tree, so a door with no out/ must make
+  # none -- the HOME leg above cannot see that one any more.
+  [ "$(ls -A "$s/bare" | grep -vx -e home -e hi.c -e a.out | wc -l)" -eq 0 ] \
+                                                   || fail "bare cc: wrote into the cwd ($(ls -A "$s/bare"))"
+  run "$dist" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' || fail "-e still evals"
+
+  # --- the docs verb rides the one image -----------------------------------------
+  run "$dist" libra doc apps/kiosko/web.l > "$s/libra.md" 2>&1 \
+    || fail "libra did not wake"
+  grep -q "love web" "$s/libra.md" \
+    || fail "libra woke but answered nothing: $(head -3 "$s/libra.md")"
+
+  ln -sf "$dabs" "$s/sb"
+  run "$s/sb" 2>&1 | grep -q "usage: sb"       || fail "the argv[0] door"
+  # NOT a name already symlinked above -- `>` through a symlink writes the artifact
+  echo '(quit 7)' > "$s/kore"
+  ( cd "$s" && run "$dabs" -- kore ); [ $? -eq 7 ] || fail "-- should force the file lane"
+
+  # --- the in-image lane -------------------------------------------------------
+  # one artifact on PATH under many names is the shape the whole thing turns on: lush
+  # runs a tool whose main rides THIS image instead of exec'ing it, and cook runs its
+  # recipe lines through lush instead of spawning a shell -- so a CC=mooncc make pays
+  # ONE image wake, not one per TU. the gate is not the speed, it is that the two
+  # lanes AGREE: the same objects, and the same make semantics a spawned /bin/sh gives.
+  sabs=$(cd "$s" && pwd)
+  mkdir -p "$sabs/bin" "$sabs/cbin" "$sabs/w/sub" "$sabs/refo"
+  for n in sh mooncc cook; do ln -sf "$dabs" "$sabs/bin/$n"; done
+  # the reference lane is gregarious (LUSHFLAGS=-g, what `love seed -g` sets), and
+  # its compiler a COPY: same bytes, different file -- so the skew guard refuses the
+  # shortcut and every TU is exec'd through a spawned /bin/sh. the other lane is lush's
+  # default, autonomous: a bare word this binary carries runs here whatever PATH holds.
+  cp "$dabs" "$sabs/love-copy" && ln -sf "$sabs/love-copy" "$sabs/cbin/mooncc"
+  i=1; while [ $i -le 4 ]; do printf 'int f%d(int x){return x+%d;}\n' $i $i > "$sabs/w/s$i.c"; i=$((i+1)); done
+  cat > "$sabs/w/Makefile" <<'MK'
+.SHELLFLAGS := -ec
+CC = mooncc
+all: $(patsubst %.c,%.o,$(wildcard s*.c)) scope
+%.o: %.c
+	$(CC) -c $< -o $@
+scope:
+	cd sub && pwd
+	pwd
+	V=set-in-line; echo "V=$$V"
+	echo "next=[$$V]"
+	-exit 7
+	echo past-ignored
+MK
+  ( cd "$sabs/w" && LUSHFLAGS=-g SHELL=/bin/sh PATH=$sabs/cbin:/usr/bin:/bin run "$dabs" cook ) > "$sabs/ref.out" 2>&1
+  echo "exit=$?" >> "$sabs/ref.out"
+  ls "$sabs/w"/*.o >/dev/null 2>&1 || fail "the reference lane laid no objects"
+  cp "$sabs/w"/*.o "$sabs/refo/" && rm -f "$sabs/w"/*.o
+  ( cd "$sabs/w" && PATH=$sabs/bin:/usr/bin:/bin run "$dabs" cook ) > "$sabs/img.out" 2>&1
+  echo "exit=$?" >> "$sabs/img.out"
+  cmp -s "$sabs/ref.out" "$sabs/img.out" \
+    || fail "in-image cook diverged from a spawned /bin/sh: $(diff "$sabs/ref.out" "$sabs/img.out" | head -6)"
+  for f in "$sabs/refo"/*.o; do
+    cmp -s "$f" "$sabs/w/$(basename "$f")" || fail "in-image mooncc laid a different $(basename "$f")"
+  done
+  # ..and PROVE the lane engaged, not merely that it could have. agreement alone
+  # would still hold if the call site quietly stopped consulting the decision --
+  # both sides would just be the spawn. so run a real line through lush IN this
+  # process and ask whether the decision was taken and kept: an unconsulted lane
+  # leaves the cache untouched, whatever the predicate on its own would answer.
+  ( PATH=$sabs/bin:/usr/bin:/bin && export PATH \
+    && run "$dabs" -e "(: _ (borrow 'lush) _ (sh-oneline (list \"-c\") \"mooncc -zzz\") (quit (? (two? (peep sh-imgc \"mooncc\" 0)) 0 1)))" ) \
+     >/dev/null 2>&1 \
+    || fail "lush ran a command without taking its own in-image decision"
+  # the checksums ride the same lane, and the same two things are asked of them: that the
+  # decision was taken and kept, and that the answer it produced -- through a redirect,
+  # which a tool running in here takes the way a builtin does -- is the one GNU gives.
+  ln -sf "$dabs" "$sabs/bin/sha256sum"
+  printf 'love\n' > "$sabs/w/sum.in"
+  ( cd "$sabs/w" && PATH=$sabs/bin:/usr/bin:/bin && export PATH \
+    && run "$dabs" -e "(: _ (borrow 'lush) _ (sh-oneline (list \"-c\") \"sha256sum sum.in > sum.out\") (quit (? (two? (peep sh-imgc \"sha256sum\" 0)) 0 1)))" ) \
+     >/dev/null 2>&1 \
+    || fail "lush spawned sha256sum where its own main rides this image"
+  if command -v sha256sum > /dev/null 2>&1; then
+    ( cd "$sabs/w" && sha256sum sum.in ) > "$sabs/w/sum.ref"
+    cmp -s "$sabs/w/sum.out" "$sabs/w/sum.ref" || fail "in-image sha256sum disagreed with GNU"
+  fi
+  # ..and cook's own: two recipe lines are ONE process in-image, one process EACH spawned
+  mkdir -p "$sabs/pw"
+  printf 'all:\n\t@echo $$$$\n\t@echo $$$$\n' > "$sabs/pw/Makefile"
+  ( cd "$sabs/pw" && PATH=$sabs/bin:/usr/bin:/bin && export PATH && run "$dabs" cook ) > "$sabs/cp.out" 2>&1
+  [ "$(sed -n 1p "$sabs/cp.out")" = "$(sed -n 2p "$sabs/cp.out")" ] \
+    || fail "cook spawned a shell per recipe line where it could have run them here"
+  ( cd "$sabs/pw" && LUSHFLAGS=-g SHELL=/bin/sh PATH=/usr/bin:/bin && export PATH SHELL LUSHFLAGS && run "$dabs" cook ) > "$sabs/cp2.out" 2>&1
+  [ "$(sed -n 1p "$sabs/cp2.out")" = "$(sed -n 2p "$sabs/cp2.out")" ] \
+    && fail "cook ran its lines in-image under -g with a foreign /bin/sh on PATH"
+  # the skew guard, stated directly: under -g, same bytes in a different file -> the
+  # shortcut is refused. autonomous mode reads the verb registry and not PATH, so the
+  # same copy is simply never consulted there -- the lane engages either way.
+  ( LUSHFLAGS=-g PATH=$sabs/cbin:/usr/bin:/bin && export PATH LUSHFLAGS \
+    && run "$dabs" -e "(: _ (borrow 'lush) (quit (? (two? (sh-imgfn \"mooncc\")) 1 0)))" ) \
+    || fail "the in-image lane engaged under -g for a mooncc that is a DIFFERENT file"
+  ( PATH=$sabs/cbin:/usr/bin:/bin && export PATH \
+    && run "$dabs" -e "(: _ (borrow 'lush) (quit (? (two? (sh-imgfn \"mooncc\")) 0 1)))" ) \
+    || fail "autonomous mode consulted PATH for a verb this binary carries"
+
+  # a bare name we do NOT own must never go in-image, whatever rides this image
+  ( cd "$sabs/w" && PATH=/usr/bin:/bin run "$dabs" sh -c 'ls Makefile' ) 2>&1 | grep -q Makefile \
+    || fail "a foreign ls must still spawn"
+
+  echo "test_dist: the artifact is multi-call -- sb/cook/kore/kiosko/mooncc dispatch, files and -e untouched"
+  echo "test_dist: the in-image lane -- cook's lines and mooncc run in THIS image, byte-for-byte and semantics-for-semantics what a spawned sh gives"
+  ;;
+
+*) echo "dist.sh: unknown mode $mode" >&2; exit 1 ;;
+esac

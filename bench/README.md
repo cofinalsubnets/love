@@ -35,11 +35,11 @@ make BENCHES=fib    # restrict the workloads (then `make clean` to refresh files
 make TIMEOUT=60 …   # per-bench wall-clock cutoff in seconds (default 30)
 make raw            # the raw result lines, unformatted
 make html           # write bench.html — a self-contained results page (below)
-make clean          # remove b/bench/
+make clean          # remove out/bench/
 ```
 
 **Results are cached per language.** Each language writes its lines to
-`b/bench/<lang>.txt`, and that file depends on the language's bench sources (and,
+`out/bench/<lang>.txt`, and that file depends on the language's bench sources (and,
 for love, the `love` binary). The user-facing targets just *pretty-print* those
 files — a bench is only (re)run when its result file is missing or older than the
 sources, so `make bench` reformats instantly once the files exist. Touch a source
@@ -96,7 +96,7 @@ server needed) showing the same per-iteration table with the fastest cell per
 bench highlighted and the `love` axis tinted. A **transpose** button swaps benches
 and languages between the rows and columns, and the initial orientation is chosen
 from the viewport (portrait drops languages down the side). It's regenerated from
-the cached `b/bench/*.txt`, so run `make all` first for a full table; the full
+the cached `out/bench/*.txt`, so run `make all` first for a full table; the full
 roster appears as columns, and a language that produced no rows (toolchain absent
 or broken) shows a dotted column.
 
@@ -111,7 +111,7 @@ or broken) shows a dotted column.
 | `deforest`  | list    | sum `(k² mod p)` of the odds in `[0,N)` — map/filter/fold FUSED to one loop (the `%` keeps it O(n)) |
 | `polysum`   | list    | sum `k²` of the odds in `[0,N)` — same shape, pure-polynomial body, CLOSED to O(1) by the loop-closer |
 | `primes`    | numeric | count primes below 30000 by trial division                |
-| `bell`      | bignum  | Bell numbers in base 36 to 280 digits (port of `t/bell.l`) |
+| `bell`      | bignum  | Bell numbers in base 36 to 280 digits (port of `test/bell.l`) |
 | `strcat`    | string  | build a 4000-char string by single-char concatenation, then hash it — love glazes the O(n²) accumulator loop to a native O(n) cask-fill |
 | `strscan`   | string  | rolling-hash scan over a fixed 20000-char string (read path) |
 | `hash`      | table   | mutable hash table: 10000 sparse-int-keyed insert / lookup / update ops |
@@ -273,7 +273,7 @@ benches/<x>.{l,ss,lisp,exs,jl,py,js,lua,go,java,rs}
 run.sh           per-language run/compile command + PATH check + per-bench timeout
 report.awk       formats the raw result lines into the terminal table
 mkhtml.sh        builds bench.html from the raw result lines (used by `make html`)
-Makefile         orchestration — per-language b/bench/<lang>.txt result files
+Makefile         orchestration — per-language out/bench/<lang>.txt result files
 ```
 
 ## Adding a benchmark
@@ -300,5 +300,5 @@ backend, guard the pure-loop benches against compile-time folding (opaque inputs
 the `closure` note above.
 
 Each love bench is concatenated after `bench.l` before being piped to `love`,
-exactly like the `t/` corpus — a top-level `:` form with no trailing body
+exactly like the `test/` corpus — a top-level `:` form with no trailing body
 leaks its bindings into global scope, so the harness names are visible.

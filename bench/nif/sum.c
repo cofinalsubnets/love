@@ -1,4 +1,4 @@
-/* the CHECKSUM floor -- i/hash.c through mooncc, gcc and clang, with the
+/* the CHECKSUM floor -- inle/hash.c through mooncc, gcc and clang, with the
  * three reports diffed and the three builds timed. ccnif.sh drives it.
  *
  * WHY THIS FILE. sha-256, md5, crc32 and cksum are the arithmetic our compiler
@@ -9,18 +9,18 @@
  * the shift/rotate or wrap lane has no other place to show.
  *
  * NO VECTOR IS WRITTEN DOWN HERE, on purpose. an answer every lane reaches is
- * i/hash.c's own and t/digest.l is where it is checked; an answer ONE
+ * inle/hash.c's own and test/digest.l is where it is checked; an answer ONE
  * lane reaches is the code generator's, and that is the only thing this file can
- * see. t/digest.l reads these nifs through the RUNNING love, which is the
+ * see. test/digest.l reads these nifs through the RUNNING love, which is the
  * gcc build nearly everywhere -- so it asks whether the algorithm is right and
  * never which compiler built it.
  *
- * the streaming lane is walked WITHOUT a cask. the state layout is i/
+ * the streaming lane is walked WITHOUT a cask. the state layout is inle/
  * hash.c's own (its header spells all three), love only carries the bytes, so
  * a harness can lay the state directly and ride the same blk_feed/blk_done/
  * dig_ld/dig_st the nifs ride. going through the cask would need a heap and
  * would read the runtime instead of the code generator. */
-#include "../../i/hash.c"
+#include "../../inle/hash.c"
 #include "stub.h"
 #include "say.h"
 

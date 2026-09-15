@@ -25,7 +25,7 @@ cat <<'HEAD'
      the quay bitmap face, green = a kept (fastest) answer. */
   @font-face {
     font-family: "Quay 16";
-    src: url("../w/fonts/quay16.woff") format("woff");
+    src: url("../web/fonts/quay16.woff") format("woff");
     font-display: swap;
   }
   :root { color-scheme: dark; }
@@ -97,10 +97,10 @@ HEAD
 if [ -n "$2" ] && [ -s "$2" ]; then
 cat <<'SAT'
 <h2>SAT solvers &mdash; milliseconds to solve</h2>
-<p class="note">A separate field: love&rsquo;s own CDCL solver (<code>a/sat/flat.l</code>:
+<p class="note">A separate field: love&rsquo;s own CDCL solver (<code>apps/sat/flat.l</code>:
 flat cask-resident state driven by four native kernels &mdash; propagation, the whole
 conflict handler, the decision, and the <code>fbva</code> grow step &mdash; each assembled
-through <code>l/holo/</code> at solver-build time, specialized to the instance size)
+through <code>love/holo/</code> at solver-build time, specialized to the instance size)
 against reference C solvers.
 Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
 and resolution-hard, where clause learning alone is <b>exponential</b> and love&rsquo;s
@@ -157,11 +157,11 @@ if [ -n "$3" ] && [ -s "$3" ]; then
 cat <<'CC'
 <h2>compilers &mdash; milliseconds to build love, and to test it</h2>
 <p class="note">A third field, love&rsquo;s C toolchain against the incumbents:
-<b>mooncc</b> is love&rsquo;s own C compiler (<code>a/moon/</code>), and it builds
+<b>mooncc</b> is love&rsquo;s own C compiler (<code>apps/moon/</code>), and it builds
 <code>love</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
-<code>mksys</code> emits the syscall leaf, and our own linker (<code>l/holo/</code>)
+<code>mksys</code> emits the syscall leaf, and our own linker (<code>love/holo/</code>)
 binds the executable. The <b>build</b> row is the wall-clock to compile every C
-translation unit (<code>l/love.c</code> + <code>i/*.c</code> + the <code>am</code> math
+translation unit (<code>love/love.c</code> + <code>inle/*.c</code> + the <code>am</code> math
 floor) and link a working binary; the <b>test</b> row runs the full corpus (the same
 files <code>test_host</code>/<code>test_raw</code> feed) through the binary that build
 produced. All three lanes egg-boot (no baked image), so the corpus runs off the freshly
@@ -178,7 +178,7 @@ optimizing compilers is modest, and the binary it emits passes the identical cor
 <p class="note">The <b>chacha</b> and <b>poly1305</b> rows are single C functions rather
 than the whole corpus
 (<code>bench/ccrypto.l</code> drives the <code>chacha20</code> and <code>poly1305</code>
-nifs in <code>i/tls.c</code>), and they are here because an average can hide a
+nifs in <code>inle/tls.c</code>), and they are here because an average can hide a
 lopsided one. <b>chacha</b> indexes a sixteen-word state <i>array</i> in its inner loop;
 <b>poly1305</b> keeps its five limbs as scalar <i>locals</i>. mooncc gives a register
 home to the second shape and not the first, so the two rows are a gauge: wide chacha
@@ -232,7 +232,7 @@ if [ -n "${4:-}" ] && [ -s "$4" ]; then
 cat <<'KO'
 <h2>userland &mdash; milliseconds per job, against three other coreutils</h2>
 <p class="note">A fourth field, and the one where love is the <i>application</i> rather
-than the compiler: <b>kore</b> is love&rsquo;s userland (<code>a/kore/</code>),
+than the compiler: <b>kore</b> is love&rsquo;s userland (<code>apps/kore/</code>),
 about ninety POSIX tools written in love and run by love&rsquo;s own interpreter, beside
 <b>busybox</b> and <b>GNU coreutils</b> (both C) and <b>uutils</b> (Rust). Every row is
 one job over one generated corpus, and the numbers are wall clock including process

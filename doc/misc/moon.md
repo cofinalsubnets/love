@@ -1,7 +1,7 @@
 # moon — the C compiler, in love
 
 `mooncc` is a C compiler written in love (chibicc was the seed), emitting through the holo books. With
-`l/holo/link.l` (our static linker) and `a/moon/lib/` (our libc, math floor and machine
+`love/holo/link.l` (our static linker) and `apps/moon/lib/` (our libc, math floor and machine
 tail) it is a **complete C toolchain that borrows nothing**: love builds itself with no gcc, no
 glibc and no ld, and the kernel is built by it too.
 
@@ -42,8 +42,8 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
 
 ## the architecture
 
-`a/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
-piece. ~14k lines of love (the laws in t/law/moon.l).
+`apps/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
+piece. ~14k lines of love (the laws in test/law/moon.l).
 
 * **floor.l** — the C type floor: the laws that are neither syntax nor codegen (the type shapes,
   `tysz`/`tyalign`, and the typing door — promotions and the usual arithmetic conversions),
@@ -83,7 +83,7 @@ piece. ~14k lines of love (the laws in t/law/moon.l).
   stage). The moon gate checks gen.l *as data* against it, so a new pass declares its sig there
   and a bad recomposition is a clash naming its seam.
 * **moon.l** — the driver.
-* **t/law/moon.l** — the laws, ~1360 of them.
+* **test/law/moon.l** — the laws, ~1360 of them.
 
 ## the driver
 
@@ -148,7 +148,7 @@ trailing padding and point at nothing an array of `S` would ever reach. In a uni
 label flattens to 0, like every other member.
 
 `gen.l` never learned about any of this: a label is one more row in the stag table, which
-is the seam holding. `t/cc/141-structlabel.c` is the battery's own check — guarded on
+is the seam holding. `test/cc/141-structlabel.c` is the battery's own check — guarded on
 `__moon__`, so gcc compiles the label-free half and both compilers must still agree — and
 the gate's oracle is the same struct with the labels deleted, compiled by gcc: identical
 size, identical offsets.
@@ -159,7 +159,7 @@ size, identical offsets.
 second is a licence to use an extension — under `-std=c` this is still mooncc and the
 extension is still refused.
 
-Anything without `-c` is a **link**, through `l/holo/link.l`.
+Anything without `-c` is a **link**, through `love/holo/link.l`.
 
 **The cc conventions** — `CC=mooncc` drives a gcc-shaped recipe unchanged:
 
@@ -172,7 +172,7 @@ Anything without `-c` is a **link**, through `l/holo/link.l`.
   library name and the one after it as an input;
 - an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — moonlibc
   + the am math + the mksys leaf, taken from the archive the binary CARRIES, or compiled from
-  the toolchain root and cached under `b/cache/moon/` (below), so a set carrying its own
+  the toolchain root and cached under `out/cache/moon/` (below), so a set carrying its own
   `am.o` never meets a twin;
 - `-nostdlib`/`-nodefaultlibs`/`-ffreestanding` turn that pull off;
 - `-ffreestanding` ALSO says the standard's own word: it makes `__STDC_HOSTED__` 0, which is how
@@ -220,11 +220,11 @@ suffix names the commit that built *the compiler*, so it would make `love1` — 
 mooncc — and `love2` — built by love1's — differ at `e_shoff` and name a broken fixpoint where
 the two compilers agree on every byte they *emit*. The base moves with a release, which both
 generations share; `love0` is stamped `$(love_base)+bootstrap` for exactly this, and
-`b/0/.love0cc` content-stamps that compile line so a `./VERSION` bump rebuilds it (make
+`out/0/.love0cc` content-stamps that compile line so a `./VERSION` bump rebuilds it (make
 tracks files, not flag strings, and a stale love0 would fail the fixpoint at a byte offset with
 nothing to say about the cause). A reader wanting the commit reads `love-version` in `.rodata`.
 
-Read it back without any binutils at all: `l/holo/elfsec.l`'s `(elfsec PATH ".comment")` answers the
+Read it back without any binutils at all: `love/holo/elfsec.l`'s `(elfsec PATH ".comment")` answers the
 `(1 bytes)` wrapper — an empty section is a real section. It works on gcc's objects and on every
 target mooncc emits, cross-machine, for the reason anything here does: a section table is a
 table. Gated by `test_moon`, both halves — the union over a foreign `.o`, and the exact string on
@@ -232,10 +232,10 @@ an all-ours link.
 
 ## the toolchain root
 
-mooncc's own files — our headers (`a/moon/include/`, glibc-ABI-faithful but NOT glibc's) and
+mooncc's own files — our headers (`apps/moon/include/`, glibc-ABI-faithful but NOT glibc's) and
 the runtime sources the implicit link pulls — are found through three rungs, tried in order:
 
-1. **the dev tree**, `a/moon/` off the cwd;
+1. **the dev tree**, `apps/moon/` off the cwd;
 2. **the installed nest**, `<seat>/../lib/love/moon/` — the loader's own seat walk, the
    `selfpath` nif. So `~/.love/bin/love` finds `~/.love/lib/love/moon/`, and a distro's
    `/usr/bin/love` finds `/usr/lib/love/moon/`. `the Makefile` lays them there.
@@ -246,7 +246,7 @@ the runtime sources the implicit link pulls — are found through three rungs, t
    install — and a version's compiles can never ride a stale copy, because the source it reads
    is the binary's own.
 
-The runtime itself rides COMPILED as well as in source: u/mkrt.l lays each hosted
+The runtime itself rides COMPILED as well as in source: tools/mkrt.l lays each hosted
 ISA's moonlibc archive (x64/a64/rv64, ~1.5 MB of archive under DEFLATE, ~210 kB carried,
 one inflate on the ISA a link asks for) beside the source blob, stamped with
 `rtcid` — a pure hash of the include/ + lib/ slice. A link consults the cache, then the
@@ -255,7 +255,7 @@ the stamp, so a laid seed tree serves and an edited dev tree falls through to th
 then compiles. That is what makes the bare door ~0.2 s instead of the ~28 s member build,
 still writing nothing.
 
-Gate: `t/gate/dist.sh`'s bare leg compiles from an empty cwd with an empty HOME and
+Gate: `test/gate/dist.sh`'s bare leg compiles from an empty cwd with an empty HOME and
 holds that HOME stays empty. `cd` matters here -- from the repo root rung 1 serves and
 rung 2 is never exercised -- so a gate for the installed nest has to leave the tree.
 
@@ -266,7 +266,7 @@ Owing symbols with NO root in reach is its own diagnostic, naming the owed symbo
 searched — an absent toolchain and an incomplete link are different conditions and must not wear
 the same face.
 
-## the runtime (a/moon/lib/)
+## the runtime (apps/moon/lib/)
 
 * **moonlibc/** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
   a flush buffer), a K&R first-fit malloc over mmap arenas, dirent over getdents64, the
@@ -282,9 +282,9 @@ the same face.
 
 **The CARRIED archive is asked first, and on a stock tree it is the whole answer** — the
 binary's own stamped bytes cannot be improved on by a cache entry, so the key is cut only where
-they were refused. That leaves the cache two populations: `u/mkrt.l` cutting the carried set
+they were refused. That leaves the cache two populations: `tools/mkrt.l` cutting the carried set
 under love0, which carries none, and a toolchain edited past the stamp. Both are a checkout,
-which is why the cache seats itself at `b/` and `make clean` reaches it.
+which is why the cache seats itself at `out/` and `make clean` reaches it.
 
 **The carried archives are per-ISA and kernel-neutral.** All three are cut under `-os linux`
 and the pin does not reach the bytes: `impl.h` parts linux, freebsd and netbsd at RUN time on
@@ -295,7 +295,7 @@ linux's numbers.
 
 **The pull is cached, content-addressed, as one archive.** A member has to be compiled before the
 pull can see what it defines, so every link owing a libc nom paid for all 190 of them — ~23s of a
-cold hello-world link's ~23s. They now ride `b/cache/moon/<sha>.a`, ONE archive per
+cold hello-world link's ~23s. They now ride `out/cache/moon/<sha>.a`, ONE archive per
 (compiler, target), keyed on the target, the runtime tree's whole text (headers included — an
 edited `stdio.h` changes what `moonlibc/` means) and the compiler's own identity. A warm link is
 ~0.15s. An archive and not 190 objects because the ranlib index IS the "what does this member
@@ -312,7 +312,7 @@ reads invalidated the runtime and cost a full rebuild. Hashing the compiler's `.
 instead looks tighter and is a hole: edit `gen.l`, link once before the image catches up, and the
 entry filed under the new sources holds the old image's codegen.
 No identity — a love with no image file in reach — means no cache at all. Nor is anything else
-owed it: no `b/`, an unwritable directory, a mangled entry (each is checked for its archive
+owed it: no `out/`, an unwritable directory, a mangled entry (each is checked for its archive
 magic) all fall back to compiling, silently. Entries land by `rename`, so parallel links cannot
 tear one, and a miss sweeps all but the six newest generations. **count, not age**: the rate
 is the tree's own — a day of rebuilds mints more generations than a month of use does, and a
@@ -407,10 +407,10 @@ predefined on x64 alone (gen's d128 lane), which is what love.c's limb seam read
 ## inline asm
 
 The GNU statement form, in the GNU dialect: the template is what clang and gcc read for the
-target — AT&T on x64, ARM on a64, riscv, thumb — and `l/holo/gas.l` lowers it to the
+target — AT&T on x64, ARM on a64, riscv, thumb — and `love/holo/gas.l` lowers it to the
 neutral IR the baked assembler encodes. So a header says each instruction ONCE and every
-compiler reads it (the kernel's `i/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
-no new encoder exists anywhere, every line lands on a backend row t/holo/golden.l froze.
+compiler reads it (the kernel's `inle/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
+no new encoder exists anywhere, every line lands on a backend row test/holo/golden.l froze.
 
     asm [volatile] ("mov $40, %0" : "=r"(v) : "r"(x), "i"(3) : "memory");
     __attribute__((holo)) asm ("li %0, 40" : "=r"(v));    // holo's neutral text instead
@@ -463,7 +463,7 @@ ANSWERS its status as a charm instead of quitting, so one image compiles again a
 that failed, and a caller who holds the image pays the wake once for a whole build. `moon-main`
 is `(quit (moon-run as))` — every shim above keeps its contract untouched. Objects laid warm
 are byte-identical to the same compile run cold, including the ones laid after a failure;
-t/gate/moon.sh holds both halves.
+test/gate/moon.sh holds both halves.
 
 `moon-run` traps `'leave`, the u-floor's exit door (a `udie` anywhere in the compile rides it
 out carrying the status), and passes its charm through. Every OTHER condition is a genuine
@@ -475,25 +475,25 @@ The image is binary-specific (anchor-checked) and installs from the same build a
 boot with no `moon-main`, so never mix builds by hand.
 
 A catted app is `#!/usr/bin/env -S love` plus the cat, so a bare `mooncc` runs on the PATH
-`love` — a STALE install mis-runs it. Probe the repo cat with `./b/love b/mooncc`,
+`love` — a STALE install mis-runs it. Probe the repo cat with `./out/love out/mooncc`,
 never a bare `mooncc`, until `make install` refreshes the PATH binary.
 
 ## testing
 
-* Every pure piece is lawed in `t/law/moon.l`: lexer goldens, cpp expansions, parser ASTs
+* Every pure piece is lawed in `test/law/moon.l`: lexer goldens, cpp expansions, parser ASTs
   printed and compared, layout/alignment tables, gen goldens.
 * **The differential oracle is `gcc -O0`**: same source, run both, compare stdout + exit code.
-  The battery lives in `t/cc/*.c` and ONLY grows — every bug fixed adds its regression.
+  The battery lives in `test/cc/*.c` and ONLY grows — every bug fixed adds its regression.
   Differential programs must be **UB-free**: `pick(++i,++i,++i)` is unsequenced, and gcc
   legitimately disagrees.
 * A seeded expression fuzz against gcc (`test_moonfuzz`).
 * **An OUTSIDE corpus, and its own answers** (`test_cts`, all three native targets and wasm under node): c-testsuite's
-  220 single-file programs, each held to the stdout it ships. Every `t/cc` file was written
+  220 single-file programs, each held to the stdout it ships. Every `test/cc` file was written
   here to pin a fault we had already met, so the battery says what we already know; these were
   written by people compiling other compilers, and their first run found **nine** programs
   mooncc built clean and answered wrong. All nine landed, 00219 (`_Generic` over a qualifier)
   last, so the wrong-answer roster is **empty** on all three targets and the rest is refusals,
-  rostered with a cause apiece in `t/gate/cts.sh` and kept apart. the roster is double-
+  rostered with a cause apiece in `test/gate/cts.sh` and kept apart. the roster is double-
   edged only when it is READ: five of its lines had gone stale by 2026-08-16 — four already
   fixed, and 00219 filed as a refusal when the truth was a live miscompile, which is what
   a gate nobody runs without an opt-in corpus buys you.

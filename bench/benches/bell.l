@@ -1,5 +1,5 @@
 ; Bell numbers rendered in base 36, one per line while the rendering's length
-; stays <= 280 (a port of t/bell.l / ~/bell.rb) -- a bignum-tower stress:
+; stays <= 280 (a port of test/bell.l / ~/bell.rb) -- a bignum-tower stress:
 ;     B(n) = sum_{k<n} C(n-1,k) B(k),  C(n,k) = n!/(k!(n-k)!)
 ; the values blow past 64 bits almost immediately (the last line is a 280-digit
 ; base-36 number). fresh memo hashes are minted per rep so every iteration

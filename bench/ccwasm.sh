@@ -13,8 +13,8 @@ set -u
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 REPS=${1:-24}
 SAMPLES=${2:-5}
-W=$R/b/bench/ccwasm
-m=$R/b/love
+W=$R/out/bench/ccwasm
+m=$R/out/love
 export CCACHE_DISABLE=1
 
 [ -x "$m" ] || { echo "ccwasm: no $m -- run \`make host\` first" >&2; exit 1; }
@@ -22,10 +22,10 @@ NODE=$(command -v node 2>/dev/null || true)
 [ -n "$NODE" ] || { echo "ccwasm: no node -- nothing runs a module here" >&2; exit 1; }
 EMCC=${EMCC:-$(command -v emcc 2>/dev/null || true)}
 [ -n "$EMCC" ] || [ ! -x /usr/lib/emscripten/emcc ] || EMCC=/usr/lib/emscripten/emcc
-RUN=$R/i/wasm/run.mjs
+RUN=$R/inle/wasm/run.mjs
 
 rm -rf "$W"; mkdir -p "$W"
-inc="-I$R/love -I$R/i -I$R/t/libc -I$R/bench/nif"
+inc="-I$R/love -I$R/inle -I$R/test/libc -I$R/bench/nif"
 lanes="mooncc emcc-O2 emcc-O0"
 have=mooncc; [ -z "$EMCC" ] || have="$have emcc-O2 emcc-O0"
 echo "ccwasm: lanes: $have   reps=$REPS samples=$SAMPLES   (emcc: ${EMCC:-none})"

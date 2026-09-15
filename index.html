@@ -4,23 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>love</title>
-<link rel="icon" type="image/png" href="w/favicon.png">
-<link rel="stylesheet" href="w/style.css">
+<link rel="icon" type="image/png" href="web/favicon.png">
+<link rel="stylesheet" href="web/style.css">
 <!-- the machine's shared ring wants an isolated page, and a static host sends no headers:
      this asks for them with a service worker and one reload. first, so the reload is
      cheap; inert where the server sends them itself (kiosko does). -->
-<script src="i/wasm/coi.js"></script>
+<script src="inle/wasm/coi.js"></script>
 </head>
 <body>
 <h1 id="love_title">🌑 <a href="https://github.com/cofinalsubnets/love">love</a> 🔭</h1>
 
-<!-- the machine island: the markup i/wasm/machine.js drives,
+<!-- the machine island: the markup inle/wasm/machine.js drives,
      its parts found by class. a page carries this block and machine.js (a module), and
      coi.js in the head -- that one goes first because it may reload the page to put the
      isolation headers on. the page is written by hand, and this block with it.
      the boot line and the two artifacts ride data- attributes, so a page can aim it
      elsewhere (data-wasm, data-image, data-boot, data-ram, data-cols); the defaults are
-     w/wasm/, which is where `make site-wasm` puts them, and a query string names the same
+     web/wasm/, which is where `make site-wasm` puts them, and a query string names the same
      four and wins where it does. the canvas carries no size: its box is the stylesheet's
      and its pixels are that box's own, measured at boot. -->
 <div class="machine">
@@ -29,7 +29,7 @@
 <div class="mbar">click the screen, then type &middot; <code>love</code> opens a repl, <code>ctrl-d</code> leaves it</div>
 </div>
 
-<script type="module" src="i/wasm/machine.js"></script>
+<script type="module" src="inle/wasm/machine.js"></script>
 
 <h2 id="what">what is this??</h2>
 <p>
@@ -63,7 +63,7 @@ to get a love repl in lush, type <code>love</code>.
 type <code>names ()</code> at the repl to see a list of the default namespace.
 </p>
 <p>
-for a nice example of idiomatic love code, try <code>vi /proc/src/a/rove/rove.l</code>.
+for a nice example of idiomatic love code, try <code>vi /proc/src/apps/rove/rove.l</code>.
 for another cool demo, try typing <code>doom</code>.
 </p>
 

@@ -13,7 +13,7 @@ cook - a dependency-driven build tool, make in love
 
 **cook** \[*options*\] \[*recipe*...\]
 
-**love** **-l** *a/cook.l* \[*options*\] \[*recipe*...\]
+**love** **-l** *apps/cook.l* \[*options*\] \[*recipe*...\]
 
 # DESCRIPTION
 
@@ -85,7 +85,7 @@ Transpile a Makefile to a resolved Cookfile:
 Without the installed symlink, loading cook by hand:
 
 > ```
-> love -l a/cook.l Makefile host
+> love -l apps/cook.l Makefile host
 > ```
 
 # EXIT STATUS

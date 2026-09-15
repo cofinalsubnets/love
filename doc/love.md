@@ -80,4 +80,4 @@ Start the interactive shell:
 
 # SEE ALSO
 
-The project README and the executable specification in *t/spec.l*, which asserts every claim of the language on every build target.
+The project README and the executable specification in *test/spec.l*, which asserts every claim of the language on every build target.
