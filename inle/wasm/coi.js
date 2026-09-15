@@ -19,14 +19,17 @@ if (typeof window === 'undefined') {
     statusText: r.statusText,
     headers: h }); })); });
 } else if (!window.crossOriginIsolated && navigator.serviceWorker) {
- const src = document.currentScript.src;
+ // the worker is registered from the page's own directory, not this file's: a worker
+ // controls only pages under its path, and index.html sits two levels above here. a
+ // page away from this file keeps a coi.js beside it that importScripts this one.
+ const src = new URL('coi.js', location.href).href, k = 'coi-reloaded:' + src;
  navigator.serviceWorker.addEventListener('controllerchange', () =>
-  !sessionStorage.getItem('coi-reloaded') &&
-  (sessionStorage.setItem('coi-reloaded', '1'),
+  !sessionStorage.getItem(k) &&
+  (sessionStorage.setItem(k, '1'),
    location.reload()));
  navigator.serviceWorker.register(src).then(reg =>
   reg.active &&
   !navigator.serviceWorker.controller &&
-  !sessionStorage.getItem('coi-reloaded') &&
-  (sessionStorage.setItem('coi-reloaded', '1'),
+  !sessionStorage.getItem(k) &&
+  (sessionStorage.setItem(k, '1'),
    location.reload())); }
