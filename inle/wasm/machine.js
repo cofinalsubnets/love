@@ -87,6 +87,7 @@ export async function loveMachine(root) {
   // not the island failing, so a refusal goes to the console and the machine runs on.
   const hear = hearing(ring, ctl);
   canvas.addEventListener('pointerdown', hear);
+  canvas.addEventListener('pointerup', hear);
   canvas.addEventListener('keydown', hear);
   scanning(ring, ctl, canvas, { scan_at, scan_n, c_sh, c_st });   // and as scancodes, for a game
   // a chip types its line at the machine, the way the repl island's chips ran theirs

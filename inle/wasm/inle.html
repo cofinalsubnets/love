@@ -75,6 +75,7 @@
     // from the first touch of the screen, which is the earliest a page is allowed to
     const hear = hearing(ring, ctl, say);
     canvas.addEventListener('pointerdown', hear);
+    canvas.addEventListener('pointerup', hear);
     canvas.addEventListener('keydown', hear);
     scanning(ring, ctl, canvas, { scan_at, scan_n, c_sh, c_st });   // and as scancodes, for a game
     // the canvas stays on THIS thread and the worker sends frames (cpu.mjs's blit): a

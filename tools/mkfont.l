@@ -88,7 +88,7 @@
                       ps (foldl (\ a c (c = 32 ? a (a + string (cask [c])))) "" (bytes fam))   ; the postscript name: no spaces
                       ns [[0 "generated from love/quay by tools/mkfont.l"] [1 fam] [2 "Regular"] [3 (fam + " 1.0")] [4 fam] [5 "Version 1.0"] [6 ps]]
                       name (: strs (map (r \ u16 <>r) ns)
-                              recs (<>(foldl (\ st s [(<st + #s) (<>st + [<st #s])]) [0 ()] strs))   ; [offset len] per string
+                              recs (<>(foldl (\ st s [(<st + #s) (<>st + [[<st #s]])]) [0 ()] strs))   ; [offset len] per string
                               (be16 0 + be16 #ns + be16 (6 + (12 * #ns))
                                + cat (map (i \ be16 3 + be16 1 + be16 1033 + be16 <(ns i) + be16 <>(recs i) + be16 <(recs i)) ^#ns)
                                + cat strs))

@@ -1235,7 +1235,7 @@
               ""
               "-- any key --")
  box-ttl "a simple wooden box"
- box-lines '("you lift the lid. inside, wrapped in a threadbare cloth, is what you came for:"
+ box-lines '("you lift the lid. inside, wrapped in threadbare cloth, is what you came for:"
              ""
              "{~}"
              ""
@@ -1688,11 +1688,12 @@
              _ (flush out)
              _ (drain-keys ())
              _ (raw 0)
-             ; won: the token line is still in the note row, and goes to the shell too
-             (g 'over @ 'won (puts $ fit (g 'msg) 200 + "\n", 0)
-              (puts $ (g 'over @ 'dead (fill w-lost [(here g)])
-                                       (fill w-fled [(g 'p 'penny)])) + "\n",
-               g 'p 'penny)))
+             ; won: the token line is still in the note row, and goes to the shell too.
+             ; the shell hears 0 whichever way the climb ended: a count is not a status
+             _ (puts ((g 'over @ 'won (fit (g 'msg) 200)
+                                 'dead (fill w-lost [(here g)])
+                                 (fill w-fled [(g 'p 'penny)])) + "\n"))
+             0)
  tower-usage "usage: love tower   (no options; q or esc leaves the tower)"
 
  ; tower takes nothing: a word here is a mistake, and the climb would swallow it
