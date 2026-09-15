@@ -1255,8 +1255,7 @@
  ; the ring is the end. all of it is measured from the fire, the way the ring always
  ; was: a cell is about twice as tall as it is wide, so the measure counts a row
  ; twice, in quarter units, where radius r stands at (2r)^2.
- ring-pen 231
- ring-glyph 79
+ ring-glyph "█"                                       ; a solid block, as the slop's water is
  oct-x 9                                                ; the octagon's reach, across and down
  oct-y 4
  close-step 2                                           ; rows the walls draw in a turn
@@ -1545,8 +1544,12 @@
            'sk sk
            'vis (lit-all d))
    _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
-   ; the painter's overlay: the ring where it stands
-   _ (pin d 'over (\ x y (? ('ring = g 'phase && on-ring? g x y) [ring-glyph ring-pen] ())))
+   ; the painter's overlay: the ring where it stands, wearing the slop's pink over this
+   ; floor's own shimmer -- the ocean at the tower's foot, arriving early. the sample walks
+   ; with the radius, so the colour crawls across the ring as it closes
+   _ (pin d 'over (\ x y (? ('ring = g 'phase && on-ring? g x y)
+                            [ring-glyph (ramp-pen pink-ramp (peep sk [((y + g 'r) % h) x] 0.0))]
+                            ())))
    (note g (fill w-floor [(here g)])))
 
 
