@@ -668,7 +668,7 @@ test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
 test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/inle/$(xa)/*.c)' \
 	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/inle/noblob.c' \
-	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xd) $(xa) $(x_o) $(x_seat_o) $(xkart_o)
+	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o) $(xkart_o)
 # test_fat -- the fat container (seed-universal U1): the one file answers through
 # its prefix + cache on the native machine, the pack is byte-deterministic, and
 # the foreign member answers under qemu-user. opt-in by name, like the x-lane.

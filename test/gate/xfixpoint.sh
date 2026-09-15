@@ -24,7 +24,8 @@
 # gate_seat_c is inle/noblob.c: this pair lays no out/src.o, so it answers the carried
 # archives itself -- and rides the OBJ list, or the twin link cannot find the body.
 # usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
-#        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XD XA OBJ...
+#        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XOD XA OBJ...
+# XOD is the x-lane's object root, where make lays mkvec.l and the objects it passes
 set -u
 
 ho=$1
@@ -33,10 +34,10 @@ qemu=$3
 xtgt=$4
 mks=$5
 tco=$6
-xd=$7
+xod=$7
 xa=$8
 shift 8
-d=$xd/fix
+d=$xod/fix
 cat=$ho/.mooncc-cat.l
 
 command -v "$qemu" >/dev/null 2>&1 || { echo "test_xfixpoint: skipped (needs $qemu)"; exit 0; }
@@ -95,12 +96,12 @@ if [ -n "$gate_arch_c" ]; then
     mkobj "$f"
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done
-  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xd/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
+  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xod/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
     || fail "love1 lay-vec"
   test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
 fi
 
-o2=; for o in "$@"; do o2="$o2 $d/${o#$xd/}"; done
+o2=; for o in "$@"; do o2="$o2 $d/${o#$xod/}"; done
 moon1 -pie $o2 -o "$d/love2" || fail "love2 link"
 
 cmp "$d/love1" "$d/love2" || fail "love2 differs from love1 -- machine B does not reproduce machine A's bytes"
