@@ -397,8 +397,9 @@ test_seed: $(ho)/love
 # byte), then scripted end-to-end passes through the `kore vi` face over a pipe (keys off
 # stdin, frames onto a captured stdout, :wq writes), driven through the crew layer.
 test_vi: host
-	@echo TEST apps/vi/{hue,core}.l test/law/vi.l
+	@echo TEST apps/{tui,vi/hue,vi/core}.l test/law/{tui,vi}.l
 	@cat test/00-init.l apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/re.l apps/kore/sed.l apps/libra/lint.l \
+	    apps/tui.l test/law/tui.l \
 	    apps/vi/config.l apps/vi/hue.l apps/vi/core.l test/law/vi.l \
 	  | sh test/gate/run.sh vi "$m" "test/law/vi:"
 	@rm -f $(ho)/.vi1; \

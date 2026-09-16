@@ -18,6 +18,7 @@
 ; usage: love lupa FILE
 (module (lupa lupa-main lupa-run lupa-new lupa-key lupa-frame lupa-byte)
 (borrow 'holo)
+(borrow 'tui)
 (borrow 'posix)
 (:
  ;; --- the file, and an ELF's .text and symbols over it ------------------------------------
@@ -91,10 +92,7 @@
  (settle d h)
   (: rows (rows-of h) cur (d 'cur) top (d 'top)
      (? (d 'mode = 'hex)
-        (: t0 (top - top % 16)
-           t1 (? (cur < t0) (cur - cur % 16)
-                 (cur >= t0 + rows * 16) (cur - cur % 16 - (rows - 1) * 16)
-                 t0)
+        (: t1 (16 * tui-settle (cur // 16) (top // 16) rows)   ; a row is sixteen bytes
            (pin d 'top (t1 < 0 ? 0 t1)))
         (: t (? (cur < top) cur top)
            ;; walk the window: if the cursor is not among its rows, it becomes the top

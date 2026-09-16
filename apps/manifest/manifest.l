@@ -29,6 +29,7 @@
 (module '(manifest manifest-main manifest-new manifest-frame manifest-key
           sheet cell cell! worth face stow unstow)
 (borrow 'posix)
+(borrow 'tui)
 (:
  ; --- reading a cell: repl-style, one form, unreadable text is a label ---
  (glean s) (sound (+ "(" (+ s ")")) @ (d . _) (two? d ? d))
@@ -145,8 +146,7 @@
   (pins {} 'sh sh 'path path 'cx 0 'cy 0 'top 0 'edit () 'over () 'w 80 'h 24)
 
  ; top moves only far enough to keep the cursor on the screen, so a page reads as a page
- (settle d h) (: nr (mrows h) cy (d 'cy) t (d 'top)
-                 (pin d 'top (? (cy < t) cy (t + nr <= cy) (cy - nr + 1) t)))
+ (settle d h) (pin d 'top (tui-settle (d 'cy) (d 'top) (mrows h)))
 
  (drawcell j sh i cy sel) (: v (worth sh (cnom i cy))
                              t (face v)

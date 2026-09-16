@@ -291,7 +291,7 @@ lushfiles = apps/lush.l
 # wants them in, and a new file joins one part rather than three lists.
 kore_head = apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/fs.l apps/kore/sum.l apps/kore/re.l \
   apps/kore/sed.l apps/kore/awk.l apps/kore/expr.l apps/kore/bc.l apps/kore/proc.l apps/kore/top.l apps/kore/less.l \
-  apps/libra/lint.l apps/vi/config.l apps/vi/hue.l apps/vi/core.l apps/vi/vi.l \
+  apps/libra/lint.l apps/tui.l apps/vi/config.l apps/vi/hue.l apps/vi/core.l apps/vi/vi.l \
   apps/kore/diff.l apps/kore/patch.l apps/dns.l apps/ain.l $(lushfiles) \
   apps/kore/find.l apps/cook.l apps/kore/asbook.l apps/kore/man.l apps/kore/lens.l
 # the backends: one file per ISA, then the text faces they share

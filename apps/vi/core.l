@@ -57,6 +57,7 @@
 (module 'vi
 (borrow 'kore) ; the text/u floors
 (borrow 'lint)  ; lint-scan, spliced for this module's compile
+(borrow 'tui)   ; tui-fresh, the diff repaint every full-screen app wants
 (:
    ; -- the small floor --
    ; lists do not index by application (a number list would church-tower), so
@@ -1346,29 +1347,11 @@
           + e + "[" + show <>>L + ";" + show <>>>L + "H"))
 
    ; -- the frame as a refresh: only what changed -------------------------------
-   ; a full redraw a keystroke is the flicker: the screen is cleared line by line and
-   ; rewritten while the terminal draws it. so keep the rows the last frame put there,
-   ; place only the ones that differ, and bracket the lot in synchronised-output mode
-   ; (DEC 2026) so a scroll lands in one piece -- a terminal that does not know 2026
-   ; ignores it, as does quay.
+   ; apps/tui.l does the diffing; what is vi's here is the geometry that says the view
+   ; has not moved, and vlay's own key, which says the body cannot have changed
    (vfresh st)
-    (: e (string 27) L (vlay st)
-       rs <L ss <>L key (L 4)
-       geo [(st 'w) (st 'h) (st 'top) (st 'tops) (st 'left)]
-       old (st 'lastr)                             ; [geo key rows status]
-       same? (two? old && (= <>old key))           ; vlay's own key: the body cannot differ
-       at? (two? old && (= <old geo))
-       (place i ln) (e + "[" + show (i + 1) + ";1H" + ln + e + "[K")
-       (dif a b i acc)
-        (? !(two? b) acc
-           (dif (two? a ? >a ()) >b (i + 1)
-                ((two? a && (= <a <b)) ? acc (acc + place i <b))))
-       body (? same? ""
-                at? (dif <>>old rs 0 "")
-                (: (go l acc) (? !(two? l) acc (go >l (acc + <l + e + "[K" + "\r\n")))
-                   (e + "[H" + go rs "")))
-       stat (? (at? && (= <>>>old ss)) "" (place (st 'h - 1) ss))
-       _ (pin st 'lastr [geo key rs ss])
-       (e + "[?2026h" + body + stat
-          + e + "[" + show <>>L + ";" + show <>>>L + "H" + e + "[?2026l")))
+    (: L (vlay st)
+       (tui-fresh st (st 'h)
+                  [(st 'w) (st 'h) (st 'top) (st 'tops) (st 'left)]
+                  (L 4) <L <>L <>>L <>>>L)))
 ) ; module 'vi

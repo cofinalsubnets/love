@@ -11,6 +11,7 @@
 ; usage: love mc [DIR [DIR]]
 (module (mc mc-main mc-run mc-new mc-key mc-frame mc-read mc-pane mc-at mc-goto mc-cell)
 (borrow 'posix)
+(borrow 'tui)
 (:
  (mc-rfind s b) (: (go k) (? (k < 0) (0 - 1) (s k = b) k (go (k - 1))) (go (#s - 1)))
 
@@ -51,7 +52,7 @@
   (: es (p 'es) m #es
      c (? (i < 0) 0 (m <= i) (? m (m - 1) 0) i)
      t (p 'top)
-     t2 (? (c < t) c (t + n <= c) (c - n + 1) t)
+     t2 (tui-settle c t n)
      (pins p 'cur c 'top (t2 < 0 ? 0 t2)))
  ; a pane that cannot read the new directory keeps the one it has, so an unreadable
  ; path is a key that did nothing rather than an empty pane with no way back.
