@@ -382,8 +382,9 @@ dist: dist-source dist-seed   # a release is both
 dist_drop = bench
 .PHONY: force_src
 force_src: ;
+# force_src: a release packs the tree as it is, so make cannot know the prerequisites;
+# selfpack rewrites the archive only when the content moved, and says so only then
 $(dist_source): force_src $(love0)
-	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
@@ -1117,12 +1118,13 @@ wasm_seat: $(k_mod) $(if $(NODE),out/wasm/love.image,)
 # by hand: bytes every C edit would otherwise churn. ONE PAIR IS COPIED OUT to web/ beside
 # the fonts -- generated files committed for one reason, that github pages serves what it
 # is given and builds nothing.
+# ..copied under a second make, whose stat of the module is after the seat laid it
 site-wasm: wasm
-	@mkdir -p web/wasm
-	@echo '$(t_cp)	'web/wasm/love.wasm
-	@cp out/love.wasm web/wasm/love.wasm
-	@if test -f out/wasm/love.image; then echo '$(t_cp)	'web/wasm/love.image; cp out/wasm/love.image web/wasm/love.image; \
-	   else echo "  no node, no image: the page boots the egg"; fi
+	@$(MAKE) -s web/wasm/love.wasm $(if $(NODE),web/wasm/love.image,)
+web/wasm/love.wasm: out/love.wasm
+	@mkdir -p web/wasm; echo '$(t_cp)	'$@; cp $< $@
+web/wasm/love.image: out/wasm/love.image
+	@echo '$(t_cp)	'$@; cp $< $@
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker

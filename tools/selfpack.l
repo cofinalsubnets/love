@@ -76,7 +76,7 @@
        (? fresh 0
           adopt (sp-write side h)
           (: z (gz-zip a "" 0)
-             (sp-write arch z, sp-write side h, 0))))
+             (puts ("LOVE\t" + arch), putc 10, sp-write arch z, sp-write side h, 0))))
 
    (sp-main av)
     (: n #av

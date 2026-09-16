@@ -667,6 +667,10 @@
  song-rate (love-arch @ 'wasm 16000 48000)
  song-cps 0.5                                           ; cycles a second
  song-chunk (song-rate // 30)                           ; a frame's worth, thirty a second
+ ; how far the head is kept ahead of the speaker. a horn asked for lands at the head,
+ ; and a card's ring can hold a second (the wasm seat's does): the beep would come a
+ ; second after the hit. a shallower card blocks at its own door under this
+ song-lead (6 * song-chunk)
  song-gain 5200.0
 
 
@@ -1627,14 +1631,16 @@
              hn (? (tablet? (cite 'harp))
                    (: q (horn song-rate 2) (? (nom? q) () q)) ())
              sng (? hn (song-new hn) ())
-             ; the wait IS the song: a chunk goes out at the speed the card plays it, so
-             ; a loop that feeds one while no key is waiting keeps time without a rest.
+             ; the wait IS the song: a chunk goes out whenever the card has less than the
+             ; lead queued, and a loop that feeds while no key is waiting keeps time.
              ; with no card it is a plain poll, and the tower is silent as it was.
              ; ..and while it waits the floor's live cells go on: a quarter-second count
              ; kept on the floor, and each count they are laid again, alone
              (flick! _) (: d (g 'd) t (clock 0 // 250)
                            (? (t != peep d 'ft ()) (pin d 'ft t, say out (live-frame g), flush out)))
-             (idle _) (: _ (? sng (song-feed sng (song-vol g)) (rest 30)) (flick! ()))
+             (feed! _) (? (horn-lag hn < song-lead) (song-feed sng (song-vol g)) (rest 5))
+             (idle _) (: _ (? sng (feed! ()) (rest 30)) (flick! ()))
+             (hold ms) (: t (clock 0) (go _) (? ((clock 0 - t) < ms) (idle (), go ())) (go ()))
              ; ..but escape at a standing sign takes the sign down, and nothing else:
              ; a page of the book or her tree is left, not the tower
              (turn k) (? (k = 27 && g 'sign) (pins g 'sign () 'pages () 'bell () 'talk ())
@@ -1643,12 +1649,11 @@
                           (crawl-turn g (steer k))))
              ; the ground shudders: the view jolts a row either way for half a second,
              ; with whatever sign the turn raised held back until it is still
-             ; ..and the song is fed through it: two chunks are the beat a jolt holds for
+             ; ..and the song goes on under it
              (rumble! _) (: d (g 'd) sg (g 'sign)
                             _ (pin g 'sign ())
-                            (jolt _) (? sng (each ^2 (_ \ song-feed sng (song-vol g))) (rest 66))
                             _ (each ^6 (k \ (pin d 'jolt (k % 2 = 0 ? 1 -1),
-                                             say out (crawl-frame g), flush out, jolt ())))
+                                             say out (crawl-frame g), flush out, hold 66)))
                             (pin d 'jolt 0, pin g 'sign sg, pin g 'rumble ()))
              (loop last t0) (? (g 'over) ()
                                (: _ (say out (crawl-frame g), flush out)
@@ -1660,8 +1665,8 @@
              _ (raw 1)
              _ (say out "\e[?1049h\e[?25l\e[2J")
              _ (loop 0 0)
-             ; an end shows its frame for a beat before the screen is given back
-             _ (say out (crawl-frame g), flush out, rest 1200)
+             ; an end shows its frame for a beat, the song still going, before the screen is given back
+             _ (say out (crawl-frame g), flush out, hold 1200)
              ; ..and the card goes back before the walk asks for it
              _ (? hn (: _ (flush hn) (close hn)) ())
              _ (g 'over = 'won ? (tower-win g))

@@ -764,7 +764,7 @@
    (until-ring n) (? ('ring = g 'phase) n (200 < n) n (: _ (crawl-turn g 46) (until-ring (n + 1))))
    n (until-ring 0)
    r (circle-r g)
-   _ (test ('ring = g 'phase) (n < 60) (find (g 'msg) "a circle" 0)
+   _ (test ('ring = g 'phase) (n < 60) (find (g 'msg) "encircles" 0)
            (11 <= r) (on-ring? g (g 'cx) (g 'cy - r)) (walled? g (g 'cx) (g 'cy - r))
            (circle-q g (g 'p 'x) (g 'p 'y) < ring-in g))   ; you are inside it
    ; a strike on it: stand just inside and step out
