@@ -54,14 +54,14 @@
    (i-oh t ix f) (vnoise ix * 0.4 * exp (t * -13.0))
    ; a clap is a short chatter then a tail: the chatter is a duty cycle on t, so it
    ; is still one expression
-   (i-cp t ix f) (: g ((((t * 220.0 % 1.0) < 0.45) * (t < 0.028)) + (t >= 0.028))
+   (i-cp t ix f) (: g (((t * 220.0 % 1.0 < 0.45) * (t < 0.028)) + (t >= 0.028))
                     (vnoise ix * 0.55 * g * (exp (t * -17.0))))
    (i-rim t ix f) (sin (t * tau * 1650.0) * 0.7 * exp (t * -150.0))
    (i-tom t ix f) (sin ((t * 96.0 + (1.4 * (1.0 - (exp (t * -22.0))))) * tau)
                    * exp (t * -11.0))
    ; the pitched four, each with one attack-decay envelope
-   (venv t d) ((1.0 - exp (t * -420.0)) * exp ((t / d) * -2.6))
-   (i-sin t ix f) (sin (t * (tau * f)))
+   (venv t d) ((1.0 - exp (t * -420.0)) * exp (t / d * -2.6))
+   (i-sin t ix f) (sin (t * tau * f))
    (i-saw t ix f) (((t * f % 1.0) * 2.0) - 1.0)
    (i-sqr t ix f) (((t * f % 1.0 < 0.5) * 2.0) - 1.0)
    (i-tri t ix f) (: u (t * f % 1.0)
@@ -89,7 +89,7 @@
        (? !ins ()
           (: dur (vnum v 'legato (ins 0))
              nt  (vnum v 'note (vnum v 'n 0))
-             f   (261.6255653005986 * (exp ((ins 1 ? nt 0) * ln2-12)))
+             f   (261.6255653005986 * exp ((ins 1 ? nt 0) * ln2-12))
              amp (vnum v 'gain 1.0)
              pn  (vnum v 'pan 0.5)
              spd (vnum v 'speed 1.0)
@@ -116,8 +116,7 @@
    ; one voice at full scale reaches 0.6 of the range, so a handful may stack before
    ; the saturation bites. -g moves the whole mix under that ceiling.
    harp-scale 20000.0
-   (clip g x) (: v (int (x * g))
-                 (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
+   (clip g x) (int (x * g) @ v (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
    ; ..and the same saturation over a whole tray, as arithmetic: `// 1` truncates toward
    ; zero exactly where `int` does, and the two comparisons are masks.
    (clipv g t) (: v (t * g // 1)
@@ -174,22 +173,25 @@
    ; --- the two sinks --------------------------------------------------------
    (wav-head rate n)                      ; 44 bytes of canonical PCM riff
     (: (u32 v) (string (v & 255) + string ((v >> 8) & 255)
-                       + string ((v >> 16) & 255) + string ((v >> 24) & 255))
+                + string ((v >> 16) & 255) + string ((v >> 24) & 255))
        (u16 v) (string (v & 255) + string ((v >> 8) & 255))
        d (n * 4)
-       ("RIFF" + (u32 (36 + d)) + "WAVEfmt " + (u32 16) + (u16 1) + (u16 2)
-        + (u32 rate) + (u32 (rate * 4)) + (u16 4) + (u16 16) + "data" + (u32 d)))
+       ("RIFF" + u32 (36 + d) + "WAVEfmt " + u32 16 + u16 1 + u16 2
+        + u32 rate + u32 (rate * 4) + u16 4 + u16 16 + "data" + u32 d))
    (harp-wav p c0 ncyc rate cps tail g path)
     (: q (open path "w")
-       (? !(hot? q) (: _ (say err $ "harp: cannot write " + path + "\n") 0)
-          (: _ (say q (wav-head rate ((ncyc * (int (rate / cps))) + tail)))
-             _ (harp-run p c0 ncyc rate cps tail g (\ s (say q s)))
-             _ (close q) 1)))
+       (? !(hot? q) (say err $ "harp: cannot write " + path + "\n", 0)
+          (say q $ wav-head rate (ncyc * int (rate / cps) + tail),
+           harp-run p c0 ncyc rate cps tail g (say q),
+           close q,
+           1)))
    (harp-horn p c0 ncyc rate cps tail g)
-    (: h (horn rate 2)
-       (? (nom? h) (: _ (say err $ "harp: no horn -- " + (show h) + "\n") 0)
-          (: _ (harp-run p c0 ncyc rate cps tail g (\ s (say h s)))
-             _ (flush h) _ (close h) 1)))
+    (horn rate 2 @ h
+     (nom? h ? (say err $ "harp: no horn -- " + show h + "\n", 0)
+      (harp-run p c0 ncyc rate cps tail g (say h),
+       flush h,
+       close h,
+        1)))
 
    ; --- printing, for eyes rather than ears ----------------------------------
    (qshow t) (: p (load t) (? (1 = <>p) (show <p) (show <p + "/" + show <>p)))
@@ -207,10 +209,9 @@
    ; a bare argument is mini-notation for `hit`; one that opens a paren is love, read
    ; and evaluated with the harp module already spliced. several arguments stack.
    (harp-read a) (0 < #a && 40 = a 0 ?  (sound a @ (a . _) (ev a) hush) (hit (mini a)))
-   (harp-atoi s) (: n #s
-                    (go i acc) (? (i >= n) acc (go (i + 1) ((acc * 10) + ((s i) - 48))))
-                    (go 0 0))
-   (harp-atof s) (: r (sound s) (? (two? r) <r 0))
+   (harp-atoi s) (:- (go 0 0) n #s
+                  (go i acc) (? (i >= n) acc (go (i + 1) ((acc * 10) + ((s i) - 48)))))
+   (harp-atof s) (sound s @ (r . _) r 0)
    (harp-main as)
     (: (go l o ps)
         (one? l ? (harp-fire o (lrev ps))
