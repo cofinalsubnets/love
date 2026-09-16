@@ -234,12 +234,12 @@
    (slurp j))
 
  ;; --- the runner: the tool on cli's stage ---------------------------------------------------
- (readf p) (: q (open p "r") (hot? q ? (: t (slurp q) (close q, [1 t]))))
- (lupa-run p) (: r (readf p)
-                 (? (one? r) (puts ("lupa: cannot read " + p + "\n"), 1)
-                    (0 = #<>r) (puts ("lupa: " + p + " is empty\n"), 1)
-                    (: d (lupa-new <>r p)
-                       (stage (lupa-frame d) (lupa-key d) (_ \ d 'over)))))
+ (readf p) (: q (open p "r") (hot? q ? (slurp q @ t (close q, [1 t]))))
+ (lupa-run p)
+  (readf p @
+   [1 ""] (puts ("lupa: " + p + " is empty\n"), 1)
+   [1 a]  (lupa-new a p @ d (stage (lupa-frame d) (lupa-key d) (_ \ d 'over)))
+   (puts $ "lupa: cannot read " + p + "\n", 1))
  lupa-usage "usage: love lupa FILE"
  (lupa-main as)
   (two? as ? (lupa-run <as) (puts (lupa-usage + "\n"), 1))
