@@ -587,9 +587,16 @@ static bool lexbound(struct ai *g, struct env *d, word x) {
  return false; }
 
 static ai_inline Ana(ana_2, word a, word b) {
- if ((x = stacklook_macro(ai_core_of(g), a)) && !lexbound(g, *c, a))   // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit
-  return g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, zero, zero, x))))))),
-         analyze(g, c, ai_ok(g) ? pop1(g) : 0);
+ if ((x = stacklook_macro(ai_core_of(g), a)) && !lexbound(g, *c, a)) {  // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit
+  g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, zero, zero, x)))))));
+  // the expansion is source again: it takes the opfix prepass a read form took, so a binder
+  // a macro built (:- is one) lowers its patterns like one the reader saw. the same guard as
+  // c0's: a lambda-headed chain is a constructed application, and pre-seal the pass is zero
+  word e = ai_ok(g) ? g->sp[0] : 0, of = ai_core_of(g)->hot_opfix;
+  if (chainp(e) && (!lamp(A(e)) || datp(A(e))) && lamp(of)) {
+   g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, e, zero, zero, of)))))));
+   if (ai_ok(g)) g->sp[1] = g->sp[0], g->sp += 1; }
+  return analyze(g, c, ai_ok(g) ? pop1(g) : 0); }
  if (!chainp(b)) return analyze(g, c, a);  // (f) == f -- below the macro lane, which has no value to be
  return avec(g, b, g = analyze(g, c, a)),
         ana_ap(g, c, b); }

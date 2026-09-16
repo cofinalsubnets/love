@@ -650,7 +650,8 @@
  ((-1 && 5) = -1) ((5 && -1) = -1) ((5 && 0) = 0) ((0 || -1) = -1)
  (2 = (|| 0 2 3)) ('(1 2 3) = [1 2 3]) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
  (1 = (quote 1)) ('a = (quote a))                                  ; quote, the macro spelling of '
- (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (x \ x * 2)) 4))
+ (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big))
+ ('(3 b) = (:- (go '((1 a) (3 b))) (go (e . u)) (<e @ 3 e (go u))))   ; a pattern binder under the rotation (9 = ((<=< (+ 1) (x \ x * 2)) 4))
  ('two = (2 @- 'else 2 'two)) ('else = (9 @- 'else 2 'two))   ; @- fronts the fallthrough, subject stays
  (() = (list)) (tray? (tuple)) (tablet? (hash)) (() = (unless))     ; the zero-operand macro
  (() = (:)) (() = (?)) (() = (\)))                                 ;   ..and the empty forms, still their head's value

@@ -214,8 +214,8 @@
 (:: '&& (\ l (: (and l) (? (two? (cup l)) (: y (nom 0) (list ': y (cap l) (list '? y (and (cup l)) y))) (cap l)) (? (two? l) (and l) 1))))
 (:: '|| (\ l (: (or l) (? (two? (cup l)) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) (cap l)) (? (two? l) (or l) 0))))
 ; end weighting: the head argument moves to the tail, so the form a long body would have
-; buried is read first. a `:` these build cannot carry a destructuring binding head -- the
-; pattern rewrite runs in the read pass, ahead of `::`, so the names miss. plain params are fine.
+; buried is read first. the `:` these build is source: both macro lanes opfix an expansion,
+; so a destructuring binding head lowers there as it would under a read `:`.
 (:: ':- (\ a (. ': (cat (cup a) (. (cap a) ())))))
 (:: '?- (\ a (. '? (cat (cup a) (. (cap a) ())))))
 ; @ carries a subject the other two lack, so @- moves the second argument, not the
