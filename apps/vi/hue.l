@@ -261,7 +261,19 @@
               (? (string? p) (go b >l (acc + snip s i a + p + snip s a b + hue-off))
                  (go b >l (acc + snip s i b)))))
        (go 0 runs ""))
-   (hue-line pens bk s in) (hue-paint pens s <(hue-lex bk s in 1))
+   ; one window of a line: columns [a b). the runs are read from column 0, since
+   ; a clip cannot tell it began inside a string, then cut to the window and
+   ; shifted home. the lexer never reads past b, so a = 0 is the plain whole-line
+   ; paint and costs what it always did.
+   (hue-win pens bk s in a b)
+    (: t (snip s 0 b)
+       rs <(hue-lex bk t in 1)
+       (cut l acc)
+        (? !(two? l) (rev acc)
+           (: r <l x <>r y <>>r
+              p (? (x < a) a x)
+              (cut >l (? (p < y) ([<r (p - a) (y - a)] . acc) acc))))
+       (hue-paint pens (snip t a b) (? (a < 1) rs (cut rs ()))))
 
    ; --- the theme, and the user's own ------------------------------------------
    ; kore ships as a baked image, so apps/vi/config.l is not a knob anyone

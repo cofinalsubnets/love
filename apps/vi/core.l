@@ -8,6 +8,9 @@
 ;
 ; the state (a tablet): 'lines (texts, never empty -- the vi invariant),
 ; 'row 'col (0-based), 'goal (the column j/k aim for), 'top (first visible row),
+; 'wrap (long lines fold onto more screen rows? off by default -- :set wrap), with
+; 'tops (the segment of 'top's line the view starts at, wrapped) and 'left (the
+; first visible column, unwrapped) naming the view's corner between them,
 ; 'mode ('n normal, 'i insert, 'c ex, 's search), 'cnt (pending count), 'op
 ; (pending operator (char n) or ()), 'pc (pending char-arg nom: f F t T r g z Z,
 ; and ti/ta for a text object), 'lastf (the f F t T that ; and , repeat), 'reg
@@ -50,8 +53,7 @@
 ; o [NAME] q q! wq x hl lint set. a bare range moves the cursor.
 ; out of scope, documented: visual mode, named registers ("a and the rest),
 ; marks (m ' `), macros (q @), :r and :!, g~ gu gU, sentence motions ( and ),
-; ge, ^E ^Y, gj gk, tabs render raw (the terminal's stops, not ours), no
-; horizontal scroll (long lines clip at the view's edge).
+; ge, ^E ^Y, gj gk, tabs render raw (the terminal's stops, not ours).
 (module 'vi
 (borrow 'kore) ; the text/u floors
 (borrow 'lint)  ; lint-scan, spliced for this module's compile
@@ -70,6 +72,28 @@
              t)))
    (vlen st) (tally (vln st))
    (vnl st) (tally (st 'lines))
+   (vdrop l k) (? ((k < 1) || one? l) l (vdrop >l (k - 1)))
+   ; a line's height in screen rows: 1 unwrapped, else what it folds to
+   (vhgt st ln) (? !(st 'wrap) 1
+                   (: w (st 'w) q ((#ln + (w - 1)) // w) (? (q < 1) 1 q)))
+   ; the last file row the body can show -- what H M L stop at. wrapped, that
+   ; is a walk down the heights from the view's corner
+   (vbot st)
+    (: nl (vnl st) top (st 'top)
+       (? !(st 'wrap) (: b (top + (st 'h - 2)) (? (nl <= b) (nl - 1) b))
+          (: (go l i n) (? !(two? l) (i - 1)
+                           (: k (vhgt st <l) (? (n <= k) i (go >l (i + 1) (n - k)))))
+             (go (vdrop (st 'lines) top) top ((st 'h - 1) + (st 'tops))))))
+   ; row r moved k SCREEN rows in direction d, answered as a file row in range
+   (vskip st r d k)
+    (: nl (vnl st)
+       (fence i) (? (i < 0) 0 (nl <= i) (nl - 1) i)
+       (go i n) (? (n < 1) i
+                   (: j (i + d)
+                      (? ((j < 0) || (nl <= j)) i
+                         ; a step costs the UPPER of the two lines, either way
+                         (go j (n - vhgt st (st 'lines (? (i < j) i j)))))))
+       (? !(st 'wrap) (fence (r + (d * k))) (go r k)))
    (vink ln) (: n #ln                       ; first non-blank column
                  (go i) (? (i < n && (ln i = 32 || ln i = 9)) (go (i + 1)) i)
                  (: k (go 0) (? (k < n) k (0 < n) (n - 1) 0)))
@@ -108,7 +132,7 @@
    ; other way round goes plain, and the generation bump drops the cached carry
    ; along with the old buffer it described.
    (vload st ls nm)
-    (pins st 'lines (? (two? ls) ls '("")) 'file nm 'row 0 'top 0,
+    (pins st 'lines (? (two? ls) ls '("")) 'file nm 'row 0 'top 0 'tops 0 'left 0,
      vgole st 0,
      pins st 'undo () 'redo () 'dirty () 'hl (vdotl nm),
      vgen st)
@@ -271,8 +295,8 @@
                       q (go n [r col] [r col])
                       p <q pv <>q
                       (? (<pv < <p) ['to <pv #(st 'lines <pv)] ['to <p <>p]))
-       (top1 k) (: t (st 'top + (k - 1)) b (st 'h - 2)
-                   (? ((st 'top + b) < t) (st 'top + b) (nl <= t) (nl - 1) t))
+       (top1 k) (: t (st 'top + (k - 1)) b (vbot st)
+                   (? (b < t) b (nl <= t) (nl - 1) t))
      (c @ 104 ['to r (: k (col - n) (? (k < 0) 0 k))]             ; h
           108 ['to r (: k (col + n) (? (len < k) len k))]        ; l
           48 ['to r 0]                                           ; 0
@@ -293,10 +317,9 @@
           95 ['linb (: k (r + (n - 1)) (? (k < nl) k (nl - 1)))]
           123 ['lin (vpara st -1)]  125 ['lin (vpara st 1)]      ; { }
           72 ['lin (top1 n)]                                     ; H
-          76 ['lin (: b (st 'top + (st 'h - 2)) f (? (nl <= b) (nl - 1) b)
-                      k (f - (n - 1)) (? (k < st 'top) (st 'top) k))]  ; L
-          77 ['lin (: b (st 'top + (st 'h - 2)) f (? (nl <= b) (nl - 1) b)
-                      ((st 'top + f) // 2))]                     ; M
+          76 ['lin (: f (vbot st) k (f - (n - 1))                 ; L
+                      (? (k < st 'top) (st 'top) k))]
+          77 ['lin ((st 'top + vbot st) // 2)]                    ; M
           37 (: p (vpct st)                                      ; %
                 (? !(two? p) ()
                    (r < <p) ['spn r col <p (<>p + 1)]
@@ -833,14 +856,18 @@
        (0 = tally nm) (vmsg st "no file name")
        (pin st 'doe [nm]))
 
-   ; :set sw=N / shiftwidth=N, and bare :set sw reports. the only option there is,
-   ; because it is the only number this file's commands need and cannot guess
+   ; :set sw=N / shiftwidth=N (bare :set sw reports), and :set wrap / nowrap.
+   ; two options: the number > and < move by, and how a line too long for the
+   ; view is shown -- folded onto more screen rows, or slid under a window
    (vexset st arg)
     (: n #arg
        (eq k) (? (n <= k) () (arg k = 61) k (eq (k + 1)))
        j (eq 0)
        nm (vextrim (? (charm? j) (snip arg 0 j) arg))
-       (? !(nm = "sw" || nm = "shiftwidth") (vmsg st $ "not an option: " + nm)
+       (? (nm = "wrap" || nm = "nowrap")
+           (: _ (pin st 'wrap (nm = "wrap" ? 1 ()))
+              (vmsg st (st 'wrap ? "wrap" "nowrap")))
+          !(nm = "sw" || nm = "shiftwidth") (vmsg st $ "not an option: " + nm)
           !(charm? j) (vmsg st $ "shiftwidth=" + show (st 'sw))
           (: t (vextrim (snip arg (j + 1) n)) k #t
              (dig? i) (i < k && 48 <= t i <= 57)
@@ -985,10 +1012,10 @@
           ; zt zz zb: the view slides under the cursor, the cursor stays put
           (k = 'z) (: body (st 'h - 1) r (st 'row)
                       t (c @ 116 r
-                             98 (: q (r - (body - 1)) (? (q < 0) 0 q))
-                             (122 || 46) (: q (r - (body // 2)) (? (q < 0) 0 q))
+                             98 (vskip st r -1 (body - 1))
+                             (122 || 46) (vskip st r -1 (body // 2))
                              (st 'top))
-                      (pin st 'top t, st))
+                      (pins st 'top t 'tops 0, st))
           (k = 'Z) (c != 90 ? st (pins st 'dow [(st 'file)] 'quit 1))
           ; i and a after an operator name a text object rather than insert mode
           (k = 'ti || k = 'ta)
@@ -1035,10 +1062,7 @@
               (two? op) (vapply st <op mr)
               (mv1 mr)))
        (page d) (: h (st 'h) step (c @ (6 || 2) (h - 2) ((h - 2) // 2))
-                   nl (vnl st)
-                   t (st 'row + d * step)
-                   t2 (? (t < 0) 0 (? (t < nl) t (nl - 1)))
-                   _ (pin st 'row t2)
+                   _ (pin st 'row (vskip st (st 'row) d step))
                    (vclampn st))
        rawc (st 'cnt)
        _ (pin st 'cnt 0)
@@ -1210,7 +1234,7 @@
    (vdotl f) (: n #f (1 < n && f (n - 2) = 46 && f (n - 1) = 108))
    (vnew ls file)
     {'lines (two? ls ? ls '(""))
-     'row 0 'col 0 'goal 0 'top 0
+     'row 0 'col 0 'goal 0 'top 0 'tops 0 'left 0 'wrap ()
      'mode 'n 'cnt 0 'op () 'pc () 'gcnt 0 'lastf ()
      'reg () 'undo () 'redo ()
      'dot () 'rec () 'reccnt 0 'dotting ()
@@ -1221,47 +1245,76 @@
      'lncar () 'laycar () 'lastr () 'w 80 'h 24}
 
    ; -- the frame ---------------------------------------------------------------
-   ; vlay settles 'top and works out what the screen should hold: the body rows
-   ; (clipped, painted), the status line (clipped), and where the cursor goes.
+   ; vlay settles the view and works out what the screen should hold: the body rows
+   ; (windowed, painted), the status line (clipped), and where the cursor goes.
    ; vframe writes all of it; vfresh writes the difference. one layout under both.
    (vlay st)
-    (: w (st 'w) h (st 'h) body (h - 1)
-       _ (st 'row < st 'top ? (pin st 'top (st 'row)))
-       _ (st 'top + body - 1 < st 'row ? (pin st 'top (st 'row - (body - 1))))
-       top (st 'top) ls (st 'lines)
-       (clip ln) (w < #ln ? (snip ln 0 w) ln)
+    (: w (st 'w) h (st 'h) body (h - 1) ls (st 'lines)
+       wrap? (st 'wrap) row (st 'row) cln (vln st)
+       (hgt ln) (vhgt st ln)
+       cs (? !wrap? 0 (: q (st 'col // w) k (hgt cln) (? (k <= q) (k - 1) q)))
+       ; -- settle the view. unwrapped, 'top is the old row arithmetic and 'left
+       ; slides half a screen at a time, never further right than the line's end.
+       ; wrapped, the corner carries a segment offset too and the distance to the
+       ; cursor is a walk -- over a screenful of lines at most, each being a row.
+       _ (? wrap?
+            (: lo (: q (row - (body - 1)) (? (q < 0) 0 q))
+               _ (st 'top < lo ? (pins st 'top lo 'tops 0))
+               (((row < st 'top) || ((row = st 'top) && (cs < st 'tops)))
+                ? (pins st 'top row 'tops cs)))
+            (: _ (row < st 'top ? (pin st 'top row))
+               _ ((st 'top + (body - 1)) < row ? (pin st 'top (row - (body - 1))))
+               col (st 'col)
+               lim (: q (#cln - w) (? (q < 0) 0 q))
+               (((col < st 'left) || ((st 'left + (w - 1)) < col))
+                ? (pin st 'left (: q (col - (w // 2)) (? (q < 0) 0 (lim < q) lim q))))))
+       t0 (st 'top) l0 (vdrop ls t0)
+       ; the screen rows from the view's corner down to the cursor, inclusive
+       cnt (? !wrap? ((row - t0) + 1)
+               (: (go l i acc) (? (row <= i) ((acc + cs + 1) - (st 'tops))
+                                  (go >l (i + 1) (acc + hgt <l)))
+                  (go l0 t0 0)))
+       ; further than the body reaches: slide the corner down by the overflow
+       _ ((wrap? && (body < cnt))
+          ? (: (adv l i k d) (? !(two? l) [i k]
+                                (: e ((hgt <l) - k)
+                                   (? (d < e) [i (k + d)] (adv >l (i + 1) 0 (d - e)))))
+               q (adv l0 t0 (st 'tops) (cnt - body))
+               (pins st 'top <q 'tops <>q)))
+       top (st 'top) tops (st 'tops) left (st 'left)
        ; the status line clips from the LEFT: its tail carries the news (row,col, the
        ; ": 12 lines", the end of the : being typed), which a deep path would push off
-       ; the screen. `<` marks the cut. the TEXT lines still clip right -- the
-       ; no-horizontal-scroll rule.
+       ; the screen. `<` marks the cut.
        (clipl ln) (: k #ln (? (w < k) ("<" + snip ln ((k - w) + 1) k) ln))
-       ; -- the paint. escapes are zero width, so clip first and paint the clip:
-       ; every column worked out below is the plain one, cursor included. off,
-       ; this whole lane vanishes and the frame is the byte-for-byte old one.
+       ; -- the paint. escapes are zero width, so the window is cut in plain columns
+       ; and painted from there: every column worked out below is the plain one,
+       ; cursor included. off, this whole lane vanishes.
        paint (st 'hl && tablet? (st 'pens))
        bk (? paint (vbook st) ())
        car (? paint (vcarry st bk) ())
-       ; the painted row, cached against the text that made it, the carry it began
-       ; on and the width it was cut to -- keyed by SCREEN row, so the table is the
+       ; the painted window, cached against the text that made it, the carry it began
+       ; on and the columns it was cut to -- keyed by SCREEN row, so the table is the
        ; height of the view and never the height of the file. typing moves one row;
        ; the other twenty-odd are answered out of here without the lexer running
-       (lay raw in i)
-        (: ln (clip raw)
-           (? !paint ln
-              (: rw (st 'hlrow)
-                 k (peep rw i ())
-                 (? (two? k && <k = ln && <>k = in && <>>k = w) <>>>k
-                    (: p (hue-line (st 'pens) bk ln in)
-                       _ (pin rw i [ln in w p])
+       (lay raw in i a)
+        (: k #raw b (? (k < (a + w)) k (a + w))
+           (? (b <= a) ""
+              !paint (snip raw a b)
+              (: rw (st 'hlrow) ky [raw in a b] c (peep rw i ())
+                 (? (two? c && (= <c ky)) <>c
+                    (: p (hue-win (st 'pens) bk raw in a b)
+                       _ (pin rw i [ky p])
                        p)))))
        ; 'lines and the carry are LISTS: asking for row i by application walks i
        ; pairs, so a screenful deep in a file walked the file forty times over --
        ; 55% of a keystroke, and the whole of why moving around got slower the
-       ; further down you were. drop to the top once and step from there
-       (drop l k) (? (k < 1 || one? l) l (drop >l (k - 1)))
-       (rows l cl i acc)
+       ; further down you were. drop to the corner once and step from there
+       (rows l cl i k acc)
         (? (body <= i) (rev acc)
-           (rows >l >cl (i + 1) ((two? l ? (lay <l <cl i) "~") . acc)))
+           !(two? l) (rows l cl (i + 1) 0 ("~" . acc))
+           (: raw <l r (lay raw <cl i (? wrap? (k * w) left))
+              (? (wrap? && ((k + 1) < hgt raw)) (rows l cl (i + 1) (k + 1) (r . acc))
+                 (rows >l >cl (i + 1) 0 (r . acc)))))
        status (? (st 'mode = 'c) (":" + edtext (st 'cmd))
                  (st 'mode = 's) ((? (0 < st 'dir) "/" "?") + edtext (st 'cmd))
                  (0 < #(st 'msg)) (st 'msg)
@@ -1269,15 +1322,18 @@
        ; in ex and search mode you are typing on the status line, so that is
        ; where the cursor goes: after the prefix, at the editor's column
        said? (st 'mode = 'c || st 'mode = 's)
-       cr (? said? h ((st 'row - top) + 1))
-       cc (: k (? said? (edcol (st 'cmd) + 2) (st 'col + 1)) (? (w < k) w k))
-       ; the body is a pure function of these five, so when none of them moved the
-       ; rows are the ones we laid last time -- a keystroke that only walks the
-       ; cursor about lays nothing at all, which is the common keystroke
-       key [(st 'hlgen) w top body (paint ? 1 ())]
+       cr (? said? h (? (body < cnt) body cnt))
+       cc (: k (? said? (edcol (st 'cmd) + 2)
+                  wrap? ((st 'col - (cs * w)) + 1)
+                  ((st 'col - left) + 1))
+             (? (w < k) w k))
+       ; the body is a pure function of these, so when none of them moved the rows
+       ; are the ones we laid last time -- a keystroke that only walks the cursor
+       ; about lays nothing at all, which is the common keystroke
+       key [(st 'hlgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())]
        lc (st 'laycar)
        rs (? (two? lc && (= <lc key)) <>lc
-             (: k (rows (drop ls top) (drop car top) 0 ())
+             (: k (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops ())
                 _ (pin st 'laycar [key k])
                 k))
        [rs (clipl status) cr cc key])
@@ -1298,7 +1354,7 @@
    (vfresh st)
     (: e (string 27) L (vlay st)
        rs <L ss <>L key (L 4)
-       geo [(st 'w) (st 'h) (st 'top)]
+       geo [(st 'w) (st 'h) (st 'top) (st 'tops) (st 'left)]
        old (st 'lastr)                             ; [geo key rows status]
        same? (two? old && (= <>old key))           ; vlay's own key: the body cannot differ
        at? (two? old && (= <old geo))

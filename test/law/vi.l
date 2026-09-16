@@ -337,8 +337,8 @@
    E$ (string 27)
    _ (test
       (mini '("ab") "" = (E$ + ("[H" + ("ab" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,1" + (E$ + ("[K" + (E$ + "[1;1H"))))))))))))))))
-      ; a long line clips at w; the cursor never leaves the view
-      (mini '("abcdefghij") "$" = (E$ + ("[H" + ("abcdefgh" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,10" + (E$ + ("[K" + (E$ + "[1;8H"))))))))))))))))
+      ; a long line slides the view sideways; the cursor never leaves it
+      (mini '("abcdefghij") "$" = (E$ + ("[H" + ("cdefghij" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,10" + (E$ + ("[K" + (E$ + "[1;8H"))))))))))))))))
       ; scrolling: the cursor's row stays inside the 3 text rows
       (: st (vgo '("a" "b" "c" "d" "e") "G") _ (pin st 'w 8) _ (pin st 'h 4)
          f (vframe st)
@@ -386,13 +386,52 @@
    _ (test
       (: st (hlon (small '("(map f)" "(g 1)") "")) _ (vfresh st)
          r0 ((st 'hlrow) 0)
-         ; [text carry width painted]: the key is what it was painted from
-         ((<r0 = "(map f)") && (<>r0 = 0) && (<>>r0 = 16) && (0 < tally <>>>r0)))
+         ; [[text carry from to] painted]: the key is what it was painted from
+         ((<r0 = ["(map f)" 0 0 7]) && (0 < tally <>r0)))
       ; the cache is keyed by SCREEN row, so it is the height of the view and
       ; never the height of the file
       (: st (hlon (small '("a" "b" "c" "d" "e" "f") "")) _ (vfresh st) _ (vfeed st (bytes "G"))
          _ (vfresh st)
          (3 = tally (keys (st 'hlrow)))))
+
+; --- long lines: the view slides sideways, and :set wrap folds them instead ---
+   (box ls w h) (: st (vnew ls "t") _ (pins st 'w w 'h h) _ (vframe st) st)
+   (see st ks) (: _ (vfeed st (? (string? ks) (bytes ks) ks)) _ (vframe st) st)
+   (body st) <(vlay st)
+   _ (test
+      ; nowrap is the default: 'left slides so the cursor shows, and stops at
+      ; the line's end rather than running off into blank columns
+      (: st (see (box '("abcdefghij") 8 4) "$")
+         ((st 'left = 2) && (body st = '("cdefghij" "~" "~"))))
+      (: st (see (see (box '("abcdefghij") 8 4) "$") "0")
+         ((st 'left = 0) && (body st = '("abcdefgh" "~" "~"))))
+      ; and comes home when the cursor lands on a short line
+      (: st (see (see (box '("abcdefghij" "x") 8 4) "$") "j")
+         ((st 'left = 0) && (body st = '("abcdefgh" "x" "~"))))
+      ; :set wrap folds the line onto as many screen rows as it needs
+      (: st (see (box '("abcdefghij") 8 4) ":set wrap\r")
+         ((st 'msg = "wrap") && (body st = '("abcdefgh" "ij" "~"))))
+      ; the cursor follows it onto the second row
+      (: st (see (see (box '("abcdefghij") 8 4) ":set wrap\r") "$")
+         L (vlay st)
+         ((<>>L = 2) && (<>>>L = 2)))
+      ; a line taller than the whole view: the corner carries a segment offset
+      (: st (see (see (box '("abcdefghijklmnopqrst") 4 4) ":set wrap\r") "$")
+         L (vlay st)
+         (((st 'top = 0) && (st 'tops = 2)) &&
+          ((body st = '("ijkl" "mnop" "qrst")) && ((<>>L = 3) && (<>>>L = 4)))))
+      ; :set nowrap puts it back, and no other word is an option
+      (: st (see (see (box '("abcdefghij") 8 4) ":set wrap\r") ":set nowrap\r")
+         ((st 'msg = "nowrap") && (body st = '("abcdefgh" "~" "~"))))
+      (st? (vgob '("a") ((bytes ":set frobs") + [CR])) 'msg = "not an option: frobs"))
+   ; H M L and the pages count SCREEN rows, so a folded line shortens their reach
+   _ (test
+      (at (see (box '("abcdefgh" "b" "c" "d") 4 5) "L") = '(3 0))
+      (at (see (box '("abcdefgh" "b" "c" "d") 4 5) ":set wrap\rL") = '(2 0))
+      (at (see (box '("abcdefgh" "b" "c" "d") 4 5) [6]) = '(3 0))
+      (at (see (box '("abcdefgh" "b" "c" "d") 4 5) ((bytes ":set wrap\r") + [6])) = '(2 0))
+      ; and zb cannot walk the view off the top of the file
+      (((see (box '("a" "b" "c") 4 5) "2Gzb") 'top) = 0))
 
 ; --- :e and :o -- the request the face performs, and the buffer swap it calls -
    _ (test
