@@ -64,30 +64,29 @@
           (: sb (dc-at s (k + 1))
              ix (((sb >> 3) & 7) | (xx << 3)) ix2 (ix = 4 ? -1 ix)
              sc (ix2 < 0 ? 1 (1 << (sb >> 6)))
-             nobase (md = 0 && (sb & 7) = 5)
+             nobase (md = 0 && sb & 7 = 5)
              bs (nobase ? -1 ((sb & 7) | (bx << 3)))
              dn (? nobase 4 (md = 1) 1 (md = 2) 4 0)
              d (dn = 0 ? 0 (dc-imm s (k + 2) dn))
              [(k + 2 + dn) reg (wrap ['mem bs ix2 sc d]) dg])
-          (: dn (md @ 1 1 2 4 0) d (dn = 0 ? 0 (dc-imm s (k + 1) dn))
+          (: dn (md @ 1 1 2 4 0) d (dn @ 0 0 (dc-imm s (k + 1) dn))
              [(k + 1 + dn) reg (wrap ['mem (rm | (bx << 3)) -1 1 d]) dg])))
 
    ;; --- the prefixes, then the opcode ---
    (x64-decode s i)
-    (: n #s
-       (go j p)
-         (? (j >= n) (1 . [(dc-byte (dc-at s i))])
-            (: c (s j)
-               (c @ 102 (go (j + 1) (pin p 'opsz 1))
-                    243 (go (j + 1) (pin p 'rep 1))
-                    242 (go (j + 1) (pin p 'repne 1))
-                    240 (go (j + 1) (pin p 'lock 1))
-                    100 (go (j + 1) (pin p 'seg 'fs))
-                    101 (go (j + 1) (pin p 'seg 'gs))
-                    (38 || 46 || 54 || 62) (go (j + 1) p)   ; es/cs/ss/ds: null in long mode
-                    (c && 64 <= c <= 79) (go (j + 1) (pins p 'rex 1 'w ((c >> 3) & 1) 'r ((c >> 2) & 1) 'x ((c >> 1) & 1) 'b (c & 1)))
-                    (dc-op s i j p))))
-       (go i {}))
+    (:- (go i {}) n #s (go j p)
+     (j >= n ? (1 . [(dc-byte (dc-at s i))])
+      (s j @
+       102 (go (j + 1) (pin p 'opsz 1))
+       243 (go (j + 1) (pin p 'rep 1))
+       242 (go (j + 1) (pin p 'repne 1))
+       240 (go (j + 1) (pin p 'lock 1))
+       100 (go (j + 1) (pin p 'seg 'fs))
+       101 (go (j + 1) (pin p 'seg 'gs))
+       (38 || 46 || 54 || 62) (go (j + 1) p)   ; es/cs/ss/ds: null in long mode
+       (c && 64 <= c <= 79)
+        (go (j + 1) (pins p 'rex 1 'w ((c >> 3) & 1) 'r ((c >> 2) & 1) 'x ((c >> 1) & 1) 'b (c & 1)))
+       (dc-op s i j p))))
 
    ;; the prefix items an instruction carries: lock always, rep/repne unless the opcode ate them
    (dc-pre p ate) ((pf p 'lock ? [['op 'lock 0 ()]] ())
@@ -153,17 +152,17 @@
           172 (nil 'lodsb)  173 (nil (w @ 2 'lodsw 8 'lodsq 'lodsd))
           174 (nil 'scasb)  175 (nil (w @ 2 'scasw 8 'scasq 'scasd))
           168 (fin (k + 1) [(op1 'test 1 [['rg 0 1] ['im (dc-imm s k 1)]])])
-          169 (: isz (w = 2 ? 2 4) (fin (k + isz) [(op1 'test w [['rg 0 w] ['im (dc-imm s k isz)]])]))
+          169 (: isz (w @ 2 2 4) (fin (k + isz) [(op1 'test w [['rg 0 w] ['im (dc-imm s k isz)]])]))
           (c && 176 <= c <= 183) (fin (k + 1) [(op1 'mov 1 [(dc-reg (rl c) 1 rexp) ['im (dc-imm s k 1)]])])
           (c && 184 <= c <= 191)
-           (? (w = 8) (fin (k + 8) [(op1 'mov 8 [['rg (rl c) 8] ['im (dc-le s k 8)]])])      ; the imm64 form: mov, by range
-              (: isz (w = 2 ? 2 4) (fin (k + isz) [(op1 'mov w [['rg (rl c) w] ['im (dc-le s k isz)]])])))
+           (w @ 8 (fin (k + 8) [(op1 'mov 8 [['rg (rl c) 8] ['im (dc-le s k 8)]])])      ; the imm64 form: mov, by range
+            (: isz (w @ 2 2 4) (fin (k + isz) [(op1 'mov w [['rg (rl c) w] ['im (dc-le s k isz)]])])))
           192 (grp2 1 'ib)  193 (grp2 w 'ib)
           208 (grp2 1 'one)  209 (grp2 w 'one)  210 (grp2 1 'cl)  211 (grp2 w 'cl)
           195 (nil 'ret)
           194 (fin (k + 2) [(op1 'ret 0 [['im (dc-le s k 2)]])])
-          198 (: r (dc-modrm s k p 1 1) (fin (r 0 + 1) [(op1 'mov 1 [(r 2) ['im (dc-imm s (r 0) 1)]])]))
-          199 (: r (dc-modrm s k p w w) isz (w = 2 ? 2 4) (fin (r 0 + isz) [(op1 'mov w [(r 2) ['im (dc-imm s (r 0) isz)]])]))
+          198 (dc-modrm s k p 1 1 @ r (fin (r 0 + 1) [(op1 'mov 1 [(r 2) ['im (dc-imm s (r 0) 1)]])]))
+          199 (: r (dc-modrm s k p w w) isz (w @ 2 2 4) (fin (r 0 + isz) [(op1 'mov w [(r 2) ['im (dc-imm s (r 0) isz)]])]))
           201 (nil 'leave)  204 (nil 'int3)
           205 (fin (k + 1) [(op1 'int 0 [['im (dc-at s k)]])])
           215 (nil 'xlat)
@@ -188,20 +187,20 @@
    (dc-0f s i j p)
     (: n #s k (j + 1) c (dc-at s k) k2 (k + 1)
        px (? (pf p 'repne) 'f2 (pf p 'rep) 'f3 (pf p 'opsz) '66 'none)       ; the SSE mandatory prefix
-       w (? (pf p 'w) 8 (pf p 'opsz && !(px = '66)) 2 4) rexp (pf p 'rex)     ; a 66 that is the SSE prefix sizes nothing
+       w (? (pf p 'w) 8 (pf p 'opsz && px != '66) 2 4) rexp (pf p 'rex)     ; a 66 that is the SSE prefix sizes nothing
        ate (px = 'f2 || px = 'f3)
-       (fin k3 items) (k3 > n ? (1 . [(dc-byte 15)]) ((k3 - i) . (dc-pre p 0 + items)))
-       (finx k3 items) (k3 > n ? (1 . [(dc-byte 15)]) ((k3 - i) . (dc-pre p ate + items)))
+       (fin k3 items) (k3 > n ? (1 . [(dc-byte 15)]) (k3 - i . dc-pre p 0 + items))
+       (finx k3 items) (k3 > n ? (1 . [(dc-byte 15)]) (k3 - i . dc-pre p ate + items))
        (op1 mn w ops) ['op mn w ops]
        (nil mn) (fin k2 [(op1 mn 0 ())])
        (bad _) (fin k [(dc-byte 15)])
-       (ge mn wr wm) (: r (dc-modrm s k2 p wr wm) (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 1) (r 2)])]))
-       (eg mn wm wr) (: r (dc-modrm s k2 p wr wm) (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 2) (r 1)])]))
+       (ge mn wr wm) (dc-modrm s k2 p wr wm @ r (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 1) (r 2)])]))
+       (eg mn wm wr) (dc-modrm s k2 p wr wm @ r (fin (r 0) [(op1 mn (dc-vw wr wm) [(r 2) (r 1)])]))
        ;; an SSE face: xmm <- xmm/m (or the store, r/m <- xmm), the name by the prefix's lane
-       (lane base) (name (base + (px @ 'none "ps" '66 "pd" 'f3 "ss" "sd")))
+       (lane base) (name $ base + (px @ 'none "ps" '66 "pd" 'f3 "ss" "sd"))
        (xx mn) (: r (dc-modrm s k2 p 16 16) (finx (r 0) [(op1 mn 0 [(r 1) (r 2)])]))
        (xxs mn) (: r (dc-modrm s k2 p 16 16) (finx (r 0) [(op1 mn 0 [(r 2) (r 1)])]))
-       (c @ 5 (nil 'syscall)  7 (nil (w = 8 ? 'sysretq 'sysretl))  11 (nil 'ud2)
+       (c @ 5 (nil 'syscall)  7 (nil (w @ 8 'sysretq 'sysretl))  11 (nil 'ud2)
           48 (nil 'wrmsr)  49 (nil 'rdtsc)  50 (nil 'rdmsr)  162 (nil 'cpuid)
           (c && c = 0) (: r (dc-modrm s k2 p 2 2) (r 3 = 3 ? (fin (r 0) [(op1 'ltr 2 [(r 2)])]) (bad 0)))
           31 (: r (dc-modrm s k2 p w w) (fin (r 0) [(op1 'nop w [(r 2)])]))          ; the long nops
@@ -210,19 +209,20 @@
                  (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0)))
           (c && c = 30 && px = 'f3 && (dc-at s k2 = 250 || dc-at s k2 = 251))
            (finx (k2 + 1) [(op1 (dc-at s k2 = 250 ? 'endbr64 'endbr32) 0 ())])
-          1 (: m (dc-at s k2)
-                     (? (m = 248) (fin (k2 + 1) [(op1 'swapgs 0 ())])
-                        (m = 208) (fin (k2 + 1) [(op1 'xgetbv 0 ())])
-                        (m = 209) (fin (k2 + 1) [(op1 'xsetbv 0 ())])
-                        (m = 249) (fin (k2 + 1) [(op1 'rdtscp 0 ())])
-                        (m >> 6 = 3) (bad 0)
-                        (: r (dc-modrm s k2 p 8 8) mn (r 3 @ 0 'sgdt 1 'sidt 2 'lgdt 3 'lidt 7 'invlpg ())
-                           (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0)))))
-          32 (: r (dc-modrm s k2 p 8 8) (fin (r 0) [(op1 'mov 8 [(r 2) ['cr <>(r 1)]])]))    ; mov r64, crN
-          34 (: r (dc-modrm s k2 p 8 8) (fin (r 0) [(op1 'mov 8 [['cr <>(r 1)] (r 2)])]))    ; mov crN, r64
+          1 (dc-at s k2 @
+                  248 (fin (k2 + 1) [(op1 'swapgs 0 ())])
+                  208 (fin (k2 + 1) [(op1 'xgetbv 0 ())])
+                  209 (fin (k2 + 1) [(op1 'xsetbv 0 ())])
+                  249 (fin (k2 + 1) [(op1 'rdtscp 0 ())])
+                  m (m >> 6 @ 3 (bad 0)
+                     (: r (dc-modrm s k2 p 8 8) mn (r 3 @ 0 'sgdt 1 'sidt 2 'lgdt 3 'lidt 7 'invlpg)
+                      (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0)))))
+          32 (dc-modrm s k2 p 8 8 @ r (fin (r 0) [(op1 'mov 8 [(r 2) ['cr <>(r 1)]])]))    ; mov r64, crN
+          34 (dc-modrm s k2 p 8 8 @ r (fin (r 0) [(op1 'mov 8 [['cr <>(r 1)] (r 2)])]))    ; mov crN, r64
           120 (eg 'vmread 8 8)  121 (ge 'vmwrite 8 8)
           199 (: r (dc-modrm s k2 p 8 8)
-                       (r 3 = 6 ? (finx (r 0) [(op1 (px @ 'none 'vmptrld '66 'vmclear 'f3 'vmxon 'vmptrld) 0 [(r 2)])]) (bad 0)))
+               (r 3 @- (bad 0)
+                6 (finx (r 0) [(op1 (px @ 'none 'vmptrld '66 'vmclear 'f3 'vmxon 'vmptrld) 0 [(r 2)])])))
           (c && 64 <= c <= 79) (ge (dc-ccname "cmov" (c & 15)) w w)
           (c && 128 <= c <= 143) (: t (k2 + 4 + dc-imm s k2 4) (fin (k2 + 4) [(op1 (dc-ccname "j" (c & 15)) 0 [['lbl t]])]))
           (c && 144 <= c <= 159) (: r (dc-modrm s k2 p 1 1) (fin (r 0) [(op1 (dc-ccname "set" (c & 15)) 1 [(r 2)])]))
@@ -230,8 +230,8 @@
           182 (ge 'movzb w 1)  183 (ge 'movzw w 2)  190 (ge 'movsb w 1)  191 (ge 'movsw w 2)
           176 (eg 'cmpxchg 1 1)  177 (eg 'cmpxchg w w)
           (164 || 172) (: r (dc-modrm s k2 p w w)
-                                  (fin (r 0 + 1) [(op1 (c = 164 ? 'shld 'shrd) w [(r 2) (r 1) ['im (dc-imm s (r 0) 1)]])]))
-          (165 || 173) (: r (dc-modrm s k2 p w w) (fin (r 0) [(op1 (c = 165 ? 'shld 'shrd) w [(r 2) (r 1) ['rg 1 1]])]))
+                        (fin (r 0 + 1) [(op1 (c @ 164 'shld 'shrd) w [(r 2) (r 1) ['im (dc-imm s (r 0) 1)]])]))
+          (165 || 173) (: r (dc-modrm s k2 p w w) (fin (r 0) [(op1 (c @ 165 'shld 'shrd) w [(r 2) (r 1) ['rg 1 1]])]))
           188 (ge 'bsf w w)  189 (ge 'bsr w w)
           (c && 200 <= c <= 207) (fin k2 [(op1 'bswap w [['rg ((c & 7) | (pf p 'b << 3)) w]])])
           ;; SSE
@@ -268,37 +268,35 @@
 
    ;; --- the stream: every instruction with its offset, targets made absolute ---
    (dc-abs base off n o)
-    (<o @ 'lbl (charm? <>o ? ['lbl (<>o + base)] o)
-          'rip (nom? <>o ? o ['rip () (<>>o + base + off + n)])   ; a rip form's disp becomes the address
-          'ind ['ind (dc-abs base off n <>o)]
-          'seg ['seg <>o (dc-abs base off n <>>o)]
-          o)
+    (<o @- o
+     'lbl (charm? <>o ? ['lbl (<>o + base)] o)
+     'rip (nom? <>o ? o ['rip () (<>>o + base + off + n)])   ; a rip form's disp becomes the address
+     'ind ['ind (dc-abs base off n <>o)]
+     'seg ['seg <>o (dc-abs base off n <>>o)])
    (x64-disasm s base)
-    (: n #s
-       (go off acc)
-        (? (off >= n) (rev acc)
-           (: r (x64-decode s off) ln <r
-              its (map (\ it (<it = 'op ? ['op (it 1) (it 2) (map (o \ dc-abs base off ln o) (it 3))] it)) >r)
-              (go (off + ln) ([off ln its] . acc))))
-       (go 0 ()))
+    (:- (go 0 ()) n #s (go off acc)
+     (off >= n ? (rev acc)
+      (: r (x64-decode s off) ln <r
+         its (map (\ it (<it = 'op ? ['op (it 1) (it 2) (map (o \ dc-abs base off ln o) (it 3))] it)) >r)
+       (go (off + ln) ([off ln its] . acc)))))
    ;; a target inside the stream, on an instruction boundary, becomes the symbol L<addr> and a
    ;; label row is laid there; a rip form keeps its address as (rip L<addr> 0). base is the first
    ;; row's address, so the symbol names an address, and the encoder's fixups resolve.
    (x64-relabel rows)
-    (: base (two? rows ? (<(<rows)) 0)
-       starts (foldl (\ t r (pin t (<r + base) 1)) {} rows)
+    (: base (two? rows ? <<rows 0)
+       starts (foldl (t \ r \ pin t (<r + base) 1) {} rows)
        (sym a) (name ("L" + show a))
        (tgt a) (peep starts a 0)
-       (fix o) (<o @ 'lbl (charm? <>o && tgt <>o ? ['lbl (sym <>o)] o)
-                     'rip (!(nom? <>o) && tgt <>>o ? ['rip (sym <>>o) 0] o)
-                     'ind ['ind (fix <>o)]
-                     'seg ['seg <>o (fix <>>o)]
-                     o)
-       (tg o) (<o @ 'lbl (charm? <>o ? <>o -1)                       ; an operand's in-stream address, or -1
-                    'rip (nom? <>o ? -1 <>>o)
-                    'ind (tg <>o)
-                    'seg (tg <>>o)
-                    -1)
+       (fix o) (<o @- o
+        'lbl (charm? <>o && tgt <>o ? ['lbl (sym <>o)] o)
+        'rip (!(nom? <>o) && tgt <>>o ? ['rip (sym <>>o) 0] o)
+        'ind ['ind (fix <>o)]
+        'seg ['seg <>o (fix <>>o)])
+       (tg o) (<o @- -1
+        'lbl (charm? <>o ? <>o -1)                       ; an operand's in-stream address, or -1
+        'rip (nom? <>o ? -1 <>>o)
+        'ind (tg <>o)
+        'seg (tg <>>o))
        used (foldl (\ t r (foldl (\ t it (? (<it = 'op) (foldl (\ t o (: a (tg o) (tgt a ? (pin t a 1) t))) t (it 3))
                                                     t))
                                  t (r 2)))

@@ -230,15 +230,11 @@
        ; ..and the same for a section-bound movw16/movt16, whose addend rides the imm16
        ; scatter (patch-with does the scatter; the linker adds S on top).
        (bakemw bytes rs)
-        (: (go rs bs)
-            (? !(two? rs) bs
-               (: r <rs
-                  (go >rs (elem <>r '(movw16 movt16) ?
-                             (: sl (mwloc <>>r)
-                                (<>sl = 0 ? bs
-                                   (o-putbs bs <r (patch-with be <>r <>sl 0 4 <>>>r))))
-                             bs))))
-           (go rs bytes))
+        (:- (go rs bytes) (go rs bs)
+         (rs @- bs (r . u)
+          (go u (nelem <>r '(movw16 movt16) ? bs
+           (: sl (mwloc <>>r)
+            (<>sl @ 0 bs (o-putbs bs <r (patch-with be <>r <>sl 0 4 <>>>r))))))))
        lbytes (map (\ l (: rs (ln-rl l) (bakemw (bakeabs (ln-bs l) rs) rs))) lanes)
        symnames (map (string * cap) locs + funcnames + globnames + map string exts)
        str (o-strtab symnames)
@@ -290,7 +286,7 @@
                (scare 'obj32-reloc k)))
           rs))
        rels (map (o-rels32 * ln-rl) lanes)
-       (rcnt i) (tally (ln-rl (ln i)))
+       (rcnt i) #(ln-rl (ln i))
        ; -- the section-name string table: the sections in order, .symtab and
        ; .strtab, then one .rel.<name> per section, then .shstrtab --
        shnames (map cap lanes
@@ -343,10 +339,8 @@
    ; an aligned(N) global pads within the section, so the header must ask the linker for the
    ; section's own start at that N -- or the inner pad aligns nothing.
    (o-dalign a0 forms)
-    (: (go l a2) (? !(two? l) a2
-                    (: f <l
-                       (go >l (two? f && <f == 'align && f 1 > a2 ? <>f a2))))
-       (go forms a0))
+    (:- (go forms a0) (go l a2)
+     (l @- a2 (f . u) (go u (two? f && <f == 'align && f 1 > a2 ? <>f a2))))
 
    ; build the whole .o image, as a byte list. textforms/dataforms/nifforms/imgforms are
    ; cgen-obj's split IR; funcnames the defined functions, globnames the global variables,
@@ -429,9 +423,9 @@
    ; where its labels and its size come from, but writes no file bytes. --
    (objsecs target0 secs funcnames globnames wknames locnames)
     (: target (arch-nom target0)
-       a64 (= target 'a64)
-       rv (= target 'rv64)
-       _ (? (= target 'x64 || a64 || rv) 0 (scare 'obj-target target))
+       a64 (target = 'a64)
+       rv (target = 'rv64)
+       _ (? (target = 'x64 || a64 || rv) 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds. riscv's are pure byte deltas (auipc is byte
        ; pc-relative, no page math), so intra-.text la/call/jmp all resolve inside the .o.
        rset (? a64 '(b26 b19) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
@@ -588,11 +582,11 @@
                              (o-offs (i + 1) (off + ln-fsz (ln i)) (off . acc)))
        co (o-offs 0 h-sz ())    coffs <co
        sym-off <>co             sym-sz (nsym * 24)
-       str-off (sym-off + sym-sz) str-sz (tally strblob)
+       str-off (sym-off + sym-sz) str-sz #strblob
        (o-roffs i off acc) (nsec <= i ? [(rev acc) off]
                               (o-roffs (i + 1) (off + rcnt i * 24) (off . acc)))
        ro (o-roffs 0 (str-off + str-sz) ())    roffs <ro
-       shs-off <>ro             shs-sz (tally shstrblob)
+       shs-off <>ro             shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
 
        ; a 64-byte section header

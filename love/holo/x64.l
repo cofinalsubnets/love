@@ -20,11 +20,9 @@
 
 (module 'holo
 (: ;; -- the register file: abstract name -> x86 encoding number (rsp kept aside as sp). --
-   x64-regs (tabof
-        [('sp . 4)
-          ('r0 . 0) ('r1 . 1) ('r2 . 2) ('r3 . 3)  ('r4 . 5)
-          ('r5 . 6) ('r6 . 7) ('r7 . 8) ('r8 . 9)  ('r9 . 10)
-          ('r10 . 11) ('r11 . 12) ('r12 . 13) ('r13 . 14) ('r14 . 15)])
+   x64-regs {'sp 4 'r0 0 'r1 1 'r2 2 'r3 3 'r4 5
+             'r5 6 'r6 7 'r7 8 'r8 9 'r9 10
+             'r10 11 'r11 12 'r12 13 'r13 14 'r14 15}
 
    ;; -- the ALU table: op -> (rr-opcode  imm-/digit  commutative?). the row list stays
    ;; bound: the emitter tablet below pins the whole group off it. --
@@ -35,12 +33,11 @@
    x64-alu (tabof x64-alu-rows)
 
    ;; -- condition codes: IR name -> the 0F 8x opcode low byte. --
-   x64-cc (tabof
-        [('eq . 132) ('ne . 133) ('lt . 140) ('ge . 141)
-          ('le . 142) ('gt . 143) ('below . 130) ('ae . 131)
-          ('be . 134) ('above . 135) ('s . 136) ('ns . 137)
-          ('vs . 128) ('vc . 129)                         ; jo / jno (overflow set / clear)
-          ('p . 138) ('np . 139)])                        ; jp / jnp (parity: ucomisd's UNORDERED bit -- NaN-honest ==/!=)
+   x64-cc {'eq 132 'ne 133 'lt 140 'ge 141
+           'le 142 'gt 143 'below 130 'ae 131
+           'be 134 'above 135 's 136 'ns 137
+           'vs 128 'vc 129                         ; jo / jno (overflow set / clear)
+           'p 138 'np 139}                        ; jp / jnp (parity: ucomisd's UNORDERED bit -- NaN-honest ==/!=)
 
    ;; -- the encoding bytes: REX.wrxb, Modrm(mod,reg,rm), SIB(scale,index,base). --
    (rex w r x b) (64 | ((w << 3) | ((r << 2) | ((x << 1) | b))))    ; 0x40 | wrxb
@@ -156,8 +153,8 @@
          ([(modrm md (lo regf) 4) (sib sc ixn bn)] + dispb))
    ;; the indexed family's shared core, REX.W + opcode per face (as x64-mem below).
    (x64-memx w opc regf base index scale disp)
-      (: fn (rn regf) bn (rn base) ixn (rn index)
-         (mrex w opc fn ixn bn + opc + memx fn base index scale disp))
+    (: fn (rn regf) bn (rn base) ixn (rn index)
+     (mrex w opc fn ixn bn + opc + memx fn base index scale disp))
    (emit-ldx d base index scale disp)  (x64-memx 1 '(139) d base index scale disp)     ; 8B    mov r64, [base+index*scale+disp]
    (emit-stx base index scale disp s)  (x64-memx 1 '(137) s base index scale disp)     ; 89    mov [base+index*scale+disp], r64
    (emit-leax d base index scale disp) (x64-memx 1 '(141) d base index scale disp)     ; 8D    lea r64, [base+index*scale+disp]
@@ -167,16 +164,16 @@
    ;; a memory operand [base+disp]: Modrm (+ SIB for an rsp/r12 base) (+ displacement). picks the
    ;; shortest disp form, and forces a 0-disp byte for an rbp/r13 base (its disp-less slot is taken).
    (mem regf base disp)
-      (: bn (rn base) blo (lo bn)
-         md (? (disp = 0 && blo != 5) 0 (fits8 disp ? 1 2))
-         head (blo @ 4 [(modrm md (lo regf) 4) (sib 0 4 blo)] [(modrm md (lo regf) blo)])
-         dispb (md @ 0 () 1 [(byte disp)] (le32 disp))
-         (head + dispb))
+    (: bn (rn base) blo (lo bn)
+       md (? (disp = 0 && blo != 5) 0 (fits8 disp ? 1 2))
+       head (blo @ 4 [(modrm md (lo regf) 4) (sib 0 4 blo)] [(modrm md (lo regf) blo)])
+       dispb (md @ 0 () 1 [(byte disp)] (le32 disp))
+     (head + dispb))
    ;; one core for the whole [base+off] family: prefix bytes, the REX.W bit, the opcode
    ;; bytes -- each face below is a partial spelling of it (mnemonics in the comments).
    (x64-mem pfx w opc regf base off)
-      (: fn (rn regf) bn (rn base)
-         (pfx + mrex w opc fn 0 bn + opc + mem fn base off))
+    (: fn (rn regf) bn (rn base)
+     (pfx + mrex w opc fn 0 bn + opc + mem fn base off))
    (emit-ld d base off)   (x64-mem () 1 '(139) d base off)      ; 8B     mov r64, [base+off]
    (emit-st base off s)   (x64-mem () 1 '(137) s base off)      ; 89     mov [base+off], r64
    (emit-lea d base off)  (x64-mem () 1 '(141) d base off)      ; 8D     lea r64, [base+off]
@@ -195,10 +192,10 @@
    ;; y a register or an immediate (83 /7 ib under a signed byte, else 81 /7 id -- regf r6
    ;; spells the 7 field, rn r6 = rdi = 7); (cmprm s base off) the flags of s - [base+off].
    (emit-cmpm base off y)
-      (? (reg? y) (x64-mem () 1 '(57) y base off)                              ; 39 /r  cmp QWORD, r64
-         (-128 <= y <= 127)
-          (x64-mem () 1 '(131) 'r6 base off + [(byte y)])                      ; 83 /7 ib
-         (x64-mem () 1 '(129) 'r6 base off + le32 y))                          ; 81 /7 id
+    (? (reg? y) (x64-mem () 1 '(57) y base off)                              ; 39 /r  cmp QWORD, r64
+       (-128 <= y <= 127)
+        (x64-mem () 1 '(131) 'r6 base off + [(byte y)])                      ; 83 /7 ib
+       (x64-mem () 1 '(129) 'r6 base off + le32 y))                          ; 81 /7 id
    (emit-cmprm s base off) (x64-mem () 1 '(59) s base off)                     ; 3B /r  cmp r64, QWORD
 
    ;; the store-immediate family (si : li :: st : ld): mov r/m, imm through /0 (regf r0 spells
@@ -255,12 +252,12 @@
             ('(72 137 194) + s9 + '(49 192))))                  ; mov rdx,rax; ..; xor eax,eax
    (emit-shr128 c)
       (? (c < 64) [72 15 172 208 (byte c)  72 193 234 (byte c)]   ; shrd rax,rdx,c; shr rdx,c
-         (: s9 (? (c = 64) () [72 193 232 (byte (c - 64))])       ; shr rax,c-64
-            ('(72 137 208) + s9 + '(49 210))))                  ; mov rax,rdx; ..; xor edx,edx
+       (: s9 (c @ 64 () [72 193 232 (byte (c - 64))])       ; shr rax,c-64
+        ('(72 137 208) + s9 + '(49 210))))                  ; mov rax,rdx; ..; xor edx,edx
    (emit-sar128 c)
       (? (c < 64) [72 15 172 208 (byte c)  72 193 250 (byte c)]   ; shrd rax,rdx,c; sar rdx,c
-         (: s9 (? (c = 64) () [72 193 248 (byte (c - 64))])       ; sar rax,c-64
-            ('(72 137 208) + s9 + '(72 193 250 63))))           ; mov rax,rdx; ..; sar rdx,63
+       (: s9 (c @ 64 () [72 193 248 (byte (c - 64))])       ; sar rax,c-64
+        ('(72 137 208) + s9 + '(72 193 250 63))))           ; mov rax,rdx; ..; sar rdx,63
    ;; the 128/64 divide pair (u128 num in the cell, u64 divisor on the protocol lo): the two-step
    ;; Knuth-safe dance -- qhi = hi/d leaves its remainder in rdx for the low divq, so neither
    ;; divide can fault (rdx < d both times). dv128 answers the full quotient pair, rm128 the
@@ -290,32 +287,32 @@
             (scare 'badcc128 cond)))
    ;; the one-operand unsigned divide (the divq the bignum kernel's inline asm speaks):
    ;; rdx:rax / r -> rax quotient, rdx remainder. F7 /6. caller stages rdx:rax itself.
-   (emit-divq s) (: sn (rn s) [(rex 1 0 0 (hi sn)) 247 (modrm 3 6 sn)])
-   (emit-divl s) (: sn (rn s) (mrex 0 () 0 0 sn + [247 (modrm 3 6 sn)]))   ; the 32-bit twin: edx:eax / r32
+   (emit-divq s) (rn s @ sn [(rex 1 0 0 (hi sn)) 247 (modrm 3 6 sn)])
+   (emit-divl s) (rn s @ sn (mrex 0 () 0 0 sn + [247 (modrm 3 6 sn)]))   ; the 32-bit twin: edx:eax / r32
    ;; the thread pointer (the TLS base): x64 keeps it in fs, and the ABI lays
    ;; the pointer itself as the first word of its own block, so (tp d) is one
    ;; segment-prefixed load -- mov d, fs:[0]. (a64's face would be mrs tpidr_el0.)
    (emit-tp d)
-      (: dn (rn d) ([100 (rex 1 (hi dn) 0 0) 139 (modrm 0 (lo dn) 4) (sib 0 4 5)] + le32 0))
+    (rn d @ dn ([100 (rex 1 (hi dn) 0 0) 139 (modrm 0 (lo dn) 4) (sib 0 4 5)] + le32 0))
    ;; compare-and-swap (the atomic seam): lock cmpxchg [ptr], new. x86 compares
    ;; [ptr] with the accumulator, stores new on equal, and lands the old value in
    ;; the accumulator either way -- the neutral form (cas racc rnew rptr) carries
    ;; that operand explicitly (a future backend homes it anywhere); here racc must
    ;; be r0 (rax, the wired accumulator) or it refuses. cas4 is the 32-bit face.
    (emit-cas w acc new ptr)
-      (acc @ 'r0 (x64-mem '(240) w '(15 177) new ptr 0)   ; f0 (REX.W) 0F b1
-       (scare 'cas-acc acc))
+    (acc @ 'r0 (x64-mem '(240) w '(15 177) new ptr 0)   ; f0 (REX.W) 0F b1
+     (scare 'cas-acc acc))
    ;; in-register sign extension (the C casts): movsx/movsxd reg64 <- reg's low w bytes
    (emit-sx w d)
-      (: dn (rn d)
-         opc (w @ 1 '(15 190) 2 '(15 191) '(99))
-         ([(rex 1 (hi dn) 0 (hi dn))] + opc + [(modrm 3 (lo dn) (lo dn))]))
+    (: dn (rn d)
+       opc (w @ 1 '(15 190) 2 '(15 191) '(99))
+     ([(rex 1 (hi dn) 0 (hi dn))] + opc + [(modrm 3 (lo dn) (lo dn))]))
    ;; in-register zero extension: movzx r64,r8/r16 (0F B6 / 0F B7); w=4 is mov r32,r32 (REX.W=0 zeroes the top).
    (emit-zx w d)
-      (: dn (rn d)
-         (w @ 1 ([(rex 1 (hi dn) 0 (hi dn)) 15 182] + [(modrm 3 (lo dn) (lo dn))])
-              2 ([(rex 1 (hi dn) 0 (hi dn)) 15 183] + [(modrm 3 (lo dn) (lo dn))])
-                ((hi dn = 0 ? () [(rex 0 1 0 1)]) + [139 (modrm 3 (lo dn) (lo dn))])))
+    (: dn (rn d)
+     (w @ 1 ([(rex 1 (hi dn) 0 (hi dn)) 15 182] + [(modrm 3 (lo dn) (lo dn))])
+          2 ([(rex 1 (hi dn) 0 (hi dn)) 15 183] + [(modrm 3 (lo dn) (lo dn))])
+            ((hi dn = 0 ? () [(rex 0 1 0 1)]) + [139 (modrm 3 (lo dn) (lo dn))])))
    ;; shifts by a register count: d3 /ext, the count in cl -- so the IR contract
    ;; pins the count register to r1 (rcx) on every backend; d must differ.
    (emit-shiftv op d c)
@@ -337,7 +334,7 @@
                     (fits8 s) [106 (byte s)]
                     (fits32 s) (104 . le32 s)
                     (scare 'push-imm s))
-   (emit-pop  d) (: dn (rn d) (? (dn >= 8) [65 (88 | lo dn)] [(88 | dn)]))
+   (emit-pop  d) (: dn (rn d) (dn >= 8 ? [65 (88 | lo dn)] [(88 | dn)]))
 
    ;; in-place unary: F7 /3 neg, F7 /2 not, FF /0 inc, FF /1 dec.
    (emit-un opcode ext d) (: dn (rn d) [(rex 1 0 0 (hi dn)) opcode (modrm 3 ext dn)])
@@ -345,12 +342,12 @@
    ;; control transfer. call/jmp are E8/e9 cd; a conditional is 0F 8x cd. each leaves a rel32 fixup
    ;; the driver fills once the target label's address is known.
    (jcc-op c) (look x64-cc c 'badcc)
-   (emit-call label)     [232 (fix 4 'rel32 label 0)]
+   (emit-call label) [232 (fix 4 'rel32 label 0)]
    ;; the address of a label: rip-relative lea -- the rel32 measures from the
    ;; end of its own field, exactly x64-patch's convention, so data placed by
    ;; (label)+(raw ..) is addressable with no new fixup kind.
    (emit-la d label)
-      (: dn (rn d) [(rex 1 (hi dn) 0 0) 141 (modrm 0 (lo dn) 5) (fix 4 'rel32 label 0)])
+    (rn d @ dn [(rex 1 (hi dn) 0 0) 141 (modrm 0 (lo dn) 5) (fix 4 'rel32 label 0)])
    ;; lia: the label's absolute (linked) address -- movabs, b8+rd io under REX.W.
    ;; `la` answers where the label is running, which is the same thing until the
    ;; two part company, and in the kernel's bring-up they do: the image is linked
@@ -358,7 +355,7 @@
    ;; needs the address the linker assigned. abs64 is never resolvable inside a
    ;; .o, so this always leaves a relocation. a64 says it in three words.
    (emit-lia d label)
-      (: dn (rn d) [(rex 1 0 0 (hi dn)) (184 | lo dn) (fix 8 'abs64 label 0)])
+    (rn d @ dn [(rex 1 0 0 (hi dn)) (184 | lo dn) (fix 8 'abs64 label 0)])
    ;; ldseg: d <- the segment register n (ES CS SS DS FS GS = 0..5). 8C /r, the
    ;; sreg number in Modrm.reg and the GPR in rm -- REX.W widens the destination
    ;; to the full register, zero-extended, so no separate movzx. the twin of
@@ -366,9 +363,9 @@
    ;; it running under, since the idt entries must name a segment that is valid
    ;; in the current gdt (OVMF leaves 0x38; a stub that lays its own names it).
    (emit-ldseg d n)
-      (: dn (rn d)
-         _ (? (0 <= n <= 5) 0 (scare 'x64-segnum n))
-         [(rex 1 0 0 (hi dn)) 140 (modrm 3 n dn)])
+    (: dn (rn d)
+       _ (0 <= n <= 5 ? 0 (scare 'x64-segnum n))
+     [(rex 1 0 0 (hi dn)) 140 (modrm 3 n dn)])
    (emit-jmp  label)     [233 (fix 4 'rel32 label 0)]
    ;; the table jump: jmpr, with the table's label and its target list riding along --
    ;; operands the machine has no use for and the analyses cannot do without.
@@ -380,10 +377,10 @@
    (emit-br8 cond label) [(jcc-op cond - 16) (fix 1 'rel8 label 0)]
    ;; jmpr: FF /4 -- an indirect jump through a register (the glaze's Continue / deopt tail). REX.B
    ;; for an extended register; no REX.W (jmp defaults to 64-bit operand size).
-   (emit-jmpr d) (: dn (rn d) ((dn >= 8 ? '(65)) + [255 (modrm 3 4 dn)]))
+   (emit-jmpr d) (rn d @ dn ((dn >= 8 ? '(65)) + [255 (modrm 3 4 dn)]))
    ;; callr: FF /2 -- an indirect call through a register (a call through a function pointer). same
    ;; shape as jmpr with the /digit at 2; REX.B for r8+, no REX.W.
-   (emit-callr d) (: dn (rn d) ((dn >= 8 ? '(65)) + [255 (modrm 3 2 dn)]))
+   (emit-callr d) (rn d @ dn ((dn >= 8 ? '(65)) + [255 (modrm 3 2 dn)]))
    ;; mulo: d <- a*b (low 64), branch to lbl on signed overflow. imul (0F AF) sets OF when the
    ;; product leaves signed-64, so a plain `jo` is exact -- the scratch `t` is unused on x86 (only
    ;; a64 needs it, for smulh).
@@ -450,7 +447,7 @@
    (xrex w r b) (mrex w () r 0 b)                                                       ; the xmm faces: no index, no byte source
    (emit-sse op d s)                                                                     ; xmm <- xmm two-address
       (: meta (peep x64-sse op 0) pfx (meta 0) opc (meta 1) dn (xrn d) sn (xrn s)
-         (catall [(? (pfx = 0) () [pfx]) (xrex 0 dn sn) [15 opc (modrm 3 dn sn)]]))
+         (catall [(pfx @ 0 () [pfx]) (xrex 0 dn sn) [15 opc (modrm 3 dn sn)]]))
    (emit-cmppd d s imm) (: dn (xrn d) sn (xrn s)                                         ; 66 0F c2 /r ib  (predicate imm: 1=LT 2=LE)
       (catall ['(102) (xrex 0 dn sn) [15 194 (modrm 3 dn sn) (byte imm)]]))
    (emit-movmskpd g x) (: gn (rn g) xn (xrn x)                                           ; 66 0F 50 /r  gp(reg) <- xmm(rm)
@@ -466,14 +463,14 @@
    ;; movsd to/from memory [base+disp] -- the spill/box ops the reg-reg SSE lane can't reach. F2 0F 11 /r
    ;; stores xmm->[mem], F2 0F 10 /r loads [mem]->xmm; the xmm number rides Modrm.reg via `mem`.
    (emit-stsd base disp s)                                                               ; (stsd base disp f)  [base+disp] <- xmm(s)
-      (: sn (xrn s) (catall ['(242) (xrex 0 sn (rn base)) '(15 17) (mem sn base disp)]))
+      (xrn s @ sn (catall ['(242) (xrex 0 sn (rn base)) '(15 17) (mem sn base disp)]))
    (emit-ldsd d base disp)                                                               ; (ldsd f base disp)  xmm(d) <- [base+disp]
-      (: dn (xrn d) (catall ['(242) (xrex 0 dn (rn base)) '(15 16) (mem dn base disp)]))
+      (xrn d @ dn (catall ['(242) (xrex 0 dn (rn base)) '(15 16) (mem dn base disp)]))
    ;; movss to/from memory -- the 4-byte single lane (the C `float` slot). f3 0F 11 /r stores, f3 0F 10 /r loads.
    (emit-stss base disp s)                                                               ; (stss base disp f)  [base+disp] <- xmm(s) (low 32)
-      (: sn (xrn s) (catall ['(243) (xrex 0 sn (rn base)) '(15 17) (mem sn base disp)]))
+      (xrn s @ sn (catall ['(243) (xrex 0 sn (rn base)) '(15 17) (mem sn base disp)]))
    (emit-ldss d base disp)                                                               ; (ldss f base disp)  xmm(d) <- [base+disp] (low 32)
-      (: dn (xrn d) (catall ['(243) (xrex 0 dn (rn base)) '(15 16) (mem dn base disp)]))
+      (xrn d @ dn (catall ['(243) (xrex 0 dn (rn base)) '(15 16) (mem dn base disp)]))
 
    ;; -- the system lane: what a kernel says and a userland never does. every encoding below was
    ;; taken from `llvm-mc -triple=x64 --show-encoding`, and test/holo/golden.l keeps them there.
@@ -483,7 +480,7 @@
    ;; only when the base is a high register. no REX.W: these are 64-bit operations already.
    (emit-m0f digit opc base off)
       (: bn (rn base)
-       ((hi bn = 0 ? () [(rex 0 0 0 1)]) + opc + mem digit base off))
+       ((hi bn @ 0 () [(rex 0 0 0 1)]) + opc + mem digit base off))
    ;; the control registers. 0F 20 reads, 0F 22 writes; the CR number rides Modrm.reg (so REX.R
    ;; is what reaches cr8) and the GPR rides Modrm.rm. again no REX.W -- a CR move is 64-bit
    ;; whether or not anyone says so.
@@ -496,8 +493,8 @@
    ;; under its own legacy prefix. the prefix leads and rex follows it -- emit-m0f puts rex
    ;; first, which is right for a bare 0f op and wrong the moment a prefix joins it.
    (emit-vmp pre base off)
-      (: bn (rn base)
-         (pre + ((hi bn != 0 ? [(rex 0 0 0 1)]) + ('(15 199) + mem 6 base off))))
+      (rn base @ bn
+       (pre + ((hi bn != 0 ? [(rex 0 0 0 1)]) + ('(15 199) + mem 6 base off))))
    ;; vmread/vmwrite move a vmcs field to or from a GPR. Modrm.reg always names the field and
    ;; .rm the other end, so the two rows below differ only in opcode and argument order. no
    ;; REX.W: both are 64-bit operations in 64-bit mode whether or not anyone says so.
@@ -505,12 +502,12 @@
       (: fn (rn f) gn (rn g)
          ((hi fn = hi gn = 0 ? () [(rex 0 (hi fn) 0 (hi gn))])
           + [15 opc (modrm 3 fn gn)]))
-   (emit-vmread d f) (emit-vmrw 120 f d)                              ; (vmread d f)  d <- vmcs[f]
-   (emit-vmwrite f s) (emit-vmrw 121 f s)                             ; (vmwrite f s) vmcs[f] <- s
-   (emit-ldcr d n) (emit-cr 32 n d)                                   ; (ldcr d n)  d <- crn
-   (emit-stcr n s) (emit-cr 34 n s)                                   ; (stcr n s)  crn <- s
-   (emit-ltr s) (: sn (rn s)                                          ; 0F 00 /3 -- the operand is r/m16
-      ((hi sn = 0 ? () [(rex 0 0 0 1)]) + [15 0 (modrm 3 3 sn)]))
+   (emit-vmread d f) (emit-vmrw 120 f d)   ; (vmread d f)  d <- vmcs[f]
+   (emit-vmwrite f s) (emit-vmrw 121 f s)  ; (vmwrite f s) vmcs[f] <- s
+   (emit-ldcr d n) (emit-cr 32 n d)        ; (ldcr d n)  d <- crn
+   (emit-stcr n s) (emit-cr 34 n s)        ; (stcr n s)  crn <- s
+   (emit-ltr s) (rn s @ sn                 ; 0F 00 /3 -- the operand is r/m16
+    ((hi sn @ 0 () [(rex 0 0 0 1)]) + [15 0 (modrm 3 3 sn)]))
    ;; INT n, cd ib -- the long form for every vector, vector 3 included. an assembler usually
    ;; folds `int 3` down to the one-byte CC, and CC is what `trap` already emits; keeping cd 03
    ;; here means the form you wrote is the form you get (they part company under vm86, where CD
@@ -523,87 +520,87 @@
    ;; verbatim -- the identity, the numeral 1. the alu/sse groups pin off their row lists.
    x64-emitters (emsof
         [('li . emit-li) ('mov . emit-mov) ('cmp . emit-cmp) ('imul . emit-imul)
-          ('ld . emit-ld) ('st . emit-st)
-          ('lea . emit-lea) ('lean . emit-lea)              ; lean: cc's consumed frame address -- same bytes, invisible to the sibcall escape gate
-          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
-          ('ldxb . emit-ldxb) ('stxb . emit-stxb)
-          ('ld1 . emit-ld1) ('ld2 . emit-ld2) ('ld4 . emit-ld4)
-          ('st1 . emit-st1) ('st2 . emit-st2) ('st4 . emit-st4)
-          ('si . emit-si) ('si1 . emit-si1) ('si2 . emit-si2) ('si4 . emit-si4)
-          ('cmpm . emit-cmpm) ('cmprm . emit-cmprm)
-          ('a128 . emit-a128) ('s128 . emit-s128) ('m128 . emit-m128) ('mw128 . emit-mw128)
-          ('a128r . emit-a128r) ('s128r . emit-s128r) ('m128r . emit-m128r)
-          ('mw128r . emit-mw128r) ('c128r . emit-c128r)
-          ('shl128 . emit-shl128) ('shr128 . emit-shr128) ('sar128 . emit-sar128)
-          ('c128 . emit-c128)
-          ('divq . emit-divq) ('divl . emit-divl) ('dv128 . emit-dv128) ('rm128 . emit-rm128)
-          ('inc128 . '(72 131 192 1  72 131 210 0))             ; add rax,1; adc rdx,0
-          ('dec128 . '(72 131 232 1  72 131 218 0))             ; sub rax,1; sbb rdx,0
-          ('sx128 . '(72 153))                                  ; cqo: rdx:rax <- sign rax
-          ('n128 . '(72 247 210  72 247 216  72 131 218 255))   ; not rdx; neg rax; sbb rdx,-1
-          ('shl128v . '(128 249 64 114 10                       ; cmp cl,64; jb small
-                         72 137 194  72 211 226  49 192  235 7   ; mov rdx,rax; shl rdx,cl; xor eax,eax; jmp done
-                         72 15 165 194  72 211 224))             ; small: shld rdx,rax,cl; shl rax,cl
-          ('shr128v . '(128 249 64 114 10
-                         72 137 208  72 211 232  49 210  235 7   ; mov rax,rdx; shr rax,cl; xor edx,edx
-                         72 15 173 208  72 211 234))             ; small: shrd rax,rdx,cl; shr rdx,cl
-          ('sar128v . '(128 249 64 114 12
-                         72 137 208  72 211 248  72 193 250 63  235 7    ; mov rax,rdx; sar rax,cl; sar rdx,63
-                         72 15 173 208  72 211 250))             ; small: shrd rax,rdx,cl; sar rdx,cl
-          ('ldu1 . emit-ldu1) ('ldu2 . emit-ldu2) ('ldu4 . emit-ldu4)
-          ('cas . emit-cas 1) ('cas4 . emit-cas 0) ('tp . emit-tp)
-          ('sx1 . emit-sx 1) ('sx2 . emit-sx 2) ('sx4 . emit-sx 4)
-          ('zx1 . emit-zx 1) ('zx2 . emit-zx 2) ('zx4 . emit-zx 4)
-          ('shlv . emit-shiftv 'shlv) ('shrv . emit-shiftv 'shrv) ('sarv . emit-shiftv 'sarv)
-          ('rorv . emit-shiftv 'rorv) ('rorv4 . emit-shiftv 'rorv4)
-          ('shl . emit-shift 'shl) ('shr . emit-shift 'shr) ('sar . emit-shift 'sar)
-          ('rol . emit-shift 'rol) ('ror . emit-shift 'ror) ('ror4 . emit-shift4 'ror)
-          ('test . emit-test) ('push . emit-push) ('pop . emit-pop)
-          ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
-          ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
-          ('jmpr . emit-jmpr) ('jmpt . emit-jmpt) ('callr . emit-callr)
-          ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set)
-          ('div . emit-div 0 1) ('udiv . emit-div 0 0)
-          ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
-          ('urem . (\ d a b t (emit-div 1 0 d a b)))
-          ('call . emit-call)
-          ('la . emit-la) ('lar . emit-la)                 ; lar == la on x86 (rip-rel lea, already translation-invariant); a64 differs (ADR vs ADRP)
-          ('lia . emit-lia) ('ldseg . emit-ldseg)
-          ('cmppd . emit-cmppd) ('movmskpd . emit-movmskpd)
-          ('cvtsi2sd . emit-cvtsi2sd) ('cvttsd2si . emit-cvttsd2si)
-          ('movqxr . emit-movqxr) ('movqrx . emit-movqrx)
-          ('stsd . emit-stsd) ('ldsd . emit-ldsd) ('stss . emit-stss) ('ldss . emit-ldss)
-          ('raw . 1)
-          ('ret . '(195)) ('sys . '(15 5)) ('nop . '(144)) ('trap . '(204))
-           ; port i/o: the port always rides dx (the immediate-port forms E4..E7
-           ; reach only ports 0..255, so the dx forms are the whole surface), the
-           ; datum al/ax/eax. the string forms take the rep prefix and walk
-           ; rsi (out) / rdi (in) by rcx -- `cld` sets the direction first.
-          ('inb . '(236)) ('inw . '(102 237)) ('inl . '(237))
-          ('outb . '(238)) ('outw . '(102 239)) ('outl . '(239))
-          ('cld . '(252))
-          ('insb . '(243 108)) ('insw . '(102 243 109)) ('insl . '(243 109))
-          ('outsb . '(243 110)) ('outsw . '(102 243 111)) ('outsl . '(243 111))
-           ; the system lane. `trap` is already int3 (CC), so `int` covers only the
-           ; vectored form; `iretq` is the 64-bit return (the REX.W is what widens it).
-          ('cli . '(250)) ('sti . '(251)) ('hlt . '(244))
-          ('ud2 . '(15 11)) ('iretq . '(72 207)) ('swapgs . '(15 1 248))
-          ('rdmsr . '(15 50)) ('wrmsr . '(15 48)) ('cpuid . '(15 162)) ('rdtsc . '(15 49))
-           ; the SVM lane (AMD-V), all of 0f 01 /3 with mod=11 and all
-           ; register-contracted like in/out: vmrun/vmload/vmsave take the vmcb's
-           ; physical address in rax and name no operand of their own.
-          ('vmrun . '(15 1 216)) ('vmload . '(15 1 218)) ('vmsave . '(15 1 219))
-          ('stgi . '(15 1 220)) ('clgi . '(15 1 221))
-           ; ..and the VMX lane beside it: two bare ops, the three pointer ops under their
-           ; prefixes, the field pair, and the two descriptor-table reads lgdt/lidt lacked.
-          ('vmlaunch . '(15 1 194)) ('vmxoff . '(15 1 196))
-          ('vmxon . emit-vmp '(243)) ('vmclear . emit-vmp '(102)) ('vmptrld . emit-vmp ())
-          ('vmread . emit-vmread) ('vmwrite . emit-vmwrite)
-          ('sgdt . emit-m0f 0 '(15 1)) ('sidt . emit-m0f 1 '(15 1))
-          ('int . emit-int) ('ltr . emit-ltr)
-          ('ldcr . emit-ldcr) ('stcr . emit-stcr)
-          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
-          ('invlpg . emit-m0f 7 '(15 1))])
+         ('ld . emit-ld) ('st . emit-st)
+         ('lea . emit-lea) ('lean . emit-lea)              ; lean: cc's consumed frame address -- same bytes, invisible to the sibcall escape gate
+         ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
+         ('ldxb . emit-ldxb) ('stxb . emit-stxb)
+         ('ld1 . emit-ld1) ('ld2 . emit-ld2) ('ld4 . emit-ld4)
+         ('st1 . emit-st1) ('st2 . emit-st2) ('st4 . emit-st4)
+         ('si . emit-si) ('si1 . emit-si1) ('si2 . emit-si2) ('si4 . emit-si4)
+         ('cmpm . emit-cmpm) ('cmprm . emit-cmprm)
+         ('a128 . emit-a128) ('s128 . emit-s128) ('m128 . emit-m128) ('mw128 . emit-mw128)
+         ('a128r . emit-a128r) ('s128r . emit-s128r) ('m128r . emit-m128r)
+         ('mw128r . emit-mw128r) ('c128r . emit-c128r)
+         ('shl128 . emit-shl128) ('shr128 . emit-shr128) ('sar128 . emit-sar128)
+         ('c128 . emit-c128)
+         ('divq . emit-divq) ('divl . emit-divl) ('dv128 . emit-dv128) ('rm128 . emit-rm128)
+         ('inc128 . '(72 131 192 1  72 131 210 0))             ; add rax,1; adc rdx,0
+         ('dec128 . '(72 131 232 1  72 131 218 0))             ; sub rax,1; sbb rdx,0
+         ('sx128 . '(72 153))                                  ; cqo: rdx:rax <- sign rax
+         ('n128 . '(72 247 210  72 247 216  72 131 218 255))   ; not rdx; neg rax; sbb rdx,-1
+         ('shl128v . '(128 249 64 114 10                       ; cmp cl,64; jb small
+                        72 137 194  72 211 226  49 192  235 7   ; mov rdx,rax; shl rdx,cl; xor eax,eax; jmp done
+                        72 15 165 194  72 211 224))             ; small: shld rdx,rax,cl; shl rax,cl
+         ('shr128v . '(128 249 64 114 10
+                        72 137 208  72 211 232  49 210  235 7   ; mov rax,rdx; shr rax,cl; xor edx,edx
+                        72 15 173 208  72 211 234))             ; small: shrd rax,rdx,cl; shr rdx,cl
+         ('sar128v . '(128 249 64 114 12
+                        72 137 208  72 211 248  72 193 250 63  235 7    ; mov rax,rdx; sar rax,cl; sar rdx,63
+                        72 15 173 208  72 211 250))             ; small: shrd rax,rdx,cl; sar rdx,cl
+         ('ldu1 . emit-ldu1) ('ldu2 . emit-ldu2) ('ldu4 . emit-ldu4)
+         ('cas . emit-cas 1) ('cas4 . emit-cas 0) ('tp . emit-tp)
+         ('sx1 . emit-sx 1) ('sx2 . emit-sx 2) ('sx4 . emit-sx 4)
+         ('zx1 . emit-zx 1) ('zx2 . emit-zx 2) ('zx4 . emit-zx 4)
+         ('shlv . emit-shiftv 'shlv) ('shrv . emit-shiftv 'shrv) ('sarv . emit-shiftv 'sarv)
+         ('rorv . emit-shiftv 'rorv) ('rorv4 . emit-shiftv 'rorv4)
+         ('shl . emit-shift 'shl) ('shr . emit-shift 'shr) ('sar . emit-shift 'sar)
+         ('rol . emit-shift 'rol) ('ror . emit-shift 'ror) ('ror4 . emit-shift4 'ror)
+         ('test . emit-test) ('push . emit-push) ('pop . emit-pop)
+         ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
+         ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
+         ('jmpr . emit-jmpr) ('jmpt . emit-jmpt) ('callr . emit-callr)
+         ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set)
+         ('div . emit-div 0 1) ('udiv . emit-div 0 0)
+         ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
+         ('urem . (\ d a b t (emit-div 1 0 d a b)))
+         ('call . emit-call)
+         ('la . emit-la) ('lar . emit-la)                 ; lar == la on x86 (rip-rel lea, already translation-invariant); a64 differs (ADR vs ADRP)
+         ('lia . emit-lia) ('ldseg . emit-ldseg)
+         ('cmppd . emit-cmppd) ('movmskpd . emit-movmskpd)
+         ('cvtsi2sd . emit-cvtsi2sd) ('cvttsd2si . emit-cvttsd2si)
+         ('movqxr . emit-movqxr) ('movqrx . emit-movqrx)
+         ('stsd . emit-stsd) ('ldsd . emit-ldsd) ('stss . emit-stss) ('ldss . emit-ldss)
+         ('raw . 1)
+         ('ret . '(195)) ('sys . '(15 5)) ('nop . '(144)) ('trap . '(204))
+          ; port i/o: the port always rides dx (the immediate-port forms E4..E7
+          ; reach only ports 0..255, so the dx forms are the whole surface), the
+          ; datum al/ax/eax. the string forms take the rep prefix and walk
+          ; rsi (out) / rdi (in) by rcx -- `cld` sets the direction first.
+         ('inb . '(236)) ('inw . '(102 237)) ('inl . '(237))
+         ('outb . '(238)) ('outw . '(102 239)) ('outl . '(239))
+         ('cld . '(252))
+         ('insb . '(243 108)) ('insw . '(102 243 109)) ('insl . '(243 109))
+         ('outsb . '(243 110)) ('outsw . '(102 243 111)) ('outsl . '(243 111))
+          ; the system lane. `trap` is already int3 (CC), so `int` covers only the
+          ; vectored form; `iretq` is the 64-bit return (the REX.W is what widens it).
+         ('cli . '(250)) ('sti . '(251)) ('hlt . '(244))
+         ('ud2 . '(15 11)) ('iretq . '(72 207)) ('swapgs . '(15 1 248))
+         ('rdmsr . '(15 50)) ('wrmsr . '(15 48)) ('cpuid . '(15 162)) ('rdtsc . '(15 49))
+          ; the SVM lane (AMD-V), all of 0f 01 /3 with mod=11 and all
+          ; register-contracted like in/out: vmrun/vmload/vmsave take the vmcb's
+          ; physical address in rax and name no operand of their own.
+         ('vmrun . '(15 1 216)) ('vmload . '(15 1 218)) ('vmsave . '(15 1 219))
+         ('stgi . '(15 1 220)) ('clgi . '(15 1 221))
+          ; ..and the VMX lane beside it: two bare ops, the three pointer ops under their
+          ; prefixes, the field pair, and the two descriptor-table reads lgdt/lidt lacked.
+         ('vmlaunch . '(15 1 194)) ('vmxoff . '(15 1 196))
+         ('vmxon . emit-vmp '(243)) ('vmclear . emit-vmp '(102)) ('vmptrld . emit-vmp ())
+         ('vmread . emit-vmread) ('vmwrite . emit-vmwrite)
+         ('sgdt . emit-m0f 0 '(15 1)) ('sidt . emit-m0f 1 '(15 1))
+         ('int . emit-int) ('ltr . emit-ltr)
+         ('ldcr . emit-ldcr) ('stcr . emit-stcr)
+         ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
+         ('invlpg . emit-m0f 7 '(15 1))])
    _ (foldl (\ _ p (emrow x64-emitters <p (emit-alu <p))) 0 x64-alu-rows)
    _ (foldl (\ _ p (emrow x64-emitters <p (emit-sse <p))) 0 x64-sse-rows)
    (x64-lower ins) (: f lower-via (? (lit? f) (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
@@ -614,8 +611,8 @@
    (x64-patch kind target site width aux)
       (kind @ 'rel32 (le32 (target - (site + width)))
           'rel8  (: d (target - (site + width))          ; the relaxer proved the fit at the
-                            _ (fits8 d ? 0 (scare 'rel8-range d))   ; pessimistic layout; this scare
-                            [(byte d)])                               ; is the loud net under that proof
+                    _ (fits8 d ? 0 (scare 'rel8-range d))   ; pessimistic layout; this scare
+                  [(byte d)])                               ; is the loud net under that proof
           'abs64 (le64 (target + aux))     ; aux = a byte addend (&arr[i]/&s.field: label + constant offset)
          ;; abs32: the same absolute address truncated to four bytes. only ever
          ;; correct where the sum provably fits, and the kernel's boot stub is
