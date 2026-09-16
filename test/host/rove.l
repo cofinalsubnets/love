@@ -384,7 +384,7 @@
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) '(shelf))
    _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "shelf" 0)
+   _ (test (1 = g 'p 'x) (two? (g 'sign)) ("Muse" = <(g 'sign)) (find (g 'msg) "one book" 0)
            (find (last (g 'sign)) "1 of 6" 0) (5 = #(g 'pages)))
    _ (crawl-turn g [1 0])
    _ (test (1 = g 'p 'x) (two? (g 'sign)) (find (last (g 'sign)) "2 of 6" 0))

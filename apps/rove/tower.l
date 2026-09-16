@@ -340,7 +340,7 @@
                        "when no muse visits, when crazy animal sounds"
                        "make sense and I read the truth with my hands."))]}
  (feat-of k) (peep feat-book k '("?" 250 244 ""))
- (feat-face k) (take 3 $ feat-of k)
+ (feat-face k) (: r (feat-of k) [(r 0) (r 1) (r 2)])      ; not take: that is the penny verb here
  (feat-line k) (feat-of k 3)
  (feat-lines k) (peep (feat-of k) 4 ())
 
