@@ -514,7 +514,7 @@
  w-stair  "no stair here"
  w-penny  "you pocket ~ pennies"
  w-ring   "you strike the circle, and it puts you back"
- w-circle "a circle clears out in the woods up ahead"
+ w-circle "a glowing curtain of pink light encircles the vale"
  w-empty  "the box, and nothing in it now"
  w-stone  "a standing stone deeply carved with the numeral ~"
  w-shut   "the door will not open now"
