@@ -843,7 +843,7 @@
        ; shf_alloc, so the kernel maps not a byte of it; nm, objdump and gdb read exactly
        ; this. every loaded byte gets a covering header (love_rela names the -pie table):
        ; strip rebuilds a file from its sections, and an orphan gap comes back as zeros.
-       lanesx (tabof [('text . 1) ('rodata . 2) ('data . 3) ('nifs . 4) ('bss . 6) ('image . 7)])
+       lanesx {'text 1 'rodata 2 'data 3 'nifs 4 'bss 6 'image 7}
        st (ldstab objs glo lanesx ld-sym 24)
        ; .comment goes last so no index moves: e_shstrndx and .symtab's sh_link are written
        ; down as 10 and 9, and a section spliced in ahead points both at the wrong table.
@@ -954,8 +954,8 @@
        eg (ldemit cx 'image n1 objs (>ef + gap <ef n1))
        fsz (fo i1)                                  ; the loaded bytes end here
        ; the section headers and symbol table ride past p_filesz, mapped by nothing
-       lanesx (tabof [('note . 1) ('boot . 2) ('text . 3)
-                      ('rodata . 4) ('data . 5) ('nifs . 5) ('image . 5) ('bss . 6)])
+       lanesx {'note 1 'boot 2 'text 3
+               'rodata 4 'data 5 'nifs 5 'image 5 'bss 6}
        st (ldstab objs glo lanesx ld-sym 24)
        shstr (o-strtab '(".note.pvh" ".boot" ".text" ".rodata"
                          ".data" ".bss" ".symtab" ".strtab" ".shstrtab"))

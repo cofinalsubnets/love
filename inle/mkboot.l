@@ -21,7 +21,7 @@
 ; the Makefile drives it. register vocabulary is holo's -- x86: r0=rax
 ; r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64: rN = xN.
 (:
-   (b-rep n x) (? (n < 1) () (x . (b-rep (n - 1) x)))
+   (b-rep n x) (n >= 1 ? (x . (b-rep (n - 1) x)))
    (b-zeros n) (b-rep n 0)
 
    (b-abs32 lbl ad) [['fix 4 'abs32 lbl ad]]     ; a 4-byte physical address

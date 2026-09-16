@@ -92,87 +92,84 @@
    (revonto l items n) (? !(two? l) (n . items)
                           (revonto >l (<l . items) (n + item-len <l)))
 
-   ;; -- the little table kit every backend leans on: `tabof` builds a tablet from
-   ;; ('k . v) pairs (the register/cc/opcode tables), `fregs` the f0..fn-1 float
+   ;; -- the little table kit every backend leans on: `fregs` builds the f0..fn-1 float
    ;; file, and `look` is the guarded read (a miss scares with the caller's tag). --
-   (tabof prs) (: t (tablet 0) _ (foldl (\ _ p (pin t <p >p)) 0 prs) t)
-   (fregs n)   (: t (tablet 0) _ (foldl (\ _ i (pin t (intern ("f" + show i)) i)) 0 (jot n)) t)
+   (fregs n)   (: t {} _ (foldl (\ _ i (pin t (intern ("f" + show i)) i)) 0 (jot n)) t)
    (look tab k tag) (: e (peep tab k -1) (? (e < 0) (scare tag k) e))
 
    ;; -- the IR's operand counts, one neutral table (the header's forms made executable). a
    ;; backend keeps an emitter tablet, each row partial-applied to everything but its IR operands
    ;; (an arity-0 row IS its chunk), and its 'lower is the lower-via shim -- so the op ->
    ;; operand-shape mapping lives here, once, instead of four hand-kept dispatch chains. --
-   ir-arity (tabof
-        [('ret . 0) ('sys . 0) ('nop . 0) ('trap . 0) ('udivll . 0) ('uremll . 0)
-           ; x86 port I/O, register-contracted like `sys` (dx the port, al/ax/eax the datum; the
-           ; string forms walk rsi/rdi by rcx). zero operands: the contract is the register file.
-          ('inb . 0) ('inw . 0) ('inl . 0) ('outb . 0) ('outw . 0) ('outl . 0)
-          ('cld . 0)
-          ('insb . 0) ('insw . 0) ('insl . 0) ('outsb . 0) ('outsw . 0) ('outsl . 0)
-           ; the system lane -- privileged instructions, arch-specific like the port i/o above.
-           ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
-           ; a64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
-           ; operation NAME then a register, `zr` whole-system), the exception generators, the waits.
-           ; riscv: the Zicsr accesses (a CSR by name or number, the pseudos writing x0 into the
-           ; slot they do not name), the two fences, the TLB flush, the privileged returns.
-          ('cli . 0) ('sti . 0) ('hlt . 0) ('ud2 . 0) ('iretq . 0) ('swapgs . 0)
-          ('rdmsr . 0) ('wrmsr . 0) ('cpuid . 0) ('rdtsc . 0)
-           ; the SVM lane: register-contracted too -- the vmcb's physical address rides rax.
-          ('vmrun . 0) ('vmload . 0) ('vmsave . 0) ('stgi . 0) ('clgi . 0)
-           ; the VMX lane, where nothing is register-contracted: vmxon/vmclear/vmptrld take a
-           ; memory operand holding a physical address (base + displacement, lgdt's shape),
-           ; vmread/vmwrite move a field to or from a GPR, vmlaunch/vmxoff are bare. sgdt/sidt
-           ; join them because VMX must write down the descriptor-table bases it will restore.
-          ('vmlaunch . 0) ('vmxoff . 0)
-          ('vmxon . 2) ('vmclear . 2) ('vmptrld . 2) ('sgdt . 2) ('sidt . 2)
-          ('vmread . 2) ('vmwrite . 2)
-          ('isb . 0) ('wfi . 0) ('wfe . 0) ('eret . 0)
-          ('int . 1) ('ltr . 1) ('dsb . 1) ('dmb . 1)
-          ('brk . 1) ('dbrk . 1) ('hvc . 1) ('smc . 1) ('udf . 1) ('svcn . 1)
-          ('ldcr . 2) ('stcr . 2) ('lgdt . 2) ('lidt . 2) ('invlpg . 2)
-          ('mrs . 2) ('msr . 2) ('msri . 2)
-          ('tlbi . 2) ('ic . 2) ('dc . 2) ('at . 2)
-          ('sret . 0) ('mret . 0) ('fence . 0) ('fencei . 0)
-          ('csrr . 2) ('csrw . 2) ('csrs . 2) ('csrc . 2)
-          ('csrwi . 2) ('csrsi . 2) ('csrci . 2) ('sfence . 2)
-          ('csrrw . 3) ('csrrs . 3) ('csrrc . 3)
-          ('csrrwi . 3) ('csrrsi . 3) ('csrrci . 3)
-          ('sx1 . 1) ('sx2 . 1) ('sx4 . 1) ('zx1 . 1) ('zx2 . 1) ('zx4 . 1)
-          ('push . 1) ('pop . 1) ('neg . 1) ('not . 1) ('inc . 1) ('dec . 1) ('tp . 1)
-          ('jmp . 1) ('jmp8 . 1) ('jmpr . 1) ('jmpt . 3) ('callr . 1) ('call . 1) ('raw . 1) ('lapool . 1)
-          ('li . 2) ('mov . 2) ('cmp . 2) ('test . 2) ('set . 2) ('br . 2) ('br8 . 2)
-          ('la . 2) ('lar . 2) ('lia . 2) ('ldseg . 2) ('clz . 2)
-          ('shl . 2) ('shr . 2) ('sar . 2) ('rol . 2) ('ror . 2) ('ror4 . 2)
-          ('shlv . 2) ('shrv . 2) ('sarv . 2) ('rorv . 2) ('rorv4 . 2)
-          ('movupd . 2) ('movsd . 2) ('movhlps . 2) ('unpcklpd . 2)
-          ('mulpd . 2) ('addpd . 2) ('subpd . 2) ('divpd . 2)
-          ('mulsd . 2) ('addsd . 2) ('subsd . 2) ('divsd . 2)
-          ('xorpd . 2) ('pcmpeqd . 2) ('andpd . 2) ('psubq . 2)
-          ('cvtss2sd . 2) ('cvtsd2ss . 2) ('ucomisd . 2) ('movmskpd . 2)
-          ('cvtsi2sd . 2) ('cvtui2sd . 2) ('cvttsd2si . 2) ('cvttsd2ui . 2)
-          ('movqxr . 2) ('movqrx . 2)
-          ('movsnxr . 2) ('movsnrx . 2)
-          ('add . 3) ('sub . 3) ('and . 3) ('or . 3) ('xor . 3) ('imul . 3) ('mulh . 3) ('umulh . 3)
-          ('adds . 3) ('subs . 3) ('adc . 3) ('adcs . 3) ('sbc . 3) ('sbcs . 3) ('ors . 3)
-          ('div . 3) ('udiv . 3)
-          ('ld . 3) ('st . 3) ('lea . 3) ('lean . 3)
-          ('cas . 3) ('cas4 . 3)
-          ('ld1 . 3) ('ld2 . 3) ('ld4 . 3) ('st1 . 3) ('st2 . 3) ('st4 . 3)
-          ('si . 3) ('si1 . 3) ('si2 . 3) ('si4 . 3)
-          ('cmpm . 3) ('cmprm . 3)
-          ('divq . 1) ('divl . 1) ('dv128 . 1) ('rm128 . 1)
-          ('a128 . 1) ('s128 . 1) ('m128 . 1) ('mw128 . 1)
-          ('a128r . 2) ('s128r . 2) ('m128r . 2) ('mw128r . 1) ('c128r . 3)
-          ('shl128 . 1) ('shr128 . 1) ('sar128 . 1) ('c128 . 2)
-          ('sx128 . 0) ('n128 . 0) ('inc128 . 0) ('dec128 . 0)
-          ('shl128v . 0) ('shr128v . 0) ('sar128v . 0)
-          ('ldu1 . 3) ('ldu2 . 3) ('ldu4 . 3)
-          ('stsd . 3) ('ldsd . 3) ('stss . 3) ('ldss . 3) ('cmppd . 3)
-          ('rem . 4) ('urem . 4) ('umull . 4) ('smull . 4) ('mla . 4)
-          ('ldx . 5) ('stx . 5) ('leax . 5) ('ldxb . 5) ('stxb . 5) ('mulo . 5)])
-   ;; an emitter row is (arity . emitter): `emsof` builds a backend's tablet from the same
-   ;; ('op . f) pairs `tabof` takes, stamping each row with its count off ir-arity. so ir-arity
+   ir-arity {'ret 0 'sys 0 'nop 0 'trap 0 'udivll 0 'uremll 0
+              ; x86 port I/O, register-contracted like `sys` (dx the port, al/ax/eax the datum; the
+              ; string forms walk rsi/rdi by rcx). zero operands: the contract is the register file.
+             'inb 0 'inw 0 'inl 0 'outb 0 'outw 0 'outl 0
+             'cld 0
+             'insb 0 'insw 0 'insl 0 'outsb 0 'outsw 0 'outsl 0
+              ; the system lane -- privileged instructions, arch-specific like the port i/o above.
+              ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
+              ; a64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
+              ; operation NAME then a register, `zr` whole-system), the exception generators, the waits.
+              ; riscv: the Zicsr accesses (a CSR by name or number, the pseudos writing x0 into the
+              ; slot they do not name), the two fences, the TLB flush, the privileged returns.
+             'cli 0 'sti 0 'hlt 0 'ud2 0 'iretq 0 'swapgs 0
+             'rdmsr 0 'wrmsr 0 'cpuid 0 'rdtsc 0
+              ; the SVM lane: register-contracted too -- the vmcb's physical address rides rax.
+             'vmrun 0 'vmload 0 'vmsave 0 'stgi 0 'clgi 0
+              ; the VMX lane, where nothing is register-contracted: vmxon/vmclear/vmptrld take a
+              ; memory operand holding a physical address (base + displacement, lgdt's shape),
+              ; vmread/vmwrite move a field to or from a GPR, vmlaunch/vmxoff are bare. sgdt/sidt
+              ; join them because VMX must write down the descriptor-table bases it will restore.
+             'vmlaunch 0 'vmxoff 0
+             'vmxon 2 'vmclear 2 'vmptrld 2 'sgdt 2 'sidt 2
+             'vmread 2 'vmwrite 2
+             'isb 0 'wfi 0 'wfe 0 'eret 0
+             'int 1 'ltr 1 'dsb 1 'dmb 1
+             'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
+             'ldcr 2 'stcr 2 'lgdt 2 'lidt 2 'invlpg 2
+             'mrs 2 'msr 2 'msri 2
+             'tlbi 2 'ic 2 'dc 2 'at 2
+             'sret 0 'mret 0 'fence 0 'fencei 0
+             'csrr 2 'csrw 2 'csrs 2 'csrc 2
+             'csrwi 2 'csrsi 2 'csrci 2 'sfence 2
+             'csrrw 3 'csrrs 3 'csrrc 3
+             'csrrwi 3 'csrrsi 3 'csrrci 3
+             'sx1 1 'sx2 1 'sx4 1 'zx1 1 'zx2 1 'zx4 1
+             'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
+             'jmp 1 'jmp8 1 'jmpr 1 'jmpt 3 'callr 1 'call 1 'raw 1 'lapool 1
+             'li 2 'mov 2 'cmp 2 'test 2 'set 2 'br 2 'br8 2
+             'la 2 'lar 2 'lia 2 'ldseg 2 'clz 2
+             'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
+             'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
+             'movupd 2 'movsd 2 'movhlps 2 'unpcklpd 2
+             'mulpd 2 'addpd 2 'subpd 2 'divpd 2
+             'mulsd 2 'addsd 2 'subsd 2 'divsd 2
+             'xorpd 2 'pcmpeqd 2 'andpd 2 'psubq 2
+             'cvtss2sd 2 'cvtsd2ss 2 'ucomisd 2 'movmskpd 2
+             'cvtsi2sd 2 'cvtui2sd 2 'cvttsd2si 2 'cvttsd2ui 2
+             'movqxr 2 'movqrx 2
+             'movsnxr 2 'movsnrx 2
+             'add 3 'sub 3 'and 3 'or 3 'xor 3 'imul 3 'mulh 3 'umulh 3
+             'adds 3 'subs 3 'adc 3 'adcs 3 'sbc 3 'sbcs 3 'ors 3
+             'div 3 'udiv 3
+             'ld 3 'st 3 'lea 3 'lean 3
+             'cas 3 'cas4 3
+             'ld1 3 'ld2 3 'ld4 3 'st1 3 'st2 3 'st4 3
+             'si 3 'si1 3 'si2 3 'si4 3
+             'cmpm 3 'cmprm 3
+             'divq 1 'divl 1 'dv128 1 'rm128 1
+             'a128 1 's128 1 'm128 1 'mw128 1
+             'a128r 2 's128r 2 'm128r 2 'mw128r 1 'c128r 3
+             'shl128 1 'shr128 1 'sar128 1 'c128 2
+             'sx128 0 'n128 0 'inc128 0 'dec128 0
+             'shl128v 0 'shr128v 0 'sar128v 0
+             'ldu1 3 'ldu2 3 'ldu4 3
+             'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
+             'rem 4 'urem 4 'umull 4 'smull 4 'mla 4
+             'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'mulo 5}
+   ;; an emitter row is (arity . emitter): `emsof` builds a backend's tablet from
+   ;; ('op . f) pairs, stamping each row with its count off ir-arity. so ir-arity
    ;; is read at bake time, once per op, and lowering reads arity and emitter in one lookup.
    (emsof prs) (: t {} _ (foldl (\ _ p (emrow t <p >p)) 0 prs) t)
    (emrow t op f) (pin t op (look ir-arity op 'bad-op . f))

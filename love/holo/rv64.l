@@ -41,25 +41,23 @@
    ;;    platform-reserved and never touched; x30/x31 (t5/t6) are the two scratches above.
    ;;    `zr` names x0, which the IR never asks for -- it is the system lane's whole-address-space
    ;;    spelling (`sfence zr, zr`), a64's `tlbi vmalle1is, zr` shape.
-   rv-regs (tabof
-        [('sp . 2) ('fp . 8) ('lr . 1) ('zr . 0)
-          ('r0 . 10) ('r1 . 11) ('r2 . 12) ('r3 . 13) ('r4 . 14)
-          ('r5 . 15) ('r6 . 16) ('r7 . 17)
-          ('r8 . 5) ('r9 . 6) ('r10 . 7) ('r11 . 28) ('r12 . 29)
-          ('r13 . 18) ('r14 . 19) ('r15 . 9)
-          ('r19 . 20) ('r20 . 21) ('r21 . 22) ('r22 . 23)
-          ('r23 . 24) ('r24 . 25) ('r25 . 26) ('r26 . 27)])
+   rv-regs {'sp 2 'fp 8 'lr 1 'zr 0
+            'r0 10 'r1 11 'r2 12 'r3 13 'r4 14
+            'r5 15 'r6 16 'r7 17
+            'r8 5 'r9 6 'r10 7 'r11 28 'r12 29
+            'r13 18 'r14 19 'r15 9
+            'r19 20 'r20 21 'r21 22 'r22 23
+            'r23 24 'r24 25 'r25 26 'r26 27}
    (rvn r) (look rv-regs r 'badreg)
    (rv-reg-eq a b) (rvn a = rvn b)
 
    ;; -- f0..f7 -> fa0..fa7 (f10..f17, the D argument file), f8..f15 -> ft0..ft7 (f0..f7 pure
    ;;    temps), f16..f19 -> ft8..ft11 (f28..f31, the narrow scratch bank). --
-   rv-fregs (tabof
-        [('f0 . 10) ('f1 . 11) ('f2 . 12) ('f3 . 13) ('f4 . 14)
-          ('f5 . 15) ('f6 . 16) ('f7 . 17)
-          ('f8 . 0) ('f9 . 1) ('f10 . 2) ('f11 . 3) ('f12 . 4)
-          ('f13 . 5) ('f14 . 6) ('f15 . 7)
-          ('f16 . 28) ('f17 . 29) ('f18 . 30) ('f19 . 31)])
+   rv-fregs {'f0 10 'f1 11 'f2 12 'f3 13 'f4 14
+             'f5 15 'f6 16 'f7 17
+             'f8 0 'f9 1 'f10 2 'f11 3 'f12 4
+             'f13 5 'f14 6 'f15 7
+             'f16 28 'f17 29 'f18 30 'f19 31}
    (rvf r) (look rv-fregs r 'badfreg)
 
    ;; -- the six instruction formats, each a word builder. immediates arrive signed; & masks
@@ -98,10 +96,7 @@
 
    ;; -- ALU: op -> (funct3 . funct7). three-address native; an immediate rides addi/andi/ori/xori
    ;;    when it fits 12 bits, else materializes in x31 -- no immediate ever scares here. --
-   rv-alu-rows
-        [('add . '(0 0)) ('sub . '(0 32)) ('and . '(7 0)) ('or . '(6 0)) ('xor . '(4 0))
-          ('imul . '(0 1))]
-   rv-alu (tabof rv-alu-rows)
+   rv-alu {'add '(0 0) 'sub '(0 32) 'and '(7 0) 'or '(6 0) 'xor '(4 0) 'imul '(0 1)}
    (rv-alu-rrr f3 f7 dn an bn) (rv-r f7 bn an f3 dn 0x33)
    (rv-aluop op d a b)
       (: meta (peep rv-alu op 0) f3 (meta 0) f7 (meta 1)
@@ -432,7 +427,7 @@
 
    ;; -- scalar-double FP (D). SSE-named IR two-address; d repeats as the first source. rm rides
    ;;    the funct3 slot: 7 = dynamic for arithmetic, 1 = toward-zero for the C-cast cvttsd2si. --
-   rv-fp3 (tabof [('addsd . 1) ('subsd . 5) ('mulsd . 9) ('divsd . 13)])
+   rv-fp3 {'addsd 1 'subsd 5 'mulsd 9 'divsd 13}
    (rv-fp3op op d s) (: dn (rvf d) (rv-r (peep rv-fp3 op 0) (rvf s) dn 7 dn 0x53))
    (rv-fmov d s)   (: sn (rvf s) (rv-r 0x11 sn sn 0 (rvf d) 0x53))           ; fsgnj.d d, s, s
    (rv-fcmp a b)   (rv-flag-set 1 (rvf a) (rvf b) -1)                        ; remember, emit nothing
@@ -457,17 +452,16 @@
    ;;    names they already had, `sys` and `trap`. --
    ;;    the CSRs a kernel touches. an unnamed one is a spelling and not a wall: a bare number
    ;;    passes through, so `csrw 1985, r0` reaches the c906's own mhcr. one row, one register.
-   rv-csrnames (tabof
-        [('fflags . 0x001) ('frm . 0x002) ('fcsr . 0x003)
-          ('cycle . 0xC00) ('time . 0xC01) ('instret . 0xC02)
-          ('sstatus . 0x100) ('sie . 0x104) ('stvec . 0x105) ('scounteren . 0x106)
-          ('sscratch . 0x140) ('sepc . 0x141) ('scause . 0x142) ('stval . 0x143)
-          ('sip . 0x144) ('satp . 0x180)
-          ('mstatus . 0x300) ('misa . 0x301) ('medeleg . 0x302) ('mideleg . 0x303)
-          ('mie . 0x304) ('mtvec . 0x305) ('mcounteren . 0x306)
-          ('mscratch . 0x340) ('mepc . 0x341) ('mcause . 0x342) ('mtval . 0x343)
-          ('mip . 0x344)
-          ('mvendorid . 0xF11) ('marchid . 0xF12) ('mimpid . 0xF13) ('mhartid . 0xF14)])
+   rv-csrnames {'fflags 0x001 'frm 0x002 'fcsr 0x003
+                'cycle 0xC00 'time 0xC01 'instret 0xC02
+                'sstatus 0x100 'sie 0x104 'stvec 0x105 'scounteren 0x106
+                'sscratch 0x140 'sepc 0x141 'scause 0x142 'stval 0x143
+                'sip 0x144 'satp 0x180
+                'mstatus 0x300 'misa 0x301 'medeleg 0x302 'mideleg 0x303
+                'mie 0x304 'mtvec 0x305 'mcounteren 0x306
+                'mscratch 0x340 'mepc 0x341 'mcause 0x342 'mtval 0x343
+                'mip 0x344
+                'mvendorid 0xF11 'marchid 0xF12 'mimpid 0xF13 'mhartid 0xF14}
    (rv-csr c) (? (imm? c) c (look rv-csrnames c 'badcsr))
    (rv-csru u) (? (0 <= u <= 31) u (scare 'rv-csr-uimm u))                   ; the 5-bit source
    (rv-csrop f3 dn csr sn) (rv-i (rv-csr csr) sn f3 dn 0x73)
@@ -537,7 +531,7 @@
           ('sret . le32 0x10200073) ('mret . le32 0x30200073)
           ('fence . le32 0x0FF0000F)                                        ; fence iorw, iorw
           ('fencei . le32 0x0000100F)])                                     ; fence.i
-   _ (foldl (\ _ p (emrow rv-emitters <p (rv-aluop <p))) 0 rv-alu-rows)
+   _ (map (k \ emrow rv-emitters k (rv-aluop k)) (keys rv-alu))
 
    ;; -- rvc, the local squeeze. a lowered chunk that is exactly one 32-bit word carrying no fixup
    ;;    may collapse to a 2-byte C form when its operands fit. the decision reads only the word --

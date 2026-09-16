@@ -42,10 +42,10 @@
    (wsect id bs) (: b (wstr bs) ((string (id . (uleb #b))) + b))
 
    ;; -- the types --
-   wasm-vt (tabof [('i32 . 127) ('i64 . 126) ('f32 . 125) ('f64 . 124) ('funcref . 112)])
+   wasm-vt {'i32 127 'i64 126 'f32 125 'f64 124 'funcref 112}
    (vt t) (look wasm-vt t 'bad-valtype)
    (blocktype x) (? (= x ()) [64] (= x 'void) [64] (nom? x) [(vt x)] (sleb x))   ; a valtype, or a type index
-   wasm-kind (tabof [('func . 0) ('table . 1) ('memory . 2) ('global . 3)])
+   wasm-kind {'func 0 'table 1 'memory 2 'global 3}
    (kind k) (look wasm-kind k 'bad-kind)
 
    ;; -- the opcode table: op -> (code shape). code is a byte or, past the 0xfc prefix, the bytes;

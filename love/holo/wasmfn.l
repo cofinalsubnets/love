@@ -28,14 +28,14 @@
    ;;    lab (i32), A B V, f8..f19, FA FB. per-arity n: r0..r26 fp lr, lab, A B V, f0..f19, FA FB. --
    w-st (tablet 0)                                   ; 'uni 'fl (1 after ucomisd) 'labs 'env 'k
    (w-uni? _) (peep w-st 'uni 0)
-   w-regs (tabof [('r0 . 0) ('r1 . 1) ('r2 . 2) ('r3 . 3) ('r4 . 4) ('r5 . 5) ('r6 . 6) ('r7 . 7)
-                  ('r8 . 8) ('r9 . 9) ('r10 . 10) ('r11 . 11) ('r12 . 12) ('r13 . 13) ('r14 . 14)
-                  ('r15 . 15) ('r16 . 16) ('r17 . 17) ('r18 . 18) ('r19 . 19) ('r20 . 20)
-                  ('r21 . 21) ('r22 . 22) ('r23 . 23) ('r24 . 24) ('r25 . 25) ('r26 . 26)
-                  ('fp . 27) ('lr . 28)])
-   w-fregs (tabof [('f0 . 0) ('f1 . 1) ('f2 . 2) ('f3 . 3) ('f4 . 4) ('f5 . 5) ('f6 . 6) ('f7 . 7)
-                   ('f8 . 8) ('f9 . 9) ('f10 . 10) ('f11 . 11) ('f12 . 12) ('f13 . 13) ('f14 . 14)
-                   ('f15 . 15) ('f16 . 16) ('f17 . 17) ('f18 . 18) ('f19 . 19)])
+   w-regs {'r0 0 'r1 1 'r2 2 'r3 3 'r4 4 'r5 5 'r6 6 'r7 7
+           'r8 8 'r9 9 'r10 10 'r11 11 'r12 12 'r13 13 'r14 14
+           'r15 15 'r16 16 'r17 17 'r18 18 'r19 19 'r20 20
+           'r21 21 'r22 22 'r23 23 'r24 24 'r25 25 'r26 26
+           'fp 27 'lr 28}
+   w-fregs {'f0 0 'f1 1 'f2 2 'f3 3 'f4 4 'f5 5 'f6 6 'f7 7
+            'f8 8 'f9 9 'f10 10 'f11 11 'f12 12 'f13 13 'f14 14
+            'f15 15 'f16 16 'f17 17 'f18 18 'f19 19}
    (w-reg r) (: n (peep w-regs r -1)                 ; r0 is 0, and 0 is falsy: a sentinel, never nil?
                 (? (n < 0) (scare 'wasm-badreg r) (w-uni? 0) (? (n < 8) n (n + 8)) n))
    (w-freg r) (: n (peep w-fregs r -1)
@@ -51,14 +51,15 @@
    (w-fset r) [['local.set (w-freg r)]]
 
    ;; -- the ALU and the conditions --
-   w-alu (tabof [('add . 'i64.add) ('sub . 'i64.sub) ('and . 'i64.and) ('or . 'i64.or)
-                 ('xor . 'i64.xor) ('imul . 'i64.mul) ('div . 'i64.div_s) ('udiv . 'i64.div_u)
-                 ('rem . 'i64.rem_s) ('urem . 'i64.rem_u)
-                 ('shl . 'i64.shl) ('shr . 'i64.shr_u) ('sar . 'i64.shr_s) ('rol . 'i64.rotl) ('ror . 'i64.rotr)
-                 ('shlv . 'i64.shl) ('shrv . 'i64.shr_u) ('sarv . 'i64.shr_s) ('rorv . 'i64.rotr)])
-   w-cc (tabof [('eq . 'i64.eq) ('ne . 'i64.ne) ('lt . 'i64.lt_s) ('le . 'i64.le_s)
-                ('gt . 'i64.gt_s) ('ge . 'i64.ge_s) ('below . 'i64.lt_u) ('be . 'i64.le_u)
-                ('above . 'i64.gt_u) ('ae . 'i64.ge_u)])
+   w-alu {'add 'i64.add 'sub 'i64.sub 'and 'i64.and 'or 'i64.or
+          'xor 'i64.xor 'imul 'i64.mul 'div 'i64.div_s 'udiv 'i64.div_u
+          'rem 'i64.rem_s 'urem 'i64.rem_u
+          'shl 'i64.shl 'shr 'i64.shr_u 'sar 'i64.shr_s 'rol 'i64.rotl 'ror 'i64.rotr
+          'shlv 'i64.shl 'shrv 'i64.shr_u 'sarv 'i64.shr_s 'rorv 'i64.rotr}
+   w-cc {'eq 'i64.eq 'ne 'i64.ne 'lt 'i64.lt_s 'le 'i64.le_s
+         'gt 'i64.gt_s 'ge 'i64.ge_s 'below 'i64.lt_u 'be 'i64.le_u
+         'above 'i64.gt_u 'ae 'i64.ge_u}
+   w-fp3 {'addsd 'f64.add 'subsd 'f64.sub 'mulsd 'f64.mul 'divsd 'f64.div}
    (w-fab _) [['local.get w-FA] ['local.get w-FB]]  (w-fba _) [['local.get w-FB] ['local.get w-FA]]
    (w-fcond c)                                       ; FA against FB, rv64's law
     (c @ ('above || 'gt) (w-fba 0 + '((f64.lt)))
@@ -104,9 +105,9 @@
    (w-memx base ix sc dp)
     (: a (w-val base + w-val ix + [['i64.const sc] '(i64.mul) '(i64.add)])
        (? (dp < 0) ((a + [['i64.const dp] '(i64.add)]) . 0) (a . dp)))
-   w-ld (tabof [('ld . '(i64.load 3)) ('ld1 . '(i64.load8_s 0)) ('ld2 . '(i64.load16_s 1)) ('ld4 . '(i64.load32_s 2))
-                ('ldu1 . '(i64.load8_u 0)) ('ldu2 . '(i64.load16_u 1)) ('ldu4 . '(i64.load32_u 2))])
-   w-st-ops (tabof [('st . '(i64.store 3)) ('st1 . '(i64.store8 0)) ('st2 . '(i64.store16 1)) ('st4 . '(i64.store32 2))])
+   w-ld {'ld '(i64.load 3) 'ld1 '(i64.load8_s 0) 'ld2 '(i64.load16_s 1) 'ld4 '(i64.load32_s 2)
+         'ldu1 '(i64.load8_u 0) 'ldu2 '(i64.load16_u 1) 'ldu4 '(i64.load32_u 2)}
+   w-st-ops {'st '(i64.store 3) 'st1 '(i64.store8 0) 'st2 '(i64.store16 1) 'st4 '(i64.store32 2)}
    (w-load op m d) (: r (w-ld op) (<m + [[<r (r 1) >m]] + w-set d))
    (w-store op m s) (: r (w-st-ops op) (<m + w-val s + [[<r (r 1) >m]]))
    ;; the shadow stack: push and pop move sp by 16, the arm family's law (the frame stays
@@ -212,7 +213,7 @@
      ;; the double lane
      'movsd (w-fval (f 2) + w-fset (f 1))
      ('addsd || 'subsd || 'mulsd || 'divsd)
-           (w-fval (f 1) + w-fval (f 2) + [[(peep (tabof [('addsd . 'f64.add) ('subsd . 'f64.sub) ('mulsd . 'f64.mul) ('divsd . 'f64.div)]) <f ())]] + w-fset (f 1))
+           (w-fval (f 1) + w-fval (f 2) + [[(w-fp3 <f)]] + w-fset (f 1))
      'xorpd (w-fval (f 1) + '((i64.reinterpret_f64)) + w-fval (f 2) + '((i64.reinterpret_f64) (i64.xor) (f64.reinterpret_i64)) + w-fset (f 1))
      'ucomisd (: _ (pin w-st 'fl 1) (w-fval (f 1) + [['local.set w-FA]] + w-fval (f 2) + [['local.set w-FB]]))
      'cvtsi2sd  (w-val (f 2) + '((f64.convert_i64_s)) + w-fset (f 1))

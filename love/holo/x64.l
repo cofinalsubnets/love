@@ -24,13 +24,11 @@
              'r5 6 'r6 7 'r7 8 'r8 9 'r9 10
              'r10 11 'r11 12 'r12 13 'r13 14 'r14 15}
 
-   ;; -- the ALU table: op -> (rr-opcode  imm-/digit  commutative?). the row list stays
-   ;; bound: the emitter tablet below pins the whole group off it. --
-   x64-alu-rows
-        [('add . '(1 0 1)) ('or . '(9 1 1)) ('and . '(33 4 1))
-          ('sub . '(41 5 0)) ('xor . '(49 6 1))
-          ('adds . '(1 0 1)) ('subs . '(41 5 0))]     ; flag-setting -- x86 add/sub already set OF; pair with (br vs/vc ..)
-   x64-alu (tabof x64-alu-rows)
+   ;; -- the ALU table: op -> (rr-opcode  imm-/digit  commutative?). the emitter tablet
+   ;; below pins the whole group off its keys. --
+   x64-alu {'add '(1 0 1) 'or '(9 1 1) 'and '(33 4 1)
+            'sub '(41 5 0) 'xor '(49 6 1)
+            'adds '(1 0 1) 'subs '(41 5 0)}     ; flag-setting -- x86 add/sub already set OF; pair with (br vs/vc ..)
 
    ;; -- condition codes: IR name -> the 0F 8x opcode low byte. --
    x64-cc {'eq 132 'ne 133 'lt 140 'ge 141
@@ -436,14 +434,12 @@
    x64-xregs (fregs 16)                                                             ; f0..f15 -> 0..15
    (xrn r) (look x64-xregs r 'badxreg)
    ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
-   x64-sse-rows
-        ['(movupd 102 16) '(movsd 242 16) '(movhlps 0 18) '(unpcklpd 102 20)
-          '(mulpd 102 89) '(addpd 102 88) '(subpd 102 92) '(divpd 102 94)
-          '(mulsd 242 89) '(addsd 242 88) '(subsd 242 92) '(divsd 242 94)
-          '(xorpd 102 87) '(pcmpeqd 102 118) '(andpd 102 84) '(psubq 102 251)
-          '(cvtss2sd 243 90) '(cvtsd2ss 242 90)                                       ; f3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
-          '(ucomisd 102 46)]                                                          ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
-   x64-sse (tabof x64-sse-rows)
+   x64-sse {'movupd '(102 16) 'movsd '(242 16) 'movhlps '(0 18) 'unpcklpd '(102 20)
+            'mulpd '(102 89) 'addpd '(102 88) 'subpd '(102 92) 'divpd '(102 94)
+            'mulsd '(242 89) 'addsd '(242 88) 'subsd '(242 92) 'divsd '(242 94)
+            'xorpd '(102 87) 'pcmpeqd '(102 118) 'andpd '(102 84) 'psubq '(102 251)
+            'cvtss2sd '(243 90) 'cvtsd2ss '(242 90)                                    ; f3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
+            'ucomisd '(102 46)}                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
    (xrex w r b) (mrex w () r 0 b)                                                       ; the xmm faces: no index, no byte source
    (emit-sse op d s)                                                                     ; xmm <- xmm two-address
       (: meta (peep x64-sse op 0) pfx (meta 0) opc (meta 1) dn (xrn d) sn (xrn s)
@@ -601,8 +597,8 @@
          ('ldcr . emit-ldcr) ('stcr . emit-stcr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])
-   _ (foldl (\ _ p (emrow x64-emitters <p (emit-alu <p))) 0 x64-alu-rows)
-   _ (foldl (\ _ p (emrow x64-emitters <p (emit-sse <p))) 0 x64-sse-rows)
+   _ (map (k \ emrow x64-emitters k (emit-alu k)) (keys x64-alu))
+   _ (map (k \ emrow x64-emitters k (emit-sse k)) (keys x64-sse))
    (x64-lower ins) (: f lower-via (? (lit? f) (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; two relocation kinds: rel32, a 32-bit pc-relative field measured from the end of the field

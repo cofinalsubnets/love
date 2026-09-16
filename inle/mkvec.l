@@ -17,10 +17,10 @@
 ; GAS's immediate form, and the same bus traffic.
 (:
    ;; the four list helpers the loops want: `iota` answers an array, these are lists
-   (v-upto n)  (: (go i) (n > i ? (i . go (i + 1))) (go 0))
+   (v-upto n)  (:- (go 0) (go i) (n > i ? (i . go (i + 1))))
    (v-rep n x) (n >= 1 ? (x . v-rep (n - 1) x))
    (v-zeros n) (v-rep n 0)
-   (v-mapi f l) (: (go l2 i) (two? l2 ? (f i <l2 . go >l2 (i + 1))) (go l 0))
+   (v-mapi f l) (:- (go l 0) (go l2 i) (two? l2 ? (f i <l2 . go >l2 (i + 1))))
 
    ;; -- x64 ------------------------------------------------------------
    ;; the vectors the CPU pushes an error code for. every other one pushes a dummy 0 first,
@@ -80,7 +80,7 @@
 
    ;; .text.
    x-text
-    (foldl (\ a v (a + (x-stub v))) () (v-upto 32)
+    (foldl (a \ v \ a + x-stub v) () (v-upto 32)
      ;; the common tail. after push15 the stack from rsp upward is struct k_frame, so
      ;; rdi = rsp is the whole argument marshalling, and rsp is 16-byte aligned at the call:
      ;; five qwords from the CPU, two from the stub, fifteen from push15 -- 176 bytes.

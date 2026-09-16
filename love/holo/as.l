@@ -28,8 +28,8 @@
    (as-regw o) (<o = 'rg ? <>>o 0)                      ; ... and its width, 0 if it isn't one
    ;; spl/bpl/sil/dil name the low four's bytes only under a REX -- bare, those slots spell
    ;; ah/ch/dh/bh -- so a byte operand in 4..7 forces an otherwise-empty one.
-   (as-frc o) (? !(as-regw o = 1) 0 (4 <= as-regn o <= 7))
-   (as-frcs ops) (foldl (\ a o (a > 0 ? a (as-frc o))) 0 ops)
+   (as-frc o) (as-regw o != 1 ? 0 (4 <= as-regn o <= 7))
+   (as-frcs ops) (foldl (a \ o \ a > 0 ? a (as-frc o)) 0 ops)
 
    ;; --- the r/m half: a register (mod 3) or a memory operand, which lays a Modrm (+ SIB)
    ;; (+ displacement) and hands up the REX X and B bits. an rbp/r13 base has no disp-less slot
@@ -41,7 +41,7 @@
       (: b (o 1) ix (o 2) sc (o 3) d (o 4)
          (b < 0 ? ([(as-mrm 0 rf 4) (as-sib (as-scb sc) (ix < 0 ? 4 ix) 5)] + le32 d)
             (: md (? (d = 0 && !(as-lo b = 5)) 0 (fits8 d) 1 2)
-               dsp (? (md = 0) () (md = 1) [(byte d)] (le32 d))
+               dsp (md @ 0 () 1 [(byte d)] (le32 d))
                hd (? (ix >= 0)      [(as-mrm md rf 4) (as-sib (as-scb sc) ix b)]
                      (as-lo b = 4)  [(as-mrm md rf 4) (as-sib 0 4 b)]
                      [(as-mrm md rf (as-lo b))])
@@ -54,7 +54,7 @@
    (as-rm-b o)  (<o @ 'mem (: b <>o (b < 0 ? 0 (as-hi b)))
                       'rip 0
                       (as-hi (as-regn o)))
-   (as-mem? o)  ((<o = 'mem) || (<o = 'rip))
+   (as-mem? o)  (<o = 'mem || <o = 'rip)
 
    ;; --- operand size: the value carries it resolved (dialect.l's xa-width), 0 when neither the
    ;; text nor a register said -- fine for the 64-bit-default forms (push/pop/call/jmp), a raise
@@ -72,15 +72,12 @@
 
    ;; the ALU group: mnemonic -> (rr-opcode  imm-ext). reg field carries the source (AT&T src,dst);
    ;; the reg->r/m direction is the table's opcode and r/m->reg is +2 (mov's 89/8b sit the same way).
-   as-alu (tabof
-        [('add . '(1 0)) ('or . '(9 1)) ('and . '(33 4)) ('sub . '(41 5))
-          ('xor . '(49 6)) ('cmp . '(57 7))])
+   as-alu {'add '(1 0) 'or '(9 1) 'and '(33 4) 'sub '(41 5) 'xor '(49 6) 'cmp '(57 7)}
    ;; the condition codes: jcc mnemonic -> 0F 8x low byte.
-   as-cc (tabof
-        [('je . 132) ('jz . 132) ('jne . 133) ('jnz . 133) ('jl . 140) ('jge . 141)
-          ('jle . 142) ('jg . 143) ('jb . 130) ('jc . 130) ('jae . 131) ('jnc . 131)
-          ('jbe . 134) ('ja . 135) ('js . 136) ('jns . 137) ('jo . 128) ('jno . 129)
-          ('jp . 138) ('jnp . 139)])
+   as-cc {'je 132 'jz 132 'jne 133 'jnz 133 'jl 140 'jge 141
+          'jle 142 'jg 143 'jb 130 'jc 130 'jae 131 'jnc 131
+          'jbe 134 'ja 135 'js 136 'jns 137 'jo 128 'jno 129
+          'jp 138 'jnp 139}
 
    ;; alu $imm,r/m: 80 /ext ib for a byte, else the 83 /ext ib short form where the immediate fits,
    ;; else 81 /ext iz.
@@ -150,19 +147,18 @@
             (scare 'as-op1 mn)))
    ;; --- the nullaries, by their one spelling: the reader folds at&T's c<from>t<to> family
    ;; (cltq, cltd, ..) and retq/leaveq/xlatb onto these. `int3' is what holo's own text calls trap.
-   as-nils (tabof
-        [('ret . '(195)) ('nop . '(144)) ('hlt . '(244))
-          ('syscall . '(15 5)) ('leave . '(201))
-          ('cbw . '(102 152)) ('cwde . '(152)) ('cdqe . '(72 152))      ; al -> ax, ax -> eax, eax -> rax
-          ('cwd . '(102 153)) ('cdq . '(153)) ('cqo . '(72 153))        ; .. and the dx:ax splits
-          ('int3 . '(204)) ('ud2 . '(15 11)) ('pause . '(243 144))
-          ('cpuid . '(15 162)) ('rdtsc . '(15 49))
-          ('cli . '(250)) ('sti . '(251))                  ; the interrupt flag
-          ('clc . '(248)) ('stc . '(249)) ('cmc . '(245))   ; ... the carry flag
-          ('cld . '(252)) ('std . '(253))                  ; ... and the direction flag
-          ('lahf . '(159)) ('sahf . '(158))
-          ('xlat . '(215))
-          ('sysret . '(15 7)) ('sysretl . '(15 7)) ('sysretq . '(72 15 7))])
+   as-nils {'ret '(195) 'nop '(144) 'hlt '(244)
+            'syscall '(15 5) 'leave '(201)
+            'cbw '(102 152) 'cwde '(152) 'cdqe '(72 152)      ; al -> ax, ax -> eax, eax -> rax
+            'cwd '(102 153) 'cdq '(153) 'cqo '(72 153)        ; .. and the dx:ax splits
+            'int3 '(204) 'ud2 '(15 11) 'pause '(243 144)
+            'cpuid '(15 162) 'rdtsc '(15 49)
+            'cli '(250) 'sti '(251)                  ; the interrupt flag
+            'clc '(248) 'stc '(249) 'cmc '(245)   ; ... the carry flag
+            'cld '(252) 'std '(253)                  ; ... and the direction flag
+            'lahf '(159) 'sahf '(158)
+            'xlat '(215)
+            'sysret '(15 7) 'sysretl '(15 7) 'sysretq '(72 15 7)}
    (as-0 mn) (as-nils mn @ () (scare 'as-op0 mn) b b)
 
    ;; an instruction of the value: (op mn w ops), ops destination first; the encoders above

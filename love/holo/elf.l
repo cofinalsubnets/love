@@ -19,10 +19,9 @@
    ; canonical keys only (love/boot/prel.l's arch-canon): every spelling anyone types is
    ; already one of these by the time a target reaches holo, so a second alias here would
    ; be a second place to keep in step.
-   elf-machines (tabof
-        [('x64 . 62) ('a64 . 183)
-         ('thumb1 . 40) ('thumb2 . 40) ('thumb2sp . 40) ('arm . 40)    ; EM_ARM
-         ('rv64 . 243)])                                  ; em_rv64
+   elf-machines {'x64 62 'a64 183
+                 'thumb1 40 'thumb2 40 'thumb2sp 40 'arm 40    ; EM_ARM
+                 'rv64 243}                                  ; em_rv64
 
    ;; one 56-byte program header. p_paddr is p_vaddr's twin on every hosted target -- the
    ;; kernel lane is where they part (a high virtual address loaded at a low physical one).

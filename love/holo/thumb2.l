@@ -24,18 +24,16 @@
 (module 'holo
 (: ;; -- registers. abstract number = hardware number for r0..r12; sp/lr/pc/fp are named. r12 (IP) is
    ;;    the aapcs intra-call scratch; the indexed stores borrow it as an unnamed address temp. --
-   thumb-regs (tabof
-        [('sp . 13) ('lr . 14) ('pc . 15) ('fp . 11)
-          ('r0 . 0) ('r1 . 1) ('r2 . 2) ('r3 . 3)  ('r4 . 4)
-          ('r5 . 5) ('r6 . 6) ('r7 . 7) ('r8 . 8)  ('r9 . 9)
-          ('r10 . 10) ('r11 . 11) ('r12 . 12)])
+   thumb-regs {'sp 13 'lr 14 'pc 15 'fp 11
+               'r0 0 'r1 1 'r2 2 'r3 3  'r4 4
+               'r5 5 'r6 6 'r7 7 'r8 8  'r9 9
+               'r10 10 'r11 11 'r12 12}
    (rn r) (look thumb-regs r 'badreg)
 
    ;; -- condition codes: IR name -> the aarch32 cond field (same 4-bit encoding a64 uses). --
-   thumb-cc (tabof
-        [('eq . 0) ('ne . 1) ('ae . 2) ('below . 3) ('s . 4) ('ns . 5)
-          ('vs . 6) ('vc . 7) ('p . 6) ('np . 7)
-          ('above . 8) ('be . 9) ('ge . 10) ('lt . 11) ('gt . 12) ('le . 13)])
+   thumb-cc {'eq 0 'ne 1 'ae 2 'below 3 's 4 'ns 5
+             'vs 6 'vc 7 'p 6 'np 7
+             'above 8 'be 9 'ge 10 'lt 11 'gt 12 'le 13}
 
    ;; -- emit: a narrow halfword, or a 32-bit word as hi-halfword-first little-endian pair. --
    (t16 w) (le16 w)
@@ -73,14 +71,12 @@
             (t32 (0xEA4F0000 | ((dn << 8) | sn)))))                ; MOV.W Rd, Rm (ORR Rd,Rn=15,Rm)
 
    ;; -- ALU register form (wide, three-address): op -> the hw1 base (S=0). d = a OP b.
-   ;; the row list stays bound: the emitter tablet below pins the group off it. --
-   thumb-alu-rows
-        [('add . 0xEB00) ('sub . 0xEBA0) ('and . 0xEA00) ('or . 0xEA40) ('xor . 0xEA80)
-          ('adds . 0xEB10) ('subs . 0xEBB0)                  ; the S-variant: set the flags
-          ('adc . 0xEB40) ('adcs . 0xEB50)                   ; the carry family -- the 64-bit
-          ('sbc . 0xEB60) ('sbcs . 0xEB70)                   ;   pair lanes (moon rung 3)
-          ('ors . 0xEA50)]                                    ; orrs: pair equality / pair truth
-   thumb-alu (tabof thumb-alu-rows)
+   ;; the emitter tablet below pins the group off its keys. --
+   thumb-alu {'add 0xEB00 'sub 0xEBA0 'and 0xEA00 'or 0xEA40 'xor 0xEA80
+              'adds 0xEB10 'subs 0xEBB0                  ; the S-variant: set the flags
+              'adc 0xEB40 'adcs 0xEB50                   ; the carry family -- the 64-bit
+              'sbc 0xEB60 'sbcs 0xEB70                   ;   pair lanes (moon rung 3)
+              'ors 0xEA50}                                ; orrs: pair equality / pair truth
    (thumb-alu-rrr base d a b)                                 ; hw1 = base|Rn(a); hw2 = Rd<<8 | Rm(b)
       (: dn (rn d) an (rn a) bn (rn b) (t32 (((base | an) << 16) | ((dn << 8) | bn))))
    ;; add/sub #imm12 via addw/subw (T4): a plain 12-bit unsigned; a negative flips the op.
@@ -336,7 +332,7 @@
    ;; MRS Rd, <sysm> -- the special registers, which are not in the general file and so have
    ;; no other door. only the two stack pointers are named: a fault handler asks which one was
    ;; active, and that is the whole of what this tree needs to read.
-   thumb-sysm (tabof [('msp . 8) ('psp . 9)])
+   thumb-sysm {'msp 8 'psp 9}
    (thumb-mrs d sys)
       (: sm (look thumb-sysm sys 'badsysm)
          (t32 (0xF3EF0000 | (0x8000 | (rn d << 8) | sm))))
@@ -384,7 +380,7 @@
           ('sys . t16 0xDF00)                               ; svc #0
           ('nop . t16 0xBF00)
           ('trap . t16 0xBE00)])                            ; bkpt #0
-   _ (foldl (\ _ p (emrow thumb-emitters <p (thumb-aluop <p))) 0 thumb-alu-rows)
+   _ (map (k \ emrow thumb-emitters k (thumb-aluop k)) (keys thumb-alu))
    (thumb-lower ins) (: f lower-via (lit? f ? (f thumb-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; a relocation. Thumb pc reads as (site + 4), and the branch fields hold a /2 (halfword) offset
