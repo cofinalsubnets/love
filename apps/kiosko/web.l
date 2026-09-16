@@ -44,21 +44,16 @@
 (borrow 'posix)
 (:
    (sv-ends? s t) (: n #s m #t (m <= n && snip s (n - m) n = t))
-   (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) (string? s && [1 s]))))
+   (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, string? s && [1 s]))))
    ; the directory a path sits in, as a link back up: "/a/b/c.l" -> "/a/b/"
    (sv-up p) (snip p 0 (lastslash p))
 
    ; the cache key: an edit that moves neither mtime nor size is one nobody can see
-   (sv-stamp p) (: st (stat p) (two? st ? (<>st + <st * 7) 0))
+   (sv-stamp p) (stat p @ st (two? st ? (<>st + <st * 7) 0))
 
    ; ..and the box it lives in: `(stamp html) per path, replaced when the stamp moves.
    (sv-cached box p make)
-   (: k (sv-stamp p)
-      e (box p)
-      (? (two? e && <e = k) <>e
-         (: h (make ())
-            _ (pin box p [k h])
-            h)))
+   (: k (sv-stamp p) e (box p) (two? e && <e = k ? <>e (make () @ h (pin box p [k h], h))))
 
    ; the nav line every page wears: up to the directory, across to the file's
    ; other reading. alt is `(href text), or () where there is no other reading.
@@ -78,15 +73,14 @@
 
    ; a case-blind substring walk over the request head; the needle comes in lowercase
    (sv-in? h t)
-   (: n #h m #t
-      (fold c) (65 <= c <= 90 ? (c + 32) c)
-      (at i j) (? (m <= j) 1
-                  (fold (h (i + j)) = t j) (at i (j + 1))
-                  0)
-      (g i) (? (n - m < i) 0
-               (at i 0) 1
-               (g (i + 1)))
-      (g 0))
+   (:- (g 0) n #h m #t
+    (fold c) (65 <= c <= 90 ? (c + 32) c)
+    (at i j) (? (m <= j) 1
+                (fold (h (i + j)) = t j) (at i (j + 1))
+                0)
+    (g i) (? (n - m < i) 0
+             (at i 0) 1
+             (g (i + 1))))
 
    ; painted, or the file itself? a browser NAVIGATING to a .l wants the page; a fetch()
    ; from one of our own pages wants the source it asked for, and handing it html is how
@@ -94,8 +88,9 @@
    ; send it on every request, `document` only for a navigation -- and where it is absent
    ; an Accept naming text/html is the older tell, so curl and every fetch read the file.
    (sv-doc? head)
-   (? (sv-in? head "sec-fetch-dest:") (sv-in? head "sec-fetch-dest: document")
-      (sv-in? head "text/html"))
+    (sv-in? head "sec-fetch-dest:" ?
+     (sv-in? head "sec-fetch-dest: document")
+     (sv-in? head "text/html"))
 
    ; the hook: `(ctype body) to serve, () to say "not mine". `.l.md` is tested
    ; first because that path ends in `.md` as much as it ends in `.l.md`.
@@ -107,14 +102,14 @@
          !(md? || sv-ends? p ".l") ()
          (: f (root + src)
             r (sv-rdf f)
-            (? !(two? r) ()                       ; not there: let kiosko say 404
+            (? (one? r) ()                       ; not there: let kiosko say 404
                ; ..and a .l.md is a rendering with no file behind it, so it is always made
                !(hd? || sv-doc? head) ["text/plain; charset=utf-8" <>r]
                ["text/html; charset=utf-8"
                 (sv-cached box p
                   (\ _ (? hd? (sv-doc p (sv-head src <>r) [src "the source"])
-                           md? (sv-doc p <>r ())
-                           (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
+                          md? (sv-doc p <>r ())
+                          (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
 
    sv-usage "love web -- the tree in a browser, painted on the way out
 usage: love web [-p PORT] [-n] [DIR]
@@ -126,12 +121,12 @@ page is laid first -- make web site-wasm -- and the machine is at /inle/wasm/inl
 where DIR is no tree the source aboard is laid under it first (`love source`) and that
 tree is served. this binary drives the page's build; no love is compiled for it.
 "
-   (sv-die c m) (: _ (say err ("web: " + m)) _ (put err 10) (quit c))
+   (sv-die c m) (say err ("web: " + m), put err 10, quit c)
 
    ; the nest under DIR (apps/source.l's src-nest): the tree seed, doom and web share, laid
    ; once, and where there is none the source aboard is laid there now
-   (sv-root dir) ((cite 'source 'src-root) dir)
-   (sv-lay dir)  ((cite 'source 'src-nest) dir)
+   (sv-root dir) (cite 'source 'src-root dir)
+   (sv-lay dir)  (cite 'source 'src-nest dir)
 
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
@@ -143,21 +138,21 @@ tree is served. this binary drives the page's build; no love is compiled for it.
    (sv-build dir)
    (: exe (selfpath 0)
       _ (string? exe ? 0 (say err "web: can't find my own path\n", quit 1))
-      _ ((cite 'source 'src-arm) dir exe)
+      _ (cite 'source 'src-arm dir exe)
       ; the module is site-wasm's to build, through its own seat: asked for by name at
       ; the top it would be laid with the x64 lane's recipe and fail a file at a time
       _ (say err ";; laying the page: make web site-wasm\n")
       p (spawn [exe "make" "-C" dir ("LOVE=" + exe) "web" "site-wasm"])
       st (charm? p && 0 <= p ? (wait p) 1)
-      (0 = st ? 0 (say err ("web: the page did not build (" + show st + ")\n"), quit 1)))
+      (st @ 0 0 (say err ("web: the page did not build (" + show st + ")\n"), quit 1)))
 
    (web-main as)
-   (: box (tablet 0)
-      t (tablet 0)
+   (: box {}
+      t {}
       o (uopt as t '(112) () {"port" 112 "no-build" 110})
-      _ (two? o ? 0 (sv-die 2 (last as + " needs an argument")))
+      _ (one? o && sv-die 2 (last as + " needs an argument"))
       un (uoptun t '(112 110))
-      _ (nil? un ? 0 (sv-die 2 ("unknown option -" + string un)))
+      _ (un && sv-die 2 ("unknown option -" + string un))
       rest <>>o
       ; DIR is positional, so a flag that fell through would become one and a whole tree
       ; would be laid under its name
@@ -165,7 +160,7 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       _ (nil? sy ? 0 (sv-die 2 ("unknown option " + sy)))
       _ (two? >rest ? (sv-die 2 ("one tree at a time, not " + <>rest)) 0)
       pt (uoptv t 112)
-      port (: v (unum pt) (? (nil? pt) 8080 (charm? v) v (sv-die 2 ("not a port: " + pt))))
+      port (: v (unum pt) (? !pt 8080 (charm? v) v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
       ; the tree: DIR itself, the nest laid under it before, or laid there now.
@@ -179,14 +174,14 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       _ (nil? serve5 ? (say err "web: no kiosko aboard\n", quit 1))
       _ (sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://127.0.0.1:" + show port
                                   + "/ and the machine /inle/wasm/inle.html\n")) 0)
-      _ (? (serve5 dir port 0 () (sv-make dir box)) 0
-           (: _ (say err ("web: cannot listen on :" + show port)) _ (put err 10) (quit 1)))
+      _ (serve5 dir port 0 () (sv-make dir box) ? 0
+         (say err ("web: cannot listen on :" + show port), put err 10, quit 1))
       (quit 0))
 
    ; the verb, and the seat (kiosko's shape): `love web ..` on the artifact, or
    ; this file named on a command line, and neither needs a script
    door (udoor 'web web-main sv-usage 1 1)
    _ (pins (cite 'verbs 'tab) 'web door)
-   s ((cite 'verbs 'fire) ["serve" "serve.l"])
+   s (cite 'verbs 'fire ["serve" "serve.l"])
    _ (two? s && door >s))
 ) ; module serve

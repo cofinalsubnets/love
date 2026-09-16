@@ -28,26 +28,21 @@
 ; usage:  kiosko [-p port] [-q] [DIR]        (with the `kiosko` script on PATH)
 ;     or: love -l apps/kiosko/kiosko.l [-p port] [DIR]
 ; DIR defaults to the working directory, port to 8080. it serves until interrupted.
-;
-; the head names the exports: the two servers, the one-request unit the gate
-; drives, and the verb. catted, an unwrapped kiosko put its whole vocabulary --
-; `strcat`, `types`, `reply` -- on the session's book.
-
-; `gulp` is out because test/host/kiosko.l drives the cask/short-read lanes directly.
+; gulp is exported for test/host/kiosko.l alone: it drives the cask/string lane
+; boundary directly, which nothing else reaches
 (module (kiosko serve serve5 serve1 kiosko-main gulp)
 
 ; --- little utils -------------------------------------------------------------------
 (borrow 'posix)
 ; the path clips (love/boot/post.l): segs and pclean under the request guard below.
 (borrow 'path)
-(: (strcat l)   (foldl (+) "" l)
-   (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
+(: (joins l sp) (? (one? l) "" (one? >l) <l (<l + sp + joins >l sp))
    (ends? s t)  (: n #s m #t (m <= n && snip s (n - m) n = t))
-   (splits s c) ((: (g i st acc) (? (i < tally s) (? (s i = c) (g (i + 1) (i + 1) (snip s st i . acc))
-                                                       (g (i + 1) st acc))
+   (splits s c) ((: (g i st acc) (? (i < #s) (s i = c ? (g (i + 1) (i + 1) (snip s st i . acc))
+                                                        (g (i + 1) st acc))
                                     (rev (snip s st #s . acc)))) 0 0 ())
    (dir? p)     (two? (readdir p))
-   (fsize p)    (: st (stat p) (? (two? st) <st ()))
+   (fsize p)    (stat p @ (s . _) s)
    ; fsize answers () for missing and 0 for empty, and both are nil -- so it
    ; cannot double as an existence test. a 0-byte file is a perfectly good file
    ; and served 404 for it until `sb` tried to pull an empty blob over http.
@@ -80,9 +75,10 @@
                     (? !(hot? q) ()
                        (: j (jug 0) buf (cask 65536)
                           (go _) (: k (swig q buf)
-                                    (? (charm? k && 0 < k) (: _ (say j (snip buf 0 k)) (go ()))
-                                       (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
-                          _ (go ()) _ (close q) (slurp j))))
+                                    (charm? k && 0 < k ?
+                                     (say j (snip buf 0 k), go ())
+                                     (see q @ -1 0 c (put j c, go ()))))
+                          (go (), close q, slurp j))))
    (gulp f)
    (: sz (fsize f)
       n (sz || 0)
@@ -173,7 +169,7 @@
                                   (-1 < h && -1 < l ? (g (i + 3) (acc + string (16 * h + l)))
                                                       (g (i + 1) (acc + string c))))
                                (g (i + 1) (acc + string c)))))) 0 ""))
-   (cutq s)    (: n #s (g i) (? !(i < n) s
+   (cutq s)    (: n #s (g i) (? (i >= n) s
                                 (s i = 63 || s i = 35) (snip s 0 i)
                                 (g (i + 1)))
                 (g 0))
@@ -244,7 +240,7 @@
             + "<body style=\"font:16px ui-serif,Georgia,serif;padding:2rem\">"
             + "<h1>" + p + "</h1><ul>"
             + (p = "/" ? "" "<li><a href=\"..\">../</a></li>")
-            + strcat (map row names) + "</ul>")
+            + catmap row names + "</ul>")
       (reply c 200 "OK" "text/html; charset=utf-8" body head?)))
 
 ; --- serving one request --------------------------------------------------------------

@@ -187,7 +187,9 @@
 (: (sortsplit l) (? (one? l) (. l ()) (one? (cup l)) (. l ())
                     (: r (sortsplit (cuup l)) (. (. (cap l) (cap r)) (. (caup l) (cup r)))))
 )
-(: catmap (compose (flip foldr ()) (compose cat))
+; catmap folds with + rather than cat, so it is band-general: mapping to lists concatenates
+; them, mapping to strings joins them. () is the seed and the do-nothing unit of both.
+(: catmap (compose (flip foldr ()) (compose (+)))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    ; assoc's identity twin, as eleq is elem's: a key that is a nom or a charm wants no
    ; structural walk, and `==` says so in one word.
