@@ -867,7 +867,7 @@ test_root: host
 test_fat32: host
 	@echo TEST test/gate/fat32.sh
 	@sh test/gate/fat32.sh $(ho) $(ho)/love
-# test_cpio -- apps/cpio/cpio.l + its face against GNU cpio, both ways over newc. Separate
+# test_cpio -- apps/cpio.l's wire + its face against GNU cpio, both ways over newc. Separate
 # from test_gz for the same reason test_gz is separate from the laws: the system tool
 # is the only oracle that can catch a format two of our own functions agree on. This
 # is the wire `make distro-initramfs` cuts its image with.

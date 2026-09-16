@@ -305,7 +305,7 @@ moon_mid = apps/moon/floor.l apps/moon/lex.l apps/moon/cpp.l apps/moon/parse.l \
 # the archives: the codec, then the two containers over it. a kore member rather than
 # a crew one because the distro's /bin IS the kore cat -- a userland that cannot open
 # a tarball is not one, and these are the tools that open every tarball there is.
-kore_arc = apps/gz.l apps/tar.l apps/cpio/cpio.l apps/cpio/cpiocmd.l
+kore_arc = apps/gz.l apps/tar.l apps/cpio.l
 # the tls stack and the multi-call door that ends kore's cat
 kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/client.l \
   apps/kore/wget.l apps/kore/kore.l
@@ -472,7 +472,7 @@ syntax: $(ho)/syntax.vim
 #
 # The kernel stays the one imported artifact (BZIMAGE, default the host's).
 
-# THE CUT IS OURS END TO END NOW -- kore's find, apps/cpio/cpio.l and apps/gz.l where the
+# THE CUT IS OURS END TO END NOW -- kore's find, apps/cpio.l and apps/gz.l where the
 # host's find | cpio | gzip -9 stood. $(mabs) because the pack runs INSIDE a `cd`, and
 # $m is spelled relative to the tree root.
 mabs         = $(abspath $m)

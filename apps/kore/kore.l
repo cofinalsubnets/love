@@ -37,7 +37,7 @@
 ;   kore html2text [-w N] [F..]      a page's prose, laid out (apps/kore/lens.l)
 ;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l); tar and cpio the
-;   kore tar czf|xzf|tzf ARCHIVE      two containers over it (apps/tar.l, apps/cpio/). these
+;   kore tar czf|xzf|tzf ARCHIVE      two containers over it (apps/tar.l, apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
 ;   kore xxd [-r] [F..]              the canonical dump, and back again
@@ -557,7 +557,7 @@ every tool answers --help and --version, and -h where the letter is free
   echo seq yes true false basename dirname     ... and the trivia
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
   tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive (apps/tar.l)
-  cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (apps/cpio/)
+  cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
   xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs
   cal [[MONTH] YEAR]                           a month, laid out (weeks open Sunday)
