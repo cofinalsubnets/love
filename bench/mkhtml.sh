@@ -22,16 +22,11 @@ cat <<'HEAD'
 <title>love benchmarks</title>
 <style>
   /* tokyo-night, matching the site (style.css): periwinkle on polar-night blue,
-     the quay bitmap face, green = a kept (fastest) answer. */
-  @font-face {
-    font-family: "Quay 16";
-    src: url("../web/fonts/quay16.woff") format("woff");
-    font-display: swap;
-  }
+     a bitmap face where the box has one, green = a kept (fastest) answer. */
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body { background: #04060e; color: #a9b1d6;
-         font-family: "Quay 16", "Px437 IBM VGA8", "DejaVu Sans Mono",
+         font-family: "Px437 IBM VGA8", "DejaVu Sans Mono",
                       ui-monospace, Menlo, Consolas, monospace;
          font-size: 16px; line-height: 1.5; font-variant-ligatures: none;
          -webkit-font-smoothing: none; font-smooth: never;

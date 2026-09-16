@@ -342,18 +342,16 @@ test_cli: host
 	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
 	@sh test/gate/cli.sh $m
 
-# the front page's icon and fonts are laid (tools/mkicon.l, tools/mkfont.l) and checked in for
-# github pages: a lay that differs from the tree means someone edited a source without
-# `make web`. the page and its stylesheet are written by hand and lay nothing
+# the front page's icon is laid (tools/mkicon.l) and checked in for github pages: a lay
+# that differs from the tree means someone edited a source without `make web`. the page
+# and its stylesheet are written by hand and lay nothing
 test_web: host
-	@echo TEST tools/mkicon.l tools/mkfont.l
+	@echo TEST tools/mkicon.l
 	@mkdir -p out/.w
 	@env -u LOVE_NO_IMAGE $m tools/mkicon.l love/quay/cga_8x8.c 3 32 out/.w/favicon.png 2>/dev/null
-	@env -u LOVE_NO_IMAGE $m tools/mkfont.l love/quay/cleat_8x16.c 12 out/.w/quay16.woff "Quay 16"
 	@cmp -s out/.w/favicon.png web/favicon.png \
-	  && cmp -s out/.w/quay16.woff web/fonts/quay16.woff \
 	  || { echo "  FAIL: a committed web asset is behind web/ -- run make web and commit"; exit 1; }
-	@echo "  web: ok -- the icon and the font are what web/ lays"
+	@echo "  web: ok -- the icon is what web/ lays"
 test_sb: host out$(hsuf)/sb
 	@echo TEST apps/sb/sb.l + test/host/sb.l
 	@rm -rf out/.sbtest

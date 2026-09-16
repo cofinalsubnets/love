@@ -285,7 +285,7 @@
             'iron ["/" 245 240 "an iron poker for the fire, smells like rust"]
             'cloth ["~" 175 133 "a large colored cloth square carefully folded"]
             'mirror ["@" 93 54 "a mirror, but you look back from somewhere else"]
-            'sign ["¶" 137 94 "a hand-painted wooden sign, lettering illegible"]
+            'sign ["¶" 137 94 "a hand-painted wooden sign, the lettering illegible"]
             'bells ["≡" 180 137 "a heavily thumbed technical manual gathers dust on the top shelf"]
             'shelf ["≡" 180 137 "one book lies half buried in a pile of water-damaged magazines"
                     '("Muse"
@@ -508,15 +508,15 @@
  w-car    "a car takes you off your feet (~)"
  w-run    "a car runs the ~ down (~)"
  w-wall   "~ holds"
- w-glass  "nothing is there, and it holds"
- w-mirror "the mirror takes you, and lets you out of another"
- w-alone  "the mirror shows you yourself, and keeps you"
+ w-glass  "you are driven back"
+ w-mirror "in a blink you're someone else"
+ w-alone  "the mirror is solid"
  w-stair  "no stair here"
  w-penny  "you pocket ~ pennies"
  w-ring   "you strike the circle, and it puts you back"
- w-circle "and there it is, at the edge of everything: the circle"
+ w-circle "a circle clears out in the woods up ahead"
  w-empty  "the box, and nothing in it now"
- w-stone  "a standing stone carved deeply with the numeral ~"
+ w-stone  "a standing stone deeply carved with the numeral ~"
  w-shut   "the door will not open now"
  w-bar    "~  hp ~/~  pennies ~"
  w-bar-up "~  hp ~/~  pennies ~  < climbs"
@@ -548,7 +548,7 @@
  ; the tower's fauna: name, glyph, pen, hp, bite, pace. pace is turns per stir, so
  ; heaven's shapes take two and a climber who would rather not fight walks past them.
  mob-book '(("rat" 114 137 3 1 1) ("lanternfly" 108 175 3 1 1)
-            ("gnome" 119 101 6 2 1) ("goblin" 103 71 8 2 1) ("hobgoblin" 71 64 11 3 1)
+            ("gnorm" 119 101 6 2 1) ("goblin" 103 71 8 2 1) ("hobgoblin" 71 64 11 3 1)
             ("d4" 52 189 4 1 2) ("d6" 54 189 6 2 2) ("d8" 56 189 8 2 2)
             ("d12" 100 189 12 3 2) ("d20" 118 189 20 3 2)  ; duodecimal, vigesimal
             ("triangle" 94 213 8 2 2) ("square" 37 213 11 2 2) ("hexagon" 38 213 15 3 2))
@@ -676,47 +676,47 @@
  ; is the cell's own dice, so one tuft always says the same thing and its neighbour
  ; says another. a name with no row here is silent.
  flavour
- '(("tuft"       "the grass here has gone to seed"
-                 "a rat chews the legs of a fat lanternfly"
-                 "lanternflies swarm the moldering carcass of a rat")
+ '(("tuft"       "the grass here went to seed"
+                 "a rat chews on the legs of a fat lanternfly"
+                 "lanternflies preen on a flat dead rat")
    ("grass"      "the brush tips of the grass tickle below your knees"
                  "seed clusters cling tenaciously to your legs"
                  "the low grass canopy smells of earthen mildew")
    ("aster"      "an aster, pink and past its best"
                  "the petals are going brown at the edge"
-                 "it tries to face the light it remembers")
-   ("goldenrod"  "it stands out from the grass like a vein of yellow ore"
-                 "you've heard it causes allergies"
+                 "it looks for the light it first remembers")
+   ("goldenrod"  "goldenrod sways over the grass like torches"
+                 "you've heard goldenrod causes allergies"
                  "the air is thick with pollen")
-   ("stream"     "the calm sound of the stream runs silver quick above the stones"
-                 "to the minnows in the stream your passing is like a fast moving rock"
+   ("stream"     "the stream murmurs over the stones"
+                 "the minnows take no note of you"
                  "you feel like you've stepped in this stream before")
-   ("floor"      "filth adheres to sticky gnomish slime trails on the floor and walls"
-                 "the floorboards give a little, as if remembering wind"
-                 "dim light spins through the motes kicked up by your passage")
-   ("door"       "a door, broken-hinged and swinging from its frame"
-                 "a low-set doggy door so gnomes can come and go as they please"
+   ("floor"      "filth adheres to sticky gnormish slime trails on the floor and walls"
+                 "the cracked floor tiles shift a little underneath your step"
+                 "the dust in the air has settled to a heavy layer")
+   ("door"       "a heavy door with a broken lock"
+                 "a low-set dog door so gnorms can come and go as they please"
                  "you turn sideways to get through")
    ("platform"   "you wonder what happens if you step on the wrong color square"
                  "you try and keep your eyes on the platform"
                  "you feel like a pawn in a game")
-   ("steps"      "the stairs between the levels baffle your sense of geometry"
+   ("steps"      "the stairs between the platforms baffle your sense of geometry"
                  "you're sure the plot won't let you fall, better not tempt fate though"
-                 "the stairways arcing through the void look almost procedurally generated")
+                 "the arching catwalks look procedurally generated")
    ("runnel"     "a quick thread of water leaves lightly as it came"
                  "cooler than the air, deeper than it looks"
                  "light shimmers on the submerged roots of the hedges")
    ("rubble"     "stone that used to be somewhere higher"
-                 "it turns underfoot"
+                 "rubble turns underfoot"
                  "someone swept it into this corner")
    ("gravel"     "gravel crunches underfoot"
                  "you recall a poem about a pebble"
                  "small stones, worn round")
    ("bones"      "the cars have crushed these bones past hope of recognition"
-                 "apparently even gnomes have bones"
+                 "apparently gnorms have bones"
                  "rats from the level below consumed this misfortunate denizen")
    ("quartz"     "a seam of quartz retains a fraction of your light"
-                 "it channels light, making it warmer than the stone around it"
+                 "the clear stone feels a shade warmer than the stone around it"
                  "a quartz deposit brightens the wall here for a step")
    ("cobbles"    "cobbles, laid long ago to harden muddy earth"
                  "worn hollow to the ancient seams"
@@ -731,47 +731,46 @@
                  "you wonder where the water pressure comes from"
                  "the pennies at the bottom have hardened to a mineral crust")
    ("star"       "a wandering star levitates at ankle height"
-                 "is it hot? you dare not touch"
+                 "is it hot? you dare not touch and see"
                  "you thought the stars were merely far away, but some it seems are truly small")
    ("stair"      "a stair to the next level. watch your step"
                  "the steps are worn hollow in the middle"
                  "the chill on the steps defies narration")
-   ("pennies"    "copper stamped by time with verdigris"
-                 "how many others counted these pennies before?"
-                 "the pennies are not the number of pennies"
-                 "pennies still warm from another thumb's eager tallying")
+   ("pennies"    "copper circles dressed by time with verdigris"
+                 "you could count pennies all day"
+                 "a pile of pennies eager to be stacked and tallied")
    ("rat"        "a plump rat, it looks healthy and happy"
                  "a dirty rat, its paws leave little black prints"
                  "a feral rat, licking open wounds"
-                 "it meets your eye and does not hurry")
-   ("lanternfly" "a lanternfly, brown black red and white"
-                 "they're said to be invasive, but they seem quite at home here now"
-                 "it lands on you as though you were furniture")
-   ("gnome"      "the gnomes of this land have grown verminous"
-                 "a worm the length of your arm, you feel bad for it"
-                 "even a gnome will turn, or so the saying goes")
-   ("goblin"     "a goblin wearing someone's stolen work uniform"
-                 "it's working really hard at its job and it wants you to know that")
-   ("hobgoblin"  "it's like a goblin but more of a team player"
-                 "earned every ounce of its success")
-   ("d4"         "a d4, a hedged bet"
-                 "does it like being least?"
-                 "four tetrahedral tips gleam menacingly")
-   ("d6"         "a d6, a square deal"
-                 "the pips are worn smooth on the six")
-   ("d8"         "a d8, somehow still six yet more"
-                 "it has settled on nothing")
-   ("d12"        "a d12, with more faces than meanings"
-                 "it rolled so far to get here")
-   ("d20"        "a d20, waiting for a natural"
-                 "it waits for its number to come up")
+                 "it meets your eye and waits for you to move")
+   ("lanternfly" "a mature lanternfly, brown black red and white"
+                 "the lanternfly nymph is black and white, very beautiful"
+                 "they're said to be invasive, but they seem at home here now")
+   ("gnorm"      "the gnomes of this district grew verminous"
+                 "a wormy little guy the length of your arm"
+                 "even a gnorm will turn, or so the saying goes")
+   ("goblin"     "a goblin wearing its work uniform"
+                 "the goblin is just trying to do its job"
+                 "the goblin is working really hard at its job")
+   ("hobgoblin"  "a big goblin who ate other goblins with less work ethic"
+                 "the hobgoblin earned every ounce of its success")
+   ("d4"         "a four-sided die"
+                 "four triangular tips gleam pointedly")
+   ("d6"         "a six-sided die"
+                 "its faces slam down heavily as it rolls")
+   ("d8"         "an eight-sided die"
+                 "pointier than a d6 and bigger than a d4")
+   ("d12"        "a twelve-sided die"
+                 "it wobbles as it rolls on its pentagon corners")
+   ("d20"        "a twenty-sided die"
+                 "it does not look very manacing")
    ("triangle"   "a triangle"
-                 "its three angles always add up to 180 degrees"
-                 "this triangle has one eye")
+                 "its angles add up to 180 degrees"
+                 "the triangle's one eye stares at you")
    ("square"     "a square"
-                 "the square looks to be in its element here")
+                 "the square's four eyes center on you")
    ("hexagon"    "a hexagon"
-                 "the hexagon has seven eyes"))
+                 "the hexagon's seven eyes gaze through you"))
 
 
  ; a name's lines, and the one it says this time
@@ -837,13 +836,13 @@
 
  ; ..and the step aside: to either side of the car's line, where a cell is free
  (shove g m o) (: sb (g 'sb)
-                  cs (roll sb 2 = 0 ? [[(m 'dy) (0 - m 'dx)] [(0 - m 'dy) (m 'dx)]]
-                                      [[(0 - m 'dy) (m 'dx)] [(m 'dy) (0 - m 'dx)]])
+                  cs (roll sb 2 @ 0 [[(m 'dy) -(m 'dx)] [-(m 'dy) (m 'dx)]]
+                                    [[-(m 'dy) (m 'dx)] [(m 'dy) -(m 'dx)]])
                   (go l) (two? l ? (: c <l nx (o 'x + <c) ny (o 'y + <>c)
                                       (blocked? g nx ny ? (go >l) (pins o 'x nx 'y ny))))
                   (go cs))
  (swerve g m) (: d (g 'd) sb (g 'sb)
-                 c (roll sb 2 = 0 ? [(m 'dy) (0 - m 'dx)] [(0 - m 'dy) (m 'dx)])
+                 c (roll sb 2 @ 0 [(m 'dy) -(m 'dx)] [-(m 'dy) (m 'dx)])
                  (corner? d (m 'x) (m 'y) <c <>c ? (car-head m <c <>c)))
 
  ; off the map, and in again by a gate: a road's border cell, headed inward
@@ -878,22 +877,21 @@
 
  ; what she says is the floor's: one page each, and the box reflows a long line
  her-book '(("A wizened gnome enjoys the garden."
-             "\"Rats tend the hedges underneath the roots.\" She aims a bony claw below."
-             "\"Ye'd blanch to ken their deepwrought burrowings.\" "
+             "\"Rats tend the hedges from underneath the roots.\" She aims a bony claw below."
+             "\"Ye'd blanch to ken their deepwrought burrowings.\""
              "When you blink she's gone."
              "-- any key --")
-            ("A wizened gnome leans on a lamppost."
-             "\"Ash and metal oxen rule the pathways of this poisoned land.\""
-             "\"Even the gnomes of this unhallowed district grew verminous.\""
-             "She snatches a bysquirming gnome and slurps it down in one heroic gulp."
-             "\"Disgusting.\" Orozcalia sublimates into an oily mephitis and vanishes."
+            ("A wizened gnome leans against a lamppost."
+             "\"Ash and metal oxen rule the pathways of this poisoned land. Even the gnomes of this unhallowed district grew verminous.\""
+             "She plucks a squirming gnorm then slurps it down in one heroic gulp and sneers. \"Disgusting.\""
+             "Orozcalia sublimates to an oily mephitis and vanishes."
              "-- any key --")
-            ("\"This tongue won't form the sound these poor shapes call their dirtened nowhere.\""
-             "Orozcalia spits and signs a cantrip of warding."
-             "\"Mere quantities. Hurry and get on now.\""
+            ("\"My tongue won't form the sound these poor shapes call their dirtened nowhere.\" Orozcalia spits and signs a gesture of warding."
+             "\"Mere quantities, get on now, careful not to fall.\""
+             "The gnome points upward and evaporates."
              "-- any key --"))
  (her-lines lvl) (peep her-book (lvl - 1) <her-book)
- (her-at? g x y) (: h (g 'her) (h && x = h 'x && y = h 'y))
+ (her-at? g x y) (g 'her @ {'x ^x 'y ^y} 1)
  (meet-her g) (pins g 'her () 'sign (her-ttl . her-lines (g 'lvl)))
 
  ; everything the painter draws over the floor: the climber, her, the mobs
@@ -1162,9 +1160,9 @@
                  _ (pin (g 'sb) () >p0)
                  _ (pins g 'd d 'lvl (1 + g 'lvl))
                  _ (dress d (g 'lvl) (g 'sb))
-                 _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in))
-                 ; a floor climbed is twenty more of the bar, and the bar filled by it
-                 _ (pins (g 'p) 'mx (g 'p 'mx + climb-hp) 'hp (g 'p 'hp + climb-hp))
+                 _ (pins (g 'p) 'x <(d 'in) 'y <>(d 'in)
+                  ; a floor climbed is twenty more of the bar, and the bar filled by it
+                  'mx (g 'p 'mx + climb-hp) 'hp (g 'p 'hp + climb-hp))
                  _ (stock g)
                  (note g (fill w-floor [(here g)]))))
 
@@ -1197,18 +1195,18 @@
                    ((1 "Who are you?" who)
                     (2 "What is this place?" here)
                     (3 "Nope." bye)))
-            (who ("\"Orozcalia the calculator.\"")
+            (who ("\"Orozcalia the Calculator.\"")
                  ((1 "Calculator?" name)
                   (2 "Ok." start)))
-            (name ("\"Number in, number out.\"  She gestures at the stones.")
+            (name ("\"Numbers.\"  She gestures at the stones.")
                   ((1 "What?" card)
                    (2 "I see." start)))
             (here ("\"If you don't know that, pumpkin, then I dread we're in a pickle.\"  She pokes the fire.")
                   ((1 "Oh..." start)))
-            (card ("\"Recursive or coinductive, no job too big. Take my card.\""
+            (card ("\"No job too big. Take my card.\""
                    "She hands you a tasteful business card:"
-                   "Orozcalia the Calculator -- Ranked Numeromatrix -- No Job Too Big"
-                   "[beyond city limits, well-bottom at forest-edge, no appt. needed]")
+                   "Orozcalia the Calculator -- No Job Too Big"
+                   "[beyond city limits, well-bottom at forest-edge]")
              ((1 "Gosh." start)))
             (bye ("\"You know what to do.\""
                   "She pokes the fire.")
@@ -1232,27 +1230,25 @@
  (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) (dx * dx + 4 * dy * dy))
 
  ; the board's reach from the fire, in the ring's own quarter-unit measure
- (circle-far g) (: d (g 'd) w (d 'w) h (d 'h) cx (g 'cx) cy (g 'cy)
-                   dx (cx < w - cx ? (w - cx) cx) dy (cy < h - cy ? (h - cy) cy)
-                   (dx * dx + 4 * dy * dy))
+ (circle-far {'d {'w w 'h h} 'cx cx 'cy cy})
+  (: dx (cx < w - cx ? (w - cx) cx) dy (cy < h - cy ? (h - cy) cy) (dx * dx + 4 * dy * dy))
 
  ; the ring's radius in rows, and -1 while there is no ring
- (circle-r g) ('ring = g 'phase ? (g 'r) -1)
+ (circle-r g) (g 'phase @ 'ring (g 'r) -1)
 
 
 
  ; how far out the pink front stands, as a share of the board's reach: past the corner
  ; -- which is to say nowhere on the board -- until the ring is half its scale, and then
  ; in to a little under half the board by the time the ring is a point
- (pink-front g) (: r (circle-r g)
-                   (? (r < 0 || pink-start <= r) 1.0
-                      (pink-floor + (((1.0 - pink-floor) * r) / pink-start))))
+ (pink-front g) (circle-r g @ r (r < 0 || pink-start <= r ? 1.0
+                 (pink-floor + (((1.0 - pink-floor) * r) / pink-start))))
  (ramp-pen rp v) (: m (#rp - 1)
                     n (int (((v + pink-span) * #rp) / (2.0 * pink-span)))
                     (rp (? (n < 0) 0 (m < n) m n)))
  (skin-pen g x y) (: v (peep (g 'sk) [y x] 0.0)
                      f (pink-front g)
-                     (ramp-pen ((circle-q g x y) > (f * f * circle-far g)
+                     (ramp-pen (circle-q g x y > f * f * circle-far g
                                 ? pink-ramp grass-ramp)
                                v))
 
@@ -1261,7 +1257,7 @@
  ; grid squares, not a box, so it stays round at every size it passes through
  (on-ring? g x y) (: r (circle-r g) q (circle-q g x y)
                      (? (r < 0) 0 (r = 0) (q = 0)
-                        (sq (2 * r - 1) <= q < sq (2 * r + 1))))
+                      (sq (2 * r - 1) <= q < sq (2 * r + 1))))
  (ring-in g) (sq (2 * circle-r g - 1))                  ; the measure the ring starts at
 
  ; the walls nobody sees: past them is not walked. the closing's own, then the ring's
@@ -1294,9 +1290,9 @@
  ; the ring, in a row a turn until it is the point, which is the end
  (vale-tick g) (g 'phase @
    'close (: wr (g 'wr - close-step)
-             _ (? (wr <= oct-y + 1)
-                  (pins g 'phase 'ring 'r (g 'r0) 'wq (sq (2 * (oct-y + 1))), note g w-circle)
-                  (pins g 'wr wr 'wq (sq (2 * wr))))
+             _ (wr <= oct-y + 1 ?
+                (pins g 'phase 'ring 'r (g 'r0) 'wq (sq (2 * (oct-y + 1))), note g w-circle)
+                (pins g 'wr wr 'wq (sq (2 * wr))))
              (push-in g (g 'wq)))
    'ring (: _ (pin g 'r (g 'r - 1))
             _ (0 < g 'r ? (push-in g (ring-in g)))
@@ -1319,7 +1315,7 @@
                     _ (pins g 'scene k 'd d 'loot (sc 'loot) 'her (sc 'her) 'ms ())
                     _ (pins (g 'p) 'x x 'y y)
                     _ (pin g 'vis (lit-all d))
-                    (k @ 'vale (doom g) ()))
+                    (k @ 'vale (doom g)))
  (exit-at g x y) (peep (peep (g 'd) 'exits {}) (x + g 'd 'w * y) ())
 
 
@@ -1334,13 +1330,12 @@
                         'sign (doom-ttl . doom-lines) 'her ())))
 
  ; the box, opened: the token is drawn here and named here, and the box is empty after
- (open-box g) (? (g 'token) (note g w-empty)
-                 (tokens (roll (g 'sb) #tokens) @ tk
-                  (pins g 'token tk 'sign (box-ttl . map (l \ fill l [tk]) box-lines))))
+ (open-box g) (g 'token ? (note g w-empty)
+               (tokens (roll (g 'sb) #tokens) @ tk
+                (pins g 'token tk 'sign (box-ttl . map (l \ fill l [tk]) box-lines))))
 
  ; the tree: a node's sign is its lines, then its choices numbered, then the foot
- (talk-node k) (:- (go her-tree)
-   (go l) (two? l ? (: e <l (k = <e ? e (go >l))) ()))
+ (talk-node k) (: (go (e . u)) (<e @ ^k e (go u)) (go her-tree))
  (joins-with sp l) (? (one? l) "" (one? >l) <l (<l + sp + joins-with sp >l))
 
  ; a choice's line is marked off between the bytes 1 and 2, which fit paints as a button

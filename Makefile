@@ -1142,17 +1142,12 @@ distclean: clean
 valg: host
 	@cat $t > $(ho)/.valg-corpus.l
 	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
-# the site's faces, laid and checked in: github pages serves the tree as it is, so a
+# the site's face, laid and checked in: github pages serves the tree as it is, so a
 # generated file still has to be committed. the front page, index.html, and its
 # stylesheet, web/style.css, are written by hand; the page's island is the markup
 # machine.js drives
-web: fonts web/favicon.png
-fonts: web/fonts/quay16.woff
-web/fonts/quay16.woff: love/quay/cleat_8x16.c tools/mkfont.l $(mdep)
-	@echo 'LOVE	'$@
-	@mkdir -p $(dir $@)
-	@$m tools/mkfont.l $< 12 $@ "Quay 16"
-# ..the favicon: cp437's heart off the 8x8 face, in the palette's red
+web: web/favicon.png
+# the favicon: cp437's heart off the 8x8 face, in the palette's red
 web/favicon.png: love/quay/cga_8x8.c tools/mkicon.l apps/vi/config.l $(mdep)
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m tools/mkicon.l $< 3 32 $@

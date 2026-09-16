@@ -15,7 +15,7 @@
    (hexd c)  (? (c <= 57) (c - 48) (c <= 70) (c - 55) (c - 87))
    (hexv s)  (foldl (\ a i (a * 16 + hexd (s i))) 0 (drop 2 ^#s))    ; "0x7e" -> 126
    (min a b) (a < b ? a b) (max a b) (a < b ? b a)
-   ; --- the source: one row list per cell, in cell order (mkfont.l's reading) ------
+   ; --- the source: one row list per cell, in cell order ---------------------------
    (cell line) (: ps (split "{" line)
                   (? (one? >ps || one? >(split "// [" line)) ()
                      (map (hexv * cap * words) (split "," <(split "}" (ps 1))))))

@@ -1,21 +1,13 @@
 /* the front page's stylesheet, written by hand: apps/vi/config.l's tokyo-night as it was laid.
    periwinkle on polar-night blue, green = a kept answer; the crew fly the name space in
-   aurora teal/cyan. the quay bitmaps set everything: 8x16 cells, crisp at 16px native
-   (so 32px is a clean 2x), and the 8x8 face beside it. both are laid by tools/mkfont.l.
-   the font url is relative to THIS SHEET, not the page: at web/style.css it reaches
-   web/fonts/, so a leading web/ here would ask for web/web/ and quietly fall back. */
+   aurora teal/cyan. the reader's own faces: the quay bitmap lives in the terminal, where
+   the machine paints it, and the page around it is plain sans and mono. */
 :root{--bg:#04060e;--fg:#c0caf5;--dim:#565f89;--rule:#3b4261;--link:#7aa2f7;--pre:#1f2335;--code:#a9b1d6;--edge:#292e42;--slab:#16161e;--mute:#737aa2;--faint:#414868;--hash:#545c7e;--em:#9aa5ce;--glow:122,162,247;--rim:#34406e;--red:#f7768e;--cyan:#7dcfff;--teal:#73daca;}
-@font-face {
-  font-family: "Quay 16";
-  src: url("fonts/quay16.woff") format("woff");
-  font-display: swap;
-}
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   background: var(--bg); color: var(--fg);
-  font-family: "Quay 16", monospace;
+  font-family: sans-serif;
   font-size: 32px; line-height: 1.5;
   max-width: 54em; margin: 0 auto;
   padding: 0.5em 1em 1em;
@@ -47,7 +39,7 @@ p code, li code, dd code { font-family: inherit; font-size: 1em; }
 
 code { color: var(--code); background: var(--pre); border: 1px solid var(--edge);
        border-radius: 3px; padding: .05em .35em; white-space: pre-wrap;
-       font-family: "Quay 16", monospace; }
+       font-family: monospace; }
 pre { background: var(--slab); border: 1px solid var(--rule); border-radius: 6px;
       padding: .9em 1em; margin: 1em 0; overflow-x: auto; line-height: 1.5; }
 pre code { white-space: pre; color: var(--em); }
@@ -72,7 +64,7 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
   background: #000000; border: 1px solid var(--rim); border-radius: 6px;
   box-shadow: 0 0 30px -4px rgba(var(--glow),.28), 0 0 90px -22px rgba(var(--glow),.22);
   padding: .8em; margin-top: 0.5em; display: flex; flex-direction: column;
-  font-family: "Quay 16", monospace;
+  font-family: monospace;
 }
 .term[hidden], .app[hidden] { display: none; }
 .term { position: relative; color: #ffffff; cursor: text;

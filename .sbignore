@@ -30,7 +30,6 @@ test/proof/lean/uugen.lean
 # never shipped (the machine's pair is `make site-wasm`'s copy out of out/). the page,
 # index.html, and its stylesheet, web/style.css, are written by hand and ship with the source
 web/favicon.png
-web/fonts
 web/wasm/love.wasm
 web/wasm/love.image
 

@@ -316,7 +316,7 @@
    _ (pin (g 'd) 'solid '(6))                           ; the floor that lays glass names it
    _ (pins (g 'p) 'x 3 'y 2)
    _ (crawl-turn g [1 0])
- (test (3 = g 'p 'x) (find (g 'msg) "nothing is there" 0)
+ (test (3 = g 'p 'x) (find (g 'msg) "driven back" 0)
        (clear? (g 'd) 3 2 5 2) (peep (g 'vis) (5 + 9 * 2) 0) !(open? (g 'd) 4 2) (lit? (g 'd) 4 2)))
 
 ; --- heaven: platforms in the void, every one a checkered rhombus with a stairway to the
@@ -350,10 +350,10 @@
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) '(mirror))
    _ (crawl-turn g [1 0])
-   _ (test (1 = g 'p 'x) (find (g 'msg) "keeps you" 0))
+   _ (test (1 = g 'p 'x) (find (g 'msg) "is solid" 0))
    _ (pin (g 'loot) (6 + 9 * 2) '(mirror))
    _ (crawl-turn g [1 0])
- (test (find (g 'msg) "takes you" 0)
+ (test (find (g 'msg) "someone else" 0)
        (|(g 'p 'x - 6) <= 1) (|(g 'p 'y - 2) <= 1) !(6 = g 'p 'x && 2 = g 'p 'y)))
 
 ; the platforms and the steps say what they are
@@ -560,7 +560,7 @@
    (all-in? ks nms) (foldl (\ a k (&& a (elem k nms))) 1 ks)
  (test
   (all-in? (kinds 1) '(rat lanternfly))
-  (all-in? (kinds 2) '(gnome goblin hobgoblin car))   ; ..and the middle's traffic
+  (all-in? (kinds 2) '(gnorm goblin hobgoblin car))   ; ..and the middle's traffic
   (all-in? (kinds 3) '(d4 d6 d8 d12 d20 triangle square hexagon))))
 
 ; --- the make of a floor: a tier is built of its own stuff, and what a cell wears is
@@ -764,7 +764,7 @@
    (until-ring n) (? ('ring = g 'phase) n (200 < n) n (: _ (crawl-turn g 46) (until-ring (n + 1))))
    n (until-ring 0)
    r (circle-r g)
-   _ (test ('ring = g 'phase) (n < 60) (find (g 'msg) "the circle" 0)
+   _ (test ('ring = g 'phase) (n < 60) (find (g 'msg) "a circle" 0)
            (11 <= r) (on-ring? g (g 'cx) (g 'cy - r)) (walled? g (g 'cx) (g 'cy - r))
            (circle-q g (g 'p 'x) (g 'p 'y) < ring-in g))   ; you are inside it
    ; a strike on it: stand just inside and step out
