@@ -269,11 +269,11 @@
  ; the page's own letters serve (quay folds them onto its face).
  ; ..and a fifth thing where there is one: a book the piece opens, its title then its
  ; pages, a stanza to a page
- feat-book {'table ["π" 240 236 "a worn stone table stained with dark liquid"]
-            'throne ["H" 130 94 "a large tree stump carved into an ornate throne sits empty"]
-            'chair ["h" 137 94 "a chair with one leg splintered"]
+ feat-book {'table ["π" 240 236 "a rough stone table stained on top with dark liquid"]
+            'throne ["H" 130 94 "a tree stump carved into an ornate throne sits empty"]
+            'chair ["h" 137 94 "an office chair, the wheels gummed up"]
             'bed ["=" 131 95 "a bed, made and cold"]
-            'crate ["x" 136 94 "a crate holding nothing of value"]
+            'crate ["x" 136 94 "an empty cardboard delivery box"]
             'fountain ["☼" 226 136 "galaxies whirl in the dazzling spray of this fountain"]
             'fire ["w" 208 130 "a fire burned low and red at the coals"]
             'lamp ["¡" 226 178 "the wall-mounted lamp emits a buzzing sodium glow"]
@@ -281,13 +281,13 @@
             'hearth ["▓" 196 88 "a hearth, and the embers in it are still bright"]
             'box ["■" 137 94 "a simple wooden box"]
             'pot ["u" 180 137 "a clay pot, with brown crust dried at the bottom"]
-            'bronze ["o" 178 136 "a bronze bowl, greenish at the rim"]
-            'iron ["/" 245 240 "an iron poker for the fire, it smells like rust"]
-            'cloth ["~" 175 133 "a large square of colored cloth, carefully folded"]
-            'mirror ["@" 93 54 "a mirror, and the one in it is not quite you"]
-            'sign ["¶" 137 94 "a hand-painted wooden sign, the letters are illegible"]
+            'bronze ["o" 178 136 "a bronze bowl, going green at the rim"]
+            'iron ["/" 245 240 "an iron poker for the fire, smells like rust"]
+            'cloth ["~" 175 133 "a large colored cloth square carefully folded"]
+            'mirror ["@" 93 54 "a mirror, but you look back from somewhere else"]
+            'sign ["¶" 137 94 "a hand-painted wooden sign, lettering illegible"]
             'bells ["≡" 180 137 "a heavily thumbed technical manual gathers dust on the top shelf"]
-            'shelf ["≡" 180 137 "one book stands out on a shelf of water-damaged magazines"
+            'shelf ["≡" 180 137 "one book lies half buried in a pile of water-damaged magazines"
                     '("Muse"
                       ("by Donald Revell"
                        ""
@@ -340,7 +340,7 @@
                        "when no muse visits, when crazy animal sounds"
                        "make sense and I read the truth with my hands."))]}
  (feat-of k) (peep feat-book k '("?" 250 244 ""))
- (feat-face k) (: r (feat-of k) [(r 0) (r 1) (r 2)])
+ (feat-face k) (take 3 $ feat-of k)
  (feat-line k) (feat-of k 3)
  (feat-lines k) (peep (feat-of k) 4 ())
 
@@ -374,9 +374,9 @@
  (bell-page g n r) (: line ("B(" + show n + ") = " + show <r)
                       cols (peep (g 'd) 'cols (g 'd 'w))
                       (? (cols - 10 < #line) (pins g 'bell () 'sign (mark-ttl . mark-lines))
-                         (pins g 'bell [n r]
-                               'sign (bell-ttl . (["" line ""] + map choice-line bell-choices
-                                                  + ["" (fill bell-foot [(n + 1)])])))))
+                       (pins g 'bell [n r] 'sign
+                        (bell-ttl . ["" line ""] + map choice-line bell-choices
+                                                 + ["" (fill bell-foot [(n + 1)])]))))
  (bell-open g) (bell-page g 0 [1])
 
  ; the key on a page: 1 turns it, 2 puts the book back, and anything else shows it again
@@ -483,15 +483,6 @@
                                   || k && (<k = 'fire || ember-pens <k)))
               ls (filter live? ^(w * d 'h))
               (pin d 'live ls, ls))))
-
-
-
-
-
-
-
-
-
 
 
 
@@ -618,7 +609,7 @@
         0.40 (0.20 + dice i c 23 45 / 100.0)))
  (tune? c) ((dice (c // #blue-phrases) 0 31 100) < 34)
  (blue-bars c) (: ph (blue-phrases (c % #blue-phrases))
-                  (v i) (vox (i % 2 = 0 ? "tri" "sqr")
+                  (v i) (vox (i % 2 ? "sqr" "tri")
                              (ph i - blue-drop) 0.95 0.52)
                   [(map v ^#ph)])
  (middle-bars c) (? (tune? c) (blue-bars c)
@@ -673,7 +664,7 @@
 
  ; every sample is a closure call, so the wasm seat -- slower, and its page resamples
  ; any rate -- plays at a third of the 48k every card takes
- song-rate (love-arch = 'wasm ? 16000 48000)
+ song-rate (love-arch @ 'wasm 16000 48000)
  song-cps 0.5                                           ; cycles a second
  song-chunk (song-rate // 30)                           ; a frame's worth, thirty a second
  song-gain 5200.0
@@ -818,7 +809,7 @@
  (car-head m dx dy) (pins m 'dx dx 'dy dy 'gl (car-glyph dx dy))
  (car-back m) (car-head m (0 - m 'dx) (0 - m 'dy))
  (street? d x y) (1 = dat d x y)
- (road? d x y) (: t (dat d x y) (t = 1 || t = 6))
+ (road? d x y) (dat d x y @ (1 || 6) 1 0)
 
 
  ; a corner is a cell whose lane runs the way of the turn: only a crossing has a lane
@@ -1066,7 +1057,7 @@
  (meet g m) (m 'met ? ()
              (: _ (pin m 'met 1)
                 s (mutter (roll (g 'sb) 97) (m 'nm))
-              (s ? (note g s))))
+              (s && note g s)))
 
 
  ; ..and what it was carrying, which is pennies and always pennies. a pile already on
@@ -1095,14 +1086,9 @@
  ; what the ground underfoot has to say for itself -- "" where nothing is strewn. the
  ; line is the cell's, off a second salt, so it does not follow which thing lies there
  (underfoot g x y) (: d (g 'd) sd (peep d 'sd 0) k (dice x y (1 + sd) 97)
-                    (dat d x y @ 2 (mutter k "stair")
-                                 3 (mutter k "stream")
-                                 4 (mutter k "floor")
-                                 5 (mutter k "door")
-                                 7 (mutter k "steps")
-                                 8 (mutter k "platform")
-                                 (strewn (make d) x y sd @ r
-                                  (two? r ? (mutter k (r 4)) ""))))
+                    (mutter k $ dat d x y @ 2 "stair" 3 "stream" 4 "floor"
+                                            5 "door" 7 "steps" 8 "platform"
+                                            (strewn (make d) x y sd @ r (two? r ? (r 4)))))
  (tread g x y) (underfoot g x y @ s (s && note g s))
 
 
@@ -1129,10 +1115,10 @@
                   (? (her-at? g nx ny) (circle? g ? (meet-her-vale g) (meet-her g))
                      (m && m 'car) (run-down g m)
                      m (strike g m)
-                     (walled? g nx ny) ('ring = g 'phase ? (ring-bump g) (note g w-glass))
-                     (it && <it = 'mirror) (mirror g i)
-                     (it && <it = 'stone) (note g (fill w-stone [<>it]))
-                     (it && <it = 'box) (open-box g)
+                     (walled? g nx ny) (g 'phase @ 'ring (ring-bump g) (note g w-glass))
+                     (<it = 'mirror) (mirror g i)
+                     (<it = 'stone) (note g (fill w-stone [<>it]))
+                     (<it = 'box) (open-box g)
                      (it && <it != 'penny) (bump-feat g <it)
                      (6 = dat (g 'd) nx ny) (note g w-glass)
                      !(open? (g 'd) nx ny) (note g (fill w-wall [(here g)]))
