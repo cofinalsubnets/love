@@ -311,7 +311,7 @@ kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/clien
   apps/kore/wget.l apps/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
-  apps/fat/fat.l apps/fat/fatcmd.l \
+  apps/fat.l \
   apps/source.l apps/lapiz.l \
   apps/libra/salt.l apps/libra/libra.l apps/vi/hueweb.l apps/kiosko/web.l \
   apps/harp/harp.l apps/harp/play.l \

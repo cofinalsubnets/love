@@ -1344,7 +1344,7 @@ lvm(k_lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
   ai_musttail return Next(1); }
 
-// --- rung 5: the disk -- the block door apps/fat/fat.l rides, driven by inle/blk.c. DMA
+// --- rung 5: the disk -- the block door apps/fat.l rides, driven by inle/blk.c. DMA
 // rides a love string's own heap bytes: nothing allocates between post and completion, so
 // the collector cannot move the buffer under the device.
 // (disk _)         -> the sector count, 0 when no disk.

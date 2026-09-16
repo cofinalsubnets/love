@@ -859,7 +859,7 @@ test_gz: host
 test_root: host
 	@echo TEST test/gate/root.sh
 	@sh test/gate/root.sh $(ho) $(ho)/love
-# test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over apps/fat/fat.l.
+# test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over apps/fat.l.
 # not test_fat, which gates the fat container (seed-universal U1) and shares only a
 # word. test/fat.l proves the filesystem's own laws over a cask, needing nothing
 # outside; this is the half only another implementation can say, and mtools is it --
