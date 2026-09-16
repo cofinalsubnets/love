@@ -59,7 +59,7 @@
    (gripe msg) ['gripe () () () msg]
    (gripe? ('gripe . _)) 1
    ; look answers a row's first value; lookr the whole tail, for an arity range
-   (look tbl k d) (: (go l) (atom? l ? d (: e <l (<e == k ? <>e (go >l)))) (go tbl))
+   (look tbl k d) (: (go l) (one? l ? d (: e <l (<e == k ? <>e (go >l)))) (go tbl))
    (lookr tbl k) (: (go l) (two? l ? (: e <l (<e == k ? >e (go >l)))) (go tbl))
 
    ; --- the node grammar, as data ------------------------------------------------
@@ -100,29 +100,29 @@
    ; this walks the tree and answers 1 or a gripe naming the first offender -- a
    ; shape check, never a type check: it knows `bin` takes three, not that it is typed.
    (clay-ok? c)
-    (: (bad m) (gripe ("clay: " + m))
-       (go x)
-        (? !(two? x) ()                             ; a leaf: a name, a number, a string
-           !(name? <x) (bad "a form whose head is not a tag")
-           (: h <x n #>x r (lookr clay-tags h)
-              (? !(two? r) (bad ("unknown tag " + string h))
-                 (n < <r) (bad (string h + " wants at least " + show <r + " operands"))
-                 (-1 < <>r < n) (bad (string h + " takes at most " + show <>r + " operands"))
-                 ; the slots holding bare keywords or spellings rather than nodes are
-                 ; skipped: a gdecl's `(static)`, an edef's `(nom expr)` and a full
-                 ; fn's or proto's attrs would each read their head as a tag.
-                 (: (kids (e . l))
-                     (two? e ? ((name? <e ? (go e) (kids e)) || kids l)
-                               (kids l))
-                    (kids (h @ ('gdecl || 'xdecl) [<>x]
-                               'edef ()
-                               ; ('fn ret ptys), the type under a pointer: a definition
-                               ; names itself at slot 1. ptys ride as a list, not a node.
-                               ('fn && !(string? (x 1))) (. (x 1) (x 2))
-                               ('fn && 4 < n) [(x 2) (x 3) (x 4)]
-                               ('proto && 3 < n) [(x 2) (x 3)]
-                               >x))))))
-       (go c || 1))
+    (:- (go c || 1)
+     (bad m) (gripe ("clay: " + m))
+     (go x)
+      (? (one? x) ()                             ; a leaf: a name, a number, a string
+         !(name? <x) (bad "a form whose head is not a tag")
+         (: h <x n #>x r (lookr clay-tags h)
+            (? (one? r) (bad ("unknown tag " + string h))
+               (n < <r) (bad (string h + " wants at least " + show <r + " operands"))
+               (-1 < <>r < n) (bad (string h + " takes at most " + show <>r + " operands"))
+               ; the slots holding bare keywords or spellings rather than nodes are
+               ; skipped: a gdecl's `(static)`, an edef's `(nom expr)` and a full
+               ; fn's or proto's attrs would each read their head as a tag.
+               (: (kids (e . l))
+                   (two? e ? ((name? <e ? (go e) (kids e)) || kids l)
+                             (kids l))
+                  (kids (h @ ('gdecl || 'xdecl) [<>x]
+                             'edef ()
+                             ; ('fn ret ptys), the type under a pointer: a definition
+                             ; names itself at slot 1. ptys ride as a list, not a node.
+                             ('fn && !(string? (x 1))) (. (x 1) (x 2))
+                             ('fn && 4 < n) [(x 2) (x 3) (x 4)]
+                             ('proto && 3 < n) [(x 2) (x 3)]
+                             >x)))))))
 
    ; --- types --------------------------------------------------------------------
    ; a C declaration is a base plus a declarator wrapped around the name, built
@@ -156,22 +156,20 @@
            "int")
       "int"))
    (cty-dtor t s p)
-    (t @ (h . a . u)
-     (h @ 'ptr (cty-dtor a ("*" + s) 1)
+    (t @- s (h . a . u)
+     (h @- s 'ptr (cty-dtor a ("*" + s) 1)
           'const (? (cptr? a) (cty-dtor <>a ("*const " + s) 1) (cty-dtor a s p))
           'restrict (? (cptr? a) (cty-dtor <>a ("*restrict " + s) 1) (cty-dtor a s p))
           'arr (cty-dtor a ((? p ("(" + s + ")") s) + "[" + cdim <u + "]") 0)
           ; a VLA: the bound is an expression, never a fold
           'varr (cty-dtor a ((? p ("(" + s + ")") s) + "[" + ce <u 0 + "]") 0)
-          'fn (cty-dtor a ((? p ("(" + s + ")") s) + cptys <u) 0)
-          s)
-     s)
+          'fn (cty-dtor a ((? p ("(" + s + ")") s) + cptys <u) 0)))
    ; an array bound: a charm prints, 0 is the unsized `[]`, anything else is a clay
    ; expression -- the generator's `[KN]`
-   (cdim n) (charm? n ? (n = 0 ? "" (show n)) (ce n 0))
+   (cdim n) (charm? n ? (n @ 0 "" (show n)) (ce n 0))
    ; a function pointer's param types -- the one place a type carries a list of types.
    ; none is C's unspecified `()`, which is what a bare (fn ret) means too.
-   (cptys l) (? (two? l) ("(" + sepby ", " (map (\ t (cty t "")) l) + ")") "()")
+   (cptys l) (two? l ? ("(" + sepby ", " (map (\ t (cty t "")) l) + ")") "()")
    ; a full declaration: type wrapped around s; s empty is the abstract declarator
    ; a cast wants
    (cty t s) (: d (cty-dtor t s 0) b (cty-base t) (d @ "" b (b + " " + d)))
@@ -215,20 +213,20 @@
    (cidx? ('deref . ('bin . '+ . _) . _)) 1
               
    (cprec e)
-    (? (atom? e) 100
+    (one? e ? 100
      (<e @ 'bin (look binprec <>e 100)
            'land 40 'lor 35 'cond 30
            'asn 25 'rmw 25 'comma 20
            'un 90 'deref (cidx? e ? 100 90) 'addr 90
            'cast 90 'clit 90 100))
    ; ce: render e, parenthesized when it binds looser than the context wants.
-   (ce e p) (: q (cprec e) t (craw e) (? (q < p) ("(" + t + ")") t))
+   (ce e p) (: q (cprec e) t (craw e) (q < p ? ("(" + t + ")") t))
    ; the arms are the expression grammar: each pattern names its tag and binds its
    ; operands, so clay-tags' arity column and the code agree by construction. the tail
    ; is lax for the ranged rows, and a node too short to bind falls to /*?*/, which
    ; clay-ok? and clay-unsaid refuse before a show ever runs.
    (craw e)
-    (? !(two? e) (string? e ? e (show e))
+    (? (one? e) (string? e ? e (show e))
        (e @
         ('num v) (cnum v)
         ('flo v) (cflo v)
@@ -236,7 +234,7 @@
         ('chr v) (cchr v)
         ('var v) v
         ('bin op l r) (: p (look binprec op 100)
-                         (ce l p + " " + look binop op "?" + " " + ce r (p + 1)))
+                       (ce l p + " " + look binop op "?" + " " + ce r (p + 1)))
         ('land l r) (ce l 40 + " && " + ce r 41)
         ('lor l r) (ce l 35 + " || " + ce r 36)
         ; ?: and = are right-associative, so the tight side flips
@@ -247,7 +245,7 @@
         ; a space where the operand starts with the operator's own character:
         ; `- -x`, never `--x`, which the lexer would read as a predecrement
         ('un u x) (: o (look unop u "?") r (ce x 90)
-                     (o + (? (tally r && (r 0 = o 0)) " " "") + r))
+                   (o + (? (#r && r 0 = o 0) " " "") + r))
         ; cparse desugars `a[i]` to (deref (bin + a i)), so the index shape is the
         ; pattern; the sugar re-desugars on the way in, so G1 holds either way
         ('deref ('bin '+ b i)) (ce b 100 + "[" + ce i 0 + "]")
@@ -259,15 +257,15 @@
         ('cast ty x)
          (: dflt ("(" + cty ty "" + ") " + ce x 90)
             (x @ ('num v && 0 <= v)
-                 (: sfx (? (= ty 'uint && v <= 4294967295) "u" (= ty 'ulong) "ul" ())
+                 (: sfx (? (ty = 'uint && v <= 4294967295) "u" (ty = 'ulong) "ul")
                     (? sfx (cnum v + sfx) dflt))
                  dflt))
-        ('szof x) ("sizeof(" + (? (ctype? x) (cty x "") (ce x 0)) + ")")
+        ('szof x) ("sizeof(" + (ctype? x ? (cty x "") (ce x 0)) + ")")
         ; a call's arguments sit above the comma operator, hence 21
         ('call f as) (ce f 100 + "(" + sepby ", " (map (\ x (ce x 21)) as) + ")")
         ; (dot (deref x) "f") is what `x->f` parses to, so print the arrow back --
         ; unless the deref is an index, where `a[i].f` has already spent it
-        ('dot t f) (? (two? t && (= <t 'deref) && !(cidx? t)) (ce <>t 100 + "->" + f)
+        ('dot t f) (? (two? t && <t = 'deref && !(cidx? t)) (ce <>t 100 + "->" + f)
                       (ce t 100 + "." + f))
         ('init _) (cinit e 0)
         ('clit ty x) ("(" + cty ty "" + ") " + craw x)
@@ -292,7 +290,7 @@
                                       ('init . _) 1) l)
    (cinit x ind)
     (x @ ['dfield a b] ("." + a + " = " + cinit b ind)
-         ['didx a b] ("[" + (? (charm? a) (show a) (ce a 0)) + "] = " + cinit b ind)
+         ['didx a b] ("[" + (charm? a ? (show a) (ce a 0)) + "] = " + cinit b ind)
          ['init l]
           (cnested? l ?
            ("{" + nl + join (map (i \ pad (ind + 1) + cinit i (ind + 1) + "," + nl) l) + pad ind + "}")
@@ -302,23 +300,23 @@
    ; --- declarations -------------------------------------------------------------
    ; one `decl` is one C declaration and may carry several declarators (`int a, *b;`),
    ; sharing a base and each growing its own; split, they would come back two nodes
-   (cstor st) (? !(two? st) "" (sepby " " (map string st) + " "))
+   (cstor st) (one? st ? "" (sepby " " (map string st) + " "))
    ; a fourth element is a register variable's asm("reg") pin, and `register` leads its run
    (cdtor1 d) (: nm <d t <>d v <>>d
                  (cty-dtor t nm 0 + (? (two? >>>d) (" asm(" + cstrlit <>>>d + ")") "")
-                  + (? !(two? v) "" (" = " + cinit v 0))))
+                  + (? (one? v) "" (" = " + cinit v 0))))
    (cdecls ds) (: b (cty-base <><ds)
                   ((? (foldl (\ a d (a || two? >>>d)) () ds) "register " "") + b + " " + sepby ", " (map cdtor1 ds)))
 
    ; --- statements ---------------------------------------------------------------
    ; one space per level, love.c's own indent
-   (pad n) (? (n < 1) "" (" " + pad (n - 1)))
+   (pad n) (n < 1 ? "" (" " + pad (n - 1)))
    (line n s) (pad n + s + nl)
    ; the only node that prints as prose: one `//` per line, so a paragraph keeps shape
    (cnote n txt)
     (: (one1 s) (? #s ("// " + s) "//")     ; no trailing space on a blank line
        (go acc cur l)
-        (? !(two? l) (acc + line n (one1 cur))
+        (one? l ? (acc + line n (one1 cur))
            (: c <l (? (c = 10) (go (acc + line n (one1 cur)) "" >l)
                       (go acc (cur + string c) >l))))
        (go "" "" (map txt (jot #txt))))
@@ -326,18 +324,17 @@
    ; copen lays a header line and the body under it; cclose lays the closer, and its
    ; tail is what lets `}` keep company -- ` else` and ` while (c);` hang off the same
    ; brace. a non-block body has no brace, so the tail falls to its own line.
-   (blk? s) (two? s && (= <s 'blk))
+   (blk? s) (two? s && <s = 'blk)
    (copen n pre hdr s)
-    (? (blk? s) (line n (pre + hdr + " {") + join (map (\ x (cstmt x (n + 1))) <>s))
+    (? (blk? s) (line n (pre + hdr + " {") + join (map (x \ cstmt x (n + 1)) <>s))
        (line n (pre + hdr) + cstmt s (n + 1)))
    (cclose n s tail)
-    (? (blk? s) (line n ("}" + tail))
-       (? #tail (line n tail) ""))
+    (? (blk? s) (line n ("}" + tail)) #tail (line n tail) "")
 
    ; a case/dflt marker sits inline in a switch's flat item list, fallthrough being
    ; the list, so it outdents by one against the statements it labels
    (cstmt s n)
-    (? !(two? s) ""
+    (? (one? s) ""
        (s @
         ['blk items] (line n "{" + join (map (\ x (cstmt x (n + 1))) items) + line n "}")
         ['note x] (cnote n x)
@@ -374,16 +371,16 @@
    ; `} else if (..) {` rather than opening a fresh level
    (cif s n pre)
     (: c <>s th <>>s e <>>>s hdr (pre + "if (" + ce c 0 + ")")
-       (? (atom? e) (copen n "" hdr th + cclose n th "")
+       (? (one? e) (copen n "" hdr th + cclose n th "")
           (<e == 'if) (copen n "" hdr th + cif e n (? (blk? th) "} else " "else "))
           (copen n "" hdr th + copen n (? (blk? th) "} " "") "else" e + cclose n e "")))
    ; a for's first clause carries no `;`, and arrives wrapped as a statement node --
    ; `(decl ..)` or `(expr ..)` -- so both are unwrapped here. an empty clause is ().
-   (cfor a) (? !(two? a) ""
-               (= <a 'decl) (cdecls <>a)
-               (= <a 'expr) (ce <>a 0)
+   (cfor a) (? (one? a) ""
+               (<a = 'decl) (cdecls <>a)
+               (<a = 'expr) (ce <>a 0)
                (ce a 0))
-   (casmop l) (? !(two? l) " :"
+   (casmop l) (? (one? l) " :"
                  (" : " + sepby ", " (map (\ o (cstrlit <o + "(" + ce <>o 0 + ")")) l)))
 
    ; --- top level ----------------------------------------------------------------
@@ -394,7 +391,7 @@
    ; `name(params)`. one spelling, so a forward declaration cannot drift from the
    ; definition it announces -- cfn opens a body under it, a proto ends it with `;`.
    (csig nm at r ps)
-    (join (map (\ a (ctag a + " ")) at) + cty r (nm + "(" + cparams ps + ")"))
+    (join (map (a \ ctag a + " ") at) + cty r (nm + "(" + cparams ps + ")"))
    ; one enum constant: a bare name takes the position C gives it, `(nom expr)` names
    ; its own value -- the only way to say `enum { nf_maxcap = 64 };`
    (cconst k) (? (two? k) (string <k + " = " + ce <>k 21) (string k))
@@ -406,54 +403,51 @@
      + line 0 "};")
    ; the ranged rows of clay-tags are arms here, longest first: `proto 1 4` is four
    ; real spellings, and the arms are what reading arity off `tally >t` would replace
-   (ctop t)
-    (? !(two? t) ""
-       (t @
-        ('note x) (cnote 0 x)
-        ('gdecl d st) (line 0 (cstor st + cdecls d + ";"))
-        ('gdecl d) (line 0 (cstor () + cdecls d + ";"))
-        ('xdecl d) (line 0 ("extern " + cdecls d + ";"))
-        ; cparse keeps the name and nothing else, so a bare (proto n) is the same
-        ; reconstruction a return-type-less fn is; the appended slots are what a
-        ; mutual recursion between two generated functions has no other way to spell
-        ('proto nm ps r at) (line 0 (csig (ctag nm) at r ps + ";"))
-        ('proto nm ps r) (line 0 (csig (ctag nm) () r ps + ";"))
-        ('proto nm ps) (line 0 (csig (ctag nm) () 'int ps + ";"))
-        ('proto nm) (line 0 ("int " + ctag nm + "();"))
-        ('tdef nm ty) (line 0 ("typedef " + cty ty nm + ";"))
-        ['tdef] (gripe "(tdef) carries nothing -- a typedef cparse could not keep")
-        ; an enum definition, one line. a constant takes the position C gives it;
-        ; `(nom expr)` is for the anonymous enum, where position means nothing.
-        ('edef nm ks)
-         (line 0 ("enum " + (? (string? nm || name? nm) (ctag nm + " ") "") + "{ "
-                  + sepby ", " (map cconst ks) + " };"))
-        ('sdef nm fs u) (csdef nm fs (= u 'union ? "union" "struct"))
-        ('sdef nm fs) (csdef nm fs "struct")
-        ('sassert e msg)
-         (line 0 ("_Static_assert(" + ce e 21 + ", " + cstrlit (ctag msg) + ");"))
-        ; a directive owns its line and starts at column 0, nested or not
-        ('cpp-def nm v) (line 0 ("#define " + ctag nm + " " + ce v 100))
-        ('cpp-def nm) (line 0 ("#define " + ctag nm))
-        ('cpp-undef nm) (line 0 ("#undef " + ctag nm))
-        ('cpp-if arms els) (ccpp arms els 1)
-        ('cpp-if arms) (ccpp arms () 0)
-        (gripe ("cannot show top-level " + string <t))))
+   (ctop t) (t @- ""
+    ('note x) (cnote 0 x)
+    ('gdecl d st) (line 0 (cstor st + cdecls d + ";"))
+    ('gdecl d) (line 0 (cstor () + cdecls d + ";"))
+    ('xdecl d) (line 0 ("extern " + cdecls d + ";"))
+    ; cparse keeps the name and nothing else, so a bare (proto n) is the same
+    ; reconstruction a return-type-less fn is; the appended slots are what a
+    ; mutual recursion between two generated functions has no other way to spell
+    ('proto nm ps r at) (line 0 (csig (ctag nm) at r ps + ";"))
+    ('proto nm ps r) (line 0 (csig (ctag nm) () r ps + ";"))
+    ('proto nm ps) (line 0 (csig (ctag nm) () 'int ps + ";"))
+    ('proto nm) (line 0 ("int " + ctag nm + "();"))
+    ('tdef nm ty) (line 0 ("typedef " + cty ty nm + ";"))
+    ['tdef] (gripe "(tdef) carries nothing -- a typedef cparse could not keep")
+    ; an enum definition, one line. a constant takes the position C gives it;
+    ; `(nom expr)` is for the anonymous enum, where position means nothing.
+    ('edef nm ks)
+     (line 0 ("enum " + (string? nm || name? nm ? (ctag nm + " ") "") + "{ "
+              + sepby ", " (map cconst ks) + " };"))
+    ('sdef nm fs u) (csdef nm fs (u = 'union ? "union" "struct"))
+    ('sdef nm fs) (csdef nm fs "struct")
+    ('sassert e msg)
+     (line 0 ("_Static_assert(" + ce e 21 + ", " + cstrlit (ctag msg) + ");"))
+    ; a directive owns its line and starts at column 0, nested or not
+    ('cpp-def nm v) (line 0 ("#define " + ctag nm + " " + ce v 100))
+    ('cpp-def nm) (line 0 ("#define " + ctag nm))
+    ('cpp-undef nm) (line 0 ("#undef " + ctag nm))
+    ('cpp-if arms els) (ccpp arms els 1)
+    ('cpp-if arms) (ccpp arms () 0)
+    (x . _) (gripe ("cannot show top-level " + string x)))
    ; #if / #elif / #else / #endif over top-level items. the arms carry their own
    ; conditions and the else is a slot, so an else out of place has no spelling.
    (ccpp arms els has)
     (: (go l first)
-        (? !(two? l) (? has (cseq (line 0 "#else") (citems els)) "")
+        (? (one? l) (? has (cseq (line 0 "#else") (citems els)) "")
            (: r <l
               (cseq (cseq (line 0 ((? first "#if " "#elif ") + ce <r 0)) (citems <>r))
                     (go >l 0))))
        (cseq (go arms 1) (line 0 "#endif")))
    ; a gripe from a nested item comes out rather than being concatenated into the
    ; text, which is what a plain `+` on a form and a string would quietly do
-   (cseq a b) (? (gripe? a) a (? (gripe? b) b (a + b)))
-   (citems l) (: (go m) (? !(two? m) "" (cseq (ctop1 <m) (go >m)))
-                 (go l))
+   (cseq a b) (? (gripe? a) a (gripe? b) b (a + b))
+   (citems l) (:- (go l) (go m) (m @ (a . u) (cseq (ctop1 a) (go u)) ""))
    ; the top-level dispatch, shared by clay-show and by a cpp arm's body
-   (ctop1 x) (? (two? x && (= <x 'fn) && (2 < tally >x)) (cfn x) (ctop x))
+   (ctop1 x) (? (two? x && <x = 'fn && 2 < tally >x) (cfn x) (ctop x))
 
    ; --- what cannot be said ------------------------------------------------------
    ; the forms carrying strictly less than C needs, found in one pass up front so
@@ -469,41 +463,38 @@
    ; printing `;` for the first and a made-up argument for the second would round-trip
    ; green and emit C that does not mean the program.
    (clay-unsaid c)
-    (: (go x)
-        (? !(two? x) ()
-           (= <x 'tdef && !(two? >x))
+    (:- (go c) (go x)
+        (? (one? x) ()
+           (<x = 'tdef && one? >x)
             (gripe "(tdef) carries nothing -- a typedef, struct or _Static_assert cparse could not keep")
-           (elem <x '(decl sdecl) && !(two? <>x))
-            (gripe ("(" + string <x + " ()) declared no object -- the tag or the function name is not in the node"))
-           (= <x 'vastart && !(two? >>x))
+           (elem <x '(decl sdecl) && one? <>x)
+            (gripe $ "(" + string <x + " ()) declared no object -- the tag or the function name is not in the node")
+           (<x = 'vastart && one? >>x)
             (gripe "(vastart ap) lost va_start's last named parameter at parse")
-           (= <x 'struct && !(cident? <>x))
-            (gripe ("(struct " + show <>x + ") -- an anonymous tag is not a C identifier"))
-           (= <x 'flo && !(cfinite? <>x))
-            (gripe ("(flo " + show <>x + ") -- C has no literal for an infinity or a nan"))
+           (<x = 'struct && !(cident? <>x))
+            (gripe $ "(struct " + show <>x + ") -- an anonymous tag is not a C identifier")
+           (<x = 'flo && !(cfinite? <>x))
+            (gripe $ "(flo " + show <>x + ") -- C has no literal for an infinity or a nan")
            ; C has no empty enum: `enum q { };` is a syntax error, not a thin lattice
-           (= <x 'edef && !(two? <>>x))
-            (gripe ("(edef " + show <>x + " ()) has no constants -- C has no empty enum"))
+           (<x = 'edef && one? <>>x)
+            (gripe $ "(edef " + show <>x + " ()) has no constants -- C has no empty enum")
            ; ..and no empty struct either, for the same reason
-           (= <x 'sdef && !(two? <>>x))
-            (gripe ("(sdef " + show <>x + " ()) has no members -- C has no empty struct"))
-           (= <x 'sdef && !(cident? <>x))
-            (gripe ("(sdef " + show <>x + ") -- an anonymous tag is not a C identifier"))
+           (<x = 'sdef && one? <>>x)
+            (gripe $ "(sdef " + show <>x + " ()) has no members -- C has no empty struct")
+           (<x = 'sdef && !(cident? <>x))
+            (gripe $ "(sdef " + show <>x + ") -- an anonymous tag is not a C identifier")
            ; a macro is named by an identifier, and `#if` with no arm is a syntax
            ; error rather than a group that is always off
            (elem <x '(cpp-def cpp-undef) && !(cident? <>x))
-            (gripe ("(" + string <x + " " + show <>x + ") -- a macro name is an identifier"))
-           (= <x 'cpp-if && !(two? <>x))
+            (gripe $ "(" + string <x + " " + show <>x + ") -- a macro name is an identifier")
+           (<x = 'cpp-if && one? <>x)
             (gripe "(cpp-if ()) has no arms -- C has no #if without a condition")
            ; restrict qualifies a pointer or nothing; anywhere else the shower would
            ; have to drop it in silence, which is pretending.
-           (= <x 'restrict && !(cptr? <>x))
+           (<x = 'restrict && !(cptr? <>x))
             (gripe "(restrict t) -- C restricts only a pointer")
-           (: (kids l) (? !(two? l) ()
-                          (: e <l v (? (two? e) (? (name? <e) (go e) (kids e)) ())
-                             (v || kids >l)))
-              (kids >x)))
-       (go c))
+           (:- (kids >x) (kids (e . u))
+            (: v (two? e ? (name? <e ? (go e) (kids e))) (v || kids u)))))
 
    ; --- the door -----------------------------------------------------------------
    ; (clay-show c) -> C text, or a gripe. `prog` is the whole translation unit;
@@ -512,15 +503,15 @@
    (clay-show c)
     (: u (clay-unsaid c)
        (? u u
-          !(two? c) (gripe "clay-show wants a form")
-          (= <c 'prog) (citems <>c)
+          (one? c) (gripe "clay-show wants a form")
+          (<c = 'prog) (citems <>c)
           (ctop1 c)))
    ; (fn name params body [ret [attrs]]) -- the trailing two are clay's and cparse
    ; hands three, so the three real spellings are three arms over one layout. an
    ; absent ret, which is every fn cparse ever built, prints `int`.
    (cfnl nm ps b r at) (copen 0 "" (csig (ctag nm) at r ps) b + cclose 0 b "")
    (cfn t)
-    (t @ ('fn nm ps b r at) (cfnl nm ps b r at)
-         ('fn nm ps b r) (cfnl nm ps b r ())
-         ('fn nm ps b) (cfnl nm ps b 'int ())
+    (t @ ['fn nm ps b r at] (cfnl nm ps b r at)
+         ['fn nm ps b r] (cfnl nm ps b r ())
+         ['fn nm ps b] (cfnl nm ps b 'int ())
          ""))
