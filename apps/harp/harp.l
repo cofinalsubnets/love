@@ -261,6 +261,10 @@
    ;   ,    stack (inside brackets or at the top)  !n  this step, n times over
    ;   ~    a rest        _  extend the last step  ?   drop it half the time
    ;   (k,n[,r])  euclidean                        :n  a sample index
+   ; euclid spreads k onsets as evenly over n slots as they go (bjork, below) and
+   ; rotates by r: bd(3,8) |x..x..x.|, bd(5,8) |x.xx.xx.|, bd(3,8,2) |.x..x.x.| --
+   ; the same three heard from the third slot. a negative k takes the slots the
+   ; figure leaves: bd(-3,8) |.xx.xx.x|. k n r are words here, so they are literals.
    ; the cursor is explicit: every reader takes (s i) and answers (x . i).
    (mspace s i) (: n #s (i < n && 32 >= s i ? (mspace s (i + 1)) i))
    (mwordc? c)  (c >= 48 && c <= 57 || c >= 65 && c <= 90
