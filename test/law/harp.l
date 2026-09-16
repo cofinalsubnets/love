@@ -111,6 +111,25 @@
              ; and two `?`s in one sequence must not agree by construction
              ((#(evs (mini "a? b? c? d? e? f? g? h?") 0 8)) < 64))
 
+   ; --- the continuous patterns: a value everywhere, no structure of their own -
+   ; they take their shape from whatever they are combined with, so the law is the
+   ; span: a real one answers exactly one event spanning it, an empty one answers
+   ; nothing at all. an inverted test here silences the whole family in silence.
+   _ (test
+      (: r (sine (qi 0) (qi 1))
+         (&& (1 = #r) (&& (0 = qnum (evwb (r 0))) (1 = qnum (evwe (r 0))))))
+      ; every member of the family, over a real span and an empty one
+      (foldl (\ a p (&& a (&& (1 = #(p (qi 0) (qi 1))) !(p (qi 1) (qi 1)))))
+             1 [sine cosine saw isaw tri square rand])
+      ; ..and the sampled values keep to their rails
+      (: (v1 p) (evv ((p (qi 0) (qi 1)) 0))
+         (foldl (\ a p (&& a (: x (v1 p) (&& (0.0 <= x) (x <= 1.0)))))
+                1 [sine cosine saw isaw tri square rand]))
+      ; range maps those rails onto its own
+      (: x (evv (((range 2.0 3.0 saw) (qi 0) (qi 1)) 0)) (&& (2.0 <= x) (x <= 3.0)))
+      ; the same span asked twice answers the same: rand is a place, not a moment
+      ((evv ((rand (qi 3) (qi 4)) 0)) = (evv ((rand (qi 3) (qi 4)) 0))))
+
    ; --- controls: tablets that merge -----------------------------------------
    hv ((hit (pure "bd")) (qi 0) (qi 1))
    _ (test (tablet? (evv (hv 0)))  ("bd" = (peep (evv (hv 0)) 's ()))
