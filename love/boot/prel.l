@@ -698,24 +698,7 @@
    ; doors: a direct read from a binding at or before it (for a lambda name, only one not
    ; shielded by a \ -- a call comes after the pin), and, for a value name, a read from anywhere
    ; the earlier bindings reach through the let's own names -- capture, not evaluation order.
-   (boxset prs) (: nm (map cap prs)
-     ; bref: one walk of a def collecting every sibling name it reads, each tagged with whether
-     ; the read sat under a \ (u). \ and : bind, a one-operand \ is quote, macros expand --
-     ; except a head this let binds, which is a variable and never a macro.
-     (bref x bnd u acc) (?
-      (nom? x) (elem x nm && !(elem x bnd) ? ((x . u) . acc) acc)
-      (one? x) acc
-      (: h <x (?
-        (== h '\) (one? >>x ? acc (: r (lp x) (bref >r (<r + bnd) 1 acc)))
-        (== h ':) (brefl >x (ln >x + bnd) u acc)
-        (: m (? (nom? h) (macros h) 0)
-           (? (m && !(elem h bnd) && !(elem h nm)) (bref (m >x) bnd u acc)
-              (foldl (a \ e \ bref e bnd u a) acc x))))))
-     (brefl bs bnd u acc) (?
-      (one? bs) acc
-      (one? >bs) (bref <bs bnd u acc)
-      (: nd (dsug <bs <>bs) (brefl >>bs bnd u (bref >nd bnd u acc))))
-     es (map (p \ <p . bref >p 0 0 ()) prs)   ; the read graph, source order
+   (boxset prs es) (: nm (map cap prs)
      (reads m) >(assoc m es)
      (anyname m) (map cap (reads m))                           ; read anywhere
      (barename m) (map cap (filter (nil? * cup) (reads m)))   ; read not under a \
@@ -731,6 +714,25 @@
      ; captures, so it wants v's slot at construction, before that slot exists.
      (reach v) (elem v (grow (catmap anyname (take (lidx v nm) nm))))
      (filter (\ v (? (near v) 1 (lambp >(assoc v prs)) 0 (reach v))) nm))
+   ; breads: the read graph boxset takes -- per def, every sibling name it reads, tagged with
+   ; whether the read sat under a \ (u). \ and : bind, a one-operand \ is quote, macros expand,
+   ; except a head this let binds, which is a variable and never a macro. c0's door builds it here;
+   ; ev.l's census hands boxfix-es the same graph off its own walk.
+   (breads prs) (: nm (map cap prs)
+     (bref x bnd u acc) (?
+      (nom? x) (elem x nm && !(elem x bnd) ? ((x . u) . acc) acc)
+      (one? x) acc
+      (: h <x (?
+        (== h '\) (one? >>x ? acc (: r (lp x) (bref >r (<r + bnd) 1 acc)))
+        (== h ':) (brefl >x (ln >x + bnd) u acc)
+        (: m (? (nom? h) (macros h) 0)
+           (? (m && !(elem h bnd) && !(elem h nm)) (bref (m >x) bnd u acc)
+              (foldl (a \ e \ bref e bnd u a) acc x))))))
+     (brefl bs bnd u acc) (?
+      (one? bs) acc
+      (one? >bs) (bref <bs bnd u acc)
+      (: nd (dsug <bs <>bs) (brefl >>bs bnd u (bref >nd bnd u acc))))
+     (map (p \ <p . bref >p 0 0 ()) prs))
    (mkcs bx) (map (v \ v . mint 0 . v) bx)
    (cellbinds cs) (map (c \ <>c . list tablet 0) cs)
    ; the cell read boxfix emits. a filled cell answers its value; a pre-fill read is a map miss, so
@@ -743,11 +745,12 @@
                              !(heard ()) ()
                              (scare 'missing nm))))))
 
-; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
+; boxfix-core: the rewrite, refs via sub/subl since c0 has no analysis-time redirect. answers
+; (cells pairs.. . body), or () when nothing boxes.
 ; the law: eager reads see let*, closures see letrec*. a bare read before its name's pin keeps
 ; the plain nom -- a boxed name's own binding is renamed _, so (: s (trim s)) under a param s
 ; reads the param. pn is the pinned-so-far set; u is 1 under a \.
-(: (boxfix-core prs body) (: (rmc cs ns) (filter (\ p !(elem <p ns)) cs)
+(: (boxfix-core prs body es) (: (rmc cs ns) (filter (\ p !(elem <p ns)) cs)
    ; bnd: the lexical binder set, seeded with the scope's own names, so a locally-bound name is
    ; an ordinary variable and never a macro head.
    (sub cs x bnd pn u) (?
@@ -764,7 +767,7 @@
     (one? bs) bs
     (one? >bs) (list (sub cs <bs bnd pn u))
     (: nd (dsug <bs <>bs) (<nd . sub cs >nd bnd pn u . subl cs >>bs bnd pn u)))
-   (: bx (boxset prs)
+   (: bx (boxset prs es)
       (? (== () bx) ()
        (: cs (mkcs bx) ns0 (map cap prs)
           (one p pn) (: d (sub cs >p ns0 pn 0)
@@ -773,16 +776,18 @@
                            (cap p . d)))
           (ones ps pn) (? (one? ps) ()
                           ((one <ps pn) . ones >ps (<<ps . pn)))
-          (cellbinds cs + ones prs () . sub cs body ns0 ns0 0))))))
-; the flat-list adapter: a `:` binding list -> the rewritten list, or the input unchanged.
-; love.c interns "boxfix" and calls it off the book, so c0 compiles prel through this. it must
-; exist before ev.l does, and both compilers share the one pass.
-(: (boxfix fs) (: (ev l) (? (one? l) 1 (one? >l) 0 (ev >>l))
+          (cs . cellbinds cs + ones prs () . sub cs body ns0 ns0 0))))))
+; the flat-list adapters: a `:` binding list -> (the rewritten list . the cells laid), the input
+; and () when nothing boxes. boxfix-es takes the read graph (ev.l's census has one); boxfix
+; walks for its own. love.c interns "boxfix" and calls it off the book, so c0 compiles prel
+; through this. it must exist before ev.l does, and both compilers share the one pass.
+(: (boxfix-es fs es) (? (bodyless? fs) (fs . ())
+    (: pb (bpr fs) r (boxfix-core <pb >pb es)
+       (? r ((catmap (p \ list <p >p) <>r + list >>r) . <r) (fs . ()))))
+   (bodyless? l) (? (one? l) 1 (one? >l) 0 (bodyless? >>l))
    (bpr fs) (? (one? >fs) (0 . <fs)
                (: r (bpr >>fs) ((dsug <fs <>fs . <r) . >r)))
-   (? (ev fs) fs
-    (: pb (bpr fs) r (boxfix-core <pb >pb)
-       (? r (catmap (p \ list <p >p) <r + list >r) fs)))))
+   (boxfix fs) (bodyless? fs ? fs <(boxfix-es fs (breads <(bpr fs)))))
 
 ; --- scheme and common lisp spellings ---------------------------------------
 ; every row here is the same function under another name; where the lisp semantics differ

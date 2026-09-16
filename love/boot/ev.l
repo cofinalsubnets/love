@@ -198,8 +198,8 @@
      '? (atom? >x ? '? (keep x (wxc >x bnd) '?))
      ': (? (atom? >x) ':
            (atom? >>x) (keep x (keep1 >x (wx <>x bnd)) ':)
-           (: bs (boxfix (lflat >x))                    ; boxfix = the capture-by-location source rewrite, post-macroexpand
-              ns (ln bs) rows (census bs ns bnd)
+           (: cr (census (lflat >x) bnd) bs <cr rows >cr    ; boxfix rides the census: the capture-by-location source rewrite
+              ns (ln bs)
               (letc . rows . wxb bs (ns + bnd) [rows #bnd #ns])))   ; a let's names all shadow throughout
      ; no macro lane: cprop's output is macro-free -- it expands every nom-headed call under the
      ; same shadow guard.
@@ -229,38 +229,50 @@
       (? (any (\ m (elem m ns)) ms) bs                            ; a name collision
          (lrdl ms bs ns) bs                                          ; an outer def reads an inner name
          (lflat (lup bs))))))
-   ; census: per lambda sibling, the names it reads that a binder covers, resolved as ana will. an
-   ; enclosing let's lambda sibling, seen from inside one of that let's lambda defs, is rebuilt at
-   ; each reference from its imports, so its row reads there in its place; the let's own lambda
-   ; siblings pour and drop; every other binder is an import. the rows ride the form to ale as the
-   ; closures' import rows, so a letrec builds each lambda once. quote and the binders read as in
-   ; lrd; a nom in head position reads like any other, which is how ana resolves it. c 'fr is the
-   ; enclosing lets' frames [rows base n], base and n placing a let's names in bnd from its end,
-   ; pushed while its lambda defs walk (wxd): the innermost binder of a name decides.
-   (census bs ns bnd) (: vis (ns + bnd) n #vis frs (c 'fr)
-    (add y sh acc) (elem y sh || elem y acc ? acc (y . acc))
-    (res x sh acc) (: i (lidx x vis) (i < #ns ? (add x sh acc) (frame x (n - 1 - i) frs sh acc)))
-    (frame x e fs sh acc) (fs @
-     ([rows base m] . u) (? (base + m <= e) (add x sh acc)                   ; bound nearer than this let
-                            (base <= e) (: p (assoc x rows) (two? p ? (foldl (a \ y \ add y sh a) acc >p) (add x sh acc)))
-                            (frame x e u sh acc))
-     (add x sh acc))
-    (fv x sh acc) (?
-     (nom? x) (x != () && elem x vis && !(elem x sh) ? (res x sh acc) acc)
+   ; census: one walk of the defs answers boxfix's read graph and, per lambda sibling, the names
+   ; it captures, resolved as ana will. an enclosing let's lambda sibling, seen from inside one of
+   ; that let's lambda defs, is rebuilt at each reference from its imports, so its row reads there
+   ; in its place; the let's own lambda siblings pour and drop; a boxed name is its cell; every
+   ; other binder is an import. the rows ride the form to ale as the closures' import rows, so a
+   ; letrec builds each lambda once. quote and the binders read as in lrd; a nom in head position
+   ; reads like any other, which is how ana resolves it; no macro lane, cprop's output having none.
+   ; c 'fr is the enclosing lets' frames [rows base n], base and n placing a let's names in bnd
+   ; from its end, pushed while its lambda defs walk (wxd): the innermost binder of a name decides.
+   ; answers (the boxfixed binding list . rows).
+   (census bs bnd) (: ns (ln bs) vis (ns + bnd) n #vis frs (c 'fr)
+    ; rd: every read of a covered name, (x u . sh): u 1 under a \, sh the binders over the read
+    (rd x sh u acc) (?
+     (nom? x) (x != () && elem x vis && !(elem x sh) ? ((x . u . sh) . acc) acc)
      (atom? x) acc
-     (<x == '\) (atom? >>x ? acc (: r (lp x) (fv >r (<r + sh) acc)))
-     (<x == ':) (fvl >x (ln >x + sh) acc)
-     (foldl (a \ e \ fv e sh a) acc x))
-    (fvl bs sh acc) (? (atom? bs) acc
-     (atom? >bs) (fv <bs sh acc)
-     (: nd (dsug <bs <>bs) (fvl >>bs sh (fv >nd sh acc))))
-    (lrows bs) (? (atom? >bs) ()
-     (: nd (dsug <bs <>bs) r (lrows >>bs)
-        (lambp >nd ? ((<nd . fv >nd () ()) . r) r)))
-    rows (lrows bs) ls (map cap rows)
+     (<x == '\) (atom? >>x ? acc (: r (lp x) (rd >r (<r + sh) 1 acc)))
+     (<x == ':) (rdl >x (ln >x + sh) u acc)
+     (foldl (a \ e \ rd e sh u a) acc x))
+    (rdl bs sh u acc) (? (atom? bs) acc
+     (atom? >bs) (rd <bs sh u acc)
+     (: nd (dsug <bs <>bs) (rdl >>bs sh u (rd >nd sh u acc))))
+    (pairs bs) (atom? >bs ? () (dsug <bs <>bs . pairs >>bs))
+    ds (pairs bs)
+    rs (map (p \ <p . rd >p () 0 ()) ds)                                            ; per def, its reads
+    es (map (r \ <r . foldl (a \ e \ (elem <e ns ? ((<e . <>e) . a) a)) () >r) rs)  ; the sibling reads, for boxfix
+    bf (boxfix-es bs es) cs >bf
+    (cell v) (: p (assoc v cs) (two? p ? <>p v))
+    (add y sh acc) (elem y sh || elem y acc ? acc (y . acc))
+    ; res: a read into (row . seen). a name resolves the same at every read but one an outer
+    ; row reads for, whose names answer to the binders over that read, so only those stay unseen
+    (res x sh b) (elem x >b ? b
+     (: i (lidx x vis)
+      (i < #ns ? (add (cell x) sh <b . x . >b) (frame x (n - 1 - i) frs sh b))))
+    (frame x e fs sh b) (fs @
+     ([rows base m] . u) (? (base + m <= e) (add x sh <b . x . >b)             ; bound nearer than this let
+                            (base <= e) (: p (assoc x rows) (two? p ? (foldl (a \ y \ add y sh a) <b >p . >b) (add x sh <b . x . >b)))
+                            (frame x e u sh b))
+     (add x sh <b . x . >b))
+    boxed (map cap cs)
+    rows (foldl (a \ p \ (lambp >p && !(elem <p boxed) ? ((<p . <(foldl (b \ e \ res <e >>e b) (() . ()) (rev >(assoc <p rs)))) . a) a)) () (rev ds))   ; reads in source order: the row's slot order
+    ls (map cap rows)
     (grow s) (: s2 (foldl (a \ m \ (elem m ls ? (foldl (b \ v \ (elem v b ? b (v . b))) a >(assoc m rows)) a)) s s)
                 (#s2 = #s ? s (grow s2)))
-    (map (r \ <r . filter (v \ !(elem v ls)) (grow >r)) rows))
+    (<bf . map (r \ <r . filter (v \ !(elem v ls)) (grow >r)) rows))
    ; --- the identity kit: unchanged -> the original, no copy --------------------------------
    ; cprop/wx hand back the input tree wherever nothing rewrote. a `:`-bound non-tail call pays
    ; ~112b where an arg/tail-position call is free, so a walk result rides to its comparison as a
