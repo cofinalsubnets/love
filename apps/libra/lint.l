@@ -8,8 +8,8 @@
 ; opener or string reports where it opened rather than end-of-file.
 ;
 (module (lint lint-scan lint-of lint-cmts)
-(: (lclose c) (? (c = 40) 41 (c = 91) 93 125)          ; ( -> )   [ -> ]   { -> }
-   (lopen c)  (? (c = 41) 40 (c = 93) 91 123)          ; ...and back, for the report
+(: (lclose c) (c @ 40 41 91 93 125)          ; ( -> )   [ -> ]   { -> }
+   (lopen c)  (c @ 41 40 93 91 123)          ; ...and back, for the report
 
    ; --- character classes ----------------------------------------------------
    ; the three sets are strings so they can be checked against love.c at a glance
@@ -21,8 +21,7 @@
    ; not a form -- '(a) quote, @(a) tray. the list wears [] and the map {} instead.
    (lctc? c) (lin? "'@" c)
    ; a token character: not whitespace, a delimiter, a quote mark or a `;`
-   (ltkc? c) !(c < 33 || c = 34 || c = 59 || c = 40 || c = 41
-               || c = 91 || c = 93 || c = 123 || c = 125)
+   (ltkc? c) !(c < 33 || elem c '(34 59 40 41 91 93 123 125))
 
    (lall? p s) (: n #s
                   (go k) (? (n <= k) (0 < n) (p (s k)) (go (k + 1)) ())
@@ -35,28 +34,26 @@
    ; a plain tablet read with peep, never apps/libra/salt.l: vi cats this file directly
    ; (test/test.mk) and a module it had to carry along would break that.
    ; a switch whose default is yes -- absent means on, only an explicit 0 is off
-   (lint-yes? conf k) (: v (conf k) (two? v ? (bit <v) 1))
+   (lint-yes? conf k) (conf k @ (v . _) (bit v) 1)
    ; the name a token mentions: a leading ' is quote, so 'foo names foo and a
    ; rename wants both. a trailing ' is the prime idiom, part of the name.
-   (lname t) (: n #t (go k) (? (k < n && t k = 39) (go (k + 1)) (snip t k n)) (go 0))
+   (lname t) (: n #t (go k) (k < n && t k = 39 ? (go (k + 1)) (snip t k n)) (go 0))
    ; the roster entry for the token text t: a bare name, or (name "hint")
    (lint-dep roster t)
-    (? !(two? roster) ()
+    (? (one? roster) ()
        (: e <roster
-          nm (? (two? e) <e e)
-          (? (string nm = t) [1 e] (lint-dep >roster t))))
+          nm (two? e ? <e e)
+          (string nm = t ? [1 e] (lint-dep >roster t))))
    (lint-depmsg e)
-    (: nm (? (two? e) <e e)
-       h  (? (two? e && two? >e) <>e ())
+    (: nm (two? e ? <e e)
+       h  (two? e && two? >e ? <>e ())
        ("deprecated " + string nm + (? (string? h) (" -- " + h) "")))
 
    ; is frame f a binder slot -- a `\` past its head, or a `:` at an even element?
-   (lbind? src n f)
-    (f @ {'e1 e1 'ne ne}
-     (: h (ltok-at src n e1)
-        (? (h = ":")  (2 <= ne && 0 = ne % 2)
-           (h = "\\") (2 <= ne)
-           0)))
+   (lbind? src n {'e1 e1 'ne ne})
+    (ltok-at src n e1 @- 0
+     ":"  (2 <= ne && 0 = ne % 2)
+     "\\" (2 <= ne))
 
    ; --- the frame ------------------------------------------------------------
    ; cl the expected closer, ln/co where the opener sat (so an unclosed one reports
@@ -64,9 +61,9 @@
    ; at, pl/qd the singleton rule's two bits, am the match bit, pd the deferred
    ; verdicts. e1 is an index read back out of src, never accumulated as text.
    (lelem stk i)
-    (? !(two? stk) stk
-       (: f <stk ne (f 'ne + 1)
-          (pin f 'ne ne, (ne = 1 ? (pin f 'e1 i) 0), stk)))
+    (one? stk ? stk
+     (: f <stk ne (f 'ne + 1)
+      (pin f 'ne ne, (ne = 1 ? (pin f 'e1 i) 0), stk)))
 
    ; a bare `@` marks its frame a match: everything after is arms, where (x) is a
    ; list shape and the singleton rule stands down. a glued @( is the tray ctor and
@@ -86,12 +83,12 @@
    ;   anything else          -> foo(x) is two datums, so the ( is a plain form
    (lpush stk c i line col src it ti)
     (: pre (? it (snip src ti i) "")
-       pq  (? (two? stk) (<stk 'qd) 0)
-       am  (? (two? stk) (<stk 'am) 0)
+       pq  (two? stk ? (<stk 'qd) 0)
+       am  (two? stk ? (<stk 'am) 0)
        ct  (lall? lctc? pre)
        op  (lall? lopc? pre)
-       qd  (? (pq || ct && lin? pre 39) 1 0)
-       pl  (? (pq || ct || op) 0 (? (c = 40) 1 0))
+       qd  !!(pq || ct && lin? pre 39)
+       pl  (!pq && !ct && !op && c = 40)
        ({'cl (lclose c) 'ln line 'co col 'ne 0 'e1 0 'pl pl 'qd qd 'am am 'pd ()}
         . stk))
 
@@ -107,23 +104,21 @@
    ; pattern and stays silent. odd `:` elements are values and warn at once.
    (lsing src n f)
     (f @ {'pl 1 'ne 1 'e1 e1 'ln ln 'co co}
-     (: t (ltok-at src n e1)
-        (? (lall? lopc? t) ()
-           [ln co ("singleton " + (0 < #t ? ("(" + t + ") ") "") + "-- (x) == x")
-            'singleton]))
-     ())
+     (ltok-at src n e1 @ t
+      (lall? lopc? t ? ()
+         [ln co ("singleton " + (0 < #t ? ("(" + t + ") ") "") + "-- (x) == x")
+          'singleton])))
    ; the deferral home: () to warn now, else [depth idx] naming the binder frame
    ; (1 parent, 2 grandparent) and the element index the verdict keys on
    (ldefer src n rest)
-    (? !(two? rest) ()
+    (? (one? rest) ()
        (lbind? src n <rest) [1 (<rest 'ne)]
-       !(two? >rest) ()
-       (lbind? src n <>rest) [2 (<>rest 'ne)]
-       ())
+       (one? >rest) ()
+       (lbind? src n <>rest) [2 (<>rest 'ne)])
    ; hang (idx . warn) on the binder's pend slot
    (lpend rest d idx wr)
-    (: f (d = 1 ? <rest <>rest)
-       (pin f 'pd ((idx . wr) . f 'pd), rest))
+    (: f (d @ 1 <rest <>rest)
+     (pin f 'pd ((idx . wr) . f 'pd), rest))
 
    ; --- the scan -------------------------------------------------------------
    ; (lint-of src conf) is the whole weighing; (lint-scan src) is it with no config,
@@ -135,14 +130,14 @@
     (: n  #src
        ; no config at all -- lint-scan's () -- is balance alone, the contract vi's
        ; cat and the fixtures ride. singleton is on by default under any other.
-       sg (? (= conf ()) 0 (lint-yes? conf 'singleton))
+       sg (conf @ () 0 (lint-yes? conf 'singleton))
        dp (conf 'deprecated)
        ; a token just ended at i, having started at ti/tc. a no-op until a config asks
        (lend line tc ti i warns)
         (: t (snip src ti i)
-           (? !(two? dp) warns
-              (: r (lint-dep dp (lname t))
-                 (two? r ? ([line tc (lint-depmsg <>r) 'deprecated] . warns) warns))))
+         (? (one? dp) warns
+          (: r (lint-dep dp (lname t))
+           (two? r ? ([line tc (lint-depmsg <>r) 'deprecated] . warns) warns))))
 
        ; stk the frames above, a matched-pair stack so ([)] is caught; sl/sc a
        ; string's opening spot; it/ti/tc the token in hand; st is code | cmt | str.
@@ -151,19 +146,19 @@
        (w i st stk line col sl sc it ti tc warns)
         (? (n <= i)
             (: w0 (? it (lend line tc ti i warns) warns)
-               w1 (= st 'str ? ([sl sc "unclosed string" 'balance] . w0) w0)
+               w1 (st @ 'str ([sl sc "unclosed string" 'balance] . w0) w0)
                (rev (foldl (\ a o (o @ {'cl cl 'ln ln 'co co}
                             ([ln co ("unclosed " + string (lopen cl)) 'balance] . a)))
                      w1 stk)))
            (: c (src i)
-              (? (= st 'str)                                    ; inside "..."
-                  (? (c = 92) (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns)   ; \ escape: skip next
-                     (c = 34) (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc warns)
-                     (c = 10) (w (i + 1) 'str stk (line + 1) 1 sl sc 0 ti tc warns)
-                     (w (i + 1) 'str stk line (col + 1) sl sc 0 ti tc warns))
-                 (= st 'cmt)                                    ; ; comment to eol
-                  (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc warns)
-                     (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
+              (? (st = 'str)                                    ; inside "..."
+                  (c @ 92 (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns)   ; \ escape: skip next
+                       34 (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc warns)
+                       10 (w (i + 1) 'str stk (line + 1) 1 sl sc 0 ti tc warns)
+                          (w (i + 1) 'str stk line (col + 1) sl sc 0 ti tc warns))
+                 (st = 'cmt)                                    ; ; comment to eol
+                  (c @ 10 (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc warns)
+                          (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
                  (c = 59)                                                      ; ; -- start comment
                   (w (i + 1) 'cmt (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i warns) warns))
@@ -184,7 +179,7 @@
                      (? it (lend line tc ti i warns) warns))
                  (c = 41 || c = 93 || c = 125)                                 ; ) ] }  -- match
                   (: w0 (? it (lend line tc ti i warns) warns)
-                     (? !(two? stk)
+                     (? (one? stk)
                          (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
                             ([line col ("stray " + string c) 'balance] . w0))
                         !(<stk 'cl = c)
@@ -198,12 +193,11 @@
                            ; the off path answers (), which is what the test below reads:
                            ; && is transparent and would pass sg's own 0 through
                            sw (sg ? (lsing src n f) ())
-                           (? (= sw ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
-                              (f 'am)     (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
+                           (? (sw = ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
+                              (f 'am)   (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
                               (: dh (ldefer src n rest)
-                                 (? (= dh ())
-                                     (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc (sw . w1))
-                                    (w (i + 1) 'code (lpend rest <dh <>dh sw) line (col + 1) sl sc 0 ti tc w1)))))))
+                                 (dh @ () (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc (sw . w1))
+                                          (w (i + 1) 'code (lpend rest <dh <>dh sw) line (col + 1) sl sc 0 ti tc w1)))))))
                  (c < 33)                                                      ; space, tab, the rest
                   (w (i + 1) 'code (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i warns) warns))
@@ -218,26 +212,23 @@
    ; just the span, because no reader in the tree keeps comments -- libra's doc
    ; verb walks these rather than encoding .l lexing a fifth time.
    (lint-cmts src)
-    (: n #src
-       (shut i cl cc ti ck acc) ([cl cc (snip src ti i) ck] . acc)
-       (w i st line col cl cc ti ck acc)
-        (? (n <= i) (rev (= st 'cmt ? (shut i cl cc ti ck acc) acc))
-           (: c (src i)
-              (? (= st 'str)
-                  (? (c = 92) (w (i + 2) 'str line (col + 2) cl cc ti ck acc)
-                     (c = 34) (w (i + 1) 'code line (col + 1) cl cc ti ck acc)
-                     (c = 10) (w (i + 1) 'str (line + 1) 1 cl cc ti ck acc)
-                     (w (i + 1) 'str line (col + 1) cl cc ti ck acc))
-                 (= st 'cmt)
-                  (? (c = 10) (w (i + 1) 'code (line + 1) 1 cl cc ti ck (shut i cl cc ti ck acc))
-                     (w (i + 1) 'cmt line (col + 1) cl cc ti ck acc))
-                 (c = 59)  (w (i + 1) 'cmt line (col + 1) line col (i + 1) 'semi acc)
-                 (c = 35 && i + 1 < n && src (i + 1) = 33)
-                  (w (i + 2) 'cmt line (col + 2) line col (i + 2) 'bang acc)
-                 (c = 34) (w (i + 1) 'str line (col + 1) cl cc ti ck acc)
-                 (c = 10) (w (i + 1) 'code (line + 1) 1 cl cc ti ck acc)
-                 (w (i + 1) 'code line (col + 1) cl cc ti ck acc))))
-       (w 0 'code 1 1 0 0 0 'semi ()))
-
-)
-) ; module lint
+    (:- (w 0 'code 1 1 0 0 0 'semi ())
+     n #src
+     (shut i cl cc ti ck acc) ([cl cc (snip src ti i) ck] . acc)
+     (w i st line col cl cc ti ck acc)
+      (n <= i ? (rev (st @ 'cmt (shut i cl cc ti ck acc) acc))
+       (: c (src i)
+        (st @
+         'str (c @ 92 (w (i + 2) 'str line (col + 2) cl cc ti ck acc)
+                   34 (w (i + 1) 'code line (col + 1) cl cc ti ck acc)
+                   10 (w (i + 1) 'str (line + 1) 1 cl cc ti ck acc)
+                      (w (i + 1) 'str line (col + 1) cl cc ti ck acc))
+         'cmt (c @ 10 (w (i + 1) 'code (line + 1) 1 cl cc ti ck (shut i cl cc ti ck acc))
+                      (w (i + 1) 'cmt line (col + 1) cl cc ti ck acc))
+         (c @ 59 (w (i + 1) 'cmt line (col + 1) line col (i + 1) 'semi acc)
+              (35 && i + 1 < n && src (i + 1) = 33)
+               (w (i + 2) 'cmt line (col + 2) line col (i + 2) 'bang acc)
+              34 (w (i + 1) 'str line (col + 1) cl cc ti ck acc)
+              10 (w (i + 1) 'code (line + 1) 1 cl cc ti ck acc)
+                 (w (i + 1) 'code line (col + 1) cl cc ti ck acc))))))
+)) ; module lint
