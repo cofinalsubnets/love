@@ -38,6 +38,7 @@
 (: ; body-less, so it leaks into the module's book: the concat helper is `bcat`, never `holo`.
    ; glazeasm takes hook.l's assembler pins at install; unpinned, the module's own serves
    glazeasm {}
+   letc (cite 'guts 'letc)                 ; ev.l's walked let, (letc rows . binds): the hook's twin carries it where a surface is missing
    (le8 n) (: u (n < 0 ? (n + 18446744073709551616) n)                        ; & is broken on a bignum >= 2^63,
               ((: (go i) (i < 8 ? (u // i 256 % 256 . go (i + 1)) ())) 0))   ; so //% splits n into 8 LE bytes
    (le4 n) ((: (go i) (i < 4 ? ((n >> 8 * i) & 255 . go (i + 1)) ())) 0)  ; n -> 4 LE bytes (offsets < 2^31, & ok)
@@ -369,6 +370,7 @@
                       (: vn (aopn <>e aopv)
                          (vn && !(elem vn env) ? (adesug env ti ta (vn . >>e)) e))
                       e)
+       (<e = letc) (adesug env ti ta (': . >>e))                                 ; the walked let, its census rows dropped
        ; the (X) singleton by atom?, never nil?: a tail of nameless mints nets to 0, and that would
        ; unwrap (\ m1 m2 m2) to a bare \, a quote-shaped wreck compiled as the constant \
        (atom? >e) (adesug env ti ta <e)
@@ -436,7 +438,7 @@
    ; njit-amble: the hook entry -- compile s (deopt -> e) or answer 0 (decline; the hook keeps e).
    ; farq = ala's letrec-local predicate (hook.l); lams = ((name . (entry . import-names))..), lz's frozen sites
    (njit-amble s a e gv farq lams nm ti ta inl tgt)
-    (: ps (init >s)  M (last >s)
+    (: ps (init >s)  M (: m (last >s) (two? m && <m = letc ? (': . >>m) m))   ; a walked let at the top reads as its surface
        lp (amble-loop M)
        go   (lp ? <lp 0)     vars0 (lp ? <>lp ())
        GB0  (lp ? (lp 2) 0)  inits (lp ? (lp 3) ())
@@ -1328,6 +1330,7 @@
 (: glaze-loaded? (lit? (cite 'glaze))   ; re-load detector, read before this load defglobs anything: `glaze` registered means the baked glaze is installed
    ; the registry, never `book`: a woken image has `book` sealed away
    base-ev (: G (cite 'glaze) (? G (G 'base-ev) ev))   ; the pure interpreter: on a re-load ev is auto-ev already, so read it out of the module, else autospec's fold re-enters the glaze
+   opfixed (cite 'guts 'opfixed)                       ; ev.l's already-factored tag: auto-ev opfixes once, ahead of its source passes
    arch love-arch                         ; the host CPU as the assembler target ('x64 / 'a64), already a nom; glaze loads only on these
    x86? (= arch 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
    ; the emitter's expression grammar over var v, exact arity: (+ x 1 2) is a tower, not x + 1
@@ -2302,11 +2305,12 @@
                 (each canon-names (n \ (: v (gv n gone) (? (v = gone) 0 (pin ctab v n)))),
                  pin ctab 'ok 1,
                  ctab))
-   (canon e) (: gv (peep gvbox 0 0)
+   (canon e) (: gv (peep gvbox 0 0) mt {}                                                      ; mt: nom -> its answer, one form's worth (tab is value-keyed, and a closure hashes by its body)
                 (? gv (: tab (ctable gv)
                          ops '(+ - * // % & | ^ < <= > >= = . && ||)                                   ; infix spellings: an operand written so reads as infix
                          (cnom x bnd hd) (? (elem x bnd) x
-                                            (: v (gv x gone) c (? (v = gone) 0 (peep tab v 0))
+                                            (: c (: m (peep mt x gone)
+                                                  (? (m = gone) (: v (gv x gone) c (? (v = gone) 0 (peep tab v 0)) _ (pin mt x c) c) m))
                                                (? !c x  (hd || !(elem c ops)) c  x)))
                          (cbinders bs) (? (atom? >bs) () (: b <bs ((? (two? b) <b b) . cbinders >>bs)))   ; a :'s names, sugared heads too
                          (cw x bnd) (?
@@ -2337,7 +2341,7 @@
                                   (? li (memo e (l \ njit-loop l <li <>li <>>li <>>>li (base-ev l)))
                                      (: ln (loopinfo-n e)
                                         (? ln (memo e (l \ njit-loop-n l <ln <>ln <>>ln <>>>ln <>>>>ln (base-ev l)))
-                                           (base-ev (autogroup (autonat (twolow (canon (opfix e)))))))))))   ; float-grid nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
+                                           (base-ev (opfixed . autogroup (autonat (twolow (canon (opfix e)))))))))))   ; float-grid nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
                   (qual e)  (memo e (l \ jitir l arch))
                   (qualn e) (memo e (l \ jitnir l arch))
                   (qualc e) (memo e (l \ jitnir (flatc l) arch))
@@ -2347,7 +2351,7 @@
                         (: ln (loopinfo-n e)
                            (? ln (memo e (l \ njit-loop-n l <ln <>ln <>>ln <>>>ln <>>>>ln (base-ev l)))
                               ; fall-through: cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
-                              (base-ev (autogroup (autonat (twolow (castbuild (canon (opfix e))))))))))))
+                              (base-ev (opfixed . autogroup (autonat (twolow (castbuild (canon (opfix e))))))))))))
    ; `ev` is orth, which a module layer cannot write, so the boot installs (: ev (cite 'glaze 'ev)). a re-load hands the baked
    ; auto-ev back; a trampoline build (love-tco 0) stays the interpreter, since glazed code Continues by tail-jump, which only the threaded vm honors
    ev (? glaze-loaded? ev

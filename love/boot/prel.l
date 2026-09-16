@@ -578,6 +578,9 @@
    ; everything else walks. idempotent. has-top-op? gates the lone-operand splice: a bare
    ; list-of-one like ((mov r3 r12)) is data and stays wrapped.
    (has-top-op? x) (? (one? x) 0 (op-puncp (cap x)) 1 (has-top-op? (cup x)))
+   ; a list with no operator at its top is its elements factored, in place: the walk below
+   ; would rebuild it element by element and answer the same list
+   (op-mapi f x) (? (one? x) x (: e (f (cap x)) r (op-mapi f (cup x)) (? (&& (== e (cap x)) (== r (cup x))) x (. e r))))
    (op-core x)
     (? (one? x) x
        (: h (cap x)
@@ -595,8 +598,9 @@
               (: p (caup x) r (cap p) d (op-core (caup p))
                  fs (? (nom? r) (monofactor r) 0)
                  (? (two? fs) (op-fin fs d) (. r (. d ()))))
-             (: res (op-w x 0 0)                        ; splice a lone folded operand up (an infix/prefix-op form)
-                (? (&& (has-top-op? x) (two? res) (one? (cup res)) (two? (cap res))) (cap res) res))))) ; (a = b) -> (= a b), not ((= a b))
+             (nil? (has-top-op? x)) (op-mapi op-core x)
+             (: res (op-w x 0 0)                        ; an operator at the top: walk, and splice a lone folded operand up
+                (? (&& (two? res) (one? (cup res)) (two? (cap res))) (cap res) res))))) ; (a = b) -> (= a b), not ((= a b))
    (opfix x) (op-core x)
 
    ; the grip door: the one sanctioned write into the compile table, and the only reach to

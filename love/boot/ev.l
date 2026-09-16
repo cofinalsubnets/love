@@ -1,7 +1,9 @@
-; iop/apx: uninterned tag markers feel emits ((iop op . args), (apx nary head . args)) and ana
-; dispatches on. top-level globals, not ev-block locals, so they stay out of ev's captured frame.
+; iop/apx/letc: uninterned tag markers feel emits ((iop op . args), (apx nary head . args),
+; (letc rows . binds)) and ana dispatches on. top-level globals, not ev-block locals, so they
+; stay out of ev's captured frame.
 (: iop (mint 0)
-   apx (mint 0))
+   apx (mint 0)
+   letc (mint 0))
 
 ; gone: avw's not-in-book sentinel. a top-level global like iop/apx, and because it folds into
 ; avw as a kim constant -- only a global resolves identically in every bootstrap generation.
@@ -75,9 +77,15 @@
        t))))
    (foldl add {} (catmap keys (stack ())))))
 
+; opfixed: the tag a caller that already factored its form puts at the head (the glaze's
+; auto-ev), so ev skips opfix. a global like iop, mopped by egg.l; a top-level let holding ev
+; itself would keep the egg's first-generation closure alive in the image.
+(: opfixed (mint 0))
+
+; ev = opfix (factor sigils), feel (desugar), ana -- the deserialized-data lane
 (:- (\ x (:
  c (sco 0 [()] ())
- y (feel c (opfix x))    ; opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
+ y (feel c (two? x && <x == opfixed ? >x (opfix x)))
  (ana c y (k0 c) 0 0)))
   lvm_cur (pick 0 (+))
   ; the nil? nif for cflip's head test: opfix's glued lane splices the value, never the name,
@@ -190,7 +198,9 @@
      '? (atom? >x ? '? (keep x (wxc >x bnd) '?))
      ': (? (atom? >x) ':
            (atom? >>x) (keep x (keep1 >x (wx <>x bnd)) ':)
-           (keep x (wxl (boxfix (lflat >x)) bnd) ':))   ; boxfix = the capture-by-location source rewrite, post-macroexpand
+           (: bs (boxfix (lflat >x))                    ; boxfix = the capture-by-location source rewrite, post-macroexpand
+              ns (ln bs) rows (census bs ns bnd)
+              (letc . rows . wxb bs (ns + bnd) [rows #bnd #ns])))   ; a let's names all shadow throughout
      ; no macro lane: cprop's output is macro-free -- it expands every nom-headed call under the
      ; same shadow guard.
      (fold (mapi (e \ wx e bnd) x) bnd)))
@@ -219,6 +229,38 @@
       (? (any (\ m (elem m ns)) ms) bs                            ; a name collision
          (lrdl ms bs ns) bs                                          ; an outer def reads an inner name
          (lflat (lup bs))))))
+   ; census: per lambda sibling, the names it reads that a binder covers, resolved as ana will. an
+   ; enclosing let's lambda sibling, seen from inside one of that let's lambda defs, is rebuilt at
+   ; each reference from its imports, so its row reads there in its place; the let's own lambda
+   ; siblings pour and drop; every other binder is an import. the rows ride the form to ale as the
+   ; closures' import rows, so a letrec builds each lambda once. quote and the binders read as in
+   ; lrd; a nom in head position reads like any other, which is how ana resolves it. c 'fr is the
+   ; enclosing lets' frames [rows base n], base and n placing a let's names in bnd from its end,
+   ; pushed while its lambda defs walk (wxd): the innermost binder of a name decides.
+   (census bs ns bnd) (: vis (ns + bnd) n #vis frs (c 'fr)
+    (add y sh acc) (elem y sh || elem y acc ? acc (y . acc))
+    (res x sh acc) (: i (lidx x vis) (i < #ns ? (add x sh acc) (frame x (n - 1 - i) frs sh acc)))
+    (frame x e fs sh acc) (fs @
+     ([rows base m] . u) (? (base + m <= e) (add x sh acc)                   ; bound nearer than this let
+                            (base <= e) (: p (assoc x rows) (two? p ? (foldl (a \ y \ add y sh a) acc >p) (add x sh acc)))
+                            (frame x e u sh acc))
+     (add x sh acc))
+    (fv x sh acc) (?
+     (nom? x) (x != () && elem x vis && !(elem x sh) ? (res x sh acc) acc)
+     (atom? x) acc
+     (<x == '\) (atom? >>x ? acc (: r (lp x) (fv >r (<r + sh) acc)))
+     (<x == ':) (fvl >x (ln >x + sh) acc)
+     (foldl (a \ e \ fv e sh a) acc x))
+    (fvl bs sh acc) (? (atom? bs) acc
+     (atom? >bs) (fv <bs sh acc)
+     (: nd (dsug <bs <>bs) (fvl >>bs sh (fv >nd sh acc))))
+    (lrows bs) (? (atom? >bs) ()
+     (: nd (dsug <bs <>bs) r (lrows >>bs)
+        (lambp >nd ? ((<nd . fv >nd () ()) . r) r)))
+    rows (lrows bs) ls (map cap rows)
+    (grow s) (: s2 (foldl (a \ m \ (elem m ls ? (foldl (b \ v \ (elem v b ? b (v . b))) a >(assoc m rows)) a)) s s)
+                (#s2 = #s ? s (grow s2)))
+    (map (r \ <r . filter (v \ !(elem v ls)) (grow >r)) rows))
    ; --- the identity kit: unchanged -> the original, no copy --------------------------------
    ; cprop/wx hand back the input tree wherever nothing rewrote. a `:`-bound non-tail call pays
    ; ~112b where an arg/tail-position call is free, so a walk result rides to its comparison as a
@@ -232,12 +274,13 @@
    (relam x r b) (b == >r ? x ('\ . <r + [b]))              ; \ rebuild; r = (lp x), b the walked body (lp's body is (last x))
    (wxl1 c x r bnd) (wxl2 c x (relam x r (wx >r (<r + bnd))))   ; wx's \ lane, framed for arg-position walks
    (wxl2 c x lam) (: _ (push c 'src (>lam . x)) lam)            ; tagged-body -> surface src for ala (stash even on identity: keeps the assoc order)
-   (wxl bs bnd) (wxb bs (ln bs + bnd))        ; a let's names all shadow throughout
-   (wxb bs bnd) (?
+   (wxb bs bnd fr) (?
     (atom? bs) bs
     (atom? >bs) (keep1 bs (wx <bs bnd))
     (: nd (dsug <bs <>bs)               ; desugar (f a..) so wx's \ adds params to bnd
-     (keep3 bs <nd (wx >nd bnd) (wxb >>bs bnd))))
+     (keep3 bs <nd (wxd >nd bnd fr) (wxb >>bs bnd fr))))
+   (wxd d bnd fr) (? !(lambp d) (wx d bnd)                        ; a lambda def walks under its let's frame
+                     (push c 'fr fr, (: w (wx d bnd) (pop c 'fr, w))))
    ; cflip: the nil?-flip peephole on a cond clause list. the cond tests g_false == nil?, so
    ; (? (nil? e) c [el]) and (? e [el] c) are equal -- flipping drops the nil? wrapper. fires only
    ; on an exact (nil? e) test in a 2- or 3-form clause. the head answers to the value as well as
@@ -502,7 +545,8 @@
                 (atom? b) (ana c a)
                 (a = '? ) (aco c b)
                 (a = '\ ) (? (atom? >b) (kim <b) (ana c (ala c () b 0 1)))
-                (a = ': ) (ale c <b >b)
+                (a = ': ) (ale c <b >b ())               ; the singleton (: x); feel tags every other let
+                (a = letc) (ale c <>b >>b <b)
                 (a = iop) (iap c b)
                 (a = apx) (apxh c b)
                 (app c a b))))     ; a value head: ala's (entry . imports) -- apply the built
@@ -644,7 +688,7 @@
                (: f (k 'far)
                   (? (tablet? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))
 
-  (ale c a b) (?
+  (ale c a b rows) (?                          ; rows: feel's census, (name . imports) per lambda sibling
    (atom? b) (ana c a)
    (:- (wire <cb <>cb >>cb (closures <cb))
     q (sco c (c 'arg) (c 'imp))
@@ -664,39 +708,9 @@
         a (? (-1 = peep t k -1 && lambp d) (#>d - 1) 0)
       (farof >ps (pin t k (1 < a ? a 0)))))
     _ (pin q 'far (farof <cb {}))
-    ; closures: each lambda def -> a closure via ala (a non-lambda -> just a stack slot), building
-    ; [names..] on the stack; then propagate captures to a fixpoint, and return the lambdas with the
-    ; let's own names dropped from each capture set (those are locals, resolved by wire).
-    (closures prs) (:- (fixcaps l)
-     s (c 'stk)
-     _ (push c 'stk 0)
-     (split a ps) (?
-      (atom? ps) a
-      !(lambp ><ps)
-       (push c 'stk <<ps,
-        split a >ps)
-      (: k <<ps
-         v (ala q () >><ps 0 0)                  ; hq 0: the first-build closure is cleared and rebuilt by weave, so no creation hook
-         a2 ((k . mkc v) . a)
-       (push c 'stk k,
-        split a2 >ps)))
-     l (split 0 prs)
-     _ (pin c 'stk s)
-     ; capture propagation: if k1 references sibling k2, k2 must also capture k1's imports (mutual
-     ; recursion). pass1 sweeps all ordered pairs once, pouring k1's vars into k2 in place (cput);
-     ; monofix repeats the pass until capsize stops growing.
-     (pour e1 e2) (each >(cof e1)                         ; pour e1's imports into e2 (skip dups; prepend)
-        (var \ elem var >(cof e2) ? 0 (cput e2 (<(cof e2) . var . >(cof e2)))))
-     (pass1 lst k1 k2) (? (atom? k1) lst                       ; one full sweep over ordered pairs k1 x k2
-        (atom? k2) (pass1 lst >k1 lst)                    ; k2 done -> next k1, reset k2
-        (k1 != k2 && elem <<k1 >(cof <k2))   ; k2 references k1
-         (pour <k1 <k2, pass1 lst k1 >k2)
-        (pass1 lst k1 >k2))
-     (capsize lst) (foldl (a \ e \ a + #>(cof e)) 0 lst)   ; total imports across closures (the measure)
-     (fixcaps lst) (: done (monofix lst (st \ pass1 st st st) capsize)
-                      j (map cap done)
-                      (dropj x) (<x . mkc (<(cof x) . foldl (flip ldel) >(cof x) j))
-                      (map dropj done)))
+    ; closures: a cell per lambda sibling, (0 . imports) off its census row -- feel's walk over the
+    ; boxfixed defs, so no closure is built to learn its captures. weave builds each on its row.
+    (closures prs) (foldl (a \ pr \ (lambp >pr ? ((<pr . mkc (0 . >(assoc <pr rows))) . a) a)) () prs)
 
    (wire prs body even lams) (:
     ; weave: emit the binding defs left-to-right. a lambda def is re-analyzed with its final import
@@ -717,8 +731,6 @@
     s (pin q 'lam lams,
        c 'stk)
     g (push c 'stk 0,
-    ; clear stale first-build closures so a ref hit during the rebuild defers to a backpatch site.
-       each lams (e \ cput e (0 . >(cof e))),
        weave prs)
     ; closures final -> backpatch each recorded recursive-fn ref with its text.
     f (each (q 'sites) (s \ poke 0 <(cof <s) (peep >s 0 0)),
