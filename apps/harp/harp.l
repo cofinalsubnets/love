@@ -52,7 +52,7 @@
    ; // truncates toward zero, so a negative cycle needs the step down by hand
    (qfl a)    (: p (load a)  n <p  d <>p  t (n // d)
                  (? (t * d = n) t (n < 0) (t - 1) t))
-   qfq    (qi * qfl)
+   qfq        (qi * qfl)
    (qnum a)   (load a @ p (<p / <>p))
    ; the same two, on plain integers, with n > 0
    (imod a n) (a % n @ r (r < 0 ? (r + n) r))
@@ -76,12 +76,12 @@
    ; the query span cut at every cycle line. every combinator whose answer depends
    ; on WHICH cycle it is (slowcat, rev, every, squeeze) queries through this, so
    ; the cycle number is never read off a span that straddles two.
-   (cycles b e) (b < e ?  (qmin e (qfq b + qone) @ nx ((b . nx) . cycles nx e)))
+   (cycles b e) (b < e ? (qmin e (qfq b + qone) @ nx ((b . nx) . cycles nx e)))
 
    ; --- the patterns ---------------------------------------------------------
    hush       (\ b e ())
    ; one event per cycle, the whole cycle wide
-   (pure v)   (\ b e (map (\ s (: c (qfq <s) [c (c + qone) <s >s v])) (cycles b e)))
+   (pure v)   (\ b e (map (s \ qfq <s @ c [c (c + qone) <s >s v]) (cycles b e)))
    (stack ps) (\ b e (cmap (p \ p b e) ps))
 
    ; one pattern per cycle, and each one advances a cycle only when its turn comes:
@@ -90,9 +90,9 @@
     (: n #ps
        (? (n = 0) hush
           (\ b e (cmap (\ s
-                        (: c (qfl <s)  i (imod c n)  o (qi (c - (idiv (c - i) n)))
+                        (: c (qfl <s)  i (imod c n)  o (qi (c - idiv (c - i) n))
                            p (ps i)
-                           (map (evtime (t \ t + o)) (p (<s - o) (>s - o)))))
+                         (map (evtime (t \ t + o)) (p (<s - o) (>s - o)))))
                        (cycles b e)))))
 
    (fast n p) (? (n = qzero) hush
@@ -184,18 +184,18 @@
    (whenmod a b g p) (a < 1 ? p (whenc (c \ imod c a >= b) g p))
    ; each event struck n times inside its own span, which is the one repeat that
    ; keeps the sequence's shape: a step that was a quarter cycle stays a quarter
-   (ply n p) (? (n < 2) p
-                (\ b e (cmap (\ x (: d ((evwe x - evwb x) / qi n)
-                                     (mk i) (? (i >= n) ()
-                                               (: sb (evwb x + qi i * d)
-                                                  se (sb + d)
-                                                  pb (qmax sb (evpb x))
-                                                  pe (qmin se (evpe x))
-                                                  (? (pb < pe)
-                                                     ([sb se pb pe (evv x)] . (mk (i + 1)))
-                                                     (mk (i + 1)))))
-                                     (mk 0)))
-                             (p b e))))
+   (ply n p) (n < 2 ? p
+              (\ b e (flip cmap (p b e) (\ x
+               (:- (mk 0)
+                d ((evwe x - evwb x) / qi n)
+                (mk i) (i < n ?
+                        (: sb (evwb x + qi i * d)
+                           se (sb + d)
+                           pb (qmax sb (evpb x))
+                           pe (qmin se (evpe x))
+                         (pb < pe ?
+                          ([sb se pb pe (evv x)] . mk (i + 1))
+                          (mk (i + 1))))))))))
 
    ; --- continuous patterns: a value everywhere, no structure of their own ----
    ; sampled at the middle of whatever span is asked for, so they take their
@@ -241,7 +241,7 @@
        (k >= n) (rept 1 n)
        (: (go a b) (: la #a  lb #b
                     (lb < 2 ? (foldl (+) () (a + b))
-                     (: m  (? (la < lb) la lb)
+                     (: m  (la < lb ? la lb)
                         na (map (i \ a i + b i) ^m)
                         nb (la > m ? (drop m a) (drop m b))
                       (go na nb))))
@@ -283,10 +283,8 @@
                         c  (go (j + 1) (ip * 10 + c - 48) (? seen (fd * 10) fd) seen)))
                (go neg 0 1 0))
    (mnum? w) (: n #w
-                (go j) (? (j >= n) 1
-                          (: c (w j)
-                             (? (c >= 48 && c <= 57 || c = 46 || c = 45)
-                                (go (j + 1)) 0)))
+                (go j) (j >= n ? 1
+                        (w j @ c (48 <= c <= 57 || c = 46 || c = 45 ?  (go (j + 1)) 0)))
                 (n @ 0 0 (go 0)))
    ; a numeric word is a number, anything else the word itself
    ; a whole number comes out as an integer, not as a rational: the value is the
@@ -298,8 +296,8 @@
    ; a term: a bracket, a rest, an elongation mark, or a word
    (mterm s i)
     (: j (mspace s i)  c (mat s j)
-     (c @ 91  (: r (mseq s (j + 1) 93 0) (<r . (madv s >r 93)))
-          60  (: r (mseq s (j + 1) 62 1) (<r . (madv s >r 62)))
+     (c @ 91  (mseq s (j + 1) 93 0 @ r (<r . (madv s >r 93)))
+          60  (mseq s (j + 1) 62 1 @ r (<r . (madv s >r 62)))
           126 (hush . (j + 1))
           95  ('elong . (j + 1))
           (mword s j @ r
@@ -344,12 +342,11 @@
    ; (a weighted timecat), alt=1 gives each member a cycle of its own
    (mseq s i cl alt)
     (: (grp i) (: r (msteps s i cl)
-                  (? (44 = (mat s >r))
-                     (: t (grp (>r + 1)) ((cat [(mfold <r)] <t) . >t))
-                     ([(mfold <r)] . >r)))
+                (mat s >r @ 44
+                 (grp (>r + 1) @ t ([(mfold <r)] + <t . >t))
+                 ([(mfold <r)] . >r)))
        g  (grp i)
-       ps (map (\ st (? !(two? st) hush
-                        (? alt (slowcat (map (\ x >x) st)) (timecat st))))
+       ps (map (st \ one? st ? hush (? alt (slowcat (map cup st)) (timecat st)))
                <g)
-       ((? (1 = #ps) (ps 0) (stack ps)) . >g))
+       ((#ps @ 1 (ps 0) (stack ps)) . >g))
    (mini s) (<(mseq s 0 0 0))))
