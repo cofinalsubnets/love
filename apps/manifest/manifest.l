@@ -16,16 +16,18 @@
 ;
 ; run: love manifest [FILE]   -- bare, it sails without one
 ; keys: arrows/hjkl move . enter edits the cell (= starts fresh) . x clears
-;       w stows . q stows and steps ashore . ^C abandons ship
+;       w stows . q stows and steps ashore . ^C abandons ship . eof leaves
 ;
-; the engine is pure core (ev/sound/tap); the tui rides raw/tty like
-; ink, so manifest never joins the corpus -- test/host/manifest.l probes both,
-; the tui end to end through a pty with the cb screen as the witness.
+; the engine is pure core (ev/sound/tap), and every key is a pure step on a state
+; tablet and every frame a pure lay into a port -- only `manifest` ties the tty, on
+; cli's stage. test/host/manifest.l probes the engine, and the tui end to end through
+; a pty with the cb screen as the witness.
 ;
-; the export list is the engine a caller can hold plus the verb: everything
-; else here (the reader, the dep walk, the painter, the key loop) is this
-; file's own business. quoted, per prel's note on the list head.
-(module '(manifest manifest-main sheet cell cell! worth face stow unstow)
+; the export list is the engine a caller can hold, the headless tui, and the verb;
+; the reader and the dep walk are this file's own business. quoted, per prel's note
+; on the list head.
+(module '(manifest manifest-main manifest-new manifest-frame manifest-key
+          sheet cell cell! worth face stow unstow)
 (borrow 'posix)
 (:
  ; --- reading a cell: repl-style, one form, unreadable text is a label ---
@@ -120,22 +122,31 @@
                           sh))))
 
  ; --- faces: how a worth looks in its 9 columns ---
- ; ..the guard is the wide case: n * " " takes |n|, so an over-long s would pad, not cut
- (padl s w) (#s < w ? ((w - #s) * " " + s) (snip s 0 w))
- (padr s w) (#s < w ? (s + (w - #s) * " ") (snip s 0 w))
+ ; cli's edwide counts display columns, so a wide character costs the two it takes
+ (padl s w) (: t (edcut s w) ((w - edwide t) (x \ " " + x) t))
+ (padr s w) (edfit s w " ")
  (face v) (? (v = whirl) "cycle!"
              (v = ()) ""
              (string? v) v
              (show v))
 
- ; --- the tui ---
+ ; --- the tui: a state tablet, a pure frame, a pure key -- cli's stage drives ---
+ ; {'sh 'path 'cx 'cy 'top 'edit 'over 'w 'h}, the shape lupa and mc hold. the stage
+ ; brackets raw mode and the alternate screen, re-reads the tty every keystroke (so a
+ ; resize lands), and decodes keys through edkey; eof leaves.
  (upto n f) ((: (go i) (i < n ? (f i, go (i + 1)))) 0)
  (cnom cx cy) (name $ string (97 + cx) + show (cy + 1))
  (min2 a b) (a < b ? a b)
  (max2 a b) (a < b ? b a)
+ (mrows h) (max2 1 (h - 3))                    ; the sheet's rows: bar, header and stern take 3
+ (mcols w) (max2 1 (min2 26 ((w - 5) // 10)))  ; 26 columns at 10 wide, past the 5-wide gutter
 
- ; one key, arrows folded to 1000+final ("\e[A".."\e[D"); a lone ESC is 27
- (key _) (see in @ 27 (? (cue? 0) (see in @ 91 (1000 + see in) 27) 27) b b)
+ (manifest-new sh path)
+  (pins {} 'sh sh 'path path 'cx 0 'cy 0 'top 0 'edit () 'over () 'w 80 'h 24)
+
+ ; top moves only far enough to keep the cursor on the screen, so a page reads as a page
+ (settle d h) (: nr (mrows h) cy (d 'cy) t (d 'top)
+                 (pin d 'top (? (cy < t) cy (t + nr <= cy) (cy - nr + 1) t)))
 
  (drawcell j sh i cy sel) (: v (worth sh (cnom i cy))
                              t (face v)
@@ -145,16 +156,19 @@
                             sel ? (say j "\e[0m"),
                             say j " "))
 
- (draw sh path r c cx cy top edit) (:
-    nr (r - 3)
-    nc (min2 26 ((c - 5) // 10))
+ (manifest-frame d w h) (:
+    _ (pins d 'w w 'h h)
+    _ (settle d h)
+    sh (d 'sh) path (d 'path) cx (d 'cx) cy (d 'cy) top (d 'top) edit (d 'edit)
+    nr (mrows h)
+    nc (mcols w)
     cur (cnom cx cy)
     j (jug 0)
     _ (say j "\e[?25l\e[H")
     ; the formula bar: cell name, then the edit line or the stowed source
     src (string $ cell sh cur)
     bar (string cur + (string? edit ? " = " ": ") + (string? edit ? edit src))
-    (say j (padr bar (c - 1)),
+    (say j (padr bar (w - 1)),
      say j "\e[K\r\n",
      ; the header row: column letters, the cursor's lit
      say j "    ",
@@ -175,51 +189,40 @@
                        "enter commits . esc steps back"
                        ((tally path ? (path + " . ") "") +
                         "arrows move . enter edits . = fresh . x clears . w stows . q quits"))
-                    (c - 1)),
+                    (w - 1)),
      say j "\e[J",
      ; editing: the terminal cursor rides the formula bar's end
      string? edit ?
       (say j (+ "\e[1;" (+ (show (+ (tally (string cur)) (+ 4 (tally edit)))) "H\e[?25h"))),
-     say out (slurp j),
-     flush out))
+     (slurp j)))
 
- ; the watch: draw, take a key, act, come about
- (go sh path r c cx cy top edit) (:
-    nr (r - 3)
-    nc (min2 26 ((c - 5) // 10))
-    top2 (? (cy < top) cy (cy >= top + nr) (cy - nr + 1) top)
-    _ (draw sh path r c cx cy top2 edit)
-    k (key ())
+ ; one key, one step on the tablet. the codes are cli's edkey: arrows are the
+ ; negatives, a byte is itself
+ (manifest-key d k) (:
+    sh (d 'sh) path (d 'path) cx (d 'cx) cy (d 'cy) edit (d 'edit)
+    nc (mcols (d 'w))
+    cur (cnom cx cy)
     (? (string? edit)
-       (k @ (13 || 10) (cell! sh (cnom cx cy) edit, go sh path r c cx cy top2 ())
-            27 (go sh path r c cx cy top2 ())
-            (127 || 8) (go sh path r c cx cy top2 (#edit ? (snip edit 0 (#edit - 1)) edit))
-            (go sh path r c cx cy top2 $ edit + (32 <= k < 127 ? (string k))))
-       (k @ (1065 || 107) (go sh path r c cx (max2 0 (- cy 1)) top2 ())       ; up
-          (1066 || 106) (go sh path r c cx (min2 98 (+ cy 1)) top2 ())      ; down
-          (1067 || 108) (go sh path r c (min2 (- nc 1) (+ cx 1)) cy top2 ()); right
-          (1068 || 104) (go sh path r c (max2 0 (- cx 1)) cy top2 ())       ; left
-          13 (go sh path r c cx cy top2 (cell sh (cnom cx cy) @ () "" s s))
-          61 (go sh path r c cx cy top2 "")
-          120 (: _ (cell! sh (cnom cx cy) "") (go sh path r c cx cy top2 ()))
-          119 (#path && stow sh path, go sh path r c cx cy top2 ())
-          113 (#path ? (stow sh path))                                   ; q: stow, step ashore
-          3 ()                                                                     ; ^C: abandon ship
-          (go sh path r c cx cy top2 ()))))
+       (k @ (13 || 10) (cell! sh cur edit, pin d 'edit ())
+            27 (pin d 'edit ())
+            (127 || 8) (pin d 'edit (#edit ? (snip edit 0 (#edit - 1)) edit))
+            (pin d 'edit $ edit + (32 <= k < 127 ? (string k))))
+       (k @ (-8 || 107) (pin d 'cy (max2 0 (cy - 1)))                 ; up
+            (-9 || 106) (pin d 'cy (min2 98 (cy + 1)))                ; down
+            (-2 || 108) (pin d 'cx (min2 (nc - 1) (cx + 1)))          ; right
+            (-1 || 104) (pin d 'cx (max2 0 (cx - 1)))                 ; left
+            13 (pin d 'edit (cell sh cur @ () "" s s))
+            61 (pin d 'edit "")                                       ; = : a fresh formula
+            120 (cell! sh cur "")                                     ; x : clear
+            119 (#path && stow sh path, d)                            ; w : stow
+            113 (#path && stow sh path, pin d 'over 1)                ; q : stow, step ashore
+            3 (pin d 'over 1)                                         ; ^C: abandon ship
+            d)))
 
  (manifest path) (: sh (sheet 0)
                     _ (tally path ? (unstow sh path))
-                    ws (tty 1)                           ; a fresh pty says 0x0: fall back
-                    r (two? ws && (5 < <ws) ? <ws 24)
-                    c (two? ws && (19 < >ws) ? >ws 80)
-                    (raw 1,
-                     say out "\e[?1049h\e[2J",
-                     flush out,
-                     go sh path r c 0 0 0 (),
-                     say out "\e[0m\e[?25h\e[?1049l",
-                     flush out,
-                     raw 0,
-                     ()))
+                    d (manifest-new sh path)
+                    (stage (manifest-frame d) (manifest-key d) (_ \ d 'over)))
 
  manifest-usage "usage: love manifest [FILE]   (arrows move . enter edits . w stows . q quits)"
  (manifest-main as) (? (one? as) (manifest "", 0)
