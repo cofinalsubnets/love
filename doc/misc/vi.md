@@ -41,12 +41,16 @@ u and ^R (whole-insert granularity), / ? n N (the BRE dialect of re.l, wrapping)
 
 The ex line: `w [NAME]`, `q`, `q!`, `wq`, `x`, a bare line number, `$`, `e`/`o` (`e NAME`, `e!`,
 `o NAME` — `:o` reads as `:e` here), `hl` (flip the syntax paint), `lint` (libra's scan over the
-buffer), `fmt` (libra's reindenter, in place).
+buffer), `fmt` (libra's reindenter, in place), `set` (`sw=N`, and `wrap`/`nowrap`).
 
 Out of scope, deliberately: visual mode, named registers, `.`, macros, `:s` (sed exists), text
 objects; tabs render at the terminal's stops, not ours (the cursor column drifts on tab-heavy
-lines); no horizontal scroll (long lines clip at the view's edge); no UTF-8 width awareness
-(bytes are columns).
+lines); no UTF-8 width awareness (bytes are columns).
+
+A line too long for the view is shown one of two ways. `nowrap` is the default: the view slides
+sideways to keep the cursor in it, half a screen at a time, and never further right than the
+line's end. `:set wrap` folds the line onto as many screen rows as it needs instead; H M L then
+stop at the last row the view really shows, and ^F ^B ^D ^U and zt zz zb step by screen rows.
 
 ## traps
 
@@ -59,6 +63,5 @@ lines); no horizontal scroll (long lines clip at the view's edge); no UTF-8 widt
 
 As need arises, in rough order: `.` (the repeat — record the last change's byte string, replay
 it), visual mode (a span-selection over the same operators), `:s` ranges over re.l (sed's engine
-is right there), named registers, tab-stop-aware rendering + horizontal scroll, and a pty smoke
-that drives the face under a real terminal via inle/posix.c (as test/baoedit.l does for bao's
-line editor).
+is right there), named registers, tab-stop-aware rendering, and a pty smoke that drives the face
+under a real terminal via inle/posix.c (as test/baoedit.l does for bao's line editor).
