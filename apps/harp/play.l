@@ -263,9 +263,9 @@
           !(two? ps2) (: _ (say err (harp-usage + "\n")) 1)
           (o 'print) (: _ (harp-print p c0 ncyc) 0)
           (peep o 'wav ()) (: _ (harp-wav p c0 ncyc rate cps tail g (o 'wav)) 0)
-          (: _ (harp-horn p c0 ncyc rate cps tail g) 0))))
+          (: _ (harp-horn p c0 ncyc rate cps tail g) 0)))
    ; ..and as a verb of the artifact: `love harp`
-   _ (pins (cite 'verbs 'tab) 'harp (udoor 'harp harp-main harp-usage 0 0))
+   _ (pins (cite 'verbs 'tab) 'harp (udoor 'harp harp-main harp-usage 0 0)))
 ) ; module play
 
 ; the seat: fire only when this file is the program on the real command line.

@@ -9,10 +9,11 @@
 // with a service worker and one reload. no isolation, no machine -- said, not left blank.
 // the module and its image are fetched from web/wasm/ -- where the tracked, committed
 // pair lives -- unless data-wasm/data-image name them; data-boot is the boot line (default
-// a login shell, whose /etc/profile opens the tower and leaves a shell behind it), data-ram
-// the RAM in MiB, data-cols the most columns worth reading, which
-// is what settles how large a glyph is drawn. a query string names the same four, and wins
-// where it does: the attributes are the page's and the link is the reader's.
+// a login shell, which says its /etc/profile and waits; a program named instead is booted
+// again when it exits, so `sh -c "tower; sh"` is a game and then a shell), data-ram the
+// RAM in MiB, data-cols the most columns worth reading, which is what settles how large a
+// glyph is drawn. a query string names the same four (?boot=tower) and wins where it
+// does: the attributes are the page's and the link is the reader's.
 //
 // the machine takes its RAM at boot and never gives it back, so a default is a promise
 // about what runs on it. 1024 is what the tower wants, measured: at 256 the walk answers a
@@ -74,14 +75,52 @@ export async function loveMachine(root) {
     Atomics.store(ctl, 1, tail);
     Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2); };
 
-  canvas.addEventListener('keydown', e => {
+  // THE SOFT KEYBOARD: a phone raises one for a text field and never for a canvas, so
+  // the keys are read off a field that is on the page and not seen, as well as off the
+  // canvas. a finger's tap on the screen is the game's and leaves the field alone, so
+  // no keyboard rises over the floor; the chip under the screen focuses the field, which
+  // is what brings the keyboard up for the shell -- and a tap on the screen takes it
+  // down again. a mouse click focuses the field too: a desktop has nothing to raise.
+  const keys = document.createElement('textarea');
+  keys.className = 'keys'; keys.setAttribute('aria-label', 'keyboard'); keys.rows = 1;
+  for (const [k, v] of Object.entries({ autocapitalize: 'off', autocomplete: 'off', autocorrect: 'off', spellcheck: 'false' }))
+    keys.setAttribute(k, v);
+  const chip = document.createElement('button');
+  chip.type = 'button'; chip.className = 'chip keys-chip'; chip.textContent = '\u2328 keyboard';
+  canvas.after(keys, chip);
+  // a soft keyboard's backspace says nothing over an empty field, so the field always
+  // holds one character to delete, a zero-width space, with the caret after it
+  const blank = '\u200b';
+  const rearm = () => { keys.value = blank; keys.setSelectionRange(1, 1); };
+  rearm();
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  const refocus = () => (coarse ? canvas : keys).focus({ preventScroll: true });
+  chip.addEventListener('click', () => { rearm(); keys.focus({ preventScroll: true }); });
+  // a hardware key, off either element: the bytes a serial terminal sends
+  const onkey = e => {
     let b = CSI[e.key];
     if (!b && e.key.length === 1) {
       const c = e.key.codePointAt(0);
       b = e.ctrlKey && c >= 64 && c < 128 ? [c & 31] : e.ctrlKey || e.metaKey || e.altKey ? null
         : [...new TextEncoder().encode(e.key)]; }
     if (!b) return;
-    e.preventDefault(); push(b); });
+    e.preventDefault(); push(b); };
+  canvas.addEventListener('keydown', onkey);
+  keys.addEventListener('keydown', onkey);
+  // a soft key names no key, so it is read off what it did to the field: a delete is
+  // caught before it lands, and anything typed is what the field holds after, less the
+  // sentinel, with the newline a return. a composition (an IME's) is read when it ends.
+  keys.addEventListener('beforeinput', e => {
+    const b = e.inputType === 'deleteContentBackward' ? [127]
+            : e.inputType === 'deleteContentForward' ? CSI.Delete : null;
+    if (!b) return;
+    e.preventDefault(); push(b); rearm(); });
+  const typed = () => {
+    const t = keys.value.split(blank).join('');
+    if (t) push([...new TextEncoder().encode(t.replace(/\n/g, '\r'))]);
+    rearm(); };
+  keys.addEventListener('input', e => { if (!e.isComposing) typed(); });
+  keys.addEventListener('compositionend', typed);
   // SOUND: the samples come out of the same ring and hear.mjs's worklet plays them, from
   // the first touch of the screen, which is the earliest a page is allowed to. no sound is
   // not the island failing, so a refusal goes to the console and the machine runs on.
@@ -89,11 +128,14 @@ export async function loveMachine(root) {
   canvas.addEventListener('pointerdown', hear);
   canvas.addEventListener('pointerup', hear);
   canvas.addEventListener('keydown', hear);
+  keys.addEventListener('keydown', hear);
+  chip.addEventListener('click', hear);
   scanning(ring, ctl, canvas, { scan_at, scan_n, c_sh, c_st });   // and as scancodes, for a game
+  scanning(ring, ctl, keys, { scan_at, scan_n, c_sh, c_st });
   // a chip types its line at the machine, the way the repl island's chips ran theirs
   for (const ch of root.querySelectorAll('[data-type]'))
     ch.addEventListener('click', () => { push([...new TextEncoder().encode(ch.dataset.type), 13]);
-                                         canvas.focus(); });
+                                         refocus(); });
 
   status.textContent = 'fetching the machine...';
   let wasm, image;
@@ -164,7 +206,8 @@ export async function loveMachine(root) {
           y = (e.clientY - box.top) * canvas.height / box.height,
           col = 1 + Math.floor(x / (8 * zoom)), row = 1 + Math.floor(y / (16 * zoom));
     push([27, 91, 60, 48, 59, ...digits(col), 59, ...digits(row), 77]); };
-  canvas.addEventListener('pointerdown', e => (canvas.focus({ preventScroll: true }), tap(e)));
+  // a finger focuses the canvas (no keyboard over the floor), a mouse the field
+  canvas.addEventListener('pointerdown', e => ((e.pointerType === 'touch' ? canvas : keys).focus({ preventScroll: true }), tap(e)));
   cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'sh --login'), fb, image },
                   image ? [wasm, image] : [wasm]);
   // the box reflowed -- the window resized, or the island's column did. the new size goes
@@ -184,7 +227,7 @@ export async function loveMachine(root) {
   new ResizeObserver(() => { clearTimeout(pending); pending = setTimeout(ask, 150); })
     .observe(canvas);
   status.textContent = 'the machine is waking...';
-  canvas.focus({ preventScroll: true });
+  refocus();
 }
 
 document.querySelectorAll('.machine').forEach(loveMachine);

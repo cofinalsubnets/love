@@ -84,6 +84,18 @@
  (test (0.05 < up) (|back < 0.01) (down < -0.1) (f != f0)
        (me 's < -0.05) (0.0 < me 'w) (has? (g 'msg) "bow")))
 
+; --- a tap: the direction from your blade to the cell, as a key ---
+(: g (fresh ()) me (g 'me) x (me 'x) mid (23 - 4 - 2)   ; a 2-inch blade is 4 rows: its middle two up
+   _ (pin g 'h 12.0)
+   _ (grass-tap g [(x - 10) mid] 1000) left (me 'w)
+   _ (grass-tap g [(x + 10) mid] 1100) right (me 'w)
+   _ (grass-tap g [x (mid - 8)] 1200) up (g 'msg) sv (me 'sv)
+   _ (grass-tap g [(x + 9) (mid + 4)] 1300) diag (g 'msg)
+   pts (g 'pts)
+   _ (grass-tap g [x mid] 1400)
+ (test (left < 0.0) (right > left) (has? up "reach for the sun") (0.0 < sv) (has? diag "bow") (me 'sv < sv)
+       (pts = 1 + 2 + 3 + 4) (g 'pts = pts)))          ; a tap on the blade itself is nothing
+
 ; --- the words: up reaches for what is in the sky, down bows ---
 (: g (fresh ())
    _ (pin g 'h 12.0) _ (grass-key g -8 1000) sun (g 'msg)
@@ -104,16 +116,16 @@
    set (s 'set)
    _ (grass-song-cue s) _ (feed 2 0.0)
    sung (s 'mode) sv #(s 'vs)
-   _ (feed (int (8 / 0.32 * 30)) 0.0)         ; the eight bars through
+   _ (feed (int (6 / 0.32 * 30)) 0.0)         ; the six bars through
    after (s 'mode)
    ; the cue: once a day at the day's hour, never twice
    g (fresh ()) _ (pins g 'songs '(7.0 7.0 7.0 7.0 7.0 7.0 7.0) 'h 6.9)
    _ (ticks g 30) c1 (g 'cue) _ (pin g 'cue 0) _ (ticks g 300) c2 (g 'cue)
    _ (pin g 'h 30.9) _ (ticks g 30) c3 (g 'cue)
  (test (3 < blown < 30) (calm <= blown + 3)
-       (#set = 10) (elem 11 set) (elem -5 set) !(elem 3 set)   ; the melody's notes, not the bass
-       (sung = 'song) (0 < sv) (after = 'chimes) (s 'cyc = 8)
-       (#(slurp j) = 4 * song-chunk * (182 + int (8 / 0.32 * 30)))
+       (#set = 6) (elem 11 set) (elem 13 set) (elem 1 set) !(elem 0 set) !(elem 7 set)   ; the melody's notes, sharped by the key
+       (sung = 'song) (0 < sv) (after = 'chimes) (s 'cyc = 6)
+       (#(slurp j) = 4 * song-chunk * (182 + int (6 / 0.32 * 30)))
        (c1 = 1) (c2 = 0) (c3 = 1)))
 
 ; --- the frame: r rows and a bar, the sky's pen by hour, shadows by day, stars by night ---

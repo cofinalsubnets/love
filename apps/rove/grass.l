@@ -17,13 +17,13 @@
 ; run: love grass
 (module (grass grass-run grass-main grass-new grass-key grass-tick grass-frame grass-hud
          grass-bar grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
-         grass-tune grass-song-new grass-song-feed grass-song-cue grass-final score song-chunk
+         grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
          daylight sky-pen compass fx1 week-hours dh fps dance-cost)
 (borrow 'rove)
 (borrow 'harp)                          ; the cycle algebra the song is scheduled by
 (borrow 'score)                         ; the tune as text
 (borrow 'play)                          ; the voices, the mix
-(? (cite 'posix) (borrow 'posix) ())
+(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
 (:
  esc (string 27)
  fps 30
@@ -39,17 +39,14 @@
  dew-drop 20.0
 
  ; the tune as a score (apps/harp/score.l): a bar to the line, NAME BEATS pairs, `-` a
- ; rest, [CHORD] the bar's bass, a key line the key signature. `love grass FILE` plays a
- ; score of your own, and a bare `love grass` plays ~/.love/etc/grass.score when there is
- ; one. `love harp --check FILE` reads one back
- score '("B4 1 A4 1 G4 1 E4 1 [Em]"
-         "G4 1 A4 .5 G4 .5 E4 1 - 1 [Em]"
-         "B4 1 A4 1 G4 1 D4 1 [D]"
-         "E4 1 D4 .5 C4 .5 B3 1 - 1 [C]"
-         "E4 1 G4 1 B4 1 E5 1 [Em]"
-         "D5 1 B4 .5 D5 .5 A4 1 - 1 [A]"
-         "G4 1 A4 .5 B4 .5 G4 1 E4 1 [G]"
-         "D4 1 E4 .5 D4 .5 G3 1 - 1 [Em]")
+ ; rest, [CHORD] the bar's bass, a key line the key signature. six bars in E
+ score '("key F# C# G# D#"
+         "B4 .75 - .25 B4 1 G4 2"
+         "B4 .75 - .25 B4 .5 F4 2 - .5"
+         "B4 .75 - .25 B4 1 G4 1.5 E4 .5"
+         "C5 1.75 - .25 B4 1.5 - .5"
+         "G4 .25 F4 .25 E4 3 - .5"
+         "C4 1 G4 1.25 - .25 F4 .25 E4 .25 C4 1")
  song-rate (love-arch @ 'wasm 16000 48000)
  song-cps 0.32                          ; bars a second: a music box wound down
  song-chunk (song-rate // 30)           ; a frame's worth, thirty a second
@@ -137,6 +134,23 @@
          (pins g 'combo combo 'pts (g 'pts + combo) 'dk k 'dms now
                  'hy (clamp (g 'hy - dance-cost) 0.0 100.0)
                  'msg (word + (1 < combo ? ((word ? "   " "") + "combo x" + show combo) ""))))))
+
+ ; ..and a tap is a place rather than a letter: the step it means is the direction from
+ ; your blade's middle to the cell it landed on -- the nearest of the eight as the screen
+ ; shows them, a cell being twice as tall as it is wide, so a tap a little off a row is
+ ; still along it. c is [x y], cli's edtap, 0-based in screen order. a tap on the blade
+ ; itself is nothing
+ tap-keys {'(-1 0) 104 '(1 0) 108 '(0 -1) 107 '(0 1) 106
+           '(-1 -1) 121 '(1 -1) 117 '(-1 1) 98 '(1 1) 110}
+ (grass-tap g c now) (: me (g 'me) r (g 'r)
+   n (int (me 'ht * rpi * (1.0 + me 's) + 0.5))
+   ex (<c - me 'x)
+   ey (<>c - (r - 4 - n // 2))
+   ax (abs ex) ay (2 * abs ey)          ; in cell widths
+   ; within 22.5 degrees of a row or a column is along it: tan is 5/12
+   dx (12 * ax < 5 * ay ? 0 (toward 0 ex))
+   dy (12 * ay < 5 * ax ? 0 (toward 0 ey))
+   (dx = 0 && dy = 0 ? g (grass-key g (tap-keys [dx dy]) now)))
 
  ; --- one frame of the week -------------------------------------------------------
  (grass-tick g) (:
@@ -356,7 +370,13 @@
    (say (s 'h) (pack (mixdown vs base song-chunk) song-chunk song-gain)))
 
  ; --- the week on the tty ------------------------------------------------------------
- ; keys drained per frame, a frame painted, a chunk of song out (or a beat's rest)
+ ; the clock paces the ticks, thirty a second, and the horn is fed by its lag: chunks go
+ ; out until a lead stands queued, ahead of anything else the loop does. a frame is
+ ; painted only when the tick it shows is on time -- a seat too slow to draw every tick
+ ; (the page draws one in forty milliseconds) still ticks at the clock's rate and still
+ ; sounds, and gives up frames rather than either.
+ song-lead (6 * song-chunk)                             ; queued ahead: a fifth of a second
+ tick-ms (1000.0 / fps)
  ; a sign stands deaf for half a second, then waits for a key; the song plays under it
  ; either way, since a beat is what feeds the horn. deaf by the clock and not by beats:
  ; a card takes its first chunks at once, so the beats say nothing about the time
@@ -374,18 +394,28 @@
    bs (filter (b \ !(b 'err)) (score-parse ls))
    hn (? bs (: h (horn song-rate 2) (? (nom? h) () h)) ())
    sng (? hn (grass-song-new bs hn (wheel (clock 0))) ())
-   (beat _) (? sng (grass-song-feed sng (g 'wind)) (rest 33))
+   (feed _) (? (sng && horn-lag hn < song-lead) (grass-song-feed sng (g 'wind), feed ()) ())
+   (beat _) (feed (), rest 5)                           ; a sign's idle: the lead, then a breath
    (cue _) (? (sng && g 'cue) (grass-song-cue sng, pin g 'cue 0))
-   (swim _) (? (g 'over) ()
-               (: _ (key-drain g repeat-gap (k \ grass-key g k (clock 0)))
-                  _ (grass-tick g)
-                  _ (cue ())
-                  _ (say out (grass-frame g), flush out)
-                  _ (beat ())
-                  (swim ())))
+   ; tick n is owed at t0 + n ticks. behind by a whole tick, the frame is skipped and the
+   ; tick alone catches up; behind by many (a sign stood, the tab slept) the clock is
+   ; re-based instead, so no stretch of the week runs in fast forward
+   (swim n) (? (g 'over) ()
+     (: _ (feed ())
+        due (g 't0 + n * tick-ms)
+        late (clock 0 - due)
+        (? (late < 0.0) (rest 2, swim n)
+           (: _ (? (10.0 * tick-ms < late) (pin g 't0 (g 't0 + late)))
+              _ (key-drain g repeat-gap (k \ (k = -12 ? (grass-tap g (edtap ()) (clock 0))
+                                                          (grass-key g k (clock 0)))))
+              _ (grass-tick g)
+              _ (cue ())
+              _ (? (late < tick-ms) (say out (grass-frame g), flush out) ())
+              (swim (n + 1))))))
    _ (say out (esc + "[?25l"))
    _ (sign g open-ttl open-rows beat)
-   _ (swim ())
+   _ (pin g 't0 (clock 0))
+   _ (swim 0)
    _ (? (g 'over = 'done)
         (pin g 'cue 1, cue (),
          sign g end-ttl ["" ("final score   " + show (g 'pts))
@@ -393,23 +423,18 @@
         ())
    _ (? hn (: _ (flush hn) (close hn)) ())
    g)
+ ; the screen raised and put back here; a terminal is asked for its taps too (xterm's
+ ; SGR mouse reports, which cli's edkey reads as the key -12)
  (grass-run ls) (: _ (raw 1)
-                  _ (say out (esc + "[?1049h" + esc + "[2J"))
+                  _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?1000h" + esc + "[?1006h"))
                   g (grass-week ls)
-                  _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
+                  _ (say out (esc + "[?1006l" + esc + "[?1000l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
                   _ (flush out)
                   _ (drain-keys ())
                   _ (raw 0)
                   (puts (grass-final g + "\n"), 0))
- grass-usage "usage: love grass [SCORE]   (dance: arrows or hjkl; q or esc leaves)"
- ; your own score, where the tree keeps an app's taste; the built-in when there is none
- (score-home _) (: h (getenv "HOME")
-                   ls (string? h ? (score-file (h + "/.love/etc/grass.score")) ())
-                   (ls ? ls score))
- (grass-main as) (:
-   (with p f) (: ls (score-file p) (ls = () ? (say err ("grass: cannot read " + p + "\n"), flush err, 2) (f ls)))
-   (as @ () (: ls (score-home ()) (score-check ls 0 ? 1 (grass-run ls)))
-         [p] (with p (ls \ (score-check ls 0 ? 1 (grass-run ls))))
-         (say err ("grass: " + grass-usage + "\n"), flush err, 2)))
+ grass-usage "usage: love grass   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
+ (grass-main as) (as @ () (grass-run score)
+                       (say err ("grass: " + grass-usage + "\n"), flush err, 2))
  _ (pins (cite 'verbs 'tab) 'grass (udoor 'grass grass-main grass-usage 1 1)))
 ) ; module grass

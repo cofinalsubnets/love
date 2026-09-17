@@ -101,6 +101,12 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
                image-rendering: pixelated; background: #000000; outline: none;
                border-radius: 3px; }
 .machine .fb[hidden] { display: none; }
+/* the field the keys are read off: on the page, so a phone raises its keyboard for it,
+   and not seen. the chip under the screen is what focuses it */
+.machine { position: relative; }
+.machine .keys { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0;
+                 border: 0; padding: 0; margin: 0; resize: none; overflow: hidden; }
+.machine .keys-chip { align-self: flex-start; margin-top: .6em; }
 .mbar { flex-shrink: 0; color: var(--dim); font-size: .8em; margin-top: .6em; }
 
 /* --- chips (runnable examples) + the crew roster + the glossary --- */
