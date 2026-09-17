@@ -182,11 +182,6 @@
            two? (stat (dl + "/doomgeneric")) ? 0 1)))
    ; the nest's IWAD rides the exec unless the caller named one: the nest's cwd is the caller's
    (nest-args dl as) (any (= "-iwad") as ? as ("-iwad" . dl + "/doom1.wad" . as))
-   ; the nest is shared with seed and web, which link its love without doom: the flag the
-   ; link wrote says which love stands there, so a plain one is relinked rather than run
-   (nest-doom? nest)
-    (: q (open (nest + "/out/.doom.flag") "r")
-       (hot? q && (: s (slurp q) _ (close q) (string? s && s = "DOOM=1\n"))))
    ; the pair the DOOM=1 lane wants, fetched into DL once: 0 when both stand there. the
    ; tree comes as the tarball where a socket is ours, and file by file where the
    ; network is a page's fetch door (kore's wget rides the same door)
@@ -209,7 +204,7 @@
     (: exe (selfpath 0)
        here (cwd 0)
        nest (here + "/love-" + love-version)
-       bin (nest + "/out/love")
+       bin (nest + "/out/doom/love")      ; the doom flavour's own tree (common.mk's hsuf)
        dl (nest + "/dl")
        (fail s) (say err ("doom: " + s + "\n"), 1)
        (enter _) (: e (setenv "LOVE_DOOM_NEST" "1",
@@ -218,7 +213,7 @@
        (? !(string? exe) (fail "cannot find this binary's path")
           ((0 < #(getenv "LOVE_DOOM_NEST")) && two? (stat bin))
            (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
-          (two? (stat bin) && nest-doom? nest) (enter 0)
+          (two? (stat bin)) (enter 0)
           (: m (nest-lay here nest dl
                          (\ _ (cite 'source 'src-arm nest exe,            ; autonomous: ours throughout
                                 note "building the nest's love with doom inside"))
@@ -235,13 +230,13 @@
     (: here (cwd 0)
        nest ((here = "/" ? "" here) + "/love-" + love-version)     ; the page's shell sits at /
        dl (nest + "/dl")
-       mod (nest + "/out/love.wasm")
+       mod (nest + "/out/doom/love.wasm")
        (fail s) (say err ("doom: " + s + "\n"), 1)
        (enter _) (: _ (note ("booting " + mod))
                     e ((ev 'kexec) mod "sh -c 'doom; sh'")
                     (fail ("cannot boot " + mod + " (" + show e + ")")))
        (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
-          (two? (stat mod) && nest-doom? nest) (enter 0)
+          (two? (stat mod)) (enter 0)
           ; a task shares no environment with its spawner on this seat, so what cook is
           ; told goes on its line
           (: m (nest-lay here nest dl (\ _ (note "building this machine's love with doom inside"))

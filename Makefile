@@ -162,12 +162,14 @@ $(ho)/o/inle/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h
 
 moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/mooncc0.image
-# A DRIVING LOVE (`love doom` names itself in LOVE): the artifact IS the bootstrap. out/love0
-# becomes a two-line script onto it (image awake: every cat a recipe preloads reopens modules
-# the image carries, the kernel verb's own shape), its own mooncc is the moon, the mooncc
-# image is never baked and no love0 is compiled -- the tree builds with nothing but the
-# binary that carried it. lcat runs on it bare: the prel is already there. rtlove is the
-# love that runs a moon-side tool (mkrt) either way.
+# A DRIVING LOVE (`love doom` names itself in LOVE): the artifact IS the bootstrap. love0
+# becomes a two-line script onto it at out/drive0 (image awake: every cat a recipe preloads
+# reopens modules the image carries, the kernel verb's own shape), its own mooncc is the
+# moon, the mooncc image is never baked and no love0 is compiled -- the tree builds with
+# nothing but the binary that carried it. A PATH APIECE: each love0 is one kind of file
+# for good, so neither is remade when the other is asked for and nothing has to tell them
+# apart. lcat runs on it bare: the prel is already there. rtlove is the love that runs a
+# moon-side tool (mkrt) either way.
 # the cat that hands an UNBAKED love holo: love0 carries no assembler and mksrc, mkblob and
 # mksys all want one. a baked love finds it itself, so a driving LOVE takes none -- and $m
 # never did: laying the source archive is 830 MB through the preload and 56 MB without it.
@@ -186,27 +188,20 @@ holocat_dep =
 # is the prerequisite that goes with it -- there is nothing to wait for.
 m = $(LOVE)
 mdep =
-$(love0): out/.love0.mode
-	@echo '$(t_sh)	'$@
+love0 = out/drive0
+$(love0): force_src
 	@mkdir -p $(dir $@)
-	@printf '#!/bin/sh\nexec %s "$$@"\n' '$(LOVE)' > $@
-	@chmod 755 $@
+	@tf=$@.$$$$.tmp; printf '#!/bin/sh\nexec %s "$$@"\n' '$(LOVE)' > $$tf; chmod 755 $$tf; \
+	 $(note)
 else
 mdep = $(ho)/love
 rtlove = $(love0) wake out/mooncc0.image
 rtlove_dep = out/mooncc0.image
-$(love0): $(love0_o) out/.love0.mode
+$(love0): $(love0_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
 endif
-# which love0 stands here is a link input no timestamp can see -- the script onto a
-# driving LOVE, or the one linked from out/0/ -- so a witness that moves when the mode
-# flips remakes it either way: the one nest `love seed`, `love doom` and `love web` share
-out/.love0.mode: force_src
-	@mkdir -p out
-	@tf=$@.$$$$.tmp; echo 'LOVE=$(LOVE)' > $$tf; \
-	 $(note)
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one odir, worn twice -- at
 # the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
@@ -542,7 +537,7 @@ distro-smoke: $(distro_img)
 	@grep -qE "kore ls /proc -> exit 0, [1-9]" $(distro_dir)/boot.log && echo "  OK kore userland runs (ls /proc, forked+captured)" || { echo "  FAIL userland self-check"; exit 1; }
 	@echo "-- distro smoke passed --"
 
-ko = out
+ko = out$(hsuf)
 
 # the kernel's verbs; its gates are test/test.mk's.
 .PHONY: kmain_o run run-$a run-sh run-headless init-container uefi
@@ -633,7 +628,7 @@ $(k_pie): $(k_o) $(mdep)
 ifeq ($a,wasm)
 k_libc_c =
 k_mach_o = $(k_doom_o)
-$(k_mod): $(k_o) $(mdep) out/.doom.flag
+$(k_mod): $(k_o) $(mdep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -t $a $(k_o) -o $@
@@ -760,14 +755,7 @@ $(moon_d)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l $(holocat_dep) $(love0)
 	@LOVE_NO_IMAGE= $(love0) $(holocat) tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-$(ho)/love.raw $(ho)/love.cand.raw: $(kart_o) out/.doom.flag
-
-# the DOOM flag is a link input no timestamp can see: a witness that changes with it, so
-# `make host DOOM=1` after a plain `make host` relinks (and the other way round)
-out/.doom.flag: force_dist_list
-	@mkdir -p out
-	@tf=$@.$$$$.tmp; echo 'DOOM=$(DOOM)' > $$tf; \
-	 $(note)
+$(ho)/love.raw $(ho)/love.cand.raw: $(kart_o)
 
 $(k_odir)/love/love.o: out/lib/love_version.h
 kcppflags += -DLvHaveVersionH      # only love/love.c reads it; cook has no target-specific variable
@@ -1114,16 +1102,16 @@ wasm:
 	@$(MAKE) -s a=wasm $(if $(LOVE),LOVE=$(LOVE),) $(if $(DOOM),DOOM=$(DOOM),) wasm_seat
 # ..and that seat, spelled where NODE is known: the module always, the image when there is
 # a node to bake it under. the loader (inle/wasm/loader.js) is the runtime under a bare module.
-wasm_seat: $(k_mod) $(if $(NODE),out/wasm/love.image,)
+wasm_seat: $(k_mod) $(if $(NODE),$(ko)/wasm/love.image,)
 # by hand: bytes every C edit would otherwise churn. ONE PAIR IS COPIED OUT to web/ beside
 # the fonts -- generated files committed for one reason, that github pages serves what it
 # is given and builds nothing.
 # ..copied under a second make, whose stat of the module is after the seat laid it
 site-wasm: wasm
 	@$(MAKE) -s web/wasm/love.wasm $(if $(NODE),web/wasm/love.image,)
-web/wasm/love.wasm: out/love.wasm
+web/wasm/love.wasm: $(ko)/love.wasm
 	@mkdir -p web/wasm; echo '$(t_cp)	'$@; cp $< $@
-web/wasm/love.image: out/wasm/love.image
+web/wasm/love.image: $(ko)/wasm/love.image
 	@echo '$(t_cp)	'$@; cp $< $@
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
@@ -1131,10 +1119,10 @@ web/wasm/love.image: out/wasm/love.image
 # hands it to k_start; a stale one is refused and the egg bakes, the host's own law.
 # the bake's own RAM: the crew warm plus the image being written is more than the
 # terminal's default span, and the fault it takes there is a wild write in gen_major.
-out/wasm/love.image: out/love.wasm inle/wasm/cpu.mjs inle/wasm/inle.mjs
+$(ko)/wasm/love.image: $(ko)/love.wasm inle/wasm/cpu.mjs inle/wasm/inle.mjs
 	@echo 'BAKE	'$@
-	@INLE_RAM=1024 $(NODE) inle/wasm/inle.mjs --lift /love.image:$@ out/love.wasm bake /love.image < /dev/null > out/wasm/bake.log 2>&1 \
-	   || { cat out/wasm/bake.log; exit 1; }
+	@INLE_RAM=1024 $(NODE) inle/wasm/inle.mjs --lift /love.image:$@ $(ko)/love.wasm bake /love.image < /dev/null > $(ko)/wasm/bake.log 2>&1 \
+	   || { cat $(ko)/wasm/bake.log; exit 1; }
 
 clean:
 	rm -rf out

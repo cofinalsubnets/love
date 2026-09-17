@@ -102,8 +102,10 @@ tco ?= 1
 
 # tco EARNS A TREE THE SAME WAY HCC does, and for the same reason: a tco=0 love is a
 # different binary at the same path, so sharing out would make every following make
-# rebuild the world, and a test would run whichever flavour was built last.
-hsuf := $(if $(HCC),/cc,)$(if $(filter 0,$(tco)),/tco0,)
+# rebuild the world, and a test would run whichever flavour was built last. DOOM earns
+# one on the same reading: it adds two TUs and a flag to every kernel TU's compile, and
+# what it lays carries a game the plain artifact does not.
+hsuf := $(if $(HCC),/cc,)$(if $(DOOM),/doom,)$(if $(filter 0,$(tco)),/tco0,)
 
 # the corpus: 00-init's harness first, the spec second, then uu.l, then the rest. uu.l is
 # front-loaded EXPLICITLY so its dependents (uukind*, uulay, uupatch, uuwm*) see it whatever

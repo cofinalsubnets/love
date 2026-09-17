@@ -333,8 +333,8 @@
    gap (: n (g 'c - wide l - wide r) (n < 2 ? 2 n))
    (l + (gap (t \ t + " ") "") + r))
  (grass-bar g) (? (g 'me 'hy < 12.0) ("you are wilting  " + g 'msg)
-                  (g 'msg || "dance: arrows or hjkl, fast and changing   q leaves"))
- (grass-final g) (g 'over = 'done ? ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + " in tall")
+                  (g 'msg || "dance: arrows or hjkl   q leaves"))
+ (grass-final g) (g 'over = 'done ? ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + "inches tall")
                                     ("you left the field on day " + show (1 + grass-day g)))
 
  ; --- the song: a music box out the horn, wind chimes between its plays ---------------

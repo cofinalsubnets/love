@@ -1253,13 +1253,13 @@ else
 test_kernel_wasm: host
 	@$(MAKE) -s wasm
 	@echo TEST out/love.wasm "(node: the kernel corpus on the woken image, serial, headless)"
-	@INLE_RAM=768 $(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love.image $(R)/out/love.wasm test/kernel/all.l \
-	   < /dev/null > out/wasm/kernel.log 2>&1; \
-	 grep -q "image awake" out/wasm/kernel.log \
-	   && grep -q "tests pass" out/wasm/kernel.log && ! grep -q "failed:" out/wasm/kernel.log \
-	   && ! grep -q "^0 tests pass" out/wasm/kernel.log \
-	   || { tail -20 out/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
-	@grep "tests pass" out/wasm/kernel.log
+	@INLE_RAM=768 $(NODE) $(R)/inle/wasm/inle.mjs --image $(ko)/wasm/love.image $(R)/$(ko)/love.wasm test/kernel/all.l \
+	   < /dev/null > $(ko)/wasm/kernel.log 2>&1; \
+	 grep -q "image awake" $(ko)/wasm/kernel.log \
+	   && grep -q "tests pass" $(ko)/wasm/kernel.log && ! grep -q "failed:" $(ko)/wasm/kernel.log \
+	   && ! grep -q "^0 tests pass" $(ko)/wasm/kernel.log \
+	   || { tail -20 $(ko)/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
+	@grep "tests pass" $(ko)/wasm/kernel.log
 	@echo TEST test/kernel/glass.l "(the console's grid: real pixels in, rows and columns out)"
 	@sh $(R)/test/gate/glass.sh $(NODE) $(R)/out/love.wasm out/wasm/love.image out/wasm/glass.log
 	@echo TEST test/gate/glass.mjs "(the page's half of the grid, asked without a page)"
