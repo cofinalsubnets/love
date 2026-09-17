@@ -23,3 +23,10 @@ love/quay/cleat_8x16.c
   The cp437 console face (ter-i16n.psf) re-laid on quay's page order by
   tools/mkpsf.l. A modified version may not wear the reserved name, so the
   table is named for the tree.
+
+
+--- music ---
+
+apps/rove/grass.l, the `score` list
+  "Toy Soldiers", written by Martika and Michael Jay, 1988.
+  The tune the music box plays is an arrangement by ear of its chorus melody.
