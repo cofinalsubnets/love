@@ -2433,6 +2433,7 @@
            (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
            (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (. (cap l) m) m)))
            (revcat l acc) (? (two? l) (revcat (cup l) (. (cap l) acc)) acc)
+           (rev l) (revcat l ())
            (assoc x l) (? (two? l) (? (= x (cap (cap l))) (cap l) (assoc x (cup l))))
            (all f l) (? (two? l) (? (f (cap l)) (all f (cup l)) 0) 1)
            (any f l) (? (two? l) (? (f (cap l)) 1 (any f (cup l))) 0)

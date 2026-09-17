@@ -9,7 +9,7 @@
 ; from `wait` as 256+sig, above every exit status, and the job parks in `sh-jobs`:
 ; n -> (pids state cmd), state 'stopped | 'running. a trailing & runs the pipeline
 ; unwaited as a 'running job. the signal numbers are Linux's, the repo's home ABI.
-; also here: the shared floor (sh-rev sh-int sh-unwords) and the shell state.
+; also here: the shared floor (sh-int sh-unwords) and the shell state.
 
 (module 'lush
 ; the syscall doors this shell drives, taken off the module by value: a splice would
@@ -26,8 +26,6 @@
    sigclear (cite 'posix 'sigclear) sigfd (cite 'posix 'sigfd)
    sigign? (cite 'posix 'sigign?)  sigtake (cite 'posix 'sigtake)
 
-   (sh-rev l) (foldl (\ a x (x . a)) () l)
-
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
    sh-jobs (tablet 0)
    sh-njob {0}
@@ -36,8 +34,8 @@
    ; interactive spawns lead a fresh process group (pg 0) and the first stage takes the
    ; terminal (fg 1) -- a stop to an orphaned group is discarded, so ^Z wants its own
    ; group. the cooked/non-tty lane keeps the in-shell pgrp (-1).
-   (sh-pgm _) (? (sh-tty ()) 0 (0 - 1))
-   (sh-fgm _) (? (sh-tty ()) 1 0)
+   (sh-pgm _) (sh-tty () ? 0 -1)
+   (sh-fgm _) (sh-tty () ? 1 0)
    sh-status {0}                               ; $?: the last foreground status
    sh-substat {0}                              ; the last $( )'s status -- ambient because
                                                ; expansion sits between sh-cmdsub and the reader
@@ -62,36 +60,31 @@
    sh-signums '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("USR1" 10) ("USR2" 12)
                 ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18) ("TSTP" 20))
    (sh-signum nm)
-     ((: (g l) (? (one? l) 0
-                  (: e <l (? (<e = nm) <>e (g >l)))))
-      sh-signums)
+    ((: (g l) (l @- 0 (e . u) (<e = nm ? <>e (g u)))) sh-signums)
    (sh-signame n)
-     ((: (g l) (? (one? l) ()
-                  (: e <l (? (<>e = n) <e (g >l)))))
-      sh-signums)
+    ((: (g l) (two? l ?  (: e <l (<>e = n ? <e (g >l)))))
+     sh-signums)
    ; every trapped condition that is a signal -- exit leaves by its own door
-   (sh-sigconds _) (filter (\ k !(k = "EXIT")) (keys sh-traps))
+   (sh-sigconds _) (filter (!= "EXIT") (keys sh-traps))
    ; a signal ignored on entry cannot be trapped (POSIX), and no error is owed for
    ; trying. snapshotted at sh-main, before the interactive entry sets ignores of its
    ; own, or the shell reads its own hand as the caller's.
    sh-igno {0}
    (sh-snapign _)
-     (pin sh-igno ()
-          (filter (\ nm (: n (sh-signum nm) (n && (sigign? n))))
-                  (map cap sh-signums)))
-   (sh-ignored? nm) (: l (sh-igno ()) (? (two? l) (any (\ k (k = nm)) l) 0))
+    (pin sh-igno () (filter (nm \ sh-signum nm @ n (n && sigign? n)) (map cap sh-signums)))
+   (sh-ignored? nm) (sh-igno () @ l (two? l && any (= nm) l))
    ; clear, then arm: sigfd's sigprocmask is a SIG_BLOCK and accumulates, and closing
    ; the fd does not unblock -- so empty the mask first and re-block the live set.
    (sh-rearm _)
      (: cs (sh-sigconds 0)
-        ns (filter (\ n !(n = 0)) (map sh-signum cs))
-        ((? (sh-sigport ()) (close (sh-sigport ())) 0),
+        ns (filter (!= 0) (map sh-signum cs))
+        (sh-sigport () && close (sh-sigport ()),
          pin sh-sigport () 0,
          sigclear 0,
-         (? (two? ns) (: p (sigfd ns) (? (hot? p) (pin sh-sigport () p) 0)) 0),
+         two? ns ? (: p (sigfd ns) (? (hot? p) (pin sh-sigport () p) 0)),
          0))
    (sh-disarm _)                               ; a forked child inherits neither
-     ((? (sh-sigport ()) (close (sh-sigport ())) 0),
+     (sh-sigport () && close (sh-sigport ()),
       pin sh-sigport () 0, sigclear 0, 0)
    ; read every queued signal and run what each one traps. the action's own status
    ; does not become $? -- the command's does, exactly as at the exit door.
@@ -101,13 +94,8 @@
         (? #a
            (: st (sh-status ()) _ ((sh-runtrap ()) a) _ (pin sh-status () st) 0)
            0))
-   (sh-sigdrain _)
-     (: p (sh-sigport ())
-        (? !p 0
-           ((: (g _) (: ev (sigtake p)
-                        (? (one? ev) 0
-                           (: _ (sh-fire-sig <ev) (g 0)))))
-            0)))
+   (sh-sigdrain _) (sh-sigport () @ p
+    (? !p 0 ((: (g _) (: ev (sigtake p) (one? ev ? 0 (sh-fire-sig <ev, g 0)))) 0)))
    ; POSIX: the exit action runs with $? as it stood and the shell still exits on
    ; that; only an explicit `exit` inside the action changes it, through sh-leave.
    (sh-fire-exit _)
@@ -137,29 +125,29 @@
    ; machinery rides out), under an sh-oneline the line (by scare, since set -u fires
    ; from a word expansion with no pair to hand back), otherwise the process.
    (sh-leave st)
-     (? (sh-subfds ()) ('xit . st)
-        (0 < (sh-online ())) (scare 'sh-exit st)
-        (: _ (sh-fire-exit 0) (quit st)))
+    (? (sh-subfds ()) ('xit . st)
+       (0 < (sh-online ())) (scare 'sh-exit st)
+       (sh-fire-exit 0, quit st))
    sh-retf {0}                                 ; a top-level `return` landed: sh-lines stops its file (dot-return)
 
    ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on
    ; the shared floor: eval's `.`/read builtins and the loops all drink from it
-   (sh-getline port) (: c (see port) (? (c < 0) 'eof (c = 10) "" ((string c) + (sh-rest port))))
-   (sh-rest port)    (: c (see port) (? (c < 0) ""   (c = 10) "" ((string c) + (sh-rest port))))
+   (sh-getline port) (see port @ c (? (c < 0) 'eof (c = 10) "" (string c + sh-rest port)))
+   (sh-rest port)    (see port @ c (? (c < 0) ""   (c = 10) "" (string c + sh-rest port)))
 
    (sh-unwords ws) (foldl (\ a w (? #a ((a + " ") + w) w)) "" ws)
    (sh-addjob pids state cmd)
-     (: n (1 + (sh-njob ())) _ (pin sh-njob () n) _ (pin sh-jobs n [pids state cmd]) n)
+    (1 + sh-njob () @ n (pin sh-njob () n, pin sh-jobs n [pids state cmd], n))
    (sh-jobline n j)
-     ("[" + ((show n) + ("] " + ((show (j 1)) + ("  " + ((j 2) + "\n"))))))
+    ("[" + show n + "] " + show (j 1) + "  " + j 2 + "\n")
    (sh-stopped? sts) (foldl (\ a x (? a a (charm? x && 255 < x))) 0 sts)
    ; wait a foreground job; a stop registers + reports it instead of hanging the prompt
    (sh-waitfg pids cmd)
-     (: sts (map (\ p (wait p)) pids)
+     (: sts (map wait pids)
         _   (sh-sigdrain 0)                            ; POSIX: after the command, not during
         _   (? (sh-tty ()) (ttyfg 0) 0)                ; the shell takes the terminal back
         _   (pin sh-status ()                          ; $?: the last stage; a stop folds to 128+sig
-             (: st (last sts) (? (charm? st && (255 < st)) (st - 128) (charm? st) st 127)))
+             (: st (last sts) (? (charm? st && 255 < st) (st - 128) (charm? st) st 127)))
         (? (sh-stopped? sts)
            (: n (sh-addjob pids 'stopped cmd)
               _ (puts (sh-jobline n (sh-jobs n))) 0)
@@ -170,21 +158,21 @@
    (sh-bgnote pid)
      (each (keys sh-jobs)
        (\ n (: j (sh-jobs n)
-               (? !j 0
-                  (: ps (sh-unpid (j 0) pid)
-                     (? (ps = (j 0)) 0
-                        !ps (: _ (? (sh-tty ())          ; notices are the tty's; scripts stay quiet
-                                    (puts ("[" + ((show n) + ("] done  " + ((j 2) + "\n"))))) 0)
-                               (pull sh-jobs n 0))
-                        (pin sh-jobs n [ps (j 1) (j 2)])))))))
+             (? !j 0
+                (: ps (sh-unpid (j 0) pid)
+                   (? (ps = (j 0)) 0
+                      !ps (: _ (? (sh-tty ())          ; notices are the tty's; scripts stay quiet
+                                  (puts ("[" + ((show n) + ("] done  " + ((j 2) + "\n"))))) 0)
+                             (pull sh-jobs n 0))
+                      (pin sh-jobs n [ps (j 1) (j 2)])))))))
    (sh-reapbg _)
-     (: r (glean 0) (? (two? r) (: _ (sh-bgnote <r) (sh-reapbg 0)) 0))
+     (glean 0 @ r (two? r ? (sh-bgnote <r, sh-reapbg 0) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
    ; string membership: elem tests identity (uninterned strings never hit)
-   (sh-smem? x l) (? (one? l) 0 (? (x = <l) 1 (sh-smem? x >l)))
+   (sh-smem? x l) (? (one? l) 0 (x = <l ? 1 (sh-smem? x >l)))
    (sh-int s) (sh-intl s 0 0)
    (sh-intl s i a) (? (i = #s) a (sh-intl s (i + 1) ((a * 10) + ((s i) - 48))))
-   (sh-lastjob _) (foldl (\ a k (? (a < k) k a)) 0 (keys sh-jobs))
+   (sh-lastjob _) (foldl (a \ k \ a < k ? k a) 0 (keys sh-jobs))
    (sh-jobn argv) (? >argv (sh-int <>argv) (sh-lastjob 0))
    (sh-fg n)
      (: j (sh-jobs n)
@@ -192,7 +180,7 @@
            (: pids (j 0) cmd (j 2)
               (pull sh-jobs n 0,
                (? (sh-tty ()) (ttyfg <pids) 0),        ; the job's group gets the terminal first
-               each pids (\ p (still p sig-cont)),
+               each pids (p \ still p sig-cont),
                sh-waitfg pids cmd))))
    (sh-bg n)
      (: j (sh-jobs n)
@@ -360,7 +348,7 @@
      (: n #s
         (addl cur segs) (#cur ? (('lit . cur) . segs) segs)
         (go i cur segs)
-          (? (i = n) (sh-rev (addl cur segs))
+          (? (i = n) (rev (addl cur segs))
            (: b (s i)
               (? (b = 92 && (i + 1) < n && sh-btesc? (s (i + 1)))
                    (go (i + 2) (cur + string (s (i + 1))) segs)
@@ -383,59 +371,56 @@
         (addl cur segs) (#cur ? (('lit . cur) . segs) segs)
         ; ".." inner: $ ` live, \ escapes $ ` \ ", " closes -> (segs . j) | ()
         (dq i cur segs)
-          (? (i = n) ()
-             (: b (s i)
-                (? (b = 34) (sh-rev (addl cur segs) . i + 1)
-                   (b = 92 && i + 1 < n && (sh-btesc? (s (i + 1)) || s (i + 1) = 34))
-                     (dq (i + 2) (cur + string (s (i + 1))) segs)
-                   (b = 36) (sh-dol s n (i + 1) @
-                             ('dollar . j) (dq j (cur + "$") segs)
-                             (sg . j)      (dq j "" (sg . addl cur segs))
-                                            (dq (i + 1) (cur + "$") segs))
-                   (b = 96) (sh-bt s n (i + 1) "" @
-                             (t . j) (dq j "" (('sub . t) . addl cur segs))
-                                      (dq (i + 1) (cur + string b) segs))
-                   (dq (i + 1) (cur + string b) segs))))
+         (i != n ? (: b (s i) (b @
+          34 (rev (addl cur segs) . i + 1)
+          (92 && i + 1 < n && (sh-btesc? (s (i + 1)) || s (i + 1) = 34))
+           (dq (i + 2) (cur + string (s (i + 1))) segs)
+          36 (sh-dol s n (i + 1) @
+              ('dollar . j) (dq j (cur + "$") segs)
+              (sg . j)      (dq j "" (sg . addl cur segs))
+                            (dq (i + 1) (cur + "$") segs))
+          96 (sh-bt s n (i + 1) "" @
+              (t . j) (dq j "" (('sub . t) . addl cur segs))
+                      (dq (i + 1) (cur + string b) segs))
+          (dq (i + 1) (cur + string b) segs))))
         (go i cur segs)
-          (? (i = n) (sh-rev (addl cur segs))
-             (: b (s i)
-                (? (b = 39) (: (cl j acc) (? (j = n) (go (i + 1) (cur + string b) segs)
-                                             (s j = 39) (go (j + 1) "" (('sq . acc) . addl cur segs))
-                                             (cl (j + 1) (acc + string (s j))))
-                              (cl (i + 1) ""))
-                   (b = 34) (dq (i + 1) "" () @
-                             (inner . j) (go j "" (('dq . inner) . addl cur segs))
-                                          (go (i + 1) (cur + string b) segs))
-                   (b = 92 && (i + 1) < n)
-                     (go (i + 2) (cur + string (s (i + 1))) segs)
-                   (b = 36) (sh-dol s n (i + 1) @
-                             ('dollar . j) (go j (cur + "$") segs)
-                             (sg . j)      (go j "" (sg . addl cur segs))
-                                            (go (i + 1) (cur + "$") segs))
-                   (b = 96) (sh-bt s n (i + 1) "" @
-                             (t . j) (go j "" (('sub . t) . addl cur segs))
-                                      (go (i + 1) (cur + string b) segs))
-                   (go (i + 1) (cur + string b) segs))))
+          (? (i = n) (rev (addl cur segs))
+             (: b (s i) (b @
+              39 (:- (cl (i + 1) "")
+                  (cl j acc) (? (j = n)    (go (i + 1) (cur + string b) segs)
+                                (s j = 39) (go (j + 1) "" (('sq . acc) . addl cur segs))
+                                           (cl (j + 1) (acc + string (s j)))))
+              34 (dq (i + 1) "" () @
+                  (inner . j) (go j "" (('dq . inner) . addl cur segs))
+                              (go (i + 1) (cur + string b) segs))
+              (92 && i + 1 < n) (go (i + 2) (cur + string (s (i + 1))) segs)
+              36 (sh-dol s n (i + 1) @
+                  ('dollar . j) (go j (cur + "$") segs)
+                  (sg . j)      (go j "" (sg . addl cur segs))
+                                (go (i + 1) (cur + "$") segs))
+              96 (sh-bt s n (i + 1) "" @
+                  (t . j) (go j "" (('sub . t) . addl cur segs))
+                          (go (i + 1) (cur + string b) segs))
+              (go (i + 1) (cur + string b) segs))))
         (go 0 "" ()))
 
    ; --- heredoc collection ------------------------------------------------------
    ; the delimiter, right after << : 'EOF' / "EOF" (quoted: body literal) or a
    ; bare run -> (quoted delim . j) | ()
    (sh-hddelim s n i)
-     (? (i = n) ()
-        (: b (s i)
-           (? (b = 39 || b = 34)
-                (: (go j acc) (? (j = n) ()
-                                 (s j = b) (1 . acc . j + 1)
-                                 (go (j + 1) (acc + string (s j))))
-                   (go (i + 1) ""))
-              (: (bare? x) !(lx-ws? x || elem x '(10 124 38 59 60 62 40 41))
-                 (go j acc) ((j < n && bare? (s j)) ? (go (j + 1) (acc + string (s j)))
-                                                      (acc . j))
-                 r (go i "")
-                 (#<r ? (0 . r))))))
+     (i != n ?
+      (s i @
+       (b @ (39 || 34))
+        (:- (go (i + 1) "")
+         (go j acc) (? (j = n) ()
+                       (s j = b) (1 . acc . j + 1)
+                       (go (j + 1) (acc + string (s j)))))
+        (: (bare? x) !(lx-ws? x || elem x '(10 124 38 59 60 62 40 41))
+           (go j acc) (j < n && bare? (s j) ? (go (j + 1) (acc + string (s j))) (acc . j))
+           r (go i "")
+         (#<r ? (0 . r)))))
    (sh-tabstrip l) (: (go i) (i < #l && l i = 9 ? (go (i + 1)) i)
-                      (snip l (go 0) #l))
+                    (snip l (go 0) #l))
    (sh-lineend s n j) (: (go i) (i = n || s i = 10 ? i (go (i + 1))) (go j))
    ; body lines from j until the delimiter line -> (body . resume-j) | ()
    (sh-hdlines s n j strip delim)
@@ -455,7 +440,7 @@
       (addl cur segs) (#cur ? (('lit . cur) . segs) segs)
       (fw cur started segs toks)                    ; flush the word in progress
         (: sg (addl cur segs)
-           (started || two? sg ? (('w . sh-rev sg) . toks) toks))
+           (started || two? sg ? (('w . rev sg) . toks) toks))
       ; substitute each heredoc placeholder word with its collected body
       (fixw t bods)
         (<t = 'w && two? >t && <<>t = 'hd ?
@@ -464,14 +449,14 @@
          t)
       (fin toks hq bods)
         (two? hq ? ('more . 'heredoc)
-                   (1 . map (t \ fixw t bods) (sh-rev toks)))
+                   (1 . map (t \ fixw t bods) (rev toks)))
       ; '...' -> index of the closing quote | ()
       (sq j) (? (j = n) () (s j = 39) j (sq (j + 1)))
       (esc? b) (elem b '(34 36 92 96))
       (peek? i b) (i + 1 < n && s (i + 1) = b)
       ; ".." -> (segs . j-past) | () unfinished
       (dq i cur segs) (i != n ?
-       (s i @ 34 (sh-rev (addl cur segs) . i + 1)
+       (s i @ 34 (rev (addl cur segs) . i + 1)
               (92 && peek? i 10) (dq (i + 2) cur segs)
               (92 && i + 1 < n && esc? (s (i + 1)))
                (dq (i + 2) (cur + string (s (i + 1))) segs)
@@ -495,14 +480,14 @@
                               (sh-hdlines s n j (h 1) (h 3) @ (body . j2)
                                  (coll j2 rest ((h 0 . (h 2 . body)) . bs)))
                               (j . bs))
-                         (coll (i + 1) (sh-rev hq) bods @
+                         (coll (i + 1) (rev hq) bods @
                           (j . bs) (lx j "" 0 () tks () bs k)
                                     ('more . 'heredoc)))))
                ; a comment runs to the end of its line, never the end of the
                ; input -- the buffer is multi-line whenever PS2/'more gathered
                ; (the nl itself still lexes, so heredoc bodies keep collecting)
                (35 && !started)
-                 (: (sk j) ((j < n && !(s j = 10)) ? (sk (j + 1)) j)
+                 (: (sk j) ((j < n && s j != 10) ? (sk (j + 1)) j)
                     (lx (sk (i + 1)) "" 0 () toks hq bods k))
                39 (: j (sq (i + 1))
                    (? !j ('more . 'quote)
@@ -611,28 +596,25 @@
    (pao ts) (: r (ppipe ts) (? (bad? r) r (paomore <r >r)))
    (paomore a ts)
      (one? ts ? [a]
-        (: t <ts
-           (? (tk-op? t "&&") (paorhs 'and a >ts)
-              (tk-op? t "||") (paorhs 'or a >ts)
-              (a . ts))))
+      (: t <ts
+       (? (tk-op? t "&&") (paorhs 'and a >ts)
+          (tk-op? t "||") (paorhs 'or a >ts)
+          (a . ts))))
    (paorhs k a ts)
-     (: ts2 (skipnl ts)
-        (one? ts2 ? ('more . 'op)
-           (: r (ppipe ts2)
-              (? (bad? r) r (paomore [k a <r] >r)))))
+     (skipnl ts @ ts2
+      (one? ts2 ? ('more . 'op)
+       (ppipe ts2 @ r (bad? r ? r (paomore [k a <r] >r)))))
 
    ; pipeline: a leading bare ! word negates the whole thing
    (ppipe ts)
-     (? (rw? <ts "!")
-        (: r (ppipe1 >ts) (? (bad? r) r ['not <r . >r]))
-        (ppipe1 ts))
-   (ppipe1 ts) (: r (pcomm ts) (? (bad? r) r (ppmore [<r] >r)))
+     (rw? <ts "!" ? (ppipe1 >ts @ r (bad? r ? r ['not <r . >r])) (ppipe1 ts))
+   (ppipe1 ts) (pcomm ts @ r (bad? r ? r (ppmore [<r] >r)))
    (ppmore cmds ts)
      (? (ts && tk-op? <ts "|")
         (: ts2 (skipnl >ts)
            (one? ts2 ? ('more . 'op)
             (: r (pcomm ts2) (bad? r ? r (ppmore (<r . cmds) >r)))))
-        ((? >cmds ['pipe (sh-rev cmds)] <cmds) . ts))
+        ((? >cmds ['pipe (rev cmds)] <cmds) . ts))
 
    ; command: a compound by its reserved word, a function def, else simple
    (pcomm ts)
@@ -668,7 +650,7 @@
            (? (two? ts2 && tk-w? <ts2)
               (prd ast >ts2 [<>t >>t ><ts2 . rs])
               ('err . "redirect wants a target")))
-        (? (two? rs) ['rdr ast (sh-rev rs) . ts] (ast . ts)))
+        (? (two? rs) ['rdr ast (rev rs) . ts] (ast . ts)))
 
    (pif ts)
      (: c (plist (skipnl ts))
@@ -685,7 +667,7 @@
         (? (one? ts2) ('more . 'compound)
            (: w (litw <ts2)
               (w @- ('err . "if wants `fi`")
-               "fi" (predir ['if (sh-rev clauses) ()] >ts2)
+               "fi" (predir ['if (rev clauses) ()] >ts2)
                "elif"
                  (: c (plist (skipnl >ts2))
                     (? (bad? c) c
@@ -699,7 +681,7 @@
                     (? (bad? b) b
                        (: f (expw >b "fi" "else wants `fi`")
                           (? !(charm? <f) f
-                             (predir ['if (sh-rev clauses) <b] >f)))))))))
+                             (predir ['if (rev clauses) <b] >f)))))))))
    (ploop k ts)
      (: c (plist (skipnl ts))
         (? (<c = 'stop) ('err . "loop: empty condition")
@@ -720,7 +702,7 @@
                     (rw? <ts2 "in")
                       (: (go t acc) (? (two? t && tk-w? <t)
                                        (go >t (><t . acc))
-                                       (sh-rev acc . t))
+                                       (rev acc . t))
                          r (go >ts2 ())
                          (pfordo nm <r >r))
                     (pfordo nm [[('var . "@")]] ts2))))))
@@ -740,14 +722,14 @@
    (pcitems w items ts)
      (: ts2 (skipnl ts)
         (? (one? ts2) ('more . 'compound)
-           (rw? <ts2 "esac") (predir ['case w (sh-rev items)] >ts2)
+           (rw? <ts2 "esac") (predir ['case w (rev items)] >ts2)
            (: ts3 (? (tk-op? <ts2 "(") >ts2 ts2)
               (go t acc)                          ; patterns: word (| word)*
                 (? (one? t) ('more . 'compound)
                    !(tk-w? <t) ('err . "case wants a pattern")
                    (: acc2 (><t . acc) t2 >t
                       (? (two? t2 && tk-op? <t2 "|") (go >t2 acc2)
-                         (two? t2 && tk-op? <t2 ")") (sh-rev acc2 . >t2)
+                         (two? t2 && tk-op? <t2 ")") (rev acc2 . >t2)
                          (one? t2) ('more . 'compound)
                          ('err . "case pattern wants `)`"))))
               r (go ts3 ())
@@ -755,26 +737,26 @@
                  (pcbody w <r >r items)))))
    (pcbody w pats ts items)
      (: ts2 (skipnl ts)
-        (? (one? ts2) ('more . 'compound)
-           (tk-op? <ts2 ";;") (pcitems w ((pats . ()) . items) >ts2)
-           (rw? <ts2 "esac") (pcitems w ((pats . ()) . items) ts2)
-           (: b (plist ts2)
-              (? (bad? b) b
-                 (: ts3 (skipnl >b)
-                    (? (one? ts3) ('more . 'compound)
-                       (tk-op? <ts3 ";;")
-                         (pcitems w ((pats . <b) . items) >ts3)
-                       (rw? <ts3 "esac")
-                         (pcitems w ((pats . <b) . items) ts3)
-                       ('err . "case wants `;;` or `esac`")))))))
+      (? (one? ts2) ('more . 'compound)
+         (tk-op? <ts2 ";;") (pcitems w ((pats . ()) . items) >ts2)
+         (rw? <ts2 "esac") (pcitems w ((pats . ()) . items) ts2)
+         (: b (plist ts2)
+          (bad? b ? b
+           (: ts3 (skipnl >b)
+            (? (one? ts3) ('more . 'compound)
+               (tk-op? <ts3 ";;")
+                 (pcitems w ((pats . <b) . items) >ts3)
+               (rw? <ts3 "esac")
+                 (pcitems w ((pats . <b) . items) ts3)
+               ('err . "case wants `;;` or `esac`")))))))
    (pgroup ts)
      (: b (plist (skipnl ts))
-        (? (<b = 'stop) (pgend () >b)              ; { } empty? no: the closer ends it
-           (bad? b) b
-           (pgend <b >b)))
+      (? (<b = 'stop) (pgend () >b)              ; { } empty? no: the closer ends it
+         (bad? b) b
+         (pgend <b >b)))
    (pgend body ts)
      (: e (expw ts "}" "{ wants `}`")
-        (? !(charm? <e) e (predir ['group body] >e)))
+      (? !(charm? <e) e (predir ['group body] >e)))
    (psubsh ts)
      (: b (plist (skipnl ts))
         (? (bad? b) b
@@ -785,9 +767,9 @@
    (pfun ts)                                     ; NAME ( ) [nl] command
      (: nm (litw <ts)
         ts3 (skipnl >>>ts)
-        (? (one? ts3) ('more . 'compound)
-           (: b (pcomm ts3)
-              (? (bad? b) b ['fun nm <b . >b]))))
+      (one? ts3 ? ('more . 'compound)
+         (: b (pcomm ts3)
+            (? (bad? b) b ['fun nm <b . >b]))))
 
    ; simple command: words + redirects, any order; a redirect eats its target
    (pcmd ts) (pcm ts () ())
@@ -805,7 +787,7 @@
               (pcfin ts ws rs))))
    (pcfin ts ws rs)
      (!ws && !rs ? ('err . "expected a command")
-        ['cmd (sh-rev ws) (sh-rev rs) . ts]))
+        ['cmd (rev ws) (rev rs) . ts]))
 ) ; module 'lush
 
 ; --- lush 🐚 the glob -- fnmatch + pathname expansion, pure love ---
@@ -826,12 +808,9 @@
    sh-ones (cite 'glob 'ones)
    (sh-globby? t m)
      (:- (go 0) n #t
-      (go i) (? (i = n) 0
-                (: b (t i)
-                   (? (m i = 49 && (b = 42 || b = 63 || b = 91)) 1 (go (i + 1))))))
+      (go i) (i = n ? 0 (t i @ b (m i = 49 && (b @ (42 || 63 || 91) 1) ? 1 (go (i + 1))))))
 
    ; pattern -> components split on / (every /, quoted or not, is a path break)
-   ; core `rev`, not sh-rev: cook loads just the glob, by path, for $(wildcard)
    (sh-psplit t m)
      (:- (go 0 0 ()) n #t (go i st acc)
       (? (i = n)    (rev ((snip t st i . snip m st i) . acc))
@@ -850,15 +829,15 @@
       (: c <cs ct <c cm >c rest >cs
          nxt (? (sh-globby? ct cm)
                 (catmap (d \ gmatches d ct cm) pfxs)
-                (catmap (d \ (: p (d + ct) (two? (stat p) && [p]))) pfxs))
+                (catmap (d \ d + ct @ p (two? (stat p) && [p])) pfxs))
          (one? rest ? nxt (gwalk (map (p \ p + "/") nxt) rest))))
    ; sorted, POSIX's law for expansion -- readdir's raw order is the filesystem's,
    ; so an unsorted glob leaks the disk into anything built over it.
    (gmatches d ct cm)
      (: names (readdir (? #d d "."))
-        dot (#ct && ((ct 0) = 46))
+        dot (#ct && ct 0 = 46)
         (map (+ d)
-             (sort (filter (nm \ (dot || nm 0 != 46) && sh-fmatch ct cm nm) names)))))
+         (sort (filter (nm \ (dot || nm 0 != 46) && sh-fmatch ct cm nm) names)))))
 ) ; module 'lush
 
 ; --- lush 🐚 the word -- expansion: segments to fields ---
@@ -878,7 +857,7 @@
    (sh-ifs? (32 || 9 || 10)) 1
    (sh-chomp t)
      (:- (go #t) (go k) (0 < k && t (k - 1) = 10 ? (go (k - 1)) (snip t 0 k)))
-   (sh-runsub x) (sh-chomp ("" + ((sh-subeval ()) x)))
+   (sh-runsub x) (sh-chomp ("" + sh-subeval () x))
 
    ; --- the love lane: a form's answer, and that answer as shell text -----------
    ; the evaluator is aboard, so nothing is spawned. (sh-loveval src) -> (1 . value) |
@@ -889,7 +868,7 @@
      (: m (nom 0)                                 ; a fresh nom: 'torn, ==-safe
         (rdl x acc) (sound x @ 'torn       m
                                (d . rest) (rdl rest (d . acc))
-                               _           (sh-rev acc))
+                               _           (rev acc))
         ; ^m, the pin: a bare `m` in a pattern would bind and take every answer.
         ; the nom is read from outside and the arm asks for that value alone.
         ; [] is the empty chain, exactly; a `()` arm would fit anything (pat.l)
@@ -907,9 +886,9 @@
    ; ${(FORM)} at expansion: the text, or "" and a word on err. a bad form is an empty
    ; expansion, never a torn word -- the seg is lexed already, so there is no line to fail
    (sh-lovseg src)
-     (sh-loveval src @ ('err . c) (: _ (sh-lovesay c) "")
-                      (_ . v)     (sh-lovetext v)
-                      _            "")
+     (sh-loveval src @ ('err . c) (sh-lovesay c, "")
+                       (_ . v)     (sh-lovetext v)
+                       _            "")
 
    ; --- parameters: shell vars over env; specials; presence out of band --------
    ; (sh-vget nm) -> () unset | (1 . value) -- a tablet hit is a string (maybe
@@ -925,17 +904,15 @@
           (: (go (a . u) k) (k @ 1 (1 . a) (go u (k - 1)))
              (go (sh-pos ()) (sh-int nm)))
         (: v (sh-vars nm)
-           (string? v ? (1 . v) (: e (getenv nm) (string? e ? (1 . e))))))
+           (string? v ? (1 . v) (getenv nm @ e (string? e ? (1 . e))))))
    (sh-vval nm)
-     (: g (sh-vget nm)
-        (? (two? g) >g
-           (: _ (? (sh-uflag ())
-                   (: _ (say err ("lush: " + (nm + ": unbound\n")))
-                      (? (sh-tty ()) 0 (sh-leave 2)))
-                   0)
-              "")))
+    (sh-vget nm @ (_ . u) u
+      (sh-uflag () ?
+        (say err ("lush: " + (nm + ": unbound\n")),
+         sh-tty () || sh-leave 2),
+       ""))
    (sh-setvar nm v)                             ; an exported name stays exported
-     (? (string? (getenv nm)) (setenv nm v) (pin sh-vars nm v))
+    (string? (getenv nm) ? (setenv nm v) (pin sh-vars nm v))
 
    ; --- $(( .. )): POSIX shell arithmetic --------------------------------------
    ; signed integer expressions over shell variables, C's operators and precedence, by
@@ -943,17 +920,17 @@
    ; "not that", so a bad expression unwinds without a raise. a name's value is
    ; arithmetic text, not a number -- `x=1+1` makes $((x*2)) four -- which is what the
    ; depth cap is for. nothing here asks ? of a value: every test is against `= 0`.
-   arerr (tablet 0)                             ; a said complaint: the top stays quiet
-   arlive (tablet 0)                            ; 0 inside a branch && || ?: did not take
-   (ar-bad msg) (: _ (pin arerr 0 1)
-                    _ (? (peep arlive 0 1) (say err ("lush: arithmetic: " + msg + "\n")) 0)
-                    ())
+   arerr {}                             ; a said complaint: the top stays quiet
+   arlive {}                            ; 0 inside a branch && || ?: did not take
+   (ar-bad msg) (pin arerr 0 1,
+                 peep arlive 0 1 && say err ("lush: arithmetic: " + msg + "\n"),
+                 ())
    ; a runtime complaint -- a value only this evaluation could know is wrong. in a
    ; branch that did not take there is none: `x != 0 && 100 / x` must not divide.
    (ar-rt msg) (peep arlive 0 1 ? (ar-bad msg) 0)
    (ar-dead th) (: old (peep arlive 0 1) v (pin arlive 0 0, th ()) (pin arlive 0 old, v))
    (ar-ws s n i) (i < n && (s i = 32 || s i = 9 || s i = 10) ? (ar-ws s n (1 + i)) i)
-   (ar-at s n i t) (: m #t ((i + m) <= n && (snip s i (i + m)) = t))
+   (ar-at s n i t) (: m #t (i + m <= n && snip s i (i + m) = t))
    (ar-has? l t) (any (= t) l)
    ; --- numbers: 0x hex, leading-0 octal, else decimal
    (ar-hexv b) (? (sh-digit? b) (b - 48)
@@ -962,12 +939,12 @@
    (ar-dig? b base) (: v (ar-hexv b) (charm? v && v < base))
    (ar-digs s n i base acc any?)
      (? (i < n && ar-dig? (s i) base)
-        (ar-digs s n (1 + i) base ((acc * base) + (ar-hexv (s i))) 1)
+        (ar-digs s n (1 + i) base (acc * base + ar-hexv (s i)) 1)
         (any? ? (acc . i)))
    (ar-num s n i)
-     (? ((1 + i) < n && s i = 48 && (s (1 + i) = 120 || s (1 + i) = 88))
+     (? (1 + i < n && s i = 48 && (s (1 + i) = 120 || s (1 + i) = 88))
           (ar-digs s n (2 + i) 16 0 0)
-        (s i = 48 && (1 + i) < n && (ar-dig? (s (1 + i)) 8))
+        (s i = 48 && 1 + i < n && ar-dig? (s (1 + i)) 8)
           (ar-digs s n (1 + i) 8 0 0)
         (ar-digs s n i 10 0 0))
    (ar-name s n i)
@@ -1017,8 +994,8 @@
    ; the next byte is not one, or `a == b` would assign.
    (ar-asnop s n i)
      (? (n > i)
-      (: b (s i) b2 (? ((1 + i) < n) (s (1 + i)) 0) b3 (? ((2 + i) < n) (s (2 + i)) 0)
-       (? (b = 61) (b2 @ 61 () ("=" . (1 + i)))
+      (: b (s i) b2 (1 + i < n ? (s (1 + i)) 0) b3 (2 + i < n ? (s (2 + i)) 0)
+       (? (b = 61) (b2 @ 61 () ("=" . 1 + i))
           ((b = 60 || b = 62) && b2 = b && b3 = 61) (snip s i (3 + i) . 3 + i)
           (b2 = 61 && (elem b '(42 47 37 43 45 38 94 124))) (snip s i (2 + i) . 2 + i))))
    ; --- the walk
@@ -1029,24 +1006,24 @@
            (: j (ar-ws s n >nv)
               op (ar-asnop s n j)
               (? (one? op) (ar-cond s n i0 d)
-                 (: r (ar-expr s n >op d)
-                    (? (one? r) ()
-                       (<op = "=") ((ar-store <nv <r) . >r)
-                       (: cur (ar-vval <nv d)
-                          (? !(charm? cur) ()
-                             (: v (ar-apply (snip <op 0 (#<op - 1)) cur <r)
-                                (charm? v ? ((ar-store <nv v) . >r) ()))))))))))
+               (: r (ar-expr s n >op d)
+                (? (one? r) ()
+                   (<op = "=") ((ar-store <nv <r) . >r)
+                   (: cur (ar-vval <nv d)
+                      (? !(charm? cur) ()
+                         (: v (ar-apply (snip <op 0 (#<op - 1)) cur <r)
+                            (charm? v ? ((ar-store <nv v) . >r) ()))))))))))
    (ar-cond s n i d)
      (: r (ar-bin s n i 0 d)
         (two? r ?
            (: j (ar-ws s n >r)
               (? !(j < n && s j = 63) r
                  (: c !(<r = 0)
-                    a (c ? (ar-expr s n (1 + j) d) (ar-dead (\ _ (ar-expr s n (1 + j) d))))
+                    a (c ? (ar-expr s n (1 + j) d) (ar-dead (_ \ ar-expr s n (1 + j) d)))
                     (two? a ?
                        (: j2 (ar-ws s n >a)
                           (? !(j2 < n && s j2 = 58) (ar-bad "? without :")
-                             (: b (c ? (ar-dead (\ _ (ar-cond s n (1 + j2) d)))
+                             (: b (c ? (ar-dead (_ \ ar-cond s n (1 + j2) d))
                                        (ar-cond s n (1 + j2) d))
                                 (two? b ? ((c ? <a <b) . >b)))))))))))
    (ar-bin s n i k d)
@@ -1062,7 +1039,7 @@
            (: j2 (j + #o)
               sc (o = "&&" || o = "||")
               rt? (o = "**")                    ; the one right-associating rung
-              dead? (sc && (o = "&&" ? (<r = 0) !(<r = 0)))
+              dead? (sc && (o = "&&" ? (<r = 0) (<r != 0)))
               nk (rt? ? k (1 + k))
               rr (dead? ? (ar-dead (\ _ (ar-bin s n j2 nk d)))
                           (ar-bin s n j2 nk d))
@@ -1079,7 +1056,7 @@
            (ar-at s n i2 "++") (ar-step s n (2 + i2) 1 d)
            (ar-at s n i2 "--") (ar-step s n (2 + i2) (0 - 1) d)
            (: b (s i2)
-              neg (\ f (: r (ar-un s n (1 + i2) d) (two? r ? (f <r . >r))))
+              neg (f \ ar-un s n (1 + i2) d @ (a . u) (f a . u))
               (b @ 45 (neg (v \ -v))
                    43 (ar-un s n (1 + i2) d)
                    33 (neg (= 0))
@@ -1096,18 +1073,17 @@
      (: i2 (ar-ws s n i)
         (? (n <= i2) (ar-bad "expression ends early")
            (s i2 = 40)
-             (: r (ar-expr s n (1 + i2) d)
-                (two? r ?
-                 (: j (ar-ws s n >r)
-                  (? (j < n && s j = 41) (<r . (1 + j)) (ar-bad "( without )")))))
+             (ar-expr s n (1 + i2) d @ (a . u)
+              (ar-ws s n u @ j
+               (j < n && s j = 41 ? (a . 1 + j) (ar-bad "( without )"))))
            (sh-digit? (s i2)) (: r (ar-num s n i2) (two? r ? r (ar-bad "bad number")))
            (sh-name1? (s i2))
              (: nv (ar-name s n i2)
                 j (ar-ws s n >nv)
                 (? (ar-at s n j "++") (ar-post <nv 1 d (2 + j))
                    (ar-at s n j "--") (ar-post <nv (0 - 1) d (2 + j))
-                   (: v (ar-vval <nv d) (charm? v ? (v . >nv) ()))))
-           (ar-bad ("unexpected " + (string (s i2))))))
+                   (: v (ar-vval <nv d) (charm? v ? (v . >nv)))))
+           (ar-bad ("unexpected " + string (s i2)))))
    (ar-post nm by d j)
     (: cur (ar-vval nm d)
      (charm? cur ? (ar-store nm (cur + by), cur . j)))
@@ -1141,7 +1117,7 @@
          set? (two? g)
          v (? set? >g "")
          colon (#op && op 0 = 58)
-         use? (? colon (set? && tally v) set?)
+         use? (? colon (set? && #v) set?)
          o (? colon (snip op 1 #op) op)
          (o @- (sh-vstrip v o text)
           "-" (? use? v (sh-voptext text))
@@ -1156,7 +1132,7 @@
                        t (k @ 'lit >sg 'sq >sg 'dq (sh-textof >sg) 'var (sh-vval >sg)
                              'vop (sh-vopseg sg) 'sub (sh-runsub >sg) 'ari (sh-arith >sg)
                              'lov (sh-lovseg >sg) "")
-                       live (? (k = 'sq || k = 'dq || k = 'lov) "0" "1")
+                       live (k @ ('sq || 'dq || 'lov) "0" "1")
                        (<a + t . >a + sh-mrep #t live)))
             ("" . "") segs)
    (sh-vstrip v o text) (: pw (sh-patmask (sh-wordize text)) pt <pw pm >pw n #v (o @
@@ -1216,10 +1192,10 @@
            ; "": a real (seen) field even empty -- except a lone "$@" over zero
            ; positionals, which contributes nothing (dqat's glue lane sets seen)
              'dq  (dqat v [d r (two? v ? sn 1)])
-             'var (: t (sh-vval v) (spl t 0 #t d r sn))
-             'vop (: t (sh-vopseg sg) (spl t 0 #t d r sn))
-             'sub (: t (sh-runsub v) (spl t 0 #t d r sn))
-             'ari (: t (sh-arith v) (spl t 0 #t d r sn))
+             'var (sh-vval v @ t (spl t 0 #t d r sn))
+             'vop (sh-vopseg sg @ t (spl t 0 #t d r sn))
+             'sub (sh-runsub v @ t (spl t 0 #t d r sn))
+             'ari (sh-arith v @ t (spl t 0 #t d r sn))
              st))
    (wsegs segs st) (? !segs st (wsegs >segs (wseg <segs st)))
 
@@ -1227,7 +1203,7 @@
    ; the rest of the run stays live so ~/*.l still globs
    (sh-tilde segs) (?- segs
     (two? segs && <<segs = 'lit && #><segs && ><segs 0 = 126)
-     (: t ><segs h ("" + (getenv "HOME"))
+     (: t ><segs h ("" + getenv "HOME")
       (?- segs
        (t = "~") (('sq . h) . >segs)
        (t 1 = 47) (('sq . h) . ('lit . snip t 1 #t) . >segs))))
@@ -1236,7 +1212,7 @@
    ; no match keeps the word (the POSIX default)
    (sh-mrep k c) (k < 1 ? "" (sh-mrep (k - 1) c + c))
    (sh-field1 runs)
-     (: rs (sh-rev runs)
+     (: rs (rev runs)
         t (foldl (a \ r \ a + <r) "" rs)
         gb (foldl (\ a r (? a a (>r && sh-anyglob <r))) 0 rs)
         (? gb
@@ -1246,7 +1222,7 @@
            [t]))
    (sh-fields segs)
      (: st (wsegs (sh-tilde segs) [() () 0])
-        fs (sh-rev (closef (st 0) (st 1) (st 2)))
+        fs (rev (closef (st 0) (st 1) (st 2)))
         (catmap sh-field1 fs)))
 ) ; module 'lush
 
@@ -1295,7 +1271,7 @@
    (rderr opens msg) (: _ (each opens close) ('err . msg))
    (sh-rdmap rs) (rdm rs () () ())
    (rdm rs fdmap opens writes)
-     (? !rs [1 (sh-rev fdmap) opens writes]
+     (? !rs [1 (rev fdmap) opens writes]
         (: r <rs ion (r 0) op (r 1)
            (? (op = "<h")
               (: pp (pipe 0)
@@ -1341,13 +1317,13 @@
    (sh-peel ws acc)
      (two? ws ?
         (: a (sh-asn? <ws)
-           (two? a ? (sh-peel >ws (a . acc)) (sh-rev acc . ws)))
-        (sh-rev acc . ws))
+         (two? a ? (sh-peel >ws (a . acc)) (rev acc . ws)))
+        (rev acc . ws))
    (sh-doasn a) (sh-setvar <a (sh-textof >a))
    (sh-tmpset a)                                ; temporary env around one command
      (: nm <a old (getenv nm)
-        _ (setenv nm (sh-textof >a))
-        (nm . old))
+      (setenv nm (sh-textof >a),
+       nm . old))
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
    sh-imgc {}                           ; word -> (1 fn whole?) | 0, decided once
@@ -1371,14 +1347,12 @@
                  ("fat" "fat-main" "fatcmd")
                  ("mkfs.vfat" "mkfsv-main" "fatcmd") ("mkdosfs" "mkfsv-main" "fatcmd"))
    (sh-pathdirs _)
-     (: p ("" + (getenv "PATH")) n #p
-        (go from k acc) (? (n <= k) (sh-rev (snip p from k . acc))
-                           (p k = 58) (go (k + 1) (k + 1) (snip p from k . acc))
-                           (go from (k + 1) acc))
-        (go 0 0 ()))
-   (sh-slashed? w) (: n #w
-                      (go k) (? (n <= k) 0 (w k = 47) 1 (go (k + 1)))
-                      (go 0))
+    (:- (go 0 0 ())
+     p ("" + (getenv "PATH")) n #p
+     (go from k acc) (? (n <= k) (rev (snip p from k . acc))
+                        (p k = 58) (go (k + 1) (k + 1) (snip p from k . acc))
+                        (go from (k + 1) acc)))
+   (sh-slashed? w) (:- (go 0) n #w (go k) (? (n <= k) 0 (w k = 47) 1 (go (k + 1))))
    ; asked at the call: the kernel bakes this file and carries no host nif, where a
    ; top-level bind would fold the baking love's own seat in and call every tool ours.
    (sh-seat _) (lit? (cite 'posix 'selfpath) ? (selfpath 0))
@@ -1395,7 +1369,7 @@
                  (two? (stat p) ? (sh-self? p) (go >l))))
         (go (sh-pathdirs ())))
    ; does this binary carry the word as a verb? the registry's own answer, PATH aside
-   (sh-verbw? w) (: f (cite 'verbs 'word) (? (lit? f) !!(f w) 0))
+   (sh-verbw? w) (cite 'verbs 'word @ f (lit? f ? !!(f w) 0))
    ; --- the mode: autonomous or gregarious ---------------------------------
    ; autonomous (-a, the default): a bare word naming a verb this binary carries is
    ; ours whatever PATH holds. gregarious (-g): ours only when PATH's winner stats as
@@ -1403,10 +1377,9 @@
    ; LUSHFLAGS' last a or g. the entry pins the box once; an unseated caller (cook, a -e)
    ; reads the environment at the ask and pins nothing, which would bake in its answer.
    (sh-envflag _) (: s ("" + (getenv "LUSHFLAGS")) n #s
-                     (go k v) (n <= k ? v (go (k + 1) ((s k) @ 97 0 103 1 _ v)))
+                     (go k v) (n <= k ? v (go (k + 1) (s k @ 97 0 103 1 _ v)))
                      (go 0 0))
-   (sh-greg? _) (: v (peep sh-gflag () 'no)       ; peep: a pinned 0 is a verdict, not an absence
-                    (v @ 'no (sh-envflag 0) v))
+   (sh-greg? _) (peep sh-gflag () 'no @ 'no (sh-envflag 0) v v) ; peep: a pinned 0 is a verdict, not an absence
    ; would spawning this word land on the binary we are already running? the one
    ; policy question behind every in-image lane -- lush's own, and cook's.
    (sh-ours? w) (? (sh-slashed? w) (sh-self? w)
@@ -1434,18 +1407,18 @@
    ; autonomous mode's verb spawns this binary (sh-spawnv), so the seat is the path
    ; to name; a seat with none (the kernel) has only the registry, sh-known?'s reading.
    (sh-vseat? w) (sh-verbw? w && (!(sh-greg? 0) || !(sh-seat ())))
-   (sh-vpath w) (: s (sh-seat ()) (string? s ? s w))
+   (sh-vpath w) (sh-seat () @ s (string? s ? s w))
    (sh-verdict w)
      (? (sh-smem? w sh-resw) ['resw]
         (sh-fn? w) ['fn]
         (sh-bi? w) ['bi]
         (sh-slashed? w) (two? (stat w) ? ['path w])
         (sh-vseat? w) ['verb (sh-vpath w)]
-        (: p (sh-whichp w) (? (two? p) ['path <>p] ())))
-   (sh-vname w v) (? (<v = 'path) (v 1) (<v = 'verb) (v 1) w)   ; `command -v`'s line
+        (: p (sh-whichp w) (two? p ? ['path <>p])))
+   (sh-vname w v) (<v @ ('path || 'verb) <>v w)   ; `command -v`'s line
    (sh-whichall w)                              ; every PATH hit for w, in order
      (: (go l acc)
-         (? (one? l) (sh-rev acc)
+         (? (one? l) (rev acc)
             (: d (? #<l <l ".") p (d + ("/" + w))
                (go >l (two? (stat p) ? (p . acc) acc))))
         (go (sh-pathdirs ()) ()))
@@ -1462,10 +1435,9 @@
            [1 (sh-imgwrap f0 mn) (mn = "kore-main")]
            0))
    (sh-imgwrap f mn) (: ur (cite 'kore 'urun)
-                        (? ((mn = "moon-run") || !ur) f (\ as (ur f as))))
+                        (? (mn = "moon-run" || !ur) f (ur f)))
    (sh-assoc w l) (? (one? l) 0 (w = <<l) <l (sh-assoc w >l))
-   (sh-imgfn w) (: v (peep sh-imgc w 'no)
-                 (v != 'no ? v (: f (sh-imgask w) (pin sh-imgc w f, f))))
+   (sh-imgfn w) (peep sh-imgc w 'no @ 'no (sh-imgask w @ f (pin sh-imgc w f, f)) v v)
    sh-forkc {}                          ; word -> 1 | 0, decided once
    (sh-dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sh-cliline _) (? (elem 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
@@ -1531,23 +1503,20 @@
            (: j (chunk ln i2 n)
               _ (sh-setvar <nms (snip ln i2 j))
               (sh-readset >nms ln j n))))
-   (sh-rtrim s)
-     (: (go k) (? ((0 < k) && sh-ifs? (s (k - 1))) (go (k - 1)) (snip s 0 k))
-        (go #s))
+   (sh-rtrim s) (:- (go #s) (go k)
+    (0 < k && sh-ifs? (s (k - 1)) ? (go (k - 1)) (snip s 0 k)))
    (sh-setb args)
-     (? (one? args) 0
-        (: a <args
-           (? (a = "--") (pin sh-pos () >args, 0)
-              (1 < #a && (a 0 = 45 || a 0 = 43))
-                (: on (a 0 = 45 ? 1 0)
-                   (go i) (? (i = #a) (sh-setb >args)
-                             (: _ ((a i) @- 0
-                                   101 (pin sh-eflag () on)
-                                   117 (pin sh-uflag () on)
-                                   120 (pin sh-xflag () on))
-                                (go (i + 1))))
-                   (go 1))
-              (pin sh-pos () args, 0))))
+     (one? args ? 0
+      (: a <args
+         (? (a = "--") (pin sh-pos () >args, 0)
+            (1 < #a && (a 0 = 45 || a 0 = 43))
+              (:- (go 1) on (a 0 = 45 ? 1 0) (go i)
+               (i = #a ? (sh-setb >args)
+                (a i @ 101 (pin sh-eflag () on)
+                       117 (pin sh-uflag () on)
+                       120 (pin sh-xflag () on),
+                 go (i + 1))))
+            (pin sh-pos () args, 0))))
    (sh-dotb args)
      (? (one? args) (cmderr ". wants a file")
         (: f <args
@@ -1721,7 +1690,7 @@
    ; compounds, builtins, functions and assignment-bearing commands (the child
    ; re-expands, so its env sees its own assignments)
    (sh-stagex cmds acc)
-     (? !cmds [1 (sh-rev acc)]
+     (? !cmds [1 (rev acc)]
         (: c <cmds
            (? !(<c = 'cmd)
               (sh-stagex >cmds ['a c () () () . acc])
@@ -1766,7 +1735,7 @@
    ; wiring, a stage's own redirects land after. lastout >= 0 sends the last
    ; stage's stdout there (the cmdsub lane).
    (sh-spawnst sts pipes allclose lastout i last pg fg pids)
-     (? !sts (sh-rev pids)
+     (? !sts (rev pids)
         (: st <sts
            base (+ (? (0 < i) [(0 . <(pipes (i - 1)))] ())
                    (? (i < last) [(1 . >(pipes i))]
@@ -2358,7 +2327,7 @@
            (<l . sh-uniq >l)))
    (sh-pathdirs s)                              ; "a:b:c" -> ("a" "b" "c")
      (:- (go 0 0 ()) n #s (go i st acc)
-      (i @ ^n (sh-rev (snip s st i . acc))
+      (i @ ^n (rev (snip s st i . acc))
        (s i @ 58 (go (i + 1) (i + 1) (snip s st i . acc))
         (go (i + 1) st acc))))
    (sh-verbnames _) (map string (keys (cite 'verbs 'tab)))

@@ -196,7 +196,7 @@
    (assq x l) (? (two? l) (? (== x (caap l)) (cap l) (assq x (cup l))))
    (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
    (zip a b) (? (two? a) (? (two? b) (. (. (cap a) (cap b)) (zip (cup a) (cup b)))))
-   rev (foldl (flip (.)) ())
+   (rev l) (revcat l ())
    ; every nom on the layer chain, deduped through a tablet. noms only -- a layer's keys also hold
    ; the macro table and the unwind chain. it sits down here so catmap/foldl are already bound.
    (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (stack ())))))
