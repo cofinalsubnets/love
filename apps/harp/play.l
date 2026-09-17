@@ -26,7 +26,7 @@
 ; enters its own layer, and the borrow below is confined to it.
 (module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
          harp-scale harp-chunk mkvoice cyc-voices mixdown pack
-         twopi ln2-12 venv vnum vnoise instr vname)
+         twopi ln2-12 venv vnum vnoise instr vname mkvoice)
 (borrow (: m (cite 'harp) (? m m "apps/harp/harp.l")))
 (:
    ; the fs doors by VALUE, off their module: a module layer does not see the
@@ -67,13 +67,20 @@
    (i-tri t ix f) (: u (t * f % 1.0)
                      v (u * 4.0)
                      ((u < 0.5) * (v - 1.0) + (u >= 0.5) * (3.0 - v)))
+   ; a music box's tine, an octave up: the note, a partial an octave and a fifth over
+   ; it that dies fast, a bright one that dies faster
+   (i-box t ix f) (: w (t * tau * f * 2.0)
+                     (sin w + 0.3 * sin (w * 3.0) * exp (t * -6.0) + 0.15 * sin (w * 5.8) * exp (t * -9.0)))
+   ; a wind chime's tube, two octaves up: inharmonic partials over a long ring
+   (i-chime t ix f) (: w (t * tau * f * 4.0)
+                       (sin w + 0.5 * sin (w * 2.76) * exp (t * -2.0) + 0.25 * sin (w * 5.4) * exp (t * -4.0)))
    ; name -> [default-duration pitched? shape]
    (instr nm) (nm @
     "bd"  [0.55 0 i-bd]   "sn"  [0.35 0 i-sn]   "hh"  [0.09 0 i-hh]
     "oh"  [0.35 0 i-oh]   "cp"  [0.35 0 i-cp]   "rim" [0.06 0 i-rim]
     "tom" [0.45 0 i-tom]  "sin" [0.30 1 i-sin]  "saw" [0.30 1 i-saw] 
     "sqr" [0.30 1 i-sqr]
-    "tri" [0.30 1 i-tri])
+    "tri" [0.30 1 i-tri]  "box" [1.20 1 i-box]  "chime" [3.0 1 i-chime])
 
    ; --- an event's value -> a voice ------------------------------------------
    ; the value is a tablet from the control words, a bare string from `hit`, or a
@@ -205,9 +212,11 @@
                                         + "  " + (show (evv x)) + "\n"))))))
 
    ; --- the verb -------------------------------------------------------------
-   harp-usage "usage: harp [-n N] [-c CPS] [-r RATE] [-g GAIN] [-o F.wav] [-p] PATTERN.."
+   harp-usage "usage: harp [-n N] [-c CPS] [-r RATE] [-g GAIN] [-o F.wav] [-p] [-s SCORE] PATTERN..
+       harp --check SCORE"
    ; a bare argument is mini-notation for `hit`; one that opens a paren is love, read
-   ; and evaluated with the harp module already spliced. several arguments stack.
+   ; and evaluated with the harp module already spliced; -s is a score file
+   ; (apps/harp/score.l), its bars the cycles unless -n says. several arguments stack.
    (harp-read a) (0 < #a && 40 = a 0 ?  (sound a @ (a . _) (ev a) hush) (hit (mini a)))
    (harp-atoi s) (:- (go 0 0) n #s
                   (go i acc) (? (i >= n) acc (go (i + 1) ((acc * 10) + ((s i) - 48)))))
@@ -223,23 +232,40 @@
                "-o" (go >>l (pin o 'wav <>l) ps)
                "-g" (go >>l (pin o 'gain (harp-atof <>l)) ps)
                "-p" (go >l (pin o 'print 1) ps)
+               "-s" (go >>l (pin o 'scores (<>l . peep o 'scores ())) ps)
+               "--check" (: ls ((cite 'score 'score-file) <>l)
+                            (? ls ((cite 'score 'score-check) ls 1)
+                               (say err ("harp: cannot read " + <>l + "\n"), 1)))
                ("-h" || "--help") (puts (harp-usage + "\n"), flush out, 0)
                ("-v" || "--version")
                 (puts ("harp (love " + love-version + ")\n"), flush out, 0)
                a (go >l o (a . ps))))
-       (go as {'cycles 4 'rate 48000 'cps 0.5 'from 0 'print 0 'gain 1.0} ()))
+       (go as {'rate 48000 'cps 0.5 'from 0 'print 0 'gain 1.0} ()))
    (harp-fire o ps)
-    (: p    (? !(two? ps) hush
-               (1 = #ps) (harp-read <ps)
-               (stack (map harp-read ps)))
-       rate (o 'rate)  cps (o 'cps)  ncyc (o 'cycles)  c0 (o 'from)
+    (: sc   (cite 'score)
+       ; a score's bars, every file's; a bad bar has been named and stops the run
+       bars (foldl (\ acc f (: ls (sc 'score-file f)
+                              (? (acc = 'bad) 'bad
+                                 !ls (say err ("harp: cannot read " + f + "\n"), 'bad)
+                                 (sc 'score-check ls 0) 'bad
+                                 (acc + filter (b \ !(b 'err)) (sc 'score-parse ls)))))
+                   () (peep o 'scores ()))
+       cps  (o 'cps)
+       ps2  (bars = 'bad ? () (ps + (two? bars ? [(sc 'score-tune bars cps)] ())))
+       p    (? !(two? ps2) hush
+               (1 = #ps2) (: x <ps2 (string? x ? (harp-read x) x))
+               (stack (map (x \ (string? x ? (harp-read x) x)) ps2)))
+       rate (o 'rate)  c0 (o 'from)
+       ncyc (peep o 'cycles (two? bars ? #bars 4))
        tail (int (rate / 2))                       ; half a second for the last decay
        g    (harp-scale * (o 'gain))
-       (? !(two? ps)
-          (: _ (say err (harp-usage + "\n")) 1)
+       (? (bars = 'bad) 1
+          !(two? ps2) (: _ (say err (harp-usage + "\n")) 1)
           (o 'print) (: _ (harp-print p c0 ncyc) 0)
           (peep o 'wav ()) (: _ (harp-wav p c0 ncyc rate cps tail g (o 'wav)) 0)
           (: _ (harp-horn p c0 ncyc rate cps tail g) 0))))
+   ; ..and as a verb of the artifact: `love harp`
+   _ (pins (cite 'verbs 'tab) 'harp (udoor 'harp harp-main harp-usage 0 0))
 ) ; module play
 
 ; the seat: fire only when this file is the program on the real command line.

@@ -17,12 +17,12 @@
 ; run: love grass
 (module (grass grass-run grass-main grass-new grass-key grass-tick grass-frame grass-hud
          grass-bar grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
-         grass-tune grass-song-new grass-song-feed grass-final
+         grass-tune grass-song-new grass-song-feed grass-song-cue grass-final score song-chunk
          daylight sky-pen compass fx1 week-hours dh fps dance-cost)
 (borrow 'rove)
-; harp and play are optional the way posix is: a seat without them plays in silence
-(? (tablet? (cite 'harp)) (borrow 'harp) ())
-(? (tablet? (cite 'play)) (borrow 'play) ())
+(borrow 'harp)                          ; the cycle algebra the song is scheduled by
+(borrow 'score)                         ; the tune as text
+(borrow 'play)                          ; the voices, the mix
 (? (cite 'posix) (borrow 'posix) ())
 (:
  esc (string 27)
@@ -38,14 +38,22 @@
  dew-hour 5.0                           ; the dewfall: just before dawn, every blade drinks
  dew-drop 20.0
 
- ; the tune: bars of harp's mini-notation, semitones from middle c, and a bass note a bar
- bars '("11 9 7 4" "7 [9 7] 4 ~" "11 9 7 2" "4 [2 0] -1 ~"
-        "4 7 11 16" "14 [11 14] 9 ~" "7 [9 11] 7 4" "2 [4 2] -5 ~")
- bass '(-8 -8 -10 -12 -8 -3 -5 -8)
- song-rate (love-arch = 'wasm ? 16000 48000)
+ ; the tune as a score (apps/harp/score.l): a bar to the line, NAME BEATS pairs, `-` a
+ ; rest, [CHORD] the bar's bass, a key line the key signature. `love grass FILE` plays a
+ ; score of your own, and a bare `love grass` plays ~/.love/etc/grass.score when there is
+ ; one. `love harp --check FILE` reads one back
+ score '("B4 1 A4 1 G4 1 E4 1 [Em]"
+         "G4 1 A4 .5 G4 .5 E4 1 - 1 [Em]"
+         "B4 1 A4 1 G4 1 D4 1 [D]"
+         "E4 1 D4 .5 C4 .5 B3 1 - 1 [C]"
+         "E4 1 G4 1 B4 1 E5 1 [Em]"
+         "D5 1 B4 .5 D5 .5 A4 1 - 1 [A]"
+         "G4 1 A4 .5 B4 .5 G4 1 E4 1 [G]"
+         "D4 1 E4 .5 D4 .5 G3 1 - 1 [Em]")
+ song-rate (love-arch @ 'wasm 16000 48000)
  song-cps 0.32                          ; bars a second: a music box wound down
  song-chunk (song-rate // 30)           ; a frame's worth, thirty a second
- song-gain 7000.0
+ song-gain 11000.0
 
  sky-pens '(17 17 17 17 17 18 60 174 74 39 39 39 39 39 39 39 74 111 173 96 54 18 17 17)
  day-names '("mon" "tue" "wed" "thu" "fri" "sat" "sun")
@@ -59,14 +67,9 @@
  twinkles '("." "+" "*")
 
  open-ttl "leaves of grass simulator 1989"
- open-rows '("you are a blade of grass. you have one week."
-             ""
-             "dance with the arrow keys (or hjkl): quick presses on"
-             "changing keys are a combo, and the combo is the points."
-             "dancing costs water. dew comes on calm cool nights; the"
-             "sun and the wind take it by day. water and warmth grow you."
-             ""
-             "q or esc leaves."
+ open-rows '(""
+             "hjkl or arrows keys to dance"
+             "q or esc to quit"
              ""
              "-- any key --")
  end-ttl "seven days"
@@ -99,32 +102,37 @@
    sb {st}
    n (c // 2)
    (blade i) {'x (2 * i + 1) 'ht (1.5 + roll sb 10 / 10.0) 'th 0.0 'w 0.0
-              'ph (roll sb 628 / 100.0) 'gf (0.6 + roll sb 50 / 100.0)
+              'ph (roll sb 628 / 100.0) 'gf (0.6 + roll sb 50 / 100.0) 's 0.0 'sv 0.0
               'dr (roll sb 2 ? 0.8 -0.8) 'me 0}
    bs (map blade ^n)
    me (bs (n // 2))
    _ (pins me 'me 1 'ht 2.0 'gf 1.0)
    tdays (map (\ _ (52.0 + roll sb 26)) ^7)
+   songs (map (\ _ (roll sb 240 / 10.0)) ^7)       ; the hour each day's song comes
    covers (map (\ _ (roll sb 10 / 10.0)) ^7)
    clouds (map (\ _ {'x0 (roll sb c * 1.0) 'y (1 + roll sb (r // 2))
                      'w (6.0 + roll sb 13) 'h (1.2 + roll sb 19 / 10.0)}) ^14)
    {'r r 'c c 'h week-start 'fr 0 'sb sb 'bs bs 'me me 'tdays tdays 'covers covers 'clouds clouds
     'wind (3.0 + roll sb 10) 'wt 8.0 'head (roll sb 360 * 1.0) 'gust 1.0 'drift 0.0
+    'songs songs 'sang -1 'cue 0
     'hy 80.0 'fh 80.0 'dewday 0 'pts 0 'combo 0 'dk 0 'dms 0 'lk 0 'lt 0 'over 0 'msg ""})
 
  ; --- the helm: an arrow or hjkl pushes your blade, q or esc leaves ---------------
  ; a press within the gap of the last, on another key, grows the combo; the combo
- ; is the points. sideways is a shove; up is a reach, into the bend, down a bow against it
+ ; is the points. sideways is a shove on the lean; up is a reach that stretches the
+ ; blade, down a bow that shortens it -- and a blade shortened hard enough buckles. a
+ ; diagonal (yubn) is both at once
  (grass-key g k now) (: mv (steer k) me (g 'me)
    (? (g 'over) g
       (k @ (113 || 27) 1 0) (pins g 'over 'fled 'msg "")
       (one? mv) g
       (: dx <mv dy <>mv
-         push (? (dx != 0) (dx * 7.0) (me 'th >= 0.0 ? (dy * -5.0) (dy * 5.0)))
          combo (? (k != g 'dk && (now - g 'dms) < dance-gap) (1 + g 'combo) 1)
-         _ (pin me 'w (me 'w + push))
+         ; a diagonal does both: the lean from its dx, the stretch from its dy
+         _ (dx != 0 ? (pin me 'w (me 'w + dx * 7.0)))
+         _ (dy != 0 ? (pin me 'sv (me 'sv - dy * 4.0)))
          word (? (dy < 0) ("you reach for the " + (0.0 < daylight (grass-hour g) ? "sun" "moon"))
-                 (0 < dy) "you bow to the sky"
+                 (0 < dy) "you bow to the wind"
                  "")
          (pins g 'combo combo 'pts (g 'pts + combo) 'dk k 'dms now
                  'hy (clamp (g 'hy - dance-cost) 0.0 100.0)
@@ -155,6 +163,9 @@
    dw ((dew - evap) * dh + (fall ? dew-drop 0.0))
    _ (pins g 'fh (clamp (g 'fh + dw) 0.0 100.0) 'hy (clamp (g 'hy + dw) 0.0 100.0))
    _ (fall ? (pins g 'dewday day 'msg "the dew falls"))
+   ; once a day, at the day's own hour, the song: the cue is raised here and taken by
+   ; whoever feeds the horn
+   _ ((g 'songs) day <= hr && g 'sang != day ? (pins g 'sang day 'cue 1))
    ; growth wants water, warmth and light
    tf (: q ((temp - 72.0) / 32.0) v (1.0 - q * q) (v < 0.0 ? 0.0 v))
    (grow hy) (0.075 * clamp ((hy - 10.0) / 80.0) 0.0 1.0 * tf * (0.2 + 0.8 * sun) * dh)
@@ -166,9 +177,14 @@
                 droop (hy < 25.0 ? (b 'dr * (1.0 - hy / 25.0)) 0.0)
                 a (f - 16.0 * (b 'th - droop) - 3.0 * b 'w)
                 w (b 'w + a * dt)
-                (pins b 'w w 'th (clamp (b 'th + w * dt) -1.3 1.3)))
+                ; ..and the stretch: a stiffer spring on the length, quick to settle
+                sv (b 'sv - (40.0 * b 's + 5.0 * b 'sv) * dt)
+                (pins b 'w w 'th (clamp (b 'th + w * dt) -1.3 1.3)
+                        'sv sv 's (clamp (b 's + sv * dt) -0.6 0.35)))
    _ (each (g 'bs) blade)
-   _ (pin g 'drift (g 'drift + wx * dt * 0.12))
+   ; the clouds ride the steady wind, not the gusts: a drift that wobbled would step
+   ; every cloud back and forth on its column
+   _ (pin g 'drift (g 'drift + grass-wind-x g * dt * 0.12))
    ; seven days, and the week is over
    _ (h >= week-hours && !(g 'over) ? (pins g 'over 'done 'msg ""))
    g)
@@ -190,10 +206,13 @@
                                    (i <= L // 2 ? (shade (x0 + sd * i) (base + 2))),
                                    go (i + 1)))
                  (0.15 < dl ? (go 1)))
-   (blade b) (: n (: v (int (b 'ht * rpi + 0.5)) (top < v ? top v))
+   (blade b) (: n (: v (int (b 'ht * rpi * (1.0 + b 's) + 0.5)) (top < v ? top v))
                 hy (b 'me ? (g 'hy) (g 'fh))
                 wilt (hy < 12.0)
-                (px k) (b 'x + round (b 'th * k * 0.8))
+                ; a shortened blade bows out of line: a bulge along its length, on the
+                ; side it already leans, that grows with the squeeze
+                bow (b 's < -0.1 ? ((b 'th < 0.0 ? -6.0 6.0) * (-0.1 - b 's)) 0.0)
+                (px k) (b 'x + round (b 'th * k * 0.8 + bow * sin (pi * k / (1 + n))))
                 (cell k) (: x (px k) d (px (k + 1) - x)
                            gl (d @ 0 "┃" 1 "╱" "╲")
                            gi (clamp (int (dl * 3.0) + (b 'me ? 2 0) + ((k + b 'x) % 2)) 0 5)
@@ -215,16 +234,21 @@
    n (3 + int (((g 'covers) (grass-day g)) * 10.0))
    drift (g 'drift)
    (deep k v) (: o (peep cm k -1) (o < v ? (pin cm k v)))
-   (lay cl) (: cx ((cl 'x0 + drift) % c) w (cl 'w) hh (cl 'h) cy (cl 'y)
+   ; a cloud sits on a whole column and is tested by whole columns, so nothing at its
+   ; edge moves until the whole of it steps; the noise and the dither are keyed to the
+   ; cloud's own columns, so they step with it
+   (lay cl) (: cx (((int (cl 'x0 + drift)) + 2 * c) % c) w (cl 'w) hh (cl 'h) cy (cl 'y)
+               k0 (int (cl 'x0 - w) - 2)                 ; the cloud's own first column
                (row y x) (x <= cx + w ?
                           (: dx ((x - cx) / w) dy ((y - cy) / hh * (cy < y ? 1.7 1.0)) e (dx * dx + dy * dy)
-                             xx ((int (x + 2 * c)) % c)
-                             v (3 - int (e * 3.0) - (cy < y) - (0 = dice xx y 5 4))
+                             xx ((x + 2 * c) % c)
+                             kx (x - int (cx - w) + k0)
+                             v (3 - int (e * 3.0) - (cy < y) - (0 = dice kx y 5 4))
                              _ (? (e < 1.0) (deep (xx + c * y) (v < 0 ? 0 v))
-                                  (e < 1.3 && 0 = dice xx y 9 3) (deep (xx + c * y) 0)
+                                  (e < 1.3 && 0 = dice kx y 9 3) (deep (xx + c * y) 0)
                                   ())
-                           (row y (x + 1.0))))
-               (rows y) (y <= cy + hh ? (1 <= y ? (row y (cx - w - 1.0)), rows (y + 1)))
+                           (row y (x + 1))))
+               (rows y) (y <= cy + hh ? (1 <= y ? (row y (int (cx - w) - 2)), rows (y + 1)))
                (rows (int (cy - hh))))
    _ (each (first-n n (g 'clouds)) lay)
    cm)
@@ -284,43 +308,47 @@
  (grass-final g) (g 'over = 'done ? ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + " in tall")
                                     ("you left the field on day " + show (1 + grass-day g)))
 
- ; --- the song: a music box out the horn ------------------------------------------
- (grass-tune _) (: mel (slowcat (map (b \ pset (note (mini b)) (legato (pure 1.3))) bars))
-                   low (slowcat (map (n \ pset (pset (note (pure n)) (legato (pure 2.2)))
-                                                (gain (pure 0.6)))
-                                     bass))
-                   (stack [mel low]))
- ; a struck tine: the note, a partial an octave and a fifth up that dies fast, a bright
- ; one that dies faster, and the long ring under them. an octave up: a music box is small
- (box-voice st v rate) (:
-   dur (vnum v 'legato 1.3)
-   nt (vnum v 'note (vnum v 'n 0))
-   f (523.2511306011972 * exp (nt * ln2-12))
-   amp (vnum v 'gain 1.0)
-   end (st + int (dur * rate) + 2)
-   fn (\ ix (: t ((ix - st) * (1.0 / rate))
-               tp (t * (t > 0.0))
-               w (tp * tau * f)
-               ((sin w + 0.3 * sin (w * 3.0) * exp (tp * -6.0) + 0.15 * sin (w * 5.8) * exp (tp * -9.0))
-                * (1.0 - exp (tp * -900.0)) * exp (tp / dur * -3.5) * (t < dur))))
-   [end fn (amp * 0.5) (amp * 0.5)])
- (grass-song-new tune h) {'tune tune 'h h 'fpos 0 'cyc 0 'next 0 'vs ()}
+ ; --- the song: a music box out the horn, wind chimes between its plays ---------------
+ (grass-tune ls) (score-tune (filter (b \ !(b 'err)) (score-parse ls)) song-cps)
+ chime-ring 3.0
+ ; the song's state over a horn h: the tune and how many bars it runs, the pitches the
+ ; chimes may ring, a die of its own. mode is 'chimes or 'song; a cue starts the song at
+ ; the write head, and when its last bar is scheduled the chimes come back under it
+ (grass-song-new bs h st)                  ; st is a wheel: a bare number rolls nothing
+  (: ps (foldl (\ acc b (foldl (\ a p (elem p a ? a (p . a))) acc (b 'pitches))) () bs)
+   {'tune (score-tune bs song-cps) 'bars #bs 'set (sort ps) 'sb {st} 'h h
+    'fpos 0 'cyc 0 'next 0 'vs () 'mode 'chimes 'chimes 1})
+ (grass-song-cue s) (pins s 'mode 'song 'cyc 0 'next (s 'fpos))
+ ; chimes a second: a few in a calm, many in a blow
+ (chime-rate wind) (0.25 + wind / 8.0)
  ; one bar's onsets as [start voice], the bar starting at frame st and spc frames long
  (song-voices s c st spc)
   (filter two? (map (\ x (: at (st + int (spc * qnum (evwb x - qi c)))
-                           v (box-voice at (evv x) song-rate)
+                           v (mkvoice at (evv x) song-rate)
                          (two? v ? [at v])))
                     (filter onset? ((s 'tune) (qi c) (qi (c + 1))))))
- ; one chunk out the horn. the write is also the clock: the card takes a chunk at the
- ; rate it plays one, so the frame loop that feeds it needs no rest of its own
- (grass-song-feed s)
+ ; one chunk out the horn, for the wind that blows now. the write is also the clock: the
+ ; card takes a chunk at the rate it plays one, so the frame loop that feeds it needs no
+ ; rest of its own
+ (grass-song-feed s wind)
   (: spc (int (song-rate / song-cps))
-     (sched _) (? (s 'next <= s 'fpos + song-chunk)
+     (sched _) (? (s 'mode = 'song && s 'next <= s 'fpos + song-chunk && s 'cyc < s 'bars)
                   (: _ (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc)))
                      _ (pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc))
                    (sched ())))
      _ (sched ())
+     _ (s 'mode = 'song && s 'bars <= s 'cyc ? (pin s 'mode 'chimes))
      base (s 'fpos)
+     ; a chime, now and then, off the score's own notes, two octaves up: the die against
+     ; the wind's rate per chunk, in thousandths
+     sb (s 'sb)
+     _ (? (s 'chimes && s 'mode = 'chimes && two? (s 'set)
+           && roll sb 1000 < int (chime-rate wind * 1000.0 / 30.0))
+          (: at (base + roll sb song-chunk)
+             nt ((s 'set) (roll sb #(s 'set)))
+             v (mkvoice at {'s "chime" 'note nt 'gain (0.1 + roll sb 25 / 100.0)
+                             'pan (roll sb 100 / 100.0) 'legato chime-ring} song-rate)
+             (pin s 'vs (cat (s 'vs) [[at v]]))))
      live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
      now (filter (p \ p 0 < base + song-chunk) live)    ; ..and already begun
      vs (map (p \ p 1) now)
@@ -339,17 +367,19 @@
                            (wait _) (cue? 0 ? (edkey in) (beat (), wait ()))
                            _ (deaf ())
                            (wait ()))
- (grass-week _) (: ws (tty 1)
+ (grass-week ls) (: ws (tty 1)
    r (two? ws && 7 < <ws ? (<ws - 1) 23)
    c (two? ws && 19 < <>ws ? <>ws 80)
    g (grass-new r c (wheel (clock 0)))
-   tune (? (tablet? (cite 'harp)) (grass-tune ()) ())
-   hn (? tune (: h (horn song-rate 2) (? (nom? h) () h)) ())
-   sng (? hn (grass-song-new tune hn) ())
-   (beat _) (? sng (grass-song-feed sng) (rest 33))
+   bs (filter (b \ !(b 'err)) (score-parse ls))
+   hn (? bs (: h (horn song-rate 2) (? (nom? h) () h)) ())
+   sng (? hn (grass-song-new bs hn (wheel (clock 0))) ())
+   (beat _) (? sng (grass-song-feed sng (g 'wind)) (rest 33))
+   (cue _) (? (sng && g 'cue) (grass-song-cue sng, pin g 'cue 0))
    (swim _) (? (g 'over) ()
                (: _ (key-drain g repeat-gap (k \ grass-key g k (clock 0)))
                   _ (grass-tick g)
+                  _ (cue ())
                   _ (say out (grass-frame g), flush out)
                   _ (beat ())
                   (swim ())))
@@ -357,20 +387,29 @@
    _ (sign g open-ttl open-rows beat)
    _ (swim ())
    _ (? (g 'over = 'done)
-        (sign g end-ttl ["" ("final score   " + show (g 'pts))
+        (pin g 'cue 1, cue (),
+         sign g end-ttl ["" ("final score   " + show (g 'pts))
                          ("final height  " + fx1 (g 'me 'ht) + " in") "" "-- any key --"] beat)
         ())
    _ (? hn (: _ (flush hn) (close hn)) ())
    g)
- (grass-run _) (: _ (raw 1)
+ (grass-run ls) (: _ (raw 1)
                   _ (say out (esc + "[?1049h" + esc + "[2J"))
-                  g (grass-week ())
+                  g (grass-week ls)
                   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
                   _ (flush out)
                   _ (drain-keys ())
                   _ (raw 0)
                   (puts (grass-final g + "\n"), 0))
- grass-usage "usage: love grass   (dance: arrows or hjkl; q or esc leaves)"
- (grass-main as) (two? as ? (say err ("grass: " + grass-usage + "\n"), flush err, 2) (grass-run ()))
+ grass-usage "usage: love grass [SCORE]   (dance: arrows or hjkl; q or esc leaves)"
+ ; your own score, where the tree keeps an app's taste; the built-in when there is none
+ (score-home _) (: h (getenv "HOME")
+                   ls (string? h ? (score-file (h + "/.love/etc/grass.score")) ())
+                   (ls ? ls score))
+ (grass-main as) (:
+   (with p f) (: ls (score-file p) (ls = () ? (say err ("grass: cannot read " + p + "\n"), flush err, 2) (f ls)))
+   (as @ () (: ls (score-home ()) (score-check ls 0 ? 1 (grass-run ls)))
+         [p] (with p (ls \ (score-check ls 0 ? 1 (grass-run ls))))
+         (say err ("grass: " + grass-usage + "\n"), flush err, 2)))
  _ (pins (cite 'verbs 'tab) 'grass (udoor 'grass grass-main grass-usage 1 1)))
 ) ; module grass

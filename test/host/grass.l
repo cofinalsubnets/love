@@ -3,10 +3,11 @@
 ; everything but the tty runner gates here: the clock and the sky, a calm cold night
 ; giving water back and a hot windy noon taking it, a blade growing on it, the dance
 ; combo and what it costs, the words a reach and a bow say, the helm leaving, the
-; week's end, and the frame's pens by hour.
+; week's end, the song and its chimes, and the frame's pens by hour.
 ;   cat test/00-init.l test/host/grass.l | out/love
 
 (borrow 'grass)   ; the artifact's module, warm from the tree
+(borrow 'score)   ; the tune's reader, for the song laws
 
 (: (find h n i) (? (i + tally n < 1 + tally h)
                   (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))
@@ -71,6 +72,18 @@
        (has? (grass-final g) "seven days")
        (grass-key g -1 0 'over = 'done)))       ; no dancing after
 
+; --- the stretch: up lengthens you, down shortens you, both ring back to rest ---
+(: g (fresh ()) me (g 'me)
+   _ (grass-key g -8 1000) _ (ticks g 3) up (me 's)
+   _ (ticks g 200) back (me 's)
+   _ (grass-key g -9 9000) _ (grass-key g -9 9500) _ (ticks g 3) down (me 's)
+   _ (pins me 'th 0.5 'ht 6.0)
+   f (grass-frame g)
+   _ (pins me 's 0.0 'sv 0.0) f0 (grass-frame g)
+   _ (pins me 's 0.0 'sv 0.0 'w 0.0) _ (grass-key g 110 20000) _ (ticks g 3)     ; n: down and to the right
+ (test (0.05 < up) (|back < 0.01) (down < -0.1) (f != f0)
+       (me 's < -0.05) (0.0 < me 'w) (has? (g 'msg) "bow")))
+
 ; --- the words: up reaches for what is in the sky, down bows ---
 (: g (fresh ())
    _ (pin g 'h 12.0) _ (grass-key g -8 1000) sun (g 'msg)
@@ -78,7 +91,30 @@
    _ (grass-key g -9 2100) bow (g 'msg)
    _ (grass-key g -1 2200) side (g 'msg)
  (test (sun = "you reach for the sun") (moon = "you reach for the moon")
-       (has? bow "you bow to the sky") (has? bow "combo x2") (side = "combo x3")))
+       (has? bow "you bow to the") (has? bow "combo x2") (side = "combo x3")))
+
+; --- the song: chimes off the score's pitches, the daily cue, the song on cue and then chimes again ---
+(: bs (score-parse score)
+   j (jug 0)
+   s (grass-song-new bs j (wheel 7))
+   (feed n w) (? (0 < n) (grass-song-feed s w, feed (n - 1) w) s)
+   _ (feed 90 30.0)                            ; three seconds of a gale
+   blown #(s 'vs)
+   _ (feed 90 0.0) calm #(s 'vs)                ; three seconds of calm: the gale's chimes ring on, few new ones
+   set (s 'set)
+   _ (grass-song-cue s) _ (feed 2 0.0)
+   sung (s 'mode) sv #(s 'vs)
+   _ (feed (int (8 / 0.32 * 30)) 0.0)         ; the eight bars through
+   after (s 'mode)
+   ; the cue: once a day at the day's hour, never twice
+   g (fresh ()) _ (pins g 'songs '(7.0 7.0 7.0 7.0 7.0 7.0 7.0) 'h 6.9)
+   _ (ticks g 30) c1 (g 'cue) _ (pin g 'cue 0) _ (ticks g 300) c2 (g 'cue)
+   _ (pin g 'h 30.9) _ (ticks g 30) c3 (g 'cue)
+ (test (3 < blown < 30) (calm <= blown + 3)
+       (#set = 10) (elem 11 set) (elem -5 set) !(elem 3 set)   ; the melody's notes, not the bass
+       (sung = 'song) (0 < sv) (after = 'chimes) (s 'cyc = 8)
+       (#(slurp j) = 4 * song-chunk * (182 + int (8 / 0.32 * 30)))
+       (c1 = 1) (c2 = 0) (c3 = 1)))
 
 ; --- the frame: r rows and a bar, the sky's pen by hour, shadows by day, stars by night ---
 (: g (fresh ())
