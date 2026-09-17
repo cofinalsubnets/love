@@ -34,7 +34,9 @@
  dh (((week-hours - week-start) / week-secs) / fps)   ; ..and in game hours
  rpi 2                                  ; rows an inch of blade takes
  dance-gap 400                          ; ms within which the next press is still the dance
- dance-cost 0.3                         ; water a press costs, in points of a hundred
+ dry-rate 4.0                           ; the sky's thirst: the drops an hour it takes at noon
+ dry-drop 1.0                           ; ..and what one drop is worth, in points of a hundred
+ dew-rate 2.3                           ; what a calm cool night gives back, an hour
  dew-hour 5.0                           ; the dewfall: just before dawn, every blade drinks
  dew-drop 20.0
 
@@ -42,10 +44,10 @@
  ; rest, [CHORD] the bar's bass, a key line the key signature. six bars in E
  score '("key F# C# G# D#"
          "B4 .75 - .25 B4 1 G4 2"
-         "B4 .75 - .25 B4 .5 F4 2 - .5"
+         "B4 .75 B4 .75 F4 2 - .5"
          "B4 .75 - .25 B4 1 G4 1.5 E4 .5"
          "C5 1.75 - .25 B4 1.5 - .5"
-         "G4 .25 F4 .25 E4 3 - .5"
+         "E4 3.5 - .5"
          "C4 1 G4 1.25 - .25 F4 .25 E4 .25 C4 1")
  song-rate (love-arch @ 'wasm 16000 48000)
  song-cps 0.32                          ; bars a second: a music box wound down
@@ -100,6 +102,7 @@
    n (c // 2)
    (blade i) {'x (2 * i + 1) 'ht (1.5 + roll sb 10 / 10.0) 'th 0.0 'w 0.0
               'ph (roll sb 628 / 100.0) 'gf (0.6 + roll sb 50 / 100.0) 's 0.0 'sv 0.0
+              'hy (70.0 + roll sb 25) 'wf (0.8 + roll sb 55 / 100.0)
               'dr (roll sb 2 ? 0.8 -0.8) 'me 0}
    bs (map blade ^n)
    me (bs (n // 2))
@@ -112,7 +115,7 @@
    {'r r 'c c 'h week-start 'fr 0 'sb sb 'bs bs 'me me 'tdays tdays 'covers covers 'clouds clouds
     'wind (3.0 + roll sb 10) 'wt 8.0 'head (roll sb 360 * 1.0) 'gust 1.0 'drift 0.0
     'songs songs 'sang -1 'cue 0
-    'hy 80.0 'fh 80.0 'dewday 0 'pts 0 'combo 0 'dk 0 'dms 0 'lk 0 'lt 0 'over 0 'msg ""})
+    'dewday 0 'pts 0 'combo 0 'dk 0 'dms 0 'lk 0 'lt 0 'over 0 'msg ""})
 
  ; --- the helm: an arrow or hjkl pushes your blade, q or esc leaves ---------------
  ; a press within the gap of the last, on another key, grows the combo; the combo
@@ -132,7 +135,6 @@
                  (0 < dy) "you bow to the wind"
                  "")
          (pins g 'combo combo 'pts (g 'pts + combo) 'dk k 'dms now
-                 'hy (clamp (g 'hy - dance-cost) 0.0 100.0)
                  'msg (word + (1 < combo ? ((word ? "   " "") + "combo x" + show combo) ""))))))
 
  ; ..and a tap is a place rather than a letter: the step it means is the direction from
@@ -168,14 +170,15 @@
    hr (grass-hour g) dl (daylight hr) temp (grass-temp g)
    cover ((g 'covers) day)
    sun (dl * (1.0 - 0.6 * cover))              ; what reaches the ground
-   ; the water: the sun and the wind take it, a calm cool night gives some back, and
-   ; the dewfall before dawn gives every blade a drink
-   evap (2.2 * (0.05 + sun) * (1.0 + (temp - 60.0) / 50.0) * (1.0 + wind / 30.0))
-   dew (? (dl > 0.0 || 12.0 <= wind || 72.0 <= temp) 0.0
-          (4.0 * (1.0 - wind / 12.0) * clamp ((72.0 - temp) / 15.0) 0.0 1.0))
+   ; the water: each tick a blade throws against the sky's thirst -- a chance in a
+   ; thousand -- and loses a drop when it hits; the night gives some back a little at a
+   ; time, and the dewfall before dawn a drink. nothing you do touches your water: the
+   ; week's weather is the whole of it
+   thirst (1000.0 * dry-rate * (0.05 + sun) * (1.0 + (temp - 60.0) / 50.0)
+                  * (1.0 + wind / 30.0) * dh / dry-drop)
+   dew ((1.0 - dl) * dew-rate * (1.0 - 0.5 * wind / 30.0) * clamp ((78.0 - temp) / 20.0) 0.2 1.0 * dh)
    fall (dew-hour <= hr && g 'dewday != day)
-   dw ((dew - evap) * dh + (fall ? dew-drop 0.0))
-   _ (pins g 'fh (clamp (g 'fh + dw) 0.0 100.0) 'hy (clamp (g 'hy + dw) 0.0 100.0))
+   drop (fall ? dew-drop 0.0)
    _ (fall ? (pins g 'dewday day 'msg "the dew falls"))
    ; once a day, at the day's own hour, the song: the cue is raised here and taken by
    ; whoever feeds the horn
@@ -184,8 +187,11 @@
    tf (: q ((temp - 72.0) / 32.0) v (1.0 - q * q) (v < 0.0 ? 0.0 v))
    (grow hy) (0.075 * clamp ((hy - 10.0) / 80.0) 0.0 1.0 * tf * (0.2 + 0.8 * sun) * dh)
    wx (grass-wind-x g * gust)
-   ; a spring in the wind: the push waves down the row, and a dry blade droops
-   (blade b) (: hy (b 'me ? (g 'hy) (g 'fh))
+   ; each blade takes its own water, and is a spring in the wind: the push waves down
+   ; the row, and a dry blade droops
+   (blade b) (: lost (roll sb 1000 < thirst * b 'wf ? dry-drop 0.0)
+                hy (clamp (b 'hy - lost + dew + drop) 0.0 100.0)
+                _ (pin b 'hy hy)
                 _ (g 'over ? () (pin b 'ht (b 'ht + grow hy * b 'gf)))
                 f (wx * 0.8 * (1.0 + 0.35 * sin (t * 2.2 + b 'ph + b 'x * 0.3)))
                 droop (hy < 25.0 ? (b 'dr * (1.0 - hy / 25.0)) 0.0)
@@ -221,8 +227,7 @@
                                    go (i + 1)))
                  (0.15 < dl ? (go 1)))
    (blade b) (: n (: v (int (b 'ht * rpi * (1.0 + b 's) + 0.5)) (top < v ? top v))
-                hy (b 'me ? (g 'hy) (g 'fh))
-                wilt (hy < 12.0)
+                wilt (b 'hy < 12.0)
                 ; a shortened blade bows out of line: a bulge along its length, on the
                 ; side it already leans, that grows with the squeeze
                 bow (b 's < -0.1 ? ((b 'th < 0.0 ? -6.0 6.0) * (-0.1 - b 's)) 0.0)
@@ -314,10 +319,10 @@
    (slurp j))
 
  (grass-hud g) (: hr (grass-hour g) hh (int hr) mm (int ((hr - hh) * 60.0)) d (int (g 'h / 24.0))
-   ("day " + show (1 + d) + " " + day-names (d % 7) + " " + two-dig hh + ":" + two-dig mm
-    + "  " + show (round (grass-temp g)) + "°F  wind " + show (round (g 'wind)) + " kt " + compass (g 'head)
-    + "  height " + fx1 (g 'me 'ht) + " in  water " + show (round (g 'hy)) + "%  points " + show (g 'pts)))
- (grass-bar g) (? (g 'hy < 12.0) ("you are wilting  " + g 'msg)
+   (day-names (d % 7) + " " + two-dig hh + ":" + two-dig mm
+    + "  " + show (round (grass-temp g)) + "°F  " + show (round (g 'wind)) + " kt " + compass (g 'head)
+    + "  " + fx1 (g 'me 'ht) + "\"  H2O" + show (round (g 'me 'hy)) + "%  score " + show (g 'pts)))
+ (grass-bar g) (? (g 'me 'hy < 12.0) ("you are wilting  " + g 'msg)
                   (g 'msg || "dance: arrows or hjkl, fast and changing   q leaves"))
  (grass-final g) (g 'over = 'done ? ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + " in tall")
                                     ("you left the field on day " + show (1 + grass-day g)))

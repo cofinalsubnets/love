@@ -16,36 +16,49 @@
    (ticks g n) (? (0 < n) (grass-tick g, ticks g (n - 1)) g)
    (count s n) (:- (go 0 0) (go i k) (? (i + tally n <= tally s)
                                        (go (i + 1) (k + (n = snip s i (i + tally n)))) k))
-   ; a known week: mild days, so the laws below do not ride the dice
-   (fresh _) (: g (grass-new 23 80 (wheel 11))
+   ; a known week: mild days and every blade equally thirsty, so the laws below do not
+   ; ride the dice
+   (fresh _) (: g (grass-new 23 80 (wheel 12))
+                _ (each (g 'bs) (b \ pins b 'wf 1.0 'hy 80.0))
                 (pins g 'tdays '(58.0 58.0 58.0 58.0 58.0 58.0 58.0) 'covers '(0.5 0.5 0.5 0.5 0.5 0.5 0.5))))
 
 ; --- the clock and the sky ---
 (: g (fresh ())
  (test
   (has? (grass-hud g) "day 1 mon 06:00")
-  (0 < #(g 'bs)) (g 'me 'me = 1) (g 'me 'ht = 2.0) (g 'hy = 80.0)
+  (0 < #(g 'bs)) (g 'me 'me = 1) (g 'me 'ht = 2.0) (g 'me 'hy = 80.0)
   (daylight 12.0 = 1.0) (daylight 0.0 = 0.0) (daylight 6.0 < 0.001)
   (sky-pen 12.5 = 39) (sky-pen 0.0 = 17)
   (compass 0.0 = "N") (compass 90.0 = "E") (compass 270.0 = "W") (compass 359.0 = "N")
   (fx1 3.46 = "3.5") (fx1 2.0 = "2.0")))
 
 ; --- water: a calm cold night gives, a hot windy noon takes; growth rides the water ---
-(: g (fresh ())
-   _ (pins g 'h 22.0 'wind 2.0 'wt 2.0 'hy 50.0 'fh 50.0)
+(: g (fresh ()) me (g 'me)
+   _ (pins g 'h 22.0 'wind 2.0 'wt 2.0) _ (each (g 'bs) (b \ pin b 'hy 50.0))
    _ (ticks g 300)                              ; four game hours, calm
-   night (g 'hy)
-   ht0 (g 'me 'ht)
-   _ (pins g 'h 12.0 'wind 20.0 'wt 20.0 'hy 50.0 'fh 50.0 'tdays '(80.0 80.0 80.0 80.0 80.0 80.0 80.0))
+   night (me 'hy)
+   ht0 (me 'ht)
+   _ (pins g 'h 12.0 'wind 20.0 'wt 20.0 'tdays '(80.0 80.0 80.0 80.0 80.0 80.0 80.0))
+   _ (each (g 'bs) (b \ pin b 'hy 50.0))
    _ (ticks g 300)
-   day (g 'hy)
- (test (50.0 < night) (day < 50.0) (ht0 < g 'me 'ht) (has? (grass-hud g) "water")))
+   day (me 'hy)
+ (test (50.0 < night) (day < 50.0) (ht0 < me 'ht) (has? (grass-hud g) "water")))
+
+; --- every blade waters itself: its own meter, its own thirst, the sky the only hand ---
+(: g (fresh ()) me (g 'me) dry (<(g 'bs)) wet ((g 'bs) 1)
+   _ (pins g 'h 12.0 'wind 10.0 'wt 10.0 'tdays '(80.0 80.0 80.0 80.0 80.0 80.0 80.0))
+   _ (pins dry 'hy 14.0 'wf 1.0) _ (pins wet 'hy 14.0 'wf 0.0)
+   hy0 (me 'hy)
+   _ (ticks g 150)                              ; two game hours of a hot noon
+ (test (dry 'hy < 12.0 < wet 'hy)             ; the thirsty one wilts, the other does not
+       (me 'hy < hy0)
+       (has? (grass-frame g) "38;5;142;")))     ; ..and a wilted blade is painted for it
 
 ; --- the dewfall: before dawn every blade drinks, once a day ---
 (: g (fresh ())
-   _ (pins g 'h 28.9 'wind 20.0 'wt 20.0 'hy 40.0 'fh 40.0)
-   _ (ticks g 30) once (g 'hy)
-   _ (ticks g 30) twice (g 'hy)
+   _ (pins g 'h 28.9 'wind 20.0 'wt 20.0) _ (each (g 'bs) (b \ pin b 'hy 40.0))
+   _ (ticks g 30) once (g 'me 'hy)
+   _ (ticks g 30) twice (g 'me 'hy)
  (test (58.0 < once < 62.0) (|(twice - once) < 1.0) (has? (grass-bar g) "dew")))
 
 ; --- the dance: another key inside the gap is the combo, the same key or a slow one is not ---
@@ -55,11 +68,12 @@
    _ (grass-key g -8 1300) c3 (g 'combo)
    _ (grass-key g -8 1400) c4 (g 'combo)
    _ (grass-key g -1 3000) c5 (g 'combo)
-   pts (g 'pts)
+   pts (g 'pts) hy (g 'me 'hy)
    _ (grass-key g 32 3100)                     ; not a steer: nothing
    _ (grass-key g 113 3200)
  (test (c1 = 1) (c2 = 2) (c3 = 3) (c4 = 1) (c5 = 1) (pts = 8)
-       (|(g 'hy - 78.5) < 0.001) (g 'over = 'fled)
+       (hy = 80.0) (g 'over = 'fled)            ; the dance is free: water is the weather's
+
        (has? (grass-final g) "left the field")))
 
 ; --- the end: seven days, then nothing more happens ---
