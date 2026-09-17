@@ -1,9 +1,11 @@
 (\ egg post (:
  (sit e z a) (? (two? a) (sit e (e (cap a)) (cup a)) z)
  now (clock 0)
- ; sit twice so ev compiles itself
- ev (sit (sit ev () egg) () egg)
+ ; p1 is live already (c0 read it in): the twice-sat half is the rest, and p1 is
+ ; compiled once by the ev that came out, ahead of post
+ ev (sit (sit ev () (cup egg)) () (cup egg))
  _ (pin book 'ev ev)
+ _ (ev (cap egg))
  _ (sit ev () post)
  _ (pin book 'born (clock now))
  ; the internals move off the book and into a module: the same names, invisible to a
