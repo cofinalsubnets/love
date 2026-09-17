@@ -14,6 +14,8 @@
                   0)
    (has? h n) (find h n 0)
    (ticks g n) (? (0 < n) (grass-tick g, ticks g (n - 1)) g)
+   ; a row in cells: a glyph's tail bytes ride the lead that began it
+   (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + (128 <= s i < 192 ? 0 1)))))
    (count s n) (:- (go 0 0) (go i k) (? (i + tally n <= tally s)
                                        (go (i + 1) (k + (n = snip s i (i + tally n)))) k))
    ; a known week: mild days and every blade equally thirsty, so the laws below do not
@@ -25,7 +27,9 @@
 ; --- the clock and the sky ---
 (: g (fresh ())
  (test
-  (has? (grass-hud g) "day 1 mon 06:00")
+  (has? (grass-hud g) "mon 06:00") (has? (grass-hud g) "H2O 80%")
+  (wide (grass-hud g) = 80)                     ; the day left, you right, the screen's width
+  ("score 0" = snip (grass-hud g) (#(grass-hud g) - 7) #(grass-hud g))
   (0 < #(g 'bs)) (g 'me 'me = 1) (g 'me 'ht = 2.0) (g 'me 'hy = 80.0)
   (daylight 12.0 = 1.0) (daylight 0.0 = 0.0) (daylight 6.0 < 0.001)
   (sky-pen 12.5 = 39) (sky-pen 0.0 = 17)
@@ -42,7 +46,7 @@
    _ (each (g 'bs) (b \ pin b 'hy 50.0))
    _ (ticks g 300)
    day (me 'hy)
- (test (50.0 < night) (day < 50.0) (ht0 < me 'ht) (has? (grass-hud g) "water")))
+ (test (50.0 < night) (day < 50.0) (ht0 < me 'ht) (has? (grass-hud g) "H2O")))
 
 ; --- every blade waters itself: its own meter, its own thirst, the sky the only hand ---
 (: g (fresh ()) me (g 'me) dry (<(g 'bs)) wet ((g 'bs) 1)
@@ -82,7 +86,7 @@
    _ (ticks g 2) ht (g 'me 'ht)
    _ (ticks g 100)
  (test (g 'over = 'done) (g 'me 'ht = ht)
-       (has? (grass-hud g) "day 8 mon 06:00")
+       (has? (grass-hud g) "mon 06:00")
        (has? (grass-final g) "seven days")
        (grass-key g -1 0 'over = 'done)))       ; no dancing after
 
@@ -141,6 +145,17 @@
        (sung = 'song) (0 < sv) (after = 'chimes) (s 'cyc = 6)
        (#(slurp j) = 4 * song-chunk * (182 + int (6 / 0.32 * 30)))
        (c1 = 1) (c2 = 0) (c3 = 1)))
+
+; --- the frame on a real console: every row reaches the last column and keeps it. an
+;     erase after a full row takes the glyph that raised the pending wrap, so the score
+;     lost its last digit and the field its last stalk
+(: (mkscr r c) (screen (cask (screen () r c)) r c)
+   (chat s i) (& 255 (glass s i))
+   g (fresh ()) _ (pin g 'h 12.0)
+   s (mkscr 24 80)
+   _ (scribe s (grass-frame g))
+ (test (chat s 79 = 48)                         ; the hud's last cell: score 0
+       (chat s 159 != 0)))                      ; ..and the first field row's
 
 ; --- the frame: r rows and a bar, the sky's pen by hour, shadows by day, stars by night ---
 (: g (fresh ())

@@ -115,8 +115,10 @@
     (go x p acc) (x >= w ? acc
      (: c (cell x y) cur? (x = d 'cx && y = d 'cy) p2 >c
       (go (x + 1) p2 (acc + (p2 @ ^p "" (pen p2)) + (cur? ? ("\e[7m" + <c + "\e[27m") <c))))))
-   _ (say j ("\e[H\e[0m\e[7m" + edfit (" design: " + lvl 'title + " -- " + d 'path + (d 'dirty ? " [+]" "")) w " " + "\e[0m\e[K\r\n"))
-   _ (each ^mh (y \ say j (row y + "\e[0m\e[K\r\n")))
+   ; the erase goes FIRST: after a row that reached the screen's edge it would take
+   ; the last cell, the very glyph that raised the pending wrap
+   _ (say j ("\e[H\e[0m\e[K\e[7m" + edfit (" design: " + lvl 'title + " -- " + d 'path + (d 'dirty ? " [+]" "")) w " " + "\e[0m\r\n"))
+   _ (each ^mh (y \ say j ("\e[0m\e[K" + row y + "\e[0m\r\n")))
    t (thing-at lvl (d 'cx) (d 'cy))
    k (kind-of lvl (tile lvl (d 'cx) (d 'cy)))
    bk (kind-of lvl (d 'brush))
@@ -125,11 +127,11 @@
                  (string (k 'ch) + " " + (k 'solid ? "wall" "floor") + " " + show (k 'fg) + "/" + show (k 'bg)))
           + "   brush: " + string (d 'brush) + " " + (bk 'solid ? "wall" "floor") + " " + show (bk 'fg) + "/" + show (bk 'bg)
           + "   palette: " + joins (map string (palette d)) " ")
-   _ (say j (edfit about w " " + "\e[K\r\n"))
-   _ (say j (edfit " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  :w save  :q leave" w " " + "\e[K\r\n"))
-   _ (say j (d 'mode @ 'map (edfit (d 'msg) w " " + "\e[K\e[?25l")
-                       'cmd (edfit (":" + edtext (d 'buf)) w "" + "\e[K\e[?25h")
-                       (edfit (show (d 'mode) + ": " + edtext (d 'buf)) w "" + "\e[K\e[?25h")))
+   _ (say j ("\e[K" + edfit about w " " + "\r\n"))
+   _ (say j ("\e[K" + edfit " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  :w save  :q leave" w " " + "\r\n"))
+   _ (say j ("\e[K" + (d 'mode @ 'map (edfit (d 'msg) w " " + "\e[?25l")
+                                 'cmd (edfit (":" + edtext (d 'buf)) w "" + "\e[?25h")
+                                 (edfit (show (d 'mode) + ": " + edtext (d 'buf)) w "" + "\e[?25h"))))
    (slurp j))
 
  ; --- the runner: the designer on cli's stage --------------------------------------

@@ -44,9 +44,9 @@
  ; rest, [CHORD] the bar's bass, a key line the key signature. six bars in E
  score '("key F# C# G# D#"
          "B4 .75 - .25 B4 1 G4 2"
-         "B4 .75 B4 .75 F4 2 - .5"
+         "B4 .75 - .25 B4 .5 F4 2 - .5"
          "B4 .75 - .25 B4 1 G4 1.5 E4 .5"
-         "C5 1.75 - .25 B4 1.5 - .5"
+         "C5 1.75 - .25 B4 2"
          "E4 3.5 - .5"
          "C4 1 G4 1.25 - .25 F4 .25 E4 .25 C4 1")
  song-rate (love-arch @ 'wasm 16000 48000)
@@ -77,6 +77,8 @@
  (round x) (int (x + (x < 0.0 ? -0.5 0.5)))
  (fx1 x) (: n (int (x * 10.0 + 0.5)) (show (n // 10) + "." + show (n % 10)))
  (two-dig n) (n < 10 ? ("0" + show n) (show n))
+ ; what a row is worth in cells: a glyph's tail bytes belong to the lead that began it
+ (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + lead (s i)))))
  sgrs {}
  (sgr f b) (: k [f b] s (sgrs k)
               (string? s ? s
@@ -311,17 +313,25 @@
                             _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
                             _ (say j (cl 0))
                             (row y (x + 1) f2 b2)))
-   (rows y) (y < r ? (row y 0 -1 -1, say j (esc + "[0m" + esc + "[K\r\n"), rows (y + 1)))
-   _ (say j (esc + "[H" + esc + "[0m" + fit (grass-hud g) c + esc + "[K\r\n"))
+   ; a row is painted to the screen's edge, so it wants no erase after it: under a
+   ; pending wrap an erase takes the very glyph that raised it, and the last column
+   ; would go blank
+   (rows y) (y < r ? (row y 0 -1 -1, say j (esc + "[0m\r\n"), rows (y + 1)))
+   _ (say j (esc + "[H" + esc + "[0m" + fit (grass-hud g) c + "\r\n"))
    _ (rows 1)
-   ; the bar a column short of the screen, so a wrapping console never scrolls the field
+   ; the bar a column short of the screen, so a wrapping console never scrolls the
+   ; field -- and its erase falls on that spare column, where it costs nothing
    _ (say j (esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K"))
    (slurp j))
 
+ ; the day and the weather to the left, what is yours to the right, the screen's spare
+ ; cells between them
  (grass-hud g) (: hr (grass-hour g) hh (int hr) mm (int ((hr - hh) * 60.0)) d (int (g 'h / 24.0))
-   (day-names (d % 7) + " " + two-dig hh + ":" + two-dig mm
-    + "  " + show (round (grass-temp g)) + "°F  " + show (round (g 'wind)) + " kt " + compass (g 'head)
-    + "  " + fx1 (g 'me 'ht) + "\"  H2O" + show (round (g 'me 'hy)) + "%  score " + show (g 'pts)))
+   l (day-names (d % 7) + " " + two-dig hh + ":" + two-dig mm
+      + "  " + show (round (grass-temp g)) + "°F  " + show (round (g 'wind)) + " kt " + compass (g 'head))
+   r (fx1 (g 'me 'ht) + "\"  H2O " + show (round (g 'me 'hy)) + "%  score " + show (g 'pts))
+   gap (: n (g 'c - wide l - wide r) (n < 2 ? 2 n))
+   (l + (gap (t \ t + " ") "") + r))
  (grass-bar g) (? (g 'me 'hy < 12.0) ("you are wilting  " + g 'msg)
                   (g 'msg || "dance: arrows or hjkl, fast and changing   q leaves"))
  (grass-final g) (g 'over = 'done ? ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + " in tall")

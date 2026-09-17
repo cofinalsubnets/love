@@ -256,7 +256,8 @@
    sunk (esc + "[38;5;52m@" + esc + "[39m")
    (line i) (: w (wtop + i) me (? (i = sy) px -1)
              (wetto < w ? (turf-row g w me) (wet-line g w i k me sunk)))
-   (lines i) (i < r ? (say j (line i + esc + "[0m" + esc + "[K\r\n"), lines (i + 1)))
+   ; a line is painted to the screen's edge: an erase there would take its last cell
+   (lines i) (i < r ? (say j (line i + esc + "[0m\r\n"), lines (i + 1)))
    _ (say j (esc + "[H"))
    _ (lines 0)
    _ (say j (slop-bar-fit g + esc + "[K"))
@@ -269,7 +270,7 @@
    k (((g 'field t (g 'wtop) + 4.001) * 2.9) // 1)
    (row i q p) (q < c ? (: n (int (peep k [i q] 0))
                          (n != p && say j (pal n), say j " ", row i (q + 1) n)))
-   (rows i) (i < r ? (row i 0 -1, say j (esc + "[0m" + esc + "[K\r\n"), rows (i + 1)))
+   (rows i) (i < r ? (row i 0 -1, say j (esc + "[0m\r\n"), rows (i + 1)))
    _ (say j (esc + "[H"))
    _ (rows 0)
    _ (say j (slop-bar-fit g + esc + "[K"))

@@ -213,11 +213,13 @@
                                (snip-cells r x0 + "\e[0m" + pen '(252 -1) + b))
                             (rows i)))
                     ^mh)))
-   _ (each rows2 (r \ say j $ r + "\e[0m\e[K\r\n"))
+   ; the erase before the row, not after: after a row that reached the edge it would
+   ; take the last cell, the one that raised the pending wrap
+   _ (each rows2 (r \ say j ("\e[0m\e[K" + $ r + "\e[0m\r\n")))
    ; the cursor shows only where you type: at the command line's end
-   _ (say j (? (g 'mode = 'cmd) (":" + edtext (g 'cmd) + "\e[K\e[?25h")
+   _ (say j ("\e[0m\e[K" + (? (g 'mode = 'cmd) (":" + edtext (g 'cmd) + "\e[?25h")
                ("\e[7m" + edfit (" " + lvl 'title + "  @ " + show (g 'x) + "," + show (g 'y) + "  " + g 'msg
-                               + (win ? "  esc closes" "  ? help  :q leaves")) w " " + "\e[0m\e[K\e[?25l")))
+                               + (win ? "  esc closes" "  ? help  :q leaves")) w " " + "\e[0m\e[?25l"))))
    ("\e[H" + slurp j))
  ; the first n cells of a painted row: pens have no width, so count the glyphs
  (snip-cells r n) (:- (go 0 0 "")

@@ -154,7 +154,7 @@
    ; the floor's foot is blank. a floor smaller than the screen sits in the middle of
    ; it, padded left and the rows above and below it blank
    rows-n (peep d 'rows h) vy (peep d 'vy 0)
-   padding (peep d 'vx 0 (t \ t + " ") "")
+   vx (peep d 'vx 0) padding (vx (t \ t + " ") "")
    ; the note row through `fit`: a message may carry the token's braces, and an
    ; escape is no width, so the cut is made in what a reader sees. a long one wraps
    ; onto a second and a third row, each covering a floor row: the floor does not move.
@@ -164,19 +164,22 @@
    notes (: ls (wr && cols < vlen msg ? (wr msg cols) [msg]) (first-n 3 ls))
    _ (pin d 'top #notes)
    _ (say j "\e[H")
-   _ (each notes (l \ say j ("\e[0m" + fit l cols + "\e[K\r\n")))
+   ; an erase under a pending wrap takes the glyph that raised it, so a row that
+   ; reached the screen's edge ends bare and only a short one is cleared
+   (end n) (n < cols ? "\e[K\r\n" "\r\n")
+   _ (each notes (l \ say j ("\e[0m" + fit l cols + end (vlen l))))
    (row y x i p) (x >= w ? p
                   (: gh (cell i)
                      p2 <>gh
                    (p != p2 ? (say j (pen p2)),
                     say j (string <gh),
                     row y (x + 1) (i + 1) p2)))
-   ; every row ends on \e[K: a floor narrower than the screen leaves nothing of the
+   ; a short row ends on \e[K: a floor narrower than the screen leaves nothing of the
    ; last floor past its edge
    (rows y p) (y >= vy + rows-n ? p
-               (rows (y + 1) (: p2 (y < 0 || y >= h ? p
-                                    (say j padding, row y 0 (w * y) p))
-                                _ (say j "\e[K\r\n")
+               (rows (y + 1) (: on (0 <= y < h)
+                                p2 (on ? (say j padding, row y 0 (w * y) p) p)
+                                _ (say j (end (on ? (vx + w) 0)))
                                 p2)))
    ; ..and the bar a column short of the screen: a console that wraps at its edge would
    ; scroll the floor for a bar that reached it
