@@ -242,7 +242,7 @@
 
 ; ---------------------------------------------------------------- markdown, show
 (: (mq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (s i @ c (g (i + 1) (acc + (spec? c ? "\\" "") + string c)))))
-   (mdi l)  (cats (map mdi1 l))
+   (mdi l)  (catmap mdi1 l)
    (mdi1 x) (<x @ 'text (mq <>x)
                   'code ("`" + <>x + "`")
                   'strong ("**" + mdi <>x + "**")
@@ -252,15 +252,15 @@
    ; a paragraph whose first characters would re-read as another block wears one backslash --
    ; the escape leaf takes it back off, so law 1 survives a paragraph that starts "- " or "# ".
    (shield s) (two? (runp starter (endnl s)) ? ("\\" + s) s)
-   (qpre s)   (cats (map (ln \ #ln ? ("> " + ln + "\n") ">\n") (splitnl s)))
+   (qpre s)   (catmap (ln \ #ln ? ("> " + ln + "\n") ">\n") (splitnl s))
    (nlist l i) (atom? l ? "" (show i + ". " + mdi <l + "\n" + nlist >l (i + 1)))
    (mfront kvs) ("---\n" + cats (map (p \ string <p + ": " + <>p + "\n") (mfilled kvs)) + "---\n")
-   (mdefs l)    (cats (map (it \ mdi <it + "\n:   " + mdi <>it + "\n") l))
+   (mdefs l)    (catmap (it \ mdi <it + "\n:   " + mdi <>it + "\n") l)
    (mdb x) (<x @ 'head    (rep "#" <>x + " " + mdi <>>x + "\n")
                  'para    (shield (mdi <>x) + "\n")
                  'fence   ("```" + <>x + "\n" + <>>x + "```\n")
                  'quote   (qpre (mdshow <>x))
-                 'bullets (cats (map (i \ "- " + mdi i + "\n") <>x))
+                 'bullets (catmap (i \ "- " + mdi i + "\n") <>x)
                  'numbers (nlist <>x 1)
                  'deflist (mdefs <>x)
                  'meta    (mfront <>x)
@@ -269,10 +269,9 @@
    (mdshow d) (joins (map mdb d) "\n"))                        ; each block ends in \n, so \n between = a blank line
 
 ; ---------------------------------------------------------------- html, show
-(: (hq s) (:- (g 0 "") (g i acc) (i >= #s ? acc
-           (: c (s i) (g (i + 1)
-            (acc + (c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)))))))
-   (hti l)  (cats (map hti1 l))
+(: (hq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (: c (s i) (g (i + 1)
+           (acc + (c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)))))))
+   (hti l)  (catmap hti1 l)
    (hti1 x) (<x @ 'text   (hq <>x)
                   'code   ("<code>" + hq <>x + "</code>")
                   'strong ("<strong>" + hti <>x + "</strong>")
@@ -281,7 +280,7 @@
                   "")
    (hitems l t) (joins (map (i \ "<li>" + hti i + "</li>") l) "\n" + "\n</" + t + ">")
    (hmeta kvs)  (joins (map (p \ "<meta name=\"" + string <p + "\" content=\"" + hq <>p + "\">") (mfilled kvs)) "\n")
-   (hdefs l)    ("<dl>\n" + joins (map (\ it ("<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>")) l) "\n" + "\n</dl>")
+   (hdefs l)    ("<dl>\n" + joins (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l) "\n" + "\n</dl>")
    (htb x) (<x @ 'head    (: h ("h" + show <>x) ("<" + h + ">" + hti <>>x + "</" + h + ">"))
                  'para    ("<p>" + hti <>x + "</p>")
                  'fence   ("<pre><code" + (? (0 < #<>x) (" class=\"language-" + <>x + "\"") "")
@@ -311,10 +310,8 @@
    halias '(("b" "strong") ("i" "em") ("u" "em") ("strike" "em") ("s" "em") ("q" "em")
             ("tt" "code") ("kbd" "code") ("samp" "code") ("var" "code") ("dfn" "em")
             ("h7" "h6") ("h8" "h6") ("menu" "ul") ("dir" "ul"))
-   (hlow t) (: n #t o (jug 0)
-               (go i) (? (n <= i) (slurp o)
-                         (: c (t i) _ (put o (? (64 < c < 91) (c + 32) c)) (go (i + 1))))
-               (go 0))
+   (hlow t) (:- (go 0) n #t o (jug 0) (go i)
+             (n <= i ? (slurp o) (t i @ c (put o (64 < c < 91 ? (c + 32) c), go (i + 1)))))
    ; the tag starting at i: [name end-index open?], or () where none does
    (htag s i)
     (: n #s
@@ -329,55 +326,50 @@
    ; from i, past the matching close of t -- nesting counted, so a <div> inside a killed
    ; <div> does not end it early. an unclosed one runs to the end, as it does in a browser.
    (hpast s i t)
-    (: n #s
-       (go k d) (? (n <= k) k
-                   (: h (htag s k)
-                      (? !(two? h) (go (k + 1) d)
-                         (<h != t) (go <>h d)
-                         <>>h (go <>h (d + 1))
-                         (d <= 1) <>h
-                         (go <>h (d - 1)))))
-       (go i 1))
+    (:- (go i 1) n #s (go k d)
+     (n <= k ? k
+      (: h (htag s k) (?
+       (one? h) (go (k + 1) d)
+       (<h != t) (go <>h d)
+       <>>h (go <>h (d + 1))
+       (d <= 1) <>h
+       (go <>h (d - 1))))))
    ; the href inside an open tag's attributes, single or double quoted, or ()
    (href s k e)
     ((: (go i) (? (e <= i + 6) ()
-                  !("href=" = snip s i (i + 5)) (go (i + 1))
-                  (: c (s (i + 5))
-                     (? !(elem c '(34 39)) ()
-                        ((: (h j) (? (e <= j) () (s j = c) (snip s (i + 6) j) (h (j + 1))))
-                         (i + 6))))))
+                  ("href=" != snip s i (i + 5)) (go (i + 1))
+                  (s (i + 5) @ ((34 || 39) @ c)
+                   ((: (h j) (? (e <= j) () (s j = c) (snip s (i + 6) j) (h (j + 1))))
+                    (i + 6)))))
      k)
    (hfind s i pat)                                  ; past the next pat, or the end
-    (: n #s m #pat
-       (go k) (? (n < k + m) n (pat = snip s k (k + m)) (k + m) (go (k + 1)))
-       (go i))
+    (:- (go i) n #s m #pat
+     (go k) (? (n < k + m) n (pat = snip s k (k + m)) (k + m) (go (k + 1))))
    (htscrub s)
-    (: n #s o (jug 0)
-       (go i)
-        (? (n <= i) (slurp o)
-           (i + 3 < n && s i = 60 && s (i + 1) = 33 && s (i + 2) = 45 && s (i + 3) = 45)
-            (go (hfind s (i + 4) "-->"))
-           (i + 1 < n && s i = 60 && s (i + 1) = 33)                       ; <!doctype ..>
-            (go ((: (g k) (? (n <= k) k (s k = 62) (k + 1) (g (k + 1)))) (i + 1)))
-           (: h (htag s i)
-              (? !(two? h) (: _ (put o (s i)) (go (i + 1)))
-                 (: t <h e <>h op? <>>h
-                    (? (elem t hkill) (go (? op? (hpast s e t) e))
-                       (elem t hbare) (go e)
-                       (= t "br") (: _ (say o "</p><p>") (go e))
-                       ; a link is the one tag whose attribute the middle keeps, so it is
-                       ; normalized to the shape the reader knows: href alone, and first.
-                       ; an <a> with no href is an anchor, not a link, and gets an empty
-                       ; one -- which the tty shower then does not print.
-                       (= t "a") (: v (? op? (href s (i + 2) (e - 1)) ())
-                                    _ (say o (? op? ("<a href=\"" + (? (string? v) v "") + "\">")
-                                                    "</a>"))
-                                    (go e))
-                       (: a (halias? t)
-                          _ (say o (? op? ("<" + a + (snip s (i + 1 + #t) (e - 1)) + ">")
-                                         ("</" + a + ">")))
-                          (go e)))))))
-       (go 0)))
+    (:- (go 0) n #s o (jug 0) (go i)
+      (? (n <= i) (slurp o)
+         (i + 3 < n && s i = 60 && s (i + 1) = 33 && s (i + 2) = 45 && s (i + 3) = 45)
+          (go (hfind s (i + 4) "-->"))
+         (i + 1 < n && s i = 60 && s (i + 1) = 33)                       ; <!doctype ..>
+          (go ((: (g k) (? (n <= k) k (s k = 62) (k + 1) (g (k + 1)))) (i + 1)))
+         (: h (htag s i)
+            (? (one? h) (put o (s i), go (i + 1))
+               (: t <h e <>h op? <>>h
+                  (? (elem t hkill) (go (? op? (hpast s e t) e))
+                     (elem t hbare) (go e)
+                     (t = "br") (say o "</p><p>", go e)
+                     ; a link is the one tag whose attribute the middle keeps, so it is
+                     ; normalized to the shape the reader knows: href alone, and first.
+                     ; an <a> with no href is an anchor, not a link, and gets an empty
+                     ; one -- which the tty shower then does not print.
+                     (t = "a") (: v (op? && href s (i + 2) (e - 1))
+                                (say o $ op? ? ("<a href=\"" + (string? v ? v "") + "\">")
+                                               "</a>",
+                                 go e))
+                     (: a (halias? t)
+                      (say o $ op? ? ("<" + a + snip s (i + 1 + #t) (e - 1) + ">")
+                                     ("</" + a + ">"),
+                       go e)))))))))
 
 ; ---------------------------------------------------------------- html, read
 ; an open tag may carry attributes -- `<h1 id="x">` is the same head as `<h1>`, and a page
@@ -402,11 +394,11 @@
    (utf8 v)
     (? (v < 0) ""
        (v < 128) (string v)
-       (v < 2048) ((string (192 + (v // 64))) + string (128 + (v % 64)))
-       (v < 65536) ((string (224 + (v // 4096))) + (string (128 + ((v // 64) % 64)))
-                    + string (128 + (v % 64)))
-       (v < 1114112) ((string (240 + (v // 262144))) + (string (128 + ((v // 4096) % 64)))
-                      + (string (128 + ((v // 64) % 64))) + string (128 + (v % 64)))
+       (v < 2048) (string (192 + v // 64) + string (128 + v % 64))
+       (v < 65536) (string (224 + v // 4096) + string (128 + v // 64 % 64)
+                    + string (128 + v % 64))
+       (v < 1114112) (string (240 + v // 262144) + string (128 + v // 4096 % 64)
+                      + string (128 + v // 64 % 64) + string (128 + v % 64))
        "")
    (hnum nm)                                     ; &#NN; and &#xHH; -> the character
     (: n #nm
@@ -494,8 +486,8 @@
                     (s i = 46 && i + 1 < #s && s (i + 1) = 32)
                      (g (i + 2) (i + 2) (rline (snip s st (i + 1)) . acc))
                     (g (i + 1) st acc))) 0 0 ())
-   (rfill s) (cats (map (ln \ ln + "\n") (rsent s)))
-   (rfi l)  (cats (map rfi1 l))
+   (rfill s) (catmap (ln \ ln + "\n") (rsent s))
+   (rfi l)  (catmap rfi1 l)
    (rfi1 x) (<x @ 'text   (rq <>x)
                   'code   ("\\f(CR" + rq <>x + "\\fR")     ; cr, not the deprecated cw: groff warns on that
                   'strong ("\\fB" + rfi <>x + "\\fR")
@@ -504,17 +496,17 @@
                   "")
    (rth kvs)   (".TH" + cats (map (k \ " \"" + mget kvs k + "\"") metakeys) + "\n")
    (rnums l i) (atom? l ? "" (".IP \"" + show i + ".\" 4\n" + rline (rfi <l) + "\n" + rnums >l (i + 1)))
-   (rdefs l)   (cats (map (it \ ".TP\n" + rline (rfi <it) + "\n" + rfill (rfi <>it)) l))
+   (rdefs l)   (catmap (it \ ".TP\n" + rline (rfi <it) + "\n" + rfill (rfi <>it)) l)
    (rfb x) (<x @ 'meta    (rth <>x)
                  'head    ((<>x < 2 ? ".SH " ".SS ") + rfi <>>x + "\n")
                  'para    (".PP\n" + rfill (rfi <>x))
                  'fence   (".EX\n" + cats (map (ln \ rline (rq ln) + "\n") (splitnl <>>x)) + ".EE\n")
                  'quote   (".PP\n.RS\n" + rfshow <>x + ".RE\n")   ; the .pp spaces the display
-                 'bullets (cats (map (i \ ".IP \\(bu 2\n" + rline (rfi i) + "\n") <>x))
+                 'bullets (catmap (i \ ".IP \\(bu 2\n" + rline (rfi i) + "\n") <>x)
                  'numbers (rnums <>x 1)
                  'deflist (rdefs <>x)
                  "")                                        ; a rule has no roff form: it vanishes
-   (rfshow d) (cats (map rfb d)))
+   (rfshow d) (catmap rfb d))
 
 ; ---------------------------------------------------------------- roff (man), scrubbed
 ; a page in the wild opens with a preamble the reader has no use for: pod2man and sphinx
@@ -598,7 +590,7 @@
    (rfown ln) (: r (rffst ln) (!#r ? "" ((r 0 = 46 ? ("\\&" + r) r) + "\n")))
    (rfscrub s)
     ((: (go l de nf d rs defs acc)
-        (? !(two? l) ((cats (rev acc)) + rfshut nf rs)
+        (one? l ? (cats (rev acc) + rfshut nf rs)
            (: ln (rfdot <l) m (rfmac ln)
               ; a .de body runs to a lone .. -- and ONLY to that. a lone . is an empty
               ; request, and so is any line whose name is blank (`.  if t ..`, which roff
@@ -698,8 +690,8 @@
    (rem s y n)     ((rfont "\\fI" 'em) s y n)
    (rspan s y n)   ((alts [resc rcode rstrong rem rtext rchar]) s y n)
    (rinls s y n)   ((pmap mrg (many (seq (notp rclose) rspan))) s y n)
-   rfinl       (mrg * (runp (many rspan)))
-   rplain      (plain * mrg * runp (many (alts [resc rtext rchar]))))   ; escapes only, no fonts
+   rfinl   (mrg * runp (many rspan))
+   rplain  (plain * mrg * runp (many (alts [resc rtext rchar]))))   ; escapes only, no fonts
 
 ; the font macros: which fonts to cycle through, and whether the arguments take a space.
 (: (rargs s)                                                  ; a macro's arguments, bare or "quoted"
@@ -719,14 +711,14 @@
    fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
               (".RI" (text em) 0) (".BI" (strong em) 0) (".IB" (em strong) 0)
               (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
-   (macinfo m) ((: (g l) (? (one? l) () (<<l = m) (>(<l)) (g >l))) fontmacs)
+   (macinfo m) ((: (g l) (? (one? l) () (<<l = m) ><l (g >l))) fontmacs)
    (wrapf f l) (f @ ('strong || 'em) [[f l]] l)
-   (allplain? l) (? (one? l) 1 (= <<l 'text) (allplain? >l) 0)
-   (argl a f)    (: l (rfinl a) (? (allplain? l) (wrapf f l) l))     ; an explicit \f inside the arg wins
-   (argls as fs i sp) (? (one? as) ()
-                         (: h (argl <as (fs (i % #fs)))
-                            (? (one? >as) h
-                               (h + (? sp '((text " ")) ()) + (argls >as fs (i + 1) sp)))))
+   (allplain? l) (? (one? l) 1 (<<l = 'text) (allplain? >l) 0)
+   (argl a f)    (rfinl a @ l (allplain? l ? (wrapf f l) l))     ; an explicit \f inside the arg wins
+   (argls as fs i sp) (two? as ?
+                       (: h (argl <as (fs (i % #fs)))
+                        (one? >as ? h
+                           (h + (? sp '((text " ")) ()) + argls >as fs (i + 1) sp))))
    (imacl line) (: a (rargs line) m (? (two? a) <a "") info (macinfo m)
                  (one? info ?  (rfinl line)
                   (mrg (argls (rargs (snip line #m #line)) <info <>info 0))))
@@ -757,7 +749,7 @@
    r-ul   (tag (\ p ['bullets p]) (many1 r-bu))
    r-no   (seqs [(skip (lit ".IP")) (skip (span nonl?)) (skip (lit "\n")) r-filled])
    r-ol   (tag (\ p ['numbers p]) (many1 r-no))
-   r-ex   (tag (\ p ['fence "" (cats (map (ln \ rplain ln + "\n") p))])
+   r-ex   (tag (\ p ['fence "" (catmap (ln \ rplain ln + "\n") p)])
                (seqs [(skip (alts [(lit ".EX") (lit ".nf")])) (skip (span nonl?)) (skip (lit "\n"))
                       (many (seq (notp (alts [(lit ".EE") (lit ".fi")])) rfline))
                       (skip (alts [(lit ".EE") (lit ".fi")])) (skip (span nonl?)) (skip (lit "\n"))]))
@@ -797,7 +789,7 @@
 (: ttesc  (string 27)
    (tton a)  (#a ? (ttesc + "[" + a + "m") "")
    ttoff  (ttesc + "[0m")
-   (ttsp n)  (rep " " (? (n < 0) 0 n))
+   (ttsp n)  (rep " " (n < 0 ? 0 n))
    (ttadd a b) (#a ? (a + ";" + b) b)                        ; a nested attribute joins the outer
    ; an inl -> [text attribute] runs. code stays plain: roman is what a terminal shows for it
    (ttsegs l a)
@@ -823,23 +815,23 @@
    ; the runs -> words, each one [visible styled]: the visible half is what a fill measures
    (ttwords segs)
     ((: (go l vis sty acc)
-        (? (one? l) (#vis ? (rev ([vis sty] . acc)) (rev acc))
-           (: s <(<l) a <>(<l)
-              (pc p vis sty acc)
-               (? (one? p) (go >l vis sty acc)
-                  (: h <p v2 (vis + h)
-                     s2 (sty + (#h ? (#a ? (tton a + h + ttoff) h) ""))
-                     (? (one? >p) (pc >p v2 s2 acc)
-                        (pc >p "" "" (#v2 ? ([v2 s2] . acc) acc)))))
-              (pc (ttsplit s) vis sty acc))))
+        (one? l ? (#vis ? (rev ([vis sty] . acc)) (rev acc))
+         (: s <<l a <><l
+            (pc p vis sty acc)
+             (one? p ? (go >l vis sty acc)
+              (: h <p v2 (vis + h)
+                 s2 (sty + (#h ? (#a ? (tton a + h + ttoff) h) ""))
+               (one? >p ? (pc >p v2 s2 acc)
+                (pc >p "" "" (#v2 ? ([v2 s2] . acc) acc)))))
+          (pc (ttsplit s) vis sty acc))))
      segs "" "" ())
    ; greedy fill: the words onto lines of at most (w - ind) visible columns, each indented
    (ttfill words w ind)
     (: pad (ttsp ind)
-       room (: r (w - ind) (? (r < 8) 8 r))
+       room (w - ind @ r (r < 8 ? 8 r))
        (go l vis sty acc)
         (? (one? l) (#vis ? (rev ((pad + sty) . acc)) (rev acc))
-           (: v <(<l) s <>(<l)
+           (: v <<l s <><l
               (? !#vis (go >l v s acc)
                  (#vis + 1 + #v <= room) (go >l (vis + " " + v) (sty + " " + s) acc)
                  (go >l v s ((pad + sty) . acc)))))
@@ -856,33 +848,32 @@
    (ttmeta kvs w)
     (: t (mget kvs 'title) sec (mget kvs 'section) mn (mget kvs 'manual)
        l (#sec ? (t + "(" + sec + ")") t)
-       gap (w - 1 - (2 * #l) - #mn)                          ; the last column stays empty
+       gap (w - 1 - 2 * #l - #mn)                          ; the last column stays empty
        lf (gap // 2)
        (? (!#t || gap < 2) (#t ? [l] ())
           [(l + ttsp lf + mn + ttsp (gap - lf) + l)]))
-   (ttvis words) ((: (g l a) (? (one? l) a (g >l (#a ? (a + " " + <(<l)) <(<l))))) words "")
+   (ttvis words) ((: (g l a) (one? l ? a (g >l (#a ? (a + " " + <(<l)) <(<l))))) words "")
    ; the term carries whatever fonts the page gave it, so nothing is forced on it here.
    ; a term that fits the gap keeps its definition beside it, which is what .TP does and
    ; what a page of one-letter flags wants; a longer one takes the line to itself. and a
    ; blank between items, without which a long definition runs into the next term.
    (ttdefs l w ind)
-    (? (one? l) ()
-       (: it <l
-          tw (ttwords (ttsegs <it ""))
-          tv (ttvis tw)
-          tl (ttfill tw w ind)
-          bl (ttinl <>it w (ind + 7) "")
-          h  (? (#tv && #tv < 7 && one? >tl && two? bl)
-                (((ttsp ind + snip <tl ind #(<tl) + ttsp (7 - #tv))
-                  + snip <bl (ind + 7) #(<bl)) . >bl)
-                (tl + bl))
-          r  (ttdefs >l w ind)
-          (? (one? r) h (h + [""] + r))))
+    (two? l ?
+     (: it <l
+        tw (ttwords (ttsegs <it ""))
+        tv (ttvis tw)
+        tl (ttfill tw w ind)
+        bl (ttinl <>it w (ind + 7) "")
+        h  (? (#tv && #tv < 7 && one? >tl && two? bl)
+              (((ttsp ind + snip <tl ind #(<tl) + ttsp (7 - #tv))
+                + snip <bl (ind + 7) #(<bl)) . >bl)
+              (tl + bl))
+        r  (ttdefs >l w ind)
+        (one? r ? h (h + [""] + r))))
    (ttnums l w ind i)
-    (? (one? l) ()
-       ((ttitem <l w ind (show i + ". ")) + ttnums >l w ind (i + 1)))
+    (two? l ? (ttitem <l w ind (show i + ". ") + ttnums >l w ind (i + 1)))
    (ttbuls l w ind)
-    (? (one? l) () ((ttitem <l w ind "• ") + ttbuls >l w ind))
+    (two? l ? (ttitem <l w ind "• " + ttbuls >l w ind))
    (ttblk x w ind)
     (<x @ 'meta    (ttmeta <>x w)
           'head    (ttinl <>>x w (<>x < 2 ? 0 3) "1")
@@ -892,8 +883,7 @@
           'bullets (ttbuls <>x w ind)
           'numbers (ttnums <>x w ind 1)
           'deflist (ttdefs <>x w ind)
-          'rule    [(ttsp ind + rep "-" (? (w - ind < 1) 1 (w - ind)))]
-          ())
+          'rule    [(ttsp ind + rep "-" (? (w - ind < 1) 1 (w - ind)))])
    ; one blank line between blocks, none before the first, and none after a heading --
    ; a heading belongs to what follows it, and man sets it that way
    (ttdoc d w ind)
@@ -902,7 +892,7 @@
           (? (one? h) r (one? r) h
              (= <(<d) 'head) (h + r)
              (h + [""] + r))))
-   (ttyshow d w) (cats (map (ln \ ln + "\n") (ttdoc d (? (w < 20) 20 w) 5)))
+   (ttyshow d w) (catmap (ln \ ln + "\n") (ttdoc d (w < 20 ? 20 w) 5))
    (rf->tty s w) (ttyshow (rfread s) w)
    (md->tty s w) (ttyshow (mdread s) w)
    (ht->tty s w) (ttyshow (htread s) w))
