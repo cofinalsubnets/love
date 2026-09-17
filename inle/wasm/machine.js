@@ -188,7 +188,8 @@ export async function loveMachine(root) {
   // zoom a glyph pixel gets there. the kernel settles rows and columns from the two, so
   // the island's shape is a layout question and nothing the console has to live inside.
   const cols = Number(at('cols', 80));
-  const fb = { ...glass(canvas, cols), post: true };
+  const ratio = Number(at('ratio', 0));            // ..and how many device pixels it may use
+  const fb = { ...glass(canvas, cols, ratio), post: true };
   // A TAP IS A PLACE. the report is xterm's SGR form (ESC [ < b ; col ; row M) -- what a
   // terminal sends an app that asked for one, and a key an app that did not reads as
   // unknown and drops. the PRESS only: nothing aboard drags, and the release is another
@@ -217,7 +218,7 @@ export async function loveMachine(root) {
   const ask = () => {
     const box = canvas.getBoundingClientRect();
     if (canvas.hidden || box.width < 1 || box.height < 1) return;
-    const g = glass(canvas, cols);
+    const g = glass(canvas, cols, ratio);
     Atomics.store(ctl, 5, g.w); Atomics.store(ctl, 6, g.h); Atomics.store(ctl, 7, g.scale);
     zoom = g.scale;
     Atomics.store(ctl, 4, 1);

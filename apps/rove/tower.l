@@ -671,6 +671,7 @@
  ; and a card's ring can hold a second (the wasm seat's does): the beep would come a
  ; second after the hit. a shallower card blocks at its own door under this
  song-lead (6 * song-chunk)
+ song-lead-max (20 * song-chunk)                       ; ..and at most this, the ring holding a second
  song-gain 5200.0
 
 
@@ -1638,7 +1639,20 @@
              ; kept on the floor, and each count they are laid again, alone
              (flick! _) (: d (g 'd) t (clock 0 // 250)
                            (? (t != peep d 'ft ()) (pin d 'ft t, say out (live-frame g), flush out)))
-             (feed! _) (? (horn-lag hn < song-lead) (song-feed sng (song-vol g)) (rest 5))
+             ; THE QUEUE MUST OUTLAST THE GAP BETWEEN FEEDS, and on a slow seat that gap is
+             ; one frame's painting: a fifth of a second is a desktop's answer and a
+             ; phone's silence. so the gap is measured, held at its recent worst --
+             ; halving every two seconds, by the clock and not by calls -- and the lead
+             ; follows it
+             pace {'t (clock 0) 'gap 0.0}
+             (pace! _) (: t (clock 0)
+                          d (1.0 * (t - pace 't))
+                          v ((d / 2000.0) 0.5 * pace 'gap)
+                          _ (pins pace 't t 'gap (v < d ? d v))
+                          (pace 'gap))
+             (lead _) (: n (int (2.5 * pace! () * song-rate / 1000.0))
+                         (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
+             (feed! _) (? (horn-lag hn < lead ()) (song-feed sng (song-vol g)) (rest 5))
              (idle _) (: _ (? sng (feed! ()) (rest 30)) (flick! ()))
              (hold ms) (: t (clock 0) (go _) (? ((clock 0 - t) < ms) (idle (), go ())) (go ()))
              ; ..but escape at a standing sign takes the sign down, and nothing else:

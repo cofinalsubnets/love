@@ -42,13 +42,17 @@ const reservation = (r) => Math.min(pixel_cap,
 // for at half the size, which is the reading kmain's fbscale gives and a page can better,
 // the pixels being the part a page knows and the kernel does not. /proc/vt/scale retunes
 // it aboard, so this is the opening zoom and not a ceiling on one.
-export function glass(canvas, cols = 80) {
+// a page may also ASK for fewer pixels than its screen has (`ratio`): halving the ratio
+// doubles the zoom to match, which is the same grid, and the frame the machine swizzles
+// each time is a quarter the bytes. on a phone that is the difference between a floor
+// that repaints and a horn that keeps up
+export function glass(canvas, cols = 80, ratio = 0) {
   const n = cols > 0 ? cols : 80;             // a query string's nonsense falls back, never NaN
   const box = canvas.getBoundingClientRect();
   // the floor is a floor and not the column target: a narrow screen gets FEWER columns,
   // never a canvas wider than the box it was laid in
   const w = Math.max(64, Math.round(box.width)), h = Math.max(16, Math.round(box.height));
-  let r = Math.max(1, Math.round(window.devicePixelRatio || 1));
+  let r = Math.max(1, Math.round(ratio > 0 ? ratio : (window.devicePixelRatio || 1)));
   const cap = reservation(r);
   while (r > 1 && w * h * r * r > Math.min(cap, frame_cap)) r--;
   // 1..8 is the kernel's own range for a glyph scale (kmain's fbscale, and what
