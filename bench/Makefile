@@ -1,7 +1,8 @@
 # Benchmark harness. Times equivalent numeric / list workloads written in many
 # languages and prints a side-by-side comparison. Each language self-times the
-# inner loop (auto-scaling reps past a 200ms floor) so interpreter startup is
-# excluded; see bench.l / lib/bench.* for the shared protocol.
+# inner loop (auto-scaling reps past a 200ms floor, then timing that count again
+# warm) so interpreter startup and first-run costs are excluded; see bench.l /
+# lib/bench.* for the shared protocol.
 #
 # Results are cached per language under out/bench/<lang>.txt. The user-facing
 # targets DEPEND on those files and just pretty-print them -- a bench is only

@@ -21,9 +21,10 @@ fails=0
 
 # <bench> <floor>: the glazed run must be at least <floor> times faster than LOVE_NO_GLAZE=1.
 # the float-grid (mandelbrot) and cask-fill (strcat) lanes emit for x64 only.
-# measured 2026-09-07 on x64: fib x12 tak x9 deforest x36 primes x16 strscan x10 hash x3.5 tree x7
-# bintrees x7 closure x84 mandelbrot x165 strcat x49 -- the floors sit near a third. hash and
-# bintrees run low because the amble's restart law declines their `(+ acc (f x))` loops.
+# measured 2026-09-18 on x64: fib x10 tak x9 deforest x35 primes x14 strscan x11 hash x6 tree x6
+# bintrees x8 closure x69 mandelbrot x175 strcat x48 -- the floors sit near a third. hash and
+# bintrees carry `(+ acc (f x))` loops the amble's restart law declines, which is why hash reads
+# lowest of the list lanes.
 roster='fib 4 tak 3 deforest 12 primes 5 strscan 3 hash 2 tree 2.5 bintrees 2 closure 25'
 [ $arch = x64 ] && roster="$roster mandelbrot 50 strcat 15"
 

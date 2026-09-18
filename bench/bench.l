@@ -3,10 +3,13 @@
 ; bindings below leak into global scope (a top-level `:` with no trailing body
 ; defines globals). every bench file ends in one (bench name work) call.
 ;
-; `bench` auto-scales the repetition count: it runs `work` an increasing power
-; of two times until the wall time clears bench-min-ms, then reports the chosen
-; reps and the total ms so a per-iteration time is reps-independent. one line is
-; printed per bench, matching the python/node harnesses:
+; `bench` auto-scales the repetition count: it runs `work` an increasing power of
+; two times until the wall time clears bench-min-ms, then times that count ONCE MORE
+; and reports the second run. the scaling runs pay the fixed per-process costs (the
+; image's first 8 MB, a JIT's warmup, the heap's first growth); reporting one leaves
+; ms/it riding whichever power of two the doubling landed on -- tree reads 3.19 cold
+; at 16 reps and 0.58 at 512. the warm run is what makes ms/it reps-independent.
+; one line is printed per bench, matching the python/node harnesses:
 ;     <name> love <reps> <ms> <checksum>
 ; the lang label comes from BENCH_LANG (run.sh exports it), default "love" -- the
 ; SAME contract as lib/bench.* (bench.py/.lisp/...); it MUST equal the column key
@@ -21,9 +24,9 @@
     (: t0  (clock 0)
        chk ((: (go i a) (? (< i reps) (go (+ i 1) (work ())) a)) 0 0)
      (. (- (clock 0) t0) chk))
-   (bench-loop work reps)                                             ; double until >= floor
+   (bench-loop work reps)                                             ; double until >= floor, then time it warm
     (: r (bench-run work reps)
-       (? (< (cap r) bench-min-ms) (bench-loop work (* 2 reps)) (. reps r)))
+       (? (< (cap r) bench-min-ms) (bench-loop work (* 2 reps)) (. reps (bench-run work reps))))
    (bench name work)
     (: r    (bench-loop work 1)
        reps (cap r) ms (caup r) chk (cuup r)

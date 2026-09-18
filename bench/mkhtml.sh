@@ -64,7 +64,8 @@ cat <<'HEAD'
 <nav class="topnav"><a href="../index.html">love</a> &nbsp;&middot;&nbsp; <a href="../language.html">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../a/index.html">crew</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
 <h1>love benchmarks &mdash; milliseconds per iteration</h1>
 <p class="note">Lower is better. Each language self-times its inner loop (reps
-auto-scaled past a 200&nbsp;ms floor, so startup is excluded). The fastest cell
+auto-scaled past a 200&nbsp;ms floor, then timed once more warm, so startup and
+first-run costs are excluded). The fastest cell
 per bench is <b style="color:#9ece6a">green</b>; the <span class="love"
 style="padding:0 .3em">love</span> axis is tinted; a dot means no implementation
 (or an unavailable toolchain). The ranking row orders the columns by the metric you pick above

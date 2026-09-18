@@ -1,7 +1,10 @@
 :Namespace bench
 ⍝ Dyalog APL benchmark harness -- mirrors lib/bench.py.
 ⍝ (work Run) name  auto-scales the repetition count (doubling until the timed
-⍝ batch clears MIN_MS = 200), then writes one line matching the other harnesses:
+⍝ batch clears MIN_MS = 200), then times that count ONCE MORE and writes the
+⍝ SECOND run -- the scaling runs pay the fixed per-process costs (JIT warm-up,
+⍝ the heap's first growth), which otherwise ride on whichever power of two the
+⍝ doubling landed on. one line per bench, matching the other harnesses:
 ⍝     <name> <lang> <reps> <ms> <checksum>
 ⍝ `work` is the work function (a dfn or tradfn), called as `work 0` and returning
 ⍝ the checksum; its dummy argument is ignored. BENCH_LANG sets the column label
@@ -20,7 +23,12 @@
     t0←⎕AI[3]
     :For i :In ⍳reps ⋄ chk←work 0 ⋄ :EndFor
     ms←⎕AI[3]-t0
-    :If ms≥200 ⋄ :Leave ⋄ :EndIf
+    :If ms≥200
+      t0←⎕AI[3]                                    ⍝ warm: time the settled count again
+      :For i :In ⍳reps ⋄ chk←work 0 ⋄ :EndFor
+      ms←⎕AI[3]-t0
+      :Leave
+    :EndIf
     reps←reps×2
   :Until 0
   z←name,' ',lang,' ',(⍕reps),' ',(⍕ms),' ',(⍕chk)

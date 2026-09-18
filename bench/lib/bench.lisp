@@ -1,6 +1,9 @@
 ;;; common lisp benchmark harness -- mirrors bench/bench.l.
 ;;; (bench name work) auto-scales the repetition count (doubling until the run
-;;; clears +min-ms+), then prints one line matching the other harnesses:
+;;; clears +min-ms+), then times that count ONCE MORE and reports the second run --
+;;; the scaling runs pay the fixed per-process costs (JIT warm-up, the heap's first
+;;; growth), which otherwise ride on whichever power of two the doubling landed on.
+;;; one line per bench, matching the other harnesses:
 ;;;     <name> <lang> <reps> <ms> <checksum>
 ;;; work is a nullary function returning a deterministic checksum. the same file
 ;;; serves every ANSI CL on the box (sbcl, clisp, ecl); BENCH_LANG sets the
@@ -14,14 +17,20 @@
           nil)
       "sbcl"))
 
+(defun bench-run (work reps)            ; -> (values ms chk)
+  (let* ((t0 (get-internal-real-time))
+         (chk (let ((c nil)) (dotimes (i reps) (setf c (funcall work))) c)))
+    (values (* 1000.0 (/ (- (get-internal-real-time) t0)
+                         internal-time-units-per-second))
+            chk)))
+
 (defun bench (name work)
   (loop with reps = 1 do
-    (let* ((t0 (get-internal-real-time))
-           (chk (let ((c nil)) (dotimes (i reps) (setf c (funcall work))) c))
-           (ms (* 1000.0 (/ (- (get-internal-real-time) t0)
-                            internal-time-units-per-second))))
+    (multiple-value-bind (ms chk) (bench-run work reps)
+      (declare (ignore chk))
       (when (>= ms +min-ms+)
-        (format t "~a ~a ~d ~,3f ~a~%" name +lang+ reps ms chk)
-        (finish-output)
+        (multiple-value-bind (ms chk) (bench-run work reps)   ; warm
+          (format t "~a ~a ~d ~,3f ~a~%" name +lang+ reps ms chk)
+          (finish-output))
         (return))
       (setf reps (* 2 reps)))))

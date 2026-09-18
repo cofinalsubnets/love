@@ -84,10 +84,19 @@ O(1). Run `make all` for the full table, or `make html` for an interactive one.
 
 Every language self-times only the inner workload, so interpreter startup is
 excluded from the measurement. The harness auto-scales the repetition count —
-doubling until the run clears a 200 ms floor — then reports `(reps, ms)`. The
-report divides `ms / reps` for a per-iteration time, so the chosen rep count
-cancels out and benches of very different cost stay comparable. love's clock has
-1 ms resolution (`(clock 0)`), which the 200 ms floor keeps under ~0.5 % error.
+doubling until the run clears a 200 ms floor — then times that count **once
+more** and reports the second run's `(reps, ms)`. The report divides `ms / reps`
+for a per-iteration time, so the chosen rep count cancels out and benches of very
+different cost stay comparable.
+
+That re-run is what makes the division honest. The scaling runs pay the fixed
+per-process costs — love faults its image's first 8 MB in, a JIT compiles, a heap
+grows to its working size — and reporting one of them leaves `ms/it` riding
+whichever power of two the doubling happened to land on: `tree` reads 3.19 ms/it
+cold at 16 reps and 0.58 at 512, so a machine slow enough to stop a step early
+reads several times worse for no reason. Warm, the same bench reads 0.56 to 0.69
+across that whole range. love's clock has 1 ms resolution (`(clock 0)`), which the
+200 ms floor keeps under ~0.5 % error.
 
 ## Results page
 
@@ -294,7 +303,8 @@ To add a whole new **language**, give it a unique extension, add a `case` arm in
 builds to a scratch dir and runs the binary (see the `go`/`rust`/`java`
 arms) — the compile isn't timed, and a build failure simply drops the cell. Add a
 `lib/bench.<ext>` (or `lib/Bench.<ext>`) that reads `BENCH_LANG` for its column
-label and implements the rep-doubling timer. If the language has an optimizing
+label and implements the rep-doubling timer -- including the warm re-run at the
+settled count. If the language has an optimizing
 backend, guard the pure-loop benches against compile-time folding (opaque inputs —
 `black_box`, a runtime-built array, a JIT warm-up) so the timing stays honest; see
 the `closure` note above.
