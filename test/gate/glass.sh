@@ -5,15 +5,20 @@
 # answer is worked out HERE and not read off the kernel, so the law gets two readings: an
 # 8x16 face at `scale` pixels a glyph pixel, and the scale itself either the door's or the
 # largest that still leaves 80 columns and 24 rows.
+# it also asks what the console does to its TEXT when the grid is re-made under it: two
+# boots print the same line, the second re-scaling the glyphs after it, and test/gate/ink.l
+# weighs the two pictures against each other.
 # skips whole without node. NOT set -e: each boot reports its own failure with context.
 #
-# usage: glass.sh NODE MODULE IMAGE LOG
+# usage: glass.sh NODE MODULE IMAGE LOG LOVE
 set -u
 
 node=$1
 wasm=$2
 image=$3
 log=$4
+love=$5
+out=$(dirname "$log")
 name=test_glass
 bad=0
 
@@ -48,5 +53,17 @@ glass 1280x800 1 "glass 50 160"
 glass 3840x2160 "" "glass 27 96"
 glass "" "" "glass none enotty"
 
+# THE TEXT SURVIVES THE GRID. the same line onto the same 640x400 paper twice, the second
+# boot re-making the grid at scale 2 under it (/proc/vt/scale); the picture that comes back
+# should be the first with every pixel doubled both ways. a console that blanked itself on
+# the re-make answers a bare cursor instead.
+ink() {
+  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+    --image "$image" "$wasm" test/kernel/ink.l $1 < /dev/null > "$log" 2>&1
+}
+ink "" "$out/ink-plain.ppm"
+ink 2 "$out/ink-scaled.ppm"
+"$love" test/gate/ink.l 2 "$out/ink-plain.ppm" "$out/ink-scaled.ppm" || bad=1
+
 [ $bad = 0 ] || exit 1
-echo "  glass: ok -- real pixels in, rows and columns out"
+echo "  glass: ok -- real pixels in, rows and columns out, and the text across a new grid"

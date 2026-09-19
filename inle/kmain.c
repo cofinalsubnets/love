@@ -1696,30 +1696,58 @@ void fbdraw(void) {
   for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
   fbcur = cur, fbblink = blink; }
 
+// the whole paper down, and the screen owed back in full. the pixels moved under the grid
+// -- a new stride, or a new size -- so every row is dirty and the strip past the last row
+// is no cell's to paint.
+static void fbwash(void) {
+  fbcur = ~0u;                         // the cached cursor indexed the grid as it was
+  for (int k = 0; k < 8; k++) kcb->dmg[k] = ~(uint32_t) 0;
+  for (uintptr_t y = 0; y < kfb.height; y++)
+    for (uintptr_t x = 0; x < kfb.width; x++) kfb._[y * kfb.pitch + x] = 0;
+  fbdraw(); }
+
+// a cell index carried from a grid `ocols` wide, its rows shifted up by `from` -- the
+// cursor's and DECSC's. what falls outside the new grid lands on its edge.
+static uint32_t cb_carry(uint32_t pos, uint16_t ocols, uintptr_t from,
+                         uintptr_t rows, uintptr_t cols) {
+  uintptr_t r = pos / ocols, k = pos % ocols;
+  r = r > from ? r - from : 0;
+  if (r >= rows) r = rows - 1u;
+  if (k >= cols) k = cols - 1u;
+  return (uint32_t) (r * cols + k); }
+
 // the console re-made for whatever kfb now says -- both doors below want exactly this. the
-// grid is a function of the scale, so the screen's text does not survive it, only the pen.
-// kcb is moved before the old buffer is freed, fbdraw being able to run from a fault
-// handler; a refusal leaves the console standing, so the allocation comes first.
+// text comes ACROSS: cells row for row, clipped where the new grid is narrower, scrolled up
+// only as far as the cursor's row needs, so shrinking spends the blank tail under a prompt
+// before it touches a line. nothing reflows -- a line wrapped at the old width stays broken
+// where it was, which is the one-buffer bargain.
+// kcb is published only once the new grid is whole, and the old buffer freed after, fbdraw
+// being able to run from a fault handler; a refusal leaves the console standing, so the
+// allocation comes first.
 static bool k_cb_remake(void) {
   uintptr_t const rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
   if (!rows || !cols) return false;
+  struct cb *const old = kcb;
+  uint16_t const orows = old->rows, ocols = old->cols;
+  if (rows == orows && cols == ocols) return fbwash(), true;  // same grid, new pixels
   struct cb *c = kmallocw(b2w(sizeof *c + rows * cols * sizeof(uint32_t)));
   if (!c) return false;
-  struct cb *const old = kcb;
-  uint8_t const fg = old->def_fg, bg = old->def_bg;
+  *c = *old;                           // the pen, the modes, a parser mid-sequence
+  c->rows = (uint16_t) rows, c->cols = (uint16_t) cols;
+  c->top = 0, c->bot = (uint16_t) (rows - 1u);   // the old region addressed the old rows
+  c->flag &= (uint16_t) ~cb_pend;      // a pending wrap named the old last column
+  uintptr_t const cr = old->wpos / ocols, from = cr >= rows ? cr - rows + 1u : 0,
+                  w = cols < ocols ? cols : ocols;
+  uint32_t const blank = cb_cell(0, c->def_fg, c->def_bg, 0);   // new ground in the DEFAULT pen
+  for (uintptr_t i = 0, n = rows * cols; i < n; i++) c->cb[i] = blank;
+  for (uintptr_t r = from, dr = 0; r < orows && dr < rows; r++, dr++)
+    for (uintptr_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
+  c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
+  c->spos = cb_carry(old->spos, ocols, from, rows, cols);
   kcb = c;
-  cb_open(kcb, (uint16_t) rows, (uint16_t) cols);
-  kcb->flag |= cb_lnm;                 // the kernel console's discipline, as cbinit sets it
-  cb_attr(kcb, fg, bg, 0);
-  cb_fill(kcb, 0);
   kfree(old);
-  fbcur = ~0u;                         // the cached cursor indexed the grid that just went
-  // the paper still holds the old grid at the old stride and fbdraw comes back only for a
-  // row that moved; the ground goes down whole, the strip past the last row being no cell's.
-  for (uintptr_t y = 0; y < kfb.height; y++)
-    for (uintptr_t x = 0; x < kfb.width; x++) kfb._[y * kfb.pitch + x] = 0;
-  fbdraw();
+  fbwash();
   return true; }
 
 static bool k_vt_rescale(unsigned v) {

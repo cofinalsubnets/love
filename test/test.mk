@@ -1260,8 +1260,8 @@ test_kernel_wasm: host
 	   && ! grep -q "^0 tests pass" $(ko)/wasm/kernel.log \
 	   || { tail -20 $(ko)/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
 	@grep "tests pass" $(ko)/wasm/kernel.log
-	@echo TEST test/kernel/glass.l "(the console's grid: real pixels in, rows and columns out)"
-	@sh $(R)/test/gate/glass.sh $(NODE) $(R)/out/love.wasm out/wasm/love.image out/wasm/glass.log
+	@echo TEST test/kernel/glass.l "(the console's grid, and its text across a re-made one)"
+	@sh $(R)/test/gate/glass.sh $(NODE) $(R)/out/love.wasm out/wasm/love.image out/wasm/glass.log $m
 	@echo TEST test/gate/glass.mjs "(the page's half of the grid, asked without a page)"
 	@$(NODE) $(R)/test/gate/glass.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/gate/worklet.mjs "(the page's speaker, asked without a page)"
