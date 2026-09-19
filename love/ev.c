@@ -1450,7 +1450,10 @@ lvm(lvm_yield_sw) {
  // asking on its behalf whether a parked peer woke; sweeping is a syscall, so it
  // rides sweep_interval. it must fire even with a runnable peer to hand the cpu
  // to -- two compute tasks trading turns would starve every parked peer for good.
- int fair = !my_wake && my_wait_fd < 0 && Ip->ap != lvm_wait;
+ // ..and neither op that yields WITHOUT advancing Ip may take the fairness arm below:
+ // it answers Continue(), which lands back on the same op, so "keep running" is a spin.
+ // a catcher is one; a task on its way out is the other, and it has no work left to keep.
+ int fair = !my_wake && my_wait_fd < 0 && Ip->ap != lvm_wait && Ip->ap != lvm_task_exit;
  if (fair && g->parked && ++g->sweep_ctr >= sweep_interval) {
   g->sweep_ctr = 0;
   Pack(g);                     // the sweep lays its fd block in the [hp, sp) gap
@@ -1460,8 +1463,8 @@ lvm(lvm_yield_sw) {
  if (!next) {
   // a fairness yield with no runnable peer just keeps running: falling into
   // yield_sw_wait would throttle compute to the slowest sleeping peer's period.
-  // a blocked task still waits below. a catcher takes this arm only over its
-  // own dead body: Ip still points at the catch, so it would spin.
+  // a blocked task still waits below, and so does a dead one: it waits on its peers'
+  // behalf until one of them can run, which is what leaves it a collectable zombie.
   if (fair) { g->yield_ctr = 0; ai_musttail return Continue(); }
   Pack(g);                     // the wait lays its fd block in the [hp, sp) gap
   next = yield_sw_wait(g, my_wake, my_wait_fd, my_events, me_live);

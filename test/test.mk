@@ -20,7 +20,7 @@
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_ord test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
-  test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
+  test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_xfixpoint uuhomgen uukind uumx uusplgen \
@@ -35,7 +35,7 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_glazebench test_dist test_seed test_moon test_links test_kernel_wasm
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_spin test_cookdiff test_glazebench test_dist test_seed test_moon test_links test_kernel_wasm
 
 
 # really slow gate
@@ -341,6 +341,11 @@ test_seat: host
 test_cli: host
 	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
 	@sh test/gate/cli.sh $m
+# what a machine SPENDS while it waits. no other gate weighs it: a scheduler that spins
+# answers everything it is asked and stays green through the whole tree.
+test_spin: host
+	@echo TEST test/gate/spin.sh "(the machine spends nothing while it waits)"
+	@sh test/gate/spin.sh $m
 
 # the front page's icon is laid (tools/mkicon.l) and checked in for github pages: a lay
 # that differs from the tree means someone edited a source without `make web`. the page
