@@ -20,7 +20,11 @@
 // plain reset still ends it.
 // --origin DIR is the page's network: what the machine fetches (kmain's fetch door) is read
 // as a file under DIR, where a page would ask its own origin.
-//   usage: node inle/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm]
+// --frames FILE takes the machine's frames the way a page does -- cpu.mjs's post lane, not
+// the once-a-second PPM -- and lays a line per frame: the time it arrived and a signature
+// of its pixels. what a gate needs to see is not that a frame came but that it CARRIES what
+// just happened, and only the signature says so (test/gate/echo.mjs).
+//   usage: node inle/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log]
 //                                  [--lift /in/machine:b/here] [--horn sound.raw]
 //                                  [--press "Escape Enter" --after S] [--for S]
 //                                  [--origin DIR] [--image love.image] love.wasm [boot line ..]
@@ -32,12 +36,14 @@ import { scanlane, codes } from './scan.mjs';
 
 const args = process.argv.slice(2);
 let fb = null, dump = null, scale = 0, liftReq = null, image = null, hornFile = null, deaf = false;
+let framesFile = null;
 let press = [], after = 0, forS = 0, origin = null;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
   else if (o === '--scale') scale = Number(args.shift());
   else if (o === '--dump') dump = args.shift();
+  else if (o === '--frames') framesFile = args.shift();
   else if (o === '--lift') { const [from, to] = args.shift().split(':'); liftReq = { from, to: to ?? from.split('/').pop() }; }
   else if (o === '--horn') hornFile = args.shift();
   else if (o === '--deaf') deaf = true;
@@ -47,10 +53,11 @@ while (args[0]?.startsWith('--')) {
   else if (o === '--origin') origin = args.shift();
   else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
-if (fb) fb.dump = dump, fb.scale = scale;
+if (fb) fb.dump = dump, fb.scale = scale, fb.post = !!framesFile;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--horn RAW] [--press KEYS --after S] [--for S] [--origin DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log] [--lift IN:OUT] [--horn RAW] [--press KEYS --after S] [--for S] [--origin DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
 
+const framesOut = framesFile ? openSync(framesFile, 'w') : 0;
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
 if (liftReq) {                                            // asked for at the reset: 2
@@ -101,6 +108,11 @@ else if (deaf) Atomics.store(ctl, c_live, 1);
 const cpu = new Worker(new URL('./cpu.mjs', import.meta.url));
 const leave = (code) => { if (process.stdin.isTTY) process.stdin.setRawMode(false); process.exit(code); };
 cpu.on('message', (m) => {
+  if (m.frame && framesOut) {                             // what a page would paint, weighed
+    const px = new Uint32Array(m.frame);
+    let sig = 0;                                          // every pixel: one glyph is all a
+    for (let i = 0; i < px.length; i++) sig = (sig * 31 + px[i]) | 0;   // keystroke changes
+    writeSync(framesOut, Date.now() + ' ' + sig + '\n'); }   // the wall clock: a gate outside shares it
   if (m.serial !== undefined) {
     process.stdout.write(m.serial);
     if (typeof after === 'string' && !pressed) {

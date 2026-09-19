@@ -1692,12 +1692,18 @@ void fbdraw(void) {
   // the paper is minted per frame, never per row: kticks moves under the timer ISR, so a
   // re-read of the blink phase mid-frame could paint one row lit and the next dark.
   struct cb_paper const paper = { kfb._, kfb.pitch, kfb.width, kfb.height, kfb.scale };
+  bool painted = false;
   for (uint16_t i = 0; i < rows; i++) {
     uint32_t const r = i > 255 ? 255 : i;   // quay's fold: bit 255 stands for 255-and-past
     if (kcb->dmg[r >> 5] >> (r & 31) & 1 || (moved && (i == was || i == now)))
-      cb_paint(&paper, kcb, &kface, i, 0, 0, blink ? cur : ~0u); }
+      cb_paint(&paper, kcb, &kface, i, 0, 0, blink ? cur : ~0u), painted = true; }
   for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
-  fbcur = cur, fbblink = blink; }
+  fbcur = cur, fbblink = blink;
+  // a seat that SHOWS this paper rather than scanning it out hears about it here, and here
+  // is the only honest place: the console's bytes leave by the serial door BEFORE the
+  // glyphs land, so a seat that took the write for its cue would carry the screen from
+  // just before it. only when something was actually drawn -- an idle park paints nothing.
+  if (painted) k_fb_touch(); }
 
 // the whole paper down, and the screen owed back in full. the pixels moved under the grid
 // -- a new stride, or a new size -- so every row is dirty and the strip past the last row
