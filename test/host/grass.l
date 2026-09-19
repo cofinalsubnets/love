@@ -9,15 +9,12 @@
 (borrow 'grass)   ; the artifact's module, warm from the tree
 (borrow 'score)   ; the tune's reader, for the song laws
 
-(: (find h n i) (? (i + tally n < 1 + tally h)
-                  (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))
-                  0)
+(: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
    (has? h n) (find h n 0)
-   (ticks g n) (? (0 < n) (grass-tick g, ticks g (n - 1)) g)
+   (ticks g n) (0 < n ? (grass-tick g, ticks g (n - 1)) g)
    ; a row in cells: a glyph's tail bytes ride the lead that began it
    (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + (128 <= s i < 192 ? 0 1)))))
-   (count s n) (:- (go 0 0) (go i k) (? (i + tally n <= tally s)
-                                       (go (i + 1) (k + (n = snip s i (i + tally n)))) k))
+   (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    ; a known week: mild days and every blade equally thirsty, so the laws below do not
    ; ride the dice
    (fresh _) (: g (grass-new 23 80 (wheel 12))
@@ -127,7 +124,7 @@
 (: bs (score-parse score)
    j (jug 0)
    s (grass-song-new bs j (wheel 7))
-   (feed n w) (? (0 < n) (grass-song-feed s w, feed (n - 1) w) s)
+   (feed n w) (0 < n ? (grass-song-feed s w, feed (n - 1) w) s)
    _ (feed 90 30.0)                            ; three seconds of a gale
    blown #(s 'vs)
    _ (feed 90 0.0) calm #(s 'vs)                ; three seconds of calm: the gale's chimes ring on, few new ones
@@ -150,7 +147,7 @@
 ;     erase after a full row takes the glyph that raised the pending wrap, so the score
 ;     lost its last digit and the field its last stalk
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
-   (chat s i) (& 255 (glass s i))
+   (chat s i) (255 & glass s i)
    g (fresh ()) _ (pin g 'h 12.0)
    s (mkscr 24 80)
    _ (scribe s (grass-frame g))
@@ -170,3 +167,6 @@
        (has? night "48;5;252m")                 ; the moon
        (has? night "38;5;230;")                 ; stars
        (has? noon "38;5;118;")))                ; you, in the bright green
+
+(test_fin (),
+ puts "grass: ok -- the tune reads, the week waters, and the frame paints day and night\n")
