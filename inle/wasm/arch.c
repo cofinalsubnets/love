@@ -69,6 +69,7 @@ void k_kb_sync(int room) {
 // the scancodes the page queued on their own lane (inle/wasm/scan.mjs), for the tap when a
 // game armed it (kmain's k_scan_put) and dropped otherwise, so the lane never fills
 void k_scan_put(uint8_t b);
+bool k_scan_armed(void);
 void k_scan_sync(void) {
   unsigned char b[16];
   long n = __ai_sys(hc_scan, (long) b, sizeof b, 0, 0, 0, 0);
@@ -80,6 +81,11 @@ void k_idle(void) {
   long ts[2] = { 0, 10 * 1000000 };
   __ai_sys(hc_nanosleep, (long) ts, 0, 0, 0, 0, 0);
   k_kb_poll();
+  // the codes go out whether or not a game armed the tap, and the worker holds its sleep
+  // while the lane has anything in it: unread is not the same as empty, so an unarmed tap
+  // empties the lane here and k_scan_put drops what it takes. armed, the game's own pop
+  // syncs and this leaves the codes where they are.
+  if (!k_scan_armed()) k_scan_sync();
   k_tick_sync(); }
 
 // a sleep under the tick, exact: kmain's k_sleep asks before it rounds to ticks

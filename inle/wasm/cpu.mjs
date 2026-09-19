@@ -126,7 +126,7 @@ const post = (m, t) => port.postMessage(m, t);
 
 class Reboot extends Error { }
 
-let memory, ctl, kb, sc, pcm, seen = 0;
+let memory, ctl, kb, sc, pcm, seen = 0, sawScan = 0;
 let fb = null, fbAt = 0, fbImg = null, fbCtx = null, blitAt = 0;
 const mono0 = (typeof performance !== 'undefined' ? performance : Date).now();
 const dec = new TextDecoder('utf-8', { fatal: false });
@@ -234,9 +234,17 @@ const sys1 = (n, a, b, c) => {
             ms = Number(ts[0]) * 1000 + Number(ts[1]) / 1e6;
       flush(); resize(); blit(true); lift(1);
       // a key still queued is a wake already: the kernel drains a few per idle, so the
-      // sleep is skipped until the ring is empty, and a pasted line lands at speed
-      if (Atomics.load(ctl, 0) === Atomics.load(ctl, 1) && Atomics.load(ctl, c_sh) === Atomics.load(ctl, c_st))
-        Atomics.wait(ctl, 2, seen, ms);
+      // sleep is skipped until the ring is empty, and a pasted line lands at speed.
+      // UNREAD IS NOT PENDING. the scan lane is written whether or not anything aboard
+      // asked for scancodes, and a guest that never reads it would otherwise hold the
+      // sleep off for good -- one keystroke, and the idle is a spin for the life of the
+      // page. so that lane only skips the sleep while it is still GROWING: codes that
+      // arrived get their quick drain, codes nobody came for are left to sit.
+      const st = Atomics.load(ctl, c_st);
+      const keys = Atomics.load(ctl, 0) !== Atomics.load(ctl, 1),
+            codes = Atomics.load(ctl, c_sh) !== st && st !== sawScan;
+      sawScan = st;
+      if (!keys && !codes) Atomics.wait(ctl, 2, seen, ms);
       seen = Atomics.load(ctl, 2);
       return 0n; }
     case NR.read: {                                     // the keys queued since the last read, never waiting

@@ -335,6 +335,9 @@ _Static_assert(countof(kb2ascii) == countof(shift_kb2ascii), "one scancode table
 // the scancode tap: arm it, then drain. a code is the PS/2 byte with the 0xe0 prefix
 // folded onto the one that follows (bit 7 is the break bit, so an extended key wears 0x100).
 void k_scan_arm(int on) { kkb.raw = on ? 1 : 0, kkb.rh = kkb.rt = 0; }
+// ..and whether anything is listening. a seat that is HANDED codes rather than interrupted
+// by them asks before it leaves a lane full: nothing reads it, so nothing empties it.
+bool k_scan_armed(void) { return kkb.raw != 0; }
 // a seat whose codes are polled rather than interrupted (inle/wasm) fills the tap here
 __attribute__((weak)) void k_scan_sync(void) { }
 int k_scan_pop(void) {

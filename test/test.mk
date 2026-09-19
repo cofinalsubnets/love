@@ -1266,6 +1266,9 @@ test_kernel_wasm: host
 	@$(NODE) $(R)/test/gate/glass.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/gate/worklet.mjs "(the page's speaker, asked without a page)"
 	@$(NODE) $(R)/test/gate/worklet.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST test/gate/idle.mjs "(the machine still sleeps once it has been typed at)"
+	@$(NODE) $(R)/test/gate/idle.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/idle.log \
+	   || { tail -5 out/wasm/idle.log; echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/kernel/horn.l "(the horn: a ramp through the port and out of the machine)"
 	@INLE_RAM=256 $(NODE) $(R)/inle/wasm/inle.mjs --horn out/wasm/horn.raw --image out/wasm/love.image \
 	   $(R)/out/love.wasm test/kernel/horn.l < /dev/null > out/wasm/horn.log 2>&1; \
