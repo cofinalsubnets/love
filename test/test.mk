@@ -1305,6 +1305,8 @@ endif
 # the horn, and is quit from its own menu over the scan lane -- Escape, up to QUIT GAME,
 # Enter, y -- which is the keys proven make and break: exit() aboard is the reset, and the
 # reset ends the run, where a game that never heard the keys outruns --for.
+# DOOM=1 is its own tree (common.mk's hsuf), so the flavour is named where it lands:
+# out/doom is what the sub-make built, and out/ beside it is the plain seat kexec boots.
 ifeq ($(NODE),)
 test_doomwasm:
 	@echo "test_doomwasm: skipped (needs node)"
@@ -1315,14 +1317,14 @@ test_doomwasm:
 	@rm -f out/wasm/doom.ppm out/wasm/doom.raw
 	@INLE_RAM=512 $(NODE) $(R)/inle/wasm/inle.mjs --fb 640x400 --dump out/wasm/doom.ppm --horn out/wasm/doom.raw \
 	   --after 12 --press "Escape ArrowUp Enter KeyY" --for 60 \
-	   --image out/wasm/love.image $(R)/out/love.wasm test/kernel/doomrun.l \
+	   --image out/doom/wasm/love.image $(R)/out/doom/love.wasm test/kernel/doomrun.l \
 	   < /dev/null > out/wasm/doom.log 2>&1 \
 	 && grep -q "I_InitGraphics: DOOM screen size" out/wasm/doom.log \
 	 && grep -q "doomsnd: the horn is open" out/wasm/doom.log \
 	 && test -s out/wasm/doom.ppm && test -s out/wasm/doom.raw \
 	   || { tail -20 out/wasm/doom.log; echo "FAIL test_doomwasm"; exit 1; }
 	@echo "  doomwasm: ok -- drew, sounded, and quit from the menu"
-	@rm -rf out/wasm/origin && mkdir -p out/wasm/origin && cp out/love.wasm out/wasm/origin/doom.wasm
+	@rm -rf out/wasm/origin && mkdir -p out/wasm/origin && cp out/doom/love.wasm out/wasm/origin/doom.wasm
 	@$(MAKE) -s wasm
 	@echo TEST test/kernel/kexec.l "(the machine fetches the doom module off its origin and boots it in place of itself)"
 	@rm -f out/wasm/kexec.ppm
