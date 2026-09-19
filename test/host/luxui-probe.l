@@ -17,7 +17,9 @@
 ;   activation the app sends for itself never drags the view while a
 ;   pager's does (the qt modal that undid every workspace switch), a view
 ;   of one float and no tile arrives with the keyboard on the float and an
-;   empty one with the focus on the root, never PointerRoot.
+;   empty one with the focus on the root, never PointerRoot, and a focused
+;   float is what _net_active_window advertises and what the survivor
+;   inherits when it is destroyed.
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
 ; loaded with -l, no test/00-init.l ahead of it -- so the posix door is borrowed here.
@@ -251,17 +253,18 @@
       a-wt (x-intern s "_NET_WM_WINDOW_TYPE")
       a-dl (x-intern s "_NET_WM_WINDOW_TYPE_DIALOG")
       a-wd (x-intern s "_NET_WM_DESKTOP")
-      wf (+ w1 5)
-      (mkdlg u)                                                                  ; a dialog: the manage hook floats it at its own size
-       (: _ (x-w8 s 1, x-w8 s 0, x-w16 s 9, x-w32 s wf, x-w32 s root,
+      wf (+ w1 5) wg (+ w1 6)
+      (mkdlg wid)                                                                ; a dialog: the manage hook floats it at its own size
+       (: _ (x-w8 s 1, x-w8 s 0, x-w16 s 9, x-w32 s wid, x-w32 s root,
              x-w16 s 5, x-w16 s 5, x-w16 s 200, x-w16 s 150,
              x-w16 s 1, x-w16 s 1, x-w32 s 0, x-w32 s 2, x-w32 s 16777215)
-          _ (x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s wf,                          ; ChangeProperty: the type, before the map
+          _ (x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s wid,                         ; ChangeProperty: the type, before the map
              x-w32 s a-wt, x-w32 s 4, x-w8 s 32, x-w8 s 0, x-w16 s 0,
              x-w32 s 1, x-w32 s a-dl)
-          (x-map s wf, x-flush s))
+          (x-map s wid, x-flush s))
       (mstf u) (cap (x-attrs s wf))
-      _ (mkdlg ())
+      (actw u) (: a (x-getprop-atoms s root a-aw) (two? a ? (cap a) -1))          ; _net_active_window: what a taskbar highlights
+      _ (mkdlg wf)
       _ (waitp "wf-floated" (u \ = 200 ((x-getgeom s wf) 2)) 100)                 ; a float keeps its own size; a tile would be stretched
       _ (cmsg wf a-wd 1 0 0)                                                     ; send it to desktop 1, alone there
       _ (waitp "wf-emigrated" (u \ = 0 (mstf ())) 50)
@@ -269,6 +272,14 @@
       _ (cmsg root a-cd 1 0 0)                                                   ; arrive at a view of one float and no tile
       _ (waitp "wf-shown" (u \ = 2 (mstf ())) 50)
       _ (waitp "wf-holds-keyboard" (u \ = wf (getfocus ())) 50)
+      _ (must "wf-advertised" (= wf (actw ())))                                  ; and the model agrees: wsfoc cannot name a float, so
+                                                                                 ; _net_active_window read 0 while one held the keyboard
+      ; a second float takes the keyboard; destroying it must hand both the
+      ; keyboard and the advertisement back, not just the keyboard
+      _ (mkdlg wg)
+      _ (waitp "wg-holds-keyboard" (u \ && (= wg (getfocus ())) (= wg (actw ()))) 100)
+      _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wg, x-flush s)   ; DestroyWindow
+      _ (waitp "wf-regains" (u \ && (= wf (getfocus ())) (= wf (actw ()))) 50)
       _ (cmsg root a-cd 2 0 0)                                                   ; and an empty view: the root, never PointerRoot (1)
       _ (waitp "empty-view-roots" (u \ = root (getfocus ())) 50)
       _ (cmsg root a-cd 0 0 0)                                                   ; back where leg 6 expects to find us

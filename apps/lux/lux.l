@@ -203,7 +203,7 @@
    ; the float that should hold the keyboard on this view: the carried one if it
    ; still lives here, else the view's own float when there is no tiled top. ()
    ; leaves the question to refocus.
-   (ffoc-for sh ff) (? (ff && (wscur sh = wstagof sh ff)) ff
+   (ffoc-for sh ff) (? (ff && (wsfloating? sh ff && (wscur sh = wstagof sh ff))) ff
                        (wsfoc sh) ()
                        <(wsring sh))
    (fmark sh pf w) (: _ (x-borderpix s w fpix) p (pf ? pf (wsfoc sh))            ; keyboard to float w sans re-render: it wears the focused
@@ -224,10 +224,10 @@
    ; --- do-act: interpret one keys.l action. Returns by looping. ---
    (do-act a sh lay hist ffoc)
     (: k <a z (wsget sh (wscur sh)) fw (ffoc ? ffoc (wsfoc sh))
-       (relay sh2 lay2 f2) (: flf (f2 && wsfloating? sh2 f2 ? f2 ())           ; a float focus takes the keyboard directly; else the tiled top
+       (relay sh2 lay2 f2) (: flf (ffoc-for sh2 f2)                            ; a float focus takes the keyboard directly; else the tiled top
                               _ (render sh2 lay2 flf)
                               _ (flf ? (x-focus s flf, x-flush s) (refocus sh2))
-                              (loop sh2 lay2 hist f2))
+                              (loop sh2 lay2 hist flf))
        (cyc d) (: nx (rnext (wsring sh) fw d)                                    ; cycle the ring: tiles, then the floats at home
                   (? !nx (loop sh lay hist ffoc)
                      (wsfloating? sh nx) (relay sh lay nx)                        ; a float takes the keyboard (relay focuses it)
@@ -321,11 +321,11 @@
                        [sh lay hist ffoc] (rev q))
              _ (pin lux-cell 'st st)                                            ; the snapshot rides post-drain, so a moor read sees the change
              sh2 <st lay2 <>st f2 (st 3)
-             flf (f2 && wsfloating? sh2 f2 ? f2 ())
+             flf (ffoc-for sh2 f2)
              _ (render sh2 lay2 flf)
              _ (flf ? (x-focus s flf, x-flush s) (refocus sh2))
              _ (line ("lux: changed x" + show #q))
-             (loop2 sh2 lay2 (st 2) f2))))
+             (loop2 sh2 lay2 (st 2) flf))))
 
    ; --- the event loop: (sheaf, layout, focus-history, focused-float).
    ;     the mru param is hist0, the fresh ring hist: a `:` binding shadows a
@@ -335,15 +335,20 @@
    (loop2 sh lay hist0 ffoc)
     (: f (ffoc ? ffoc (wsfoc sh))                                                ; the mru rides the effective focus: floats enter too
        hist (f && !(f = (two? hist0 ? <hist0 ())) ? (f . znub f hist0) hist0)
-       (relay sh2 lay2 f2) (: flf (f2 && wsfloating? sh2 f2 ? f2 ())           ; render, focus the float or the tiled top, loop (do-act has its own)
+       (relay sh2 lay2 f2) (: flf (ffoc-for sh2 f2)                            ; render, focus the float or the tiled top, loop (do-act has its own)
                               _ (render sh2 lay2 flf)
                               _ (flf ? (x-focus s flf, x-flush s) (refocus sh2))
-                              (loop sh2 lay2 hist f2))
+                              (loop sh2 lay2 hist flf))
        _ (glean 0)                                                                ; glean one spawned zombie home, if any
-       _ (ewmh-sync s sh)                                                        ; publish the sheaf to pagers (change-guarded)
+       _ (ewmh-sync s sh ffoc)                                                   ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
        (? !e (line "lux: display gone")
-          (ev-code e = 0) (line ("lux: X error " + show (ev-detail e)), loop sh lay hist ffoc)
+          (ev-code e = 0)                                                        ; an X error. the code alone names neither the request
+          (: pkt (ev-raw e)                                                      ; nor the resource, so a window that died between its
+             _ (line ("lux: X error " + (show (ev-detail e) +                    ; unmap and our delprop reads exactly like a real bug
+                        (" req " + (show (pkt 10) + ("." + (show (u16 pkt 8) +
+                           (" id " + show (u32 pkt 4)))))))))
+             (loop sh lay hist ffoc))
           (: code (ev-code e) win (ev-window e)
              (? ((code = 20) && wsknownw? sh win)                                ; MapRequest from a window we already manage: ignore it
                 (line ("lux: remap " + show win), loop sh lay hist ffoc)     ; (mapping it here would paint it OVER a workspace it
@@ -371,25 +376,20 @@
                 (: _ (ewmh-untrack win) _ (unled! win)
                    (? !(wsknownw? sh win) (loop sh lay hist ffoc)
                       (: sh2 (evict sh win) ffoc2 (win = ffoc ? () ffoc)
-                         _ (render sh2 lay ffoc2)
-                         _ (ffoc2 ? (x-focus s ffoc2, x-flush s) (refocus sh2))   ; the departed held the keyboard: hand it on
                          _ (line ("lux: - " + (show win + (" " + show (wsrow sh2)))))
-                         (loop sh2 lay hist ffoc2))))
+                         (relay sh2 lay ffoc2))))                                 ; the departed held the keyboard: relay hands it on
                 (code = 18)                                                     ; UnmapNotify: xmonad's waitingUnmap rule. Our own hides echo
                 (? !(wsknownw? sh win) (loop sh lay hist ffoc)                   ; back counted (the owed ledger); a synthetic (send-event bit
                    (: syn (127 < <(ev-raw e)) p (peep owed win 0)                ; on the raw byte) is a withdraw (ICCCM 4.1.4) -- and so is a
                       (? (!syn && (0 < p))                                       ; real one we're owed no echo for: the client unmapped it,
                          (pin owed win (p - 1), loop sh lay hist ffoc)    ; courtesy synthetic or not
                          (: _ (ewmh-untrack win)
-                            _ (x-delprop s win (x-intern s "WM_STATE"))          ; unstamp: a restart must not re-adopt the withdrawn (the
-                            sh2 (evict sh win) ffoc2 (win = ffoc ? () ffoc)
-                            _ (x-unmap s win)                                    ; a crossing's render in the event gap may have re-mapped it
-                                                                                 ; (telegram's media viewer) -- withdrawn means unmapped, so say so
-                            _ (unled! win)
-                            _ (render sh2 lay ffoc2) _ (x-flush s)               ; tray ghost); a re-map arrives as a fresh MapRequest
-                            _ (ffoc2 ? (x-focus s ffoc2, x-flush s) (refocus sh2))
+                            _ (x-delprop s win (x-intern s "WM_STATE"))          ; unstamp: a restart must not re-adopt the withdrawn
+                            sh2 (evict sh win) ffoc2 (win = ffoc ? () ffoc)      ; (the tray ghost); a re-map arrives as a fresh MapRequest
+                            _ (x-unmap s win)                                    ; a crossing's render in the event gap may have re-mapped
+                            _ (unled! win)                                       ; it (telegram's media viewer): withdrawn means unmapped
                             _ (line ("lux: withdraw " + show win))
-                            (loop sh2 lay hist ffoc2)))))
+                            (relay sh2 lay ffoc2)))))
                 (code = 7)                                                      ; EnterNotify: focus follows the pointer (normal crossings
                 (: pkt (ev-raw e) w (u32 pkt 12)                                 ; only -- the window is the event field, byte 12)
                    (? (!(pkt 30 = 0) || (ev-detail e = 2))                  ; mode Grab/Ungrab or detail Inferior: not a real entry

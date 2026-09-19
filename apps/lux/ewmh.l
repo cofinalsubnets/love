@@ -77,8 +77,10 @@
        (x-flush s))
 
    ; --- sync: publish the sheaf whenever it changed (pagers track us) ---
-   (ewmh-sync s sh)
-    (: wins (wswins sh) cur (wscur sh - 1) foc (wsfoc sh ? (wsfoc sh) 0)
+   (ewmh-sync s sh ff)                                                           ; ff: the float holding the keyboard, else ()
+    (: wins (wswins sh) cur (wscur sh - 1)
+       foc (ff ? ff (wsfoc sh ? (wsfoc sh) 0))                                   ; the EFFECTIVE focus -- a focused float is what a
+                                                                                 ; taskbar must highlight, and wsfoc cannot name one
        key [cur foc wins]
        (? (key = ewst 'last) 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0)
