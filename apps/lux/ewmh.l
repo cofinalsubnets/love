@@ -77,11 +77,10 @@
        (x-flush s))
 
    ; --- sync: publish the sheaf whenever it changed (pagers track us) ---
-   (ewmh-sync s sh ff)                                                           ; ff: the float holding the keyboard, else ()
+   (ewmh-sync s sh)
     (: wins (wswins sh) cur (wscur sh - 1)
-       foc (ff ? ff (wsfoc sh ? (wsfoc sh) 0))                                   ; the EFFECTIVE focus -- a focused float is what a
-                                                                                 ; taskbar must highlight, and wsfoc cannot name one
-       key [cur foc wins]
+       foc (wsfoc sh ? (wsfoc sh) 0)                                             ; a focused float is what a taskbar must highlight,
+       key [cur foc wins]                                                        ; and wsfoc names one
        (? (key = ewst 'last) 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0)
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins)
@@ -89,9 +88,8 @@
                                                                                      ; an empty taskbar); wswins is tiles-then-floats = bottom to top
              _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 [cur])
              _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 [foc])
-             _ (map (p \ (: t (<p - 1)                                           ; tiled windows wear their workspace...
-                            (map (w \ x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 [t]) (zrow <>p)))) (wsboard sh))
-             _ (map (p \ x-chprop32 s <p (ewmh-atom "_NET_WM_DESKTOP") 6 [(p 2 - 1)]) (wsfloat sh))           ; ...floats wear their HOME tag (per-workspace now)
+             _ (map (p \ (: t (<p - 1)                                           ; every window wears its workspace -- a float's
+                            (map (w \ x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 [t]) (zrow <>p)))) (wsboard sh))   ; tag is the zipper that holds it
              (x-flush s))))
 
    ; --- ClientMessage (event 33) field reads, off the raw bytes ---

@@ -1,8 +1,9 @@
 ; apps/lux/core.l -- the pure StackSet: the window model, no X and no sockets. This is
-; xmonad's StackSet.hs, single-screen: a focus zipper per workspace, a sheaf of
-; workspaces with one current, and a floating map (window -> rect) beside the
-; tiled stacks. Pure -- so it rides the corpus on every target (test/law/lux.l asserts
-; the invariants), and the driver (apps/lux/lux.l) + the X layers build on it.
+; xmonad's StackSet.hs, single-screen: a focus zipper per workspace holding every
+; window on it, floats included, and a floating map (window -> rect) carrying
+; geometry alone. One focus, one home tag, no second copy to drift. Pure -- so it
+; rides the corpus on every target (test/law/lux.l asserts the invariants), and the
+; driver (apps/lux/lux.l) + the X layers build on it.
 ;
 ; tools/wm2uu.l reads this file as data and keys on the post-opfix tree --
 ; cap/cup chains (the glued accessors factor to them), ></+/!=, and the literal
@@ -14,14 +15,8 @@
 ; nif; the wm vocabulary is `z*` (the zipper) and `ws*`/admit/evict/shiftto/
 ; shiftwin (the sheaf).
 (:
-   ; --- the app's own list utilities ---
+   ; --- the app's own list utility ---
    (afind pred l) (? (atom? l) () (pred <l) <l (afind pred >l))    ; first element satisfying pred, else ()
-   (rnext ring f d) (: n #ring                              ; the cyclic neighbor: d steps from f around ring
-                       (idx i m) (? !(two? m) () (<m = f) i (idx (i + 1) >m))
-                       i (idx 1 ring)                              ; 1-based (0 reads false), () when f is absent
-                       (? (n = 0) ()
-                          !i <ring                                 ; absent (or ()): start at the head
-                          (ring ((i - 1 + d + n) % n))))
 
    ; --- the zipper: a workspace's tiled stack. () or (focus up down), up reversed
    ;     (nearest-first), so focus motion is O(1) at either end. ---
@@ -58,8 +53,11 @@
    (zswapw a b z) (? (zhas? a z && zhas? b z)                      ; exchange a and b in place; focus follows its window
                      (zfromrow (map (x \ (? (x = a) b (x = b) a x)) (zrow z)) (zfoc z)) z)
 
-   ; --- the sheaf: (cur board floating). board = ((tag stack)..), one tag current;
-   ;     floating = an alist ((window rect)..), the un-tiled windows (rect = (x y w h)). ---
+   ; --- the sheaf: (cur board floating). board = ((tag zipper)..), one tag
+   ;     current. a zipper holds EVERY window on its workspace, floats included,
+   ;     in ring order; floating = an alist ((window rect)..), geometry alone.
+   ;     a window's workspace is structural -- whichever zipper holds it -- so
+   ;     there is one focus and one home tag, never a second copy to drift. ---
    (sheaf tags) [<tags (map (t \ [t ()]) tags) ()]
    (wscur sh) <sh
    (wsboard sh) <>sh
@@ -69,39 +67,55 @@
    (wsget sh t) (: p (assoc t (wsboard sh)) (two? p ? <>p))   ; the tag's zipper
    (wsset sh t z) (wsmake (wscur sh) (map (p \ (<p = t ? [t z] p)) (wsboard sh)) (wsfloat sh))
    (wsview sh t) (wsknown? sh t ? (wsmake t (wsboard sh) (wsfloat sh)) sh)   ; switch current (only the tag turns)
-   (wsrow sh) (zrow (wsget sh (wscur sh)))                         ; the current tiled row, ordered
-   (wsfoc sh) (zfoc (wsget sh (wscur sh)))                         ; the focused window of the current ws
+   (wsring sh) (zrow (wsget sh (wscur sh)))                        ; the focus ring: every window here, tiles and floats alike
+   (wsfoc sh) (zfoc (wsget sh (wscur sh)))                         ; the focused window -- a float names itself
    (wsmap sh f) (wsset sh (wscur sh) (f (wsget sh (wscur sh))))    ; reshape the current zipper
 
-   ; --- floating (xmonad's W.float / W.sink), a pure alist. An entry is
-   ;     (window rect tag): a float lives on a workspace (its home tag), shown
-   ;     only there -- xmonad's model, and what keeps a fullscreen float off
-   ;     the other workspaces. ---
+   ; --- floating (xmonad's W.float / W.sink): the alist carries geometry only,
+   ;     so lifting a window never moves it in the ring and sinking it never
+   ;     moves it back. ---
    (wsunfl w fl) (filter (p \ <p != w) fl)                       ; drop w from the floating alist
    (wsfloating? sh w) (any (p \ <p = w) (wsfloat sh))            ; w is floating?
    (wsrect sh w) (: p (assoc w (wsfloat sh)) (two? p ? <>p))  ; w's float rect, or ()
-   (wsftag sh w) (: p (assoc w (wsfloat sh)) (two? p ? <>>p)) ; w's home tag, or ()
-   (wsvisfl sh) (filter (p \ <>>p = wscur sh) (wsfloat sh))      ; the floats at home on the current tag
-   (wsdel-tiled sh w) (map (p \ [<p (zdel w <>p)]) (wsboard sh))   ; drop w from every workspace's tiled stack
-   (wsdofloat sh w r)                                              ; float: tiled -> floating; the home tag is where it
-    (: t0 (wsftag sh w) t1 (t0 ? t0 (wstagof sh w)) t (t1 ? t1 (wscur sh))   ; already lives (re-float keeps it; a tiled window's
-       (wsmake (wscur sh) (wsdel-tiled sh w) ([w r t] . wsunfl w (wsfloat sh))))   ; tag; else the current view)
-   (wssink sh w) (wsmap (wsmake (wscur sh) (wsboard sh) (wsunfl w (wsfloat sh))) (zins w))   ; sink: floating -> the current tiled stack
+   (wsflhere sh) (filter (w \ wsfloating? sh w) (wsring sh))     ; the floats on the current view, ring order
+   (wsvisfl sh) (map (w \ [w (wsrect sh w)]) (wsflhere sh))      ; ...as (window rect), what the painter wants
+   (wsdofloat sh w r)                                              ; float: pin a rect on a window already in the ring
+    (wsknownw? sh w ? (wsmake (wscur sh) (wsboard sh) ([w r] . wsunfl w (wsfloat sh))) sh)
+   (wssink sh w) (wsmake (wscur sh) (wsboard sh) (wsunfl w (wsfloat sh)))   ; sink: drop the rect, the window has not moved
+
+   ; --- the tiled half, derived. the layout sees a zipper with the floats
+   ;     filtered out (W.filter: a deleted focus falls down, then up). ---
+   (wstilez sh) (foldl (\ z w (zdel w z)) (wsget sh (wscur sh)) (wsflhere sh))
+   (wsrow sh) (zrow (wstilez sh))                                  ; the current tiled row, ordered, master first
+   (wsztile sh zop)                                                ; run a zipper op on the TILED subsequence; floats keep their slots
+    (: f (wsfoc sh)
+       (? (!f || wsfloating? sh f) sh
+          (: z (zfromrow (wsrow sh) f)
+             (? !z sh
+                (: ts (zrow (zop z)) row (wsring sh)
+                   (fill m r) (? !(two? m) ()
+                                 (wsfloating? sh <m) (<m . fill >m r)
+                                 (<r . fill >m >r))
+                   (wsmap sh (zz \ zfromrow (fill row ts) f)))))))
+   (wsmaster sh) (wsztile sh zmaster)                              ; the focused tile fronts the tiled row
+   (wsswapup sh) (wsztile sh zswapup)
+   (wsswapdn sh) (wsztile sh zswapdn)
 
    ; --- managing windows across the whole sheaf ---
-   (wstiled sh) (foldl (\ a p (a + zrow <>p)) () (wsboard sh))     ; every tiled window, all workspaces
-   (wswins sh) (wstiled sh + map cap (wsfloat sh))                 ; every managed window (tiled + floating)
-   (wsknownw? sh w) (any (x \ x = w) (wswins sh))
-   (wsring sh) (wsrow sh + map cap (wsvisfl sh))                   ; the focus ring: the tiled row, then the floats at home
-   (wstagof sh w) (: r (filter (p \ any (x \ x = w) (zrow <>p)) (wsboard sh))
-                     (two? r ? <<r (wsftag sh w)))               ; the tag holding w (tiled, else a float's home), or ()
+   (wsallw sh) (foldl (\ a p (a + zrow <>p)) () (wsboard sh))      ; every managed window, all workspaces
+   (wstiled sh) (filter (w \ !(wsfloating? sh w)) (wsallw sh))     ; every tiled window
+   (wsfloatw sh) (filter (w \ wsfloating? sh w) (wsallw sh))       ; every floating window
+   (wswins sh) (wstiled sh + wsfloatw sh)                          ; tiles then floats: the stacking order a pager reads, bottom to top
+   (wsknownw? sh w) (any (x \ x = w) (wsallw sh))
+   (wsdelw sh w) (map (p \ [<p (zdel w <>p)]) (wsboard sh))        ; drop w from every workspace's zipper
+   (wstagof sh w) (: r (filter (p \ zhas? w <>p) (wsboard sh))     ; the tag holding w, or ()
+                     (two? r ? <<r))
    (admit sh w) (wsknownw? sh w ? sh (wsmap sh (zins w)))        ; manage w into the current ws (a no-op if already managed)
-   (evict sh w) (wsmake (wscur sh) (wsdel-tiled sh w) (wsunfl w (wsfloat sh)))   ; unmanage w everywhere (tiled or float)
+   (evict sh w) (wsmake (wscur sh) (wsdelw sh w) (wsunfl w (wsfloat sh)))   ; unmanage w everywhere
    (shiftwin sh w t) (? !(wsknown? sh t && wsknownw? sh w && (t != wstagof sh w)) sh
-                        (wsfloating? sh w)                         ; a float emigrates by retagging its home (rect kept)
-                        (wsmake (wscur sh) (wsboard sh)
-                                (map (p \ (<p = w ? [w <>p t] p)) (wsfloat sh)))
-                        (: d (evict sh w) (wsset d t (zins w (wsget d t)))))   ; tiled: leave here, arrive focused on t
+                        (: d (wsmake (wscur sh) (wsdelw sh w) (wsfloat sh))   ; one path: a float emigrates with its rect
+                           (wsset d t (zins w (wsget d t)))))                 ; and arrives focused on t
    (shiftto sh t) (shiftwin sh (wsfoc sh) t)                       ; the focused window emigrates to tag t; we stay
-   (wssane? sh) (wsknown? sh (wscur sh) && znodup? (wswins sh))    ; the StackSet invariant
+   (wssane? sh) (wsknown? sh (wscur sh) && znodup? (wsallw sh)     ; the StackSet invariant: no window twice,
+                  && all (p \ wsknownw? sh <p) (wsfloat sh))       ; and no rect without a window
    (znodup? l) (? !(two? l) 1 (any (x \ x = <l) >l) 0 (znodup? >l)))

@@ -18,8 +18,9 @@
 ;   pager's does (the qt modal that undid every workspace switch), a view
 ;   of one float and no tile arrives with the keyboard on the float and an
 ;   empty one with the focus on the root, never PointerRoot, and a focused
-;   float is what _net_active_window advertises and what the survivor
-;   inherits when it is destroyed.
+;   float is what _net_active_window advertises and what a survivor
+;   inherits when it is destroyed; float and sink are geometry, so a window
+;   dropped back into the tiling lands in the slot it left.
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
 ; loaded with -l, no test/00-init.l ahead of it -- so the posix door is borrowed here.
@@ -147,8 +148,8 @@
       ;     the withdraw must leave the window unmapped anyway, and a re-show
       ;     must arrive as a fresh MapRequest and re-manage fullscreen. ---
       a-fs (x-intern s "_NET_WM_STATE_FULLSCREEN")
-      wt (+ w1 1)                                                                ; a tile under the pointer: the crossing into a tile is the
-      _ (mkwin s wt root)                                                        ; rendering branch (a float's crossing only fmarks)
+      wt (+ w1 1)                                                                ; a tile under the pointer: a crossing focuses whatever
+      _ (mkwin s wt root)                                                        ; it lands on, tile or float, by the same path
       _ (waitp "wt-tiled" (u \ < 600 ((x-getgeom s wt) 2)) 100)
       wv (+ w1 2)
       _ (: _ (x-w8 s 1) _ (x-w8 s 0) _ (x-w16 s 9)                               ; create (unmapped): white 300x200 toplevel
@@ -218,15 +219,20 @@
       _ (mapr ())                                                                ; and the re-show re-manages
       _ (waitp "wr-remanaged" (u \ && (known? ()) (= 2 (mstr ()))) 50)
 
-      ; --- 5d. close the focused tile: the survivor must take the keyboard.
+      ; --- 5d. close the focused tile: a survivor must take the keyboard.
       ;     the pointer parks over the float first, so no crossing can hand
-      ;     focus on -- only lux's own refocus after the eviction can ---
+      ;     focus on -- only lux's own refocus after the eviction can. which
+      ;     survivor is the ring's business (zdel falls down, then up, over
+      ;     every window on the view, float or tile), so the assert is that
+      ;     the keyboard lands on a live client and not on the corpse, the
+      ;     root, or PointerRoot ---
       gf (x-getgeom s w1)
       _ (fake 6 0 (+ (gf 0) (// (gf 2) 2)) (+ (gf 1) (// (gf 3) 2))) _ (rest 100)
       _ (cmsg wt a-aw 0 0 0)                                                     ; activate the victim: two tiles, wt holds the focus
       _ (waitp "victim-focused" (u \ = wt (getfocus ())) 50)
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wt, x-flush s)   ; DestroyWindow: the app quits
-      _ (waitp "survivor-focused" (u \ = wr (getfocus ())) 50)
+      _ (waitp "survivor-focused"
+            (u \ : f (getfocus ()) (&& (! (|| (= f wt) (= f 1))) (&& (! (= f root)) (< 0 f)))) 50)
 
       ; --- 5e. the activation source (ewmh 1.4 _net_active_window data[0]): a
       ;     pager (2) or a legacy client (0) may pull the view to its window,
@@ -289,7 +295,7 @@
       ;     (msg! 'next-layout flips the ||| index -- read back through the
       ;     snapshot over the moor socket, so the assert leans on no window
       ;     and no X read), and refuses garbage ((lux! 0): (0 st) is 1, not
-      ;     a sane 4-list). a queued change drains at lux's next X event; we
+      ;     a sane 3-list). a queued change drains at lux's next X event; we
       ;     nudge with a no-op ClientMessage from a fresh connection each time
       ;     (kept open: this Xvfb spuriously CloseDownClient's one client
       ;     ~10s in -- gdb'd to ospoll_wait -> CloseDownClient with the
@@ -360,7 +366,24 @@
       _ (chord ())
       _ (waitp "chord-after-remap-back" (u \ = i0 (ask chidx)) 50)
 
-      ; --- 9. the back door: (lux-restart ()) over the moor execs in place.
+      ; --- 9. float and sink are geometry, not position: a window lifted out
+      ;     of the tiling and dropped back lands in the slot it left, because
+      ;     it never leaves the view's zipper. read through the moor, so no X
+      ;     geometry can stand in for the model ---
+      wi (+ w1 7) wj (+ w1 8)
+      _ (mkwin s wi root) _ (mkwin s wj root)
+      _ (rest 300)
+      (rowof u) (ask "(wsrow (cap (lux-st ())))")
+      r0 (rowof ())
+      _ (must "row-is-three" (< 20 (tally r0)))                                  ; three ids and their parens
+      _ (ask (+ "(float! " (+ (show wi) " '(10 10 120 90))")))
+      _ (nudge ())
+      _ (waitp "float-leaves-row" (u \ ! (= r0 (rowof ()))) 50)                   ; the tiled row drops it...
+      _ (ask (+ "(sink! " (+ (show wi) ")")))
+      _ (nudge ())
+      _ (waitp "sink-restores-row" (u \ = r0 (rowof ())) 50)                      ; ...and sinking puts it back exactly
+
+      ; --- 10. the back door: (lux-restart ()) over the moor execs in place.
       ;     the old generation is marked through its lux-cell; the reborn moor
       ;     answers with a fresh cell (the marker gone), the same pid (exec),
       ;     and the windows adopted. one connection per poll: a try that lands

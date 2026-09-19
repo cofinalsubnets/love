@@ -44,41 +44,46 @@
       !(wsknownw? (evict s2 20) 20) (wsrow (evict s2 20) = '(30 10))
       (wsfoc (evict s2 30) = 20) (wssane? (evict s2 30))
       (wstagof s2 10 = 1) !(wstagof s2 99)
-      ; --- the focus ring (rnext walks it cyclically, either direction) ---
-      (rnext '(1 2 3) 2 1 = 3) (rnext '(1 2 3) 2 -1 = 1)
-      (rnext '(1 2 3) 3 1 = 1) (rnext '(1 2 3) 1 -1 = 3)                        ; wraps at either end
-      (rnext '(1 2 3) 9 1 = 1) !(rnext () 9 1)                                  ; absent -> the head; an empty ring -> ()
       (wsring s2 = '(30 20 10))))                                               ; no floats: the ring is the tiled row
 
-; --- the floating half (W.float / W.sink) ---
+; --- the floating half (W.float / W.sink): the alist is geometry alone, so
+;     lifting a window never moves it in the ring and sinking it never moves it back ---
 (: s2 (admit (admit (admit (sheaf '(1 2 3)) 10) 20) 30) r99 '(20 20 200 100)
    (sameset? a b) ((#a = tally b) && all (x \ any (y \ x = y) b) a)
    f2 (wsdofloat s2 20 r99)
+   g (wsmap f2 (zfocto 20))                                                      ; the float holds the focus
+   h (wsswapup (wsmap f2 (zfocto 10)))                                           ; an order op with a tile focused
    (test
       !(wsfloating? s2 20) (wsfloating? f2 20) (wsrect f2 20 = r99)              ; float lifts a window
       (wsknownw? f2 20) (wsrect f2 30 = ())                                      ; still managed; a tiled window has no rect
-      !(any (x \ x = 20) (wstiled f2))                                         ; float removed 20 from the tiled stack
+      !(any (x \ x = 20) (wstiled f2))                                           ; float takes it out of the tiled half
       (sameset? (wswins f2) (wswins s2))                                         ; float moves it between sets, not out
-      !(wsfloating? (wssink f2 20) 20) (sameset? (wswins (wssink f2 20)) (wswins s2))        ; sink is float's inverse
-      ; --- the HOME tag: a float lives on one workspace (xmonad's model) ---
-      (1 = wsftag f2 20)                                                         ; floated while viewing tag 1: home is 1
-      (1 = wsftag (wsview f2 2) 20)                                              ; viewing elsewhere doesn't move it
+      (wssink f2 20 = s2)                                                        ; sink is float's exact inverse
+      ; --- geometry only: the ring slot belongs to the window, float or not ---
+      (wsring f2 = wsring s2) (wsring f2 = '(30 20 10))                          ; lifting moves nothing
+      (wsrow f2 = '(30 10)) (wsfoc f2 = 30)                                      ; the tiled row is the float-free subsequence
+      (wsvisfl f2 = [[20 r99]])                                                  ; what the painter places
+      ; --- the home tag is structural: whichever zipper holds it ---
+      (1 = wstagof f2 20)                                                        ; floated while viewing tag 1: home is 1
+      (1 = wstagof (wsview f2 2) 20)                                             ; viewing elsewhere doesn't move it
       (two? (wsvisfl f2)) !(two? (wsvisfl (wsview f2 2)))                        ; visible at home, hidden abroad
-      (1 = wstagof f2 20)                                                        ; wstagof answers a float's home
-      (1 = wsftag (wsdofloat (wsview f2 2) 20 '(0 0 9 9)) 20)                    ; re-floating abroad (a drag) keeps the home
-      (2 = wsftag (shiftwin f2 20 2) 20)                                         ; shiftwin retags a float's home...
+      (1 = wstagof (wsdofloat (wsview f2 2) 20 '(0 0 9 9)) 20)                   ; re-floating abroad (a drag) keeps the home
+      (2 = wstagof (shiftwin f2 20 2) 20)                                        ; shiftwin carries a float...
       (r99 = wsrect (shiftwin f2 20 2) 20)                                       ; ...still floating, rect kept
       (wssane? (shiftwin f2 20 2)) (shiftwin f2 20 1 = f2)                       ; to its own home: a no-op
-      (wsring f2 = '(30 10 20))                                                  ; the ring reaches the float, after the tiles
-      !(any (x \ x = 20) (wsring (wsview f2 2)))))                             ; abroad, the float is off the ring
+      !(any (x \ x = 20) (wsring (wsview f2 2)))                                 ; abroad, the float is off the ring
+      ; --- one focus: wsfoc names a float, and a view round trip returns it ---
+      (wsfoc g = 20) (wsfoc (wsview (wsview g 2) 1) = 20)
+      (wsmaster g = g) (wsswapup g = g)                                          ; the order ops are tiles-only: a float focus stays put
+      (wsring h = '(10 20 30)) (wsrow h = '(10 30)) (wsflhere h = '(20))))       ; they permute the tiled slots, the float keeps its own
 
 ; --- the seeded fuzz: the whole op vocabulary, 200 steps, invariant per step ---
 (: r99 '(20 20 200 100)
    (fzop k w s)
     (? (k = 0) (admit s w)     (k = 1) (evict s w)
        (k = 2) (wsmap s zfocup) (k = 3) (wsmap s zfocdn)
-       (k = 4) (wsmap s zswapup) (k = 5) (wsmap s zswapdn)
-       (k = 6) (wsmap s zmaster) (k = 7) (wsview s (1 + (w % 3)))
+       (k = 4) (wsswapup s) (k = 5) (wsswapdn s)
+       (k = 6) (wsmaster s) (k = 7) (wsview s (1 + (w % 3)))
        (k = 8) (shiftto s (1 + (w % 3)))
        (: fw (wsfoc s) (fw ? (wsfloating? s fw ? (wssink s fw) (wsdofloat s fw r99)) s)))   ; toggle-float the focus
    (fz i st s)
@@ -87,7 +92,9 @@
           s2 (fzop <r1 (1 + <r2) s)
           (wssane? s2 ? (fz (i - 1) >r2 s2) ['broke <r1 (1 + <r2)])))
    sF (fz 200 (wheel 7) (sheaf '(1 2 3)))
-   (test (wssane? sF) (all (w \ wsfloating? sF w || wsknown? sF (wstagof sF w)) (wswins sF))))
+   (test (wssane? sF) (all (w \ wsknown? sF (wstagof sF w)) (wswins sF))              ; every window, float or not, has a real tag
+         (all (w \ wstagof sF w = wscur sF) (wsring sF))                             ; and the ring holds exactly what lives here
+         (wsrow sF = filter (w \ !(wsfloating? sF w)) (wsring sF))))                  ; the tiled row is the ring's float-free subsequence
 
 ; --- the layout engine (apps/lux/layout.l): geometry is a partition ---
 (: (area p) (p 3 * p 4)                                                ; a placement's w*h

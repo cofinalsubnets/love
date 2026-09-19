@@ -7,16 +7,16 @@
 ; driver reads the config -- border width and colors (focused/normal pixels),
 ; workspaces, the layout stack, hooks, keymap, startup spawns -- and runs until
 ; the display dies or (quit). The f_t hinge: a float-focused chord moves/
-; resizes the float, a tile-focused one messages the layout / navigates. ffoc
-; tracks the focused float (the zipper only holds tiles); hist is nextMatch's
-; mru focus ring.
+; resizes the float, a tile-focused one messages the layout / navigates. the
+; sheaf's zipper holds every window on a view, so wsfoc names the focus whatever
+; its kind and no float focus rides beside it; hist is nextMatch's mru focus ring.
 
 ; --- the lux repl: a unix-socket moor into the running wm (the dock's shape,
 ; crew-side; `ain <sock>` is the client). Forms eval in the book, so every
-; global is a verb; the live (sh lay hist ffoc) state rides lux-cell -- reads
+; global is a verb; the live (sh lay hist) state rides lux-cell -- reads
 ; take the snapshot ((lux-st ())), changes queue a state function through
 ; (lux! f), and the driver's loop drains the queue at its next X event,
-; guarded: a change must answer a 4-list whose sheaf is wssane? -- the proved
+; guarded: a change must answer a 3-list whose sheaf is wssane? -- the proved
 ; invariant, standing as a live seatbelt -- or it is refused and the old
 ; state kept. one hand on the wire: the repl never touches any X socket (the
 ; the painter's law, absolute); with layout.l's open dispatch lane,
@@ -42,13 +42,12 @@
    ; wire is the driver's alone.
    (lux! f) (pin lux-cell 'q (f . lux-cell 'q), 'queued)                 ; (a peep+pin pair -- a concurrent drain in the gap can lose
                                                                          ;  a change; prompt-scale odds, and wssane? guards either way)
-   ; the command sugar -- each a (lux! ..) over the snapshot shape (sh lay hist ffoc)
-   (lay! l)  (lux! (st \ [<st l (st 2) (st 3)]))
-   (msg! m)  (lux! (st \ (: lay2 (lay-msg <>st m (wsget <st (wscur <st)))
-                             [<st (lay2 ? lay2 <>st) (st 2) (st 3)])))
-   (sink! w) (lux! (st \ [(wssink <st w) <>st (st 2)
-                             (st 3 @ ^w () f f)]))
-   (float! w r) (lux! (st \ [(wsdofloat <st w r) <>st (st 2) w]))
+   ; the command sugar -- each a (lux! ..) over the snapshot shape (sh lay hist)
+   (lay! l)  (lux! (st \ [<st l (st 2)]))
+   (msg! m)  (lux! (st \ (: lay2 (lay-msg <>st m (wstilez <st))
+                             [<st (lay2 ? lay2 <>st) (st 2)])))
+   (sink! w) (lux! (st \ [(wssink <st w) <>st (st 2)]))
+   (float! w r) (lux! (st \ [(wsdofloat <st w r) <>st (st 2)]))
    (row u) (wsrow <(lux-st ()))
 
    ; the moor: shore the socket, twirl a session per client -- read every form
@@ -174,9 +173,9 @@
    (hide! w) (: _ (peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0)         ; only a mapped window echoes -- an unmap of the
                 _ (pull mapd w 0) (x-unmap s w))                                 ; already-hidden fires no event, so no count
    (unled! w) (pull mapd w 0, pull owed w 0)                              ; the window left management: clear its ledger
-   (render sh lay ff)                                                            ; ask the layout for placements, configure them, unmap the dropped
-    (: z (wsget sh (wscur sh)) f (ff ? ff (zfoc z))                              ; ff: the float holding the keyboard, else the tiled top
-       pls <(lay-tile lay (trect ()) z) placed (map cap pls)
+   (render sh lay)                                                               ; ask the layout for placements, configure them, unmap the dropped
+    (: f (wsfoc sh)                                                              ; the focus is the sheaf's, float or tile alike
+       pls <(lay-tile lay (trect ()) (wstilez sh)) placed (map cap pls)
        _ (map (t \ (: w (t 0) bw (#t < 6 ? lux-border (t 5))     ; smartBorders sets 0 on a singleton/fullscreen
                       _ (x-border s w bw)
                       _ (x-borderpix s w (w = f ? fpix npix))                  ; focusedBorderColor / normalBorderColor
@@ -190,65 +189,48 @@
                         _ (x-configure s w (fr 0) (fr 1) (fr 2) (fr 3))
                         _ (map! w) (x-raise s w))) (wsvisfl sh))
        (x-flush s))
-   (refocus sh) (: f (wsfoc sh ? (wsfoc sh) <(wsring sh))            ; the tiled top, else a float alone on the view (wsfoc
-                   (x-focus s (f ? f root), x-flush s))              ; reads the zipper, and a float is not in it). an empty
-                                                                     ; view takes the root: PointerRoot would hand the keys
-                                                                     ; to whatever the pointer happens to sit over
-   ; the float that should hold the keyboard on this view: the carried one if it
-   ; still lives here, else the view's own float when there is no tiled top. ()
-   ; leaves the question to refocus.
-   (ffoc-for sh ff) (? (ff && wsfloating? sh ff && wscur sh = wstagof sh ff) ff
-                       (wsfoc sh) ()
-                       <(wsring sh))
-   (fmark sh pf w) (: _ (x-borderpix s w fpix) p (pf ? pf (wsfoc sh))            ; keyboard to float w sans re-render: it wears the focused
-                      (p && p != w ? (x-borderpix s p npix) 0))              ; border, the previous effective focus hands it back
+   (refocus sh) (: f (wsfoc sh)                                                 ; an empty view takes the root: PointerRoot would
+                   (x-focus s (f ? f root), x-flush s))                         ; hand the keys to whatever the pointer sits over
    (watch w) (x-cwa-events s w 16, x-grabbtn s w)                         ; the mouse wires: EnterWindow selected (focus follows the
                                                                                  ; pointer in) + buttons 1-3 sync-grabbed (click-to-focus)
-   (switch sh lay t)                                                             ; view: hide the leaving row + floats, show the arriving
+   (switch sh lay t)                                                             ; view: hide the leaving ring, show the arriving one
     (? (t = wscur sh || !(wsknown? sh t)) sh
-       (: old (wsrow sh) oldf (map cap (wsvisfl sh)) sh2 (wsview sh t)
-          _ (map map! (wsrow sh2))
-          _ (render sh2 lay ())
-          _ (map hide! old)
-          _ (map hide! oldf) _ (x-flush s)
+       (: old (wsring sh) sh2 (wsview sh t)                                      ; the whole ring leaves, tiles and floats alike
+          _ (map map! (wsring sh2))
+          _ (render sh2 lay)
+          _ (map hide! old) _ (x-flush s)
           _ (line ("lux: view " + show t + " " + show (wsrow sh2)))
           sh2))
    (msg-or old new) (new ? new old)                                              ; keep the old layout when a message is unhandled (())
 
    ; --- do-act: interpret one keys.l action. Returns by looping. ---
-   (do-act a sh lay hist ffoc)
-    (: k <a z (wsget sh (wscur sh)) fw (ffoc ? ffoc (wsfoc sh))
-       (relay sh2 lay2 f2) (: flf (ffoc-for sh2 f2)                            ; a float focus takes the keyboard directly; else the tiled top
-                              _ (render sh2 lay2 flf)
-                              _ (flf ? (x-focus s flf, x-flush s) (refocus sh2))
-                              (loop sh2 lay2 hist flf))
-       (cyc d) (: nx (rnext (wsring sh) fw d)                                    ; cycle the ring: tiles, then the floats at home
-                  (? !nx (loop sh lay hist ffoc)
-                     (wsfloating? sh nx) (relay sh lay nx)                        ; a float takes the keyboard (relay focuses it)
-                     (relay (wsmap sh (zfocto nx)) lay ())))
-       (? (k = 'msg) (relay sh (msg-or lay (lay-msg lay <>a z)) ffoc)
-          (k = 'focus-dn) (cyc 1)
-          (k = 'focus-up) (cyc -1)
-          (k = 'focus-master) (relay (wsmap sh (zz \ zfocto (two? (zrow zz) ? <(zrow zz) ()) zz)) lay ())
-          (k = 'swap-dn) (relay (wsmap sh zswapdn) lay ffoc)
-          (k = 'swap-up) (relay (wsmap sh zswapup) lay ffoc)
-          (k = 'swap-master) (relay (wsmap sh zmaster) lay ffoc)
-          (k = 'view) (: sh2 (switch sh lay <>a)                                 ; switch renders but does not focus: relay is what makes
-                         (relay sh2 lay (ffoc-for sh2 ffoc)))                   ; the keyboard agree with the arriving view
-          (k = 'shift) (: t <>a sh2 (shiftwin sh fw t)                           ; the effective focus emigrates -- a float by its home
-                          ff2 (sh2 != sh && ffoc = fw ? () ffoc)
-                          _ (render sh2 lay ff2)
+   (do-act a sh lay hist)
+    (: k <a z (wstilez sh) fw (wsfoc sh)                                         ; the layout reads the tiled zipper; fw is simply the focus
+       (relay sh2 lay2) (: _ (render sh2 lay2)                                   ; render, focus whatever the sheaf focuses, loop
+                            _ (refocus sh2)
+                            (loop sh2 lay2 hist))
+       (? (k = 'msg) (relay sh (msg-or lay (lay-msg lay <>a z)))
+          (k = 'focus-dn) (relay (wsmap sh zfocdn) lay)                          ; the ring IS the zipper: one op, no branch on kind
+          (k = 'focus-up) (relay (wsmap sh zfocup) lay)
+          (k = 'focus-master) (relay (wsmap sh (zfocto <(wsrow sh))) lay)        ; the first TILE: a float is never master
+          (k = 'swap-dn) (relay (wsswapdn sh) lay)                               ; the order ops permute tiled slots, floats keep theirs
+          (k = 'swap-up) (relay (wsswapup sh) lay)
+          (k = 'swap-master) (relay (wsmaster sh) lay)
+          (k = 'view) (relay (switch sh lay <>a) lay)                            ; switch renders but does not focus: relay is what makes
+                                                                                 ; the keyboard agree with the arriving view
+          (k = 'shift) (: t <>a sh2 (shiftwin sh fw t)                           ; the focus emigrates, float or tile, rect and all
+                          _ (render sh2 lay)
                           _ (sh2 = sh ? 0 (hide! fw, x-flush s))        ; it moved (always off this view): hide the emigrant
                           _ (line ("lux: sent " + show fw + " -> " + show t))
-                          (loop sh2 lay hist ff2))
+                          (loop sh2 lay hist))
           (k = 'spawn) (: p (spawn <>a) _ (line ("lux: spawn " + (<<>a + " " + show p)))
-                          (loop sh lay hist ffoc))
+                          (loop sh lay hist))
           (k = 'exec) (line "lux: exec -- abdicating", exec <>a,          ; returns only on failure
-                       loop sh lay hist ffoc)
+                       loop sh lay hist)
           (k = 'kill) (: _ (? fw (: _ (? (x-has-atom s fw "WM_PROTOCOLS" "WM_DELETE_WINDOW")   ; ask first (killWindow): KillClient
                                          (x-wmdel s fw) (x-kill s fw))           ; takes the whole client, every window it owns
                                      (x-flush s)) 0)                             ; DestroyNotify does the eviction
-                         _ (line ("lux: kill " + show fw)) (loop sh lay hist ffoc))
+                         _ (line ("lux: kill " + show fw)) (loop sh lay hist))
           (k = 'quit) (line "lux: quit")                                          ; fall out of the loop
           (k = 'restart)                                                         ; restart-in-place: exec the original argv (execvp, so love
           (line ("lux: restart -- exec, pid " + show (getpid 0)),            ; re-resolves off PATH -- an upgraded binary lands first try,
@@ -256,30 +238,28 @@
            exec [(lux-self ())],                                            ; the seat path would pin a deleted build forever). the
            exec [(selfpath 0) (lux-self ())],                               ; cloexec'd socket drops, the redirect releases, the new
            line "lux: restart failed",
-           loop sh lay hist ffoc)                                           ; generation adopts the survivors
-          (k = 'refresh) (relay sh lay ffoc)
-          (k = 'reset-layout) (relay sh lux-layout ffoc)
-          (k = 'toggle-struts) (ewmh-toggle (), line "lux: toggle struts", relay sh lay ffoc)
-          (k = 'sink) (wsfloating? sh fw ? (relay (wssink sh fw) lay ()) (loop sh lay hist ffoc))
+           loop sh lay hist)                                                ; generation adopts the survivors
+          (k = 'refresh) (relay sh lay)
+          (k = 'reset-layout) (relay sh lux-layout)
+          (k = 'toggle-struts) (ewmh-toggle (), line "lux: toggle struts", relay sh lay)
+          (k = 'sink) (wsfloating? sh fw ? (relay (wssink sh fw) lay) (loop sh lay hist))
           (k = 'float-toggle)
-          (? !fw (loop sh lay hist ffoc)
-             (wsfloating? sh fw) (relay (wssink sh fw) lay ())
-             (line ("lux: float " + show fw), relay (wsdofloat sh fw (x-getgeom s fw)) lay fw))
+          (? !fw (loop sh lay hist)
+             (wsfloating? sh fw) (relay (wssink sh fw) lay)
+             (line ("lux: float " + show fw), relay (wsdofloat sh fw (x-getgeom s fw)) lay))
           (k = 'next-match)
-          (: t (nm-pick (wsring sh) fw hist <>a)                                 ; the whole ring -- floats too, anchored at the
-             (? !t (loop sh lay hist ffoc)                                       ; effective focus
-                (wsfloating? sh t) (relay sh lay t)
-                (relay (wsmap sh (zfocto t)) lay ())))
+          (: t (nm-pick (wsring sh) fw hist <>a)                                 ; the whole ring -- floats too, anchored at the focus
+             (t ? (relay (wsmap sh (zfocto t)) lay) (loop sh lay hist)))
           ; --- the directional trio: the f_t hinge ---
           (wsfloating? sh fw)                                                    ; float focused: move (go) or resize (swapd/resize)
           (: r (wsrect sh fw) d (a 2) dx <d dy <>d
              r2 (k @ 'go [(r 0 + dx) (r 1 + dy) (r 2) (r 3)]
                  [(r 0) (r 1) (mx2 20 (r 2 + dx)) (mx2 20 (r 3 + dy))])
-             (relay (wsdofloat sh fw r2) lay ffoc))
-          (: dir <>a pls <(lay-tile lay (trect ()) z) tgt (nav-target pls (wsfoc sh) dir)
-             (k @ 'go (tgt ? (relay (wsmap sh (zfocto tgt)) lay ()) (loop sh lay hist ffoc))
-               'swapd (tgt ? (relay (wsmap sh (zswapw (wsfoc sh) tgt)) lay ffoc) (loop sh lay hist ffoc))
-                      (relay sh (msg-or lay (lay-msg lay (dir @ ('left || 'down) 'shrink 'expand) z)) ffoc)))))
+             (relay (wsdofloat sh fw r2) lay))
+          (: dir <>a pls <(lay-tile lay (trect ()) z) tgt (nav-target pls fw dir)
+             (k @ 'go (tgt ? (relay (wsmap sh (zfocto tgt)) lay) (loop sh lay hist))
+               'swapd (tgt ? (relay (wsmap sh (zswapw fw tgt)) lay) (loop sh lay hist))
+                      (relay sh (msg-or lay (lay-msg lay (dir @ ('left || 'down) 'shrink 'expand) z)))))))
 
    ; --- pointer drag (xmonad's mouseBindings): the window follows the pointer
    ;     ('move) or its far corner does ('resize). g0 is the start rect, (rx0 ry0)
@@ -302,40 +282,38 @@
           (drag mode w g0 rx0 ry0)))                                            ; anything else mid-drag: ignore
 
    ; --- the repl gate: every pass through the loop publishes the snapshot and
-   ;     drains (lux!) changes, each guarded -- a change must answer a 4-list
+   ;     drains (lux!) changes, each guarded -- a change must answer a 3-list
    ;     whose sheaf is wssane? (the proved invariant, live) or it is refused
    ;     and the old state kept. a scare inside a change answers ('scare a b)
-   ;     through the help above -- not a 4-list, so it refuses the same way. ---
-   (loop sh lay hist ffoc)
+   ;     through the help above -- not a 3-list, so it refuses the same way. ---
+   (loop sh lay hist)
     (: q (pull lux-cell 'q ())
-       (? !(two? q) (pin lux-cell 'st [sh lay hist ffoc],
-                          loop2 sh lay hist ffoc)
+       (? !(two? q) (pin lux-cell 'st [sh lay hist],
+                          loop2 sh lay hist)
           (: st (foldl (\ acc f (: r (f acc)
-                                   (? (two? r && 4 = #r && wssane? <r) r
+                                   (? (two? r && 3 = #r && wssane? <r) r
                                       (line "lux: change refused", acc))))
-                       [sh lay hist ffoc] (rev q))
+                       [sh lay hist] (rev q))
              _ (pin lux-cell 'st st)                                            ; the snapshot rides post-drain, so a moor read sees the change
-             sh2 <st lay2 <>st f2 (st 3)
-             flf (ffoc-for sh2 f2)
-             _ (render sh2 lay2 flf)
-             _ (flf ? (x-focus s flf, x-flush s) (refocus sh2))
+             sh2 <st lay2 <>st
+             _ (render sh2 lay2)
+             _ (refocus sh2)
              _ (line ("lux: changed x" + show #q))
-             (loop2 sh2 lay2 (st 2) flf))))
+             (loop2 sh2 lay2 (st 2)))))
 
-   ; --- the event loop: (sheaf, layout, focus-history, focused-float).
+   ; --- the event loop: (sheaf, layout, focus-history).
    ;     the mru param is hist0, the fresh ring hist: a `:` binding shadows a
    ;     same-named parameter over the whole form (one scope, no escape), so
    ;     `hist (?  .. hist ..)` read the zero point every pass -- the ring
    ;     never accumulated. name the parameter apart and the ring lives. ---
-   (loop2 sh lay hist0 ffoc)
-    (: f (ffoc ? ffoc (wsfoc sh))                                                ; the mru rides the effective focus: floats enter too
+   (loop2 sh lay hist0)
+    (: f (wsfoc sh)                                                              ; the mru rides the focus: floats enter too
        hist (f && f != (two? hist0 ? <hist0 ()) ? (f . znub f hist0) hist0)
-       (relay sh2 lay2 f2) (: flf (ffoc-for sh2 f2)                            ; render, focus the float or the tiled top, loop (do-act has its own)
-                              _ (render sh2 lay2 flf)
-                              _ (flf ? (x-focus s flf, x-flush s) (refocus sh2))
-                              (loop sh2 lay2 hist flf))
+       (relay sh2 lay2) (: _ (render sh2 lay2)                                   ; render, focus, loop (do-act has its own)
+                            _ (refocus sh2)
+                            (loop sh2 lay2 hist))
        _ (glean 0)                                                                ; glean one spawned zombie home, if any
-       _ (ewmh-sync s sh ffoc)                                                   ; publish the sheaf to pagers (change-guarded)
+       _ (ewmh-sync s sh)                                                        ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
        (? !e (line "lux: display gone")
           (ev-code e = 0)                                                        ; an X error. the code alone names neither the request
@@ -343,59 +321,56 @@
              _ (line ("lux: X error " + show (ev-detail e) +                    ; unmap and our delprop reads exactly like a real bug
                         " req " + show (pkt 10) + "." + show (u16 pkt 8) +
                            " id " + show (u32 pkt 4)))
-             (loop sh lay hist ffoc))
+             (loop sh lay hist))
           (: code (ev-code e) win (ev-window e)
              (? (code = 20 && wsknownw? sh win)                                ; MapRequest from a window we already manage: ignore it
-                (line ("lux: remap " + show win), loop sh lay hist ffoc)     ; (mapping it here would paint it OVER a workspace it
+                (line ("lux: remap " + show win), loop sh lay hist)          ; (mapping it here would paint it OVER a workspace it
                 (code = 20)                                                      ; isn't on -- the "one window on two workspaces" bug)
                                                                                  ; MapRequest: admit tiled, run the manageHook, then place
                 (: _ (ewmh-track s win ? (line ("lux: strut " + show win)) 0)   ; a dock's strut shrinks the tiling rect
                    sh1 (admit sh win)
                    c (mg-ctx s win scrn (x-getgeom s win))
                    sh2 (manage-window lux-manage c sh1)
-                   ffoc2 (wsfloating? sh2 win ? win ffoc)                      ; a hook-floated window takes the float focus
                    (? (wsknownw? sh2 win)                                        ; managed (tiled or floated) -> place it
                       (x-chprop32 s win (x-intern s "WM_STATE") (x-intern s "WM_STATE") '(1 0),    ; the ICCCM stamp: a restart finds us even hidden
                        watch win,
-                       render sh2 lay ffoc2,
+                       render sh2 lay,
                        map! win,
-                       wsfloating? sh2 win && x-focus s win,          ; a freshly-mapped float (a dialog) takes the keyboard at once
-                       x-flush s,
+                       refocus sh2,                                        ; admit focused it: a fresh window takes the keyboard
+
                        line ("lux: + " + show win + " " + show (wsrow sh2)),
-                       loop sh2 lay hist ffoc2)
+                       loop sh2 lay hist)
                       (x-map s win,                                         ; ignored: map raw -- a desktop under everything, a dock/notification on top
                        x-has-atom s win "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP" ?
                          (x-lower s win) (x-raise s win),
                        x-flush s,
                        line ("lux: ignore " + show win),
-                       loop sh2 lay hist ffoc)))
-                (code = 19) (win = wsfoc sh ? (x-focus s win, x-flush s), loop sh lay hist ffoc)     ; MapNotify: focus if it's the top
+                       loop sh2 lay hist)))
+                (code = 19) (win = wsfoc sh ? (x-focus s win, x-flush s), loop sh lay hist)          ; MapNotify: focus if it's the top
                 (code = 17)                                                      ; DestroyNotify: unmanage + tile
                 (ewmh-untrack win, unled! win,
-                 (? !(wsknownw? sh win) (loop sh lay hist ffoc)
-                  (: sh2 (evict sh win) ffoc2 (win = ffoc ? () ffoc)
+                 (? !(wsknownw? sh win) (loop sh lay hist)
+                  (: sh2 (evict sh win)
                      _ (line ("lux: - " + show win + " " + show (wsrow sh2)))
-                     (relay sh2 lay ffoc2))))                                 ; the departed held the keyboard: relay hands it on
+                     (relay sh2 lay))))                                       ; zdel already moved the focus on; relay follows it
                 (code = 18)                                                     ; UnmapNotify: xmonad's waitingUnmap rule. Our own hides echo
-                (? !(wsknownw? sh win) (loop sh lay hist ffoc)                   ; back counted (the owed ledger); a synthetic (send-event bit
+                (? !(wsknownw? sh win) (loop sh lay hist)                        ; back counted (the owed ledger); a synthetic (send-event bit
                    (: syn (127 < <(ev-raw e)) p (peep owed win 0)                ; on the raw byte) is a withdraw (ICCCM 4.1.4) -- and so is a
                       (? (!syn && (0 < p))                                       ; real one we're owed no echo for: the client unmapped it,
-                         (pin owed win (p - 1), loop sh lay hist ffoc)    ; courtesy synthetic or not
+                         (pin owed win (p - 1), loop sh lay hist)         ; courtesy synthetic or not
                          (: _ (ewmh-untrack win)
                             _ (x-delprop s win (x-intern s "WM_STATE"))          ; unstamp: a restart must not re-adopt the withdrawn
-                            sh2 (evict sh win) ffoc2 (win = ffoc ? () ffoc)      ; (the tray ghost); a re-map arrives as a fresh MapRequest
+                            sh2 (evict sh win)                                   ; (the tray ghost); a re-map arrives as a fresh MapRequest
                             _ (x-unmap s win)                                    ; a crossing's render in the event gap may have re-mapped
                             _ (unled! win)                                       ; it (telegram's media viewer): withdrawn means unmapped
                             _ (line ("lux: withdraw " + show win))
-                            (relay sh2 lay ffoc2)))))
+                            (relay sh2 lay)))))
                 (code = 7)                                                      ; EnterNotify: focus follows the pointer (normal crossings
                 (: pkt (ev-raw e) w (u32 pkt 12)                                 ; only -- the window is the event field, byte 12)
                    (? (pkt 30 != 0 || ev-detail e = 2)                  ; mode Grab/Ungrab or detail Inferior: not a real entry
-                      (loop sh lay hist ffoc)
-                      (!(wsknownw? sh w) || w = (ffoc ? ffoc (wsfoc sh)))
-                      (loop sh lay hist ffoc)                                    ; unmanaged, or already the effective focus: still
-                      (wsfloating? sh w) (fmark sh ffoc w, x-focus s w, x-flush s, loop sh lay hist w)
-                      (: sh2 (wsmap sh (zfocto w)) (render sh2 lay (), refocus sh2, loop sh2 lay hist ()))))
+                      (loop sh lay hist)
+                      (!(wsknownw? sh w) || w = wsfoc sh) (loop sh lay hist)   ; unmanaged, or already focused: still
+                      (relay (wsmap sh (zfocto w)) lay)))
                 (code = 4)                                                      ; ButtonPress via the sync grab: super+drag moves/resizes a
                 (: pkt (ev-raw e) w (u32 pkt 12) btn (ev-detail e) st (ev-state e)   ; float (xmonad mouseBindings); a plain click focuses
                    (? (st & lux-mod && wsknownw? sh w && (btn = 1 || btn = 3))    ; mod+btn1 move, mod+btn3 resize -- float first, then drag
@@ -406,30 +381,29 @@
                          gf (drag (btn @ 1 'move 'resize) w g0 rx0 ry0)
                          _ (x-ungrabptr s) _ (x-flush s)
                          _ (line ((btn @ 1 "lux: moved " "lux: resized ") + show w))
-                         (relay (wsdofloat sh2 w gf) lay w))
+                         (relay (wsdofloat (wsmap sh2 (zfocto w)) w gf) lay))
                       ((st & lux-mod) && wsknownw? sh w && (btn = 2))            ; mod+btn2: promote the clicked window to master (shiftMaster)
                       (x-allow-async s, x-flush s,
-                         relay (wsmap sh (zmaster * zfocto w)) lay ffoc)
+                         relay (wsmaster (wsmap sh (zfocto w))) lay)
                       (: _ (x-replay s) _ (x-flush s)                           ; a plain click: hand it to the app, then click-to-focus
-                         (? (!(wsknownw? sh w) || w = (ffoc ? ffoc (wsfoc sh))) (loop sh lay hist ffoc)
-                            (wsfloating? sh w) (fmark sh ffoc w, x-focus s w, x-raise s w, x-flush s, loop sh lay hist w)
-                            (: sh2 (wsmap sh (zfocto w)) (render sh2 lay (), refocus sh2, loop sh2 lay hist ()))))))
+                         (? (!(wsknownw? sh w) || w = wsfoc sh) (loop sh lay hist)
+                            (relay (wsmap sh (zfocto w)) lay)))))
                 (code = 2)                                                       ; KeyPress: the table answers
                 (: kc (ev-detail e) stm (ev-state e & kmodmask)
                    hit (afind (r \ <r = stm && <>r = kc) (ktab ()))
-                   (? (two? hit) (do-act (hit 2) sh lay hist ffoc)
-                      (loop sh lay hist ffoc)))
+                   (? (two? hit) (do-act (hit 2) sh lay hist)
+                      (loop sh lay hist)))
                 (code = 34)                                                      ; MappingNotify: the keyboard/modifier map changed under us
                 (: rq (ev-raw e 4)                                        ; (a replug, setxkbmap, xmodmap) -- stale keycodes would
-                   (rq @ 2 (loop sh lay hist ffoc)                           ; leave every grab dead; pointer mapping (2) is not ours
+                   (rq @ 2 (loop sh lay hist)                                ; leave every grab dead; pointer mapping (2) is not ours
                     (: _ (x-ungrabkeys s root)
                        tab (keys-resolve ()) _ (pin ktabc 0 tab) _ (keys-grab tab)
                        _ (line ("lux: mapping changed -- regrabbed " + show #tab))
-                       (loop sh lay hist ffoc))))
+                       (loop sh lay hist))))
                 (code = 23)                                              ; ConfigureRequest: tiled -> the layout answers, and the
                 (? (wsknownw? sh win && !(wsfloating? sh win))           ; client is told so -- a synthetic ConfigureNotify with the
-                   (render sh lay ffoc, x-confnotify s win, x-flush s,   ; real geometry (silence leaves VTE drawing a phantom grid)
-                    loop sh lay hist ffoc)
+                   (render sh lay, x-confnotify s win, x-flush s,        ; real geometry (silence leaves VTE drawing a phantom grid)
+                    loop sh lay hist)
                    (: pkt (ev-raw e) mask (u16 pkt 26) g (x-getgeom s win)       ; unmanaged (pre-map): grant it -- a client waits on
                       gx (mask & 1 ? (u16 pkt 16) (g 0))                   ; this configure before mapping (deny = no MapRequest,
                       gy (mask & 2 ? (u16 pkt 18) (g 1))                   ; the 1x1 deadlock); fields absent from the value-mask
@@ -437,7 +411,7 @@
                       gh (mask & 8 ? (u16 pkt 22) (g 3))
                       _ (x-configure s win gx gy gw gh) _ (x-flush s)
                       sh2 (wsfloating? sh win ? (wsdofloat sh win [gx gy gw gh]) sh)    ; a float's request is granted too, and the
-                      (loop sh2 lay hist ffoc)))                                 ; sheaf's rect follows it (xmonad: grant + re-float)
+                      (loop sh2 lay hist)))                                      ; sheaf's rect follows it (xmonad: grant + re-float)
                 (code = 33)                                                      ; ClientMessage: EWMH requests ride SendEvent to the root
                 (: pkt (ev-raw e) cw (ewmh-cm-win pkt) ty (ewmh-cm-type pkt)
                    (fs? d) (d = ewmh-atom "_NET_WM_STATE_FULLSCREEN")
@@ -446,14 +420,14 @@
                    (state-toggle rect atoms word)                               ; _net_wm_state add/remove/toggle -> float at rect / sink
                      (: act (ewmh-cm-d0 pkt) on (wsfloating? sh cw)
                         want (act @ 1 1 0 0 !on)             ; 0 remove / 1 add / 2 toggle
-                        (? (want = !!on) (loop sh lay hist ffoc)
-                           want (: sh2 (wsdofloat sh cw rect)
+                        (? (want = !!on) (loop sh lay hist)
+                           want (: sh2 (wsdofloat (wsmap sh (zfocto cw)) cw rect)
                                    _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 atoms)
-                                   _ (render sh2 lay cw) _ (x-focus s cw) _ (x-flush s)
-                                   _ (line ("lux: " + word + " " + show cw)) (loop sh2 lay hist cw))
+                                   _ (render sh2 lay) _ (refocus sh2)
+                                   _ (line ("lux: " + word + " " + show cw)) (loop sh2 lay hist))
                            (: sh2 (wssink sh cw)
                               _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 ())
-                              _ (render sh2 lay ()) _ (line ("lux: un" + word + " " + show cw)) (loop sh2 lay hist ()))))
+                              _ (render sh2 lay) _ (line ("lux: un" + word + " " + show cw)) (loop sh2 lay hist))))
                    (? (ty = ewmh-atom "_NET_WM_STATE" &&                       ; _net_wm_state add/remove/toggle fullscreen (ewmhFullscreen)
                           wsknownw? sh cw && (fs? (ewmh-cm-d1 pkt) || fs? (ewmh-cm-d2 pkt)))
                       (state-toggle scrn [(ewmh-atom "_NET_WM_STATE_FULLSCREEN")] "fullscreen")    ; over the whole screen, struts and all
@@ -461,34 +435,29 @@
                           wsknownw? sh cw && (mx? (ewmh-cm-d1 pkt) || mx? (ewmh-cm-d2 pkt)))
                       (state-toggle (trect ()) [(ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT") (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")] "maximize")
                       (ty = ewmh-atom "WM_CHANGE_STATE" && ewmh-cm-d0 pkt = 3)       ; ICCCM iconify -> minimize (minimizeEventHook)
-                      (: lay2 (msg-or lay (lay-msg lay ['minimize-window cw] (wsget sh (wscur sh))))
-                         _ (render sh lay2 ffoc) _ (line ("lux: minimize " + show cw)) (loop sh lay2 hist ffoc))
+                      (: lay2 (msg-or lay (lay-msg lay ['minimize-window cw] (wstilez sh)))
+                         _ (render sh lay2) _ (line ("lux: minimize " + show cw)) (loop sh lay2 hist))
                       ((ty = ewmh-atom "_NET_CLOSE_WINDOW") && wsknownw? sh cw)       ; a panel/pager closes a window -- gracefully if it can
                       (: _ (x-has-atom s cw "WM_PROTOCOLS" "WM_DELETE_WINDOW" ? (x-wmdel s cw) (x-kill s cw))
-                         _ (x-flush s) _ (line ("lux: close " + show cw)) (loop sh lay hist ffoc))
+                         _ (x-flush s) _ (line ("lux: close " + show cw)) (loop sh lay hist))
                       (ty = ewmh-atom "_NET_CURRENT_DESKTOP")                    ; a pager switches the desktop -- the same ending, and
-                      (: sh2 (switch sh lay (ewmh-cm-d0 pkt + 1))                ; the departed view's float focus does not ride along
-                         (relay sh2 lay (ffoc-for sh2 ffoc)))
+                      (relay (switch sh lay (ewmh-cm-d0 pkt + 1)) lay)
                       (ty = ewmh-atom "_NET_WM_DESKTOP")                         ; a pager drags a window to another desktop (W.shiftWin)
                       (: t (ewmh-cm-d0 pkt + 1) sh2 (shiftwin sh cw t)
-                         (sh2 = sh ? (loop sh lay hist ffoc)                   ; unknown window/tag (or sticky 0xffffffff): a no-op
-                          (: ff2 (ffoc = cw && t != wscur sh2 ? () ffoc)
-                             _ (render sh2 lay ff2)                            ; arriving on the current view: render maps it...
+                         (sh2 = sh ? (loop sh lay hist)                        ; unknown window/tag (or sticky 0xffffffff): a no-op
+                          (: _ (render sh2 lay)                              ; arriving on the current view: render maps it...
                              _ (t = wscur sh2 ? 0 (hide! cw, x-flush s))     ; ...leaving it: hide the emigrant
                              _ (line ("lux: sent " + show cw + " -> " + show t))
-                             (loop sh2 lay hist ff2))))
+                             (loop sh2 lay hist))))
                       (ty = ewmh-atom "_NET_ACTIVE_WINDOW")                      ; activate: restore if minimized, view its tag, focus it.
-                      (: z (wsget sh (wscur sh))                                 ; source 1 is the app asking for itself, 2 a pager (the user):
-                         lay2 (msg-or lay (lay-msg lay ['restore-window cw] z))  ; an app may take the keyboard on this view but may not drag
-                         t (wstagof sh cw)                                       ; the view to itself -- a qt modal re-asserts its activation
-                         (? !t (render sh lay2 ffoc, loop sh lay2 hist ffoc)     ; whenever focus moves, and would undo every switch away
-                            (ewmh-cm-d0 pkt = 1 && t != wscur sh)
-                            (line ("lux: activate refused " + show cw), loop sh lay hist ffoc)
-                            (: sh2 (switch sh lay2 t)                            ; a float takes the keyboard itself: refocus would hand it
-                               (wsfloating? sh2 cw ? (relay sh2 lay2 cw)         ; to the tiled top instead, and the app would ask again
-                                  (relay (wsmap sh2 (zfocto cw)) lay2 ())))))
-                      (loop sh lay hist ffoc)))
-                (loop sh lay hist ffoc)))))
+                      (: lay2 (msg-or lay (lay-msg lay ['restore-window cw] (wstilez sh)))   ; source 1 is the app asking for itself, 2 a
+                         t (wstagof sh cw)                                       ; pager (the user): an app may take the keyboard on this
+                         (? !t (render sh lay2, loop sh lay2 hist)               ; view but may not drag the view to itself -- a qt modal
+                            (ewmh-cm-d0 pkt = 1 && t != wscur sh)                ; re-asserts its activation whenever focus moves, and
+                            (line ("lux: activate refused " + show cw), loop sh lay hist)    ; would undo every switch away
+                            (relay (wsmap (switch sh lay2 t) (zfocto cw)) lay2)))
+                      (loop sh lay hist)))
+                (loop sh lay hist)))))
 
    ; adopt the windows already mapped before we grabbed the redirect (closes the startup race; survives a restart-in-place)
    (furniture? w) (x-has-atom s w "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP" ||     ; desktops and docks are furniture, never clients
@@ -534,7 +503,7 @@
        _ (map (w \ x-manageable? s w ? (pin mapd w 1) 0) ws)                 ; the viewable adoptees are mapped
        sh2)
    (settle sh ws tag)                                                           ; paint a batch and say so
-    (: _ (render sh lux-layout ())
+    (: _ (render sh lux-layout)
        _ (map (w \ any (= w) (wsrow sh) ? 0 (hide! w)) (wstiled sh))   ; adopted onto a hidden tag: hide it
        _ (x-flush s)                                                            ; now, or it lingers painted over workspace 1 (the WM_STATE
        _ (refocus sh) (line (tag + show ws)))                                   ; stamp keeps it adoptable through the next restart)
