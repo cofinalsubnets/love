@@ -13,7 +13,11 @@
 ;   media-viewer zombie: the crossing's render must not resurrect it),
 ;   the unmap ledger: lux's own hides (switch, minimize) never evict, a
 ;   rude client unmap with no courtesy synthetic does (xmonad's rule),
-;   closing the focused tile hands the keyboard to the survivor.
+;   closing the focused tile hands the keyboard to the survivor, and an
+;   activation the app sends for itself never drags the view while a
+;   pager's does (the qt modal that undid every workspace switch), a view
+;   of one float and no tile arrives with the keyboard on the float and an
+;   empty one with the focus on the root, never PointerRoot.
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
 ; loaded with -l, no test/00-init.l ahead of it -- so the posix door is borrowed here.
@@ -222,6 +226,54 @@
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wt, x-flush s)   ; DestroyWindow: the app quits
       _ (waitp "survivor-focused" (u \ = wr (getfocus ())) 50)
 
+      ; --- 5e. the activation source (ewmh 1.4 _net_active_window data[0]): a
+      ;     pager (2) or a legacy client (0) may pull the view to its window,
+      ;     the app asking for itself (1) may not -- a qt modal re-asserts its
+      ;     own activation on every focus change, and an obeyed request would
+      ;     undo the switch that just left it ---
+      (deskt u) (: d (x-getprop-atoms s root a-cd) (two? d ? (cap d) -1))
+      _ (cmsg root a-cd 1 0 0)                                                   ; the pager switches off wr's desktop
+      _ (waitp "aw-switched-away" (u \ && (= 1 (deskt ())) (= 0 (mstr ()))) 50)
+      _ (cmsg wr a-aw 1 0 0)                                                     ; the app asks for itself: refused
+      _ (rest 300)                                                               ; let an obeyed request land before the read
+      _ (must "aw-app-holds-view" (= 1 (deskt ())))
+      _ (must "aw-app-holds-hidden" (= 0 (mstr ())))
+      _ (cmsg wr a-aw 2 0 0)                                                     ; the pager asks: honoured
+      _ (waitp "aw-pager-switches" (u \ && (= 0 (deskt ())) (= 2 (mstr ()))) 50)
+
+      ; --- 5f. the view change must land the keyboard. switch renders but does
+      ;     not focus, and wsfoc reads the tiled zipper -- so a view holding a
+      ;     float alone used to arrive with the focus at PointerRoot, the float
+      ;     visible and wearing the focused border with no keyboard. an empty
+      ;     view takes the root, so a raw-mapped dock under the pointer cannot
+      ;     collect the keys. the pointer parks off the float throughout: a
+      ;     crossing would hand the focus on and hide the whole thing ---
+      a-wt (x-intern s "_NET_WM_WINDOW_TYPE")
+      a-dl (x-intern s "_NET_WM_WINDOW_TYPE_DIALOG")
+      a-wd (x-intern s "_NET_WM_DESKTOP")
+      wf (+ w1 5)
+      (mkdlg u)                                                                  ; a dialog: the manage hook floats it at its own size
+       (: _ (x-w8 s 1, x-w8 s 0, x-w16 s 9, x-w32 s wf, x-w32 s root,
+             x-w16 s 5, x-w16 s 5, x-w16 s 200, x-w16 s 150,
+             x-w16 s 1, x-w16 s 1, x-w32 s 0, x-w32 s 2, x-w32 s 16777215)
+          _ (x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s wf,                          ; ChangeProperty: the type, before the map
+             x-w32 s a-wt, x-w32 s 4, x-w8 s 32, x-w8 s 0, x-w16 s 0,
+             x-w32 s 1, x-w32 s a-dl)
+          (x-map s wf, x-flush s))
+      (mstf u) (cap (x-attrs s wf))
+      _ (mkdlg ())
+      _ (waitp "wf-floated" (u \ = 200 ((x-getgeom s wf) 2)) 100)                 ; a float keeps its own size; a tile would be stretched
+      _ (cmsg wf a-wd 1 0 0)                                                     ; send it to desktop 1, alone there
+      _ (waitp "wf-emigrated" (u \ = 0 (mstf ())) 50)
+      _ (fake 6 0 5 5) _ (rest 100)                                              ; park the pointer off the centred float
+      _ (cmsg root a-cd 1 0 0)                                                   ; arrive at a view of one float and no tile
+      _ (waitp "wf-shown" (u \ = 2 (mstf ())) 50)
+      _ (waitp "wf-holds-keyboard" (u \ = wf (getfocus ())) 50)
+      _ (cmsg root a-cd 2 0 0)                                                   ; and an empty view: the root, never PointerRoot (1)
+      _ (waitp "empty-view-roots" (u \ = root (getfocus ())) 50)
+      _ (cmsg root a-cd 0 0 0)                                                   ; back where leg 6 expects to find us
+      _ (waitp "back-to-first" (u \ && (= 0 (deskt ())) (= 2 (mstr ()))) 50)
+
       ; --- 6. last, the moor: the live repl evals, survives a scare, changes state
       ;     (msg! 'next-layout flips the ||| index -- read back through the
       ;     snapshot over the moor socket, so the assert leans on no window
@@ -318,5 +370,5 @@
       _ (close rc)
 
       _ (close s3) _ (close s)
-      _ (line "probe: manage + maximize + move + resize + focus + moor + close, all exact")
+      _ (line "probe: manage + maximize + move + resize + focus + activate + moor + close, all exact")
       (quit 0)))

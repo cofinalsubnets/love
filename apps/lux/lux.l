@@ -196,7 +196,16 @@
                         _ (x-configure s w (fr 0) (fr 1) (fr 2) (fr 3))
                         _ (map! w) (x-raise s w))) (wsvisfl sh))
        (x-flush s))
-   (refocus sh) (wsfoc sh ? (x-focus s (wsfoc sh), x-flush s) 0)        ; focus the current top -- only when it is mapped/viewable
+   (refocus sh) (: f (wsfoc sh ? (wsfoc sh) <(wsring sh))                     ; the tiled top, else a float alone on the view (wsfoc
+                   (x-focus s (f ? f root), x-flush s))                        ; reads the zipper, and a float is not in it). an empty
+                                                                                 ; view takes the root: PointerRoot would hand the keys
+                                                                                 ; to whatever the pointer happens to sit over
+   ; the float that should hold the keyboard on this view: the carried one if it
+   ; still lives here, else the view's own float when there is no tiled top. ()
+   ; leaves the question to refocus.
+   (ffoc-for sh ff) (? (ff && (wscur sh = wstagof sh ff)) ff
+                       (wsfoc sh) ()
+                       <(wsring sh))
    (fmark sh pf w) (: _ (x-borderpix s w fpix) p (pf ? pf (wsfoc sh))            ; keyboard to float w sans re-render: it wears the focused
                       (p && !(p = w) ? (x-borderpix s p npix) 0))              ; border, the previous effective focus hands it back
    (watch w) (x-cwa-events s w 16, x-grabbtn s w)                         ; the mouse wires: EnterWindow selected (focus follows the
@@ -230,8 +239,8 @@
           (k = 'swap-dn) (relay (wsmap sh zswapdn) lay ffoc)
           (k = 'swap-up) (relay (wsmap sh zswapup) lay ffoc)
           (k = 'swap-master) (relay (wsmap sh zmaster) lay ffoc)
-          (k = 'view) (: sh2 (switch sh lay <>a)                                 ; a float focus stays only if its home is the new view
-                         (loop sh2 lay hist (ffoc && (wscur sh2 = wstagof sh2 ffoc) ? ffoc ())))
+          (k = 'view) (: sh2 (switch sh lay <>a)                                 ; switch renders but does not focus: relay is what makes
+                         (relay sh2 lay (ffoc-for sh2 ffoc)))                   ; the keyboard agree with the arriving view
           (k = 'shift) (: t <>a sh2 (shiftwin sh fw t)                           ; the effective focus emigrates -- a float by its home
                           ff2 (!(sh2 = sh) && (ffoc = fw) ? () ffoc)
                           _ (render sh2 lay ff2)
@@ -459,8 +468,9 @@
                       ((ty = ewmh-atom "_NET_CLOSE_WINDOW") && wsknownw? sh cw)       ; a panel/pager closes a window -- gracefully if it can
                       (: _ (x-has-atom s cw "WM_PROTOCOLS" "WM_DELETE_WINDOW" ? (x-wmdel s cw) (x-kill s cw))
                          _ (x-flush s) _ (line ("lux: close " + show cw)) (loop sh lay hist ffoc))
-                      (ty = ewmh-atom "_NET_CURRENT_DESKTOP")                    ; a pager switches the desktop
-                      (loop (switch sh lay (ewmh-cm-d0 pkt + 1)) lay hist ffoc)
+                      (ty = ewmh-atom "_NET_CURRENT_DESKTOP")                    ; a pager switches the desktop -- the same ending, and
+                      (: sh2 (switch sh lay (ewmh-cm-d0 pkt + 1))                ; the departed view's float focus does not ride along
+                         (relay sh2 lay (ffoc-for sh2 ffoc)))
                       (ty = ewmh-atom "_NET_WM_DESKTOP")                         ; a pager drags a window to another desktop (W.shiftWin)
                       (: t (ewmh-cm-d0 pkt + 1) sh2 (shiftwin sh cw t)
                          (? (sh2 = sh) (loop sh lay hist ffoc)                   ; unknown window/tag (or sticky 0xffffffff): a no-op
@@ -469,13 +479,16 @@
                                _ (t = wscur sh2 ? 0 (hide! cw, x-flush s))     ; ...leaving it: hide the emigrant
                                _ (line ("lux: sent " + (show cw + (" -> " + show t))))
                                (loop sh2 lay hist ff2))))
-                      (ty = ewmh-atom "_NET_ACTIVE_WINDOW")                      ; a pager activates: restore if minimized, view its tag, focus
-                      (: z (wsget sh (wscur sh))
-                         lay2 (msg-or lay (lay-msg lay ['restore-window cw] z))
-                         t (wstagof sh cw)
-                         (? !t (render sh lay2 ffoc, loop sh lay2 hist ffoc)
-                            (: sh2 (wsmap (switch sh lay2 t) (zfocto cw))
-                               _ (render sh2 lay2 ()) _ (refocus sh2) (loop sh2 lay2 hist ()))))
+                      (ty = ewmh-atom "_NET_ACTIVE_WINDOW")                      ; activate: restore if minimized, view its tag, focus it.
+                      (: z (wsget sh (wscur sh))                                 ; source 1 is the app asking for itself, 2 a pager (the user):
+                         lay2 (msg-or lay (lay-msg lay ['restore-window cw] z))  ; an app may take the keyboard on this view but may not drag
+                         t (wstagof sh cw)                                       ; the view to itself -- a qt modal re-asserts its activation
+                         (? !t (render sh lay2 ffoc, loop sh lay2 hist ffoc)     ; whenever focus moves, and would undo every switch away
+                            ((ewmh-cm-d0 pkt = 1) && !(t = wscur sh))
+                            (line ("lux: activate refused " + show cw), loop sh lay hist ffoc)
+                            (: sh2 (switch sh lay2 t)                            ; a float takes the keyboard itself: refocus would hand it
+                               (wsfloating? sh2 cw ? (relay sh2 lay2 cw)         ; to the tiled top instead, and the app would ask again
+                                  (relay (wsmap sh2 (zfocto cw)) lay2 ())))))
                       (loop sh lay hist ffoc)))
                 (loop sh lay hist ffoc)))))
 
