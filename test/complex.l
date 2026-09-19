@@ -15,8 +15,8 @@
 
 (test
  ; --- printer: (re ~ im) form, parenthesized so it reads back by re-evaluation ---
- (= "(0.0 ~ 1.0)" (show i))
- (= "(2.0 ~ 3.0)" (show (2 ~ 3)))
+ ("(0.0 ~ 1.0)" = show i)
+ ("(2.0 ~ 3.0)" = show (2 ~ 3))
  (= "(2.0 ~ -3.0)" (show (2 ~ -3)))
  (= "(-1.0 ~ -2.0)" (show (-1 ~ -2)))
 
@@ -144,8 +144,8 @@
 
  ; --- the accessors, elementwise over an array: re/im/arg drop to the real tier,
  ;     conj stays complex; a real array is its own real part and its own conjugate ---
- (= @(1.0 3.0) (re ca-v))   (= @(2.0 4.0) (im ca-v))
- (aall (= ca-v (conj (conj ca-v))))              ; conj is an involution on the array too
+ (@(1.0 3.0) = re ca-v)   (@(2.0 4.0) = im ca-v)
+ (aall (ca-v = conj (conj ca-v)))              ; conj is an involution on the array too
  (= (1 ~ -2) (peep (conj ca-v) 0 0))   (= (3 ~ -4) (peep (conj ca-v) 1 0))
  (= twin-tray (tier (conj ca-v)))                 ; the tier is kept
  (near (/ pi 2) (peep (arg (twin-tray '(1) [(0 ~ 1)])) 0 0))
@@ -154,26 +154,26 @@
  ; --- `=` over complex arrays -> a boolean (whole-array); the orderings -> a mask ---
  (= ca-v ca-v)
  !(= ca-v (twin-tray '(2) [(9 ~ 9) (3 ~ 4)]))   ; one cell differs -> false, never a mask
- (aall (= ca-v ca-v))                           ; aall is the identity on the boolean
+ (aall (ca-v = ca-v))                           ; aall is the identity on the boolean
  ; a complex tray orders exactly as its cells do -- (re,im) lexicographic, the order that
  ; makes `sort` total (cmp3). a tray follows its scalar; these once answered nil.
- (aall (= @(1 0) (< ca-v (twin-tray '(2) [(1 ~ 5) (0 ~ 0)]))))  ; re tie -> im 2<5 ; 3>0
- (aall (= @(0 1) (> ca-v (twin-tray '(2) [(1 ~ 5) (0 ~ 0)]))))
- (aall (<= ca-v ca-v))   (aall (>= ca-v ca-v))
- (aall (= @(1 0) (< ca-v (2 ~ 0))))             ; a complex scalar broadcasts
- (nil? (% ca-v ca-v))   (nil? (// ca-v ca-v))   ; % and // stay undefined on complex
+ (aall (@(1 0) = (ca-v < twin-tray '(2) [(1 ~ 5) (0 ~ 0)])))  ; re tie -> im 2<5 ; 3>0
+ (aall (@(0 1) = (ca-v > twin-tray '(2) [(1 ~ 5) (0 ~ 0)])))
+ (aall (ca-v <= ca-v))   (aall (ca-v >= ca-v))
+ (aall (@(1 0) = (ca-v < (2 ~ 0))))             ; a complex scalar broadcasts
+ !(ca-v % ca-v)   !(ca-v // ca-v)   ; % and // stay undefined on complex
 
  ; --- reductions: complex sum / product; max/min unordered -> nil ---
- (= (4 ~ 6) (net ca-v))                        ; (1+2i)+(3+4i)
- (= (-5 ~ 10) (prod ca-v))                     ; (1+2i)*(3+4i)
- (= (6 ~ 6) (net ca-a))   (= (0 ~ 0) (net ca-z))
- (nil? (max ca-v))   (nil? (min ca-v))
+ (4 ~ 6 = +ca-v)                        ; (1+2i)+(3+4i)
+ (-5 ~ 10 = *ca-v)                     ; (1+2i)*(3+4i)
+ (6 ~ 6 = +ca-a)   (0 ~ 0 = +ca-z)
+ !(max ca-v)   !(min ca-v)
 
  ; --- aall/aany lift the 0+0i-is-falsy rule ---
  (aall ca-v)
- (nil? (aall (twin-tray '(2) [(0 ~ 0) (1 ~ 1)])))  ; a 0+0i element fails aall
- (sat (twin-tray '(2) [(0 ~ 0) (1 ~ 1)]))           ; the element sum (1 ~ 1) sorts positive
- (nil? (sat ca-z))
+ !(aall (twin-tray '(2) [(0 ~ 0) (1 ~ 1)]))  ; a 0+0i element fails aall
+ $(twin-tray '(2) [(0 ~ 0) (1 ~ 1)])           ; the element sum (1 ~ 1) sorts positive
+ !$ca-z
 
  ; --- abs of a complex array = the flat L2 norm over every (re, im) ---
  (= 5.0 (abs (twin-tray '(1) [(3 ~ 4)])))          ; |3+4i| = 5

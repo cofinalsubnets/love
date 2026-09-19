@@ -11,19 +11,19 @@
 
   ; unget + get roundtrip on stdin -- one top-level form, or the repl eats the pushback
   (: (rt c) (: _ (unsee in c) (see in))
-   (do (65 = rt 65)
-      (32 = rt 32)
-      (255 = rt 255)))
+   (&& (65 = rt 65)                           ; `&&`, not `do`: do answers its last
+       (32 = rt 32)                           ; operand and the rest go unchecked
+       (255 = rt 255)))
 
   ; the same pair once a real read has happened, which the net-zero roundtrip cannot
   ; reach. on a tap, never on `in`: a real read of `in` eats the corpus feeding this
   ; suite. the pushback is the port's (love.c's zungetc), so a tap walks identical code.
   (: t (tap '(120 121))         ; a tap taps a charlist -- (tap "xy") is the empty one
    _ (see t)
-   (do (99 = unsee t 99)
-      (99 = see t)
-      (121 = see t)  ; ..and y is still there, unshifted by the detour
-      (-1 = see t))) ; ..and the end is still the end
+   (&& (99 = unsee t 99)
+       (99 = see t)
+       (121 = see t)  ; ..and y is still there, unshifted by the detour
+       (-1 = see t))) ; ..and the end is still the end
 
   ; a non-port reads as an already-empty stream: (get x) is -1, not the echoed x, so a
   ; read-until-(-1) loop over an absent port terminates. this is what bounds the file

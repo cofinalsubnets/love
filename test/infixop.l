@@ -13,7 +13,7 @@
  (1 = (3 = 3.0)) (0 = (3 = 4))
  (1 = (1 < 2)) (1 = (1 <= 1)) (1 = (2 > 1)) (1 = (2 >= 2)) (0 = (2 < 1))
  (15 = (8 | 4 | 2 | 1)) (0 = (5 & 2)) (7 = (5 | 2))
- (1 = (5 % 2)) ('% = (caup '(5 % 2)))               ; % is plain infix at two (mod is gone); quotes stay data
+ (1 = (5 % 2)) ('% = caup '(5 % 2))               ; % is plain infix at two (mod is gone); quotes stay data
 
  ; right-associativity; parens override
  (7 = (1 + 2 * 3))                              ; (+ 1 (* 2 3))
@@ -34,13 +34,13 @@
  ; as a list element. (1 + 2 3) is (+ 1 (2 3)), not ((+ 1 2) 3).
  ('(3 3) = [(1 + 2) 3])                         ; two elements: (+ 1 2) and 3
  ('(3 9) = [(1 + 2) (4 + 5)])
- ("(+ 1 (2 3))" = (show (opfix '(1 + 2 3))))  ; 2 3 is one operand, the whole to the right of +
- ("(= (a b) (c d))" = (show (opfix '(a b = c d))))
+ ("(+ 1 (2 3))" = show (opfix '(1 + 2 3)))  ; 2 3 is one operand, the whole to the right of +
+ ("(= (a b) (c d))" = show (opfix '(a b = c d)))
 
  ; operators as values and quoted operators are untouched
- (12 = (foldl (+) 0 '(3 4 5)))
- ('(1 2 3) = (sort '(3 1 2)))
- (nom? '+) (7 = ((+) 3 4))
+ (12 = foldl (+) 0 '(3 4 5))
+ ('(1 2 3) = sort '(3 1 2))
+ (nom? '+) (7 = (+) 3 4)
 
  ; composes with sigils at one ($ folds eagerly -- binds tightest -- then + steals it)
  (197 = ($"ab" + 2))
@@ -52,9 +52,9 @@
 ; structural incompleteness still pends: an unclosed list comes back torn.
 ; a trailing operator does not pend -- "1 +" is two complete datums whose factor
 ; folds to the partial (+ 1) at compile time, not a reader state.
-(test ('torn = (sound '(40 49 32 43))))              ; "(1 +" -> torn
+(test ('torn = sound '(40 49 32 43)))              ; "(1 +" -> torn
 (: r (sound '(49 32 43))                                 ; "1 +"  -> 1, then +
-   (test (1 = <r) ('+ = (cap (sound >r)))))
+   (test (1 = <r) ('+ = <(sound >r))))
 
 ; a fresh dyadic operator needs no table at all -- define-then-use (the DEFAULT
 ; infix section below); ** here rides the default, right-associatively
@@ -93,18 +93,18 @@
 ; same word by another spelling. the one rule the infix spelling owns is that a `:` chain is
 ; one scope -- the nest op-steal builds is spliced flat, never left standing.
 (test
- ((show '(\ a b c))           = (show (opfix '(a \ b \ c))))             ; the chain flattens: one closure, not two
- ((show '(\ x (+ x 1)))       = (show (opfix '(x \ x + 1))))             ; the body extends right, under every tighter op
- ((show '(\ x (? c a b)))     = (show (opfix '(x \ c ? a b))))           ; ..a clause form included
- ((show '(: a b c))           = (show (opfix '(a : b c))))               ; n-ary: every operand stays one
- ((show '(: a b))             = (show (opfix '(a : b))))                 ; ..and at two it is the body-less form, which pins
- ((show '(: (f x) (+ x 1)))   = (show (opfix '(f x : x + 1))))           ; define-sugar: the leading span is the binder
- ((show '(: a 1 b 2 (+ a b))) = (show (opfix '(a : 1 b : 2 (a + b)))))   ; the chain is one scope -- the prefix form exactly
- ((show '(: a b c d))         = (show (opfix '(a : b c : d))))           ; ..so a chain of bare definitions is one body-less :
- ((show '(: f (\ x (+ x 1)))) = (show (opfix '(f : x \ x + 1))))         ; \ grips tighter than :, so a lambda is one value
- ((show (opfix '(a : b c)))   = (show (opfix '(a := b c))))              ; := names `:` and inherits the whole fold
- ((show (opfix '(a : 1 b : 2 (a + b)))) = (show (opfix '(a : 1 b := 2 (a + b)))))   ; ..either spelling, same chain
- (3 = ((x \ x + 1) 2)) (7 = ((x \ y \ x + y) 3 4))
+ (show '(\ a b c)           = show (opfix '(a \ b \ c)))             ; the chain flattens: one closure, not two
+ (show '(\ x (+ x 1))       = show (opfix '(x \ x + 1)))             ; the body extends right, under every tighter op
+ (show '(\ x (? c a b))     = show (opfix '(x \ c ? a b)))           ; ..a clause form included
+ (show '(: a b c)           = show (opfix '(a : b c)))               ; n-ary: every operand stays one
+ (show '(: a b)             = show (opfix '(a : b)))                 ; ..and at two it is the body-less form, which pins
+ (show '(: (f x) (+ x 1))   = show (opfix '(f x : x + 1)))           ; define-sugar: the leading span is the binder
+ (show '(: a 1 b 2 (+ a b)) = show (opfix '(a : 1 b : 2 (a + b))))   ; the chain is one scope -- the prefix form exactly
+ (show '(: a b c d)         = show (opfix '(a : b c : d)))           ; ..so a chain of bare definitions is one body-less :
+ (show '(: f (\ x (+ x 1))) = show (opfix '(f : x \ x + 1)))         ; \ grips tighter than :, so a lambda is one value
+ (show (opfix '(a : b c))   = show (opfix '(a := b c)))              ; := names `:` and inherits the whole fold
+ (show (opfix '(a : 1 b : 2 (a + b))) = show (opfix '(a : 1 b := 2 (a + b))))   ; ..either spelling, same chain
+ (3 = (x \ x + 1) 2) (7 = (x \ y \ x + y) 3 4)
  (9 = (a : 4 b : 5 (a + b))))                                            ; a body-having : is one scope and pins nothing
 
 ; so an infix definition at top level pins, which is what a file of them is for. distinct
@@ -112,15 +112,15 @@
 (ifx-sq x := x * x)
 (ifx-hyp a b : (ifx-sq a + ifx-sq b))
 (ifx-fst [a b] := a)                                    ; a define-sugar param is a pattern here too
-(test (9 = (ifx-sq 3)) (25 = (ifx-hyp 3 4)) (5 = (ifx-fst '(5 7)))
-        (7 = (ifx-z : 7)))                              ; ..and the form answers what it bound
+(test (9 = ifx-sq 3) (25 = ifx-hyp 3 4) (5 = ifx-fst '(5 7))
+        (7 = (ifx-z : 7)))                            ; ..and the form answers what it bound
 
 ; a param that is not a nom is a pattern wherever it sits: infix, prefix, or merged up out of
 ; a nested lambda -- that last one used to carry it up as a param, where it bound nothing.
 ; these read through behaviour and not through show: each lowering mints its own fresh nom,
 ; so two spellings of one form never print the same text however identical they are.
 (test
- (7 = ((\ x [a b] (x + a + b)) 0 '(3 4)))                                ; prefix
- (7 = ((x \ [a b] \ x + a + b) 0 '(3 4)))                                ; ..infix
- (7 = ((\ x (\ [a b] (x + a + b))) 0 '(3 4)))                            ; ..and merged up out of a nested lambda
- (2 = ((\ [a b] (\ a a)) '(1 2) 2)))                                     ; the shadow still refuses to merge
+ (7 = (\ x [a b] (x + a + b)) 0 '(3 4))                                ; prefix
+ (7 = (x \ [a b] \ x + a + b) 0 '(3 4))                                ; ..infix
+ (7 = (\ x (\ [a b] (x + a + b))) 0 '(3 4))                            ; ..and merged up out of a nested lambda
+ (2 = (\ [a b] (\ a a)) '(1 2) 2))                                     ; the shadow still refuses to merge
