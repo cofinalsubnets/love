@@ -11,9 +11,9 @@
 (reads (open "apps/berth/berth.l" "r"))
 
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
-   (chat s i) (& 255 (glass s i))
+   (chat s i) (255 & glass s i)
    (rowtx s r) (: c (gaze s 2)
-                (foldl (\ a i (+ a (string (: ch (chat s (+ (* r c) i)) (? (= 0 ch) 32 ch)))))
+                (foldl (\ a i (a + string (: ch (chat s ((r * c) + i)) (0 = ch ? 32 ch))))
                        "" (jot c))))
 
 ; --- a child's plain output lands on the grid, colours and all ---
@@ -21,25 +21,25 @@
  _ (test (two? md))
  s (mkscr 5 20)
  bx {s}
- _ (moor bx (cup md) ())
+ _ (moor bx >md ())
  _ (test
-    (= "hired" (snip (rowtx s 0) 0 5))
-    (= 7 (& 255 (>> (glass s 1) 8)))     ; the h: default pen
-    (= 1 (& 255 (>> (glass s 2) 8))))    ; the r: red
- st (waitfor (cap md))
- _ (test (two? st) (= 3 (cap st)))     ; the status pair came home
- (close (cup md)))
+    ("hired" = snip (rowtx s 0) 0 5)
+    (7 = (255 & (glass s 1 >> 8)))     ; the h: default pen
+    (1 = (255 & (glass s 2 >> 8))))    ; the r: red
+ st (waitfor <md)
+ _ (test (two? st) (3 = <st))     ; the status pair came home
+ (close >md))
 
 ; --- the pty's onlcr: a child's bare \n arrives as \r\n, so columns behave ---
 (: md (tether ["sh" "-c" "printf 'a\\nb'"])
  s (mkscr 5 20)
  bx {s}
- _ (moor bx (cup md) ())
+ _ (moor bx >md ())
  _ (test
-    (= 97 (chat s 0))
-    (= 98 (chat s 20)))                  ; b at row 1 column 0, not under the a
- _ (waitfor (cap md))
- (close (cup md)))
+    (97 = chat s 0)
+    (98 = chat s 20))                  ; b at row 1 column 0, not under the a
+ _ (waitfor <md)
+ (close >md))
 
 ; --- the dialogue lane: a dsr answer rides home and the child reads it ---
 ; the child asks where the cursor is, drinks the 6-byte "\e[1;1R" answer off
@@ -54,46 +54,42 @@
 (: md (tether ["sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 | cat -v"])
  s (mkscr 5 20)
  bx {s}
- _ (moor bx (cup md) ())
- _ (test (= "^[[1;1R" (snip (rowtx s 0) 0 7)))
- _ (waitfor (cap md))
- (close (cup md)))
+ _ (moor bx >md ())
+ _ (test ("^[[1;1R" = snip (rowtx s 0) 0 7))
+ _ (waitfor <md)
+ (close >md))
 
 ; --- a full-screen guest: clear, address, paint, leave ---
 (: md (tether ["sh" "-c" "printf '\\033[2J\\033[3;5Hdeep\\033[7msea'"])
  s (mkscr 6 20)
  bx {s}
- _ (moor bx (cup md) ())
+ _ (moor bx >md ())
  _ (test
-    (= "    deepsea" (snip (rowtx s 2) 0 11))
-    (= 4 (>> (glass s (+ (* 2 20) 8)) 28)))   ; the s of sea: reverse video
- _ (waitfor (cap md))
- (close (cup md)))
+    ("    deepsea" = snip (rowtx s 2) 0 11)
+    (4 = (glass s ((2 * 20) + 8) >> 28)))   ; the s of sea: reverse video
+ _ (waitfor <md)
+ (close >md))
 
 ; --- the utf-8 round trip, all the way through the painter: a guest says
 ; ─ and é; the grid folds them to cp437; full berth (painter and all, on
 ; its own pty) says them back out as the same utf-8 ---
-(: (find h n i) (? (< (+ i (tally n)) (+ (tally h) 1))
-                  (? (= n (snip h i (+ i (tally n)))) 1 (find h n (+ i 1)))
-                  0)
+(: (find h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)
  md (tether ["out/love" "-l" "apps/berth/berth.l"
            "-e" "(berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"])"])
- outb (slurp (cup md))
- st (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))
+ outb (slurp >md)
+ st (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  _ (test
     (two? st)
     (find outb "x\xe2\x94\x80y" 0)       ; the ─ came back out as utf-8
     (find outb "\xc3\xa9z" 0))           ; ... and the é
- (close (cup md)))
+ (close >md))
 
 ; --- the harbour: many berths on one wharf ---------------------------------
 ; the multiplexing half. berth's own entry needs a tty (raw/tty) and blocks
 ; until the last child leaves, so these drive the harbour directly -- the same
 ; pieces berth wires up, minus the terminal. a pane is (box master pid).
-(: (sub? h n i) (? (< (+ i (tally n)) (+ (tally h) 1))
-                   (? (= n (snip h i (+ i (tally n)))) 1 (sub? h n (+ i 1)))
-                   0)
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
    ; berth's own opening, with the tty parts left out
    (mkhb r c argv)
     (: p0 (hopen argv r c)
@@ -128,7 +124,7 @@
  p1 (hpid (hpane hb2 1)) p2 (hpid (hpane hb2 2))
  lay (hb2 'lay)
  _ (test
-    (2 = (tally lay))
+    (2 = #lay)
     (10 = (wharf-cols <lay)) (10 = (wharf-cols <>lay))
     (0 = (wharf-col <lay))   (11 = (wharf-col <>lay))
     (2 = (hb2 'focus))                    ; the new berth takes the focus
@@ -169,7 +165,7 @@
     (() = (wharf-berths (hb2 'plan)))
     (() = (hb2 'focus)))
  _ (waitfor p1) _ (waitfor p2)            ; hshut hangs their ptys up; reap, or they outlive the file
- (map (\ t (? (landed? t) (catch t) (freeze t))) (hb2 'jobs)))
+ (map (\ t (landed? t ? (catch t) (freeze t))) (hb2 'jobs)))
 
 ; --- C-a v, on a real berth, over a real pty -------------------------------
 ; the prefix intercept is the one piece the harbour laws above cannot reach: it
@@ -177,13 +173,11 @@
 ; on its own pty and the split is typed -- two bytes onto the master -- and the
 ; bar it draws comes back out in the frames. a fresh pty reports 0x0, so berth
 ; falls back to 24x80 and the geometry here is deterministic: 39 + bar + 40.
-(: (sub? h n i) (? (< (+ i (tally n)) (+ (tally h) 1))
-                   (? (= n (snip h i (+ i (tally n)))) 1 (sub? h n (+ i 1)))
-                   0)
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
  md (tether ["out/love" "-l" "apps/berth/berth.l"
              "-e" "(berth [\"sh\" \"-c\" \"sleep 5\"])"])
  _ (test (two? md))
- m (cup md)
+ m >md
  _ (rest 1200)                            ; let berth come up and moor its first child
  ; the order is the content: "v C-a" is not the prefix, so the two puts are sequenced
  _ (put m 1) _ (put m 118) _ (flush m)     ; C-a v: split beside
@@ -192,7 +186,7 @@
     (sub? outb "\e[1;40H" 0)              ; the bar's column, 39 zero-based
     (sub? outb limn-down 0)                   ; ... drawn with the box glyph
     (sub? outb "\e[2;41H" 0))             ; the new pane's second row, past the bar
- _ (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))
+ _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (close m))
 
 (test_fin ())

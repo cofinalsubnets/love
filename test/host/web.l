@@ -37,16 +37,16 @@
    _ (spit "/x.l" "; a comment\n(: x 1)\n")
    _ (spit "/d.md" "# a head\n\nsome *prose*.\n")
    _ (spit "/plain.txt" "not mine\n")
-   box (tablet 0)
-   ; the maker takes the request HEAD as well as the path: a browser navigating to a
+   box {}
+   ; the maker takes the request head as well as the path: a browser navigating to a
    ; .l wants the painted page, a fetch() wants the source. an arity short of that does
-   ; not fail -- it answers a PARTIAL, which is not two?, so every claim reads as refused.
+   ; not fail -- it answers a partial, which is not two?, so every claim reads as refused.
    nav "GET / HTTP/1.1\r\nHost: x\r\nsec-fetch-dest: document\r\n\r\n"
    fet "GET / HTTP/1.1\r\nHost: x\r\nsec-fetch-dest: empty\r\n\r\n"
    (mk p)    (sv-make dir box p nav)
    (fetch p) (sv-make dir box p fet)
-   (sub? s t) (: n (tally s) m (tally t)
-                 ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
+   (sub? s t) (: n #s m #t
+                 ((: (g i) ((i + m) <= n ? ((snip s i (i + m)) = t ? 1 (g (i + 1))) 0)) 0))
 
    ; --- the three it answers for ----------------------------------------------
    _ (: r (mk "/x.l")
@@ -118,7 +118,7 @@
         0)
    0)
 
-(: _ (test_fin ())
-   _ (puts "lib/serve: ok -- the maker (painted .l, its header, a rendered .md, the css, and ())
-")
-   0)
+(test_fin (),
+ puts "lib/serve: ok -- the maker (painted .l, its header, a rendered .md, the css, and ())
+",
+ 0)

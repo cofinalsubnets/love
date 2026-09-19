@@ -20,7 +20,7 @@
  (elem 'md->ht (keys (cite 'lapiz)))        ; keys introspects the layer
  ("<h1>hi</h1>" = ((cite 'lapiz 'md->ht) "# hi"))   ; the opaque accessor reaches a face
  (lit? (cite 'lapiz))                         ; presence: the accessor is a closure
- (! (cite 'lapis)))                           ; a missing module answers ()
+ !(cite 'lapis))                           ; a missing module answers ()
 
 ; --- the corpus: every block, every span, and the edges around them ------------
 (: corpus
@@ -83,7 +83,7 @@ the [end](e)."]
    (hrm s) (htshow (htread s))                 ; ..and the html one
    ; the 0 nil-tail fossil would fail law 1 on nothing but the terminator, and
    ; `show` prints the two alike -- so probe the tail itself, everywhere in the AST.
-   (t0? x) (? (! (two? x)) (0 = x) (|| (t0? <x) (t0? >x)))
+   (t0? x) (? !(two? x) (0 = x) (t0? <x || t0? >x))
    _ (map (\ s
       (: d (mdread s)  m (nrm s)  h (md->ht s)
          (test
@@ -93,8 +93,8 @@ the [end](e)."]
             (m = (nrm m))                      ; ..and a normalizer is idempotent
             (h = (md->ht (ht->md h)))
             (h = (hrm h))
-            (! (t0? d))                        ; no 0 tail anywhere in the middle
-            (! (t0? (htread h)))))) corpus)
+            !(t0? d)                        ; no 0 tail anywhere in the middle
+            !(t0? (htread h))))) corpus)
 
  ; --- the shapes, spelled out: the middle is plain love data -------------------
  _ (test
@@ -193,7 +193,7 @@ some literal
 ```"]
     _ (map (\ s (: d (mdread s)
                    (test (d = (rfread (rfshow d)))        ; law 1, the roff surface
-                           (! (t0? (rfread (rfshow d))))))) rfcorpus)
+                           !(t0? (rfread (rfshow d)))))) rfcorpus)
 
     ; ..and outside the domain rfshow stays total while rfread normalizes. each loss is
     ; pinned here, so it is a stated property of the surface and not a surprise.
@@ -235,7 +235,7 @@ some literal
                         (0 < tally d)                    ; it parsed
                         (d = (mdread (mdshow d)))        ; law 1 on real markdown
                         (d = (htread (htshow d)))
-                        (! (t0? d)))))
+                        !(t0? d))))
              ["README.md" "doc/love.md" "doc/cook.md"])
       ; ..and the roff law only on the man pages: readme.md is deliberately outside the
       ; roff domain (deep headings, fence languages, links, rules), which is the domain
@@ -247,13 +247,13 @@ some literal
       ; generated page loses nothing (verified against groff by hand, byte-identical
       ; to the hand-written pages these replaced).
       _ (map (\ f (: d (mdread (slurpf f))
-                     (test ('meta = (cap (cap d)))    ; a .th, and it leads
-                             (! (elem 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
+                     (test ('meta = <<d)    ; a .th, and it leads
+                             !(elem 'rule (map cap d))))) ["doc/love.md" "doc/cook.md"])
       0)
 
  ; --- the html surface outside its own output ---------------------------------
  ; law 1 says htread reads what htshow writes. what `html2text` needs is the other half:
- ; that it also reads a page NOBODY wrote with htshow -- attributes, containers, a head,
+ ; that it also reads a page nobody wrote with htshow -- attributes, containers, a head,
  ; entities, and tags this middle has no node for. none of that is law 1 and none of it can
  ; be, so it is stated here as what the scrub promises.
  _ (test
@@ -263,7 +263,7 @@ some literal
     ((htread "<head><title>t</title></head><p>hi</p>") = '((para ((text "hi")))))
     ((htread "<script>var x = '<p>no</p>';</script><p>yes</p>") = '((para ((text "yes")))))
     ((htread "<!-- <p>no</p> --><p>yes</p>") = '((para ((text "yes")))))
-    ; a container is UNWRAPPED -- what it held is still there, one level out
+    ; a container is unwrapped -- what it held is still there, one level out
     ((htread "<div class=\"a\"><p>hi</p></div>") = '((para ((text "hi")))))
     ((htread "<div><div><p>hi</p></div></div>") = '((para ((text "hi")))))
     ; ..and a nested kill does not end its parent early
@@ -289,14 +289,13 @@ some literal
 
  ; --- the terminal surface: the circle the man pages travel ---------------------
  ; the build writes doc/*.md, shows it as roff, ships that, and `kore man` reads it back.
- ; so the property that matters is the round trip through the SHIPPED form: every heading
+ ; so the property that matters is the round trip through the shipped form: every heading
  ; the markdown has is still a heading after roff and the tty shower, at the column the
  ; shower puts one. it is not law 1 -- a terminal keeps nothing and there is no ttread --
  ; which is why 'tty is no row in `surfaces`: a row owes law 1 and this cannot pay it.
  _ (: (slurpf f) (: q (open f "r") (slurp q))
       ; an inl down to its text -- lapiz keeps its own `plain` off the export list
-      (flat l) (? (one? l) ""
-                  (: x <l
+      (flat l) (one? l ? "" (: x <l
                      ((<x @ 'text <>x 'code <>x 'strong (flat <>x) 'em (flat <>x)
                              'link (flat <>x) "") + flat >l)))
       ; the line a heading should have become: a .SH flush left, a .SS indented three
@@ -305,7 +304,7 @@ some literal
                                (i + 1 < #s && s i = 27 && s (i + 1) = 91)
                                 ((: (h k) (? (#s <= k) (slurp o) (s k = 109) (g (k + 1) o)
                                              (h (k + 1)))) (i + 2))
-                               (: _ (put o (s i)) (g (i + 1) o)))) 0 (jug 0))
+                               (put o (s i), g (i + 1) o))) 0 (jug 0))
       (lines s) (: (g i st a) (? (#s <= i) (rev a)
                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i . a))
                                  (g (i + 1) st a))
@@ -351,7 +350,7 @@ a display
       ; the two ways a page's own furniture leaks into it. a .de body runs to a lone `..`
       ; and to nothing else -- an indented request inside one names no macro, and ending
       ; the body there spills the rest of the definition, terminator included. and `.if n`
-      ; is THIS device's branch, so its text is the page's; `.if t` belongs to the other one.
+      ; is this device's branch, so its text is the page's; `.if t` belongs to the other one.
       _ (: d (rfread ".TH \"T\" \"1\" \"\" \"s\" \"m\"
 .de Q
 .ie \\n(.g \\(lq\\\\$1\\(rq
@@ -366,7 +365,7 @@ a display
 t \\- a thing
 ")
            ls (lines (flush (ttyshow d 40)))
-           (test (! (elem "     .." ls)) (! (elem "     .. .." ls))
+           (test !(elem "     .." ls) !(elem "     .. .." ls)
                    (elem "     kept by nroff t - a thing" ls)))
       0)
 

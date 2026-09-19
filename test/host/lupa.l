@@ -5,15 +5,13 @@
 (borrow 'lupa)
 
 (: (has? h n) (0 <= findsub h n)
-   ;; the frame less its escapes: a CSI ends at its final byte, any of @ through ~
-   (plain s) ((: (g i acc esc) (? (i < #s)
-                                  (: c (s i)
+   ;; the frame less its escapes: a csi ends at its final byte, any of @ through ~
+   (plain s) ((: (g i acc esc) (i < #s ? (: c (s i)
                                      (? esc (g (i + 1) acc (? (c = 91) 1 (64 <= c <= 126) 0 1))
                                         (c = 27) (g (i + 1) acc 1)
-                                        (g (i + 1) (acc + string c) 0)))
-                                  acc)) 0 "" 0)
+                                        (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)
    (keys! d s) (each (map (i \ s i) ^#s) (c \ lupa-key d c))
-   (cmd! d s) (: _ (lupa-key d 58) _ (keys! d s) (lupa-key d 13))
+   (cmd! d s) (lupa-key d 58, keys! d s, lupa-key d 13)
    (frame d) (plain (lupa-frame d 80 12))
    ;; -- a raw program: push rbp; mov rbp, rsp; mov eax, 42; pop rbp; ret; and a jump back --
    prog (string '(85 72 137 229 184 42 0 0 0 93 195 235 244))
@@ -33,8 +31,8 @@
              (has? f "mov\t$42, %eax") (has? f "pop\t%rbp") (has? f "ret") (has? f "jmp\t0x1"))   ; eb f4: back 12 from 13
    _ (keys! d "jj")   _ (test (d 'cur = 4))         ; past push (1) and mov (3)
    _ (keys! d "k")    _ (test (d 'cur = 1))
-   ;; a cursor that is no instruction boundary: the walk from the anchor steps PAST it and
-   ;; never lands on it, so k takes the shortest real decode ENDING there instead -- 00 00
+   ;; a cursor that is no instruction boundary: the walk from the anchor steps past it and
+   ;; never lands on it, so k takes the shortest real decode ending there instead -- 00 00
    ;; at 6 is two bytes and ends at 8. where nothing decodes to end there, one byte back.
    _ (cmd! d "g 8")   _ (test (d 'cur = 8))
    _ (keys! d "k")    _ (test (d 'cur = 6))

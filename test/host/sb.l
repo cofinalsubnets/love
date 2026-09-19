@@ -11,11 +11,11 @@
 
 (: _ (mkdir "out/.sbtest" 493)
    cd (chdir "out/.sbtest")
-   _ (? !cd () (: _ (puts "sbtest: chdir failed\n") (quit 1)))
+   _ (!cd ? () (puts "sbtest: chdir failed\n", quit 1))
    ; the same-text equality for list-shaped store values
    (seq a b) (show a = show b)
    ; the tree: two files and two ignored dirs -- junk/ by the file below, out/ by the
-   ; built-in, which is a DIRECTORY rule (a file by that name would stay)
+   ; built-in, which is a directory rule (a file by that name would stay)
    _ (mkdir "sub" 493)
    _ (lay "a.txt" "one\ntwo\nthree\n")
    _ (lay "sub/b.txt" "hello\n")
@@ -51,7 +51,7 @@
  (seq (fld f2 'deps) [p1])                          ; the context reads p1's writes
  (3 = tally (fld f2 'hunks))
  (seq (tips ()) [p2])                               ; p1 is no longer maximal
- !(elem "sub/b.txt" (: (go m acc) (? (two? m) (go >m (<<m . acc)) acc)
+ !(elem "sub/b.txt" (: (go m acc) (two? m ? (go >m (<<m . acc)) acc)
                           (go (snap ()) ())))       ; the death left the snap
  (0 = sb-diff ()))                                   ; recorded = working again
 
@@ -78,14 +78,14 @@
    _ (mk ())
    pp (sb-record "peer work")
    _ (chdir "..")
-   nbefore (tally (readdir ".sb/patch"))
+   nbefore #(readdir ".sb/patch")
    pdirty (dirty ())                                   ; the main tree is clean pre-sync
    got (sb-sync "pr")
-   nafter (tally (readdir ".sb/patch")))
+   nafter #(readdir ".sb/patch"))
 
 (test
  (0 = pdirty)                                             ; clean, so sync will materialize
- (< nbefore nafter)                                       ; the peer's patch arrived
+ (nbefore < nafter)                                       ; the peer's patch arrived
  (two? (patch pp))                                     ; ...as a real, addressable patch object
  (elem pp (tips ()))                                ; and it opens a fresh tip
  (3 = tally (tips ()))                                 ; p2 + p3 + pp, all maximal
@@ -203,10 +203,10 @@
    chere (look "c-only")                              ; ...and c's walked out, unattended
    _ (lay "scratch" "unrecorded\n")                   ; now dirty the peer
    _ (chdir "../c")
-   nb4 (tally (readdir ".sb/patch"))
+   nb4 #(readdir ".sb/patch")
    _ (lay "late" "late work\n") _ (sb-record "c: late")
    goty (sb-sync "../d")
-   dstore (tally (readdir "../d/.sb/patch"))
+   dstore #(readdir "../d/.sb/patch")
    _ (chdir "../.."))
 
 (test
@@ -227,7 +227,7 @@
    _ (lay "a" "v1\n") pa (sb-record "a born")
    _ (lay "a" "v2\n") pb (sb-record "a edited")
    ; "b" on purpose: a built-in ignore names it, and those are directory-only, so a
-   ; FILE by that name is an ordinary file. this line is what says so.
+   ; file by that name is an ordinary file. this line is what says so.
    _ (lay "b" "x\n")  pc (sb-record "b born -- independent")
    n1 (sb-apply [pa])                                  ; checkout: the tree as OF pa
    a1 (<>(look "a")) b1 (look "b")
@@ -237,7 +237,7 @@
    n4 (sb-apply ())                                    ; no id: the way back
    a4 (<>(look "a"))
    bad (sb-apply '("deadbeef"))                        ; a prefix that resolves to nothing
-   nstore (tally (readdir ".sb/patch"))                ; read here -- the assert runs after the chdir back
+   nstore #(readdir ".sb/patch")                ; read here -- the assert runs after the chdir back
    clean (dirty ())
    _ (chdir "../.."))
 
@@ -260,10 +260,10 @@
    _ (lay "f" "one\ntwo\nthree\n") _ (sb-record "base")
    _ (lay "f" "one\nBAD\nthree\n") pbad (sb-record "the bad edit, line 2")
    _ (lay "f" "one\nBAD\nTHREE!\n") _ (sb-record "later work, line 3")
-   n0 (tally (readdir ".sb/patch"))
+   n0 #(readdir ".sb/patch")
    u1 (sb-undo [pbad])
    ftext (<>(look "f"))
-   n1 (tally (readdir ".sb/patch"))
+   n1 #(readdir ".sb/patch")
    clean (dirty ())
    _ (lay "g" "born\n") pg (sb-record "g born")       ; a birth undone is a death
    u2 (sb-undo [pg])
@@ -271,9 +271,9 @@
    _ (lay "h" "a\nb\n") _ (sb-record "h base")        ; the overlap: same line, later patch
    _ (lay "h" "a\nB2\n") pq (sb-record "h -> B2")
    _ (lay "h" "a\nB3\n") _ (sb-record "h -> B3")
-   n2 (tally (readdir ".sb/patch"))
+   n2 #(readdir ".sb/patch")
    u3 (sb-undo [pq])
-   n3 (tally (readdir ".sb/patch"))
+   n3 #(readdir ".sb/patch")
    _ (lay "h" "a\nB3\n")                                ; settle the markers by hand
    _ (chdir "../.."))
 
@@ -295,7 +295,7 @@
 (: _ (mkdir "mrg/k" 493) _ (chdir "mrg/k") _ (mk ())
    _ (lay "a" "1\n") _ (sb-record "a born")
    _ (lay "b" "2\n") _ (sb-record "b born -- independent, so BOTH stay tips")
-   ntip (tally (tips ()))
+   ntip #(tips ())
    b1 (sb-bank '("v1"))
    b2 (sb-bank '("v1"))                                ; the same head again: idempotent
    r1 (refof "v1")
@@ -350,4 +350,4 @@
  (show lkept = show lrel)                                ; each side kept its own -- no silent loss
  (show dkept = show drel))
 
-(: _ (puts "sb: ok") _ (putc 10) 0)
+(puts "sb: ok", putc 10, 0)

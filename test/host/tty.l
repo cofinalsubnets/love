@@ -1,7 +1,7 @@
 ; --- test/host/tty.l: the tty app runners, on a real terminal ---
 ; the engines gate headless -- test/host/rove.l the climb, test/host/story.l the fiction,
 ; apps/ink.l's shimmer into a jug -- and each of those files says the same thing about
-; what it leaves out: the RUNNER, the loop that asks the terminal its size, puts the
+; what it leaves out: the runner, the loop that asks the terminal its size, puts the
 ; app on the alternate screen, reads keys and steps ashore. that lane wants a
 ; terminal, so it gets one. `tether` spawns the verb on a pty, we type at the master
 ; and scribe what came back onto a quay screen -- the same struct cb the app would be
@@ -13,31 +13,30 @@
 ; not in the test/*.l corpus: tether and the screen nifs live in inle/*.c, which love0 does
 ; not link.
 ;
-; TWO RULES, both learned here:
+; two rules, both learned here:
 ;
-; THE SIZE IS SET FROM INSIDE THE CHILD. a fresh pty is 0x0 and the parent's
-; settty races the child's first `tty` -- the climb reads its size ONCE and falls
+; the size is set from inside the child. a fresh pty is 0x0 and the parent's
+; settty races the child's first `tty` -- the climb reads its size once and falls
 ; back to 22x80, so a lost race is a quiet 22-row deck and a gate that reddens one run
 ; in fifty. `stty` on the child's own tty before the exec cannot race.
 ;
-; NO ESCAPE KEY, EVER. the stage tells a lone ESC from a sequence by a short rest, so
+; no escape key, ever. the stage tells a lone ESC from a sequence by a short rest, so
 ; an ESC with a key hard behind it reads as alt-<key> -- and alt-q is not quit. that
 ; run never lands and `slurp` waits on a child that is still playing. a hung gate is
 ; worse than a red one, so every sequence here ends in a quit the app cannot misread.
 (: (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
-   (has? h n) (: k (tally n) m (tally h)
+   (has? h n) (: k #n m #h
                  (go i) (? ((m - k) < i) 0 (n = snip h i (i + k)) 1 (go (i + 1)))
                  (go 0))
    ; the wire read until a phrase has passed, as the text so far: chars kept newest
    ; first and the phrase matched at the head, so a frame costs the frame, not its square
    (wire p n) (: rn (rev (map n ^#n))
-                 (pre? a b) (? a (? b (? (<a = <b) (pre? >a >b) 0) 0) 1)
+                 (pre? a b) (a ? (b ? (<a = <b ? (pre? >a >b) 0) 0) 1)
                  (go acc) (: ch (see p)
-                             (? (ch = -1) acc
-                                (: acc2 (ch . acc) (? (pre? rn acc2) acc2 (go acc2)))))
+                             (ch = -1 ? acc (: acc2 (ch . acc) (pre? rn acc2 ? acc2 (go acc2)))))
                  (string (rev (go ()))))
-   (blank? t) (foldl (\ a ch (&& a (ch = 32))) 1 t)
-   (count h n) (: k (tally n) m (tally h)
+   (blank? t) (foldl (\ a ch (a && (ch = 32))) 1 t)
+   (count h n) (: k #n m #h
                   (go i c) (? ((m - k) < i) c
                               (n = snip h i (i + k)) (go (i + k) (c + 1))
                               (go (i + 1) c))
@@ -45,16 +44,16 @@
    ; the stream up to the last alt-screen leave. quay honours 1049, so scribing a
    ; whole run would lay the empty primary screen back over the app's last frame --
    ; what is wanted is the grid as the app left it, not as the terminal got it back.
-   (held h) (: n (tally h) k 8
+   (held h) (: n #h k 8
                (go i best) (? (n < (i + k)) best
                             ("\e[?1049l" = snip h i (i + k)) (go (i + 1) i)
                             (go (i + 1) best))
-               (: b (go 0 -1) (? (b < 0) h (snip h 0 b))))
+               (: b (go 0 -1) (b < 0 ? h (snip h 0 b))))
    (mkscr r c) (screen (cask (screen () r c)) r c)
-   (chat s i) (& 255 (glass s i))
-   (cbg s i) (& 255 (>> (glass s i) 16))
+   (chat s i) (255 & glass s i)
+   (cbg s i) (255 & (glass s i >> 16))
    (rowtx s r) (: c (gaze s 2)
-                  (foldl (\ a i (+ a (string (: ch (chat s (+ (* r c) i)) (? (= 0 ch) 32 ch)))))
+                  (foldl (\ a i (a + string (: ch (chat s ((r * c) + i)) (0 = ch ? 32 ch))))
                          "" (jot c)))
    ; the climb's floor is seeded off the clock, so where @ stands is nobody's law --
    ; that it stands somewhere is
@@ -76,7 +75,7 @@
        [txt s])
 
 ; --- tower: the climb takes the terminal's size, and a key is a turn ---
-; the bar is the LAST row, which is the geometry law -- but only away from 80x24. a
+; the bar is the last row, which is the geometry law -- but only away from 80x24. a
 ; sizeless climb falls back to a 22-row floor, which with the note and the bar is 24
 ; lines exactly, so the same grid comes out whether the tty was read or missed and
 ; the law at 24 rows is vacuous. 20x70 is nobody's fallback.
@@ -97,14 +96,14 @@
     ("the garden" = snip (rowtx <>b 19) 0 10)
     (at <>b))
 
-; --- ..and an arrow's three bytes are ONE key. read as a bare ESC they would be quit
+; --- ..and an arrow's three bytes are one key. read as a bare ESC they would be quit
 ;     (the climb's own second quit key), the h behind them unread and the note still on
-;     row 0 -- so a spent note is exactly the law that the CSI was decoded
+;     row 0 -- so a spent note is exactly the law that the csi was decoded
  c (run "out/love tower" "\e[Chq" 20 70)
  _ (test (blank? (rowtx <>c 0)) (has? <c "you leave the tower"))
 
 ; --- ink: the shimmer paints while no key waits ---
-; which is why its key cannot be typed up front -- ink asks `cue?` BEFORE its first
+; which is why its key cannot be typed up front -- ink asks `cue?` before its first
 ; frame, so a waiting key ends it having drawn nothing. read until a painted cell is
 ; on the wire, then type: the app says when, and no timer is involved.
  t (spawn "out/love ink" 12 40)
@@ -118,7 +117,7 @@
     (has? itx "\e[?1049h") (has? itx "\e[?25l")              ; alt screen, cursor away
     (has? itx "\e[?1049l") (has? itx "\e[?25h")              ; ..and both put back
     ; the ocean is one SGR background per cell, so a frame is exactly r*c of them --
-    ; and r is the size it was told LESS the last row, which ink spares so that the
+    ; and r is the size it was told less the last row, which ink spares so that the
     ; terminal never scrolls. 11*40, however many frames landed. the grid cannot say
     ; this: a sizeless ink paints 23x80, which at 40 columns wraps two screen rows to
     ; the ink row and leaves the same last row dry.
@@ -137,7 +136,7 @@
  dr (: t (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; out/love tower; "
                              + "stty -icanon min 0 time 3; cat")])
        m >t
-       ; the keys wait for raw mode: typed before it, the tty ECHOES them back and the
+       ; the keys wait for raw mode: typed before it, the tty echoes them back and the
        ; leftovers cannot be told from the echo of the ones that were read
        _ (rest 500)
        _ (say m "zqzzzz")
@@ -146,14 +145,14 @@
          !(has? dr "zzzz"))                                 ; ..and ate what was behind it
 
 ; --- slop takes what the tower hands it: a token, a purse, and a sign saying so ---
-; the walk holds the sign until a key comes -- but it will not HEAR one for half a
+; the walk holds the sign until a key comes -- but it will not hear one for half a
 ; second, because the keys behind the circle's last ring are sitting in the queue when
 ; the box goes up and are not an answer to it. so the keys cannot be typed up front
-; here: wait for the box on the wire, type one INTO the deaf half second, and only
+; here: wait for the box on the wire, type one into the deaf half second, and only
 ; then the two that take it down and leave.
 ;
 ; and the frame count is what convicts it: every frame is one cursor-home. eaten, the
-; box is ONE frame and the key that ends it buys one more -- the screen stood still for
+; box is one frame and the key that ends it buys one more -- the screen stood still for
 ; the whole of the wait. heard, the walk is swimming through all of it, and the frames
 ; it lays down while nobody is reading the pty fill the thing and stand at five.
  sgt (spawn "out/love slop phone 38" 14 64)
@@ -201,7 +200,7 @@
                                                             ; line ends, so a prompt after it
                                                             ; starts a row of its own
 
-; --- the story: a level file is a fixed map, so this one place IS a law ---
+; --- the story: a level file is a fixed map, so this one place is a law ---
  d (run "out/love story" ":q\r" 14 60)
  _ (test
     (has? <d "the lighthouse")                               ; the status line names it

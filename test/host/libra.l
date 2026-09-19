@@ -13,14 +13,14 @@
 ; "no config anywhere", which is what every balance test wants. never (salt
 ; 'libra) in a test -- that would read the machine's own ~/.love/etc/libra.l and
 ; make the gate depend on who is running it.
-(: lt-none (tablet 0)
-   (lt-conf prs) (foldl (\ t p (: _ (pin t <p >p) t)) (tablet 0) prs))
+(: lt-none {}
+   (lt-conf prs) (foldl (\ t p (pin t <p >p, t)) {} prs))
 
 ; the check is the scan itself, laid out for a terminal: one warning here is one
 ; line there, and the config rides in as an argument rather than being read
 (test
- (1 = (tally (lint-scan "(: a 1\n")))
- (1 = (tally (lint-of "(: a 1\n" lt-none)))
+ (1 = #(lint-scan "(: a 1\n"))
+ (1 = #(lint-of "(: a 1\n" lt-none))
  !(lint-scan "(: a 1)\n") !(lint-of "(: a 1)\n" lt-none))
 
 ; --- the config rules -----------------------------------------------------
@@ -38,17 +38,17 @@
 
 (test
  !(lint-scan "(go)")                        ; off by default: the rule is an opinion
- (1 = (tally (lint-of "(go)" lt-sing)))
+ (1 = #(lint-of "(go)" lt-sing))
  ('(singleton) = (lt-rule (lint-of "(go)" lt-sing)))
  ('(balance) = (lt-rule (lint-scan "(: a 1\n"))))
 
 ; a form of one element is that element, so the parens do nothing -- and a
 ; nullary call never fires. the position points at the opener.
 (test
- (: w <(lint-of "(: a 1\n   (go))" lt-sing) (&& (2 = <w) (4 = <>w)))
- (1 = (tally (lint-of "(0)" lt-sing)))         ; a number is no different
- (1 = (tally (lint-of "((f x))" lt-sing)))     ; nor is an inner form
- (1 = (tally (lint-of "foo(x)" lt-sing))))     ; foo(x) is two datums, so (x) is a form
+ (: w <(lint-of "(: a 1\n   (go))" lt-sing) ((2 = <w) && (4 = <>w)))
+ (1 = #(lint-of "(0)" lt-sing))         ; a number is no different
+ (1 = #(lint-of "((f x))" lt-sing))     ; nor is an inner form
+ (1 = #(lint-of "foo(x)" lt-sing)))     ; foo(x) is two datums, so (x) is a form
 
 ; the three exemptions, each load-bearing.
 (test
@@ -57,7 +57,7 @@
  !(lint-of "{x}" lt-sing)
  !(lint-of "'(a (b))" lt-sing)
  ; ...but a bracket list evaluates its elements, so a form inside one is a form
- (1 = (tally (lint-of "[a (b)]" lt-sing)))
+ (1 = #(lint-of "[a (b)]" lt-sing))
  ; 2. glued to an operator run: merged, two runs lex as one, and that is sometimes
  ; the same value and sometimes a different operator -- <(<l) survives (<< is the
  ; same caap) but <(= x) is (< (= x)) while <=x is the single operator <=. the scan
@@ -70,7 +70,7 @@
  !(lint-of "(:)" lt-sing) !(lint-of "(?)" lt-sing) !(lint-of "(\\)" lt-sing)
  ; and that is narrower than "starts with punctuation" on purpose -- (<>b) and
  ; <>b are one value, so those parens really are droppable
- (1 = (tally (lint-of "(<>b)" lt-sing))))
+ (1 = #(lint-of "(<>b)" lt-sing)))
 
 ; the deprecated roster: a bare name, or `(name "hint"). comments and strings are
 ; not code, and a quoted 'foo names foo just as much as bare foo does.
@@ -80,11 +80,11 @@
  ("deprecated worse-thing -- use better-thing"
   = <(lt-msg (lint-of "(f worse-thing)" lt-dep)))
  ('(deprecated) = (lt-rule (lint-of "(f old-thing)" lt-dep)))
- (1 = (tally (lint-of "(f 'old-thing)" lt-dep)))                ; 'foo is a mention
+ (1 = #(lint-of "(f 'old-thing)" lt-dep))                ; 'foo is a mention
  !(lint-of "; old-thing" lt-dep)                                ; a comment is not code
  !(lint-of "(f \"old-thing\")" lt-dep)                          ; nor is a string
  !(lint-of "(f old-thing-x)" lt-dep)                            ; a longer name is another name
- (2 = (tally (lint-of "(old-thing worse-thing)" lt-dep))))
+ (2 = #(lint-of "(old-thing worse-thing)" lt-dep)))
 
 ; which warnings fail splits with the rule, and nothing moves the split: an
 ; imbalance always does, because the file does not read and that is not a matter
@@ -172,7 +172,7 @@
 ; doc/*.md at all, which is the gap the doc verb exists to close.)
 (:
    (alnum? c) (((48 <= c) && (c <= 57)) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
-   (bare s) ((: (g i acc) (? (i < tally s) (g (i + 1) (? (alnum? (s i)) (acc + string (s i)) acc)) acc))
+   (bare s) ((: (g i acc) (i < tally s ? (g (i + 1) (alnum? (s i) ? (acc + string (s i)) acc)) acc))
              0 "")
    (itext l) (foldl (+) "" (map (\ x (: t <x
                                         (? (t = 'text) <>x
@@ -189,7 +189,7 @@
                    (t = 'deflist) (foldl (+) "" (map (\ it (itext <it + itext <>it)) <>b))
                    ""))
    (dtext d) (foldl (+) "" (map btext d))
-   (slurpf f) (: q (open f "r") (? (hot? q) (slurp q) ""))
+   (slurpf f) (: q (open f "r") (hot? q ? (slurp q) ""))
    _ (map (\ f (: src (slurpf f)
                   head (foldl (+) "" (ldoc-head src))
                   d (mdread (ldoc-md src))
@@ -234,7 +234,7 @@
 ; and the whole of it through the lens: a real header comes out as a document with
 ; a heading its sections hang off, which is what papel reads a page's title,
 ; anchors and contents nav from.
-(: (rd f) (: q (open f "r") (? (hot? q) (slurp q) ""))
+(: (rd f) (: q (open f "r") (hot? q ? (slurp q) ""))
    d (mdread ("# apps/lapiz.l\n\n" + ldoc-md (rd "apps/lapiz.l")))
    heads (filter (\ b (<b = 'head)) d)
    _ (test

@@ -7,7 +7,7 @@
 ; not in the test/*.l corpus -- tether and tty both live in inle/posix.c, which love0
 ; does not link. Run it (the test macro comes from test/00-init.l):
 ;
-;   LOVEBIN=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"
+;   lovebin=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"
 ;
 ; the pty starts 0x0 until settty lands and the child may read its size before we
 ; push one, so nothing here asks about geometry -- only about what any window
@@ -15,12 +15,12 @@
 
 (: love (getenv "LOVEBIN")
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
-   ; the keys go in ONE AT A TIME, a fifth of a second apart. typed as one word they
+   ; the keys go in one at a time, a fifth of a second apart. typed as one word they
    ; arrive in a single read, and the q at the end of it would be found in the same
    ; buffer as the repaints ahead of it and win -- correctly, and with nothing left
    ; to count. a reader types slower than a pipe.
-   (type m s) (: n (tally s)
-                 (go i) (? (n <= i) 0 (do (say m (string (s i))) (rest 200) (go (i + 1))))
+   (type m s) (: n #s
+                 (go i) (n <= i ? 0 (do (say m (string (s i))) (rest 200) (go (i + 1))))
                  (go 0))
    ; spawn `love kore top ARGS..` on a pty, size it, type keys, answer what it drew.
    ; every key list ends in q: a run that failed to quit would park this harness on
@@ -34,11 +34,11 @@
        txt (slurp m)
        st (waitfor <r)
        [txt <st])
-   (has? t s) (: n (tally t) k (tally s)
-                 (go i) (? ((n - k) < i) () (= (snip t i (i + k)) s) 1 (go (i + 1)))
+   (has? t s) (: n #t k #s
+                 (go i) (? ((n - k) < i) () (snip t i (i + k) = s) 1 (go (i + 1)))
                  (go 0))
-   (cnt t s) (: n (tally t) k (tally s)
-                (go i a) (? ((n - k) < i) a (go (i + 1) (? (= (snip t i (i + k)) s) (a + 1) a)))
+   (cnt t s) (: n #t k #s
+                (go i a) ((n - k) < i ? a (go (i + 1) (snip t i (i + k) = s ? (a + 1) a)))
                 (go 0 0))
 
    ; --- q leaves at once, and what it leaves behind is a screen put back ---

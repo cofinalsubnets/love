@@ -10,9 +10,7 @@
 
 (borrow 'slop)   ; the artifact's module, warm from the tree
 
-(: (find h n i) (? (i + tally n < 1 + tally h)
-                  (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))
-                  0)
+(: (find h n i) (i + tally n < 1 + tally h ? (n = snip h i (i + tally n) ? 1 (find h n (i + 1))) 0)
    (has? h n) (find h n 0)
    ; press k until the game says otherwise; answers the presses spent
    (drive g p) (: (go n) (? (g 'over) n (p g) n (slop-key g 107, go (n + 1))) (go 0))
@@ -20,7 +18,7 @@
    ; the pens tell the three grounds apart: grass below 94, road within, sand above
    (brown? c) (93 < <>c < 138)
    (sandy? c) (138 < <>c)
-   (road-width g w) (tally (filter brown? (map (x \ slop-turf g w x) ^(g 'c)))))
+   (road-width g w) #(filter brown? (map (x \ slop-turf g w x) ^(g 'c))))
 
 ; --- the first frame: a field, and nothing else on it ---
 (: g (slop-new 23 80 (wheel 11))
@@ -55,7 +53,7 @@
    steps (map (x \ |((slop-shore g (x + 1)) - slop-shore g x)) xs)
    shores (map (x \ slop-shore g x) ^80)
    srt (sort shores)
-   (last l) (cap (rev l))
+   (last l) <(rev l)
  (test
   (all (s \ (s <= 1)) steps)                     ; never a two-row drop
   (0 < tally (filter (s \ (s = 1)) steps))       ; but it does move
@@ -89,18 +87,16 @@
 ; the gap is read off the shore at the road's own column, so setting it means finding
 ; the world row that has it -- the road crosses a wavy line and a gap can be skipped
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (? (w < -70) ()
-                            (: q (w - slop-shore g (slop-road g w))
-                             (? (q = gp) w (go (w - 1)))))
+   (row-at gp) (: (go w) (w < -70 ? () (: q (w - slop-shore g (slop-road g w))
+                             (q = gp ? w (go (w - 1)))))
                   (go 22))
    ; a world row is a charm that goes negative, so a miss is asked with charm?, never
    ; with ? -- truth here is the sign, and every row past the start would read as a miss
-   (at gp) (: w (row-at gp) (? (charm? w) (: _ (pin g 'w w) (slop-cost g)) 'none))
-   (rate-at gp) (: w (row-at gp) (? (charm? w) (: _ (pin g 'w w) (slop-rate g)) 'none))
-   ladder (: (go w acc) (? (w < -13) (rev acc)
-                           (: _ (pin g 'w w) (go (w - 1) (slop-cost g . acc))))
+   (at gp) (: w (row-at gp) (charm? w ? (pin g 'w w, slop-cost g) 'none))
+   (rate-at gp) (: w (row-at gp) (charm? w ? (pin g 'w w, slop-rate g) 'none))
+   ladder (: (go w acc) (w < -13 ? (rev acc) (pin g 'w w, go (w - 1) (slop-cost g . acc)))
              (go 22 ()))
-   (rising? l) (l @- 1 (a . b . r) (? (b < a) 0 (rising? (b . r))))
+   (rising? l) (l @- 1 (a . b . r) (b < a ? 0 (rising? (b . r))))
  (test
   (20 = g 'drag)                                 ; the ladder's reach, about a screen
   (1 = at 66) (1 = at 20)                        ; beyond it, a square is a square
@@ -167,9 +163,7 @@
                   _ (slop-step h)
                   mine (((slop-sy h) = (y0 - 1)) && ((h 'wtop) = t0))
                   slop (((slop-sy h) = y0) && ((h 'wtop) = (t0 - 1)))
-                (? ((h 'w) = (w0 - 1))
-                   (? (mine || slop) ((gap0 - 2) <= (slop-gap h) <= gap0) 0)
-                   0))
+                ((h 'w) = (w0 - 1) ? (mine || slop ? ((gap0 - 2) <= (slop-gap h) <= gap0) 0) 0))
    (steps n ok) (? (g 'over) [n ok] (: k (lawful? g) (steps (n + 1) (ok && k))))
    r (steps 0 1)
  (test
@@ -188,9 +182,9 @@
                                  (any (x \ (w <= ((slop-shore h x) + slop-sand h x))) ^80))
                (wet-top? h) (: w (h 'wtop) (any (x \ slop-wet? h w x) ^80))
                (go n) (? (g 'over) [n (slop-sy g) (peep sand () -1) (peep shore () -1)]
-                         (: _ (seen? g sand sandy-top?)
-                            _ (seen? g shore wet-top?)
-                          (slop-key g 107, go (n + 1))))
+                         (seen? g sand sandy-top?,
+                          seen? g shore wet-top?,
+                          slop-key g 107, go (n + 1)))
                (go 0))
    runs (map (i \ run (wheel (300 + i))) ^12)
    (col j) (map (r \ r j) runs)
@@ -272,10 +266,10 @@
 (: g (slop-new 23 80 (wheel 11))
    f1 (slop-frame g)
    f2 (slop-frame g)
-   kept (tally (keys (g 'rows)))
+   kept #(keys (g 'rows))
    _ (drive g (h \ ((h 'wtop) < -67)))
    _ (slop-frame g)
-   cut (tally (filter (w \ (w <= (g 'wetto))) (keys (g 'rows))))
+   cut #(filter (w \ (w <= (g 'wetto))) (keys (g 'rows)))
  (test (f1 = f2) (0 < kept) (0 = cut)))
 
 ; --- the song: gwen's tidal line, note for note, and a tempo the walk drags on ---
@@ -294,41 +288,39 @@
  (test
   (76 = tally c0)                                ; 12 + 12 + 7 + 7, twice over
   (76 = tally c2)
-  ; cycle 0 drops its FIRST quarter five semitones -- that is chunk 4 (|- n 5)
+  ; cycle 0 drops its first quarter five semitones -- that is chunk 4 (|- n 5)
   ('(-1 23 2 23 6 23 11 23 14 23 18 23) = take 12 one)
   ; the second quarter is e major, pinkyup, untouched
   ('(4 28 8 28 11 28 16 28 20 28 23 28) = take 12 (drop 12 one))
   ; the third and fourth fall: d minor then d major
   ('(26 21 17 14 9 5 2) = take 7 (drop 24 one))
   ('(26 21 18 14 9 6 2) = take 7 (drop 31 one))
-  ; cycle 2 leaves the first two alone and drops the THIRD
+  ; cycle 2 leaves the first two alone and drops the third
   ('(4 28 7 28 11 28 16 28 19 28 23 28) = take 12 c2)
   ('(21 16 12 9 4 0 -3) = take 7 (drop 24 c2))
   ; a sine, and a note that rings a third of a second
-  ("sin" = peep (evv (cap (filter onset? (tune (qi 0) (qi 1))))) 's 'none)))
+  ("sin" = peep (evv <(filter onset? (tune (qi 0) (qi 1)))) 's 'none)))
 
 ; the tempo falls with the cost, but only to a third: a twentieth of a tempo is none
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (? (w < -70) ()
-                            (: q (w - slop-shore g (slop-road g w))
-                             (? (q = gp) w (go (w - 1)))))
+   (row-at gp) (: (go w) (w < -70 ? () (: q (w - slop-shore g (slop-road g w))
+                             (q = gp ? w (go (w - 1)))))
                   (go 22))
-   (sp gp) (: w (row-at gp) (? (charm? w) (: _ (pin g 'w w) (slop-song-speed g)) 'none))
+   (sp gp) (: w (row-at gp) (charm? w ? (pin g 'w w, slop-song-speed g) 'none))
  (test
   (1.0 = sp 66) (1.0 = sp 20)                    ; out in the field it runs at tempo
   (sp 1 < sp 10) (sp 10 < sp 20)                 ; and drags all the way in
   (0.3 <= sp 1 <= 0.4)))                         ; ..to a third of it, and no further
 
 ; and the waveform thickens with it: a clean sine at the start, a square at the shore,
-; and half way over at the knee. linear in the GAP either side of the knee, not in the
+; and half way over at the knee. linear in the gap either side of the knee, not in the
 ; cost -- the cost is a reciprocal, so a dial linear in it spends nineteen of the
 ; twenty-one squares reaching half way and does the rest inside the last one.
 (: g (slop-new 23 80 (wheel 11))
-   (row-at gp) (: (go w) (? (w < -70) ()
-                            (: q (w - slop-shore g (slop-road g w))
-                             (? (q = gp) w (go (w - 1)))))
+   (row-at gp) (: (go w) (w < -70 ? () (: q (w - slop-shore g (slop-road g w))
+                             (q = gp ? w (go (w - 1)))))
                   (go 22))
-   (ed gp) (: w (row-at gp) (? (charm? w) (: _ (pin g 'w w) (slop-song-edge g)) 'none))
+   (ed gp) (: w (row-at gp) (charm? w ? (pin g 'w w, slop-song-edge g) 'none))
  (test
   (0.0 = ed 66) (0.0 = ed 50)                    ; the whole first screen is a clean sine
   (0.0 = ed (g 'gmin))                           ; the ramp starts at the volume's floor
@@ -367,11 +359,10 @@
 ; the dip falls smoothly and never goes under the floor, and every point of the walk is
 ; between the floor and full
 (: g (slop-new 23 80 (wheel 11))
-   vs (: (go acc) (? (g 'over) (rev acc)
-                     (: _ (slop-key g 107) (go ((slop-song-vol g) . acc))))
+   vs (: (go acc) (g 'over ? (rev acc) (slop-key g 107, go ((slop-song-vol g) . acc)))
          (go ()))
-   (rising? l) (l @- 1 (a . b . r) (? (b < a) 0 (rising? (b . r))))
-   (falling? l) (l @- 1 (a . b . r) (? (a < b) 0 (falling? (b . r))))
+   (rising? l) (l @- 1 (a . b . r) (b < a ? 0 (rising? (b . r))))
+   (falling? l) (l @- 1 (a . b . r) (a < b ? 0 (falling? (b . r))))
  (test
   (all (v \ (0.06 <= v <= 1.0)) vs)              ; nothing under the floor, nothing over full
   (0 < tally (filter (v \ (v <= 0.07)) vs))      ; there is a quiet stretch
@@ -380,19 +371,19 @@
   (rising? (rev (take 20 (rev vs))))))         ; and only rises at the end
 
 ; the dial itself: play.l's i-sin at one end, its i-sqr at the other, and the triangle
-; between them -- in three STEPS, not a slide, because a crossfade builds both of its
+; between them -- in three steps, not a slide, because a crossfade builds both of its
 ; shapes and a voice is paid for by the operation (apps/rove/slop.l says the numbers). the
 ; three share a phase -- a square built on the half of the period has the sine's sign --
 ; so a step lands on the same side of zero as the one before it rather than against it,
 ; which is the law worth holding here whether they cross or jump.
 (: twopi 6.283185307179586
-   (w ph m) (slop-song-wave ph 1.0 m)            ; f of 1, so the phase IS the argument
+   (w ph m) (slop-song-wave ph 1.0 m)            ; f of 1, so the phase is the argument
    (near a b) (|(a - b) < 0.000001)
    phs [0.0 0.125 0.25 0.375 0.5 0.625 0.75 0.875]
  (test
   ; m 0 is i-sin, note for note; m 1 is i-sqr
   (all (p \ (near (w p 0.0) (sin (p * twopi)))) phs)
-  (all (p \ (near (w p 1.0) (? (p < 0.5) 1.0 -1.0))) phs)
+  (all (p \ (near (w p 1.0) (p < 0.5 ? 1.0 -1.0))) phs)
   ; they share a sign the whole way round, which is what lets the blend cross rather
   ; than cancel. to a tolerance: sin of pi is not zero, it is -1.2e-16, and the square
   ; has already flipped there
@@ -413,18 +404,18 @@
   ; and nothing anywhere on the dial leaves the rails
   (all (p \ (all (m \ (-1.0001 <= (w p m) <= 1.0001)) [0.0 0.25 0.5 0.75 1.0])) phs)))
 
-; the voices go out a port, so a jug plays the part of the card: real PCM, not silence
+; the voices go out a port, so a jug plays the part of the card: real pcm, not silence
 (: tune (slop-tune ())
    ; harp by VALUE, not spliced: the gate wants prel's rev above, and a borrow
    ; would hand it the pattern one
    qi (cite 'harp 'qi)  evv (cite 'harp 'evv)  onset? (cite 'harp 'onset?)
    j (jug 0)
    s (slop-song-new tune j)
-   (feed n) (? (0 < n) (: _ (slop-song-feed s 1.0 0.0 1.0) (feed (n - 1))))
+   (feed n) (? (0 < n) (slop-song-feed s 1.0 0.0 1.0, feed (n - 1)))
    _ (feed 10)
    pcm (slurp j)
    (samp i) (: v ((peep pcm (i * 2) 0) + ((peep pcm ((i * 2) + 1) 0) << 8))
-             (? (v > 32767) (v - 65536) v))
+             (v > 32767 ? (v - 65536) v))
    n (#pcm // 2)
    peak (foldl (\ a i (: v |(samp i) (a < v ? v a))) 0 ^n)
  (test
@@ -471,7 +462,7 @@
    t0 ((ix0 - st) * (1.0 / 16000))
    tp0 (t0 * (t0 > 0.0))
    long0 (slop-song-wave tp0 f 0.5 * venv tp0 0.34 * (t0 < 0.34))
- (test (tray? w) (5442 < #w) (= w w2) (533 = #c) (= c long) (0.0 = peep w 0 0) (= c0 long0)))
+ (test (tray? w) (5442 < #w) (w = w2) (533 = #c) (c = long) (0.0 = peep w 0 0) (c0 = long0)))
 
 ; the bar stops a column short of the screen
 (: g (slop-new 10 20 (wheel 3))

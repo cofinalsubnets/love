@@ -24,7 +24,7 @@
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
 ; loaded with -l, no test/00-init.l ahead of it -- so the posix door is borrowed here.
-(? (cite 'posix) (borrow 'posix) ())
+(cite 'posix ? (borrow 'posix) ())
 
 (borrow 'xwire)   ; the X wire, apps/lux/wire.l
 (: (probe dpy)
@@ -32,11 +32,10 @@
       sc (x-setup s ())
       root (scr-root sc)
       (line m) (say out m, say out "\n", flush out)
-      (fail m) (line (+ "probe FAIL " m), quit 1)
+      (fail m) (line ("probe FAIL " + m), quit 1)
       (must m v) (v ? v (fail m))
       ; a patient waiter: poll th every 100ms until it answers true
-      (waitp m th t) (? (< t 1) (fail m)
-                        (th () ? 1 (rest 100, waitp m th (- t 1))))
+      (waitp m th t) (t < 1 ? (fail m) (th () ? 1 (rest 100, waitp m th (t - 1))))
 
       ; --- lux is up when ewmh-init has stamped the root ---
       _ (waitp "wm-up" (u \ two? (x-getprop-atoms s root (x-intern s "_NET_SUPPORTED"))) 100)
@@ -44,15 +43,15 @@
       ; --- xtest: the extension's major opcode, then the super keycode
       ;     (mod4 row of GetModifierMapping, first nonzero) ---
       qx (: n #"XTEST"
-            _ (x-w8 s 98) _ (x-w8 s 0) _ (x-w16 s (+ 2 (/ (+ n (x-pad4 n)) 4)))
+            _ (x-w8 s 98) _ (x-w8 s 0) _ (x-w16 s (2 + ((n + x-pad4 n) / 4)))
             _ (x-w16 s n) _ (x-w16 s 0) _ (x-wpad s "XTEST") _ (x-flush s)
             hdr (x-reply s) (hdr 9))
-      _ (must "xtest-present" (< 0 qx))
+      _ (must "xtest-present" (0 < qx))
       sk (: _ (x-w8 s 119) _ (x-w8 s 0) _ (x-w16 s 1) _ (x-flush s)
-            hdr (x-reply s) kpm (hdr 1) data (x-rbytes s (* 8 kpm))
-            (go j) (< j kpm ? (: c (data (+ (* 6 kpm) j)) (< 0 c ? c (go (+ j 1)))) 0)
+            hdr (x-reply s) kpm (hdr 1) data (x-rbytes s (8 * kpm))
+            (go j) (< j kpm ? (: c (data ((6 * kpm) + j)) (< 0 c ? c (go (j + 1)))) 0)
             (go 0))
-      _ (must "super-keycode" (< 0 sk))
+      _ (must "super-keycode" (0 < sk))
       ; one synthetic input event: xxtestFakeInputReq is 36 bytes (length 9),
       ; rootX/rootY at bytes 24/26; type 2/3 key, 4/5 button, 6 motion (abs)
       (fake ty dt rx ry)
@@ -91,38 +90,35 @@
       ;     by design: float-state is the proxy) -- the stamp goes on and off ---
       _ (cmsg w1 a-st 1 a-mv a-mh)
       _ (waitp "maximized" (u \ (: g (x-getgeom s w1)
-                                   (&& (= 0 (g 0)) (< 600 (g 2))))) 50)
+                                   ((0 = g 0) && (600 < g 2)))) 50)
       _ (waitp "max-stamped" (u \ = 2 #(x-getprop-atoms s w1 a-st)) 50)
       _ (cmsg w1 a-st 0 a-mv a-mh)
       _ (waitp "unmax-stamped" (u \ ! (x-getprop-atoms s w1 a-st)) 50)
 
       ; --- 3. super+btn1 drag: float + move, the delta lands exact ---
       g0 (x-getgeom s w1)
-      cx (+ (g0 0) (// (g0 2) 2)) cy (+ (g0 1) (// (g0 3) 2))
+      cx (g0 0 + (g0 2 // 2)) cy (g0 1 + (g0 3 // 2))
       _ (fake 6 0 cx cy) _ (rest 80)
       _ (fake 2 sk 0 0) _ (rest 80)
       _ (fake 4 1 cx cy) _ (rest 100)
-      _ (fake 6 0 (+ cx 40) (+ cy 20)) _ (rest 60)
-      _ (fake 6 0 (+ cx 75) (+ cy 45)) _ (rest 100)
-      _ (fake 5 1 (+ cx 75) (+ cy 45)) _ (rest 100)
+      _ (fake 6 0 (cx + 40) (cy + 20)) _ (rest 60)
+      _ (fake 6 0 (cx + 75) (cy + 45)) _ (rest 100)
+      _ (fake 5 1 (cx + 75) (cy + 45)) _ (rest 100)
       _ (fake 3 sk 0 0) _ (rest 80)
       _ (waitp "moved-exact" (u \ (: g (x-getgeom s w1)
-                                     (&& (= (g 0) (+ (g0 0) 75))
-                                         (&& (= (g 1) (+ (g0 1) 45))
-                                             (= (g 2) (g0 2)))))) 50)
+                                     ((g 0 = (g0 0 + 75)) && ((g 1 = (g0 1 + 45)) && (g 2 = g0 2))))) 50)
 
       ; --- 4. super+btn3 drag: resize, the delta lands exact ---
       g1 (x-getgeom s w1)
-      rx (+ (g1 0) (// (g1 2) 2)) ry (+ (g1 1) (// (g1 3) 2))
+      rx (g1 0 + (g1 2 // 2)) ry (g1 1 + (g1 3 // 2))
       _ (fake 6 0 rx ry) _ (rest 80)
       _ (fake 2 sk 0 0) _ (rest 80)
       _ (fake 4 3 rx ry) _ (rest 100)
-      _ (fake 6 0 (+ rx 50) (+ ry 30)) _ (rest 100)
-      _ (fake 5 3 (+ rx 50) (+ ry 30)) _ (rest 100)
+      _ (fake 6 0 (rx + 50) (ry + 30)) _ (rest 100)
+      _ (fake 5 3 (rx + 50) (ry + 30)) _ (rest 100)
       _ (fake 3 sk 0 0) _ (rest 80)
       _ (waitp "resized-exact" (u \ (: g (x-getgeom s w1)
-                                       (&& (= (g 2) (+ (g1 2) 50))
-                                           (= (g 3) (+ (g1 3) 30))))) 50)
+                                       ((g 2 = (g1 2 + 50)) && (g 3 = (g1 3 + 30))))) 50)
       _ (waitp "float-focused" (u \ = w1 (getfocus ())) 50)
 
       ; --- 5. a second client (its own connection) tiles alongside;
@@ -139,7 +135,7 @@
       s3 (connectu dpy)
       sc3 (x-setup s3 ())
       _ (waitp "w2-felled" (u \ (: t (x-querytree s3 root)                       ; a failed query is not
-                                    (&& (two? t) (! (any (k \ = k w2) (caup t)))))) 100)   ; "felled"
+                                    (&& (two? t) !(any (k \ = k w2) (caup t))))) 100)   ; "felled"
 
       ; --- 5b. the withdraw race (the telegram media-viewer zombie): a client
       ;     hides a fullscreen float Qt-style -- a real unmap, then the ICCCM
@@ -148,10 +144,10 @@
       ;     the withdraw must leave the window unmapped anyway, and a re-show
       ;     must arrive as a fresh MapRequest and re-manage fullscreen. ---
       a-fs (x-intern s "_NET_WM_STATE_FULLSCREEN")
-      wt (+ w1 1)                                                                ; a tile under the pointer: a crossing focuses whatever
+      wt (w1 + 1)                                                                ; a tile under the pointer: a crossing focuses whatever
       _ (mkwin s wt root)                                                        ; it lands on, tile or float, by the same path
       _ (waitp "wt-tiled" (u \ < 600 ((x-getgeom s wt) 2)) 100)
-      wv (+ w1 2)
+      wv (w1 + 2)
       _ (: _ (x-w8 s 1) _ (x-w8 s 0) _ (x-w16 s 9)                               ; create (unmapped): white 300x200 toplevel
            _ (x-w32 s wv) _ (x-w32 s root)
            _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w16 s 300) _ (x-w16 s 200)
@@ -161,7 +157,7 @@
            _ (x-w32 s a-st) _ (x-w32 s 4) _ (x-w8 s 32) _ (x-w8 s 0)
            _ (x-w16 s 0) _ (x-w32 s 1) _ (x-w32 s a-fs) (x-flush s))
       (mapv u) (x-w8 s 8, x-w8 s 0, x-w16 s 2, x-w32 s wv, x-flush s)
-      (mstv u) (cap (x-attrs s wv))                                              ; 2 = viewable, 0 = unmapped
+      (mstv u) <(x-attrs s wv)                                              ; 2 = viewable, 0 = unmapped
       _ (fake 6 0 30 20) _ (rest 80)                                             ; park the pointer over the bare tile (the w1 float, dragged
                                                                                  ; off its near-fullscreen tiled rect, leaves only this strip):
                                                                                  ; the withdraw's crossing must land in the tile to render
@@ -177,9 +173,7 @@
       _ (rest 300)                                                               ; let any resurrecting render land before the read
       _ (waitp "wv-withdraw-unmapped" (u \ = 0 (mstv ())) 50)
       _ (mapv ())
-      _ (waitp "wv-reshow-fullscreen" (u \ (&& (= 2 (mstv ()))
-                                               (&& (< 600 ((x-getgeom s wv) 2))
-                                                   (two? (x-getprop-atoms s wv (x-intern s "WM_STATE")))))) 50)
+      _ (waitp "wv-reshow-fullscreen" (u \ ((2 = mstv ()) && ((600 < (x-getgeom s wv) 2) && two? (x-getprop-atoms s wv (x-intern s "WM_STATE"))))) 50)
       _ (withdraw ())                                                            ; leave it withdrawn: the moor leg leans on nothing here
       _ (waitp "wv-rewithdraw" (u \ = 0 (mstv ())) 50)
 
@@ -190,14 +184,14 @@
       a-aw (x-intern s "_NET_ACTIVE_WINDOW")
       a-ic (x-intern s "WM_CHANGE_STATE")
       a-li (x-intern s "_NET_CLIENT_LIST")
-      wr (+ w1 3)
+      wr (w1 + 3)
       _ (: _ (x-w8 s 1) _ (x-w8 s 0) _ (x-w16 s 9)                               ; a plain tile
            _ (x-w32 s wr) _ (x-w32 s root)
            _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w16 s 300) _ (x-w16 s 200)
            _ (x-w16 s 1) _ (x-w16 s 1) _ (x-w32 s 0)
            _ (x-w32 s 2) _ (x-w32 s 16777215) (x-flush s))
       (mapr u) (x-w8 s 8, x-w8 s 0, x-w16 s 2, x-w32 s wr, x-flush s)
-      (mstr u) (cap (x-attrs s wr))
+      (mstr u) <(x-attrs s wr)
       (known? u) (any (k \ = k wr) (x-getprop-atoms s root a-li))
       _ (mapr ())
       _ (waitp "wr-tiled" (u \ known? ()) 50)
@@ -215,9 +209,9 @@
       _ (waitp "wr-rude-evicts" (u \ ! (known? ())) 50)                        ; an unowed real unmap is the withdraw
       _ (waitp "wr-rude-unstamped" (u \ ! (two? (x-getprop-atoms s wr (x-intern s "WM_STATE")))) 50)
       _ (rest 300)                                                               ; let any resurrecting render land before the read
-      _ (must "wr-rude-unmapped" (= 0 (mstr ())))
+      _ (must "wr-rude-unmapped" (0 = mstr ()))
       _ (mapr ())                                                                ; and the re-show re-manages
-      _ (waitp "wr-remanaged" (u \ && (known? ()) (= 2 (mstr ()))) 50)
+      _ (waitp "wr-remanaged" (u \ && (known? ()) (2 = mstr ())) 50)
 
       ; --- 5d. close the focused tile: a survivor must take the keyboard.
       ;     the pointer parks over the float first, so no crossing can hand
@@ -227,27 +221,27 @@
       ;     the keyboard lands on a live client and not on the corpse, the
       ;     root, or PointerRoot ---
       gf (x-getgeom s w1)
-      _ (fake 6 0 (+ (gf 0) (// (gf 2) 2)) (+ (gf 1) (// (gf 3) 2))) _ (rest 100)
+      _ (fake 6 0 (gf 0 + (gf 2 // 2)) (gf 1 + (gf 3 // 2))) _ (rest 100)
       _ (cmsg wt a-aw 0 0 0)                                                     ; activate the victim: two tiles, wt holds the focus
       _ (waitp "victim-focused" (u \ = wt (getfocus ())) 50)
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wt, x-flush s)   ; DestroyWindow: the app quits
       _ (waitp "survivor-focused"
-            (u \ : f (getfocus ()) (&& (! (|| (= f wt) (= f 1))) (&& (! (= f root)) (< 0 f)))) 50)
+            (u \ : f (getfocus ()) (&& !((f = wt) || (f = 1)) (&& !(f = root) (0 < f)))) 50)
 
       ; --- 5e. the activation source (ewmh 1.4 _net_active_window data[0]): a
       ;     pager (2) or a legacy client (0) may pull the view to its window,
       ;     the app asking for itself (1) may not -- a qt modal re-asserts its
       ;     own activation on every focus change, and an obeyed request would
       ;     undo the switch that just left it ---
-      (deskt u) (: d (x-getprop-atoms s root a-cd) (two? d ? (cap d) -1))
+      (deskt u) (: d (x-getprop-atoms s root a-cd) (two? d ? <d -1))
       _ (cmsg root a-cd 1 0 0)                                                   ; the pager switches off wr's desktop
-      _ (waitp "aw-switched-away" (u \ && (= 1 (deskt ())) (= 0 (mstr ()))) 50)
+      _ (waitp "aw-switched-away" (u \ && (1 = deskt ()) (0 = mstr ())) 50)
       _ (cmsg wr a-aw 1 0 0)                                                     ; the app asks for itself: refused
       _ (rest 300)                                                               ; let an obeyed request land before the read
-      _ (must "aw-app-holds-view" (= 1 (deskt ())))
-      _ (must "aw-app-holds-hidden" (= 0 (mstr ())))
+      _ (must "aw-app-holds-view" (1 = deskt ()))
+      _ (must "aw-app-holds-hidden" (0 = mstr ()))
       _ (cmsg wr a-aw 2 0 0)                                                     ; the pager asks: honoured
-      _ (waitp "aw-pager-switches" (u \ && (= 0 (deskt ())) (= 2 (mstr ()))) 50)
+      _ (waitp "aw-pager-switches" (u \ && (0 = deskt ()) (2 = mstr ())) 50)
 
       ; --- 5f. the view change must land the keyboard. switch renders but does
       ;     not focus, and wsfoc reads the tiled zipper -- so a view holding a
@@ -259,17 +253,17 @@
       a-wt (x-intern s "_NET_WM_WINDOW_TYPE")
       a-dl (x-intern s "_NET_WM_WINDOW_TYPE_DIALOG")
       a-wd (x-intern s "_NET_WM_DESKTOP")
-      wf (+ w1 5) wg (+ w1 6)
+      wf (w1 + 5) wg (w1 + 6)
       (mkdlg wid)                                                                ; a dialog: the manage hook floats it at its own size
-       (: _ (x-w8 s 1, x-w8 s 0, x-w16 s 9, x-w32 s wid, x-w32 s root,
+       (x-w8 s 1, x-w8 s 0, x-w16 s 9, x-w32 s wid, x-w32 s root,
              x-w16 s 5, x-w16 s 5, x-w16 s 200, x-w16 s 150,
-             x-w16 s 1, x-w16 s 1, x-w32 s 0, x-w32 s 2, x-w32 s 16777215)
-          _ (x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s wid,                         ; ChangeProperty: the type, before the map
+             x-w16 s 1, x-w16 s 1, x-w32 s 0, x-w32 s 2, x-w32 s 16777215,
+        x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s wid,                         ; ChangeProperty: the type, before the map
              x-w32 s a-wt, x-w32 s 4, x-w8 s 32, x-w8 s 0, x-w16 s 0,
-             x-w32 s 1, x-w32 s a-dl)
-          (x-map s wid, x-flush s))
-      (mstf u) (cap (x-attrs s wf))
-      (actw u) (: a (x-getprop-atoms s root a-aw) (two? a ? (cap a) -1))          ; _net_active_window: what a taskbar highlights
+             x-w32 s 1, x-w32 s a-dl,
+        x-map s wid, x-flush s)
+      (mstf u) <(x-attrs s wf)
+      (actw u) (: a (x-getprop-atoms s root a-aw) (two? a ? <a -1))          ; _net_active_window: what a taskbar highlights
       _ (mkdlg wf)
       _ (waitp "wf-floated" (u \ = 200 ((x-getgeom s wf) 2)) 100)                 ; a float keeps its own size; a tile would be stretched
       _ (cmsg wf a-wd 1 0 0)                                                     ; send it to desktop 1, alone there
@@ -278,18 +272,18 @@
       _ (cmsg root a-cd 1 0 0)                                                   ; arrive at a view of one float and no tile
       _ (waitp "wf-shown" (u \ = 2 (mstf ())) 50)
       _ (waitp "wf-holds-keyboard" (u \ = wf (getfocus ())) 50)
-      _ (must "wf-advertised" (= wf (actw ())))                                  ; and the model agrees: wsfoc cannot name a float, so
+      _ (must "wf-advertised" (wf = actw ()))                                  ; and the model agrees: wsfoc cannot name a float, so
                                                                                  ; _net_active_window read 0 while one held the keyboard
       ; a second float takes the keyboard; destroying it must hand both the
       ; keyboard and the advertisement back, not just the keyboard
       _ (mkdlg wg)
-      _ (waitp "wg-holds-keyboard" (u \ && (= wg (getfocus ())) (= wg (actw ()))) 100)
+      _ (waitp "wg-holds-keyboard" (u \ && (wg = getfocus ()) (wg = actw ())) 100)
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wg, x-flush s)   ; DestroyWindow
-      _ (waitp "wf-regains" (u \ && (= wf (getfocus ())) (= wf (actw ()))) 50)
+      _ (waitp "wf-regains" (u \ && (wf = getfocus ()) (wf = actw ())) 50)
       _ (cmsg root a-cd 2 0 0)                                                   ; and an empty view: the root, never PointerRoot (1)
       _ (waitp "empty-view-roots" (u \ = root (getfocus ())) 50)
       _ (cmsg root a-cd 0 0 0)                                                   ; back where leg 6 expects to find us
-      _ (waitp "back-to-first" (u \ && (= 0 (deskt ())) (= 2 (mstr ()))) 50)
+      _ (waitp "back-to-first" (u \ && (0 = deskt ()) (2 = mstr ())) 50)
 
       ; --- 6. last, the moor: the live repl evals, survives a scare, changes state
       ;     (msg! 'next-layout flips the ||| index -- read back through the
@@ -303,19 +297,18 @@
       ;     s staying alive, and closing spares fds would re-arm it) ---
       rsock (: rd (getenv "XDG_RUNTIME_DIR")
                base (< 1 #rd ? rd "/tmp")
-               (+ base (+ "/lux-" (+ (snip dpy 16 #dpy) ".sock"))))
-      rc (: (try t) (? (< t 1) ()
-                       (: p (connectu rsock)
-                          (lit? p ? p (rest 100, try (- t 1)))))
+               (base + ("/lux-" + (snip dpy 16 #dpy + ".sock"))))
+      rc (: (try t) (t < 1 ? () (: p (connectu rsock)
+                          (lit? p ? p (rest 100, try (t - 1)))))
             (try 100))
       _ (must "moor-up" (lit? rc))
       (rdline u) (: (go acc) (: ch (see rc)
-                                (|| (= ch -1) (= ch 10) ? acc (go (+ acc (string ch)))))
+                                (|| (ch = -1) (ch = 10) ? acc (go (acc + string ch))))
                     (go ""))
       (ask q) (say rc q, say rc "\n", flush rc, rdline ())
-      _ (must "moor-evals" (= "3" (ask "(+ 1 2)")))
+      _ (must "moor-evals" ("3" = ask "(+ 1 2)"))
       _ (ask "(boom-unbound)")                                                   ; a scare answers a value; the session lives
-      _ (must "moor-survives" (= "7" (ask "(+ 3 4)")))
+      _ (must "moor-survives" ("7" = ask "(+ 3 4)"))
       (nudge u) (: nf (connectu dpy) sf (x-setup nf ())
                    _ (x-w8 nf 25) _ (x-w8 nf 0) _ (x-w16 nf 11)
                    _ (x-w32 nf root) _ (x-w32 nf 1572864)
@@ -327,14 +320,14 @@
       i0 (ask chidx)
       _ (ask "(msg! 'next-layout)")
       _ (nudge ())
-      _ (waitp "moor-changes" (u \ ! (= i0 (ask chidx))) 50)
+      _ (waitp "moor-changes" (u \ ! (i0 = ask chidx)) 50)
       _ (ask "(msg! 'next-layout)")                                              ; flip back (the ||| holds two layouts)
       _ (nudge ())
       _ (waitp "moor-cycles" (u \ = i0 (ask chidx)) 50)
       _ (ask "(lux! 0)")                                                        ; garbage: refused, the wm stands
       _ (nudge ())
-      _ (must "moor-refuses" (= "11" (ask "(+ 5 6)")))
-      _ (must "moor-standing" (= i0 (ask chidx)))
+      _ (must "moor-refuses" ("11" = ask "(+ 5 6)"))
+      _ (must "moor-standing" (i0 = ask chidx))
 
       ; --- 7. keybindings under a lock modifier: super+space (next-layout,
       ;     read back through the moor's snapshot like leg 6) must fire with
@@ -344,12 +337,12 @@
       ;     symptom) ---
       kmn (x-keymap s (scr-mink sc) (scr-maxk sc) [32 65407])                     ; space, Num_Lock
       spk (peep kmn 32 0) nlk (peep kmn 65407 0)
-      _ (must "space-keycode" (< 0 spk)) _ (must "numlock-keycode" (< 0 nlk))
+      _ (must "space-keycode" (0 < spk)) _ (must "numlock-keycode" (0 < nlk))
       (chord u) (fake 2 sk 0 0, rest 60, fake 2 spk 0 0, rest 60,
                    fake 3 spk 0 0, rest 60, fake 3 sk 0 0, rest 100)
       (numlock u) (fake 2 nlk 0 0, rest 60, fake 3 nlk 0 0, rest 100)
       _ (chord ())
-      _ (waitp "chord-flips" (u \ ! (= i0 (ask chidx))) 50)                     ; the machinery works bare...
+      _ (waitp "chord-flips" (u \ ! (i0 = ask chidx)) 50)                     ; the machinery works bare...
       _ (numlock ())                                                              ; ...now latch NumLock
       _ (chord ())
       _ (waitp "chord-under-numlock" (u \ = i0 (ask chidx)) 50)                 ; and the chord must still land (flip back to i0)
@@ -362,7 +355,7 @@
            _ (x-w16 s 0) _ (x-w32 s 0) (x-flush s))
       _ (rest 200)                                                               ; let the regrab land
       _ (chord ())
-      _ (waitp "chord-after-remap" (u \ ! (= i0 (ask chidx))) 50)
+      _ (waitp "chord-after-remap" (u \ ! (i0 = ask chidx)) 50)
       _ (chord ())
       _ (waitp "chord-after-remap-back" (u \ = i0 (ask chidx)) 50)
 
@@ -370,16 +363,16 @@
       ;     of the tiling and dropped back lands in the slot it left, because
       ;     it never leaves the view's zipper. read through the moor, so no X
       ;     geometry can stand in for the model ---
-      wi (+ w1 7) wj (+ w1 8)
+      wi (w1 + 7) wj (w1 + 8)
       _ (mkwin s wi root) _ (mkwin s wj root)
       _ (rest 300)
       (rowof u) (ask "(wsrow (cap (lux-st ())))")
       r0 (rowof ())
-      _ (must "row-is-three" (< 20 (tally r0)))                                  ; three ids and their parens
-      _ (ask (+ "(float! " (+ (show wi) " '(10 10 120 90))")))
+      _ (must "row-is-three" (20 < #r0))                                  ; three ids and their parens
+      _ (ask ("(float! " + (show wi + " '(10 10 120 90))")))
       _ (nudge ())
-      _ (waitp "float-leaves-row" (u \ ! (= r0 (rowof ()))) 50)                   ; the tiled row drops it...
-      _ (ask (+ "(sink! " (+ (show wi) ")")))
+      _ (waitp "float-leaves-row" (u \ ! (r0 = rowof ())) 50)                   ; the tiled row drops it...
+      _ (ask ("(sink! " + (show wi + ")")))
       _ (nudge ())
       _ (waitp "sink-restores-row" (u \ = r0 (rowof ())) 50)                      ; ...and sinking puts it back exactly
 
@@ -389,10 +382,10 @@
       ;     and the windows adopted. one connection per poll: a try that lands
       ;     on the dying generation just answers wrong and is retried ---
       (askonce q) (: p (connectu rsock)
-                     (? (! (lit? p)) ()
+                     (? !(lit? p) ()
                         (: _ (say p q) _ (say p "\n") _ (flush p)
                            r (: (go acc) (: ch (see p)
-                                            (|| (= ch -1) (= ch 10) ? acc (go (+ acc (string ch)))))
+                                            (|| (ch = -1) (ch = 10) ? acc (go (acc + string ch))))
                                 (go ""))
                            _ (close p) r)))
       _ (ask "(pin lux-cell 'gen 'old)")

@@ -23,22 +23,22 @@
 ; ran proves nothing, and neither does a comparison that cannot fail. both are
 ; asserted at the foot.
 
-(: (rd-cl s) (map s (jot (tally s)))
-   (rd-slurp path) (: q (open path "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
-   (rd-cut s n) (? ((tally s) <= n) s (snip s 0 n))
-   (rd-rep c n) (? (n <= 0) "" (c + (rd-rep c (n - 1))))
+(: (rd-cl s) (map s (jot #s))
+   (rd-slurp path) (: q (open path "r") (hot? q ? (: t (slurp q) _ (close q) t) ""))
+   (rd-cut s n) (#s <= n ? s (snip s 0 n))
+   (rd-rep c n) (n <= 0 ? "" (c + (rd-rep c (n - 1))))
    ; every form a reader gets off a text. the read protocol is sound's, and the
    ; residue is the answer, so the walk threads it: a clean end and a torn shape
    ; both stop, which is what makes the injected-fault runs below comparable.
    (rd-forms r txt)
      (: (go cl acc) (: x (r cl)
-                       (? (two? x) (go (cup x) (<x . acc)) (rev acc)))
+                       (two? x ? (go >x (<x . acc)) (rev acc)))
         (go (rd-cl txt) ())))
 
 ; the smallest subform where two trees part -- descend while the differing child
 ; is itself a pair, then report that pair. a leaf alone says "0 vs ()" and names
 ; nothing; its parent says which form it sat in.
-(: (rd-dn a b) (&& (! (= a b)) (two? a) (two? b))
+(: (rd-dn a b) (&& !(a = b) (two? a) (two? b))
    (rd-small a b) (? (rd-dn <a <b) (rd-small <a <b)
                      (rd-dn >a >b) (rd-small >a >b)
                      [a b]))
@@ -47,12 +47,12 @@
 ; out/ is generated, dot-directories are not ours. stat's mode word decides
 ; directory-or-not: (two? (readdir p)) would call an empty directory a file.
 (: rd-skip '("out")
-   (rd-dir? p) (: st (stat p) (&& (two? st) (= 16384 (& 61440 (cauup st)))))
-   (rd-dot? n) (= 46 (peep n 0 0))
-   (rd-dotl? n) (: t (tally n) (&& (2 < t) (= ".l" (snip n (t - 2) t))))
+   (rd-dir? p) (: st (stat p) (two? st && (16384 = (61440 & cauup st))))
+   (rd-dot? n) (46 = peep n 0 0)
+   (rd-dotl? n) (: t #n ((2 < t) && (".l" = snip n (t - 2) t)))
    (rd-walk d acc)
-     (foldl (\ a n (: p (? (= "." d) n (d + "/" + n))
-                      (? (|| (rd-dot? n) (elem n rd-skip)) a
+     (foldl (\ a n (: p ("." = d ? n (d + "/" + n))
+                      (? (rd-dot? n || elem n rd-skip) a
                          (rd-dir? p) (rd-walk p a)
                          (rd-dotl? n) (p . a)
                          a)))
@@ -63,26 +63,26 @@
 ; divergences with the subform that parted -- off for the injected run, which is
 ; supposed to diverge.
 (: (rd-run r paths loud)
-   (: n (tablet 0)
+   (: n {}
       (bump k v) (pin n k (v + (peep n k 0)))
       (say leg path a b)
-        (: _ (bump 'bad 1)
-           (? (&& loud ((peep n 'bad 0) <= 8))
+        (bump 'bad 1,
+         ? (loud && ((peep n 'bad 0) <= 8))
               (: d (rd-small a b)
                  _ (puts ("  " + leg + " " + path + "\n    A " + (rd-cut (show <d) 120)
                                                  + "\n    B " + (rd-cut (show <>d) 120) + "\n")) 0)
-              0))
+              0)
       (one path)
         (: txt (rd-slurp path)
            fa (rd-forms sound txt)
            fb (rd-forms r txt)
            _ (bump 'files 1)
-           _ (bump 'forms (tally fa))
-           _ (? (= fa fb) 0 (say "A/B" path fa fb))
+           _ (bump 'forms #fa)
+           _ (fa = fb ? 0 (say "A/B" path fa fb))
            ; print->read rides reader A's forms so it still measures something
            ; when a and B are the same reader
            (each fa (\ f (: g (rd-forms r (show f))
-                            (? (= [f] g) 0 (say "print->read" path [f] g))))))
+                            ([f] = g ? 0 (say "print->read" path [f] g))))))
       _ (each paths one)
       n))
 
@@ -91,14 +91,14 @@
 ; through a file -- the shape a real second reader's bug takes (not a crash, a
 ; plausible wrong tree) -- and the sweep must see it. gate the rig on this, never
 ; on the diff being green: green is what a rig that never ran also prints.
-(: rd-hurt-n (tablet 0)
+(: rd-hurt-n {}
    (rd-hurt cl)
      (: x (sound cl)
         _ (pin rd-hurt-n 0 (1 + (peep rd-hurt-n 0 0)))
-        (? (= 3 (peep rd-hurt-n 0 0)) 'rd-spoiled x)))
+        (3 = peep rd-hurt-n 0 0 ? 'rd-spoiled x)))
 
 (: rd-files (rd-walk "." ())
-   _ (puts ("rdiff: " + (show (tally rd-files)) + " .l files\n"))
+   _ (puts ("rdiff: " + (show #rd-files) + " .l files\n"))
    rd-clean (rd-run rd-test rd-files 1)
    rd-hurtn (rd-run rd-hurt ["test/spec.l"] 0)
    _ (puts ("rdiff: files=" + (show (peep rd-clean 'files 0))
@@ -125,13 +125,13 @@
    ; thing the stackless reader has over it. so pin the depth it reaches, far
    ; past the deepest form in the tree (38, test/uupatch.l).
    rd-deep (: s ((rd-rep "(" 20000) + (rd-rep ")" 20000))
-              (= (sound0 (rd-cl s)) (sound (rd-cl s))))
+              (sound0 (rd-cl s) = sound (rd-cl s)))
    ; and p0's own injector: the A/B leg above is the load-bearing one now, so it
    ; owes the same proof that its comparison can fail.
-   rd-p0hn (tablet 0)
+   rd-p0hn {}
    (rd-p0hurt cl) (: x (sound0 cl)
                      _ (pin rd-p0hn 0 (1 + (peep rd-p0hn 0 0)))
-                     (? (= 3 (peep rd-p0hn 0 0)) 'rd-spoiled x))
+                     (3 = peep rd-p0hn 0 0 ? 'rd-spoiled x))
    rd-p0hurtn (rd-run rd-p0hurt ["test/host/p0fix.l"] 0)
    _ (puts ("rdiff: p0 forms=" + (show (peep rd-p0 'forms 0))
             + " bad=" + (show (peep rd-p0 'bad 0))

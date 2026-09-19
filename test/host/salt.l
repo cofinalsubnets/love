@@ -20,9 +20,9 @@
 ; a setting is `(key operand ..)`: the head names it, the tail is the value.
 (: st-a (st-put "a.l" "(singleton 1)\n(deprecated old-thing (worse \"say better\"))\n"))
 (test
- (: c (salt-file st-a (tablet 0))
+ (: c (salt-file st-a {})
     (&& (1 = (salt-one c 'singleton 0))
-        (2 = (tally (salt-all c 'deprecated)))
+        (2 = #(salt-all c 'deprecated))
         ('old-thing = <(salt-all c 'deprecated)))))
 
 ; --- a config is data, never code -----------------------------------------
@@ -31,9 +31,9 @@
 ; test would exit here instead of asserting; it lands as a plain list.
 (: st-q (st-put "quit.l" "(danger (quit 1))\n"))
 (test
- (: c (salt-file st-q (tablet 0))
+ (: c (salt-file st-q {})
     v (salt-one c 'danger ())
-    (&& (two? v) ('quit = <v))))
+    (two? v && ('quit = <v))))
 
 ; --- presence is the open -------------------------------------------------
 ; an absent file and an empty one both mean "no overrides", and neither may
@@ -41,10 +41,10 @@
 ; good thing for a config file to be -- the question is whether it opened.)
 (: st-e (st-put "empty.l" ""))
 (test
- (: c (salt-file st-e (salt-file st-a (tablet 0))) (1 = (salt-one c 'singleton 0)))
- (: c (salt-file st-gone (salt-file st-a (tablet 0))) (1 = (salt-one c 'singleton 0)))
- !(salt-all (salt-file st-e (tablet 0)) 'singleton)
- !(salt-all (salt-file st-gone (tablet 0)) 'singleton))
+ (: c (salt-file st-e (salt-file st-a {})) (1 = (salt-one c 'singleton 0)))
+ (: c (salt-file st-gone (salt-file st-a {})) (1 = (salt-one c 'singleton 0)))
+ !(salt-all (salt-file st-e {}) 'singleton)
+ !(salt-all (salt-file st-gone {}) 'singleton))
 
 ; --- the overlay ------------------------------------------------------------
 ; later wins, key by key: the file read second speaks last, and a key it does
@@ -53,10 +53,10 @@
 ; for the tree's own.)
 (: st-b (st-put "b.l" "(singleton 0)\n"))
 (test
- (: c (salt-file st-b (salt-file st-a (tablet 0)))
+ (: c (salt-file st-b (salt-file st-a {}))
     (&& (0 = (salt-one c 'singleton 9))                  ; replaced
-        (2 = (tally (salt-all c 'deprecated)))))         ; untouched
- (: c (salt-file st-a (salt-file st-b (tablet 0)))
+        (2 = #(salt-all c 'deprecated))))         ; untouched
+ (: c (salt-file st-a (salt-file st-b {}))
     (1 = (salt-one c 'singleton 9))))                    ; ...and the other way round
 
 ; --- a form that is not a setting is simply not a setting ------------------
@@ -64,16 +64,15 @@
 ; the bad forms are skipped in silence and everything around them still lands.
 (: st-j (st-put "junk.l" "loose-symbol\n42\n\"a string\"\n(singleton 1)\n((f x) 2)\n(deprecated a)\n"))
 (test
- (: c (salt-file st-j (tablet 0))
-    (&& (1 = (salt-one c 'singleton 0))
-        (1 = (tally (salt-all c 'deprecated))))))
+ (: c (salt-file st-j {})
+    ((1 = (salt-one c 'singleton 0)) && (1 = #(salt-all c 'deprecated)))))
 
 ; ...and a dropped paren ends the read rather than spinning on it: `sound`
 ; answers `torn` on an unfinished shape, which is a third thing to catch --
 ; not a datum and not the clean end.
 (: st-t (st-put "trunc.l" "(singleton 1)\n(deprecated foo\n"))
 (test
- (: c (salt-file st-t (tablet 0))
+ (: c (salt-file st-t {})
     (&& (1 = (salt-one c 'singleton 0)) !(salt-all c 'deprecated))))
 
 ; --- reading a setting ------------------------------------------------------
@@ -81,9 +80,9 @@
 ; are () -- so a switch is `(singleton 1)`, never a bare `(singleton)`.
 (: st-n (st-put "none.l" "(singleton)\n"))
 (test
- (: c (salt-file st-n (tablet 0))
+ (: c (salt-file st-n {})
     (&& !(salt-all c 'singleton) ('dflt = (salt-one c 'singleton 'dflt))))
- (: c (salt-file st-a (tablet 0))
+ (: c (salt-file st-a {})
     (&& ('dflt = (salt-one c 'never-written 'dflt))
         !(salt-all c 'never-written))))
 
@@ -91,7 +90,7 @@
 ; answer is the entry wrapped -- presence out of band, since a bare name nets
 ; whatever its spelling nets and could not say "found" on its own.
 (test
- (: c (salt-file st-a (tablet 0))
+ (: c (salt-file st-a {})
     (&& (two? (salt-has? c 'deprecated 'old-thing))
         ('old-thing = <>(salt-has? c 'deprecated 'old-thing))
         (two? (salt-has? c 'deprecated 'worse))

@@ -31,30 +31,26 @@
   (elem 'cook (cite ()))
   (elem 'build (keys (cite 'papel)))
   (lit? (cite 'papel 'papel-main))
-  (! (cite 'papyrus))                          ; a missing module answers ()
+  !(cite 'papyrus)                          ; a missing module answers ()
   ; the combinators are a module nobody splices at boot: lapiz and cook each said (borrow 'peg),
   ; so peg is loaded and reachable by key. `parse` itself can sit on the book -- the
   ; crew layer (moon's front end) puts it there in the warm lane -- so the leak check is
   ; a delta: loading papel must not have added it.
   (elem 'peg (cite ()))
   (lit? (cite 'peg 'seq))
-  (= parse-before (elem 'parse (names ())))))
+  (parse-before = elem 'parse (names ()))))
 
 (: dir "/tmp/papeltest"
    (put-file f s) (: q (open (dir + "/" + f) "w") _ (say q s) (close q))
-   (get-file f)   (: q (open (dir + "/" + f) "r") (? (hot? q) (slurp q) ""))
+   (get-file f)   (: q (open (dir + "/" + f) "r") (hot? q ? (slurp q) ""))
    ; every attribute value introduced by `pre` and closed by a quote: the way to ask
    ; the emitted html what it actually said, without re-parsing it.
-   (finds s pre)  (: m (tally pre) n (tally s)
+   (finds s pre)  (: m #pre n #s
                      ((: (g i acc)
-                         (? ((i + m) <= n)
-                            (? ((snip s i (i + m)) = pre)
-                               (: j ((: (f k) (? (&& (k < n) (! ((s k) = 34))) (f (k + 1)) k)) (i + m))
-                                  (g j (. (snip s (i + m) j) acc)))
-                               (g (i + 1) acc))
-                            (rev acc))) 0 ()))
+                         ((i + m) <= n ? ((snip s i (i + m)) = pre ? (: j ((: (f k) (&& (k < n) !((s k) = 34) ? (f (k + 1)) k)) (i + m))
+                                  (g j (. (snip s (i + m) j) acc))) (g (i + 1) acc)) (rev acc))) 0 ()))
    (has? l x)     (elem x l)
-   (uniq? l)      ((: (g l) (? (! (two? l)) 1 (elem <l >l) 0 (g >l))) l)
+   (uniq? l)      ((: (g l) (? !(two? l) 1 (elem <l >l) 0 (g >l))) l)
 
    ; from a clean slate: the freshness clauses below count files written, so a left-over
    ; site from a previous run would make the first build a no-op and every count wrong.
@@ -100,7 +96,7 @@ Only a paragraph, so the title has to come from the meta block.
    _ (put-file "src/three.md" "Neither a head-1 nor a meta block, so the file name is the title.
 ")
 
-   conf (: t (tablet 0)
+   conf (: t {}
            _ (pin t 'out (dir + "/site"))
            _ (pin t 'title "Fixture")
            _ (pin t 'src [(dir + "/src")])
@@ -130,7 +126,7 @@ Only a paragraph, so the title has to come from the meta block.
    ; only when it moved. it must never answer work for an untouched tree (that was the
    ; 1.5s page load), and must never miss a real edit (that would be a dev server that
    ; ignores you). the second is the one that matters, so it is checked both ways.
-   box (tablet 0)
+   box {}
    r1 (refresh conf box)                                 ; first look -- nothing remembered yet
    r2 (refresh conf box)
    _ (rest 5)                                       ; same coarse-clock care as one.md above
@@ -144,9 +140,9 @@ Only a paragraph, so the title has to come from the meta block.
    ; rebuilds per source change climbed 28 ingredients a rebuild, forever, and `prep`
    ; walked all of them. unbounded memory and quadratic time out of a server sitting idle.
    cards (cite 'cook 'cards)
-   (icount _) (tally (cap (peep cards (dir + "/site/index.html") ())))
+   (icount _) #<(peep cards (dir + "/site/index.html") ())
    n0 (icount ())
-   _ ((: (again k) (? (k < 6) (: _ (build conf) (again (k + 1))) 0)) 0)
+   _ ((: (again k) (k < 6 ? (build conf, again (k + 1)) 0)) 0)
    _ (test (0 < n0) (n0 = (icount ())))
 
    one (get-file "site/one.html")
@@ -159,7 +155,7 @@ Only a paragraph, so the title has to come from the meta block.
    ; every page of this tree's own docs, built below.
    (anchored? h) (: ids (finds h "id=\"")
                     tgts (finds h "href=\"#")
-                    (? (! (two? tgts)) 1 (: bad (filter (\ t (! (has? ids t))) tgts) (! (two? bad)))))
+                    (? !(two? tgts) 1 (: bad (filter (\ t !(has? ids t)) tgts) !(two? bad))))
    _ (test
       (anchored? one) (anchored? two) (anchored? three)
       ; and it is not vacuous: page one really has a contents, with the head-1 left
@@ -175,7 +171,7 @@ Only a paragraph, so the title has to come from the meta block.
       (has? (finds one "id=\"") "big-1")
       (has? (finds one "id=\"") "shared-name-2")
       (has? (finds one "class=\"") "words")
-      ((tally (finds one "href=\"#")) = 4))                  ; 3 in the toc + the entry's link
+      (#(finds one "href=\"#") = 4))                  ; 3 in the toc + the entry's link
 
    ; --- relink: rewritten inside the site, untouched outside ------------------------
    hrefs (finds one "href=\"")
@@ -183,7 +179,7 @@ Only a paragraph, so the title has to come from the meta block.
       (has? hrefs "two.html")                    ; in the site -> .html
       (has? hrefs "archive/old.md")              ; not built -> left alone
       (has? hrefs "https://example.com/x.md")    ; absolute -> left alone
-      (! (has? hrefs "two.md")))
+      !(has? hrefs "two.md"))
 
    ; --- title: the three sources, in order ------------------------------------------
    _ (test
@@ -208,7 +204,7 @@ Only a paragraph, so the title has to come from the meta block.
    ; every markdown page in the tree through the whole pipe, and the anchor property has
    ; to hold on all of them. readme.md is deliberately in: it is the widest markdown here.
    ; mdsof does not recurse, so a directory that grows a subtree needs naming here.
-   rconf (: t (tablet 0)
+   rconf (: t {}
             _ (pin t 'out (dir + "/love"))
             _ (pin t 'title "love")
             _ (pin t 'src '("README.md" "doc" "doc/misc"))
@@ -219,7 +215,7 @@ Only a paragraph, so the title has to come from the meta block.
    _ (test
       (10 < rn)                                   ; it built a real site
       (0 = (build rconf)))                        ; ..and is at once up to date
-   _ (: (page f) (: q (open (dir + "/love/" + f) "r") (? (hot? q) (slurp q) ""))
+   _ (: (page f) (: q (open (dir + "/love/" + f) "r") (hot? q ? (slurp q) ""))
         _ (each (filter (\ f ((cite 'papel 'ends?) f ".html")) (readdir (dir + "/love")))
                 (\ f (: h (page f)
                         (test (0 < tally h)

@@ -16,7 +16,7 @@
 ;             nursery everything the major pool is not using. the budget is read off
 ;             gauge[8], the live set, so it holds as the image's weight moves
 
-(: (spine n acc) (? (n < 1) acc (spine (n - 1) (. acc 1)))    ; a left spine: n levels of car
+(: (spine n acc) (n < 1 ? acc (spine (n - 1) (. acc 1)))    ; a left spine: n levels of car
    knobs (tune @(0 16384 65536 24))              ; the floor, the step, the ratio; budget open
    _ (please 1)                                  ; ..a major, so the count below is the live one
    live (peep (gauge 0) 8 0)                     ; words the major pool holds live
@@ -28,7 +28,7 @@
    gap (peep (gauge 0) 0 0)
    n (2 * gap)                                   ; 2n words of worklist over a gap of n
    a (spine n 0) b (spine n 0) c (spine n 1)
-   answers [(= a b) (= a c) (elem b [c a]) (elem c [a])]
+   answers [(a = b) (a = c) (elem b [c a]) (elem c [a])]
    _ (tune knobs)                                ; the seat goes back before anything else runs
    _ (test (gap <= 16384)                        ; the floor took: the walk is past the region
            (answers = [1 0 1 0]))

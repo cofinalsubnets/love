@@ -39,11 +39,11 @@
  (0 = (gz-nif 9 (\ _ gz-no-such-nif)))          ; ..and the answer is kept, asked twice
  (1 = (gz-nif 10 gz-crcprobe)))
 
-(: (gzc-mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1)))) (go 0))
-   (gzc-l d h) (: r (gz-puff d h) (? (two? r) <>r 'nil))          ; the oracle
-   (gzc-c d h) (: r (inflate d h) (? (string? r) r 'nil))         ; the C twin
-   (gzc-same d h) (? (= (gzc-l d h) (gzc-c d h)) 1 0)
-   (gzc-all f xs) (? (! (two? xs)) 1 (? (f <xs) (gzc-all f >xs) 0))
+(: (gzc-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
+   (gzc-l d h) (: r (gz-puff d h) (two? r ? <>r 'nil))          ; the oracle
+   (gzc-c d h) (: r (inflate d h) (string? r ? r 'nil))         ; the C twin
+   (gzc-same d h) (gzc-l d h = gzc-c d h)
+   (gzc-all f xs) (? !(two? xs) 1 (f <xs ? (gzc-all f >xs) 0))
 
    gzc-empty ""
    gzc-one   "x"
@@ -55,32 +55,32 @@
    ; a corpus of one period cannot say where that line falls. The C copies byte by byte
    ; today and this row still earns its place -- with only period 11 in the gate, a copy
    ; taking whole words from four back passed everything.
-   gzc-near  (: (go j a) (? (9 < j) a (go (j + 1) (a + (gzc-mk 4000 (\ i (65 + (i % j)))))))
+   gzc-near  (: (go j a) (9 < j ? a (go (j + 1) (a + (gzc-mk 4000 (\ i (65 + (i % j)))))))
                 (go 2 ""))
    gzc-text  ("the quick brown fox jumps over the lazy dog. "
               + "pack my box with five dozen liquor jugs. ")
    gzc-noise (gzc-mk 2000 (\ i (((i * 2654435761) >> 7) & 255)))   ; no matches: stored
-   gzc-mixed (: (go k a) (? (k < 1) a (go (k - 1) (a + gzc-text + gzc-run + gzc-noise)))
+   gzc-mixed (: (go k a) (k < 1 ? a (go (k - 1) (a + gzc-text + gzc-run + gzc-noise)))
                 (go 8 ""))
    gzc-shapes [gzc-empty gzc-one gzc-run gzc-long gzc-per gzc-near gzc-text gzc-noise
                gzc-mixed]
 
    ; a round trip, and the same stream read both ways with the size and without it
-   (gzc-rt s) (: d (gz-deflate s)   n (tally s)
-                 (? (! (gzc-same d n)) 0
-                    (! (gzc-same d 0)) 0
-                    (! (= (gzc-c d n) s)) 0
+   (gzc-rt s) (: d (gz-deflate s)   n #s
+                 (? !(gzc-same d n) 0
+                    !(gzc-same d 0) 0
+                    !(gzc-c d n = s) 0
                     1))
    ; ..and with a size that lies, which is the retry
-   (gzc-hint s) (: d (gz-deflate s)   n (tally s)
-                   (? (! (gzc-same d (n + 100))) 0
-                      (! (gzc-same d -3)) 0
-                      (! (gzc-same d (? (n < 2) 1 (n - 1)))) 0
+   (gzc-hint s) (: d (gz-deflate s)   n #s
+                   (? !(gzc-same d (n + 100)) 0
+                      !(gzc-same d -3) 0
+                      !(gzc-same d (n < 2 ? 1 (n - 1))) 0
                       1))
    ; the door itself: `gz-inflate` reaches for the nif and must answer what puff answers
-   (gzc-door s) (: d (gz-deflate s)   n (tally s)
+   (gzc-door s) (: d (gz-deflate s)   n #s
                    r (gz-inflate d n)
-                   (? (! (two? r)) 0 (= <>r s) 1 0)))
+                   (? !(two? r) 0 (<>r = s) 1 0)))
 
 ; --- the shapes ---
 (test
@@ -90,20 +90,20 @@
 
 ; --- torn: every prefix of a good stream ---
 (: gzc-td (gz-deflate gzc-mixed)
-   (gzc-cut d i) (: c (cask i) _ (? i (pour c 0 d 0 i) 0) (string c))
+   (gzc-cut d i) (: c (cask i) _ (i ? (pour c 0 d 0 i) 0) (string c))
    (gzc-torn d k step)
-    (: (go i) (? (k <= i) 1 (! (gzc-same (gzc-cut d i) 400)) 0 (go (i + step)))
+    (: (go i) (? (k <= i) 1 !(gzc-same (gzc-cut d i) 400) 0 (go (i + step)))
        (go 0)))
-(test (gzc-torn gzc-td (tally gzc-td) 7))
+(test (gzc-torn gzc-td #gzc-td 7))
 
 ; --- fuzz: one flipped bit, over two streams and every bit of the smaller ---
 (: (gzc-flip d k)
-    (: n (tally d)   c (cask n)   _ (pour c 0 d 0 n)   o (// k 8)
+    (: n #d   c (cask n)   _ (pour c 0 d 0 n)   o (k // 8)
        _ (pin c o ((peep c o 0) ^ (1 << (k % 8))))
        (string c))
    (gzc-fuzz s step)
-    (: d (gz-deflate s)   nb (8 * (tally d))   n (tally s)
-       (go k) (? (nb <= k) 1 (! (gzc-same (gzc-flip d k) n)) 0 (go (k + step)))
+    (: d (gz-deflate s)   nb (8 * #d)   n #s
+       (go k) (? (nb <= k) 1 !(gzc-same (gzc-flip d k) n) 0 (go (k + step)))
        (go 0))
    ; a corrupt stream inflates to nonsense, and gz-puff walks that nonsense at love
    ; speed -- so the streams here are small on purpose. the shapes, not the sizes, are
@@ -118,10 +118,10 @@
 ; reads one: the tail is the only place the two can part and it is a different tail at
 ; every length mod eight. The published check value is asserted off the C side, so a twin
 ; that agrees with a walk which has drifted still fails.
-(: (gzc-crc s) (? (= (crc32 s) (gz-crcwalk s)) 1 0)
+(: (gzc-crc s) (crc32 s = gz-crcwalk s)
    (gzc-crclen k)
     (: (go i) (? (k < i) 1
-                 (! (gzc-crc (gzc-mk i (\ j (((j * 2654435761) >> 11) & 255))))) 0
+                 !(gzc-crc (gzc-mk i (\ j (((j * 2654435761) >> 11) & 255)))) 0
                  (go (i + 1)))
        (go 0)))
 (test
@@ -136,15 +136,15 @@
 
 ; --- misuse: a value op, so a wrong shape answers () and decodes nothing ---
 (test
- (! (charm? (crc32 7)))
- (! (charm? (crc32 ())))
- (! (charm? (crc32 (cask 8))))
- (! (string? (inflate 7 10)))
- (! (string? (inflate () 10)))
- (! (string? (inflate (cask 8) 10)))
- (! (string? (inflate (iota 8) 10)))
- (! (string? (inflate gzc-td 'x)))
- (! (string? (inflate gzc-td 1.5)))
+ !(charm? (crc32 7))
+ !(charm? (crc32 ()))
+ !(charm? (crc32 (cask 8)))
+ !(string? (inflate 7 10))
+ !(string? (inflate () 10))
+ !(string? (inflate (cask 8) 10))
+ !(string? (inflate (iota 8) 10))
+ !(string? (inflate gzc-td 'x))
+ !(string? (inflate gzc-td 1.5))
  ; ..and the empty stream is not a stream at all, at either lane
  (gzc-same "" 0))
 
@@ -152,11 +152,11 @@
 ;     trip -- same parse, same block costing, same Huffman tie-breaks, so `=` over the
 ;     streams is the law. the love lane is the oracle; a divergence is the C being
 ;     wrong until proven otherwise.
-(: (gzd-same s) (? (= (deflate s) (gz-deflatel s)) 1 0)
+(: (gzd-same s) (deflate s = gz-deflatel s)
    (gzd-trip s) (: c (deflate s)
-                   l (gz-puff c (tally s))
-                   i (inflate c (tally s))
-                   (? ((two? l) & (string? i) & (= (<(>l)) s) & (= i s)) 1 0))
+                   l (gz-puff c #s)
+                   i (inflate c #s)
+                   ((two? l) & (string? i) & ((<(>l)) = s) & (i = s) ? 1 0))
    gzd-corp [gzc-empty gzc-one gzc-run gzc-long gzc-per gzc-near gzc-text]
    _ (test
       (lit? deflate)
@@ -165,12 +165,12 @@
       ; one operand, so a second applies to the answer: a string of an index is that
       ; byte, and the two spellings are the same value. a nif run carrying a curry
       ; prologue it has no operands for reads the spare operand as its return address.
-      (= (deflate gzc-text 3) ((deflate gzc-text) 3))
-      (= (deflate gzc-one 0) ((deflate gzc-one) 0)))
+      (deflate gzc-text 3 = (deflate gzc-text) 3)
+      (deflate gzc-one 0 = (deflate gzc-one) 0))
    (puts "gzc: deflate twin ok -- the C coder answers love's bytes, both inflates read it
 "))
 
-(: _ (test_fin ())
-   _ (puts "gzc: ok -- the C twins agree with love (shapes, hints, torn, fuzz, crc, misuse)
-")
-   0)
+(test_fin (),
+ puts "gzc: ok -- the C twins agree with love (shapes, hints, torn, fuzz, crc, misuse)
+",
+ 0)

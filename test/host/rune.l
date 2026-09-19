@@ -1,5 +1,5 @@
 ; --- test/host/rune.l: the rune engine, exactly ---
-; not in the corpus: love0 evaluates it TWICE and this file does not survive its own
+; not in the corpus: love0 evaluates it twice and this file does not survive its own
 ; second run -- one marker where a corpus file gives two. it loads a crew file and
 ; leaks its helpers besides.
 ; after the ring/field laws, the corpus is a real disproof: the 19 july 2026
@@ -22,7 +22,7 @@
  (elem 'deriv (keys (cite 'rune)))      ; keys introspects the layer
  (1 = ((cite 'rune 'cnorm) (3 /// 3)))      ; the opaque accessor reaches a member
  (lit? (cite 'rune))                      ; presence: the accessor is a closure
- (! (cite 'ruin)))                        ; a missing module answers ()
+ !(cite 'ruin))                        ; a missing module answers ()
 
 ; --- the ring: canonical forms make the identities structural --------------
 ; commutative/associative/distributive, (x+y)^2, and the zero polynomial is
@@ -86,8 +86,7 @@
 ; (psff p) is the ascending factor list (a1 a2 ..), each monic squarefree,
 ; monic p = a1^1 * a2^2 * .. -- rebuild says exactly that, powering each
 ; factor through the poly coin's numeral application.
-(: (rebuild fs) (: (go i r) (? (0 = tally r) (gc 1)
-                               (pmul (load (i (poly <r))) (go (i + 1) >r)))
+(: (rebuild fs) (: (go i r) (0 = tally r ? (gc 1) (pmul (load (i (poly <r))) (go (i + 1) >r)))
                    (go 1 fs)))
 (test
  ((psff (pmul g1 g2)) = [(pmul g1 g2)])          ; squarefree: one factor, itself
@@ -130,7 +129,7 @@
 ; factor list whose pmul-fold is p. a rootless remainder of degree 2 or 3 is
 ; certified irreducible over Q -- and the disproof's modulus m is exactly
 ; that: a rootless cubic, so Q[x]/(m) really is a field.
-(: (refac fs) (? (0 = tally fs) (gc 1) (pmul <fs (refac >fs))))
+(: (refac fs) (0 = tally fs ? (gc 1) (pmul <fs (refac >fs))))
 (test
  ((proots (pmul g1 g2)) = [-2 -1])               ; the roots, ascending
  ((proots (pmul g1 g1)) = [-1 -1])               ; multiplicity rides psff
@@ -227,7 +226,7 @@
    b2 (padd bx (bc 1))                           ; x+1
    b3 (padd bx (pmul by by))                     ; x+y^2
    bq (padd (pmul bx bx) (padd by (bc 1)))       ; x^2+y+1
-   (refac2 fs) (? (0 = tally fs) (bc 1) (pmul <fs (refac2 >fs))))
+   (refac2 fs) (0 = tally fs ? (bc 1) (pmul <fs (refac2 >fs))))
 (test
  ((pfac (psub (pmul bx bx) (pmul by by)))
   = [(psub bx by) b1])                           ; the classic: x^2-y^2 = (x-y)(x+y)
@@ -272,7 +271,7 @@
    (tcc c) (pconst 3 c)
    t1 (padd tcx (padd tcy tcz))                  ; x+y+z
    t2 (padd tcx (pmul tcy tcz))                  ; x+yz
-   (refac3 fs) (? (0 = tally fs) (tcc 1) (pmul <fs (refac3 >fs))))
+   (refac3 fs) (0 = tally fs ? (tcc 1) (pmul <fs (refac3 >fs))))
 (test
  ((pfac (pmul t1 t2)) = [t1 t2])                 ; the trivariate flagship:
                                                  ; (x+y+z)(x+yz), split exactly
@@ -311,7 +310,7 @@
  ((pconst 3 (0 /// 1)) = ())                       ; a value-zero coin is no constant
  ((pconst 3 (4 /// 2)) = (pconst 3 2))             ; an integer-valued coin enters demoted
  ((pdet [qd1 qd2]) = (pconst 2 1))               ; det diag(1/2 2) = 1: q entries, integer det
- ((- (poly qp) (poly qp)) = (poly ()))           ; the coin face rides the same ring
+ ((poly qp - poly qp) = (poly ()))           ; the coin face rides the same ring
  ((3 /// 2) = ((pfn qp '(x y z)) 1 1 0))           ; compiled: 1/2 + 1 = 3/2
  ((4 /// 1) = ((pfn qp '(x y z)) 2 3 0)))          ; a mixed evaluation lands a coin: (4 /// 1), not 4
 
@@ -324,31 +323,31 @@
    pp2 (poly (psub rx (pmul (pconst 3 2) ry))))    ; x - 2y: content sums red
 (test
  (coin? pp1)
- ((+ pp1 pp1) = (poly (pmul (pconst 3 2) (padd rx ry))))
- ((* (poly rx) (poly ry)) = (poly (pmul rx ry)))
- ((- pp1 pp1) = zp)                    ; subtraction lands the zero coin
- ((* pp1 zp) = zp)                     ; annihilation -- the zero poly, not the () unit ride
- ((* 3 (poly rx)) = (poly (pmul (pconst 3 3) rx)))   ; a star lifts to the poly's arity
- ((+ (poly rx) 1) = (poly (padd rx (pconst 3 1))))   ; ... either side, + too
- ((- (poly rx) 1) = (poly (psub rx (pconst 3 1))))
- ((+ (poly rx) -1) = (- (poly rx) 1))  ; a red star is a coefficient, not the zero poly
- ((* (poly rx) -2) = (poly (pmul (pconst 3 -2) rx)))
- ((+ (poly rx) 0) = (poly rx))         ; ... while the zero star still rides as zero
- (! zp)                                ; the zero polynomial is nothing
- (nil? (! pp2))                        ; red content, still something -- the !p law, closed
+ ((pp1 + pp1) = (poly (pmul (pconst 3 2) (padd rx ry))))
+ ((poly rx * poly ry) = (poly (pmul rx ry)))
+ ((pp1 - pp1) = zp)                    ; subtraction lands the zero coin
+ ((pp1 * zp) = zp)                     ; annihilation -- the zero poly, not the () unit ride
+ ((3 * poly rx) = (poly (pmul (pconst 3 3) rx)))   ; a star lifts to the poly's arity
+ ((poly rx + 1) = (poly (padd rx (pconst 3 1))))   ; ... either side, + too
+ ((poly rx - 1) = (poly (psub rx (pconst 3 1))))
+ ((poly rx + -1) = (poly rx - 1))  ; a red star is a coefficient, not the zero poly
+ ((poly rx * -2) = (poly (pmul (pconst 3 -2) rx)))
+ ((poly rx + 0) = (poly rx))         ; ... while the zero star still rides as zero
+ !zp                                ; the zero polynomial is nothing
+ !!pp2                        ; red content, still something -- the !p law, closed
  (2 = (sat pp2))                       ; $ counts monomials
- (nil? (+ pp1 (1 /// 2)))                ; distinct dies never combine
- (nil? (* pp1 "s"))                    ; a method owns its domain
- ((* 5 zp) = zp)                       ; star times the zero poly is the zero poly (no arity needed)
- ((* zp 5) = zp)
- (nil? (+ 5 zp))                       ; ... but + there stays (): the arity is unknowable
+ !(pp1 + 1 /// 2)                ; distinct dies never combine
+ !(pp1 * "s")                    ; a method owns its domain
+ ((5 * zp) = zp)                       ; star times the zero poly is the zero poly (no arity needed)
+ ((zp * 5) = zp)
+ !(5 + zp)                       ; ... but + there stays (): the arity is unknowable
  ((2 (poly rx)) = (poly (pmul rx rx))) ; polys are stars (slot 7): a numeral squares through *
  (((poly rx) ** 3) = (poly (pmul rx (pmul rx rx))))
  ((3 zp) = zp)                         ; the zero poly powers to itself
  (1 = (0 (poly rx)))                   ; the zero numeral: p**0 = 1
  (star? pp1)                           ; a declared star self-nets: the vocabulary follows
  (star? zp)                            ; the zero poly is a star, like 0
- ((net [pp1 pp1]) = (+ pp1 pp1)))      ; net of a list of polys is their sum -- the hom in the ring
+ ((net [pp1 pp1]) = (pp1 + pp1)))      ; net of a list of polys is their sum -- the hom in the ring
 
 ; --- the field: Q[x]/(x^2 - 2), where root-two squares to two --------------
 (: sq2xd [(2 /// 1) (0 /// 1)]                      ; x^2 == 2
@@ -395,7 +394,7 @@
    kg3 (vadd (vadd (vscale (2 /// 1) kx) (vscale (-3 /// 1) (kmul jxd kx2 ky)))
              (vscale (-1 /// 1) (kmul jxd (kmul jxd kx2 kx) kz))))
 (test
- (! (jdisc = 0))
+ !(jdisc = 0)
  (kg1 = (knum 3 1))
  (kg2 = (knum 3 -5))
  (kg3 = (knum 3 3)))
@@ -403,20 +402,20 @@
 ; --- part C: the published rational collision ------------------------------
 ; three distinct rational points, one image, by plain q-coin evaluation of F.
 (: (feval xx yy zz)
-   (: uu (+ 1 (* xx yy))
-      ww (+ 4 (* 3 (* xx yy)))
-      us (* uu uu)
-      ys (* yy yy)
-      xs (* xx xx)
-      [(+ (* (* us uu) zz) (* (* ys uu) ww))
-       (+ yy (+ (* 3 (* (* xx us) zz)) (* 3 (* (* xx ys) ww))))
-       (+ (* 2 xx) (+ (* -3 (* xs yy)) (* -1 (* (* xs xx) zz))))])
+   (: uu (1 + (xx * yy))
+      ww (4 + (3 * (xx * yy)))
+      us (uu * uu)
+      ys (yy * yy)
+      xs (xx * xx)
+      [(((us * uu) * zz) + ((ys * uu) * ww))
+       (yy + ((3 * ((xx * us) * zz)) + (3 * ((xx * ys) * ww))))
+       ((2 * xx) + ((-3 * (xs * yy)) + (-1 * ((xs * xx) * zz))))])
    cin1 [(0 /// 1) (0 /// 1) (-1 /// 4)]
    cin2 [(1 /// 1) (-3 /// 2) (13 /// 2)]
    cin3 [(-1 /// 1) (3 /// 2) (13 /// 2)]
    cimg [(-1 /// 4) (0 /// 1) (0 /// 1)])
 (test
- (! (cin1 = cin2)) (! (cin2 = cin3)) (! (cin1 = cin3))
+ !(cin1 = cin2) !(cin2 = cin3) !(cin1 = cin3)
  ((feval (0 /// 1) (0 /// 1) (-1 /// 4)) = cimg)
  ((feval (1 /// 1) (-3 /// 2) (13 /// 2)) = cimg)
  ((feval (-1 /// 1) (3 /// 2) (13 /// 2)) = cimg))

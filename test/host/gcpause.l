@@ -23,13 +23,13 @@
 ;   cat test/00-init.l test/host/gcpause.l | out/love
 ;
 ; not a corpus member, and the reason is the table above: it prints live-word counts,
-; and those differ by READER -- a file door and a seek door allocate differently on the
+; and those differ by reader -- a file door and a seek door allocate differently on the
 ; way in. test_stdincorpus holds the corpus byte-identical down all three doors, so a
 ; gauge that reports its own machine cannot ride it. the appetite is the second reason.
 
 (: G_LEN 0 G_GC 3 G_EVAC 7 G_OLD 8 G_MINOR 11 G_MAJCAP 12 G_MINHI 14 G_MAJHI 15
    (gget i) (peep (gauge 0) i 0)
-   (mx a b) (? (a < b) b a)
+   (mx a b) (a < b ? b a)
 
    ; one churn step: raise a fresh 4k list, force a minor under it (the list
    ; is the survivor set), answer `(minors words ns) for that one collection --
@@ -40,7 +40,7 @@
                _  (please ())
                ns (nclock t0)
                dg ((gget G_MINOR) - g0) de ((gget G_EVAC) - e0)
-               _  (tally keep)                       ; keep lives across the minor
+               _  #keep                       ; keep lives across the minor
              [dg de ns])
 
    ; k steps -> `(worst-words worst-ns collections) over the window
@@ -65,10 +65,17 @@
                  de ((gget G_EVAC) - e0)
                [de ns l])
 
-   (row maj r) (: _ (puts "live-w ") _ (putx (gget G_OLD))
-                  _ (puts "  major-w ") _ (putx <maj) _ (puts "  major-ns ") _ (putx <>maj)
-                  _ (puts "  minor-worst-w ") _ (putx <r) _ (puts "  minor-worst-ns ") _ (putx <>r)
-                  (putc 10))
+   (row maj r) (puts "live-w ",
+                putx (gget G_OLD),
+                puts "  major-w ",
+                putx <maj,
+                puts "  major-ns ",
+                putx <>maj,
+                puts "  minor-worst-w ",
+                putx <r,
+                puts "  minor-worst-ns ",
+                putx <>r,
+                putc 10)
 
    ; three levels, 12x tenured growth end to end, every level held live
    t1 (tenure 16)  r1 (churn 8) _ (row t1 r1)

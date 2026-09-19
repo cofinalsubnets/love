@@ -12,20 +12,18 @@
 
 (: R "/tmp/mctest"
    ; the text under the escapes: an ESC and its sequence, up to the final letter, drop
-   (plain s) ((: (g i acc esc) (? (i < #s)
-                                  (: c (s i)
-                                     (? esc (g (i + 1) acc (? (65 <= c < 91 || 97 <= c < 123) 0 1))
+   (plain s) ((: (g i acc esc) (i < #s ? (: c (s i)
+                                     (? esc (g (i + 1) acc (65 <= c < 91 || 97 <= c < 123 ? 0 1))
                                         (c = 27) (g (i + 1) acc 1)
-                                        (g (i + 1) (acc + string c) 0)))
-                                  acc)) 0 "" 0)
-   (find h n i) (? (i + #n < 1 + #h) (? (n = snip h i (i + #n)) 1 (find h n (i + 1))) 0)
+                                        (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)
+   (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
    (has? h n) (find h n 0)
    (starts? s p) (p = snip s 0 #p)
    (blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
-   (scrub _) (: _ (each ["/sub/deep.txt" "/plain.txt" "/run.sh" "/good" "/bad" "/zeta.txt"]
-                        (n \ unlink (R + n)))
-                 _ (rmdir (R + "/sub"))
-                 (rmdir R))
+   (scrub _) (each ["/sub/deep.txt" "/plain.txt" "/run.sh" "/good" "/bad" "/zeta.txt"]
+                        (n \ unlink (R + n)),
+              rmdir (R + "/sub"),
+              rmdir R)
 
    ; --- the fixture: one of each class mc paints ------------------------------------
    ;   sub/ a directory   plain.txt a file   run.sh executable
@@ -43,8 +41,8 @@
    ; --- the listing: "..", the directories, then the rest, each by name -------------
    es (mc-read R)
    _ (test (= [".." "sub" "bad" "good" "plain.txt" "run.sh"] (map cap es)))
-   _ (test (nil? (mc-read (R + "/plain.txt"))))     ; not a directory, so no listing
-   _ (test (nil? (mc-read (R + "/nosuch"))))
+   _ (test !(mc-read (R + "/plain.txt")))     ; not a directory, so no listing
+   _ (test !(mc-read (R + "/nosuch")))
    _ (test (".." != <(<(mc-read "/"))))             ; the root owes no ".."
 
    ; --- the four hues, off the same lstat the row already holds ---------------------

@@ -27,7 +27,7 @@
 
    ; no output -> the EmptyString singleton, tee or not
    quiet (herald ["sh" "-c" "exit 0"])
-   _ (test (two? quiet) (<quiet = 0) (! >quiet))
+   _ (test (two? quiet) (<quiet = 0) !>quiet)
 
    (puts "run: ok\n"))
 
@@ -42,12 +42,12 @@
 ; cooperative and never gets the turn -- so the control would deadlock instead of
 ; reddening, and a gate that hangs is worse than one that fails.
 (: pr (pipe 0)
-   rfd (cap pr) wfd (cup pr)
+   rfd <pr wfd >pr
    pid (spawnio ["sh" "-c" "sleep 1; cat >/dev/null"] rfd 1 2 [wfd] -1 0)
    _ (close rfd)
    w (fdopen wfd)
    t0 (clock 0)
-   _ (say w (* "x" 200000))          ; 200K against a 64K pipe: the tail cannot land
+   _ (say w ("x" * 200000))          ; 200K against a 64K pipe: the tail cannot land
    ms (clock t0)
    _ (test (charm? pid) (0 < pid)
              (ms < 500))             ; a blocking door sits here for the child's whole nap
@@ -72,8 +72,8 @@
 ; the status has to come out of the pipeline, and $? there is head's, so love's
 ; own goes to a file from inside the subshell -- POSIX, no pipestatus.
 (: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | out/love; echo $? > out/.sigst ) | head -1 > /dev/null; cat out/.sigst; rm -f out/.sigst"
-   st (cup (hark ["sh" "-c" spew]))
-   sig (cup (hark ["sh" "-c" "grep SigIgn /proc/self/status"]))
+   st >(hark ["sh" "-c" spew])
+   sig >(hark ["sh" "-c" "grep SigIgn /proc/self/status"])
    _ (test
       (st = "141\n")                       ; 128 + sigpipe: the death the shell has always seen
       (sig = "SigIgn:\t0000000000000000\n")))  ; the child inherits no ignore at all
@@ -85,7 +85,7 @@
 ; timeout, because its regression is a hang (the scheduler sleeping on a fd set
 ; the ninth parked task never got into) and a wedged gate is worse than a red one.
 ; it must be a subprocess for that reason alone; nothing about it needs one.
-(: rc (cap (hark ["sh" "-c" "timeout 20 out/love test/host/parked.l"]))
+(: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/parked.l"])
    _ (test (rc = 0)))                    ; 124 is the timeout: the old cap's hang
 
 (puts "run parked: ok\n")
@@ -96,7 +96,7 @@
 ; waits for a connection only the wedged vm could still make), and a wedged gate is
 ; worse than a red one. 124 is the control's answer, and each law was verified by
 ; putting its own blocking call back.
-(: rc (cap (hark ["sh" "-c" "timeout 20 out/love test/host/nifpark.l"]))
+(: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/nifpark.l"])
    _ (test (rc = 0)))
 
 (puts "run nifpark: ok\n")
@@ -106,7 +106,7 @@
 ; the loopback. driven from here for the usual reason: a resolver whose deadline
 ; stops working does not redden, it hangs -- there is no answer coming and nothing
 ; to wake the caller.
-(: rc (cap (hark ["sh" "-c" "timeout 20 out/love test/host/dns.l"]))
+(: rc <(hark ["sh" "-c" "timeout 20 out/love test/host/dns.l"])
    _ (test (rc = 0)))
 
 (test_fin ())

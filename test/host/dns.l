@@ -5,13 +5,16 @@
 ; answers a canned response built with the module's own be16 helper. Nothing
 ; leaves the loopback and nothing here reads the machine's own /etc.
 ;
-;   out/love test/host/dns.l      ; green dots = pass, exits 1 on fail
+;   out/love test/host/dns.l      ; silence is a pass, exits 1 on fail
+;
+; the checks are `assert`, not `test`: standalone there is no harness, so `test`
+; is a missing name and the file dies at load.
 ;
 ; driven from test/host/run.l under a timeout, like the other socket laws: a
 ; resolver that stops parking stops the whole vm, and a wedged gate is worse than
 ; a red one.
 ; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here.
-(? (cite 'posix) (borrow 'posix) ())
+(cite 'posix ? (borrow 'posix) ())
 
 (: _ (borrow 'dns))
 
@@ -22,11 +25,10 @@
 ; what the parser's skip has to get right.
 (: (dns-reply q addr tc)
     ((snip q 0 2)                                     ; the id, echoed
-     + (dns-be16 (? tc 33664 33152))                  ; qr|RD|ra, and TC if asked
-     + (dns-be16 1) + (dns-be16 (? tc 0 1)) + (dns-be16 0) + (dns-be16 0)
-     + (snip q 12 (tally q))                          ; the question, verbatim
-     + (? tc ""
-          ((string 192) + (string 12)             ; name: a pointer to offset 12
+     + (dns-be16 (tc ? 33664 33152))                  ; qr|RD|ra, and TC if asked
+     + (dns-be16 1) + (dns-be16 (tc ? 0 1)) + (dns-be16 0) + (dns-be16 0)
+     + (snip q 12 #q)                          ; the question, verbatim
+     + (tc ? "" ((string 192) + (string 12)             ; name: a pointer to offset 12
            + (dns-be16 1) + (dns-be16 1)              ; type A, class in
            + (dns-be16 0) + (dns-be16 60)             ; ttl
            + (dns-be16 4)
@@ -38,7 +40,7 @@
    (nameserver port addr tc)
     (twirl (\ _ (: p (udp-bind port)
                    d (udp-recv p)
-                   _ (udp-send p (cap d) (dns-reply (cup d) addr tc))
+                   _ (udp-send p <d (dns-reply >d addr tc))
                    _ (rest 20)                        ; let the datagram leave
                    _ (close p) 1)) ()))
 
@@ -50,7 +52,7 @@
    _ (catch s)
    _ (assert (two? a)
              (<a = 16909060)
-             (! (two? >a))))                          ; exactly one a record
+             !(two? >a)))                          ; exactly one a record
 
 ; --- law 2: a nameserver that never answers gives up, and does not hang --------
 ; the deadline is a park, not a poll -- the receiver waits on the socket, a
@@ -60,7 +62,7 @@
 (: t0 (clock 0)
    a (dns-ask 2130706433 7402 "ab.cd" 200)            ; nothing is bound there
    ms ((clock 0) - t0)
-   _ (assert (! (two? a))
+   _ (assert !(two? a)
              (200 <= ms)
              (ms < 2000)))
 
@@ -77,7 +79,7 @@
 ; and a fixture is the only way to say that: pointing at the machine's own file
 ; would make the gate depend on the machine.
 (: dir "out/.dns-t"
-   _ (cap (hark ["mkdir" "-p" dir]))
+   _ <(hark ["mkdir" "-p" dir])
    hp (dir + "/hosts")
    cp (dir + "/conf")
    h (open hp "w")
@@ -92,14 +94,14 @@
    ; the conf parse, read back through the door that uses it
    ns (dns-servers cp)
    _ (assert (two? ns)
-             (<(cap ns) = 151587081)                  ; 9.9.9.9
-             (>(cap ns) = 53))                        ; ... and resolv.conf means 53
-   _ (assert (= (dns-conf cp "search") '("one.test" "two.test"))))
+             (<<ns = 151587081)                  ; 9.9.9.9
+             (><ns = 53))                        ; ... and resolv.conf means 53
+   _ (assert (dns-conf cp "search" = '("one.test" "two.test"))))
 
 ; --- law 5: an empty resolv.conf still names a server --------------------------
 ; musl's fallback and moonlibc's: 127.0.0.1, so a machine with no config reaches a
 ; local stub instead of answering "no such host".
 (: ns (dns-servers "out/.dns-t/nope")
-   _ (assert (two? ns) (<(cap ns) = 2130706433)))
+   _ (assert (two? ns) (<<ns = 2130706433)))
 
-(: _ (say out "dns: ok") (putc 10))
+(say out "dns: ok", putc 10)

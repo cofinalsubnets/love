@@ -21,7 +21,7 @@
    look (SD 'look) lay (SD 'lay) mk (SD 'mk) dirty (SD 'dirty) refof (SD 'refof)
    urlsplit (SD 'url-split) urlp (SD 'url?) digits (SD 'digits) readform (SD 'readform)
    root "out/.sbhttp"
-   _ (hark (list "rm" "-rf" root))
+   _ (hark ["rm" "-rf" root])
    _ (mkdir root 493)
    _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)
    home (cwd 0)
@@ -35,38 +35,37 @@
    _ (mk ()) _ (record "first")
    _ (lay "a.txt" "v2\n") _ (record "second")
    _ (bank '("v1"))
-   nblob (tally (readdir ".sb/blob"))
+   nblob #(readdir ".sb/blob")
    _ (chdir home)
    ; --- kiosko over the origin's .sb/, in a task ---
    port 7433
    l (listen port)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
-                                _ (? (hot? c) (: _ ((cite 'kiosko 'serve1) oroot () c)
-                                          (close c)) ())
+                                _ (hot? c ? (cite 'kiosko 'serve1 oroot () c, close c))
                                 (g k)))
                     0)) 0)
    ; --- the pull, from a nest that has never seen the origin ---
    _ (chdir (root + "/clone"))
-   got (sync ("http://127.0.0.1:" + (show port) + "/"))
+   got (sync ("http://127.0.0.1:" + show port + "/"))
    a (look "a.txt") b (look "sub/b.txt") e (look "empty.txt")
    clean (dirty ())
    ref (refof "v1")
-   npat (tally (readdir ".sb/patch"))
+   npat #(readdir ".sb/patch")
    _ (chdir home))
 
 (test
- (urlp "http://h/") (! (urlp "https://h/")) (! (urlp "../peer"))     ; the url gate
- (5432 = (digits "5432")) (! (digits "8x"))
- ((show '("h" 8080 "/a")) = (show (urlsplit "http://h:8080/a")))
- ((show '("h" 80 "/")) = (show (urlsplit "http://h")))
- ((show '(1 2)) = (show (readform "(1 2)")))                         ; a form off a string
+ (urlp "http://h/") !(urlp "https://h/") !(urlp "../peer")     ; the url gate
+ (5432 = digits "5432") !(digits "8x")
+ (show '("h" 8080 "/a") = show (urlsplit "http://h:8080/a"))
+ (show '("h" 80 "/") = show (urlsplit "http://h"))
+ (show '(1 2) = show (readform "(1 2)"))                         ; a form off a string
  (0 < got)                                                           ; the pull went through
  (2 = npat) (4 = nblob)                                              ; every patch, every blob
  (<>a = "v2\n")                                                    ; the head content
  (<>b = "nested\n")                                                ; ...a nested path materialized
- (two? e) (0 = (tally <>e))                                        ; ...and the empty file, 0 bytes
+ (two? e) (0 = #<>e)                                        ; ...and the empty file, 0 bytes
  (two? ref)                                                          ; the ref rode along
  (0 = clean))                                                        ; the tree matches the snap
 
-(: _ (test_fin ()) _ (puts "sbhttp: ok") _ (putc 10) 0)
+(test_fin (), puts "sbhttp: ok", putc 10, 0)

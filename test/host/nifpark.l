@@ -3,7 +3,10 @@
 ; instead of stopping the whole vm inside a syscall. The device floor made every
 ; device entry point nonblocking; this is the layer where the caller is a nif.
 ;
-;   out/love test/host/nifpark.l      ; green dots = pass, exits 1 on fail
+;   out/love test/host/nifpark.l      ; silence is a pass, exits 1 on fail
+;
+; the checks are `assert`, not `test`: standalone there is no harness, so `test`
+; is a missing name and the file dies at load.
 ;
 ; driven from test/host/run.l under a timeout, because most of these regressions
 ; are hangs rather than red asserts: a blocking `accept` with an empty backlog waits
@@ -18,12 +21,11 @@
 
 ; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here,
 ; the same guarded way the corpus prelude borrows it.
-(? (cite 'posix) (borrow 'posix) ())
+(cite 'posix ? (borrow 'posix) ())
 
-(: (ticker n) (twirl (\ _ ((: (go u) (: _ (pin n 0 (1 + (peep n 0 0)))
-                                         _ (rest 0)
-                                         (go ())))
-                           ())) ()))
+(: (ticker n) (twirl (\ _ ((: (go u) (pin n 0 (1 + (peep n 0 0)),
+                                      rest 0,
+                                      go ())) ())) ()))
 
 ; --- law 1: accept parks on an empty backlog ----------------------------------
 ; the server task reaches `accept` before anyone has connected. Under the blocking
@@ -31,8 +33,8 @@
 ; and not the main task that was about to connect, which is why the control hangs.
 (: port 7394
    l (listen port)
-   n (tablet 0)
-   srv (twirl (\ _ (: c (accept l) _ (close c) 1)) ())
+   n {}
+   srv (twirl (\ _ (: c (accept l) (close c, 1))) ())
    t (ticker n)
    _ (rest 20)                          ; both reach their parks; the ticker spins
    k (peep n 0 0)
@@ -48,13 +50,13 @@
 ; 127.0.0.1 is 2130706433 -- which is how inle/sock.c marshals a sockaddr into a
 ; charm.
 (: p (udp-bind 7395)
-   n (tablet 0)
-   rx (twirl (\ _ (: d (udp-recv p) _ (close p) (cup d))) ())
+   n {}
+   rx (twirl (\ _ (: d (udp-recv p) (close p, >d))) ())
    t (ticker n)
    _ (rest 20)
    k (peep n 0 0)
    s (udp-bind 7396)
-   _ (udp-send s ((2130706433 * 65536) + 7395) "ping")
+   _ (udp-send s (2130706433 * 65536 + 7395) "ping")
    got (catch rx)
    _ (freeze t)
    _ (close s)
@@ -66,13 +68,13 @@
 ; a pid is not an fd, so `wait` re-arms for the next tick. That is rung 5's shape for
 ; the write residue and the same trade. What the law pins is only that a peer runs --
 ; how often the waiter wakes to ask is the poll's business, not the law's.
-(: n (tablet 0)
+(: n {}
    t (ticker n)
    r (tether '("sleep" "0.3"))
-   st (wait (cap r))
+   st (wait <r)
    _ (freeze t)
-   _ (close (cup r))
-   _ (assert (0 < (peep n 0 0))         ; 0 with the blocking waitpid back in
+   _ (close >r)
+   _ (assert (0 < peep n 0 0)         ; 0 with the blocking waitpid back in
              (st = 0)))                 ; ... and the child's status is still exact
 
 ; --- law 4: hark parks for the child's whole life ------------------------------
@@ -84,13 +86,13 @@
 ; the child must be slow in the middle, not just at the end -- a child that
 ; writes everything at once and exits would let a blocking drain finish in one
 ; read and the law would pass over the bug.
-(: n (tablet 0)
+(: n {}
    t (ticker n)
    r (hark '("sh" "-c" "echo one; sleep 0.2; echo two"))
    _ (freeze t)
-   _ (assert (0 < (peep n 0 0))         ; 0 with the blocking drain back in
-             ((cap r) = 0)
-             ((cup r) = "one\ntwo\n")))  ; ... and the capture is still whole
+   _ (assert (0 < peep n 0 0)         ; 0 with the blocking drain back in
+             (<r = 0)
+             (>r = "one\ntwo\n")))  ; ... and the capture is still whole
 
 ; --- law 5: connect parks on the handshake ------------------------------------
 ; the write-direction park, and the only one there is -- held back until something
@@ -118,12 +120,12 @@
 ; socket is left behind by a task unspliced mid-park.
 (: port 7397
    l (listen port)
-   n (tablet 0)
+   n {}
    a (connect "127.0.0.1" port)         ; the witness: one that lands, kept open
-   (fillq k) (? (k = 0) 0 (: c (connect "127.0.0.1" port) _ (close c) (fillq (k - 1))))
+   (fillq k) (k @ 0 0 (: c (connect "127.0.0.1" port) (close c, fillq (k - 1))))
    _ (fillq 512)                        ; a + 512 = 513 = backlog + 1: the queue is full
    t (ticker n)
-   s (twirl (\ _ (connect "127.0.0.1" port)) ())   ; the next: syn dropped, stalls
+   s (twirl (_ \ connect "127.0.0.1" port) ())   ; the next: syn dropped, stalls
    _ (rest 50)
    k (peep n 0 0)
    _ (close l)                          ; ... which resets it, so the task ends
@@ -134,4 +136,4 @@
              (nom? r)                   ; the reset handshake answers its nom
              (lit? a)))                 ; ... and a connect that did land is a port
 
-(: _ (say out "nifpark: ok") (putc 10))
+(say out "nifpark: ok\n")

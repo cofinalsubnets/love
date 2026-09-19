@@ -1,7 +1,8 @@
 ; --- test/host/parked.l: many tasks parked on many fds, and the wake finds them --
 ; not in hostnif_tests: this is the program test/host/run.l runs as a bounded
 ; subprocess, because its regression is a hang and a gate that wedges is worse
-; than one that fails. The law it carries:
+; than one that fails -- so the checks are `assert`, not `test`, which is a
+; missing name with no harness catted in. the law it carries:
 ;
 ;   the scheduler used to fold every parked task's fd into an `int fds[8]` on its
 ;   own C frame and silently drop the rest, so a ninth parked task with no timer
@@ -19,21 +20,21 @@
 ;
 ; the target is the first-twirled task -- tasks are prepended to the ring, so it
 ; sits furthest from the walking head and is the one the old cap dropped first.
-(: (mk k acc) (? (k = 0) acc (mk (k - 1) (. (pipe 0) acc)))
+(: (mk k acc) (k = 0 ? acc (mk (k - 1) (. (pipe 0) acc)))
    ps (mk 16 ())
    q (pipe 0)
-   qw (fdopen (cup q))
-   qr (fdopen (cap q))
+   qw (fdopen >q)
+   qr (fdopen <q)
 
    ; the write ends stay open here. close one and its reader gets the end of the
    ; stream instead of parking, and the whole shape evaporates.
-   _ (each ps (\ p (twirl (\ _ (: r (fdopen (cap p))
+   _ (each ps (\ p (twirl (\ _ (: r (fdopen <p)
                                   _ (see r)
                                   _ (say qw "x")
                                   (flush qw))) ())))
 
    ; the one byte from outside, a second from now: by then all 17 are parked.
-   pid (spawnio ["sh" "-c" "sleep 1; printf x"] 0 (cup (cap ps)) 2 [] -1 0)
+   pid (spawnio ["sh" "-c" "sleep 1; printf x"] 0 ><ps 2 [] -1 0)
 
    b (see qr)                      ; parks; only the woken peer's byte releases it
    _ (wait pid)
@@ -52,10 +53,10 @@
 ; gulps both bytes into the port. the peer is then parked on a fd with nothing left
 ; to say, over a buffer holding its byte -- and `catch` hangs instead of reaping.
 (: p (pipe 0)
-   r (fdopen (cap p))               ; one heap port; the write end stays a bare fd
+   r (fdopen <p)               ; one heap port; the write end stays a bare fd
    t (twirl (\ _ (see r)) ())
    _ (rest 20)                      ; t reaches its park before anything is written
-   pid (spawnio ["sh" "-c" "sleep 0.3; printf AB"] 0 (cup p) 2 [] -1 0)
+   pid (spawnio ["sh" "-c" "sleep 0.3; printf AB"] 0 >p 2 [] -1 0)
    a (see r)
    b (catch t)                      ; hangs with the port half of the test taken out
    _ (wait pid)
@@ -66,8 +67,8 @@
 ; law), so awaiting one whose buffer is already full parked on a device that has
 ; nothing left to say. one task is enough here, and the hang is the monotask wait.
 (: p2 (pipe 0)
-   r2 (fdopen (cap p2))
-   pid2 (spawnio ["sh" "-c" "printf AB"] 0 (cup p2) 2 [] -1 0)
+   r2 (fdopen <p2)
+   pid2 (spawnio ["sh" "-c" "printf AB"] 0 >p2 2 [] -1 0)
    _ (wait pid2)
    a2 (see r2)                      ; gulps both; the second is in the buffer now
    _ (await r2)                     ; hangs with the buffer term taken out
@@ -85,13 +86,13 @@
 ; from running dry, which is exactly why the bug survived the first reading.
 ; verified by fault injection: gating the sweep hangs this law and nothing else.
 (: p3 (pipe 0)
-   r3 (fdopen (cap p3))
-   (spin n) (? (n < 1) 0 (spin (n - 1)))
+   r3 (fdopen <p3)
+   (spin n) (n < 1 ? 0 (spin (n - 1)))
    t3 (twirl (\ _ (see r3)) ())
    _ (rest 30)                      ; t3 reaches its park before the compute starts
    c1 (twirl (\ _ (spin 4000000)) ())
    c2 (twirl (\ _ (spin 4000000)) ())
-   pid3 (spawnio ["sh" "-c" "sleep 0.2; printf Z"] 0 (cup p3) 2 [] -1 0)
+   pid3 (spawnio ["sh" "-c" "sleep 0.2; printf Z"] 0 >p3 2 [] -1 0)
    got (catch t3)                   ; never returns if the parked peer starves
    _ (wait pid3)
    _ (freeze c1) _ (freeze c2)

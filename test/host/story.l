@@ -11,25 +11,21 @@
 
 (borrow 'story)   ; the artifact's module, warm from the tree
 
-(: (find h n i) (? (i + tally n < 1 + tally h)
-                  (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))
-                  0)
+(: (find h n i) (i + tally n < 1 + tally h ? (n = snip h i (i + tally n) ? 1 (find h n (i + 1))) 0)
    (has? h n) (find h n 0)
-   ; the text under the escapes: an ESC and its CSI sequence, up to the final letter, drop
-   (plain s) ((: (g i acc esc) (? (i < #s)
-                                  (: c (s i)
-                                     (? esc (g (i + 1) acc (? (65 <= c < 91 || 97 <= c < 123) 0 1))
+   ; the text under the escapes: an ESC and its csi sequence, up to the final letter, drop
+   (plain s) ((: (g i acc esc) (i < #s ? (: c (s i)
+                                     (? esc (g (i + 1) acc (65 <= c < 91 || 97 <= c < 123 ? 0 1))
                                         (c = 27) (g (i + 1) acc 1)
-                                        (g (i + 1) (acc + string c) 0)))
-                                  acc)) 0 "" 0)
+                                        (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)
    (keys! g s) (each (map (i \ s i) ^#s) (c \ story-key g c))
 
    ; --- the level file, and its round trip ---
    L (load-level "apps/rove/levels/lighthouse.l")
    _ (test L (13 = (L 'w)) (14 = (L 'h)) (6 = (L 'sx)) (8 = (L 'sy))
-             (= '(lamp sign) (sort (keys (L 'things))))
+             ('(lamp sign) = sort (keys (L 'things)))
              ("*" = (L 'things 'lamp 'gl)) (220 = (L 'things 'lamp 'fg))
-             (= (data-of (level-of <(sound (level-text L)))) (data-of L)))   ; a shown level reads back
+             (data-of (level-of <(sound (level-text L))) = data-of L))   ; a shown level reads back
    ; the palette: the space is a wall that shows nothing, the water a wall with pens, the
    ; floor a floor; a character the palette lacks is a floor drawn as itself
    _ (test (4 = tally (keys (L 'tiles))) (wall? L 0 0) (" " = (kind-of L 32) 'gl) (wall? L 0 12) (27 = (kind-of L 126) 'fg)
@@ -89,7 +85,7 @@
    _ (keys! g2 "\e")
 
    ; --- the view scrolls: a map wider and taller than the screen follows you ---
-   big (level "wide" 1 1 (map (\ y (: (go x acc) (? (x < 60) (go (x + 1) (acc + (? (y = 0 || y = 29 || x = 0 || x = 59) "#" "."))) acc) (go 0 ""))) (jot 30)) {} {})
+   big (level "wide" 1 1 (map (\ y (: (go x acc) (x < 60 ? (go (x + 1) (acc + (y = 0 || y = 29 || x = 0 || x = 59 ? "#" "."))) acc) (go 0 ""))) (jot 30)) {} {})
    g4 (story-new big)
    f4 (plain (story-frame g4 20 10))
    r4 (split "\r\n" f4)

@@ -1,10 +1,10 @@
-; --- test/host/x11.l: the X11 colour names (apps/x11.l) --------------------------------
+; --- test/host/x11.l: the x11 colour names (apps/x11.l) --------------------------------
 ;   cat test/00-init.l test/host/x11.l | out/love
 (borrow 'x11)
 (test ("#f0fff0" = x11 "honeydew")
       ("#e6e6fa" = x11 "Lavender")
       ("#000080" = x11 "Navy Blue")                   ; case and spaces do not count
-      ("#bebebe" = x11 "gray") ("#808080" = x11 "webgray")   ; X11's gray, and the web's
+      ("#bebebe" = x11 "gray") ("#808080" = x11 "webgray")   ; x11's gray, and the web's
       (() = x11 "mauve-ish") (() = x11 42)
       ([230 230 250] = x11-rgb "lavender")
       ("\e[38;2;240;255;240m" = x11-fg "honeydew")

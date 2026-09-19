@@ -33,18 +33,17 @@
 ; the fixtures, leaked on purpose (a body-less `:`) so every assert below shares
 ; them -- the shape test/host/tls.l wears.
 (: ckey (bytes 32 (\ i i))
-   cnon (bytes 12 (\ i (? (i = 7) 74 0)))            ; §2.4.2's nonce: ..4a
-   (cmsg n) (bytes n (\ i (& ((i * 7) + 11) 255)))   ; a fixed pseudo-random run
+   cnon (bytes 12 (\ i (i = 7 ? 74 0)))            ; §2.4.2's nonce: ..4a
+   (cmsg n) (bytes n (\ i (((i * 7) + 11) & 255)))   ; a fixed pseudo-random run
    ; the first length at which the twins disagree, or -1 if none does. a bare
    ; false would say "somewhere"; this names the block edge it broke on.
-   (cbad i n) (? (n < i) -1
-                 (: m (cmsg i)
-                    (? (! ((chacha20 ckey cnon 1 m) = (cc-xor ckey cnon 1 m))) i
-                       (! ((poly1305 ckey m) = (po-mac ckey m))) i
+   (cbad i n) (n < i ? -1 (: m (cmsg i)
+                    (? !((chacha20 ckey cnon 1 m) = (cc-xor ckey cnon 1 m)) i
+                       !((poly1305 ckey m) = (po-mac ckey m)) i
                        (cbad (i + 1) n))))
    (cctrbad c n) (: big (cmsg 512)                   ; eight blocks, so it carries
                     (? (n < c) -1
-                       (! ((chacha20 ckey cnon c big) = (cc-xor ckey cnon c big))) c
+                       !((chacha20 ckey cnon c big) = (cc-xor ckey cnon c big)) c
                        (cctrbad (c + 1) n))))
 
 ; --- vectors: the C side against the RFC, not merely against love ------------------
@@ -66,8 +65,8 @@
 (test
  (-1 = (cbad 0 129))
  ; ..and the run is not two piles of nothing: lengths differ, counters differ
- (! ((poly1305 ckey (cmsg 32)) = (poly1305 ckey (cmsg 33))))
- (! ((chacha20 ckey cnon 1 (cmsg 64)) = (chacha20 ckey cnon 2 (cmsg 64)))))
+ !((poly1305 ckey (cmsg 32)) = (poly1305 ckey (cmsg 33)))
+ !((chacha20 ckey cnon 1 (cmsg 64)) = (chacha20 ckey cnon 2 (cmsg 64))))
 
 ; --- counters: love varies the counter down a galaxy, C walks it ------------------
 (test
@@ -77,23 +76,23 @@
  ((snip (chacha20 ckey cnon 1 (cmsg 512)) 64 128)
   = (cc-xor ckey cnon 2 (snip (cmsg 512) 64 128)))
  ; a counter step really moves the keystream, so the above compares something
- (! ((chacha20 ckey cnon 1 (cmsg 512)) = (chacha20 ckey cnon 3 (cmsg 512)))))
+ !((chacha20 ckey cnon 1 (cmsg 512)) = (chacha20 ckey cnon 3 (cmsg 512))))
 
 ; --- misuse: a value op, so a wrong shape answers () and encrypts nothing ----------
 (: shortk (bytes 31 (\ i i))
    longn (bytes 16 (\ i i))
    (test
-    (! (chacha20 shortk cnon 1 "hello"))
-    (! (chacha20 ckey longn 1 "hello"))
-    (! (chacha20 ckey cnon 'x "hello"))
-    (! (chacha20 ckey cnon -1 "hello"))
-    (! (poly1305 shortk "hello"))
-    (! (poly1305 ckey 'x))
+    !(chacha20 shortk cnon 1 "hello")
+    !(chacha20 ckey longn 1 "hello")
+    !(chacha20 ckey cnon 'x "hello")
+    !(chacha20 ckey cnon -1 "hello")
+    !(poly1305 shortk "hello")
+    !(poly1305 ckey 'x)
     ; ..and the empty message is a real answer, not a misuse: a 16-byte tag
-    (16 = (tally (poly1305 ckey "")))
+    (16 = #(poly1305 ckey ""))
     ((poly1305 ckey "") = (po-mac ckey ""))))
 
-(: _ (test_fin ())
-   _ (puts "apps/tls: ok -- the C twins agree with love (vectors, lengths, counters, misuse)
-")
-   0)
+(test_fin (),
+ puts "apps/tls: ok -- the C twins agree with love (vectors, lengths, counters, misuse)
+",
+ 0)

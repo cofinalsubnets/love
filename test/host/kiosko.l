@@ -25,7 +25,7 @@
  (elem 'kiosko (cite ()))
  (elem 'serve1 (keys (cite 'kiosko)))
  (lit? (cite 'kiosko 'kiosko-main))
- (! (cite 'kiosco)))
+ !(cite 'kiosco))
 
 ; --- the shelf ------------------------------------------------------------------------
 (: dir "/tmp/kioskotest"
@@ -45,7 +45,7 @@
    ; that can go wrong -- a dropped tail, a doubled chunk, a byte lost at the seam where
    ; swig answers 0 and a single `see` carries the next byte -- shows up only past the
    ; first buffer. the body is checked whole, not just its length, so a reordering counts.
-   big (: (rep s n) (? (n < 1) "" (s + rep s (n - 1)))
+   big (: (rep s n) (n < 1 ? "" (s + rep s (n - 1)))
           line "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n"
           (rep line 3000))                              ; 64 bytes x 3000 = 192000
    _ (put-file "big.txt" big)
@@ -60,10 +60,10 @@
    ; listener (a bare `accept` would BLOCK the whole process, and the client below would
    ; never get to run), then serve1 answers one request. it stops on a flag rather than a
    ; count, so adding an assert below does not silently hang the run.
-   stop (tablet 0)
-   ; ..and it takes TWO: the decoded path and the request head, which is what serve1
+   stop {}
+   ; ..and it takes two: the decoded path and the request head, which is what serve1
    ; hands it. an arity short of that curries instead of failing -- the answer gets
-   ; INDEXED by the head and reads as "not mine", so every claim quietly becomes a 404.
+   ; indexed by the head and reads as "not mine", so every claim quietly becomes a 404.
    (mk p head) (? (p = "/made") '("text/plain" "made on the way out")
                   (p = "/a.txt") '("text/plain" "the hook wins over the file")
                   (p = "/echo") ["text/plain" head]
@@ -72,8 +72,8 @@
                                 c (accept l)
                                 ; the maker hook: it claims /made and says "not mine" for
                                 ; everything else, including a path that is a file on disk
-                                _ (? (hot? c) (: _ (serve1 dir mk c) _ (seal c 1) (close c)) 0)
-                                (? (peep stop 0 0) 1 (g (k + 1))))) 0)) 0)
+                                _ (hot? c ? (serve1 dir mk c, seal c 1, close c) 0)
+                                (peep stop 0 0 ? 1 (g (k + 1))))) 0)) 0)
    (ask req) (: c (connect "127.0.0.1" port)
                 _ (say c req)
                 _ (flush c)
@@ -81,9 +81,9 @@
                 _ (close c)
                 r)
    (get p)   (ask ("GET " + p + " HTTP/1.1\r\nHost: x\r\n\r\n"))
-   (code r)  (: n (tally r) ((: (g i) (? (&& (i < n) (! ((r i) = 32))) (g (i + 1)) (snip r (i + 1) (i + 4)))) 0))
-   (sub? s t) (: n (tally s) m (tally t)
-                 ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
+   (code r)  (: n #r ((: (g i) (&& (i < n) !((r i) = 32) ? (g (i + 1)) (snip r (i + 1) (i + 4)))) 0))
+   (sub? s t) (: n #s m #t
+                 ((: (g i) ((i + m) <= n ? ((snip s i (i + m)) = t ? 1 (g (i + 1))) 0)) 0))
 
    ; --- the maker hook -------------------------------------------------------------------
    ; it is asked first, before the file on disk, which is the whole point: `love web`
@@ -112,7 +112,7 @@
       ((code (get "/index.html")) = "200")
       ((code hd) = "200")
       (sub? hd "Content-Length: 13")     ; head reports the body it does not send
-      (! (sub? hd "<h1>root</h1>"))
+      !(sub? hd "<h1>root</h1>")
       ((code (ask "PUT / HTTP/1.1\r\nHost: x\r\n\r\n")) = "405")
       ((code (ask "DELETE / HTTP/1.1\r\nHost: x\r\n\r\n")) = "405"))
 
@@ -147,11 +147,11 @@
 
    ; --- a body past the chunk boundary ----------------------------------------------------
    bigr (get "/big.txt")
-   _ (: i ((: (g k) (? (&& (k < tally bigr) (! ((snip bigr k (k + 4)) = "\r\n\r\n"))) (g (k + 1)) k)) 0)
-        body (snip bigr (i + 4) (tally bigr))
-        _ (test ((tally big) = 192000)                       ; the fixture is really 3 chunks
+   _ (: i ((: (g k) (&& (k < tally bigr) !((snip bigr k (k + 4)) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
+        body (snip bigr (i + 4) #bigr)
+        _ (test (#big = 192000)                       ; the fixture is really 3 chunks
                   (sub? bigr "Content-Length: 192000")
-                  ((tally body) = (tally big))
+                  (#body = #big)
                   (body = big)))                               ; ..and byte-for-byte, not just as long
 
    ; --- the lane boundary in the read -------------------------------------------------
@@ -163,16 +163,16 @@
    ; one side and wrong on the other. one file each side of the line, byte for byte.
    ; the floor is kiosko's and it moved (8192 -> 131072 when `snip` learned to read a
    ; cask), so these two follow it -- read `caskfloor` before touching the sizes.
-   (dbl s n) (? (n <= tally s) (snip s 0 n) (dbl (s + s) n))     ; O(n), not (s + rep ..)
+   (dbl s n) (n <= tally s ? (snip s 0 n) (dbl (s + s) n))     ; O(n), not (s + rep ..)
    under (dbl "abcdefgh" 131064)
    over  (dbl "abcdefgh" 131080)
    _ (put-file "under.txt" under)
    _ (put-file "over.txt" over)
-   _ (: (bodyof r) (: n (tally r)
-                      i ((: (g k) (? (&& (k < n) (! ((snip r k (k + 4)) = "\r\n\r\n"))) (g (k + 1)) k)) 0)
+   _ (: (bodyof r) (: n #r
+                      i ((: (g k) (&& (k < n) !((snip r k (k + 4)) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
                       (snip r (i + 4) n))
         u (get "/under.txt") o (get "/over.txt")
-        (test ((tally under) = 131064) ((tally over) = 131080)  ; really either side of 131072
+        (test (#under = 131064) (#over = 131080)  ; really either side of 131072
                 ((bodyof u) = under)                              ; the copy lane
                 ((bodyof o) = over)                               ; the cask lane
                 (sub? u "Content-Length: 131064")
@@ -193,7 +193,7 @@
         bigr (: q (open "/proc/cpuinfo" "r") (slurp q))
         (test (0 < tally e)
                 (e = r)                                   ; byte for byte, through the loop
-                ((tally big) = (tally bigr))))            ; ..and nothing truncated at 4096
+                (#big = #bigr)))            ; ..and nothing truncated at 4096
 
    ; --- content types -------------------------------------------------------------------
    _ (test

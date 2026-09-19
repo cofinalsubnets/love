@@ -1,6 +1,6 @@
 ; --- test/host/loader.l: use on a path, the loader (love/boot/prel.l) ---
 ; not in the corpus, and it cannot be: love0 evaluates the corpus twice, and the first
-; law below is that zz-loadprobe is ABSENT -- true once, since the run that proves it
+; law below is that zz-loadprobe is absent -- true once, since the run that proves it
 ; registers it. a second evaluation reads the module it just made and stops there.
 ; `borrow` answers a module two ways and only two: a NAME it already holds -- baked,
 ; catted, or loaded earlier -- and a PATH the caller writes out. it invents no
@@ -25,7 +25,7 @@
 ; symbol still misses: the loader has no path to invent, so the splice raises by
 ; name and nothing registers.
 (: a (trap (\ _ (borrow 'zz-loadprobe)) () (\ a b 'caught))
- (test (a = 'caught) (nil? (cite 'zz-loadprobe))))
+ (test (a = 'caught) !(cite 'zz-loadprobe)))
 
 ; the path lane: one layer named for the basename, registered, spliced -- bare names
 ; resolve in forms compiled after the use (the capture law: a use must precede its readers)
@@ -39,7 +39,7 @@
 (borrow "lib/zz-loadprobe/sub.l")
 (test (70 = zz-probe-sub 7)
         (lit? (cite 'sub))
-        (nil? (cite 'zz-loadprobe/sub)))
+        !(cite 'zz-loadprobe/sub))
 
 ; a re-use hits the registry, never the file again -- by name or by the path that
 ; named it: rewrite the file, use both ways, the module keeps its first reading
@@ -61,7 +61,7 @@
    _ (say p "(module 'zz-othername (: zz-other-pin 79))") (close p))
 (borrow "lib/zz-elsewhere.l")
 (test (79 = (cite 'zz-othername 'zz-other-pin))
-        (nil? (cite 'zz-elsewhere)))
+        !(cite 'zz-elsewhere))
 
 ; a path that opens nothing is a miss, like any other
 (: a (trap (\ _ (borrow "lib/zz-absent.l")) () (\ a b 'caught))
@@ -89,9 +89,11 @@
 (: a (trap (\ _ (borrow 'zz-seatprobe)) () (\ a b 'caught))
    b (trap (\ _ (borrow 'zz-fhsprobe)) () (\ a b 'caught))
  (test (a = 'caught) (b = 'caught)
-         (nil? (cite 'zz-seatprobe)) (nil? (cite 'zz-fhsprobe))))
-(: _ (unlink "out/lib/zz-seatprobe.l") _ (unlink "out/lib/love/zz-fhsprobe.l")
-   _ (rmdir "out/lib/love") 0)
+         !(cite 'zz-seatprobe) !(cite 'zz-fhsprobe)))
+(unlink "out/lib/zz-seatprobe.l",
+ unlink "out/lib/love/zz-fhsprobe.l",
+ rmdir "out/lib/love",
+ 0)
 (test_fin ())
 (puts "loader: ok")
 (putc 10)

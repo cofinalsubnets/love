@@ -36,14 +36,14 @@
        txt (slurp m)
        st (waitfor <r)
        [txt <st])
-   (has? t s) (: n (tally t) k (tally s)
-                 (go i) (? ((n - k) < i) () (= (snip t i (i + k)) s) 1 (go (i + 1)))
+   (has? t s) (: n #t k #s
+                 (go i) (? (n - k < i) () (s = snip t i (i + k)) 1 (go (i + 1)))
                  (go 0))
 
    ; --- q leaves at once: the first screenful, the status line, and the screen back
    r1 (run "" [f])
    _ (test
-      (= <>r1 0)                            ; the pager's own status, not a signal
+      (<>r1 = 0)                            ; the pager's own status, not a signal
       (has? <r1 "alpha")                    ; the top of the file
       (has? <r1 "pg.txt")                   ; the status line names the file
       (has? <r1 "1-")                       ; ... and where in it we are
@@ -52,32 +52,32 @@
 
    ; --- G lands at the end, and the status says so
    r2 (run "G" [f])
-   _ (test (= <>r2 0) (has? <r2 "juliet") (has? <r2 "(END)"))
+   _ (test (<>r2 = 0) (has? <r2 "juliet") (has? <r2 "(END)"))
 
    ; --- /pattern moves to the match, and h swaps the help page in
    r3 (run "/india\n" [f])
-   _ (test (= <>r3 0) (has? <r3 "india"))
+   _ (test (<>r3 = 0) (has? <r3 "india"))
    ; the first q comes back out of the help; only the second one leaves
    r4 (run "h" [f])
-   _ (test (= <>r4 0) (has? <r4 "the pager") (has? <r4 "alpha"))
+   _ (test (<>r4 = 0) (has? <r4 "the pager") (has? <r4 "alpha"))
 
    ; --- -N numbers the lines, and +/pat opens where the match is
    r5 (run "" ["-N" f])
-   _ (test (= <>r5 0) (has? <r5 "1 alpha"))
+   _ (test (<>r5 = 0) (has? <r5 "1 alpha"))
    r6 (run "" ["+/golf" f])
-   _ (test (= <>r6 0) (has? <r6 "golf"))
+   _ (test (<>r6 = 0) (has? <r6 "golf"))
 
    ; --- a name that will not open is a status, said on err, and no screen at all
    r7 (run "" [(dir + "/nope.txt")])
-   _ (test (= <>r7 1) !(has? <r7 "\e[?1049h"))
+   _ (test (<>r7 = 1) !(has? <r7 "\e[?1049h"))
 
    ; --- :n walks to the second operand and :p walks back
    g (dir + "/pg2.txt")
    _ (: q (open g "w") _ (say q "kilo\nlima\n") (close q))
    r8 (run ":n" [f g])
-   _ (test (= <>r8 0) (has? <r8 "kilo") (has? <r8 "pg2.txt"))
+   _ (test (<>r8 = 0) (has? <r8 "kilo") (has? <r8 "pg2.txt"))
    r9 (run ":n:p" [f g])
-   _ (test (= <>r9 0) (has? <r9 "alpha"))
+   _ (test (<>r9 = 0) (has? <r9 "alpha"))
 
    ; --- a PIPE is the text and /dev/tty is the keyboard: `more` is the same door
    ra (: r (tether ["sh" "-c" (love + " kore head -3 " + f + " | " + love + " kore more")])
@@ -88,7 +88,7 @@
          txt (slurp m)
          st (waitfor <r)
          [txt <st])
-   _ (test (= <>ra 0) (has? <ra "alpha") (has? <ra "\e[?1049h"))
+   _ (test (<>ra = 0) (has? <ra "alpha") (has? <ra "\e[?1049h"))
 
    _ (unlink f) _ (unlink g)
    _ (test_fin ())                          ; no zz-fin here: quit before claiming ok
