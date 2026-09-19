@@ -17,12 +17,11 @@
 ; infix section).
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
-(test ('^ = (cap (sound '(94)))) ('+ = (cap (sound '(43)))))
+(test ('^ = <(sound '(94))) ('+ = <(sound '(43))))
 
 ; ^^ has no entry, and a spaced sigil never splits, so in head position it stays
 ; the plain symbol -- and ^ is the xor nif all along
-(test (nom? '^^) ("(^^ 5)" = (show (opfix '(^^ 5))))
-        (-2 = (^ 1 -1)) (6 = (^ 5 3)))
+(test (nom? '^^) ("(^^ 5)" = show (opfix '(^^ 5))) (-2 = 1 ^ -1) (6 = 5 ^ 3))
 
 ; --- the comma: the clause layer, loosest of all -----------------------------
 ; a lone one-char datum off the reader (never fuses, either side); within any
@@ -43,18 +42,18 @@
  (5 = (5 ,))                                    ; a trailing comma is ignored
  (5 = (, 5))                                    ; leading comma: the sequencing macro,
  (2 = (, 1 2))                                  ; ... explicit head-position form
- ("(, (1) (2 3))" = (show (opfix '(1 , 2 3))))) ; the emission, reparsable
+ ("(, (1) (2 3))" = show (opfix '(1 , 2 3)))) ; the emission, reparsable
 ; effects run in source order and the last clause is the value
 (: cq (tablet 0)
    (cnote v) (: _ (pin cq (tally cq) v) v)
    (: r ((cnote 'a), (cnote 'b), (cnote 'c))
-      (test ('c = r) ('a = (cq 0)) ('b = (cq 1)) ('c = (cq 2)) (3 = #cq))))
+      (test ('c = r) ('a = cq 0) ('b = cq 1) ('c = cq 2) (3 = #cq))))
 ; quote interiors are data: the comma stays a plain symbol, and reading is
 ; structural -- a lone comma off a port is just the datum
-(test (3 = (tally '(1 , 2))) (', = (caup '(1 , 2)))
-        (nom? ',) ("," = (string ',)) (', = (cap (sound '(44)))))
+(test (3 = #'(1 , 2)) (', = <>'(1 , 2))
+        (nom? ',) ("," = string ',) (', = <(sound '(44))))
 ; clauses nest per list, and chain their effects in source order
-(test (6 = (: t {0 1} _ ((pin t 0 2), (pin t 1 3)) ((t 0) * (t 1)))))
+(test (6 = (: t {0 1} _ ((pin t 0 2), (pin t 1 3)) (t 0 * t 1))))
 ; the two negations, which the glaze desugars rather than calls: (!= a b) is
 ; (? (= a b) 0 1) and (!== a b) the same over ==. structural against identity is
 ; the whole of the difference, so each law needs two chains that are equal and not
@@ -73,7 +72,7 @@
 (: r (/// 1 1)
    (test
       (elem r '(1 2 3)) !(eleq r '(1 2 3))    ; 1/1 IS 1 by value, and is not the same word
-      (elem 1 (list r 2)) !(eleq 1 (list r 2))
+      (elem 1 [r 2]) !(eleq 1 [r 2])
       (elem 'b '(a b)) (eleq 'b '(a b))       ; a nom is its own equality either way
       !(elem 'z '(a b)) !(eleq 'z '(a b))
       (elem '(1 2) '((1 2))) !(eleq '(1 2) '((1 2))))) ; two chains built apart
@@ -91,9 +90,9 @@
    ("abc" 1 = 98) (elem ("abc" 1) "abc"))            ; what indexing answers, elem finds
 ; assoc and assq are the pair-walkers of the same two questions: assoc reads keys with
 ; `=`, assq with `==`, so a ratio key finds a charm row only through assoc.
-(: rows (list (list (/// 1 1) 'ratio) '(b two))
+(: rows [[(1 /// 1) 'ratio] '(b two)]
    (test
-      (assoc 1 rows = (list (/// 1 1) 'ratio))   ; 1 IS 1/1 by value
+      (assoc 1 rows = [(1 /// 1) 'ratio])   ; 1 IS 1/1 by value
       (nil? (assq 1 rows))                       ; ..and is not the same word
       (assoc 'b rows = '(b two)) (assq 'b rows = '(b two))
       (nil? (assoc 'z rows)) (nil? (assq 'z rows))))

@@ -26,10 +26,10 @@
   ; has to distinguish, which the serial does. the serial is non-deterministic, so we
   ; assert the shape: a leading "(mint ", stable, distinct.
   ("(mint " = snip (show (mint 0)) 0 6)
-  (: m (mint 0) ((show m) = (show m)))             ; stable: same mint, same face
-  (: a (mint 0) b (mint 0) !((show a) = (show b))) ; distinct mints, distinct faces
+  (: m (mint 0) (show m = show m))             ; stable: same mint, same face
+  (: a (mint 0) b (mint 0) (show a != show b)) ; distinct mints, distinct faces
   (nom? (mint 0))
-  ('bar = (mint 'bar))                             ; mint is nom: a name answers itself
+  ('bar = mint 'bar)                             ; mint is nom: a name answers itself
 
   ; quote sugar: a chain (` x) prints as 'x
   ("'foo" = show ''foo)
@@ -55,7 +55,7 @@
   (: (rng n) (? (n = 0) 0 (. n (rng (n - 1))))
      s (show (rng 200))
      ; 200 numbers + 199 separators + 2 parens = at least 400 chars
-   (do (string? s) (400 < tally s)))
+   (do (string? s) (400 < tally s))) ;; FIXME another `do` in test position, i think these are both supposed to be separate tests
 
   ; GC stress: 500 inspects in a loop. Each call alloc'd a heap port + cask,
   ; provoking many GCs. Final call must still produce the expected output.

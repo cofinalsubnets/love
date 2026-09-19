@@ -23,8 +23,8 @@
 
  ; --- holds arbitrary values verbatim (no boxing/coercion) ---
  (oa-big = peep oa-a 0 0)
- ((oa-big * oa-big) = peep oa-a 1 0)
- ((oa-big + 7) = peep oa-a 2 0)
+ (oa-big * oa-big = peep oa-a 1 0)
+ (oa-big + 7 = peep oa-a 2 0)
  ("hi" = peep oa-a 3 0)
  ('sym = peep oa-a 4 0)
  !(peep oa-z 0 0)                           ; (top-tray ... 0) fills with nil
@@ -45,7 +45,7 @@
  ;     bignum element pointers must be forwarded, not dropped or truncated ---
  (0 = oa-churn 80)
  (oa-big = peep oa-a 0 0)
- ((oa-big * oa-big) = peep oa-a 1 0)
+ (oa-big * oa-big = peep oa-a 1 0)
  ('sym = peep oa-a 4 0))
 
 ; --- elementwise arithmetic: transparent bignums, full broadcasting ----------
@@ -72,8 +72,8 @@
  !((80 2) = peep (oa-zar * oa-zar) 0 0)
 
  ; broadcasting: object array (+) scalar bignum
- ((2 * (100 2)) = peep (oa-x + (100 2)) 0 0) ; (2^100)+(2^100)
- ((3 + (100 2)) = peep ((100 2) + oa-x) 2 0) ; scalar on the left; oa-x elem 2 = 3
+ (2 * 100 2 = peep (oa-x + 100 2) 0 0) ; (2^100)+(2^100)
+ (3 + 100 2 = peep (100 2 + oa-x) 2 0) ; scalar on the left; oa-x elem 2 = 3
 
  ; mixed: object array (+) typed int array -> widens the int array, stays exact
  (? word ((2 * oa-w) = peep (oa-oar + oa-zar) 0 0) 1)   ; 2^40 wraps differently in a 32-bit z-array
@@ -83,18 +83,18 @@
  (0 = peep (top-tray '(2) '(1 5) < top-tray '(2) '(3 2)) 1 0)
 
  ; --- reductions fold exactly through the same dispatch ---
- (((100 2) + 5) = net oa-x)
- ((6 * (100 2)) = prod oa-x)
- ((100 2) = max (top-tray '(3) [5 (100 2) 7]))
+ (100 2 + 5 = +oa-x)
+ (6 * 100 2 = *oa-x)
+ (100 2 = max (top-tray '(3) [5 (100 2) 7]))
  (-3 = min (top-tray '(3) [5 -3 7]))
  (aall (top-tray '(2) '(1 2)))
  !(aall (top-tray '(2) '(1 0)))
- (sat (top-tray '(2) '(0 5)))
- !(sat (top-tray '(2) '(0 0)))
+ $(top-tray '(2) '(0 5))
+ !$(top-tray '(2) '(0 0))
 
  ; --- arithmetic under GC pressure: bignum products survive collection ---
  (0 = oa-churn 40)
- ((2 * (80 2)) = net (oa-oar * oa-oar)))    ; [2^80 2^80] summed = 2^81
+ (2 * 80 2 = +(oa-oar * oa-oar)))    ; [2^80 2^80] summed = 2^81
 
 ; --- the `array` constructor: ergonomic front-end over the *-tray ctors -----
 ; no type code (inferred as the highest of z<r<o present), shape may be a
@@ -113,7 +113,7 @@
  (top-tray = tier oa-bn)
  ; numeric shape -> rank-1 vector of length ($ n); a non-positive shape is empty
  (1 = rank (array 4 1 2 3 4))
- (0 = tally (array -3)) ("@()" = show (array -3))
+ (0 = #(array -3)) ("@()" = show (array -3))
  ; shape list -> rank-N
  (2 = rank oa-m)   (4 = peep oa-m [1 1] 0)
  ; elements stored verbatim, in order
@@ -126,12 +126,12 @@
  ; round-trips: numeric array result prints as the terse @(…) sugar
  ("@(1 2 3)" = show (array 3 1 2 3))
  ; saturating shape coercion: a float / complex / vector dimension -> ($ d)
- (3 = tally (array 2.9 7 8 9))                 ; ($ 2.9) = 3 : rank-1 length 3
- (3 = tally (array (3 ~ 4) 0 0 0))             ; ($ (3 ~ 4)) = 3, the real part
- (8 = tally (array [2.0 3.5] 1 2 3 4 5 6 7 8)) ; dims (2 4) -> 8 elems
+ (3 = #(array 2.9 7 8 9))                 ; ($ 2.9) = 3 : rank-1 length 3
+ (3 = #(array (3 ~ 4) 0 0 0))             ; ($ (3 ~ 4)) = 3, the real part
+ (8 = #(array [2.0 3.5] 1 2 3 4 5 6 7 8)) ; dims (2 4) -> 8 elems
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
  (top-tray = tier @((100 2) 1))                    ; bignum element -> object array
- (aall (= @(1 2 3) (array 3 1 2 3))))
+ (aall (@(1 2 3) = array 3 1 2 3)))
 
 ; --- the measure across tuple types: g_len recurses into each element's own magnitude,
 ; so an all-zero array nets 0 and not the garbage a raw word-bits L2 norm would give.
@@ -142,10 +142,10 @@
    oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
 (test
  (twin-tray = tier oa-z2) (twin-tray = tier oa-c2) (top-tray = tier oa-b2)
- (0 = sat oa-z2) !oa-z2        ; all-zero object array -> falsy, pin 0
- (3 = sat oa-c2) !!oa-c2       ; one nonzero element -> truthy, ceil(3)
+ (0 = $oa-z2) !oa-z2        ; all-zero object array -> falsy, pin 0
+ (3 = $oa-c2) !!oa-c2       ; one nonzero element -> truthy, ceil(3)
  !!oa-b2                       ; a bignum element is truthy
- (0 = sat (top-tray '(2 2) 0)) ; all-nil object array -> pin 0
+ (0 = $(top-tray '(2 2) 0)) ; all-nil object array -> pin 0
  !!(array 2 'a 'b))            ; symbol elements -> truthy
 
 ; --- a cell holds a value, so `=` reads through to it and hashing has to as well:
@@ -155,14 +155,14 @@
    oa-k2 @((+ "a" "b") [1 2] 'sym)
    oa-t (pin (pin {} oa-k1 1) oa-k2 2))
 (test
- (oa-k1 = oa-k2) ((dig oa-k1) = (dig oa-k2))
+ (oa-k1 = oa-k2) (dig oa-k1 = dig oa-k2)
  (2 = peep oa-t oa-k1 0)            ; one key, pinned twice
- (1 = tally (keys oa-t))
+ (1 = #(keys oa-t))
  !(oa-k1 = @("ab" [1 3] 'sym))      ; a cell apart is a key apart
- !((dig oa-k1) = (dig @("ab" [1 3] 'sym)))
+ !(dig oa-k1 = dig @("ab" [1 3] 'sym))
  !(oa-k1 = @("ab" [1 2]))           ; ..and so is a shape apart
- ((array [2 2] "a" "b" "c" "d") = (array [2 2] (+ "" "a") "b" "c" "d"))   ; rank-N alike
- ((dig (array [2 2] "a" "b" "c" "d")) = (dig (array [2 2] (+ "" "a") "b" "c" "d")))
+ (array [2 2] "a" "b" "c" "d" = array [2 2] (+ "" "a") "b" "c" "d")   ; rank-N alike
+ (dig (array [2 2] "a" "b" "c" "d") = dig (array [2 2] ("" + "a") "b" "c" "d"))
  ; the cells move and the key stays findable: a probe rehashes, so a hash that read
  ; the pointers would lose its own entry at the first collection
- (0 = oa-churn 80) (2 = peep oa-t oa-k1 0) ((dig oa-k1) = (dig oa-k2)))
+ (0 = oa-churn 80) (2 = peep oa-t oa-k1 0) (dig oa-k1 = dig oa-k2))

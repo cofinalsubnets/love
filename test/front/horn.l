@@ -14,21 +14,21 @@
 ; this is the one place in the tree where that path is read back rather than played.
 
 ; a ramp, so a sample is its own index and a reversed or doubled buffer says so
-(: (ramp n) (string (map (\ i (i % 251)) (jot n))))
+(: (ramp n) (string (map (i \ i % 251) ^n)))
 
 ; --- a stereo port: what goes in is what the sink takes, byte for byte -----------
 ; 1600 bytes is 400 stereo frames at 8k, well inside the sink's 250 ms ring, so the
 ; whole write lands in one go and a short answer here means the sink refused.
 (: h (horn 8000 2)
-   _ (assert (! (nom? h)))
+   _ (assert !(nom? h))
    pcm (ramp 1600)
    _ (say h pcm)
    _ (flush h)
    got (tapped ())
-   _ (assert (= 1600 (tally got)))
-   _ (assert (= pcm got))                      ; ..and in order, which a ring can lose
-   _ (assert (= 8000 (taprate ())))
-   (assert (= 2 (tapchans ()))))
+   _ (assert (1600 = #got))
+   _ (assert (pcm = got))                      ; ..and in order, which a ring can lose
+   _ (assert (8000 = taprate ()))
+   (assert (2 = tapchans ())))
 
 ; --- a mono port taps as MONO, which is the trap for whoever plays the tap --------
 ; inle/horn.c doubles a 1-channel port to stereo so that the device is always stereo --
@@ -37,14 +37,14 @@
 ; the same 800 bytes are 400 frames here and 200 through a stereo port, and a seat that
 ; assumed two would play this at half speed. so: honour tapchans, do not assume it.
 (: h (horn 8000 1)
-   _ (assert (! (nom? h)))
+   _ (assert !(nom? h))
    pcm (ramp 800)
    _ (say h pcm)
    _ (flush h)
    got (tapped ())
-   _ (assert (= pcm got))                      ; the port's own bytes, undoubled
-   _ (assert (= 1 (tapchans ())))              ; ..and its own count, said plainly
-   (assert (= 8000 (taprate ()))))
+   _ (assert (pcm = got))                      ; the port's own bytes, undoubled
+   _ (assert (1 = tapchans ()))              ; ..and its own count, said plainly
+   (assert (8000 = taprate ())))
 
 ; --- a write past the ring's depth is backpressure, not a dropped frame -----------
 ; the sink holds a quarter second and no more -- 2000 frames at 8k, 8000 bytes -- so
@@ -53,17 +53,17 @@
 ; rate and the rest lands behind it. every byte arrives, and in order: a horn that
 ; dropped what would not fit would pass the first law above and fail here.
 (: h (horn 8000 2)
-   _ (assert (! (nom? h)))
+   _ (assert !(nom? h))
    pcm (ramp 16000)                            ; 4000 frames, the ring twice over
    _ (say h pcm)
    _ (flush h)
    got (tapped ())
-   _ (assert (= 16000 (tally got)))
-   (assert (= pcm got)))
+   _ (assert (16000 = #got))
+   (assert (pcm = got)))
 
 ; --- a rate outside the range, and a channel count that is neither 1 nor 2 --------
-(: _ (assert (nom? (horn 10 2)))
-   _ (assert (nom? (horn 8000 3)))
-   (assert (nom? (horn 8000 0))))
+(assert (nom? (horn 10 2)))
+(assert (nom? (horn 8000 3)))
+(assert (nom? (horn 8000 0)))
 
-(: _ (say out "horn: ok") (putc 10))
+(say out "horn: ok\n")

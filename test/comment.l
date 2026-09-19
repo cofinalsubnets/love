@@ -7,5 +7,5 @@
 #! a `#!` shebang line is skipped too -- ) ) ( ( " weird tokens are fine here
 (: cmt-after 7)  ;;; a trailing ;;; is an ordinary line comment
 (test
- (= 7 cmt-after)                                ; survived the ;;; / #! / ;; lines above
- (= 1 1))
+ (7 = cmt-after)                                ; survived the ;;; / #! / ;; lines above
+ (1 = 1))

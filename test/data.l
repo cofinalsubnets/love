@@ -8,7 +8,7 @@
          ('asdf = intern "asdf")  ; intern: string -> the interned symbol
          ('asdf = intern 'asdf)   ; ...identity on any non-string arg
          ('asdf = nom "asdf")     ; nom on a string is that same interning
-         ('asdf = (2 nom "asdf")) ; ...so it is a projection to the kind: idempotent
+         ('asdf = 2 nom "asdf") ; ...so it is a projection to the kind: idempotent
          ("asdf" = string 'asdf)))
 (:
  t (tablet 0)
@@ -28,8 +28,8 @@
  (test
     (2 = tally t)
     (2 = ln (keys t))
-    (: (lll t) (foldl (\ l k (. k (. (Get k) l))) () (keys t))
-     ((2 * tally t) = ln (lll t)))))
+    (: (lll t) (foldl (l \ k \ k . Get k . l) () (keys t))
+     (2 * tally t = ln (lll t)))))
 
 (:
  (stripPrefix p s) (? (p = snip s 0 #p) (snip s #p #s))
@@ -40,9 +40,9 @@
  (alt a b y n) (a y (b y n))
  (rep a y n s) ((opt (cats a (rep a))) y n s)
  (test
-  ("xx" = ("xx" + ""))
-  ("xx" = ("x" + "x"))
-  ("xx" = ("" + "xx"))
+  ("xx" = "xx" + "")
+  ("xx" = "x" + "x")
+  ("xx" = "" + "xx")
   (4 = tally "slen")
   ("bidden" = snip "forbidden planet" 3 9)
   ("all of it" = snip "all of it" -9 100)
@@ -57,7 +57,7 @@
   !("hi" 2)                ; past the end -> 1
   !("hi" -1) !("hi" -2)    ; a negative index is out of range, like one past the end
   ("hix" = ("hi" 'x))      ; a point operand is text: it juxtaposes
-  (255 = ((string 255) 0)) ; high byte returns unsigned 0..255
+  (255 = string 255 0) ; high byte returns unsigned 0..255
   ; apply and peep coincide on the sequence kinds -- the same index action, apply answering
   ; () where peep answers the caller default. a rule the tree keeps, not a law it promises:
   ; a tray towers instead of indexing. snip still reads a negative, clamping to the front.
@@ -81,7 +81,7 @@
  snip-s "forbid"
  snip-l (map snip-s (jot #snip-s))
  snip-ix [-3 0 1 2 3 6 9]
- (snip-grid f) (map (\ i (map (\ j (f i j)) snip-ix)) snip-ix)
+ (snip-grid f) (map (i \ map (f i) snip-ix) snip-ix)
  (test
   ([1 2 3] = snip [1 2 3 4 5] 0 3)
   ([3 4 5] = snip [1 2 3 4 5] 2 99)
@@ -90,5 +90,5 @@
   ; an empty window answers the empty of the kind: () where text answers ""
   (() = snip [1 2 3] 3 3) (() = snip [1 2 3] 4 1) (() = snip () 0 3)
   ("" = snip "abc" 3 3)
-  ([1 2] = snip (. 1 (. 2 3)) 0 2)             ; an improper tail is no element of it
+  ([1 2] = snip (1 . 2 . 3) 0 2)             ; an improper tail is no element of it
   ((snip-grid (\ i j (string (snip snip-l i j)))) = (snip-grid (\ i j (snip snip-s i j))))))

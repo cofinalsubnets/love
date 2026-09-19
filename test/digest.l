@@ -41,20 +41,20 @@
 
 ; --- md5, RFC 1321 appendix A.5 ---
 (test
- ((md5 "") = "d41d8cd98f00b204e9800998ecf8427e")
- ((md5 "a") = "0cc175b9c0f1b6a831c399e269772661")
- ((md5 "abc") = "900150983cd24fb0d6963f7d28e17f72")
- ((md5 "message digest") = "f96b697d7cb7938d525a2f31aaf161d0")
- ((md5 hash-alpha) = "c3fcd3d76192e4007dfb496cca67e13b")
- ((md5 hash-mixed) = "d174ab98d277d9f5a5611c2c9f419d9f")
- ((md5 hash-nums) = "57edf4a22be3c955ac49da2e2107b67a"))
+ (md5 "" = "d41d8cd98f00b204e9800998ecf8427e")
+ (md5 "a" = "0cc175b9c0f1b6a831c399e269772661")
+ (md5 "abc" = "900150983cd24fb0d6963f7d28e17f72")
+ (md5 "message digest" = "f96b697d7cb7938d525a2f31aaf161d0")
+ (md5 hash-alpha = "c3fcd3d76192e4007dfb496cca67e13b")
+ (md5 hash-mixed = "d174ab98d277d9f5a5611c2c9f419d9f")
+ (md5 hash-nums = "57edf4a22be3c955ac49da2e2107b67a"))
 
 ; --- sha-256, fips 180-4 ---
 (test
- ((sha256 "") = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
- ((sha256 "abc") = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
- ((sha256 hash-56) = "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")
- ((sha256 hash-112) = "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1"))
+ (sha256 "" = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+ (sha256 "abc" = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+ (sha256 hash-56 = "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")
+ (sha256 hash-112 = "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1"))
 
 ; --- cksum: the love statement of the polynomial, and the C against it ---
 (: hash-m32 4294967295
@@ -65,27 +65,25 @@
    ; the message, then its own length low byte first, then the register complemented
    (hash-ckwalk s)
     (: n #s
-       (fold c m) (? (m < 1) (c ^ hash-m32) (fold (hash-ckbyte c (m & 255)) (m >> 8)))
-       (go c i) (? (n <= i) (fold c n) (go (hash-ckbyte c (s i)) (i + 1)))
+       (fold c m) (m < 1 ? (c ^ hash-m32) (fold (hash-ckbyte c (m & 255)) (m >> 8)))
+       (go c i) (n <= i ? (fold c n) (go (hash-ckbyte c (s i)) (i + 1)))
        (go 0 0))
    (hash-cksame s) (? ((cksum s) = (hash-ckwalk s)) 1 0)
    (hash-cklen k) (: (go i) (? (k < i) 1 !(hash-cksame (hash-bytes i)) 0 (go (i + 1)))
                      (go 0)))
 (test
- (930766865 = (cksum "123456789"))          ; what POSIX publishes for cksum
- (4294967295 = (cksum ""))                  ; the length fold: an empty message still turns it
+ (930766865 = cksum "123456789")          ; what POSIX publishes for cksum
+ (4294967295 = cksum "")                  ; the length fold: an empty message still turns it
  (hash-cklen 129)
  (hash-cksame hash-mixed)
- (hash-cksame (hash-mk 300 (\ i 0)))        ; 300 NULs: the register turns on a zero byte
- (charm? (cksum (hash-mk 300 (\ i 0)))))
+ (hash-cksame (hash-mk 300 (i \ 0)))        ; 300 NULs: the register turns on a zero byte
+ (charm? (cksum (hash-mk 300 (i \ 0)))))
 
 ; --- the lengths either side of a block and its length field ---
-(: (hash-hexlen s n) (: d (? (n = 32) (md5 s) (sha256 s))
-                        (go k) (? (n <= k) 1
-                                  (: c (d k)
-                                     (? (((47 < c) && (c < 58)) || ((96 < c) && (c < 103)))
-                                        (go (k + 1)) 0)))
-                        (? (#d = n) (go 0) 0))
+(: (hash-hexlen s n) (: d (n @ 32 (md5 s) (sha256 s))
+                        (go k) (n <= k ? 1
+                                (d k @ c (? (47 < c < 58 || 96 < c < 103) (go (k + 1)) 0)))
+                        (#d = n ? (go 0) 0))
    (hash-shape ls)
     (? !(two? ls) 1
        (: s (hash-bytes <ls)
@@ -119,8 +117,8 @@
     (: b (cask <d)
        _ (<>d b)
        n #s
-       (go i) (? (n <= i) (<>>>d b)
-                 (: j (? (n < (i + k)) n (i + k))
+       (go i) (n <= i ? (<>>>d b)
+                 (: j (n < i + k ? n (i + k))
                     _ (<>>d b (snip s i j))
                     (go j)))
        (go 0))
@@ -129,7 +127,7 @@
    dig-ck  (\ _ [ck-st   cksum-init  cksum-feed  cksum-done])
    ; init and feed answer the cask itself: a value the collector can walk, held live
    ; across a collection by whoever binds it
-   (dig-gc d s) (: b (cask <d) _ (<>d b) _ (<>>d b s) _ (please 1) (<>>>d b))
+   (dig-gc d s) (: b (cask <d) (<>d b, <>>d b s, please 1, <>>>d b))
    (sha-stream s k) (dig-stream (dig-sha 0) s k)
    (md5-stream s k) (dig-stream (dig-md5 0) s k)
    (ck-stream s k)  (dig-stream (dig-ck 0) s k)
@@ -137,32 +135,30 @@
    ; and in chunks that divide the block, straddle it, and outrun it
    (dig-agree? n)
     (: s (hash-bytes n)
-       (go ks) (? (! (two? ks)) 1
-                  (? (&& (sha256 s = sha-stream s <ks)
-                         (md5 s = md5-stream s <ks)
-                         (cksum s = ck-stream s <ks))
+       (go ks) (? (one? ks) 1
+                  (? (sha256 s = sha-stream s <ks &&
+                      md5 s = md5-stream s <ks &&
+                      cksum s = ck-stream s <ks)
                      (go >ks) 0)))
-   (sha-sweep lo hi)
-    (: (go n) (? (hi < n) 1
-                 (? (dig-agree? n '(1 3 7 63 64 65 127 128)) (go (n + 1)) 0))
-       (go lo)))
+   (sha-sweep lo hi) (:- (go lo) (go n)
+    (hi < n ? 1 (dig-agree? n '(1 3 7 63 64 65 127 128) ? (go (n + 1)) 0))))
 
 (test
  (lit? sha256-init) (lit? sha256-feed) (lit? sha256-done)
  ; the published vectors, arrived at a byte at a time
- ((sha-stream "" 1) = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
- ((sha-stream "abc" 1) = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
- ((sha-stream hash-56 1) = (sha256 hash-56))
- ((sha-stream hash-112 7) = (sha256 hash-112))
+ (sha-stream "" 1 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+ (sha-stream "abc" 1 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+ (sha-stream hash-56 1 = sha256 hash-56)
+ (sha-stream hash-112 7 = sha256 hash-112)
  ; the state outlives a collection with init's answer still bound
- ((dig-gc (dig-sha 0) "abc") = (sha256 "abc"))
- ((dig-gc (dig-md5 0) "abc") = (md5 "abc"))
- ((dig-gc (dig-ck 0) "abc") = (cksum "abc"))
+ (dig-gc (dig-sha 0) "abc" = sha256 "abc")
+ (dig-gc (dig-md5 0) "abc" = md5 "abc")
+ (dig-gc (dig-ck 0) "abc" = cksum "abc")
  ; 0..130 by every chunking: the block, the two pad boundaries, and past them
  (sha-sweep 0 130)
  ; a body that outruns any one feed, at a chunk size that is not a block multiple
- ((sha-stream (hash-bytes 100000) 65536) = (sha256 (hash-bytes 100000)))
- ((sha-stream (hash-bytes 100000) 1000) = (sha256 (hash-bytes 100000)))
+ (sha-stream (hash-bytes 100000) 65536 = sha256 (hash-bytes 100000))
+ (sha-stream (hash-bytes 100000) 1000 = sha256 (hash-bytes 100000))
  ; misuse: the state is a 105-byte cask or it is nothing
  !(sha256-init (cask 8))
  !(sha256-init "not a cask")
@@ -173,14 +169,14 @@
  ; --- md5 and cksum stream the same way ---
  (lit? md5-init) (lit? md5-feed) (lit? md5-done)
  (lit? cksum-init) (lit? cksum-feed) (lit? cksum-done)
- ((md5-stream "" 1) = "d41d8cd98f00b204e9800998ecf8427e")
- ((md5-stream "abc" 1) = "900150983cd24fb0d6963f7d28e17f72")
- ((md5-stream hash-112 7) = (md5 hash-112))
- ((md5-stream (hash-bytes 100000) 1000) = (md5 (hash-bytes 100000)))
+ (md5-stream "" 1 = "d41d8cd98f00b204e9800998ecf8427e")
+ (md5-stream "abc" 1 = "900150983cd24fb0d6963f7d28e17f72")
+ (md5-stream hash-112 7 = md5 hash-112)
+ (md5-stream (hash-bytes 100000) 1000 = md5 (hash-bytes 100000))
  ; cksum folds the length in at the end, so the empty file is 4294967295 and not 0 --
  ; the one place a streamed digest could plausibly answer "nothing fed" and be wrong
- ((ck-stream "" 4) = 4294967295) ((ck-stream "" 4) = (cksum ""))
- ((ck-stream (hash-bytes 100000) 1000) = (cksum (hash-bytes 100000)))
+ (ck-stream "" 4 = 4294967295) (ck-stream "" 4 = cksum "")
+ (ck-stream (hash-bytes 100000) 1000 = cksum (hash-bytes 100000))
  ; misuse, and crosswise: a state of the wrong width is refused, which is the only
  ; thing between three digests that all take a cask and a string
  !(md5-init (cask sha-st)) !(sha256-init (cask md5-st))

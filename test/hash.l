@@ -33,7 +33,7 @@
  (300 = peep ht 3 0)
  (tablet? (tablet 0))                                  ; the empty hash
  (? (tablet 0)) (? {}) (0 = #(tablet 0)) (0 = #{})     ; the empty map is truthy (a lambda) and tallies 0; {} reads to (tablet 0)
- (50 = peep (pin (tablet 0) 5 50) 5 0)                 ; the empty hash is mutable
+ (50 = peep (pin {} 5 50) 5 0)                 ; the empty hash is mutable
  (3 = foldl (\ n _ (1 + n)) 0 (keys {1 10 2 20 3 30})) ; splice builds all entries
  ("{}" = show {})                                      ; {} is the empty map, and round-trips
  ("{1 \"hi\"}" = show {1 "hi"}))
@@ -43,7 +43,7 @@
 ; from {} the empty map (one ()-keyed entry vs no entries). key 0 is a miss now.
 (: bx {0})
 (test
- (tablet? {0}) !!{0} (= 1 ${0})              ; a box is a nonempty 1-entry hash
+ (tablet? {0}) !!{0} (1 = ${0})              ; a box is a nonempty 1-entry hash
  (0 = peep bx () 9)                          ; the boxed value sits at key () (the unit)
  (9 = peep bx 0 9)                           ; ... and key 0 is a miss (the flip's tell)
  (9 = (: _ (pin bx () 9) (peep bx () 0)))    ; ... and is mutable in place

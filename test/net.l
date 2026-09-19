@@ -16,8 +16,8 @@
 ; the nifs link on every seat, but the answers below are the OS's -- errno lanes and a
 ; real loopback. skip where there is no kernel underneath (hosted, test/00-init.l).
 (? hosted (do
-  (: (rdline p) (: (go acc) (: ch (see p) (? (ch = 10) acc (ch = -1) acc (go (acc + string ch))))
-                   (go "")))
+  (: (rdline p) (:- (go "") (go acc)
+                 (see p @ (10 || -1) acc ch (go (acc + string ch)))))
 
   ; --- listen / accept / connect / get / say / seal over 127.0.0.1 ---
   (: port 7391
@@ -51,11 +51,11 @@
   ; a failure is a nom, and the nom says which failure: refused is not a bad
   ; argument, and the two operator problems a () could never part now read apart.
   (: _ (test
-      ('badarg = (listen -1))                       ; bad port: refused up here
-      ('econnrefused = (connect "127.0.0.1" 7392))  ; nothing listening on 7392
-      ('badarg = (connect 12345 80))                ; non-string host
-      ('badarg = (connect "example.org" 80))        ; a NAME is a misuse: connect takes a quad
-      ('badarg = (udp-bind -1))))
+      ('badarg = listen -1)                       ; bad port: refused up here
+      ('econnrefused = connect "127.0.0.1" 7392)  ; nothing listening on 7392
+      ('badarg = connect 12345 80)                ; non-string host
+      ('badarg = connect "example.org" 80)        ; a NAME is a misuse: connect takes a quad
+      ('badarg = udp-bind -1)))
 
   ; --- rung 5: seal lands the write run ------------------------------------------
   ; the bug: `seal` shuts the write half and never flushed. love.h has always
@@ -71,7 +71,7 @@
    l (listen port)
    got (tablet 0)
    srv (twirl (\ _ (: c (accept l)
-                      n ((: (go k) (: b (see c) (? (b = -1) k (go (k + 1))))) 0)
+                      n ((: (go k) (see c @ -1 k (go (k + 1)))) 0)
                       _ (pin got 0 n)
                       _ (close c) 1)) 0)
    c (connect "127.0.0.1" port)
@@ -79,7 +79,7 @@
    _ (seal c 1)                             ; ... and the fin it sends is the server's EOF
    _ (catch srv)
    _ (test
-      ((peep got 0 0) = 2))                 ; both bytes crossed the half-close
+      (peep got 0 0 = 2))                 ; both bytes crossed the half-close
    _ (close c)
    _ (close l))
 
@@ -102,7 +102,7 @@
    ms (clock t0)
    _ (close l)
    _ (test
-      ((peep got 0 0) = 160000)             ; every byte
+      (peep got 0 0 = 160000)             ; every byte
       (ms < 3000)))                         ; the recursive form sat here for 25 seconds
 
   ; --- a peer that hangs up mid-response does not kill the runtime ---------------
@@ -114,7 +114,7 @@
    l (listen port)
    srv (twirl (\ _ (: c (accept l)
                       _ ((: (go k) (? (k = 0) 0
-                                      (: _ (say c ("x" * 200000)) _ (rest 5) (go (k - 1))))) 30)
+                                      (say c ("x" * 200000), rest 5, go (k - 1)))) 30)
                       _ (close c) 1)) 0)
    c (connect "127.0.0.1" port)
    _ (rest 30)
@@ -124,5 +124,5 @@
    _ (close l))                             ; reaching here at all is the law
 
   (test_fin ())
-  (puts "net: ok") (putc 10)
-) 0)
+  (puts "net: ok\n")
+))

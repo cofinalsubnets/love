@@ -17,10 +17,8 @@
 
 (: (take p n)                       ; n bytes off p as text, stopping at the end
    ((: (go k acc)
-       (? (k = 0) (string (rev acc))
-          (: c (see p)
-             (? (c = -1) (string (rev acc))
-                (go (k - 1) (. c acc))))))
+       (k @ 0 (string (rev acc))
+        (see p @ -1 (string (rev acc)) c (go (k - 1) (c . acc)))))
     n ()))
 
 ; --- law 1: a stalled read loses nothing --------------------------------------
@@ -31,7 +29,7 @@
 (: p (dev ())
    _ (feed p "abc")
    _ (stall p 3)
-   _ (assert ((take p 3) = "abc")))
+   _ (assert (take p 3 = "abc")))
 
 ; --- law 2: the park yields, it does not stop the vm --------------------------
 ; the shape defect 5 was diagnosed on: one task reading a device that keeps
@@ -41,11 +39,8 @@
 (: p (dev ())
    _ (feed p "xy")
    _ (stall p 6)
-   n (tablet 0)
-   t (twirl (\ _ ((: (go u) (: _ (pin n 0 (1 + (peep n 0 0)))
-                                _ (rest 0)
-                                (go ())))
-                  ())) ())
+   n {}
+   t (twirl (\ _ ((: (go u) (pin n 0 (1 + (peep n 0 0)), rest 0, go ())) ())) ())
    got (take p 2)
    _ (freeze t)
    _ (assert (got = "xy")
@@ -111,9 +106,9 @@
 ; `say` would take the direct lane and never touch it.
 (: p (dev ())
    _ (wcap p 1)
-   _ (each '(97 98 99 100 101 102 103 104) (\ c (put p c)))
+   _ (each '(97 98 99 100 101 102 103 104) (put p))
    _ (flush p)
-   _ (assert ((sent p) = "abcdefgh")))
+   _ (assert (sent p = "abcdefgh")))
 
 ; --- law 8: a stalled write keeps its residue and its order --------------------
 ; a device that lands nothing for a while must not lose the run, and the bytes that
@@ -126,15 +121,15 @@
    _ (wstall p 2)
    _ (say p "hello world")
    _ (flush p)
-   _ (assert ((sent p) = "hello world")))
+   _ (assert (sent p = "hello world")))
 
 ; and the same over many small writes, where the residue has to survive the gaps
 (: p (dev ())
    _ (wcap p 2)
    _ (wstall p 1)
-   _ (each '("one" "two" "six") (\ s (say p s)))
+   _ (each '("one" "two" "six") (say p))
    _ (flush p)
-   _ (assert ((sent p) = "onetwosix")))
+   _ (assert (sent p = "onetwosix")))
 
 ; --- law 9: flush delivers -- the residue finishes on its own -----------------
 ; rung 4 made the write door answer short, so a flush that took its answer left
@@ -146,7 +141,7 @@
    _ (wstall p 5)
    _ (say p "hello")
    _ (flush p)
-   _ (assert ((sent p) = "hello")))
+   _ (assert (sent p = "hello")))
 
 ; --- law 10: the writer parks, it does not stop the vm -----------------------
 ; law 2's shape on the write side, and the whole point of the rung: the task
@@ -154,16 +149,13 @@
 ; blocking write door the ticker below never moved at all.
 (: p (dev ())
    _ (wstall p 30)
-   n (tablet 0)
-   t (twirl (\ _ ((: (go u) (: _ (pin n 0 (1 + (peep n 0 0)))
-                                _ (rest 0)
-                                (go ())))
-                  ())) ())
+   n {}
+   t (twirl (\ _ ((: (go u) (pin n 0 (1 + (peep n 0 0)), rest 0, go ())) ())) ())
    _ (say p "xyz")
    _ (flush p)
    _ (freeze t)
-   _ (assert ((sent p) = "xyz")
-             (0 < (peep n 0 0))))       ; the peer ran while the writer waited
+   _ (assert (sent p = "xyz")
+             (0 < peep n 0 0)))       ; the peer ran while the writer waited
 
 ; --- law 11: the write run is a buffer, not a queue --------------------------
 ; rung 4 made the door answer short and hand the remainder to the port, which is
@@ -174,13 +166,13 @@
 ; device instead. the device below refuses long enough that four says would pile
 ; up all four; the run must never hold more than one buffer's worth.
 (: p (dev ())
-   s (: (dup t n) (? (n = 0) t (dup (t + t) (n - 1))) (dup "0123456789abcdef" 8))
+   s (: (dup t n) (n @ 0 t (dup (t + t) (n - 1))) (dup "0123456789abcdef" 8))
    _ (wstall p 40)
-   hi (foldl (\ m _ (: _ (say p s) k (wpending p) (? (m < k) k m))) 0 '(1 2 3 4))
+   hi (foldl (\ m _ (: _ (say p s) k (wpending p) (m < k ? k m))) 0 '(1 2 3 4))
    _ (flush p)
-   _ (assert ((tally s) = 4096)
+   _ (assert (#s = 4096)
              (hi <= 4096)                  ; 16384 with the park taken back out
-             ((tally (sent p)) = 16384)))  ; and not one byte lost to the waiting
+             (#(sent p) = 16384)))  ; and not one byte lost to the waiting
 
 ; and the same rule on the byte lane. `put` fills the run one byte at a time,
 ; and one byte at a time is still without a bound -- the run just doubled its
@@ -188,12 +180,12 @@
 ; six lines and reaching it wants a value big enough to be its own story.)
 (: p (dev ())
    _ (wstall p 40)
-   hi (: (go k m) (? (k = 0) m
-                     (: _ (put p 120) j (wpending p) (go (k - 1) (? (m < j) j m))))
+   hi (: (go k m) (k @ 0 m
+                   (: _ (put p 120) j (wpending p) (go (k - 1) (? (m < j) j m))))
          (go 9000 0))
    _ (flush p)
    _ (assert (hi <= 4096)                 ; 8192 with the park taken back out
-             ((tally (sent p)) = 9000)))
+             (#(sent p) = 9000)))
 
 ; --- law 13: a catcher parks, so the scheduler gets to sleep -----------------
 ; not a device law, and it is here because this is the only frontend that can
@@ -211,33 +203,33 @@
 ; and the peer is fresh and runnable, the catcher's yield never reaches the arm at
 ; all, and the law proves nothing.
 (: n0 (naps ())
-   b (twirl (\ _ (rest 60)) ())
+   b (twirl (_ \ rest 60) ())
    _ (rest 0)
    _ (catch b)
-   _ (assert (0 < ((naps ()) - n0))))    ; 0 with that arm's guard taken back out
+   _ (assert (0 < naps () - n0)))    ; 0 with that arm's guard taken back out
 
 ; --- law 14: and find_runnable must not answer a catcher either ---------------
 ; the other half, on some other task's yield. a chain is what reaches it: the
 ; sleeper is the last to yield here and it yields with a deadline, so law 13's arm
 ; is never even offered and only the find_runnable clause can keep this green.
 (: n0 (naps ())
-   b (twirl (\ _ (rest 60)) ())
-   a (twirl (\ _ (catch b)) ())
+   b (twirl (_ \ rest 60) ())
+   a (twirl (_ \ catch b) ())
    _ (catch a)
-   _ (assert (0 < ((naps ()) - n0))))    ; 0 with the find_runnable clause out
+   _ (assert (0 < naps () - n0)))    ; 0 with the find_runnable clause out
 
 ; --- law 15: the park still answers, on an exit and on a freeze ---------------
 ; a catcher wakes on its peer's exit and reaps the value, which is the whole of
 ; what catch promised before it went and did it by spinning.
-(: t (twirl (\ _ (: _ (rest 20) 41)) ())
-   _ (assert ((catch t) = 41)))
+(: t (twirl (_ \ (rest 20, 41)) ())
+   _ (assert (catch t = 41)))
 
 ; and a caught peer frozen out from under the catcher must wake it too. freeze
 ; unsplices the node, so the pid goes gone rather than dormant -- a park that
 ; waited for dormancy alone would wait out the 5 s that never comes, and this
 ; frontend would exit 97 on the deadlock rather than hang.
-(: t (twirl (\ _ (rest 5000)) ())
-   _ (twirl (\ _ (freeze t)) ())
-   _ (assert (! (catch t))))
+(: t (twirl (_ \ rest 5000) ())
+   _ (twirl (_ \ freeze t) ())
+   _ (assert !(catch t)))
 
-(: _ (say out "front: ok") (putc 10))
+(say out "front: ok\n")
