@@ -132,6 +132,14 @@
       ; a message ||| doesn't know (shrink) delegates to the active sublayout
       ((ch-cur (lay-msg (choice [L1 full]) 'shrink z3)) 2 = 0.48)))
 
+; --- the book (apps/lux/layout.l): one layout per tag, () = every tag on the default ---
+(: L1 (resizable-tall 1 0.02 0.5) b1 (lays-put () 2 full)
+   (test
+      (lays-of () 1 L1 = L1)                                                     ; no entry: the default
+      (lays-of b1 2 L1 = full) (lays-of b1 1 L1 = L1)                            ; the entry, and its neighbour untouched
+      (lays-of (lays-put b1 2 L1) 2 full = L1) (#(lays-put b1 2 L1) = 1)         ; put replaces, never doubles
+      (#(lays-put b1 1 L1) = 2)))
+
 ; --- the tiling ledger (rtwinsrow, test/uulay.l: proved of the model in uu,
 ; --- certified by Rocq + Lean; here the same law watched on the metal):
 ; --- rt-tile's placements name the row exactly -- every window placed once,

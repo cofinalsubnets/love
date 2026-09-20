@@ -315,8 +315,9 @@
                    _ (x-w8 nf 33) _ (x-w8 nf 32) _ (x-w16 nf 0) _ (x-w32 nf root) _ (x-w32 nf 1)
                    _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0)
                    _ (x-flush nf) (rest 100))
-      ; the ||| index rides at minimize>smart>toggle>mirror>choice (config.l's stack)
-      chidx "((((((caup (lux-st ())) 2) 1) 2) 2) 1)"
+      ; the ||| index rides at minimize>smart>toggle>mirror>choice (config.l's stack);
+      ; (lay ()) is the current tag's layout out of the book
+      chidx "((((((lay ()) 2) 1) 2) 2) 1)"
       i0 (ask chidx)
       _ (ask "(msg! 'next-layout)")
       _ (nudge ())
@@ -328,6 +329,19 @@
       _ (nudge ())
       _ (must "moor-refuses" ("11" = ask "(+ 5 6)"))
       _ (must "moor-standing" (i0 = ask chidx))
+
+      ; --- 6b. the book: a layout is the tag's own. flip on tag 1, view tag 2 --
+      ;     it still reads the configured stack -- and tag 1 kept its flip ---
+      _ (ask "(msg! 'next-layout)")
+      _ (nudge ())
+      _ (waitp "book-flips" (u \ ! (i0 = ask chidx)) 50)
+      _ (cmsg root a-cd 1 0 0)
+      _ (waitp "book-other-tag" (u \ && (1 = deskt ()) (i0 = ask chidx)) 50)
+      _ (cmsg root a-cd 0 0 0)
+      _ (waitp "book-kept" (u \ && (0 = deskt ()) (! (i0 = ask chidx))) 50)
+      _ (ask "(msg! 'next-layout)")                                              ; flip back: leg 7 starts from i0
+      _ (nudge ())
+      _ (waitp "book-restored" (u \ = i0 (ask chidx)) 50)
 
       ; --- 7. keybindings under a lock modifier: super+space (next-layout,
       ;     read back through the moor's snapshot like leg 6) must fire with
