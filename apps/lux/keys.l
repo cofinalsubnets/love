@@ -121,9 +121,7 @@
      (kb modm 109 '(msg mirror))                                                 ; mod+m       Toggle mirror
      (kb modm 102 '(msg toggle-layout))                                          ; mod+f       toggleLayouts Full
      (kb modm 112 '(spawn ("xfce4-screenshooter")))                              ; mod+p
-     (kb modm 119 '(float-toggle))                                               ; mod+w       f_t sink float
-     (kb (modm | shiftm) 101 '(spawn ("gvim" "/home/gwen/g/lux")))               ; mod+shift+e edit config
-     (kb modm 101 '(spawn ("rofimoji")))                                         ; mod+e
+     (kb modm 115 '(float-toggle))                                               ; mod+s       f_t: float <-> sink; w/e/r stay the screens
      (kb modm 122 '(spawn ("xscreensaver-command" "-activate")))                 ; mod+z
      (kb (modm | shiftm) 111 '(exec ("openbox" "--replace")))                    ; mod+shift+o abdicate
      (kb (modm | shiftm) 122 '(spawn ("xscreensaver-command" "-lock")))          ; mod+shift+z

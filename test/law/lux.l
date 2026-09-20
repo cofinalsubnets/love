@@ -316,9 +316,9 @@
       (keys-find keys-dir (supm | shiftm) xk-up = '(swapd up (0 -20)))           ; sup+shift+Up
       (keys-find keys-dir (supm | ctrlm) 106 = '(resize down (0 20)))            ; sup+ctrl+j
       ; the union: custom wins on a collision, stock survives elsewhere
-      (#keys-custom = 45) (#keys-def = 45) (#the-keys = 73)       ; 17 stock rows shadowed
+      (#keys-custom = 43) (#keys-def = 45) (#the-keys = 74)       ; 14 stock rows shadowed
       (keys-find the-keys supm 114 = '(screen 2)) (keys-find the-keys (supm | shiftm) 119 = '(to-screen 0))   ; the screen keys
-      (keys-find the-keys supm 119 = '(float-toggle))                            ; ..where custom does not sit on them
+      (keys-find the-keys supm 119 = '(screen 0)) (keys-find the-keys supm 115 = '(float-toggle))   ; w/e/r free of custom; s toggles
       (keys-find the-keys supm xk-ret = '(spawn ("xfce4-terminal")))             ; custom sup+ret over stock swap-master
       (keys-find the-keys supm 109 = '(msg mirror))                              ; custom sup+m over stock focus-master
       (keys-find the-keys (supm | shiftm) xk-ret = '(spawn ("xterm")))           ; the stock terminal survives
@@ -395,7 +395,7 @@
       (<rt = 'rtall) (rt 1 = 1) (rt 2 = 0.5)                           ; ResizableTall 1 (2/100) (1/2)
       (<dw = 'dwindle)
       (: phi (dw 1) ((1.61803 < phi) && (phi < 1.61804)))                   ; fib 32 / fib 31, the golden ratio
-      (#(keys-build supm 20 9 () ()) = 73) (lit? (manage-for '("a") '("b") ()))
+      (#(keys-build supm 20 9 () ()) = 74) (lit? (manage-for '("a") '("b") ()))
       (<<(conf-roster c0 'startup '(("setxkbmap"))) = "setxkbmap")))
 
 ; --- the config door (apps/libra/salt.l): every setting overrides, and its absence is
@@ -450,7 +450,7 @@
       (keys-find km supm 65027 = '(kill))                                        ; the raw-keysym chord grabs like any other
       !(keys-find km supm 112) !(keys-find km supm 122)                          ; unbind cuts, and cuts last
       (keys-find km supm 120 = '(kill))                                          ; ... only what it names
-      (#km = 74)))                                                          ; 73 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
+      (#km = 75)))                                                          ; 74 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
 
 ; --- ~/.Xauthority parsing (apps/lux/wire.l rung 8), on mock bytes ---
 (: (be16 n) (string (n >> 8) + string (255 & n))                                        ; big-endian u16 as two appended bytes

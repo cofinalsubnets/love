@@ -395,7 +395,7 @@
       _ (waitp "screen-back" (u \ (: g (x-getgeom s w6) (g 0 + g 2 <= 213))) 50)
       _ (must "screen-vis-back" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
 
-      ; --- 6e. the screen keys (mod+r: mod+w/e sit under the custom table): mod+r
+      ; --- 6e. the screen keys, on the third screen so the leg also proves n=2: mod+r
       ;     focuses screen 2 (tag 3) and warps the pointer onto it; a crossing back
       ;     onto w6 makes the left screen current without a trade; mod+shift+r sends
       ;     w6 to screen 2's tag, where it is painted, not hidden ---
