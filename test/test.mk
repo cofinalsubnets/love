@@ -368,9 +368,9 @@ korerun = $m kore
 # one file per subject under test/kore/, and the roster is SPELLED: test/kore/common.sh
 # is dotted by each and must never run as one, so this cannot be a glob. a subject also
 # stands alone -- `make test_kore_sed` -- which is most of why the split is worth having.
-kore_parts = laws diff toolchain line sort ls seams grep field column encode fs sed \
-  proc procfs sh fork awk find record sum expr bc stat time patch pager top lapiz \
-  status door archive misc
+kore_parts = laws diff toolchain line sort ls grep field column encode fs sed proc \
+  procfs sh fork awk find record sum expr bc stat time patch pager top lapiz archive \
+  misc prop-seams prop-door prop-status
 test_kore: host
 	@for p in $(kore_parts); do sh test/kore/$$p.sh $(ho) $m || exit 1; done
 $(kore_parts:%=test_kore_%): test_kore_%: host

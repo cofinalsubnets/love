@@ -3,8 +3,8 @@
 . "$(dirname "$0")/common.sh"
 
 # NOT byte-for-byte, and it cannot be: the process table moves between two runs and
-# every number these read is a clock. The PARSERS are lawed above (ustatf, uclk, utty,
-# uupsay); what is asked here is that the FACES agree with procps about the machine
+# every number these read is a clock. The PARSERS are lawed in laws.sh (ustatf, uclk,
+# utty, uupsay); what is asked here is that the FACES agree with procps about the machine
 # they are both looking at -- the header they print, a process we made ourselves, and
 # a number that has to come out of /proc/meminfo.
 # the victim is a COPY of sleep under our own name: `killall sleep` on a shared box

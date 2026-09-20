@@ -2,10 +2,11 @@
 # test/kore/seams.sh -- the 4096-byte gulp seams, over every tool that reads by chugs
 . "$(dirname "$0")/common.sh"
 
-# THE GULP SEAMS. cat/head/tail/nl/rev read by 4096-byte chugs now, so a line that
-# spans a gulp, an input with no newline in it at all, and a file that ends exactly
-# on the boundary are each a place the reader can lose or double a byte -- and none
-# of them shows in the small fixtures above.
+# THE GULP SEAMS, one property over every tool that reads. cat/head/tail/nl/rev pull
+# 4096-byte chugs (apps/kore/u.l's urd-line and urd-gulp), so a line that spans a gulp,
+# an input with no newline in it at all, and a file that ends exactly on the boundary
+# are each a place the reader can lose or double a byte -- and none of them shows on
+# the few-line fixtures the per-tool files use.
 awk 'BEGIN{for(i=0;i<300;i++)printf "%09d-", i; print ""}' > "$ho/.gs1"   # one 3000-char line
 awk 'BEGIN{for(i=0;i<40;i++){for(j=0;j<300;j++)printf "%09d-",j; print ""}}' > "$ho/.gs2"
 dd if=/dev/zero bs=4096 count=1 2>/dev/null | tr '\0' 'x' > "$ho/.gs3"    # 4096, no newline

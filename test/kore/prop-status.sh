@@ -6,8 +6,8 @@
 # a caller staying in the image lives through a tool that fails -- the property the
 # seat hides, since the seat quits with the answer. one image, four tools whose
 # statuses are 1, 2 (a udie from deep inside), 0 and 0: the run must reach the last
-# say, and the charms must be exactly those. nothing else here can catch this: a
-# regression to `quit` still passes every check above.
+# say, and the charms must be exactly those. nothing else in test/kore/ can catch this:
+# a regression to `quit` still passes every other subject.
 LOVE_NO_IMAGE= "$m" -e '(: _ (borrow (name "kore")) a (kore-main (list "kore" "false"))
                                     b (kore-main (list "kore" "basename"))
                                     c (kore-main (list "kore" "true"))

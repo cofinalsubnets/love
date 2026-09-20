@@ -2,8 +2,8 @@
 # test/kore/pager.sh -- less and more -- one pager, both names, and the face on a pty
 . "$(dirname "$0")/common.sh"
 
-# `less` and `more` are ONE door (apps/kore/less.l). Its engine is lawed with the
-# rest above -- pgstep driven byte by byte, no tty in it -- and its face rides a
+# `less` and `more` are ONE door (apps/kore/less.l). Its engine is lawed in laws.sh
+# -- pgstep driven byte by byte, no tty in it -- and its face rides a
 # real pty below. What belongs here is the lane a script actually takes: stdout is
 # not a terminal, so the pager pours, and the pour has to be cat to the byte.
 pg=$ho/.kore-pg

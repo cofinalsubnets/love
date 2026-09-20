@@ -110,7 +110,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
   status. mooncc rides the same floor with two doors of its own — `moon-run` answers, `moon-main`
   quits with what it answers (doc/misc/moon.md). nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
-  test/kore/status.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
+  test/kore/prop-status.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
 * **the nif lane.** fs effects ride inle/posix.c (app-glob LvNif, no core edit) and its
   `posix_` conventions: an effect op answers () ok | an errno nom | 'badarg misuse; a
   value op answers the value | () absence | a nom. inle/posix.c holds rename symlink readlink chmod chown utime

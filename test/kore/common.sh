@@ -1,6 +1,12 @@
 # test/kore/common.sh -- what every check in test/kore/ drinks from. dotted, never run:
 # each subject script takes OUTDIR and LOVE and dots this to get the helpers.
 #
+# A file here is named for the tool it holds to GNU (sed.sh, awk.sh), or for the family
+# where one fixture serves several (line.sh, field.sh, toolchain.sh). `prop-*.sh` is the
+# other kind: ONE property over MANY tools, which is why it answers to no tool's name --
+# prop-seams.sh the 4096-byte read boundary, prop-door.sh --help/--version, prop-status.sh
+# the exit charm. laws.sh is the .l-level suite and stands apart from both.
+#
 # The shape almost every check takes: run the system tool, run OUR applet the same way,
 # and require byte-identical stdout -- and, where the exit code carries meaning (grep's
 # 0/1/2, sed's 1/2, xargs' 123/127, expr's 0/1/2, patch's 0/1), that too. GNU is not
