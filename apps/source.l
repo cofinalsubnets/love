@@ -181,6 +181,12 @@
              _ (close q2)
              v)))
 
+   ; a seat whose files are inside the machine: ask whatever is outside to carry one out,
+   ; the way `lift` does. a hosted seat has no such file, and nothing is said.
+   (src-lift p)
+    (: q (open "/proc/lift" "w")
+       (hot? q ? (say q p, close q, 1) 0))
+
    ; the fixpoint is scoped, not dropped: it can hold only where the output ought to be
    ; this binary, and a cross lay is the one case the invocation itself says it cannot.
    ; a dirty tree still fails.
@@ -193,8 +199,10 @@
        e (copyfile made dst)
        _ (e < 0 ? (src-die ("can't write " + dst)))
        _ (chmod dst 493)
+       out? (src-lift dst)
        _ (puts (";; laid " + dst + " -- a raw egg for " + xa + ". on that machine\n"
                 + ";; `love bake` lays its crew from the source it carries.\n"
+                + (out? ? ";; carried out of the machine. the x bit does not travel: chmod +x it there.\n" "")
                 + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
                 + ";; `love seed` on the " + xa + " machine proves it.\n"))
        0)

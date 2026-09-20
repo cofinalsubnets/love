@@ -1361,8 +1361,8 @@ endif
 # test_seedwasm -- `love seed x64` ON THE WASM SEAT: the machine lays the source it
 # carries, drives cook with the artifact itself as the bootstrap (LOVE=, so no love0 is
 # compiled -- there is no seat here to run one) and cross-builds a hosted x64 love with
-# its own mooncc. nothing under it but wasm: no cc, no shell, no toolchain. the lift
-# brings the egg out and, on an x64 box, it has to run.
+# its own mooncc. nothing under it but wasm: no cc, no shell, no toolchain. the seed asks
+# for the egg to be carried out itself, and on an x64 box it has to run.
 # RAM: the seat's collector is bounded at an eighth of the machine (inle/kmain.c), so the
 # machine has to be big enough that an eighth of it holds the largest live set. that is
 # selfpack's, laying the dist tarball: 512 ooms there, 768 carries it, and this is the
@@ -1375,11 +1375,13 @@ else
 test_seedwasm: host
 	@$(MAKE) -s wasm
 	@echo TEST "love seed x64 (the wasm seat, nothing under it)"
-	@rm -f out/wasm/love-x64
-	@INLE_RAM=1024 $(NODE) $(R)/inle/wasm/inle.mjs --lift /s/love-x64:out/wasm/love-x64 \
+	@rm -f love-x64 out/wasm/love-x64
+	@INLE_RAM=1024 $(NODE) $(R)/inle/wasm/inle.mjs \
 	   --image out/wasm/love.image $(R)/out/love.wasm seed x64 /s \
 	   < /dev/null > out/wasm/seed.log 2>&1; \
-	 grep -q "a raw egg for x64" out/wasm/seed.log && test -s out/wasm/love-x64 \
+	 mv -f love-x64 out/wasm/love-x64 2>/dev/null; \
+	 grep -q "a raw egg for x64" out/wasm/seed.log \
+	   && grep -q "carried out of the machine" out/wasm/seed.log && test -s out/wasm/love-x64 \
 	   || { tail -20 out/wasm/seed.log; echo "FAIL test_seedwasm"; exit 1; }
 	@chmod +x out/wasm/love-x64
 	@$(if $(filter x64,$(hosta)),out/wasm/love-x64 -v,echo "  the egg is x64 and this box is $(hosta): laid, not run")

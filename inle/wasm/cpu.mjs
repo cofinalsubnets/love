@@ -50,8 +50,9 @@ export const shared_n = horn_at + horn_n * 4;
 // every extern, and called back into the module from a hypercall (the idle) or after
 // a reset, when the kernel is parked and the tree is whole. the terminal leaves the path
 // in the shared buffer and sets ctl[3]: 1 for the next idle, 2 for the reset -- a file a
-// program writes last is there at the second and not the first. the bytes come back as
-// a message.
+// program writes last is there at the second and not the first. the reset serves a 1 as
+// well, an ask on the way out being the shape of a program that lifts what it just made.
+// the bytes come back as a message.
 let ex = null, top = 0;                                   // the module's exports; the scratch page
 // the page's network, one body at a time (kmain's k_fetch through inle/wasm/arch.c): the
 // worker fetches a URL whole -- a synchronous XMLHttpRequest, which a worker may make, so
@@ -81,7 +82,10 @@ const fetchOpen = (url) => {
 const lift = (when, msg) => {
   if (!ex) return;
   const kind = Atomics.load(ctl, 3);
-  if (kind !== when && !(kind === 3 && when === 2)) return;
+  // the idle serves an ordinary ask and nothing else; the reset serves whatever is
+  // pending. a program that lifts what it just made and then leaves asks at the last
+  // moment it has, and the tree it wrote is still whole here
+  if (when === 1 ? kind !== 1 : !kind) return;
   const raw = new Uint8Array(ctl.buffer, lift_at, lift_n);
   let n = 0; while (n < lift_n && raw[n]) n++;
   const path = dec.decode(raw.slice(0, n));
