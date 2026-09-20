@@ -16,7 +16,7 @@
   x-rstr x-pad4 x-wname x-rbytes u16 u32 evq x-reply
   x-connect x-wpad x-setup scr-root scr-w scr-h scr-mink scr-maxk
   scr-idbase scr-cmap scr-visual scr-depth x-cwa-events x-configure x-map x-unmap
-  x-focus x-border x-intern x-getprop x-atoms-of x-getprop-atoms x-has-atom x-getclass
+  x-focus x-sync x-clear-enters x-border x-intern x-getprop x-atoms-of x-getprop-atoms x-has-atom x-getclass
   x-transient x-getgeom x-raise x-lower x-kill x-wmdel x-confnotify x-delprop
   x-grabbtn x-replay x-allow-async x-grabptr x-ungrabptr x-querytree x-attrs x-manageable?
   x-redirect x-keymap x-grab x-ungrabkeys x-color x-borderpix x-cursor xauth-parse
@@ -93,6 +93,8 @@
    (x-map s win)   (x-w8 s 8, x-w8 s 0, x-w16 s 2, x-w32 s win)
    (x-unmap s win) (x-w8 s 10, x-w8 s 0, x-w16 s 2, x-w32 s win)
    (x-focus s win) (x-w8 s 42, x-w8 s 1, x-w16 s 3, x-w32 s win, x-w32 s 0)      ; SetInputFocus, PointerRoot revert
+   (x-sync s) (x-w8 s 43, x-w8 s 0, x-w16 s 1, x-flush s, x-reply s)             ; GetInputFocus: a cheap round trip, the events so far stashed
+   (x-clear-enters s) (x-sync s, pin evq 0 (filter (p \ (127 & <p) != 7) (evq 0)))   ; drop the EnterNotify a paint of our own just caused
    (x-border s win px)                                                           ; ConfigureWindow border-width
     (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w16 s 16, x-w16 s 0, x-w32 s px)
 

@@ -436,13 +436,31 @@
 
       ; --- 6g. a float's home follows its screen: w7 floated near the right screen's
       ;     left edge, mod+left nudges it (20px a press) until its centre crosses into
-      ;     the middle screen -- it becomes tag 2's, focused, and that screen current ---
+      ;     the middle screen -- it becomes tag 2's, focused, and that screen current.
+      ;     a tile under it on each screen (w9 right, w8 middle) and the pointer on
+      ;     its body: the crossings a move paints are lux's own, so the focus holds,
+      ;     and the float stays above the tiles it lands on ---
       lk (peep (x-keymap s (scr-mink sc) (scr-maxk sc) [65361]) 65361 0)          ; Left
       _ (must "left-keycode" (0 < lk))
+      w8 (w1 + 11) w9 (w1 + 12)
+      _ (mkwin s w9 root)                                                        ; the pointer is on the right screen: w9 tiles tag 3
+      _ (waitp "w9-on-right" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w9 + ")")) 50)
+      _ (fake 6 0 320 240) _ (rest 100)
+      _ (mkwin s w8 root)                                                        ; the middle: w8 tiles tag 2
+      _ (waitp "w8-on-mid" (u \ "2" = ask ("(wstagof (cap (lux-st ())) " + show w8 + ")")) 50)
+      _ (waitp "w8-painted" (u \ 213 <= x-getgeom s w8 0) 50)
       _ (ask ("(float! " + show w7 + " '(427 10 200 150))"))                     ; centre 527: still screen 2's
       _ (nudge ())
       _ (waitp "float-on-right" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")) 50)
-      _ (press 0 lk) _ (press 0 lk) _ (press 0 lk) _ (press 0 lk) _ (press 0 lk)   ; x 327, centre 427: still screen 2's
+      _ (fake 6 0 600 100) _ (rest 100)                                          ; the pointer onto w7's body: focused, tag 3 current
+      _ (waitp "float-focused-under-pointer" (u \ show w7 = ask "(wsfoc (cap (lux-st ())))" && "3" = curtag ()) 50)
+      (above? lo hi) (x-querytree s root @ [1 t] (: (go l) (? !(two? l) 0 (<l = lo) (any (= hi) >l) (go >l)) (go t)) 0)
+      _ (must "float-above-right-tile" (above? w9 w7))
+      _ (press 0 lk) _ (press 0 lk)                                              ; x 387: the body leaves the pointer, which lands on w9
+      _ (rest 200)
+      _ (must "float-keeps-focus" (show w7 = ask "(wsfoc (cap (lux-st ())))"))   ; that crossing was the move's own: not a focus
+      _ (must "float-keeps-current" ("3" = curtag ()))
+      _ (press 0 lk) _ (press 0 lk) _ (press 0 lk)                               ; x 327, centre 427: still screen 2's
       _ (rest 200)
       _ (must "float-still-right" ("3" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")))
       _ (press 0 lk)                                                             ; x 307, centre 407: the middle screen's
@@ -450,8 +468,13 @@
       _ (must "float-rehome-focus" (show w7 = ask "(wsfoc (cap (lux-st ())))"))
       _ (must "float-rehome-current" ("2" = curtag ()))
       _ (must "float-rehome-painted" (307 = x-getgeom s w7 0))
-      _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w7, x-flush s)                   ; DestroyWindow
+      _ (must "float-above-mid-tile" (above? w8 w7))                             ; over w8 now, and on top of it
+      _ (press 0 lk)                                                             ; one more on the new screen: still the float that moves
+      _ (waitp "float-moves-on" (u \ 287 = x-getgeom s w7 0) 50)
+      _ (must "float-still-above" (above? w8 w7))
+      _ (map (w \ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w, x-flush s)) [w7 w8 w9])   ; DestroyWindow
       _ (waitp "w7-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w7 + ")")) 50)
+      _ (waitp "w9-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w9 + ")")) 50)
       _ (fake 6 0 5 475) _ (rest 100)                                             ; the pointer back to the left screen for the fold
       _ (delmon "left") _ (delmon "mid") _ (delmon "right")
       _ (refresh ())

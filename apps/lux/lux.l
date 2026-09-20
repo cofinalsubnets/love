@@ -208,7 +208,7 @@
                                    _ (x-border s w bw) _ (x-borderpix s w (w = f ? fpix npix))
                                    _ (x-configure s w (fr 0) (fr 1) (fr 2) (fr 3))
                                    _ (map! w) (x-raise s w))) (wsvisflof sh <p)))) (wsvis sh))
-       (x-flush s))
+       (x-clear-enters s))                                                       ; the crossings this paint caused are not the user's
    (refocus sh) (: f (wsfoc sh)                                                 ; an empty view takes the root: PointerRoot would
                    (x-focus s (f ? f root), x-flush s))                         ; hand the keys to whatever the pointer sits over
    (watch w) (x-cwa-events s w 16, x-grabbtn s w)                         ; the mouse wires: EnterWindow selected (focus follows the
@@ -218,7 +218,7 @@
        (: was (wsonscreen sh) sh2 (wsgreedy sh t) now (wsonscreen sh2)
           _ (map map! (filter (w \ !(any (= w) was)) now))                       ; the arriving ring, tiles and floats alike
           _ (render sh2 lays)
-          _ (map hide! (filter (w \ !(any (= w) now)) was)) _ (x-flush s)
+          _ (map hide! (filter (w \ !(any (= w) now)) was)) _ (x-clear-enters s)
           _ (line ("lux: view " + show t + " " + show (wsrow sh2)))
           sh2))
 
@@ -240,7 +240,7 @@
                                                                                  ; the keyboard agree with the arriving view
           (k = 'shift) (: t <>a sh2 (shiftwin sh fw t)                           ; the focus emigrates, float or tile, rect and all
                           _ (render sh2 lays)
-                          _ (sh2 = sh || wsvisible? sh2 t ? 0 (hide! fw, x-flush s))   ; it left every screen: hide the emigrant
+                          _ (sh2 = sh || wsvisible? sh2 t ? 0 (hide! fw, x-clear-enters s))   ; it left every screen: hide the emigrant
                           _ (line ("lux: sent " + show fw + " -> " + show t))
                           (loop sh2 lays hist))
           (k = 'screen)                                                          ; focus screen n: its tag becomes current, the pointer follows
