@@ -26,14 +26,10 @@
                         quit 1))
  _ (!(two? xv) ? (puts "luxui: ok (no Xvfb, skipped)", quit 0))
  _ (enlist 'xv <xv)
- (rdnum p) (:- (go 0 0)
-               (go n st) (: c (see p)
-                            (? (c = -1) ()
-                               (c = 13) (go n st)
-                               (c = 10) (st = 1 ? n (go 0 0))
-                               (48 <= c < 58)
-                                (st = 2 ? (go 0 2) (go (10 * n + c - 48) 1))
-                               (go 0 2))))
+ (rdnum p) (:- (go 0 0) (go n st)
+            (see p @ -1 () 13 (go n st) 10 (st @ 1 n (go 0 0))
+                     c (48 <= c < 58 ? (st @ 2 (go 0 2) (go (10 * n + c - 48) 1))
+                                       (go 0 2))))
  dn (rdnum >xv)
  _ (must 'display (charm? dn && !(two? (gather <xv))))
  dpy ("/tmp/.X11-unix/X" + show dn)
@@ -43,7 +39,7 @@
  rdir (: rd (getenv "XDG_RUNTIME_DIR") (1 < #rd ? rd "/tmp"))
  stale "lux-luxui-stale.sock"
  _ (: p (shore (rdir + "/" + stale)) (hot? p ? (close p)))
- _ (must 'stale-planted (any (n \ n = stale) (readdir rdir)))
+ _ (must 'stale-planted (any (= stale) (readdir rdir)))
 
  ; the real driver, the same modules bin/lux ships. HOME rides a scratch seat so
  ; the box's own ~/.love/etc/lux.l cannot reach a gate driving stock-layout chords
@@ -66,11 +62,11 @@
  _ (enlist 'pr <pr)
  g (wfx <pr)
  _ (pull camp 'pr 0)
- (echo p) (: c (see p) (c = -1 ? 0 (putc c, echo p)))
+ (echo p) (see p @ -1 0 c (putc c, echo p))
  _ (echo >pr)
  _ (close >pr)
  _ (must 'probe-clean (0 = <g))
- _ (must 'swept !(any (n \ n = stale) (readdir rdir)))
+ _ (must 'swept !(any (= stale) (readdir rdir)))
 
  _ (strike ())
  _ (close >ph) _ (close >xv)

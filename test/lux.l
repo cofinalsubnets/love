@@ -13,10 +13,10 @@
 ; sockets under it refuses differently. skip where there is no kernel (hosted).
 (? hosted (do
   (test (lit? connectu))
-  (test ('enoent = (connectu "/nonexistent/never/sock")))   ; no such path
-  (test ('badarg = (connectu "")))                          ; empty path: refused up here
+  (test ('enoent = connectu "/nonexistent/never/sock"))   ; no such path
+  (test ('badarg = connectu ""))                          ; empty path: refused up here
   (test (nom? (connectu "/tmp")))                             ; a directory, not a socket
-  (test ('badarg = (connectu 7)))                           ; not a string
+  (test ('badarg = connectu 7))                           ; not a string
   (test_fin ())
   (say err "lux: ok\n")
 ) 0)

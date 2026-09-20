@@ -14,7 +14,7 @@
       (zfocdn (zfocup z3) = z3) (zfocup (zfocdn z3) = z3)                        ; motions are inverses
       (zfoc (zfocup z3) = 1) (zfoc (zfocdn z3) = 3)
       (zfoc (zfocup (zfocup z3)) = 3)                                            ; wrap past the top -> the bottom
-      (((3 zfocup) z3) = z3) (((3 zfocdn) z3) = z3)                              ; the church numeral is the cycle law
+      (3 zfocup z3 = z3) (3 zfocdn z3 = z3)                                      ; the church numeral is the cycle law
       (zfocup (zmk 7 () ()) = zmk 7 () ())                                       ; a singleton is a fixed point
       (zswapdn (zswapup z3) = z3) (zswapup (zswapdn z3) = z3)                    ; swaps are inverses
       (zfoc (zswapup z3) = 2) (zrow (zswapup z3) = '(2 1 3))
@@ -39,7 +39,7 @@
       (wscur s4 = 1) (wstagof s4 30 = 2) (wsfoc s4 = 20) (wsrow s4 = '(20 10)) (wssane? s4)
       (shiftto s2 1 = s2) (shiftto s2 9 = s2)                                   ; to self / to nowhere: no-ops
       (: s5 (shiftwin s2 10 3)                                                  ; shiftwin names its window: 10 leaves, focus stays 30
-         ((wstagof s5 10 = 3) && (wsrow s5 = '(30 20)) && (wsfoc s5 = 30) && wssane? s5))
+         (wstagof s5 10 = 3 && wsrow s5 = '(30 20) && wsfoc s5 = 30 && wssane? s5))
       (shiftwin s2 10 1 = s2) (shiftwin s2 99 2 = s2)                           ; to its own tag / an unknown window: no-ops
       !(wsknownw? (evict s2 20) 20) (wsrow (evict s2 20) = '(30 10))
       (wsfoc (evict s2 30) = 20) (wssane? (evict s2 30))
@@ -49,14 +49,14 @@
 ; --- the floating half (W.float / W.sink): the alist is geometry alone, so
 ;     lifting a window never moves it in the ring and sinking it never moves it back ---
 (: s2 (admit (admit (admit (sheaf '(1 2 3)) 10) 20) 30) r99 '(20 20 200 100)
-   (sameset? a b) ((#a = tally b) && all (x \ any (y \ x = y) b) a)
+   (sameset? a b) (#a = #b && all (x \ any (= x) b) a)
    f2 (wsdofloat s2 20 r99)
    g (wsmap f2 (zfocto 20))                                                      ; the float holds the focus
    h (wsswapup (wsmap f2 (zfocto 10)))                                           ; an order op with a tile focused
    (test
       !(wsfloating? s2 20) (wsfloating? f2 20) (wsrect f2 20 = r99)              ; float lifts a window
       (wsknownw? f2 20) (wsrect f2 30 = ())                                      ; still managed; a tiled window has no rect
-      !(any (x \ x = 20) (wstiled f2))                                           ; float takes it out of the tiled half
+      !(any (= 20) (wstiled f2))                                           ; float takes it out of the tiled half
       (sameset? (wswins f2) (wswins s2))                                         ; float moves it between sets, not out
       (wssink f2 20 = s2)                                                        ; sink is float's exact inverse
       ; --- geometry only: the ring slot belongs to the window, float or not ---
@@ -71,7 +71,7 @@
       (2 = wstagof (shiftwin f2 20 2) 20)                                        ; shiftwin carries a float...
       (r99 = wsrect (shiftwin f2 20 2) 20)                                       ; ...still floating, rect kept
       (wssane? (shiftwin f2 20 2)) (shiftwin f2 20 1 = f2)                       ; to its own home: a no-op
-      !(any (x \ x = 20) (wsring (wsview f2 2)))                                 ; abroad, the float is off the ring
+      !(any (= 20) (wsring (wsview f2 2)))                                 ; abroad, the float is off the ring
       ; --- one focus: wsfoc names a float, and a view round trip returns it ---
       (wsfoc g = 20) (wsfoc (wsview (wsview g 2) 1) = 20)
       (wsmaster g = g) (wsswapup g = g)                                          ; the order ops are tiles-only: a float focus stays put
@@ -117,15 +117,15 @@
 
 ; --- the seeded fuzz: the whole op vocabulary, 200 steps, invariant per step ---
 (: r99 '(20 20 200 100) rA '(0 0 1 1) rB '(1 0 1 1)
-   (fzop k w s)
-    (? (k = 0) (admit s w)     (k = 1) (evict s w)
-       (k = 2) (wsmap s zfocup) (k = 3) (wsmap s zfocdn)
-       (k = 4) (wsswapup s) (k = 5) (wsswapdn s)
-       (k = 6) (wsmaster s) (k = 7) (wsview s (1 + (w % 3)))
-       (k = 8) (shiftto s (1 + (w % 3)))
-       (k = 9) (wsgreedy s (1 + (w % 3)))
-       (k = 10) (wsrescreen s (take (1 + (w % 2)) [rA rB]))                    ; one screen or two
-       (: fw (wsfoc s) (fw ? (wsfloating? s fw ? (wssink s fw) (wsdofloat s fw r99)) s)))   ; toggle-float the focus
+   (fzop k w s) (k @
+    0 (admit s w)      1 (evict s w)
+    2 (wsmap s zfocup) 3 (wsmap s zfocdn)
+    4 (wsswapup s) 5 (wsswapdn s)
+    6 (wsmaster s) 7 (wsview s (1 + (w % 3)))
+    8 (shiftto s (1 + (w % 3)))
+    9 (wsgreedy s (1 + (w % 3)))
+    10 (wsrescreen s (take (1 + (w % 2)) [rA rB]))                    ; one screen or two
+    (: fw (wsfoc s) (fw ? (wsfloating? s fw ? (wssink s fw) (wsdofloat s fw r99)) s)))   ; toggle-float the focus
    (fz i st s)
     (? (i < 1) s
        (: r1 (random st 12) r2 (random >r1 40)
@@ -153,7 +153,7 @@
       ; Shrink / Expand nudge the master ratio by delta (master width, was 400)
       (: mw- (<<(lay-tile (lay-msg L1 'shrink z3) r z3) 3)
          mw+ (<<(lay-tile (lay-msg L1 'expand z3) r z3) 3)
-         ((mw- < 400) && mw- > 380 && mw+ > 400 && (mw+ < 420)))
+         (mw- < 400 && mw- > 380 && mw+ > 400 && mw+ < 420))
       ((lay-msg (lay-msg L1 'expand z3) 'shrink z3) 2 = 0.5)               ; expand then shrink is a round trip
       ; IncMasterN grows the master column (2 masters left, 1 slave right)
       (: L2 (lay-msg L1 'inc-master z3) p <(lay-tile L2 r z3)
@@ -161,17 +161,17 @@
       ((lay-msg (lay-msg L1 'inc-master z3) 'dec-master z3) 1 = 1)          ; dec undoes inc; floored at 1
       ((lay-msg L1 'dec-master z3) 1 = 1)
       ; Full places only the focus, whole rect
-      (: f <(lay-tile full r z3) ((#f = 1) && (<f = '(10 0 0 800 600))))
+      (: f <(lay-tile full r z3) (#f = 1 && <f = '(10 0 0 800 600)))
       ; MirrorShrink shrinks the focused slave (focus 20, the first slave)
       (: zs (zfocdn z3) M (lay-msg L1 'mirror-shrink zs) h20 (<><(lay-tile M r zs) 4)
-         ((h20 < 300) && h20 > 250))
+         (250 < h20 < 300))
       ; ||| holds the layouts; NextLayout cycles the index (tall -> full -> tall)
       (: C (choice [L1 full])
-         ((#<(ch-tile C r z3) = 3)                                         ; index 0 = ResizableTall
-          && (#<(ch-tile (lay-msg C 'next-layout z3) r z3) = 1)            ; index 1 = Full
-          && ((lay-msg (lay-msg C 'next-layout z3) 'next-layout z3) 1 = 0)))     ; wraps back to 0
+         (#<(ch-tile C r z3) = 3                                       ; index 0 = ResizableTall
+          && #<(ch-tile (lay-msg C 'next-layout z3) r z3) = 1          ; index 1 = Full
+          && lay-msg (lay-msg C 'next-layout z3) 'next-layout z3 1 = 0))     ; wraps back to 0
       ; a message ||| doesn't know (shrink) delegates to the active sublayout
-      ((ch-cur (lay-msg (choice [L1 full]) 'shrink z3)) 2 = 0.48)))
+      (ch-cur (lay-msg (choice [L1 full]) 'shrink z3) 2 = 0.48)))
 
 ; --- the book (apps/lux/layout.l): one layout per tag, () = every tag on the default ---
 (: L1 (resizable-tall 1 0.02 0.5) b1 (lays-put () 2 full)
@@ -207,35 +207,34 @@
       (lay-tile (mirror L1) r z3 = [<(lay-tile L1 r z3) (mirror L1)])            ; mirror off is a pass-through
       ; Dwindle is a golden spiral: the focus takes phi/(1+phi) of the width, still a partition
       (: p <(lay-tile (dwindle 1.618) r z3)
-         ((<p 3 = int ((1.618 / 2.618) * 800)) && (sumarea p = 480000) && (#p = 3)))
+       (<p 3 = int (1.618 / 2.618 * 800) && sumarea p = 480000 && #p = 3))
       ; toggleLayouts Full: off = inner, on = the focus fullscreen
       (#<(lay-tile (toggle-full L1) r z3) = 3)
       (<<(lay-tile (lay-msg (toggle-full L1) 'toggle-layout z3) r z3) = '(10 0 0 800 600))
       ; smartBorders: a lone window (or a fullscreen one) gets a border-0 hint (a 6th field)
-      (: p <(lay-tile (smart-borders L1) r z1) ((#<p = 6) && (<p 5 = 0)))
-      (: p <(lay-tile (smart-borders L1) r z3) (all (q \ tally q = 5) p))          ; multi-window: no border hint
+      (: p <(lay-tile (smart-borders L1) r z1) (#<p = 6 && <p 5 = 0))
+      (: p <(lay-tile (smart-borders L1) r z3) (all (q \ #q = 5) p))          ; multi-window: no border hint
       ; minimize filters a window out of the row; the rest re-tile; restore brings it back
       (: p <(lay-tile (lay-msg (minimize L1) '(minimize-window 20) z3) r z3)
-         ((#p = 2) && !(afind (q \ q 0 = 20) p)))
+         (#p = 2 && !(afind (q \ q 0 = 20) p)))
       (: mm (lay-msg (lay-msg (minimize L1) '(minimize-window 20) z3) 'restore z3)
          (#<(lay-tile mm r z3) = 3))
       ; windowNavigation geometry: nearest window in a direction
       (: pls <(lay-tile L1 r z3)
-         ((nav-target pls 10 'right = 20) && !(nav-target pls 10 'left)         ; master: right -> a slave, nothing left
-          && (nav-target pls 20 'left = 10) && (nav-target pls 20 'down = 30)))     ; slave: left -> master, down -> the other slave
+         (nav-target pls 10 'right = 20 && !(nav-target pls 10 'left)         ; master: right -> a slave, nothing left
+          && nav-target pls 20 'left = 10 && nav-target pls 20 'down = 30))     ; slave: left -> master, down -> the other slave
       ; the whole config stack composes: message pass-through reaches the base, partition holds
       (sumarea <(lay-tile stk r z3) = 480000)
       (#<(lay-tile (lay-msg stk 'next-layout z3) r z3) = 3)                 ; next-layout reaches the ||| at the bottom
-      (: q <(lay-tile (lay-msg stk 'toggle-layout z3) r z3) ((#q = 1) && (<q 5 = 0)))))                 ; toggle-full through the stack -> fullscreen, borderless
+      (: q <(lay-tile (lay-msg stk 'toggle-layout z3) r z3) (#q = 1 && <q 5 = 0))))                 ; toggle-full through the stack -> fullscreen, borderless
 
 ; --- the open dispatch lane: a layout whose head is a closure answers the
 ; --- 'tile/'msg protocol itself -- user layouts enter as plain data, no table
 ; --- edit (the lux repl's live-layout hook), and modifiers wrap them like
 ; --- any builtin ---
-(: (q op lay a b) (? (op = 'tile) (: f (zfoc b)                                  ; focus in a fixed corner box; state = (lay 1)
-                                     [(f ? [(f . rct 0 0 100 (lay 1))] ()) lay])
-                     (op = 'msg) (a = 'grow ? [<lay (lay 1 + 10)] ())
-                     ())
+(: (q op lay a b) (op @ 'tile (zfoc b @ f                                  ; focus in a fixed corner box; state = (lay 1)
+                               [(f ? [(f . rct 0 0 100 (lay 1))] ()) lay])
+                        'msg (a @ 'grow [<lay (lay 1 + 10)]))
    Q [q 50] r (rct 0 0 800 600) z3 (zfrom '(10 20 30))
    (test
       (<(lay-tile Q r z3) = '((10 0 0 100 50)))                                  ; the closure places
@@ -250,10 +249,10 @@
 (: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
    c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom
    yes (c \ 1) no (c \ 0)                                                        ; mock predicates
-   tag (nm \ \ c sh (nm . sh))                                               ; mock action: cons a tag onto the sheaf (marks it ran)
+   tag (nm \ _ \ sh \ nm . sh)                                               ; mock action: cons a tag onto the sheaf (marks it ran)
    (test
       ; float actions move the (tiled) window into the floating half at the right rect
-      (: f (do-full-float c s0) (wsfloating? f 20 && (wsrect f 20 = '(0 0 800 600)) && !(any (x \ x = 20) (wstiled f))))
+      (: f (do-full-float c s0) (wsfloating? f 20 && wsrect f 20 = '(0 0 800 600) && !(any (= 20) (wstiled f))))
       (: f (do-float c s0) (wsrect f 20 = '(100 100 300 200)))                  ; do-float keeps the window's own geometry
       (: f (do-center-float c s0) (wsrect f 20 = '(250 200 300 200)))           ; centered: (800-300)/2=250, (600-200)/2=200
       (do-ignore c s0 = evict s0 20)                                            ; ignore un-manages entirely
@@ -269,7 +268,7 @@
       (((compose-one [(no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c)]) c s0) = ('b . s0))
       (((compose-one [(no -?> tag 'a) (no -?> tag 'b)]) c s0) = s0)
       ; compose-all threads every hook (a plain hook, so wrap or use identity)
-      (((compose-all [(\ c sh ('x . sh)) (\ c sh ('y . sh))]) c s0) = ('y . ('x . s0)))
+      (((compose-all [(\ c sh ('x . sh)) (\ c sh ('y . sh))]) c s0) = ('y . 'x . s0))
       ; manage-for is the assembled config hook -- a runnable closure (X-driven; not called here)
       (lit? manage-default) (lit? (manage-for '("a") '("b") '("c")))))
 
@@ -286,8 +285,8 @@
 ; --- the keymap (apps/lux/keys.l rung 6): the table's shape, the union law, nextMatch ---
 (: (test
       ; every binding is (lib keysym action), the action a tagged list
-      (all (r \ (#r = 3) && two? (kb-act r) && name? <(kb-act r)) the-keys)
-      (kmodmask = (shiftm | (ctrlm | (altm | supm))))
+      (all (r \ #r = 3 && two? (kb-act r) && name? <(kb-act r)) the-keys)
+      (kmodmask = shiftm | ctrlm | altm | supm)
       ; the directional generator: 4 dirs x 2 keysyms x 3 modifier rows
       (#keys-dir = 24)
       (keys-find keys-dir supm 104 = '(go left (-20 0)))                         ; sup+h
@@ -335,16 +334,16 @@
 ; --- the property/window encodings, byte-exact into a jug ---
 (: j (jug 0) _ (x-chprop32 j 5 6 7 '(9 10)) b (slurp j)
    (test (#b = 32) (b 0 = 18) (b 2 = 8)                                   ; opcode, len 6+2
-           (b 4 = 5) (b 8 = 6) (b 12 = 7)                                        ; window, property, type
-           (b 16 = 32) (b 20 = 2) (b 24 = 9) (b 28 = 10)))                       ; format, count, the two values
+         (b 4 = 5) (b 8 = 6) (b 12 = 7)                                        ; window, property, type
+         (b 16 = 32) (b 20 = 2) (b 24 = 9) (b 28 = 10)))                       ; format, count, the two values
 
 (: j (jug 0) _ (x-chprop8 j 5 6 7 "AB") b (slurp j)
    (test (#b = 28) (b 0 = 18) (b 2 = 7)                                   ; len 6 + 1 (2 chars + pad)
-           (b 16 = 8) (b 20 = 2) (b 24 = 65) (b 25 = 66) (b 26 = 0)))            ; format 8, n=2, "ab\0\0"
+         (b 16 = 8) (b 20 = 2) (b 24 = 65) (b 25 = 66) (b 26 = 0)))            ; format 8, n=2, "ab\0\0"
 
 (: j (jug 0) _ (x-mkwin j 42 7) b (slurp j)
    (test (#b = 32) (b 0 = 1) (b 4 = 42) (b 8 = 7)                         ; CreateWindow, wid, parent
-           (b 12 = 255) (b 13 = 255) (b 16 = 1) (b 22 = 2)))                     ; x=-1, w=1, class InputOnly
+         (b 12 = 255) (b 13 = 255) (b 16 = 1) (b 22 = 2)))                     ; x=-1, w=1, class InputOnly
 
 ; --- ClientMessage field reads (win@4 type@8 data@12,16,20) ---
 (: pk ('(33 32 0 0 9 0 0 0 5 0 0 0 2 0 0 0 7 0 0 0 8 0 0 0) + '(0 0 0 0 0 0 0 0))
@@ -372,7 +371,7 @@
 ; --- the config door (apps/libra/salt.l): every setting overrides, and its absence is
 ;     the value that used to be hardcoded. the tablet is built by hand -- salt
 ;     pins a setting's whole tail under its head, which is what salt-file writes. ---
-(: (st l) (foldl (\ t p (pin t <p >p)) (tablet 0) l)                             ; a settings roster -> the tablet salt would answer
+(: (st l) (foldl (\ t p (pin t <p >p)) {} l)                             ; a settings roster -> the tablet salt would answer
    c1 (st '((border 5) (mod alt) (tags 4) (nudge 7)
             (layout (dwindle 2.0)) (layout-wrap smart)
             (float-class inkscape "blender") (center-class ()) (startup ())))
@@ -383,8 +382,8 @@
    (test
       (salt-one c1 'border 3 = 5) (conf-tags c1 = 4) (conf-mod c1 = altm)        ; scalars land
       (<lay1 = 'smart) (<(lay1 1) = 'choice)                                ; layout-wrap replaces the whole stack
-      (#((lay1 1) 2) = 1)                                         ; one ||| member, the config's dwindle
-      (<<((lay1 1) 2) = 'dwindle)
+      (#(lay1 1 2) = 1)                                         ; one ||| member, the config's dwindle
+      (<<(lay1 1 2) = 'dwindle)
       !(conf-roster c1 'center-class ())                                         ; `(k ())` is the empty roster...
       (#(conf-roster c1 'float-class '("x")) = 2)                           ; ...and a named one lands whole
       !(conf-roster c1 'startup '(("setxkbmap")))                                ; so a config can spawn nothing at all
@@ -424,9 +423,9 @@
       (#km = 71)))                                                          ; 70 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
 
 ; --- ~/.Xauthority parsing (apps/lux/wire.l rung 8), on mock bytes ---
-(: (be16 n) ((string (>> n 8)) + string (255 & n))                                        ; big-endian u16 as two appended bytes
+(: (be16 n) (string (n >> 8) + string (255 & n))                                        ; big-endian u16 as two appended bytes
    (fld t) (be16 #t + t)
-   (entry num data) ((((be16 256 + fld "bee") + fld num) + fld "MIT-MAGIC-COOKIE-1") + fld data)
+   (entry num data) (be16 256 + fld "bee" + fld num + fld "MIT-MAGIC-COOKIE-1" + fld data)
    b (entry "0" "aaaabbbbccccdddd" + entry "7" "0123456789abcdef")
    (test
       (xauth-parse b "7" = '("MIT-MAGIC-COOKIE-1" "0123456789abcdef"))           ; finds the display's cookie
