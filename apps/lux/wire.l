@@ -196,8 +196,8 @@
    ;     intern round-trip. 1 = we hold it, 0 = another wm -- the Access error
    ;     arrives before the intern reply, so x-reply answers the intern wait
    ;     with the error packet: refusal reads as the intern's () ---
-   (x-redirect s root)
-    (: _ (x-cwa-events s root 1572864)
+   (x-redirect s root)                                                           ; substructure redirect+notify, and the root's own
+    (: _ (x-cwa-events s root 1703936)                                           ; StructureNotify: randr reshapes it under us
        (x-intern s "WM_STATE" ? 1 0))
 
    ; --- keyboard: GetKeyboardMapping -> a keysym->keycode map; GrabKey ---

@@ -159,8 +159,9 @@
    _ (line ("lux: grabbed " + show #(ktab ()) + " chords"))
 
    ; --- rendering (the layout engine answers, X obeys) ---
-   scrn [0 0 wpx hpx]
-   (trect u) (ewmh-rect scrn wpx hpx)                                            ; the tiling rect: screen minus dock struts (sup+b flips)
+   scrc {} _ (pin scrc 0 [0 0 wpx hpx])                                         ; the screen rect lives in a cell: randr reshapes it
+   (scrn u) (scrc 0)
+   (trect u) (: r (scrn ()) (ewmh-rect r (r 2) (r 3)))                           ; the tiling rect: screen minus dock struts (sup+b flips)
 
    ; --- the unmap ledger (xmonad's mapped + waitingUnmap): map!/hide! track our
    ;     own intent at send time -- mapd holds the windows we have mapped, owed
@@ -184,7 +185,7 @@
        _ (map (w \ any (= w) placed ? 0 (hide! w)) (wsrow sh))       ; windows the layout dropped (Full/minimize): hide them
        _ (map map! placed)                                           ; (re)map placed -- a no-op on the already-mapped
        _ (map (fp \ (: w <fp fr <>fp                                 ; floating windows at HOME here: place, map, raise above the tiles
-                        bw (fr = scrn ? 0 lux-border)                ; a fullscreen float (the whole screen is its rect) wears no border
+                        bw (fr = (scrn ()) ? 0 lux-border)           ; a fullscreen float (the whole screen is its rect) wears no border
                         _ (x-border s w bw) _ (x-borderpix s w (w = f ? fpix npix))
                         _ (x-configure s w (fr 0) (fr 1) (fr 2) (fr 3))
                         _ (map! w) (x-raise s w))) (wsvisfl sh))
@@ -329,7 +330,7 @@
                                                                                  ; MapRequest: admit tiled, run the manageHook, then place
                 (: _ (ewmh-track s win ? (line ("lux: strut " + show win)) 0)   ; a dock's strut shrinks the tiling rect
                    sh1 (admit sh win)
-                   c (mg-ctx s win scrn (x-getgeom s win))
+                   c (mg-ctx s win (scrn ()) (x-getgeom s win))
                    sh2 (manage-window lux-manage c sh1)
                    (? (wsknownw? sh2 win)                                        ; managed (tiled or floated) -> place it
                       (x-chprop32 s win (x-intern s "WM_STATE") (x-intern s "WM_STATE") '(1 0),    ; the ICCCM stamp: a restart finds us even hidden
@@ -400,6 +401,12 @@
                        tab (keys-resolve ()) _ (pin ktabc 0 tab) _ (keys-grab tab)
                        _ (line ("lux: mapping changed -- regrabbed " + show #tab))
                        (loop sh lay hist))))
+                (code = 22)                                              ; ConfigureNotify: the root's is randr reshaping the screen
+                (: pkt (ev-raw e) r [0 0 (u16 pkt 20) (u16 pkt 22)]      ; (a rotation, a mode, a hotplug); a child's is noise
+                   (? (win = root && r != (scrn ()))
+                      (pin scrc 0 r, line ("lux: screen " + show (r 2) + "x" + show (r 3)),
+                       render sh lay, loop sh lay hist)
+                      (loop sh lay hist)))
                 (code = 23)                                              ; ConfigureRequest: tiled -> the layout answers, and the
                 (? (wsknownw? sh win && !(wsfloating? sh win))           ; client is told so -- a synthetic ConfigureNotify with the
                    (render sh lay, x-confnotify s win, x-flush s,        ; real geometry (silence leaves VTE drawing a phantom grid)
@@ -430,7 +437,7 @@
                               _ (render sh2 lay) _ (line ("lux: un" + word + " " + show cw)) (loop sh2 lay hist))))
                    (? (ty = ewmh-atom "_NET_WM_STATE" &&                       ; _net_wm_state add/remove/toggle fullscreen (ewmhFullscreen)
                           wsknownw? sh cw && (fs? (ewmh-cm-d1 pkt) || fs? (ewmh-cm-d2 pkt)))
-                      (state-toggle scrn [(ewmh-atom "_NET_WM_STATE_FULLSCREEN")] "fullscreen")    ; over the whole screen, struts and all
+                      (state-toggle (scrn ()) [(ewmh-atom "_NET_WM_STATE_FULLSCREEN")] "fullscreen")    ; over the whole screen, struts and all
                       (ty = ewmh-atom "_NET_WM_STATE" &&                       ; maximized_vert/horz -> float over the tiling rect (panel kept)
                           wsknownw? sh cw && (mx? (ewmh-cm-d1 pkt) || mx? (ewmh-cm-d2 pkt)))
                       (state-toggle (trect ()) [(ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT") (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")] "maximize")
