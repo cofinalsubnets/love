@@ -22,13 +22,19 @@ korerun dd if="$ho/.arc1" of=/dev/null status=none > "$o" 2>&1
 [ -s "$o" ] && fail "kore dd status=none still spoke" || true
 # xxd: vim's, where the box has it; the -r round trip stands on its own either way
 dd if=/dev/urandom of="$ho/.xxbin" bs=311 count=1 2>/dev/null
+# ..and one FIXED input whose ascii gutter opens on two hex charms ("ab.."), which is
+# where -r used to read the gutter as data. random bytes hit it about one run in eight,
+# so the row that catches it cannot be left to the fixture's luck.
+printf 'ab\0hello\0\1\2cd\0xyz\n' > "$ho/.xxgut"
 if command -v xxd >/dev/null 2>&1; then
   for f in .arc1 .xxbin .gs4 .gs5; do
     xxd "$ho/$f" > "$g" 2>/dev/null; korerun xxd "$ho/$f" > "$o" 2>/dev/null
     same "xxd $f"
   done
-  xxd "$ho/.xxbin" | korerun xxd -r > "$o" 2>/dev/null
-  cmp -s "$ho/.xxbin" "$o" || fail "kore xxd -r over GNU's dump"
+  for f in .xxbin .xxgut; do
+    xxd "$ho/$f" | korerun xxd -r > "$o" 2>/dev/null
+    cmp -s "$ho/$f" "$o" || fail "kore xxd -r over GNU's dump ($f)"
+  done
 fi
 korerun xxd "$ho/.xxbin" | korerun xxd -r > "$o" 2>/dev/null
 cmp -s "$ho/.xxbin" "$o" || fail "kore xxd | xxd -r round trip"

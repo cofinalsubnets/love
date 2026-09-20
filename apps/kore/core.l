@@ -1608,7 +1608,12 @@
        (go k acc hi)
         (? (n <= k) (rev acc)
            (: c (ln k) v (uxx-nib c)
-              (? (v < 0) (? ((32 = c) && !(charm? hi)) (go (k + 1) acc hi) (rev acc))
+              ; two spaces in a row IS the gutter, and the gutter is text: `ab.hello` past
+           ; it reads as hex to anything that only skips single spaces
+           (? (v < 0) (? ((32 = c) && !(charm? hi))
+                         (? (((k + 1) < n) && ((ln (k + 1)) = 32)) (rev acc)
+                            (go (k + 1) acc hi))
+                         (rev acc))
                  (charm? hi) (go (k + 1) (((* 16 hi) + v) . acc) ())
                  (go (k + 1) acc v))))
        (go s () ()))
