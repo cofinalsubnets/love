@@ -48,15 +48,17 @@
        (array '(2) 'a 'b) (array '(2) () ())
        5 0 -3 2.5 () "text" '(1 2 3)]
 
+   ; an answer is a tray or a scalar: `=` is a mask on a tray, and aall the whole question
+   (same? a b) (aall (= a b))
    (chk1 nm f g xs)                                  ; a one-argument kernel against its twin
-    (: bad (filter (\ x !(= (f x) (g x))) xs)
+    (: bad (filter (\ x !(same? (f x) (g x))) xs)
        (? (nil? bad) (say out ("  " + nm + ": agrees on " + show (tally xs) + " shapes\n"))
           (die (nm + " DISAGREES with its twin on " + show bad))))
    (chk2 nm f g xs)                                  ; a two-argument kernel, every pair
-    (: bad (filter (\ a (any (\ b !(= (f a b) (g a b))) xs)) xs)
+    (: bad (filter (\ a (any (\ b !(same? (f a b) (g a b))) xs)) xs)
        (? (nil? bad)
           (say out ("  " + nm + ": agrees on " + show (tally xs * tally xs) + " pairs\n"))
-          (: _ (each xs (\ a (each xs (\ b (? (= (f a b) (g a b)) 0
+          (: _ (each xs (\ a (each xs (\ b (? (same? (f a b) (g a b)) 0
                  (say out ("    " + nm + " " + show (shape a) + " x " + show (shape b)
                            + "\n      twin " + show (g a b) + "\n      holo " + show (f a b) + "\n")))))))
              (die (nm + " DISAGREES with its twin")))))

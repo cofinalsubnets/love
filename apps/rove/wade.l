@@ -96,7 +96,7 @@
    (go k k1 r) (? (k <= k1) (one k -1 r, one k 1 r, go (k + 1) k1 r))
    (span r reach) (go (flo ((pz - reach) / sp)) (flo ((pz + reach) / sp)) r)
    (span 0 far, span 1 (far / 2.0), span 2 (far / 2.0), tb))
- (wade-tables st) (lay-trees st (fresh st))
+ (wade-tables st) (: tb (lay-trees st (fresh st)) (pin tb 'water (water-rows st)))
  ; the sky at a pixel: a grey ramp up from the horizon, the moon's glow, the disc with
  ; its seas, the stars. the ramp's bands and the glow's reach scale with the screen
  (sky x y st tb mn t) (: hz (st 'hz) h (st 'h) sc (st 'foc / 40.0)
@@ -110,15 +110,37 @@
       (r2 < ((r + 4.0 * sc) * (r + 4.0 * sc))) 237   ; #3a3a3a ..and wider
       (star ())))
  ; the water's lift, in the world's units: a slow swell, and the rings the player's steps
- ; sent out, each fading as it spreads
+ ; sent out, each fading as it spreads. x and z are trays, a row of points at once, and
+ ; a ring's reach is a mask over them; numbers pass through the same words
  (swell x z t) ((0.10 * sin (1.1 * z + 0.3 * x + 0.20 * t)) + (0.07 * sin (1.7 * x - 0.4 * z + 0.31 * t)))
  (rings-at x z t rings) (:
    (ring a r) (: age (t - r 't) dx (x - r 'x) dz (z - r 'z) d (sqrt (dx * dx + dz * dz))
-                 (? ((0.0 < age) && (d < (0.18 * age))) (a + 0.25 * exp (-0.25 * d - 0.03 * age) * sin (4.0 * d - 0.72 * age)) a))
+                 (? (0.0 < age) (a + (d < (0.18 * age)) * 0.25 * exp (-0.25 * d - 0.03 * age) * sin (4.0 * d - 0.72 * age)) a))
    (foldl ring 0.0 rings))
  ; a ring five seconds old is a hundredth of what it was: gone from the list, so the
  ; water stops asking after it
  ring-life 150.0
+ ; every water row at once, in trays over the columns: where the row's rays meet the
+ ; water, whether that is past the river's edge, and the lift there tilting the sample
+ ; by more the nearer it is -- the sample's row and column, and the rings' own lift, for
+ ; a crest
+ (water-rows st) (: w (st 'w) h (st 'h) hz (st 'hz) foc (st 'foc) t (st 't)
+   th (st 'th) sn (sin th) cs (cos th) px (st 'px) pz (st 'pz) rings (st 'rings)
+   xs (iota w + 0.0)
+   u ((xs - st 'cx) / foc)
+   hi (w - 1.0)
+   rows {}
+   (row y) (? (y < h)
+     (: d ((foc * eh) / (y + 0.5 - hz)) g (foc / d)
+        wx (px + d * (sn + u * cs)) wz (pz + d * (cs - u * sn))
+        bank ((wx > rw) + (wx < -rw))
+        rl (rings-at wx wz t rings)
+        l (swell wx wz t + rl)
+        y2 (y + l * g * 2.0)
+        x2 (floor (max 0.0 (min hi (xs + l * g * 0.4))))
+        _ (pin rows y [bank y2 x2 rl])
+        (row (y + 1))))
+   (row hz, rows))
  ; what the water makes of what it mirrors -- its own grey under the forest, a shade
  ; off the bank -- and a ring's crest catching the moon, a step or two lighter
  ; the moon #ffffd7 to #d7af5f, its seas to #af8700, a star to a grey two steps down, the
@@ -126,18 +148,11 @@
  dark {230 179 187 136 238 236 237 235 236 235 235 234 234 234 233 233 16 233 232 233 250 244 245 240 255 247}
  ; ..and a crest: the water's greys two steps up, the moon's gold to #ffd787
  crest {233 235 234 236 235 237 236 238 179 222 136 179 244 250 240 245 247 255 16 233 232 233}
- ; a water pixel: where its ray meets the water, the bank if that is past the river's
- ; edge, else the mirror, the lift there tilting the sample by more the nearer it is
- (water x y st tb mn t) (: th (st 'th) hz (st 'hz) sn (sin th) cs (cos th)
-   foc (st 'foc) w (st 'w)
-   d ((foc * eh) / (y + 0.5 - hz))
-   u ((x - st 'cx) / foc)
-   wx (st 'px + d * (sn + u * cs)) wz (st 'pz + d * (cs - u * sn))
-   (? (rw < abs wx) bank-pen
-      (: rl (rings-at wx wz t (st 'rings))
-         l (swell wx wz t + rl)
-         g (foc / d)
-         y2 (y + l * g * 2.0) x2 (clamp (flo (x + l * g * 0.4)) 0 (w - 1))
+ ; a water pixel, off its row's trays: the bank, or the mirror's sample -- the forest's
+ ; reflection, or the sky's darkened -- and a crest a step lighter
+ (water x y st tb mn t) (: hz (st 'hz) row (peep (tb 'water) y ())
+   (? (0 < peep (row 0) x 0) bank-pen
+      (: y2 (peep (row 1) x 0.0) x2 (int (peep (row 2) x 0)) rl (peep (row 3) x 0.0)
          c (? (y2 < peep (tb 'bots) x2 0.0) haze-pen
               (peep dark (sky x2 (min2 (flo (2 * hz - 1 - y2)) (hz - 1)) st tb mn t) haze-pen))
          ((0.06 < rl) ? (peep crest c c) c))))

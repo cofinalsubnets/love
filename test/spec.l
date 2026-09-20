@@ -182,7 +182,7 @@
  ("(@(1 1) 5 @(2 4))" = show (sort [@(2 4) 5 @(1 1)]))   ; nets 2 < 5 < 6, galaxies interleaving with the star
  ("(3 @(1 2))" = show (sort [@(1 2) 3]))           ; net tie -> a star seats below a galaxy
  ("(@('a 'b) (7 8))" = show (sort [@('a 'b) '(7 8)]))    ; a tray (object array) stays below link (chain is the grammar substrate, seated high)
- (tray? @(5)) !(@(5) = 5))                            ; a one-cell array is an array, never its scalar
+ (tray? @(5)) (tray? (@(5) = 5)))                     ; a one-cell array is an array: = with its scalar is a mask
 
 ; --- comparing functions --- `=` on functions is alpha + structural (binders by position, free
 ; vars by name, captures pairwise); eta/beta not bridged; a number never equals a closure --
@@ -363,7 +363,7 @@
 ; r on one inexact cell); the bitwise five are the word lane, so they ride a z-tray and refuse
 ; anything else whole -- a gem/twin tray, or an object tray, answers the zero point rather than
 ; mapping elementwise. masks are the everyday customer: `<` and `>` broadcast to 0/1, & | ^ join.
-; reduce net/prod/max/min/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
+; reduce net/prod/amax/amin/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
 ; `=` is a boolean on every kind, arrays included -- whole-array equality: same shape, every cell
 ; equal, comparing across tiers the way (= 5 5.0) is true. it is not a mask; `<` and `>` are the
 ; mask makers. a non-numeric operand beside an array, or a shape mismatch, reads 0 -- never the
@@ -381,13 +381,14 @@
  (star-tray = (tier (star-tray '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
  (3 = (peep (star-tray '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
  (@(2 4 6) = @(1 2 3) * 2) (gem-tray = (tier ((star-tray '(2) 0) + 1.5))) (star-tray = (tier ((star-tray '(3) 0) < 1)))
- (60 = (net @(10 20 30))) (30 = (max @(10 30 20))) (5 = (net 5)) (aall (1 < 2))
+ (60 = (net @(10 20 30))) (30 = (amax @(10 30 20))) (5 = (net 5)) (aall (1 < 2))
  (@(0 1 2) = (iota 3)) (star-tray = (tier (iota 3))) !(iota 0) !(iota -1) (4950 = (net (iota 100)))   ; iota: jot's range as a z-array
  (aall (@(2.0 3.0) = ((1 / 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = @(7 11) // 2)
  (@(4 6) = @(8 12) / 2) !(star-tray '(3) 0) ("@(10 20 30)" = show @(10 20 30))
  (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2))
  (0 = (@(1 2 3) = @(1 2))) (0 = ('sym = @(1 2 3))) (0 = ("ab" = @(1 2)))   ; a shape/kind mismatch is 0
- (@(1 2 3) = @(1 2 3)) !(@(1 2 3) = @(1 2 9))                              ; whole-array `=`, a boolean
+ (aall (@(1 2 3) = @(1 2 3))) !(aall (@(1 2 3) = @(1 2 9)))                ; `=` is a mask; the whole question is aall
+ (tray? (@(1 2 3) = @(1 2 9))) (aany (@(1 2 3) = @(1 2 9)))
  (@(1 2) = (gem-tray '(2) '(1.0 2.0)))                                     ; ...across tiers, like (= 5 5.0)
  (0 = (net (star-tray '(0) 0))) (1 = (prod (star-tray '(0) 0))) (aall (star-tray '(0) 0))
  ("@()" = show (star-tray '(0) 0)) (0 = #((star-tray '(0) 0) + 1))
@@ -534,7 +535,7 @@
  (() != 0)                                       ; () (zero-point) and 0 (number) are distinct, both nothing
  ("@()" = show @()) (1 = rank @()) (0 = #@()) (star-tray = tier @())               ; @() the empty array, round-trips
  (tablet? {}) (0 = #{}) ("{}" = show {})      ; {} the empty map, show round-trips it
- (tray? @0) (0 != @0) (1 = rank @0) (1 = #@0)            ; @0 wraps the value 0 -> a one-cell array
+ (tray? @0) (tray? (0 = @0)) (1 = rank @0) (1 = #@0)     ; @0 wraps the value 0 -> a one-cell array
  ("@(0)" = show @0) (0 = peep @0 0 -1)                  ; ...which shows and reads back as one
  (tablet? {0}) (1 = ${0}) !!{0})                       ; {0} wraps the value 0 -> a box (present)
 

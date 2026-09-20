@@ -5,7 +5,9 @@
 ; - elementwise + - * / over arrays + scalar broadcast + numpy broadcasting
 ; - mixed element-type promotes to the widest type
 ; - < <= > >= = elementwise -> 0/1 bool array
-; - reductions net prod max min aall aany; identity on scalars
+; - reductions net prod amax amin aall aany; identity on scalars
+; - the apl rule: every numeric word is elementwise with broadcast, = and != too;
+;   a whole question is a reduction; max and min are the binary pair
 ; - vector falsiness: a tuple is false iff every element is 0
 ; - elementwise transcendentals (sqrt) over an array
 ; - print round-trip; non-conforming / non-numeric -> nil
@@ -28,7 +30,7 @@
  (gem? (gem-tray 0 0)) (0.0 = gem-tray 0 0) ; -> a boxed 0.0
  (tray? (star-tray '(1) '(5)))              ; rank-1 len-1 -> a one-cell array, not the fixnum 5
  (5 = (peep (star-tray '(1) '(5)) 0 -1))    ; ...its lone cell reads back
- (tray? @(3.5)) !(= 3.5 @(3.5))             ; @(3.5) is a one-cell array, never the scalar 3.5
+ (tray? @(3.5)) (tray? (= 3.5 @(3.5)))      ; @(3.5) is a one-cell array: = with its scalar is a mask, not a bit
  (1 = (tally @(3.5))) (1 = (rank @(3.5)))
  !(rank (star-tray 0 0))           ; a demoted scalar is not a tuple
  !#(gem-tray 0 0)
@@ -101,8 +103,8 @@
  ; --- reductions ---
  (60 = net (star-tray '(3) '(10 20 30)))
  (6000 = prod (star-tray '(3) '(10 20 30)))
- (30 = max (star-tray '(3) '(10 30 20)))
- (10 = min (star-tray '(3) '(20 10 30)))
+ (30 = amax (star-tray '(3) '(10 30 20)))
+ (10 = amin (star-tray '(3) '(20 10 30)))
  (6.0 = net (gem-tray '(3) '(1.0 2.0 3.0)))
  (21 = net (star-tray '(2 3) '(1 2 3 4 5 6))) ; reduces over all axes
  (aall (star-tray '(3) '(1 2 3)))             ; every element true
@@ -114,7 +116,7 @@
 
  ; --- reductions are the identity on a scalar (rank-agnostic idiom) ---
  (5 = net 5)
- (5 = max 5)
+ (5 = amax 5)
  (1 = aall 1)
  (0 = aall 0)
  (aall (1 < 2))                                    ; scalar: (< 1 2) = 1, (aall 1) = 1
@@ -170,3 +172,25 @@
   ('(0 3) = (shape ((gem-tray '(0 3) 0) + 1))) ; rank-2 empties keep their shape
   (: rt @()                                    ; the printed form (@()) reads back
      (&& (0 = #rt) ('(0) = (shape rt)) (star-tray = (tier rt))))))
+
+; --- the apl rule: `=` and `!=` are masks, the whole question a reduction; max and min
+; are binary and elementwise, the operand itself; floor floors a float or a float tray ---
+(test
+ (aall (@(1 0 1) = (@(1 2 3) = @(1 5 3))))
+ (aall (@(0 1 0) = (@(1 2 3) != @(1 5 3))))
+ (aall (@(0 1 0) = (@(1 2 3) = 2)))                  ; broadcast
+ (0 = (@(1 2) = @(1 2 3)))                           ; non-conformant: 0, not a mask
+ (aall (@(1 1) = @(1 1))) !(aall (@(1 2) = @(1 3)))
+ (aany (@(1 2) = @(1 3))) !(aany (@(1 2) = @(5 6))) !(aany (star-tray '(0) 0))
+ (aany (star-tray '(2) '(-1 1))) !(aany (star-tray '(2) '(-1 0)))   ; the truth law
+ (1 = aany 1) (0 = aany 0)
+ (5 = max 3 5) (3 = min 3 5) (charm? (max 3 5))      ; the operand itself
+ (2.5 = max 2.5 -1) (-1 = min 2.5 -1)
+ (aall (@(3 5 3) = max @(1 5 2) 3)) (aall (@(1 3 2) = min @(1 5 2) 3))
+ (aall (@(1.5 4.0) = max @(1.5 2.0) @(0.0 4.0)))
+ (star-tray = tier (max @(1 5 2) 3))                 ; ints stay ints
+ ("b" = max "a" "b") ('(2) = max '(1) '(2))          ; the order < keeps, across kinds
+ (30 = amax @(10 30 20)) (10 = amin @(20 10 30))
+ (2 = floor 2.7) (-3 = floor -2.5) (2 = floor 2) (charm? (floor 2.7))
+ (aall (@(1.0 -3.0) = floor @(1.5 -2.5))) (aall (@(1 2) = floor @(1 2)))
+ (star-tray = tier (floor @(1 2))))

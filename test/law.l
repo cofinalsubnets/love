@@ -4,9 +4,10 @@
                   (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3) (7 /// 2) (-7 /// 2) cap 'x)
    law-jot (list ^0 ^1 ^2 ^4 ^5 ^^0 ^^1 ^^2 ^^4 ^^5 ^^^0 ^^^1 ^^^2 ^^^3 ^^^4 ^^^^3)
    law-corpus (law-flat + law-jot)
-   ; a law is (nom . closure); it holds when every value answers the charm 1
+   ; a law is (nom . closure); it holds when every value answers the charm 1 -- a tray
+   ; value answers a mask, every cell of it 1, and an empty tray's mask is vacuously so
    (law-bad f) (: (go l) (? (atom? l) ()
-                            (1 = f <l) (go >l)
+                            (aall (1 = f <l)) (go >l)
                             [1 <l])                       ; (1 witness) -- presence, not the value
                   (go law-corpus))
    (law-run r) (: nom <r f <>r b (law-bad f)
@@ -72,7 +73,7 @@
                   ; to repetition, which does associate.
                   (ok? y z) (? (coin? y || coin? z) 1
                                (ch x && (ch y || ch z) && !(txt? y) && !(txt? z)) 1
-                               (((x * y) * z) = (x * (y * z))))
+                               (aall (((x * y) * z) = (x * (y * z)))))   ; a tray's = is a mask
                   (all (\ y (all (ok? y) ws)) ws))))]
       ; --- * on chains is the cartesian product, so it associates up to the canonical
       ; --- reassociation, not on the nose: ((a b) c) and (a (b c)) are the same triple
@@ -101,7 +102,7 @@
        (\ x (? (lit? x || coin? x) 1
                (: ms (list 0 1 2 5)
                   nums (list 0 2 -5 2.5 (twin 3 4))
-                  act (all (\ m (all (\ n ((x * (m + n)) = ((x * m) + (x * n)))) ms)) ms)
+                  act (all (\ m (all (\ n (aall ((x * (m + n)) = ((x * m) + (x * n))))) ms)) ms)
                   num (? (two? x || tray? x || string? x || (? (x = ()) 0 (nom? x))) 1
                          (all (\ y (all (\ z ((x * (y + z)) = ((x * y) + (x * z)))) nums)) nums))
                   cart (? (two? x)

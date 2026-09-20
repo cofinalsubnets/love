@@ -720,7 +720,7 @@ typedef ai_flo_t (*ai_flo2)(ai_flo_t, ai_flo_t);
 // elementwise dyadic opcodes for lvm_vbin. codes >= vop_lt produce a 0/1 mask (vop_eq is
 // table-shared only -- tray_eq answers `=`). vop_quot is `/`, vop_fquot `//` (truncating).
 enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
-           vop_band, vop_bor, vop_bxor, vop_bsl, vop_bsr,
+           vop_band, vop_bor, vop_bxor, vop_bsl, vop_bsr, vop_max, vop_min,
            vop_lt, vop_le, vop_gt, vop_ge, vop_eq, };
 // the bitwise codes ride the word lane (spec.l's width law): defined only where the cells
 // are machine words; other operands take the whole op to the zero point
@@ -761,7 +761,7 @@ lvm_t lvm_kcall,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound0,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
- lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
+ lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_aany, lvm_max2, lvm_min2, lvm_floor, lvm_inner, lvm_outer,
  lvm_litp, lvm_hotp,
  lvm_nif,         // codegen backend: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_nifx,        // ... with an extras word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the plain twin and the image revert (img_nif_interp) never dereferences a pack
@@ -942,6 +942,7 @@ static ai_inline ai_flo_t ai_trunc(ai_flo_t x) {
  ai_flo_t m = x < 0 ? -x : x;
  if (m > (ai_flo_t) 9.22e18) return x;
  return (ai_flo_t) (int64_t) x; }
+static ai_inline ai_flo_t ai_floor(ai_flo_t x) { ai_flo_t t = ai_trunc(x); return t > x ? t - 1 : t; }
 static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
  return a - ai_trunc(a / b) * b; }
 

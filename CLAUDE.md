@@ -118,6 +118,9 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - strings and lists index by application: "abc" 0 = 97, [1 2 3] 1 = 2
 ; - charm? is number predicate; (show 'sym) spells a symbol
 ; - cap/cup are total: <() = >() = (); (= a b) across types answers 0, never dies
+; - trays (@(..), iota): every numeric word is elementwise with broadcast, = and != too;
+;   a whole question is a reduction -- aall/aany of a mask, net/prod/amax/amin of a tray --
+;   and max/min are the binary pair. abs of a tray is its norm
 
 ; booleans
 ; the exact boolean values are {0,1}. however any value can be

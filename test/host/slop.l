@@ -462,7 +462,7 @@
    t0 ((ix0 - st) * (1.0 / 16000))
    tp0 (t0 * (t0 > 0.0))
    long0 (slop-song-wave tp0 f 0.5 * venv tp0 0.34 * (t0 < 0.34))
- (test (tray? w) (5442 < #w) (w = w2) (533 = #c) (c = long) (0.0 = peep w 0 0) (c0 = long0)))
+ (test (tray? w) (5442 < #w) (aall (w = w2)) (533 = #c) (c = long) (0.0 = peep w 0 0) (c0 = long0)))
 
 ; the bar stops a column short of the screen
 (: g (slop-new 10 20 (wheel 3))

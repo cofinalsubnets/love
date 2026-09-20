@@ -153,7 +153,8 @@
 
  ; --- `=` over complex arrays -> a boolean (whole-array); the orderings -> a mask ---
  (ca-v = ca-v)
- !(ca-v = twin-tray '(2) [(9 ~ 9) (3 ~ 4)])     ; one cell differs -> false, never a mask
+ !(aall (ca-v = twin-tray '(2) [(9 ~ 9) (3 ~ 4)]))   ; one cell differs: the mask has a 0, and aall says so
+ (aany (ca-v = twin-tray '(2) [(9 ~ 9) (3 ~ 4)]))
  (aall (ca-v = ca-v))                           ; aall is the identity on the boolean
  ; a complex tray orders exactly as its cells do -- (re,im) lexicographic, the order that
  ; makes `sort` total (cmp3). a tray follows its scalar; these once answered nil.
@@ -167,7 +168,7 @@
  (4 ~ 6 = +ca-v)                               ; (1+2i)+(3+4i)
  (-5 ~ 10 = *ca-v)                             ; (1+2i)*(3+4i)
  (6 ~ 6 = +ca-a)   (0 ~ 0 = +ca-z)
- !(max ca-v)   !(min ca-v)
+ !(amax ca-v)   !(amin ca-v)
 
  ; --- aall lifts the truth law: an element is true by its real part ---
  (aall ca-v)

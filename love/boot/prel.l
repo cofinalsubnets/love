@@ -230,7 +230,7 @@
                   (go (cap l) (cup l)))))
 
 (: (** a b) (b a)  
-   $ 1 ! nil?  (!= a b) (nil? (= a b))
+   $ 1 ! nil?  (!= a b) (- 1 (= a b))                 ; a bit, or a tray's mask, flipped
    ; elem is the nif (love/arr.c); this is its negation. spelled `nil?`, not glued `!`: a
    ; glued sigil factors through monofactor's (mono ..), and mono is bound further down.
    (nelem x l) (nil? (elem x l)))                         ; the exponent answers to all three spellings

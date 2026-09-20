@@ -85,8 +85,8 @@
  ; --- reductions fold exactly through the same dispatch ---
  (100 2 + 5 = +oa-x)
  (6 * 100 2 = *oa-x)
- (100 2 = max (top-tray '(3) [5 (100 2) 7]))
- (-3 = min (top-tray '(3) [5 -3 7]))
+ (100 2 = amax (top-tray '(3) [5 (100 2) 7]))
+ (-3 = amin (top-tray '(3) [5 -3 7]))
  (aall (top-tray '(2) '(1 2)))
  !(aall (top-tray '(2) '(1 0)))
  $(top-tray '(2) '(0 5))
@@ -155,13 +155,13 @@
    oa-k2 @((+ "a" "b") [1 2] 'sym)
    oa-t (pin (pin {} oa-k1 1) oa-k2 2))
 (test
- (oa-k1 = oa-k2) (dig oa-k1 = dig oa-k2)
+ (aall (oa-k1 = oa-k2)) (dig oa-k1 = dig oa-k2)
  (2 = peep oa-t oa-k1 0)            ; one key, pinned twice
  (1 = #(keys oa-t))
- !(oa-k1 = @("ab" [1 3] 'sym))      ; a cell apart is a key apart
+ !(aall (oa-k1 = @("ab" [1 3] 'sym)))   ; a cell apart is a key apart: the mask has a 0
  !(dig oa-k1 = dig @("ab" [1 3] 'sym))
- !(oa-k1 = @("ab" [1 2]))           ; ..and so is a shape apart
- (array [2 2] "a" "b" "c" "d" = array [2 2] (+ "" "a") "b" "c" "d")   ; rank-N alike
+ (0 = (oa-k1 = @("ab" [1 2])))      ; ..and so is a shape apart: no mask, a 0
+ (aall (array [2 2] "a" "b" "c" "d" = array [2 2] (+ "" "a") "b" "c" "d"))   ; rank-N alike, cell by cell
  (dig (array [2 2] "a" "b" "c" "d") = dig (array [2 2] ("" + "a") "b" "c" "d"))
  ; the cells move and the key stays findable: a probe rehashes, so a hash that read
  ; the pointers would lose its own entry at the first collection

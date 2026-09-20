@@ -951,6 +951,8 @@ lvm(lvm_eq) {
   bool r = a == b;
   if (Ip[1].ap == lvm_cond) { Sp += 2; Ip = r ? Ip + 3 : Ip[2].m; ai_musttail return Continue(); }
   ai_musttail return Answerp(1, r ? putcharm(1) : zero); }
+ // a tray: elementwise with broadcast, a mask; the whole question is (aall (= a b))
+ if (trayp(a) || trayp(b)) { g->b = (word) vop_eq; ai_musttail return Ap(lvm_vbin, g); }
  word *top, *base = eq_gap(g, &top);
  int r = ai_eq_value(g, a, b, base, top);
  if (r < 0) LvmCall(g, eq_wide)                            // too deep for the gap: walk again, wider
@@ -1008,6 +1010,9 @@ lvm(lvm_eleq) { word x = Sp[0], l = Sp[1];
 
 // one element op, allocating via *fp; zero for a non-numeric/complex operand
 static word obin_elem(struct ai **fp, int op, word a, word b) {
+ if (op == vop_eq) {                            // a cell against a cell: the whole `=`, structural
+  word *top, *base = eq_gap(*fp, &top);
+  return ai_eq_value(*fp, a, b, base, top) > 0 ? putcharm(1) : zero; }
  if (op >= vop_lt) {                            // comparison -> 1 / zero, no allocation
   if (!isnum(a) || !isnum(b)) return zero;       // twinp not in isnum -> unordered -> zero
   intptr_t t = (gemp(a) || gemp(b)) ? vcmp_flo(op, toflo(a), toflo(b))
@@ -1031,12 +1036,17 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av % bv; break;
    case vop_sub:  of = __builtin_sub_overflow(av, bv, &t); break;
    case vop_mul:  of = __builtin_mul_overflow(av, bv, &t); break;
+   case vop_max:  of = false; t = av > bv ? av : bv; break;
+   case vop_min:  of = false; t = av < bv ? av : bv; break;
    default:       of = __builtin_add_overflow(av, bv, &t); break; }   // vop_add
   if (!of) {                                    // demote-or-box the result
    if (t >= mincharm && t <= maxcharm) return putcharm(t);
    if (!ai_ok(g = ai_have(g, wbig_req))) return *fp = g, zero;
    *fp = g;
    return mk_wbig(&g->hp, t); } }
+ if (op == vop_max || op == vop_min) {          // an extreme is one of its operands: no arithmetic
+  intptr_t c = ai_big_cmp(a, b);
+  return (op == vop_max ? c >= 0 : c <= 0) ? a : b; }
  // bignum lane: ai_big_binop computes sp[0] (op) sp[1], leaves it at sp[1],
  // pops one, and advances ip -- so save/restore ip and pop the net result.
  if (!ai_ok(g = ai_push(g, 2, a, b))) return *fp = g, zero;
@@ -1154,6 +1164,10 @@ static void twin_op(int vop, ai_flo_t ar, ai_flo_t ai, ai_flo_t br, ai_flo_t bi,
   case vop_mul: *re = ar * br - ai * bi; *im = ar * bi + ai * br; break;
   case vop_quot: { ai_flo_t d = br * br + bi * bi;   // (ac+bd)/(c^2+d^2) + ...
    *re = (ar * br + ai * bi) / d; *im = (ai * br - ar * bi) / d; break; }
+  case vop_max: case vop_min: {                       // the (re, im) order the comparisons keep
+   int c = ar < br ? -1 : ar > br ? 1 : ai < bi ? -1 : ai > bi ? 1 : 0;
+   bool pa = vop == vop_max ? c >= 0 : c <= 0;
+   *re = pa ? ar : br; *im = pa ? ai : bi; break; }
   default: *re = ar + br; *im = ai + bi; } }          // vop_add
 
 // fill the complex box with a `vop` b; the &-taking lives here (the wrapper's tail call)

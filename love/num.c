@@ -1006,8 +1006,8 @@ static lvm(lvm_aextreme) {
   if (ismax?m3>m0:m3<m0) m0=m3;
   emit_int(_res, m0); }
  ai_musttail return Answer(_res); }
-lvm(lvm_max) { g->b = (word) 2; ai_musttail return Ap(lvm_aextreme, g); }
-lvm(lvm_min) { g->b = (word) 3; ai_musttail return Ap(lvm_aextreme, g); }
+lvm(lvm_max) { g->b = (word) 2; ai_musttail return Ap(lvm_aextreme, g); }   // amax
+lvm(lvm_min) { g->b = (word) 3; ai_musttail return Ap(lvm_aextreme, g); }   // amin
 
 // aall: the conjunction reduction under the truth law -- every element true, a positive
 // real part, as `?` and ai_nilp read it; empty -> vacuously true; scalar -> identity
@@ -1032,6 +1032,44 @@ lvm(lvm_aall) {
   if (fdom ? !(tray_get_flo(v, i) > 0) : tray_get_int(v, i) <= 0)
    ai_musttail return Answer(zero);
  ai_musttail return Answer(putcharm(1)); }
+
+// aany: the disjunction under the same law -- some element true; empty -> false;
+// scalar -> identity, as aall
+lvm(lvm_aany) {
+ word x = Sp[0];
+ if (!packp(x)) ai_musttail return Next(1);
+ struct ai_tray *v = tray(x);
+ uintptr_t n = tray_nelem(v);
+ if (v->type == ai_O) {
+  for (uintptr_t i = 0; i < n; i++)
+   if (!ai_nilp(g, tray_get_obj(v, i))) ai_musttail return Answer(putcharm(1));
+  ai_musttail return Answer(zero); }
+ if (v->type == ai_C) {
+  ai_flo_t *fp = tray_data(v);
+  for (uintptr_t i = 0; i < n; i++)
+   if (fp[2*i] > 0) ai_musttail return Answer(putcharm(1));
+  ai_musttail return Answer(zero); }
+ bool fdom = v->type >= ai_R;
+ for (uintptr_t i = 0; i < n; i++)
+  if (fdom ? tray_get_flo(v, i) > 0 : tray_get_int(v, i) > 0)
+   ai_musttail return Answer(putcharm(1));
+ ai_musttail return Answer(zero); }
+
+// (floor x): the greatest integer under a float, a charm as int and ceil answer, saturating
+// at the charm bounds; an integer passes. a float tray floors elementwise and stays a
+// tray; an int tray passes whole
+lvm(lvm_floor) {
+ word a = Sp[0];
+ if (trayp(a)) {
+  if (tray(a)->type < ai_R) ai_musttail return Next(1);
+  if (tray(a)->type != ai_R) ai_musttail return Answer(ZeroPoint);
+  g->b = (word) (uintptr_t) (ai_floor); ai_musttail return Ap(lvm_vmap1, g); }
+ if (isnum(a) && !charmp(a) && !bigp(a)) {
+  ai_flo_t v = ai_floor(toflo(a));
+  Sp[0] = putcharm(v >= (ai_flo_t) maxcharm ? maxcharm
+                 : v <= (ai_flo_t) mincharm ? mincharm
+                 : v != v ? 0 : (intptr_t) v); }
+ ai_musttail return Next(1); }
 
 // (outer a b): result[I,J] = a[I] * b[J], shape a.shape ++ b.shape; complex/
 // object or over-rank -> zero
@@ -1140,6 +1178,7 @@ ai_flo_t vop_flo(int op, ai_flo_t a, ai_flo_t b) {
   case vop_sub: return a - b; case vop_mul: return a * b;
   case vop_quot: return a / b; case vop_fquot: return ai_trunc(a / b);
   case vop_rem: return b == 0 ? a : ai_fmod(a, b);
+  case vop_max: return a > b ? a : b; case vop_min: return a < b ? a : b;
   default: return a + b; } }                   // vop_add
 static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
  switch (op) {
@@ -1147,6 +1186,8 @@ static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
   case vop_mul: return (intptr_t)((uintptr_t) a * (uintptr_t) b);
   case vop_quot: case vop_fquot: return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a / b;
   case vop_rem:  return b == 0 ? a : (a == INTPTR_MIN && b == -1) ? 0 : a % b;
+  case vop_max:  return a > b ? a : b;
+  case vop_min:  return a < b ? a : b;
   case vop_band: return a & b;
   case vop_bor:  return a | b;
   case vop_bxor: return a ^ b;
@@ -1432,6 +1473,18 @@ cmp_lt(lvm_lt, vop_lt) cmp_lt(lvm_le, vop_le)
 cmp_lt(lvm_gt, vop_gt) cmp_lt(lvm_ge, vop_ge)
 #undef cmp_lt
 
+// (max a b) / (min a b): the greater or the lesser by the order `<` keeps, across kinds
+// too, and the operand itself, not a copy; a tray operand -> elementwise with broadcast,
+// in the operands' own type. the extreme OF a tray is amax/amin (lvm_aextreme)
+static lvm(lvm_extreme2) {
+ int ismax = (int) g->b;
+ word a = Sp[0], b = Sp[1];
+ if (trayp(a) || trayp(b)) { g->b = (word) (ismax ? vop_max : vop_min); ai_musttail return Ap(lvm_vbin, g); }
+ intptr_t c = cmp3(g, a, b);
+ ai_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
+lvm(lvm_max2) { g->b = (word) 1; ai_musttail return Ap(lvm_extreme2, g); }
+lvm(lvm_min2) { g->b = (word) 0; ai_musttail return Ap(lvm_extreme2, g); }
+
 // comparison from a 3-way sign: a bignum is always out of machine-int range, so
 // it orders against any int element by its sign alone -- exactly
 static intptr_t vcmp_sign(int op, int s) {
@@ -1501,13 +1554,15 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
    if (cmpf) { intptr_t *rp = (intptr_t*) tray_data(r);
     #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E)?1:0; } } while (0)
     switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
-      case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
+      case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return;
+      case vop_eq: VBF(ai_same_flo(av,bv)); return; }   // a NaN is (), and = holds over it
     #undef VBF
    } else { ai_flo_t *rp = (ai_flo_t*) tray_data(r);
     #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E); } } while (0)
     switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
       case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
-      case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(bv==0?av:ai_fmod(av,bv)); return; }
+      case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(bv==0?av:ai_fmod(av,bv)); return;
+      case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return; }
     #undef VBF
    }
   } else if (!fdom && (!atray || va->type == ai_Z) && (!btray || vb->type == ai_Z)) {
@@ -1527,7 +1582,8 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
       case vop_sub: VBF((intptr_t)((uintptr_t)av-(uintptr_t)bv)); return;
       case vop_mul: VBF((intptr_t)((uintptr_t)av*(uintptr_t)bv)); return;
       case vop_quot: case vop_fquot: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av/bv); return;
-      case vop_rem: VBF(bv==0?av:(av==INTPTR_MIN&&bv==-1)?0:av%bv); return; } } } }
+      case vop_rem: VBF(bv==0?av:(av==INTPTR_MIN&&bv==-1)?0:av%bv); return;
+      case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return; } } } }
     #undef VBF
  struct bcast w; bc_open(&w, va, vb, R, r->shape);
  bool cmp = op >= vop_lt;
