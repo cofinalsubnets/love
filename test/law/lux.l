@@ -98,7 +98,8 @@
       (wsvistags (wsrescreen (wsview s2 3) [r1 r2 r3]) = '(3 2 1))              ; a screen added: the first hidden tag fills it
       (wsvistags (wsrescreen s0 [r1 r2 r3 r4]) = '(1 2 3))                       ; more screens than tags: the spare stays dark
       (wsrescreen s2 () = s2)                                                     ; no screens is not a shape: refused
-      (wsrescreen s2 [r2 r1] = wsmake 1 (wsboard s2) () [[1 r2] [2 r1]])         ; the same tags in order, the rects re-read
+      (wsrescreen s2 [r2 r1] = s2)                                               ; screens go by position: a primary flip moves nothing
+      (wsvis (wsrescreen s0 [r2 '(0 700 800 600) r1]) = [[1 r1] [2 '(0 700 800 600)] [3 r2]])   ; x first, then y
       (wsvistags (wsrescreen s0 [r1 r1 r2]) = '(1 2))                             ; a clone is one screen
       (wsvis (wsrescreen s0 [r1 '(100 100 200 200)]) = [[1 r1]])                  ; a nested output too
       (wsvis (wsrescreen s0 ['(100 100 200 200) r1]) = [[1 r1]])                  ; whichever comes first: the container stays

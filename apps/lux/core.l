@@ -94,8 +94,8 @@
                       (go (<l . seen) >l))
        (go () rects))
    (wsrescreen sh rects)                                           ; the screens changed: visible tags keep their screens in order,
-    (: rs (wsclean rects)                                          ; hidden ones fill new screens, tags past the last screen hide
-       (? !(two? rs) sh
+    (: rs (sort (wsclean rects))                                   ; hidden ones fill new screens, tags past the last screen hide;
+       (? !(two? rs) sh                                            ; screens go by position (x, then y): the leftmost is screen 0
           (: tags (take #rs (wsvistags sh + wshidden sh))
              cur (any (= (wscur sh)) tags ? (wscur sh) <tags)
              (wsmake cur (wsboard sh) (wsfloat sh) (wspair tags rs)))))
