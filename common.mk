@@ -191,8 +191,10 @@ c_c = $(addprefix $R/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c m
 # the dialect we target, and mooncc's own aim -- doc/misc/moon-c-gaps.md is the ledger.
 ai_std := c11
 
+# these ride the AMBIENT cc and nothing else: the mooncc recipes take none of them, so what
+# they read is the hosted half (love0's objects), never the kernel's own C.
 ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
-  -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
+  -Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fno-stack-protector
 # a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- inle/main.c

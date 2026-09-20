@@ -168,11 +168,10 @@ setup: $(SETUP)
 # (bench/ccrypto.l) and the three heavy-nif rows (bench/cnifs.l) through each.
 # Rows build+test+chacha+poly1305+inflate+crc32+sha256,
 # columns the compilers. ai_cflags + the corpus come from the Makefile (one source of
-# truth); the mooncc lane runs THE ARTIFACT's own mooncc verb, so depend on `dist-seed`
-# beside `host`. that is not tidiness -- ccbench.sh's SEED note has the measurement:
-# through out/mooncc the build row read 2.2x high, because rebuilding mooncc.image
-# invalidated the cached moonlibc archive on every run. Cached; `make ccbench` to refresh it
-# on its own. (mooncc is x86-64 only -- dnf elsewhere.)
+# truth); the mooncc lane runs the artifact's own mooncc verb, so `dist-seed` stands
+# beside `host` -- an intermediate keys the cached moonlibc archive on its own stat and
+# the build row pays a libc build inside it. cached; `make ccbench` refreshes it on its
+# own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
 $(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/love/love.c $(wildcard $(R)/inle/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
