@@ -412,6 +412,20 @@
       _ (must "key-sent-stays" ("1" = curtag ()))
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w6, x-flush s)                 ; DestroyWindow: lux evicts it
       _ (waitp "screen-window-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w6 + ")")) 50)
+
+      ; --- 6f. a new window lands on the pointer's screen: the pointer parks on the
+      ;     right screen, empty now (no window, so no crossing moves the focus), and
+      ;     a fresh window is admitted to its tag and tiled there ---
+      _ (fake 6 0 533 240) _ (rest 100)
+      _ (must "pointer-screen-not-current" ("1" = curtag ()))
+      w7 (w1 + 10)
+      _ (mkwin s w7 root)
+      _ (waitp "lands-on-pointer-screen" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")) 50)
+      _ (waitp "lands-painted-there" (u \ 426 <= x-getgeom s w7 0) 50)
+      _ (must "lands-current" ("3" = curtag ()))
+      _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w7, x-flush s)                   ; DestroyWindow
+      _ (waitp "w7-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w7 + ")")) 50)
+      _ (fake 6 0 5 475) _ (rest 100)                                             ; the pointer back to the left screen for the fold
       _ (delmon "left") _ (delmon "mid") _ (delmon "right")
       _ (refresh ())
       _ (waitp "screens-folded" (u \ "1" = nscreens ()) 50)

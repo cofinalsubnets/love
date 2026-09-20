@@ -140,6 +140,8 @@
    (wsringof sh t) (zrow (wsget sh t))                              ; a tag's ring
    (wsonscreen sh) (foldl (\ a t (a + wsringof sh t)) () (wsvistags sh))   ; every window some screen shows
    (wsscreenof sh w) (wsrectof sh (wstagof sh w))                   ; the rect of the screen showing w, or ()
+   (wsscreenat sh x y) (: p (afind (p \ (: r <>p (two? r && r 0 <= x < r 0 + r 2 && r 1 <= y < r 1 + r 3))) (wsvis sh))
+                          (two? p ? <p))                            ; the tag on the screen under (x y), or ()
    (wsfocw sh w) (: t (wstagof sh w)                                 ; focus w wherever it is on screen: its screen becomes current
                    (t && wsvisible? sh t ? (wsmap (wsview sh t) (zfocto w)) sh))
 

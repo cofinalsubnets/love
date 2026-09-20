@@ -114,6 +114,8 @@
       (zrow (wstilezof s3 1) = '(10)) (wsvisflof s3 1 = [[20 r99]]) !(wsvisflof s3 2)
       (wsonscreen s3 = '(20 10 30)) (wsonscreen s4 = '(20 30))                  ; tag 3 has no screen
       (wsscreenof s3 30 = r2) (wsscreenof s3 10 = r1) !(wsscreenof s4 10) !(wsscreenof s3 99)
+      (wsscreenat s3 10 10 = 1) (wsscreenat s3 800 599 = 2) (wsscreenat s3 799 0 = 1)   ; the screen under a point, edges to the right screen
+      !(wsscreenat s3 1600 10) !(wsscreenat s3 10 600) !(wsscreenat (sheaf '(1 2)) 10 10)   ; off every screen, or no rect yet
       (wscur (wsfocw s3 30) = 2) (wsfoc (wsfocw s3 30) = 30) (wssane? (wsfocw s3 30))   ; focus across: the screen follows
       (wscur (wsfocw s3 10) = 1) (wsfoc (wsfocw s3 10) = 10)
       (wsfocw s4 10 = s4) (wsfocw s3 99 = s3)                                    ; hidden or unknown: no-op

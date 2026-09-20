@@ -173,7 +173,9 @@
    (trect-of r) (: sr (scrn ()) (ewmh-rect r (sr 2) (sr 3)))                     ; a screen's tiling rect: minus dock struts (sup+b flips)
    (cur-rect sh) (: r (wsrectof sh (wscur sh)) (r ? r (scrn ())))                 ; the current screen's rect
    (screens u) (: ms (rr ? (x-monitors s rr root) ()) (two? ms ? ms [(scrn ())]))   ; the monitors, else the whole root
-   (rescreen sh) (: sh2 (wsrescreen sh (screens ()))                            ; re-read the screens into the sheaf, saying so when they moved
+   (under-pointer sh) (: p (x-queryptr s root) t (wsscreenat sh <p <>p)          ; the pointer's screen becomes current (a crossing
+                         (t ? (wsview sh t) sh))                                  ; only fires over a window; an empty screen has none)
+   (rescreen sh) (: sh2 (under-pointer (wsrescreen sh (screens ())))             ; re-read the screens into the sheaf, saying so when they moved
                     _ (sh2 = sh ? 0 (line ("lux: screens " + show (wsvis sh2)))) sh2)
 
    ; --- the unmap ledger (xmonad's mapped + waitingUnmap): map!/hide! track our
@@ -354,7 +356,7 @@
                 (code = 20)                                                      ; isn't on -- the "one window on two workspaces" bug)
                                                                                  ; MapRequest: admit tiled, run the manageHook, then place
                 (: _ (ewmh-track s win ? (line ("lux: strut " + show win)) 0)   ; a dock's strut shrinks the tiling rect
-                   sh1 (admit sh win)
+                   sh1 (admit (under-pointer sh) win)                          ; a new window lands where the pointer is
                    c (mg-ctx s win (cur-rect sh) (x-getgeom s win))
                    sh2 (manage-window lux-manage c sh1)
                    (? (wsknownw? sh2 win)                                        ; managed (tiled or floated) -> place it
