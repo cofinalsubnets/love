@@ -43,7 +43,7 @@
       ;     per desktop, and the names are the tags as NUL-terminated strings ---
       nd (: d (x-getprop-atoms s root (x-intern s "_NET_NUMBER_OF_DESKTOPS")) (two? d ? <d 0))
       _ (must "desktops-published" (0 < nd))
-      _ (must "desktop-geometry" ('(640 480) = x-getprop-atoms s root (x-intern s "_NET_DESKTOP_GEOMETRY")))
+      _ (waitp "desktop-geometry" (u \ '(640 480) = x-getprop-atoms s root (x-intern s "_NET_DESKTOP_GEOMETRY")) 50)   ; sync's, a beat after init
       _ (must "desktop-viewport" (2 * nd = #(x-getprop-atoms s root (x-intern s "_NET_DESKTOP_VIEWPORT"))))
       _ (waitp "workarea" (u \ (: w (x-getprop-atoms s root (x-intern s "_NET_WORKAREA"))
                                   (4 * nd = #w && '(0 0 640 480) = take 4 w))) 50)
@@ -433,6 +433,23 @@
       _ (waitp "lands-on-pointer-screen" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")) 50)
       _ (waitp "lands-painted-there" (u \ 426 <= x-getgeom s w7 0) 50)
       _ (must "lands-current" ("3" = curtag ()))
+
+      ; --- 6g. a float's home follows its screen: w7 floated near the right screen's
+      ;     left edge, mod+left nudges it (20px a press) until its centre crosses into
+      ;     the middle screen -- it becomes tag 2's, focused, and that screen current ---
+      lk (peep (x-keymap s (scr-mink sc) (scr-maxk sc) [65361]) 65361 0)          ; Left
+      _ (must "left-keycode" (0 < lk))
+      _ (ask ("(float! " + show w7 + " '(427 10 200 150))"))                     ; centre 527: still screen 2's
+      _ (nudge ())
+      _ (waitp "float-on-right" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")) 50)
+      _ (press 0 lk) _ (press 0 lk) _ (press 0 lk) _ (press 0 lk) _ (press 0 lk)   ; x 327, centre 427: still screen 2's
+      _ (rest 200)
+      _ (must "float-still-right" ("3" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")))
+      _ (press 0 lk)                                                             ; x 307, centre 407: the middle screen's
+      _ (waitp "float-rehomed" (u \ "2" = ask ("(wstagof (cap (lux-st ())) " + show w7 + ")")) 50)
+      _ (must "float-rehome-focus" (show w7 = ask "(wsfoc (cap (lux-st ())))"))
+      _ (must "float-rehome-current" ("2" = curtag ()))
+      _ (must "float-rehome-painted" (307 = x-getgeom s w7 0))
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w7, x-flush s)                   ; DestroyWindow
       _ (waitp "w7-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w7 + ")")) 50)
       _ (fake 6 0 5 475) _ (rest 100)                                             ; the pointer back to the left screen for the fold

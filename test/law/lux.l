@@ -122,6 +122,22 @@
       (wsfocw s4 10 = s4) (wsfocw s3 99 = s3)                                    ; hidden or unknown: no-op
       (wsvistags (wsfocw s3 30) = '(1 2))))                                      ; nothing trades screens
 
+; --- a float's home follows its screen: floated or moved with its centre on another screen, it
+;     changes tag, takes the focus there, and that screen is current; hidden, or on its own screen, nothing moves ---
+(: r1 '(0 0 800 600) r2 '(800 0 800 600)
+   s2 (wsrescreen (admit (admit (sheaf '(1 2 3)) 10) 20) [r1 r2])              ; tag 1 (20 10) on r1, tag 2 empty on r2
+   f (wsdofloat s2 10 '(900 100 200 100))                                       ; centre 1000: the right screen
+   g (wsdofloat s2 10 '(600 100 200 100))                                       ; centre 700: its own
+   (test
+      (wstagof f 10 = 2) (wscur f = 2) (wsfoc f = 10) (wsfloating? f 10) (wsrect f 10 = '(900 100 200 100)) (wssane? f)
+      (wsring f = '(10)) (wsringof f 1 = '(20))                                   ; it left tag 1's ring for tag 2's
+      (wstagof g 10 = 1) (wscur g = 1) (wsfloating? g 10)
+      (wsdofloat f 10 '(900 100 200 100) = f)                                    ; the same screen again: nothing moves
+      (wstagof (wsdofloat f 10 '(100 100 200 100)) 10 = 1)                      ; and back across: home again
+      (wstagof (wsdofloat (wsview s2 3) 10 '(900 100 200 100)) 10 = 1)          ; hidden (tag 3 took its screen): stays home
+      (wstagof (wsdofloat s2 10 '(1700 100 200 100)) 10 = 1)                    ; off every screen: stays home
+      (wssink f 10 = wsfocw (shiftwin s2 10 2) 10)))                             ; sinking keeps the new home
+
 ; --- the seeded fuzz: the whole op vocabulary, 200 steps, invariant per step ---
 (: r99 '(20 20 200 100) rA '(0 0 1 1) rB '(1 0 1 1)
    (fzop k w s) (k @

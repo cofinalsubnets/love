@@ -113,8 +113,13 @@
    (wsflhere sh) (wsflof sh (wscur sh))                           ; the floats on the current view
    (wsvisflof sh t) (map (w \ [w (wsrect sh w)]) (wsflof sh t))  ; ...as (window rect), what the painter wants
    (wsvisfl sh) (wsvisflof sh (wscur sh))
-   (wsdofloat sh w r)                                              ; float: pin a rect on a window already in the ring
-    (wsknownw? sh w ? (wsmake (wscur sh) (wsboard sh) ([w r] . wsunfl w (wsfloat sh)) (wsvis sh)) sh)
+   (wsdofloat sh w r)                                              ; float: pin a rect on a window already in the ring, then home it
+    (wsknownw? sh w ? (wsrehome (wsmake (wscur sh) (wsboard sh) ([w r] . wsunfl w (wsfloat sh)) (wsvis sh)) w) sh)
+   (wsrehome sh w)                                                 ; a float on screen belongs to the screen its centre is on: it moves to
+    (: r (wsrect sh w) home (wstagof sh w)                         ; that tag, focused, its screen current; a hidden float stays home
+       t (two? r ? (wsscreenat sh (r 0 + r 2 // 2) (r 1 + r 3 // 2)))
+       (? (!t || t = home || !(wsvisible? sh home)) sh
+          (wsfocw (shiftwin sh w t) w)))
    (wssink sh w) (wsmake (wscur sh) (wsboard sh) (wsunfl w (wsfloat sh)) (wsvis sh))   ; sink: drop the rect, the window has not moved
 
    ; --- the tiled half, derived. the layout sees a zipper with the floats
