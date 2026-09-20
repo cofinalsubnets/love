@@ -86,11 +86,19 @@
     (? (!(wsknown? sh t) || t = wscur sh) sh
        (wsmake t (wsboard sh) (wsfloat sh) (wsswapvis (wsvis sh) (wscur sh) t)))
    (wspair ts rs) (two? ts && two? rs ? ([<ts <rs] . wspair >ts >rs))
+   (wswithin? a b) (b 0 <= a 0 && b 1 <= a 1 && a 0 + a 2 <= b 0 + b 2 && a 1 + a 3 <= b 1 + b 3)   ; rect a inside rect b
+   (wsclean rects)                                                 ; a rect inside another (a clone, a nested output) is no screen: the first of equals stays
+    (: (go seen l) (? !(two? l) (rev seen)
+                      (any (k \ wswithin? <l k) seen) (go seen >l)                   ; inside one already kept
+                      (any (k \ wswithin? <l k && <l != k) >l) (go seen >l)          ; inside a larger one still to come
+                      (go (<l . seen) >l))
+       (go () rects))
    (wsrescreen sh rects)                                           ; the screens changed: visible tags keep their screens in order,
-    (? !(two? rects) sh                                            ; hidden ones fill new screens, tags past the last screen hide
-       (: tags (take #rects (wsvistags sh + wshidden sh))
-          cur (any (= (wscur sh)) tags ? (wscur sh) <tags)
-          (wsmake cur (wsboard sh) (wsfloat sh) (wspair tags rects))))
+    (: rs (wsclean rects)                                          ; hidden ones fill new screens, tags past the last screen hide
+       (? !(two? rs) sh
+          (: tags (take #rs (wsvistags sh + wshidden sh))
+             cur (any (= (wscur sh)) tags ? (wscur sh) <tags)
+             (wsmake cur (wsboard sh) (wsfloat sh) (wspair tags rs)))))
    (wsring sh) (zrow (wsget sh (wscur sh)))                        ; the focus ring: every window here, tiles and floats alike
    (wsfoc sh) (zfoc (wsget sh (wscur sh)))                         ; the focused window -- a float names itself
    (wsmap sh f) (wsset sh (wscur sh) (f (wsget sh (wscur sh))))    ; reshape the current zipper

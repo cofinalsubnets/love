@@ -223,6 +223,7 @@
    ; --- do-act: interpret one keys.l action. Returns by looping. ---
    (do-act a sh lays hist)
     (: k <a z (wstilez sh) fw (wsfoc sh)                                         ; the layout reads the tiled zipper; fw is simply the focus
+       (screen-tag n) (: ts (wsvistags sh) (n < #ts ? (ts n)))                  ; the tag on screen n, () past the last screen
        (relay sh2 lays2) (: _ (render sh2 lays2)                                   ; render, focus whatever the sheaf focuses, loop
                             _ (refocus sh2)
                             (loop sh2 lays2 hist))
@@ -240,6 +241,14 @@
                           _ (sh2 = sh || wsvisible? sh2 t ? 0 (hide! fw, x-flush s))   ; it left every screen: hide the emigrant
                           _ (line ("lux: sent " + show fw + " -> " + show t))
                           (loop sh2 lays hist))
+          (k = 'screen)                                                          ; focus screen n: its tag becomes current, the pointer follows
+          (: t (screen-tag <>a)
+             (? (!t || t = wscur sh) (loop sh lays hist)
+                (: r (wsrectof sh t)
+                   _ (x-warp s root (r 0 + r 2 // 2) (r 1 + r 3 // 2))
+                   (relay (wsview sh t) lays))))
+          (k = 'to-screen)                                                       ; send the focus to screen n's tag
+          (: t (screen-tag <>a) (t && fw ? (do-act ['shift t] sh lays hist) (loop sh lays hist)))
           (k = 'spawn) (: p (spawn <>a) _ (line ("lux: spawn " + (<<>a + " " + show p)))
                           (loop sh lays hist))
           (k = 'exec) (line "lux: exec -- abdicating", exec <>a,          ; returns only on failure

@@ -16,6 +16,7 @@
 ;   (view T) (shift T) (spawn ARGV) (exec ARGV) (kill) (quit) (restart)
 ;   (refresh) (reset-layout) (sink) (float-toggle) (next-match FWD)
 ;   (focus-dn) (focus-up) (focus-master) (swap-dn) (swap-up) (swap-master)
+;   (screen N) (to-screen N)   focus screen N / send the focus to its tag
 ; a body-less `:` -- the vocabulary leaks to the driver.
 (:
    ; --- modifier masks (the X state bits) ---
@@ -145,6 +146,9 @@
      (kb modm 32 '(msg next-layout))                                             ; mod+space
      (kb (modm | shiftm) 32 '(reset-layout))                                     ; mod+shift+space
      (kb modm 110 '(refresh))                                                    ; mod+n
+     (kb modm 119 '(screen 0)) (kb modm 101 '(screen 1)) (kb modm 114 '(screen 2))   ; mod+w/e/r         screenWorkspace n >>= view
+     (kb (modm | shiftm) 119 '(to-screen 0)) (kb (modm | shiftm) 101 '(to-screen 1))   ; mod+shift+w/e/r  screenWorkspace n >>= shift
+     (kb (modm | shiftm) 114 '(to-screen 2))
      (kb modm xk-tab '(focus-dn))                                                ; mod+tab           (custom overrides)
      (kb (modm | shiftm) xk-tab '(focus-up))
      (kb modm 106 '(focus-dn))                                                   ; mod+j

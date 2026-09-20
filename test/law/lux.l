@@ -78,7 +78,7 @@
       (wsring h = '(10 20 30)) (wsrow h = '(10 30)) (wsflhere h = '(20))))       ; they permute the tiled slots, the float keeps its own
 
 ; --- the screens (xmonad's current/visible/hidden): vis is ((tag rect)..) in screen order ---
-(: r1 '(0 0 800 600) r2 '(800 0 800 600)
+(: r1 '(0 0 800 600) r2 '(800 0 800 600) r3 '(1600 0 800 600) r4 '(2400 0 800 600)
    s0 (sheaf '(1 2 3)) s2 (wsrescreen s0 [r1 r2])                               ; two screens: tags 1 and 2 on view, 3 hidden
    (test
       (wsvistags s0 = '(1)) !(wsrectof s0 1) (wshidden s0 = '(2 3)) (wssane? s0)   ; born single-screen, the rect unknown
@@ -95,10 +95,14 @@
       (wssane? (wsview s2 3)) (wssane? (wsgreedy s2 2))
       (wsvistags (wsrescreen s2 [r1]) = '(1)) (wssane? (wsrescreen s2 [r1]))     ; a screen gone: its tag hides
       (wscur (wsrescreen (wsview s2 2) [r1]) = 1)                                ; the current screen gone: the first left is current
-      (wsvistags (wsrescreen (wsview s2 3) [r1 r2 r1]) = '(3 2 1))              ; a screen added: the first hidden tag fills it
-      (wsvistags (wsrescreen s0 [r1 r2 r1 r2]) = '(1 2 3))                       ; more screens than tags: the spare stays dark
+      (wsvistags (wsrescreen (wsview s2 3) [r1 r2 r3]) = '(3 2 1))              ; a screen added: the first hidden tag fills it
+      (wsvistags (wsrescreen s0 [r1 r2 r3 r4]) = '(1 2 3))                       ; more screens than tags: the spare stays dark
       (wsrescreen s2 () = s2)                                                     ; no screens is not a shape: refused
-      (wsrescreen s2 [r2 r1] = wsmake 1 (wsboard s2) () [[1 r2] [2 r1]])))       ; the same tags in order, the rects re-read
+      (wsrescreen s2 [r2 r1] = wsmake 1 (wsboard s2) () [[1 r2] [2 r1]])         ; the same tags in order, the rects re-read
+      (wsvistags (wsrescreen s0 [r1 r1 r2]) = '(1 2))                             ; a clone is one screen
+      (wsvis (wsrescreen s0 [r1 '(100 100 200 200)]) = [[1 r1]])                  ; a nested output too
+      (wsvis (wsrescreen s0 ['(100 100 200 200) r1]) = [[1 r1]])                  ; whichever comes first: the container stays
+      (wsclean [r1 '(0 0 800 600) r2] = [r1 r2]) (wsclean () = ())))
 
 ; --- per screen: what each screen paints, and focus across screens ---
 (: r1 '(0 0 800 600) r2 '(800 0 800 600) r99 '(1 1 9 9)
@@ -293,7 +297,9 @@
       (keys-find keys-dir (supm | shiftm) xk-up = '(swapd up (0 -20)))           ; sup+shift+Up
       (keys-find keys-dir (supm | ctrlm) 106 = '(resize down (0 20)))            ; sup+ctrl+j
       ; the union: custom wins on a collision, stock survives elsewhere
-      (#keys-custom = 45) (#keys-def = 39) (#the-keys = 70)       ; 14 stock rows shadowed
+      (#keys-custom = 45) (#keys-def = 45) (#the-keys = 73)       ; 17 stock rows shadowed
+      (keys-find the-keys supm 114 = '(screen 2)) (keys-find the-keys (supm | shiftm) 119 = '(to-screen 0))   ; the screen keys
+      (keys-find the-keys supm 119 = '(float-toggle))                            ; ..where custom does not sit on them
       (keys-find the-keys supm xk-ret = '(spawn ("xfce4-terminal")))             ; custom sup+ret over stock swap-master
       (keys-find the-keys supm 109 = '(msg mirror))                              ; custom sup+m over stock focus-master
       (keys-find the-keys (supm | shiftm) xk-ret = '(spawn ("xterm")))           ; the stock terminal survives
@@ -365,7 +371,7 @@
       (<rt = 'rtall) (rt 1 = 1) (rt 2 = 0.5)                           ; ResizableTall 1 (2/100) (1/2)
       (<dw = 'dwindle)
       (: phi (dw 1) ((1.61803 < phi) && (phi < 1.61804)))                   ; fib 32 / fib 31, the golden ratio
-      (#(keys-build supm 20 9 () ()) = 70) (lit? (manage-for '("a") '("b") ()))
+      (#(keys-build supm 20 9 () ()) = 73) (lit? (manage-for '("a") '("b") ()))
       (<<(conf-roster c0 'startup '(("setxkbmap"))) = "setxkbmap")))
 
 ; --- the config door (apps/libra/salt.l): every setting overrides, and its absence is
@@ -420,7 +426,7 @@
       (keys-find km supm 65027 = '(kill))                                        ; the raw-keysym chord grabs like any other
       !(keys-find km supm 112) !(keys-find km supm 122)                          ; unbind cuts, and cuts last
       (keys-find km supm 120 = '(kill))                                          ; ... only what it names
-      (#km = 71)))                                                          ; 70 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
+      (#km = 74)))                                                          ; 73 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
 
 ; --- ~/.Xauthority parsing (apps/lux/wire.l rung 8), on mock bytes ---
 (: (be16 n) (string (n >> 8) + string (255 & n))                                        ; big-endian u16 as two appended bytes

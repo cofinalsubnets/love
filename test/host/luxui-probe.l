@@ -348,9 +348,14 @@
       ;     the monitors: every tag lands on a screen; deleted, it folds back to one ---
       rr (x-randr-init s root)
       _ (must "randr-1.5" (two? rr))
-      (setmon nm x w) (: a (x-intern s nm)                                       ; RRSetMonitor: name, not primary, not automatic, no outputs
-                         (x-w8 s <rr, x-w8 s 43, x-w16 s 8, x-w32 s root, x-w32 s a, x-w8 s 0, x-w8 s 0, x-w16 s 0,
-                          x-w16 s x, x-w16 s 0, x-w16 s w, x-w16 s 480, x-w32 s 100, x-w32 s 100, x-flush s))
+      out0 (: _ (x-w8 s <rr, x-w8 s 42, x-w16 s 3, x-w32 s root, x-w8 s 1, x-w8 s 0, x-w16 s 0, x-flush s)   ; RRGetMonitors: the auto
+              hdr (x-reply s) b (x-rbytes s (4 * u32 hdr 4))                     ; monitor's one output -- a client monitor claiming it
+              (0 < u16 b 6 ? (u32 b 24) 0))                                       ; retires the auto one, which would swallow ours (a clone is no screen)
+      _ (must "auto-output" (0 < out0))
+      (setmon nm x w outs) (: a (x-intern s nm)                                  ; RRSetMonitor: name, not primary, not automatic, its outputs
+                              (x-w8 s <rr, x-w8 s 43, x-w16 s (8 + #outs), x-w32 s root, x-w32 s a, x-w8 s 0, x-w8 s 0, x-w16 s #outs,
+                               x-w16 s x, x-w16 s 0, x-w16 s w, x-w16 s 480, x-w32 s 100, x-w32 s 100,
+                               map (x-w32 s) outs, x-flush s))
       (delmon nm) (: a (x-intern s nm)                                          ; RRDeleteMonitor (the atom first: a round trip mid-request garbles the stream)
                      (x-w8 s <rr, x-w8 s 44, x-w16 s 3, x-w32 s root, x-w32 s a, x-flush s))
       nk (peep (x-keymap s (scr-mink sc) (scr-maxk sc) [110]) 110 0)             ; n: mod+n is refresh
@@ -359,29 +364,55 @@
                    fake 3 nk 0 0, rest 60, fake 3 sk 0 0, rest 100)
       (nscreens u) (ask "(tally (wsvis (cap (lux-st ()))))")
       _ (must "one-screen" ("1" = nscreens ()))
-      _ (setmon "left" 0 320) _ (setmon "right" 320 320)
+      _ (setmon "left" 0 213 [out0]) _ (setmon "mid" 213 213 ()) _ (setmon "right" 426 214 ())
       _ (refresh ())
-      _ (waitp "screens-found" (u \ "3" = nscreens ()) 50)                       ; left, right, and xvfb's own auto monitor
-      _ (must "screen-rect" ("(0 0 320 480)" = ask "(wsrectof (cap (lux-st ())) 1)"))
+      _ (waitp "screens-found" (u \ "3" = nscreens ()) 50)                       ; left, mid, right; the auto monitor retired with its output
+      _ (must "screen-rect" ("(0 0 213 480)" = ask "(wsrectof (cap (lux-st ())) 1)"))
       _ (must "screens-tags" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
 
       ; --- 6d. per-screen rendering: a fresh window on tag 1 tiles into the left
-      ;     screen; viewing tag 2 (on the right screen) is greedy -- the tags trade
-      ;     screens, so the window lands in the right rect; back again, the left ---
+      ;     screen; viewing tag 2 (on the middle screen) is greedy -- the tags trade
+      ;     screens, so the window lands in the middle rect; back again, the left ---
       w6 (w1 + 9)
       _ (mkwin s w6 root)
-      _ (waitp "screen-tiled" (u \ (: g (x-getgeom s w6) (g 0 + g 2 <= 320 && 100 < g 2))) 50)
+      _ (waitp "screen-tiled" (u \ (: g (x-getgeom s w6) (g 0 + g 2 <= 213 && 50 < g 2))) 50)
       _ (fake 6 0 5 475) _ (rest 80)                                             ; the pointer to the left screen: a crossing makes its screen current
       _ (cmsg root a-cd 1 0 0)
-      _ (waitp "screen-traded" (u \ (: g (x-getgeom s w6) (320 <= g 0 && 100 < g 2))) 50)
+      _ (waitp "screen-traded" (u \ (: g (x-getgeom s w6) (213 <= g 0 && g 0 + g 2 <= 426))) 50)
       _ (must "screen-cur" ("2" = ask "(wscur (cap (lux-st ())))"))
       _ (must "screen-vis" ("(2 1 3)" = ask "(wsvistags (cap (lux-st ())))"))
       _ (cmsg root a-cd 0 0 0)
-      _ (waitp "screen-back" (u \ (: g (x-getgeom s w6) (g 0 + g 2 <= 320))) 50)
+      _ (waitp "screen-back" (u \ (: g (x-getgeom s w6) (g 0 + g 2 <= 213))) 50)
       _ (must "screen-vis-back" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
+
+      ; --- 6e. the screen keys (mod+r: mod+w/e sit under the custom table): mod+r
+      ;     focuses screen 2 (tag 3) and warps the pointer onto it; a crossing back
+      ;     onto w6 makes the left screen current without a trade; mod+shift+r sends
+      ;     w6 to screen 2's tag, where it is painted, not hidden ---
+      km2 (x-keymap s (scr-mink sc) (scr-maxk sc) [114 65505])
+      rk (peep km2 114 0) shk (peep km2 65505 0)                                 ; r, Shift_L
+      _ (must "r-shift-keycodes" (0 < rk && 0 < shk))
+      (press sh? kc) (fake 2 sk 0 0, sh? ? (fake 2 shk 0 0) 0, rest 60, fake 2 kc 0 0, rest 60,
+                      fake 3 kc 0 0, rest 60, sh? ? (fake 3 shk 0 0) 0, fake 3 sk 0 0, rest 100)
+      (ptrx u) (: _ (x-w8 s 38, x-w8 s 0, x-w16 s 2, x-w32 s root, x-flush s)  ; QueryPointer: root-x
+                  hdr (x-reply s) (u16 hdr 16))
+      (curtag u) (ask "(wscur (cap (lux-st ())))")
+      _ (ask ("(sink! " + show w1 + ")")) _ (nudge ())                            ; w1's float covers the root: sunk, the warp lands on no tag-1 window
+      _ (waitp "w1-sunk" (u \ "0" = ask ("(wsfloating? (cap (lux-st ())) " + show w1 + ")")) 50)
+      _ (press 0 rk)
+      _ (waitp "key-screen-2" (u \ "3" = curtag ()) 50)
+      _ (must "key-warped" (426 <= ptrx ()))
+      g6 (x-getgeom s w6)
+      _ (fake 6 0 (g6 0 + g6 2 // 2) (g6 1 + g6 3 // 2)) _ (rest 100)           ; the pointer onto w6: its screen is current again, nothing trades
+      _ (waitp "key-cross-back" (u \ "1" = curtag () && show w6 = ask "(wsfoc (cap (lux-st ())))") 50)
+      _ (must "key-cross-no-trade" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
+      _ (press 1 rk)
+      _ (waitp "key-sent" (u \ "3" = ask ("(wstagof (cap (lux-st ())) " + show w6 + ")")) 50)
+      _ (waitp "key-sent-painted" (u \ 426 <= x-getgeom s w6 0) 50)
+      _ (must "key-sent-stays" ("1" = curtag ()))
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w6, x-flush s)                 ; DestroyWindow: lux evicts it
       _ (waitp "screen-window-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w6 + ")")) 50)
-      _ (delmon "left") _ (delmon "right")
+      _ (delmon "left") _ (delmon "mid") _ (delmon "right")
       _ (refresh ())
       _ (waitp "screens-folded" (u \ "1" = nscreens ()) 50)
       _ (must "screens-cur" ("1" = ask "(wscur (cap (lux-st ())))"))

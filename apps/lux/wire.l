@@ -21,7 +21,7 @@
   x-grabbtn x-replay x-allow-async x-grabptr x-ungrabptr x-querytree x-attrs x-manageable?
   x-redirect x-keymap x-grab x-ungrabkeys x-color x-borderpix x-cursor xauth-parse
   xauth-cookie x-decode x-next ev-code ev-detail ev-window ev-state ev-raw
-  i16 x-queryext x-randr-init x-monitors)
+  i16 x-queryext x-randr-init x-monitors x-warp)
 (borrow 'posix)
 (:
    ; --- byte IO over the socket (little-endian) ---
@@ -166,6 +166,8 @@
           x-w16 s 72, x-w8 s 1, x-w8 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s)
        (x-reply s))                                                              ; a reply (the grab status) -- read it to keep the demux synced
    (x-ungrabptr s) (x-w8 s 27, x-w8 s 0, x-w16 s 2, x-w32 s 0)                   ; UngrabPointer, CurrentTime
+   (x-warp s win x y) (x-w8 s 41, x-w8 s 0, x-w16 s 6, x-w32 s 0, x-w32 s win,   ; WarpPointer to (x y) in win, from anywhere
+                       x-w16 s 0, x-w16 s 0, x-w16 s 0, x-w16 s 0, x-w16 s x, x-w16 s y)
 
    ; --- QueryTree (opcode 15) + GetWindowAttributes (opcode 3): at startup we
    ;     adopt the windows that mapped before the redirect took hold (closing the
