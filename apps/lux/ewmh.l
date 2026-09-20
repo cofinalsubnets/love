@@ -34,6 +34,8 @@
     (? !(peep ewst 'avoid 0) scrn
        (foldl (\ r p (strut-shrink r <>p swp shp)) scrn (ewst 'struts)))
    (ewmh-toggle u) (pin ewst 'avoid !(ewst 'avoid))
+   (ewmh-names tags) (foldl (\ a t (a + show t + string 0)) "" tags)            ; _net_desktop_names: NUL-terminated utf8 strings
+   (ewmh-per tags vals) (foldl (\ a t (a + vals)) () tags)                       ; one row of vals per desktop
    (ewmh-track s win)                                                            ; read the window's strut; () if it has none
     (: vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT_PARTIAL"))
        vals (two? vals ? vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
@@ -65,9 +67,10 @@
                  "_NET_WM_STATE" "_NET_WM_STATE_FULLSCREEN" "_NET_WM_STATE_MODAL"
                  "_NET_WM_STATE_MAXIMIZED_VERT" "_NET_WM_STATE_MAXIMIZED_HORZ" "_NET_CLOSE_WINDOW"
                  "_NET_WM_STRUT" "_NET_WM_STRUT_PARTIAL" "_NET_WM_WINDOW_TYPE"
+                 "_NET_DESKTOP_GEOMETRY" "_NET_DESKTOP_VIEWPORT" "_NET_WORKAREA" "_NET_DESKTOP_NAMES"
                  "_NET_WM_WINDOW_TYPE_DOCK" "_NET_WM_WINDOW_TYPE_DIALOG" "_NET_WM_WINDOW_TYPE_NOTIFICATION"
                  "WM_CHANGE_STATE")                                              ; ICCCM iconify (minimizeEventHook); interned, not advertised as _net_
-   (ewmh-init s root idbase ndesk)
+   (ewmh-init s root idbase tags)
     (: at (tablet 8)
        _ (each ewmh-atoms (nm \ pin at nm (x-intern s nm)))
        utf8 (x-intern s "UTF8_STRING")
@@ -79,16 +82,22 @@
        _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])                     ; type window(33)
        _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])
        _ (x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)")                        ; setwmname: the Java hack
-       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 [ndesk])                        ; type cardinal(6)
+       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 [#tags])                        ; type cardinal(6)
+       _ (x-chprop32 s root (a "_NET_DESKTOP_VIEWPORT") 6 (ewmh-per tags '(0 0)))           ; no large desktops: every viewport (0 0)
+       _ (x-chprop8 s root (a "_NET_DESKTOP_NAMES") utf8 (ewmh-names tags))
        (x-flush s))
 
-   ; --- sync: publish the sheaf whenever it changed (pagers track us) ---
-   (ewmh-sync s sh)
+   ; --- sync: publish the sheaf whenever it changed (pagers track us); scrn is the
+   ;     root rect, so the desktop's shape and workarea follow the screen and the struts ---
+   (ewmh-sync s sh scrn)
     (: wins (wswins sh) cur (wscur sh - 1)
        foc (wsfoc sh ? (wsfoc sh) 0)                                             ; a focused float is what a taskbar must highlight,
-       key [cur foc wins]                                                        ; and wsfoc names one
+       wa (ewmh-rect scrn (scrn 2) (scrn 3))                                     ; and wsfoc names one
+       key [cur foc wins scrn wa]
        (? (key = ewst 'last) 0
-          (: _ (pin ewst 'last key) root (peep ewst 'root 0)
+          (: _ (pin ewst 'last key) root (peep ewst 'root 0) tags (map cap (wsboard sh))
+             _ (x-chprop32 s root (ewmh-atom "_NET_DESKTOP_GEOMETRY") 6 [(scrn 2) (scrn 3)])
+             _ (x-chprop32 s root (ewmh-atom "_NET_WORKAREA") 6 (ewmh-per tags wa))      ; the root minus every strut, per desktop
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins)
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins)   ; libwnck creates its windows off this list (no stacking =
                                                                                      ; an empty taskbar); wswins is tiles-then-floats = bottom to top

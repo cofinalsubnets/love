@@ -328,6 +328,11 @@
       (strut-shrink (rct 0 0 800 600) (strut-parse '(0 50 0 20)) 800 600 = '(0 0 750 580))     ; right + bottom
       ((strut-shrink (rct 0 0 100 100) (strut-parse '(700 0 0 0)) 800 600) 2 = 0)))
 
+; the desktop's shape for pagers: names as NUL-terminated strings, one row of values per desktop
+(: nul (string 0)
+   (test (ewmh-names '(1 2 3) = "1" + nul + "2" + nul + "3" + nul) (ewmh-names () = "")
+         (ewmh-per '(1 2 3) '(0 0) = '(0 0 0 0 0 0)) (ewmh-per '(7) '(1 2 3 4) = '(1 2 3 4)) !(ewmh-per () '(0 0))))
+
 ; a partial strut reaches only the screens its span meets: a bottom panel under the left screen
 (: st (strut-parse '(0 0 0 20 0 0 0 0 0 0 0 799)) l (rct 0 0 800 600) r (rct 800 0 800 600)
    (test (strut-shrink l st 1600 600 = '(0 0 800 580)) (strut-shrink r st 1600 600 = r)

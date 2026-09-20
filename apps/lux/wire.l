@@ -111,9 +111,9 @@
           x-w32 s 0, x-w32 s 0, x-w32 s 1024, x-flush s)
        hdr (x-reply s)
        (? !(<hdr = 1) [0 0 ()]                                                   ; the window died: no property
-          (: rlen (u32 hdr 4)
+          (: rlen (u32 hdr 4) fmt (hdr 1) n (u32 hdr 16)                        ; the reply's length in longs; the value's item count at 16
              bytes (x-rbytes s (rlen * 4))
-             [(hdr 1) (u32 hdr 12) bytes])))
+             [fmt n (take (n * (fmt // 8)) bytes)])))                            ; the value alone, its padding dropped
    (x-atoms-of bytes) (? (#bytes < 4) ()                                         ; group 4 le bytes -> a 32-bit atom/window list
                          (u32 bytes 0 . x-atoms-of (drop 4 bytes)))
    (x-getprop-atoms s win prop) (x-atoms-of ((x-getprop s win prop) 2))

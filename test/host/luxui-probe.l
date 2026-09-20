@@ -39,6 +39,16 @@
 
       ; --- lux is up when ewmh-init has stamped the root ---
       _ (waitp "wm-up" (u \ two? (x-getprop-atoms s root (x-intern s "_NET_SUPPORTED"))) 100)
+      ; --- the desktop's shape (ewmh 1.4): geometry is the root, a viewport and a workarea row
+      ;     per desktop, and the names are the tags as NUL-terminated strings ---
+      nd (: d (x-getprop-atoms s root (x-intern s "_NET_NUMBER_OF_DESKTOPS")) (two? d ? <d 0))
+      _ (must "desktops-published" (0 < nd))
+      _ (must "desktop-geometry" ('(640 480) = x-getprop-atoms s root (x-intern s "_NET_DESKTOP_GEOMETRY")))
+      _ (must "desktop-viewport" (2 * nd = #(x-getprop-atoms s root (x-intern s "_NET_DESKTOP_VIEWPORT"))))
+      _ (waitp "workarea" (u \ (: w (x-getprop-atoms s root (x-intern s "_NET_WORKAREA"))
+                                  (4 * nd = #w && '(0 0 640 480) = take 4 w))) 50)
+      _ (must "desktop-names" (x-getprop s root (x-intern s "_NET_DESKTOP_NAMES") @ [8 n b]      ; format 8, one digit + NUL per desktop
+                                (2 * nd = n && 2 * nd = #b && 0 = b (n - 1))))
 
       ; --- xtest: the extension's major opcode, then the super keycode
       ;     (mod4 row of GetModifierMapping, first nonzero) ---

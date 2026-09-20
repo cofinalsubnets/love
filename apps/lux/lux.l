@@ -139,7 +139,7 @@
    root (scr-root sc) wpx (scr-w sc) hpx (scr-h sc)
    _ (x-redirect s root ? 0 (say err "lux: another WM owns this display\n", quit 1))
    _ (line ("lux: managing " + show root + " " + show wpx + "x" + show hpx))
-   _ (ewmh-init s root (scr-idbase sc) #lux-tags)                          ; the support window + _net_* root properties
+   _ (ewmh-init s root (scr-idbase sc) lux-tags)                          ; the support window + _net_* root properties
    rr (x-randr-init s root)                                                      ; randr 1.5: the monitors are the screens, their changes events
    _ (line (rr ? ("lux: randr events from " + show <>rr) "lux: no randr 1.5 -- the root is the one screen"))
 
@@ -341,7 +341,7 @@
                             _ (refocus sh2)
                             (loop sh2 lays2 hist))
        _ (glean 0)                                                                ; glean one spawned zombie home, if any
-       _ (ewmh-sync s sh)                                                        ; publish the sheaf to pagers (change-guarded)
+       _ (ewmh-sync s sh (scrn ()))                                              ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
        (? !e (line "lux: display gone")
           (ev-code e = 0)                                                        ; an X error. the code alone names neither the request
