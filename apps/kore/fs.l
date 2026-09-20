@@ -110,7 +110,7 @@
    ; and not order, so they rank instead -- -l, then -1, then -x, then -C.
    ; the screen and the grid on it are both grid's: $COLUMNS then the terminal, ragged
    ; columns, a pad that elides onto tab stops. all three are GNU's own and not an
-   ; imitation of them, and test/gate/lscmp.sh is where the two are compared.
+   ; imitation of them, and test/kore/ls.sh is where the two are compared.
    ; several operands print GNU's `name:` headers, files before directories.
    ; THE LONG ROW'S CLOCK IS UTC. this tree carries no timezone database (see
    ; date's own note), so `ls -l` reads local time only where local time is UTC, and

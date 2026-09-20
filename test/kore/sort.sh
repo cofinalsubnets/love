@@ -1,15 +1,14 @@
 #!/bin/sh
-# sortcmp.sh -- kore's sort against GNU's, byte for byte, over a flag matrix.
-# not a gate of its own: test/gate/kore.sh calls it, and it is here as one file
-# because the matrix is the test and a matrix reads badly inlined.
+# test/kore/sort.sh -- kore's sort against GNU's, byte for byte, over a flag matrix.
+# one file because the matrix is the test and a matrix reads badly inlined.
 #
 # LC_ALL=C on BOTH sides. GNU's default collation ignores punctuation and case,
 # ours is byte order, and without this every row disagrees for a reason that has
 # nothing to do with the code.
 set -u
-m=${1:-./out/love}
+m=${2:-./out/love}                   # (OUTDIR LOVE), as every subject here takes
 LC_ALL=C; export LC_ALL
-w=${TMPDIR:-/tmp}/sortcmp.$$; mkdir -p "$w"; trap 'rm -rf "$w"' EXIT
+w=${TMPDIR:-/tmp}/kore-sort.$$; mkdir -p "$w"; trap 'rm -rf "$w"' EXIT
 fail=0; ran=0
 
 # the corpus: three shapes, because one input cannot exercise a numeric key, a
@@ -82,5 +81,5 @@ try c -t: -k1,1 -k2,2n
 try c -t: -k3
 try c -t: -u -k1,1
 
-echo "sortcmp: $ran rows, $fail failed"
+echo "kore sort: $ran rows, $fail failed"
 [ "$fail" = 0 ]

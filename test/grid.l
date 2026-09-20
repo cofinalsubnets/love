@@ -1,7 +1,7 @@
 ; grid -- the column layout ls and `love verbs` share. every answer below is GNU
 ; ls's own, read off `COLUMNS=n ls -C` and `ls -x` over the same names: ragged
 ; columns, the widest count that fits, and a pad that elides onto tab stops.
-; test/gate/lscmp.sh compares the whole flag matrix against a GNU that is installed;
+; test/kore/ls.sh compares the whole flag matrix against a GNU that is installed;
 ; this is the part of the claim that runs without one.
 (: grid-lay (cite 'grid 'lay)
    (grid-cells ns) (map (n \ n . #n) ns)

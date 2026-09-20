@@ -365,8 +365,16 @@ test_sb: host out$(hsuf)/sb
 # warm per spawn; the argv0 smoke lays its own two-line shim,
 # the distro's shape, since the tree carries no kore binary anymore.
 korerun = $m kore
+# one file per subject under test/kore/, and the roster is SPELLED: test/kore/common.sh
+# is dotted by each and must never run as one, so this cannot be a glob. a subject also
+# stands alone -- `make test_kore_sed` -- which is most of why the split is worth having.
+kore_parts = laws diff toolchain line sort ls seams grep field column encode fs sed \
+  proc procfs sh fork awk find record sum expr bc stat time patch pager top lapiz \
+  status door archive misc
 test_kore: host
-	@sh test/gate/kore.sh $(ho) $m
+	@for p in $(kore_parts); do sh test/kore/$$p.sh $(ho) $m || exit 1; done
+$(kore_parts:%=test_kore_%): test_kore_%: host
+	@sh test/kore/$*.sh $(ho) $m
 # grep + sed against GNU over seeded random patterns (doc: the script's own head).
 # test_kore's battery is a list someone thought of; this one is NOT, which is the point.
 # skips (exit 0) without GNU grep/sed, and checks --version, since an interactive `grep`

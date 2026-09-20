@@ -1662,7 +1662,7 @@
 ; because sgr colour parts the two -- the escape bytes take up no screen. answers the lines
 ; with no trailing blanks: a row's pad is written ahead of the next cell, never behind the last
 ; one on the row. GNU's own search and tab-eliding pad, so `ls -C` and `ls -x` compare byte for
-; byte (test/gate/lscmp.sh).
+; byte (test/kore/ls.sh).
 (module '(grid lay screen)
 (: gmin 3                            ; the narrowest a column may be: one char and its gap
    gpad 2                            ; the gap between two columns

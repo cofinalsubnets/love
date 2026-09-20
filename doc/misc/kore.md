@@ -10,7 +10,7 @@ same reach. A tool listed here answers to its name; which options it answers to 
 at the head of its own source, absences included. `make -C bench korebench` found the two
 worst of those absences by running the flags rather than reading the list — `sort` had no
 `-n` and `ls` no `-l`, each reading the flag as a filename — and both now carry a matrix
-against GNU (`test/gate/sortcmp.sh`, `test/gate/lscmp.sh`) inside `make test_kore`.
+against GNU (`test/kore/sort.sh`, `test/kore/ls.sh`) inside `make test_kore`.
 
 kore is the distro's coreutils: the love-native POSIX environment over the Linux kernel is
 kernel + a static `love` + .l files, and kore is busybox's multi-call trick done natively.
@@ -110,13 +110,13 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
   status. mooncc rides the same floor with two doors of its own — `moon-run` answers, `moon-main`
   quits with what it answers (doc/misc/moon.md). nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
-  test/gate/kore.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
+  test/kore/status.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
 * **the nif lane.** fs effects ride inle/posix.c (app-glob LvNif, no core edit) and its
   `posix_` conventions: an effect op answers () ok | an errno nom | 'badarg misuse; a
   value op answers the value | () absence | a nom. inle/posix.c holds rename symlink readlink chmod chown utime
   umask rmdir hardlink (`link` the word belongs to the chain ctor). test/fs.l smokes them
   under test_hostnif. `!e` is the success test, `nom? e` the failure test, and a
-  specific errno matches by name (mv's `(id? e 'exdev)` lane). test/gate/kore.sh
+  specific errno matches by name (mv's `(id? e 'exdev)` lane). test/kore/fs.sh
   carries a failure row per tool.
 * **exit codes.** 0 clean, 1 something failed (reported on err, the loop continued), 2 usage;
   diff keeps its classic 0/1/2 triple.

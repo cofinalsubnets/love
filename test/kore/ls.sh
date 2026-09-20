@@ -1,6 +1,6 @@
 #!/bin/sh
-# lscmp.sh -- kore's ls against GNU's, byte for byte, over a flag matrix.
-# called by test/gate/kore.sh; here as one file because the matrix is the test.
+# test/kore/ls.sh -- kore's ls against GNU's, byte for byte, over a flag matrix.
+# one file because the matrix is the test and a matrix reads badly inlined.
 #
 # TZ=UTC on BOTH sides. `ls -l`'s clock column is local time and this tree keeps
 # no timezone database, so ours is UTC always; the comparison is only meaningful
@@ -14,10 +14,10 @@
 # what both read when there is no terminal to ask. TABSIZE is unset for the same
 # reason -- the pad elides onto tab stops and ours are 8, GNU's default.
 set -u
-m=${1:-./out/love}
+m=${2:-./out/love}                   # (OUTDIR LOVE), as every subject here takes
 LC_ALL=C TZ=UTC; export LC_ALL TZ
 unset COLUMNS TABSIZE 2>/dev/null || :
-w=${TMPDIR:-/tmp}/lscmp.$$; mkdir -p "$w"; trap 'rm -rf "$w"' EXIT
+w=${TMPDIR:-/tmp}/kore-ls.$$; mkdir -p "$w"; trap 'rm -rf "$w"' EXIT
 fail=0; ran=0
 
 t=$w/t
@@ -96,5 +96,5 @@ tryw 40 -x "$t/a" "$t/bbb" "$t/zero"
 tryw 40 -C "$t/a" "$t/sub"
 tryw 12 -C "$t/empty"
 
-echo "lscmp: $ran rows, $fail failed"
+echo "kore ls: $ran rows, $fail failed"
 [ "$fail" = 0 ]

@@ -1,6 +1,6 @@
 ; --- test/host/top.l: top's face on a real terminal ---
 ; the frame builder (apps/kore/top.l's tp-frame) is exercised through `top -b` in
-; test/gate/kore.sh with no tty at all; what is left is the face -- raw mode, the
+; test/kore/top.sh with no tty at all; what is left is the face -- raw mode, the
 ; alternate screen, the poll that stands in for a timer, and the exit that puts
 ; the screen back. That lane needs a terminal, so it gets one: `tether` spawns
 ; `kore top` on a pty, we type at the master and read the frames back off it.

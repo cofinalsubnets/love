@@ -483,7 +483,7 @@
    ; and none of them can be smoked byte-for-byte against procps: the process table
    ; moves between two runs, and every number here is a clock. So the parsers are lawed
    ; (test/law/kore.l) and the faces are smoked as sets -- a pid we made ourselves is in the
-   ; listing, a pid we killed is gone -- which is test/gate/kore.sh's own note.
+   ; listing, a pid we killed is gone -- which is test/kore/procfs.sh's own note.
 
    (uprocs _)                          ; every numeric name under /proc, ascending
     (: r (readdir "/proc")
