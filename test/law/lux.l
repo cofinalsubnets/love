@@ -77,22 +77,48 @@
       (wsmaster g = g) (wsswapup g = g)                                          ; the order ops are tiles-only: a float focus stays put
       (wsring h = '(10 20 30)) (wsrow h = '(10 30)) (wsflhere h = '(20))))       ; they permute the tiled slots, the float keeps its own
 
+; --- the screens (xmonad's current/visible/hidden): vis is ((tag rect)..) in screen order ---
+(: r1 '(0 0 800 600) r2 '(800 0 800 600)
+   s0 (sheaf '(1 2 3)) s2 (wsrescreen s0 [r1 r2])                               ; two screens: tags 1 and 2 on view, 3 hidden
+   (test
+      (wsvistags s0 = '(1)) !(wsrectof s0 1) (wshidden s0 = '(2 3)) (wssane? s0)   ; born single-screen, the rect unknown
+      (wsvistags s2 = '(1 2)) (wsrectof s2 2 = r2) (wscur s2 = 1) (wshidden s2 = '(3)) (wssane? s2)
+      (wsvisible? s2 2) !(wsvisible? s2 3) !(wsrectof s2 3)
+      (wscur (wsview s2 2) = 2) (wsvistags (wsview s2 2) = '(1 2))              ; view a visible tag: the focus moves, no screen changes
+      (wscur (wsview s2 3) = 3) (wsvistags (wsview s2 3) = '(3 2))              ; view a hidden tag: it takes the current screen
+      (wsrectof (wsview s2 3) 3 = r1) (wsview (wsview s2 3) 1 = s2)              ; ..in that screen's rect, and the view round-trips
+      (wsview s2 1 = s2) (wsview s2 9 = s2)                                      ; self / unknown: no-ops
+      (wscur (wsgreedy s2 2) = 2) (wsvistags (wsgreedy s2 2) = '(2 1))           ; greedy: a visible tag comes over, the tags trade screens
+      (wsrectof (wsgreedy s2 2) 2 = r1) (wsrectof (wsgreedy s2 2) 1 = r2)
+      (wsgreedy s2 3 = wsview s2 3) (wsgreedy s2 1 = s2)                         ; on a hidden tag greedy is view
+      (wsgreedy (wsgreedy s2 2) 1 = s2)                                          ; and it round-trips
+      (wssane? (wsview s2 3)) (wssane? (wsgreedy s2 2))
+      (wsvistags (wsrescreen s2 [r1]) = '(1)) (wssane? (wsrescreen s2 [r1]))     ; a screen gone: its tag hides
+      (wscur (wsrescreen (wsview s2 2) [r1]) = 1)                                ; the current screen gone: the first left is current
+      (wsvistags (wsrescreen (wsview s2 3) [r1 r2 r1]) = '(3 2 1))              ; a screen added: the first hidden tag fills it
+      (wsvistags (wsrescreen s0 [r1 r2 r1 r2]) = '(1 2 3))                       ; more screens than tags: the spare stays dark
+      (wsrescreen s2 () = s2)                                                     ; no screens is not a shape: refused
+      (wsrescreen s2 [r2 r1] = wsmake 1 (wsboard s2) () [[1 r2] [2 r1]])))       ; the same tags in order, the rects re-read
+
 ; --- the seeded fuzz: the whole op vocabulary, 200 steps, invariant per step ---
-(: r99 '(20 20 200 100)
+(: r99 '(20 20 200 100) rA '(0 0 1 1) rB '(1 0 1 1)
    (fzop k w s)
     (? (k = 0) (admit s w)     (k = 1) (evict s w)
        (k = 2) (wsmap s zfocup) (k = 3) (wsmap s zfocdn)
        (k = 4) (wsswapup s) (k = 5) (wsswapdn s)
        (k = 6) (wsmaster s) (k = 7) (wsview s (1 + (w % 3)))
        (k = 8) (shiftto s (1 + (w % 3)))
+       (k = 9) (wsgreedy s (1 + (w % 3)))
+       (k = 10) (wsrescreen s (take (1 + (w % 2)) [rA rB]))                    ; one screen or two
        (: fw (wsfoc s) (fw ? (wsfloating? s fw ? (wssink s fw) (wsdofloat s fw r99)) s)))   ; toggle-float the focus
    (fz i st s)
     (? (i < 1) s
-       (: r1 (random st 10) r2 (random >r1 40)
+       (: r1 (random st 12) r2 (random >r1 40)
           s2 (fzop <r1 (1 + <r2) s)
           (wssane? s2 ? (fz (i - 1) >r2 s2) ['broke <r1 (1 + <r2)])))
    sF (fz 200 (wheel 7) (sheaf '(1 2 3)))
    (test (wssane? sF) (all (w \ wsknown? sF (wstagof sF w)) (wswins sF))              ; every window, float or not, has a real tag
+         (wsvisible? sF (wscur sF)) (all (t \ wsknown? sF t) (wsvistags sF))            ; the current tag is on a screen, every screen shows a tag
          (all (w \ wstagof sF w = wscur sF) (wsring sF))                             ; and the ring holds exactly what lives here
          (wsrow sF = filter (w \ !(wsfloating? sF w)) (wsring sF))))                  ; the tiled row is the ring's float-free subsequence
 

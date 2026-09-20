@@ -410,8 +410,9 @@
                 (code = 22)                                              ; ConfigureNotify: the root's is randr reshaping the screen
                 (: pkt (ev-raw e) r [0 0 (u16 pkt 20) (u16 pkt 22)]      ; (a rotation, a mode, a hotplug); a child's is noise
                    (? (win = root && r != (scrn ()))
-                      (pin scrc 0 r, line ("lux: screen " + show (r 2) + "x" + show (r 3)),
-                       render sh lays, loop sh lays hist)
+                      (: sh2 (wsrescreen sh [r])
+                         _ (pin scrc 0 r) _ (line ("lux: screen " + show (r 2) + "x" + show (r 3)))
+                         _ (render sh2 lays) (loop sh2 lays hist))
                       (loop sh lays hist)))
                 (code = 23)                                              ; ConfigureRequest: tiled -> the layout answers, and the
                 (? (wsknownw? sh win && !(wsfloating? sh win))           ; client is told so -- a synthetic ConfigureNotify with the
@@ -520,7 +521,7 @@
        _ (map (w \ any (= w) (wsrow sh) ? 0 (hide! w)) (wstiled sh))   ; adopted onto a hidden tag: hide it
        _ (x-flush s)                                                            ; now, or it lingers painted over workspace 1 (the WM_STATE
        _ (refocus sh) (line (tag + show ws)))                                   ; stamp keeps it adoptable through the next restart)
-   sh0 (take-in (sheaf lux-tags) kids)
+   sh0 (take-in (wsrescreen (sheaf lux-tags) [(scrn ())]) kids)             ; one screen, the whole root
    _ (two? kids ? (settle sh0 kids "lux: adopted "))
    ; the second look, and the whole point of it: the sweep above is one shot and
    ; it is the only adoption path an already-mapped window has -- no MapRequest
