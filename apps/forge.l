@@ -130,7 +130,7 @@
    ; =======================================================================================
    ; the kernels
    ; =======================================================================================
-   ; (aall v) -- the conjunction reduction over a tray: no zero element. the native says the
+   ; (aall v) -- the conjunction reduction over a tray: every element positive. the native says the
    ; ai_Z lane and nothing else; a scalar, a float/complex/object tray and a fixnum all deopt.
    ; tray layout: [0] ap, [8] type, [16] rank, [24] shape.., data at 24+rank*8.
    ; the weakest of the three -- gcc hoists the C nif's per-element type test out by itself.
@@ -142,7 +142,7 @@
         (ldx r9 r0 r10 8 24) (imul r8 r8 r9) (add r10 r10 1) (jmp pl)
         (label ple) (leax r9 r0 r7 8 24) (li r10 0)          ; data = v + 24 + rank*8
         (label el) (cmp r10 r8) (br ge yes)
-        (ldx r0 r9 r10 8 0) (cmp r0 0) (br eq no)
+        (ldx r0 r9 r10 8 0) (cmp r0 0) (br le no)
         (add r10 r10 1) (jmp el)
         (label no) (li r0 0) (jmp fin)
         (label yes) (li r0 1)

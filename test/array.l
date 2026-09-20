@@ -105,8 +105,10 @@
  (10 = min (star-tray '(3) '(20 10 30)))
  (6.0 = net (gem-tray '(3) '(1.0 2.0 3.0)))
  (21 = net (star-tray '(2 3) '(1 2 3 4 5 6))) ; reduces over all axes
- (aall (star-tray '(3) '(1 2 3)))             ; no zero element
+ (aall (star-tray '(3) '(1 2 3)))             ; every element true
  !(aall (star-tray '(3) '(1 0 3)))            ; a zero element
+ !(aall (star-tray '(2) '(1 -1)))             ; ..and a negative one: the truth law, not nonzero
+ !(aall (gem-tray '(2) '(1.5 -0.5)))
  (sat (star-tray '(3) '(0 0 3)))
  !(sat (star-tray '(3) 0))                         ; all zero
 

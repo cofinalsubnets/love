@@ -169,9 +169,11 @@
  (6 ~ 6 = +ca-a)   (0 ~ 0 = +ca-z)
  !(max ca-v)   !(min ca-v)
 
- ; --- aall/aany lift the 0+0i-is-falsy rule ---
+ ; --- aall lifts the truth law: an element is true by its real part ---
  (aall ca-v)
  !(aall (twin-tray '(2) [(0 ~ 0) (1 ~ 1)]))        ; a 0+0i element fails aall
+ !(aall (twin-tray '(2) [(0 ~ 1) (1 ~ 1)]))        ; ..and so does i: no real part, as (? i) says
+ !(aall (twin-tray '(1) [(-1 ~ 5)]))
  $(twin-tray '(2) [(0 ~ 0) (1 ~ 1)])                ; the element sum (1 ~ 1) sorts positive
  !$ca-z
 

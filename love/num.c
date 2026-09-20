@@ -1009,27 +1009,27 @@ static lvm(lvm_aextreme) {
 lvm(lvm_max) { g->b = (word) 2; ai_musttail return Ap(lvm_aextreme, g); }
 lvm(lvm_min) { g->b = (word) 3; ai_musttail return Ap(lvm_aextreme, g); }
 
-// aall: the bool conjunction reduction ("no zero element"; empty -> vacuously
-// true; scalar -> identity). the disjunction is just `len`.
+// aall: the conjunction reduction under the truth law -- every element true, a positive
+// real part, as `?` and ai_nilp read it; empty -> vacuously true; scalar -> identity
 lvm(lvm_aall) {
  word x = Sp[0];
  if (!packp(x)) ai_musttail return Next(1);
  struct ai_tray *v = tray(x);
  uintptr_t n = tray_nelem(v);
- if (v->type == ai_O) {                         // object: a falsy element fails the conjunction
+ if (v->type == ai_O) {                         // object: the oracle itself
   for (uintptr_t i = 0; i < n; i++)
    if (ai_nilp(g, tray_get_obj(v, i))) ai_musttail return Answer(zero);
   ai_musttail return Answer(putcharm(1)); }
- if (v->type == ai_C) {                         // complex: a 0+0i element fails the conjunction
+ if (v->type == ai_C) {                         // complex: the real part
   ai_flo_t *fp = tray_data(v);
   for (uintptr_t i = 0; i < n; i++)
-   if (fp[2*i] == 0 && fp[2*i+1] == 0) ai_musttail return Answer(zero);
+   if (!(fp[2*i] > 0)) ai_musttail return Answer(zero);
   ai_musttail return Answer(putcharm(1)); }
  // a short-circuit sound, not an accumulator chain -- already load-bound (the
  // compiler vectorizes it), so multi-accumulating buys nothing; left as is.
  bool fdom = v->type >= ai_R;
  for (uintptr_t i = 0; i < n; i++)
-  if (fdom ? tray_get_flo(v, i) == 0 : tray_get_int(v, i) == 0)
+  if (fdom ? !(tray_get_flo(v, i) > 0) : tray_get_int(v, i) <= 0)
    ai_musttail return Answer(zero);
  ai_musttail return Answer(putcharm(1)); }
 
