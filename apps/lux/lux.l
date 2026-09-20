@@ -140,6 +140,8 @@
    _ (x-redirect s root ? 0 (say err "lux: another WM owns this display\n", quit 1))
    _ (line ("lux: managing " + show root + " " + show wpx + "x" + show hpx))
    _ (ewmh-init s root (scr-idbase sc) #lux-tags)                          ; the support window + _net_* root properties
+   rr (x-randr-init s root)                                                      ; randr 1.5: the monitors are the screens, their changes events
+   _ (line (rr ? ("lux: randr events from " + show <>rr) "lux: no randr 1.5 -- the root is the one screen"))
 
    ; --- the config's face: border pixels, the root cursor, the startup spawns ---
    npix (x-color s (scr-cmap sc) lux-normal-color)
@@ -169,6 +171,9 @@
    scrc {} _ (pin scrc 0 [0 0 wpx hpx])                                         ; the screen rect lives in a cell: randr reshapes it
    (scrn u) (scrc 0)
    (trect u) (: r (scrn ()) (ewmh-rect r (r 2) (r 3)))                           ; the tiling rect: screen minus dock struts (sup+b flips)
+   (screens u) (: ms (rr ? (x-monitors s rr root) ()) (two? ms ? ms [(scrn ())]))   ; the monitors, else the whole root
+   (rescreen sh) (: sh2 (wsrescreen sh (screens ()))                            ; re-read the screens into the sheaf, saying so when they moved
+                    _ (sh2 = sh ? 0 (line ("lux: screens " + show (wsvis sh2)))) sh2)
 
    ; --- the unmap ledger (xmonad's mapped + waitingUnmap): map!/hide! track our
    ;     own intent at send time -- mapd holds the windows we have mapped, owed
@@ -246,7 +251,7 @@
            exec [(selfpath 0) (lux-self ())],                               ; cloexec'd socket drops, the redirect releases, the new
            line "lux: restart failed",
            loop sh lays hist)                                                ; generation adopts the survivors
-          (k = 'refresh) (relay sh lays)
+          (k = 'refresh) (relay (rescreen sh) lays)                             ; and re-read the screens: a client monitor change sends no event
           (k = 'reset-layout) (relay sh (lays-put lays (wscur sh) lux-layout))
           (k = 'toggle-struts) (ewmh-toggle (), line "lux: toggle struts", relay sh lays)
           (k = 'sink) (wsfloating? sh fw ? (relay (wssink sh fw) lays) (loop sh lays hist))
@@ -407,11 +412,14 @@
                        tab (keys-resolve ()) _ (pin ktabc 0 tab) _ (keys-grab tab)
                        _ (line ("lux: mapping changed -- regrabbed " + show #tab))
                        (loop sh lays hist))))
+                (rr && (code = <>rr || code = <>rr + 1))                 ; RRScreenChangeNotify / RRNotify: the monitors moved
+                (: _ (line ("lux: randr notify " + show code)) sh2 (rescreen sh)
+                   (sh2 = sh ? (loop sh lays hist) (render sh2 lays, loop sh2 lays hist)))
                 (code = 22)                                              ; ConfigureNotify: the root's is randr reshaping the screen
                 (: pkt (ev-raw e) r [0 0 (u16 pkt 20) (u16 pkt 22)]      ; (a rotation, a mode, a hotplug); a child's is noise
                    (? (win = root && r != (scrn ()))
-                      (: sh2 (wsrescreen sh [r])
-                         _ (pin scrc 0 r) _ (line ("lux: screen " + show (r 2) + "x" + show (r 3)))
+                      (: _ (pin scrc 0 r) _ (line ("lux: screen " + show (r 2) + "x" + show (r 3)))
+                         sh2 (rescreen sh)
                          _ (render sh2 lays) (loop sh2 lays hist))
                       (loop sh lays hist)))
                 (code = 23)                                              ; ConfigureRequest: tiled -> the layout answers, and the
@@ -521,7 +529,7 @@
        _ (map (w \ any (= w) (wsrow sh) ? 0 (hide! w)) (wstiled sh))   ; adopted onto a hidden tag: hide it
        _ (x-flush s)                                                            ; now, or it lingers painted over workspace 1 (the WM_STATE
        _ (refocus sh) (line (tag + show ws)))                                   ; stamp keeps it adoptable through the next restart)
-   sh0 (take-in (wsrescreen (sheaf lux-tags) [(scrn ())]) kids)             ; one screen, the whole root
+   sh0 (take-in (rescreen (sheaf lux-tags)) kids)                            ; the screens, before any window lands
    _ (two? kids ? (settle sh0 kids "lux: adopted "))
    ; the second look, and the whole point of it: the sweep above is one shot and
    ; it is the only adoption path an already-mapped window has -- no MapRequest

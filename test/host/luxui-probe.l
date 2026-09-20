@@ -343,6 +343,34 @@
       _ (nudge ())
       _ (waitp "book-restored" (u \ = i0 (ask chidx)) 50)
 
+      ; --- 6c. the screens: randr 1.5 monitors are lux's screens. two client
+      ;     monitors (this connection's, so they live while it does), then mod+n
+      ;     (refresh) -- the server sends no event for a client monitor, and a
+      ;     SendEvent of an extension code is not delivered -- and lux re-reads
+      ;     the monitors: every tag lands on a screen; deleted, it folds back to one ---
+      rr (x-randr-init s root)
+      _ (must "randr-1.5" (two? rr))
+      (setmon nm x w) (: a (x-intern s nm)                                       ; RRSetMonitor: name, not primary, not automatic, no outputs
+                         (x-w8 s <rr, x-w8 s 43, x-w16 s 8, x-w32 s root, x-w32 s a, x-w8 s 0, x-w8 s 0, x-w16 s 0,
+                          x-w16 s x, x-w16 s 0, x-w16 s w, x-w16 s 480, x-w32 s 100, x-w32 s 100, x-flush s))
+      (delmon nm) (: a (x-intern s nm)                                          ; RRDeleteMonitor (the atom first: a round trip mid-request garbles the stream)
+                     (x-w8 s <rr, x-w8 s 44, x-w16 s 3, x-w32 s root, x-w32 s a, x-flush s))
+      nk (peep (x-keymap s (scr-mink sc) (scr-maxk sc) [110]) 110 0)             ; n: mod+n is refresh
+      _ (must "n-keycode" (0 < nk))
+      (refresh u) (fake 2 sk 0 0, rest 60, fake 2 nk 0 0, rest 60,
+                   fake 3 nk 0 0, rest 60, fake 3 sk 0 0, rest 100)
+      (nscreens u) (ask "(tally (wsvis (cap (lux-st ()))))")
+      _ (must "one-screen" ("1" = nscreens ()))
+      _ (setmon "left" 0 320) _ (setmon "right" 320 320)
+      _ (refresh ())
+      _ (waitp "screens-found" (u \ "3" = nscreens ()) 50)                       ; left, right, and xvfb's own auto monitor
+      _ (must "screen-rect" ("(0 0 320 480)" = ask "(wsrectof (cap (lux-st ())) 1)"))
+      _ (must "screens-tags" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
+      _ (delmon "left") _ (delmon "right")
+      _ (refresh ())
+      _ (waitp "screens-folded" (u \ "1" = nscreens ()) 50)
+      _ (must "screens-cur" ("1" = ask "(wscur (cap (lux-st ())))"))
+
       ; --- 7. keybindings under a lock modifier: super+space (next-layout,
       ;     read back through the moor's snapshot like leg 6) must fire with
       ;     NumLock off -- and just the same with NumLock on: a lock bit rides
