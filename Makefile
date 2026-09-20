@@ -100,7 +100,7 @@ host_o = $(host_c:$(R)/%.c=$(ho)/o/%.o)
 # weak one wherever moonlibc's os.c is not in the link.
 # wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
 seat_o = $(ho)/o/inle/nokern.o $(ho)/o/inle/noblob.o
-hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Ilove -Iinle -Iout/lib
+hcc = LOVE_NO_IMAGE= $(CC) $(cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Ilove -Iinle -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
 force_hostcc: ;
@@ -132,7 +132,7 @@ $(ho)/liblove.a: $(h_o)
 love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/inle/cats.c,$(host_c)) $(R)/inle/main0.c $(R)/inle/nokern.c $(R)/inle/noblob.c $(love_c))
 out/0/inle/main0.o: out/lib/boot0.h
 out/0/inle/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h
-boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Ilove -Iinle -Iout/lib
+boot_cc = $(CCACHE) $(CC) $(cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Ilove -Iinle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -200,7 +200,7 @@ rtlove_dep = out/mooncc0.image
 $(love0): $(love0_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
+	@LOVE_NO_IMAGE= $(CC) $(cflags) -pie -o $@ $(love0_o)
 endif
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one odir, worn twice -- at
 # the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,

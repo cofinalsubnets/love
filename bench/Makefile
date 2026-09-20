@@ -167,7 +167,7 @@ setup: $(SETUP)
 # mooncc / gcc / clang, then run the full corpus ($t), the two cipher rows
 # (bench/ccrypto.l) and the three heavy-nif rows (bench/cnifs.l) through each.
 # Rows build+test+chacha+poly1305+inflate+crc32+sha256,
-# columns the compilers. ai_cflags + the corpus come from the Makefile (one source of
+# columns the compilers. cflags + the corpus come from the Makefile (one source of
 # truth); the mooncc lane runs the artifact's own mooncc verb, so `dist-seed` stands
 # beside `host` -- an intermediate keys the cached moonlibc archive on its own stat and
 # the build row pays a libc build inside it. cached; `make ccbench` refreshes it on its
@@ -175,7 +175,7 @@ setup: $(SETUP)
 CCBENCH := $(BDIR)/ccbench.txt
 $(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/love/love.c $(wildcard $(R)/inle/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
-	@LOVE_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
+	@LOVE_CFLAGS='$(cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
 	@cat $(CCBENCH)
 

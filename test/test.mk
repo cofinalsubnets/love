@@ -443,7 +443,7 @@ test_moon: host $(love0)
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
 mx_gen = love/mx.h:love/mx.l:mx-h:mx-ok love/kinds.h:love/mx.l:kinds-h:mx-ok love/nifs.h:love/nifs.l:nifs-h:nifs-ok \
          love/quay/xterm256.h:love/quay/quay.l:q-c:q-ok love/love_data.ld:love/mx.l:mx-ld:mx-ok
-# /warn the \# escapes are load-bearing: a bare # in a make variable starts a comment and
+# the \# escapes are load-bearing: a bare # in a make variable starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
 # the egg lane, deliberately: these generators read core tables with the boot
@@ -593,11 +593,11 @@ test_tco0:
 test_hdiff: host
 	@echo TEST test/gate/hdiff.sh
 	@sh test/gate/hdiff.sh gcc clang
-# the cc-driver conventions (the `CC=mooncc` door's floor): the real $(ai_cflags) soup
+# the cc-driver conventions (the `CC=mooncc` door's floor): the real $(cflags) soup
 # rides through -c, a link owing libc symbols pulls the runtime by need, and the loud edges
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host
-	@sh test/gate/drv.sh $(ho) $(ai_cflags)
+	@sh test/gate/drv.sh $(ho) $(cflags)
 # the kernel's inline-asm seam: inle/<a>/asmops.h says every privileged instruction
 # once, in GNU's template, and mooncc reads it through holo/gas.l -- so the gate compiles one
 # probe with mooncc and clang and compares op by op. Skips without llvm-objdump.
@@ -813,7 +813,7 @@ test_links: host $(ho)/front $(ho)/frontseat $(love0)
 # opt-in: point the package's SRC var at a prepared tree and each script skips without one.
 # a cross lane puts a qemu wrapper on PATH so a suite that execs by name runs unmodified;
 # riscv routes around faults the other two share (nhome = 0), so it is not redundant.
-# /warn the sqlite cross lanes wait on moon-sqlite: they read its x86-64 answers as the oracle.
+# the sqlite cross lanes wait on moon-sqlite: they read its x86-64 answers as the oracle.
 moon_arch_a64 = a64
 moon_arch_rv64 = rv64
 # $1 package, $2 its source-tree var, $3 what the two cross lanes wait on
@@ -929,7 +929,7 @@ test_tools: host out$(hsuf)/lush
 	@$(MAKE) -C tools
 # test_gcheck: the copy loop's fixpoint instance check. LvGcCheck makes gen_minor re-drive
 # its whole scan after the drain and trap if the second pass copies a word, in its own tree.
-# /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.
+# the knob is GCDBG: EXTRA_CFLAGS rides $(cflags), which the mooncc recipes do not use.
 # the shared unsuffixed prerequisites are named here so the parent makes them once.
 # both debug lanes recurse, and a target two sub-makes each decide to remake is a partial
 # file to whoever reads it meanwhile -- a half-written mooncc0.image wakes with no verb
@@ -962,7 +962,7 @@ else
 # spec.v -- love's headline laws (the numeral / function / absence core of test/spec.l) as Rocq
 # theorems, axiom-free and universe-checked: the executable spec upgraded from shown to proved.
 # spec.vo is a file target, compiled once and kept: test_gen and test_extract both `Require
-# Import spec`. /warn one spelling everywhere (`cd test/proof/rocq && -R . ""`), or spec.vo's logical
+# Import spec`. one spelling everywhere (`cd test/proof/rocq && -R . ""`), or spec.vo's logical
 # name is not the one gen.v asks for. a static pattern: big/mx/enc take their own flags.
 rocq_kept = test/proof/rocq/spec.vo test/proof/rocq/patch.vo
 $(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v
@@ -1008,7 +1008,7 @@ test_extract test_big test_encver:
 	@echo "$@: skipped (needs coqc + ocamlopt)"
 else
 # extract.v's normalizer (on spec.v's PROVEN subst/shift) extracted to OCaml and fuzzed against
-# ev. /warn run the oracle once, into a file (2>&1 too): grep it, then cat it -- a second run
+# ev. run the oracle once, into a file (2>&1 too): grep it, then cat it -- a second run
 # to display doubles the work.
 test_extract: host $(rocq_kept)
 	@echo TEST test/proof/rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"

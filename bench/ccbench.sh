@@ -34,7 +34,7 @@ export CCACHE_DISABLE=1
 # (glaze-x86 out -- it wants emit.l ahead of it and runs native under its own guard)
 CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*.l 2>/dev/null | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort)"}
 
-# the Makefile's $(ai_cflags) and nowhere else: a copy here drifts, and a table timed
+# the Makefile's $(cflags) and nowhere else: a copy here drifts, and a table timed
 # under flags that are not the tree's is wrong rather than missing
 [ -n "${LOVE_CFLAGS:-}" ] || { echo "ccbench: no LOVE_CFLAGS -- run \`make ccbench\`" >&2; exit 2; }
 # a caller's -Werror comes back out: a warning set is not throughput

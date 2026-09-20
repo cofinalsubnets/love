@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/drv.sh -- the cc-DRIVER conventions gate: `CC=mooncc` must drive a
 # gcc-shaped recipe unchanged. Three laws, each cheap:
-#   1. the advisory flag soup (the REAL $(ai_cflags), passed in by make) rides
+#   1. the advisory flag soup (the REAL $(cflags), passed in by make) rides
 #      through -c and the link ignored;
 #   2. a link owing libc symbols pulls the runtime BY NEED -- moonlibc + the am
 #      math + the sys leaf, compiled from the sources beside us -- and the
