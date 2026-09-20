@@ -170,7 +170,8 @@
    ; --- rendering (the layout engine answers, X obeys) ---
    scrc {} _ (pin scrc 0 [0 0 wpx hpx])                                         ; the screen rect lives in a cell: randr reshapes it
    (scrn u) (scrc 0)
-   (trect u) (: r (scrn ()) (ewmh-rect r (r 2) (r 3)))                           ; the tiling rect: screen minus dock struts (sup+b flips)
+   (trect-of r) (: sr (scrn ()) (ewmh-rect r (sr 2) (sr 3)))                     ; a screen's tiling rect: minus dock struts (sup+b flips)
+   (cur-rect sh) (: r (wsrectof sh (wscur sh)) (r ? r (scrn ())))                 ; the current screen's rect
    (screens u) (: ms (rr ? (x-monitors s rr root) ()) (two? ms ? ms [(scrn ())]))   ; the monitors, else the whole root
    (rescreen sh) (: sh2 (wsrescreen sh (screens ()))                            ; re-read the screens into the sheaf, saying so when they moved
                     _ (sh2 = sh ? 0 (line ("lux: screens " + show (wsvis sh2)))) sh2)
@@ -186,32 +187,36 @@
    (hide! w) (: _ (peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0)         ; only a mapped window echoes -- an unmap of the
                 _ (pull mapd w 0) (x-unmap s w))                                 ; already-hidden fires no event, so no count
    (unled! w) (pull mapd w 0, pull owed w 0)                              ; the window left management: clear its ledger
-   (render sh lays)                                                               ; ask the layout for placements, configure them, unmap the dropped
+   (render sh lays)                                                               ; every screen: its tag's placements configured, the dropped unmapped, floats on top
     (: f (wsfoc sh)                                                              ; the focus is the sheaf's, float or tile alike
-       pls <(lay-tile (cur-lay sh lays) (trect ()) (wstilez sh)) placed (map cap pls)
-       _ (map (t \ (: w (t 0) bw (#t < 6 ? lux-border (t 5))     ; smartBorders sets 0 on a singleton/fullscreen
-                      _ (x-border s w bw)
-                      _ (x-borderpix s w (w = f ? fpix npix))                  ; focusedBorderColor / normalBorderColor
-                      (x-configure s w (t 1) (t 2)                       ; the border sits outside the frame: shave it off
-                                   (mx2 1 (t 3 - (2 * bw))) (mx2 1 (t 4 - (2 * bw)))))) pls)
-       _ (map (w \ any (= w) placed ? 0 (hide! w)) (wsrow sh))       ; windows the layout dropped (Full/minimize): hide them
-       _ (map map! placed)                                           ; (re)map placed -- a no-op on the already-mapped
-       _ (map (fp \ (: w <fp fr <>fp                                 ; floating windows at HOME here: place, map, raise above the tiles
-                        bw (fr = (scrn ()) ? 0 lux-border)           ; a fullscreen float (the whole screen is its rect) wears no border
-                        _ (x-border s w bw) _ (x-borderpix s w (w = f ? fpix npix))
-                        _ (x-configure s w (fr 0) (fr 1) (fr 2) (fr 3))
-                        _ (map! w) (x-raise s w))) (wsvisfl sh))
+       (tiles p)                                                                 ; one screen (tag rect): tile the tag into its rect, answer the placed
+        (: t <p pls <(lay-tile (lay-at lays t) (trect-of <>p) (wstilezof sh t))
+           _ (map (q \ (: w (q 0) bw (#q < 6 ? lux-border (q 5))                ; smartBorders sets 0 on a singleton/fullscreen
+                         _ (x-border s w bw)
+                         _ (x-borderpix s w (w = f ? fpix npix))                 ; focusedBorderColor / normalBorderColor
+                         (x-configure s w (q 1) (q 2)                            ; the border sits outside the frame: shave it off
+                                      (mx2 1 (q 3 - (2 * bw))) (mx2 1 (q 4 - (2 * bw)))))) pls)
+           (map cap pls))
+       placed (foldl (\ a p (a + tiles p)) () (wsvis sh))
+       _ (map (w \ any (= w) placed || wsfloating? sh w ? 0 (hide! w)) (wsonscreen sh))   ; tiles the layouts dropped (Full/minimize): hide them
+       _ (map map! placed)                                                       ; (re)map placed -- a no-op on the already-mapped
+       _ (map (p \ (: r <>p                                                      ; floating windows at home on a screen: place, map, raise above the tiles
+                     (map (fp \ (: w <fp fr <>fp
+                                   bw (fr = r ? 0 lux-border)                    ; a fullscreen float (its screen is its rect) wears no border
+                                   _ (x-border s w bw) _ (x-borderpix s w (w = f ? fpix npix))
+                                   _ (x-configure s w (fr 0) (fr 1) (fr 2) (fr 3))
+                                   _ (map! w) (x-raise s w))) (wsvisflof sh <p)))) (wsvis sh))
        (x-flush s))
    (refocus sh) (: f (wsfoc sh)                                                 ; an empty view takes the root: PointerRoot would
                    (x-focus s (f ? f root), x-flush s))                         ; hand the keys to whatever the pointer sits over
    (watch w) (x-cwa-events s w 16, x-grabbtn s w)                         ; the mouse wires: EnterWindow selected (focus follows the
                                                                                  ; pointer in) + buttons 1-3 sync-grabbed (click-to-focus)
-   (switch sh lays t)                                                             ; view: hide the leaving ring, show the arriving one
+   (switch sh lays t)                                                             ; view (greedy: the tag comes to this screen): paint, then hide what left every screen
     (? (t = wscur sh || !(wsknown? sh t)) sh
-       (: old (wsring sh) sh2 (wsview sh t)                                      ; the whole ring leaves, tiles and floats alike
-          _ (map map! (wsring sh2))
+       (: was (wsonscreen sh) sh2 (wsgreedy sh t) now (wsonscreen sh2)
+          _ (map map! (filter (w \ !(any (= w) was)) now))                       ; the arriving ring, tiles and floats alike
           _ (render sh2 lays)
-          _ (map hide! old) _ (x-flush s)
+          _ (map hide! (filter (w \ !(any (= w) now)) was)) _ (x-flush s)
           _ (line ("lux: view " + show t + " " + show (wsrow sh2)))
           sh2))
 
@@ -232,7 +237,7 @@
                                                                                  ; the keyboard agree with the arriving view
           (k = 'shift) (: t <>a sh2 (shiftwin sh fw t)                           ; the focus emigrates, float or tile, rect and all
                           _ (render sh2 lays)
-                          _ (sh2 = sh ? 0 (hide! fw, x-flush s))        ; it moved (always off this view): hide the emigrant
+                          _ (sh2 = sh || wsvisible? sh2 t ? 0 (hide! fw, x-flush s))   ; it left every screen: hide the emigrant
                           _ (line ("lux: sent " + show fw + " -> " + show t))
                           (loop sh2 lays hist))
           (k = 'spawn) (: p (spawn <>a) _ (line ("lux: spawn " + (<<>a + " " + show p)))
@@ -268,7 +273,7 @@
              r2 (k @ 'go [(r 0 + dx) (r 1 + dy) (r 2) (r 3)]
                  [(r 0) (r 1) (mx2 20 (r 2 + dx)) (mx2 20 (r 3 + dy))])
              (relay (wsdofloat sh fw r2) lays))
-          (: dir <>a pls <(lay-tile (cur-lay sh lays) (trect ()) z) tgt (nav-target pls fw dir)
+          (: dir <>a pls <(lay-tile (cur-lay sh lays) (trect-of (cur-rect sh)) z) tgt (nav-target pls fw dir)
              (k @ 'go (tgt ? (relay (wsmap sh (zfocto tgt)) lays) (loop sh lays hist))
                'swapd (tgt ? (relay (wsmap sh (zswapw fw tgt)) lays) (loop sh lays hist))
                       (relay sh (lays-send lays (wscur sh) (dir @ ('left || 'down) 'shrink 'expand) z))))))
@@ -341,7 +346,7 @@
                                                                                  ; MapRequest: admit tiled, run the manageHook, then place
                 (: _ (ewmh-track s win ? (line ("lux: strut " + show win)) 0)   ; a dock's strut shrinks the tiling rect
                    sh1 (admit sh win)
-                   c (mg-ctx s win (scrn ()) (x-getgeom s win))
+                   c (mg-ctx s win (cur-rect sh) (x-getgeom s win))
                    sh2 (manage-window lux-manage c sh1)
                    (? (wsknownw? sh2 win)                                        ; managed (tiled or floated) -> place it
                       (x-chprop32 s win (x-intern s "WM_STATE") (x-intern s "WM_STATE") '(1 0),    ; the ICCCM stamp: a restart finds us even hidden
@@ -382,7 +387,7 @@
                    (? (pkt 30 != 0 || ev-detail e = 2)                  ; mode Grab/Ungrab or detail Inferior: not a real entry
                       (loop sh lays hist)
                       (!(wsknownw? sh w) || w = wsfoc sh) (loop sh lays hist)   ; unmanaged, or already focused: still
-                      (relay (wsmap sh (zfocto w)) lays)))
+                      (relay (wsfocw sh w) lays)))                               ; on another screen: that screen becomes current
                 (code = 4)                                                      ; ButtonPress via the sync grab: super+drag moves/resizes a
                 (: pkt (ev-raw e) w (u32 pkt 12) btn (ev-detail e) st (ev-state e)   ; float (xmonad mouseBindings); a plain click focuses
                    (? (st & lux-mod && wsknownw? sh w && (btn = 1 || btn = 3))    ; mod+btn1 move, mod+btn3 resize -- float first, then drag
@@ -393,13 +398,13 @@
                          gf (drag (btn @ 1 'move 'resize) w g0 rx0 ry0)
                          _ (x-ungrabptr s) _ (x-flush s)
                          _ (line ((btn @ 1 "lux: moved " "lux: resized ") + show w))
-                         (relay (wsdofloat (wsmap sh2 (zfocto w)) w gf) lays))
+                         (relay (wsdofloat (wsfocw sh2 w) w gf) lays))
                       ((st & lux-mod) && wsknownw? sh w && (btn = 2))            ; mod+btn2: promote the clicked window to master (shiftMaster)
                       (x-allow-async s, x-flush s,
-                         relay (wsmaster (wsmap sh (zfocto w))) lays)
+                         relay (wsmaster (wsfocw sh w)) lays)
                       (: _ (x-replay s) _ (x-flush s)                           ; a plain click: hand it to the app, then click-to-focus
                          (? (!(wsknownw? sh w) || w = wsfoc sh) (loop sh lays hist)
-                            (relay (wsmap sh (zfocto w)) lays)))))
+                            (relay (wsfocw sh w) lays)))))
                 (code = 2)                                                       ; KeyPress: the table answers
                 (: kc (ev-detail e) stm (ev-state e & kmodmask)
                    hit (afind (r \ <r = stm && <>r = kc) (ktab ()))
@@ -439,6 +444,7 @@
                    (fs? d) (d = ewmh-atom "_NET_WM_STATE_FULLSCREEN")
                    (mx? d) (d = ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT" ||     ; either maximize axis reads as "maximize"
                             d = ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")
+                   (screen-of w) (: r (wsscreenof sh w) (r ? r (cur-rect sh)))  ; the screen w is on (the current one when hidden)
                    (state-toggle rect atoms word)                               ; _net_wm_state add/remove/toggle -> float at rect / sink
                      (: act (ewmh-cm-d0 pkt) on (wsfloating? sh cw)
                         want (act @ 1 1 0 0 !on)             ; 0 remove / 1 add / 2 toggle
@@ -452,10 +458,10 @@
                               _ (render sh2 lays) _ (line ("lux: un" + word + " " + show cw)) (loop sh2 lays hist))))
                    (? (ty = ewmh-atom "_NET_WM_STATE" &&                       ; _net_wm_state add/remove/toggle fullscreen (ewmhFullscreen)
                           wsknownw? sh cw && (fs? (ewmh-cm-d1 pkt) || fs? (ewmh-cm-d2 pkt)))
-                      (state-toggle (scrn ()) [(ewmh-atom "_NET_WM_STATE_FULLSCREEN")] "fullscreen")    ; over the whole screen, struts and all
+                      (state-toggle (screen-of cw) [(ewmh-atom "_NET_WM_STATE_FULLSCREEN")] "fullscreen")    ; over its whole screen, struts and all
                       (ty = ewmh-atom "_NET_WM_STATE" &&                       ; maximized_vert/horz -> float over the tiling rect (panel kept)
                           wsknownw? sh cw && (mx? (ewmh-cm-d1 pkt) || mx? (ewmh-cm-d2 pkt)))
-                      (state-toggle (trect ()) [(ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT") (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")] "maximize")
+                      (state-toggle (trect-of (screen-of cw)) [(ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT") (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")] "maximize")
                       (ty = ewmh-atom "WM_CHANGE_STATE" && ewmh-cm-d0 pkt = 3)       ; ICCCM iconify -> minimize (minimizeEventHook)
                       (: lays2 (lays-send lays (wstagof sh cw) ['minimize-window cw] (wstilez sh))
                          _ (render sh lays2) _ (line ("lux: minimize " + show cw)) (loop sh lays2 hist))
@@ -468,7 +474,7 @@
                       (: t (ewmh-cm-d0 pkt + 1) sh2 (shiftwin sh cw t)
                          (sh2 = sh ? (loop sh lays hist)                        ; unknown window/tag (or sticky 0xffffffff): a no-op
                           (: _ (render sh2 lays)                              ; arriving on the current view: render maps it...
-                             _ (t = wscur sh2 ? 0 (hide! cw, x-flush s))     ; ...leaving it: hide the emigrant
+                             _ (wsvisible? sh2 t ? 0 (hide! cw, x-flush s))  ; ...leaving every screen: hide the emigrant
                              _ (line ("lux: sent " + show cw + " -> " + show t))
                              (loop sh2 lays hist))))
                       (ty = ewmh-atom "_NET_ACTIVE_WINDOW")                      ; activate: restore if minimized, view its tag, focus it.
@@ -526,7 +532,7 @@
        sh2)
    (settle sh ws tag)                                                           ; paint a batch and say so
     (: _ (render sh ())
-       _ (map (w \ any (= w) (wsrow sh) ? 0 (hide! w)) (wstiled sh))   ; adopted onto a hidden tag: hide it
+       _ (map (w \ any (= w) (wsonscreen sh) ? 0 (hide! w)) (wstiled sh))   ; adopted onto a hidden tag: hide it
        _ (x-flush s)                                                            ; now, or it lingers painted over workspace 1 (the WM_STATE
        _ (refocus sh) (line (tag + show ws)))                                   ; stamp keeps it adoptable through the next restart)
    sh0 (take-in (rescreen (sheaf lux-tags)) kids)                            ; the screens, before any window lands

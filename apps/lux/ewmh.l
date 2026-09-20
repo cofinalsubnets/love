@@ -12,19 +12,25 @@
 ; evq pattern). Loads after apps/lux/{layout,wire}.l. a body-less `:` -- leaks all.
 (borrow 'xwire)   ; the X wire, apps/lux/wire.l
 (:
-   ; --- pure: strut arithmetic. a strut is (left right top bottom), root-
-   ;     relative reserved widths; shrinking clamps the rect off each edge. ---
-   (strut-parse vals) (#vals >= 4 ? (take 4 vals))                      ; _partial's 12 values: the first 4 are the strut
+   ; --- pure: strut arithmetic. a strut is (left right top bottom ls le rs re
+   ;     ts te bs be): root-relative reserved widths, then each edge's span;
+   ;     shrinking clamps a screen off an edge only where the span meets it. ---
+   (strut-parse vals) (? (#vals >= 12) (take 12 vals)                              ; _partial: the strut and its spans
+                         (#vals >= 4) (take 4 vals + '(0 65535 0 65535 0 65535 0 65535))   ; _strut: the whole edge
+                         ())
    (strut-shrink r st swp shp)
-    (: x1 (mx2 (rx r) (st 0)) y1 (mx2 (ry r) (st 2))
-       x2 (mn2 (rx r + rw r) (swp - st 1))
-       y2 (mn2 (ry r + rh r) (shp - st 3))
+    (: (spans? a b lo hi) (lo <= b && a <= hi)                                  ; the span [lo hi] meets the screen's [a b]
+       ys? (spans? (ry r) (ry r + rh r - 1)) xs? (spans? (rx r) (rx r + rw r - 1))
+       x1 (ys? (st 4) (st 5) ? (mx2 (rx r) (st 0)) (rx r))
+       y1 (xs? (st 8) (st 9) ? (mx2 (ry r) (st 2)) (ry r))
+       x2 (ys? (st 6) (st 7) ? (mn2 (rx r + rw r) (swp - st 1)) (rx r + rw r))
+       y2 (xs? (st 10) (st 11) ? (mn2 (ry r + rh r) (shp - st 3)) (ry r + rh r))
        (rct x1 y1 (mx2 0 (x2 - x1)) (mx2 0 (y2 - y1))))
 
    ; --- the EWMH state: one tablet (the evq pattern) ---
    ewst {'avoid 1 'struts () 'last ()}
    (ewmh-atom nm) (peep (peep ewst 'atoms (tablet 1)) nm 0)
-   (ewmh-rect scrn swp shp)                                                      ; the tiling rect: screen minus struts (when avoiding)
+   (ewmh-rect scrn swp shp)                                                      ; a screen's tiling rect: minus the struts reaching it (when avoiding)
     (? !(peep ewst 'avoid 0) scrn
        (foldl (\ r p (strut-shrink r <>p swp shp)) scrn (ewst 'struts)))
    (ewmh-toggle u) (pin ewst 'avoid !(ewst 'avoid))

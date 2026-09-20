@@ -100,6 +100,21 @@
       (wsrescreen s2 () = s2)                                                     ; no screens is not a shape: refused
       (wsrescreen s2 [r2 r1] = wsmake 1 (wsboard s2) () [[1 r2] [2 r1]])))       ; the same tags in order, the rects re-read
 
+; --- per screen: what each screen paints, and focus across screens ---
+(: r1 '(0 0 800 600) r2 '(800 0 800 600) r99 '(1 1 9 9)
+   s2 (wsrescreen (admit (admit (admit (sheaf '(1 2 3)) 10) 20) 30) [r1 r2])   ; tag 1 (30 20 10) on r1, tag 2 empty on r2, 3 hidden
+   s3 (shiftwin (wsdofloat s2 20 r99) 30 2)                                    ; 20 floats on 1, 30 moves to tag 2
+   s4 (shiftwin s3 10 3)                                                       ; and 10 to the hidden tag 3
+   (test
+      (wsringof s3 1 = '(20 10)) (wsringof s3 2 = '(30)) !(wsringof s3 3)
+      (zrow (wstilezof s3 1) = '(10)) (wsvisflof s3 1 = [[20 r99]]) !(wsvisflof s3 2)
+      (wsonscreen s3 = '(20 10 30)) (wsonscreen s4 = '(20 30))                  ; tag 3 has no screen
+      (wsscreenof s3 30 = r2) (wsscreenof s3 10 = r1) !(wsscreenof s4 10) !(wsscreenof s3 99)
+      (wscur (wsfocw s3 30) = 2) (wsfoc (wsfocw s3 30) = 30) (wssane? (wsfocw s3 30))   ; focus across: the screen follows
+      (wscur (wsfocw s3 10) = 1) (wsfoc (wsfocw s3 10) = 10)
+      (wsfocw s4 10 = s4) (wsfocw s3 99 = s3)                                    ; hidden or unknown: no-op
+      (wsvistags (wsfocw s3 30) = '(1 2))))                                      ; nothing trades screens
+
 ; --- the seeded fuzz: the whole op vocabulary, 200 steps, invariant per step ---
 (: r99 '(20 20 200 100) rA '(0 0 1 1) rB '(1 0 1 1)
    (fzop k w s)
@@ -296,15 +311,21 @@
 
 ; --- EWMH + docks (apps/lux/ewmh.l rung 7): strut arithmetic + wire encodings ---
 (: (test
-      ; _net_wm_strut_partial's 12 values: the strut is the first 4; short = none
-      (strut-parse '(0 0 30 0 0 0 0 0 0 0 400 800) = '(0 0 30 0))
+      ; _net_wm_strut_partial's 12 values ride whole; _net_wm_strut's 4 get whole-edge spans; short = none
+      (strut-parse '(0 0 30 0 0 0 0 0 0 0 400 800) = '(0 0 30 0 0 0 0 0 0 0 400 800))
+      (strut-parse '(0 0 30 0) = '(0 0 30 0 0 65535 0 65535 0 65535 0 65535))
       !(strut-parse '(1 2))
       ; struts clamp the rect off each edge; a swallowed axis floors at 0
-      (strut-shrink (rct 0 0 800 600) '(0 0 30 0) 800 600 = '(0 30 800 570))     ; a top-30 panel
-      (strut-shrink (rct 0 0 800 600) '(0 50 0 20) 800 600 = '(0 0 750 580))     ; right + bottom
-      ((strut-shrink (rct 0 0 100 100) '(700 0 0 0) 800 600) 2 = 0)))
+      (strut-shrink (rct 0 0 800 600) (strut-parse '(0 0 30 0)) 800 600 = '(0 30 800 570))     ; a top-30 panel
+      (strut-shrink (rct 0 0 800 600) (strut-parse '(0 50 0 20)) 800 600 = '(0 0 750 580))     ; right + bottom
+      ((strut-shrink (rct 0 0 100 100) (strut-parse '(700 0 0 0)) 800 600) 2 = 0)))
 
-(: _ (pin ewst 'struts '((77 (0 0 30 0)) (88 (40 0 0 0)))) _ (pin ewst 'avoid 1)
+; a partial strut reaches only the screens its span meets: a bottom panel under the left screen
+(: st (strut-parse '(0 0 0 20 0 0 0 0 0 0 0 799)) l (rct 0 0 800 600) r (rct 800 0 800 600)
+   (test (strut-shrink l st 1600 600 = '(0 0 800 580)) (strut-shrink r st 1600 600 = r)
+         (strut-shrink r (strut-parse '(0 0 0 20)) 1600 600 = '(800 0 800 580))))   ; a plain strut: the whole edge
+
+(: _ (pin ewst 'struts [[77 (strut-parse '(0 0 30 0))] [88 (strut-parse '(40 0 0 0))]]) _ (pin ewst 'avoid 1)
    r1 (ewmh-rect (rct 0 0 800 600) 800 600)
    _ (ewmh-toggle ()) r2 (ewmh-rect (rct 0 0 800 600) 800 600)                   ; ToggleStruts: the full screen again
    _ (ewmh-toggle ()) _ (ewmh-untrack 88) r3 (ewmh-rect (rct 0 0 800 600) 800 600)

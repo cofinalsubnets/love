@@ -366,6 +366,23 @@
       _ (waitp "screens-found" (u \ "3" = nscreens ()) 50)                       ; left, right, and xvfb's own auto monitor
       _ (must "screen-rect" ("(0 0 320 480)" = ask "(wsrectof (cap (lux-st ())) 1)"))
       _ (must "screens-tags" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
+
+      ; --- 6d. per-screen rendering: a fresh window on tag 1 tiles into the left
+      ;     screen; viewing tag 2 (on the right screen) is greedy -- the tags trade
+      ;     screens, so the window lands in the right rect; back again, the left ---
+      w6 (w1 + 9)
+      _ (mkwin s w6 root)
+      _ (waitp "screen-tiled" (u \ (: g (x-getgeom s w6) (g 0 + g 2 <= 320 && 100 < g 2))) 50)
+      _ (fake 6 0 5 475) _ (rest 80)                                             ; the pointer to the left screen: a crossing makes its screen current
+      _ (cmsg root a-cd 1 0 0)
+      _ (waitp "screen-traded" (u \ (: g (x-getgeom s w6) (320 <= g 0 && 100 < g 2))) 50)
+      _ (must "screen-cur" ("2" = ask "(wscur (cap (lux-st ())))"))
+      _ (must "screen-vis" ("(2 1 3)" = ask "(wsvistags (cap (lux-st ())))"))
+      _ (cmsg root a-cd 0 0 0)
+      _ (waitp "screen-back" (u \ (: g (x-getgeom s w6) (g 0 + g 2 <= 320))) 50)
+      _ (must "screen-vis-back" ("(1 2 3)" = ask "(wsvistags (cap (lux-st ())))"))
+      _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s w6, x-flush s)                 ; DestroyWindow: lux evicts it
+      _ (waitp "screen-window-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show w6 + ")")) 50)
       _ (delmon "left") _ (delmon "right")
       _ (refresh ())
       _ (waitp "screens-folded" (u \ "1" = nscreens ()) 50)

@@ -101,15 +101,18 @@
    (wsunfl w fl) (filter (p \ <p != w) fl)                       ; drop w from the floating alist
    (wsfloating? sh w) (any (p \ <p = w) (wsfloat sh))            ; w is floating?
    (wsrect sh w) (: p (assoc w (wsfloat sh)) (two? p ? <>p))  ; w's float rect, or ()
-   (wsflhere sh) (filter (w \ wsfloating? sh w) (wsring sh))     ; the floats on the current view, ring order
-   (wsvisfl sh) (map (w \ [w (wsrect sh w)]) (wsflhere sh))      ; ...as (window rect), what the painter wants
+   (wsflof sh t) (filter (w \ wsfloating? sh w) (wsringof sh t))   ; a tag's floats, ring order
+   (wsflhere sh) (wsflof sh (wscur sh))                           ; the floats on the current view
+   (wsvisflof sh t) (map (w \ [w (wsrect sh w)]) (wsflof sh t))  ; ...as (window rect), what the painter wants
+   (wsvisfl sh) (wsvisflof sh (wscur sh))
    (wsdofloat sh w r)                                              ; float: pin a rect on a window already in the ring
     (wsknownw? sh w ? (wsmake (wscur sh) (wsboard sh) ([w r] . wsunfl w (wsfloat sh)) (wsvis sh)) sh)
    (wssink sh w) (wsmake (wscur sh) (wsboard sh) (wsunfl w (wsfloat sh)) (wsvis sh))   ; sink: drop the rect, the window has not moved
 
    ; --- the tiled half, derived. the layout sees a zipper with the floats
    ;     filtered out (W.filter: a deleted focus falls down, then up). ---
-   (wstilez sh) (foldl (\ z w (zdel w z)) (wsget sh (wscur sh)) (wsflhere sh))
+   (wstilezof sh t) (foldl (\ z w (zdel w z)) (wsget sh t) (wsflof sh t))   ; a tag's tiled zipper
+   (wstilez sh) (wstilezof sh (wscur sh))
    (wsrow sh) (zrow (wstilez sh))                                  ; the current tiled row, ordered, master first
    (wsztile sh zop)                                                ; run a zipper op on the TILED subsequence; floats keep their slots
     (: f (wsfoc sh)
@@ -124,6 +127,13 @@
    (wsmaster sh) (wsztile sh zmaster)                              ; the focused tile fronts the tiled row
    (wsswapup sh) (wsztile sh zswapup)
    (wsswapdn sh) (wsztile sh zswapdn)
+
+   ; --- per screen: what each screen paints, and focus across screens ---
+   (wsringof sh t) (zrow (wsget sh t))                              ; a tag's ring
+   (wsonscreen sh) (foldl (\ a t (a + wsringof sh t)) () (wsvistags sh))   ; every window some screen shows
+   (wsscreenof sh w) (wsrectof sh (wstagof sh w))                   ; the rect of the screen showing w, or ()
+   (wsfocw sh w) (: t (wstagof sh w)                                 ; focus w wherever it is on screen: its screen becomes current
+                   (t && wsvisible? sh t ? (wsmap (wsview sh t) (zfocto w)) sh))
 
    ; --- managing windows across the whole sheaf ---
    (wsallw sh) (foldl (\ a p (a + zrow <>p)) () (wsboard sh))      ; every managed window, all workspaces
