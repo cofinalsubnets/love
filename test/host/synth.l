@@ -15,16 +15,17 @@
 
 ; --- a key: a digit is a degree, its shifted mate the same with shift, 256 past either
 ; --- is alt, and any other key is nothing
-(test (synth-code d0 = [0 0 0]) (synth-code d1 = [1 0 0]) (synth-code (synth-digits 9) = [9 0 0])
+(test (synth-code d0 = [0 0 0]) (synth-code d1 = [1 0 0]) (synth-code (synth-digits 11) = [11 0 0])
+      (#synth-digits = 12) (#synth-shifted = 12)                 ; a chromatic octave, and its shifted row
       (synth-code s0 = [0 1 0]) (synth-code (256 + d0) = [0 0 1]) (synth-code (256 + s0) = [0 1 1])
       (synth-code 97 = ()) (synth-code 9 = ()) (synth-code -8 = ()))
 
-; --- the bends against each other: a key on is a whole tone, shift half of that, alt
-; --- half of shift and down, both together up by what alt took
+; --- the bends against each other: a key on is a semitone, the last key of the row an
+; --- octave less one, shift half a semitone up, alt half down, both together the plain note
 (: a (semis [0 0 0]) b (semis [1 0 0]) sh (semis [0 1 0]) al (semis [0 0 1]) bo (semis [0 1 1])
- (test (abs (b - a - 2.0) < 0.001) (abs (sh - a - 1.0) < 0.001)
-       (abs (a - al - 0.5) < 0.001) (abs (bo - a - 0.5) < 0.001)
-       (abs (semis [5 0 0] - a - 10.0) < 0.001)))
+ (test (abs (b - a - 1.0) < 0.001) (abs (sh - a - 0.5) < 0.001)
+       (abs (a - al - 0.5) < 0.001) (abs (bo - a) < 0.001)
+       (abs (semis [11 0 0] - a - 11.0) < 0.001)))
 
 ; --- a name: middle c and its octaves, the semitone under a quarter tone said in cents
 (test (synth-name 0.0 = "C4") (synth-name 12.0 = "C5") (synth-name -12.0 = "C3")

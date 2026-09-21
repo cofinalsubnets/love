@@ -354,8 +354,9 @@
          (? (k = g 'lk && (clock 0 - g 'lt) < gap) (go n)
             (take k, pins g 'lk k 'lt (clock 0), go (n + 1))))
       n))
- ; the queue eaten: keys typed at what stood before are not typed at what stands now
- (drain-keys _) (cue? 0 ? (see in, drain-keys ()))
+ ; the queue eaten: keys typed at what stood before are not typed at what stands now --
+ ; and no further at the end of the input, which a hung-up fd reads as ready
+ (drain-keys _) (cue? 0 ? (see in @ -1 () _ (drain-keys ())))
 
  ; --- the horn: the rate a game plays at, and how far ahead of the speaker it feeds ----
  ; every sample is a closure call, so the wasm seat -- slower, and its page resamples
