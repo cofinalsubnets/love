@@ -27,6 +27,7 @@
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
 (borrow 'rove)
+(borrow 'ink)                           ; the shimmer, one frame of it held still, for the ground's grain
 (borrow 'play)                          ; the voices, the mix; harp is cited, never borrowed
 (:
  esc (string 27)
@@ -35,12 +36,18 @@
  cube-w 9                               ; a cube on a grid whose cells are twice as tall as wide
  cube-h 5
  road-h 2
- grass-pens '(34 40 28 70 34)
- sand-pens '(220 214 178 222 180)
- path-pens '(94 130 137)
- road-pens '(240 245 243)
+ ; the ground is solid blocks, each in a pen off its ramp by one still frame of the
+ ; walk's shimmer (ink-drift), so the colour runs in smooth bands and not a mottle. the
+ ; ramps run pale to deep; span is the band of the field they cover, its four sines
+ ; seldom leaving +-3
+ ground-glyph "█"
+ grass-ramp [118 112 76 70 40 34 28 22]
+ sand-ramp [187 180 179 178 172 136 137 101]
+ road-ramp [137 95 94 94 58 58 52 52]
+ path-ramp [180 137 137 95 94 94 58 58]
+ ramp-span 3.0
  glass-face '("▒" 117)
- shard-face '("·" 153)
+ shard-face '("░" 117)
  npc-glyph "Ψ"
  npc-pen 213
  me-pen 228
@@ -101,6 +108,7 @@
    cubes ((lay mine) . map lay (filter (!= mine) ^ncol))
    c <cubes
    (pins d 'cubes cubes 'cube c 'road ry 'sd (roll sb 1000000)
+           'skin (ink-drift h w (roll sb 1000 / 10.0) 0.0)   ; where in the drift it stopped
            'in [(c 0 + cube-w // 2) (c 1 + cube-h // 2)]))
  ; strictly inside a cube: past its glass on every side
  (inside? c x y) (c 0 < x < c 0 + c 2 - 1 && c 1 < y < c 1 + c 3 - 1)
@@ -168,17 +176,21 @@
    g)
 
  ; --- the frame: the plain's faces, the note, the bar, and a sign over it all ---------
- ; the cell's dice pick a blade or a grain and its shade, so the same plain is always
- ; the same plain
- (apartment-face g) (: d (g 'd) w (d 'w) sd (peep d 'sd 0)
+ ; a ground cell is a block in its ramp's pen at the skin's value there, so grass and
+ ; the sand it turns to share one grain and the road runs through the same bands
+ (ramp-pen rp v) (: m (#rp - 1)
+                    n (int (((v + ramp-span) * #rp) / (2.0 * ramp-span)))
+                    (rp (? (n < 0) 0 (m < n) m n)))
+ (apartment-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
    ents (filter tablet? [(g 'p) (g 'npc)])
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
+   (ground rp x y) [ground-glyph (ramp-pen rp (peep sk [y x] 0.0))]
    (\ i (: e (spot i) x (i % w) y (i // w) t (peep (d 't) i 0)
            (? e [(e 'gl) (e 'hue)]
-              (t @ 1 [(dice x y sd 7 = 0 ? 44 46) (grass-pens (dice x y (sd + 1) #grass-pens))]
-                   2 [(dice x y sd 9 = 0 ? 126 46) (sand-pens (dice x y (sd + 1) #sand-pens))]
-                   3 [46 (path-pens (dice x y (sd + 2) #path-pens))]
-                   4 [46 (road-pens (dice x y (sd + 3) #road-pens))]
+              (t @ 1 (ground grass-ramp x y)
+                   2 (ground sand-ramp x y)
+                   3 (ground path-ramp x y)
+                   4 (ground road-ramp x y)
                    6 glass-face
                    7 shard-face
                    '(32 0))))))
