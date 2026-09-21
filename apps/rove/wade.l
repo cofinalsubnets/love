@@ -74,10 +74,10 @@
  ; top row for all trees and for the near ones alone and the reflection's bottom row,
  ; tablets while the trees are laid and trays after; a row's height cell, for rows well
  ; above the screen too, since the water mirrors sky that is off the top; and the sky's
- ; rows and the frame's, kept as they are asked for
+ ; rows, darkened for the water, and the frame's, kept as they are asked for
  (fresh st) (: w (st 'w) h (st 'h) hz (st 'hz) th (st 'th) foc (st 'foc) cx (st 'cx)
    xs (iota w)
-   tb {'xs xs 'tops {} 'ntops {} 'bots {} 'qes {} 'sky {} 'rows {}
+   tb {'xs xs 'tops {} 'ntops {} 'bots {} 'qes {} 'sky {} 'dark {} 'rows {}
        'qas (((floor ((th + atan ((xs - cx) / foc)) / (2.0 * pi) * 256.0)) % 256 + 256) % 256)}
    (row y) (? (y < hz) (pin (tb 'qes) y (flo (atan ((hz - y) / foc) * foc)), row (y + 1)))
    (row (0 - h - 12), tb))
@@ -179,17 +179,29 @@
  dark {230 179 187 136 238 236 237 235 236 235 235 234 234 234 233 233 16 233 232 233 250 244 245 240 255 247}
  ; ..and a crest: the water's greys two steps up, the moon's gold to #ffd787
  crest {233 235 234 236 235 237 236 238 179 222 136 179 244 250 240 245 247 255 16 233 232 233}
- ; a water pixel, off its row's trays: the bank, or the mirror's sample -- the forest's
- ; reflection, or the sky's darkened -- and a crest a step lighter
- (water x y st tb mn t) (: hz (st 'hz) row (peep (tb 'water) y ())
-   (? (0 < peep (row 0) x 0) bank-pen
-      (: y2 (peep (row 1) x 0.0) x2 (peep (row 2) x 0) rl (peep (row 3) x 0.0)
-         c (? (y2 < peep (tb 'bots) x2 0.0) haze-pen
-              (peep dark (peep (sky-at (min2 (flo (2 * hz - 1 - y2)) (hz - 1)) st tb mn t) x2 236) haze-pen))
-         ((0.06 < rl) ? (peep crest c c) c))))
+ ; ..the two as trays a pen row indexes
+ darks (star-tray [256] (map (i \ peep dark i haze-pen) (jot 256)))
+ crests (star-tray [256] (map (i \ peep crest i i) (jot 256)))
+ ; a sky row as the water darkens it, kept as asked for
+ (dark-at r st tb mn t) (: d (peep (tb 'dark) r ())
+   (? (tray? d) d (: d2 (peep darks (sky-at r st tb mn t) haze-pen) (pin (tb 'dark) r d2, d2))))
+ ; a water row, off its trays: the mirror's sample, gathered from each darkened sky row
+ ; the row's columns reach; the forest's reflection where the sample is under the
+ ; treeline; a crest a step lighter; and the bank
+ (water-row y st tb mn t) (: hz (st 'hz) row (peep (tb 'water) y ())
+   bank (row 0) y2 (row 1) x2 (row 2) rl (row 3)
+   yq (min (floor (2 * hz - 1 - y2)) (hz - 1))
+   (band r r1 acc) (? (r <= r1)
+                      (: m (yq = r)
+                         (band (r + 1) r1 (? (aany m) (over acc m (peep (dark-at r st tb mn t) x2 haze-pen)) acc)))
+                      acc)
+   c (band (amin yq) (amax yq) haze-pen)
+   c2 (over c (y2 < peep (tb 'bots) x2 0.0) haze-pen)
+   c3 (over c2 (0.06 < rl) (peep crests c2 haze-pen))
+   (over c3 (0 < bank) bank-pen))
  ; a frame: two pixel rows a cell, one sgr per change, the rows joined by \r\n with no
- ; newline after the last, so a screen of just enough rows never scrolls. a pixel row's
- ; source is its tray above the horizon and the water below it
+ ; newline after the last, so a screen of just enough rows never scrolls. a pixel row is
+ ; a tray of pens, the sky's and the trees' above the horizon and the water's below it
  sgrs {}
  (sgr f b) (: k (f * 256 + b) s (sgrs k)
               (string? s ? s (: s2 (esc + "[38;5;" + show f + ";48;5;" + show b + "m") (pin sgrs k s2, s2))))
@@ -197,9 +209,8 @@
    _ (pin st 'rings (filter (r \ (t - r 't) < ring-life) (st 'rings)))
    tb (wade-tables st) mn (moon-at st)
    j (jug 0)
-   (src y) (? (y < hz) (top-row y st tb mn t) ())
-   (px s x y) (? (tray? s) (peep s x 236) (water x y st tb mn t))
-   (row y x f b ts bs) (? (x < w) (: f2 (px ts x (2 * y)) b2 (px bs x (2 * y + 1))
+   (src y) (? (y < hz) (top-row y st tb mn t) (water-row y st tb mn t))
+   (row y x f b ts bs) (? (x < w) (: f2 (peep ts x 236) b2 (peep bs x 236)
                                      _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
                                      _ (say j "▀")
                                      (row y (x + 1) f2 b2 ts bs)))

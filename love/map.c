@@ -162,6 +162,33 @@ op11(lvm_hotp, (caskp(Sp[0]) || iop(Sp[0])) ? putcharm(1) : zero)
 // (hash x) -- the general hashing method exposed to l as a fixnum.
 op11(lvm_dig, putcharm(hash(g, Sp[0])))
 
+// (peep tray idx d) with idx an int tray: the gather. the answer takes idx's shape and the
+// tray's kind, a miss the default; a complex or object tray, a float index or a default
+// that is not a number answer the default whole, as a miss would
+static ai_noinline void gather_fill(struct ai_tray *r, struct ai_tray *v, struct ai_tray *ki, ai_flo_t zf, intptr_t zi) {
+ uintptr_t n = tray_nelem(r), m = tray_nelem(v);
+ for (uintptr_t i = 0; i < n; i++) {
+  intptr_t j = tray_get_int(ki, i);
+  bool ok = j >= 0 && (uintptr_t) j < m;
+  if (r->type == ai_R) tray_put_flo(r, i, ok ? tray_get_flo(v, (uintptr_t) j) : zf);
+  else tray_put_int(r, i, ok ? tray_get_int(v, (uintptr_t) j) : zi); } }
+static lvm(lvm_gather) {
+ word z = Sp[2];
+ struct ai_tray *v = tray(Sp[0]), *ki = tray(Sp[1]);
+ if (v->type > ai_R || ki->type >= ai_R || !(charmp(z) || gemp(z))) ai_musttail return Answerp(2, z);
+ ai_flo_t zf = charmp(z) ? (ai_flo_t) getcharm(z) : gem_get(z);
+ intptr_t zi = charmp(z) ? getcharm(z) : (intptr_t) zf;
+ int type = v->type == ai_R ? ai_R : ai_Z;
+ uintptr_t rank = ki->rank, n = tray_nelem(ki), bytes = tray_bytes(type, rank, n);
+ Have(b2w(bytes));
+ v = tray(Sp[0]), ki = tray(Sp[1]);             // re-read post-Have
+ struct ai_tray *r = (struct ai_tray*) Hp;
+ Hp += b2w(bytes);
+ ini_tray(r, type, rank);
+ for (uintptr_t i = 0; i < rank; i++) r->shape[i] = ki->shape[i];
+ gather_fill(r, v, ki, zf, zi);
+ ai_musttail return Answerp(2, word(r)); }
+
 lvm(lvm_peep) {                                // (peep coll key default): collection-first
  word x = Sp[0], k = Sp[1], z = Sp[2], n;
  if (caskp(x)) {                                 // mutable byte string: byte index
@@ -180,6 +207,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
    // array index: a fixnum (rank-1) or a row-major shape-list (rank-N);
    // out-of-bounds or wrong rank falls through to the default
    struct ai_tray *v = tray(x);
+   if (trayp(k)) ai_musttail return Ap(lvm_gather, g);   // a tray of indices gathers
    intptr_t o = tray_off(v, k); uintptr_t off = (uintptr_t) o; bool ok = o >= 0;
    if (ok && v->type == ai_O) z = tray_get_obj(v, off);   // object: the slot is the value
    else if (ok && v->type == ai_C) {                       // packed complex -> a (re,im) box

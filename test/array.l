@@ -195,4 +195,11 @@
  (aall (@(1 -3) = floor @(1.5 -2.5))) (aall (@(1 2) = floor @(1 2)))
  (star-tray = tier (floor @(1.5 -2.5))) (star-tray = tier (floor @(1 2)))   ; ..to an int tray, as the scalar
  (aall (@(1 -2) = int @(1.5 -2.5))) (star-tray = tier (int @(1.5 -2.5)))   ; int truncates the same way
- (aall (@(1 2) = int @(1 2))))
+ (aall (@(1 2) = int @(1 2)))
+ ; the gather: peep by a tray of indices, the answer in the indices' shape and the tray's
+ ; kind, a miss the default
+ (aall (@(30 10 -1) = peep @(10 20 30) @(2 0 5) -1))
+ (aall (@(1.5 0.5) = peep @(0.5 1.5) @(1 0) 0)) (gem-tray = tier (peep @(0.5 1.5) @(1 0) 0))
+ ('(2 2) = shape (peep @(7 8 9) (star-tray '(2 2) '(0 1 2 0)) 0))
+ (star-tray = tier (peep @(7 8 9) @(1) 0.5))
+ ('x = peep @(1 2) @(0) 'x) ('x = peep @(1 2) @(0.0) 'x))

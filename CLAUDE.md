@@ -121,7 +121,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - trays (@(..), iota): every numeric word is elementwise with broadcast, = and != too;
 ;   a whole question is a reduction -- aall/aany of a mask, net/prod/amax/amin of a tray --
 ;   and max/min are the binary pair. abs of a tray is its norm; floor and int take a float
-;   tray to an int tray
+;   tray to an int tray; peep by a tray of indices gathers, a miss the default
 
 ; booleans
 ; the exact boolean values are {0,1}. however any value can be
