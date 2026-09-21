@@ -2,9 +2,9 @@
 ; plays notes out the horn on harp's voices, a screen says which.
 ;
 ; 1 is middle c and each key on from it along the row -- the digits, then - and = --
-; a semitone higher, twelve keys to the octave; shift raises the note a quarter tone and
-; alt lowers it one. tab takes the next timbre, the up and down arrows an octave, q
-; leaves. a key
+; a semitone higher, twelve keys to the octave; shift plays the note an octave up and
+; alt lowers it a quarter tone. tab takes the next timbre, the up and down arrows move
+; the octave, q leaves. a key
 ; is a strike: the note rings and dies on its own, since a tty tells of keys pressed
 ; and never of keys let go, and a held key's repeats are dropped as the games drop them.
 ;
@@ -48,9 +48,9 @@
  (synth-code k) (: alt (255 < k) c (alt ? (k - 256) k)
                    i (spot synth-digits c) j (spot synth-shifted c)
                    (? (0 <= i) [i 0 alt] (0 <= j) [j 1 alt] ()))
- ; semitones from middle c: up the row, the octave, a quarter tone up for shift and
- ; down for alt -- so both together is the plain note
- (synth-semis st [i sh al]) (12.0 * st 'oct + i + 0.5 * sh - 0.5 * al)
+ ; semitones from middle c: up the row, the octave and one more for shift, a quarter
+ ; tone down for alt
+ (synth-semis st [i sh al]) (12.0 * (st 'oct + sh) + i - 0.5 * al)
  ; a note's name: the semitone under it and its octave, and the quarter tone said in cents
  (synth-name s) (: t (int s) n (s < t ? (t - 1) t)
                    o (n < 0 ? ((n - 11) // 12) (n // 12))
@@ -84,7 +84,7 @@
     + "  timbre " + tm 0 + "   octave " + show (st 'oct)
     + "   last " + (string? (st 'last) ? (st 'last) "-") + "\r\n\r\n"
     + row 0 + row 6 + "\r\n"
-    + "  shift a quarter tone up   alt a quarter tone down\r\n"
+    + "  shift an octave up   alt a quarter tone down\r\n"
     + "  tab the next timbre   up and down the octave    q leaves\r\n"))
 
  ; --- the tty: a key, alt as the escape before it, arrows as the cli's numbers -------

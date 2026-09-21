@@ -21,10 +21,10 @@
       (synth-code 97 = ()) (synth-code 9 = ()) (synth-code -8 = ()))
 
 ; --- the bends against each other: a key on is a semitone, the last key of the row an
-; --- octave less one, shift half a semitone up, alt half down, both together the plain note
+; --- octave less one, shift the octave, alt half a semitone down, both together both
 (: a (semis [0 0 0]) b (semis [1 0 0]) sh (semis [0 1 0]) al (semis [0 0 1]) bo (semis [0 1 1])
- (test (abs (b - a - 1.0) < 0.001) (abs (sh - a - 0.5) < 0.001)
-       (abs (a - al - 0.5) < 0.001) (abs (bo - a) < 0.001)
+ (test (abs (b - a - 1.0) < 0.001) (abs (sh - a - 12.0) < 0.001)
+       (abs (a - al - 0.5) < 0.001) (abs (bo - a - 11.5) < 0.001)
        (abs (semis [11 0 0] - a - 11.0) < 0.001)))
 
 ; --- a name: middle c and its octaves, the semitone under a quarter tone said in cents
