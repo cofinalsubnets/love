@@ -15,60 +15,84 @@
    (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    (rows s) (1 + count s "\r\n")
    (range a b) (map (+ a) ^(b - a))
-   ; the cells you can walk to from where you stand, four ways at a step
+   ; the cells you can walk to from where you stand, eight ways at a step
    (reach g) (: d (g 'd) w (d 'w) h (d 'h) seen {}
                 (nbs i) (: x (i % w) y (i // w)
                            (filter (j \ 0 <= j)
                                    (map ([dx dy] \ (: nx (x + dx) ny (y + dy)
                                                      (0 <= nx < w && 0 <= ny < h && open? d nx ny ? (nx + w * ny) -1)))
-                                        '((1 0) (-1 0) (0 1) (0 -1)))))
+                                        '((1 0) (-1 0) (0 1) (0 -1) (1 1) (-1 -1) (1 -1) (-1 1)))))
                 (go l) (l @- seen (i . u) (seen i ? (go u) (pin seen i 1, go (u + nbs i))))
                 (go [(g 'p 'x + w * g 'p 'y)]))
    (blocky? s) (0 < #s && 0 = #s % 3 && all (i \ elem (snip s (3 * i) (3 * i + 3)) blocks) ^(#s // 3)))
 
-; --- the lay: the road across, every cube's path down to it, and yours closed with you
-; --- inside and the stranger outside at the pane
+; --- the lay: eight cubes in an octagon, yours the left of the top pair, the road west
+; --- from the hub, every cube a path to it, and yours closed with you inside and the
+; --- stranger outside at the pane; someone in every other cube, wandering it
 (: g (apartment-new 80 22 (wheel 5)) d (g 'd) w 80 h 22 c (d 'cube) p (g 'p) npc (g 'npc)
    (t x y) (dat d x y)
-   ry (d 'road)
+   hub (d 'hub) hx <hub hy <>hub
+   pn (c 4)
    in (reach g)
-   f (apartment-frame g)
-   (pathed? cb) (: x (cb 4)
-                   ys (cb 5 ? (range (ry + road-h) (cb 1)) (range (cb 1 + cube-h) ry))
-                   (all (y \ 3 = t x y) ys))
- (test (rows f = h + 2) (f = apartment-frame g)                 ; the note row, the plain, the bar
-       (all (x \ 4 = t x ry && 4 = t x (ry + road-h - 1)) ^w)   ; the road, edge to edge
-       (3 <= #(d 'cubes)) (all pathed? (d 'cubes))              ; each cube a path to the road
+   f (apartment-frame g) f2 (apartment-frame g)
+   ; a cube's pane is its glass, and a path cell touches it
+   (pathed? cb) (: q (cb 4)
+                   (6 = t <q <>q && any ([dx dy] \ 3 = t (<q + dx) (<>q + dy)) '((1 0) (-1 0) (0 1) (0 -1) (1 1) (-1 -1) (1 -1) (-1 1))))
+   (walls cb) (filter (i \ (: x (i % w) y (i // w)
+                              (cb 0 <= x < cb 0 + cube-w && cb 1 <= y < cb 1 + cube-h && !(inside? cb x y))))
+                      ^(w * h))
+   ; the others' places before any turn
+   was (map (m \ [(m 'x) (m 'y)]) (g 'ms))
+   _ (apartment-turn g 32)
+   _ (each ^30 (i \ apartment-turn g '(0 -1)))                   ; thirty turns at the wall
+   now (map (m \ [(m 'x) (m 'y)]) (g 'ms))
+ (test (rows f = h + 2) (f = f2)                                ; the note row, the plain, the bar
+       (all (x \ 4 = t x hy && 4 = t x (hy + road-h - 1)) ^(hx + 1))   ; the road, west from the hub off the map
+       (4 != t (w - 1) hy)                                       ; ..and not east
+       (8 = #(d 'cubes)) (all pathed? (d 'cubes))               ; eight, each with a path in
+       (all (cb \ all (i \ 6 = peep (d 't) i 0) (walls cb)) (d 'cubes))   ; ..each glass all round
+       (all (cb \ c 1 <= cb 1) (d 'cubes))                     ; yours on the top row
+       (any (cb \ cb 1 = c 1 && c 0 < cb 0) (d 'cubes))         ; ..the left of a pair there
+       (c 0 + cube-w // 2 < hx) (c 1 + cube-h // 2 < hy)         ; ..up and left of the hub
        (inside? c (p 'x) (p 'y)) (1 = t (p 'x) (p 'y))         ; you, on grass inside yours
-       (6 = t (c 0) (c 1)) (6 = t (c 0 + cube-w - 1) (c 1 + cube-h - 1))   ; ..which is glass round
        (all (i \ inside? c (i % w) (i // w)) (keys in))         ; ..and closed: nowhere to walk but inside
        (#(keys in) = (cube-w - 2) * (cube-h - 2))
        (tablet? npc) (!(inside? c (npc 'x) (npc 'y)))           ; the stranger outside
-       (npc 'y = c 1 + cube-h) (6 = t (npc 'x) (npc 'y - 1))   ; ..at the foot, a pane between
-       (g 'pane = npc 'x + w * (npc 'y - 1))
+       (6 = t <pn <>pn) (g 'pane = <pn + w * <>pn)              ; ..a pane between, on your glass
+       (|(npc 'x - <pn) <= 1) (|(npc 'y - <>pn) <= 1)           ; ..which they stand against
+       (7 = #(g 'ms))                                            ; the others, one to a cube, none in yours
+       (all (m \ inside? (m 'cube) (m 'x) (m 'y) && !(inside? c (m 'x) (m 'y))) (g 'ms))
+       (was != now)                                              ; ..and they wander, inside still
        (blocky? (npc 'nm)) (blocky? (npc 'greet))               ; named and greeting in blocks
-       (two? (g 'sign)) (!(g 'talk))                             ; the opening sign stands
-       (apartment-turn g 32, !(g 'sign))                        ; ..and a key takes it down
+       (!(g 'talk))
+       (: g1 (apartment-new 80 22 (wheel 5)) (two? (g1 'sign) && (apartment-turn g1 32, !(g1 'sign))))   ; the opening sign stands, and a key takes it down
        ; the same seed lays the same plain and names the same stranger
        (: g2 (apartment-new 80 22 (wheel 5)) (g2 'npc 'nm = npc 'nm && g2 'd 'cube = c))))
+
+; where you stand to bump the pane from inside: the interior cell nearest it, and the step
+(: (clampi v lo hi) (v < lo ? lo (hi < v ? hi v))
+   (by-pane c) (: pn (c 4) ix (clampi <pn (c 0 + 1) (c 0 + cube-w - 2)) iy (clampi <>pn (c 1 + 1) (c 1 + cube-h - 2))
+                  [ix iy [(<pn - ix) (<>pn - iy)]]))
 
 ; --- glass holds, but for the pane the stranger stands at, which opens the talk ---
 (: g (apartment-new 80 22 (wheel 5)) d (g 'd) w 80 c (d 'cube) p (g 'p) npc (g 'npc)
    _ (apartment-turn g 32)
-   _ (pins p 'x (c 0 + 1) 'y (c 1 + 1)) _ (apartment-turn g '(0 -1))   ; up into the top wall
+   _ (pins p 'x (c 0 + 1) 'y (c 1 + 1)) _ (apartment-turn g '(-1 -1))   ; up into the corner
    x1 (p 'x) y1 (p 'y) m1 (g 'msg) k1 (g 'talk)
-   _ (pins p 'x (npc 'x) 'y (npc 'y - 2)) _ (apartment-turn g '(0 1))  ; down into the pane
+   bp (by-pane c)
+   _ (pins p 'x (bp 0) 'y (bp 1)) _ (apartment-turn g (bp 2))     ; into the pane
    sg (g 'sign)
  (test (x1 = c 0 + 1) (y1 = c 1 + 1) (0 < #m1) (nil? k1)      ; held, and something said
        ('start = g 'talk) (two? sg) (<sg = npc 'nm)             ; the talk, under the stranger's name
        (any (l \ has? l (npc 'greet)) >sg)                       ; ..greeting in blocks
-       (p 'x = npc 'x) (p 'y = npc 'y - 2)))                     ; ..and you never moved
+       (p 'x = bp 0) (p 'y = bp 1)))                             ; ..and you never moved
 
 ; --- the talk walks its tree; a leaf closes it, and that is the end ---
 (: g (apartment-new 80 22 (wheel 5)) d (g 'd) w 80 h 22 c (d 'cube) p (g 'p) npc (g 'npc)
-   (t x y) (dat d x y)
+   (t x y) (dat d x y) pn (c 4)
    _ (apartment-turn g 32)
-   _ (pins p 'x (npc 'x) 'y (npc 'y - 2)) _ (apartment-turn g '(0 1))
+   bp (by-pane c)
+   _ (pins p 'x (bp 0) 'y (bp 1)) _ (apartment-turn g (bp 2))
    root (chat-node 'start) c1 <(root 2)
    _ (apartment-turn g (48 + <c1)) k1 (g 'talk)
    _ (apartment-turn g 120) k2 (g 'talk)                          ; x is no choice: shown again
@@ -78,15 +102,18 @@
    _ (chat g <leaf) s1 (g 'sign)
    _ (apartment-turn g 32)
    in (reach g)
+   bones (map (m \ [(m 'x) (m 'y)]) (g 'ms))
+   _ (each ^20 (i \ apartment-turn g '(-1 -1)))                  ; twenty turns at the corner
  (test (k1 = c1 2) (k2 = c1 2) (two? s1)
        (!(g 'talk)) (!(g 'sign)) (!(g 'npc))                    ; closed, and the stranger gone
        (elem 'drum (g 'sfx)) (0 < #(g 'msg))                     ; the drum asked for, and something said
-       (7 = t (npc 'x) (npc 'y - 1))                             ; the pane is shards
-       (open? d (npc 'x) (npc 'y - 1))
+       (7 = t <pn <>pn) (open? d <pn <>pn)                       ; the pane is shards, and a way
        (g 'desert) (2 = peep (d 't) out 0)                        ; the grass outside is sand
        (1 = t (p 'x) (p 'y)) (all (i \ 1 = peep (d 't) i 0) (filter (i \ inside? c (i % w) (i // w)) ^(w * h)))
        (any (i \ 4 = peep (d 't) i 0) (keys in))                 ; ..and the road is a walk away
-       (apartment-turn g '(0 1), apartment-turn g '(0 1), p 'y = npc 'y)   ; out through the pane
+       (all (m \ m 'bones && m 'gl = bones-glyph) (g 'ms))        ; the others are bones
+       (bones = map (m \ [(m 'x) (m 'y)]) (g 'ms))               ; ..where they stood
+       (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2), p 'x = <pn && p 'y = <>pn)   ; out onto the pane
        (rows (apartment-frame g) = h + 2)))
 
 ; --- the song: no bars yet, so a fresh song is silence, and the drum is not ---

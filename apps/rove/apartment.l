@@ -1,9 +1,11 @@
 ; apartment -- the level after the river: you come to inside a glass cube on a grassy
-; plain, one of several, each with a path back to the main road, and no way out. a
-; stranger stands outside against the glass, named in blocks and greeting you in
-; blocks, and you talk through the pane. when the talk is done the stranger is gone,
-; the pane shatters to a drum, and the grass past the glass goes over to desert -- the
-; grass inside stays -- and the plain is yours to walk.
+; plain, one of eight standing in an octagon, a flat side up, yours the left of the top
+; pair; each has a path in to the octagon's middle, where the road runs off the map to
+; the west, and no way out. someone is in every other cube, wandering. a stranger stands
+; outside against your glass, named in blocks and greeting you in blocks, and you talk
+; through the pane. when the talk is done the stranger is gone, the pane shatters to a
+; drum, the others are bones where they stood, and the grass past the glass goes over
+; to desert -- the grass inside stays -- and the plain is yours to walk.
 ;
 ; a roguelike floor on rove: the plain is laid, not delved, the size of the screen and
 ; lit end to end; the painter is rove's and the keys the tower's. the talk is a tree the
@@ -20,9 +22,9 @@
 ; run: love apartment    h j k l or the arrows walk, y u b n slant; q or esc leaves
 (module (apartment apartment-run apartment-walk apartment-main apartment-new apartment-turn
          apartment-frame apartment-bar apartment-lay apartment-face apartment-stride
-         chat chat-key chat-node chat-end chat-book blocks blocks-name cube-w cube-h road-h
-         inside? apartment-song-new apartment-song-feed apartment-sfx apartment-tune
-         apartment-bars song-chunk npc-glyph)
+         apartment-stir chat chat-key chat-node chat-end chat-book blocks blocks-name
+         cube-w cube-h road-h inside? oct-pt apartment-song-new apartment-song-feed
+         apartment-sfx apartment-tune apartment-bars song-chunk npc-glyph bones-glyph)
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
@@ -35,7 +37,7 @@
  ; 6 glass -- looked through and never entered -- and 7 shards, where glass was
  cube-w 9                               ; a cube on a grid whose cells are twice as tall as wide
  cube-h 5
- road-h 2
+ road-h 1                               ; the road is a row: the octagon's west pair leave it one
  ; the ground is solid blocks, each in a pen off its ramp by one still frame of the
  ; walk's shimmer (ink-drift), so the colour runs in smooth bands and not a mottle. the
  ; ramps run pale to deep; span is the band of the field they cover, its four sines
@@ -47,10 +49,14 @@
  path-ramp [180 137 137 95 94 94 58 58]
  ramp-span 3.0
  glass-face '("▒" 117)
- shard-face '("░" 117)
+ shard-glyph "░"                        ; ..on the road's brown: glass on the ground
+ glass-pen 117
  npc-glyph "Ψ"
  npc-pen 213
  me-pen 228
+ mob-pens '(250 245 252)                ; the others, greys
+ bones-glyph 37                         ; % as the middle's bones are
+ bones-pen 187
  blocks ["█" "▓" "▒" "░"]               ; the solid and shaded block elements a name is spelled in
 
  ; --- the words: every line the level says; a ~ takes the next value ---
@@ -81,33 +87,44 @@
                   ()))
  chat-foot "-- ~ --"
 
- ; --- laying the plain: grass end to end, the road across it, the cubes with their paths ---
- ; a cube is [x0 y0 w h px below]: its corner, its size, the column its path runs down,
- ; and whether it stands below the road. yours is the first, above the road, in the
- ; column nearest the middle; the rest take a column each, above or below at random
+ ; --- laying the plain: grass end to end, eight cubes in an octagon about the middle,
+ ; a path from each in to the hub, and the road west from the hub off the map ---
+ ; a point of the octagon: k of eight, clockwise from the right of the top pair -- the
+ ; octagon stands turned an eighth of a slice, a flat side up, as the vale's stones do
+ ; -- and the eighth is the left of that pair. rx and ry are its reach, across and down
+ (oct-pt cx cy rx ry k) (: a (k * 0.7853981633974483 - 1.1780972450961724)
+                           c (cos a) s (sin a)
+                           [(cx + int (rx * c + (0.0 < c ? 0.5 -0.5)))
+                            (cy + int (ry * s + (0.0 < s ? 0.5 -0.5)))])
+ ; a cube is [x0 y0 w h pane]: its corner, its size, and the cell of its glass the path
+ ; leaves through -- the pane the stranger stands at, on yours. yours is the first, the
+ ; left of the top pair; the rest follow clockwise from it
  (apartment-lay w h sb) (:
    d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'rows h 'cols w 'solid '(6)}
    _ (each ^(w * h) (i \ pin (d 't) i 1))
-   ry (h * 2 // 3)
-   _ (each ^road-h (j \ each ^w (x \ dput d x (ry + j) 4)))
-   ncol ((w // 16) @ n (n < 3 ? 3 n))
-   span (w // ncol)
-   mine (ncol // 2)
-   room-below (cube-h + 2 <= h - ry - road-h)
+   cx (w // 2) cy (h // 2)
+   rx (cx - cube-w // 2 - 2) ry (cy - cube-h // 2 - 1)
+   _ (each ^(cx + 1) (x \ each ^road-h (j \ dput d x (cy + j) 4)))
    (cube x0 y0) (each ^cube-h (j \ each ^cube-w (i \ dput d (x0 + i) (y0 + j)
                   (j = 0 || j = cube-h - 1 || i = 0 || i = cube-w - 1 ? 6 1))))
-   (path x ya yb) (each ^(yb - ya) (j \ dput d x (ya + j) 3))
-   (lay k) (: x0 (k * span + 1 + roll sb (max 1 (span - cube-w - 1)))
-              below (k != mine && room-below && roll sb 2 = 0)
-              y0 (below ? (ry + road-h + 1 + roll sb (max 1 (h - ry - road-h - cube-h - 1)))
-                          (1 + roll sb (max 1 (ry - cube-h - 1))))
-              px (x0 + 1 + roll sb (cube-w - 2))
+   ; the cells from one point to another, a step at a time along the longer axis
+   (line x0 y0 x1 y1) (: n (max |(x1 - x0) |(y1 - y0))
+                         (part dv i) (: v (dv * i) ((v + (0 < v ? n // 2 (0 - n // 2))) // n))
+                         (at i) [(x0 + part (x1 - x0) i) (y0 + part (y1 - y0) i)]
+                         (0 < n ? (map at ^(n + 1)) [[x0 y0]]))
+   ; a cube at its point, and its path: the line from its middle to the hub leaves
+   ; through one cell of its glass, the pane, and is dirt from there in, over grass alone
+   (lay k) (: pt (oct-pt cx cy rx ry ((k + 7) % 8))
+              mx <pt my <>pt x0 (mx - cube-w // 2) y0 (my - cube-h // 2)
               _ (cube x0 y0)
-              _ (below ? (path px (ry + road-h) y0) (path px (y0 + cube-h) ry))
-              [x0 y0 cube-w cube-h px below])
-   cubes ((lay mine) . map lay (filter (!= mine) ^ncol))
+              ln (line mx my cx cy)
+              pane <(filter (q \ 6 = dat d <q <>q) ln)
+              _ (each ln (q \ (? (1 = dat d <q <>q && !(x0 <= <q < x0 + cube-w && y0 <= <>q < y0 + cube-h))
+                                  (dput d <q <>q 3))))
+              [x0 y0 cube-w cube-h pane])
+   cubes (map lay ^8)
    c <cubes
-   (pins d 'cubes cubes 'cube c 'road ry 'sd (roll sb 1000000)
+   (pins d 'cubes cubes 'cube c 'hub [cx cy] 'sd (roll sb 1000000)
            'skin (ink-drift h w (roll sb 1000 / 10.0) 0.0)   ; where in the drift it stopped
            'in [(c 0 + cube-w // 2) (c 1 + cube-h // 2)]))
  ; strictly inside a cube: past its glass on every side
@@ -118,14 +135,18 @@
                            (foldl (+) "" (map (i \ blocks (roll sb #blocks)) ^n)))
 
  ; a fresh level: the plain laid from the seed, you in the middle of your cube, the
- ; stranger on your path against the pane at the foot of the cube
+ ; stranger on your path just past the pane, and someone in the middle of every other cube
+ (toward a b) (a < b ? 1 (b < a ? -1 0))
  (apartment-new w h st) (:
    sb {st}
-   d (apartment-lay w h sb) c (d 'cube)
+   d (apartment-lay w h sb) c (d 'cube) pane (c 4) hub (d 'hub)
    nm (blocks-name sb 3 6) gr (blocks-name sb 5 10)
    p {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue me-pen}
-   npc {'x (c 4) 'y (c 1 + cube-h) 'gl npc-glyph 'hue npc-pen 'nm nm 'greet gr}
-   g {'d d 'sb sb 'p p 'npc npc 'pane (c 4 + w * (c 1 + cube-h - 1))
+   npc {'x (<pane + toward <pane <hub) 'y (<>pane + toward <>pane <>hub)
+        'gl npc-glyph 'hue npc-pen 'nm nm 'greet gr}
+   (mob cb) {'x (cb 0 + cube-w // 2) 'y (cb 1 + cube-h // 2) 'gl 64
+             'hue (mob-pens (roll sb #mob-pens)) 'cube cb}
+   g {'d d 'sb sb 'p p 'npc npc 'ms (map mob >(d 'cubes)) 'pane (<pane + w * <>pane)
       'msg "" 'tn 0 'over 0 'sign () 'talk () 'sfx () 'desert 0}
    _ (pin g 'sign (open-ttl . open-lines))
    g)
@@ -148,10 +169,11 @@
                    (one? chs ? (chat-end g)
                     (: c (filter (c \ 48 + <c = k) chs)
                        (chat g (two? c ? (<c 2) (g 'talk))))))
- ; the end: the stranger gone, the pane to shards, a drum, and every blade of grass
- ; past your cube's glass to sand
+ ; the end: the stranger gone, the pane to shards, a drum, the others bones where they
+ ; stood, and every blade of grass past your cube's glass to sand
  (chat-end g) (: d (g 'd) w (d 'w) c (d 'cube)
                  _ (pins g 'talk () 'sign () 'npc () 'desert 1 'sfx ('drum . g 'sfx))
+                 _ (each (g 'ms) (m \ pins m 'gl bones-glyph 'hue bones-pen 'bones 1))
                  _ (pin (d 't) (g 'pane) 7)
                  _ (each ^(w * d 'h) (j \ (? (1 = peep (d 't) j 0 && !(inside? c (j % w) (j // w)))
                                              (pin (d 't) j 2))))
@@ -166,12 +188,18 @@
       (t = 6) (npc && i = g 'pane ? (chat g 'start) (note g w-glass))
       !(open? d nx ny) (note g w-edge)
       (pins p 'x nx 'y ny)))
+ ; ..and the others wander their cubes a step a turn, over grass alone, while they can
+ (apartment-stir g) (: d (g 'd) sb (g 'sb)
+   (taken? x y) (any (m \ m 'x = x && m 'y = y) (g 'ms))
+   (stir m) (: nx (m 'x + roll sb 3 - 1) ny (m 'y + roll sb 3 - 1)
+               (? (1 = dat d nx ny && !(taken? nx ny)) (pins m 'x nx 'y ny)))
+   (each (g 'ms) (m \ (m 'bones ? () (stir m)))))
  (apartment-turn g k) (:
    _ (pins g 'msg "" 'tn (1 + g 'tn))
    sg (g 'sign)
    _ (? sg (g 'talk ? (chat-key g k) (pin g 'sign ()))
         (g 'over) ()
-        (two? k) (apartment-stride g k)
+        (two? k) (apartment-stride g k, apartment-stir g)
         ())
    g)
 
@@ -182,7 +210,7 @@
                     n (int (((v + ramp-span) * #rp) / (2.0 * ramp-span)))
                     (rp (? (n < 0) 0 (m < n) m n)))
  (apartment-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
-   ents (filter tablet? [(g 'p) (g 'npc)])
+   ents (filter tablet? ((g 'p) . (g 'npc) . g 'ms))
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    (ramp-of t) (t @ 1 grass-ramp 2 sand-ramp 3 path-ramp 4 road-ramp ())
    (ground-pen rp x y) (ramp-pen rp (peep sk [y x] 0.0))
@@ -192,7 +220,8 @@
            (? (e && rp) (: bg (ground-pen rp x y) [(e 'gl) [(legible (e 'hue) bg) bg]])
               e [(e 'gl) (e 'hue)]
               rp [ground-glyph (ground-pen rp x y)]
-              (t @ 6 glass-face 7 shard-face '(32 0))))))
+              (t = 7) [shard-glyph [glass-pen (ground-pen road-ramp x y)]]
+              (t @ 6 glass-face '(32 0))))))
  (apartment-bar g) (fill w-bar [(g 'desert ? "the desert" "the plain") (g 'tn)])
  (apartment-frame g) (: d (g 'd) rows (d 'rows) cols (d 'cols)
    f (:- (slurp j) j (paint (jug 0) d (apartment-face g) (g 'msg) (apartment-bar g)))
