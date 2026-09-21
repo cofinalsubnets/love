@@ -23,12 +23,15 @@
 ; only wade-run ties the tty and the horn.
 ;
 ; run: love wade    h l or the arrows turn, k or up wades on, u n look up and down,
-;                   space walks on until pressed again; q or esc leaves, and reaching
-;                   the lamppost ends the level a moment later.
+;                   space walks on until pressed again; q or esc leaves. reaching the
+;                   lamppost ends the level: the view turns to the lamp and pitches up
+;                   to hold its flame, a moment passes, and the apartment takes the
+;                   screen (apps/rove/apartment.l) where the seat carries it.
 ;                   HORN=none plays silent on a seat with no sound device
 (module (wade wade-run wade-main wade-new wade-step wade-move wade-frame wade-tables
          wade-size wade-song-new wade-song-feed moon-at swell rings-at tree-of rw sp loop fps
-         slendro song-chunk arc-z morph-z lamp-z lamp-near done-ms texts texts-at pen-rgb rgb-pen)
+         slendro song-chunk arc-z morph-z lamp-z lamp-near done-ms settle-ms wade-aim wade-settle
+         texts texts-at pen-rgb rgb-pen)
 (borrow 'rove)
 (borrow 'play)                          ; the voices, the mix
 (? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
@@ -343,7 +346,8 @@
    r {'x px 'z pz2 't (t + 0.0)}
    (? (st 'done) st
       (: _ (pins st 'pz pz2 'rings (due ? (first-n 5 (r . rs)) rs))
-         (lamp-z - pz2 <= lamp-near ? (pins st 'done 1 'walk 0) st))))
+         (lamp-z - pz2 <= lamp-near ? (pins st 'done 1 'walk 0 'th0 (st 'th) 'hz0 (st 'hz)) st))))
+
  ; a key: h l or the arrows turn, within sixty degrees of ahead, k or up wades on -- there
  ; is no wading back -- u n look up and down, the horizon dropping down the screen to
  ; look up. a tty tells of keys pressed and never of keys let go, and it repeats one key
@@ -353,12 +357,24 @@
    turn (k @ 104 -0.08 -1 -0.08 108 0.08 -2 0.08 0.0)
    mv (k @ 107 0.35 -8 0.35 0.0)
    h (st 'h) tilt (k @ 117 (h // 16) 110 (0 - h // 16) 0)
-   (? (turn != 0.0) (pin st 'th (clamp (th + turn) (0.0 - facing) facing))
+   (? (st 'done) st                     ; arrived: the view is the level's now
+      (turn != 0.0) (pin st 'th (clamp (th + turn) (0.0 - facing) facing))
       (tilt != 0) (pin st 'hz (clamp (st 'hz + tilt) (h // 4) (3 * h // 4)))
-      (st 'done) st
       (mv != 0.0) (wade-move st mv)
       (k = 32) (pin st 'walk (st 'walk ? 0 1))
       st))
+ ; --- arrived: the view is the level's. it turns to the lamp and pitches up until the
+ ; lamp's flame holds the middle of the screen, eased over settle-ms from where the
+ ; player left it, and the level is over done-ms after that ---
+ settle-ms 1500
+ (wade-aim st) (: px (st 'px) dz (lamp-z - st 'pz) dist (sqrt (px * px + dz * dz))
+                  th (clamp (wrap (atan2 (0.0 - px) dz)) (0.0 - facing) facing)
+                  hz (st 'h // 2 + int (st 'foc * (lamp-h - eh) / dist))
+                  [th (clamp hz (st 'h // 4) (st 'h - 1))])
+ (wade-settle st s) (: e (s * s * (3.0 - 2.0 * s)) aim (wade-aim st)
+                       th0 (peep st 'th0 (st 'th)) hz0 (peep st 'hz0 (st 'hz))
+                       (pins st 'th (th0 + (aim 0 - th0) * e)
+                                'hz (int (hz0 + (aim 1 - hz0) * e + 0.5))))
  ; --- the song: a slendro chime now and then, and a gong under it ---------------------
  ; five near-equal steps to the octave, as a gamelan is tuned, in semitones from middle c
  slendro (map (* 2.4) ^5)
@@ -414,17 +430,25 @@
              _ (say out (esc + "[H" + wade-frame st), flush out)
              k (keys ())
              _ (pin st 't (st 't + 1))
-             ; arrived: the clock is noted the first frame, and the level is over done-ms on
+             ; arrived: the clock is noted the first frame, the view settles on the lamp over
+             ; settle-ms, and the level is over done-ms on
              _ (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0)))
-             (? (k = 'quit || (st 'done-at && done-ms <= (clock 0 - st 'done-at))) ()
+             _ (? (st 'done-at) (: s ((clock 0 - st 'done-at) / (1.0 * settle-ms))
+                                   (wade-settle st (1.0 < s ? 1.0 s))))
+             (? (k = 'quit || (st 'done-at && settle-ms + done-ms <= (clock 0 - st 'done-at))) ()
                 (: _ (? (charm? k) (wade-step st k))
                    _ (? (st 'walk) (wade-move st 0.25))
                    spent (clock 0 - t0)
                    _ (spent < tick ? (rest (tick - spent)))
                    (go ()))))
    _ (go ())
-   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
+   ; ..and the card goes back before the next level asks for it
    _ (hn ? (flush hn, close hn))
+   ; arrived: the apartment takes the stage as it stands and gives it back here; a seat
+   ; that carries no apartment ends at the lamp
+   walk (cite 'apartment 'apartment-walk)
+   _ (? (st 'done && walk) (walk ()))
+   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
    _ (drain-keys ())
    _ (raw 0)
    0)

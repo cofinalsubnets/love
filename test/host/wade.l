@@ -78,11 +78,21 @@
        (abs (z3 - 2 * z1) < 0.001) (n3 = 1) (n4 = 5)   ; two steps on, and the back keys took none
        (st 'px = 0.0) (z3 < st 'pz)                    ; facing the bank, the wading is still down the river
        ; ..and the last step is the lamppost's foot, where the level is done: no step, no
-       ; walk, but a turn and a tilt still
-       (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5)) _ (wade-move s 1.0) z (s 'pz)
+       ; walk, and no turn or tilt either -- the view is the level's, and the settle
+       ; takes it from where it was to the aim, eased, all the way by 1: turned to the
+       ; lamp, which is dead ahead, and pitched up, the horizon lower on the screen
+       (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5) 'th 0.5 'hz 20) _ (wade-move s 1.0) z (s 'pz)
           _ (wade-step s 107) _ (wade-step s 32) _ (wade-move s 1.0) _ (wade-step s 108) _ (wade-step s 117)
+          a (wade-aim s)
+          _ (wade-settle s 0.0) t0 (s 'th) h0 (s 'hz)
+          _ (wade-settle s 0.5) t5 (s 'th) h5 (s 'hz)
+          _ (wade-settle s 1.0)
           (s 'done && abs (z - (lamp-z - lamp-near)) < 0.001 && s 'pz = z && s 'walk = 0
-           && 0.0 < s 'th && 24 < s 'hz && !((wade-new 80 48) 'done)))))
+           && abs (t0 - 0.5) < 0.001 && h0 = 20
+           && abs (a 0) < 0.001 && 20 < a 1 < 48
+           && 0.0 < t5 < 0.5 && 20 < h5 < a 1
+           && abs (s 'th - a 0) < 0.001 && s 'hz = a 1
+           && !((wade-new 80 48) 'done)))))
 
 ; --- the words: the first line over the frame between its two points and not at the
 ; --- end, each of its cells in place of a pixel pair, on the average of what it covers
