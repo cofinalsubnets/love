@@ -11,7 +11,7 @@
 // the program has quit (the reset). --image hands the machine a heap image to wake (the one
 // `bake PATH` on the boot line writes, lifted out: `make out/wasm/love.image`).
 // --horn names a file to lay what the machine PLAYS in, as raw 16-bit stereo at the
-// horn's own rate: the AudioWorklet a page has, headless. --press names keys (scan.mjs's
+// horn's own rate: the AudioWorklet a page has, headless. --press names keys (machine.js's
 // names, e.code's spelling) pressed and released in turn on the scan lane, --after
 // seconds into the run, or five seconds after a line of the serial output holds that
 // text: a game's keys, which no tty byte can carry. --for ends the run after that many
@@ -32,7 +32,7 @@ import { Worker } from 'node:worker_threads';
 import { openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n, scan_at, scan_n, c_sh, c_st,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
-import { scanlane, codes } from './scan.mjs';
+import { scanlane, codes } from './machine.js';
 
 const args = process.argv.slice(2);
 let fb = null, dump = null, scale = 0, liftReq = null, image = null, hornFile = null, deaf = false;

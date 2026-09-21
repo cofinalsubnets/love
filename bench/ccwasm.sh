@@ -22,7 +22,7 @@ NODE=$(command -v node 2>/dev/null || true)
 [ -n "$NODE" ] || { echo "ccwasm: no node -- nothing runs a module here" >&2; exit 1; }
 EMCC=${EMCC:-$(command -v emcc 2>/dev/null || true)}
 [ -n "$EMCC" ] || [ ! -x /usr/lib/emscripten/emcc ] || EMCC=/usr/lib/emscripten/emcc
-RUN=$R/inle/wasm/run.mjs
+RUN=$R/inle/wasm/loader.js
 
 rm -rf "$W"; mkdir -p "$W"
 inc="-I$R/love -I$R/inle -I$R/test/libc -I$R/bench/nif"

@@ -1,6 +1,6 @@
 // test/gate/idle.mjs -- the machine at rest STAYS at rest, once it has been typed at.
 // the page writes a key onto two lanes: the terminal's bytes, which the guest reads, and
-// inle/wasm/scan.mjs's scancodes, which only a game ever asks for. the worker holds its
+// inle/wasm/machine.js's scancodes, which only a game ever asks for. the worker holds its
 // sleep while a lane has something in it (cpu.mjs's idle), so a lane nobody reads is a
 // spin for the life of the page -- one keystroke and the core never comes back. the
 // kernel empties an unarmed tap's lane each idle (inle/wasm/arch.c's k_idle) and the

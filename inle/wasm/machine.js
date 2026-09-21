@@ -3,7 +3,11 @@
 // framebuffer, the keyboard its serial line and an AudioWorklet its speaker; the two
 // threads share one ring, which is what lets the kernel's idle really block. one island per .machine on
 // the page, its parts found by class under it, so a page carries the markup (the
-// island on index.html) and this script and no glue.
+// island on index.html) and this script and no glue. the page's half of the machine is
+// all here: the glass that sizes the canvas, the scan lane that sends keys as a keyboard,
+// the hearing that starts the speaker, then the island itself. inle.mjs, node's terminal,
+// and the gates import the first three without a page, so nothing above the island
+// touches the document.
 // a shared ring means the page must be CROSS-ORIGIN ISOLATED. a server that sends the
 // two headers has it already (kiosko does); on a host that will not, coi.js asks for them
 // with a service worker and one reload. no isolation, no machine -- said, not left blank.
@@ -19,10 +23,168 @@
 // about what runs on it. 1024 is what the tower wants, measured: at 256 the walk answers a
 // keypress in twenty-odd SECONDS, and the floor is somewhere under 512. `love seed` wants
 // the same 1024 and ooms under 768, so one number covers both.
-import { ctl_n, ring_n, ring_at, shared_n, scan_at, scan_n, c_sh, c_st } from './cpu.mjs';
-import { scanning } from './scan.mjs';
-import { glass } from './glass.mjs';
-import { hearing } from './hear.mjs';
+import { ctl_n, ring_n, ring_at, shared_n, scan_at, scan_n, c_sh, c_st,
+         horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
+
+// --- the glass: a canvas as REAL pixels ------------------------------------------------
+// the backing store is the element's own box times a ratio settled here, and
+// the zoom says how many of its pixels a glyph pixel gets. the ratio is held to what one
+// frame is worth painting (frame_cap): past that the compositor does the last integer
+// doubling, which is the same grid and costs the machine nothing. the machine is handed
+// the size and the zoom and settles rows and columns itself (inle/wasm/arch.c's k_start,
+// then kmain's fbscale and cbinit) -- which is why
+// nothing here mentions a font size or an aspect ratio, and why a page cannot pick a
+// shape the console then has to live inside.
+//
+// nothing here pins the box: the element's own CSS lays it out and this only follows,
+// which is what lets a page re-measure on a reflow and hand the machine the new size.
+
+// how many pixels the machine may have -- 32 MiB of framebuffer, which covers a retina
+// 1440p canvas and a plain 4K one. a dense screen at full ratio can ask for more than the
+// RAM the worker grows (cpu.mjs's `ram`, 256 MiB by default) wants to spare, and a frame
+// is that many bytes to swizzle each time one goes out; the ratio is what gives, the
+// layout being the reader's.
+const pixel_cap = 8 << 20;
+
+// ..and how many one FRAME is worth, which is a different question and a smaller number.
+// every pixel above this is swizzled and handed over on the machine's own thread
+// (cpu.mjs's blit), so a dense screen spends the guest's time on pixels instead of on the
+// guest -- and on a floor that repaints whether or not you touch it, that is the guest's
+// sound going with it. a console's glyphs are integer-scaled bitmaps and the canvas is
+// `image-rendering: pixelated`, so halving the ratio and doubling the scale to match is
+// THE SAME GRID, pixel for pixel: the compositor does the last doubling, for free and on
+// the GPU, instead of the worker doing it per pixel in a loop.
+const frame_cap = 2 << 20;
+
+// the RESERVATION: the most this canvas can ever be, which is the screen it sits on. the
+// paper is carved at it once, at boot, and the heap gets what is under it, so a later
+// resize lands inside memory the kernel was never given. it is a whole-screen box because
+// that is the largest layout any reflow can arrive at, and it is settled here because the
+// screen is the reader's and not the kernel's.
+const reservation = (r) => Math.min(pixel_cap,
+  Math.round(screen.width * r) * Math.round(screen.height * r));
+
+// `cols` is the MOST columns worth reading: the zoom is the smallest that keeps the grid
+// inside it, so a wide box gets bigger text rather than more of it. a cap and not a floor
+// -- a box one glyph short of the next zoom would otherwise carry twice the columns asked
+// for at half the size, which is the reading kmain's fbscale gives and a page can better,
+// the pixels being the part a page knows and the kernel does not. /proc/vt/scale retunes
+// it aboard, so this is the opening zoom and not a ceiling on one.
+// a page may also ASK for fewer pixels than its screen has (`ratio`): halving the ratio
+// doubles the zoom to match, which is the same grid, and the frame the machine swizzles
+// each time is a quarter the bytes. on a phone that is the difference between a floor
+// that repaints and a horn that keeps up
+export function glass(canvas, cols = 80, ratio = 0) {
+  const n = cols > 0 ? cols : 80;             // a query string's nonsense falls back, never NaN
+  const box = canvas.getBoundingClientRect();
+  // the floor is a floor and not the column target: a narrow screen gets FEWER columns,
+  // never a canvas wider than the box it was laid in
+  const w = Math.max(64, Math.round(box.width)), h = Math.max(16, Math.round(box.height));
+  let r = Math.max(1, Math.round(ratio > 0 ? ratio : (window.devicePixelRatio || 1)));
+  const cap = reservation(r);
+  while (r > 1 && w * h * r * r > Math.min(cap, frame_cap)) r--;
+  // 1..8 is the kernel's own range for a glyph scale (kmain's fbscale, and what
+  // k_fb_reseat will take): past it a huge screen would be refused outright
+  const scale = Math.min(8, Math.max(1, Math.ceil(w / (8 * n))) * r);
+  return { w: w * r, h: h * r, scale, cap }; }
+
+// --- the scan lane: the keyboard as a keyboard -----------------------------------------
+// into the shared ring's scan lane as PS/2 set 1 make and break codes, the bytes the
+// kernel's scancode tap reads (kmain's k_scan_pop) and a game asks for -- a held key is a
+// make with no break behind it, which no serial byte can say. the terminal lane beside it
+// still carries the key as text, so the shell sees a line and a game sees a key at once.
+// physical keys (e.code), so a layout does not move the game's hands.
+export const codes = {
+  Escape: 0x01, Digit1: 0x02, Digit2: 0x03, Digit3: 0x04, Digit4: 0x05, Digit5: 0x06,
+  Digit6: 0x07, Digit7: 0x08, Digit8: 0x09, Digit9: 0x0a, Digit0: 0x0b, Minus: 0x0c,
+  Equal: 0x0d, Backspace: 0x0e, Tab: 0x0f, KeyQ: 0x10, KeyW: 0x11, KeyE: 0x12, KeyR: 0x13,
+  KeyT: 0x14, KeyY: 0x15, KeyU: 0x16, KeyI: 0x17, KeyO: 0x18, KeyP: 0x19, BracketLeft: 0x1a,
+  BracketRight: 0x1b, Enter: 0x1c, ControlLeft: 0x1d, KeyA: 0x1e, KeyS: 0x1f, KeyD: 0x20,
+  KeyF: 0x21, KeyG: 0x22, KeyH: 0x23, KeyJ: 0x24, KeyK: 0x25, KeyL: 0x26, Semicolon: 0x27,
+  Quote: 0x28, Backquote: 0x29, ShiftLeft: 0x2a, Backslash: 0x2b, KeyZ: 0x2c, KeyX: 0x2d,
+  KeyC: 0x2e, KeyV: 0x2f, KeyB: 0x30, KeyN: 0x31, KeyM: 0x32, Comma: 0x33, Period: 0x34,
+  Slash: 0x35, ShiftRight: 0x36, NumpadMultiply: 0x37, AltLeft: 0x38, Space: 0x39,
+  CapsLock: 0x3a, F1: 0x3b, F2: 0x3c, F3: 0x3d, F4: 0x3e, F5: 0x3f, F6: 0x40, F7: 0x41,
+  F8: 0x42, F9: 0x43, F10: 0x44, NumLock: 0x45, ScrollLock: 0x46, NumpadSubtract: 0x4a,
+  NumpadAdd: 0x4e, F11: 0x57, F12: 0x58,
+  // the extended keys wear the 0xe0 prefix, folded onto 0x100 here and unfolded when sent
+  ControlRight: 0x11d, AltRight: 0x138, ArrowUp: 0x148, ArrowLeft: 0x14b, ArrowRight: 0x14d,
+  ArrowDown: 0x150, Home: 0x147, End: 0x14f, PageUp: 0x149, PageDown: 0x151, Insert: 0x152,
+  Delete: 0x153, NumpadEnter: 0x11c, NumpadDivide: 0x135 };
+
+// the lane as a function: (name, up) -> the code sent, or nothing for a name that is not a
+// key. ctl and its constants are cpu.mjs's. a full lane drops the code, as the key lane
+// drops a byte.
+export function scanlane(ring, ctl, { scan_at, scan_n, c_sh, c_st }) {
+  const lane = new Uint8Array(ring, scan_at, scan_n);
+  const push = (bytes) => {
+    let tail = Atomics.load(ctl, c_st);
+    for (const b of bytes) {
+      const n = (tail + 1) % scan_n;
+      if (n === Atomics.load(ctl, c_sh)) break;
+      lane[tail] = b; tail = n; }
+    Atomics.store(ctl, c_st, tail);
+    Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2); };
+  return (name, up) => {
+    const c = codes[name];
+    if (c === undefined) return false;
+    push(c & 0x100 ? [0xe0, (c & 0x7f) | (up ? 0x80 : 0)] : [c | (up ? 0x80 : 0)]);
+    return true; }; }
+
+// wire the element's keys into the lane; a repeat is not a second make
+export function scanning(ring, ctl, el, k) {
+  const send = scanlane(ring, ctl, k);
+  el.addEventListener('keydown', (e) => { if (!e.repeat && send(e.code, 0)) e.preventDefault(); });
+  el.addEventListener('keyup', (e) => { if (send(e.code, 1)) e.preventDefault(); }); }
+
+// --- hearing: letting the machine be heard ---------------------------------------------
+// ring by the time this matters (inle/wasm/horn.c, then cpu.mjs); what is left is the
+// AudioWorklet that plays them, and a page may not start one until it has been touched.
+// so the island hangs `hearing` off the touches that focus the screen: it makes the
+// context once and resumes it on every touch until it runs -- a finger grants nothing on
+// the way down, only on the way up, so the press that builds it cannot always start it.
+// until then cpu.mjs drains the ring off its own clock -- a machine that plays before the
+// reader touches is never blocked, only unheard.
+// c_live is what says which of the two is draining, and it follows the context's state:
+// a suspended context plays nothing and must not be counted on to empty the ring.
+
+export function hearing(ring, ctl, said = (s) => console.warn(s)) {
+  // the context AND the node are held here for the life of the page, and the node is why:
+  // it takes no input, so nothing but this reference keeps it reachable, and a collected
+  // worklet stops draining without saying so -- which the machine would meet as a device
+  // that never empties. cpu.mjs survives that now; it should still not happen.
+  let audio = null, horn = null, made = null, dead = false;
+  const make = async () => {
+    audio = new AudioContext();
+    await audio.audioWorklet.addModule(new URL('./horn.js', import.meta.url));
+    horn = new AudioWorkletNode(audio, 'horn', {
+      numberOfInputs: 0, outputChannelCount: [2],
+      processorOptions: { ring, ctl_n, horn_at, horn_n, c_rate, c_wrote, c_played } });
+    // the machine has been playing unheard, so the first sound lands mid-phrase: it comes
+    // up over a second instead of all at once, and so does every return from a suspension
+    const fade = audio.createGain();
+    fade.gain.value = 0;
+    horn.connect(fade).connect(audio.destination);
+    let was = '';
+    const state = () => {
+      if (audio.state === was) return;
+      was = audio.state;
+      Atomics.store(ctl, c_live, was === 'running' ? 1 : 0);
+      if (was !== 'running') return;
+      const t = audio.currentTime;
+      fade.gain.cancelScheduledValues(t);
+      fade.gain.setValueAtTime(0, t);
+      fade.gain.linearRampToValueAtTime(1, t + 1); };
+    audio.addEventListener('statechange', state);
+    state(); };                                       // a context born running raises no event
+  return async () => {
+    if (dead) return;
+    try { if (!made) made = make(); await made; }
+    catch (e) { dead = true; said('no sound: ' + e.message); return; }
+    if (audio.state !== 'running') audio.resume().catch(() => {});   // not yet allowed: the next touch asks again
+  }; }
+
+// --- the island ----------------------------------------------------------------------
 
 // the module is wasm64: an engine without memory64 says so instead of failing in silence
 const memory64 = () => WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 0]));
@@ -121,7 +283,7 @@ export async function loveMachine(root) {
     rearm(); };
   keys.addEventListener('input', e => { if (!e.isComposing) typed(); });
   keys.addEventListener('compositionend', typed);
-  // SOUND: the samples come out of the same ring and hear.mjs's worklet plays them, from
+  // SOUND: the samples come out of the same ring and `hearing`'s worklet plays them, from
   // the first touch of the screen, which is the earliest a page is allowed to. no sound is
   // not the island failing, so a refusal goes to the console and the machine runs on.
   const hear = hearing(ring, ctl);
@@ -184,11 +346,14 @@ export async function loveMachine(root) {
     else if (m.lift !== undefined) lifted(m);
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
-  // the canvas measured as REAL pixels -- its own box times the device ratio -- and the
-  // zoom a glyph pixel gets there. the kernel settles rows and columns from the two, so
-  // the island's shape is a layout question and nothing the console has to live inside.
+  // the canvas measured as REAL pixels -- its own box times a ratio -- and the zoom a
+  // glyph pixel gets there. the kernel settles rows and columns from the two, so the
+  // island's shape is a layout question and nothing the console has to live inside.
+  // the ratio is one: the console's glyphs are integer-scaled bitmaps, so the compositor's
+  // doubling to the screen's density is the same grid, and the machine's thread swizzles a
+  // box's worth of pixels a frame instead of the screen's. `ratio=0` asks for the device's
   const cols = Number(at('cols', 80));
-  const ratio = Number(at('ratio', 0));            // ..and how many device pixels it may use
+  const ratio = Number(at('ratio', 1));
   const fb = { ...glass(canvas, cols, ratio), post: true };
   // A TAP IS A PLACE. the report is xterm's SGR form (ESC [ < b ; col ; row M) -- what a
   // terminal sends an app that asked for one, and a key an app that did not reads as
@@ -231,4 +396,4 @@ export async function loveMachine(root) {
   refocus();
 }
 
-document.querySelectorAll('.machine').forEach(loveMachine);
+if (typeof document !== 'undefined') document.querySelectorAll('.machine').forEach(loveMachine);

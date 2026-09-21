@@ -1088,7 +1088,7 @@ site-serve: host out/toolmd.stamp
 # ..and `make serve` is the TREE in a browser: kiosko under love's own painter, a .l
 # served syntax-coloured and a .md rendered. it lays the page first through this same
 # make -- web/ and the wasm pair -- and its reply carries the two isolation
-# headers, which is what lets inle/wasm/inle.html's machine run without a service worker.
+# headers, which is what lets the page's machine run without a service worker.
 SERVEPORT ?= 8080
 serve: host
 	@$(ho)/love web -p $(SERVEPORT) $R

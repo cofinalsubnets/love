@@ -215,7 +215,7 @@
                 + "Content-Length: " + show #body + "\r\n"
                 + "Cache-Control: no-cache\r\n"
                 ; the two isolation headers: a page served here may use SharedArrayBuffer
-                ; (inle/wasm/inle.html's machine), and a static page loads nothing
+                ; (the page's machine), and a static page loads nothing
                 ; cross-origin that they would refuse
                 + "Cross-Origin-Opener-Policy: same-origin\r\n"
                 + "Cross-Origin-Embedder-Policy: require-corp\r\n"

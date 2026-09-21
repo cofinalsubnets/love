@@ -66,7 +66,7 @@ void k_kb_sync(int room) {
   long n = __ai_sys(hc_read, 0, (long) b, room < (int) sizeof b ? room : (long) sizeof b, 0, 0, 0);
   for (long i = 0; i < n; i++) kq(b[i]); }
 
-// the scancodes the page queued on their own lane (inle/wasm/scan.mjs), for the tap when a
+// the scancodes the page queued on their own lane (inle/wasm/machine.js's scan lane), for the tap when a
 // game armed it (kmain's k_scan_put) and dropped otherwise, so the lane never fills
 void k_scan_put(uint8_t b);
 bool k_scan_armed(void);

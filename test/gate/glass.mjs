@@ -1,12 +1,12 @@
 // test/gate/glass.mjs -- the page's half of the console's grid, asked without a page.
-// inle/wasm/glass.mjs turns a canvas box into real pixels and the zoom a glyph pixel gets,
+// inle/wasm/machine.js's glass turns a canvas box into real pixels and the zoom a glyph pixel gets,
 // and no lane here has a browser, so the three globals it reads are stubbed and the law
 // is checked as arithmetic: the machine divides the pixels it is handed by the face times
 // the zoom (kmain's cbinit), so the columns are settled HERE and read back the same way.
 // what is asked is the cap -- the box a glyph short of the next zoom is the one that used
 // to carry twice the columns at half the size.
 // usage: node test/gate/glass.mjs
-import { glass } from '../../inle/wasm/glass.mjs';
+import { glass } from '../../inle/wasm/machine.js';
 
 const face = 8;                                  // cga_8x8's width, what cbinit divides by
 globalThis.screen = { width: 2560, height: 1440 };
@@ -45,5 +45,5 @@ for (const r of [1, 2, 3]) {
   const g = grid(1024, 640, r, 80);
   law(g.w <= 1024 * r && g.h <= 640 * r, `at ratio ${r} the pixels stay inside the box`); }
 
-console.log(bad ? `FAIL glass: ${bad} of the grid's laws` : '  glass: ok -- inle/wasm/glass.mjs without a page');
+console.log(bad ? `FAIL glass: ${bad} of the grid's laws` : '  glass: ok -- the glass of inle/wasm/machine.js without a page');
 process.exitCode = bad ? 1 : 0;

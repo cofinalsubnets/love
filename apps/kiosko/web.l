@@ -22,7 +22,7 @@
 ;
 ; and the github page: index.html and web/style.css are written by hand; make web lays the
 ; icon and fonts, make wasm the module and its image, site-wasm copies them beside the
-; loader, and the wasm inle seat (inle/wasm/inle.html) is its own module -- .sbignore drops
+; island, and the machine is the page itself (index.html, inle/wasm/machine.js) -- .sbignore drops
 ; the laid ones from the source, so a checkout serves no machine until they are. where DIR
 ; is the tree (a Makefile and index.html), this lays them through our own make first; where
 ; it is a bare directory the source aboard is laid under it (`love source`) and that tree
@@ -31,7 +31,7 @@
 ; IWAD off their own hosts, builds the game aboard and boots what it built. the page's
 ; own module is laid plain -- a game inside it would answer `doom` at once and the build
 ; would never run. the two isolation headers kiosko's reply sends are what let
-; inle.html's machine run here without its service worker.
+; the page's machine run here without its service worker.
 ;
 ; kiosko is a module: `cite` is the reach, and its miss is checked by name -- () applied
 ; to operands is 1, a miss that would read as a server that started.
@@ -117,7 +117,7 @@ usage: love web [-p PORT] [-n] [DIR]
   -n, --no-build    serve DIR as it is
   DIR               the tree to serve (default .)
 a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
-page is laid first -- make web site-wasm -- and the machine is at /inle/wasm/inle.html.
+page is laid first -- make web site-wasm -- and the machine is the page, at /.
 where DIR is no tree the source aboard is laid under it first (`love source`) and that
 tree is served. this binary drives the page's build; no love is compiled for it.
 "
@@ -173,7 +173,7 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       serve5 (cite 'kiosko 'serve5)
       _ (nil? serve5 ? (say err "web: no kiosko aboard\n", quit 1))
       _ (sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://127.0.0.1:" + show port
-                                  + "/ and the machine /inle/wasm/inle.html\n")) 0)
+                                  + "/, the machine\n")) 0)
       _ (serve5 dir port 0 () (sv-make dir box) ? 0
          (say err ("web: cannot listen on :" + show port), put err 10, quit 1))
       (quit 0))

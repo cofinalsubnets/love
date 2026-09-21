@@ -1,8 +1,7 @@
 // inle/wasm/loader.js -- the environment of moon's wasm artifact, in place of emcc's
 // runtime: Love() instantiates a module and answers the Module its drivers already expect
-// (run.mjs, test/holo/loader.mjs) -- ccall/cwrap, the string marshalling,
-// _malloc/_free,
-// and the HEAPU8/HEAPU32 views. the module imports ONE function, env.__ai_sys, moonlibc's
+// (test/holo/loader.mjs) -- ccall/cwrap, the string marshalling, _malloc/_free, and the
+// HEAPU8/HEAPU32 views. the module imports ONE function, env.__ai_sys, moonlibc's
 // syscall door, and this file is the kernel under it: linux's numbers, the handful the
 // artifact issues -- write, mmap over memory.grow, clock_gettime, exit -- and ENOSYS for
 // the rest. the type law is the arity: every wasm param and answer is an i64, so a number
@@ -13,12 +12,13 @@
 //     wasm      the module's bytes, a URL, or a path; unset: love.wasm beside this file
 //     print     a line of stdout (fd 1); printErr fd 2; both default to the console
 //   Love is also the global `Love`, for a page that loads this file as a module script
-//   and drives it from a classic one.
+//   and drives it from a classic one. run as a program it is a shell running one:
+//     node inle/wasm/loader.js prog.wasm
+//   the program's _start under this kernel, stdout and stderr through, its exit status as ours.
 
-const NR = { write: 1, close: 3, mmap: 9, mprotect: 10, munmap: 11, writev: 20,
-             exit: 60, clock_gettime: 228, exit_group: 231 };
-const EBADF = 9, ENOSYS = 38;
-const PAGE = 65536;
+const EBADF = 9, ENOSYS = 38, PAGE = 65536,
+ NR = { write: 1, close: 3, mmap: 9, mprotect: 10, munmap: 11, writev: 20,
+        exit: 60, clock_gettime: 228, exit_group: 231 };
 
 export class ExitStatus extends Error {
   constructor(status) { super('exit(' + status + ')'); this.name = 'ExitStatus'; this.status = status; } }
@@ -35,16 +35,16 @@ async function bytesOf(wasm) {
   return await (await fetch(at)).arrayBuffer(); }
 
 export default async function Love(opts = {}) {
-  const print = opts.print ?? ((s) => console.log(s));
-  const printErr = opts.printErr ?? ((s) => console.error(s));
-  const dec = new TextDecoder(), enc = new TextEncoder();
-  let memory, brk = 0;                                     // brk: the mmap bump, page-aligned bytes
-  let uni = false;                                         // moon's convention: 16 params in, (i64 i64 f64 f64) out
+  const print = opts.print ?? ((s) => console.log(s)),
+        printErr = opts.printErr ?? ((s) => console.error(s)),
+        dec = new TextDecoder(), enc = new TextEncoder();
+  let memory, brk = 0,                                     // brk: the mmap bump, page-aligned bytes
+      uni = false;                                         // moon's convention: 16 params in, (i64 i64 f64 f64) out
   const u8 = () => new Uint8Array(memory.buffer);
 
   // the kernel: (n a b c d e f) as BigInts, the answer a BigInt (negative errno on refusal)
-  const sys = (...a) => { const r = sys1(...a); return uni ? [r, 0n, 0, 0] : r; };
-  const sys1 = (n, a, b, c, d, e, f) => {
+  const sys = (...a) => { const r = sys1(...a); return uni ? [r, 0n, 0, 0] : r; },
+   sys1 = (n, a, b, c, d, e, f) => {
     switch (Number(n)) {
       case NR.write: {
         const fd = Number(a), p = Number(b), len = Number(c);
@@ -69,31 +69,46 @@ export default async function Love(opts = {}) {
       case NR.exit: case NR.exit_group: throw new ExitStatus(Number(a));
       default: return BigInt(-ENOSYS); } };
 
-  const { instance } = await WebAssembly.instantiate(await bytesOf(opts.wasm), { env: { __ai_sys: sys } });
-  const ex = instance.exports;
+  const { instance } = await WebAssembly.instantiate(await bytesOf(opts.wasm), { env: { __ai_sys: sys } }),
+        ex = instance.exports;
   memory = ex.mem ?? ex.memory;
   uni = Object.values(ex).some((f) => typeof f === 'function' && f.length === 16);
 
   // the marshalling: every wasm param is an i64
-  const toWasm = (t, v) => t === 'number' ? BigInt(Math.trunc(v)) : t === 'boolean' ? (v ? 1n : 0n) : v;
-  const fromWasm = (t, v) => t === 'number' ? Number(v) : t === 'boolean' ? v !== 0n : t === 'string' ? UTF8ToString(Number(v)) : undefined;
-  const lengthBytesUTF8 = (s) => enc.encode(s).length;
+  const toWasm = (t, v) => t === 'number' ? BigInt(Math.trunc(v)) : t === 'boolean' ? (v ? 1n : 0n) : v,
+        fromWasm = (t, v) => t === 'number' ? Number(v) : t === 'boolean' ? v !== 0n : t === 'string' ? UTF8ToString(Number(v)) : undefined,
+        lengthBytesUTF8 = (s) => enc.encode(s).length;
+
   const stringToUTF8 = (s, p, n) => {                     // n counts the terminator, as emcc's does
-    const b = enc.encode(s), k = Math.max(0, Math.min(b.length, n - 1));
-    u8().set(b.subarray(0, k), p); u8()[p + k] = 0; return k; };
+    const b = enc.encode(s),
+          k = Math.max(0, Math.min(b.length, n - 1));
+    u8().set(b.subarray(0, k), p);
+    u8()[p + k] = 0;
+    return k; };
+
   const UTF8ToString = (p, len) => {
-    const h = u8(); if (len === undefined) { len = 0; while (h[p + len]) len++; }
+    const h = u8();
+    if (len === undefined) for (len = 0; h[p + len]; len++);
     return dec.decode(h.slice(p, p + len)); };           // slice: firefox's TextDecoder refuses a view over resizable memory
-  const _malloc = (n) => ccall('malloc', 'number', ['number'], [n]);
-  const _free = (p) => { ccall('free', 'null', ['number'], [p]); };
+
+  const
+   _malloc = (n) => ccall('malloc', 'number', ['number'], [n]),
+   _free = (p) => ccall('free', 'null', ['number'], [p]);
+
   const ccall = (name, ret, types, args) => {
-    const f = ex[name]; if (!f) throw new Error('no export ' + name);
-    const frees = [];
-    const vs = (args ?? []).map((v, i) => {
-      if (types[i] === 'string') { const n = lengthBytesUTF8(v) + 1, p = _malloc(n); stringToUTF8(v, p, n); frees.push(p); return BigInt(p); }
+    const f = ex[name];
+    if (!f) throw new Error('no export ' + name);
+    const frees = [], vs = (args ?? []).map((v, i) => {
+      if (types[i] === 'string') {
+       const n = lengthBytesUTF8(v) + 1, p = _malloc(n);
+       stringToUTF8(v, p, n);
+       frees.push(p);
+       return BigInt(p); }
       return toWasm(types[i], v); });
     // moon's convention: r0..r7 then f0..f7 in, the answer the first of (r0 f0)
-    if (f.length === 16) { while (vs.length < 8) vs.push(0n); while (vs.length < 16) vs.push(0); }
+    if (f.length === 16) {
+     while (vs.length < 8) vs.push(0n);
+     while (vs.length < 16) vs.push(0); }
     try { const r = f(...vs); return fromWasm(ret, Array.isArray(r) ? r[0] : r); } finally { frees.forEach(_free); } };
   const cwrap = (name, ret, types) => (...args) => ccall(name, ret, types, args);
 
@@ -124,21 +139,40 @@ export default async function Love(opts = {}) {
     // drain what the horn has written and queue it; call each animation frame
     pull() {
       if (!ctx || ctx.state !== 'running') return 0;
-      const rate = ccall('ai_horn_rate', 'number', [], []); if (!rate) return 0;
+      const rate = ccall('ai_horn_rate', 'number', [], []);
+      if (!rate) return 0;
       const chans = ccall('ai_horn_chans', 'number', [], []) || 2, want = rate;   // up to a second per pull
-      if (pcmCap < want) { if (pcmBuf) _free(pcmBuf); pcmBuf = _malloc(want * 2); pcmCap = want; }
+      if (pcmCap < want) {
+        if (pcmBuf) _free(pcmBuf);
+        pcmBuf = _malloc(want * 2);
+        pcmCap = want; }
       const got = ccall('ai_horn_drain', 'number', ['number', 'number'], [pcmBuf, want]);
       if (!got) return 0;
-      const frames = (got / chans) | 0; if (!frames) return 0;
-      const pcm = new Int16Array(memory.buffer, Number(pcmBuf), frames * chans);
-      const ab = ctx.createBuffer(chans, frames, rate);
-      for (let c = 0; c < chans; c++) { const ch = ab.getChannelData(c);
+      const frames = (got / chans) | 0;
+      if (!frames) return 0;
+      const pcm = new Int16Array(memory.buffer, Number(pcmBuf), frames * chans),
+            ab = ctx.createBuffer(chans, frames, rate);
+      for (let c = 0; c < chans; c++) {
+        const ch = ab.getChannelData(c);
         for (let i = 0; i < frames; i++) ch[i] = pcm[i * chans + c] / 32768; }
-      const src = ctx.createBufferSource(); src.buffer = ab; src.connect(ctx.destination);
+      const src = ctx.createBufferSource();
+      src.buffer = ab;
+      src.connect(ctx.destination);
       const now = ctx.currentTime, at = Math.max(now + 0.02, playhead);   // a small lead over the clock
-      src.start(at); playhead = at + frames / rate;
+      src.start(at);
+      playhead = at + frames / rate;
       return frames; } };
   M.horn = horn;
   return M; }
 
 if (typeof globalThis !== 'undefined') globalThis.Love = Love;
+
+// the program this file is, when node was handed it and not a module that imports it
+const main = typeof process !== 'undefined' && process.argv[1]
+  && import.meta.url === (await import('node:url')).pathToFileURL(process.argv[1]).href;
+if (main) {
+  const path = process.argv[2];
+  if (!path) { console.error('usage: node inle/wasm/loader.js prog.wasm'); process.exit(2); }
+  const M = await Love({ wasm: path, print: (s) => process.stdout.write(s), printErr: (s) => process.stderr.write(s) });
+  try { M.ccall('_start', 'null', [], []); process.exitCode = 0; }
+  catch (e) { if (e instanceof ExitStatus) process.exitCode = e.status & 255; else throw e; } }

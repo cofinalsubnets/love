@@ -1,6 +1,6 @@
 // inle/wasm/cpu.mjs -- the CPU under love.wasm: a worker that instantiates the
 // module, answers its hypercalls, and never yields. the terminal is the other thread
-// (inle.mjs under node, inle.html in the browser); the two share one ring of key bytes
+// (inle.mjs under node, machine.js in the browser); the two share one ring of key bytes
 // in a SharedArrayBuffer, which is what lets the kernel's idle really block: nanosleep is
 // an Atomics.wait on the ring, one tick or the next key. moonlibc's calls never arrive --
 // kmain writes __ai_osv = -1 and they take inle/sys.c -- so what comes through the one import
@@ -32,7 +32,7 @@ const ENOENT = 2, EBADF = 9, ENOSYS = 38, ENAMETOOLONG = 36;
 // then ring_n bytes of keys from ring_at, scan_n bytes of scancodes (PS/2 set 1, make and
 // break, what the kernel's tap reads and a game wants: a key's release is not a byte),
 // lift_n bytes holding the path of the file asked for, and the horn's own samples.
-// inle.mjs and inle.html write it, this file reads it.
+// inle.mjs and machine.js write it, this file reads it.
 // the ring is the only door into the worker: it blocks inside k_start and idles in an
 // Atomics.wait, so it never returns to an event loop and a postMessage cannot reach it.
 export const ctl_n = 14, ring_n = 4096, ring_at = ctl_n * 4;

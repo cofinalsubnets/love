@@ -93,11 +93,11 @@ if [ -n "$qemu" ]; then
   QEMU=$(command -v "$qemu" 2>/dev/null || true)
   [ -n "$QEMU" ] || { echo "$name: skipped (need $qemu)"; exit 0; }
 fi
-# the wasm machine is node under the loader's kernel (run.mjs), in qemu's seat
+# the wasm machine is node under the loader's kernel (loader.js run as a program), in qemu's seat
 if [ "$arch" = wasm ]; then
   NODE=$(command -v node 2>/dev/null || true)
   [ -n "$NODE" ] || { echo "$name: skipped (need node)"; exit 0; }
-  QEMU="$NODE $PWD/inle/wasm/run.mjs"
+  QEMU="$NODE $PWD/inle/wasm/loader.js"
 fi
 
 # the corpus, first hit wins: an explicit CTSSRC, then the tree-local dl/, then the
