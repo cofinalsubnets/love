@@ -357,13 +357,16 @@
  ; --- the song: a music box out the horn, wind chimes between its plays ---------------
  (grass-tune ls) (score-tune (filter (b \ !(b 'err)) (score-parse ls)) song-cps)
  chime-ring 3.0
+ ; how many tubes may ring at once: a chime is thirty tray passes a chunk, and the page's
+ ; machine cannot afford a gale's eight, which four sound like anyway
+ chime-cap (love-arch @ 'wasm 4 30)
  ; the song's state over a horn h: the tune and how many bars it runs, the pitches the
  ; chimes may ring, a die of its own. mode is 'chimes or 'song; a cue starts the song at
  ; the write head, and when its last bar is scheduled the chimes come back under it
  (grass-song-new bs h st)                  ; st is a wheel: a bare number rolls nothing
   (: ps (foldl (\ acc b (foldl (\ a p (elem p a ? a (p . a))) acc (b 'pitches))) () bs)
    {'tune (score-tune bs song-cps) 'bars #bs 'set (sort ps) 'sb {st} 'h h
-    'fpos 0 'cyc 0 'next 0 'vs () 'mode 'chimes 'chimes 1})
+    'fpos 0 'cyc 0 'next 0 'vs () 'mode 'chimes 'chimes 1 'cap chime-cap})
  (grass-song-cue s) (pins s 'mode 'song 'cyc 0 'next (s 'fpos))
  ; chimes a second: a few in a calm, many in a blow
  (chime-rate wind) (0.25 + wind / 8.0)
@@ -388,7 +391,7 @@
      ; a chime, now and then, off the score's own notes, two octaves up: the die against
      ; the wind's rate per chunk, in thousandths
      sb (s 'sb)
-     _ (? (s 'chimes && s 'mode = 'chimes && two? (s 'set)
+     _ (? (s 'chimes && s 'mode = 'chimes && two? (s 'set) && #(s 'vs) < s 'cap
            && roll sb 1000 < int (chime-rate wind * 1000.0 / 30.0))
           (: at (base + roll sb song-chunk)
              nt ((s 'set) (roll sb #(s 'set)))

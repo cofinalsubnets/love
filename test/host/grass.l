@@ -127,6 +127,10 @@
    (feed n w) (0 < n ? (grass-song-feed s w, feed (n - 1) w) s)
    _ (feed 90 30.0)                            ; three seconds of a gale
    blown #(s 'vs)
+   ; ..and under the page's cap the same gale rings four at most
+   s4 (grass-song-new bs (jug 0) (wheel 7)) _ (pin s4 'cap 4)
+   (feed4 n) (0 < n ? (grass-song-feed s4 30.0, feed4 (n - 1)) s4)
+   _ (feed4 90) capped #(s4 'vs)
    _ (feed 90 0.0) calm #(s 'vs)                ; three seconds of calm: the gale's chimes ring on, few new ones
    set (s 'set)
    _ (grass-song-cue s) _ (feed 2 0.0)
@@ -137,7 +141,7 @@
    g (fresh ()) _ (pins g 'songs '(7.0 7.0 7.0 7.0 7.0 7.0 7.0) 'h 6.9)
    _ (ticks g 30) c1 (g 'cue) _ (pin g 'cue 0) _ (ticks g 300) c2 (g 'cue)
    _ (pin g 'h 30.9) _ (ticks g 30) c3 (g 'cue)
- (test (3 < blown < 30) (calm <= blown + 3)
+ (test (3 < blown < 30) (calm <= blown + 3) (2 <= capped <= 4)
        (#set = 6) (elem 11 set) (elem 13 set) (elem 1 set) !(elem 0 set) !(elem 7 set)   ; the melody's notes, sharped by the key
        (sung = 'song) (0 < sv) (after = 'chimes) (s 'cyc = 6)
        (#(slurp j) = 4 * song-chunk * (182 + int (6 / 0.32 * 30)))
