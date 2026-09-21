@@ -35,10 +35,12 @@
    pn (c 4)
    in (reach g)
    f (apartment-frame g) f2 (apartment-frame g)
-   ; a cube's pane is its glass, in its middle column on the road's side, and the column
-   ; from there to the road is path
-   (pathed? cb) (: q (cb 4) x <q y <>q above (y < hy)
-                   ys (above ? (range (y + 1) hy) (range (hy + road-h) y))
+   ; the river's row in a column -- the stone's counts, it stands in the water -- or -1 where there is none
+   (river-at x) (: ys (filter (y \ elem (t x y) '(4 8)) ^h) (two? ys ? <ys -1))
+   ; a cube's pane is its glass, in its middle column on the river's side, and the
+   ; column from there to the river is path
+   (pathed? cb) (: q (cb 4) x <q y <>q above (y < hy) ry (river-at x)
+                   ys (above ? (range (y + 1) ry) (range (ry + river-h) y))
                    (6 = t x y && x = cb 0 + cube-w // 2 && (above ? (y = cb 1 + cube-h - 1) (y = cb 1))
                     && all (yy \ 3 = t x yy) ys))
    (walls cb) (filter (i \ (: x (i % w) y (i // w)
@@ -50,9 +52,17 @@
    _ (each ^30 (i \ apartment-turn g '(0 -1)))                   ; thirty turns at the wall
    now (map (m \ [(m 'x) (m 'y)]) (g 'ms))
  (test (rows f = h + 2) (f = f2)                                ; the note row, the plain, the bar
-       (all (x \ 4 = t x hy && 4 = t x (hy + road-h - 1)) ^(east + 1))   ; the road, from the octagon's east edge off the map west
-       (hx < east < w - 1) (4 != t (east + 1) hy)                ; ..and no further
+       (all (x \ 0 <= river-at x) ^(east + 1))                   ; the river, from the octagon's east edge off the map west
+       (hx < east < w - 1) (river-at (east + 1) < 0)             ; ..and no further
+       (all (x \ |(river-at x - river-at (x + 1)) <= 1) ^east)   ; ..a row a column, never a jump
+       (any (x \ river-at x != hy) ^(east + 1))                  ; ..and it wanders
+       ; ..but runs straight past the pairs that stand either side of it
+       (all (cb \ (? (cb 1 <= hy - 1 < cb 1 + cube-h || cb 1 <= hy + 1 < cb 1 + cube-h)
+                     (all (x \ river-at x = hy) (range (cb 0) (cb 0 + cube-w)))
+                     1))
+            (d 'cubes))
        (all (cb \ cb 0 + cube-w - 1 <= east) (d 'cubes))
+       (: st (d 'stone) (8 = t <st <>st && <st < 5 && |(<>st - river-at (<st - 1)) <= 1))   ; the stone in the bed near the west edge
        (8 = #(d 'cubes)) (all pathed? (d 'cubes))               ; eight, each with a path in
        (all (cb \ all (i \ 6 = peep (d 't) i 0) (walls cb)) (d 'cubes))   ; ..each glass all round
        (all (cb \ c 1 <= cb 1) (d 'cubes))                     ; yours on the top row
@@ -114,11 +124,20 @@
        (7 = t <pn <>pn) (open? d <pn <>pn)                       ; the pane is shards, and a way
        (g 'desert) (2 = peep (d 't) out 0)                        ; the grass outside is sand
        (1 = t (p 'x) (p 'y)) (all (i \ 1 = peep (d 't) i 0) (filter (i \ inside? c (i % w) (i // w)) ^(w * h)))
-       (any (i \ 4 = peep (d 't) i 0) (keys in))                 ; ..and the road is a walk away
+       (any (i \ 5 = peep (d 't) i 0) (keys in))                 ; ..and the riverbed is a walk away
        (all (m \ m 'bones && m 'gl = bones-glyph) (g 'ms))        ; the others are bones
        (bones = map (m \ [(m 'x) (m 'y)]) (g 'ms))               ; ..where they stood
        (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2), p 'x = <pn && p 'y = <>pn)   ; out onto the pane
-       (rows (apartment-frame g) = h + 2)))
+       (rows (apartment-frame g) = h + 2)
+       ; the river is dry to the west edge, and walked: a step onto the stone reads it,
+       ; and a step west off the map along the bed is the way out
+       (all (i \ 4 != peep (d 't) i 0) ^(w * h))
+       (any (i \ 0 = i % w && 5 = peep (d 't) i 0) (keys in))
+       (: st (d 'stone) _ (pins p 'x (<st + 1) 'y <>st) _ (apartment-turn g '(-1 0))
+          (p 'x = <st && p 'y = <>st && two? (g 'sign)))
+       (: st (d 'stone) _ (apartment-turn g 32) wy (<(filter (y \ 5 = t 0 y) ^h))
+          _ (pins p 'x 0 'y wy) _ (apartment-turn g '(-1 0))
+          ('west = g 'over))))
 
 ; --- the song: the drone from the first frame, the phrase soon after and again every so
 ; --- often, each note with its echoes behind it; the drum sounds where it is asked for
@@ -142,6 +161,7 @@
    loud (slurp j2)
  (test (#quiet = 5 * 4 * song-chunk) (any (i \ 0 != quiet (i * 89)) ^(#quiet // 89)) (k0 = 0)   ; the drone, before any phrase
        (n0 = 1)
+       (: y ((drone-voice ()) 1 (iota 4800)) (1.0 < amax y - amin y))   ; ..and it is a wave, not a level
        (k1 = 1) (any (i \ 0 != heard (i * 89)) ^(#heard // 89))          ; the phrase, once, and heard
        ; a phrase is its notes and each note's echoes, every echo behind its note and softer
        (: s3 (apartment-song-new (jug 0) (wheel 7)) _ (apartment-song-feed s3) _ (pin s3 'next 0) _ (apartment-song-feed s3)

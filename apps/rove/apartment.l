@@ -1,12 +1,14 @@
 ; apartment -- the level after the river: you come to inside a glass cube on a grassy
 ; plain, one of eight standing in an octagon, a flat side up, yours the left of the top
-; pair; the road runs through the octagon's middle from its east edge off the map to the
-; west, and each cube's path drops straight to it; there is no way out. someone is in
-; every other cube, wandering. a stranger stands
-; outside against your glass, named in blocks and greeting you in blocks, and you talk
-; through the pane. when the talk is done the stranger is gone, the pane shatters to a
-; drum, the others are bones where they stood, and the grass past the glass goes over
-; to desert -- the grass inside stays -- and the plain is yours to walk.
+; pair; a river runs through the octagon's middle from its east edge off the map to the
+; west, meandering a little, and each cube's path drops straight to it; there is no way
+; out. someone is in every other cube, wandering. a stranger stands outside against your
+; glass, named in blocks and greeting you in blocks, and you talk through the pane. when
+; the talk is done the stranger is gone, the pane shatters to a drum, the others are
+; bones where they stood, the grass past the glass goes over to desert -- the grass
+; inside stays -- and the river runs dry: a stone stands in its bed near the west edge,
+; an inscription on it, and the way off the map is west along the bed, into the garage
+; (apps/rove/garage.l) where the seat carries it.
 ;
 ; a roguelike floor on rove: the plain is laid, not delved, the size of the screen and
 ; lit end to end; the painter is rove's and the keys the tower's. the talk is a tree the
@@ -25,7 +27,7 @@
 (module (apartment apartment-run apartment-walk apartment-main apartment-new apartment-turn
          apartment-frame apartment-bar apartment-lay apartment-face apartment-stride
          apartment-stir chat chat-key chat-node chat-end chat-book blocks blocks-name
-         cube-w cube-h road-h inside? oct-pt apartment-song-new apartment-song-feed
+         cube-w cube-h river-h inside? oct-pt stone-lines apartment-song-new apartment-song-feed
          apartment-sfx phrase phrase-gap phrase-ring phrase-slow phrase-every phrase-vary phrase-first
          phrase-echoes drone-voice drone-notes song-chunk npc-glyph bones-glyph)
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
@@ -36,11 +38,12 @@
 (borrow 'play)                          ; the voices, the mix; harp is cited, never borrowed
 (:
  esc (string 27)
- ; --- the plain: tiles in a cask, (x y) indexed. 1 grass, 2 sand, 3 a path, 4 the road,
- ; 6 glass -- looked through and never entered -- and 7 shards, where glass was
+ ; --- the plain: tiles in a cask, (x y) indexed. 1 grass, 2 sand, 3 a path, 4 the river,
+ ; 5 its bed once dry, 6 glass -- looked through and never entered -- 7 shards, where
+ ; glass was, and 8 the stone in the bed
  cube-w 9                               ; a cube on a grid whose cells are twice as tall as wide
  cube-h 5
- road-h 1                               ; the road is a row: the octagon's west pair leave it one
+ river-h 3                              ; rows the river takes; the pairs either side of it stand off it
  ; the ground is solid blocks, each in a pen off its ramp by one still frame of the
  ; walk's shimmer (ink-drift), so the colour runs in smooth bands and not a mottle. the
  ; ramps run pale to deep; span is the band of the field they cover, its four sines
@@ -48,8 +51,12 @@
  ground-glyph "█"
  grass-ramp [118 112 76 70 40 34 28 22]
  sand-ramp [187 180 179 178 172 136 137 101]
- road-ramp [137 95 94 94 58 58 52 52]
+ water-ramp [45 39 38 32 33 27 26 25]
+ bed-ramp [180 179 137 136 95 94 58 58]        ; the bed dry: silt, browns
+ road-ramp [137 95 94 94 58 58 52 52]          ; the shards lie on this
  path-ramp [180 137 137 95 94 94 58 58]
+ stone-glyph "▄"                        ; the stone: a half block, grey, on the bed
+ stone-pen 245
  ramp-span 3.0
  glass-face '("▒" 117)
  shard-glyph "░"                        ; ..on the road's brown: glass on the ground
@@ -65,6 +72,13 @@
  ; --- the words: every line the level says; a ~ takes the next value ---
  w-glass   "the glass holds"
  w-edge    "the plain goes on and on"
+ w-water   "the river is deep and quick"
+ stone-ttl "a stone"
+ stone-lines '("a flat stone in the riverbed, worn smooth, an inscription cut into it."
+               ""
+               "the letters are too worn to read."
+               ""
+               "-- any key --")
  w-shatter "the pane bursts into a thousand pieces, and the grass beyond it goes to sand"
  w-bar     "~  turn ~"
  open-ttl  "apartment"
@@ -91,7 +105,7 @@
  chat-foot "-- ~ --"
 
  ; --- laying the plain: grass end to end, eight cubes in an octagon about the middle,
- ; the road through the middle from the octagon's east edge west off the map, and a
+ ; the river through the middle from the octagon's east edge west off the map, and a
  ; path from each cube straight down or up to it ---
  ; a point of the octagon: k of eight, clockwise from the right of the top pair -- the
  ; octagon stands turned an eighth of a slice, a flat side up, as the vale's stones do
@@ -104,28 +118,39 @@
  ; leaves through -- the pane the stranger stands at, on yours. yours is the first, the
  ; left of the top pair; the rest follow clockwise from it
  (apartment-lay w h sb) (:
-   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'rows h 'cols w 'solid '(6)}
+   d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'rows h 'cols w 'solid '(6 4)}
    _ (each ^(w * h) (i \ pin (d 't) i 1))
    cx (w // 2) cy (h // 2)
    rx (cx - cube-w // 2 - 2) ry (cy - cube-h // 2 - 1)
    (cube x0 y0) (each ^cube-h (j \ each ^cube-w (i \ dput d (x0 + i) (y0 + j)
                   (j = 0 || j = cube-h - 1 || i = 0 || i = cube-w - 1 ? 6 1))))
-   ; a cube at its point, and its path: straight down its middle column to the road,
-   ; or up to it, from the pane in the wall that faces the road -- a fibre
-   (lay k) (: pt (oct-pt cx cy rx ry ((k + 7) % 8))
-              mx <pt my <>pt x0 (mx - cube-w // 2) y0 (my - cube-h // 2)
-              _ (cube x0 y0)
-              above (my < cy)
-              pane (above ? [mx (y0 + cube-h - 1)] [mx y0])
-              ya (above ? (y0 + cube-h) (cy + road-h)) yb (above ? cy y0)
-              _ (each ^(yb - ya) (j \ dput d mx (ya + j) 3))
-              [x0 y0 cube-w cube-h pane])
-   cubes (map lay ^8)
+   ; a cube at its point: its corner, and the pane in the wall that faces the river. the
+ ; pairs either side of the river stand off it by a cell, whatever the octagon says
+   off (river-h // 2 + 1 + cube-h // 2)
+   (cube-at k) (: j ((k + 7) % 8) pt (oct-pt cx cy rx ry j)
+                  mx <pt my (elem j '(1 2 5 6) ? (<>pt < cy ? (cy - off) (cy + off)) <>pt)
+                  x0 (mx - cube-w // 2) y0 (my - cube-h // 2)
+                  _ (cube x0 y0)
+                  [x0 y0 cube-w cube-h (my < cy ? [mx (y0 + cube-h - 1)] [mx y0])])
+   cubes (map cube-at ^8)
    c <cubes
-   ; the road: through the middle, from the octagon's east edge off the map to the west
+   ; the river: through the middle, from the octagon's east edge off the map to the
+   ; west, so many rows a column, wandering a row or two on two sines -- and straight
+   ; where a cube stands beside it
    east (foldl (\ a cb (: e (cb 0 + cube-w - 1) (a < e ? e a))) 0 cubes)
-   _ (each ^(east + 1) (x \ each ^road-h (j \ dput d x (cy + j) 4)))
-   (pins d 'cubes cubes 'cube c 'hub [cx cy] 'east east 'sd (roll sb 1000000)
+   mid (cy - river-h // 2)                                ; the top row when it runs straight
+   (bend x) (mid + int (1.4 * sin (x * 0.17) + 0.9 * sin (x * 0.053)))
+   (river-y x) (: y (bend x) (all (j \ 1 = dat d x (y + j)) ^river-h ? y mid))
+   _ (each ^(east + 1) (x \ each ^river-h (j \ dput d x (river-y x + j) 4)))
+   ; ..and each cube's path: straight down its middle column to the river, or up to it,
+   ; from the pane -- a fibre
+   _ (each cubes (cb \ (: pn (cb 4) mx <pn above (<>pn < cy)
+                          ya (above ? (<>pn + 1) (river-y mx + river-h)) yb (above ? (river-y mx) <>pn)
+                          (each ^(yb - ya) (j \ dput d mx (ya + j) 3)))))
+   ; the stone in the bed near the west edge, midstream, under the water until it is dry
+   stone [2 (river-y 2 + river-h // 2)]
+   _ (dput d <stone <>stone 8)
+   (pins d 'cubes cubes 'cube c 'hub [cx cy] 'east east 'stone stone 'sd (roll sb 1000000)
            'skin (ink-drift h w (roll sb 1000 / 10.0) 0.0)   ; where in the drift it stopped
            'in [(c 0 + cube-w // 2) (c 1 + cube-h // 2)]))
  ; strictly inside a cube: past its glass on every side
@@ -171,24 +196,29 @@
                     (: c (filter (c \ 48 + <c = k) chs)
                        (chat g (two? c ? (<c 2) (g 'talk))))))
  ; the end: the stranger gone, the pane to shards, a drum, the others bones where they
- ; stood, and every blade of grass past your cube's glass to sand
+ ; stood, every blade of grass past your cube's glass to sand, and the river dry
  (chat-end g) (: d (g 'd) w (d 'w) c (d 'cube)
                  _ (pins g 'talk () 'sign () 'npc () 'desert 1 'sfx ('drum . g 'sfx))
                  _ (each (g 'ms) (m \ pins m 'gl bones-glyph 'hue bones-pen 'bones 1))
                  _ (pin (d 't) (g 'pane) 7)
-                 _ (each ^(w * d 'h) (j \ (? (1 = peep (d 't) j 0 && !(inside? c (j % w) (j // w)))
-                                             (pin (d 't) j 2))))
+                 _ (each ^(w * d 'h) (j \ (: t (peep (d 't) j 0)
+                                            (? (1 = t && !(inside? c (j % w) (j // w))) (pin (d 't) j 2)
+                                               (4 = t) (pin (d 't) j 5)))))
                  (note g w-shatter))
 
  ; --- a turn: a sign standing takes the key, else a step ------------------------------
- ; bumping the pane the stranger stands at opens the talk; any other glass holds, and
- ; the plain's edge does too
+ ; bumping the pane the stranger stands at opens the talk; any other glass holds, the
+ ; river does, and the plain's edge does too -- but for the west edge along the dry
+ ; bed, which is the way out. a step onto the stone reads it
  (apartment-stride g mv) (: p (g 'p) d (g 'd) nx (p 'x + <mv) ny (p 'y + <>mv)
                             i (nx + d 'w * ny) t (dat d nx ny) npc (g 'npc)
    (? (npc && nx = npc 'x && ny = npc 'y) (chat g 'start)
       (t = 6) (npc && i = g 'pane ? (chat g 'start) (note g w-glass))
+      (t = 4) (note g w-water)
+      (nx < 0 && 5 = dat d 0 ny) (pin g 'over 'west)
       !(open? d nx ny) (note g w-edge)
-      (pins p 'x nx 'y ny)))
+      (: _ (pins p 'x nx 'y ny)
+         (t = 8 ? (pin g 'sign (stone-ttl . stone-lines))))))
  ; ..and the others wander their cubes a step a turn, over grass alone, while they can
  (apartment-stir g) (: d (g 'd) sb (g 'sb)
    (taken? x y) (any (m \ m 'x = x && m 'y = y) (g 'ms))
@@ -213,13 +243,14 @@
  (apartment-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
    ents (filter tablet? ((g 'p) . (g 'npc) . g 'ms))
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
-   (ramp-of t) (t @ 1 grass-ramp 2 sand-ramp 3 path-ramp 4 road-ramp ())
+   (ramp-of t) (t @ 1 grass-ramp 2 sand-ramp 3 path-ramp 4 water-ramp 5 bed-ramp 8 (g 'desert ? bed-ramp water-ramp) ())
    (ground-pen rp x y) (ramp-pen rp (peep sk [y x] 0.0))
    ; a mob on a block wears the block's colour under it, its own over -- or its inverse
    ; where the two would not tell apart; on glass it stands on nothing
    (\ i (: e (spot i) x (i % w) y (i // w) t (peep (d 't) i 0) rp (ramp-of t)
            (? (e && rp) (: bg (ground-pen rp x y) [(e 'gl) [(legible (e 'hue) bg) bg]])
               e [(e 'gl) (e 'hue)]
+              (t = 8 && g 'desert) [stone-glyph [stone-pen (ground-pen rp x y)]]   ; the stone, once the water is off it
               rp [ground-glyph (ground-pen rp x y)]
               (t = 7) [shard-glyph [glass-pen (ground-pen road-ramp x y)]]
               (t @ 6 glass-face '(32 0))))))
@@ -240,8 +271,8 @@
  ; next chunk
  song-chunk (song-rate // 30)
  song-gain 5200.0
- phrase [6.5 8.5 -0.5]
- phrase-gap 0.7                         ; seconds from one note of it to the next
+ phrase [-5.5 -3.5 -12.5]
+ phrase-gap 1.2                         ; seconds from one note of it to the next
  phrase-ring 3.0                        ; ..and how long a note takes to die away
  phrase-slow 1.2                        ; ..both by this much more for each octave down, less for each up
  phrase-every 10                        ; seconds between phrases..
@@ -250,7 +281,7 @@
  phrase-octaves 3                       ; the octave: one of this many, about middle c's
  phrase-echoes '((0.09 0.45) (0.21 0.28) (0.37 0.16))   ; a note's returns: seconds behind it, and how loud
  drone-notes [-24.5 -17.5]              ; the phrase's c and g, two octaves under middle c's, flat as they are
- drone-gain 0.22
+ drone-gain 2.22
  drone-swell 0.05                       ; the undulation, in cycles a second..
  drone-swell-depth 0.35                 ; ..and how much of the drone it takes away at its ebb
  drone-waver 0.3                        ; the pitch's wander, in cycles a second..
@@ -262,7 +293,7 @@
                     (fn ix) (: t (ix * (1.0 / song-rate))
                                ph (sin (t * twopi * drone-waver) * drone-waver-depth)
                                sw (1.0 - drone-swell-depth * (0.5 + 0.5 * sin (t * twopi * drone-swell)))
-                               (foldl (\ acc f (acc + sin (t * twopi * f + ph))) (t * 0.0) fs) * (sw / #fs))
+                               ((foldl (\ acc f (acc + sin (t * twopi * f + ph))) (t * 0.0) fs) * (sw / #fs)))
                     [1099511627776 fn (drone-gain * 0.5) (drone-gain * 0.5)])
  (apartment-song-new h st) {'h h 'fpos 0 'vs [(drone-voice ())] 'sb {st}
                             'next (phrase-first * song-rate) 'struck 0}
@@ -317,7 +348,12 @@
                         (loop k (clock 0))))
    _ (say out (esc + "[2J"))
    _ (loop 0 0)
+   ; ..and the card goes back before the next level asks for it
    _ (? hn (flush hn, close hn))
+   ; west along the dry bed: the garage takes the stage as it stands and gives it back
+   ; here; a seat that carries no garage ends at the edge
+   next (cite 'garage 'garage-walk)
+   _ (? (g 'over = 'west && next) (next ()))
    g)
  ; ..and the verb around it: the screen raised here and put back here
  (apartment-run _) (: _ (raw 1)
