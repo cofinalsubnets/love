@@ -194,6 +194,15 @@ const memory64 = () => WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 
 const CSI = { Enter: [13], Backspace: [127], Tab: [9], Escape: [27], Delete: [27, 91, 51, 126],
               ArrowUp: [27, 91, 65], ArrowDown: [27, 91, 66], ArrowRight: [27, 91, 67], ArrowLeft: [27, 91, 68],
               Home: [27, 91, 72], End: [27, 91, 70], PageUp: [27, 91, 53, 126], PageDown: [27, 91, 54, 126] };
+// a hardware key's bytes, or null for a key the terminal has no bytes for: ctrl with a
+// letter is the control byte, alt with a character is an escape before it, as xterm
+// sends meta and as the guest's readers take it, and meta or ctrl otherwise is nothing
+export function keybytes(e) {
+  const b = CSI[e.key];
+  if (b || e.key.length !== 1) return b || null;
+  const c = e.key.codePointAt(0), t = [...new TextEncoder().encode(e.key)];
+  return e.ctrlKey && c >= 64 && c < 128 ? [c & 31] : e.ctrlKey || e.metaKey ? null
+       : e.altKey ? [27, ...t] : t; }
 
 export async function loveMachine(root) {
   const q = c => root.querySelector('.' + c);
@@ -260,11 +269,7 @@ export async function loveMachine(root) {
   chip.addEventListener('click', () => { rearm(); keys.focus({ preventScroll: true }); });
   // a hardware key, off either element: the bytes a serial terminal sends
   const onkey = e => {
-    let b = CSI[e.key];
-    if (!b && e.key.length === 1) {
-      const c = e.key.codePointAt(0);
-      b = e.ctrlKey && c >= 64 && c < 128 ? [c & 31] : e.ctrlKey || e.metaKey || e.altKey ? null
-        : [...new TextEncoder().encode(e.key)]; }
+    const b = keybytes(e);
     if (!b) return;
     e.preventDefault(); push(b); };
   canvas.addEventListener('keydown', onkey);

@@ -5,8 +5,9 @@
 // the zoom (kmain's cbinit), so the columns are settled HERE and read back the same way.
 // what is asked is the cap -- the box a glyph short of the next zoom is the one that used
 // to carry twice the columns at half the size.
+// ..and the bytes a hardware key sends, the same way: keybytes on a made-up event.
 // usage: node test/gate/glass.mjs
-import { glass } from '../../inle/wasm/machine.js';
+import { glass, keybytes } from '../../inle/wasm/machine.js';
 
 const face = 8;                                  // cga_8x8's width, what cbinit divides by
 globalThis.screen = { width: 2560, height: 1440 };
@@ -44,6 +45,21 @@ law(zooms[0] <= zooms[1] && zooms[1] <= zooms[2], 'the zoom climbs with the box,
 for (const r of [1, 2, 3]) {
   const g = grid(1024, 640, r, 80);
   law(g.w <= 1024 * r && g.h <= 640 * r, `at ratio ${r} the pixels stay inside the box`); }
+
+// the keys: a character is its bytes, shift is whatever character the keymap made of it,
+// ctrl with a letter the control byte, alt an escape before the character -- and the same
+// escape before a shifted one, so both together reach the guest as one key -- while meta
+// is nothing and an arrow is its own sequence under any modifier
+const key = (k, m = {}) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, ...m });
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+law(same(keybytes(key('1')), [49]), 'a digit is its byte');
+law(same(keybytes(key('!')), [33]), 'shift is the character the keymap made');
+law(same(keybytes(key('a', { ctrlKey: true })), [1]), 'ctrl with a letter is the control byte');
+law(same(keybytes(key('1', { altKey: true })), [27, 49]), 'alt is an escape before the key');
+law(same(keybytes(key('!', { altKey: true })), [27, 33]), 'alt and shift together, one escape');
+law(keybytes(key('1', { metaKey: true })) === null, 'meta is nothing');
+law(same(keybytes(key('ArrowUp', { altKey: true })), [27, 91, 65]), 'an arrow is its sequence under alt too');
+law(keybytes(key('Shift')) === null, 'a modifier alone is nothing');
 
 console.log(bad ? `FAIL glass: ${bad} of the grid's laws` : '  glass: ok -- the glass of inle/wasm/machine.js without a page');
 process.exitCode = bad ? 1 : 0;
