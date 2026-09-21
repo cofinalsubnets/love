@@ -49,7 +49,6 @@
          "C5 1.75 - .25 B4 2"
          "E4 3.5 - .5"
          "C4 1 G4 1.25 - .25 F4 .25 E4 .25 C4 1")
- song-rate (love-arch @ 'wasm 16000 48000)
  song-cps 0.32                          ; bars a second: a music box wound down
  song-chunk (song-rate // 30)           ; a frame's worth, thirty a second
  song-gain 11000.0
@@ -433,8 +432,6 @@
  ; painted only when the tick it shows is on time -- a seat too slow to draw every tick
  ; (the page draws one in forty milliseconds) still ticks at the clock's rate and still
  ; sounds, and gives up frames rather than either.
- song-lead (6 * song-chunk)                             ; queued ahead: a fifth of a second
- song-lead-max (20 * song-chunk)                        ; ..and at most this, the ring holding a second
  tick-ms (1000.0 / fps)
  ; a sign stands deaf for half a second, then waits for a key; the song plays under it
  ; either way, since a beat is what feeds the horn. deaf by the clock and not by beats:
@@ -457,15 +454,8 @@
    ; frame's painting: a fifth of a second is a desktop's answer and a phone's silence.
    ; so the gap is measured, held at its recent worst -- halving every two seconds, by
    ; the clock and not by calls -- and the lead follows it
-   pace {'t (clock 0) 'gap 0.0}
-   (pace! _) (: t (clock 0)
-                d (1.0 * (t - pace 't))
-                v ((d / 2000.0) 0.5 * pace 'gap)
-                _ (pins pace 't t 'gap (v < d ? d v))
-                (pace 'gap))
-   (lead _) (: n (int (2.5 * pace! () * song-rate / 1000.0))
-               (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
-   (feed _) (: l (lead ())
+   pace (pacer ())
+   (feed _) (: l (song-lead-of (pace! pace))
                (fill _) (? (sng && horn-lag hn < l) (grass-song-feed sng (g 'wind), fill ()) ())
                (fill ()))
    (beat _) (feed (), rest 5)                           ; a sign's idle: the lead, then a breath

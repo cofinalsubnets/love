@@ -850,6 +850,15 @@
 ; the climb raised is the one the slop is to run on. a missed cite is a silent end.
 (test !(() = (cite 'slop 'slop-walk)))
 
+; --- the horn's lead: a fifth of a second on a seat that keeps up, two and a half gaps
+; on one that lags, a second at most; the pacer holds a gap at its recent worst and lets
+; it go by the clock
+(test (song-lead-of 0.0 = song-lead) (song-lead-of 33.0 = song-lead)
+      (song-lead < song-lead-of 200.0 < song-lead-max) (song-lead-of 200.0 = int (0.5 * song-rate))
+      (song-lead-of 5000.0 = song-lead-max))
+(: p (pacer ()) g0 (pace! p) _ (rest 60) g1 (pace! p) _ (rest 5) g2 (pace! p)
+ (test (g0 < 5.0) (55.0 <= g1) (g1 * 0.9 < g2 <= g1)))   ; a long gap held over a short one after it
+
 ; --- the sign: the tower holds one up before a step is taken, the first key buys its
 ; coming down and nothing else, and the bar under it is never covered
 (: g (crawl-new 40 16 (wheel 7))

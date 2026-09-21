@@ -4,14 +4,15 @@
 ; been shown; fov is line-of-sight over bresenham strides; the painter says a frame of
 ; painted cells into any port, each cell's face the game's own function, so frames gate
 ; headless; the helm turns a key into a steer; the sign is a box over the frame; the
-; words machine fills a line's ~ and {braces}; and the keys are paced, so a key held
-; down is not a key pressed again. the tower (apps/rove/tower.l) and the slop
+; words machine fills a line's ~ and {braces}; the keys are paced, so a key held
+; down is not a key pressed again; and the horn's lead is paced by the frame gap. the tower (apps/rove/tower.l) and the slop
 ; (apps/rove/slop.l) borrow it; it gates headless in test/host/rove.l.
 (module (rove cell-of cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
          fill first-n fit fit-in fov hole key-drain key-wait lead lim lit? mix mob-at note
-         nth-on open-book open? pad page-foot paint paint-live pen pens repeat-gap roll
+         nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pens repeat-gap roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
-         sign-rect sign-top sign-tpen snip-l steer tail? tap-steer toward vlen)
+         sign-rect sign-top sign-tpen snip-l song-lead song-lead-max song-lead-of song-rate steer
+         tail? tap-steer toward vlen)
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
@@ -355,6 +356,26 @@
       n))
  ; the queue eaten: keys typed at what stood before are not typed at what stands now
  (drain-keys _) (cue? 0 ? (see in, drain-keys ()))
+
+ ; --- the horn: the rate a game plays at, and how far ahead of the speaker it feeds ----
+ ; every sample is a closure call, so the wasm seat -- slower, and its page resamples
+ ; any rate -- plays at a third of the 48k every card takes
+ song-rate (love-arch @ 'wasm 16000 48000)
+ ; THE QUEUE MUST OUTLAST THE GAP BETWEEN FEEDS, and on a slow seat that gap is one
+ ; frame's painting: a fifth of a second is a desktop's answer and a phone's silence. so
+ ; the gap is measured -- a pacer, asked once a feed, holds it at its recent worst,
+ ; halving every two seconds by the clock and not by calls -- and the lead follows it:
+ ; two and a half gaps, never under the fifth, never over the second a card's ring holds
+ song-lead (6 * (song-rate // 30))
+ song-lead-max (20 * (song-rate // 30))
+ (pacer _) {'t (clock 0) 'gap 0.0}
+ (pace! p) (: t (clock 0)
+              d (1.0 * (t - p 't))
+              v ((d / 2000.0) 0.5 * p 'gap)
+              _ (pins p 't t 'gap (v < d ? d v))
+              (p 'gap))
+ (song-lead-of gap) (: n (int (2.5 * gap * song-rate / 1000.0))
+                       (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
  ; ..and for a while: a box that goes up over what the keys were typed at
  settle-slice 25
  (settle ms) (? (0 < ms) (drain-keys (), rest settle-slice, settle (ms - settle-slice)))

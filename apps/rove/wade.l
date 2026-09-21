@@ -23,7 +23,7 @@
 ;                   HORN=none plays silent on a seat with no sound device
 (module (wade wade-run wade-main wade-new wade-step wade-move wade-frame wade-tables
          wade-size wade-song-new wade-song-feed moon-at swell rings-at tree-of rw sp loop fps
-         slendro song-rate song-chunk)
+         slendro song-chunk)
 (borrow 'rove)
 (borrow 'play)                          ; the voices, the mix
 (? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
@@ -246,10 +246,8 @@
  ; --- the song: a slendro chime now and then, and a gong under it ---------------------
  ; five near-equal steps to the octave, as a gamelan is tuned, in semitones from middle c
  slendro (map (d \ d * 2.4) ^5)
- song-rate (love-arch @ 'wasm 16000 48000)
  song-chunk (song-rate // fps)                          ; a frame's worth
  song-gain 11000.0
- song-lead (6 * song-chunk)                             ; queued ahead: a fifth of a second
  chime-odds 12                                          ; a chime's chance a chunk, in thousandths: one every three seconds or so
  ; the song: its port, a spun die, the frames written, the voices ringing, when the gong
  ; is next due, and how many strikes there have been
@@ -274,8 +272,8 @@
    (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
  ; the tty: every key waiting is read each frame and the last one acts, so a held key
  ; moves once a frame and stops when it is let go; the horn is fed until a lead stands
- ; queued, ahead of anything else the loop does; a frame's rest is what the tick has
- ; left after the painting
+ ; queued, ahead of anything else the loop does, the lead paced by the frame gap (rove's
+ ; pacer); a frame's rest is what the tick has left after the painting
  (wade-run _) (: _ (raw 1)
    _ (say out (esc + "[?1049h" + esc + "[?25l" + esc + "[2J"))
    ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
@@ -289,7 +287,10 @@
    tick (1000 // fps)
    hn (: h (horn song-rate 2) (? (nom? h) () h))
    sng (? hn (wade-song-new hn (wheel (clock 0))) ())
-   (feed _) (? (sng && horn-lag hn < song-lead) (wade-song-feed sng, feed ()))
+   pace (pacer ())
+   (feed _) (: l (song-lead-of (pace! pace))
+               (fill _) (? (sng && horn-lag hn < l) (wade-song-feed sng, fill ()))
+               (fill ()))
    (keys last) (? (cue? 0) (: k (edkey in) (? ((k = 113) || (k = 27)) 'quit (keys ((charm? k) ? k last)))) last)
    (go _) (: t0 (clock 0)
              _ (feed ())
