@@ -454,13 +454,14 @@ lvm(lvm_natp) {
 
 
 // (cue? p): would `see` answer without parking? the dual of the park law -- all
-// three terms (pushback, buffered run, fd), or a port with bytes in hand reads
+// three terms (pushback, buffered run -- the borrowed one too, for the static input
+// port that reads through it -- and fd), or a port with bytes in hand reads
 // "not ready". it asks will you answer, not is there data: a hung-up fd reads
 // ready and the see answers -1. a non-port asks about stdin (the bare (cue? 0)).
 static lvm(lvm_key) {
  Sp[0] = io_route(g, iop(Sp[0]) ? Sp[0] : (word) &ai_stdin);   // the bare (cue? 0) asks about stdin, so it routes too
  struct ai_io *i = (struct ai_io*) Sp[0];
- Sp[0] = (getcharm(i->ungetc_buf) != EOF || bio_rpending(bio_of(g, i))
+ Sp[0] = (getcharm(i->ungetc_buf) != EOF || ai_io_pending(g, i)
           || ai_ready((int) ai_io_fd(i), ai_wait_in)) ? putcharm(1) : zero;
  Ip += 1;
  ai_musttail return Continue(); }

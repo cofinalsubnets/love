@@ -92,7 +92,7 @@ static ai_inline bool bio_wpending(struct ai_bio *b) {
 bool wait_buffered(struct ai *g, lvm_t *ap, word x, int fd) {
  return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
      && ai_io_fd((struct ai_io*) x) == fd
-     && bio_rpending(bio_of(g, (struct ai_io*) x)); }
+     && bio_rpending(rbio_of(g, (struct ai_io*) x)); }
 
 // the write run outgrew its backing: double it, pending bytes and all (only
 // reachable when a device took less than the whole run)
@@ -596,7 +596,7 @@ lvm(lvm_await) {
  if (iop(Sp[0])) {
   intptr_t fd = ai_io_fd((struct ai_io*) Sp[0]);
   // the buffer counts: a port holding bytes is readable however quiet its fd is
-  if (fd >= 0 && !bio_rpending(bio_of(g, (struct ai_io*) Sp[0])) && !ai_ready(fd, ai_wait_in)) {
+  if (fd >= 0 && !bio_rpending(rbio_of(g, (struct ai_io*) Sp[0])) && !ai_ready(fd, ai_wait_in)) {
    g->next_wait_fd = fd;
    ai_musttail return Ap(lvm_yield_sw, g); } }
  ai_musttail return Next(1); }

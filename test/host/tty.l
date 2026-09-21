@@ -24,6 +24,7 @@
 ; an ESC with a key hard behind it reads as alt-<key> -- and alt-q is not quit. that
 ; run never lands and `slurp` waits on a child that is still playing. a hung gate is
 ; worse than a red one, so every sequence here ends in a quit the app cannot misread.
+(borrow 'synth)   ; the keyboard's own naming of a note, for the alt law
 (: (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
    (has? h n) (: k #n m #h
                  (go i) (? ((m - k) < i) 0 (n = snip h i (i + k)) 1 (go (i + 1)))
@@ -207,5 +208,23 @@
     ((8 . 6) = at <>d))                                      ; you stand where the level puts you
  e (run "out/love story" "k:q\r" 14 60)
  _ (test ((7 . 6) = at <>e))                                 ; ..and k is one row north
+; --- the synth: alt is an escape before the key, and the two arrive in one write -- the
+; --- quarter tone is struck, not an escape dropped and then a plain note. the keys go
+; --- in once the first frame has come, so the tty is raw by then, and q once the second
+; --- has, so the key's answer is on the screen
+ (frames m acc n) (: (cnt s i k) (i + 6 <= #s ? (cnt s (i + 1) (k + ("leaves" = snip s i (i + 6)))) k)
+                     c (cnt acc 0 0 < n ? (see m) -1)             ; -1 at the end too: a dead child ends the read
+                     (c < 0 ? acc (frames m (acc + string c) n)))
+ sy (spawn "env HORN=none out/love synth" 8 70)
+ sm >sy
+ a1 (frames sm "" 1)
+ _ (say sm "\e1", flush sm)
+ a2 (frames sm a1 2)
+ _ (say sm "q", flush sm)
+ atx (a2 + slurp sm)
+ _ (waitfor <sy)
+ sq (synth-new ())
+ an (synth-name (synth-semis sq [0 0 1]))
+ _ (test !(has? a1 an) (has? a2 an))                       ; not on the legend, on the screen after the key
  _ (test_fin ())
  (puts "tty: ok"))
