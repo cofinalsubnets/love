@@ -184,16 +184,15 @@
  (apartment-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
    ents (filter tablet? [(g 'p) (g 'npc)])
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
-   (ground rp x y) [ground-glyph (ramp-pen rp (peep sk [y x] 0.0))]
-   (\ i (: e (spot i) x (i % w) y (i // w) t (peep (d 't) i 0)
-           (? e [(e 'gl) (e 'hue)]
-              (t @ 1 (ground grass-ramp x y)
-                   2 (ground sand-ramp x y)
-                   3 (ground path-ramp x y)
-                   4 (ground road-ramp x y)
-                   6 glass-face
-                   7 shard-face
-                   '(32 0))))))
+   (ramp-of t) (t @ 1 grass-ramp 2 sand-ramp 3 path-ramp 4 road-ramp ())
+   (ground-pen rp x y) (ramp-pen rp (peep sk [y x] 0.0))
+   ; a mob on a block wears the block's colour under it, its own over -- or its inverse
+   ; where the two would not tell apart; on glass it stands on nothing
+   (\ i (: e (spot i) x (i % w) y (i // w) t (peep (d 't) i 0) rp (ramp-of t)
+           (? (e && rp) (: bg (ground-pen rp x y) [(e 'gl) [(legible (e 'hue) bg) bg]])
+              e [(e 'gl) (e 'hue)]
+              rp [ground-glyph (ground-pen rp x y)]
+              (t @ 6 glass-face 7 shard-face '(32 0))))))
  (apartment-bar g) (fill w-bar [(g 'desert ? "the desert" "the plain") (g 'tn)])
  (apartment-frame g) (: d (g 'd) rows (d 'rows) cols (d 'cols)
    f (:- (slurp j) j (paint (jug 0) d (apartment-face g) (g 'msg) (apartment-bar g)))

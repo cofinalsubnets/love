@@ -8,8 +8,8 @@
 ; down is not a key pressed again; and the horn's lead is paced by the frame gap. the tower (apps/rove/tower.l) and the slop
 ; (apps/rove/slop.l) borrow it; it gates headless in test/host/rove.l.
 (module (rove cell-of cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
-         fill first-n fit fit-in fov hole key-drain key-wait lead lim lit? mix mob-at note
-         nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pens repeat-gap roll
+         fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap lim lit? mix mob-at note
+         nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
          sign-rect sign-top sign-tpen snip-l song-lead song-lead-max song-lead-of song-rate steer
          tail? tap-steer toward vlen)
@@ -128,12 +128,34 @@
    vis)
 
  ; --- the painter: one frame said into a port as painted cells ---
- ; a cell's face is the game's: cell takes a cell's index and answers (glyph hue).
- ; one SGR per hue change, threaded down the frame; the port is any jug, so frames
- ; gate headless.
+ ; a cell's face is the game's: cell takes a cell's index and answers (glyph hue), and
+ ; the hue is a pen or (fg bg), a glyph on a ground -- a mob standing on a block wears
+ ; the block's colour under it. one SGR per hue change, threaded down the frame, and the ground is
+ ; put off right after the glyph it was under; the port is any jug, so frames gate headless.
  pens {}
- (pen n) (: s (pens n) (string? s ? s
-          (: s2 ("\e[38;5;" + show n + "m") (pin pens n s2, s2))))
+ (pen n) (two? n ? ("\e[38;5;" + show <n + ";48;5;" + show <>n + "m")
+          (: s (pens n) (string? s ? s
+             (: s2 ("\e[38;5;" + show n + "m") (pin pens n s2, s2)))))
+ ; a pen's rgb and the pen nearest an rgb, over the cube and the grey ramp both
+ levels [0 95 135 175 215 255]
+ (pen-rgb c) (? (232 <= c) (: v (8 + 10 * (c - 232)) [v v v])
+                (16 <= c) (: i (c - 16) [(levels (i // 36)) (levels ((i // 6) % 6)) (levels (i % 6))])
+                [0 0 0])
+ (cube v) (v < 48 ? 0 ((v - 35) // 40))                 ; x11's rule: a channel to its nearest level
+ (rgb-pen r g b) (: cb (16 + 36 * cube r + 6 * cube g + cube b)
+                    n (((r + g + b) // 3 - 3) // 10)
+                    gy (232 + (? (n < 0) 0 (23 < n) 23 n))
+                    (dist p) (: q (pen-rgb p) (2 (q 0 - r) + 2 (q 1 - g) + 2 (q 2 - b)))
+                    (dist gy < dist cb ? gy cb))
+ ; how far apart two pens are, in rgb squared; and a fg that reads over a bg: the hue
+ ; itself when the two are far enough apart, else its inverse, else black or white,
+ ; whichever the bg is not
+ (pen-gap a b) (: p (pen-rgb a) q (pen-rgb b) (2 (p 0 - q 0) + 2 (p 1 - q 1) + 2 (p 2 - q 2)))
+ legible-gap 14400                                       ; a hundred and twenty of rgb, squared
+ (legible fg bg) (: (far? a) (legible-gap <= pen-gap a bg)
+                    q (pen-rgb fg) inv (rgb-pen (255 - q 0) (255 - q 1) (255 - q 2))
+                    b (pen-rgb bg)
+                    (? (far? fg) fg (far? inv) inv (384 < b 0 + b 1 + b 2) 16 231))
  ; two multiply-shift rounds masked to 32 bits: the dice a cell throws for itself,
  ; so the same cell of the same floor always throws the same number.
  lim 4294967296
@@ -174,7 +196,9 @@
                      p2 <>gh
                    (p != p2 ? (say j (pen p2)),
                     say j (string <gh),
-                    row y (x + 1) (i + 1) p2)))
+                    ; a ground goes no further than its glyph, and the next pen is said whole
+                    two? p2 ? (say j "\e[49m"),
+                    row y (x + 1) (i + 1) (two? p2 ? -1 p2))))
    ; a short row ends on \e[K: a floor narrower than the screen leaves nothing of the
    ; last floor past its edge
    (rows y p) (y >= vy + rows-n ? p
@@ -197,7 +221,8 @@
    (one i) (: x (i % w) y (i // w) sx (x + vx) sy (y - vy + 1)
               (? (top <= sy < rows + 1 && (lit-all? || peep vis i 0) && !(boxed? sx sy))
                  (: gh (cell i)
-                    (say j ("\e[" + show (sy + 1) + ";" + show (sx + 1) + "H" + pen <>gh + string <gh)))))
+                    (say j ("\e[" + show (sy + 1) + ";" + show (sx + 1) + "H" + pen <>gh + string <gh
+                            + (two? <>gh ? "\e[49m" ""))))))
    _ (each cells one)
    (say j "\e[0m", j))
 

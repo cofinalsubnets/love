@@ -99,10 +99,7 @@
 (: e (texts 0) a (e 0) b (e 1) txt (e 2)
    on (wade-frame (pins (wade-new 80 48) 'pz ((a + b) / 2.0))) off (wade-frame (pins (wade-new 80 48) 'pz b))
  (test (has? on txt) (!(has? off txt)) (count on "▀" = 1920 - #txt) (count off "▀" <= 1920)
-       (elem txt (texts-at a)) (!(elem txt (texts-at b)))
-       (pen-rgb 16 = [0 0 0]) (pen-rgb 230 = [255 255 215]) (pen-rgb 233 = [18 18 18])
-       (rgb-pen 0 0 0 = 16) (rgb-pen 255 255 215 = 230) (rgb-pen 18 18 18 = 233) (rgb-pen 20 20 20 = 233)
-       (rgb-pen 128 128 128 = 244) (rgb-pen 215 175 95 = 179)))
+       (elem txt (texts-at a)) (!(elem txt (texts-at b)))))
 
 ; --- the helm: turns stop at sixty degrees, tilts clamp, space walks, the rest is nothing ---
 (: st (wade-new 80 48)

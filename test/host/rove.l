@@ -1010,5 +1010,20 @@
   (all (r \ find r "\e[38;5;34m" 0) srs)         ; the field's pen survives the box
   (all (r \ find r "\e[K" 0) srs)))            ; ..and so does the erase it ends on
 
+; --- pens: a pen's rgb and back, a pair as a glyph on a ground, and a fg that reads
+; --- over a bg -- itself when far enough, otherwise something far
+(: (frame gl hue) (: d {'w 3 'h 1 't (cask 3) 'seen (cask 3)}
+                     _ (each ^3 (i \ pin (d 't) i 1))
+                     (:- (slurp j) j (paint (jug 0) d (i \ (i = 1 ? [gl [hue 22]] [35 22])) "" "")))
+   f (frame 64 228)
+   (kept? fg bg) (fg = legible fg bg)
+ (test (pen-rgb 16 = [0 0 0]) (pen-rgb 231 = [255 255 255]) (pen-rgb 233 = [18 18 18])
+       (all (c \ c = (: q (pen-rgb c) (rgb-pen (q 0) (q 1) (q 2)))) (map (+ 16) ^240))   ; every pen comes back
+       (find (pen [228 22]) ";48;5;22m" 0) (find (pen [228 22]) "38;5;228" 0)
+       (find f ";48;5;22m" 0) (find f "\e[49m" 0)                    ; the ground put on, and off again
+       (kept? 228 22) (kept? 16 231)                                  ; far apart: the hue itself
+       (!(kept? 22 22)) (!(kept? 244 244)) (!(kept? 228 187))         ; too close: another
+       (all (bg \ legible-gap <= pen-gap (legible bg bg) bg) (map (+ 16) ^240))))   ; ..and always far enough
+
 (test_fin ())
 (puts "tower: ok")

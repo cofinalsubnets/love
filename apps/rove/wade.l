@@ -31,7 +31,7 @@
 (module (wade wade-run wade-main wade-new wade-step wade-move wade-frame wade-tables
          wade-size wade-song-new wade-song-feed moon-at swell rings-at tree-of rw sp loop fps
          slendro song-chunk arc-z morph-z lamp-z lamp-near done-ms settle-ms wade-aim wade-settle
-         texts texts-at pen-rgb rgb-pen)
+         texts texts-at)
 (borrow 'rove)
 (borrow 'play)                          ; the voices, the mix
 (? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
@@ -81,16 +81,6 @@
  texts [[10.0 20.0 "found the river again"]]
  text-pen 230 text-row -3
  (texts-at pz) (map (e \ e 2) (filter (e \ e 0 <= pz < e 1) texts))
- ; a pen's rgb and the pen nearest an rgb, over the cube and the grey ramp both
- levels [0 95 135 175 215 255]
- (pen-rgb c) (? (232 <= c) (: v (8 + 10 * (c - 232)) [v v v])
-                (16 <= c) (: i (c - 16) [(levels (i // 36)) (levels ((i // 6) % 6)) (levels (i % 6))])
-                [0 0 0])
- (cube v) (v < 48 ? 0 ((v - 35) // 40))                 ; x11's rule: a channel to its nearest level
- (rgb-pen r g b) (: cb (16 + 36 * cube r + 6 * cube g + cube b)
-                    gy (232 + clamp (((r + g + b) // 3 - 3) // 10) 0 23)
-                    (dist p) (: q (pen-rgb p) (2 (q 0 - r) + 2 (q 1 - g) + 2 (q 2 - b)))
-                    (dist gy < dist cb ? gy cb))
  maz 0.5 mel 0.36 mang 0.14           ; the moon's bearing and height at the start, and its angular radius
  (lerp a b v) (a + v * (b - a))
  ; what is on the screen: [cx cy r foot pw v] -- the disc's centre and radius, the row
