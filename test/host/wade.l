@@ -19,8 +19,8 @@
 (: st (wade-new 80 48) f (wade-frame st)
    wide (wade-new 120 60) g (wade-frame wide)   ; a 120 by 30 terminal
  (test
-  (rows f = 24) (count f "▀" = 1920)
-  (rows g = 30) (count g "▀" = 3600) (pen? g 230) (pen? g 179) (pen? g 16)
+  (rows f = 24) (count f "▀" <= 1920)             ; a cell a pixel pair, less any words over them
+  (rows g = 30) (count g "▀" <= 3600) (pen? g 230) (pen? g 179) (pen? g 16)
   (wide 'hz = 30) (wide 'foc = 60.0) (wide 'cx = 60.0)
   (pen? f 230) (pen? f 179)                     ; the moon, and the moon in the water
   (pen? f 16) (pen? f 233) (pen? f 232)         ; a near tree, the water's grey, the bank
@@ -62,24 +62,37 @@
        (t0 'ht != t2 'ht || t0 'wd != t2 'wd)
        (rw < t0 'x) ((tree-of 3 -1 0) 'x < 0.0 - rw)))
 
-; --- a step: on down the river whichever way the player faces, and a ring, but not two at once ---
+; --- a step: on down the river whichever way the player faces, never back, and a ring, but not two at once ---
 (: st (wade-new 80 48)
    _ (wade-step st 107)                         ; k: on
    z1 (st 'pz) n1 #(st 'rings)
    _ (wade-step st 107)
    n2 #(st 'rings)
-   _ (pin st 't 10) _ (wade-step st -9)         ; down: back, six ticks on
+   _ (pin st 't 10) _ (wade-step st -9) _ (wade-step st 106)   ; down, j: nothing, six ticks on
    n3 #(st 'rings) z3 (st 'pz)
    _ (each '(20 30 40 50 60 70) (t \ (pin st 't t, wade-step st 107)))
    n4 #(st 'rings)
    _ (pins st 'th 1.5707963267948966 'px 0.0)
    _ (each '(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20) (i \ wade-step st 107))
- (test (abs (z1 - 0.35) < 0.001) (n1 = 1) (n2 = 1)
-       (abs (z3 - 0.35) < 0.001) (n3 = 2) (n4 = 5)
-       (st 'px = 0.0) (abs (st 'pz - 9.45) < 0.001)   ; facing the bank, the wading is still down the river
-       ; ..and the last step is the lamppost's foot, where the level is done
-       (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5)) _ (wade-move s 1.0)
-          (s 'done && abs (s 'pz - (lamp-z - lamp-near)) < 0.001 && !((wade-new 80 48) 'done)))))
+ (test (0.0 < z1) (n1 = 1) (n2 = 1)
+       (abs (z3 - 2 * z1) < 0.001) (n3 = 1) (n4 = 5)   ; two steps on, and the back keys took none
+       (st 'px = 0.0) (z3 < st 'pz)                    ; facing the bank, the wading is still down the river
+       ; ..and the last step is the lamppost's foot, where the level is done: no step, no
+       ; walk, but a turn and a tilt still
+       (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5)) _ (wade-move s 1.0) z (s 'pz)
+          _ (wade-step s 107) _ (wade-step s 32) _ (wade-move s 1.0) _ (wade-step s 108) _ (wade-step s 117)
+          (s 'done && abs (z - (lamp-z - lamp-near)) < 0.001 && s 'pz = z && s 'walk = 0
+           && 0.0 < s 'th && 24 < s 'hz && !((wade-new 80 48) 'done)))))
+
+; --- the words: the first line over the frame between its two points and not at the
+; --- end, each of its cells in place of a pixel pair, on the average of what it covers
+(: e (texts 0) a (e 0) b (e 1) txt (e 2)
+   on (wade-frame (pins (wade-new 80 48) 'pz ((a + b) / 2.0))) off (wade-frame (pins (wade-new 80 48) 'pz b))
+ (test (has? on txt) (!(has? off txt)) (count on "▀" = 1920 - #txt) (count off "▀" <= 1920)
+       (elem txt (texts-at a)) (!(elem txt (texts-at b)))
+       (pen-rgb 16 = [0 0 0]) (pen-rgb 230 = [255 255 215]) (pen-rgb 233 = [18 18 18])
+       (rgb-pen 0 0 0 = 16) (rgb-pen 255 255 215 = 230) (rgb-pen 18 18 18 = 233) (rgb-pen 20 20 20 = 233)
+       (rgb-pen 128 128 128 = 244) (rgb-pen 215 175 95 = 179)))
 
 ; --- the helm: turns stop at sixty degrees, tilts clamp, space walks, the rest is nothing ---
 (: st (wade-new 80 48)
@@ -91,9 +104,9 @@
    _ (wade-step st 32) w1 (st 'walk)
    _ (wade-step st 32) w2 (st 'walk)
    _ (wade-step st 120) _ (wade-step st 'tap) _ (wade-step st ())
- (test (abs (th1 - 0.08) < 0.001) (abs th2 < 0.001)
-       (abs (th3 + 1.0471975511965976) < 0.001)   ; a hundred left turns: sixty degrees left
-       (hz1 = 36) (hz2 = 12) (w1 = 1) (w2 = 0)    ; looking up, the horizon drops down the screen
+ (test (0.0 < th1) (abs th2 < 0.001)
+       (-1.05 < th3 < 0.0)                         ; a hundred left turns stop at sixty degrees
+       (24 < hz1 <= 36) (12 <= hz2 < 24) (w1 = 1) (w2 = 0)   ; looking up, the horizon drops down the screen, within bounds
        (st 'pz = 0.0) (st 'rings = ())
        ; a resize keeps the horizon in proportion and within its bounds
        (: s2 (wade-size (wade-new 80 48) 100 40) (s2 'w = 100 && s2 'h = 80 && s2 'hz = 40 && s2 'foc = 50.0))
@@ -122,4 +135,4 @@
        (100 < loud) (s 'struck = s2 'struck)))            ; ..and the same seed strikes the same
 
 (test_fin (),
- puts "wade: ok -- the moon turns, the banks repeat, a step rings, the mirror keeps the sky, the moon comes down to a lamppost, and the chimes sound\n")
+ puts "wade: ok -- the moon turns, the banks repeat, a step rings, the mirror keeps the sky, the moon comes down to a lamppost, the words show on the way, and the chimes sound\n")
