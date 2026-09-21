@@ -168,5 +168,14 @@
        (has? night "38;5;230;")                 ; stars
        (has? noon "38;5;118;")))                ; you, in the bright green
 
+; --- the kept rows: a frame off the kept rows and clouds is the frame a fresh painter
+;     says, by day and by night, and rows were kept
+(: g (fresh ()) _ (pin g 'h 12.0)
+   _ (grass-frame g) _ (ticks g 30) a (grass-frame g)
+   _ (pins g 'kept {} 'cm ()) b (grass-frame g)
+   _ (pin g 'h 1.0) _ (grass-frame g) _ (ticks g 5) n1 (grass-frame g)
+   _ (pins g 'kept {} 'cm ()) n2 (grass-frame g)
+ (test (a = b) (n1 = n2) (0 < #(keys (g 'kept)))))
+
 (test_fin (),
- puts "grass: ok -- the tune reads, the week waters, and the frame paints day and night\n")
+ puts "grass: ok -- the tune reads, the week waters, the frame paints day and night, and the kept rows say the same\n")

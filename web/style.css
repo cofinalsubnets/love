@@ -141,3 +141,14 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
   code { overflow-wrap: anywhere; }
   td { word-break: break-word; }
 }
+
+/* --- the full page: the machine alone, the canvas the whole viewport. dvh follows a
+   phone's toolbar as it comes and goes, vh the fallback where dvh is unknown; the keys
+   chip keeps its row under the screen, which is how a phone raises the keyboard --- */
+body.full { max-width: none; margin: 0; padding: 0; overflow: hidden;
+            height: 100vh; height: 100dvh; }
+body.full .machine { height: 100%; margin: 0; padding: 0;
+                     border: 0; border-radius: 0; box-shadow: none; }
+body.full .machine .fb { flex: 1; min-height: 0; height: auto; width: 100%; border-radius: 0; }
+body.full .machine .status { position: absolute; left: .5em; top: .5em; z-index: 1; }
+body.full .machine .keys-chip { margin: .2em .4em; }

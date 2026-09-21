@@ -26,7 +26,7 @@
 (? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
 (:
  esc (string 27)
- fps 30
+ fps (love-arch @ 'wasm 15 30)          ; the page's machine paints every cell in the interpreter: half the frames there
  week-secs 420.0                        ; a minute a day
  week-start 6.0                         ; monday, dawn
  week-hours 174.0                       ; ..to the next monday's dawn: seven days
@@ -115,7 +115,7 @@
    clouds (map (\ _ {'x0 (roll sb c * 1.0) 'y (1 + roll sb (r // 2))
                      'w (6.0 + roll sb 13) 'h (1.2 + roll sb 19 / 10.0)}) ^14)
    {'r r 'c c 'h week-start 'fr 0 'sb sb 'bs bs 'me me 'tdays tdays 'covers covers 'clouds clouds
-    'wind (3.0 + roll sb 10) 'wt 8.0 'head (roll sb 360 * 1.0) 'gust 1.0 'drift 0.0
+    'wind (3.0 + roll sb 10) 'wt 8.0 'head (roll sb 360 * 1.0) 'gust 1.0 'drift 0.0 'kept {} 'cm ()
     'songs songs 'sang -1 'cue 0
     'dewday 0 'pts 0 'combo 0 'dk 0 'dms 0 'lk 0 'lt 0 'over 0 'msg ""})
 
@@ -212,14 +212,15 @@
    g)
 
  ; --- the frame --------------------------------------------------------------------
- ; what stands on the sky and the dirt: [cells shade] -- cells is index -> [glyph fg bg],
- ; a bg of -1 taking the sky's own; shade the dirt indices a shadow falls on
+ ; what stands on the sky and the dirt: [cells shade rows] -- cells is index -> [glyph fg
+ ; bg], a bg of -1 taking the sky's own; shade the dirt indices a shadow falls on; rows
+ ; the rows any of it stands on
  (grass-lay g) (:
-   ov {} sh {} r (g 'r) c (g 'c) base (r - 4) top (r - 5)
+   ov {} sh {} ys {} r (g 'r) c (g 'c) base (r - 4) top (r - 5)
    hr (grass-hour g) dl (daylight hr)
    sd (hr < 12.0 ? -1 1)                       ; the shadow's side: west of the blade till noon
-   (put x y cl) (0 <= x < c && 1 <= y < r ? (pin ov (x + c * y) cl))
-   (shade x y) (0 <= x < c ? (pin sh (x + c * y) 1))
+   (put x y cl) (0 <= x < c && 1 <= y < r ? (pin ov (x + c * y) cl, pin ys y 1))
+   (shade x y) (0 <= x < c ? (pin sh (x + c * y) 1, pin ys y 1))
    ; long at dawn and dusk, under the blade at noon, and none by night
    (shadow b) (: n (int (b 'ht * rpi + 0.5))
                  L (int (n * (1.0 - dl) * 1.3 + 1.0))
@@ -244,16 +245,21 @@
    ; the rest first: you are painted over them
    _ (each (g 'bs) (b \ (b 'me ? () (shadow b, blade b))))
    _ (: me (g 'me) (shadow me, blade me))
-   [ov sh])
+   [ov sh ys])
 
  ; the clouds of the day as a tablet of sky index -> depth, 3 at the core down to 0 at
  ; the edge: the cover picks how many show, each an ellipse on the drift, flatter under
  ; than over, its edge dithered, its underside a shade darker, and a little noise
  ; through the whole of it. where two overlap the deeper one shows
- (grass-clouds g) (:
+ ; ..a cloud steps by whole columns, so the layout holds until one steps: it is kept under
+ ; the columns the clouds stand on
+ (grass-clouds g) (: n (3 + int (((g 'covers) (grass-day g)) * 10.0)) drift (g 'drift)
+   key (map (cl \ int (cl 'x0 + drift)) (first-n n (g 'clouds)))
+   kept (g 'cm)
+   (? (two? kept && kept 0 = key) (kept 1)
+      (: cm (clouds-lay g n drift) (pin g 'cm [key cm], cm))))
+ (clouds-lay g n drift) (:
    cm {} r (g 'r) c (g 'c)
-   n (3 + int (((g 'covers) (grass-day g)) * 10.0))
-   drift (g 'drift)
    (deep k v) (: o (peep cm k -1) (o < v ? (pin cm k v)))
    ; a cloud sits on a whole column and is tested by whole columns, so nothing at its
    ; edge moves until the whole of it steps; the noise and the dither are keyed to the
@@ -277,7 +283,7 @@
  (grass-frame g) (:
    j (jug 0) r (g 'r) c (g 'c) base (r - 4)
    hr (grass-hour g) dl (daylight hr)
-   ls (grass-lay g) ov <ls sh <>ls
+   ls (grass-lay g) ov <ls sh <>ls ys (ls 2)
    cm (grass-clouds g)
    skybg (sky-pen hr)
    dark (dl = 0.0 && (hr < 5.5 || 20.5 < hr))
@@ -309,14 +315,25 @@
                         [(dirt-dots (dice x y 3 4)) (s ? 94 (dots (dice x y 17 #dots))) (s ? 58 (dirt (dice (x // 4) y 13 #dirt)))])
         (two? o) [(o 0) (o 1) (o 2 < 0 ? ((sky x y i) 2) (o 2))]
         (sky x y i)))
-   (row y x f b) (x < c ? (: cl (cell x y) f2 (cl 1) b2 (cl 2)
-                            _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
-                            _ (say j (cl 0))
-                            (row y (x + 1) f2 b2)))
+   (row p y x f b) (x < c ? (: cl (cell x y) f2 (cl 1) b2 (cl 2)
+                              _ (f2 != f || b2 != b ? (say p (sgr f2 b2)))
+                              _ (say p (cl 0))
+                              (row p y (x + 1) f2 b2)))
    ; a row is painted to the screen's edge, so it wants no erase after it: under a
    ; pending wrap an erase takes the very glyph that raised it, and the last column
-   ; would go blank
-   (rows y) (y < r ? (row y 0 -1 -1, say j (esc + "[0m\r\n"), rows (y + 1)))
+   ; would go blank. a row nothing stands on is the sky or the dirt alone, the same
+   ; until the light, the clouds, the stars or the sun move: it is kept as its string
+   ; under a key of those, and said again while the key holds
+   bk [skybg (0.0 < dl) (? (0.6 < dl) 2 (0.05 < dl) 1 0) (? (0.3 < dl) 2 (0.05 < dl) 1 0)
+       sx sy (dark ? (g 'fr // 9) 0) (g 'cm 0)]
+   kept (g 'kept)
+   (rows y) (y < r ?
+     (: k (peep kept y ())
+        _ (? (peep ys y 0) (row j y 0 -1 -1, say j (esc + "[0m\r\n"))
+             (two? k && k 0 = bk) (say j (k 1))
+             (: p (jug 0) _ (row p y 0 -1 -1, say p (esc + "[0m\r\n")) s (slurp p)
+                (pin kept y [bk s], say j s)))
+        (rows (y + 1))))
    _ (say j (esc + "[H" + esc + "[0m" + fit (grass-hud g) c + "\r\n"))
    _ (rows 1)
    ; the bar a column short of the screen, so a wrapping console never scrolls the
