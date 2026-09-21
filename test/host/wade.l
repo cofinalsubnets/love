@@ -36,6 +36,18 @@
   (abs (d 0 - (moon (6.5 - 6.283185307179793) 24) 0) < 0.001)
   (abs (big 0 - 2 * a 0) < 0.001) (abs (big 2 - 2 * a 2) < 0.001)))   ; twice the width, twice the moon
 
+; --- ..and goes where the wading takes it: down to the horizon dead ahead, into a lamp
+; --- on a post standing in the water, and the lamppost nearer and taller with every step
+(: (at z) (moon-at (pins (wade-new 80 48) 'pz z))
+   m0 (at 0.0) m1 (at arc-z) m2 (at (arc-z + morph-z)) m3 (at (lamp-z - 10.0))
+   f1 (wade-frame (pins (wade-new 80 48) 'pz arc-z)) f3 (wade-frame (pins (wade-new 80 48) 'pz (lamp-z - 10.0)))
+ (test (m1 0 = 40.0) (m1 1 = 24.0) (m1 4 = 0.0)                 ; the arc ends on the horizon, no post yet
+       (m0 1 < m1 1) (m1 0 < m0 0) (m0 4 = 0.0)                  ; ..from high on the right
+       (m2 2 < 1.0) (m2 2 < m1 2) (24.0 < m2 3) (0.0 < m2 4)     ; contracted into a lamp on a post into the water
+       (m2 2 < m3 2) (m2 3 < m3 3) (m3 1 < m2 1)                 ; nearer: bigger, the foot deeper, the lamp higher
+       (rows f1 = 24) (pen? f1 230) (pen? f1 179)                ; both paint, the lamp and its path
+       (rows f3 = 24) (pen? f3 230) (pen? f3 179)))
+
 ; --- the banks repeat: a whole loop down the river lays the same treeline to within
 ; --- float noise, though the swell rides the river's length and so the water differs
 (: st (wade-new 80 48)
@@ -50,7 +62,7 @@
        (t0 'ht != t2 'ht || t0 'wd != t2 'wd)
        (rw < t0 'x) ((tree-of 3 -1 0) 'x < 0.0 - rw)))
 
-; --- a step: along the heading, kept in the river, and a ring, but not two at once ---
+; --- a step: on down the river whichever way the player faces, and a ring, but not two at once ---
 (: st (wade-new 80 48)
    _ (wade-step st 107)                         ; k: on
    z1 (st 'pz) n1 #(st 'rings)
@@ -64,9 +76,12 @@
    _ (each '(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20) (i \ wade-step st 107))
  (test (abs (z1 - 0.35) < 0.001) (n1 = 1) (n2 = 1)
        (abs (z3 - 0.35) < 0.001) (n3 = 2) (n4 = 5)
-       (abs (st 'px - (rw - 0.8)) < 0.001)))     ; facing the bank, a walk stops at its edge
+       (st 'px = 0.0) (abs (st 'pz - 9.45) < 0.001)   ; facing the bank, the wading is still down the river
+       ; ..and the last step is the lamppost's foot, where the level is done
+       (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5)) _ (wade-move s 1.0)
+          (s 'done && abs (s 'pz - (lamp-z - lamp-near)) < 0.001 && !((wade-new 80 48) 'done)))))
 
-; --- the helm: turns wrap, tilts clamp, space walks, the rest is nothing ---
+; --- the helm: turns stop at sixty degrees, tilts clamp, space walks, the rest is nothing ---
 (: st (wade-new 80 48)
    _ (wade-step st 108) th1 (st 'th)
    _ (wade-step st -1) th2 (st 'th)
@@ -77,8 +92,8 @@
    _ (wade-step st 32) w2 (st 'walk)
    _ (wade-step st 120) _ (wade-step st 'tap) _ (wade-step st ())
  (test (abs (th1 - 0.08) < 0.001) (abs th2 < 0.001)
-       (-3.15 < th3 < 3.15)
-       (hz1 = 12) (hz2 = 36) (w1 = 1) (w2 = 0)
+       (abs (th3 + 1.0471975511965976) < 0.001)   ; a hundred left turns: sixty degrees left
+       (hz1 = 36) (hz2 = 12) (w1 = 1) (w2 = 0)    ; looking up, the horizon drops down the screen
        (st 'pz = 0.0) (st 'rings = ())
        ; a resize keeps the horizon in proportion and within its bounds
        (: s2 (wade-size (wade-new 80 48) 100 40) (s2 'w = 100 && s2 'h = 80 && s2 'hz = 40 && s2 'foc = 50.0))
@@ -86,7 +101,7 @@
 
 ; --- the mirror keeps the sky that is off the top: looking up, the moon's disc is past
 ; --- the screen's edge but its path is in the water; looking down, a full screen paints
-(: st (wade-new 80 48) _ (pins st 'th 0.35 'hz 12) up (wade-frame st)
+(: st (wade-new 80 48) _ (pins st 'th 0.5 'hz 8) up (wade-frame st)
    _ (pin st 'hz 36) down (wade-frame st)
    sky (snip up 0 (find up "\r\n" 0))          ; the first row alone
  (test (rows up = 24) (rows down = 24)
@@ -107,4 +122,4 @@
        (100 < loud) (s 'struck = s2 'struck)))            ; ..and the same seed strikes the same
 
 (test_fin (),
- puts "wade: ok -- the moon turns, the banks repeat, a step rings, the mirror keeps the sky, and the chimes sound\n")
+ puts "wade: ok -- the moon turns, the banks repeat, a step rings, the mirror keeps the sky, the moon comes down to a lamppost, and the chimes sound\n")

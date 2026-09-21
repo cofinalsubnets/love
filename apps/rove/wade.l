@@ -1,5 +1,9 @@
 ; wade -- a night river in half blocks, first person: the sky, a moon and stars, black
 ; forest on either bank, and all of it in the water, rippled where the player wades.
+; the player wades on down the river, facing where they like within sixty degrees of
+; ahead, and the moon goes where the wading takes it: high on the right at the start, it
+; arcs down to the middle of the screen where the water meets the sky, then contracts
+; into the lamp of a lamppost standing in the river, and the level ends at its foot.
 ;
 ; the screen is the terminal, two pixels to a cell: the upper half block, the top pixel
 ; in the pen and the bottom in the ground; the view is ninety degrees wide whatever the
@@ -19,11 +23,12 @@
 ; only wade-run ties the tty and the horn.
 ;
 ; run: love wade    h l or the arrows turn, k j or up down wade on and back, u n look up
-;                   and down, space walks on until pressed again; q or esc leaves.
+;                   and down, space walks on until pressed again; q or esc leaves, and
+;                   reaching the lamppost ends the level.
 ;                   HORN=none plays silent on a seat with no sound device
 (module (wade wade-run wade-main wade-new wade-step wade-move wade-frame wade-tables
          wade-size wade-song-new wade-song-feed moon-at swell rings-at tree-of rw sp loop fps
-         slendro song-chunk)
+         slendro song-chunk arc-z morph-z lamp-z lamp-near)
 (borrow 'rove)
 (borrow 'play)                          ; the voices, the mix
 (? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
@@ -41,6 +46,7 @@
  ; 232 + n is #vvvvvv with v = 8 + 10n, so a grey of brightness v is 232 + (v - 8) / 10.
  ; `love x11 NAME` answers a named colour's cube cell
  moon-pen 230 sea-pen 187             ; #ffffd7 the disc, #d7d7af its seas
+ glass-pen 179 heart-pen 231          ; #d7af5f the lantern's glass; the flame in it is the moon's pale, its heart #ffffff
  tree-pen 16 haze-pen 233             ; #000000 a near tree, #121212 a far one
  bank-pen 232                         ; #080808 the bank, a shade under the water's #121212
  (clamp v lo hi) (v < lo ? lo (hi < v ? hi v))
@@ -49,12 +55,42 @@
  (tn a) (sin a / cos a)
  (min2 a b) (a < b ? a b)
  (max2 a b) (a < b ? b a)
- ; the moon: its bearing, its height, and its angular radius; on a screen whose horizon
- ; is row hz it is [cx cy r], or far off the screen when it is behind the player
- maz 0.35 mel 0.40 mang 0.14
- (moon-at st) (: th (st 'th) hz (st 'hz) foc (st 'foc) rel (wrap (maz - th)) c (cos rel)
-   (? (abs rel < 1.3) [(st 'cx + foc * tn rel) (hz - (foc * tn mel) / c) ((foc * tn mang) / c)]
-      [-999.0 -999.0 0.0]))
+ ; the moon's journey, a piecewise function of how far the player has waded. over the
+ ; first stretch it arcs from high on the right down to dead ahead on the horizon, its
+ ; bearing sweeping in as its height falls; over the next it contracts into the lamp of
+ ; a lamppost standing in the river's middle, a post growing under it to the water; from
+ ; there the lamppost is a thing in the world, nearer and taller with every step, and
+ ; the level ends at its foot
+ arc-z 90.0 morph-z 30.0              ; the stretch the moon arcs over, and the one it contracts over
+ lamp-z 160.0 lamp-h 3.2 lamp-r 0.45  ; where the post stands, and the lamp's height and radius
+ post-w 0.12 lamp-near 3.0            ; the post's half width, and how near its foot is arrived
+ ; the lantern on the post, in the world's units about the lamp's centre: the glass, lit,
+ ; its half width and height; a dark rim around it; and a roof over it, that wide at its
+ ; eaves and that tall to its peak
+ lan-w 0.4 lan-h 0.7 lan-rim 0.08 lan-eave 0.6 lan-roof 0.35
+ lan-taper 0.4                        ; ..and the glass and its rim this much narrower at the bottom than the top
+ maz 0.5 mel 0.36 mang 0.14           ; the moon's bearing and height at the start, and its angular radius
+ (lerp a b v) (a + v * (b - a))
+ ; what is on the screen: [cx cy r foot pw v] -- the disc's centre and radius, the row
+ ; the post's foot stands on and the post's half width, no post while it is the moon, and
+ ; how far along the contraction it is, 0 a moon and 1 a lamp; and far off the screen
+ ; when it is behind the player
+ off-screen [-999.0 -999.0 0.0 -999.0 0.0 0.0]
+ (moon-at st) (: th (st 'th) hz (st 'hz) foc (st 'foc) cx0 (st 'cx) px (st 'px) pz (st 'pz)
+   u (clamp (pz / arc-z) 0.0 1.0)
+   v (clamp ((pz - arc-z) / morph-z) 0.0 1.0)
+   rel (wrap (maz * (1.0 - u) - th)) c (cos rel) el (mel * cos (u * pi / 2.0))
+   moon (? (abs rel < 1.3) [(cx0 + foc * tn rel) (hz - (foc * tn el) / c) ((foc * tn mang) / c) (hz - (foc * tn el) / c) 0.0 0.0]
+           off-screen)
+   dz (lamp-z - pz) dist (sqrt (px * px + dz * dz))
+   rl (wrap (atan2 (0.0 - px) dz - th)) dep (dist * cos rl)
+   lamp (? (abs rl < 1.3 && 0.5 < dep)
+           [(cx0 + foc * tn rl) (hz - (foc * (lamp-h - eh)) / dep) ((foc * lamp-r) / dep)
+            (hz + (foc * eh) / dep) ((foc * post-w) / dep) 1.0]
+           off-screen)
+   (? (v <= 0.0) moon (1.0 <= v) lamp
+      (moon 0 < -900.0 || lamp 0 < -900.0) off-screen
+      (map (i \ lerp (moon i) (lamp i) v) ^6)))
  ; a tree by its bank s (-1 or 1), its row r back from the water and its index k along
  ; the river: where it stands, how tall and wide, and whether its crown is round. the
  ; loop has so many places, and each is hashed once and kept
@@ -124,15 +160,51 @@
    star (0 = throw qa qe 7 41)                                                      ; #8a8a8a twinkling to #bcbcbc
    twinkle (0 = ((throw qa qe 11 3) + (t // 3)) % 3)
    starry (over (over ramp bright 255) star (245 + (5 * twinkle)))
-   dy (y - mn 1) r (mn 2) g1 (r + (1.5 * sc)) g4 (r + (4.0 * sc))
-   ; the moon's layers, on the rows it reaches
+   dy (y - mn 1) r (mn 2) v (mn 5) lit (1.0 <= v)
+   g1 (r + (1.5 * sc)) g4 (r + (4.0 * sc))                                          ; the glow, the lamp's as much as the moon's
+   pw (mn 4) hw (max2 0.5 pw)                                                       ; the post, a pixel at least
+   ; the lantern's parts in pixels, once it is the lamp: the glass a pixel at least, which
+   ; is what the contracted moon was; the rim a pixel around it at least, the eaves a
+   ; pixel past the rim and the roof a pixel tall, so the shape reads however far it is
+   ; -- but only once the glass is wider than a pixel, and the flame's heart with it: a
+   ; housing around a lone point of light is not what a far lamp looks like
+   sz (r / lamp-r)                                                                  ; a world unit in pixels
+   gw (max2 0.5 (lan-w * sz)) gh (max2 0.5 (lan-h / 2.0 * sz))
+   housed (1.25 <= lan-w * sz)                                                     ; the glass three wide at the top
+   rw (max2 (gw + 1.0) ((lan-w + lan-rim) * sz)) rh (max2 (gh + 1.0) ((lan-h / 2.0 + lan-rim) * sz))
+   ev (max2 (rw + 1.0) (lan-eave * sz)) rf (max2 1.0 (lan-roof * sz))
+   reach (rh + rf)                                                                  ; the roof's peak above the lamp's centre
+   ; the moon's layers, on the rows it reaches: the glow, the post over it, black, and
+   ; the disc over that -- or, once it is the lamp, the lantern: the roof, black, the
+   ; rim, the water's grey, the glass, the two tapering down it, and in the glass a
+   ; flame: a teardrop off the glass's floor in the moon's pale, its tip swaying and its
+   ; height breathing with the tick, and a white heart low in it -- a pixel at least,
+   ; which is what the contracted moon was
+   (lantern c dx) (: x2 (dx * dx) ady (abs dy)
+     tp (1.0 - lan-taper * clamp ((dy + gh) / (2.0 * gh + 0.001)) 0.0 1.0)  ; down the glass: 1 at the top
+     gwt (gw * tp) rwt (max2 (gwt + 1.0) ((lan-w + lan-rim) * sz * tp))
+     q (((0.0 - dy) - rh) / rf)                       ; up the roof: 0 at the eaves, 1 at the peak
+     ew (max2 0.5 (ev * (1.0 - q)))
+     roofed (housed ? (over c ((0.0 <= q) * (q <= 1.0) * (x2 <= ew * ew)) tree-pen) c)
+     rimmed (housed ? (over roofed ((x2 <= rwt * rwt) * (ady <= rh)) haze-pen) roofed)
+     glass ((x2 <= gwt * gwt) * (ady <= gh))
+     glassed (over rimmed glass glass-pen)
+     fh (1.5 * gh * (0.85 + 0.15 * sin (1.3 * t)))    ; the flame's height, off the floor to its tip
+     p ((0.6 * gh - dy) / fh)                         ; up the flame: 0 at its foot, 1 at its tip
+     sx (p * gw * (0.3 * sin (0.5 * t) + 0.15 * sin (1.9 * t)))   ; the sway, all of it at the tip
+     fw (max2 0.5 (1.43 * gw * (1.0 - p) * sqrt (max2 0.0 p)))     ; the teardrop, widest a third of the way up
+     f2 ((dx - sx) * (dx - sx))
+     flamed (over glassed (glass * (0.0 <= p) * (p <= 1.0) * (f2 <= fw * fw)) moon-pen)
+     hw2 (max2 0.5 (0.45 * fw))
+     (over flamed (housed * (1.0 <= fw) * glass * (0.05 <= p) * (p <= 0.65) * (f2 <= hw2 * hw2)) heart-pen))   ; ..where the flame is three wide around it
    (mooned _) (: dx (xs - mn 0) r2 (dx * dx + dy * dy)
                  sea (0 = throw (floor (dx + 100.0)) (floor (dy + 100.0)) 21 7)
-                 (over (over (over starry
-                                   (r2 < (g4 * g4)) 237)     ; #3a3a3a the glow, wide
-                             (r2 < (g1 * g1)) 238)           ; #444444 ..and close
-                       (r2 < (r * r)) (over moon-pen sea sea-pen)))
-   (? (abs dy < g4) (mooned ()) starry))
+                 glowed (over (over starry (r2 < (g4 * g4)) 237)     ; #3a3a3a the glow, wide
+                              (r2 < (g1 * g1)) 238)                  ; #444444 ..and close
+                 posted (over glowed ((0.0 < pw) * (0.0 < dy) * (dx * dx <= hw * hw)) tree-pen)
+                 (? lit (lantern posted dx)
+                    (over posted (r2 < (r * r)) (over moon-pen sea sea-pen))))
+   (? (abs dy < g4 || (lit && abs dy <= reach) || (0.0 < pw && 0.0 < dy)) (mooned ()) starry))
  (sky-at y st tb mn t) (: r (peep (tb 'sky) y ())
    (? (tray? r) r (: r2 (sky-row y st tb mn t) (pin (tb 'sky) y r2, r2))))
  ; a row above the horizon: the sky, a far tree's haze over it, a near tree's black over that
@@ -176,7 +248,8 @@
  ; off the bank -- and a ring's crest catching the moon, a step or two lighter
  ; the moon #ffffd7 to #d7af5f, its seas to #af8700, a star to a grey two steps down, the
  ; sky's greys a step down, and the forest and the bank to the water's #121212
- dark {230 179 187 136 238 236 237 235 236 235 235 234 234 234 233 233 16 233 232 233 250 244 245 240 255 247}
+ dark {230 179 187 136 238 236 237 235 236 235 235 234 234 234 233 233 16 233 232 233 250 244 245 240 255 247
+       179 136 231 179}                                   ; the lantern's glass to #af8700, the flame's heart as the moon
  ; ..and a crest: the water's greys two steps up, the moon's gold to #ffd787
  crest {233 235 234 236 235 237 236 238 179 222 136 179 244 250 240 245 247 255 16 233 232 233}
  ; ..the two as trays a pen row indexes
@@ -198,7 +271,9 @@
    c (band (amin yq) (amax yq) haze-pen)
    c2 (over c (y2 < peep (tb 'bots) x2 0.0) haze-pen)
    c3 (over c2 (0.06 < rl) (peep crests c2 haze-pen))
-   (over c3 (0 < bank) bank-pen))
+   c4 (over c3 (0 < bank) bank-pen)
+   pw (mn 4) hw (max2 0.5 pw) dx ((tb 'xs) - mn 0)
+   (over c4 ((0.0 < pw) * (y < mn 3) * (dx * dx <= hw * hw)) tree-pen))
  ; a frame: two pixel rows a cell, one sgr per change, the rows joined by \r\n with no
  ; newline after the last, so a screen of just enough rows never scrolls. a pixel row is
  ; a tray of pens, the sky's and the trees' above the horizon and the water's below it
@@ -219,26 +294,29 @@
  ; the state: the screen, where the player stands and faces, the horizon's row, the
  ; tick, the rings on the water, and whether they walk on by themselves
  (wade-new w h) {'w w 'h h 'cx (w / 2.0) 'foc (w / 2.0) 'hz (h // 2)
-                 'px 0.0 'pz 0.0 'th 0.0 't 0 'rings () 'walk 0}
+                 'px 0.0 'pz 0.0 'th 0.0 't 0 'rings () 'walk 0 'done 0}
  ; the screen's shape: w cells across and r rows, two pixels a row, the horizon kept
  ; where it stood in proportion
  (wade-size st w r) (: h (2 * r) hz ((st 'hz) * h // (st 'h))
    (pins st 'w w 'h h 'cx (w / 2.0) 'foc (w / 2.0) 'hz (clamp hz (h // 4) (3 * h // 4))))
- ; a step along the heading, kept in the river; it sends a ring, but not on the heels
- ; of the last one
- (wade-move st mv) (: th (st 'th) t (st 't) rs (st 'rings)
-   px2 (clamp (st 'px + mv * sin th) (0.8 - rw) (rw - 0.8)) pz2 (st 'pz + mv * cos th)
+ ; a step on down the river, whichever way the player faces, and no further than the
+ ; lamppost's foot, where the level is done; it sends a ring, but not on the heels of
+ ; the last one
+ (wade-move st mv) (: t (st 't) rs (st 'rings) px (st 'px)
+   pz2 (min2 (st 'pz + mv) (lamp-z - lamp-near))
    due (? (rs = ()) 1 (6.0 <= (t - peep (cap rs) 't 0.0)))
-   r {'x px2 'z pz2 't (t + 0.0)}
-   (pins st 'px px2 'pz pz2 'rings (due ? (first-n 5 (r . rs)) rs)))
- ; a key: h l or the arrows turn, k j or up down wade on and back, u n look up and down.
- ; a tty tells of keys pressed and never of keys let go, and it repeats one key at a
+   r {'x px 'z pz2 't (t + 0.0)}
+   (pins st 'pz pz2 'done (lamp-z - pz2 <= lamp-near) 'rings (due ? (first-n 5 (r . rs)) rs)))
+ ; a key: h l or the arrows turn, within sixty degrees of ahead, k j or up down wade on
+ ; and back, u n look up and down -- the horizon dropping down the screen to look up. a
+ ; tty tells of keys pressed and never of keys let go, and it repeats one key at a
  ; time, so a chord cannot be seen: space walks on by itself, and the turns steer it
+ facing (pi / 3.0)
  (wade-step st k) (: th (st 'th)
    turn (k @ 104 -0.08 -1 -0.08 108 0.08 -2 0.08 0.0)
    mv (k @ 107 0.35 -8 0.35 106 -0.35 -9 -0.35 0.0)
-   h (st 'h) tilt (k @ 117 (0 - h // 16) 110 (h // 16) 0)
-   (? (turn != 0.0) (pin st 'th (wrap (th + turn)))
+   h (st 'h) tilt (k @ 117 (h // 16) 110 (0 - h // 16) 0)
+   (? (turn != 0.0) (pin st 'th (clamp (th + turn) (0.0 - facing) facing))
       (tilt != 0) (pin st 'hz (clamp (st 'hz + tilt) (h // 4) (3 * h // 4)))
       (mv != 0.0) (wade-move st mv)
       (k = 32) (pin st 'walk ((st 'walk) ? 0 1))
@@ -298,7 +376,7 @@
              _ (say out (esc + "[H" + wade-frame st), flush out)
              k (keys ())
              _ (pin st 't (st 't + 1))
-             (? (k = 'quit) ()
+             (? (k = 'quit || st 'done) ()
                 (: _ (? (charm? k) (wade-step st k))
                    _ (? (st 'walk) (wade-move st 0.25))
                    spent (clock 0 - t0)
@@ -310,7 +388,7 @@
    _ (drain-keys ())
    _ (raw 0)
    0)
- wade-usage "usage: love wade   (h l turn, k j wade, u n look, space walks; q or esc leaves)"
+ wade-usage "usage: love wade   (h l turn, k j wade, u n look, space walks on to the lamppost; q or esc leaves)"
  (wade-main as) (as @ () (wade-run ())
                       (say err ("wade: " + wade-usage + "\n"), flush err, 2))
  _ (pins (cite 'verbs 'tab) 'wade (udoor 'wade wade-main wade-usage 1 1)))
