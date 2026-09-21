@@ -1,7 +1,8 @@
 ; apartment -- the level after the river: you come to inside a glass cube on a grassy
 ; plain, one of eight standing in an octagon, a flat side up, yours the left of the top
-; pair; each has a path in to the octagon's middle, where the road runs off the map to
-; the west, and no way out. someone is in every other cube, wandering. a stranger stands
+; pair; the road runs through the octagon's middle from its east edge off the map to the
+; west, and each cube's path drops straight to it; there is no way out. someone is in
+; every other cube, wandering. a stranger stands
 ; outside against your glass, named in blocks and greeting you in blocks, and you talk
 ; through the pane. when the talk is done the stranger is gone, the pane shatters to a
 ; drum, the others are bones where they stood, and the grass past the glass goes over
@@ -16,15 +17,16 @@
 ; the game is pure love -- apartment-new, apartment-turn and apartment-frame are state
 ; in and state out, the song feeds any port -- gated headless by test/host/apartment.l.
 ; apartment-walk takes a stage already raised, which is how wade hands over on the same
-; screen, and apartment-run raises one. no music yet: the song is the tower's shape with
-; no bars in it, carrying the sound effects, and apartment-bars is where a tune goes.
+; screen, and apartment-run raises one. the music is three notes on a music box, g a c
+; each a quarter tone flat, at an octave the die picks, every twenty seconds or so; the
+; sound effects ride the same feed.
 ;
 ; run: love apartment    h j k l or the arrows walk, y u b n slant; q or esc leaves
 (module (apartment apartment-run apartment-walk apartment-main apartment-new apartment-turn
          apartment-frame apartment-bar apartment-lay apartment-face apartment-stride
          apartment-stir chat chat-key chat-node chat-end chat-book blocks blocks-name
          cube-w cube-h road-h inside? oct-pt apartment-song-new apartment-song-feed
-         apartment-sfx apartment-tune apartment-bars song-chunk npc-glyph bones-glyph)
+         apartment-sfx phrase phrase-gap phrase-every phrase-vary phrase-first song-chunk npc-glyph bones-glyph)
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
@@ -88,7 +90,8 @@
  chat-foot "-- ~ --"
 
  ; --- laying the plain: grass end to end, eight cubes in an octagon about the middle,
- ; a path from each in to the hub, and the road west from the hub off the map ---
+ ; the road through the middle from the octagon's east edge west off the map, and a
+ ; path from each cube straight down or up to it ---
  ; a point of the octagon: k of eight, clockwise from the right of the top pair -- the
  ; octagon stands turned an eighth of a slice, a flat side up, as the vale's stones do
  ; -- and the eighth is the left of that pair. rx and ry are its reach, across and down
@@ -104,27 +107,24 @@
    _ (each ^(w * h) (i \ pin (d 't) i 1))
    cx (w // 2) cy (h // 2)
    rx (cx - cube-w // 2 - 2) ry (cy - cube-h // 2 - 1)
-   _ (each ^(cx + 1) (x \ each ^road-h (j \ dput d x (cy + j) 4)))
    (cube x0 y0) (each ^cube-h (j \ each ^cube-w (i \ dput d (x0 + i) (y0 + j)
                   (j = 0 || j = cube-h - 1 || i = 0 || i = cube-w - 1 ? 6 1))))
-   ; the cells from one point to another, a step at a time along the longer axis
-   (line x0 y0 x1 y1) (: n (max |(x1 - x0) |(y1 - y0))
-                         (part dv i) (: v (dv * i) ((v + (0 < v ? n // 2 (0 - n // 2))) // n))
-                         (at i) [(x0 + part (x1 - x0) i) (y0 + part (y1 - y0) i)]
-                         (0 < n ? (map at ^(n + 1)) [[x0 y0]]))
-   ; a cube at its point, and its path: the line from its middle to the hub leaves
-   ; through one cell of its glass, the pane, and is dirt from there in, over grass alone
+   ; a cube at its point, and its path: straight down its middle column to the road,
+   ; or up to it, from the pane in the wall that faces the road -- a fibre
    (lay k) (: pt (oct-pt cx cy rx ry ((k + 7) % 8))
               mx <pt my <>pt x0 (mx - cube-w // 2) y0 (my - cube-h // 2)
               _ (cube x0 y0)
-              ln (line mx my cx cy)
-              pane <(filter (q \ 6 = dat d <q <>q) ln)
-              _ (each ln (q \ (? (1 = dat d <q <>q && !(x0 <= <q < x0 + cube-w && y0 <= <>q < y0 + cube-h))
-                                  (dput d <q <>q 3))))
+              above (my < cy)
+              pane (above ? [mx (y0 + cube-h - 1)] [mx y0])
+              ya (above ? (y0 + cube-h) (cy + road-h)) yb (above ? cy y0)
+              _ (each ^(yb - ya) (j \ dput d mx (ya + j) 3))
               [x0 y0 cube-w cube-h pane])
    cubes (map lay ^8)
    c <cubes
-   (pins d 'cubes cubes 'cube c 'hub [cx cy] 'sd (roll sb 1000000)
+   ; the road: through the middle, from the octagon's east edge off the map to the west
+   east (foldl (\ a cb (: e (cb 0 + cube-w - 1) (a < e ? e a))) 0 cubes)
+   _ (each ^(east + 1) (x \ each ^road-h (j \ dput d x (cy + j) 4)))
+   (pins d 'cubes cubes 'cube c 'hub [cx cy] 'east east 'sd (roll sb 1000000)
            'skin (ink-drift h w (roll sb 1000 / 10.0) 0.0)   ; where in the drift it stopped
            'in [(c 0 + cube-w // 2) (c 1 + cube-h // 2)]))
  ; strictly inside a cube: past its glass on every side
@@ -229,20 +229,27 @@
    _ (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()))
    (two? sg ? (sign-over f <sg >sg 1 rows cols) f))
 
- ; --- the song: the tower's shape, a chunk out the card at a time, with no bars in it
- ; yet -- apartment-bars is where the tune goes: a list of bars sounded together, each
- ; slots across one cycle, a slot a voice tablet or () for silence. the sound effects
- ; ride the same feed, put in at the write head so they sound in the next chunk
- song-cps 0.5
+ ; --- the song: a chunk out the card at a time, the river's way. the tune is a phrase
+ ; on a music box -- g a c, each a quarter tone flat, in semitones from middle c -- at an
+ ; octave the die picks, every so many seconds give or take a few; the first soon after
+ ; the start. the sound effects ride the same feed, put in at the write head so they
+ ; sound in the next chunk
  song-chunk (song-rate // 30)
  song-gain 5200.0
- (apartment-bars c) ()
- (apartment-tune c) (: hush (cite 'harp 'hush) pure (cite 'harp 'pure)
-                       fastcat (cite 'harp 'fastcat) stack (cite 'harp 'stack)
-                       (bar sl) (fastcat (map (v \ (tablet? v ? (pure v) hush)) sl))
-                       bars (apartment-bars c)
-                       (two? bars ? (stack (map bar bars)) hush))
- (apartment-song-new h) {'h h 'fpos 0 'cyc 0 'next 0 'vs ()}
+ phrase [6.5 8.5 11.5]
+ phrase-gap 0.5                         ; seconds from one note of it to the next
+ phrase-every 20                        ; seconds between phrases..
+ phrase-vary 5                          ; ..give or take up to this many
+ phrase-first 2
+ phrase-octaves 3                       ; the octave: one of this many, about middle c's
+ (apartment-song-new h st) {'h h 'fpos 0 'vs () 'sb {st} 'next (phrase-first * song-rate) 'struck 0}
+ (strike! s at v) (pin s 'vs (s 'vs + [(mkvoice at v song-rate)]))
+ (phrase! s) (: sb (s 'sb) base (s 'fpos)
+                oct (12.0 * (roll sb phrase-octaves - phrase-octaves // 2))
+                _ (each ^#phrase (i \ strike! s (base + int (i * phrase-gap * song-rate))
+                                         {'s "box" 'note (phrase i + oct) 'gain 0.7 'legato 1.6}))
+                (pins s 'struck (s 'struck + 1)
+                        'next (base + song-rate * (phrase-every - phrase-vary + roll sb (2 * phrase-vary + 1)))))
  ; the drum: a kick and a snare together, and the snare's crack again a beat behind
  (apartment-sfx s g) (: fx (g 'sfx)
                         (at k v) (mkvoice (s 'fpos + int (k * song-rate)) v song-rate)
@@ -252,13 +259,7 @@
                         _ (pin g 'sfx ())
                         (pin s 'vs (s 'vs + filter two? vs)))
  (apartment-song-feed s) (:
-   spc (int (song-rate / song-cps))
-   (ahead _) (? (s 'next <= s 'fpos + song-chunk)
-                (: p (apartment-tune (s 'cyc))
-                   _ (pin s 'vs (cat (s 'vs) (cyc-voices p (s 'cyc) 0 spc song-rate)))
-                   _ (pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc))
-                   (ahead ())))
-   _ (ahead ())
+   _ (? (s 'next <= s 'fpos + song-chunk) (phrase! s))
    base (s 'fpos)
    live (filter (v \ v 0 >= base) (s 'vs))
    _ (pins s 'vs live 'fpos (base + song-chunk))
@@ -271,7 +272,7 @@
    g (apartment-new (c < 100 ? c 100) r (wheel (clock 0)))
    ; the card, if this seat has one: no harp or no horn and the level is quiet
    hn (? (tablet? (cite 'harp)) (: q (horn song-rate 2) (? (nom? q) () q)) ())
-   sng (? hn (apartment-song-new hn) ())
+   sng (? hn (apartment-song-new hn (wheel (clock 0))) ())
    pace (pacer ())
    (feed! _) (? (horn-lag hn < song-lead-of (pace! pace)) (apartment-song-feed sng) (rest 5))
    (idle _) (? sng (feed! ()) (rest 30))

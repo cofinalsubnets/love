@@ -31,13 +31,16 @@
 ; --- stranger outside at the pane; someone in every other cube, wandering it
 (: g (apartment-new 80 22 (wheel 5)) d (g 'd) w 80 h 22 c (d 'cube) p (g 'p) npc (g 'npc)
    (t x y) (dat d x y)
-   hub (d 'hub) hx <hub hy <>hub
+   hub (d 'hub) hx <hub hy <>hub east (d 'east)
    pn (c 4)
    in (reach g)
    f (apartment-frame g) f2 (apartment-frame g)
-   ; a cube's pane is its glass, and a path cell touches it
-   (pathed? cb) (: q (cb 4)
-                   (6 = t <q <>q && any ([dx dy] \ 3 = t (<q + dx) (<>q + dy)) '((1 0) (-1 0) (0 1) (0 -1) (1 1) (-1 -1) (1 -1) (-1 1))))
+   ; a cube's pane is its glass, in its middle column on the road's side, and the column
+   ; from there to the road is path
+   (pathed? cb) (: q (cb 4) x <q y <>q above (y < hy)
+                   ys (above ? (range (y + 1) hy) (range (hy + road-h) y))
+                   (6 = t x y && x = cb 0 + cube-w // 2 && (above ? (y = cb 1 + cube-h - 1) (y = cb 1))
+                    && all (yy \ 3 = t x yy) ys))
    (walls cb) (filter (i \ (: x (i % w) y (i // w)
                               (cb 0 <= x < cb 0 + cube-w && cb 1 <= y < cb 1 + cube-h && !(inside? cb x y))))
                       ^(w * h))
@@ -47,8 +50,9 @@
    _ (each ^30 (i \ apartment-turn g '(0 -1)))                   ; thirty turns at the wall
    now (map (m \ [(m 'x) (m 'y)]) (g 'ms))
  (test (rows f = h + 2) (f = f2)                                ; the note row, the plain, the bar
-       (all (x \ 4 = t x hy && 4 = t x (hy + road-h - 1)) ^(hx + 1))   ; the road, west from the hub off the map
-       (4 != t (w - 1) hy)                                       ; ..and not east
+       (all (x \ 4 = t x hy && 4 = t x (hy + road-h - 1)) ^(east + 1))   ; the road, from the octagon's east edge off the map west
+       (hx < east < w - 1) (4 != t (east + 1) hy)                ; ..and no further
+       (all (cb \ cb 0 + cube-w - 1 <= east) (d 'cubes))
        (8 = #(d 'cubes)) (all pathed? (d 'cubes))               ; eight, each with a path in
        (all (cb \ all (i \ 6 = peep (d 't) i 0) (walls cb)) (d 'cubes))   ; ..each glass all round
        (all (cb \ c 1 <= cb 1) (d 'cubes))                     ; yours on the top row
@@ -116,18 +120,29 @@
        (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2), p 'x = <pn && p 'y = <>pn)   ; out onto the pane
        (rows (apartment-frame g) = h + 2)))
 
-; --- the song: no bars yet, so a fresh song is silence, and the drum is not ---
-(: j (jug 0) s (apartment-song-new j)
+; --- the song: silence at first, then the phrase, and again every so often; the drum
+; --- sounds where it is asked for
+(: j (jug 0) s (apartment-song-new j (wheel 7))
    _ (each ^5 (i \ apartment-song-feed s))
-   quiet (slurp j)
+   quiet (slurp j) k0 (s 'struck)
+   _ (each ^(30 * (phrase-first + 1)) (i \ apartment-song-feed s))    ; on past the first
+   heard (slurp j) k1 (s 'struck)
+   _ (each ^(30 * 3 * phrase-every) (i \ apartment-song-feed s))       ; a minute more
+   k2 (s 'struck)
+   s2 (apartment-song-new (jug 0) (wheel 7))
+   _ (each ^(30 * 3 * phrase-every) (i \ apartment-song-feed s2))
    g (apartment-new 80 22 (wheel 5))
+   d (apartment-song-new (jug 0) (wheel 9))
    _ (pin g 'sfx '(drum))
-   _ (apartment-sfx s g)
-   n1 #(s 'vs)
-   j2 (jug 0) _ (pin s 'h j2)
-   _ (each ^40 (i \ apartment-song-feed s))
+   _ (apartment-sfx d g)
+   n1 #(d 'vs)
+   j2 (jug 0) _ (pin d 'h j2)
+   _ (each ^40 (i \ apartment-song-feed d))
    loud (slurp j2)
- (test (#quiet = 5 * 4 * song-chunk) (all (i \ 0 = quiet i) ^#quiet)
+ (test (#quiet = 5 * 4 * song-chunk) (all (i \ 0 = quiet i) ^#quiet) (k0 = 0)
+       (k1 = 1) (any (i \ 0 != heard (i * 89)) ^(#heard // 89))          ; the phrase, once, and heard
+       (2 <= k2 - k1 <= 4)                                                ; ..and every so often after
+       (s2 'struck = k2) (s2 'next = s 'next)                             ; the same seed strikes the same
        (0 < n1) (!(g 'sfx))
        (#loud = 40 * 4 * song-chunk) (any (i \ 0 != loud (i * 89)) ^400)))
 
