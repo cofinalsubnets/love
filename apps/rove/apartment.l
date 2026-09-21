@@ -26,7 +26,8 @@
          apartment-frame apartment-bar apartment-lay apartment-face apartment-stride
          apartment-stir chat chat-key chat-node chat-end chat-book blocks blocks-name
          cube-w cube-h road-h inside? oct-pt apartment-song-new apartment-song-feed
-         apartment-sfx phrase phrase-gap phrase-every phrase-vary phrase-first song-chunk npc-glyph bones-glyph)
+         apartment-sfx phrase phrase-gap phrase-ring phrase-slow phrase-every phrase-vary phrase-first
+         phrase-echoes drone-voice drone-notes song-chunk npc-glyph bones-glyph)
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
@@ -231,23 +232,50 @@
 
  ; --- the song: a chunk out the card at a time, the river's way. the tune is a phrase
  ; on a music box -- g a c, each a quarter tone flat, in semitones from middle c -- at an
- ; octave the die picks, every so many seconds give or take a few; the first soon after
- ; the start. the sound effects ride the same feed, put in at the write head so they
- ; sound in the next chunk
+ ; octave the die picks, every so many seconds give or take a few, the first soon after
+ ; the start; the lower the octave the slower it goes and the longer each note rings,
+ ; and each note comes back a few times, softer and later, off the plain. under it all
+ ; a drone, the phrase's c and its g two octaves down, swelling and wavering slowly.
+ ; the sound effects ride the same feed, put in at the write head so they sound in the
+ ; next chunk
  song-chunk (song-rate // 30)
  song-gain 5200.0
- phrase [6.5 8.5 11.5]
- phrase-gap 0.5                         ; seconds from one note of it to the next
- phrase-every 20                        ; seconds between phrases..
- phrase-vary 5                          ; ..give or take up to this many
+ phrase [6.5 8.5 -0.5]
+ phrase-gap 0.7                         ; seconds from one note of it to the next
+ phrase-ring 3.0                        ; ..and how long a note takes to die away
+ phrase-slow 1.2                        ; ..both by this much more for each octave down, less for each up
+ phrase-every 10                        ; seconds between phrases..
+ phrase-vary 3                          ; ..give or take up to this many
  phrase-first 2
  phrase-octaves 3                       ; the octave: one of this many, about middle c's
- (apartment-song-new h st) {'h h 'fpos 0 'vs () 'sb {st} 'next (phrase-first * song-rate) 'struck 0}
+ phrase-echoes '((0.09 0.45) (0.21 0.28) (0.37 0.16))   ; a note's returns: seconds behind it, and how loud
+ drone-notes [-24.5 -17.5]              ; the phrase's c and g, two octaves under middle c's, flat as they are
+ drone-gain 0.22
+ drone-swell 0.05                       ; the undulation, in cycles a second..
+ drone-swell-depth 0.35                 ; ..and how much of the drone it takes away at its ebb
+ drone-waver 0.3                        ; the pitch's wander, in cycles a second..
+ drone-waver-depth 2.0                  ; ..and its reach, in radians of phase
+ ; the drone is a voice like the box's -- a function from a tray of frame numbers to a
+ ; tray of amplitudes -- with no end frame it will ever reach: the two notes summed, the
+ ; phase pushed slowly to and fro for the waver, the whole scaled by the slow swell
+ (drone-voice _) (: fs (map (n \ 261.6255653005986 * exp (n * ln2-12)) drone-notes)
+                    (fn ix) (: t (ix * (1.0 / song-rate))
+                               ph (sin (t * twopi * drone-waver) * drone-waver-depth)
+                               sw (1.0 - drone-swell-depth * (0.5 + 0.5 * sin (t * twopi * drone-swell)))
+                               (foldl (\ acc f (acc + sin (t * twopi * f + ph))) (t * 0.0) fs) * (sw / #fs))
+                    [1099511627776 fn (drone-gain * 0.5) (drone-gain * 0.5)])
+ (apartment-song-new h st) {'h h 'fpos 0 'vs [(drone-voice ())] 'sb {st}
+                            'next (phrase-first * song-rate) 'struck 0}
  (strike! s at v) (pin s 'vs (s 'vs + [(mkvoice at v song-rate)]))
+ ; a note and its echoes, each a voice of its own
+ (note! s at v) (: _ (strike! s at v)
+                   (each phrase-echoes (e \ strike! s (at + int (<e * song-rate)) (pin (pins {} 's (v 's) 'note (v 'note) 'legato (v 'legato)) 'gain (v 'gain * e 1)))))
  (phrase! s) (: sb (s 'sb) base (s 'fpos)
-                oct (12.0 * (roll sb phrase-octaves - phrase-octaves // 2))
-                _ (each ^#phrase (i \ strike! s (base + int (i * phrase-gap * song-rate))
-                                         {'s "box" 'note (phrase i + oct) 'gain 0.7 'legato 1.6}))
+                o (roll sb phrase-octaves - phrase-octaves // 2)
+                oct (12.0 * o)
+                slow (-o phrase-slow)                       ; phrase-slow to the -o
+                _ (each ^#phrase (i \ note! s (base + int (i * phrase-gap * slow * song-rate))
+                                         {'s "box" 'note (phrase i + oct) 'gain 0.7 'legato (phrase-ring * slow)}))
                 (pins s 'struck (s 'struck + 1)
                         'next (base + song-rate * (phrase-every - phrase-vary + roll sb (2 * phrase-vary + 1)))))
  ; the drum: a kick and a snare together, and the snare's crack again a beat behind

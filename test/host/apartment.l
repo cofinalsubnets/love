@@ -120,17 +120,18 @@
        (pins p 'x (bp 0) 'y (bp 1), apartment-turn g (bp 2), p 'x = <pn && p 'y = <>pn)   ; out onto the pane
        (rows (apartment-frame g) = h + 2)))
 
-; --- the song: silence at first, then the phrase, and again every so often; the drum
-; --- sounds where it is asked for
+; --- the song: the drone from the first frame, the phrase soon after and again every so
+; --- often, each note with its echoes behind it; the drum sounds where it is asked for
 (: j (jug 0) s (apartment-song-new j (wheel 7))
    _ (each ^5 (i \ apartment-song-feed s))
    quiet (slurp j) k0 (s 'struck)
+   n0 #(s 'vs)
    _ (each ^(30 * (phrase-first + 1)) (i \ apartment-song-feed s))    ; on past the first
    heard (slurp j) k1 (s 'struck)
    _ (each ^(30 * 3 * phrase-every) (i \ apartment-song-feed s))       ; a minute more
    k2 (s 'struck)
    s2 (apartment-song-new (jug 0) (wheel 7))
-   _ (each ^(30 * 3 * phrase-every) (i \ apartment-song-feed s2))
+   _ (each ^(5 + 30 * (phrase-first + 1) + 30 * 3 * phrase-every) (i \ apartment-song-feed s2))   ; as far as s
    g (apartment-new 80 22 (wheel 5))
    d (apartment-song-new (jug 0) (wheel 9))
    _ (pin g 'sfx '(drum))
@@ -139,8 +140,13 @@
    j2 (jug 0) _ (pin d 'h j2)
    _ (each ^40 (i \ apartment-song-feed d))
    loud (slurp j2)
- (test (#quiet = 5 * 4 * song-chunk) (all (i \ 0 = quiet i) ^#quiet) (k0 = 0)
+ (test (#quiet = 5 * 4 * song-chunk) (any (i \ 0 != quiet (i * 89)) ^(#quiet // 89)) (k0 = 0)   ; the drone, before any phrase
+       (n0 = 1)
        (k1 = 1) (any (i \ 0 != heard (i * 89)) ^(#heard // 89))          ; the phrase, once, and heard
+       ; a phrase is its notes and each note's echoes, every echo behind its note and softer
+       (: s3 (apartment-song-new (jug 0) (wheel 7)) _ (apartment-song-feed s3) _ (pin s3 'next 0) _ (apartment-song-feed s3)
+          vs >(s3 'vs)
+          (#vs = #phrase * (1 + #phrase-echoes) && all (v \ v 0 < 1099511627776) vs))
        (2 <= k2 - k1 <= 4)                                                ; ..and every so often after
        (s2 'struck = k2) (s2 'next = s 'next)                             ; the same seed strikes the same
        (0 < n1) (!(g 'sfx))
