@@ -1056,14 +1056,14 @@ lvm(lvm_aany) {
  ai_musttail return Answer(zero); }
 
 // (floor x): the greatest integer under a float, a charm as int and ceil answer, saturating
-// at the charm bounds; an integer passes. a float tray floors elementwise and stays a
-// tray; an int tray passes whole
+// at the charm bounds; an integer passes. a float tray floors elementwise to an int tray;
+// an int tray passes whole
 lvm(lvm_floor) {
  word a = Sp[0];
  if (trayp(a)) {
   if (tray(a)->type < ai_R) ai_musttail return Next(1);
   if (tray(a)->type != ai_R) ai_musttail return Answer(ZeroPoint);
-  g->b = (word) (uintptr_t) (ai_floor); ai_musttail return Ap(lvm_vmap1, g); }
+  g->b = (word) (uintptr_t) (ai_floor); ai_musttail return Ap(lvm_vmap1z, g); }
  if (isnum(a) && !charmp(a) && !bigp(a)) {
   ai_flo_t v = ai_floor(toflo(a));
   Sp[0] = putcharm(v >= (ai_flo_t) maxcharm ? maxcharm
@@ -1169,6 +1169,30 @@ lvm(lvm_vmap1) {
  ini_tray(r, ai_R, rank);
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = a->shape[i];
  vmap1_fill(r, a, fn);
+ ai_musttail return Answer(word(r)); }
+
+// the same over a float tray into an int tray: the machine word's own saturation, a NaN
+// to 0, so floor and int leave the float kind the way their scalars do
+static ai_inline intptr_t flo_word(ai_flo_t v) {
+ return v >= (ai_flo_t) INTPTR_MAX ? INTPTR_MAX : v <= (ai_flo_t) INTPTR_MIN ? INTPTR_MIN
+      : v != v ? 0 : (intptr_t) v; }
+static ai_noinline void vmap1z_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t)) {
+ uintptr_t n = tray_nelem(r);
+ intptr_t *p = tray_data(r);
+ for (uintptr_t i = 0; i < n; i++) p[i] = flo_word(fn(tray_get_flo(a, i))); }
+
+lvm(lvm_vmap1z) {
+ ai_flo1 fn = (ai_flo1) (uintptr_t) g->b;
+ struct ai_tray *a = tray(Sp[0]);
+ uintptr_t rank = a->rank, n = tray_nelem(a),
+           bytes = tray_bytes(ai_Z, rank, n);
+ Have(b2w(bytes));
+ a = tray(Sp[0]);                               // re-read post-Have
+ struct ai_tray *r = (struct ai_tray*) Hp;
+ Hp += b2w(bytes);
+ ini_tray(r, ai_Z, rank);
+ for (uintptr_t i = 0; i < rank; i++) r->shape[i] = a->shape[i];
+ vmap1z_fill(r, a, fn);
  ai_musttail return Answer(word(r)); }
 
 // --- elementwise dyadic engine with broadcasting. integer division guards /0

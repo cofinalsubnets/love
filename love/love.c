@@ -808,6 +808,9 @@ op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
 // rungs (the bare cast wrapped above 2^62 -- UB read as 0); an exact-ratio coin
 // truncates by long division; everything else passes through.
 static lvm(lvm_intf) {
+ if (trayp(Sp[0])) {                            // a float tray truncates to an int tray, the rest pass
+  if (tray(Sp[0])->type != ai_R) { Ip += 1; ai_musttail return Continue(); }
+  g->b = (word) (uintptr_t) (ai_trunc); ai_musttail return Ap(lvm_vmap1z, g); }
  if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 0)
  if (gemp(Sp[0])) { ai_flo_t v = gem_get(Sp[0]);
   Sp[0] = putcharm(v >= (ai_flo_t) maxcharm ? maxcharm

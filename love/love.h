@@ -777,7 +777,7 @@ ai_noinline ai_noicf lvm_t
  lvm_mulh, lvm_myself, lvm_nilp, lvm_quo0, lvm_quom1,
  lvm_quotn, lvm_rank, lvm_tabp, lvm_twinp, lvm_worn,
  // these carry extra operands, so they are declared apart from the plain lvm_t list
- lvm_vbin, lvm_bdiv_start, lvm_vmap1, lvm_vmap2, lvm_twin_bin, lvm_cbin, lvm_obin,
+ lvm_vbin, lvm_bdiv_start, lvm_vmap1, lvm_vmap1z, lvm_vmap2, lvm_twin_bin, lvm_cbin, lvm_obin,
  // the data sentinels: each is the first word (ap) of its rep's heap objects and the rep
  // itself (enum d). bodies are byte-identical, kept distinct by address (ai_noicf).
  data_num_apply, data_sym_apply, data_string_apply, data_pair_apply,

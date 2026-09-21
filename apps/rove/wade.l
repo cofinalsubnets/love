@@ -56,23 +56,31 @@
    (? (abs rel < 1.3) [(st 'cx + foc * tn rel) (hz - (foc * tn mel) / c) ((foc * tn mang) / c)]
       [-999.0 -999.0 0.0]))
  ; a tree by its bank s (-1 or 1), its row r back from the water and its index k along
- ; the river: where it stands, how tall and wide, and whether its crown is round
- (tree-of k s r) (: kk (((k % loop) + loop) % loop) seed (s + 2 + 5 * r)
-   {'z (k * sp + (dice kk seed 3 100) / 100.0 * sp)
-    'x (s * (rw + 0.8 + 2.2 * r + (dice kk seed 5 100) / 100.0 * 2.0))
-    'ht (5.0 + (dice kk seed 7 100) / 100.0 * 6.0)
-    'wd (2.5 + (dice kk seed 9 100) / 100.0 * 2.5)
-    'round ((dice kk seed 4 3) = 0)})
- ; the frame's tables: a column's bearing cell, the treeline's top row for all trees and
- ; for the near ones alone, the reflection's bottom row; a row's height cell, for rows
- ; well above the screen too, since the water mirrors sky that is off the top
- (fresh st) (: tb {'tops {} 'ntops {} 'bots {} 'qas {} 'qes {}}
-   th (st 'th) hz (st 'hz) w (st 'w) h (st 'h) foc (st 'foc) cx (st 'cx)
-   (col x) (? (x < w) (pin (tb 'tops) x 999.0, pin (tb 'ntops) x 999.0, pin (tb 'bots) x (hz - 1.0),
-                       pin (tb 'qas) x (((flo ((th + atan ((x - cx) / foc)) / (2.0 * pi) * 256.0)) % 256 + 256) % 256),
-                       col (x + 1)))
+ ; the river: where it stands, how tall and wide, and whether its crown is round. the
+ ; loop has so many places, and each is hashed once and kept
+ trees {}
+ (tree-of k s r) (: kk (((k % loop) + loop) % loop) key (kk * 8 + r * 2 + (0 < s))
+   b (peep trees key ())
+   b2 (? (two? b) b
+         (: seed (s + 2 + 5 * r)
+            b3 [((dice kk seed 3 100) / 100.0 * sp)
+                (s * (rw + 0.8 + 2.2 * r + (dice kk seed 5 100) / 100.0 * 2.0))
+                (5.0 + (dice kk seed 7 100) / 100.0 * 6.0)
+                (2.5 + (dice kk seed 9 100) / 100.0 * 2.5)
+                ((dice kk seed 4 3) = 0)]
+            (pin trees key b3, b3)))
+   {'z (k * sp + b2 0) 'x (b2 1) 'ht (b2 2) 'wd (b2 3) 'round (b2 4)})
+ ; the frame's tables: the columns' indices and bearing cells as trays; the treeline's
+ ; top row for all trees and for the near ones alone and the reflection's bottom row,
+ ; tablets while the trees are laid and trays after; a row's height cell, for rows well
+ ; above the screen too, since the water mirrors sky that is off the top; and the sky's
+ ; rows and the frame's, kept as they are asked for
+ (fresh st) (: w (st 'w) h (st 'h) hz (st 'hz) th (st 'th) foc (st 'foc) cx (st 'cx)
+   xs (iota w)
+   tb {'xs xs 'tops {} 'ntops {} 'bots {} 'qes {} 'sky {} 'rows {}
+       'qas (((floor ((th + atan ((xs - cx) / foc)) / (2.0 * pi) * 256.0)) % 256 + 256) % 256)}
    (row y) (? (y < hz) (pin (tb 'qes) y (flo (atan ((hz - y) / foc) * foc)), row (y + 1)))
-   (col 0, row (0 - h - 12), tb))
+   (row (0 - h - 12), tb))
  ; the trees within sight, each laid into the columns it covers: a conifer or a round
  ; crown, its base at the bank and its mirror hanging under it. the row at the water
  ; runs to the horizon, the two behind it half as far
@@ -89,26 +97,49 @@
                  xa (clamp (flo (cx - hw)) 0 (w - 1)) xb (clamp (flo (cx + hw)) 0 (w - 1))
                  (col x) (? (x <= xb) (: q ((abs (x - cx)) / hw)
                                          hx (q < 1.0 ? (hg * (? (tr 'round) (sqrt (1.0 - q * q)) (1.0 - q))) 0.0)
-                                         _ (pin tops x (min2 (tops x) (by - hx)))
-                                         _ (pin bots x (max2 (bots x) (by + hx)))
+                                         _ (pin tops x (min2 (peep tops x 999.0) (by - hx)))
+                                         _ (pin bots x (max2 (peep bots x (hz - 1.0)) (by + hx)))
                                          (col (x + 1))))
                  (col xa))))))
    (go k k1 r) (? (k <= k1) (one k -1 r, one k 1 r, go (k + 1) k1 r))
    (span r reach) (go (flo ((pz - reach) / sp)) (flo ((pz + reach) / sp)) r)
-   (span 0 far, span 1 (far / 2.0), span 2 (far / 2.0), tb))
+   (tray-of tab d) (gem-tray [w] (map (x \ peep tab x d) (jot w)))
+   (span 0 far, span 1 (far / 2.0), span 2 (far / 2.0),
+    pins tb 'tops (tray-of (tb 'tops) 999.0) 'ntops (tray-of (tb 'ntops) 999.0) 'bots (tray-of (tb 'bots) (hz - 1.0))))
  (wade-tables st) (: tb (lay-trees st (fresh st)) (pin tb 'water (water-rows st)))
- ; the sky at a pixel: a grey ramp up from the horizon, the moon's glow, the disc with
- ; its seas, the stars. the ramp's bands and the glow's reach scale with the screen
- (sky x y st tb mn t) (: hz (st 'hz) h (st 'h) sc (st 'foc / 40.0)
-   (star _) (: qa (peep (tb 'qas) x 0) qe (peep (tb 'qes) y 0) up (hz - y)
-               (? (0 = dice qa qe 7 41) ((((dice qa qe 11 3) + (t // 3)) % 3 = 0) ? 250 245)   ; #bcbcbc twinkling to #8a8a8a
-                  (0 = dice qa qe 13 197) 255                                                  ; #eeeeee a bright one
-                  ((3 * h // 8) < up) 233 ((h // 4) < up) 234 ((h // 8) < up) 235 236))      ; #121212 .. #303030 down to the horizon
-   dx (x - mn 0) dy (y - mn 1) r (mn 2) r2 (dx * dx + dy * dy)
-   (? (r2 < (r * r)) ((0 = dice (flo dx + 100) (flo dy + 100) 21 7) ? sea-pen moon-pen)
-      (r2 < ((r + 1.5 * sc) * (r + 1.5 * sc))) 238   ; #444444 the glow
-      (r2 < ((r + 4.0 * sc) * (r + 4.0 * sc))) 237   ; #3a3a3a ..and wider
-      (star ())))
+ ; the sky, a row at a time in trays over the columns: a grey ramp up from the horizon,
+ ; the stars hashed off the column's bearing cell and the row's height cell, the moon's
+ ; glow, and its disc with its seas, each laid over the last where its mask holds. the
+ ; ramp's bands and the glow's reach scale with the screen. the hash is two rounds of
+ ; multiply, shift and mask kept under 32 bits, so a tray's machine words and a number
+ ; throw alike
+ m32 4294967295
+ (mash a) (: h (((a & m32) * 1103515245) & m32) h2 (((h ^ (h >> 15)) * 1664525) & m32) (h2 ^ (h2 >> 13)))
+ (throw x y s k) ((mash (y * 374761393 + x * 668265263 + s * 2654435761 + 1)) % k)
+ (over c m v) (c + m * (v - c))
+ (sky-row y st tb mn t) (: hz (st 'hz) h (st 'h) sc (st 'foc / 40.0) xs (tb 'xs)
+   qa (tb 'qas) qe (peep (tb 'qes) y 0) up (hz - y)
+   ramp (? ((3 * h // 8) < up) 233 ((h // 4) < up) 234 ((h // 8) < up) 235 236)   ; #121212 .. #303030 down to the horizon
+   bright (0 = throw qa qe 13 197)                                                  ; #eeeeee a bright star
+   star (0 = throw qa qe 7 41)                                                      ; #8a8a8a twinkling to #bcbcbc
+   twinkle (0 = ((throw qa qe 11 3) + (t // 3)) % 3)
+   starry (over (over ramp bright 255) star (245 + (5 * twinkle)))
+   dy (y - mn 1) r (mn 2) g1 (r + (1.5 * sc)) g4 (r + (4.0 * sc))
+   ; the moon's layers, on the rows it reaches
+   (mooned _) (: dx (xs - mn 0) r2 (dx * dx + dy * dy)
+                 sea (0 = throw (floor (dx + 100.0)) (floor (dy + 100.0)) 21 7)
+                 (over (over (over starry
+                                   (r2 < (g4 * g4)) 237)     ; #3a3a3a the glow, wide
+                             (r2 < (g1 * g1)) 238)           ; #444444 ..and close
+                       (r2 < (r * r)) (over moon-pen sea sea-pen)))
+   (? (abs dy < g4) (mooned ()) starry))
+ (sky-at y st tb mn t) (: r (peep (tb 'sky) y ())
+   (? (tray? r) r (: r2 (sky-row y st tb mn t) (pin (tb 'sky) y r2, r2))))
+ ; a row above the horizon: the sky, a far tree's haze over it, a near tree's black over that
+ (top-row y st tb mn t) (: r (peep (tb 'rows) y ())
+   (? (tray? r) r
+      (: r2 (over (over (sky-at y st tb mn t) (y >= (tb 'tops)) haze-pen) (y >= (tb 'ntops)) tree-pen)
+         (pin (tb 'rows) y r2, r2))))
  ; the water's lift, in the world's units: a slow swell, and the rings the player's steps
  ; sent out, each fading as it spreads. x and z are trays, a row of points at once, and
  ; a ring's reach is a mask over them; numbers pass through the same words
@@ -152,28 +183,27 @@
  ; reflection, or the sky's darkened -- and a crest a step lighter
  (water x y st tb mn t) (: hz (st 'hz) row (peep (tb 'water) y ())
    (? (0 < peep (row 0) x 0) bank-pen
-      (: y2 (peep (row 1) x 0.0) x2 (int (peep (row 2) x 0)) rl (peep (row 3) x 0.0)
+      (: y2 (peep (row 1) x 0.0) x2 (peep (row 2) x 0) rl (peep (row 3) x 0.0)
          c (? (y2 < peep (tb 'bots) x2 0.0) haze-pen
-              (peep dark (sky x2 (min2 (flo (2 * hz - 1 - y2)) (hz - 1)) st tb mn t) haze-pen))
+              (peep dark (peep (sky-at (min2 (flo (2 * hz - 1 - y2)) (hz - 1)) st tb mn t) x2 236) haze-pen))
          ((0.06 < rl) ? (peep crest c c) c))))
- ; a pixel above the horizon is a near tree, a far one in haze, or the sky
- (pix x y st tb mn t) (: hz (st 'hz)
-   (? (y < hz) (? (y >= peep (tb 'ntops) x 999.0) tree-pen (y >= peep (tb 'tops) x 999.0) haze-pen (sky x y st tb mn t))
-      (water x y st tb mn t)))
  ; a frame: two pixel rows a cell, one sgr per change, the rows joined by \r\n with no
- ; newline after the last, so a screen of just enough rows never scrolls
+ ; newline after the last, so a screen of just enough rows never scrolls. a pixel row's
+ ; source is its tray above the horizon and the water below it
  sgrs {}
  (sgr f b) (: k (f * 256 + b) s (sgrs k)
               (string? s ? s (: s2 (esc + "[38;5;" + show f + ";48;5;" + show b + "m") (pin sgrs k s2, s2))))
- (wade-frame st) (: t (st 't) w (st 'w) h (st 'h)
+ (wade-frame st) (: t (st 't) w (st 'w) h (st 'h) hz (st 'hz)
    _ (pin st 'rings (filter (r \ (t - r 't) < ring-life) (st 'rings)))
    tb (wade-tables st) mn (moon-at st)
    j (jug 0)
-   (row y x f b) (? (x < w) (: f2 (pix x (2 * y) st tb mn t) b2 (pix x (2 * y + 1) st tb mn t)
-                               _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
-                               _ (say j "▀")
-                               (row y (x + 1) f2 b2)))
-   (rows y) (? (y < (h // 2)) (row y 0 -1 -1, say j (esc + "[0m"), (? ((y + 1) < (h // 2)) (say j "\r\n")), rows (y + 1)))
+   (src y) (? (y < hz) (top-row y st tb mn t) ())
+   (px s x y) (? (tray? s) (peep s x 236) (water x y st tb mn t))
+   (row y x f b ts bs) (? (x < w) (: f2 (px ts x (2 * y)) b2 (px bs x (2 * y + 1))
+                                     _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
+                                     _ (say j "▀")
+                                     (row y (x + 1) f2 b2 ts bs)))
+   (rows y) (? (y < (h // 2)) (row y 0 -1 -1 (src (2 * y)) (src (2 * y + 1)), say j (esc + "[0m"), (? ((y + 1) < (h // 2)) (say j "\r\n")), rows (y + 1)))
    (rows 0, slurp j))
  ; the state: the screen, where the player stands and faces, the horizon's row, the
  ; tick, the rings on the water, and whether they walk on by themselves

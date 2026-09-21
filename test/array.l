@@ -174,7 +174,7 @@
      (&& (0 = #rt) ('(0) = (shape rt)) (star-tray = (tier rt))))))
 
 ; --- the apl rule: `=` and `!=` are masks, the whole question a reduction; max and min
-; are binary and elementwise, the operand itself; floor floors a float or a float tray ---
+; are binary and elementwise, the operand itself; floor and int take a float tray to an int tray ---
 (test
  (aall (@(1 0 1) = (@(1 2 3) = @(1 5 3))))
  (aall (@(0 1 0) = (@(1 2 3) != @(1 5 3))))
@@ -192,5 +192,7 @@
  ("b" = max "a" "b") ('(2) = max '(1) '(2))          ; the order < keeps, across kinds
  (30 = amax @(10 30 20)) (10 = amin @(20 10 30))
  (2 = floor 2.7) (-3 = floor -2.5) (2 = floor 2) (charm? (floor 2.7))
- (aall (@(1.0 -3.0) = floor @(1.5 -2.5))) (aall (@(1 2) = floor @(1 2)))
- (star-tray = tier (floor @(1 2))))
+ (aall (@(1 -3) = floor @(1.5 -2.5))) (aall (@(1 2) = floor @(1 2)))
+ (star-tray = tier (floor @(1.5 -2.5))) (star-tray = tier (floor @(1 2)))   ; ..to an int tray, as the scalar
+ (aall (@(1 -2) = int @(1.5 -2.5))) (star-tray = tier (int @(1.5 -2.5)))   ; int truncates the same way
+ (aall (@(1 2) = int @(1 2))))
