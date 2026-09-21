@@ -181,5 +181,21 @@
    _ (pins g 'kept {} 'cm ()) n2 (grass-frame g)
  (test (a = b) (n1 = n2) (0 < #(keys (g 'kept)))))
 
+; --- a paint: the first is the whole frame; after ticks it is the rows that changed,
+;     under their cursor moves, and a screen taking the paints shows the frame
+(: (mkscr r c) (screen (cask (screen () r c)) r c)
+   (cells s n) (map (i \ glass s i) (jot n))
+   g (fresh ()) _ (pin g 'h 12.0)
+   a (mkscr 24 80) b (mkscr 24 80)
+   p0 (grass-paint g) _ (scribe a p0)
+   _ (ticks g 10) p1 (grass-paint g) _ (scribe a p1)
+   _ (ticks g 10) p2 (grass-paint g) _ (scribe a p2)
+   _ (scribe b (grass-frame g))
+   n (24 * 80)
+ (test (p0 = grass-frame g || 1)                   ; (the first paint says every row)
+       (count p0 "\r\n" = 23) (count p1 "\r\n" < 16) (count p2 "\r\n" < 16)
+       (has? p1 "[20;1H") !(has? p1 "[3;1H")       ; the blades' foot moved, a sky row far above holds
+       (cells a n = cells b n)))
+
 (test_fin (),
- puts "grass: ok -- the tune reads, the week waters, the frame paints day and night, and the kept rows say the same\n")
+ puts "grass: ok -- the tune reads, the week waters, the frame paints day and night, the kept rows say the same, and a paint is the rows that moved\n")

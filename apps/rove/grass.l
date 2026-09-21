@@ -16,7 +16,7 @@
 ;
 ; run: love grass
 (module (grass grass-run grass-main grass-new grass-key grass-tick grass-frame grass-hud
-         grass-bar grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
+         grass-bar grass-rows grass-paint grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
          grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
          daylight sky-pen compass fx1 week-hours dh fps dance-cost)
 (borrow 'rove)
@@ -115,7 +115,7 @@
    clouds (map (\ _ {'x0 (roll sb c * 1.0) 'y (1 + roll sb (r // 2))
                      'w (6.0 + roll sb 13) 'h (1.2 + roll sb 19 / 10.0)}) ^14)
    {'r r 'c c 'h week-start 'fr 0 'sb sb 'bs bs 'me me 'tdays tdays 'covers covers 'clouds clouds
-    'wind (3.0 + roll sb 10) 'wt 8.0 'head (roll sb 360 * 1.0) 'gust 1.0 'drift 0.0 'kept {} 'cm ()
+    'wind (3.0 + roll sb 10) 'wt 8.0 'head (roll sb 360 * 1.0) 'gust 1.0 'drift 0.0 'kept {} 'cm () 'last ()
     'songs songs 'sang -1 'cue 0
     'dewday 0 'pts 0 'combo 0 'dk 0 'dms 0 'lk 0 'lt 0 'over 0 'msg ""})
 
@@ -280,8 +280,14 @@
    _ (each (first-n n (g 'clouds)) lay)
    cm)
 
- (grass-frame g) (:
-   j (jug 0) r (g 'r) c (g 'c) base (r - 4)
+ ; the frame's rows as strings -- the hud, every field row with its end, the bar: the
+ ; frame is their join, and a paint is the rows that changed. a row nothing stands on
+ ; is the sky or the dirt alone, the same until the light, the clouds or the sun move:
+ ; it is kept under a key of those, as its cells and as its string; a row a blade
+ ; stands on takes its sky from the kept cells instead of asking the dice again. the
+ ; stars' twinkle turns a row over only if a star is in it
+ (grass-rows g) (:
+   r (g 'r) c (g 'c) base (r - 4)
    hr (grass-hour g) dl (daylight hr)
    ls (grass-lay g) ov <ls sh <>ls ys (ls 2)
    cm (grass-clouds g)
@@ -309,36 +315,53 @@
                      (y = sy && (x = sx || x = sx + 1)) [" " sp sp]
                      (dark && 0 = dice x y 7 53) [(twinkles ((dice x y 11 3 + (g 'fr // 9)) % 3)) 230 skybg]
                      [" " skybg skybg]))
-   (cell x y) (: i (x + c * y) o (peep ov i ())
-     (? (base < y) (: s (peep sh i 0)
-                        ; patches four cells wide, a dot of its own on each
-                        [(dirt-dots (dice x y 3 4)) (s ? 94 (dots (dice x y 17 #dots))) (s ? 58 (dirt (dice (x // 4) y 13 #dirt)))])
-        (two? o) [(o 0) (o 1) (o 2 < 0 ? ((sky x y i) 2) (o 2))]
-        (sky x y i)))
-   (row p y x f b) (x < c ? (: cl (cell x y) f2 (cl 1) b2 (cl 2)
-                              _ (f2 != f || b2 != b ? (say p (sgr f2 b2)))
-                              _ (say p (cl 0))
-                              (row p y (x + 1) f2 b2)))
+   ; the dirt: patches four cells wide, a dot of its own on each, and the shadows
+   (dirt-cell x y i) (: s (peep sh i 0)
+     [(dirt-dots (dice x y 3 4)) (s ? 94 (dots (dice x y 17 #dots))) (s ? 58 (dirt (dice (x // 4) y 13 #dirt)))])
+   ; a sky row's cells, kept: the key is the light and the sun, the clouds' columns,
+   ; and the twinkle where a star is in the row (a star's pen is its own)
+   bk [skybg (0.0 < dl) (? (0.6 < dl) 2 (0.05 < dl) 1 0) (? (0.3 < dl) 2 (0.05 < dl) 1 0) sx sy (g 'cm 0)]
+   ph (dark ? (g 'fr // 9) 0)
+   kept (g 'kept)
+   (held? e) (tablet? e && e 'k = bk && (!(e 'starry) || e 'ph = ph))
+   (entry y) (: e (peep kept y ())
+     (? (held? e) e
+        (: cs (base < y ? () (map (\ x (sky x y (x + c * y))) (jot c)))
+           e2 {'k bk 'ph ph 'starry (foldl (\ a cl (a || cl 1 = 230)) 0 cs) 's ()
+               'cells (base < y ? () (top-tray [c] cs))}
+           (pin kept y e2, e2))))
+   ; a cell: on the dirt its own; a blade's, with the sky's ground where it asks; the sky's
+   (cell x y cells) (: i (x + c * y) o (peep ov i ())
+     (? (base < y) (dirt-cell x y i)
+        (two? o) [(o 0) (o 1) (o 2 < 0 ? ((peep cells x ()) 2) (o 2))]
+        (peep cells x ())))
    ; a row is painted to the screen's edge, so it wants no erase after it: under a
    ; pending wrap an erase takes the very glyph that raised it, and the last column
-   ; would go blank. a row nothing stands on is the sky or the dirt alone, the same
-   ; until the light, the clouds, the stars or the sun move: it is kept as its string
-   ; under a key of those, and said again while the key holds
-   bk [skybg (0.0 < dl) (? (0.6 < dl) 2 (0.05 < dl) 1 0) (? (0.3 < dl) 2 (0.05 < dl) 1 0)
-       sx sy (dark ? (g 'fr // 9) 0) (g 'cm 0)]
-   kept (g 'kept)
-   (rows y) (y < r ?
-     (: k (peep kept y ())
-        _ (? (peep ys y 0) (row j y 0 -1 -1, say j (esc + "[0m\r\n"))
-             (two? k && k 0 = bk) (say j (k 1))
-             (: p (jug 0) _ (row p y 0 -1 -1, say p (esc + "[0m\r\n")) s (slurp p)
-                (pin kept y [bk s], say j s)))
-        (rows (y + 1))))
-   _ (say j (esc + "[H" + esc + "[0m" + fit (grass-hud g) c + "\r\n"))
-   _ (rows 1)
+   ; would go blank
+   (row p y x f b cells) (x < c ? (: cl (cell x y cells) f2 (cl 1) b2 (cl 2)
+                                    _ (f2 != f || b2 != b ? (say p (sgr f2 b2)))
+                                    _ (say p (cl 0))
+                                    (row p y (x + 1) f2 b2 cells)))
+   (paint y cells) (: p (jug 0) _ (row p y 0 -1 -1 cells, say p (esc + "[0m\r\n")) (slurp p))
+   (line y) (: e (entry y)
+     (? (peep ys y 0) (paint y (e 'cells))
+        (string? (e 's)) (e 's)
+        (: s (paint y (e 'cells)) (pin e 's s, s))))
    ; the bar a column short of the screen, so a wrapping console never scrolls the
    ; field -- and its erase falls on that spare column, where it costs nothing
-   _ (say j (esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K"))
+   ((esc + "[0m" + fit (grass-hud g) c + "\r\n")
+    . (cat (map line (map (+ 1) (jot (r - 1))))
+           [(esc + "[0m" + fit (grass-bar g) (c - 1) + esc + "[K")])))
+ (grass-frame g) (: j (jug 0) _ (say j (esc + "[H")) _ (each (grass-rows g) (s \ say j s)) (slurp j))
+ ; the rows that changed since the last paint, each under its cursor move; the first
+ ; paint, and one after a sign stood over the screen, is the whole frame
+ (grass-paint g) (: rs (grass-rows g) j (jug 0)
+   last (: t (g 'last) (tablet? t ? t (pin g 'last {}, g 'last)))
+   (go l i) (? (two? l)
+               (: s <l
+                  _ (? (s = peep last i ()) () (say j (esc + "[" + show (i + 1) + ";1H" + s), pin last i s))
+                  (go >l (i + 1))))
+   _ (go rs 0)
    (slurp j))
 
  ; the day and the weather to the left, what is yours to the right, the screen's spare
@@ -422,7 +445,7 @@
                            (deaf _) (clock t0 < sign-deaf ? (drain-keys (), beat (), deaf ()))
                            (wait _) (cue? 0 ? (edkey in) (beat (), wait ()))
                            _ (deaf ())
-                           (wait ()))
+                           (wait (), pin g 'last ()))       ; the box stood over the screen: the next paint is whole
  (grass-week ls) (: ws (tty 1)
    r (two? ws && 7 < <ws ? (<ws - 1) 23)
    c (two? ws && 19 < <>ws ? <>ws 80)
@@ -460,7 +483,7 @@
                                                           (grass-key g k (clock 0)))))
               _ (grass-tick g)
               _ (cue ())
-              _ (? (late < tick-ms) (say out (grass-frame g), flush out) ())
+              _ (? (late < tick-ms) (say out (grass-paint g), flush out) ())
               (swim (n + 1))))))
    _ (say out (esc + "[?25l"))
    _ (sign g open-ttl open-rows beat)
