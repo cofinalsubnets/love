@@ -5,7 +5,11 @@
 ;   (x11-fg "lavender")     "\e[38;2;230;230;250m" -- and x11-bg the background's
 ;   (x11-256 "lavender")    189: the cube cell quay lands that truecolour on (love/quay/quay.c)
 ;   (x11-names 0)           every name, sorted
-;   love x11 NAME..         the verb: a line per name -- hex, rgb, the cube cell
+;   (x11-pen 88)            (135 0 0): a pen's rgb -- 16..231 the cube, 232..255 the grey ramp
+;   (x11-pen-hex 88)        "#870000", and (x11-near 88) the name nearest it, "darkred"
+;   love x11 NAME..         the verb: a table, a row a name -- name, hex, r g b, the cube
+;   love x11 88             cell -- and a swatch of the cell when the output is a terminal;
+;                           a pen's row has the name nearest it, marked ~
 ;
 ; a name is matched lowercase with its spaces, hyphens and underscores dropped, so
 ; "Navy Blue" and navyblue are one. the four names where X11 and the web disagree
@@ -70,12 +74,43 @@
  (x11-cube v) (v < 48 ? 0 ((v - 35) // 40))
  (x11-256 n) (: c (x11-rgb n) (two? c ? (16 + 36 * x11-cube <c + 6 * x11-cube (c 1) + x11-cube (c 2)) ()))
  (x11-names _) (sort (keys x11-tab))
+ ; ..and the other way: a pen's rgb, 16..231 the cube and 232..255 the grey ramp, where
+ ; 232 + n is 8 + 10n; its hex; and the name nearest it in rgb
+ x11-levels [0 95 135 175 215 255]
+ (x11-pen c) (? (!(charm? c)) ()
+                (232 <= c && c <= 255) (: v (8 + 10 * (c - 232)) [v v v])
+                (16 <= c && c < 232) (: i (c - 16) [(x11-levels (i // 36)) (x11-levels ((i // 6) % 6)) (x11-levels (i % 6))])
+                ())
+ (x11-pen-hex c) (: p (x11-pen c) d "0123456789abcdef"
+                    (hx v) (string (d (v // 16)) + string (d (v % 16)))
+                    (two? p ? ("#" + hx <p + hx (p 1) + hx (p 2)) ()))
+ (x11-near c) (: p (x11-pen c)
+                 (gap n) (: q (x11-rgb n) (2 (q 0 - p 0) + 2 (q 1 - p 1) + 2 (q 2 - p 2)))
+                 (two? p ? (foldl (\ a n (gap n < gap a ? n a)) "black" (x11-names 0)) ()))
+ ; the verb: every argument a row -- a name's hex, rgb and cube cell, or a pen's hex,
+ ; rgb and nearest name, marked ~ -- the columns padded to the widest, as ls pads its;
+ ; a swatch of the cell on the end when stdout is a terminal, and no arguments is
+ ; every name. an argument that is neither is said on stderr, and the answer is 1
  (x11-main as)
-  (: (line n) (: h (x11 n)
-                 (string? h ? (puts (n + " " + h + " " + show (x11-rgb n) + " " + show (x11-256 n) + "\n"), 0)
-                  (say err $ "x11: not a colour: " + n + "\n", 1)))
-     (two? as ? (foldl (\ a n (a || line n)) 0 as)
-      (each (x11-names 0) line)))
+  (: tty? (two? (tty 1))
+     (digits? n) (0 < #n && all (i \ 47 < n i && n i < 58) ^#n)
+     (num n) (foldl (\ a i (10 * a + (n i - 48))) 0 ^#n)
+     (row n) (: h (x11 n) c (digits? n ? (num n) ())
+                (? (string? h) (: q (x11-rgb n) [n h (show (q 0)) (show (q 1)) (show (q 2)) (show (x11-256 n))])
+                   (two? (x11-pen c)) (: q (x11-pen c) [("~" + x11-near c) (x11-pen-hex c) (show (q 0)) (show (q 1)) (show (q 2)) n])
+                   ()))
+     (lpad w t) (#t < w ? (lpad w (" " + t)) t)
+     (rpad w t) (#t < w ? (rpad w (t + " ")) t)
+     (wide rs k) (foldl (\ w r (: n #(r k) (w < n ? n w))) 0 rs)
+     (emit rs) (: wn (wide rs 0) wr (wide rs 2) wg (wide rs 3) wb (wide rs 4) wp (wide rs 5)
+                  (each rs (r \ puts (rpad wn (r 0) + "  " + r 1 + "  " + lpad wr (r 2) + " " + lpad wg (r 3) + " " + lpad wb (r 4)
+                                       + "  " + lpad wp (r 5) + (tty? ? ("  \e[48;5;" + r 5 + "m   \e[0m") "") + "\n"))))
+     names (two? as ? as (x11-names 0))
+     rs (map row names)
+     bad (filter (n \ !(two? (row n))) names)
+     _ (emit (filter two? rs))
+     _ (each bad (n \ say err $ "x11: not a colour: " + n + "\n"))
+     (two? bad ? 1 0))
  _ (pins (cite 'verbs 'tab) 'x11 x11-main)
  s (cite 'verbs 'fire ["x11" "x11.l"])
  _ (two? s ? (x11-main >s) 0))                     ; a binding: a module's letrec ends in none

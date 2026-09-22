@@ -12,7 +12,8 @@
 ; the painter is rove's and the keys the tower's. the game is pure love -- garage-new,
 ; garage-turn and garage-frame are state in and state out, the song feeds any port --
 ; gated headless by test/host/garage.l. garage-walk takes a stage already raised, which
-; is how the apartment hands over on the same screen, and garage-run raises one. no
+; is how the apartment hands over on the same screen, and hands it on the same way to
+; the shaft (apps/rove/shaft.l) when the player walks off west; garage-run raises one. no
 ; music yet: the song is silence with the shape the rest have, for the effects and a
 ; tune to go into.
 ;
@@ -251,6 +252,9 @@
    _ (say out (esc + "[2J"))
    _ (loop 0 0)
    _ (? hn (flush hn, close hn))
+   ; west along the bed: the shaft takes the stage as it stands and gives it back here
+   next (cite 'shaft 'shaft-walk)
+   _ (? (g 'over = 'west && next) (next ()))
    g)
  ; ..and the verb around it: the screen raised here and put back here
  (garage-run _) (: _ (raw 1)

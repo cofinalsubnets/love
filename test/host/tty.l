@@ -226,5 +226,17 @@
  sq (synth-new ())
  an (synth-name (synth-semis sq [0 0 1]))
  _ (test !(has? a1 an) (has? a2 an))                       ; not on the legend, on the screen after the key
+; --- the shaft: a first frame of half blocks comes, and q ends it ---
+ (blocks m acc k n) (: c (k < n ? (see m) -1)
+                       (? (c < 0) acc
+                          (: acc2 (acc + string c) l #acc2
+                             (blocks m acc2 (k + (3 <= l && "▀" = snip acc2 (l - 3) l)) n))))
+ sh (spawn "env HORN=none out/love shaft" 12 70)
+ shm >sh
+ b1 (blocks shm "" 0 840)
+ _ (say shm "q", flush shm)
+ _ (slurp shm)
+ _ (waitfor <sh)
+ _ (test (840 <= #b1 // 3))                                 ; a frame's worth of half blocks came
  _ (test_fin ())
  (puts "tty: ok"))
