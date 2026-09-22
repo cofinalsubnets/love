@@ -1354,7 +1354,7 @@
    ; pidof, pgrep and killall skip their own pid, which in here is the shell's. a
    ; main answers a status or scares 'leave, and urun makes either a charm.
    sh-imgok '("mooncc" "cc"
-              "test" "[" "true" "false" "echo" "printf" "uname" "pwd"
+              "test" "[" "echo" "printf" "uname"
               "basename" "dirname" "readlink" "seq" "ls" "dir" "cmp" "diff"
               "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
               ; the three that DO read stdin when bare: the build spells them with a
