@@ -72,7 +72,7 @@
         tee-main test-main top-main
         touch-main lift-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
-        uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main
+        uset usignames usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main
         cal-main clear-main dd-main hostname-main strings-main timeout-main tty-main
         which-main xxd-main)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too

@@ -79,8 +79,12 @@
 
    ; -TERM / -15 / -9 -> the number, or () for anything else. shared with kill, which
    ; is the tool that taught the table; pkill and killall wear the same spelling.
-   usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("KILL" 9) ("USR1" 10)
-               ("USR2" 12) ("TERM" 15) ("CONT" 18) ("STOP" 19))
+   ; the one signal table: kill, pkill, killall and timeout spell by it, and lush's
+   ; trap and kill builtins read it too. the numbers are Linux's; USR1 USR2 CHLD TSTP
+   ; want an ISA/OS table on a BSD
+   usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("KILL" 9) ("USR1" 10) ("SEGV" 11)
+               ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18)
+               ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22))
    (usigdig? b k) (? ((tally b) <= k) (0 < (tally b))
                      ((48 <= (b k)) && ((b k) <= 57)) (usigdig? b (k + 1))
                      0)

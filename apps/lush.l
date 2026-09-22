@@ -62,11 +62,8 @@
    ; datum; armed only while a signal trap exists. drained, never parked on: `wait` is a
    ; 1ms yielding poll, so a non-blocking sigtake between polls sees the signal and
    ; POSIX's rule -- the action runs when the foreground command completes -- is free.
-   ; the numbers are Linux's; USR1 USR2 CHLD TSTP want an ISA/OS table on a BSD.
    sh-sigport {0}                              ; the signalfd port, or 0
-   sh-signums '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("KILL" 9) ("USR1" 10) ("SEGV" 11)
-                ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18)
-                ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22))
+   sh-signums (cite 'kore 'usignames)          ; kore's table: one spelling of the signals
    (sh-signum nm)
     ((: (g l) (l @- 0 (e . u) (<e = nm ? <>e (g u)))) sh-signums)
    (sh-signame n)
@@ -1467,8 +1464,7 @@
         (? (sh-smem? w sh-imgok && !(sh-slashed? w) && !!f0 && sh-ours? w)
            [1 (sh-imgwrap f0 mn) (mn = "kore-main")]
            0))
-   (sh-imgwrap f mn) (: ur (cite 'kore 'urun)
-                        (? (mn = "moon-run" || !ur) f (ur f)))
+   (sh-imgwrap f mn) (? (mn = "moon-run") f ((cite 'kore 'urun) f))
    (sh-assoc w l) (? (one? l) 0 (w = <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (peep sh-imgc w 'no @ 'no (sh-imgask w @ f (pin sh-imgc w f, f)) v v)
    sh-forkc {}                          ; word -> 1 | 0, decided once
