@@ -1337,17 +1337,29 @@
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
    sh-imgc {}                           ; word -> (1 fn whole?) | 0, decided once
+   ; the words that run in this very process. each one is BOUNDED, ending on its own
+   ; in a time nobody wants to cut short -- the shell ignores INT in here, so an
+   ; in-process `sleep` or `yes` could not be taken back; reads NO STDIN however it is
+   ; called -- `cat f` ends where the file does, bare `cat` drinks the terminal, and a
+   ; list of words cannot tell the two calls apart; LEAVES THE SHELL AS IT FOUND IT --
+   ; `env X=1 CMD` and chroot would move us; and ANSWERS THE SAME WHOEVER ASKS --
+   ; pidof, pgrep and killall skip their own pid, which in here is the shell's. a
+   ; main answers a status or scares 'leave, and urun makes either a charm.
    sh-imgok '("mooncc" "cc"
               "test" "[" "true" "false" "echo" "printf" "uname" "pwd"
               "basename" "dirname" "readlink" "seq" "ls" "dir" "cmp" "diff"
               "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
+              ; the three that DO read stdin when bare: the build spells them with a
+              ; file, and a per-call answer is what would move them off this list
               "objcopy" "cksum" "md5sum" "sha256sum"
-              ; the toolchain's other half: each needs its operands (as wants three,
-              ; the rest a file), so none can sit on stdin
-              "nm" "ar" "ld" "as"
-              ; ..and the crew tools that answer a status instead of quitting: each is
-              ; bounded by the archive or image it names, holds nothing, reads no stdin
-              "tar" "libra" "fat" "mkfs.vfat" "mkdosfs")
+              "nm" "ar" "ld" "as"                  ; each wants its operands, or it is usage
+              "tar" "libra" "fat" "mkfs.vfat" "mkdosfs"   ; bounded by the archive or image named
+              ; the facts: the clock, the box, this process, the environment, a path
+              "date" "cal" "uptime" "arch" "nproc" "hostname" "tty" "whoami" "id"
+              "groups" "printenv" "which" "realpath" "expr" "free" "ps" "pwdx"
+              ; ..and the syscalls said plainly, each bounded by what it names
+              "stat" "df" "du" "link" "unlink" "mktemp" "mkfifo" "mknod" "sync"
+              "chown" "mount" "umount" "clear" "lift")
    ; the words whose main is not spelled <word>-main. kore-main wants the whole argv
    ; (it reads its own program seat); the rest take the args after the name.
    sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
