@@ -1023,7 +1023,10 @@
        (find f ";48;5;22m" 0) (find f "\e[49m" 0)                    ; the ground put on, and off again
        (kept? 228 22) (kept? 16 231)                                  ; far apart: the hue itself
        (!(kept? 22 22)) (!(kept? 244 244)) (!(kept? 228 187))         ; too close: another
-       (all (bg \ legible-gap <= pen-gap (legible bg bg) bg) (map (+ 16) ^240))))   ; ..and always far enough
+       (!(kept? 213 118)) (!(kept? 226 118))                          ; ..as bright as each other: another
+       (all (bg \ (: fg (legible bg bg)                                ; ..and always far enough, both ways
+                     (legible-gap <= pen-gap fg bg && legible-lum <= |(pen-lum fg - pen-lum bg))))
+            (map (+ 16) ^240))))
 
 (test_fin ())
 (puts "tower: ok")

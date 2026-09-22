@@ -52,14 +52,14 @@
    _ (each ^30 (i \ apartment-turn g '(0 -1)))                   ; thirty turns at the wall
    now (map (m \ [(m 'x) (m 'y)]) (g 'ms))
  (test (rows f = h + 2) (f = f2)                                ; the note row, the plain, the bar
-       (all (x \ 0 <= river-at x) ^(east + 1))                   ; the river, from the octagon's east edge off the map west
-       (hx < east < w - 1) (river-at (east + 1) < 0)             ; ..and no further
-       (all (x \ |(river-at x - river-at (x + 1)) <= 1) ^east)   ; ..a row a column, never a jump
-       (any (x \ river-at x != hy) ^(east + 1))                  ; ..and it wanders
-       ; ..but runs straight past the pairs that stand either side of it
-       (all (cb \ (? (cb 1 <= hy - 1 < cb 1 + cube-h || cb 1 <= hy + 1 < cb 1 + cube-h)
-                     (all (x \ river-at x = hy) (range (cb 0) (cb 0 + cube-w)))
-                     1))
+       (all (x \ 0 <= river-at x) ^w)                            ; the river, edge to edge
+       (hx < east < w - 1)
+       (all (x \ |(river-at x - river-at (x + 1)) <= 1) ^(w - 1))   ; ..a row a column, never a jump
+       (any (x \ river-at x != river-at 0) ^w)                   ; ..and it wanders
+       ; ..but keeps a row of grass off every cube it passes
+       (all (cb \ all (x \ (: ry (river-at x)
+                              (ry < 0 || cb 1 + cube-h < ry || ry + river-h < cb 1)))
+                      (range (cb 0) (cb 0 + cube-w)))
             (d 'cubes))
        (all (cb \ cb 0 + cube-w - 1 <= east) (d 'cubes))
        (: st (d 'stone) (8 = t <st <>st && <st < 5 && |(<>st - river-at (<st - 1)) <= 1))   ; the stone in the bed near the west edge

@@ -8,8 +8,8 @@
 ; down is not a key pressed again; and the horn's lead is paced by the frame gap. the tower (apps/rove/tower.l) and the slop
 ; (apps/rove/slop.l) borrow it; it gates headless in test/host/rove.l.
 (module (rove cell-of cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
-         fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap lim lit? mix mob-at note
-         nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-rgb pens repeat-gap rgb-pen roll
+         fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at note
+         nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
          sign-rect sign-top sign-tpen snip-l song-lead song-lead-max song-lead-of song-rate steer
          tail? tap-steer toward vlen)
@@ -147,15 +147,17 @@
                     gy (232 + (? (n < 0) 0 (23 < n) 23 n))
                     (dist p) (: q (pen-rgb p) (2 (q 0 - r) + 2 (q 1 - g) + 2 (q 2 - b)))
                     (dist gy < dist cb ? gy cb))
- ; how far apart two pens are, in rgb squared; and a fg that reads over a bg: the hue
- ; itself when the two are far enough apart, else its inverse, else black or white,
- ; whichever the bg is not
+ ; how far apart two pens are, in rgb squared and in luminance -- hues apart in rgb can
+ ; still be as bright as each other, which is what the eye goes by; and a fg that reads
+ ; over a bg: the hue itself when the two are far enough apart both ways, else its
+ ; inverse, else black or white, whichever the bg is not
  (pen-gap a b) (: p (pen-rgb a) q (pen-rgb b) (2 (p 0 - q 0) + 2 (p 1 - q 1) + 2 (p 2 - q 2)))
+ (pen-lum c) (: q (pen-rgb c) (int (0.2126 * q 0 + 0.7152 * q 1 + 0.0722 * q 2)))
  legible-gap 14400                                       ; a hundred and twenty of rgb, squared
- (legible fg bg) (: (far? a) (legible-gap <= pen-gap a bg)
+ legible-lum 80                                          ; ..and this much of luminance, of 255
+ (legible fg bg) (: (far? a) (legible-gap <= pen-gap a bg && legible-lum <= |(pen-lum a - pen-lum bg))
                     q (pen-rgb fg) inv (rgb-pen (255 - q 0) (255 - q 1) (255 - q 2))
-                    b (pen-rgb bg)
-                    (? (far? fg) fg (far? inv) inv (384 < b 0 + b 1 + b 2) 16 231))
+                    (? (far? fg) fg (far? inv) inv (128 <= pen-lum bg) 16 231))
  ; two multiply-shift rounds masked to 32 bits: the dice a cell throws for itself,
  ; so the same cell of the same floor always throws the same number.
  lim 4294967296

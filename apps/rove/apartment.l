@@ -43,7 +43,9 @@
  ; glass was, and 8 the stone in the bed
  cube-w 9                               ; a cube on a grid whose cells are twice as tall as wide
  cube-h 5
- river-h 3                              ; rows the river takes; the pairs either side of it stand off it
+ river-h 3                              ; rows the river takes
+ river-gap 1                            ; grass rows between a pair's pane and the river when it runs straight
+ river-sway 2                           ; rows the river wanders either side of its middle
  ; the ground is solid blocks, each in a pen off its ramp by one still frame of the
  ; walk's shimmer (ink-drift), so the colour runs in smooth bands and not a mottle. the
  ; ramps run pale to deep; span is the band of the field they cover, its four sines
@@ -56,13 +58,13 @@
  road-ramp [137 95 94 94 58 58 52 52]          ; the shards lie on this
  path-ramp [180 137 137 95 94 94 58 58]
  stone-glyph "▄"                        ; the stone: a half block, grey, on the bed
- stone-pen 245
+ stone-pen 237
  ramp-span 3.0
  glass-face '("▒" 117)
  shard-glyph "░"                        ; ..on the road's brown: glass on the ground
  glass-pen 117
  npc-glyph "Ψ"
- npc-pen 213
+ npc-pen 53
  me-pen 228
  mob-pens '(250 245 252)                ; the others, greys
  bones-glyph 37                         ; % as the middle's bones are
@@ -105,7 +107,7 @@
  chat-foot "-- ~ --"
 
  ; --- laying the plain: grass end to end, eight cubes in an octagon about the middle,
- ; the river through the middle from the octagon's east edge west off the map, and a
+ ; the river through the middle from off the map east to off the map west, and a
  ; path from each cube straight down or up to it ---
  ; a point of the octagon: k of eight, clockwise from the right of the top pair -- the
  ; octagon stands turned an eighth of a slice, a flat side up, as the vale's stones do
@@ -121,27 +123,51 @@
    d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms () 'rows h 'cols w 'solid '(6 4)}
    _ (each ^(w * h) (i \ pin (d 't) i 1))
    cx (w // 2) cy (h // 2)
-   rx (cx - cube-w // 2 - 2) ry (cy - cube-h // 2 - 1)
+   ; the octagon's reach: down, what the plain has room for; across, twice that -- a
+   ; cell is twice as tall as it is wide -- but at least enough to keep the pairs clear
+   ; of each other, and no more than the plain has
+   ry (cy - cube-h // 2 - 1)
+   rx (min (cx - cube-w // 2 - 2) (max (2 * ry) (int ((cube-w + 2) / 0.5412 + 1))))
    (cube x0 y0) (each ^cube-h (j \ each ^cube-w (i \ dput d (x0 + i) (y0 + j)
                   (j = 0 || j = cube-h - 1 || i = 0 || i = cube-w - 1 ? 6 1))))
    ; a cube at its point: its corner, and the pane in the wall that faces the river. the
- ; pairs either side of the river stand off it by a cell, whatever the octagon says
-   off (river-h // 2 + 1 + cube-h // 2)
+   ; pairs either side of the river stand off it by a row of grass at least, whatever
+   ; the octagon says
+   off (river-h // 2 + 1 + cube-h // 2 + river-gap)
    (cube-at k) (: j ((k + 7) % 8) pt (oct-pt cx cy rx ry j)
-                  mx <pt my (elem j '(1 2 5 6) ? (<>pt < cy ? (cy - off) (cy + off)) <>pt)
+                  mx <pt my (elem j '(1 2 5 6) ? (<>pt < cy ? (cy - max off (cy - <>pt)) (cy + max off (<>pt - cy))) <>pt)
                   x0 (mx - cube-w // 2) y0 (my - cube-h // 2)
                   _ (cube x0 y0)
                   [x0 y0 cube-w cube-h (my < cy ? [mx (y0 + cube-h - 1)] [mx y0])])
    cubes (map cube-at ^8)
    c <cubes
-   ; the river: through the middle, from the octagon's east edge off the map to the
-   ; west, so many rows a column, wandering a row or two on two sines -- and straight
-   ; where a cube stands beside it
-   east (foldl (\ a cb (: e (cb 0 + cube-w - 1) (a < e ? e a))) 0 cubes)
+   ; the river: through the middle, off the map east to off the map west, so many
+   ; rows a column, its top row swaying a row or two on two sines the
+   ; die phases -- and held a row of grass off anything that is not grass, eased there
+   ; a row a column, so it runs straight past the pairs that stand beside it
+   east (foldl (\ a cb (: e (cb 0 + cube-w - 1) (a < e ? e a))) 0 cubes)   ; the octagon's east edge
+   n w
    mid (cy - river-h // 2)                                ; the top row when it runs straight
-   (bend x) (mid + int (1.4 * sin (x * 0.17) + 0.9 * sin (x * 0.053)))
-   (river-y x) (: y (bend x) (all (j \ 1 = dat d x (y + j)) ^river-h ? y mid))
-   _ (each ^(east + 1) (x \ each ^river-h (j \ dput d x (river-y x + j) 4)))
+   p1 (roll sb 628 / 100.0) p2 (roll sb 628 / 100.0)
+   f1 (0.1 + roll sb 9 / 100.0) f2 (0.035 + roll sb 26 / 1000.0)
+   ; ..the sway dying away over a few columns toward any cube that stands near the river
+   near (filter (cb \ cb 1 <= mid + river-h + river-sway && mid - river-sway - 1 < cb 1 + cube-h) cubes)
+   (apart x cb) (: x0 (cb 0) x1 (cb 0 + cube-w - 1) (x < x0 ? (x0 - x) (x1 < x ? (x - x1) 0)))
+   (ease x) (min 1.0 ((foldl (\ a cb (min a (apart x cb))) (4 * river-sway) near) / (4.0 * river-sway)))
+   (sway x) (: v (ease x * river-sway * (0.65 * sin (f1 * x + p1) + 0.35 * sin (f2 * x + p2)))
+               (int (v + (0.0 < v ? 0.5 -0.5))))
+   ; grass from y stepping dy: how far, so far
+   (run x y dy m) (:- (go 0) (go k) (: yy (y + dy * k) (k < m && 0 <= yy < h && 1 = dat d x yy ? (go (k + 1)) k)))
+   lo (cask n) hi (cask n)                                ; the top row's bounds a column
+   _ (each ^n (x \ (pin lo x (mid - max 0 (run x (mid - 1) -1 (river-sway + 1) - 1)),
+                    pin hi x (mid + max 0 (run x (mid + river-h) 1 (river-sway + 1) - 1)))))
+   _ (each ^(n - 1) (x \ (pin lo (x + 1) (max (peep lo (x + 1) mid) (peep lo x mid - 1)),
+                          pin hi (x + 1) (min (peep hi (x + 1) mid) (peep hi x mid + 1)))))
+   _ (each ^(n - 1) (k \ (: x (n - 2 - k)
+                           (pin lo x (max (peep lo x mid) (peep lo (x + 1) mid - 1)),
+                            pin hi x (min (peep hi x mid) (peep hi (x + 1) mid + 1))))))
+   (river-y x) (min (peep hi x mid) (max (peep lo x mid) (mid + sway x)))
+   _ (each ^n (x \ each ^river-h (j \ dput d x (river-y x + j) 4)))
    ; ..and each cube's path: straight down its middle column to the river, or up to it,
    ; from the pane -- a fibre
    _ (each cubes (cb \ (: pn (cb 4) mx <pn above (<>pn < cy)
