@@ -714,5 +714,14 @@
     !(sh-t-has? j4 "no such job")       ; ..which fg can still find
     (sh-t-has? j4 "woke")))             ; ..and wakes, group and all, to the end
 
+;; a $( ) of a roster word is ours to run in here: the jug when nothing wants an fd,
+;; the pipe lane when a redirect does; a spelled path still spawns, a builtin keeps its lane
+(: (lane s) (sh-lane >(sh-parse >(sh-lex s)))
+   (test ('jug = lane "date") ('sub = lane "date 2>/dev/null") ('ext = lane "/bin/date")
+         ('ext = lane "cat") ('jug = lane "echo hi") ('sub = lane "cd /") ('jug = lane "pwd")))
+(: r (hark ["out/love" "out/lush" "-c"
+            "v=$(expr 1 + 2); w=$(printenv LUSH_UNSET_QQ 2>/dev/null); echo $? v=$v w=[$w]"])
+   (test ("1 v=3 w=[]\n" = >r)))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)

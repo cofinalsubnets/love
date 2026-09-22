@@ -2109,6 +2109,7 @@
         (: nm (sh-cmdname a)
            (? !nm 'sub
               (sh-fn? nm) 'sub
+              (&& !(sh-bi? nm) (sh-selfok? nm)) (? (one? (a 2)) 'jug 'sub)   ; ours to run in here
               !(sh-bi? nm) 'ext
               (&& (one? (a 2)) (sh-smem? nm sh-purebi)) 'jug   ; a redirect wants an fd
               'sub)))
