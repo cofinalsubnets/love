@@ -5,10 +5,10 @@
 ; terminal, so it gets one: `tether` spawns `kore less` on a pty, we type at the
 ; master and read the frames back off it. not in the test/*.l corpus -- tether and
 ; tty both live in inle/posix.c, which love0 does not link. Run it (the test macro
-; comes from test/00-init.l; $lovebin names the binary under test and $lesstestdir a
+; comes from test/00-init.l; $LOVEBIN names the binary under test and $LESSTESTDIR a
 ; scratch directory it may write in):
 ;
-;   lovebin=out/love lesstestdir=b sh -c "cat test/00-init.l test/host/less.l | out/love"
+;   LOVEBIN=out/love LESSTESTDIR=out sh -c "cat test/00-init.l test/host/less.l | out/love"
 ;
 ; the pty starts 0x0 until settty lands, and the child may read its size before
 ; we push one -- so nothing here asks about geometry, only about what any window

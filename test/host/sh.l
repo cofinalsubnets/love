@@ -646,5 +646,34 @@
 (: pr (sh-parse-line "which cc")
    (test ('jug = sh-lane >pr) ('jug = (sh-lane >(sh-parse-line "type cc")))))
 
+; a pipeline's stages must share the group that holds the terminal: `ls | less`
+; spawns ls and forks the pager in-image, and a pager left in the background reads
+; /dev/tty into EIO. driven on a pty -- the alt screen opens, stays, and closes on q.
+(: (sh-t-has? hay ned)
+    (: n #ned m #hay
+       (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
+       (go 0))
+   (sh-t-pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, sh-t-pump src dst))
+   (sh-t-type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   e (string 27)
+   r (tether ["out/love" "lush"])
+   m >r
+   _ (settty m 24 80)
+   sink (jug 0)
+   t (twirl (_ \ sh-t-pump m sink) 0)
+   _ (rest 600)
+   _ (sh-t-type m "ls | less\n")
+   _ (rest 900)
+   s1 (slurp sink)                      ; cumulative: a jug's slurp does not drain it
+   _ (sh-t-type m "q")
+   _ (rest 600)
+   s2 (slurp sink)
+   _ (still <r 9)
+   _ (landed? t ? (catch t) (freeze t))
+   (test
+    (sh-t-has? s1 (e + "[?1049h"))      ; the pager opened
+    !(sh-t-has? s1 (e + "[?1049l"))     ; ..and did not quit on its own
+    (sh-t-has? s2 (e + "[?1049l"))))    ; ..and q reached it
+
 (test_fin ())
 (puts "sh: ok") (putc 10)

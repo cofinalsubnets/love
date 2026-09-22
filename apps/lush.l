@@ -1703,6 +1703,10 @@
                           (sh-stagex >cmds
                                      ['x argv (rm 1) (rm 2) (rm 3) . acc]))))))))
    (stclean acc) (each acc (\ st (each (st 3) close)))
+   ; does this stage run in-image? a fork lane, no exec. sh-spawn1 and the group
+   ; choice below must read it the same way, so both ask here
+   (sh-stfk? st fm)
+     (? !(st 0 = 'x) 1 (sh-forkok? (st 1) fm) (sh-forkfn <(st 1)) 0)
    ; spawn one stage: external -> spawnmap; anything else -> fork, the child laying
    ; the pipe map on itself (dup2), closing the plumbing, evaluating, quitting.
    ; flush first, both lanes: a builtin buffers through `out` and a child writes the
@@ -1712,7 +1716,7 @@
         (? (st 0 = 'x)
            (: w <(st 1)
               fm (base + (st 2))
-              fk (? (sh-forkok? (st 1) fm) (sh-forkfn w) 0)
+              fk (sh-stfk? st fm)
               (? fk
                  ; ours: fork, no exec -- the child runs the line through cli-line on
                  ; this warm heap and quits with its status, a real pid. pg/fg are not
@@ -1731,15 +1735,24 @@
                     s (sh-eval (st 1))
                     (quit (? (charm? s) s (? (<s = 'ret) >s 0))))
                  p))))
+   (sh-stbase pipes lastout i last)
+     (+ (? (0 < i) [(0 . <(pipes (i - 1)))] ())
+        (? (i < last) [(1 . >(pipes i))]
+           (? (lastout < 0) () [(1 . lastout)])))
+   ; a forked stage stays in the shell's group, so a pipeline holding one keeps that
+   ; group for every stage: hand the terminal to a spawned leader's fresh group and
+   ; the forked stage is left in the background, where a /dev/tty read dies with EIO
+   (sh-anyfork? sts pipes lastout i last)
+     (? !sts 0
+        (sh-stfk? <sts (+ (sh-stbase pipes lastout i last) (<sts 2))) 1
+        (sh-anyfork? >sts pipes lastout (i + 1) last))
    ; stage 0 may lead a pgrp + take the tty, the rest join; base map = pipe
    ; wiring, a stage's own redirects land after. lastout >= 0 sends the last
    ; stage's stdout there (the cmdsub lane).
    (sh-spawnst sts pipes allclose lastout i last pg fg pids)
      (? !sts (rev pids)
         (: st <sts
-           base (+ (? (0 < i) [(0 . <(pipes (i - 1)))] ())
-                   (? (i < last) [(1 . >(pipes i))]
-                      (? (lastout < 0) () [(1 . lastout)])))
+           base (sh-stbase pipes lastout i last)
            pid (sh-spawn1 st base allclose pg (? (i = 0) fg 0))
            (sh-spawnst >sts pipes allclose lastout (i + 1) last
                        (? (pg < 0) pg (? (i = 0) pid pg)) fg (pid . pids))))
@@ -1756,8 +1769,10 @@
               ofds (catmap (\ st (st 3)) sts)
               wrs (catmap (\ st (st 4)) sts)
               allclose (pfds + (ofds + (map cap wrs)))
+              mix (? bg 0 (sh-anyfork? sts pipes (0 - 1) 0 n))
               pids (sh-spawnst sts pipes allclose (0 - 1) 0 n
-                               (sh-pgm 0) (? bg 0 (sh-fgm 0)) ())
+                               (? mix (0 - 1) (sh-pgm 0))
+                               (? (bg || mix) 0 (sh-fgm 0)) ())
               (each (pfds + ofds) close,
                sh-hwrite wrs,
                (? bg
