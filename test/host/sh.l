@@ -690,6 +690,18 @@
    _ (sh-t-type m2 "echo st=$?\n")
    _ (rest 700)
    j2 (slurp sink2)
+   ; ..and a ( ) is ONE job of the shell above, not a job table of its own
+   _ (sh-t-type m2 "( sleep 2 ; echo w''oke )\n")   ; typed w''oke, printed woke
+   _ (rest 500)
+   _ (sh-t-type m2 (string 26))         ; ^Z
+   _ (rest 700)
+   _ (sh-t-type m2 "jobs\n")
+   _ (rest 500)
+   j3 (slurp sink2)
+   _ (sh-t-type m2 "fg\n")
+   _ (rest 2500)
+   _ (rest 700)
+   j4 (slurp sink2)
    _ (still <r2 9)
    _ (landed? t2 ? (catch t2) (freeze t2))
    (test
@@ -697,7 +709,10 @@
     !(sh-t-has? s1 (e + "[?1049l"))     ; ..and did not quit on its own
     (sh-t-has? s2 (e + "[?1049l"))      ; ..and q reached it
     (sh-t-has? j1 "stopped")            ; ^Z reached the forked job
-    (sh-t-has? j2 "st=0")))             ; ..and fg ran it to completion
+    (sh-t-has? j2 "st=0")               ; ..and fg ran it to completion
+    (sh-t-has? j3 "] stopped  ( sleep") ; the subshell is the job the shell lists
+    !(sh-t-has? j4 "no such job")       ; ..which fg can still find
+    (sh-t-has? j4 "woke")))             ; ..and wakes, group and all, to the end
 
 (test_fin ())
 (puts "sh: ok") (putc 10)

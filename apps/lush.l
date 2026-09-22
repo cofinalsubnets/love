@@ -31,11 +31,17 @@
    sh-njob {0}
    sh-tty {0}                                  ; 1 = interactive: jobs get their own pgrp + the tty
    sh-login {0}                                ; 1 = a login shell (--login, or a -argv0 seat): profiles read
+   ; job control is the interactive shell's own, and it does not nest: a forked child
+   ; that goes on to run shell code clears this, so what it runs rides ITS group and the
+   ; shell above sees one job -- the child. separate from sh-tty, which also says whether
+   ; -e leaves and whether a syntax error is fatal, neither of which a subshell changes.
+   sh-jc {1}
+   (sh-jc? _) (? (sh-tty ()) (sh-jc ()) 0)
    ; interactive spawns lead a fresh process group (pg 0) and the first stage takes the
    ; terminal (fg 1) -- a stop to an orphaned group is discarded, so ^Z wants its own
    ; group. the cooked/non-tty lane keeps the in-shell pgrp (-1).
-   (sh-pgm _) (sh-tty () ? 0 -1)
-   (sh-fgm _) (sh-tty () ? 1 0)
+   (sh-pgm _) (sh-jc? 0 ? 0 -1)
+   (sh-fgm _) (sh-jc? 0 ? 1 0)
    sh-status {0}                               ; $?: the last foreground status
    sh-substat {0}                              ; the last $( )'s status -- ambient because
                                                ; expansion sits between sh-cmdsub and the reader
@@ -138,6 +144,10 @@
    (sh-unwords ws) (foldl (\ a w (? #a ((a + " ") + w) w)) "" ws)
    (sh-addjob pids state cmd)
     (1 + sh-njob () @ n (pin sh-njob () n, pin sh-jobs n [pids state cmd], n))
+   ; wake a job: its group first -- a subshell's own children are in it and are on no
+   ; list of ours -- then each pid we do know, for a job that leads no group. a stray
+   ; cont is nothing, so neither half has to be sure of the other.
+   (sh-cont pids) (: _ (still (0 - <pids) sig-cont) (each pids (\ p (still p sig-cont))))
    (sh-jobline n j)
     ("[" + show n + "] " + show (j 1) + "  " + j 2 + "\n")
    (sh-stopped? sts) (foldl (\ a x (? a a (charm? x && 255 < x))) 0 sts)
@@ -145,7 +155,7 @@
    (sh-waitfg pids cmd)
      (: sts (map wait pids)
         _   (sh-sigdrain 0)                            ; POSIX: after the command, not during
-        _   (? (sh-tty ()) (ttyfg 0) 0)                ; the shell takes the terminal back
+        _   (? (sh-jc? 0) (ttyfg 0) 0)                 ; the shell takes the terminal back
         _   (pin sh-status ()                          ; $?: the last stage; a stop folds to 128+sig
              (: st (last sts) (? (charm? st && 255 < st) (st - 128) (charm? st) st 127)))
         (? (sh-stopped? sts)
@@ -179,13 +189,13 @@
         (? !j (puts "fg: no such job\n", 0)
            (: pids (j 0) cmd (j 2)
               (pull sh-jobs n 0,
-               (? (sh-tty ()) (ttyfg <pids) 0),        ; the job's group gets the terminal first
-               each pids (p \ still p sig-cont),
+               (? (sh-jc? 0) (ttyfg <pids) 0),         ; the job's group gets the terminal first
+               sh-cont pids,
                sh-waitfg pids cmd))))
    (sh-bg n)
      (: j (sh-jobs n)
         (? !j (puts "bg: no such job\n", 0)
-           (each (j 0) (\ p (still p sig-cont)),
+           (sh-cont (j 0),
             pin sh-jobs n [(j 0) 'running (j 2)],
             puts (sh-jobline n (sh-jobs n)),
             0))))
@@ -1469,6 +1479,12 @@
    ; there, which is what lets it hand itself the terminal from the background.
    (sh-pgkid pg fg) (? (pg < 0) 0 (: _ (setpg 0 pg) (? fg (ttyfg 0) 0)))
    (sh-pgdad p pg) (? (pg < 0) 0 (setpg p (? pg pg p)))
+   ; ..and what such a child owes once it has its group: it IS the job now, so it takes
+   ; the tty signals like any other process, and it runs no job control of its own --
+   ; what it runs stays in its group, and the shell above it sees one job, not theirs.
+   ; after sh-pgkid, never before: the handoff wants TTOU still ignored.
+   (sh-subjc _) (: _ (pin sh-jc () 0)
+                   (each [sig-int sig-quit sig-tstp sig-ttou sig-ttin] (flip signal 0)))
    ; the fork child itself, shared by the pipeline stage and the simple foreground
    ; command: answers the pid in the parent (or fork's own nom), never in the child.
    ; every line of it is child hygiene -- copy the whole thing, not parts.
@@ -1735,6 +1751,7 @@
                  (: _ (wear (),                   ; a child wears the console: its fds are the dup2 below, and a jug is not one
                          sh-dropcaps (),           ; ...and it is inside no capture of ours
                          sh-pgkid pg fgi,          ; and joins the pipeline's group
+                         sh-subjc (),              ; ..and runs no job control of its own
                          each base (\ e (dup2 >e <e)),
                          each allclose (\ fd (? (2 < fd) (close fd) 0)))
                     s (sh-eval (st 1))
@@ -1755,6 +1772,10 @@
    (sh-echk st)
      (? (charm? st && st != 0 && sh-eflag () && sh-noe () = 0 && !(sh-tty ()))
         (sh-leave st) st)
+   ; a background job shows the line that started it, and that line already carries the
+   ; & unless it held several and_ors and this was not the last
+   (sh-bgline _) (: s (sh-rtrim (sh-curline ()))
+                    (? (0 < #s && s (#s - 1) = 38) s (s + " &")))
    (sh-pipeline cmds bg)
      (: sx (sh-stagex cmds ())
         (? (<sx = 'err) (cmderr >sx)
@@ -1770,7 +1791,7 @@
               (each (pfds + ofds) close,
                sh-hwrite wrs,
                (? bg
-                  (: jn (sh-addjob pids 'running ((sh-curline ()) + " &"))
+                  (: jn (sh-addjob pids 'running (sh-bgline 0))
                      (pin sh-lastbg () (last pids),      ; $!
                       (? (sh-tty ()) (puts ("[" + show jn + "] " + sh-unwords (map show pids) + "\n")) 0),
                       0))
@@ -1976,13 +1997,17 @@
    (sh-subsh b)
      (? (sh-subfds ()) (sh-subhere b)
         (: _ (flush out) _ (flush err)
+           pg (sh-pgm 0) fg (sh-fgm 0)
            p (fork 0)
            (? (p = 0) (: _ (wear ())         ; the child's stdio is its fds, never a jug this task wears
                          _ (sh-dropcaps ())  ; ...and it is inside no capture of ours
+                         _ (sh-pgkid pg fg)  ; a ( ) is one job of the shell above: its own group
+                         _ (sh-subjc ())     ; ..and the commands in it are not jobs of anyone
                          s (b ())
                          (quit (? (charm? s) s (? (<s = 'ret) >s 0))))
               (nom? p) (cmderr "cannot fork")
-              (: _ (sh-waitfg [p] (sh-curline ())) (sh-echk (sh-status ()))))))
+              (: _ (sh-pgdad p pg)
+                 _ (sh-waitfg [p] (sh-curline ())) (sh-echk (sh-status ()))))))
    ; the roster sh-subback puts back is the subshell's contract and rides the raised
    ; way out too, or a scare leaks the body's cwd, vars, funcs and flags into us.
    (sh-subhere b)                            ; a subshell in our own process
