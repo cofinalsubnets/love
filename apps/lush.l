@@ -24,7 +24,8 @@
    readlink (cite 'posix 'readlink) rmdir (cite 'posix 'rmdir)
    selfpath (cite 'posix 'selfpath) stat (cite 'posix 'stat)
    sigclear (cite 'posix 'sigclear) sigfd (cite 'posix 'sigfd)
-   umask (cite 'posix 'umask)
+   umask (cite 'posix 'umask)     rusage (cite 'posix 'rusage)
+   rlimit (cite 'posix 'rlimit)   setrlimit (cite 'posix 'setrlimit)
    sigign? (cite 'posix 'sigign?)  sigtake (cite 'posix 'sigtake)
 
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
@@ -48,6 +49,10 @@
                                                ; expansion sits between sh-cmdsub and the reader
    sh-curline {0}                              ; the source line under eval (job display)
    sh-vars (tablet 0)                          ; shell variables (name -> value; export promotes)
+   sh-rovars (tablet 0)                        ; the readonly names
+   sh-aliases (tablet 0)                       ; alias name -> its text
+   sh-hashc (tablet 0)                         ; word -> (PATH . the path it won), hash's memory
+   (sh-tclear t) (each (keys t) (k \ pull t k 0))
    sh-funcs (tablet 0)                         ; functions (name -> the PLANNED body)
    ; --- trap: the action for a condition, and the door it leaves through -------
    ; sh-traps holds condition -> action text; sh-runtrap is the evaluator, pinned at
@@ -927,8 +932,14 @@
         (say err ("lush: " + (nm + ": unbound\n")),
          sh-tty () || sh-leave 2),
        ""))
+   (sh-ro? nm) (peep sh-rovars nm 0)
+   (sh-rosay nm)                                ; a readonly assignment: an error, fatal to a script
+     (: _ (say err ("lush: " + nm + ": readonly variable\n")) _ (pin sh-status () 1)
+        (? (sh-tty ()) 1 (sh-leave 2)))
    (sh-setvar nm v)                             ; an exported name stays exported
-    (string? (getenv nm) ? (setenv nm v) (pin sh-vars nm v))
+    (? (sh-ro? nm) (sh-rosay nm)
+       (string? (getenv nm)) (setenv nm v)
+       (pin sh-vars nm v))
 
    ; --- $(( .. )): POSIX shell arithmetic --------------------------------------
    ; signed integer expressions over shell variables, C's operators and precedence, by
@@ -1264,6 +1275,7 @@
    (sh-export w)
      (: p (sh-eqpos w 0)
         (? !p (setenv w (sh-vval w))
+           (sh-ro? (snip w 0 p)) (sh-rosay (snip w 0 p))
            (setenv (snip w 0 p) (snip w (p + 1) #w))))
 
    (cmderr msg) (: _ (say err ("lush: " + (msg + "\n"))) _ (pin sh-status () 1) 1)
@@ -1340,7 +1352,7 @@
    (sh-doasn a) (sh-setvar <a (sh-textof >a))
    (sh-tmpset a)                                ; temporary env around one command
      (: nm <a old (getenv nm)
-      (setenv nm (sh-textof >a),
+      (? (sh-ro? nm) (sh-rosay nm) (setenv nm (sh-textof >a)),
        nm . old))
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
@@ -1387,12 +1399,18 @@
    ; top-level bind would fold the baking love's own seat in and call every tool ours.
    (sh-seat _) (lit? (cite 'posix 'selfpath) ? (selfpath 0))
    (sh-self? p) (: a (stat p) ((two? a) && (a = (stat (sh-seat ())))))
+   ; hash's memory: a win is kept under the PATH that gave it, and read back only
+   ; while PATH is that string and the file is still there
+   (sh-hashget w) (peep sh-hashc w () @ (ps . p) (? (ps = ("" + (getenv "PATH")) && two? (stat p)) p ()) ())
+   (sh-hashput w p) (pin sh-hashc w (("" + (getenv "PATH")) . p))
    (sh-whichp w)                                ; PATH's winner for w -> (1 path), or ()
      (? (sh-slashed? w) (two? (stat w) ? [1 w])
-        (: (go l) (two? l ?
-                   (: d (? #<l <l ".") p (d + ("/" + w))
-                    (two? (stat p) ? [1 p] (go >l))))
-           (go (sh-pathdirs ()))))
+        (: c (sh-hashget w)
+           (? (string? c) [1 c]
+              (: (go l) (two? l ?
+                         (: d (? #<l <l ".") p (d + ("/" + w))
+                          (two? (stat p) ? (sh-hashput w p, [1 p]) (go >l))))
+                 (go (sh-pathdirs ()))))))
    (sh-onpath? w)                               ; is PATH's winner for w this binary
      (: (go l) (two? l ?
                 (: d (? #<l <l ".") p (d + ("/" + w))
@@ -1440,12 +1458,13 @@
    (sh-vpath w) (sh-seat () @ s (string? s ? s w))
    (sh-verdict w)
      (? (sh-smem? w sh-resw) ['resw]
+        (string? (sh-aliases w)) ['alias (sh-aliases w)]
         (sh-fn? w) ['fn]
         (sh-bi? w) ['bi]
         (sh-slashed? w) (two? (stat w) ? ['path w])
         (sh-vseat? w) ['verb (sh-vpath w)]
         (: p (sh-whichp w) (two? p ? ['path <>p])))
-   (sh-vname w v) (<v @ ('path || 'verb) <>v w)   ; `command -v`'s line
+   (sh-vname w v) (<v @ ('path || 'verb) <>v 'alias ("alias " + w + "='" + <>v + "'") w)   ; `command -v`'s line
    (sh-whichall w)                              ; every PATH hit for w, in order
      (: (go l acc)
          (? (one? l) (rev acc)
@@ -1507,8 +1526,7 @@
                   (v != 'no ? v (: f (sh-forkask w) (pin sh-forkc w f, f))))
    ; a shell starting on a forked heap inherits its parent's verdicts, and its own
    ; mode may differ: sh-main drops them, and each word is asked again
-   (sh-forget _) (: (clear t) (each (keys t) (k \ pull t k 0))
-                    (clear sh-imgc, clear sh-forkc))
+   (sh-forget _) (sh-tclear sh-imgc, sh-tclear sh-forkc, sh-tclear sh-hashc)
    (sh-fd0? fdmap) (? (one? fdmap) 0 (<<fdmap = 0) 1 (sh-fd0? >fdmap))
    ; --- how a word runs: three lanes, and why they nest -------------------------
    ; self -- in this very process, no fork. it asks the most of a word: no quit, no
@@ -1577,7 +1595,7 @@
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local" "exec"
                 "break" "continue" "return" "ev" "trap" "which" "where" "type"
-                "kill" "umask" "getopts")
+                "kill" "umask" "getopts" "readonly" "alias" "unalias" "times" "hash" "ulimit")
    (sh-bi? nm) (sh-smem? nm sh-binames)
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
@@ -1686,14 +1704,16 @@
                0 args))
    (sh-typesay v)
      (<v @ 'resw " is a shell reserved word"
+           'alias (" is an alias for " + (v 1))
            'fn   " is a shell function"
            'bi   " is a shell builtin"
            'verb (" is a verb of " + (v 1))
                  (" is " + (v 1)))
    (sh-localb args)
-     (: _ (each args (\ w (: p (sh-eqpos w 0)
-                             (? !p (pin sh-vars w "")
-                                (pin sh-vars (snip w 0 p) (snip w (p + 1) #w))))))
+     (: _ (each args (\ w (: p (sh-eqpos w 0) nm (? p (snip w 0 p) w)
+                             (? (sh-ro? nm) (sh-rosay nm)
+                                !p (pin sh-vars w "")
+                                (pin sh-vars nm (snip w (p + 1) #w))))))
         0)
    (sh-waitb args)                              ; wait [pid..] -> the last one's status
      (? (two? args)
@@ -1799,6 +1819,76 @@
                             (sh-setvar nm "?", moan "option requires an argument" c),
                           leave (ind + 1) 0, 0))
                     (sh-setvar nm (string c), noarg 0, step 0, 0))))))
+   ; readonly [-p] [NAME[=VALUE]..]: a set, then the mark; the mark is what every setter asks
+   (sh-readonlyb args)
+     (? (!(two? args) || <args = "-p")
+        (each (sort (keys sh-rovars))
+              (nm \ puts ("readonly " + nm + (sh-vget nm @ (_ . v) ("='" + v + "'") "") + "\n")), 0)
+        (foldl (a \ w \ (: p (sh-eqpos w 0)
+                          nm (? p (snip w 0 p) w)
+                          _ (? p (sh-setvar nm (snip w (p + 1) #w)) 0)
+                          _ (pin sh-rovars nm 1)
+                          a))
+               0 args))
+   ; alias [NAME[=TEXT]..] and unalias [-a] NAME..: the text is lexed at every use, so it
+   ; is refused here unless it is words alone -- an operator in it would need the grammar
+   (sh-aliassay ws) (each ws (w \ puts ("alias " + w + "='" + sh-aliases w + "'\n")))
+   (sh-aliasb args)
+     (? !(two? args) (sh-aliassay (sort (keys sh-aliases)), 0)
+        (foldl (a \ w \ (: p (sh-eqpos w 0)
+                          (? !p (? (string? (sh-aliases w)) (sh-aliassay [w], a)
+                                   (say err ("lush: alias: " + w + ": not found\n"), 1))
+                             (: v (snip w (p + 1) #w)
+                                (? (two? (sh-aliasws v)) (pin sh-aliases (snip w 0 p) v, a)
+                                   (say err ("lush: alias: " + (snip w 0 p) + ": words only, no operators\n"), 1))))))
+               0 args))
+   (sh-unaliasb args)
+     (? (two? args && <args = "-a") (sh-tclear sh-aliases, 0)
+        !(two? args) (cmderr "unalias: usage: unalias [-a] NAME..")
+        (foldl (a \ w \ (? (string? (sh-aliases w)) (pull sh-aliases w 0, a)
+                           (say err ("lush: unalias: " + w + ": not found\n"), 1)))
+               0 args))
+   ; times: the shell's own clocks, then its reaped children's, POSIX's two lines
+   (sh-timesb _)
+     (: (pad3 n) (: t (show n) ((snip "000" 0 (3 - #t)) + t))
+        (fmt us) (: ms (us // 1000) s (ms // 1000)
+                    (show (s // 60) + "m" + show (s % 60) + "." + pad3 (ms % 1000) + "s"))
+        (line r) (? (two? r) (puts (fmt <r + " " + fmt <>r + "\n")) (puts "0m0.000s 0m0.000s\n"))
+        _ (line (rusage 0)) _ (line (rusage -1))
+        0)
+   ; hash [-r] [NAME..]: the PATH walk's memory, listed, filled by name, or dropped
+   (sh-hashb args)
+     (? (two? args && <args = "-r") (sh-tclear sh-hashc, 0)
+        !(two? args) (each (sort (keys sh-hashc)) (w \ puts (w + "=" + >(sh-hashc w) + "\n")), 0)
+        (foldl (a \ w \ (? (two? (sh-whichp w)) a (say err ("lush: hash: " + w + ": not found\n"), 1)))
+               0 args))
+   ; ulimit [-HS] [-a] [-cdfnstuv [LIMIT]]: POSIX's -f in 512-byte blocks and bash's letters
+   ; beside it; a letter alone shows the soft bound, a LIMIT sets both unless -H or -S says one
+   sh-ulims '((99 "core file size" "blocks" 4 512) (100 "data seg size" "kbytes" 2 1024)
+              (102 "file size" "blocks" 1 512) (110 "open files" "" 6 1)
+              (115 "stack size" "kbytes" 3 1024) (116 "cpu time" "seconds" 0 1)
+              (117 "max user processes" "" 5 1) (118 "virtual memory" "kbytes" 7 1024))
+   (sh-ulimitb args)
+     (: t (tablet 0)
+        (fl a lim) (? !(two? a) lim
+                      (1 < #<a && <a 0 = 45) (: (cl k) (? (#<a <= k) (fl >a lim) (pin t (<a k) 1, cl (k + 1))) (cl 1))
+                      (fl >a <a))
+        lim (fl args ())
+        hard? (t 72) soft? (t 83)
+        (row c) (: (go l) (? !(two? l) () (<<l = c) <l (go >l)) (go sh-ulims))
+        bad (filter (c \ !(elem c '(97 72 83)) && !(row c)) (keys t))
+        (pad w s) (#s < w ? (pad w (s + " ")) s)
+        (val r) (: v (rlimit (r 3) (? hard? 1 0)) (? (!(charm? v) || v < 0) "unlimited" (show (v // (r 4)))))
+        (showrow r) (puts (pad 32 ((r 1) + (? #(r 2) (" (" + (r 2) + ", -" + string <r + ")") (" (-" + string <r + ")"))) + val r + "\n"))
+        ls (filter (c \ t c) (map cap sh-ulims))        ; the letters asked, in table order
+        (? (two? bad) (cmderr ("ulimit: unknown option -" + string <bad))
+           (t 97) (each sh-ulims showrow, 0)
+           (: r (row (? (two? ls) <ls 102))               ; -f is the default
+              (? !(string? lim) (puts (val r + "\n"), 0)
+                 (: n (? (lim = "unlimited") -1 (sh-digits? lim) (sh-int lim * (r 4)) ())
+                    (? !(charm? n) (cmderr ("ulimit: " + lim + ": invalid limit"))
+                       (: e (setrlimit (r 3) (? (hard? && !soft?) () n) (? (soft? && !hard?) () n))
+                          (? e (cmderr ("ulimit: cannot set " + (r 1))) 0))))))))
    (sh-builtin argv)
      (<argv @- 'nope                             ; a word no builtin answers to
       "exit"   (: st (? >argv (sh-int <>argv) (sh-status ())) (sh-leave st))
@@ -1829,7 +1919,7 @@
       "set"    (sh-setb >argv)
       "shift"  (: n (? >argv (sh-int <>argv) 1)
                   (pin sh-pos () (drop n (sh-pos ())), 0))
-      "unset"  (each >argv (nm \ (pull sh-vars nm 0, setenv nm ())), 0)
+      "unset"  (foldl (a \ nm \ (? (sh-ro? nm) (sh-rosay nm) (pull sh-vars nm 0, setenv nm (), a))) 0 >argv)
       "eval"   (: c (sh-unwords >argv)
                   (? #c (: r (sh-line c) (? (two? r) (cmderr "eval: unexpected eof") r))
                      0))
@@ -1843,6 +1933,12 @@
       "kill"   (sh-killb >argv)
       "umask"  (sh-umaskb >argv)
       "getopts" (sh-getoptsb >argv)
+      "readonly" (sh-readonlyb >argv)
+      "alias"  (sh-aliasb >argv)
+      "unalias" (sh-unaliasb >argv)
+      "times"  (sh-timesb >argv)
+      "hash"   (sh-hashb >argv)
+      "ulimit" (sh-ulimitb >argv)
       "break"    ('brk . (? >argv (sh-int <>argv) 1))
       "continue" ('cnt . (? >argv (sh-int <>argv) 1))
       "return"   ('ret . (? >argv (sh-int <>argv) (sh-status ()))))
@@ -1866,7 +1962,7 @@
               (sh-stagex >cmds ['a c () () () . acc])
               (: pk (sh-peel (c 1) ())
                  argv (catmap sh-fields >pk)
-                 (? (two? <pk || one? argv || sh-bi? <argv || sh-fn? <argv)
+                 (? (two? <pk || one? argv || sh-bi? <argv || sh-fn? <argv || string? (sh-aliases <argv))
                     (sh-stagex >cmds ['a c () () () . acc])
                     (: rm (sh-rdmap (c 2))
                        (? (<rm = 'err) (: _ (stclean acc) rm)
@@ -1944,7 +2040,27 @@
                   (sh-waitfg pids (sh-curline ()), sh-echk (sh-status ())))))))
    ; one simple foreground command: assignments, function, builtin, or a spawn.
    ; pk is the peel -- (assignments . words) -- split at plan time, it is syntax
+   ; an alias's text lexes to words and nothing else (the builtin refuses the rest);
+   ; a command node's words are bare segment lists, so the lexer's w tag comes off
+   (sh-aliasws v) (sh-lex v @ (1 . ts) (? (all (t \ <t = 'w) ts) (map cup ts) ()) ())
+   ; the first word, a bare literal naming an alias, becomes the alias's words; again on
+   ; what that made, until the first word names none or one already seen (POSIX's stop).
+   ; () when nothing changed
+   (sh-unalias ws seen)
+     (: w (two? ws ? (sh-barelit <ws) ())
+        (? !(string? w) ()
+           !(string? (sh-aliases w)) ()
+           (elem w seen) ()
+           (: e (sh-aliasws (sh-aliases w) + >ws)
+              r (sh-unalias e (w . seen))
+              (? (two? r) r e))))
+   ; the alias's words may open with assignments of their own: peeled again, ahead of
+   ; the line's, which POSIX puts first
    (sh-simple pk rs)
+     (: e (sh-unalias >pk ())
+        (? !(two? e) (sh-simple1 pk rs)
+           (: q (sh-peel e ()) (sh-simple1 ((<pk + <q) . >q) rs))))
+   (sh-simple1 pk rs)
      (: asns <pk
         _ (pin sh-substat () 0)          ; ahead of both expansions -- see below
         argv (catmap sh-fields >pk)
@@ -2226,6 +2342,7 @@
         (: nm (sh-cmdname a)
            (? !nm 'sub
               (sh-fn? nm) 'sub
+              (string? (sh-aliases nm)) 'sub
               (&& !(sh-bi? nm) (sh-selfok? nm)) (? (one? (a 2)) 'jug 'sub)   ; ours to run in here
               !(sh-bi? nm) 'ext
               (&& (one? (a 2)) (sh-smem? nm sh-purebi)) 'jug   ; a redirect wants an fd
@@ -2497,7 +2614,7 @@
 
    ; --- completion: (insert . candidates) off the text left of the cursor ------
    sh-builtins '("cd" "exit" "exec" "export" "pwd" "jobs" "fg" "bg" "which" "where" "type"
-                 "kill" "umask" "getopts")
+                 "kill" "umask" "getopts" "readonly" "alias" "unalias" "times" "hash" "ulimit")
    (sh-prefix? p s) (: n #p ((n <= #s) && (p = (snip s 0 n))))
    (sh-comm2 a s)                               ; longest common prefix of two
      (: n (? (#a < #s) #a #s)

@@ -145,6 +145,8 @@ static short const os_nr[][3] = {
    * narrowed suseconds_t with it, so it stays off the map until a box says otherwise.
    * statfs has no row at all: all three shapes disagree past the first field. */
   {NR_getrusage,     NR_fb_getrusage,    -1},
+  {NR_getrlimit,     NR_fb_getrlimit,   194},
+  {NR_setrlimit,     NR_fb_setrlimit,   195},
   {NR_kill,          NR_fb_kill,         37},
   {NR_fcntl,         NR_fb_fcntl,        92},
   {NR_fsync,         NR_fb_fsync,        95},

@@ -1058,6 +1058,36 @@ static lvm(lvm_posix_copyfile) {
  Sp[1] = host_posix_copyfile(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
+// (rlimit res which) -> a bound as a charm, -1 unlimited: res by the index below, which 0 the
+// soft, 1 the hard. (setrlimit res soft hard) -> () | a nom: -1 unlimited, () keeps that bound
+static ai_inline int host_rlres(intptr_t i) {
+ switch (i) { case 0: return RLIMIT_CPU;   case 1: return RLIMIT_FSIZE; case 2: return RLIMIT_DATA;
+              case 3: return RLIMIT_STACK; case 4: return RLIMIT_CORE;  case 5: return RLIMIT_NPROC;
+              case 6: return RLIMIT_NOFILE; case 7: return RLIMIT_AS;   default: return -1; } }
+ai_noinline static word host_posix_rlimit(struct ai *g, word rw, word ww) {
+ if (!charmp(rw) || !charmp(ww)) return ai_badarg(g);
+ int r = host_rlres(getcharm(rw));
+ intptr_t w = getcharm(ww);
+ if (r < 0 || (w != 0 && w != 1)) return ai_badarg(g);
+ struct rlimit l;
+ if (getrlimit(r, &l)) return ai_err(g, errno);
+ rlim_t v = w ? l.rlim_max : l.rlim_cur;
+ return putcharm(v == RLIM_INFINITY ? -1 : (intptr_t) v); }
+static lvm(lvm_posix_rlimit) {
+ Sp[1] = host_posix_rlimit(g, Sp[0], Sp[1]);
+ ai_musttail return Nextp(1, 1); }
+ai_noinline static word host_posix_setrlimit(struct ai *g, word rw, word sw, word hw) {
+ if (!charmp(rw)) return ai_badarg(g);
+ int r = host_rlres(getcharm(rw));
+ if (r < 0) return ai_badarg(g);
+ struct rlimit l;
+ if (getrlimit(r, &l)) return ai_err(g, errno);
+ if (charmp(sw)) l.rlim_cur = getcharm(sw) < 0 ? RLIM_INFINITY : (rlim_t) getcharm(sw);
+ if (charmp(hw)) l.rlim_max = getcharm(hw) < 0 ? RLIM_INFINITY : (rlim_t) getcharm(hw);
+ return setrlimit(r, &l) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_posix_setrlimit) {
+ Sp[2] = host_posix_setrlimit(g, Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
+
 static lvm(lvm_posix_umask) {
  Sp[0] = charmp(Sp[0]) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
                      : ai_badarg(g);
@@ -1071,6 +1101,8 @@ static union u const
   nif_posix_chown[]    = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_chown}, {lvm_ret0}},
   nif_posix_utime[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_utime}, {lvm_ret0}},
   nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}},
+  nif_posix_rlimit[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_rlimit}, {lvm_ret0}},
+  nif_posix_setrlimit[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_setrlimit}, {lvm_ret0}},
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
   nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
   nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
@@ -1081,6 +1113,8 @@ LvNif("chmod", nif_posix_chmod, "posix");
 LvNif("chown", nif_posix_chown, "posix");
 LvNif("utime", nif_posix_utime, "posix");
 LvNif("umask", nif_posix_umask, "posix");
+LvNif("rlimit", nif_posix_rlimit, "posix");
+LvNif("setrlimit", nif_posix_setrlimit, "posix");
 LvNif("rmdir", nif_posix_rmdir, "posix");
 LvNif("hardlink", nif_posix_hardlink, NULL);
 LvNif("copyfile", nif_posix_copyfile, "posix");

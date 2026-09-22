@@ -68,6 +68,7 @@ processes, this surface answered against a ramfs.
 | `dup2`/`pipe`                  | `dup` `dup2` `pipe` (a pair of fds)                    |
 | `stat`/`mkdir`/`unlink`/readdir| `stat` `lstat` `statfs` `mkdir` `rmdir` `unlink` `readdir` `rename` `symlink` `readlink` `hardlink` `chmod` `chown` `utime` `umask` |
 | `getrusage`                    | `rusage` — `(rusage 0)` this process, `(rusage -1)` the children reaped |
+| `getrlimit`/`setrlimit`        | `rlimit` `setrlimit` — `(rlimit res which)` one bound, `(setrlimit res soft hard)`; -1 is unlimited, res an index (cpu fsize data stack core nproc nofile as) |
 | the birth time                 | `birth` — `(birth path follow)`; `()` where the filesystem keeps none |
 | `cwd` — `chdir`/`getcwd`       | `chdir` `cwd`                                           |
 | signals — `sigaction`/`kill`   | **the condition system**: `signal`, `sigfd`/`sigtake`, `still` |

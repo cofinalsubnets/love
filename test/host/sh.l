@@ -753,5 +753,30 @@
            (("(\"" + ours + "\" \"a\" \"b\")\nsh\n") = >r))
    (unlink ours, unlink sh))
 
+;; readonly, alias, times, hash and ulimit: each acts on this process or its tables.
+;; a readonly assignment is an error, fatal to a script, from every setter
+(: r (hark ["out/love" "out/lush" "-c" "readonly R=1 S; readonly; R=2; echo after"])
+   (test (2 = <r) ("readonly R='1'\nreadonly S\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "readonly R=1; unset R; echo after"])
+   (test (2 = <r) ("" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "f() { local R=9; echo in; }; readonly R=1; f; echo after"])
+   (test (2 = <r) ("" = >r)))
+;; an alias is words, expanded at the simple command, in a capture and in a pipeline
+;; stage, recursion stopping at its own name; its text may open with an assignment
+(: r (hark ["out/love" "out/lush" "-c"
+            "alias ll='echo L'; ll a; x=$(ll b); echo [$x]; ll p | cat; alias; alias echo='echo E'; echo x; alias e='V=7 echo'; e y; echo [$V]; unalias -a; alias bad='a | b'; echo st=$?"])
+   (test ("L a\n[L b]\nL p\nalias ll='echo L'\nE x\ny\nE []\nst=1\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "alias zz-qq='echo L'; type zz-qq; command -v zz-qq; unalias zz-qq; type zz-qq"])
+   (test (1 = <r) ("zz-qq is an alias for echo L\nalias zz-qq='echo L'\n" = >r)))
+;; times is two lines of the POSIX shape; hash remembers PATH's winners and forgets
+(: r (hark ["out/love" "out/lush" "-c" "times"])
+   (test (2 = #(lines >r)) (all (\ l (= "m" (snip l 1 2))) (lines >r))))
+(: r (hark ["out/love" "out/lush" "-c" "hash -r; hash; hash nosuch-qq; echo st=$?; hash sh; hash | sed 's/=.*//'; hash -r; hash"])
+   (test ("st=1\nsh\n" = >r)))
+;; ulimit: -n set both bounds, -S the soft alone, -H reads the hard; an unknown letter
+;; and a bad limit are errors
+(: r (hark ["out/love" "out/lush" "-c" "ulimit -n 1000; ulimit -n; ulimit -Sn 500; ulimit -n; ulimit -Hn; ulimit -z; echo st=$?; ulimit -n abc; echo st=$?"])
+   (test ("1000\n500\n1000\nst=1\nst=1\n" = >r)))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)
