@@ -1473,10 +1473,36 @@
    ; a seat with no fork: inle runs a process as a task (kmain's shim, the spawnmap
    ; lane below), and the fork it pins is a no-op -- so no word forks there
    (sh-forkseat? _) (? (elem 'love-os (names ())) !(elem (ev 'love-os) '(inle wasm)) 1)
-   (sh-forkask w) (? (sh-slashed? w || sh-dotl? w) 0
-                     !(sh-forkseat? 0) 0
-                     (sh-cliline () && sh-ours? w) 1
+   ; a .l script's interpreter line -> the argv it starts under, or () when that is not
+   ; this binary: `#!/usr/bin/env -S love ARG..` is PATH's love, a spelled path stats as
+   ; us. the exec of the script would have started that line; the fork starts it warm
+   (sh-shebang p)
+     (: h (open p "r")
+        (? !(hot? h) ()
+           (: ln (sh-getline h) _ (close h)
+              (? !(string? ln && 1 < #ln && ln 0 = 35 && ln 1 = 33) ()
+                 (: ws (filter (w \ 0 < #w) ((cite 'kore 'usplit) 32 (snip ln 2 #ln)))
+                    env? (two? ws && (: n #<ws (3 < n && snip <ws (n - 4) n = "/env")))
+                    iv (? env? (? (two? >ws && <>ws = "-S") >>ws >ws) ws)
+                    (? !(two? iv) ()
+                       (? env? (<iv = "love" && sh-onpath? "love") (sh-self? <iv))
+                         ((sh-seat ()) . >iv)
+                       ()))))))
+   ; a spelled path is ours when it stats as this binary (sh-ours?), a script when its
+   ; interpreter line does; a bare word when PATH or the registry says so
+   (sh-forkask w) (? !(sh-forkseat? 0) 0
+                     !(sh-cliline ()) 0
+                     (sh-dotl? w) (: r (sh-whichp w) (? (two? r) (two? (sh-shebang (r 1))) 0))
+                     (sh-ours? w) 1
                      0)
+   ; the line a forked child hands cli-line: a script rides its interpreter line, as the
+   ; exec of it would have; anything else is the line as spelled, argv0 its own door
+   (sh-forkv argv)
+     (: w <argv
+        (? !(sh-dotl? w) argv
+           (: r (sh-whichp w)
+              iv (? (two? r) (sh-shebang (r 1)) ())
+              (? (two? iv) (iv + ((r 1) . >argv)) argv))))
    (sh-forkfn w) (: v (peep sh-forkc w 'no)
                   (v != 'no ? v (: f (sh-forkask w) (pin sh-forkc w f, f))))
    ; a shell starting on a forked heap inherits its parent's verdicts, and its own
@@ -1544,7 +1570,7 @@
             each allclose (fd \ 2 < fd ? (close fd) 0),
             ; 0: a child has a shell already. cli-line answers the line's status, a
             ; charm, and the process answers with it; anything else is 0
-            sh-cliline () argv 0)
+            sh-cliline () (sh-forkv argv) 0)
             (quit (charm? r ? (r & 255) 0)))))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------

@@ -740,5 +740,18 @@
             "set -- -a -z -b; while getopts :ab: o; do echo \"$o:${OPTARG-}\"; done; set -- -a -- -b; OPTIND=1; getopts ab o; getopts ab o; echo \"$o st=$? $OPTIND\""])
    (test ("a:\n?:z\n::b\n? st=1 3\n" = >r)))
 
+;; the fork lane reaches a spelled path that stats as this binary and a script whose
+;; interpreter line names it; a foreign path or shebang still execs. the script rides
+;; its interpreter line into cli-line, so it sees the same command line either way
+(: seat (sh-seat ())
+   (put p t) (: h (open p "w") _ (say h t) _ (close h) ((cite 'posix 'chmod) p 493))
+   ours "/tmp/lush-t-ours.l" sh "/tmp/lush-t-sh.l"
+   _ (put ours ("#!" + seat + "\n(puts (show (cup cmdline)), puts \"\\n\")\n"))
+   _ (put sh "#!/bin/sh\necho sh\n")
+   r (hark ["out/love" "out/lush" "-c" (ours + " a b </dev/null; " + sh + " </dev/null")])
+   _ (test (1 = sh-forkask seat) (1 = sh-forkask ours) (0 = sh-forkask sh) (0 = sh-forkask "/bin/date")
+           (("(\"" + ours + "\" \"a\" \"b\")\nsh\n") = >r))
+   (unlink ours, unlink sh))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)
