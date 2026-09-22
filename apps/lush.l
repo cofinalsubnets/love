@@ -1462,14 +1462,22 @@
            (two? a) 1
            (sh-fd0? fdmap) 1
            0))
+   ; spawnio does the job-control dance in C for a child it execs; a forked stage never
+   ; execs, so it does its own. both sides set the group, as spawnio's two calls do, so
+   ; neither a wait nor a signal can race it. pg < 0 keeps the shell's group (the non-tty
+   ; lane). the child's half runs BEFORE it sheds the five ignores: TTOU is still SIG_IGN
+   ; there, which is what lets it hand itself the terminal from the background.
+   (sh-pgkid pg fg) (? (pg < 0) 0 (: _ (setpg 0 pg) (? fg (ttyfg 0) 0)))
+   (sh-pgdad p pg) (? (pg < 0) 0 (setpg p (? pg pg p)))
    ; the fork child itself, shared by the pipeline stage and the simple foreground
    ; command: answers the pid in the parent (or fork's own nom), never in the child.
    ; every line of it is child hygiene -- copy the whole thing, not parts.
-   (sh-fork1 argv fdmap allclose)
+   (sh-fork1 argv fdmap allclose pg fg)
      (: p (fork 0)
-        (?- p (p = 0)
+        (?- (: _ (sh-pgdad p pg) p) (p = 0)
          (: r (wear (),
                sh-dropcaps (),        ; ...and it is inside no capture of ours
+            sh-pgkid pg fg,           ; the group, while the shell's TTOU ignore still holds
             ; the five tty ignores are the shell's: a spawned child sheds them through
             ; exec, this one by hand -- or a forked `sleep` shrugs off its own ^C
             signal sig-int 0, signal sig-quit 0, signal sig-tstp 0,
@@ -1703,10 +1711,6 @@
                           (sh-stagex >cmds
                                      ['x argv (rm 1) (rm 2) (rm 3) . acc]))))))))
    (stclean acc) (each acc (\ st (each (st 3) close)))
-   ; does this stage run in-image? a fork lane, no exec. sh-spawn1 and the group
-   ; choice below must read it the same way, so both ask here
-   (sh-stfk? st fm)
-     (? !(st 0 = 'x) 1 (sh-forkok? (st 1) fm) (sh-forkfn <(st 1)) 0)
    ; spawn one stage: external -> spawnmap; anything else -> fork, the child laying
    ; the pipe map on itself (dup2), closing the plumbing, evaluating, quitting.
    ; flush first, both lanes: a builtin buffers through `out` and a child writes the
@@ -1716,12 +1720,12 @@
         (? (st 0 = 'x)
            (: w <(st 1)
               fm (base + (st 2))
-              fk (sh-stfk? st fm)
+              fk (? (sh-forkok? (st 1) fm) (sh-forkfn w) 0)
               (? fk
                  ; ours: fork, no exec -- the child runs the line through cli-line on
-                 ; this warm heap and quits with its status, a real pid. pg/fg are not
-                 ; taken: the child stays in the shell's group, which keeps the tty.
-                 (sh-fork1 (st 1) fm allclose)
+                 ; this warm heap and quits with its status, a real pid. it takes pg/fg
+                 ; by hand, so the whole pipeline is one group whatever mix of lanes.
+                 (sh-fork1 (st 1) fm allclose pg fgi)
                  ; foreign, or an explicit path: spawned as ever -- its 127 is the
                  ; child's own, and only the word is ours to say
                  (: _ (? (sh-known? w) 0 (sh-nfsay w fm))
@@ -1730,29 +1734,21 @@
               (? (p = 0)
                  (: _ (wear (),                   ; a child wears the console: its fds are the dup2 below, and a jug is not one
                          sh-dropcaps (),           ; ...and it is inside no capture of ours
+                         sh-pgkid pg fgi,          ; and joins the pipeline's group
                          each base (\ e (dup2 >e <e)),
                          each allclose (\ fd (? (2 < fd) (close fd) 0)))
                     s (sh-eval (st 1))
                     (quit (? (charm? s) s (? (<s = 'ret) >s 0))))
-                 p))))
-   (sh-stbase pipes lastout i last)
-     (+ (? (0 < i) [(0 . <(pipes (i - 1)))] ())
-        (? (i < last) [(1 . >(pipes i))]
-           (? (lastout < 0) () [(1 . lastout)])))
-   ; a forked stage stays in the shell's group, so a pipeline holding one keeps that
-   ; group for every stage: hand the terminal to a spawned leader's fresh group and
-   ; the forked stage is left in the background, where a /dev/tty read dies with EIO
-   (sh-anyfork? sts pipes lastout i last)
-     (? !sts 0
-        (sh-stfk? <sts (+ (sh-stbase pipes lastout i last) (<sts 2))) 1
-        (sh-anyfork? >sts pipes lastout (i + 1) last))
+                 (: _ (sh-pgdad p pg) p)))))
    ; stage 0 may lead a pgrp + take the tty, the rest join; base map = pipe
    ; wiring, a stage's own redirects land after. lastout >= 0 sends the last
    ; stage's stdout there (the cmdsub lane).
    (sh-spawnst sts pipes allclose lastout i last pg fg pids)
      (? !sts (rev pids)
         (: st <sts
-           base (sh-stbase pipes lastout i last)
+           base (+ (? (0 < i) [(0 . <(pipes (i - 1)))] ())
+                   (? (i < last) [(1 . >(pipes i))]
+                      (? (lastout < 0) () [(1 . lastout)])))
            pid (sh-spawn1 st base allclose pg (? (i = 0) fg 0))
            (sh-spawnst >sts pipes allclose lastout (i + 1) last
                        (? (pg < 0) pg (? (i = 0) pid pg)) fg (pid . pids))))
@@ -1769,10 +1765,8 @@
               ofds (catmap (\ st (st 3)) sts)
               wrs (catmap (\ st (st 4)) sts)
               allclose (pfds + (ofds + (map cap wrs)))
-              mix (? bg 0 (sh-anyfork? sts pipes (0 - 1) 0 n))
               pids (sh-spawnst sts pipes allclose (0 - 1) 0 n
-                               (? mix (0 - 1) (sh-pgm 0))
-                               (? (bg || mix) 0 (sh-fgm 0)) ())
+                               (sh-pgm 0) (? bg 0 (sh-fgm 0)) ())
               (each (pfds + ofds) close,
                sh-hwrite wrs,
                (? bg
@@ -1866,12 +1860,13 @@
                     _ (flush out) _ (flush err)      ; see sh-spawn1: the child writes the fd straight
                     ; ours, but not safe to run in this process: fork the warm heap
                     ; rather than exec a second wake -- a quit is then the child's exit
-                    ; and kept state a copy. pg/fg not taken, as for a pipeline stage.
+                    ; and kept state a copy. pg/fg as for the spawn below: its own group,
+                    ; and the terminal, so ^Z and `fg` reach it like any other job.
                     fk (? (sh-forkok? argv (rm 1)) (sh-forkfn <argv) 0)
                     ; said here and not at the status below: the opens close first, and
                     ; the word goes through the map -- `nope 2> f` puts it in f
                     _ (? (fk || sh-known? <argv) 0 (sh-nfsay <argv (rm 1)))
-                    pid (? fk (sh-fork1 argv (rm 1) ac)
+                    pid (? fk (sh-fork1 argv (rm 1) ac (sh-pgm 0) (sh-fgm 0))
                            (sh-known? <argv) (spawnmap (sh-spawnv argv) (rm 1) ac (sh-pgm 0) (sh-fgm 0))
                            ())
                     (each opens close,

@@ -646,9 +646,11 @@
 (: pr (sh-parse-line "which cc")
    (test ('jug = sh-lane >pr) ('jug = (sh-lane >(sh-parse-line "type cc")))))
 
-; a pipeline's stages must share the group that holds the terminal: `ls | less`
-; spawns ls and forks the pager in-image, and a pager left in the background reads
-; /dev/tty into EIO. driven on a pty -- the alt screen opens, stays, and closes on q.
+; job control rides the process group, and a stage that runs in-image forks rather
+; than execs -- so it sets its own group, as spawnio does in C for a child it execs.
+; without that a pipeline splits across two groups and the forked half is left in the
+; background: `ls | less` read /dev/tty into EIO, and a stopped job never resumed,
+; because fg handed the terminal to a pid that led no group. driven on a pty.
 (: (sh-t-has? hay ned)
     (: n #ned m #hay
        (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
@@ -656,6 +658,7 @@
    (sh-t-pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, sh-t-pump src dst))
    (sh-t-type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
    e (string 27)
+   ; the pager is the pipeline's forked half: it must keep the terminal it reads keys on
    r (tether ["out/love" "lush"])
    m >r
    _ (settty m 24 80)
@@ -670,10 +673,31 @@
    s2 (slurp sink)
    _ (still <r 9)
    _ (landed? t ? (catch t) (freeze t))
+   ; ..and a forked job leads a group of its own, so ^Z stops it and fg runs it out
+   r2 (tether ["out/love" "lush"])
+   m2 >r2
+   _ (settty m2 24 80)
+   sink2 (jug 0)
+   t2 (twirl (_ \ sh-t-pump m2 sink2) 0)
+   _ (rest 600)
+   _ (sh-t-type m2 "sleep 2\n")
+   _ (rest 500)
+   _ (sh-t-type m2 (string 26))         ; ^Z
+   _ (rest 700)
+   j1 (slurp sink2)
+   _ (sh-t-type m2 "fg\n")
+   _ (rest 2500)                        ; the rest of the sleep, once it is running again
+   _ (sh-t-type m2 "echo st=$?\n")
+   _ (rest 700)
+   j2 (slurp sink2)
+   _ (still <r2 9)
+   _ (landed? t2 ? (catch t2) (freeze t2))
    (test
     (sh-t-has? s1 (e + "[?1049h"))      ; the pager opened
     !(sh-t-has? s1 (e + "[?1049l"))     ; ..and did not quit on its own
-    (sh-t-has? s2 (e + "[?1049l"))))    ; ..and q reached it
+    (sh-t-has? s2 (e + "[?1049l"))      ; ..and q reached it
+    (sh-t-has? j1 "stopped")            ; ^Z reached the forked job
+    (sh-t-has? j2 "st=0")))             ; ..and fg ran it to completion
 
 (test_fin ())
 (puts "sh: ok") (putc 10)

@@ -463,6 +463,10 @@ static lvm(lvm_selfpath) {
 //                   execvp. the parent closes its own pipe ends with `close`.
 // (ttyfg pg)     -> give the terminal (fd 0) to process group pg; pg <= 0 takes it back
 //                   to the caller's own group. () | a nom.
+// (setpg pid pg) -> put process pid in group pg; 0 for pid is the caller, 0 for pg is a
+//                   fresh group the process leads. spawnio does this dance in C for a
+//                   child it execs; a shell's forked stage never execs, so it asks here --
+//                   both sides call it, closing the same race spawnio's two calls do.
 ai_noinline static struct ai *host_pipe(struct ai *g) {
  int fds[2];
  if (pipe(fds)) return g->sp[0] = ai_err(g, errno), g;
@@ -492,6 +496,15 @@ static lvm(lvm_spawnio) {
  intptr_t pg = charmp(Sp[5]) ? getcharm(Sp[5]) : -1,
           fg = charmp(Sp[6]) ? getcharm(Sp[6]) : 0;
  LvmCallp(g, 7, host_spawnx, in, out, err, -1, 4, pg, fg) }   // argv at sp[0], closes at sp[4]; pid over the 7 args
+
+ai_noinline static word host_posix_setpg(struct ai *g, word pidw, word pgw) {
+ if (!charmp(pidw) || !charmp(pgw)) return ai_badarg(g);
+ pid_t pid = (pid_t) getcharm(pidw), pg = (pid_t) getcharm(pgw);
+ if (pid < 0 || pg < 0) return ai_badarg(g);
+ return setpgid(pid, pg) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_posix_setpg) {
+ Sp[1] = host_posix_setpg(g, Sp[0], Sp[1]);
+ ai_musttail return Nextp(1, 1); }
 
 ai_noinline static word host_posix_ttyfg(struct ai *g, word pgw) {
  pid_t pg = (charmp(pgw) && getcharm(pgw) > 0) ? (pid_t) getcharm(pgw) : getpgrp();
@@ -878,6 +891,7 @@ static union u const
   nif_sigignp[]       = {{lvm_sigignp}, {lvm_ret0}},
   nif_posix_signal[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_signal}, {lvm_ret0}},
   nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
+  nif_posix_setpg[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setpg}, {lvm_ret0}},
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
 // not every row here is the module's: the ones registered with NULL stay on the book,
@@ -924,6 +938,7 @@ LvNif("unlink", nif_posix_unlink, "posix");
 LvNif("lseek", nif_posix_lseek, "posix");
 LvNif("signal", nif_posix_signal, NULL);
 LvNif("ttyfg", nif_posix_ttyfg, NULL);
+LvNif("setpg", nif_posix_setpg, NULL);
 LvNif("setenv", nif_posix_setenv, NULL);
 LvNif("environ", nif_posix_environ, NULL);
 // --- the rest of the fs surface: the effect ops the fs tools ride (mv, ln, touch,

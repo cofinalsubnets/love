@@ -2241,7 +2241,7 @@ void kmain(void) {
    "(: (raw m) () (signal n h) ())"
    "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
-   "       getpid getuid seal ttyfg glean pipe fdopen dup dup2 connect listen"
+   "       getpid getuid seal ttyfg setpg glean pipe fdopen dup dup2 connect listen"
    "       accept udp-bind udp-send udp-recv hark tty))");
   // then the kore cat through the stream shell: the line is seatless here, so every member's
   // own seat sits out and the whole userland lands. built off /proc/src, korelist being the
