@@ -1465,12 +1465,29 @@
    (sh-forget _) (: (clear t) (each (keys t) (k \ pull t k 0))
                     (clear sh-imgc, clear sh-forkc))
    (sh-fd0? fdmap) (? (one? fdmap) 0 (<<fdmap = 0) 1 (sh-fd0? >fdmap))
+   ; --- how a word runs: three lanes, and why they nest -------------------------
+   ; self -- in this very process, no fork. it asks the most of a word: no quit, no
+   ;         mess left in the shell's state, and no reading the shell's stdin. the
+   ;         roster is that clearance. only a simple command offers this lane; a
+   ;         pipeline stage wants a pid and a group of its own.
+   ; fork -- the warm heap, no exec. it asks only that the child not drink stdin this
+   ;         shell has already read into: on a PIPE or a FILE the read buffer duplicates
+   ;         across a fork, and parent and child then answer the same byte, so a line
+   ;         the child eats the shell reads again -- `head -1 | cat` down a script ran
+   ;         the line after it twice. a TERMINAL reads no further than it is asked and
+   ;         cannot duplicate, so the guard is a script's, never a prompt's; past that,
+   ;         a stdin of the word's own or the roster's clearance each answer it too.
+   ; exec -- a fresh image, its buffers its own. the only lane for a foreign word.
+   ; the trusts NEST -- self implies fork implies exec -- so the fork test below asks
+   ; the self question rather than keeping a second list beside it.
+   (sh-selfok? w) (two? (sh-imgfn w))
    (sh-forkok? av fdmap)
      (: a >av                                    ; cap is total, so a bare word reads () here
         (? (<a = "bake" || <a = "wake") 0
            (0 < #(getenv "LOVE_NO_IMAGE") && elem 'love-image (names ())) 0
-           (two? a) 1
-           (sh-fd0? fdmap) 1
+           (sh-tty ()) 1                         ; our stdin is the terminal: nothing to duplicate
+           (sh-fd0? fdmap) 1                     ; the child's stdin is its own
+           (sh-selfok? <av) 1                    ; run in our own process, so ours to fork
            0))
    ; spawnio does the job-control dance in C for a child it execs; a forked stage never
    ; execs, so it does its own. both sides set the group, as spawnio's two calls do, so
@@ -1867,7 +1884,7 @@
                 (? (two? b) b                            ; brk/cnt/ret ride out
                    (charm? b) (: _ (pin sh-status () b) (sh-echk b))
                    b))
-           (two? (sh-imgfn <argv))                       ; the in-image lane
+           (sh-selfok? <argv)                            ; the self lane
              (: g (sh-imgfn <argv)
                 f (g 1)
                 s (sh-withrs rs (\ _ (f (? (g 2) argv >argv))))
