@@ -24,6 +24,7 @@
    readlink (cite 'posix 'readlink) rmdir (cite 'posix 'rmdir)
    selfpath (cite 'posix 'selfpath) stat (cite 'posix 'stat)
    sigclear (cite 'posix 'sigclear) sigfd (cite 'posix 'sigfd)
+   umask (cite 'posix 'umask)
    sigign? (cite 'posix 'sigign?)  sigtake (cite 'posix 'sigtake)
 
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
@@ -63,8 +64,9 @@
    ; POSIX's rule -- the action runs when the foreground command completes -- is free.
    ; the numbers are Linux's; USR1 USR2 CHLD TSTP want an ISA/OS table on a BSD.
    sh-sigport {0}                              ; the signalfd port, or 0
-   sh-signums '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("USR1" 10) ("USR2" 12)
-                ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18) ("TSTP" 20))
+   sh-signums '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("KILL" 9) ("USR1" 10) ("SEGV" 11)
+                ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18)
+                ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22))
    (sh-signum nm)
     ((: (g l) (l @- 0 (e . u) (<e = nm ? <>e (g u)))) sh-signums)
    (sh-signame n)
@@ -183,7 +185,14 @@
    (sh-int s) (sh-intl s 0 0)
    (sh-intl s i a) (? (i = #s) a (sh-intl s (i + 1) ((a * 10) + ((s i) - 48))))
    (sh-lastjob _) (foldl (a \ k \ a < k ? k a) 0 (keys sh-jobs))
-   (sh-jobn argv) (? >argv (sh-int <>argv) (sh-lastjob 0))
+   ; a jobspec: %N, and %% or %+ the newest, %- the one before it; a bare N is N
+   (sh-jobspec w)
+     (? !(0 < #w && w 0 = 37) (sh-int w)
+        (: b (snip w 1 #w) l (sh-lastjob 0)
+           (? (b = "" || b = "%" || b = "+") l
+              (b = "-") (foldl (a \ k \ (k < l && a < k) ? k a) 0 (keys sh-jobs))
+              (sh-int b))))
+   (sh-jobn argv) (? >argv (sh-jobspec <>argv) (sh-lastjob 0))
    (sh-fg n)
      (: j (sh-jobs n)
         (? !j (puts "fg: no such job\n", 0)
@@ -1251,7 +1260,9 @@
 ; set -e rides sh-eflag with sh-noe guarding conditions and && || arms.
 
 (module 'lush
-(: ; export NAME=VAL -> setenv; export NAME promotes the shell var
+(: sh-optind {1}                             ; getopts: where the last call left off
+   sh-optk {0}                                  ; ..and how far into a clustered word
+   ; export NAME=VAL -> setenv; export NAME promotes the shell var
    (sh-eqpos s i) (#s @ ^i () (s i @ 61 i (sh-eqpos s (i + 1))))
    (sh-export w)
      (: p (sh-eqpos w 0)
@@ -1543,7 +1554,8 @@
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local" "exec"
-                "break" "continue" "return" "ev" "trap" "which" "where" "type")
+                "break" "continue" "return" "ev" "trap" "which" "where" "type"
+                "kill" "umask" "getopts")
    (sh-bi? nm) (sh-smem? nm sh-binames)
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
@@ -1685,6 +1697,86 @@
                  (: v >r
                     _ (? q 0 (puts ((sh-lovetext v) + "\n")))
                     (? v 0 1))))))
+   ; the three that act on this process or its tables, which is what makes a builtin:
+   ; kill knows the jobs, umask sets the shell's own mask, getopts writes its variables
+   (sh-sigof s)                                 ; TERM, SIGTERM or 15 -> 15; () for none
+     (: b (? (3 < #s && snip s 0 3 = "SIG") (snip s 3 #s) s)
+        (? (sh-digits? b) (sh-int b) (sh-signum b @ 0 () n n)))
+   ; kill [-s SIG | -SIG | -N] PID|%JOB..: a job is its group when it leads one, else
+   ; each pid of it; a negative pid wants the -- that keeps it from reading as a signal.
+   ; a signal we send ourselves is drained here, after the command as POSIX has it --
+   ; left queued, the next rearm's sigclear would deliver it unhandled
+   (sh-killb args)
+     (:- (go args 15)
+      (fail m) (say err ("lush: kill: " + m + "\n"), 1)
+      (targets w)                              ; the pids a word names, or ()
+        (? (0 < #w && w 0 = 37)
+           (: j (sh-jobs (sh-jobspec w)) (? !j () (sh-jc? 0) [(0 - <(j 0))] (j 0)))
+           (sh-digits? w) [(sh-int w)]
+           (1 < #w && w 0 = 45 && sh-digits? (snip w 1 #w)) [(0 - sh-int (snip w 1 #w))]
+           ())
+      (one w sig ok)
+        (: ts (targets w)
+           (? !(two? ts) (fail (w + ": no such job or pid"))
+              (foldl (a \ p \ (? !(still p sig) a (fail ("cannot kill " + w)))) ok ts)))
+      (send ws sig) (: r (foldl (a \ w \ one w sig a) 0 ws) _ (sh-sigdrain 0) r)
+      (named a sig) (? (charm? sig) (go >a sig) (fail (<a + ": invalid signal")))
+      (go a sig)
+        (? !(two? a) (fail "usage: kill [-s SIG | -SIG] PID|%JOB..")
+           (<a = "-l") (puts (sh-unwords (map cap sh-signums) + "\n"), 0)
+           (<a = "-s") (? (two? >a) (named >a (sh-sigof <>a)) (fail "-s wants a signal"))
+           (<a = "--") (send >a sig)
+           (1 < #<a && <a 0 = 45) (named a (sh-sigof (snip <a 1 #<a)))
+           (send a sig)))
+   ; umask [-S] [OCTAL]: shown four wide, or symbolic under -S
+   (sh-octal? s) (: (go k) (? (#s <= k) (0 < #s) (48 <= s k <= 55) (go (k + 1)) 0) (go 0))
+   (sh-oct s) (: (go k a) (? (#s <= k) a (go (k + 1) (a * 8 + (s k - 48)))) (go 0 0))
+   (sh-umaskb args)
+     (: s? (two? args && <args = "-S")
+        a (? s? >args args)
+        cur (: m (umask 0) _ (umask m) m)
+        (oct n) (: (go k i s) (? (i < 1) s (go (k // 8) (i - 1) (string (48 + (k % 8)) + s)))
+                   (go n 4 ""))
+        (tri v) ((? (v & 4) "r" "") + (? (v & 2) "w" "") + (? (v & 1) "x" ""))
+        (sym n) (: p (511 - (n & 511))
+                   ("u=" + tri (p // 64) + ",g=" + tri ((p // 8) % 8) + ",o=" + tri (p % 8)))
+        (? !(two? a) (puts ((? s? (sym cur) (oct cur)) + "\n"), 0)
+           (sh-octal? <a) (umask (sh-oct <a), 0)
+           (cmderr ("umask: " + <a + ": octal mode wanted"))))
+   ; getopts OPTSTRING NAME [ARG..]: one option per call. OPTIND is the next word and
+   ; the place inside a clustered one is ours, dropped when OPTIND moves under us; a
+   ; leading : in OPTSTRING keeps the complaints quiet and hands the letter in OPTARG
+   (sh-getoptsb args)
+     (? !(two? >args) (cmderr "getopts: usage: getopts OPTSTRING NAME [ARG..]")
+        (: os <args nm <>args
+           quiet (0 < #os && os 0 = 58)
+           spec (? quiet (snip os 1 #os) os)
+           ws (? (two? >>args) >>args (sh-pos ()))
+           ind (sh-vget "OPTIND" @ (_ . v) (? (sh-digits? v) (sh-int v) 1) 1)
+           k (? (ind = sh-optind ()) (sh-optk ()) 0)
+           (at i) (? (0 < i <= #ws) (ws (i - 1)) ())
+           (leave i j) (pin sh-optind () i, pin sh-optk () j, sh-setvar "OPTIND" (show i))
+           (noarg _) (pull sh-vars "OPTARG" 0, setenv "OPTARG" ())
+           (done _) (leave ind 0, sh-setvar nm "?", noarg 0, 1)
+           (moan m c) (? quiet (sh-setvar "OPTARG" (string c))
+                         (noarg 0, say err ("lush: getopts: " + m + " -- " + string c + "\n")))
+           w (at ind)
+           (? !(string? w) (done 0)
+              (k = 0 && w = "--") (leave (ind + 1) 0, sh-setvar nm "?", noarg 0, 1)
+              (k = 0 && (#w < 2 || w 0 != 45)) (done 0)
+              (: k1 (? k k 1)
+                 c (w k1)
+                 pos (: (go i) (? (#spec <= i) () (spec i = c && c != 58) i (go (i + 1))) (go 0))
+                 more? (k1 + 1 < #w)                 ; letters left in this word
+                 (step _) (? more? (leave ind (k1 + 1)) (leave (ind + 1) 0))
+                 (? !(charm? pos) (sh-setvar nm "?", moan "illegal option" c, step 0, 0)
+                    (pos + 1 < #spec && spec (pos + 1) = 58)      ; the letter takes an argument
+                      (? more? (sh-setvar "OPTARG" (snip w (k1 + 1) #w), sh-setvar nm (string c), leave (ind + 1) 0, 0)
+                         (string? (at (ind + 1))) (sh-setvar "OPTARG" (at (ind + 1)), sh-setvar nm (string c), leave (ind + 2) 0, 0)
+                         (? quiet (sh-setvar nm ":", sh-setvar "OPTARG" (string c))
+                            (sh-setvar nm "?", moan "option requires an argument" c),
+                          leave (ind + 1) 0, 0))
+                    (sh-setvar nm (string c), noarg 0, step 0, 0))))))
    (sh-builtin argv)
      (<argv @- 'nope                             ; a word no builtin answers to
       "exit"   (: st (? >argv (sh-int <>argv) (sh-status ())) (sh-leave st))
@@ -1726,6 +1818,9 @@
       "."      (sh-dotb >argv)
       "local"  (sh-localb >argv)
       "wait"   (sh-waitb >argv)
+      "kill"   (sh-killb >argv)
+      "umask"  (sh-umaskb >argv)
+      "getopts" (sh-getoptsb >argv)
       "break"    ('brk . (? >argv (sh-int <>argv) 1))
       "continue" ('cnt . (? >argv (sh-int <>argv) 1))
       "return"   ('ret . (? >argv (sh-int <>argv) (sh-status ()))))
@@ -2379,7 +2474,8 @@
         (? (hot? o) (: _ (say o (ln + "\n")) _ (flush o) (close o)) 0))
 
    ; --- completion: (insert . candidates) off the text left of the cursor ------
-   sh-builtins '("cd" "exit" "exec" "export" "pwd" "jobs" "fg" "bg" "which" "where" "type")
+   sh-builtins '("cd" "exit" "exec" "export" "pwd" "jobs" "fg" "bg" "which" "where" "type"
+                 "kill" "umask" "getopts")
    (sh-prefix? p s) (: n #p ((n <= #s) && (p = (snip s 0 n))))
    (sh-comm2 a s)                               ; longest common prefix of two
      (: n (? (#a < #s) #a #s)

@@ -723,5 +723,22 @@
             "v=$(expr 1 + 2); w=$(printenv LUSH_UNSET_QQ 2>/dev/null); echo $? v=$v w=[$w]"])
    (test ("1 v=3 w=[]\n" = >r)))
 
+;; kill, umask and getopts are builtins because each acts on this process or its
+;; tables: a jobspec reads the job table, the mask is the shell's own, and getopts
+;; writes OPTIND, OPTARG and the name it is given. %N, %% and %+ name jobs for fg too
+(test (1 = sh-jobspec "1") (1 = sh-jobspec "%1") (0 = sh-jobspec "%%") (0 = sh-jobspec "%+")
+      (15 = sh-sigof "TERM") (15 = sh-sigof "SIGTERM") (9 = sh-sigof "9") (one? (sh-sigof "BOGUS")))
+(: r (hark ["out/love" "out/lush" "-c"
+            "sleep 5 & kill %1; wait $!; echo st=$?; sleep 5 & kill -9 %%; wait $!; echo st=$?; sleep 5 & kill -s TERM -- $!; wait $!; echo st=$?; kill %7; echo st=$?"])
+   (test ("st=143\nst=137\nst=143\nst=1\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "umask 022; umask; umask -S; umask 077; umask; umask 8 || echo st=$?"])
+   (test ("0022\nu=rwx,g=rx,o=rx\n0077\nst=1\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c"
+            "set -- -ab val -c x y; while getopts ab:c o; do echo \"$o:${OPTARG-}\"; done; shift $((OPTIND-1)); echo \"[$@]\""])
+   (test ("a:\nb:val\nc:\n[x y]\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c"
+            "set -- -a -z -b; while getopts :ab: o; do echo \"$o:${OPTARG-}\"; done; set -- -a -- -b; OPTIND=1; getopts ab o; getopts ab o; echo \"$o st=$? $OPTIND\""])
+   (test ("a:\n?:z\n::b\n? st=1 3\n" = >r)))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)
