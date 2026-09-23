@@ -78,7 +78,7 @@
    ; --- a scalar for a pattern, a number for a time ---------------------------
    ; every combinator below takes its patterns and times through these two, so a
    ; literal stands where a pattern does and nothing below writes a bare time. a
-   ; rational reads as a closure to coin?, and no time is ever a closure
+   ; rational is a star, so it is asked for first and kept as it is
    (pat x)  (? (string? x) (mini x) (star? x) (pure x) x)
    (coin n) (? (coin? n) n (string? n) (mrat n) (star? n) (mrat (show n)) n)
 

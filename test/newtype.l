@@ -22,6 +22,8 @@
     (coin? a)                      ; a is a coin
     !(coin? 5)               ; a plain value is not
     !(coin? "s")
+    !(coin? (\ x x))         ; ..nor a lambda, though it shares the hot row
+    !(coin? sin)
     (3 = load a)           ; load reads the payload
     (7 = load 7)           ; load of a non-coin is itself
     (kind a = kind (z5 3)) ; every z5 coin names one kind
@@ -29,7 +31,7 @@
 
     ; --- kind: the name a value dispatches as; the coin row refined ---
     ('z5 = kind a)
-    ('coin = kind (strike {} 5))   ; an unnamed table keeps the row
+    ('coin = kind (strike {} 5))   ; an unnamed table is a coin still, and not the row's lambda
     ('charm = kind 5)  ('mint = kind ())  ('mint = kind (nom 0))  ('nom = kind 'a)
     ('string = kind "s")  ('chain = kind [1 2])  ('tablet = kind {})
     ('lambda = kind (\ x x))  ('port = kind out)  ('cask = kind (cask 4))

@@ -150,7 +150,6 @@
               (coin? x) (: p (load x) e (kreg 0 (kind x)) t (? (two? e) (cup e) ())
                            (? (= 1 (t 'star)) x                 ; starred: the fixpoint
                               (= 'tally (t 'net)) (tally x)
-                              (= p x) (saturate x)              ; a native loads as itself
                               (net p)))
               (saturate x))
    (prod x) (? (tray? x) (aprod x)

@@ -53,8 +53,8 @@
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text)
-(borrow "apps/berth/wharf.l")
-(borrow "apps/berth/limn.l")
+(borrow (: m (cite 'wharf) (? m m "apps/berth/wharf.l")))   ; the baked module, else the tree's file
+(borrow (: m (cite 'limn) (? m m "apps/berth/limn.l")))
 (borrow 'posix)
 (:
  ; --- the moor: pump the master through the screen until the child hangs up.

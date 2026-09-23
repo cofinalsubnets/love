@@ -3,7 +3,7 @@
 ; never pixels -- berth seats them with \e[r;cH, the kernel console multiplies them by
 ; the font's width and height, and neither has to know what the other does with them.
 ; cells are the only currency both speak, and the one `gaze` already answers in.
-; `(borrow "apps/berth/wharf.l")`.
+; a module: `(borrow 'wharf)` on the artifact, `(borrow "apps/berth/wharf.l")` off the tree.
 ;
 ; a plan is a binary tree. a leaf is a berth's id; a node is one split:
 ;
@@ -23,6 +23,8 @@
 ; and sizes rather than trusting the arithmetic: every rectangle sits inside the wharf,
 ; and no two overlap. the spans are half-open, so a zero-extent berth overlaps nothing
 ; -- including itself -- and neither law has to except it.
+(module '(wharf wharf-at wharf-bars wharf-berths wharf-col wharf-cols wharf-id wharf-lay wharf-row
+          wharf-rows wharf-show? wharf-shut wharf-split wharf-steer)
 (:
    ; --- reading a laid berth: (id row col rows cols), origins 0-based ----------
    (wharf-id b)    <b
@@ -141,3 +143,4 @@
        (: a (wharf-shut <>>p id) b (wharf-shut <>>>p id)
           (? (() = a) b (() = b) a [<p <>p a b]))
        (p = id ? () p)))
+) ; module wharf

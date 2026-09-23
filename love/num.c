@@ -1252,7 +1252,7 @@ static ai_inline int cmp_rank(struct ai *g, word x) {
  if (k == KTablet) return 5;                          // tablet: above chain
  if (coinp(x) && kind_get(g, coin_kind(x), KnNet) == ai_core_of(g)->knom[KnRatio])
   return 2;                                        // a ratio coin seats in the number band, by its value
- return 6; }                                       // KCoin -- the ceiling (the only kind left)
+ return 6; }                                       // KHot -- the ceiling (the only kind left)
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;

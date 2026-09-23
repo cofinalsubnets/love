@@ -181,7 +181,7 @@
 
 (: (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 
-; --- coin: a kind of the coin row -- a table of what its values answer to, keyed by the noms
+; --- coin: a kind of the hot row -- a table of what its values answer to, keyed by the noms
 ; the C side reads (love.h's Kn rows): name + * ap hot - net star /, net one of payload tally
 ; ratio. (coin 'nm spec) registers the kind and answers its constructor; spec is a tablet, or
 ; a function of the constructor when a method strikes its own kind: (z \ {'+ ..}). a method
@@ -472,7 +472,7 @@
                       (: _ (put o 92) (pnum o (abs (dig v)))))))))))   ; opaque: a distinguisher, nothing more -- C spelled the address here, this is the digest, which at least survives a collection
 
   (px o x sn) (? (charm? x) (pnum o x)
-                (coin? x && !(x = load x)) (pcoin o x sn)   ; struck: a native loads as itself
+                (coin? x) (pcoin o x sn)
                 (tablet? x) (pmap o x sn)
                 (lit? x) (pfn o x sn)
                 (== x ()) (say o "()")

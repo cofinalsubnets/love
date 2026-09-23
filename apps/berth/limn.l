@@ -2,7 +2,7 @@
 ; the third piece of the pane story and the one every seat needs -- cb says what is
 ; in a grid (bytes in, cells out), apps/berth/wharf.l says where the rectangle is, and this
 ; says a grid's cells at an origin. cells are the currency all three speak.
-; `(borrow "apps/berth/limn.l")`.
+; a module: `(borrow 'limn)` on the artifact, `(borrow "apps/berth/limn.l")` off the tree.
 ;
 ; it takes a grid and an origin, never a plan and never a harbour: the bars come in as
 ; wharf-bars' list, so nothing here knows what a berth or a buffer is, and one painter
@@ -14,6 +14,8 @@
 ;
 ; host-only: `glass` and `unfold` are cb's nifs (love/quay/nif.c), so this never joins
 ; the corpus -- test/limn.l is its gate.
+(module '(limn limn-across limn-bars limn-down limn-glyph limn-glyphs limn-go limn-row limn-rows
+          limn-run limn-sgr limn-utf8)
 (:
    ; --- the pen: a cell's high bytes ((>> cell 8): fg, bg, font+faces). one SGR per
    ; pen change, respecified from zero each time -- cheap, and never stale ----------
@@ -70,3 +72,4 @@
                             0)
                 (down 0))))
          bs))
+) ; module limn

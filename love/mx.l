@@ -11,10 +11,12 @@
    ; itself, each lane a contiguous block; love.h's narrative argues that order. dispatch
    ; only -- a tray enters as its four tiers and never as the bare rep.
    mx-kinds '(KMint KNom KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO
-              KString KChain KTablet KCoin)
-   ; the rows' love names, in the same order: what `kind` answers for a built-in. the coin
-   ; row is the one `kind` refines: a struck coin's own name, else lambda, cask, port.
-   mx-kind-noms '(mint nom charm sun gem twin trayz trayr trayc trayo string chain tablet coin)
+              KString KChain KTablet KHot)
+   ; the rows' love names, in the same order: what `kind` answers for a built-in. the hot
+   ; row -- every non-data heap object that is not a tablet: lambdas, nifs, casks, ports,
+   ; and struck coins, which are typed hots -- is the one `kind` refines: a struck coin's
+   ; own name, else lambda, cask, port.
+   mx-kind-noms '(mint nom charm sun gem twin trayz trayr trayc trayo string chain tablet hot)
    _ (assert (= #mx-kind-noms #mx-kinds))
    ; the arithmetic lane: every numeric kind routes identically, gem tower and tray alike
    mx-numk '(KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
@@ -29,7 +31,7 @@
    mx-repq '((DMint KMint) (DNom KNom) (DGem KGem) (DTwin KTwin)
              (DBig KSun) (DTray KTrayZ) (DString KString) (DChain KChain))
 
-   ; --- the rows. one per (name numk KMint KNom KString KChain KTablet KCoin): the numeric
+   ; --- the rows. one per (name numk KMint KNom KString KChain KTablet KHot): the numeric
    ; lane, then the six kinds one at a time -- fifteen, so every row is total.
    ; precedence, high to low: lambda > tablet > chain > text > number (incl. tray).
    mx-rows
@@ -57,14 +59,14 @@
       (MUL_CHAIN lvm_mul_rep    lvm_0        lvm_0          lvm_0          lvm_mul_cart lvm_mulh     lvm_mulh)
       (MUL_H     lvm_mulh       lvm_0        lvm_0          lvm_mulh       lvm_mulh     lvm_mulh     lvm_mulh))
 
-   ; --- which row each kind takes. a KTablet or KCoin operand wins over everything, so their
+   ; --- which row each kind takes. a KTablet or KHot operand wins over everything, so their
    ; rows and columns are both the Church lanes: a tablet is a lookup lambda here.
    mx-add-of '((ADD_MINT KMint KNom)
                (ADD_NUM KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
-               (ADD_STR KString) (ADD_TWO KChain) (ADD_H KTablet KCoin))
+               (ADD_STR KString) (ADD_TWO KChain) (ADD_H KTablet KHot))
    mx-mul-of '((MUL_MINT KMint KNom) (MUL_REP KString)
                (MUL_NUM KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
-               (MUL_CHAIN KChain) (MUL_H KTablet KCoin))
+               (MUL_CHAIN KChain) (MUL_H KTablet KHot))
 
    ; --- expanding the table ------------------------------------------------------
    (mx-rowof asg k)                                   ; which row does kind k take?

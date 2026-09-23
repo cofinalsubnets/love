@@ -261,7 +261,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
   // the kind table's keys and the built-in coins' names (g->knom, love.h's Kn rows), and
   // the registry of named kinds (g->kreg): name -> (serial . table), pinned by post.l's `coin`
   { char const *const ns[KnN] = { "name", "+", "*", "ap", "hot", "-", "net", "star", "/",
-                                  "payload", "tally", "ratio", "lambda", "cask", "port" };
+                                  "payload", "tally", "ratio", "lambda", "cask", "port", "coin" };
     for (int i = 0; ai_ok(g) && i < KnN; i++)
      if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->knom[i] = ai_pop1(g); }
   if (ai_ok(g = map_new(g))) g->kreg = ai_pop1(g);

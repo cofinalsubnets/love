@@ -135,7 +135,7 @@
    (idpath true))
  (defq mx-hot-dominates
    (paths bool
-     (mxall mxnk (lam b (orb (mxpoint b) (nateqb (mxmul mxKCoin b) mxLmulh))))
+     (mxall mxnk (lam b (orb (mxpoint b) (nateqb (mxmul mxKHot b) mxLmulh))))
      true)
    (idpath true)))
 
@@ -151,13 +151,13 @@
         (two? (peep GLOB 'idfun 0)))
 (test
  (defn mxLcompose nat mxLmulh)                     ; the lane uuhom's homcomp spells
- (defq mx-compose-diag (paths nat (mxmul mxKCoin mxKCoin) mxLcompose) (idpath mxLcompose))
+ (defq mx-compose-diag (paths nat (mxmul mxKHot mxKHot) mxLcompose) (idpath mxLcompose))
  ; ..and the mint at that cell is the zero, not the monoid's unit. uuhom's unit is
  ; idfun, itself a lambda and so a khot -- it rides the compose lane like any other
- (defq mx-compose-zero (paths nat (mxmul mxKCoin mxKMint) mxL0) (idpath mxL0))
+ (defq mx-compose-zero (paths nat (mxmul mxKHot mxKMint) mxL0) (idpath mxL0))
  ; the Church sum is the band's other lane: uuhom's monoid is the multiplicative
  ; half of a two-operation band, and the two lanes are distinct
- (defq mx-church-add-diag (paths nat (mxadd mxKCoin mxKCoin) mxLaddh) (idpath mxLaddh))
+ (defq mx-church-add-diag (paths nat (mxadd mxKHot mxKHot) mxLaddh) (idpath mxLaddh))
  (defq mx-church-lanes-apart (paths bool (nateqb mxLaddh mxLcompose) false) (idpath false)))
 
 ; --- the planted faults. a bounded forall that came back `true` for the wrong
@@ -190,8 +190,8 @@
     (idpath true)))))
  ; the compose cell is the mul lane, not the Church sum -- a band with one
  ; operation would make uuhom's monoid the whole story, and it is half of it
- ('accepted = (rejects (\ z (defq mx-ok-compose (paths nat (mxmul mxKCoin mxKCoin) mxLmulh) (idpath mxLmulh)))))
- ('rejected = (rejects (\ z (defq mx-bad-compose (paths nat (mxmul mxKCoin mxKCoin) mxLaddh) (idpath mxLaddh)))))
+ ('accepted = (rejects (\ z (defq mx-ok-compose (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh)))))
+ ('rejected = (rejects (\ z (defq mx-bad-compose (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh)))))
  ; ..and the mint annihilates there rather than uniting
- ('rejected = (rejects (\ z (defq mx-bad-compose-unit (paths nat (mxmul mxKCoin mxKMint) mxLmulh) (idpath mxLmulh))))))
+ ('rejected = (rejects (\ z (defq mx-bad-compose-unit (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh))))))
 (hear test-strict)

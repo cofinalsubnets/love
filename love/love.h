@@ -525,7 +525,7 @@ lvm(lvm_gc);                                    // takes its word count in g->b
 word ai_err(struct ai*, int);
 #define ai_badarg(g) ai_err(g, -1)
 uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
-// any value -> its enum q: KCharm for a fixnum, KCoin for a non-data heap pointer, else
+// any value -> its enum q: KCharm for a fixnum, KHot for a non-data heap pointer, else
 // ai_typ's rep, a tray refined by element tier (KTrayZ..KTrayO).
 enum q ai_kind(word);
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
@@ -732,7 +732,7 @@ lvm_t lvm_kcall,
  lvm_putn, lvm_seal, lvm_heard, lvm_worn, lvm_myself,
  lvm_nilp, lvm_putc, lvm_intern,
  lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy, lvm_xlat,
- lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_kind, lvm_sub_coin, lvm_quot_coin,   // coins: a kind's values, typed hots on the KCoin row
+ lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_kind, lvm_sub_coin, lvm_quot_coin,   // coins: a kind's values, typed hots on the KHot row
  lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
  lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,
  lvm_twin, lvm_twinp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,   // complex; lvm_twin_bin declared apart below
@@ -823,7 +823,7 @@ struct ai *ai_mapput(struct ai*), *map_new(struct ai*);
 // the byte ops read from a string or a cask; both resolve to a ai_str of bytes.
 static ai_inline struct ai_str *bytes_of(word x) { return caskp(x) ? cask(x)->str : str(x); }
 // a coin of a kind of its own: a typed hot [lvm_coin, kind, payload], a plain thread. ai_kind
-// reads KCoin, so +/* route every coin to lvm_addh/mulh. the kind is a tablet keyed by the noms
+// reads KHot, so +/* route every coin to lvm_addh/mulh. the kind is a tablet keyed by the noms
 // below (g->knom), a named one registered in g->kreg (name -> (serial . table)).
 struct ai_coin { lvm_t *ap; word kind; word payload; };
 static ai_inline bool coinp(word _) { return lamp(_) && cell(_)->ap == lvm_coin; }
@@ -834,9 +834,10 @@ static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload;
 // (references), absent = fresh data. star truthy = numeric: a numeral powers them through their
 // own * (prel's num-ap reads it, C never does). net is a mode nom, never a closure -- ai_net is
 // pure C and may not re-enter the VM: absent = net of the payload, tally = count, ratio = n/d.
-// the tail names, KnLambda on, are `kind`'s answers for the built-in coins.
+// the tail names, KnLambda on, are `kind`'s answers inside the hot row: a lambda, a
+// cask, a port, and a struck coin whose kind has no name.
 enum { KnName, KnAdd, KnMul, KnApply, KnHot, KnSub, KnNet, KnStar, KnDiv,
-       KnPayload, KnTally, KnRatio, KnLambda, KnCask, KnPort, KnN };
+       KnPayload, KnTally, KnRatio, KnLambda, KnCask, KnPort, KnCoin, KnN };
 // read a kind table's slot, or () if absent / the kind is not a tablet.
 static ai_inline word kind_get(struct ai *g, word kind, intptr_t i) {
  return tabp(kind) ? ai_mapget(g, zero, ai_core_of(g)->knom[i], kind) : zero; }

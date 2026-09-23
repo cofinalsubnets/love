@@ -1138,17 +1138,18 @@ lvm(lvm_load) {
  Sp[0] = coinp(Sp[0]) ? coin_load(Sp[0]) : Sp[0];
  ai_musttail return Next(1); }
 // (kind x) -> the nom of the kind x dispatches as: the roster row's (g->kinds), refined
-// inside the coin row -- a struck coin's own name, else lambda, cask, port
+// inside the hot row -- a struck coin's own name, coin for one whose kind has none,
+// else lambda, cask, port
 lvm(lvm_kind) {
  word x = Sp[0], n = zero;
  struct ai *c = ai_core_of(g);
- if (coinp(x)) n = kind_get(g, coin_kind(x), KnName);
+ if (coinp(x)) { n = kind_get(g, coin_kind(x), KnName); if (ai_nilp(g, n)) n = c->knom[KnCoin]; }
  else if (caskp(x)) n = c->knom[KnCask];
  else if (iop(x)) n = c->knom[KnPort];
- else if (ai_kind(x) == KCoin) n = c->knom[KnLambda];
+ else if (ai_kind(x) == KHot) n = c->knom[KnLambda];
  Sp[0] = ai_nilp(g, n) ? ai_mapget(g, zero, putcharm(ai_kind(x)), c->kinds) : n;
  ai_musttail return Next(1); }
-op11(lvm_coinp, ai_kind(Sp[0]) == KCoin ? putcharm(1) : zero)   // (coin? x): the coin row, struck or not
+op11(lvm_coinp, coinp(Sp[0]) ? putcharm(1) : zero)   // (coin? x): a struck coin, and not the rest of the hot row
 
 // apply function to one argument
 lvm(lvm_ap) {

@@ -164,12 +164,12 @@ lvm(data_pair_apply) {
 #include "mx.h"
 
 // any value -> the kind it dispatches as (enum q, love.h): fixnum -> KCharm,
-// non-data heap pointer -> KTablet/KCoin, else the rep's kind. a tray is the one rep
+// non-data heap pointer -> KTablet/KHot, else the rep's kind. a tray is the one rep
 // that dispatches four ways, by element tier. exported so the apply sentinels share
 // it; it sits under mx.h for ai_kind_of_d, the rep -> kind crossing.
 enum q ai_kind(word x) {
  if (charmp(x)) return KCharm;
- if (!datp(x)) return tabp(x) ? KTablet : KCoin;
+ if (!datp(x)) return tabp(x) ? KTablet : KHot;
  enum d r = typ(x);
  if (r == DTray) return (enum q) (KTrayZ + tray(x)->type);
  return ai_kind_of_d[r]; }

@@ -25,7 +25,7 @@
  (defn mxKString nat 10)
  (defn mxKChain nat 11)
  (defn mxKTablet nat 12)
- (defn mxKCoin nat 13)
+ (defn mxKHot nat 13)
  (defn mxLbin_unit nat 0)
  (defn mxLaddn nat 1)
  (defn mxLbin_b nat 2)
@@ -105,7 +105,7 @@
    (mcons (ncons 0 (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 6 (ncons 6 (ncons 3 (ncons 3 nnil))))))))))))))
    ; KTablet
    (mcons (ncons 0 (ncons 0 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 nnil))))))))))))))
-   ; KCoin
+   ; KHot
    (mcons (ncons 0 (ncons 0 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 nnil))))))))))))))
     mnil)))))))))))))))
 
@@ -137,7 +137,7 @@
    (mcons (ncons 7 (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 7 (ncons 11 (ncons 10 (ncons 10 nnil))))))))))))))
    ; KTablet
    (mcons (ncons 7 (ncons 7 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 nnil))))))))))))))
-   ; KCoin
+   ; KHot
    (mcons (ncons 7 (ncons 7 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 nnil))))))))))))))
     mnil)))))))))))))))
 
