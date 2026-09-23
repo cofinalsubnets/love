@@ -29,7 +29,7 @@
   pmap pkeep onsets appl pset whenc every off jux iter palin seg sig super whenmod ply
   sine cosine saw isaw tri square rand range
   degby undeg degbyk undegk sometimesby sometimes degrade euclid euclidr bjork rnd rndk
-  ctl with named hit note n gain pan speed cut room legato mini matom lrev cmap)
+  ctl with named hit note n gain pan speed cut room legato slide smooth mini matom lrev cmap)
 (:
    ; --- exact cycle time -----------------------------------------------------
    ; the tree's own rationals (love/boot/post.l): `3 /// 4` builds one, + - * / and
@@ -168,6 +168,7 @@
    cut    (named 'cut)
    room   (named 'room)
    legato (named 'legato)
+   slide  (named 'slide)                ; semitones a note glides through by its end
 
    ; --- cycle-indexed transforms ---------------------------------------------
    (whenc f g p) (\ b e (cmap (\ s (: c (qfl <s)  q (f c ? (g p) p) (q <s >s)))
@@ -210,6 +211,23 @@
    square        (sig (t \ frac t < 0.5 ? 0.0 1.0))
    rand          (\ b e (b < e ? [[b e b e (rnd ((b + e) * qhalf))]]))
    (range lo hi p) (pmap (v \ lo + (v * (hi - lo))) p)
+   ; a pattern of numbers made continuous: the value at a time lies on the line from
+   ; the event under it to the next one's, each taken at its whole's start, so a
+   ; sequence drifts rather than steps. sampled at the middle of the span asked, as
+   ; the signals are, and shaped like them. a time with no event under it, or a
+   ; value that is not a number at either end, is answered as it stands
+   (smooth p)
+    (\ b e (b < e ?
+      (: m ((b + e) * qhalf)  c (qfq m)
+         here (filter (x \ evwb x <= m && m < evwe x) (p c (c + qone)))
+         (two? here ?
+          (: x0 (here 0)  v0 (evv x0)  wb0 (evwb x0)
+             nx (foldl (\ a x (? (wb0 < evwb x && (one? a || evwb x < evwb a)) x a))
+                       () (p c (c + qi 2)))
+             v (? (charm? v0 && two? nx && charm? (evv nx))
+                  (v0 + (evv nx - v0) * qnum ((m - wb0) / (evwb nx - wb0)))
+                  v0)
+           [[b e b e v]])))))
 
    ; --- chance ---------------------------------------------------------------
    ; keyed off the event's own whole-begin, so a pattern degrades the same way on

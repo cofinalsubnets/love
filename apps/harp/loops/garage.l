@@ -22,6 +22,8 @@
              (legato (pure 0.35))) (gain (pure 0.22)))
 ])
 ; spares --
+; the servo as one whine: a square note sliding two octaves over the beat instead of stepping
+;  (pset (pset (pset (pset (hit (mini "~ ~ sqr ~")) (note (pure -10))) (slide (pure 24))) (legato (pure 0.4))) (gain (pure 0.26)))
 ; the press: a kick slowed to a stamp, every other cycle, the plate stuttered after it
 ;  (pset (pset (hit (mini "<bd ~> ~ ~ ~")) (speed (pure 0.55))) (gain (pure 0.7)))
 ;  (ply 3 (pset (pset (hit (mini "~ ~ ~ chime")) (note (pure 31))) (legato (pure 0.08))))

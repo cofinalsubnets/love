@@ -26,7 +26,7 @@
 ; enters its own layer, and the borrow below is confined to it.
 (module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
          harp-scale harp-chunk mkvoice cyc-voices mixdown pack
-         twopi ln2-12 venv vnum vnoise instr vname mkvoice)
+         twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice)
 (borrow (: m (cite 'harp) (? m m "apps/harp/harp.l")))
 (:
    ; the fs doors by VALUE, off their module: a module layer does not see the
@@ -43,36 +43,39 @@
        c (((b ^ (b >> 13)) * 3266489909) & 4294967295)
        ((((c >> 16) & 65535) * 0.000030517578125) - 1.0))
 
-   ; --- the kit. each takes (t ix f): seconds since the onset (clamped at 0), the
-   ;     absolute frame numbers, and the note's frequency. all three are trays. ---
+   ; --- the kit. each takes (t ix ph): seconds since the onset (clamped at 0), the
+   ;     absolute frame numbers, and the note's phase in cycles -- t times the
+   ;     frequency for a held note, the integral of a moving one for a slide, so a
+   ;     shape never sees a frequency and every pitched one glides. all three are
+   ;     trays. ---
    ; a kick is one falling sine: the phase is the integral of 46 + 88e^(-34t), in
    ; closed form, because a per-sample oscillator would need state and this does not.
-   (i-bd t ix f) (sin ((t * 46.0 + 2.6 * (1.0 - exp (t * -34.0))) * tau)
+   (i-bd t ix ph) (sin ((t * 46.0 + 2.6 * (1.0 - exp (t * -34.0))) * tau)
                   * exp (t * -8.0))
-   (i-sn t ix f) ((vnoise ix * 0.75 + sin (t * tau * 190.0) * 0.5) * exp (t * -24.0))
-   (i-hh t ix f) (vnoise ix * 0.5 * exp (t * -95.0))
-   (i-oh t ix f) (vnoise ix * 0.4 * exp (t * -13.0))
+   (i-sn t ix ph) ((vnoise ix * 0.75 + sin (t * tau * 190.0) * 0.5) * exp (t * -24.0))
+   (i-hh t ix ph) (vnoise ix * 0.5 * exp (t * -95.0))
+   (i-oh t ix ph) (vnoise ix * 0.4 * exp (t * -13.0))
    ; a clap is a short chatter then a tail: the chatter is a duty cycle on t, so it
    ; is still one expression
-   (i-cp t ix f) (: g (((t * 220.0 % 1.0 < 0.45) * (t < 0.028)) + (t >= 0.028))
+   (i-cp t ix ph) (: g (((t * 220.0 % 1.0 < 0.45) * (t < 0.028)) + (t >= 0.028))
                     (vnoise ix * 0.55 * g * (exp (t * -17.0))))
-   (i-rim t ix f) (sin (t * tau * 1650.0) * 0.7 * exp (t * -150.0))
-   (i-tom t ix f) (sin ((t * 96.0 + (1.4 * (1.0 - (exp (t * -22.0))))) * tau)
+   (i-rim t ix ph) (sin (t * tau * 1650.0) * 0.7 * exp (t * -150.0))
+   (i-tom t ix ph) (sin ((t * 96.0 + (1.4 * (1.0 - (exp (t * -22.0))))) * tau)
                    * exp (t * -11.0))
    ; the pitched four, each with one attack-decay envelope
    (venv t d) ((1.0 - exp (t * -420.0)) * exp (t / d * -2.6))
-   (i-sin t ix f) (sin (t * tau * f))
-   (i-saw t ix f) (((t * f % 1.0) * 2.0) - 1.0)
-   (i-sqr t ix f) (((t * f % 1.0 < 0.5) * 2.0) - 1.0)
-   (i-tri t ix f) (: u (t * f % 1.0)
+   (i-sin t ix ph) (sin (ph * tau))
+   (i-saw t ix ph) (((ph % 1.0) * 2.0) - 1.0)
+   (i-sqr t ix ph) (((ph % 1.0 < 0.5) * 2.0) - 1.0)
+   (i-tri t ix ph) (: u (ph % 1.0)
                      v (u * 4.0)
                      ((u < 0.5) * (v - 1.0) + (u >= 0.5) * (3.0 - v)))
    ; a music box's tine, an octave up: the note, a partial an octave and a fifth over
    ; it that dies fast, a bright one that dies faster
-   (i-box t ix f) (: w (t * tau * f * 2.0)
+   (i-box t ix ph) (: w (ph * tau * 2.0)
                      (sin w + 0.3 * sin (w * 3.0) * exp (t * -6.0) + 0.15 * sin (w * 5.8) * exp (t * -9.0)))
    ; a wind chime's tube, two octaves up: inharmonic partials over a long ring
-   (i-chime t ix f) (: w (t * tau * f * 4.0)
+   (i-chime t ix ph) (: w (ph * tau * 4.0)
                        (sin w + 0.5 * sin (w * 2.76) * exp (t * -2.0) + 0.25 * sin (w * 5.4) * exp (t * -4.0)))
    ; name -> [default-duration pitched? shape]
    (instr nm) (nm @
@@ -90,6 +93,9 @@
    ; true here, so a missing key is asked for by a symbol nothing else can be.
    (vnum v k d) (: r (? (tablet? v) (peep v k 'none) (charm? v) (k @ 'note v 'none) 'none)
                  (r @ 'none d r))
+   ; the phase in cycles at t of a note at f gliding at k nepers a second: the
+   ; integral of f e^(kt), and f t when it holds. k is what a slide comes to
+   (vphase t f k) (k = 0.0 ? (t * f) (f * (exp (t * k) - 1.0) / k))
    ; a voice is [end-frame amp-of-frames left-gain right-gain]
    (mkvoice st v rate)
     (: ins (instr (vname v))
@@ -100,12 +106,13 @@
              amp (vnum v 'gain 1.0)
              pn  (vnum v 'pan 0.5)
              spd (vnum v 'speed 1.0)
+             k   (1.0 * vnum v 'slide 0 * ln2-12 / dur)   ; the slide's rate: its semitones over the note
              sh  (ins 2)
              end (st + int (dur * rate / spd) + 2)
              fn  (\ ix (: t  ((ix - st) * (spd / rate))
                           tp (t * (t > 0.0))
                           e  (? (ins 1) (venv tp dur) 1.0)
-                          (sh tp ix f * e * (t >= 0.0) * (t < dur))))
+                          (sh tp ix (vphase tp f k) * e * (t >= 0.0) * (t < dur))))
              [end fn (amp * (1.0 - pn)) (amp * pn)])))
 
    ; --- mixing and packing ---------------------------------------------------

@@ -142,6 +142,32 @@
                  (sort (map (\ x (peep (evv x) 'pan ())) r)))
               = [0.0 0.0 1.0 1.0]))
 
+   ; --- smooth: a sequence of numbers drifts from each value to the next, the value
+   ; at a time on the line between the two events' starts; a span answers one event
+   ; sampled at its middle, as the signals do, and a bare word is left as it is
+   (sm p b e) (evv (((smooth p) b e) 0))
+   _ (test ((sm (mini "0 10") (qi 0) qhalf) = 5.0)           ; the middle of the first step
+             ((sm (mini "0 10") qhalf (qi 1)) = 5.0)         ; ..and of the second, on the way back to 0
+             ((sm (mini "0 10") (qi 0) (1 /// 4)) = 2.5)
+             ((sm (mini "0 10") (qi 1) (3 /// 2)) = 5.0)     ; the next cycle alike
+             ((sm (pure 4) (qi 0) (qi 1)) = 4)               ; one value: nowhere to drift to
+             ((sm (mini "bd sn") (qi 0) qhalf) = "bd")
+             (1 = #((smooth (mini "0 10")) (qi 0) (qi 1)))
+             !((smooth (mini "0 10")) (qi 1) (qi 1)))
+
+   ; --- slide: a control word like the rest, and at the voice a phase that bends: the
+   ; integral of a frequency rising at the slide's rate, the plain product when it holds.
+   ; a note that slides an octave over a second ends at 1/ln 2 times the cycles of one
+   ; that holds; a slide of 0 is the held note bit for bit; a sliding one is another
+   _ (test ((peep (evv ((slide (pure 3)) (qi 0) (qi 1) 0)) 'slide ()) = 3)
+             ((vphase 1.0 100.0 0.0) = 100.0)
+             ((abs (vphase 1.0 100.0 0.6931471805599453 - 144.26950408889634)) < 0.0001)
+             ((vphase 0.0 100.0 0.6931471805599453) = 0.0)
+             (: ix (iota 200 + 10)
+                (amp v) ((mkvoice 10 v 1000) 1 ix)
+                a (amp {'s "sin" 'note 0})  b (amp {'s "sin" 'note 0 'slide 0})  c (amp {'s "sin" 'note 0 'slide 12})
+                (&& (aall (a = b)) !(aall (a = c)))))
+
    ; --- mini-notation --------------------------------------------------------
    (m s) (map (\ x [(qnum (evwb x)) (qnum (evwe x)) (evv x)])
               (filter onset? ((mini s) (qi 0) (qi 1))))
