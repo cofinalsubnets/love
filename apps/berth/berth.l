@@ -35,9 +35,10 @@
 ; a guest need not be a child either: a stage of this process -- cli's triple, (show w
 ; h) the frame as escapes, (step k) a key, (over? _) done -- berths the same way. its
 ; frame is scribed onto the pane's screen as a child's bytes are, so it knows nothing
-; of panes, and its keys come through edkey as on cli's stage. a fourth door, 'tick,
-; is asked every swim: a true answer is a frame to paint, which is how a guest with a
-; clock or a card gets its turn without a key. splits from a stage open a shell.
+; of panes, and its keys come through edkey as on cli's stage, or through its own
+; reader if a door 'key holds one, for a guest whose keys edkey does not spell. a door
+; 'tick is asked every swim: a true answer is a frame to paint, which is how a guest
+; with a clock or a card gets its turn without a key. splits from a stage open a shell.
 ;
 ; run: out/love -e "(: _ (borrow 'berth) (berth [\"sh\"]))"
 ;      out/love -e "(: _ (borrow 'berth) (berth [\"vim\" \"README.md\"]))"
@@ -255,10 +256,10 @@
                  (= k 91)  (hcopy hb)                   ; [
                  (= k 93)  (hpaste hb)                  ; ]
                  0))
- ; a child gets the bytes as typed; a stage gets edkey's keys, as on cli's stage,
- ; and the user's eof leaves it
+ ; a child gets the bytes as typed; a stage gets edkey's keys, as on cli's stage, or
+ ; its own reader's; and the user's eof leaves it
  (oars hb) (: p (hpane hb (hb 'focus))
-              ch (? (two? p && !(hpty? p)) (edkey in) (see in))
+              ch (? (two? p && !(hpty? p)) ((peep (hstage p) 'key edkey) in) (see in))
               (? (= ch -1) (hfeed hb 4)                 ; veof follows the user's own eof
                  (= ch -7) (hshut hb (hb 'focus))
                (: _ (? (= ch 1) (hkey hb) (hfeed hb ch))

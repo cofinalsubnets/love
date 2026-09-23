@@ -15,7 +15,9 @@
 ;
 ; the shifted row is the keymap's: what shift makes of the digits is the terminal's to
 ; say, and synth-shifted is the us row. alt reaches the terminal as an escape before
-; the key, the way the cli's edkey reads it for the letters.
+; the key, read by the synth's own synth-key, which makes alt of any key where the
+; cli's edkey makes it of the letters alone; on the harbour the keys' stage hands berth
+; that reader through its 'key door.
 ;
 ; a backing loop to play over: harp's patterns, in the text `love harp` takes -- a mini
 ; string, or a love form over harp's names in parentheses -- pulled a cycle at a time
@@ -218,7 +220,7 @@
    keys (br 'berth-stage (\ w h (pin st 'dirty 0, synth-frame st))
                          (\ k (? (k = 101) (synth-send st (synth-text (buf 'lines))) (synth-step st k)))
                          (\ _ (st 'over)))
-   _ (pin keys 'tick (\ _ (feed (), st 'dirty)))
+   _ (pins keys 'tick (\ _ (feed (), st 'dirty)) 'key synth-key)   ; alt on any key, the row's own reading
    text (br 'berth-stage (face 0) (face 1) (\ _ (buf 'quit || st 'over)))
    _ (pin text 'paste (face 3))
    share (min 90 ((100 * (synth-rows + 1) + <sz - 1) // <sz))   ; the keys' rows, and one over

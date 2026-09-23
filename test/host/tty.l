@@ -209,22 +209,22 @@
  e (run "out/love story" "k:q\r" 14 60)
  _ (test ((7 . 6) = at <>e))                                 ; ..and k is one row north
 ; --- the synth: alt is an escape before the key, and the two arrive in one write -- the
-; --- quarter tone is struck, not an escape dropped and then a plain note. the keys go
-; --- in once the first frame has come, so the tty is raw by then, and q once the second
-; --- has, so the key's answer is on the screen
- (frames m acc n) (: (cnt s i k) (i + 6 <= #s ? (cnt s (i + 1) (k + ("leaves" = snip s i (i + 6)))) k)
-                     c (cnt acc 0 0 < n ? (see m) -1)             ; -1 at the end too: a dead child ends the read
-                     (c < 0 ? acc (frames m (acc + string c) n)))
- sy (spawn "env HORN=none out/love synth" 8 70)
- sm >sy
- a1 (frames sm "" 1)
- _ (say sm "\e1", flush sm)
- a2 (frames sm a1 2)
- _ (say sm "q", flush sm)
- atx (a2 + slurp sm)
- _ (waitfor <sy)
+; --- quarter tone is struck, not an escape dropped and then a plain note. the key goes
+; --- in once the legend's first cell is on the wire, so the tty is raw and the keys'
+; --- pane painted by then, and q a breath after it, so the key's answer has been
+; --- painted; the harbour puts the keys over a buffer, so the rows are what holds the
+; --- whole of the keys' frame. a screen that never shows the answer fails the law
  sq (synth-new ())
+ c4 (synth-digits 0 . synth-name (synth-semis sq [0 0 0]))  ; the first key and its note, as the legend cells them
  an (synth-name (synth-semis sq [0 0 1]))
+ sy (spawn "env HORN=none out/love synth" 16 70)
+ sm >sy
+ a1 (wire sm (string <c4 + " " + >c4))
+ _ (say sm "\e1", flush sm)
+ _ (rest 300)
+ _ (say sm "q", flush sm)
+ a2 (slurp sm)
+ _ (waitfor <sy)
  _ (test !(has? a1 an) (has? a2 an))                       ; not on the legend, on the screen after the key
 ; --- the shaft: a first frame of half blocks comes, and q ends it ---
  (blocks m acc k n) (: c (k < n ? (see m) -1)
