@@ -38,14 +38,11 @@
          slop-shore slop-sand slop-wet?)
 (borrow 'ink)
 (borrow 'rove)
-; harp is OPTIONAL the way posix is: the song wants its cycle algebra, the walk wants
-; none of it, and a seat carrying no harp plays the game in silence. every name off it
-; is spelled inside a lambda, so an absent one costs nothing until the song is asked
-; for. play is harp's voice layer -- vnum, venv, mixdown and pack come off it, and the
-; two ride the same roster. borrowing harp shadows prel's rev and every with the
-; pattern ones, so the list reverse is lrev from here down.
-(? (tablet? (cite 'harp)) (borrow 'harp) ())
-(? (tablet? (cite 'play)) (borrow 'play) ())
+; the song wants harp's cycle algebra and play's voices -- vnum, venv, mixdown and pack.
+; borrowing harp shadows prel's rev and every with the pattern ones, so the list
+; reverse is lrev from here down.
+(borrow 'harp)
+(borrow 'play)
 ; posix is OPTIONAL: the page's seat (inle/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
@@ -291,8 +288,7 @@
  (pinkyup l) (:- (go 0 ()) top <(lrev l)
               (go k acc) (k + 1 < #l ? (go (k + 1) (top . l k . acc)) (lrev acc)))
  (arp-of q) (? (q < 2) pinkyup lrev)    ; "pinkyup down": the first half, then the second
- ; the tune, built on first use so a seat without harp never reaches these names.
- ; four quarters to the cycle and four cycles to the round, the k'th cycle dropping
+ ; the tune: four quarters to the cycle and four cycles to the round, the k'th cycle dropping
  ; its k'th quarter five semitones -- which is what chunk 4 does. sine, because the
  ; piano it was written for is not the point; the notes are.
  (slop-tune _)
@@ -488,10 +484,10 @@
              r (two? ws && 7 < <ws ? (<ws - 1) 23)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (slop-new r c (wheel (clock 0)))
-             ; the song, if this seat has one: harp for the notes, a horn to put them
-             ; out of. no harp or no card and the walk is silent, which is all it is.
-             tune (? (tablet? (cite 'harp)) (slop-tune ()) ())
-             hn (? tune (: r (horn song-rate 2) (? (nom? r) () r)) ())
+             ; the song: harp for the notes, a horn to put them out of. no card and
+             ; the walk is silent, which is all it is.
+             tune (slop-tune ())
+             hn (: r (horn song-rate 2) (? (nom? r) () r))
              sng (? hn (slop-song-new tune hn) ())
              ; a chunk of song is a frame's worth and the card takes it at playing
              ; speed, so with a horn the music is the clock; without one, rest is

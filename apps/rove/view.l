@@ -1,7 +1,11 @@
 ; view -- what a first-person level in half blocks rides: the screen as a camera on the
-; state, the rays its columns cast, the pens said a change at a time, and the small
-; arithmetic the scenes share. wade (apps/rove/wade.l) and shaft (apps/rove/shaft.l) borrow it.
-(module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays view-frame)
+; state, the rays its columns cast, the pens said a change at a time, the tty loop that
+; runs a level, and the small arithmetic the scenes share. wade, dusk and shaft
+; (apps/rove/) borrow it.
+(module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays
+         view-frame view-walk view-run)
+(borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
+(? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
 (:
  esc (string 27)
  pi 3.141592653589793
@@ -45,5 +49,57 @@
         (row (x + 1) f2 b2 ts bs bd)))
    (rows y) (? (y < h // 2) (row 0 -1 -1 (src (2 * y)) (src (2 * y + 1)) (peep bands y ()),
                              say j (esc + "[0m"), (? ((y + 1) < (h // 2)) (say j "\r\n")), rows (y + 1)))
-   (rows 0, slurp j)))
+   (rows 0, slurp j))
+ ; a level on a stage already raised, a frame a tick: every key waiting is read and the
+ ; last one acts, so a held key moves once a frame; the horn is fed until a lead stands
+ ; queued, the lead paced by the frame gap; the rest is what the tick has left after the
+ ; painting. the level is lv: 'new (w h) its state, 'size (st w r) a resize, 'frame (st),
+ ; 'key (st k), 'tick (st) a frame's own motion, 'fps, 'song (hn) what feeds its song a
+ ; chunk (st) -- asked with () on a seat with no horn, and then fed once a frame --
+ ; 'linger how long it stays once 'done, and 'next the [module walk] after it, or ()
+ (view-walk lv) (:
+   ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
+   ; frame, so a resized window is painted whole
+   (shape _) (: ws (tty 1) [(two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])
+   sh0 (shape ())
+   st (lv 'new (sh0 0) (2 * sh0 1))
+   (resize _) (: sh (shape ())
+               (? (sh 0 != st 'w || 2 * sh 1 != st 'h)
+                (lv 'size st (sh 0) (sh 1), say out (esc + "[2J"))))
+   tick (1000 // lv 'fps)
+   hn (: q (horn song-rate 2) (? (nom? q) () q))
+   fd (lv 'song hn)
+   pace (pacer ())
+   (feed _) (? (hn && fd) (song-fill hn (song-lead-of (pace! pace)) (\ _ (fd st))) fd (fd st) 0)
+   (keys last) (? (cue? 0) (edkey in @ (113 || 27) 'quit k (keys (charm? k ? k last))) last)
+   (go _) (: t0 (clock 0)
+             _ (feed ())
+             _ (resize ())
+             _ (say out (esc + "[H" + lv 'frame st), flush out)
+             k (keys ())
+             _ (? (charm? k) (lv 'key st k))
+             _ (lv 'tick st)
+             _ (pin st 't (st 't + 1))
+             _ (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0)))
+             (? (k = 'quit || (st 'done-at && lv 'linger <= clock (st 'done-at))) ()
+                (: spent (clock 0 - t0)
+                   _ (spent < tick ? (rest (tick - spent)))
+                   (go ()))))
+   _ (say out (esc + "[2J"))
+   _ (go ())
+   ; ..and the card goes back before the next level asks for it
+   _ (? hn (flush hn, close hn))
+   ; done: the next level takes the stage as it stands and gives it back here; a seat
+   ; that carries no such level ends where this one did
+   nx (lv 'next) walk (? nx (cite (nx 0) (nx 1)) ())
+   _ (? (st 'done && walk) (walk ()))
+   st)
+ ; ..and the verb around a walk: the screen raised here and put back here
+ (view-run walk) (: _ (raw 1)
+   _ (say out (esc + "[?1049h" + esc + "[?25l"))
+   _ (walk ())
+   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
+   _ (drain-keys ())
+   _ (raw 0)
+   0))
 ) ; module view

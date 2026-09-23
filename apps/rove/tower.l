@@ -1620,9 +1620,8 @@
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
-             ; the card, if this seat has one: no harp or no horn and the tower is quiet
-             hn (? (tablet? (cite 'harp))
-                   (: q (horn song-rate 2) (? (nom? q) () q)) ())
+             ; the card, if this seat has one: no horn and the tower is quiet
+             hn (: q (horn song-rate 2) (? (nom? q) () q))
              sng (? hn (song-new hn) ())
              ; the wait IS the song: a chunk goes out whenever the card has less than the
              ; lead queued, and a loop that feeds while no key is waiting keeps time.

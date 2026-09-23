@@ -256,58 +256,16 @@
    _ (? (s 'gong <= base)
         (strike {'s "tri" 'note -19.3 'gain 0.8 'pan 0.5 'legato 8.0},
          pin s 'gong (base + song-rate * (9 + roll sb 6))))
-   live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
-   now (filter (p \ p 0 < base + song-chunk) live)    ; ..and already begun
-   _ (pins s 'vs live 'fpos (base + song-chunk))
-   (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
- ; --- the tty: every key waiting is read each frame and the last one acts; the horn is
- ; fed until a lead stands queued, the lead paced by the frame gap; a frame's rest is
- ; what the tick has left after the painting. the stage is taken as raised ---
- (dusk-walk _) (:
-   (shape _) (: ws (tty 1) [(two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])
-   sh0 (shape ())
-   st (dusk-new (sh0 0) (2 * sh0 1))
-   (resize _) (: sh (shape ())
-               (? (sh 0 != st 'w || 2 * sh 1 != st 'h)
-                (dusk-size st (sh 0) (sh 1), say out (esc + "[2J"))))
-   tick (1000 // fps)
-   hn (? (tablet? (cite 'harp)) (: q (horn song-rate 2) (? (nom? q) () q)) ())
-   sng (? hn (dusk-song-new hn (wheel (clock 0))) ())
-   pace (pacer ())
-   (feed _) (: l (song-lead-of (pace! pace))
-               (? sng (song-fill hn l (\ _ (dusk-song-feed sng))) 0))
-   (keys last) (? (cue? 0) (edkey in @ (113 || 27) 'quit k (keys (charm? k ? k last))) last)
-   (go _) (: t0 (clock 0)
-             _ (feed ())
-             _ (resize ())
-             _ (say out (esc + "[H" + dusk-frame st), flush out)
-             k (keys ())
-             _ (pin st 't (st 't + 1))
-             _ (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0)))
-             _ (? (st 'done) (dusk-settle st))
-             (? (k = 'quit || (st 'done-at && done-ms <= clock (st 'done-at))) ()
-                (: _ (? (charm? k) (dusk-step st k))
-                   _ (? (st 'walk) (dusk-move st 0.25))
-                   spent (clock 0 - t0)
-                   _ (spent < tick ? (rest (tick - spent)))
-                   (go ()))))
-   _ (say out (esc + "[2J"))
-   _ (go ())
-   ; ..and the card goes back before the next level asks for it
-   _ (? hn (flush hn, close hn))
-   ; into the hole: the garage takes the stage as it stands and gives it back here; a
-   ; seat that carries no garage ends at the mouth
-   next (cite 'garage 'garage-walk)
-   _ (? (st 'done && next) (next ()))
-   st)
- ; ..and the verb around it: the screen raised here and put back here
- (dusk-run _) (: _ (raw 1)
-   _ (say out (esc + "[?1049h" + esc + "[?25l"))
-   st (dusk-walk ())
-   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
-   _ (drain-keys ())
-   _ (raw 0)
-   0)
+   (song-out s song-chunk song-gain))
+ ; --- the walk, on view's loop: walking on by itself, or in the hole settling, a frame
+ ; at a time, and the garage after it. dusk-walk takes a stage already raised, and
+ ; dusk-run raises one ---
+ (dusk-walk _) (view-walk {'new dusk-new 'size dusk-size 'frame dusk-frame 'key dusk-step 'fps fps
+                           'tick (st \ (? (st 'done) (dusk-settle st) (st 'walk) (dusk-move st 0.25)))
+                           'song (hn \ (: s (? hn (dusk-song-new hn (wheel (clock 0))) ())
+                                          (? s (\ _ (dusk-song-feed s)) ())))
+                           'linger done-ms 'next ['garage 'garage-walk]})
+ (dusk-run _) (view-run dusk-walk)
  dusk-usage "usage: love dusk   (h l turn, k walks on, u n look, space walks on to the garage; q or esc leaves)"
  (dusk-main as) (as @ () (dusk-run ())
                      (say err ("dusk: " + dusk-usage + "\n"), flush err, 2))

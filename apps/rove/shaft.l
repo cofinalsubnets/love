@@ -349,53 +349,16 @@
    vs (foldl (\ acc f (cat acc (one f))) () (st 'sfx))
    _ (pin st 'sfx ())
    (pin s 'vs (s 'vs + filter (p \ two? (p 1)) vs)))
- (shaft-song-feed s) (: base (s 'fpos)
-   live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
-   now (filter (p \ p 0 < base + song-chunk) live)    ; ..and already begun
-   _ (pins s 'vs live 'fpos (base + song-chunk))
-   (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
- ; --- the tty: every key waiting is read each frame and the last one acts; the horn is
- ; fed until a lead stands queued, the lead paced by the frame gap; a frame's rest is
- ; what the tick has left after the painting. the stage is taken as raised ---
- (shaft-walk _) (:
-   (shape _) (: ws (tty 1) [(two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])
-   sh0 (shape ())
-   st (shaft-new (sh0 0) (2 * sh0 1) (wheel (clock 0)))
-   (resize _) (: sh (shape ())
-               (? (sh 0 != st 'w || 2 * sh 1 != st 'h)
-                (shaft-size st (sh 0) (sh 1), say out (esc + "[2J"))))
-   tick (1000 // fps)
-   hn (? (tablet? (cite 'harp)) (: q (horn song-rate 2) (? (nom? q) () q)) ())
-   sng (? hn (shaft-song-new hn (wheel (clock 0))) ())
-   pace (pacer ())
-   (feed _) (: l (song-lead-of (pace! pace))
-               (? sng (song-fill hn l (\ _ (shaft-sfx sng st, shaft-song-feed sng))) (pin st 'sfx ())))
-   (keys last) (? (cue? 0) (edkey in @ (113 || 27) 'quit k (keys (charm? k ? k last))) last)
-   (go _) (: t0 (clock 0)
-             _ (feed ())
-             _ (resize ())
-             _ (say out (esc + "[H" + shaft-frame st), flush out)
-             k (keys ())
-             _ (? (charm? k) (shaft-step st k))
-             _ (shaft-move st)
-             _ (pin st 't (st 't + 1))
-             _ (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0)))
-             (? (k = 'quit || (st 'done-at && done-ms <= (clock 0 - st 'done-at))) ()
-                (: spent (clock 0 - t0)
-                   _ (spent < tick ? (rest (tick - spent)))
-                   (go ()))))
-   _ (say out (esc + "[2J"))
-   _ (go ())
-   _ (? hn (flush hn, close hn))
-   st)
- ; ..and the verb around it: the screen raised here and put back here
- (shaft-run _) (: _ (raw 1)
-   _ (say out (esc + "[?1049h" + esc + "[?25l"))
-   st (shaft-walk ())
-   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
-   _ (drain-keys ())
-   _ (raw 0)
-   0)
+ (shaft-song-feed s) (song-out s song-chunk song-gain)
+ ; --- the walk, on view's loop: a frame's motion after the key, the sounds it made fed to
+ ; the song -- or let go, on a seat with no horn. shaft-walk takes a stage already
+ ; raised, and shaft-run raises one ---
+ (shaft-walk _) (view-walk {'new (\ w h (shaft-new w h (wheel (clock 0)))) 'size shaft-size
+                            'frame shaft-frame 'key shaft-step 'tick shaft-move 'fps fps
+                            'song (hn \ (: s (? hn (shaft-song-new hn (wheel (clock 0))) ())
+                                           (? s (\ st (shaft-sfx s st, shaft-song-feed s)) (\ st (pin st 'sfx ())))))
+                            'linger done-ms 'next ()})
+ (shaft-run _) (view-run shaft-walk)
  shaft-usage "usage: love shaft   (h l turn, k j step, space jumps or takes a ladder, u n look; q or esc leaves)"
  (shaft-main as) (as @ () (shaft-run ())
                        (say err ("shaft: " + shaft-usage + "\n"), flush err, 2))

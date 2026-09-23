@@ -25,7 +25,7 @@
 ; every, here) would shadow the prel for everything compiled after it. a module
 ; enters its own layer, and the borrow below is confined to it.
 (module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
-         harp-scale harp-chunk mkvoice cyc-voices mixdown pack
+         harp-scale harp-chunk mkvoice cyc-voices mixdown pack song-out
          twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice)
 (borrow (: m (cite 'harp) (? m m "apps/harp/harp.l")))
 (:
@@ -154,6 +154,13 @@
                  lay c 2 2 4 (clipv g R),
                  string c)
           (string (go 0))))
+   ; a song's next n frames out its port 'h at gain g: its voices 'vs, [start voice] each,
+   ; let go once finished and summed once begun, and its frames written 'fpos moved on
+   (song-out s n g) (: base (s 'fpos)
+                       live (filter (p \ p 1 0 >= base) (s 'vs))
+                       now (filter (p \ p 0 < base + n) live)
+                       _ (pins s 'vs live 'fpos (base + n))
+                       (say (s 'h) (pack (mixdown (map (p \ p 1) now) base n) n g)))
 
    ; --- the run: cycles in, chunks out ---------------------------------------
    harp-chunk 2048

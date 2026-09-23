@@ -20,7 +20,7 @@
 ;
 ; the scene is pure love -- wade-new, wade-step, wade-move and wade-frame are state in
 ; and state out, and the song feeds any port -- gated headless by test/host/wade.l;
-; only wade-run ties the tty and the horn.
+; only wade-walk and wade-run tie the tty and the horn.
 ;
 ; run: love wade    h l or the arrows turn, k or up wades on, u n look up and down,
 ;                   space walks on until pressed again; q or esc leaves. reaching the
@@ -28,7 +28,7 @@
 ;                   to hold its flame, a moment passes, and the apartment takes the
 ;                   screen (apps/rove/apartment.l) where the seat carries it.
 ;                   HORN=none plays silent on a seat with no sound device
-(module (wade wade-run wade-main wade-new wade-step wade-move wade-frame wade-tables
+(module (wade wade-run wade-walk wade-main wade-new wade-step wade-move wade-frame wade-tables
          wade-size wade-song-new wade-song-feed moon-at swell rings-at tree-of rw sp loop fps
          slendro song-chunk arc-z morph-z lamp-z lamp-near done-ms settle-ms wade-aim wade-settle
          texts texts-at)
@@ -357,59 +357,18 @@
    _ (? (s 'gong <= base)
         (strike {'s "tri" 'note -22.0 'gain 0.9 'pan 0.5 'legato 7.0},
          pin s 'gong (base + song-rate * (8 + roll sb 6))))
-   live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
-   now (filter (p \ p 0 < base + song-chunk) live)    ; ..and already begun
-   _ (pins s 'vs live 'fpos (base + song-chunk))
-   (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
- ; the tty: every key waiting is read each frame and the last one acts, so a held key
- ; moves once a frame and stops when it is let go; the horn is fed until a lead stands
- ; queued, ahead of anything else the loop does, the lead paced by the frame gap (rove's
- ; pacer); a frame's rest is what the tick has left after the painting
- (wade-run _) (: _ (raw 1)
-   _ (say out (esc + "[?1049h" + esc + "[?25l" + esc + "[2J"))
-   ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
-   ; frame, so a resized window is painted whole
-   (shape _) (: ws (tty 1) [(two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])
-   sh0 (shape ())
-   st (wade-new (sh0 0) (2 * sh0 1))
-   (resize _) (: sh (shape ())
-               (? (sh 0 != st 'w || 2 * sh 1 != st 'h)
-                (wade-size st (sh 0) (sh 1), say out (esc + "[2J"))))
-   tick (1000 // fps)
-   hn (: h (horn song-rate 2) (? (nom? h) () h))
-   sng (? hn (wade-song-new hn (wheel (clock 0))) ())
-   pace (pacer ())
-   (feed _) (: l (song-lead-of (pace! pace))
-               (? sng (song-fill hn l (\ _ (wade-song-feed sng))) 0))
-   (keys last) (? (cue? 0) (edkey in @ (113 || 27) 'quit k (keys (charm? k ? k last))) last)
-   (go _) (: t0 (clock 0)
-             _ (feed ())
-             _ (resize ())
-             _ (say out (esc + "[H" + wade-frame st), flush out)
-             k (keys ())
-             _ (pin st 't (st 't + 1))
-             ; arrived: the clock is noted the first frame, the view settles on the lamp over
-             ; settle-ms, and the level is over done-ms on
-             _ (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0)))
-             _ (? (st 'done-at) (: s (clock (st 'done-at) / (1.0 * settle-ms))
-                                   (wade-settle st (1.0 < s ? 1.0 s))))
-             (? (k = 'quit || (st 'done-at && settle-ms + done-ms <= clock (st 'done-at))) ()
-                (: _ (? (charm? k) (wade-step st k))
-                   _ (? (st 'walk) (wade-move st 0.25))
-                   spent (clock 0 - t0)
-                   _ (spent < tick ? (rest (tick - spent)))
-                   (go ()))))
-   _ (go ())
-   ; ..and the card goes back before the next level asks for it
-   _ (hn ? (flush hn, close hn))
-   ; arrived: the apartment takes the stage as it stands and gives it back here; a seat
-   ; that carries no apartment ends at the lamp
-   walk (cite 'apartment 'apartment-walk)
-   _ (? (st 'done && walk) (walk ()))
-   _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
-   _ (drain-keys ())
-   _ (raw 0)
-   0)
+   (song-out s song-chunk song-gain))
+ ; --- the walk, on view's loop: walking on by itself, or at the lamppost settling on the
+ ; lamp over settle-ms, and the apartment after it. wade-walk takes a stage already
+ ; raised, and wade-run raises one ---
+ (wade-walk _) (view-walk {'new wade-new 'size wade-size 'frame wade-frame 'key wade-step 'fps fps
+                           'tick (st \ (? (st 'done-at) (: s (clock (st 'done-at) / (1.0 * settle-ms))
+                                                            (wade-settle st (1.0 < s ? 1.0 s)))
+                                          (st 'walk) (wade-move st 0.25)))
+                           'song (hn \ (: s (? hn (wade-song-new hn (wheel (clock 0))) ())
+                                          (? s (\ _ (wade-song-feed s)) ())))
+                           'linger (settle-ms + done-ms) 'next ['apartment 'apartment-walk]})
+ (wade-run _) (view-run wade-walk)
  wade-usage "usage: love wade   (h l turn, k j wade, u n look, space walks on to the lamppost; q or esc leaves)"
  (wade-main as) (as @ () (wade-run ())
                       (say err ("wade: " + wade-usage + "\n"), flush err, 2))

@@ -232,8 +232,7 @@
  ; and the lines under the stack are spares to swap in. heard alone: the stack pasted
  ; into love synth, :cps 0.55 and :send.
  ; harp is cited by name, never borrowed: borrowing it would put its note and rev over
- ; rove's and prel's for everything below. built on first use, so a seat without harp
- ; never reaches these names.
+ ; rove's and prel's for everything below.
  (garage-tune _) (:
    (h w) (cite 'harp w)
    stack (h 'stack) pset (h 'pset) hush (h 'hush) every (h 'every) whenmod (h 'whenmod)
@@ -293,17 +292,14 @@
                   _ (pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc))
                 (pull ())))
    _ (pull ())
-   live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
-   now (filter (p \ p 0 < lim) live)                  ; ..and already begun
-   _ (pins s 'vs live 'fpos lim)
-   (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
+   (song-out s song-chunk song-gain))
 
  ; --- the walk: on a stage already raised, the tower's way -- the wait is the song ---
  (garage-walk _) (: ws (tty 1)
    r (two? ws && 7 < <ws ? (<ws - 2) 22)
    c (two? ws && 19 < <>ws ? <>ws 80)
    g (garage-new (c < 100 ? c 100) r (wheel (clock 0)))
-   hn (? (tablet? (cite 'harp)) (: q (horn song-rate 2) (? (nom? q) () q)) ())
+   hn (: q (horn song-rate 2) (? (nom? q) () q))
    sng (? hn (garage-song-new (garage-tune ()) hn (wheel (clock 0))) ())
    pace (pacer ())
    ; the wait is the song: fed up to the lead, and a rest when the card wants nothing
