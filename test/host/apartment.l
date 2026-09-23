@@ -139,6 +139,18 @@
           _ (pins p 'x 0 'y wy) _ (apartment-turn g '(-1 0))
           ('west = g 'over))))
 
+; --- the river runs on its own clock: further along it, its cells paint differently and
+; --- the grass paints the same; dry, its bed stands still with the rest
+(: g (apartment-new 80 22 (wheel 5)) d (g 'd) w 80 h 22
+   (cells t) (filter (i \ t = peep (d 't) i 0) ^(w * h))
+   (faces is) (map (apartment-face g) is)
+   water (cells 4) grass (cells 1)
+   aw (faces water) ag (faces grass) _ (pin g 'wt 2.0) bw (faces water) bg (faces grass)
+   _ (pin g 'wt 0.0) cw (faces water)
+   _ (pins g 'desert 1) _ (each (cells 4) (i \ pin (d 't) i 5))
+   bed (cells 5) dry (faces bed) _ (pin g 'wt 2.0) dry2 (faces bed)
+ (test (aw != bw) (ag = bg) (aw = cw) (dry = dry2)))
+
 ; --- the song: the drone from the first frame, the phrase soon after and again every so
 ; --- often, each note with its echoes behind it; the drum sounds where it is asked for
 (: j (jug 0) s (apartment-song-new j (wheel 7))

@@ -63,20 +63,24 @@
 
  ; --- the words: every line the level says; a ~ takes the next value ---
  w-concrete "concrete"
- w-wreck    "a wreck, and nothing in it"
+ w-wreck    "a wrecked conveyance stripped to its skeleton"
  w-east     "the bed runs back east, to the plain"
  w-rat      "the rat hawks a bauble at you"
  w-bar      "~  turn ~"
  open-ttl   "the garage"
- open-lines '("the dry riverbed runs in under a low concrete ceiling, between the columns of a parking garage.  something is scuttling in the bays."
+ open-lines '("the dry river passes through an underground parking garage."
               ""
               "move     h j k l    or the arrow keys"
               "         y u b n    for diagonals"
               "leave    q          or esc"
               ""
               "-- any key --")
+ rat-lines '(
+  "solemnly chants an old commercial jingle"
+  "sniffs at an oily bindle of engine parts"
+  "hawks a bauble at you")
  ; a rat, bumped: the die is threaded through for what a rat may come to say or do
- (rat-interaction sb r) w-rat
+ (rat-interaction sb r) ("the rat " + rat-lines (roll sb #rat-lines))
 
  ; --- laying the garage ---------------------------------------------------------------
  (garage-lay w h sb) (:

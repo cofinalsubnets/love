@@ -27,7 +27,7 @@
 (module (apartment apartment-run apartment-walk apartment-main apartment-new apartment-turn
          apartment-frame apartment-bar apartment-lay apartment-face apartment-stride
          apartment-stir chat chat-key chat-node chat-end chat-book blocks blocks-name
-         cube-w cube-h river-h inside? oct-pt stone-lines apartment-song-new apartment-song-feed
+         cube-w cube-h river-h water-rate water-gap inside? oct-pt stone-lines apartment-song-new apartment-song-feed
          apartment-sfx phrase phrase-gap phrase-ring phrase-slow phrase-every phrase-vary phrase-first
          phrase-echoes drone-voice drone-notes song-chunk npc-glyph bones-glyph)
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
@@ -48,12 +48,15 @@
  river-sway 2                           ; rows the river wanders either side of its middle
  ; the ground is solid blocks, each in a pen off its ramp by one still frame of the
  ; walk's shimmer (ink-drift), so the colour runs in smooth bands and not a mottle. the
- ; ramps run pale to deep; span is the band of the field they cover, its four sines
- ; seldom leaving +-3
+ ; river alone reads the shimmer at the clock, so it runs while everything else stands;
+ ; dry, its bed reads the still frame with the rest. the ramps run pale to deep; span is
+ ; the band of the field they cover, its four sines seldom leaving +-3
  ground-glyph "█"
  grass-ramp [118 112 76 70 40 34 28 22]
  sand-ramp [187 180 179 178 172 136 137 101]
  water-ramp [45 39 38 32 33 27 26 25]
+ water-rate 0.6                         ; the river's drift, field time a second
+ water-gap 100                          ; ms between frames while the river runs
  bed-ramp [180 179 137 136 95 94 58 58]        ; the bed dry: silt, browns
  road-ramp [137 95 94 94 58 58 52 52]          ; the shards lie on this
  path-ramp [180 137 137 95 94 94 58 58]
@@ -73,18 +76,21 @@
 
  ; --- the words: every line the level says; a ~ takes the next value ---
  w-glass   "the glass holds"
- w-edge    "the plain goes on and on"
+ w-edge    "the desert goes on and on"
+ w-east    "the river gives out to a dried up ocean"
  w-water   "the river is deep and quick"
+ w-dry     "the river is flooded with dust"
  stone-ttl "a stone"
- stone-lines '("a flat stone in the riverbed, worn smooth, an inscription cut into it."
-               ""
-               "the letters are too worn to read."
+ stone-lines '("numbers etched into the stone:"
+               "2016"
+               "2023"
+               "2026"
                ""
                "-- any key --")
- w-shatter "the pane bursts into a thousand pieces, and the grass beyond it goes to sand"
+ w-shatter "the pane shatters and the grass outside turns to sand."
  w-bar     "~  turn ~"
  open-ttl  "apartment"
- open-lines '("you come to inside a glass cube on a plain.  someone is standing outside."
+ open-lines '("you wake up in your bedroom. someone else is here."
               ""
               "move     h j k l    or the arrow keys"
               "         y u b n    for diagonals"
@@ -94,14 +100,17 @@
  ; what the stranger says: a node is its lines and its choices, a choice a key, its
  ; words and the node it leads to; a node with no choices closes, and closing is the
  ; end. a ~ is the stranger's name; the greeting goes in front of the first node
- chat-book '((start ("The stranger presses a hand to the glass.")
-                    ((1 "Who are you?" who)
-                     (2 "Where is this?" here)
-                     (3 "..." bye)))
-             (who ("\"~.\"")
-                  ((1 "Ok." start)))
-             (here ("\"Home.\"  ~ taps the pane.")
-                   ((1 "Oh." start)))
+ chat-book '((start ("~ presses a hand to the glass.")
+                    ((1 "\"How long did you sleep?\"" how)
+                     (2 "\"Where is this place?\"" here)
+                     (3 "\"I found the river again.\"" river)
+                     (4 "..." bye)))
+             (how ("\"Almost seven hours.\" ~ looks confused.")
+                  ((1 "\"Wait...\"" start)))
+             (here ("\"Home.\"  ~ taps the side of their head.")
+                   ((1 "\"Oh yeah.\"" start)))
+             (river ("~ closes their eyes and smiles as if recalling a pleasant memory.")
+                    ((1 "You feel the same way." start)))
              (bye ("~ turns away.")
                   ()))
  chat-foot "-- ~ --"
@@ -176,8 +185,9 @@
    ; the stone in the bed near the west edge, midstream, under the water until it is dry
    stone [2 (river-y 2 + river-h // 2)]
    _ (dput d <stone <>stone 8)
+   flow (ink-drift h w) phase (roll sb 1000 / 10.0)           ; where in the drift it stopped
    (pins d 'cubes cubes 'cube c 'hub [cx cy] 'east east 'stone stone 'sd (roll sb 1000000)
-           'skin (ink-drift h w (roll sb 1000 / 10.0) 0.0)   ; where in the drift it stopped
+           'flow flow 'phase phase 'skin (flow phase 0.0)
            'in [(c 0 + cube-w // 2) (c 1 + cube-h // 2)]))
  ; strictly inside a cube: past its glass on every side
  (inside? c x y) (c 0 < x < c 0 + c 2 - 1 && c 1 < y < c 1 + c 3 - 1)
@@ -192,14 +202,14 @@
  (apartment-new w h st) (:
    sb {st}
    d (apartment-lay w h sb) c (d 'cube) pane (c 4) hub (d 'hub)
-   nm (blocks-name sb 3 6) gr (blocks-name sb 5 10)
+   nm (blocks-name sb 3 6)
    p {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue me-pen}
    npc {'x (<pane + toward <pane <hub) 'y (<>pane + toward <>pane <>hub)
-        'gl npc-glyph 'hue npc-pen 'nm nm 'greet gr}
+        'gl npc-glyph 'hue npc-pen 'nm nm}
    (mob cb) {'x (cb 0 + cube-w // 2) 'y (cb 1 + cube-h // 2) 'gl 64
              'hue (mob-pens (roll sb #mob-pens)) 'cube cb}
    g {'d d 'sb sb 'p p 'npc npc 'ms (map mob >(d 'cubes)) 'pane (<pane + w * <>pane)
-      'msg "" 'tn 0 'over 0 'sign () 'talk () 'sfx () 'desert 0}
+      'msg "" 'tn 0 'over 0 'sign () 'talk () 'sfx () 'desert 0 'wt 0.0}
    _ (pin g 'sign (open-ttl . open-lines))
    g)
 
@@ -210,9 +220,8 @@
  (choice-line c) (string 1 + " " + show <c + "  " + c 1 + " " + string 2)
  (chat g k) (: nd (chat-node k) nm (g 'npc 'nm)
                txt (map (l \ fill l [nm]) (nd 1)) chs (nd 2)
-               head (k = 'start ? [("\"" + g 'npc 'greet + "\"")] ())
                ks (map (show * cap) chs)
-               lines (head + txt + (two? chs ? [""] ()) + map choice-line chs
+               lines (txt + (two? chs ? [""] ()) + map choice-line chs
                       + ["" (fill chat-foot [(two? chs ? (joins-with ", " ks) "any key")])])
                (pins g 'talk k 'sign (nm . lines)))
  ; a digit picks its choice, anything else at a node with choices shows it again, and a
@@ -232,19 +241,28 @@
                                                (4 = t) (pin (d 't) j 5)))))
                  (note g w-shatter))
 
+ stride-msgs
+ {2 '("the sand burns your feet" "a sharp wind blows dust in your eyes" "a distant hum makes you dizzy and nauseous")
+  5 '("smooth stones line the riverbed" "on the bank lie bones half buried under thick silt")
+  7 '("you step carefully over the fragments")}
+
  ; --- a turn: a sign standing takes the key, else a step ------------------------------
  ; bumping the pane the stranger stands at opens the talk; any other glass holds, the
  ; river does, and the plain's edge does too -- but for the west edge along the dry
  ; bed, which is the way out. a step onto the stone reads it
- (apartment-stride g mv) (: p (g 'p) d (g 'd) nx (p 'x + <mv) ny (p 'y + <>mv)
+ (apartment-stride g mv) (: p (g 'p) d (g 'd) ox (p 'x) oy (p 'y)
+                            nx (ox + <mv) ny (oy + <>mv)
                             i (nx + d 'w * ny) t (dat d nx ny) npc (g 'npc)
    (? (npc && nx = npc 'x && ny = npc 'y) (chat g 'start)
       (t = 6) (npc && i = g 'pane ? (chat g 'start) (note g w-glass))
       (t = 4) (note g w-water)
       (nx < 0 && 5 = dat d 0 ny) (pin g 'over 'west)
-      !(open? d nx ny) (note g w-edge)
+      !(open? d nx ny) (note g (dat d ox oy = 5 ? w-east w-edge))
       (: _ (pins p 'x nx 'y ny)
-         (t = 8 ? (pin g 'sign (stone-ttl . stone-lines))))))
+         _ (stride-msgs t @ () () l
+            (: sb (g 'sb) (roll sb 8 @ 0 (note g (l $ roll sb #l)))))
+         (? (t = 8) (pin g 'sign (stone-ttl . stone-lines))
+            (t = 5 && dat d ox oy < 4) (note g w-dry)))))
  ; ..and the others wander their cubes a step a turn, over grass alone, while they can
  (apartment-stir g) (: d (g 'd) sb (g 'sb)
    (taken? x y) (any (m \ m 'x = x && m 'y = y) (g 'ms))
@@ -262,15 +280,17 @@
 
  ; --- the frame: the plain's faces, the note, the bar, and a sign over it all ---------
  ; a ground cell is a block in its ramp's pen at the skin's value there, so grass and
- ; the sand it turns to share one grain and the road runs through the same bands
+ ; the sand it turns to share one grain and the road runs through the same bands; the
+ ; water reads the skin further along, by the clock (wt, seconds), until it is off
  (ramp-pen rp v) (: m (#rp - 1)
                     n (int (((v + ramp-span) * #rp) / (2.0 * ramp-span)))
                     (rp (? (n < 0) 0 (m < n) m n)))
  (apartment-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
+   wet (g 'desert ? sk ((d 'flow) (d 'phase + water-rate * g 'wt) 0.0))
    ents (filter tablet? ((g 'p) . (g 'npc) . g 'ms))
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    (ramp-of t) (t @ 1 grass-ramp 2 sand-ramp 3 path-ramp 4 water-ramp 5 bed-ramp 8 (g 'desert ? bed-ramp water-ramp) ())
-   (ground-pen rp x y) (ramp-pen rp (peep sk [y x] 0.0))
+   (ground-pen rp x y) (ramp-pen rp (peep (rp = water-ramp ? wet sk) [y x] 0.0))
    ; a mob on a block wears the block's colour under it, its own over -- or its inverse
    ; where the two would not tell apart; on glass it stands on nothing
    (\ i (: e (spot i) x (i % w) y (i // w) t (peep (d 't) i 0) rp (ramp-of t)
@@ -301,7 +321,7 @@
  phrase-gap 1.2                         ; seconds from one note of it to the next
  phrase-ring 3.0                        ; ..and how long a note takes to die away
  phrase-slow 1.2                        ; ..both by this much more for each octave down, less for each up
- phrase-every 10                        ; seconds between phrases..
+ phrase-every 17                        ; seconds between phrases..
  phrase-vary 3                          ; ..give or take up to this many
  phrase-first 2
  phrase-octaves 3                       ; the octave: one of this many, about middle c's
@@ -328,12 +348,14 @@
  (note! s at v) (: _ (strike! s at v)
                    (each phrase-echoes (e \ strike! s (at + int (<e * song-rate)) (pin (pins {} 's (v 's) 'note (v 'note) 'legato (v 'legato)) 'gain (v 'gain * e 1)))))
  (phrase! s) (: sb (s 'sb) base (s 'fpos)
-                o (roll sb phrase-octaves - phrase-octaves // 2)
+                (rr sb lr) (roll sb phrase-octaves @ ^lr (rr sb lr) nr nr)
+                nr (rr sb (s 'lr))
+                o (nr - phrase-octaves // 2)
                 oct (12.0 * o)
                 slow (-o phrase-slow)                       ; phrase-slow to the -o
                 _ (each ^#phrase (i \ note! s (base + int (i * phrase-gap * slow * song-rate))
                                          {'s "box" 'note (phrase i + oct) 'gain 0.7 'legato (phrase-ring * slow)}))
-                (pins s 'struck (s 'struck + 1)
+                (pins s 'struck (s 'struck + 1) 'lr nr
                         'next (base + song-rate * (phrase-every - phrase-vary + roll sb (2 * phrase-vary + 1)))))
  ; the drum: a kick and a snare together, and the snare's crack again a beat behind
  (apartment-sfx s g) (: fx (g 'sfx)
@@ -366,12 +388,20 @@
    (turn k) (? (k = 27 && g 'sign) (pins g 'sign () 'talk ())
                (k @ (113 || 27 || -7) (pin g 'over 'fled)
                 (apartment-turn g (steer k))))
+   ; a key, or none when the river is due another frame
+   (wait t0 last gap due) (? (cue? 0)
+                             (: k (edkey in)
+                                (k = last && (clock 0 - t0) < gap ? (wait t0 last gap due) k))
+                             (due <= clock 0) ()
+                             (idle (), wait t0 last gap due))
+   t00 (clock 0)
    (loop last t0) (? (g 'over) ()
-                     (: _ (say out (apartment-frame g), flush out)
-                        k (key-wait t0 last (g 'sign ? sign-gap repeat-gap) idle)
-                        _ (turn k)
+                     (: _ (pin g 'wt ((clock 0 - t00) / 1000.0))
+                        _ (say out (apartment-frame g), flush out)
+                        k (wait t0 last (g 'sign ? sign-gap repeat-gap) (clock 0 + water-gap))
+                        _ (? (two? k || charm? k) (turn k))
                         _ (? sng (apartment-sfx sng g) (pin g 'sfx ()))
-                        (loop k (clock 0))))
+                        (loop (k ? k last) (k ? (clock 0) t0))))
    _ (say out (esc + "[2J"))
    _ (loop 0 0)
    ; ..and the card goes back before the next level asks for it
