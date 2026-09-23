@@ -853,15 +853,20 @@
 (: p (pacer ()) g0 (pace! p) _ (rest 60) g1 (pace! p) _ (rest 5) g2 (pace! p)
  (test (g0 < 5.0) (55.0 <= g1) (g1 * 0.9 < g2 <= g1)))   ; a long gap held over a short one after it
 ; ..and the filler: feeds until the lag is at the lead, none at a lead already met, and a
-; lead the card's ring cannot hold is still a bounded number of feeds -- the ring fills,
-; stops taking, and the filler stops with it. on a seat with no horn there is nothing to ask
+; lead the card's ring cannot hold is still a bounded number of feeds. the lag counts
+; what the port still holds for the device, so a run past the ring is not lost to it:
+; two seconds said at once are two seconds of lag, less what played meanwhile. on a
+; seat with no horn there is nothing to ask
 (: h (horn song-rate 2)
    z (string (cask (4 * 480)))                        ; a hundredth of a second of silence
    (feed _) (say h z)
    k1 (nom? h ? 1 (song-fill h 2400 feed))
    k2 (nom? h ? 0 (song-fill h 0 feed))
    k3 (nom? h ? 1 (song-fill h 100000000 feed))
- (test (0 < k1) (k2 = 0) (0 < k3)))
+   big (string (cask (4 * 2 * song-rate)))
+   l0 (nom? h ? 0 (horn-lag h))
+   l (nom? h ? (2 * song-rate) (say h big, horn-lag h))
+ (test (0 < k1) (k2 = 0) (0 < k3) (2 * song-rate - 4800 < l - l0 <= 2 * song-rate)))
 
 ; --- the sign: the tower holds one up before a step is taken, the first key buys its
 ; coming down and nothing else, and the bar under it is never covered

@@ -456,8 +456,7 @@
    ; the clock and not by calls -- and the lead follows it
    pace (pacer ())
    (feed _) (: l (song-lead-of (pace! pace))
-               (fill _) (? (sng && horn-lag hn < l) (grass-song-feed sng (g 'wind), fill ()) ())
-               (fill ()))
+               (? sng (song-fill hn l (\ _ (grass-song-feed sng (g 'wind)))) ()))
    (beat _) (feed (), rest 5)                           ; a sign's idle: the lead, then a breath
    (cue _) (? (sng && g 'cue) (grass-song-cue sng, pin g 'cue 0))
    ; tick n is owed at t0 + n ticks. behind by a whole tick, the frame is skipped and the

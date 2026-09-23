@@ -405,10 +405,11 @@
  (song-lead-of gap) (: n (int (2.5 * gap * song-rate / 1000.0))
                        (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
  ; the horn fed up to a lead: feed while the lag is under it AND EACH FEED RAISES IT.
- ; the card's write is non-blocking and a full ring takes nothing, so a lead past the
- ; ring can never be reached, and a feed slower than the frames it makes loses ground
- ; every time: either way the lag stops rising, and the filler stops with it rather
- ; than loop, so the keys are read and the sound merely gaps. answers the feeds made
+ ; the lag counts the card's ring and the port's run behind it, but a full ring takes
+ ; nothing and a say on a full run waits, so a lead past the two together can never
+ ; be reached, and a feed slower than the frames it makes loses ground every time:
+ ; either way the lag stops rising, and the filler stops with it rather than loop, so
+ ; the keys are read and the sound merely gaps. answers the feeds made
  (song-fill hn lead feed) (:- (go (horn-lag hn) 0) (go l0 k)
                             (? (l0 < lead) (: _ (feed ()) l1 (horn-lag hn) (? (l0 < l1) (go l1 (k + 1)) (k + 1)))
                                k))

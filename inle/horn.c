@@ -3,7 +3,8 @@
 //   (horn rate chans)   open the sound device -> a port | an errno nom | 'badarg.
 //                       16-bit little-endian samples go out through the ordinary
 //                       write path; 1 or 2 channels, the rate in 8000..192000.
-//   (horn-lag port)     frames written and not yet played, or () for a non-horn.
+//   (horn-lag port)     frames written and not yet played, the port's own pending
+//                       run included, or () for a non-horn.
 //
 // the port wears the fd port's shape (love.h: ai_horn_vt is a bio to io.c), so a
 // full device answers 0 at the door, the write run keeps the residue and the task
@@ -394,7 +395,10 @@ ai_noinline static struct ai *horn_open(struct ai *g) {
 static lvm(lvm_horn) {
  LvmCall(g, horn_open) }
 
-// (horn-lag p) -> frames queued and unplayed | () for anything but an open horn
+// (horn-lag p) -> frames queued and unplayed | () for anything but an open horn.
+// what the device holds, and what the port still has to hand it: a full ring takes
+// nothing and the run stays pending in the port, and a feeder that reads only the
+// device's queue would see its lag stand still and never stop feeding
 static lvm(lvm_horn_lag) {
  word x = Sp[0];
  if (charmp(x) || cell(x)->ap != lvm_port_io || ((struct ai_io*) x)->vt != &ai_horn_vt)
@@ -405,6 +409,7 @@ static lvm(lvm_horn_lag) {
   case horn_sink: lag = (uintptr_t) getcharm(h->wpos) - sink_played(h); break;
   case horn_dev: lag = dev_lag((int) getcharm(h->b.f.fd)); break;
   default: lag = k_horn_lag(); }
+ lag += ai_io_wpending(g, (struct ai_io*) h) / (2 * (uintptr_t) getcharm(h->chans));
  ai_musttail return Answer(putcharm((intptr_t) lag)); }
 
 static union u const
