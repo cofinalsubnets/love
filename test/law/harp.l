@@ -137,10 +137,33 @@
              ((: r ((pset (hit (pure "bd")) (note (pure 7))) (qi 0) (qi 1))
                  [(peep (evv (r 0)) 's ()) (peep (evv (r 0)) 'note ())])
               = ["bd" 7])
+             ; psets is # over several controls in one form, folded from the left: the
+             ; later word wins a key, and a pattern alone is itself
+             ((: r ((psets (hit (pure "bd")) (note (pure 7)) (gain (pure 0.5)) (note (pure 9))) (qi 0) (qi 1))
+                 v (evv (r 0))
+                 [(peep v 's ()) (peep v 'note ()) (peep v 'gain ())])
+              = ["bd" 9 0.5])
+             (: (flat q) (: v (evv ((q (qi 0) (qi 1)) 0)) [(peep v 's ()) (peep v 'note ())])
+                (flat (psets (hit (pure "bd")) (note (pure 7))) = flat (pset (hit (pure "bd")) (note (pure 7)))))
+             (1 = #((psets (hit (pure "bd"))) (qi 0) (qi 1)))
              ; jux is the same shape: two copies, hard left and hard right
              ((: r ((jux rev (hit (fastcat [(pure "bd") (pure "sn")]))) (qi 0) (qi 1))
                  (sort (map (\ x (peep (evv x) 'pan ())) r)))
               = [0.0 0.0 1.0 1.0]))
+
+   ; --- a scalar where a pattern is wanted is one by its type: a string is mini, a
+   ; number is pure, and a time may be an int or a decimal, made exact
+   _ (test ((map (\ x (evv x)) ((stack ["bd sn"]) (qi 0) (qi 1))) = ["bd" "sn"])
+             ((map (\ x (peep (evv x) 's ())) ((hit "bd sn") (qi 0) (qi 1))) = ["bd" "sn"])
+             ((peep (evv (((note 7) (qi 0) (qi 1)) 0)) 'note ()) = 7)
+             ((peep (evv (((gain 0.5) (qi 0) (qi 1)) 0)) 'gain ()) = 0.5)
+             ((evs (fast 2 (pure 'a)) 0 1) = (evs (fast (qi 2) (pure 'a)) 0 1))
+             ((evs (fast 1.5 (pure 'a)) 0 2) = (evs (fast (3 /// 2) (pure 'a)) 0 2))
+             ((evs (late 0.25 (pure 'a)) 0 1) = (evs (late (1 /// 4) (pure 'a)) 0 1))
+             ((evs (slowcat ["a" "b"]) 1 2) = [[1 2 "b"]])
+             ((evs (rev "a b") 0 1) = [[0.5 1 "a"] [0 0.5 "b"]])
+             ((peep (evv (((psets "sqr" (note -10) (slide 24)) (qi 0) (qi 1)) 0)) 'slide ()) = 24)
+             ((evs (timecat [(3 . "a") (1 . "b")]) 0 1) = [[0 0.75 "a"] [0.75 1 "b"]]))
 
    ; --- smooth: a sequence of numbers drifts from each value to the next, the value
    ; at a time on the line between the two events' starts; a span answers one event
