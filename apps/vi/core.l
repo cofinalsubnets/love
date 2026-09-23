@@ -11,7 +11,8 @@
 ; 'wrap (long lines fold onto more screen rows? off by default -- :set wrap), with
 ; 'tops (the segment of 'top's line the view starts at, wrapped) and 'left (the
 ; first visible column, unwrapped) naming the view's corner between them,
-; 'mode ('n normal, 'i insert, 'c ex, 's search), 'cnt (pending count), 'op
+; 'mode ('n normal, 'i insert, 'c ex, 's search, 'v and 'V visual, charwise and
+; linewise, with 'va the other end of the selection), 'cnt (pending count), 'op
 ; (pending operator (char n) or ()), 'pc (pending char-arg nom: f F t T r g z Z,
 ; and ti/ta for a text object), 'lastf (the f F t T that ; and , repeat), 'reg
 ; (the yank: ('lin lines) | ('chr text), a charwise text carrying newlines when the
@@ -24,7 +25,8 @@
 ; it), 'doe (a READ request, same shape: :e/:o leave it, the face calls vload),
 ; 'dos (a SPLIT request, (dir name): :sp/:vs leave it, name "" for a new buffer,
 ; and the face opens the pane where it has a harbour), 'dox (an ex word this engine
-; does not know, (word arg): the face may, and clears the complaint when it does),
+; does not know, (word arg): the face may, and clears the complaint when it does;
+; 'exmore lists the words it knows, so a head of one of them resolves too),
 ; 'w 'h (the view).
 ;
 ; the syntax paint rides apps/vi/hue.l and five more keys: 'hl (paint? -- born on for
@@ -889,27 +891,52 @@
        (? (i < k2) [k2 (snip s i k2)]
           (n <= i) [i ""]
           [(i + 1) (string (s i))]))
+   ; the ex words and what each one means, so a head of one resolves to it: :spl is
+   ; :split and :se is :set, unless two words with different meanings share the head.
+   ; the face's own words ('exmore) count, each meaning itself. (word meaning) pairs
+   vexwords '(("s" "s") ("g" "global") ("global" "global") ("v" "v")
+              ("d" "delete") ("delete" "delete") ("y" "yank") ("yank" "yank")
+              ("m" "move") ("move" "move") ("t" "copy") ("co" "copy") ("copy" "copy")
+              ("j" "join") ("join" "join") ("p" "print") ("print" "print")
+              ("nu" "number") ("number" "number") ("#" "#") ("=" "=")
+              ("q" "q") ("w" "w") ("wq" "wq") ("x" "x")
+              ("e" "edit") ("o" "edit") ("edit" "edit")
+              ("hl" "hl") ("set" "set") ("lint" "lint")
+              ("sp" "split") ("split" "split") ("vs" "vsplit") ("vsplit" "vsplit"))
+   ; the word as typed when it is one, else the meaning of the one word it heads;
+   ; ('many ..) when the heads mean different things, and the word itself when none
+   (vexfull st w)
+    (: ws (vexwords + map (x \ [x x]) (peep st 'exmore ()))
+       hit (filter (p \ w = <p) ws)
+       heads (filter (p \ (: k (tally <p) (#w < k && w = snip <p 0 #w))) ws)
+       means (foldl (\ a p (elem <>p a ? a (<>p . a))) () heads)
+       (? (two? hit) <>(<hit)
+          !(two? means) w
+          (two? >means) ['many (rev means)]
+          <means))
    (vexcmd st s i r1 r2 got?)
-    (vexword s i @ [j w]
+    (vexword s i @ [j w0]
       (: n #s
          bang (j < n && s j = 33)
          k (bang ? (j + 1) j)
          arg (vextrim (snip s k n))
          nm (0 < #arg ? arg (st 'file))
-         (? (w = "s") (vexsub st s k r1 r2)
-            (w = "g" || w = "global") (vexglob st s k r1 r2 got? ())
+         w (vexfull st w0)
+         (? (two? w) (vmsg st ("ambiguous: " + w0 + " -- " + (foldl (\ a m (a + " " + m)) "" <>w)))
+            (w = "s") (vexsub st s k r1 r2)
+            (w = "global") (vexglob st s k r1 r2 got? ())
             (w = "v") (vexglob st s k r1 r2 got? 1)
-            (w = "d" || w = "delete")
+            (w = "delete")
              (? (vexbad? st r1 r2) (vmsg st "out of range") (vopl st 100 r1 r2))
-            (w = "y" || w = "yank")
+            (w = "yank")
              (? (vexbad? st r1 r2) (vmsg st "out of range") (vopl st 121 r1 r2))
-            (w = "m" || w = "move") (vexmove st s k r1 r2 ())
-            (w = "t" || w = "co" || w = "copy") (vexmove st s k r1 r2 1)
-            (w = "j" || w = "join") (vexjoin st r1 r2)
+            (w = "move") (vexmove st s k r1 r2 ())
+            (w = "copy") (vexmove st s k r1 r2 1)
+            (w = "join") (vexjoin st r1 r2)
             ; there is no printing to do on a screen, so these land the cursor
             ; on the range's last line. `l` is not among them -- it promises to
             ; spell control characters, and this frame does not
-            (w = "p" || w = "print" || w = "nu" || w = "number" || w = "#")
+            (w = "print" || w = "number" || w = "#")
              (? (vexbad? st r1 r2) (vmsg st "out of range")
                 (: _ (vexgo st r2) (vmsg st (show (r2 - r1 + 1) + " lines"))))
             (w = "=") (vmsg st (show (r2 + 1)))
@@ -917,9 +944,9 @@
                          (vmsg st "no write since last change (q! overrides)"))
             (w = "w") (pin st 'dow [nm])
             (w = "wq" || w = "x") (: _ (pin st 'dow [nm]) (pin st 'quit 1))
-            (w = "e" || w = "o" || w = "edit") (vedit st nm bang)
-            (w = "sp" || w = "split") (pin st 'dos ['stack arg])
-            (w = "vs" || w = "vsplit") (pin st 'dos ['beside arg])
+            (w = "edit") (vedit st nm bang)
+            (w = "split") (pin st 'dos ['stack arg])
+            (w = "vsplit") (pin st 'dos ['beside arg])
             (w = "hl") (: _ (pin st 'hl (st 'hl ? () 1))
                           (vmsg st (st 'hl ? "syntax on" "syntax off")))
             ; :set knows one option, which is the one > and < need a number for
@@ -1161,6 +1188,8 @@
                       (pin st 'mode 'i))
           (c = 112) (vpaste st 1 n)                             ; p
           (c = 80) (vpaste st () n)                             ; P
+          (c = 118 || c = 86)                                   ; v V: visual, from here
+           (: _ (pin st 'op ()) (pins st 'va [(st 'row) (st 'col)] 'mode (c = 118 ? 'v 'V)))
           (c = 117) (vundo st)                                  ; u
           (c = 18) (vredo st)                                   ; ^R
           (c = 58) (: _ (pin st 'cmd (ednew ())) (pin st 'mode 'c))     ; :
@@ -1181,6 +1210,31 @@
    (vchange? c) (elem c '(120 88 68 67 115 83 114 74 126 112 80
                           105 97 73 65 111 79 100 99 62 60 1 24))
    (vquiet? st) ((st 'mode = 'n) && !(st 'pc) && !(two? (st 'op)))
+   ; -- visual mode: the selection is the anchor 'va and the cursor, the motions
+   ; walk the cursor as in normal mode, o swaps the ends, v and V change the kind
+   ; or leave, and an operator takes the whole of it -- charwise both ends in, or
+   ; the lines -- and leaves. a search returns to it; anything else is nothing
+   (vback st) (? (two? (st 'va)) (st 'vkind) 'n)
+   vmotions '(104 108 48 94 36 124 119 101 98 87 69 66 106 107 71 43 13 45 95 123 125
+              72 76 77 37 102 70 116 84 103 59 44 110 78 6 2 4 21 377 373 354 366)
+   (vvis st c)
+    (: kind (st 'mode) a (st 'va) r (st 'row) col (st 'col)
+       r1 (? (<a < r) <a r) r2 (? (<a < r) r <a)
+       fwd? (<a < r || (<a = r && <>a <= col))
+       c1 (? fwd? <>a col) c2 (? fwd? col <>a)
+       (leave _) (pins st 'va () 'mode 'n)
+       (op opc) (: _ (leave ())
+                   (? (kind = 'V || vlinop? opc) (vopl st opc r1 r2)
+                      (vospn st opc r1 c1 r2 (c2 + 1))))
+       (? (c = 27) (leave ())
+          (c = 118 || c = 86) (: k (c = 118 ? 'v 'V) (? (k = kind) (leave ()) (pin st 'mode k)))
+          (c = 111) (: _ (pin st 'va [r col]) _ (pin st 'row <a) (vgole st <>a))
+          (elem c '(121 100 120 99 62 60)) (op (c = 120 ? 100 c))
+          (48 <= c <= 57 && (48 < c || 0 < st 'cnt)) (pin st 'cnt (10 * st 'cnt + c - 48))
+          (c = 47 || c = 63) (: _ (pin st 'vkind kind) (vnorm st c))
+          (c = 58) (: _ (leave ()) (vnorm st c))
+          (elem (arrow c) vmotions) (vnorm st (arrow c))
+          st))
    (vdigits k) (: s (show k) (map (\ i (s i)) (jot #s)))
    (vdot st raw)
     (: d (st 'dot)
@@ -1210,13 +1264,14 @@
    (vstep1 st c)
     (: m (st 'mode)
        (? (m = 'i) (vins st c)
+          (m = 'v || m = 'V) (? (st 'pc) (vpc st c) (vvis st c))
           (m = 'c || m = 's)
            ; the line is cli's prompt; a backspace on nothing leaves too, which is vi's
            ; own rule and no prompt's
            (: t (st 'cmd)
               (? ((c = 127 || c = 8 || c = -3) && edempty? t) (pin st 'mode 'n)
                  (edcmd st 'cmd c
-                  (s \ (: _ (pin st 'mode 'n)
+                  (s \ (: _ (pin st 'mode (m = 's ? (vback st) 'n))
                           _ (vmsg st "")
                           (? (m = 'c) (vex st)
                              (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
@@ -1225,7 +1280,7 @@
                                    (pins st 'pat <>b 'pattx s 'patw (),
                                     vhunt st (st 'dir))
                                    (vmsg st $ "bad pattern: " + s))))))
-                  (_ \ pin st 'mode 'n))))
+                  (_ \ pin st 'mode (m = 's ? (vback st) 'n)))))
           ; normal
           (? (st 'pc) (vpc st c)
              (48 <= c <= 57 && (48 < c || 0 < st 'cnt))
@@ -1247,7 +1302,7 @@
      'dot () 'rec () 'reccnt 0 'dotting ()
      'file file 'dirty () 'msg "" 'sw 2
      'cmd "" 'pat () 'pattx "" 'patw () 'dir 1
-     'quit () 'dow () 'doe () 'dos () 'dox ()
+     'quit () 'dow () 'doe () 'dos () 'dox () 'va () 'exmore ()
      'hl (vdotl file) 'pens () 'book () 'hlcar () 'hlgen 0 'hlrow (tablet ())
      'lncar () 'laycar () 'lastr () 'w 80 'h 24}
 
@@ -1303,9 +1358,29 @@
        ; on and the columns it was cut to -- keyed by SCREEN row, so the table is the
        ; height of the view and never the height of the file. typing moves one row;
        ; the other twenty-odd are answered out of here without the lexer running
-       (lay raw in i a)
+       ; the selection, on a row of the file: its columns [s1 s2), or () off it. a
+       ; charwise one runs both ends in; a line takes one cell at least, so an empty
+       ; line still shows
+       vis? (st 'mode = 'v || st 'mode = 'V)
+       va (st 'va)
+       vr1 (? vis? (? (<va < row) <va row) 0) vr2 (? vis? (? (<va < row) row <va) 0)
+       vfwd? (vis? && (<va < row || (<va = row && <>va <= st 'col)))
+       vc1 (? vfwd? <>va (st 'col)) vc2 (? vfwd? (st 'col) <>va)
+       (sel fr raw) (? (!vis? || fr < vr1 || vr2 < fr) ()
+                       (: k #raw
+                          (? (st 'mode = 'V) [0 (? (k < 1) 1 k)]
+                             (vr1 = vr2) [vc1 (vc2 + 1)]
+                             (fr = vr1) [vc1 (? (k < vc1 + 1) (vc1 + 1) k)]
+                             (fr = vr2) [0 (vc2 + 1)]
+                             [0 (? (k < 1) 1 k)])))
+       (lay raw in i a fr)
         (: k #raw b (? (k < (a + w)) k (a + w))
-           (? (b <= a) ""
+           s (sel fr raw)
+           (? (two? s && (k = 0 || <s < b) && a < <>s)
+               (: p (? (<s < a) a <s) q (? (b < <>s) b <>s)
+                  pad (? (k < <>s && q = k) " " "")     ; the cell past the end, a line's own
+                  (snip raw a p + "\e[7m" + snip raw p q + pad + "\e[0m" + snip raw q b))
+              (b <= a) ""
               !paint (snip raw a b)
               (: rw (st 'hlrow) ky [raw in a b] c (peep rw i ())
                  (? (two? c && (= <c ky)) <>c
@@ -1316,16 +1391,18 @@
        ; pairs, so a screenful deep in a file walked the file forty times over --
        ; 55% of a keystroke, and the whole of why moving around got slower the
        ; further down you were. drop to the corner once and step from there
-       (rows l cl i k acc)
+       (rows l cl i k acc fr)
         (? (body <= i) (rev acc)
-           !(two? l) (rows l cl (i + 1) 0 ("~" . acc))
-           (: raw <l r (lay raw <cl i (? wrap? (k * w) left))
-              (? (wrap? && ((k + 1) < hgt raw)) (rows l cl (i + 1) (k + 1) (r . acc))
-                 (rows >l >cl (i + 1) 0 (r . acc)))))
+           !(two? l) (rows l cl (i + 1) 0 ("~" . acc) fr)
+           (: raw <l r (lay raw <cl i (? wrap? (k * w) left) fr)
+              (? (wrap? && ((k + 1) < hgt raw)) (rows l cl (i + 1) (k + 1) (r . acc) fr)
+                 (rows >l >cl (i + 1) 0 (r . acc) (fr + 1)))))
        status (? (st 'mode = 'c) (":" + edtext (st 'cmd))
                  (st 'mode = 's) ((? (0 < st 'dir) "/" "?") + edtext (st 'cmd))
                  (0 < #(st 'msg)) (st 'msg)
-                 ((? (0 < #(st 'file)) (st 'file) "[no name]") + (? (st 'dirty) " [+]" "") + (? (st 'mode = 'i) " -- INSERT --" "") + "  " + show (st 'row + 1) + "," + show (st 'col + 1)))
+                 ((? (0 < #(st 'file)) (st 'file) "[no name]") + (? (st 'dirty) " [+]" "")
+                  + (st 'mode @ 'i " -- INSERT --" 'v " -- VISUAL --" 'V " -- VISUAL LINE --" "")
+                  + "  " + show (st 'row + 1) + "," + show (st 'col + 1)))
        ; in ex and search mode you are typing on the status line, so that is
        ; where the cursor goes: after the prefix, at the editor's column
        said? (st 'mode = 'c || st 'mode = 's)
@@ -1337,10 +1414,11 @@
        ; the body is a pure function of these, so when none of them moved the rows
        ; are the ones we laid last time -- a keystroke that only walks the cursor
        ; about lays nothing at all, which is the common keystroke
-       key [(st 'hlgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())]
+       key [(st 'hlgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())
+            (? vis? [(st 'mode) vr1 vc1 vr2 vc2] ())]
        lc (st 'laycar)
        rs (? (two? lc && (= <lc key)) <>lc
-             (: k (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops ())
+             (: k (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops () top)
                 _ (pin st 'laycar [key k])
                 k))
        [rs (clipl status) cr cc key])

@@ -20,8 +20,17 @@
 ;   C-a s / C-a v   split the focused berth, stacked or beside
 ;   C-a h j k l     steer the focus
 ;   C-a x           shut the focused berth
+;   C-a [           copy mode: the focused pane's screen in a vi buffer above it
+;   C-a ]           paste the clip into the focused pane
 ;   C-a C-a         send a literal C-a through
 ; a guest never sees the prefix and never has to cooperate.
+;
+; the clip is the harbour's: one register, vi's shape, that every vi buffer on the
+; wharf yanks into and puts from, so a yank in one pane is a put in another. copy
+; mode is vi too -- the screen's rows become a buffer, and its motions and yanks
+; are the selection -- and :q closes it. a paste into a child is the text typed at
+; it; into a stage, its 'paste door, which vi answers with a put, or the text typed
+; in insert mode
 ;
 ; a guest need not be a child either: a stage of this process -- cli's triple, (show w
 ; h) the frame as escapes, (step k) a key, (over? _) done -- berths the same way. its
@@ -42,7 +51,7 @@
 ; ties a pane up on it, and hsail runs it on the tty until the last pane leaves.
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
-          hfeed hkey oars hsize htide htick hswim hquick?)
+          hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text)
 (borrow "apps/berth/wharf.l")
 (borrow "apps/berth/limn.l")
 (borrow 'posix)
@@ -79,12 +88,25 @@
  ; --- the harbour: every berth's screen, pty and child, under one wharf plan ---
  ; a pane is (box master pid stage): a child's has its master and pid and no stage,
  ; a stage's the stage and neither. the harbour is a tablet, and the keys are the
- ; whole state: plan focus next rows cols panes lay dirt more jobs.
+ ; whole state: plan focus next rows cols panes lay dirt more jobs clip.
  (hbox p) <p
  (hmas p) <>p
  (hpid p) <>>p
  (hstage p) (p 3)
  (hpty? p) (!= () (hmas p))
+ ; the clip's text: a linewise register ends each line, a charwise one is as it is
+ (hclip-text hb) (: v (peep (hb 'clip) () ())
+                    (? !(two? v) ""
+                       (<v = 'lin) (foldl (\ a l (a + l + "\n")) "" <>v)
+                       <>v))
+ ; a pane's screen as rows of text, each with its trailing blanks off; the glyphs
+ ; come out as limn paints them
+ (hscreen-text p) (: s (peep (hbox p) () 0) r (gaze s 1) c (gaze s 2)
+                     (cell i) (: ch (glass s i & 255) (ch = 0 ? " " (limn-glyph ch)))
+                     (row i) (: (go q acc) (? (q < 0) acc (go (q - 1) ((cell (i * c + q)) + acc)))
+                                (last q) (? (q < 0) -1 (32 = glass s (i * c + q) & 255 || 0 = glass s (i * c + q) & 255) (last (q - 1)) q)
+                                (go (last (c - 1)) ""))
+                     (map row (jot r)))
  (hpane hb id) (peep (hb 'panes) id ())
  (hfind bs id) (? (two? bs) (? (= (wharf-id <bs) id) <bs (hfind >bs id)) ())
  (hsoil hb) (: b (hb 'dirt) (pin b () 1))
@@ -192,6 +214,25 @@
                        0)
                   (hrelay hb))
 
+ ; --- copy mode: the focused pane's screen as a vi buffer above it, on the clip;
+ ; answers the buffer's state, or () on a seat with no vi. paste: the clip typed at
+ ; a child, or handed to a stage's paste door ---
+ (hcopy hb) (: p (hpane hb (hb 'focus)) vi (cite 'vi)
+               (? (!(two? p) || !(tablet? vi)) ()
+                  (: st (vi 'vi-open "")
+                     rows (hscreen-text p)
+                     _ (pin st 'lines (two? rows ? rows [""]))
+                     fc (vi 'vi-face st {'reg (hb 'clip)})
+                     sg (berth-stage (fc 0) (fc 1) (fc 2))
+                     _ (pin sg 'paste (fc 3))
+                     _ (hberth hb 'stack 50 (hopen-stage sg 1 1))
+                     st)))
+ (hpaste hb) (: p (hpane hb (hb 'focus)) v (peep (hb 'clip) () ())
+                (? (!(two? p) || !(two? v)) 0
+                   (hpty? p) (: _ (say (hmas p) (hclip-text hb)) (flush (hmas p)))
+                   (: sg (hstage p)
+                      (? (sg 'paste) (: _ (sg 'paste v) _ (hshow p) (hsoil hb)) 0))))
+
  ; --- keys: raw stdin pours onto the focused pane, C-a first. a stage takes the
  ; key as a step and is painted again, or shut when the step was its last ---
  (hfeed hb ch) (: p (hpane hb (hb 'focus))
@@ -211,6 +252,8 @@
                  (= k 107) (hsteer hb 'up)              ; k
                  (= k 108) (hsteer hb 'right)           ; l
                  (= k 120) (hshut hb (hb 'focus))       ; x
+                 (= k 91)  (hcopy hb)                   ; [
+                 (= k 93)  (hpaste hb)                  ; ]
                  0))
  ; a child gets the bytes as typed; a stage gets edkey's keys, as on cli's stage,
  ; and the user's eof leaves it
@@ -263,7 +306,7 @@
  ; the caller's, a thunk answering the pane a prefix split ties up ---
  (harbour r c) (: hb {}
                   _ (pins hb 'plan () 'focus () 'next 1 'rows r 'cols c 'panes {}
-                          'more () 'dirt {1} 'jobs () 'lay ())
+                          'more () 'dirt {1} 'jobs () 'lay () 'clip {})
                   hb)
 
  ; --- sail: the harbour on the tty, raw and on the alternate screen, keys pumped

@@ -68,18 +68,28 @@
                         (? (ex s2 <rq <>rq) 0 (pin s2 'msg m)))
                   0)
              s2)))
-   ; the face: cli's triple over a state, with the doors a host lends it -- 'split
-   ; (dir name) and 'ex (state word arg), either may be missing. the stage hides
-   ; the cursor; vi's frame places it, so the frame shows it. vfresh, not vframe: a
-   ; full redraw a keystroke is what the flicker is, and it writes only the rows
-   ; that changed since the last
+   ; the face: cli's triple over a state and a paste, with the doors a host lends it
+   ; -- 'split (dir name), 'ex (state word arg) and 'reg, a box the register is kept
+   ; in between steps so every buffer on a wharf shares one; any may be missing. the
+   ; paste takes a register's value: a put in normal mode, the text typed in insert.
+   ; the stage hides the cursor; vi's frame places it, so the frame shows it. vfresh,
+   ; not vframe: a full redraw a keystroke is what the flicker is, and it writes only
+   ; the rows that changed since the last
    (vi-face st doors)
-    [(\ w h (pins st 'w w 'h h, "\e[?25h" + vfresh st))
-     (\ c (vstep st c, dow st, doe st, dos st (peep doors 'split ()), dox st (peep doors 'ex ())))
-     (\ _ (st 'quit))]
+    (: box (peep doors 'reg ())
+       (load _) (? box (pin st 'reg (peep box () (st 'reg))) 0)
+       (keep _) (? box (pin box () (st 'reg)) 0)
+       (text v) (? !(two? v) "" (<v = 'lin) (foldl (\ a l (a + l + "\n")) "" <>v) <>v)
+       (type s) (map (c \ vstep st c) (map (i \ s i) ^#s))
+     [(\ w h (pins st 'w w 'h h, "\e[?25h" + vfresh st))
+      (\ c (load (), vstep st c, keep (), dow st, doe st, dos st (peep doors 'split ()), dox st (peep doors 'ex ())))
+      (\ _ (st 'quit))
+      (\ v (? (elem (st 'mode) '(i c s)) (type (text v))
+              (: _ (pin st 'reg v) _ (vstep st 112) (keep ()))))])
    ; the visit: on a harbour where the seat has one -- every buffer a stage in a pane
    ; of its own, :sp and :vs and the prefix's C-a s and C-a v opening another, :q
-   ; shutting the one it is typed in -- else cli's stage, one buffer full screen
+   ; shutting the one it is typed in, one register between them -- else cli's stage,
+   ; one buffer full screen
    (vi-main as)
     (: f (? (two? as) <as "")
        ; vi reads no options: a dash word would open a new file named after it
@@ -88,7 +98,10 @@
        br (cite 'berth)
        (? (tablet? br)
           (: sz (br 'hsize 0) hb (br 'harbour <sz <>sz)
-             (stage-of s) (: fc (vi-face s {'split split}) (br 'berth-stage (fc 0) (fc 1) (fc 2)))
+             (stage-of s) (: fc (vi-face s {'split split 'reg (hb 'clip)})
+                              sg (br 'berth-stage (fc 0) (fc 1) (fc 2))
+                              _ (pin sg 'paste (fc 3))
+                              sg)
              (split d nm) (br 'hberth hb d 50 (br 'hopen-stage (stage-of (vi-open nm)) 1 1))
              _ (pin hb 'more (\ _ (br 'hopen-stage (stage-of (vi-open "")) 1 1)))
              _ (br 'hberth hb 'stack 50 (br 'hopen-stage (stage-of st) <sz <>sz))

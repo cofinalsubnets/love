@@ -14,6 +14,10 @@
                                     (rest 150, cue? m) (go acc)
                                     acc))
    (say! m s) (: _ (say m s) _ (flush m) (drink m))
+   ; n within a row of at: the row's cells follow its address, pens between them
+   (after? h at n) (:- (go 0) (go i) (? (#h < i + #at) 0
+                                        (at = snip h i (i + #at)) (sub? (snip h i (min #h (i + 120))) n 0)
+                                        (go (i + 1))))
    md (tether ["out/love" "vi"])
    _ (test (two? md))
    m >md
@@ -26,14 +30,19 @@
    b5 (say! m "Aagain\e")
    b6 (say! m ":sp\r")                     ; a third, under the first
    b7 (say! m ":q\r")                      ; ... and shut again
-   b8 (say! m ":q!\r")                     ; the first, dirty
-   b9 (say! m "\x01l:q!\r")                ; the last one leaves, and so does vi
+   ba (say! m "yy\x01l")                    ; the first line yanked, over to the second pane
+   bb (say! m "p")                          ; ..and put under its line: the one register
+   bc (say! m "\x01]")                      ; C-a ]: the same put, the harbour's way
+   b8 (say! m "\x01h:q!\r")                ; the first, dirty
+   b9 (say! m ":q!\r")                     ; the last one leaves, and so does vi
    st (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (test (sub? b0 "\e[?1049h" 0)
        (sub? b1 "hello" 0)
        (sub? b2 "\e[1;40H" 0) (sub? b2 "\e[2;41H" 0)
        (sub? b3 "second" 0)
        (sub? b5 "helloagain" 0)
+       (after? bb "\e[2;41H" "helloagain")    ; pane 2, row 2: the put line
+       (after? bc "\e[3;41H" "helloagain")    ; ..and row 3, the paste
        (sub? b9 "\e[?1049l" 0)
        (two? st)))
 

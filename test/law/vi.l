@@ -337,6 +337,45 @@
       (st? (vgob '("a") ((bytes ":vsplit x") + [CR])) 'dos = '(beside "x"))
       !(st? (vgob '("a") ((bytes ":w") + [CR])) 'dos))
 
+; --- visual mode: v and V select from the cursor, the motions stretch it, o swaps
+; --- the ends, an operator takes it charwise with both ends in or by lines, and
+; --- escape or the same key again leaves; the frame reverses the selection ---
+   (has? h n) (:- (go 0) (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))))
+   (vmini ls ks) (: st (vgo ls ks) _ (pin st 'w 8) _ (pin st 'h 4) (vframe st))
+   _ (test
+      (st? (vgo '("abc") "v") 'mode = 'v)
+      (st? (vgo '("abc") "v") 'va = '(0 0))
+      (st? (vgo '("abc") "vv") 'mode = 'n)
+      (st? (vgo '("abc") "vV") 'mode = 'V)
+      (st? (vgo '("abc") "v\e") 'mode = 'n)
+      !(st? (vgo '("abc") "v\e") 'va)
+      (st? (vgo '("abcdef") "vlly") 'reg = '(chr "abc"))
+      (at (vgo '("abcdef") "llvhhy") = '(0 0))                  ; backwards: the same three
+      (st? (vgo '("abcdef") "llvhhy") 'reg = '(chr "abc"))
+      (st? (vgo '("abcdef") "lv$y") 'reg = '(chr "bcdef"))
+      (lns (vgo '("abcdef") "lvlld") = '("aef"))
+      (lns (vgo '("abcdef") "lvllx") = '("aef"))
+      (lns (vgo '("abc" "def") "lvjd") = '("af"))              ; across rows, both ends in
+      (st? (vgo '("abc" "def") "lvjy") 'reg = '(chr "bc\nde"))
+      (at (vgo '("abc" "def") "lvjy") = '(0 1))                 ; y lands on the start
+      (lns (vgo '("a" "b" "c") "Vjd") = '("c"))
+      (st? (vgo '("a" "b" "c") "jVky") 'reg = '(lin ("a" "b")))
+      (lns (vgo '("abc") "vlc") = '("c"))                        ; c: gone, and inserting
+      (st? (vgo '("abc") "vlc") 'mode = 'i)
+      (lns (vgo '("a" "b") "Vj>") = '("  a" "  b"))
+      (at (vgo '("abc" "def") "lvjo") = '(0 1))                  ; o: to the other end
+      (st? (vgo '("abc" "def") "lvjo") 'va = '(1 1))
+      (lns (vgo '("abc" "def") "lvjoy") = '("abc" "def"))
+      (st? (vgo '("abc" "def") "vjkd") 'mode = 'n)               ; i in visual is nothing
+      (lns (vgo '("abc") "vix") = '("bc"))
+      (st? (vgo '("abc" "abc") "v/b\r") 'mode = 'v)               ; a search comes back to it
+      (st? (vgo '("abc" "abc") "v/b\ry") 'reg = '(chr "ab"))
+      (: f (vmini '("abc") "vl") (has? f "\e[7mab\e[0m"))
+      (: q (vgo '("abc") "vl") _ (pins q 'w 40 'h 4) (has? ((vlay q) 1) "-- VISUAL --"))
+      (: q (vgo '("abc") "Vl") _ (pins q 'w 40 'h 4) (has? ((vlay q) 1) "-- VISUAL LINE --"))
+      (: f (vmini '("abc" "") "Vj") (has? f "\e[7m \e[0m"))     ; an empty line still shows
+      (: f (vmini '("abc") "vl\e") (!(has? f "\e[7m"))))
+
 ; --- the frame: escapes exact on a tiny screen ---
    (mini ls ks) (: st (vgo ls ks) _ (pin st 'w 8) _ (pin st 'h 4) (vframe st))
    E$ (string 27)
@@ -546,6 +585,20 @@
       (st? (ex '("a") "zz") 'msg = "not an ex command: zz")
       (st? (ex '("a") "zz 1 2") 'dox = '("zz" "1 2"))               ; ..and left for a face that knows it
       !(st? (ex '("a") "w") 'dox)
+      ; a word is itself or the one word it heads
+      (st? (ex '("a") "spl") 'dos = '(stack ""))
+      (st? (ex '("a") "vsp x") 'dos = '(beside "x"))
+      (st? (ex '("a") "se sw=3") 'sw = 3)
+      (st? (ex '("a") "n") 'msg = "1 lines")                        ; nu and number mean one thing
+      (st? (ex '("a") "ya") 'reg = '(lin ("a")))
+      (: q (vgob '("a") ((bytes ":sen") + [CR]))                    ; the face's word, headed
+         _ (pin q 'exmore '("send"))
+         q2 (vgob '("a") ((bytes ":sen") + [CR]))
+         (q 'msg = "not an ex command: sen"))
+      (: q (vnew '("a") "t") _ (pin q 'exmore '("send"))
+         _ (vfeed q ((bytes ":sen") + [CR])) d1 (q 'dox)
+         _ (vfeed q ((bytes ":se") + [CR])) m2 (q 'msg)
+         (d1 = '("send" "") && 0 < #m2 && "ambiguous" = snip m2 0 9))
       ; a no-op line is a no-op, not a complaint
       (st? (ex '("a") "") 'msg = ""))
 

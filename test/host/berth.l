@@ -228,6 +228,61 @@
       (() = (hb 'focus)))
    (map (\ t (landed? t ? (catch t) (freeze t))) (hb 'jobs)))
 
+; --- the clip: copy mode is a vi buffer of the focused pane's screen, a yank in it
+; --- is the harbour's register, and a paste is the text typed at a child or handed
+; --- to a stage's paste door; a child is copied in a headless harbour with its
+; --- output moored first, and a stage's door in another
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   (mkhb r c p0 argv)
+    (: panes {}
+       _ (pin panes 1 p0)
+       hb {}
+       _ (pin hb 'plan 1) _ (pin hb 'focus 1) _ (pin hb 'next 2)
+       _ (pin hb 'rows r) _ (pin hb 'cols c)
+       _ (pin hb 'panes panes) _ (pin hb 'more (\ _ (hopen argv 1 1)))
+       _ (pin hb 'dirt {1}) _ (pin hb 'jobs ()) _ (pin hb 'lay ()) _ (pin hb 'clip {})
+       _ (hrelay hb)
+       hb)
+   ; a child said its piece and left; its pane keeps the screen
+   hb (mkhb 10 20 (hopen ["sh" "-c" "printf 'hi there\\nsecond'"] 10 20) ["sh" "-c" "sleep 30"])
+   _ (moor (hbox (hpane hb 1)) (hmas (hpane hb 1)) ())
+   _ (waitfor (hpid (hpane hb 1)))
+   rows (hscreen-text (hpane hb 1))
+   t0 (hclip-text hb)
+   st (hcopy hb)                            ; C-a [: the copy buffer, focused, above
+   _ (hfeed hb 121) _ (hfeed hb 121)        ; yy in it: the harbour's register
+   clip (peep (hb 'clip) () ())
+   t1 (hclip-text hb)
+   _ (hfeed hb 106) _ (hfeed hb 121) _ (hfeed hb 119)   ; j yw: a word, charwise
+   t2 (hclip-text hb)
+   _ (test
+      ("hi there" = <rows) ("second" = <>rows) (10 = #rows)
+      ("" = t0)
+      (tablet? st) ("hi there" = <(st 'lines)) (2 = #(hb 'lay)) (2 = (hb 'focus))
+      ('lin = <clip) ("hi there\n" = t1)
+      ("second" = t2))
+   ; a paste into a child: typed at it, and the pty's echo lands it on the grid
+   hb2 (mkhb 10 21 (hopen ["sh" "-c" "sleep 30"] 10 21) ["sh" "-c" "sleep 30"])
+   _ (hmoor hb2 1)
+   _ (pin (hb2 'clip) () ['chr "pasted"])
+   _ (hpaste hb2)
+   _ (rest 400)
+   p2 (hpid (hpane hb2 1))
+   rows2 (hscreen-text (hpane hb2 1))
+   _ (hshut hb2 1)
+   _ (waitfor p2)
+   ; a paste into a stage: its door takes the register's value
+   got {}
+   sg (berth-stage (\ w h "\e[Hstage") (\ c 0) (\ _ 0))
+   _ (pin sg 'paste (\ v (pin got () v)))
+   hb3 (mkhb 10 20 (hopen-stage sg 10 20) ["sh" "-c" "sleep 30"])
+   _ (pin (hb3 'clip) () ['lin ["a" "b"]])
+   _ (hpaste hb3)
+   _ (test
+      (sub? <rows2 "pasted" 0)
+      ('lin = <(peep got () ())) (["a" "b"] = <>(peep got () ())))
+   (map (\ t (landed? t ? (catch t) (freeze t))) (hb2 'jobs)))
+
 ; --- a stage on a real berth, over a real pty: its frame comes out through the
 ; painter, and its keys come in through edkey -- q is its last, and berth ends ---
 (: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
