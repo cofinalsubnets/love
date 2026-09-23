@@ -1,4 +1,4 @@
-; garage -- the level after the plain: the dry riverbed runs in through the east wall of
+; garage -- the level after the desert: the dry riverbed runs in through the east wall of
 ; a mall's parking garage and out through the west. concrete all round, thickened into
 ; pilasters along the walls, and the floor laid out as a garage is: a lane round the
 ; outside, islands of bays back to back with lanes between them, the bays in sections a
@@ -12,7 +12,7 @@
 ; the painter is rove's and the keys the tower's. the game is pure love -- garage-new,
 ; garage-turn and garage-frame are state in and state out, the song feeds any port --
 ; gated headless by test/host/garage.l. garage-walk takes a stage already raised, which
-; is how the apartment hands over on the same screen, and hands it on the same way to
+; is how the dusk (apps/rove/dusk.l) hands over on the same screen, and hands it on the same way to
 ; the shaft (apps/rove/shaft.l) when the player walks off west; garage-run raises one.
 ; the music is the machinery: a harp loop, garage-tune, pulled a cycle at a time into
 ; the song, which feeds any port.
@@ -65,7 +65,7 @@
  ; --- the words: every line the level says; a ~ takes the next value ---
  w-concrete "concrete"
  w-wreck    "a wrecked conveyance stripped to its skeleton"
- w-east     "the bed runs back east, to the plain"
+ w-east     "the bed runs back east, to the desert"
  w-rat      "the rat hawks a bauble at you"
  w-bar      "~  turn ~"
  open-ttl   "the garage"

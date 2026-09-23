@@ -7,8 +7,8 @@
 ; stranger is gone, the pane shatters to a drum, the others are bones where they stood,
 ; the grass past the glass goes over to desert -- the grass inside stays -- and the river
 ; runs dry: a stone stands in its bed near the west edge, an inscription on it, and the
-; way off the map is west along the bed, into the garage
-; (apps/rove/garage.l) where the seat carries it.
+; way off the map is west along the bed, into the desert at sunset
+; (apps/rove/dusk.l) where the seat carries it.
 ;
 ; a roguelike floor on rove: the plain is laid, not delved, the size of the screen and
 ; lit end to end; the painter is rove's and the keys the tower's. the talk is a tree the
@@ -406,9 +406,9 @@
    _ (loop 0 0)
    ; ..and the card goes back before the next level asks for it
    _ (? hn (flush hn, close hn))
-   ; west along the dry bed: the garage takes the stage as it stands and gives it back
-   ; here; a seat that carries no garage ends at the edge
-   next (cite 'garage 'garage-walk)
+   ; west along the dry bed: the dusk takes the stage as it stands and gives it back
+   ; here; a seat that carries no dusk ends at the edge
+   next (cite 'dusk 'dusk-walk)
    _ (? (g 'over = 'west && next) (next ()))
    g)
  ; ..and the verb around it: the screen raised here and put back here
