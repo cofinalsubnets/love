@@ -33,17 +33,14 @@
          slendro song-chunk arc-z morph-z lamp-z lamp-near done-ms settle-ms wade-aim wade-settle
          texts texts-at)
 (borrow 'rove)
+(borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'play)                          ; the voices, the mix
 (? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
 (:
- esc (string 27)
- ; the screen rides the state: 'w and 'h its pixels, 'cx the middle column, 'foc the
- ; focal length, half the width for a view ninety degrees wide, 'hz the horizon's row
  eh 1.2 rw 5.0                        ; the eye above the water, waist deep; the river's half width
  sp 3.0 loop 64                       ; a tree every so far along a bank; the bank repeats
  far 150.0 near 35.0                  ; sight along a bank; a tree nearer than near is black, past it haze
  fps 30
- pi 3.141592653589793
  ; the pens, in the 256-colour palette. 16..231 is a 6x6x6 cube, a channel's levels
  ; 0 95 135 175 215 255 and the cell 16 + 36r + 6g + b; 232..255 is the grey ramp, where
  ; 232 + n is #vvvvvv with v = 8 + 10n, so a grey of brightness v is 232 + (v - 8) / 10.
@@ -52,12 +49,7 @@
  glass-pen 179 heart-pen 231          ; #d7af5f the lantern's glass; the flame in it is the moon's pale, its heart #ffffff
  tree-pen 16 haze-pen 233             ; #000000 a near tree, #121212 a far one
  bank-pen 232                         ; #080808 the bank, a shade under the water's #121212
- (clamp v lo hi) (v < lo ? lo (hi < v ? hi v))
- (flo v) (int (v + 1000.0) - 1000)
- (wrap a) (a < -pi ? (wrap (a + 2.0 * pi)) (pi < a ? (wrap (a - 2.0 * pi)) a))
  (tn a) (sin a / cos a)
- (min2 a b) (a < b ? a b)
- (max2 a b) (a < b ? b a)
  ; the moon's journey, a piecewise function of how far the player has waded. over the
  ; first stretch it arcs from high on the right down to dead ahead on the horizon, its
  ; bearing sweeping in as its height falls; over the next it contracts into the lamp of
@@ -158,13 +150,7 @@
  ; the sky, a row at a time in trays over the columns: a grey ramp up from the horizon,
  ; the stars hashed off the column's bearing cell and the row's height cell, the moon's
  ; glow, and its disc with its seas, each laid over the last where its mask holds. the
- ; ramp's bands and the glow's reach scale with the screen. the hash is two rounds of
- ; multiply, shift and mask kept under 32 bits, so a tray's machine words and a number
- ; throw alike
- m32 4294967295
- (mash a) (: h (((a & m32) * 1103515245) & m32) h2 (((h ^ (h >> 15)) * 1664525) & m32) (h2 ^ (h2 >> 13)))
- (throw x y s k) ((mash (y * 374761393 + x * 668265263 + s * 2654435761 + 1)) % k)
- (over c m v) (c + m * (v - c))
+ ; ramp's bands and the glow's reach scale with the screen
  (sky-row y st tb mn t) (: hz (st 'hz) h (st 'h) sc (st 'foc / 40.0) xs (tb 'xs)
    qa (tb 'qas) qe (peep (tb 'qes) y 0) up (hz - y)
    ramp (? (3 * h // 8 < up) 233 (h // 4 < up) 234 (h // 8 < up) 235 236)   ; #121212 .. #303030 down to the horizon
@@ -240,14 +226,14 @@
  ; by more the nearer it is -- the sample's row and column, and the rings' own lift, for
  ; a crest
  (water-rows st) (: w (st 'w) h (st 'h) hz (st 'hz) foc (st 'foc) t (st 't)
-   th (st 'th) sn (sin th) cs (cos th) px (st 'px) pz (st 'pz) rings (st 'rings)
+   px (st 'px) pz (st 'pz) rings (st 'rings)
    xs (iota w + 0.0)
-   u ((xs - st 'cx) / foc)
+   rs (view-rays st) vx (rs 0) vz (rs 1)
    hi (w - 1.0)
    rows {}
    (row y) (y < h ?
      (: d (foc * eh / (y + 0.5 - hz)) g (foc / d)
-        wx (px + d * (sn + u * cs)) wz (pz + d * (cs - u * sn))
+        wx (px + d * vx) wz (pz + d * vz)
         bank ((wx > rw) + (wx < -rw))
         rl (rings-at wx wz t rings)
         l (swell wx wz t + rl)
@@ -289,9 +275,6 @@
  ; a frame: two pixel rows a cell, one sgr per change, the rows joined by \r\n with no
  ; newline after the last, so a screen of just enough rows never scrolls. a pixel row is
  ; a tray of pens, the sky's and the trees' above the horizon and the water's below it
- sgrs {}
- (sgr f b) (: k (f * 256 + b) s (sgrs k)
-              (string? s ? s (: s2 (esc + "[38;5;" + show f + ";48;5;" + show b + "m") (pin sgrs k s2, s2))))
  (wade-frame st) (: t (st 't) w (st 'w) h (st 'h) hz (st 'hz)
    _ (pin st 'rings (filter (r \ t - r 't < ring-life) (st 'rings)))
    tb (wade-tables st) mn (moon-at st)
@@ -321,12 +304,9 @@
    (rows 0, slurp j))
  ; the state: the screen, where the player stands and faces, the horizon's row, the
  ; tick, the rings on the water, and whether they walk on by themselves
- (wade-new w h) {'w w 'h h 'cx (w / 2.0) 'foc (w / 2.0) 'hz (h // 2)
-                 'px 0.0 'pz 0.0 'th 0.0 't 0 'rings () 'walk 0 'done 0}
- ; the screen's shape: w cells across and r rows, two pixels a row, the horizon kept
- ; where it stood in proportion
- (wade-size st w r) (: h (2 * r) hz (st 'hz * h // st 'h)
-   (pins st 'w w 'h h 'cx (w / 2.0) 'foc (w / 2.0) 'hz (clamp hz (h // 4) (3 * h // 4))))
+ (wade-new w h) (view! {'px 0.0 'pz 0.0 'th 0.0 't 0 'rings () 'walk 0 'done 0} w h (h // 2))
+ ; the screen's shape: w cells across and r rows, the horizon off the top and bottom quarter
+ (wade-size st w r) (view-size st w r 4)
  ; a step on down the river, whichever way the player faces, and no further than the
  ; lamppost's foot, where the level is done and the wading with it -- the player may
  ; still look around; it sends a ring, but not on the heels of the last one
@@ -349,7 +329,7 @@
    h (st 'h) tilt (k @ 117 (h // 16) 110 (0 - h // 16) 0)
    (? (st 'done) st                     ; arrived: the view is the level's now
       (turn != 0.0) (pin st 'th (clamp (th + turn) (0.0 - facing) facing))
-      (tilt != 0) (pin st 'hz (clamp (st 'hz + tilt) (h // 4) (3 * h // 4)))
+      (tilt != 0) (view-hz st (st 'hz + tilt) 4)
       (mv != 0.0) (wade-move st mv)
       (k = 32) (pin st 'walk (st 'walk ? 0 1))
       st))

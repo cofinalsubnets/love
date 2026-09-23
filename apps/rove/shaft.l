@@ -39,11 +39,10 @@
          light-drift gap-l
          flash-v0 flash-span done-ms turn-step song-chunk)
 (borrow 'rove)
+(borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'play)                          ; the voices, the mix
 (? (cite 'posix) (borrow 'posix) ())    ; close, for the horn
 (:
- esc (string 27)
- pi 3.141592653589793
  fps 30
  ; --- the shaft, in the world's units: x and z across it, y up, the middle of the
  ; floor the origin. s runs round the walls from the corner at (-r -r): along the wall
@@ -88,17 +87,6 @@
  panel-pen 235 frame-pen 240 open-pen 230 ladder-pen 242
  irons (star-tray [3] iron-pens) seams (star-tray [3] seam-pens) floorings (star-tray [3] floor-pens)
  (band-of d) ((band-1 < d) + (band-2 < d))
- (clamp v lo hi) (v < lo ? lo (hi < v ? hi v))
- (flo v) (int (v + 1000.0) - 1000)
- (wrap a) (a < -pi ? (wrap (a + 2.0 * pi)) (pi < a ? (wrap (a - 2.0 * pi)) a))
- (min2 a b) (a < b ? a b)
- (max2 a b) (a < b ? b a)
- (over c m v) (c + m * (v - c))
- ; the hash for the plates' speckle: two rounds of multiply, shift and mask kept under
- ; 32 bits, so a tray's words and a number throw alike
- m32 4294967295
- (mash a) (: h (((a & m32) * 1103515245) & m32) h2 (((h ^ (h >> 15)) * 1664525) & m32) (h2 ^ (h2 >> 13)))
- (throw x y s k) ((mash (y * 374761393 + x * 668265263 + s * 2654435761 + 1)) % k)
  ; --- round the walls ---
  (wrap-s s) (s - perim * flo (s / perim))
  (s-apart a b) (: d (wrap-s (a - b)) (min2 d (perim - d)))
@@ -147,23 +135,19 @@
                           (two? ls ? <ls ()))
  ; --- the state: the screen, where the player stands and looks, how they move, and
  ; the lay ---
- ; 'w and 'h the screen's pixels, 'cx the middle column, 'foc the focal length, half
- ; the width for a view ninety degrees wide, 'hz the horizon's row; 'px 'pz where the
- ; player stands, 'y the feet's height, 'th the way they face as a bearing; 'vx 'vz 'vy
+ ; the screen as view lays it; 'px 'pz where the player stands, 'y the feet's height, 'th the way they face as a bearing; 'vx 'vz 'vy
  ; the speed across and up, kept in the air; 'kx 'kz the last step a key pushed and
  ; 'kt when, for a jump to carry it; 'ground standing on something, 'rung the ladder
  ; held or (); 'flash the red on the screen and 'flash-k what is left of it a frame on,
  ; 'sfx sounds due, 'done the top door open
  ; the horizon starts a little above the middle: the view pitched down a touch, to the ledge ahead
  (shaft-new w h st) (: sb {st} e (ring-pt 1.0 walk-q)
-   {'w w 'h h 'cx (w / 2.0) 'foc (w / 2.0) 'hz (5 * h // 12)
-    'px (e 0) 'pz (e 1) 'y 0.0 'th (tangents 0) 'vx 0.0 'vz 0.0 'vy 0.0 'kx 0.0 'kz 0.0 'kt -999
-    'ground 1 'rung () 't 0 'off-t -999
-    'flash 0.0 'flash-k 1.0 'sfx () 'done 0 'sb sb 'lay (shaft-lay sb)})
- ; the screen's shape: w cells across and r rows, two pixels a row, the horizon kept
- ; where it stood in proportion
- (shaft-size st w r) (: h (2 * r) hz (st 'hz * h // st 'h)
-   (pins st 'w w 'h h 'cx (w / 2.0) 'foc (w / 2.0) 'hz (clamp hz (h // 8) (7 * h // 8))))
+   (view! {'px (e 0) 'pz (e 1) 'y 0.0 'th (tangents 0) 'vx 0.0 'vz 0.0 'vy 0.0 'kx 0.0 'kz 0.0 'kt -999
+           'ground 1 'rung () 't 0 'off-t -999
+           'flash 0.0 'flash-k 1.0 'sfx () 'done 0 'sb sb 'lay (shaft-lay sb)}
+          w h (5 * h // 12)))
+ ; the screen's shape: w cells across and r rows, the horizon off the top and bottom eighth
+ (shaft-size st w r) (view-size st w r 8)
  ; --- a frame of motion ---
  ; a landing on a ledge at g, coming down at v: the feet on it, the flash by how hard --
  ; nothing under flash-v0, and both more opaque and slower to fade the harder -- and a thud
@@ -224,7 +208,7 @@
                 (pins st 'rung la 'px (e 0) 'pz (e 1) 'th (wrap (tangents i + pi / 2.0)) 'ground 0 'vx 0.0 'vz 0.0 'vy 0.0))
    (? (st 'done) st
       (turn != 0.0) (pin st 'th (wrap (st 'th + turn)))
-      (tilt != 0) (pin st 'hz (clamp (st 'hz + tilt) (h // 8) (7 * h // 8)))
+      (tilt != 0) (view-hz st (st 'hz + tilt) 8)
       (k = 32) (? l (pins st 'rung () 'ground 0 'off-t (st 't))
                   (: la (ladder-at (st 'lay) (st 'px) (st 'pz) (st 'y)) (la ? (hold la) (shaft-jump st))))
       (fwd != 0.0) (l ? (climb fwd) (step fwd))
@@ -329,14 +313,9 @@
  ; a frame: two pixel rows a cell, one sgr per change, the rows joined by \r\n with no
  ; newline after the last, so a screen of just enough rows never scrolls. the
  ; background rows are trays and the ledges a cask over them, and the flash tints both
- sgrs {}
- (sgr f b) (: k (f * 256 + b) s (sgrs k)
-              (string? s ? s (: s2 (esc + "[38;5;" + show f + ";48;5;" + show b + "m") (pin sgrs k s2, s2))))
- (shaft-frame st) (: w (st 'w) h (st 'h) hz (st 'hz) foc (st 'foc) cx (st 'cx) r shaft-r
-   th (st 'th) sn (sin th) cs (cos th)
+ (shaft-frame st) (: w (st 'w) h (st 'h) r shaft-r
    ex (st 'px) ez (st 'pz) ey (st 'y + eye-h)
-   xs (iota w + 0.0) u ((xs + 0.5 - cx) / foc)
-   vx0 (sn + u * cs) vz0 (cs - u * sn)
+   rs (view-rays st) vx0 (rs 0) vz0 (rs 1)
    vx (over vx0 (vx0 = 0.0) 1e-9) vz (over vz0 (vz0 = 0.0) 1e-9)
    ; each column's ray ends on the nearest of the four planes ahead of it
    tx (over ((0.0 - r - ex) / vx) (0.0 < vx) ((r - ex) / vx))
