@@ -11,7 +11,6 @@
 (borrow 'rove)        ; dat, open?, the words
 
 (: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
-   (has? h n) (find h n 0)
    (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    (rows s) (1 + count s "\r\n")
    (range a b) (map (+ a) ^(b - a))
@@ -77,7 +76,7 @@
        (7 = #(g 'ms))                                            ; the others, one to a cube, none in yours
        (all (m \ inside? (m 'cube) (m 'x) (m 'y) && !(inside? c (m 'x) (m 'y))) (g 'ms))
        (was != now)                                              ; ..and they wander, inside still
-       (blocky? (npc 'nm)) (blocky? (npc 'greet))               ; named and greeting in blocks
+       (blocky? (npc 'nm))                                       ; named in blocks
        (!(g 'talk))
        (: g1 (apartment-new 80 22 (wheel 5)) (two? (g1 'sign) && (apartment-turn g1 32, !(g1 'sign))))   ; the opening sign stands, and a key takes it down
        ; the same seed lays the same plain and names the same stranger
@@ -98,7 +97,6 @@
    sg (g 'sign)
  (test (x1 = c 0 + 1) (y1 = c 1 + 1) (0 < #m1) (nil? k1)      ; held, and something said
        ('start = g 'talk) (two? sg) (<sg = npc 'nm)             ; the talk, under the stranger's name
-       (any (l \ has? l (npc 'greet)) >sg)                       ; ..greeting in blocks
        (p 'x = bp 0) (p 'y = bp 1)))                             ; ..and you never moved
 
 ; --- the talk walks its tree; a leaf closes it, and that is the end ---

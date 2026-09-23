@@ -80,7 +80,8 @@
        ; ..and the last step is the lamppost's foot, where the level is done: no step, no
        ; walk, and no turn or tilt either -- the view is the level's, and the settle
        ; takes it from where it was to the aim, eased, all the way by 1: turned to the
-       ; lamp, which is dead ahead, and pitched up, the horizon lower on the screen
+       ; lamp, which is dead ahead, and pitched down to its reflection, the horizon
+       ; higher on the screen
        (: s (pins (wade-new 80 48) 'pz (lamp-z - 3.5) 'th 0.5 'hz 20) _ (wade-move s 1.0) z (s 'pz)
           _ (wade-step s 107) _ (wade-step s 32) _ (wade-move s 1.0) _ (wade-step s 108) _ (wade-step s 117)
           a (wade-aim s)
@@ -89,8 +90,8 @@
           _ (wade-settle s 1.0)
           (s 'done && abs (z - (lamp-z - lamp-near)) < 0.001 && s 'pz = z && s 'walk = 0
            && abs (t0 - 0.5) < 0.001 && h0 = 20
-           && abs (a 0) < 0.001 && 20 < a 1 < 48
-           && 0.0 < t5 < 0.5 && 20 < h5 < a 1
+           && abs (a 0) < 0.001 && a 1 < 20
+           && 0.0 < t5 < 0.5 && a 1 < h5 < 20
            && abs (s 'th - a 0) < 0.001 && s 'hz = a 1
            && !((wade-new 80 48) 'done)))))
 

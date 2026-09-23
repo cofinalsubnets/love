@@ -217,7 +217,10 @@
    ; a bare argument is mini-notation for `hit`; one that opens a paren is love, read
    ; and evaluated with the harp module already spliced; -s is a score file
    ; (apps/harp/score.l), its bars the cycles unless -n says. several arguments stack.
-   (harp-read a) (0 < #a && 40 = a 0 ?  (sound a @ (a . _) (ev a) hush) (hit (mini a)))
+   ; a parenthesised text is love over harp's names: ev runs in the global scope, where
+   ; harp is not, so the form is read under a borrow of it
+   (harp-read a) (0 < #a && 40 = a 0 ?  (sound ("(: _ (borrow 'harp) " + a + ")") @ (f . _) (ev f) hush)
+                                        (hit (mini a)))
    (harp-atoi s) (:- (go 0 0) n #s
                   (go i acc) (? (i >= n) acc (go (i + 1) ((acc * 10) + ((s i) - 48)))))
    (harp-atof s) (sound s @ (r . _) r 0)

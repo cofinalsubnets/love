@@ -330,7 +330,12 @@
       (: q (vgob '("a") ((bytes "x:wq") + [CR]))
          ((q 'dow = '("t")) && (q 'quit = 1)))
       (: q (vgob '("a") (bytes "xZZ"))
-         ((q 'dow = '("t")) && (q 'quit = 1))))
+         ((q 'dow = '("t")) && (q 'quit = 1)))
+      ; the split requests: a fresh buffer, or a file, beside or under
+      (st? (vgob '("a") ((bytes ":vs") + [CR])) 'dos = '(beside ""))
+      (st? (vgob '("a") ((bytes ":sp other") + [CR])) 'dos = '(stack "other"))
+      (st? (vgob '("a") ((bytes ":vsplit x") + [CR])) 'dos = '(beside "x"))
+      !(st? (vgob '("a") ((bytes ":w") + [CR])) 'dos))
 
 ; --- the frame: escapes exact on a tiny screen ---
    (mini ls ks) (: st (vgo ls ks) _ (pin st 'w 8) _ (pin st 'h 4) (vframe st))
@@ -539,6 +544,8 @@
       (st? (ex '("a") "=") 'msg = "1")
       (st? (ex ab5 "$=") 'msg = "5")
       (st? (ex '("a") "zz") 'msg = "not an ex command: zz")
+      (st? (ex '("a") "zz 1 2") 'dox = '("zz" "1 2"))               ; ..and left for a face that knows it
+      !(st? (ex '("a") "w") 'dox)
       ; a no-op line is a no-op, not a complaint
       (st? (ex '("a") "") 'msg = ""))
 

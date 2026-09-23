@@ -353,18 +353,20 @@
       (mv != 0.0) (wade-move st mv)
       (k = 32) (pin st 'walk (st 'walk ? 0 1))
       st))
- ; --- arrived: the view is the level's. it turns to the lamp and pitches up until the
- ; lamp's flame holds the middle of the screen, eased over settle-ms from where the
- ; player left it, and the level is over done-ms after that ---
+ ; --- arrived: the view is the level's. it turns to the lamp and pitches down until the
+ ; flame's reflection holds the middle of the screen, eased over settle-ms from where
+ ; the player left it, and the level is over done-ms after that. the reflection hangs
+ ; as far under the horizon as the flame is over the water and the eye is over it, so
+ ; from this close the horizon goes off the top and the screen is water ---
  settle-ms 1500
- (wade-aim st) (: px (st 'px) dz (lamp-z - st 'pz) dist (sqrt (px * px + dz * dz))
-                  th (clamp (wrap (atan2 (0.0 - px) dz)) (0.0 - facing) facing)
-                  hz (st 'h // 2 + int (st 'foc * (lamp-h - eh) / dist))
-                  [th (clamp hz (st 'h // 4) (st 'h - 1))])
- (wade-settle st s) (: e (s * s * (3.0 - 2.0 * s)) aim (wade-aim st)
+ (wade-aim st) (: px (st 'px) dz (lamp-z - st 'pz) dist (sqrt (2 px + 2 dz))
+                  th (clamp (wrap (atan2 -px dz)) -facing facing)
+                  hz (st 'h // 2 - int (st 'foc * (lamp-h + eh) / dist))
+                  [th (clamp hz (1 - st 'h) (st 'h - 1))])
+ (wade-settle st s) (: e (2 s * (3.0 - 2.0 * s)) aim (wade-aim st)
                        th0 (peep st 'th0 (st 'th)) hz0 (peep st 'hz0 (st 'hz))
                        (pins st 'th (th0 + (aim 0 - th0) * e)
-                                'hz (int (hz0 + (aim 1 - hz0) * e + 0.5))))
+                                'hz (floor (hz0 + (aim 1 - hz0) * e + 0.5))))   ; to the nearest row, above the screen too
  ; --- the song: a slendro chime now and then, and a gong under it ---------------------
  ; five near-equal steps to the octave, as a gamelan is tuned, in semitones from middle c
  slendro (map (* 2.4) ^5)
@@ -423,9 +425,9 @@
              ; arrived: the clock is noted the first frame, the view settles on the lamp over
              ; settle-ms, and the level is over done-ms on
              _ (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0)))
-             _ (? (st 'done-at) (: s ((clock 0 - st 'done-at) / (1.0 * settle-ms))
+             _ (? (st 'done-at) (: s (clock (st 'done-at) / (1.0 * settle-ms))
                                    (wade-settle st (1.0 < s ? 1.0 s))))
-             (? (k = 'quit || (st 'done-at && settle-ms + done-ms <= (clock 0 - st 'done-at))) ()
+             (? (k = 'quit || (st 'done-at && settle-ms + done-ms <= clock (st 'done-at))) ()
                 (: _ (? (charm? k) (wade-step st k))
                    _ (? (st 'walk) (wade-move st 0.25))
                    spent (clock 0 - t0)

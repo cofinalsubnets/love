@@ -22,6 +22,9 @@
 ; 'patw is * and #'s word-bounding, which re.l's engine has no node for), 'dir,
 ; 'quit (() | 1), 'dow (a write request: (name), uread's shape, the face consumes
 ; it), 'doe (a READ request, same shape: :e/:o leave it, the face calls vload),
+; 'dos (a SPLIT request, (dir name): :sp/:vs leave it, name "" for a new buffer,
+; and the face opens the pane where it has a harbour), 'dox (an ex word this engine
+; does not know, (word arg): the face may, and clears the complaint when it does),
 ; 'w 'h (the view).
 ;
 ; the syntax paint rides apps/vi/hue.l and five more keys: 'hl (paint? -- born on for
@@ -915,12 +918,15 @@
             (w = "w") (pin st 'dow [nm])
             (w = "wq" || w = "x") (: _ (pin st 'dow [nm]) (pin st 'quit 1))
             (w = "e" || w = "o" || w = "edit") (vedit st nm bang)
+            (w = "sp" || w = "split") (pin st 'dos ['stack arg])
+            (w = "vs" || w = "vsplit") (pin st 'dos ['beside arg])
             (w = "hl") (: _ (pin st 'hl (st 'hl ? () 1))
                           (vmsg st (st 'hl ? "syntax on" "syntax off")))
             ; :set knows one option, which is the one > and < need a number for
             (w = "set") (vexset st arg)
             (w = "lint") (vlint st)                    ; libra's scan, on the buffer
-            (vmsg st $ "not an ex command: " + w))))
+            ; unknown here, but left on the state: a face with more ex words takes it
+            (: _ (pin st 'dox [w arg]) (vmsg st $ "not an ex command: " + w)))))
    (vex st)
     (: s (edtext (st 'cmd))
        n #s
@@ -1241,7 +1247,7 @@
      'dot () 'rec () 'reccnt 0 'dotting ()
      'file file 'dirty () 'msg "" 'sw 2
      'cmd "" 'pat () 'pattx "" 'patw () 'dir 1
-     'quit () 'dow () 'doe ()
+     'quit () 'dow () 'doe () 'dos () 'dox ()
      'hl (vdotl file) 'pens () 'book () 'hlcar () 'hlgen 0 'hlrow (tablet ())
      'lncar () 'laycar () 'lastr () 'w 80 'h 24}
 

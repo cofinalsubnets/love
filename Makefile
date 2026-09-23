@@ -311,7 +311,7 @@ crewfiles = apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/libra/salt.l apps/libra/libra.l apps/vi/hueweb.l apps/kiosko/web.l \
   apps/harp/harp.l apps/harp/play.l apps/harp/score.l \
   apps/x11.l apps/ink.l apps/manifest/manifest.l apps/rove/rove.l apps/rove/tower.l apps/rove/story.l apps/rove/design.l apps/rove/slop.l apps/rove/grass.l apps/rove/wade.l apps/rove/apartment.l apps/rove/garage.l apps/rove/shaft.l apps/harp/synth.l \
-  apps/lux/wire.l apps/doom.l apps/lupa.l apps/mc.l
+  apps/berth/berth.l apps/lux/wire.l apps/doom.l apps/lupa.l apps/mc.l
 korefiles = $(kore_head) $(holo_obj) love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and

@@ -6,6 +6,7 @@
 ;   cat test/00-init.l test/host/synth.l | out/love
 
 (borrow 'synth)   ; the artifact's module, warm from the tree
+(borrow 'vi)      ; a buffer, for the loop's ex words
 
 (: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
    (has? h n) (find h n 0)
@@ -58,5 +59,47 @@
        (#(st 'vs) = 0) (string? (st 'last)) (has? f (st 'last))
        (has? f (synth-timbres (st 'tim) 0))))
 
+; --- the loop: a text sent is read as harp reads it and plays from the next chunk,
+; --- its cycles ringing into the jug; a bad one is said and the sent one kept; stopped,
+; --- it rings out to silence; the cps is bounded, and the keys turn it all
+(: j (jug 0) st (synth-new ())
+   _ (synth-send st "bd sn")
+   on (st 'on) m1 (st 'lmsg) good (st 'nextp)
+   _ (each ^40 (i \ synth-feed st j)) out (slurp j)
+   loud (net (map (i \ (out (i * 97) != 0 ? 1 0)) ^(#out // 97)))
+   c1 (st 'cyc)
+   _ (synth-send st "(nosuch 1)") m3 (st 'lmsg) kept (st 'pat)     ; a bad form: said, and the playing one kept
+   _ (synth-send st "(fast 2 (hit (mini \"bd\")))") m4 (st 'lmsg)
+   _ (synth-send st "") m5 (st 'lmsg)
+   _ (synth-stop st) off (st 'on) c2 (st 'cyc)
+   _ (each ^400 (i \ synth-feed st j)) whole (slurp j)
+   n #whole quiet (all (i \ 0 = whole (n - 1 - i)) ^(4 * synth-chunk))
+   c3 (st 'cyc)
+   _ (synth-cps! st 100.0) hi (st 'cps) _ (synth-cps! st 0.0) lo (st 'cps)
+   _ (synth-cps! st 1.0) _ (synth-step st 93) up (st 'cps) _ (synth-step st 91) _ (synth-step st 91) down (st 'cps)
+   _ (synth-step st 112) p1 (st 'on) _ (synth-step st 112) p2 (st 'on)
+   _ (synth-step st 113)
+ (test (on = 1) (m1 = "sent") (0 < c1) (0 < loud)
+       (m3 != "sent") (kept != ()) (m4 = "sent") (m5 = "sent")
+       (off = 0) (c2 = c3) quiet
+       (hi = synth-cps-hi) (lo = synth-cps-lo)
+       (abs (up - 1.0 - synth-cps-step) < 0.001) (abs (1.0 - synth-cps-step - down) < 0.001)
+       (p1 = 1) (p2 = 0) (st 'over = 1)))
+
+; --- the buffer's ex words: send plays its lines, cps sets, stop stops, and a word that
+; --- is neither the engine's nor the loop's is still a complaint
+(: st (synth-new ()) buf (vi-open "") _ (pin buf 'lines ["bd sn" "hh"])
+   face (vi-face buf {'ex (synth-ex st)})
+   (ex s) (: t (":" + s) (map (face 1) ((map (i \ t i) ^#t) + [13])))
+   _ (ex "send") m1 (buf 'msg) on (st 'on) t (st 'lmsg)
+   _ (ex "cps 1") m2 (buf 'msg) c (st 'cps)
+   _ (ex "cps") m3 (buf 'msg)
+   _ (ex "stop") m4 (buf 'msg) off (st 'on)
+   _ (ex "play") m5 (buf 'msg) back (st 'on)
+   _ (ex "zz") m6 (buf 'msg)
+ (test (m1 = "sent") (on = 1) (t = "sent") (c = 1.0) (0 < #m2) (0 < #m3)
+       (m4 = "stopped") (off = 0) (m5 = "playing") (back = 1)
+       (m6 = "not an ex command: zz")))
+
 (test_fin (),
- puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, and a strike rings\n")
+ puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, and the loop plays what the buffer says\n")

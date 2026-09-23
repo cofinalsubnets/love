@@ -4,56 +4,94 @@
 ; loads after core.l/re.l/vi core in the kore cat and rides the u-floor (uread,
 ; udie) and text.l's lines/unlines.
 ;
-; the visit is cli's `stage`: raw tty, the alternate screen, one key a step through
-; cli's edkey (arrows, alt letters, a bare escape after a beat), and port EOF leaves --
-; a piped script (the smoke lane) ends with :wq and never dangles.
+; the visit is berth's harbour where the seat carries one -- each buffer a stage in a
+; pane, split by :sp/:vs or the prefix -- and cli's `stage` otherwise: raw tty, the
+; alternate screen, one key a step through cli's edkey (arrows, alt letters, a bare
+; escape after a beat), and port EOF leaves -- a piped script (the smoke lane) ends
+; with :wq and never dangles.
 (module 'vi
 (borrow 'kore) ; the text/u floors
 (borrow 'posix)
 
 (:
+   ; a state for a file, read or new; the pens are the face's to hand over -- they
+   ; want $colorterm and the user's own theme file, and the engine reads neither
+   (vi-open f)
+    (: r (? (< 0 (tally f)) (uread f) ())
+       st (vnew (? (two? r) (lines <>r) ()) f)
+       _ (? ((< 0 (tally f)) && !(two? r)) (vmsg st (+ f ": new file")) ())
+       _ (pin st 'pens (hue-wake ()))
+       st)
+   ; the ex write requests: (name) means write, "" means the buffer's file
+   (dow s2)
+    (: rq (s2 'dow)
+       (? !(two? rq) s2
+          (: _ (pin s2 'dow ())
+             nm <rq
+             (? (< 0 (tally nm))
+                (: q (open nm "w")
+                   (? (hot? q) (: _ (say q (unlines (s2 'lines))) _ (close q)
+                           _ (pin s2 'dirty ())
+                           (vmsg s2 (+ nm " written")))
+                      (: _ (pin s2 'quit ())          ; a failed wq must not quit
+                         (vmsg s2 (+ "cannot write " nm)))))
+                (: _ (pin s2 'quit ())
+                   (vmsg s2 "no file name"))))))
+   ; the ex read requests: (name) means put that file in the buffer. a name
+   ; that does not open is not an error -- it is a new file, the same welcome
+   ; the startup above gives one. presence is uread's (1 text) wrapper, not
+   ; the text: an empty file is a real file with nothing in it.
+   (doe s2)
+    (: rq (s2 'doe)
+       (? !(two? rq) s2
+          (: _ (pin s2 'doe ())
+             nm <rq
+             r (uread nm)
+             _ (vload s2 (? (two? r) (lines <>r) ()) nm)
+             (vmsg s2 (? (two? r) (nm + ": " + show (tally (s2 'lines)) + " lines")
+                          (nm + ": new file"))))))
+   ; the ex split requests: (dir name) means another buffer, on name or fresh, beside
+   ; or under this one. split is the harbour's door, or () on a seat with no harbour
+   (dos s2 split)
+    (: rq (s2 'dos)
+       (? !(two? rq) s2
+          (: _ (pin s2 'dos ())
+             _ (? split (split <rq <>rq) (vmsg s2 "no splits on this seat"))
+             s2)))
+   ; the ex words the engine does not know: (word arg) goes to the face's ex door,
+   ; which answers true when it took it and the complaint stands otherwise
+   (dox s2 ex)
+    (: rq (s2 'dox)
+       (? !(two? rq) s2
+          (: _ (pin s2 'dox ())
+             _ (? ex (: m (s2 'msg) _ (pin s2 'msg "")
+                        (? (ex s2 <rq <>rq) 0 (pin s2 'msg m)))
+                  0)
+             s2)))
+   ; the face: cli's triple over a state, with the doors a host lends it -- 'split
+   ; (dir name) and 'ex (state word arg), either may be missing. the stage hides
+   ; the cursor; vi's frame places it, so the frame shows it. vfresh, not vframe: a
+   ; full redraw a keystroke is what the flicker is, and it writes only the rows
+   ; that changed since the last
+   (vi-face st doors)
+    [(\ w h (pins st 'w w 'h h, "\e[?25h" + vfresh st))
+     (\ c (vstep st c, dow st, doe st, dos st (peep doors 'split ()), dox st (peep doors 'ex ())))
+     (\ _ (st 'quit))]
+   ; the visit: on a harbour where the seat has one -- every buffer a stage in a pane
+   ; of its own, :sp and :vs and the prefix's C-a s and C-a v opening another, :q
+   ; shutting the one it is typed in -- else cli's stage, one buffer full screen
    (vi-main as)
     (: f (? (two? as) <as "")
        ; vi reads no options: a dash word would open a new file named after it
        _ (? (1 < #f && f 0 = 45) (udie 2 ("vi: unknown option " + f)) ())
-       r (? (< 0 (tally f)) (uread f) ())
-       st (vnew (? (two? r) (lines <>r) ()) f)
-       _ (? ((< 0 (tally f)) && !(two? r)) (vmsg st (+ f ": new file")) ())
-       ; the pens are the face's to hand over -- they want $colorterm and the
-       ; user's own theme file, and the engine reads neither
-       _ (pin st 'pens (hue-wake ()))
-       ; the ex write requests: (name) means write, "" means the buffer's file
-       (dow s2)
-        (: rq (s2 'dow)
-           (? !(two? rq) s2
-              (: _ (pin s2 'dow ())
-                 nm <rq
-                 (? (< 0 (tally nm))
-                    (: q (open nm "w")
-                       (? (hot? q) (: _ (say q (unlines (s2 'lines))) _ (close q)
-                               _ (pin s2 'dirty ())
-                               (vmsg s2 (+ nm " written")))
-                          (: _ (pin s2 'quit ())          ; a failed wq must not quit
-                             (vmsg s2 (+ "cannot write " nm)))))
-                    (: _ (pin s2 'quit ())
-                       (vmsg s2 "no file name"))))))
-       ; the ex read requests: (name) means put that file in the buffer. a name
-       ; that does not open is not an error -- it is a new file, the same welcome
-       ; the startup above gives one. presence is uread's (1 text) wrapper, not
-       ; the text: an empty file is a real file with nothing in it.
-       (doe s2)
-        (: rq (s2 'doe)
-           (? !(two? rq) s2
-              (: _ (pin s2 'doe ())
-                 nm <rq
-                 r (uread nm)
-                 _ (vload s2 (? (two? r) (lines <>r) ()) nm)
-                 (vmsg s2 (? (two? r) (nm + ": " + show (tally (s2 'lines)) + " lines")
-                              (nm + ": new file"))))))
-       ; the stage hides the cursor; vi's frame places it, so the frame shows it.
-       ; vfresh, not vframe: a full redraw a keystroke is what the flicker is, and
-       ; it writes only the rows that changed since the last one
-       (stage (\ w h (pins st 'w w 'h h, "\e[?25h" + vfresh st))
-              (\ c (vstep st c, dow st, doe st))
-              (\ _ (st 'quit)))))
+       st (vi-open f)
+       br (cite 'berth)
+       (? (tablet? br)
+          (: sz (br 'hsize 0) hb (br 'harbour <sz <>sz)
+             (stage-of s) (: fc (vi-face s {'split split}) (br 'berth-stage (fc 0) (fc 1) (fc 2)))
+             (split d nm) (br 'hberth hb d 50 (br 'hopen-stage (stage-of (vi-open nm)) 1 1))
+             _ (pin hb 'more (\ _ (br 'hopen-stage (stage-of (vi-open "")) 1 1)))
+             _ (br 'hberth hb 'stack 50 (br 'hopen-stage (stage-of st) <sz <>sz))
+             (br 'hsail hb))
+          (: fc (vi-face st {}) (stage (fc 0) (fc 1) (fc 2))))))
 ) ; module 'vi

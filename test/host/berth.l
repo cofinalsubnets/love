@@ -8,7 +8,9 @@
 ; interactive berthing (raw tty, keys, repaint) stays a live probe -- this
 ; verifies the moor: pty -> parser -> grid, replies riding home, exit status.
 
-(reads (open "apps/berth/berth.l" "r"))
+(borrow "apps/berth/berth.l")
+(borrow "apps/berth/wharf.l")
+(borrow "apps/berth/limn.l")
 
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
    (chat s i) (255 & glass s i)
@@ -76,7 +78,7 @@
 (: (find h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)
  md (tether ["out/love" "-l" "apps/berth/berth.l"
-           "-e" "(berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"])"])
+           "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"]))"])
  outb (slurp >md)
  st (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  _ (test
@@ -98,7 +100,7 @@
        hb {}
        _ (pin hb 'plan 1) _ (pin hb 'focus 1) _ (pin hb 'next 2)
        _ (pin hb 'rows r) _ (pin hb 'cols c)
-       _ (pin hb 'panes panes) _ (pin hb 'argv argv)
+       _ (pin hb 'panes panes) _ (pin hb 'more (\ _ (hopen argv 1 1)))
        _ (pin hb 'dirt {1}) _ (pin hb 'jobs ()) _ (pin hb 'lay ())
        _ (hrelay hb)
        hb)
@@ -167,6 +169,81 @@
  _ (waitfor p1) _ (waitfor p2)            ; hshut hangs their ptys up; reap, or they outlive the file
  (map (\ t (landed? t ? (catch t) (freeze t))) (hb2 'jobs)))
 
+; --- the stage door: a stage of this process berths like a child ----------
+; its frame lands on its own grid at the pane's size, a key is a step and a repaint,
+; a split re-shows it at its new width, a tick door paints when it says so, and the
+; step that is its last shuts the pane
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   (scrof hb id) (peep (hbox (hpane hb id)) () 0)
+   keys {} ticks {}
+   sg (berth-stage (\ w h ("\e[H\e[2J" + show w + "x" + show h + " k" + show (peep keys () 0) + " t" + show (peep ticks () 0)))
+                   (\ c (pin keys () c))
+                   (\ _ (= 113 (peep keys () 0))))
+   ; the harbour's opening with a stage as its first berth, the tty parts left out
+   (mkhb r c sg argv)
+    (: p0 (hopen-stage sg r c)
+       panes {}
+       _ (pin panes 1 p0)
+       hb {}
+       _ (pin hb 'plan 1) _ (pin hb 'focus 1) _ (pin hb 'next 2)
+       _ (pin hb 'rows r) _ (pin hb 'cols c)
+       _ (pin hb 'panes panes) _ (pin hb 'more (\ _ (hopen argv 1 1)))
+       _ (pin hb 'dirt {1}) _ (pin hb 'jobs ()) _ (pin hb 'lay ())
+       _ (hrelay hb)
+       hb)
+   hb (mkhb 10 21 sg ["sh" "-c" "sleep 30"])
+   _ (test
+      (!(hpty? (hpane hb 1)))
+      (sub? (rowtx (scrof hb 1) 0) "21x10 k0 t0" 0)   ; the frame, at the pane's size
+      (sub? (hframe hb) "21x10" 0))                   ; ... and out through the painter
+   _ (pin (hb 'dirt) () 0)
+   _ (hfeed hb 97)
+   _ (test
+      (97 = (peep keys () 0))                          ; the key was a step
+      (sub? (rowtx (scrof hb 1) 0) "21x10 k97" 0)      ; ... and a repaint
+      (1 = (peep (hb 'dirt) () 0)))                    ; ... that cued the painter
+   ; a split beside: the child takes the new half, the stage is re-shown in its own
+   _ (hsplit hb 'beside)
+   p2 (hpid (hpane hb 2))
+   _ (test
+      (2 = #(hb 'lay))
+      (hpty? (hpane hb 2))
+      (10 = (gaze (scrof hb 1) 2))
+      (sub? (rowtx (scrof hb 1) 0) "10x10 k97" 0))
+   _ (hshut hb 2)
+   _ (waitfor p2)
+   _ (test (sub? (rowtx (scrof hb 1) 0) "21x10 k97" 0))   ; the bar's column back too
+   ; the tick door: no on a no, a repaint on a yes
+   _ (pin sg 'tick (\ _ (: n (1 + peep ticks () 0) _ (pin ticks () n) (= 0 (n % 2)))))
+   _ (pin (hb 'dirt) () 0)
+   _ (htick hb)
+   _ (test (1 = (peep ticks () 0)) (0 = (peep (hb 'dirt) () 0)) (sub? (rowtx (scrof hb 1) 0) " t0" 0))
+   _ (htick hb)
+   _ (test (2 = (peep ticks () 0)) (1 = (peep (hb 'dirt) () 0)) (sub? (rowtx (scrof hb 1) 0) " t2" 0))
+   ; the last step: the pane is shut, and the wharf is empty
+   _ (hfeed hb 113)
+   _ (test
+      (() = (hb 'plan))
+      (() = (hpane hb 1))
+      (() = (hb 'focus)))
+   (map (\ t (landed? t ? (catch t) (freeze t))) (hb 'jobs)))
+
+; --- a stage on a real berth, over a real pty: its frame comes out through the
+; painter, and its keys come in through edkey -- q is its last, and berth ends ---
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+ md (tether ["out/love" "-l" "apps/berth/berth.l"
+             "-e" "(: _ (borrow 'berth) b {} (berth (berth-stage (\\ w h (\"\\e[Hstage \" + show w)) (\\ c (pin b () c)) (\\ _ (= 113 (peep b () 0))))))"])
+ _ (test (two? md))
+ m >md
+ _ (rest 1200)
+ _ (put m 113) _ (flush m)                ; q: the stage's last key
+ outb (slurp m)
+ _ (test
+    (sub? outb "stage 80" 0)              ; the frame, painted at the wharf's width
+    (sub? outb "\e[?1049l" 0))            ; ... and berth left
+ _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
+ (close m))
+
 ; --- C-a v, on a real berth, over a real pty -------------------------------
 ; the prefix intercept is the one piece the harbour laws above cannot reach: it
 ; lives in the key pump, and a key has to arrive to exercise it. so berth runs
@@ -175,7 +252,7 @@
 ; falls back to 24x80 and the geometry here is deterministic: 39 + bar + 40.
 (: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
  md (tether ["out/love" "-l" "apps/berth/berth.l"
-             "-e" "(berth [\"sh\" \"-c\" \"sleep 5\"])"])
+             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"sleep 5\"]))"])
  _ (test (two? md))
  m >md
  _ (rest 1200)                            ; let berth come up and moor its first child

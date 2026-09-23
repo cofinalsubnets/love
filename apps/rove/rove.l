@@ -25,7 +25,7 @@
  ; 4 a building's floor, 5 a door, 6 glass -- looked through and never entered: a road's
  ; end off the map, heaven's void -- 7 a step and 8 a platform; the vale's 9 dirt, 10 the
  ; bare spot, 11 timber -- the cottage seen from outside, a wall -- 12 garden, 13 a stair down
- (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
+ (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + d 'w * y) 0) 0)
  ; walked: anything laid, but for the tiles this floor calls solid. the engine lays 1 and
  ; 2 and knows no other number -- a floor that lays a wall of its own names it in 'solid
  (open? d x y) (: t (dat d x y) (0 < t && !(elem t (peep d 'solid ()))))
@@ -72,7 +72,7 @@
                    d 'rooms ? (lash (mid rm) (mid <(d 'rooms))),
                    pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
-   _ (try ((w * h) // (pl 4)))
+   _ (try (w * h // pl 4))
    ; a cramped floor can come up short: guarantee two joined rooms
    _ (#(d 'rooms) < 2 ?
       (: r1 '(1 1 3 3) r2 [(w - 4) (h - 4) 3 3]
@@ -88,15 +88,15 @@
  ; a list dealt out in a random order, and the first n of one
  (deal sb l) (:- (go l ())
    (go l acc) (two? l ? (: k (roll sb #l) (go (cat (snip-l l 0 k) (nth-on l (k + 1))) ((l k) . acc))) acc))
- (snip-l l a b) (a >= b ? () ((l a) . snip-l l (a + 1) b))
+ (snip-l l a b) (a < b ? (l a . snip-l l (a + 1) b))
  (nth-on l k) (k <= 0 ? l (nth-on >l (k - 1)))
- (first-n n l) (0 < n && two? l ? (<l . first-n (n - 1) >l) ())
+ (first-n n l) (0 < n && two? l ? (<l . first-n (n - 1) >l))
 
  ; --- the lantern: line-of-sight fov over bresenham strides ---
  ; a stride is clear when every cell strictly between the ends is looked through; the
  ; endpoint itself may be rock -- that is how a wall catches the light.
  (clear? d x0 y0 x1 y1) (:
-   dx |(x1 - x0) dy (0 - |(y1 - y0))
+   dx |(x1 - x0) dy -|(y1 - y0)
    sx (? (x0 < x1) 1 -1) sy (? (y0 < y1) 1 -1)
    (go x y e) (? (x = x1 && y = y1) 1
                (: e2 (2 * e)
@@ -324,7 +324,7 @@
  ; few cells short of the edge either side, so no row runs full and a word never sits
  ; against the frame. one list of rows per line
  (sign-flow ls w) (: wr (cite 'story 'wrap)
-                     (map (l \ (wr && (w - 10) < vlen l ? (wr l (w - 10)) [l])) ls))
+                   (map (l \ wr && (w - 10) < vlen l ? (wr l (w - 10)) [l]) ls))
  ; the screen row the box's top takes, for a box of nb rows
  (sign-top a n nb) (: q (a + (n - nb) // 2) (a < q ? q a))
  ; the line under screen row y, as an index into ls, or -1 off the box and its frame
@@ -370,7 +370,7 @@
  ; the last turn took and t0 when; answers the key to turn on
  (key-wait t0 last gap idle) (? (cue? 0)
                                 (: k (edkey in)
-                                   (k = last && (clock 0 - t0) < gap ? (key-wait t0 last gap idle) k))
+                                   (k = last && clock t0 < gap ? (key-wait t0 last gap idle) k))
                                 (idle (), key-wait t0 last gap idle))
  ; the polling shape: every key waiting handed to take under the same rule, the last
  ; key taken and its time riding g as 'lk and 'lt; answers how many were taken
@@ -378,7 +378,7 @@
   (:- (go 0) (go n)
    (? (cue? 0)
       (: k (edkey in)
-         (? (k = g 'lk && (clock 0 - g 'lt) < gap) (go n)
+         (? (k = g 'lk && clock (g 'lt) < gap) (go n)
             (take k, pins g 'lk k 'lt (clock 0), go (n + 1))))
       n))
  ; the queue eaten: keys typed at what stood before are not typed at what stands now --
@@ -406,10 +406,10 @@
                        (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
  ; ..and for a while: a box that goes up over what the keys were typed at
  settle-slice 25
- (settle ms) (? (0 < ms) (drain-keys (), rest settle-slice, settle (ms - settle-slice)))
+ (settle ms) (0 < ms ? (drain-keys (), rest settle-slice, settle (ms - settle-slice)))
 
  (note g s) (pin g 'msg (g 'msg ? (g 'msg + "; " + s) s))
- (mob-at g x y) <(filter (m \ x = m 'x && y = m 'y) (g 'ms))
+ (mob-at g x y) <(filter ({'x ^x 'y ^y} \ 1) (g 'ms))
  ; a mob stirs on the turns its pace divides, so heaven moves at half a climber's rate
- (due? g m) (: q ((g 'tn) % (m 'pc)) (0 = q)))
+ (due? g m) (0 = g 'tn % m 'pc))
 ) ; module rove

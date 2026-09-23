@@ -3,11 +3,11 @@
 ; pair; a river runs through the octagon's middle from its east edge off the map to the
 ; west, meandering a little, and each cube's path drops straight to it; there is no way
 ; out. someone is in every other cube, wandering. a stranger stands outside against your
-; glass, named in blocks and greeting you in blocks, and you talk through the pane. when
-; the talk is done the stranger is gone, the pane shatters to a drum, the others are
-; bones where they stood, the grass past the glass goes over to desert -- the grass
-; inside stays -- and the river runs dry: a stone stands in its bed near the west edge,
-; an inscription on it, and the way off the map is west along the bed, into the garage
+; glass, named in blocks, and you talk through the pane. when the talk is done the
+; stranger is gone, the pane shatters to a drum, the others are bones where they stood,
+; the grass past the glass goes over to desert -- the grass inside stays -- and the river
+; runs dry: a stone stands in its bed near the west edge, an inscription on it, and the
+; way off the map is west along the bed, into the garage
 ; (apps/rove/garage.l) where the seat carries it.
 ;
 ; a roguelike floor on rove: the plain is laid, not delved, the size of the screen and
@@ -99,7 +99,7 @@
               "-- any key --")
  ; what the stranger says: a node is its lines and its choices, a choice a key, its
  ; words and the node it leads to; a node with no choices closes, and closing is the
- ; end. a ~ is the stranger's name; the greeting goes in front of the first node
+ ; end. a ~ is the stranger's name
  chat-book '((start ("~ presses a hand to the glass.")
                     ((1 "\"How long did you sleep?\"" how)
                      (2 "\"Where is this place?\"" here)
