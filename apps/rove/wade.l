@@ -272,15 +272,13 @@
    c4 (over c3 (0 < bank) bank-pen)
    pw (mn 4) hw (max2 0.5 pw) dx (tb 'xs - mn 0)
    (over c4 ((0.0 < pw) * (y < mn 3) * (2 dx <= 2 hw)) tree-pen))
- ; a frame: two pixel rows a cell, one sgr per change, the rows joined by \r\n with no
- ; newline after the last, so a screen of just enough rows never scrolls. a pixel row is
- ; a tray of pens, the sky's and the trees' above the horizon and the water's below it
+ ; a frame, as view lays it: a pixel row is a tray of pens, the sky's and the trees' above
+ ; the horizon and the water's below it
  (wade-frame st) (: t (st 't) w (st 'w) h (st 'h) hz (st 'hz)
    _ (pin st 'rings (filter (r \ t - r 't < ring-life) (st 'rings)))
    tb (wade-tables st) mn (moon-at st)
-   j (jug 0)
    (src y) (y < hz ? (top-row y st tb mn t) (water-row y st tb mn t))
-   ; the words live here, each a band [x0 text ground] on its cell row, the ground the
+   ; the words live here, each a band [x0 text pen ground] on its cell row, the ground the
    ; average of the two pixel rows under the text
    ws (texts-at (st 'pz))
    (band i) (: s (snip (ws i) 0 (min2 #(ws i) w)) ty (h // 4 - text-row - i) x0 ((w - #s) // 2)
@@ -288,20 +286,9 @@
                (add a x) (: p (pen-rgb (peep ts x 236)) q (pen-rgb (peep bs x 236))
                             [(a 0 + p 0 + q 0) (a 1 + p 1 + q 1) (a 2 + p 2 + q 2)])
                sum (foldl add [0 0 0] (map (+ x0) ^#s)) n (2 * #s)
-               [x0 s (rgb-pen (sum 0 // n) (sum 1 // n) (sum 2 // n))])
+               [x0 s text-pen (rgb-pen (sum 0 // n) (sum 1 // n) (sum 2 // n))])
    bands (foldl (\ tab i (: ty (h // 4 - text-row - i) (0 <= ty < h // 2 ? (pin tab ty (band i)) tab))) {} ^#ws)
-   (row y x f b ts bs bd) (? (x < w)
-     (? (two? bd && bd 0 <= x < bd 0 + #(bd 1))
-        (: g (bd 2)
-           _ (f != text-pen || b != g ? (say j (sgr text-pen g)))
-           _ (say j (string (bd 1 (x - bd 0))))
-           (row y (x + 1) text-pen g ts bs bd))
-        (: f2 (peep ts x 236) b2 (peep bs x 236)
-           _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
-           _ (say j "▀")
-           (row y (x + 1) f2 b2 ts bs bd))))
-   (rows y) (? (y < h // 2) (row y 0 -1 -1 (src (2 * y)) (src (2 * y + 1)) (bands y), say j (esc + "[0m"), (? ((y + 1) < (h // 2)) (say j "\r\n")), rows (y + 1)))
-   (rows 0, slurp j))
+   (view-frame w h src bands))
  ; the state: the screen, where the player stands and faces, the horizon's row, the
  ; tick, the rings on the water, and whether they walk on by themselves
  (wade-new w h) (view! {'px 0.0 'pz 0.0 'th 0.0 't 0 'rings () 'walk 0 'done 0} w h (h // 2))

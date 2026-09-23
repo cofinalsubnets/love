@@ -310,9 +310,8 @@
      rings (map (p \ p 1) (sort (map (f \ (: dy (f * floor-h - ey) [(dy * dy) f])) (map (+ 1) ^(floors - 1)))))
      (each bands (b \ each rings (f \ ring b f))))
    (each ^w col))
- ; a frame: two pixel rows a cell, one sgr per change, the rows joined by \r\n with no
- ; newline after the last, so a screen of just enough rows never scrolls. the
- ; background rows are trays and the ledges a cask over them, and the flash tints both
+ ; a frame, as view lays it: the background rows are trays and the ledges a cask over
+ ; them, a pixel row a cask of the two, and the flash tints both
  (shaft-frame st) (: w (st 'w) h (st 'h) r shaft-r
    ex (st 'px) ez (st 'pz) ey (st 'y + eye-h)
    rs (view-rays st) vx0 (rs 0) vz0 (rs 1)
@@ -331,17 +330,12 @@
    _ (ledges! st tb ov)
    lv (int (st 'flash * 4.0 + 0.999))
    fm (0 < lv ? (flashes (lv - 1)) ())
-   (src y) (: rw (bg-row y st tb) (fm ? (peep fm rw 0) rw))
-   (pix x i ts) (: o (peep ov i 0) (0 = o ? (peep ts x 0) (fm ? (peep fm o 0) o)))
-   j (jug 0)
-   (row y x f b ts bs i0 i1) (? (x < w)
-     (: f2 (pix x (i0 + x) ts) b2 (pix x (i1 + x) bs)
-        _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
-        _ (say j "▀")
-        (row y (x + 1) f2 b2 ts bs i0 i1)))
-   (rows y) (? (y < h // 2) (row y 0 -1 -1 (src (2 * y)) (src (2 * y + 1)) (w * 2 * y) (w * (2 * y + 1)),
-                             say j (esc + "[0m"), (? ((y + 1) < (h // 2)) (say j "\r\n")), rows (y + 1)))
-   (rows 0, slurp j))
+   (src y) (: rw (bg-row y st tb) ts (fm ? (peep fm rw 0) rw) i0 (w * y) px (cask w)
+              (go x) (? (x < w) (: o (peep ov (i0 + x) 0)
+                                  _ (pin px x (0 = o ? (peep ts x 0) (fm ? (peep fm o 0) o)))
+                                  (go (x + 1))))
+              (go 0, px))
+   (view-frame w h src {}))
  ; --- the song: nothing but what happens -- a thud on landing, the harder the louder,
  ; and two notes when the top door opens; out any port a frame's worth at a time ---
  song-chunk (song-rate // fps)

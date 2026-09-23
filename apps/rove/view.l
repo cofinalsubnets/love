@@ -1,7 +1,7 @@
 ; view -- what a first-person level in half blocks rides: the screen as a camera on the
 ; state, the rays its columns cast, the pens said a change at a time, and the small
 ; arithmetic the scenes share. wade (apps/rove/wade.l) and shaft (apps/rove/shaft.l) borrow it.
-(module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays)
+(module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays view-frame)
 (:
  esc (string 27)
  pi 3.141592653589793
@@ -30,5 +30,20 @@
  (view-size st w r n) (: h (2 * r) hz (st 'hz * h // st 'h) (view-hz (view! st w h hz) hz n))
  ; each column's ray through its middle, facing 'th: [x z] trays of its direction
  (view-rays st) (: th (st 'th) sn (sin th) cs (cos th) u ((iota (st 'w) + 0.5 - st 'cx) / st 'foc)
-                   [(sn + u * cs) (cs - u * sn)]))
+                   [(sn + u * cs) (cs - u * sn)])
+ ; a frame: two pixel rows a cell, the upper half block with the top pixel in the pen and
+ ; the bottom in the ground, one sgr per change, the rows joined by \r\n with no newline
+ ; after the last, so a screen of just enough rows never scrolls. (src y) is pixel row
+ ; y's pens, a tray or a cask; bands holds a cell row's words, [x0 text fg bg], laid over
+ ; the cells they cover
+ (view-frame w h src bands) (: j (jug 0)
+   (row x f b ts bs bd) (? (x < w)
+     (: tx (two? bd && bd 0 <= x < bd 0 + #(bd 1))
+        f2 (tx ? (bd 2) (peep ts x 0)) b2 (tx ? (bd 3) (peep bs x 0))
+        _ (f2 != f || b2 != b ? (say j (sgr f2 b2)))
+        _ (say j (tx ? (string (bd 1 (x - bd 0))) "▀"))
+        (row (x + 1) f2 b2 ts bs bd)))
+   (rows y) (? (y < h // 2) (row 0 -1 -1 (src (2 * y)) (src (2 * y + 1)) (peep bands y ()),
+                             say j (esc + "[0m"), (? ((y + 1) < (h // 2)) (say j "\r\n")), rows (y + 1)))
+   (rows 0, slurp j)))
 ) ; module view
