@@ -32,7 +32,7 @@
 ; folded from the left, so a later word wins a key. a macro, as pins is, since a
 ; binary op is binary: it lives with the reader rather than the module, and so is
 ; in hand wherever harp's names are
-(:: 'psets (\ l (foldl (\ a q (list pset a q)) (cap l) (cup l))))
+(:: 'psets (\ l (foldl (\ a q (list 'pset a q)) (cap l) (cup l))))
 
 (module '(harp
   qi qzero qone qhalf qneg qmin qmax qfl qfq qnum

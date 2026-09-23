@@ -13,14 +13,15 @@
 ; garage-turn and garage-frame are state in and state out, the song feeds any port --
 ; gated headless by test/host/garage.l. garage-walk takes a stage already raised, which
 ; is how the apartment hands over on the same screen, and hands it on the same way to
-; the shaft (apps/rove/shaft.l) when the player walks off west; garage-run raises one. no
-; music yet: the song is silence with the shape the rest have, for the effects and a
-; tune to go into.
+; the shaft (apps/rove/shaft.l) when the player walks off west; garage-run raises one.
+; the music is the machinery: a harp loop, garage-tune, pulled a cycle at a time into
+; the song, which feeds any port.
 ;
 ; run: love garage    h j k l or the arrows walk, y u b n slant; q or esc leaves
 (module (garage garage-run garage-walk garage-main garage-new garage-turn garage-frame
          garage-bar garage-lay garage-face garage-stride garage-stir rat-interaction
-         car-cells bay-w bay-d bed-h rat-glyph garage-song-new garage-song-feed song-chunk)
+         car-cells bay-w bay-d bed-h rat-glyph garage-tune garage-song-new garage-song-feed
+         song-chunk song-cps)
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
@@ -226,14 +227,76 @@
    _ (pin d 'box (two? sg ? (sign-rect <sg >sg 1 rows cols) ()))
    (two? sg ? (sign-over f <sg >sg 1 rows cols) f))
 
- ; --- the song: silence, in the shape the others have, a chunk out the card at a time ---
+ ; --- the tune: machinery -- a plant throbbing under a compressor, a servo, a ratchet, a
+ ; scrape and a bin lid. every layer a line of the stack: a ; at its front silences one,
+ ; and the lines under the stack are spares to swap in. heard alone: the stack pasted
+ ; into love synth, :cps 0.55 and :send.
+ ; harp is cited by name, never borrowed: borrowing it would put its note and rev over
+ ; rove's and prel's for everything below. built on first use, so a seat without harp
+ ; never reaches these names.
+ (garage-tune _) (:
+   (h w) (cite 'harp w)
+   stack (h 'stack) pset (h 'pset) hush (h 'hush) every (h 'every) whenmod (h 'whenmod)
+   ply (h 'ply) fast (h 'fast) degby (h 'degby) degrade (h 'degrade) range (h 'range)
+   rand (h 'rand) saw (h 'saw)
+   hit (h 'hit) note (h 'note) gain (h 'gain) speed (h 'speed) legato (h 'legato) slide (h 'slide)
+   (stack [
+    ; the plant: a low throb, two saws a hair apart beating against each other
+    (psets (hit "saw*8") (note "[-31, -30.9]") (legato 0.32) (gain 0.14))
+    ; the compressor: a long hiss let go on the one, a shorter one answering off the beat
+    (psets (hit "oh?0.7 ~ ~ [~ oh?0.3]") (speed "0.12 ~ ~ [~ 0.3]") (gain "0.5 ~ ~ [~ 0.3]"))
+    ; the servo: one square note whining up two octaves on the third beat, and every
+    ; third cycle down them from the top
+    ;(degby 0.7 (every 3 (\ q (psets q (note 14) (slide -24)))
+    ; (psets (hit "~ ~ sqr ~") (note -10) (slide 24) (legato 1.4) (gain 0.26))))
+    ; the ratchet: rim pings, the pitch set by speed -- low is a bolt, high a tick
+    (degrade (psets (hit "<rim(5,16) rim(5,16,3) rim(5,16,5)>") (speed "<0.35 0.5> 3.2 0.7 4.5 0.35") (gain 0.55)))
+    ; the scrape: a grain cloud of hats at random gains, the fourth bar of four
+    (whenmod 4 3 (\ q (psets (hit "hh*48?") (speed 0.4) (gain (range 0.05 0.45 rand)))) hush)
+    ; the plate: a chime an octave or two up, inharmonic, cut short -- a bin lid
+   ; (psets (hit "~ chime ~ ~ ~ ~ [chime ~ chime] ~") (note "~ 19 ~ ~ ~ ~ [26 ~ 23] ~") (legato 0.35) (gain 0.22))
+   ]))
+ ; spares --
+ ; the servo as it was: twelve short square notes stepping up a ramp
+ ;  (psets (hit "~ ~ sqr*12 ~") (note (range -10 14 (fast 4 saw))) (legato 0.045) (gain 0.26))
+ ; the press: a kick slowed to a stamp, every other cycle, the plate stuttered after it
+ ;  (psets (hit "<bd ~> ~ ~ ~") (speed 0.55) (gain 0.7))
+ ;  (ply 3 (psets (hit "~ ~ ~ chime") (note 31) (legato 0.08)))
+ ; the alarm: two triangles a quarter tone apart, held, wandering by a semitone a cycle
+ ;  (psets (hit "tri tri") (note "<[7, 7.5] [8, 8.5] [6, 6.5]>") (legato 0.9) (gain 0.12))
+ ; the belt: the ratchet's figure on the snare's noise, dropped a third of the time
+ ;  (psets (hit "sn(7,16)?0.35") (speed 2.5) (gain 0.3))
+
+ ; --- the song: the tune a cycle at a time, a chunk out the card at a time --------------
+ song-cps 0.55                          ; cycles a second
  song-chunk (song-rate // 30)
  song-gain 5200.0
- (garage-song-new h st) {'h h 'fpos 0 'vs () 'sb {st}}
- (garage-song-feed s) (: base (s 'fpos)
-                         live (filter (v \ v 0 >= base) (s 'vs))
-                         _ (pins s 'vs live 'fpos (base + song-chunk))
-                         (say (s 'h) (pack (mixdown live base song-chunk) song-chunk song-gain)))
+ ; the song: its port, the tune, a spun die, the next cycle to pull and the frame it
+ ; starts on, the frames written, and the voices as [start voice] -- a whole cycle is
+ ; scheduled at once, and a voice not begun is silent but not free, its closure runs
+ ; over every frame of a chunk, so the start keeps it out of the mix until it comes
+ (garage-song-new tune h st) {'h h 'tune tune 'sb {st} 'fpos 0 'cyc 0 'next 0 'vs ()}
+ ; one cycle's onsets as voices, the cycle starting at frame st and spc frames long.
+ ; cycle time is a rational and frame time an integer: qnum is the one crossing
+ (song-voices s c st spc)
+  (: p (s 'tune) evwb (cite 'harp 'evwb) evv (cite 'harp 'evv) onset? (cite 'harp 'onset?)
+     qi (cite 'harp 'qi) qnum (cite 'harp 'qnum)
+   (filter two? (map (x \ (: at (st + int (spc * qnum (evwb x - qi c)))
+                             v (mkvoice at (evv x) song-rate)
+                           (two? v ? [at v])))
+                     (filter onset? (p (qi c) (qi (c + 1)))))))
+ ; one chunk out the port: the cycles reaching into it pulled in, the voices begun taken
+ ; up, the voices ringing summed. the port is any jug, so the song gates headless
+ (garage-song-feed s) (: base (s 'fpos) lim (base + song-chunk) spc (int (song-rate / song-cps))
+   (pull _) (? (!(s 'tune) || lim <= s 'next) ()
+               (: _ (pin s 'vs (s 'vs + song-voices s (s 'cyc) (s 'next) spc))
+                  _ (pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc))
+                (pull ())))
+   _ (pull ())
+   live (filter (p \ p 1 0 >= base) (s 'vs))          ; not finished
+   now (filter (p \ p 0 < lim) live)                  ; ..and already begun
+   _ (pins s 'vs live 'fpos lim)
+   (say (s 'h) (pack (mixdown (map (p \ p 1) now) base song-chunk) song-chunk song-gain)))
 
  ; --- the walk: on a stage already raised, the tower's way -- the wait is the song ---
  (garage-walk _) (: ws (tty 1)
@@ -241,10 +304,11 @@
    c (two? ws && 19 < <>ws ? <>ws 80)
    g (garage-new (c < 100 ? c 100) r (wheel (clock 0)))
    hn (? (tablet? (cite 'harp)) (: q (horn song-rate 2) (? (nom? q) () q)) ())
-   sng (? hn (garage-song-new hn (wheel (clock 0))) ())
+   sng (? hn (garage-song-new (garage-tune ()) hn (wheel (clock 0))) ())
    pace (pacer ())
-   (feed! _) (? (horn-lag hn < song-lead-of (pace! pace)) (garage-song-feed sng) (rest 5))
-   (idle _) (? sng (feed! ()) (rest 30))
+   ; the wait is the song: fed up to the lead, and a rest when the card wants nothing
+   (feed _) (song-fill hn (song-lead-of (pace! pace)) (\ _ (garage-song-feed sng)))
+   (idle _) (? !sng (rest 30) (feed ()) 0 (rest 5))
    (turn k) (? (k = 27 && g 'sign) (pin g 'sign ())
                (k @ (113 || 27 || -7) (pin g 'over 'fled)
                 (garage-turn g (steer k))))

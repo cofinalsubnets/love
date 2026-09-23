@@ -4,7 +4,7 @@
 ; columns, the bays' lines, wrecks in some bays and never on the bed, the bed in
 ; through the east wall and out through the west -- the rats wandering the bare floor,
 ; a rat bumped, the walls and the wrecks holding, the way out west and not east, and
-; the song into a jug.
+; the song into a jug, the tune's cycles pulled as the head reaches them.
 ;   cat test/00-init.l test/host/garage.l | out/love
 
 (borrow 'garage)   ; the artifact's module, warm from the tree
@@ -80,11 +80,19 @@
        (any (y \ 5 = t 0 y) ^h) (any (y \ 5 = t (w - 1) y) ^h)
        (5 = t (g 'p 'x) (g 'p 'y))))
 
-; --- the song: silence, a chunk a feed ---
-(: j (jug 0) s (garage-song-new j (wheel 7))
-   _ (each ^5 (i \ garage-song-feed s))
+; --- the song: a chunk a feed, the tune's cycles pulled as the head reaches them and its
+; voices sounding; no tune, and the same chunks are silence ---
+(: j (jug 0) s (garage-song-new (garage-tune ()) j (wheel 7))
+   spc (int (song-rate / song-cps))
+   n (1 + spc // song-chunk)                              ; feeds enough to reach the second cycle
+   _ (each ^n (i \ garage-song-feed s))
    out (slurp j)
- (test (#out = 5 * 4 * song-chunk) (all (i \ 0 = out i) ^#out)))
+   j2 (jug 0) s2 (garage-song-new () j2 (wheel 7))
+   _ (each ^5 (i \ garage-song-feed s2))
+   out2 (slurp j2)
+ (test (#out = n * 4 * song-chunk) (any (i \ 0 != out i) ^#out)
+       (2 = s 'cyc) (2 * spc = s 'next) (n * song-chunk = s 'fpos)
+       (#out2 = 5 * 4 * song-chunk) (all (i \ 0 = out2 i) ^#out2) (0 = s2 'cyc)))
 
 (test_fin (),
  puts "garage: ok -- the bed runs through, the rats wander, the wrecks and the walls hold, and west is the way\n")
