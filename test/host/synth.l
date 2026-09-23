@@ -7,6 +7,8 @@
 
 (borrow 'synth)   ; the artifact's module, warm from the tree
 (borrow 'vi)      ; a buffer, for the loop's ex words
+(borrow 'harp)    ; the events, to ask a text read by
+(borrow 'play)    ; harp-read
 
 (: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
    (has? h n) (find h n 0)
@@ -68,10 +70,11 @@
    _ (each ^40 (i \ synth-feed st j)) out (slurp j)
    loud (net (map (i \ (out (i * 97) != 0 ? 1 0)) ^(#out // 97)))
    c1 (st 'cyc)
+   ahead (two? (st 'due) && all (p \ (st 'fpos) <= p 0) (st 'due))   ; pulled voices wait for their start
    _ (synth-send st "(nosuch 1)") m3 (st 'lmsg) kept (st 'pat)     ; a bad form: said, and the playing one kept
    _ (synth-send st "(fast 2 (hit (mini \"bd\")))") m4 (st 'lmsg)
    _ (synth-send st "") m5 (st 'lmsg)
-   _ (synth-stop st) off (st 'on) c2 (st 'cyc)
+   _ (synth-stop st) off (st 'on) c2 (st 'cyc) gone (st 'due = ())
    _ (each ^400 (i \ synth-feed st j)) whole (slurp j)
    n #whole quiet (all (i \ 0 = whole (n - 1 - i)) ^(4 * synth-chunk))
    c3 (st 'cyc)
@@ -79,7 +82,7 @@
    _ (synth-cps! st 1.0) _ (synth-step st 93) up (st 'cps) _ (synth-step st 91) _ (synth-step st 91) down (st 'cps)
    _ (synth-step st 112) p1 (st 'on) _ (synth-step st 112) p2 (st 'on)
    _ (synth-step st 113)
- (test (on = 1) (m1 = "sent") (0 < c1) (0 < loud)
+ (test (on = 1) (m1 = "sent") (0 < c1) (0 < loud) ahead gone
        (m3 != "sent") (kept != ()) (m4 = "sent") (m5 = "sent")
        (off = 0) (c2 = c3) quiet
        (hi = synth-cps-hi) (lo = synth-cps-lo)
@@ -100,6 +103,20 @@
  (test (m1 = "sent") (on = 1) (t = "sent") (c = 1.0) (0 < #m2) (0 < #m3)
        (m4 = "stopped") (off = 0) (m5 = "playing") (back = 1)
        (m6 = "not an ex command: zz")))
+
+; --- the text is read as harp reads it: a form's names are harp's even where the prel
+; --- has one of the same name, and comment lines before the paren are passed over
+(: (evs p) (filter onset? (p (qi 0) (qi 1)))
+   r (harp-read "(jux rev (hit (mini \"bd sn\")))")
+   right (filter (x \ 1.0 = (evv x) 'pan) (evs r))
+   bdr (filter (x \ "bd" = (evv x) 's) right)
+   g (harp-read "(pset (hit (mini \"hh*4\")) (gain (range 0.0 1.0 sine)))")
+   gs (map (x \ (evv x) 'gain) (evs g))
+   c (harp-read "; a word first\n  ; and another\n(hit (mini \"bd*3\"))")
+   m (harp-read "bd sn")
+ (test (2 = #right) (1 = #bdr) (qhalf = evwb (bdr 0))      ; the right side is the cycle turned round
+       (4 = #gs) (0 < net (map (x \ (x != gs 0)) gs))       ; a swell, not the prel's sin of a span
+       (3 = #(evs c)) (2 = #(evs m))))
 
 (test_fin (),
  puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, and the loop plays what the buffer says\n")

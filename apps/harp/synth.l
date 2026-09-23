@@ -9,7 +9,9 @@
 ; and never of keys let go, and a held key's repeats are dropped as the games drop them.
 ;
 ; the horn is fed a small chunk at a time, a short lead ahead of the speaker, paced by
-; the loop's gap (rove's pacer), so a strike sounds a few hundredths of a second on.
+; the loop's gap (rove's pacer), so a strike sounds a few hundredths of a second on;
+; the filler is rove's song-fill, which stops when the card stops taking, so a loop
+; heavier than the seat can mix gaps rather than holds the keys.
 ;
 ; the shifted row is the keymap's: what shift makes of the digits is the terminal's to
 ; say, and synth-shifted is the us row. alt reaches the terminal as an escape before
@@ -57,9 +59,10 @@
  synth-cps-hi 4.0
 
  ; the loop rides the state: 'pat the pattern playing, 'nextp the one sent since,
- ; 'on, 'cyc the next cycle to pull and 'cstart the frame it starts on, 'lmsg the
- ; loop's last word for the screen
- (synth-new _) {'oct 0 'tim 0 'vs () 'fpos 0 'last () 'lk 0 'lt 0 'dirty 1
+ ; 'on, 'cyc the next cycle to pull and 'cstart the frame it starts on, 'due the
+ ; voices pulled but not begun as [start voice], 'lmsg the loop's last word for the
+ ; screen
+ (synth-new _) {'oct 0 'tim 0 'vs () 'due () 'fpos 0 'last () 'lk 0 'lt 0 'dirty 1
                 'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0}
 
  ; --- a key into a note ---------------------------------------------------------------
@@ -96,21 +99,26 @@
                          (? (two? r) (pins st 'lmsg <>r 'dirty 1)
                             (: _ (pins st 'nextp r 'lmsg "sent" 'dirty 1)
                                (st 'on ? st (synth-play st)))))
- ; play: from the next frame written, cycle 0; stop: no more pulled, what rings rings out
+ ; play: from the next frame written, cycle 0; stop: no more pulled, what has not
+ ; begun dropped, what rings rings out
  (synth-play st) (st 'on ? st (pins st 'on 1 'cyc 0 'cstart (st 'fpos) 'dirty 1))
- (synth-stop st) (pins st 'on 0 'dirty 1)
+ (synth-stop st) (pins st 'on 0 'due () 'dirty 1)
  (synth-cps! st v) (pins st 'cps (v < synth-cps-lo ? synth-cps-lo (synth-cps-hi < v ? synth-cps-hi v)) 'dirty 1)
- ; the cycles starting before frame lim, their onsets as voices from their frames; a
- ; pattern sent takes over at a cycle's start. cycle time is a rational and frame time
- ; an integer: qnum is the one crossing, as in play's own run
+ ; the cycles starting before frame lim, their onsets as voices from their frames, kept
+ ; with their start until it comes: a voice not begun is silent but not free, its closure
+ ; runs over every frame of a chunk, and a cycle is pulled whole. a pattern sent takes
+ ; over at a cycle's start. cycle time is a rational and frame time an integer: qnum is
+ ; the one crossing, as in play's own run
  (synth-pull st lim) (:- (go ()) (go _)
    (? (!(st 'on) || lim <= st 'cstart) ()
       (: _ (? (st 'nextp) (pins st 'pat (st 'nextp) 'nextp ()) ())
          p (st 'pat) c (st 'cyc) f0 (st 'cstart) spc (int (song-rate / st 'cps))
-         vs (? p (filter two? (map (x \ mkvoice (f0 + int (spc * qnum (evwb x - qi c))) (evv x) song-rate)
+         vs (? p (filter two? (map (x \ (: at (f0 + int (spc * qnum (evwb x - qi c)))
+                                          v (mkvoice at (evv x) song-rate)
+                                        (two? v ? [at v] ())))
                                    (filter onset? (p (qi c) (qi (c + 1))))))
                  ())
-         _ (pins st 'vs (st 'vs + vs) 'cyc (c + 1) 'cstart (f0 + spc) 'dirty 1)
+         _ (pins st 'due (st 'due + vs) 'cyc (c + 1) 'cstart (f0 + spc) 'dirty 1)
          (go ()))))
  ; the buffer's ex words, vi's door: answers true for one of the loop's
  (synth-ex st s w arg) (: (num t) (: v <(sound t) (charm? v ? v ()))
@@ -123,12 +131,13 @@
                      1)
       ()))
 
- ; one chunk out the port: the loop's next cycles pulled in, and the voices still
- ; ringing summed. the port is any jug
- (synth-feed st h) (: base (st 'fpos)
-                      _ (synth-pull st (base + synth-chunk))
-                      live (filter (v \ v 0 >= base) (st 'vs))
-                      _ (pins st 'vs live 'fpos (base + synth-chunk))
+ ; one chunk out the port: the loop's next cycles pulled in, the voices due in this
+ ; chunk taken up, and the voices still ringing summed. the port is any jug
+ (synth-feed st h) (: base (st 'fpos) lim (base + synth-chunk)
+                      _ (synth-pull st lim)
+                      now (map (p \ p 1) (filter (p \ p 0 < lim) (st 'due)))
+                      live (filter (v \ v 0 >= base) (st 'vs + now))
+                      _ (pins st 'vs live 'due (filter (p \ p 0 >= lim) (st 'due)) 'fpos lim)
                       (say h (pack (mixdown live base synth-chunk) synth-chunk synth-gain)))
 
  ; --- a key: a note struck, the timbre or the octave turned, the loop played or
@@ -184,8 +193,7 @@
    hn (: h (horn song-rate 2) (? (nom? h) () h))
    pace (pacer ())
    (feed _) (: l (lead-of (pace! pace))
-               (fill _) (? (hn && horn-lag hn < l) (synth-feed st hn, fill ()))
-               (fill ()))
+               (? hn (song-fill hn l (\ _ (synth-feed st hn))) 0))
    (go _) (: _ (feed ())
              _ (? (st 'dirty) (say out (synth-frame st), flush out, pin st 'dirty 0))
              (keys st = 'quit || st 'over ? () (rest 4, go ())))
@@ -202,8 +210,7 @@
    hn (: h (horn song-rate 2) (? (nom? h) () h))
    pace (pacer ())
    (feed _) (: l (lead-of (pace! pace))
-               (fill _) (? (hn && horn-lag hn < l) (synth-feed st hn, fill ()))
-               (fill ()))
+               (? hn (song-fill hn l (\ _ (synth-feed st hn))) 0))
    sz (br 'hsize 0) hb (br 'harbour <sz <>sz)
    buf (vi 'vi-open f)
    _ (pin buf 'exmore '("send" "play" "stop" "cps"))

@@ -11,7 +11,7 @@
          fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at note
          nth-on open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-over sign-pen
-         sign-rect sign-top sign-tpen snip-l song-lead song-lead-max song-lead-of song-rate steer
+         sign-rect sign-top sign-tpen snip-l song-fill song-lead song-lead-max song-lead-of song-rate steer
          tail? tap-steer toward vlen)
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
@@ -404,6 +404,14 @@
               (p 'gap))
  (song-lead-of gap) (: n (int (2.5 * gap * song-rate / 1000.0))
                        (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
+ ; the horn fed up to a lead: feed while the lag is under it AND EACH FEED RAISES IT.
+ ; the card's write is non-blocking and a full ring takes nothing, so a lead past the
+ ; ring can never be reached, and a feed slower than the frames it makes loses ground
+ ; every time: either way the lag stops rising, and the filler stops with it rather
+ ; than loop, so the keys are read and the sound merely gaps. answers the feeds made
+ (song-fill hn lead feed) (:- (go (horn-lag hn) 0) (go l0 k)
+                            (? (l0 < lead) (: _ (feed ()) l1 (horn-lag hn) (? (l0 < l1) (go l1 (k + 1)) (k + 1)))
+                               k))
  ; ..and for a while: a box that goes up over what the keys were typed at
  settle-slice 25
  (settle ms) (0 < ms ? (drain-keys (), rest settle-slice, settle (ms - settle-slice)))

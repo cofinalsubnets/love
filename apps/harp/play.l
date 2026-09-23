@@ -218,9 +218,21 @@
    ; and evaluated with the harp module already spliced; -s is a score file
    ; (apps/harp/score.l), its bars the cycles unless -n says. several arguments stack.
    ; a parenthesised text is love over harp's names: ev runs in the global scope, where
-   ; harp is not, so the form is read under a borrow of it
-   (harp-read a) (0 < #a && 40 = a 0 ?  (sound ("(: _ (borrow 'harp) " + a + ")") @ (f . _) (ev f) hush)
-                                        (hit (mini a)))
+   ; harp is not, so harp is spliced there first -- once, and before the text is read,
+   ; since a name folds into a form at its compile and the prel already owns rand, sine
+   ; and rev. blanks and comment lines before the paren are passed over, so a loop file
+   ; may open with a word about itself
+   (harp-lead a) (:- (go 0) n #a
+                  (go i) (? (i >= n) i
+                            (32 >= a i) (go (i + 1))
+                            (59 = a i) (: (eol j) (j < n && 10 != a j ? (eol (j + 1)) j) (go (eol i)))
+                            i))
+   spliced (tablet 0)
+   (harp-splice _) (? (peep spliced 0 0) ()
+                      (pin spliced 0 1, ev (<(sound "(borrow 'harp)"))))
+   (harp-read a) (: i (harp-lead a)
+                    (i < #a && 40 = a i ? (harp-splice (), sound a @ (f . _) (ev f) hush)
+                                          (hit (mini a))))
    (harp-atoi s) (:- (go 0 0) n #s
                   (go i acc) (? (i >= n) acc (go (i + 1) ((acc * 10) + ((s i) - 48)))))
    (harp-atof s) (sound s @ (r . _) r 0)
