@@ -991,19 +991,17 @@ void *malloc(size_t), free(void*),
 size_t strlen(char const*);
 
 // the lean scalar boxes: {ap, payload} GC leaves, copied like bignums
-struct ai_gem { lvm_t *ap; word w; };
+struct ai_gem { lvm_t *ap; union { word w; ai_flo_t d; }; };   // the payload word is the double
 #define gem_req Width(struct ai_gem)
 #define gem(_) ((struct ai_gem*)(_))
 #define wbig_req b2w(sizeof(struct ai_big) + wlimbs * sizeof(ai_limb))   // a word-sized magnitude, boxed
 #define box_req (gem_req > wbig_req ? gem_req : wbig_req)   // what emit_int/emit_gem reserve
-struct ai_twin { lvm_t *ap; word re, im; };   // two punned-double payload words
+struct ai_twin { lvm_t *ap; union { word re; ai_flo_t dre; }; union { word im; ai_flo_t dim; }; };   // two double payload words
 #define twin(_) ((struct ai_twin*)(_))
-// pun through a union, not memcpy(&local,..): the memcpy form escapes a stack local, and
-// clang -Os then refuses the sibling call out of any inlining VM ap (tools/vmret.l)
+// the payload reads and writes as a union member: no stack temporary (memcpy(&local,..) or a
+// compound literal), whose frame address would cost an inlining caller its sibling calls
 _Static_assert(sizeof(ai_flo_t) == sizeof(uintptr_t), "float box assumes ai_flo_t is pointer-width");
-typedef union { uintptr_t u; ai_flo_t d; } ai_flo_pun;
-static ai_inline ai_flo_t gem_get(word x) {
- return ((ai_flo_pun){ .u = ((struct ai_gem*) x)->w }).d; }
+static ai_inline ai_flo_t gem_get(word x) { return ((struct ai_gem*) x)->d; }
 // allocate a float box at *hpp (caller holds Have(gem_req)); no &local, so the caller keeps its tail call.
 // the law, the one real-float box-write: NaN collapses to 0 so the order stays total and
 // !x == (0 = $x) holds. inf rides through. glaze's jit lanes emit the same collapse.
@@ -1012,14 +1010,12 @@ static ai_inline word mk_gem(word **hpp, ai_flo_t v) {
  struct ai_gem *f = (struct ai_gem*) *hpp;
  *hpp += gem_req;
  f->ap = lvm_gembox;
- f->w = ((ai_flo_pun){.d = v}).u;
+ f->d = v;
  return word(f); }
 
-static ai_inline ai_flo_t twin_re(word x) {
- return ((ai_flo_pun){ .u = ((struct ai_twin*) x)->re }).d; }
+static ai_inline ai_flo_t twin_re(word x) { return ((struct ai_twin*) x)->dre; }
 
-static ai_inline ai_flo_t twin_im(word x) {
- return ((ai_flo_pun){ .u = ((struct ai_twin*) x)->im }).d; }
+static ai_inline ai_flo_t twin_im(word x) { return ((struct ai_twin*) x)->dim; }
 
 static ai_inline ai_flo_t twin_mod(word x) {   // |z|
  ai_flo_t re = twin_re(x), im = twin_im(x);
@@ -1027,8 +1023,7 @@ static ai_inline ai_flo_t twin_mod(word x) {   // |z|
 
 // mk_twin allocates at *hpp (caller holds Have(twin_req)); no &local taken
 static ai_inline void twin_set(struct ai_twin *v, ai_flo_t re, ai_flo_t im) {
- v->re = ((ai_flo_pun){ .d = re }).u;
- v->im = ((ai_flo_pun){ .d = im }).u; }
+ v->dre = re, v->dim = im; }
 
 static ai_inline word mk_twin(word **hpp, ai_flo_t re, ai_flo_t im) {
  struct ai_twin *v = (struct ai_twin*) *hpp;

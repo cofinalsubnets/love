@@ -948,7 +948,7 @@
     (: (go ps as benv acc rbs sbs)
         (? (one? ps) [benv acc rbs sbs]
            (: nm <<ps pty <><ps
-              kb (? (kb? && kb? nm)
+              kb (? (kb? && kb? nm && !(flo? pty))
                     (: kc (knum g <as)
                        (? (one? kc) ()
                           (: cv (cnum g ['cast pty ['num <kc]])
@@ -963,6 +963,9 @@
                        (go >ps >as ([nm ['reg al] pty] . benv) acc rbs sbs))
                  (: r (cgexpr g env <as ())
                     (? (bad? r) 'bad
+                       (flo? pty)                             ; a double param: its slot, stored as one
+                        (: off (ntmp g pty)
+                           (go >ps >as ([nm off pty] . benv) (acc + asflo g r + fstf g pty 'r4 off 'f0) rbs sbs))
                        (pair? g pty)                          ; a pair param: an 8-byte slot, both words
                         (: off (ntmp g 'llong)
                            (go >ps >as ([nm off pty] . benv) (acc + asll g r + pst 'r4 off) rbs sbs))
@@ -1041,6 +1044,8 @@
                  (pin g 'fesc fe0, pin g 'strs strs0, 'no)
                 (!fe0 && g 'fesc)          ; the body took a frame address: keep the caller lean
                  (pin g 'fesc (), pin g 'strs strs0, 'no)
+                (leas? bf)                 ; ..or consumed one (a compound literal): it would cost the caller its tail calls
+                 (pin g 'strs strs0, 'no)
                 (<>br + bf)))))
    ; (v & k) as a bare condition: test is flags-only, so the value's register survives (a mapped
    ; local stays mapped); the 'log gate is exactly test's immediate reach on each backend
@@ -6466,7 +6471,8 @@
                          <(peep (g 'sigs) (g 'fn) ['long ()]))         ; else the current function's
                    res
                    (? (bad? r) 'bad
-                      (flo? rt)                                        ; a double return leaves f0 (xmm0; never inline -- gated);
+                      (flo? rt && il) (asflo g r + [['jmp il]])       ; a spliced double answers in f0, the call's own protocol
+                      (flo? rt)                                        ; a double return leaves f0 (xmm0);
                        (asflo g r                                      ; v6-M base ABI carries a double out on the r0:r1 pair,
                         + (? (t32f? g && (= rt 'float)) '((cvtsd2ss f0 f0))   ; AAPCS-VFP: narrow into s0, d0's own low half
                              !(v6m? g) ()                              ; a bare float as one word (binary32 in r0)
@@ -6716,15 +6722,16 @@
    (oneret? (i . u))                                  ; decls* + one trailing `return expr` (the b2w shape)
     (i @ ('decl . _) (oneret? u)
          (('ret . rv . _) && two? rv) !(two? u))
-   (inlok? f sig aln)                               ; aln: __attribute__((always_inline)) -- the author's word waives the size gate
+   (inlok? g f sig aln)                             ; aln: __attribute__((always_inline)) -- the author's word waives the size gate
     (: rt (? (two? sig) <sig 'long)
        items <><>>>f
+       (dbl? ty) (= ty 'double && fsel? g)              ; a double binds and returns in the float file
        (pok ps n) (? !(two? ps) (n <= 6)
                      (: pty <><ps                               ; a d128 param would bind only its lo word -- a real call takes it
-                        (? (flo? pty || stru? pty || arr? pty || d128? pty) ()
+                        (? ((flo? pty && !(dbl? pty)) || stru? pty || arr? pty || d128? pty) ()
                            (pok >ps (n + 1)))))
        (? !(two? sig) ()
-          (flo? rt || stru? rt) ()
+          ((flo? rt && !(dbl? rt)) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
           !(pok <>>f 0) ()
           ; the size gate on the shown body: 600 for a single-return body, 250 for a branchy one
@@ -6782,6 +6789,8 @@
            (pin g 'fesc fe0, pin g 'strs strs0, 'no)
           (!fe0 && g 'fesc)                   ; the splice took a frame address (an & arg too -- the
            (pin g 'fesc (), pin g 'strs strs0, 'no)   ; real call's arg lane wraps it, bind cannot): keep the caller lean
+          (leas? ibd)                                  ; ..or consumed one (a compound literal): it would cost the
+           (pin g 'strs strs0, 'no)                    ; caller its tail calls
           (mkv rt 'r0 (<>br + ibd + [['label ilb9]]))))
 
    ; -- respell: a name declared twice in one fn conflates in alive and kprop, so each later decl
@@ -7612,7 +7621,7 @@
                          _ (? (<f = 'fn && !nolin &&
                                !(elem <>f weaks) &&
                                !(elem <>f noinls) &&
-                               inlok? f (peep sigs <>f ()) (elem <>f ainls))
+                               inlok? g f (peep sigs <>f ()) (elem <>f ainls))
                               (pin (g 'inl) <>f f))
                          (recfns >fs)))
        _ (recfns <>ast)
