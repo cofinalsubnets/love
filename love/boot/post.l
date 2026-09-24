@@ -553,40 +553,51 @@
               (pin rng-box () >r,
                constellation? n && 0 < n ? (n * <r) <r)))
 
-; /// -- rationals: an exact field as a coin over reduced (num den). the twin's peer: 3 /// 4
-; builds one, and one prints that way
+; /// -- rationals: an exact field as a coin over reduced (num den), a whole one the integer
+; itself, so the integers are its subset and = needs no lane of its own. the twin's peer:
+; 3 /// 4 builds one, and one prints that way. C knows nothing of it: the die spells its
+; measure ('net), its order ('<) and its integer rungs ('int 'ceil) beside its arithmetic
 (: /// (: (reduce n d)
          (0 = n ? [0 1]                           ; gcd out, sign on num, den > 0
           (: g (gcd (abs n) (abs d)) s (? (d < 0) -1 1)
            [(s * n // g) (s * d // g)]))
-        (parts v) (two? v ? v [v 1])                          ; a bare star is n/1
+        (arg v) (? (coin? v) (load v) (two? v) v [v 1])       ; an operand as (n d): a bare star is n/1
         ; the domain test is the closed star: an open star as an (n d) component would
         ; drag gcd off the tower it terminates on -- a coin is never a coefficient.
-        (nstar? v) ((nil? * coin?) v && v = +v)
+        (nstar? v) (!(two? v) && (nil? * coin?) v && v = +v)   ; a chain is no star, and may not reach =: its net
+                                                            ; is a rational whose '= would ask this again
         (ok? v) (nstar? v || (two? v && all nstar? v))
+        (q p) (? (= 1 <>p) <p (c p))                          ; a reduced (n d): the integer when d is 1, else struck
+        (measure c) (: p (load c) q (<p / <>p)                ; n/d: truth is the value's sign, so a quotient
+                      (? (<p = 0) 0                             ; lost to underflow keeps it (nonzero at every
+                         (q = 0) (? (= (<p < 0) (<>p < 0)) 1e-37 -1e-37)   ; gem width)
+                         q))
+        (val v) (? (coin? v && ok? (load v)) (measure v) v)   ; a rational as its measure, anything else itself
         c (coin '/// (z \ {'star 1                               ; a rational is a star
-         'net (\ c (: p (load c) q (<p / <>p)                   ; its measure n/d: truth is the value's sign,
-                     (? (<p = 0) 0                                ; so a quotient lost to underflow keeps it
-                        (q = 0) (? (= (<p < 0) (<>p < 0)) 1e-37 -1e-37)   ; (nonzero at every gem width)
-                        q)))
-         '+ (\ a b (: x (load a) y (load b)                    ; (n1 d1) + (n2 d2)
+         'net measure
+         '< (\ a b (: x (arg a) y (arg b)                      ; (n1 d1) < (n2 d2): cross-multiply, exact (d > 0)
+             (? (ok? x && ok? y) (< (<x * <>y) (<y * <>x))
+                (< (val a) (val b)))))                         ; against a non-number: by the measure's band
+         '= (\ a b (: x (arg a) y (arg b)                      ; the same cross-multiply, so 7/2 = 3.5 as the
+             (? (ok? x && ok? y) (= (<x * <>y) (<y * <>x))     ; order already says
+                (= (val a) (val b)))))
+         'int (\ c (: p (load c) (// <p <>p)))                 ; toward zero
+         'ceil (\ c (: p (load c) k (// <p <>p)                ; d > 1 for every coin, so the quotient never
+                     (? (0 < <p) (k + 1) k)))                  ; lands: up from a positive trunc, else it is the ceil
+         '+ (\ a b (: x (arg a) y (arg b)                    ; (n1 d1) + (n2 d2)
              (? (ok? x && ok? y)
-              (: p (parts x) r (parts y)
-               (z (reduce (<p * <>r + <r * <>p) (<>p * <>r)))))))
-         '* (\ a b (: x (load a) y (load b)                    ; (n1 d1) * (n2 d2)
+              (q (reduce (<x * <>y + <y * <>x) (<>x * <>y))))))
+         '* (\ a b (: x (arg a) y (arg b)                    ; (n1 d1) * (n2 d2)
              (? (ok? x && ok? y)
-              (: p (parts x) r (parts y)
-               (z (reduce (<p * <r) (<>p * <>r)))))))
-         '- (\ a b (: x (load a) y (load b)                    ; (n1 d1) - (n2 d2)
+              (q (reduce (<x * <y) (<>x * <>y))))))
+         '- (\ a b (: x (arg a) y (arg b)                    ; (n1 d1) - (n2 d2)
              (? (ok? x && ok? y)
-              (: p (parts x) r (parts y)
-               (z (reduce (<p * <>r - <r * <>p) (<>p * <>r)))))))
-         '/ (\ a b (: x (load a) y (load b)                    ; (n1 d1) / (n2 d2): invert and
+              (q (reduce (<x * <>y - <y * <>x) (<>x * <>y))))))
+         '/ (\ a b (: x (arg a) y (arg b)                    ; (n1 d1) / (n2 d2): invert and
              (? (ok? x && ok? y && <y != 0)                  ; multiply; by zero -> () (no inf in Q; cap of a bare star is itself)
-              (: p (parts x) r (parts y)
-               (z (reduce (<p * <>r) (<>p * <r)))))))}))
-        (\ n (two? n ? (c (reduce <n <>n))                    ; (/// (n d)) -- the list form
-                       (c * reduce n)))))                     ; (/// n d) -- the curried form, and 3 /// 4 spaced
+              (q (reduce (<x * <>y) (<>x * <y))))))}))
+        (\ n (two? n ? (q (reduce <n <>n))                    ; (/// (n d)) -- the list form
+                       (q * reduce n)))))                     ; (/// n d) -- the curried form, and 3 /// 4 spaced
 
 
 ; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname expansion

@@ -94,10 +94,16 @@
     (-4 = +(sm [1 -5]))      ; no 'net: the payload hom, signed, as ever
 
     ; --- rationals (///): a multi-field coin; +/*/=/show all work ---
-    ; this die is the one coin that is a NUMBER: cmp_rank seats it in the number
-    ; band by value, so its order, its sort and its `=` all read the value and not
-    ; the representation. every other coin below stays an opaque newtype.
+    ; this die is the one coin that is a NUMBER, and C knows nothing of it: its order is
+    ; its '<, its rungs 'int and 'ceil, its truth its 'net, and a whole rational is the
+    ; integer itself, so = is the integers' own. every other coin below stays an opaque newtype.
     (5 /// 6 = 1 /// 2 + 1 /// 3)    ; 1/2 + 1/3 = 5/6
+    (1 = 1 /// 2 + 1 /// 2)          ; a whole sum is the integer
+    (charm? (4 /// 2))               ; ... and so is a whole quotient, at the strike
+    (3 = 6 /// 2)
+    (2 = int (5 /// 2))     (3 = ceil (5 /// 2))     (3 = $(5 /// 2))       ; the rungs, through the die
+    (-2 = int (-5 /// 2))   (-2 = ceil (-5 /// 2))   (0 = $(-5 /// 2))
+    (3 /// 2 = max 1 (3 /// 2))   (1 = min 1 (3 /// 2))   (1 /// 2 = min (3 /// 2) (1 /// 2))
     (1 /// 2 = 2 /// 3 * 3 /// 4)    ; 2/3 * 3/4 = 1/2
     (1 /// 2 = 2 /// 4)                ; reduced on construction
     (1 /// 2 = (/// [1 2]))             ; the 2-list form (what show reads back)
@@ -147,7 +153,7 @@
     !(a / sm 3)                     ; distinct kinds never combine
 
     ; --- a method owns its domain: off it (no star / (n d)-of-stars face), () ---
-    !(1 /// 2 + [(1 /// 1) (0 /// 1)])    ; a chain of coins is not an (n d)
+    !(1 /// 2 + [(1 /// 3) (1 /// 3)])    ; a chain of coins is not an (n d)
     !(1 /// 2 * ['x])                 ; nor a chain of symbols
     !(1 /// 2 - "s")                   ; nor text
     (1 /// 1 = 1 /// 2 + [1 2])           ; ... but a bare (n d) of stars reads as n/d
@@ -162,8 +168,7 @@
     (1 /// 2 = -1 (2 /// 1))           ; a reciprocal power rides coin / (slot 8)
     (9 /// 4 = -2 (2 /// 3))           ; (2/3)**-2 = 9/4: ipow, then invert
     (9 /// 4 = 2 /// 3 ** -2)        ; the apply operator rides the same law
-    !(-1 (0 /// 1))                ; zero has no reciprocal power
-    !((1 / 2) (4 /// 1))           ; a non-whole exponent off the tower: ()
+    !((1 / 2) (4 /// 3))           ; a non-whole exponent off the tower: ()
     ('lambda = kind (2 (sm 3)))  ; an unflagged coin still composes (a closure)
 
     ; --- the ratio's 'net: a rational's truth is its VALUE's sign, exactly ---
@@ -178,7 +183,7 @@
     !!(/// 1 (1000 10))      ; a 10^1000 denominator underflows the double --
     !(/// -1 (1000 10))            ; ... the sign survives it, both ways
 
-    ; --- the order half: a ratio coin seats in the number band, by VALUE ---
+    ; --- the order half: a rational orders by VALUE, through its own '< ---
     (/// 1 3 < 1 /// 2)                ; value order, not payload order
     !(/// 1 2 < 1 /// 3)
     !(/// 1 2 < 2 /// 4)         ; equal values tie (either side)
@@ -193,7 +198,7 @@
                                        ; the exact cross-multiply tier does not
     ([(-1 /// 2) (1 /// 3) (1 /// 2) 1 (3 /// 2) 2] =
      (sort [2 (1 /// 2) 1 (3 /// 2) (1 /// 3) (-1 /// 2)]))    ; sort interleaves by value
-    (/// 9 1 < cnt [1])             ; a non-ratio coin keeps the coin band, above the numbers
+    (/// 9 1 < cnt [1])             ; a coin without '< keeps the coin band, above the numbers
 
     ; --- rung 2: a declared star self-nets, so the vocabulary follows the flag ---
     (1 /// 2 = +(1 /// 2))          ; net answers the coin itself (the fixpoint, by declaration)

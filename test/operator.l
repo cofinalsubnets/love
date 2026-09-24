@@ -68,10 +68,10 @@
       (1 == 1) !(1 !== 1)                    ; ..and an equal charm IS the same one
       ((a != b) = 0) ((a !== b) = 1)))       ; both answer the exact booleans
 ; elem and eleq are the same walk under = and ==, so they part company exactly where
-; those two do: a ratio coin reads in the number band, an identity compare cannot.
-(: r (/// 1 1)
+; those two do: a float reads across the tower by value, an identity compare cannot.
+(: r 1.0
    (test
-      (elem r '(1 2 3)) !(eleq r '(1 2 3))    ; 1/1 IS 1 by value, and is not the same word
+      (elem r '(1 2 3)) !(eleq r '(1 2 3))    ; 1.0 IS 1 by value, and is not the same word
       (elem 1 [r 2]) !(eleq 1 [r 2])
       (elem 'b '(a b)) (eleq 'b '(a b))       ; a nom is its own equality either way
       !(elem 'z '(a b)) !(eleq 'z '(a b))
@@ -89,10 +89,10 @@
    !(eleq 98 "abc")                                  ; eleq stays the chain walk
    ("abc" 1 = 98) (elem ("abc" 1) "abc"))            ; what indexing answers, elem finds
 ; assoc and assq are the pair-walkers of the same two questions: assoc reads keys with
-; `=`, assq with `==`, so a ratio key finds a charm row only through assoc.
-(: rows [[(1 /// 1) 'ratio] '(b two)]
+; `=`, assq with `==`, so a float key finds a charm row only through assoc.
+(: rows [[1.0 'float] '(b two)]
    (test
-      (assoc 1 rows = [(1 /// 1) 'ratio])   ; 1 IS 1/1 by value
+      (assoc 1 rows = [1.0 'float])         ; 1 IS 1.0 by value
       (nil? (assq 1 rows))                       ; ..and is not the same word
       (assoc 'b rows = '(b two)) (assq 'b rows = '(b two))
       (nil? (assoc 'z rows)) (nil? (assq 'z rows))))

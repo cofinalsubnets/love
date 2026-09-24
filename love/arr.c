@@ -955,6 +955,18 @@ lvm(lvm_eq) {
   ai_musttail return Answerp(1, r ? putcharm(1) : zero); }
  // a tray: elementwise with broadcast, a mask; the whole question is (aall (= a b))
  if (trayp(a) || trayp(b)) { g->b = (word) vop_eq; ai_musttail return Ap(lvm_vbin, g); }
+ // a coin whose kind spells '=: the method's ((f a) b) under numap_drive, either side, like +
+ // (two coins of distinct kinds are unequal by payload). the structural walk below, which a
+ // map probe and sort share, reads the payload regardless
+ if (coinp(a) || coinp(b)) {
+  word f = coinp(a) && coinp(b) && coin_kind(a) != coin_kind(b) ? zero
+         : kind_get(g, coin_kind(coinp(a) ? a : b), KnEq);
+  if (lamp(f)) {
+   Have(2);
+   a = Sp[0], b = Sp[1], f = kind_get(g, coin_kind(coinp(a) ? a : b), KnEq);
+   word *dst = Sp - 2;
+   dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = word(Ip + 1);
+   Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); } }
  word *top, *base = eq_gap(g, &top);
  int r = ai_eq_value(g, a, b, base, top);
  if (r < 0) LvmCall(g, eq_wide)                            // too deep for the gap: walk again, wider

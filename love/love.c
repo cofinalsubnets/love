@@ -118,6 +118,11 @@ lvm(lvm_help) {
 char const *ai_nif_name(intptr_t x) {
  for (uintptr_t i = 0; i < countof(def1); i++) if (def1[i].v.x == x) return def1[i].n;
  return 0; }
+word ai_nif_word(char const *nm) {                 // strlen + memcmp: the boards link no strcmp
+ size_t n = strlen(nm);
+ for (uintptr_t i = 0; i < countof(def1); i++)
+  if (strlen(def1[i].n) == n && !memcmp(def1[i].n, nm, n)) return def1[i].v.x;
+ return 0; }
 
 // the canonical (linux) errno numbering, lowercase -- the spellings ai_ini_0
 // interns into g->errs. 41 and 58 are blanks in the numbering itself; a kernel
@@ -261,7 +266,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
   // the kind table's keys and the built-in coins' names (g->knom, love.h's Kn rows), and
   // the registry of named kinds (g->kreg): name -> (serial . table), pinned by post.l's `coin`
   { char const *const ns[KnN] = { "name", "+", "*", "ap", "hot", "-", "net", "star", "/",
-                                  "payload", "///", "lambda", "cask", "port", "coin" };
+                                  "payload", "<", "=", "int", "ceil", "lambda", "cask", "port", "coin" };
     for (int i = 0; ai_ok(g) && i < KnN; i++)
      if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->knom[i] = ai_pop1(g); }
   if (ai_ok(g = map_new(g))) g->kreg = ai_pop1(g);
@@ -806,13 +811,13 @@ op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
 // (int x): truncate a float scalar to a fixnum; other numbers pass through. used by
 // num-ap to get an integer composition count from a non-integer numeral operator.
 // int: a gem truncates toward zero, saturating at the charm bounds like the other
-// rungs (the bare cast wrapped above 2^62 -- UB read as 0); an exact-ratio coin
-// truncates by long division; everything else passes through.
+// rungs (the bare cast wrapped above 2^62 -- UB read as 0); a coin whose kind spells
+// 'int takes that; everything else passes through.
 static lvm(lvm_intf) {
  if (trayp(Sp[0])) {                            // a float tray truncates to an int tray, the rest pass
   if (tray(Sp[0])->type != ai_R) { Ip += 1; ai_musttail return Continue(); }
   g->b = (word) (uintptr_t) (ai_trunc); ai_musttail return Ap(lvm_vmap1z, g); }
- if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 0)
+ if (coinp(Sp[0]) && lamp(kind_get(g, coin_kind(Sp[0]), KnInt))) { g->b = (word) KnInt; ai_musttail return Ap(lvm_coin_rung, g); }
  if (gemp(Sp[0])) { ai_flo_t v = gem_get(Sp[0]);
   Sp[0] = putcharm(v >= (ai_flo_t) maxcharm ? maxcharm
                  : v <= (ai_flo_t) mincharm ? mincharm

@@ -1971,6 +1971,16 @@ lvm(lvm_measure) {
   dst[0] = Sp[0], dst[1] = hot_hook(g->hot_net), dst[2] = word(Ip);
   Sp = dst; Ip = (union u*) callout_drive;
   ai_musttail return Continue(); }
+// the coin at Sp[0] through its kind's slot g->b (int, ceil) the same way, the op re-running
+// on the number it answers; a kind without the slot is measured
+lvm(lvm_coin_rung) {
+  word f = kind_get(g, coin_kind(Sp[0]), (intptr_t) g->b);
+  if (!lamp(f)) ai_musttail return Ap(lvm_measure, g);
+  Have(2);
+  word *dst = Sp - 2;
+  dst[0] = Sp[0], dst[1] = kind_get(g, coin_kind(Sp[0]), (intptr_t) g->b), dst[2] = word(Ip);
+  Sp = dst; Ip = (union u*) callout_drive;
+  ai_musttail return Continue(); }
 // $: the net observed once -- max(0, ceil) of its real part
 static intptr_t ai_saturate(struct ai *g, word x) {
   // the charm lane is exactness, not speed: the net is a double, so above 2^53 a
@@ -1984,7 +1994,7 @@ static intptr_t ai_saturate(struct ai *g, word x) {
   return i + (re > (ai_flo_t) i ? 1 : 0); }
 
 lvm(lvm_saturate) {
- if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 2)
+ if (coinp(Sp[0])) { g->b = (word) KnCeil; ai_musttail return Ap(lvm_coin_rung, g); }
  if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
  Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
@@ -2002,6 +2012,6 @@ static intptr_t ai_ceilnet(struct ai *g, word x) {
   return i + (re > (ai_flo_t) i ? 1 : 0); }
 
 lvm(lvm_ceil) {
- if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 1)
+ if (coinp(Sp[0])) { g->b = (word) KnCeil; ai_musttail return Ap(lvm_coin_rung, g); }
  if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
  Sp[0] = putcharm(ai_ceilnet(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }

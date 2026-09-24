@@ -19,10 +19,6 @@ static ai_noinline void
  vbin_fill(struct ai_tray *r, word a, word b, int op, bool fdom),
  vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t)),
  vmap2_fill(struct ai_tray *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t));
-static bool
- ratio_ifit(word x, int64_t *v),
- ratio_iview(word x, int64_t *n, int64_t *d),
- ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2, intptr_t *c);
 static int
  big_mul_mag(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb, ai_limb *t),
  big_nlimbs(word x),
@@ -423,55 +419,6 @@ struct ai *ai_big_shift(struct ai *g, int vop) {
  while (rn > 0 && r[rn-1] == 0) rn--;
  return *++g->sp = ai_big_canon(&g->hp, r, rn, neg && rn > 0), ++g->ip, g; }
 
-// the ratio coin, known to C by its kind's name: the one coin cmp3 orders by value and the
-// integer rungs long-divide. its measure is its own 'net, in love, like every coin's.
-static ai_inline bool ratiop(struct ai *g, word x) {
- return coinp(x) && kind_get(g, coin_kind(x), KnName) == ai_core_of(g)->knom[KnRatio]; }
-// the integer rungs' exact lane (int / ceil / saturate) for a ratio coin: above
-// 2^53 the float net rounds, so a rung riding it lands on the wrong integer.
-// domain: the ratio coin over (n d), both exact integers, d nonzero (a zero
-// divisor keeps the float lane's inf/sign story).
-bool ai_ratio_exact(struct ai *g, word x) {
- if (!ratiop(g, x)) return false;
- word p = coin_load(x);
- if (!chainp(p) || !chainp(B(p))) return false;
- word n = A(p), d = A(B(p));
- if (!intp(n) || !intp(d)) return false;
- return charmp(d) ? d != putcharm(0) : true; }   // a canonical bignum is never 0
-// ..the lane: trunc(n/d) by long division, clamped to the charm bounds like every
-// rung (the codomain law), then the rung's own adjustment -- ceil rounds a dropped
-// remainder up, saturate is ceil with its floor raised to 0. the operand rides
-// g->sp[0] across ai_have's GC edge; scratch sits above hp and is never committed.
-struct ai *ai_ratio_rung(struct ai *g, int rung) {
- word x = g->sp[0], p = coin_load(x), a = A(p), b = A(B(p));
- int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
- if (!ai_ok(g = ai_have(g, b2w((size_t) (4 * (na + nb) + 16) * sizeof(ai_limb))))) return g;
- x = g->sp[0], p = coin_load(x), a = A(p), b = A(B(p));       // re-fetch (ai_have may have GC'd)
- ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
- int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
- bool rneg = nega != negb, rnz = false, sat = false;
- uintptr_t uq = 0;
- if (nla == 0) ;                                              // 0/d: q 0, r 0
- else if (mag_cmp(la, nla, lb, nlb) < 0) rnz = true;          // |a| < |b|: q 0, r a
- else {
-  ai_limb *q = (ai_limb*) g->hp,
-          *rem = q + (nla - nlb + 1),
-          *un = rem + nlb,
-          *vn = un + (nla + 1);
-  mag_divmod(q, rem, la, nla, lb, nlb, un, vn);
-  int qn = nla - nlb + 1;
-  while (qn > 0 && q[qn-1] == 0) qn--;
-  for (int i = 0; i < nlb; i++) if (rem[i]) { rnz = true; break; }
-  if (qn > wlimbs) sat = true;
-  else { for (int i = 0; i < qn; i++) uq |= (uintptr_t) q[i] << (limb_bits * i);
-         if (uq > (uintptr_t) maxcharm + (rneg ? 1 : 0)) sat = true; } }
- intptr_t t = sat ? (rneg ? mincharm : maxcharm)
-                  : rneg ? -(intptr_t) uq : (intptr_t) uq;
- if (rung >= 1 && !sat && rnz && !rneg && t < maxcharm) t++;  // ceil: a dropped remainder rounds up
- if (rung == 2 && t < 0) t = 0;                               // saturate: the floor rises to 0
- g->sp[0] = putcharm(t);
- g->ip = (union u*) g->ip + 1;
- return g; }
 
 // `/` over the bignum lane: like ai_big_binop's truncated quotient, but the result
 // stays an exact integer only when b divides a; a nonzero remainder promotes to a
@@ -1273,7 +1220,6 @@ static ai_inline int cmp_rank(struct ai *g, word x) {
  if (k == KTrayO) return 3;                         // object tray: above the numbers, below chain
  if (k == KChain) return 4;                        // chain: the grammar substrate -- high, just under book (only book's mutability seats it above)
  if (k == KTablet) return 5;                          // tablet: above chain
- if (ratiop(g, x)) return 2;                       // the ratio coin seats in the number band, by its value
  return 6; }                                       // KHot -- the ceiling (the only kind left)
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
@@ -1308,81 +1254,12 @@ static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb) {
   if (ea.re != eb.re) return ea.re < eb.re ? -1 : 1;
   if (ea.im != eb.im) return ea.im < eb.im ? -1 : 1; }
  return 0; }
-// a ratio coin orders by its value: int64-fitting components cross-multiply
-// exactly (near-equal rationals order right where the float quotient ties);
-// anything wider falls to the sign-exact net quotients.
-static ai_inline bool ratio_ifit(word x, int64_t *v) {
- if (charmp(x)) return *v = toint(x), true;
- if (!bigp(x)) return false;
- struct ai_big *b = big(x);
- int n = big_nlimbs(x);
- if (n * limb_bits > 64) return false;
- uint64_t m = b->limb[n-1];
- for (int i = n - 2; i >= 0; i--) m = (m << (limb_bits - 1) << 1) | b->limb[i];
- bool neg = b->slen < 0;
- if (m > (uint64_t) INT64_MAX + neg) return false;
- return *v = (int64_t) (neg ? 0 - m : m), true; }
-
-// the number band's measure for cmp3: a star or galaxy is a leaf; the ratio coin is n/d off its
-// (n d) payload, the sign exact -- the division's sign is IEEE-true, and the two loss lanes
-// restore it from the components' own signs (inf/inf, and an underflow to 0)
-static void band_measure(struct ai *g, word x, struct ai_zn *z) {
- if (!coinp(x)) { ai_net_leaf(g, x, z); return; }
- word p = coin_load(x); struct ai_zn n, d;
- *z = zn(0, 0);
- if (!chainp(p) || !chainp(B(p)) || !ai_net_leaf(g, A(p), &n) || !ai_net_leaf(g, A(B(p)), &d)
-     || n.im != 0 || d.im != 0 || d.re == 0) return;
- ai_flo_t s = (n.re < 0) != (d.re < 0) ? -1.0 : 1.0, v = n.re / d.re;
- if (v != v) v = s;
- else if (v == 0 && n.re != 0) v = s * (ai_flo_t) (Bits == 64 ? 1e-300 : 1e-37);
- *z = zn(v, 0); }
-static ai_inline bool ratio_iview(word x, int64_t *n, int64_t *d) {
- if (coinp(x)) { word p = coin_load(x);
-  if (!chainp(p) || !chainp(B(p))) return false;
-  return ratio_ifit(A(p), n) && ratio_ifit(A(B(p)), d) && *d != 0; }
- return ratio_ifit(x, n) && (*d = 1, true); }
-#if !defined(__SIZEOF_INT128__)
-// u64 x u64 -> 128-bit magnitude product from 32-bit half-word partials -- the exact
-// cross-multiply for builds without __int128 (mooncc's love-raw; the thumb ports).
-static ai_inline void ratio_mag_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
- uint64_t mask = 0xFFFFFFFFu,
-          a0 = a & mask, a1 = a >> 32, b0 = b & mask, b1 = b >> 32,
-          p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1,
-          mid = (p00 >> 32) + (p01 & mask) + (p10 & mask);
- *lo = (p00 & mask) | (mid << 32);
- *hi = p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32); }
-#endif
-static ai_inline bool ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2, intptr_t *c) {
- intptr_t s = (d1 < 0) != (d2 < 0) ? -1 : 1;
-#if defined(__SIZEOF_INT128__)
- __int128 l = (__int128) n1 * d2, r = (__int128) n2 * d1;
- return *c = l == r ? 0 : (l < r ? -s : s), true;
-#else
- // exact sign + magnitude: |n1|*|d2| vs |n2|*|d1| as double-word pairs, signs on top.
- uint64_t la = n1 < 0 ? (uint64_t) 0 - (uint64_t) n1 : (uint64_t) n1,
-          lb = d2 < 0 ? (uint64_t) 0 - (uint64_t) d2 : (uint64_t) d2,
-          ra = n2 < 0 ? (uint64_t) 0 - (uint64_t) n2 : (uint64_t) n2,
-          rb = d1 < 0 ? (uint64_t) 0 - (uint64_t) d1 : (uint64_t) d1,
-          lhi, llo, rhi, rlo;
- ratio_mag_mul(la, lb, &lhi, &llo);
- ratio_mag_mul(ra, rb, &rhi, &rlo);
- bool zl = !(lhi | llo), zr = !(rhi | rlo),
-      sl = !zl && ((n1 < 0) != (d2 < 0)), sr = !zr && ((n2 < 0) != (d1 < 0));
- intptr_t cl;                                     // -1/0/1 of l - r, signs first then magnitudes
- if (sl != sr) cl = sl ? -1 : 1;
- else { intptr_t cm = lhi != rhi ? (lhi < rhi ? -1 : 1) : llo != rlo ? (llo < rlo ? -1 : 1) : 0;
-        cl = sl ? -cm : cm; }
- return *c = cl == 0 ? 0 : (cl < 0 ? -s : s), true;
-#endif
-}
-// 3-way total-order comparator (-1/0/1); the recursive engine for the chain case.
-// floats collapse NaN to "equal" here (a structural total order can't carry IEEE
-// unorderedness); the scalar lane below keeps NaN unordered at the top level. hash
-// is alloc-free + GC-stable, so the lambda case is safe to call mid-comparison.
-// a coin's kind's registry serial (g->kreg: name -> (serial . table)), else ()
+// a coin's kind serial: the registration order two kinds compare by
 static word kind_serial(struct ai *g, word x) {
  word e = ai_mapget(g, zero, kind_get(g, coin_kind(x), KnName), ai_core_of(g)->kreg);
  return chainp(e) ? A(e) : zero; }
+// the total order sort and < share. a coin sits in its own band by payload: a kind's own
+// order ('<) lives in love, and the lanes that can ask it (lvm_cmp_ord, sortby) do
 static intptr_t cmp3(struct ai *g, word a, word b) {
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) return ra < rb ? -1 : 1;                    // cross-kind: the true-blue lattice (cmp_rank)
@@ -1391,15 +1268,6 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
  // recursion below would otherwise grab it.
  if (nomp(a)) return mint_cmp(g, a, b);                    // mint band: () < bare mints < named syms
  if (ra == 2) {                                            // number band: stars + galaxies, ordered by net
-  if (coinp(a) || coinp(b)) {                              // a ratio coin in the band (cmp_rank read its
-   int64_t n1, d1, n2, d2; intptr_t c;                     // mode-2 die): int64-fitting components -> exact
-   if (ratio_iview(a, &n1, &d1) && ratio_iview(b, &n2, &d2)
-       && ratio_xcmp(n1, d1, n2, d2, &c)) return c;
-   struct ai_zn za, zb; band_measure(g, a, &za), band_measure(g, b, &zb);   // else the sign-exact quotients
-   if (za.re != zb.re) return za.re < zb.re ? -1 : 1;
-   if (za.im != zb.im) return za.im < zb.im ? -1 : 1;
-   if (galaxyp(a) != galaxyp(b)) return galaxyp(a) ? 1 : -1;  // net tie vs a galaxy: the star seats below
-   return 0; }
   if (galaxyp(a) || galaxyp(b)) {                          // a galaxy in play -> by net (re, im), then star<galaxy, then shape/content
    bool ga = galaxyp(a), gb = galaxyp(b);
    struct ai_zn na, nb; ai_net_leaf(g, a, &na), ai_net_leaf(g, b, &nb);
@@ -1425,9 +1293,7 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
  uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/i/cask: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
-// the two arr.c's equality lane needs: whether a value orders as a number, and the
-// order itself. a ratio coin answers true to the first -- cmp_rank seats it in the
-// number band by value -- which is what makes `=` agree with `<` and sort on one.
+// the two arr.c's equality lane needs: whether a value orders as a number, and the order itself
 bool ai_numband(struct ai *g, word x) { return cmp_rank(g, x) == 2; }
 intptr_t ai_cmp3(struct ai *g, word a, word b) { return cmp3(g, a, b); }
 
@@ -1466,7 +1332,9 @@ lvm(lvm_sort) {
  word l = Sp[0];
  if (!chainp(l) || !chainp(B(l))) ai_musttail return Next(1);
  uintptr_t n = 0;
- for (word p = l; chainp(p); p = B(p)) n++;
+ for (word p = l; chainp(p); p = B(p)) {
+  if (coinp(A(p))) { *--Sp = ai_nif_word("<="); ai_musttail return Ap(lvm_sortby, g); }   // a coin aboard: its kind's order, through the lane that can ask it (<= keeps ties left)
+  n++; }
  uintptr_t req = n * Width(struct ai_chain) + 2 * n + 256;   // words: spine + 2n scratch + a radix count table
  Have(req);
  l = Sp[0];                                        // re-read post-GC
@@ -1501,6 +1369,33 @@ lvm(lvm_sort) {
  spine[n - 1].b = ZeroPoint;                        // () terminator (zero-ontology)
  ai_musttail return Answer(word(spine)); }
 
+// a coin orders by its kind's '< (either side, like +): x < y is asked as the method's
+// ((f x) y) under numap_drive, and the answer lands under the op's own return with a code --
+// 0 as it is, 1 negated (<= and >= ask the other way round), 2 the extreme (max and min:
+// a on a true answer, else b). [x f y land code ret] lies over the operands, which stay
+static lvm(lvm_coin_cmp_land) {
+ bool t = !ai_nilp(g, Sp[0]); intptr_t code = getcharm(Sp[1]);
+ Ip = cell(Sp[2]);
+ Sp += 3;                                                    // [ans code ret a b] -> [a b]
+ word r = code == 2 ? (t ? Sp[0] : Sp[1]) : putcharm(code ? !t : t);
+ Sp += 1; Sp[0] = r;                                         // two operands in, one answer out
+ ai_musttail return Continue(); }
+static union u const coin_cmp_land[] = { {.ap = lvm_coin_cmp_land} };
+// the '< of whichever operand is the coin, or 0: two coins of distinct kinds have no order
+// between them, and a kind without '< keeps the coin band (cmp3, by payload)
+static ai_inline word coin_lt(struct ai *g, word a, word b) {
+ if (coinp(a) && coinp(b) && coin_kind(a) != coin_kind(b)) return 0;
+ word f = kind_get(g, coin_kind(coinp(a) ? a : b), KnLt);
+ return lamp(f) ? f : 0; }
+static lvm(lvm_coin_cmp) {                                   // g->b = code << 1 | swap
+ intptr_t k = g->b; bool swap = k & 1; intptr_t code = k >> 1;
+ Have(6);
+ word a = Sp[0], b = Sp[1], f = coin_lt(g, a, b), *dst = Sp - 6;
+ dst[0] = swap ? b : a, dst[1] = f, dst[2] = swap ? a : b;
+ dst[3] = word(coin_cmp_land), dst[4] = putcharm(code), dst[5] = word(Ip + 1);
+ Sp = dst; Ip = (union u*) numap_drive;
+ ai_musttail return Continue(); }
+
 // the `<` / `<=` lane (op is vop_lt or vop_le). an array operand -> elementwise
 // mask (lvm_vbin); a top-level float/complex chain is IEEE-faithful (NaN ->
 // unordered -> false), so e.g. (<= nan nan) is zero.
@@ -1508,9 +1403,12 @@ static lvm(lvm_cmp_ord) {
  int op = (int) g->b;
  word a = Sp[0], b = Sp[1]; intptr_t r;
  if (trayp(a) || trayp(b)) { g->b = (word) (op); ai_musttail return Ap(lvm_vbin, g); }      // array -> elementwise
+ if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) {                                             // a coin's own order
+  g->b = (word) (op == vop_lt ? 0 : op == vop_gt ? 1 : op == vop_le ? 3 : 2);                // le: !(b<a), ge: !(a<b)
+  ai_musttail return Ap(lvm_coin_cmp, g); }
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: the true-blue lattice (cmp_rank)
- else if (!(isnum(a) || twinp(a)) || coinp(b)) r = vcmp_int(op, cmp3(g, a, b), 0);  // same non-number band, or a ratio coin either side (a coin as `a` fails isnum; as `b` this catches it): via cmp3
+ else if (!(isnum(a) || twinp(a))) r = vcmp_int(op, cmp3(g, a, b), 0);   // same non-number band: via cmp3
  else if (twinp(a) || twinp(b)) {                          // complex: lexicographic, per op
   ai_flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
   r = ar != br ? vcmp_flo(op, ar, br)
@@ -1539,6 +1437,7 @@ static lvm(lvm_extreme2) {
  int ismax = (int) g->b;
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) { g->b = (word) (ismax ? vop_max : vop_min); ai_musttail return Ap(lvm_vbin, g); }
+ if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) { g->b = (word) (4 | ismax); ai_musttail return Ap(lvm_coin_cmp, g); }   // max asks b < a, min a < b
  intptr_t c = cmp3(g, a, b);
  ai_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
 lvm(lvm_max2) { g->b = (word) 1; ai_musttail return Ap(lvm_extreme2, g); }

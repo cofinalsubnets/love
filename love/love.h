@@ -229,7 +229,7 @@ struct ai {
      errs,        // errno vocabulary: canonical number -> its nom; ai_err reads it
      kinds,       // the kind roster: enum q row -> its nom (kinds.h); `kind` reads it
      kreg,        // the named kinds: name -> (serial . table), pinned by post.l's `coin`
-     knom[16],    // the kind table's keys and the built-in coins' names (the Kn rows)
+     knom[20],    // the kind table's keys and the built-in coins' names (the Kn rows)
      inport;      // the buffered stdin port, or 0
    union {
     word x;
@@ -830,16 +830,17 @@ struct ai_coin { lvm_t *ap; word kind; word payload; };
 static ai_inline bool coinp(word _) { return lamp(_) && cell(_)->ap == lvm_coin; }
 static ai_inline word coin_kind(word x) { return ((struct ai_coin*) x)->kind; }
 static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload; }
-// the kind table's keys, by index into g->knom. + * - / ap and net are closures run inside the
-// VM (net: the kind's measure, read by prel's `measure` -- absent, the payload's net);
-// =/</show/tally default over the payload in pure C. hot truthy = the kind's coins are lit?
-// (references), absent = fresh data. star truthy = numeric: a numeral powers them through their
-// own * (prel's num-ap reads it, C never does). KnRatio is the ratio coin's own name: the one
-// coin C orders by value (cmp3) and long-divides (the integer rungs). the tail names, KnLambda
-// on, are `kind`'s answers inside the hot row: a lambda, a cask, a port, and a struck coin
-// whose kind has no name.
+// the kind table's keys, by index into g->knom. + * - / ap < int ceil and net are closures
+// run inside the VM: net is the kind's measure (prel's `measure` reads it, absent = the
+// payload's net), < and = its order and equality (either side, like +; absent, the coin band
+// and the payload -- and a map key or a sort compare reads the payload regardless, the
+// hash's own law), int and ceil its integer rungs (absent = the measure's). show and tally
+// default over the payload in pure C. hot truthy = the kind's coins are lit? (references), absent = fresh data. star
+// truthy = numeric: a numeral powers them through their own * (prel's num-ap reads it, C never
+// does). C knows no kind by name: the tail names, KnLambda on, are `kind`'s answers inside the
+// hot row: a lambda, a cask, a port, and a struck coin whose kind has no name.
 enum { KnName, KnAdd, KnMul, KnApply, KnHot, KnSub, KnNet, KnStar, KnDiv,
-       KnPayload, KnRatio, KnLambda, KnCask, KnPort, KnCoin, KnN };
+       KnPayload, KnLt, KnEq, KnInt, KnCeil, KnLambda, KnCask, KnPort, KnCoin, KnN };
 // read a kind table's slot, or () if absent / the kind is not a tablet.
 static ai_inline word kind_get(struct ai *g, word kind, intptr_t i) {
  return tabp(kind) ? ai_mapget(g, zero, ai_core_of(g)->knom[i], kind) : zero; }
@@ -857,13 +858,10 @@ word ai_big_canon(word **hp, ai_limb const *limb, int n, bool neg);
 ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo)
 int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
 intptr_t ai_mint_cmp(struct ai*, word, word); // -1/0/1 over two points: () < bare mints < names
-bool ai_ratio_exact(struct ai*, word);  // int/ceil/saturate's exact-ratio domain: the ratio coin over integer (n d)
-// the number band's order, for arr.c's equality lane: a ratio coin seats in that band by
-// value (cmp_rank), so `=` must read it the way `<` and sort already do.
+// the number band's order, for arr.c's equality lane: what seats there compares by value
 bool ai_numband(struct ai*, word);            // x orders as a number (cmp_rank 2)
 intptr_t ai_cmp3(struct ai*, word, word);     // -1/0/1, the order sort and < share
 struct ai
- *ai_ratio_rung(struct ai*, int),     // ..and the lane: long-divide the parts (0 int, 1 ceil, 2 saturate), packed
  *ai_big_binop(struct ai*, int vop),  // vop_add..vop_rem, packed; pops one operand
  *ai_big_bitop(struct ai*, int vop),  // vop_band..vop_bxor, two's complement; pops one operand
  *ai_big_shift(struct ai*, int vop),  // vop_bsl / vop_bsr, promoting and flooring; pops one operand
@@ -929,6 +927,8 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
 bool ai_net_leaf(struct ai *, word, struct ai_zn *);   // a leaf's net: true with it, false on a compound
 intptr_t ai_count(struct ai *, word);           // fwd: tally's C body
 _lvm(lvm_measure);                              // a compound at Sp[0] measured by love, the op re-run
+_lvm(lvm_coin_rung);                            // the coin at Sp[0] through its kind's slot g->b, the op re-run
+word ai_nif_word(char const *);                 // a nif's value by its roster name, 0 for none
 // a leaf is what C nets itself; a chain, an object tray or a coin is love's (ev.c's net)
 static ai_inline bool ai_leafp(word x) {
   if (charmp(x)) return true;
