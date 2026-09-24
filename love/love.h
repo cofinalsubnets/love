@@ -191,10 +191,10 @@ struct ai {
  // the sub-word collector scalars, adjacent so both ride the rem set's tail
  bool gc_gen;                             // set during a collection: gbump() targets major_hp, not hp
  int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
- // the two pools: the main pool is pure minor, young being [end, hp); old lives in
- // major_pool, its own two-space. a minor evacuates young -> the major active half; a major
+ // the two pools: the main pool is pure minor, young being [end, hp); old lives in the major,
+ // a two-space of separate blocks. a minor evacuates young -> the active half; a major
  // drains both, compacts into the spare half, flips, rebuilds symbols, runs finalizers.
- word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
+ word *major_base, *major_spare, *major_hp;  // major: active half, spare half (major_len words each), active bump
  uintptr_t
    major_len,                     // major half size (words)
    n_minor,                       // minor collections so far (majors = n_gc - n_minor)
@@ -1119,7 +1119,8 @@ struct ai_gcx {
 // of a port (heap bio, or the static it cannot own a buffer for).
 static ai_inline bool in_live_pool(struct ai *g, word const *p) {
  if (p >= ptr(g) && p < ptr(g) + g->len) return true;             // minor / main pool
- return g->major_pool && p >= g->major_pool && p < g->major_pool + 2 * g->major_len; }   // both major halves
+ return (p >= g->major_base && p < g->major_base + g->major_len)                    // both major halves
+     || (p >= g->major_spare && p < g->major_spare + g->major_len); }
 // GC scans run with different [lo,hi), so a terminator is recognized by which live pool its head
 // lands in, not the caller's range -- else a young-pointing terminator under the major range is
 // gcp'd as a field. mid-pass the to-space is a third: gen_major's unflipped pair, or gen_grow's.
@@ -1174,8 +1175,7 @@ extern struct ai_port_vt const ai_to_vt, ai_closed_vt, ai_ci_vt;
 
 // scratch for a walk that may not allocate: the major's spare half, dead outside a collection
 static ai_inline word *ai_gap(struct ai *g, word **top) {
- word *s = g->major_base == g->major_pool ? g->major_pool + g->major_len : g->major_pool;
- return *top = s + g->major_len, s; }
+ return *top = g->major_spare + g->major_len, g->major_spare; }
 static ai_inline struct ai *pushq(struct ai*g) { return intern(ai_strof(g, "\\")); }
 static ai_inline struct ai *push0(struct ai*g) { return ai_push(g, 1, zero); }
 static ai_inline size_t llen(word l) {
@@ -1287,6 +1287,7 @@ struct ai
  *gen_grow(struct ai *g, uintptr_t len1),
  *gen_major(struct ai *g, uintptr_t req0, bool *tight),
  *ored(struct ai *g, int kind), *zflush(struct ai*g);
+word *ai_major_pair(uintptr_t n, word **spare);
 uintptr_t
  bshape(word a, word b, uintptr_t *R),
  hash_at(struct ai *g, intptr_t x, word *base),

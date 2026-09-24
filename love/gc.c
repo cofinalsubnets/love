@@ -213,6 +213,12 @@ static void gen_minor(struct ai *g) {
 #endif
  g->gc_gen = false; }
 
+// the major's two halves as separate blocks, both or neither: half the contiguous ask of one pair
+word *ai_major_pair(uintptr_t n, word **spare) {
+ word *a = ai_alloc(NULL, n * sizeof(word)), *b = a ? ai_alloc(NULL, n * sizeof(word)) : NULL;
+ if (a && !b) ai_alloc(a, 0), a = NULL;
+ return *spare = b, a; }
+
 // the major: one cheney pass from the real roots over both from-spaces into the
 // spare half -- reachability, never a linear sweep, which is why a rem-set overflow
 // forces one. then rebuild the intern map, run finalizers, flip, reset the minor.
@@ -240,12 +246,11 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  if (g->budget) {
   uintptr_t cap = g->budget > (uintptr_t) g->len ? (g->budget - (uintptr_t) g->len) / 2 : 0;
   if (to_len > cap) to_len = cap > need_step ? (cap / step) * step : need_step; }
- word *spare = (g->major_base == g->major_pool) ? g->major_pool + g->major_len : g->major_pool,  // the same-size other half
-      *to, *resized = 0;
+ word *to = g->major_spare, *resized = 0, *rspare = 0;
  if (to_len != g->major_len) {                                 // a different-size pair: alloc it, free the old
-  resized = ai_alloc(NULL, 2 * to_len * sizeof(word));
+  resized = ai_major_pair(to_len, &rspare);
   if (!resized && to_len > need_step)                          // the headroom alloc failed: retry at the tight size
-   to_len = need_step, resized = (need_step == g->major_len) ? 0 : ai_alloc(NULL, 2 * need_step * sizeof(word));
+   to_len = need_step, resized = (need_step == g->major_len) ? 0 : ai_major_pair(need_step, &rspare);
   // last chance: drop the STEP granularity too. need_step is need rounded UP to a whole
   // step, so it can overshoot the largest free block by most of a step -- on a seat whose
   // pool is a fixed region that is the difference between a heap and a dead board. need
@@ -253,11 +258,11 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
   // sized there has no headroom and the next collection will be a major too, which is the
   // trade this rung exists to make.
   if (!resized && need < to_len)
-   to_len = need, resized = (need == g->major_len) ? 0 : ai_alloc(NULL, 2 * need * sizeof(word));
+   to_len = need, resized = (need == g->major_len) ? 0 : ai_major_pair(need, &rspare);
   if (resized) to = resized;
-  else if (need <= g->major_len) to_len = g->major_len, to = spare;   // alloc failed, but the existing spare half holds the live set
+  else if (need <= g->major_len) to_len = g->major_len;             // alloc failed, but the existing spare half holds the live set
   else return g->gc_gen = false, encode(g, ai_status_scare);         // true oom: compacting would overflow the spare -> clean scare, no corruption
- } else to = spare;
+ }
  g->gc_gen = true;
  if (tight) *tight = to_len < free_len;   // denied: the budget cap, or the bigger alloc failed
  g->major_hp = to, X.cp = to;
@@ -273,7 +278,8 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
  g->symbols = major_symbols_rebuild(g, &X, om);
  major_run_finalizers(g, &X);
- if (resized) ai_alloc(g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
+ if (resized) ai_alloc(g->major_base, 0), ai_alloc(g->major_spare, 0), g->major_spare = rspare, g->major_len = to_len;
+ else g->major_spare = g->major_base;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
 #ifdef LvGcStress

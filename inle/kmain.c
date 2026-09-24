@@ -945,7 +945,7 @@ static int k_gauge(char *b, struct ai const *g) {
   at = k_row(b, at, "seen-words", g->n_seen);
   at = k_row(b, at, "evac-words", g->n_evac);
   at = k_row(b, at, "old-words", (uintptr_t) (g->major_hp - g->major_base));
-  at = k_row(b, at, "major-cap", g->major_pool ? 2 * g->major_len : 0);
+  at = k_row(b, at, "major-cap", 2 * g->major_len);
   at = k_row(b, at, "rem-miss", g->rem_miss);
   at = k_row(b, at, "rem-peak", g->rem_hi);
   at = k_row(b, at, "resizes", g->n_resize);

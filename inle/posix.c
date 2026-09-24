@@ -183,7 +183,8 @@ void host_spawn_guard(struct ai *g, int on) {
  // the ceiling is the frontier, not the block top: ai_argv_marshal lays the child's argv
  // at g->hp, so the window above hp stays mapped and is all execvp can still read.
  guard1(g, g->hp, adv);
- if (g->major_pool) guard1(g->major_pool, g->major_pool + 2 * g->major_len, adv);
+ guard1(g->major_base, g->major_base + g->major_len, adv);
+ guard1(g->major_spare, g->major_spare + g->major_len, adv);
 #else
 #endif
 }

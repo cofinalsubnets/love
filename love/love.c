@@ -55,7 +55,7 @@ enum ai_status ai_fin(struct ai *g) {
    // the nursery -- a frontend that exits never misses them, one that fins to make room
    // for the next runtime gets nothing back without this.
    if (g->rem) ai_alloc(g->rem, 0);
-   if (g->major_pool) ai_alloc(g->major_pool, 0);
+   if (g->major_base) ai_alloc(g->major_base, 0), ai_alloc(g->major_spare, 0);
    ai_alloc(g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
@@ -165,9 +165,9 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
  // the rem set + major pool ride ai_alloc: a seat whose heap cannot supply them cannot run
  g->major_len = ai_major0;
  g->rem = ai_alloc(NULL, LvRemCap * sizeof(word));
- g->major_pool = g->rem ? ai_alloc(NULL, 2 * g->major_len * sizeof(word)) : NULL;
- if (!g->major_pool) { if (g->rem) ai_alloc(g->rem, 0); return encode(g, ai_status_scare); }
- g->major_base = g->major_hp = g->major_pool, g->budget = ai_budget;
+ g->major_base = g->rem ? ai_major_pair(g->major_len, &g->major_spare) : NULL;
+ if (!g->major_base) { if (g->rem) ai_alloc(g->rem, 0); return encode(g, ai_status_scare); }
+ g->major_hp = g->major_base, g->budget = ai_budget;
  g->minor0 = ai_minor0, g->major0 = ai_major0, g->ratio = ai_gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = ai_wait_in;
  // the reach: the kind sentinels a native's guards compare against and the two drives,
@@ -379,7 +379,7 @@ static lvm(lvm_please) {
 //   [9] rem_miss  rem-set entries dropped on overflow since the last collection (a miss forces a major; ~always 0)
 //  [10] rem_hi    peak remembered-set size (distinct old objects with a young field)
 //  [11] n_minor   minor collections so far (majors = n_gc - n_minor)
-//  [12] major_cap the major pool's reserved footprint: 2*major_len words (both halves), 0 if non-gen
+//  [12] major_cap the major pool's reserved footprint: 2*major_len words (both halves)
 //  [13] n_resize  pool reallocations so far (the pool-cliff tell)
 //  [14] minor_hi  peak words one minor copied -- the pause gauge (a copying
 //  [15] major_hi  peak words one major copied    collection's pause is its copy volume)
@@ -404,7 +404,7 @@ static lvm(lvm_gauge) {
  tray_put_int(v, 10, (intptr_t) g->rem_hi);
  tray_put_int(v, 11, (intptr_t) g->n_minor);
  tray_put_int(v, 8, (intptr_t) (g->major_hp - g->major_base));            // words live in the major pool
- tray_put_int(v, 12, (intptr_t) (g->major_pool ? 2 * g->major_len : 0));  // major pool capacity (both halves), words
+ tray_put_int(v, 12, (intptr_t) (2 * g->major_len));                         // major pool capacity (both halves), words
  tray_put_int(v, 13, (intptr_t) g->n_resize);
  tray_put_int(v, 14, (intptr_t) g->minor_hi);
  tray_put_int(v, 15, (intptr_t) g->major_hi);

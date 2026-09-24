@@ -521,8 +521,7 @@ static int64_t df_go(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t cap,
 // a pointer held across the bump is stale, and a major collection flips the halves.
 static uint8_t *df_arena(struct ai *g, int *alloced) {
  *alloced = 0;
- if (g->major_pool && g->major_len * sizeof(word) >= DF_ARENA)
-  return (uint8_t*) ((g->major_base == g->major_pool) ? g->major_pool + g->major_len : g->major_pool);
+ if (g->major_len * sizeof(word) >= DF_ARENA) return (uint8_t*) g->major_spare;
  void *p = ai_alloc(NULL, DF_ARENA);
  if (p) *alloced = 1;
  return (uint8_t*) p; }
