@@ -22,8 +22,8 @@
 ;
 ; and the blob names no address of the binary. natives ride the image now, so this
 ; kernel can be carried into a bake and woken under another base -- which is sound
-; only because the string-kind guard loads its sentinel from g's jk table rather than
-; wearing an li of (apof ""). that is emit.l's `jk` law and it binds here too.
+; only because the string-kind guard loads its sentinel from g's reach rather than
+; wearing an li of (apof ""). that is glaze.l's `reach` law and it binds here too.
 (module 'scan
 (:
    ; the honest answer, and the differential oracle the laws hold the kernel to.
@@ -55,10 +55,10 @@
     (: rg (abi tgt) G <rg IP <>rg SP <>>rg SC <>>>rg
        ([['ld SC SP 0] ['test SC 1] '(br ne deopt)               ; Sp[0] a pointer ...
           ['ld 'r7 SC 0]
-          ; the string kind off g's jk table (slot 1), never an li of (apof ""):
+          ; the string kind off g's reach (slot 1), never an li of (apof ""):
           ; that is a C code address, and a blob that names one is not the same
-          ; bytes under another base. emit.l's `jk` law, and the same reason
-          ['ld 'r8 G ((jkoff 0) + 8)]
+          ; bytes under another base. glaze.l's `reach` law, and the same reason
+          ['ld 'r8 G ((reach-offset 0) + 8)]
           '(cmp r7 r8) '(br ne deopt)]                            ; ... of string kind
         + [['ld SC SP 8] ['test SC 1] '(br eq deopt)]             ; Sp[1] a charm
         + [['ld SC SP 16] ['test SC 1] '(br eq deopt)]            ; Sp[2] a charm

@@ -37,7 +37,7 @@ Thread sizing at load scans the encoded terminator (`off·8+2`, unique since obj
 File = header + dictionary + **token stream** + the **code segment**: the live natives' blobs
 packed in walk order, mapped executable at wake as a chunk of the code arena before the decode
 walk names them. A blob holds no address of the binary — the kind sentinels and the callout
-drives it needs are read off `g->jk` — so the bytes are the same under any base. The encoded words are wildly repetitive — half an
+drives it needs are read off `g->reach` — so the bytes are the same under any base. The encoded words are wildly repetitive — half an
 image is 25 distinct words, and the commonest single one is `lvm_chain`'s index at 23%, the `ap`
 every pair wears — so each rides as one byte naming one of the 248 commonest, or as an escape
 naming its own width. 3.8x off the file; the wake expands into the pool and then decodes there in

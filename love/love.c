@@ -170,7 +170,12 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
  g->major_base = g->major_hp = g->major_pool, g->budget = ai_budget;
  g->minor0 = ai_minor0, g->major0 = ai_major0, g->ratio = ai_gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = ai_wait_in;
- jk_ini(g);
+ // the reach: the kind sentinels a native's guards compare against and the two drives,
+ // reached through g since a blob carries no address of the binary
+ g->reach[ReachChain] = (word) lvm_chain, g->reach[ReachStr] = (word) lvm_str, g->reach[ReachMap] = (word) lvm_map_lookup;
+ g->reach[ReachNom] = (word) lvm_nom, g->reach[ReachMint] = (word) lvm_sym, g->reach[ReachGem] = (word) lvm_gembox;
+ g->reach[ReachCask] = (word) lvm_cask, g->reach[ReachDrive] = (word) callout_drive, g->reach[ReachResume] = (word) callout_resume;
+ g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc;
  // book + macro maps (lookup-lambdas) then the main task thread.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 9))) {
   union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
@@ -447,8 +452,8 @@ static lvm(lvm_apof) {
  Ip += 1;
  ai_musttail return Continue(); }
 
-// (jkoff x) -> the byte offset of g->jk, so the emitter's `jk` law reads a slot as `ld r g off`
-lvm(lvm_jkoff) { ai_musttail return Answer(putcharm((intptr_t) offsetof(struct ai, jk))); }
+// (reach-offset x) -> the byte offset of g->reach, so the emitter's `reach` law reads a slot as `ld r g off`
+lvm(lvm_reach_offset) { ai_musttail return Answer(putcharm((intptr_t) offsetof(struct ai, reach))); }
 // (nat? f) -> 1 when f is a native closure: arity 1 enters its code directly; an
 // arity>=2 cell curries through lvm_cur with the code at value[2]
 lvm(lvm_natp) {

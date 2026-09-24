@@ -718,15 +718,15 @@
    ; own shape and used by nothing in the core, so it stays out of the roster: a holo
    ; kernel, one IR for x64 and a64, with a twin that is the oracle and the engine
    ; wherever the install declines (inle, wasm, rv64). the shape is scan.l's -- the
-   ; register roles, the deopt tail, the kind guards off g's jk table so the blob
+   ; register roles, the deopt tail, the kind guards off g's reach so the blob
    ; names no C address.
    ;                            g   ip  sp  scratch
    (kabi tgt) (? (= tgt 'a64) '(r0 r1 r3 r4) '(r6 r5 r1 r0))
-   ; Sp[k] is a heap object of jk kind `kind` (1 a string, 6 a cask), or the twin's;
+   ; Sp[k] is a heap object of reach kind `kind` (1 a string, 6 a cask), or the twin's;
    ; r7 and r8 are the scratch pair, and SC is left holding the object
    (kguard SP G SC k kind)
      [['ld SC SP (* 8 k)] ['test SC 1] '(br ne deopt)
-      ['ld 'r7 SC 0] ['ld 'r8 G ((jkoff 0) + (* 8 kind))] '(cmp r7 r8) '(br ne deopt)]
+      ['ld 'r7 SC 0] ['ld 'r8 G ((reach-offset 0) + (* 8 kind))] '(cmp r7 r8) '(br ne deopt)]
    ; the deopt: arity >= 2, so Ip <- the twin, as scan.l lands it
    (kdeopt IP) ['(label deopt) ['ld 'r7 IP 8] ['lea IP 'r7 16] ['ld 'r7 IP 0] '(jmpr r7)]
    ; the answer: SC tagged as a charm onto Sp[0], then the cell's ret

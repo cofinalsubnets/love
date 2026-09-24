@@ -180,8 +180,8 @@ struct ai {
  struct ai_code *code;
  struct ai_cfree *cfree;
  // what a native reads off g instead of carrying: the kind sentinels and callout drives are
- // addresses of this binary, so a blob holding one could not ride an image. jk_ini fills it.
- word jk[12];
+ // addresses of this binary, so a blob holding one could not ride an image. ai_ini fills it.
+ word reach[12];
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied
  // the remembered set, the whole write barrier: old cells that took a young pointer,
@@ -766,8 +766,8 @@ lvm_t lvm_kcall,
  lvm_litp, lvm_hotp,
  lvm_nif,         // codegen backend: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_nifx,        // ... with an extras word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the plain twin and the image revert (img_nif_interp) never dereferences a pack
- lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reads them off g->jk)
- lvm_jkoff,       // (jkoff x): g->jk's byte offset, what the emitter's `jk` law loads from
+ lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reaches them through g->reach)
+ lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
  lvm_natp;        // (nat? f): is f a native closure -- its code in the arena
 // the attributes are the declaration: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both.
@@ -1264,20 +1264,20 @@ struct ai; struct ai_bio; struct ai_cask; struct ai_def; struct ai_io; struct ai
 // because countof wants the array's complete type and an extern one has none.
 extern struct ai_def const *const ai_def1;
 extern uintptr_t const ai_def1_n;
-extern union u const callout_drive[];
+extern union u const callout_drive[], callout_resume[];
 extern union u const yield_c[];
 struct ai_bio *bio_of(struct ai *g, struct ai_io *i);
 char *code_install(struct ai *g, char const *src, size_t n), *code_adopt(struct ai *g, char const *src, size_t n);
 char *ai_code_window(char *p);
-void code_free(struct ai *g, char *code), code_fin(struct ai *g), jk_ini(struct ai *g);
+void code_free(struct ai *g, char *code), code_fin(struct ai *g);
 int code_in(struct ai *g, uintptr_t v);
 // the instruction table (love/snap.c): an instruction word <-> its index; a negative index is
 // not an instruction, address 0 no such index. ai_nif_cell draws the line against a nif's run.
 intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i);
 int ai_nif_cell(union u const *k);
 size_t code_len(char *code);
-// the jk slots (g->jk): what a native reads off g -- the emitter's `jk` law names them the same
-enum { JkChain, JkStr, JkMap, JkNom, JkMint, JkGem, JkCask, JkDrive, JkResume, JkCur, JkUnc };
+// the reach (g->reach): what a native reaches through g instead of carrying -- the emitter's `reach` law names them the same
+enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc };
 union u *fn_base(union u *k, int *nargs);
 struct ai
  *ai_eval_(struct ai *g),

@@ -160,7 +160,7 @@
       (nif_kind          "kind"          1 lvm_kind)
       (nif_coinp         "coin?"         1 lvm_coinp)
       (nif_calloutdrive  "calloutdrive"  1 lvm_calloutdrive)
-      (nif_jkoff         "jkoff"         1 lvm_jkoff)
+      (nif_reach_offset "reach-offset" 1 lvm_reach_offset)
       (nif_natp          "nat?"          1 lvm_natp)
       (nif_calloutresume "calloutresume" 1 lvm_calloutresume))
 

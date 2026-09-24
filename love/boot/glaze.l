@@ -48,8 +48,8 @@
    (jitn lam) (jitnir lam 'x64)          ; (jitn '(\ p0 .. E)): arity>=2 (natn curries to saturation)
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-t/auto.l)
    (gfind p l) (atom? l ? () (p <l) <l (gfind p >l))     ; first elt matching p
-   ; a blob names no address of the binary: sentinels and drives are read off g (love.h's JkX slots)
-   (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc
+   ; a blob names no address of the binary: sentinels and drives are reached through g (love.h's Reach* slots)
+   (reach tgt r k) ['ld r (greg tgt 'g) ((reach-offset 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
    (asmx ir) ((hasm 'x64 ir) 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
@@ -177,7 +177,7 @@
            ['lar T 'bb] ['ld U SP 32] ['subs T T U]          ; F[2] = tag(&bb - base): an odd charm, GC-walk-clean
            ['leax T T T 1 1] ['st SP -16 T]
            ['st SP -8 U]                                       ; F[3] = base (out-of-pool -- the walk returns it unharmed)
-           (jk tgt IP 8) ['sub SP SP 32]         ; Ip = callout_resume ; Sp = frame
+           (reach tgt IP 8) ['sub SP SP 32]         ; Ip = callout_resume ; Sp = frame
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> lvm_ap -> clos -> lvm_resume -> bb
         + ['(label bb)
            ['ld A SP 0]                                        ; A = result (Sp[0] on resume, Sp = R-8)
@@ -224,7 +224,7 @@
            ['lar T 'bb] ['ld U SP 32] ['subs T T U]          ; F[2] = tag(&bb - base)
            ['leax T T T 1 1] ['st SP -16 T]
            ['st SP -8 U]                                       ; F[3] = base
-           (jk tgt IP 8) ['sub SP SP 32]         ; Ip = callout_resume ; Sp = frame
+           (reach tgt IP 8) ['sub SP SP 32]         ; Ip = callout_resume ; Sp = frame
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> lvm_ap -> F -> lvm_resume -> bb
         + ['(label bb)
            ['ld A SP 0] ['test A 1] ['br 'eq 'codeopt]]      ; gate 1: a non-fixnum result -> deopt
@@ -593,14 +593,14 @@
               (abin sa sb d
                ([['cmp T A] ['br 'ne ne1]
                  ['test A 1] ['br 'ne ys]                                                          ; equal fixnums -> 1
-                 ['ld X A 0] (jk tgt SC 3) ['cmp X SC] ['br 'eq ys]                              ; the same point -> 1
-                 (jk tgt SC 4) ['cmp X SC] ['br 'eq ys] ['jmp sl]                                ; the same heap box: structural (NaN) -> drive
+                 ['ld X A 0] (reach tgt SC 3) ['cmp X SC] ['br 'eq ys]                              ; the same point -> 1
+                 (reach tgt SC 4) ['cmp X SC] ['br 'eq ys] ['jmp sl]                                ; the same heap box: structural (NaN) -> drive
                  ['label ne1] ['test T 1] ['br 'eq et]
                  ['test A 1] ['br 'ne no]                                                          ; distinct fixnums -> 0
-                 ['ld X A 0] (jk tgt SC 3) ['cmp X SC] ['br 'eq no]                              ; a point equals only itself -> 0
-                 (jk tgt SC 4) ['cmp X SC] ['br 'eq no] ['jmp sl]
-                 ['label et] ['ld X T 0] (jk tgt SC 3) ['cmp X SC] ['br 'eq no]
-                 (jk tgt SC 4) ['cmp X SC] ['br 'eq no] ['jmp sl]
+                 ['ld X A 0] (reach tgt SC 3) ['cmp X SC] ['br 'eq no]                              ; a point equals only itself -> 0
+                 (reach tgt SC 4) ['cmp X SC] ['br 'eq no] ['jmp sl]
+                 ['label et] ['ld X T 0] (reach tgt SC 3) ['cmp X SC] ['br 'eq no]
+                 (reach tgt SC 4) ['cmp X SC] ['br 'eq no] ['jmp sl]
                  ['label ys] ['li A 3] ['jmp dn]
                  ['label no] ['li A 1] ['jmp dn]
                  ['label sl] ['st SP (spill (d + 1)) A] ['mov A T]]                              ; slow: spill b ; A = a
@@ -611,15 +611,15 @@
              (aid sa sb d) (abin sa sb d [['cmp T A] ['set 'eq A] ['leax A A A 1 1]])                ; raw word identity: total, no guard
              (atwo sx d) (: ln (mint 0)
               ((acg sx d) + [['li T 1] ['test A 1] ['br 'ne ln]
-                              ['ld X A 0] (jk tgt A 0) ['cmp X A] ['br 'ne ln]
+                              ['ld X A 0] (reach tgt A 0) ['cmp X A] ['br 'ne ln]
                               ['li T 3] ['label ln] ['mov A T]]))
              (acap sx d off) ((acg sx d) + (fb1 (off = 8 ? 'cap 'cup)
                                             [['test A 1] ['br 'ne 'deopt]
-                                             ['ld X A 0] (jk tgt T 0) ['cmp X T] ['br 'ne 'deopt]
+                                             ['ld X A 0] (reach tgt T 0) ['cmp X T] ['br 'ne 'deopt]
                                              ['ld A A off]]))
              (alink sa sb d) (abin sa sb d (fb2 '. d                                                ; room for 3w + floor, else deopt (no GC mid-native) -- or the
                                              [['lea X HP 88] ['cmp SP X] ['br 'below 'deopt]         ; stub, whose cons collects
-                                              (jk tgt X 0) ['st HP 0 X] ['st HP 8 T] ['st HP 16 A]
+                                              (reach tgt X 0) ['st HP 0 X] ['st HP 8 T] ['st HP 16 A]
                                               ['mov A HP] ['add HP HP 24]]))
              (acq st sth sel d) (: le (mint 0)  ln (mint 0)  tr (atruth 0)
               (acg st d + <tr + [['cmp A 1] ['br 'le le]]                                       ; heap truth -> net -> twin, or the bit stub; tag(x)<=1 <=> x<=0
@@ -628,7 +628,7 @@
               [['st SP -32 A] ['ld T SP cso] ['st SP -24 T]                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
                  ['lar T bb] ['lar X 'entry0] ['subs T T X] ['leax T T T 1 1]                       ; pool code base, so a GC with the call pending walks it clean
                  ['st SP -16 T] ['st SP -8 X]
-                 (jk tgt IP 8) ['sub SP SP 32] ['ld T IP 0] ['jmpr T]                  ; -> lvm_ap -> callee -> lvm_resume -> bb
+                 (reach tgt IP 8) ['sub SP SP 32] ['ld T IP 0] ['jmpr T]                  ; -> lvm_ap -> callee -> lvm_resume -> bb
                  ['label bb] ['ld A SP 0] ['add SP SP 8]])                                            ; resume: result at Sp[0], pop it
              (achain as cso d) (atom? >as
                                   ? (acg <as d + adrive cso)
@@ -638,10 +638,10 @@
              ; [cur n-1 unc arg cont tag] while curry remains, [unc arg cont tag] last; cont = callee+2, tag = cell|2
              (asite as d) (: so (ino + (8 * <as))  n <>as  vs >>as
                              (acur v a) (a > 2 ?
-                                           [(jk tgt X 9) ['st HP 0 X] ['li X ((2 * a) - 1)] ['st HP 8 X]
-                                            (jk tgt X 10) ['st HP 16 X] ['ld X SP (voff v)] ['st HP 24 X] ['lea X T 16] ['st HP 32 X]
+                                           [(reach tgt X 9) ['st HP 0 X] ['li X ((2 * a) - 1)] ['st HP 8 X]
+                                            (reach tgt X 10) ['st HP 16 X] ['ld X SP (voff v)] ['st HP 24 X] ['lea X T 16] ['st HP 32 X]
                                             ['mov X HP] ['or X X 2] ['st HP 40 X] ['mov T HP] ['add HP HP 48]]
-                                           [(jk tgt X 10) ['st HP 0 X] ['ld X SP (voff v)] ['st HP 8 X] ['lea X T 16] ['st HP 16 X]
+                                           [(reach tgt X 10) ['st HP 0 X] ['ld X SP (voff v)] ['st HP 8 X] ['lea X T 16] ['st HP 16 X]
                                             ['mov X HP] ['or X X 2] ['st HP 24 X] ['mov T HP] ['add HP HP 32]])
                              (gov l a) (two? l ? ((acur <l a) + (gov >l (a - 1))) ())
                              (two? vs ?
@@ -650,7 +650,7 @@
                                 [['ld A SP so]]))
              (astr1 cso) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the string fast lane at a 1-arg frame-callee site: (s i) on a text and an
               ([['ld T SP cso] ['test T 1] ['br 'ne ld]                                             ; in-range charm reads the byte; anything else drives, never deopts. the one
-                  ['ld X T 0] (jk tgt SC 1) ['cmp X SC] ['br 'ne ld]                             ; unsigned compare rejects negative and past-end alike
+                  ['ld X T 0] (reach tgt SC 1) ['cmp X SC] ['br 'ne ld]                             ; unsigned compare rejects negative and past-end alike
                   ['test A 1] ['br 'eq ld]
                   ['mov X A] ['sar X 1] ['ld SC T 8]
                   ['cmp X SC] ['br 'below ok]
@@ -662,7 +662,7 @@
              (atally sx d) (: ld (mint 0) en (mint 0)                                                       ; (tally X) on a text: A = tag([X+8]); anything else drives the tally global off its gn slot
               (acg sx d
                + [['test A 1] ['br 'ne ld]
-                    ['ld X A 0] (jk tgt SC 1) ['cmp X SC] ['br 'ne ld]
+                    ['ld X A 0] (reach tgt SC 1) ['cmp X SC] ['br 'ne ld]
                     ['ld X A 8] ['leax A X X 1 1] ['jmp en]
                     ['label ld]]
                + adrive (gbo + 8 * (1 + posof 'tally gn 0))
@@ -672,10 +672,10 @@
              (asat as cso d) (: bb (mint 0)  sw (mint 0)  dn (mint 0)  n #as  w (n + 3)
               ((agous as 0 d)
                + [['ld X SP cso] ['test X 1] ['br 'ne sw]
-                  ['ld T X 0] (jk tgt SC 9) ['cmp T SC] ['br 'ne sw]                               ; entry = lvm_cur?
+                  ['ld T X 0] (reach tgt SC 9) ['cmp T SC] ['br 'ne sw]                               ; entry = lvm_cur?
                   ['ld T X 8] ['cmp T (2 * n + 1)] ['br 'ne sw]]                                 ; arity = n?
                + (: (gsl j) (j < n ? ([['ld A SP (spill (d + j))] ['st SP (8 * j - 8 * w) A]] + (gsl (j + 1))) ()) (gsl 0))
-               + [(jk tgt T 8) ['add T T 8] ['st SP (8 * n - 8 * w) T]                         ; cont = &resume[1]
+               + [(reach tgt T 8) ['add T T 8] ['st SP (8 * n - 8 * w) T]                         ; cont = &resume[1]
                   ['lar T bb] ['lar A 'entry0] ['subs T T A] ['leax T T T 1 1] ['st SP (8 * (n + 1) - 8 * w) T]
                   ['st SP ((8 * (n + 2)) - (8 * w)) A]
                   ['lea IP X 16] ['sub SP SP (8 * w)] ['ld T IP 0] ['jmpr T]                      ; enter the body at cell+2
@@ -711,7 +711,7 @@
               (agous as 0 d
                + (: (gimp l i) (two? l ? ([['ld T SP (voff <l)] ['st SP (8 * i - 8 * w) T]] + (gimp >l (i + 1))) ()) (gimp simp 0))
                + (: (garg j) (j < a - ni ? ([['ld T SP (spill (d + j))] ['st SP (8 * (ni + j) - 8 * w) T]] + (garg (j + 1))) ()) (garg 0))
-               + [(jk tgt T 8) ['add T T 8] ['st SP ((8 * a) - (8 * w)) T]                          ; cont = &resume[1]: ret jumps the cell's word 0 = lvm_resume
+               + [(reach tgt T 8) ['add T T 8] ['st SP ((8 * a) - (8 * w)) T]                          ; cont = &resume[1]: ret jumps the cell's word 0 = lvm_resume
                   ['lar T bb] ['lar X 'entry0] ['subs T T X] ['leax T T T 1 1] ['st SP (8 * (a + 1) - 8 * w) T]
                   ['st SP ((8 * (a + 2)) - (8 * w)) X]
                   ['ld IP SP soo]]
@@ -855,7 +855,7 @@
        (nif (emit (asmt tgt ((cgf tgt v <>>lam 0)
           + [['lea A HP 80] ['cmp S A] ['br 'ae ok]]                  ; cmp Sp,Hp+10w ; room? skip deopt
           + deoptbody tgt 0 + [['label ok]] + nanc tgt             ; heap-full -> deopt (depth 0: cgf balances its spills) ; NaN -> 0.0
-          + [(jk tgt T 5) ['st HP 0 T]                                  ; [Hp] = lvm_gembox (box header)
+          + [(reach tgt T 5) ['st HP 0 T]                                  ; [Hp] = lvm_gembox (box header)
               ['stsd HP 8 'f0]                                           ; [Hp+8] = the double
               ['mov A HP] ['add HP HP 16]                               ; acc = Hp (the gem ptr) ; Hp += 16
               ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]])))   ; [Sp] = gem ; Continue (no putfix: acc is the gem)
@@ -1215,9 +1215,9 @@
             (op a)
             (? (= op 'tally) (: R (argregir tgt (argix a ps 0)) [['ld A R 8]])              ; (tally STR): acc = the raw len at [STR+8]
                (= op 'two?) (: z (mint 0) en (mint 0)                                       ; (two? E): is E a chain? -> 1/0, total, since a non-chain reads 0
-                  (bcat [(go a) [['test A 1] ['br 'ne z] ['ld T A 0] (jk tgt 'r8 0) ['cmp T 'r8] ['br 'ne z] ['li A 1] ['jmp en] ['label z] ['li A 0] ['label en]]]))
-               (= op 'cap) (bcat [(go a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (jk tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A 8]]])    ; <E: a non-chain deopts, and it always runs under a two?
-               (= op 'cup) (bcat [(go a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (jk tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A 16]]])   ; >E: the same guard, then acc = [E+16]
+                  (bcat [(go a) [['test A 1] ['br 'ne z] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne z] ['li A 1] ['jmp en] ['label z] ['li A 0] ['label en]]]))
+               (= op 'cap) (bcat [(go a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A 8]]])    ; <E: a non-chain deopts, and it always runs under a two?
+               (= op 'cup) (bcat [(go a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A 16]]])   ; >E: the same guard, then acc = [E+16]
                ())
             ())))
    (gargsir tgt syms ps as) (atom? as ? () (bcat [(cggir tgt syms ps <as) [['push (greg tgt 'acc)]] (gargsir tgt syms ps >as)]))
@@ -1227,7 +1227,7 @@
    ; value, so no putfix. r9/r10 are free scratch in the group ABI (args r3/r12-r14, anchor r11, acc r0, tmp r7, sp r1, hp r2, ip r5)
    (consir tgt) (: A (greg tgt 'acc) T (greg tgt 'tmp) S (greg tgt 'sp) HP (greg tgt 'hp)
       [['lea 'r9 HP 88] ['cmp S 'r9] '(br below OVF)                             ; room for 3w+floor; Sp < Hp+88 -> heap full -> deopt
-        (jk tgt 'r10 0) ['st HP 0 'r10]                                      ; [Hp] = chain header
+        (reach tgt 'r10 0) ['st HP 0 'r10]                                      ; [Hp] = chain header
         ['st HP 8 T] ['st HP 16 A]                                               ; [Hp+8] = cap (the popped a); [Hp+16] = cup (b)
         ['mov A HP] ['add HP HP 24]])                                            ; acc = Hp (result ptr); bump Hp by 3 words
    ; cggvir: value-mode codegen -- e yields a love value (a heap pointer or a tagged scalar) in acc, not a raw int
@@ -1264,17 +1264,17 @@
    ; OVF restores sp from the anchor, abandoning the group's frames, then falls into deopt
    (mkouterir tgt k entry arity valt smask mmask bufmask cmask pmask)              ; valt: a value-typed entry stores acc as-is, with no putfix
     (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) OVFR (govf tgt) ss (slotsz tgt)
-       strk 1 mapk 2 bufk 6                                                            ; the jk slots of the kind sentinels the raw-param guards check against
+       strk 1 mapk 2 bufk 6                                                            ; the reach slots of the kind sentinels the raw-param guards check against
        (pusharg1 i) (: o (8 * i)                                                   ; one external arg: load Sp[i] -> acc, guard by kind, push
           (? (elem i cmask) [['ld A S o] ['push A]]                          ; a chain: raw, no guard -- two? is total and cap/cup deopt a non-chain inline
              (elem i smask || (elem i mmask || elem i bufmask))     ; a string, map or cask: a fixnum cannot be a heap object, and [arg]'s kind must match
                (: kind (? (elem i mmask) mapk (elem i bufmask) bufk strk)
-                  [['ld A S o] ['test A 1] '(br ne OVF) ['ld T A 0] (jk tgt 'r8 kind) ['cmp T 'r8] '(br ne OVF) ['push A]])   ; an odd (fixnum) word deopts, then the kind word must match
+                  [['ld A S o] ['test A 1] '(br ne OVF) ['ld T A 0] (reach tgt 'r8 kind) ['cmp T 'r8] '(br ne OVF) ['push A]])   ; an odd (fixnum) word deopts, then the kind word must match
              (elem i pmask)                                                     ; a point key: nom or mint, pushed raw -- word identity is its whole equality,
                (: pok (mint 0)                                                     ; and a charm deopts, since only interp knows the numeric bridges like (2 = 2.0)
                   [['ld A S o] ['test A 1] '(br ne OVF)
-                    ['ld T A 0] (jk tgt 'r8 3) ['cmp T 'r8] ['br 'eq pok]
-                    (jk tgt 'r8 4) ['cmp T 'r8] '(br ne OVF) ['label pok] ['push A]])
+                    ['ld T A 0] (reach tgt 'r8 3) ['cmp T 'r8] ['br 'eq pok]
+                    (reach tgt 'r8 4) ['cmp T 'r8] '(br ne OVF) ['label pok] ['push A]])
              [['ld A S o] ['test A 1] '(br eq OVF) ['sar A 1] ['push A]]))    ; an int: fixnum-guarded, untagged, pushed
        pushargs (foldl (\ a i (bcat [a (pusharg1 i)])) () (rangeL 0 k))
        epi (valt ? [['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]]                                  ; a value: store acc as-is, then Continue with no putfix
