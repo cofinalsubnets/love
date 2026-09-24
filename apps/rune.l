@@ -497,9 +497,9 @@
 
 ; --- the poly coin: polynomials first-class under the generic ops ----------
 ; strike a canonical monomial list and the surface arrives whole: + - * run padd/psub/pmul
-; through the die (slots 1/5/2), = compares canonical payloads, net-mode 1 (slot 6) nets a poly
+; through the die, = compares canonical payloads, the die's 'net nets a poly
 ; by its monomial count -- so ! reads "is the zero polynomial" even when the coefficients sum
-; red, where the raw-list layer needs (0 = tally p) -- and slot 7 declares polys stars, so a
+; red, where the raw-list layer needs (0 = tally p) -- and 'star declares polys stars, so a
 ; numeral powers one through its own * (ipow's squaring, seeded at 1, lands on the zero-mul
 ; face). pd/pdet work the raw layer: (load p) down, (poly ..) back.
 ;
@@ -517,7 +517,7 @@
    (pmeth z f) (\ a b (: x (load a) y (load b)
                        (? (pok? x y && pok? y x) (z (f (plift x y) (plift y x))))))
    (zface v w) (? (star? v) (? (polyish? w) (0 = #w) 0) 0)   ; c times the zero poly is the zero poly: * needs no lift
-   mk (coin 'poly (z \ {'net 'tally 'star 1
+   mk (coin 'poly (z \ {'net (\ c (tally (load c))) 'star 1
                           '+ (pmeth z padd)
                           '* (: mulm (pmeth z pmul)
                                (\ a b (: x (load a) y (load b)

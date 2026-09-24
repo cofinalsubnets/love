@@ -857,6 +857,7 @@ static lvm(sortby_step) {
            m = min(lo + w, n);
  if (Sp[sb_pend] == sb_done) goto spine;                             // a collection at the reservation below re-entered the step: the merge is over
  if (Sp[sb_pend] != zero) {                                          // the answer to (le a[x] a[y]): the left when true
+  if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);   // a compound answer: measured, then the step again
   bool left = !ai_nilp(g, Sp[0]);
   word v = tray_get_obj(tray(Sp[sb_va]), left ? x++ : y++);
   tray_put_obj(tray(Sp[sb_vb]), o++, v);
@@ -1037,7 +1038,7 @@ static lvm(lvm_numtap) {
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
 
 // (seal-hook n f): install f as core hook n (0 read, 1 num-ap, 2 stack, 3 compose,
-// 4 opfix, 5 the help, 6 the task's stdio, 7 show). 5 and 6 are the dynamic slots and
+// 4 opfix, 5 the help, 6 the task's stdio, 7 show, 8 measure). 5 and 6 are the dynamic slots and
 // alone skip the lambda gate -- 5 takes a help or (), 6 a 3-chain or (); anything else
 // traps. a switch, not a table: a slot[] would be an address-taken local (the lvm
 // scratch rule).
@@ -1053,6 +1054,7 @@ lvm(lvm_seal) {
   case 5: *task_help(g) = Sp[1], gen_wb_cell(g, task_help(g), Sp[1]); break;
   case 6: *task_io(g) = chainp(Sp[1]) ? Sp[1] : zero, gen_wb_cell(g, task_io(g), *task_io(g)); break;   // anything but a chain hands the console back
   case 7: g->hot_show = Sp[1]; break;
+  case 8: g->hot_net = Sp[1]; break;
   default: __builtin_trap(); }
  Sp += 1, Sp[0] = zero, Ip += 1;
  ai_musttail return Continue(); }
@@ -1650,7 +1652,11 @@ lvm(lvm_jump) { Ip = Ip[1].m; ai_musttail return Continue(); }
 // the only compiled truthiness branch (`?`, and the `&&`/`||` macros). uses the
 // language falsy predicate so an all-zero tray (boxed 0.0, zero int box,
 // all-zero array) takes the false arm, lifting "0 is the only false scalar".
-lvm(lvm_cond) { Ip = ai_nilp(g, *Sp++) ? Ip[1].m : Ip + 2; ai_musttail return Continue(); }
+lvm(lvm_cond) {
+ word x = Sp[0];
+ if (charmp(x)) { Ip = getcharm(x) <= 0 ? Ip[1].m : Ip + 2; Sp += 1; ai_musttail return Continue(); }
+ if (!ai_leafp(x)) ai_musttail return Ap(lvm_measure, g);
+ Ip = ai_nilp(g, *Sp++) ? Ip[1].m : Ip + 2; ai_musttail return Continue(); }
 lvm(lvm_unc) {
  Have1();
  *--Sp = Ip[1].x;
@@ -1793,7 +1799,21 @@ fld(lvm_argtwo, (chainp(v) && !nomp(v)) ? putcharm(1) : zero)
 // arg + cond: the test never reaches the stack at all -- no push, no pop, one op.
 // layout [Ip]=argcond [Ip+1]=idx [Ip+2]=else-addr [Ip+3]=then, matching lvm_cond's
 // own targets shifted by our operand (cf. the cmp_lt note).
-lvm(lvm_argcond) { Ip = ai_nilp(g, Sp[getcharm(Ip[1].x)]) ? Ip[2].m : Ip + 3; ai_musttail return Continue(); }
+// argcond's operand stays in its argument slot, so a compound is measured under a landing
+// cell with the op's own address beside it: [x measure land op], the landing at [ans op ..]
+static lvm(lvm_argcond_land) {
+ Ip = cell(Sp[1]);
+ Ip = ai_nilp(g, Sp[0]) ? Ip[2].m : Ip + 3;
+ Sp += 2; ai_musttail return Continue(); }
+static union u const argcond_land[] = { {.ap = lvm_argcond_land} };
+lvm(lvm_argcond) {
+ word x = Sp[getcharm(Ip[1].x)];
+ if (!charmp(x) && !ai_leafp(x)) {
+  Have(4);
+  word *dst = Sp - 4;
+  dst[0] = Sp[getcharm(Ip[1].x)], dst[1] = hot_hook(g->hot_net), dst[2] = word(argcond_land), dst[3] = word(Ip);
+  Sp = dst; Ip = (union u*) callout_drive; ai_musttail return Continue(); }
+ Ip = ai_nilp(g, x) ? Ip[2].m : Ip + 3; ai_musttail return Continue(); }
 // ... and the rung above: load + predicate + cond, all three in one op. measured, this
 // is where `?` actually lives: only 7.1M conds test a bare local, while 86.1M test the
 // result of a fused load+accessor -- `(? (two? b) ..)` is the shape, 64.4M of it. the
@@ -1905,69 +1925,59 @@ lvm(lvm_spin) {
 // FIXME i don't think anything underneath here belongs in this file
 // the net: the complex-valued measure. a complex scalar nets itself (additivity
 // needs phase, so the codomain is C and the order retraction happens once, in the
-// observers); every other scalar nets real; a link nets net(car) + net(cdr) and a
-// rank>=1 array the sum of its elements -- recursive, unclamped -- so negatives cancel
-// and opposite phases annihilate by vector cancellation. net(asum v) = net(v).
-struct ai_zn ai_net(struct ai *g, word x) {
-  if (charmp(x)) return zn((ai_flo_t) getcharm(x), 0);               // fixnum: its value
+// observers); every other scalar nets real; a numeric tray the sum of its elements --
+// unclamped -- so negatives cancel and opposite phases annihilate by vector cancellation.
+// C nets the leaves alone. a chain, an object tray or a coin is love's: prel's `measure`
+// (hook 8) sums the parts and reads a coin by its kind's 'net, so a kind's measure is
+// written in love like its + and *, and the walk over a deep value rides the VM stack,
+// never C's. an lvm meets one through lvm_measure; ai_nilp reads it as nothing.
+bool ai_net_leaf(struct ai *g, word x, struct ai_zn *e) {
+  (void) g;
+  if (charmp(x)) return *e = zn((ai_flo_t) getcharm(x), 0), true;   // fixnum: its value
   if (caskp(x)) { struct ai_str *b = cask(x)->str; ai_flo_t t = 0; // hot chars: Σ charms, like a string
     for (uintptr_t i = 0; i < b->len; i++) t += (uint8_t) b->bytes[i];
-    return zn(t, 0); }
-  if (tabp(x)) return zn(1, 0);                                   // table: a lookup lambda, and a lambda nets 1 -- mutable, so its truth is not its contents
-  if (coinp(x)) {                                              // a coin nets its payload (the monoid hom), unless
-    word mode = kind_get(g, coin_kind(x), KnNet), *kn = ai_core_of(g)->knom;   // its kind pins a net mode.
-    if (mode == kn[KnTally])                                   // mode 1: net by tally, the count -- never negative,
-      return zn((ai_flo_t) ai_count(g, coin_load(x)), 0);      // so truth is "has any"
-    if (mode == kn[KnRatio]) {                                 // mode 2: ratio -- an (n d)-of-reals payload nets
-      word p = coin_load(x);                                   // n/d, the sign exact (value truth for rationals):
-      if (chainp(p) && chainp(B(p))) {                         // the division's sign is IEEE-true, and the two
-        struct ai_zn n = ai_net(g, A(p)), d = ai_net(g, A(B(p)));  // loss lanes below restore it from the
-        if (n.im == 0 && d.im == 0 && d.re != 0) {             // components' own exact signs.
-          ai_flo_t s = (n.re < 0) != (d.re < 0) ? -1.0 : 1.0;
-          ai_flo_t v = n.re / d.re;
-          if (v != v) v = s;                                   // inf/inf (two giant bignums): sign carries
-          else if (v == 0 && n.re != 0)                        // underflow: a live sign never reads as the floor
-            v = s * (ai_flo_t) (Bits == 64 ? 1e-300 : 1e-37);  // (the rescue must be nonzero at ai_flo_t's width)
-          return zn(v, 0); } } }                               // a malformed payload falls through to the hom
-    return ai_net(g, coin_load(x)); }
-  if (!datp(x)) return zn(1, 0);                                // opaque but present (fn / port): truthy
+    return *e = zn(t, 0), true; }
+  if (tabp(x)) return *e = zn(1, 0), true;                          // table: a lookup lambda, and a lambda nets 1 -- mutable, so its truth is not its contents
+  if (coinp(x)) return false;                                       // a coin: its kind's 'net, in love
+  if (!datp(x)) return *e = zn(1, 0), true;                         // opaque but present (fn / port): truthy
   switch (typ(x)) {
     case DString: { ai_flo_t t = 0;                                 // a string is packed chars: Σ charms
       for (uintptr_t i = 0; i < len(x); i++) t += (uint8_t) txt(x)[i];
-      return zn(t, 0); }                                           // (the count moved to tally)
-    case DChain: { struct ai_zn s = zn(0, 0); word p = x;           // chain: net a + net b at every link --
-      do { struct ai_zn e = ai_net(g, A(p));                       // complex sums, so negatives cancel,
-           s.re += e.re, s.im += e.im;                           // phases cancel, and a chain of
-           p = B(p); } while (chainp(p));                          // nothings nets to nothing
-      if (!mintp(p)) { struct ai_zn e = ai_net(g, p);              // ..and the TAIL, so the hom
-        s.re += e.re, s.im += e.im; }                          // holds at a dotted one. every
-                                                               // mint nets 0, so `()` skips
-      return s; }
-    case DBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
-    case DGem: return zn(gem_get(x), 0);                         // a boxed float nets its value
-    case DTwin: return zn(twin_re(x), twin_im(x));               // a complex nets itself (phase intact)
-    case DMint: return zn(0, 0);                                 // a bare point nets nothing (the distinct nothing)
+      return *e = zn(t, 0), true; }                                 // (the count moved to tally)
+    case DChain: return false;
+    case DBig: return *e = zn(ai_big_to_flo(x), 0), true;           // bignum: full magnitude, sign intact
+    case DGem: return *e = zn(gem_get(x), 0), true;                 // a boxed float nets its value
+    case DTwin: return *e = zn(twin_re(x), twin_im(x)), true;       // a complex nets itself (phase intact)
+    case DMint: return *e = zn(0, 0), true;                         // a bare point nets nothing (the distinct nothing)
     case DNom: { ai_flo_t t = 0; struct ai_str *s = str(nom(x)->name);  // a named point nets its spelling's charms
       for (uintptr_t i = 0; i < s->len; i++) t += (uint8_t) txt(s)[i];
-      return zn(t, 0); }
+      return *e = zn(t, 0), true; }
     case DTray: { struct ai_tray *v = tray(x);                 // a rank>=1 tray (the scalar stars are DGem/DBig/DTwin)
       uintptr_t i, n = tray_nelem(v);
       struct ai_zn s = zn(0, 0);                                  // rank>=1 array -> Σ elem
+      if (v->type == ai_O) return false;                          // objects: love's, element by element
       if (v->type == ai_C) { ai_flo_t *d = tray_data(v);
         for (i = 0; i < n; i++) s.re += ai_net_flo(d[2*i]), s.im += ai_net_flo(d[2*i+1]);
-        return s; }
-      if (v->type == ai_O)
-        for (i = 0; i < n; i++) { struct ai_zn e = ai_net(g, tray_get_obj(v, i));
-          s.re += e.re, s.im += e.im; }
-      else for (i = 0; i < n; i++) s.re += ai_net_flo(tray_get_flo(v, i));
-      return s; } }
-  return zn(1, 0); }
+        return *e = s, true; }
+      for (i = 0; i < n; i++) s.re += ai_net_flo(tray_get_flo(v, i));
+      return *e = s, true; } }
+  return *e = zn(1, 0), true; }
+// a compound operand measured by love: [x measure ret] under callout_drive, the answer landing
+// where x was; ret is the op itself, which re-runs on the leaf. unsealed, the hook traps: the
+// boot window runs on the nif book, and nothing there may ask a compound's truth.
+lvm(lvm_measure) {
+  Have(2);
+  word *dst = Sp - 2;
+  dst[0] = Sp[0], dst[1] = hot_hook(g->hot_net), dst[2] = word(Ip);
+  Sp = dst; Ip = (union u*) callout_drive;
+  ai_musttail return Continue(); }
 // $: the net observed once -- max(0, ceil) of its real part
 static intptr_t ai_saturate(struct ai *g, word x) {
   // the charm lane is exactness, not speed: the net is a double, so above 2^53 a
   // charm comes back rounded -- and $ is the identity on every green charm (spec.l).
   if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }
-  ai_flo_t re = ai_net(g, x).re;
+  struct ai_zn z; ai_net_leaf(g, x, &z);
+  ai_flo_t re = z.re;
   if (re <= 0) return 0;
   if (re >= (ai_flo_t) maxcharm) return maxcharm;
   intptr_t i = (intptr_t) re;
@@ -1975,6 +1985,7 @@ static intptr_t ai_saturate(struct ai *g, word x) {
 
 lvm(lvm_saturate) {
  if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 2)
+ if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
  Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
 // the tower's third rung: ceil(re(net x)) -- the measure retracted onto the integers, where
@@ -1983,7 +1994,8 @@ lvm(lvm_saturate) {
 // measure that will not fit lands on the edge rather than wrapping or widening.
 static intptr_t ai_ceilnet(struct ai *g, word x) {
   if (charmp(x)) return getcharm(x);
-  ai_flo_t re = ai_net(g, x).re;
+  struct ai_zn z; ai_net_leaf(g, x, &z);
+  ai_flo_t re = z.re;
   if (re >= (ai_flo_t) maxcharm) return maxcharm;
   if (re <= (ai_flo_t) mincharm) return mincharm;
   intptr_t i = (intptr_t) re;
@@ -1991,4 +2003,5 @@ static intptr_t ai_ceilnet(struct ai *g, word x) {
 
 lvm(lvm_ceil) {
  if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 1)
+ if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
  Sp[0] = putcharm(ai_ceilnet(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }

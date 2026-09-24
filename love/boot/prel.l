@@ -141,17 +141,29 @@
    ; link plus one revcat keeps it linear.
    (revcat l acc) (? (two? l) (revcat (cup l) (. (cap l) acc)) acc))   ; no `!` here: not bound yet
 ; the monadic words behind the glued sigils. a coin's lane is by declaration: a starred kind
-; nets itself, else its tally under net-mode tally, else its payload signed. one walk over the
+; nets itself, else its kind's 'net measures it, else its payload signed. one walk over the
 ; spine's cars then the tail, so net(. a b) = net a + net b at every link.
+; measure is what C's truth asks of a compound (hook 8): net, with a starred coin read by its
+; 'net too -- net keeps it whole so a sum of rationals stays rational, truth wants its sign
 (: (netsum a l) (? (two? l) (netsum (+ a (net (cap l))) (cup l)) (+ a (net l)))
-   (net x) (? (tray? x) (asum x)
+   (ktab x) (: e (kreg 0 (kind x)) (? (two? e) (cup e) ()))
+   ; an object tray (atype 3) nets its elements, each by net; peep reads a flat index at
+   ; rank 1 and a row-major coordinate list above it
+   (onet x) (: sh (shape x) n (prod sh)
+              (dec i s) (? (two? (cup s)) (: r (prod (cup s)) (. (// i r) (dec (% i r) (cup s)))) (. i ()))
+              (go i a) (? (< i n) (go (+ i 1) (+ a (net (peep x (? (two? (cup sh)) (dec i sh) i) ())))) a)
+              (go 0 0))
+   (net x) (? (tray? x) (? (= 3 (atype x)) (onet x) (asum x))
               (constellation? x) x
               (two? x) (netsum 0 x)
-              (coin? x) (: p (load x) e (kreg 0 (kind x)) t (? (two? e) (cup e) ())
+              (coin? x) (: t (ktab x) f (t 'net)
                            (? (= 1 (t 'star)) x                 ; starred: the fixpoint
-                              (= 'tally (t 'net)) (tally x)
-                              (net p)))
+                              (lit? f) (f x)                    ; the kind's own measure
+                              (net (load x))))
               (saturate x))
+   (measure x) (? (coin? x) (: f ((ktab x) 'net) (? (lit? f) (f x) (net x)))
+                  (net x))
+   _ (seal-hook 8 measure)
    (prod x) (? (tray? x) (aprod x)
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)
                x)

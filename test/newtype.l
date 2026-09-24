@@ -15,7 +15,7 @@
    smp (sm 2)
    smq (sm 3)
    ; a counted kind -- nets by tally, not by content
-   cnt (coin 'cnt {'net 'tally})
+   cnt (coin 'cnt {'net (\ c (tally (load c)))})
    (tail-from k l) (? (one? l) () (<l = k) l (tail-from k >l))
    (test
     ; --- what a coin is ---
@@ -85,13 +85,13 @@
     ; --- tally delegates to the payload ---
     (3 = #(sm [7 8 9]))    ; a coin over a 3-list tallies its payload
 
-    ; --- net-mode 1 (slot 6): net by tally -- truth reads "has any", never "sums green" ---
+    ; --- a 'net method: net by tally -- truth reads "has any", never "sums green" ---
     (2 = $(cnt [1 -5]))      ; content sums -4; the count is 2
     !!(cnt [-3])      ; red content, still true: one element is something
     !(cnt ())                ; an empty payload counts 0 -> nothing
     (0 = $(cnt ()))
     (3 = +[(cnt [1]) (cnt [1 1])])      ; counts flow through the list sum: 1+2
-    (-4 = +(sm [1 -5]))      ; mode absent: the payload hom, signed, as ever
+    (-4 = +(sm [1 -5]))      ; no 'net: the payload hom, signed, as ever
 
     ; --- rationals (///): a multi-field coin; +/*/=/show all work ---
     ; this die is the one coin that is a NUMBER: cmp_rank seats it in the number
@@ -166,7 +166,7 @@
     !((1 / 2) (4 /// 1))           ; a non-whole exponent off the tower: ()
     ('lambda = kind (2 (sm 3)))  ; an unflagged coin still composes (a closure)
 
-    ; --- net-mode 2 (RATIO): a rational's truth is its VALUE's sign, exactly ---
+    ; --- the ratio's 'net: a rational's truth is its VALUE's sign, exactly ---
     !(-1 /// 2)                    ; a negative rational is nothing: red by value
     !!(1 /// 2)              ; a positive one is something
     !(0 /// 5)                     ; zero is the blue floor

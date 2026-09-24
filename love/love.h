@@ -223,6 +223,7 @@ struct ai {
      hot_opfix,   // 4: the operator factor pass
                   // 5 the help and 6 the stdio are the running task's, in its node
      hot_show,    // 7: show a value as a string
+     hot_net,     // 8: the measure of a compound value (prel's `measure`), what C's truth asks
      lib,        // the library: name -> book. `borrow` takes one onto the stack, `cite`
                  // reads one where it stands, `leave` checks the written one back in.
      errs,        // errno vocabulary: canonical number -> its nom; ai_err reads it
@@ -829,15 +830,16 @@ struct ai_coin { lvm_t *ap; word kind; word payload; };
 static ai_inline bool coinp(word _) { return lamp(_) && cell(_)->ap == lvm_coin; }
 static ai_inline word coin_kind(word x) { return ((struct ai_coin*) x)->kind; }
 static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload; }
-// the kind table's keys, by index into g->knom. + * - / and ap are closures run inside the VM;
-// net/=/</show/tally default over the payload in pure C. hot truthy = the kind's coins are lit?
+// the kind table's keys, by index into g->knom. + * - / ap and net are closures run inside the
+// VM (net: the kind's measure, read by prel's `measure` -- absent, the payload's net);
+// =/</show/tally default over the payload in pure C. hot truthy = the kind's coins are lit?
 // (references), absent = fresh data. star truthy = numeric: a numeral powers them through their
-// own * (prel's num-ap reads it, C never does). net is a mode nom, never a closure -- ai_net is
-// pure C and may not re-enter the VM: absent = net of the payload, tally = count, ratio = n/d.
-// the tail names, KnLambda on, are `kind`'s answers inside the hot row: a lambda, a
-// cask, a port, and a struck coin whose kind has no name.
+// own * (prel's num-ap reads it, C never does). KnRatio is the ratio coin's own name: the one
+// coin C orders by value (cmp3) and long-divides (the integer rungs). the tail names, KnLambda
+// on, are `kind`'s answers inside the hot row: a lambda, a cask, a port, and a struck coin
+// whose kind has no name.
 enum { KnName, KnAdd, KnMul, KnApply, KnHot, KnSub, KnNet, KnStar, KnDiv,
-       KnPayload, KnTally, KnRatio, KnLambda, KnCask, KnPort, KnCoin, KnN };
+       KnPayload, KnRatio, KnLambda, KnCask, KnPort, KnCoin, KnN };
 // read a kind table's slot, or () if absent / the kind is not a tablet.
 static ai_inline word kind_get(struct ai *g, word kind, intptr_t i) {
  return tabp(kind) ? ai_mapget(g, zero, ai_core_of(g)->knom[i], kind) : zero; }
@@ -855,7 +857,7 @@ word ai_big_canon(word **hp, ai_limb const *limb, int n, bool neg);
 ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo)
 int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
 intptr_t ai_mint_cmp(struct ai*, word, word); // -1/0/1 over two points: () < bare mints < names
-bool ai_ratio_exact(struct ai*, word);  // int/ceil/saturate's exact-ratio domain: a net-mode-2 coin over integer (n d)
+bool ai_ratio_exact(struct ai*, word);  // int/ceil/saturate's exact-ratio domain: the ratio coin over integer (n d)
 // the number band's order, for arr.c's equality lane: a ratio coin seats in that band by
 // value (cmp_rank), so `=` must read it the way `<` and sort already do.
 bool ai_numband(struct ai*, word);            // x orders as a number (cmp_rank 2)
@@ -915,8 +917,8 @@ static ai_inline word tray_get_obj(struct ai_tray *v, uintptr_t i) {
 static ai_inline void tray_put_obj(struct ai_tray *v, uintptr_t i, word x) {
  ((word*) tray_data(v))[i] = x; }
 
-// truth: x is false iff (= 0 ($ x)). the net's codomain is complex (ai_net): a complex scalar
-// nets itself, every other nets real, aggregates sum, so the net is additive exactly and a sum
+// truth: x is false iff (= 0 ($ x)). the net's codomain is complex: a complex scalar nets
+// itself, every other nets real, aggregates sum, so the net is additive exactly and a sum
 // cannot short-circuit (a later negative cancels). same zero conditions as ai_saturate ($).
 struct ai_str *nom_str(struct ai *g, word x);   // a named sym -> its name string, else 0
 struct ai_zn { ai_flo_t re, im; };                     // the net: a complex value
@@ -924,17 +926,25 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
   struct ai_zn z = {re, im}; return z; }
 // the truth gate, not the total order -- the one place the two part: a net is nothing unless
 // its real part is positive, so a pure phase is blue. the order stays lexicographic and total.
-struct ai_zn ai_net(struct ai *, word);         // fwd: aggregates sum their elements
-intptr_t ai_count(struct ai *, word);           // fwd: tally's C body (net-mode 1 reads it)
-// only the two lanes answering with no load and no call earn a line: a third costs more
-// than the walk it skips, since ai_net is never inlined
+bool ai_net_leaf(struct ai *, word, struct ai_zn *);   // a leaf's net: true with it, false on a compound
+intptr_t ai_count(struct ai *, word);           // fwd: tally's C body
+_lvm(lvm_measure);                              // a compound at Sp[0] measured by love, the op re-run
+// a leaf is what C nets itself; a chain, an object tray or a coin is love's (ev.c's net)
+static ai_inline bool ai_leafp(word x) {
+  if (charmp(x)) return true;
+  if (coinp(x)) return false;
+  if (!datp(x)) return true;
+  return typ(x) != DChain && (typ(x) != DTray || tray(x)->type != ai_O); }
+// the truth of a leaf. an lvm sends a compound to love first (lvm_measure); the C-only seats
+// -- a kind's flag, a help, a method slot -- read one as nothing: a flag is a scalar
 static ai_inline bool ai_nilp(struct ai *g, word x) {
+  struct ai_zn z;
   if (charmp(x)) return getcharm(x) <= 0;            // a charm is its own net
   if (mintp(x)) return true;                         // a bare point nets nothing
-  return ai_net(g, x).re <= 0; }
+  return !ai_net_leaf(g, x, &z) || z.re <= 0; }
 
 // a NaN is love's (): love admits no irreflexive value, so = reads two of them as one,
-// and it nets nothing, exactly as every other point does (ai_net's chain arm says so).
+// and it nets nothing, exactly as every other point does (the mint lane of ai_net_leaf).
 static ai_inline bool ai_same_flo(ai_flo_t a, ai_flo_t b) { return a == b || (a != a && b != b); }
 static ai_inline ai_flo_t ai_net_flo(ai_flo_t v) { return v != v ? 0 : v; }
 // truncation toward zero / float remainder; pure and freestanding-safe (no libm)

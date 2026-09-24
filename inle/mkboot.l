@@ -325,12 +325,12 @@
        (wfi)
        (jmp rv_park))
 
-   ;; the boot stack, every arch: kmain never returns. 1 MiB: the egg bake walks the tree's
-   ;; own forms through C that recurses per level (ai_net), and 64 KiB ran out by a few KiB
-   ;; on a64 -- below the stack lie the boot's page tables, which an overflow eats in silence
-   ;; (the HHDM's L0 entry went to zero, and every later access took a level-0 fault).
-   ;; .bss so it costs the file nothing. the far end carries a label, so every khop loads
-   ;; the top and the size is spelled once.
+   ;; the boot stack, every arch: kmain never returns. 1 MiB, though the C walks below the
+   ;; egg bake are meant to stay flat: below the stack lie the boot's page tables, which an
+   ;; overflow eats in silence (the HHDM's L0 entry goes to zero, and every later access
+   ;; takes a level-0 fault, the report's own included), and the room stands in for the
+   ;; guard page there is not yet. .bss so it costs the file nothing. the far end carries a
+   ;; label, so every khop loads the top and the size is spelled once.
    b-stack [['label 'kstack] ['raw (b-zeros 1048576)] ['label 'kstack_top]]
 
    ;; -- the two objects ---------------------------------------------------

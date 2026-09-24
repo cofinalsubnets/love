@@ -423,12 +423,16 @@ struct ai *ai_big_shift(struct ai *g, int vop) {
  while (rn > 0 && r[rn-1] == 0) rn--;
  return *++g->sp = ai_big_canon(&g->hp, r, rn, neg && rn > 0), ++g->ip, g; }
 
+// the ratio coin, known to C by its kind's name: the one coin cmp3 orders by value and the
+// integer rungs long-divide. its measure is its own 'net, in love, like every coin's.
+static ai_inline bool ratiop(struct ai *g, word x) {
+ return coinp(x) && kind_get(g, coin_kind(x), KnName) == ai_core_of(g)->knom[KnRatio]; }
 // the integer rungs' exact lane (int / ceil / saturate) for a ratio coin: above
 // 2^53 the float net rounds, so a rung riding it lands on the wrong integer.
-// domain: a net-mode-2 coin over (n d), both exact integers, d nonzero (a zero
+// domain: the ratio coin over (n d), both exact integers, d nonzero (a zero
 // divisor keeps the float lane's inf/sign story).
 bool ai_ratio_exact(struct ai *g, word x) {
- if (!coinp(x) || kind_get(g, coin_kind(x), KnNet) != ai_core_of(g)->knom[KnRatio]) return false;
+ if (!ratiop(g, x)) return false;
  word p = coin_load(x);
  if (!chainp(p) || !chainp(B(p))) return false;
  word n = A(p), d = A(B(p));
@@ -1009,6 +1013,31 @@ static lvm(lvm_aextreme) {
 lvm(lvm_max) { g->b = (word) 2; ai_musttail return Ap(lvm_aextreme, g); }   // amax
 lvm(lvm_min) { g->b = (word) 3; ai_musttail return Ap(lvm_aextreme, g); }   // amin
 
+// the object lane of aall (g->b = 2i) and aany (2i + 1), scanning from element i: a compound
+// element is measured by love under a landing cell, [e measure land op 2i+any] over the tray
+// in the operand slot, and the landing scans on past it
+static lvm(lvm_ascan);
+static lvm(lvm_ascan_land) {
+ intptr_t k = getcharm(Sp[2]); bool any = k & 1;
+ Ip = cell(Sp[1]);
+ bool t = !ai_nilp(g, Sp[0]);
+ Sp += 3;                                                        // [ans op k tray] -> [tray]
+ if (t == any) ai_musttail return Answer(putcharm(any));
+ g->b = (word) (k + 2); ai_musttail return Ap(lvm_ascan, g); }
+static union u const ascan_land[] = { {.ap = lvm_ascan_land} };
+static lvm(lvm_ascan) {
+ intptr_t k = g->b; bool any = k & 1;
+ for (uintptr_t i = (uintptr_t) (k >> 1); i < tray_nelem(tray(Sp[0])); i++) {
+  word e = tray_get_obj(tray(Sp[0]), i);
+  if (!ai_leafp(e)) {
+   Have(5);                                                      // (a collection re-runs the op from 0)
+   word *dst = Sp - 5;
+   dst[0] = e, dst[1] = hot_hook(g->hot_net), dst[2] = word(ascan_land), dst[3] = word(Ip),
+   dst[4] = putcharm((intptr_t) (i << 1) | any);
+   Sp = dst; Ip = (union u*) callout_drive; ai_musttail return Continue(); }
+  if (!ai_nilp(g, e) == any) ai_musttail return Answer(putcharm(any)); }
+ ai_musttail return Answer(putcharm(!any)); }
+
 // aall: the conjunction reduction under the truth law -- every element true, a positive
 // real part, as `?` and ai_nilp read it; empty -> vacuously true; scalar -> identity
 lvm(lvm_aall) {
@@ -1016,10 +1045,7 @@ lvm(lvm_aall) {
  if (!packp(x)) ai_musttail return Next(1);
  struct ai_tray *v = tray(x);
  uintptr_t n = tray_nelem(v);
- if (v->type == ai_O) {                         // object: the oracle itself
-  for (uintptr_t i = 0; i < n; i++)
-   if (ai_nilp(g, tray_get_obj(v, i))) ai_musttail return Answer(zero);
-  ai_musttail return Answer(putcharm(1)); }
+ if (v->type == ai_O) { g->b = 0; ai_musttail return Ap(lvm_ascan, g); }   // object: the oracle itself
  if (v->type == ai_C) {                         // complex: the real part
   ai_flo_t *fp = tray_data(v);
   for (uintptr_t i = 0; i < n; i++)
@@ -1040,10 +1066,7 @@ lvm(lvm_aany) {
  if (!packp(x)) ai_musttail return Next(1);
  struct ai_tray *v = tray(x);
  uintptr_t n = tray_nelem(v);
- if (v->type == ai_O) {
-  for (uintptr_t i = 0; i < n; i++)
-   if (!ai_nilp(g, tray_get_obj(v, i))) ai_musttail return Answer(putcharm(1));
-  ai_musttail return Answer(zero); }
+ if (v->type == ai_O) { g->b = 1; ai_musttail return Ap(lvm_ascan, g); }
  if (v->type == ai_C) {
   ai_flo_t *fp = tray_data(v);
   for (uintptr_t i = 0; i < n; i++)
@@ -1250,8 +1273,7 @@ static ai_inline int cmp_rank(struct ai *g, word x) {
  if (k == KTrayO) return 3;                         // object tray: above the numbers, below chain
  if (k == KChain) return 4;                        // chain: the grammar substrate -- high, just under book (only book's mutability seats it above)
  if (k == KTablet) return 5;                          // tablet: above chain
- if (coinp(x) && kind_get(g, coin_kind(x), KnNet) == ai_core_of(g)->knom[KnRatio])
-  return 2;                                        // a ratio coin seats in the number band, by its value
+ if (ratiop(g, x)) return 2;                       // the ratio coin seats in the number band, by its value
  return 6; }                                       // KHot -- the ceiling (the only kind left)
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
@@ -1301,6 +1323,19 @@ static ai_inline bool ratio_ifit(word x, int64_t *v) {
  if (m > (uint64_t) INT64_MAX + neg) return false;
  return *v = (int64_t) (neg ? 0 - m : m), true; }
 
+// the number band's measure for cmp3: a star or galaxy is a leaf; the ratio coin is n/d off its
+// (n d) payload, the sign exact -- the division's sign is IEEE-true, and the two loss lanes
+// restore it from the components' own signs (inf/inf, and an underflow to 0)
+static void band_measure(struct ai *g, word x, struct ai_zn *z) {
+ if (!coinp(x)) { ai_net_leaf(g, x, z); return; }
+ word p = coin_load(x); struct ai_zn n, d;
+ *z = zn(0, 0);
+ if (!chainp(p) || !chainp(B(p)) || !ai_net_leaf(g, A(p), &n) || !ai_net_leaf(g, A(B(p)), &d)
+     || n.im != 0 || d.im != 0 || d.re == 0) return;
+ ai_flo_t s = (n.re < 0) != (d.re < 0) ? -1.0 : 1.0, v = n.re / d.re;
+ if (v != v) v = s;
+ else if (v == 0 && n.re != 0) v = s * (ai_flo_t) (Bits == 64 ? 1e-300 : 1e-37);
+ *z = zn(v, 0); }
 static ai_inline bool ratio_iview(word x, int64_t *n, int64_t *d) {
  if (coinp(x)) { word p = coin_load(x);
   if (!chainp(p) || !chainp(B(p))) return false;
@@ -1360,14 +1395,14 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
    int64_t n1, d1, n2, d2; intptr_t c;                     // mode-2 die): int64-fitting components -> exact
    if (ratio_iview(a, &n1, &d1) && ratio_iview(b, &n2, &d2)
        && ratio_xcmp(n1, d1, n2, d2, &c)) return c;
-   struct ai_zn za = ai_net(g, a), zb = ai_net(g, b);      // else the sign-exact quotients
+   struct ai_zn za, zb; band_measure(g, a, &za), band_measure(g, b, &zb);   // else the sign-exact quotients
    if (za.re != zb.re) return za.re < zb.re ? -1 : 1;
    if (za.im != zb.im) return za.im < zb.im ? -1 : 1;
    if (galaxyp(a) != galaxyp(b)) return galaxyp(a) ? 1 : -1;  // net tie vs a galaxy: the star seats below
    return 0; }
   if (galaxyp(a) || galaxyp(b)) {                          // a galaxy in play -> by net (re, im), then star<galaxy, then shape/content
    bool ga = galaxyp(a), gb = galaxyp(b);
-   struct ai_zn na = ai_net(g, a), nb = ai_net(g, b);
+   struct ai_zn na, nb; ai_net_leaf(g, a, &na), ai_net_leaf(g, b, &nb);
    if (na.re != nb.re) return na.re < nb.re ? -1 : 1;
    if (na.im != nb.im) return na.im < nb.im ? -1 : 1;
    if (ga != gb) return ga ? 1 : -1;                       // net tie: a star seats below a galaxy

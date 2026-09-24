@@ -276,7 +276,9 @@ op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : zero)   // (charm? x): a fixnum --
 // (nil? x): the falsy predicate, ($ x <= 0) -- every negative is nil, not just
 // the zero point. the single truthiness oracle: `?`, zerop and aall all consult
 // ai_nilp, so the feel pass can drop a zerop wrapper.
-op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putcharm(1) : zero)
+lvm(lvm_nilp) {
+ if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
+ Sp[0] = ai_nilp(g, Sp[0]) ? putcharm(1) : zero; Ip += 1; ai_musttail return Continue(); }
 
 // unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
 // non-numeric arg → zero. TCO-clean (no & escapes).

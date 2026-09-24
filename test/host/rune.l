@@ -317,7 +317,7 @@
 ; --- the poly coin: polynomials first-class under + - * and ! ---------------
 ; the zero polynomial is the coin over (); ! reads "is the zero polynomial"
 ; even when the coefficients sum red -- the trap the raw layer carries
-; ((0 = tally p) there), closed by net-mode 1 on the die.
+; ((0 = tally p) there), closed by the die's 'net.
 (: zp (poly ())
    pp1 (poly (padd rx ry))
    pp2 (poly (psub rx (pmul (pconst 3 2) ry))))    ; x - 2y: content sums red

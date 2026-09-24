@@ -564,7 +564,11 @@
         ; drag gcd off the tower it terminates on -- a coin is never a coefficient.
         (nstar? v) ((nil? * coin?) v && v = +v)
         (ok? v) (nstar? v || (two? v && all nstar? v))
-        c (coin '/// (z \ {'star 1 'net 'ratio                   ; a rational is a star; C truth by value
+        c (coin '/// (z \ {'star 1                               ; a rational is a star
+         'net (\ c (: p (load c) q (<p / <>p)                   ; its measure n/d: truth is the value's sign,
+                     (? (<p = 0) 0                                ; so a quotient lost to underflow keeps it
+                        (q = 0) (? (= (<p < 0) (<>p < 0)) 1e-37 -1e-37)   ; (nonzero at every gem width)
+                        q)))
          '+ (\ a b (: x (load a) y (load b)                    ; (n1 d1) + (n2 d2)
              (? (ok? x && ok? y)
               (: p (parts x) r (parts y)

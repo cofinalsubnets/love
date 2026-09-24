@@ -971,8 +971,9 @@ static struct ai *applyq_(struct ai *g, char const *driver) {
  return ai_pop(applyq(g, driver), 1); }
 
 // the plain eval fold: run a list of forms in order, answer the last one's
-// value. `ev` is read late so one text drives both of love0's passes.
-static char const evfold[] = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
+// value. `ev` is read late so one text drives both of love0's passes. the forms
+// left are asked two?, never their truth: that would net the rest of the text per form
+static char const evfold[] = "((:(e a b)(? (two? b)(e(ev 'ev(cap b))(cup b))a)e)0)";
 
 // every top-level form of a text, evaluated in order -- the frontends' door for a
 // boot tail, a CLI driver, a corpus runner. ai_evals keeps the last form's value at
