@@ -870,10 +870,10 @@ lvm(lvm_asum) {
  bool fdom = v->type >= ai_R; word _res;
  Have(box_req);
  v = tray(Sp[0]);
- if (fdom) {                                    // K=4 accumulators (see aprod complex)
-  ai_flo_t a0=0,a1=0,a2=0,a3=0; uintptr_t i = 0;
-  for (; i + 4 <= n; i += 4) a0+=tray_get_flo(v,i), a1+=tray_get_flo(v,i+1), a2+=tray_get_flo(v,i+2), a3+=tray_get_flo(v,i+3);
-  for (; i < n; i++) a0 += tray_get_flo(v, i);
+ if (fdom) {                                    // ai_R: K=4 accumulators (see aprod complex), raw doubles
+  ai_flo_t *d = tray_data(v), a0=0,a1=0,a2=0,a3=0; uintptr_t i = 0;
+  for (; i + 4 <= n; i += 4) a0 += d[i], a1 += d[i+1], a2 += d[i+2], a3 += d[i+3];
+  for (; i < n; i++) a0 += d[i];
   emit_gem(_res, (a0+a1)+(a2+a3)); }
  else {                                         // K=4 (modular, Z/2^64 is a commutative ring -> assoc+exact)
   uintptr_t *p = tray_data(v), a0=0,a1=0,a2=0,a3=0, i = 0;   // raw words: the kind test stays out of the loop
