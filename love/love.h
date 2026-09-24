@@ -188,8 +188,6 @@ struct ai {
  // rescanned by the next minor. any rem_miss forces the next collection major.
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
- // the sub-word collector scalars, adjacent so both ride the rem set's tail
- bool gc_gen;                             // set during a collection: gbump() targets major_hp, not hp
  int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
  // the two pools: the main pool is pure minor, young being [end, hp); old lives in the major,
  // a two-space of separate blocks. a minor evacuates young -> the active half; a major

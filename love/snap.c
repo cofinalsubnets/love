@@ -1078,6 +1078,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len) {
  // otherwise ramps from the bare floor a doubling -- and a collection -- at a time,
  // and a woken runtime already knows how much it will be scanning past.
  uintptr_t want = nw >> 1;
+ g->hp = g->end;                          // ai_ini's young: garbage, every root came from the image
  if (want > (uintptr_t) g->len) { struct ai *h = gen_grow(g, want); if (ai_ok(h)) g = h; }
  return g;
  // a refused wake owns a whole runtime: the rem set and the major pool ride ai_alloc,

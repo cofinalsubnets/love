@@ -10,14 +10,9 @@ lvm(lvm_gc) {
 
 static ai_noinline word gcp(struct ai*, struct ai_gcx*, word);
 
-// the collector's bump. a pass promotes into the major pool, never the nursery it is
-// emptying; gen_grow drives the same copy_* code with gc_gen clear and wants hp, which
-// is the whole of what the flag selects. the mutator's bump (love.h) is the hp half
-// alone -- gc_gen cannot be set under it, so it does not pay for the test.
+// the collector's bump: a pass promotes into the major pool, never the nursery it is emptying
 static ai_inline void *gbump(struct ai *g, uintptr_t n) {
- if (g->gc_gen) { void *x = g->major_hp; g->major_hp += n; return x; }
- if (avail(g) < n) __builtin_trap();
- void *x = g->hp; g->hp += n; return x; }
+ void *x = g->major_hp; g->major_hp += n; return x; }
 
 static void evac_thread(struct ai *g, struct ai_gcx *X) {
  // tagl ends the thread regardless of scan space, so a young-pointing terminator is never gcp'd as a field
@@ -165,7 +160,6 @@ static void gen_minor(struct ai *g) {
  struct ai_gcx X = { .p0 = (word const*) g->end, .t0 = g->hp,    // minor from-range
                      .to_lo = g->major_base, .to_hi = g->major_base + g->major_len,
                      .fwd = g->major_hp, .cp = g->major_hp };
- g->gc_gen = true;
  g->ip = cell(gcp(g, &X, word(g->ip)));
  g->tasks = cell(gcp(g, &X, word(g->tasks)));
  if (g->parked) g->parked = cell(gcp(g, &X, word(g->parked)));   // the parked ring is its own root
@@ -211,7 +205,7 @@ static void gen_minor(struct ai *g) {
  // here -- gen_fz_relocate is the from-space's last reader.
  for (word *p = (word*) X.p0; p < (word*) X.t0; p++) *p = ai_gc_poison;
 #endif
- g->gc_gen = false; }
+ }
 
 // the major's two halves as separate blocks, both or neither: half the contiguous ask of one pair
 word *ai_major_pair(uintptr_t n, word **spare) {
@@ -261,9 +255,8 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
    to_len = need, resized = (need == g->major_len) ? 0 : ai_major_pair(need, &rspare);
   if (resized) to = resized;
   else if (need <= g->major_len) to_len = g->major_len;             // alloc failed, but the existing spare half holds the live set
-  else return g->gc_gen = false, encode(g, ai_status_scare);         // true oom: compacting would overflow the spare -> clean scare, no corruption
+  else return encode(g, ai_status_scare);                           // true oom: compacting would overflow the spare -> clean scare, no corruption
  }
- g->gc_gen = true;
  if (tight) *tight = to_len < free_len;   // denied: the budget cap, or the bigger alloc failed
  g->major_hp = to, X.cp = to;
  X.to_lo = to, X.to_hi = to + to_len, X.fwd = to;           // fresh to-space: every copy is a forward
@@ -293,31 +286,19 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  // to be reused. cleared here rather than in ai_please alone, because a major can be
  // called directly -- the image dump compacts before it serializes.
  g->rem_n = 0, g->rem_miss = 0;
- return g->gc_gen = false, g; }
+ return g; }
 
-// resize the minor pool, decoupled from the major. called right after a collection,
-// so the minor is empty: only the core + stack move; the major + intern map ride
-// through untouched (() is ZeroPoint, so nothing points at the moving core).
+// resize the minor pool, decoupled from the major. every caller has emptied the nursery,
+// and no value points at the core or into the stack, so the core and the stack move by
+// copy and every value stays where it is: the major, the image, or the binary.
 struct ai *gen_grow(struct ai *g, uintptr_t len1) {
+ if (g->hp != g->end) __builtin_trap();
  struct ai *h = ai_alloc(NULL, len1 * sizeof(word));
  if (!h) return encode(g, ai_status_scare);
+ uintptr_t sh = (uintptr_t) (ptr(g) + g->len - g->sp);
  memcpy(h, g, sizeof(struct ai));
- h->len = len1;
- h->gc_gen = false;
- word const *sp0 = g->sp;
- struct ai_gcx X = { .p0 = ptr(g), .t0 = ptr(g) + g->len,      // the whole old pool is the from-space
-                     .to_lo = ptr(h), .to_hi = ptr(h) + len1, .fwd = ptr(h), .cp = h->end };
- word sh = X.t0 - sp0;
- h->sp = ptr(h) + len1 - sh;
- h->hp = h->end;                             // core moves to h; no (word)g root to forward (() is the const ZeroPoint)
- h->ip = cell(gcp(h, &X, word(h->ip)));
- h->tasks = cell(gcp(h, &X, word(h->tasks)));
- if (h->parked) h->parked = cell(gcp(h, &X, word(h->parked)));
- // h->symbols + the major were memcpy'd and live outside [p0,t0): untouched, not rebuilt
- for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, &X, (&h->v0)[i]);   // core vars
- for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, &X, sp0[n]);                        // stack
- for (struct ai_r *s = h->root; s; s = s->n) *s->x = gcp(h, &X, *s->x);              // C roots
- while (X.cp < h->hp) (datp(X.cp) ? evac_data : evac_thread)(h, &X);                 // heap empty -> ~nothing
+ h->len = len1, h->hp = h->end, h->sp = ptr(h) + len1 - sh;
+ memcpy(h->sp, g->sp, sh * sizeof(word));
  h->n_resize += 1;
  if (h->len > h->max_len) h->max_len = h->len;
  ai_alloc(g, 0);                          // free the old main pool

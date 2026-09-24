@@ -157,7 +157,7 @@ static struct { short v; char n[16]; } const ai_errnames[] = {
  {131,"enotrecoverable"}, {132,"erfkill"}, {133,"ehwpoison"} };
 
 static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
- memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
+ memset(g, 0, sizeof(struct ai));
  g->len = len0;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
  g->hot_read = g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = g->hot_net = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
