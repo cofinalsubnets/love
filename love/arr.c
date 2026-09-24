@@ -581,7 +581,8 @@ struct hmf { uintptr_t h; word a, b, tag; };              // a mode switch; `tag
 // carries the value side's h, region base and the sw to rewind to (the residual it
 // allocated), sw_src the source side's h, rib and residual.
 uintptr_t hash_at(struct ai *g, intptr_t x0, word *base) {
- word *sw = base, *end = off_pool(g) + g->len, *vbase = base;
+ word *end, *sw = base, *vbase = base;
+ ai_gap(g, &end);
  word x = x0, src = 0;
  struct arib *env = 0;
  struct clonf *clo = 0;
@@ -843,7 +844,8 @@ static int eqv_at(struct ai *g, word a, word b, word *base, word *top) {
 // the gap is the region for a walk with nowhere to put a wider one: a map probe and a
 // comparator both answer mid-reservation, where nothing may allocate.
 ai_noinline bool eqv(struct ai *g, word a, word b) {
- int r = eqv_at(g, a, b, off_pool(g), off_pool(g) + g->len);
+ word *top, *base = ai_gap(g, &top);
+ int r = eqv_at(g, a, b, base, top);
  if (r < 0) __builtin_trap();
  return r > 0; }
 
@@ -905,10 +907,8 @@ static int ai_eq_value(struct ai *g, word a, word b, word *base, word *top) {
  if (gemp(a) || gemp(b)) return isnum(a) && isnum(b) && (toflo(a) == toflo(b));
  return eql_at(g, a, b, base, top); }
 
-// the gap the walk starts in: the inactive half of the minor two-space, usable only
-// because nothing allocates while it is being read
-static word *eq_gap(struct ai *g, word **top) {
- return *top = off_pool(g) + g->len, off_pool(g); }
+// the gap the walk starts in, usable only because nothing allocates while it is being read
+static word *eq_gap(struct ai *g, word **top) { return ai_gap(g, top); }
 
 // a scratch array of n words for a walk the gap could not hold. it is read by nothing
 // else and the walk allocates nothing, so the raw words in it stay put; () when the heap
@@ -921,14 +921,14 @@ static word *eq_scratch(struct ai **gp, uintptr_t n) {
  ini_tray(v, ai_Z, 1), v->shape[0] = n;
  return *gp = g, tray_data(v); }
 
-// the deep lane of `=`: the gap is bounded by the nursery's spare half and the values
+// the deep lane of `=`: the gap is bounded by the major's spare half and the values
 // walked are not, so a shape past it gets a region of its own, doubling from twice the
 // gap until the walk fits. the pair is re-read each round -- a reservation may move it.
 // nothing fits a pair no region can hold, and the doubling ends where every reservation
 // does, at a heap that will not grow. the 64 is what makes that true of the doubling
 // too: from a zero-word gap it would double forever without asking for anything.
 static struct ai *eq_wide(struct ai *g) {
- for (uintptr_t n = 2 * (uintptr_t) g->len + 64;; n *= 2) {
+ for (uintptr_t n = 2 * (uintptr_t) g->major_len + 64;; n *= 2) {
   word *base = eq_scratch(&g, n);
   if (!base) return g;
   int r = ai_eq_value(g, g->sp[0], g->sp[1], base, base + n);
@@ -936,7 +936,7 @@ static struct ai *eq_wide(struct ai *g) {
 
 // ..and of `elem`: the scan has no side effects, so a widened region simply re-runs it
 static struct ai *elem_wide(struct ai *g) {
- for (uintptr_t n = 2 * (uintptr_t) g->len + 64;; n *= 2) {
+ for (uintptr_t n = 2 * (uintptr_t) g->major_len + 64;; n *= 2) {
   word *base = eq_scratch(&g, n);
   if (!base) return g;
   int r = 0;

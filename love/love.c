@@ -296,7 +296,7 @@ struct ai *ai_system;
 
 struct ai *ai_ini(void) {
  uintptr_t const len0 = ai_minor0;   // initial minor pool; grows on demand (gen_grow)
- struct ai *g = ai_alloc(NULL, 2 * len0 * sizeof(word));
+ struct ai *g = ai_alloc(NULL, len0 * sizeof(word));
  if (g == NULL) return encode(g, ai_status_scare);
  g = ai_ini_0(g, len0);
  return ai_ok(g) ? (ai_system = g) : g; }
@@ -411,7 +411,7 @@ static lvm(lvm_gauge) {
  ai_musttail return Answer(word(v)); }
 
 // (tune v) -> the four live GC knobs as a rank-1 Z array, in words:
-//   [0] budget  total footprint cap (2*minor + 2*major); 0 = unbounded (appel's rule)
+//   [0] budget  total footprint cap (minor + 2*major); 0 = unbounded (appel's rule)
 //   [1] minor0  the nursery floor every resize clamps up to
 //   [2] major0  the major pool's grow/shrink step (never 0: it divides)
 //   [3] ratio   copy-overhead setpoint -- hold copied/allocated inside [1/(4*ratio), 1/ratio]

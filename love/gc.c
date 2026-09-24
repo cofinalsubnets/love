@@ -238,7 +238,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  // budget cap: keep the major pair within its share, but never below need_step (the
  // to-space must hold the worst-case promotion); too small falls through to the oom path
  if (g->budget) {
-  uintptr_t cap = g->budget > 2 * (uintptr_t) g->len ? (g->budget - 2 * (uintptr_t) g->len) / 2 : 0;
+  uintptr_t cap = g->budget > (uintptr_t) g->len ? (g->budget - (uintptr_t) g->len) / 2 : 0;
   if (to_len > cap) to_len = cap > need_step ? (cap / step) * step : need_step; }
  word *spare = (g->major_base == g->major_pool) ? g->major_pool + g->major_len : g->major_pool,  // the same-size other half
       *to, *resized = 0;
@@ -293,7 +293,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
 // so the minor is empty: only the core + stack move; the major + intern map ride
 // through untouched (() is ZeroPoint, so nothing points at the moving core).
 struct ai *gen_grow(struct ai *g, uintptr_t len1) {
- struct ai *h = ai_alloc(NULL, len1 * 2 * sizeof(word));
+ struct ai *h = ai_alloc(NULL, len1 * sizeof(word));
  if (!h) return encode(g, ai_status_scare);
  memcpy(h, g, sizeof(struct ai));
  h->len = len1;
@@ -406,7 +406,9 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
   if (arena > fit) arena = fit; }
  if (arena < g->minor0) arena = g->minor0;                     // floor
  if (arena < req) arena = req;                                 // hard floor: hold the pending allocation
- return arena == len1 ? g : gen_grow(g, arena); }
+ if (arena == len1) return g;
+ struct ai *h = gen_grow(g, arena);
+ return ai_ok(h) || len1 < req ? h : g; }                      // a denied resize keeps a pool that still holds the request
 
 static ai_inline word copy_data(struct ai *g, union u *src) {
  switch (typ(src)) {

@@ -204,7 +204,7 @@ struct ai {
                                   // after it. a major fires once since_major > major_live0 + 4*minor-pool
    win_alloc, win_copied,         // the minor-resize window (words): overhead = copied/alloc, reset on a resize
    n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
-   budget,                     // total cap in words (2*minor + 2*major), 0 = unbounded; by appel's
+   budget,                     // total cap in words (minor + 2*major), 0 = unbounded; by appel's
                                             // rule the nursery gets what the major pool leaves
    minor0, major0, ratio;         // nursery floor, major grow/shrink step, copy-overhead setpoint;
                                           // seeded at ai_ini, moved by `tune`. untraced: a bake drops them.
@@ -669,7 +669,7 @@ _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size"
 #ifndef ai_gc_ratio
 # define ai_gc_ratio 24   // the knee of the GC-reduction curve; past it RAM doubles for a flat curve
 #endif
-// total memory budget in words (2*minor + 2*major); 0 = unbounded. a device sets its RAM
+// total memory budget in words (minor + 2*major); 0 = unbounded. a device sets its RAM
 // (-Dai_budget=131072 for a 1 MB Teensy); the nursery sizes by appel's rule (ai_please).
 #ifndef ai_budget
 # define ai_budget 0
@@ -1172,9 +1172,10 @@ static ai_inline uintptr_t rot(uintptr_t x) {
 // the doors that are not a device; spelled out beside their readn/writen
 extern struct ai_port_vt const ai_to_vt, ai_closed_vt, ai_ci_vt;
 
-// the pool's spare half: the core sits at the base of the active one, so the scratch
-// a walk borrows starts one pool length up
-static ai_inline void *off_pool(struct ai *g) { return (word*) g + g->len; }
+// scratch for a walk that may not allocate: the major's spare half, dead outside a collection
+static ai_inline word *ai_gap(struct ai *g, word **top) {
+ word *s = g->major_base == g->major_pool ? g->major_pool + g->major_len : g->major_pool;
+ return *top = s + g->major_len, s; }
 static ai_inline struct ai *pushq(struct ai*g) { return intern(ai_strof(g, "\\")); }
 static ai_inline struct ai *push0(struct ai*g) { return ai_push(g, 1, zero); }
 static ai_inline size_t llen(word l) {

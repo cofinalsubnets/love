@@ -678,7 +678,9 @@ struct ai *grbufg(struct ai *g, uintptr_t len) {
 static ai_noinline double strtod_wrap(struct ai*g, word x) {
  struct ai_str *s = str(x);
  if (!strp(x) || !s->len) return NAN;
- char *e, *b = off_pool(g);
+ word *top;
+ char *e, *b = (char*) ai_gap(g, &top);
+ if (s->len >= (uintptr_t) ((char*) top - b)) return NAN;
  memcpy(b, s->bytes, s->len);
  b[s->len] = 0;
  double r = am_strtod(b, &e);

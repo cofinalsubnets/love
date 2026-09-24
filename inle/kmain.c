@@ -2021,9 +2021,9 @@ void kmain(void) {
               (uintptr_t)(__stop_ai_knifs - __start_ai_knifs));
   // bound the generational collector to the device's RAM (the Appel knob): unbounded, the
   // nursery's resizer grows and gen_major's all-survive sizing asks kmallocw for a block
-  // bigger than physical RAM. an eighth leaves headroom for the major's double-buffered
-  // resize, the free list and fragmentation; the host, with virtual memory, runs unbounded.
-  if (ai_ok(g)) g->budget = kram_words / 8;
+  // bigger than physical RAM. the budget counts every pool but not a resize, which holds
+  // the old pair beside the new; a third leaves RAM for that
+  if (ai_ok(g)) g->budget = kram_words / 3;
   // the kore ROSTER (rung 3): the cat itself is read off the ramfs below.
   g = ai_strof(g, src_korelist);
   struct ai_def kd[] = {{"korelist", {.x = ai_pop1(g)}}};

@@ -303,7 +303,7 @@ static const char hash_base[1] = {0};
 // the walk-from-nothing entry; hash_at (love/arr.c) is the same walk continued above a live
 // worklist. a charm settles here so the hot key never pays for the hand-off.
 uintptr_t hash(struct ai *g, intptr_t x) {
- return charmp(x) ? rot(x*mix) : hash_at(g, x, off_pool(g)); }
+ word *top; return charmp(x) ? rot(x*mix) : hash_at(g, x, ai_gap(g, &top)); }
 
 // a leaf's own hash, nothing walked under it: -> 0 the answer is in *out; 1 hash the
 // \-expr in *src, nothing filled; 2 bridge the closure in *src, falling back to *out when
