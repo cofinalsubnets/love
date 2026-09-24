@@ -173,8 +173,8 @@ int main(void) {
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
-  if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(word) / 4;
-  struct ai *r = ai_egg_(g,
+  if (ai_ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
+  struct ai *r = ai_egg(g,
 #include "egg.h"
     ,
 #include "p1.h"
@@ -191,7 +191,7 @@ int main(void) {
 #include "seat.h"
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the hart\") _ (putc 10)"
     "   (vexit (? ok 42 1)))");
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
+  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
   ai_fin(r);
   v_exit(2);                                 // fell out of the driver: loud
   return 0; }

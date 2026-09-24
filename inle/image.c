@@ -59,9 +59,8 @@ struct ai *image_dump(struct ai *g, char const *path) {
   g = ai_strof(g, path);
   if (!ai_ok(g)) return ai_core_of(g)->b = -2, g;
   int rc = image_put(g);
-  // FIXME if g is still ok here then the core_of is redundant
-  ai_core_of(g)->sp++;
-  return ai_core_of(g)->b = rc, g; }
+  g->sp++;
+  return g->b = rc, g; }
 
 // image_bake -- lay an image into a binary's own .image section on disk. `out` NULL is the
 // self-bake, in place; a path writes a copy there instead. ETXTBSY-proof by the adopt

@@ -91,8 +91,8 @@ struct ai *ai_defv(struct ai *g, char const *nm) {
  if (!ai_ok(g)) return g;
  g = ai_push(g, 1, A(g->stack));           // [book, value, ..]
  if (!ai_ok(g)) return g;
- g = ai_mapput(intern(ai_strof(ai_push(g, 1, ai_core_of(g)->sp[1]), nm)));
- if (ai_ok(g)) ai_core_of(g)->sp++;                   // [value, ..]
+ g = ai_mapput(intern(ai_strof(ai_push(g, 1, g->sp[1]), nm)));
+ if (ai_ok(g)) g->sp++;                               // [value, ..]
  return g; }
 
 // the nif + instruction registry: one `union u` table, a nif's little stream being a
@@ -836,26 +836,25 @@ op11(lvm_cap, chainp(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)   // cup of an atom -> the const () (ZeroPoint), not the moving core (which had serial g->ip, not 0)
 op11(lvm_stack, g->stack)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
 op11(lvm_setstack, (g->stack = Sp[0], zero))   // set the layer chain: the scope-layer door (open/use/close ride it); runtime-internal, mopped at birth
-op11(lvm_kreg, ai_core_of(g)->kreg)   // (kreg _): the named-kind registry; post.l's coin/kinds read and pin it
+op11(lvm_kreg, g->kreg)   // (kreg _): the named-kind registry; post.l's coin/kinds read and pin it
 op11(lvm_lib, g->lib)   // (lib _): the module registry book; runtime-internal, mopped at birth
 // push a fresh writable layer at the head of the book chain -- the runtime's
 // enter: the session's scope, every defglob's target
-struct ai *ai_open_(struct ai *g) {
- if (!ai_ok(g)) return g;
+struct ai *ai_open(struct ai *g) {
  if (!ai_ok(g = map_new(g))) return g;                 // sp[0] = the fresh layer map
- g = gxr(ai_push(g, 1, ai_core_of(g)->stack));          // (layer . chain)
+ g = gxr(ai_push(g, 1, g->stack));                      // (layer . chain)
  if (!ai_ok(g)) return g;
- ai_core_of(g)->stack = *ai_core_of(g)->sp;
+ g->stack = *g->sp;
  return ai_pop(g, 1); }
 // drop the link just below the head -- the runtime's bare leave, the inverse of
 // one `borrow`; nothing below the head is a no-op
-struct ai *ai_shelve_(struct ai *g) {
+struct ai *ai_shelve(struct ai *g) {
  if (!ai_ok(g)) return g;
- word bk = ai_core_of(g)->stack;
+ word bk = g->stack;
  if (!chainp(B(bk))) return g;
  g = gxl(ai_push(g, 2, A(bk), B(B(bk))));              // (head . below-the-neighbour)
  if (!ai_ok(g)) return g;
- ai_core_of(g)->stack = *ai_core_of(g)->sp;
+ g->stack = *g->sp;
  return ai_pop(g, 1); }
 
 op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : zero)  // the surface chain?: a real compound list. a named symbol reads (name . mint) but counts as an atom

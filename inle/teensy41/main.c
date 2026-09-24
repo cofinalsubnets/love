@@ -256,7 +256,7 @@ int main(void) {
   // and new at once, so an unbounded budget OOMs inside the collector. A
   // quarter of the arena leaves the double-buffered resize and free-list
   // fragmentation their room.
-  if (ai_ok(g)) ai_core_of(g)->budget = arena_words / 4;
+  if (ai_ok(g)) g->budget = arena_words / 4;
   // The LED is the status channel while the console has no adapter: solid on
   // = still baking/waking, OFF = the shell is at its prompt, fast blink
   // (below) = fatal. 3 is LED_BIT (GPIO2_IO03 = pin 13). the tail runs AFTER
@@ -269,7 +269,7 @@ int main(void) {
   if (!woke) {
     // the on-device egg bake: bao is a MODULE, registered by the eval below and
     // then spliced. a woken image (the mps2 baker's) carries the load already.
-    g = ai_egg_(g,
+    g = ai_egg(g,
 #include "egg.h"
     ,
 #include "p1.h"
@@ -283,7 +283,7 @@ int main(void) {
     g = ai_evals_(g, "(borrow 'cli) 0"); }
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
   // here, never in the base (bakes carry none; every boot or wake pushes its own).
-  g = ai_open_(g);
+  g = ai_open(g);
   // the seat laws (inle/seat.l) answer first: a shell over an image that fails them is
   // worse than a loud prompt, and this board has no exit code to say it with.
   struct ai *r = ai_evals_(g, woke ?
@@ -295,7 +295,7 @@ int main(void) {
 #include "seat.h"
     TE_TAIL("; egg hatched -- shell up"));
   // The shell only returns on a fatal error: honest face, then blink it out.
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
+  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
   ai_fin(r);
   for (;;) {
     gpio_put(LED_BIT, 1); ai_sleep(120);

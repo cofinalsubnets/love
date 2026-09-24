@@ -125,7 +125,7 @@ static int k_update(void *_) {
     if (!ai_ok(K.g)) {
       // honest face: the condition prints to the console, and the screen
       // freezes on it (reset the device to go again)
-      if (ai_code_of(K.g) == ai_status_scare) ai_scare_face_(K.g);
+      if (ai_code_of(K.g) == ai_status_scare) ai_scare_face(K.g);
       K.dead = 1; } }
   blit();
   return 1; }
@@ -184,13 +184,13 @@ void love_init(void) {
   // teensy's law): a major resize holds old and new pools at once, so the
   // transient peak is double the budget -- 8 MB here, and the simulator
   // emulates the device heap exactly (a budget of half OOMed it).
-  if (ai_ok(g)) ai_core_of(g)->budget = (4u << 20) / sizeof(word);
+  if (ai_ok(g)) g->budget = (4u << 20) / sizeof(word);
   if (woke) {
-    K.g = ai_open_(g);          // the waker opens its own session (the bake carries none)
+    K.g = ai_open(g);           // the waker opens its own session (the bake carries none)
     pdg_log("love: woke -- workbench up");
     if (ai_ok(K.g)) pdg_set_update(k_update);
     return; }
-  K.g = ai_egg_(g,
+  K.g = ai_egg(g,
 #include "egg.h"
     ,
 #include "p1.h"
@@ -210,11 +210,11 @@ void love_init(void) {
 #include "cas.h"
     " 0");
   // THE SESSION: the crank's evals defglob here, never in the base
-  K.g = ai_open_(K.g);
+  K.g = ai_open(K.g);
   pdg_log(ai_ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");
   if (ai_ok(K.g))
     pdg_set_update(k_update);
   else if (ai_code_of(K.g) == ai_status_scare)
-    ai_scare_face_(K.g),          // the condition lands on the cb...
+    ai_scare_face(K.g),           // the condition lands on the cb...
     blit();                       // ...and freezes on the LCD
 }

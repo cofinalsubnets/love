@@ -401,11 +401,11 @@ struct ai
  *ai_ini(void),
  *ai_evals(struct ai*, const char*),      // ..keeping the last form's value at sp[0]
  *ai_evals_(struct ai*, const char*),
- *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
+ *ai_egg(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t),                // immortal values only
  *ai_defv(struct ai*, char const*),                // its twin for a live heap value (rides sp[0], stays there)
- *ai_open_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
- *ai_shelve_(struct ai*);   // drop the link below the head (the runtime's bare leave)
+ *ai_open(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
+ *ai_shelve(struct ai*);   // drop the link below the head (the runtime's bare leave)
 
 // the heap-image codec (stdio-free): save compacts g and serializes into a fresh ai_alloc'd
 // buffer; load reconstructs a fresh g, or NULL on any mismatch. buffer-based, so a
@@ -426,11 +426,11 @@ struct ai
 
 // the terminal scare face: ";; a b\n" (show forms) to the err port from the stashed
 // condition data; the bare oom prints ";; oom@len=N\n".
-void ai_scare_face_(struct ai*);
+void ai_scare_face(struct ai*);
 
 extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 
-// the boot driver: ai_egg_ applies love/boot/egg.l to the quoted corpus -- compile the compiler
+// the boot driver: ai_egg applies love/boot/egg.l to the quoted corpus -- compile the compiler
 // with c0, recompile the corpus through itself, install as `ev`. the list is stitched (p0 reads
 // egg + p1, p1 reads the corpus), so p1.l alone is held to the pure lisp subset.
 
@@ -1280,7 +1280,7 @@ size_t code_len(char *code);
 enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc };
 union u *fn_base(union u *k, int *nargs);
 struct ai
- *ai_eval_(struct ai *g),
+ *ai_eval(struct ai *g),
  *ioputc(struct ai*g, int c),
  *ioputs(struct ai*g, char const *s),
  *gen_grow(struct ai *g, uintptr_t len1),

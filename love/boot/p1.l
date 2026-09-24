@@ -330,7 +330,7 @@
      (: n (tally s)
         (go k acc) (? (< k 0) acc (go (- k 1) (. (s k) acc)))
         (go (- n 1) ()))
-   ; the boot's door, whole text -> every form: what ai_egg_ calls to read ev.l.
+   ; the boot's door, whole text -> every form: what ai_egg calls to read ev.l.
    (p1-text s) (p1-reads (p1-chars s))
 
    _ (seal-hook 0 p1-text)

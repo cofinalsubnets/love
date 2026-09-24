@@ -460,7 +460,7 @@ int main(int argc, char const **argv) {
   // inle/horn.c's rows ride the section, not the table above, so without this the horn is
   // in the binary and off the book.
   g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
-  g = ai_egg_(g,
+  g = ai_egg(g,
 #include "egg.h"
     ,
 #include "p1.h"
@@ -472,8 +472,8 @@ int main(int argc, char const **argv) {
 #include "post.h"
     );
   g = ai_evals_(g, "(borrow 'cli)");
-  g = ai_open_(g);                  // the session layer: one load, one layer
+  g = ai_open(g);                   // the session layer: one load, one layer
   for (int i = 1; i < argc && ai_ok(g); i++) g = ai_evals_(g, slurp(argv[i]));
-  if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);   // the honest face: ";; a b", or ";; oom@len=N" bare
+  if (ai_code_of(g) == ai_status_scare) ai_scare_face(g);    // the honest face: ";; a b", or ";; oom@len=N" bare
   fflush(stdout);
   return ai_fin(g); }

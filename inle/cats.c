@@ -33,7 +33,7 @@ static struct ai *cat_eval(struct ai *g, unsigned char const *z, uintptr_t zn, u
 struct ai *ai_cats_egg(struct ai *g) {
   char *e = CatOpen(g, ai_cat_egg_z), *p = CatOpen(g, ai_cat_p1_z),
        *r = CatOpen(g, ai_cat_prel_z), *o = CatOpen(g, ai_cat_post_z);
-  if (e && p && r && o) g = ai_egg_(g, e, p, r, o);     // prel carries ev's half spliced after its own
+  if (e && p && r && o) g = ai_egg(g, e, p, r, o);      // prel carries ev's half spliced after its own
   ai_alloc(e, 0), ai_alloc(p, 0), ai_alloc(r, 0), ai_alloc(o, 0);
   return g; }
 

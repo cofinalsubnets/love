@@ -127,7 +127,7 @@ static ai_inline char const *str_c(word x) { return strp(x) ? txt(x) : NULL; }
 // `if (!*cavp) return g` covers both.
 static struct ai *argv_marshal(struct ai *g, char ***cavp) {
  g = ai_argv_marshal(g, cavp);
- return !*cavp && ai_ok(g) ? ai_push(g, 1, ai_badarg(g)) : g; }
+ return !*cavp ? ai_push(g, 1, ai_badarg(g)) : g; }
 
 // --- the supervisor pair: spawn without waiting, reap any dead child ------------
 // (spawn argv)  -> child pid (a fixnum) | a nom ('badarg misuse)

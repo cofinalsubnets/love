@@ -28,11 +28,10 @@ ai_noinline intptr_t ai_nclock(void) {
 
 static void stdin_give(struct ai *g) {
  if (!g || !ai_ok(g)) return;
- struct ai *fc = ai_core_of(g);
- if (fc->inflag)                                          // its blocking bit was ours: back it goes
-  fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(fc->inflag)), fc->inflag = 0;
- if (!fc->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
- uintptr_t n = ai_io_pending(g, (struct ai_io*) fc->inport)
+ if (g->inflag)                                          // its blocking bit was ours: back it goes
+  fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(g->inflag)), g->inflag = 0;
+ if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
+ uintptr_t n = ai_io_pending(g, (struct ai_io*) g->inport)
              + (getcharm(ai_stdin.io.ungetc_buf) != EOF ? 1 : 0);
  if (n) lseek(STDIN_FILENO, -(off_t) n, SEEK_CUR); }
 
@@ -42,10 +41,9 @@ static struct ai *stdin_take(struct ai *g) {
   if (isatty(STDIN_FILENO)) return g;
   int fl = fcntl(STDIN_FILENO, F_GETFL);                  // a pipe: take the bit and the bytes
   if (fl >= 0 && ((fl & O_NONBLOCK) || fcntl(STDIN_FILENO, F_SETFL, fl | O_NONBLOCK) >= 0))
-   ai_core_of(g)->inflag = putcharm(fl); }                // already-nonblocking restores to itself
+   g->inflag = putcharm(fl); }                            // already-nonblocking restores to itself
  if (!ai_ok(g = ai_io_alloc(g, STDIN_FILENO))) return g;
- struct ai *fc = ai_core_of(g);
- fc->inport = fc->sp[0], fc->sp++;
+ g->inport = g->sp[0], g->sp++;
  return g; }
 
 _lvm(k_lvm_quit);
@@ -59,14 +57,13 @@ static lvm(lvm_exit) {
 static void stdin_hand(struct ai *g) {
  stdin_give(g);
  if (!g || !ai_ok(g)) return;
- struct ai *fc = ai_core_of(g);
- if (!fc->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) >= 0) return;   // seekable: the seek said it all
+ if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) >= 0) return;   // seekable: the seek said it all
  unsigned char res[ai_iobuf + 1];
  uintptr_t n = 0;
  if (getcharm(ai_stdin.io.ungetc_buf) != EOF)
   res[n++] = (unsigned char) getcharm(ai_stdin.io.ungetc_buf),
   ai_stdin.io.ungetc_buf = putcharm(EOF);
- n += ai_io_read_drain(g, (struct ai_io*) fc->inport, res + n, sizeof res - n);
+ n += ai_io_read_drain(g, (struct ai_io*) g->inport, res + n, sizeof res - n);
  if (!n) return;                                                    // nothing owed: the fd is already exact
  int p[2];
  if (pipe(p)) return;
@@ -214,7 +211,7 @@ static lvm(lvm_harkdrain) {
 ai_noinline static struct ai *host_exec(struct ai *g) {
  char **cav;
  g = ai_argv_marshal(g, &cav);
- if (!cav) return ai_ok(g) ? ai_push(g, 1, ai_badarg(g)) : g;
+ if (!cav) return ai_push(g, 1, ai_badarg(g));
  fflush(stdout);
  fflush(stderr);
  signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
@@ -242,7 +239,7 @@ ai_noinline static struct ai *host_fexec(struct ai *g) {
  char **cav;
  g->sp[0] = g->sp[1];                       // argv over the fd -- the marshal's only root
  g = ai_argv_marshal(g, &cav);
- if (!cav || fd < 0) return ai_ok(g) ? ai_push(g, 1, ai_badarg(g)) : g;
+ if (!cav || fd < 0) return ai_push(g, 1, ai_badarg(g));
  fflush(stdout);
  fflush(stderr);
  signal(SIGPIPE, SIG_DFL);
@@ -315,7 +312,7 @@ static char const glaze_off[] = "";
 // bao already did restore the true baseline rather than a raw one.
 static struct ai *run_program(struct ai *g, bool replp) {
   if (replp) (void) ai_raw_mode(1);
-  g = ai_open_(g);
+  g = ai_open(g);
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
   return ai_evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
@@ -409,7 +406,7 @@ static struct ai *bake_eval_file(struct ai *g, char const *path) {
   if (xn) memcpy(txt(g->sp[0]), path, xn);
   g = ai_defv(g, "bake-load");
   if (!ai_ok(g)) return g;
-  ai_core_of(g)->sp++;
+  g->sp++;
   g = ai_evals_(g,
     "(: open (cite 'posix 'open) close (cite 'posix 'close)"    // the fs doors are a module's
     "   q (open bake-load \"r\")"
@@ -435,15 +432,15 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "(: uu (cite 'uu))"
     "(borrow 'holo)"
   );
-  g = ai_shelve_(g);
+  g = ai_shelve(g);
   g = ai_evals_(g, "(borrow 'cli)(borrow 'verbs)");
-  g = ai_shelve_(g);
+  g = ai_shelve(g);
   // kanren, overlay and uu come off: the latter two already have their accessor bound
   // above, so the splice bought only ambient names -- `C`, `Q`, `src`, `glob`, `walk`,
   // `var`, `con`, `est` are what this tree calls its locals. kanren keeps a named surface.
   // unsplice drops one link at a time, so bao comes off with them and goes straight back
   // on: read/reads for cli, `@` for every later compile.
-  for (int i = 0; i < 4; i++) g = ai_shelve_(g);       // bao, uu, overlay, kanren
+  for (int i = 0; i < 4; i++) g = ai_shelve(g);        // bao, uu, overlay, kanren
   // FIXME what is this even doing? we just used bao a couple of lines ago? what is "hoist"?
   g = ai_evals_(g, "(borrow 'cli)"
     "(transcribe 'kanren ())"                                 // \\\, &&&, |||, zz -- macros, not names
@@ -453,7 +450,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "   === (cite 'kanren '===)  =/= (cite 'kanren '=/=))");
   g = ai_cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef LvGlazed
-  g = ai_shelve_(g);                                   // holo back to non-ambient
+  g = ai_shelve(g);                                    // holo back to non-ambient
 #endif
 
   g = ai_evals_(g,
@@ -606,19 +603,19 @@ int main(int argc, char const **argv) {
 #endif
       if (osn && ai_ok(g = intern(ai_strof(g, osn)))) {
         g = ai_defv(g, "love-os");
-        if (ai_ok(g)) ai_core_of(g)->sp++; } }
+        if (ai_ok(g)) g->sp++; } }
     if (image_load_path && ai_ok(g = ai_push(g, 1, putcharm((intptr_t) woke_ms)))) {
       g = ai_defv(g, "born");
-      if (ai_ok(g)) ai_core_of(g)->sp++; }
+      if (ai_ok(g)) g->sp++; }
     if (!bake) g = stdin_take(g);
     // an egg warm, or a woken image straight to the program -- the wake skips the warm
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
                         : boot(g, argp, bake, bake_load, bake_out); }
-  if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);
+  if (ai_code_of(g) == ai_status_scare) ai_scare_face(g);
   // the program's status is cli-line's answer, a charm, left at sp[0] by ai_evals: the
   // process answers with it. a scare answers 1 through ai_fin, ahead of it.
-  int rc = (image_load_path || argp) && ai_ok(g) && charmp(ai_core_of(g)->sp[0])
-         ? (int) (getcharm(ai_core_of(g)->sp[0]) & 255) : 0;
+  int rc = (image_load_path || argp) && ai_ok(g) && charmp(g->sp[0])
+         ? (int) (getcharm(g->sp[0]) & 255) : 0;
   stdin_give(g);
   enum ai_status s = ai_fin(g);
   return s ? (int) s : rc; }

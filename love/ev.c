@@ -62,7 +62,7 @@ static word
 // ============================================================================
 static ai_inline struct ai *pushl(struct ai*g) { return intern(ai_strof(g, "\\")); }
 static ai_noinline struct ai *c0(struct ai *g, lvm_t *y);
-struct ai *ai_eval_(struct ai *g);
+struct ai *ai_eval(struct ai *g);
 
 // function state using this type
 struct env {
@@ -171,13 +171,13 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  // every in-place store below is precisely barriered (gen_wb_cell/two), so a
  // mid-compile collection stays minor. the opfix prepass runs first; a chain whose
  // head is already a top is a constructed direct application (never readable
- // source): skipped, which also terminates the recursion through ai_eval_.
+ // source): skipped, which also terminates the recursion through ai_eval.
  { word x0 = g->sp[0];
    if (chainp(x0) && (!lamp(A(x0)) || datp(A(x0)))) {
-    word of = ai_core_of(g)->hot_opfix;          // sealed: a book rebind can't reach this lane;
+    word of = g->hot_opfix;                      // sealed: a book rebind can't reach this lane;
     if (lamp(of)) {                              // pre-seal (mid-prel bootstrap) it is zero and
                                                  // the pass skips -- everything there is prefix
-     g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, zero, zero, of)))))));
+     g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, zero, zero, of)))))));
      if (!ai_ok(g)) return g;
      g->sp[1] = g->sp[0], g->sp += 1; } } }
  if (!ai_ok(g = enscope(g, (struct env*) zero, zero, zero))) return g;
@@ -249,7 +249,7 @@ static Cata(c1_recv) {
  Kp[0].ap = lvm_quote;
  if (zerop(site)) return
    Kp[1].x = lget(g, y, LThread), gen_wb_cell(g, Kp + 1, Kp[1].x), pull(g, c);
- { struct ai_r *mm0 = ai_core_of(g)->root;             // sset allocates: root site first
+ { struct ai_r *mm0 = g->root;                         // sset allocates: root site first
    mm(g, &site);
    Kp[1].x = zero;
    g = sset(g, site, SCell, (word) &Kp[1]);
@@ -296,7 +296,7 @@ lvm(_lvm_yieldk) { return
 // a hardware fault is a crash on every target: no handler, no recovery -- a fault
 // means an invariant is already broken, and the immediate core dump names the site.
 // (a barrier here once turned that class into a silent per-call siglongjmp storm.)
-struct ai *ai_eval_(struct ai *g) {
+struct ai *ai_eval(struct ai *g) {
  if (!ai_ok(g)) return g;                        // c0 reads g->sp[0] before any guard of its own
  g = c0(g, _lvm_yieldk);
 #if ai_tco
@@ -408,10 +408,10 @@ static struct ai *subst1(struct ai *g, word x, word p, word m) {
  { struct ai_str *nm; word a = A(x);
    if (nomp(a) && (nm = nom_str(g, a)) && len(nm) == 1 && *txt(nm) == '\\' &&
        chainp(B(x)) && !chainp(BB(x))) return ai_push(g, 1, x); }   // (\ q): a quote is data
- struct ai_r *mm0 = ai_core_of(g)->root;
+ struct ai_r *mm0 = g->root;
  mm(g, &x); mm(g, &p); mm(g, &m);
  g = subst1(g, A(x), p, m);
- if (ai_ok(g)) g = subst1(g, B(x), p, m);
+ g = subst1(g, B(x), p, m);
  ai_core_of(g)->root = mm0;
  return gxr(g); }
 
@@ -588,13 +588,13 @@ static bool lexbound(struct ai *g, struct env *d, word x) {
 
 static ai_inline Ana(ana_2, word a, word b) {
  if ((x = stacklook_macro(ai_core_of(g), a)) && !lexbound(g, *c, a)) {  // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit
-  g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, zero, zero, x)))))));
+  g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, zero, zero, x)))))));
   // the expansion is source again: it takes the opfix prepass a read form took, so a binder
   // a macro built (:- is one) lowers its patterns like one the reader saw. the same guard as
   // c0's: a lambda-headed chain is a constructed application, and pre-seal the pass is zero
   word e = ai_ok(g) ? g->sp[0] : 0, of = ai_core_of(g)->hot_opfix;
   if (chainp(e) && (!lamp(A(e)) || datp(A(e))) && lamp(of)) {
-   g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, e, zero, zero, of)))))));
+   g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, e, zero, zero, of)))))));
    if (ai_ok(g)) g->sp[1] = g->sp[0], g->sp += 1; }
   return analyze(g, c, ai_ok(g) ? pop1(g) : 0); }
  if (!chainp(b)) return analyze(g, c, a);  // (f) == f -- below the macro lane, which has no value to be
@@ -624,7 +624,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  if (ai_ok(g = intern(ai_strof(g, "boxfix")))) {
   word bf = stacklook(g, 0, pop1(g));
   if (bf && lamp(bf)) {
-   g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, zero, zero, bf)))))));
+   g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, zero, zero, bf)))))));
    if (ai_ok(g)) exp = pop1(g); } }
  g = enscope(g, *b, eget(g, (*b), EArgs), eget(g, (*b), EImps));
  if (!ai_ok(g)) return forget();
@@ -757,7 +757,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
 static struct ai *ldels(struct ai *g, word lam, word l) {
  if (!ai_ok(g)) return g;
  if (!chainp(l)) return ai_push(g, 1, zero);
- struct ai_r *mm0 = ai_core_of(g)->root;
+ struct ai_r *mm0 = g->root;
  mm(g, &lam), mm(g, &l);
  g = ldels(g, lam, B(l));
  if (ai_ok(g) && !assq(g, lam, A(l))) g = gxl(ai_push(g, 1, A(l)));
@@ -933,7 +933,7 @@ static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
  if (!ai_nilp(c, h) && avail(c) < 4) {
   struct ai *p = ai_please(c, 4);
   if (!ai_ok(p)) return encode(ai_core_of(p), ai_status_scare);
-  c = ai_core_of(p);                            // moved: re-derive every pointer
+  c = p;                                        // moved: re-derive every pointer
   a = c->scare_a, b = c->scare_b;
   h = *task_help(c); }
  if (!ai_nilp(c, h) && avail(c) >= 4) {
@@ -995,10 +995,9 @@ lvm(lvm_index) {
   // terminal. nom_str + ioput* hold no heap operand -> no GC, so Sp/Ip survive.
   struct ai_str *nm = nom_str(g, Ip[1].x);
   if (nm) { struct ai_io *sv = g->io; g->io = &ai_stderr.io;
-            struct ai *w = ioputs(g, ";; missing "); // FIXME another unneeded alias
-            for (uintptr_t i = 0; ai_ok(w) && i < nm->len; i++) w = ioputc(w, nm->bytes[i]);
-            if (ai_ok(w)) w = ioputc(w, '\n');
-            if (ai_ok(w)) zflush(w);
+            g = ioputs(g, ";; missing ");
+            for (uintptr_t i = 0; ai_ok(g) && i < nm->len; i++) g = ioputc(g, nm->bytes[i]);
+            g = ai_core_of(zflush(ioputc(g, '\n')));  // best effort: a failed write stays off g
             g->io = sv; }
 #endif
   *--Sp = ZeroPoint; ai_musttail return Next(2); }
@@ -1137,12 +1136,11 @@ lvm(lvm_load) {
 // else lambda, cask, port
 lvm(lvm_kind) {
  word x = Sp[0], n = zero;
- struct ai *c = ai_core_of(g);
- if (coinp(x)) { n = kind_get(g, coin_kind(x), KnName); if (ai_nilp(g, n)) n = c->knom[KnCoin]; }
- else if (caskp(x)) n = c->knom[KnCask];
- else if (iop(x)) n = c->knom[KnPort];
- else if (ai_kind(x) == KHot) n = c->knom[KnLambda];
- Sp[0] = ai_nilp(g, n) ? ai_mapget(g, zero, putcharm(ai_kind(x)), c->kinds) : n;
+ if (coinp(x)) { n = kind_get(g, coin_kind(x), KnName); if (ai_nilp(g, n)) n = g->knom[KnCoin]; }
+ else if (caskp(x)) n = g->knom[KnCask];
+ else if (iop(x)) n = g->knom[KnPort];
+ else if (ai_kind(x) == KHot) n = g->knom[KnLambda];
+ Sp[0] = ai_nilp(g, n) ? ai_mapget(g, zero, putcharm(ai_kind(x)), g->kinds) : n;
  ai_musttail return Next(1); }
 op11(lvm_coinp, coinp(Sp[0]) ? putcharm(1) : zero)   // (coin? x): a struck coin, and not the rest of the hot row
 

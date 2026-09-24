@@ -208,7 +208,7 @@ int main(void) {
   struct ai *g = ai_image_load(buf, len);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
   g = ai_defn(g, defs, countof(defs));
-  if (ai_ok(g)) ai_core_of(g)->budget = freelist->len / 4;
+  if (ai_ok(g)) g->budget = freelist->len / 4;
   struct ai *r = ai_evals_(g,
     "(: ok (&& "
 #include "seat.h"
@@ -219,7 +219,7 @@ int main(void) {
 #endif
     "   _ (putc 10) _ (puts \"; the image woke -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
+  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
   ai_fin(r);
   m7_exit(2);
   return 0; }
@@ -257,8 +257,8 @@ int main(void) {
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
   struct ai *g = ai_ini();          // NO ai_defn: a port nif in the book would
                                     // ride into the image as a dead absolute
-  if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(word) / 4;
-  struct ai *r = ai_egg_(g,
+  if (ai_ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
+  struct ai *r = ai_egg(g,
 #include "egg.h"
     ,
 #include "p1.h"
@@ -284,7 +284,7 @@ int main(void) {
 #endif
     "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {
-    if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
+    if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
     m7_exit(3); }
   struct ai_image_bad bad = { {0}, 0, 0 };               // an unencodable word refuses the dump
   uintptr_t len = 0;
@@ -344,8 +344,8 @@ int main(void) {
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
-  if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(word) / 4;
-  struct ai *r = ai_egg_(g,
+  if (ai_ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
+  struct ai *r = ai_egg(g,
 #include "egg.h"
     ,
 #include "p1.h"
@@ -362,7 +362,7 @@ int main(void) {
 #include "seat.h"
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
+  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
   ai_fin(r);
   m7_exit(2);                                // fell out of the driver: loud
   return 0; }

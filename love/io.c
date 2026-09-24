@@ -221,8 +221,8 @@ struct ai *ioputc(struct ai*g, int c) {
 // run and lands at the next write, at close, or through the finalizer's drain
 struct ai *zflush(struct ai*g) {
  if (!ai_ok(g)) return g;
- g = io_wdrain(g, ai_core_of(g)->io);
- return ai_ok(g) ? ai_core_of(g)->io->vt->flush(g) : g; }
+ g = io_wdrain(g, g->io);
+ return ai_ok(g) ? g->io->vt->flush(g) : g; }
 // the exported faces (love.h): a host nif consults/drains the read run without
 // knowing the bio shape -- swig's first course rides these.
 uintptr_t ai_io_pending(struct ai *g, struct ai_io *i) {
@@ -261,7 +261,7 @@ static ai_inline struct ai *chug_str(struct ai *g, struct ai_io *i) {
  uintptr_t n = u + (rbio_of(g, i) ? ai_io_pending(g, i)
                     : vt->athand ? vt->athand(g, ai_iobuf) : 0);
  if (!ai_ok(g = str0(g, n))) return g;
- i = ai_core_of(g)->io;                       // str0 collects: the port may have moved
+ i = g->io;                                   // str0 collects: the port may have moved
  if (n) {
   char *d = txt(g->sp[0]);
   if (u) *d = (char) getcharm(i->ungetc_buf), i->ungetc_buf = putcharm(EOF);
@@ -480,19 +480,19 @@ static struct ai *facex(struct ai *g, word x, int d) {
 // the bare scare (oom) prints ";; oom@len=N". best-effort. N is the MAIN POOL's length
 // in words -- what the heap had, not what the refused allocation asked for. reading it
 // as the ask sends you hunting an oversized request when the story is usually the pool.
-void ai_scare_face_(struct ai *g) {
+void ai_scare_face(struct ai *g) {
  if (!(g = ai_core_of(g))) return;
  g->io = &ai_stderr.io;
  if (zerop(g->scare_a) && zerop(g->scare_b)) {
   g = ioputs(g, ";; oom@len=");
-  if (ai_ok(g)) g = ioputn(g, (intptr_t) ai_core_of(g)->len, 10); }
+  if (ai_ok(g)) g = ioputn(g, (intptr_t) g->len, 10); }
  else {
   g = ioputs(g, ";; ");
-  if (ai_ok(g)) g = facex(g, ai_core_of(g)->scare_a, 0);
-  if (ai_ok(g)) g = ioputc(g, ' ');
-  if (ai_ok(g)) g = facex(g, ai_core_of(g)->scare_b, 0); }
- if (ai_ok(g)) g = ioputc(g, '\n');
- if (ai_ok(g)) zflush(g); }
+  if (ai_ok(g)) g = facex(g, g->scare_a, 0);
+  g = ioputc(g, ' ');
+  if (ai_ok(g)) g = facex(g, g->scare_b, 0); }
+ g = ioputc(g, '\n');
+ zflush(g); }
 
 static ai_inline struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o) {
  return g->io = o, ioputn(g, n, b); }
@@ -854,7 +854,7 @@ static struct ai *p0reads(struct ai *g, uintptr_t d) {
  uintptr_t n = 0;
  for (int c; ai_ok(g); n++) {
   if ((c = p0skip(g, d)) == ')') { p0pop(g, d); break; }
-  if (c == EOF) return encode(ai_core_of(g), ai_status_more);   // unclosed list
+  if (c == EOF) return encode(g, ai_status_more);               // unclosed list
   g = p0read1(g, d); }
  if (!ai_ok(g)) return g;
  for (g = ai_push(g, 1, ZeroPoint); ai_ok(g) && n--; g = gxr(g));
@@ -871,9 +871,8 @@ static struct ai *p0read1(struct ai *g, uintptr_t d) {
    g = p0read1(g, d);
    if (ai_code_of(g) == ai_status_eof)                  // quote with no operand
     g = encode(ai_core_of(g), ai_status_more);
-   if (!ai_ok(g)) return g;
    g = gxr(ai_push(g, 1, ZeroPoint));                   // (d . ())
-   if (ai_ok(g)) g = intern(ai_strof(g, "\\"));
+   g = intern(ai_strof(g, "\\"));
    return gxl(g);                                       // (\ . (d))
   case '\\': return intern(ai_strof(g, "\\"));          // lambda/quote: never fuses (form space)
   default: return ioread1sym(g, d, c); } }              // name / number
@@ -945,13 +944,13 @@ static struct ai *p1text(struct ai *g, char const *s) {
  g = ai_strof(g, s);
  g = gxr(push0(g));                                  // ("<text>")
  if (!ai_ok(g = ai_push(g, 1, zero))) return g;       // reserve first, then read the slot:
- g->sp[0] = ai_core_of(g)->hot_read;                 //   a push can gc, and the gc is what
- if (!ai_ok(g = ai_eval_(gxl(g)))) return g;          //   moves hot_read. (<reader> "<text>")
+ g->sp[0] = g->hot_read;                             //   a push can gc, and the gc is what
+ if (!ai_ok(g = ai_eval(gxl(g)))) return g;           //   moves hot_read. (<reader> "<text>")
  // p1 answers `torn` for an unfinished shape; the egg would fold over it as an
  // empty corpus and silently pin ev to 0, so refuse it here (chainp and not nomp)
  word r = g->sp[0];
  return (chainp(r) && !nomp(r)) || r == ZeroPoint ? g
-      : encode(ai_core_of(g), ai_status_more); }
+      : encode(g, ai_status_more); }
 
 // a text -> the list of its forms, pushed: p1 reads it once sealed, p0 until then
 // (the sealed slot is the test)
@@ -966,7 +965,7 @@ static struct ai *qtop(struct ai *g) {                // x on top -> 'x
 // the stack: (<driver> '(list)). the answer stays at sp[0]; applyq_ drops it.
 static struct ai *applyq(struct ai *g, char const *driver) {
  g = p0onto(gxr(push0(qtop(g))), driver);            // ('(list)), then (driver '(list))
- return ai_eval_(g); }
+ return ai_eval(g); }
 static struct ai *applyq_(struct ai *g, char const *driver) {
  return ai_pop(applyq(g, driver), 1); }
 
@@ -987,7 +986,7 @@ ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
 // the egg takes two corpora: `corpus` is sat twice (ev compiles itself), `post`
 // once, after the hatch and before the mop -- the seat for love that needs the
 // runtime-internal noms (peek/seek) the mop is about to take off the book.
-ai_noinline struct ai *ai_egg_(struct ai *g, char const *egg, char const *p1,
+ai_noinline struct ai *ai_egg(struct ai *g, char const *egg, char const *p1,
                                char const *corpus, char const *post) {
  g = p0onto(ai_push(g, 1, ZeroPoint), p1);           // p1's forms, by p0 ..
  g = applyq_(g, evfold);                             // .. and c0 evals them: p1 is live
@@ -995,4 +994,4 @@ ai_noinline struct ai *ai_egg_(struct ai *g, char const *egg, char const *p1,
  g = p1text(g, corpus);                              // prel + ev, through the reader in love
  g = p0onto(g, p1);                                  // and p1 at the head of the corpus
  g = p0onto(gxl(qtop(g)), egg);                      // (egg 'corpus 'post)
- return ai_pop(ai_eval_(g), 1); }
+ return ai_pop(ai_eval(g), 1); }

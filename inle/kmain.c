@@ -2023,7 +2023,7 @@ void kmain(void) {
   // nursery's resizer grows and gen_major's all-survive sizing asks kmallocw for a block
   // bigger than physical RAM. an eighth leaves headroom for the major's double-buffered
   // resize, the free list and fragmentation; the host, with virtual memory, runs unbounded.
-  if (ai_ok(g)) ai_core_of(g)->budget = kram_words / 8;
+  if (ai_ok(g)) g->budget = kram_words / 8;
   // the kore ROSTER (rung 3): the cat itself is read off the ramfs below.
   g = ai_strof(g, src_korelist);
   struct ai_def kd[] = {{"korelist", {.x = ai_pop1(g)}}};
@@ -2232,7 +2232,7 @@ void kmain(void) {
    "      _ (pin seat-doors 2 spawnmap) (pin seat-doors 3 wait))"
    "   0)");
   // the session: a fresh writable layer, so the shell's defglobs never land in the base
-  r = ai_open_(r);
+  r = ai_open(r);
   // an unbound mention raises missing at every define that names one, and bao's file-help
   // folds a real quit, so one absent nif in the cat resets the machine at load. pin a no-op
   // for whichever host nifs the cat mentions and this seat lacks -- self-retiring, since a
@@ -2285,6 +2285,6 @@ void kmain(void) {
    "   0)");
   r = ai_evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare gets the honest face on the serial console before reset
-  if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
+  if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
   ai_fin(r); }
  k_reset(); }
