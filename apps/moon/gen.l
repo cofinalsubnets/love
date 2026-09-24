@@ -608,8 +608,10 @@
    (ffile g) (? (abl? g 'fsel) ()
                  (x64? g) '(f8 f9 f10 f11 f12 f13 f14 f15)
                  (a64? g) '(f24 f25 f26 f27 f28 f29 f30 f31)   ; the pure temps past the parks (v8..v15 owe a save)
+                 (rv64? g) '(f8 f9 f10 f11 f12 f13 f14 f15)    ; ft0..ft7, and wasm's locals
                  ())
-   (fsel? g) ((x64? g || a64? g) && !(abl? g 'fsel))   ; the targets whose double lane rides the xmm/d file (MOON_ABLATE=fsel prices it)
+   (fsel? g) ((x64? g || a64? g || rv64? g) && !(abl? g 'fsel))   ; the targets whose double lane rides the float file (MOON_ABLATE=fsel prices it)
+   (fidx? g) ((x64? g || a64? g) && fsel? g)             ; ..and whose indexed float loads/stores are one form
    ; the homable-param fold for pgo, upar and ubuild: a float/sse param spends no gp seat, the
    ; walk stops at the home limit, and (hx acc gpi param) folds each homable seat
    (homefold g ps gpi acc hx)
@@ -801,7 +803,7 @@
           (mkv 'double 'r0 [['li 'r0 (v & 4294967295)] ['li 'r1 ((v >> 32) & 4294967295)]
                             '(movqxr f0 r0)]))
        (x64? g && fsel? g) (mkv 'double 'r0 [['ldsdl 'f0 (dblab g d)]])   ; one load off the pool
-       (a64? g && fsel? g) (mkv 'double 'r0 [['la 'r0 (dblab g d)] ['ldsd 'f0 'r0 0]])   ; adrp+add, then the load
+       ((a64? g || rv64? g) && fsel? g) (mkv 'double 'r0 [['la 'r0 (dblab g d)] ['ldsd 'f0 'r0 0]])   ; the address, then the load
        (mkv 'double 'r0 [['li 'r0 (fbits d)] '(movqxr f0 r0)]))
    ; the type of a constant arithmetic expression: 'double, 'int (any integer type), or 'no.
    ; float answers 'no (the f suffix parses as a cast and rounds at every step)
@@ -1071,7 +1073,7 @@
     (? (relish? cnd && (ea @ ('num 1) 1 ()) && (eb @ ('num 0) 1 ())) (cgexpr g env cnd wnt)
        (relish? cnd && (ea @ ('num 0) 1 ()) && (eb @ ('num 1) 1 ())) (cgexpr g env ['un 'not cnd] wnt)
        (: r (fminmax g env cnd ea eb)
-          (? !(= r 'no) r (icmov g env cnd ea eb))))
+          (? !(= r 'no) r (x64? g || a64? g) (icmov g env cnd ea eb) 'no)))   ; rv64 has no cmov
    (fminmax g env cnd ea eb)
     (cnd @ ('bin op a b && x64? g && elem op '(lt gt) && flo9? g env a && flo9? g env b &&   ; minsd/maxsd are x64's (fmin's NaN differs)
             !(wrany? a || callish? a || wrany? b || callish? b) &&
@@ -4995,7 +4997,7 @@
           ; a leax feeding the next ld/ldu1 base is the indexed load (base/index may alias a dying dest)
           ; ..and the float loads/stores take the same fold on x64, into their indexed twins
           lx (? !(two? f && <f = 'leax && two? nx  &&
-                  (elem <nx '(ld ldu1) || (fsel? g && elem <nx fldops))) ()
+                  (elem <nx '(ld ldu1) || (fidx? g && elem <nx fldops))) ()
                 !(= <>>nx <>f) ()
                 !(charm? <>>>nx && charm? (f 5)) ()
                 [(<nx @ 'ld 'ldx 'ldu1 'ldxb 'ldsd 'ldsdx 'ldssx) <>nx <>>f <>>>f (f 4)
@@ -5003,7 +5005,7 @@
           ; ..and a store through the leax's dest further down (x64): the address forms and the
           ; store are kept apart by the value's computation. the window between may not touch
           ; the dest, its base or its index, nor read the dest, nor bar (a label, a call)
-          sw (? (two? lx || !(fsel? g) || !(two? f && <f = 'leax)) ()
+          sw (? (two? lx || !(fidx? g) || !(two? f && <f = 'leax)) ()
                 (elem (f 2) '(sp r4) || elem (f 3) '(sp r4)) ()   ; a frame address: sp moves under a park
                 (= (f 1) (f 2) || (= (f 1) (f 3))) ()             ; the dest is its own base or index: the makers move
                 (: D (f 1) b (f 2) i (f 3)
@@ -5023,7 +5025,7 @@
           ; leax feeding a store's base is the indexed store (the value must not be the leax's dest)
           sx (? (two? lx) ()
                 !(two? f && <f = 'leax && two? nx &&
-                  (elem <nx '(st st1) || (fsel? g && elem <nx fstops))) ()
+                  (elem <nx '(st st1) || (fidx? g && elem <nx fstops))) ()
                 !(= <>nx <>f) ()
                 !(charm? <>>nx && charm? (f 5)) ()
                 (= <>>>nx <>f) ()

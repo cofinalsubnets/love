@@ -508,7 +508,7 @@
           ('ldxb . rv-ldxb) ('stxb . rv-stxb)
           ('call . rv-call) ('la . rv-la) ('lar . rv-la)
           ('tp . rv-tp)
-          ('movsd . rv-fmov)
+          ('movsd . rv-fmov) ('movapd . rv-fmov)
           ('addsd . rv-fp3op 'addsd) ('subsd . rv-fp3op 'subsd)
           ('mulsd . rv-fp3op 'mulsd) ('divsd . rv-fp3op 'divsd)
           ('ucomisd . rv-fcmp) ('cvtsi2sd . rv-scvtf) ('cvttsd2si . rv-fcvtzs)

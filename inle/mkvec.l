@@ -230,18 +230,22 @@
    ;; saved: the caller-saved file -- ra, t0..t4, a0..a7 -- and the two scratches x30/x31,
    ;; which the abstract file does not name: x30 holds a cmp's flags until its br, and an
    ;; interrupt lands anywhere. k_trap is ABI, so s0..s11 are its own to keep. 16 slots
-   ;; is 128 bytes, and sp stays 16-aligned.
+   ;; is 128 bytes; then f0..f19, the float file compiled C spends (fa0..fa7, ft0..ft11),
+   ;; since doubles live in it across statements. 288 keeps sp 16-aligned.
    r-save '(lr r8 r9 r10 r11 r12 r0 r1 r2 r3 r4 r5 r6 r7)
-   r-frame 128
+   r-fregs (map (i \ (name ("f" + show i))) (v-upto 20))
+   r-frame 288
    ;; sd/ld of the two unnamed registers against sp, as words: S-form splits the offset
    ;; 11:5 / 4:0, I-form carries it whole.
    (r-sd rs2 off) (le32 (((off >> 5) << 25) | (rs2 << 20) | (2 << 15) | (3 << 12)
                          | ((off & 31) << 7) | 0x23))
    (r-ld rd off)  (le32 ((off << 20) | (2 << 15) | (3 << 12) | (rd << 7) | 0x03))
    r-push (v-mapi (\ i r ['st 'sp (8 * i) r]) r-save
-           + [['raw (r-sd 30 112)] ['raw (r-sd 31 120)]])
+           + [['raw (r-sd 30 112)] ['raw (r-sd 31 120)]]
+           + v-mapi (\ i r ['stsd 'sp (128 + 8 * i) r]) r-fregs)
    r-pop  (v-mapi (\ i r ['ld r 'sp (8 * i)]) r-save
-           + [['raw (r-ld 30 112)] ['raw (r-ld 31 120)]])
+           + [['raw (r-ld 30 112)] ['raw (r-ld 31 120)]]
+           + v-mapi (\ i r ['ldsd r 'sp (128 + 8 * i)]) r-fregs)
    r-text
     ([['label 'vectors] ['sub 'sp 'sp r-frame]]
      + r-push

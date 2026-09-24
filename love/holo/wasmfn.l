@@ -211,7 +211,7 @@
      'trap '((unreachable))
      ('nop || 'align) ()
      ;; the double lane
-     'movsd (w-fval (f 2) + w-fset (f 1))
+     ('movsd || 'movapd) (w-fval (f 2) + w-fset (f 1))
      ('addsd || 'subsd || 'mulsd || 'divsd)
            (w-fval (f 1) + w-fval (f 2) + [[(w-fp3 <f)]] + w-fset (f 1))
      'xorpd (w-fval (f 1) + '((i64.reinterpret_f64)) + w-fval (f 2) + '((i64.reinterpret_f64) (i64.xor) (f64.reinterpret_i64)) + w-fset (f 1))
