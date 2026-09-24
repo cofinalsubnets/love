@@ -365,7 +365,7 @@ lvm(lvm_fputc) {
  if (charmp(Sp[0])) {
   intptr_t fd = getcharm(Sp[0]);
   unsigned char c = (unsigned char) getcharm(Sp[1]);
-  if (fd >= 0) { Pack(g); ai_fd_say((int) fd, &c, 1); Unpack(g); }
+  if (fd >= 0) ai_fd_say((int) fd, &c, 1);
   ai_musttail return Nextp(1, 1); }
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
@@ -407,7 +407,7 @@ lvm(lvm_fputs) {
  if (charmp(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   intptr_t fd = getcharm(Sp[0]);
   struct ai_str *v = bytes_of(Sp[1]);
-  if (fd >= 0) { Pack(g); ai_fd_say((int) fd, (unsigned char const*) txt(v), len(v)); Unpack(g); }
+  if (fd >= 0) ai_fd_say((int) fd, (unsigned char const*) txt(v), len(v));
   ai_musttail return Nextp(1, 1); }
  if (iop(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   g->io = (struct ai_io*) Sp[0];
