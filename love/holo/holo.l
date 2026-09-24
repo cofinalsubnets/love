@@ -40,6 +40,10 @@
 ;   (ucomisd a b)                              ; compare doubles, set flags
 ;   (cvtsi2sd f g) (movqxr f g) (movqrx g f)   ; int->double ; gp<->xmm bit moves
 ;   (stsd base disp f) (ldsd f base disp)      ; movsd [base+disp]<->xmm  (spill / box store)
+;   (ldsdx f base index scale disp) (stsdx base index scale disp f)   ; the indexed twins (ldssx/stssx single)
+;   (ldsdl f label)                            ; xmm <- the double at a label (pc-relative, a rodata constant)
+;   (minsd d s) (maxsd d s)                    ; d <- d < s ? d : s  /  d > s ? d : s (a NaN takes s)
+;   (cmov cond d s)                            ; d <- s when cond holds, off the last cmp (x86-64)
 ;
 ; a register operand is a symbol (r0..), an immediate a number -- `reg?` tells them apart, so the
 ; ALU ops take either in the same slot with no syntax. the abstract register file is what makes the
@@ -142,7 +146,7 @@
              'la 2 'lar 2 'lia 2 'ldseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
-             'movupd 2 'movsd 2 'movhlps 2 'unpcklpd 2
+             'movupd 2 'movsd 2 'movapd 2 'movhlps 2 'unpcklpd 2
              'mulpd 2 'addpd 2 'subpd 2 'divpd 2
              'mulsd 2 'addsd 2 'subsd 2 'divsd 2
              'xorpd 2 'pcmpeqd 2 'andpd 2 'psubq 2
@@ -167,7 +171,9 @@
              'ldu1 3 'ldu2 3 'ldu4 3
              'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
              'rem 4 'urem 4 'umull 4 'smull 4 'mla 4
-             'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'mulo 5}
+             'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'mulo 5
+             'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2
+             'minsd 2 'maxsd 2 'cmov 3}
    ;; an emitter row is (arity . emitter): `emsof` builds a backend's tablet from
    ;; ('op . f) pairs, stamping each row with its count off ir-arity. so ir-arity
    ;; is read at bake time, once per op, and lowering reads arity and emitter in one lookup.

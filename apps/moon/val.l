@@ -19,7 +19,7 @@
    (vsbit x) (x = 'sp ? 0 1)
    (vspc b) (b = 0 ? 'sp 'r4)
    ; ops that neither read nor write frame memory
-   (vpure? x) (elem x '(ret br label li mov cmp test push pop set la ud2
+   (vpure? x) (elem x '(ret br label li mov cmp test push pop set la ldsdl ud2
                            add sub and or xor imul shl shr sar ror4
                            sx4 zx4 sx2 zx2 sx1 zx1 not neg))
 
@@ -78,7 +78,7 @@
                    (: op <f
                       (? (elem op '(lea lean leax)) (mark >f)
                          (0 < vldw op || 0 < vstw op || 0 < vsiw op
-                          || elem op '(ldsd stsd cmpm cmprm ldss stss cvtsi2sd movqxr movqrx)) 0
+                          || elem op '(ldsd stsd cmpm cmprm ldss stss ldsdl cvtsi2sd movqxr movqrx)) 0
                          (valu? op && <>f = 'sp) 0
                          (mark >f))))
               (go >l)))

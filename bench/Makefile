@@ -199,6 +199,17 @@ REPS ?= 24
 ccnif: $(GL)
 	@./ccnif.sh $(REPS) $(SAMPLES)
 
+# the loop shapes rove's tray math runs through (bench/loops.c), mooncc against gcc on the
+# CODE: checksums, then perf instructions (the meter) and cycles (the band) per kernel. And
+# the same shapes end to end as tray ops through the artifact (bench/traybench.l, ms per op).
+# Neither is cached nor a gate: instruments for gen.l work. `MCC=moon0 make ccloops` reads
+# the bootstrap image, the 4 s edit cycle. x86-64 only, perf on PATH.
+LREPS ?= 2000
+ccloops: $(GL)
+	@./ccloops.sh $(LREPS)
+traybench: $(GL)
+	@$(GL) traybench.l 200
+
 # the same floors on the WASM target: `mooncc -t wasm` against emcc's wasm64 (clang +
 # musl), every lane under node. ccnif's shape and ccnif's caveats; needs node, and emcc
 # for the foreign lanes. `make ccwasm REPS=64 SAMPLES=5` for a quieter reading.

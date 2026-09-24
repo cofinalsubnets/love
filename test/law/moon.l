@@ -531,9 +531,8 @@
       ; the parser: a double type and a 'flo primary
       (= (cast "int main() { double d = 1.5; return 0; }")
          '(prog ((fn "main" () (blk ((decl (("d" double (flo 1.5)))) (ret (num 0))))))))
-      ; the 1.0 constant loads its IEEE-754 bits then movqxr into f0
-      (has 'movqxr irbits)
-      (has 'li irbits)
+      ; the 1.0 constant is one load off the unit's double pool (x64)
+      (has 'ldsdl irbits)
       ; the value path compiles: locals, arithmetic, mixed int/double, compare, cast
       (two? (cgn "int main() { double a = 1.5; double b = 2.5; return (int)(a + b); }"))
       (two? (cgn "int main() { double a = 3.0; int n = 2; return (int)(a * n); }"))     ; mixed -> double
@@ -1634,14 +1633,16 @@
             (movqxr f0 r5) (movqrx r5 f0)
             (cvtsi2sd f0 r5) (cvttsd2si r5 f0)
             (ldsd f0 r9 8) (ldss f0 r9 8) (stsd r9 8 f0) (stss r9 8 f0)
-            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1)
+            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1) (movapd f0 f1)
             (ucomisd f0 f1) (cvtss2sd f0 f1) (cvtsd2ss f0 f1)
+            (ldsdx f0 r9 r10 8 0) (ldssx f0 r9 r10 8 0) (stsdx r9 r10 8 0 f0) (stssx r9 r10 8 0 f0)
+            (ldsdl f0 zz9) (minsd f0 f1) (maxsd f0 f1) (cmov eq r5 r9)
             (div r5 r9 r10) (udiv r5 r9 r10) (rem r5 r9 r10 r2) (urem r5 r9 r10 r2)
             (shlv r5 r1) (shrv r5 r1) (sarv r5 r1) (rorv r5 r1) (rorv4 r5 r1))
    heads (map (f9 \ <f9) shapes)
    rostered (aluops + divops + vshops + unops + ldops9 + gstops + stxops + siops +
-             leaops + xops + fldops + fstops + xmmops +
-             '(li mov push pop shl shr sar rol ror ror4 cmpm cmprm la set cmp test
+             leaops + xops + fxops + fstxops + fldops + fstops + xmmops +
+             '(li mov push pop shl shr sar rol ror ror4 cmpm cmprm la ldsdl set cmov cmp test
                movqxr movqrx cvtsi2sd cvttsd2si))
    ; the forward carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
    ; form -- no guard is restated here, cpwalk decides and holo judges
@@ -1667,11 +1668,11 @@
    bad2 (catmap bwd shapes)
    (test
       ; the carrier is what it says it is, and every shape is one both halves already accept
-      (78 = #shapes)
+      (87 = #shapes)
       !(two? (filter (f9 \ (= (rdsp gX f9) 'bar)) shapes))
       (all emits? shapes)
       !(two? (filter (\ o9 !(elem o9 heads)) rostered))    ; the drift gate
-      (390 = nfwd) (660 = nbwd)                               ; a silent narrowing shows up here
+      (405 = nfwd) (675 = nbwd)                               ; a silent narrowing shows up here
       !(two? bad1)                                            ; forward: 390 renames, all encodable
       !(two? bad2)                                            ; backward: 660 folds, all encodable
       ; the two shapes the guards exist for, refused by holo itself, plus the alias emit-alu

@@ -402,6 +402,12 @@
    ;; set: d <- (cond) ? 1 : 0 from the last cmp -- setcc dl (0F 9x /0) then movzx d,dl (0F B6 /r). a
    ;; REX (B for r8b+, a bare 0x40 for spl/bpl/sil/dil) forces the byte operand to be the low byte,
    ;; not ah/ch/dh/bh. setcc's opcode is the Jcc low byte + 0x10 (0F 84 je -> 0F 94 sete).
+   ;; cmov: d <- s when cond holds, off the last cmp -- REX.W 0F 4x /r (the Jcc low byte less 0x40).
+   ;; d = s would be a no-op that reads as a select: refused, so a rename that aliases them dies loud
+   (emit-cmov cond d s)
+      (: dn (rn d) sn (rn s)
+         (? (= dn sn) (scare 'cmov-alias d)
+            [(rex 1 (hi dn) 0 (hi sn)) 15 (jcc-op cond - 64) (modrm 3 dn sn)]))
    (emit-set cond d)
       (: o (jcc-op cond) dn (rn d)
          rb (? (dn >= 8) '(65) (dn >= 4) '(64))
@@ -434,9 +440,10 @@
    x64-xregs (fregs 16)                                                             ; f0..f15 -> 0..15
    (xrn r) (look x64-xregs r 'badxreg)
    ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
-   x64-sse {'movupd '(102 16) 'movsd '(242 16) 'movhlps '(0 18) 'unpcklpd '(102 20)
+   x64-sse {'movupd '(102 16) 'movsd '(242 16) 'movapd '(102 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd: the whole-register copy (no merge)
             'mulpd '(102 89) 'addpd '(102 88) 'subpd '(102 92) 'divpd '(102 94)
             'mulsd '(242 89) 'addsd '(242 88) 'subsd '(242 92) 'divsd '(242 94)
+            'minsd '(242 93) 'maxsd '(242 95)                                              ; d <- d < s ? d : s (a NaN takes s)
             'xorpd '(102 87) 'pcmpeqd '(102 118) 'andpd '(102 84) 'psubq '(102 251)
             'cvtss2sd '(243 90) 'cvtsd2ss '(242 90)                                    ; f3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
             'ucomisd '(102 46)}                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
@@ -467,6 +474,16 @@
       (xrn s @ sn (catall ['(243) (xrex 0 sn (rn base)) '(15 17) (mem sn base disp)]))
    (emit-ldss d base disp)                                                               ; (ldss f base disp)  xmm(d) <- [base+disp] (low 32)
       (xrn d @ dn (catall ['(243) (xrex 0 dn (rn base)) '(15 16) (mem dn base disp)]))
+   ;; the indexed twins, [base+index*scale+disp] <-> xmm: the F2/F3 prefix rides ahead of the REX
+   (x64-fmemx pfx opc xn base index scale disp)
+      (: bn (rn base) ixn (rn index)
+         ([pfx] + mrex 0 () xn ixn bn + opc + memx xn base index scale disp))
+   (emit-ldsdl d label)                                                                    ; (ldsdl f label)  xmm(d) <- [rip+label], la's shape
+      (xrn d @ dn (catall ['(242) (xrex 0 dn 0) [15 16 (modrm 0 (lo dn) 5)] [(fix 4 'rel32 label 0)]]))
+   (emit-ldsdx d base index scale disp) (x64-fmemx 242 '(15 16) (xrn d) base index scale disp)   ; (ldsdx f base index scale disp)
+   (emit-stsdx base index scale disp s) (x64-fmemx 242 '(15 17) (xrn s) base index scale disp)   ; (stsdx base index scale disp f)
+   (emit-ldssx d base index scale disp) (x64-fmemx 243 '(15 16) (xrn d) base index scale disp)   ; (ldssx f base index scale disp)
+   (emit-stssx base index scale disp s) (x64-fmemx 243 '(15 17) (xrn s) base index scale disp)   ; (stssx base index scale disp f)
 
    ;; -- the system lane: what a kernel says and a userland never does. every encoding below was
    ;; taken from `llvm-mc -triple=x64 --show-encoding`, and test/holo/golden.l keeps them there.
@@ -520,6 +537,8 @@
          ('lea . emit-lea) ('lean . emit-lea)              ; lean: cc's consumed frame address -- same bytes, invisible to the sibcall escape gate
          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
          ('ldxb . emit-ldxb) ('stxb . emit-stxb)
+         ('ldsdx . emit-ldsdx) ('stsdx . emit-stsdx) ('ldssx . emit-ldssx) ('stssx . emit-stssx)
+         ('ldsdl . emit-ldsdl)
          ('ld1 . emit-ld1) ('ld2 . emit-ld2) ('ld4 . emit-ld4)
          ('st1 . emit-st1) ('st2 . emit-st2) ('st4 . emit-st4)
          ('si . emit-si) ('si1 . emit-si1) ('si2 . emit-si2) ('si4 . emit-si4)
@@ -555,7 +574,7 @@
          ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
          ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
          ('jmpr . emit-jmpr) ('jmpt . emit-jmpt) ('callr . emit-callr)
-         ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set)
+         ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set) ('cmov . emit-cmov)
          ('div . emit-div 0 1) ('udiv . emit-div 0 0)
          ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
          ('urem . (\ d a b t (emit-div 1 0 d a b)))
@@ -628,7 +647,7 @@
         ;; set over whatever stood: inc/dec keep CF and the shifts keep everything at count
         ;; 0, so neither writes for this purpose, and imul/idiv leave some undefined.
         'zeroxor 1
-        'flagr '(br set adc sbb)
+        'flagr '(br set cmov adc sbb)
         'flagw '(cmp cmpm cmprm test add sub and or xor adds subs neg mulo ucomisd)
         ;; branch relaxation: rel8 measures from the end of the 2-byte short form, so the distance
         ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
