@@ -117,6 +117,7 @@
    ; reset per statement. a pool value never crosses a call (caller-saved, no spill wrap)
    opool '(r6 r5 r9 r10 r7 r8)
    fpark '(f3 f4 f5 f6 f7)                          ; the xmm park file (x64): f0/f1 the protocol pair, f2 the narrow scratch
+   fpark-a64 '(f17 f18 f19 f20 f21 f22 f23)          ; a64: past the narrow scratch f16, under the homes
    fregs16 '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15)
    ; the forms an arm may lay between a compare and its cmov: none writes a flag
    fneu '(li mov lea lean leax ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldx ldxb sx1 sx2 sx4 zx1 zx2 zx4)
@@ -604,7 +605,11 @@
    ; call takes one, and it never joins g 'homes (no wrap, no shadow). the file sits above the
    ; protocol pair, the narrow scratch and the park file
    (fhomable? ty) (= ty 'double)
-   (ffile g) (? (x64? g) '(f8 f9 f10 f11 f12 f13 f14 f15) ())
+   (ffile g) (? (abl? g 'fsel) ()
+                 (x64? g) '(f8 f9 f10 f11 f12 f13 f14 f15)
+                 (a64? g) '(f24 f25 f26 f27 f28 f29 f30 f31)   ; the pure temps past the parks (v8..v15 owe a save)
+                 ())
+   (fsel? g) ((x64? g || a64? g) && !(abl? g 'fsel))   ; the targets whose double lane rides the xmm/d file (MOON_ABLATE=fsel prices it)
    ; the homable-param fold for pgo, upar and ubuild: a float/sse param spends no gp seat, the
    ; walk stops at the home limit, and (hx acc gpi param) folds each homable seat
    (homefold g ps gpi acc hx)
@@ -795,7 +800,8 @@
        (: v (fbits d)
           (mkv 'double 'r0 [['li 'r0 (v & 4294967295)] ['li 'r1 ((v >> 32) & 4294967295)]
                             '(movqxr f0 r0)]))
-       (x64? g) (mkv 'double 'r0 [['ldsdl 'f0 (dblab g d)]])   ; one load off the pool
+       (x64? g && fsel? g) (mkv 'double 'r0 [['ldsdl 'f0 (dblab g d)]])   ; one load off the pool
+       (a64? g && fsel? g) (mkv 'double 'r0 [['la 'r0 (dblab g d)] ['ldsd 'f0 'r0 0]])   ; adrp+add, then the load
        (mkv 'double 'r0 [['li 'r0 (fbits d)] '(movqxr f0 r0)]))
    ; the type of a constant arithmetic expression: 'double, 'int (any integer type), or 'no.
    ; float answers 'no (the f suffix parses as a cast and rounds at every step)
@@ -1067,7 +1073,7 @@
        (: r (fminmax g env cnd ea eb)
           (? !(= r 'no) r (icmov g env cnd ea eb))))
    (fminmax g env cnd ea eb)
-    (cnd @ ('bin op a b && elem op '(lt gt) && flo9? g env a && flo9? g env b &&
+    (cnd @ ('bin op a b && x64? g && elem op '(lt gt) && flo9? g env a && flo9? g env b &&   ; minsd/maxsd are x64's (fmin's NaN differs)
             !(wrany? a || callish? a || wrany? b || callish? b) &&
             ((= ea a && (= eb b)) || (= ea b && (= eb a))))
      (: da (= ea a)                                  ; the dst arm is the left operand
@@ -1439,6 +1445,7 @@
              (= <>f fr) 1
              (fclob? >fs fr))))
    (fpick fs l) (? !(two? l) () (fclob? fs <l) (fpick fs >l) <l)
+   (fparks g) (? (a64? g) fpark-a64 fpark)
    ; a right operand that reads direct, no shuttle: an xmm home alone (its register is the
    ; operand), or gp-only forms then one write of f0, retargeted to f1 -> (forms operand) | ()
    (fsimple g fs)
@@ -1456,8 +1463,8 @@
              ())))
    (fshut g af bf)
     (? (t32? g) (af + '((movqrx r0 f0)) + spush2 + bf + spop2 'r2 'r3 + '((movqxr f1 r2)))
-       (x64? g && !(fclob? bf 'f1)) (af + '((movapd f1 f0)) + bf)
-       (: p (x64? g ? (fpick bf fpark) ())
+       (fsel? g && !(fclob? bf 'f1)) (af + '((movapd f1 f0)) + bf)
+       (: p (fsel? g ? (fpick bf (fparks g)) ())
           (? (nom? p) (af + [['movapd p 'f0]] + bf + [['movapd 'f1 p]])
              (: s (? (r1safe? g bf) 'r1 (spare g bf))
                 (? s (af + [['movqrx s 'f0]] + bf + [['movqxr 'f1 s]])
@@ -2417,7 +2424,7 @@
               (mkv 'long 'r0 (f + ['(li r0 0) ['jmp ld]
                                        ['label lt] '(li r0 1) ['label ld]]))))
        ('cond cnd ea eb)
-        (: sel (x64? g ? (csel g env cnd ea eb wnt) 'no)   ; a select, where one fits
+        (: sel (fsel? g ? (csel g env cnd ea eb wnt) 'no)   ; a select, where one fits
            (? !(= sel 'no) sel
         (: le (nlab g ".e") ld (nlab g ".d")
            c (cbranch g env cnd 'eq le)
@@ -3288,7 +3295,7 @@
                              ; the double lane: both to double. x64 arithmetic over a simple right
                              ; reads it direct, the left on f0; else the shuttle, f1 = left, f0 = right
                              (: af (asflo g av) bf (asflo g b)
-                                sim (? (x64? g && elem op '(+ - * /)) (fsimple g bf) ())
+                                sim (? (fsel? g && elem op '(+ - * /)) (fsimple g bf) ())
                                 mid (? (two? sim) () (fshut g af bf))
                                 (? (two? sim)
                                    (mkv 'double 'r0 (af + <sim + [[(op @ '+ 'addsd '- 'subsd '* 'mulsd 'divsd) 'f0 <>sim]]))
@@ -4988,7 +4995,7 @@
           ; a leax feeding the next ld/ldu1 base is the indexed load (base/index may alias a dying dest)
           ; ..and the float loads/stores take the same fold on x64, into their indexed twins
           lx (? !(two? f && <f = 'leax && two? nx  &&
-                  (elem <nx '(ld ldu1) || (x64? g && elem <nx fldops))) ()
+                  (elem <nx '(ld ldu1) || (fsel? g && elem <nx fldops))) ()
                 !(= <>>nx <>f) ()
                 !(charm? <>>>nx && charm? (f 5)) ()
                 [(<nx @ 'ld 'ldx 'ldu1 'ldxb 'ldsd 'ldsdx 'ldssx) <>nx <>>f <>>>f (f 4)
@@ -4996,7 +5003,7 @@
           ; ..and a store through the leax's dest further down (x64): the address forms and the
           ; store are kept apart by the value's computation. the window between may not touch
           ; the dest, its base or its index, nor read the dest, nor bar (a label, a call)
-          sw (? (two? lx || !(x64? g) || !(two? f && <f = 'leax)) ()
+          sw (? (two? lx || !(fsel? g) || !(two? f && <f = 'leax)) ()
                 (elem (f 2) '(sp r4) || elem (f 3) '(sp r4)) ()   ; a frame address: sp moves under a park
                 (= (f 1) (f 2) || (= (f 1) (f 3))) ()             ; the dest is its own base or index: the makers move
                 (: D (f 1) b (f 2) i (f 3)
@@ -5016,7 +5023,7 @@
           ; leax feeding a store's base is the indexed store (the value must not be the leax's dest)
           sx (? (two? lx) ()
                 !(two? f && <f = 'leax && two? nx &&
-                  (elem <nx '(st st1) || (x64? g && elem <nx fstops))) ()
+                  (elem <nx '(st st1) || (fsel? g && elem <nx fstops))) ()
                 !(= <>nx <>f) ()
                 !(charm? <>>nx && charm? (f 5)) ()
                 (= <>>>nx <>f) ()

@@ -386,7 +386,7 @@ function under those seats.
 The economics that shaped this: the two halves buy different things -- the pool
 half buys cycles with instructions, the cs half buys latency at flat count.
 
-* **the xmm file (x64)** — a double is a double in a register, never a gp word. The
+* **the float file (x64 and a64)** — a double is a double in a register, never a gp word. The
   protocol pair f0/f1 carries expression results; f2 is the narrow scratch; f3..f7 park
   a binop's left operand across its right (`fshut`, the gp park only past a call);
   f8..f15 home double locals and params (`fhomable?`, ulloc's `fok`: once-declared,
@@ -396,7 +396,12 @@ half buys cycles with instructions, the cs half buys latency at flat count.
   (`ldsdl`, labels `.D<pattern>`). Loops are bottom-tested with a 64-byte-aligned head
   under the entry jump, a select is a set/minsd/maxsd/cmov where its arms allow
   (`csel`), and addrfold folds a lea into the load or store it feeds even at a distance.
-  `MOON_DUMP=<fn>` prints a function's forms at the seams and ulloc's seating.
+  a64 rides the same lanes on its d-file: parks in f17..f23, homes in f24..f31 (v8..v15 owe
+  a save and stay out), a constant through `la` + `ldsd`, the indexed float forms as
+  register-offset `ldr`/`str` (a scale of 1 or the element's size, no displacement -- the
+  gp `ldx`/`stx` take that word too now), `cmov` as `csel`; minsd/maxsd stay x64's (fmin's
+  NaN answers differ from C's ternary). `MOON_DUMP=<fn>` prints a function's forms at the
+  seams and ulloc's seating.
 
 ## sibcalls, and the flat stack
 

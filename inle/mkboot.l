@@ -325,10 +325,13 @@
        (wfi)
        (jmp rv_park))
 
-   ;; the boot stack, every arch: kmain never returns, and 64 KiB is what a
-   ;; firmware hand-off hands over. .bss so it costs the file nothing. the far end
-   ;; carries a label, so every khop loads the top and the size is spelled once.
-   b-stack [['label 'kstack] ['raw (b-zeros 65536)] ['label 'kstack_top]]
+   ;; the boot stack, every arch: kmain never returns. 1 MiB: the egg bake walks the tree's
+   ;; own forms through C that recurses per level (ai_net), and 64 KiB ran out by a few KiB
+   ;; on a64 -- below the stack lie the boot's page tables, which an overflow eats in silence
+   ;; (the HHDM's L0 entry went to zero, and every later access took a level-0 fault).
+   ;; .bss so it costs the file nothing. the far end carries a label, so every khop loads
+   ;; the top and the size is spelled once.
+   b-stack [['label 'kstack] ['raw (b-zeros 1048576)] ['label 'kstack_top]]
 
    ;; -- the two objects ---------------------------------------------------
    ;; SHF flags: 2 ALLOC, 3 ALLOC|WRITE, 6 ALLOC|EXEC. types: 1 PROGBITS,

@@ -31,6 +31,12 @@
    x-save '(r4 r0 r3 r1 r2 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)   ; rbp rax rbx rcx rdx rsi rdi r8..r15
    x-push (map (r \ ['push r]) x-save)
    x-pop  (map (r \ ['pop r]) (rev x-save))
+   ;; ..and the xmm file, low halves: compiled C keeps doubles in xmm registers across
+   ;; statements now, and a handler's own C may spend any of them. 128 bytes under the gp
+   ;; frame keeps sp 16-byte aligned; the frame pointer for k_exception steps over them.
+   x-fregs (map (i \ (name ("f" + show i))) (v-upto 16))
+   x-fsave ([['sub 'sp 'sp 128]] + v-mapi (\ i r ['stsd 'sp (8 * i) r]) x-fregs)
+   x-fload (v-mapi (\ i r ['ldsd r 'sp (8 * i)]) x-fregs + [['add 'sp 'sp 128]])
    ;; an EOI to the primary PIC. the port rides dx, the datum al.
    x-eoi '((li r0 0x20) (li r2 0x20) (outb))
    (x-stub v)
@@ -86,7 +92,9 @@
      ;; five qwords from the CPU, two from the stub, fifteen from push15 -- 176 bytes.
      + [['align 8] ['label 'exc_common]]
      + x-push
-     + '((mov r6 sp) (call k_exception))
+     + x-fsave
+     + '((lea r6 sp 128) (call k_exception))
+     + x-fload
      + x-pop
      + '((add sp sp 16)          ; discard the vector + error code
          (iretq))                ; (the fatal handler never returns)
@@ -101,17 +109,21 @@
      ;; the PS/2 keyboard (IRQ1): read the scancode off port 0x60, hand it to kb_int
      + [['align 8] ['label 'keyboard_isr]]
      + x-push
+     + x-fsave
      + '((li r2 0x60) (inb)        ; al <- scancode
          (mov r6 r0) (zx1 r6)    ; rdi = (uint8_t) al
          (call kb_int))
      + x-eoi
+     + x-fload
      + x-pop
      + '((iretq))
      ;; COM1 RX (IRQ4).
      + [['align 8] ['label 'uart_isr]]
      + x-push
+     + x-fsave
      + '((call k_uart))
      + x-eoi
+     + x-fload
      + x-pop
      + '((iretq))
      ;; archinit: walk isrs/isr_types in lockstep, packing each (handler, type) pair into a
@@ -180,10 +192,13 @@
    ;; str/ldr rather than stp/ldp: twice the words, no scratch, and every offset stays inside
    ;; the 12-bit scaled immediate, so the far lane never borrows x16.
    a-save '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 fp lr)
-   a-frame 176
+   ;; ..then the d-file, all 32 low halves: compiled C keeps doubles in d17..d31 across
+   ;; statements now, and k_irq's own C may spend any of them. 176 + 256 keeps the alignment
+   a-fregs (map (i \ (name ("f" + show i))) (v-upto 32))
+   a-frame 432
    (a-slot-off i) (8 * i)
-   a-push (v-mapi (\ i r ['st 'sp (a-slot-off i) r]) a-save)
-   a-pop  (v-mapi (\ i r ['ld r 'sp (a-slot-off i)]) a-save)
+   a-push (v-mapi (\ i r ['st 'sp (a-slot-off i) r]) a-save + v-mapi (\ i r ['stsd 'sp (176 + 8 * i) r]) a-fregs)
+   a-pop  (v-mapi (\ i r ['ld r 'sp (a-slot-off i)]) a-save + v-mapi (\ i r ['ldsd r 'sp (176 + 8 * i)]) a-fregs)
    ;; the align rides after each slot, the last included, so the table is exactly the
    ;; 16 x 0x80 the architecture defines and the handlers start past it. packing the handler
    ;; into the sixteenth slot's tail would save 124 bytes; a whole table is worth them.

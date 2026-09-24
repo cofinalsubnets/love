@@ -446,13 +446,35 @@
    ;; outside the r0..r14 file, so it never clashes with an IR register).
    (a64-shiftamt scale) (? (scale = 1) 0 (scale = 2) 1 (scale = 4) 2 (scale = 8) 3 (scare 'badscale scale))
    (a64-addsh dn bn ixn amt) (le32 (0x8B000000 | ((ixn << 16) | ((amt << 10) | ((bn << 5) | dn)))))   ; add Xdn, Xbn, Xixn, lsl #amt
+   ;; ..but a register offset is one word: LDR/STR Xt|Dt|St|Wt, [Xn, Xm, LSL #s] takes no displacement
+   ;; and a scale of 1 or the element's own size (S = 1 shifts by log2 size)
+   (a64-norof _) (: s (getenv "MOON_ABLATE") (string? s && (= s "rof" || (= s "fsel,rof"))))   ; MOON_ABLATE=rof prices the word
+   (a64-rof? scale disp sz) (disp = 0 && (scale = 1 || scale = sz) && !(a64-norof 0))
+   (a64-rofs base dn bn ixn s) (le32 (base | ((ixn << 16) | ((3 << 13) | ((s << 12) | ((bn << 5) | dn))))))
    (a64-ldx d base index scale disp)
-      (: dn (rn d) (catall [(a64-addsh dn (rn base) (rn index) (a64-shiftamt scale)) (a64-ld d d disp)]))
+      (? (a64-rof? scale disp 8) (a64-rofs 0xF8600800 (rn d) (rn base) (rn index) (? (scale = 8) 1 0))   ; ldr Xd, [base, index, lsl #3]
+         (: dn (rn d) (catall [(a64-addsh dn (rn base) (rn index) (a64-shiftamt scale)) (a64-ld d d disp)])))
    (a64-leax d base index scale disp)
       (: dn (rn d) (catall [(a64-addsh dn (rn base) (rn index) (a64-shiftamt scale)) (? (disp = 0) () (a64-addsub-imm 'add d d disp))]))
    (a64-stx base index scale disp s)
-      (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale))                ; add x16, base, index lsl #amt
-                (a64-mem-r 0xF8000000 0xF9000000 (rn s) 16 disp)])                          ; str s, [x16, #disp]
+      (? (a64-rof? scale disp 8) (a64-rofs 0xF8200800 (rn s) (rn base) (rn index) (? (scale = 8) 1 0))   ; str Xs, [base, index, lsl #3]
+         (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale))                ; add x16, base, index lsl #amt
+                  (a64-mem-r 0xF8000000 0xF9000000 (rn s) 16 disp)]))                        ; str s, [x16, #disp]
+   ;; the float twins: a register offset where the shape allows, else through x16 like stx
+   (a64-fldx d base index scale disp)
+      (? (a64-rof? scale disp 8) (a64-rofs 0xFC600800 (frn d) (rn base) (rn index) (? (scale = 8) 1 0))  ; ldr Dd, [base, index, lsl #3]
+         (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale)) (a64-mem-raw 0xFC400000 0xFD400000 8 (frn d) 16 disp)]))
+   (a64-fstx base index scale disp s)
+      (? (a64-rof? scale disp 8) (a64-rofs 0xFC200800 (frn s) (rn base) (rn index) (? (scale = 8) 1 0))  ; str Ds, [base, index, lsl #3]
+         (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale)) (a64-mem-raw 0xFC000000 0xFD000000 8 (frn s) 16 disp)]))
+   (a64-fldsx d base index scale disp)
+      (? (a64-rof? scale disp 4) (a64-rofs 0xBC600800 (frn d) (rn base) (rn index) (? (scale = 4) 1 0))  ; ldr Sd, [base, index, lsl #2]
+         (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale)) (a64-mem-raw 0xBC400000 0xBD400000 4 (frn d) 16 disp)]))
+   (a64-fstsx base index scale disp s)
+      (? (a64-rof? scale disp 4) (a64-rofs 0xBC200800 (frn s) (rn base) (rn index) (? (scale = 4) 1 0))  ; str Ss, [base, index, lsl #2]
+         (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale)) (a64-mem-raw 0xBC000000 0xBD000000 4 (frn s) 16 disp)]))
+   ;; cmov: d <- s when cond holds = csel Xd, Xs, Xd, cond; d = s would be a no-op wearing a select: refused
+   (a64-cmov cond d s) (: dn (rn d) sn (rn s) (? (= dn sn) (scare 'cmov-alias d) (a64-wsel dn sn dn cond)))
    ;; byte indexed load/store (the string/cask/map byte lanes). LDRB zero-extends to W (clearing the top
    ;; 32 of X, == x86 movzx); strb stores the low byte. disp is a raw BYTE offset (no scaling), unsigned
    ;; 12-bit. Same address synthesis as ldx/stx: ldxb borrows the dest as the address temp, stxb uses x16.
@@ -584,8 +606,10 @@
           ('inc128 . a64-inc128) ('dec128 . a64-dec128)
           ('ldx . a64-ldx) ('stx . a64-stx) ('leax . a64-leax)
           ('ldxb . a64-ldxb) ('stxb . a64-stxb)
+          ('ldsdx . a64-fldx) ('stsdx . a64-fstx) ('ldssx . a64-fldsx) ('stssx . a64-fstsx)
+          ('cmov . a64-cmov)
           ('call . a64-call) ('la . a64-la) ('lar . a64-lar) ('lia . a64-lia)
-          ('movsd . a64-fmov)                             ; -- scalar-double FP --
+          ('movsd . a64-fmov) ('movapd . a64-fmov)        ; -- scalar-double FP --
           ('addsd . a64-fp3op 'addsd) ('subsd . a64-fp3op 'subsd)
           ('mulsd . a64-fp3op 'mulsd) ('divsd . a64-fp3op 'divsd)
           ('ucomisd . a64-fcmp) ('cvtsi2sd . a64-scvtf) ('cvttsd2si . a64-fcvtzs)
