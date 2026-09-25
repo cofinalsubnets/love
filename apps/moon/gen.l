@@ -4970,7 +4970,9 @@
                                     (: _ (? fin (foldl (\ _ r (scare 'cs-unrestored [fn r])) 0 S) 0)
                                        (step >l 'dead chg fin))
                                    (step >l (move f S) chg fin))))))
-                   (fix n) (? (step fs () 0 ()) (? (n < 24) (fix (n + 1)) (scare 'cs-fix fn)) 0)
+                   ; a pass that changes anything grows some label's set, and no set outgrows dr
+                   lim (1 + #(keys labs) * #dr)
+                   (fix n) (? (step fs () 0 ()) (? (n < lim) (fix (n + 1)) (scare 'cs-fix fn)) 0)
                    _ (fix 0)
                    _ (step fs () 0 1)
                    fs)))))
