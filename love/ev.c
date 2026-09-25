@@ -1950,7 +1950,8 @@ bool ai_net_leaf(struct ai *g, word x, struct ai_zn *e) {
       if (v->type == ai_C) { ai_flo_t *d = tray_data(v);
         for (i = 0; i < n; i++) s.re += ai_net_flo(d[2*i]), s.im += ai_net_flo(d[2*i+1]);
         return *e = s, true; }
-      for (i = 0; i < n; i++) s.re += ai_net_flo(tray_get_flo(v, i));
+      if (v->type == ai_R) { ai_flo_t *d = tray_data(v); for (i = 0; i < n; i++) s.re += ai_net_flo(d[i]); }
+      else { intptr_t *d = tray_data(v); for (i = 0; i < n; i++) s.re += (ai_flo_t) d[i]; }   // ai_Z: never a NaN
       return *e = s, true; } }
   return *e = zn(1, 0), true; }
 // a compound operand measured by love: [x measure ret] under callout_drive, the answer landing

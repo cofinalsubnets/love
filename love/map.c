@@ -167,11 +167,11 @@ op11(lvm_dig, putcharm(hash(g, Sp[0])))
 // that is not a number answer the default whole, as a miss would
 static ai_noinline void gather_fill(struct ai_tray *r, struct ai_tray *v, struct ai_tray *ki, ai_flo_t zf, intptr_t zi) {
  uintptr_t n = tray_nelem(r), m = tray_nelem(v);
- for (uintptr_t i = 0; i < n; i++) {
-  intptr_t j = tray_get_int(ki, i);
-  bool ok = j >= 0 && (uintptr_t) j < m;
-  if (r->type == ai_R) tray_put_flo(r, i, ok ? tray_get_flo(v, (uintptr_t) j) : zf);
-  else tray_put_int(r, i, ok ? tray_get_int(v, (uintptr_t) j) : zi); } }
+ intptr_t *k = tray_data(ki);                          // ki is ai_Z, and r wears v's kind: asked once
+ if (r->type == ai_R) { ai_flo_t *d = tray_data(r), *s = tray_data(v);
+  for (uintptr_t i = 0; i < n; i++) { intptr_t j = k[i]; d[i] = j >= 0 && (uintptr_t) j < m ? s[j] : zf; } }
+ else { intptr_t *d = tray_data(r), *s = tray_data(v);
+  for (uintptr_t i = 0; i < n; i++) { intptr_t j = k[i]; d[i] = j >= 0 && (uintptr_t) j < m ? s[j] : zi; } } }
 static lvm(lvm_gather) {
  word z = Sp[2];
  struct ai_tray *v = tray(Sp[0]), *ki = tray(Sp[1]);

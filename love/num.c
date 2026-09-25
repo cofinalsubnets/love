@@ -933,29 +933,21 @@ static lvm(lvm_aextreme) {
  if (!n) ai_musttail return Answer(ZeroPoint);
  bool fdom = v->type >= ai_R, ismax = kind == 2; word _res;
  Have(box_req); v = tray(Sp[0]);
- // K=4 running extremes break the latency chain; exact (selects an existing element)
- if (fdom) { ai_flo_t m0 = tray_get_flo(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
-  for (; i + 4 <= n; i += 4) {
-   e = tray_get_flo(v,i);   if (ismax?e>m0:e<m0) m0=e;
-   e = tray_get_flo(v,i+1); if (ismax?e>m1:e<m1) m1=e;
-   e = tray_get_flo(v,i+2); if (ismax?e>m2:e<m2) m2=e;
-   e = tray_get_flo(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
-  for (; i < n; i++) { e = tray_get_flo(v,i); if (ismax?e>m0:e<m0) m0=e; }
-  if (ismax?m1>m0:m1<m0) m0=m1;
-  if (ismax?m2>m0:m2<m0) m0=m2;
-  if (ismax?m3>m0:m3<m0) m0=m3;
-  emit_gem(_res, m0); }
- else { intptr_t m0 = tray_get_int(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
-  for (; i + 4 <= n; i += 4) {
-   e = tray_get_int(v,i);   if (ismax?e>m0:e<m0) m0=e;
-   e = tray_get_int(v,i+1); if (ismax?e>m1:e<m1) m1=e;
-   e = tray_get_int(v,i+2); if (ismax?e>m2:e<m2) m2=e;
-   e = tray_get_int(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
-  for (; i < n; i++) { e = tray_get_int(v,i); if (ismax?e>m0:e<m0) m0=e; }
-  if (ismax?m1>m0:m1<m0) m0=m1;
-  if (ismax?m2>m0:m2<m0) m0=m2;
-  if (ismax?m3>m0:m3<m0) m0=m3;
-  emit_int(_res, m0); }
+ // K=4 running extremes break the latency chain; exact (selects an existing element). the kind
+ // (ai_R past the object and complex lanes, else ai_Z) and the direction are asked once, a loop each
+ #define AEXT(T, P, B, M) do { T m0 = P[0], m1 = m0, m2 = m0, m3 = m0, e; uintptr_t i = 1; \
+  for (; i + 4 <= n; i += 4) { \
+   e = P[i];   if (e B m0) m0 = e;  e = P[i+1]; if (e B m1) m1 = e; \
+   e = P[i+2]; if (e B m2) m2 = e;  e = P[i+3]; if (e B m3) m3 = e; } \
+  for (; i < n; i++) { e = P[i]; if (e B m0) m0 = e; } \
+  if (m1 B m0) m0 = m1; if (m2 B m0) m0 = m2; if (m3 B m0) m0 = m3; M = m0; } while (0)
+ if (fdom) { ai_flo_t *p = tray_data(v), m;
+  if (ismax) AEXT(ai_flo_t, p, >, m); else AEXT(ai_flo_t, p, <, m);
+  emit_gem(_res, m); }
+ else { intptr_t *p = tray_data(v), m;
+  if (ismax) AEXT(intptr_t, p, >, m); else AEXT(intptr_t, p, <, m);
+  emit_int(_res, m); }
+ #undef AEXT
  ai_musttail return Answer(_res); }
 lvm(lvm_max) { g->b = (word) 2; ai_musttail return Ap(lvm_aextreme, g); }   // amax
 lvm(lvm_min) { g->b = (word) 3; ai_musttail return Ap(lvm_aextreme, g); }   // amin
@@ -1125,7 +1117,9 @@ lvm(lvm_inner) {
 // the fill loop takes no &local, so the lvm wrapper keeps its tail call
 static ai_noinline void vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t)) {
  uintptr_t n = tray_nelem(r);
- for (uintptr_t i = 0; i < n; i++) tray_put_flo(r, i, fn(tray_get_flo(a, i))); }
+ ai_flo_t *d = tray_data(r);                          // r is ai_R; a's kind is asked once, not per element
+ if (a->type == ai_R) { ai_flo_t *s = tray_data(a); for (uintptr_t i = 0; i < n; i++) d[i] = fn(s[i]); }
+ else for (uintptr_t i = 0; i < n; i++) d[i] = fn(tray_get_flo(a, i)); }
 
 lvm(lvm_vmap1) {
  ai_flo1 fn = (ai_flo1) (uintptr_t) g->b;
@@ -1149,7 +1143,8 @@ static ai_inline intptr_t flo_word(ai_flo_t v) {
 static ai_noinline void vmap1z_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t)) {
  uintptr_t n = tray_nelem(r);
  intptr_t *p = tray_data(r);
- for (uintptr_t i = 0; i < n; i++) p[i] = flo_word(fn(tray_get_flo(a, i))); }
+ if (a->type == ai_R) { ai_flo_t *s = tray_data(a); for (uintptr_t i = 0; i < n; i++) p[i] = flo_word(fn(s[i])); }
+ else for (uintptr_t i = 0; i < n; i++) p[i] = flo_word(fn(tray_get_flo(a, i))); }
 
 lvm(lvm_vmap1z) {
  ai_flo1 fn = (ai_flo1) (uintptr_t) g->b;
@@ -1505,18 +1500,24 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
  bool cmpf = op >= vop_lt,
       aok = !atray || tray_nelem(va) == n, bok = !btray || tray_nelem(vb) == n,
       nobig = !((!atray && bigp(a)) || (!btray && bigp(b)));
+ // the operand shapes unswitched, a loop each: the tray-or-scalar test stays out of the body
+ #define VBL(T, A, B, SA, SB, BODY) do { \
+  if (atray && btray) for (uintptr_t p = 0; p < n; p++) { T av = A[p], bv = B[p]; BODY; } \
+  else if (atray) for (uintptr_t p = 0; p < n; p++) { T av = A[p], bv = SB; BODY; } \
+  else if (btray) for (uintptr_t p = 0; p < n; p++) { T av = SA, bv = B[p]; BODY; } \
+  else for (uintptr_t p = 0; p < n; p++) { T av = SA, bv = SB; BODY; } } while (0)
  if (aok && bok && nobig) {
   if (fdom && (!atray || va->type == ai_R) && (!btray || vb->type == ai_R)) {
    ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
    ai_flo_t *ap = atray ? (ai_flo_t*) tray_data(va) : 0, *bp = btray ? (ai_flo_t*) tray_data(vb) : 0;
    if (cmpf) { intptr_t *rp = (intptr_t*) tray_data(r);
-    #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E)?1:0; } } while (0)
+    #define VBF(E) VBL(ai_flo_t, ap, bp, sa, sb, rp[p] = (E) ? 1 : 0)
     switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
       case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return;
       case vop_eq: VBF(ai_same_flo(av,bv)); return; }   // a NaN is (), and = holds over it
     #undef VBF
    } else { ai_flo_t *rp = (ai_flo_t*) tray_data(r);
-    #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E); } } while (0)
+    #define VBF(E) VBL(ai_flo_t, ap, bp, sa, sb, rp[p] = (E))
     switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
       case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
       case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(bv==0?av:ai_fmod(av,bv)); return;
@@ -1529,12 +1530,12 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
             *ap = atray ? (intptr_t*) tray_data(va) : 0, *bp = btray ? (intptr_t*) tray_data(vb) : 0,
             *rp = (intptr_t*) tray_data(r);   // r is ai_Z for both int-arith and the mask
    if (cmpf) {
-    #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E)?1:0; } } while (0)
+    #define VBF(E) VBL(intptr_t, ap, bp, sia, sib, rp[p] = (E) ? 1 : 0)
     switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
       case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
     #undef VBF
    } else {
-    #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E); } } while (0)
+    #define VBF(E) VBL(intptr_t, ap, bp, sia, sib, rp[p] = (E))
     switch (op) {
       case vop_add: VBF((intptr_t)((uintptr_t)av+(uintptr_t)bv)); return;
       case vop_sub: VBF((intptr_t)((uintptr_t)av-(uintptr_t)bv)); return;
@@ -1543,6 +1544,7 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
       case vop_rem: VBF(bv==0?av:(av==INTPTR_MIN&&bv==-1)?0:av%bv); return;
       case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return; } } } }
     #undef VBF
+ #undef VBL
  struct bcast w; bc_open(&w, va, vb, R, r->shape);
  bool cmp = op >= vop_lt;
  // the int domain demotes a bignum scalar by low bits for arithmetic, but a
