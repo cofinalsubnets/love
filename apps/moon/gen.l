@@ -70,9 +70,9 @@
    ; stacks, 'glob name -> (label ty init), 'globs the emission order, 'strs ((label . text)..);
    ; env is ((name off ty)..), the frame locals
    (nlab g pfx) (: k (peep g 'n 0) (pin g 'n (k + 1), name (pfx + "." + show k)))   ; one counter across prefixes
-   ; a loop head's alignment: the pad sits under the entry jump, never executed. x64 fetches
-   ; by the 16-byte window; the 4-byte ISAs gain nothing worth the bytes
-   (lalign g) (x64? g ? '((align 64)) ())
+   ; a loop head's alignment: the pad sits under the entry jump, never executed. x64 pays at 32
+   ; (16 is no better than none, 64 no better than 32); the 4-byte ISAs gain nothing worth the bytes
+   (lalign g) (x64? g ? '((align 32)) ())
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
