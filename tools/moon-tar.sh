@@ -39,7 +39,7 @@ set -e
 target=${1:-x64}
 case $target in
   x64)   name=moon-tar       ; tflag=""         ; sub=moontar
-         mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
+         mksys=mksys-x64   ; backend=""              ; run=""            ; need="" ;;
   a64) name=moon-tar-a64 ; tflag="-t a64" ; sub=moontar-a64
          mksys=mksys-a64 ; backend=love/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
   rv64) name=moon-tar-rv64 ; tflag="-t rv64" ; sub=moontar-rv

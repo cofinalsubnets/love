@@ -829,7 +829,7 @@ define moon_pkg
 moon-$1: host
 moon-$1-a64 moon-$1-rv64: $3
 moon-$1 moon-$1-a64 moon-$1-rv64:
-	@$2="$$($2)" ./u/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
+	@$2="$$($2)" ./tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
 endef
 $(eval $(call moon_pkg,tar,TARSRC,host))
 $(eval $(call moon_pkg,m4,M4SRC,host))

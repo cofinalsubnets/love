@@ -29,7 +29,7 @@ set -e
 target=${1:-x64}
 case $target in
   x64)   name=moon-bzip2       ; tflag=""            ; sub=moonbz2
-         mksys=mksys       ; backend=""               ; run=""            ; need="" ;;
+         mksys=mksys-x64   ; backend=""               ; run=""            ; need="" ;;
   a64) name=moon-bzip2-a64 ; tflag="-t a64"    ; sub=moonbz2-a64
          mksys=mksys-a64 ; backend=love/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
   rv64) name=moon-bzip2-rv64 ; tflag="-t rv64" ; sub=moonbz2-rv
