@@ -148,12 +148,10 @@ op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : zero)
 
 // FIXME this predicate is confusing, let's try and remove it
 // (lit? x): the upper segment of the lattice, ai_kind >= KTablet -- tablets and the
-// tops above (closures, nifs, cask/port), never the fresh value-data below. a
-// coin's kind decides (hot truthy = lit): lit? is the lattice cut, not storage.
+// tops above (closures, nifs, cask/port), never the fresh value-data below or a coin.
 lvm(lvm_litp) {
  word x = Sp[0];
- bool lit = coinp(x) ? !ai_nilp(g, kind_get(g, coin_kind(x), KnHot))   // a coin: its kind decides
-                     : ai_kind(x) >= KTablet;                             // else the lattice cut
+ bool lit = !coinp(x) && ai_kind(x) >= KTablet;                    // a coin is data
  Sp[0] = lit ? putcharm(1) : zero;
  ai_musttail return Next(1); }
 // (hot? x): an opaque hot handle -- a cask or a port (a task is a fixnum id, not a handle)
@@ -196,7 +194,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
   if (charmp(k) && (n = getcharm(k)) >= 0 && n < (word) len(s))
    z = putcharm((unsigned char) txt(s)[n]); }
  else if (tabp(x)) z = ai_mapget(g, z, k, x);     // map lookup (not a data sentinel)
- else if (lamp(x) && datp(x)) switch (typ(x)) {
+ else if (evenp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // a bare mint (DMint) is not indexable
   case DGem:                                    // a rank-0 scalar float: a zero key derefs to itself
   case DBig:                                    // ... same for a boxed integer
@@ -243,7 +241,7 @@ lvm(lvm_pin) {
   if (charmp(Sp[1]) && charmp(Sp[2]) && (n = getcharm(Sp[1])) >= 0 && n < (word) len(cask(x)->str))
    txt(cask(x)->str)[n] = (char) getcharm(Sp[2]);    // index = key = Sp[1], val = Sp[2]
   ai_musttail return Answerp(2, x); }
- if (lamp(x) && datp(x)) switch (typ(x)) {
+ if (evenp(x) && datp(x)) switch (typ(x)) {
   default: break;                                // a mint, a scalar: nothing to pin into
   case DString: {                                // one byte replaced in a fresh text
    if (!charmp(Sp[1]) || !charmp(Sp[2])) break;

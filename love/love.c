@@ -185,7 +185,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
   M[3].x = zero;   // wake_at: zero means "always runnable"
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   M[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
-  M[6].x = zero;   // help: nothing heard until the first (hear f)
+  M[6].x = ZeroPoint;   // help: () until the first (hear f)
   M[7].x = zero;   // stdio: the console until the first (wear l)
   g->tasks = tagthread(M, 8);
   g->parked = NULL;   // nothing is fd-parked before the first task ever parks
@@ -270,7 +270,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
    if (ai_ok(g)) g->kinds = ai_pop1(g); }
   // the kind table's keys and the built-in coins' names (g->knom, love.h's Kn rows), and
   // the registry of named kinds (g->kreg): name -> (serial . table), pinned by post.l's `coin`
-  { char const *const ns[KnN] = { "name", "+", "*", "ap", "hot", "-", "net", "star", "/",
+  { char const *const ns[KnN] = { "name", "+", "*", "ap", "-", "net", "star", "/",
                                   "payload", "<", "=", "int", "ceil", "lambda", "cask", "port", "coin" };
     for (int i = 0; ai_ok(g) && i < KnN; i++)
      if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->knom[i] = ai_pop1(g); }
@@ -439,7 +439,7 @@ static lvm(lvm_tune) {
 // reads the kind of a reference string at codegen time and emits a `cmp [s], kind; jne deopt` type guard.
 static lvm(lvm_apof) {
  word x = Sp[0];
- Sp[0] = putcharm(lamp(x) ? (uintptr_t) cell(x)->ap : 0);
+ Sp[0] = putcharm(evenp(x) ? (uintptr_t) cell(x)->ap : 0);
  Ip += 1;
  ai_musttail return Continue(); }
 
@@ -449,7 +449,7 @@ lvm(lvm_reach_offset) { ai_musttail return Answer(putcharm((intptr_t) offsetof(s
 // arity>=2 cell curries through lvm_cur with the code at value[2]
 lvm(lvm_natp) {
  word x = Sp[0];
- int nat = lamp(x) && (code_in(g, (uintptr_t) cell(x)->ap) ||
+ int nat = evenp(x) && (code_in(g, (uintptr_t) cell(x)->ap) ||
   (cell(x)->ap == lvm_cur && code_in(g, (uintptr_t) cell(x)[2].ap)));
  ai_musttail return Answer(putcharm(nat)); }
 
@@ -814,7 +814,7 @@ static lvm(lvm_intf) {
  if (trayp(Sp[0])) {                            // a float tray truncates to an int tray, the rest pass
   if (tray(Sp[0])->type != ai_R) { Ip += 1; ai_musttail return Continue(); }
   g->b = (word) (uintptr_t) (ai_trunc); ai_musttail return Ap(lvm_vmap1z, g); }
- if (coinp(Sp[0]) && lamp(kind_get(g, coin_kind(Sp[0]), KnInt))) { g->b = (word) KnInt; ai_musttail return Ap(lvm_coin_rung, g); }
+ if (coinp(Sp[0]) && kind_get(g, coin_kind(Sp[0]), KnInt) != ZeroPoint) { g->b = (word) KnInt; ai_musttail return Ap(lvm_coin_rung, g); }
  if (gemp(Sp[0])) { ai_flo_t v = gem_get(Sp[0]);
   Sp[0] = putcharm(v >= (ai_flo_t) maxcharm ? maxcharm
                  : v <= (ai_flo_t) mincharm ? mincharm

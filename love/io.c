@@ -51,7 +51,7 @@ static word *p0cur(struct ai *g, uintptr_t d);
 // the atomic-edge contract: every write can grow a backing (a GC), so an op spanning
 // more than one write parks its heap operand on g->sp and re-reads it across each --
 // never a raw pointer over an edge. the lam_* helpers are pure and open none.
-bool iop(word x) { return lamp(x) && cell(x)->ap == lvm_port_io; }
+bool iop(word x) { return evenp(x) && cell(x)->ap == lvm_port_io; }
 // the port an op acts on. in/b/err are three names, not three devices: a task wearing
 // its own stdio (hook 6, the chain (i o e)) reaches them through here, routed in place so
 // the re-read across a GC edge finds the same port. op-level only -- ==, peek, hot? and
@@ -527,11 +527,11 @@ word fn_src(struct ai *c, union u *k, word x) {
  if (!xin || fn_partialp(k)) return 0;
  if (k == tag_head(ttag(c, k))) return 0;       // value at allocation start: no leading src cell
  word s = k[-1].x;
- return lamp(s) && in_heap(c, s) && chainp(s) ? s : 0; }
+ return evenp(s) && in_heap(c, s) && chainp(s) ? s : 0; }
 // (lamsrc f): that source, or () -- the one heap-layout question the printer in
 // love cannot ask for itself (reading value[-1] unguarded walks a neighbour).
 lvm(lvm_lamsrc) {
- word x = Sp[0], s = lamp(x) && !datp(x) ? fn_src(g, cell(x), x) : 0;
+ word x = Sp[0], s = evenp(x) && !datp(x) ? fn_src(g, cell(x), x) : 0;
  Sp[0] = s ? s : ZeroPoint;
  ai_musttail return Next(1); }
 
@@ -732,7 +732,7 @@ lvm(lvm_string) {
  // `string` answers a string: a string is the only identity, every other kind coerces
  // through hook 7. px reaches `string` on chains and noms only, so show cannot recur.
  if (x == ZeroPoint) { Sp[0] = word(EmptyString); ai_musttail return Next(1); }   // the empty charlist
- if (strp(x) || !lamp(g->hot_show)) ai_musttail return Next(1);   // ..or the boot window, where identity stands
+ if (strp(x) || !evenp(g->hot_show)) ai_musttail return Next(1);   // ..or the boot window, where identity stands
  Have(2);                                               // the drive grows Sp by two
  { word *dst = Sp - 2;                                  // [x show ret] -- callout_drive's 1-arg shape
    dst[0] = Sp[0], dst[1] = g->hot_show, dst[2] = word(Ip + 1);
@@ -957,7 +957,7 @@ static struct ai *p1text(struct ai *g, char const *s) {
 // a text -> the list of its forms, pushed: p1 reads it once sealed, p0 until then
 // (the sealed slot is the test)
 static struct ai *readtext(struct ai *g, char const *s) {
- if (lamp(ai_core_of(g)->hot_read)) return p1text(g, s);
+ if (evenp(ai_core_of(g)->hot_read)) return p1text(g, s);
  return p0onto(push0(g), s); }
 
 static struct ai *qtop(struct ai *g) {                // x on top -> 'x

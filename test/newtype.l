@@ -207,10 +207,10 @@
     !(star? (sm 3))
     (5 /// 6 = +[(1 /// 2) (1 /// 3)])    ; additivity lands in the ring: an exact rational sum
 
-    ; --- a coin's lit?-ness is its kind's call: fresh data by default ---
+    ; --- a coin is data, never lit? ---
     !(lit? (1 /// 2))          ; a rational is data -- a value, not a reference (like a number)
     !(lit? a)                ; a mod-n residue too
     !(lit? (sm 5))
     !(lit? ((coin 'd ()) 5))          ; a plain kind -> data
-    (lit? ((coin 'h {'hot 1}) 5))     ; ... but a hot kind strikes lit coins
+    !(lit? ((coin 'h {'hot 1}) 5))    ; 'hot is no slot: a kind table's other keys are its own
     ))

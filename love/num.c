@@ -959,7 +959,7 @@ static lvm(lvm_ascan);
 static lvm(lvm_ascan_land) {
  intptr_t k = getcharm(Sp[2]); bool any = k & 1;
  Ip = cell(Sp[1]);
- bool t = !ai_nilp(g, Sp[0]);
+ bool t = !leaf_nilp(Sp[0]);
  Sp += 3;                                                        // [ans op k tray] -> [tray]
  if (t == any) ai_musttail return Answer(putcharm(any));
  g->b = (word) (k + 2); ai_musttail return Ap(lvm_ascan, g); }
@@ -974,11 +974,11 @@ static lvm(lvm_ascan) {
    dst[0] = e, dst[1] = hot_hook(g->hot_net), dst[2] = word(ascan_land), dst[3] = word(Ip),
    dst[4] = putcharm((intptr_t) (i << 1) | any);
    Sp = dst; Ip = (union u*) callout_drive; ai_musttail return Continue(); }
-  if (!ai_nilp(g, e) == any) ai_musttail return Answer(putcharm(any)); }
+  if (!leaf_nilp(e) == any) ai_musttail return Answer(putcharm(any)); }
  ai_musttail return Answer(putcharm(!any)); }
 
 // aall: the conjunction reduction under the truth law -- every element true, a positive
-// real part, as `?` and ai_nilp read it; empty -> vacuously true; scalar -> identity
+// real part, as `?` and leaf_nilp read it; empty -> vacuously true; scalar -> identity
 lvm(lvm_aall) {
  word x = Sp[0];
  if (!packp(x)) ai_musttail return Next(1);
@@ -1197,6 +1197,98 @@ intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
   case vop_gt: return a > b; case vop_ge: return a >= b;
   default: return a == b; } }                   // vop_eq
 
+// --- the net: the complex-valued measure. a complex scalar nets itself (additivity
+// needs phase, so the codomain is C and the order retraction happens once, in the
+// observers); every other scalar nets real; a numeric tray the sum of its elements --
+// unclamped -- so negatives cancel and opposite phases annihilate by vector cancellation.
+// C nets the leaves alone. a chain, an object tray or a coin is love's: prel's `measure`
+// (hook 8) sums the parts and reads a coin by its kind's 'net, so a kind's measure is
+// written in love like its + and *, and the walk over a deep value rides the VM stack,
+// never C's. an lvm meets one through lvm_measure (ev.c).
+// bytes read as charms, summed: a string's net, a cask's, a named point's spelling's
+static ai_flo_t bytes_net(char const *p, uintptr_t n) {
+  ai_flo_t t = 0;
+  for (char const *q = p + n; p < q; t += (uint8_t) *p++);
+  return t; }
+// the real part of a leaf's net -- the part every observer reads. x must be ai_leafp.
+ai_flo_t ai_net_re(word x) {
+  if (charmp(x)) return (ai_flo_t) getcharm(x);                     // fixnum: its value
+  if (caskp(x)) return bytes_net((char const*) cask(x)->str->bytes, cask(x)->str->len);
+  if (tabp(x) || !datp(x)) return 1;                                // a table, fn or port: present, so
+  switch (typ(x)) {                                                 // truthy, and never its contents
+    case DString: return bytes_net(txt(x), len(x));
+    case DBig: return ai_big_to_flo(x);                              // full magnitude, sign intact
+    case DGem: return gem_get(x);
+    case DTwin: return twin_re(x);
+    case DMint: return 0;                                            // a bare point nets nothing
+    case DNom: return bytes_net(txt(nom(x)->name), len(nom(x)->name));
+    case DTray: {                                                    // a numeric tray: Σ elements, unclamped
+      struct ai_tray *v = tray(x);
+      uintptr_t i, n = tray_nelem(v);
+      ai_flo_t s = 0;
+      if (v->type == ai_C) { ai_flo_t *d = tray_data(v); for (i = 0; i < n; i++) s += ai_net_flo(d[2 * i]); }
+      else if (v->type == ai_R) { ai_flo_t *d = tray_data(v); for (i = 0; i < n; i++) s += ai_net_flo(d[i]); }
+      else { intptr_t *d = tray_data(v); for (i = 0; i < n; i++) s += (ai_flo_t) d[i]; }   // ai_Z: never a NaN
+      return s; }
+    default: return 1; } }
+// the imaginary part: a complex scalar's phase, a complex tray's Σ; every other leaf nets real
+ai_flo_t ai_net_im(word x) {
+  if (twinp(x)) return twin_im(x);
+  if (!trayp(x) || tray(x)->type != ai_C) return 0;
+  ai_flo_t *d = tray_data(tray(x)), s = 0;
+  for (uintptr_t i = 0, n = tray_nelem(tray(x)); i < n; i++) s += ai_net_flo(d[2 * i + 1]);
+  return s; }
+
+// a compound's net is love's: hand x to prel's measure (hook 8), and return to this same op,
+// which runs again on the number that replaced x. every op that needs a compound's net or
+// truth takes this door. before the seal the hook traps: the boot asks no compound's truth.
+lvm(lvm_measure) {
+  Have(2);
+  word *dst = Sp - 2;
+  dst[0] = Sp[0], dst[1] = hot_hook(g->hot_net), dst[2] = word(Ip);
+  Sp = dst; Ip = (union u*) callout_drive;
+  ai_musttail return Continue(); }
+// the same for a coin whose kind answers for itself: its slot g->b ('int or 'ceil) is called
+// on the coin, and the op runs again on the number; a kind without that slot is measured
+lvm(lvm_coin_rung) {
+  word f = kind_get(g, coin_kind(Sp[0]), (intptr_t) g->b);
+  if (f == ZeroPoint) ai_musttail return Ap(lvm_measure, g);
+  Have(2);
+  word *dst = Sp - 2;
+  dst[0] = Sp[0], dst[1] = kind_get(g, coin_kind(Sp[0]), (intptr_t) g->b), dst[2] = word(Ip);
+  Sp = dst; Ip = (union u*) callout_drive;
+  ai_musttail return Continue(); }
+// ($ x): max(0, ceil (re (net x))), clamped to a charm
+static intptr_t ai_saturate(word x) {
+  // the charm lane is exactness, not speed: the net is a double, so above 2^53 a
+  // charm comes back rounded -- and $ is the identity on every green charm (spec.l).
+  if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }
+  ai_flo_t re = ai_net_re(x);
+  if (re <= 0) return 0;
+  if (re >= (ai_flo_t) maxcharm) return maxcharm;
+  intptr_t i = (intptr_t) re;
+  return i + (re > (ai_flo_t) i ? 1 : 0); }
+
+lvm(lvm_saturate) {
+ if (coinp(Sp[0])) { g->b = (word) KnCeil; ai_musttail return Ap(lvm_coin_rung, g); }
+ if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
+ Sp[0] = putcharm(ai_saturate(Sp[0])); Ip += 1; ai_musttail return Continue(); }
+
+// (ceil x): ceil (re (net x)), clamped to a charm -- a net past the charm range answers the
+// edge rather than wrapping. $ is this with a floor of 0.
+static intptr_t ai_ceilnet(word x) {
+  if (charmp(x)) return getcharm(x);
+  ai_flo_t re = ai_net_re(x);
+  if (re >= (ai_flo_t) maxcharm) return maxcharm;
+  if (re <= (ai_flo_t) mincharm) return mincharm;
+  intptr_t i = (intptr_t) re;
+  return i + (re > (ai_flo_t) i ? 1 : 0); }
+
+lvm(lvm_ceil) {
+ if (coinp(Sp[0])) { g->b = (word) KnCeil; ai_musttail return Ap(lvm_coin_rung, g); }
+ if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
+ Sp[0] = putcharm(ai_ceilnet(Sp[0])); Ip += 1; ai_musttail return Continue(); }
+
 // === ordered comparison: the true-blue total order over all values ===========
 // low -> high: () < mint < string < number < tray < chain < map < hot (an array
 // operand compares elementwise via lvm_vbin instead -- the mask). within a band:
@@ -1265,9 +1357,10 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
  if (ra == 2) {                                            // number band: stars + galaxies, ordered by net
   if (galaxyp(a) || galaxyp(b)) {                          // a galaxy in play -> by net (re, im), then star<galaxy, then shape/content
    bool ga = galaxyp(a), gb = galaxyp(b);
-   struct ai_zn na, nb; ai_net_leaf(g, a, &na), ai_net_leaf(g, b, &nb);
-   if (na.re != nb.re) return na.re < nb.re ? -1 : 1;
-   if (na.im != nb.im) return na.im < nb.im ? -1 : 1;
+   ai_flo_t na = ai_net_re(a), nb = ai_net_re(b);
+   if (na != nb) return na < nb ? -1 : 1;
+   ai_flo_t ia = ai_net_im(a), ib = ai_net_im(b);
+   if (ia != ib) return ia < ib ? -1 : 1;
    if (ga != gb) return ga ? 1 : -1;                       // net tie: a star seats below a galaxy
    return galaxy_tie(tray(a), tray(b)); }                    // both galaxies, equal net: shape then content
   if (twinp(a) || twinp(b)) {                              // both scalars -- complex: (re, im) lexicographic
@@ -1369,7 +1462,8 @@ lvm(lvm_sort) {
 // 0 as it is, 1 negated (<= and >= ask the other way round), 2 the extreme (max and min:
 // a on a true answer, else b). [x f y land code ret] lies over the operands, which stay
 static lvm(lvm_coin_cmp_land) {
- bool t = !ai_nilp(g, Sp[0]); intptr_t code = getcharm(Sp[1]);
+ if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);   // a compound answer: measured, then here again
+ bool t = !leaf_nilp(Sp[0]); intptr_t code = getcharm(Sp[1]);
  Ip = cell(Sp[2]);
  Sp += 3;                                                    // [ans code ret a b] -> [a b]
  word r = code == 2 ? (t ? Sp[0] : Sp[1]) : putcharm(code ? !t : t);
@@ -1381,7 +1475,7 @@ static union u const coin_cmp_land[] = { {.ap = lvm_coin_cmp_land} };
 static ai_inline word coin_lt(struct ai *g, word a, word b) {
  if (coinp(a) && coinp(b) && coin_kind(a) != coin_kind(b)) return 0;
  word f = kind_get(g, coin_kind(coinp(a) ? a : b), KnLt);
- return lamp(f) ? f : 0; }
+ return f != ZeroPoint ? f : 0; }
 static lvm(lvm_coin_cmp) {                                   // g->b = code << 1 | swap
  intptr_t k = g->b; bool swap = k & 1; intptr_t code = k >> 1;
  Have(6);

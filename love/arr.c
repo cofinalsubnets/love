@@ -273,12 +273,11 @@ lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  LvmResume(g, ai_big_shift, vop_bsl) }
 
 op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : zero)   // (charm? x): a fixnum -- a charm, the tagged odd word
-// (nil? x): the falsy predicate, ($ x <= 0) -- every negative is nil, not just
-// the zero point. the single truthiness oracle: `?`, zerop and aall all consult
-// ai_nilp, so the feel pass can drop a zerop wrapper.
+// (nil? x): the falsy predicate, ($ x <= 0) -- every negative is nil, not just (). `?`,
+// argcond and aall ask it the same way (leaf_nilp), so the feel pass can drop a zerop wrapper.
 lvm(lvm_nilp) {
  if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
- Sp[0] = ai_nilp(g, Sp[0]) ? putcharm(1) : zero; Ip += 1; ai_musttail return Continue(); }
+ Sp[0] = leaf_nilp(Sp[0]) ? putcharm(1) : zero; Ip += 1; ai_musttail return Continue(); }
 
 // unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
 // non-numeric arg → zero. TCO-clean (no & escapes).
@@ -545,7 +544,7 @@ struct clonf { word body, rem, fsyms; int nr, fn; word fv[nf_maxcap]; };  // res
 // load a closure value's capture-substitution residual. a partial-app over a sourced base, or a
 // no-capture lambda (fn = 0). returns false for a source-less base (a bif) or a quote -- caller falls back.
 static bool clo_load(struct ai *c, word v, struct clonf *o) {
- if (!lamp(v) || datp(v) || !in_heap(c, v)) return false;
+ if (!evenp(v) || datp(v) || !in_heap(c, v)) return false;
  union u *k = cell(v);
  word s; int na = 0;
  if (!fn_partialp(k)) s = fn_src(c, k, v);
@@ -769,7 +768,7 @@ static enum eqstep eqv_leaf(struct ai *g, word a, word b) {
  if (a == b) return eq_yes;
  if (coinp(a) || coinp(b))                                 // a coin: same die, then the payloads
   return coinp(a) && coinp(b) && coin_kind(a) == coin_kind(b) ? eq_coin : eq_no;
- if (lamp(a) && lamp(b) && !datp(a) && !datp(b)) return eq_fn;
+ if (evenp(a) && evenp(b) && !datp(a) && !datp(b)) return eq_fn;
  // a number never equals a closure: bridging 0/1 to their church lambdas would
  // break congruence, the order, and tower transitivity
  if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return eq_no;
@@ -959,9 +958,9 @@ lvm(lvm_eq) {
  // (two coins of distinct kinds are unequal by payload). the structural walk below, which a
  // map probe and sort share, reads the payload regardless
  if (coinp(a) || coinp(b)) {
-  word f = coinp(a) && coinp(b) && coin_kind(a) != coin_kind(b) ? zero
+  word f = coinp(a) && coinp(b) && coin_kind(a) != coin_kind(b) ? ZeroPoint
          : kind_get(g, coin_kind(coinp(a) ? a : b), KnEq);
-  if (lamp(f)) {
+  if (f != ZeroPoint) {
    Have(2);
    a = Sp[0], b = Sp[1], f = kind_get(g, coin_kind(coinp(a) ? a : b), KnEq);
    word *dst = Sp - 2;

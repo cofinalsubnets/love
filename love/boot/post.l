@@ -208,7 +208,7 @@
    (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
                   (== hcur (pick 0 f)) (2 = peek 1 f)
                   (: s (lamsrc f) (? (two? s) (4 = #s) 1)))
-   (hear f) (? !f (seal-hook 5 f)                   ; every nothing uninstalls
+   (hear f) (? !f (seal-hook 5 ())                  ; every nothing uninstalls
                (binary? f) (seal-hook 5 f)
                (scare 'help-arity f)))
 

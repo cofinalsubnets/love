@@ -112,7 +112,7 @@ static void minor_run_finalizers(struct ai *g, struct ai_gcx *X) {
   struct ai_fz *next = fz->next;
   if ((word*) fz->p >= X->p0 && (word*) fz->p < X->t0) {
    word fwd = fz->p->x;
-   if (!(lamp(fwd) && X->fwd <= ptr(fwd) && ptr(fwd) < X->to_hi)) {
+   if (!(evenp(fwd) && X->fwd <= ptr(fwd) && ptr(fwd) < X->to_hi)) {
     fz->fn(g, fz->p), *link = fz = next;
     continue; }
    fz->p = cell(fwd); }
@@ -137,7 +137,7 @@ static word major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om) {
   if (k == map_gap) continue;
   word e = os[2 * j + 1];
   word fwd = cell(e)->x;                        // the atom's first word: its forward, if it survived
-  if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
+  if (!(evenp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
   word nk = nom(fwd)->name;
   uintptr_t i = hash(g, nk) & mask;
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
@@ -149,7 +149,7 @@ static void major_run_finalizers(struct ai *g, struct ai_gcx *X) {
  struct ai_fz *new_fz = NULL;
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) {
   word fwd = fz->p->x;
-  if (lamp(fwd) && X->to_lo <= ptr(fwd) && ptr(fwd) < X->to_hi) {
+  if (evenp(fwd) && X->to_lo <= ptr(fwd) && ptr(fwd) < X->to_hi) {
    struct ai_fz *nn = gbump(g, Width(struct ai_fz));
    nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
   } else fz->fn(g, fz->p); }
@@ -465,6 +465,6 @@ static ai_noinline intptr_t gcp(struct ai *g, struct ai_gcx *X, word x) {
  x = src->x; // get its contents
  // if it contains a pointer to the new space then return the pointer (already forwarded)
  word const *flo = X->fwd, *fhi = X->to_hi;   // forwarding window of this collection (major/spare/new pool)
- return lamp(x) && flo <= ptr(x) && ptr(x) < fhi ? x :
+ return evenp(x) && flo <= ptr(x) && ptr(x) < fhi ? x :
         in_data((void*) x) ? copy_data(g, src) :
                              copy_thread(g, X, src); }

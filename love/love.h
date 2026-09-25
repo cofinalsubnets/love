@@ -556,13 +556,12 @@ static ai_inline enum d ai_typ(union u *o) {
       :                   DTwin; }   // the 8th and last: lvm_twinbox
 #endif
 #define str(_) ((struct ai_str*)(_))
-#define lamp evenp
 #define two(_) ((struct ai_chain*)(_))
 #define chain_req Width(struct ai_chain)
 #define mint_req Width(struct ai_mint)
 #define nom_req Width(struct ai_nom)
 #define cask(_) ((struct ai_cask*)(_))
-static ai_inline bool chainp(word _) { return lamp(_) && cell(_)->ap == lvm_chain; }
+static ai_inline bool chainp(word _) { return evenp(_) && cell(_)->ap == lvm_chain; }
 static ai_inline void *bump(struct ai *g, uintptr_t n) {   // the mutator's: the nursery. gc.c bumps the major itself
  if (avail(g) < n) __builtin_trap();
  void *x = g->hp; g->hp += n; return x; }
@@ -583,7 +582,7 @@ static ai_inline struct ai *ai_have(struct ai *g, uintptr_t n) {
  return !ai_ok(g) || avail(g) >= n ? g : ai_please(g, n);
 #endif
 }
-static ai_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
+static ai_inline bool strp(word _) { return evenp(_) && cell(_)->ap == lvm_str; }
 
 
 // ===== the runtime internals =====
@@ -674,8 +673,7 @@ _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size"
 # define ai_budget 0
 #endif
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
-// structural test for the charm zero, not a measure: distinct from ai_nilp, the language's
-// falsy predicate (all-zero tray, unit, red net)
+// structural test for the charm zero, not a measure: distinct from nil? (leaf_nilp)
 #define zerop(_) (word(_)==zero)
 #define AB(o) A(B(o))
 #define AA(o) A(A(o))
@@ -790,13 +788,13 @@ char const *ai_nif_name(intptr_t);
 #define sym(_) ((struct ai_mint*)(_))
 #define nom(_) ((struct ai_nom*)(_))
 #define big(_) ((struct ai_big*)(_))
-static ai_inline bool mintp(word _) { return lamp(_) && cell(_)->ap == lvm_sym; }
-static ai_inline bool namep(word _) { return lamp(_) && cell(_)->ap == lvm_nom; }
-static ai_inline bool packp(word _) { return lamp(_) && cell(_)->ap == lvm_tray; }
-static ai_inline bool nomp(word x) { return lamp(x) && (cell(x)->ap == lvm_sym || cell(x)->ap == lvm_nom); }
+static ai_inline bool mintp(word _) { return evenp(_) && cell(_)->ap == lvm_sym; }
+static ai_inline bool namep(word _) { return evenp(_) && cell(_)->ap == lvm_nom; }
+static ai_inline bool packp(word _) { return evenp(_) && cell(_)->ap == lvm_tray; }
+static ai_inline bool nomp(word x) { return evenp(x) && (cell(x)->ap == lvm_sym || cell(x)->ap == lvm_nom); }
 // mutable flat byte string, not a data kind: the head is the behaves-as-0 lvm_cask, so the
 // GC walks a cask as a plain length-2 thread and forwards the embedded ai_str free.
-static ai_inline bool caskp(word _) { return lamp(_) && cell(_)->ap == lvm_cask; }
+static ai_inline bool caskp(word _) { return evenp(_) && cell(_)->ap == lvm_cask; }
 // a map is a lookup-lambda with stable identity across growth: a fixed header
 // [lvm_map_lookup, backing, serial, <tag>] callers hold, and an open-addressed backing
 // [lvm_map_data, len, cap, k0,v0, .., <tag>] -- growth swaps header[1], so aliased references
@@ -804,7 +802,7 @@ static ai_inline bool caskp(word _) { return lamp(_) && cell(_)->ap == lvm_cask;
 // address. (m k) -> value, () absent. the serial (a charm off the mint stream) is the order
 // key: a tablet is mutable, so its order is its identity, never its contents.
 lvm_t lvm_map_lookup, lvm_map_data;
-static ai_inline bool tabp(word _) { return lamp(_) && cell(_)->ap == lvm_map_lookup; }
+static ai_inline bool tabp(word _) { return evenp(_) && cell(_)->ap == lvm_map_lookup; }
 extern const word ai_map_gap_cell;   // one definition: map_gap is its address
 #define map_gap ((word) &ai_map_gap_cell)
 #define map_min_cap 4
@@ -826,7 +824,7 @@ static ai_inline struct ai_str *bytes_of(word x) { return caskp(x) ? cask(x)->st
 // reads KHot, so +/* route every coin to lvm_addh/mulh. the kind is a tablet keyed by the noms
 // below (g->knom), a named one registered in g->kreg (name -> (serial . table)).
 struct ai_coin { lvm_t *ap; word kind; word payload; };
-static ai_inline bool coinp(word _) { return lamp(_) && cell(_)->ap == lvm_coin; }
+static ai_inline bool coinp(word _) { return evenp(_) && cell(_)->ap == lvm_coin; }
 static ai_inline word coin_kind(word x) { return ((struct ai_coin*) x)->kind; }
 static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload; }
 // the kind table's keys, by index into g->knom. + * - / ap < int ceil and net are closures
@@ -834,20 +832,20 @@ static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload;
 // payload's net), < and = its order and equality (either side, like +; absent, the coin band
 // and the payload -- and a map key or a sort compare reads the payload regardless, the
 // hash's own law), int and ceil its integer rungs (absent = the measure's). show and tally
-// default over the payload in pure C. hot truthy = the kind's coins are lit? (references), absent = fresh data. star
+// default over the payload in pure C. star
 // truthy = numeric: a numeral powers them through their own * (prel's num-ap reads it, C never
 // does). C knows no kind by name: the tail names, KnLambda on, are `kind`'s answers inside the
 // hot row: a lambda, a cask, a port, and a struck coin whose kind has no name.
-enum { KnName, KnAdd, KnMul, KnApply, KnHot, KnSub, KnNet, KnStar, KnDiv,
+enum { KnName, KnAdd, KnMul, KnApply, KnSub, KnNet, KnStar, KnDiv,
        KnPayload, KnLt, KnEq, KnInt, KnCeil, KnLambda, KnCask, KnPort, KnCoin, KnN };
-// read a kind table's slot, or () if absent / the kind is not a tablet.
+// read a kind table's slot, or () if absent / the kind is not a tablet: () is an empty slot
 static ai_inline word kind_get(struct ai *g, word kind, intptr_t i) {
- return tabp(kind) ? ai_mapget(g, zero, ai_core_of(g)->knom[i], kind) : zero; }
+ return tabp(kind) ? ai_mapget(g, ZeroPoint, ai_core_of(g)->knom[i], kind) : ZeroPoint; }
 // the boxed integer -- love's `sun`: flat raw limbs, moved by memcpy (a thread sound would
 // misread even-and-in-pool limb words). slen = signed limb count, little-endian, top limb
 // nonzero; zero demotes, so slen is never 0 and charmp/bigp stay exclusive.
 struct ai_big { lvm_t *ap; intptr_t slen; ai_limb limb[]; };
-static ai_inline bool bigp(word _) { return lamp(_) && cell(_)->ap == lvm_big; }
+static ai_inline bool bigp(word _) { return evenp(_) && cell(_)->ap == lvm_big; }
 static ai_inline struct ai_big *ini_big(struct ai_big *b, intptr_t slen) {
  return b->ap = lvm_big, b->slen = slen, b; }
 uintptr_t ai_big_bytes(struct ai_big*);
@@ -870,8 +868,8 @@ struct ai
  *ai_big_read_oct(struct ai*);        // ..and [+-]?0<octdigits>, the third
 
 // a boxed scalar float: a lean {ap, payload} box, two words
-static ai_inline bool gemp(word _) { return lamp(_) && cell(_)->ap == lvm_gembox; }
-static ai_inline bool twinp(word _) { return lamp(_) && cell(_)->ap == lvm_twinbox; }
+static ai_inline bool gemp(word _) { return evenp(_) && cell(_)->ap == lvm_gembox; }
+static ai_inline bool twinp(word _) { return evenp(_) && cell(_)->ap == lvm_twinbox; }
 static ai_inline bool trayp(word _) { return packp(_) && tray(_)->rank >= 1; }
 static ai_inline bool galaxyp(word _) { return trayp(_) && tray(_)->type != ai_O; }
 static ai_inline bool objtrayp(word _) { return trayp(_) && tray(_)->type == ai_O; }
@@ -923,27 +921,26 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
   struct ai_zn z = {re, im}; return z; }
 // the truth gate, not the total order -- the one place the two part: a net is nothing unless
 // its real part is positive, so a pure phase is blue. the order stays lexicographic and total.
-bool ai_net_leaf(struct ai *, word, struct ai_zn *);   // a leaf's net: true with it, false on a compound
+ai_flo_t ai_net_re(word), ai_net_im(word);             // a leaf's net, its two parts: x must be ai_leafp
 intptr_t ai_count(struct ai *, word);           // fwd: tally's C body
 _lvm(lvm_measure);                              // a compound at Sp[0] measured by love, the op re-run
 _lvm(lvm_coin_rung);                            // the coin at Sp[0] through its kind's slot g->b, the op re-run
 word ai_nif_word(char const *);                 // a nif's value by its roster name, 0 for none
-// a leaf is what C nets itself; a chain, an object tray or a coin is love's (ev.c's net)
+// a leaf is what C nets itself; a chain, an object tray or a coin is love's (num.c's net)
 static ai_inline bool ai_leafp(word x) {
   if (charmp(x)) return true;
   if (coinp(x)) return false;
   if (!datp(x)) return true;
   return typ(x) != DChain && (typ(x) != DTray || tray(x)->type != ai_O); }
-// the truth of a leaf. an lvm sends a compound to love first (lvm_measure); the C-only seats
-// -- a kind's flag, a help, a method slot -- read one as nothing: a flag is a scalar
-static ai_inline bool ai_nilp(struct ai *g, word x) {
-  struct ai_zn z;
+// nil? of a leaf: its net's real part is not positive. a compound's truth is love's, so a
+// caller sends one through lvm_measure first
+static ai_inline bool leaf_nilp(word x) {
   if (charmp(x)) return getcharm(x) <= 0;            // a charm is its own net
   if (mintp(x)) return true;                         // a bare point nets nothing
-  return !ai_net_leaf(g, x, &z) || z.re <= 0; }
+  return ai_net_re(x) <= 0; }
 
 // a NaN is love's (): love admits no irreflexive value, so = reads two of them as one,
-// and it nets nothing, exactly as every other point does (the mint lane of ai_net_leaf).
+// and it nets nothing, exactly as every other point does (the mint lane of ai_net_re).
 static ai_inline bool ai_same_flo(ai_flo_t a, ai_flo_t b) { return a == b || (a != a && b != b); }
 static ai_inline ai_flo_t ai_net_flo(ai_flo_t v) { return v != v ? 0 : v; }
 // truncation toward zero / float remainder; pure and freestanding-safe (no libm)
