@@ -7,7 +7,7 @@
 // prel's cellread and bao's launcher ask before choosing to raise or install.
 op11(lvm_heard, (intptr_t) *task_help(g))
 // (worn x) -> the stdio this task wears (x ignored): the live read of hook 6, the
-// zero point when it wears the console. what a caller saves before re-seating.
+// () when it wears the console. what a caller saves before re-seating.
 op11(lvm_worn, (intptr_t) *task_io(g))
 // (myself x) -> the running task's own id (x ignored): the charm `twirl` answered for it,
 // and the zero point for the task nobody twirled. the run ring's head is the running

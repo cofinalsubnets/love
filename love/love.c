@@ -186,7 +186,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   M[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
   M[6].x = ZeroPoint;   // help: () until the first (hear f)
-  M[7].x = zero;   // stdio: the console until the first (wear l)
+  M[7].x = ZeroPoint;   // stdio: () until the first (wear l)
   g->tasks = tagthread(M, 8);
   g->parked = NULL;   // nothing is fd-parked before the first task ever parks
   // book[zero] = macro (the macro table -- no separate field). both are on the

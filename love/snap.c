@@ -1067,7 +1067,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len) {
  g->parked  = NULL;
  for (uintptr_t i = 0; i < nv; i++) ((word*) &g->v0)[i] = image_root_dec(H.root_tag[2 + i], H.root_val[2 + i], base);
  g->next_serial = H.next_serial;
- g->tasks[7].x = zero;   // a worn port names an fd, which means nothing in a new process -- a woken task wears the console (the parked ring's rule)
+ g->tasks[7].x = ZeroPoint;   // a worn port names an fd, which means nothing in a new process -- a woken task wears the console (the parked ring's rule)
  // sp stays at ai_ini's topof(g) (empty ai stack); the dispatch re-establishes ip
  g->major_live0 = nw;
  // the rem set names the heap this wake just freed: ai_ini's session has been collecting

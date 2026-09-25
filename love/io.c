@@ -58,7 +58,7 @@ bool iop(word x) { return evenp(x) && cell(x)->ap == lvm_port_io; }
 // the image still answer the static, since prel's tap/jug read the head by index.
 word io_route(struct ai *g, word x) {
  word l = *task_io(g), s;
- if (l == zero) return x;
+ if (l == ZeroPoint) return x;
  if (x == (word) &ai_stdin)       s = A(l);
  else if (x == (word) &ai_stdout) s = chainp(B(l)) ? A(B(l)) : zero;
  else if (x == (word) &ai_stderr) s = chainp(B(l)) && chainp(BB(l)) ? A(BB(l)) : zero;
@@ -285,7 +285,7 @@ ai_noinline static struct ai *chug_fd(struct ai *g, intptr_t fd) {
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
 lvm(lvm_chug) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (charmp(Sp[0])) LvmCall(g, chug_fd, getcharm(Sp[0]))
  if (!iop(Sp[0])) { Sp[0] = EmptyString; ai_musttail return Next(1); }
  LvmCall(g, chug_str, (struct ai_io*) Sp[0]) }
@@ -294,7 +294,7 @@ lvm(lvm_chug) {
 // the borrowed run counts, so a reader can ask whether anyone else has drawn on the port
 // since it last looked, which is the only way to know its own charlist is still the port's.
 lvm(lvm_inhand) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  Sp[0] = putcharm(iop(Sp[0]) ? (word) ai_io_pending(g, (struct ai_io*) Sp[0]) : 0);
  ai_musttail return Next(1); }
 
@@ -302,7 +302,7 @@ lvm(lvm_inhand) {
 // caller that chugged more than it used leaves the rest where the port's position sees it.
 // answers how many went back -- a short answer is the refusal (ai_io_unread's notes).
 lvm(lvm_unchug) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  Sp[1] = putcharm(iop(Sp[0]) && charmp(Sp[1]) && getcharm(Sp[1]) != 0
                   ? (word) ai_io_unread(g, (struct ai_io*) Sp[0],
                                            (intptr_t) getcharm(Sp[1])) : 0);
@@ -364,7 +364,7 @@ struct ai_port_vt const
 // (fputc port byte) — write byte to port; return byte. a charm operand is a raw
 // fd and the byte goes straight at the row -- nothing to buffer, nothing to flush.
 lvm(lvm_fputc) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (charmp(Sp[0])) {
   intptr_t fd = getcharm(Sp[0]);
   unsigned char c = (unsigned char) getcharm(Sp[1]);
@@ -390,7 +390,7 @@ lvm(lvm_fputc) {
 // and the op re-runs (safe: a flush consumes nothing). a raw fd holds nothing of
 // love's, so a charm falls through with nothing to do and answers itself.
 lvm(lvm_fflush) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
   Pack(g);
@@ -406,7 +406,7 @@ lvm(lvm_fflush) {
 // re-reads each iteration so GC inside ioputc can forward it. a charm operand is a raw fd:
 // ai_fd_say lands the run in one place and never touches love's heap.
 lvm(lvm_fputs) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (charmp(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   intptr_t fd = getcharm(Sp[0]);
   struct ai_str *v = bytes_of(Sp[1]);
@@ -437,7 +437,7 @@ lvm(lvm_fputs) {
 
 static struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o);
 lvm(lvm_fputbn) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
    Pack(g);
    g = gfputbn(g, getcharm(Sp[1]), getcharm(Sp[2]), (struct ai_io*) Sp[0]);
@@ -560,7 +560,7 @@ bool lam_isp(struct ai *g, word x) {         // (\ b.. body): >=2 operands
 // loop over a misused port is bounded. a charm is a raw fd, read a byte at a time off the
 // row: no pushback of its own, and a busy row parks the task exactly as a port's would.
 lvm(lvm_fgetc) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (charmp(Sp[0])) {
   intptr_t fd = getcharm(Sp[0]);
   unsigned char c;
@@ -595,7 +595,7 @@ lvm(lvm_fgetc) {
 // the port (so it chains into a read) -- for fds you can't drain a byte at a time
 // (signalfd, timerfd). Ip is unadvanced, so the task re-checks on reschedule.
 lvm(lvm_await) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);   // and the routed port is what it answers -- the read that chains off it lands there too
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);   // and the routed port is what it answers -- the read that chains off it lands there too
  if (iop(Sp[0])) {
   intptr_t fd = ai_io_fd((struct ai_io*) Sp[0]);
   // the buffer counts: a port holding bytes is readable however quiet its fd is
@@ -606,7 +606,7 @@ lvm(lvm_await) {
 
 // (fungetc port byte) — push back one byte, return the byte.
 lvm(lvm_fungetc) {
- if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
   struct ai_io *i = (struct ai_io*) Sp[0];
   Pack(g);

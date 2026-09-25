@@ -1023,7 +1023,7 @@ lvm(lvm_seal) {
   case 3: g->hot_compose = Sp[1]; break;
   case 4: g->hot_opfix = Sp[1]; break;
   case 5: *task_help(g) = Sp[1], gen_wb_cell(g, task_help(g), Sp[1]); break;
-  case 6: *task_io(g) = chainp(Sp[1]) ? Sp[1] : zero, gen_wb_cell(g, task_io(g), *task_io(g)); break;   // anything but a chain hands the console back
+  case 6: *task_io(g) = chainp(Sp[1]) ? Sp[1] : ZeroPoint, gen_wb_cell(g, task_io(g), *task_io(g)); break;   // anything but a chain hands the console back
   case 7: g->hot_show = Sp[1]; break;
   case 8: g->hot_net = Sp[1]; break;
   default: __builtin_trap(); }
