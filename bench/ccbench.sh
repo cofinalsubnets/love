@@ -94,16 +94,17 @@ build_mooncc() { # $1=binpath
 CORPUS1=$WORK/corpus.l
 cat $CORPUS > "$CORPUS1"
 
-# exit 0 AND the sentinel: a binary that reader-stops mid-corpus must not be timed
-passes() { out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" < "$CORPUS1" 2>&1); r=$?
+# exit 0 AND the sentinel: a binary that reader-stops mid-corpus must not be timed. the
+# corpus runs from the root, as the gates run it: a test borrows a module by its tree path
+passes() { out=$(cd "$R" && LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" < "$CORPUS1" 2>&1); r=$?
            [ $r -eq 0 ] && printf '%s' "$out" | grep -q "tests pass"; }
 
 # the corpus alone: every fresh binary egg-boots, so an empty run is subtracted and the
 # fixed seconds cancel. all three lanes egg-boot, which is what keeps the field level.
 corpus_ms() { # $1=binpath ; median full, median boot, report max(0, full-boot)
   bin=$1
-  full=$(med "LOVE_NO_IMAGE=1 $bin < $CORPUS1")
-  boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
+  full=$(med "cd $R && LOVE_NO_IMAGE=1 $bin < $CORPUS1")
+  boot=$(med "cd $R && LOVE_NO_IMAGE=1 $bin </dev/null")
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
