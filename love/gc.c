@@ -103,12 +103,19 @@ static void gen_scan_inplace(struct ai *g, struct ai_gcx *X, word obj) {
   case DNom: nom(p)->name = gcp(g, X, nom(p)->name); break;
   default: break; } }                              // DMint/DString/DBig/DGem/DTwin: pointer-free leaves
 
-// relocate finalizer nodes out of the dead minor into the major. a minor never
-// runs a finalizer; that waits for a major's compact.
-static void gen_fz_relocate(struct ai *g) {
+// the minor's finalizer pass, after the drain: a young target the trace did not forward is
+// dead, so its finalizer runs while the from-space still reads; a tenured one waits for a
+// major. nodes in the minor move into the major.
+static void minor_run_finalizers(struct ai *g, struct ai_gcx *X) {
  struct ai_fz **link = &g->fz;
  for (struct ai_fz *fz = *link; fz; ) {
   struct ai_fz *next = fz->next;
+  if ((word*) fz->p >= X->p0 && (word*) fz->p < X->t0) {
+   word fwd = fz->p->x;
+   if (!(lamp(fwd) && X->fwd <= ptr(fwd) && ptr(fwd) < X->to_hi)) {
+    fz->fn(g, fz->p), *link = fz = next;
+    continue; }
+   fz->p = cell(fwd); }
   if ((word*) fz >= (word*) g->end && (word*) fz < g->hp) {   // node was in the minor -> relocate
    struct ai_fz *nn = gbump(g, Width(struct ai_fz));
    nn->p = fz->p, nn->fn = fz->fn, nn->next = next;
@@ -172,7 +179,6 @@ static void gen_minor(struct ai *g) {
  if (g->symbols) { // FIXME when !g->symbols ?  early init?
   if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols); }
  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);        // major->young edges
- for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, &X, word(fz->p)));
  while (X.cp < g->major_hp)
   if (datp(X.cp)) evac_data(g, &X);
   else evac_thread(g, &X);
@@ -191,16 +197,15 @@ static void gen_minor(struct ai *g) {
   if (g->symbols) {
    if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols); }
   for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);
-  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, &X, word(fz->p)));
   while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
   if (g->major_hp != hp1) __builtin_trap(); }
 #endif
- if (g->fz) gen_fz_relocate(g);
+ if (g->fz) minor_run_finalizers(g, &X);
  g->hp = g->end;                                              // minor emptied
 #ifdef LvGcStress
  // poison the vacated nursery, or the stress build is half a detector: a stale
  // local otherwise reads a forwarding pointer that still looks live. last thing
- // here -- gen_fz_relocate is the from-space's last reader.
+ // here -- minor_run_finalizers is the from-space's last reader.
  for (word *p = (word*) X.p0; p < (word*) X.t0; p++) *p = ai_gc_poison;
 #endif
  }
@@ -388,6 +393,18 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  if (arena == len1) return g;
  struct ai *h = gen_grow(g, arena);
  return ai_ok(h) || len1 < req ? h : g; }                      // a denied resize keeps a pool that still holds the request
+
+// a collection asked for rather than needed, a major when `major`. it observes and never
+// steers: the resize window is set aside for the call, so forcing collections can't talk
+// the nursery into growing.
+struct ai *ai_force(struct ai *g, bool major) {
+ uintptr_t wa = g->win_alloc, wc = g->win_copied;
+ int8_t ln = g->lean;
+ g->win_alloc = g->win_copied = 0, g->lean = 0;
+ if (major) g->rem_miss = 1;                                   // a miss forces the major
+ if (!ai_ok(g = ai_please(g, 0))) return g;
+ g->win_alloc = wa, g->win_copied = wc, g->lean = ln;
+ return g; }
 
 static ai_inline word copy_data(struct ai *g, union u *src) {
  switch (typ(src)) {

@@ -89,15 +89,20 @@ ai_noinline static int call_connect(uint32_t a, int port) {
  close(fd);
  return -e; }
 
-static lvm(lvm_connect) {
- uint32_t a;
- intptr_t port = oddp(Sp[1]) ? getcharm(Sp[1]) : -1;
- if (!strp(Sp[0]) || port < 0 || port > 65535 || quad(str(Sp[0]), &a) < 0)
-  Sp[0] = ai_badarg(g);
- else {
-  int fd = call_connect(a, (int) port);
-  Sp[0] = fd < 0 ? ai_err(g, -fd) : putcharm(fd); }
- ai_musttail return Next(1); }
+struct sock_to { uint32_t a; int port; };
+static int mk_connect(struct ai *g, void *env) {
+ struct sock_to *t = env; (void) g;
+ return call_connect(t->a, t->port); }
+ai_noinline static struct ai *host_connect(struct ai *g) {
+ struct sock_to t;
+ intptr_t port = oddp(g->sp[1]) ? getcharm(g->sp[1]) : -1;
+ if (!strp(g->sp[0]) || port < 0 || port > 65535 || quad(str(g->sp[0]), &t.a) < 0)
+  return g->sp[0] = ai_badarg(g), g;
+ t.port = (int) port;
+ int fd = mk_connect(g, &t);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_connect, &t))) return g;
+ return g->sp[0] = fd < 0 ? ai_err(g, -fd) : putcharm(fd), g; }
+static lvm(lvm_connect) { LvmCall(g, host_connect) }
 
 // the second ap: the handshake, waited on by the scheduler. SO_ERROR reads 0 on a socket
 // still trying, so POLLOUT first and the error after is the one order that tells
@@ -145,10 +150,20 @@ ai_noinline static int bind_any(int type, int port, int backlog) {
   return -e; }
  return fd; }
 
+struct sock_bind { int type, port, backlog; };
+static int mk_bind(struct ai *g, void *env) {
+ struct sock_bind *b = env; (void) g;
+ return bind_any(b->type, b->port, b->backlog); }
+ai_noinline static struct ai *host_bind(struct ai *g, int type, int port, int backlog) {
+ struct sock_bind b = { type, port, backlog };
+ int fd = mk_bind(g, &b);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_bind, &b))) return g;
+ return host_port(g, fd); }
+
 static lvm(lvm_listen) {
  intptr_t port = oddp(Sp[0]) ? getcharm(Sp[0]) : -1;
  if (port < 0 || port > 65535) ai_musttail return Answer(ai_badarg(g));
- LvmCallp(g, 1, host_port, bind_any(SOCK_STREAM, (int) port, ai_listen_backlog)) }   // [port#] -> [port]
+ LvmCallp(g, 1, host_bind, SOCK_STREAM, (int) port, ai_listen_backlog) }   // [port#] -> [port]
 
 // accept(2) without waiting: >=0 the fd, else a negated errno -- -EAGAIN is "nobody there
 // yet", the park the wrapper reads by name. the O_NONBLOCK toggle is per call for main.c's
@@ -163,6 +178,11 @@ ai_noinline static int call_accept(int lfd) {
  if (off) fcntl(lfd, F_SETFL, fl);
  return fd >= 0 ? fd : -e; }
 
+static int mk_accept(struct ai *g, void *env) { (void) env; return call_accept((int) ai_port_fd(g->sp[0])); }
+ai_noinline static struct ai *host_accept(struct ai *g, int fd) {
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_accept, NULL))) return g;
+ return host_port(g, fd); }
+
 // (accept l) -- take the next client on listener port `l` and wrap its fd as a port. an
 // empty backlog parks the task on the listener's fd, so the scheduler folds it into the
 // same wait as every other quiet fd; nothing is consumed, so the re-run is exact.
@@ -172,7 +192,7 @@ static lvm(lvm_accept) {
  if (lfd < 0) ai_musttail return Answer(ai_badarg(g));
  int fd = call_accept(lfd);
  if (fd == -EAGAIN) { g->next_wait_fd = lfd; ai_musttail return Ap(lvm_yield_sw, g); }
- LvmCallp(g, 1, host_port, fd) }                // [l] -> [conn]
+ LvmCallp(g, 1, host_accept, fd) }              // [l] -> [conn]
 
 // (shutdown s how) -- half-close a socket port. `how` is the POSIX SHUT_* fixnum: 0 read,
 // 1 write, 2 both. the load-bearing case is (shutdown s 1) after a stdin-EOF, so the peer
@@ -212,7 +232,7 @@ static lvm(lvm_shutdown) {
 static lvm(lvm_udpbind) {
  intptr_t port = oddp(Sp[0]) ? getcharm(Sp[0]) : -1;
  if (port < 0 || port > 65535) ai_musttail return Answer(ai_badarg(g));
- LvmCallp(g, 1, host_port, bind_any(SOCK_DGRAM, (int) port, 0)) }   // [port#] -> [port]
+ LvmCallp(g, 1, host_bind, SOCK_DGRAM, (int) port, 0) }   // [port#] -> [port]
 
 // recvfrom + peer marshaling; the &-taken sockaddr lives here so the lvm wrapper stays
 // TCO-clean. the struct must stay two words: at 24 bytes the ABI returns it through memory,
@@ -314,11 +334,17 @@ ai_noinline static int call_connectu(struct ai_str *pv) {
  if (connect(fd, (struct sockaddr*) &a, sizeof a)) { int e = errno; close(fd); return -e; }
  return fd; }
 
+static int mk_connectu(struct ai *g, void *env) { (void) env; return call_connectu((struct ai_str*) g->sp[0]); }
+ai_noinline static struct ai *host_connectu(struct ai *g) {
+ int fd = mk_connectu(g, NULL);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_connectu, NULL))) return g;
+ return host_port(g, fd); }
+
 static lvm(lvm_connectu) {
  struct ai_str *pv = strp(Sp[0]) ? (struct ai_str*) Sp[0] : 0;
  struct sockaddr_un un;
  if (!pv || pv->len == 0 || pv->len >= sizeof un.sun_path) ai_musttail return Answer(ai_badarg(g));
- LvmCallp(g, 1, host_port, call_connectu(pv)) }   // [path] -> [port]
+ LvmCallp(g, 1, host_connectu) }   // [path] -> [port]
 
 static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};
 LvNif("connectu", nif_connectu, NULL);
@@ -338,11 +364,17 @@ ai_noinline static int call_shore(struct ai_str *p) {
  if (bind(fd, (struct sockaddr*) &a, sizeof a) || listen(fd, 8)) { int e = errno; close(fd); return -e; }
  return fd; }
 
+static int mk_shore(struct ai *g, void *env) { (void) env; return call_shore(cask_bytes(g->sp[0])); }
+ai_noinline static struct ai *host_shore(struct ai *g) {
+ int fd = mk_shore(g, NULL);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_shore, NULL))) return g;
+ return host_port(g, fd); }
+
 static lvm(lvm_shore) {
  struct ai_str *p = cask_bytes(Sp[0]);
  struct sockaddr_un un;
  if (!p || p->len + 1 > sizeof un.sun_path) ai_musttail return Answer(ai_badarg(g));
- LvmCallp(g, 1, host_port, call_shore(p)) }   // [path] -> [port]
+ LvmCallp(g, 1, host_shore) }   // [path] -> [port]
 
 static union u const nif_shore[] = {{lvm_shore}, {lvm_ret0}};
 LvNif("shore", nif_shore, NULL);

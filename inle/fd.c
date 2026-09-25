@@ -15,6 +15,15 @@
 #include <time.h>
 #include <unistd.h>
 
+// a door found the fd table full: a dropped port holds its fd until a collection finds it
+// dead, so collect -- a minor for the young, then a major for the tenured -- and ask `mk`
+// again. `mk` answers an fd or a negated errno, and reads any heap operand off g->sp afresh.
+struct ai *ai_fd_retry(struct ai *g, int *fd, int (*mk)(struct ai*, void*), void *env) {
+ for (int k = 0; k < 2 && (*fd == -EMFILE || *fd == -ENFILE); k++) {
+  if (!ai_ok(g = ai_force(g, k))) return g;
+  *fd = mk(g, env); }
+ return g; }
+
 // __ai_osv, "which kernel this binary stands on", rides love.h: os.c defines
 // it hosted, love.c carries the weak zero for links with no moonlibc at all.
 

@@ -348,19 +348,11 @@ op11(lvm_clock, putcharm(ai_clock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 op11(lvm_nclock, putcharm(ai_nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 
 // (please x): a collection on demand -- () a minor, a positive charm a major;
-// answers the new n_gc (the real-time lever). a forced collection observes and
-// never steers: the resize window is zeroed for the call and put back, so a probe
-// forcing minors can't talk the nursery into doubling (the pause gauge's first
-// draft ran the pool to oom@8GB through exactly that feedback).
+// answers the new n_gc (the real-time lever). ai_force keeps it from steering the nursery.
 static lvm(lvm_please) {
  word n = Sp[0];
  Pack(g);
- if (charmp(n) && getcharm(n) > 0) g->rem_miss = 1;     // a miss forces the major
- uintptr_t wa = g->win_alloc, wc = g->win_copied;
- int8_t ln = g->lean;
- g->win_alloc = g->win_copied = 0, g->lean = 0;
- if (!ai_ok(g = ai_please(g, 0))) ai_musttail return Ap(_lvm_ghelp, g);
- g->win_alloc = wa, g->win_copied = wc, g->lean = ln;
+ if (!ai_ok(g = ai_force(g, charmp(n) && getcharm(n) > 0))) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[0] = putcharm((intptr_t) g->n_gc);
  Ip += 1; ai_musttail return Continue(); }

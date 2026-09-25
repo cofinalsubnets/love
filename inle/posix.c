@@ -282,6 +282,17 @@ ai_noinline static int host_sigfd_kq(word a) {
  host_sigkq = 1;
  return kq; }
 #endif
+// the canonical door, then the BSD one where it answers -- the try is the probe.
+static int mk_sigfd(struct ai *g, void *m) {
+ int fd = -1, e = ENOSYS;
+#if defined(LvHaveSignalfd)
+ if ((fd = signalfd(-1, m, SFD_NONBLOCK | SFD_CLOEXEC)) < 0) e = errno;
+#endif
+#if defined(LvHaveKqueue)
+ if (fd < 0 && e == ENOSYS && (fd = host_sigfd_kq(g->sp[0])) < 0) e = errno;   // a BSD kernel; kqueue is the body
+#endif
+ (void) g, (void) m;
+ return fd < 0 ? -e : fd; }
 // a list of signal numbers to watch; anything else keeps SIGCHLD + SIGTERM.
 ai_noinline static struct ai *host_sigfd(struct ai *g) {
  sigset_t m;
@@ -292,22 +303,14 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
   if charmp(A(p)) sigaddset(&m, (int) getcharm(A(p))); }
  else { sigaddset(&m, SIGCHLD); sigaddset(&m, SIGTERM); }
  if (sigprocmask(SIG_BLOCK, &m, NULL)) return g->sp[0] = ai_err(g, errno), g;
- // the canonical door, then the BSD one where it answers -- the try is the probe.
- int fd = -1;
-#if defined(LvHaveSignalfd)
- fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
-#endif
-#if defined(LvHaveKqueue)
- if (fd < 0) fd = host_sigfd_kq(a);          // ENOSYS: a BSD kernel; kqueue is the body
-#endif
- if (fd < 0) return g->sp[0] = ai_err(g, errno), g;
+ int fd = mk_sigfd(g, &m);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_sigfd, &m))) return g;
+ if (fd < 0) return g->sp[0] = ai_err(g, -fd), g;
  struct ai *r = ai_io_alloc(g, fd);
  if (!ai_ok(r)) return close(fd), g->sp[0] = ai_err(g, ENOMEM), g;
  g = r;
  return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the dummy arg
-static lvm(lvm_sigfd) {
- Pack(g); g = host_sigfd(g); Unpack(g);     // host_sigfd folds every failure to (), so no ghelp
- ai_musttail return Next(1); }
+static lvm(lvm_sigfd) { LvmCall(g, host_sigfd) }
 
 // read one pending signal (non-blocking) into (signo . pid). signo is the raw canonical
 // number; pid is ssi_pid -- except the kqueue lane, which names no sender: pid 0 there.
@@ -468,9 +471,11 @@ static lvm(lvm_selfpath) {
 //                   fresh group the process leads. spawnio does this dance in C for a
 //                   child it execs; a shell's forked stage never execs, so it asks here --
 //                   both sides call it, closing the same race spawnio's two calls do.
+static int mk_pipe(struct ai *g, void *fds) { (void) g; return pipe(fds) ? -errno : 0; }
 ai_noinline static struct ai *host_pipe(struct ai *g) {
- int fds[2];
- if (pipe(fds)) return g->sp[0] = ai_err(g, errno), g;
+ int fds[2], r = mk_pipe(g, fds);
+ if (!ai_ok(g = ai_fd_retry(g, &r, mk_pipe, fds))) return g;
+ if (r < 0) return g->sp[0] = ai_err(g, -r), g;
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return close(fds[0]), close(fds[1]), g;   // oom -> !ok
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                 putcharm(fds[0]), putcharm(fds[1]));
@@ -478,17 +483,22 @@ ai_noinline static struct ai *host_pipe(struct ai *g) {
 static lvm(lvm_pipe) {
  LvmCall(g, host_pipe) }
 
-static lvm(lvm_openfd) {
- char const *buf = str_c(Sp[0]);
- if (!buf) { Sp[1] = ai_badarg(g); Sp += 1; ai_musttail return Next(1); }
- intptr_t m = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
+static int mk_openfd(struct ai *g, void *env) {
+ (void) env;
+ intptr_t m = charmp(g->sp[1]) ? getcharm(g->sp[1]) : 0;
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
            : O_RDONLY,
-     fd = open(buf, flags, m == 3 ? 0600 : 0644);
- Sp[1] = (fd < 0) ? ai_err(g, errno) : putcharm(fd);
- ai_musttail return Nextp(1, 1); }
+     fd = open(str_c(g->sp[0]), flags, m == 3 ? 0600 : 0644);
+ return fd < 0 ? -errno : fd; }
+ai_noinline static struct ai *host_openfd(struct ai *g) {
+ int fd = mk_openfd(g, NULL);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_openfd, NULL))) return g;
+ return ai_push(g, 1, fd < 0 ? ai_err(g, -fd) : putcharm(fd)); }
+static lvm(lvm_openfd) {
+ if (!str_c(Sp[0])) { Sp[1] = ai_badarg(g); Sp += 1; ai_musttail return Next(1); }
+ LvmCallp(g, 2, host_openfd) }                  // [path, mode] -> [fd]
 
 static lvm(lvm_spawnio) {
  int in  = charmp(Sp[1]) ? (int) getcharm(Sp[1]) : -1,
@@ -555,12 +565,17 @@ static ai_inline word host_dup2(struct ai *g, word sw, word dw) {
 
 static lvm(lvm_dup2) { Sp[1] = host_dup2(g, Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
 
-static ai_inline word host_dup(struct ai *g, word w) {
- if (!charmp(w)) return ai_badarg(g);
- int fd = fcntl((int) getcharm(w), F_DUPFD, 3);
- return fd < 0 ? ai_err(g, errno) : putcharm(fd); }
+static int mk_dup(struct ai *g, void *env) {
+ (void) env;
+ int fd = fcntl((int) getcharm(g->sp[0]), F_DUPFD, 3);
+ return fd < 0 ? -errno : fd; }
+ai_noinline static struct ai *host_dup(struct ai *g) {
+ if (!charmp(g->sp[0])) return g->sp[0] = ai_badarg(g), g;
+ int fd = mk_dup(g, NULL);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_dup, NULL))) return g;
+ return g->sp[0] = fd < 0 ? ai_err(g, -fd) : putcharm(fd), g; }
 
-static lvm(lvm_dup) { Sp[0] = host_dup(g, Sp[0]); ai_musttail return Next(1); }
+static lvm(lvm_dup) { LvmCall(g, host_dup) }
 
 // --- pid1 bringup: mount the early filesystems + cgroup dirs ----------------------
 // (mkdir path mode) -> mkdir(2). () | a nom | 'badarg misuse. mode is octal (493 = 0755).
@@ -1343,30 +1358,22 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
     default: return -1; }
   int fd = open(pv->bytes, flags, 0644);
   return fd < 0 ? -errno : fd; }
+static int mk_open(struct ai *g, void *env) { (void) env; return call_open(str(g->sp[0]), str(g->sp[1])); }
 
 // (open path mode) -- a heap port (closed on GC), or a nom: open(2)'s errno, 'badarg for
 // misuse. a failure is truthy (a nom nets positive), so a caller may not ask ? of the
 // answer -- port? is the success test, nom? the failure test.
-static lvm(lvm_open) {
-  long rc = -1;
-  if (!strp(Sp[0]) || !strp(Sp[1])) goto fail;
-  struct ai_str *pv = str(Sp[0]), *mv = str(Sp[1]);
-  // heap and stack ride registers under ai_tco, and a seat whose open reports them
-  // (inle's /proc/gauge) reads them off the struct: this Pack is that write-back.
-  Pack(g);
-  int fd = call_open(pv, mv);
-  if (fd < 0) { rc = fd; goto fail; }
-  Pack(g);
+// heap and stack ride registers under ai_tco, and a seat whose open reports them (inle's
+// /proc/gauge) reads them off the struct: LvmCallp's Pack is that write-back.
+ai_noinline static struct ai *host_open(struct ai *g) {
+  int fd = mk_open(g, NULL);
+  if (!ai_ok(g = ai_fd_retry(g, &fd, mk_open, NULL))) return g;
+  if (fd < 0) return ai_push(g, 1, fd == -1 ? ai_badarg(g) : ai_err(g, -fd));
   struct ai *r = ai_io_alloc(g, fd);
-  if (!ai_ok(r)) { close(fd); rc = -ENOMEM; goto fail; }
-  g = r;
-  Unpack(g);
-  // stack: [port, path, mode, ...] -> [port, ...]
-  Sp[2] = Sp[0];
-  ai_musttail return Nextp(1, 2);
- fail:
-  Sp[1] = rc == -1 ? ai_badarg(g) : ai_err(g, (int) -rc);
-  ai_musttail return Nextp(1, 1); }
+  return ai_ok(r) ? r : (close(fd), ai_push(g, 1, ai_err(g, ENOMEM))); }
+static lvm(lvm_open) {
+  if (!strp(Sp[0]) || !strp(Sp[1])) { Sp[1] = ai_badarg(g); ai_musttail return Nextp(1, 1); }
+  LvmCallp(g, 2, host_open) }                   // [path, mode] -> [port]
 
 // (close x) -- a port, or a raw fd from openfd/pipe/dup. on a port: flush, close, and hand
 // it the closed vt, so every later read, write and flush finds the door that does nothing

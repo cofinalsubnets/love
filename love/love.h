@@ -185,7 +185,7 @@ struct ai {
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied
  // the remembered set, the whole write barrier: old cells that took a young pointer,
- // rescanned by the next minor. any rem_miss forces the next collection major (please sets one).
+ // rescanned by the next minor. any rem_miss forces the next collection major (ai_force sets one).
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
  int8_t lean;                             // grow-stickiness streak; a grow needs lean >= 2
@@ -510,6 +510,8 @@ bool ai_ready(int fd, int events);
 extern struct ai *ai_system;   // the running state; gen_grow is the only thing that moves it
 struct ai
  *ai_please(struct ai*, uintptr_t),
+ *ai_force(struct ai*, bool),
+ *ai_fd_retry(struct ai*, int*, int (*)(struct ai*, void*), void*),
  *ai_push(struct ai*, uintptr_t, ...),
  *ai_strof(struct ai*, const char*),
  *gxl(struct ai*),
