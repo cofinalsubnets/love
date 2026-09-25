@@ -123,21 +123,29 @@ static void minor_run_finalizers(struct ai *g, struct ai_gcx *X) {
   } else link = &fz->next;
   fz = next; } }
 
+static ai_inline bool sym_survived(word fwd, word const *lo, word const *hi) {
+ return evenp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi; }   // an atom's first word: its forward, if it survived
 // the weak-table sweep + finalizer pass of a major's compact: symbols_rebuild /
 // run_finalizers, but bumping into the major to-space and testing survival against X's
 static word major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om) {
  if (!om) return 0;
- uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
+ uintptr_t ocap = map_cap(om), cap = map_min_cap, n = 0;
+ word *os = map_slots(om);
+ word const *lo = X->to_lo, *hi = X->to_hi;
+ for (uintptr_t j = 0; j < ocap; j++)
+  if (os[2 * j] != map_gap && sym_survived(cell(os[2 * j + 1])->x, lo, hi)) n++;
+ // sized to its survivors, so an image's map is a function of the live set; one more intern fits (intern_reserve)
+ while ((n + 1) * 4 >= cap * 3) cap *= 2;
+ uintptr_t mask = cap - 1;
  union u *b = map_fill_back(gbump(g, 4 + 2 * cap), cap), *hd = gbump(g, map_head);
  hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, hd[2].x = cell(om)[2].x, tagthread(hd, 3);
- word *os = map_slots(om), *ns = &b[3].x;
- word const *lo = X->to_lo, *hi = X->to_hi;
- for (uintptr_t j = 0; j < cap; j++) {
+ word *ns = &b[3].x;
+ n = 0;
+ for (uintptr_t j = 0; j < ocap; j++) {
   word k = os[2 * j];
   if (k == map_gap) continue;
-  word e = os[2 * j + 1];
-  word fwd = cell(e)->x;                        // the atom's first word: its forward, if it survived
-  if (!(evenp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
+  word fwd = cell(os[2 * j + 1])->x;
+  if (!sym_survived(fwd, lo, hi)) continue;
   word nk = nom(fwd)->name;
   uintptr_t i = hash(g, nk) & mask;
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
