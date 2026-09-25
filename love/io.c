@@ -88,7 +88,10 @@ bool bio_rpending(struct ai_bio *b) {
 static ai_inline bool bio_wpending(struct ai_bio *b) {
  return b && b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0; }
 
-// the scheduler's half of the park law above, declared up by find_runnable.
+// the scheduler's half of the park law above: is this parked task sitting on a port already
+// holding bytes? bytes live in the port, not the fd; a reader parks with Ip unadvanced, so its
+// port is the top of its saved stack. the ap guard is what makes reading x legal: only these
+// two ops park with a port at Sp[0]; every other parker answers false first.
 bool wait_buffered(struct ai *g, lvm_t *ap, word x, int fd) {
  return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
      && ai_io_fd((struct ai_io*) x) == fd

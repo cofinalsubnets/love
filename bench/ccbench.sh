@@ -40,7 +40,7 @@ CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*
 # a caller's -Werror comes back out: a warning set is not throughput
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/love -I$R/inle -I$R/out/lib"
 # the hosted roster, common.mk's spelling: love/ plus inle/ less the kernel's own six
-love_tu="love gc ev io map snap num arr gz"
+love_tu="love gc ev task io map snap num arr gz"
 host_cs=$(ls "$R"/inle/*.c | grep -v '/\(kmain\|blk\|hda\|sys\|doom\|doomsnd\)\.c$')
 # common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's ai_typ, and
 # ld left alone orders love.data.N as emitted -- lvm_str under lvm_sym, strings as closures

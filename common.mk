@@ -99,7 +99,7 @@ love_h = $(wildcard $R/love/*.h)
 # the core rides its own math floor, no libm anywhere; love.c broke into TUs so the biggest is
 # not the whole build's critical path. a LINK ORDER, so it stays named where the other sets
 # glob -- $(wildcard) answers readdir order.
-love_tu = love.c gc.c ev.c io.c map.c snap.c num.c arr.c
+love_tu = love.c gc.c ev.c task.c io.c map.c snap.c num.c arr.c
 # ..and snap.c reaches the codec unconditionally to pack an image's code segment, so a seat
 # that links the runtime links it. wasm is the one that does not, and reads love_tu alone.
 love_codec = gz.c

@@ -51,13 +51,13 @@
    ; --- the roster: (file function hook why) ----------------------------------
    ; every wait in the tree, and the sentence that earns it.
    roster
-   [["love/ev.c" "wait_one" "ai_wait_fds"
+   [["love/task.c" "wait_one" "ai_wait_fds"
      "the scheduler's one-fd shim -- an lvm_ frame may hold no scratch"]
-    ["love/ev.c" "lvm_yield_sw_mono" "wait_one"
+    ["love/task.c" "lvm_yield_sw_mono" "wait_one"
      "the monotask scheduler, parked on one fd"]
-    ["love/ev.c" "lvm_yield_sw_mono" "ai_sleep"
+    ["love/task.c" "lvm_yield_sw_mono" "ai_sleep"
      "the monotask scheduler, a timer and no fd"]
-    ["love/ev.c" "yield_sw_wait" "ai_wait_fds"
+    ["love/task.c" "yield_sw_wait" "ai_wait_fds"
      "THE wait: every parked task and the nearest timer, one call"]
     ["love/io.c" "io_close" "ai_fd_drain"
      "the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait"]

@@ -1284,9 +1284,12 @@ uintptr_t
  hash_at(struct ai *g, intptr_t x, word *base),
  map_probe(struct ai *g, word m, word k, bool *found);
 struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
+// the running task is the run ring's head, a node [next, saved ip, pid, wake at, wait fd,
+// wait events, help, stdio, stack..]; help and stdio are hooks 5 and 6
+static ai_inline word *task_help(struct ai *g) { return &g->tasks[6].x; }
+static ai_inline word *task_io(struct ai *g) { return &g->tasks[7].x; }
 intptr_t
  fn_arg(union u *k, int i, int nargs),
- *task_io(struct ai *g),
  vcmp_flo(int op, ai_flo_t a, ai_flo_t b),
  vcmp_int(int op, intptr_t a, intptr_t b),
  io_route(struct ai *g, word x),

@@ -70,9 +70,9 @@ lay_lc  = $(subst $(R)/,,$(lay_l))
 kore_lc = $(subst $(R)/,,$(kore_l))
 be_lc   = $(subst $(R)/,,$(p_be_l))
 
-# the runtime a bare seat links: love_tu's seven translation units and love_codec's pair
+# the runtime a bare seat links: love_tu's translation units and love_codec's pair
 # (common.mk names both). a port compiles every one under its own <x>_cc, since love.c
-# owes the other six and snap.c owes the codecs. love_m is the object stems, love_dep what
+# owes the rest and snap.c owes the codecs. love_m is the object stems, love_dep what
 # each one watches.
 # ..plus love/bare.c, the answers a seat with no inle/fd.c gives to the runtime's own doors,
 # and love/nohorn.c, the horn's refusal where there is no card. only a bare seat links
