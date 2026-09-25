@@ -53,10 +53,8 @@
    ; tenure n 64KB casks: build them young, then the timed forced major
    ; promotes them -> `(major-words major-ns casks); the casks ride in the
    ; answer so a later read holds every level live to the end. the major
-   ; sizes its pool for the test that forced it and zeroes the amortization
-   ; window, so the churn that follows fires minors only -- churning dead
-   ; casks here to "recover" headroom would spend that window and shrink the
-   ; nursery, and the next churn step would major on the amortization rule.
+   ; sizes its pool for the test that forced it, so the churn that follows
+   ; fires minors only.
    (tenure n) (: l (map (\ _ (cask 65536)) (jot n))
                  e0 (gget G_EVAC)
                  t0 (nclock 0)

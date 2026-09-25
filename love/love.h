@@ -185,10 +185,10 @@ struct ai {
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied
  // the remembered set, the whole write barrier: old cells that took a young pointer,
- // rescanned by the next minor. any rem_miss forces the next collection major.
+ // rescanned by the next minor. any rem_miss forces the next collection major (please sets one).
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
- int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
+ int8_t lean;                             // grow-stickiness streak; a grow needs lean >= 2
  // the two pools: the main pool is pure minor, young being [end, hp); old lives in the major,
  // a two-space of separate blocks. a minor evacuates young -> the active half; a major
  // drains both, compacts into the spare half, flips, rebuilds symbols, runs finalizers.
@@ -198,8 +198,7 @@ struct ai {
    n_minor,                       // minor collections so far (majors = n_gc - n_minor)
    minor_hi, major_hi,            // the pause gauge: peak words one minor / one major copied
                                   // (gauge[14]/[15]; test/host/gcpause.l puts wall ns against them)
-   since_major, major_live0,      // young words scanned since the last major; major live right
-                                  // after it. a major fires once since_major > major_live0 + 4*minor-pool
+   major_live0,                   // major live right after the last major: the budget's live set
    win_alloc, win_copied,         // the minor-resize window (words): overhead = copied/alloc, reset on a resize
    n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
    budget,                     // total cap in words (minor + 2*major), 0 = unbounded; by appel's
@@ -662,8 +661,8 @@ _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size"
 #ifndef ai_major0
 # define ai_major0 (1u << 16)      // ~512 KB major-pool half; grows much less often than the minor pool
 #endif
-// the nursery's copy-overhead setpoint (ai_please): resize to keep copied/allocated inside
-// [1/(4*ratio), 1/ratio]. larger ratio = lower overhead, more RAM.
+// the nursery's copy-overhead setpoint (ai_please): grow while copied/allocated tops
+// 1/ratio. larger ratio = lower overhead, more RAM.
 #ifndef ai_gc_ratio
 # define ai_gc_ratio 24   // the knee of the GC-reduction curve; past it RAM doubles for a flat curve
 #endif

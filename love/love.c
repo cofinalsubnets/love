@@ -355,8 +355,7 @@ op11(lvm_nclock, putcharm(ai_nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 static lvm(lvm_please) {
  word n = Sp[0];
  Pack(g);
- if (charmp(n) && getcharm(n) > 0)
-  g->since_major = g->major_live0 + 4 * (uintptr_t) g->len + 1;
+ if (charmp(n) && getcharm(n) > 0) g->rem_miss = 1;     // a miss forces the major
  uintptr_t wa = g->win_alloc, wc = g->win_copied;
  int8_t ln = g->lean;
  g->win_alloc = g->win_copied = 0, g->lean = 0;
@@ -414,7 +413,7 @@ static lvm(lvm_gauge) {
 //   [0] budget  total footprint cap (minor + 2*major); 0 = unbounded (appel's rule)
 //   [1] minor0  the nursery floor every resize clamps up to
 //   [2] major0  the major pool's grow/shrink step (never 0: it divides)
-//   [3] ratio   copy-overhead setpoint -- hold copied/allocated inside [1/(4*ratio), 1/ratio]
+//   [3] ratio   copy-overhead setpoint -- the nursery grows while copied/allocated tops 1/ratio
 // (tune ()) reads; a rank-1 4-array writes and answers what it replaced, so a probe
 // can put the knobs back. seeded at ai_ini from ai_minor0/ai_major0/ai_gc_ratio.
 // a knob lands at the next collection -- tightening budget frees nothing until then,
@@ -441,7 +440,7 @@ static lvm(lvm_tune) {
   g->budget = b > 0 ? (uintptr_t) b : 0;     // <= 0 is the unbounded spelling, not a refusal
   if (mi > 0) g->minor0 = (uintptr_t) mi;    // a 0 floor would let the nursery vanish
   if (ma > 0) g->major0 = (uintptr_t) ma;    // the step divides
-  if (ra > 0) g->ratio = (uintptr_t) ra; }   // 0 would never grow and always shrink
+  if (ra > 0) g->ratio = (uintptr_t) ra; }   // 0 would never grow
  ai_musttail return Answer(word(v)); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. the string-lane glaze
@@ -792,11 +791,12 @@ ai_noinline word intern_checked(struct ai *g, struct ai_str *b) {
    while (ns[2 * x] != map_gap) x = (x + 1) & nmask;
    ns[2 * x] = k, ns[2 * x + 1] = os[2 * j + 1], nlen++; }
   nb[1].x = putcharm(nlen);
-  cell(m)[1].x = (word) nb;                              // swap backing; header identity stable
+  cell(m)[1].x = (word) nb, gen_wb(g, m, (word) nb);     // swap backing; header identity stable
   i = map_probe(g, m, word(b), &found); }
  struct ai_nom *y = ini_nom(bump(g, Width(struct ai_nom)), word(b), nom_dig(word(b)));  // the canonical KNom: name + serial + cached spelling hash
  word *slots = map_slots(m);
  slots[2 * i] = word(b), slots[2 * i + 1] = word(y);
+ gen_wb(g, map_back(m), word(y));                        // a fresh atom in a tenured backing
  cell(map_back(m))[1].x = putcharm(map_len(m) + 1);
  return word(y); }
 

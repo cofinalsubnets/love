@@ -167,11 +167,10 @@ static void gen_minor(struct ai *g) {
  for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, &X, *s);                       // stack
  for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, &X, *r->x);              // C roots
  // the weak intern map is its own field, not a root: promote its structure by hand
- // (entries stay weak -- a major drops dead atoms). young header: gcp it; tenured:
- // scan its possibly-young backing in place.
+ // (entries stay weak -- a major drops dead atoms). young header: gcp it; a tenured one
+ // took its young atoms through intern_checked's barrier, so the rem set holds it.
  if (g->symbols) { // FIXME when !g->symbols ?  early init?
-  if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols);
-  else gen_scan_inplace(g, &X, g->symbols), gen_scan_inplace(g, &X, map_back(g->symbols)); }
+  if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols); }
  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);        // major->young edges
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, &X, word(fz->p)));
  while (X.cp < g->major_hp)
@@ -190,8 +189,7 @@ static void gen_minor(struct ai *g) {
   for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, &X, *s);
   for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, &X, *r->x);
   if (g->symbols) {
-   if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols);
-   else gen_scan_inplace(g, &X, g->symbols), gen_scan_inplace(g, &X, map_back(g->symbols)); }
+   if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols); }
   for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);
   for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, &X, word(fz->p)));
   while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
@@ -305,18 +303,15 @@ struct ai *gen_grow(struct ai *g, uintptr_t len1) {
  ai_system = h;                              // the one place a state changes address
  return h; }
 
-// the GC entry: a minor unless the rem set overflowed or the major lacks headroom --
-// then a major. afterwards size the minor by appel's rule against the budget.
+// the GC entry: a minor unless the rem set missed or the major lacks headroom -- then a
+// major. afterwards the nursery grows on copy overhead and shrinks only to the budget.
 ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end),
            major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
- g->since_major += seen_young;                                  // young allocated (∝ scanned) since the last major
- // a major: forced by rem-set overflow, by the major lacking room for a worst-case
- // promotion, or by the amortization rule -- live set + 4 minor-pools allocated since
- // the last one -- so floating dead tenured objects sweep and the pool can shrink.
+ // a major: forced by a rem-set miss (or a please asking for one) or by the major lacking
+ // room for a worst-case promotion. dead tenured objects wait for that, bounded by the pool.
  bool major = g->rem_miss
-   || major_free < (uintptr_t) g->len + req0 + 16
-   || g->since_major > g->major_live0 + 4 * (uintptr_t) g->len;
+   || major_free < (uintptr_t) g->len + req0 + 16;
 #ifdef LvGcStress
  // a minor is not enough: stress-collecting tenures everything almost at once,
  // and a minor never moves the tenured -- the detector answered green on its own
@@ -329,7 +324,7 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  if (major) {
   if (!ai_ok(g = gen_major(g, req0, &tight))) return g;     // a true oom mid-major (compacting would overflow the spare): propagate the scare
   g->n_gc += 1;
-  g->since_major = 0, g->major_live0 = (uintptr_t)(g->major_hp - g->major_base);   // reset the amortization window
+  g->major_live0 = (uintptr_t)(g->major_hp - g->major_base);
 #ifdef LvGcCheck
   // the forcing test above must read false after the major it forced, unless the sizer was
   // denied the room -- there thrash beats dying. still true on a pool that got what it asked
@@ -348,11 +343,11 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  uintptr_t e = (uintptr_t)(g->major_hp - g->major_base);
  if (e > g->max_heap) g->max_heap = e;
  // minor resize, deterministic (words copied / words allocated -- no wall clock, so
- // the schedule is reproducible): keep the copy overhead inside a band, accumulated
+ // the schedule is reproducible): keep the copy overhead under a setpoint, accumulated
  // over a sliding window; ai_budget caps the footprint by appel's rule.
- uintptr_t const ratio = g->ratio;              // target band: grow above 1/ratio overhead, shrink below 1/(4*ratio)
+ uintptr_t const ratio = g->ratio;              // grow above 1/ratio overhead; only the budget shrinks
 #ifdef LvGcStress
- // the band is meaningless on a forced schedule (`allocated` ~0 doubles the nursery
+ // the setpoint is meaningless on a forced schedule (`allocated` ~0 doubles the nursery
  // every collection), but the hard floor stays: it guarantees the pending allocation
  // fits. it must also come back down -- a nursery parked at its high-water stands above
  // the major's spare, and `major_free < g->len` then forces a major every collection,
@@ -365,20 +360,17 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
 #endif
  g->win_alloc += seen_young, g->win_copied += copied;
  uintptr_t used = g->len - avail(g), req = req0 + used + (used >> 2), len1 = g->len, arena = len1;
- // resize stickiness: act only on two consecutive same-way windows (lean tracks the
- // streak; in-band ends it). a resize is the costliest single act -- fresh pool, full
- // copy, every page refaulted -- so a spike self-corrects and only a real ramp confirms
- // next collection. first-verdict-with-reset taxes ramps ~4%, and excluding majors from
- // the window costs +70% wall.
+ // grow stickiness: act only on two consecutive over-setpoint windows (lean counts them;
+ // a window under it ends the streak). a resize is the costliest single act -- fresh pool,
+ // full copy, every page refaulted -- so a spike self-corrects and only a real ramp confirms.
+ // the nursery never shrinks for low overhead: a small one pays per-collection costs for
+ // nothing, and a shrink rule oscillates on phased work, resizing every other collection.
  if (g->win_copied * ratio > g->win_alloc) {                   // overhead > 1/ratio: nursery too small
   if ((g->lean = g->lean > 0 ? g->lean + 1 : 1) >= 2) {        // confirmed: grow
-   uintptr_t wa = g->win_alloc | 1;                            // grow until the projected overhead lands in band (| 1: guarantee progress)
+   uintptr_t wa = g->win_alloc | 1;                            // grow until the projected overhead is under 1/ratio (| 1: guarantee progress)
    while (g->win_copied * ratio > wa) arena <<= 1, wa <<= 1;    // (doubling the pool ~doubles alloc-between-GCs)
    g->lean = 0, g->win_alloc = g->win_copied = 0; }
- } else if (g->win_copied * (ratio * 4) < g->win_alloc) {       // overhead < 1/(4*ratio): oversized
-  if ((g->lean = g->lean < 0 ? g->lean - 1 : -1) <= -2)
-   arena = len1 >> 1, g->lean = 0, g->win_alloc = g->win_copied = 0;   // shrink one step (gentle -- multi-step collapses on a lucky GC)
- } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0, g->lean = 0;   // in band: cap the window; the streak dies
+ } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0, g->lean = 0;   // under it: cap the window; the streak dies
  if (g->budget) {
   // appel cap, reserving room for the major that must hold the worst-case promotion
   // (live + this whole nursery): the nursery gets ~(budget - 2*live)/4
