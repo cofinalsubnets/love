@@ -278,8 +278,9 @@
       ; recursion runs flat and the lvm shape continues by jmp at ai_tco=1.
       (elem '(jmp rec) <>(cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))
       !(elem '(call rec) <>(cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))
-      ; a frame-escaping fn keeps the plain call (the address outlives the frame)
-      (elem '(call g) <>(cgn "int g(int*p){ return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }"))
+      ; a frame-escaping fn keeps the plain call (the address outlives the frame); g's static
+      ; bars both inliners, which would otherwise read *p as x and take no address at all
+      (elem '(call g) <>(cgn "int g(int*p){ static int k; k++; return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }"))
       ; kprop: a write-once constant local reads as its literal and its slot vanishes --
       ; a write or a taken address keeps the slot (the store stays), and the chain folds whole
       (= (fnf 'f <>(cgn "long f(void) { long w = 8; return w; } int main() { return (int)f(); }"))
@@ -1371,6 +1372,8 @@
 ; -- register-bound branch splices: a call-free cbinl predicate reads its args from
 ; registers. a var arg over a pinned/homed local aliases that register (zero forms); an
 ; expression arg parks in a pool reg, only while the pool stays deep (the measured lever).
+; the sites below sit where the AST inliner does not reach (under && or a ?: arm), so the
+; splice is what compiles them
 (: pre9 "static long inr(long x, long n) { return x >= 2 && x <= n; }\n"
    irU (cgn (pre9 + "long wq(long a, long n) { long s = 0; long i = 0; while (i < n) { if (inr(a, n)) s = s + a; if (inr(s, a)) s = s + 1; i = i + 1; } return s; } int main() { return wq(3, 5); }"))
    uf (fnf 'wq <>irU)
@@ -1381,7 +1384,7 @@
       (elem '(cmp r9 2) uf)                       ; the second splice aliases s's home
       (elem '(cmp r9 r6) uf)
       (0 = (splds uf)))                              ; the whole fn runs slot-free
-   irP (cgn (pre9 + "long pk(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { if (inr(a + i, n)) s += i; } return s; } int main() { return pk(1, 6); }"))
+   irP (cgn (pre9 + "long pk(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { if (n > 0 && inr(a + i, n)) s += i; } return s; } int main() { return pk(1, 6); }"))
    pf (fnf 'pk <>irP)
    _ (test
       (two? irP)
@@ -1390,7 +1393,7 @@
       (0 = (splds pf)))
    ; the value splice aliases too; its low-read expression arg stays a slot -- a park spans
    ; the whole body (the measured anti-lever), so it must earn the seat: weighted reads >= 8
-   irQ2 (cgn "static long clamp9(long x, long lo) { if (x < lo) return lo; if (x > 99) return 99; return x; }\nlong vq(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + clamp9(a + i, n); } return s; } int main() { return vq(1, 5); }")
+   irQ2 (cgn "static long clamp9(long x, long lo) { if (x < lo) return lo; if (x > 99) return 99; return x; }\nlong vq(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + (n > 0 ? clamp9(a + i, n) : 0); } return s; } int main() { return vq(1, 5); }")
    q2f (fnf 'vq <>irQ2)
    _ (test
       (two? irQ2)
@@ -1405,7 +1408,7 @@
       (copyof? wf 'r6)                               ; the written param p copies out of a's ride...
       !(elem '(add r6 r6 1) wf)                   ; ...and a's ride is never walked
       (elem '(cmp r2 r5) wf))                     ; lim, never written, reads n's ride straight (its alias copy folds after repack)
-   irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
+   irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (y > 0 && p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
    xf (fnf 'run <>irX)
    _ (test
       (two? irX)
@@ -1415,7 +1418,7 @@
    ; a value-splice park that earns the seat: a read inside the body's loop weighs x8, so the
    ; expression arg rides a pool reg for the splice's whole span. the body's own decls earn
    ; seats the same way (regen attempts only)
-   irG (cgn "static long sum9(long p, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + p; } return s; }\nlong gq(long a, long n) { return sum9(a + 1, n); }\nint main() { return gq(3, 5); }")
+   irG (cgn "static long sum9(long p, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + p; } return s; }\nlong gq(long a, long n) { return n > 0 ? sum9(a + 1, n) : 0; }\nint main() { return gq(3, 5); }")
    gf (fnf 'gq <>irG)
    _ (test
       (two? irG)
@@ -1443,6 +1446,34 @@
       (elem '(cmp r9 r5) jf)                      ; i rides its seat against n's ride...
       (elem '(add r9 r9 1) jf)                    ; ...and steps in place
       (0 = (splds jf))))                             ; the whole fn runs slot-free
+
+; -- the AST inliner: the call becomes the callee's body in the caller's AST, so the caller's
+; own analyses see one fn. a predicate's `return e` substitutes into the branch (no bit settled
+; and retested), &x bound to a deref-only param reads x itself (no frame address), and a helper
+; over constants folds whole (the constant select included) --
+(: aP (cgn "static long inr(long x, long n) { return x >= 2 && x <= n; }\nlong pk(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { if (inr(a + i, n)) s += i; } return s; } int main() { return pk(1, 6); }")
+   aPf (fnf 'pk <>aP)
+   aG (cgn "static long sum9(long p, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + p; } return s; }\nlong gq(long a, long n) { return sum9(a + 1, n); }\nint main() { return gq(3, 5); }")
+   aGf (fnf 'gq <>aG)
+   aX (cgn "int g(int*p){ return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }")
+   aXf (fnf 'h <>aX)
+   aB (cgn "static unsigned long b2w(unsigned long b) { unsigned long q = b / 8, r = b % 8; return q + (r ? 1 : 0); }\nlong f(long *hp) { unsigned long const S = 3 + b2w(8); return hp[S]; }\nint main() { long a[8] = {0}; return (int) f(a); }")
+   aBf (fnf 'f <>aB)
+   (sp? fs) (foldl (\ a f (a || (two? f && <f = 'sub && <>f = 'sp))) () fs)
+   (test
+      (two? aP)
+      !(elem '(call inr) aPf)
+      !(elem '(li r0 1) aPf)                         ; the predicate branches where it stands...
+      !(elem '(cmp r0 0) aPf)                        ; ...never a 0/1 retested
+      (two? aG)
+      !(elem '(call sum9) aGf)
+      (0 = (splds aGf))                              ; the callee's counter is a caller local with a seat
+      !(sp? aGf)                                     ; ...and gq runs frameless
+      (two? aX)
+      !(elem '(call g) aXf)                          ; *p over &x is x: no address taken, no frame
+      !(sp? aXf)
+      (two? aB)
+      (elem '(ld r0 r6 32) aBf)))                    ; 3 + b2w(8) is 4: hp[4], one load
 
 ; -- the shuttle skip + slot residency: a right side whose forms never write r1 (no call, no
 ; label, no control) runs with the left parked in r1 -- one mov, no push/pop round-trip; and
@@ -1999,5 +2030,5 @@ int main() { return 0; }"
       (= 2 #(csset fJ))))                     ; shared: a and b ride one seat
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
-(say err "test/law/moon: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, a64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")
+(say err "test/law/moon: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, a64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the AST inliner + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")
 (put err 10)

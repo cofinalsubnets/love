@@ -6809,6 +6809,211 @@
            (pin g 'strs strs0, 'no)                    ; caller its tail calls
           (mkv rt 'r0 (<>br + ibd + [['label ilb9]]))))
 
+   ; -- the AST inliner: a call to an inline candidate, where its statement evaluates it before anything
+   ; it sequences (not under && || ?: nor a comma's right), becomes the callee's body as statements ahead
+   ; of it: each param a fresh local, each return a store to the call's value -- a lone `return e` is e
+   ; in place, and at a return the body's returns stay returns. the caller's analyses then see one body.
+   ; what it declines, cginl may still splice --
+   (acand g nm)                                    ; -> (params body rt locals frees decls) | ()
+    (: f (g 'inl nm)
+       (? !(two? f) ()
+          (: rf (respell f)
+             ps <>>rf
+             body <>(rf 3)
+             (dps x a) (? !(two? x) a
+                          (<x = 'decl) (foldl (\ a2 p (p . a2)) a <>x)
+                          (dps >x (dps <x a)))
+             dl (dps body ())
+             loc (map (p \ <p) ps + map (p \ <p) dl)
+             ; a frame address costs the caller its sibcalls (cginl's decline); asm pins its homing off
+             (bar? x) (? !(two? x) ()
+                         (x @ ('addr ('var v)) (elem v loc)
+                              (('clit || 'asm || 'sexpr) . _) 1
+                              (bar? <x || bar? >x)))
+             (fv x a) (? !(two? x) a
+                         (x @ ('var v) (? (elem v loc || elem v a) a (v . a))
+                              (fv >x (fv <x a))))
+             (? (bar? body) ()
+                (foldl (\ a p (a || stru? <>p || arr? <>p)) () dl) ()
+                [ps body <(peep (g 'sigs) nm ['long ()]) loc (fv body ()) dl]))))
+   ; a callee body's returns -> stores to rv (or bare evaluations when rv is ()), with no jump: a return
+   ; ends the list or an if arm that always returns, whose rest moves into the other arm | 'no
+   (aelim l rv)
+    (: (hr x) (? !(two? x) () (<x = 'ret) 1 (hr <x || hr >x))
+       (ar s) (s @ ('ret . _) 1
+                   ('blk items) (foldl (\ a x (a || ar x)) () items)
+                   ('if _ t e) (ar t && ar e)
+                   ())
+       (rs e) (? !(two? e) () rv [['expr ['asn ['var rv] e]]] [['expr e]])
+       (bl l) (: r (el l) (? (= r 'no) 'no ['blk r]))
+       (arm c a b) (? ((= a 'no) || (= b 'no)) 'no [['if c a b]])
+       (el l)
+        (? !(two? l) ()
+           (: s <l
+              (? !(hr s) (: r (el >l) (? (= r 'no) 'no (s . r)))
+                 (s @ ('ret . e) (rs <e)
+                      ('blk items) (el (items + >l))
+                      ; the parse's else-less if carries a () arm
+                      ('if c t e) (? (ar t) (arm c (bl [t]) (bl (? (two? e) (e . >l) >l)))
+                                     (ar e) (arm c (bl (t . >l)) (bl [e]))
+                                     'no)
+                      'no))))
+       (el l))
+   ; is every mention of p a deref or a call's arg? then p may stand for an address
+   (aonly p x)
+    (? !(two? x) 1
+       (x @ ('var ^p) ()
+            ('deref ('var ^p)) 1
+            ('call fh as) (aonly p fh && foldl (\ a e (a && (e @ ('var ^p) 1 (aonly p e)))) 1 as)
+            (aonly p <x && aonly p >x)))
+   ; rename the callee's locals per m: every var, every decl head. a name m maps to an
+   ; expression (&x) stands for it, and its deref for x
+   (aren x m)
+    (? !(two? x) x
+       (x @ ('var nm) (: v (peep m nm 'no) (? (= v 'no) x (two? v) v ['var v]))
+            ('deref ('var nm)) (: v (peep m nm 'no) (? (two? v) <>v ['deref (aren <>x m)]))
+            ('decl ps) ['decl (map (p \ (peep m <p <p . aren >p m)) ps)]
+            (aren <x m . aren >x m)))
+   (ainl g f)
+    (: rf (respell f)
+       tys {} dn {} tak {} n9 {'k 0}
+       (cen x)                                     ; the caller's names: types, and which are &-taken
+        (? !(two? x) 0
+           (x @ ('addr ('var nm)) (pin tak nm 1, 0)
+                (('decl || 'sdecl) ps) (: _ (map (p \ (pin tys <p <>p, pin dn <p 1, cen >>p)) ps) 0)
+                (: _ (cen <x) (cen >x))))
+       _ (map (p \ (pin tys <p <>p, pin dn <p 1)) <>>rf)
+       _ (cen (rf 3))
+       memo (g 'ainlc)
+       (cand nm) (: c (peep memo nm 'no)
+                    (? (= c 'no) (: c9 (acand g nm) _ (pin memo nm c9) c9) c))
+       crt <(peep (g 'sigs) <>rf ['long ()])
+       ; a call's value in its return type: a truth value needs no conversion to an integer type
+       (cv e rt) (? (elem rt '(bool char uchar short ushort int uint long ulong) &&
+                     (e @ ('bin op _ _) (elem op '(eq ne lt le gt ge)) (('land || 'lor) . _) 1 ('un 'not _) 1 ()))
+                    e ['cast rt e])
+       ; a call spliced here -> (pre value) | () declined. mode: 'val its value, 'br a branch's test,
+       ; 'stmt none, 'ret the caller's own return (the body's returns stay returns, tail calls tails)
+       (site nm as d mode)
+        (: c (? ((elem nm d) || (3 < #d) || (dn nm)) () (cand nm))
+           val? (elem mode '(val br))
+           (? !(two? c) ()
+              (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5)
+                 one (body @ (('ret e)) (two? e) ())          ; the whole body one `return e`
+                 (? (#ps != #as) ()
+                    (foldl (\ a v (a || dn v)) () fr) ()          ; a free name the caller shadows
+                    (val? && (= rt 'void)) ()
+                    ((mode = 'br) && !one) ()                       ; a branchy test is cbinl's: it branches from each return
+                    (: k (n9 'k) _ (pin n9 'k (k + 1))
+                       sfx ("`a" + show k)
+                       m {}
+                       _ (map (v \ pin m v (v + sfx)) loc)
+                       _ (map (p \ pin tys (m <p) <>p) dl)
+                       ; a caller local of the param's own type, never &-taken and never written by
+                       ; the body, is the param outright; so is &x of a caller local x the body only
+                       ; derefs (or hands a call), whose *p is then x: a fresh local holding &x would
+                       ; cost the caller its frame, so that arg declines instead. any other binds a fresh local
+                       (bind ps as pre)
+                        (? !(two? ps) pre
+                           (: p <ps a <as
+                              ty9 (? (two? a && (<a = 'var)) (peep tys <>a 'no) 'no)
+                              ax (? (two? a && (<a = 'addr) && two? <>a && (<<>a = 'var)) <><>a ())
+                              tx (? (string? ax) (peep tys ax 'no) 'no)
+                              (? ((= ty9 <>p) && !(tak <>a) && !(wrs? <p body))
+                                  (: _ (pin m <p <>a) (bind >ps >as pre))
+                                 !(= tx 'no)
+                                  (? ((= <>p ['ptr tx]) && !(wrs? <p body) && aonly <p body)
+                                     (: _ (pin m <p a) (bind >ps >as pre))
+                                     'no)
+                                 (: nn (m <p) _ (pin tys nn <>p)
+                                    (bind >ps >as (pre + [['decl [[nn <>p a]]]]))))))
+                       pre (bind ps as ())
+                       rb (aren body m)
+                       (rc x) (? !(two? x) x
+                                 (<x = 'ret) (? (two? <>x) ['ret (? (= rt crt) <>x (cv <>x rt))] x)
+                                 (rc <x . rc >x))
+                       rv (? (val? && !one) ("`r" + show k) ())
+                       el (? (= pre 'no) 'no
+                             (mode = 'ret) (rc rb)
+                             (val? && one) rb
+                             (aelim rb rv))
+                       (? (= el 'no) ()
+                          (mode = 'ret) [(pre + hitems el (nm . d)) ()]
+                          (val? && one) [pre (cv <><rb rt)]
+                          (: _ (? rv (pin tys rv rt) 0)
+                             ; one return, the last statement: the value is a decl from it (kprop reads those)
+                             rl (rev el)
+                             tl (? (two? rl) (<rl @ ('expr ('asn ('var ^rv) e)) [e] ()) ())
+                             nr (: (go x) (? !(two? x) 0 (<x = 'ret) 1 ((go <x) + go >x)) (go body))
+                             st (? !rv el
+                                   (two? tl && nr = 1) (rev (['decl [[rv rt <tl]]] . >rl))
+                                   (['decl [[rv rt]]] . el))
+                             [(pre + hitems st (nm . d)) (? rv ['var rv] ())])))))))
+       ; an expression -> (pre e'): only the positions evaluated first are hoisted
+       (hx e d)
+        (? !(two? e) [() e]
+           (e @ ('call ('var nm) as)
+                (: ha (hxl as d)
+                   s (site nm <>ha d 'val)
+                   (? (two? s) [(<ha + <s) <>s] [<ha ['call ['var nm] <>ha]]))
+                ('call fh as) (: ha (hxl as d) [<ha ['call fh <>ha]])
+                ('bin op a b) (: ra (hx a d) rb (hx b d) [(<ra + <rb) ['bin op <>ra <>rb]])
+                ('comma a b) (: ra (hx a d) [<ra ['comma <>ra b]])
+                ; a short-circuit or a select branches on its first operand, as cbranch lays it
+                (('land || 'lor) a b) (: ra (hxb a d) [<ra [<e <>ra b]])
+                ('cond c a b) (: rc (hxb c d) [<rc ['cond <>rc a b]])
+                ('asn l r) (: rl (hx l d) rr (hx r d) [(<rl + <rr) ['asn <>rl <>rr]])
+                ('rmw op l r) (: rl (hx l d) rr (hx r d) [(<rl + <rr) ['rmw op <>rl <>rr]])
+                ('post l n) (: r (hx l d) [<r ['post <>r n]])
+                ('un op a) (: r (hx a d) [<r ['un op <>r]])
+                ('cast ty a) (: r (hx a d) [<r ['cast ty <>r]])
+                ('deref a) (: r (hx a d) [<r ['deref <>r]])
+                ('dot a fl) (: r (hx a d) [<r ['dot <>r fl]])
+                [() e]))
+       ; a branch's test: the call its truth decides, through ! and the first operand of && ||
+       (hxb e d)
+        (e @ ('call ('var nm) as)
+             (: ha (hxl as d)
+                s (site nm <>ha d 'br)
+                (? (two? s) [(<ha + <s) <>s] [<ha ['call ['var nm] <>ha]]))
+             ('un 'not a) (: r (hxb a d) [<r ['un 'not <>r]])
+             (('land || 'lor) a b) (: ra (hxb a d) [<ra [<e <>ra b]])
+             (hx e d))
+       (hxl l d) (? !(two? l) [() ()]
+                    (: r (hx <l d) rs (hxl >l d) [(<r + <rs) (<>r . <>rs)]))
+       ; a statement -> the statements it becomes
+       (hb s d) (: l (hs s d) (? (two? l && !(two? >l)) <l ['blk l]))
+       (hs s d)
+        (? !(two? s) [s]
+           (s @ ('expr ('call ('var nm) as))
+                (: ha (hxl as d)
+                   st (site nm <>ha d 'stmt)
+                   (? (two? st) (<ha + <st) (<ha + [['expr ['call ['var nm] <>ha]]])))
+                ('ret ('call ('var nm) as))
+                 (: ha (hxl as d)
+                    st (site nm <>ha d 'ret)
+                    (? (two? st) (<ha + <st) (<ha + [['ret ['call ['var nm] <>ha]]])))
+                ('expr e) (: r (hx e d) (<r + [['expr <>r]]))
+                ('decl ps)
+                 ; an init may name its own decl (sizeof *h): what hoists above it may not
+                 (: (men nm x) (? !(two? x) () (x @ ('var ^nm) 1 (men nm <x || men nm >x)))
+                    rs (map (p \ (? !(two? >>p) [() ()]
+                                   (: r (hx <>>p d) (? (men <p <r) [() <>>p] r)))) ps)
+                    (? !(foldl (\ a r (a || two? <r)) () rs) [s]
+                       (: (go ps rs) (? !(two? ps) ()
+                                        (: p <ps r <rs
+                                           (<r + [['decl [(? (two? >>p) ([<p <>p <>r] + >>>p) p)]]] + go >ps >rs)))
+                          (go ps rs))))
+                ('ret e) (? !(two? e) [s] (: r (hx e d) (<r + [['ret <>r]])))
+                ('if c t e) (: r (hxb c d) (<r + [['if <>r (hb t d) (hb e d)]]))
+                ('while c b) [['while c (hb b d)]]
+                ('do b c) [['do (hb b d) c]]
+                ('for i c st b) [['for i c st (hb b d)]]
+                ('switch e items) (: r (hx e d) (<r + [['switch <>r (hitems items d)]]))
+                ('blk items) [['blk (hitems items d)]]
+                [s]))
+       (hitems l d) (? !(two? l) () (hs <l d + hitems >l d))
+       [<rf <>rf <>>rf ['blk (hitems <>(rf 3) [<>rf])]])
    ; -- respell: a name declared twice in one fn conflates in alive and kprop, so each later decl
    ; respells (nm`2 ..) and its scope's mentions follow; a static local keeps its spelling (its label) --
    (respell f)
@@ -6905,7 +7110,7 @@
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (kprop g (respell f))
+    (: f (kprop g (respell (ainl g f)))
        params <>>f
        _ (fnreset g)                                 ; the whole per-fn pin record wiped (one roster)
        ; v6-M has no fpu: f0/f1/f15 are three frame cells, and soften rewrites every f-op onto them
@@ -7613,7 +7818,7 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'inl {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
+          'fns {} 'inl {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})
