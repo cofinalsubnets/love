@@ -743,6 +743,11 @@
                    ('uchar || 'bool) 'ldu1 'ushort 'ldu2 'uint 'ldu4 'ld)
    (stop ty) (ty @ ('char || 'uchar || 'bool) 'st1 ('short || 'ushort) 'st2
                    ('int || 'uint) 'st4 'st)
+   ; does every value of integer type a fit b? (a canonical a is then already a canonical b)
+   (irng ty) (ty @ 'bool [0 1] 'char [-128 127] 'uchar [0 255] 'short [-32768 32767] 'ushort [0 65535]
+                   'int [-2147483648 2147483647] 'uint [0 4294967295] ())
+   (irfit? a b) (: ra (irng a) rb (irng b)
+                   (? !(two? rb) 1 !(two? ra) () (<rb <= <ra && >ra <= >rb)))
    ; bool's cvt converts (any nonzero -> 1): every write site runs cvt before its store, so a
    ; bool object holds 0/1 and loads ride a plain ldu1
    (cvt ty r) (ty @ 'char [['sx1 r]] 'short [['sx2 r]] 'int [['sx4 r]]
@@ -6513,7 +6518,8 @@
                        (? (w128? g) (as128 g r + (? il [['jmp il]] epj)) (no128 g))
                       (rt = 'bool)                             ; a bool return converts (callers read r0 whole -- cc calls untyped)
                        (tor0 g r + cvt rt 'r0 + (? il [['jmp il]] epj))
-                      (tor0 g r + (? il [['jmp il]] epj)))      ; int -> int, as before (a pair value narrows to its lo)
+                      ; int -> int: a value the return type cannot hold converts (callers read r0 whole)
+                      (tor0 g r + (? (irfit? (vty r) rt) () (cvt rt 'r0)) + (? il [['jmp il]] epj)))
                    (? (!mt || bad? res) res (mustret g res))))
              rr9)         ; a musttail ret marks its call for sibs
           ('expr pe)
