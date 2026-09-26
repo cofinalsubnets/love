@@ -57,7 +57,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both) |
 | apps/ain.l | nc / ain |
 | apps/cook.l | make / cook |
-| core.l, the line tools | cat tac echo head tail wc sort uniq tee |
+| core.l, the line tools | cat tac shuf echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
 | core.l, the line endings | dos2unix unix2dos mac2unix (in place by default; a binary file is refused, the mode is kept) |

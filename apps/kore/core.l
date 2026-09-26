@@ -1,4 +1,4 @@
-; apps/kore/core.l -- the line tools, the coreutils batch of kore: cat, tac, echo,
+; apps/kore/core.l -- the line tools, the coreutils batch of kore: cat, tac, shuf, echo,
 ; head, tail, wc, sort, uniq, tee, seq, yes, true, false, basename, dirname -- the
 ; field tools cut, tr, nl, rev -- the column tools fold, expand, unexpand -- and the
 ; encodings base64 and base32 beside tsort and factor. every tool is a
@@ -49,6 +49,62 @@
                   (out1 m) (? (two? m) (: _ (say out <m) (out1 >m)) 1)
                   (out1 (go ()))))
             as)
+
+   ; -- shuf: the records in a random order; -e takes the operands as the records, -i
+   ; LO-HI the numbers, -n caps the count, -r draws with replacement, -z splits on NUL.
+   ; a partial Fisher-Yates over a tablet of swapped seats, a miss reading the seat's own
+   ; record, so -i never lays its range out and -n k costs k draws.
+   (ushuf n k seat dot)                ; the first k of a shuffle of seats 0..n-1, each to dot
+    (: t (tablet 0)
+       (at i) (peep t i (seat i))
+       (go i) (? (i < k)
+                 (: j (i + rand (n - i)) a (at i) b (at j)
+                    _ (pin t j a) _ (pin t i b) _ (dot b)
+                    (go (i + 1)))
+                 0)
+       (go 0))
+   (shuf-main as)
+    (: t (tablet 0)
+       (sdie m) (udie 1 ("shuf: " + m))
+       o (uopt as t '(105 110 111) ()
+               {"echo" 101 "input-range" 105 "head-count" 110 "output" 111
+                "repeat" 114 "zero-terminated" 122})
+       _ (? (two? o) () (sdie "an option wants a value"))
+       _ (: c (uoptun t "einorz") (? (nil? c) () (sdie ("unknown option -" + string c))))
+       rest <>>o e? (peep t 101 0) r? (peep t 114 0)
+       d (? (peep t 122 0) 0 10)
+       ir (uoptv t 105) nv (uoptv t 110) of (uoptv t 111)
+       _ (? (e? && string? ir) (sdie "cannot combine -e and -i options") ())
+       _ (? (!e? && two? rest && (string? ir || two? >rest)) (sdie ("extra operand " + (string? ir ? <rest <>rest))) ())
+       cap (? (string? nv) (: v (unum nv) (? (charm? v) v (sdie ("invalid line count: " + nv)))) ())
+       ; the records as [count seat]: -i reads each seat off the range, the rest pin a tablet
+       (laid ls) (: lt (tablet 0)
+                    (go l i) (? (two? l) (: _ (pin lt i <l) (go >l (i + 1))) [i (\ i (lt i))])
+                    (go ls 0))
+       (range s) (: n #s
+                    m ((: (go i) (? (n <= i) -1 (s i = 45) i (go (i + 1)))) 0)
+                    lo (? (0 < m) (unum (snip s 0 m)))
+                    hi (? (0 < m) (unum (snip s (m + 1) n)))
+                    (? (charm? lo && charm? hi && lo <= hi + 1) [(hi - lo + 1) (+ lo)]
+                       (sdie ("invalid input range: " + s))))
+       (input _) (: j (jug 0)
+                    f (? (two? rest) <rest "-")
+                    _ (? (= 0 (uchunks "shuf" (\ h (say j h)) [f])) 0 (uleave 1))
+                    s (slurp j)
+                    rs (usplit d s)
+                    (? (#s && (s (#s - 1) != d)) rs (rev >(rev rs))))
+       src (? (string? ir) (range ir) e? (laid rest) (laid (input 0)))
+       n <src seat <>src
+       q (? (string? of) (: h (open of "w") (? (hot? h) h (sdie ("cannot write " + of)))) out)
+       (dot x) (: _ (say q (? (string? x) x (show x))) (put q d))
+       ; with replacement: a draw a record, the count capped or forever, as yes is
+       (draws k) (? (k = 0) 0 (: _ (dot (seat (rand n))) (draws (? k (k - 1) k))))
+       _ (? !r? (ushuf n (? (charm? cap) (min n cap) n) seat dot)
+            (cap = 0) 0
+            (n = 0) (sdie "no lines to repeat")
+            (draws (? (charm? cap) cap ())))
+       _ (flush q) _ (? (string? of) (close q) 0)
+       0)
 
    ; -- echo: the args back; -n holds the newline --
    (echo-main as)
