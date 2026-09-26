@@ -1391,14 +1391,16 @@
       (elem '(add r7 r6 r9) pf)                   ; the expression arg lands its park r7...
       (elem '(cmp r7 r5) pf)                      ; ...and the body compares park vs alias
       (0 = (splds pf)))
-   ; the value splice aliases too; its low-read expression arg stays a slot -- a park spans
-   ; the whole body (the measured anti-lever), so it must earn the seat: weighted reads >= 8
+   ; a callee of statements at a ?: arm: the arm's value is a temporary assigned at each of the
+   ; body's returns under the if, and the temporary rides a pool register; the body's own
+   ; local x is born straight off a + i and compares straight against n's ride
    irQ2 (cgn "static long clamp9(long x, long lo) { if (x < lo) return lo; if (x > 99) return 99; return x; }\nlong vq(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + (n > 0 ? clamp9(a + i, n) : 0); } return s; } int main() { return vq(1, 5); }")
    q2f (fnf 'vq <>irQ2)
    _ (test
       (two? irQ2)
-      (elem '(cmp r7 r5) q2f)                     ; x < lo compares against the alias, no stage
-      (0 = (splds q2f)))
+      (elem '(cmp r11 r5) q2f)                    ; x < lo compares against the alias, no stage
+      (elem '(add r12 r12 r9) q2f)                ; the arm's temporary, read once, in a pool seat
+      (elem '(li r9 0) q2f))                      ; ..the other arm lands its constant there too
    ; a body that assigns its param cannot alias: the register holds the caller's live value
    ; and the splice's own p++ would walk it. a read-only sibling still aliases.
    irW (cgn "static long walk9(long p, long lim) { for (;; p++) { if (p >= lim) return p; } }\nlong wv(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + walk9(a, n); } return s; } int main() { return wv(1, 5); }")
@@ -1412,21 +1414,21 @@
    xf (fnf 'run <>irX)
    _ (test
       (two? irX)
-      (elem '(add r7 r6 r5) xf)                   ; a += b is born in its park, off x's ride...
+      (elem '(add r11 r6 r5) xf)                  ; a += b is born in a's own seat, off x's ride...
       !(elem '(add r6 r6 r5) xf))                 ; ...and x's ride never takes the add (b, never
                                                      ;   written, aliases y's ride in the same form)
-   ; a value-splice park that earns the seat: a read inside the body's loop weighs x8, so the
-   ; expression arg rides a pool reg for the splice's whole span. the body's own decls earn
-   ; seats the same way (regen attempts only)
+   ; a callee of statements at a return's ?: arm: the return is an if whose arm holds the body,
+   ; its own return laid direct -- no frame, no slot, the expression arg and the counter in registers
    irG (cgn "static long sum9(long p, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + p; } return s; }\nlong gq(long a, long n) { return n > 0 ? sum9(a + 1, n) : 0; }\nint main() { return gq(3, 5); }")
    gf (fnf 'gq <>irG)
    _ (test
       (two? irG)
-      (elem '(add r10 r6 1) gf)                   ; a + 1 is born in its park r10 (no bridge)...
-      (elem '(add r9 r9 r10) gf)                  ; ...and the loop reads it, no reload
+      (elem '(add r7 r6 1) gf)                    ; a + 1 is born in its register (no bridge)...
+      (elem '(add r9 r9 r7) gf)                   ; ...and the loop reads it, no reload
       (elem '(li r9 0) gf)                        ; s's decl bind: the init delivers to the seat
       !(elem '(mov r9 r0) gf)                     ;  (the die: no r0 bridge)
-      (1 = (splds gf)))                              ; the one surviving slot read is i's
+      !(sp? gf)                                   ; no frame: i rides a register too
+      (0 = (splds gf)))
    ; a park under the caller's loop resets from its source every iteration -- that mov wears
    ; the entry-home shape (mov H A), and unhome renaming it away erases the reset. pears stops
    ; at the first body label, so the reset stands and the walk stays on the park.

@@ -6848,8 +6848,21 @@
                 [ps body <(peep (g 'sigs) nm ['long ()]) loc (fv body ()) dl]))))
    ; a callee body's returns -> what rs lays for each value, with no jump: a return ends the list
    ; or an if arm that always returns, whose rest moves into the other arm | 'no
-   (aelim l rs)
+   ; sw: a trailing switch may end the list too, each case's top-level return a store and a
+   ; break (a copied arm could carry a break of its own, so a push-down passes ())
+   (aelim l rs sw)
     (: (hr x) (? !(two? x) () (<x = 'ret) 1 (hr <x || hr >x))
+       (swel items)
+        (? !(two? items) ()
+           (: s9 <items
+              r1 (? !(two? s9) [s9]
+                    (s9 @ ('ret . e) ((rs <e) + [['brk]])
+                         ('blk bs) (: r (swel bs) (? (= r 'no) 'no [['blk r]]))
+                         ('if c t e) (: a (swb t) b (? (two? e) (swb e) ())
+                                        (? ((= a 'no) || (= b 'no)) 'no [['if c a b]]))
+                         (? (hr s9) 'no [s9])))
+              (? (= r1 'no) 'no (: r2 (swel >items) (? (= r2 'no) 'no (r1 + r2))))))
+       (swb x) (: r (swel [x]) (? (= r 'no) 'no (two? r && !(two? >r)) <r ['blk r]))
        (ar s) (s @ ('ret . _) 1
                    ('blk items) (foldl (\ a x (a || ar x)) () items)
                    ('if _ t e) (ar t && ar e)
@@ -6866,6 +6879,15 @@
                       ('if c t e) (? (ar t) (arm c (bl [t]) (bl (? (two? e) (e . >l) >l)))
                                      (ar e) (arm c (bl (t . >l)) (bl [e]))
                                      'no)
+                      ; ..a trap past the switch (the author's, for a fall out) moves inside it, last,
+                      ; behind a default when there is none: a break skips it, a fall out still meets it
+                      ('switch e items)
+                       (: trap '(expr (call (var "__builtin_trap") ()))
+                          (? (!sw || two? (filter (\ x !(= x trap)) >l)) 'no
+                             (: r (swel items)
+                                dfl (foldl (\ a x (a || (two? x && <x = 'dflt))) () items)
+                                tl (? !(two? >l) () dfl [trap] [['dflt] trap])
+                                (? (= r 'no) 'no [['switch e (r + tl)]]))))
                       'no))))
        (el l))
    ; is every mention of p a deref or a call's arg? then p may stand for an address
@@ -6886,6 +6908,14 @@
    (ainl g f)
     (: rf (respell f)
        tys {} dn {} tak {} n9 {'k 0} st9 {'s ()}          ; st9: the statement being laid
+       ; the static type of an expression here, by the parser's own typer over the caller's names
+       ; (and the spliced bodies' as they are pinned): () where it does not know
+       gty (: t (g 'ainlg)
+              (? t t (: t2 (foldl (\ a k (pin a k <>(g 'glob k))) {} (keys (g 'glob)))
+                        _ (pin g 'ainlg t2) t2)))
+       ps9 {'locals tys 'globals gty 'sigs (g 'sigs) 'stag (g 'stag) 'tgt (g 'tgt)}
+       (ety e) (: t (ptype ps9 e) (? (stru? t || arr? t) () t))
+       (tmp ty) (: k (n9 'k) _ (pin n9 'k (k + 1)) t ("`c" + show k) _ (pin tys t ty) t)
        (cen x)                                     ; the caller's names: types, and which are &-taken
         (? !(two? x) 0
            (x @ ('addr ('var nm)) (pin tak nm 1, 0)
@@ -6910,22 +6940,25 @@
         (: c (? ((elem nm d) || (3 < #d) || (dn nm)) () (cand nm))
            xh (two? mode && <mode = 'exprh)
            xo (xh || mode = 'expr)
-           val? (xo || elem mode '(val br))
-           pm (two? mode && !xh)
+           xi (two? mode && <mode = 'into)             ; ('into v T): the body's returns store to v, cast T when given
+           val? (xo || xi || elem mode '(val br))
+           pm (two? mode && !xh && !xi)
            (? !(two? c) ()
               (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5)
                  one (body @ (('ret e)) (two? e) ())          ; the whole body one `return e`
+                 nr9 (: (go x) (? !(two? x) 0 (<x = 'ret) 1 ((go <x) + go >x)) (go body))
+                 ; ..or statements then one: at a test the statements hoist, the return is the test
+                 tr1 ((mode = 'br) && !one && nr9 = 1 && (: rl (rev body) (two? rl && <rl @ ('ret e) (two? e) ())))
                  ex (? xo (flat body (nm . d)) ())
                  bd (? (two? ex) [['ret ex]] body)
                  nocall (foldl (\ a x (a && !(callish? x))) 1 as)
                  (? (#ps != #as) ()
                     (foldl (\ a v (a || dn v)) () fr) ()          ; a free name the caller shadows
                     ((val? || pm) && (= rt 'void)) ()
-                    ((mode = 'br) && !one) ()                       ; a branchy test that does not push down is cginl's
+                    ((mode = 'br) && !one && !tr1) ()               ; a branchy test that does not push down is cginl's
                     (xo && !(two? ex)) ()
-                    ; ..each return lays its own copy of the arms: a few small ones
-                    (pm && ((40 < (dsz (mode 2) + dsz (mode 3))) ||
-                            (5 < (: (go x) (? !(two? x) 0 (<x = 'ret) 1 ((go <x) + go >x)) (go body))))) ()
+                    ; ..each return past the first lays its own copy of the arms: a few small ones
+                    (pm && 1 < nr9 && ((64 < (dsz (mode 2) + dsz (mode 3))) || 5 < nr9)) ()
                     (: k (n9 'k) _ (pin n9 'k (k + 1))
                        sfx ("`a" + show k)
                        m {}
@@ -6962,7 +6995,8 @@
                        (rc x) (? !(two? x) x
                                  (<x = 'ret) (? (two? <>x) ['ret (? (= rt crt) <>x (cv <>x rt))] x)
                                  (rc <x . rc >x))
-                       rv (? (val? && !one) ("`r" + show k) ())
+                       rv (? xi <>mode (val? && !one) ("`r" + show k) ())
+                       (into e) (: v (cv e rt) [['expr ['asn ['var rv] (? (mode 2) ['cast (mode 2) v] v)]]])
                        ; a test pushed down: each return's value decides the caller's if in place
                        (pt e) (: v (cv e rt) kc (cnum g v)
                                  (? (two? kc)                    ; a constant return is its arm
@@ -6970,11 +7004,15 @@
                                     [['if (? (<>mode = 1) ['un 'not v] v) (mode 2) (mode 3)]]))
                        el (? (= pre 'no) 'no
                              (mode = 'ret) (rc rb)
+                             xi (aelim rb (e \ (? !(two? e) () (into e))) 1)
                              (xo || (val? && one)) rb
-                             pm (aelim rb pt)
-                             (aelim rb (e \ (? !(two? e) () rv [['expr ['asn ['var rv] e]]] [['expr e]]))))
+                             tr1 (: rl (rev rb) r (hx <>(<rl) (nm . d))       ; the trailing return is the test
+                                    [(hitems (rev >rl) (nm . d) + <r) (cv <>r rt)])
+                             pm (aelim rb pt ())
+                             (aelim rb (e \ (? !(two? e) () rv [['expr ['asn ['var rv] e]]] [['expr e]])) 1))
                        (? (= el 'no) ()
-                          ((mode = 'ret) || pm) [(pre + hitems el (nm . d)) ()]
+                          ((mode = 'ret) || pm || xi) [(pre + hitems el (nm . d)) ()]
+                          tr1 [(pre + <el) <>el]
                           xo [pre (cv <><rb rt)]
                           (val? && one) (: r (hx <><rb (nm . d)) [(pre + <r) (cv <>r rt)])
                           (: _ (? rv (pin tys rv rt) 0)
@@ -6988,7 +7026,8 @@
                              [(pre + hitems st (nm . d)) (? rv ['var rv] ())])))))))
        ; a test that pushes down -> (inv nm as) | (): a call, or its !, to a candidate of many returns
        (pcall c)
-        (: pc (c @ ('call ('var nm) as) [0 nm as] ('un 'not ('call ('var nm) as)) [1 nm as] ())
+        (: pc (c @ ('call ('var nm) as) [0 nm as] ('un 'not ('call ('var nm) as)) [1 nm as]
+                   ('un 'not ('un 'not x)) (pcall x) ())
            cd (? pc (cand <>pc))
            (? (two? cd && !(<>cd @ (('ret e)) 1 ())) pc ()))
        ; no call, store or storage: evaluating it any number of times, or not at all, changes nothing
@@ -7034,6 +7073,11 @@
                 (map (x \ hxe x d h) e)))
        (hxh e d f)                                    ; f builds e's form from its hoist box
         (: h {'pre () 'ws (st9 's)} r (f h) [(h 'pre) r])
+       ; a candidate call the expression lane left (its body is statements): at a value position
+       ; the operand becomes a typed temporary assigned under an if, where the body splices
+       (armc? x) (? !(two? x) () (x @ ('call ('var nm) _) (two? (cand nm)) (armc? <x || armc? >x)))
+       (cvt ty x) (? (= ty 'same) x ['cast ty x])
+       (hascont? x) (? !(two? x) () (<x = 'cont) 1 (hascont? <x || hascont? >x))
        ; an arm's weight as a copy, or past any budget when a copy would be wrong (a label, a decl)
        (dsz x) (? (= x ()) 0 !(two? x) 1 (elem <x '(lbl case dflt decl sdecl asm)) 99 ((dsz <x) + dsz >x))
        ; an expression -> (pre e'): only the positions evaluated first are hoisted
@@ -7045,11 +7089,24 @@
                    (? (two? s) [(<ha + <s) <>s] [<ha ['call ['var nm] <>ha]]))
                 ('call fh as) (: ha (hxl as d) [<ha ['call fh <>ha]])
                 ('bin op a b) (: ra (hx a d) rb (hx b d) [(<ra + <rb) ['bin op <>ra <>rb]])
-                ('comma a b) (: ra (hx a d) rb (hxh e d (h \ (hxe b d h))) [(<ra + <rb) ['comma <>ra <>rb]])
-                ; a short-circuit or a select branches on its first operand, as cbranch lays it
-                (('land || 'lor) a b) (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) [(<ra + <rb) [<e <>ra <>rb]])
-                ('cond c a b) (: rc (hxb c d) rb (hxh e d (h \ [(hxe a d h) (hxe b d h)]))
-                                 [(<rc + <rb) ['cond <>rc <<>rb <><>rb]])
+                ; a comma's right evaluates once its left has: the left is a statement, the right hoists
+                ('comma a b) (: ra (hx a d) rb (hx b d) [(<ra + [['expr <>ra]] + <rb) <>rb])
+                ; a short-circuit or a select branches on its first operand, as cbranch lays it -- a
+                ; right operand of statements decides a temporary under nested ifs (its test pushes down)
+                (('land || 'lor) a b)
+                 (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) b2 <>rb
+                    (? !(armc? b2) [(<ra + <rb) [<e <>ra b2]]
+                       (: t (tmp 'int)
+                          s1 ['expr ['asn ['var t] ['num 1]]] s0 ['expr ['asn ['var t] ['num 0]]]
+                          st (hs (? (<e = 'land) ['if <>ra ['if b2 s1 s0] s0] ['if <>ra s1 ['if b2 s1 s0]]) d)
+                          [(<ra + <rb + [['decl [[t 'int]]]] + st) ['var t]])))
+                ('cond c a b)
+                 (: rb (hxh e d (h \ [(hxe a d h) (hxe b d h)])) a2 <<>rb b2 <><>rb
+                    ty (? (armc? a2 || armc? b2) (ety e) ())
+                    (? (= ty ()) (: rc (hxb c d) [(<rc + <rb) ['cond <>rc a2 b2]])
+                       (: t (tmp ty)
+                          st (hs ['if c ['expr ['asn ['var t] a2]] ['expr ['asn ['var t] b2]]] d)
+                          [(<rb + [['decl [[t ty]]]] + st) ['var t]])))
                 ('asn l r) (: rl (hx l d) rr (hx r d) [(<rl + <rr) ['asn <>rl <>rr]])
                 ('rmw op l r) (: rl (hx l d) rr (hx r d) [(<rl + <rr) ['rmw op <>rl <>rr]])
                 ('post l n) (: r (hx l d) [<r ['post <>r n]])
@@ -7082,14 +7139,25 @@
                  (: ha (hxl as d)
                     st (site nm <>ha d 'ret)
                     (? (two? st) (<ha + <st) (<ha + [['ret ['call ['var nm] <>ha]]])))
-                ; x = c ? a : b and return c ? a : b are ifs, where c pushes down: for a pointer x,
-                ; where an arm converts to x as it would to the arms' common type
-                ('expr ('asn ('var v) ('cond c a b)))
-                 (? (ptr? (peep tys v ()) && pcall c) (hs ['if c ['expr ['asn ['var v] a]] ['expr ['asn ['var v] b]]] d)
-                    (: r (hx <>s d) (<r + [['expr <>r]])))
+                ; x = c ? a : b and return c ? a : b are ifs where c pushes down or an arm splices:
+                ; each arm cast to the arms' common type first -- a pointer x converts them so itself
+                ('expr ('asn lv ('cond c a b)))
+                 (: ty (? !(pure? lv && (pcall c || armc? a || armc? b)) () (ptr? (ety lv)) 'same (ety ['cond c a b]))
+                    (? (= ty ()) (: r (hx <>s d) (<r + [['expr <>r]]))
+                       (hs ['if c ['expr ['asn lv (cvt ty a)]] ['expr ['asn lv (cvt ty b)]]] d)))
                 ('ret ('cond c a b))
-                 (? (ptr? crt && pcall c) (hs ['if c ['ret a] ['ret b]] d)
-                    (: r (hx <>s d) (<r + [['ret <>r]])))
+                 (: ty (? !(pcall c || armc? a || armc? b) () (ptr? crt) 'same (ety ['cond c a b]))
+                    (? (= ty ()) (: r (hx <>s d) (<r + [['ret <>r]]))
+                       (hs ['if c ['ret (cvt ty a)] ['ret (cvt ty b)]] d)))
+                ; x = f(..), or (T) f(..): the body's returns store to x
+                ('expr ('asn ('var v) x))
+                 (: cx (x @ ('call ('var nm) as) [nm as ()] ('cast ty ('call ('var nm) as)) [nm as ty] ())
+                    (? !(two? cx) (: r (hx <>s d) (<r + [['expr <>r]]))
+                       (: ha (hxl <>cx d)
+                          st (site <cx <>ha d ['into v (cx 2)])
+                          c2 ['call ['var <cx] <>ha]
+                          (? (two? st) (<ha + <st)
+                             (<ha + [['expr ['asn ['var v] (? (cx 2) ['cast (cx 2) c2] c2)]]])))))
                 ('expr e) (: r (hx e d) (<r + [['expr <>r]]))
                 ('decl ps)
                  ; an init may name its own decl (sizeof *h): what hoists above it may not
@@ -7101,18 +7169,34 @@
                                      (<r + [['decl [(? (two? >>p) ([<p <>p <>r] + >>>p) p)]]] + go >ps >rs)))
                     (go ps rs))
                 ('ret e) (? !(two? e) [s] (: r (hx e d) (<r + [['ret <>r]])))
-                ('if c t e)
+                ; a test's && || whose right still holds a callee of statements once its expressions
+                ; are in place: the right decides its own if under (or beside) the left's, the small
+                ; arm copied -- each test then pushes down
+                ('if (('land || 'lor) a b) t e && 40 > dsz (? (<<>s = 'land) e t))
+                 (: rb (hxh s d (h \ (hxe b d h))) b2 <>rb
+                    (? !(armc? b2) (hif <>s t e d)
+                       (<rb + hs (? (<<>s = 'land) ['if a ['if b2 t e] e] ['if a t ['if b2 t e]]) d)))
+                ('if c t e) (hif c t e d)
+                ; a loop's test of statements: the test is an if at the body's head, a break its
+                ; else -- continue runs it again (for a do-while only where the body has no continue)
+                ('while c b) (: c2 (hxe c d ())
+                                (? !(armc? c2) [['while c2 (hb b d)]]
+                                   [['while ['num 1] ['blk (hs ['if ['un 'not c2] ['brk] ()] d + [(hb b d)])]]]))
+                ('do b c) (: c2 (hxe c d ())
+                             (? !(armc? c2 && !(hascont? b)) [['do (hb b d) c2]]
+                                [['do ['blk ([(hb b d)] + hs ['if ['un 'not c2] ['brk] ()] d)] ['num 1]]]))
+                ('for i c st b) (: c2 (hxe c d ())
+                                   (? !(armc? c2) [['for (hxe i d ()) c2 (hxe st d ()) (hb b d)]]
+                                      [['for (hxe i d ()) ['num 1] (hxe st d ()) ['blk (hs ['if ['un 'not c2] ['brk] ()] d + [(hb b d)])]]]))
+                ('switch e items) (: r (hx e d) (<r + [['switch <>r (hitems items d)]]))
+                ('blk items) [['blk (hitems items d)]]
+                [s]))
+       (hif c t e d)
                  (: pc (pcall c)
                     ha (? pc (hxl (pc 2) d))
                     st (? pc (site <>pc <>ha d ['push <pc t e]))
                     (? (two? st) (<ha + <st)
                        (: r (hxb c d) (<r + [['if <>r (hb t d) (hb e d)]]))))
-                ('while c b) [['while (hxe c d ()) (hb b d)]]
-                ('do b c) [['do (hb b d) (hxe c d ())]]
-                ('for i c st b) [['for (hxe i d ()) (hxe c d ()) (hxe st d ()) (hb b d)]]
-                ('switch e items) (: r (hx e d) (<r + [['switch <>r (hitems items d)]]))
-                ('blk items) [['blk (hitems items d)]]
-                [s]))
        (hitems l d) (? !(two? l) () (hs <l d + hitems >l d))
        [<rf <>rf <>>rf ['blk (hitems <>(rf 3) [<>rf])]])
    ; -- respell: a name declared twice in one fn conflates in alive and kprop, so each later decl
