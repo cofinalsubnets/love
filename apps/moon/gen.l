@@ -150,9 +150,7 @@
                     fs))
    (ralloc g) (? !(abl? g 'ralloc)
                (g 'pool @ (r9 . u)
-                ; a pinned reg on the free list is the free-list/pin split resurfacing: refuse loud
-                (elem r9 (g 'rpin) ? (scare 'ralloc-pinned r9),
-                 pin g 'pool u,
+                (pin g 'pool u,
                  (: k9 (peep g 'vrn 0)
                     v9 (name ("%v" + show k9))
                   (pin g 'vrn (k9 + 1),
@@ -160,13 +158,10 @@
                    v9)))))
    (rfree g rz) (: r (rp g rz)
                   (elem r (g 'pool0) &&
-                 !(elem r (g 'pool)) &&
-                 !(elem r (g 'rpin)) ?             ; a splice's register bind is not ours to free
+                 !(elem r (g 'pool)) ?
                   (pin g 'pool (r . g 'pool))))
    (wr? g rz) (? (= rz 'r0) 1                        ; writable: protocol r0 or an owned pool reg
-                 (: r (rp g rz)
-                    (elem r (g 'pool0) &&   ; (a borrowed home or a bind
-                     !(elem r (g 'rpin)))))  ;  reg is read-only)
+                 (elem (rp g rz) (g 'pool0)))         ; (a borrowed home is read-only)
    ; the assignment: move a mint onto its copy's other side, so the copy substitutes to (mov X X)
    ; and the sweep drops it. a move is licensed only over a straight-line window, every rule is a
    ; mention-list scan, and a refused move changes nothing (a leaked mint still dies loud at holo).
@@ -343,19 +338,6 @@
    (vdrop g v) (: fs (vfs v) (rfree g (vreg v), fs))   ; the value is discarded: keep the effects, free the reg
    ; the result register for an op consuming rA: a writable operand, else a fresh pool reg, else r0
    (rdst g rA) (wr? g rA ? rA (: rX (ralloc g) (rX || 'r0)))
-   ; what a register costs, per class, in memory operations; every gate weighs its own extent (the
-   ; traffic the residency erases) against it. a gate's n and ext must share one clock (per call or per iteration)
-   (rcost cls n)                                    ; -> memory ops per register, or 'never
-    (cls @ 'ros  n                                  ; a rostered pin reloads at every call in scope
-           'bor  (1 + n)                            ; a seat: one save, then one reload per exit
-           'home (2 * n)                            ; a caller-saved home: the wrap pair per call
-           'pool (? (0 < n) 'never 1)               ; not a price: a pool home cannot cross a call
-           'bind 7                                  ; a splice bind's park (measured, not derived)
-           'never)
-   (rprice cls n ext)                               ; the margin: ops saved, net of ops spent
-    (rcost cls n @ 'never 'never c (ext - c))
-   (rpays? cls n ext)                               ; ...and it must win
-    (rprice cls n ext @ 'never 0 m (0 < m ))
    ; frame-direct: a constant-indexed frame-array element is a static slot (off + k*elsize), the
    ; address consumed by its own load/store, so escaping arrays too; pair/d128 keep the address lanes
    (afd g env e)                                    ; -> (off elty) | ()
@@ -366,12 +348,6 @@
                     (? ((ptr? et || elem et '(char uchar bool short ushort int uint long ulong)) &&
                         !(pair? g et))
                        [(<>en + i * tsz g et) et])))))
-   ; may an alias live across a splice body? only in a register the body's staging never writes:
-   ; x64 staging owns r0-r3; elsewhere the arrivals r0-r7 are staging-adjacent, so pool/cs only
-   (alsafe? g rz)
-    (: r (rp g rz)
-       (? (x64t? g) !(elem r '(r0 r1 r2 r3))
-          (elem r (g 'pool0) || elem r (cspool g))))
    ; may this param alias? only if the body never writes it (the register holds the caller's
    ; live value). a C name is a string, so the compare is `=` -- `==` never matches
    (wrs? nm e)
@@ -384,11 +360,7 @@
             (: w9 (? (elem <e '(while do for)) (w * 8) w)
                (go l a) (? !(two? l) a (go >l (a + rdw nm <l w9)))
                ((? (two? <e) (rdw nm <e w9) 0) + go >e 0))))
-   ; the per-statement pool reset: pool0 minus the splice binds
-   (psreset g)
-    (: vp (g 'rpin)
-       (? !(two? vp) (pin g 'pool (g 'pool0))
-          (pin g 'pool (filter (\ r9 !(elem r9 vp)) (g 'pool0)))))
+   (psreset g) (pin g 'pool (g 'pool0))            ; the per-statement pool reset
    ; the target seam: g 'tgt (x64 | a64 | rv64 | wasm | thumb2 | thumb2sp | thumb1) picks the ABI
    ; shapes; the IR stays neutral. the arm family retargets the frame base to fp at the end of build (a4ize)
    (a64? {'tgt 'a64}) 1
@@ -924,71 +896,6 @@
           (d128? (vty r))                            ; wide truth: fold the pair into r0
            (mkv 'long 'r0 (vfs r + '((or r0 r0 r2))))
           r))
-   ; the predicate splice: a call to an inline-table fn whose body is one `return E` with E a bit
-   ; by shape branches through the body straight to lbl. the fesc/strs decline protocol is cginl's. forms | 'no
-   (retex f)                                     ; init-free scalar decls* + one `return E` -> (((name ty)..) E) | ()
-    (: (dok ps acc9)
-        (? (one? ps) acc9
-         (: p9 <ps
-          (? (two? <>>p9 || arr? <>p9 || stru? <>p9) 'bad
-           (dok >ps ([<p9 <>p9] . acc9)))))
-       (go items dacc)
-        (? (one? items) ()
-         (: it <items
-          (? (<it = 'decl)
-              (: ds (dok <>it dacc) (bad? ds ? () (go >items ds)))
-             (<it != 'ret) ()
-             (one? <>it) ()
-             (two? >items) ()
-             [dacc <>it])))
-       (go <><>>>f ()))
-   (abit? e9) (? !(two? e9) ()
-                 (<e9 = 'un && <>e9 = 'not) 1
-                 (elem <e9 '(land lor)) 1
-                 (<e9 = 'bin && elem <>e9 '(eq ne lt le gt ge)))
-   ; the splice bind: params against args -> [benv acc rbs sbs] | 'bad. an arg lands as a constant
-   ; (kb?), a homed local's alias register (call-free, never assigned), a pool park (call-free, pk?,
-   ; two seats stay free), else a frame slot. rpin holds each bind register; rbs lists the parks, sbs the constants
-   (sbind g env ps as nocall body kb? pk?)
-    (: (go ps as benv acc rbs sbs)
-        (? (one? ps) [benv acc rbs sbs]
-           (: nm <<ps pty <><ps
-              kb (? (kb? && kb? nm && !(flo? pty))
-                    (: kc (knum g <as)
-                       (? (one? kc) ()
-                          (: cv (cnum g ['cast pty ['num <kc]])
-                             (two? cv ? ['cast pty ['num <cv]])))))
-              al (? (nocall && !(flo? pty) && 8 = tsz g pty &&
-                     two? <as && <<as = 'var && !(wrs? nm body))
-                    (: v9 (vent g env <><as)               ; a homed/riding local: a read-only
-                       (? (two? v9 && <v9 = 'regv && !(flo? <>>v9)) <>v9)))   ; reg holding the value
-              al (? al (? (alsafe? g al) al ()) ())        ; staging must never write it
-              (? (two? kb) (go >ps >as benv acc rbs ([nm kb] . sbs))
-                 al (: _ (pin g 'rpin ((rp g al) . g 'rpin))   ; the alias bind: zero forms
-                       (go >ps >as ([nm ['reg al] pty] . benv) acc rbs sbs))
-                 (: r (cgexpr g env <as ())
-                    (? (bad? r) 'bad
-                       (flo? pty)                             ; a double param: its slot, stored as one
-                        (: off (ntmp g pty)
-                           (go >ps >as ([nm off pty] . benv) (acc + asflo g r + fstf g pty 'r4 off 'f0) rbs sbs))
-                       (pair? g pty)                          ; a pair param: an 8-byte slot, both words
-                        (: off (ntmp g 'llong)
-                           (go >ps >as ([nm off pty] . benv) (acc + asll g r + pst 'r4 off) rbs sbs))
-                       (: rb (? (nocall && !(flo? pty) && pk? nm && deep? (g 'pool)) (ralloc g) ())
-                          (? rb                              ; the park bind: the value rides a pool reg
-                              (: _ (pin g 'rpin ((rp g rb) . g 'rpin))
-                                 (go >ps >as ([nm ['reg rb] pty] . benv)
-                                     (acc + asintt g r pty + [['mov rb 'r0]] + cvt pty rb)
-                                     (rb . rbs) sbs))
-                             (: off (ntmp g 'long)
-                                vd (? (flo? (vty r) || (= pty 'bool) || (= (vreg r) 'r0)) () (vreg r))
-                                (go >ps >as ([nm off pty] . benv)
-                                    (? vd (: fs (acc + vfs r + [['st 'r4 off vd]]) _ (rfree g vd) fs)
-                                       (acc + asintt g r pty
-                                            + (pty @ 'bool (cvt pty 'r0))   ; the entry conversion the splice skips
-                                            + [['st 'r4 off 'r0]]))
-                                    rbs sbs)))))))))
-       (go ps as () () () ()))
    ; does e certainly compute a double? a static peek for the branch lanes: a miss (a shape
    ; the peek does not read) keeps the discard lane, so it is never wrong, only incomplete
    (flo9? g env e)
@@ -1016,42 +923,6 @@
           (: a (hdty9 g env x)
              (two? a && elem <a '(ptr arr) ? a (hdty9 g env y)))
          ())
-   (cbinl g env e cc lbl)
-    (: head <>e args <>>e
-       il0 (peep g 'inlining ())
-       d0 (il0 || 0)
-       inlf (? (2 < d0) ()                        ; nests to depth 3: no labels, so only recursion needs a cap
-               !(<head = 'var) ()
-               !(bad? (vent g env <>head)) ()     ; a local/global shadows the name
-               (: c9 (g 'inl <>head)
-                  (? (atom? c9) ()
-                     (#args = #<>>c9) c9)))
-       rx (two? inlf ? (retex inlf))
-       e9 (two? rx ? <>rx)
-       (? !(abit? e9) 'no
-          (: fe0 (g 'fesc)
-             strs0 (g 'strs)
-             rp0 (g 'rpin)
-             (anyc l) (? !(two? l) () (? (callish? <l) 1 (anyc >l)))
-             nocall (!(callish? e9) && !(anyc args))
-             _ (pin g 'inlining (d0 + 1))
-             (dtmp ds benv9)                       ; the body's own decls: fresh temps over the params
-              (? !(two? ds) benv9
-                 (: d9 <ds (dtmp >ds ([<d9 (ntmp g <>d9) <>d9] . benv9))))
-             br (sbind g env <>>inlf args nocall <><>>>inlf () (nm \ 1))   ; every park priced in: the body is one expression
-             ib0 (peep g 'inlbody 0)
-             _ (pin g 'inlbody (ib0 + 1))          ; the body blinds the alias bind (name conflation)
-             bf (? (bad? br) 'bad (cbranch g (dtmp <rx <br) e9 cc lbl))
-             _ (pins g 'inlbody ib0 'inlining il0 'rpin rp0) ; the bind pins die with the splice
-             (unrb (a . u)) (rfree g a, unrb u)
-             _ (two? br ? (unrb (br 2)))
-             (? (bad? bf)
-                 (pin g 'fesc fe0, pin g 'strs strs0, 'no)
-                (!fe0 && g 'fesc)          ; the body took a frame address: keep the caller lean
-                 (pin g 'fesc (), pin g 'strs strs0, 'no)
-                (leas? bf)                 ; ..or consumed one (a compound literal): it would cost the caller its tail calls
-                 (pin g 'strs strs0, 'no)
-                (<>br + bf)))))
    ; (v & k) as a bare condition: test is flags-only, so the value's register survives (a mapped
    ; local stays mapped); the 'log gate is exactly test's immediate reach on each backend
    (tbr g env v k cc lbl)
@@ -1061,7 +932,7 @@
              _ (rfree g (vreg a))
              fs)))
    ; branch on a condition without materializing it: jump to lbl when it is false (cc 'eq) or true
-   ; (cc 'ne), the sense of `(cmp r0 0) (br cc lbl)`. fusions: cmp+br, !, &&/||, tbr, cbinl, fcb. forms | 'bad
+   ; (cc 'ne), the sense of `(cmp r0 0) (br cc lbl)`. fusions: cmp+br, !, &&/||, tbr, fcb. forms | 'bad
    ; x64's selects, tried before the branch lowering -> a value | 'no. `c ? 1 : 0` over a relation
    ; is the relation's own value (c ? 0 : 1 its negation); `a < b ? a : b` and its three twins are
    ; minsd/maxsd (strict lt/gt only: <= differs on a signed zero; a NaN falls to the src arm as C
@@ -1306,8 +1177,7 @@
           rhs (two? ms ? <>ms)
           kr (two? ms ? (knum g rhs))
           kl (two? ms ? (knum g lhs))
-          try (? (<e = 'call) (cbinl g env e cc lbl)
-                 !(two? ms) 'no
+          try (? !(two? ms) 'no
                  (two? kr && immok g 'log <kr) (tbr g env lhs <kr cc lbl)
                  (two? kl && immok g 'log <kl) (tbr g env rhs <kl cc lbl)
                  'no)
@@ -1431,8 +1301,6 @@
    ; closes inside its own staging, so the free list keeps its order
    (spare g bf)
     (: (go l) (? !(two? l) ()
-                 (elem <l (g 'rpin))
-                  (scare 'spare-pinned <l)
                  (psafe? g bf <l) <l
                  (go >l))
        (go (g 'pool)))
@@ -2526,16 +2394,6 @@
            bi (? (<head = 'var) <>head ())
            bv (cgbuiltin g env bi args)
            (? !(= bv 'no) bv
-              (: m9 (g 'must9)
-                 _ (m9 ? (pin g 'must9 ()))
-                 inlf (? m9 ()                                  ; a musttail call is owed as a call: never spliced
-                         (2 < peep g 'inlining 0) ()   ; splices nest to depth 3, cbinl's cap
-                         !(<head = 'var) ()
-                         !(bad? (vent g env <>head)) ()   ; a local/global shadows the name
-                         (g 'inl <>head))
-                 ir9 (? (two? inlf && #args = #<>>inlf)
-                        (cginl g env inlf args) 'no)              ; 'no: splice declined (fesc or shape) -> the real call
-                 (? !(= ir9 'no) ir9
               (: direct (<head = 'var && bad? (vent g env <>head) &&  ; not a local/global variable...
                                          g 'fns <>head)     ; ...and a known function (typos refuse)
                  sig (direct ? (g 'sigs <>head))
@@ -2578,7 +2436,7 @@
                     (= (aone g (vty cr)) 'int)    ; a small int aggregate result: park rax
                      (: toff (nslot g 16)
                         (mkv (vty cr) 'r0 (vfs cr + [['st 'r4 toff 'r0] ['lean 'r0 'r4 toff]])))
-                    'bad))))))
+                    'bad))))
        ; a statement expression: the statements in place, then the value as an ordinary expression (keeps its register);
        ; 'inlining is raised over the statements so stq stops ticking and each wears the conservative wrapset
        ('sexpr items ve ty)
@@ -5803,18 +5661,7 @@
                      (vone ps env2 acc p ty))
                  (: span (& (tsz g ty + 7) -8)
               off (nslot g span)
-              hreg (? (g 'inlining)
-                      ; a splice's body decl takes a pool seat when cginl licensed the name (inlrb),
-                      ; held in rpin and freed by the splice (inlrbs); seat-bearing builds (rgon) only
-                      (? (g 'rgon &&
-                          lhomable? ty &&
-                          elem <p (g 'inlrb) &&
-                          deep? (g 'pool))
-                          (: rb (ralloc g)
-                             (? !rb ()
-                                (: _ (pins g 'rpin ((rp g rb) . g 'rpin)
-                                             'inlrbs (rb . g 'inlrbs))
-                                   rb))))
+              hreg (? (g 'inlining) ()                   ; a statement expression's decl takes no seat
                       !(lhomable? ty || fhomable? ty || (d128? ty && w128? g)) ()
                       (: sq (1 + peep g 'dseq 0)
                          _ (pins g 'dseq sq
@@ -6426,7 +6273,7 @@
            (peep n9 'asm 0) (peep n9 'vla 0) (peep n9 'sq 0) tak
            (pmxl items 1 1) (? pq9 1 ()) (? wd9 1 ())] ()))
    ; alive's forward twin: cgstmt/cgdecl/cgsdecl entries tick and pin the wrapset off livtab
-   ; (a miss pins 'all); a splice neither ticks nor re-pins
+   ; (a miss pins 'all); a statement expression's statements neither tick nor re-pin
    (stq g)
     (? (g 'inlining) (peep g 'stwrap 'all)
        (: q (1 + peep g 'lsq 0)
@@ -6465,35 +6312,26 @@
      'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
-     'inlining () 'inlbody 0   ; splice depth + body depth (the bind lanes' blind)
-     'inlret () 'inlrt ()      ; splice return label + type (cgstmt's ret door)
-     'inlrb () 'inlrbs ()      ; splice decl-license + its reg roster
-     'rpin ()                  ; splice bind pins
+     'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
      'fpin ()                  ; the frame link is asked for by name (unframe stands off)
      'cssv ()                  ; the callee-saved save forms (a cs grant pins)
      'sret ())                 ; the memory-return slot (the driver re-pins under sr6f)
 
    (cgstmt g env s)
-    (: _ (psreset g)                                 ; a statement never carries a live operand in (splice binds do)
+    (: _ (psreset g)                                 ; a statement never carries a live operand in
        myw (stq g)                                   ; this statement's wrapset (alive's forward twin)
        (s @- 'bad                                                        ; the refusal up front, 180 lines of clauses below
-          ('ret . rs)                                                     ; inside an inline splice a return jumps to the
-          (: il (g 'inlret)                                      ; splice's end label instead of the epilogue
-             epj (peep g 'epi epi)                                       ; the target's epilogue (cgen-core pins it)
+          ('ret . rs)
+          (: epj (peep g 'epi epi)                                       ; the target's epilogue (cgen-core pins it)
              mt (1 < tally rs)                                           ; clay's (ret e PRE): presence is the arity
              rr9
-             (? (mt && il) 'bad                     ; a musttail never inlines: the splice declines, the real call still can
-                !(two? <rs)
-                 (? mt (nolane g "a musttail return carries no call") (? il [['jmp il]] epj))   ; bare `return;` -- just the epilogue
-                (: _ (? mt (pin g 'must9 1) 0)      ; the ret's own call stays a call (no splice) -- consumed at first touch
-                   r (cgexpr g env <rs 'r0)         ; the return value's one true home
-                   _ (pin g 'must9 ())
-                   rt (? il (peep g 'inlrt 'long)                        ; the inlined function's return type
-                         <(peep (g 'sigs) (g 'fn) ['long ()]))         ; else the current function's
+             (? !(two? <rs)
+                 (? mt (nolane g "a musttail return carries no call") epj)   ; bare `return;` -- just the epilogue
+                (: r (cgexpr g env <rs 'r0)         ; the return value's one true home
+                   rt <(peep (g 'sigs) (g 'fn) ['long ()])           ; the function's return type
                    res
                    (? (bad? r) 'bad
-                      (flo? rt && il) (asflo g r + [['jmp il]])       ; a spliced double answers in f0, the call's own protocol
                       (flo? rt)                                        ; a double return leaves f0 (xmm0);
                        (asflo g r                                      ; v6-M base ABI carries a double out on the r0:r1 pair,
                         + (? (t32f? g && (= rt 'float)) '((cvtsd2ss f0 f0))   ; AAPCS-VFP: narrow into s0, d0's own low half
@@ -6527,14 +6365,14 @@
                       (stru? rt || stru? (vty r))                        ; a mixed 16-byte pair, and every composite class
                        (nolane g ("no lane for returning this " + show (tsz g (? (stru? rt) rt (vty r)))     ; a64 has no memory return yet
                                   + "-byte struct by value" + ontgt g))
-                      (flo? (vty r)) (asintt g r rt + (? (= rt 'bool) (cvt rt 'r0) ()) + (? il [['jmp il]] epj))     ; a double value, an int return -> truncate to r0
-                      (pair? g rt) (asll g r + (? il [['jmp il]] epj))        ; a pair return: r0:r1 (widen a word value)
+                      (flo? (vty r)) (asintt g r rt + (? (= rt 'bool) (cvt rt 'r0) ()) + epj)     ; a double value, an int return -> truncate to r0
+                      (pair? g rt) (asll g r + epj)        ; a pair return: r0:r1 (widen a word value)
                       (d128? rt)                                                ; a wide return rides rdx:rax (the SysV i128 pair)
-                       (? (w128? g) (as128 g r + (? il [['jmp il]] epj)) (no128 g))
+                       (? (w128? g) (as128 g r + epj) (no128 g))
                       (rt = 'bool)                             ; a bool return converts (callers read r0 whole -- cc calls untyped)
-                       (tor0 g r + cvt rt 'r0 + (? il [['jmp il]] epj))
+                       (tor0 g r + cvt rt 'r0 + epj)
                       ; int -> int: a value the return type cannot hold converts (callers read r0 whole)
-                      (tor0 g r + (? (irfit? (vty r) rt) () (cvt rt 'r0)) + (? il [['jmp il]] epj)))
+                      (tor0 g r + (? (irfit? (vty r) rt) () (cvt rt 'r0)) + epj))
                    (? (!mt || bad? res) res (mustret g res))))
              rr9)         ; a musttail ret marks its call for sibs
           ('expr pe)
@@ -6760,68 +6598,12 @@
           ; the size gate on the shown body: 600 for a single-return body, 250 for a branchy one
           (!aln && (oneret? items ? 600 250) < #(show <>>>f)) ()
           !(noinl? <>>>f)))
-   (cginl g env f args)                              ; splice f's body at the site -> (ty forms) | 'no (declined)
-    (: fe0 (g 'fesc)                          ; a splice that pins fesc would cost the caller every sibcall: declined below
-       strs0 (g 'strs)
-       il0 (g 'inlining)
-       ir0 (g 'inlret)
-       irt0 (g 'inlrt)
-       _ (pin g 'inlining ((il0 || 0) + 1))
-       rt <(peep (g 'sigs) <>f ['long ()])
-       ilb9 (nlab g ".il")
-       rp0 (g 'rpin)
-       ; the bind is sbind's; &param self-declines through clval. a park spans the whole body, so it
-       ; must earn its seat by weighted reads (paid?)
-       (anyc (a . u)) (callish? a || anyc u)
-       body9 <><>>>f
-       (paid? nm) (rpays? 'bind 0 (rdw nm body9 1))
-       nocall (!(callish? body9) && !(anyc args))
-       (dnames x a9)
-        (? !(two? x) a9
-           (= <x 'decl && two? >x)
-            (: (dn ps a) (? !(two? ps) a (dn >ps (<<ps . a)))
-               (dn <>x a9))
-           (dnames <x (dnames >x a9)))
-       dns (dnames body9 ())
-       (anyasm x) (? (= x 'asm) 1 !(two? x) () (anyasm <x || anyasm >x))
-       asm9 (anyasm body9)
-       ; the const bind's license: a literal arg that folds exactly substitutes into the body; declined
-       ; when the body assigns or shadows the name, or carries asm (an output could write it unseen)
-       (kok? nm) !(asm9 || wrs? nm body9 || elem nm dns)
-       br (sbind g env <>>f args nocall body9 kok? paid?)
-       ; the body-decl license: a paid decl name register-binds in cgdecl's splice lane; nesting saves/restores
-       rb0 (g 'inlrb)
-       rbs0 (g 'inlrbs)
-       _ (pins g 'inlrb (? nocall (filter paid? dns))
-          'inlrbs () 'inlret ilb9 'inlrt rt)
-       ; (g 'cgitems), not cgitems: the direct edge closes a letrec cycle the loader re-weaves wrong
-       ib0 (peep g 'inlbody 0)
-       _ (pin g 'inlbody (ib0 + 1))                ; the body blinds the alias bind (name conflation)
-       csbs (? (bad? br) () (br 3))
-       (vsub x) (? !(two? x) x
-                   (= <x 'var) (: p (assoc <>x csbs) (? (two? p) <>p x))
-                   ((vsub <x) . (vsub >x)))
-       ibd (? (bad? br) 'bad ((g 'cgitems) g <br (? (two? csbs) (vsub body9) body9) ()))
-       _ (pins g 'inlbody ib0 'inlret ir0 'inlrt irt0 'inlining il0 'rpin rp0) ; the bind pins die with the splice
-       drbs (g 'inlrbs)
-       _ (pins g 'inlrb rb0 'inlrbs rbs0)
-       (unrb (a . u)) (rfree g a, unrb u)
-       _ (two? br ? (unrb (br 2)))          ; the park regs return to the pool...
-       _ (unrb drbs)                                  ; ...and the body-decl binds with them
-       (? (bad? br || bad? ibd)                       ; a shape the splice can't take: the real call still can
-           (pin g 'fesc fe0, pin g 'strs strs0, 'no)
-          (!fe0 && g 'fesc)                   ; the splice took a frame address (an & arg too -- the
-           (pin g 'fesc (), pin g 'strs strs0, 'no)   ; real call's arg lane wraps it, bind cannot): keep the caller lean
-          (leas? ibd)                                  ; ..or consumed one (a compound literal): it would cost the
-           (pin g 'strs strs0, 'no)                    ; caller its tail calls
-          (mkv rt 'r0 (<>br + ibd + [['label ilb9]]))))
-
    ; -- the AST inliner: a call to an inline candidate, where its statement evaluates it before anything
    ; it sequences (not under && || ?: nor a comma's right), becomes the callee's body as statements ahead
    ; of it: each param a fresh local, each return a store to the call's value -- a lone `return e` is e
    ; in place, at a return the body's returns stay returns, and at an if's test each return decides the
    ; if where it stands, the arms copied there. the caller's analyses then see one body.
-   ; what it declines, cginl may still splice --
+   ; what it declines stays a call --
    (acand g nm)                                    ; -> (params body rt locals frees decls) | ()
     (: f (g 'inl nm)
        (? !(two? f) ()
@@ -6833,8 +6615,8 @@
                           (dps >x (dps <x a)))
              dl (dps body ())
              loc (map (p \ <p) ps + map (p \ <p) dl)
-             ; a frame address costs the caller its sibcalls (cginl's decline), and a return address
-             ; read in place is the caller's own; asm pins its homing off
+             ; a frame address costs the caller its sibcalls, and a return address read in place is
+             ; the caller's own; asm pins its homing off
              (bar? x) (? !(two? x) ()
                          (x @ ('addr ('var v)) (elem v loc)
                               ('call ('var b9) _ && elem b9 '("__builtin_return_address" "__builtin_frame_address")) 1
@@ -6888,6 +6670,12 @@
                                 dfl (foldl (\ a x (a || (two? x && <x = 'dflt))) () items)
                                 tl (? !(two? >l) () dfl [trap] [['dflt] trap])
                                 (? (= r 'no) 'no [['switch e (r + tl)]]))))
+                      ; ..and a trailing loop's top-level returns break out the same way: nothing
+                      ; follows the loop, so a break is the return (a loop the body leaves by its own
+                      ; break would meet what follows: only an empty tail)
+                      ('while c b) (? (!sw || two? >l) 'no (: r (swb b) (? (= r 'no) 'no [['while c r]])))
+                      ('do b c) (? (!sw || two? >l) 'no (: r (swb b) (? (= r 'no) 'no [['do r c]])))
+                      ('for i c st b) (? (!sw || two? >l) 'no (: r (swb b) (? (= r 'no) 'no [['for i c st r]])))
                       'no))))
        (el l))
    ; is every mention of p a deref or a call's arg? then p may stand for an address
@@ -6955,7 +6743,7 @@
                  (? (#ps != #as) ()
                     (foldl (\ a v (a || dn v)) () fr) ()          ; a free name the caller shadows
                     ((val? || pm) && (= rt 'void)) ()
-                    ((mode = 'br) && !one && !tr1) ()               ; a branchy test that does not push down is cginl's
+                    ((mode = 'br) && !one && !tr1) ()               ; a branchy test that does not push down stays a call
                     (xo && !(two? ex)) ()
                     ; ..each return past the first lays its own copy of the arms: a few small ones
                     (pm && 1 < nr9 && ((64 < (dsz (mode 2) + dsz (mode 3))) || 5 < nr9)) ()
@@ -6997,18 +6785,19 @@
                                  (rc <x . rc >x))
                        rv (? xi <>mode (val? && !one) ("`r" + show k) ())
                        (into e) (: v (cv e rt) [['expr ['asn ['var rv] (? (mode 2) ['cast (mode 2) v] v)]]])
-                       ; a test pushed down: each return's value decides the caller's if in place
+                       ; a test pushed down: each return's value decides the caller's if in place -- the
+                       ; arms copied under armk, the caller's own code, walked one level up (hs)
                        (pt e) (: v (cv e rt) kc (cnum g v)
                                  (? (two? kc)                    ; a constant return is its arm
-                                     (: a (? ((<kc = 0) = (<>mode = 1)) (mode 2) (mode 3)) (? (two? a) [a] ()))
-                                    [['if (? (<>mode = 1) ['un 'not v] v) (mode 2) (mode 3)]]))
+                                     (: a (? ((<kc = 0) = (<>mode = 1)) (mode 2) (mode 3)) (? (two? a) [['armk a]] ()))
+                                    [['if (? (<>mode = 1) ['un 'not v] v) ['armk (mode 2)] ['armk (mode 3)]]]))
                        el (? (= pre 'no) 'no
                              (mode = 'ret) (rc rb)
                              xi (aelim rb (e \ (? !(two? e) () (into e))) 1)
                              (xo || (val? && one)) rb
                              tr1 (: rl (rev rb) r (hx <>(<rl) (nm . d))       ; the trailing return is the test
                                     [(hitems (rev >rl) (nm . d) + <r) (cv <>r rt)])
-                             pm (aelim rb pt ())
+                             pm (aelim rb pt !(hasjmp? (mode 2) || hasjmp? (mode 3)))   ; an arm with a break of its own may not copy under a loop or switch
                              (aelim rb (e \ (? !(two? e) () rv [['expr ['asn ['var rv] e]]] [['expr e]])) 1))
                        (? (= el 'no) ()
                           ((mode = 'ret) || pm || xi) [(pre + hitems el (nm . d)) ()]
@@ -7078,6 +6867,7 @@
        (armc? x) (? !(two? x) () (x @ ('call ('var nm) _) (two? (cand nm)) (armc? <x || armc? >x)))
        (cvt ty x) (? (= ty 'same) x ['cast ty x])
        (hascont? x) (? !(two? x) () (<x = 'cont) 1 (hascont? <x || hascont? >x))
+       (hasjmp? x) (? !(two? x) () (elem <x '(brk cont goto)) 1 (hasjmp? <x || hasjmp? >x))
        ; an arm's weight as a copy, or past any budget when a copy would be wrong (a label, a decl)
        (dsz x) (? (= x ()) 0 !(two? x) 1 (elem <x '(lbl case dflt decl sdecl asm)) 99 ((dsz <x) + dsz >x))
        ; an expression -> (pre e'): only the positions evaluated first are hoisted
@@ -7114,6 +6904,7 @@
                 ('cast ty a) (: r (hx a d) [<r ['cast ty <>r]])
                 ('deref a) (: r (hx a d) [<r ['deref <>r]])
                 ('dot a fl) (: r (hx a d) [<r ['dot <>r fl]])
+                ('addr a) (: r (hx a d) [<r ['addr <>r]])
                 [() e]))
        ; a branch's test: the call its truth decides, through ! and the first operand of && ||
        (hxb e d)
@@ -7122,7 +6913,15 @@
                 s (site nm <>ha d 'br)
                 (? (two? s) [(<ha + <s) <>s] [<ha ['call ['var nm] <>ha]]))
              ('un 'not a) (: r (hxb a d) [<r ['un 'not <>r]])
-             (('land || 'lor) a b) (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) [(<ra + <rb) [<e <>ra <>rb]])
+             ; a right operand of statements at a test decides a temporary under the left's if
+             (('land || 'lor) a b)
+              (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) b2 <>rb
+                 ty (? (armc? b2) (ety b) ())
+                 (? (= ty ()) [(<ra + <rb) [<e <>ra b2]]
+                    (: tv (tmp ty)
+                       st (hs (? (<e = 'land) ['if <>ra ['expr ['asn ['var tv] b2]] ['expr ['asn ['var tv] ['num 0]]]]
+                                              ['if <>ra ['expr ['asn ['var tv] ['num 1]]] ['expr ['asn ['var tv] b2]]]) d)
+                       [(<ra + <rb + [['decl [[tv ty]]]] + st) ['var tv]])))
              (hx e d))
        (hxl l d) (? !(two? l) [() ()]
                     (: r (hx <l d) rs (hxl >l d) [(<r + <rs) (<>r . <>rs)]))
@@ -7131,7 +6930,8 @@
        (hs s d) (: s0 (st9 's) _ (pin st9 's s) r (hs1 s d) _ (pin st9 's s0) r)
        (hs1 s d)
         (? !(two? s) [s]
-           (s @ ('expr ('call ('var nm) as))
+           (s @ ('armk s9) (hs s9 >d)                    ; a pushed-down arm: the caller's code
+                ('expr ('call ('var nm) as))
                 (: ha (hxl as d)
                    st (site nm <>ha d 'stmt)
                    (? (two? st) (<ha + <st) (<ha + [['expr ['call ['var nm] <>ha]]])))
@@ -7192,11 +6992,19 @@
                 ('blk items) [['blk (hitems items d)]]
                 [s]))
        (hif c t e d)
-                 (: pc (pcall c)
-                    ha (? pc (hxl (pc 2) d))
-                    st (? pc (site <>pc <>ha d ['push <pc t e]))
-                    (? (two? st) (<ha + <st)
-                       (: r (hxb c d) (<r + [['if <>r (hb t d) (hb e d)]]))))
+        (: pc (pcall c)
+           ha (? pc (hxl (pc 2) d))
+           st (? pc (site <>pc <>ha d ['push <pc t e]))
+           ; ..declined (arms too big to copy): the callee's value lands in a temporary of its
+           ; return type instead, and the if tests that
+           fl (? !(pc && !(two? st)) ()
+                 (: rt <>>(cand <>pc) tv (tmp rt)
+                    s9 (hs ['expr ['asn ['var tv] ['call ['var <>pc] <>ha]]] d)
+                    (? (s9 @ (('expr ('asn _ ('call . _)))) 1 ()) ()      ; the call stayed: no temporary then
+                       (<ha + [['decl [[tv rt]]]] + s9 + [['if (? (<pc = 1) ['un 'not ['var tv]] ['var tv]) (hb t d) (hb e d)]]))))
+           (? (two? st) (<ha + <st)
+              (two? fl) fl
+              (: r (hxb c d) (<r + [['if <>r (hb t d) (hb e d)]]))))
        (hitems l d) (? !(two? l) () (hs <l d + hitems >l d))
        [<rf <>rf <>>rf ['blk (hitems <>(rf 3) [<>rf])]])
    ; -- respell: a name declared twice in one fn conflates in alive and kprop, so each later decl

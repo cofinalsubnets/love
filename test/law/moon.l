@@ -1409,7 +1409,7 @@
       (two? irW)
       (copyof? wf 'r6)                               ; the written param p copies out of a's ride...
       !(elem '(add r6 r6 1) wf)                   ; ...and a's ride is never walked
-      (elem '(cmp r2 r5) wf))                     ; lim, never written, reads n's ride straight (its alias copy folds after repack)
+      (elem '(cmp r9 r5) wf))                     ; lim, never written, reads n's ride straight
    irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (y > 0 && p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
    xf (fnf 'run <>irX)
    _ (test
