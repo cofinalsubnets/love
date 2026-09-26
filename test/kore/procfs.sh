@@ -40,8 +40,15 @@ korerun pidof nosuchprocess > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore p
 mt=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
 [ "$(korerun free | awk 'NR==2{print $2}')" = "$mt" ] || fail "kore free total vs /proc/meminfo"
 [ "$(korerun free -m | awk 'NR==2{print $2}')" = "$((mt / 1024))" ] || fail "kore free -m"
-# no `N users` clause: it comes out of utmp, which this tree does not keep
+# the users clause is the host's utmp, counted as `who -q` counts it; with no utmp to
+# read there is none, never an invented 0
 korerun uptime | grep -qE '^ [0-9][0-9]:[0-9][0-9]:[0-9][0-9] up .*load average: [0-9]' \
   || fail "kore uptime shape"
-korerun uptime | grep -q users && fail "kore uptime invented a user count"
+nu=$(korerun who -q 2>/dev/null | sed -n 's/^# users=//p')
+if [ -n "$nu" ]; then
+  u=$(korerun uptime | sed -n 's/.*,  \([0-9]*\) users*,.*/\1/p')
+  [ "$u" = "$nu" ] || fail "kore uptime's users ($u) vs who -q ($nu)"
+else
+  korerun uptime | grep -q users && fail "kore uptime invented a user count"
+fi
 echo "kore: the /proc family (ps/free/uptime/pidof/pgrep/pkill/killall/pwdx vs procps) ok"

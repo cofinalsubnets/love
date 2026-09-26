@@ -756,47 +756,6 @@
        n (? (two? r) (go (lines <>r) 0) 0)
        _ (say out (show (? (0 < n) n 1))) _ (put out 10) _ (flush out) 0)
 
-   ; -- printf: the escapes, then %s %d %c %%. The format is reused while args remain
-   ; (POSIX), and an exhausted %s is "" / %d is 0 rather than a stop. No field widths:
-   ; nothing in this tree spends one, and a half-implemented %-5.2f would be a lie.
-   ; (1 charm) or (), never a bare charm: `\0` is 0, so a charm answer cannot say
-   ; "not an escape" -- presence has to ride out of band or \0 reads as an unknown.
-   (pf-esc d) (? (d = 110) '(1 10) (d = 116) '(1 9) (d = 114) '(1 13) (d = 92) '(1 92)
-                 (d = 97) '(1 7) (d = 98) '(1 8) (d = 102) '(1 12) (d = 118) '(1 11)
-                 (d = 48) '(1 0) ())
-   ; the escape is resolved here, in the format walk, and not per character: `\` and
-   ; `n` are two charms, so a helper handed one at a time can never see a pair -- which
-   ; is exactly how `printf '%s\n'` printed a literal backslash-n.
-   (pf-one f as)                               ; one pass of the format -> the args left
-    (: n (tally f)
-       (go k l) (? (n <= k) l
-                   (: c (f k)
-                      (? ((c = 92) && (k + 1 < n))
-                         (: e (pf-esc (f (k + 1)))
-                            (? (two? e) (: _ (put out <>e) (go (k + 2) l))
-                               (: _ (put out 92) (go (k + 1) l))))
-                         !((c = 37) && (k + 1 < n)) (: _ (put out c) (go (k + 1) l))
-                         (: d (f (k + 1))
-                            (? (d = 37) (: _ (put out 37) (go (k + 2) l))
-                               (d = 115) (: _ (say out (? (two? l) <l "")) (go (k + 2) >l))
-                               ((d = 100) || (d = 105))
-                                (: v (? (two? l) (t-int <l) ())
-                                   _ (say out (show (? (two? v) <>v 0)))
-                                   (go (k + 2) >l))
-                               (d = 99) (: w (? (two? l) <l "")
-                                            _ (? (0 < tally w) (put out (w 0)) 0)
-                                            (go (k + 2) >l))
-                               (: _ (put out 37) (go (k + 1) l)))))))
-       (go 0 as))
-   (printf-main as)
-    (? !(two? as) (udie 2 "usage: printf FORMAT [ARG..]")
-       (: f <as
-          (go l) (: r (pf-one f l)                 ; POSIX: repeat while the args advance
-                    (? ((two? r) && !(r = l)) (go r) 0))
-          _ (go >as)
-          _ (flush out) 0))
-
-
    ; -- basename and dirname: the two path clips --
    (basename-main as)
     (? !(two? as) (udie 2 "usage: basename NAME [SUFFIX]")

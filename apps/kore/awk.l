@@ -60,27 +60,10 @@
               k2 (run k)
               (k2 = k ? i3 k2))                          ; a bare e is not an exponent
           i3))
-   ; the text of a number -> the number (the span is already known good)
-   (aw-parse s a b)
-    (: neg (s a = 45)
-       i1 (s a = 45 || s a = 43 ? (a + 1) a)
-       (mant k acc sc dot)
-        (b <= k ? [acc sc]
-         (: c (s k)
-            (?- [acc sc]
-             (c = 46) (mant (k + 1) acc sc 1)
-             (aw-dig? c) (mant (k + 1) (10 * acc + c - 48) (dot ? (sc * 10) sc) dot))))
-       (fnd k) (? (b <= k) b (s k = 101 || s k = 69) k (fnd (k + 1)))
-       e (fnd i1)
-       m (mant i1 0 1 0)
-       base (<m / <>m)
-       ex (e = b ? 0
-           (: t (snip s (e + 1) b)                ; a sign, or the whole text
-              ((0 < #t && t 0) @ 45 -(uatoi (snip t 1 #t))
-                                43 (uatoi (snip t 1 #t))
-                                (uatoi t))))
-       v (ex = 0 ? base (base * 10 ** ex))
-       (neg ? -v v))
+   ; the text of a number -> the number (the span is already known good): love's own
+   ; strtod, correctly rounded, which is the one rounding C's makes; a whole value a
+   ; double holds exactly comes back a charm
+   (aw-parse s a b) (: v (gem (snip s a b)) (? (abs v < 9.0e15 && v = int v) (int v) v))
    ; awk's string->number: the longest numeric prefix, blanks first, 0 for none
    (aw-s2n s)
     (: n #s
@@ -127,23 +110,33 @@
        (up e) (a / 10 ** e >= 10 ? (up (e + 1)) e)
        (dn e) (a / 10 ** e < 1 ? (dn (e - 1)) e)
        (dn (up e0)))
+   ; a double as the exact fraction it is (num den): halving a big one and doubling a
+   ; small one are both exact, so the scaling never rounds
+   (aw-exact a)
+    (? (9.0e15 <= a)
+       (: (dn b j) (? (b < 9.0e15) [(int b * 2 ** j) 1] (dn (b / 2) (j + 1))) (dn a 0))
+       (: (up b j) (? (b = int b || 1100 < j) [(int b) (2 ** j)] (up (b * 2) (j + 1))) (up a 0)))
+   ; round(a * 10^nd) off that exact value, ties to even, as glibc rounds
+   (aw-round a nd)
+    (: q (aw-exact a)
+       num (? (nd < 0) <q (<q * 10 ** nd))
+       den (? (nd < 0) (<>q * 10 ** (0 - nd)) <>q)
+       r (num // den) rem (num - r * den)
+       (? (den < 2 * rem || (2 * rem = den && r % 2 = 1)) (r + 1) r))
+   ; a > 0 to p+1 significant digits -> (digits exponent), the carry to a new place taken
+   (aw-edig a p)
+    (: e (aw-exp10 a)
+       r (aw-round a (p - e))
+       (? (10 ** (p + 1) <= r) [(show (aw-round a (p - e - 1))) (e + 1)] [(show r) e]))
    ; %.<nd>f
    (aw-fixed x nd)
     (: neg (x < 0)
-       a (abs x)
-       y (a * (** 10 nd))
-       ; past a charm the value is integral already, so its exact digits plus nd
-       ; zeros are the fixed spelling
-       (!(y < 9.0e18) ?
-          (: s ((neg ? "-" "") + aw-intstr a)
-             (nd < 1 ? s (s + "." + aw-zeros nd)))
-          (: r (int (y + 0.5))
-             s (show r)
-             body (nd < 1 ? s
-                     (: p (aw-lpad (nd + 1) s)
-                        m #p
-                        (snip p 0 (m - nd) + "." + snip p (m - nd) m)))
-             (neg ? ("-" + body) body))))
+       s (show (aw-round (abs x) nd))
+       body (nd < 1 ? s
+               (: p (aw-lpad (nd + 1) s)
+                  m #p
+                  (snip p 0 (m - nd) + "." + snip p (m - nd) m)))
+       (neg ? ("-" + body) body))
    ; %.<nd>e
    (aw-expo x nd)
     (: neg (x < 0)
@@ -152,12 +145,8 @@
        (tl e) (: d (show (e < 0 ? -e e))
                  ("e" + (e < 0 ? "-" "+") + (#d < 2 ? ("0" + d) d)))
        (a = 0 ? (sg + aw-fixed 0 nd + tl 0)
-          (: e (aw-exp10 a)
-             m (a / 10 ** e)
-             carry (m >= 10 - 0.5 / 10 ** nd)   ; the round can carry to 10.0
-             e2 (carry ? (e + 1) e)
-             ms (aw-fixed (carry ? (a / 10 ** e2) m) nd)
-             (sg + ms + tl e2))))
+          (: de (aw-edig a nd) ds <de
+             (sg + snip ds 0 1 + (nd < 1 ? "" ("." + snip ds 1 #ds)) + tl <>de))))
    ; drop the trailing zeros of a fraction, then a bare trailing point
    (aw-strip s)
     (: n #s
@@ -173,7 +162,7 @@
        neg (x < 0)
        a (abs x)
        (a = 0 ? "0"
-          (: e (aw-exp10 a)
+          (: e <>(aw-edig a (np - 1))
              (e < -4 || !(e < np) ?
                 (: s (aw-expo x (np - 1))
                    n #s
@@ -284,6 +273,269 @@
              (aw-conv o f n k l cf @ [nk rest] (go nk rest) (slurp o))
              (put o c, go (k + 1) l))))
        (go 0 as))
+
+   ; -- printf, the shell's ----------------------------------------------------
+   ; the format walked as C walks it, over the number engine above: flags - + space # 0,
+   ; a width and a precision (either may be *), d i o u x X c s b q f F e E g G and %%.
+   ; the escapes of the format and of %b; each argument read the way C's strto* read it,
+   ; so a word that is not wholly a number is said on err, printed as far as it went,
+   ; and the status left 1. the format is reused while arguments remain. \c ends it all.
+   ; no %a: a hex float is the one conversion nothing here spells.
+   (pf-hexd c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) -1)
+   (pf-utf8 v)
+    (? (v < 128) (string v)
+       (v < 2048) (string (192 | (v >> 6)) + string (128 | (v & 63)))
+       (v < 65536) (string (224 | (v >> 12)) + string (128 | ((v >> 6) & 63)) + string (128 | (v & 63)))
+       (string (240 | (v >> 18)) + string (128 | ((v >> 12) & 63)) + string (128 | ((v >> 6) & 63))
+        + string (128 | (v & 63))))
+   (pf-die m) (: _ (flush out) (udie 1 ("printf: " + m)))
+   ; the escape whose letter is at s k -> (text next) | 'stop for \c. %b's octal may lead
+   ; with a 0 (\0NNN); the format's is \NNN alone
+   (pf-esc s k b?)
+    (: n #s c (s k)
+       (dig j lim base acc cnt)
+        (: d (? (j < n) (pf-hexd (s j)) -1)
+           (? (cnt < lim && 0 <= d && d < base) (dig (j + 1) lim base (acc * base + d) (cnt + 1))
+              [acc j cnt]))
+       (? (c = 99) 'stop
+          (48 <= c && c <= 55)
+           (: r (dig (? (b? && c = 48) (k + 1) k) 3 8 0 0) [(string (<r & 255)) <>r])
+          (c = 120)
+           (: r (dig (k + 1) 2 16 0 0)
+              (? (<>>r = 0) (pf-die "missing hexadecimal number in escape") [(string <r) <>r]))
+          (c = 117 || c = 85)
+           (: r (dig (k + 1) (? (c = 117) 4 8) 16 0 0)
+              (? (<>>r = 0) (pf-die "missing hexadecimal number in escape") [(pf-utf8 <r) <>r]))
+          (: m (c @ 34 34 92 92 97 7 98 8 101 27 102 12 110 10 114 13 116 9 118 11 -1)
+             (? (m < 0) [("\\" + string c) (k + 1)] [(string m) (k + 1)]))))
+   ; %b's argument, its escapes laid -> (text stop?)
+   (pf-bexp s)
+    (: n #s
+       (go k acc)
+        (? (n <= k) [acc 0]
+           (!(s k = 92) || n <= k + 1) (go (k + 1) (acc + string (s k)))
+           (: e (pf-esc s (k + 1) 1)
+              (? (e = 'stop) [acc 1] (go <>e (acc + <e)))))
+       (go 0 ""))
+   (pf-bad st w m) (: _ (say err ("printf: '" + w + "': " + m + "\n")) (pin st 'bad 1))
+   (pf-cchar st w)                     ; 'c and "c: the character's code
+    (: n #w
+       _ (? (2 < n) (say err ("printf: warning: " + snip w 2 n
+                              + ": character(s) following character constant have been ignored\n")) 0)
+       (? (n < 2) 0 (w 1)))
+   ; an argument as a whole number: C's strtoimax (strtoumax under u?, a minus wrapping)
+   (pf-int st w u?)
+    (: n #w
+       (? (0 < n && (w 0 = 39 || w 0 = 34)) (pf-cchar st w)
+          (: (sp k) (? (k < n && (w k = 32 || w k = 9 || w k = 10)) (sp (k + 1)) k)
+             a (sp 0)
+             neg (a < n && w a = 45)
+             b (? (a < n && (w a = 45 || w a = 43)) (a + 1) a)
+             hx (b + 2 < n && w b = 48 && (w (b + 1) = 120 || w (b + 1) = 88) && 0 <= pf-hexd (w (b + 2)))
+             base (? hx 16 (b < n && w b = 48) 8 10)
+             s0 (? hx (b + 2) b)
+             (go j acc) (: d (? (j < n) (pf-hexd (w j)) -1)
+                           (? (0 <= d && d < base) (go (j + 1) (acc * base + d)) [acc j]))
+             r (go s0 0)
+             v0 <r e <>r
+             lim (? (u? || !neg) (? u? 18446744073709551615 9223372036854775807) 9223372036854775808)
+             v1 (? (lim < v0) (: _ (pf-bad st w "Numerical result out of range") lim) v0)
+             v (? neg (0 - v1) v1)
+             _ (? (e = s0) (pf-bad st w "expected a numeric value")
+                  (e < n && !(lim < v0)) (pf-bad st w "value not completely converted")
+                  0)
+             (? (u? && v < 0) (v + 18446744073709551616) v))))
+   ; an argument as a real: C's strtold, and inf and nan by name
+   (pf-flt st w)
+    (: n #w
+       (? (0 < n && (w 0 = 39 || w 0 = 34)) (pf-cchar st w)
+          (: (sp k) (? (k < n && (w k = 32 || w k = 9 || w k = 10)) (sp (k + 1)) k)
+             a (sp 0)
+             b (? (a < n && (w a = 45 || w a = 43)) (a + 1) a)
+             neg (a < n && w a = 45)
+             lw (aw-down (snip w b n))
+             (? (lw = "inf" || lw = "infinity") (? neg '-inf 'inf)
+                (lw = "nan") 'nan
+                (b + 1 < n && w b = 48 && (w (b + 1) = 120 || w (b + 1) = 88)) (pf-hexflt st w b neg)
+                (: e (aw-nspan w a n)
+                   (? (e = a) (: _ (pf-bad st w "expected a numeric value") 0)
+                      (: v (aw-parse w a e)
+                         _ (? (e < n) (pf-bad st w "value not completely converted") 0)
+                         v)))))))
+   ; 0x h.h p e: the mantissa's digits, then the binary exponent
+   (pf-hexflt st w b neg)
+    (: n #w
+       (dg j acc sc dot) (: d (? (j < n) (pf-hexd (w j)) -1)
+                            (? (0 <= d) (dg (j + 1) (acc * 16 + d) (? dot (sc * 16) sc) dot)
+                               (j < n && w j = 46 && !dot) (dg (j + 1) acc sc 1)
+                               [acc sc j]))
+       r (dg (b + 2) 0 1 0)
+       e (r 2)
+       pe (? (e + 1 < n && (w e = 112 || w e = 80))
+             (: sg (? (w (e + 1) = 45) -1 1) st2 (? (w (e + 1) = 45 || w (e + 1) = 43) (e + 2) (e + 1))
+                (ex j acc) (? (j < n && 48 <= w j && w j <= 57) (ex (j + 1) (acc * 10 + w j - 48)) [acc j])
+                x (ex st2 0)
+                (? (<>x = st2) [0 e] [(sg * <x) <>x]))
+             [0 e])
+       v (<r / (r 1) * 2.0 ** <pe)
+       _ (? (<>pe < n) (pf-bad st w "value not completely converted") 0)
+       (? neg (0 - v) v))
+   ; GNU's %q: bare when every byte is safe, '..' when printable, ".." when a ' is the
+   ; one reason not to use '..', and a control byte as its own $'\n' between quotes
+   (pf-safe? c) (? (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57) 1
+                   (elem c [37 43 44 45 46 47 58 61 64 94 95]) 1 0)
+   (pf-q s)
+    (: n #s
+       (all p) (: (go k) (? (n <= k) 1 (p (s k)) (go (k + 1)) 0) (go 0))
+       odd? (c \ (c < 32 || 126 < c))
+       (? (n = 0) "''"
+          (all pf-safe?) s
+          (all (c \ !(odd? c)))
+           (? !(elem 39 s) ("'" + s + "'")
+              (all (c \ !(elem c [36 96 34 92 33]))) ("\"" + s + "\"")
+              (: (go k acc) (? (n <= k) (acc + "'")
+                               (s k = 39) (go (k + 1) (acc + "'\\''"))
+                               (go (k + 1) (acc + string (s k))))
+                 (go 0 "'")))
+          ; a run of odd bytes leaves the quote for one $'..' of escapes
+          (: (esc c) (c @ 10 "\\n" 9 "\\t" 13 "\\r" 27 "\\E" 7 "\\a" 8 "\\b" 12 "\\f" 11 "\\v"
+                        ("\\" + uzpad 3 (uradix c 8)))
+             (go k acc md)               ; md 1 inside '..', 2 inside $'..'
+              (? (n <= k) (acc + "'")
+                 (odd? (s k)) (go (k + 1) (acc + (? (md = 1) "'$'" "") + esc (s k)) 2)
+                 (: c (s k)
+                    pre (? (md = 2) "''" "")
+                    (go (k + 1) (acc + pre + (? (c = 39) "'\\''" (string c))) 1)))
+             (go 0 "'" 1))))
+   ; the laid field: pre (a sign or 0x) and the digits, spaces or zeros to the width
+   (pf-lay m z w pre body)
+    (: t (#pre + #body)
+       (? (w <= t) (pre + body)
+          m (pre + body + aw-spaces (w - t))
+          z (pre + aw-zeros (w - t) + body)
+          (aw-spaces (w - t) + pre + body)))
+   (pf-sign pl sp neg) (? neg "-" pl "+" sp " " "")
+   (pf-real d x pr alt)                ; f F e E g G of a finite x, unsigned
+    (: a (abs x) p (? (pr < 0) 6 pr)
+       ; # keeps the point, and g's trailing zeros
+       (dot t) (? (elem 46 t) t
+                  (: (ep k) (? (#t <= k) k (t k = 101) k (ep (k + 1)))
+                     i (ep 0) (snip t 0 i + "." + snip t i #t)))
+       gp (? (p = 0) 1 p)
+       s (d @ (102 || 70) (aw-fixed a p)
+              (101 || 69) (aw-expo a p)
+              (? !alt (aw-gen a gp)
+                 (a = 0) (aw-fixed 0 (gp - 1))
+                 (: e <>(aw-edig a (gp - 1))
+                    (? (e < -4 || !(e < gp)) (aw-expo a (gp - 1)) (aw-fixed a (gp - 1 - e))))))
+       s2 (? alt (dot s) s)
+       (? (elem d [70 69 71]) (aw-up s2) s2))
+   ; one conversion at f k (a %) -> (next args-left) | 'stop
+   (pf-conv st f k l)
+    (: n #f
+       (flags j m z pl sp alt)
+        (: c (? (j < n) (f j) 0)
+           (c @ 45 (flags (j + 1) 1 z pl sp alt)  48 (flags (j + 1) m 1 pl sp alt)
+                43 (flags (j + 1) m z 1 sp alt)   32 (flags (j + 1) m z pl 1 alt)
+                35 (flags (j + 1) m z pl sp 1)    39 (: _ (pin st 'grp 1) (flags (j + 1) m z pl sp alt))
+                [j m z pl sp alt]))
+       _ (pin st 'grp 0)
+       fr (flags (k + 1) 0 0 0 0 0)
+       (num j) (: (go i acc) (? (i < n && 48 <= f i && f i <= 57) (go (i + 1) (acc * 10 + f i - 48)) [acc i])
+                  (go j 0))
+       (arg a) (? (two? a) <a "")
+       ; an argument that is not there reads as 0, and says nothing
+       (int a u?) (? (two? a) (pf-int st <a u?) 0)
+       j0 <fr
+       ; the width: digits, or * off the arguments (a minus there is the - flag)
+       wr (? (j0 < n && f j0 = 42) [(int l 0) (j0 + 1) (? (two? l) >l l)]
+             (: r (num j0) [<r <>r l]))
+       w0 <wr j1 <>wr l1 <>>wr
+       m (fr 1 || w0 < 0) w (abs w0)
+       pr (? (j1 < n && f j1 = 46)
+             (? (j1 + 1 < n && f (j1 + 1) = 42)
+                [(int l1 0) (j1 + 2) (? (two? l1) >l1 l1)]
+                (: r (num (j1 + 1)) [<r <>r l1]))
+             [-1 j1 l1])
+       p (? (<pr < 0) -1 <pr) j2 <>pr l2 <>>pr
+       ; C's length modifiers are taken and change nothing
+       (skip i) (? (i < n && elem (f i) [104 108 76 106 122 116]) (skip (i + 1)) i)
+       j3 (skip j2)
+       d (? (j3 < n) (f j3) -1)
+       a (arg l2) rest (? (two? l2) >l2 l2)
+       z (fr 2) pl (fr 3) sp (fr 4) alt (fr 5)
+       spec (snip f k (? (j3 < n) (j3 + 1) n))
+       ; GNU's refusals: %b and %q stand bare; # never on c d i s u, 0 never on c s, a
+       ; precision never on c, the ' grouping never on c e E o s x X
+       plain (j3 = k + 1)
+       _ (? ((elem d [98 113] && !plain)
+             || (alt && elem d [99 100 105 115 117]) || (z && elem d [99 115])
+             || (d = 99 && !(<pr < 0 && j2 = j1)) || (st 'grp && elem d [99 101 69 111 115 120 88]))
+            (pf-die (spec + ": invalid conversion specification")) 0)
+       (? (d = 37 && j3 = k + 1) (: _ (put out 37) [(j3 + 1) l])
+          (d = 115)
+           (: s (? (p < 0 || #a <= p) a (snip a 0 p)) _ (say out (pf-lay m 0 w "" s)) [(j3 + 1) rest])
+          (d = 99)
+           (: _ (say out (pf-lay m 0 w "" (string (? (0 < #a) (a 0) 0)))) [(j3 + 1) rest])
+          (d = 98)
+           (: r (pf-bexp a)
+              s (? (p < 0 || #<r <= p) <r (snip <r 0 p))
+              _ (say out (pf-lay m 0 w "" s))
+              (? <>r 'stop [(j3 + 1) rest]))
+          (d = 113) (: _ (say out (pf-lay m 0 w "" (pf-q a))) [(j3 + 1) rest])
+          (d = 100 || d = 105)
+           (: v (int l2 0)
+              ds (show (abs v))
+              ds2 (? (p = 0 && v = 0) "" (0 < p) (aw-lpad p ds) ds)
+              _ (say out (pf-lay m (z && p < 0) w (pf-sign pl sp (v < 0)) ds2))
+              [(j3 + 1) rest])
+          (elem d [111 117 120 88])
+           (: v (int l2 1)
+              ds (d @ 111 (aw-base v 8 0) 117 (show v) (aw-base v 16 (d = 88)))
+              ds1 (? (p = 0 && v = 0) "" (0 < p) (aw-lpad p ds) ds)
+              ds2 (? (alt && d = 111 && !(0 < #ds1 && ds1 0 = 48)) ("0" + ds1) ds1)
+              pre (? (alt && 0 < v && d = 120) "0x" (alt && 0 < v && d = 88) "0X" "")
+              _ (say out (pf-lay m (z && p < 0) w pre ds2))
+              [(j3 + 1) rest])
+          (elem d [102 70 101 69 103 71])
+           (: x (? (two? l2) (pf-flt st a) 0)
+              up (elem d [70 69 71])
+              (fin s neg) (say out (pf-lay m z w (pf-sign pl sp neg) s))
+              _ (? (x = 'nan) (say out (pf-lay m 0 w "" (? up "NAN" "nan")))
+                   (x = 'inf || x = '-inf)
+                    (say out (pf-lay m 0 w (pf-sign pl sp (x = '-inf)) (? up "INF" "inf")))
+                   (fin (pf-real d x p alt) (x < 0)))
+              [(j3 + 1) rest])
+          (pf-die (spec + ": invalid conversion specification"))))
+   ; one pass of the format -> (args-left used?) | 'stop
+   (pf-pass st f l)
+    (: n #f
+       (go k l u)
+        (? (n <= k) [l u]
+           (: c (f k)
+              (? (c = 92 && k + 1 < n)
+                 (: e (pf-esc f (k + 1) 0)
+                    (? (e = 'stop) 'stop (: _ (say out <e) (go <>e l u))))
+                 (c = 37)
+                  (? (k + 1 < n)
+                     (: r (pf-conv st f k l)
+                        (? (r = 'stop) 'stop (go <r <>r (u || !(<>r = l)))))
+                     (pf-die "%: invalid conversion specification"))
+                 (: _ (put out c) (go (k + 1) l u)))))
+       (go 0 l 0))
+   (printf-main as)
+    (: _ (? (two? as) 0 (udie 1 "printf: missing operand\nTry 'printf --help' for more information."))
+       st {'bad 0}
+       f <as
+       (go l) (: r (pf-pass st f l)
+                 (? (r = 'stop) ()
+                    (two? <r && <>r) (go <r)
+                    (two? <r)
+                     (say err ("printf: warning: ignoring excess arguments, starting with '" + <<r + "'\n"))
+                    ()))
+       _ (go >as)
+       _ (flush out)
+       (? (st 'bad) 1 0))
 
    ; -- the lexer -----------------------------------------------------------
    ; every refusal from here down leaves through one scare, caught in awk-main:

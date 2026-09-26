@@ -144,4 +144,34 @@ ab: -a -b x y
 EOF_GETOPT
 fi
 korerun getopt -T; [ $? -eq 4 ] || fail "kore getopt -T must answer 4"
+# printf against GNU's (env reaches the binary, not the shell's builtin): stdout and
+# status over flags, widths, precisions, the bases, the reals exactly rounded, the
+# escapes, %b %q %c, a word that is not a number (said, and the status 1), missing
+# arguments (0 and "", silently) and the format reused while arguments remain
+if env printf %q x > /dev/null 2>&1; then
+  pf() { LC_ALL=C env printf "$@" > "$g" 2>/dev/null; r1=$?
+         korerun printf "$@" > "$o" 2>/dev/null; r2=$?
+         same "printf $1"; [ $r1 -eq $r2 ] || fail "kore printf $1: status $r2, GNU's $r1"; }
+  pf '%d|%i|%5d|%-5d|%05d|%+d|% d|%.3d|%.0d\n' 42 -7 3 3 -3 3 3 7 0
+  pf '%o|%x|%X|%#o|%#x|%#X|%u|%x\n' 8 255 48879 8 255 0 -1 -1
+  pf '%d %d %d %d\n' 0x1f 010 "'a" ' 12'
+  pf '%f|%.2f|%10.4f|%-10.2e|%+.1g|%g|%g|%G|%#.0f|%08.3f\n' 1.5 2.675 3.14159265 -12345 0.05 100000 1000000 1e-10 3 -3.5
+  pf '%.2g|%.2g|%e|%.0e|%.3e\n' 255 99.995 0 15 0x10
+  pf '%f|%F|%f\n' inf -inf nan
+  pf '%s|%5s|%-5s|%.2s|%c|%c|%5c|\n' abc x y hello hello '' z
+  pf '%*d|%-*d|%.*f|%*s|\n' 4 1 4 2 2 3.14159 -4 x
+  pf '\e\101\x41\\\a\b\f\vé\n'
+  pf 'a\cb'
+  pf '%b|%b\n' 'a\tb\0101\101' '\x41\c.z'
+  pf '%q %q %q %q %q\n' 'a b' abc '' "it's" 'tab	here'
+  pf '%s-%s|' a b c
+  pf '%d %f %s|\n' 1
+  pf '%ld %hd %%\n' 1 2
+  pf '%d\n' abc
+  pf '%d\n' 1.5
+  pf '%x\n'
+  pf '%z'
+  pf '%5b' x
+  pf '%#d' 1
+fi
 echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt ok"
