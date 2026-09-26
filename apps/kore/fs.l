@@ -918,27 +918,31 @@
    ; -- chown: owner[:group] onto every named path, -R down the tree. a name is looked
    ; up in /etc/passwd / /etc/group, a numeral is taken as itself, and an empty side is
    ; -1, which the kernel reads as "leave this one alone" --
-   (uowner spec)                       ; "u:g" / "u" / ":g" -> (uid gid), -1 for absent
+   (uowner who spec shown)             ; "u:g" / "u" / ":g" -> (uid gid), -1 for absent
     (: ps (usplit 58 spec)
-       (side w path) (0 >= #w ? -1
-                      (uidof path w @ r
-                       (two? r ? <>r (w 0 @ c (48 <= c <= 57 ? (uatoi w)
-                                      (udie 1 ("chown: invalid user: '" + spec + "'")))))))
-       [(side <ps "/etc/passwd") (one? >ps ? -1 (side <>ps "/etc/group"))])
-   (chown-main as)
+       (side w path kind) (0 >= #w ? -1
+                           (uidof path w @ r
+                            (two? r ? <>r (w 0 @ c (48 <= c <= 57 ? (uatoi w)
+                                           (udie 1 (who + ": invalid " + kind + ": '" + shown + "'")))))))
+       [(side <ps "/etc/passwd" "user") (one? >ps ? -1 (side <>ps "/etc/group" "group"))])
+   ; chown and chgrp are one walk: chgrp's GROUP is chown's :GROUP
+   (uchown who as)
     (: r? (two? as && <as = "-R")
        rest (r? ? >as as)
-       _ (one? >rest && udie 2 "usage: chown [-R] OWNER[:GROUP] FILE..")
-       ug (uowner <rest)
+       grp? (who = "chgrp")
+       _ (one? >rest && udie 2 ("usage: " + who + (grp? ? " [-R] GROUP FILE.." " [-R] OWNER[:GROUP] FILE..")))
+       ug (grp? ? (uowner who (":" + <rest) <rest) (uowner who <rest <rest))
        uid <ug gid <>ug
        (one q ok)
         (: e (chown q uid gid)
-           ok2 (!e ? ok (say err ("chown: cannot chown '" + q + "'\n"), 0))
+           ok2 (!e ? ok (say err (who + (grp? ? ": cannot change group of '" ": cannot chown '") + q + "'\n"), 0))
            (r? && (udirp q) ?
             (foldl (acc \ c \ one (q + "/" + c) acc) ok2 (readdir q))
             ok2))
        (go a ok) (two? a ? (go >a (one <a ok)) !ok)
        (go >rest 1))
+   (chown-main as) (uchown "chown" as)
+   (chgrp-main as) (uchown "chgrp" as)
 
    ; -- mktemp: a name nobody else has, made and not merely proposed. the trailing run
    ; of X's in the template becomes random alphanumerics and the name is claimed with an

@@ -58,13 +58,13 @@
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         diff-main as-main ar-main ld-main nm-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
-        chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
+        chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
         date-main dirname-main dos2unix-main dsplit du-main echo-main env-main expand-main expr-main
         mac2unix-main unix2dos-main
-        factor-main false-main find-main fold-main free-main gfind grep-main groups-main
+        factor-main false-main find-main fold-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
         head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main markdown-main
         ln-main ls-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
-        mv-main myers nl-main nproc-main
+        mv-main myers nl-main nohup-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main readlink-main realpath-main rebre refind refold
         rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main shuf-main sleep-main
@@ -295,19 +295,22 @@
             'install install-main 'readlink readlink-main
             'realpath realpath-main 'link link-main 'unlink unlink-main
             'cmp cmp-main
-            'stat stat-main 'du du-main 'df df-main 'chown chown-main 'mktemp mktemp-main
+            'stat stat-main 'du du-main 'df df-main 'chown chown-main 'chgrp chgrp-main 'mktemp mktemp-main
             'expr expr-main 'date date-main 'id id-main
             'bc bc-main
             'patch patch-main
             'wget wget-main
             'grep grep-main 'sed sed-main
+            ; the two old spellings, GNU's own shims: -E and -F said by name
+            'egrep (\ as (grep-main ("-E" . as))) 'fgrep (\ as (grep-main ("-F" . as)))
             'awk awk-main 'find find-main
             'vi (cite 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'man man-main    ; the pages the build writes, read back (apps/kore/man.l)
             'html2text html2text-main   ; a page's prose (apps/kore/lens.l), the same lens
             'markdown markdown-main     ; ..and the lens run the way papel runs it
-            'env env-main 'printenv printenv-main 'sleep sleep-main
+            'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
+            'getopt getopt-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
             ; umount, sync, mkfifo and mknod are what a root the distro builds
             ; is filled and entered with
@@ -321,7 +324,7 @@
             'zcat (cite 'gzcmd 'zcat-main)
             'tar (cite 'tarcmd 'tar-main) 'cpio (cite 'cpiocmd 'cpio-main)
             ; the byte tools, the clock's other face, and the four one-liners
-            'dd dd-main 'xxd xxd-main 'strings strings-main
+            'dd dd-main 'xxd xxd-main 'strings strings-main 'hexdump hexdump-main 'hd hd-main
             'cal cal-main 'timeout timeout-main
             'which which-main 'tty tty-main 'clear clear-main 'hostname hostname-main
             ; the /proc family -- no nif of their own, /proc is a filesystem
@@ -407,6 +410,7 @@
     'du "usage: du [-sabchk] [-d N] [FILE..]"
     'df "usage: df [-h|-k] [-i] [-a] [-P] [FILE..]"
     'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
+    'chgrp "usage: chgrp [-R] GROUP FILE.."
     'mktemp "usage: mktemp [-d] [-u] [-q] [-p DIR] [TEMPLATE]"
     'sync "usage: sync   (the bare call; no operands here)"
     'mkfifo "usage: mkfifo [-m MODE] NAME.."
@@ -414,6 +418,8 @@
     'expr "usage: expr EXPRESSION"
     'patch "usage: patch [-pN] [-R] [-i F] [-o F] [-s] [--dry-run]"
     'grep "usage: grep [-nvclqhaixwFEo] [-e PAT] [-m N] PATTERN [FILE..]"
+    'egrep "usage: egrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -E)"
+    'fgrep "usage: fgrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -F)"
     'sed "usage: sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]"
     'awk "usage: awk [-F FS] [-v var=val].. PROGRAM [FILE..]  |  awk .. -f PROGFILE.. [FILE..]"
     'find "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
@@ -425,6 +431,8 @@
   -q  accepted: nothing is printed at start with or without it"
     'vi "usage: vi [FILE]"
     'env "usage: env [-i] [-u NAME].. [NAME=VALUE].. [CMD [ARG..]]"
+    'nohup "usage: nohup CMD [ARG..]"
+    'getopt "usage: getopt [-o SHORTS] [-l LONGS].. [-n NAME] [-aqQTu] [-s sh] [--] PARAMS  |  getopt SHORTS PARAMS"
     'printenv "usage: printenv [NAME..]"
     'sleep "usage: sleep N[smhd].."
     'chroot "usage: chroot DIR [CMD [ARG..]]"
@@ -459,6 +467,8 @@
     'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
     'dd "usage: dd [if=F] [of=F] [bs=N] [count=N] [skip=N] [status=none]"
     'xxd "usage: xxd [-r] [FILE..]"
+    'hexdump "usage: hexdump [-Cv] [-n LEN] [-s SKIP] [FILE..]"
+    'hd "usage: hd [-v] [-n LEN] [-s SKIP] [FILE..]   (hexdump -C)"
     'strings "usage: strings [-n LEN] [FILE..]"
     'cal "usage: cal [[MONTH] YEAR]"
     'timeout "usage: timeout [-s SIG] [-k DURATION] DURATION CMD [ARG..]"
@@ -528,12 +538,14 @@ every tool answers --help and --version, and -h where the letter is free
   bc [-l] [-q] [F..]                      the calculator language (apps/kore/bc.l)
   patch [-pN] [-R] [-i F] [--dry-run]     lay a unified diff on a tree
   grep [-nvclqhaixwFEo] [-e P] [-m N] PAT [F..]   BRE, or ERE under -E (apps/kore/re.l)
+  egrep | fgrep                           grep -E and grep -F, by their old names
   sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (s///gp, d, p, q, addresses)
   awk [-F FS] [-v var=val].. 'PROG' [F..]  patterns and actions over records
   awk [-F FS] -f PROGFILE.. [F..]          ... the program off a file instead
   find [PATH..] [EXPR]   -name -path -type f|d|l -print -prune -exec CMD.. \\;
                          ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
-  env printenv sleep kill xargs           the process tools (apps/kore/proc.l)
+  env printenv sleep kill xargs nohup     the process tools (apps/kore/proc.l)
+  getopt -o SHORTS [-l LONGS] -- PARAMS   options parsed and quoted for `eval set --`
   chroot DIR [CMD [ARG..]]                the root changed, then CMD in it
   mount [-t TYPE] [-o OPTS] SRC TGT       ... or bare, to list /proc/self/mounts
   umount TGT.. | sync                     ... and the two that undo and settle it
@@ -555,13 +567,14 @@ every tool answers --help and --version, and -h where the letter is free
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (apps/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
   realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
-  stat [-c FMT] | du [-sabhc] | df [-hia] | chown | mktemp   ... and what they report
+  stat [-c FMT] | du [-sabhc] | df [-hia] | chown | chgrp | mktemp   ... and what they report
   echo seq yes true false basename dirname     ... and the trivia
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
   tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive (apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
   xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs
+  hexdump [-Cv] [-n LEN] [-s SKIP] | hd         the BSD dump, words or -C's bytes
   cal [[MONTH] YEAR]                           a month, laid out (weeks open Sunday)
   timeout [-s SIG] [-k DUR] DUR CMD [ARG..]    a command, and the clock that ends it
   which [-a] NAME.. | tty | clear | hostname   ... and the four short answers
