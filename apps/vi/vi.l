@@ -20,7 +20,7 @@
     (: r (? (< 0 (tally f)) (uread f) ())
        st (vnew (? (two? r) (lines <>r) ()) f)
        _ (? ((< 0 (tally f)) && !(two? r)) (vmsg st (+ f ": new file")) ())
-       _ (pin st 'pens (hue-wake ()))
+       _ (pin st 'pens (hues-wake ()))
        st)
    ; the ex write requests: (name) means write, "" means the buffer's file
    (dow s2)

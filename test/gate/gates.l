@@ -23,7 +23,7 @@
    ; about whatever else is loaded. running before anything else is the whole of what a
    ; process of its own was buying.
    early [['vi "apps/kore/text.l" "apps/kore/u.l" "apps/kore/core.l" "apps/kore/re.l"
-           "apps/kore/sed.l" "apps/libra/lint.l" "apps/vi/config.l" "apps/vi/hue.l"
+           "apps/kore/sed.l" "apps/libra/lint.l" "apps/vi/config.l" "apps/vi/hue.l" "apps/vi/hues.l"
            "apps/vi/core.l" "test/law/vi.l"]]
 
    ; a row is [name path ..]. borrow marks a path once read, so a file two rows both want

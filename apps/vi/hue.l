@@ -223,10 +223,11 @@
                  (word i (tend i) acc))))
        (? in (wstr 0 0 ()) (w 0 ())))
 
-   ; one start-state per line: fold the lexer down the buffer, keeping nothing
-   (hue-carry bk ls)
+   ; one start-state per line: fold a lexer (lx s in keep) down the buffer,
+   ; keeping nothing. hue-lex over a book is one; apps/vi/hues.l has the rest
+   (hue-carry lx ls)
     (: (go l st acc) (? !(two? l) (rev acc)
-                        (: r (hue-lex bk <l st ()) (go >l <>r (st . acc))))
+                        (: r (lx <l st ()) (go >l <>r (st . acc))))
        (go ls 0 ()))
 
    ; --- the pens --------------------------------------------------------------
@@ -265,9 +266,9 @@
    ; a clip cannot tell it began inside a string, then cut to the window and
    ; shifted home. the lexer never reads past b, so a = 0 is the plain whole-line
    ; paint and costs what it always did.
-   (hue-win pens bk s in a b)
+   (hue-win pens lx s in a b)
     (: t (snip s 0 b)
-       rs <(hue-lex bk t in 1)
+       rs <(lx t in 1)
        (cut l acc)
         (? !(two? l) (rev acc)
            (: r <l x <>r y <>>r

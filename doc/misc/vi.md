@@ -25,6 +25,13 @@ re.l regex engine):
   two readings cannot drift. `make syntax` builds it into `out/syntax.vim` and
   `make install` puts it in `~/.vim/syntax/love.vim`; it is never checked in, so there is no
   copy to keep up to date.
+* **apps/vi/hues.l** — the paint for C, JS, awk, HTML (its `<style>` and `<script>` bodies as
+  CSS and JS), CSS, sh, make (a recipe line reads as sh), JSON, diffs, roff, assembly (gas in
+  AT&T or Intel, a64, rv64 and arm) and markdown (a fence naming a language is lexed as it).
+  Each lexer answers what hue.l's does, so the painter, the carry and `%` take any of them.
+  The file name picks one — `.c .h .js .mjs .awk .html .css .sh .mk .json .diff .patch .s .S
+  .asm .md .man .1`–`.9`, `Makefile`, `Cookfile` — else a `#!` naming a shell or an awk; `:hl`
+  on anything else paints it as .l.
 * **apps/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
   the generated syntax file can emit `hi def link` lines rather than hardcoded colours.
 * **test/law/vi.l** — the gate.

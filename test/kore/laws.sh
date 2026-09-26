@@ -6,7 +6,7 @@ echo "UTILS apps/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,man,
 out=$ho/.test_kore.out
 # lush's job.l + glob.l ride along because find.l captures sh-match at its define
 { cat test/00-init.l apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/fs.l apps/kore/re.l \
-      apps/kore/sed.l apps/kore/awk.l apps/kore/expr.l apps/kore/bc.l apps/kore/proc.l apps/kore/less.l apps/libra/lint.l apps/vi/config.l apps/vi/hue.l \
+      apps/kore/sed.l apps/kore/awk.l apps/kore/expr.l apps/kore/bc.l apps/kore/proc.l apps/kore/less.l apps/libra/lint.l apps/vi/config.l apps/vi/hue.l apps/vi/hues.l \
       apps/vi/core.l apps/vi/vi.l apps/kore/diff.l apps/kore/patch.l apps/lush.l \
       apps/kore/find.l apps/kore/man.l apps/kore/lens.l; \
   echo "(borrow 'kore)"; \

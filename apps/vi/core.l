@@ -29,14 +29,14 @@
 ; 'exmore lists the words it knows, so a head of one of them resolves too),
 ; 'w 'h (the view).
 ;
-; the syntax paint rides apps/vi/hue.l and five more keys: 'hl (paint? -- born on for
-; a .l name, :hl flips it), 'pens (the class -> escape tablet, installed by the FACE
-; so this file touches no getenv and no file), 'book (the vocabulary, folded once at
-; the first paint), 'hlcar (the per-line "starts inside a string" carry as
-; [gen flags] -- the wrapper is load-bearing, gen 0 over an empty buffer being a real
+; the syntax paint rides apps/vi/hue.l and apps/vi/hues.l and five more keys: 'hl
+; (paint? -- born on for a file hues-lang names, :hl flips it), 'pens (the class ->
+; escape tablet, installed by the FACE so this file touches no getenv and no file),
+; 'lex ([lang lexer], built at the first paint), 'hlcar (the per-line start state as
+; [gen lang states] -- the wrapper is load-bearing, gen 0 over an empty buffer being a real
 ; cached value a bare one could not tell from "no cache"), 'hlgen (bumped by the three
 ; line mutators, vput/vsplice/vrest, and nothing else touches 'lines), 'hlrow (the
-; painted row per SCREEN row, keyed by the text, carry and width it came from).
+; painted row per SCREEN row, keyed by the text, carry, width and language it came from).
 ; the lexer is not only the paint's: % and the bracket objects read its runs to know
 ; which ( is code, which is why a ) in a literal is not a mate.
 ;
@@ -134,13 +134,13 @@
 
    ; the pure half of :e -- the face reads the file and hands the lines over, this
    ; starts the buffer over on them: cursor home, no history, not dirty. the paint
-   ; is re-decided from the new name, so :e-ing a .l from a .md lights up and the
+   ; is re-decided from the new name, so :e-ing a .l from a .txt lights up and the
    ; other way round goes plain, and the generation bump drops the cached carry
    ; along with the old buffer it described.
    (vload st ls nm)
     (pins st 'lines (? (two? ls) ls '("")) 'file nm 'row 0 'top 0 'tops 0 'left 0,
      vgole st 0,
-     pins st 'undo () 'redo () 'dirty () 'hl (vdotl nm),
+     pins st 'undo () 'redo () 'dirty () 'hl (nom? (vlang st)),
      vgen st)
 
    ; splice: replace rows r1..r2 (inclusive) with the list `ins`; r2 = r1 - 1
@@ -199,27 +199,32 @@
              [r2 (run c2)])))
 
    ; -- the delimiter scan ------------------------------------------------------
-   ; % and the bracket objects want the delimiters that are code. in a .l buffer
-   ; apps/vi/hue.l's lexer -- the paint's, the only string-and-comment truth this
+   ; % and the bracket objects want the delimiters that are code. in a buffer whose
+   ; language the paint knows, its lexer -- the only string-and-comment truth this
    ; file has -- says which columns are inside a literal or a comment; anywhere
    ; else the mask is empty and every column counts, the way classic vi's % does.
-   ; the file's name decides, not 'hl, so :hl moves the colour and nothing else.
-   (vbook st) (: b (st 'book) (tablet? b ? b (: k (hue-book ()) _ (pin st 'book k) k)))
-   ; the per-line "starts inside a string" flags, folded once per generation and
-   ; cached against it. the paint reads this too, so an edit pays for one fold
-   ; and a keystroke that only moves the cursor pays for none.
-   (vcarry st bk)
+   ; the language decides, not 'hl, so :hl moves the colour and nothing else.
+   (vlang st) (hues-lang (st 'file) <(st 'lines))
+   (vlex st g)
+    (: c (st 'lex)
+       (? (two? c && <c = g) <>c
+          (: k (hues-lexer g) _ (pin st 'lex [g k]) k)))
+   ; the per-line start states, folded once per generation and cached against it
+   ; and the language. the paint reads this too, so an edit pays for one fold and
+   ; a keystroke that only moves the cursor pays for none.
+   (vcarry st g lx)
     (: c (st 'hlcar)
-       (two? c && <c = st 'hlgen ? <>c
-        (: k (hue-carry bk (st 'lines)) _ (pin st 'hlcar [(st 'hlgen) k]) k)))
+       (two? c && <c = st 'hlgen && <>c = g ? <>>c
+        (: k (hue-carry lx (st 'lines)) _ (pin st 'hlcar [(st 'hlgen) g k]) k)))
    (vskips st r)                                   ; the ([a b) ..) that are not code
-    (? !(vdotl (st 'file)) ()
-       (: bk (vbook st)
-          rs <(hue-lex bk (st 'lines r) ((vcarry st bk) r) 1)
-          (go l acc) (? !(two? l) (rev acc)
-                        (: h <l
-                           (go >l ((<h = 'string || <h = 'comment) ? ([<>h <>>h] . acc) acc))))
-          (go rs ())))
+    (: g (vlang st)
+       (? !(nom? g) ()
+          (: lx (vlex st g)
+             rs <(lx (st 'lines r) ((vcarry st g lx) r) 1)
+             (go l acc) (? !(two? l) (rev acc)
+                           (: h <l
+                              (go >l ((<h = 'string || <h = 'comment) ? ([<>h <>>h] . acc) acc))))
+             (go rs ()))))
    (vcode? sk i) (? !(two? sk) 1 (: h <sk (? (<h <= i < <>h) () (vcode? >sk i))))
    (vopen? c)  (c = 40 || c = 91 || c = 123 || c = 60)
    (vclose? c) (c = 41 || c = 93 || c = 125 || c = 62)
@@ -1290,10 +1295,9 @@
    (vfeed st bs) (bs @ (a . u) (vfeed (vstep st a) u) st)
 
    ; -- birth --
-   ; the paint is born on for a .l name and off for everything else, which is
-   ; also why every frame law below still reads the plain bytes it always did:
-   ; they open their buffers as "t".
-   (vdotl f) (: n #f (1 < n && f (n - 2) = 46 && f (n - 1) = 108))
+   ; the paint is born on for a language hues-lang knows and off for everything
+   ; else, which is also why every frame law below still reads the plain bytes it
+   ; always did: they open their buffers as "t".
    (vnew ls file)
     {'lines (two? ls ? ls '(""))
      'row 0 'col 0 'goal 0 'top 0 'tops 0 'left 0 'wrap ()
@@ -1303,7 +1307,7 @@
      'file file 'dirty () 'msg "" 'sw 2
      'cmd "" 'pat () 'pattx "" 'patw () 'dir 1
      'quit () 'dow () 'doe () 'dos () 'dox () 'va () 'exmore ()
-     'hl (vdotl file) 'pens () 'book () 'hlcar () 'hlgen 0 'hlrow (tablet ())
+     'hl (nom? (hues-lang file (two? ls ? <ls ""))) 'pens () 'lex () 'hlcar () 'hlgen 0 'hlrow (tablet ())
      'lncar () 'laycar () 'lastr () 'w 80 'h 24}
 
    ; -- the frame ---------------------------------------------------------------
@@ -1351,9 +1355,11 @@
        ; -- the paint. escapes are zero width, so the window is cut in plain columns
        ; and painted from there: every column worked out below is the plain one,
        ; cursor included. off, this whole lane vanishes.
-       paint (st 'hl && tablet? (st 'pens))
-       bk (? paint (vbook st) ())
-       car (? paint (vcarry st bk) ())
+       ; a language the name does not tell paints as .l, once :hl asks for it
+       lg (? (st 'hl && tablet? (st 'pens)) (: g (vlang st) (? (nom? g) g 'l)) ())
+       lx (? (nom? lg) (vlex st lg) ())
+       paint (lit? lx)
+       car (? paint (vcarry st lg lx) ())
        ; the painted window, cached against the text that made it, the carry it began
        ; on and the columns it was cut to -- keyed by SCREEN row, so the table is the
        ; height of the view and never the height of the file. typing moves one row;
@@ -1382,9 +1388,9 @@
                   (snip raw a p + "\e[7m" + snip raw p q + pad + "\e[0m" + snip raw q b))
               (b <= a) ""
               !paint (snip raw a b)
-              (: rw (st 'hlrow) ky [raw in a b] c (peep rw i ())
+              (: rw (st 'hlrow) ky [raw in a b lg] c (peep rw i ())
                  (? (two? c && (= <c ky)) <>c
-                    (: p (hue-win (st 'pens) bk raw in a b)
+                    (: p (hue-win (st 'pens) lx raw in a b)
                        _ (pin rw i [ky p])
                        p)))))
        ; 'lines and the carry are LISTS: asking for row i by application walks i

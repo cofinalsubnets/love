@@ -3,7 +3,7 @@
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
 ;   cat test/00-init.l apps/kore/text.l apps/kore/core.l apps/kore/re.l apps/kore/sed.l apps/libra/lint.l \
-;       apps/vi/config.l apps/vi/hue.l apps/vi/core.l test/law/vi.l | out/love
+;       apps/vi/config.l apps/vi/hue.l apps/vi/hues.l apps/vi/core.l test/law/vi.l | out/love
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
 ; the 27-element list shape), and answers the state; the helpers read it back.
@@ -393,7 +393,7 @@
 ;     placed absolutely. the whole thing rides the terminal's synchronised-output
 ;     bracket, so a scroll lands in one piece rather than line by line ---------
    (small ls ks) (: st (vgo ls ks) _ (pin st 'w 16) _ (pin st 'h 4) st)
-   (hlon st) (: _ (pin st 'pens (hue-pens hue-theme ())) _ (pin st 'hl 1) st)
+   (hlon st) (: _ (pin st 'pens (hues-pens hue-theme ())) _ (pin st 'hl 1) st)
    SY (E$ + "[?2026h") YS (E$ + "[?2026l")
    (place r s) (E$ + "[" + show r + ";1H" + s + E$ + "[K")
    _ (test
@@ -431,7 +431,7 @@
       (: st (hlon (small '("(map f)" "(g 1)") "")) _ (vfresh st)
          r0 ((st 'hlrow) 0)
          ; [[text carry from to] painted]: the key is what it was painted from
-         ((<r0 = ["(map f)" 0 0 7]) && (0 < tally <>r0)))
+         ((<r0 = ["(map f)" 0 0 7 'l]) && (0 < tally <>r0)))
       ; the cache is keyed by SCREEN row, so it is the height of the view and
       ; never the height of the file
       (: st (hlon (small '("a" "b" "c" "d" "e" "f") "")) _ (vfresh st) _ (vfeed st (bytes "G"))
@@ -493,7 +493,7 @@
          ((lns q = '("x" "y" "z")) &&
           (at q = '(0 0)) &&
           !(q 'dirty) && !(q 'undo) && q 'hl))
-      (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.md") !(q 'hl))
+      (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.txt") !(q 'hl))
       (: q (vgo '("a") "") _ (vload q () "e.l") (lns q = '(""))))             ; an empty read is one empty line
 
 ; --- libra ⚖ on the buffer: :lint weighs what you are looking at. one scanner
@@ -624,6 +624,7 @@
 ; --- the syntax paint (apps/vi/hue.l): classes, the carry, and the one law
 ; that keeps every exact-frame assertion above honest --------------------------
    hbk (hue-book ())
+   hlx (\ s in keep (hue-lex hbk s in keep))
    (klass s) (map (\ r <r) <(hue-lex hbk s 0 1))
    (runs s in) <(hue-lex hbk s in 1)
    ; strip SGR and only SGR: \e[<digits;>m goes, \e[H and \e[K and \e[r;cH stay,
@@ -678,7 +679,7 @@
 ; --- the carry: a string spans lines (papel.l's css is forty of them), so a
 ;     line's class depends on where the line before it ended -----------------
    _ (test
-      (hue-carry hbk '("(: css \"a" "b\" 1)" "x") = '(0 1 0))
+      (hue-carry hlx '("(: css \"a" "b\" 1)" "x") = '(0 1 0))
       (runs "a ; b\" c" 1 = '((string 0 6)))        ; carried in: the ; is still string
       (runs "a ; b" 1 = '((string 0 5)))            ; and it stays open to the end
       ; keep () is the same walk with its answers dropped -- one lexer, provably
@@ -722,7 +723,9 @@
       (hue-pen '(Statement 161 "#F92672" (bold)) () = "\e[1;38;5;161m")
       (hue-pen '(Statement 161 "#F92672" (bold)) 1 = "\e[1;38;2;249;38;114m")
       (: ps (hue-pens hue-theme ()) (all (\ c (string? (ps (hue-cls c)))) hue-classes))
-      (all (\ r (any (\ c (hue-grp c = <r)) hue-classes)) hue-theme))
+      (: ps (hues-pens hue-theme ()) (all (\ c (string? (ps (hue-cls c)))) hues-classes))
+      (all (\ r (any (\ c (hue-grp c = <r)) hue-classes || any (\ c (hue-grp c = <r)) hues-classes))
+           hue-theme))
 
 ; --- paint invariance: colour adds colour and moves nothing. this is what keeps
 ;     every byte-exact frame law above meaningful once the paint exists -------
@@ -737,16 +740,138 @@
       (twin '("(a really quite long line that clips at the view edge)") "$")
       (twin '("") ""))
 
-; --- born on for .l, off for everything else (which is why "t" above is plain),
-;     and :hl flips it ------------------------------------------------------
+; --- the other languages (apps/vi/hues.l): the name picks the lexer, else a #!
+;     naming a shell, and each answers hue-lex's shape, the carry included ----
+   (hk g s in) (map (\ r <r) <((hues-lexer g) s in 1))
+   (hc g ls) (hue-carry (hues-lexer g) ls)
+   _ (test
+      (hues-lang "a/b.c" "" = 'c)
+      (hues-lang "x.h" "" = 'c)
+      (hues-lang "Makefile" "" = 'make)
+      (hues-lang "t.mk" "" = 'make)
+      (hues-lang "x.html" "" = 'html)
+      (hues-lang "x.css" "" = 'css)
+      (hues-lang "x.sh" "" = 'sh)
+      (hues-lang "run" "#!/bin/sh -e" = 'sh)
+      (hues-lang "x.l" "#!/bin/sh" = 'l)                  ; the name first
+      !(hues-lang "x.txt" "")
+      !(hues-lang "run" "#!/usr/bin/env python3"))
+   _ (test
+      (hk 'c "#include <stdio.h>" 0 = '(pre string))
+      (hk 'c "static int x = 0x1f; // n" 0 = '(type type number comment))
+      (hk 'c "if (c == '\\'') return \"a\\\"b\";" 0 = '(keyword string keyword string))
+      (hk 'c "x = 1.5e-3f;" 0 = '(number))
+      (hk 'c "c */ d" 1 = '(comment))
+      (hc 'c '("a /* b" "c */ d" "e") = '(0 1 0)))
+   _ (test
+      (hk 'css "a:hover, .x #y {" 0 = '(keyword ent func func))
+      (hk 'css "  color: #fff; margin: -2px 10%;" 0 = '(type number type number number))
+      (hk 'css "  --w: 3em !important;" 0 = '(var number keyword))
+      (hk 'css "@media screen {" 0 = '(pre keyword))
+      (hc 'css '("/* a" "b */ p {" "x") = '(0 1 0)))
+   _ (test
+      (hk 'html "<a href=\"x\">t &amp; u</a>" 0 = '(keyword attr string keyword ent keyword keyword))
+      (hk 'html "<style>p { color: red }</style>" 0 = '(keyword keyword keyword type keyword keyword))
+      (hc 'html '("<!-- a" "b --> <div" "  id=x>" "y") = [0 1 ['tag "div" 0] 0])
+      (hc 'html '("<style>/* a" "b */</style>" "x") = [0 ['css 1] 0]))
+   _ (test
+      (hk 'sh "FOO=bar # c" 0 = '(var comment))
+      (hk 'sh "a#b" 0 = ())                               ; # opens a comment only at a word
+      (hk 'sh "if [ \"$x\" = 1 ]; then echo ${y}; fi" 0
+          = '(keyword func string var string number func keyword func var keyword))
+      (hc 'sh '("cat <<-'EOF'" "body $x" "\tEOF" "x") = '(0 "EOF" "EOF" 0))
+      (hk 'sh "body $x" "EOF" = '(string))
+      (hk 'sh "\tEOF" "EOF" = '(pre))
+      (hc 'sh '("a 'b" "c' \"d" "e\"" "x") = '(0 1 2 0)))
+   _ (test
+      (hk 'make "CC ?= cc # c" 0 = '(var comment))
+      (hk 'make "$(ho)/love: a.o $(b)" 0 = '(func var))
+      (hk 'make "ifeq ($(A),1)" 0 = '(pre var))
+      (hk 'make "\techo $@ $(X) 'q'" 0 = '(func var var string))   ; a recipe is sh
+      (<((hues-lexer 'make) "\ttest -s $$t" 0 1) = '((func 1 5) (var 9 12)))
+      (hk 'make "x.o: CFLAGS=1" 0 = '(func)))
+   _ (test
+      (map (\ f (hues-lang f "")) ["x.md" "x.json" "x.s" "x.S" "x.asm" "x.diff" "x.patch" "x.awk"
+                                   "love.1" "x.man" "x.mjs" "Cookfile"]
+       = '(md json asm asm asm diff diff awk roff roff js make))
+      (hues-lang "run" "#!/usr/bin/awk -f" = 'awk))
+   _ (test
+      (hk 'json "{\"a\": [1, -2.5e3, true], \"b\": \"x\\\"y\"} // c" 0
+          = '(type number number const type string comment))
+      (hk 'diff "--- a/x" 0 = '(type))
+      (<((hues-lexer 'diff) "@@ -1 +1 @@ fn" 0 1) = '((ent 0 11)))
+      (hk 'diff "+new" 0 = '(added))
+      (hk 'diff "-old" 0 = '(removed))
+      (hk 'diff " ctx" 0 = ())
+      (hk 'roff ".TH LOVE 1 \"2026\"" 0 = '(keyword string))
+      (hk 'roff "a \\fBb\\fR \\(em \\*(Lq \\s+2" 0 = '(ent ent ent ent ent))
+      (hk 'roff "text \"q\" \\\" c" 0 = '(comment))       ; quotes are literal outside a request
+      (hk 'roff ".\\\" all comment" 0 = '(comment))
+      (hk 'awk "/^a+/ && $3 > 1 { n = NF / 2; print $1 }  # c" 0
+          = '(string var number var number keyword var comment))
+      (hk 'awk "BEGIN { FS = \":\" }" 0 = '(keyword var string))
+      (hk 'js "r = /a\\/b/g, d = x / 2 / y" 0 = '(string number)))
+   _ (test
+      (hk 'asm "main:  movq %rsp, %rbp  # c" 0 = '(func keyword var var comment))
+      (hk 'asm "  movl $-1, -8(%rbp); ret" 0 = '(keyword number number var keyword))
+      (hk 'asm "  .globl main" 0 = '(pre))
+      (hk 'asm "  mov rax, qword ptr [rbx+8]" 0 = '(keyword var type type var number))
+      (hk 'asm "  add x0, x1, #16 // a64" 0 = '(keyword var var number comment))
+      (hk 'asm "  addi a0, a1, 3" 0 = '(keyword var var number))
+      (hk 'asm "  bx lr @ thumb" 0 = '(keyword var comment))
+      (hk 'asm "1: jmp 1b" 0 = '(func keyword number))
+      (hk 'asm "#include <x.h>" 0 = '(pre))
+      (hc 'asm '("/* a" "b */ nop" "x") = '(0 1 0)))
+   _ (test
+      (hk 'md "# Title" 0 = '(keyword))
+      (hk 'md "a *em* **strong** `code` a_b_c [t](u) <https://y>" 0
+          = '(ent const string func string string))
+      (hk 'md "- item" 0 = '(pre))
+      (hk 'md "12. item" 0 = '(pre))
+      (hk 'md "> q" 0 = '(comment))
+      (hk 'md "***" 0 = '(pre))
+      ; a fence names its language and its body is lexed as that one, carry and all
+      (hc 'md '("```c" "int x; /* a" "b */" "```" "t")
+          = [0 ['fence 96 3 'c 0] ['fence 96 3 'c 1] ['fence 96 3 'c 0] 0])
+      (hk 'md "int x;" ['fence 96 3 'c 0] = '(type))
+      (hk 'md "(map f l)" ['fence 96 3 'l 0] = '(paren book paren))
+      (hk 'md "raw *x*" ['fence 126 3 () 0] = '(string))
+      (hk 'md "````" ['fence 96 3 'c 0] = '(pre)))         ; a longer run closes too
+   ; paint invariance again, off the .l lexer: colour is added and nothing moves
+   (twinf ls nm) (: a (vnew ls nm) b (vnew ls nm)
+                    _ (pin a 'w 30) _ (pin a 'h 5) _ (pin a 'hl ())
+                    _ (pin b 'w 30) _ (pin b 'h 5) _ (hlon b)
+                    ((bare (vframe b) = vframe a) && !(vframe b = vframe a)))
+   _ (test
+      (twinf '("int x; /* a" "b */ char *s = \"q\";") "t.c")
+      (twinf '("<p class=\"a\">x &lt; y</p>") "t.html")
+      (twinf '("if true; then echo $x; fi") "t.sh")
+      (twinf '("all: x.o" "\tcc -o $@ $^") "Makefile")
+      (twinf '("p { color: red }") "t.css")
+      (twinf '("{\"a\": 1}") "t.json")
+      (twinf '("@@ -1 +1 @@" "-a" "+b") "t.diff")
+      (twinf '(".SH NAME" "love \\- a lisp") "t.1")
+      (twinf '("main: movq %rsp, %rbp") "t.s")
+      (twinf '("# t" "```c" "int x;" "```") "t.md")
+      (twinf '("{ print $1 }") "t.awk")
+      ; % reads c's strings as the paint does: the quoted ) is not a mate
+      (at (vfeed (vnew '("f(\")\", x)") "t.c") (bytes "%")) = '(0 8))
+      (at (vgo '("f(\")\", x)") "%") = '(0 3)))
+
+; --- born on for a language hues-lang names, off for everything else (which is
+;     why "t" above is plain), and :hl flips it -------------------------------
    _ (test
       !(st? (vnew '("a") "t") 'hl)
       !(st? (vnew '("a") "") 'hl)
       !(st? (vnew '("a") "l") 'hl)
+      !(st? (vnew '("a") "x.txt") 'hl)
       (st? (vnew '("a") "x.l") 'hl)
       (st? (vnew '("a") "apps/vi/hue.l") 'hl)
+      (st? (vnew '("a") "x.c") 'hl)
+      (st? (vnew '("a") "Makefile") 'hl)
+      (st? (vnew '("#!/bin/sh") "run") 'hl)
       (st? (vgob '("a") ((bytes ":hl") + [CR])) 'hl)
       !(st? (vgob '("a") ((bytes ":hl") + [CR] + (bytes ":hl") + [CR])) 'hl))
 
    _ (test_fin ())                                    ; no zz-fin here: quit before claiming ok
-   _ (say err "test/law/vi: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue ok") _ (put err 10) 0)
+   _ (say err "test/law/vi: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue + hues ok") _ (put err 10) 0)

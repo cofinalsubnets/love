@@ -28,7 +28,9 @@
       (Identifier 214 "#ffb700" ())          ; molokayo over molokai's #fd971f/208
       (Special    81  "#66d0ef" (italic))    ; molokayo over molokai's #66d9ef
       (Operator   161 "#F92672" ())
-      (Delimiter  241 "#8F8F8F" ()))
+      (Delimiter  241 "#8F8F8F" ())
+      (Type       81  "#66D9EF" ())          ; these two paint only apps/vi/hues.l's classes
+      (PreProc    118 "#A6E22E" ()))
 
    ; the page palettes: a role a row, `(role "#rrggbb")`, and a scheme is one palette or
    ; a light/dark pair. hueweb spells each role as the css variable of the same name
