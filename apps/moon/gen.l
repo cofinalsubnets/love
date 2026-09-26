@@ -4106,7 +4106,14 @@
                        (: _ ((: (dfs ds) (? !(two? ds) 1
                                             (: _ (defr ci rg sl ce <ds) (dfs >ds))) dfs) <>rd)
                           (go r 1 cur rg sl ce ci (f . acc))))))))
-       (go fs0 1 0 (fresh 0) (fresh 0) (fresh 0) (fresh 0) ()))
+       ; a br over a jmp to the br's own target is the one br, inverted
+       (brj l) (? !(two? l) ()
+                  (: f <l
+                     (? (two? f && <f = 'br && elem <>f ccs9 && two? >l && two? >>l &&
+                         (: j <>l k <>>l (two? j && <j = 'jmp && two? k && <k = 'label && <>k = <>>f)))
+                         (['br (negcc <>f) <><>l] . brj >>l)
+                        (f . brj >l))))
+       (brj (go fs0 1 0 (fresh 0) (fresh 0) (fresh 0) (fresh 0) ())))
 
    ; dead cells: a spush cell nothing loads is write-only, so its store and its sub/add pair drop;
    ; a live cell converts to a frame slot (one per record depth) and the pair still drops
@@ -6812,7 +6819,8 @@
    ; -- the AST inliner: a call to an inline candidate, where its statement evaluates it before anything
    ; it sequences (not under && || ?: nor a comma's right), becomes the callee's body as statements ahead
    ; of it: each param a fresh local, each return a store to the call's value -- a lone `return e` is e
-   ; in place, and at a return the body's returns stay returns. the caller's analyses then see one body.
+   ; in place, at a return the body's returns stay returns, and at an if's test each return decides the
+   ; if where it stands, the arms copied there. the caller's analyses then see one body.
    ; what it declines, cginl may still splice --
    (acand g nm)                                    ; -> (params body rt locals frees decls) | ()
     (: f (g 'inl nm)
@@ -6836,15 +6844,14 @@
              (? (bar? body) ()
                 (foldl (\ a p (a || stru? <>p || arr? <>p)) () dl) ()
                 [ps body <(peep (g 'sigs) nm ['long ()]) loc (fv body ()) dl]))))
-   ; a callee body's returns -> stores to rv (or bare evaluations when rv is ()), with no jump: a return
-   ; ends the list or an if arm that always returns, whose rest moves into the other arm | 'no
-   (aelim l rv)
+   ; a callee body's returns -> what rs lays for each value, with no jump: a return ends the list
+   ; or an if arm that always returns, whose rest moves into the other arm | 'no
+   (aelim l rs)
     (: (hr x) (? !(two? x) () (<x = 'ret) 1 (hr <x || hr >x))
        (ar s) (s @ ('ret . _) 1
                    ('blk items) (foldl (\ a x (a || ar x)) () items)
                    ('if _ t e) (ar t && ar e)
                    ())
-       (rs e) (? !(two? e) () rv [['expr ['asn ['var rv] e]]] [['expr e]])
        (bl l) (: r (el l) (? (= r 'no) 'no ['blk r]))
        (arm c a b) (? ((= a 'no) || (= b 'no)) 'no [['if c a b]])
        (el l)
@@ -6893,17 +6900,22 @@
                      (e @ ('bin op _ _) (elem op '(eq ne lt le gt ge)) (('land || 'lor) . _) 1 ('un 'not _) 1 ()))
                     e ['cast rt e])
        ; a call spliced here -> (pre value) | () declined. mode: 'val its value, 'br a branch's test,
-       ; 'stmt none, 'ret the caller's own return (the body's returns stay returns, tail calls tails)
+       ; 'stmt none, 'ret the caller's own return (the body's returns stay returns, tail calls tails),
+       ; ('push inv then else) an if's test
        (site nm as d mode)
         (: c (? ((elem nm d) || (3 < #d) || (dn nm)) () (cand nm))
            val? (elem mode '(val br))
+           pm (two? mode)
            (? !(two? c) ()
               (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5)
                  one (body @ (('ret e)) (two? e) ())          ; the whole body one `return e`
                  (? (#ps != #as) ()
                     (foldl (\ a v (a || dn v)) () fr) ()          ; a free name the caller shadows
-                    (val? && (= rt 'void)) ()
-                    ((mode = 'br) && !one) ()                       ; a branchy test is cbinl's: it branches from each return
+                    ((val? || pm) && (= rt 'void)) ()
+                    ((mode = 'br) && !one) ()                       ; a branchy test that does not push down is cginl's
+                    ; ..each return lays its own copy of the arms: a few small ones
+                    (pm && ((40 < (dsz (mode 2) + dsz (mode 3))) ||
+                            (5 < (: (go x) (? !(two? x) 0 (<x = 'ret) 1 ((go <x) + go >x)) (go body))))) ()
                     (: k (n9 'k) _ (pin n9 'k (k + 1))
                        sfx ("`a" + show k)
                        m {}
@@ -6933,12 +6945,18 @@
                                  (<x = 'ret) (? (two? <>x) ['ret (? (= rt crt) <>x (cv <>x rt))] x)
                                  (rc <x . rc >x))
                        rv (? (val? && !one) ("`r" + show k) ())
+                       ; a test pushed down: each return's value decides the caller's if in place
+                       (pt e) (: v (cv e rt) kc (cnum g v)
+                                 (? (two? kc)                    ; a constant return is its arm
+                                     (: a (? ((<kc = 0) = (<>mode = 1)) (mode 2) (mode 3)) (? (two? a) [a] ()))
+                                    [['if (? (<>mode = 1) ['un 'not v] v) (mode 2) (mode 3)]]))
                        el (? (= pre 'no) 'no
                              (mode = 'ret) (rc rb)
                              (val? && one) rb
-                             (aelim rb rv))
+                             pm (aelim rb pt)
+                             (aelim rb (e \ (? !(two? e) () rv [['expr ['asn ['var rv] e]]] [['expr e]]))))
                        (? (= el 'no) ()
-                          (mode = 'ret) [(pre + hitems el (nm . d)) ()]
+                          ((mode = 'ret) || pm) [(pre + hitems el (nm . d)) ()]
                           (val? && one) [pre (cv <><rb rt)]
                           (: _ (? rv (pin tys rv rt) 0)
                              ; one return, the last statement: the value is a decl from it (kprop reads those)
@@ -6949,6 +6967,13 @@
                                    (two? tl && nr = 1) (rev (['decl [[rv rt <tl]]] . >rl))
                                    (['decl [[rv rt]]] . el))
                              [(pre + hitems st (nm . d)) (? rv ['var rv] ())])))))))
+       ; a test that pushes down -> (inv nm as) | (): a call, or its !, to a candidate of many returns
+       (pcall c)
+        (: pc (c @ ('call ('var nm) as) [0 nm as] ('un 'not ('call ('var nm) as)) [1 nm as] ())
+           cd (? pc (cand <>pc))
+           (? (two? cd && !(<>cd @ (('ret e)) 1 ())) pc ()))
+       ; an arm's weight as a copy, or past any budget when a copy would be wrong (a label, a decl)
+       (dsz x) (? (= x ()) 0 !(two? x) 1 (elem <x '(lbl case dflt decl sdecl asm)) 99 ((dsz <x) + dsz >x))
        ; an expression -> (pre e'): only the positions evaluated first are hoisted
        (hx e d)
         (? !(two? e) [() e]
@@ -6993,6 +7018,14 @@
                  (: ha (hxl as d)
                     st (site nm <>ha d 'ret)
                     (? (two? st) (<ha + <st) (<ha + [['ret ['call ['var nm] <>ha]]])))
+                ; x = c ? a : b and return c ? a : b are ifs, where c pushes down: for a pointer x,
+                ; where an arm converts to x as it would to the arms' common type
+                ('expr ('asn ('var v) ('cond c a b)))
+                 (? (ptr? (peep tys v ()) && pcall c) (hs ['if c ['expr ['asn ['var v] a]] ['expr ['asn ['var v] b]]] d)
+                    (: r (hx <>s d) (<r + [['expr <>r]])))
+                ('ret ('cond c a b))
+                 (? (ptr? crt && pcall c) (hs ['if c ['ret a] ['ret b]] d)
+                    (: r (hx <>s d) (<r + [['ret <>r]])))
                 ('expr e) (: r (hx e d) (<r + [['expr <>r]]))
                 ('decl ps)
                  ; an init may name its own decl (sizeof *h): what hoists above it may not
@@ -7005,7 +7038,12 @@
                                            (<r + [['decl [(? (two? >>p) ([<p <>p <>r] + >>>p) p)]]] + go >ps >rs)))
                           (go ps rs))))
                 ('ret e) (? !(two? e) [s] (: r (hx e d) (<r + [['ret <>r]])))
-                ('if c t e) (: r (hxb c d) (<r + [['if <>r (hb t d) (hb e d)]]))
+                ('if c t e)
+                 (: pc (pcall c)
+                    ha (? pc (hxl (pc 2) d))
+                    st (? pc (site <>pc <>ha d ['push <pc t e]))
+                    (? (two? st) (<ha + <st)
+                       (: r (hxb c d) (<r + [['if <>r (hb t d) (hb e d)]]))))
                 ('while c b) [['while c (hb b d)]]
                 ('do b c) [['do (hb b d) c]]
                 ('for i c st b) [['for i c st (hb b d)]]

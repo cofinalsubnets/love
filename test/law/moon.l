@@ -1449,8 +1449,9 @@
 
 ; -- the AST inliner: the call becomes the callee's body in the caller's AST, so the caller's
 ; own analyses see one fn. a predicate's `return e` substitutes into the branch (no bit settled
-; and retested), &x bound to a deref-only param reads x itself (no frame address), and a helper
-; over constants folds whole (the constant select included) --
+; and retested; a branchy one's returns each decide it), &x bound to a deref-only param reads
+; x itself (no frame address), and a helper over constants folds whole (the constant select
+; included) --
 (: aP (cgn "static long inr(long x, long n) { return x >= 2 && x <= n; }\nlong pk(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { if (inr(a + i, n)) s += i; } return s; } int main() { return pk(1, 6); }")
    aPf (fnf 'pk <>aP)
    aG (cgn "static long sum9(long p, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + p; } return s; }\nlong gq(long a, long n) { return sum9(a + 1, n); }\nint main() { return gq(3, 5); }")
@@ -1459,7 +1460,10 @@
    aXf (fnf 'h <>aX)
    aB (cgn "static unsigned long b2w(unsigned long b) { unsigned long q = b / 8, r = b % 8; return q + (r ? 1 : 0); }\nlong f(long *hp) { unsigned long const S = 3 + b2w(8); return hp[S]; }\nint main() { long a[8] = {0}; return (int) f(a); }")
    aBf (fnf 'f <>aB)
+   aT (cgn "static int rng(int x) { if (x < 0) return 0; if (x > 100) return 1; return x & 1; }\nint g(int x, int y) { if (rng(x)) return y + 1; return y * 3; }\nint main() { return g(3, 4); }")
+   aTf (fnf 'g <>aT)
    (sp? fs) (foldl (\ a f (a || (two? f && <f = 'sub && <>f = 'sp))) () fs)
+   (has? op fs) (foldl (\ a f (a || (two? f && <f = op))) () fs)
    (test
       (two? aP)
       !(elem '(call inr) aPf)
@@ -1473,7 +1477,11 @@
       !(elem '(call g) aXf)                          ; *p over &x is x: no address taken, no frame
       !(sp? aXf)
       (two? aB)
-      (elem '(ld r0 r6 32) aBf)))                    ; 3 + b2w(8) is 4: hp[4], one load
+      (elem '(ld r0 r6 32) aBf)                     ; 3 + b2w(8) is 4: hp[4], one load
+      (two? aT)                                      ; a branchy predicate at a test: each return
+      !(has? 'li aTf)                                ; decides the test where it stands, the arms
+      !(has? 'jmp aTf)                               ; copied to it -- no flag set, none retested
+      !(sp? aTf)))
 
 ; -- the shuttle skip + slot residency: a right side whose forms never write r1 (no call, no
 ; label, no control) runs with the left parked in r1 -- one mov, no push/pop round-trip; and
