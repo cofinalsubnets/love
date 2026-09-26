@@ -253,20 +253,29 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
   if (to_len > cap) to_len = cap > need_step ? (cap / step) * step : need_step; }
  word *to = g->major_spare, *resized = 0, *rspare = 0;
  if (to_len != g->major_len) {                                 // a different-size pair: alloc it, free the old
-  resized = ai_major_pair(to_len, &rspare);
-  if (!resized && to_len > need_step)                          // the headroom alloc failed: retry at the tight size
-   to_len = need_step, resized = (need_step == g->major_len) ? 0 : ai_major_pair(need_step, &rspare);
-  // last chance: drop the STEP granularity too. need_step is need rounded UP to a whole
-  // step, so it can overshoot the largest free block by most of a step -- on a seat whose
-  // pool is a fixed region that is the difference between a heap and a dead board. need
-  // itself is the worst case the to-space has to hold, by the arithmetic above; a pair
-  // sized there has no headroom and the next collection will be a major too, which is the
-  // trade this rung exists to make.
-  if (!resized && need < to_len)
-   to_len = need, resized = (need == g->major_len) ? 0 : ai_major_pair(need, &rspare);
+  uintptr_t ask = to_len;
+  // the copy never reads the spare half: when the live set has outgrown it, so it cannot be
+  // the to-space, it gives its room to the pair and the ladder runs again. peak is then the
+  // active half and the new pair, not both pairs -- on a fixed region, a heap or a dead board
+  for (int pass = 0; pass < 2 && !resized; pass++) {
+   if (pass) {
+    if (need <= g->major_len) break;
+    ai_alloc(g->major_spare, 0), g->major_spare = 0; }
+   to_len = ask, resized = ai_major_pair(to_len, &rspare);
+   if (!resized && to_len > need_step)                          // the headroom alloc failed: retry at the tight size
+    to_len = need_step, resized = (need_step == g->major_len) ? 0 : ai_major_pair(need_step, &rspare);
+   // last chance: drop the STEP granularity too. need_step is need rounded UP to a whole
+   // step, so it can overshoot the largest free block by most of a step. need itself is the
+   // worst case the to-space has to hold, by the arithmetic above; a pair sized there has
+   // no headroom and the next collection will be a major too, which is the trade this rung
+   // exists to make.
+   if (!resized && need < to_len)
+    to_len = need, resized = (need == g->major_len) ? 0 : ai_major_pair(need, &rspare); }
   if (resized) to = resized;
   else if (need <= g->major_len) to_len = g->major_len;             // alloc failed, but the existing spare half holds the live set
-  else return encode(g, ai_status_scare);                           // true oom: compacting would overflow the spare -> clean scare, no corruption
+  else {                                                            // true oom: compacting would overflow the spare -> clean scare, no corruption
+   if (!g->major_spare) g->major_spare = ai_alloc(NULL, g->major_len * sizeof(word));
+   return encode(g, ai_status_scare); }
  }
  if (tight) *tight = to_len < free_len;   // denied: the budget cap, or the bigger alloc failed
  g->major_hp = to, X.cp = to;
