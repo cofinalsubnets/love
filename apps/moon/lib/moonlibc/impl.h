@@ -383,6 +383,7 @@ static long er(long r) {
  * __ai_osv where the shapes part -- fb0..fb6 reach the calls the map cannot
  * carry, by their NR_fb_* number, errno translated the same. */
 extern long __ai_osv;
+unsigned long getauxval(unsigned long t);
 extern long __ai_osdetect(void);
 /* inle's door (inle/sys.c): the same seam in C, for the kernel that is only
  * ever itself. it answers the canonical numbers, so a negative osv takes every

@@ -115,6 +115,12 @@ static void __ai_reloc(void) {
   for (long *p = __start_love_rela; p < __stop_love_rela; p++)
     *(unsigned long *) (bias + (unsigned long) *p) += bias; }
 
+/* ---- getauxval: the kernel's word for a type, 0 where it laid none ---- */
+unsigned long getauxval(unsigned long t) {
+  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2)      /* low word: __ai_bias's rule */
+    if ((unsigned int) a[0] == t) return (unsigned long) a[1];
+  return 0; }
+
 /* ---- dl_iterate_phdr off the auxv (AT_PHDR/AT_PHNUM): one callback covers "the
  * main program", carrying the real load bias so image.c's bake walk bounds the
  * in-binary pointers correctly under -pie (0 for a fixed-base ET_EXEC). ---- */
