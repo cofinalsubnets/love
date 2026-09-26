@@ -1,9 +1,9 @@
-; apps/kore/proc.l -- the process and world tools of kore: env, printenv, sleep,
+; apps/kore/proc.l -- the process and world tools of kore: env, nohup, printenv, sleep,
 ; kill, xargs, date, id, whoami, groups.
 ; a toolbox file, no seat -- kore is its door; loads after core.l and rides the
 ; u-floor. no nifs of its own: environ/getenv/setenv (inle/main.c + init.c),
 ; spawn/wait (init.c's posix lane -- spawn answers the pid or a NEGATIVE errno,
-; a child that cannot exec _exit(127)s), still (pty.c's kill), rest (the core
+; a child that cannot exec _exit(127)s), still (posix.c's kill), rest (the core
 ; sleep, milliseconds). a body-less top-level `:` leaking one pure helper
 ; (udur -- lawed in test/law/kore.l) and the mains.
 (module 'kore
@@ -275,6 +275,32 @@
                       + (" groups=" + (ujoinc 44 (map one gs))))))
        _ (put out 10) _ (flush out) 0)
 
+   ; -- nohup: SIGHUP ignored, then exec the command. a terminal on 0 is swapped for
+   ; /dev/null, one on 1 for nohup.out (0600, $HOME's when the cwd refuses), one on 2
+   ; for stdout; the sentence says which, before err moves. 125 nohup's own trouble,
+   ; 126 the command would not run, 127 no such command, else the command's own --
+   (nohup-main as)
+    (: cmd (? (two? as && <as = "--") >as as)
+       _ (? (two? cmd) () (udie 125 "nohup: missing operand"))
+       tin (two? (tty 0)) tout (two? (tty 1)) terr (two? (tty 2))
+       _ (signal 1 1)
+       (open1 p) (: new !(two? (stat p)) fd (openfd p 2)
+                    (? (nom? fd) () (: _ (? new (chmod p 384) 0) [fd p])))
+       ofd (? tout (: a (open1 "nohup.out") h (getenv "HOME")
+                      (? (two? a) a (string? h) (open1 (h + "/nohup.out")) ()))
+              ())
+       _ (? (tout && !(two? ofd)) (udie 125 "nohup: failed to open nohup.out") ())
+       what (? tout ("appending output to '" + <>ofd + "'")
+               terr "redirecting stderr to stdout"
+               "")
+       msg (? (tin && #what) ("ignoring input and " + what) tin "ignoring input" what)
+       _ (? #msg (: _ (say err ("nohup: " + msg)) _ (put err 10) (flush err)) 0)
+       _ (? tin (: fd (openfd "/dev/null" 0) (? (nom? fd) 0 (: _ (dup2 fd 0) (close fd)))) 0)
+       _ (? tout (: _ (dup2 <ofd 1) (close <ofd)) 0)
+       _ (? terr (dup2 1 2) 0)
+       _ (flush out)
+       e (exec cmd)
+       (udie (? (e = 'enoent) 127 126) ("nohup: failed to run command '" + <cmd + "'")))
 
    ; -- printenv: the world, or just the names asked for (a name with no value in it
    ; says nothing and the exit remembers, like GNU's) --

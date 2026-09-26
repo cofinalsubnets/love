@@ -1,5 +1,6 @@
 #!/bin/sh
-# test/kore/misc.sh -- dd, xxd, strings, cal, timeout, which, tty, clear, hostname
+# test/kore/misc.sh -- dd, xxd, strings, cal, timeout, which, tty, clear, hostname,
+# hexdump, getopt
 . "$(dirname "$0")/common.sh"
 
 # dd: the data AND the two record lines. a partial block is the +1 column, which is
@@ -97,4 +98,50 @@ korerun tty < /dev/null > /dev/null 2>&1; r=$?
 # the three read no options at all, so a dash word is refused and not ignored
 korerun tty -Z > "$o" 2>&1; r=$?
 [ $r -eq 2 ] && grep -q 'unknown option' "$o" || fail "kore tty -Z must be refused"
-echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname ok"
+# hexdump to the byte against the system's where there is one: both faces, the `*` a
+# repeated row folds to, a short last row padded out, -s landing past the end still
+# naming the offset it reached
+if command -v hexdump > /dev/null 2>&1; then
+  printf 'hello\n' > "$ho/.hx1"; printf 'abc' > "$ho/.hx2"; : > "$ho/.hx3"
+  { dd if=/dev/zero bs=48 count=1 2>/dev/null; printf 'x'; } > "$ho/.hx4"
+  for f in .hx1 .hx2 .hx3 .hx4 .arc1; do
+    for fl in "" "-C" "-v" "-n 5" "-s 3" "-C -s 17 -n 20" "-s 1000"; do
+      # shellcheck disable=SC2086
+      hexdump $fl "$ho/$f" > "$g" 2>/dev/null; korerun hexdump $fl "$ho/$f" > "$o" 2>/dev/null
+      same "hexdump $fl $f"
+    done
+  done
+  hexdump -C "$ho/.arc1" > "$g"; korerun hd "$ho/.arc1" > "$o"; same "hd"
+fi
+# getopt against util-linux's where it is the enhanced one (-T answers 4): the quoting
+# for eval, abbreviated longs, the three operand modes, -a's one-dash longs, and the
+# parse errors -- stderr and the exit ride along
+if getopt -T > /dev/null 2>&1; [ $? -eq 4 ]; then
+  while IFS= read -r c; do
+    eval "getopt $c" > "$g" 2>&1; rg=$?
+    eval "korerun getopt $c" > "$o" 2>&1; ro=$?
+    cmp -s "$g" "$o" && [ $rg -eq $ro ] || fail "kore getopt $c (rc $ro vs $rg)"
+  done <<'EOF_GETOPT'
+-o ab:c:: --long alpha,beta:,gamma:: -n prog -- -a -b x file --alp -c
+-o ab:c:: -l alpha,beta: -- -a -bval -cval -c rest1 -- -a
+-o ab: -- -b
+-o a -- -z -a
+-o a -- --nope
+-o a -l alpha,also -- --al
+-o a -l alpha -- --alpha=3
+-o a -l beta: -- --beta
+-o a -l gamma:: -- --gamma --gamma=v
+-o +ab -- -a file -b
+-o -ab -- -a file -b
+-q -o a -- -z -a
+-Q -o a -- -a x
+-a -o ab -l alpha,beta: -- -alp -b -beta x -beta=y -a
+-o a -- "it's" -a
+-u -o ab: -- -b "x y" z
+ab: -a -b x y
+-n x ab: -a -b q
+-o x: -- -x ''
+EOF_GETOPT
+fi
+korerun getopt -T; [ $? -eq 4 ] || fail "kore getopt -T must answer 4"
+echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt ok"

@@ -94,4 +94,10 @@ korerun grep b "$ho/.gr-nope" 2> "$o"; b=$?
 cmp -s "$g" "$o" && [ $a -eq 2 ] && [ $b -eq 2 ] || fail "kore grep missing file vs GNU"
 korerun grep b "$ho/.gr1" "$ho/.gr-nope" > /dev/null 2>&1; r=$?
 [ $r -eq 2 ] || fail "kore grep err beats match exit"
-echo "kore: grep (BRE + ERE batteries + the clustered flag matrix GNU-identical, the exit triple) ok"
+# the two old spellings are grep -E and grep -F by name
+printf 'a+b\naab\nx.y\n' > "$ho/.gr-eg"
+for c in "egrep a+b" "fgrep a+b" "egrep -c x|a" "fgrep -v x.y"; do
+  set -- $c
+  "$@" "$ho/.gr-eg" > "$g" 2>/dev/null; korerun "$@" "$ho/.gr-eg" > "$o" 2>/dev/null; same "$c"
+done
+echo "kore: grep (BRE + ERE batteries + the clustered flag matrix GNU-identical, the exit triple, egrep/fgrep) ok"

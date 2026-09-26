@@ -82,6 +82,12 @@ if [ "$(stat -c %d /tmp 2>/dev/null)" != "$(stat -c %d "$P" 2>/dev/null)" ]; the
   korerun mv /tmp/.kore-xdev "$P/xdev" && [ -f "$P/xdev" ] && [ ! -e /tmp/.kore-xdev ] \
     || fail "kore mv cross-device"
 fi
+# chgrp is chown's :GROUP -- a group we are in by name and by number, and a name the
+# group file does not carry is refused before any file is touched
+printf 'g\n' > "$P/cg"
+korerun chgrp "$(id -gn)" "$P/cg" && [ "$(stat -c %G "$P/cg")" = "$(id -gn)" ] || fail "kore chgrp NAME"
+korerun chgrp -R "$(id -g)" "$P/many" || fail "kore chgrp -R GID"
+korerun chgrp no-such-group-here "$P/cg" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore chgrp bad group (rc $r)"
 # test's file relations: -ef is one file through a hard or a soft link, -nt/-ot the
 # mtime, and a file that is not there the older of the two. the answers are GNU's, spelled
 # out, since under lush the `test` beside this one may be kore's own
@@ -94,4 +100,4 @@ for c in "0 a -ef h" "0 a -ef s" "1 a -ef b" "1 a -ef none" "0 a -nt old" "1 old
   [ "$k" = "${c%% *}" ] || fail "kore test ${c#? } (got $k, want ${c%% *})"
 done
 (cd "$T" && "$K" kore [ a -ef h ]) || fail "kore [ a -ef h ]"
-echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test) ok"
+echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp) ok"

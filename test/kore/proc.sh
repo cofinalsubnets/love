@@ -57,4 +57,19 @@ korerun printenv | grep -v '^_=' | LC_ALL=C sort > "$o"; same "printenv print"
 # everywhere. This box is the linux arm of that; the inle arm is test/kernel/wfs.l.
 [ "$(korerun uname -s)" = "$(uname -s)" ] || fail "kore uname -s"
 [ "$(korerun nproc)" = "$(nproc --all)" ] || fail "kore nproc"
-echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc) ok"
+# nohup: HUP ignored across the exec, the command's own status back, 125/126/127 for its
+# own trouble; under a terminal (script(1) makes one) output lands in nohup.out, 0600
+[ "$(korerun nohup sh -c 'kill -HUP $$; echo survived')" = survived ] || fail "kore nohup: HUP must be ignored"
+korerun nohup sh -c 'exit 3'; r=$?; [ $r -eq 3 ] || fail "kore nohup: the command's status (got $r)"
+korerun nohup /nonexistent/cmd 2>/dev/null; r=$?; [ $r -eq 127 ] || fail "kore nohup: no such command is 127 (got $r)"
+korerun nohup "$HO" 2>/dev/null; r=$?; [ $r -eq 126 ] || fail "kore nohup: a command that will not run is 126 (got $r)"
+korerun nohup 2>/dev/null; r=$?; [ $r -eq 125 ] || fail "kore nohup: no operand is 125 (got $r)"
+if script -qec true /dev/null > /dev/null 2>&1; then
+  N=$HO/.nohup; rm -rf "$N"; mkdir "$N"
+  (cd "$N" && script -qec "$K kore nohup sh -c 'echo out; echo errline >&2'" /dev/null > "$N/tty" 2>&1)
+  grep -q "ignoring input and appending output to 'nohup.out'" "$N/tty" || fail "kore nohup: the terminal's sentence"
+  [ "$(cat "$N/nohup.out")" = "out
+errline" ] || fail "kore nohup: stdout and stderr land in nohup.out"
+  [ "$(stat -c %a "$N/nohup.out")" = 600 ] || fail "kore nohup: nohup.out is made 0600"
+fi
+echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup) ok"

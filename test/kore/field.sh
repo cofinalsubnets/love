@@ -27,6 +27,17 @@ pipe "tr -cd"    'hi there 42
 '                tr -cd 'a-z\n'
 pipe "tr -cs"    'one two  three
 '                tr -cs '[:alnum:]' '\n'
+# -ds deletes SET1 and then squeezes SET2 in what is left; -d took no -s and answered
+# the delete alone. a SET2 beside a bare -d, or none beside -ds, is GNU's refusal (1)
+pipe "tr -ds"    'aabbccaab
+'                tr -ds a b
+pipe "tr -cds"   'aabbccaab
+'                tr -cds 'a\n' a
+for c in "-d a b" "-ds a"; do
+  # shellcheck disable=SC2086
+  echo ab | korerun tr $c > /dev/null 2>&1; r=$?
+  [ $r -eq 1 ] || fail "kore tr $c must refuse with 1 (got $r)"
+done
 # the classes past the three that were spelled: a [:name:] uset does not know stays
 # LITERAL, so `tr -d [:space:]` quietly deleted a, c, e, p, s and the colon instead
 for c in space alpha alnum punct blank xdigit cntrl print graph; do

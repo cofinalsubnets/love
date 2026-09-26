@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (127 tools, 132 names)
+## the inventory (134 tools, 139 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir and
 less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -73,17 +73,18 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | core.l, the record tools | paste comm join split od |
 | sum.l, the checksums | cksum md5sum sha256sum (`-c` reads a list back) |
 | core.l, the trivia | seq yes true false basename dirname test [ uname arch nproc printf |
-| core.l, the byte tools | dd xxd strings |
+| core.l, the byte tools | dd xxd strings hexdump hd (the BSD dump: words, or -C's bytes; -n -s -v, no -e) |
+| core.l, the shell's helper | getopt (util-linux's: -o -l -n -a -q -Q -T -u, the three operand modes, quoted for `eval set --`; the old `getopt SHORTS` face; -s csh refused) |
 | fs.l, the fs tools | ls/dir cp mv rm mkdir rmdir ln touch lift pwd chmod install readlink cmp |
 | fs.l, the paths and the two bare calls | realpath link unlink |
-| fs.l, what they report | stat du df chown mktemp |
+| fs.l, what they report | stat du df chown chgrp mktemp |
 | expr.l, the little language | expr (arithmetic, the six comparisons, \| and &, and `:` over the BRE engine) |
 | patch.l, the diff read back | patch (unified only; -pN -R -i -o --dry-run, offsets, rejects) |
-| re.l, the matcher | grep (-nvclqhaixwFEo, -e stacking, -m) over the lawed regex engine, BRE or ERE |
+| re.l, the matcher | grep (-nvclqhaixwFEo, -e stacking, -m) over the lawed regex engine, BRE or ERE; egrep and fgrep, grep -E and -F by their old names (kore.l) |
 | sed.l, the editor | sed (-n -E -i -e; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
-| proc.l, the processes and the world | env printenv sleep kill xargs time date id whoami groups |
+| proc.l, the processes and the world | env nohup printenv sleep kill xargs time date id whoami groups |
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
 | proc.l, the one-liners | cal hostname tty clear which timeout |
 | top.l | top (the process table, repainted; `-b` batch) |
@@ -522,7 +523,7 @@ Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one
 
 ## not built
 
-Polish, as need arises: uniq -d/-u, cut -b, tr -ds (the -s is dropped), echo -e, seq over
+Polish, as need arises: uniq -d/-u, cut -b, echo -e, seq over
 gems, sed y/N and the hold space, join -o, od with several -t at once, date's spellings past
 `@SECONDS`, the checksums' `-b`/`--tag` output modes and `-c`'s `--quiet`/`--status` (a `-c`
 list written either way still READS here).
@@ -564,13 +565,13 @@ Retaken with `busybox --list`, `ls /usr/bin/uu-*`, `pacman -Qql` over the packag
 
 | | kore | busybox | GNU | uutils | NetBSD | FreeBSD |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 138 | 392 | 201 | 108 | 1025 | 956 |
-| shared with kore | | 120 | 104 | 80 | 110 | 115 |
+| names | 145 | 392 | 201 | 108 | 1025 | 956 |
+| shared with kore | | 127 | 108 | 82 | 116 | 122 |
 | carried by no one else | 9 | 181 | 27 | 1 | 505 | 433 |
 
-What at least four of the other five carry and kore does not: `chgrp` `csplit` `dc` `egrep`
-`fgrep` `fmt` `logname` `nice` `nohup` `pathchk` `pr` `sha1sum` `sha512sum` `stty` `sum`
-`telnet` `truncate` `uncompress` `users` `who`.
+What at least four of the other five carry and kore does not: `csplit` `dc` `fmt` `logname`
+`nice` `pathchk` `pr` `sha1sum` `sha512sum` `stty` `sum` `telnet` `truncate` `uncompress`
+`users` `who`.
 
 | tool | kore | busybox | GNU | uutils | NetBSD | FreeBSD |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
@@ -628,7 +629,7 @@ What at least four of the other five carry and kore does not: `chgrp` `csplit` `
 | `chat` |  | ✓ |  |  | ✓ | ✓ |
 | `chflags` |  |  |  |  | ✓ | ✓ |
 | `chfn` |  |  |  |  | ✓ | ✓ |
-| `chgrp` |  | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `chgrp` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `chio` |  |  |  |  | ✓ | ✓ |
 | `chmod` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `chown` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -682,7 +683,7 @@ What at least four of the other five carry and kore does not: `chgrp` `csplit` `
 | `echo` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `ed` |  | ✓ |  |  | ✓ | ✓ |
 | `edquota` |  |  |  |  | ✓ | ✓ |
-| `egrep` |  | ✓ | ✓ |  | ✓ | ✓ |
+| `egrep` | ✓ | ✓ | ✓ |  | ✓ | ✓ |
 | `eject` |  | ✓ |  |  | ✓ |  |
 | `elfedit` |  |  | ✓ |  | ✓ |  |
 | `env` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -698,7 +699,7 @@ What at least four of the other five carry and kore does not: `chgrp` `csplit` `
 | `fat` | ✓ |  |  |  |  |  |
 | `fdformat` |  | ✓ |  |  | ✓ | ✓ |
 | `fdisk` |  | ✓ |  |  | ✓ |  |
-| `fgrep` |  | ✓ | ✓ |  | ✓ | ✓ |
+| `fgrep` | ✓ | ✓ | ✓ |  | ✓ | ✓ |
 | `file` |  |  |  |  | ✓ | ✓ |
 | `find` | ✓ | ✓ | ✓ |  | ✓ | ✓ |
 | `finger` |  |  |  |  | ✓ | ✓ |
@@ -731,7 +732,7 @@ What at least four of the other five carry and kore does not: `chgrp` `csplit` `
 | `getent` |  |  |  |  | ✓ | ✓ |
 | `getextattr` |  |  |  |  | ✓ | ✓ |
 | `getfacl` |  |  |  |  | ✓ | ✓ |
-| `getopt` |  | ✓ |  |  | ✓ | ✓ |
+| `getopt` | ✓ | ✓ |  |  | ✓ | ✓ |
 | `gpioctl` |  |  |  |  | ✓ | ✓ |
 | `gprof` |  |  | ✓ |  | ✓ | ✓ |
 | `grep` | ✓ | ✓ | ✓ |  | ✓ | ✓ |
@@ -741,9 +742,9 @@ What at least four of the other five carry and kore does not: `chgrp` `csplit` `
 | `gzexe` |  |  | ✓ |  | ✓ | ✓ |
 | `gzip` | ✓ | ✓ | ✓ |  | ✓ | ✓ |
 | `halt` |  | ✓ |  |  | ✓ | ✓ |
-| `hd` |  | ✓ |  |  |  | ✓ |
+| `hd` | ✓ | ✓ |  |  |  | ✓ |
 | `head` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `hexdump` |  | ✓ |  |  | ✓ | ✓ |
+| `hexdump` | ✓ | ✓ |  |  | ✓ | ✓ |
 | `host` |  |  |  |  | ✓ | ✓ |
 | `hostapd` |  |  |  |  | ✓ | ✓ |
 | `hostapd_cli` |  |  |  |  | ✓ | ✓ |
@@ -879,7 +880,7 @@ What at least four of the other five carry and kore does not: `chgrp` `csplit` `
 | `nice` |  | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `nl` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `nm` | ✓ |  | ✓ |  | ✓ | ✓ |
-| `nohup` |  | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `nohup` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `nologin` |  |  |  |  | ✓ | ✓ |
 | `nproc` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
 | `nslookup` |  | ✓ |  |  | ✓ |  |

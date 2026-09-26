@@ -919,8 +919,13 @@
        n (tally src)
        ; the reading as kxlat's table: image, then mode -- 0 dropped, 1 written, 2
        ; written unless it repeats. -s squeezes what SET1 names when it stands alone
-       ; and what SET2 names beside a translation, which is how GNU reads the pair
-       tbl (? d? (ktable (\ c [c (? (in? c) 0 1)]))
+       ; and what SET2 names beside a translation, which is how GNU reads the pair.
+       ; -ds deletes SET1 and squeezes SET2, so -d takes a SET2 only beside -s
+       _ (? !d? ()
+            (s? && !(two? two)) (udie 1 "tr: -ds wants SET2, the charms to squeeze")
+            (!s? && two? two) (udie 1 ("tr: extra operand " + <>rest))
+            ())
+       tbl (? d? (ktable (\ c [c (? (in? c) 0 (s? && peep twot c 0) 2 1)]))
               (!(two? two) && !s?) (udie 2 "tr: SET2 wanted")
               !(two? two) (ktable (\ c [c (? (in? c) 2 1)]))
               (ktable (\ c (: v (image c) [v (? (s? && (peep twot v 0)) 2 1)]))))
@@ -1699,6 +1704,168 @@
                             (: _ (say out (uxx-row off blk)) _ (put out 10)
                                (go (off + (tally blk))))))
              _ (go 0) _ (flush out) 0)))
+
+   ; -- hexdump: the BSD dump, two faces. bare: a 7-digit hex offset and eight
+   ; little-endian 16-bit words a row; -C (and hd): an 8-digit offset, sixteen bytes
+   ; split eight and eight, the ascii gutter. a row equal to the one before is a `*`
+   ; until -v; -s skips, -n caps; the last line is the offset reached. the -e format
+   ; language and the one-letter faces past -C are not here --
+   (uhd-row C? off blk)
+    (: n #blk o (jug 0)
+       (hx v w) (say o (uzpad w (uradix v 16)))
+       _ (? C?
+            (: _ (hx off 8) _ (say o "  ")
+               _ (each ^16 (\ i (: _ (? (i < n) (: _ (hx (blk i) 2) (put o 32)) (say o "   "))
+                                  (? (i = 7) (put o 32) 0))))
+               _ (say o " |")
+               _ (each ^n (\ i (put o (uxx-esc (blk i)))))
+               (put o 124))
+            (: _ (hx off 7)
+               (each ^8 (\ i (? (2 * i < n)
+                                (: _ (put o 32)
+                                   (hx (blk (2 * i) + (? (2 * i + 1 < n) (256 * blk (2 * i + 1)) 0)) 4))
+                                (say o "     "))))))
+       (slurp o))
+   (uhexdump who as)
+    (: t (tablet 0)
+       o (uopt as t '(110 115) () ())
+       _ (? (two? o) () (udie 1 (who + ": option requires an argument")))
+       _ (: c (uoptun t "Cvns") (? (nil? c) () (udie 1 (who + ": unknown option -" + string c))))
+       (num k) (: v (uoptv t k)
+                  (? !(string? v) ()
+                     (: x (unum v) (? (charm? x) x (udie 1 (who + ": bad number " + v))))))
+       C? (peep t 67 0) v? (peep t 118 0) lim (num 110) skip (? (charm? (num 115)) (num 115) 0)
+       rd (urdb (\ f (udie 1 (who + ": " + f + ": No such file or directory"))) <>>o)
+       left {'n lim}
+       (take k) (: m (peep left 'n ())
+                   k2 (? (charm? m) (min k m) k)
+                   b (? (0 < k2) (urdj-take rd k2) "")
+                   _ (? (charm? m) (pin left 'n (m - #b)) 0)
+                   b)
+       ; the offset starts where the skip landed, which is short of -s on a short input
+       (drop k got) (? (k <= 0) got (: b (urdj-take rd (min k 65536)) (? #b (drop (k - #b) (got + #b)) got)))
+       at (drop skip 0)
+       (go off prev star)
+        (: blk (take 16) n #blk
+           (? !n off
+              (!v? && n = 16 && blk = prev)
+               (: _ (? star 0 (: _ (say out "*") (put out 10))) (go (off + 16) prev 1))
+              (: _ (say out (uhd-row C? off blk)) _ (put out 10) (go (off + n) blk 0))))
+       end (go at () 0)
+       _ (? (0 < end) (: _ (say out (uzpad (? C? 8 7) (uradix end 16))) (put out 10)) 0)
+       _ (flush out) 0)
+   (hexdump-main as) (uhexdump "hexdump" as)
+   (hd-main as) (uhexdump "hd" ("-C" . as))
+
+   ; -- getopt: util-linux's. -o SHORTS -l LONGS.. [--] PARAMS answers the options
+   ; parsed and quoted for `eval set --`, then --, then the operands; a first word
+   ; with no dash is the old face, `getopt SHORTS PARAMS`, answered unquoted.
+   ; operands are gathered behind -- unless SHORTS opens with + (stop at the first)
+   ; or - (answer them in place). a long may be abbreviated where unambiguous, and
+   ; under -a wear one dash. 1 a parse error (the rest still answered), 2 getopt's
+   ; own misuse, 4 for -T --
+   (getopt-main as)
+    (: old? (two? as && !(0 < #<as && <as 0 = 45))
+       t (tablet 0)
+       o (? old? [t () >as]
+            (uopt as t '(111 108 110 115) '(108)
+                  {"options" 111 "longoptions" 108 "long" 108 "name" 110 "quiet" 113
+                   "quiet-output" 81 "alternative" 97 "shell" 115 "test" 84 "unquoted" 117}))
+       _ (? (two? o) () (udie 2 "getopt: option requires an argument"))
+       _ (: c (uoptun t "olnqQasTu") (? (nil? c) () (udie 2 ("getopt: invalid option -- '" + string c + "'"))))
+       _ (? (peep t 84 0) (uleave 4) 0)
+       _ (: s (uoptv t 115) (? (!(string? s) || elem s '("sh" "bash")) 0
+                               (udie 2 "getopt: unknown shell after -s or --shell argument")))
+       nm (: v (uoptv t 110) (? (string? v) v "getopt"))
+       q? (peep t 113 0) Q? (peep t 81 0) alt? (peep t 97 0)
+       quote? (!old? && !(peep t 117 0))
+       ps0 <>>o
+       so (? old? <as (string? (uoptv t 111)) (uoptv t 111) (two? ps0) <ps0
+             (udie 2 "getopt: missing optstring argument"))
+       ps (? (old? || string? (uoptv t 111)) ps0 >ps0)
+       m0 (? (0 < #so) (so 0) 0)
+       mode (? (m0 = 43) 'stop (m0 = 45) 'here (string? (getenv "POSIXLY_CORRECT")) 'stop 'gather)
+       ; SHORTS -> {charm kind}: 0 bare, 1 wants a value, 2 takes one glued or none
+       sp (: tb (tablet 0) n #so
+             (go k) (? (n <= k) tb
+                       (: c (so k)
+                          (? ((k = 0) && ((c = 43) || (c = 45))) (go 1)
+                             (: k1 (k + 1)
+                                c1 (? (k1 < n && so k1 = 58) 1 0)
+                                c2 (? (c1 && (k1 + 1) < n && so (k1 + 1) = 58) 1 0)
+                                _ (pin tb c (c1 + c2))
+                                (go (k1 + c1 + c2))))))
+             (go 0))
+       ; LONGS -> ((name kind)..), comma lists stacked across -l
+       lo (: (one w) (: n #w (tr k) (? (0 < k && w (k - 1) = 58) (tr (k - 1)) k)
+                        e (tr n) [(snip w 0 e) (? (2 <= n - e) 2 (n - e))])
+             (map one (filter (\ w (0 < #w)) (foldl (\ acc s (acc + usplit 44 s)) () <>o))))
+       bad {'b 0}
+       (gerr msg) (: _ (pin bad 'b 1) (? q? 0 (: _ (say err (nm + ": " + msg)) (put err 10))))
+       ; a ' inside is closed, escaped and reopened: it's -> 'it'\''s'
+       (qj ps) (? !(two? >ps) <ps (<ps + "'\\''" + qj >ps))
+       (qt s) (? quote? ("'" + qj (usplit 39 s) + "'") s)
+       (lmatch body)                         ; -> (name kind) | 'none | ('many names)
+        (: ex (filter (\ l (<l = body)) lo)
+           pre (filter (\ l (#body <= #<l && snip <l 0 #body = body)) lo)
+           (? (two? ex) <ex (one? pre) 'none !(two? >pre) <pre ['many (map cap pre)]))
+       (long w dash rest opts)               ; -> (rest opts)
+        (: body (snip w #dash #w)
+           e ((: (go i) (? (#body <= i) -1 (body i = 61) i (go (i + 1)))) 0)
+           key (? (e < 0) body (snip body 0 e))
+           val (? (e < 0) () (snip body (e + 1) #body))
+           r (lmatch key)
+           (? (= r 'none) (: _ (gerr ("unrecognized option '" + w + "'")) [rest opts])
+              (two? r && <r = 'many)
+               (: _ (gerr ("option '" + dash + key + "' is ambiguous; possibilities:"
+                          + foldl (\ acc x (acc + " '" + dash + x + "'")) "" <>r))
+                  [rest opts])
+              (: ln <r k <>r tok ("--" + ln)
+                 (? (k = 0) (? (string? val) (: _ (gerr ("option '" + dash + ln + "' doesn't allow an argument")) [rest opts])
+                               [rest (tok . opts)])
+                    (k = 2) [rest ((qt (? (string? val) val "")) . tok . opts)]
+                    (string? val) [rest ((qt val) . tok . opts)]
+                    (two? rest) [>rest ((qt <rest) . tok . opts)]
+                    (: _ (gerr ("option '" + dash + ln + "' requires an argument")) [rest opts])))))
+       (short w rest opts)                   ; one cluster -> (rest opts)
+        (: n #w
+           (go k rest opts)
+            (? (n <= k) [rest opts]
+               (: c (w k) kd (peep sp c -1) tok ("-" + string c)
+                  (? (kd < 0) (: _ (gerr ("invalid option -- '" + string c + "'")) (go (k + 1) rest opts))
+                     (kd = 0) (go (k + 1) rest (tok . opts))
+                     (kd = 2) [rest ((qt (snip w (k + 1) n)) . tok . opts)]
+                     ((k + 1) < n) [rest ((qt (snip w (k + 1) n)) . tok . opts)]
+                     (two? rest) [>rest ((qt <rest) . tok . opts)]
+                     (: _ (gerr ("option requires an argument -- '" + string c + "'")) [rest opts]))))
+           (go 1 rest opts))
+       ; under -a a one-dash word is a long when one matches -- but `-f`, f a short of
+       ; SHORTS, is never an abbreviation, only an exact long beats it (glibc's rule)
+       (alt1? w) (: e ((: (go i) (? (#w <= i) #w (w i = 61) i (go (i + 1)))) 1)
+                    b (snip w 1 e) r (lmatch b)
+                    (? (= r 'none) 0
+                       (#w = 2 && 0 <= peep sp (w 1) -1) (two? r && <r = b)
+                       1))
+       (walk a opts nons)                    ; -> (opts nons), both reversed
+        (? !(two? a) [opts nons]
+           (: w <a n #w
+              (? (w = "--") [opts (foldl (\ acc x (x . acc)) nons >a)]
+                 (2 < n && w 0 = 45 && w 1 = 45)
+                  (: r (long w "--" >a opts) (walk <r <>r nons))
+                 (alt? && 1 < n && w 0 = 45 && alt1? w)
+                  (: r (long w "-" >a opts) (walk <r <>r nons))
+                 (1 < n && w 0 = 45)
+                  (: r (short w >a opts) (walk <r <>r nons))
+                 (mode = 'stop) [opts (foldl (\ acc x (x . acc)) nons a)]
+                 (mode = 'here) (walk >a ((qt w) . opts) nons)
+                 (walk >a opts (w . nons)))))
+       r (walk ps () ())
+       _ (? Q? 0
+            (: toks ((rev <r) + ["--"] + map qt (rev <>r))
+               _ (each toks (\ x (: _ (put out 32) (say out x))))
+               (put out 10)))
+       _ (flush out)
+       (? (peep bad 'b 0) 1 0))
 
    ; -- strings: the printable runs of 4 or more (-n changes the floor). a run ends
    ; at the first byte outside print-or-tab, which is what makes it useful on an
