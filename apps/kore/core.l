@@ -212,8 +212,7 @@
    ; tail cannot stop reading but need not hold: a ring of the last n lines is the
    ; whole answer. trimmed at 2n, so the trim costs n every n lines, not n a line.
    (tail-main as)
-    (: p (uclip-args "tail" as) n <p fs <>p many <>>p sign <>>>p
-       _ (? <>>>>p (udie 1 "tail: -c is not here, only -n") 0)
+    (: p (uclip-args "tail" as) n <p fs <>p many <>>p sign <>>>p bytes? <>>>>p
        ; -n +N opens at line N instead, counted from 1; +0 reads as +1, as GNU has it
        (from-n rd)
         (: st (? (n < 1) 1 n)
@@ -228,10 +227,25 @@
                                (? ((* 2 n) <= (k + 1)) (go (take n a2) n) (go a2 (k + 1))))))
            (out1 m) (? (two? m) (: _ (uclip-say <m) (out1 >m)) 1)
            (out1 (rev (take n (go () 0)))))
+       ; -c: the bytes the same two ways. +N skips N-1 and pours the rest; N holds the
+       ; last N, the held tail never longer than N and a gulp
+       (from-b rd)
+        (: (go skip) (: h (urd-gulp rd)
+                        (? !#h 1
+                           (skip < #h) (: _ (say out (snip h skip #h)) (go 0))
+                           (go (skip - #h))))
+           (go (? (n < 1) 0 (n - 1))))
+       (last-b rd)
+        (: (go hold) (: h (urd-gulp rd)
+                        (? !#h hold
+                           (: t (hold + h) (go (snip t (max 0 (#t - n)) #t)))))
+           (say out (go "")))
        (body f first rd)
         (: _ (uclip-hdr many first f)
-           (? (sign = 1) (from-n rd) (last-n rd)))
-       (ureach "tail" body fs))
+           (? bytes? (? (sign = 1) (from-b rd) (: _ (last-b rd) 1))
+              (sign = 1) (from-n rd) (last-n rd)))
+       ; a count of 0 is GNU's early leave: nothing said, no file opened, 0
+       (? (n = 0 && !(sign = 1)) 0 (ureach "tail" body fs)))
 
    ; -- wc: lines, words, bytes (flags pick; bare wc reads all three) --
    (wc-main as)
