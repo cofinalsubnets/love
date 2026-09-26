@@ -1,10 +1,10 @@
-; apps/kore/proc.l -- the process and world tools of kore: env, nohup, printenv, sleep,
-; kill, xargs, date, id, whoami, groups.
+; apps/kore/proc.l -- the process and world tools of kore: env, nohup, nice, renice,
+; printenv, sleep, kill, xargs, date, id, whoami, groups, stty, who, users, logname.
 ; a toolbox file, no seat -- kore is its door; loads after core.l and rides the
 ; u-floor. no nifs of its own: environ/getenv/setenv (inle/main.c + init.c),
 ; spawn/wait (init.c's posix lane -- spawn answers the pid or a NEGATIVE errno,
-; a child that cannot exec _exit(127)s), still (posix.c's kill), rest (the core
-; sleep, milliseconds). a body-less top-level `:` leaking one pure helper
+; a child that cannot exec _exit(127)s), still (posix.c's kill), prio/setprio and
+; termios/settermios (posix.c), rest (the core sleep, milliseconds). a body-less top-level `:` leaking one pure helper
 ; (udur -- lawed in test/law/kore.l) and the mains.
 (module 'kore
 (borrow 'cli)
@@ -302,6 +302,72 @@
        e (exec cmd)
        (udie (? (e = 'enoent) 127 126) ("nohup: failed to run command '" + <cmd + "'")))
 
+   ; -- nice: run a command at another niceness, 10 lower by default; bare, say this
+   ; one's. -N and --N are the old spellings of -n N. a refusal to raise the priority is
+   ; said and the command runs anyway; 125 nice's own trouble, 126/127 as nohup's --
+   (nice-main as)
+    (: (num? w k) (: n #w (k < n && 48 <= w k && w k <= 57))
+       (go a adj)
+        (? !(two? a) [adj ()]
+           (: w <a n #w
+              (? (w = "--") [adj >a]
+                 (1 < n && w 0 = 45 && num? w (? (w 1 = 45 || w 1 = 43) 2 1)) (go >a (snip w 1 n))
+                 (w = "-n" || w = "--adjustment")
+                  (? (two? >a) (go >>a <>a) (udie 125 "nice: option requires an argument -- 'n'"))
+                 (2 < n && snip w 0 2 = "-n") (go >a (snip w 2 n))
+                 (13 < n && snip w 0 13 = "--adjustment=") (go >a (snip w 13 n))
+                 (1 < n && w 0 = 45) (udie 125 ("nice: invalid option -- '" + string (w 1) + "'\nTry 'nice --help' for more information."))
+                 [adj a])))
+       r (go as ())
+       adj <r cmd <>r
+       cur (prio 0 0)
+       (? !(two? cmd)
+          (? (string? adj) (udie 125 "nice: a command must be given with an adjustment\nTry 'nice --help' for more information.")
+             (: _ (say out (show cur + "\n")) _ (flush out) 0))
+          (: a0 (? (string? adj) (: t (? (0 < #adj && adj 0 = 43) (snip adj 1 #adj) adj)
+                                   v (? (0 < #t && t 0 = 45) (: u (unum (snip t 1 #t)) (? (charm? u) (0 - u) ()))
+                                        (unum t))
+                                   (? (charm? v) v (udie 125 ("nice: invalid adjustment '" + adj + "'"))))
+                   10)
+             e (setprio 0 0 (cur + (max -39 (min 39 a0))))
+             _ (? (nom? e) (: _ (say err ("nice: cannot set niceness: " + uerrno e + "\n")) (flush err)) 0)
+             x (exec cmd)
+             (udie (? (x = 'enoent) 127 126) ("nice: '" + <cmd + "': " + uerrno x)))))
+
+   ; -- renice: util-linux's. the priority is absolute, or with --relative added to
+   ; each one's own; -p -g -u say what the ids that follow are (a user by name or
+   ; number). each change is reported, each failure warned, 1 if any failed --
+   (renice-main as)
+    (: kinds ["process ID" "process group ID" "user ID"]
+       a0 (? (two? as && (<as = "-n" || <as = "--priority" || <as = "--relative")) >as as)
+       rel (two? as && <as = "--relative")
+       _ (? (two? a0) 0 (udie 1 "renice: not enough arguments\nTry 'renice --help' for more information."))
+       pr (: v (? (0 < #<a0 && <a0 0 = 45) (: u (unum (snip <a0 1 #<a0)) (? (charm? u) (0 - u) ())) (unum <a0))
+             (? (charm? v) v (udie 1 ("renice: invalid priority '" + <a0 + "'\nTry 'renice --help' for more information."))))
+       (warn m) (: _ (say err ("renice: " + m + "\n")) (flush err))
+       (one wh id)
+        (: o (prio wh id)
+           (? (nom? o) (: _ (warn ("failed to get priority for " + show id + " (" + kinds wh + "): " + uerrno o)) 1)
+              (: e (setprio wh id (? rel (o + pr) pr))
+                 (? (nom? e) (: _ (warn ("failed to set priority for " + show id + " (" + kinds wh + "): " + uerrno e)) 1)
+                    (: nw (prio wh id)
+                       _ (say out (show id + " (" + kinds wh + ") old priority " + show o
+                                   + ", new priority " + show nw + "\n"))
+                       0)))))
+       (go l wh bad)
+        (? !(two? l) bad
+           (: w <l
+              (? (w = "-p" || w = "--pid") (go >l 0 bad)
+                 (w = "-g" || w = "--pgrp") (go >l 1 bad)
+                 (w = "-u" || w = "--user") (go >l 2 bad)
+                 (: id (? (wh = 2) (: u (uidof "/etc/passwd" w) (? u <>u (unum w))) (unum w))
+                    (? (!(charm? id) || id < 0)
+                       (: _ (warn (? (wh = 2) ("unknown user " + w) ("bad " + kinds wh + " value: " + w))) (go >l wh 1))
+                       (go >l wh (max bad (one wh id))))))))
+       b (go >a0 0 0)
+       _ (flush out)
+       (? b 1 0))
+
    ; -- printenv: the world, or just the names asked for (a name with no value in it
    ; says nothing and the exit remembers, like GNU's) --
    (printenv-main as)
@@ -338,6 +404,210 @@
        _ (say out (? !t? "not a tty" (? (string? r) r "/dev/tty")))
        _ (put out 10) _ (flush out)
        (? t? 0 1))
+
+   ; -- stty: the line discipline on stdin (or -F's device), shown or set. the flags are
+   ; linux's names and bits, which the libc hands over whatever kernel is under it; the
+   ; views are GNU's: bare the changes from sane, -a all of it, -g the saved form. there
+   ; is one speed, so ispeed and ospeed both set it. a row
+   ; is (name word marks bits mask): word 0 iflag 1 oflag 2 cflag 3 lflag, marks 1 may be
+   ; negated, 2 set by sane, 4 cleared by sane, 8 an alias never shown --
+   ustty-modes
+    '(("parenb" 2 1 256 0) ("parodd" 2 1 512 0) ("cmspar" 2 1 1073741824 0)
+      ("cs5" 2 0 0 48) ("cs6" 2 0 16 48) ("cs7" 2 0 32 48) ("cs8" 2 0 48 48)
+      ("hupcl" 2 1 1024 0) ("hup" 2 9 1024 0) ("cstopb" 2 1 64 0) ("cread" 2 3 128 0)
+      ("clocal" 2 1 2048 0) ("crtscts" 2 1 2147483648 0)
+      ("ignbrk" 0 5 1 0) ("brkint" 0 3 2 0) ("ignpar" 0 1 4 0) ("parmrk" 0 1 8 0)
+      ("inpck" 0 1 16 0) ("istrip" 0 1 32 0) ("inlcr" 0 5 64 0) ("igncr" 0 5 128 0)
+      ("icrnl" 0 3 256 0) ("ixon" 0 1 1024 0) ("ixoff" 0 5 4096 0) ("tandem" 0 9 4096 0)
+      ("iuclc" 0 5 512 0) ("ixany" 0 5 2048 0) ("imaxbel" 0 3 8192 0) ("iutf8" 0 5 16384 0)
+      ("opost" 1 3 1 0) ("olcuc" 1 5 2 0) ("ocrnl" 1 5 8 0) ("onlcr" 1 3 4 0)
+      ("onocr" 1 5 16 0) ("onlret" 1 5 32 0) ("ofill" 1 5 64 0) ("ofdel" 1 5 128 0)
+      ("nl1" 1 4 256 256) ("nl0" 1 2 0 256)
+      ("cr3" 1 4 1536 1536) ("cr2" 1 4 1024 1536) ("cr1" 1 4 512 1536) ("cr0" 1 2 0 1536)
+      ("tab3" 1 4 6144 6144) ("tab2" 1 4 4096 6144) ("tab1" 1 4 2048 6144) ("tab0" 1 2 0 6144)
+      ("bs1" 1 4 8192 8192) ("bs0" 1 2 0 8192) ("vt1" 1 4 16384 16384) ("vt0" 1 2 0 16384)
+      ("ff1" 1 4 32768 32768) ("ff0" 1 2 0 32768)
+      ("isig" 3 3 1 0) ("icanon" 3 3 2 0) ("iexten" 3 3 32768 0) ("echo" 3 3 8 0)
+      ("echoe" 3 3 16 0) ("crterase" 3 9 16 0) ("echok" 3 3 32 0) ("echonl" 3 5 64 0)
+      ("noflsh" 3 5 128 0) ("xcase" 3 5 4 0) ("tostop" 3 5 256 0) ("echoprt" 3 5 1024 0)
+      ("prterase" 3 9 1024 0) ("echoctl" 3 3 512 0) ("ctlecho" 3 9 512 0)
+      ("echoke" 3 3 2048 0) ("crtkill" 3 9 2048 0) ("flusho" 3 5 4096 0) ("extproc" 3 5 65536 0))
+   ; the control characters: (name slot sane); the state list holds slot k at 5 + k
+   ustty-ccs '(("intr" 0 3) ("quit" 1 28) ("erase" 2 127) ("kill" 3 21) ("eof" 4 4)
+               ("eol" 11 0) ("eol2" 16 0) ("swtch" 7 0) ("start" 8 17) ("stop" 9 19)
+               ("susp" 10 26) ("rprnt" 12 18) ("werase" 14 23) ("lnext" 15 22) ("discard" 13 15))
+   ustty-bauds '(0 50 75 110 134 150 200 300 600 1200 1800 2400 4800 9600 19200 38400 57600
+                 115200 230400 460800 500000 576000 921600 1000000 1152000 1500000 2000000
+                 2500000 3000000 3500000 4000000)
+   ; the combinations, as the words they stand for; a leading - is the undoing
+   ustty-combos
+    {"cooked" ["brkint" "ignpar" "istrip" "icrnl" "ixon" "opost" "isig" "icanon"]
+     "-raw" ["brkint" "ignpar" "istrip" "icrnl" "ixon" "opost" "isig" "icanon"]
+     "evenp" ["-parodd" "cs7" "parenb"] "parity" ["-parodd" "cs7" "parenb"]
+     "-evenp" ["-parenb" "cs8"] "-parity" ["-parenb" "cs8"]
+     "oddp" ["cs7" "parodd" "parenb"] "-oddp" ["-parenb" "cs8"]
+     "nl" ["-icrnl" "-onlcr"] "-nl" ["icrnl" "-inlcr" "-igncr" "onlcr" "-ocrnl" "-onlret"]
+     "ek" ["erase" "^?" "kill" "^U"]
+     "cbreak" ["-icanon"] "-cbreak" ["icanon"]
+     "pass8" ["-parenb" "cs8" "-istrip"] "-pass8" ["cs7" "parenb" "istrip"]
+     "litout" ["-parenb" "cs8" "-istrip" "-opost"] "-litout" ["cs7" "parenb" "istrip" "opost"]
+     "decctlq" ["-ixany"] "-decctlq" ["ixany"] "tabs" ["tab0"] "-tabs" ["tab3"]
+     "lcase" ["xcase" "iuclc" "olcuc"] "-lcase" ["-xcase" "-iuclc" "-olcuc"]
+     "LCASE" ["xcase" "iuclc" "olcuc"] "-LCASE" ["-xcase" "-iuclc" "-olcuc"]
+     "crt" ["echoe" "echoctl" "echoke"]
+     "dec" ["intr" "^C" "erase" "^?" "kill" "^U" "echoe" "echoctl" "echoke" "-ixany"]}
+   (ustty-vis c)
+    (? (c = 0) "<undef>" (c = 127) "^?" (c < 32) ("^" + string (c + 64)) (c < 127) (string c)
+       (: d (c - 128) ("M-" + (? (d = 127) "^?" (d < 32) ("^" + string (d + 64)) (string d)))))
+   (ustty-at l k v) (? (k = 0) (v . >l) (<l . (ustty-at >l (k - 1) v)))
+   (ustty-off x b) (x - (x & b))
+   (ustty-on? st m) (: mk (? (0 < m 4) (m 4) (m 3)) (((st (m 1)) & mk) = m 3))
+   (ustty-set st m neg)
+    (: k (m 1) x (st k) mk (? (0 < m 4) (m 4) (m 3))
+       (ustty-at st k (? neg (ustty-off x (m 3)) (ustty-off x mk | m 3))))
+   (ustty-sane st)
+    (: c (foldl (\ s r (ustty-at s (5 + r 1) (r 2))) st ustty-ccs)
+       c2 (ustty-at (ustty-at c 11 1) 10 0)
+       (foldl (\ s m (: k (m 1) x (s k) mk (? (0 < m 4) (m 4) (m 3))
+                        (? (0 < (m 2 & 2)) (ustty-at s k (ustty-off x mk | m 3))
+                           (0 < (m 2 & 4)) (ustty-at s k (ustty-off (ustty-off x (m 4)) (m 3)))
+                           s)))
+              c2 ustty-modes))
+   (ustty-int s)                       ; decimal, 0x hex or 0 octal -> a charm | ()
+    (: n #s
+       hx (2 < n && s 0 = 48 && (s 1 = 120 || s 1 = 88))
+       b (? hx 16 (1 < n && s 0 = 48) 8 10)
+       (dig c) (? (48 <= c && c <= 57) (c - 48) (97 <= c && c <= 102) (c - 87)
+                  (65 <= c && c <= 70) (c - 55) 99)
+       (go i a) (? (n <= i) a (: d (dig (s i)) (? (d < b) (go (i + 1) (a * b + d)) ())))
+       (? (n = 0) () (go (? hx 2 0) 0)))
+   (ustty-byte w)
+    (: v (ustty-int w)
+       (? (charm? v && v <= 255) v
+          (udie 1 ("stty: invalid integer argument: '" + w + "'"
+                   + (? (charm? v) ": Value too large for defined data type" "")))))
+   (ustty-ccval s)
+    (? (#s = 1) (s 0)
+       (s = "^-" || s = "undef") 0
+       (#s = 2 && s 0 = 94) (? (s 1 = 63) 127 (s 1 & 159))
+       (ustty-byte s))
+   (ustty-hex v)
+    (: d "0123456789abcdef"
+       (go v a) (? (v < 16) (string (d v) + a) (go (v // 16) (string (d (v % 16)) + a)))
+       (go v ""))
+   (ustty-wrap w items xtra)           ; GNU's wrap: an item that would reach w starts a line
+    (: (go l col acc)
+        (? !(two? l) (acc + "\n")
+           (: s <l n (#s + (? (two? >l) 0 xtra))
+              (? (col = 0) (go >l n (acc + s))
+                 ((w - col) <= n) (go >l n (acc + "\n" + s))
+                 (go >l (col + 1 + n) (acc + " " + s)))))
+       (go items 0 ""))
+   (ustty-flags st all?)               ; -> the four groups' items, control input output local
+    (: (item m)
+        (? (ustty-on? st m) (? (all? || 0 < (m 2 & 4)) (m 0) ())
+           all? (? (0 < (m 2 & 1)) ("-" + m 0) ())
+           ((m 2 & 3) = 3) ("-" + m 0)
+           ())
+       (grp g) (filter string? (map item (filter (m \ (m 1 = g) && (m 2 & 8) = 0) ustty-modes)))
+       (map grp '(2 0 1 3)))
+   (ustty-show st all? w rc)
+    (: sp ("speed " + show (st 4) + " baud;")
+       cci (map (r \ r 0 + " = " + ustty-vis (st (5 + r 1)) + ";")
+                (? all? ustty-ccs (filter (r \ !(st (5 + r 1) = r 2)) ustty-ccs)))
+       mt ("min = " + show (st 11) + "; time = " + show (st 10) + ";")
+       icanon (0 < (st 3 & 2))
+       l1 (ustty-wrap w (? all? ([sp] + (? (two? rc) [("rows " + show <rc + "; columns " + show >rc + ";")] ())
+                                      + ["line = 0;"])
+                           [sp "line = 0;"]) 0)
+       l2 (? all? (ustty-wrap w (cci + [mt]) 0)
+             !icanon (ustty-wrap w (cci + [mt]) 1)
+             (two? cci) (ustty-wrap w cci 0)
+             "")
+       fl (foldl (\ a g (? (two? g) (a + ustty-wrap w g 0) a)) "" (ustty-flags st all?))
+       (say out (l1 + l2 + fl)))
+   (stty-main as)
+    (: (bad w) (udie 1 ("stty: invalid argument '" + w + "'\nTry 'stty --help' for more information."))
+       (go a all gs dev ss)
+        (? !(two? a) [all gs dev (rev ss)]
+           (: w <a
+              (? (w = "-a" || w = "--all") (go >a 1 gs dev ss)
+                 (w = "-g" || w = "--save") (go >a all 1 dev ss)
+                 (w = "-F" || w = "--file")
+                  (? (two? >a) (go >>a all gs <>a ss) (udie 1 "stty: option requires an argument -- 'F'"))
+                 (7 < #w && snip w 0 7 = "--file=") (go >a all gs (snip w 7 #w) ss)
+                 (2 < #w && snip w 0 2 = "-F") (go >a all gs (snip w 2 #w) ss)
+                 (go >a all gs dev (w . ss)))))
+       o (go as 0 0 () ())
+       all <o gs <>o dev <>>o ss (o 3)
+       _ (? (all && gs) (udie 1 "stty: the options for verbose and stty-readable output styles are\nmutually exclusive") 0)
+       _ (? ((all || gs) && two? ss) (udie 1 "stty: when specifying an output style, modes may not be set") 0)
+       nm (? dev dev "'standard input'")
+       fd (? dev (: q (open dev "r") (? (hot? q) q (udie 1 ("stty: " + dev + ": " + uerrno q)))) in)
+       st0 (termios fd)
+       _ (? (nom? st0) (udie 1 ("stty: " + nm + ": " + uerrno st0)) 0)
+       tw (tty out)
+       cw (getenv "COLUMNS")
+       w (? (two? tw && 0 < >tw) >tw (string? cw && 0 < uatoi cw) (uatoi cw) 80)
+       rc (: r (tty fd) (? (two? r) r ()))
+       (need l) (? (two? >l) <>l (udie 1 ("stty: missing argument to '" + <l + "'\nTry 'stty --help' for more information.")))
+       (win l k)                       ; rows or cols, laid now, as GNU lays them
+        (: v (ustty-byte0 (need l)) r (tty fd)
+           _ (? (two? r) (settty fd (? (k = 0) v <r) (? (k = 0) >r v)) 0)
+           0)
+       (gform w)                       ; -g's own output read back -> the state | ()
+        (: f (usplit 58 w) vs (map (x \ ustty-int ("0x" + x)) f)
+           (? ((4 < #f) && !(elem () vs))
+              (: cc (: (go l k) (? (17 <= k) () ((? (two? l) <l 0) . (go >l (k + 1)))) (go (drop 4 vs) 0))
+                 ([(vs 0) (vs 1) (vs 2) (vs 3) -1] + cc))
+              ()))
+       (apply st l)
+        (? !(two? l) st
+           (: w <l
+              neg (1 < #w && w 0 = 45)
+              base (? neg (snip w 1 #w) w)
+              m (: (f ms) (? !(two? ms) () (<ms 0 = base) <ms (f >ms)) (f ustty-modes))
+              cc (: (f cs) (? !(two? cs) () (<cs 0 = w) <cs (f >cs)) (f ustty-ccs))
+              cb (ustty-combos w)
+              sp (ustty-int w)
+              gf (? (usub? ":" w) (gform w) ())
+              (? (two? m) (? (neg && (m 2 & 1) = 0) (bad w) (apply (ustty-set st m neg) >l))
+                 (two? cc) (apply (ustty-at st (5 + cc 1) (ustty-ccval (need l))) >>l)
+                 (w = "min") (apply (ustty-at st 11 (ustty-byte (need l))) >>l)
+                 (w = "time") (apply (ustty-at st 10 (ustty-byte (need l))) >>l)
+                 (w = "ispeed" || w = "ospeed")
+                  (: v (ustty-int (need l))
+                     (? (elem v ustty-bauds) (apply (ustty-at st 4 v) >>l) (bad <>l)))
+                 (w = "rows") (: _ (win l 0) (apply st >>l))
+                 (w = "cols" || w = "columns") (: _ (win l 1) (apply st >>l))
+                 (w = "size") (: r (tty fd)
+                                 _ (? (two? r) (say out (show <r + " " + show >r + "\n"))
+                                      (udie 1 ("stty: " + nm + ": unable to get window size")))
+                                 (apply st >l))
+                 (w = "speed") (: _ (say out (show (st 4) + "\n")) (apply st >l))
+                 (w = "raw" || w = "-cooked")
+                  (apply (apply (ustty-at st 0 0) ["-opost" "-isig" "-icanon" "-xcase" "min" "1" "time" "0"]) >l)
+                 (w = "sane") (apply (ustty-sane st) >l)
+                 (two? cb) (apply (apply st cb) >l)
+                 (charm? sp) (? (elem sp ustty-bauds) (apply (ustty-at st 4 sp) >l) (bad w))
+                 (two? gf) (apply gf >l)
+                 (bad w))))
+       (? gs (: _ (say out (ustty-hex (st0 0) + ":" + ustty-hex (st0 1) + ":" + ustty-hex (st0 2) + ":"
+                            + ustty-hex (st0 3)
+                            + foldl (\ a v (a + ":" + ustty-hex v)) "" (drop 5 st0 + map (\ _ 0) ^15) + "\n"))
+                _ (flush out) 0)
+          (two? ss) (: st (apply st0 ss)
+                       e (? (st = st0) () (settermios fd st))
+                       _ (flush out)
+                       _ (? (nom? e) (udie 1 ("stty: " + nm + ": " + uerrno e)) 0)
+                       ; read back, as GNU does: a pty takes no parity and no size, and
+                       ; saying nothing then would be a lie
+                       now (termios fd)
+                       (same a b) (: sa (? (b 4 < 0) (ustty-at a 4 -1) a) sb (? (b 4 < 0) (ustty-at b 4 -1) b) (sa = sb))
+                       (? (st = st0 || (two? now && same now st)) 0
+                          (udie 1 ("stty: " + nm + ": unable to perform all requested operations"))))
+          (: _ (ustty-show st0 all w rc) _ (flush out) 0)))
+   (ustty-byte0 w) (: v (ustty-int w) (? (charm? v && v <= 65535) v (udie 1 ("stty: invalid integer argument: '" + w + "'"))))
 
    ; -- clear: home, erase, and drop the scrollback. the third (xterm's 3J) is what a
    ; modern clear sends and the reason `clear` and ^L are not the same key --
@@ -644,10 +914,9 @@
        _ (put out 10)
        _ (flush out) 0)
 
-   ; -- uptime: the clock, how long since boot, and the three load averages. there
-   ; is no `N users` field and there will not be one: it comes out of utmp, which this
-   ; tree does not keep, and a fabricated 0 is worse than an absent field. the time
-   ; of day is utc, for the reason `date` gives --
+   ; -- uptime: the clock, how long since boot, the users the host's utmp holds, and
+   ; the three load averages. with no utmp to read the users field is left out, never
+   ; a made-up 0. the time of day is utc, for the reason `date` gives --
    (uupticks _)                        ; /proc/uptime's first number in centiseconds --
     (: r (uread "/proc/uptime")         ; user_hz, the scale a starttime is already in
        (? !(two? r) 0
@@ -666,8 +935,163 @@
     (: secs (uupsecs 0)
        ld (uloadav 0)
        tod (uclk (% (// (clock 0) 1000) 86400))
-       _ (say out (((" " + tod) + (" up " + (uupsay secs))) + (",  load average: " + ld)))
+       r (uut-read (uut-file 0))
+       nu (? r (tally (filter (uut-user? 1) <>r)) ())
+       us (? (charm? nu) (",  " + show nu + (? (nu = 1) " user" " users")) "")
+       _ (say out (" " + tod + " up " + uupsay secs + us + ",  load average: " + ld))
        _ (put out 10) _ (flush out) 0)
+
+   ; -- the utmp family: who, users, logname. the host keeps the file and kore only
+   ; reads it, in the three shapes a host writes: glibc's 384-byte record, netbsd's
+   ; 520-byte utmpx, freebsd's packed 197-byte futx (big-endian). a record reads as
+   ; (type pid line id user host secs term exit), the type in sysv's numbering --
+   (ucz s i n)                         ; the NUL-ended text in s[i, i+n)
+    (: e (i + n) (go j) (? ((j < e) && !(s j = 0)) (go (j + 1)) (snip s i j)) (go i))
+   (ule s i n) (? (n < 1) 0 (s i + (256 * ule s (i + 1) (n - 1))))
+   (ube s i n) (: (go k a) (? (n <= k) a (go (k + 1) ((a * 256) + s (i + k)))) (go 0 0))
+   (uut-glibc s i)
+    [(ule s i 2) (ule s (i + 4) 4) (ucz s (i + 8) 32) (ucz s (i + 40) 4) (ucz s (i + 44) 32)
+     (ucz s (i + 76) 256) (ule s (i + 340) 4) (ule s (i + 332) 2) (ule s (i + 334) 2)]
+   (uut-nbsd s i)                      ; its run level rides the exit pair, not the pid
+    [(ule s (i + 326) 2)
+     (? (ule s (i + 326) 2 = 1) (ule s (i + 332) 2 + 256 * ule s (i + 334) 2) (ule s (i + 328) 4)) (ucz s (i + 36) 32) (ucz s (i + 32) 4) (ucz s i 32)
+     (ucz s (i + 68) 256) (ule s (i + 464) 8) (ule s (i + 332) 2) (ule s (i + 334) 2)]
+   (uut-fbsd s i)                      ; freebsd counts its types from boot = 1
+    [(: t (s i) (? (t < 8) ([0 2 3 4 7 5 6 8] t) 0))
+     (ube s (i + 17) 4) (ucz s (i + 53) 16) (ucz s (i + 9) 8) (ucz s (i + 21) 32)
+     (ucz s (i + 69) 128) (ube s (i + 1) 8 // 1000000) 0 0]
+   ; the shape goes by the name, as each host names its own file
+   (uut-read p)                        ; -> (1 records) | () for no file to read
+    (: r (uread p)
+       b (ubase0 p)
+       (? !(two? r) ()
+          (: s <>r
+             k (? (4 <= #b && snip b 0 4 = "utx.") [197 uut-fbsd]
+                  (usub? "tmpx" b) [520 uut-nbsd]
+                  [384 uut-glibc])
+             (go i acc) (? (#s < i + <k) [1 (rev acc)] (go (i + <k) ((<>k s i) . acc)))
+             (go 0 ()))))
+   (usub? x s) (: n #x (go i) (? (#s < i + n) () (snip s i (i + n) = x) 1 (go (i + 1))) (go 0))
+   (uut-file _)                        ; the first the host keeps, else the one it would
+    (: (go l) (? !(two? >l) <l (two? (stat <l)) <l (go >l))
+       (go '("/var/run/utx.active" "/var/run/utmpx" "/run/utmp" "/var/run/utmp")))
+   ; a user process is one with a name, and in the live file one whose pid is still
+   ; there (GNU's check: a record a crashed session left behind is not a user)
+   (uut-user? live u)
+    ((u 0 = 7) && (0 < #(u 4)) && (!live || (u 1 <= 0) || !((still (u 1) 0) = 'esrch)))
+   (uut-dev l) (? (0 < #l && l 0 = 47) l ("/dev/" + l))
+   (uut-rdev l) (: st (stat (uut-dev l)) (? (two? st && 12 < #st) (st 12) -1))
+   (uut-mine _)                        ; stdin's terminal as its device number, or -1
+    (: st (stat 0) (? (two? st && 12 < #st && (st 2 & 61440) = 8192) (st 12) -1))
+   (utrimr s) (: (go k) (? ((0 < k) && (s (k - 1) = 32)) (go (k - 1)) (snip s 0 k)) (go #s))
+   (uwho-say c user st line tm idl pid cm ex)
+    (: _ (say out (utrimr ((urpad 8 user) + (? (c 'mesg) (" " + string st) "")
+                           + " " + urpad 12 line + " " + urpad 12 tm
+                           + (? ((c 'idle) && !(c 'short)) (" " + urpad 6 idl) "")
+                           + (? (c 'short) "" (" " + upad 10 pid))
+                           + " " + urpad 8 cm
+                           + (? (c 'ext) (" " + urpad 12 ex) ""))))
+       (put out 10))
+   (uwho-tm u) (udatef "%b %e %H:%M" (u 6 * 1000))
+   (uwho-idle when boot now)
+    (: d (now - when)
+       (? ((boot < when) && (when <= now) && (d < 86400))
+          (? (d < 60) "  .  " (uzpad 2 (show (d // 3600)) + ":" + uzpad 2 (show (d % 3600 // 60))))
+          " old "))
+   (uwho-user c u boot now)
+    (: st (stat (uut-dev (u 2)))
+       ok (two? st && 9 < #st)
+       idl (? ok (uwho-idle (st 9 // 1000000000) boot now) "  ?")
+       (uwho-say c (u 4) (? !ok 63 (0 < (st 2 & 16)) 43 45) (u 2) (uwho-tm u) idl
+                 (show (u 1)) (? (0 < #(u 5)) ("(" + u 5 + ")") "") ""))
+   (uwho-id u) ("id=" + u 3)
+   (uwho-one c u boot now)
+    (: ty <u
+       (? ((c 'users) && uut-user? (c 'live) u) (uwho-user c u boot now)
+          ((c 'run) && ty = 1)
+           (: lst (u 1 // 256) cur (u 1 % 256)
+              (uwho-say c "" 32 ("run-level " + string cur) (uwho-tm u) "" ""
+                        (? ((32 < lst) && (lst < 127)) ("last=" + string (? (lst = 78) 83 lst)) "") ""))
+          ((c 'boot) && ty = 2) (uwho-say c "" 32 "system boot" (uwho-tm u) "" "" "" "")
+          ((c 'clock) && ty = 4) (uwho-say c "" 32 "clock change" (uwho-tm u) "" "" "" "")
+          ((c 'init) && ty = 5) (uwho-say c "" 32 (u 2) (uwho-tm u) "" (show (u 1)) (uwho-id u) "")
+          ((c 'login) && ty = 6) (uwho-say c "LOGIN" 32 (u 2) (uwho-tm u) "" (show (u 1)) (uwho-id u) "")
+          ((c 'dead) && ty = 8)
+           (uwho-say c "" 32 (u 2) (uwho-tm u) "" (show (u 1)) (uwho-id u)
+                     ("term=" + show (u 7) + " exit=" + show (u 8)))
+          0))
+   (uwho-opts as t)                    ; -> the operands
+    (: longs {"all" 97 "boot" 98 "dead" 100 "heading" 72 "login" 108 "lookup" 0 "mesg" 84
+              "message" 84 "writable" 84 "process" 112 "count" 113 "runlevel" 114 "short" 115
+              "time" 116 "users" 117}
+       (go a ops)
+        (? !(two? a) (rev ops)
+           (: w <a n #w
+              (? (w = "--") (rev ops + >a)
+                 ((n < 2) || !(w 0 = 45)) (go >a (w . ops))
+                 (w 1 = 45)
+                  (: k (longs (snip w 2 n))
+                     (? (charm? k) (: _ (pin t k 1) (go >a ops))
+                        (udie 1 ("who: unrecognized option '" + w + "'\nTry 'who --help' for more information."))))
+                 (: (cl j) (? (n <= j) (go >a ops)
+                              (: c (w j)
+                                 (? (elem c [97 98 100 72 108 109 112 113 114 115 116 84 117 119])
+                                    (: _ (pin t (? (c = 119) 84 c) 1) (cl (j + 1)))
+                                    (udie 1 ("who: invalid option -- '" + string c + "'\nTry 'who --help' for more information.")))))
+                    (cl 1)))))
+       (go as ()))
+   (who-main as)
+    (: t (tablet 0)
+       o (uwho-opts as t)
+       _ (? (2 < #o) (udie 1 ("who: extra operand '" + o 2 + "'\nTry 'who --help' for more information.")) 0)
+       (f? k) (peep t k 0)
+       all (f? 97)
+       asm (all || f? 98 || f? 100 || f? 108 || f? 112 || f? 114 || f? 116 || f? 117)
+       ext (all || f? 100)
+       c {'mesg (all || f? 84) 'idle (all || f? 117 || f? 100 || f? 108) 'ext ext
+          'short ((!asm || f? 115) && !ext) 'users (!asm || all || f? 117)
+          'run (all || f? 114) 'boot (all || f? 98) 'clock (all || f? 116)
+          'init (all || f? 112) 'login (all || f? 108) 'dead ext 'live (#o = 0)}
+       fl (? (#o = 1) <o (uut-file 0))
+       r (uut-read fl)
+       _ (? r 0 (udie 1 ("who: " + fl + ": No such file or directory")))
+       us (filter (uut-user? (#o = 0)) <>r)
+       (? (f? 113)
+          (: _ (say out (ujoin (map (u \ u 4) us) + "\n# users=" + show #us + "\n"))
+             _ (flush out) 0)
+          (: _ (? (f? 72) (uwho-say c "NAME" 32 "LINE" "TIME" "IDLE" "PID" "COMMENT" "EXIT") 0)
+             me (? ((#o = 2) || f? 109) (uut-mine 0) ())
+             now (clock 0 // 1000)
+             _ (foldl (\ boot u
+                       (: _ (? (!(charm? me) || (0 <= me && uut-rdev (u 2) = me))
+                               (uwho-one c u boot now) 0)
+                          (? (<u = 2) (u 6) boot)))
+                      0 <>r)
+             _ (flush out) 0)))
+
+   ; -- users: the names logged in, sorted, on one line --
+   (users-main as)
+    (: _ (? (1 < #as) (udie 1 ("users: extra operand '" + as 1 + "'")) 0)
+       fl (? (two? as) <as (uut-file 0))
+       r (uut-read fl)
+       _ (? r 0 (udie 1 ("users: " + fl + ": No such file or directory")))
+       ns (sort (map (u \ u 4) (filter (uut-user? !(two? as)) <>r)))
+       _ (? (two? ns) (: _ (say out (ujoin ns)) (put out 10)) 0)
+       _ (flush out) 0)
+
+   ; -- logname: the name this session logged in as. linux keeps it with the process
+   ; (/proc/self/loginuid); else the utmp record holding stdin's terminal says it --
+   (logname-main as)
+    (: _ (? (two? as) (udie 1 ("logname: extra operand '" + <as + "'")) 0)
+       lu (u-1line "/proc/self/loginuid" "")
+       id (? (0 < #lu) (uatoi lu) -1)
+       pw (? ((0 <= id) && (id < 4294967295)) (uidname "/etc/passwd" id) "")
+       me (uut-mine 0)
+       r (? (0 < #pw && !(pw = show id)) () (0 <= me) (uut-read (uut-file 0)) ())
+       (hit l) (? !(two? l) "" ((<l 0 = 7) && uut-rdev (<l 2) = me) (<l 4) (hit >l))
+       nm (? r (hit <>r) pw)
+       _ (? (0 < #nm && !(nm = show id)) 0 (udie 1 "logname: no login name"))
+       _ (say out nm) _ (put out 10) _ (flush out) 0)
 
    ; -- the four by-name tools. a name is matched against the comm, which is what the
    ; kernel keeps and is capped at fifteen charms -- `pgrep -f` asks the cmdline

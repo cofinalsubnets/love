@@ -1,9 +1,9 @@
 ; apps/kore/fs.l -- the fs tools of kore: ls, cp, mv, rm, mkdir, rmdir, ln,
-; touch, pwd, chmod. every tool a <name>-main dispatched by kore (apps/kore/kore.l),
+; touch, pwd, chmod, truncate. every tool a <name>-main dispatched by kore (apps/kore/kore.l),
 ; same as core.l -- a toolbox, no seat, kore is its door. loads after core.l in the
 ; cat and rides its u-floor (udie, uread, ubase); the effects ride inle/posix.c's
 ; posix_ lane (stat readdir unlink mkdir rename symlink hardlink rmdir
-; chmod utime cwd), whose convention shapes every loop here: an effect op
+; chmod utime cwd truncate), whose convention shapes every loop here: an effect op
 ; answers () ok or an errno nom, so !e is the success every loop below asks.
 ; a body-less top-level `:` leaking uoct (lawed in test/law/kore.l) and the mains.
 (module 'kore
@@ -943,6 +943,73 @@
        (go >rest 1))
    (chown-main as) (uchown "chown" as)
    (chgrp-main as) (uchown "chgrp" as)
+
+   ; -- truncate: each file cut or stretched to a size. -s [+-<>/%]N with GNU's suffixes
+   ; (grow by, shrink by, at most, at least, down or up to a multiple), -r a file whose
+   ; size is the start, -o the count in the file's own blocks, -c make no file --
+   (utrunc-n w)
+    (: n #w (dend k) (? (k < n && 47 < w k < 58) (dend (k + 1)) k)
+       e (dend 0) v (? (0 < e) (unum (snip w 0 e)) ())
+       sf (snip w e n)
+       m (? (sf = "") 1 (: r (filter (\ p (<p = sf)) uclip-sfx) (? (two? r) <>(<r) ())))
+       (? (charm? v && charm? m) (v * m) (udie 1 ("truncate: Invalid number: '" + w + "'"))))
+   (truncate-main as)
+    (: t (tablet 0)
+       (val w k a f) (? (k < #w) (: _ (pin t f (snip w k #w)) (go a))
+                        (two? a) (: _ (pin t f <a) (go >a))
+                        (udie 1 ("truncate: option requires an argument -- '" + string (w (k - 1)) + "'")))
+       (go a)
+        (? !(two? a) ()
+           (: w <a n #w
+              (? (w = "--") >a
+                 (w = "--no-create") (: _ (pin t 'c 1) (go >a))
+                 (w = "--io-blocks") (: _ (pin t 'o 1) (go >a))
+                 (w = "--size" || w = "--reference")
+                  (? (two? >a) (: _ (pin t (? (w 2 = 115) 's 'r) <>a) (go >>a))
+                     (udie 1 ("truncate: option '" + w + "' requires an argument")))
+                 (7 < n && snip w 0 7 = "--size=") (: _ (pin t 's (snip w 7 n)) (go >a))
+                 (12 < n && snip w 0 12 = "--reference=") (: _ (pin t 'r (snip w 12 n)) (go >a))
+                 (1 < n && w 0 = 45 && !(w 1 = 45))
+                  (: (cl k) (? (n <= k) (go >a)
+                               (: c (w k)
+                                  (? (c = 99) (: _ (pin t 'c 1) (cl (k + 1)))
+                                     (c = 111) (: _ (pin t 'o 1) (cl (k + 1)))
+                                     (c = 115) (val w (k + 1) >a 's)
+                                     (c = 114) (val w (k + 1) >a 'r)
+                                     (udie 1 ("truncate: invalid option -- '" + string c + "'\nTry 'truncate --help' for more information.")))))
+                     (cl 1))
+                 (1 < n && w 0 = 45) (udie 1 ("truncate: unrecognized option '" + w + "'\nTry 'truncate --help' for more information."))
+                 (w . (go >a)))))
+       fs (go as)
+       sz (t 's) rf (t 'r)
+       op (? sz (: c (? (0 < #sz) (sz 0) 0) (? (elem c [43 45 60 62 47 37]) c 0)) 0)
+       num (? sz (utrunc-n (? (op = 0) sz (snip sz 1 #sz))) 0)
+       try "\nTry 'truncate --help' for more information."
+       _ (? (!sz && !rf) (udie 1 ("truncate: you must specify either '--size' or '--reference'" + try)) 0)
+       _ (? (rf && sz && op = 0) (udie 1 ("truncate: you must specify a relative '--size' with '--reference'" + try)) 0)
+       _ (? ((t 'o) && !sz) (udie 1 ("truncate: '--io-blocks' was specified but '--size' was not" + try)) 0)
+       _ (? (two? fs) 0 (udie 1 ("truncate: missing file operand" + try)))
+       _ (? ((op = 47 || op = 37) && num = 0) (udie 1 "truncate: division by zero") 0)
+       rsz (? rf (: st (stat rf) (? (two? st) <st (udie 1 ("truncate: cannot stat '" + rf + "': " + uerrno st)))) 0)
+       (fail f e) (: _ (say err ("truncate: cannot open '" + f + "' for writing: " + uerrno e + "\n")) 1)
+       (one f)
+        (: st0 (stat f)
+           mk (? (t 'c) 0 1)
+           e0 (? (!(two? st0) && t 'o && mk) (truncate f 0 1) ())
+           st (? (two? st0) st0 (stat f))
+           (? (!(two? st0) && t 'c) 0
+              (nom? e0) (fail f e0)
+              (: bs (? (two? st && 13 < #st) (st 13) 512)
+                 n (? (t 'o) (num * bs) num)
+                 base (? rf rsz (two? st) <st 0)
+                 want (? !sz rsz (op = 0) n (op = 43) (base + n) (op = 45) (max 0 (base - n))
+                         (op = 60) (min base n) (op = 62) (max base n)
+                         (op = 47) (base // n * n) ((base + n - 1) // n * n))
+                 e (truncate f want mk)
+                 (? (nom? e) (fail f e) 0))))
+       r (foldl (\ a f (max a (one f))) 0 fs)
+       _ (flush err)
+       r)
 
    ; -- mktemp: a name nobody else has, made and not merely proposed. the trailing run
    ; of X's in the template becomes random alphanumerics and the name is claimed with an

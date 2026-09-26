@@ -698,6 +698,14 @@
        (? ((0 = n) || !(as (n - 1) = "]")) (udie 2 "[: missing ]")
           (test-main (t-clip as))))
 
+   ; a nom -> strerror's sentence, for the few a tool here meets; another says its name
+   (uerrno e)
+    (e @ 'enoent "No such file or directory" 'eacces "Permission denied"
+         'eperm "Operation not permitted" 'esrch "No such process"
+         'enotty "Inappropriate ioctl for device" 'eisdir "Is a directory"
+         'enotdir "Not a directory" 'einval "Invalid argument" 'erofs "Read-only file system"
+         'efbig "File too large" 'ebadf "Bad file descriptor" 'enxio "No such device or address"
+         (show e))
    ; -- uname: -s -n -r -m, or -a for all four. the machine is love-arch respelled --
    ; holo says x64 where uname says x86_64, and a build naming an artifact off the wrong
    ; one names it for an arch nothing else calls. The other three come off /proc, so a

@@ -1,5 +1,6 @@
 #!/bin/sh
-# test/kore/proc.sh -- env, printenv, sleep, kill, xargs, whoami, groups, arch, nproc
+# test/kore/proc.sh -- env, printenv, sleep, kill, xargs, whoami, groups, arch, nproc, nohup,
+# nice, renice, stty, who, users
 . "$(dirname "$0")/common.sh"
 
 pipe "xargs"     'a b
@@ -72,4 +73,75 @@ if script -qec true /dev/null > /dev/null 2>&1; then
 errline" ] || fail "kore nohup: stdout and stderr land in nohup.out"
   [ "$(stat -c %a "$N/nohup.out")" = 600 ] || fail "kore nohup: nohup.out is made 0600"
 fi
-echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup) ok"
+# nice: bare it says the niceness; -n N runs the command N lower (capped at 19); 125 its
+# own trouble, 127 no such command. renice aims only at a child of this script, and at
+# 19, which any caller may reach
+n0=$(korerun nice); [ "$n0" = "$(nice)" ] || fail "kore nice: bare"
+w=$((n0 + 3)); [ $w -gt 19 ] && w=19
+[ "$(korerun nice -n 3 "$K" kore nice)" = $w ] || fail "kore nice -n 3"
+[ "$(korerun nice -3 "$K" kore nice)" = $w ] || fail "kore nice -3, the old spelling"
+korerun nice -n x true 2>/dev/null; r=$?; [ $r -eq 125 ] || fail "kore nice: a bad adjustment is 125 (got $r)"
+korerun nice -n 3 2>/dev/null; r=$?; [ $r -eq 125 ] || fail "kore nice: an adjustment wants a command (got $r)"
+korerun nice /nonexistent/cmd 2>/dev/null; r=$?; [ $r -eq 127 ] || fail "kore nice: no such command is 127 (got $r)"
+sleep 5 & sp=$!
+[ "$(korerun renice 19 -p $sp)" = "$sp (process ID) old priority $n0, new priority 19" ] || fail "kore renice -p"
+korerun renice 19 -p 2147483646 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore renice: no such pid is 1 (got $r)"
+korerun renice x -p $sp 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore renice: a bad priority is 1 (got $r)"
+kill $sp 2>/dev/null
+# stty: GNU's three views to the byte under a terminal script(1) makes, and settings
+# GNU's own stty then reads back; off a terminal, GNU's refusal
+korerun stty < /dev/null 2> "$o"; r=$?
+[ $r -eq 1 ] || fail "kore stty off a terminal is 1 (got $r)"
+grep -q "stty: 'standard input': Inappropriate ioctl for device" "$o" || fail "kore stty: the refusal's words"
+if command -v stty >/dev/null 2>&1 && script -qec true /dev/null > /dev/null 2>&1; then
+  for v in "" "-a" "size" "speed"; do
+    script -qec "stty $v" /dev/null 2>&1 | tr -d '\r' > "$g"
+    script -qec "$K kore stty $v" /dev/null 2>&1 | tr -d '\r' > "$o"; same "stty $v"
+  done
+  for v in "-echo intr ^A" "raw" "sane" "cbreak min 3 time 2" "evenp" "nl -ixon" "erase 0x8 kill undef"; do
+    script -qec "stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | grep -v '^^D$' > "$g"
+    script -qec "$K kore stty $v; stty -a" /dev/null 2>&1 | tr -d '\r' | grep -v '^^D$' > "$o"; same "stty $v"
+  done
+fi
+# who, users: one set of records -- a boot, a user, a session that ended, a getty --
+# laid in the three shapes the hosts write. GNU reads the glibc one as we do, and the
+# freebsd and netbsd files must say exactly what the glibc one says
+# the bytes are love's to lay: printf's octal escapes are not in every shell's printf
+cat > "$ho/.who-fix.l" <<EOF
+(borrow 'posix)
+(: (zb n) (? (n < 1) "" (string 0 + zb (n - 1)))
+   (sz s n) (s + zb (n - #s))
+   (le v n) (? (n < 1) "" (string (v & 255) + le (v >> 8) (n - 1)))
+   (be v n) (? (n < 1) "" (be (v >> 8) (n - 1) + string (v & 255)))
+   (gl r) (le (r 0) 2 + zb 2 + le (r 1) 4 + sz (r 2) 32 + sz (r 3) 4 + sz (r 4) 32
+           + sz (r 5) 256 + zb 8 + le (r 6) 4 + zb 40)
+   (fb r) (string ([0 0 1 0 0 0 6 4 7] (r 0)) + be (r 6 * 1000000) 8 + sz (r 3) 8
+           + be (r 1) 4 + sz (r 4) 32 + sz (r 2) 16 + sz (r 5) 128)
+   (nb r) (sz (r 4) 32 + sz (r 3) 4 + sz (r 2) 32 + sz (r 5) 256 + zb 2 + le (r 0) 2
+           + le (r 1) 4 + zb 132 + le (r 6) 8 + zb 48)
+   t0 1790206500
+   rs [[2 0 "~" "~~" "reboot" "7.2.6-test" t0]
+       [7 0 "pts/9997" "9997" "alice" "example.org" (t0 + 60)]
+       [8 4242 "pts/9998" "9998" "" "" (t0 + 3600)]
+       [6 77 "tty9" "9" "LOGIN" "" (t0 + 90)]]
+   (lay p f) (: q (open p "w") _ (say q (foldl (\\ a r (a + f r)) "" rs)) (close q))
+   _ (lay "$HO/.who-gl" gl) _ (lay "$HO/utx.who-fb" fb) _ (lay "$HO/.who-nb.utmpx" nb)
+   0)
+EOF
+LOVE_NO_IMAGE= "$m" "$ho/.who-fix.l" || fail "who: the utmp fixtures"
+[ "$(wc -c < "$ho/.who-gl")" -eq 1536 ] && [ "$(wc -c < "$ho/utx.who-fb")" -eq 788 ] \
+  && [ "$(wc -c < "$ho/.who-nb.utmpx")" -eq 2080 ] || fail "who: the utmp fixtures' sizes"
+for v in "" "-a" "-b" "-d" "-l" "-q" "-H" "-uT"; do
+  if command -v who >/dev/null 2>&1; then
+    TZ=UTC LC_ALL=C who $v "$ho/.who-gl" > "$g" 2>&1; korerun who $v "$ho/.who-gl" > "$o" 2>&1; same "who $v (glibc utmp)"
+  fi
+  korerun who $v "$ho/.who-gl" > "$g" 2>&1
+  korerun who $v "$ho/utx.who-fb" > "$o" 2>&1; same "who $v (freebsd utx, as the glibc file)"
+  korerun who $v "$ho/.who-nb.utmpx" > "$o" 2>&1; same "who $v (netbsd utmpx, as the glibc file)"
+done
+[ "$(korerun users "$ho/.who-gl")" = alice ] || fail "kore users FILE"
+korerun who "$ho/.who-none" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore who: no such file is 1 (got $r)"
+if command -v who >/dev/null 2>&1 && [ -r /run/utmp -o -r /var/run/utmp ]; then
+  [ "$(korerun users)" = "$(users)" ] || fail "kore users vs the host's"
+fi
+echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup/nice/renice/stty/who/users) ok"

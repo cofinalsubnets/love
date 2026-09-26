@@ -1104,6 +1104,40 @@ ai_noinline static word host_posix_setrlimit(struct ai *g, word rw, word sw, wor
 static lvm(lvm_posix_setrlimit) {
  Sp[2] = host_posix_setrlimit(g, Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
 
+// (prio which who) -> the nice value | a nom; (setprio which who n) -> () | a nom. which 0
+// a process, 1 a process group, 2 a user; who 0 the caller's own.
+static ai_inline word host_posix_prio(struct ai *g, word ww, word hw) {
+ if (!charmp(ww) || !charmp(hw)) return ai_badarg(g);
+ errno = 0;
+ int n = getpriority((int) getcharm(ww), (id_t) getcharm(hw));
+ return n == -1 && errno ? ai_err(g, errno) : putcharm(n); }
+static lvm(lvm_posix_prio) {
+ Sp[1] = host_posix_prio(g, Sp[0], Sp[1]);
+ ai_musttail return Nextp(1, 1); }
+static ai_inline word host_posix_setprio(struct ai *g, word ww, word hw, word nw) {
+ if (!charmp(ww) || !charmp(hw) || !charmp(nw)) return ai_badarg(g);
+ return setpriority((int) getcharm(ww), (id_t) getcharm(hw), (int) getcharm(nw))
+        ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_posix_setprio) {
+ Sp[2] = host_posix_setprio(g, Sp[0], Sp[1], Sp[2]);
+ ai_musttail return Nextp(1, 2); }
+
+// (truncate path n make) -> () | a nom | 'badarg: the file cut or stretched to n bytes,
+// made first (0666 less the umask) when `make` is truthy, or a charm fd instead of a path.
+ai_noinline static word host_posix_truncate(struct ai *g, word pw, word nw, word mw) {
+ if (!charmp(nw) || getcharm(nw) < 0) return ai_badarg(g);
+ if (charmp(pw)) return ftruncate((int) getcharm(pw), (off_t) getcharm(nw)) ? ai_err(g, errno) : ZeroPoint;
+ char const *p = str_c(pw);
+ if (!p) return ai_badarg(g);
+ int fd = open(p, O_WRONLY | O_NONBLOCK | O_CLOEXEC | (charmp(mw) && getcharm(mw) > 0 ? O_CREAT : 0), 0666);
+ if (fd < 0) return ai_err(g, errno);
+ int e = ftruncate(fd, (off_t) getcharm(nw)) ? errno : 0;
+ close(fd);
+ return e ? ai_err(g, e) : ZeroPoint; }
+static lvm(lvm_posix_truncate) {
+ Sp[2] = host_posix_truncate(g, Sp[0], Sp[1], Sp[2]);
+ ai_musttail return Nextp(1, 2); }
+
 static lvm(lvm_posix_umask) {
  Sp[0] = charmp(Sp[0]) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
                      : ai_badarg(g);
@@ -1119,6 +1153,9 @@ static union u const
   nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}},
   nif_posix_rlimit[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_rlimit}, {lvm_ret0}},
   nif_posix_setrlimit[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_setrlimit}, {lvm_ret0}},
+  nif_posix_prio[]     = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_prio}, {lvm_ret0}},
+  nif_posix_setprio[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_setprio}, {lvm_ret0}},
+  nif_posix_truncate[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_truncate}, {lvm_ret0}},
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
   nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
   nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
@@ -1131,6 +1168,9 @@ LvNif("utime", nif_posix_utime, "posix");
 LvNif("umask", nif_posix_umask, "posix");
 LvNif("rlimit", nif_posix_rlimit, "posix");
 LvNif("setrlimit", nif_posix_setrlimit, "posix");
+LvNif("prio", nif_posix_prio, "posix");
+LvNif("setprio", nif_posix_setprio, "posix");
+LvNif("truncate", nif_posix_truncate, "posix");
 LvNif("rmdir", nif_posix_rmdir, "posix");
 LvNif("hardlink", nif_posix_hardlink, NULL);
 LvNif("copyfile", nif_posix_copyfile, "posix");
@@ -1287,6 +1327,60 @@ static lvm(lvm_ptyecho) {
  Sp[1] = rc ? ai_err(g, -rc) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
+// (termios fd) -> (iflag oflag cflag lflag speed cc0..cc16) | a nom | 'badarg: the line
+// discipline on fd in linux's canonical spelling (the libc respells a BSD's). speed is the
+// baud, read from c_ospeed where the kernel keeps one and from cflag's CBAUD where it does not.
+// (settermios fd l) takes that same list back: () | a nom. both speeds and CBAUD are set,
+// or with a negative speed cflag's CBAUD is taken as given.
+static const unsigned tio_baud[][2] = {
+ {0, 0}, {50, 1}, {75, 2}, {110, 3}, {134, 4}, {150, 5}, {200, 6}, {300, 7}, {600, 8},
+ {1200, 9}, {1800, 10}, {2400, 11}, {4800, 12}, {9600, 13}, {19200, 14}, {38400, 15},
+ {57600, 4097}, {115200, 4098}, {230400, 4099}, {460800, 4100}, {500000, 4101},
+ {576000, 4102}, {921600, 4103}, {1000000, 4104}, {1152000, 4105}, {1500000, 4106},
+ {2000000, 4107}, {2500000, 4108}, {3000000, 4109}, {3500000, 4110}, {4000000, 4111}};
+#define TIO_NB (sizeof tio_baud / sizeof *tio_baud)
+ai_noinline static struct ai *host_termios(struct ai *g) {
+ word x = g->sp[0];
+ intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);
+ struct termios t;
+ if (fd < 0) return g->sp[0] = ai_badarg(g), g;
+ memset(&t, 0, sizeof t);
+ if (tcgetattr((int) fd, &t)) return g->sp[0] = ai_err(g, errno), g;
+ intptr_t sp = (intptr_t) t.c_ospeed;
+ if (!sp) for (unsigned k = 0; k < TIO_NB; k++)
+  if (tio_baud[k][1] == (t.c_cflag & 4111u)) sp = tio_baud[k][0];
+ size_t const C = Width(struct ai_chain);
+ if (!ai_ok(g = ai_have(g, 22 * C))) return g;
+ struct ai_chain *c = 0;
+ word l = ZeroPoint;
+ for (int k = 16; k >= 0; k--) c = ini_chain(bump(g, C), putcharm(t.c_cc[k]), l), l = word(c);
+ intptr_t hd[5] = {t.c_iflag, t.c_oflag, t.c_cflag, t.c_lflag, sp};
+ for (int k = 4; k >= 0; k--) c = ini_chain(bump(g, C), putcharm(hd[k]), l), l = word(c);
+ return g->sp[0] = l, g; }
+static lvm(lvm_termios) {
+ LvmCall(g, host_termios) }
+
+ai_noinline static word host_settermios(struct ai *g, word x, word l) {
+ intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x), v[22];
+ struct termios t;
+ int n = 0;
+ for (; n < 22 && chainp(l) && charmp(A(l)); n++, l = B(l)) v[n] = getcharm(A(l));
+ if (fd < 0 || n < 22) return ai_badarg(g);
+ memset(&t, 0, sizeof t);
+ if (tcgetattr((int) fd, &t)) return ai_err(g, errno);
+ t.c_iflag = (tcflag_t) v[0], t.c_oflag = (tcflag_t) v[1], t.c_lflag = (tcflag_t) v[3];
+ t.c_cflag = (tcflag_t) v[2];
+ if (v[4] >= 0) {                                // a negative speed keeps cflag's own
+  t.c_cflag &= ~4111u;
+  for (unsigned k = 0; k < TIO_NB; k++)
+   if (tio_baud[k][0] == (unsigned) v[4]) t.c_cflag |= tio_baud[k][1];
+  t.c_ispeed = t.c_ospeed = (speed_t) v[4]; }
+ for (int k = 0; k < 17; k++) t.c_cc[k] = (cc_t) v[5 + k];
+ return tcsetattr((int) fd, TCSADRAIN, &t) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_settermios) {
+ Sp[1] = host_settermios(g, Sp[0], Sp[1]);
+ ai_musttail return Nextp(1, 1); }
+
 // (raw on): own the interactive terminal discipline on stdin. a truthy `on` puts the tty
 // in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is the sole echo; on = 0 / ()
 // restores the cooked termios captured at the first raw-on. () | a nom ('enotty).
@@ -1415,13 +1509,17 @@ static union u const
   nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
   nif_tty[]        = {{lvm_tty}, {lvm_ret0}},
   nif_settty[]     = {{lvm_cur}, {.x = putcharm(3)}, {lvm_settty}, {lvm_ret0}},
-  nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
+  nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}},
+  nif_termios[]    = {{lvm_termios}, {lvm_ret0}},
+  nif_settermios[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_settermios}, {lvm_ret0}};
 LvNif("tether", nif_tether, "posix");
 LvNif("gather", nif_reap, "posix");
 LvNif("still", nif_kill, NULL);
 LvNif("tty", nif_tty, NULL);
 LvNif("settty", nif_settty, "posix");
 LvNif("ptyecho", nif_ptyecho, "posix");
+LvNif("termios", nif_termios, "posix");
+LvNif("settermios", nif_settermios, "posix");
 LvNif("raw", nif_raw, NULL);
 LvNif("swig", nif_swig, "posix");
 LvNif("open", nif_open, "posix");

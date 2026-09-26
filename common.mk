@@ -133,7 +133,7 @@ f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/love/quay/*.c))
 c_c = $(addprefix $R/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
   $(addprefix $R/apps/moon/lib/moonlibc/sys/,read.c write.c birth.c \
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
-    getgid.c getpgrp.c getpid.c getrlimit.c getrusage.c getuid.c setrlimit.c ioctl.c kevent.c kill.c kqueue.c \
+    ftruncate.c getgid.c getpgrp.c getpid.c getpriority.c getrlimit.c getrusage.c getuid.c setrlimit.c ioctl.c kevent.c kill.c kqueue.c \
     link.c lseek.c lstat.c madvise.c mkdir.c mmap.c mount.c mprotect.c munmap.c open.c pipe.c poll.c raise.c readlink.c \
     rename.c rmdir.c setpgid.c setsid.c stat.c statfs.c symlink.c sysconf.c sysctl.c umask.c \
     unlink.c unshare.c utimensat.c waitpid.c) \

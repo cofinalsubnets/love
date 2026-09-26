@@ -300,7 +300,7 @@ moon_mid = apps/moon/floor.l apps/moon/lex.l apps/moon/cpp.l apps/moon/parse.l \
 # the archives: the codec, then the two containers over it. a kore member rather than
 # a crew one because the distro's /bin IS the kore cat -- a userland that cannot open
 # a tarball is not one, and these are the tools that open every tarball there is.
-kore_arc = apps/gz.l apps/tar.l apps/cpio.l
+kore_arc = apps/gz.l apps/xz.l apps/tar.l apps/cpio.l
 # the tls stack and the multi-call door that ends kore's cat
 kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/client.l \
   apps/kore/wget.l apps/kore/kore.l
