@@ -33,12 +33,15 @@
    ; the stat leads so the two failures stay tellable apart: one errno covers either end,
    ; and `cp: cannot open X` vs `cannot create Y` is the whole diagnostic. it is the same
    ; stat the mode comes from, so it costs nothing it did not already spend.
-   (ucopy who src dst)
+   ; ucopy1 says its complaint and answers 0, so a tool with many operands carries on;
+   ; ucopy leaves with 1 instead
+   (usay-err m) (: _ (say err m) _ (put err 10) 0)
+   (ucopy1 who src dst)
     (: st (stat src)
-       _ (? (two? st) () (udie 1 (who + ": cannot open " + src)))
-       _ (? (ucopy-bytes src dst) () (udie 1 (who + ": cannot create " + dst)))
-       _ (chmod dst (& 4095 <>>st))
-       1)
+       (? !(two? st) (usay-err (who + ": cannot open " + src))
+          !(ucopy-bytes src dst) (usay-err (who + ": cannot create " + dst))
+          (: _ (chmod dst (& 4095 <>>st)) 1)))
+   (ucopy who src dst) (? (ucopy1 who src dst) 1 (uleave 1))
 
    ; -- pwd: where we stand --
    (pwd-main _) (: _ (say out (cwd ())) _ (put out 10) _ (flush out) 0)
@@ -271,29 +274,42 @@
                      [p r a])
        (fl as 0 0))
    ; -r walks a tree top-down: a directory is laid at the far end and its entries follow
-   ; it, a file is one copy
+   ; it, a file is one copy. a miss inside costs the answer, not the rest of the walk
    (cp-tree src dst)
     (: _ (? (udirp dst) 0 (mkdir dst 493))
-       _ (? (udirp dst) 0 (udie 1 ("cp: cannot create " + dst)))
-       (each (readdir src) (nm \ (: s (src + "/" + nm) d (dst + "/" + nm)
-                                   (? (udirp s) (cp-tree s d) (ucopy "cp" s d))))))
+       (? !(udirp dst) (usay-err ("cp: cannot create " + dst))
+          (foldl (\ ok nm (: s (src + "/" + nm) d (dst + "/" + nm)
+                             k (? (udirp s) (cp-tree s d) (ucopy1 "cp" s d))
+                             (? k ok 0)))
+                 1 (readdir src))))
+   ; SRC.. DST: the last operand is the target, and with more than one source it must be
+   ; a directory. each source lands under udest, a miss is said and the rest still go
+   (cp-srcs who as each1)
+    (: fs (rev as) dst <fs srcs (rev >fs)
+       (? (two? >srcs && !(udirp dst))
+          (udie 1 (who + ": target " + dst + " is not a directory"))
+          (: ok (foldl (\ ok src (? (each1 src (udest src dst)) ok 0)) 1 srcs)
+             (? ok 0 1))))
    (cp-main as)
     (: q (cpf-split as) p? <q r? <>q rest <>>q
-       (? !(two? >rest) (udie 2 "usage: cp [-f] [-p] [-r] SRC DST")
-          (: src <rest dst (udest src <>rest)
-             _ (? (udirp src) (r? ? (cp-tree src dst) (udie 1 ("cp: -r not given; omitting directory " + src)))
-                  (ucopy "cp" src dst))
-             s (? p? (stat src) ())
-             _ (? (two? s) (utime dst <>s) 0)
-             0)))
+       (one src dst)
+        (: k (? (udirp src)
+                (? r? (cp-tree src dst) (usay-err ("cp: -r not given; omitting directory " + src)))
+                (ucopy1 "cp" src dst))
+           s (? (k && p?) (stat src) ())
+           _ (? (two? s) (utime dst <>s) 0)
+           k)
+       (? !(two? >rest) (udie 2 "usage: cp [-f] [-p] [-r] SRC.. DST")
+          (cp-srcs "cp" rest one)))
    (mv-main as)
     (: rest (<>>(cpf-split as))
-       (? !(two? >rest) (udie 2 "usage: mv [-f] SRC DST")
-          (: src <rest dst (udest src <>rest)
-             e (rename src dst)
-             (? !e 0
-                (= e 'exdev) (: _ (ucopy "mv" src dst) _ (unlink src) 0)  ; the long way
-                (udie 1 ("mv: cannot move " + src))))))
+       (one src dst)
+        (: e (rename src dst)
+           (? !e 1
+              (= e 'exdev) (? (ucopy1 "mv" src dst) (: _ (unlink src) 1) 0)  ; the long way
+              (usay-err ("mv: cannot move " + src))))
+       (? !(two? >rest) (udie 2 "usage: mv [-f] SRC.. DST")
+          (cp-srcs "mv" rest one)))
 
    ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
    (rm-main as)

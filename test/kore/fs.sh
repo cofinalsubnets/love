@@ -11,6 +11,20 @@ korerun cp "$P/f1" "$P/a" && cmp -s "$P/f1" "$P/a/f1" || fail "kore cp into dir"
 korerun cp -r "$P/a" "$P/copy" && cmp -s "$P/f1" "$P/copy/f1" && [ -d "$P/copy/b/c" ] || fail "kore cp -r"
 korerun cp "$P/a" "$P/nope" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] && [ ! -e "$P/nope" ] || fail "kore cp of a dir without -r (rc $r)"
 korerun mv "$P/f2" "$P/f3" && [ ! -e "$P/f2" ] && cmp -s "$P/f1" "$P/f3" || fail "kore mv"
+# SRC.. DST: every source lands in the directory, and a target that is not one refuses
+# before anything moves. read as two operands, the second source was overwritten, exit 0
+mkdir "$P/many"; printf 'two\n' > "$P/g2"
+korerun cp "$P/f1" "$P/g2" "$P/many" && cmp -s "$P/f1" "$P/many/f1" && cmp -s "$P/g2" "$P/many/g2" \
+  && [ "$(cat "$P/g2")" = two ] || fail "kore cp SRC.. DIR"
+korerun cp "$P/f1" "$P/g2" "$P/f3" > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] && [ "$(cat "$P/g2")" = two ] || fail "kore cp SRC.. FILE must refuse (rc $r)"
+korerun cp "$P/nosuch" "$P/g2" "$P/many/" > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] && [ -f "$P/many/g2" ] || fail "kore cp: a missing source costs the status, not the rest (rc $r)"
+mkdir "$P/mdst"; printf 'a\n' > "$P/m1"; printf 'b\n' > "$P/m2"
+korerun mv "$P/m1" "$P/m2" "$P/mdst" && [ -f "$P/mdst/m1" ] && [ -f "$P/mdst/m2" ] \
+  && [ ! -e "$P/m1" ] && [ ! -e "$P/m2" ] || fail "kore mv SRC.. DIR"
+printf 'c\n' > "$P/m3"; korerun mv "$P/m3" "$P/f3" "$P/f1" > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] && [ -f "$P/m3" ] && [ -f "$P/f3" ] || fail "kore mv SRC.. FILE must refuse (rc $r)"
 korerun ln -s f1 "$P/l1" && [ "$(readlink "$P/l1")" = f1 ] || fail "kore ln -s"
 korerun ln "$P/f1" "$P/h1" && [ "$P/h1" -ef "$P/f1" ] || fail "kore ln"
 korerun touch "$P/new" "$P/.hidden" && [ -f "$P/new" ] && [ -f "$P/.hidden" ] || fail "kore touch"

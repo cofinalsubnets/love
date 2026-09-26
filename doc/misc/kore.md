@@ -522,8 +522,7 @@ Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one
 
 ## not built
 
-Polish, as need arises: multi-source cp/mv into a directory (today a third operand is
-ignored and the second overwritten, exit 0), uniq -d/-u, cut -b, tr -ds (the -s is dropped), echo -e, seq over
+Polish, as need arises: uniq -d/-u, cut -b, tr -ds (the -s is dropped), echo -e, seq over
 gems, sed y/N and the hold space, join -o, od with several -t at once, date's spellings past
 `@SECONDS`, the checksums' `-b`/`--tag` output modes and `-c`'s `--quiet`/`--status` (a `-c`
 list written either way still READS here).
