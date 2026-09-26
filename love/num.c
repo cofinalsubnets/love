@@ -955,7 +955,10 @@ static lvm(lvm_aextreme) {
    e = P[i];   if (e B m0) m0 = e;  e = P[i+1]; if (e B m1) m1 = e; \
    e = P[i+2]; if (e B m2) m2 = e;  e = P[i+3]; if (e B m3) m3 = e; } \
   for (; i < n; i++) { e = P[i]; if (e B m0) m0 = e; } \
-  if (m1 B m0) m0 = m1; if (m2 B m0) m0 = m2; if (m3 B m0) m0 = m3; M = m0; } while (0)
+  if (m1 B m0) m0 = m1; \
+  if (m2 B m0) m0 = m2; \
+  if (m3 B m0) m0 = m3; \
+  M = m0; } while (0)
  if (fdom) { ai_flo_t *p = tray_data(v), m;
   if (ismax) AEXT(ai_flo_t, p, >, m); else AEXT(ai_flo_t, p, <, m);
   emit_gem(_res, m); }
