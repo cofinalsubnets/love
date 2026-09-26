@@ -322,8 +322,8 @@
        path ("" + getenv "PATH")
        ; ours lead, so ours win wherever we carry a tool of that name; -g puts them
        ; last, where they fill the gaps only. the build's shells read the same choice
-       ; off LUSHFLAGS: -g (gregarious) makes a bare word PATH's business (the bootstrap
-       ; through an ambient cc and userland), -a keeps lush autonomous, PATH deciding nothing
+       ; off LUSHFLAGS: -g (gregarious) hands a bare word to PATH first, ours in its gaps (the
+       ; bootstrap through an ambient cc and userland), -a keeps lush autonomous, PATH deciding nothing
        _ (string? exe ? (setenv "PATH" (greg? ? (path + ":" + farm) (farm + ":" + path))) 0)
        _ (setenv "LUSHFLAGS" (greg? ? "-g" "-a"))
        ; naming ourselves where there is no path to name: `love` is a verb like every

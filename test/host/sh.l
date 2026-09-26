@@ -571,18 +571,28 @@
 
 ; the mode. autonomous (the default): a bare verb word is ours whatever PATH holds --
 ; the stage forks the warm heap, and a bare word that must spawn spawns this binary
-; under the word (tr with no operands: its own usage, status 2). -g is PATH's rule
-; again, and an empty PATH finds nothing (127). lushflags carries the choice into a
-; child shell, and a flag word on its own line overrides it.
-(test !(sh-greg? 0))
+; under the word (tr with no operands: its own usage, status 2). -p is PATH's rule
+; alone, and an empty PATH finds nothing (127); -g is PATH first, ours in its gaps.
+; lushflags carries the choice into a child shell, and a flag word on its own line
+; overrides it.
+(test (0 = sh-mode 0))
 (: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; printf abc | tr a-c A-C; echo; tr 2>/dev/null; echo st=$?"])
    (test ("ABC\nst=2\n" = >r)))
-; (under -g even echo is PATH's, so the status crosses a variable and PATH comes back)
-(: r (hark ["out/love" "out/lush" "-g" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
+; (under -p even echo is PATH's, so the status crosses a variable and PATH comes back)
+(: r (hark ["out/love" "out/lush" "-p" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
+   (test ("st=127\n" = >r)))
+(: r (hark ["out/love" "out/lush" "--precarious" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
    (test ("st=127\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c"
-            "export p=$PATH; PATH=/nonexistent; LUSHFLAGS=-g sh -c 'tr 2>/dev/null; s=$?; PATH=$p; echo st=$s'; LUSHFLAGS=-g sh -a -c 'tr 2>/dev/null; echo st=$?'"])
-   (test ("st=127\nst=2\n" = >r)))
+            "export p=$PATH; PATH=/nonexistent; LUSHFLAGS=-p sh -c 'tr 2>/dev/null; s=$?; PATH=$p; echo st=$s'; LUSHFLAGS=-p sh -a -c 'tr 2>/dev/null; echo st=$?'; LUSHFLAGS=-p sh -g -c 'tr 2>/dev/null; echo st=$?'"])
+   (test ("st=127\nst=2\nst=2\n" = >r)))
+; -g: an empty PATH leaves the verb ours, and a PATH that names the word wins it -- a
+; script called tr on PATH answers where our tr would have. autonomous passes it by
+(: r (hark ["out/love" "out/lush" "-c"
+            "export d=/tmp/lush-t-greg; mkdir -p $d; printf '#!/bin/sh\\necho theirs\\n' > $d/tr; chmod 755 $d/tr
+             LUSHFLAGS=-g sh -c 'p=$PATH; PATH=/nonexistent; tr 2>/dev/null; echo st=$?; PATH=$d:$p; tr'
+             PATH=$d:$PATH; tr 2>/dev/null; echo st=$?; rm -r $d"])
+   (test ("st=2\ntheirs\nst=2\n" = >r)))
 
 ; `which` and `type` -- one verdict (sh-verdict) walks sh-simple2's own ladder, so
 ; what they name is what would run, and `command -v` reads the same answer. the
@@ -620,10 +630,14 @@
    (: s (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; ls /"])
       (test (>s = snip >r 0 #>s)
               (elem 'verb (sh-verdict "dir")))))
-; (under -g even echo is PATH's, so the status crosses a variable and PATH comes back)
-(: r (hark ["out/love" "out/lush" "-g" "-c"
+; (under -p even echo is PATH's, so the status crosses a variable and PATH comes back)
+(: r (hark ["out/love" "out/lush" "-p" "-c"
             "p=$PATH; PATH=/nonexistent; which tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
    (test ("st=1\n" = >r)))
+; ..and -g answers the seat where PATH finds nothing
+(: r (hark ["out/love" "out/lush" "-g" "-c"
+            "p=$PATH; PATH=/nonexistent; a=$(which tr); PATH=$p; b=$(ev '(selfpath 0)'); [ \"$a\" = \"$b\" ] && echo seat || echo other"])
+   (test ("seat\n" = >r)))
 ; the in-image lane, widened: the toolchain's other half plus the three crew tools
 ; that answer a status instead of quitting. each is claimed by name, from its own
 ; module where that is not the applets' home.

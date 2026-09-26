@@ -52,6 +52,8 @@
    sh-rovars (tablet 0)                        ; the readonly names
    sh-aliases (tablet 0)                       ; alias name -> its text
    sh-hashc (tablet 0)                         ; word -> (PATH . the path it won), hash's memory
+   sh-forkc {}                                 ; word -> 1 | 0, decided once per PATH
+   sh-verdpath (tablet 0)                      ; the PATH the word verdicts were taken under
    (sh-tclear t) (each (keys t) (k \ pull t k 0))
    sh-funcs (tablet 0)                         ; functions (name -> the PLANNED body)
    ; --- trap: the action for a condition, and the door it leaves through -------
@@ -118,7 +120,7 @@
    sh-pos {0}                                  ; the positionals, a list of strings
    sh-arg0 {0}                                 ; $0 (the script path, or the shell)
    sh-eflag {0} sh-uflag {0} sh-xflag {0}      ; set -e / -u / -x
-   sh-gflag (tablet 0)                         ; -g: gregarious, PATH decides (1), or autonomous (0); empty until sh-main pins it
+   sh-mflag (tablet 0)                         ; the mode: 0 autonomous, 1 gregarious, 2 precarious; empty until sh-main pins it
    sh-lastbg {0}                               ; $!: the last background pid
    ; ambient on purpose, never a parameter: the guard is a dynamic extent every
    ; re-entry reads, and a plan parameter would have to cross the word expansion.
@@ -1418,21 +1420,24 @@
         (go (sh-pathdirs ())))
    ; does this binary carry the word as a verb? the registry's own answer, PATH aside
    (sh-verbw? w) (cite 'verbs 'word @ f (lit? f ? !!(f w) 0))
-   ; --- the mode: autonomous or gregarious ---------------------------------
-   ; autonomous (-a, the default): a bare word naming a verb this binary carries is
-   ; ours whatever PATH holds. gregarious (-g): ours only when PATH's winner stats as
-   ; this binary, what a bootstrap through ambient tools wants. the flag word wins, else
-   ; LUSHFLAGS' last a or g. the entry pins the box once; an unseated caller (cook, a -e)
-   ; reads the environment at the ask and pins nothing, which would bake in its answer.
+   ; --- the mode: autonomous, gregarious or precarious ----------------------
+   ; where this binary's verbs stand to PATH. autonomous (-a, the default): before it,
+   ; a verb word is ours whatever PATH holds. gregarious (-g): after it, ours where PATH
+   ; finds nothing. precarious (-p): not at all, ours only when PATH's winner stats as
+   ; this binary. the flag word wins, else LUSHFLAGS' last a, g or p. the entry pins the
+   ; box once; an unseated caller (cook, a -e) reads the environment at the ask and pins
+   ; nothing, which would bake in its answer.
    (sh-envflag _) (: s ("" + (getenv "LUSHFLAGS")) n #s
-                     (go k v) (n <= k ? v (go (k + 1) (s k @ 97 0 103 1 _ v)))
+                     (go k v) (n <= k ? v (go (k + 1) (s k @ 97 0 103 1 112 2 _ v)))
                      (go 0 0))
-   (sh-greg? _) (peep sh-gflag () 'no @ 'no (sh-envflag 0) v v) ; peep: a pinned 0 is a verdict, not an absence
+   (sh-mode _) (peep sh-mflag () 'no @ 'no (sh-envflag 0) v v) ; peep: a pinned 0 is a verdict, not an absence
+   ; is the verb word ours by the mode alone, PATH's winner aside
+   (sh-verbours? w) (? !(sh-verbw? w) 0
+                       (sh-mode 0 @ 0 1 1 (one? (sh-whichp w)) 0))
    ; would spawning this word land on the binary we are already running? the one
    ; policy question behind every in-image lane -- lush's own, and cook's.
    (sh-ours? w) (? (sh-slashed? w) (sh-self? w)
-                   (sh-greg? 0) (sh-onpath? w)
-                   (sh-verbw? w) 1
+                   (sh-verbours? w) 1
                    (sh-onpath? w))
    ; can this seat run the word at all? PATH answers wherever there is a seat to exec.
    ; a seat with none never execs: the kernel's spawn hands a bare word to the verb
@@ -1440,21 +1445,21 @@
    ; alone would call half the words on such a machine missing.
    (sh-known? w) (? !(sh-seat ())
                       (? (sh-slashed? w || sh-dotl? w) (two? (stat w)) (sh-verbw? w))
-                    (!(sh-greg? 0) && sh-verbw? w) 1
+                    (sh-verbours? w) 1
                     (two? (sh-whichp w)))
-   ; the argv a spawn execs: autonomous mode spawns this binary under a bare verb
-   ; word, so PATH decides nothing there either; anything else runs as spelled
+   ; the argv a spawn execs: a bare verb word ours by the mode spawns this binary
+   ; under the word, so PATH decides nothing there either; anything else runs as spelled
    (sh-spawnv argv) (: w <argv exe (sh-seat ())
-                       (? (!(sh-greg? 0) && string? exe && !(sh-slashed? w)
-                           && !(sh-dotl? w) && sh-verbw? w)
+                       (? (string? exe && !(sh-slashed? w)
+                           && !(sh-dotl? w) && sh-verbours? w)
                           (exe . argv)
                           argv))
    ; --- what would run: the answer `command -v`, `which` and `type` share -------
    ; the verdict walks sh-simple2's own ladder, so what it names is what would run:
    ; ('resw) ('fn) ('bi) ('verb path) ('path path), or () for a word nothing answers.
-   ; autonomous mode's verb spawns this binary (sh-spawnv), so the seat is the path
+   ; a verb ours by the mode spawns this binary (sh-spawnv), so the seat is the path
    ; to name; a seat with none (the kernel) has only the registry, sh-known?'s reading.
-   (sh-vseat? w) (sh-verbw? w && (!(sh-greg? 0) || !(sh-seat ())))
+   (sh-vseat? w) (? (sh-seat ()) (sh-verbours? w) (sh-verbw? w))
    (sh-vpath w) (sh-seat () @ s (string? s ? s w))
    (sh-verdict w)
      (? (sh-smem? w sh-resw) ['resw]
@@ -1485,8 +1490,7 @@
            0))
    (sh-imgwrap f mn) (? (mn = "moon-run") f ((cite 'kore 'urun) f))
    (sh-assoc w l) (? (one? l) 0 (w = <<l) <l (sh-assoc w >l))
-   (sh-imgfn w) (peep sh-imgc w 'no @ 'no (sh-imgask w @ f (pin sh-imgc w f, f)) v v)
-   sh-forkc {}                          ; word -> 1 | 0, decided once
+   (sh-imgfn w) (sh-pathfresh 0, peep sh-imgc w 'no @ 'no (sh-imgask w @ f (pin sh-imgc w f, f)) v v)
    (sh-dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sh-cliline _) (? (elem 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
    ; a seat with no fork: inle runs a process as a task (kmain's shim, the spawnmap
@@ -1522,11 +1526,15 @@
            (: r (sh-whichp w)
               iv (? (two? r) (sh-shebang (r 1)) ())
               (? (two? iv) (iv + ((r 1) . >argv)) argv))))
-   (sh-forkfn w) (: v (peep sh-forkc w 'no)
+   (sh-forkfn w) (: _ (sh-pathfresh 0) v (peep sh-forkc w 'no)
                   (v != 'no ? v (: f (sh-forkask w) (pin sh-forkc w f, f))))
    ; a shell starting on a forked heap inherits its parent's verdicts, and its own
    ; mode may differ: sh-main drops them, and each word is asked again
    (sh-forget _) (sh-tclear sh-imgc, sh-tclear sh-forkc, sh-tclear sh-hashc)
+   ; a verdict outside autonomous mode is PATH's, so a new PATH asks each word again
+   (sh-pathfresh _) (: p ("" + getenv "PATH")
+                       (? (p = peep sh-verdpath () 0) 0
+                          (sh-tclear sh-imgc, sh-tclear sh-forkc, pin sh-verdpath () p, 0)))
    (sh-fd0? fdmap) (? (one? fdmap) 0 (<<fdmap = 0) 1 (sh-fd0? >fdmap))
    ; --- how a word runs: three lanes, and why they nest -------------------------
    ; self -- in this very process, no fork. it asks the most of a word: no quit, no
@@ -2633,7 +2641,7 @@
    (sh-verbnames _) (map string (keys (cite 'verbs 'tab)))
    (sh-cmds w)                                  ; command candidates for prefix w
      (sh-uniq (sort (filter (sh-prefix? w) sh-builtins +
-                     (? (sh-greg? 0) () (filter (sh-prefix? w) (sh-verbnames 0))) +
+                     (? (2 = sh-mode 0) () (filter (sh-prefix? w) (sh-verbnames 0))) +
                      (catmap (filter (sh-prefix? w) * readdir) (sh-pathdirs ("" + getenv "PATH"))))))
    (sh-dirp q) (: st (stat q) (two? st && (16384 = (61440 & (st 2)))))
    (sh-unfold w)                                ; ~/x -> $HOME/x (stat wants the real path)
@@ -2707,8 +2715,9 @@
 ; run it:
 ;   out/lush                    ; interactive (or cooked when stdin is a pipe)
 ;   out/lush -c "echo hi"       ; one command (multi-line strings fine)
-;   out/lush -g ..              ; gregarious: a verb word is ours only when PATH says so
 ;   out/lush -a ..              ; autonomous, the default: our verbs run here whatever PATH holds
+;   out/lush -g ..              ; gregarious: our verbs where PATH finds nothing
+;   out/lush -p ..              ; precarious: a verb word is ours only when PATH says so
 ;   out/lush script.sh          ; a script file, continuations gathered
 ;   out/lush --login ..         ; a login shell: /etc/profile + ~/.profile first
 ;   out/love -l apps/lush.l ..   ; the module road to the same seat
@@ -2744,7 +2753,7 @@
         r (sh-line cmd)
         ((two? r ? (say err "lush: unexpected eof\n", pin sh-status () 2) 0),
          sh-fire-exit 0, quit (sh-status ())))
-   ; the flag word: a c e g u x, bundled or apart -- `sh -ec CMD` is what a Makefile's
+   ; the flag word: a c e g p u x, bundled or apart -- `sh -ec CMD` is what a Makefile's
    ; .SHELLFLAGS writes, so without the bundle lush cannot be the SHELL of a make.
    ; answers (1 c? rest) with e/u/x pinned, or () when a letter is not ours.
    (sh-flagw a rest)
@@ -2752,21 +2761,26 @@
       (n <= k ? [1 c? rest]
        (a k @
           99 (go (k + 1) 1)
-          97 (pin sh-gflag () 0, go (k + 1) c?)    ; -a autonomous
-          103 (pin sh-gflag () 1, go (k + 1) c?)   ; -g gregarious
+          97 (pin sh-mflag () 0, go (k + 1) c?)    ; -a autonomous
+          103 (pin sh-mflag () 1, go (k + 1) c?)   ; -g gregarious
+          112 (pin sh-mflag () 2, go (k + 1) c?)   ; -p precarious
           101 (pin sh-eflag () 1, go (k + 1) c?)
           117 (pin sh-uflag () 1, go (k + 1) c?)
           120 (pin sh-xflag () 1, go (k + 1) c?))))
-   sh-usage "usage: sh [-aeguxc] [--login] [-c CMD [NAME [ARG..]]] [FILE [ARG..]]
-  -c CMD   run CMD              -e  leave on a failing command
-  -a       autonomous: our verbs before PATH (the default)
-  -g       gregarious: PATH decides; LUSHFLAGS' last a or g sets either
-  -u       an unset name is an error    -x  trace what runs
-  --login  a login shell: the profiles are read
+   sh-usage "usage: sh [-aegpuxc] [--login] [-c CMD [NAME [ARG..]]] [FILE [ARG..]]
+  -c CMD            run CMD
+  -e                leave on a failing command
+  -u                an unset name is an error
+  -x                trace what runs
+  -a, --autonomous  our verbs before PATH (the default)
+  -g, --gregarious  our verbs after PATH
+  -p, --precarious  PATH alone, ours never inserted
+  --login           a login shell: the profiles are read
+with no mode flag, LUSHFLAGS' last a, g or p sets the mode
 no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise"
    (sh-main args)
      (sh-snapign 0,                             ; first: what our caller had turned off
-      pin sh-gflag () (sh-envflag 0),            ; the mode: LUSHFLAGS' now, a flag word's below
+      pin sh-mflag () (sh-envflag 0),            ; the mode: LUSHFLAGS' now, a flag word's below
       sh-forget 0,                               ; a forked shell drops its parent's word verdicts
       ; a task on inle shares this module with every other shell aboard: a child of a
       ; login shell is not one, and a recipe's shell owns no tty
@@ -2777,6 +2791,9 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
         (: a <args
            (a @- (sh-file a >args)
             "--login" (pin sh-login () 1, sh-args >args)
+              "--autonomous" (pin sh-mflag () 0, sh-args >args)
+              "--gregarious" (pin sh-mflag () 1, sh-args >args)
+              "--precarious" (pin sh-mflag () 2, sh-args >args)
               ; the long forms only: -h is `set -h` in every shell, and -v is `set -v`
               "--help" (puts (sh-usage + "\n"), flush out, quit 0)
               "--version"
