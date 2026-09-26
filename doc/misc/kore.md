@@ -15,7 +15,7 @@ against GNU (`test/kore/sort.sh`, `test/kore/ls.sh`) inside `make test_kore`.
 kore is love's unix userland, and the verb for it: busybox's multi-call trick done natively.
 The love-native POSIX environment over the Linux kernel is kernel + a static `love` + .l
 files, and kore is its coreutils and more — sh, make, vi, cc, nc, the archives. How it
-compares to busybox, GNU, uutils and the two BSDs, name by name, is the census at the foot.
+compares to busybox, toybox, GNU and uutils, name by name, is the census at the foot.
 
 ## the shape
 
