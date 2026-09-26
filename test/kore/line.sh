@@ -16,6 +16,14 @@ for c in "+1" "+2" "+9" "2" "-2"; do
   both "tail -n $c"  tail -n "$c" "$ho/.cu1"
   both "head -n $c"  head -n "$c" "$ho/.cu1"
 done
+# -c: bytes, the last of -c/-n winning, -c -N all but the last N, GNU's multipliers,
+# and a byte clip that stops reading -- /dev/zero holds no newline to stop a line one
+for c in "-c 3" "-c3" "-c 0" "-c 100" "-c -2" "-c -100" "-c +3" "-n 2 -c 3" "-c 3 -n 2" "--bytes=4" "-c 1b"; do
+  # shellcheck disable=SC2086
+  both "head $c"  head $c "$ho/.cu1" "$ho/.cu2"
+done
+[ "$(korerun head -c 48 /dev/zero | wc -c)" -eq 48 ] || fail "kore head -c must stop reading"
+korerun head -c 3x "$ho/.cu1" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore head -c 3x must refuse (rc $r)"
 both "tail -n +2 many"  tail -n +2 "$ho/.cu1" "$ho/.cu2"
 both "head -n -1 many"  head -n -1 "$ho/.cu1" "$ho/.cu2"
 printf 'x\ny' > "$ho/.cun"                  # no trailing newline: the clip must keep that
