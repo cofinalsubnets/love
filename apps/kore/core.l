@@ -123,20 +123,45 @@
                   (go 1))
    ; a count word -> [n sign], sign 1 for a written +, -1 for a written -, 0 for neither.
    ; the sign is the clip's other reading: head -n -N drops the last N, tail -n +N opens
-   ; at line N. uatoi has no sign to read, so it is taken off here.
-   (uclip-n w) (: n (tally w) c (? (0 < n) (w 0) 0)
-                 (? (c = 43) [(uatoi (snip w 1 n)) 1]
-                    (c = 45) [(uatoi (snip w 1 n)) -1]
-                    [(uatoi w) 0]))
-   (uclip-args who as)                      ; -> (n files many? sign)
-    (: nr (? (two? as && (<as = "-n"))
-             (? (two? >as) (: q (uclip-n <>as) [<q >>as <>q])
-                (udie 2 (who + ": -n wants a count")))
-             (two? as && ((<as 0) = 45) && (digits? <as))
-             [(uatoi (snip <as 1 (tally <as))) >as 0]
-             [10 as 0])
-       n <nr fs <>nr sign <>>nr
-       [n fs (? (two? fs && two? >fs) 1 0) sign])
+   ; at line N. the digits may wear GNU's multipliers (b 512, k K KiB 1024, kB KB 1000,
+   ; M G T the same two ways); anything else is refused by name, not read as a number.
+   uclip-sfx '(("b" 512) ("k" 1024) ("K" 1024) ("KiB" 1024) ("kB" 1000) ("KB" 1000)
+               ("M" 1048576) ("MiB" 1048576) ("MB" 1000000)
+               ("G" 1073741824) ("GiB" 1073741824) ("GB" 1000000000)
+               ("T" 1099511627776) ("TiB" 1099511627776) ("TB" 1000000000000))
+   (uclip-n who what w)
+    (: n (tally w) c (? (0 < n) (w 0) 0)
+       sign (? (c = 43) 1 (c = 45) -1 0)
+       st (? (sign = 0) 0 1)                   ; -1 is falsy: ask, do not test
+       (dend k) (? (k < n && 47 < w k < 58) (dend (k + 1)) k)
+       e (dend st)
+       v (? (st < e) (unum (snip w st e)) ())
+       sf (snip w e n)
+       m (? (sf = "") 1 (: r (filter (\ p (<p = sf)) uclip-sfx) (? (two? r) <>(<r) ())))
+       (? (charm? v && charm? m) [(v * m) sign]
+          (udie 1 (who + ": invalid number of " + what + ": '" + w + "'"))))
+   ; the leading words: -n N / -nN / --lines=N, -c N / -cN / --bytes=N (the last given
+   ; wins, as GNU's), the obsolescent -N, and -- to end them. any other word is a file
+   (uclip-args who as)                      ; -> (n files many? sign bytes?)
+    (: (val w a k) (? (k < #w) [(snip w k #w) >a]
+                      (two? >a) [<>a >>a]
+                      (udie 1 (who + ": option requires an argument -- '" + string (w 1) + "'")))
+       (go a n sign b?)
+        (? !(two? a) [n a sign b?]
+           (: w <a nw #w
+              (? (w = "--") [n >a sign b?]
+                 (2 <= nw && w 0 = 45 && (w 1 = 110 || w 1 = 99))
+                  (: r (val w a 2) b (w 1 = 99) q (uclip-n who (? b "bytes" "lines") <r)
+                     (go <>r <q <>q b))
+                 (8 < nw && snip w 0 8 = "--lines=")
+                  (: q (uclip-n who "lines" (snip w 8 nw)) (go >a <q <>q 0))
+                 (8 < nw && snip w 0 8 = "--bytes=")
+                  (: q (uclip-n who "bytes" (snip w 8 nw)) (go >a <q <>q 1))
+                 (w 0 = 45 && digits? w) (go >a (unum (snip w 1 nw)) 0 0)
+                 [n a sign b?])))
+       r (go as 10 0 0)
+       fs <>r
+       [<r fs (? (two? fs && two? >fs) 1 0) <>>r <>>>r])
    (uclip-hdr many first f)
     (? many (say out (uhdr first (? (f = "-") "standard input" f))) 0)
    (uclip-say l) (: _ (say out <l) (? <>l (put out 10) 0))   ; a read line, its own ending
@@ -144,7 +169,7 @@
    ; one line of a 100 MB file cost 7.2 GB. uhead is still the spec for where the
    ; last newline goes (test/law/kore.l holds it); this answers the same text, a line at a time.
    (head-main as)
-    (: p (uclip-args "head" as) n <p fs <>p many <>>p sign <>>>p
+    (: p (uclip-args "head" as) n <p fs <>p many <>>p sign <>>>p bytes? <>>>>p
        ; -n -N is the other clip: hold a queue of N, and a line leaves only once N
        ; newer ones have come in. two stacks, so the hold costs N and not N a line.
        (drop-last rd)
@@ -164,14 +189,31 @@
                         (? (! (two? l)) 1
                            (: _ (uclip-say l) (go (k + 1))))))
            (go 0))
+       ; -c: the first n bytes, gulp by gulp, stopping once they are out -- or with -c -N
+       ; everything but the last n, the held tail never longer than n and a gulp
+       (first-b rd)
+        (: (go k) (? (n <= k) 1
+                     (: h (urd-gulp rd)
+                        (? !#h 1
+                           (: m (min #h (n - k)) _ (say out (snip h 0 m)) (go (k + m))))))
+           (go 0))
+       (drop-last-b rd)
+        (: (go hold) (: h (urd-gulp rd)
+                        (? !#h 1
+                           (: t (hold + h) cut (#t - n)
+                              (? (0 < cut) (: _ (say out (snip t 0 cut)) (go (snip t cut #t)))
+                                 (go t)))))
+           (go ""))
        (body f first rd)
         (: _ (uclip-hdr many first f)
-           (? (sign = -1) (drop-last rd) (first-n rd)))
+           (? bytes? (? (sign = -1) (drop-last-b rd) (first-b rd))
+              (sign = -1) (drop-last rd) (first-n rd)))
        (ureach "head" body fs))
    ; tail cannot stop reading but need not hold: a ring of the last n lines is the
    ; whole answer. trimmed at 2n, so the trim costs n every n lines, not n a line.
    (tail-main as)
     (: p (uclip-args "tail" as) n <p fs <>p many <>>p sign <>>>p
+       _ (? <>>>>p (udie 1 "tail: -c is not here, only -n") 0)
        ; -n +N opens at line N instead, counted from 1; +0 reads as +1, as GNU has it
        (from-n rd)
         (: st (? (n < 1) 1 n)

@@ -352,7 +352,7 @@
     'objcopy "usage: objcopy -O binary|ihex IN OUT"
     'cat "usage: cat [FILE..]"
     'tac "usage: tac [FILE..]"
-    'head "usage: head [-n N] [-N] [FILE..]"
+    'head "usage: head [-n N] [-c N] [-N] [FILE..]"
     'tail "usage: tail [-n N] [-N] [FILE..]"
     'wc "usage: wc [-lwc] [FILE..]"
     'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
