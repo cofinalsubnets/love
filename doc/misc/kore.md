@@ -72,7 +72,8 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | core.l, the two little computations | tsort factor |
 | core.l, the record tools | paste comm join split od |
 | sum.l, the checksums | cksum md5sum sha256sum (`-c` reads a list back) |
-| core.l, the trivia | seq yes true false basename dirname test [ uname arch nproc printf |
+| core.l, the trivia | seq yes true false basename dirname test [ uname arch nproc |
+| awk.l, beside the number engine it shares | printf (C's flags, widths, precisions and conversions but `%a`, `%b` `%q`, the escapes, strto*'s reading and its complaints; reals formatted from their exact binary value, as glibc does, where GNU's are long doubles) |
 | core.l, the byte tools | dd xxd strings hexdump hd (the BSD dump: words, or -C's bytes; -n -s -v, no -e) |
 | core.l, the shell's helper | getopt (util-linux's: -o -l -n -a -q -Q -T -u, the three operand modes, quoted for `eval set --`; the old `getopt SHORTS` face; -s csh refused) |
 | fs.l, the fs tools | ls/dir cp mv rm mkdir rmdir ln touch lift pwd chmod install readlink cmp |
@@ -546,8 +547,7 @@ Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one
 
 ## not built
 
-Polish, as need arises: printf's widths, `%o` `%x` `%u` and `\NNN` (a script under lush
-reaches this printf), uniq -d/-u, cut -b, echo -e, seq over
+Polish, as need arises: printf's `%a`, uniq -d/-u, cut -b, echo -e, seq over
 gems, sed y/N and the hold space, join -o, od with several -t at once, date's spellings past
 `@SECONDS`, the checksums' `-b`/`--tag` output modes and `-c`'s `--quiet`/`--status` (a `-c`
 list written either way still READS here).

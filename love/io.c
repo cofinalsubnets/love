@@ -694,7 +694,7 @@ static ai_noinline double strtod_wrap(struct ai*g, word x) {
  double r = am_strtod(b, &e);
  return e != b && *e == 0 ? (ai_flo_t) r : (ai_flo_t) NAN; }
 
-// (flo s): parse a string as a decimal float -> a box if the whole string parses,
+// (gem s): parse a string as a decimal float -> a box if the whole string parses,
 // else zero (the l-side reader's twin of the C cascade)
 lvm(lvm_gem) {
  word x = Sp[0];
