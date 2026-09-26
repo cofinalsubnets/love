@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/kore/archive.sh -- gzip, gunzip, zcat, tar, cpio under kore's door
+# test/kore/archive.sh -- gzip, gunzip, zcat, xz, unxz, tar, cpio under kore's door
 . "$(dirname "$0")/common.sh"
 
 # gz.l, tar.l and the two cpio files are kore members now, not crew ones: the distro's
@@ -43,4 +43,43 @@ grep -q 'one\.txt' "$o" || fail "kore tar: the verb fell through to the usage sc
 ( cd "$ho" && "$K" kore find .arcd | "$K" kore cpio -o --quiet > .arc.cpio ) || fail "kore cpio -o"
 korerun cpio -t < "$ho/.arc.cpio" > "$o" 2>/dev/null || fail "kore cpio -t"
 grep -q 'one\.txt' "$o" || fail "kore cpio: the verb fell through to the usage screen"
-echo "kore: gzip/gunzip/zcat/tar/cpio under kore's door ok"
+# xz: the round trip, the empty stream (32 bytes, no block), each check, a torn stream
+# refused as xz refuses it, and both directions against xz-utils where it is there --
+# its streams read here whatever the preset, ours read there, and .lzma both ways in
+korerun xz -c < "$ho/.arc1" > "$ho/.arc1.xz" || fail "kore xz"
+korerun unxz -c < "$ho/.arc1.xz" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore xz | unxz round trip"
+: > "$ho/.arc0"; korerun xz -c "$ho/.arc0" > "$ho/.arc0.xz"
+[ "$(wc -c < "$ho/.arc0.xz")" -eq 32 ] || fail "kore xz: an empty input is a 32-byte stream"
+korerun xzcat "$ho/.arc0.xz" > "$o"; [ ! -s "$o" ] || fail "kore xzcat of the empty stream"
+for c in none crc32 crc64 sha256; do
+  korerun xz -C $c -c "$ho/.arc1" > "$ho/.arcc.xz" || fail "kore xz -C $c"
+  korerun xz -dc "$ho/.arcc.xz" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore xz -C $c round trip"
+done
+dd if="$ho/.arc1.xz" of="$ho/.arct.xz" bs=1 count=40 2>/dev/null
+korerun xz -t "$ho/.arct.xz" 2> "$ho/.arct.say"; r=$?
+[ $r -eq 1 ] || fail "kore xz -t of a torn stream (rc $r)"
+grep -q 'Unexpected end of input' "$ho/.arct.say" || fail "kore xz: a torn stream says so"
+cp "$ho/.arc1" "$ho/.arcx"; korerun xz "$ho/.arcx"; korerun xz "$ho/.arcx.xz" 2>/dev/null; r=$?
+[ $r -eq 2 ] || fail "kore xz: a .xz name is a warning, not a second layer (rc $r)"
+korerun unxz "$ho/.arcx.xz"; cmp -s "$ho/.arc1" "$ho/.arcx" || fail "kore unxz in place"
+# ..and a binary big enough to cross LZMA2's chunk bounds
+dd if="$K" of="$ho/.arcb" bs=1024 count=600 2>/dev/null
+korerun xz -c "$ho/.arcb" | korerun xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore xz round trip, 600 KiB"
+if command -v xz >/dev/null 2>&1; then
+  for p in -0 -6 -9e; do
+    xz $p -c "$ho/.arc1" > "$ho/.arcg.xz"
+    korerun xz -dc "$ho/.arcg.xz" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore unxz of xz $p"
+  done
+  xz -dc "$ho/.arc1.xz" > "$o" 2>/dev/null; cmp -s "$ho/.arc1" "$o" || fail "xz -d of kore's xz"
+  xz -t "$ho/.arc0.xz" || fail "xz -t of kore's empty stream"
+  korerun xz -c "$ho/.arcb" | xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "xz -d of kore's xz, 600 KiB"
+  xz -c "$ho/.arcb" | korerun xz -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore unxz of xz's, 600 KiB"
+  cat "$ho/.arcg.xz" "$ho/.arc1.xz" > "$ho/.arcs.xz"
+  cat "$ho/.arc1" "$ho/.arc1" > "$g"
+  korerun xz -dc "$ho/.arcs.xz" > "$o"; cmp -s "$g" "$o" || fail "kore unxz of two streams"
+  xz --format=lzma -c "$ho/.arc1" > "$ho/.arc1.lzma"
+  korerun unlzma -c "$ho/.arc1.lzma" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore unlzma of xz's .lzma"
+  cat "$ho/.arc1" | xz --format=lzma | korerun lzcat > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore lzcat of a sizeless .lzma"
+fi
+hv "xz --help" '^xz -- the' korerun xz --help
+echo "kore: gzip/gunzip/zcat/xz/unxz/tar/cpio under kore's door ok"

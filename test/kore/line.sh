@@ -23,6 +23,10 @@ for c in "-c 3" "-c3" "-c 0" "-c 100" "-c -2" "-c -100" "-c +3" "-n 2 -c 3" "-c 
   both "head $c"  head $c "$ho/.cu1" "$ho/.cu2"
 done
 [ "$(korerun head -c 48 /dev/zero | wc -c)" -eq 48 ] || fail "kore head -c must stop reading"
+for c in "-c 3" "-c3" "-c 0" "-n 0" "-c 100" "-c +3" "-c +0" "-n +0" "-c +100" "-n 2 -c 3" "-c 3 -n 2" "--bytes=+4" "-c 1b"; do
+  # shellcheck disable=SC2086
+  both "tail $c"  tail $c "$ho/.cu1" "$ho/.cu2"
+done
 korerun head -c 3x "$ho/.cu1" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore head -c 3x must refuse (rc $r)"
 both "tail -n +2 many"  tail -n +2 "$ho/.cu1" "$ho/.cu2"
 both "head -n -1 many"  head -n -1 "$ho/.cu1" "$ho/.cu2"

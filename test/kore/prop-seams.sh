@@ -23,15 +23,16 @@ awk 'BEGIN{for(i=0;i<9000;i++)print "dup" i%3}' > "$ho/.gs7"
 # that ride `ulines` and carry nothing of their own -- nl, fold, expand, unexpand --
 # all answer for rev, and their own work is held to GNU in field.sh and column.sh.
 # what stays is one row per DISTINCT loop: rev for ulines, cat for uchunks, head's two
-# clips (first-n and the -N queue) and its two byte clips (-c N, -c -N), tail's ring and
-# its +N open, uniq's run, sed's lookahead, grep's own walk, wc's three counters
-# (ucount-go/-l/-b, picked by flag), and the three digests, which share a read loop but
-# not a hash state.
+# clips (first-n and the -N queue) and its two byte clips (-c N, -c -N), tail's ring, its
+# byte hold and its +N open, uniq's run, sed's lookahead, grep's own walk, wc's three
+# counters (ucount-go/-l/-b, picked by flag), and the three digests, which share a read
+# loop but not a hash state.
 for f in .gs1 .gs2 .gs3 .gs4 .gs5 .gs6 .gs7; do
   for t in "cat" "rev" "head -n 3" "tail -n 3" "head -n 1" "head -n -2" "tail -n +2" \
            "grep 000000001" "grep -c 0" "grep -n 000000002" "sed s/00/QQ/" "sed -n 2p" \
            'sed $d' "sed 2q" "wc" "wc -c" "wc -l" "wc -w" "uniq" "uniq -c" \
-           "tac" "cksum" "md5sum" "sha256sum" "head -c 4097" "head -c -4097"; do
+           "tac" "cksum" "md5sum" "sha256sum" "head -c 4097" "head -c -4097" \
+           "tail -c 4097" "tail -c +4097"; do
     # shellcheck disable=SC2086
     $t "$ho/$f" > "$g" 2>/dev/null; korerun $t "$ho/$f" > "$o" 2>/dev/null
     cmp -s "$g" "$o" || fail "kore $t over $f (a gulp seam)"

@@ -1,6 +1,7 @@
 #ifndef _AI_SYS_RESOURCE_H
 #define _AI_SYS_RESOURCE_H
 #include <sys/time.h>   /* struct timeval */
+#include <sys/types.h>  /* id_t */
 #define RUSAGE_SELF      0
 #define RUSAGE_CHILDREN (-1)
 /* the kernels agree on the two timevals and part company after them: the tail is
@@ -26,4 +27,9 @@ typedef unsigned long rlim_t;
 struct rlimit { rlim_t rlim_cur, rlim_max; };
 int getrlimit(int, struct rlimit*);
 int setrlimit(int, const struct rlimit*);
+#define PRIO_PROCESS 0
+#define PRIO_PGRP    1
+#define PRIO_USER    2
+int getpriority(int, id_t);
+int setpriority(int, id_t, int);
 #endif

@@ -1,5 +1,6 @@
 #!/bin/sh
-# test/kore/toolchain.sh -- as, ar, ld, objcopy and nm -- the object tools, x86-64 only
+# test/kore/toolchain.sh -- as, ar, ld, objcopy, nm, size, strip, ranlib -- the object tools,
+# x86-64 only
 . "$(dirname "$0")/common.sh"
 
 if [ "$(uname -m)" = x86_64 ]; then
@@ -79,5 +80,30 @@ if [ "$(uname -m)" = x86_64 ]; then
   korerun nm "$ho/.kore-arf.o" "$ho/.kore-arm.o" > "$o" || fail "kore nm (two files)"
   grep -q '\.kore-arm\.o:$' "$o" || fail "kore nm: no per-file header past one file"
   korerun nm "$ho/.kore-arf.c" >/dev/null 2>&1 && fail "kore nm read a non-ELF"
+  # size: binutils' berkeley sums to the byte, over objects, an exe and an archive, and
+  # its status (3 a file that is no object). strip: the exe still runs, loses its symbol
+  # table, and keeps the sections binutils' strip keeps. ranlib: an archive laid with no
+  # index (binutils' ar S) gains one, which is what mooncc's link reads it by
+  if command -v size >/dev/null 2>&1; then
+    size "$ho/.kore-arm.o" "$ho/.kore-ld.elf" "$ho/.kore-our.a" > "$g" 2>&1
+    korerun size "$ho/.kore-arm.o" "$ho/.kore-ld.elf" "$ho/.kore-our.a" > "$o" 2>&1; same "size"
+    size -t "$ho/.kore-arm.o" "$ho/.kore-arf.o" > "$g"; korerun size -t "$ho/.kore-arm.o" "$ho/.kore-arf.o" > "$o"; same "size -t"
+  fi
+  korerun size "$ho/.kore-arf.c" 2>/dev/null; r=$?; [ $r -eq 3 ] || fail "kore size of a non-object is 3 (got $r)"
+  cp "$ho/.kore-ld.elf" "$ho/.kore-st.elf"
+  korerun strip "$ho/.kore-st.elf" || fail "kore strip"
+  "$ho/.kore-st.elf"; r=$?; [ $r -eq 42 ] || fail "kore strip: the stripped exe runs (exit $r)"
+  korerun nm "$ho/.kore-st.elf" 2>&1 | grep -q 'no symbols' || fail "kore strip: no symbol table left"
+  if command -v strip >/dev/null 2>&1 && command -v readelf >/dev/null 2>&1; then
+    cp "$ho/.kore-ld.elf" "$ho/.kore-gst.elf"; strip "$ho/.kore-gst.elf"
+    readelf -SW "$ho/.kore-gst.elf" | sed -n 's/^ *\[ *[0-9]*\] *\([^ ]*\).*/\1/p' | LC_ALL=C sort > "$g"
+    readelf -SW "$ho/.kore-st.elf" | sed -n 's/^ *\[ *[0-9]*\] *\([^ ]*\).*/\1/p' | LC_ALL=C sort > "$o"; same "strip (the sections kept)"
+  fi
+  if command -v ar >/dev/null 2>&1; then
+    rm -f "$ho/.kore-rl.a"; ar rcS "$ho/.kore-rl.a" "$ho/.kore-arf.o"
+    korerun ranlib "$ho/.kore-rl.a" || fail "kore ranlib"
+    moonc "$ho/.kore-arm.o" "$ho/.kore-rl.a" -o "$ho/.kore-rl.elf" >/dev/null 2>&1 || fail "kore ranlib: mooncc links through the index"
+    "$ho/.kore-rl.elf"; r=$?; [ $r -eq 42 ] || fail "kore ranlib: the linked exe (exit $r)"
+  fi
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy + nm ok"
+echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy + nm + size + strip + ranlib ok"

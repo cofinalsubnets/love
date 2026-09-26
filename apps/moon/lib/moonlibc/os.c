@@ -82,6 +82,7 @@ long __ai_safb(long f) { return f; }
 long __ai_sacan(long f) { return f; }
 void __ai_tiofb(struct termios const *t, struct __fb_termios *f) { }
 void __ai_tiocan(struct __fb_termios const *f, struct termios *t) { }
+void __ai_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur) { }
 long __ai_affb(long a) { return a; }
 long __ai_afcan(long a) { return a; }
 long __ai_sotype(long t) { return t; }
@@ -147,6 +148,7 @@ static short const os_nr[][3] = {
   {NR_getrusage,     NR_fb_getrusage,    -1},
   {NR_getrlimit,     NR_fb_getrlimit,   194},
   {NR_setrlimit,     NR_fb_setrlimit,   195},
+  {NR_setpriority,   NR_fb_setpriority,  96},
   {NR_kill,          NR_fb_kill,         37},
   {NR_fcntl,         NR_fb_fcntl,        92},
   {NR_fsync,         NR_fb_fsync,        95},
@@ -417,11 +419,20 @@ void __ai_tiofb(struct termios const *t, struct __fb_termios *f) {
   f->c_oflag = os_tiow(t->c_oflag, os_tio_o, sizeof os_tio_o / 8, 0);
   f->c_cflag = os_tiow(t->c_cflag, os_tio_c, sizeof os_tio_c / 8, 0);
   f->c_lflag = os_tiow(t->c_lflag, os_tio_l, sizeof os_tio_l / 8, 0);
+  /* a disabled slot is 0 in the canonical spelling and 0xff here; vmin and vtime
+   * (5, 6) are counts, where 0 is a value. a slot linux has no name for stays off */
+  memset(f->c_cc, 0xff, sizeof f->c_cc);
   for (int i = 0; i < 17; i++)
-    if (os_tio_cc[i] >= 0) f->c_cc[(int) os_tio_cc[i]] = t->c_cc[i];
+    if (os_tio_cc[i] >= 0)
+      f->c_cc[(int) os_tio_cc[i]] = t->c_cc[i] || i == 5 || i == 6 ? t->c_cc[i] : 0xff;
   /* netbsd spells CRTSCTS as the low bit alone; the high one is foreign there */
   if (__ai_osv == 3 && (f->c_cflag & 0x30000)) f->c_cflag = (f->c_cflag & ~0x30000u) | 0x10000;
   f->c_ispeed = t->c_ispeed; f->c_ospeed = t->c_ospeed; }
+/* the slots linux has no name for (status, dsusp) kept as the terminal has them */
+void __ai_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur) {
+  unsigned char named[20] = {0};
+  for (int i = 0; i < 17; i++) if (os_tio_cc[i] >= 0) named[(int) os_tio_cc[i]] = 1;
+  for (int k = 0; k < 20; k++) if (!named[k]) f->c_cc[k] = cur->c_cc[k]; }
 void __ai_tiocan(struct __fb_termios const *f, struct termios *t) {
   memset(t, 0, sizeof *t);
   t->c_iflag = os_tiow(f->c_iflag, os_tio_i, sizeof os_tio_i / 8, 1);
@@ -429,7 +440,9 @@ void __ai_tiocan(struct __fb_termios const *f, struct termios *t) {
   t->c_cflag = os_tiow(f->c_cflag, os_tio_c, sizeof os_tio_c / 8, 1);
   t->c_lflag = os_tiow(f->c_lflag, os_tio_l, sizeof os_tio_l / 8, 1);
   for (int i = 0; i < 17; i++)
-    if (os_tio_cc[i] >= 0) t->c_cc[i] = f->c_cc[(int) os_tio_cc[i]];
+    if (os_tio_cc[i] >= 0) {
+      unsigned char c = f->c_cc[(int) os_tio_cc[i]];
+      t->c_cc[i] = c == 0xff && i != 5 && i != 6 ? 0 : c; }
   t->c_ispeed = f->c_ispeed; t->c_ospeed = f->c_ospeed; }
 
 /* the socket family: unix and inet agree, inet6 moves (10 -> 28). the BSD

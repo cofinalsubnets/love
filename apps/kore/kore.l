@@ -36,7 +36,8 @@
 ;                                    written in, read back through lapiz and paged by less
 ;   kore html2text [-w N] [F..]      a page's prose, laid out (apps/kore/lens.l)
 ;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
-;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l); tar and cpio the
+;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
+;                                    one (apps/xz.l, inle/xz.c's LZMA2); tar and cpio the
 ;   kore tar czf|xzf|tzf ARCHIVE      two containers over it (apps/tar.l, apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
@@ -64,16 +65,16 @@
         factor-main false-main find-main fold-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
         head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main markdown-main
         ln-main ls-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
-        mv-main myers nl-main nohup-main nproc-main
+        mv-main myers nl-main nice-main nohup-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
-        printf-main ps-main pwd-main pwdx-main readlink-main realpath-main rebre refind refold
-        rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main shuf-main sleep-main
-        sort-main sparse split-main srun stat-main sync-main df-main time-main tac-main tail-main
+        printf-main ps-main pwd-main pwdx-main ranlib-main readlink-main realpath-main rebre refind refold renice-main
+        rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main shuf-main size-main sleep-main
+        sort-main sparse split-main srun stat-main strip-main stty-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
-        touch-main lift-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
+        touch-main lift-main tr-main true-main truncate-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
-        uset usignames usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main
-        cal-main clear-main dd-main hostname-main strings-main timeout-main tty-main
+        users-main uset usignames usplit ustatf utag utty uupsay wc-main who-main whoami-main xargs-main yes-main
+        cal-main clear-main dd-main hostname-main logname-main strings-main timeout-main tty-main
         which-main xxd-main)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
@@ -119,27 +120,32 @@
        _ (? (hot? q) () (die ("ar: cannot write " + dst)))
        _ (say q (arbytes ms))
        (close q))
-   (ar-t p)                                                   ; list member names
-    (: r (uread p) _ (? (two? r) () (die ("ar: cannot open " + p)))
-       b <>r n (tally b)
-       _ (? ((<= 8 n) && (snip b 0 8 = "!<arch>\n")) () (die ("ar: not an archive: " + p)))
+   ; an archive's members as ((name bytes)..), the index and the long-name table read
+   ; past; () for bytes that are no archive
+   (ar-mems b)
+    (: n (tally b)
        (field s) (: (go k) (? ((0 < k) && (s (k - 1) = 32)) (go (k - 1)) (snip s 0 k)) (go (tally s)))
        (lname lt off) (: (go k) (? ((< k (tally lt)) && !(lt k = 10)) (go (k + 1)) k)
                          e (go off)
                          (: nm (snip lt off e) z (tally nm)
                             (? ((0 < z) && (nm (z - 1) = 47)) (snip nm 0 (z - 1)) nm)))
-       (go pos lt) (? (< (n - pos) 60) 0
-                      (: nm (field (snip b pos (pos + 16)))
-                         sz (uatoi (field (snip b (pos + 48) (pos + 58))))
-                         d0 (pos + 60)
-                         nx ((d0 + sz) + (& sz 1))
-                         (? (nm = "/") (go nx lt)
-                            (nm = "//") (go nx (snip b d0 (d0 + sz)))
-                            (: shown (? (nm 0 = 47) (lname lt (uatoi (snip nm 1 (tally nm))))
-                                        (: z (tally nm) (? (nm (z - 1) = 47) (snip nm 0 (z - 1)) nm)))
-                               _ (puts (shown + "\n"))
-                               (go nx lt)))))
-       _ (go 8 "")
+       (go pos lt acc)
+        (? (< (n - pos) 60) (rev acc)
+           (: nm (field (snip b pos (pos + 16)))
+              sz (uatoi (field (snip b (pos + 48) (pos + 58))))
+              d0 (pos + 60)
+              nx ((d0 + sz) + (& sz 1))
+              (? (nm = "/" || nm = "/SYM64/") (go nx lt acc)
+                 (nm = "//") (go nx (snip b d0 (d0 + sz)) acc)
+                 (: shown (? (nm 0 = 47) (lname lt (uatoi (snip nm 1 (tally nm))))
+                             (: z (tally nm) (? (nm (z - 1) = 47) (snip nm 0 (z - 1)) nm)))
+                    (go nx lt ([shown (snip b d0 (d0 + sz))] . acc))))))
+       (? ((<= 8 n) && (snip b 0 8 = "!<arch>\n")) (go 8 "" ()) ()))
+   (ar-t p)                                                   ; list member names
+    (: r (uread p) _ (? (two? r) () (die ("ar: cannot open " + p)))
+       b <>r
+       _ (? ((<= 8 (tally b)) && (snip b 0 8 = "!<arch>\n")) () (die ("ar: not an archive: " + p)))
+       _ (map (m \ puts (<m + "\n")) (ar-mems b))
        0)
    (ar-main as)
     (? !(two? as) (die "usage: kore ar rcs OUT MEMBER..   |   kore ar t OUT")
@@ -255,6 +261,179 @@
        _ (flush out)
        (? any 0 1))
 
+   ; -- size, strip, ranlib: the three binutils that ride holo's ELF field table and its
+   ; archive writer. little-endian ELF of either class; a section reads as
+   ; (index name type flags off size link info align header-bytes) --
+   (bu-le v n) (? (n < 1) "" (string (v & 255) + bu-le (v >> 8) (n - 1)))
+   (bu-put fs h nm v) (: r (ld-row fs nm) o <r w <>r (snip h 0 o + bu-le v w + snip h (o + w) #h))
+   (bu-elf? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70 && b 5 = 1
+                && (b 4 = 1 || b 4 = 2))
+   (bu-fs b) (? (b 4 = 2) elf64f elf32f)
+   (bu-secs fs b)
+    (: shoff (ld-f fs b 0 'e-shoff) n (ld-f fs b 0 'e-shnum) e (ld-n fs 'sh-ent)
+       sx (ld-f fs b 0 'e-shstrx)
+       stro (? (sx < n) (ld-f fs b (shoff + sx * e) 'sh-off) 0)
+       (go i acc)
+        (? (n <= i) (rev acc)
+           (: h (shoff + i * e)
+              (go (i + 1) ([i (ld-cstr b (stro + ld-f fs b h 'sh-name)) (ld-f fs b h 'sh-type)
+                            (ld-f fs b h 'sh-flags) (ld-f fs b h 'sh-off) (ld-f fs b h 'sh-size)
+                            (ld-f fs b h 'sh-link) (ld-f fs b h 'sh-info) (ld-f fs b h 'sh-align)
+                            (snip b h (h + e))] . acc))))
+       (go 0 ()))
+   ; binutils' berkeley sums: allocated code or read-only is text, allocated with bytes
+   ; is data, allocated without is bss
+   (bu-berk b)
+    (foldl (\ a sc (: fl (sc 3) sz (sc 5)
+                      (? ((fl & 2) = 0) a
+                         (0 < (fl & 4) || (fl & 1) = 0) [(a 0 + sz) (a 1) (a 2)]
+                         !(sc 2 = 8) [(a 0) (a 1 + sz) (a 2)]
+                         [(a 0) (a 1) (a 2 + sz)])))
+           [0 0 0] (bu-secs (bu-fs b) b))
+   (size-main as)
+    (: t? (elem "-t" as || elem "--totals" as)
+       bad (filter (w \ 1 < #w && w 0 = 45 && !(elem w '("-t" "--totals" "-B" "-d" "--format=berkeley"
+                                                        "--format=bsd" "--radix=10"))) as)
+       _ (? (two? bad) (udie 1 ("size: " + <bad + " is not here (the berkeley format, decimal, and -t)")) 0)
+       fs0 (filter (w \ !(1 < #w && w 0 = 45)) as)
+       fs (? (two? fs0) fs0 ["a.out"])
+       hd {0 0}
+       (row s nm)
+        (: _ (? (hd 0) 0 (: _ (pin hd 0 1) (puts "   text\t   data\t    bss\t    dec\t    hex\tfilename\n")))
+           d (s 0 + s 1 + s 2)
+           (puts (upad 7 (show (s 0)) + "\t" + upad 7 (show (s 1)) + "\t" + upad 7 (show (s 2)) + "\t"
+                  + upad 7 (show d) + "\t" + upad 7 (uradix d 16) + "\t" + nm + "\n")))
+       ; the status is the last trouble's: 1 a file not there, 3 one not an object
+       (add a s) [(a 0 + s 0) (a 1 + s 1) (a 2 + s 2) (? (0 < s 3) (s 3) (a 3))]
+       (bad c m) (: _ (say err ("size: " + m + "\n")) [0 0 0 c])
+       (one a f)
+        (: r (uread f)
+           (? !(two? r) (add a (bad 1 ("'" + f + "': No such file")))
+              (: b <>r ms (ar-mems b)
+                 (? (bu-elf? b) (: s (bu-berk b) _ (row s f) (add a (s + [0])))
+                    (two? ms)
+                     (foldl (\ a2 m (? (bu-elf? <>m) (: s (bu-berk <>m) _ (row s (<m + " (ex " + f + ")")) (add a2 (s + [0])))
+                                       (add a2 (bad 3 (<m + ": file format not recognized")))))
+                            a ms)
+                    (add a (bad 3 (f + ": file format not recognized")))))))
+       tot (foldl one [0 0 0 0] fs)
+       _ (? t? (row tot "(TOTALS)") 0)
+       _ (flush out)
+       (tot 3))
+
+   ; strip: the symbol table and the debugging sections out of an executable or a
+   ; shared object; -g the debugging alone, which is all a relocatable object may lose,
+   ; its relocations naming the symbols. what the loader maps stays where it lies; the
+   ; sections nothing maps move up behind it, under a new name table and header table
+   (bu-dbg? nm) (: (pre p) (#p <= #nm && snip nm 0 #p = p)
+                   (pre ".debug" || pre ".zdebug" || pre ".stab" || pre ".gnu.debuglto_" || pre ".line"))
+   (bu-strip b all?)                   ; -> the stripped bytes
+    (: fs (bu-fs b)
+       w64 (b 4 = 2)
+       secs (bu-secs fs b)
+       sx (ld-f fs b 0 'e-shstrx)
+       na (sc \ ((sc 3) & 2) = 0)
+       g0 (map (sc \ (<sc > 0) && na sc && ((all? && sc 2 = 2) || bu-dbg? (sc 1))) secs)
+       (linked-by i gs) (foldl (\ a sc (? (a || (sc 6 = i && gs <sc)) 1 0)) 0 secs)
+       (kept-link? i gs) (foldl (\ a sc (? (a || (sc 6 = i && !(gs <sc))) 1 0)) 0 secs)
+       g1 (map (sc \ (g0 <sc) || (sc 2 = 3 && na sc && !(<sc = sx)
+                                   && linked-by <sc g0 && !(kept-link? <sc g0))) secs)
+       gone (map (sc \ (g1 <sc) || ((sc 2 = 4 || sc 2 = 9) && na sc
+                                     && ((0 < sc 7 && sc 7 < #secs && g1 (sc 7))
+                                         || (0 < sc 6 && sc 6 < #secs && g1 (sc 6))))) secs)
+       keep (filter (sc \ !(gone <sc)) secs)
+       (? (#keep = #secs) b
+          (: map1 (foldl (\ t sc (pin t <sc #(keys t))) {} keep)
+             (nx i) (peep map1 i 0)
+             ehs (? w64 64 52)
+             phend (: po (ld-f fs b 0 'e-phoff) pn (ld-f fs b 0 'e-phnum) pe (ld-n fs 'ph-ent)
+                      (foldl (\ a k (: h (po + k * pe) (max a (ld-f fs b h 'ph-off + ld-f fs b h 'ph-fsz))))
+                             (? pn (po + pn * pe) 0) ^pn))
+             base (foldl (\ a sc (? (na sc || sc 2 = 8) a (max a (sc 4 + sc 5)))) (max ehs phend) keep)
+             ; the name table, each kept name once, in section order
+             nt (foldl (\ a sc (? (<sc = 0) a [(<a + sc 1 + string 0) (pin <>a <sc #<a)]))
+                       [(string 0) {}] keep)
+             names <nt noff <>nt
+             ; the unmapped sections laid behind the mapped bytes, the name table among them
+             lay (foldl (\ a sc (: al (max 1 (sc 8)) at (ld-align al <a)
+                                   body (? (<sc = sx) names
+                                           (sc 2 = 2 && !all?) (bu-symfix fs (snip b (sc 4) (sc 4 + sc 5)) nx)
+                                           (sc 2 = 8) "" (snip b (sc 4) (sc 4 + sc 5)))
+                                   (? (!(na sc) || <sc = 0) a
+                                      [(at + #body) (pin <>a <sc at)
+                                       (<>>a + [(ld-zeros (at - <a)) body])])))
+                        [base {} ()] keep)
+             shoff (ld-align (? w64 8 4) <lay)
+             offs <>lay
+             hdrs (map (sc \ (: h0 (sc 9)
+                                h1 (bu-put fs h0 'sh-name (peep noff <sc 0))
+                                h2 (: o (peep offs <sc -1) (? (o < 0) h1 (bu-put fs h1 'sh-off o)))
+                                h3 (? (<sc = sx) (bu-put fs h2 'sh-size #names) h2)
+                                h4 (? (0 < sc 6) (bu-put fs h3 'sh-link (nx (sc 6))) h3)
+                                (? ((sc 2 = 4 || sc 2 = 9 || 0 < (sc 3 & 64)) && 0 < sc 7)
+                                   (bu-put fs h4 'sh-info (nx (sc 7))) h4)))
+                       keep)
+             eh (bu-put fs (bu-put fs (bu-put fs (snip b 0 ehs) 'e-shoff shoff) 'e-shnum #keep)
+                        'e-shstrx (nx sx))
+             (foldl (\ a p (a + (? (string? p) p (foldl (\ s z (s + string z)) "" p))))
+                    ""
+                    ([eh (snip b ehs base)] + <>>lay + [(ld-zeros (shoff - <lay))] + hdrs)))))
+   (bu-symfix fs s nx)                 ; a kept symbol table's section numbers, renumbered
+    (: e (ld-n fs 'sy-ent) n (#s // e)
+       (go i acc)
+        (? (n <= i) acc
+           (: h (snip s (i * e) (i * e + e)) x (ld-f fs h 0 'sy-shndx)
+              (go (i + 1) (acc + (? (0 < x && x < 65280) (bu-put fs h 'sy-shndx (nx x)) h)))))
+       (go 0 ""))
+   (strip-main as)
+    (: dbg (foldl (\ a w (a || elem w '("-g" "-S" "-d" "--strip-debug"))) 0 as)
+       (go a o fs)
+        (? !(two? a) [o (rev fs)]
+           (: w <a
+              (? (w = "-o") (? (two? >a) (go >>a <>a fs) (udie 1 "strip: option requires an argument -- 'o'"))
+                 (elem w '("-g" "-S" "-d" "--strip-debug" "-s" "--strip-all" "--strip-unneeded" "-p" "--preserve-dates"))
+                  (go >a o fs)
+                 (1 < #w && w 0 = 45) (udie 1 ("strip: " + w + " is not here (-s -g -o -p)"))
+                 (go >a o (w . fs)))))
+       r (go as () ())
+       o <r fs <>r
+       p? (elem "-p" as || elem "--preserve-dates" as)
+       _ (? (two? fs) 0 (udie 1 "Usage: strip [-s|-g] [-p] [-o OUT] FILE.."))
+       _ (? (o && two? >fs) (udie 1 "strip: -o wants one input file") 0)
+       (warn m) (: _ (say err ("strip: " + m + "\n")) 1)
+       (one f)
+        (: rd (uread f)
+           (? !(two? rd) (warn ("'" + f + "': No such file"))
+              (: b <>rd
+                 (? !(bu-elf? b) (warn (f + ": file format not recognized"))
+                    (!dbg && (b 16 + 256 * b 17) = 1)
+                     (warn (f + ": a relocatable object keeps its symbols here (-g takes its debugging)"))
+                    (: out (bu-strip b !dbg)
+                       dst (? o o f)
+                       st (stat f)
+                       q (open dst "w")
+                       (? !(hot? q) (warn ("unable to write " + dst))
+                          (: _ (say q out) _ (close q)
+                             _ (? (two? st) (chmod dst (st 2 & 4095)) 0)
+                             _ (? (p? && two? st) (utime dst (st 1)) 0)
+                             0)))))))
+       (? (foldl (\ a f (max a (one f))) 0 fs) 1 0))
+
+   ; ranlib: an archive written again with its index, the index holo's own reader wants
+   (ranlib-main as)
+    (: fs (filter (w \ !(1 < #w && w 0 = 45)) as)
+       _ (? (two? fs) 0 (udie 1 "Usage: ranlib ARCHIVE.."))
+       (one f)
+        (: r (uread f)
+           (? !(two? r) (: _ (say err ("ranlib: '" + f + "': No such file\n")) 1)
+              (: ms (ar-mems <>r)
+                 (? (!(two? ms) && !(snip <>r 0 8 = "!<arch>\n"))
+                    (: _ (say err ("ranlib: " + f + ": file format not recognized\n")) 1)
+                    (: q (open f "w")
+                       (? (hot? q) (: _ (say q (arbytes ms)) _ (close q) 0)
+                          (: _ (say err ("ranlib: unable to write " + f + "\n")) 1)))))))
+       (? (foldl (\ a f (max a (one f))) 0 fs) 1 0))
+
    ; the registry: name -> main (aliases share)
    applets {'diff diff-main
             'nm nm-main
@@ -262,6 +441,7 @@
             'make (cite 'cook 'cook-main) 'cook (cite 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
+            'size size-main 'strip strip-main 'ranlib ranlib-main
             'objcopy (cite 'holo 'objcopy)   ; the applet is the function: love/holo/copy.l, module-side
             'cat cat-main 'tac tac-main 'echo echo-main
             'head head-main 'tail tail-main
@@ -310,6 +490,7 @@
             'html2text html2text-main   ; a page's prose (apps/kore/lens.l), the same lens
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
+            'nice nice-main 'renice renice-main 'stty stty-main 'truncate truncate-main
             'getopt getopt-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
             ; umount, sync, mkfifo and mknod are what a root the distro builds
@@ -317,11 +498,16 @@
             'chroot chroot-main 'mount mount-main 'umount umount-main
             'sync sync-main 'mkfifo mkfifo-main 'mknod mknod-main
             'whoami whoami-main 'groups groups-main
+            ; the host's utmp, read: kore keeps none of its own
+            'who who-main 'users users-main 'logname logname-main
             ; the archives: gz.l and tar.l register into `verbs` for love's own rail,
             ; and these rows are the same mains under kore's door. they sit in the cat
             ; ahead of this file, so the cite reads now
             'gzip (cite 'gzcmd 'gzip-main) 'gunzip (cite 'gzcmd 'gunzip-main)
             'zcat (cite 'gzcmd 'zcat-main)
+            'xz (cite 'xzcmd 'xz-main) 'unxz (cite 'xzcmd 'unxz-main)
+            'xzcat (cite 'xzcmd 'xzcat-main) 'unlzma (cite 'xzcmd 'unxz-main)
+            'lzcat (cite 'xzcmd 'xzcat-main)
             'tar (cite 'tarcmd 'tar-main) 'cpio (cite 'cpiocmd 'cpio-main)
             ; the byte tools, the clock's other face, and the four one-liners
             'dd dd-main 'xxd xxd-main 'strings strings-main 'hexdump hexdump-main 'hd hd-main
@@ -353,7 +539,7 @@
     'cat "usage: cat [FILE..]"
     'tac "usage: tac [FILE..]"
     'head "usage: head [-n N] [-c N] [-N] [FILE..]"
-    'tail "usage: tail [-n N] [-N] [FILE..]"
+    'tail "usage: tail [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwc] [FILE..]"
     'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
     'uniq "usage: uniq [-c] [FILE]"
@@ -432,6 +618,10 @@
     'vi "usage: vi [FILE]"
     'env "usage: env [-i] [-u NAME].. [NAME=VALUE].. [CMD [ARG..]]"
     'nohup "usage: nohup CMD [ARG..]"
+    'nice "usage: nice [-n N] [CMD [ARG..]]"
+    'renice "usage: renice [-n|--relative] PRIORITY [-p|-g|-u] ID.."
+    'stty "usage: stty [-F DEV] [-a|-g|SETTING..]"
+    'truncate "usage: truncate [-co] [-r RFILE] [-s [+-<>/%]SIZE] FILE.."
     'getopt "usage: getopt [-o SHORTS] [-l LONGS].. [-n NAME] [-aqQTu] [-s sh] [--] PARAMS  |  getopt SHORTS PARAMS"
     'printenv "usage: printenv [NAME..]"
     'sleep "usage: sleep N[smhd].."
@@ -439,6 +629,12 @@
     'mount "usage: mount [-t TYPE] [-o OPTS] SRC TGT   (or bare, to list)"
     'umount "usage: umount TARGET.."
     'whoami "usage: whoami"
+    'who "usage: who [-abdHlmpqrstTuw] [FILE | am i]"
+    'users "usage: users [FILE]"
+    'logname "usage: logname"
+    'size "usage: size [-t] [FILE..]"
+    'strip "usage: strip [-s|-g] [-p] [-o OUT] FILE.."
+    'ranlib "usage: ranlib ARCHIVE.."
     'groups "usage: groups"
     'ps "usage: ps [-e]"
     'top "usage: top [-b] [-n FRAMES] [-d SECS] [-p PID]..
@@ -476,13 +672,15 @@
     'tty "usage: tty"
     'clear "usage: clear"
     'hostname "usage: hostname"
-    ; the three archives keep their own screens: the cmd modules leak them off the same
+    ; the archives keep their own screens: the cmd modules leak them off the same
     ; bodyless letrec the mains come through, so the door shows what the tool would
     'cpio (cite 'cpiocmd 'cpioc-usage)
     'tar (cite 'tarcmd 'usage)
     'gzip (cite 'gzcmd 'gzc-help)
     'gunzip (cite 'gzcmd 'gzc-help)
-    'zcat (cite 'gzcmd 'gzc-help)}
+    'zcat (cite 'gzcmd 'gzc-help)
+    'xz (cite 'xzcmd 'xzc-help) 'unxz (cite 'xzcmd 'xzc-help) 'xzcat (cite 'xzcmd 'xzc-help)
+    'unlzma (cite 'xzcmd 'xzc-help) 'lzcat (cite 'xzcmd 'xzc-help)}
 
    ; echo, test and [ read no options at all -- posix says so, and a script writing
    ; `echo --help` means the word. cook and lush answer the flags themselves, each
@@ -525,6 +723,7 @@ every tool answers --help and --version, and -h where the letter is free
   ld A.o.. -o OUT    holo's static linker (-pie, -t x64|a64|rv64, -Ttext)
   objcopy -O F IN OUT   flatten a linked ELF: F is binary or ihex (Intel HEX)
   nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
+  size [-t] F.. | strip [-g] [-o OUT] F.. | ranlib A..   sizes, symbols out, the index in
   cat tac head tail wc sort uniq tee      the line tools (apps/kore/core.l)
   shuf [-rz] [-n N] [-e ARG.. | -i LO-HI | F]   the lines in a random order
   cut tr nl rev                           the field tools
@@ -545,12 +744,15 @@ every tool answers --help and --version, and -h where the letter is free
   find [PATH..] [EXPR]   -name -path -type f|d|l -print -prune -exec CMD.. \\;
                          ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
   env printenv sleep kill xargs nohup     the process tools (apps/kore/proc.l)
+  nice [-n N] CMD | renice PRIO [-pgu] ID..   the niceness, for a new command or running ones
+  stty [-F DEV] [-a|-g|SETTING..]         the terminal's line discipline, shown or set
   getopt -o SHORTS [-l LONGS] -- PARAMS   options parsed and quoted for `eval set --`
   chroot DIR [CMD [ARG..]]                the root changed, then CMD in it
   mount [-t TYPE] [-o OPTS] SRC TGT       ... or bare, to list /proc/self/mounts
   umount TGT.. | sync                     ... and the two that undo and settle it
   mkfifo [-m MODE] NAME.. | mknod [-m MODE] NAME p|b|c|u [MAJOR MINOR]
   whoami | groups | arch | nproc          the four one-line answers
+  who [-abdHlmqTu] | users | logname      the host's utmp, read
   ps [-e] | free [-m|-g] | uptime         what /proc says about the machine
   top [-b] [-n N] [-d SECS] [-p PID]      the process table, repainted
   pidof NAME.. | pgrep [-fx] PAT          .. and about who is running
@@ -568,8 +770,10 @@ every tool answers --help and --version, and -h where the letter is free
   install readlink cmp                         ... the build's fs verbs
   realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
   stat [-c FMT] | du [-sabhc] | df [-hia] | chown | chgrp | mktemp   ... and what they report
+  truncate [-co] [-r RF] [-s [+-<>/%]N] F..    ... and a file's size, set
   echo seq yes true false basename dirname     ... and the trivia
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
+  xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (apps/xz.l)
   tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive (apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out

@@ -100,4 +100,23 @@ for c in "0 a -ef h" "0 a -ef s" "1 a -ef b" "1 a -ef none" "0 a -nt old" "1 old
   [ "$k" = "${c%% *}" ] || fail "kore test ${c#? } (got $k, want ${c%% *})"
 done
 (cd "$T" && "$K" kore [ a -ef h ]) || fail "kore [ a -ef h ]"
-echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp) ok"
+# truncate: each size form against GNU's where there is one, else the sizes written out;
+# -c makes no file, and GNU's refusals come back as 1
+T2=$HO/.trunc; rm -rf "$T2"; mkdir "$T2"
+for v in "-s 5" "-s +5" "-s -3" "-s -100" "-s <4" "-s >40" "-s /5" "-s %5" "-s 2K" "-s 1KB" \
+         "-r $T2/ref" "-r $T2/ref -s +2" "-o -s 1"; do
+  printf 'hello world\n' > "$T2/f"; printf 0123456789 > "$T2/ref"
+  korerun truncate $v "$T2/f" || fail "kore truncate $v"
+  k=$(wc -c < "$T2/f")
+  if command -v truncate >/dev/null 2>&1; then
+    printf 'hello world\n' > "$T2/f"; truncate $v "$T2/f"
+    [ "$k" -eq "$(wc -c < "$T2/f")" ] || fail "kore truncate $v vs GNU ($k)"
+  fi
+done
+printf 'hello world\n' > "$T2/f"; korerun truncate -s %5 "$T2/f"; [ "$(wc -c < "$T2/f")" -eq 15 ] || fail "kore truncate -s %5"
+korerun truncate -c -s 7 "$T2/none"; [ ! -e "$T2/none" ] || fail "kore truncate -c made a file"
+korerun truncate -s 9 "$T2/new"; [ "$(wc -c < "$T2/new")" -eq 9 ] || fail "kore truncate made the file"
+for v in "" "-s 5" "-s abc $T2/f" "-s /0 $T2/f" "-r $T2/ref -s 3 $T2/f"; do
+  korerun truncate $v 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore truncate $v is 1 (got $r)"
+done
+echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate) ok"

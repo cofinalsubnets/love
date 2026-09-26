@@ -129,6 +129,8 @@ struct _IO_FILE {
 #define NR_fb_getrusage     117
 #define NR_fb_getrlimit     194
 #define NR_fb_setrlimit     195   /* the first two timevals agree, which is all a caller reads */
+#define NR_fb_getpriority   100   /* the nice itself, where linux answers 20 - nice */
+#define NR_fb_setpriority    96
 #define NR_fb_kill           37
 #define NR_fb_fcntl          92
 #define NR_fb_fsync          95
@@ -262,6 +264,8 @@ struct _IO_FILE {
 #define NR_getrusage      165
 #define NR_getrlimit      163
 #define NR_setrlimit      164
+#define NR_getpriority    141
+#define NR_setpriority    140
 #define NR_statx          291
 #define NR_statfs          43
 #define NR_fstatfs         44
@@ -311,6 +315,8 @@ struct _IO_FILE {
 #define NR_getrusage       98
 #define NR_getrlimit       97
 #define NR_setrlimit      160
+#define NR_getpriority    140
+#define NR_setpriority    141
 #define NR_statx          332
 #define NR_statfs         137
 #define NR_fstatfs        138
@@ -502,6 +508,7 @@ struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 spe
 };
 extern void __ai_fbstat(struct __fb_stat const *f, struct stat *st);   /* fstat.c's, shared by the stat trio */
 extern void __ai_tiofb(struct termios const *t, struct __fb_termios *f);   /* os.c's termios rows */
+extern void __ai_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur);
 extern void __ai_tiocan(struct __fb_termios const *f, struct termios *t);
 
 /* ---- the third kernel: netbsd (rung UV4). the classic BSD band matches
