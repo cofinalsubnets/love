@@ -8,7 +8,7 @@
 ;   kore as tgt in out   assemble IR forms from in (x64|a64) into an ELF at out
 ;   kore objcopy -O binary|ihex in out   a linked ELF flattened (love/holo/copy.l)
 ;   kore nm [-gup] file..   an ELF's symbols, nm's three columns (love/holo/link.l)
-;   kore cat|tac|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
+;   kore cat|tac|shuf|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   kore cut|tr|nl|rev|paste|comm|join|split|od   the line, field and record tools
 ;                                                 (apps/kore/core.l)
 ;   kore fold|expand|unexpand        the column tools (a tab steps to the next stop)
@@ -67,7 +67,7 @@
         mv-main myers nl-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main readlink-main realpath-main rebre refind refold
-        rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main sleep-main
+        rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main shuf-main sleep-main
         sort-main sparse split-main srun stat-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
         touch-main lift-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
@@ -265,7 +265,7 @@
             'objcopy (cite 'holo 'objcopy)   ; the applet is the function: love/holo/copy.l, module-side
             'cat cat-main 'tac tac-main 'echo echo-main
             'head head-main 'tail tail-main
-            'wc wc-main 'sort sort-main
+            'wc wc-main 'sort sort-main 'shuf shuf-main
             'uniq uniq-main 'tee tee-main
             'seq seq-main 'yes yes-main
             'true true-main 'false false-main
@@ -354,6 +354,7 @@
     'wc "usage: wc [-lwc] [FILE..]"
     'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
     'uniq "usage: uniq [-c] [FILE]"
+    'shuf "usage: shuf [-rz] [-n N] [-o F] [FILE]  |  shuf -e [ARG..]  |  shuf -i LO-HI"
     'tee "usage: tee [-a] [FILE..]"
     'seq "usage: seq [FIRST [INCR]] LAST"
     'yes "usage: yes [WORD..]"
@@ -386,8 +387,8 @@
     'sha256sum "usage: sha256sum [-c] [FILE..]"
     'ls "usage: ls [-aACdlrtx1] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
-    'cp "usage: cp [-f] [-p] SRC DST"
-    'mv "usage: mv [-f] SRC DST"
+    'cp "usage: cp [-f] [-p] [-r] SRC.. DST"
+    'mv "usage: mv [-f] SRC.. DST"
     'rm "usage: rm [-r] [-f] FILE.."
     'mkdir "usage: mkdir [-p] DIR.."
     'rmdir "usage: rmdir DIR.."
@@ -515,6 +516,7 @@ every tool answers --help and --version, and -h where the letter is free
   objcopy -O F IN OUT   flatten a linked ELF: F is binary or ihex (Intel HEX)
   nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
   cat tac head tail wc sort uniq tee      the line tools (apps/kore/core.l)
+  shuf [-rz] [-n N] [-e ARG.. | -i LO-HI | F]   the lines in a random order
   cut tr nl rev                           the field tools
   dos2unix | unix2dos | mac2unix [-fkqn] [F..]   the line endings, converted IN PLACE
   fold [-w N] [-s] [-b] | expand [-t N] [-i] | unexpand [-a] [-t N]   the columns
