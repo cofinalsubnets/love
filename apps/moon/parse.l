@@ -348,6 +348,7 @@
    ; -- the type floor rides apps/moon/floor.l (shapes, sizes, the typing door), read from
    ; gen too. ps carries the two things it takes as parameters: the word and the tag table --
    (pst32? ps) (elem (peep ps 'tgt ()) '(thumb2 thumb2sp thumb1))
+   (pw64 ps) !(pst32? ps)                          ; is long 8 bytes? the const folder's one question
    (psword ps) (? (pst32? ps) 4 8)
    (szty ps) (? (pst32? ps) 'uint 'ulong)          ; size_t: sizeof folds wear this coat
    (tsz ps ty) (tysz (psword ps) (ps 'stag) ty)
@@ -371,7 +372,7 @@
            (<b = 'deref)
             (: c <>b
                (? !(two? c && (<c = 'cast)) ()
-                  (: ty <>c v (cfold <>>c)
+                  (: ty <>c v (cfold (pw64 ps) <>>c)
                      (? (ptr? ty && charm? v && (v = 0)) [0 <>ty] ()))))
            (<b = 'dot)
             (: gr (ground <>b)
@@ -385,15 +386,15 @@
         (? !(two? x) ()
            ((<x = 'cast) && ptr? <>x)
             (: ty <>x
-               v (cfold <>>x)
+               v (cfold (pw64 ps) <>>x)
                (? (charm? v) [v (tsz ps <>ty)] ()))
            ((<x = 'bin) && (= <>x '+))
             (: pa (pval <>>x)
                (? (two? pa)
-                  (: n (cfold <>>>x) (? (charm? n) [(<pa + (* n <>pa)) <>pa] ()))
+                  (: n (cfold (pw64 ps) <>>>x) (? (charm? n) [(<pa + (* n <>pa)) <>pa] ()))
                   (: pb (pval <>>>x)
                      (? !(two? pb) ()
-                        (: n (cfold <>>x) (? (charm? n) [(<pb + (* n <>pb)) <>pb] ()))))))
+                        (: n (cfold (pw64 ps) <>>x) (? (charm? n) [(<pb + (* n <>pb)) <>pb] ()))))))
            ; a null-grounded array member decays to its (constant) address with
            ; the element stride -- &((T*)0)->ts[i] (musl's ioctl compat table)
            (<x = 'dot)
@@ -415,7 +416,7 @@
    ; a null pointer constant (C11 6.3.2.3p3): an integer constant expression folding to 0,
    ; with or without a cast to a pointer type -- cfold folds through a cast whose target is
    ; not an integer type, so both spellings arrive here as 0
-   (npc? e) (: v (cfold e) (? (cint? v && (v = 0)) 1 ()))
+   (npc? e) (: v (cfold 1 e) (? (cint? v && (v = 0)) 1 ()))
    (ptype ps e)
     (? !(two? e) ()
        (: k <e
@@ -509,7 +510,7 @@
                                ((peekp t2 "*") && peekp >t2 "]") (adims ps >>t2 (0 . acc))
                                (: er (thenw (pexpr ps t2) "]")
                                   (? !(two? er) ()
-                                     (: dv (cfold <er)
+                                     (: dv (cfold (pw64 ps) <er)
                                         (? (charm? dv) (adims ps <>er (dv . acc))
                                            (adims ps <>er (['vdim <er] . acc)))))))))
    ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3);
@@ -597,7 +598,7 @@
    (pbits ps ts) (? !(peekp ts ":") ()
                     (: er (pasn ps >ts)
                        (? !(two? er) ()
-                          (: cv (cfold <er) (? (charm? cv) [cv <>er] ())))))
+                          (: cv (cfold (pw64 ps) <er) (? (charm? cv) [cv <>er] ())))))
    ; the extensions ride the `moon` dialect -- ours, and the default. `-std=c` is the fence.
    (moon? ps) (= (peep ps 'dia 'moon) 'moon)
    ; a label is an identifier then `:` -- and not `::`, which nothing here spells but a
@@ -814,7 +815,7 @@
                               vr (? (peekp ts5 "=")
                                     (: er (pasn ps >ts5)              ; = const-expr: fold it (enum consts, 1<<n, A+1) -- not just a literal
                                        (? !(two? er) ()
-                                          (: cv (cfold <er)
+                                          (: cv (cfold (pw64 ps) <er)
                                              ; a sun-sized enumerator is still a number, and gcc
                                              ; widens the underlying type rather than refusing
                                              (? (cint? cv) [cv <>er] ()))))
@@ -1129,7 +1130,7 @@
               (: r1 (want >ts "(")
                  ra (? (two? r1) (pasn ps r1) ())
                  rest (? (two? ra) (want <>ra ")") ())
-                 (? (two? rest) [['num (? (charm? (cfold <ra)) 1 0)] rest] ()))
+                 (? (two? rest) [['num (? (charm? (cfold (pw64 ps) <ra)) 1 0)] rest] ()))
              ; __builtin_object_size(p,t) and the dynamic spelling: the answer gcc gives when
              ; it cannot see the object -- (size_t)-1 for types 0/1, 0 for 2/3, the conservative
              ; end both ways, which is what the kernel's fortify checks read to stand down
@@ -1140,7 +1141,7 @@
                  r2 (? (two? ra) (want <>ra ",") ())
                  rb (? (two? r2) (pasn ps r2) ())
                  rest (? (two? rb) (want <>rb ")") ())
-                 tv (? (two? rb) (cfold <rb) ())
+                 tv (? (two? rb) (cfold (pw64 ps) <rb) ())
                  (? !(two? rest) ()
                     [['cast (szty ps) ['num (? (charm? tv && 1 < tv) 0 -1)]] rest]))
              ; __builtin_choose_expr(c,a,b): c must fold, the unchosen arm is parsed and
@@ -1153,7 +1154,7 @@
                  r3 (? (two? ra) (want <>ra ",") ())
                  rb (? (two? r3) (pasn ps r3) ())
                  rest (? (two? rb) (want <>rb ")") ())
-                 cv (? (two? rc) (cfold <rc) ())
+                 cv (? (two? rc) (cfold (pw64 ps) <rc) ())
                  (? !(two? rest) ()
                     !(charm? cv) (blame r1 "__builtin_choose_expr wants a constant condition")
                     [(? (cv = 0) <rb <ra) rest]))
@@ -1381,7 +1382,7 @@
        ; image as constants (globals demand it, a local loses nothing)
        (: r (pasn ps ts)
           (? !(two? r) ()
-             (: e <r v (cfold e)
+             (: e <r v (cfold (pw64 ps) e)
                 (? (cint? v) [['num v] <>r]            ; cint?: a sun-sized fold (max-charm's image) is still a number
                    ((<e = 'un) &&
                     (<>e = 'neg) && (<<>>e = 'flo))
@@ -1454,13 +1455,13 @@
            (? !(two? er) ()
               (peekp <>er "...")                     ; gcc's range designator: one item per index
                (: e2 (thenw (pexpr ps ><>er) "]")
-                  n (cfold <er)
-                  m (? (two? e2) (cfold <e2) ())
+                  n (cfold (pw64 ps) <er)
+                  m (? (two? e2) (cfold (pw64 ps) <e2) ())
                   (? !(two? e2) ()
                      !(charm? n && charm? m) ()
                      (pdesigs ps <>e2 (['r n m] . acc))))
               (: r2 (want <>er "]")
-                 n (cfold <er)
+                 n (cfold (pw64 ps) <er)
                  (? !(two? r2) () (charm? n) (pdesigs ps r2 (['i n] . acc)) ()))))
        !(two? acc) ()
        (: r (want ts "=")
@@ -1505,103 +1506,99 @@
           (? (two? v) [[[() <v]] <>v] ())))
 
    ; a constant-expression folder: an integer | () when the expression is not a compile-time
-   ; constant (sizeof/enum already folded to num). values are 64-bit machine patterns, love's
-   ; shifts and bitops wrapping at the word; a narrow cast masks to its width, sign-extending
-   ; the signed ones, and >> under an unsigned left goes logical via mask, so (uintptr_t)-1 >> 2
-   ; is max-charm, not -1. uext? reads that unsignedness: an unsigned cast, or a bin under one.
+   ; constant (sizeof/enum already folded to num). it folds C's way, each value in its type
+   ; (cfty): operands meet at the usual arithmetic conversions (puac), so -1 < 1u is 0 and
+   ; -6 / 3u divides unsigned, and every result wraps to its type's width. w64: long is 8
+   ; bytes. the answer is the value in its type: an unsigned one never negative.
    (cint? x) (charm? x || sun? x)
-   (uext? e) (? !(two? e) ()
-                (<e = 'cast) (elem <>e '(uchar ushort uint ulong ullong))
-                (<e = 'bin) (uext? <>>e)
-                ())
-   ; the folder carries no types, so it reads them off the casts the literal lane emits (`1u`
-   ; is ('cast 'uint ..)), which answers the one question here: is this expression's C type
-   ; `unsigned int`, whose `+ - * <<` must wrap at 32 bits where a love integer keeps growing?
-   ; it is, when a uint reaches the root and nothing 64-bit does. everything else folds unbounded.
-   (w64c? e) (? !(two? e) ()
-                (<e = 'cast) (elem <>e '(long ulong llong ullong))
-                (<e = 'bin) (w64c? <>>e || w64c? <>>>e)
-                (<e = 'un) (w64c? <>>e)
-                ())
-   (uic? e) (? !(two? e) ()
-               (<e = 'cast) (= <>e 'uint)
-               (<e = 'bin) (uic? <>>e || uic? <>>>e)
-               (<e = 'un) (uic? <>>e)
-               ())
-   (u32w e v) (? (uic? e && !(w64c? e)) (v & 4294967295) v)
+   (ity? ty) (elem ty '(bool char uchar short ushort int uint long ulong llong ullong i128 u128))
+   (tbits w64 ty) (ty @ 'bool 1 ('char || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
+                        ('long || 'ulong) (w64 ? 64 32) ('i128 || 'u128) 128 64)
+   ; v as a value of ty (C11 6.3.1.3): an unsigned type is v modulo its width, a signed one
+   ; that residue re-signed, _Bool a compare with 0
+   (wrapt w64 ty v)
+    (? (ty = 'bool) (v = 0 ? 0 1)
+       (: n (tbits w64 ty) m (v & ((2 ** n) - 1))
+          (? (tusg? ty || m < (2 ** (n - 1))) m (m - (2 ** n)))))
+   ; a literal is an int where it fits, else the long that holds it (ilp32 spells one past int llong)
+   (numt w64 n) (? (-2147483648 <= n && n <= 2147483647) 'int
+                   w64 (n < (2 ** 63) ? 'long 'ulong)
+                   (n < (2 ** 63) ? 'llong 'ullong))
    ; a const float expression -> its gem | 'bad, for the one place cfold needs one. gen.l's
    ; ffold is the image-time twin; both stand on love's own doubles, which are the target's.
-   (fcfold e)
+   (fcfold w64 e)
     (? !(two? e) 'bad
-       (: iv (cfold e)
+       (: iv (cfold w64 e)
           (? (cint? iv) (0.0 + iv)
              (<e = 'flo) (0.0 + <>e)
-             (<e = 'cast) (? (elem <>e '(double float)) (fcfold <>>e) 'bad)
-             (<e = 'un) (: v (fcfold <>>e)
+             (<e = 'cast) (? (elem <>e '(double float)) (fcfold w64 <>>e) 'bad)
+             (<e = 'un) (: v (fcfold w64 <>>e)
                            (? (= v 'bad) 'bad (<>e = 'neg) (0.0 - v) 'bad))
              (<e = 'bin)
-              (: op <>e a (fcfold <>>e) b (fcfold <>>>e)
+              (: op <>e a (fcfold w64 <>>e) b (fcfold w64 <>>>e)
                  (? (= a 'bad || (= b 'bad)) 'bad
                     (op = '+) (a + b) (op = '-) (a - b) (op = '*) (* a b)
                     (op = '/) (? (b = 0.0) 'bad (a / b))
                     'bad))
              'bad)))
-   (cfold e)
-    (? !(two? e) ()
-       (<e = 'num) <>e
-       (<e = 'bin)
-        (: op <>e a (cfold <>>e) b (cfold <>>>e)
-           (? (!(cint? a) || !(cint? b)) ()
-              (op = '+) (u32w e (a + b)) (op = '-) (u32w e (a - b)) (op = '*) (u32w e (* a b))
-              (op = '/) (? (b = 0) () (// a b)) (op = '%) (? (b = 0) () (a - (* (// a b) b)))
-              (op = 'eq) (? (a = b) 1 0) (op = 'ne) (? (a = b) 0 1)
-              (op = 'lt) (? (a < b) 1 0) (op = 'le) (? (a <= b) 1 0)
-              (op = 'gt) (? (b < a) 1 0) (op = 'ge) (? (b <= a) 1 0)
-              (op = '&) (a & b) (op = '|) (a | b) (op = '^) (a ^ b)
-              ; shl multiplies by 2^b (the church exponent): love's << wraps at the word and a
-              ; u128 constant must fold exact, so a bignum result rides and charm?/cint? decide
-              (op = 'shl) (? ((0 <= b) && (b <= 256)) (u32w e (* a (b 2))) ())
-              (op = 'shr) (? (uext? <>>e) (& (a >> b) ((<< 1 (64 - b)) - 1)) (a >> b))
-              ()))
-       (<e = 'un)
-        (: v (cfold <>>e)
-           (? !(cint? v) () (<>e = 'neg) (0 - v)
-              (<>e = 'not) (? (v = 0) 1 0) (<>e = 'bnot) ((0 - v) - 1) ()))
-       (<e = 'cast)
-        (: ty <>e
-           v0 (cfold <>>e)
-           ; C11 6.6p6: a cast to an integer type may take a float constant -- an array dim is
-           ; where it matters, since an unfoldable one reads as a VLA in silence. the integer
-           ; roster has to be spelled: a cast to `double` takes the same fold and keeps its fraction.
-           v (? (cint? v0 || !(elem ty '(bool char uchar short ushort int uint
-                                            long ulong llong ullong))) v0
-                (: f (fcfold <>>e)
-                   (? (= f 'bad) v0
-                      (ty = 'bool) (? (f = 0.0) 0 1)   ; to _Bool is a compare, never a truncation
-                      (ceil (f // 1)))))              ; and every other one truncates toward zero
-           (? !(cint? v) v                          ; non-integer / non-const: fold through
-              (ty = 'bool) (? (v = 0) 0 1)          ; conversion to _Bool compares with 0 (C11 6.3.1.2)
-              (ty = 'uchar) (v & 255)
-              (ty = 'ushort) (v & 65535)
-              (ty = 'uint) (v & 4294967295)
-              (elem ty '(char short int))
-               (: w (? (ty = 'char) 8 (ty = 'short) 16 32)
-                  r (& v ((1 << w) - 1))
-                  (? (r < (<< 1 (w - 1))) r (r - (1 << w))))
-              v))                                   ; word-sized: the pattern is the value
-       ; land/lor are 3-element ('land l r), so l=<>e r=<>>e, not the 4-element bin accessors;
-       ; truthiness is != 0, not > 0 -- a negative operand is true in C (-1 && 1 == 1).
-       (<e = 'land) (: a (cfold <>e) b (cfold <>>e)
-                            (? (!(cint? a) || !(cint? b)) () (? (!(a = 0) && !(b = 0)) 1 0)))
-       (<e = 'lor) (: a (cfold <>e) b (cfold <>>e)
-                           (? (!(cint? a) || !(cint? b)) () (? (!(a = 0) || !(b = 0)) 1 0)))
-       ; ternary ('cond c a b): fold only the selected arm (C11 6.6) -- the dead arm need not
-       ; be constant or even defined (1 ? 0 : 1/0 is a valid constant expression).
-       (<e = 'cond) (: c (cfold <>e)
-                            (? !(cint? c) ()
-                               (: v (? (c = 0) (cfold <>>>e) (cfold <>>e))
-                                  (? (cint? v) v ()))))
-       ())
+   (cfold w64 e) (: r (cfty w64 e) (? (two? r) <r ()))
+   ; e -> (value type) | (), the value canonical in its type
+   (cfty w64 e)
+    (: (wr ty v) [(wrapt w64 ty v) ty]
+       (? !(two? e) ()
+          (<e = 'num) (? (cint? <>e) [<>e (numt w64 <>e)] ())
+          (<e = 'bin)
+           (: op <>e ra (cfty w64 <>>e) rb (cfty w64 <>>>e)
+              (? (!(two? ra) || !(two? rb)) ()
+                 (elem op '(shl shr))                   ; the left operand's promoted type; the count is a count
+                  (: ty (pprom <>ra) a (wrapt w64 ty <ra) b <rb
+                     (? !(0 <= b && b <= 256) ()
+                        (op = 'shl) (wr ty (a * (2 ** b)))
+                        (wr ty (a >> b))))
+                 (: ty (puac w64 <>ra <>rb)
+                    a (wrapt w64 ty <ra) b (wrapt w64 ty <rb)
+                    (op @ '+ (wr ty (a + b)) '- (wr ty (a - b)) '* (wr ty (a * b))
+                          '/ (? (b = 0) () (wr ty (// a b)))
+                          '% (? (b = 0) () (wr ty (a - (* (// a b) b))))
+                          '& (wr ty (a & b)) '| (wr ty (a | b)) '^ (wr ty (a ^ b))
+                          'eq [(a = b ? 1 0) 'int] 'ne [(a = b ? 0 1) 'int]
+                          'lt [(a < b ? 1 0) 'int] 'le [(a <= b ? 1 0) 'int]
+                          'gt [(b < a ? 1 0) 'int] 'ge [(b <= a ? 1 0) 'int]
+                          ()))))
+          (<e = 'un)
+           (: r (cfty w64 <>>e)
+              (? !(two? r) ()
+                 (: ty (pprom <>r) v (wrapt w64 ty <r)
+                    (<>e @ 'neg (wr ty (0 - v)) 'bnot (wr ty ((0 - v) - 1))
+                           'not [(v = 0 ? 1 0) 'int] ()))))
+          (<e = 'cast)
+           (: ty <>e r (cfty w64 <>>e)
+              ; C11 6.6p6: a cast to an integer type may take a float constant -- an array dim is
+              ; where it matters, since an unfoldable one reads as a VLA in silence. a cast to
+              ; `double` takes the same fold and keeps its fraction
+              (? (two? r) (? (ity? ty) (wr ty <r)
+                             (ptr? ty) (wr (w64 ? 'ulong 'uint) <r)
+                             r)                       ; a type this fold does not know: the value rides
+                 !(ity? ty) ()
+                 (: f (fcfold w64 <>>e)
+                    (? (= f 'bad) ()
+                       (ty = 'bool) [(f = 0.0 ? 0 1) 'bool]   ; to _Bool is a compare, never a truncation
+                       (wr ty (ceil (f // 1)))))))           ; and every other one truncates toward zero
+          ; land/lor are 3-element ('land l r); truthiness is != 0 (-1 && 1 == 1)
+          (elem <e '(land lor))
+           (: a (cfty w64 <>e) b (cfty w64 <>>e)
+              (? (!(two? a) || !(two? b)) ()
+                 (<e = 'land) [(!(<a = 0) && !(<b = 0) ? 1 0) 'int]
+                 [(!(<a = 0) || !(<b = 0) ? 1 0) 'int]))
+          ; ('cond c a b): only the selected arm need be constant (C11 6.6: 1 ? 0 : 1/0 is one);
+          ; when the other folds too, the arms meet at their common type
+          (<e = 'cond)
+           (: c (cfty w64 <>e)
+              (? !(two? c) ()
+                 (: r (? (<c = 0) (cfty w64 <>>>e) (cfty w64 <>>e))
+                    o (? (<c = 0) (cfty w64 <>>e) (cfty w64 <>>>e))
+                    (? !(two? r) () !(two? o) r (wr (puac w64 <>r <>o) <r)))))
+          ()))
    ; _Static_assert ( const-expr [, "message"] ) ; -> (('tdef) rest) | () -- an assertion that
    ; folds to false fails the compile, a non-constant one is let by. the message is optional
    ; (C23), so a `)` where the comma would be is the short form, not a refusal.
@@ -1615,7 +1612,7 @@
        ; peek for the `;`, then take the tail: want answers the remainder, () when the matched
        ; token was the last one -- a TU that is only an assert would read as no `;` found
        (? !(two? r4 && peekp r4 ";") ()
-          (: v (cfold <re)
+          (: v (cfold (pw64 ps) <re)
              (? (charm? v && (v <= 0)) () ['(tdef) >r4]))))
    (sassert? ts) (two? ts && idv? <ts "_Static_assert")
 
@@ -1886,13 +1883,13 @@
              (tkw? t 'case)
               (: rv (pexpr ps >ts)
                  (? !(two? rv) ()
-                    (: v (cfold <rv)
+                    (: v (cfold (pw64 ps) <rv)
                        (crange lo hi acc) (? (hi < lo) (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
                        (? !(charm? v) ()
                           (peekp <>rv "...")
                            (: r2 (pexpr ps ><>rv)
                               (? !(two? r2) ()
-                                 (: hi (cfold <r2)
+                                 (: hi (cfold (pw64 ps) <r2)
                                     rest (want <>r2 ":")
                                     (? !(charm? hi) ()
                                        !(two? rest) ()

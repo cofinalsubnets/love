@@ -1354,7 +1354,7 @@
    ; memcpy/memset with a small constant size lay straight-line, by name (declining where a local
    ; shadows it or the fn is the library's own). no memmove: bcopy interleaves loads and stores
    (meminl g) (8 * wsize g)                          ; the widest expansion: 8 words either way
-   (memk g e) (: k (knum g e) (? (two? k) <k (: v (cfold e) (cint? v ? v ()))))
+   (memk g e) (: k (knum g e) (? (two? k) <k (: v (cfold !(t32? g) e) (cint? v ? v ()))))
    (memnm? bi nm) (bi = nm || bi = "__builtin_" + nm)
    (memok? g env bi args)                            ; may this call expand at all?
     ((3 = #args) && !(abl? g 'meminl) && (bad? (vent g env bi)) && !(g 'fn = bi))
@@ -2343,7 +2343,7 @@
               (flo? tgt && d128? (vty r))
                ; (double) of a wide value: a constant expression only, folded exactly (love's + rounds a big correctly);
                ; there is no runtime lane, and the discarded emission r is pure
-               (: v (cfold x)
+               (: v (cfold !(t32? g) x)
                   (? (cint? v) (mkv 'double 'r0 [['li 'r0 (fbits (0.0 + v))] '(movqxr f0 r0)])
                      'bad))
               (d128? tgt && flo? (vty r))                                 ; double -> wide: not carried
@@ -3032,7 +3032,7 @@
    (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width
     (rotty g env e @ 'uint 32 ('ulong || 'ullong) 64)
    (rotk g e)                                       ; a count as a number: knum, then the const fold
-    (: k (knum g e) (two? k ? <k (cfold e)))
+    (: k (knum g e) (two? k ? <k (cfold !(t32? g) e)))
    (rotc? g w big n)                                ; big reads (W - n), n pure and shared
     (big @ ('bin '- wide sub)
              (: kb (rotk g wide)
