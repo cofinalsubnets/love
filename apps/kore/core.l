@@ -599,6 +599,18 @@
           (op = "-r") (0 < (& m 292))
           (op = "-w") (0 < (& m 146))
           (0 < (& m 73))))
+   ; -ef is one file (dev and ino, stat following links); -nt/-ot compare the mtime to the
+   ; nanosecond, and a file that is not there is older than one that is. a stat tail too
+   ; short to carry dev and ino (the kernel's) makes -ef a bad expression, not a guess
+   (t-rel a op b)                              ; a bit, or 'no if op is not one
+    (: x (stat a) y (stat b)
+       (at s) [(s 1) (s 3)]
+       (? (op = "-ef") (? (!(two? x) || !(two? y)) 0
+                          (tally x < 12 || tally y < 12) 'no
+                          (x 8 = y 8 && x 11 = y 11))
+          (op = "-nt") (? !(two? x) 0 !(two? y) 1 (at y < at x))
+          (op = "-ot") (? !(two? y) 0 !(two? x) 1 (at x < at y))
+          'no))
    (t-not v) (? (= v 'no) 'no !v)
    (t-eval as)                                 ; a bit, or 'no for a malformed expression
     (: n (tally as)
@@ -613,6 +625,7 @@
           (3 = n) (: a <as op <>as b <>>as
                      (? (op = "=") (a = b)
                         (op = "!=") !(a = b)
+                        (elem op '("-ef" "-nt" "-ot")) (t-rel a op b)
                         !(elem op t-nops) 'no
                         (: x (t-int a) y (t-int b)
                            (? (!(two? x) || !(two? y)) 'no

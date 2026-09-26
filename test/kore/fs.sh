@@ -82,4 +82,16 @@ if [ "$(stat -c %d /tmp 2>/dev/null)" != "$(stat -c %d "$P" 2>/dev/null)" ]; the
   korerun mv /tmp/.kore-xdev "$P/xdev" && [ -f "$P/xdev" ] && [ ! -e /tmp/.kore-xdev ] \
     || fail "kore mv cross-device"
 fi
-echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link) ok"
+# test's file relations: -ef is one file through a hard or a soft link, -nt/-ot the
+# mtime, and a file that is not there the older of the two. the answers are GNU's, spelled
+# out, since under lush the `test` beside this one may be kore's own
+T=$P/rel; mkdir "$T"; : > "$T/old"; sleep 1; printf 'a\n' > "$T/a"; printf 'b\n' > "$T/b"
+ln "$T/a" "$T/h"; ln -s a "$T/s"
+for c in "0 a -ef h" "0 a -ef s" "1 a -ef b" "1 a -ef none" "0 a -nt old" "1 old -nt a" \
+         "0 a -nt none" "1 none -nt a" "0 old -ot a" "1 a -ot old" "0 none -ot a" \
+         "1 a -ot none" "0 ! a -ef b"; do
+  (cd "$T" && eval "$K kore test ${c#? }"); k=$?
+  [ "$k" = "${c%% *}" ] || fail "kore test ${c#? } (got $k, want ${c%% *})"
+done
+(cd "$T" && "$K" kore [ a -ef h ]) || fail "kore [ a -ef h ]"
+echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test) ok"
