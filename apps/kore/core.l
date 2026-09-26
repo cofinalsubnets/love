@@ -919,8 +919,13 @@
        n (tally src)
        ; the reading as kxlat's table: image, then mode -- 0 dropped, 1 written, 2
        ; written unless it repeats. -s squeezes what SET1 names when it stands alone
-       ; and what SET2 names beside a translation, which is how GNU reads the pair
-       tbl (? d? (ktable (\ c [c (? (in? c) 0 1)]))
+       ; and what SET2 names beside a translation, which is how GNU reads the pair.
+       ; -ds deletes SET1 and squeezes SET2, so -d takes a SET2 only beside -s
+       _ (? !d? ()
+            (s? && !(two? two)) (udie 1 "tr: -ds wants SET2, the charms to squeeze")
+            (!s? && two? two) (udie 1 ("tr: extra operand " + <>rest))
+            ())
+       tbl (? d? (ktable (\ c [c (? (in? c) 0 (s? && peep twot c 0) 2 1)]))
               (!(two? two) && !s?) (udie 2 "tr: SET2 wanted")
               !(two? two) (ktable (\ c [c (? (in? c) 2 1)]))
               (ktable (\ c (: v (image c) [v (? (s? && (peep twot v 0)) 2 1)]))))
