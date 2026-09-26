@@ -6833,9 +6833,11 @@
                           (dps >x (dps <x a)))
              dl (dps body ())
              loc (map (p \ <p) ps + map (p \ <p) dl)
-             ; a frame address costs the caller its sibcalls (cginl's decline); asm pins its homing off
+             ; a frame address costs the caller its sibcalls (cginl's decline), and a return address
+             ; read in place is the caller's own; asm pins its homing off
              (bar? x) (? !(two? x) ()
                          (x @ ('addr ('var v)) (elem v loc)
+                              ('call ('var b9) _ && elem b9 '("__builtin_return_address" "__builtin_frame_address")) 1
                               (('clit || 'asm || 'sexpr) . _) 1
                               (bar? <x || bar? >x)))
              (fv x a) (? !(two? x) a
@@ -6878,12 +6880,12 @@
    (aren x m)
     (? !(two? x) x
        (x @ ('var nm) (: v (peep m nm 'no) (? (= v 'no) x (two? v) v ['var v]))
-            ('deref ('var nm)) (: v (peep m nm 'no) (? (two? v) <>v ['deref (aren <>x m)]))
+            ('deref ('var nm)) (: v (peep m nm 'no) (? (two? v && <v = 'addr) <>v ['deref (aren <>x m)]))
             ('decl ps) ['decl (map (p \ (peep m <p <p . aren >p m)) ps)]
             (aren <x m . aren >x m)))
    (ainl g f)
     (: rf (respell f)
-       tys {} dn {} tak {} n9 {'k 0}
+       tys {} dn {} tak {} n9 {'k 0} st9 {'s ()}          ; st9: the statement being laid
        (cen x)                                     ; the caller's names: types, and which are &-taken
         (? !(two? x) 0
            (x @ ('addr ('var nm)) (pin tak nm 1, 0)
@@ -6901,18 +6903,26 @@
                     e ['cast rt e])
        ; a call spliced here -> (pre value) | () declined. mode: 'val its value, 'br a branch's test,
        ; 'stmt none, 'ret the caller's own return (the body's returns stay returns, tail calls tails),
-       ; ('push inv then else) an if's test
+       ; ('push inv then else) an if's test, 'expr a position evaluated conditionally or in a loop:
+       ; the value is the body's one expression in place, nothing hoisted -- ('exprh ws) the same
+       ; where an arg that cannot trap may still hoist to a decl, ws the statement it may not be written in
        (site nm as d mode)
         (: c (? ((elem nm d) || (3 < #d) || (dn nm)) () (cand nm))
-           val? (elem mode '(val br))
-           pm (two? mode)
+           xh (two? mode && <mode = 'exprh)
+           xo (xh || mode = 'expr)
+           val? (xo || elem mode '(val br))
+           pm (two? mode && !xh)
            (? !(two? c) ()
               (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5)
                  one (body @ (('ret e)) (two? e) ())          ; the whole body one `return e`
+                 ex (? xo (flat body (nm . d)) ())
+                 bd (? (two? ex) [['ret ex]] body)
+                 nocall (foldl (\ a x (a && !(callish? x))) 1 as)
                  (? (#ps != #as) ()
                     (foldl (\ a v (a || dn v)) () fr) ()          ; a free name the caller shadows
                     ((val? || pm) && (= rt 'void)) ()
                     ((mode = 'br) && !one) ()                       ; a branchy test that does not push down is cginl's
+                    (xo && !(two? ex)) ()
                     ; ..each return lays its own copy of the arms: a few small ones
                     (pm && ((40 < (dsz (mode 2) + dsz (mode 3))) ||
                             (5 < (: (go x) (? !(two? x) 0 (<x = 'ret) 1 ((go <x) + go >x)) (go body))))) ()
@@ -6924,23 +6934,31 @@
                        ; a caller local of the param's own type, never &-taken and never written by
                        ; the body, is the param outright; so is &x of a caller local x the body only
                        ; derefs (or hands a call), whose *p is then x: a fresh local holding &x would
-                       ; cost the caller its frame, so that arg declines instead. any other binds a fresh local
+                       ; cost the caller its frame, so that arg declines instead. any other binds a fresh
+                       ; local -- but an expression takes none: a pure arg the pure expression reads at
+                       ; most once (a small one twice, a local or literal any number of times) stands as
+                       ; (T)arg, the parameter conversion; with no call among the args its value is the call's
                        (bind ps as pre)
                         (? !(two? ps) pre
-                           (: p <ps a <as
+                           (: p <ps
+                              a (: kc (cfold !(t32? g) <as) (? (cint? kc) ['num kc] <as))   ; a constant arg folded
                               ty9 (? (two? a && (<a = 'var)) (peep tys <>a 'no) 'no)
                               ax (? (two? a && (<a = 'addr) && two? <>a && (<<>a = 'var)) <><>a ())
                               tx (? (string? ax) (peep tys ax 'no) 'no)
-                              (? ((= ty9 <>p) && !(tak <>a) && !(wrs? <p body))
+                              (? ((= ty9 <>p) && !(tak <>a) && !(wrs? <p bd))
                                   (: _ (pin m <p <>a) (bind >ps >as pre))
                                  !(= tx 'no)
-                                  (? ((= <>p ['ptr tx]) && !(wrs? <p body) && aonly <p body)
+                                  (? ((= <>p ['ptr tx]) && !(wrs? <p bd) && aonly <p bd)
                                      (: _ (pin m <p a) (bind >ps >as pre))
                                      'no)
+                                 (xo && nocall && pure? a && !(stru? <>p || arr? <>p) &&
+                                  (elem <a '(num var) || (rdw <p ex 1) <= (? (dsz a < 13) 2 1)))
+                                  (: _ (pin m <p ['cast <>p a]) (bind >ps >as pre))
+                                 (xo && !(xh && safe? a <>mode)) 'no
                                  (: nn (m <p) _ (pin tys nn <>p)
                                     (bind >ps >as (pre + [['decl [[nn <>p a]]]]))))))
                        pre (bind ps as ())
-                       rb (aren body m)
+                       rb (aren bd m)
                        (rc x) (? !(two? x) x
                                  (<x = 'ret) (? (two? <>x) ['ret (? (= rt crt) <>x (cv <>x rt))] x)
                                  (rc <x . rc >x))
@@ -6952,12 +6970,13 @@
                                     [['if (? (<>mode = 1) ['un 'not v] v) (mode 2) (mode 3)]]))
                        el (? (= pre 'no) 'no
                              (mode = 'ret) (rc rb)
-                             (val? && one) rb
+                             (xo || (val? && one)) rb
                              pm (aelim rb pt)
                              (aelim rb (e \ (? !(two? e) () rv [['expr ['asn ['var rv] e]]] [['expr e]]))))
                        (? (= el 'no) ()
                           ((mode = 'ret) || pm) [(pre + hitems el (nm . d)) ()]
-                          (val? && one) [pre (cv <><rb rt)]
+                          xo [pre (cv <><rb rt)]
+                          (val? && one) (: r (hx <><rb (nm . d)) [(pre + <r) (cv <>r rt)])
                           (: _ (? rv (pin tys rv rt) 0)
                              ; one return, the last statement: the value is a decl from it (kprop reads those)
                              rl (rev el)
@@ -6972,6 +6991,49 @@
         (: pc (c @ ('call ('var nm) as) [0 nm as] ('un 'not ('call ('var nm) as)) [1 nm as] ())
            cd (? pc (cand <>pc))
            (? (two? cd && !(<>cd @ (('ret e)) 1 ())) pc ()))
+       ; no call, store or storage: evaluating it any number of times, or not at all, changes nothing
+       (pure? x) (? !(two? x) 1 (elem <x '(call callr sys asn rmw post sexpr clit asm)) () (pure? <x && pure? >x))
+       (sub x nm v) (? !(two? x) x (x @ ('var ^nm) v ((sub <x nm v) . sub >x nm v)))
+       ; may x evaluate ahead of its position, at the statement's head? pure, no trap (no load,
+       ; no division), over caller locals nothing else writes: not &-taken, not written in ws
+       (safe? x ws) (? !(two? x) 1
+                       (x @ ('var v) (!(= (peep tys v 'no) 'no) && !(tak v) && !(wrs? v ws))
+                            ('deref . _) ()
+                            ('bin o _ _ && elem o '(/ %)) ()
+                            (pure? x && safe? <x ws && safe? >x ws)))
+       ; a body of pure scalar decls and one `return e` as the one expression: its own candidate
+       ; calls substituted first, then each local read at most once (a local or literal any number
+       ; of times) stands as (T)init | ()
+       (flat items d9)
+        (: (hxi l) (map (s9 \ (s9 @ ('ret e) ['ret (hxe e d9 ())]
+                                  ('decl ps) ['decl (map (p \ (? (two? >>p) (<p . <>p . hxe <>>p d9 () . >>>p) p)) ps)]
+                                  s9)) l)
+           (go items)
+            (? !(two? items) ()
+               (items @ (('ret e)) (? (two? e && pure? e) e ())
+                        (('decl ps) . rest)
+                         (? !(two? ps) (go rest)
+                            (: p <ps
+                               r9 (['decl >ps] . rest)
+                               (? (!(two? >>p) || two? >>>p || !(pure? <>>p) || stru? <>p || arr? <>p) ()
+                                  !(elem <<>>p '(num var) || (rdw <p r9 1) <= 1) ()
+                                  (go (sub r9 <p ['cast <>p <>>p])))))
+                        ()))
+           (go (hxi items)))
+       ; an expression at a position evaluated conditionally or in a loop: a candidate call whose
+       ; body is one expression becomes it in place. h () in a loop, else {'pre 'ws}: the decls
+       ; args hoist to, laid at the statement's head
+       (hxe e d h)
+        (? !(two? e) e
+           (e @ ('call ('var nm) as)
+                (: as2 (map (a \ hxe a d h) as)
+                   s (site nm as2 d (? h ['exprh (h 'ws)] 'expr))
+                   _ (? (two? s && two? <s) (pin h 'pre (h 'pre + <s)) 0)
+                   (? (two? s) <>s ['call ['var nm] as2]))
+                ('sexpr . _) e
+                (map (x \ hxe x d h) e)))
+       (hxh e d f)                                    ; f builds e's form from its hoist box
+        (: h {'pre () 'ws (st9 's)} r (f h) [(h 'pre) r])
        ; an arm's weight as a copy, or past any budget when a copy would be wrong (a label, a decl)
        (dsz x) (? (= x ()) 0 !(two? x) 1 (elem <x '(lbl case dflt decl sdecl asm)) 99 ((dsz <x) + dsz >x))
        ; an expression -> (pre e'): only the positions evaluated first are hoisted
@@ -6983,10 +7045,11 @@
                    (? (two? s) [(<ha + <s) <>s] [<ha ['call ['var nm] <>ha]]))
                 ('call fh as) (: ha (hxl as d) [<ha ['call fh <>ha]])
                 ('bin op a b) (: ra (hx a d) rb (hx b d) [(<ra + <rb) ['bin op <>ra <>rb]])
-                ('comma a b) (: ra (hx a d) [<ra ['comma <>ra b]])
+                ('comma a b) (: ra (hx a d) rb (hxh e d (h \ (hxe b d h))) [(<ra + <rb) ['comma <>ra <>rb]])
                 ; a short-circuit or a select branches on its first operand, as cbranch lays it
-                (('land || 'lor) a b) (: ra (hxb a d) [<ra [<e <>ra b]])
-                ('cond c a b) (: rc (hxb c d) [<rc ['cond <>rc a b]])
+                (('land || 'lor) a b) (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) [(<ra + <rb) [<e <>ra <>rb]])
+                ('cond c a b) (: rc (hxb c d) rb (hxh e d (h \ [(hxe a d h) (hxe b d h)]))
+                                 [(<rc + <rb) ['cond <>rc <<>rb <><>rb]])
                 ('asn l r) (: rl (hx l d) rr (hx r d) [(<rl + <rr) ['asn <>rl <>rr]])
                 ('rmw op l r) (: rl (hx l d) rr (hx r d) [(<rl + <rr) ['rmw op <>rl <>rr]])
                 ('post l n) (: r (hx l d) [<r ['post <>r n]])
@@ -7002,13 +7065,14 @@
                 s (site nm <>ha d 'br)
                 (? (two? s) [(<ha + <s) <>s] [<ha ['call ['var nm] <>ha]]))
              ('un 'not a) (: r (hxb a d) [<r ['un 'not <>r]])
-             (('land || 'lor) a b) (: ra (hxb a d) [<ra [<e <>ra b]])
+             (('land || 'lor) a b) (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) [(<ra + <rb) [<e <>ra <>rb]])
              (hx e d))
        (hxl l d) (? !(two? l) [() ()]
                     (: r (hx <l d) rs (hxl >l d) [(<r + <rs) (<>r . <>rs)]))
        ; a statement -> the statements it becomes
        (hb s d) (: l (hs s d) (? (two? l && !(two? >l)) <l ['blk l]))
-       (hs s d)
+       (hs s d) (: s0 (st9 's) _ (pin st9 's s) r (hs1 s d) _ (pin st9 's s0) r)
+       (hs1 s d)
         (? !(two? s) [s]
            (s @ ('expr ('call ('var nm) as))
                 (: ha (hxl as d)
@@ -7032,11 +7096,10 @@
                  (: (men nm x) (? !(two? x) () (x @ ('var ^nm) 1 (men nm <x || men nm >x)))
                     rs (map (p \ (? !(two? >>p) [() ()]
                                    (: r (hx <>>p d) (? (men <p <r) [() <>>p] r)))) ps)
-                    (? !(foldl (\ a r (a || two? <r)) () rs) [s]
-                       (: (go ps rs) (? !(two? ps) ()
-                                        (: p <ps r <rs
-                                           (<r + [['decl [(? (two? >>p) ([<p <>p <>r] + >>>p) p)]]] + go >ps >rs)))
-                          (go ps rs))))
+                    (go ps rs) (? !(two? ps) ()
+                                  (: p <ps r <rs
+                                     (<r + [['decl [(? (two? >>p) ([<p <>p <>r] + >>>p) p)]]] + go >ps >rs)))
+                    (go ps rs))
                 ('ret e) (? !(two? e) [s] (: r (hx e d) (<r + [['ret <>r]])))
                 ('if c t e)
                  (: pc (pcall c)
@@ -7044,9 +7107,9 @@
                     st (? pc (site <>pc <>ha d ['push <pc t e]))
                     (? (two? st) (<ha + <st)
                        (: r (hxb c d) (<r + [['if <>r (hb t d) (hb e d)]]))))
-                ('while c b) [['while c (hb b d)]]
-                ('do b c) [['do (hb b d) c]]
-                ('for i c st b) [['for i c st (hb b d)]]
+                ('while c b) [['while (hxe c d ()) (hb b d)]]
+                ('do b c) [['do (hb b d) (hxe c d ())]]
+                ('for i c st b) [['for (hxe i d ()) (hxe c d ()) (hxe st d ()) (hb b d)]]
                 ('switch e items) (: r (hx e d) (<r + [['switch <>r (hitems items d)]]))
                 ('blk items) [['blk (hitems items d)]]
                 [s]))
