@@ -1007,7 +1007,8 @@
    (pprim ps ts)
     (? !(two? (mark ts)) ()         ; the bottom of the expression ladder: mark here and a bad operand reports itself, not the operator before it
        (: t <ts
-          (? (tkk t = 'num) [['num (tkv t)] >ts]
+          (? (tkk t = 'num)                           ; past int on t32, long is too narrow: long long
+              [(? (pst32? ps && 2147483647 < tkv t) ['cast 'llong ['num (tkv t)]] ['num (tkv t)]) >ts]
              (tkk t = 'unum)                          ; a u-suffixed literal wears its unsignedness (neg/div/shift go unsigned):
               [['cast 'uint ['num (tkv t)]] >ts]     ; 1u an unsigned INT (-1u wraps at 32 bits),
              (tkk t = 'ulnum)                                   ; 1ul an unsigned long -- and on t32, a
@@ -1018,8 +1019,15 @@
               [['cast (? (pst32? ps) 'ullong 'ulong) ['num (tkv t)]] >ts]
              (tkk t = 'llnum)                                   ; 1ll: llong on t32, long elsewhere
               [['cast (? (pst32? ps) 'llong 'long) ['num (tkv t)]] >ts]
-             ; C11 6.4.4.1: an l/L suffix makes the constant a long -- untyped, `i + 2L` is int
-             (tkk t = 'lnum) [['cast 'long ['num (tkv t)]] >ts]
+             ; C11 6.4.4.1: an l/L suffix makes the constant a long -- untyped, `i + 2L` is int.
+             ; on t32 one past the 32-bit long climbs: hex/octal to ulong first, then long long
+             (tkk t = 'lnum)
+              (: v (tkv t) sp (t 4)
+                 dec !(sp 0 = 48 && 1 < #sp && !(elem (sp 1) '(108 76 117 85)))
+                 ty (? !(pst32? ps && 2147483647 < v) 'long
+                       (!dec && v <= 4294967295) 'ulong
+                       'llong)
+                 [['cast ty ['num v]] >ts])
              (tkk t = 'flo) [['flo (cflo (tkv t))] >ts]
              ; an f suffix makes a float constant (C11 6.4.4.2) -- the cast is what
              ; narrows it, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
