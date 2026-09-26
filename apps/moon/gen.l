@@ -7122,9 +7122,7 @@
            (elem nm pns) ()
            (two? (peep (g 'glob) nm 0)) ()
            (g 'fns nm) ()
-           (: v (: kc (knum g init)
-                   (? (two? kc) <kc
-                      (: lv (litv init) (? (two? lv) <lv 'no))))
+           (: v (: cv (cfold !(t32? g) init) (? (cint? cv) cv 'no))   ; any constant init, folded in C's types
               (? !(charm? v) ()
                  (: cv (cnum g ['cast ty ['num v]])
                     (two? cv ? ['cast ty ['num <cv]])))))

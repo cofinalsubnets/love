@@ -1477,7 +1477,8 @@
       !(elem '(call g) aXf)                          ; *p over &x is x: no address taken, no frame
       !(sp? aXf)
       (two? aB)
-      (elem '(ld r0 r6 32) aBf)                     ; 3 + b2w(8) is 4: hp[4], one load
+      (elem '(ld r0 r6 32) aBf)                     ; 3 + b2w(8) is 4: hp[4], one load --
+      !(has? 'li aBf)                                ; its q and r fold as constants, no dead seat left
       (two? aT)                                      ; a branchy predicate at a test: each return
       !(has? 'li aTf)                                ; decides the test where it stands, the arms
       !(has? 'jmp aTf)                               ; copied to it -- no flag set, none retested
