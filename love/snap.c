@@ -2,6 +2,7 @@
 // snap.c -- the heap-image snapshot. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are love/love.h.
 #include "love.h"
+struct img_ctx;
 struct ai_chain; struct hc; struct image_hdr; struct img_dec; struct img_ord;
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline intptr_t img_decode_cold(intptr_t v, char *code);

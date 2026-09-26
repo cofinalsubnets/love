@@ -3,6 +3,17 @@
 // and a coder and a decoder that disagree there disagree about the format. apps/gz.l's
 // gz-lbase/gz-lext/gz-dbase/gz-dext say the same numbers in love.
 #include "love.h"
+// an unaligned little-endian read, where the machine takes one in a single instruction --
+// mooncc lays a byte gather as eight loads and as many shifts and ors. the caller owns the
+// bound: these read their full width.
+#if defined(__x86_64__) || defined(__aarch64__)
+#define ai_wideld 1
+struct ai_u64u { uint64_t v; } __attribute__((packed, aligned(1)));
+#define ai_ld64(p) (((struct ai_u64u const*)(p))->v)
+#define ai_st64(p, x) (((struct ai_u64u*)(p))->v = (x))
+#else
+#define ai_wideld 0
+#endif
 #include <stdint.h>
 #include <string.h>
 

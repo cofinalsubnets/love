@@ -1,7 +1,22 @@
 // ev.c -- ev, vm, the lisp help. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are love/love.h.
 #include "love.h"
-struct ai_wait_fd;
+#if ai_tco
+#define ai_status_yield ai_status_ok
+#else
+#define ai_status_yield ai_status_eof
+#endif
+#define argn(nom, i) lvm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; ai_musttail return Continue(); }
+#define quon(nom, v) lvm(nom) { Have1(); Sp -= 1; Sp[0] = putcharm(v); Ip += 1; ai_musttail return Continue(); }
+#define Ana(n, ...) struct ai *n(struct ai *g, struct env **c, intptr_t x, ##__VA_ARGS__)
+#define Cata(n, ...) struct ai *n(struct ai *g, struct env **c, ##__VA_ARGS__)
+#define incl(e, n) ((e)->len += ((n)<<1))
+#define Kp (g->ip)
+#define cata1(n, ...) static Cata(n) { return __VA_ARGS__, pull(g, c); }
+#define forget() (ai_core_of(g)->root=(mm0),g)
+static ai_inline union u *clip(struct ai *g, union u *k) {
+ return tagthread(k, cell(ttag(g, k)) - k); }
+struct env;
 typedef Ana(ana);
 typedef Cata(cata);
 static Ana(ana_2, word a, word b);

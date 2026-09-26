@@ -1,6 +1,11 @@
 // io.c -- io. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are love/love.h.
 #include "love.h"
+double am_strtod(char const*, char**);   // correctly rounded read: the printer's twin
+#ifndef NAN
+#define NAN (__builtin_nanf(""))
+#endif
+#define ai_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline double strtod_wrap(struct ai*g, word x);
 static ai_noinline struct ai *p0text(struct ai *g);

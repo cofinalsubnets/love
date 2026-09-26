@@ -3,6 +3,21 @@
 // active half, a major compacts that half into the spare one and flips; the rem set and the
 // write barriers below are what let a minor skip the tenured bulk.
 #include "love.h"
+// the collection: state meaning something only for the span of one pass, held on the C stack of
+// whoever drives it -- between collections there is no answer, and a stale range loses the heap.
+struct ai_gcx {
+ word const *p0, *t0;        // the from-space under trace
+ word const *f2lo, *f2hi;    // a second from-space (0 = unused); a major traces {major ∪ minor} in one pass
+ word *to_lo, *to_hi;        // where survivors land: the tagp range [to_lo, to_hi)
+ word *fwd;                  // the forwarding floor: word0 in [fwd, to_hi) = a copy made this pass
+ word *cp; };                // the cheney scan cursor
+// GC scans run with different [lo,hi), so a terminator is recognized by which live pool its head
+// lands in, not the caller's range -- else a young-pointing terminator under the major range is
+// gcp'd as a field. mid-pass the to-space is a third: gen_major's unflipped pair, or gen_grow's.
+static ai_inline bool tagl(struct ai *g, struct ai_gcx *X, word x) {   // range-independent terminator test
+ if ((x & 3) != ai_thread_tag) return false;
+ word const *p = (word const*) (x & ~(word) 3);
+ return (X->to_lo && p >= X->to_lo && p < X->to_hi) || in_live_pool(g, p); }
 
 lvm(lvm_gc) {
  uintptr_t n = (uintptr_t) g->b;                // Have's ask, left in the scratch slot

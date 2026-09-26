@@ -1,6 +1,13 @@
 // love.c -- g, stack, sys, str, sym, chain, tray. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are love/love.h.
 #include "love.h"
+// the spelling hash a fresh nom caches in its `dig` slot (same fnv walk as the
+// KString lane in hash(), so a nom and its name string hash alike)
+static ai_inline uintptr_t nom_dig(uintptr_t name) {
+ uintptr_t n = len(name), h = mix;
+ char const *bs = txt(name);
+ while (n--) h ^= (uint8_t) *bs++, h *= mix;
+ return h; }
 
 // which kernel we woke on -- 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, -1 inle. the
 // values and the probe are moonlibc's (apps/moon/lib/moonlibc/os.c), which owns the word

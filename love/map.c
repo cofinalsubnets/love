@@ -1,6 +1,22 @@
 // map.c -- map, codegen backend. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are love/love.h.
 #include "love.h"
+// a tray key -> a row-major element offset: a fixnum on a rank-1 tray, else a shape-list of
+// `rank` fixnums; -1 = wrong rank or out of bounds. by value: an &local costs the tail jump.
+static ai_inline intptr_t tray_off(struct ai_tray *v, word k) {
+ if (v->rank == 1 && charmp(k)) {
+  intptr_t ix = getcharm(k);
+  return ix >= 0 && ix < (intptr_t) v->shape[0] ? ix : -1; }
+ if (!chainp(k)) return -1;
+ uintptr_t a = 0, o = 0;
+ for (word l = k;; l = B(l)) {
+  if (!chainp(l)) return a == v->rank ? (intptr_t) o : -1;
+  word ki = A(l);
+  if (a >= v->rank || !charmp(ki)) return -1;
+  intptr_t ix = getcharm(ki);
+  if (ix < 0 || ix >= (intptr_t) v->shape[a]) return -1;
+  o = o * v->shape[a] + (uintptr_t) ix, a++; } }
+#define map_hint_max (1u << 24)        // the `(tablet n)` size hint saturates to this bounded green charm
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline struct ai *map_grow(struct ai *g);
 static ai_noinline word ai_mapdel(struct ai *g, word m, word k, word dflt);

@@ -1,6 +1,21 @@
 // num.c -- big. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are love/love.h.
 #include "love.h"
+#define limb_clz(x) (__builtin_clzll((unsigned long long) (x)) - (8 * (int) sizeof(unsigned long long) - limb_bits))  // leading zeros of a nonzero limb, at limb width
+// decimal digits a limb spans: floor(limb_bits * log10 2), 30103 = round(1e5 log10 2)
+#define limb_dec_chunk  (limb_bits * 30103 / 100000)
+// the binary-radix twins: the most digits whose product still fits a limb
+#define limb_hex_chunk  ((limb_bits - 1) / 4)
+#define limb_oct_chunk  ((limb_bits - 1) / 3)
+#define limb_base ((ai_dlimb) 1 << limb_bits)
+// the bitwise codes ride the word lane (spec.l's width law): defined only where the cells
+// are machine words; other operands take the whole op to the zero point
+#define vop_bitp(op) ((op) >= vop_band && (op) <= vop_bsr)
+static ai_inline ai_flo_t ai_floor(ai_flo_t x) { ai_flo_t t = ai_trunc(x); return t > x ? t - 1 : t; }
+static ai_inline ai_flo_t ai_net_flo(ai_flo_t v) { return v != v ? 0 : v; }
+struct ai_zn { ai_flo_t re, im; };                     // the net: a complex value
+static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
+  struct ai_zn z = {re, im}; return z; }
 // this file's own, forward-declared so order within it does not matter.
 static ai_dlimb div128by64(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem);
 static ai_limb

@@ -1,6 +1,63 @@
 // arr.c -- generic-op lane, rng, eq, obin. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are love/love.h.
 #include "love.h"
+// the math floor is ours on every frontend (apps/moon/lib/moonlibc/math/am.c); the 32-bit
+// lane computes in binary64 and narrows.
+#if Bits == 64
+double am_sin(double), am_cos(double), am_atan2(double, double),
+       am_sqrt(double), am_exp(double), am_log(double), am_pow(double, double);
+#define ai_sin   am_sin
+#define ai_cos   am_cos
+#define ai_atan2 am_atan2
+#define ai_sqrt  am_sqrt
+#define ai_exp   am_exp
+#define ai_log   am_log
+#define ai_pow   am_pow
+#else
+float am_sinf(float), am_cosf(float), am_atan2f(float, float), am_sqrtf(float),
+      am_expf(float), am_logf(float), am_powf(float, float);
+#define ai_sin   am_sinf
+#define ai_cos   am_cosf
+#define ai_atan2 am_atan2f
+#define ai_sqrt  am_sqrtf
+#define ai_exp   am_expf
+#define ai_log   am_logf
+#define ai_pow   am_powf
+#endif
+static ai_inline ai_flo_t ai_tan(ai_flo_t x) { return ai_sin(x) / ai_cos(x); }
+static ai_inline ai_flo_t ai_atan(ai_flo_t x) { return ai_atan2(x, (ai_flo_t) 1); }
+#define avm_div(op, c_op) lvm(lvm_##op) { \
+ word a = Sp[0], b = Sp[1]; \
+ if (charmp(a) && charmp(b)) { \
+  intptr_t av = getcharm(a), bv = getcharm(b); \
+  if (bv != 0 && !(av == INTPTR_MIN && bv == -1)) { \
+   intptr_t t = av c_op bv; \
+   if (t >= mincharm && t <= maxcharm) \
+    ai_musttail return Push(putcharm(t)); } } \
+ avm_unit(a, b); \
+ ai_musttail return Ap(lvm_##op##n, g); }
+#define bit_slow(n, c_op, vop) lvm(lvm_##n##_slow) {          \
+ word a = Sp[0], b = Sp[1], _res;                                     \
+ if (!intp(a) || !intp(b)) ai_musttail return Push(ZeroPoint);        \
+ if (bigp(a) || bigp(b)) { Pack(g); g = ai_big_bitop(g, vop);         \
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);                \
+  ai_musttail return Resume(); }                                      \
+ Have(box_req);                                                       \
+ emit_int(_res, toint(a) c_op toint(b));                                    \
+ ai_musttail return Push(_res); }
+#define mvm1(n) lvm(lvm_##n) { g->b = (word) (uintptr_t) (ai_##n); ai_musttail return Ap(lvm_math1, g); }
+#define m1(_) _(sin) _(cos) _(tan) _(atan)   // the real-only unaries; sqrt/exp/log widen to complex and have their own aps
+// RNG: a rank-1 i64 tray of length 4 (xoshiro256++), payload moved by memcpy -- tray_get/
+// put_int would truncate the limbs on 32-bit ports. fixed 8-byte limbs reproduce a seed.
+#define rng_state_len 4
+#define rng_payload_bytes (rng_state_len * 8)
+#define rng_tray_bytes (sizeof(struct ai_tray) + sizeof(uintptr_t) + rng_payload_bytes)
+#define rng_tray_req (b2w(rng_tray_bytes))
+// whichever element kind is 8 bytes wide, so ai_tray_bytes sees the full payload
+#define rng_vt (Bytes == 4 ? ai_C : ai_Z)
+static ai_inline ai_flo_t twin_mod(word x) {   // |z|
+ ai_flo_t re = twin_re(x), im = twin_im(x);
+ return ai_sqrt(re * re + im * im); }
 // this file's own, forward-declared so order within it does not matter.
 static int eqv_at(struct ai *g, word a, word b, word *base, word *top);
 // the bit_slow trio takes its linkage here: the macro body carries no storage class.
