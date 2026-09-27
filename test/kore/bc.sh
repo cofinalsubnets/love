@@ -257,4 +257,65 @@ same "bc files then stdin"
 printf '' | bc "$ho/.kore-bc-nope" > /dev/null 2>&1; a=$?
 printf '' | korerun bc "$ho/.kore-bc-nope" > /dev/null 2>&1; b=$?
 [ $a -eq $b ] || fail "kore bc missing file (gnu $a ours $b)"
-echo "kore: bc (the scale rules, the bases both ways, the language, the wrap, -l, GNU-identical) ok"
+# dc: GNU's, stdout and stderr, over the arithmetic and its scale, the bases, the
+# registers and arrays, macros and their exits, and every complaint
+if command -v dc >/dev/null 2>&1; then
+  cat > "$ho/.kore-dc.cases" <<'EOF'
+2 3+p
+5k1 3/p
+_5 2/p
+2 10^p
+2 0.5^p
+10k2vp
+16o255p
+16i FFp
+2o10p
+20o 1000000 p
+[hello]p
+256 65*66+P
+1 2 3f
+1 2 3 zp
+3.14159 Xp
+_12.340 Zp Xp
+[abc]Zp
+1 2r f
+d
+5 Sa 6 Sa La p La p
+[2p]sa 1 1 =a
+[2p]sa 1 2 >a
+[1p]sa 1 2 !>a
+3 [1-d0<a]sa lax f
+1 2 3 4 R f
+1 2 3 _3 R f
+7 3 ~ f
+2 10 7 |p
+10 3 k /p K p
+1 2 3 [q]x f
+4 3 [2Q]x f
+1 0/p
+5 0%p
+5 1:a 1;a p
+99999999999999999999999999999999999999999999999999999999999999999999999999999999 p
+_1k
+17i
+1o
+[a]1+
+_4v
+3k 2 _2^p
+0.5 2^p
+65 a p
+1 2 ]
+e
+EOF
+  # a line at a time by number, not a while read: under lush dc is the in-image verb,
+  # and a verb in a read loop drinks the loop's own buffered input before its pipe
+  nc=$(wc -l < "$ho/.kore-dc.cases"); i=1
+  while [ $i -le $nc ]; do
+    p=$(sed -n "${i}p" "$ho/.kore-dc.cases"); i=$((i + 1))
+    printf '%s\n' "$p" | dc > "$g" 2>&1; printf '%s\n' "$p" | korerun dc > "$o" 2>&1; same "dc [$p]"
+  done
+  printf '1 2+p\n' > "$ho/.kore-dc.f"
+  dc -e '3 4*p' -f "$ho/.kore-dc.f" > "$g" 2>&1; korerun dc -e '3 4*p' -f "$ho/.kore-dc.f" > "$o" 2>&1; same "dc -e -f"
+  printf '[2p\n3p]x\n' | dc > "$g"; printf '[2p\n3p]x\n' | korerun dc > "$o"; same "dc: a string over two lines"
+fi
+echo "kore: bc (the scale rules, the bases both ways, the language, the wrap, -l, GNU-identical) + dc ok"

@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (162 tools, 168 names)
+## the inventory (177 tools, 183 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -61,23 +61,23 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 
 | where | tools |
 | --- | --- |
-| kore.l (thin mains) | diff (diff-main; the patience/myers engines are diff.l), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both), nm, size (binutils' berkeley sums), strip (the symbol table and debugging out of an exe or shared object; `-g` the debugging alone, which is all an object may lose), ranlib (an archive rewritten with its index) |
+| kore.l (thin mains) | readelf (binutils' -h -l -S -s -e, at 80 columns or -W, the dynamic symbols' versions with them), diff (diff-main; the patience/myers engines are diff.l), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both), nm, size (binutils' berkeley sums), strip (the symbol table and debugging out of an exe or shared object; `-g` the debugging alone, which is all an object may lose), ranlib (an archive rewritten with its index) |
 | apps/ain.l | nc / ain |
 | apps/cook.l | make / cook |
 | core.l, the line tools | cat tac shuf echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
 | core.l, the line endings | dos2unix unix2dos mac2unix (in place by default; a binary file is refused, the mode is kept) |
-| core.l, the encodings | base64 base32 (RFC 4648; `-d` reads it back, `-w` says the wrap) |
+| core.l, the encodings | base64 base32 basenc (RFC 4648; basenc's url, hex, base16, the two base2 orders and z85 too; `-d` reads it back, `-w` says the wrap), uuencode uudecode (busybox's, `-m` base64), ascii (toybox's table) |
 | core.l, the two little computations | tsort factor |
 | core.l, the record tools | paste comm join split od |
-| sum.l, the checksums | cksum sum md5sum sha1sum sha224sum sha256sum sha384sum sha512sum b2sum (`-c` reads a list back) |
+| sum.l, the checksums | cksum sum crc32 md5sum sha1sum sha224sum sha256sum sha384sum sha512sum b2sum sha3sum (`-c` reads a list back) |
 | core.l, the trivia | seq yes true false basename dirname test [ uname arch nproc |
 | awk.l, beside the number engine it shares | printf (C's flags, widths, precisions and conversions but `%a`, `%b` `%q`, the escapes, strto*'s reading and its complaints; reals formatted from their exact binary value, as glibc does, where GNU's are long doubles) |
 | core.l, the byte tools | dd xxd strings hexdump hd (the BSD dump: words, or -C's bytes; -n -s -v, no -e) |
 | core.l, the shell's helper | getopt (util-linux's: -o -l -n -a -q -Q -T -u, the three operand modes, quoted for `eval set --`; the old `getopt SHORTS` face; -s csh refused) |
 | fs.l, the fs tools | ls/dir/vdir cp mv rm mkdir rmdir ln touch lift pwd chmod install readlink cmp |
-| fs.l, a name, a mount, a file undone | pathchk (the system's limits, or POSIX's portable floor under -p/-P) mountpoint (the kernel's mount table; -d, -x) shred (GNU's passes and their arrangement, -z -u -x -s, each pass synced) |
+| fs.l, a name, a mount, a file undone | fsync dircolors (GNU's database, which permits the copy, and its language) pathchk (the system's limits, or POSIX's portable floor under -p/-P) mountpoint (the kernel's mount table; -d, -x) shred (GNU's passes and their arrangement, -z -u -x -s, each pass synced) |
 | fs.l, the paths and the two bare calls | realpath link unlink |
 | fs.l, what they report | stat du df chown chgrp mktemp truncate |
 | expr.l, the little language | expr (arithmetic, the six comparisons, \| and &, and `:` over the BRE engine) |
@@ -86,17 +86,17 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | sed.l, the editor | sed (-n -E -i -e; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
-| proc.l, the processes and the world | env nohup nice renice setsid printenv sleep kill xargs time date id whoami groups |
+| proc.l, the processes and the world | env nohup nice renice setsid printenv sleep usleep kill xargs time ts date id whoami groups |
 | proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them) |
-| proc.l, the host's utmp, read | who users logname (glibc's, netbsd's utmpx and freebsd's utx.active; kore writes none) |
+| proc.l, the host's utmp, read | who users pinky logname (glibc's, netbsd's utmpx and freebsd's utx.active; kore writes none) |
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
-| proc.l, the one-liners | cal hostname hostid dnsdomainname tty clear which timeout watch |
+| proc.l, the one-liners | cal hostname hostid dnsdomainname tty clear reset which timeout watch |
 | top.l | top (the process table, repainted; `-b` batch) |
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | apps/vi/ | vi |
-| less.l, the pager | less / more |
-| bc.l, the calculator | bc (-l, -q) |
+| less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
+| bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
 | apps/gz.l, apps/xz.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
@@ -331,18 +331,19 @@ walks several at once. Three things are worth knowing:
 
 ## the checksums (apps/kore/sum.l)
 
-`cksum`, `sum`, `md5sum`, `sha1sum`, `sha224sum`, `sha256sum`, `sha384sum`, `sha512sum`,
-`b2sum` — the file streamed a gulp at a time through its digest, one line said. The faces are
+`cksum`, `sum`, `crc32`, `md5sum`, `sha1sum`, `sha224sum`, `sha256sum`, `sha384sum`,
+`sha512sum`, `b2sum`, `sha3sum` — the file streamed a gulp at a time through its digest, one line said. The faces are
 GNU's: cksum's `CRC BYTES NAME` (and no name at all reading stdin), sum's two (bsd's 16-bit
 rotating sum over 1K blocks, `-s` system v's folded byte total over 512-byte ones), the
 digest tools' `DIGEST  NAME` with the two spaces that mean text mode. b2sum's `-l` asks for a
-shorter blake2b, which is its own digest and not a prefix of the long one. `-c` reads such a list back and says
+shorter blake2b, which is its own digest and not a prefix of the long one; sha3sum is
+toybox's (`-a` any length 128..512, 224 by default, `-S` shake's pad) with busybox's `-c`. `-c` reads such a list back and says
 `NAME: OK` / `NAME: FAILED` per line, leaving with 1 if any did not match (b2sum reads a line
 of any length it could have written); the gate holds both directions, GNU reading ours and
 ours reading GNU's.
 
-The digests themselves are **inle/hash.c** (`md5`, `sha1`, the four sha-2s, `blake2b`,
-`bsdsum` and `cksum` — the last being POSIX's own crc, a different polynomial from `crc32`'s
+The digests themselves are **inle/hash.c** (`md5`, `sha1`, the four sha-2s, `sha3`,
+`blake2b`, `bsdsum`, `crc32` and `cksum` — the last being POSIX's own crc, a different polynomial from `crc32`'s
 and with the byte count folded in, which is why an empty file is `4294967295 0`). md5, sha-1
 and the sha-2s share one buffering and one state layout; sha-512 keeps its 64-bit words as
 32-bit halves to ride it, and blake2b, which pads nothing and flags its last block, has its
@@ -564,6 +565,8 @@ layout language, not another row).
 shred draws its pattern order from its own random numbers, as GNU's does, so the two agree on
 which passes are random and never on the order of the rest; watch has no `-d`, `-c` or `-p`;
 hostid and dnsdomainname ask /etc/hosts and the host's own addresses, never DNS.
+readelf reads no relocations, dynamic section, notes or dumps; dircolors spells LS_COLORS
+that kore's own ls does not yet read; hexedit has no search.
 Of xz, not yet: `-l`, writing `.lzma`, and the BCJ and delta filters (a stream using one is
 refused by name). The encoder's parse is one fast greedy one, near `xz -1`'s ratio at any
 level; a level picks only the dictionary. strip leaves a relocatable object's symbol table
@@ -600,8 +603,8 @@ packages above.
 
 | | kore | busybox | toybox | GNU | uutils |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| names | 174 | 392 | 239 | 201 | 108 |
-| shared with kore | | 146 | 125 | 128 | 98 |
+| names | 189 | 392 | 239 | 201 | 108 |
+| shared with kore | | 157 | 136 | 133 | 101 |
 | carried by no one else | 10 | 162 | 33 | 58 | 1 |
 
 What at least three of the other four carry and kore does not: `fmt`.
@@ -613,13 +616,13 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `ar` | ✓ | ✓ |  | ✓ |  |
 | `arch` | ✓ | ✓ | ✓ |  | ✓ |
 | `as` | ✓ |  |  | ✓ |  |
-| `ascii` |  | ✓ | ✓ |  |  |
+| `ascii` | ✓ | ✓ | ✓ |  |  |
 | `awk` | ✓ | ✓ |  | ✓ |  |
 | `b2sum` | ✓ |  |  | ✓ | ✓ |
 | `base32` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `base64` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `basename` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `basenc` |  |  |  | ✓ | ✓ |
+| `basenc` | ✓ |  |  | ✓ | ✓ |
 | `bc` | ✓ | ✓ |  | ✓ |  |
 | `blkdiscard` |  | ✓ | ✓ |  |  |
 | `blkid` |  | ✓ | ✓ |  |  |
@@ -643,17 +646,17 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `cook` | ✓ |  |  |  |  |
 | `cp` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `cpio` | ✓ | ✓ | ✓ | ✓ |  |
-| `crc32` |  | ✓ | ✓ |  |  |
+| `crc32` | ✓ | ✓ | ✓ |  |  |
 | `csplit` |  |  |  | ✓ | ✓ |
 | `cut` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `date` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `dc` |  | ✓ |  | ✓ |  |
+| `dc` | ✓ | ✓ |  | ✓ |  |
 | `dd` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `deallocvt` |  | ✓ | ✓ |  |  |
 | `df` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `diff` | ✓ | ✓ |  | ✓ |  |
 | `dir` | ✓ |  |  | ✓ | ✓ |
-| `dircolors` |  |  |  | ✓ | ✓ |
+| `dircolors` | ✓ |  |  | ✓ | ✓ |
 | `dirname` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `dmesg` |  | ✓ | ✓ |  |  |
 | `dnsdomainname` | ✓ | ✓ | ✓ | ✓ |  |
@@ -677,7 +680,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `free` | ✓ | ✓ | ✓ |  |  |
 | `freeramdisk` |  | ✓ | ✓ |  |  |
 | `fsfreeze` |  | ✓ | ✓ |  |  |
-| `fsync` |  | ✓ | ✓ |  |  |
+| `fsync` | ✓ | ✓ | ✓ |  |  |
 | `ftpd` |  | ✓ |  | ✓ |  |
 | `ftpget` |  | ✓ | ✓ |  |  |
 | `ftpput` |  | ✓ | ✓ |  |  |
@@ -690,7 +693,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `hd` | ✓ | ✓ | ✓ |  |  |
 | `head` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `hexdump` | ✓ | ✓ |  |  |  |
-| `hexedit` |  | ✓ | ✓ |  |  |
+| `hexedit` | ✓ | ✓ | ✓ |  |  |
 | `hostid` | ✓ | ✓ |  | ✓ | ✓ |
 | `hostname` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `html2text` | ✓ |  |  |  |  |
@@ -770,7 +773,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `pidof` | ✓ | ✓ | ✓ |  |  |
 | `ping` |  | ✓ | ✓ |  |  |
 | `ping6` |  | ✓ | ✓ |  |  |
-| `pinky` |  |  |  | ✓ | ✓ |
+| `pinky` | ✓ |  |  | ✓ | ✓ |
 | `pivot_root` |  | ✓ | ✓ |  |  |
 | `pkill` | ✓ | ✓ | ✓ |  |  |
 | `pmap` |  | ✓ | ✓ |  |  |
@@ -785,12 +788,12 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `pwdx` | ✓ | ✓ | ✓ |  |  |
 | `ranlib` | ✓ |  |  | ✓ |  |
 | `readahead` |  | ✓ | ✓ |  |  |
-| `readelf` |  |  | ✓ | ✓ |  |
+| `readelf` | ✓ |  | ✓ | ✓ |  |
 | `readlink` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `realpath` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `reboot` |  | ✓ | ✓ |  |  |
 | `renice` | ✓ | ✓ | ✓ |  |  |
-| `reset` |  | ✓ | ✓ |  |  |
+| `reset` | ✓ | ✓ | ✓ |  |  |
 | `rev` | ✓ | ✓ | ✓ |  |  |
 | `rfkill` |  | ✓ | ✓ |  |  |
 | `rm` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -806,7 +809,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `sha224sum` | ✓ |  | ✓ | ✓ | ✓ |
 | `sha256sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `sha384sum` | ✓ |  | ✓ | ✓ | ✓ |
-| `sha3sum` |  | ✓ | ✓ |  |  |
+| `sha3sum` | ✓ | ✓ | ✓ |  |  |
 | `sha512sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `shred` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `shuf` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -841,7 +844,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `tr` | ✓ | ✓ |  | ✓ | ✓ |
 | `true` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `truncate` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ts` |  | ✓ | ✓ |  |  |
+| `ts` | ✓ | ✓ | ✓ |  |  |
 | `tsort` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `tty` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `tunctl` |  | ✓ | ✓ |  |  |
@@ -857,9 +860,9 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `unxz` | ✓ | ✓ |  |  |  |
 | `uptime` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `users` | ✓ |  |  | ✓ | ✓ |
-| `usleep` |  | ✓ | ✓ |  |  |
-| `uudecode` |  | ✓ | ✓ |  |  |
-| `uuencode` |  | ✓ | ✓ |  |  |
+| `usleep` | ✓ | ✓ | ✓ |  |  |
+| `uudecode` | ✓ | ✓ | ✓ |  |  |
+| `uuencode` | ✓ | ✓ | ✓ |  |  |
 | `vconfig` |  | ✓ | ✓ |  |  |
 | `vdir` | ✓ |  |  | ✓ | ✓ |
 | `vi` | ✓ | ✓ |  |  |  |
