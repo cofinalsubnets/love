@@ -74,7 +74,7 @@
     ; marker, so one only ever comes from a generator. sdef's fields take the shape
     ; parse's own pmembers answers, ((name ty)..), and its 3rd slot is 'union: a
     ; union defines with its own keyword but refers as ('struct tag).
-    '((prog 1 1) (fn 1 5) (proto 1 4) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1)
+    '((prog 1 1) (fn 1 5) (proto 1 4) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1) (tasm 1 1)
       (edef 2 2) (sdef 2 3) (sassert 2 2) (cpp-def 1 2) (cpp-undef 1 1) (cpp-if 1 2)
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 2) (if 2 3) (while 2 2) (for 4 4)
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
@@ -414,6 +414,7 @@
     ('gdecl d st) (line 0 (cstor st + cdecls d + ";"))
     ('gdecl d) (line 0 (cstor () + cdecls d + ";"))
     ('xdecl d) (line 0 ("extern " + cdecls d + ";"))
+    ('tasm t) (line 0 ("__asm__ (" + cstrlit t + ");"))
     ; cparse keeps the name and nothing else, so a bare (proto n) is the same
     ; reconstruction a return-type-less fn is; the appended slots are what a
     ; mutual recursion between two generated functions has no other way to spell

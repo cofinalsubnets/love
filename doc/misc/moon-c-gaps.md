@@ -112,7 +112,8 @@ definitions, bitfields including compound assignment, flexible array members, va
 `frame_address`,
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
 arrays, statement expressions (`({ .. })`), `__auto_type`, named asm operands (`%[x]`),
-`asm inline`, `asm goto`, `x ?: y` (x read once), `typeof` over a qualified type-name,
+`asm inline`, `asm goto`, a file-scope asm (holo's gas-top: sections, labels, data words over
+`sym - .`; 178-toplevelasm.c), `__section__` beside `section`, `x ?: y` (x read once), `typeof` over a qualified type-name,
 `__builtin_offsetof` over a runtime index (the address itself; a constant index before a
 member still folds), a variably modified object at file scope refused by name,
 `__attribute__((cleanup(f)))` on a local (parse.l's pcln lays f(&v) on every way out of the
@@ -817,31 +818,33 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 ## linux
 
-**measured 2026-09-26** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
+**measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
 with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
-every ninth by path: **3 compile**, and the rest stop at
+every ninth by path: **4 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 143 | `__attribute__((cleanup))`, refused (`guard()`, `DEFINE_FREE`: nearly every header chain) |
-| 7 | `typeof` of the object in its own initializer (`__get_unaligned_t`, `container_of`) |
-| 3 | top-level asm, which `EXPORT_SYMBOL` writes |
-| 3 | an x86 instruction holo does not encode (`pushf`, `lcallw`, a `%fs` operand) |
-| 1 | `&&label` (computed goto: `_THIS_IP_`) |
+| 104 | an x86 instruction holo does not encode: `pushf` (102, irqflags.h), `lcallw`, a `%fs` operand |
+| 20 | `__builtin_bswap16` over a constant in a case label |
+| 20 | `typeof` of the object in its own initializer (`get_unaligned`, `container_of`) |
+| 6 | `__label__`, a block's local label (`unsafe_get_user`, rseq) |
+| 2 | gcc's `__attribute` spelling |
+| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), `__builtin_clzll` in a bit-field width, a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label` |
 
-past cleanup (read while the attribute was still skipped) the first stops were top-level asm
-(76), `pushf` (30), `__builtin_bswap16` over a constant in a case label (19),
-`typeof` of the object in its own initializer (18), `__builtin_clzll` in a bit-field width,
-a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, and gcc's `__attribute`
-spelling (1 each). each row that lands moves the next up: `typeof(const T)` stopped 80 units,
-`x ?: y` 134 and a runtime `__builtin_offsetof` 122 before they read (142-syntax.c,
-174-elvis.c and 175-offsetof.c hold them).
+each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
+runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143 and file-scope asm 76 before
+they read (142-syntax.c, 174-elvis.c, 175-offsetof.c, 176-cleanup.c and 178-toplevelasm.c
+hold them). a file-scope asm is gas's whole language, and holo's gas-top reads what C headers
+write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
+`.byte`..`.quad` over a symbol plus a constant or less `.`, `.ascii`/`.asciz`, `.balign`,
+`.zero` -- into sections the object carries; any other directive refuses by name.
 **154 of the 160 units carry `asm goto`**, and every kernel template (jump labels,
-alternatives, the exception table) is written in assembler directives: `.pushsection`,
-`.long 1b - .`, `.skip` over label arithmetic, `%c0`. none of that is in gas.l's reach, so
-past the rows above the kernel stops on the assembler, not the compiler. that is the
-toolchain half: a directive-reading gas, a linker-script reader, and a 32/16-bit x86 backend
-for arch/x86/boot and the 32-bit vDSO.
+alternatives, the exception table) is written in the same directives inside a function:
+`.pushsection`, `.long 1b - .`, `.skip` over label arithmetic, `%c0`. a function's template
+still goes through gas-text, which reads no directive, so past the rows above the kernel
+stops on the assembler, not the compiler. that is the toolchain half: gas-top's sections
+carried out of a function's asm, a linker-script reader, and a 32/16-bit x86 backend for
+arch/x86/boot and the 32-bit vDSO.
 
 ---
 

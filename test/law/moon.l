@@ -717,6 +717,8 @@
       !(elem '(label m) (ob 2))                     ; ..and not in .data
       !(elem '(label e) (ob 2))
       (elem '(label plain) (ob 2))                  ; an unattributed global still does
+      ; the underscored spelling is the same attribute
+      (= (<<((cobx "__attribute__((__section__(\".u\"))) long u = 1; int main() { return 0; }") 8)) ".u")
       ; a braced bitfield images its unit's bits, not a placement apiece: {0,1} is bit 1
       ; alone, and 5 with 21 above it is 5 + 21*8
       (= ((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}") 2)
@@ -1129,6 +1131,39 @@
       (refused? (cgn "int main() { asm goto(\"jmp %l0\" : : : \"r12\" : out); return 1; out: return 0; }"))
       (refused? (cgn "int main() { asm goto(\"jmp %l0\" : : \"r\"(1) : : out); return 1; out: return 0; }"))
       (refused? (cgn "int main() { asm goto(\"jmp %0\" : : : : out); return 1; out: return 0; }"))))
+
+; --- a file-scope asm: gas's whole language, which holo's gas-top lowers into sections the
+; object carries. the goldens are the kernel's rows -- EXPORT_SYMBOL's string and pointer, a
+; tracepoint's `sym - .` (a rel32 is S + aux - P - 4, so it rides aux 4), a static call's
+; numeric label read back from the section it pushed. a static only the asm names is laid. ---
+(: (tacast src) <>(cparse <>(clex src))
+   (tacob src) (: r (cparse <>(clex src))
+                  (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   ex (gas-top 'x64 ".section \".export_symbol\",\"a\" ; __export_symbol_x: ; .asciz \"\" ; .balign 8 ; .quad x ; .previous")
+   tp (gas-top 'x64 "\t.section \"__tracepoints_ptrs\", \"a\"\n\t.balign 4\n\t.long __tracepoint_x - .\n\t.previous\n")
+   sc (gas-top 'x64 ".pushsection .static_call.text, \"ax\"\n.globl sc\nsc:\n911: .pushsection .discard.annotate_insn, \"M\", @progbits, 8; .long 911b - ., 1; .popsection\n.byte 0xe9; .long it - (. + 4)\n.popsection\n")
+   l9 (name "l911.1")
+   ; the section stack: push, switch, .previous, pop -- and gas's flags for a name given none
+   st (gas-top 'x64 "x: .byte 1\n.pushsection .a\n.section .b\n.byte 2\n.previous\n.byte 3\n.popsection\n.byte 4\n.section .text.hot\nret\n.section .rodata.k\n.short -2\n.bss\n.zero 2\n")
+   ob (tacob "static int hidden(void) { return 3; } asm(\".section .tb, \\\"a\\\"\\n.long hidden - .\\n.previous\");")
+   (test
+      (= (tacast "asm(\"nop\");") '(prog ((tasm "nop"))))
+      (= (tacast "__asm__ volatile (\"a\" \"b\"); int x;") '(prog ((tasm "ab") (gdecl (("x" int ()))))))
+      (refused? (cparse <>(clex "int x; asm(\"\" : : \"r\"(x));")))
+      (= ex '(((".export_symbol" 1 2 ((label __export_symbol_x) (raw (0)) (align 8) (raw ((fix 8 abs64 x 0))))))
+              () ()))
+      (= tp '((("__tracepoints_ptrs" 1 2 ((align 4) (raw ((fix 4 rel32 __tracepoint_x 4)))))) () ()))
+      (= sc [[[".static_call.text" 1 6 [['label 'sc] ['label l9] ['raw [233]] ['raw [['fix 4 'rel32 'it 0]]]]]
+              [".discard.annotate_insn" 1 0 [['raw [['fix 4 'rel32 l9 4] 1 0 0 0]]]]]
+             ["sc"] ()])
+      (= (map (s \ [<s (s 1) (s 2)]) <st)
+         '((".text" 1 6) (".a" 1 0) (".b" 1 0) (".text.hot" 1 6) (".rodata.k" 1 2) (".bss" 8 3)))
+      (= (<st 0 3) '((label x) (raw (1)) (raw (4))))
+      (= (<st 1 3) '((raw (3))))
+      (= (<st 4 3) '((raw (254 255))))
+      (two? ob)
+      (= (ob 12) '(((".tb" 1 2 ((raw ((fix 4 rel32 hidden 4)))))) () ()))
+      (elem '(label hidden) (ob 1))))
 
 ; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params spill/reload
 ; only around calls they are live across. a param shadowed by an inner local conflates two

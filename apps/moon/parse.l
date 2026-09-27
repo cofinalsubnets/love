@@ -240,15 +240,16 @@
    (inlany? ts) (attrany? ts "always_inline" "__always_inline__")
    (wkany? ts) (attrany? ts "weak" "__weak__")
    (noinlany? ts) (attrany? ts "noinline" "__noinline__")
-   ; the declaration's section attribute: `section("NAME")` to the first depth-0 `;` or
-   ; `{` -- inside a declaration that shape only occurs in an __attribute__. -> NAME | ()
+   ; the declaration's section attribute: `section("NAME")`, either spelling, to the first
+   ; depth-0 `;` or `{` -- inside a declaration that shape only occurs in an __attribute__.
+   ; -> NAME | ()
    (secat? ts)
     (: (go s d) (? !(two? s) ()
                    (: t <s
                       (? ((d < 1) && (tp? t ";" || tp? t "{")) ()
                          (tp? t "(") (go >s (d + 1))
                          (tp? t ")") (go >s (d - 1))
-                         (idv? t "section")
+                         (idv? t "section" || idv? t "__section__")
                           (? (peekp >s "(" && strat? >>s)
                              (tkv <>>s)
                              (go >s d))
@@ -1848,11 +1849,20 @@
                          (? !(two? s3) ()
                             (: s4 (? (peekp <>s3 ":") (golabs ><>s3 ()) [() <>s3])
                                r9 (want <>s4 ")")
-                               rest (? (two? r9) (want r9 ";") ())
+                               semi (two? r9 && peekp r9 ";")      ; the rest may be empty: a file can end here
                                nms (map opnm <s1 + map opnm <s2 + <s4)
                                tm (? (anynm? nms) (asmnm <tr nms) <tr)
-                               (? (two? rest)
-                                  [['asm tm (map opbare <s1) (map opbare <s2) <s3 <s4] rest] ()))))))))))
+                               (? semi
+                                  [['asm tm (map opbare <s1) (map opbare <s2) <s3 <s4] >r9] ()))))))))))
+
+   ; a file-scope asm("..") is gcc's basic form: gas's whole language, sections and data
+   ; included, which gen hands to holo's gas-top. operands have nothing to bind to out here
+   ; -> (('tasm tmpl) rest) | ()
+   (ptasm ps ts)
+    (: r (pasm ps ts)
+       (? !(two? r) ()
+          (<r @ ('asm t () () () ()) [['tasm t] <>r]
+                (blame >ts "a file-scope asm takes no operands"))))
 
    ; a statement-position __attribute__((..)) run skips, except two: musttail lands in the
    ; ret's pre slot (clay's (ret e PRE)) and gen's sibcall pass spells the tail jump or refuses;
@@ -2343,6 +2353,7 @@
        ; glibc opens `__extension__ typedef` and the typedef lane reads the raw head
        (two? ts && idv? <ts "__extension__") (ptop9 ps >ts)
        (sassert? ts) (pstatic ps ts)
+       (asmid? <ts) (ptasm ps ts)
        ; a leading __attribute__((..)): the scans at ptop's entry read the whole form, so
        ; skip it and parse the declaration proper
        !(= (pattr ts) ts) (ptop ps (pattr ts))

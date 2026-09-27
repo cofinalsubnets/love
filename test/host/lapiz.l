@@ -401,23 +401,39 @@ t \\- a thing
            (test !(elem "     .." ls) !(elem "     .. .." ls)
                    (elem "     kept by nroff t - a thing" ls)))
       ; the browser's view: every link with a url is [n] in reading order, through every
-      ; block that holds an inl, and n picks its url; an anchor is a mark and no number
+      ; block that holds an inl, and n picks its url; an anchor is a mark and no number.
+      ; each [n] rides behind a mark named byte 3 and n, which ttpage lifts into the lines
       _ (: d (htread "<h2>see <a href=\"/h\">head</a></h2><p>a <a href=\"x/1\">one</a> and <em><a href=\"#f\">two <b>b</b></a></em>, <a name=\"n\">anchor</a></p><ul><li><a href=\"u3\">three</a></li></ul><blockquote><p><a href=\"q4\">four</a></p></blockquote><dl><dt><a href=\"d5\">term</a></dt><dd><a href=\"d6\">def</a></dd></dl><table><tr><th><a href=\"t7\">h</a></th></tr><tr><td><a href=\"t8\">c</a></td></tr></table>")
            r (ttlinks d)
            p (ttpage d 60)
            ls (lines (flush <p))
            (test (<>r = ["/h" "x/1" "#f" "u3" "q4" "d5" "d6" "t7" "t8"])
-                 (<r = '((head 2 ((text "see [1]head")))
-                         (para ((text "a [2]one and ") (em ((text "[3]two ") (strong ((text "b")))))
+                 (<r = '((head 2 ((text "see ") (tmark "\x031") (text "[1]head")))
+                         (para ((text "a ") (tmark "\x032") (text "[2]one and ")
+                                (em ((tmark "\x033") (text "[3]two ") (strong ((text "b")))))
                                 (text ", ") (tmark "n") (text "anchor")))
-                         (bullets (((text "[4]three"))))
-                         (quote ((para ((text "[5]four")))))
-                         (deflist ((((text "[6]term")) ((text "[7]def")))))
-                         (table (n) (((text "[8]h"))) ((((text "[9]c")))))))
+                         (bullets (((tmark "\x034") (text "[4]three"))))
+                         (quote ((para ((tmark "\x035") (text "[5]four")))))
+                         (deflist ((((tmark "\x036") (text "[6]term")) ((tmark "\x037") (text "[7]def")))))
+                         (table (n) (((tmark "\x038") (text "[8]h"))) ((((tmark "\x039") (text "[9]c")))))))
                  (p 1 = <>r) (p 2 = [["n" 1]])
+                 (p 3 = [0 1 1 3 5 7 8 10 12])
                  (elem "     a [2]one and [3]two b, anchor" ls)
                  ; a page with no links answers none, and the doc unchanged
                  (ttlinks (mdread "a *b* `c`\n") = [(mdread "a *b* `c`\n") ()])))
+      ; what a page carries that is not prose, read anyway: a get form's text field is a
+      ; link to form:ACTION?PAIRS -- every other control as it stands, the first submit
+      ; button, then its own name=value last -- and a post form, a <select>, a hidden or
+      ; unchecked control lay nothing. an image is its alt; a bare & is itself; an
+      ; attribute may go unquoted, and a > inside a quoted one ends no tag
+      _ (: f (htread "<form action=\"/w/i.php?old=1#f\"><input type=hidden name=t value=\"Special:S &amp; b\"><input name=q placeholder=\"Find\"><select name=k><option value=a>A<option selected>B b</select><input type=checkbox name=c checked><input type=checkbox name=d><input type=submit name=go value=Go><input type=submit name=no value=No><textarea name=n>x &lt; y</textarea></form><form method=POST><input name=p></form>")
+           (test (f = '((para ((link ((text "[Find________]")) "form:/w/i.php?t=Special%3AS+%26+b&k=B+b&c=on&n=x+%3C+y&go=Go&q=")
+                                (link ((text "[x < y_______]")) "form:/w/i.php?t=Special%3AS+%26+b&q=&k=B+b&c=on&go=Go&n=x+%3C+y")))))
+                 (htread "<p>a <img src=x alt=\"the logo\"> b <img alt=\"\" src=y> c</p>" = '((para ((text "a [the logo] b  c")))))
+                 (htread "<p>fish & chips, <a href=\"q?a=1&b=2&amp;c=3\">q</a></p>"
+                  = '((para ((text "fish & chips, ") (link ((text "q")) "q?a=1&b=2&c=3")))))
+                 (htread "<p><a href=/u/v title=\"a > b\">u</a> <span id=s>s</span></p>"
+                  = '((para ((link ((text "u")) "/u/v") (text " ") (mark "s") (text "s")))))))
       ; the places a link lands: every id a mark, inside a tag whose content is a line and
       ; ahead of any other, and an <a> with no href only its mark and its text. html keeps
       ; them (law 1); markdown and the terminal show nothing for them; ttpage answers each

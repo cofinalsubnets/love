@@ -7891,6 +7891,9 @@
                                                       pin g 'globs (<p . g 'globs)))
                            (one >ps)))
                     (one <>f)))))
+       ; the file-scope asm, one text in declaration order (gas's section state runs across them)
+       asrc (foldl (\ a f (? (<f = 'tasm) (a + <>f + "\n") a)) "" <>ast)
+       _ (pin g 'asecs (? (0 < #asrc) (gas-top tgt asrc) ()))
        ok (rec <>ast)
        ; -- lazy lowering: lay the roots (every exported fn, alias target, section-named fn, and every
        ; fn an initializer names), then what their laid forms still call, to closure; a spliced static's body ships only if named --
@@ -7958,7 +7961,9 @@
                     (go <>ast ()))
            ; what the sectioned bodies call joins the worklist like any other ref
            sq (foldl (\ a x (: t (unom x) (t && !(laid t) ? (t . a) a))) () snoms)
-           _ (drive (roots + sq))
+           ; ..and a static the file-scope asm names, which no C reference may reach
+           aq (foldl (\ a x (: t (unom x) (t && !(laid t) ? (t . a) a))) () (keys (cg-refs (g 'asecs) {})))
+           _ (drive (roots + sq + aq))
            ; the data lane's fn references, read off the initializers in g 'glob (block-scope statics
            ; included); a laid body can add its own, so this closes rather than passes
            (datclose _)
@@ -7994,11 +7999,12 @@
        (? (gripe? r) r                               ; a named cause rides out to the driver (a gripe is a chain, so guard before two?)
           !(two? r) ()
           !(r 3) ()                               ; no main -> no program (the exe has nothing to start)
+          (two? (<r 'asecs)) (gripe () () () "a file-scope asm lays sections, which only an object carries")
           (: dat <>>r                           ; one flat image: nifs, rodata and bss (as real zeros) all ride the one lane
              [1 (crt0 + <>r + <>>>>>dat + <dat + <>dat + <>>>>dat)])))
    ; the relocatable object view: the .o emitter turns the names into a symbol table + relocations;
    ; the static fns ride as lnames (local func symbols, so nm/gdb see real boundaries)
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs asecs) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           !(two? r) ()
@@ -8055,5 +8061,5 @@
                         (map (nm \ [nm (forsec nm src) (grain nm src)]) (noms src ()))))
              [1 <>r <dat fnames gnames
                 <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat
-                xfns]))))
+                xfns (<r 'asecs)]))))
 ) ; module 'moon
