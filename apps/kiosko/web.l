@@ -43,7 +43,6 @@
 
 (borrow 'posix)
 (:
-   (sv-ends? s t) (: n #s m #t (m <= n && snip s (n - m) n = t))
    (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, string? s && [1 s]))))
    ; the directory a path sits in, as a link back up: "/a/b/c.l" -> "/a/b/"
    (sv-up p) (snip p 0 (lastslash p))
@@ -95,11 +94,11 @@
    ; the hook: `(ctype body) to serve, () to say "not mine". `.l.md` is tested
    ; first because that path ends in `.md` as much as it ends in `.l.md`.
    (sv-make root box p head)
-   (: hd? (sv-ends? p ".l.md")
-      md? (sv-ends? p ".md")
+   (: hd? (ends? p ".l.md")
+      md? (ends? p ".md")
       src (hd? ? (snip p 0 (#p - 3)) p)            ; "/x.l.md" -> "/x.l"
       (? (p = "/hue.css") ["text/css; charset=utf-8" (hw-css 'paper)]
-         !(md? || sv-ends? p ".l") ()
+         !(md? || ends? p ".l") ()
          (: f (root + src)
             r (sv-rdf f)
             (? (one? r) ()                       ; not there: let kiosko say 404

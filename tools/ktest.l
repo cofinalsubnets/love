@@ -14,12 +14,9 @@
 (borrow 'posix)
 (: (sub-at s i t j) (? (j >= #t) 1                           ; does t occur in s at index i?
        (s (i + j) = t j ? (sub-at s i t (j + 1)) 0))
-   (idx s t) ((: (g i) (? (i + #t > #s) -1                     ; first index of t in s, else -1
-       (sub-at s i t 0 ? i (g (i + 1))))) 0)
-   (has? s t) (-1 < idx s t)
    (bol s i)  (? (i < 1) 0 (10 = peep s (i - 1) 0) i (bol s (i - 1)))
    (eol s i)  (? (i >= #s) i (10 = peep s i 0) i (eol s (i + 1)))
-   (lineof s t) (: i (idx s t) (i < 0 ? "" (snip s (bol s i) (eol s i)))))
+   (lineof s t) (: i (findsub s t) (i < 0 ? "" (snip s (bol s i) (eol s i)))))
 
 (: a    >argv
    iso  <a

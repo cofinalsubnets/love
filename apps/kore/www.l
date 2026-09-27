@@ -154,7 +154,7 @@
     (: a (ww-split u) au (snip (a 1) 2 #(a 1)) hp (ww-cut au ":")
        [<hp (? (1 < #(hp 1)) (: n (unum (snip (hp 1) 1 #(hp 1))) (? (charm? n) n dflt)) dflt)])
    ; the answer to a field, off a query this page's form made (?NAME=v), else ()
-   (ww-answer q nm) (? (ww-pre? ("?" + nm + "=") q) (ww-dec q (2 + #nm) #q 1) ())
+   (ww-answer q nm) (? (starts? q ("?" + nm + "=")) (ww-dec q (2 + #nm) #q 1) ())
 
    ; gopher (RFC 1436; its urls, RFC 4266: gopher://host[:port]/Tselector). a menu's lines
    ; are Tdisplay TAB selector TAB host TAB port, a lone "." after the last. i and 3 lines
@@ -177,7 +177,7 @@
               port (: n (? (3 < #f) (unum (f 3)) ()) (? (charm? n) n 70))
               (? ((t = 105) || (t = 51)) (pin run 's (run 's + disp + "\n"))
                  (: _ (flush-run 0)
-                    href (? ((t = 104) && (ww-pre? "URL:" sel)) (snip sel 4 #sel)
+                    href (? ((t = 104) && (starts? sel "URL:")) (snip sel 4 #sel)
                             (t = 55) ("form:" + ww-gurl host port t sel + "?search=")
                             (ww-gurl host port t sel))
                     (say o ("<p>" + ww-gkind t + " " + ww-link href disp + "</p>\n"))))))
@@ -187,7 +187,7 @@
        (slurp o))
    ; a text item's lines, its ".." back to "." and its closing "." gone
    (ww-gtxt s) (: ls (ww-lns s)
-                  (go l) (? !(two? l) () (<l = ".") () ((? (ww-pre? ".." <l) (snip <l 1 #<l) <l) . go >l))
+                  (go l) (? !(two? l) () (<l = ".") () ((? (starts? <l "..") (snip <l 1 #<l) <l) . go >l))
                   (unlines (go ls)))
    (ww-gopher url)
     (: p (ww-split url) hp (ww-hostport url 70) path (p 2) q (p 3)
@@ -229,20 +229,20 @@
        (trim s) (: (a i) (? ((i < #s) && ((s i = 32) || (s i = 9))) (a (i + 1)) i) (snip s (a 0) #s))
        (line l)
         (? ((st 'pre) = 1)
-            (? (ww-pre? "```" l) (: _ (block 0) (pin st 'pre 0))
+            (? (starts? l "```") (: _ (block 0) (pin st 'pre 0))
                (pin st 'buf (st 'buf + l + "\n")))
-           (ww-pre? "```" l) (: _ (ul 0) (pin st 'pre 1))
-           (ww-pre? "* " l) (: _ (ul 1) (say o ("<li>" + ww-esc (trim (snip l 2 #l)) + "</li>\n")))
+           (starts? l "```") (: _ (ul 0) (pin st 'pre 1))
+           (starts? l "* ") (: _ (ul 1) (say o ("<li>" + ww-esc (trim (snip l 2 #l)) + "</li>\n")))
            (: _ (ul 0)
-              (? (ww-pre? "=>" l)
+              (? (starts? l "=>")
                   (: r (trim (snip l 2 #l))
                      k ((: (g i) (? ((#r <= i) || (r i = 32) || (r i = 9)) i (g (i + 1)))) 0)
                      href (snip r 0 k) lab (trim (snip r k #r))
                      (? (0 < #href) (say o ("<p>" + ww-link href (? (0 < #lab) lab href) + "</p>\n")) 0))
-                 (ww-pre? "###" l) (say o ("<h3>" + ww-esc (trim (snip l 3 #l)) + "</h3>\n"))
-                 (ww-pre? "##" l) (say o ("<h2>" + ww-esc (trim (snip l 2 #l)) + "</h2>\n"))
-                 (ww-pre? "#" l) (say o ("<h1>" + ww-esc (trim (snip l 1 #l)) + "</h1>\n"))
-                 (ww-pre? ">" l)
+                 (starts? l "###") (say o ("<h3>" + ww-esc (trim (snip l 3 #l)) + "</h3>\n"))
+                 (starts? l "##") (say o ("<h2>" + ww-esc (trim (snip l 2 #l)) + "</h2>\n"))
+                 (starts? l "#") (say o ("<h1>" + ww-esc (trim (snip l 1 #l)) + "</h1>\n"))
+                 (starts? l ">")
                   (say o ("<blockquote>\n<p>" + ww-esc (trim (snip l 1 #l)) + "</p>\n</blockquote>\n"))
                  (0 < #(trim l)) (say o ("<p>" + ww-esc l + "</p>\n"))
                  0)))
@@ -269,8 +269,8 @@
                           lab (? (code = 11) "[answer, unshown]" "[answer]")
                           [0 u 'html ("<p>" + ww-esc meta + "</p>\n<p>" + ww-link form lab + "</p>\n") 200])
                       (code < 30) (: mime (? (0 < #meta) (wg-lower meta) "text/gemini")
-                                     (? (ww-pre? "text/gemini" mime) [0 u 'html (ww-gtext body) 200]
-                                        (ww-pre? "text/" mime) [0 u 'text body 200]
+                                     (? (starts? mime "text/gemini") [0 u 'html (ww-gtext body) 200]
+                                        (starts? mime "text/") [0 u 'text body 200]
                                         [1 ("www: " + url + " is " + meta + ", not a page")]))
                       (code < 40) (? (hops < 1) [1 "www: too many redirects"]
                                      (ww-get (ww-resolve url meta) (hops - 1)))
@@ -314,10 +314,9 @@
    ; a link off the page made absolute. a form field's (form:ACTION?PAIRS) resolves its
    ; action and keeps its pairs, which are the query the form sends
    (ww-abs base u)
-    (? !(ww-pre? "form:" u) (ww-resolve base u)
+    (? !(starts? u "form:") (ww-resolve base u)
        (: t (snip u 5 #u) q (ww-cut t "?") p (ww-split (ww-resolve base <q))
           ("form:" + ww-join [(p 0) (p 1) (p 2) <>q ""])))
-   (ww-pre? p s) (#p <= #s && p = snip s 0 #p)
    ; a fetched page -> [lines urls anchors lines-of-links], the urls absolute, an anchor
    ; [name line], and the line each link n was laid on at (n - 1)
    (ww-lay g w)
