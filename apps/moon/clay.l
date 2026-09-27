@@ -364,8 +364,8 @@
             (copen n "" hdr b + cclose n b ""))
         ['switch c items] (line n ("switch (" + ce c 0 + ") {")
                            + join (map (x \ cstmt x (n + 1)) items) + line n "}")
-        ['asm t o1 o2 cl . more] (line n ((two? more ? "__attribute__((holo)) " "") + "__asm__ (" + cstrlit t + casmop o1 + casmop o2
-                                   + (two? cl ? (" : " + sepby ", " (map cstrlit cl)) "") + ");"))
+        ['asm t o1 o2 cl lb _] (casm n "__attribute__((holo)) " t o1 o2 cl lb)   ; the holo mark
+        ['asm t o1 o2 cl lb] (casm n "" t o1 o2 cl lb)
         (line n (ce s 0 + ";"))))
    ; the else-if chain kept flat: an else whose whole body is another `if` prints as
    ; `} else if (..) {` rather than opening a fresh level
@@ -380,6 +380,10 @@
                (<a = 'decl) (cdecls <>a)
                (<a = 'expr) (ce <>a 0)
                (ce a 0))
+   (casm n pre t o1 o2 cl lb)
+    (line n (pre + "__asm__ " + (two? lb ? "goto " "") + "(" + cstrlit t + casmop o1 + casmop o2
+             + (two? cl ? (" : " + sepby ", " (map cstrlit cl)) (two? lb ? " :" ""))
+             + (two? lb ? (" : " + sepby ", " lb) "") + ");"))
    (casmop l) (? (one? l) " :"
                  (" : " + sepby ", " (map (\ o (cstrlit <o + "(" + ce <>o 0 + ")")) l)))
 

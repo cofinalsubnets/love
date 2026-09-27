@@ -1,6 +1,6 @@
 /* The syntax rungs of doc/misc/moon-c-gaps.md, held to gcc: a brace-less switch body, a
  * declarator list opening with a FUNCTION, an attribute run BEFORE a struct/union
- * tag, _Thread_local, bare typeof. The battery compares EXIT CODES, so a failing
+ * tag, _Thread_local, bare typeof (over a qualified type-name too). The battery compares EXIT CODES, so a failing
  * check's number comes back. _Thread_local is plain static storage here, so this
  * is an oracle only for the single-threaded reading gcc shares.
  */
@@ -26,6 +26,7 @@ union  __attribute__((packed)) Q { char a; int b; };
 struct __attribute__((packed)) R { char a; int b; } rv;
 
 typeof(counter) same_as_counter;         /* gcc's gnu-mode spelling, C23's own */
+__typeof__(const unsigned long) qual_ul = 3;   /* a qualified type-name (linux's percpu) */
 _Thread_local int tls  = 7;
 __thread      int tls2 = 8;
 
@@ -56,6 +57,8 @@ int main(void)
     if (tls + tls2 != 15) return 13;
     tls = 1;
     if (tls + tls2 != 9)  return 14;
+
+    if (qual_ul != 3 || sizeof(qual_ul) != sizeof(unsigned long)) return 15;
 
     return 0;
 }
