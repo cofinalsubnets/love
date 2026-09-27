@@ -486,6 +486,9 @@
              ((k = 'un) && (= <>e 'not)) 'int
              ((k = 'bin) && elem <>e '(eq ne lt le gt ge)) 'int
              (elem k '(land lor)) 'int
+             ; an assignment and an increment answer the lvalue's type, a comma its right side
+             (elem k '(asn post)) (ptype ps <>e)
+             (elem k '(rmw comma)) (ptype ps <>>e)
              ())))
 
    ; -- declarators: stars xor one array suffix, plus T (*name)(..) and the dispatch table
@@ -1333,9 +1336,33 @@
              (more <r <>r))))
    (pland ps ts) (pone ps pbor "&&" 'land ts)
    (plor ps ts) (pone ps pland "||" 'lor ts)
+   ; gcc's `a ?: b` is `a ? a : b` with a read once: a side-effect-free a is simply repeated
+   ; (so a constant stays one), anything else lands in a temp inside a statement expression
+   (elvpure? e)
+    (e @ (('num || 'flo || 'str || 'var || 'szof) . _) 1
+         (('un || 'cast) _ x) (elvpure? x)
+         (('deref || 'addr) x) (elvpure? x)
+         ('dot x _) (elvpure? x)
+         ('bin _ a b) (elvpure? a && elvpure? b)
+         (('land || 'lor) a b) (elvpure? a && elvpure? b)
+         ('cond c a b) (elvpure? c && elvpure? a && elvpure? b)
+         ())
+   (pelvis ps a b)
+    (? (elvpure? a) ['cond a a b]
+       (: ty (ptype ps a)
+          ty2 (ptype ps ['cond a a b])
+          n (1 + peep ps 'elvn 0)
+          _ (pin ps 'elvn n)
+          t ("__elvis_" + show n)
+          (? (!ty || !ty2) ()
+             ['sexpr [['decl [[t (pdecay ty) a]]]] ['cond ['var t] ['var t] b] ty2])))
    (pcond ps ts)
     (: r (plor ps ts)
        (? !(two? r) ()
+          (peekp <>r "?" && peekp ><>r ":")
+           (: re (pcond ps >><>r)
+              e (? (two? re) (pelvis ps <r <re) ())
+              (? (two? e) [e <>re] ()))
           (peekp <>r "?")
            (: rt (thenw (pexpr ps ><>r) ":")
               (? !(two? rt) ()
