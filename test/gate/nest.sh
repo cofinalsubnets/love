@@ -1,7 +1,8 @@
 #!/bin/sh
 # test/gate/nest.sh -- `love nest`, the binary laying itself as the user's love, in a
-# HOME of its own: a fresh nest, the same build again, an older love, a newer one, one
-# of the same stamp with other bytes, and -f. the installed love is a script where the
+# HOME of its own: the plan said (-n) and done (-y), the same build again, an older love,
+# a newer one, one of the same stamp with other bytes, and -f. off a terminal a bare
+# `love nest` is -y's; the floor (apps/rove/roost.l) is test/host/roost.l's. the installed love is a script where the
 # case wants a stamp no build here carries; it answers `verbs` and `nest --stamp`.
 #
 # usage: sh test/gate/nest.sh LOVE
@@ -20,7 +21,11 @@ mine=$("$love" nest --stamp)
 [ "$mine" -gt 0 ] 2>/dev/null || fail "--stamp answers no stamp: '$mine'"
 
 fresh
-out=$(nest); st=$?
+out=$(nest -n); st=$?
+[ $st = 0 ] || fail "-n exits $st"
+case $out in *"nothing is there yet"*"lush     absent -> love"*) ;; *) fail "-n said: $out";; esac
+[ -e "$H/.love/bin/love" ] && fail "-n laid a love"
+out=$(nest -y); st=$?
 [ $st = 0 ] || fail "a fresh nest exits $st: $out"
 cmp -s "$love" "$H/.love/bin/love" || fail "a fresh nest did not lay this binary"
 for t in lush kore sb cook libra mooncc ain; do
@@ -41,7 +46,7 @@ cmp -s "$love" "$H/.love/bin/love" || fail "an older love was not replaced"
 fake 4000000000
 out=$(nest); st=$?
 [ $st = 1 ] || fail "over a newer love exits $st, wanted 1"
-case $out in *"-f replaces it"*) ;; *) fail "over a newer love said: $out";; esac
+case $out in *"-f lays this one"*) ;; *) fail "over a newer love said: $out";; esac
 
 fake "$mine"
 out=$(nest); st=$?
