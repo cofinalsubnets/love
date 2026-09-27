@@ -136,7 +136,7 @@
    _ (say c "neko\n")
    echo (rdline c)
    _ (close c) _ (catch srv) _ (close l)
-   _ (test (hot? l) (echo = "neko!") ('enoent = connect ['unix (path + ".none")])))
+   (test (hot? l) (echo = "neko!") ('enoent = connect ['unix (path + ".none")])))
   ; a datagram comes with its peer as send takes one, so a reply is (send p (car d) ..)
   (: a (bind ['udp 7396]) b (bind ['udp 7397])
    _ (send b ["127.0.0.1" 7396] "ping")
@@ -144,7 +144,7 @@
    _ (send a <d "pong")
    e (recv b)
    _ (close a) _ (close b)
-   _ (test (<>d = "ping") (<(<d) = "127.0.0.1") (<d 1 = 7397) (e = [["127.0.0.1" 7396] "pong"])))
+   (test (<>d = "ping") (<(<d) = "127.0.0.1") (<d 1 = 7397) (e = [["127.0.0.1" 7396] "pong"])))
   ; an echo to loopback over icmp, its ttl asked for. linux lets a group in
   ; ping_group_range open this socket unprivileged; where it may not, the bind says so
   (: p (bind ['icmp 'ttl])
