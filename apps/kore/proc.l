@@ -1221,6 +1221,112 @@
                       0 <>r)
              _ (flush out) 0)))
 
+   ; -- pinky: GNU's lightweight finger over the same utmp -- the short table (-f no
+   ; head, -w no name, -i no name nor where, -q not idle either), or -l's long form of
+   ; the named users off /etc/passwd (-b no home nor shell, -h no .project, -p no .plan) --
+   (upw-row nm)                         ; the passwd row -> its seven fields | ()
+    (: r (uread "/etc/passwd")
+       hit (? (two? r) (filter (\ l (: f (usplit 58 l) (two? f && <f = nm))) (lines <>r)) ())
+       (? (two? hit) (usplit 58 <hit) ()))
+   (upw-real row)                       ; the gecos up to its comma, & the capitalized login
+    (: g (row 4) k (findsub g ",") g2 (? (k < 0) g (snip g 0 k))
+       nm <row cap (? (#nm && 96 < nm 0 && nm 0 < 123) (string (nm 0 - 32) + snip nm 1 #nm) nm)
+       (go i) (? (#g2 <= i) "" (g2 i = 38) (cap + go (i + 1)) (string (g2 i) + go (i + 1)))
+       (go 0))
+   (pinky-idle s)
+    (? (s < 60) "     " (s < 86400) (uzpad 2 (show (s // 3600)) + ":" + uzpad 2 (show (s % 3600 // 60)))
+       (show (s // 86400) + "d"))
+   (pinky-main as)
+    (: (usage m) (udie 1 ("pinky: " + m + "\nTry 'pinky --help' for more information."))
+       (go a o)
+        (? !(two? a) o
+           (: w <a n #w
+              (? (w = "--") (: _ (pin o 'us (o 'us + >a)) o)
+                 (2 < n && snip w 0 2 = "--") (usage ("unrecognized option '" + w + "'"))
+                 (1 < n && w 0 = 45)
+                  (: _ (map (\ c (? (elem c "slbhpfwiq") (pin o c 1) (usage ("invalid option -- '" + string c + "'"))))
+                            (map w (drop 1 ^n)))
+                     (go >a o))
+                 (: _ (pin o 'us (o 'us + [w])) (go >a o)))))
+       o (go as {'us ()})
+       us (o 'us)
+       (f? c) (peep o c 0)
+       (? (f? 108)
+          (? !(two? us) (usage "no username specified; at least one must be specified when using -l")
+             (: _ (map (\ nm
+                         (: row (upw-row nm)
+                            (? !(two? row) (say out ("Login name: " + urpad 28 nm + "In real life:  ???\n"))
+                               (: _ (say out ("Login name: " + urpad 28 nm + "In real life:  " + upw-real row + "\n"))
+                                  _ (? (f? 98) 0 (say out ("Directory: " + urpad 29 (row 5) + "Shell:  " + row 6 + "\n")))
+                                  (dot f what) (: r (uread (row 5 + "/" + f)) (? (two? r) (say out (what + <>r)) 0))
+                                  _ (? (f? 104) 0 (dot ".project" "Project: "))
+                                  _ (? (f? 112) 0 (dot ".plan" "Plan:\n"))
+                                  (say out "\n")))))
+                       us)
+                _ (flush out) 0))
+          (: full !(f? 119 || f? 105 || f? 113)
+             where !(f? 105 || f? 113)
+             idle !(f? 113)
+             _ (? (f? 102) 0
+                  (say out ((urpad 8 "Login") + (? full (" " + urpad 19 "Name") "") + " " + urpad 9 " TTY"
+                            + (? idle (" " + urpad 6 "Idle") "") + " " + urpad 12 "When" + (? where " Where" "") + "\n")))
+             r (uut-read (uut-file 0))
+             now (clock 0 // 1000)
+             _ (map (\ u
+                      (? (!(u 0 = 7) || !(#(u 4)) || (two? us && !(elem (u 4) us))) 0
+                         (: st (stat (uut-dev (u 2)))
+                            ok (two? st && 9 < #st)
+                            row (upw-row (u 4))
+                            _ (say out ((urpad 8 (u 4))
+                                        + (? full (? (two? row) (" " + urpad 19 (: t (upw-real row) (? (19 < #t) (snip t 0 19) t)))
+                                                     (" " + upad 19 "        ???")) "")
+                                        + " " + string (? !ok 63 (0 < (st 2 & 16)) 32 42) + urpad 8 (u 2)
+                                        + (? idle (" " + urpad 6 (? ok (pinky-idle (now - st 9 // 1000000000)) "???")) "")
+                                        + " " + uwho-tm u
+                                        + (? (where && #(u 5)) (" " + u 5) "") + "\n"))
+                            0)))
+                    (? (two? r) <>r ()))
+             _ (flush out) 0)))
+
+   ; -- usleep: a pause in microseconds (to the millisecond, which is the clock's grain) --
+   (usleep-main as)
+    (: _ (? (two? as && !(two? >as)) 0 (udie 1 "usage: usleep MICROSECONDS"))
+       v (unum <as)
+       _ (? (charm? v && 0 <= v) (rest ((v + 999) // 1000)) (udie 1 ("usleep: invalid number '" + <as + "'")))
+       0)
+
+   ; -- reset: the terminal put back -- the line discipline sane where stdin is one, and
+   ; the full reset (RIS) sent, toybox's pair --
+   (reset-main _)
+    (: _ (? (two? (tty 0)) (stty-main ["sane"]) 0)
+       _ (say out "\ec") _ (flush out) 0)
+
+   ; -- ts: each line of the input stamped as it arrives, toybox's: the date and time
+   ; ("%b %d %H:%M:%S"), or with -s the time since the start and with -i since the line
+   ; before ("%H:%M:%S"); -m adds the milliseconds; a FORMAT is strftime's. UTC, as every
+   ; clock here is --
+   (ts-main as)
+    (: (go a o) (? !(two? a) o
+                   (1 < #<a && <a 0 = 45)
+                    (: w <a _ (map (\ c (? (elem c "ism") (pin o c 1) (udie 1 ("ts: Unknown option '" + string c + "' (see \"ts --help\")"))))
+                                   (map w (drop 1 ^#w)))
+                       (go >a o))
+                   (: _ (pin o 'fmt <a) (go >a o)))
+       o (go as {})
+       rel (peep o 115 0) inc (peep o 105 0)
+       fmt (? (o 'fmt) (o 'fmt) (rel || inc) "%H:%M:%S" "%b %d %H:%M:%S")
+       t0 (clock 0)
+       rd (urd in)
+       (stamp ms) (udatef fmt ms + (? (peep o 109 0) ("." + uzpad 3 (show (ms % 1000))) ""))
+       (loop last)
+        (: l (urd-line rd)
+           (? !(two? l) (: _ (flush out) 0)
+              (: now (clock 0)
+                 _ (say out (stamp (? rel (now - t0) inc (now - last) now) + " " + <l + (? <>l "\n" "")))
+                 _ (flush out)
+                 (loop now))))
+       (loop t0))
+
    ; -- users: the names logged in, sorted, on one line --
    (users-main as)
     (: _ (? (1 < #as) (udie 1 ("users: extra operand '" + as 1 + "'")) 0)

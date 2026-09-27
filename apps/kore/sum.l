@@ -1,5 +1,5 @@
-; apps/kore/sum.l -- the checksum tools: cksum, sum, md5sum, sha1sum, sha224sum,
-; sha256sum, sha384sum, sha512sum, b2sum. one shape each time -- stream a file through
+; apps/kore/sum.l -- the checksum tools: cksum, sum, crc32, md5sum, sha1sum, sha224sum,
+; sha256sum, sha384sum, sha512sum, b2sum, sha3sum. one shape each time -- stream a file through
 ; a digest, say a line -- so what is actually here is the GNU faces (cksum's "CRC BYTES
 ; NAME", sum's two, the digest tools' "DIGEST  NAME") and the -c lane that reads those
 ; lines back. the digests are inle/hash.c; there is no love statement of any of them,
@@ -27,6 +27,8 @@
    sum-sha512p (\ _ (sha512 ""))
    sum-b2p (\ _ (blake2b ""))
    sum-bsdp (\ _ (bsdsum 0 ""))
+   sum-sha3p (\ _ (sha3 ""))
+   sum-crcp (\ _ (crc32-on 0 ""))
    (sum-nif k f)
     (: v (peep sum-door k ())
        (? (charm? v) v
@@ -44,6 +46,7 @@
    (sum-sha384d _) [202 sha384-init sha384-feed sha384-done]
    (sum-sha512d _) [201 sha512-init sha512-feed sha512-done]
    (sum-b2d n)     [210 (\ b (blake2b-init b n)) blake2b-feed blake2b-done]
+   (sum-sha3d n sh) [204 (\ b (sha3-init b n sh)) sha3-feed sha3-done]
 
    ; one operand folded a gulp at a time -> [acc bytes] | 'dir | the open's nom. "-"
    ; is stdin, as it is everywhere in kore. a 100 MB file goes past a gulp at a time
@@ -206,6 +209,43 @@
        (? <>r (sum-check "b2sum" (? l (\ _ (\ _ (sum-b2d nn))) (\ k (\ _ (sum-b2d (k // 2)))))
                          (? l (2 * nn) 0) <>>r)
           (sum-say "b2sum" sum-hexline (\ _ (sum-b2d nn)) "-" <>>r)))
+
+   ; sha3sum: toybox's -a BITS (224 by default, 128..512), -b the digest alone, -S shake's
+   ; pad; busybox's -c beside them, reading a list of the length -a says
+   (sha3sum-main as)
+    (: _ (sum-have "sha3sum" "sha3" 9 sum-sha3p)
+       (bad m) (udie 1 ("sha3sum: " + m + " (see \"sha3sum --help\")"))
+       (bits w) (: v (unum w)
+                   (? !(charm? v) (bad ("-a '" + w + "'")) (v < 128) (bad "-a < 128") (512 < v) (bad "-a > 512") v))
+       (go a o)
+        (? !(two? a) o
+           (: w <a n #w
+              (? (w = "--") (: _ (pin o 'fs (o 'fs + >a)) o)
+                 (w = "-a") (? (two? >a) (: _ (pin o 'a (bits <>a)) (go >>a o)) (bad "Missing argument to -a"))
+                 (1 < n && w 0 = 45)
+                  (: (cl k) (? (n <= k) (go >a o)
+                               (w k = 97) (: _ (pin o 'a (bits (? (k + 1 < n) (snip w (k + 1) n) (two? >a) <>a "")))
+                                             (go (? (k + 1 < n || !(two? >a)) >a >>a) o))
+                               (elem (w k) "bSc") (: _ (pin o (w k @ 98 'b 83 'S 'c) 1) (cl (k + 1)))
+                               (bad ("Unknown option '" + string (w k) + "'")))
+                     (cl 1))
+                 (: _ (pin o 'fs (o 'fs + [w])) (go >a o)))))
+       o (go as {'a 224 'fs ()})
+       mk (\ _ (sum-sha3d (o 'a) (o 'S)))
+       (? (o 'c) (sum-check "sha3sum" (\ _ mk) (2 * (o 'a // 8)) (o 'fs))
+          (sum-say "sha3sum" (? (o 'b) (\ v n f (v + "\n")) sum-hexline) mk "-" (o 'fs))))
+
+   ; crc32: toybox's -- zlib's crc of each file, eight hex digits and the name
+   (crc32-main as)
+    (: _ (sum-have "crc32" "crc32" 10 sum-crcp)
+       (row f nm ok)
+        (: r (sum-fold f crc32-on 0)
+           (? (two? r) (: _ (say out ((upadc 8 48 (ubase-hex <r)) + (? #nm (" " + nm) "") + "\n")) ok)
+              (: _ (sum-nope "crc32" f r) 0)))
+       (walk a ok) (? (two? a) (walk >a (row <a <a ok)) ok)
+       ok (? (two? as) (walk as 1) (row "-" "" 1))
+       _ (flush out)
+       (? ok 0 1))
 
    ; sum: bsd's 16-bit rotating checksum over 1024-byte blocks (-r, the default), or
    ; system v's byte total folded to 16 bits over 512-byte blocks (-s, --sysv), the

@@ -15,7 +15,7 @@
 ;   kore dos2unix|unix2dos|mac2unix [-fkqn] [F..]   the three line endings, IN PLACE
 ;   kore base64|base32 [-d] [-w N]   the RFC 4648 encodings
 ;   kore tsort|factor                a partial order made total, and a number's primes
-;   kore cksum|sum|md5sum|sha1sum|sha224sum|sha256sum|sha384sum|sha512sum|b2sum [-c] [F..]
+;   kore cksum|sum|crc32|md5sum|sha1sum|sha224sum|sha256sum|sha384sum|sha512sum|b2sum|sha3sum
 ;                                    the checksums (apps/kore/sum.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (apps/kore/fs.l)
 ;   kore realpath|link|unlink        a path made canonical, and the two bare calls
@@ -78,6 +78,8 @@
         users-main uset usignames usplit ustatf utag utty uupsay wc-main who-main whoami-main xargs-main yes-main
         cal-main clear-main dd-main hostname-main logname-main strings-main timeout-main tty-main
         hostid-main dnsdomainname-main setsid-main watch-main pathchk-main mountpoint-main shred-main
+        sha3sum-main crc32-main basenc-main uuencode-main uudecode-main ascii-main pinky-main
+        usleep-main reset-main ts-main fsync-main dircolors-main dc-main readelf-main hexedit-main
         which-main xxd-main)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
@@ -423,6 +425,274 @@
        (? (foldl (\ a f (max a (one f))) 0 fs) 1 0))
 
    ; ranlib: an archive written again with its index, the index holo's own reader wants
+   ; -- readelf: binutils' -h -l -S -s (and -e, all three headers), wide or at 80
+   ; columns, over little-endian ELF of either class. out of reach, deliberately: the
+   ; relocations, the dynamic section, notes, versions and the dumps --
+   (re-hex v w) (upadc w 48 (? (v = 0) "0" (ubase-hex v)))
+   (re-0x v) ("0x" + (? (v = 0) "0" (ubase-hex v)))
+   (re-u v w) (upad w (show v))
+   (re-cut s w) (? (w < #s) (snip s 0 (w - 5) + "[...]") s)
+   (re-at s w) (? (w < #s) (snip s 0 w) s)
+   (re-lbl l) ("  " + urpad 35 l)
+   (re-mach m) (m @ 3 "Intel 80386" 40 "ARM" 62 "Advanced Micro Devices X86-64" 183 "AArch64"
+                    243 "RISC-V" 8 "MIPS R3000" 20 "PowerPC" 21 "PowerPC64" ("<unknown>: 0x" + ubase-hex m))
+   (re-osabi o) (o @ 0 "UNIX - System V" 1 "UNIX - HP-UX" 2 "UNIX - NetBSD" 3 "UNIX - GNU" 6 "UNIX - Solaris"
+                     9 "UNIX - FreeBSD" 12 "UNIX - OpenBSD" ("<unknown: " + ubase-hex o + ">"))
+   (re-dyn fs b)                        ; the dynamic section's (tag . value) pairs
+    (: w (? (b 4 = 2) 8 4)
+       d (filter (\ sc (sc 2 = 6)) (bu-secs fs b))
+       (? !(two? d) ()
+          (: o (<d 4) n (<d 5 // (2 * w))
+             (map (\ i [(ule b (o + 2 * w * i) w) (ule b (o + 2 * w * i + w) w)]) ^n))))
+   (re-type fs b t)
+    (t @ 0 "NONE (None)" 1 "REL (Relocatable file)" 2 "EXEC (Executable file)" 4 "CORE (Core file)"
+         3 (? (any (\ p (<p = 1879048187 && 0 < (<>p & 134217728))) (re-dyn fs b))
+              "DYN (Position-Independent Executable file)" "DYN (Shared object file)")
+         ("<unknown>: " + ubase-hex t))
+   (re-flags b m f)
+    ("0x" + ubase-hex f
+     + (? (m = 40) (? (f >> 24) (", Version" + show (f >> 24) + " EABI"
+                               + (? (f & 1024) ", hard-float ABI" (f & 512) ", soft-float ABI" "")) "")
+          (m = 243) ((? (f & 1) ", RVC" "") + ([", soft-float ABI" ", single-float ABI" ", double-float ABI" ", quad-float ABI"] ((f & 6) >> 1))
+                     + (? (f & 8) ", RVE" "") + (? (f & 16) ", TSO" ""))
+          ""))
+   (re-head fs b)
+    (: e64 (b 4 = 2) m (ule b 18 2) f (ule b (? e64 48 36) 4)
+       (row l v) (say out (re-lbl l + v + "\n"))
+       _ (say out "ELF Header:\n  Magic:   ")
+       _ (map (\ i (say out (re-hex (b i) 2 + " "))) ^16)
+       _ (say out "\n")
+       _ (row "Class:" (? e64 "ELF64" "ELF32"))
+       _ (row "Data:" "2's complement, little endian")
+       _ (row "Version:" (show (b 6) + (? (b 6 = 1) " (current)" "")))
+       _ (row "OS/ABI:" (re-osabi (b 7)))
+       _ (row "ABI Version:" (show (b 8)))
+       _ (row "Type:" (re-type fs b (ule b 16 2)))
+       _ (row "Machine:" (re-mach m))
+       _ (row "Version:" (re-0x (ule b 20 4)))
+       _ (row "Entry point address:" (re-0x (ld-f fs b 0 'e-entry)))
+       _ (row "Start of program headers:" (show (ld-f fs b 0 'e-phoff) + " (bytes into file)"))
+       _ (row "Start of section headers:" (show (ld-f fs b 0 'e-shoff) + " (bytes into file)"))
+       _ (row "Flags:" (re-flags b m f))
+       _ (row "Size of this header:" (show (ule b (? e64 52 40) 2) + " (bytes)"))
+       _ (row "Size of program headers:" (show (ld-f fs b 0 'e-phent) + " (bytes)"))
+       _ (row "Number of program headers:" (show (ld-f fs b 0 'e-phnum)))
+       _ (row "Size of section headers:" (show (ld-f fs b 0 'e-shent) + " (bytes)"))
+       _ (row "Number of section headers:" (show (ld-f fs b 0 'e-shnum)))
+       (row "Section header string table index:" (show (ld-f fs b 0 'e-shstrx))))
+   (re-shtype m t)
+    (? (t < 20) (["NULL" "PROGBITS" "SYMTAB" "STRTAB" "RELA" "HASH" "DYNAMIC" "NOTE" "NOBITS" "REL"
+                  "SHLIB" "DYNSYM" "" "" "INIT_ARRAY" "FINI_ARRAY" "PREINIT_ARRAY" "GROUP" "SYMTAB SECTION INDICES" "RELR"] t)
+       (t = 1879048181) "GNU_ATTRIBUTES" (t = 1879048182) "GNU_HASH" (t = 1879048183) "GNU_LIBLIST"
+       (t = 1879048189) "VERDEF" (t = 1879048190) "VERNEED" (t = 1879048191) "VERSYM"
+       (t = 1879048180) "GNU_SFRAME" (t = 1879002115) "LLVM_ADDRSIG"
+       (m = 62 && t = 1879048193) "X86_64_UNWIND"
+       (m = 40 && t = 1879048193) "ARM_EXIDX" (m = 40 && t = 1879048194) "ARM_PREEMPTMAP"
+       (m = 40 && t = 1879048195) "ARM_ATTRIBUTES" (m = 243 && t = 1879048195) "RISCV_ATTRIBUTES"
+       (m = 183 && t = 1879048195) "AARCH64_ATTRIBUTES"
+       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + ubase-hex (t - 1610612736))
+       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + ubase-hex (t - 1879048192))
+       (2147483648 <= t) ("LOUSER+0x" + ubase-hex (t - 2147483648))
+       (re-hex t 8 + ": <unknown>"))
+   (re-shflags b m f)
+    (: gnu (b 7 = 3 || b 7 = 9)
+       (go bit o) (? (32 <= bit) o
+                     (: v (1 << bit)
+                        (? (0 = (f & v)) (go (bit + 1) o)
+                           (: c (? (bit < 12) ("WAX?MSILOGTC" bit)
+                                   (v = 2097152 && gnu) 82
+                                   (v = 268435456 && m = 62) 108
+                                   (v = 536870912 && m = 40) 121
+                                   (v = 2147483648) 69
+                                   (0 < (v & 267386880)) 111
+                                   (0 < (v & 4026531840)) 112
+                                   120)
+                              (go (bit + 1) (? (elem c o) o (o + string c)))))))
+       (go 0 ""))
+   (re-keys b m)
+    ("Key to Flags:\n  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),\n"
+     + "  L (link order), O (extra OS processing required), G (group), T (TLS),\n"
+     + "  C (compressed), x (unknown), o (OS specific), E (exclude),\n  "
+     + (? (b 7 = 3 || b 7 = 9) "R (retain), " "") + "D (mbind), "
+     + (m @ 62 "l (large), " 40 "y (purecode), " "") + "p (processor specific)\n")
+   (re-secs fs b w? h?)
+    (: e64 (b 4 = 2) m (ule b 18 2) ss (bu-secs fs b)
+       (ent sc) (ld-f fs b 0 'e-shoff + sc 0 * ld-n fs 'sh-ent)
+       (addr sc) (ule b ((ent sc) + (? e64 16 12)) (? e64 8 4))
+       (esz sc) (ld-f fs b (ent sc) 'sh-esz)
+       (? !(two? ss) (say out "\nThere are no sections in this file.\n")
+          (: _ (? h? (say out "\n")
+                  (say out ("There are " + show #ss + " section headers, starting at offset " + re-0x (ld-f fs b 0 'e-shoff) + ":\n\n")))
+             _ (say out (? (#ss = 1) "Section Header:\n" "Section Headers:\n"))
+             _ (say out (? !e64 "  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al\n"
+                           w? "  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al\n"
+                           "  [Nr] Name              Type             Address           Offset\n       Size              EntSize          Flags  Link  Info  Align\n"))
+             _ (map (\ sc
+                      (: nm (sc 1) ty (re-at (re-shtype m (sc 2)) 15) fl (re-shflags b m (sc 3))
+                         hd ("  [" + re-u (sc 0) 2 + "] " + urpad 17 (? w? nm (re-cut nm 17)) + " ")
+                         (say out (? (!e64 || w?)
+                                     (hd + urpad 15 ty + " " + re-hex (addr sc) (? e64 16 8) + " " + re-hex (sc 4) 6 + " "
+                                      + re-hex (sc 5) 6 + " " + re-hex (esz sc) 2 + " " + upad 3 fl + " " + re-u (sc 6) 2
+                                      + " " + re-u (sc 7) 3 + " " + re-u (sc 8) 2 + "\n")
+                                     (hd + urpad 15 ty + "  " + re-hex (addr sc) 16 + "  " + re-hex (sc 4) 8 + "\n       "
+                                      + re-hex (sc 5) 16 + "  " + re-hex (esz sc) 16 + " " + upad 3 fl + "      "
+                                      + re-u (sc 6) 2 + "   " + re-u (sc 7) 3 + "     " + show (sc 8) + "\n")))))
+                    ss)
+             (say out (re-keys b m)))))
+   (re-phtype m t)
+    (? (t < 8) (["NULL" "LOAD" "DYNAMIC" "INTERP" "NOTE" "SHLIB" "PHDR" "TLS"] t)
+       (t = 1685382480) "GNU_EH_FRAME" (t = 1685382481) "GNU_STACK" (t = 1685382482) "GNU_RELRO"
+       (t = 1685382483) "GNU_PROPERTY" (t = 1685382484) "GNU_SFRAME"
+       (m = 40 && t = 1879048193) "EXIDX" (m = 243 && t = 1879048195) "RISCV_ATTRIBUT"
+       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + ubase-hex (t - 1610612736))
+       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + ubase-hex (t - 1879048192))
+       ("<unknown>: " + ubase-hex t))
+   (re-phs fs b)                        ; [type off vaddr paddr filesz memsz flags align]
+    (: e64 (b 4 = 2) o (ld-f fs b 0 'e-phoff) n (ld-f fs b 0 'e-phnum) e (ld-f fs b 0 'e-phent)
+       (map (\ i (: h (o + i * e)
+                    (? e64 [(ule b h 4) (ule b (h + 8) 8) (ule b (h + 16) 8) (ule b (h + 24) 8) (ule b (h + 32) 8)
+                            (ule b (h + 40) 8) (ule b (h + 4) 4) (ule b (h + 48) 8)]
+                       [(ule b h 4) (ule b (h + 4) 4) (ule b (h + 8) 4) (ule b (h + 12) 4) (ule b (h + 16) 4)
+                        (ule b (h + 20) 4) (ule b (h + 24) 4) (ule b (h + 28) 4)])))
+            ^n))
+   ; binutils' ELF_SECTION_IN_SEGMENT, strictly, the tbss case aside: the arithmetic is
+   ; unsigned, so a size of 0 less 1 is every address
+   (re-in? sc p)
+    (: ty (sc 2) fl (sc 3) off (sc 4) sz (sc 5) addr (sc 10) pt <p
+       tls (0 < (fl & 1024)) alloc (0 < (fl & 2)) nob (ty = 8)
+       (le1 x v) (v = 0 || x <= v - 1)       ; x <= v - 1, unsigned
+       ssz (? (!tls || !nob || pt = 7) sz 0)
+       (? (tls && nob && !(pt = 7)) 0
+          !(? tls (pt = 7 || pt = 1685382482 || pt = 1) !(pt = 7 || pt = 6)) 0
+          (!alloc && (elem pt [1 2 1685382480 1685382481 1685382482 1685382484])) 0
+          !(nob || (p 1 <= off && le1 (off - p 1) (p 4) && off - p 1 + ssz <= p 4)) 0
+          !(!alloc || (p 2 <= addr && le1 (addr - p 2) (p 5) && addr - p 2 + ssz <= p 5)) 0
+          (!(pt = 2 || pt = 4) || !(sz = 0) || p 5 = 0) 1
+          ((nob || (p 1 < off && off - p 1 < p 4)) && (!alloc || (p 2 < addr && addr - p 2 < p 5)))))
+   (re-segs fs b h? w?)
+    (: e64 (b 4 = 2) m (ule b 18 2) ps (re-phs fs b)
+       ss (map (\ sc (sc + [(ule b (ld-f fs b 0 'e-shoff + sc 0 * ld-n fs 'sh-ent + (? e64 16 12)) (? e64 8 4))]))
+               (drop 1 (bu-secs fs b)))
+       (? !(two? ps) (say out "\nThere are no program headers in this file.\n")
+          (: _ (? h? 0
+                  (say out ("\nElf file type is " + re-type fs b (ule b 16 2) + "\nEntry point " + re-0x (ld-f fs b 0 'e-entry)
+                            + "\nThere are " + show #ps + " program headers, starting at offset " + show (ld-f fs b 0 'e-phoff) + "\n")))
+             _ (say out (? !e64 "\nProgram Headers:\n  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align\n"
+                           w? "\nProgram Headers:\n  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align\n"
+                           "\nProgram Headers:\n  Type           Offset             VirtAddr           PhysAddr\n                 FileSiz            MemSiz              Flags  Align\n"))
+             (fl f) (string (? (f & 4) 82 32) + string (? (f & 2) 87 32) + string (? (f & 1) 69 32))
+             _ (map (\ p
+                      (: _ (say out ("  " + urpad 14 (re-at (re-phtype m <p) 14) + " "
+                                     + (? (e64 && w?) ("0x" + re-hex (p 1) 6 + " 0x" + re-hex (p 2) 16 + " 0x" + re-hex (p 3) 16 + " 0x" + re-hex (p 4) 6
+                                                    + " 0x" + re-hex (p 5) 6 + " " + fl (p 6) + " " + re-0x (p 7))
+                                          e64 ("0x" + re-hex (p 1) 16 + " 0x" + re-hex (p 2) 16 + " 0x" + re-hex (p 3) 16
+                                               + "\n                 0x" + re-hex (p 4) 16 + " 0x" + re-hex (p 5) 16 + "  " + fl (p 6) + "    " + re-0x (p 7))
+                                          ("0x" + re-hex (p 1) 6 + " 0x" + re-hex (p 2) 8 + " 0x" + re-hex (p 3) 8 + " 0x" + re-hex (p 4) 5
+                                           + " 0x" + re-hex (p 5) 5 + " " + fl (p 6) + " " + re-0x (p 7)))
+                                     + "\n"))
+                         (? (<p = 3) (say out ("      [Requesting program interpreter: " + ld-cstr b (p 1) + "]\n")) 0)))
+                    ps)
+             _ (say out "\n Section to Segment mapping:\n  Segment Sections...\n")
+             (map (\ i (: p (ps i)
+                          (say out ("   " + upadc 2 48 (show i) + "     "
+                                    + foldl (\ a sc (? (re-in? sc p) (a + sc 1 + " ") a)) "" ss + "\n"))))
+                  ^#ps))))
+   ; a version index's name, off .gnu.version_r (what the file needs) and
+   ; .gnu.version_d (what it defines): a tablet of index -> [name needed?]
+   (re-vers ss b)
+    (: t {}
+       (str sc o) (ld-cstr b ((ss (sc 6)) 4 + o))
+       (need sc)
+        (: (vn o k) (? (k < 1) 0
+                       (: cnt (ule b (o + 2) 2) aux (ule b (o + 8) 4) nx (ule b (o + 12) 4)
+                          (va a j) (? (j < 1) 0
+                                      (: _ (pin t (ule b (a + 6) 2) [(str sc (ule b (a + 8) 4)) 1])
+                                         (va (a + ule b (a + 12) 4) (j - 1))))
+                          _ (va (o + aux) cnt)
+                          (? (nx = 0) 0 (vn (o + nx) (k - 1)))))
+           (vn (sc 4) (sc 7)))
+       (def sc)
+        (: (vd o k) (? (k < 1) 0
+                       (: ndx (ule b (o + 4) 2) aux (ule b (o + 12) 4) nx (ule b (o + 16) 4)
+                          _ (pin t ndx [(str sc (ule b (o + aux) 4)) 0])
+                          (? (nx = 0) 0 (vd (o + nx) (k - 1)))))
+           (vd (sc 4) (sc 7)))
+       _ (map (\ sc (? (sc 2 = 1879048190) (need sc) (sc 2 = 1879048189) (def sc) 0)) ss)
+       t)
+   (re-syms fs b w?)
+    (: e64 (b 4 = 2) ss (bu-secs fs b) es (? e64 24 16)
+       vt (re-vers ss b)
+       vs (filter (\ sc (sc 2 = 1879048191)) ss)
+       (sym o k) (: h (o + k * es)
+                    (? e64 [(ule b h 4) (b (h + 4)) (b (h + 5)) (ule b (h + 6) 2) (ule b (h + 8) 8) (ule b (h + 16) 8)]
+                       [(ule b h 4) (b (h + 12)) (b (h + 13)) (ule b (h + 14) 2) (ule b (h + 4) 4) (ule b (h + 8) 4)]))
+       (styp t) (? (t < 7) (["NOTYPE" "OBJECT" "FUNC" "SECTION" "FILE" "COMMON" "TLS"] t) (t = 10) "IFUNC"
+                   (13 <= t) ("<processor specific>: " + show t) ("<OS specific>: " + show t))
+       (sbind t) (? (t < 3) (["LOCAL" "GLOBAL" "WEAK"] t) (t = 10) "UNIQUE"
+                    (13 <= t) ("<processor specific>: " + show t) ("<OS specific>: " + show t))
+       (ndx x) (upad 4 (? (x = 0) "UND" (x = 65521) "ABS" (x = 65522) "COM" (65280 <= x) ("PRC[0x" + re-hex x 4 + "]") (show x)))
+       (szs v) (? (v < 100000) (re-u v 5) (re-0x v))
+       (map (\ st
+              (: n (st 5 // es) stro (? (st 6 < #ss) ((ss (st 6)) 4) 0)
+                 _ (say out ("\nSymbol table '" + st 1 + "' contains " + show n + " " + (? (n = 1) "entry" "entries") + ":\n"
+                             + (? e64 "   Num:    Value          Size Type    Bind   Vis      Ndx Name\n"
+                                  "   Num:    Value  Size Type    Bind   Vis      Ndx Name\n")))
+                 vsec (? (st 2 = 11) (filter (\ v (v 6 = st 0)) vs) ())
+                 ; a needed version says its index; a defined one says @@, or @ where hidden,
+                 ; and nothing on the symbol that names the version itself
+                 (ver k y nm0) (? !(two? vsec) ""
+                                  (: x (ule b (<vsec 4 + 2 * k) 2) i (x & 32767) e (peep vt i ())
+                                     (? (i < 2 || !(two? e)) ""
+                                        (y 3 = 0 || <>e) ("@" + <e + " (" + show i + ")")
+                                        (<e = nm0) ""
+                                        (x & 32768) ("@" + <e) ("@@" + <e))))
+                 (map (\ k (: y (sym (st 4) k) t (y 1 & 15)
+                              nm0 (? (t = 3 && y 0 = 0 && y 3 < #ss) ((ss (y 3)) 1) (ld-cstr b (stro + y 0)))
+                              v (ver k y nm0)
+                              nm (? (w? || #nm0 + #v <= 21) (nm0 + v) (snip nm0 0 (max 0 (16 - #v)) + "[...]" + v))
+                              (say out (re-u k 6 + ": " + re-hex (y 4) (? e64 16 8) + " " + szs (y 5) + " "
+                                        + urpad 7 (styp t) + " " + urpad 6 (sbind (y 1 >> 4)) + " "
+                                        + urpad 7 (["DEFAULT" "INTERNAL" "HIDDEN" "PROTECTED"] (y 2 & 3)) + " "
+                                        + ndx (y 3) + " " + nm + "\n"))))
+                      ^n)))
+            (filter (\ sc (sc 2 = 2 || sc 2 = 11)) ss)))
+   (readelf-main as)
+    (: (usage m) (udie 1 ("readelf: " + m))
+       longs {"--file-header" 104 "--program-headers" 108 "--segments" 108 "--section-headers" 83
+              "--sections" 83 "--headers" 101 "--syms" 115 "--symbols" 115 "--wide" 87}
+       (go a o)
+        (? !(two? a) o
+           (: w <a n #w
+              (? (w = "--") (: _ (pin o 'fs (o 'fs + >a)) o)
+                 (2 < n && snip w 0 2 = "--")
+                  (: k (peep longs w ()) (? (charm? k) (: _ (pin o k 1) (go >a o)) (usage (w + " is not here (-h -l -S -s -e -W)"))))
+                 (1 < n && w 0 = 45)
+                  (: _ (map (\ c (? (elem c "hlSseW") (pin o c 1) (usage ("-" + string c + " is not here (-h -l -S -s -e -W)"))))
+                            (map w (drop 1 ^n)))
+                     (go >a o))
+                 (: _ (pin o 'fs (o 'fs + [w])) (go >a o)))))
+       o (go as {'fs ()})
+       e? (peep o 101 0)
+       h? (e? || peep o 104 0) l? (e? || peep o 108 0) S? (e? || peep o 83 0) s? (peep o 115 0) w? (peep o 87 0)
+       fs (o 'fs)
+       _ (? (h? || l? || S? || s?) 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
+       _ (? (two? fs) 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
+       (one f)
+        (: r (uread f)
+           (? !(two? r) (: _ (say err ("readelf: Error: '" + f + "': No such file\n")) 0)
+              (: b <>r
+                 (? !(bu-elf? b) (: _ (say err "readelf: Error: Not an ELF file - it has the wrong magic bytes at the start\n") 0)
+                    (: fs2 (bu-fs b)
+                       _ (? (two? >fs) (say out ("\nFile: " + f + "\n")) 0)
+                       _ (? h? (re-head fs2 b) 0)
+                       _ (? S? (re-secs fs2 b w? h?) 0)
+                       _ (? l? (re-segs fs2 b h? w?) 0)
+                       _ (? s? (re-syms fs2 b w?) 0)
+                       1)))))
+       ok (foldl (\ a f (? (one f) a 0)) 1 fs)
+       _ (flush out) _ (flush err)
+       (? ok 0 1))
+
    (ranlib-main as)
     (: fs (filter (w \ !(1 < #w && w 0 = 45)) as)
        _ (? (two? fs) 0 (udie 1 "Usage: ranlib ARCHIVE.."))
@@ -444,7 +714,7 @@
             'make (cite 'cook 'cook-main) 'cook (cite 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
-            'size size-main 'strip strip-main 'ranlib ranlib-main
+            'size size-main 'strip strip-main 'ranlib ranlib-main 'readelf readelf-main
             'objcopy (cite 'holo 'objcopy)   ; the applet is the function: love/holo/copy.l, module-side
             'cat cat-main 'tac tac-main 'echo echo-main
             'head head-main 'tail tail-main
@@ -465,16 +735,18 @@
             'dos2unix dos2unix-main 'unix2dos unix2dos-main 'mac2unix mac2unix-main
             'nl nl-main 'rev rev-main
             'fold fold-main 'expand expand-main 'unexpand unexpand-main
-            'base64 base64-main 'base32 base32-main
+            'base64 base64-main 'base32 base32-main 'basenc basenc-main
+            'uuencode uuencode-main 'uudecode uudecode-main 'ascii ascii-main
             'tsort tsort-main 'factor factor-main
             'paste paste-main 'comm comm-main 'split split-main
             'join join-main 'od od-main
             'cksum cksum-main 'sum sum-main 'md5sum md5sum-main 'sha1sum sha1sum-main
             'sha224sum sha224sum-main 'sha256sum sha256sum-main 'sha384sum sha384sum-main
-            'sha512sum sha512sum-main 'b2sum b2sum-main
+            'sha512sum sha512sum-main 'b2sum b2sum-main 'sha3sum sha3sum-main 'crc32 crc32-main
             'ls ls-main 'dir ls-main   ; one lister, and the name DOS and coreutils ask it by
             'vdir (\ as (ls-main ("-l" . as)))   ; ..and coreutils' long one
             'pathchk pathchk-main 'mountpoint mountpoint-main 'shred shred-main
+            'fsync fsync-main 'dircolors dircolors-main
             'cp cp-main 'mv mv-main
             'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
             'ln ln-main 'touch touch-main 'lift lift-main
@@ -484,7 +756,7 @@
             'cmp cmp-main
             'stat stat-main 'du du-main 'df df-main 'chown chown-main 'chgrp chgrp-main 'mktemp mktemp-main
             'expr expr-main 'date date-main 'id id-main
-            'bc bc-main
+            'bc bc-main 'dc dc-main
             'patch patch-main
             'wget wget-main
             'grep grep-main 'sed sed-main
@@ -492,13 +764,14 @@
             'egrep (\ as (grep-main ("-E" . as))) 'fgrep (\ as (grep-main ("-F" . as)))
             'awk awk-main 'find find-main
             'vi (cite 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
+            'hexedit hexedit-main
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'man man-main    ; the pages the build writes, read back (apps/kore/man.l)
             'html2text html2text-main   ; a page's prose (apps/kore/lens.l), the same lens
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
             'nice nice-main 'renice renice-main 'stty stty-main 'truncate truncate-main
-            'setsid setsid-main 'watch watch-main
+            'setsid setsid-main 'watch watch-main 'usleep usleep-main 'ts ts-main
             'getopt getopt-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
             ; umount, sync, mkfifo and mknod are what a root the distro builds
@@ -521,7 +794,8 @@
             'dd dd-main 'xxd xxd-main 'strings strings-main 'hexdump hexdump-main 'hd hd-main
             'cal cal-main 'timeout timeout-main
             'which which-main 'tty tty-main 'clear clear-main 'hostname hostname-main
-            'hostid hostid-main 'dnsdomainname dnsdomainname-main
+            'hostid hostid-main 'dnsdomainname dnsdomainname-main 'reset reset-main
+            'pinky pinky-main
             ; the /proc family -- no nif of their own, /proc is a filesystem
             'ps ps-main 'free free-main 'uptime uptime-main 'top top-main
             'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
@@ -597,6 +871,21 @@
     'watch "usage: watch [-begtx] [-n SECS] CMD [ARG..]"
     'hostid "usage: hostid"
     'dnsdomainname "usage: dnsdomainname"
+    'sha3sum "usage: sha3sum [-bcS] [-a BITS] [FILE..]"
+    'crc32 "usage: crc32 [FILE..]"
+    'basenc "usage: basenc --base64|--base64url|--base32|--base32hex|--base16|--base2msbf|--base2lsbf|--z85 [-di] [-w N] [FILE]"
+    'uuencode "usage: uuencode [-m] [INFILE] STORED_NAME"
+    'uudecode "usage: uudecode [-o OUTFILE] [INFILE]"
+    'ascii "usage: ascii"
+    'pinky "usage: pinky [-lbhpsfwiq] [USER..]"
+    'usleep "usage: usleep MICROSECONDS"
+    'reset "usage: reset"
+    'ts "usage: ts [-ism] [FORMAT]"
+    'fsync "usage: fsync [-d] FILE.."
+    'dircolors "usage: dircolors [-b|-c|-p|--print-ls-colors] [FILE]"
+    'dc "usage: dc [-e EXPR] [-f FILE] [FILE..]"
+    'readelf "usage: readelf -h|-l|-S|-s|-e [-W] FILE.."
+    'hexedit "usage: hexedit [-r] FILE"
     'ls "usage: ls [-aACdlrtx1] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-f] [-p] [-r] SRC.. DST"
@@ -712,7 +1001,7 @@
    ; -v is never the door's: gnu gives --version no short spelling, and the letter is the
    ; tool's wherever it wants one (cpio -v names members, grep -v inverts, nl -v numbers).
    ; -h is the door's where it is free -- these spell it themselves, or posix and gnu do.
-   korenoh '(grep du df ls sort touch chown ln free)
+   korenoh '(grep du df ls sort touch chown ln free readelf pinky)
    ; the tools that read no options at all, and the few dash words the two of them
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
@@ -757,6 +1046,9 @@ every tool answers --help and --version, and -h where the letter is free
   paste comm join split od                the record tools
   cksum | sum [-rs] | md5sum [-c] | sha1sum [-c]   the checksums (apps/kore/sum.l)
   sha224sum | sha256sum | sha384sum | sha512sum [-c] | b2sum [-c] [-l BITS]
+  crc32 [F..] | sha3sum [-bcS] [-a BITS] [F..]   zlib's crc, and keccak's digests
+  basenc --ENC [-di] [-w N] [F]           every RFC 4648 alphabet, base16, base2, z85
+  uuencode [-m] [F] NAME | uudecode [-o OUT] [F] | ascii   the mail armour; the table
   expr EXPRESSION                         arithmetic, comparison and BRE matching
   bc [-l] [-q] [F..]                      the calculator language (apps/kore/bc.l)
   patch [-pN] [-R] [-i F] [--dry-run]     lay a unified diff on a tree
@@ -770,6 +1062,7 @@ every tool answers --help and --version, and -h where the letter is free
   env printenv sleep kill xargs nohup     the process tools (apps/kore/proc.l)
   nice [-n N] CMD | renice PRIO [-pgu] ID..   the niceness, for a new command or running ones
   setsid [-cfw] CMD | watch [-begtx] [-n S] CMD   a new session; a command every S seconds
+  ts [-ism] [FMT] | usleep US | reset | pinky [-lsfwiq] [USER..]   stamps, a pause, the tty, who
   stty [-F DEV] [-a|-g|SETTING..]         the terminal's line discipline, shown or set
   getopt -o SHORTS [-l LONGS] -- PARAMS   options parsed and quoted for `eval set --`
   chroot DIR [CMD [ARG..]]                the root changed, then CMD in it
@@ -798,6 +1091,9 @@ every tool answers --help and --version, and -h where the letter is free
   truncate [-co] [-r RF] [-s [+-<>/%]N] F..    ... and a file's size, set
   shred [-fuvxz] [-n N] [-s N] F.. | vdir       ... a file overwritten, ls -l's other name
   pathchk [-pP] NAME.. | mountpoint [-qdx] P    ... whether a name would work, or is a mount
+  fsync [-d] F.. | dircolors [-b|-c|-p] [F]      ... a file to disk; LS_COLORS spelled
+  readelf -h|-l|-S|-s|-e [-W] F..             binutils' view of an ELF file
+  dc [-e EXPR] [-f F] | hexedit [-r] F         the stack calculator; the byte editor
   echo seq yes true false basename dirname     ... and the trivia
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (apps/xz.l)
