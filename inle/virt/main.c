@@ -105,60 +105,22 @@ static union u const nif_vexit[] = {{ai_vexit}, {lvm_ret0}};
 static struct ai_def defs[] = { {"vexit", {.k = nif_vexit}} };
 
 // --- the arena ------------------------------------------------------------
-// The teensy first-fit free list, fed 64 MB of virt's DRAM by address -- the
+// The first-fit free list (ffalloc.h), fed 64 MB of virt's DRAM by address -- the
 // ox64's PSRAM budget, so what fits here fits the board. The image sits at
 // the bottom of DRAM (0x80000000); the C stack tops out at the pool's base
 // and grows away from it.
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *freelist;
+#include "../ffalloc.h"
+static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x82000000u)
 #define POOL_BYTES ((64u << 20) - 64)   // 64B short: a one-past read at a block
                                         // boundary stays inside the region
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
-
-static void *mallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (freelist && freelist->len < n + 2 * Width(struct mem))
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  if (freelist)
-    freelist->len -= n + Width(struct mem),
-    t = after(freelist),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = freelist,
-    freelist = t;
-  return p; }
+static void *mallocw(uintptr_t n) { return ff_alloc(&freelist, n); }
 
 void *malloc(size_t n) { return mallocw(b2w(n)); }
 
-void free(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (freelist && freelist < m)
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (freelist != after(m)) m->next = freelist;
-    else m->len += freelist->len,
-         m->next = freelist->next;
-    freelist = m;
-    if (!r) return; } }
+void free(void *p) { ff_free(&freelist, p); }
 
 // --- entry ----------------------------------------------------------------
 // start.o set sp, opened the FPU (mstatus.FS) and pointed mtvec at the fault
