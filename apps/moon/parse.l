@@ -129,7 +129,10 @@
           [vp [vp vp sz] ()]))                     ; memcpy and memmove
    ; one qualifier token, and the cursor past it (an attribute id carries its parens)
    (qual? t) (? (tkk t = 'kw) (elem (tkv t) qualkw) (tkk t = 'id) (elem (tkv t) qualid) ())
-   (qskip ts) (: r >ts (? ((tkk <ts = 'id) && peekp r "(") (skipbal >r 1) r))
+   (qskip ts) (: r >ts
+                 (? ((tkk <ts = 'id) && peekp r "(")
+                     (: e (skipbal >r 1) (? (idv? <ts "__attribute__" && cleanup? ts e) (nocleanup e) e))
+                    r))
    (pquals ts) (? (two? ts && qual? <ts) (pquals (qskip ts)) ts)
    ; skip a trailing run of __attribute__((..)) / __asm__(..) -- the decoration glibc hangs
    ; off a declarator's tail. the `(` is required to skip: a bare one of these names is not
@@ -138,15 +141,18 @@
     (? !(two? ts) ts
        (((tkk <ts = 'id) && elem (tkv <ts) '("__attribute__" "__asm__" "__asm")) &&
         peekp >ts "(")
-        (patt (skipbal >>ts 1))
+        (: e (skipbal >>ts 1) (? (cleanup? ts e) (nocleanup e) (patt e)))
        ts)
    ; the statement-position skip: __attribute__ only -- a leading __asm__(..) there is the
    ; inline-asm statement, and patt would balance-skip it as decoration.
    (pattr ts)
     (? !(two? ts) ts
        ((idv? <ts "__attribute__") && peekp >ts "(")
-        (pattr (skipbal >>ts 1))
+        (: e (skipbal >>ts 1) (? (cleanup? ts e) (nocleanup e) (pattr e)))
        ts)
+   ; cleanup is not decoration: it runs code at every exit from the scope, which a skip drops
+   (cleanup? a b) (attrin a b "cleanup" || attrin a b "__cleanup__")
+   (nocleanup ts) (blame ts "__attribute__((cleanup)) is not carried out")
    ; gcc's `__label__ a, b;` declares local labels; skipped, since a label already mangles
    ; to fn.NAME -- two blocks of one function spelling a name land as a duplicate, loudly.
    (plabs ts)
@@ -371,14 +377,25 @@
         (? !(two? b) ()
            (<b = 'deref)
             (: c <>b
-               (? !(two? c && (<c = 'cast)) ()
-                  (: ty <>c v (cfold (pw64 ps) <>>c)
-                     (? (ptr? ty && charm? v && (v = 0)) [0 <>ty] ()))))
+               (? (two? c && (<c = 'cast))
+                   (: ty <>c v (cfold (pw64 ps) <>>c)
+                      (? (ptr? ty && charm? v && (v = 0)) [0 <>ty] ()))
+                  ; a constant index off a null-grounded array or pointer: in[1].b
+                  (: pv (? (zbase? c) (pval c) ())
+                     t (? (two? pv) (ptype ps c) ())
+                     (? (ptr? t || arr? t) [<pv <>t] ()))))
            (<b = 'dot)
             (: gr (ground <>b)
                (? !(two? gr) ()
                   (: f (fmof ps <>gr <>>b)
                      (? (two? f) [(<gr + <f) <>f] ()))))
+           ())
+       ; the pointer under an index grounds at null itself, never at another constant
+       (zbase? x)
+        (? !(two? x) ()
+           (<x = 'cast) (: v (cfold (pw64 ps) <>>x) (charm? v && v = 0))
+           (<x = 'bin) (zbase? <>>x || zbase? <>>>x)
+           (<x = 'dot) (two? (ground x))
            ())
        ; a null-grounded pointer value -> (byte-address stride) | (): the cast ((T*)K), and
        ; + arithmetic over it scaled by the pointee. not so grounded stays an address.
@@ -523,6 +540,7 @@
                           (? (two? d && (= <d 'vdim)) ['varr (mkarr ety >dims) <>d]
                              ['arr (mkarr ety >dims) d])))
    (varr? ('varr . _)) 1
+   (vmod? ty) (? (varr? ty) 1 ((ptr? ty || arr? ty) && vmod? <>ty))   ; a VLA anywhere in the derivation
    ; the (params)/[dims] suffix run on a direct declarator -> ((name w dat bare) rest).
    ; each suffix wraps inside w (the wrap-so-far: eventual-pointee -> declared type), so
    ; the type grows inside-out; dat is the name's own (params), which a fn def binds;
@@ -1106,6 +1124,7 @@
              ; types, or an expression never evaluated, so none can ride the call path.
              ; __builtin_offsetof seeds &((T*)0)->NAME, lets the postfix ladder take the
              ; `.b` / `[i]` tail, then folds the address through nulloff like the hand idiom.
+             ; a runtime index (`[i]`) folds nowhere: the address itself is the answer, as gcc's
              ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_offsetof"))
               (: r1 (want >ts "(")
                  tr (? (two? r1) (pcty ps r1) ())
@@ -1114,7 +1133,9 @@
                  dr (? nm (ppostfrom ps ['dot ['deref ['cast ['ptr <tr] '(num 0)]] nm] >r2) ())
                  rest (? (two? dr) (want <>dr ")") ())
                  off (? (two? rest) (nulloff ps <dr) ())
-                 (? (charm? off) [['cast (szty ps) ['num off]] rest] ()))
+                 (? (charm? off) [['cast (szty ps) ['num off]] rest]
+                    (two? rest) [['cast (szty ps) ['addr <dr]] rest]
+                    ()))
              ; __builtin_types_compatible_p: structural equality over the two bare types and
              ; no decay -- an array is not its element pointer (the kernel's __must_be_array)
              ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_types_compatible_p"))
@@ -2281,7 +2302,10 @@
                                                                     (pin (ps 'consts) <p 1) ())
                                                                (goc >l)))
                                                  (goc vps)))
-                                         (? (two? vps) [['gdecl vps] rest]
+                                         ; C11 6.7.6.2p2: no variably modified object at file scope
+                                         vm (filter (p \ vmod? <>p) vps)
+                                         (? (two? vm) (blame rest ("variably modified '" + <<vm + "' at file scope"))
+                                            (two? vps) [['gdecl vps] rest]
                                             ['(tdef) rest]))))
                             (? (!(two? fpty) && peekp ts2 "(")        ; a function (the return type rides the sig table)
                                (: rp (? (krhead? ps >ts2) (pkr ps >ts2) (pparams ps >ts2 ()))
