@@ -862,6 +862,24 @@
        ty (? (bad? lv) (: r (cgexpr g env e ()) (? (bad? r) 'bad (rfree g (vreg r), vty r))) (vty lv))
        _ (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fasecs fa0)
        ty)
+   ; a counted loop's step: for (..; v < E; v++ | ++v) with E no wider than v and v unwritten
+   ; elsewhere steps only once v < E held, so v + 1 still fits and the home's re-narrow is the
+   ; identity -> v | ()
+   (bndv g env cnd stp body)
+    (: v (stp @ ('post ('var v) 1) v ('asn ('var v) ('bin '+ ('var v2) ('num 1))) (v = v2 ? v ()) ())
+       (wr? e) (? (atom? e) ()
+                  (elem <e '(asm goto label) || (elem <e '(asn post rmw addr) && two? >e && <>e = ['var v])) 1
+                  (: (go l) (? (atom? l) () (wr? <l) 1 (go >l)) (go e)))
+       (? !v ()
+          (cnd @ ('bin 'lt ('var v3) E)
+           (? (v3 != v || wr? body || wr? E) ()
+              (: tv (peekty g env ['var v]) te (peekty g env E)
+                 k (E @ ('num k) (charm? k ? k ()) ())       ; a literal bound: its value, not its type
+                 (? (tv = 'int && (k ? (k <= 2147483647) (elem te '(int short ushort char schar uchar bool)))) v
+                    (tv = 'uint && (k ? (0 <= k <= 4294967295) (elem te '(uint ushort uchar bool)))) v
+                    ())))
+           ())))
+   (hcvt g nm ty r) (? (nm = g 'bndv) () (cvt ty r))   ; the counted loop's step skips its re-narrow
    ; a targetable leaf re-emitted straight into rX -> forms | 'no. leaves are pure (no strs pin,
    ; no argpos), so re-aiming costs nothing
    (cgleaf g env e rX)
@@ -1981,8 +1999,8 @@
                (: r (cgexpr g env rhs <>rv)   ; the rhs aims straight at the home
                   (? (bad? r) 'bad
                      (flo? (vty r)) (mkv <>>rv 'r0 (asintt g r <>>rv + [['mov <>rv 'r0]] + cvt <>>rv <>rv))
-                     (vreg r = <>rv) (mkv <>>rv <>rv (vfs r + cvt <>>rv <>rv))   ; landed in the home already (re-narrowed)
-                     (: fs (vfs r + [['mov <>rv (vreg r)]] + cvt <>>rv <>rv)   ; straight from the value's register
+                     (vreg r = <>rv) (mkv <>>rv <>rv (vfs r + hcvt g <>dst <>>rv <>rv))   ; landed in the home already (re-narrowed)
+                     (: fs (vfs r + [['mov <>rv (vreg r)]] + hcvt g <>dst <>>rv <>rv)   ; straight from the value's register
                         _ (rfree g (vreg r))
                         (mkv <>>rv <>rv fs))))
               (two? rv && <rv = 'regw)     ; store into a pair-homed d128: land on the protocol, mov both halves
@@ -2142,7 +2160,7 @@
               (two? rv && <rv = 'regv)   ; p++ on a register-homed scalar: old in r0, home += step
                (: ty <>>rv stp (ptr? ty ? (tsz g <>ty) 1)
                   (mkv ty 'r0 ([['mov 'r0 <>rv]
-                                ['add <>rv <>rv (stp * step)]] + cvt ty <>rv)))
+                                ['add <>rv <>rv (stp * step)]] + hcvt g <>dst ty <>rv)))
               ; store-direct (the asn twin): a direct frame ld+st leaves no lean, so the local can still home
               (two? rv && <rv = 'loc &&
                (: t9 <>>rv !(stru? t9 || arr? t9 || flo? t9 || bitf? t9)))
@@ -6722,7 +6740,9 @@
                     _ (pins g 'brk >(g 'brk)
                               'cnt >(g 'cnt)
                               'stwrap myw)           ; the body re-pinned as it went; the step is ours
+                    _ (pin g 'bndv (bndv g env2 cnd stp body))
                     st2 (two? stp ? (cgexpr g env2 stp ()))
+                    _ (pin g 'bndv ())
                     (? (bad? c || bad? b || bad? st2) 'bad
                        (<ir + (two? cnd ? ([['jmp lc]] + lalign g)) + [['label lb]] +
                         b + [['label ls]] + (two? st2 ? (vdrop g st2)) +

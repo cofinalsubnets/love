@@ -1261,9 +1261,15 @@
       (elem '(cmp r12 r2) zf)                     ; ...and the bound compare reads it register-register
       (elem '(sx4 r7) zf)                         ; nb rides too -- no slot, no wrap
       (elem '(cmp r9 r7) zf)                      ; ...the inner bound register-register as well
-      (elem '(sx4 r12) zf)                        ; i's defs re-narrow: the home stays canonical
+      !(elem '(sx4 r12) zf)                       ; i's step: i < na held, so i + 1 fits and stays canonical
       (elem '(add r12 r12 1) zf)                  ; i on its cs home
       (2 = (splds zf)))                              ; full-word sp loads: only the two cs restores
+   ; ..and a body that writes the counter keeps the step's re-narrow
+   irZ3 (cgn "long g3(long *a, int na) { long s = 0; for (int i = 0; i < na; i++) { s = s + a[i]; if (s < 0) i = i + 1; } return s; } int main() { return 0; }")
+   z3f (fnf 'g3 <>irZ3)
+   _ (test
+      (two? irZ3)
+      (3 = #(filter (f \ two? f && <f = 'sx4) z3f)))   ; na's entry, the body's write, the step
    ; the guard law: with a call remaining there is no ride, so an int param keeps its slot
    ; (a pool home would starve the locals and pay wraps -- the measured anti-lever)
    irZp (cgn "long ext(long); long h3(int n, long *a) { long s = 0; for (int i = 0; i < n; i++) { s = s + ext(a[i]) + n; } return s; } int main() { return 0; }")
