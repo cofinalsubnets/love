@@ -71,4 +71,4 @@ stop at the last row the view really shows, and ^F ^B ^D ^U and zt zz zb step by
 As need arises, in rough order: `.` (the repeat — record the last change's byte string, replay
 it), visual mode (a span-selection over the same operators), `:s` ranges over re.l (sed's engine
 is right there), named registers, tab-stop-aware rendering, and a pty smoke that drives the face
-under a real terminal via inle/posix.c (as test/baoedit.l does for bao's line editor).
+under a real terminal via love/posix.c (as test/baoedit.l does for bao's line editor).

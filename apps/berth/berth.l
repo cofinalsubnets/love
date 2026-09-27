@@ -1,7 +1,7 @@
 ; berth -- quay's terminal multiplexer: where programs tie up.
 ;
 ; each child rides its own pty (tether); its bytes pour through a quay cb screen
-; -- the same vt parser the kernel console runs, hosted in a cask by inle/cb.c --
+; -- the same vt parser the kernel console runs, hosted in a cask by love/cb.c --
 ; and the grids repaint the outer terminal as painted cells. keys pour down the
 ; other way; dsr/da answers ride home off each screen's reply queue; the outer
 ; size is polled each second-ish and mirrored onto every pty (the kernel raises
@@ -45,7 +45,7 @@
 ;      out/love -e "(: _ (borrow 'berth) (berth (berth-stage SHOW STEP OVER?)))"
 ;      (-l apps/berth/berth.l ahead of -e runs the file on disk instead of the baked one)
 ;
-; host-only (screen/scribe + tether/gather + raw/tty ride inle/*.c), so
+; host-only (screen/scribe + tether/gather + raw/tty ride love/*.c), so
 ; berth never joins the corpus; the moor core needs no tty and is smoke-
 ; tested end to end over a real pty by test/host/berth.l. a module, so a guest
 ; that berths itself (vi's splits) cites it: harbour makes an empty wharf, hberth

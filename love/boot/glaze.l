@@ -31,7 +31,7 @@
 ; emit -- the codegen backend: neutral love/holo/ IR, assembled per target, roles named through
 ; `greg`. putfix is `adds A A A` then `or A A 1`: the overflow flag is the 62-bit fixnum gate.
 
-; nif/nifx, the C install seam, leave the book on boot (inle/main.c); a body-less `:` rebinds
+; nif/nifx, the C install seam, leave the book on boot (love/main.c); a body-less `:` rebinds
 ; the outer ones here rather than letrec-ing
 (: nif nif  nifx nifx)
 
@@ -1325,7 +1325,7 @@
 ; auto -- rebind `ev` so a qualifying closure compiles to native with no verb and no annotation, =/show-identical to
 ; its source; anything else falls through to the base interpreter. every recognizer is exact-arity: (+ x 1 2) is a tower.
 ; ev stays 1-arg, so the loader's `(ev 'ev r)` survives the rebind, and the jits call the captured base-ev, never ev.
-; with emit above this is the `glaze` module (inle/main.c registers the pair): every name reaches by (cite 'glaze 'k), none touches the book
+; with emit above this is the `glaze` module (love/main.c registers the pair): every name reaches by (cite 'glaze 'k), none touches the book
 (: sfuel {})   ; autospec's unfold fuel; a global, since a sibling-captured value-local misses in the hatched ev
 (: glaze-loaded? (lit? (cite 'glaze))   ; re-load detector, read before this load defglobs anything: `glaze` registered means the baked glaze is installed
    ; the registry, never `book`: a woken image has `book` sealed away

@@ -65,7 +65,7 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-// the readiness law (inle/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// the readiness law (love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy (lvm_sound's park law
 // spins sound -> yield -> sound forever: the Enter-key freeze, walled here
@@ -99,7 +99,7 @@ struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_b
 struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-#include "../fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+#include "../../love/fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
 
 // --- the exit builtin -----------------------------------------------------
 // (m7exit code) -- leave the machine through semihosting with `code` as the
@@ -205,9 +205,13 @@ int main(void) {
   if (sh_call(SH_READ, (uintptr_t) rd)) { sh_puts("; short read\n"); m7_exit(4); }
   uintptr_t cl[1] = { (uintptr_t) fd };
   sh_call(SH_CLOSE, (uintptr_t) cl);
+  uintptr_t t0 = ai_clock();
   struct ai *g = ai_image_load(buf, len);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
   g = ai_defn(g, defs, countof(defs));
+  if (ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {   // born: this wake's cost
+    g = ai_defv(g, "born");
+    if (ai_ok(g)) g->sp++; }
   if (ai_ok(g)) g->budget = freelist->len / 4;
   struct ai *r = ai_evals_(g,
     "(: ok (&& "
@@ -282,7 +286,8 @@ int main(void) {
 #else
     "(borrow 'cli)"
 #endif
-    "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
+    "(: _ (pull book 'born 0)"            // this boot's cost, not the image's: off before the dump
+    "   _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {
     if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
     m7_exit(3); }

@@ -2,7 +2,7 @@
 ; sha256sum, sha384sum, sha512sum, b2sum, sha3sum. one shape each time -- stream a file through
 ; a digest, say a line -- so what is actually here is the GNU faces (cksum's "CRC BYTES
 ; NAME", sum's two, the digest tools' "DIGEST  NAME") and the -c lane that reads those
-; lines back. the digests are inle/hash.c; there is no love statement of any of them,
+; lines back. the digests are love/lib/hash.c; there is no love statement of any of them,
 ; so an image carrying no host nif (the kernel's, which compiles none) says which one
 ; is missing and leaves with 2.
 ; loads after fs.l for udirp. a body-less top-level `:` -- the mains leak, kore.l

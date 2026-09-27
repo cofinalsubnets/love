@@ -4,7 +4,7 @@
 ; alternate screen, the poll that stands in for a timer, and the exit that puts
 ; the screen back. That lane needs a terminal, so it gets one: `tether` spawns
 ; `kore top` on a pty, we type at the master and read the frames back off it.
-; not in the test/*.l corpus -- tether and tty both live in inle/posix.c, which love0
+; not in the test/*.l corpus -- tether and tty both live in love/posix.c, which love0
 ; does not link. Run it (the test macro comes from test/00-init.l):
 ;
 ;   lovebin=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"

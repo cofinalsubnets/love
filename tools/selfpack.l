@@ -15,7 +15,7 @@
 ; moved" off stat alone, holding neither the bodies nor the tar; only the cut writes the
 ; sidecar, so what .sha names is always the archive that was written.
 ;
-; the coder is love/gz.c through gz.l's door -- love0 carries no nifs, which is why the
+; the coder is love/lib/gz.c through gz.l's door -- love0 carries no nifs, which is why the
 ; recipe prefers the tree's own love.
 ;
 ; the borrows below name PATHS, in dependency order. a module name has nothing to find

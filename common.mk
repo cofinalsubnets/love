@@ -100,7 +100,7 @@ hsuf := $(if $(HCC),/cc,)$(if $(DOOM),/doom,)$(if $(filter 0,$(tco)),/tco0,)
 # ride their own arch-guarded targets, never the arch-neutral corpus.
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
-# the runtime's own headers, and love/ is the roster: the metal seat's k.h and the per-ISA
+# the runtime's own headers, and love/ is the roster: kernel mode's k.h and the per-ISA
 # asmops sit under inle/, so a touch on one of those rebuilds no love object.
 love_h = $(wildcard $R/love/*.h)
 # the core rides its own math floor, no libm anywhere; love.c broke into TUs so the biggest is
@@ -108,28 +108,30 @@ love_h = $(wildcard $R/love/*.h)
 # glob -- $(wildcard) answers readdir order.
 love_tu = love.c gc.c ev.c task.c io.c map.c snap.c num.c arr.c
 # ..and snap.c reaches the codec unconditionally to pack an image's code segment, so a seat
-# that links the runtime links it. wasm is the one that does not, and reads love_tu alone.
-love_codec = gz.c
+# that links the runtime links it: the one library in lib/ the core itself calls.
+love_codec = lib/gz.c
 core_tu = $(love_tu) $(love_codec)
 love_tu_c = $(patsubst %,$R/love/%,$(core_tu))
 love_c = $(love_tu_c) $R/apps/moon/lib/moonlibc/math/am.c
 # the per-ISA set ONE machine's build takes; the directory is the roster, empty on an arch with
 # no seat, which is what the rebuild gates read to skip their kernel half.
 hosta_c = $(wildcard $R/inle/$(hosta)/*.c)
-# ..and the hosted surface is inle/ less the kernel's own six (kmain, the syscall table, the two
-# drivers, doom), love0's seat (main0.c) and the two a LINK names for itself rather than a
-# directory naming it, nokern.c and noblob.c. drop an inle/<app>.c in and its nifs register
-# with no rule edit.
-host_c = $(filter-out $(addprefix $R/inle/,kmain.c main0.c nokern.c noblob.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/inle/*.c))
-# love/ vs inle/ cuts language from SEATS, not portable from machine-specific: quay draws into
-# a buffer and names no device, so it stays here; a seat brings its own nifs through ai_defn.
-# paint.c (32bpp) and nif.c (the love door) are per-seat -- a 1-bit device wants neither, the
-# host unity-includes nif.c -- so a seat that wants one NAMES it rather than taking it here.
+# ..and the surface over the interface: love/ less the core, the board seat (bare.c, nohorn.c)
+# and noblob.c, which a LINK names for itself, plus lib/'s nif libraries. user and kernel
+# mode both take it -- moonlibc's __ai_sys is the one door under it, whoever answers. drop a
+# love/<app>.c in and its nifs register with no rule edit.
+host_c = $(filter-out $(addprefix $R/love/,$(love_tu) bare.c nohorn.c noblob.c),$(wildcard $R/love/*.c)) \
+         $(filter-out $R/love/$(love_codec),$(wildcard $R/love/lib/*.c))
+# the tree cuts at moonlibc's interface: love/ is everything over it, love/user/ the seats
+# where another kernel answers, and inle/ kernel mode, where we do. quay draws into a buffer
+# and names no device, so it is over the door. paint.c (32bpp) and nif.c (the love door) are
+# per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
+# wants one NAMES it rather than taking it here.
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/love/quay/*.c))
 # inle's libc is moonlibc's, named member by member; os.c is the map every syscall reaches it
 # through, and a negative __ai_osv (written at kmain) takes the __ai_inle arm, inle/sys.c
 # answering the canonical numbers in C. mooncc builds the kernel, so it builds the kernel's
-# libc too -- no second copy to drift. this is inle/posix.c's closure plus the members love.c's
+# libc too -- no second copy to drift. this is love/posix.c's closure plus the members love.c's
 # hosted compile reaches (the mmap family behind the W^X arena's runtime branch, refused
 # -ENOSYS on metal). core.c stays OUT: malloc, the process entry and the std streams are all
 # the kernel's, and inle/sys.c answers its four seat symbols instead (environ, stdout/stderr,
@@ -175,7 +177,7 @@ cflags = -std=$(cstd) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -falign-functions=16 -fno-stack-protector
 # -fcf-protection (Intel CET) is x86-only; the other seats take it as a no-op.
 cflags += -fcf-protection=none
-# a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half, which inle/main.c
+# a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half, which love/main.c
 # owes clock_gettime and kill to, so the level is asked for by name. but it is GLIBC'S ask: a
 # BSD header defaults to its whole surface and reads this as a NARROWING -- freebsd drops
 # __BSD_VISIBLE the moment it is defined, taking MSG_DONTWAIT, SOCK_CLOEXEC and the pty
