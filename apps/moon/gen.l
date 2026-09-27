@@ -5203,14 +5203,22 @@
    ; holds it, off any base but the frame's (stld's). an address is its base's root plus an offset,
    ; through the lea/add/sub/mov that made the base. a store forgets what it may overlap (a
    ; different root may alias), any other write or a call forgets all, a label starts over. runs
-   ; only where the unit names no volatile: the types carry no qualifier to say which loads are
+   ; only where the unit names no volatile: the types carry no qualifier to say which loads are.
+   ; every target but thumb
    (memfw g fs)
-    (? !(x64? g && peep g 'novol ()) fs
+    (? (t32? g || !(peep g 'novol ())) fs
        (: fr '(sp fp r4)
           mw (stops9 + siops + stxops + fstxops + '(push pop call callr raw sys asm))
           (root A b o) (: e (assoc b A) (? (two? e) [(e 1) (o + e 2)] [b o]))
-          (kill M A x) [(filter (\ e (e 0 != x && e 2 != x)) M)
-                        (filter (\ e (e 0 != x && e 1 != x)) A)]
+          ; x is redefined: what rooted at x re-roots at a surviving copy of it, else goes
+          (kill M A x)
+           (: p (foldl (\ q e (? (q || !(e 1 = x && e 0 != x)) q e)) () A)
+              (? !p [(filter (\ e (e 0 != x && e 2 != x)) M)
+                     (filter (\ e (e 0 != x && e 1 != x)) A)]
+                 (: r (p 0) dk (p 2)
+                    [(filter (\ e (e 2 != x)) (map (\ e (? (e 0 = x) [r (e 1 - dk) (e 2)] e)) M))
+                     (filter (\ e (e 0 != x && e 0 != r))
+                             (map (\ e (? (e 1 = x) [(e 0) r (e 2 - dk)] e)) A))])))
           (go l M A)
            (? !(two? l) ()
               (: f <l op (two? f ? <f)
@@ -7851,11 +7859,13 @@
        sp1 (? (uni9 || !(two? vzf)) sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
        irf (? uni9 (ubuild (alive g f)) (build sp1))
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):
-       ; the a64 sweeps (rv64 takes addk alone), then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
-       (swp irx) (? !(a64? g) (? (rv64? g) (addk g irx) irx)      ; rv64's one sweep
+       ; the a64 sweeps (rv64 takes addk and memfw), then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
+       (swp irx) (? !(a64? g) (? (rv64? g) (copyprop g (memfw g (addk g irx))) irx)   ; rv64's sweeps
                     (tailst g
                     (deadst g
                      (deaddef g
+                     (copyprop g
+                     (memfw g
                      (addrfold g
                      (addk g
                      (rezx g
@@ -7864,7 +7874,7 @@
                      (spmerge
                      (deaddef g
                      (deadcell g
-                     (cfoldir g irx)))))))))))))
+                     (cfoldir g irx)))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
        (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))
