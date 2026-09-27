@@ -189,13 +189,14 @@
                         (? (! (two? l)) 1
                            (: _ (uclip-say l) (go (k + 1))))))
            (go 0))
-       ; -c: the first n bytes, gulp by gulp, stopping once they are out -- or with -c -N
-       ; everything but the last n, the held tail never longer than n and a gulp
+       ; -c: the first n bytes, gulp by gulp, stopping once they are out, the rest of the
+       ; last gulp handed back -- or with -c -N everything but the last n, the held tail
+       ; never longer than n and a gulp
        (first-b rd)
         (: (go k) (? (n <= k) 1
                      (: h (urd-gulp rd)
                         (? !#h 1
-                           (: m (min #h (n - k)) _ (say out (snip h 0 m)) (go (k + m))))))
+                           (: m (min #h (n - k)) _ (say out (snip h 0 m)) _ (urd-back rd (#h - m)) (go (k + m))))))
            (go 0))
        (drop-last-b rd)
         (: (go hold) (: h (urd-gulp rd)
