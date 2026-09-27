@@ -6568,12 +6568,22 @@
             (go 1)) ||
             (: (go l) (? !(two? l) () (d128? <><l) 1 (go >l)) (go params)) ||
             wdc items)
+       ; the wide park's peak draw: a wide binop holds its left's two-register park while its right
+       ; evaluates, so a right that parks again doubles it. a miss costs speed only (the cell lane)
+       wdn (: (go i acc) (? (peep n9 'sq 0 < i) acc
+                             (: e2 (sqm i) (go (i + 1) (? (two? e2 && d128? <>e2) (<e2 . acc) acc))))
+              (go 1 (map (p \ <p) (filter (p \ d128? <>p) params))))
+       (wide? e) (? (atom? e) ()
+                    (e @ ('cast ty _) (d128? ty) ('var nm) (elem nm wdn) ('bin _ l r) (wide? l || wide? r) ()))
+       (wpd e) (? (atom? e) 0
+                  (e @ ('bin _ l r) (? (wide? l || wide? r) (max (wpd l) (2 + wpd r)) (max (wpd l) (wpd r)))
+                       (foldl (\ m x (max m (wpd x))) 0 e)))
        pq9 (0 = pdtl items && !wd9)
        (? (0 = peep n9 'q 0)
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
            (peep n9 'asm 0) (peep n9 'vla 0) (peep n9 'sq 0) tak
-           (pmxl items 1 1) (? pq9 1 ()) (? wd9 1 ())] ()))
+           (pmxl items 1 1) (? pq9 1 ()) (? wd9 1 ()) (? wd9 (wpd items) 0)] ()))
    ; alive's forward twin: cgstmt/cgdecl/cgsdecl entries tick and pin the wrapset off livtab
    ; (a miss pins 'all); a statement expression's statements neither tick nor re-pin
    (stq g)
@@ -7810,17 +7820,19 @@
         (: uv <>>av9 crh9 (av9 6) rdc9 (av9 7) rdt9 (av9 8)
            lf9 (av9 15 <= 2)                  ; leaf-shaped: at most two cold hard crossings (see ulloc)
            pq9 (qk && av9 16)                    ; protocol-quiet: nothing in the body writes a quad
-           wd9 (av9 17 &&                      ; d128 material: the wide kit owns the file --
-                !(a64? g || t32? g || rv64? g))         ; on x64, whose mul/div pin the rax:rdx pair
+           wm9 (av9 17 && !(a64? g || t32? g || rv64? g))   ; d128 material on x64, whose mul/div pin rax:rdx
+           wd9 (wm9 && 2 < av9 18)             ; a nested park would starve: the wide kit owns the file
+           dp9 (? wm9 5 3)                     ; else a take leaves the file two deeper, one park's draw
            (homefold g params 0 [() () () #tpool]
             (\ a4 gpi p9
               (: nm <p9 pty <>p9
                  A (argr g gpi)
                  nv (a4 3)                       ; the file's running depth (homes and rides drain it)
-                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2)
+                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2 &&
+                     (!wm9 || 64 <= peep rdt9 nm 0))  ; beside the wide kit only a hot param takes a seat
                  ; a bool's entry cvt defs through set, which qclob? cannot tell from a clobber: a bool quad vacates
                  qb9 (= pty 'bool && elem A '(r0 r1 r2 r3))
-                 (? (ok && homable? pty)
+                 (? (ok && homable? pty && (!wm9 || dp9 <= nv))
                     (? (A = homereg gpi) [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                        (a4rider? A) [<a4 (gpi . <>a4) (a4 2) nv]
                        (elem A '(r0 r1 r2 r3))
@@ -7833,7 +7845,7 @@
                     ; an int param rides its arrival if read at least once, no d128 about, and the file
                     ; stays two deep after the take; a64's r4 arrival rides free
                     (ok && lhomable? pty && !qb9 && (0 < peep rdc9 nm 0) && !wd9 &&
-                     (elem A tpool && 3 <= nv || a4rider? A))
+                     (elem A tpool && dp9 <= nv || a4rider? A))
                      [(gpi . <a4) <>a4
                       (? (elem A tpool) (A . a4 2) (a4 2))
                       (? (elem A tpool) (nv - 1) nv)]
@@ -7842,7 +7854,7 @@
                      [(gpi . <a4) <>a4 (a4 2) nv]
                     ; ..and a hot one (weighted reads >= 64, the blocker bar) that cannot ride vacates to its positional seat
                     (ok && lhomable? pty && !wd9 && 64 <= peep rdt9 nm 0 &&
-                     elem A '(r0 r1 r2 r3) && 3 <= nv)
+                     elem A '(r0 r1 r2 r3) && dp9 <= nv)
                      [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                     a4)))))
        ; the quad-ride check: a ridden r0-r3 arrival's only legitimate def is its entry cvt; any other

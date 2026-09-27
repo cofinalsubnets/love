@@ -1377,7 +1377,10 @@
       (1 = #(filter (f \ two? f && <f = 'a128r && <>>f = 0) mrf))   ; + r[i+j]: the park never opens
       (2 = (occh mrf 'a128r))                    ; + c reads c's home
       (0 = (occh mrf 'shr128))                   ; c = s >> 64: two moves, the high half a zero
-      (: ws (filter (f \ two? f && <f = 'a128r) mrf) (elem ['li <>>(ws 1) 0] mrf)))
+      (: ws (filter (f \ two? f && <f = 'a128r) mrf) (elem ['li <>>(ws 1) 0] mrf))
+      ; the park never nests here, so the hot params r and b take seats: the full-word sp loads
+      ; are the four cs restores, cold a's read per row and ai's in the inner loop
+      (6 = (splds mrf)))
    (test
       (two? irV)
       (elem '(mov r11 r0) vf)                     ; c's write lands its lo home...
