@@ -74,6 +74,16 @@ try 2 'unfinished form'   -e '(1 +'
 try 1 'cannot open'       /nonexistent.l
 try 1 'cannot open'       -l /nonexistent.l -e 1
 
+# a complaint ends its own line, so the shell's prompt after it starts on a fresh one
+nl() {
+  [ "$("$love" "$@" </dev/null 2>&1 | tail -c 1 | od -An -c | tr -d ' ')" = '\n' ] || {
+    echo "FAIL cli: 'love $*' leaves its last line open"; fails=$((fails+1)); }
+}
+nl /nonexistent.l
+nl -e '(1 +'
+nl -e
+nl -m zz -e 1
+
 # the VERB rail answers a charm and the rail leaves with it -- the one lane whose
 # status is a value rather than a literal. bake/wake are C's alone, one argv chain
 # before this file is evaluated, so they are no rows here and the listing has
