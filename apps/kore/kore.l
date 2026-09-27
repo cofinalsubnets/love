@@ -43,8 +43,8 @@
 ;                                    httpd, kiosko under busybox's flags, nslookup, ping, ping6
 ;   kore ssh|sshd|scp ..             the ssh client and server, and scp over them (apps/ssh/cli.l)
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
-;                                    one (apps/xz.l, inle/xz.c's LZMA2), bzip2|bunzip2|bzcat
-;                                    (apps/bz2.l, inle/bz2.c); tar and cpio the
+;                                    one (apps/xz.l, love/lib/xz.c's LZMA2), bzip2|bunzip2|bzcat
+;                                    (apps/bz2.l, love/lib/bz2.c); tar and cpio the
 ;   kore tar {c|x|t}[vzjJ] -f A      two containers over it (apps/tar.l, apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l

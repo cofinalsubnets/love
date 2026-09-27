@@ -21,7 +21,7 @@
 # (mkobj below) and the rosters arrive in the environment -- gate_love_c / gate_host_c /
 # gate_arch_c / gate_kern_c -- so a rename in the Makefile cannot leave this behind.
 #
-# gate_seat_c is inle/noblob.c: this pair lays no out/src.o, so it answers the carried
+# gate_seat_c is love/noblob.c: this pair lays no out/src.o, so it answers the carried
 # archives itself -- and rides the OBJ list, or the twin link cannot find the body.
 # usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
 #        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XOD XA OBJ...

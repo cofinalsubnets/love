@@ -41,7 +41,7 @@ CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/love -I$R/inle -I$R/out/lib"
 # the hosted roster, common.mk's spelling: love/ plus inle/ less the kernel's own six
 love_tu="love gc ev task io map snap num arr gz"
-host_cs=$(ls "$R"/inle/*.c | grep -v '/\(kmain\|blk\|hda\|sys\|doom\|doomsnd\)\.c$')
+host_cs=$(ls "$R"/love/*.c "$R"/love/lib/*.c | grep -v '/\(love\|gc\|ev\|task\|io\|map\|snap\|num\|arr\|gz\|bare\|nohorn\|noblob\)\.c$')
 # common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's ai_typ, and
 # ld left alone orders love.data.N as emitted -- lvm_str under lvm_sym, strings as closures
 LDFLAGS="-Wl,-T,$R/love/love_data.ld"
@@ -89,7 +89,7 @@ build_mooncc() { # $1=binpath
     mc "$od"/*.o -o "$bin" ) || return 1
 }
 
-# one file by redirect, not a pipe: only a seekable fd 0 gets a read run (inle/main.c),
+# one file by redirect, not a pipe: only a seekable fd 0 gets a read run (love/main.c),
 # and a pipe's read-per-byte is kernel time in every lane alike, diluting the reading
 CORPUS1=$WORK/corpus.l
 cat $CORPUS > "$CORPUS1"

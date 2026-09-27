@@ -1,12 +1,14 @@
-# inle -- the machine side of love
+# inle -- love in kernel mode
 
-love/ is the language; this is every machine it runs on. One seam, `__ai_sys`,
-and inle gives the other side of it -- for the host kernels (the frontend TUs
-the shipped artifact links), for bare metal, and for each device below. Every
-device target is self-contained (own Makefile, `R := ../..` back to the repo
-root); the qemu boot gates live in test/test.mk and ride `make test_slow`.
-A seat's own vocabulary comes in through `ai_defn` -- the crank on a Playdate,
-a board's console -- so love/ never learns a device's name.
+love/ is everything over one interface, moonlibc's `__ai_sys`; a platform answers
+it from one side. In user mode another kernel answers -- linux and the BSDs by trap,
+an SDK for the seats in love/user/. In kernel mode we answer: that is inle, the
+kernel (`kmain.c`, the syscall table `sys.c`, its drivers) and its machines. The
+bare boards below are reduced kernel seats; nucleo446 and rp2040 carry no love at
+all and are the toolchain on silicon. Every device target is self-contained (own
+Makefile, `R := ../..` back to the repo root); the qemu boot gates live in
+test/test.mk and ride `make test_slow`. A seat's own vocabulary comes in through
+`ai_defn` -- a board's console -- so love/ never learns a device's name.
 
 ## the kernel
 
@@ -32,13 +34,10 @@ VCP, and a 28-check on-silicon battery (soft doubles, 64-bit, am math,
 composites). `make flash` via st-flash; gate test_nucleo446 boots the
 semihosting face on qemu's netduinoplus2 (STM32F405 -- same UART/RCC map).
 
-## playdate/
+## the playdate
 
-Panic Playdate: love WAKES on the device build -- all-mooncc `-t thumb2sp`
-soft-double pdx (device + simulator, needs PLAYDATE_SDK_PATH and
-arm-none-eabi-gcc for link/pack), booting a qemu-baked love-pd.img; cas.l is
-the rune workbench face. Simulator-verified; sideloading is the human step.
-See playdate/README.md.
+A user-mode seat -- the SDK answers, not us -- so it lives at love/user/playdate/.
+Its image still bakes here, on mps2's baker (`make -C inle/mps2 imgpd`).
 
 ## rp2040/
 
