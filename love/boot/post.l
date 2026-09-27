@@ -153,6 +153,30 @@
    (ends? s p)     (#p <= #s && snip s (#s - #p) #s = p ? 1 0)
    (replace s cite to) (#cite = 0 ? s (join to (split cite s)))
    (ws? c)  (c = 32 || c = 9 || c = 10 || c = 13 ? 1 0)
+   (digit? c) (48 <= c <= 57 ? 1 0)
+   (alpha? c) (65 <= c <= 90 || 97 <= c <= 122 ? 1 0)
+   (alnum? c) (digit? c || alpha? c ? 1 0)
+   ; a hex digit's value, -1 for none: 0 is a digit and nets false, so () could not say it
+   (hexv c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) -1)
+   ; all-digits text as its number, () for anything else ("" and "abc" included)
+   (unum s) (: n #s
+               (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
+               (? (string? s && n) (go 0 0) ()))
+   ; lowercase digits past 9. putbn reads a charm only, so a big is split down to one
+   (radix n b)
+    (? (charm? n) (: o (jug 0) _ (putbn o n b) (slurp o))
+       (n < 0) ("-" + radix (0 - n) b)
+       (radix (n // b) b + string ("0123456789abcdefghijklmnopqrstuvwxyz" (n % b))))
+   (zpad w s) (#s < w ? (zpad w ("0" + s)) s)
+   ; a code point as its utf-8 bytes, "" outside unicode. `string` on a number is one byte
+   (utf8 v)
+    (? (v < 0) ""
+       (v < 128) (string v)
+       (v < 2048) (string (192 + v // 64) + string (128 + v % 64))
+       (v < 65536) (string (224 + v // 4096) + string (128 + v // 64 % 64) + string (128 + v % 64))
+       (v < 1114112) (string (240 + v // 262144) + string (128 + v // 4096 % 64)
+                      + string (128 + v // 64 % 64) + string (128 + v % 64))
+       "")
    (lstrip s) (: (go i) (i < #s && ws? (s i) ? (go (i + 1)) i) (snip s (go 0) #s))
    (rstrip s) (: (go j) (0 < j && ws? (s (j - 1)) ? (go (j - 1)) j) (snip s 0 (go #s)))
    (strip s)  (lstrip (rstrip s))       ; not `trim`: that name is ev.l's port op, mopped by egg.l
@@ -493,6 +517,30 @@
    (show x) (: o (jug 0) (px o x (), slurp o))
    (dot x) (string? x || hot? x && !(port? x) ? (say out x) (px out x ()), flush out, x)
    putx (print out))
+
+; --- the u-floor's door: a whole file in and out, and the exit every tool leaves by.
+; open and close are 'posix's, so they are cited; a module borrows them itself ---
+(: ; a path -> (1 text) when it opens, () when it does not
+   (uread p) ((cite 'posix 'open) p "r" @ q
+              (? (hot? q) (: t (slurp q) _ ((cite 'posix 'close) q) [1 t]) ()))
+   ; a path + text -> 1 when it lands, () when it will not open
+   (uwrite p t) ((cite 'posix 'open) p "w" @ q
+                 (? (hot? q) (: _ (say q t) _ ((cite 'posix 'close) q) 1) ()))
+   ; a main answers its status as a charm, or leaves from deep inside by scaring 'leave
+   ; with it. urun is the driver both come back through, so a caller in the same image
+   ; gets a charm instead of a dead process. nothing unwinds through a scare, so a port
+   ; held at the leave is lost, exactly as `quit` loses it.
+   (uleave c) (scare 'leave c)
+   (urun f as)
+    (: (out! _) (flush out, flush err)
+       (trap (\ _ (: r (f as) _ (out! ()) (? (charm? r) r 0))) ()
+             (\ a b (out! (),
+                     (a @ 'leave b
+                        (say err ";; ", print err a, say err " ",
+                         print err b, put err 10, flush err, 1))))))
+   ; say m on err and leave with code c
+   (udie c m) (: _ (say err m) _ (put err 10) (uleave c)))
+
 (seal-hook 7 show)
 (: (red? x) (+x < 0) (blue? x) (+x = 0) (green? x) (+x > 0))
 
@@ -693,6 +741,69 @@
     l () 0))
 
 ) ; module path
+
+; bytes -- words in and out of byte strings, the conversions every codec and wire protocol
+; keeps writing. a reader takes anything that indexes by application: a string, a cask, a
+; list. & and >> are exact on a big and on a negative, so a 64-bit word needs no care.
+;   (rdle s i n) (rdbe s i n) -> the n-byte word at i, little- and big-endian
+;   (wrle v n) (wrbe v n)     -> v as n bytes, the low n kept (two's complement for v < 0)
+;   (padk n k)   -> the bytes from n to the next multiple of k
+;   (zbytes n)   -> n NULs
+;   (b2hex s) (hex2b h) -> bytes as lowercase hex, and hex (either case) back
+;   (xorb a b)   -> a with b xored in, byte by byte, #a long
+
+(module '(bytes rdle rdbe wrle wrbe padk zbytes b2hex hex2b xorb)
+(: (rdle s i n) (? (n < 1) 0 (s i + (rdle s (i + 1) (n - 1) << 8)))
+   (rdbe s i n) (: (go k a) (? (n <= k) a (go (k + 1) ((a << 8) + s (i + k)))) (go 0 0))
+   (wrle v n) (? (n < 1) "" (string (v & 255) + wrle (v >> 8) (n - 1)))
+   (wrbe v n) (? (n < 1) "" (wrbe (v >> 8) (n - 1) + string (v & 255)))
+   (padk n k) ((k - n % k) % k)
+   (zbytes n) (string (cask n))
+   (b2hex s) (foldl (a \ i \ a + zpad 2 (radix (s i) 16)) "" ^#s)
+   (hex2b h) (: n (#h // 2) b (cask n)
+                _ (each ^n (i \ pin b i (hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1)))))
+                (string b))
+   (xorb a b) (: n #a c (cask n) _ (each ^n (i \ pin c i (a i ^ b i))) (string c)))
+
+) ; module bytes
+
+; cal -- the proleptic gregorian calendar over days since 1970-01-01, utc. floor division
+; throughout, so a day before 1970 reads right with no sign fix-up.
+;   (civil z)           -> [y m d] for day z
+;   (epoch-days y m d)  -> its inverse
+;   (wday z)            -> 0 for sunday .. 6
+;   (mdays y m)         -> the month's length, leap years included
+;   mon3 monl wd3 wdl   -> the month and weekday names, short and long, january and sunday first
+
+(module '(cal civil epoch-days wday mdays mon3 monl wd3 wdl)
+(: (civil z0)
+    (: z (z0 + 719468)
+       era (z // 146097)
+       doe (z - era * 146097)
+       yoe ((doe - doe // 1460 + doe // 36524 - doe // 146096) // 365)
+       y (era * 400 + yoe)
+       doy (doe - (365 * yoe + yoe // 4 - yoe // 100))
+       mp ((5 * doy + 2) // 153)
+       d (doy - (153 * mp + 2) // 5 + 1)
+       m (mp < 10 ? (mp + 3) (mp - 9))
+       [(m <= 2 ? (y + 1) y) m d])
+   (epoch-days y0 m d)
+    (: y (m <= 2 ? (y0 - 1) y0)
+       era (y // 400)
+       yoe (y - era * 400)
+       doy ((153 * (m + (2 < m ? -3 9)) + 2) // 5 + d - 1)
+       doe (yoe * 365 + yoe // 4 - yoe // 100 + doy)
+       (era * 146097 + doe - 719468))
+   (wday z) (((z + 4) % 7 + 7) % 7)                   ; 1970-01-01 was a thursday
+   ; the gap to the next 1st, so a leap year needs no test
+   (mdays y m) (epoch-days (m = 12 ? (y + 1) y) (m = 12 ? 1 (m + 1)) 1 - epoch-days y m 1)
+   mon3 ["Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"]
+   monl ["January" "February" "March" "April" "May" "June" "July" "August" "September"
+         "October" "November" "December"]
+   wd3 ["Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat"]
+   wdl ["Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday"])
+
+) ; module cal
 
 ; lush 🐚 the word -- a word back into a command line, and the mask law's other half. module
 ; 'lush begins here because two catted scripts carrying no apps/lush.l still need one: sb reads
@@ -1744,7 +1855,7 @@
    ; to ask), 80 where neither says. a COLUMNS that is not a plain count is ignored.
    (screen fd)
     (: e (getenv "COLUMNS")
-       c (? (string? e) (: n ((cite 'cli 'unum) e) (? (charm? n && 0 < n) n 80)) 80)
+       c (? (string? e) (: n (unum e) (? (charm? n && 0 < n) n 80)) 80)
        t (tty fd)
        (? (two? t && 0 < >t) >t c))
    ; (lay cs w down?) -- the cells over a terminal w columns wide, as lines
@@ -1838,7 +1949,7 @@
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap
-          uopt uopt1 uoptv uoptun uoptstray unum uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptstray uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2227,12 +2338,6 @@
    ; not one, so an applet with positional operands would take `-x` for a filename. () once
    ; `--` has been spelled: the words behind it are literal by request.
    (uoptstray as rest) (? (elem "--" as) () (<(filter (w \ 1 < #w && w 0 = 45) rest)))
-   ; a flag's text as a whole number, or () for anything that is not all digits: a hand-rolled
-   ; reader answers 0 for "abc" as for "", so a port typed wrong and one nobody typed read
-   ; alike. `charm?` on the answer is the test.
-   (unum s) (: n #s
-               (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
-               (? (string? s && n) (go 0 0) ()))
 
    ; --- the two flags every applet answers, and the one place that answers them ------
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a file

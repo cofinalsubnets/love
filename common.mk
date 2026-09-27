@@ -19,6 +19,9 @@ t_rm   := $(if $(armed),KORE,RM)
 t_ln   := $(if $(armed),KORE,LN)
 
 m = $R/out$(hsuf)/love
+# the gates' shell: lush aboard the love under test, so the loves a gate runs fork warm.
+# -g puts PATH first: a bare grep or tar is the GNU one a gate holds ours against
+gsh = $m lush -g
 # the HOST's arch, which $a is not: a cross lane overrides $a on the command line, and
 # anything under out reading $a then lays a cross artifact into the host tree.
 # `uname -m` is not the ISA word either -- the BSDs say amd64 for x86_64, freebsd arm64 and

@@ -6,6 +6,7 @@
 ;   pom [[[[[cc]yy]mm]dd]HH]  another hour, date(1)'s order
 ; usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]]
 (module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art)
+(borrow 'cal)
 (:
  epoch 2444238.5                       ; 1980 january 0.0
  elonge 278.833540                     ; the sun's ecliptic longitude at the epoch
@@ -122,17 +123,7 @@
            ps (pairs op)
            (at k d) (? (k < #ps) (ps k) d)
            s ((clock 0) // 1000)
-           ; the civil date of julian day jd, gregorian
-           jd (s // 86400 + 2440588)
-           a (jd + 32044)
-           b ((4 * a + 3) // 146097)
-           c (a - 146097 * b // 4)
-           e ((4 * c + 3) // 1461)
-           f (c - 1461 * e // 4)
-           g ((5 * f + 2) // 153)
-           gy (100 * b + e - 4800 + g // 10)
-           gm (g + 3 - 12 * (g // 10))
-           gd (f - (153 * g + 2) // 5 + 1)
+           gt (civil (s // 86400)) gy <gt gm <>gt gd <>>gt
            hs (at 0 (show (s % 86400 // 3600)))
            ds (at 1 ()) ms (at 2 ()) ys (at 3 ())
            yd (? ys (at 4 (snip (show gy) 0 2) + ys) (show gy))

@@ -23,7 +23,6 @@
 (:
    _ (borrow "apps/moon/clay.l")
    _ (borrow 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
-   _ (borrow 'kore)                       ; uread below is the u-floor's
    cshow (cite 'clay 'clay-show)
    cok? (cite 'clay 'clay-ok?)
    nl (string 10)

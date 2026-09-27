@@ -232,9 +232,8 @@
    (slurp j))
 
  ;; --- the runner: the tool on cli's stage ---------------------------------------------------
- (readf p) (: q (open p "r") (hot? q ? (slurp q @ t (close q, [1 t]))))
  (lupa-run p)
-  (readf p @
+  (uread p @
    [1 ""] (puts ("lupa: " + p + " is empty\n"), 1)
    [1 a]  (lupa-new a p @ d (stage (lupa-frame d) (lupa-key d) (_ \ d 'over)))
    (puts $ "lupa: cannot read " + p + "\n", 1))

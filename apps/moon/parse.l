@@ -1784,22 +1784,24 @@
                    (tkk t = 'id) (elem (tkv t) '("__volatile__" "__inline__" "__inline"))
                    ())
    ; `%[name]` -> the operand's number, so no name reaches gen's asmsub. gcc numbers outputs
-   ; first, inputs after and labels last, the order nms arrives in; `%l[name]` names a label
-   ; the same way. an unmatched name is left for gen
+   ; first, inputs after and labels last, the order nms arrives in; a modifier letter keeps its
+   ; place (`%l[name]` a label, `%c[name]` a bare constant). an unmatched name is left for gen
    (anynm? l) (? !(two? l) () (string? <l) 1 (anynm? >l))
    (asmnm tmpl nms)
     (: n (tally tmpl)
        (idx nm l k) (? !(two? l) () (= <l nm) k (idx nm >l (k + 1)))
        (rbr j) (? (n <= j) -1 ((tmpl j) = 93) j (rbr (j + 1)))
+       (alpha? c) (65 <= c <= 90 || 97 <= c <= 122)
        (go i acc)
-        (: l9 ((i + 2) < n && (tmpl (i + 1)) = 108)       ; %l[ reads past the l
-           b (? l9 (i + 2) (i + 1))
+        (: md ((i + 2) < n && alpha? (tmpl (i + 1)))     ; %c[ reads past the letter
+           b (? md (i + 2) (i + 1))
            (? (n <= i) acc
+              ((tmpl i) = 37 && (i + 1) < n && (tmpl (i + 1)) = 37) (go (i + 2) (acc + "%%"))
               ((tmpl i) = 37 && b < n && (tmpl b) = 91)
                (: e (rbr (b + 1))
                   nm (? (e < 0) () (snip tmpl (b + 1) e))
                   k (? (string? nm) (idx nm nms 0) ())
-                  (? (charm? k) (go (e + 1) (acc + (? l9 "%l" "%") + show k))
+                  (? (charm? k) (go (e + 1) (acc + snip tmpl i b + show k))
                      (go (i + 1) (acc + string (tmpl i)))))
               (go (i + 1) (acc + string (tmpl i)))))
        (go 0 ""))

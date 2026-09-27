@@ -95,10 +95,9 @@
    (gdig? c) (48 <= c <= 57)
    (galpha? c) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || c = 46)
    (gidc? c) (galpha? c || gdig? c)
-   (ghexd c) (? (gdig? c) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) -1)
-   (ghex? c) (ghexd c >= 0)
+   (ghex? c) (hexv c >= 0)
    (gdecv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
-   (ghexv s) (foldl (a \ i \ a * 16 + ghexd (s i)) 0 ^#s)
+   (ghexv s) (foldl (a \ i \ a * 16 + hexv (s i)) 0 ^#s)
    (gtoks s) (: n #s
       (span i p) ((: (g j) (? (j < n && p (s j)) (g (j + 1)) j)) i)
       (go i acc)
@@ -271,8 +270,6 @@
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (: c (xa-idx t 58) o (at-operand (snip t (c + 1) #t))
                                        ['seg (name (snip t 1 c)) (<o = 'abs ? ['mem -1 -1 1 <>o] o)])
-         (t 0 = 37 && xa-has? t 58) (: c (xa-idx t 58) o (at-operand (snip t (c + 1) #t))
-                                       ['seg (name (snip t 1 c)) (<o = 'abs ? ['mem -1 -1 1 <>o] o)])
          (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) (two? cr ? cr (at-reglook nm)))
          (t 0 = 36) (: v (snip t 1 #t)
                       (? (xa-num? v) ['im (xa-num v)]
@@ -280,7 +277,10 @@
                          (xa-dig? (v 0) || xa-neg? v) (scare 'as-badnum v)
                          ['ims (name (xa-unquote v))]))
          (xa-has? t 40)
-         (: op (xa-idx t 40) inner (snip t (op + 1) (#t - 1)) disp (snip t 0 op)
+         (: op ((: (g i) (? (i < 1 || t i = 40) i (g (i - 1)))) (#t - 1))   ; the last paren: `(2f)(%rip)`
+            d0 (snip t 0 op) n0 #d0
+            disp (? (1 < n0 && d0 0 = 40 && d0 (n0 - 1) = 41) (snip d0 1 (n0 - 1)) d0)
+            inner (snip t (op + 1) (#t - 1))
             (? (inner = "%rip") (? (0 = #disp) ['rip () 0]
                                     (xa-num? disp) ['rip () (xa-num disp)]
                                     (: so (xa-symoff disp) ['rip <so >so]))

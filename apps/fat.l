@@ -29,19 +29,18 @@
 ; definition, so fat-mkfs refuses a device too small (~33 MB) -- absence, not divergence.
 
 ; the module head is the export list, and it is not decoration: this file's own floor
-; is spelled u16, u32, w16, w32, bcopy, zeros, group, alias, cksum -- names a shared
+; is spelled w16, w32, bcopy, group, alias, cksum -- names a shared
 ; layer would collide with on sight. only the surface at the top of this header leaves.
 (module (fat fat-mkfs fat-mount fat-ls fat-stat fat-read fat-write fat-mkdir fat-rm
          fat-disk)
+(borrow 'bytes)
+(borrow 'cal)
 (:
    ; --- little-endian scalars: strings index charms, casks pin them ---
-   (u16 s i) (s i + (s (i + 1) << 8))
-   (u32 s i) (u16 s i + (u16 s (i + 2) << 16))
    (w16 b i v) (pin b i (v & 255), pin b (i + 1) (v >> 8 & 255), ())
    (w32 b i v) (w16 b i v, w16 b (i + 2) (v >> 16))
    (bcopy b i s) (: n #s (n ? (pour b i s 0 n), ()))      ; pour refuses an empty
    (bfill b i n v) (n ? (pin b i v, bfill b (i + 1) (n - 1) v))
-   (zeros n) (string (cask n))
 
    ; --- the fs tablet, read by slot: 0 rd, 1 wr, 2 spc, 3 rsvd, 4 nfats, 5 fatsz,
    ;     6 rootcl, 7 data0, 8 nclus, 9 fat-cache lba, 10 fat-cache string, 11 free hint ---
@@ -55,13 +54,13 @@
     (: lba (fat-sec f cl)
        s (= lba (f 9) ? (f 10)
           (: t (rd1 f lba) (pin f 9 lba, pin f 10 t, t)))
-       (u32 s (cl * 4 % 512) & 0x0FFFFFFF))
+       (rdle s (cl * 4 % 512) 4 & 0x0FFFFFFF))
    (fat! f cl v)                                      ; write, both copies, top nibble kept
     (: lba (fat-sec f cl)
        s (lba = f 9 ? (f 10) (rd1 f lba))
        b (cask 512) _ (bcopy b 0 s)
        off (cl * 4 % 512)
-       _ (w32 b off ((u32 s off & 0xF0000000) + (v & 0x0FFFFFFF)))
+       _ (w32 b off ((rdle s off 4 & 0xF0000000) + (v & 0x0FFFFFFF)))
        t (string b)
        (wr1 f lba t,
         wr1 f (lba + f 5) t,                          ; the mirror
@@ -118,7 +117,6 @@
                                (d < 0) (s . "")
                                (snip s 0 d . snip s (d + 1) n))
                    (go 0 -1))
-   (alnum? c) (48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122)
    (plain? c) (alnum? c || c = 95 || c = 45 || c = 126)
    (allc? s p) ((: (go i) (i < #s ? (p (s i) ? (go (i + 1)) 0) 1)) 0)
    (lower? s) (allc? s (\ c !(65 <= c <= 90)))
@@ -158,7 +156,7 @@
    (group nm at cl sz r11 raw) {0 nm 1 at 2 cl 3 sz 4 r11 5 raw}
    lfn-offs '(1 3 5 7 9 14 16 18 20 22 24 28 30)      ; where the 13 UCS-2 chars sit
    (lfn-part s o)                                     ; one LFN entry's text
-    (: (ch i) (: v (u16 s (o + i)) (!v || v = 0xFFFF ? () (v < 256 ? v 63)))
+    (: (ch i) (: v (rdle s (o + i) 2) (!v || v = 0xFFFF ? () (v < 256 ? v 63)))
        (go l) (one? l ? "" (ch <l @ c (charm? c ? (string [c] + go >l) "")))
      (go lfn-offs))
    (short-name s o flags)                             ; 8.3 back to text, basis flags honored
@@ -182,12 +180,12 @@
                  (: at (s (o + 11))
                     (? ((at & 15) = 15)
                        (go (o + 32) ((lfn-part s o) + lfn) (charm? start ? start o) acc)
-                       (: cl ((u16 s (o + 26)) + ((u16 s (o + 20)) << 16))
+                       (: cl ((rdle s (o + 26) 2) + ((rdle s (o + 20) 2) << 16))
                           label (at & 8 = 8)
                           nm (tally lfn ? lfn (short-name s o (s (o + 12))))
                           dot (name=? nm "." || name=? nm "..")
                           raw (snip s (charm? start && !label ? start o) (o + 32))
-                          g (group (label || dot ? () nm) at cl (u32 s (o + 28))
+                          g (group (label || dot ? () nm) at cl (rdle s (o + 28) 4)
                                    (snip s o (o + 11)) raw)
                           (go (o + 32) "" () (g . acc))))))))
        (go 0 "" () ()))
@@ -213,7 +211,7 @@
             (: extra (chain-take f (need - #cls))
              (two? extra ? (fat! f (last cls) <extra, cls + extra) cls)))
        (#cls >= need ?                     ; short of that the disk is full: refuse
-        (chain-wr f cls (s + zeros (cb * #cls - #s)),
+        (chain-wr f cls (s + zbytes (cb * #cls - #s)),
          1)))
 
    ; --- paths: "/a/b/c" -> components; the walk answers the parent's cluster,
@@ -234,15 +232,8 @@
 
    ; --- timestamps: (clock 0) ms -> the dos pair (date . time) ---
    (dos-now u)
-    (: ms (clock 0) days (ms // 86400000) secs (ms // 1000 % 86400)
-       z (days + 719468) era (z // 146097) doe (z % 146097)
-       yoe ((doe - (doe // 1460 + doe // 146096 - doe // 36524)) // 365)
-       y (era * 400 + yoe)
-       doy (doe - (365 * yoe + (yoe // 4 - yoe // 100)))
-       mp ((5 * doy + 2) // 153)
-       d (doy - ((153 * mp + 2) // 5) + 1)
-       m (mp < 10 ? (mp + 3) (mp - 9))
-       y (m <= 2 ? (y + 1) y)
+    (: ms (clock 0) secs (ms // 1000 % 86400)
+       ymd (civil (ms // 86400000)) y <ymd m <>ymd d <>>ymd
        (((y - 1980) << 9) + (m << 5) + d .
         ((secs // 3600) << 11) + ((secs // 60 % 60) << 5) + (secs % 60 // 2)))
 
@@ -296,7 +287,7 @@
              inf (string i)
              _ (wr 0 bpb, wr 1 inf, wr 6 bpb, wr 7 inf)
              ; zero both fats + the root cluster, 64 sectors a stroke
-             z64 (zeros 32768)
+             z64 (zbytes 32768)
              (go lba left) (left ?
                             (: k (left < 64 ? left 64)
                              (wr lba (k = 64 ? z64 (snip z64 0 (k * 512))),
@@ -312,10 +303,10 @@
    (fat-mount dev)
     (: rd <dev s (rd 0 1)
        (? !(string? s) ()
-          (u16 s 510 != 0xAA55 || u16 s 11 != 512 || u16 s 22 || !(u32 s 36)) ()
-          (: spc (s 13) rsvd (u16 s 14) nfats (s 16) fatsz (u32 s 36)
-             nsec (u32 s 32) data0 (rsvd + nfats * fatsz)
-             {0 rd 1 <>dev 2 spc 3 rsvd 4 nfats 5 fatsz 6 (u32 s 44)
+          (rdle s 510 2 != 0xAA55 || rdle s 11 2 != 512 || rdle s 22 2 || !(rdle s 36 4)) ()
+          (: spc (s 13) rsvd (rdle s 14 2) nfats (s 16) fatsz (rdle s 36 4)
+             nsec (rdle s 32 4) data0 (rsvd + nfats * fatsz)
+             {0 rd 1 <>dev 2 spc 3 rsvd 4 nfats 5 fatsz 6 (rdle s 44 4)
               7 data0 8 ((nsec - data0) // spc) 9 () 10 () 11 3})))
 
    ; --- the verbs ---
@@ -412,12 +403,7 @@
 (: fatc-usage "usage: fat {ls|stat|cat|get|put|mkdir|rm|mkfs} IMG [PATH..]"
    mkfsv-usage "usage: mkfs.vfat [-C] IMG [BLOCKS]"
    (fatc-moan m) (say err ("fat: " + m), put err 10, flush err, 1)
-   ; the exit door: a status raised, not a process ended, so a caller already in
-   ; this image gets a charm back; without kore aboard there is no catcher.
-   (fatc-leave c) (: u (cite 'kore 'uleave) (lit? u ? (u c) (quit c)))
-   (fatc-die c m) (fatc-moan m, fatc-leave c)
-   (fatc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, [1 (s + "")]))))
-   (fatc-blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
+   (fatc-die c m) (udie c ("fat: " + m))
 
    ; a size word: 64M, 40m, 33554432. answers charms, () when it will not read.
    (fatc-size s)
@@ -445,7 +431,7 @@
    ; the two failures are told apart on purpose: a missing file and a file that is
    ; not a FAT32 want different repairs, and one "cannot read" sends you to the wrong one.
    (fatc-open img)
-    (: t (fatc-slurp img)
+    (: t (uread img)
        _ (!t && fatc-die 2 ("cannot read " + img))
        s <>t
        im (cask #s)
@@ -457,7 +443,7 @@
    ; the write-back, once, and only when something wrote
    (fatc-sync img im dirty)
     (? (peep dirty 0 0)
-       (fatc-blurt img (string im) ? 0 (fatc-moan ("cannot write " + img)))
+       (uwrite img (string im) ? 0 (fatc-moan ("cannot write " + img)))
        0)
 
    (fatc-ls img path)
@@ -475,9 +461,9 @@
        r (fat-read <>>b path)
        (? (one? r) (fatc-moan (path + ": no such file"))
           (dst = "" || dst = "-") (say out <>r, flush out, 0)
-          (fatc-blurt dst <>r ? 0 (fatc-moan ("cannot write " + dst)))))
+          (uwrite dst <>r ? 0 (fatc-moan ("cannot write " + dst)))))
    (fatc-put img path src)
-    (: t (src @ ("" || "-") [1 (slurp in)] (fatc-slurp src))
+    (: t (src @ ("" || "-") [1 (slurp in)] (uread src))
        _ (t || fatc-die 2 ("cannot read " + src))
        b (fatc-open img)
        im <b dirty <>b f <>>b
@@ -497,7 +483,7 @@
    ; remade at that size, which is what `mkfs.vfat -C` means and what a script
    ; re-running its own setup wants.
    (fatc-mkfs img size)
-    (: have (fatc-slurp img)
+    (: have (uread img)
        n (? (charm? size) size (? have #(<>have) 0))
        _ (? (charm? n && (0 < n)) () (fatc-die 2 ("no size for " + img + ", and no image there")))
        _ (? (n % 512) (fatc-die 2 "the size must be a whole number of 512-byte sectors") ())
@@ -505,7 +491,7 @@
        _ (!(charm? size) && have && (<>have @ s (#s && pour im 0 s 0 #s)))
        dirty {}
        (? (fat-mkfs (fatc-dev im dirty))
-          (? (fatc-blurt img (string im)) 0 (fatc-moan ("cannot write " + img)))
+          (? (uwrite img (string im)) 0 (fatc-moan ("cannot write " + img)))
           (fatc-moan (img + ": too small for FAT32 (it wants about 33 MB; "
                           + "under 65525 clusters the format IS FAT16)"))))
 
@@ -537,9 +523,8 @@
 
    T (cite 'verbs 'tab)
    ; the verb wraps in urun, kore.l's own shape for a main that leaves deep
-   (fatc-run f av) (: r (cite 'kore 'urun) (lit? r ? (r f av) (f av)))
-   _ (pins T 'fat       (udoor 'fat (fatc-run fat-main) fatc-usage 1 1)
-            'mkfs.vfat  (udoor 'mkfs.vfat (fatc-run mkfsv-main) mkfsv-usage 1 1)
-            'mkdosfs    (udoor 'mkdosfs (fatc-run mkfsv-main) mkfsv-usage 1 1)))
+   _ (pins T 'fat       (udoor 'fat (urun fat-main) fatc-usage 1 1)
+            'mkfs.vfat  (udoor 'mkfs.vfat (urun mkfsv-main) mkfsv-usage 1 1)
+            'mkdosfs    (udoor 'mkdosfs (urun mkfsv-main) mkfsv-usage 1 1)))
 
 ) ; module 'fatcmd

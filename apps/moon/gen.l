@@ -5952,7 +5952,7 @@
               (? !(c = 37) (go (i + 1) (acc + string c))
                  (i + 1 < n)
                   (: d (tm (i + 1))
-                     md (? (elem d '(98 119 107 113 99 120 108) && i + 2 < n && 48 <= (tm (i + 2)) <= 57) d 0)
+                     md (? (elem d '(98 119 107 113 99 120 108 97 80) && i + 2 < n && 48 <= (tm (i + 2)) <= 57) d 0)
                      dx (? md (tm (i + 2)) d)
                      (? (d = 37) (go (i + 2) (acc + "%"))
                         (48 <= dx <= 57)
@@ -5963,21 +5963,32 @@
                         'bad))
                  'bad)))
        (go 0 ""))
+   ; an "i" operand: a constant -> the number, an address constant (a global, a function, a
+   ; string, &a.b[k]) -> its "label+k" text, else 'no. a name a local shadows is no constant
+   (asmk g env e)
+    (: k (memk g e)
+       (local? x) (? !(two? x) ()
+                     (<x = 'var) (two? (assoc <>x env))
+                     (local? <x || local? >x))
+       (? (charm? k) k
+          (local? e) 'no
+          (: a (imaddr g e)
+             (a @ 'no 'no
+                  (: nm (nom? <a ? (show <a) <a) (<>a @ 0 nm (<>a < 0 ? (nm + show <>a) (nm + "+" + show <>a))))))))
    ; an operand's byte width, off its type by static peek (a register spells by it on x64)
    (asmw g env e) (: ty (peekty g env e)
                      (? (bad? ty) 8 (: n (tsz g ty) (? (elem n '(1 2 4 8)) n 8))))
-   asmhb holo-bytes                                 ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
-   asmho holo-bytes-open
+   asmho holo-bytes-open                            ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
    ; a template's bytes: one opaque raw, unless it carries a directive or a label beside an
    ; instruction -- then gas-top reads it from the function's own place. what stays here lays
    ; as raw runs split at its labels, which are the function's (another section's word may name
    ; one), numbered per reading so an inlined copy lays its own; the other sections ride
-   ; 'fasecs out to the object, beside the file-scope asm's
-   (asmbody g tgt neutral? txt labs)
+   ; 'fasecs out to the object, beside the file-scope asm's. a name the template does not
+   ; define (a goto label, a global) stays a fix
+   (asmbody g tgt neutral? txt)
     (? (neutral? || gas-plain? tgt txt)
        [['raw (: prog (? neutral? (asm-text txt) (gas-text tgt txt))
-                 (? (two? labs) (asmho tgt prog (foldl (\ t l9 (pin t l9 1)) {} labs))
-                    (asmhb tgt prog)))]]
+                 (asmho tgt prog (cg-refs prog {})))]]
        (: r (gas-top-in tgt txt "" [1 6] (show (nlab g (g 'fn + ".asm")) + "."))
           home (foldl (\ a x (? (<x = "") (x 3) a)) () <r)
           _ (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2)] . (g 'fasecs)))
@@ -6017,10 +6028,10 @@
        (iconv l acc)
         (? !(two? l) (rev acc)
            (: k (asmc g <<l) e <><l
-              const? (two? e && <e = 'num && charm? <>e)
+              v (? (elem k '(imm either)) (asmk g env e) 'no)
               (k @ 'bad (asmno g ("an asm input constrained \"" + <<l + "\""))
-                   'imm (const? ? (iconv >l (['m <>e 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
-                   'either (? const? (iconv >l (['m <>e 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
+                   'imm (? (v != 'no) (iconv >l (['m v 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
+                   'either (? (charm? v) (iconv >l (['m v 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
                    'mem (iconv >l (['b 'pick ['addr e] 0] . acc))
                    (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
@@ -6062,7 +6073,7 @@
                       (two? labs && (two? os || two? saves)) (asmno g "an asm goto with outputs or a callee-saved clobber")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
                          (rtext a9 w) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
-                         (itext v) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (show v)) (gas-imm tgt v md)))
+                         (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(charm? v) ? 'bad (show v)) (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? ((peep asmnames a9 "r?") + ", 0") (gas-mem tgt a9)))
                          (ltext l9) (md \ (? (md = 108) (show l9) 'bad))
                          (optext l al acc)
@@ -6093,7 +6104,7 @@
                                             (pops >l >al acc)))
                                      ; the body, the saved clobbers pushed around it
                                      body ((map (r9 \ ['push r9]) saves)
-                                           + asmbody g tgt neutral? txt labs
+                                           + asmbody g tgt neutral? txt
                                            + map (r9 \ ['pop r9]) (rev saves))
                                      ; outputs: push each register, store back reverse
                                      (opush l al acc)
@@ -7258,12 +7269,17 @@
    ; written or &-taken, shadowing nothing, reads as its cast literal and its decl drops. runs to a fixpoint --
    (kprop g f)
     (: items <><>>>f
-       dcl {} tak {} wrt {} st {}
+       dcl {} tak {} wrt {}
        (cen x c9)                                   ; one walk: the censuses + the decl pairs seen
         (? !(two? x) c9
            (: c8 (x @ ('addr ('var nm)) (pin tak nm 1, c9)
                      (('asn || 'post) . ('var nm) . _) (pin wrt nm 1, c9)
-                     ('asm . _) (pin st 'asm 1, c9)
+                     ; an asm writes its outputs and takes a memory input's address
+                     ('asm . _)
+                      (: (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) '(109 111)) 1 (go (i + 1)))) 0)
+                         _ (foldl (\ _ o (<>o @ ('var nm) (pin wrt nm 1) 0)) 0 (x 2))
+                         _ (foldl (\ _ o (? (mem? <o) (<>o @ ('var nm) (pin tak nm 1) 0) 0)) 0 (x 3))
+                         c9)
                      (('decl || 'sdecl) ps)
                       (: (dn l a) (? !(two? l) a
                                      (pin dcl <<l (1 + peep dcl <<l 0),
@@ -7275,8 +7291,7 @@
        cds (cen items ())
        pns (: (go l a) (? !(two? l) a (go >l (<<l . a))) (go <>>f))
        (kok nm ty init)
-        (? (st 'asm) ()
-           !(elem ty '(bool char uchar short ushort int uint long ulong)) ()
+        (? !(elem ty '(bool char uchar short ushort int uint long ulong)) ()
            !(1 = peep dcl nm 0) ()
            (tak nm || wrt nm) ()
            (elem nm pns) ()
@@ -7289,7 +7304,7 @@
        sbs (: t {}
               (go l) (? !(two? l) t
                         (: p <l
-                           kb (kok <p <>p <>>p)
+                           kb (? (two? >>>p) () (kok <p <>p <>>p))    ; a register variable keeps its pin
                            _ (two? kb ? (pin t <p kb))
                            (go >l)))
               (go cds))

@@ -208,19 +208,6 @@
       (uoct "755" = 493) (uoct "644" = 420) (uoct "0" = 0) (uoct "7" = 7)
       (rp-parts "/a//b/" = '("a" "b")) (rp-parts "a" = '("a")) !(rp-parts "///")))
 
-; --- the calendar floor (apps/kore/core.l): civil-from-days and its inverse. exact by
-; construction (no month table, no float), and the round trip is what holds it: stat's
-; %y and date both read them, and a leap-year slip would only show on one day a year ---
-(: (rt z) (: c (ucivil z) (udays <c <>c <>>c = z))
-   (test
-      (ucivil 0 = '(1970 1 1)) (ucivil 1 = '(1970 1 2)) (ucivil -1 = '(1969 12 31))
-      (ucivil 19675 = '(2023 11 14)) (ucivil 20682 = '(2026 8 17))
-      (ucivil 11016 = '(2000 2 29))                     ; a century divisible by 400 is leap
-      (ucivil 11017 = '(2000 3 1))
-      (ucivil -25508 = '(1900 3 1))                     ; ..and 1900 is not
-      (udays 1970 1 1 = 0) (udays 2000 2 29 = 11016) (udays 1900 3 1 = -25508)
-      (rt 0) (rt 1) (rt -1) (rt 19675) (rt 11016) (rt 20682) (rt 40000) (rt -25508)))
-
 ; --- the record floor (apps/kore/core.l): paste's delimiter list, split's suffix and
 ; size words, join's field split, and od's three readings ---
 (: (test
@@ -234,8 +221,8 @@
       (ujfs () "  a   1  " = '("a" "1"))                  ; blank runs, the edges dropped
       (ujfs () "" = ()) (ujfs 58 "a:b:" = '("a" "b" ""))
       (unth '("a" "b") 2 = "b") !(unth '("a" "b") 3) !(unth '("a") 0)
-      (uzpad 3 "7" = "007") (uzpad 1 "77" = "77")
-      (uradix 255 16 = "ff") (uradix 255 8 = "377")
+      (zpad 3 "7" = "007") (zpad 1 "77" = "77")
+      (radix 255 16 = "ff") (radix 255 8 = "377")
       (uodesc 10 = "\\n") (uodesc 0 = "\\0") (uodesc 92 = "\\") (uodesc 65 = "A")
       (uodesc 1 = "001") (uodesc 255 = "377") (uodesc 127 = "177")
       (uodname 10 = "nl") (uodname 32 = "sp") (uodname 127 = "del")

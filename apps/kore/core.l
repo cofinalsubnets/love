@@ -806,13 +806,29 @@
        _ (say out (show (? (0 < n) n 1))) _ (put out 10) _ (flush out) 0)
 
    ; -- basename and dirname: the two path clips --
+   ; GNU's forms: -a many names, -s SUF (which means -a), -z NUL-ended, -- ends the options
+   (ubn-opts as t)                             ; -> the operands
+    (? !(two? as) ()
+       (<as = "--") >as
+       (<as = "-a" || <as = "--multiple") (: _ (pin t 'a 1) (ubn-opts >as t))
+       (<as = "-z" || <as = "--zero") (: _ (pin t 'z 1) (ubn-opts >as t))
+       (<as = "-s" && two? >as) (: _ (pins t 's <>as 'a 1) (ubn-opts >>as t))
+       (2 < #<as && snip <as 0 2 = "-s") (: _ (pins t 's (snip <as 2 #<as) 'a 1) (ubn-opts >as t))
+       (9 < #<as && snip <as 0 9 = "--suffix=") (: _ (pins t 's (snip <as 9 #<as) 'a 1) (ubn-opts >as t))
+       as)
+   (ubn-say t ns f) (: end (? (peep t 'z 0) 0 10)
+                       _ (each ns (n \ (: _ (say out (f n)) (put out end))))
+                       _ (flush out) 0)
    (basename-main as)
-    (? !(two? as) (udie 2 "usage: basename NAME [SUFFIX]")
-       (: _ (say out (ubase <as (? (two? >as) <>as "")))
-          _ (put out 10) _ (flush out) 0))
+    (: t (tablet 0) ops (ubn-opts as t) a? (peep t 'a 0)
+       (? !(two? ops) (udie 1 "usage: basename NAME [SUFFIX] | basename -a [-s SUF] NAME..")
+          (!a? && two? >>ops) (udie 1 ("basename: extra operand '" + <>>ops + "'"))
+          a? (ubn-say t ops (n \ ubase n (peep t 's "")))
+          (ubn-say t [<ops] (n \ ubase n (? (two? >ops) <>ops "")))))
    (dirname-main as)
-    (? !(two? as) (udie 2 "usage: dirname NAME")
-       (: _ (say out (udir <as)) _ (put out 10) _ (flush out) 0))
+    (: t (tablet 0) ops (ubn-opts as t)
+       (? !(two? ops) (udie 1 "usage: dirname NAME..")
+          (ubn-say t ops udir)))
 
    ; -- cut: -f list [-d C] [-s] over fields, -c list over charms (flags glue or not) --
    (cut-main as)
@@ -1194,31 +1210,6 @@
    (unix2dos-main as) (ud2u "unix2dos" ulfcr as)
    (mac2unix-main as) (ud2u "mac2unix" ucrlone as)
 
-   ; ---- the calendar floor (stat's %y and date both read it) --------------------
-   ; Howard Hinnant's exact integer civil-from-days and its inverse, shifted to a March
-   ; year so the leap day lands at the end and no month table is needed. love's // is
-   ; a floor division, which is what these want -- the sign dance the C originals carry
-   ; is only there because C truncates. lawed in test/law/kore.l over the round trip.
-   ; there is no time zone here and there will not be one without a tz database: every
-   ; face over these is utc, exactly as moonlibc's localtime is its gmtime.
-   (ucivil z0)                         ; days since 1970-01-01 -> (year month day)
-    (: z (z0 + 719468)
-       era (// z 146097)
-       doe (z - (* era 146097))
-       yoe (// (((doe - (// doe 1460)) + (// doe 36524)) - (// doe 146096)) 365)
-       y ((* era 400) + yoe)
-       doy (doe - (((* 365 yoe) + (// yoe 4)) - (// yoe 100)))
-       mp (// ((* 5 doy) + 2) 153)
-       d ((doy - (// ((* 153 mp) + 2) 5)) + 1)
-       m (mp + (? (mp < 10) 3 -9))
-       [(? (m <= 2) (y + 1) y) m d])
-   (udays y0 m d)                      ; (year month day) -> days since 1970-01-01
-    (: y (? (m <= 2) (y0 - 1) y0)
-       era (// y 400)
-       yoe (y - (* era 400))
-       doy ((// ((* 153 (m + (? (2 < m) -3 9))) + 2) 5) + (d - 1))
-       doe ((((* yoe 365) + (// yoe 4)) - (// yoe 100)) + doy)
-       (((* era 146097) + doe) - 719468))
 
 
    ; ---- the encodings: base64 and base32 (RFC 4648, GNU's two faces) ------------
@@ -1505,7 +1496,7 @@
    (ascii-main _)
     (: o (jug 0)
        (cell x y) (: i (x * 16 + y)
-                     _ (say o (upad (3 + (? (5 < x) 1 0)) (show i) + " " + upadc 2 48 (uhex2 i) + " "))
+                     _ (say o (upad (3 + (? (5 < x) 1 0)) (show i) + " " + zpad 2 (uhex2 i) + " "))
                      (? (i < 32) (say o (snip ascii-low (3 * i) (3 * i + 3))) (i = 127) (say o "DEL") (put o i)))
        (uhex2 i) (string ("0123456789ABCDEF" (i >> 4)) + string ("0123456789ABCDEF" (i & 15)))
        _ (map (\ x (: _ (say o ("Dec Hex" + upad (1 + (? (x < 2) 2 0) + (? (4 < x) 1 0)) " ")) (put o (? (6 < x) 10 32)))) ^8)
@@ -1808,8 +1799,6 @@
    ; the -t's GNU gives them. one -t per run, the last given winning: GNU's
    ; several-at-once lane re-widens every column to the widest type in the set, which
    ; is a whole layout of its own and not another row.
-   (uzpad w s) (? (tally s < w) (uzpad w ("0" + s)) s)
-   (uradix n b) (: o (jug 0) _ (putbn o n b) (slurp o))
    uodnames '("nul" "soh" "stx" "etx" "eot" "enq" "ack" "bel" "bs" "ht" "nl" "vt"
               "ff" "cr" "so" "si" "dle" "dc1" "dc2" "dc3" "dc4" "nak" "syn" "etb"
               "can" "em" "sub" "esc" "fs" "gs" "rs" "us" "sp")
@@ -1819,7 +1808,7 @@
     (? (c = 0) "\\0" (c = 7) "\\a" (c = 8) "\\b" (c = 9) "\\t" (c = 10) "\\n"
        (c = 11) "\\v" (c = 12) "\\f" (c = 13) "\\r"
        ((31 < c) && (c < 127)) (string c)
-       (uzpad 3 (uradix c 8)))
+       (zpad 3 (radix c 8)))
    (uodtype s)                         ; a -t word -> (kind size width) | ()
     (: k (? (0 < tally s) (s 0) 0)
        z (? (1 < tally s) (uatoi (snip s 1 (tally s))) 0)
@@ -1877,9 +1866,9 @@
                       (? n (drop (k - n)) 0)))
        _ (? (drop skip) 0 (udie 1 "od: cannot skip past end of combined input"))
        (adr k) (? (ad = 110) ""
-                  (ad = 100) (uzpad 7 (show k))
-                  (ad = 120) (uzpad 6 (uradix k 16))
-                  (uzpad 7 (uradix k 8)))
+                  (ad = 100) (zpad 7 (show k))
+                  (ad = 120) (zpad 6 (radix k 16))
+                  (zpad 7 (radix k 8)))
        (val blk k)                      ; the little-endian item at k, short reads zeroed
         (: n (tally blk)
            (go i acc) (? (sz <= i) acc
@@ -1891,8 +1880,8 @@
            (= kd 'a) (upad 3 (uodname (blk k)))
            (: raw (val blk k)
               v (? ((= kd 'd) && !(raw < (((* 8 sz) - 1) 2))) (raw - ((* 8 sz) 2)) raw)
-              (? (= kd 'x) (uzpad wd (uradix v 16))
-                 (= kd 'o) (uzpad wd (uradix v 8))
+              (? (= kd 'x) (zpad wd (radix v 16))
+                 (= kd 'o) (zpad wd (radix v 8))
                  (upad wd (show v)))))
        (rowof blk cnt)
         (: items (? byte? cnt (// ((cnt + sz) - 1) sz))
@@ -1925,18 +1914,15 @@
    (uxx-esc c) (? ((32 <= c) && (c < 127)) c 46)     ; a dot for anything unprintable
    (uxx-row off blk)
     (: n (tally blk) o (jug 0)
-       _ (say o (uzpad 8 (uradix off 16))) _ (say o ": ")
+       _ (say o (zpad 8 (radix off 16))) _ (say o ": ")
        (hex i) (? (16 <= i) 0
-                  (: _ (? (i < n) (say o (uzpad 2 (uradix (blk i) 16))) (say o "  "))
+                  (: _ (? (i < n) (say o (zpad 2 (radix (blk i) 16))) (say o "  "))
                      _ (? (1 = (% i 2)) (put o 32) 0)
                      (hex (i + 1))))
        _ (hex 0) _ (put o 32)
        (asc i) (? ((16 <= i) || (n <= i)) 0 (: _ (put o (uxx-esc (blk i))) (asc (i + 1))))
        _ (asc 0)
        (slurp o))
-   (uxx-nib c) (? ((48 <= c) && (c <= 57)) (c - 48)
-                  ((97 <= c) && (c <= 102)) ((c - 97) + 10)
-                  ((65 <= c) && (c <= 70)) ((c - 65) + 10) -1)
    ; -r reads the dump back: the offset up to the colon is skipped, the gutter past
    ; two spaces is not hex and stops the row. a line with no colon is all hex
    (uxx-unrow ln)
@@ -1945,7 +1931,7 @@
        s (col 0)
        (go k acc hi)
         (? (n <= k) (rev acc)
-           (: c (ln k) v (uxx-nib c)
+           (: c (ln k) v (hexv c)
               ; two spaces in a row IS the gutter, and the gutter is text: `ab.hello` past
            ; it reads as hex to anything that only skips single spaces
            (? (v < 0) (? ((32 = c) && !(charm? hi))
@@ -1976,7 +1962,7 @@
    ; language and the one-letter faces past -C are not here --
    (uhd-row C? off blk)
     (: n #blk o (jug 0)
-       (hx v w) (say o (uzpad w (uradix v 16)))
+       (hx v w) (say o (zpad w (radix v 16)))
        _ (? C?
             (: _ (hx off 8) _ (say o "  ")
                _ (each ^16 (\ i (: _ (? (i < n) (: _ (hx (blk i) 2) (put o 32)) (say o "   "))
@@ -2016,7 +2002,7 @@
                (: _ (? star 0 (: _ (say out "*") (put out 10))) (go (off + 16) prev 1))
               (: _ (say out (uhd-row C? off blk)) _ (put out 10) (go (off + n) blk 0))))
        end (go at () 0)
-       _ (? (0 < end) (: _ (say out (uzpad (? C? 8 7) (uradix end 16))) (put out 10)) 0)
+       _ (? (0 < end) (: _ (say out (zpad (? C? 8 7) (radix end 16))) (put out 10)) 0)
        _ (flush out) 0)
    (hexdump-main as) (uhexdump "hexdump" as)
    (hd-main as) (uhexdump "hd" ("-C" . as))

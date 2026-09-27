@@ -178,10 +178,9 @@
    ; s from i to n with each %XX back to its byte, and a + a space when plus?
    (ww-dec s i n plus?)
     (: o (jug 0)
-       (hx c) (? (47 < c < 58) (c - 48) (96 < c < 103) (c - 87) (64 < c < 71) (c - 55) -1)
        (go i) (? (n <= i) (slurp o)
-                 (s i = 37 && i + 2 < n && 0 <= hx (s (i + 1)) && 0 <= hx (s (i + 2)))
-                  (: _ (put o (hx (s (i + 1)) * 16 + hx (s (i + 2)))) (go (i + 3)))
+                 (s i = 37 && i + 2 < n && 0 <= hexv (s (i + 1)) && 0 <= hexv (s (i + 2)))
+                  (: _ (put o (hexv (s (i + 1)) * 16 + hexv (s (i + 2)))) (go (i + 3)))
                  (: _ (put o (? (plus? && s i = 43) 32 (s i))) (go (i + 1))))
        (go i))
    ; a fragment's name: the # off and each %XX back to its byte, the way an id is spelled

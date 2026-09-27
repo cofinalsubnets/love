@@ -32,8 +32,6 @@ usage: bzip2 [-cdfkqstvz] [-1..-9] [FILE..]
 no file, or a bare -, is the filter: stdin -> stdout"
    bzc-sufs [[".bz2" ""] [".bz" ""] [".tbz2" ".tar"] [".tbz" ".tar"]]
 
-   (bzc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
-   (bzc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
    (bzc-say t m) (: _ (say err (peep t 'nm "bzip2" + ": " + m + "\n")) (flush err))
    (bzc-moan t m) (? (peep t 'q 0) 0 (bzc-say t m))
    (bzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
@@ -54,12 +52,12 @@ no file, or a bare -, is the filter: stdin -> stdout"
         + bzc-fix (100 * (1 - #z / #s)) 100 5 + "% saved, " + show #s + " in, " + show #z + " out."))
    (bzc-put t p dst bytes st)          ; the output laid, the input's mode and time carried
     (? (two? (lstat dst) && !(peep t 'f 0)) (: _ (bzc-moan t ("Output file " + dst + " already exists.")) 1)
-       !(bzc-blurt dst bytes) (: _ (bzc-moan t ("Can't create output file " + dst + ".")) 1)
+       !(uwrite dst bytes) (: _ (bzc-moan t ("Can't create output file " + dst + ".")) 1)
        (: _ (two? st && (: _ (chmod dst (st 2 & 4095)) (utime dst (st 1))))
           _ (peep t 'k 0 ? 0 (unlink p))
           0))
    (bzc-one t p)
-    (: r (bzc-slurp p)
+    (: r (uread p)
        st (stat p)
        (? (two? st && (st 2 & 61440) = 16384) (: _ (bzc-moan t ("Input file " + p + " is a directory.")) 1)
           !r (: _ (bzc-moan t ("Can't open input file " + p + ": No such file or directory.")) 1)
