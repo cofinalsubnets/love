@@ -439,6 +439,16 @@ t \\- a thing
                  !(elem 1 (map (i \ <p i) ^#(<p)))                ; no sentinel left behind
                  (p 2 = [["top" 0] ["History" 0] ["old" 1] ["cite_note-1" 3] ["x" 3]
                          ["cite_note-2" 4] ["end" 6] ["q&a" 8]])))
+      ; where a page's own content starts: <main> or role=main is " main", an <article>
+      ; " article" -- a space in the name, which no id has -- beside the tag's own id
+      _ (: d (htread "<nav><p>menu</p></nav><main id=\"content\"><h1>t</h1></main>")
+           (test (d = '((para ((text "menu"))) (para ((mark "content") (mark " main"))) (head 1 ((text "t")))))
+                 (htread (htshow d) = d)
+                 (ttpage d 60 2 = [["content" 2] [" main" 2]])
+                 (htread "<div role=\"main\"><p>x</p></div>" = '((para ((mark " main"))) (para ((text "x")))))
+                 (htread "<article><p>y</p></article>" = '((para ((mark " article"))) (para ((text "y")))))
+                 ; a page's indenting leaves blank text beside the marks, and they still move on
+                 (ttpage (htread "<nav><p>m</p></nav><main>\n    <p>x</p></main>") 60 2 = [[" main" 2]])))
       0)
 
  _ (test_fin ())

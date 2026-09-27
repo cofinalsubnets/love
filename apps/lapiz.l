@@ -25,6 +25,8 @@
 ;   ('text s)  ('em inl)  ('strong inl)  ('code s)  ('link inl url)  ('mark name)
 ; a mark is a place a link can land -- an html id. it is html's alone: markdown, roff and
 ; the terminal show nothing for it, which is the normalization the other surfaces owe it.
+; two names have a space, which no id can: " main" and " article", where a page's own
+; content starts past its menus (htscrub lays them).
 ; ('meta ..) is document-level and heads the doc; its keys are the canonical five, always
 ; all five, absent ones empty (`mnorm`). a doc is normal when no two texts are adjacent in
 ; an inl (`mrg`) and no two lists of one kind are adjacent in the doc (`bmrg`); every reader
@@ -414,6 +416,12 @@
    ; the tags whose content is a line of text: a mark goes inside, where the text is; any
    ; other tag holds blocks or is dropped, and its mark goes ahead of it
    hinside '("p" "h1" "h2" "h3" "h4" "h5" "h6" "li" "dt" "dd" "td" "th")
+   ; where the page's own content starts, past its menus: a mark whose name has a space,
+   ; which no id can, so it never meets one. <main> or role=main, else an <article>
+   (hmain s t k e)
+    (? (t = "main" || hattr s k e "role" = "main") (hmk " main")
+       (t = "article") (hmk " article")
+       "")
    (hfind s i pat)                                  ; past the next pat, or the end
     (:- (go i) n #s m #pat
      (go k) (? (n < k + m) n (pat = snip s k (k + m)) (k + m) (go (k + 1))))
@@ -431,7 +439,7 @@
             (? (one? h) (put o (s i), go (i + 1) ba)
                (: t <h e <>h op? <>>h
                   k (i + 1 + #t)
-                  mk (? op? (hmk (hattr s k (e - 1) "id")) "")
+                  mk (? op? (hmk (hattr s k (e - 1) "id") + hmain s t k (e - 1)) "")
                   (? (elem t hkill) (go (? op? (hpast s e t) e) ba)
                      (elem t hbare) (say o mk, go e ba)
                      (t = "br") (say o "</p><p>", go e ba)
@@ -1059,7 +1067,12 @@
           [x acc])
    ; a paragraph of marks alone lays no line to land on, so its marks move onto the next
    ; block that holds text; past the end of a doc there is none, and they go
-   (tlmarks? l) (two? l && (: (g m) (? (one? m) 1 (<(<m) = 'mark) (g >m) 0) (g l)))
+   ; ..and so does one whose only text is blank, which is what a page's indenting leaves
+   (tlblank? x) (<x = 'text && (: t <>x (g i) (? (#t <= i) 1 (elem (t i) '(32 9 10 13)) (g (i + 1)) 0) (g 0)))
+   (tlmarks? l)
+    (: (g m k) (? (one? m) k (<(<m) = 'mark) (g >m 1) (tlblank? <m) (g >m k) 0)
+       (g l 0))
+   (tlonly l) (filter (x \ <x = 'mark) l)
    (tlput x pend)
     (<x @ 'head    ['head <>x (pend + <>>x)]
           'para    ['para (pend + <>x)]
@@ -1072,7 +1085,7 @@
     ((: (go l pend)
         (? (one? l) ()
            (: x <l
-              (? (<x = 'para && tlmarks? <>x) (go >l (pend + <>x))
+              (? (<x = 'para && tlmarks? <>x) (go >l (pend + tlonly <>x))
                  (: y (? (one? pend) (<x = 'quote ? ['quote (tlcarry <>x)] x) (tlput x pend))
                     (? (one? y) (x . (go >l pend)) (y . (go >l ()))))))))
      d ())

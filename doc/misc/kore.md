@@ -568,9 +568,11 @@ keys over less's:
   and its links resolve against it.
 * **With no terminal the page is poured plain, with its references after it**, as `lynx -dump`
   does. A server's error status still shows its page, and exits 8, as wget does.
-
 * **A `#name` lands on the line where lapiz laid that id.** Within the page it's a step in
   the history with no fetch, so back is a scroll. On another page it lands after that page loads.
+* **A page opened without a `#name` opens where its own content starts**, past the menus:
+  lapiz marks the first `<main>` (or `role="main"`), else an `<article>`. **`m`** goes back
+  there, and **`g`** is still the very top.
 
 Absent: forms, scripts, cookies, images, and any charset but utf-8. The TLS peer is not
 verified (wget's client).
