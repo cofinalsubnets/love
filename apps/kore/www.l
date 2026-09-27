@@ -14,9 +14,11 @@
 ; its links resolve against it. not a terminal: the page is poured plain with its references
 ; after it, as lynx -dump does, and a server's error status is the exit 8 wget gives it.
 ;
+; a #name lands on the line lapiz laid that id on (ttpage's anchors): on this page as a step
+; in the history with no fetch, on another after it loads.
+;
 ; out of scope, and said: forms, scripts, cookies, images, and any charset but utf-8. the
-; tls peer is not verified (wget's client). an in-page link (#name) does not land -- lapiz
-; keeps no anchors -- so it says so and stays.
+; tls peer is not verified (wget's client).
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -102,12 +104,26 @@
                       (: ct (wg-header hd "content-type")
                          k (ww-kind (? (string? ct) ct ""))
                          (? k [0 url k (r 2) code] [1 ("www: " + url + " is " + ct + ", not a page")]))))))))
-   ; a fetched page -> [lines urls], the urls absolute against the page's own
+   ; a fetched page -> [lines urls anchors], the urls absolute against the page's own and
+   ; an anchor [name line]
    (ww-lay g w)
     (: url (g 1) k (g 2) body (g 3)
-       (? (k = 'text) [(lines body) ()]
+       (? (k = 'text) [(lines body) () ()]
           (: p ((cite 'lapiz 'ttpage) ((cite 'lapiz 'htread) body) w)
-             [(lines <p) (map (ww-resolve url) <>p)])))
+             [(lines <p) (map (ww-resolve url) (p 1)) (p 2)])))
+   ; a fragment's name: the # off and each %XX back to its byte, the way an id is spelled
+   (ww-unpct s)
+    (: n #s o (jug 0)
+       (hx c) (? (47 < c < 58) (c - 48) (96 < c < 103) (c - 87) (64 < c < 71) (c - 55) -1)
+       (go i) (? (n <= i) (slurp o)
+                 (s i = 37 && i + 2 < n && 0 <= hx (s (i + 1)) && 0 <= hx (s (i + 2)))
+                  (: _ (put o (hx (s (i + 1)) * 16 + hx (s (i + 2)))) (go (i + 3)))
+                 (: _ (put o (s i)) (go (i + 1))))
+       (go 1))
+   ; the line a fragment lands on, or -1
+   (ww-anchor st fr)
+    (: nm (ww-unpct fr)
+       ((: (g l) (? (one? l) -1 (<(<l) = nm) <>(<l) (g >l))) (st 'anchors)))
    ; the page poured plain, then its references numbered, as lynx -dump lays them
    (ww-dump ls urls)
     (: n #urls
@@ -119,15 +135,23 @@
    (ww-goto st u)
     (: p (ww-split u) sc <p fr (p 4)
        (? (0 < #fr && ww-nofrag u = ww-nofrag (st 'url))
-           (pgmsg st ("in-page links do not land yet: " + fr))
+           ; a place on this page: a step in the history, and no fetch
+           (: ln (ww-anchor st fr)
+              (? (ln < 0) (pgmsg st ("no anchor " + fr + " on this page"))
+                 (: _ (pin st 'hist ([(st 'url) (st 'top)] . st 'hist))
+                    _ (pin st 'url u)
+                    (pgline! st ln))))
           !(sc = "http:" || sc = "https:" || sc = "file:") (pgmsg st ("no door for " + u))
           (: _ (pin st 'go [u 1 0]) st)))
    (ww-link st n)
     (: us (st 'urls) (? (0 < n <= #us) (us (n - 1)) ()))
+   ; back within a page is a scroll; back to another page is a fetch
    (ww-back st)
     (? (pgback st) st
        (: h (st 'hist)
           (? !(two? h) (pgmsg st "no previous page")
+             (ww-nofrag <(<h) = ww-nofrag (st 'url))
+              (: _ (pins st 'hist >h 'url <(<h)) (pggo st <>(<h)))
              (: _ (pins st 'hist >h 'go [<(<h) 0 <>(<h)]) st))))
    (ww-norm st c)
     (: cn (st 'cnt) n (pgcnt st 0)
@@ -153,15 +177,17 @@
        (st 'mode = 'n) (ww-norm st c)
        (pgstep st c))
    ; a fetched page into the state: the old one onto the history when asked, the new one
-   ; laid at the width and opened where it was left (a back, a reload) or at the top
+   ; laid at the width and opened where it was left (a back, a reload), else at its
+   ; fragment's place, else at the top
    (ww-show st g push top)
     (: _ (? (push && #(st 'url)) (pin st 'hist ([(st 'url) (st 'top)] . st 'hist)) 0)
        p (ww-lay g (pgwidth st))
        _ (pgload st <p (g 1))
-       _ (pins st 'url (g 1) 'urls <>p)
-       _ (pggo st top)
+       _ (pins st 'url (g 1) 'urls (p 1) 'anchors (p 2))
+       ln (: fr ((ww-split (g 1)) 4) (? (top = 0 && 0 < #fr) (ww-anchor st fr) -1))
+       _ (? (0 <= ln) (pgline! st ln) (pggo st top))
        (pgmsg st (? (200 <= (g 4) < 300) (g 1) ((g 1) + " answered " + show (g 4)))))
-   (ww-new w h) (: st (pgnew (tablet 0) w h) _ (pins st 'url "" 'urls () 'hist () 'go ()) st)
+   (ww-new w h) (: st (pgnew (tablet 0) w h) _ (pins st 'url "" 'urls () 'anchors () 'hist () 'go ()) st)
 
    ; -- the face -----------------------------------------------------------------
    (ww-do st)
@@ -202,6 +228,6 @@
        (? (two? ws)
            (: st (ww-new w <hw) _ (ww-show st g 0 0) (ww-ride st in))
           (: p (ww-lay g w)
-             _ (puts (ww-dump <p <>p))
+             _ (puts (ww-dump <p (p 1)))
              (? (200 <= (g 4) < 300) 0 8)))))
 ) ; module 'kore

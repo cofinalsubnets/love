@@ -36,7 +36,9 @@
    _ (mkdir root 493) _ (mkdir (root + "/site") 493) _ (mkdir (root + "/site/sub") 493)
    sroot (cwd 0 + "/" + root + "/site")
    (wput f s) (: p (open (sroot + f) "w") _ (say p s) (close p))
-   _ (wput "/a.html" "<h1>Top</h1><p>go <a href=\"sub\">down</a>, <a href=\"#here\">here</a> or <a href=\"mailto:x@y\">mail</a></p>")
+   ; a page long enough that landing on #here moves the view
+   _ (wput "/a.html" ("<h1>Top</h1><p>go <a href=\"sub\">down</a>, <a href=\"#here\">here</a> or <a href=\"mailto:x@y\">mail</a>, not <a href=\"#gone\">gone</a></p>"
+                      + catmap (i \ "<p>filler " + show i + "</p>") ^40 + "<p id=\"here\">here it is</p>"))
    _ (wput "/sub/index.html" "<p><a href=\"../a.html\">up</a> <a href=\"t.txt\">notes</a></p>")
    _ (wput "/sub/t.txt" "plain\ntext\n")
    port 7435
@@ -54,12 +56,12 @@
    g4 (get (at + "/none.html") 8)
    _ (test (<ga = 0) (ga 2 = 'html) (ga 4 = 200)
            (<gs = 0) (gs 1 = at + "/sub/")
-           (<>(lay gs 60) = [(at + "/a.html") (at + "/sub/t.txt")])
+           (lay gs 60 1 = [(at + "/a.html") (at + "/sub/t.txt")])
            (gt 2 = 'text) (<(lay gt 60) = ["plain" "text"])
            (<g4 = 0) (g4 4 = 404)                                    ; a no is still a page
            (<(get "ftp://x/y" 8) = 1) (<(get "http://127.0.0.1:1/" 8) = 1))
    ; the dump: the page plain, then its references
-   _ (: p (lay ga 60) d (dump <p <>p)
+   _ (: p (lay ga 60) d (dump <p (p 1))
         (test (0 <= (K 'wg-find) d "go [1]down, [2]here or [3]mail" 0)
               (0 <= (K 'wg-find) d "References\n\n  1. " 0)
               (0 <= (K 'wg-find) d ("  1. " + at + "/sub\n  2. " + at + "/a.html#here\n  3. mailto:x@y\n") 0)
@@ -86,9 +88,14 @@
    _ (wland st ga)
    _ (wkeys st "B")
    _ (test (st 'msg = "no previous page"))
-   ; an in-page link stays and says so; a door www has none of stays too
+   ; an in-page link lands with no fetch, and back from it is a scroll; one with no place
+   ; on the page stays and says so; a door www has none of stays too
    _ (wkeys st "2\r")
-   _ (test (st 'go = ()) (0 <= (K 'wg-find) (st 'msg) "#here" 0))
+   _ (test (st 'go = ()) (0 < st 'top) (st 'url = at + "/a.html#here") (st 'hist = [[(at + "/a.html") 0]]))
+   _ (wkeys st "B")
+   _ (test (st 'go = ()) (st 'top = 0) (st 'url = at + "/a.html") (st 'hist = ()))
+   _ (wkeys st "4\r")
+   _ (test (st 'go = ()) (st 'top = 0) (st 'msg = "no anchor #gone on this page"))
    _ (wkeys st "3\r")
    _ (test (st 'go = ()) (st 'msg = "no door for mailto:x@y"))
    _ (wkeys st "oexample.com/q\r")
@@ -97,6 +104,8 @@
         (test (st 'file = "HELP") (0 <= (K 'wg-find) <ls "kore www" 0)))
    _ (wkeys st "q")
    _ (test (st 'file = at + "/a.html") !(st 'quit))
+   ; a page fetched with a fragment opens at its place
+   _ (: s2 (wnew 60 20) _ (wland s2 (get (at + "/a.html#here") 8)) (test (0 < s2 'top)))
    ; less's keys still reach less
    _ (wkeys st "G")
    _ (test (0 <= st 'top))

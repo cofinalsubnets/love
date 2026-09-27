@@ -569,8 +569,11 @@ keys over less's:
 * **With no terminal the page is poured plain, with its references after it**, as `lynx -dump`
   does. A server's error status still shows its page, and exits 8, as wget does.
 
+* **A `#name` lands on the line where lapiz laid that id.** Within the page it's a step in
+  the history with no fetch, so back is a scroll. On another page it lands after that page loads.
+
 Absent: forms, scripts, cookies, images, and any charset but utf-8. The TLS peer is not
-verified (wget's client). An in-page link (`#name`) does not land, because lapiz keeps no anchors.
+verified (wget's client).
 
 ## not built
 

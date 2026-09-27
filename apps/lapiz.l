@@ -22,7 +22,9 @@
 ;   ('table aligns head rows): aligns one of 'n 'l 'c 'r a column, head a row, a row a
 ;   list of inls, every row as wide as the head
 ; an inl is a list of spans:
-;   ('text s)  ('em inl)  ('strong inl)  ('code s)  ('link inl url)
+;   ('text s)  ('em inl)  ('strong inl)  ('code s)  ('link inl url)  ('mark name)
+; a mark is a place a link can land -- an html id. it is html's alone: markdown, roff and
+; the terminal show nothing for it, which is the normalization the other surfaces owe it.
 ; ('meta ..) is document-level and heads the doc; its keys are the canonical five, always
 ; all five, absent ones empty (`mnorm`). a doc is normal when no two texts are adjacent in
 ; an inl (`mrg`) and no two lists of one kind are adjacent in the doc (`bmrg`); every reader
@@ -45,8 +47,8 @@
 ; state. what it owes instead is stated in test/host/lapiz.l: every heading the markdown has
 ; is still a heading after roff and the shower, and no line overruns the width.
 ; a link shows its <url> after its text, as man wants; a browser wants numbers instead, and
-; `ttlinks` rewrites a doc so each link reads [n] and hands back the urls by n (`ttpage`
-; is the two together).
+; `ttlinks` rewrites a doc so each link reads [n] and hands back the urls by n. `ttpage`
+; lays that and lifts the marks out too, answering the line each one landed on.
 ;
 ; --- the roff domain ---
 ; man macros are a smaller surface. law 1 holds on man-page-shaped docs: meta, head 1-2,
@@ -321,6 +323,7 @@
                   'strong ("<strong>" + hti <>x + "</strong>")
                   'em     ("<em>" + hti <>x + "</em>")
                   'link   ("<a href=\"" + hq <>>x + "\">" + hti <>x + "</a>")
+                  'mark   ("<a id=\"" + hq <>x + "\"></a>")
                   "")
    (hitems l t) (joins (map (i \ "<li>" + hti i + "</li>") l) "\n" + "\n</" + t + ">")
    (hmeta kvs)  (joins (map (p \ "<meta name=\"" + string <p + "\" content=\"" + hq <>p + "\">") (mfilled kvs)) "\n")
@@ -392,34 +395,58 @@
                    ((: (h j) (? (e <= j) () (s j = c) (snip s (i + 6) j) (h (j + 1))))
                     (i + 6)))))
      k)
+   ; an attribute's value by name, where the name starts a word -- so id= is not data-id=
+   ; every open tag asks, so it compares in place and allocates only the answer
+   (hattr s k e nm)
+    (: n #nm m (n + 1)
+       (at? i) (: (g j) (? (n <= j) (s (i + n) = 61) (s (i + j) != nm j) 0 (g (j + 1))) (g 0))
+       ((: (go i) (? (e <= i + m) ()
+                     !(s i = nm 0 && elem (s (i - 1)) '(32 9 10 13) && at? i) (go (i + 1))
+                     (s (i + m) @ ((34 || 39) @ c)
+                      ((: (h j) (? (e <= j) () (s j = c) (snip s (i + m + 1) j) (h (j + 1))))
+                       (i + m + 1)))))
+        k))
+   ; a place a link can land, in the one shape the reader knows. a name with a quote in it
+   ; cannot be spelled there, and is no place
+   (hmk v)
+    (? (string? v && 0 < #v && (: (g i) (? (#v <= i) 1 (v i = 34) 0 (g (i + 1))) (g 0)))
+       ("<a id=\"" + v + "\"></a>") "")
+   ; the tags whose content is a line of text: a mark goes inside, where the text is; any
+   ; other tag holds blocks or is dropped, and its mark goes ahead of it
+   hinside '("p" "h1" "h2" "h3" "h4" "h5" "h6" "li" "dt" "dd" "td" "th")
    (hfind s i pat)                                  ; past the next pat, or the end
     (:- (go i) n #s m #pat
      (go k) (? (n < k + m) n (pat = snip s k (k + m)) (k + m) (go (k + 1))))
+   ; an id is the other attribute the middle keeps: it becomes a mark, inside a tag whose
+   ; content is a line and ahead of any other. `ba` is 1 while an <a> with no href is open:
+   ; that is an anchor, not a link, so its tags go and only its mark and its text stay.
    (htscrub s)
-    (:- (go 0) n #s o (jug 0) (go i)
+    (:- (go 0 0) n #s o (jug 0) (go i ba)
       (? (n <= i) (slurp o)
          (i + 3 < n && s i = 60 && s (i + 1) = 33 && s (i + 2) = 45 && s (i + 3) = 45)
-          (go (hfind s (i + 4) "-->"))
+          (go (hfind s (i + 4) "-->") ba)
          (i + 1 < n && s i = 60 && s (i + 1) = 33)                       ; <!doctype ..>
-          (go ((: (g k) (? (n <= k) k (s k = 62) (k + 1) (g (k + 1)))) (i + 1)))
+          (go ((: (g k) (? (n <= k) k (s k = 62) (k + 1) (g (k + 1)))) (i + 1)) ba)
          (: h (htag s i)
-            (? (one? h) (put o (s i), go (i + 1))
+            (? (one? h) (put o (s i), go (i + 1) ba)
                (: t <h e <>h op? <>>h
-                  (? (elem t hkill) (go (? op? (hpast s e t) e))
-                     (elem t hbare) (go e)
-                     (t = "br") (say o "</p><p>", go e)
+                  k (i + 1 + #t)
+                  mk (? op? (hmk (hattr s k (e - 1) "id")) "")
+                  (? (elem t hkill) (go (? op? (hpast s e t) e) ba)
+                     (elem t hbare) (say o mk, go e ba)
+                     (t = "br") (say o "</p><p>", go e ba)
                      ; a link is the one tag whose attribute the middle keeps, so it is
-                     ; normalized to the shape the reader knows: href alone, and first.
-                     ; an <a> with no href is an anchor, not a link, and gets an empty
-                     ; one -- which the tty shower then does not print.
+                     ; normalized to the shape the reader knows: href alone, and first
                      (t = "a") (: v (op? && href s (i + 2) (e - 1))
-                                (say o $ op? ? ("<a href=\"" + (string? v ? v "") + "\">")
-                                               "</a>",
-                                 go e))
+                                  m2 (? #mk mk op? (hmk (hattr s k (e - 1) "name")) "")
+                                (? !op? (say o (ba ? "" "</a>"), go e 0)
+                                   (string? v) (say o (m2 + "<a href=\"" + v + "\">"), go e 0)
+                                   (say o m2, go e 1)))
                      (: a (halias? t)
-                      (say o $ op? ? ("<" + a + snip s (i + 1 + #t) (e - 1) + ">")
+                      (say o $ op? ? (: tg ("<" + a + snip s k (e - 1) + ">")
+                                        (elem a hinside ? (tg + mk) (mk + tg)))
                                      ("</" + a + ">"),
-                       go e)))))))))
+                       go e ba)))))))))
 
 ; ---------------------------------------------------------------- html, read
 ; an open tag may carry attributes -- `<h1 id="x">` is the same head as `<h1>`, and a page
@@ -467,6 +494,8 @@
    hent    (tag (\ p ['text (entof <p)]) (seqs [(skip (lit "&")) (span (!= 59)) (skip (lit ";"))]))
    htext   (tag (\ p ['text (cats p)]) (seq (one hraw?) (span hraw?)))
    hcode   (tag (\ p ['code (plain <p)]) (wrapt "code" (pack (many (alts [hent htext])))))
+   hmark   (tag (\ p ['mark (plain (runp (many (alts [hent htext])) <p))])
+                (seqs [(skip (lit "<a id=\"")) (span (!= 34)) (skip (lit "\"></a>"))]))
    ; the inline cycle (htinl -> strong/em/link -> htinl) rides eta-expanded parsers
    (hstrong s y n) ((tag (\ p ['strong <p]) (wrapt "strong" (pack htinl))) s y n)
    (hem s y n)     ((tag (\ p ['em <p]) (wrapt "em" (pack htinl))) s y n)
@@ -474,7 +503,7 @@
    (hlink s y n)   ((tag (\ p ['link <>p (plain (runp (many (alts [hent htext])) <p))])
                          (seqs [(skip (lit "<a href=\"")) (span (!= 34)) (skip (lit "\">"))
                                 (pack htinl) (skip (lit "</a>"))])) s y n)
-   (htinl s y n)   ((pmap mrg (many (alts [hent hcode hstrong hem hlink htext]))) s y n)
+   (htinl s y n)   ((pmap mrg (many (alts [hent hcode hstrong hem hmark hlink htext]))) s y n)
 
    (hlev n)  (tag (\ p ['head n <p]) (wrapt ("h" + show n) (pack htinl)))
    hlang     (seqs [(skip (lit " class=\"language-")) (span (!= 34)) (skip (lit "\""))])
@@ -522,7 +551,7 @@
    ; its inline content bare at block level, which is where most of a real page's prose
    ; turns out to live; `many1` is what keeps it from matching nothing and looping.
    h-loose (tag (\ p ['para <p])
-                (pack (pmap mrg (many1 (alts [hent hcode hstrong hem hlink htext])))))
+                (pack (pmap mrg (many1 (alts [hent hcode hstrong hem hmark hlink htext])))))
    ; quote recurses into the block loop, so it sits with it and stays eta-expanded
    (h-quote s y n) ((tag (\ p ['quote <p]) (wrapt "blockquote" (pack (many h-block)))) s y n)
    (h-block s y n)
@@ -876,6 +905,8 @@
 ; matters -- no wrap, here or in a pager that wraps again at its own width, can ever cut an
 ; attribute away from the reset that ends it.
 (: ttesc  (string 27)
+   ttmk0  (string 1)                                          ; a mark's sentinel, never text
+   ttmk1  (string 2)
    (tton a)  (#a ? (ttesc + "[" + a + "m") "")
    ttoff  (ttesc + "[0m")
    (ttsp n)  (rep " " (n < 0 ? 0 n))
@@ -891,6 +922,8 @@
                 ; the url trails the text it was on, the way a man page's \(la..\(ra does
                 ; -- and an anchor, which has no url, is just its text
                 'link   ((ttsegs <>x a) + (#<>>x ? [[(" <" + <>>x + ">") a]] ()) + ttsegs >l a)
+                ; ttlinks' own node: a place, laid as a sentinel with no width that ttpage lifts
+                'tmark  ([[(ttmk0 + <>x + ttmk1) 'mark]] + ttsegs >l a)
                 (ttsegs >l a))))
    ; a run's text at its space breaks; the empty pieces at each end are what lets a word
    ; carry on across a style change with no space between the halves. a newline is a break
@@ -901,18 +934,21 @@
     ((: (g i st acc) (? (#s <= i) (rev (snip s st i . acc))
                         (elem (s i) '(32 9 10 13)) (g (i + 1) (i + 1) (snip s st i . acc))
                         (g (i + 1) st acc))) 0 0 ())
-   ; the runs -> words, each one [visible styled]: the visible half is what a fill measures
+   ; the runs -> words, each one [visible styled]: the visible half is what a fill measures.
+   ; a mark rides the styled half only, onto the next word, or the last where none follows
    (ttwords segs)
     ((: (go l vis sty acc)
-        (one? l ? (#vis ? (rev ([vis sty] . acc)) (rev acc))
+        (one? l ? (#vis ? (rev ([vis sty] . acc))
+                   (#sty && two? acc) (rev ([<(<acc) (<acc 1 + sty)] . >acc))
+                   (rev acc))
          (: s <<l a <><l
             (pc p vis sty acc)
              (one? p ? (go >l vis sty acc)
               (: h <p v2 (vis + h)
                  s2 (sty + (#h ? (#a ? (tton a + h + ttoff) h) ""))
                (one? >p ? (pc >p v2 s2 acc)
-                (pc >p "" "" (#v2 ? ([v2 s2] . acc) acc)))))
-          (pc (ttsplit s) vis sty acc))))
+                (pc >p "" (#v2 ? "" s2) (#v2 ? ([v2 s2] . acc) acc)))))
+          (? (a = 'mark) (go >l vis (sty + s) acc) (pc (ttsplit s) vis sty acc)))))
      segs "" "" ())
    ; greedy fill: the words onto lines of at most (w - ind) visible columns, each indented
    (ttfill words w ind)
@@ -1005,6 +1041,7 @@
                                   (: i (tlspans <>x acc) [[['link <i (x 2)]] (i 1)]))
                  'em     (: i (tlspans <>x acc) [[['em <i]] (i 1)])
                  'strong (: i (tlspans <>x acc) [[['strong <i]] (i 1)])
+                 'mark   [[['tmark <>x]] acc]
                  [[x] acc])
         s (tlgo >l (r 1))
         [(<r + <s) (s 1)]))
@@ -1020,10 +1057,40 @@
           'table   (: h (tlmap tlspans (x 2) acc) r (tlmap (tlmap tlspans) (x 3) (h 1))
                       [['table <>x <h <r] (r 1)])
           [x acc])
+   ; a paragraph of marks alone lays no line to land on, so its marks move onto the next
+   ; block that holds text; past the end of a doc there is none, and they go
+   (tlmarks? l) (two? l && (: (g m) (? (one? m) 1 (<(<m) = 'mark) (g >m) 0) (g l)))
+   (tlput x pend)
+    (<x @ 'head    ['head <>x (pend + <>>x)]
+          'para    ['para (pend + <>x)]
+          'bullets (two? <>x ? ['bullets ((pend + <(<>x)) . >(<>x))] ())
+          'numbers (two? <>x ? ['numbers ((pend + <(<>x)) . >(<>x))] ())
+          'deflist (two? <>x ? ['deflist ([(pend + <(<(<>x))) <>(<(<>x))] . >(<>x))] ())
+          'quote   ['quote (tlcarry (['para pend] . <>x))]
+          ())
+   (tlcarry d)
+    ((: (go l pend)
+        (? (one? l) ()
+           (: x <l
+              (? (<x = 'para && tlmarks? <>x) (go >l (pend + <>x))
+                 (: y (? (one? pend) (<x = 'quote ? ['quote (tlcarry <>x)] x) (tlput x pend))
+                    (? (one? y) (x . (go >l pend)) (y . (go >l ()))))))))
+     d ())
    ; a doc -> [doc urls]: the links numbered in reading order, urls 1-based by that number.
    ; a browser shows the doc and follows (urls (n - 1)); man keeps ttyshow's <url>
-   (ttlinks d) (: r (tlmap tlblk d ()) [<r (rev (r 1))])
-   (ttpage d w) (: r (ttlinks d) [(ttyshow <r w) (r 1)])
+   (ttlinks d) (: r (tlmap tlblk (tlcarry d) ()) [<r (rev (r 1))])
+   ; the laid text with each mark's sentinel lifted out -> [text anchors], an anchor being
+   ; [name line] with the line counted from 0
+   (ttlift t)
+    (: n #t o (jug 0)
+       (go i ln acc)
+        (? (n <= i) [(slurp o) (rev acc)]
+           (t i = 1) (: e ((: (g k) (? (n <= k || t k = 2) k (g (k + 1)))) (i + 1))
+                        (go (e + 1) ln ([(snip t (i + 1) e) ln] . acc)))
+           (: c (t i) _ (put o c) (go (i + 1) (c = 10 ? (ln + 1) ln) acc)))
+       (go 0 0 ()))
+   ; [text urls anchors]: what a browser shows, follows, and lands on
+   (ttpage d w) (: r (ttlinks d) l (ttlift (ttyshow <r w)) [<l (r 1) <>l])
    (ttyshow d w) (catmap (ln \ ln + "\n") (ttdoc d (w < 20 ? 20 w) 5))
    (rf->tty s w) (ttyshow (rfread s) w)
    (md->tty s w) (ttyshow (mdread s) w)
