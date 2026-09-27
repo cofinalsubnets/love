@@ -359,9 +359,9 @@ ai_noinline static ssize_t call_recv_raw(int fd, struct rbuf *r) {
 
 // the datagram's bytes and its peer's address as strings, then the list over them: pushes
 // (("quad" port) bytes) or (("quad" port) bytes ttl), v6 text in the quad's place
-ai_noinline static struct ai *host_dgram(struct ai *g, char const *b, uintptr_t n, struct rmeta m) {
+ai_noinline static struct ai *host_dgram(struct ai *g, char const *b, uintptr_t n, struct rmeta const *m) {
  char q[INET6_ADDRSTRLEN];
- int k = m.v6 ? (int) strlen(inet_ntop(AF_INET6, m.ip6, q, sizeof q)) : quad_show(q, m.ip);
+ int k = m->v6 ? (int) strlen(inet_ntop(AF_INET6, m->ip6, q, sizeof q)) : quad_show(q, m->ip);
  if (n) {
   if (!ai_ok(g = str0(g, n))) return g;
   memcpy(txt(g->sp[0]), b, n), len(g->sp[0]) = n; }
@@ -371,9 +371,9 @@ ai_noinline static struct ai *host_dgram(struct ai *g, char const *b, uintptr_t 
  if (!ai_ok(g = ai_have(g, 5 * Width(struct ai_chain)))) return g;
  struct ai_chain *c = bump(g, 5 * Width(struct ai_chain));
  word host = g->sp[0], bytes = g->sp[1];         // read after ai_have, which may move them
- ini_chain(c + 0, m.ttl >= 0 ? putcharm(m.ttl) : ZeroPoint, ZeroPoint);
- ini_chain(c + 1, bytes, m.ttl >= 0 ? word(c + 0) : ZeroPoint);
- ini_chain(c + 2, putcharm(m.port), ZeroPoint);
+ ini_chain(c + 0, m->ttl >= 0 ? putcharm(m->ttl) : ZeroPoint, ZeroPoint);
+ ini_chain(c + 1, bytes, m->ttl >= 0 ? word(c + 0) : ZeroPoint);
+ ini_chain(c + 2, putcharm(m->port), ZeroPoint);
  ini_chain(c + 3, host, word(c + 2));
  ini_chain(c + 4, word(c + 3), word(c + 1));
  g->sp[1] = word(c + 4), g->sp += 1;
@@ -389,7 +389,7 @@ static lvm(lvm_recv) {
  // no datagram yet -> park on the socket; nothing was taken off the wire, so the op re-runs
  if (n == -EAGAIN) { g->next_wait_fd = fd; ai_musttail return Ap(lvm_yield_sw, g); }
  if (n < 0) ai_musttail return Answer(ai_err(g, (int) -n));
- LvmCallp(g, 1, host_dgram, r.b, (uintptr_t) n, r.m) }   // [p] -> [(peer bytes ..)]
+ LvmCallp(g, 1, host_dgram, r.b, (uintptr_t) n, &r.m) }   // [p] -> [(peer bytes ..)]
 
 // a peer's sockaddr: v6 when its text has a colon, else a dotted quad
 struct peer { union { struct sockaddr_in in; struct sockaddr_in6 in6; } a; socklen_t n; int v6; };
