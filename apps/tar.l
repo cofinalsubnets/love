@@ -329,15 +329,17 @@
        (ok && go >xs (k + 1))))))) ; module 'tar
 
 ; --- the face -----------------------------------------------------------------------
-; `love tar`, tar's own flag spelling over the module above + apps/gz.l.
+; `love tar`, GNU tar's spelling over the module above: the bundled key (czf), dashed
+; letters (-c -z -f A, -czfA) and the long names, in any mix.
 ;
-;   love tar czf A.tar.gz DIR     pack DIR's contents (paths relative)
-;   love tar xzf A.tar.gz [DIR]   unpack into DIR (default ".")
-;   love tar tzf A.tar.gz         list, one path a line
-;   love tar cjf A.tar.bz2 DIR    j in place of z: bzip2 (apps/bz2.l)
+;   tar {c|x|t}[v][z|j|J|a] [-f ARCHIVE] [-C DIR] [-O] [--strip-components=N] [MEMBER..]
 ;
-; tools/tgz.l is the same two engines behind c|x|t; this is the spelling a hand types.
-; our deflate lands a few percent above `gzip -9`; the numbers live in apps/gz.l.
+; c packs each MEMBER as named, relative to -C; x and t take the members to pick, a
+; directory naming all it holds. ARCHIVE `-` or none is stdin/stdout. z gzip, j bzip2
+; (apps/bz2.l), J xz (apps/xz.l); a read that names none sniffs the magic, and a
+; create under -a picks by the archive's suffix. bz2 and xz are reached at the call:
+; the path-loaded tools (selfpack, mkrootfs) take tar with gz alone. statuses as
+; GNU's: 0, 2 a failure.
 ;
 ; the module wrap is not decoration: `borrow` splices a module's names into the current
 ; layer, so unwrapped these two asks would put tar's and gz's names on the dist cat's
@@ -351,55 +353,205 @@
    ; this image gets a charm back. loaded without kore there is no catcher and we
    ; quit as before -- the two ride together in every artifact that carries tar.
    (tarc-leave c) (: u (cite 'kore 'uleave) (lit? u ? (u c) (quit c)))
-   (tarc-die m) (say err ("tar: " + m + "\n"), tarc-leave 1)
+   (tarc-die m) (say err ("tar: " + m + "\n"), tarc-leave 2)
+   (tarc-warn m) (say err ("tar: " + m + "\n"), flush err)
    (tarc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, [1 (s + "")]))))
    (tarc-blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
-   (tarc-has? fl c) (:- (go 0) n #fl (go k) (? (n <= k) 0 (fl k = c) 1 (go (k + 1))))
+   (tarc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
+   (tarc-lazy m f what) (: b (cite m f) (lit? b ? b (tarc-die ("no " + what + " aboard"))))
 
-   ; z? is 'z for gzip, 'j for bzip2, () for neither. bz2 is reached at the call: the
-   ; path-loaded tools (selfpack, mkrootfs) take tar with gz alone
-   (tarc-bz f) (: b (cite 'bz2 f) (lit? b ? b (tarc-die "no bzip2 aboard")))
-   (tarc-c arch dir z?)
-    (: g (tar-gather dir "")
-       _ (!g && tarc-die ("cannot read " + dir))
-       a (tar-pack <>g)
-       _ (!a && tarc-die "cannot pack (a path too long for ustar?)")
-       b (z? @ 'z (gz-zip a "" 0) 'j (tarc-bz 'bz2-pack a 9) a)
-       _ (tarc-blurt arch b ? 0 (tarc-die ("cannot write " + arch)))
-       0)
+   ; --- the codecs: 'z 'j 'J, and () for a bare tar ---------------------------------
+   (tarc-zip z a) (z @ 'z (gz-zip a "" 0)
+                       'j ((tarc-lazy 'bz2 'bz2-pack "bzip2") a 9)
+                       'J ((tarc-lazy 'xz 'xz-pack "xz") a 8388608 'crc64)
+                       a)
+   (tarc-unzip z b)                    ; -> (1 bytes) | ()
+    (z @ 'z (gz-unzip b)
+         'j (: v ((tarc-lazy 'bz2 'bz2-unpack "bzip2") b) (two? v && v))
+         'J (: v ((tarc-lazy 'xz 'xz-unpack "xz") b) (two? v && v))
+         [1 b])
+   (tarc-sniff b)
+    (? (2 <= #b && b 0 = 31 && b 1 = 139) 'z
+       (4 <= #b && snip b 0 3 = "BZh") 'j
+       (6 <= #b && b 0 = 253 && snip b 1 5 = "7zXZ" && b 5 = 0) 'J
+       ())
+   (tarc-bysuf p)
+    (? (tarc-ends? p ".gz" || tarc-ends? p ".tgz" || tarc-ends? p ".taz") 'z
+       (tarc-ends? p ".bz2" || tarc-ends? p ".tbz" || tarc-ends? p ".tbz2" || tarc-ends? p ".tb2") 'j
+       (tarc-ends? p ".xz" || tarc-ends? p ".txz") 'J
+       ())
+   (tarc-zname z) (z @ 'z "gzip" 'j "bzip2" "xz")
+
+   ; --- the flags ----------------------------------------------------------------
+   ; each letter's rows: what it pins, and 'arg for the two that take a word
+   tarc-letters [[99 'mode 'c] [120 'mode 'x] [116 'mode 't] [122 'z 'z] [106 'z 'j]
+                 [74 'z 'J] [97 'auto 1] [118 'v 1] [79 'O 1] [102 'f 'arg] [67 'C 'arg]]
+   tarc-longs [["create" 'mode 'c] ["extract" 'mode 'x] ["get" 'mode 'x] ["list" 'mode 't]
+               ["gzip" 'z 'z] ["gunzip" 'z 'z] ["ungzip" 'z 'z] ["bzip2" 'z 'j] ["xz" 'z 'J]
+               ["auto-compress" 'auto 1] ["verbose" 'v 1] ["to-stdout" 'O 1]
+               ["file" 'f 'arg] ["directory" 'C 'arg] ["strip-components" 'strip 'arg]]
+   (tarc-row k rows) (: (go l) (? !(two? l) () (<<l = k) <l (go >l)) (go rows))
+   (tarc-set t row v) (pin t (row 1) (? (row 2 = 'arg) v (row 2)))
+   ; one letter cluster -> the words left; `wait` the arg-takers' words still owed, the
+   ; bundled key's way: czf A takes A for f after the cluster, -fA and -f A the dashed way
+   (tarc-cluster t w k dash rest)
+    (? (#w <= k) rest
+       (: row (tarc-row (w k) tarc-letters)
+          (? !row (tarc-die ("invalid option -- '" + string (w k) + "'"))
+             !(row 2 = 'arg) (: _ (tarc-set t row 0) (tarc-cluster t w (k + 1) dash rest))
+             (dash && k + 1 < #w) (: _ (tarc-set t row (snip w (k + 1) #w)) rest)
+             !(two? rest) (tarc-die ("option requires an argument -- '" + string (w k) + "'"))
+             (: _ (tarc-set t row <rest) (tarc-cluster t w (k + 1) dash >rest)))))
+   (tarc-long t w rest)                ; --name, --name=V, --name V -> the words left
+    (: eq (: (go k) (? (#w <= k) () (w k = 61) k (go (k + 1))) (go 0))
+       nm (? eq (snip w 0 eq) w)
+       row (tarc-row nm tarc-longs)
+       (? !row (tarc-die ("unrecognized option '--" + w + "'"))
+          !(row 2 = 'arg) (: _ (tarc-set t row 0) rest)
+          eq (: _ (tarc-set t row (snip w (eq + 1) #w)) rest)
+          !(two? rest) (tarc-die ("option '--" + nm + "' requires an argument"))
+          (: _ (tarc-set t row <rest) >rest)))
+   (tarc-opts t as)                    ; the bundled key first, then anything in any order
+    (: (go l mem)
+        (? !(two? l) (pin t 'mem (rev mem))
+           (: w <l
+              (? (w = "--") (pin t 'mem (rev mem + >l))
+                 (2 < #w && w 0 = 45 && w 1 = 45) (go (tarc-long t (snip w 2 #w) >l) mem)
+                 (1 < #w && w 0 = 45) (go (tarc-cluster t w 1 1 >l) mem)
+                 (go >l (w . mem)))))
+       (? (two? as && 0 < #<as && !(<as 0 = 45))
+          (go (tarc-cluster t <as 0 0 >as) ())
+          (go as ())))
+
+   ; --- the members --------------------------------------------------------------
+   (tarc-trim p) (? (1 < #p && p (#p - 1) = 47) (tarc-trim (snip p 0 (#p - 1))) p)
+   (tarc-nom e) (tarc-trim (tar-strip (tar-get e 'nom "")))
+   (tarc-has? nom m) (: m2 (tarc-trim (tar-strip m))
+                        (nom = m2 || (#m2 < #nom && snip nom 0 (#m2 + 1) = m2 + "/")))
+   ; --strip-components: the first n segments off, a member with no more dropped
+   (tarc-cut nom n) (? (n < 1) nom
+                       (: (go k) (? (#nom <= k) () (nom k = 47) (tarc-cut (snip nom (k + 1) #nom) (n - 1)) (go (k + 1)))
+                          (go 0)))
+   (tarc-pick t es)
+    (: ms (peep t 'mem ())
+       n (tarc-num (peep t 'strip ""))
+       picked (? !(two? ms) es (filter (e \ any (m \ tarc-has? (tarc-nom e) m) ms) es))
+       _ (each ms (m \ (? (any (e \ tarc-has? (tarc-nom e) m) es) 0
+                          (: _ (tarc-warn (m + ": Not found in archive")) (pin t 'bad 1)))))
+       cut (map (e \ (: c (tarc-cut (tarc-nom e) n) (? (c && 0 < #c) (pin (tarc-copy e) 'nom c) ()))) picked)
+       (filter (e \ !(nil? e)) cut))
+   (tarc-num s) (: (go k v) (? (#s <= k) v (s k < 48 || 57 < s k) (tarc-die ("invalid number: " + s))
+                                (go (k + 1) (v * 10 + s k - 48)))
+                   (go 0 0))
+   (tarc-copy e) (foldl (\ c k (pin c k (e k))) {} (keys e))
+
+   ; --- the long listing: GNU's columns, the clock in UTC ------------------------------
+   (tarc-p2 v) (? (v < 10) ("0" + show v) (show v))
+   (tarc-civil z)                      ; days since 1970 -> (y m d)
+    (: z2 (z + 719468)
+       era (? (0 <= z2) (z2 // 146097) ((z2 - 146096) // 146097))
+       doe (z2 - era * 146097)
+       yoe ((doe - doe // 1460 + doe // 36524 - doe // 146096) // 365)
+       doy (doe - (365 * yoe + yoe // 4 - yoe // 100))
+       mp ((5 * doy + 2) // 153)
+       d (doy - (153 * mp + 2) // 5 + 1)
+       m (? (mp < 10) (mp + 3) (mp - 9))
+       [(yoe + era * 400 + (? (m <= 2) 1 0)) m d])
+   (tarc-date s) (: c (tarc-civil (s // 86400)) r (s % 86400)
+                    (show <c + "-" + tarc-p2 <>c + "-" + tarc-p2 <>>c + " "
+                     + tarc-p2 (r // 3600) + ":" + tarc-p2 (r % 3600 // 60)))
+   (tarc-perm e)
+    (: md (tar-get e 'mode 420)
+       (bit b c) (? (0 < (md & b)) c "-")
+       ((tar-get e 'kind 'file @ 'dir "d" 'link "l" "-")
+        + bit 256 "r" + bit 128 "w" + bit 64 "x" + bit 32 "r" + bit 16 "w" + bit 8 "x"
+        + bit 4 "r" + bit 2 "w" + bit 1 "x"))
+   (tarc-lpad w s) (? (w <= #s) s (tarc-lpad w (" " + s)))
+   (tarc-longline e)
+    (: un (tar-get e 'uname "") gn (tar-get e 'gname "")
+       og ((? #un un (show (tar-get e 'uid 0))) + "/" + (? #gn gn (show (tar-get e 'gid 0))))
+       sz (show (? (tar-get e 'kind 'file = 'file) #(tar-get e 'body "") 0))
+       nom (tar-get e 'nom "")
+       (tarc-perm e + " " + og + " " + tarc-lpad (18 - #og) sz + " "
+        + tarc-date (tar-get e 'mtime 0) + " " + nom
+        + (? (tar-get e 'kind 'file = 'link) (" -> " + tar-get e 'to "") "")))
+
+   ; --- the three modes ------------------------------------------------------------
+   (tarc-arch t) (peep t 'f "-")
+   ; where the names -v says go: stdout, unless the archive is going there
+   (tarc-tell t s) (: o (? (peep t 'mode 'c = 'c && tarc-arch t = "-") err out)
+                      (say o (s + "\n")))
+   (tarc-c t)
+    (: ops (peep t 'mem ())
+       _ (!(two? ops) && tarc-die "Cowardly refusing to create an empty archive")
+       a (tarc-arch t)
+       _ (a = "-" && two? (tty out) && tarc-die "Refusing to write archive contents to terminal (missing -f option?)")
+       root (peep t 'C "")
+       ; each member as named: a leading / comes off, as GNU takes it off, and says so
+       (one p)
+        (: p2 (tarc-trim p)
+           abs (0 < #p2 && p2 0 = 47)
+           rel (: (go k) (? (k < #p2 && p2 k = 47) (go (k + 1)) (snip p2 k #p2)) (go 0))
+           _ (abs && !(peep t 'slash 0) && (: _ (pin t 'slash 1) (tarc-warn "Removing leading `/' from member names")))
+           g (tar-gather (? abs "/" (? #root root ".")) (? (abs && !#rel) "." rel))
+           (? g <>g (: _ (tarc-warn (p + ": Cannot stat: No such file or directory")) _ (pin t 'bad 1) ())))
+       es (foldl (\ acc p (acc + one p)) () ops)
+       _ (peep t 'v 0 && each es (e \ tarc-tell t (tar-get e 'nom "")))
+       ar (tar-pack es)
+       _ (!ar && tarc-die "cannot pack (a path too long for ustar?)")
+       z (? (peep t 'z ()) (peep t 'z ()) (peep t 'auto 0) (tarc-bysuf a) ())
+       b (tarc-zip z ar)
+       _ (? (a = "-") (: _ (say out b) (flush out))
+            (tarc-blurt a b) 0
+            (tarc-die (a + ": Cannot open")))
+       (peep t 'bad 0 ? 2 0))
 
    ; each read is guarded on its own so the message names the step: "not a gzip" and
    ; "not a tar" are different repairs, and one "cannot read" sends you to the wrong one.
-   (tarc-open arch z?)
-    (: b (tarc-slurp arch)
-       _ (!b && tarc-die ("cannot read " + arch))
-       u (z? @ 'z (gz-unzip <>b) 'j (: v (tarc-bz 'bz2-unpack <>b) (two? v && v)) [1 <>b])
-       _ (!u && tarc-die (arch + (z? = 'j ? ": not a bzip2 stream, or its crc disagrees"
-                                          ": not a gzip stream, or its crc32 disagrees")))
+   (tarc-open t)
+    (: a (tarc-arch t)
+       _ (a = "-" && two? (tty in) && tarc-die "Refusing to read archive contents from terminal (missing -f option?)")
+       b (? (a = "-") [1 (slurp in + "")] (tarc-slurp a))
+       _ (!b && tarc-die (a + ": Cannot open: No such file or directory"))
+       z (: w (peep t 'z ()) (? w w (tarc-sniff <>b)))
+       u (tarc-unzip z <>b)
+       _ (!u && tarc-die (a + ": not a " + tarc-zname z + " stream, or its check disagrees"))
        r (tar-unpack <>u)
-       _ (!r && tarc-die (arch + ": not a tar archive, or it is truncated"))
+       _ (!r && tarc-die (a + ": not a tar archive, or it is truncated"))
        <>r)
+   ; the directories a member lies under, laid first: an archive need not carry them
+   (tarc-parents root es)
+    (each es (e \ (: nom (tarc-nom e)
+                     (go k) (? (#nom <= k) 0
+                               (nom k = 47) (: d (root + "/" + snip nom 0 k)
+                                               _ (? (two? (stat d)) 0 (mkdir d 493))
+                                               (go (k + 1)))
+                               (go (k + 1)))
+                     (go 1))))
+   (tarc-x t)
+    (: es (tarc-pick t (tarc-open t))
+       root (peep t 'C ".")
+       _ (peep t 'v 0 && each es (e \ tarc-tell t (tar-get e 'nom "")))
+       (? (peep t 'O 0)
+          (: _ (each es (e \ (? (tar-get e 'kind 'file = 'file) (say out (tar-get e 'body "")) 0)))
+             _ (flush out)
+             (peep t 'bad 0 ? 2 0))
+          (: _ (tarc-parents root es)
+             w (tar-scatter root es)
+             _ (!w && tarc-die ("cannot write under " + root))
+             (peep t 'bad 0 ? 2 0))))
+   (tarc-t t)
+    (: es (tarc-pick t (tarc-open t))
+       _ (each es (e \ say out ((? (peep t 'v 0) (tarc-longline e) (tar-get e 'nom "")) + "\n")))
+       _ (flush out)
+       (peep t 'bad 0 ? 2 0))
 
-   (tarc-x arch dir z?)
-    (: es (tarc-open arch z?)
-       w (tar-scatter dir es)
-       _ (!w && tarc-die ("cannot write under " + dir))
-       0)
-
-   (tarc-t arch z?) (each (tarc-open arch z?) (e \ say out (peep e 'nom "" + "\n")), 0)
-
-   usage "usage: tar czf|xzf|tzf ARCHIVE [DIR] (j for z: bzip2)"
+   usage "usage: tar {c|x|t}[vzjJaO] [-f ARCHIVE] [-C DIR] [--strip-components=N] [MEMBER..]"
    (tar-main av)
-    (: n #av
-       fl (n ? <av "")
-       z? (? (tarc-has? fl 122) 'z (tarc-has? fl 106) 'j ())   ; z, j
-       a (2 <= n ? <>av "")
-       d (3 <= n ? <>>av ".")
-       (? (n < 2) (tarc-die usage)
-          (tarc-has? fl 99) (n < 3 ? (tarc-die usage) (tarc-c a d z?))      ; c
-          (tarc-has? fl 120) (tarc-x a d z?)                                ; x
-          (tarc-has? fl 116) (tarc-t a z?)                                  ; t
-          (tarc-die usage)))
+    (: t (tablet 0)
+       _ (tarc-opts t av)
+       (peep t 'mode () @ 'c (tarc-c t) 'x (tarc-x t) 't (tarc-t t)
+         (tarc-die "You must specify one of the '-ctx' options")))
 
    T (cite 'verbs 'tab)
    (tarc-run av) (: r (cite 'kore 'urun) (lit? r ? (r tar-main av) (tar-main av)))

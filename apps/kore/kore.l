@@ -43,7 +43,7 @@
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
 ;                                    one (apps/xz.l, inle/xz.c's LZMA2), bzip2|bunzip2|bzcat
 ;                                    (apps/bz2.l, inle/bz2.c); tar and cpio the
-;   kore tar czf|xzf|tzf ARCHIVE      two containers over it (apps/tar.l, apps/cpio.l). these
+;   kore tar {c|x|t}[vzjJ] -f A      two containers over it (apps/tar.l, apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
 ;   kore xxd [-r] [F..]              the canonical dump, and back again
@@ -71,7 +71,7 @@
         mac2unix-main unix2dos-main
         factor-main false-main find-main fold-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
         head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main markdown-main
-        ln-main ls-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
+        ln-main ls-main vdir-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
         mv-main myers nl-main nice-main nohup-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main ranlib-main readlink-main realpath-main rebre refind refold renice-main
@@ -750,7 +750,7 @@
             'sha224sum sha224sum-main 'sha256sum sha256sum-main 'sha384sum sha384sum-main
             'sha512sum sha512sum-main 'b2sum b2sum-main 'sha3sum sha3sum-main 'crc32 crc32-main
             'ls ls-main 'dir ls-main   ; one lister, and the name DOS and coreutils ask it by
-            'vdir (\ as (ls-main ("-l" . as)))   ; ..and coreutils' long one
+            'vdir vdir-main   ; ..and coreutils' long one
             'pathchk pathchk-main 'mountpoint mountpoint-main 'shred shred-main
             'fsync fsync-main 'dircolors dircolors-main
             'cp cp-main 'mv mv-main
@@ -1115,7 +1115,7 @@ every tool answers --help and --version, and -h where the letter is free
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (apps/xz.l)
   bzip2 | bunzip2 | bzcat [-cdfkqtvz1-9]       the block-sorting one (apps/bz2.l)
-  tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive, j for bzip2 (apps/tar.l)
+  tar {c|x|t}[vzjJaO] [-f A] [-C D] [M..]      the ustar archive; z gzip, j bzip2, J xz (apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
   xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs
