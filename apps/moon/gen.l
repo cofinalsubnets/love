@@ -3027,23 +3027,28 @@
                                     (pa || pb) 'bad
                                     (: rt (wbin ta tb)
                                        w? (two? wpk)
-                                       midw (? w? (as128 g av + ([['mov <wpk 'r0] ['mov <>wpk 'r2]] + as128 g b))
+                                       ; a right read off its home pair is the op's own operand pair (these commute)
+                                       hb (? (w? && d128? tb && elem op '(+ * | & ^ eq ne))
+                                             (vfs b @ (('mov 'r2 H) ('mov 'r0 L)) [L H] ()) ())
+                                       pk (hb || wpk)
+                                       midw (? hb (as128 g av)
+                                               w? (as128 g av + ([['mov <wpk 'r0] ['mov <>wpk 'r2]] + as128 g b))
                                                (as128 g av + (wpush + as128 g b)))
                                        res (op @
-                                            '+ (mkv rt 'r0 (midw + (? w? [['a128r <wpk <>wpk]] ('((a128 sp)) + wdrop))))
+                                            '+ (mkv rt 'r0 (midw + (? w? [['a128r <pk <>pk]] ('((a128 sp)) + wdrop))))
                                             '- (mkv rt 'r0 (midw + (? w? [['s128r <wpk <>wpk]] ('((s128 sp)) + wdrop))))
                                             '* (: zl (d128? ta ? (zext128? (vfs av)) (usg? ta9 || ptr? ta9))
                                                   zr (d128? tb ? (zext128? (vfs b)) (usg? tb9 || ptr? tb9))
                                                   (? (zl && zr)                 ; hi halves zero: one mulq, the park needs only lo
                                                      (mkv rt 'r0 (? w? (as128 g av + [['mov <wpk 'r0]] + (tor0 g b + [['mw128r <wpk]]))
                                                                    (as128 g av + wpush + tor0 g b + '((mw128 sp)) + wdrop)))
-                                                     (mkv rt 'r0 (midw + (? w? [['m128r <wpk <>wpk]] ('((m128 sp)) + wdrop))))))
+                                                     (mkv rt 'r0 (midw + (? w? [['m128r <pk <>pk]] ('((m128 sp)) + wdrop))))))
                                             ('| || '& || '^)
                                              (: w9 (irop op)
-                                                (mkv rt 'r0 (midw + (? w? [[w9 'r0 'r0 <wpk] [w9 'r2 'r2 <>wpk]]
+                                                (mkv rt 'r0 (midw + (? w? [[w9 'r0 'r0 <pk] [w9 'r2 'r2 <>pk]]
                                                                (['(ld r1 sp 0) [w9 'r0 'r0 'r1] '(ld r1 sp 8) [w9 'r2 'r2 'r1]] + wdrop)))))
                                             ('eq || 'ne || 'lt || 'le || 'gt || 'ge)
-                                             (mkv 'long 'r0 (midw + (? w? [['c128r (scc op (rt = 'u128)) <wpk <>wpk]]
+                                             (mkv 'long 'r0 (midw + (? w? [['c128r (scc op (rt = 'u128)) <pk <>pk]]
                                                                ([['c128 (scc op (rt = 'u128)) 'sp]] + wdrop))))
                                             ('/ || '%)
                                              ; u128 by a divisor with a provably-zero high half only (dv128's two-step divq is unsigned)
@@ -3396,6 +3401,14 @@
           ; a variable shift defines only its dest: x64's encoder wants cl but refuses any other register outright, so no
           ; move clobbers r1 -- and a claimed r1 def would read the pair lane's carry-in or as dead
           (elem op vshops) [[<>f <>>f] [<>f] ()]
+          ; the wide register kit: the pair rides r2:r0 unspelled, so copyprop's positional probe never renames it.
+          ; x64 spends rcx inside m128r/c128r, and its subtract answers through the park
+          (op = 'sx128) ['(r0) '(r2) 1]
+          (elem op '(n128 inc128 dec128 shl128 shr128 sar128)) ['(r0 r2) '(r0 r2) 1]
+          (op = 'mw128r) [['r0 <>f] '(r0 r2) 1]
+          (elem op '(a128r s128r m128r))
+           [(['r0 'r2 <>f] + rg1 <>>f) ('(r0 r2) + (x64? g ? (op @ 's128r [<>f <>>f] 'm128r '(r1) ()) ())) 1]   ; a128r's hi may be 0
+          (op = 'c128r) [['r0 'r2 <>>f <>>>f] (x64? g ? '(r0 r1 r2) '(r0)) 1]
           'bar))
    ; the a64 retarget renames by position, not symbol: x4 is also an argument register, so only the base slot's r4 becomes fp
    a4base (: t (foldl (\ t o (pin t o 2)) {} (ldops9 + fldops + xops + fxops + leaops + '(cmprm)))
@@ -4381,7 +4394,9 @@
    lvquiet '(label align ud2 br jmp)                ; no register effect at all
    ; what an exit owes back beside the cs file. r2 (rdx, an aggregate's high half) is missing:
    ; a consumer using this for a plain dead-def test owes it first
-   (lvret g) (? (t32? g) '(r0 r1) '(r0 r1 f0 f1))
+   (lvret g) (? (t32? g) '(r0 r1)
+                (: rt <(peep (g 'sigs) (g 'fn) ['long ()])       ; r2: a wide return's high half, x64's int pair's
+                   (? (w128? g && (d128? rt || x64? g && ipair? g rt)) '(r0 r1 r2 f0 f1) '(r0 r1 f0 f1))))
    ; the blanket cases filter mints out: a mint live across a call must read as crossing, not
    ; be read+def'd into a false kill. inert post-vrfix
    (lvtx g f u)                                     ; one form's (reads defs) | 'bar
@@ -4444,6 +4459,47 @@
              [lin lot])))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
+
+   ; the wide pair's two shuffles, off liveness (x64, a64). a word built in r0 while the pair
+   ; parks, then added with a zero high half, is built in the park and the pair stays put:
+   ;   (mov p r0)(mov q r2) S (li r2 0)(a128r p q) -> S[r0 := p] (a128r p 0)
+   ; S straight-line, every register it touches spelled, r0 written before read, r2 p q untouched.
+   ; and a pair shifted down 64 into a home lands its halves: (shr128 64)(mov a r0)(mov b r2) -> (mov a r2)(li b 0)
+   (wpair g fs)
+    (: lot (? (w128? g) (lvout g fs) 'no)
+       (reg? x) (nom? x && nelem x '(sp fp r0 r2))
+       (dead? rs i) !(two? (filter (r \ elem r (lot i)) rs))
+       ; the run S up to (li r2 0)(a128r p q) -> its length, or () off the shape
+       (run l p q n w)
+        (? (!(two? l) || 12 < n) ()
+           (: f <l
+              (? (two? l && two? >l && f = '(li r2 0) && <>l = ['a128r p q]) (w ? n ())
+                 (: d (? (two? f) (rdsp g f) 'bar)
+                    rs (d @ 'bar () (<d + <>d))
+                    (? (d = 'bar || two? (filter (r \ nelem r >f) rs) ||
+                        two? (filter (r \ elem r ['r2 p q]) rs) ||
+                        (!w && elem 'r0 <d))
+                       ()
+                       (run >l p q (n + 1) (w || elem 'r0 <>d)))))))
+       (go l i)
+        (? !(two? l) ()
+           (: f <l
+              (? (two? f && <f = 'mov && two? >l && <>>f = 'r0 && (: f2 <>l (two? f2 && <f2 = 'mov && <>>f2 = 'r2)) &&
+                  reg? <>f && reg? <><>l && <>f != <><>l)
+                  (: p <>f q <><>l
+                     n (run >>l p q 0 ())
+                     (? (charm? n && dead? [p q] (i + 3 + n))
+                         (: S (map (h \ map (x \ (x = 'r0 ? p x)) h) (take n >>l))
+                            (S + [['a128r p 0]] + go (drop (n + 2) >>l) (i + 4 + n)))
+                        (f . go >l (i + 1))))
+                 (f = '(shr128 64) && two? >>l &&
+                  (: m1 <>l m2 <>>l
+                     (two? m1 && two? m2 && <m1 = 'mov && <m2 = 'mov && <>>m1 = 'r0 && <>>m2 = 'r2 &&
+                      reg? <>m1 && reg? <>m2 && nelem <>m1 '(r0 r2) && nelem <>m2 '(r0 r2) && <>m1 != <>m2)) &&
+                  dead? '(r0 r2) (i + 2))
+                  ([['mov <><>l 'r2] ['li <><>>l 0]] + go >>>l (i + 3))
+                 (f . go >l (i + 1)))))
+       (lot @ 'no fs (go fs 0)))
 
    ; coalescing: a (mov D S) whose S dies here and was defined by the form just before is a
    ; misnamed def: the def takes D and the mov drops. the prologue is unframe's, read by position
@@ -7948,7 +8004,7 @@
                      (cfoldir g irx)))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))
+       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
