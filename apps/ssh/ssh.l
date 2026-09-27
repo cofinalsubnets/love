@@ -23,7 +23,7 @@
 
 (: (ssh-main as)
  (:
-    (die m) (say err ("ssh: " + m + "\n"), quit 255)
+    (die m) (udie 255 ("ssh: " + m))
     (atoi s) (: (go i a) (? (i < #s) (go (i + 1) (10 * a + s i - 48)) a) (go 0 0))
     (env k d) (: v (getenv k) (? (string? v) v d))
 
@@ -99,8 +99,8 @@
     cmd (o 'cmd)
     pty? (? (o 'pty < 0) ((nil? cmd) && (two? (tty 0))) (o 'pty))
     st (ssh-run t cmd pty?)
-    (quit (? (st < 0) 255 st)))))
+    (? (st < 0) 255 st))))
 
 (: s (cite 'verbs 'fire ["ssh" "ssh.l"])
-   (two? s ? (ssh-main >s)))
+   (two? s ? (quit (urun ssh-main >s))))
 ) ; module ssh-cli

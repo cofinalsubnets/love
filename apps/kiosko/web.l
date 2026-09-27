@@ -171,17 +171,16 @@ tree is served. this binary drives the page's build; no love is compiled for it.
              dir0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
-      _ (nil? serve5 ? (say err "web: no kiosko aboard\n", quit 1))
+      _ (nil? serve5 ? (udie 1 "web: no kiosko aboard"))
       _ (sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://127.0.0.1:" + show port
                                   + "/, the machine\n")) 0)
-      _ (serve5 dir port 0 () (sv-make dir box) ? 0
-         (say err ("web: cannot listen on :" + show port), put err 10, quit 1))
-      (quit 0))
+      _ (serve5 dir port 0 () (sv-make dir box) ? 0 (udie 1 ("web: cannot listen on :" + show port)))
+      0)
 
    ; the verb, and the seat (kiosko's shape): `love web ..` on the artifact, or
    ; this file named on a command line, and neither needs a script
-   door (udoor 'web web-main sv-usage 1 1)
-   _ (pins (cite 'verbs 'tab) 'web door)
+   door (udoor 'web (urun web-main) sv-usage 1 1)
+   _ ((cite 'verbs 'enlist) 'web door ())
    s (cite 'verbs 'fire ["serve" "serve.l"])
-   _ (two? s && door >s))
+   _ (two? s && quit (door >s)))
 ) ; module serve

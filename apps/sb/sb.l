@@ -526,18 +526,19 @@ usage: sb VERB ..
   diff            working tree vs the recorded state (unified; exit 1 on change)
 "
    ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
-   (usage _) (say err sb-usage, quit 2)
+   (usage _) (say err sb-usage, uleave 2)
+   ; a verb answers its status: 0, or 1 when it did not take
    (sb-main as) (one? as ? (usage ())
-    (<as @ "record" (sb-record (two? >as ? <>as ""), quit 0)
-           "sync" (one? >as ? (usage ()) (sb-sync <>as @ r (quit !r)))
-           "apply" (sb-apply >as @ r (quit !r))
-           "bank" (one? >as ? (usage ()) (sb-bank >as @ r (quit !r)))
-           "undo" (one? >as ? (usage ()) (sb-undo >as @ r (quit !r)))
-           "log" (sb-log (), quit 0)
-           "diff" (sb-diff () @ n (quit (0 < n)))
+    (<as @ "record" (sb-record (two? >as ? <>as ""), 0)
+           "sync" (one? >as ? (usage ()) !(sb-sync <>as))
+           "apply" !(sb-apply >as)
+           "bank" (one? >as ? (usage ()) !(sb-bank >as))
+           "undo" (one? >as ? (usage ()) !(sb-undo >as))
+           "log" (sb-log (), 0)
+           "diff" (0 < sb-diff ())
            (usage ()))))
 
-; the seat (cook.l's shape): fire sb-main iff this file -- or the installed
+; the seat (cook.l's shape): fire sb-main, and quit with its answer, iff this file -- or the installed
 ; `sb` binary -- sits in the program seat of the real command line (the
 ; positional program or a -l preload), taking the args after the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load orders
@@ -545,9 +546,9 @@ usage: sb VERB ..
 ; this file and have nothing fire. sb-main reads bare: the module's layer holds
 ; this file's binds and is still the head when this form compiles. body-having:
 ; the seat leaks nothing.
-(: door (udoor 'sb sb-main sb-usage 1 1)
-   s (pins (cite 'verbs 'tab) 'sb door,
+(: door (udoor 'sb (urun sb-main) sb-usage 1 1)
+   s ((cite 'verbs 'enlist) 'sb door (),
       cite 'verbs 'fire ["sb" "sb.l"])
-   (two? s && door >s))
+   (two? s && quit (door >s)))
 
 ) ; module 'sb
