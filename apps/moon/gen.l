@@ -4168,6 +4168,77 @@
                         (go (k 1) (['br (negcc <>f) K] . acc) (cs + (['label K] . <k))))
                     (go >l (f . acc) cs))))
           (go fs () ())))
+   ; shrink-wrap: code the entry reaches without the frame runs without it. the prologue ((sub sp sp N)
+   ; and the saves after it) moves onto the edges that leave that region, one stub each, and the
+   ; region's exits drop their restores and (add sp sp N). the frame is needed by an sp operand, a
+   ; call, a push or pop, or a write of a saved register; a label reached from outside is outside
+   (swrap g fs)
+    (: f1 (two? fs && two? >fs ? <>fs)
+       N (? (two? f1 && <f1 = 'sub && f1 1 = 'sp && f1 2 = 'sp && charm? (f1 3)) (f1 3))
+       (sv l acc) (? (two? l && two? <l && <<l = 'st && <l 1 = 'sp && charm? (<l 2) && nom? (<l 3))
+                     (sv >l ([(<l 2) (<l 3)] . acc)) [(rev acc) l])
+       s9 (? N (sv >>fs ()))
+       (? (!(x64? g) || !N || !(two? <>s9)) fs
+          (: saves <s9 rs (map (\ p (p 1)) saves) bod <>s9 n #bod
+             fv (foldl (\ t i (pin t i (bod i))) {} (jot n))
+             lix (foldl (\ t i (: f (fv i) (? (two? f && <f = 'label) (pin t (f 1) i) t))) {} (jot n))
+             (uncond? f) (two? f && elem <f '(jmp jmpm jmpr ret ud2))
+             (epi? f) (two? f && (<f = 'add && f 1 = 'sp && f 2 = 'sp && f 3 = N ||
+                                  <f = 'ld && f 2 = 'sp && elem [(f 3) (f 1)] saves))
+             (needs? f) (? (!(two? f) || epi? f) ()
+                           (elem <f '(call callr push pop raw sys asm jmpt) || elem 'sp f) 1
+                           (elem <f '(label align br br8 jmp jmpm jmpr ret ud2)) ()   ; rdsp bars control forms
+                           (: rd (rdsp g f) (rd = 'bar || foldl (\ a r (a || elem r rs)) () <>rd)))
+             (tgt f) (? (two? f && elem <f '(br br8)) (f 2) (two? f && <f = 'jmp) (f 1))
+             (succ i f) (: t (tgt f) j (? t (peep lix t ()))
+                           (? (charm? j) (? (uncond? f) [j] [j (i + 1)])
+                              (uncond? f) ()
+                              (i + 1 < n) [(i + 1)] ()))
+             ; the branch predecessors of each label
+             bp (foldl (\ t i (: f (fv i) L (tgt f)
+                                 (? (L && charm? (peep lix L ())) (pin t L (i . peep t L ())) t))) {} (jot n))
+             (reach B)
+              (: (go st P) (? !(two? st) P
+                              (: i <st
+                                 (? (peep P i () || peep B i () || needs? (fv i)) (go >st P)
+                                    (go (succ i (fv i) + >st) (pin P i 1)))))
+                 (go [0] {}))
+             (settle B)
+              (: P (reach B)
+                 bad (filter (\ j (: f (fv j) L (f 1)
+                                    ; a label is inside only if every way in is
+                                    (!(foldl (\ a i (a && peep P i ())) 1 (peep bp L ())) ||
+                                     0 < j && !(uncond? (fv (j - 1))) && !(peep P (j - 1) ()))))
+                             (filter (\ j (: f (fv j) (two? f && <f = 'label))) (keys P)))
+                 (? (two? bad) (settle (foldl (\ t j (pin t j 1)) B bad)) P))
+             P (settle {})
+             (inP i) (peep P i ())
+             (exit? f) (two? f && (elem <f '(jmpm jmpr ret) || <f = 'jmp && !(charm? (peep lix (f 1) ()))))
+             ; the ways out: a branch to an outside label, or a fall into an outside form
+             (uniq l) (foldl (\ a j (? (elem j a) a (j . a))) () l)
+             jb (uniq (foldl (\ a i (: f (fv i) t (tgt f) j (? t (peep lix t ()))
+                                        (? (charm? j && !(inP j)) (j . a) a)))
+                             () (filter inP (jot n))))
+             jf (filter (\ i (i < n && !(inP i) && inP (i - 1) && !(uncond? (fv (i - 1)))))
+                        (map (+ 1) (filter inP (jot n))))
+             js (uniq (jb + jf))
+             (? (!(inP 0) || !(foldl (\ a i (a || exit? (fv i))) () (filter inP (jot n)))) fs
+                (: tl (foldl (\ t j (: f (fv j) (pin t j (? (two? f && <f = 'label) (f 1) (nlab g ".w"))))) {} js)
+                   sl (foldl (\ t j (pin t j (nlab g ".w"))) {} jb)
+                   pro (<>fs . map (\ p ['st 'sp (p 0) (p 1)]) saves)
+                   (emit i acc)
+                    (? !(i < n) (rev acc)
+                       (: f (fv i)
+                          (? (inP i)
+                              (: t (tgt f) j (? t (peep lix t ()))
+                                 f2 (? (charm? j && !(inP j)) (reop f (? (<f = 'jmp) 1 2) (sl j)) f)
+                                 a1 (? (epi? f) acc (f2 . acc))
+                                 (emit (i + 1) (? (!(uncond? f) && i + 1 < n && !(inP (i + 1)))
+                                                  (rev pro + a1) a1)))            ; a fall out lays the prologue inline
+                             (: a1 (? (elem i js && !(two? f && <f = 'label)) (['label (tl i)] . acc) acc)
+                                (emit (i + 1) (f . a1))))))
+                   stubs (foldl (\ a j (a + [['label (sl j)]] + pro + [['jmp (tl j)]])) () jb)
+                   ((<fs . emit 0 ()) + stubs))))))
    (unhome g fs)
     (: ar (argr g) hr (hregs g)
        (pears l n acc)                                ; the leading (mov H A) movs -> ((H A)..)
@@ -7750,7 +7821,7 @@
                      (cfoldir g irx)))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))
+       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_

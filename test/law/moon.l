@@ -1511,6 +1511,15 @@
       !(foldl (\ a f (a || (two? f && <f = 'call))) () xf)   ; no call: the hint is gone
       (<(rev xf) @ ('jmp _) 1 ())                            ; the arm lays last and jumps back
       (elem '(ret) xf))
+   ; shrink-wrap: the path that never touches the frame runs without it -- the entry is the
+   ; test, not the (sub sp sp N), and the call's path builds the frame where it leaves
+   irW (cgn "long slow9(long);\nlong kw(long *s, long x) { if (x & 1) return s[x >> 1]; long d = slow9(x); return d > 0 ? s[1] : s[2]; }\nint main() { long a[4] = {0}; return (int) kw(a, 2); }")
+   wf (fnf 'kw <>irW)
+   _ (test
+      (two? irW)
+      (<wf @ ('sub 'sp 'sp _) () 1)                          ; no frame at the entry
+      (foldl (\ a f (a || (f @ ('sub 'sp 'sp _) 1 ()))) () wf)   ; ..but one on the call's path
+      (elem '(ret) wf))
    ; a park under the caller's loop resets from its source every iteration -- that mov wears
    ; the entry-home shape (mov H A), and unhome renaming it away erases the reset. pears stops
    ; at the first body label, so the reset stands and the walk stays on the park.
