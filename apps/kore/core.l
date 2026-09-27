@@ -806,13 +806,29 @@
        _ (say out (show (? (0 < n) n 1))) _ (put out 10) _ (flush out) 0)
 
    ; -- basename and dirname: the two path clips --
+   ; GNU's forms: -a many names, -s SUF (which means -a), -z NUL-ended, -- ends the options
+   (ubn-opts as t)                             ; -> the operands
+    (? !(two? as) ()
+       (<as = "--") >as
+       (<as = "-a" || <as = "--multiple") (: _ (pin t 'a 1) (ubn-opts >as t))
+       (<as = "-z" || <as = "--zero") (: _ (pin t 'z 1) (ubn-opts >as t))
+       (<as = "-s" && two? >as) (: _ (pins t 's <>as 'a 1) (ubn-opts >>as t))
+       (2 < #<as && snip <as 0 2 = "-s") (: _ (pins t 's (snip <as 2 #<as) 'a 1) (ubn-opts >as t))
+       (9 < #<as && snip <as 0 9 = "--suffix=") (: _ (pins t 's (snip <as 9 #<as) 'a 1) (ubn-opts >as t))
+       as)
+   (ubn-say t ns f) (: end (? (peep t 'z 0) 0 10)
+                       _ (each ns (n \ (: _ (say out (f n)) (put out end))))
+                       _ (flush out) 0)
    (basename-main as)
-    (? !(two? as) (udie 2 "usage: basename NAME [SUFFIX]")
-       (: _ (say out (ubase <as (? (two? >as) <>as "")))
-          _ (put out 10) _ (flush out) 0))
+    (: t (tablet 0) ops (ubn-opts as t) a? (peep t 'a 0)
+       (? !(two? ops) (udie 1 "usage: basename NAME [SUFFIX] | basename -a [-s SUF] NAME..")
+          (!a? && two? >>ops) (udie 1 ("basename: extra operand '" + <>>ops + "'"))
+          a? (ubn-say t ops (n \ ubase n (peep t 's "")))
+          (ubn-say t [<ops] (n \ ubase n (? (two? >ops) <>ops "")))))
    (dirname-main as)
-    (? !(two? as) (udie 2 "usage: dirname NAME")
-       (: _ (say out (udir <as)) _ (put out 10) _ (flush out) 0))
+    (: t (tablet 0) ops (ubn-opts as t)
+       (? !(two? ops) (udie 1 "usage: dirname NAME..")
+          (ubn-say t ops udir)))
 
    ; -- cut: -f list [-d C] [-s] over fields, -c list over charms (flags glue or not) --
    (cut-main as)
