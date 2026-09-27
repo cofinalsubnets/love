@@ -906,7 +906,7 @@
           (ubn-say t ops udir)))
 
    ; -- cut: -f list [-d C] [-s] over fields, -c list over charms (flags glue or not) --
-   (cut-main as)
+   (cut-args as)                       ; -> (delim fields chars s? files)
     (: (fl a d f c s?)
         (? !(two? a) [d f c s? a]
            (: h <a
@@ -921,7 +921,9 @@
                  ((2 < tally h) && (snip h 0 2 = "-f")) (fl >a d (snip h 2 (tally h)) c s?)
                  ((2 < tally h) && (snip h 0 2 = "-c")) (fl >a d f (snip h 2 (tally h)) s?)
                  [d f c s? a])))
-       p (fl as 9 () () 0)
+       (fl as 9 () () 0))
+   (cut-main as)
+    (: p (cut-args as)
        d <p fspec <>p cspec <>>p s? <>>>p
        fs <>>>>p
        _ (? (fspec || cspec) () (udie 2 "usage: cut -f LIST [-d C] [-s] | cut -c LIST"))

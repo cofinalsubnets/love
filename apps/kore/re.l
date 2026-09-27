@@ -47,9 +47,12 @@
           (? !(two? acc) [1 st en] (st < <>acc) [1 st en] acc)
           acc)
        (foldl best () ms))
+   (grep-opt as t) (uopt as t '(101 109) '(101) ())     ; -e pattern (stacks), -m count
+   ; with -e the whole tail is files; without it the first word is the pattern
+   (grep-fs o) (: eps <>o rest <>>o (? (two? eps) rest >rest))
    (grep-main as)
     (: t (tablet 0)
-       o (uopt as t '(101 109) '(101) ())              ; -e pattern (stacks), -m count
+       o (grep-opt as t)
        _ (? (two? o) () (udie 2 "grep: bad option"))
        ; -a is in the usage and read nowhere: everything here is text, so it is a
        ; no-op and not an unknown
@@ -60,7 +63,7 @@
        _ (? (two? eps || two? rest) ()
             (udie 2 "usage: grep [-nvclqhaixwFEo] [-e PAT] [-m N] PATTERN [FILE..]"))
        pt (? (two? eps) (ujoinc 10 eps) <rest)
-       fs (? (two? eps) rest >rest)
+       fs (grep-fs o)
        nss (gnodes t pt)
        _ (? (two? nss) () (udie 2 ("grep: invalid pattern: " + pt)))
        ast (map recomp <>nss)                     ; compiled once, not per line

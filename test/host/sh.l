@@ -647,7 +647,7 @@
 ; ..and the stdin readers stay out: a filter with no file operand would drink the
 ; terminal in here, where ^C kills the shell and no pid answers `kill %1`. tar is one
 ; (f -, or no f at all)
-(test (all (\ w !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "cat" "sort" "tar")))
+(test (all (\ w !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "sort" "tar")))
 ; the door is what makes that safe. a tool that used to `quit` on its error path
 ; would have taken the shell with it; now every failure is one command's status and
 ; the line after it still runs.
@@ -734,10 +734,12 @@
     (sh-t-has? j4 "woke")))             ; ..and wakes, group and all, to the end
 
 ;; a $( ) of a roster word is ours to run in here: the jug when nothing wants an fd,
-;; the pipe lane when a redirect does; a spelled path still spawns, a builtin keeps its lane
+;; the pipe lane when a redirect does; a spelled path still spawns, a builtin keeps its lane,
+;; and a word that is ours only for some calls takes the pipe lane, where the call answers
 (: (lane s) (sh-lane >(sh-parse >(sh-lex s)))
    (test ('jug = lane "date") ('sub = lane "date 2>/dev/null") ('ext = lane "/bin/date")
-         ('ext = lane "cat") ('jug = lane "echo hi") ('sub = lane "cd /") ('jug = lane "pwd")))
+         ('sub = lane "cat") ('ext = lane "gzip") ('jug = lane "echo hi") ('sub = lane "cd /")
+         ('jug = lane "pwd")))
 (: r (hark ["out/love" "out/lush" "-c"
             "v=$(expr 1 + 2); w=$(printenv LUSH_UNSET_QQ 2>/dev/null); echo $? v=$v w=[$w]"])
    (test ("1 v=3 w=[]\n" = >r)))
@@ -796,17 +798,30 @@
    (test ("hi\npf\nt\necho is a shell builtin\n" = >r)))
 (: T (cite 'verbs 'trait)
    (test (1 = sh-verbbi? "echo") (1 = sh-verbbi? "[") (0 = sh-verbbi? "ls")
-         (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (0 = T 'cat 'self)))
+         (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (lit? (T 'cat 'self))))
 ;; a reader is self per call: every operand a regular file, or it forks -- bare, a -,
 ;; a missing file, a device, or an option's word
 (: f "test/00-init.l"
    (test (1 = sh-selfcall? ["wc" "-l" f f]) (1 = sh-selfcall? ["sha256sum" f])
          (0 = sh-selfcall? ["wc"]) (0 = sh-selfcall? ["wc" "-"]) (0 = sh-selfcall? ["wc" f "/nonexistent-qq"])
-         (0 = sh-selfcall? ["md5sum" "/dev/zero"]) (0 = sh-selfcall? ["cat" f])
+         (0 = sh-selfcall? ["md5sum" "/dev/zero"]) (1 = sh-selfcall? ["cat" f]) (0 = sh-selfcall? ["cat"])
+         ; the filters ask their own parsers: -n's word is no file, a bare pattern is none
+         (1 = sh-selfcall? ["head" "-n" "5" f]) (0 = sh-selfcall? ["head" "-n" "5"])
+         (1 = sh-selfcall? ["tail" "-n" "+3" f]) (0 = sh-selfcall? ["tail" "-n" "bogus" f])
+         (1 = sh-selfcall? ["cut" "-d" ":" "-f" "1" f]) (0 = sh-selfcall? ["cut" "-f" "1"])
+         (1 = sh-selfcall? ["grep" "x" f]) (0 = sh-selfcall? ["grep" "x"]) (1 = sh-selfcall? ["grep" "-e" "x" f])
+         (0 = sh-selfcall? ["grep" f])
          (1 = sh-selfcall? ["ls" "-l"]) (0 = sh-selfplain? "wc") (1 = sh-selfplain? "ls")))
-;; ..and a capture of a big in-image reader lives: cat forks, so the pipe has a reader
+;; ..and a capture of a big in-image reader lives: the body writes a port that parks
+;; on a full pipe, so the drain gets its turn -- the static stdout would block on it
 (: r (hark ["out/love" "out/lush" "-a" "-c" "f() { cat love/*.c; cat love/*.c; }; x=$(f); echo ${#x}"])
    (test (0 < #(>r))))
+;; exec rides the same (path . word) spawn: PATH's file, the child named as spelled --
+;; GNU's cat says `cat:`, never its path -- and a word nothing answers is 127
+(: r (hark ["out/love" "out/lush" "-g" "-c" "exec cat /nonexistent-qq 2>&1"])
+   (test (1 = <r) ("cat: " = snip >r 0 5)))
+(: r (hark ["out/love" "out/lush" "-g" "-c" "exec nope-qq-cmd 2>/dev/null"])
+   (test (127 = <r)))
 ;; a crew main answers its status to a caller in the image, a failure from deep in
 ;; included -- only the seats quit
 (: C (cite 'verbs 'call)
