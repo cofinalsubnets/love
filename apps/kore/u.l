@@ -230,6 +230,16 @@
           _ (pins t 'h "" 'p 0 'm 0)
           (p @ 0 h (snip h p #h)))
        "")
+   ; a tool that stops short hands the held tail back to the port, so the next reader of
+   ; stdin -- the shell's own `read`, or a child through the fd -- starts where the tool
+   ; did. a gulp is one run of the port and a fill comes only when the held bytes hold no
+   ; line, so what is unread at a stop lies inside the run the port still holds, which is
+   ; as far as unchug reaches
+   (urd-back t k) (0 < k ? (unchug (t 'q) k) 0)   ; the last k bytes of the latest gulp, back to the port
+   (urd-give t)
+    (: h (peep t 'h "") p (peep t 'p 0)
+       _ (urd-back t (#h - p))
+       (pins t 'h "" 'p 0 'm 0))
 
    ; --- the operand walk -----------------------------------------------------
    ; each name in turn, a miss complains and costs the status without stopping the
@@ -259,8 +269,9 @@
                  (? !p 0
                     (: fst (peep t 'f 1)
                        _ (pin t 'f 0)
-                       v (body f fst (urd <p))
-                       _ (? <>p (close <p) 0)
+                       rd (urd <p)
+                       v (body f fst rd)
+                       _ (? <>p (close <p) (urd-give rd))
                        (? v ok 0)))))
             as))
    (ureach who body as) (ureachm (umiss who) body as)

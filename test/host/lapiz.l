@@ -281,8 +281,10 @@ some literal
  ; entities, and tags this middle has no node for. none of that is law 1 and none of it can
  ; be, so it is stated here as what the scrub promises.
  _ (test
-    ; an attribute does not hide a block, and the scrub drops what is not prose
-    ((htread "<h1 id=\"x\">hi</h1>") = '((head 1 ((text "hi")))))
+    ; an attribute does not hide a block (an id is kept, as a mark), and the scrub drops
+    ; what is not prose
+    ((htread "<h1 id=\"x\">hi</h1>") = '((head 1 ((mark "x") (text "hi")))))
+    ((htread "<h1 class=\"x\">hi</h1>") = '((head 1 ((text "hi")))))
     ((htread "<!doctype html>\n<html><body><p>hi</p></body></html>") = '((para ((text "hi")))))
     ((htread "<head><title>t</title></head><p>hi</p>") = '((para ((text "hi")))))
     ((htread "<script>var x = '<p>no</p>';</script><p>yes</p>") = '((para ((text "yes")))))
@@ -398,6 +400,45 @@ t \\- a thing
            ls (lines (flush (ttyshow d 40)))
            (test !(elem "     .." ls) !(elem "     .. .." ls)
                    (elem "     kept by nroff t - a thing" ls)))
+      ; the browser's view: every link with a url is [n] in reading order, through every
+      ; block that holds an inl, and n picks its url; an anchor is a mark and no number
+      _ (: d (htread "<h2>see <a href=\"/h\">head</a></h2><p>a <a href=\"x/1\">one</a> and <em><a href=\"#f\">two <b>b</b></a></em>, <a name=\"n\">anchor</a></p><ul><li><a href=\"u3\">three</a></li></ul><blockquote><p><a href=\"q4\">four</a></p></blockquote><dl><dt><a href=\"d5\">term</a></dt><dd><a href=\"d6\">def</a></dd></dl><table><tr><th><a href=\"t7\">h</a></th></tr><tr><td><a href=\"t8\">c</a></td></tr></table>")
+           r (ttlinks d)
+           p (ttpage d 60)
+           ls (lines (flush <p))
+           (test (<>r = ["/h" "x/1" "#f" "u3" "q4" "d5" "d6" "t7" "t8"])
+                 (<r = '((head 2 ((text "see [1]head")))
+                         (para ((text "a [2]one and ") (em ((text "[3]two ") (strong ((text "b")))))
+                                (text ", ") (tmark "n") (text "anchor")))
+                         (bullets (((text "[4]three"))))
+                         (quote ((para ((text "[5]four")))))
+                         (deflist ((((text "[6]term")) ((text "[7]def")))))
+                         (table (n) (((text "[8]h"))) ((((text "[9]c")))))))
+                 (p 1 = <>r) (p 2 = [["n" 1]])
+                 (elem "     a [2]one and [3]two b, anchor" ls)
+                 ; a page with no links answers none, and the doc unchanged
+                 (ttlinks (mdread "a *b* `c`\n") = [(mdread "a *b* `c`\n") ()])))
+      ; the places a link lands: every id a mark, inside a tag whose content is a line and
+      ; ahead of any other, and an <a> with no href only its mark and its text. html keeps
+      ; them (law 1); markdown and the terminal show nothing for them; ttpage answers each
+      ; one's line -- a paragraph of marks alone on the next block, a mark at the end of
+      ; one on its last word
+      _ (: src "<div id=\"top\"></div><h2 id=\"History\">History</h2><p>see <a href=\"#cite_note-1\">[1]</a> and <a name=\"old\">old place</a> here</p><ol><li id=\"cite_note-1\"><span id=\"x\"></span>the note</li><li id=\"cite_note-2\">two</li></ol><section id=\"end\"><p>last</p></section><p>tail <a id=\"q&amp;a\"></a></p>"
+           bare "<h2>History</h2><p>see <a href=\"#cite_note-1\">[1]</a> and old place here</p><ol><li>the note</li><li>two</li></ol><p>last</p><p>tail </p>"
+           d (htread src)
+           p (ttpage d 60)
+           (test (d = '((para ((mark "top"))) (head 2 ((mark "History") (text "History")))
+                        (para ((text "see ") (link ((text "[1]")) "#cite_note-1") (text " and ")
+                               (mark "old") (text "old place here")))
+                        (numbers (((mark "cite_note-1") (mark "x") (text "the note"))
+                                  ((mark "cite_note-2") (text "two"))))
+                        (para ((mark "end"))) (para ((text "last"))) (para ((text "tail ") (mark "q&a")))))
+                 (htread (htshow d) = d)
+                 (ht->tty src 60 = ht->tty bare 60)
+                 (mdread (mdshow d) = mdread (mdshow (htread bare)))
+                 !(elem 1 (map (i \ <p i) ^#(<p)))                ; no sentinel left behind
+                 (p 2 = [["top" 0] ["History" 0] ["old" 1] ["cite_note-1" 3] ["x" 3]
+                         ["cite_note-2" 4] ["end" 6] ["q&a" 8]])))
       0)
 
  _ (test_fin ())

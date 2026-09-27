@@ -139,3 +139,16 @@
                   (list 'f 10 0))
    _ (test (55 = ev (mk '+)) (55 = ev (mk plus)) (ev (mk '+) = ev (mk plus)))
    0)
+; a whole-number leaf is laid as a 64-bit immediate, so every lane's grammar admits only a
+; charm: a big in a body declines the lane and the interpreter answers, in place of the
+; low 64 bits (2^64-1 tagged as -1, 2^64 as 0, and the linker's modulus answering 1 for -5).
+(: (f _) 18446744073709551615
+   (g _) 18446744073709551616
+   (m x) (x % 18446744073709551616)
+   _ (test (= (f 0) 18446744073709551615) (= (g 0) 18446744073709551616) (= (m -5) -5))
+   0)
+; a polynomial fold over jot closes to its form in the bound: the map's function is sampled,
+; so a sum of squares is not the sum of the counter. the same number as the interpreter.
+(: dq '(: (s n) (foldl (+) 0 (map (\ x (* x x)) (jot n))) (s 100))
+   _ (test (= 328350 (ev dq)))
+   0)

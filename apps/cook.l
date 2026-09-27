@@ -332,7 +332,7 @@
                 (two? ts ? (each ts (cook * pick)) (cook (check 0)))))
 
 ; --- importing a Makefile ------------------------------------------------------
-; a parser is (\ s y n) over a string s: y the success continuation (rest parsed), n the
+; a parser is (\ s y n) over a state s (text . i): y the success continuation (rest parsed), n the
 ; failure continuation (rest); the parsed payload is a list `seq` concatenates. love has no
 ; regex, so the leaves are `lit` (a literal prefix), `one` (one char by predicate) and `span`
 ; (a maximal run), with alt/seq/opt/many over them. the import is reasonably GNU-compatible:

@@ -250,8 +250,8 @@
    amble-lam (mint 0)                                             ; the inner-lambda site marker: (amble-lam i n v..) -- entry i of arity n, curried through the imports v..
    (amax a b) (a < b ? b a)
    (adistinct l) (l @ (a . u) (!(elem a u) && adistinct u) 1)
-   ; a constant rides as the immediate 2e+1, so only a fixnum: a big would be laid truncated, silently
-   (afix? e) (whole? e && (-4611686018427387904 <= e <= 4611686018427387903))
+   ; a constant rides as the immediate 2e+1, so only a fixnum (charm?): a big would be laid truncated, silently
+   (afix? e) (charm? e)
    (aconst? e) (afix? e || (e = amble-nil))
    (aop2? op) (elem op '(+ - * // % & | ^ < <= > >= = == .))
    (acmp? op) (elem op '(< <= > >= =))
@@ -1047,7 +1047,7 @@
       (op @ '// [['div A T A]]  '% [['rem A T A SC]]  ()))
    ; divk: tmp / the literal k >= 2 by magic multiply (Hacker's Delight 10-1, signed 64-bit): q = mulh(n, M)
    ; (+ n when M < 0) >> s, + 1 for negative n so it truncates toward zero like idiv; % is n - q*k
-   (divc? b) (whole? b && b >= 2)
+   (divc? b) (charm? b && b >= 2)
    (magic k) (: two63 9223372036854775808  two64 18446744073709551616
                 anc (two63 - 1 - (two63 % k))
                 (go p q1 r1 q2 r2)
@@ -1334,14 +1334,14 @@
    arch love-arch                         ; the host CPU as the assembler target ('x64 / 'a64), already a nom; glaze loads only on these
    x86? (= arch 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
    ; the emitter's expression grammar over var v, exact arity: (+ x 1 2) is a tower, not x + 1
-   (exprp e v) (? (e = v) 1  (whole? e) 1  (atom? e) 0
+   (exprp e v) (? (e = v) 1  (charm? e) 1  (atom? e) 0
                   (e @ (op a b) (elem op '(+ - * // % & | ^ < <= > >= =) && exprp a v && exprp b v)
                        ('? c a b) (exprp c v && exprp a v && exprp b v)
                        0))
    ; --- leaf: (\ x E) ---
    (qual ['\ x E]) (nom? x && exprp E x)
    ; --- arity-N leaf: (\ p0 .. p_{n-1} E), E over the params (any distinct symbols) ---
-   (exprn ps e) (? (elem e ps) 1  (whole? e) 1  (atom? e) 0
+   (exprn ps e) (? (elem e ps) 1  (charm? e) 1  (atom? e) 0
                    (e @ (op a b) (elem op '(+ - * // % & | ^ < <= > >= =) && exprn ps a && exprn ps b)
                         ('? c a b) (exprn ps c && exprn ps a && exprn ps b)
                         0))
@@ -1392,7 +1392,7 @@
               && #updates = #vars && #inits = #vars
               && elem <T '(< <= > >= =) && exprn fr T              ; test a comparison over {n,vars}
               && all (u \ exprn fr u) updates && exprn fr R           ; updates + result exprs over {n,vars}
-              && all whole? inits                                     ; inits are fixnum consts
+              && all charm? inits                                     ; inits are fixnum consts
               ? [vars updates T R inits] 0))
           0)
    ; --- c-finite bignum deopt: a linear recurrence with a canonical counter closes to m^n x0, on njit-loop-n's post-overflow
@@ -1448,7 +1448,7 @@
    (flatc ['\ p ['\ q E]]) ['\ p q E]                          ; (\ p (\ q E)) -> (\ p q E)
    ; --- float-result leaf (\ x <fexpr>): boxes a gem. native cvtsi2sd's the param at every use, where the interpreter keeps an
    ;     int subexpression exact until a float forces it ((x * 3) + 1.5 diverges at 2^53+1), so allsafe rejects the param inside an I-typed compound
-   (fty e v) (? (e = v) 'I  (gem? e) 'F  (whole? e) 'I                     ; param/int = I, float const = F
+   (fty e v) (? (e = v) 'I  (gem? e) 'F  (charm? e) 'I                     ; param/int = I, float const = F
                 (e @- 0
                  [('+ || '- || '*) a b]                                ; +-*: float iff an operand is float
                   (: ta (fty a v) tb (fty b v)
@@ -1643,7 +1643,7 @@
                  (: nf (norm-let e) info (cbacc nf) (? (two? info) (cbrw nf info) (map cbwalk e))))
    ; --- the native cask variant: a single-byte counted builder, i:0-by-1 the cask index and E a charm expr -> a counted byte-store.
    ;     the epilogue tags rax as a fixnum, so the cask cannot come back: the loop lifts to a sibling F-fill answering the count, the wrapper F holds the cask
-   (cbbyte? e i) (? (whole? e) 1  (e = i) 1  (two? e && <e = 'peep) 1                ; a charm expr: const | the counter | a peep byte | arith thereof
+   (cbbyte? e i) (? (charm? e) 1  (e = i) 1  (two? e && <e = 'peep) 1                ; a charm expr: const | the counter | a peep byte | arith thereof
                     (two? e && elem <e '(+ - * // % & | ^ << >>) && 3 = #e) (cbbyte? (opd e 0) i && cbbyte? (opd e 1) i) 0)
    (cbcask nlval nf)                                                                              ; -> (wrapper-pair fill-pair) on a clean single-byte counted match, else ()
     (? !(two? nf && nom? <nf && 1 < #nf) ()                                    ; nf must be (F p..) so we can sibling the fill
@@ -1992,7 +1992,7 @@
    ; only a pure polynomial body (+ - * over the param and int consts) closes: its difference table dies exactly at its
    ; degree, where a body with //, %, <, or ? can fit the first samples and break later
    (lc1lam? f)   (two? f && <f = '\ && 3 = #f && nom? (opd f 0))               ; (\ v BODY)
-   (lcpoly? v e) (? (e = v) 1 (whole? e) 1
+   (lcpoly? v e) (? (e = v) 1 (charm? e) 1
                     (two? e && elem <e '(+ - *) && 3 = #e) (lcpoly? v (opd e 0) && lcpoly? v (opd e 1))
                     0)
    (lcpolyf? f)  (lc1lam? f && lcpoly? (opd f 0) (opd f 1))
@@ -2009,7 +2009,7 @@
     (: z (opd x 1) p (lcsrc (opd x 2))
        (? (atom? p) ()
           (: Fsrc <p Psrc <>p N <>>p
-             Fc (? (() = Fsrc) 1 (lcpolyf? Fsrc) base-ev Fsrc)              ; identity if no map; else F must be a pure polynomial
+             Fc (? (() = Fsrc) 1 (lcpolyf? Fsrc) (base-ev Fsrc) ())          ; identity if no map; else F must be a pure polynomial
              (? (() = Fc) ()
                 (() = Psrc) (lcemit z Fc N)                                                 ; no filter: g = F over [0,N)
                 (lcoddp? Psrc @                                                         ; else need a recognized odd/even filter
@@ -2070,7 +2070,7 @@
    (groupok? cm pm cands cps pps ps e)                                                        ; int-valued e over cands; cps/pps = the current fn's chain-/point-param names
     (? (elem e cps) 0                                                                       ; a chain param is not int-valued (only valid via cok?)
        (elem e pps) 0                                                                       ; a point param neither (raw word: only the point-= and point slots)
-       (elem e ps) 1  (whole? e) 1
+       (elem e ps) 1  (charm? e) 1
        (two? e) (: op <e ar (clook2 op cands)
           (? (-1 < ar) (#>e = ar && gargok? cm pm cands cps pps ps >e 0 op)   ; group call: arity ok, each arg ok for its slot's kind
              (op = '= && 3 = #e                                              ; point-=: (P = <..)/(<.. = P), word identity, int 0/1; total since P is entry-guarded nom|mint
@@ -2081,8 +2081,8 @@
               (3 = #e && groupok? cm pm cands cps pps ps <>e && groupok? cm pm cands cps pps ps <>>e)
              (op @ '? (4 = #e && groupok? cm pm cands cps pps ps <>e && groupok? cm pm cands cps pps ps <>>e && groupok? cm pm cands cps pps ps <>>>e)
              'tally   (2 = #e && elem <>e ps)                                          ; (tally STR): str a param (string lane)
-             'peep    (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && whole? <>>>e)   ; (peep STR i d): str param, i ok, d const
-             'mpeep   (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && whole? <>>>e)   ; (mpeep MAP k d): map param, key ok, d const (the map lane -- mapfix rewrote a map-valued peep here)
+             'peep    (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && charm? <>>>e)   ; (peep STR i d): str param, i ok, d const
+             'mpeep   (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && charm? <>>>e)   ; (mpeep MAP k d): map param, key ok, d const (the map lane -- mapfix rewrote a map-valued peep here)
              'mpin    (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && groupok? cm pm cands cps pps ps <>>>e)   ; (mpin MAP k v): map param, key ok, v ok -- update-in-place; produces the map (threaded into a call's map slot, or a discarded result)
              'pin     (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && groupok? cm pm cands cps pps ps <>>>e)   ; (pin BUF i V): buf a raw-buf param, i ok, V ok
              'two?    (2 = #e && cok? cm cands cps ps <>e)               ; (two? CE): ce chain-valued; result int 0/1 (total -- a non-chain reads false)
@@ -2091,7 +2091,7 @@
    ; --- vok?: the value grammar for a heap-allocating body: int const | param | (. V V) | (? INT V V) | a call to a value-typed
    ;     candidate. vok?'s calls resolve only in vcands and groupok?'s only in icands, so neither kind can call the other
    (vok? cm pm icands vcands cps pps ps e)
-    (? (whole? e) 1
+    (? (charm? e) 1
        (elem e cps) 0  (elem e pps) 0                                                   ; raw-word params (chain/point) are not values: cggvir would re-tag them
        (elem e ps) 1
        (two? e) (: op <e ar (clook2 op vcands)
@@ -2385,7 +2385,7 @@
        ; grp-ok?: autogroup's recognizer over the defs jitgroupirx compiles. jgir-ok? only says the ops exist -- a body past
        ; the grammar reaches cggir, whose ? chain ends in a silent () that emits no code
        (grp-ok? gds) (: cands (map (gd \ [<<gd (#<gd - 1)]) gds) (#(grpfix gds cands) = #gds))   ; (name arity)
-       (exprn ps e) (? (elem e ps) 1  (whole? e) 1  (atom? e) 0                    ; the leaf grammar, exact arity: (+ x 1 2) is a tower, not x + 1
+       (exprn ps e) (? (elem e ps) 1  (charm? e) 1  (atom? e) 0                    ; the leaf grammar, exact arity: (+ x 1 2) is a tower, not x + 1
                        (e @ (op a b) (elem op '(+ - * // % & | ^ < <= > >= =) && exprn ps a && exprn ps b)
                             ('? c a b) (exprn ps c && exprn ps a && exprn ps b)
                             0))
