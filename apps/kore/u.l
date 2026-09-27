@@ -159,11 +159,6 @@
                   (go (k + 3) (rev (span c (s (k + 2)) ()) + acc))
                  (go (k + 1) (c . acc)))))
        (go 0 ()))
-   ; a text's charms, back to front
-   (urev s)
-    (: o (jug 0)
-       (go k) (k < 0 ? (slurp o) (put o (s k), go (k - 1)))
-       (go (#s - 1)))
    ; --- reading an input without holding it ----------------------------------
    ; uread + `lines` keeps four whole copies of the input alive at once -- `rev` of
    ; 50 MB wanted 1.09 GB of live set. These hand it over a gulp or a line at a time.
