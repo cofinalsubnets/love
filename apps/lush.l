@@ -1904,12 +1904,24 @@
                     (? !(charm? n) (cmderr ("ulimit: " + lim + ": invalid limit"))
                        (: e (setrlimit (r 3) (? (hard? && !soft?) () n) (? (soft? && !hard?) () n))
                           (? e (cmderr ("ulimit: cannot set " + (r 1))) 0))))))))
+   ; cd [-L|-P] [--] [DIR|-]: the two modes alike, since chdir resolves the one way;
+   ; - is OLDPWD, said back; PWD and OLDPWD follow each move
+   (sh-cdopts a) (? (two? a && (<a = "-L" || <a = "-P")) (sh-cdopts >a) (two? a && <a = "--") >a a)
+   (sh-cdb args)
+     (: a (sh-cdopts args)
+        dash (two? a && <a = "-")
+        vt (? dash (sh-vget "OLDPWD") (two? a) (1 . <a) (sh-vget "HOME"))
+        t (? (two? vt) >vt "")
+        old (cwd 0)
+        (? !#t (: _ (say err ("lush: cd: " + (dash ? "OLDPWD" "HOME") + " not set\n")) 1)
+           (chdir t) (: _ (say err ("lush: cd: " + t + "\n")) 1)
+           (: _ (sh-setvar "OLDPWD" old) _ (sh-setvar "PWD" (cwd 0))
+              _ (? dash (puts (cwd 0 + "\n")) 0)
+              0)))
    (sh-builtin argv)
      (<argv @- 'nope                             ; a word no builtin answers to
       "exit"   (: st (? >argv (sh-int <>argv) (sh-status ())) (sh-leave st))
-      "cd"     (: t (? >argv <>argv ("" + (getenv "HOME")))
-                  r (chdir t)
-                  (? !r 0 (say err ("lush: cd: " + (t + "\n")), 1)))
+      "cd"     (sh-cdb >argv)
       "trap"   (sh-trapb >argv)
       "export" (each >argv sh-export, 0)
       ; `command -v W` -- the probe every configure-shaped script opens with.
