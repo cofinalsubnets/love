@@ -11,8 +11,6 @@
 (borrow 'design)
 
 (: S "/tmp/designtest.l"
-   (find h n i) (i + tally n < 1 + tally h ? (n = snip h i (i + tally n) ? 1 (find h n (i + 1))) 0)
-   (has? h n) (find h n 0)
    (plain s) ((: (g i acc esc) (i < #s ? (: c (s i)
                                      (? esc (g (i + 1) acc (65 <= c < 91 || 97 <= c < 123 ? 0 1))
                                         (c = 27) (g (i + 1) acc 1)

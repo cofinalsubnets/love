@@ -629,7 +629,6 @@
       (: n #s
          j (edx-colons s j0)
          c (? (j < n) (s j) 124)
-         (alpha? x) (97 <= x <= 122 || 65 <= x <= 90)
          we (: (go i) (? (i < n && alpha? (s i)) (go (i + 1)) i) (go j))
          w (? (alpha? c) (snip s j we) (string c))
          word (? (alpha? c) (edx-word w) w)

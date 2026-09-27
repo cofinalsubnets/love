@@ -98,7 +98,6 @@
                  (go i) (? (i < #v && dig? (v i)) (go (i + 1)) i)
                  n (num (snip v 0 (go 0)))
                  (? n n d))
- (has? h n) (: (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))) (go 0))
  (fail s) (say err ("pom: " + s + "\n"), flush err, 1)
  ; getopts 'de': [d e operands], or () for a letter it does not know
  (flags as d e)

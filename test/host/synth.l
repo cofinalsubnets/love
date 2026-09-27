@@ -10,9 +10,7 @@
 (borrow 'harp)    ; the events, to ask a text read by
 (borrow 'play)    ; harp-read
 
-(: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
-   (has? h n) (find h n 0)
-   d0 (synth-digits 0) d1 (synth-digits 1) s0 (synth-shifted 0)
+(: d0 (synth-digits 0) d1 (synth-digits 1) s0 (synth-shifted 0)
    st (synth-new ())
    (semis c) (synth-semis st c))
 

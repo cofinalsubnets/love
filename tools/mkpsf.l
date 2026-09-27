@@ -11,7 +11,6 @@
    (hd d) (string (d < 10 ? (48 + d) (87 + d)))
    (hx2 v) ("0x" + hd ((v >> 4) & 15) + hd (v & 15))
    (hx v) (v < 16 ? (hd v) ((hx (v >> 4)) + hd (v & 15)))
-   (join sep l) (two? l ? (foldl (\ a x ((a + sep) + x)) <l >l) "")
    (le16 s i) ((s i) | ((s (i + 1)) << 8))
    (le32 s i) ((le16 s i) | ((le16 s (i + 2)) << 16))
    (utf8 s) (: b (s 0)                                        ; the first char's codepoint
