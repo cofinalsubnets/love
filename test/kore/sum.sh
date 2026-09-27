@@ -1,21 +1,24 @@
 #!/bin/sh
-# test/kore/sum.sh -- cksum, md5sum, sha256sum over the block boundaries, -c both ways round
+# test/kore/sum.sh -- cksum, sum and the digest tools over the block boundaries, -c both ways round
 . "$(dirname "$0")/common.sh"
 
-# cksum, md5sum and sha256sum against GNU. these three are the tools whose entire
+# cksum, sum and the digest tools against GNU. these are the tools whose entire
 # output is one number, so a single wrong byte in inle/hash.c is a wrong line here and
 # nowhere else. THE LENGTHS ARE THE POINT of the battery: a digest pads its last block
 # with the message length in the final 8 bytes, so 55/56 and 119/120 are where a pad
-# off by one shows, and 0 is where cksum's own length fold does (an empty file is
-# 4294967295 0, not 0 0).
+# off by one shows (111/112 and 239/240 for sha-384/512's 128-byte block, 128 and 256
+# where blake2b holds its last block back), and 0 is where cksum's own length fold does
+# (an empty file is 4294967295 0, not 0 0).
 ck=$ho/.kore-ck
 rm -rf "$ck"; mkdir -p "$ck"
 as() { i=0; s=; while [ "$i" -lt "$1" ]; do s=$s"a"; i=$((i + 1)); done; printf '%s' "$s"; }
-for n in 0 1 55 56 57 63 64 65 119 120 128 1000; do as "$n" > "$ck/n$n"; done
+lens="0 1 55 56 57 63 64 65 111 112 119 120 127 128 129 239 240 256 257 1000"
+for n in $lens; do as "$n" > "$ck/n$n"; done
 printf '\0\1\2\377\376abc\n' > "$ck/bin"        # NULs and high bytes: bytes, not text
 printf 'hello\nworld\n' > "$ck/a"
-for t in cksum md5sum sha256sum; do
-  for n in 0 1 55 56 57 63 64 65 119 120 128 1000; do both "$t n$n" $t "$ck/n$n"; done
+tools="cksum sum md5sum sha1sum sha224sum sha256sum sha384sum sha512sum b2sum"
+for t in $tools; do
+  for n in $lens; do both "$t n$n" $t "$ck/n$n"; done
   both "$t binary" $t "$ck/bin"
   both "$t many"   $t "$ck/a" "$ck/bin" "$ck/n0"
   both "$t missing" $t "$ck/nope"                # the unreadable operand, stdout and all
@@ -64,10 +67,38 @@ same "sha256sum -c mismatch"
 # A DIRECTORY OPENS AND SLURPS EMPTY, so an unguarded digest of one is the digest of
 # nothing -- a plausible number, which is worse than none. GNU refuses it and so do we.
 mkdir -p "$ck/dir"
-for t in cksum md5sum sha256sum; do
+for t in $tools; do
   $t "$ck/dir" > "$g" 2>/dev/null; rg=$?
   korerun $t "$ck/dir" > "$o" 2>/dev/null; ro=$?
   same "$t on a directory"
   [ "$rg" -eq 1 ] && [ "$ro" -eq 1 ] || fail "$t on a directory exit ($rg vs $ro)"
 done
-echo "kore: checksums (cksum/md5sum/sha256sum GNU-identical over the block boundaries, -c both ways round) ok"
+# every digest tool's list read back by the other side, both ways round
+for t in md5sum sha1sum sha224sum sha384sum sha512sum b2sum; do
+  ( cd "$ck" && $t a bin n128 > $t.gnu ) && ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore $t a bin n128 > $t.ours )
+  cmp -s "$ck/$t.gnu" "$ck/$t.ours" || fail "$t's list is not GNU's"
+  ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore $t -c $t.gnu ) > "$o" 2>/dev/null; ro=$?
+  ( cd "$ck" && $t -c $t.ours ) > "$g" 2>/dev/null; rg=$?
+  same "$t -c"
+  [ "$rg" -eq 0 ] && [ "$ro" -eq 0 ] || fail "$t -c exit ($rg vs $ro)"
+done
+# sum's two algorithms and its name rule: a named operand, "-" included, is said
+for f in "-r" "-s" "-rs" "-sr"; do both "sum $f" sum $f "$ck/a" "$ck/bin"; done
+pipe "sum -s stdin" 'hello
+' sum -s
+pipe "sum - " 'hello
+' sum -
+# b2sum's shorter digests, and -c reading back whatever length a line carries
+for l in 8 256 504; do both "b2sum -l $l" b2sum -l $l "$ck/a" "$ck/n129"; done
+( cd "$ck" && b2sum -l 256 a bin > b2.256 )
+( cd "$ck" && LOVE_NO_IMAGE= "$K" kore b2sum -c b2.256 ) > "$o" 2>/dev/null; ro=$?
+( cd "$ck" && b2sum -c b2.256 ) > "$g" 2>/dev/null
+same "b2sum -c of a 256-bit list"
+[ "$ro" -eq 0 ] || fail "b2sum -c 256 exit $ro"
+for l in 12 520 x; do
+  LC_ALL=C b2sum -l $l "$ck/a" > "$g" 2>&1; rg=$?
+  korerun b2sum -l $l "$ck/a" > "$o" 2>&1; ro=$?
+  same "b2sum -l $l refused"
+  [ "$rg" -eq "$ro" ] || fail "b2sum -l $l exit ($rg vs $ro)"
+done
+echo "kore: checksums (cksum/sum/md5sum/sha*sum/b2sum GNU-identical over the block boundaries, -c both ways round) ok"
