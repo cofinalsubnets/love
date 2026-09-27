@@ -371,6 +371,14 @@
    ; the grain is the caller's: a run of one-fn sections at grain N tiles at N, which is how
    ; love.h's ai_typ gets a stride out of a linker that was told no such thing.
    (objsec-code nm forms al) [nm 1 6 al forms]
+   ; a file-scope asm's sections, (name type flags forms) each: a name already laid takes the
+   ; forms at its tail and keeps its own flags, a new one rides after the rest
+   (objsec-merge secs xs)
+    (foldl (\ a x (: nm <x fs (x 3)
+                     (? (any (s \ <s = nm) a)
+                        (map (s \ (? (<s = nm) [nm (s 1) (s 2) (o-dalign (s 3) fs) ((s 4) + fs)] s)) a)
+                        (a + [[nm (x 1) (x 2) (o-dalign 1 fs) fs]]))))
+           secs xs)
    ; the arm32 twin of objsecs4: four lanes, because there is no .image at 32 bits (no bake),
    ; so a non-empty one is a caller's mistake. code sits at grain 4 rather than 16 -- a thumb
    ; function is 2-byte aligned and flash is scarce, which is also why .bss rides here: these

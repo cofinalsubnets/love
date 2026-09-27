@@ -383,6 +383,189 @@
             ('ins m os) (gt-ins m (map gt-opnd os))
             ()))
 
+   ;; -- file scope: an asm("..") outside any function is the whole assembler -- sections, data,
+   ;; labels the object exports. the directives read are the ones C headers write there (the
+   ;; kernel's export, initcall, tracepoint and static-call rows); a run of instructions goes to
+   ;; gas-text, and any other directive scares. --
+   (gf-kin? nm b) (nm = b || xa-starts? nm (b + "."))
+   ; gas's own defaults for a section named without flags: the standard four and their dotted
+   ; kin, .init/.fini, and otherwise none -- not even allocated
+   (gf-dflt nm) (? (gf-kin? nm ".text" || elem nm '(".init" ".fini")) [1 6]
+                   (gf-kin? nm ".data") [1 3]
+                   (gf-kin? nm ".bss") [8 3]
+                   (gf-kin? nm ".rodata") [1 2]
+                   [1 0])
+   ; M and S only license merging, which a section never owes
+   (gf-flags s) (foldl (\ a c (c @ 97 (a | 2) 119 (a | 1) 120 (a | 4) 77 a 83 a
+                                  (scare 'gas-section-flag (string c))))
+                       0 (chars s))
+   ; .section name[, "flags"[, @type[, entsize]]] -> [name type flags]
+   (gf-sect xs)
+    (: nm (xa-unquote <xs) d (gf-dflt nm)
+       ty (? (2 < #xs)
+             (: t (xs 2) (? (elem t '("@progbits" "%progbits")) 1
+                            (elem t '("@nobits" "%nobits")) 8
+                            (scare 'gas-section-type t)))
+             <d)
+       [nm ty (? (1 < #xs) (gf-flags (xa-unquote (xs 1))) <>d)])
+   (gf-width tgt mn) (? (mn = ".byte") 1
+                        (elem mn '(".short" ".value" ".2byte" ".hword")) 2
+                        (mn = ".word") (? (tgt = 'x64) 2 4)
+                        (elem mn '(".long" ".int" ".4byte")) 4
+                        (elem mn '(".quad" ".8byte" ".dword")) 8
+                        0)
+   ; .ascii's operands: literals split by commas or blanks, C's escapes -> one byte list per literal
+   (gf-strs s)
+    (: n #s
+       (oct? c) (48 <= c <= 55)
+       (esc i)                                      ; i past the backslash -> [byte next]
+        (: c (s i)
+           (? (oct? c) ((: (o j v k) (? (k < 3 && j < n && oct? (s j)) (o (j + 1) (v * 8 + s j - 48) (k + 1))
+                                        [(v & 255) j])) i 0 0)
+              (c = 120) ((: (h j v) (? (j < n && ghex? (s j)) (h (j + 1) (v * 16 + ghexd (s j)))
+                                       [(v & 255) j])) (i + 1) 0)
+              [(c @ 110 10 116 9 114 13 98 8 102 12 118 11 97 7 c) (i + 1)]))
+       (str i acc)
+        (? (i >= n) (scare 'gas-string s)
+           (s i = 34) [(rev acc) (i + 1)]
+           (s i = 92 && i + 1 < n) (: e (esc (i + 1)) (str <>e (<e . acc)))
+           (str (i + 1) (s i . acc)))
+       (go i acc)
+        (? (i >= n) (rev acc)
+           (gws? (s i) || s i = 44) (go (i + 1) acc)
+           (s i = 34) (: r (str (i + 1) ()) (go <>r (<r . acc)))
+           (scare 'gas-string s))
+       (go 0 ()))
+   ; a data operand as a linear sum [k terms], terms ((sym . coef)..) with `.` among the syms --
+   ; label arithmetic, which is all a relocation can carry. each level answers (sum . rest) | 'bad
+   (gf-neg l) [(0 - <l) (map (p \ (<p . (0 - >p))) <>l)]
+   (gf-plus a b) [(<a + <b) (<>a + <>b)]
+   (gf-prim ts rl)
+    (? !(two? ts) 'bad
+       (<ts @ ('num v) ([v ()] . >ts)
+              ('sym s) ([0 [(s . 1)]] . >ts)
+              ('lref n d) ([0 [((rl n d) . 1)]] . >ts)
+              ('ch 40) (: r (gf-sum >ts rl)
+                          (? (gbad? r || !(two? >r) || !(= <>r '(ch 41))) 'bad (<r . >>r)))
+              ('ch 45) (: r (gf-prim >ts rl) (? (gbad? r) 'bad ((gf-neg <r) . >r)))
+              ('ch 43) (gf-prim >ts rl)
+              'bad))
+   (gf-sum ts rl)
+    (: (go r) (? (gbad? r) 'bad
+                 !(two? >r) r
+                 !(elem <>r '((ch 43) (ch 45))) r
+                 (: q (gf-prim >>r rl)
+                    (? (gbad? q) 'bad
+                       (go ((gf-plus <r (? (<>r = '(ch 43)) <q (gf-neg <q))) . >q)))))
+       (go (gf-prim ts rl)))
+   (gf-norm terms)                                  ; summed per sym, zeros dropped
+    (: t {} _ (foldl (\ _ p (pin t <p (peep t <p 0 + >p))) 0 terms)
+       (filter (p \ >p != 0) (map (k \ (k . (t k))) (sort (keys t)))))
+   ; -> [pc? sym k]: sym () for a constant; pc? for sym + k - `.`
+   (gf-val e rl)
+    (: ts (gtoks e)
+       (? !(any (t \ <t = 'sym || <t = 'lref) ts) [() () (gimm ts)]
+          (: r (gf-sum ts rl)
+             (? (gbad? r || two? >r) (scare 'gas-data e)
+                (: ns (gf-norm <><r)
+                   dt (filter (p \ <p = ".") ns)
+                   sy (filter (p \ <p != ".") ns)
+                   (? (!(two? sy) || two? >sy || ><sy != 1) (scare 'gas-data e)
+                      !(two? dt) [() <<sy <<r]
+                      (><dt = -1) [1 <<sy <<r]
+                      (scare 'gas-data e)))))))
+   (gf-le v w) (: u (? (v < 0) (v + (1 << (8 * w))) v) (map (i \ byte (u >> (8 * i))) ^w))
+   ; a word's bytes, or its fixup: rel32 is S + aux - P - 4 wherever it resolves, so `- .` rides aux + 4
+   (gf-word tgt w e rl)
+    (: v (gf-val e rl) pc <v s <>v k <>>v
+       (? !(string? s) (gf-le k w)
+          pc (? (w = 4 && !(gthumb? tgt)) [['fix 4 'rel32 (name s) (k + 4)]] (scare 'gas-data-pcrel e))
+          (w = 8) [['fix 8 'abs64 (name s) k]]
+          (w = 4 && (tgt = 'x64 || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
+          (scare 'gas-data-width e)))
+   ; GNU's numeric local labels in an instruction line -> the names gas-top laid them under
+   (gf-lsub s rl)
+    (: n #s
+       (go i acc)
+        (? (i >= n) acc
+           (: c (s i)
+              (? (gdig? c && (i = 0 || !(gidc? (s (i - 1)))))
+                 (: j ((: (g j) (? (j < n && gdig? (s j)) (g (j + 1)) j)) i)
+                    (? (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))))
+                       (go (j + 1) (acc + rl (gdecv (snip s i j)) (s j)))
+                       (go j (acc + snip s i j))))
+                 (go (i + 1) (acc + string c)))))
+       (go 0 ""))
+   ; -> [secs fns objs]: secs ((name type flags forms)..) first-seen, fns and objs the .globl
+   ; names a label here defines, split by whether its section executes
+   (gas-top tgt src)
+    (: st {'cur ".text" 'prev ".text" 'stk () 'run () 'order () 'globl ()}
+       secs {}                                      ; name -> [type flags forms-reversed]
+       labs {}                                      ; label -> its section
+       lc {}                                        ; N -> how many `N:` so far
+       (rl n d) (show (glabel n (? (d = 102) (1 + peep lc n 0) (peep lc n 0))))
+       (row nm td) (? (two? (secs nm)) 0
+                      (: _ (pin st 'order (nm . (st 'order))) (pin secs nm [<td <>td ()])))
+       (emit fs) (: nm (st 'cur) _ (row nm (gf-dflt nm)) r (secs nm)
+                    (pin secs nm [<r <>r (revcat fs <>>r)]))
+       (flush _) (: r (st 'run)
+                    (? (two? r) (: _ (pin st 'run ()) (emit (gas-text tgt (xa-join "\n" (rev r))))) 0))
+       (goto nm td) (: _ (row nm td) _ (pin st 'prev (st 'cur)) (pin st 'cur nm))
+       (raw bs) (? (two? bs) (emit [['raw bs]]) 0)
+       (num e) (gimm (gtoks e))
+       (dir mn rest)
+        (: xs (xa-oplist rest) w (gf-width tgt mn)
+           (? (0 < w) (raw (catmap (e \ gf-word tgt w e rl) xs))
+              (mn = ".ascii") (raw (catall (gf-strs rest)))
+              (elem mn '(".asciz" ".string")) (raw (catmap (b \ b + [0]) (gf-strs rest)))
+              (elem mn '(".zero" ".skip" ".space"))
+               (: f (? (two? >xs) (num <>xs) 0) (raw (map (i \ f & 255) ^(num <xs))))
+              (mn = ".balign") (emit [['align (num <xs)]])
+              (mn = ".p2align") (emit [['align (1 << num <xs)]])
+              (mn = ".align") (emit [['align (? (tgt = 'x64) (num <xs) (1 << num <xs))]])   ; bytes on x86, a power elsewhere
+              (elem mn '(".section" ".pushsection"))
+               (: d (gf-sect xs)
+                  _ (? (mn = ".pushsection") (pin st 'stk ([(st 'cur) (st 'prev)] . (st 'stk))) 0)
+                  (goto <d >d))
+              (mn = ".popsection")
+               (: s (st 'stk)
+                  _ (? (two? s) 0 (scare 'gas-popsection src))
+                  _ (pin st 'stk >s)
+                  _ (pin st 'cur <<s)
+                  (pin st 'prev <><s))
+              (mn = ".previous") (: c (st 'cur) _ (pin st 'cur (st 'prev)) (pin st 'prev c))
+              (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
+              (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
+              ; what a static link never reads: symbol types and sizes, visibility, unwind rows
+              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal") || xa-starts? mn ".cfi_") 0
+              (scare 'gas-directive mn)))
+       ; a leading `name:`'s colon, or -1
+       (labat s) (: n #s j ((: (g j) (? (j < n && gidc? (s j)) (g (j + 1)) j)) 0)
+                    (? (0 < j && j < n && s j = 58) j -1))
+       (line s0)
+        (: s (xa-trim s0)
+           (? (0 = #s) 0
+              (: c (labat s)
+                 (? (0 <= c)
+                    (: l (snip s 0 c)
+                       _ (flush 0)
+                       _ (? (xa-allof? l gdig? 0)
+                            (: n (gdecv l) k (1 + peep lc n 0) _ (pin lc n k)
+                               (emit [['label (glabel n k)]]))
+                            (: _ (pin labs l (st 'cur)) (emit [['label (name l)]])))
+                       (line (snip s (c + 1) #s)))
+                    (s 0 = 46) (: _ (flush 0) (dir (xa-mnem s) (xa-rest s)))
+                    (pin st 'run ((gf-lsub s rl) . (st 'run)))))))
+       hash? (elem tgt '(x64 rv64))
+       _ (foldl (\ _ ln (: _ (foldl (\ _ x (line x)) 0 (xa-lines (? hash? (xa-decomment ln) (gcut2 ln 47)))) 0))
+                0 (gsplit src 10))
+       _ (flush 0)
+       (sec nm) (: r (secs nm) [nm <r <>r (rev <>>r)])
+       (exec? l) (0 < (<>(secs (labs l)) & 4))
+       def (filter (l \ string? (labs l)) (rev (st 'globl)))
+       [(filter (r \ two? (r 3)) (map sec (rev (st 'order))))
+        (filter exec? def) (filter (l \ !(exec? l)) def)])
+
    ;; -- the front door: TEXT -> IR, by target. --
    (gas-text tgt src)
     (? (= tgt 'x64) (gx-text src)
