@@ -18,10 +18,12 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define PF_INET6  AF_INET6
 #define SOCK_STREAM 1
 #define SOCK_DGRAM  2
+#define SOCK_RAW    3
 #define SOCK_NONBLOCK 2048
 #define SOCK_CLOEXEC 524288
 #define SOL_SOCKET 1
 #define SO_REUSEADDR 2
+#define SO_TYPE 3
 #define SO_ERROR 4
 #define SO_KEEPALIVE 9
 #define SHUT_RD   0
