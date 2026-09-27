@@ -92,8 +92,8 @@ All of C89 passes. What remains is C99/C11/GNU.
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
 | computed goto | `&&label`, `goto *p` |
 | `typeof` of the object its own initializer declares | `int *p = (typeof(p))0;` — the name is not in scope until the declarator ends |
-| `__builtin_offsetof` over a runtime index | `__builtin_offsetof(struct S, n[i])` — gcc answers an expression in `i`, not a constant |
-| `__builtin_clzll` over a constant where a constant is owed | `unsigned w : 63 - __builtin_clzll(8);` — parse folds no builtin call |
+| `__attribute__((cleanup(f)))` | refused by name: it runs f at every exit from the scope, and skipped as decoration it dropped the call in silence (linux's `guard()` never unlocked) |
+| a builtin over constants where a constant is owed | `unsigned w : 63 - __builtin_clzll(8);`, `case __builtin_bswap16(0x0800):` — parse folds no builtin call |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
@@ -113,7 +113,9 @@ definitions, bitfields including compound assignment, flexible array members, va
 `frame_address`,
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
 arrays, statement expressions (`({ .. })`), `__auto_type`, named asm operands (`%[x]`),
-`asm inline`, `asm goto`, `x ?: y` (x read once), `typeof` over a qualified type-name, `case A ... B` and `[a ... b] =` ranges, a global register variable on the
+`asm inline`, `asm goto`, `x ?: y` (x read once), `typeof` over a qualified type-name,
+`__builtin_offsetof` over a runtime index (the address itself; a constant index before a
+member still folds), a variably modified object at file scope refused by name, `case A ... B` and `[a ... b] =` ranges, a global register variable on the
 stack pointer, `__typeof_unqual__`, an enumerator past the int word, a `_Static_assert` or a
 bare `;` standing as a struct member, an anonymous bitfield over a typedef or mid-list, brace elision in nested initialisers, pointer-to-array declarators, functions returning
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
@@ -816,15 +818,19 @@ every ninth by path: **3 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 122 | `__builtin_offsetof` over a runtime index (`container_of(.., node[idx])`) |
-| 8 | `typeof` of the object in its own initializer (`__get_unaligned_t`) |
-| 13 | top-level asm, which `EXPORT_SYMBOL` writes |
-| 12 | an x86 instruction holo does not encode (`pushf` in 10, `lcallw`, a `%fs` operand) |
-| 1 | `__builtin_clzll` over a constant in a bit-field width (`ilog2`) |
+| 143 | `__attribute__((cleanup))`, refused (`guard()`, `DEFINE_FREE`: nearly every header chain) |
+| 7 | `typeof` of the object in its own initializer (`__get_unaligned_t`, `container_of`) |
+| 3 | top-level asm, which `EXPORT_SYMBOL` writes |
+| 3 | an x86 instruction holo does not encode (`pushf`, `lcallw`, a `%fs` operand) |
 | 1 | `&&label` (computed goto: `_THIS_IP_`) |
 
-each row that lands moves the next up: `typeof(const T)` stopped 80 units and `x ?: y` 134
-before they read (142-syntax.c and 174-elvis.c hold them).
+past cleanup (read while the attribute was still skipped) the first stops were top-level asm
+(76), `pushf` (30), `__builtin_bswap16` over a constant in a case label (19),
+`typeof` of the object in its own initializer (18), `__builtin_clzll` in a bit-field width,
+a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, and gcc's `__attribute`
+spelling (1 each). each row that lands moves the next up: `typeof(const T)` stopped 80 units,
+`x ?: y` 134 and a runtime `__builtin_offsetof` 122 before they read (142-syntax.c,
+174-elvis.c and 175-offsetof.c hold them).
 **154 of the 160 units carry `asm goto`**, and every kernel template (jump labels,
 alternatives, the exception table) is written in assembler directives: `.pushsection`,
 `.long 1b - .`, `.skip` over label arithmetic, `%c0`. none of that is in gas.l's reach, so
