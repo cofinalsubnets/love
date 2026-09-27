@@ -150,6 +150,9 @@
                                            (u8 94 + u32 (ch 'rch) + sstr b)))
                           (go (i + n))))))
        (go 0))
+   ; a task of the session's own, trapped: an uncaught raise in a task ends the process, and
+   ; this one serves every other connection too
+   (sd-spawn f) (twirl (_ \ trap f 0 (\ a b (sd-log 0 ("session task failed: " + show a)))) 0)
    ; a port's output to the channel until it ends: await parks on the fd, so a pty master
    ; read never holds the process
    (sd-pump t ch p ext)
@@ -158,7 +161,7 @@
           (: _ (unsee p c) s (chug p) _ (sd-data t ch s ext) (sd-pump t ch p ext))))
    ; the output drained, then the status, eof and close
    (sd-finish t ch ports pid)
-    (: e (? (two? >ports) (twirl (_ \ sd-pump t ch (ports 1) 1) 0) ())
+    (: e (? (two? >ports) (sd-spawn (_ \ sd-pump t ch (ports 1) 1)) ())
        _ (sd-pump t ch <ports 0)
        _ (? (nil? e) 0 (catch e))
        st (wait pid)
@@ -185,14 +188,14 @@
                 (: m >r
                    _ (settty m (pt 1) (pt 2))
                    _ (pins ch 'pid <r 'in m 'tty 1)
-                   _ (twirl (_ \ sd-finish t ch [m] <r) 0)
+                   _ (sd-spawn (_ \ sd-finish t ch [m] <r))
                    1)))
           (: pi (pipe 0) po (pipe 0) pe (pipe 0)
              pid (spawnio argv <pi >po >pe [>pi <po <pe] -1 0)
              _ (close <pi) _ (close >po) _ (close >pe)
              (? !(charm? pid) (: _ (map close [>pi <po <pe]) ("cannot start " + <argv + " (" + show pid + ")"))
                 (: _ (pins ch 'pid pid 'in (fdopen >pi) 'tty 0)
-                   _ (twirl (_ \ sd-finish t ch [(fdopen <po) (fdopen <pe)] pid) 0)
+                   _ (sd-spawn (_ \ sd-finish t ch [(fdopen <po) (fdopen <pe)] pid))
                    1)))))
    (sd-open t c)
     (: kind (g-str c) rch (g-u32 c) rwin (g-u32 c) rmax (g-u32 c)

@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (189 tools, 196 names)
+## the inventory (190 tools, 197 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -99,7 +99,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
-| apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as) |
+| apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
 | apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (inle/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
@@ -632,7 +632,7 @@ ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` 
 apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
 1452 here, one datagram on a 1500-byte link.
 
-## ssh and sshd (apps/ssh/)
+## ssh, sshd and scp (apps/ssh/)
 
 One of everything, OpenSSH's first choices: curve25519-sha256 for the exchange, ssh-ed25519
 keys, chacha20-poly1305@openssh.com both ways, public-key authentication. The client came first
@@ -650,7 +650,15 @@ Each connection is a task, and it carries one session channel: the login shell, 
 under it with `-c`, on a pty when the client asks for one (`window-change` follows it) and on
 three pipes when not, so bytes pass clean and stderr stays apart. The exit status goes home.
 Refused: rekeying (OpenSSH asks after 1 GB; the connection ends there), port forwarding, agent
-forwarding, subsystems (so sftp, and OpenSSH 9's scp, which rides it), and passwords.
+forwarding, subsystems (so sftp, and OpenSSH 9's scp by default, which rides it), and passwords.
+
+`scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target` copies with rcp's
+protocol over an exec channel, the one OpenSSH's `scp -O` speaks: files, and with `-r` whole
+trees, one side `[user@]host:path` and the other local. A file's mode always travels; `-p`
+keeps its mtime too, which becomes its access time as well. The remote end is `scp -t` receiving or `scp -f`
+sending, whatever `scp` the remote shell finds, OpenSSH's or kore's; kore's answers both, so
+kore to kore, OpenSSH's `scp -O` to kore and kore to OpenSSH all work. A received name with a
+slash, or `.` or `..`, is refused. Two remote hosts, or none, are refused by name.
 
 ## ed and ex (apps/kore/ed.l)
 
@@ -741,9 +749,9 @@ over the packages above.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 202 | 392 | 239 | 201 | 108 | 261 |
+| names | 203 | 392 | 239 | 201 | 108 | 261 |
 | shared with kore | | 166 | 141 | 134 | 101 | 49 |
-| carried by no one else | 13 | 157 | 30 | 58 | 1 | 204 |
+| carried by no one else | 14 | 157 | 30 | 58 | 1 | 204 |
 
 What at least three of the other five carry and kore does not: `fmt`, `pr`, `uncompress`.
 
@@ -945,6 +953,7 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 | `rmdir` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `rmmod` |  | ✓ | ✓ |  |  |  |
 | `rtcwake` |  | ✓ | ✓ |  |  |  |
+| `scp` | ✓ |  |  |  |  |  |
 | `sed` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
 | `seq` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `setfattr` |  | ✓ | ✓ |  |  |  |

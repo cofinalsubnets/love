@@ -41,7 +41,7 @@
 ;   kore www [-w N] URL|FILE         a web page, its links numbered (apps/kore/www.l)
 ;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l); httpd, kiosko
 ;                                    under busybox's flags, nslookup, ping and ping6 beside it
-;   kore ssh|sshd ..                 the ssh client and server (apps/ssh/cli.l)
+;   kore ssh|sshd|scp ..             the ssh client and server, and scp over them (apps/ssh/cli.l)
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
 ;                                    one (apps/xz.l, inle/xz.c's LZMA2), bzip2|bunzip2|bzcat
 ;                                    (apps/bz2.l, inle/bz2.c); tar and cpio the
@@ -718,6 +718,7 @@
             'nm nm-main
             'nc (cite 'ain 'ain-main) 'ain (cite 'ain 'ain-main)   ; ain's wrap registered ahead in the cat
             'ssh (cite 'ssh-cli 'ssh-main) 'sshd (cite 'ssh-cli 'sshd-main)   ; apps/ssh, ahead in the cat
+            'scp (cite 'ssh-cli 'scp-main)
             'make (cite 'cook 'cook-main) 'cook (cite 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
@@ -830,6 +831,7 @@
     'nc "usage: nc HOST PORT  |  nc -l PORT"
     'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
     'sshd "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
+    'scp "usage: scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target"
     'ain "usage: ain HOST PORT  |  ain -l PORT"
     'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
@@ -1055,6 +1057,7 @@ every tool answers --help and --version, and -h where the letter is free
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
   nc HOST PORT       netcat; nc -l PORT listens
   ssh [user@]HOST    the ssh client; sshd [-p PORT] serves this user (apps/ssh)
+  scp SRC.. DEST     copies over ssh, [user@]host:path on one side (rcp's protocol)
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
   as TGT IN OUT      assemble IR forms from IN (x64|a64) into ELF OUT
   ar rcs OUT M..     the archive, GNU shape + ranlib index (ar t OUT lists)

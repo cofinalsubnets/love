@@ -4,7 +4,9 @@
 ; pty, and a read there holds the process, so a server beside it here would never run).
 ; exec with stderr and a status, stdin to its eof, a pty the client's terminal sizes, and the
 ; refusals: an unknown key, another user. where openssh's client is installed it logs in
-; too, which also holds our key files to what openssh will read.
+; too, which also holds our key files to what openssh will read. then scp both ways, the
+; server's PATH finding love as `scp`, so both ends of the protocol are ours; openssh's
+; scp -O against our remote end where it is installed.
 ;   cat test/00-init.l test/host/sshd.l | out/love
 (borrow 'posix)
 (borrow 'tls)
@@ -26,7 +28,12 @@
    _ (test ((ssh-authorized (dir + "/ak")) = [(id 1)]))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
    (has? t s) (0 <= ((cite 'kore 'wg-find) t s 0))
+   ; the server's sessions find love as scp: a link at the head of the PATH it inherits
+   _ (mkdir (dir + "/bin") 448) _ (symlink love (dir + "/bin/scp"))
+   path0 (getenv "PATH")
+   _ (setenv "PATH" (dir + "/bin:" + path0))
    srv (tether [love "kore" "sshd" "-p" (show port) "-h" (dir + "/host") "-o" ("AuthorizedKeysFile=" + dir + "/ak")])
+   _ (setenv "PATH" path0)
    _ (rest 400)                                    ; its listen, before our connects
    (ssh key args) (tether (love . "kore" . "ssh" . "-p" . show port . "-i" . (dir + "/" + key)
                                 . "-o" . "StrictHostKeyChecking=no" . args))
@@ -55,6 +62,29 @@
                         "-i" (dir + "/id") "-p" (show port) (user + "@127.0.0.1") "echo openssh-$((6*7)); exit 5"])
              t (slurp >r) st <(waitfor <r)
              (test (has? t "openssh-42") (st = 5)))
+        0)
+   ; scp: a file up keeping its mtime, a tree down, a missing file said
+   (put p s) (: q (open p "w") _ (say q s) (close q))
+   (got p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) s) ()))
+   blob (bytes 70000 (i \ (i * 7 + i // 256) & 255))
+   _ (map (d \ mkdir (dir + d) 448) ["/src" "/src/sub" "/up" "/down" "/o"])
+   _ (put (dir + "/src/f1") "hello\n") _ (put (dir + "/src/sub/blob") blob)
+   _ (utime (dir + "/src/f1") 981158400000)
+   (scp args) (: r (tether (love . "kore" . "scp" . "-P" . show port . "-i" . (dir + "/id")
+                             . "-o" . "StrictHostKeyChecking=no" . args))
+                 t (slurp >r) [t <(waitfor <r)])
+   far (user + "@127.0.0.1:")
+   s1 (scp ["-p" (dir + "/src/f1") (far + dir + "/up/")])
+   s2 (scp ["-r" (far + dir + "/src") (dir + "/down/")])
+   s3 (scp [(far + dir + "/src/nope") (dir + "/down/")])
+   _ (test (s1 1 = 0) ((got (dir + "/up/f1")) = "hello\n") (((stat (dir + "/up/f1")) 1) = 981158400000)
+           (s2 1 = 0) ((got (dir + "/down/src/f1")) = "hello\n") ((got (dir + "/down/src/sub/blob")) = blob)
+           (s3 1 = 1) (has? <s3 "nope"))
+   _ (? o (: r (tether ["scp" "-O" "-F" "/dev/null" "-o" "StrictHostKeyChecking=no" "-o" "UserKnownHostsFile=/dev/null"
+                        "-o" "IdentitiesOnly=yes" "-o" "BatchMode=yes" "-o" "LogLevel=ERROR"
+                        "-i" (dir + "/id") "-P" (show port) "-r" (dir + "/src") (far + dir + "/o/")])
+             _ (slurp >r) st <(waitfor <r)
+             (test (st = 0) ((got (dir + "/o/src/sub/blob")) = blob)))
         0)
    _ (still <srv 15)
    log (slurp >srv)
