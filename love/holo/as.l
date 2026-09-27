@@ -154,6 +154,7 @@
             'int3 '(204) 'ud2 '(15 11) 'pause '(243 144)
             'cpuid '(15 162) 'rdtsc '(15 49)
             'cli '(250) 'sti '(251)                  ; the interrupt flag
+            'pushf '(156) 'pushfq '(156) 'popf '(157) 'popfq '(157)   ; ... and the whole word, through the stack
             'clc '(248) 'stc '(249) 'cmc '(245)   ; ... the carry flag
             'cld '(252) 'std '(253)                  ; ... and the direction flag
             'lahf '(159) 'sahf '(158)

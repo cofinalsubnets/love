@@ -21,7 +21,7 @@ compares to busybox, toybox, GNU and uutils, name by name, is the census at the 
 
 ONE roster — `$(korefiles)` in the Makefile: kore_head (kore's own toolboxes, apps/libra/lint.l,
 apps/vi/, apps/tui.l, apps/dns.l, apps/ain.l, the lush files, apps/cook.l), the holo linker
-files, kore_arc (gz.l tar.l cpio.l) and kore_net (the tls stack, wget.l and www.l). The
+files, kore_arc (gz.l tar.l cpio.l) and kore_net (the tls stack, wget.l, www.l and net.l). The
 crew rides IN the default binary's own image, so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a four-line sh
 shim — re-evaling the cat per spawn costs ~1.3s, so only the distro, which has no image
@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (178 tools, 184 names)
+## the inventory (183 tools, 189 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -98,10 +98,11 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
-| apps/gz.l, apps/xz.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), tar, cpio |
+| apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (inle/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
+| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags) |
 | apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -589,6 +590,24 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
 utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
 
+## telnet and httpd (apps/kore/net.l)
+
+`telnet HOST [PORT]` is nc (apps/ain.l) with the telnet protocol's options answered
+(RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
+go-ahead itself, and refuses every other option either way. On a terminal it follows the
+server's echo. While the server echoes, the terminal is raw and each key is sent as typed
+(character mode). Otherwise the terminal's own line editing holds a line until return (line
+mode). A line ends CR LF on the wire, and `^]` closes the connection. When stdin is not a
+terminal, its lines are sent, and its end half-closes the connection so the server's
+answer can still arrive.
+
+`httpd [-fv] [-p PORT] [-h DIR]` is kiosko under busybox's name and flags: the port
+defaults to 80 and the directory to `.`, and `-v` logs each request. `-f` is accepted and
+always in force, because it never runs in the background. kiosko listens on every address,
+so `-p IP:PORT` with a specific address is refused rather than silently served more widely;
+`0.0.0.0:PORT` and `:PORT` are taken. Busybox's other flags (`-c -u -r -m -e -d -i`) are
+refused by name.
+
 ## not built
 
 Polish, as need arises: printf's `%a`, uniq -d/-u, cut -b, echo -e, seq over
@@ -638,9 +657,9 @@ packages above.
 
 | | kore | busybox | toybox | GNU | uutils |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| names | 189 | 392 | 239 | 201 | 108 |
-| shared with kore | | 157 | 136 | 133 | 101 |
-| carried by no one else | 10 | 162 | 33 | 58 | 1 |
+| names | 192 | 392 | 239 | 201 | 108 |
+| shared with kore | | 160 | 138 | 133 | 101 |
+| carried by no one else | 10 | 161 | 33 | 58 | 1 |
 
 What at least three of the other four carry and kore does not: `fmt`.
 
@@ -662,8 +681,9 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `blkdiscard` |  | ✓ | ✓ |  |  |
 | `blkid` |  | ✓ | ✓ |  |  |
 | `blockdev` |  | ✓ | ✓ |  |  |
-| `bunzip2` |  | ✓ | ✓ |  |  |
-| `bzcat` |  | ✓ | ✓ |  |  |
+| `bunzip2` | ✓ | ✓ | ✓ |  |  |
+| `bzcat` | ✓ | ✓ | ✓ |  |  |
+| `bzip2` | ✓ | ✓ |  |  |  |
 | `cal` | ✓ | ✓ | ✓ |  |  |
 | `cat` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `cc` | ✓ |  |  | ✓ |  |
@@ -917,8 +937,8 @@ What at least three of the other four carry and kore does not: `fmt`.
 
 The names only one carries:
 
-* **busybox alone** (162): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
-  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `bzip2` `chat` `chpasswd` `chpst` `crond`
+* **busybox alone** (161): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
+  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond`
   `crontab` `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap`
   `dumpleases` `ed` `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash`
   `fdflush` `fdformat` `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser`

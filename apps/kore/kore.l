@@ -38,8 +38,11 @@
 ;   kore html2text [-w N] [F..]      a page's prose, laid out (apps/kore/lens.l)
 ;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
 ;   kore www [-w N] URL|FILE         a web page, its links numbered (apps/kore/www.l)
+;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l); httpd, kiosko
+;                                    under busybox's flags, beside it
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
-;                                    one (apps/xz.l, inle/xz.c's LZMA2); tar and cpio the
+;                                    one (apps/xz.l, inle/xz.c's LZMA2), bzip2|bunzip2|bzcat
+;                                    (apps/bz2.l, inle/bz2.c); tar and cpio the
 ;   kore tar czf|xzf|tzf ARCHIVE      two containers over it (apps/tar.l, apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
@@ -60,6 +63,7 @@
 ; leaves deep through `die`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
+        telnet-main httpd-main tn-new tn-byte tn-send tn-echo?
         diff-main as-main ar-main ld-main nm-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
@@ -772,6 +776,7 @@
             'html2text html2text-main   ; a page's prose (apps/kore/lens.l), the same lens
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'www www-main               ; a page to read, its links followed (apps/kore/www.l)
+            'telnet telnet-main 'httpd httpd-main   ; a remote terminal, and kiosko (apps/kore/net.l)
             'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
             'nice nice-main 'renice renice-main 'stty stty-main 'truncate truncate-main
             'setsid setsid-main 'watch watch-main 'usleep usleep-main 'ts ts-main
@@ -792,6 +797,8 @@
             'xz (cite 'xzcmd 'xz-main) 'unxz (cite 'xzcmd 'unxz-main)
             'xzcat (cite 'xzcmd 'xzcat-main) 'unlzma (cite 'xzcmd 'unxz-main)
             'lzcat (cite 'xzcmd 'xzcat-main)
+            'bzip2 (cite 'bz2cmd 'bzip2-main) 'bunzip2 (cite 'bz2cmd 'bunzip2-main)
+            'bzcat (cite 'bz2cmd 'bzcat-main)
             'tar (cite 'tarcmd 'tar-main) 'cpio (cite 'cpiocmd 'cpio-main)
             ; the byte tools, the clock's other face, and the four one-liners
             'dd dd-main 'xxd xxd-main 'strings strings-main 'hexdump hexdump-main 'hd hd-main
@@ -977,6 +984,8 @@
     'html2text "usage: html2text [-w COLS] [FILE..]"
     'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
     'www "usage: www [-w COLS] URL|FILE"
+    'telnet "usage: telnet HOST [PORT]"
+    'httpd "usage: httpd [-fv] [-p PORT] [-h DIR]"
     'dd "usage: dd [if=F] [of=F] [bs=N] [count=N] [skip=N] [status=none]"
     'xxd "usage: xxd [-r] [FILE..]"
     'hexdump "usage: hexdump [-Cv] [-n LEN] [-s SKIP] [FILE..]"
@@ -996,7 +1005,8 @@
     'gunzip (cite 'gzcmd 'gzc-help)
     'zcat (cite 'gzcmd 'gzc-help)
     'xz (cite 'xzcmd 'xzc-help) 'unxz (cite 'xzcmd 'xzc-help) 'xzcat (cite 'xzcmd 'xzc-help)
-    'unlzma (cite 'xzcmd 'xzc-help) 'lzcat (cite 'xzcmd 'xzc-help)}
+    'unlzma (cite 'xzcmd 'xzc-help) 'lzcat (cite 'xzcmd 'xzc-help)
+    'bzip2 (cite 'bz2cmd 'bzc-help) 'bunzip2 (cite 'bz2cmd 'bzc-help) 'bzcat (cite 'bz2cmd 'bzc-help)}
 
    ; echo, test and [ read no options at all -- posix says so, and a script writing
    ; `echo --help` means the word. cook and lush answer the flags themselves, each
@@ -1005,7 +1015,7 @@
    ; -v is never the door's: gnu gives --version no short spelling, and the letter is the
    ; tool's wherever it wants one (cpio -v names members, grep -v inverts, nl -v numbers).
    ; -h is the door's where it is free -- these spell it themselves, or posix and gnu do.
-   korenoh '(grep du df ls sort touch chown ln free readelf pinky)
+   korenoh '(grep du df ls sort touch chown ln free readelf pinky httpd)
    ; the tools that read no options at all, and the few dash words the two of them
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
@@ -1088,6 +1098,8 @@ every tool answers --help and --version, and -h where the letter is free
   html2text [-w COLS] [F..]               a page's prose, laid out (apps/kore/lens.l)
   markdown [-t html|roff|text] [F..]      markdown laid out the other way
   www [-w COLS] URL|FILE                  a web page, its links numbered (apps/kore/www.l)
+  telnet HOST [PORT]                      a remote terminal; ^] closes (apps/kore/net.l)
+  httpd [-fv] [-p PORT] [-h DIR]          kiosko under busybox's flags (apps/kore/net.l)
   sh [-c CMD | FILE]                      the shell, lush (apps/lush.l)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (apps/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
@@ -1102,7 +1114,8 @@ every tool answers --help and --version, and -h where the letter is free
   echo seq yes true false basename dirname     ... and the trivia
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (apps/xz.l)
-  tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive (apps/tar.l)
+  bzip2 | bunzip2 | bzcat [-cdfkqtvz1-9]       the block-sorting one (apps/bz2.l)
+  tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive, j for bzip2 (apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
   xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs
