@@ -89,7 +89,6 @@
 
    ; -- writing a number ------------------------------------------------------
    bc-figs "0123456789ABCDEF"
-   (bc-zpad k t) (? (#t < k) (bc-zpad k ("0" + t)) t)
    (bc-padl k ds) (? (#ds < k) (bc-padl k (0 . ds)) ds)
    ; a fraction of scale s owes the least k with base^k >= 10^s digits -- asked
    ; in whole numbers, never through a log, so no float rounding can shift it
@@ -110,7 +109,7 @@
        (go m first)
         (? !(two? m) (slurp o)
            (: _ (? wide (: _ (? (first && !lead) 0 (put o 32))
-                           (say o (bc-zpad w (show <m))))
+                           (say o (zpad w (show <m))))
                    (put o (bc-figs <m)))
               (go >m 0)))
        (go ds 1))
@@ -888,7 +887,7 @@ define j(n, x) {
                         (: _ (? (c = 115) (: r (dc-args st 1 0) (? (two? r) (: m (dc-reg st rc) (pin (st 'reg) rc (<<>r . (? (two? m) >m ())))) 0))
                                 (c = 83) (: r (dc-args st 1 0) (? (two? r) (pin (st 'reg) rc (<<>r . dc-reg st rc)) 0))
                                 (c = 108) (: m (dc-reg st rc) (dc-push st (? (two? m) <m bn-zero)))
-                                (c = 76) (: m (dc-reg st rc) (? (two? m) (: _ (pin (st 'reg) rc >m) (dc-push st <m)) (dc-err st ("stack register '" + string rc + "' (0" + uradix rc 8 + ") is empty"))))
+                                (c = 76) (: m (dc-reg st rc) (? (two? m) (: _ (pin (st 'reg) rc >m) (dc-push st <m)) (dc-err st ("stack register '" + string rc + "' (0" + radix rc 8 + ") is empty"))))
                                 (c = 58) (: r (dc-args st 2 0)
                                             (? !(two? r) 0
                                                (: ix <<>r v <>(<>r)
@@ -919,7 +918,7 @@ define j(n, x) {
                                       (out1 (m - 1))))))
                  (c = 63) (: l (urd-line (st 'rd))
                              (? (two? l) (: u (dc-run st <l) (? (0 < u) (out1 (u - 1)) (go (i + 1)))) (go (i + 1))))
-                 (: _ (dc-err st ("'" + string c + "' (0" + uradix c 8 + ") unimplemented")) (go (i + 1))))))
+                 (: _ (dc-err st ("'" + string c + "' (0" + radix c 8 + ") unimplemented")) (go (i + 1))))))
        (go 0))
    (dc-main as)
     (: st (dc-state 0)

@@ -281,20 +281,13 @@
    ; so a word that is not wholly a number is said on err, printed as far as it went,
    ; and the status left 1. the format is reused while arguments remain. \c ends it all.
    ; no %a: a hex float is the one conversion nothing here spells.
-   (pf-hexd c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) -1)
-   (pf-utf8 v)
-    (? (v < 128) (string v)
-       (v < 2048) (string (192 | (v >> 6)) + string (128 | (v & 63)))
-       (v < 65536) (string (224 | (v >> 12)) + string (128 | ((v >> 6) & 63)) + string (128 | (v & 63)))
-       (string (240 | (v >> 18)) + string (128 | ((v >> 12) & 63)) + string (128 | ((v >> 6) & 63))
-        + string (128 | (v & 63))))
    (pf-die m) (: _ (flush out) (udie 1 ("printf: " + m)))
    ; the escape whose letter is at s k -> (text next) | 'stop for \c. %b's octal may lead
    ; with a 0 (\0NNN); the format's is \NNN alone
    (pf-esc s k b?)
     (: n #s c (s k)
        (dig j lim base acc cnt)
-        (: d (? (j < n) (pf-hexd (s j)) -1)
+        (: d (? (j < n) (hexv (s j)) -1)
            (? (cnt < lim && 0 <= d && d < base) (dig (j + 1) lim base (acc * base + d) (cnt + 1))
               [acc j cnt]))
        (? (c = 99) 'stop
@@ -305,7 +298,7 @@
               (? (<>>r = 0) (pf-die "missing hexadecimal number in escape") [(string <r) <>r]))
           (c = 117 || c = 85)
            (: r (dig (k + 1) (? (c = 117) 4 8) 16 0 0)
-              (? (<>>r = 0) (pf-die "missing hexadecimal number in escape") [(pf-utf8 <r) <>r]))
+              (? (<>>r = 0) (pf-die "missing hexadecimal number in escape") [(utf8 <r) <>r]))
           (: m (c @ 34 34 92 92 97 7 98 8 101 27 102 12 110 10 114 13 116 9 118 11 -1)
              (? (m < 0) [("\\" + string c) (k + 1)] [(string m) (k + 1)]))))
    ; %b's argument, its escapes laid -> (text stop?)
@@ -331,10 +324,10 @@
              a (sp 0)
              neg (a < n && w a = 45)
              b (? (a < n && (w a = 45 || w a = 43)) (a + 1) a)
-             hx (b + 2 < n && w b = 48 && (w (b + 1) = 120 || w (b + 1) = 88) && 0 <= pf-hexd (w (b + 2)))
+             hx (b + 2 < n && w b = 48 && (w (b + 1) = 120 || w (b + 1) = 88) && 0 <= hexv (w (b + 2)))
              base (? hx 16 (b < n && w b = 48) 8 10)
              s0 (? hx (b + 2) b)
-             (go j acc) (: d (? (j < n) (pf-hexd (w j)) -1)
+             (go j acc) (: d (? (j < n) (hexv (w j)) -1)
                            (? (0 <= d && d < base) (go (j + 1) (acc * base + d)) [acc j]))
              r (go s0 0)
              v0 <r e <>r
@@ -365,7 +358,7 @@
    ; 0x h.h p e: the mantissa's digits, then the binary exponent
    (pf-hexflt st w b neg)
     (: n #w
-       (dg j acc sc dot) (: d (? (j < n) (pf-hexd (w j)) -1)
+       (dg j acc sc dot) (: d (? (j < n) (hexv (w j)) -1)
                             (? (0 <= d) (dg (j + 1) (acc * 16 + d) (? dot (sc * 16) sc) dot)
                                (j < n && w j = 46 && !dot) (dg (j + 1) acc sc 1)
                                [acc sc j]))
@@ -399,7 +392,7 @@
                  (go 0 "'")))
           ; a run of odd bytes leaves the quote for one $'..' of escapes
           (: (esc c) (c @ 10 "\\n" 9 "\\t" 13 "\\r" 27 "\\E" 7 "\\a" 8 "\\b" 12 "\\f" 11 "\\v"
-                        ("\\" + uzpad 3 (uradix c 8)))
+                        ("\\" + zpad 3 (radix c 8)))
              (go k acc md)               ; md 1 inside '..', 2 inside $'..'
               (? (n <= k) (acc + "'")
                  (odd? (s k)) (go (k + 1) (acc + (? (md = 1) "'$'" "") + esc (s k)) 2)

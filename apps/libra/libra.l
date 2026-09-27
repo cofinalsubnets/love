@@ -37,7 +37,6 @@
    (warnline path w) (path + ":" + show <w + ":" + show <>w + ": " + <>>w + "\n")
 
    ; --- the verbs ------------------------------------------------------------
-   (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))
 
    ; balance alone fails. the other rules speak -- an editing aid, read by hand --
    ; and nothing promotes one, so libra never refuses a file over a habit.
@@ -46,7 +45,7 @@
 
    (libra-check-files conf fs bad)
     (? !(two? fs) bad
-       (: r (rdf <fs)
+       (: r (uread <fs)
           (? !(two? r) (: _ (say err ("libra: cannot open " + <fs + "\n"))
                            (libra-check-files conf >fs (bad + 1)))
              (: src <>r
@@ -144,7 +143,7 @@
    ; .l and pays for whatever this file names.
    (libra-doc-files fs surf bad)
     (? !(two? fs) bad
-       (: r (rdf <fs)
+       (: r (uread <fs)
           (? !(two? r) (: _ (say err ("libra: cannot open " + <fs + "\n"))
                            (libra-doc-files >fs surf (bad + 1)))
              (: body (ldoc-md <>r)

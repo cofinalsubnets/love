@@ -93,9 +93,7 @@
  ; every name. an argument that is neither is said on stderr, and the answer is 1
  (x11-main as)
   (: tty? (two? (tty 1))
-     (digits? n) (0 < #n && all (i \ 47 < n i && n i < 58) ^#n)
-     (num n) (foldl (\ a i (10 * a + (n i - 48))) 0 ^#n)
-     (row n) (: h (x11 n) c (digits? n ? (num n) ())
+     (row n) (: h (x11 n) c (unum n)
                 (? (string? h) (: q (x11-rgb n) [n h (show (q 0)) (show (q 1)) (show (q 2)) (show (x11-256 n))])
                    (two? (x11-pen c)) (: q (x11-pen c) [("~" + x11-near c) (x11-pen-hex c) (show (q 0)) (show (q 1)) (show (q 2)) n])
                    ()))
