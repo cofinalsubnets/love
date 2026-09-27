@@ -398,6 +398,25 @@ t \\- a thing
            ls (lines (flush (ttyshow d 40)))
            (test !(elem "     .." ls) !(elem "     .. .." ls)
                    (elem "     kept by nroff t - a thing" ls)))
+      ; the browser's view: every link with a url is [n] in reading order, through every
+      ; block that holds an inl, and n picks its url; an anchor is its text and no number
+      _ (: d (htread "<h2>see <a href=\"/h\">head</a></h2><p>a <a href=\"x/1\">one</a> and <em><a href=\"#f\">two <b>b</b></a></em>, <a name=\"n\">anchor</a></p><ul><li><a href=\"u3\">three</a></li></ul><blockquote><p><a href=\"q4\">four</a></p></blockquote><dl><dt><a href=\"d5\">term</a></dt><dd><a href=\"d6\">def</a></dd></dl><table><tr><th><a href=\"t7\">h</a></th></tr><tr><td><a href=\"t8\">c</a></td></tr></table>")
+           r (ttlinks d)
+           p (ttpage d 60)
+           ls (lines (flush <p))
+           (test (<>r = ["/h" "x/1" "#f" "u3" "q4" "d5" "d6" "t7" "t8"])
+                 (<r = '((head 2 ((text "see [1]head")))
+                         (para ((text "a [2]one and ") (em ((text "[3]two ") (strong ((text "b")))))
+                                (text ", ") (link ((text "anchor")) ())))
+                         (bullets (((text "[4]three"))))
+                         (quote ((para ((text "[5]four")))))
+                         (deflist ((((text "[6]term")) ((text "[7]def")))))
+                         (table (n) (((text "[8]h"))) ((((text "[9]c")))))))
+                 (<>p = <>r)
+                 (elem "     a [2]one and [3]two b, anchor" ls)
+                 (<p = ttyshow <r 60)
+                 ; a page with no links answers none, and the doc unchanged
+                 (ttlinks (mdread "a *b* `c`\n") = [(mdread "a *b* `c`\n") ()])))
       0)
 
  _ (test_fin ())

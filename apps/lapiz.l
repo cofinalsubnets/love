@@ -44,6 +44,9 @@
 ; nothing -- there is no ttread to be the other half of the pair, so there is no lens to
 ; state. what it owes instead is stated in test/host/lapiz.l: every heading the markdown has
 ; is still a heading after roff and the shower, and no line overruns the width.
+; a link shows its <url> after its text, as man wants; a browser wants numbers instead, and
+; `ttlinks` rewrites a doc so each link reads [n] and hands back the urls by n (`ttpage`
+; is the two together).
 ;
 ; --- the roff domain ---
 ; man macros are a smaller surface. law 1 holds on man-page-shaped docs: meta, head 1-2,
@@ -60,8 +63,9 @@
 ;
 ; a consumer says (borrow 'lapiz), or hands the loader this file's path, and reads bare down
 ; the splice or reaches one member by accessor: (cite 'lapiz 'md->ht). the faces are the six
-; surface pairs, plus rf->tty/md->tty and ttyshow beside them. the head below names the
-; exports and nothing else: unwrapped, lapiz puts all ~163 of its names on the session.
+; surface pairs, plus rf->tty/md->tty, ttyshow and ttlinks/ttpage beside them. the head
+; below names the exports and nothing else: unwrapped, lapiz puts all ~163 of its names on
+; the session.
 
 ; no brackets here: the runtime supplies the layer. a consumer says (borrow 'lapiz)
 ; (the baked module) or hands the loader this file's path ((borrow "apps/lapiz.l")
@@ -74,7 +78,7 @@
 ; the head names the exports: the ten faces, plus the four pieces papel's template
 ; reaches through the accessor. everything else is machinery and stays off the
 ; tablet -- catted, an unwrapped lapiz put all ~163 of its names on the session.
-(module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow
+(module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow ttlinks ttpage
          md->ht ht->md md->rf rf->md rf->tty md->tty ht->tty convert  htb hti hq mget)
 
 ; the combinators (love/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
@@ -987,6 +991,39 @@
           (? (one? h) r (one? r) h
              (= <(<d) 'head) (h + r)
              (h + [""] + r))))
+   ; a stateful map: f answers [y acc], threaded left to right
+   (tlmap f l acc)
+    (one? l ? [() acc]
+     (: r (f <l acc) s (tlmap f >l (r 1)) [(<r . <s) (s 1)]))
+   ; an inl -> [inl acc]: a link with a url becomes [n] and its text, acc the urls newest
+   ; first, so n is #acc. an anchor keeps its node -- no url, nothing to number
+   (tlgo l acc)
+    (one? l ? [() acc]
+     (: x <l
+        r (<x @ 'link   (#(x 2) ? (: a ((x 2) . acc) i (tlspans <>x a)
+                                     [(['text ("[" + show #a + "]")] . <i) (i 1)])
+                                  (: i (tlspans <>x acc) [[['link <i (x 2)]] (i 1)]))
+                 'em     (: i (tlspans <>x acc) [[['em <i]] (i 1)])
+                 'strong (: i (tlspans <>x acc) [[['strong <i]] (i 1)])
+                 [[x] acc])
+        s (tlgo >l (r 1))
+        [(<r + <s) (s 1)]))
+   (tlspans l acc) (: r (tlgo l acc) [(mrg <r) (r 1)])     ; the marker joins its text: normal
+   (tldef p acc) (: t (tlspans <p acc) b (tlspans <>p (t 1)) [[<t <b] (b 1)])
+   (tlblk x acc)
+    (<x @ 'head    (: i (tlspans (x 2) acc) [['head <>x <i] (i 1)])
+          'para    (: i (tlspans <>x acc) [['para <i] (i 1)])
+          'quote   (: d (tlmap tlblk <>x acc) [['quote <d] (d 1)])
+          'bullets (: r (tlmap tlspans <>x acc) [['bullets <r] (r 1)])
+          'numbers (: r (tlmap tlspans <>x acc) [['numbers <r] (r 1)])
+          'deflist (: r (tlmap tldef <>x acc) [['deflist <r] (r 1)])
+          'table   (: h (tlmap tlspans (x 2) acc) r (tlmap (tlmap tlspans) (x 3) (h 1))
+                      [['table <>x <h <r] (r 1)])
+          [x acc])
+   ; a doc -> [doc urls]: the links numbered in reading order, urls 1-based by that number.
+   ; a browser shows the doc and follows (urls (n - 1)); man keeps ttyshow's <url>
+   (ttlinks d) (: r (tlmap tlblk d ()) [<r (rev (r 1))])
+   (ttpage d w) (: r (ttlinks d) [(ttyshow <r w) (r 1)])
    (ttyshow d w) (catmap (ln \ ln + "\n") (ttdoc d (w < 20 ? 20 w) 5))
    (rf->tty s w) (ttyshow (rfread s) w)
    (md->tty s w) (ttyshow (mdread s) w)
