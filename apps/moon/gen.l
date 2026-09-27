@@ -1018,6 +1018,8 @@
                                               _ (? rA (rfree g rA) ()) _ (? rB (rfree g rB) ())
                                               (mkv rt 'r0 fs)))))))))))))))
    (cbranch g env e cc lbl)
+    (: k (cfold !(t32? g) e)                      ; a constant test is a jmp or nothing: do { } while (0)
+     (? (cint? k) (? ((k != 0) = (cc = 'ne)) [['jmp lbl]] ())
     (e @
        ('un 'not x)
         (cbranch g env x (cc @ 'eq 'ne 'eq) lbl)
@@ -1195,7 +1197,7 @@
                   (vfs c + '((or r0 r0 r2) (cmp r0 0)) + [['br cc lbl]])
                  (: fs (vfs c + [['cmp (vreg c) 0] ['br cc lbl]])
                     _ (rfree g (vreg c))
-                    fs))))))
+                    fs))))))))
    ; n little-endian bytes of a constant (the global initializer image)
    (les n v) (: (go i acc) (? (n <= i) (rev acc)
                               (go (i + 1) (((v >> (8 * i)) & 255) . acc)))
@@ -4097,6 +4099,34 @@
                      (: (mend w i) (? (i = k) (['jmpr X] . jr0 g >w)
                                       (<w . mend >w (i + 1)))
                         (mend >fs 0)))))))
+   ; the dispatch's load and its indirect jump fuse: (ld X b o) .. (jmpr X) -> .. (jmpm b o), x64's
+   ; jmp *o(b). last of all, past every analysis. the load sinks past moves, loads, pops and
+   ; bumps that leave X alone and b too, but for b's own add, which the offset absorbs. never off
+   ; sp or fp: a frame popped between would leave the slot under sp. X is no argument register
+   (jmpm g fs)
+    (? !(x64? g) fs
+       (: ar (argr g)
+          (sink X b o l acc n)                        ; -> [forms-between o' rest] | ()
+           (? (!(two? l) || 8 < n) ()
+              (: f <l
+                 (? !(two? f) ()
+                    (<f = 'jmpr) (<>f = X && fits32? o ? [(rev acc) o >l])
+                    !(elem <f '(mov ld add sub pop li lea)) ()
+                    (: rd (rdsp g f)
+                       (? (rd = 'bar || elem X <rd || elem X <>rd) ()
+                          !(elem b <>rd) (sink X b o >l (f . acc) (n + 1))
+                          (charm? (f 3) && f 1 = b && f 2 = b)
+                           (<f @ 'add (sink X b (o - f 3) >l (f . acc) (n + 1))
+                                 'sub (sink X b (o + f 3) >l (f . acc) (n + 1))
+                                 ())
+                          ())))))
+          (go l) (? !(two? l) l
+                    (: f <l
+                       k (? (two? f && <f = 'ld && charm? (f 3) && nelem (f 2) '(sp r4) && nelem (f 1) ar)
+                            (sink (f 1) (f 2) (f 3) >l () 0))
+                       (? (two? k) (<k + (['jmpm (f 2) (k 1)] . go (k 2)))
+                          (f . go >l))))
+          (go fs)))
    (unhome g fs)
     (: ar (argr g) hr (hregs g)
        (pears l n acc)                                ; the leading (mov H A) movs -> ((H A)..)
@@ -5027,6 +5057,19 @@
        (next wl) (? !(two? wl) 1
                   (: w <wl (seen w ? (next >wl) (pin seen w 1, go (lab all w) >wl))))
        (go fs0 ()))
+
+   ; two constant adds onto one register fold to one: (add d a k1)(add d d k2) -> (add d a k1+k2).
+   ; Have's Hp + n + floor is the shape. x64, whose add immediate is any le32
+   (addk g fs)
+    (? !(x64? g) fs
+       (: (go l) (? !(two? l) l
+                    (: f <l nx (two? >l ? <>l)
+                       (? (two? f && <f = 'add && two? nx && <nx = 'add &&
+                           charm? (f 3) && charm? (nx 3) && nx 1 == f 1 && nx 2 == f 1 &&
+                           fits32? (f 3 + nx 3))
+                          (go (['add (f 1) (f 2) (f 3 + nx 3)] . >>l))
+                          (f . go >l))))
+          (go fs)))
 
    ; cmp load-op fusion: (ld X b o)(cmp X y) -> (cmpm b o y), (cmp r X) -> (cmprm r b o) when X
    ; dies beyond. after addrfold; x64 and full-word only (a narrow cmp's flags shift with the extension)
@@ -7330,6 +7373,7 @@
                         (deaddef g      ; rerun: the widened addrfold strands live-dest addr insns
                         (cmpfuse g
                         (addrfold g
+                        (addk g
                         (rezx g         ; after stld: the forward mints zx, this drops the redundant
                         (copyprop g
                         (stld g
@@ -7341,7 +7385,7 @@
                           (vrfix g
                           ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp frame] sav3] +
                            g 'cssv + <sp0 +
-                           body + '((li r0 0)) + peep g 'epi epi)))))))))))))))))))))
+                           body + '((li r0 0)) + peep g 'epi epi))))))))))))))))))))))
        ; an r4 arrival (a64's 5th gp) is never ridden: gen spells the frame base r4 and a4ize retargets
        ; it to fp by position, so a ridden r4 in a base slot would turn into fp
        (a4rider? A) (fbase g !== 'r4 && A == 'r4)
@@ -7619,7 +7663,7 @@
                      (cfoldir g irx))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))
+       (? (bad? irf) irf (dp 'final (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_

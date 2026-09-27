@@ -115,7 +115,7 @@
                           (op = 'br) (: j (peep lt <>>f -1) (? (j < 0) nx (j . nx)))
                           ; a table jump names its targets, so the graph keeps the edges
                           (op = 'jmpt) (filter (\ j (0 <= j)) (map (\ L (peep lt L -1)) (f 3)))
-                          (elem op '(ret jmpr ud2)) ()
+                          (elem op '(ret jmpr jmpm ud2)) ()
                           nx)))
               _ (pin t i ss)
               (go >l (i + 1))))
@@ -154,7 +154,7 @@
              (0 < sw) ((vbase? <>f && charm? <>>f) ? [() (vbytes <>f (c + <>>f) sw) 0] [() () 1])
              (0 < iw) ((vbase? <>f && charm? <>>f) ? [() (vbytes <>f (c + <>>f) iw) 0] [() () 1])
              (elem op '(stsd stss)) ((vbase? <>f && charm? <>>f) ? [() (vbytes <>f (c + <>>f) 8) 0] [() () 1])
-             (elem op '(cmpm cmprm call callr sys raw jmpr)) [() () 1]
+             (elem op '(cmpm cmprm call callr sys raw jmpr jmpm)) [() () 1]
              (op = 'jmp) ((0 <= peep lt <>f -1) ? [() () 0] [() () 1])
              (vpure? op) [() () 0]
              [() () 1])))
@@ -177,7 +177,7 @@
        (sweep chg i)
         (? (i < 0) chg
            (: f (peep bt i ())
-              o0 (? ((two? f && elem <f '(ret jmpr sys ud2)) && escn) 'all ())
+              o0 (? ((two? f && elem <f '(ret jmpr jmpm sys ud2)) && escn) 'all ())
               ou (out (peep succ i ()) o0)
               rw (peep rwt i ())
               nin (? ((0 < <>>rw) || vall? ou) 'all (vun (vsans ou <>rw) <rw))
