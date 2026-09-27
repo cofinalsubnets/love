@@ -9,7 +9,7 @@
 # say, and the charms must be exactly those. nothing else in test/kore/ can catch this:
 # a regression to `quit` still passes every other subject.
 LOVE_NO_IMAGE= "$m" -e '(: _ (borrow (name "kore")) a (kore-main (list "kore" "false"))
-                                    b (kore-main (list "kore" "basename"))
+                                    b (kore-main (list "kore" "test" "(" "x"))
                                     c (kore-main (list "kore" "true"))
                                     d (kore-main (list "kore" "echo" "alive"))
                                     _ (say out (show a + " " + show b + " " + show c + " " + show d + "\n"))
