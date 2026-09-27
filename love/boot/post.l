@@ -1619,6 +1619,7 @@
 ; i as (1 start end spans), spans an ([idx start end]..) with the newest pin of each group
 ; first -- (..)*'s \1 is the last iteration, like GNU; read it with assoc.
 (module 're
+(borrow 'text)
 (:
    ; -- the twelve POSIX [:name:] classes, each written once as its ranges --
    cnames '(("alnum" (48 57) (65 90) (97 122))  ("alpha" (65 90) (97 122))
@@ -1635,17 +1636,17 @@
        (p j = 58 && p (j + 1) = 93) [1 j]
        (recend p n (j + 1)))
    ; a class body at i (past [ and any ^): `first` keeps a leading ] literal.
-   ; answers (items j) | (), items an ([lo hi]..). one scanner, both dialects --
-   ; POSIX spells the bracket expression the same in BRE and ERE
-   (recitems p n i first acc) (n > i ? (: c (p i)
+   ; answers (items j) | (), items an ([lo hi]..) of code points. one scanner, both
+   ; dialects -- POSIX spells the bracket expression the same in BRE and ERE
+   (recitems p n i first acc) (n > i ? (: c (cpat p i) j (cpnext p i)
     (? (c = 93 && !first) [acc (i + 1)]
        (c = 91 && i + 1 < n && p (i + 1) = 58)
         (recend p n (i + 2) @ [_ e]
           (assoc (snip p (i + 2) e) cnames @
            (_ . rs) (recitems p n (e + 2) 0 (cat rs acc))))
-       (i + 2 < n && p (i + 1) = 45 && p (i + 2) != 93)
-        (recitems p n (i + 3) 0 ([c (p (i + 2))] . acc))
-       (recitems p n (i + 1) 0 ([c c] . acc)))))
+       (j + 1 < n && p j = 45 && p (j + 1) != 93)
+        (recitems p n (cpnext p (j + 1)) 0 ([c (cpat p (j + 1))] . acc))
+       (recitems p n j 0 ([c c] . acc)))))
 
    ; -- the parser, both dialects: pattern text -> (1 nodes ngroups) | () --
    (reparse p ere?)
@@ -1657,6 +1658,9 @@
        ; BRE arm whenever ERE's own test fails, and `\(` is a literal paren in ERE
        (esc? i ch) (ere? ? (i < n && p i = ch) (i + 1 < n && p i = 92 && p (i + 1) = ch))
        (dig? c) (48 <= c <= 57)
+       ; the literal at i and its width: a character past ascii is one class of itself,
+       ; so a repeat after it takes the whole character and not its last byte
+       (lit i) (: m (cpn p i) c (cpat p i) (? (1 < m) [['cls 0 [[c c]]] m] [['chr (p i)] 1]))
        (rnum i v got) (? (i < n && dig? (p i)) (rnum (i + 1) (v * 10 + p i - 48) 1) got [1 v i])
        ; the interval body at i (past the opening brace) -> (lo hi j) | (), j past
        ; the close. {n} is (n n), {n,} unbounded, {n,m} both ends
@@ -1727,8 +1731,8 @@
                   (n <= i + 1 ? ()
                      (: d (p (i + 1))
                         (49 <= d <= 57 ? () ; backrefs: refused, both dialects
-                           (pseq (i + 2) (['chr d] . acc) lvl gi))))
-                 (pseq (i + 1) (['chr c] . acc) lvl gi))))
+                           (lit (i + 1) @ [nd w] (pseq (i + 1 + w) (nd . acc) lvl gi)))))
+                 (lit i @ [nd w] (pseq (i + w) (nd . acc) lvl gi)))))
        ; the alternation above the sequence: branches joined by the bar, kept flat
        ; in one ['alt ..] node so a three-way reads as three branches
        (palt i lvl gi)
@@ -1774,14 +1778,13 @@
    ; does charm c sit in a class of these ranges, negated or not?
    (rcls neg rs c)
     (: hit (any (\ [lo hi] (lo <= c <= hi)) rs) (? neg !hit hit))
-   ; the class as a 256-wide membership table: a range walk per charm was the whole
-   ; cost of [a-z], and the table is one native string index
+   ; the class as a 256-wide table, one native string index: a range walk per charm was the
+   ; whole cost of [a-z]. past ascii it can only say a lead byte might open a member
    (recls neg rs)
     (: o (jug 0)
        (go c) (? (255 < c) (slurp o)
-                 (put o (? (rcls neg rs c) 1 0), go (c + 1)))
-       tbl (go 0)
-       (\ c (? (c <= 255) (tbl c) (rcls neg rs c))))
+                 (put o (? (c < 128) (? (rcls neg rs c) 1 0) (194 <= c <= 244) 1 0), go (c + 1)))
+       (go 0))
    ; the program a caller holds: the matcher, whether the pattern can only match at 0, and a
    ; skipper -- the walk's way of reaching the next position that could start a match instead
    ; of asking the matcher about every one
@@ -1811,10 +1814,12 @@
           0)
    ; the charm a match must open with, or (). only ever answered for a first node that has to
    ; consume one -- a repeat that can take nothing answers (), so the skip never steps over a
-   ; match. nil? is zero?, so a NUL needle reads as absent and simply declines the skip
+   ; match. nil? is zero?, so a NUL needle reads as absent and simply declines the skip. a
+   ; character past ascii opens with its lead byte, which no tail byte can be
    (refirst ns)
     (ns @ (nd . _) (nd @
      ['chr c]       c
+     ['cls 0 [[c d]]] (127 < c && c = d && utf8 c 0)
      ['grp _ sub]   (refirst sub)
      ['rep a lo hi] (0 < lo && refirst [a])
      ['alt brs]     (: cs (map refirst brs) k <cs
@@ -1830,9 +1835,13 @@
              ['alt brs]   (all reanch brs)))
    (renode nd tail)
     (nd @ ['chr c]      (\ s i sp k (i < #s && s i = c ? (tail s (i + 1) sp k)))
-          ['any]        (\ s i sp k (i < #s && tail s (i + 1) sp k))
-          ['cls neg rs] (: p (recls neg rs)
-                           (\ s i sp k (i < #s && p (s i) ? (tail s (i + 1) sp k))))
+          ; `.` and a class each take a character, and never a byte no character wears.
+          ; ascii stays one compare, with the decode off in rewide
+          ['any]        (\ s i sp k (i < #s && (s i < 128 ? (tail s (i + 1) sp k)
+                                                  (rewide (\ c 1) s i sp k tail))))
+          ['cls neg rs] (: t (recls neg rs) p (rcls neg rs)
+                           (\ s i sp k (i < #s && t (s i) ? (s i < 128 ? (tail s (i + 1) sp k)
+                                                               (rewide p s i sp k tail)))))
           ['bol]        (\ s i sp k (i = 0 && tail s i sp k))
           ['eol]        (\ s i sp k (i = #s && tail s i sp k))
           ['grp gi sub] (: b (recompm sub)
@@ -1856,6 +1865,8 @@
                                               _ (pin b 0 (relimit ()))
                                               (rrepb b ab lo hi tail s i sp k 0)))
                                (\ s i sp k (rrepc ab lo hi tail s i sp k 0)))))
+   ; the character past ascii at i, if p takes its code point
+   (rewide p s i sp k tail) (: m (cpn s i) (0 < m && p (cpat s i) ? (tail s (i + m) sp k)))
    ; the repeat: try one more (progress required), else the tail once fed. an empty iteration
    ; cannot repeat -- that guard is what stops `\(\)*` spinning -- but it still satisfies the
    ; minimum, all at once, or `a*\+\+` demands an `a`: the inner a* matches empty, the empty

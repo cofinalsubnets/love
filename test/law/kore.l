@@ -442,6 +442,11 @@
       (ok "[[:alpha:][:digit:]]" "1") (ok "[^[:digit:]]" "a")  ; two in one bracket, negated
       (ok "[[:space:]]" "a b") (ok "[[:upper:]]" "aB")
       (bad "[[:nope:]]")                                       ; an unknown class is malformed
+      ; by character: `.` and a class take one whole, and never a byte no character wears
+      (ok "^.$" "é") (no "^..$" "é") (no "." (string 255))
+      (ok "^[^a]$" "日") (no "[^a]" (string 255)) (ok "[à-ÿ]" "é") (no "[à-é]" "ÿ")
+      (ok "^é*$" "éé") (ok "^é\\{2\\}$" "éé") (no "^é\\{2\\}$" "é")  ; a repeat takes all of é
+      (refind <>(rebre "本.") "日本語" 0 = '(1 3 9 ()))
       (refind <>(rebre "b*") "abbc" 0 = '(1 0 0 ()))           ; leftmost, before longest
       (refind <>(rebre "bb") "abbc" 0 = '(1 1 3 ()))
       (refind <>(rebre "b*") "abbc" 1 = '(1 1 3 ()))           ; greedy at its own start
