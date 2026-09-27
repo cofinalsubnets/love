@@ -26,6 +26,7 @@ long sendmsg(int fd, struct msghdr const *m, int fl) {
       int lv = *(int const*) (c + at + 8), ty = *(int const*) (c + at + 12);
       if (l < 16 || l > cn - at) return er(-EINVAL);
       if (lv == 1) { if (ty != 1) return er(-EINVAL); lv = 0xffff; }
+      if (lv == 41 && ty == 52) ty = 47;  /* IPV6_HOPLIMIT */
       *(unsigned int*) (cb + at) = (unsigned int) l;
       *(int*) (cb + at + 4) = lv;
       *(int*) (cb + at + 8) = ty;

@@ -59,7 +59,10 @@
       ; the address is a list whose head names a family the verb has: nothing else goes
       ('badarg = connect 12345) ('badarg = connect ['ftp "127.0.0.1" 21])
       ('badarg = listen ['udp 7393]) ('badarg = bind ['tcp 7393]) ('badarg = connect ['icmp])
-      ('badarg = bind ['udp 0 'fast]) ('badarg = connect ['unix ""])))
+      ('badarg = bind ['udp 0 'fast]) ('badarg = connect ['unix ""])
+      ('badarg = connect ['icmp6]) ('badarg = bind ['icmp6 'fast])
+      ; a peer's v6 text is read whole: a second :: is no address
+      (: u (bind ['udp 0]) r (send u ["1::2::3" 9] "x") _ (close u) ('badarg = r))))
 
   ; --- rung 5: seal lands the write run ------------------------------------------
   ; the bug: `seal` shuts the write half and never flushed. love.h has always
@@ -153,6 +156,15 @@
          d (recv p)
          _ (close p)
          (test (<(<d) = "127.0.0.1") (<>d 0 = 0) (snip <>d 8 12 = "love") (0 < d 2 <= 255)))))
+  ; and over icmp6 to ::1, its hop limit asked for; a host with no v6 refuses the socket,
+  ; or the send, and then there is nothing to wait for
+  (: p (bind ['icmp6 'ttl])
+   (? (nom? p) (test ('eacces = p || 'eperm = p || 'eprotonosupport = p || 'eafnosupport = p))
+      (: w (send p ["::1" 0] ("\x80\x00\x00\x00\x00\x00\x00\x01" + "love"))
+         d (? (nom? w) () (recv p))
+         _ (close p)
+         (? (nom? w) (test 1)
+            (test (<(<d) = "::1") (<>d 0 = 129) (snip <>d 8 12 = "love") (0 < d 2 <= 255))))))
 
   (test_fin ())
   (puts "net: ok\n")

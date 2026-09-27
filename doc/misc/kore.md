@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (185 tools, 191 names)
+## the inventory (185 tools, 192 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -102,7 +102,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
-| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping (icmp echoes) |
+| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6) |
 | apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -590,7 +590,7 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
 utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
 
-## telnet, httpd, nslookup and ping (apps/kore/net.l)
+## telnet, httpd, nslookup, ping and ping6 (apps/kore/net.l)
 
 `telnet HOST [PORT]` is nc (apps/ain.l) with the telnet protocol's options answered
 (RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
@@ -617,13 +617,18 @@ answer such as a TXT set arrives whole; one that still does not fit is said to b
 there is no TCP retry. A name that does not exist exits 1. The protocol pieces live in
 apps/dns.l (`dns-qedns`, `dns-raw`, `dns-records`), beside the resolver.
 
-`ping [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST` sends an ICMP echo every `-i`
+`ping [-46q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST` sends an ICMP echo every `-i`
 seconds (1 by default, fractions allowed), `-c` times or until ^C, and prints each reply's
 size, sequence, TTL and round trip, then the loss and min/avg/max, in busybox's format.
 After the last echo it waits up to `-W` seconds (10) for the rest. It exits 0 when any
 reply came back and 1 otherwise. It uses Linux's unprivileged ICMP echo socket, open to the
 groups in `net.ipv4.ping_group_range`, or else a raw ICMP socket, which needs root; FreeBSD
 and NetBSD have only the raw kind. Where both are refused it says so.
+
+`ping6`, or `ping -6`, or `ping` given an address with a colon in it, does the same over
+ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` in
+apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
+1452 here, one datagram on a 1500-byte link.
 
 ## not built
 

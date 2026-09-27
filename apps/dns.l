@@ -4,6 +4,7 @@
 ; half lives up here instead, where a lookup can park like anything else:
 ;
 ;   (resolve "example.org")      ; -> a list of ipv4 charms, in the server's order
+;   (resolve6 "example.org")     ; -> a list of ipv6 texts, the spelling `send` takes
 ;   (dial "example.org" 80)      ; -> a port, or ()  -- resolve, then connect
 ;   (resolve-in conf hosts name) ; the same, against named config paths
 ;
@@ -21,10 +22,10 @@
 ; stays where it is: moonlibc is a libc, and a C program mooncc builds is entitled to
 ; getaddrinfo.
 ;
-; what it speaks, and what it does not: a records over UDP, /etc/hosts first,
-; /etc/resolv.conf's nameservers in order with the search domains appended on a miss.
-; not AAAA and not the TCP fallback -- a truncated answer is a scare, never a silent
-; partial, so the gap says so when something reaches it.
+; what it speaks, and what it does not: a records (and aaaa, through resolve6) over UDP,
+; /etc/hosts first, /etc/resolv.conf's nameservers in order with the search domains
+; appended on a miss. not the TCP fallback -- a truncated answer is a scare, never a
+; silent partial, so the gap says so when something reaches it.
 ;
 ; presence is the wrapper here as everywhere: `0.0.0.0` is a perfectly good address and
 ; nets nothing, so every "did it parse" answer is a one-list tested with `two?`.
@@ -34,7 +35,8 @@
 (module (dns dial resolve dns-show
          dns-answers dns-ask dns-be16 dns-conf dns-query dns-servers
          dns-hosts dns-labels resolve-in dns-quad
-         dns-qtype dns-qedns dns-raw dns-name dns-records dns-v6)
+         dns-qtype dns-qedns dns-raw dns-name dns-records dns-v6
+         resolve6 resolve6-in dns-hosts6 dns-colon? dns-walk6)
 (borrow 'posix)
 (:
    ; --- files, lines, words ----------------------------------------------------
@@ -251,6 +253,15 @@
        (: a (dns-quad <w)
         (two? a && elem h >w ? a (go u)))))
      (go (dns-lines (dns-look path))))
+   ; and its v6 lines, the address kept as the text it is
+   (dns-hosts6 path h)
+    (: (go (l . u))
+     (: w (dns-words l)
+      (? (one? w) (go u)
+         (dns-colon? <w && elem h >w) [<w]
+         (go u)))
+     (go (dns-lines (dns-look path))))
+   (dns-colon? s) ((: (g i) (? (#s <= i) 0 (s i = 58) 1 (g (i + 1)))) 0)
 
    ; the nameservers, in order -- 127.0.0.1 when the file names none, musl's fallback
    ; and moonlibc's, so a machine with an empty resolv.conf still reaches a local stub
@@ -272,20 +283,31 @@
      'torn (scare 'torn ['dns h])
      (x && two? x) x
      (dns-walk su h))
+   ; the same walk asking aaaa, its answers v6 text
+   (dns-walk6 ((a . u) . su) h)
+    (: id (clock 0 & 65535)
+       r (dns-raw a u (dns-qedns id h 28) dns-ms)
+       ((? (string? r) (dns-records r id) ()) @
+        'torn (scare 'torn ['dns h])
+        (x && two? x) (catmap (d \ ? (d 1 = 28) [(d 2)] ()) (x 2))
+        (dns-walk6 su h)))
 
    ; hosts first, then the name as given, then each search domain appended.
-   (resolve-in conf hosts h)
-    (: f (dns-hosts hosts h)
+   (dns-lookup conf hosts h byhosts walk)
+    (: f (byhosts hosts h)
        (? (two? f) f
           (: servers (dns-servers conf)
-             a (dns-walk servers h)
+             a (walk servers h)
              (? (two? a) a
                 (: (go ds) (? (one? ds) ()
-                              (: b (dns-walk servers (h + "." + <ds))
+                              (: b (walk servers (h + "." + <ds))
                                  (two? b ? b (go >ds))))
                    (go (dns-conf conf "search")))))))
+   (resolve-in conf hosts h) (dns-lookup conf hosts h dns-hosts dns-walk)
+   (resolve6-in conf hosts h) (dns-lookup conf hosts h dns-hosts6 dns-walk6)
 
    (resolve h) (: a (dns-quad h) (two? a ? a (resolve-in "/etc/resolv.conf" "/etc/hosts" h)))
+   (resolve6 h) (? (dns-colon? h) [h] (resolve6-in "/etc/resolv.conf" "/etc/hosts" h))
 
    ; resolve, then connect to each address in turn until one takes. a dotted quad
    ; costs no lookup at all -- `resolve` hands it straight back.

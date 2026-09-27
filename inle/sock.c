@@ -31,12 +31,6 @@
 // a datagram caps at one ethernet MTU.
 #define DgMax 1472
 
-// a cask's (or string's) backing bytes, or 0 -- the wl lanes take either.
-static struct ai_str *cask_bytes(word x) {
- if (charmp(x)) return 0;
- if (cell(x)->ap == lvm_cask) return cask(x)->str;
- return strp(x) ? str(x) : 0; }
-
 // the fd a syscall helper answered, or its negated errno -> the port pushed, or the
 // errno's nom. a refused port allocation closes the fd and hands the not-ok g up, where
 // the wrapper ghelps: heap exhaustion is a scare here as everywhere.
@@ -81,11 +75,13 @@ static int quad(struct ai_str *hv, uint32_t *out) {
 // socket(2) triple and the sockaddr, so a new family is a row here and not a nif.
 //   connect  (tcp "1.2.3.4" 80)   (unix "/tmp/.X11-unix/X0")
 //   listen   (tcp 80)  or a bare port, which is tcp   (unix "/run/x.sock")
-//   bind     (udp 53)   (icmp)   -- options after: (icmp ttl) asks each datagram's ttl
+//   bind     (udp 53)   (icmp)   (icmp6)   -- options after: (icmp ttl) asks each datagram's
+//            ttl, (icmp6 ttl) its hop limit
 // icmp is linux's unprivileged echo socket, or where that is refused a raw one (root's, and
-// the bsds' only kind) dressed as it: recv and send answer and take the same bytes either way
-// a host is a dotted quad and nothing else: names resolve one layer up (apps/dns.l).
-enum { FamTcp = 1, FamUdp, FamIcmp, FamUnix };
+// the bsds' only kind) dressed as it: recv and send answer and take the same bytes either
+// way. icmp6 is the same pair over ipv6, and the only family that speaks it.
+// a host is a dotted quad, or v6 text for an icmp6 peer: names resolve one layer up (apps/dns.l).
+enum { FamTcp = 1, FamUdp, FamIcmp, FamIcmp6, FamUnix };
 enum { HowConnect = 1, HowListen, HowBind };
 struct saddr { int fam, port, ttl; uint32_t ip; struct ai_str *path; };
 
@@ -123,35 +119,39 @@ static int parse_addr(word x, int how, struct saddr *a) {
   if ((a->fam == FamTcp) != (how != HowBind)) return -1;
   if (how == HowConnect && (!(v = nth_take(&x)) || !strp(v) || quad(str(v), &a->ip) < 0)) return -1;
   if ((a->port = port_of(nth_take(&x))) < 0) return -1; }
- else if (nom_is(f, "icmp")) {
+ else if (nom_is(f, "icmp") || nom_is(f, "icmp6")) {
   if (how != HowBind) return -1;
-  a->fam = FamIcmp; }
+  a->fam = nom_is(f, "icmp6") ? FamIcmp6 : FamIcmp; }
  else return -1;
  while ((v = nth_take(&x)))                       // the options
-  if (nom_is(v, "ttl") && a->fam == FamIcmp) a->ttl = 1;
+  if (nom_is(v, "ttl") && (a->fam == FamIcmp || a->fam == FamIcmp6)) a->ttl = 1;
   else return -1;
  return 0; }
 
 // the fd for a, or a negated errno: socket(2) by the family's row, then the verb's own
 // steps. a connect leaves the socket nonblocking with its handshake in flight
 ai_noinline static int call_sock(struct saddr const *a, int how) {
- int un = a->fam == FamUnix, raw = 0;
+ int un = a->fam == FamUnix, v6 = a->fam == FamIcmp6, raw = 0;
  int type = a->fam == FamTcp || un ? SOCK_STREAM : SOCK_DGRAM;
- int fd = socket(un ? AF_UNIX : AF_INET, type, a->fam == FamIcmp ? IPPROTO_ICMP : 0);
- if (fd < 0 && a->fam == FamIcmp) {              // no echo socket: a raw one, if we may
+ int dom = un ? AF_UNIX : v6 ? AF_INET6 : AF_INET;
+ int proto = v6 ? IPPROTO_ICMPV6 : a->fam == FamIcmp ? IPPROTO_ICMP : 0;
+ int fd = socket(dom, type, proto);
+ if (fd < 0 && proto) {                          // no echo socket: a raw one, if we may
   int e = errno;
-  fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP), raw = 1;
+  fd = socket(dom, SOCK_RAW, proto), raw = 1;
   if (fd < 0 && e != EPROTONOSUPPORT) errno = e; }   // linux's refusal names its knob
  if (fd < 0) return -errno;
  cloexec(fd);
  struct sockaddr_in in = {0};
- struct sockaddr_un ua = {0};
+  struct sockaddr_un ua = {0};
+ struct sockaddr_in6 i6 = {0};                   // an icmp6 bind is to any address
+ i6.sin6_family = AF_INET6;
  in.sin_family = AF_INET;
  in.sin_addr.s_addr = htonl(how == HowConnect ? a->ip : INADDR_ANY);
  in.sin_port = htons((uint16_t) a->port);
  if (un) ua.sun_family = AF_UNIX, memcpy(ua.sun_path, a->path->bytes, a->path->len);
- struct sockaddr *sa = un ? (struct sockaddr*) &ua : (struct sockaddr*) &in;
- socklen_t sl = un ? (socklen_t) sizeof ua : (socklen_t) sizeof in;
+ struct sockaddr *sa = un ? (struct sockaddr*) &ua : v6 ? (struct sockaddr*) &i6 : (struct sockaddr*) &in;
+ socklen_t sl = un ? (socklen_t) sizeof ua : v6 ? (socklen_t) sizeof i6 : (socklen_t) sizeof in;
  int r;
  if (how == HowConnect) {
   int fl = fcntl(fd, F_GETFL);
@@ -163,7 +163,8 @@ ai_noinline static int call_sock(struct saddr const *a, int how) {
   int one = 1;
   if (un) unlink(ua.sun_path);                   // a stale socket file from a dead listener
   else setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
-  if (a->ttl && !raw) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);   // linux's number
+  if (a->ttl && v6) setsockopt(fd, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &one, sizeof one);
+  else if (a->ttl && !raw) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);   // linux's number
   r = bind(fd, sa, sl);
   if (!r && how == HowListen) r = listen(fd, ai_listen_backlog);
   if (!r) return fd; }
@@ -305,10 +306,10 @@ static int quad_show(char *q, uint32_t a) {
 
 // one datagram and who sent it. the sockaddr and the control buffer are &-taken here, so
 // the lvm wrapper stays TCO-clean; what it needs back rides in the caller's rbuf
-struct rmeta { uint32_t ip; int port, ttl; };
+struct rmeta { uint32_t ip; int port, ttl, v6; unsigned char ip6[16]; };
 struct rbuf { char b[DgMax + 60]; struct rmeta m; };   // room for a raw socket's ip header
 ai_noinline static ssize_t call_recv(int fd, struct rbuf *r) {
- struct sockaddr_in peer;
+ union { struct sockaddr_in in; struct sockaddr_in6 in6; } peer;
  memset(&peer, 0, sizeof peer);
  struct iovec iov = { r->b, sizeof r->b };
  union { struct cmsghdr h; char c[64]; } cb;
@@ -320,9 +321,12 @@ ai_noinline static ssize_t call_recv(int fd, struct rbuf *r) {
  ssize_t n;
  do n = recvmsg(fd, &m, MSG_DONTWAIT); while (n < 0 && errno == EINTR);
  if (n < 0) return -(errno == EWOULDBLOCK ? EAGAIN : errno);
- r->m.ip = ntohl(peer.sin_addr.s_addr), r->m.port = ntohs(peer.sin_port), r->m.ttl = -1;
+ r->m.ttl = -1, r->m.v6 = peer.in.sin_family == AF_INET6;
+ if (r->m.v6) memcpy(r->m.ip6, &peer.in6.sin6_addr, 16), r->m.port = ntohs(peer.in6.sin6_port);
+ else r->m.ip = ntohl(peer.in.sin_addr.s_addr), r->m.port = ntohs(peer.in.sin_port);
  for (struct cmsghdr *c = CMSG_FIRSTHDR(&m); c; c = CMSG_NXTHDR(&m, c))
-  if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_TTL) {
+  if ((c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_TTL)
+      || (c->cmsg_level == IPPROTO_IPV6 && c->cmsg_type == IPV6_HOPLIMIT)) {
    int t;
    memcpy(&t, CMSG_DATA(c), sizeof t);
    r->m.ttl = t; }
@@ -337,23 +341,27 @@ static int is_raw(int fd) {
 static unsigned echo_id(void) { return (unsigned) getpid() & 0xffff; }
 
 // the next echo reply to us, its ip header off and that header's ttl kept; the rest of what
-// a raw socket hears (our own requests on loopback, other pings' replies) is skipped
+// a raw socket hears (our own requests on loopback, other pings' replies, v6's neighbour
+// talk) is skipped. a v6 one brings no header, and its hop limit came as a cmsg
 ai_noinline static ssize_t call_recv_raw(int fd, struct rbuf *r) {
  for (;;) {
   ssize_t n = call_recv(fd, r);
   if (n < 0) return n;
   unsigned char const *b = (unsigned char const*) r->b;
+  if (r->m.v6) {
+   if (n < 8 || b[0] != 129 || (unsigned) (b[4] << 8 | b[5]) != echo_id()) continue;
+   return n; }
   ssize_t h = (b[0] & 15) * 4;
   if (n < h + 8 || b[h] != 0 || (unsigned) (b[h + 4] << 8 | b[h + 5]) != echo_id()) continue;
   r->m.ttl = b[8];
   memmove(r->b, r->b + h, (size_t) (n - h));
   return n - h; } }
 
-// the datagram's bytes and its peer's quad as strings, then the list over them: pushes
-// (("quad" port) bytes) or (("quad" port) bytes ttl)
+// the datagram's bytes and its peer's address as strings, then the list over them: pushes
+// (("quad" port) bytes) or (("quad" port) bytes ttl), v6 text in the quad's place
 ai_noinline static struct ai *host_dgram(struct ai *g, char const *b, uintptr_t n, struct rmeta m) {
- char q[16];
- int k = quad_show(q, m.ip);
+ char q[INET6_ADDRSTRLEN];
+ int k = m.v6 ? (int) strlen(inet_ntop(AF_INET6, m.ip6, q, sizeof q)) : quad_show(q, m.ip);
  if (n) {
   if (!ai_ok(g = str0(g, n))) return g;
   memcpy(txt(g->sp[0]), b, n), len(g->sp[0]) = n; }
@@ -383,42 +391,56 @@ static lvm(lvm_recv) {
  if (n < 0) ai_musttail return Answer(ai_err(g, (int) -n));
  LvmCallp(g, 1, host_dgram, r.b, (uintptr_t) n, r.m) }   // [p] -> [(peer bytes ..)]
 
-// sendto with the peer read off its list; the &-taken sockaddr lives here
-ai_noinline static ssize_t call_send(int fd, uint32_t ip, int port, void const *p, size_t n) {
- struct sockaddr_in a;
- memset(&a, 0, sizeof a);
- a.sin_family = AF_INET;
- a.sin_addr.s_addr = htonl(ip);
- a.sin_port = htons((uint16_t) port);
+// a peer's sockaddr: v6 when its text has a colon, else a dotted quad
+struct peer { union { struct sockaddr_in in; struct sockaddr_in6 in6; } a; socklen_t n; int v6; };
+ai_noinline static int peer_of(struct ai_str *h, int port, struct peer *pe) {
+ char t[INET6_ADDRSTRLEN];
+ uint32_t ip;
+ memset(pe, 0, sizeof *pe);
+ if (port < 0 || h->len >= sizeof t) return -1;
+ memcpy(t, h->bytes, h->len), t[h->len] = 0;
+ if ((pe->v6 = memchr(t, ':', h->len) != 0)) {
+  pe->a.in6.sin6_family = AF_INET6, pe->a.in6.sin6_port = htons((uint16_t) port);
+  pe->n = (socklen_t) sizeof pe->a.in6;
+  return inet_pton(AF_INET6, t, &pe->a.in6.sin6_addr) == 1 ? 0 : -1; }
+ if (quad(h, &ip) < 0) return -1;
+ pe->a.in.sin_family = AF_INET, pe->a.in.sin_port = htons((uint16_t) port);
+ pe->a.in.sin_addr.s_addr = htonl(ip);
+ pe->n = (socklen_t) sizeof pe->a.in;
+ return 0; }
+
+ai_noinline static ssize_t call_send(int fd, struct peer const *pe, void const *p, size_t n) {
  ssize_t w;
- do w = sendto(fd, p, n, 0, (struct sockaddr*) &a, sizeof a);
+ do w = sendto(fd, p, n, 0, (struct sockaddr const*) &pe->a, pe->n);
  while (w < 0 && errno == EINTR);
  return w < 0 ? -errno : w; }
 
 // an echo request through a raw socket: our id and the checksum written into a copy, the
-// two things linux's echo socket fills in itself. it takes only echo requests, as that does
-ai_noinline static ssize_t call_send_raw(int fd, uint32_t ip, void const *p, size_t n) {
+// two things linux's echo socket fills in itself -- v6's checksum the kernel writes for
+// any raw icmp6 socket. it takes only echo requests, as that does
+ai_noinline static ssize_t call_send_raw(int fd, struct peer const *pe, void const *p, size_t n) {
  unsigned char b[DgMax];
- if (n < 8 || n > sizeof b || *(unsigned char const*) p != 8) return -EINVAL;
+ if (n < 8 || n > sizeof b || *(unsigned char const*) p != (pe->v6 ? 128 : 8)) return -EINVAL;
  memcpy(b, p, n);
  unsigned id = echo_id();
  uint32_t s = 0;
  b[2] = b[3] = 0, b[4] = (unsigned char) (id >> 8), b[5] = (unsigned char) id;
- for (size_t i = 0; i < n; i += 2) s += (uint32_t) b[i] << 8 | (i + 1 < n ? b[i + 1] : 0);
- while (s >> 16) s = (s & 0xffff) + (s >> 16);
- s = ~s & 0xffff;
- b[2] = (unsigned char) (s >> 8), b[3] = (unsigned char) s;
- return call_send(fd, ip, 0, b, n); }
+ if (!pe->v6) {
+  for (size_t i = 0; i < n; i += 2) s += (uint32_t) b[i] << 8 | (i + 1 < n ? b[i + 1] : 0);
+  while (s >> 16) s = (s & 0xffff) + (s >> 16);
+  s = ~s & 0xffff;
+  b[2] = (unsigned char) (s >> 8), b[3] = (unsigned char) s; }
+ return call_send(fd, pe, b, n); }
 
 static lvm(lvm_send) {
  int fd = (int) ai_port_fd(Sp[0]);
  word x = Sp[1], h = nth_take(&x);
  int port = port_of(nth_take(&x));
- uint32_t ip;
- if (fd < 0 || !h || !strp(h) || quad(str(h), &ip) < 0 || port < 0 || !strp(Sp[2]))
+ struct peer pe;
+ if (fd < 0 || !h || !strp(h) || peer_of(str(h), port, &pe) < 0 || !strp(Sp[2]))
   ai_musttail return Answerp(2, ai_badarg(g));
  struct ai_str *s = str(Sp[2]);
- ssize_t w = is_raw(fd) ? call_send_raw(fd, ip, txt(s), len(s)) : call_send(fd, ip, port, txt(s), len(s));
+ ssize_t w = is_raw(fd) ? call_send_raw(fd, &pe, txt(s), len(s)) : call_send(fd, &pe, txt(s), len(s));
  ai_musttail return Answerp(2, w < 0 ? ai_err(g, (int) -w) : Sp[0]); }   // [p, peer, bytes] -> [p]
 
 static union u const
