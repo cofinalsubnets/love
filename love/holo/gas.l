@@ -145,6 +145,19 @@
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
    gx-ext (gtab '((movzb (zx1 ldu1)) (movzw (zx2 ldu2)) (movsb (sx1 ld1)) (movsw (sx2 ld2)) (movsl (sx4 ld4))))
+   ; a %gs:/%fs: operand: the override byte before the one form that reaches memory. an absolute
+   ; address (percpu's `%gs:sym`, `%gs:40`) loads through its destination: the address, then the word
+   (gx-seg m w0 ops)
+    (: i ((: (g j) (? (j >= #ops) -1 (<(ops j) = 'seg) j (g (j + 1)))) 0)
+       sg <>(ops i) o <>>(ops i) w (w0 > 0 ? w0 8)
+       ab (? (<o = 'lbl) <>o (<o = 'mem && (o 1) < 0 && (o 2) < 0) (o 4) ())
+       (? (<o = 'mem && (o 1) >= 0)
+           (: fs (gx-ins m w0 (map (x \ (<x = 'seg ? <>>x x)) ops))
+              (? (#fs = 1) [['seg sg] <fs] (scare 'gas-x64-seg ops)))
+          (m = 'mov && i = 1 && <(ops 0) = 'rg && (nom? ab || charm? ab))
+           (: x (gx-r (ops 0))
+              [(nom? ab ? ['lia x ab] ['li x ab]) ['seg sg] [(gx-lop w) x x 0]])
+          (scare 'gas-x64-seg ops)))
    (gx-ins m w0 ops)
     (: k #ops w (w0 > 0 ? w0 8)
        d (k > 0 ? (ops 0) ()) s (k > 1 ? (ops 1) ())
@@ -213,7 +226,8 @@
                             it) . acc))
                    () items)))
    (gx-item it) (<it @ 'label [['label <>it]]
-                      'op (gx-ins (it 1) (it 2) (it 3))
+                      'op (? (any (o \ two? o && <o = 'seg) (it 3)) (gx-seg (it 1) (it 2) (it 3))
+                             (gx-ins (it 1) (it 2) (it 3)))
                       (scare 'gas-x64-line it))                    ; a directive has no place in a template
    (gx-text src) (catmap gx-item (gx-locals (att-read src)))
 

@@ -1,10 +1,11 @@
-; apps/kore/net.l -- telnet, httpd, nslookup and ping: network tools over doors the tree
+; apps/kore/net.l -- telnet, httpd, nslookup, ping and ping6: network tools over doors the tree
 ; already has (inle/sock.c's connect/listen/bind, apps/dns.l, kiosko).
 ;
 ;   telnet HOST [PORT]                a remote terminal over tcp, port 23 by default
 ;   httpd [-fv] [-p PORT] [-h DIR]    kiosko under busybox's name and flags
 ;   nslookup [-type=T] HOST [SERVER]  a name's records, asked of a nameserver directly
-;   ping [-q] [-c N] [-i S] [-W S] [-s N] HOST    icmp echoes and their round trips
+;   ping [-46q] [-c N] [-i S] [-W S] [-s N] HOST  icmp echoes and their round trips
+;   ping6 [-q] [-c N] [-i S] [-W S] [-s N] HOST   the same over ipv6 (ping -6)
 ;
 ; telnet is nc (apps/ain.l) with the protocol's options answered (RFC 854, 855): it lets the
 ; server echo and suppress go-ahead, offers to suppress go-ahead itself, refuses every other
@@ -30,7 +31,8 @@
 ; reply's round trip and ttl, then the loss and min/avg/max. it rides linux's unprivileged
 ; echo socket, open to the groups in net.ipv4.ping_group_range, or else a raw one, which is
 ; root's (the bsds have only that); where both refuse, it says so. no reply at all is exit
-; 1, as busybox's.
+; 1, as busybox's. ping6 is the same over icmp6, its ttl the hop limit; ping takes it for
+; -6 or an address with a colon in it.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -39,7 +41,8 @@
    tn-usage "usage: telnet HOST [PORT]"
    httpd-usage "usage: httpd [-fv] [-p PORT] [-h DIR]"
    ns-usage "usage: nslookup [-type=A|AAAA|CNAME|MX|NS|PTR|SOA|TXT] [-port=N] HOST [SERVER]"
-   ping-usage "usage: ping [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
+   ping-usage "usage: ping [-46q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
+   ping6-usage "usage: ping6 [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
    ns-types '(("a" 1) ("aaaa" 28) ("cname" 5) ("mx" 15) ("ns" 2) ("ptr" 12) ("soa" 6) ("txt" 16))
    ns-rcodes '((1 "FORMERR") (2 "SERVFAIL") (3 "NXDOMAIN") (4 "NOTIMP") (5 "REFUSED"))
 
@@ -201,40 +204,49 @@
    ; ns -> "m.mmm", the ms busybox prints
    (ping-t ns) (: us (ns // 1000) f (show (us % 1000))
                   (show (us // 1000) + "." + snip ("00" + f) (#f - 1) (#f + 2)))
-   (ping-main as)
+   (ping-main as) (ping-run 0 as)
+   (ping6-main as) (ping-run 1 as)
+   ; v6 when ping6, or ping's -6, or a host with a colon; -4 holds ping to v4
+   (ping-run six? as)
     (: t (tablet 0)
+       nm (? six? "ping6" "ping")
+       use (? six? ping6-usage ping-usage)
        o (uopt as t '(99 105 87 115) () ())
-       _ (? (two? o) 0 (udie 2 ping-usage))
-       _ (: u (uoptun t '(99 105 87 115 113)) (? (nil? u) 0 (udie 2 ("ping: unknown option -" + string u + "\n" + ping-usage))))
+       _ (? (two? o) 0 (udie 2 use))
+       _ (: u (uoptun t (? six? '(99 105 87 115 113) '(99 105 87 115 113 52 54))) (? (nil? u) 0 (udie 2 (nm + ": unknown option -" + string u + "\n" + use))))
        ops (o 2)
-       _ (? (two? ops && one? >ops) 0 (udie 2 ping-usage))
+       _ (? (two? ops && one? >ops) 0 (udie 2 use))
        (num c d lo) (: v (uoptv t c)
-                       (? (nil? v) d (: n (unum v) (? (charm? n && lo <= n) n (udie 2 ("ping: bad -" + string c + " " + v))))))
+                       (? (nil? v) d (: n (unum v) (? (charm? n && lo <= n) n (udie 2 (nm + ": bad -" + string c + " " + v))))))
+       host <ops
+       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 (((cite 'dns) 'dns-colon?) host))
        count (num 99 () 1)
        size (num 115 56 0)
-       _ (? (size <= 1464) 0 (udie 2 "ping: -s is at most 1464, one datagram"))
-       ms (: v (uoptv t 105) (? (nil? v) 1000 (: m (ping-ms v) (? (charm? m && 0 < m) m (udie 2 ("ping: bad -i " + v))))))
-       wait (: v (uoptv t 87) (? (nil? v) 10000 (: m (ping-ms v) (? (charm? m) m (udie 2 ("ping: bad -W " + v))))))
+       cap (? six 1452 1464)                          ; one datagram on a 1500-byte link
+       _ (? (size <= cap) 0 (udie 2 (nm + ": -s is at most " + show cap + ", one datagram")))
+       ms (: v (uoptv t 105) (? (nil? v) 1000 (: m (ping-ms v) (? (charm? m && 0 < m) m (udie 2 (nm + ": bad -i " + v))))))
+       wait (: v (uoptv t 87) (? (nil? v) 10000 (: m (ping-ms v) (? (charm? m) m (udie 2 (nm + ": bad -W " + v))))))
        quiet (peep t 113 0)
-       host <ops
        D (cite 'dns)
-       ad (? (two? ((D 'dns-quad) host)) ((D 'dns-quad) host) ((D 'resolve) host))
-       _ (? (two? ad) 0 (udie 1 ("ping: bad address '" + host + "'")))
-       ip ((D 'dns-show) <ad)
-       p (bind ['icmp 'ttl])
+       ad (? six ((D 'resolve6) host)
+             (two? ((D 'dns-quad) host)) (map (D 'dns-show) ((D 'dns-quad) host))
+             (map (D 'dns-show) ((D 'resolve) host)))
+       _ (? (two? ad) 0 (udie 1 (nm + ": bad address '" + host + "'")))
+       ip <ad
+       p (bind [(? six 'icmp6 'icmp) 'ttl])
        _ (? (nom? p)
-            (udie 2 ("ping: no icmp echo socket here (" + show p + "); it wants root, or on linux"
-                     + " your group in net.ipv4.ping_group_range")) 0)
+            (udie 2 (nm + ": no icmp" + (? six "6" "") + " echo socket here (" + show p
+                     + "); it wants root, or on linux your group in net.ipv4.ping_group_range")) 0)
        _ (: _ (say out ("PING " + host + " (" + ip + "): " + show size + " data bytes\n")) (flush out))
        st {'sent 0 'got 0 'min () 'max 0 'sum 0}
        at (tablet 0)                                   ; seq -> the nclock it went at
-       (pkt n) (string 8 + string 0 + "\x00\x00\x00\x00" + string (n >> 8 & 255) + string (n & 255)
+       (pkt n) (string (? six 128 8) + string 0 + "\x00\x00\x00\x00" + string (n >> 8 & 255) + string (n & 255)
                 + catmap (i \ string (i & 255)) ^size)
        ; the replies, as they come: each seq once, its round trip off its send time
        (rx _)
         (: d (recv p)
            b <>d
-           n (? (8 <= #b && b 0 = 0) (b 6 * 256 + b 7) -1)
+           n (? (8 <= #b && b 0 = (? six 129 0)) (b 6 * 256 + b 7) -1)
            t0 (peep at n ())
            _ (? (nil? t0) 0
                 (: rt (nclock t0)
@@ -265,7 +277,7 @@
        (tx n)
         (? (charm? count && count <= n) 0
            (: _ (pin at (n & 65535) (nclock 0))
-              _ (send p [ip 0] (pkt (n & 65535)))
+              _ (: w (send p [ip 0] (pkt (n & 65535))) (? (nom? w) (udie 1 (nm + ": sendto: " + show w)) 0))
               _ (pin st 'sent (st 'sent + 1))
               _ (? (charm? count && count <= n + 1) 0 (rest ms))
               (tx (n + 1))))
