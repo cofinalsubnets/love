@@ -54,7 +54,7 @@
               (? (4 < f) "bad filter"
                  (: _ (png-recon c f d (d - n - 1) n bpp (k = 0)) (row (k + 1) (d + n))))))
        (row 0 o))
-   ; the door: inle/png.c's nif where the artifact carries it, else the walk. asked at
+   ; the door: love/lib/png.c's nif where the artifact carries it, else the walk. asked at
    ; first call, never at load, where the answer would be the baking love's.
    ; -> [rows first-row-offset row-stride] | why not
    png-door (tablet 0)

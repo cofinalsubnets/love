@@ -1,9 +1,9 @@
-; --- test/host/png.l: apps/png.l and inle/png.c's unfilter ------------------------------
-; the nif on rows worked by hand: each filter, a bad filter byte, too few bytes. then, where
-; python3 with PIL and magick are here, images of every colour type, grey at 1 to 16 bits,
-; palettes of 1 to 8, colour keys, 16-bit and interlaced ones at a size that splits bytes
-; and adam7 passes, each decoded and held to magick's own rgba byte for byte. last the refusals: not
-; a png, a torn file, a flipped byte under a crc.
+; --- test/host/png.l: apps/png.l and love/lib/png.c's unfilter --------------------------
+; the nif and the walk on rows worked by hand: each filter, a bad filter byte, too few
+; bytes. then, where python3 with PIL and magick are here, images of every colour type, grey
+; at 1 to 16 bits, palettes of 1 to 8, colour keys, 16-bit and interlaced ones at a size
+; that splits bytes and adam7 passes, each decoded and held to magick's own rgba byte for
+; byte. last the refusals: not a png, a torn file, a flipped byte under a crc.
 ;   cat test/00-init.l test/host/png.l | out/love
 (borrow 'posix)
 (borrow "apps/png.l")
