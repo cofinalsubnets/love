@@ -134,6 +134,12 @@
    ; buffer to take the corner a read filled -- 64K for a 12-byte file, and over a
    ; source tree more copying than the archive it is hashing.
    (tar-feed h buf e)                       ; feed one file's body + pad; 1 | ()
+    (? !(string? (tar-get e 'path ()))      ; a fat entry, no file behind it
+       (: b (tar-get e 'body "")
+          _ (sha256-feed h b)
+          r (#b % tar-blk)
+          (? r (sha256-feed h * string * cask $ tar-blk - r) 0)
+          1)
     (: n (tar-get e 'size 0)
        q (? (0 < n) (open (tar-get e 'path "") "r") 0)
        (? (0 = n) 1
@@ -146,7 +152,7 @@
                            (go (left - k2))))))
              ok (go n)
              _ (close q)
-             (ok && (: r (n % tar-blk) (r && sha256-feed h * string * cask $ tar-blk - r, 1))))))
+             (ok && (: r (n % tar-blk) (r && sha256-feed h * string * cask $ tar-blk - r, 1)))))))
    (tar-hash es)                            ; -> the 64-char digest | ()
     (: h (cask tar-shast)
        _ (sha256-init h)

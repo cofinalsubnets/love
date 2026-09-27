@@ -242,7 +242,8 @@ struct ai {
  word b;
  word inflag;           // fd 0's flags as we found them (a charm), 0 = we left them alone
  uintptr_t next_serial, // mint id counter
-           next_wake_at; // deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
+           next_wake_at, // deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
+           clock_at;     // the clock the last sweep tick read: fairness yields between ticks reuse it
  word symbols;          // intern map (string -> canonical atom), swept each gc
  uintptr_t len;         // main-pool size in words: the core sits at its base, [end,hp) is the young heap
  struct ai_r { word *x; struct ai_r *n; } *root; // gc roots list

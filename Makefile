@@ -312,7 +312,7 @@ crewfiles = apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/source.l apps/lapiz.l \
   apps/libra/salt.l apps/libra/libra.l apps/vi/hueweb.l apps/kiosko/web.l \
   apps/harp/harp.l apps/harp/play.l apps/harp/score.l \
-  apps/x11.l apps/ink.l apps/manifest/manifest.l apps/rove/rove.l apps/rove/view.l apps/rove/tower.l apps/rove/story.l apps/rove/design.l apps/rove/slop.l apps/rove/grass.l apps/rove/wade.l apps/rove/apartment.l apps/rove/dusk.l apps/rove/garage.l apps/rove/shaft.l apps/harp/synth.l \
+  apps/x11.l apps/ink.l apps/manifest/manifest.l apps/rove/rove.l apps/rove/view.l apps/rove/tower.l apps/rove/story.l apps/rove/design.l apps/rove/slop.l apps/rove/grass.l apps/rove/wade.l apps/rove/apartment.l apps/rove/dusk.l apps/rove/garage.l apps/rove/shaft.l apps/rove/roost.l apps/harp/synth.l \
   apps/berth/wharf.l apps/berth/limn.l apps/berth/berth.l apps/lux/wire.l apps/doom.l apps/lupa.l apps/mc.l apps/pom.l
 korefiles = $(kore_head) $(holo_obj) love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
@@ -383,7 +383,7 @@ force_src: ;
 # selfpack rewrites the archive only when the content moved, and says so only then
 $(dist_source): force_src $(love0)
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(dist_drop)
 
 out/src.o: $(dist_source) tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
@@ -916,7 +916,15 @@ endif
 # spellings of a list is how they drift.
 binnames = $(BIN) kore sb mooncc cook papel libra ain lux bao lush
 mannames = $(BIN) cook lush
-installs = $(patsubst %,$d/bin/%,$(binnames)) \
+# the default nest lays itself: `love nest -y` (apps/source.l) copies the binary in, newer
+# builds only, and links the tools it serves by name. the rest keep their rules below, and
+# a real PREFIX, DESTDIR or BIN keeps them all
+nestnames = $(BIN) kore sb mooncc cook libra ain lush
+ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love|.love/|$(HOME)/)
+nested = 1
+endif
+rulenames = $(if $(nested),$(filter-out $(nestnames),$(binnames)),$(binnames))
+installs = $(patsubst %,$d/bin/%,$(rulenames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
   $v/ftdetect/love.vim $v/syntax/love.vim $v/ftplugin/love.vim
 
@@ -927,7 +935,7 @@ inst644 = @echo '$(t_cp)	'$(abspath $@); install -D -m 644 $< $@
 # those are already on PATH and manpath. A real PREFIX (a distro) skips them.
 ifeq ($(PREFIX),.love/)
 compat = $(DESTDIR)/.local
-installs += $(patsubst %,$(compat)/bin/%,$(binnames)) \
+installs += $(patsubst %,$(compat)/bin/%,$(rulenames)) \
   $(patsubst %,$(compat)/share/man/man1/%.1,$(mannames))
 inln = @echo '$(t_ln)	'$(abspath $@); mkdir -p $(@D); ln -sf $(abspath $<) $@
 $(compat)/bin/%: $d/bin/%
@@ -936,10 +944,15 @@ $(compat)/share/man/man1/%.1: $d/share/man/man1/%.1
 	$(inln)
 endif
 
-install: $(installs)
+# what nest lays, for uninstall to take back
+nestlaid = $(if $(nested),$(patsubst %,$d/bin/%,$(nestnames)) $(patsubst %,$(compat)/bin/%,$(nestnames)))
+install: $(installs) $(if $(nested),nest-self)
+.PHONY: nest-self
+nest-self: $(ho)/love
+	@LOVE_NO_IMAGE= $(ho)/love nest -y
 uninstall:
-	@echo '$(t_rm)	'$(abspath $(installs))
-	@rm -f $(installs)
+	@echo '$(t_rm)	'$(abspath $(installs) $(nestlaid))
+	@rm -f $(installs) $(nestlaid)
 
 # UNSTRIPPED deliberately: stripping drops the symbol table holo lays on purpose, for ~2%
 # of a baked binary. binutils strip IS safe on our ELF (every loaded byte has a covering

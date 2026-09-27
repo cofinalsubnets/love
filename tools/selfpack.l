@@ -1,12 +1,14 @@
 ; tools/selfpack.l -- cut the source archive from the tree itself.
 ;
-;   love tools/selfpack.l archive.tar.gz top [stamp [drop..]]
+;   love tools/selfpack.l archive.tar.gz top [stamp [build [drop..]]]
 ;
 ; the one cutter, every world: the tree on disk is the source, checkout and seed-laid
 ; tree alike. what it leaves out is sb's law -- .sbignore plus sb's built-ins, so the vcs
 ; walk and this cut cannot disagree about what the tree is -- plus sp-own's structural
 ; skips and each drop nom. the walk is sorted and every mtime pinned to stamp, so the same
 ; files answer the same bytes wherever they sit; test_distboot holds a re-cut to the byte.
+; `build` rides in as top/STAMP, a file no tree holds: the stamp that orders two builds of
+; one VERSION, which an unpacked release reads back where there is no git to ask.
 ;
 ; the id is the sha of the LEVELED tar, kept in archive.sha, so a touch settles and a
 ; delete or rename is seen. the quiet pass (tar-thin? + tar-hash) answers "has the tree
@@ -50,19 +52,20 @@
           _ (pin e 'nom (top + "/" + tar-get e 'nom ""))
           (sp-take >es top (e . acc))))
 
-   ; the root leads, top follows wearing its mode, the rest re-homes under top. shared
-   ; by both passes, so their digests are comparable.
-   (sp-lev es top stamp)
+   ; the root leads, top follows wearing its mode, then STAMP, then the rest re-homes
+   ; under top. shared by both passes, so their digests are comparable.
+   (sp-lev es top stamp build)
     (: root <es
        te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
-       (tar-level (root . te . sp-take >es top ()) stamp))
+       se (tar-entry "STAMP" 'file (build + "\n"))
+       (tar-level (root . te . sp-take (se . >es) top ()) stamp))
 
    ; the cut that reads: pack, hash, and write when the content actually moved.
-   (sp-cut arch side top stamp rules)
+   (sp-cut arch side top stamp build rules)
     (: g (tar-gather? (sp-keep? rules) "." "")
        _ (!g ? (sp-die "cannot read the tree"))
-       lev (sp-lev <>g top stamp)
+       lev (sp-lev <>g top stamp build)
        a (tar-pack lev)
        _ (!a ? (sp-die "cannot pack (a path too long for ustar?)"))
        h (sha256 a)
@@ -80,13 +83,14 @@
 
    (sp-main av)
     (: n #av
-       _ (n < 2 ? (sp-die "usage: selfpack ARCHIVE.tar.gz TOP [STAMP [DROP..]]"))
+       _ (n < 2 ? (sp-die "usage: selfpack ARCHIVE.tar.gz TOP [STAMP [BUILD [DROP..]]]"))
        arch <av
        top <>av
        stamp (3 <= n ? <(sound <>>av) 0)
+       build (4 <= n ? (av 3) "0")
        ; top joins the drops: a release untarred at the root would otherwise ride the
        ; next blob, and the artifact would swallow a whole second love.
-       drops (top . (3 <= n ? >>>av ()))
+       drops (top . (4 <= n ? >>>>av ()))
        side (arch + ".sha")
        ; `stat`, not a read: the question is only whether the archive is there. a ()
        ; from the thin pass (a torn read, a nom too long for ustar) is not an answer
@@ -94,9 +98,9 @@
        rules (sp-rules drops)
        t (tar-thin? (sp-keep? rules) "." "")
        _ (!t ? (sp-die "cannot read the tree"))
-       hq (tar-hash (sp-lev <>t top stamp))
+       hq (tar-hash (sp-lev <>t top stamp build))
        old (sp-read side)
        quiet (string? hq && two? old && <>old = hq && two? (stat arch))
-       (quiet ? 0 (sp-cut arch side top stamp rules)))
+       (quiet ? 0 (sp-cut arch side top stamp build rules)))
 
    (sp-main >argv))

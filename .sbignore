@@ -7,6 +7,9 @@
 # downloaded, never built
 dl
 
+# the build stamp: selfpack writes it into every archive itself, so the walk must not
+STAMP
+
 # the engineering narratives, and the design record: local, and gitignored besides.
 # named here too so the dist cut agrees with git rather than relying on it.
 notes

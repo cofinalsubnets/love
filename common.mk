@@ -69,6 +69,10 @@ love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 # edit loop, an unpacked release wants the product.
 in_git := $(wildcard $R/.git)
 
+# the BUILD STAMP orders two builds of one VERSION: the commit time of HEAD in seconds, or an
+# unpacked release's own STAMP, which selfpack writes into every archive and no tree tracks
+love_stamp := $(if $(wildcard $R/STAMP),$(shell cat $R/STAMP),$(if $(in_git),$(shell git -C $R log -1 --format=%ct 2>/dev/null || echo 0),0))
+
 # $(CC) is the ambient compiler and the tree names no favourite: mooncc builds everything but
 # love0, which by definition cannot be built by the compiler it exists to bootstrap.
 
