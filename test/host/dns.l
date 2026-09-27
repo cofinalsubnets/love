@@ -133,4 +133,21 @@
              (snip qe 12 #q0 = snip q0 12 #q0)
              (snip qe #q0 #qe = string 0 + wrbe 41 2 + wrbe 1232 2 + wrbe 0 2 + wrbe 0 2 + wrbe 0 2)))
 
+; --- law 7: resolve6's pieces -- an aaaa asked and read back as text, hosts' v6 lines ---
+; the query carries edns, so the question the reply echoes stops short of its 11-byte OPT
+(: port 7403
+   v6 (catmap string [32 1 13 184 0 0 0 0 0 0 0 0 0 0 0 1])
+   s (twirl (\ _ (: p (bind ['udp port])
+                    d (recv p) q <>d
+                    r (snip q 0 2 + wrbe 33152 2 + wrbe 1 2 + wrbe 1 2 + wrbe 0 2 + wrbe 0 2
+                       + snip q 12 (#q - 11) + string 192 + string 12 + wrbe 28 2 + wrbe 1 2
+                       + wrbe 0 2 + wrbe 60 2 + wrbe 16 2 + v6)
+                    _ (send p <d r) _ (rest 20) _ (close p) 1)) ())
+   _ (rest 20)
+   a (dns-walk6 [(2130706433 . port)] "ab.cd")
+   _ (catch s)
+   _ (assert (a = ["2001:db8::1"])
+             ((resolve6-in "out/.dns-t/conf" "out/.dns-t/hosts" "v6.only") = ["::1"])
+             ((resolve6 "fe80::1") = ["fe80::1"])))
+
 (say out "dns: ok", putc 10)

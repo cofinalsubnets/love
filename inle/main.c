@@ -124,7 +124,7 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
   int nul = open("/dev/null", O_RDONLY);
   if (nul >= 0) { dup2(nul, STDIN_FILENO); if (nul > 2) close(nul); }
   close(op[0]); close(op[1]); close(ep[0]);
-  execvp(cav[0], cav);
+  execvp(ai_argv_file(cav), cav);
   int e = errno; ssize_t w = write(ep[1], &e, sizeof e); (void) w;
   _exit(127); }
  close(op[1]); close(ep[1]);                              // parent
@@ -216,7 +216,7 @@ ai_noinline static struct ai *host_exec(struct ai *g) {
  fflush(stderr);
  signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
  stdin_hand(g);                                            // the child inherits fd 0: hand it over exact
- execvp(cav[0], cav);
+ execvp(ai_argv_file(cav), cav);
  return ai_push(g, 1, ai_err(g, errno)); }                  // exec failed -> its nom
 
 static lvm(lvm_exec) {

@@ -17,6 +17,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'text)
 
 (:
    ; -- cat: files (or -) onto out, verbatim -- and a DIRECTORY lists, the way ls does.
@@ -1039,35 +1040,37 @@
    ; -- rev: every line back to front --
    (rev-main as)
     ; the last line keeps the source's end, which is exactly what term? carries
-    (: (dot ln term?) (: _ (say out (urev ln)) _ (? term? (put out 10) 0) 1)
+    (: (dot ln term?) (: _ (say out (cprev ln)) _ (? term? (put out 10) 0) 1)
        (ulines "rev" dot as))
 
    ; ---- the column tools: fold, expand, unexpand --------------------------------
    ; all three count columns and not bytes -- a tab steps to the next stop, \b steps
-   ; back one, \r starts the line over -- which is the whole reason they are one
-   ; section: `ucol` is the only thing they share and the only thing they disagree
-   ; with a byte count about. fold -b asks for the bytes instead.
-   (ucol col c stop)                   ; the column charm c leaves the cursor on
+   ; back one, \r starts the line over, a character takes its wcwidth -- which is the
+   ; whole reason they are one section: `ucol` is the only thing they share and the only
+   ; thing they disagree with a byte count about. fold -b asks for the bytes instead.
+   (ucol col c stop)                   ; the column code point c leaves the cursor on
     (? (c = 9) (* stop ((// col stop) + 1))
        (c = 8) (? (0 < col) (col - 1) 0)
        (c = 13) 0
-       (col + 1))
+       (c < 128) (col + 1)
+       (col + max 0 (wcwidth c)))
    (ublank? c) ((c = 32) || (c = 9))
    (uspaces o k) (? (0 < k) (: _ (put o 32) (uspaces o (k - 1))) 0)
 
    ; -- fold: one line -> the pieces it breaks into at width w. the break lands
-   ; before the charm that would overflow, so a charm wider than the whole width
+   ; before the character that would overflow, so one wider than the whole width
    ; still gets a line of its own; -s backs the break up to the last blank --
    (ufold w s? b? s)
     (: n (tally s)
        (go k st col lb acc)            ; lb: seat after the last blank, -1 for none
         (? (n <= k) (rev (snip s st n . acc))
-           (: c (s k)
+           (: c (b? ? (s k) (cpat s k))
+              k2 (b? ? (k + 1) (cpnext s k))
               nc (? b? (col + 1) (ucol col c 8))
               (? ((w < nc) && (st < k))
                  (: cut (? ((s? && (st < lb)) && (lb <= k)) lb k)
                     (go cut cut 0 -1 (snip s st cut . acc)))
-                 (go (k + 1) st nc (? (ublank? c) (k + 1) lb) acc))))
+                 (go k2 st nc (? (ublank? c) k2 lb) acc))))
        (go 0 0 0 -1 ()))
    (fold-main as)
     (: t (tablet 0)
@@ -1100,11 +1103,11 @@
     (: m (tally s) o (jug 0)
        (go k col lead)
         (? (m <= k) (slurp o)
-           (: c (s k)
+           (: c (cpat s k) k2 (cpnext s k)
               (? ((c = 9) && (lead || !i?))
-                 (: to (* n ((// col n) + 1)) _ (uspaces o (to - col)) (go (k + 1) to lead))
-                 (: _ (put o c)
-                    (go (k + 1) (ucol col c n) (? (ublank? c) lead 0))))))
+                 (: to (* n ((// col n) + 1)) _ (uspaces o (to - col)) (go k2 to lead))
+                 (: _ (? (c < 128) (put o c) (say o (snip s k k2)))
+                    (go k2 (ucol col c n) (? (ublank? c) lead 0))))))
        (go 0 0 1))
    (expand-main as)
     (: t (tablet 0)
@@ -1130,13 +1133,13 @@
            (go st))
        (go k col rst lead)             ; rst: the run's first column, -1 for none
         (? (m <= k) (: _ (? (rst < 0) 0 (spill rst col)) (slurp o))
-           (: c (s k)
+           (: c (cpat s k) k2 (cpnext s k)
               cv (ucol col c n)
               (? ((ublank? c) && (lead || a?))
-                 (go (k + 1) cv (? (rst < 0) col rst) lead)
+                 (go k2 cv (? (rst < 0) col rst) lead)
                  (: _ (? (rst < 0) 0 (spill rst col))
-                    _ (put o c)
-                    (go (k + 1) cv -1 (? (ublank? c) lead 0))))))
+                    _ (? (c < 128) (put o c) (say o (snip s k k2)))
+                    (go k2 cv -1 (? (ublank? c) lead 0))))))
        (go 0 0 -1 1))
    (unexpand-main as)
     (: t (tablet 0)

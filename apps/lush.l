@@ -1453,11 +1453,13 @@
                     (two? (sh-whichp w)))
    ; the argv a spawn execs: a bare verb word ours by the mode spawns this binary
    ; under the word, so PATH decides nothing there either; anything else runs as spelled
+   ; a foreign bare word goes as (path . word): PATH was searched here already, so the
+   ; exec takes that file and the child is still named as spelled. a seat with none
+   ; (the kernel) hands the bare word to its registry
    (sh-spawnv argv) (: w <argv exe (sh-seat ())
-                       (? (string? exe && !(sh-slashed? w)
-                           && !(sh-dotl? w) && sh-verbours? w)
-                          (exe . argv)
-                          argv))
+                       (? (!(string? exe) || sh-slashed? w) argv
+                          (!(sh-dotl? w) && sh-verbours? w) (exe . argv)
+                          (: r (sh-whichp w) (? (two? r) ((<>r . w) . >argv) argv))))
    ; --- what would run: the answer `command -v`, `which` and `type` share -------
    ; the verdict walks sh-simple2's own ladder, so what it names is what would run:
    ; ('resw) ('fn) ('bi) ('verb path) ('path path), or () for a word nothing answers.

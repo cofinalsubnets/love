@@ -1513,6 +1513,26 @@
       !(foldl (\ a f (a || (two? f && <f = 'call))) () xf)   ; no call: the hint is gone
       (<(rev xf) @ ('jmp _) 1 ())                            ; the arm lays last and jumps back
       (elem '(ret) xf))
+   ; shrink-wrap: the path that never touches the frame runs without it -- the entry is the
+   ; test, not the (sub sp sp N), and the call's path builds the frame where it leaves
+   irW (cgn "long slow9(long);\nlong kw(long *s, long x) { if (x & 1) return s[x >> 1]; long d = slow9(x); return d > 0 ? s[1] : s[2]; }\nint main() { long a[4] = {0}; return (int) kw(a, 2); }")
+   wf (fnf 'kw <>irW)
+   _ (test
+      (two? irW)
+      (<wf @ ('sub 'sp 'sp _) () 1)                          ; no frame at the entry
+      (foldl (\ a f (a || (f @ ('sub 'sp 'sp _) 1 ()))) () wf)   ; ..but one on the call's path
+      (elem '(ret) wf))
+   ; memfw: a word just stored rides its register, its reload through another base goes -- but
+   ; only where the unit names no volatile (the parse tuple's last word; cgn passes none)
+   (cgv src vol) (: r (cparse <>(clex src))
+                    (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r [() () {} {} {} () () {} {} () {} vol] 'x64) ()))
+   mfsrc "long h(long *sp, long *ip) { long *d = sp - 1; *d = ip[1]; long x = sp[-1]; return x + (long) d; }\nint main() { long a[4] = {0}; return (int) h(a + 2, a); }"
+   (lds fs) #(filter (f \ (two? f && <f = 'ld)) fs)
+   mf0 (fnf 'h <>(cgv mfsrc ()))
+   mf1 (fnf 'h <>(cgv mfsrc 1))
+   _ (test
+      (1 = lds mf0)                                          ; ip[1] only: sp[-1] is the stored register
+      (2 = lds mf1))                                         ; a unit that names volatile reloads
    ; a park under the caller's loop resets from its source every iteration -- that mov wears
    ; the entry-home shape (mov H A), and unhome renaming it away erases the reset. pears stops
    ; at the first body label, so the reset stands and the walk stays on the park.

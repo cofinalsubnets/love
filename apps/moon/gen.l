@@ -4168,6 +4168,77 @@
                         (go (k 1) (['br (negcc <>f) K] . acc) (cs + (['label K] . <k))))
                     (go >l (f . acc) cs))))
           (go fs () ())))
+   ; shrink-wrap: code the entry reaches without the frame runs without it. the prologue ((sub sp sp N)
+   ; and the saves after it) moves onto the edges that leave that region, one stub each, and the
+   ; region's exits drop their restores and (add sp sp N). the frame is needed by an sp operand, a
+   ; call, a push or pop, or a write of a saved register; a label reached from outside is outside
+   (swrap g fs)
+    (: f1 (two? fs && two? >fs ? <>fs)
+       N (? (two? f1 && <f1 = 'sub && f1 1 = 'sp && f1 2 = 'sp && charm? (f1 3)) (f1 3))
+       (sv l acc) (? (two? l && two? <l && <<l = 'st && <l 1 = 'sp && charm? (<l 2) && nom? (<l 3))
+                     (sv >l ([(<l 2) (<l 3)] . acc)) [(rev acc) l])
+       s9 (? N (sv >>fs ()))
+       (? (!(x64? g) || !N || !(two? <>s9)) fs
+          (: saves <s9 rs (map (\ p (p 1)) saves) bod <>s9 n #bod
+             fv (foldl (\ t i (pin t i (bod i))) {} (jot n))
+             lix (foldl (\ t i (: f (fv i) (? (two? f && <f = 'label) (pin t (f 1) i) t))) {} (jot n))
+             (uncond? f) (two? f && elem <f '(jmp jmpm jmpr ret ud2))
+             (epi? f) (two? f && (<f = 'add && f 1 = 'sp && f 2 = 'sp && f 3 = N ||
+                                  <f = 'ld && f 2 = 'sp && elem [(f 3) (f 1)] saves))
+             (needs? f) (? (!(two? f) || epi? f) ()
+                           (elem <f '(call callr push pop raw sys asm jmpt) || elem 'sp f) 1
+                           (elem <f '(label align br br8 jmp jmpm jmpr ret ud2)) ()   ; rdsp bars control forms
+                           (: rd (rdsp g f) (rd = 'bar || foldl (\ a r (a || elem r rs)) () <>rd)))
+             (tgt f) (? (two? f && elem <f '(br br8)) (f 2) (two? f && <f = 'jmp) (f 1))
+             (succ i f) (: t (tgt f) j (? t (peep lix t ()))
+                           (? (charm? j) (? (uncond? f) [j] [j (i + 1)])
+                              (uncond? f) ()
+                              (i + 1 < n) [(i + 1)] ()))
+             ; the branch predecessors of each label
+             bp (foldl (\ t i (: f (fv i) L (tgt f)
+                                 (? (L && charm? (peep lix L ())) (pin t L (i . peep t L ())) t))) {} (jot n))
+             (reach B)
+              (: (go st P) (? !(two? st) P
+                              (: i <st
+                                 (? (peep P i () || peep B i () || needs? (fv i)) (go >st P)
+                                    (go (succ i (fv i) + >st) (pin P i 1)))))
+                 (go [0] {}))
+             (settle B)
+              (: P (reach B)
+                 bad (filter (\ j (: f (fv j) L (f 1)
+                                    ; a label is inside only if every way in is
+                                    (!(foldl (\ a i (a && peep P i ())) 1 (peep bp L ())) ||
+                                     0 < j && !(uncond? (fv (j - 1))) && !(peep P (j - 1) ()))))
+                             (filter (\ j (: f (fv j) (two? f && <f = 'label))) (keys P)))
+                 (? (two? bad) (settle (foldl (\ t j (pin t j 1)) B bad)) P))
+             P (settle {})
+             (inP i) (peep P i ())
+             (exit? f) (two? f && (elem <f '(jmpm jmpr ret) || <f = 'jmp && !(charm? (peep lix (f 1) ()))))
+             ; the ways out: a branch to an outside label, or a fall into an outside form
+             (uniq l) (foldl (\ a j (? (elem j a) a (j . a))) () l)
+             jb (uniq (foldl (\ a i (: f (fv i) t (tgt f) j (? t (peep lix t ()))
+                                        (? (charm? j && !(inP j)) (j . a) a)))
+                             () (filter inP (jot n))))
+             jf (filter (\ i (i < n && !(inP i) && inP (i - 1) && !(uncond? (fv (i - 1)))))
+                        (map (+ 1) (filter inP (jot n))))
+             js (uniq (jb + jf))
+             (? (!(inP 0) || !(foldl (\ a i (a || exit? (fv i))) () (filter inP (jot n)))) fs
+                (: tl (foldl (\ t j (: f (fv j) (pin t j (? (two? f && <f = 'label) (f 1) (nlab g ".w"))))) {} js)
+                   sl (foldl (\ t j (pin t j (nlab g ".w"))) {} jb)
+                   pro (<>fs . map (\ p ['st 'sp (p 0) (p 1)]) saves)
+                   (emit i acc)
+                    (? !(i < n) (rev acc)
+                       (: f (fv i)
+                          (? (inP i)
+                              (: t (tgt f) j (? t (peep lix t ()))
+                                 f2 (? (charm? j && !(inP j)) (reop f (? (<f = 'jmp) 1 2) (sl j)) f)
+                                 a1 (? (epi? f) acc (f2 . acc))
+                                 (emit (i + 1) (? (!(uncond? f) && i + 1 < n && !(inP (i + 1)))
+                                                  (rev pro + a1) a1)))            ; a fall out lays the prologue inline
+                             (: a1 (? (elem i js && !(two? f && <f = 'label)) (['label (tl i)] . acc) acc)
+                                (emit (i + 1) (f . a1))))))
+                   stubs (foldl (\ a j (a + [['label (sl j)]] + pro + [['jmp (tl j)]])) () jb)
+                   ((<fs . emit 0 ()) + stubs))))))
    (unhome g fs)
     (: ar (argr g) hr (hregs g)
        (pears l n acc)                                ; the leading (mov H A) movs -> ((H A)..)
@@ -5127,6 +5198,58 @@
                     (charm? <>nx ? () ['cmprm <>nx <>>f <>>>f]))
               (two? m && dieb? g X fs >r ? (m . go >r) (f . go r)))
        (go fs))
+
+   ; memory forward: within a straight run a full word stored or loaded rides the register that
+   ; holds it, off any base but the frame's (stld's). an address is its base's root plus an offset,
+   ; through the lea/add/sub/mov that made the base. a store forgets what it may overlap (a
+   ; different root may alias), any other write or a call forgets all, a label starts over. runs
+   ; only where the unit names no volatile: the types carry no qualifier to say which loads are.
+   ; every target but thumb
+   (memfw g fs)
+    (? (t32? g || !(peep g 'novol ())) fs
+       (: fr '(sp fp r4)
+          mw (stops9 + siops + stxops + fstxops + '(push pop call callr raw sys asm))
+          (root A b o) (: e (assoc b A) (? (two? e) [(e 1) (o + e 2)] [b o]))
+          ; x is redefined: what rooted at x re-roots at a surviving copy of it, else goes
+          (kill M A x)
+           (: p (foldl (\ q e (? (q || !(e 1 = x && e 0 != x)) q e)) () A)
+              (? !p [(filter (\ e (e 0 != x && e 2 != x)) M)
+                     (filter (\ e (e 0 != x && e 1 != x)) A)]
+                 (: r (p 0) dk (p 2)
+                    [(filter (\ e (e 2 != x)) (map (\ e (? (e 0 = x) [r (e 1 - dk) (e 2)] e)) M))
+                     (filter (\ e (e 0 != x && e 0 != r))
+                             (map (\ e (? (e 1 = x) [(e 0) r (e 2 - dk)] e)) A))])))
+          (go l M A)
+           (? !(two? l) ()
+              (: f <l op (two? f ? <f)
+                 (? !(two? f) (f . go >l M A)
+                    (op = 'label) (f . go >l () ())
+                    (elem op '(jmp jmpr jmpm ret ud2)) (f . go >l () ())
+                    (elem op '(br br8 align)) (f . go >l M A)
+                    ; a full-word load: the register that holds the word answers it
+                    (op = 'ld && nom? (f 1) && nom? (f 2) && charm? (f 3) && nelem (f 2) fr && f 1 != 'sp)
+                     (: D (f 1) a (root A (f 2) (f 3))
+                        hit (foldl (\ r e (? (r || !(e 0 = a 0 && e 1 = a 1)) r (e 2))) () M)
+                        k (kill M A D)
+                        M2 (? (a 0 != D) ([(a 0) (a 1) D] . <k) <k)
+                        (? (hit = D) (go >l M2 (k 1))
+                           hit (['mov D hit] . go >l M2 (k 1))
+                           (f . go >l M2 (k 1))))
+                    ; a full-word store: what it may overlap goes, the stored register holds its word
+                    (op = 'st && nom? (f 1) && charm? (f 2) && nelem (f 1) fr)
+                     (: a (root A (f 1) (f 2))
+                        M1 (filter (\ e (e 0 = a 0 && (7 < e 1 - a 1 || e 1 - a 1 < -7))) M)
+                        (f . go >l (? (nom? (f 3)) ([(a 0) (a 1) (f 3)] . M1) M1) A))
+                    (: rd (rdsp g f)
+                       (? (rd = 'bar || elem op mw) (f . go >l () (? (rd = 'bar) () ((foldl (\ k x (kill <k (k 1) x)) [() A] <>rd) 1)))
+                          ; a base made by lea/add/sub off another, or a register copy, roots at that one
+                          (: D (f 1)
+                             bs (? (elem op '(lea add sub) && nom? D && nom? (f 2) && charm? (f 3) && nelem (f 2) fr)
+                                   (root A (f 2) (op = 'sub ? (0 - f 3) (f 3)))
+                                   (op = 'mov && nom? D && nom? (f 2) && nelem (f 2) fr) (root A (f 2) 0))
+                             k (foldl (\ k x (kill <k (k 1) x)) [M A] <>rd)
+                             (f . go >l <k (? (two? bs && bs 0 != D) ([D (bs 0) (bs 1)] . k 1) (k 1)))))))))
+          (go fs () ())))
 
    ; store-forward: within a straight run a full-word frame slot rides the register that last
    ; touched it; r3/cs reloads stay (epilogue anchors); an lea off r4 keeps the adjacent pair only
@@ -7529,6 +7652,8 @@
                        (dp 'sweeps (deadst g
                         (deaddef g      ; rerun: the widened addrfold strands live-dest addr insns
                         (cmpfuse g
+                        (copyprop g                 ; memfw's movs fold before cmpfuse reads the pair
+                        (memfw g                    ; after addrfold: an address is a base and an offset
                         (addrfold g
                         (addk g
                         (rezx g         ; after stld: the forward mints zx, this drops the redundant
@@ -7542,7 +7667,7 @@
                           (vrfix g
                           ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp frame] sav3] +
                            g 'cssv + <sp0 +
-                           body + '((li r0 0)) + peep g 'epi epi))))))))))))))))))))))
+                           body + '((li r0 0)) + peep g 'epi epi))))))))))))))))))))))))
        ; an r4 arrival (a64's 5th gp) is never ridden: gen spells the frame base r4 and a4ize retargets
        ; it to fp by position, so a ridden r4 in a base slot would turn into fp
        (a4rider? A) (fbase g !== 'r4 && A == 'r4)
@@ -7805,11 +7930,13 @@
        sp1 (? (uni9 || !(two? vzf)) sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
        irf (? uni9 (ubuild (alive g f)) (build sp1))
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):
-       ; the a64 sweeps (rv64 takes addk alone), then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
-       (swp irx) (? !(a64? g) (? (rv64? g) (addk g irx) irx)      ; rv64's one sweep
+       ; the a64 sweeps (rv64 takes addk and memfw), then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
+       (swp irx) (? !(a64? g) (? (rv64? g) (copyprop g (memfw g (addk g irx))) irx)   ; rv64's sweeps
                     (tailst g
                     (deadst g
                      (deaddef g
+                     (copyprop g
+                     (memfw g
                      (addrfold g
                      (addk g
                      (rezx g
@@ -7818,10 +7945,10 @@
                      (spmerge
                      (deaddef g
                      (deadcell g
-                     (cfoldir g irx)))))))))))))
+                     (cfoldir g irx)))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))
+       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -7956,6 +8083,8 @@
           'rstrs (two? xtra && 8 < #xtra ? (xtra 8) {})
           ; file-scope `register T nm asm("R")` names: vent answers the register, nothing is laid
           'gregs (two? xtra && 10 < #xtra ? (xtra 10) {})
+          ; the unit names no volatile (the parser's word; absent reads as named): memfw may run
+          'novol (two? xtra && 11 < #xtra && !(xtra 11))
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}}                               ; a const candidate's image, laid once and read by both walks

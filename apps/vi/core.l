@@ -63,6 +63,7 @@
 (borrow 'kore) ; the text/u floors
 (borrow 'lint)  ; lint-scan, spliced for this module's compile
 (borrow 'tui)   ; tui-fresh, the diff repaint every full-screen app wants
+(borrow 'text)  ; utf-8 read as characters, and their widths
 (:
    ; -- the small floor --
    ; lists do not index by application (a number list would church-tower), so
@@ -80,8 +81,7 @@
    (vnl st) (tally (st 'lines))
    (vdrop l k) (? ((k < 1) || one? l) l (vdrop >l (k - 1)))
    ; a line's height in screen rows: 1 unwrapped, else what it folds to
-   (vhgt st ln) (? !(st 'wrap) 1
-                   (: w (st 'w) q ((#ln + (w - 1)) // w) (? (q < 1) 1 q)))
+   (vhgt st ln) (? !(st 'wrap) 1 (tally (vsegs ln (st 'w))))
    ; the last file row the body can show -- what H M L stop at. wrapped, that
    ; is a walk down the heights from the view's corner
    (vbot st)
@@ -110,14 +110,50 @@
                                                      ((? (i = r) ln <l) . go >l (i + 1)))
                                          (go (st 'lines) 0)))
                      (vgen st))
-   (vgole st c) (pins st 'col c 'goal c)
-   (vclampn st) (: n (vlen st)                     ; normal-mode col fence
-                    (? (st 'col < n) st
-                       (vgole st (? (0 < n) (n - 1) 0))))
+   ; -- characters: 'col is a byte, always a character's first, and the screen counts
+   ; columns -- a wide character two, a combining mark none, an ascii byte one (a tab
+   ; renders raw, so it is the terminal's one column here too)
+   (vnx ln i) (? (#ln <= i || ln i < 128) (i + 1) (cpnext ln i))
+   (vhead ln i)                                    ; the first byte of the character at i
+    (: (go j) (? (j < 1 || 2 < i - j || (ln j & 192) != 128) j (go (j - 1)))
+       j (? (#ln <= i) i (go i))
+       (? (j < i && cpnext ln j <= i) i j))
+   (vpv ln i) (? (i < 1) 0 (vhead ln (i - 1)))
+   (vend ln) (vpv ln #ln)                          ; the last character, 0 on an empty line
+   (vchars ln i k) (? (k < 1 || #ln <= i) i (vchars ln (vnx ln i) (k - 1)))
+   (vcharsb ln i k) (? (k < 1 || i < 1) i (vcharsb ln (vpv ln i) (k - 1)))
+   (vcw ln i) (: b (ln i) (? (b < 128) 1 (max 0 (wcwidth (cpat ln i)))))
+   (vcols ln a b)                                  ; the columns bytes [a,b) take
+    (: n #ln (go i c) (? (b <= i || n <= i) c (go (vnx ln i) (c + vcw ln i))) (go a 0))
+   (vcolat ln g)                                   ; the character column g falls in, #ln past it
+    (: n #ln
+       (go i c) (? (n <= i) n (: c2 (c + vcw ln i) (? (g < c2) i (go (vnx ln i) c2))))
+       (go 0 0))
+   ; the byte starts of the screen rows ln folds to at width w: a character that would
+   ; cross the margin opens the next row. width never passes the byte count, so a line
+   ; no longer than w is one row without a walk
+   (vsegs ln w)
+    (: n #ln
+       (go i c acc) (? (n <= i) (rev acc)
+                       (: cw (vcw ln i)
+                          (? (w < c + cw && 0 < c) (go i 0 (i . acc)) (go (vnx ln i) (c + cw) acc))))
+       (? (n <= w) [0] (go 0 0 [0])))
+   ; the bytes of ln showing in columns [c0, c0 + w) -> [a b pad]: a wide character the
+   ; left edge cuts is left out, its column shown blank
+   (vwin ln c0 w)
+    (: n #ln
+       (lo i c) (? (n <= i || c0 <= c) [i c] (lo (vnx ln i) (c + vcw ln i)))
+       p (lo 0 0) a <p ca <>p
+       (hi i c) (? (n <= i) i (: c2 (c + vcw ln i) (? (c0 + w < c2) i (hi (vnx ln i) c2))))
+       [a (hi a ca) (? (ca < c0) 0 (ca - c0))])
+
+   (vgole st c) (pins st 'col c 'goal (vcols (vln st) 0 c))
+   (vclampn st) (: ln (vln st) n #ln               ; normal-mode col fence
+                    (? (st 'col < n) st (vgole st (vend ln))))
    (vcl c) (? (c = 32 || c = 9) 0              ; char class: blank / word / ink
               (48 <= c <= 57 ||
                65 <= c <= 90 ||
-               97 <= c <= 122 || c = 95) 1
+               97 <= c <= 122 || c = 95 || 128 <= c) 1   ; a letter past ascii is a word's
               2)
    (vclw c) (? (c = 32 || c = 9) 0 1)          ; the WORD class: blank / everything else
    (vupc c) (? (97 <= c <= 122) (c - 32) (65 <= c <= 90) (c + 32) c)   ; ~'s flip
@@ -129,8 +165,8 @@
    (vblanks n) (: (go i acc) (? (i < 1) acc (go (i - 1) (acc + " "))) (go n ""))
    (vmsg st m) (pin st 'msg m)
    (vsnap st) (pins st 'undo ([(st 'lines) (st 'row) (st 'col)] . st 'undo) 'redo ())
-   (vrest st fr) (: _ (pins st 'lines <fr 'row <>fr)
-                     _ (vgole st <>>fr) _ (pin st 'dirty 1) (vgen st))
+   (vrest st fr) (: _ (pins st 'lines <fr 'row <>fr) _ (vgen st)
+                     _ (vgole st <>>fr) (pin st 'dirty 1))
 
    ; the pure half of :e -- the face reads the file and hands the lines over, this
    ; starts the buffer over on them: cursor home, no history, not dirty. the paint
@@ -179,12 +215,12 @@
                         (? (c2 < #ln) (? (cf (ln c2) = 0) (skipb r2 (c2 + 1)) [r2 c2])
                            ((r2 + 1) < n) (skipb (r2 + 1) 0)
                            [r2 c2]))
-       p (skipb r (c + 1))
+       p (skipb r (vnx (ls r) c))
        r2 <p c2 <>p ln (ls r2)
-       (? (#ln <= c2) [r2 (? (0 < #ln) (#ln - 1) 0)]
+       (? (#ln <= c2) [r2 (vend ln)]
           (: k (cf (ln c2))
              (run j) (? ((j < #ln) && (cf (ln j) = k)) (run (j + 1)) (j - 1))
-             [r2 (run c2)])))
+             [r2 (vhead ln (run c2))])))
    (vwback st cf r c)                              ; previous word start
     (: ls (st 'lines)
        (skipb r2 c2) (? (c2 < 0) (0 < r2 ? (: pr (r2 - 1) (skipb pr (#(ls pr) - 1)))
@@ -308,12 +344,12 @@
                       (? (<pv < <p) ['to <pv #(st 'lines <pv)] ['to <p <>p]))
        (top1 k) (: t (st 'top + (k - 1)) b (vbot st)
                    (? (b < t) b (nl <= t) (nl - 1) t))
-     (c @ 104 ['to r (: k (col - n) (? (k < 0) 0 k))]             ; h
-          108 ['to r (: k (col + n) (? (len < k) len k))]        ; l
+     (c @ 104 ['to r (vcharsb ln col n)]                         ; h
+          108 ['to r (vchars ln col n)]                          ; l
           48 ['to r 0]                                           ; 0
           94 ['to r (vink ln)]                                   ; ^
-          36 (? (0 < len) ['toi r (len - 1)] ['to r 0])         ; $
-          124 ['to r (: k (n - 1) (? (len < k) len k))]          ; |
+          36 (? (0 < len) ['toi r (vend ln)] ['to r 0])         ; $
+          124 ['to r (vcolat ln (n - 1))]                        ; | -- a screen column
           119 (two? (st 'op) ? (walkop vcl) (walk vwfwd vcl 'to))   ; w
           101 (walk vwend vcl 'toi)                              ; e
           98  (walk vwback vcl 'to)                              ; b
@@ -334,26 +370,28 @@
           37 (: p (vpct st)                                      ; %
                 (? !(two? p) ()
                    (r < <p) ['spn r col <p (<>p + 1)]
-                   (<p < r) ['spn <p <>p r (col + 1)]
+                   (<p < r) ['spn <p <>p r (vnx ln col)]
                    (col <= <>p) ['toi r <>p]
-                   ['spn r <>p r (col + 1)]))
+                   ['spn r <>p r (vnx ln col)]))
           71 ['lin (? (0 < raw) (: k (raw - 1) (? (k < nl) k (nl - 1)))
                            (nl - 1))]))                               ; G
-   ; f F t T with the argument char a
+   ; f F t T with the argument character a, as text: a utf-8 lead is never a tail
+   ; byte, so a byte-wise hit is a character's start
    (vfind st k a n)
-    (: ln (vln st) len (tally ln) col (st 'col)
+    (: ln (vln st) len (tally ln) col (st 'col) m #a
        fwd (k = 'f || k = 't)
        (go i c2 left) (? (left < 1) c2
                          (: nx (? fwd (fx (i + 1)) (bx (i - 1)))
                             (? (charm? nx) (go nx nx (left - 1)) ())))   ; charm?, not truth: column 0 is a hit
-       (fx i) (: (s2 j) (? (len <= j) () (ln j = a) j (s2 (j + 1))) (s2 i))
-       (bx i) (: (s2 j) (? (j < 0) () (ln j = a) j (s2 (j - 1))) (s2 i))
+       (at? j) (j + m <= len && snip ln j (j + m) = a)
+       (fx i) (: (s2 j) (? (len <= j) () (at? j) j (s2 (j + 1))) (s2 i))
+       (bx i) (: (s2 j) (? (j < 0) () (at? j) j (s2 (j - 1))) (s2 i))
        hit (go col () n)
        (? !(charm? hit) ()
         (k @ 'f  ['toi (st 'row) hit]
-             't (col < hit ? ['toi (st 'row) (hit - 1)])
+             't (col < hit ? ['toi (st 'row) (vpv ln hit)])
              'F ['to (st 'row) hit]
-             (hit < col ? ['to (st 'row) (hit + 1)]))))
+             (hit < col ? ['to (st 'row) (hit + m)]))))
 
    ; -- the operators --
    ; the opcodes are the keys themselves: d y c, and > < for the shifts, which are
@@ -425,9 +463,10 @@
           (kind = 'spn)  (: t >>>mr
                             (? (vlinop? opc) (vopl st opc a <t) (vospn st opc a b <t <>t)))
           (vlinop? opc)  (vopl st opc (st 'row) a)
-          (a = st 'row)  (vopc st opc (st 'row) (st 'col) (? (kind = 'toi) (b + 1) b))
-          (st 'row < a)  (vospn st opc (st 'row) (st 'col) a (? (kind = 'toi) (b + 1) b))
-          (vospn st opc a b (st 'row) (? (kind = 'toi) (st 'col + 1) (st 'col)))))
+          ; an inclusive end takes its whole character
+          (a = st 'row)  (vopc st opc (st 'row) (st 'col) (? (kind = 'toi) (vnx (st 'lines a) b) b))
+          (st 'row < a)  (vospn st opc (st 'row) (st 'col) a (? (kind = 'toi) (vnx (st 'lines a) b) b))
+          (vospn st opc a b (st 'row) (? (kind = 'toi) (vnx (vln st) (st 'col)) (st 'col)))))
 
    ; -- the text objects: i and a after an operator ----------------------------
    ; each answers a range in vapply's own vocabulary, so ci( and di( and yi( are
@@ -435,7 +474,7 @@
    (vwobj st cf ar n)                              ; iw aw iW aW -- runs on this row
     (: r (st 'row) ln (st 'lines r) len #ln
        (? (len < 1) ()
-          (: c (: k (st 'col) (? (len <= k) (len - 1) k))
+          (: c (: k (st 'col) (? (len <= k) (vend ln) k))
              (rune i) (: k (cf (ln i))
                          (go j) (? (j < len && cf (ln j) = k) (go (j + 1)) j)
                          (go i))
@@ -511,7 +550,7 @@
              (rep i acc) (i < 1 ? acc (rep (i - 1) (acc + t)))
              tt (rep n "")
              ln (vln st) len #ln r (st 'row)
-             at (after && 0 < len ? (st 'col + 1) (st 'col))
+             at (after && 0 < len ? (vnx ln (st 'col)) (st 'col))
              ; text.l's `lines` drops a trailing empty and a charwise register that
              ; ends at a line's start is exactly that -- so this split keeps them
              ps (: k #tt
@@ -523,7 +562,7 @@
              ; line opens at the cursor and the tail rides the register's last row
              (? (#ps < 2)
                 (: _ (vput st r (snip ln 0 at + tt + snip ln at len))
-                   _ (vgole st (at + #tt - 1))
+                   _ (vgole st (vpv (vln st) (at + #tt)))
                    st)
                 (: lst (vexlast ps)
                    mid (: (go l acc) (? !(two? >l) (rev acc) (go >l (<l . acc))) (go >ps ()))
@@ -614,7 +653,7 @@
                (bwd (% ((i - 1) + nl) nl) (steps + 1)))))
        hit (0 < dir ? (fwd r 0) (bwd r 0))
        (two? hit ?
-        (pin st 'row <hit, vgole st <>hit, st)
+        (pin st 'row <hit, vgole st (vhead (ls <hit) <>hit), st)
         (vmsg st $ "not found: " + st 'pattx)))
    ; * and # -- the word under the cursor becomes the search. a name in this tree
    ; is full of BRE metacharacters (`map*`, `1.5`, `\`), so every one of them is
@@ -975,7 +1014,7 @@
    (vins st c)
     (: r (st 'row) col (st 'col) ln (vln st) len #ln
        (? (c = 27) (: _ (pin st 'mode 'n)
-                      _ (vgole st (0 < col ? (col - 1) 0))
+                      _ (vgole st (vpv ln col))
                       (vclampn st))
           (c = 13 || c = 10)
            (: _ (vput st r (snip ln 0 col))
@@ -983,8 +1022,9 @@
               _ (pin st 'row (r + 1))
               (vgole st 0))
           (c = 8 || c = 127)
-           (? (0 < col) (: _ (vput st r (snip ln 0 (col - 1) + snip ln col len))
-                           (vgole st (col - 1)))
+           (? (0 < col) (: p (vpv ln col)
+                           _ (vput st r (snip ln 0 p + snip ln col len))
+                           (vgole st p))
               (0 < r) (: pv (st 'lines (r - 1)) pl #pv
                          _ (vsplice st (r - 1) r [(pv + ln)])
                          _ (pin st 'row (r - 1))
@@ -1004,29 +1044,40 @@
               (vgole st (col + 1)))
           ; the arrows: insert's cursor may sit past the last char, so the fences are
           ; the line's length, and up and down keep the goal column as j and k do
-          (c = -1) (vgole st (0 < col ? (col - 1) 0))
-          (c = -2) (vgole st (col < len ? (col + 1) len))
+          (c = -1) (vgole st (vpv ln col))
+          (c = -2) (vgole st (col < len ? (vnx ln col) len))
           (c = -8 || c = -9)
            (: k (c = -8 ? (r - 1) (r + 1))
               (? (k < 0 || vnl st <= k) st
-                 (: _ (pin st 'row k) n (vlen st) g (st 'goal)
-                    (pin st 'col (g < n ? g n)))))
+                 (: _ (pin st 'row k) (pin st 'col (vcolat (vln st) (st 'goal))))))
           st))
 
    ; -- the pending char-argument commands --
+   ; keys come a byte at a time, so a utf-8 lead waits in 'pcb for its tail and the
+   ; argument goes on as the character's text; a torn one goes on as what came
+   (vpcu st c)
+    (: b (st 'pcb)
+       s (? (0 < #b) (b + string c) (192 <= c < 248) (string c) ())
+       (? (c = 27) (: _ (pin st 'pcb "") (vpc st c))
+          !s (vpc st c)
+          (: l (s 0) need (? (l < 224) 2 (l < 240) 3 4)
+             (? (#s < need && (#s = 1 || (c & 192) = 128)) (pin st 'pcb s)
+                (: _ (pin st 'pcb "") (vpc st s))))))
    (vpc st c)
     (: k (st 'pc) n (: v (st 'cnt) (? (0 < v) v 1))
        _ (pin st 'pc ()) _ (pin st 'cnt 0)
        (? (c = 27) (pin st 'op (), st)             ; escape drops the pending operator too
-          (k = 'r) (? (c = 9 || 32 <= c)
-                      (: ln (vln st) len #ln col (st 'col)
-                         (? (col + n <= len)
-                            (: (rep i acc) (i < 1 ? acc (rep (i - 1) (acc + string c)))
-                               _ (vsnap st)
-                               _ (vput st (st 'row) (snip ln 0 col + rep n "" + snip ln (col + n) len))
-                               (vgole st (col + n - 1)))
-                            st))
-                      st)
+          ; r replaces n characters, all of them there or none
+          (k = 'r) (: t (? (string? c) c (c = 9 || 32 <= c) (string c) ())
+                      (? !t st
+                         (: ln (vln st) len #ln col (st 'col)
+                            lst (vchars ln col (n - 1))
+                            (? (lst < len)
+                               (: (rep i acc) (i < 1 ? acc (rep (i - 1) (acc + t)))
+                                  _ (vsnap st)
+                                  _ (vput st (st 'row) (snip ln 0 col + rep n "" + snip ln (vnx ln lst) len))
+                                  (vgole st (col + (n - 1) * #t)))
+                               st))))
           (k = 'g) (? (c = 103)                                 ; gg
                       (: t (0 < st 'gcnt ? (st 'gcnt - 1) 0)
                          nl (vnl st)
@@ -1044,7 +1095,7 @@
                                             (bk (i - 1)) i)
                                   e (bk #ln)
                                   op (st 'op) _ (pin st 'op ())
-                                  mr ['toi t (0 < e ? (e - 1) 0)]
+                                  mr ['toi t (vpv ln e)]
                                   (two? op ? (vapply st <op mr)
                                    (pin st 'row t, vgole st <>>mr, st)))
                       st)
@@ -1063,9 +1114,10 @@
               _ (pin st 'op ())
               (? (two? mr && two? op) (vapply st <op mr) st))
           ; f F t T -- and the pair is remembered, which is what ; and , repeat
-          (: mr (vfind st k c n)
+          (: a (? (string? c) c (string c))
+             mr (vfind st k a n)
              op (st 'op)
-             _ (pin st 'lastf [k c])
+             _ (pin st 'lastf [k a])
              _ (pin st 'op ())
              (? !(two? mr) st
                 (two? op) (vapply st <op mr)
@@ -1078,8 +1130,8 @@
         (? (one? mr) st
            (<mr = 'lin)
             (: t <>mr _ (pin st 'row t)
-             (pin st 'col (: g (st 'goal) len (vlen st)
-                           (? (g < len) g (0 < len) (len - 1) 0))))
+             (pin st 'col (: ln (vln st) k (vcolat ln (st 'goal))
+                           (? (k < #ln) k (vend ln)))))
            ; 'linb is 'lin that lands on the line's first ink: + - _ and the ex
            ; addresses do that and j and k deliberately do not
            (<mr = 'linb) (: _ (pin st 'row <>mr) (vgole st (vink (vln st))))
@@ -1091,10 +1143,8 @@
                     [<>mr <>>mr])
                _ (pin st 'row <p)
                (vgole st <>p))
-           (: _ (vgole st (: c2 <>>mr len (vlen st)
-                             lim (0 < len ? (len - 1) 0)
-                             (lim < c2 ? lim c2)))
-              (pin st 'row <>mr)))
+           (: _ (pin st 'row <>mr)
+              (vgole st (: c2 <>>mr lim (vend (vln st)) (lim < c2 ? lim c2)))))
        (motion mr)
         (: op (st 'op) _ (pin st 'op ())
            (? !(two? mr) st
@@ -1141,13 +1191,10 @@
                     (vopl st c (st 'row) (: t ((st 'row + total) - 1) nl (vnl st)
                                             (? (t < nl) t (nl - 1)))))
                  (: _ (pin st 'op [c n]) st)))
-          (c = 120) (: len (vlen st)                            ; x
-                       (? (0 < len)
-                          (vopc st 100 (st 'row) (st 'col)
-                                (: e (st 'col + n) (? (len < e) len e)))
-                          st))
+          (c = 120) (: ln (vln st)                              ; x
+                       (? (0 < #ln) (vopc st 100 (st 'row) (st 'col) (vchars ln (st 'col) n)) st))
           (c = 88) (? (0 < st 'col)                             ; X
-                      (vopc st 100 (st 'row) (: k (st 'col - n) (? (k < 0) 0 k)) (st 'col))
+                      (vopc st 100 (st 'row) (vcharsb (vln st) (st 'col) n) (st 'col))
                       st)
           (c = 68) (: len (vlen st)                             ; D
                       (? (st 'col < len) (vopc st 100 (st 'row) (st 'col) len) st))
@@ -1155,10 +1202,9 @@
                       _ (? (st 'col < len) (vopc st 99 (st 'row) (st 'col) len)
                            (: _ (vsnap st) (pin st 'mode 'i)))
                       st)
-          (c = 115) (: len (vlen st)                            ; s
-                       (? (0 < len)
-                          (vopc st 99 (st 'row) (st 'col)
-                                (: e (st 'col + n) (? (len < e) len e)))
+          (c = 115) (: ln (vln st)                              ; s
+                       (? (0 < #ln)
+                          (vopc st 99 (st 'row) (st 'col) (vchars ln (st 'col) n))
                           (: _ (vsnap st) _ (pin st 'mode 'i) st)))
           (c = 74) (vjoin st n 1)                               ; J
           (c = 89) (vopl st 121 (st 'row)                       ; Y: yy, the whole line
@@ -1167,18 +1213,18 @@
                          (: t ((st 'row + n) - 1) nl (vnl st) (? (t < nl) t (nl - 1))))
           (c = 126) (: ln (vln st) len #ln col (st 'col)        ; ~
                        (? (len < 1) st
-                          (: e (: k (col + n) (? (len < k) len k))
+                          (: e (vchars ln col n)
                              _ (vsnap st)
                              _ (vput st (st 'row)
                                     (snip ln 0 col + vflip (snip ln col e) + snip ln e len))
                              _ (pin st 'dirty 1)
-                             (vgole st (e < len ? e (len - 1))))))
+                             (vgole st (e < len ? e (vend ln))))))
           (c = 42) (vstar st 1)  (c = 35) (vstar st -1)         ; * #
           (c = 1) (vincr st n)   (c = 24) (vincr st (0 - n))    ; ^A ^X
           (c = 46) (vdot st rawc)                               ; .
           (c = 105) (: _ (vsnap st) (pin st 'mode 'i))          ; i
           (c = 97) (: _ (vsnap st)                              ; a
-                      _ (vgole st (? (0 < vlen st) (st 'col + 1) 0))
+                      _ (vgole st (? (0 < vlen st) (vnx (vln st) (st 'col)) 0))
                       (pin st 'mode 'i))
           (c = 73) (: _ (vsnap st) _ (vgole st (vink (vln st))) (pin st 'mode 'i))   ; I
           (c = 65) (: _ (vsnap st) _ (vgole st (vlen st)) (pin st 'mode 'i))         ; A
@@ -1230,7 +1276,7 @@
        (leave _) (pins st 'va () 'mode 'n)
        (op opc) (: _ (leave ())
                    (? (kind = 'V || vlinop? opc) (vopl st opc r1 r2)
-                      (vospn st opc r1 c1 r2 (c2 + 1))))
+                      (vospn st opc r1 c1 r2 (vnx (st 'lines r2) c2))))
        (? (c = 27) (leave ())
           (c = 118 || c = 86) (: k (c = 118 ? 'v 'V) (? (k = kind) (leave ()) (pin st 'mode k)))
           (c = 111) (: _ (pin st 'va [r col]) _ (pin st 'row <a) (vgole st <>a))
@@ -1269,7 +1315,7 @@
    (vstep1 st c)
     (: m (st 'mode)
        (? (m = 'i) (vins st c)
-          (m = 'v || m = 'V) (? (st 'pc) (vpc st c) (vvis st c))
+          (m = 'v || m = 'V) (? (st 'pc) (vpcu st c) (vvis st c))
           (m = 'c || m = 's)
            ; the line is cli's prompt; a backspace on nothing leaves too, which is vi's
            ; own rule and no prompt's
@@ -1287,7 +1333,7 @@
                                    (vmsg st $ "bad pattern: " + s))))))
                   (_ \ pin st 'mode (m = 's ? (vback st) 'n)))))
           ; normal
-          (? (st 'pc) (vpc st c)
+          (? (st 'pc) (vpcu st c)
              (48 <= c <= 57 && (48 < c || 0 < st 'cnt))
               (pin st 'cnt (10 * st 'cnt + c - 48))
              (c = 27) (pins st 'cnt 0 'op (), vmsg st "")
@@ -1301,7 +1347,7 @@
    (vnew ls file)
     {'lines (two? ls ? ls '(""))
      'row 0 'col 0 'goal 0 'top 0 'tops 0 'left 0 'wrap ()
-     'mode 'n 'cnt 0 'op () 'pc () 'gcnt 0 'lastf ()
+     'mode 'n 'cnt 0 'op () 'pc () 'pcb "" 'gcnt 0 'lastf ()
      'reg () 'undo () 'redo ()
      'dot () 'rec () 'reccnt 0 'dotting ()
      'file file 'dirty () 'msg "" 'sw 2
@@ -1318,7 +1364,10 @@
     (: w (st 'w) h (st 'h) body (h - 1) ls (st 'lines)
        wrap? (st 'wrap) row (st 'row) cln (vln st)
        (hgt ln) (vhgt st ln)
-       cs (? !wrap? 0 (: q (st 'col // w) k (hgt cln) (? (k <= q) (k - 1) q)))
+       ; the cursor's screen row within its line and the byte that row opens on
+       cseg (: (go l i) (? (two? >l && <>l <= st 'col) (go >l (i + 1)) [i <l])
+               (? wrap? (go (vsegs cln w) 0) [0 0]))
+       cs <cseg
        ; -- settle the view. unwrapped, 'top is the old row arithmetic and 'left
        ; slides half a screen at a time, never further right than the line's end.
        ; wrapped, the corner carries a segment offset too and the distance to the
@@ -1330,10 +1379,13 @@
                 ? (pins st 'top row 'tops cs)))
             (: _ (row < st 'top ? (pin st 'top row))
                _ ((st 'top + (body - 1)) < row ? (pin st 'top (row - (body - 1))))
+               ; 'left is a screen column, and the cursor's character shows whole
                col (st 'col)
-               lim (: q (#cln - w) (? (q < 0) 0 q))
-               (((col < st 'left) || ((st 'left + (w - 1)) < col))
-                ? (pin st 'left (: q (col - (w // 2)) (? (q < 0) 0 (lim < q) lim q))))))
+               cc0 (vcols cln 0 col)
+               cw (? (col < #cln) (vcw cln col) 1)
+               lim (: q (vcols cln 0 #cln - w) (? (q < 0) 0 q))
+               (((cc0 < st 'left) || ((st 'left + w) < (cc0 + cw)))
+                ? (pin st 'left (: q (cc0 - (w // 2)) (? (q < 0) 0 (lim < q) lim q))))))
        t0 (st 'top) l0 (vdrop ls t0)
        ; the screen rows from the view's corner down to the cursor, inclusive
        cnt (? !wrap? ((row - t0) + 1)
@@ -1375,13 +1427,15 @@
        (sel fr raw) (? (!vis? || fr < vr1 || vr2 < fr) ()
                        (: k #raw
                           (? (st 'mode = 'V) [0 (? (k < 1) 1 k)]
-                             (vr1 = vr2) [vc1 (vc2 + 1)]
-                             (fr = vr1) [vc1 (? (k < vc1 + 1) (vc1 + 1) k)]
-                             (fr = vr2) [0 (vc2 + 1)]
+                             (vr1 = vr2) [vc1 (vnx raw vc2)]
+                             (fr = vr1) [vc1 (: e (vnx raw vc1) (? (k < e) e k))]
+                             (fr = vr2) [0 (vnx raw vc2)]
                              [0 (? (k < 1) 1 k)])))
-       (lay raw in i a fr)
-        (: k #raw b (? (k < (a + w)) k (a + w))
+       ; win is the row's [a b pad]: its bytes, and the blank a cut wide character leaves
+       (lay raw in i win fr)
+        (: k #raw a <win b (: e <>win (? (k < e) k e))
            s (sel fr raw)
+           (vblanks <>>win +
            (? (two? s && (k = 0 || <s < b) && a < <>s)
                (: p (? (<s < a) a <s) q (? (b < <>s) b <>s)
                   pad (? (k < <>s && q = k) " " "")     ; the cell past the end, a line's own
@@ -1392,7 +1446,7 @@
                  (? (two? c && (= <c ky)) <>c
                     (: p (hue-win (st 'pens) lx raw in a b)
                        _ (pin rw i [ky p])
-                       p)))))
+                       p))))))
        ; 'lines and the carry are LISTS: asking for row i by application walks i
        ; pairs, so a screenful deep in a file walked the file forty times over --
        ; 55% of a keystroke, and the whole of why moving around got slower the
@@ -1400,7 +1454,10 @@
        (rows l cl i k acc fr)
         (? (body <= i) (rev acc)
            !(two? l) (rows l cl (i + 1) 0 ("~" . acc) fr)
-           (: raw <l r (lay raw <cl i (? wrap? (k * w) left) fr)
+           (: raw <l
+              win (? wrap? (: sg (vdrop (vsegs raw w) k) [<sg (two? >sg ? <>sg #raw) 0])
+                     (vwin raw left w))
+              r (lay raw <cl i win fr)
               (? (wrap? && ((k + 1) < hgt raw)) (rows l cl (i + 1) (k + 1) (r . acc) fr)
                  (rows >l >cl (i + 1) 0 (r . acc) (fr + 1)))))
        status (? (st 'mode = 'c) (":" + edtext (st 'cmd))
@@ -1414,8 +1471,8 @@
        said? (st 'mode = 'c || st 'mode = 's)
        cr (? said? h (? (body < cnt) body cnt))
        cc (: k (? said? (edcol (st 'cmd) + 2)
-                  wrap? ((st 'col - (cs * w)) + 1)
-                  ((st 'col - left) + 1))
+                  wrap? (vcols cln <>cseg (st 'col) + 1)
+                  (vcols cln 0 (st 'col) - left + 1))
              (? (w < k) w k))
        ; the body is a pure function of these, so when none of them moved the rows
        ; are the ones we laid last time -- a keystroke that only walks the cursor
