@@ -130,6 +130,11 @@
    _ (catch srv)
    _ (close l))                             ; reaching here at all is the law
 
+  ; a listener on one address, loopback's, reached there; a quad that is not one refused
+  (: l (listen ['tcp "127.0.0.1" 7398]) c (connect ['tcp "127.0.0.1" 7398]) s (accept l)
+     _ (close c) _ (close s) _ (close l)
+     (test (hot? l) (hot? c) (hot? s) ('badarg = listen ['tcp "1.2.3" 7399])))
+
   ; --- the other families: unix streams, udp's peer, an icmp echo -----------------
   ; one listen and one connect for every stream family: a unix one echoes the same way
   (: path (cwd 0 + "/out/.net-unix.sock")

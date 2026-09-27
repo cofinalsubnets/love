@@ -309,5 +309,64 @@
                    st (drain t)
                    _ (? pty? (raw 0) 0)
                    st)))))
+
+   ; --- a channel as a byte stream, for a protocol riding exec (scp) ---
+   ;   (ssh-open t cmd)   a session channel running cmd, no pty -> 1 | a reason string
+   ;   (ch-read t n)      exactly n bytes, or () when the channel ended first
+   ;   (ch-line t)        through the next newline, or ()
+   ;   (ch-write t s)     inside the peer's window, waiting on its adjusts
+   ;   (ch-end t)         eof, then the channel's close -> the exit status
+   ; one task drives it: a read pulls packets until it has enough, stderr goes to ours
+   (ssh-open t cmd)
+    (: _ (ssh-send t (u8 90 + sstr "session" + u32 0 + u32 lwin + u32 32768))
+       r (ssh-next t)
+       (? !((string? r) && (r 0 = 91)) "the server refused a session channel"
+          (: c (cur r) _ (g-skip c 5)
+             rch (g-u32 c) rwin (g-u32 c) rmax (g-u32 c)       ; in wire order: pins evaluates last first
+             _ (pins t 'rch rch 'rwin rwin 'rmax rmax 'used 0 'status -1 'rbuf "" 'eof 0 'closed 0)
+             _ (chreq t "exec" 1 (sstr cmd))
+             (? (reply t) 1 ("the server would not run " + cmd)))))
+   (ch-took t n) (: used (t 'used + n)
+                    (? (lwin // 2 < used) (: _ (ssh-send t (u8 93 + u32 (t 'rch) + u32 used)) (pin t 'used 0))
+                       (pin t 'used used)))
+   ; one packet into the channel's state -> 0 once it can bring no more
+   (ch-pull t)
+    (: p (? ((t 'closed) = 1) () (ssh-next t))
+       (? !(string? p) (: _ (pins t 'eof 1 'closed 1) 0)
+          (: ty (p 0) c (cur p) _ (g-skip c 5)
+             (? (ty = 94) (: d (g-str c) _ (pin t 'rbuf (t 'rbuf + d)) _ (ch-took t #d) 1)
+                (ty = 95) (: _ (g-u32 c) d (g-str c) _ (say err d) _ (flush err) _ (ch-took t #d) 1)
+                (ty = 93) (: _ (pin t 'rwin (t 'rwin + g-u32 c)) 1)
+                (ty = 98) (: nm (g-str c) wr? (g-u8 c)
+                             _ (? (nm = "exit-status") (pin t 'status (g-u32 c)) (nm = "exit-signal") (pin t 'status 255) 0)
+                             _ (? wr? (ssh-send t (u8 100 + u32 (t 'rch))) 0)
+                             1)
+                (ty = 96) (: _ (pin t 'eof 1) 1)
+                (ty = 97) (: _ (ssh-send t (u8 97 + u32 (t 'rch))) _ (pins t 'eof 1 'closed 1) 0)
+                1))))
+   (ch-read t n)
+    (: b (t 'rbuf)
+       (? (n <= #b) (: _ (pin t 'rbuf (snip b n #b)) (snip b 0 n))
+          ((t 'eof) = 1) ()
+          (: _ (ch-pull t) (ch-read t n))))
+   (ch-line t)
+    (: b (t 'rbuf)
+       k ((: (g i) (? (#b <= i) -1 (b i = 10) i (g (i + 1)))) 0)
+       (? (0 <= k) (ch-read t (k + 1))
+          ((t 'eof) = 1) ()
+          (: _ (ch-pull t) (ch-line t))))
+   (ch-write t s)
+    (: (go i) (? (#s <= i) 1
+                 ((t 'closed) = 1) 0
+                 (: room (min (t 'rmax) (t 'rwin))
+                    (? (room < 1) (: _ (ch-pull t) (go i))
+                       (: n (min room (#s - i))
+                          _ (pin t 'rwin (t 'rwin - n))
+                          _ (ssh-send t (u8 94 + u32 (t 'rch) + sstr (snip s i (i + n))))
+                          (go (i + n))))))
+       (go 0))
+   (ch-end t)
+    (: _ (? ((t 'closed) = 1) 0 (ssh-send t (u8 96 + u32 (t 'rch))))
+       (: (go _) (? ((t 'closed) = 1) (t 'status) (: _ (ch-pull t) (go 0))) (go 0)))
 )
 ) ; module 'ssh

@@ -1,6 +1,6 @@
 ; apps/kore/core.l -- the line tools, the coreutils batch of kore: cat, tac, shuf, echo,
 ; head, tail, wc, sort, uniq, tee, seq, yes, true, false, basename, dirname -- the
-; field tools cut, tr, nl, rev -- the column tools fold, expand, unexpand -- and the
+; field tools cut, tr, nl, rev -- the column tools fold, expand, unexpand, column -- and the
 ; encodings base64 and base32 beside tsort and factor. every tool is a
 ; <name>-main (the args after its name -> conversation on the ports -> the exit status,
 ; answered as a charm; a leave from deep inside rides udie, and urun is the door both
@@ -1096,6 +1096,73 @@
                         (go >m)))
            (go (ufold w s? b? ln)))
        (ulines "fold" dot <>>o))
+
+   ; -- column: lines laid in columns, util-linux's and the BSDs' byte for byte. filling,
+   ; every column is one width, the widest entry's taken past the next tab stop, and the pad
+   ; is tabs; down the columns unless -x, across -c's width (the screen's, else 80), a name
+   ; a line when even two will not fit. -t makes a table: fields split on whitespace (a run
+   ; as one, the ends dropped) or on each of -s's characters (so an empty field stays), each
+   ; column as wide as its widest cell, -o between (two spaces), a short row padded to the
+   ; last column. blank lines are skipped; widths are screen columns, a wide character two
+   (col-sp n) (? (n < 1) "" (" " + col-sp (n - 1)))
+   (col-vec l) (: t (tablet 0) (go l j) (? !(two? l) t (: _ (pin t j <l) (go >l (j + 1)))) (go l 0))
+   ; tabs from screen column c up to the stop end, util-linux's loop
+   (col-stop c) (((c // 8) + 1) * 8)
+   (col-tabs c end) (: n (col-stop c) (? (end < n) "" ("\t" + col-tabs n end)))
+   (col-fill ls w across?)
+    (: n #ls v (col-vec ls)
+       ws (col-vec (map swidth ls))
+       mx (col-stop (foldl max 0 (map swidth ls)))
+       (? (n < 1) 0
+          (w <= mx) (map (l \ say out (l + "\n")) ls)
+          (: cols (: k (w // mx) (? (k < 1) 1 k))
+             rows (((n + cols) - 1) // cols)
+             ; one line's entries, the tabs between them: past an entry the position is the
+             ; column's stop when a tab reached it, else where the entry ended
+             (line js c end acc)
+              (? !(two? js) acc
+                 (: j <js c2 (c + ws j)
+                    (? (two? >js)
+                       (line >js (? ((col-stop c2) <= end) end c2) (end + mx) (acc + v j + col-tabs c2 end))
+                       (acc + v j))))
+             (idx r) (filter (j \ j < n) (map (k \ ? across? ((r * cols) + k) (r + (k * rows))) (jot cols)))
+             (map (r \ say out (line (idx r) 0 mx "" + "\n")) (jot rows)))))
+   (col-split ln sep)
+    (? (string? sep)
+       (: cs (map (i \ sep i) (jot #sep))
+          (go i j acc) (? (#ln <= i) (rev (snip ln j i . acc))
+                          (elem (ln i) cs) (go (i + 1) (i + 1) (snip ln j i . acc))
+                          (go (i + 1) j acc))
+          (go 0 0 ()))
+       (: (go i j acc) (? (#ln <= i) (rev (? (j < i) (snip ln j i . acc) acc))
+                          ((ln i = 32) || (ln i = 9))
+                           (go (i + 1) (i + 1) (? (j < i) (snip ln j i . acc) acc))
+                          (go (i + 1) j acc))
+          (go 0 0 ())))
+   (col-table ls sep osep)
+    (: rows (map (l \ col-split l sep) ls)
+       nc (foldl max 0 (map tally rows))
+       wd (col-vec (map (c \ foldl max 0 (map (r \ ? (c < #r) (swidth (r c)) 0) rows)) (jot nc)))
+       (cell r c) (? (c < #r) (r c) "")
+       (lay r c) (? (nc <= c + 1) (cell r c)
+                    (: s (cell r c) (s + col-sp (wd c - swidth s) + osep + lay r (c + 1))))
+       (map (r \ say out (lay r 0 + "\n")) rows))
+   (column-main as)
+    (: t (tablet 0)
+       o (uopt as t '(99 115 111) () ())
+       _ (? (two? o) 0 (udie 1 "usage: column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]"))
+       _ (: c (uoptun t "csotx") (? (nil? c) 0 (udie 1 ("column: unknown option -" + string c))))
+       wv (uoptv t 99)
+       w (? (string? wv)
+            (: n (unum wv) (? (charm? n && 0 < n) n (udie 1 ("column: invalid columns argument: '" + wv + "'"))))
+            ((cite 'grid 'screen) 1))
+       osep (: v (uoptv t 111) (? (string? v) v "  "))
+       box (tablet 1) _ (pin box 'l ())
+       st (ulines "column" (\ ln _ (: _ (? (0 < #ln) (pin box 'l (ln . box 'l)) 0) 1)) (o 2))
+       ls (rev (box 'l))
+       _ (? (peep t 116 0) (col-table ls (uoptv t 115) osep) (col-fill ls w (peep t 120 0)))
+       _ (flush out)
+       st)
 
    ; -- expand: tabs to spaces, a stop every n (8 unsaid); -i converts only the
    ; blanks a line opens with --
