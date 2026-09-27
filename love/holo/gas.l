@@ -105,9 +105,8 @@
            (? (= r 'sp) "sp" ((? (w9 <= 4) "w" "x") + k)))
        (= tgt 'rv64) (: s (peep rv-back r ()) (? !s (scare 'gas-reg r) (show s)))
        (show r))
-   (gas-imm tgt n mod) (? (= tgt 'x64) (? (= mod 99) (show n) ("$" + show n))
-                          (gthumb? tgt) ("#" + show n)
-                          (show n))
+   (gas-imm tgt n mod) (: t (charm? n ? (show n) n)             ; n a number, or a "sym+k" text
+                          (? (elem mod '(99 97 80)) t (= tgt 'x64) ("$" + t) (gthumb? tgt) ("#" + t) t))
    (gas-mem tgt r) (? (= tgt 'x64) ("(" + gas-reg tgt r 8 0 + ")")
                       (= tgt 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
@@ -179,6 +178,7 @@
               (scare 'gas-x64-operand d))
           (= m 'lea)
            (? (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
+              (<s = 'rip && nom? <>s) [['la (gx-r d) <>s] ['lea (gx-r d) (gx-r d) <>>s]]   ; sym+k: lea keeps the flags too
               (<s = 'mem) (: bm (gx-mem s) [['lea (gx-r d) <bm <>bm]])
               (scare 'gas-x64-operand ops))
           (elem m gx-alu)
@@ -528,6 +528,17 @@
        (goto nm td) (: _ (row nm td) _ (pin st 'prev (st 'cur)) (pin st 'cur nm))
        (raw bs) (? (two? bs) (emit [['raw bs]]) 0)
        (num e) (gimm (gtoks e))
+       ; .org label+k (or k from the section's start): zeros up to it, over data laid since
+       (org e)
+        (: v (gf-val e rl) s <>v r (secs (st 'cur))
+           (back l n) (? !(two? l) (? (string? s) 'bad n)
+                         (: f <l
+                            (? (<f = 'label && string? s && <>f = name s) n
+                               (<f = 'raw) (back >l (n + foldl (\ a x (a + (two? x ? (x 1) 1))) 0 <>f))
+                               (<f = 'label) (back >l n)
+                               'bad)))
+           at (back (two? r ? <>>r ()) 0)
+           (? (<v || gbad? at || <>>v < at) (scare 'gas-org e) (raw (map (i \ 0) ^(<>>v - at)))))
        (dir mn rest)
         (: xs (xa-oplist rest) w (gf-width tgt mn)
            (? (0 < w) (raw (catmap (e \ gf-word tgt w e rl) xs))
@@ -535,6 +546,7 @@
               (elem mn '(".asciz" ".string")) (raw (catmap (b \ b + [0]) (gf-strs rest)))
               (elem mn '(".zero" ".skip" ".space"))
                (: f (? (two? >xs) (num <>xs) 0) (raw (map (i \ f & 255) ^(num <xs))))
+              (mn = ".org") (org rest)
               (mn = ".balign") (emit [['align (num <xs)]])
               (mn = ".p2align") (emit [['align (1 << num <xs)]])
               (mn = ".align") (emit [['align (? (tgt = 'x64) (num <xs) (1 << num <xs))]])   ; bytes on x86, a power elsewhere
