@@ -28,7 +28,7 @@
 
 (borrow 'xwire)   ; the X wire, apps/lux/wire.l
 (: (probe dpy)
-   (: s (connectu dpy)
+   (: s (connect ['unix dpy])
       sc (x-setup s ())
       root (scr-root sc)
       (line m) (say out m, say out "\n", flush out)
@@ -136,13 +136,13 @@
       ;     lux takes the KillClient fallback, verified through
       ;     fresh eyes (the reply stream of a client whose window died
       ;     mid-poll echoes stale replies) ---
-      s2 (connectu dpy)
+      s2 (connect ['unix dpy])
       sc2 (x-setup s2 ())
       w2 (scr-idbase sc2)
       _ (mkwin s2 w2 root)
       _ (waitp "w2-tiled" (u \ 300 < x-getgeom s w2 2) 100)           ; w1 floats, so w2 owns the tiling alone
       _ (cmsg w2 a-cl 0 0 0)
-      s3 (connectu dpy)
+      s3 (connect ['unix dpy])
       sc3 (x-setup s3 ())
       _ (waitp "w2-felled" (u \ x-querytree s3 root @ t                       ; a failed query is not
                                  (two? t && !(any (= w2) <>t))) 100)   ; "felled"
@@ -308,7 +308,7 @@
       rsock (: rd (getenv "XDG_RUNTIME_DIR")
                base (1 < #rd ? rd "/tmp")
              (base + "/lux-" + snip dpy 16 #dpy + ".sock"))
-      rc (: (try t) (t >= 1 ? (: p (connectu rsock)
+      rc (: (try t) (t >= 1 ? (: p (connect ['unix rsock])
                           (lit? p ? p (rest 100, try (t - 1)))))
             (try 100))
       _ (must "moor-up" (lit? rc))
@@ -317,7 +317,7 @@
       _ (must "moor-evals" ("3" = ask "(+ 1 2)"))
       _ (ask "(boom-unbound)")                                                   ; a scare answers a value; the session lives
       _ (must "moor-survives" ("7" = ask "(+ 3 4)"))
-      (nudge u) (: nf (connectu dpy) sf (x-setup nf ())
+      (nudge u) (: nf (connect ['unix dpy]) sf (x-setup nf ())
                  (x-w8 nf 25, x-w8 nf 0, x-w16 nf 11,
                   x-w32 nf root, x-w32 nf 1572864,
                   x-w8 nf 33, x-w8 nf 32, x-w16 nf 0, x-w32 nf root, x-w32 nf 1,
@@ -533,7 +533,7 @@
       ;     answers with a fresh cell (the marker gone), the same pid (exec),
       ;     and the windows adopted. one connection per poll: a try that lands
       ;     on the dying generation just answers wrong and is retried ---
-      (askonce q) (: p (connectu rsock)
+      (askonce q) (: p (connect ['unix rsock])
                      (? !(lit? p) ()
                         (: _ (say p q, say p "\n", flush p)
                            r (: (go acc) (see p @ (-1 || 10) acc ch (go (acc + string ch)))

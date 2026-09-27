@@ -74,7 +74,7 @@
                                 ; everything else, including a path that is a file on disk
                                 _ (hot? c ? (serve1 dir mk c, seal c 1, close c) 0)
                                 (peep stop 0 0 ? 1 (g (k + 1))))) 0)) 0)
-   (ask req) (: c (connect "127.0.0.1" port)
+   (ask req) (: c (connect ['tcp "127.0.0.1" port])
                 _ (say c req)
                 _ (flush c)
                 r (slurp c)                            ; Connection: close -- EOF frames it
@@ -123,7 +123,7 @@
    ; for the rest). both would wedge the connection rather than fail an assert, so they are
    ; here -- a hang is the failure mode, and the gate has to be the thing that finds it.
    _ (test ((code (ask "GET /index.html HTTP/1.1\nHost: x\n\n")) = "200"))     ; lf only
-   split (: c (connect "127.0.0.1" port)
+   split (: c (connect ['tcp "127.0.0.1" port])
             _ (say c "GET /index.htm")
             _ (flush c)
             _ (say c "l HTTP/1.1\r\nHost: x\r\n\r\n")
