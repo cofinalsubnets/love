@@ -851,7 +851,7 @@ static lvm(sortby_step) {
            m = min(lo + w, n);
  if (Sp[sb_pend] == sb_done) goto spine;                             // a collection at the reservation below re-entered the step: the merge is over
  if (Sp[sb_pend] != zero) {                                          // the answer to (le a[x] a[y]): the left when true
-  if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);   // a compound answer: measured, then the step again
+  if (__builtin_expect(!ai_leafp(Sp[0]), 0)) ai_musttail return Ap(lvm_measure, g);   // a compound answer: measured, then the step again
   bool left = !leaf_nilp(Sp[0]);
   word v = tray_get_obj(tray(Sp[sb_va]), left ? x++ : y++);
   tray_put_obj(tray(Sp[sb_vb]), o++, v);
@@ -1276,7 +1276,7 @@ lvm(lvm_arg) {
 // fused (arg <idx> ; ap): the dominant "call a function on a local" shape, one
 // dispatch saved; resume is Ip+2 (2-word op)
 lvm(lvm_argap) {
- if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, resume at Ip+2
+ if (__builtin_expect(oddp(Sp[0]), 0)) {              // fixnum operator -> num-ap, resume at Ip+2
   Have1();
   Sp[-1] = Sp[getcharm(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; resume now Ip+2
   ai_musttail return Ap(lvm_numap, g); }
@@ -1289,7 +1289,7 @@ lvm(lvm_argap) {
 
 // fused (quote <v> ; ap): a call with a constant arg; resume Ip+2
 lvm(lvm_quoteap) {
- if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, resume at Ip+2
+ if (__builtin_expect(oddp(Sp[0]), 0)) {              // fixnum operator -> num-ap, resume at Ip+2
   Have1();
   Sp[-1] = Ip[1].x, Sp -= 1, Ip += 1;               // push const under operator; resume now Ip+2
   ai_musttail return Ap(lvm_numap, g); }
@@ -1302,7 +1302,7 @@ lvm(lvm_quoteap) {
 
 // fused (arg <idx> ; tap <fs>): the single-arg tail-call shape, e.g. a tail (loop x)
 lvm(lvm_argtap) {
- if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, deliver to caller
+ if (__builtin_expect(oddp(Sp[0]), 0)) {              // fixnum operator -> num-ap, deliver to caller
   Have1();
   Sp[-1] = Sp[getcharm(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; fs operand now Ip[1]
   ai_musttail return Ap(lvm_numtap, g); }
@@ -1342,7 +1342,7 @@ quon(lvm_quom1, -1) quon(lvm_quom2, -2)
 // `ret = Ip+1` landing past the whole op.
 #define frun2p(nom, p1, p2) lvm(nom) { \
  Have(2); p1(1); \
- if (oddp(Sp[0])) { p2(2); Ip += 2; ai_musttail return Ap(lvm_numap, g); } \
+ if (__builtin_expect(oddp(Sp[0]), 0)) { p2(2); Ip += 2; ai_musttail return Ap(lvm_numap, g); } \
  p2(2); \
  union u *k = cell(Sp[1]); Sp[1] = word(Ip + 3), Ip = k; \
  YieldCheck(); \
@@ -1375,7 +1375,7 @@ static lvm(lvm_argcond_land) {
 static union u const argcond_land[] = { {.ap = lvm_argcond_land} };
 lvm(lvm_argcond) {
  word x = Sp[getcharm(Ip[1].x)];
- if (!charmp(x) && !ai_leafp(x)) {
+ if (__builtin_expect(!charmp(x) && !ai_leafp(x), 0)) {
   Have(4);
   word *dst = Sp - 4;
   dst[0] = Sp[getcharm(Ip[1].x)], dst[1] = hot_hook(g->hot_net), dst[2] = word(argcond_land), dst[3] = word(Ip);
