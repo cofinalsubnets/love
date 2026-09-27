@@ -357,6 +357,9 @@
    _ (chk-eq "gas.x64.rip"                         ; an absolute or rip-relative memory operand rides rip: cpu features' `testb $m, caps+1`
         '((testm 1 rip (caps 1) 32) (alum add 4 rip (cnt 0) 1))
         (gas-text 'x64 "testb $32, caps+1\naddl $1, cnt(%rip)"))
+   ; gas's comparisons answer -1 for true: the alternatives' `-(d > 0) * d` is d when d > 0, else 0
+   _ (chk-eq "gimm.cmp" [3 0 -1 0] [(gimm (gtoks "-((5-2) > 0) * (5-2)")) (gimm (gtoks "-((2-5) > 0) * (2-5)"))
+                                    (gimm (gtoks "1 < 2")) (gimm (gtoks "2 < 1"))])
    ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
    _ (chk-eq "gas.x64.thisip"
         '((raw (76 141 29 0 0 0 0)) (raw (72 141 5 8 0 0 0)))
