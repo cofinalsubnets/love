@@ -4131,24 +4131,28 @@
                        (? (two? k) (<k + (['jmpm (f 2) (k 1)] . go (k 2)))
                           (f . go >l))))
           (go fs)))
-   ; an early exit lays last: (br cc L), a run that ends in a jump or ret, then (label L) -> (br !cc K)
+   ; an early exit lays last: (br cc L), a run that leaves the function, then (label L) -> (br !cc K)
    ; (label L) .., and (label K) run after the function; the fall-through is the path that goes on.
    ; the run may hold labels but no branch. an if whose test is __builtin_expect(c, 0) makes L cold:
-   ; its run may branch, and one that falls into L jumps there. __builtin_expect(c, 1) keeps its arm
+   ; the run past its last test of L may branch, and one that falls into L jumps there.
+   ; __builtin_expect(c, 1) keeps its arm.
+   ; a run that is one (jmp X) is the br itself, to X: a tail call anywhere on x64, a label elsewhere
    (tailarm g fs)
     (? (t32? g) fs                                            ; thumb's short branches stay put
        (: hot (peep g 'hot ()) cold (peep g 'cold ())
+          labs (map (\ f (f 1)) (filter (\ f (two? f && <f = 'label)) fs))
           (term? f) (two? f && elem <f '(jmp jmpr jmpm ret))
+          (exit? f) (two? f && (elem <f '(jmpr jmpm ret) || <f = 'jmp && nelem (f 1) labs))   ; leaves the function
           (run l L acc n c)                                   ; -> [run rest] | ()
            (? (!(two? l) || (c ? 96 48) < n) ()
               (: f <l
                  (? !(two? f) (run >l L (f . acc) (n + 1) c)
                     (<f = 'label && <>f = L) (? !(two? acc) ()
-                                                (term? <acc) [(rev acc) l]
+                                                (? c (term? <acc) (exit? <acc)) [(rev acc) l]
                                                 c [(rev (['jmp L] . acc)) l]
                                                 ())
                     (elem <f '(jmpt align)) ()
-                    (!c && elem <f '(br br8)) ()
+                    (elem <f '(br br8) && (!c || f 2 = L)) ()          ; a later test of L owns the region
                     (run >l L (f . acc) (n + 1) c))))
           (go l acc cs)
            (? !(two? l) (rev acc + cs)
@@ -4156,7 +4160,10 @@
                  k (? (two? f && <f = 'br && elem <>f '(eq ne lt le gt ge below be above ae s ns) &&
                        nelem <>>f hot)
                       (run >l <>>f () 0 (elem <>>f cold)))
-                 (? (two? k)
+                 r1 (two? k && !(two? ><k) && <<<k = 'jmp ? (<<k 1))   ; a lone (jmp X): branch there
+                 (? (two? k && r1 && (x64? g || elem r1 labs))
+                     (go (k 1) (['br (negcc <>f) r1] . acc) cs)
+                    (two? k)
                      (: K (nlab g ".k")
                         (go (k 1) (['br (negcc <>f) K] . acc) (cs + (['label K] . <k))))
                     (go >l (f . acc) cs))))
@@ -6455,10 +6462,9 @@
           ('blk items) (cgitems g env items ())
           ('if . cnd . thn . er)
            (: le (nlab g ".e")
-              xk >(xpct cnd)
-              xv (? (two? xk && <<xk = 'num) <><xk ())
-              _ (xv @ 1 (pin g 'hot (le . peep g 'hot ()))                 ; tailarm leaves the arm
-                      0 (pin g 'cold (le . peep g 'cold ()))               ; ..or lays it past the function
+              xm (thn @ ('blk (('nop m) . _)) m ())                    ; the parser's __builtin_expect mark
+              _ (xm @ 'hot (pin g 'hot (le . peep g 'hot ()))              ; tailarm leaves the arm
+                      'cold (pin g 'cold (le . peep g 'cold ()))           ; ..or lays it past the function
                       ())
               c (cbranch g env cnd 'eq le)
               t (cgstmt g env thn)
