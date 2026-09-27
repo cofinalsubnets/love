@@ -1301,9 +1301,12 @@
 
 ) ; module uu
 
-; peg -- gw.js-style parser combinators. a parser is (\ s y n) over a string s, with a success
+; peg -- gw.js-style parser combinators. a parser is (\ s y n) over a state s, with a success
 ; continuation y = (\ rest payload) and a failure continuation n = (\ rest); payloads are lists
-; `seq` concatenates. the leaves are `lit` (a literal prefix), `one` (one char by predicate) and
+; `seq` concatenates. a state is (text . i), the input and how far in: a step moves i, and the
+; rest is never copied. `parse` and `runp` make the first one from a string; a hand-written
+; leaf reads <s and >s and answers (<s . k).
+; the leaves are `lit` (a literal prefix), `one` (one char by predicate) and
 ; `span` (a maximal run) -- love has no regex. `parse` requires the whole input consumed, `runp`
 ; keeps the payload and ignores trailing slack. an empty payload is the unit, never the 0
 ; nil-tail: `cat` propagates whatever tail it is handed, and `=` tells the two apart.
@@ -1313,19 +1316,18 @@
 
 (module 'peg
 (: (eps s y n) (y s ())
-   (lit l s y n) (? (#l <= #s && l = snip s 0 #l)
-                  (y (snip s #l #s) [l])
-                  (n s))
+   (lit l s y n) (: t <s i >s k (i + #l)
+                  (? (k <= #t && l = snip t i k) (y (t . k) [l]) (n s)))
    ; the payload element is a one-char string, not the charm: every element a peg
    ; parser yields is then a string fragment, so a consumer's join is pure concat.
    ; the predicate still sees the charm.
-   (one p s y n) (? (0 < #s && p (s 0))
-                  (y (snip s 1 #s) [(snip s 0 1)])
-                  (n s))
+   (one p s y n) (: t <s i >s
+                  (? (i < #t && p (t i)) (y (t . (i + 1)) [(snip t i (i + 1))]) (n s)))
    (span p s y n) (:
-    (g j)(j < #s && p (s j) ? (g (1 + j)) j)
-    i (g 0)
-    (y (snip s i #s) [(snip s 0 i)]))
+    t <s i >s
+    (g j) (j < #t && p (t j) ? (g (1 + j)) j)
+    k (g i)
+    (y (t . k) [(snip t i k)]))
    (alt a b s y n) (a s y (_ \ b s y n))
    (seq a b s y n) (a s (s1 \ p1 \ b s1 (s2 \ p2 \ y s2 (p1 + p2)) n) n)
    (seqs l) (foldr seq eps l)
@@ -1343,8 +1345,8 @@
    (pack a) (pmap (p \ [p]) a)                                   ; a whole payload folded to one element
    (tag f a) (pmap (p \ [(f p)]) a)                              ; ..and that element built into a node
    (dflt a v) (alt a (pmap (_ \ [v]) eps))                       ; a always yields one element, v when absent
-   (parse p s) (p s (r \ x \ r @ "" x) ())     ; strict: whole input must parse
-   (runp p s)  (p s 0 ()))                           ; lenient: keep the payload, ignore trailing slack
+   (parse p s) (p (s . 0) (r \ x \ (>r = #s ? x ())) ())      ; strict: whole input must parse
+   (runp p s)  (p (s . 0) 0 ()))                               ; lenient: keep the payload, ignore trailing slack
 
 ) ; module peg
 

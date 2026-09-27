@@ -1,6 +1,6 @@
 ; dimacs -- a dimacs cnf reader for the sat solver, built from the parser combinators in love/boot/post.l
-; (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a
-; failure continuation n = rest; payloads are lists that `seq` concatenates).
+; (a parser is (\ s y n): a state s = (text . i), a success continuation y = (rest payload),
+; a failure continuation n = rest; payloads are lists that `seq` concatenates).
 (borrow 'peg)
 
 (:
@@ -10,9 +10,9 @@
    (notnl? c) (c != 10)
    (str->nat ds) ((: (g i a) (i >= #ds ? a (g (i + 1) (a * 10 + ds i - 48)))) 0 0)
    (pint s y n)                                            ; an optional '-' then >=1 digits -> (the int); fail otherwise
-    (: t #s neg (0 < t && s 0 = 45) j0 ?neg
-       j (: (g i) (i < t && dig? (s i) ? (g (i + 1)) i) (g j0))
-     (j = j0 ? (n s) (: v (str->nat (snip s j0 j)) (y (snip s j t) [(neg ? -v v)]))))
+    (: t <s i0 >s m #t neg (i0 < m && t i0 = 45) j0 (i0 + ?neg)
+       j (: (g i) (i < m && dig? (t i) ? (g (i + 1)) i) (g j0))
+     (j = j0 ? (n s) (: v (str->nat (snip t j0 j)) (y (t . j) [(neg ? -v v)]))))
    ; -- the dimacs grammar --
    ws        (skip (span ws?))                              ; a (possibly empty) whitespace run
    cline     (seq (lit "c") (span notnl?))                  ; a 'c' comment: 'c' + rest of line (the newline is ws)
