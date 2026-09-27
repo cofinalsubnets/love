@@ -138,7 +138,8 @@
                    (vmlaunch vmlaunch) (vmxoff vmxoff) (cld cld)
                    (inb inb) (inw inw) (inl inl) (outb outb) (outw outw) (outl outl)
                    (insb insb) (insw insw) (insl insl) (outsb outsb) (outsw outsw) (outsl outsl)
-                   (nop nop) (ret ret) (syscall sys) (int3 trap)))
+                   (nop nop) (ret ret) (syscall sys) (int3 trap)
+                   (pause pause) (mfence mfence) (lfence lfence) (sfence sfencex)))   ; sfencex: rv64's sfence is sfence.vma
    gx-alu '(add sub and or xor imul)
    gx-cc (gtab '((je eq) (jz eq) (jne ne) (jnz ne) (jl lt) (jle le) (jg gt) (jge ge)
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
@@ -188,6 +189,10 @@
                  (m = 'test) [['testm wm <bm <>bm (gx-rv s)]]
                  [['alum m wm <bm <>bm (gx-rv s)]]))
           (= m 'xchg && <s = 'mem && <d = 'rg) (gx-ins m w0 [s d])
+          ; the bit scans and counts, at the suffix's width or the destination's
+          (elem m '(bsr bsf tzcnt lzcnt popcnt))
+           (? (<d = 'rg && <s = 'rg) [['bscan m (w0 > 0 ? w0 (d 2)) (gx-r d) (gx-r s)]]
+              (scare 'gas-x64-operand ops))
           (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
           (= m 'vmwrite) [['vmwrite (gx-r d) (gx-r s)]]
           (= m 'mov)

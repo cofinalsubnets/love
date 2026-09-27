@@ -561,26 +561,11 @@ test_softfp: host
 # moved -- and holds the seat whose absolutes ride MOVW/MOVT to refusing outright.
 test_reloc32: host
 	@$(gsh) test/gate/reloc32.sh $(ho) $m
-# The rung-2 self-host gate: compile the love and host lanes with mooncc (gcc/clang only
-# links), then run the whole corpus through the all-mooncc binary -- the compiler compiles
-# the runtime it runs on. opt-in; x86-64 only; the binary carries no image, so a fresh egg.
+# the rung-2 self-host gate: every love C file and moonlibc compiled by mooncc, the system
+# linker binding them -- test/gate/selfhost.sh. opt-in; x86-64 only.
 test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
-	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
-	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
-	  for f in $(love_tu_c) $(host_c) $(R)/love/user/nokern.c $(R)/love/noblob.c; do b=`basename $$f .c`; \
-	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Ilove -Iinle -Iout/lib -c $$f $$d/$$b.o \
-	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
-	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $$d/am.o \
-	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
-	  $(CC) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
-	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
-	  cat $t > $(ho)/.selfhost-corpus.l; \
-	  LOVE_NO_IMAGE=1 $(ho)/love-selfhost $(ho)/.selfhost-corpus.l </dev/null > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
-	  tail -1 $(ho)/.test_selfhost.out; \
-	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
-	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
-	  echo "test_selfhost: all `echo $(love_tu_c) $(host_c) | wc -w` src/*.c built by mooncc, corpus passes"
+	@$(raw_env) $(gsh) test/gate/selfhost.sh $(ho) $m $t
 # the rung-4 gate: the gcc-free fixpoint. everything test_selfhost builds plus our own raw
 # libc (moonlibc/), math floor (am.c) and sys.o, bound by our static linker -- no gcc, no
 # glibc, no ld anywhere. in test_slow, x86-64 only; supersedes test_selfhost. the two cross
