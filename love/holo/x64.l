@@ -198,34 +198,42 @@
    ;; the sized read-modify-writes on [base+off] -- inline asm's atomics and percpu counters, a
    ;; `lock` or a segment laid before them. w 1 2 4 8: the byte opcode for a byte (a bare REX
    ;; reaching spl..dil, never ah..bh), 66 for a word, REX.W for a quad. regf is the register
-   ;; operand, or the /digit field spelled as the register of that number
+   ;; operand, or the /digit field spelled as the register of that number. base 'rip with off
+   ;; (sym k) is that symbol's address, rip-relative: tl, the immediate's bytes after the
+   ;; displacement, moves the fix's aux so it still measures from the instruction's end
    x64-digit '(r0 r1 r2 r3 sp r4 r5 r6)
-   (x64-mw w op8 op regf base off)
-    (: fn (rn regf) bn (rn base)
+   (x64-mw w op8 op regf base off tl)
+    (: fn (rn regf) rip (base = 'rip) bn (rip ? 0 (rn base))
        rx (w = 8 || fn >= 8 || bn >= 8 || (w = 1 && 4 <= fn <= 7))
        ((w = 2 ? [102] ()) + (rx ? [(rex (w = 8 ? 1 0) (hi fn) 0 (hi bn))] ())
-        + (w = 1 ? op8 op) + mem fn base off))
-   (emit-xaddm w base off s) (x64-mw w '(15 192) '(15 193) s base off)         ; 0F C0/C1 /r  xadd m, r
-   (emit-cmpxchgm w base off s) (x64-mw w '(15 176) '(15 177) s base off)      ; 0F B0/B1 /r  cmpxchg m, r (rax the expected)
-   (emit-xchgm w base off s) (x64-mw w '(134) '(135) s base off)               ; 86/87 /r     xchg m, r
+        + (w = 1 ? op8 op)
+        + (rip ? [(modrm 0 (lo fn) 5) (fix 4 'rel32 <off (<>off - tl))] (mem fn base off))))
+   (imw w y) (w @ 1 [(byte y)] 2 [(byte y) (byte (y >> 8))] (le32 y))   ; an immediate at w (a quad's sign-extends its 32)
+   (emit-xaddm w base off s) (x64-mw w '(15 192) '(15 193) s base off 0)       ; 0F C0/C1 /r  xadd m, r
+   (emit-cmpxchgm w base off s) (x64-mw w '(15 176) '(15 177) s base off 0)    ; 0F B0/B1 /r  cmpxchg m, r (rax the expected)
+   (emit-xchgm w base off s) (x64-mw w '(134) '(135) s base off 0)             ; 86/87 /r     xchg m, r
    ;; op m, y: y a register (00+8k/01+8k /r) or an immediate (80 /k ib, 83 /k ib, 81 /k id|iw)
    (emit-alum op w base off y)
     (: k (op @ 'add 0 'or 1 'and 4 'sub 5 'xor 6 'cmp 7 (scare 'x64-alum op))
-       (? (reg? y) (x64-mw w [(8 * k)] [(8 * k + 1)] y base off)
-          (w = 1) (x64-mw 1 '(128) () (x64-digit k) base off + [(byte y)])
-          (-128 <= y <= 127) (x64-mw w () '(131) (x64-digit k) base off + [(byte y)])
-          (x64-mw w () '(129) (x64-digit k) base off + (w = 2 ? [(byte y) (byte (y >> 8))] (le32 y)))))
+       (? (reg? y) (x64-mw w [(8 * k)] [(8 * k + 1)] y base off 0)
+          (w = 1) (x64-mw 1 '(128) () (x64-digit k) base off 1 + [(byte y)])
+          (-128 <= y <= 127) (x64-mw w () '(131) (x64-digit k) base off 1 + [(byte y)])
+          (: iy (imw (w = 8 ? 4 w) y) (x64-mw w () '(129) (x64-digit k) base off #iy + iy))))
+   ;; test m, y: 84/85 /r by a register, F6/F7 /0 by an immediate
+   (emit-testm w base off y)
+    (? (reg? y) (x64-mw w '(132) '(133) y base off 0)
+       (: iy (imw (w = 8 ? 4 w) y) (x64-mw w '(246) '(247) 'r0 base off #iy + iy)))
    ;; inc dec not neg m: FE/FF /0 /1, F6/F7 /2 /3
    (emit-unm op w base off)
     (: d (op @ 'inc 0 'dec 1 'not 2 'neg 3 (scare 'x64-unm op))
-       (? (d < 2) (x64-mw w '(254) '(255) (x64-digit d) base off)
-          (x64-mw w '(246) '(247) (x64-digit d) base off)))
+       (? (d < 2) (x64-mw w '(254) '(255) (x64-digit d) base off 0)
+          (x64-mw w '(246) '(247) (x64-digit d) base off 0)))
    ;; bt bts btr btc m, y: 0F A3/AB/B3/BB /r by a register, 0F BA /4../7 ib by an immediate
    (emit-btm op w base off y)
     (: k (op @ 'bt 4 'bts 5 'btr 6 'btc 7 (scare 'x64-btm op))
        (? (w = 1) (scare 'x64-btm-byte op)
-          (reg? y) (x64-mw w () [15 (k @ 4 163 5 171 6 179 187)] y base off)
-          (x64-mw w () '(15 186) (x64-digit k) base off + [(byte y)])))
+          (reg? y) (x64-mw w () [15 (k @ 4 163 5 171 6 179 187)] y base off 0)
+          (x64-mw w () '(15 186) (x64-digit k) base off 1 + [(byte y)])))
 
    ;; the store-immediate family (si : li :: st : ld): mov r/m, imm through /0 (regf r0 spells
    ;; the 0 field). the 64-bit face sign-extends its imm32; the narrow faces truncate like their
@@ -649,7 +657,7 @@
          ('sgdt . emit-m0f 0 '(15 1)) ('sidt . emit-m0f 1 '(15 1))
          ('int . emit-int) ('ltr . emit-ltr) ('seg . emit-seg)
          ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
-         ('alum . emit-alum) ('unm . emit-unm) ('btm . emit-btm)
+         ('alum . emit-alum) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
          ('ldcr . emit-ldcr) ('stcr . emit-stcr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])
@@ -663,6 +671,7 @@
    ;; needs the assembly org set to the load vaddr, which elf64 does).
    (x64-patch kind target site width aux)
       (kind @ 'rel32 (le32 (target + aux - (site + width)))
+          'rel64 (le64 (target + aux - (site + width)))    ; a data word's S + A - P, eight bytes wide
           'rel8  (: d (target - (site + width))          ; the relaxer proved the fit at the
                     _ (fits8 d ? 0 (scare 'rel8-range d))   ; pessimistic layout; this scare
                   [(byte d)])                               ; is the loud net under that proof

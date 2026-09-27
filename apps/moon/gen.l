@@ -6853,6 +6853,21 @@
                  (atom? x) ()
                  (x @ ('call _ as && 6 < tally as) 1 ()) 1     ; an overflow-arg call moves sp -- splicing it bars the caller's unframe
                  (noinl? <x || noinl? >x))
+   ; a body whose asm names a parameter in an immediate ("i"(key), the kernel's jump labels and
+   ; cpu features) compiles only where it is spliced: its labels may ride along (the jump lane).
+   ; so does one handing a parameter to such a body (static_key_false's key)
+   (asmneed? g ps x)
+    (: pn (map (p \ <p) ps)
+       (pv? e) (? !(two? e) () (e @ ('var v) (elem v pn) (pv? <e || pv? >e)))
+       (imm? c) (: n #c ((: (go i) (? (i >= n) () (elem (c i) '(105 110)) 1 (go (i + 1)))) 0))
+       (go y) (? !(two? y) ()
+                 (<y = 'asm) (any (o \ imm? <o && pv? <>o) (y 3))
+                 (y @ ('call ('var fn) as) (? (peep (g 'ineed) fn () && any pv? as) 1 (go as))
+                      (go <y || go >y)))
+       (go x))
+   (noinlj? x) (? (elem x '(sdecl vastart varr)) 1 (atom? x) ()
+                  (x @ ('call _ as && 6 < tally as) 1 ()) 1
+                  (noinlj? <x || noinlj? >x))
    (oneret? (i . u))                                  ; decls* + one trailing `return expr` (the b2w shape)
     (i @ ('decl . _) (oneret? u)
          (('ret . rv . _) && two? rv) !(two? u))
@@ -6870,6 +6885,7 @@
           !(pok <>>f 0) ()
           ; the size gate on the shown body: 600 for a single-return body, 250 for a branchy one
           (!aln && (oneret? items ? 600 250) < #(show <>>>f)) ()
+          (asmneed? g <>>f <>>>f) !(noinlj? <>>>f)
           !(noinl? <>>>f)))
    ; -- the AST inliner: a call to an inline candidate, where its statement evaluates it before anything
    ; it sequences (not under && || ?: nor a comma's right), becomes the callee's body as statements ahead
@@ -6889,18 +6905,20 @@
              dl (dps body ())
              loc (map (p \ <p) ps + map (p \ <p) dl)
              ; a frame address costs the caller its sibcalls, and a return address read in place is
-             ; the caller's own; asm pins its homing off
+             ; the caller's own; asm pins its homing off, unless the body compiles only spliced
+             need (peep (g 'ineed) nm ())
              (bar? x) (two? x ?
                          (x @ ('addr ('var v)) (elem v loc)
                               ('call ('var b9) _ && elem b9 '("__builtin_return_address" "__builtin_frame_address")) 1
-                              (('clit || 'asm || 'sexpr) . _) 1
+                              ('asm . _) (? need (bar? >x) 1)
+                              (('clit || 'sexpr) . _) 1
                               (bar? <x || bar? >x)))
              (fv x a) (? !(two? x) a
                          (x @ ('var v) (? (elem v loc || elem v a) a (v . a))
                               (fv >x (fv <x a))))
              (? (bar? body) ()
                 (foldl (\ a p (a || stru? <>p || arr? <>p)) () dl) ()
-                [ps body <(peep (g 'sigs) nm ['long ()]) loc (fv body ()) dl]))))
+                [ps body <(peep (g 'sigs) nm ['long ()]) loc (fv body ()) dl need]))))
    ; a callee body's returns -> what rs lays for each value, with no jump: a return ends the list
    ; or an if arm that always returns, whose rest moves into the other arm | 'no
    ; sw: a trailing switch may end the list too, each case's top-level return a store and a
@@ -6998,14 +7016,17 @@
        ; the value is the body's one expression in place, nothing hoisted -- ('exprh ws) the same
        ; where an arg that cannot trap may still hoist to a decl, ws the statement it may not be written in
        (site nm as d mode)
-        (: c (? (elem nm d || 3 < #d || dn nm) () (cand nm))
+        (: c (? (elem nm d || dn nm) ()
+                ; a body that compiles only spliced has no call to fall back on: it reaches deeper
+                ((? (peep (g 'ineed) nm ()) 8 3) < #d) ()
+                (cand nm))
            xh (two? mode && <mode = 'exprh)
            xo (xh || mode = 'expr)
            xi (two? mode && <mode = 'into)             ; ('into v T): the body's returns store to v, cast T when given
            val? (xo || xi || elem mode '(val br))
            pm (two? mode && !xh && !xi)
            (two? c ?
-              (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5)
+              (: ps <c body <>c rt <>>c loc (c 3) fr (c 4) dl (c 5) jl (c 6)
                  one (body @ (('ret e)) (two? e) ())          ; the whole body one `return e`
                  nr9 (: (go x) (? !(two? x) 0 (<x = 'ret) 1 ((go <x) + go >x)) (go body))
                  ; ..or statements then one: at a test the statements hoist, the return is the test
@@ -7016,10 +7037,10 @@
                  (? (#ps != #as) ()
                     (foldl (\ a v (a || dn v)) () fr) ()          ; a free name the caller shadows
                     ((val? || pm) && rt = 'void) ()
-                    (mode = 'br && !one && !tr1) ()               ; a branchy test that does not push down stays a call
+                    (mode = 'br && !one && !tr1 && !jl) ()       ; a branchy test that does not push down stays a call
                     (xo && !(two? ex)) ()
                     ; ..each return past the first lays its own copy of the arms: a few small ones
-                    (pm && 1 < nr9 && ((64 < (dsz (mode 2) + dsz (mode 3))) || 5 < nr9)) ()
+                    (pm && !jl && 1 < nr9 && ((64 < (dsz (mode 2) + dsz (mode 3))) || 5 < nr9)) ()
                     (: k (n9 'k) _ (pin n9 'k (k + 1))
                        sfx ("`a" + show k)
                        m {}
@@ -7064,7 +7085,29 @@
                                  (? (two? kc)                    ; a constant return is its arm
                                      (: a (? ((<kc = 0) = (<>mode = 1)) (mode 2) (mode 3)) (? (two? a) [['armk a]] ()))
                                     [['if (? (<>mode = 1) ['un 'not v] v) ['armk (mode 2)] ['armk (mode 3)]]]))
+                       ; the jump lane: the body's labels take this splice's suffix (asm goto's list
+                       ; too), each return stores the value and jumps to the splice's end label
+                       lm (: t {} (lb x) (? !(two? x) 0 (x @ ('lbl v) (pin t v (v + "." + snip sfx 1 #sfx), 0) (lb <x, lb >x)))   ; `.`: no C label has one, and gas reads it
+                             _ (? jl (lb rb) 0) t)
+                       (lset l i v) (? (i = 0) (v . >l) (<l . lset >l (i - 1) v))
+                       (lren x) (? !(two? x) x
+                                   (x @ ('lbl v) ['lbl (lm v)]
+                                        ('goto v) ['goto (peep lm v v)]
+                                        ('asm . _) (: y (map lren x) (? (5 < #y) (lset y 5 (map (v \ peep lm v v) (y 5))) y))
+                                        (map lren x)))
+                       jend ("`e" + show k)
+                       jrv (? (jl && rt != 'void) ("`r" + show k) ())
+                       (jr x) (? !(two? x) x
+                                 (<x = 'ret) ['blk (? (jrv && two? >x) [['expr ['asn ['var jrv] (cv <>x rt)]] ['goto jend]] [['goto jend]])]
+                                 (map jr x))
+                       jst (? jl ((? jrv [['decl [[jrv rt]]]] ()) + [['blk (jr (lren rb))] ['lbl jend]]) ())
+                       _ (? jrv (pin tys jrv rt) 0)
                        el (? (pre = 'no) 'no
+                             jl (? xo 'no
+                                   (mode = 'ret) (jst + [(? jrv ['ret ['var jrv]] ['ret])])
+                                   pm (jst + pt ['var jrv])
+                                   xi (jst + into ['var jrv])
+                                   jst)
                              (mode = 'ret) (rc rb)
                              xi (aelim rb (e \ (two? e ? (into e))) 1)
                              (xo || (val? && one)) rb
@@ -7073,6 +7116,7 @@
                              pm (aelim rb pt !(hasjmp? (mode 2) || hasjmp? (mode 3)))   ; an arm with a break of its own may not copy under a loop or switch
                              (aelim rb (e \ (? !(two? e) () rv [['expr ['asn ['var rv] e]]] [['expr e]])) 1))
                        (? (el = 'no) ()
+                          jl [(pre + hitems el (nm . d)) (? (mode = 'ret || pm || xi || !jrv) () ['var jrv])]
                           (mode = 'ret || pm || xi) [(pre + hitems el (nm . d)) ()]
                           tr1 [(pre + <el) <>el]
                           xo [pre (cv <><rb rt)]
@@ -7130,7 +7174,7 @@
                    s (site nm as2 d (? h ['exprh (h 'ws)] 'expr))
                    _ (? (two? s && two? <s) (pin h 'pre (h 'pre + <s)) 0)
                    (? (two? s) <>s ['call ['var nm] as2]))
-                ('sexpr . _) e
+                ('sexpr . _) (hsx e d)
                 (map (x \ hxe x d h) e)))
        (hxh e d f)                                    ; f builds e's form from its hoist box
         (: h {'pre () 'ws (st9 's)} r (f h) [(h 'pre) r])
@@ -7177,7 +7221,11 @@
                 ('deref a) (: r (hx a d) [<r ['deref <>r]])
                 ('dot a fl) (: r (hx a d) [<r ['dot <>r fl]])
                 ('addr a) (: r (hx a d) [<r ['addr <>r]])
+                ('sexpr . _) [() (hsx e d)]
                 [() e]))
+       ; a statement expression splices within itself: its statements run each time it does, so
+       ; its items take calls like a block's, and its value's hoist lands among them
+       (hsx e d) (e @ ('sexpr items v ty) (: r (hx v d) ['sexpr (hitems items d + <r) <>r ty]) e)
        ; a branch's test: the call its truth decides, through ! and the first operand of && ||
        (hxb e d)
         (e @ ('call ('var nm) as)
@@ -7289,7 +7337,15 @@
        (re e env)                                   ; an expression (or a type): mentions respell
         (? (atom? e) e
            (e @ ('var nm) (: a (assoc nm env) (? (two? a) ['var <>a] e))
+                ; a statement expression's items are a statement run, its value in their scope
+                ('sexpr items v ty) (: r (rsle items env ()) ['sexpr <r (re v <>r) ty])
                 (map (x \ re x env) e)))
+       (rsle items env acc)                         ; rsl, answering (items env) for what follows
+        (? !(two? items) [(rev acc) env]
+           (: s <items
+              (? (two? s && <s = 'decl)
+                  (: r (rps <>s env ()) (rsle >items <>r (['decl <r] . acc)))
+                 (rsle >items env (rs s env . acc)))))
        (rps ps env acc)                             ; decl pairs -> [pairs env]
         (? !(two? ps) [(rev acc) env]
            (: p <ps
@@ -7325,16 +7381,17 @@
    ; written or &-taken, shadowing nothing, reads as its cast literal and its decl drops. runs to a fixpoint --
    (kprop g f)
     (: items <><>>>f
-       dcl {} tak {} wrt {}
+       dcl {} tak {} wrt {} ivs {}                  ; ivs: the locals an asm names as an immediate
        (cen x c9)                                   ; one walk: the censuses + the decl pairs seen
         (? !(two? x) c9
            (: c8 (x @ ('addr ('var nm)) (pin tak nm 1, c9)
                      (('asn || 'post) . ('var nm) . _) (pin wrt nm 1, c9)
                      ; an asm writes its outputs and takes a memory input's address
                      ('asm . _)
-                      (: (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) '(109 111)) 1 (go (i + 1)))) 0)
+                      (: (has? c l) ((: (go i) (? (#c <= i) () (elem (c i) l) 1 (go (i + 1)))) 0)
                          _ (foldl (\ _ o (<>o @ ('var nm) (pin wrt nm 1) 0)) 0 (x 2))
-                         _ (foldl (\ _ o (? (mem? <o) (<>o @ ('var nm) (pin tak nm 1) 0) 0)) 0 (x 3))
+                         _ (foldl (\ _ o (? (has? <o '(109 111)) (<>o @ ('var nm) (pin tak nm 1) 0)
+                                            (has? <o '(105 110)) (<>o @ ('var nm) (pin ivs nm 1) 0) 0)) 0 (x 3))
                          c9)
                      (('decl || 'sdecl) ps)
                       (: (dn l a) (? !(two? l) a
@@ -7347,12 +7404,16 @@
        cds (cen items ())
        pns (: (go l a) (? !(two? l) a (go >l (<<l . a))) (go <>>f))
        (kok nm ty init)
-        (? !(elem ty '(bool char uchar short ushort int uint long ulong)) ()
-           !(1 = peep dcl nm 0) ()
+        (? !(1 = peep dcl nm 0) ()
            (tak nm || wrt nm) ()
            (elem nm pns) ()
            (two? (peep (g 'glob) nm 0)) ()
            (g 'fns nm) ()
+           ; a pointer an asm names as an immediate reads as its address constant (a spliced
+           ; jump label's key)
+           (ptr? ty) (? (ivs nm && (init @ ('addr . _) 1 ('cast _ ('addr . _)) 1 ()) && imaddr g init != 'no)
+                        ['cast ty init] ())
+           !(elem ty '(bool char uchar short ushort int uint long ulong)) ()
            (: v (: cv (cfold !(t32? g) init) (? (cint? cv) cv 'no))   ; any constant init, folded in C's types
               (? !(charm? v) ()
                  (: cv (cnum g ['cast ty ['num v]])
@@ -8062,18 +8123,20 @@
     (? (nom? x) (pin t x 1)
        !(two? x) t
        (cg-refs >x (cg-refs <x t)))
-   ; the same relation over an AST, where a name is still text (laid forms wear the nom)
+   ; the same relation over an AST, where a name is still text (laid forms wear the nom): only a
+   ; mention names one -- a struct tag, a field's designator or a string literal that spells a
+   ; function's name is not a reference to it
    (cg-srefs x t)
-    (? (string? x) (pin t x 1)
-       !(two? x) t
-       (cg-srefs >x (cg-srefs <x t)))
+    (? !(two? x) t
+       (x @ ('var s) (? (string? s) (pin t s 1) t)
+            (cg-srefs >x (cg-srefs <x t))))
    ; the shared core: the gen state, then text (no _start) and data -> (g textforms dataforms) | ().
    ; weaks never inline (a spliced body would bake past the linker's strong override); xtra is the parser's tablets, () reading as empties
    (cgen-core ast stbl sigs weaks xtra tgt)
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'inl {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
+          'fns {} 'inl {} 'ineed {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})
@@ -8101,7 +8164,8 @@
                                (nelem <>f weaks) &&
                                (nelem <>f noinls) &&
                                inlok? g f (sigs <>f) (elem <>f ainls))
-                              (pin (g 'inl) <>f f))
+                              (: _ (? (asmneed? g <>>f <>>>f) (pin (g 'ineed) <>f 1) 0)
+                                 (pin (g 'inl) <>f f)))
                          (recfns >fs)))
        _ (recfns <>ast)
        _ (: (go ns) (? !(two? ns) 1 (pin (g 'fns) <ns 1, go >ns))
