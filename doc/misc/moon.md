@@ -465,8 +465,13 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
 * `asm goto`'s labels are the one outside name a template may reach: `%lN` (numbered after
   every operand) or `%l[name]` spells the function's label, and the jump's fix rides the raw
   out to it. It refuses outputs and a callee-saved clobber, which a jump would skip.
-* Deferred until a consumer demands them: `"f"` float operands, top-level asm, indexed
-  memory operands.
+* A file-scope `asm("..")` is gas's whole language: holo's gas-top reads the section stack
+  (`.section`/`.pushsection`/`.popsection`/`.previous`), labels local and numeric, `.globl`,
+  data words over a symbol plus a constant or less `.`, strings, `.balign`, `.zero`, and hands
+  each run of instructions to gas-text. Its sections merge into the object (a name already laid
+  takes the forms at its tail), and a static it names is laid. Anything else refuses by name,
+  as do a `- .` word on arm32 and the wasm lane.
+* Deferred until a consumer demands them: `"f"` float operands, indexed memory operands.
 
 ## the installed shape
 

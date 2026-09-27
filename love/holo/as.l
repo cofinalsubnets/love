@@ -98,7 +98,7 @@
 
    ;; --- the per-instruction encoders (each -> a byte/fix item list), in at&T operand order. ---
    ;; a rip-relative operand with an immediate tail is refused, not encoded: x64-patch measures
-   ;; rel32 from the end of its own field, and holo's fixup carries no addend to walk past the tail.
+   ;; rel32 from the end of its own field, and no encoder here threads the tail through the fix's aux.
    (as-2 mn w a b)                                           ; two-operand: at&T src,dst
       (: ka <a kb <b frc (as-frcs [a b])
          alu (as-alu mn)

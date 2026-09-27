@@ -190,6 +190,18 @@ clref 'static void d(int *p){ (void)p; }\nint m(void){ static int k __attribute_
 clref 'static void d(int *p){ (void)p; }\nint g __attribute__((cleanup(d)));\nint m(void){ return g; }\n' \
   "cleanup)) is not carried out" "file scope was skipped"
 
+# a file-scope asm (test/cc/178 holds the well-formed side): a directive gas-top does not
+# read, label arithmetic past one symbol, a `- .` word on arm32 and the wasm lane refuse by
+# name -- a dropped directive is a section the linker never sees
+taref() {
+  printf "$1" > "$ho/.feat.c"
+  moonrun -c -t "$2" -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "$3" || fail "file-scope asm: $4"
+}
+taref 'asm(".weak x");\n' x64 "gas-directive" "an unread directive was not refused"
+taref 'asm(".data\\na: .long a - b\\nb:");\n' x64 "gas-data" "a label difference was not refused"
+taref 'int f(void){return 0;}\nasm(".data\\n.long f - .");\n' thumb2 "gas-data-pcrel" "a pc-relative word on arm32 was not refused"
+taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file-scope asm"
+
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the
 # well-formed side; only the refusals live here.
