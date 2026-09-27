@@ -2163,6 +2163,13 @@
       new (swuniq (filter (h \ !(elem h names) && swsrc h != 0) heads))
       (? (atom? new) fns
          (swgather (foldr (\ h a (: d (swsrc h) (((h . <d) . >d) . a))) fns new))))
+   ; swhope?: body e could pass groupok? or vok? were every recorded global it calls a member. both grammars take only a
+   ;     charm or a param at a leaf and a head that is a grammar word, a candidate or a swallowed global, so a body that fails
+   ;     here fails grpfix whatever the swallow lowers -- the check that spares lowering a whole module to learn it
+   (swhope? names ps e) (? (charm? e) 1  (atom? e) (elem e ps)
+                           (: h <e (nom? h && (elem h '(+ - * // % & | ^ < <= > >= = ? . tally peep mpeep mpin pin two? cap cup)
+                                               || elem h names || peep srcreg h 0 != 0)
+                                      && all (x \ swhope? names ps x) >e)))
    (autogroup form0)
     (srcrec form0, ; record global fn sources (flag-gated inside srcrec) before any decline
      (? (one? form0) form0
@@ -2176,7 +2183,8 @@
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix form0)))))))))))
           parsed (anat-defs >form) pairs <parsed
           fns0 (filter (p \ (: nf <p (two? nf && 1 < #nf < 6 && all nom? >nf && distinctp >nf))) pairs)   ; (name p..), 1..4 distinct sym params
-          fns (swgather fns0)                                                              ; swallow: pull called globals' recorded sources in as synthetic members
+          ; swallow: pull called globals' recorded sources in as synthetic members -- unless no candidate could join any group
+          fns (? (any (p \ swhope? (map caap fns0) ><p >p) fns0) (swgather fns0) ())
           (? !(two? fns) form0                                                            ; no candidate functions -> original
              (: armap (map (p \ [<<p (#<p - 1)]) fns)                  ; (name arity) candidates
                 grp (grpfix fns armap)                                                        ; the closed glazeable subset
