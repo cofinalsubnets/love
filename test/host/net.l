@@ -94,7 +94,9 @@
 ; nslookup against a nameserver that is a process of its own (the pty read holds this one):
 ; four queries, box.test's a and aaaa -- one address, then an empty yes -- and nosuch.test's
 ; two, both NXDOMAIN. it tells them apart by the first letter of the name and finds the
-; type just past it. ping sends two echoes to loopback, where the kernel lets it.
+; type just past it. ping sends two echoes to loopback, where the kernel lets it, and again
+; in a fresh user and network namespace: there ping_group_range shuts the echo socket and
+; the namespace's root may open a raw one, the socket the bsds ping through.
 (: K (cite 'kore)
    love <cmdline
    dir "out/.nettest"
@@ -136,6 +138,14 @@
         (test (has? <g "PING 127.0.0.1 (127.0.0.1): 56 data bytes") (has? <g "64 bytes from 127.0.0.1: seq=1 ttl=")
               (has? <g "2 packets transmitted, 2 packets received, 0% packet loss")
               (has? <g "round-trip min/avg/max = ") (g 1 = 0)))
+   ; the raw socket, where unshare and ip are there to make the namespace (99 when not)
+   rw (: r (tether ["/bin/sh" "-c" ("unshare -rn sh -c 'ip link set lo up' 2>/dev/null || exit 99; "
+                                   + "exec unshare -rn sh -c 'ip link set lo up && exec " + love
+                                   + " kore ping -c 2 -i 0.2 127.0.0.1'")])
+           t (slurp >r) [t <(waitfor <r)])
+   _ (? (rw 1 = 99) 0
+        (test (has? <rw "64 bytes from 127.0.0.1: seq=1 ttl=")
+              (has? <rw "2 packets transmitted, 2 packets received, 0% packet loss") (rw 1 = 0)))
    h (run ["ping" "-c" "x" "127.0.0.1"])
    ; -i and -W read seconds with up to three places; a time prints as ms to three
    (test (has? <h "ping: bad -c x") (h 1 = 2)
