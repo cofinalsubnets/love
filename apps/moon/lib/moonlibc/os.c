@@ -496,12 +496,17 @@ long __ai_msgcan(long f) {
   if (f & 0x20) o |= 0x8;               /* MSG_CTRUNC */
   return o; }
 /* sockopt: SOL_SOCKET moves whole (1 -> 0xffff) and its names permute, and
- * so do IPPROTO_IPV6's (the bsds share kame's numbers); the other IPPROTO_*
- * levels ride (TCP_NODELAY 1 = 1). only what the headers spell has a row; an
- * unmapped name refuses loudly upstream, never a silently different option.
- * 0 ok, -1 unknown. */
+ * so do IPPROTO_IP's and IPPROTO_IPV6's (the bsds share kame's numbers there);
+ * the other IPPROTO_* levels ride (TCP_NODELAY 1 = 1). only what the headers
+ * spell has a row; an unmapped name refuses loudly upstream, never a silently
+ * different option -- linux's IP_TTL is a bsd's IP_HDRINCL. 0 ok, -1 unknown. */
 int __ai_sofb(long *lv, long *op) {
+  if (*lv == 0) switch (*op) {
+    case 2: *op = 4; return 0;          /* IP_TTL */
+    case 12: *op = __ai_osv == 3 ? 23 : 65; return 0;   /* IP_RECVTTL */
+    default: return -1; }
   if (*lv == 41) switch (*op) {
+    case 16: *op = 4; return 0;         /* IPV6_UNICAST_HOPS */
     case 26: *op = 27; return 0;        /* IPV6_V6ONLY */
     case 20: *op = 12; return 0;        /* IPV6_JOIN_GROUP */
     case 21: *op = 13; return 0;        /* IPV6_LEAVE_GROUP */

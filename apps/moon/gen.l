@@ -481,7 +481,7 @@
    ; the memory class: an aggregate past 16 bytes, passed wholly on the stack (x64 only; AAPCS64 differs)
    (amem? g ty) (stru? ty && !(aclass g ty) && !(arm? g) && !(t32? g))
    (asalign g ty) (: e (peep (g 'stag) <>ty 0) (two? e ? <>>e 8))        ; a struct tag's alignment
-   (aslots g ty) (((tsz g ty + 7) & -8) >> 3)                              ; its eightbyte count
+   (aslots g ty) (aup (tsz g ty) 8 >> 3)                              ; its eightbyte count
    ; a memory-class return: a hidden pointer as the first gp argument, filled and answered by
    ; the callee. v6-M past 4 bytes, SysV past 16
    (sretm? g ty) (stru? ty && (v6m? g && 4 < tsz g ty || amem? g ty))
@@ -862,6 +862,24 @@
        ty (? (bad? lv) (: r (cgexpr g env e ()) (? (bad? r) 'bad (rfree g (vreg r), vty r))) (vty lv))
        _ (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fasecs fa0)
        ty)
+   ; a counted loop's step: for (..; v < E; v++ | ++v) with E no wider than v and v unwritten
+   ; elsewhere steps only once v < E held, so v + 1 still fits and the home's re-narrow is the
+   ; identity -> v | ()
+   (bndv g env cnd stp body)
+    (: v (stp @ ('post ('var v) 1) v ('asn ('var v) ('bin '+ ('var v2) ('num 1))) (v = v2 ? v ()) ())
+       (wr? e) (? (atom? e) ()
+                  (elem <e '(asm goto label) || (elem <e '(asn post rmw addr) && two? >e && <>e = ['var v])) 1
+                  (: (go l) (? (atom? l) () (wr? <l) 1 (go >l)) (go e)))
+       (? !v ()
+          (cnd @ ('bin 'lt ('var v3) E)
+           (? (v3 != v || wr? body || wr? E) ()
+              (: tv (peekty g env ['var v]) te (peekty g env E)
+                 k (E @ ('num k) (charm? k ? k ()) ())       ; a literal bound: its value, not its type
+                 (? (tv = 'int && (k ? (k <= 2147483647) (elem te '(int short ushort char schar uchar bool)))) v
+                    (tv = 'uint && (k ? (0 <= k <= 4294967295) (elem te '(uint ushort uchar bool)))) v
+                    ())))
+           ())))
+   (hcvt g nm ty r) (? (nm = g 'bndv) () (cvt ty r))   ; the counted loop's step skips its re-narrow
    ; a targetable leaf re-emitted straight into rX -> forms | 'no. leaves are pure (no strs pin,
    ; no argpos), so re-aiming costs nothing
    (cgleaf g env e rX)
@@ -1085,6 +1103,10 @@
                    (vfs a + pnum <k + pbrf g o (usg? (vty a)) 'r0 'r1 'r2 'r3 cc lbl)
                   (d128? (vty a))
                    (? !(w128? g) (no128 g)
+                      ; against zero: a signed pair's sign is its high word's, and == 0 is lo | hi
+                      (<k = 0 && (elem o '(eq ne) || vty a = 'i128 && elem o '(lt ge)))
+                       (: z (elem o '(eq ne))
+                          (as128 g a + (z ? '((or r0 r0 r2)) ()) + [['cmp (z ? 'r0 'r2) 0] ['br (bcc o ()) lbl]]))
                       (wbr o (as128 g a + wpush + wnum <k) (vty a = 'u128)))
                   (: n <k
                      cc9 (bcc o (cmpu g (vty a) <>k))
@@ -1494,7 +1516,7 @@
                   (: (go l) (two? l ?
                              (: o <l (<o <= x && x < <o + <>o ? o (go >l))))
                      (go sl)))
-   (ntmp g ty) (nslot g $ (tsz g ty + 7) & -8)
+   (ntmp g ty) (nslot g $ aup (tsz g ty) 8)
    ; the store-immediate op for (ty, k) | (), the vi fold's license (x64 only). st sign-extends
    ; imm32, the narrow forms truncate
    (fitsw? v) (-2147483648 <= v <= 4294967295)      ; sits in a 32-bit word under either signedness
@@ -1539,7 +1561,7 @@
    (clitcode g env off ty ini)
     (? (arr? ty || stru? ty)
         (: f (cgfill g env off ty ini)
-           (? (bad? f) 'bad (cgzero g off ((tsz g ty + 7) & -8) + f)))
+           (? (bad? f) 'bad (cgzero g off (aup (tsz g ty) 8) + f)))
        (: v (? (two? ini && <ini = 'init)
                (? (two? <>ini) <<>ini '(num 0)) ini)
           (cgstore g env off ty v)))
@@ -1981,8 +2003,8 @@
                (: r (cgexpr g env rhs <>rv)   ; the rhs aims straight at the home
                   (? (bad? r) 'bad
                      (flo? (vty r)) (mkv <>>rv 'r0 (asintt g r <>>rv + [['mov <>rv 'r0]] + cvt <>>rv <>rv))
-                     (vreg r = <>rv) (mkv <>>rv <>rv (vfs r + cvt <>>rv <>rv))   ; landed in the home already (re-narrowed)
-                     (: fs (vfs r + [['mov <>rv (vreg r)]] + cvt <>>rv <>rv)   ; straight from the value's register
+                     (vreg r = <>rv) (mkv <>>rv <>rv (vfs r + hcvt g <>dst <>>rv <>rv))   ; landed in the home already (re-narrowed)
+                     (: fs (vfs r + [['mov <>rv (vreg r)]] + hcvt g <>dst <>>rv <>rv)   ; straight from the value's register
                         _ (rfree g (vreg r))
                         (mkv <>>rv <>rv fs))))
               (two? rv && <rv = 'regw)     ; store into a pair-homed d128: land on the protocol, mov both halves
@@ -2142,7 +2164,7 @@
               (two? rv && <rv = 'regv)   ; p++ on a register-homed scalar: old in r0, home += step
                (: ty <>>rv stp (ptr? ty ? (tsz g <>ty) 1)
                   (mkv ty 'r0 ([['mov 'r0 <>rv]
-                                ['add <>rv <>rv (stp * step)]] + cvt ty <>rv)))
+                                ['add <>rv <>rv (stp * step)]] + hcvt g <>dst ty <>rv)))
               ; store-direct (the asn twin): a direct frame ld+st leaves no lean, so the local can still home
               (two? rv && <rv = 'loc &&
                (: t9 <>>rv !(stru? t9 || arr? t9 || flo? t9 || bitf? t9)))
@@ -2580,11 +2602,11 @@
                        (d128? aty)                               ; a wide arg: not carried (love.c passes limbs, never dlimbs)
                         (nolane g "a wide value is not carried as an argument")
                        (pair? g aty)                             ; a pair arg: an even-odd register pair (AAPCS32
-                        (: gpe ((gpc + 1) & -2)                  ;  rounds up), else the stack 8-aligned -- and gp
+                        (: gpe (aup gpc 2)                  ;  rounds up), else the stack 8-aligned -- and gp
                            (? ((gpe + 2) <= ngp g)               ;  assignment closes behind a stack arg (C.13)
                                (kls >as (i + 1) (gpe + 2) xmmc ovc
                                     ([['g2 gpe] (asll g a + spush2)] . acc))
-                               (: ov8 ((ovc + 7) & -8)
+                               (: ov8 (aup ovc 8)
                                   (kls >as (i + 1) 4 xmmc (ov8 + 8)
                                        (. [['ov ov8 8]
                                                 (asll g a + pstw 'sp ov8 'r0 'r1)]
@@ -2631,7 +2653,7 @@
                               (: k (vfpn xmmc 2 2)
                                  (? (0 <= k) (kls >as (i + 1) gpc (vfpm xmmc k 2) ovc
                                                   ([['x (k // 2)] rpush] . acc))
-                                    (: ov8 ((ovc + 7) & -8)
+                                    (: ov8 (aup ovc 8)
                                        (kls >as (i + 1) gpc vfpx (ov8 + 8)
                                             ([['ov ov8 8]
                                               (aval + pstw 'sp ov8 'r0 'r1)] . acc)))))
@@ -2644,11 +2666,11 @@
                                     (kls >as (i + 1) gpc xmmc (ovc + 4)
                                          ([['ov ovc 4] (av1 + [['st 'sp ovc 'r0]])] . acc))))
                              (v6m? g && wd2)               ; v6-M base ABI: a double/8B-blob arg is an even-odd gp
-                              (: gpe ((gpc + 1) & -2)      ;  pair (aval already lands r0:r1), else the 8-aligned stack
+                              (: gpe (aup gpc 2)      ;  pair (aval already lands r0:r1), else the 8-aligned stack
                                  (? (gpe + 2 <= (ngp g))
                                      (kls >as (i + 1) (gpe + 2) xmmc ovc
                                           ([['g2 gpe] (aval + spush2)] . acc))
-                                     (: ov8 ((ovc + 7) & -8)
+                                     (: ov8 (aup ovc 8)
                                         (kls >as (i + 1) 4 xmmc (ov8 + 8)
                                              (. [['ov ov8 8]
                                                       (aval + pstw 'sp ov8 'r0 'r1)]
@@ -2732,7 +2754,7 @@
              padn ((nov & 1) = 1 ? 8 0)               ; keep sp 16-aligned across the overflow block
              ; t32 slots are byte offsets: the block spans to the highest slot's end, rounded to 8; x64/a64 count 8-byte slots
              ovblk (? (t32? g)
-                      (: (go9 l9 m9) (? !(two? l9) ((m9 + 7) & -8)
+                      (: (go9 l9 m9) (? !(two? l9) (aup m9 8)
                                         (: ce <<l9
                                            e9 (<ce @ 'ov (<>ce + (two? >>ce ? <>>ce 4)) 0)
                                            (go9 >l9 (m9 < e9 ? e9 m9))))
@@ -3027,23 +3049,28 @@
                                     (pa || pb) 'bad
                                     (: rt (wbin ta tb)
                                        w? (two? wpk)
-                                       midw (? w? (as128 g av + ([['mov <wpk 'r0] ['mov <>wpk 'r2]] + as128 g b))
+                                       ; a right read off its home pair is the op's own operand pair (these commute)
+                                       hb (? (w? && d128? tb && elem op '(+ * | & ^ eq ne))
+                                             (vfs b @ (('mov 'r2 H) ('mov 'r0 L)) [L H] ()) ())
+                                       pk (hb || wpk)
+                                       midw (? hb (as128 g av)
+                                               w? (as128 g av + ([['mov <wpk 'r0] ['mov <>wpk 'r2]] + as128 g b))
                                                (as128 g av + (wpush + as128 g b)))
                                        res (op @
-                                            '+ (mkv rt 'r0 (midw + (? w? [['a128r <wpk <>wpk]] ('((a128 sp)) + wdrop))))
+                                            '+ (mkv rt 'r0 (midw + (? w? [['a128r <pk <>pk]] ('((a128 sp)) + wdrop))))
                                             '- (mkv rt 'r0 (midw + (? w? [['s128r <wpk <>wpk]] ('((s128 sp)) + wdrop))))
                                             '* (: zl (d128? ta ? (zext128? (vfs av)) (usg? ta9 || ptr? ta9))
                                                   zr (d128? tb ? (zext128? (vfs b)) (usg? tb9 || ptr? tb9))
                                                   (? (zl && zr)                 ; hi halves zero: one mulq, the park needs only lo
                                                      (mkv rt 'r0 (? w? (as128 g av + [['mov <wpk 'r0]] + (tor0 g b + [['mw128r <wpk]]))
                                                                    (as128 g av + wpush + tor0 g b + '((mw128 sp)) + wdrop)))
-                                                     (mkv rt 'r0 (midw + (? w? [['m128r <wpk <>wpk]] ('((m128 sp)) + wdrop))))))
+                                                     (mkv rt 'r0 (midw + (? w? [['m128r <pk <>pk]] ('((m128 sp)) + wdrop))))))
                                             ('| || '& || '^)
                                              (: w9 (irop op)
-                                                (mkv rt 'r0 (midw + (? w? [[w9 'r0 'r0 <wpk] [w9 'r2 'r2 <>wpk]]
+                                                (mkv rt 'r0 (midw + (? w? [[w9 'r0 'r0 <pk] [w9 'r2 'r2 <>pk]]
                                                                (['(ld r1 sp 0) [w9 'r0 'r0 'r1] '(ld r1 sp 8) [w9 'r2 'r2 'r1]] + wdrop)))))
                                             ('eq || 'ne || 'lt || 'le || 'gt || 'ge)
-                                             (mkv 'long 'r0 (midw + (? w? [['c128r (scc op (rt = 'u128)) <wpk <>wpk]]
+                                             (mkv 'long 'r0 (midw + (? w? [['c128r (scc op (rt = 'u128)) <pk <>pk]]
                                                                ([['c128 (scc op (rt = 'u128)) 'sp]] + wdrop))))
                                             ('/ || '%)
                                              ; u128 by a divisor with a provably-zero high half only (dv128's two-step divq is unsigned)
@@ -3396,6 +3423,14 @@
           ; a variable shift defines only its dest: x64's encoder wants cl but refuses any other register outright, so no
           ; move clobbers r1 -- and a claimed r1 def would read the pair lane's carry-in or as dead
           (elem op vshops) [[<>f <>>f] [<>f] ()]
+          ; the wide register kit: the pair rides r2:r0 unspelled, so copyprop's positional probe never renames it.
+          ; x64 spends rcx inside m128r/c128r, and its subtract answers through the park
+          (op = 'sx128) ['(r0) '(r2) 1]
+          (elem op '(n128 inc128 dec128 shl128 shr128 sar128)) ['(r0 r2) '(r0 r2) 1]
+          (op = 'mw128r) [['r0 <>f] '(r0 r2) 1]
+          (elem op '(a128r s128r m128r))
+           [(['r0 'r2 <>f] + rg1 <>>f) ('(r0 r2) + (x64? g ? (op @ 's128r [<>f <>>f] 'm128r '(r1) ()) ())) 1]   ; a128r's hi may be 0
+          (op = 'c128r) [['r0 'r2 <>>f <>>>f] (x64? g ? '(r0 r1 r2) '(r0)) 1]
           'bar))
    ; the a64 retarget renames by position, not symbol: x4 is also an argument register, so only the base slot's r4 becomes fp
    a4base (: t (foldl (\ t o (pin t o 2)) {} (ldops9 + fldops + xops + fxops + leaops + '(cmprm)))
@@ -4036,7 +4071,7 @@
                                                      (pin ldconv <ls o, pl >ls)) pl)
                                        (clds (e 1)))
                                     (cvt >l))) cvt) cvl)
-                F2 ((F + 8 * tally ds + 15) & -16)
+                F2 (aup (F + 8 * tally ds) 16)
                 ; a converted cell joins the slot map, or deadst/repack meet an unclaimed r4 touch and
                 ; bar the fn; one 8-byte slot per record depth, at the offset cvt hands the st/ld
                 _ (foldl (\ _ d (: o ((F + 8) + (8 * rank d ds 0))
@@ -4381,7 +4416,9 @@
    lvquiet '(label align ud2 br jmp)                ; no register effect at all
    ; what an exit owes back beside the cs file. r2 (rdx, an aggregate's high half) is missing:
    ; a consumer using this for a plain dead-def test owes it first
-   (lvret g) (? (t32? g) '(r0 r1) '(r0 r1 f0 f1))
+   (lvret g) (? (t32? g) '(r0 r1)
+                (: rt <(peep (g 'sigs) (g 'fn) ['long ()])       ; r2: a wide return's high half, x64's int pair's
+                   (? (w128? g && (d128? rt || x64? g && ipair? g rt)) '(r0 r1 r2 f0 f1) '(r0 r1 f0 f1))))
    ; the blanket cases filter mints out: a mint live across a call must read as crossing, not
    ; be read+def'd into a false kill. inert post-vrfix
    (lvtx g f u)                                     ; one form's (reads defs) | 'bar
@@ -4444,6 +4481,59 @@
              [lin lot])))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
+
+   ; the wide pair's two shuffles, off liveness (x64, a64). a word built in r0 while the pair
+   ; parks, then added with a zero high half, is built in the park and the pair stays put:
+   ;   (mov p r0)(mov q r2) S (li r2 0)(a128r p q) -> S[r0 := p] (a128r p 0)
+   ; S straight-line, every register it touches spelled, r0 written before read, r2 p q untouched.
+   ; and a pair shifted down 64 into a home lands its halves: (shr128 64)(mov a r0)(mov b r2) -> (mov a r2)(li b 0)
+   (wpair g fs)
+    (: lot (? (w128? g) (lvout g fs) 'no)
+       (reg? x) (nom? x && nelem x '(sp fp r0 r2))
+       (dead? rs i) !(two? (filter (r \ elem r (lot i)) rs))
+       ; the run S up to (li r2 0)(a128r p q) -> its length, or () off the shape
+       (run l p q n w)
+        (? (!(two? l) || 12 < n) ()
+           (: f <l
+              (? (two? l && two? >l && f = '(li r2 0) && <>l = ['a128r p q]) (w ? n ())
+                 (: d (? (two? f) (rdsp g f) 'bar)
+                    rs (d @ 'bar () (<d + <>d))
+                    (? (d = 'bar || two? (filter (r \ nelem r >f) rs) ||
+                        two? (filter (r \ elem r ['r2 p q]) rs) ||
+                        (!w && elem 'r0 <d))
+                       ()
+                       (run >l p q (n + 1) (w || elem 'r0 <>d)))))))
+       (go l i)
+        (? !(two? l) ()
+           (: f <l
+              (? (two? f && <f = 'mov && two? >l && <>>f = 'r0 && (: f2 <>l (two? f2 && <f2 = 'mov && <>>f2 = 'r2)) &&
+                  reg? <>f && reg? <><>l && <>f != <><>l)
+                  (: p <>f q <><>l
+                     n (run >>l p q 0 ())
+                     (? (charm? n && dead? [p q] (i + 3 + n))
+                         (: S (map (h \ map (x \ (x = 'r0 ? p x)) h) (take n >>l))
+                            (S + [['a128r p 0]] + go (drop (n + 2) >>l) (i + 4 + n)))
+                        (f . go >l (i + 1))))
+                 (f = '(shr128 64) && two? >>l &&
+                  (: m1 <>l m2 <>>l
+                     (two? m1 && two? m2 && <m1 = 'mov && <m2 = 'mov && <>>m1 = 'r0 && <>>m2 = 'r2 &&
+                      reg? <>m1 && reg? <>m2 && nelem <>m1 '(r0 r2) && nelem <>m2 '(r0 r2) && <>m1 != <>m2)) &&
+                  dead? '(r0 r2) (i + 2))
+                  ([['mov <><>l 'r2] ['li <><>>l 0]] + go >>>l (i + 3))
+                 ; the pair's constants: a widened li is two, a known pair shifts up 64 by moving its lo, and a
+                 ; known pair with lo 0 adds as its hi alone (the halves then die apart)
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && two? >l && <>l = '(sx128))
+                  (go (f . ['li 'r2 (<>>f < 0 ? -1 0)] . >>l) i)        ; same length: the indices hold
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && fitsw? <>>f && two? >>>l &&
+                  (: f2 <>l (two? f2 && <f2 = 'li && <>f2 = 'r2 && charm? <>>f2)) && <>>l = '(shl128 64) &&
+                  (: f4 <>>>l (two? f4 && <f4 = 'a128r && reg? <>f4 && reg? <>>f4)))
+                  (: f4 <>>>l
+                     ([['mov 'r0 <>f4] ['mov 'r2 <>>f4] ['add 'r2 'r2 <>>f]] + go >>>>l (i + 4)))
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && two? >>l &&
+                  (: f2 <>l (two? f2 && <f2 = 'li && <>f2 = 'r2 && charm? <>>f2)) && <>>l = '(shl128 64))
+                  ([['li 'r0 0] ['li 'r2 <>>f]] + go >>>l (i + 3))
+                 (f . go >l (i + 1)))))
+       (lot @ 'no fs (go fs 0)))
 
    ; coalescing: a (mov D S) whose S dies here and was defined by the form just before is a
    ; misnamed def: the def takes D and the mov drops. the prologue is unframe's, read by position
@@ -4798,8 +4888,8 @@
                                   (go csused 1))
                          csaves (map (r \ ['st 'r4 (peep cslot r 0) r]) csused)
                          csrests (map (r \ ['ld r 'r4 (peep cslot r 0)]) csused)
-                         K2 ((high2 + 15) & -16)
-                         K3 (? (two? csused) (((high2 + (8 * tally csused)) + 15) & -16) K2)
+                         K2 (aup high2 16)
+                         K3 (? (two? csused) (aup (high2 + 8 * tally csused) 16) K2)
                          ; a jmp off the label table is a sibcall; so is one to the entry label (a self tail call)
                          (exit9? f) (xit? f || xjmp? f labt ||
                                      (two? f && <f = 'jmp && 0 = (peep labt <>f -1)))
@@ -5788,7 +5878,7 @@
    (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
     (: b (imgbytes g ty val) (? (bad? b) 'bad (b + zeros (w - imbytelen b))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
-    (: span ((tsz g ty + wsize g - 1) & -(wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
+    (: span (aup (tsz g ty) (wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
        raw (imgbytes g ty ini)
        (? (bad? raw) 'bad (raw + zeros (span - imbytelen raw))))
 
@@ -5841,7 +5931,7 @@
                      !(elem (gtgt g) '(x64 a64 rv64))
                       (nolane g ("no lane for a variable-length array" + ontgt g))
                      (vone ps env2 acc p ty))
-                 (: span ((tsz g ty + 7) & -8)
+                 (: span (aup (tsz g ty) 8)
               off (nslot g span)
               hreg (? (g 'inlining) ()                   ; a statement expression's decl takes no seat
                       !(lhomable? ty || fhomable? ty || (d128? ty && w128? g)) ()
@@ -6524,12 +6614,22 @@
             (go 1)) ||
             (: (go l) (? !(two? l) () (d128? <><l) 1 (go >l)) (go params)) ||
             wdc items)
+       ; the wide park's peak draw: a wide binop holds its left's two-register park while its right
+       ; evaluates, so a right that parks again doubles it. a miss costs speed only (the cell lane)
+       wdn (: (go i acc) (? (peep n9 'sq 0 < i) acc
+                             (: e2 (sqm i) (go (i + 1) (? (two? e2 && d128? <>e2) (<e2 . acc) acc))))
+              (go 1 (map (p \ <p) (filter (p \ d128? <>p) params))))
+       (wide? e) (? (atom? e) ()
+                    (e @ ('cast ty _) (d128? ty) ('var nm) (elem nm wdn) ('bin _ l r) (wide? l || wide? r) ()))
+       (wpd e) (? (atom? e) 0
+                  (e @ ('bin _ l r) (? (wide? l || wide? r) (max (wpd l) (2 + wpd r)) (max (wpd l) (wpd r)))
+                       (foldl (\ m x (max m (wpd x))) 0 e)))
        pq9 (0 = pdtl items && !wd9)
        (? (0 = peep n9 'q 0)
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
            (peep n9 'asm 0) (peep n9 'vla 0) (peep n9 'sq 0) tak
-           (pmxl items 1 1) (? pq9 1 ()) (? wd9 1 ())] ()))
+           (pmxl items 1 1) (? pq9 1 ()) (? wd9 1 ()) (? wd9 (wpd items) 0)] ()))
    ; alive's forward twin: cgstmt/cgdecl/cgsdecl entries tick and pin the wrapset off livtab
    ; (a miss pins 'all); a statement expression's statements neither tick nor re-pin
    (stq g)
@@ -6696,7 +6796,9 @@
                     _ (pins g 'brk >(g 'brk)
                               'cnt >(g 'cnt)
                               'stwrap myw)           ; the body re-pinned as it went; the step is ours
+                    _ (pin g 'bndv (bndv g env2 cnd stp body))
                     st2 (two? stp ? (cgexpr g env2 stp ()))
+                    _ (pin g 'bndv ())
                     (? (bad? c || bad? b || bad? st2) 'bad
                        (<ir + (two? cnd ? ([['jmp lc]] + lalign g)) + [['label lb]] +
                         b + [['label ls]] + (two? st2 ? (vdrop g st2)) +
@@ -7483,7 +7585,7 @@
                    (: off (nslot g 8)
                       (spill hp >ps (gpe + 2) xmmi ovi ([<p off pty] . env)
                              (acc + pstw 'r4 off (argr g gpe) (argr g (gpe + 1)))))
-                  (: ov8 ((ovi + 7) & -8)
+                  (: ov8 (aup ovi 8)
                      (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
               (? (v6m? g && sse2? g pty)                ; v6-M: a position-0 16B composite arrives whole in r0-r3
                   (gpi != 0 ? 'bad                          ;  (the caller's g4 lane); any later start splits -- deferred
@@ -7519,10 +7621,10 @@
                      (: k (vfpn xmmi 2 2) off (nslot g 8)
                         (spill hp >ps gpi (vfpm xmmi k 2) ovi ([<p off pty] . env)
                                (acc + fstf g 'double 'r4 off (xmmreg (k // 2)))))
-                     (: ov8 ((ovi + 7) & -8)
+                     (: ov8 (aup ovi 8)
                         (spill hp >ps gpi vfpx (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
                  (v6m? g && stru? pty && aone g pty == 'sse)           ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
-                  (gpair ((gpi + 1) & -2))
+                  (gpair (aup gpi 2))
                  (stru? pty && two? (aeb2 g pty))       ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
                   (? (pol? hp && !(sse2? g pty)) 'bad        ; a policy homes gp scalars only -- mixed/int-pair 16B deopts
                      (: cls (aeb2 g pty) c0 <cls c1 <>cls
@@ -7568,7 +7670,7 @@
                                (acc + [['st 'r4 off (argr g gpi)]])))
                      (spill hp >ps gpi xmmi (ovi + 4) ([<p (ovb g + ovi) pty] . env) acc))
                  (v6m? g && flo? pty)                   ; v6-M base ABI: a double param is a gp pair (no FPU regs exist)
-                  (gpair ((gpi + 1) & -2))
+                  (gpair (aup gpi 2))
                  ; a double granted an xmm seat rides there off its arrival; the rest take a slot
                  (fhomable? pty && xmmi < 8 && nom? (peep (g 'fpar) <p ()))
                   (: fr (peep (g 'fpar) <p ())
@@ -7578,7 +7680,7 @@
                   (: off (nslot g 8)
                      (spill hp >ps gpi (xmmi + 1) ovi ([<p off pty] . env)
                             (acc + fstf g pty 'r4 off (xmmreg xmmi))))
-                 (pair? g pty) (gpair ((gpi + 1) & -2))   ; a pair param: the even-odd register pair
+                 (pair? g pty) (gpair (aup gpi 2))   ; a pair param: the even-odd register pair
                  (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
                   (nolane g "a wide value is not carried as a parameter")
                  (!(flo? pty) && gpi < ngp g)
@@ -7678,7 +7780,7 @@
            (: body (bldreset g,
                     cgitems g <>sp0 <><>>>f ())
               (? (bad? body) 'bad
-                 (: frame ((peep g 'off 0 + 15) & -16)
+                 (: frame (aup (peep g 'off 0) 16)
                     (? (arm? g)
                        ; the IR sweeps stay out of the arm build (a64 sweeps post-choice, where r4 is unambiguously fp:
                        ; a raw r4 is also the 5th argument); a4ize retargets r4 -> fp after sibcall. no sav3: r3 is caller-saved
@@ -7851,17 +7953,19 @@
         (: uv <>>av9 crh9 (av9 6) rdc9 (av9 7) rdt9 (av9 8)
            lf9 (av9 15 <= 2)                  ; leaf-shaped: at most two cold hard crossings (see ulloc)
            pq9 (qk && av9 16)                    ; protocol-quiet: nothing in the body writes a quad
-           wd9 (av9 17 &&                      ; d128 material: the wide kit owns the file --
-                !(a64? g || t32? g || rv64? g))         ; on x64, whose mul/div pin the rax:rdx pair
+           wm9 (av9 17 && !(a64? g || t32? g || rv64? g))   ; d128 material on x64, whose mul/div pin rax:rdx
+           wd9 (wm9 && 2 < av9 18)             ; a nested park would starve: the wide kit owns the file
+           dp9 (? wm9 5 3)                     ; else a take leaves the file two deeper, one park's draw
            (homefold g params 0 [() () () #tpool]
             (\ a4 gpi p9
               (: nm <p9 pty <>p9
                  A (argr g gpi)
                  nv (a4 3)                       ; the file's running depth (homes and rides drain it)
-                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2)
+                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2 &&
+                     (!wm9 || 64 <= peep rdt9 nm 0))  ; beside the wide kit only a hot param takes a seat
                  ; a bool's entry cvt defs through set, which qclob? cannot tell from a clobber: a bool quad vacates
                  qb9 (= pty 'bool && elem A '(r0 r1 r2 r3))
-                 (? (ok && homable? pty)
+                 (? (ok && homable? pty && (!wm9 || dp9 <= nv))
                     (? (A = homereg gpi) [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                        (a4rider? A) [<a4 (gpi . <>a4) (a4 2) nv]
                        (elem A '(r0 r1 r2 r3))
@@ -7874,7 +7978,7 @@
                     ; an int param rides its arrival if read at least once, no d128 about, and the file
                     ; stays two deep after the take; a64's r4 arrival rides free
                     (ok && lhomable? pty && !qb9 && (0 < peep rdc9 nm 0) && !wd9 &&
-                     (elem A tpool && 3 <= nv || a4rider? A))
+                     (elem A tpool && dp9 <= nv || a4rider? A))
                      [(gpi . <a4) <>a4
                       (? (elem A tpool) (A . a4 2) (a4 2))
                       (? (elem A tpool) (nv - 1) nv)]
@@ -7883,7 +7987,7 @@
                      [(gpi . <a4) <>a4 (a4 2) nv]
                     ; ..and a hot one (weighted reads >= 64, the blocker bar) that cannot ride vacates to its positional seat
                     (ok && lhomable? pty && !wd9 && 64 <= peep rdt9 nm 0 &&
-                     elem A '(r0 r1 r2 r3) && 3 <= nv)
+                     elem A '(r0 r1 r2 r3) && dp9 <= nv)
                      [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                     a4)))))
        ; the quad-ride check: a ridden r0-r3 arrival's only legitimate def is its entry cvt; any other
@@ -8009,7 +8113,7 @@
                      (cfoldir g irx)))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))
+       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (copyprop g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_

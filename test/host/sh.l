@@ -647,7 +647,7 @@
 ; ..and the stdin readers stay out: a filter with no file operand would drink the
 ; terminal in here, where ^C kills the shell and no pid answers `kill %1`. tar is one
 ; (f -, or no f at all)
-(test (all (\ w !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "cat" "sort" "tar")))
+(test (all (\ w !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "sort" "tar")))
 ; the door is what makes that safe. a tool that used to `quit` on its error path
 ; would have taken the shell with it; now every failure is one command's status and
 ; the line after it still runs.
@@ -657,6 +657,9 @@
              mkfs.vfat 2>/dev/null; echo m=$?
              echo alive"])
    (test ("t=2\nl=1\nm=2\nalive\n" = >r)))
+; ..and a main's early answer too: mooncc's --version leaves, never quits, in here
+(: r (hark ["out/love" "out/lush" "-a" "-c" "mooncc --version > /dev/null; mooncc -h > /dev/null; echo alive"])
+   (test ("alive\n" = >r)))
 ; a capture of one takes the jug: no pipe, no fd, no child, which is the whole
 ; point of `cc=$(which cc)`
 (: pr (sh-parse-line "which cc")
@@ -731,10 +734,12 @@
     (sh-t-has? j4 "woke")))             ; ..and wakes, group and all, to the end
 
 ;; a $( ) of a roster word is ours to run in here: the jug when nothing wants an fd,
-;; the pipe lane when a redirect does; a spelled path still spawns, a builtin keeps its lane
+;; the pipe lane when a redirect does; a spelled path still spawns, a builtin keeps its lane,
+;; and a word that is ours only for some calls takes the pipe lane, where the call answers
 (: (lane s) (sh-lane >(sh-parse >(sh-lex s)))
    (test ('jug = lane "date") ('sub = lane "date 2>/dev/null") ('ext = lane "/bin/date")
-         ('ext = lane "cat") ('jug = lane "echo hi") ('sub = lane "cd /") ('jug = lane "pwd")))
+         ('sub = lane "cat") ('ext = lane "gzip") ('jug = lane "echo hi") ('sub = lane "cd /")
+         ('jug = lane "pwd")))
 (: r (hark ["out/love" "out/lush" "-c"
             "v=$(expr 1 + 2); w=$(printenv LUSH_UNSET_QQ 2>/dev/null); echo $? v=$v w=[$w]"])
    (test ("1 v=3 w=[]\n" = >r)))
@@ -787,6 +792,48 @@
    _ (pin sh-inread () in0)
    (test (1 = a) (0 = b) (1 = c) (1 = d)))
 
+;; a verb that says it is a builtin (verbs' traits) runs as one in every mode, ahead of
+;; PATH, and says so; the self lane reads the same table
+(: r (hark ["out/love" "out/lush" "-p" "-c" "PATH=/nonexistent; echo hi; printf '%s\\n' pf; [ a = a ] && test 1 = 1 && echo t; type echo"])
+   (test ("hi\npf\nt\necho is a shell builtin\n" = >r)))
+(: T (cite 'verbs 'trait)
+   (test (1 = sh-verbbi? "echo") (1 = sh-verbbi? "[") (0 = sh-verbbi? "ls")
+         (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (lit? (T 'cat 'self))))
+;; a reader is self per call: every operand a regular file, or it forks -- bare, a -,
+;; a missing file, a device, or an option's word
+(: f "test/00-init.l"
+   (test (1 = sh-selfcall? ["wc" "-l" f f]) (1 = sh-selfcall? ["sha256sum" f])
+         (0 = sh-selfcall? ["wc"]) (0 = sh-selfcall? ["wc" "-"]) (0 = sh-selfcall? ["wc" f "/nonexistent-qq"])
+         (0 = sh-selfcall? ["md5sum" "/dev/zero"]) (1 = sh-selfcall? ["cat" f]) (0 = sh-selfcall? ["cat"])
+         ; the filters ask their own parsers: -n's word is no file, a bare pattern is none
+         (1 = sh-selfcall? ["head" "-n" "5" f]) (0 = sh-selfcall? ["head" "-n" "5"])
+         (1 = sh-selfcall? ["tail" "-n" "+3" f]) (0 = sh-selfcall? ["tail" "-n" "bogus" f])
+         (1 = sh-selfcall? ["cut" "-d" ":" "-f" "1" f]) (0 = sh-selfcall? ["cut" "-f" "1"])
+         (1 = sh-selfcall? ["grep" "x" f]) (0 = sh-selfcall? ["grep" "x"]) (1 = sh-selfcall? ["grep" "-e" "x" f])
+         (0 = sh-selfcall? ["grep" f])
+         (1 = sh-selfcall? ["ls" "-l"]) (0 = sh-selfplain? "wc") (1 = sh-selfplain? "ls")))
+;; ..and a capture of a big in-image reader lives: the body writes a port that parks
+;; on a full pipe, so the drain gets its turn -- the static stdout would block on it
+(: r (hark ["out/love" "out/lush" "-a" "-c" "f() { cat love/*.c; cat love/*.c; }; x=$(f); echo ${#x}"])
+   (test (0 < #(>r))))
+;; exec rides the same (path . word) spawn: PATH's file, the child named as spelled --
+;; GNU's cat says `cat:`, never its path -- and a word nothing answers is 127
+(: r (hark ["out/love" "out/lush" "-g" "-c" "exec cat /nonexistent-qq 2>&1"])
+   (test (1 = <r) ("cat: " = snip >r 0 5)))
+(: r (hark ["out/love" "out/lush" "-g" "-c" "exec nope-qq-cmd 2>/dev/null"])
+   (test (127 = <r)))
+;; a crew main answers its status to a caller in the image, a failure from deep in
+;; included -- only the seats quit
+(: C (cite 'verbs 'call)
+   (test (1 = C 'cook ["-f" "/nonexistent-qq.mk"]) (2 = C 'sb ["no-such-verb"])
+         (2 = C 'kiosko ["-z"])))
+;; ..and a trait may turn on the call: love's bake and wake want a fresh process, asked
+;; under the name the word runs as, so a path to this binary is love too
+(: H (cite 'verbs 'holds)
+   (test (1 = H 'love 'exec ["bake"]) (1 = H 'love 'exec ["wake" "x"]) (0 = H 'love 'exec ["-e" "1"])
+         (1 = sh-exec? ["out/love" "bake"]) (0 = sh-exec? ["out/love" "kore" "ls"])
+         (0 = sh-forkok? ["out/love" "bake"] [(0 . 5)])))
+
 ;; readonly, alias, times, hash and ulimit: each acts on this process or its tables.
 ;; a readonly assignment is an error, fatal to a script, from every setter
 (: r (hark ["out/love" "out/lush" "-c" "readonly R=1 S; readonly; R=2; echo after"])
@@ -811,6 +858,31 @@
 ;; and a bad limit are errors
 (: r (hark ["out/love" "out/lush" "-c" "ulimit -n 1000; ulimit -n; ulimit -Sn 500; ulimit -n; ulimit -Hn; ulimit -z; echo st=$?; ulimit -n abc; echo st=$?"])
    (test ("1000\n500\n1000\nst=1\nst=1\n" = >r)))
+
+;; the line editor takes utf-8 on a pty: a character's bytes arrive one at a time, and left
+;; and backspace move over it whole -- typed a日本b, left twice, backspace, it runs as a本b
+(: (has? hay ned)
+    (: n #ned m #hay
+       (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
+       (go 0))
+   (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
+   (type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   e (string 27)
+   r (tether ["out/love" "lush"])
+   m >r
+   _ (settty m 24 80)
+   sink (jug 0)
+   t (twirl (_ \ pump m sink) 0)
+   _ (rest 600)
+   _ (type m "printf '%s|\\n' a日本b")
+   _ (type m (e + "[D" + e + "[D"))        ; left over b, then over 本 whole
+   _ (type m (string 127))                 ; backspace takes 日 whole
+   _ (type m "\n")
+   _ (rest 700)
+   s (slurp sink)
+   _ (still <r 9)
+   _ (landed? t ? (catch t) (freeze t))
+   (test (has? s "a本b|") !(has? s "a日本b|") !(has? s "\xef\xbf\xbd")))
 
 (test_fin ())
 (puts "sh: ok") (putc 10)

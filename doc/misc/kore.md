@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (187 tools, 194 names)
+## the inventory (194 tools, 202 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -66,7 +66,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | apps/cook.l | make / cook |
 | core.l, the line tools | cat tac shuf echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
-| core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
+| core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop), column (lines laid in columns, or `-t` a table) |
 | core.l, the line endings | dos2unix unix2dos mac2unix (in place by default; a binary file is refused, the mode is kept) |
 | core.l, the encodings | base64 base32 basenc (RFC 4648; basenc's url, hex, base16, the two base2 orders and z85 too; `-d` reads it back, `-w` says the wrap), uuencode uudecode (busybox's, `-m` base64), ascii (toybox's table) |
 | core.l, the two little computations | tsort factor |
@@ -87,7 +87,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
 | proc.l, the processes and the world | env nohup nice renice setsid printenv sleep usleep kill xargs time ts date id whoami groups |
-| proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them) |
+| proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them), microcom (a serial line and this terminal, byte for byte) |
 | proc.l, the host's utmp, read | who users pinky logname (glibc's, netbsd's utmpx and freebsd's utx.active; kore writes none) |
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
 | proc.l, the one-liners | cal hostname hostid dnsdomainname tty clear reset which timeout watch |
@@ -99,11 +99,12 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
+| apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
 | apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (inle/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
-| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6) |
+| net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -165,6 +166,17 @@ COLUMNS, so a tab steps to the next stop, `\b` steps back one and `\r` starts th
 `fold -b` asks for bytes instead, `-s` backs the break up to the last blank, `-w N` and the
 obsolescent `-N` both say the width; `expand -t N -i`; `unexpand -a`, and `-t N` means `-a`
 too, as GNU's does.
+
+`column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]` lays lines out as util-linux's does,
+byte for byte (test/kore/column.sh holds it to the system's). Filling, every column is one
+width: the widest entry's, taken past the next tab stop, the pad in tabs, down the columns
+unless `-x`, across `-c`'s width, else `$COLUMNS` or the terminal or 80. `-t` makes a table:
+fields split on whitespace (a run as one, the ends dropped), or on each of `-s`'s characters
+so an empty field stays; each column as wide as its widest cell, `-o` between (two spaces),
+a short row padded out to the last column. Blank lines are skipped and widths are screen
+columns, a wide character two. One corner parts from util-linux: with `-x` and no room for
+even one column, util-linux runs every name onto one line; kore writes a name a line, as the
+BSDs do and as util-linux itself does without `-x`.
 
 * **a tab lands only where it saves at least two columns**, which is why a lone space
   sitting on a tab stop stays a space. It is the one rule the obvious unexpand gets wrong.
@@ -591,7 +603,7 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
 utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
 
-## telnet, httpd, nslookup, ping and ping6 (apps/kore/net.l)
+## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (apps/kore/net.l)
 
 `telnet HOST [PORT]` is nc (apps/ain.l) with the telnet protocol's options answered
 (RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
@@ -601,6 +613,23 @@ server's echo. While the server echoes, the terminal is raw and each key is sent
 mode). A line ends CR LF on the wire, and `^]` closes the connection. When stdin is not a
 terminal, its lines are sent, and its end half-closes the connection so the server's
 answer can still arrive.
+
+`telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]` is busybox's: each client
+gets LOGIN on a pty of its own, `/bin/login` unless `-l` names another program, and anything
+else it names is said on stderr (whoever reaches the port runs it, unauthenticated). `-b`
+takes a dotted quad to listen on one address, loopback's say, where `listen` answers every
+address by default. The server offers to echo and suppress go-ahead and asks the client's
+window size, which the pty follows as it changes; every other option is refused, and TERM is
+xterm. A client's CR LF or CR NUL is a CR, as the pty's ICRNL expects. The program's end
+closes the connection and the client's going hangs the program up. `/etc/issue.net`, or
+`-f`'s file, is shown first. `-F` and `-K` are what it always does; `-i`, `-w` and `-S` are
+refused by name.
+
+`microcom [-X] [-s SPEED] [-t TIMEOUT] TTY` (apps/kore/proc.l) is busybox's serial terminal,
+the other way onto a board: the line is opened read-write, never as the controlling terminal
+and without waiting on its carrier, then set raw 8N1 with no flow control at `-s`'s speed or
+its own. Bytes pass as they are both ways; ^X leaves unless `-X`, `-t` milliseconds of quiet
+leave too, and the line's settings go back as they were. `-d` is refused by name.
 
 `httpd [-fv] [-p PORT] [-h DIR]` is kiosko under busybox's name and flags: the port
 defaults to 80 and the directory to `.`, and `-v` logs each request. `-f` is accepted and
@@ -626,10 +655,49 @@ reply came back and 1 otherwise. It uses Linux's unprivileged ICMP echo socket, 
 groups in `net.ipv4.ping_group_range`, or else a raw ICMP socket, which needs root; FreeBSD
 and NetBSD have only the raw kind. Where both are refused it says so.
 
+`traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST` (and `traceroute6`) sends
+ICMP echoes with the TTL rising from `-f` (1) to `-m` (30), `-q` (3) to each hop, and prints
+busybox's lines: each hop's router, as its PTR name off the first nameserver unless `-n`, and
+each probe's round trip or `*` after `-w` seconds (3). The target's reply ends it, and so does
+an unreachable, marked `!N` `!H` `!P` or `!X`. Busybox's probes are UDP by default; these are
+the ICMP ones its `-I` sends, the one kind Linux's unprivileged echo socket can send, and
+that socket brings the routers' errors back on its error queue (`IP_RECVERR`). A raw socket
+(root, and the BSDs) reads them as they come. NetBSD's raw socket sends every packet at TTL
+255 whatever it is asked, so there traceroute sees only the target.
+
 `ping6`, or `ping -6`, or `ping` given an address with a colon in it, does the same over
 ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` in
 apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
 1452 here, one datagram on a 1500-byte link.
+
+## ssh, sshd and scp (apps/ssh/)
+
+One of everything, OpenSSH's first choices: curve25519-sha256 for the exchange, ssh-ed25519
+keys, chacha20-poly1305@openssh.com both ways, public-key authentication. The client came first
+(`ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]`,
+known_hosts held as OpenSSH's accept-new holds it); the server is its other half.
+
+`sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]` serves the user it runs
+as and only that user: there is no setuid here, so a login naming anyone else is refused. It
+listens on 22 by default, never detaches (`-D` and `-e` are taken for OpenSSH's sake) and logs
+to stderr. The host key is `-h`'s, else /etc/ssh/ssh_host_ed25519_key when that user can read
+it, else `~/.ssh/sshd_ed25519_key`, written on first use (0600, OpenSSH's format, a `.pub`
+beside it). authorized_keys is read at each login, so an edit counts at once; a line with
+options ahead of its key type (`command=`, `from=` ..) grants nothing, since none are honoured.
+Each connection is a task, and it carries one session channel: the login shell, or a command
+under it with `-c`, on a pty when the client asks for one (`window-change` follows it) and on
+three pipes when not, so bytes pass clean and stderr stays apart. The exit status goes home.
+Refused: rekeying (OpenSSH asks after 1 GB; the connection ends there), port forwarding, agent
+forwarding, subsystems (so sftp, and OpenSSH 9's scp by default, which rides it), and passwords.
+
+`scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target` copies with rcp's
+protocol over an exec channel, the one OpenSSH's `scp -O` speaks: files, and with `-r` whole
+trees, one side `[user@]host:path` and the other local. A file's mode always travels; `-p`
+keeps its mtime too, which becomes its access time as well. The remote end is `scp -t`
+receiving or `scp -f` sending, whatever `scp` the remote shell finds, OpenSSH's or kore's;
+kore's answers both, so kore to kore, OpenSSH's `scp -O` to kore and kore to OpenSSH all
+work. A received name with a slash, or `.` or `..`, is refused. Two remote hosts, or none,
+are refused by name.
 
 ## ed and ex (apps/kore/ed.l)
 
@@ -689,11 +757,18 @@ kore does not is the census's to say.
 
 ## the census (kore against the other userlands)
 
-Taken 2026-09-26, kore's column retaken 2026-09-27. A row is a tool NAME and a mark says the
-implementation answers to it — the same reach as the inventory, nothing about flags. Every
+Taken 2026-09-26; kore's column retaken and plan9port's added 2026-09-27. A row is a tool
+NAME and a mark says the implementation answers to it — the same reach as the inventory,
+nothing about flags (plan9port's `ls` or `grep` answers to the name in Plan 9's manner). Every
 tool kore has is a row, and so is every tool at least two of the others share; a name only
 one other carries is listed after the table instead, since those are mostly one system's own
-administration (busybox's init and network daemons, GNU's toolchain driver names).
+(busybox's init and network daemons, GNU's toolchain driver names, plan9port's graphics and
+file servers, util-linux's disk and login tools). `mc` is a name and not a tool shared:
+kore's is a file browser, plan9port's lays its input in columns, which kore's `column` does.
+Not counted in any column: one implementation's spelling of a general tool (kore's `lush`
+`cook` `ain`, busybox's `ash` `linuxrc`, GNU's `bash` `rbash` `gawk` `gcc` `gcc-ar` `gcc-nm`
+`gcc-ranlib` `g++` `ld.bfd` `ld.gold`) and a userland's name for itself (`coreutils`,
+plan9port's `9`).
 
 * **kore** — the `applets` tablet in kore.l, plus the love verbs that are unix tools: `cc`
   (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `mc`, `pom`.
@@ -703,328 +778,393 @@ administration (busybox's init and network daemons, GNU's toolchain driver names
 * **GNU** — the GNU packages on the Arch box: coreutils 9.11, findutils, diffutils, grep, sed,
   gawk, tar, gzip, cpio, bc, make, bash, binutils, gcc (the driver names, not the target
   triples), inetutils, which, time, m4, patch, wget. coreutils' `kill` and `uptime` are
-  counted though Arch builds them out in favour of procps. Not counted: util-linux, procps,
-  shadow and the rest of the Linux userland that is not GNU's, and GNU's toolchain-side
-  packages (texinfo, gettext, groff, gdb, bison).
+  counted though Arch builds them out in favour of procps. Not counted here: util-linux
+  (its own column), procps, shadow and the rest of the Linux userland that is not GNU's, and
+  GNU's toolchain-side packages (texinfo, gettext, groff, gdb, bison).
 * **uutils** — uutils-coreutils 0.12.0, the `uu-*` names. Its findutils and diffutils are
   separate projects, not installed.
+* **plan9port** — 20260826 as Arch packages it: the files in `$PLAN9/bin`
+  (/usr/lib/plan9/bin), less the three `.rc` libraries its scripts source. The commands in
+  its subdirectories (`venti/`, `fossil/`, `upas/`, `fs/`, `disk/`) are reached by those
+  prefixed names and are not counted.
+* **util-linux** — 2.42.4 as Arch packages it: the files in /usr/bin and /usr/sbin, setarch's
+  arch names (`linux32` `linux64` `i386` `x86_64` `uname26`) among them.
 
-Retaken with `busybox --list`, `toybox`, `ls /usr/bin/uu-*` and `pacman -Qql` over the
-packages above.
+Retaken with `busybox --list`, `toybox`, `ls /usr/bin/uu-*`, `ls $PLAN9/bin` and `pacman -Qql`
+over the packages above; util-linux's column added 2026-09-27.
 
-| | kore | busybox | toybox | GNU | uutils |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| names | 200 | 392 | 239 | 201 | 108 |
-| shared with kore | | 166 | 141 | 134 | 101 |
-| carried by no one else | 12 | 159 | 33 | 58 | 1 |
+| | kore | busybox | toybox | GNU | uutils | plan9port | util-linux |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| names | 205 | 389 | 239 | 191 | 107 | 260 | 136 |
+| shared with kore | | 170 | 142 | 135 | 101 | 49 | 12 |
+| carried by no one else | 11 | 136 | 25 | 48 | 0 | 201 | 75 |
 
-What at least three of the other four carry and kore does not: `fmt`.
+What at least three of the other six carry and kore does not: `blkdiscard`, `blkid`,
+`blockdev`, `chrt`, `dmesg`, `eject`, `fallocate`, `flock`, `fmt`, `fsfreeze`, `hwclock`,
+`ionice`, `linux32`, `logger`, `login`, `losetup`, `mkswap`, `nsenter`, `pivot_root`, `pr`,
+`rfkill`, `rtcwake`, `su`, `swapoff`, `swapon`, `switch_root`, `taskset`, `uncompress`,
+`unshare`.
 
-| tool | kore | busybox | toybox | GNU | uutils |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| `[` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ain` | ✓ |  |  |  |  |
-| `ar` | ✓ | ✓ |  | ✓ |  |
-| `arch` | ✓ | ✓ | ✓ |  | ✓ |
-| `as` | ✓ |  |  | ✓ |  |
-| `ascii` | ✓ | ✓ | ✓ |  |  |
-| `awk` | ✓ | ✓ |  | ✓ |  |
-| `b2sum` | ✓ |  |  | ✓ | ✓ |
-| `base32` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `base64` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `basename` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `basenc` | ✓ |  |  | ✓ | ✓ |
-| `bc` | ✓ | ✓ |  | ✓ |  |
-| `blkdiscard` |  | ✓ | ✓ |  |  |
-| `blkid` |  | ✓ | ✓ |  |  |
-| `blockdev` |  | ✓ | ✓ |  |  |
-| `bunzip2` | ✓ | ✓ | ✓ |  |  |
-| `bzcat` | ✓ | ✓ | ✓ |  |  |
-| `bzip2` | ✓ | ✓ |  |  |  |
-| `cal` | ✓ | ✓ | ✓ |  |  |
-| `cat` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `cc` | ✓ |  |  | ✓ |  |
-| `chattr` |  | ✓ | ✓ |  |  |
-| `chgrp` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `chmod` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `chown` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `chroot` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `chrt` |  | ✓ | ✓ |  |  |
-| `chvt` |  | ✓ | ✓ |  |  |
-| `cksum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `clear` | ✓ | ✓ | ✓ |  |  |
-| `cmp` | ✓ | ✓ | ✓ | ✓ |  |
-| `comm` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `cook` | ✓ |  |  |  |  |
-| `cp` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `cpio` | ✓ | ✓ | ✓ | ✓ |  |
-| `crc32` | ✓ | ✓ | ✓ |  |  |
-| `csplit` |  |  |  | ✓ | ✓ |
-| `cut` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `date` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `dc` | ✓ | ✓ |  | ✓ |  |
-| `dd` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `deallocvt` |  | ✓ | ✓ |  |  |
-| `df` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `diff` | ✓ | ✓ |  | ✓ |  |
-| `dir` | ✓ |  |  | ✓ | ✓ |
-| `dircolors` | ✓ |  |  | ✓ | ✓ |
-| `dirname` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `dmesg` |  | ✓ | ✓ |  |  |
-| `dnsdomainname` | ✓ | ✓ | ✓ | ✓ |  |
-| `dos2unix` | ✓ | ✓ | ✓ |  |  |
-| `du` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `echo` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ed` | ✓ | ✓ |  |  |  |
-| `egrep` | ✓ | ✓ | ✓ | ✓ |  |
-| `eject` |  | ✓ | ✓ |  |  |
-| `env` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ex` | ✓ |  |  |  |  |
-| `expand` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `expr` | ✓ | ✓ |  | ✓ | ✓ |
-| `factor` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `fallocate` |  | ✓ | ✓ |  |  |
-| `false` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `fat` | ✓ |  |  |  |  |
-| `fgrep` | ✓ | ✓ | ✓ | ✓ |  |
-| `find` | ✓ | ✓ | ✓ | ✓ |  |
-| `flock` |  | ✓ | ✓ |  |  |
-| `fmt` |  |  | ✓ | ✓ | ✓ |
-| `fold` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `free` | ✓ | ✓ | ✓ |  |  |
-| `freeramdisk` |  | ✓ | ✓ |  |  |
-| `fsfreeze` |  | ✓ | ✓ |  |  |
-| `fsync` | ✓ | ✓ | ✓ |  |  |
-| `ftpd` |  | ✓ |  | ✓ |  |
-| `ftpget` |  | ✓ | ✓ |  |  |
-| `ftpput` |  | ✓ | ✓ |  |  |
-| `getopt` | ✓ | ✓ | ✓ |  |  |
-| `grep` | ✓ | ✓ | ✓ | ✓ |  |
-| `groups` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `gunzip` | ✓ | ✓ | ✓ | ✓ |  |
-| `gzip` | ✓ | ✓ |  | ✓ |  |
-| `halt` |  | ✓ | ✓ |  |  |
-| `hd` | ✓ | ✓ | ✓ |  |  |
-| `head` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `hexdump` | ✓ | ✓ |  |  |  |
-| `hexedit` | ✓ | ✓ | ✓ |  |  |
-| `hostid` | ✓ | ✓ |  | ✓ | ✓ |
-| `hostname` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `html2text` | ✓ |  |  |  |  |
-| `httpd` | ✓ | ✓ | ✓ |  |  |
-| `hwclock` |  | ✓ | ✓ |  |  |
-| `i2cdetect` |  | ✓ | ✓ |  |  |
-| `i2cdump` |  | ✓ | ✓ |  |  |
-| `i2cget` |  | ✓ | ✓ |  |  |
-| `i2cset` |  | ✓ | ✓ |  |  |
-| `i2ctransfer` |  | ✓ | ✓ |  |  |
-| `id` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ifconfig` |  | ✓ | ✓ |  |  |
-| `inotifyd` |  | ✓ | ✓ |  |  |
-| `insmod` |  | ✓ | ✓ |  |  |
-| `install` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ionice` |  | ✓ | ✓ |  |  |
-| `join` | ✓ |  |  | ✓ | ✓ |
-| `kill` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `killall` | ✓ | ✓ | ✓ |  |  |
-| `killall5` |  | ✓ | ✓ |  |  |
-| `ld` | ✓ |  |  | ✓ |  |
-| `less` | ✓ | ✓ |  |  |  |
-| `lift` | ✓ |  |  |  |  |
-| `link` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `linux32` |  | ✓ | ✓ |  |  |
-| `ln` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `logger` |  | ✓ | ✓ |  |  |
-| `login` |  | ✓ | ✓ |  |  |
-| `logname` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `losetup` |  | ✓ | ✓ |  |  |
-| `ls` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `lsattr` |  | ✓ | ✓ |  |  |
-| `lsmod` |  | ✓ | ✓ |  |  |
-| `lspci` |  | ✓ | ✓ |  |  |
-| `lsusb` |  | ✓ | ✓ |  |  |
-| `lush` | ✓ |  |  |  |  |
-| `lzcat` | ✓ | ✓ |  |  |  |
-| `mac2unix` | ✓ |  |  |  |  |
-| `make` | ✓ |  |  | ✓ |  |
-| `makedevs` |  | ✓ | ✓ |  |  |
-| `man` | ✓ | ✓ |  |  |  |
-| `markdown` | ✓ |  |  |  |  |
-| `mc` | ✓ |  |  |  |  |
-| `md5sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `microcom` |  | ✓ | ✓ |  |  |
-| `mkdir` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `mkdosfs` | ✓ | ✓ |  |  |  |
-| `mkfifo` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `mkfs.vfat` | ✓ | ✓ |  |  |  |
-| `mknod` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `mkpasswd` |  | ✓ | ✓ |  |  |
-| `mkswap` |  | ✓ | ✓ |  |  |
-| `mktemp` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `modinfo` |  | ✓ | ✓ |  |  |
-| `more` | ✓ | ✓ |  |  | ✓ |
-| `mount` | ✓ | ✓ | ✓ |  |  |
-| `mountpoint` | ✓ | ✓ | ✓ |  |  |
-| `mv` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nbd-client` |  | ✓ | ✓ |  |  |
-| `nc` | ✓ | ✓ | ✓ |  |  |
-| `netstat` |  | ✓ | ✓ |  |  |
-| `nice` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nl` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nm` | ✓ |  |  | ✓ |  |
-| `nohup` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nproc` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nsenter` |  | ✓ | ✓ |  |  |
-| `nslookup` | ✓ | ✓ |  |  |  |
-| `numfmt` |  |  |  | ✓ | ✓ |
-| `objcopy` | ✓ |  |  | ✓ |  |
-| `od` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `openvt` |  | ✓ | ✓ |  |  |
-| `partprobe` |  | ✓ | ✓ |  |  |
-| `paste` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `patch` | ✓ | ✓ | ✓ | ✓ |  |
-| `pathchk` | ✓ |  |  | ✓ | ✓ |
-| `pgrep` | ✓ | ✓ | ✓ |  |  |
-| `pidof` | ✓ | ✓ | ✓ |  |  |
-| `ping` | ✓ | ✓ | ✓ |  |  |
-| `ping6` | ✓ | ✓ | ✓ |  |  |
-| `pinky` | ✓ |  |  | ✓ | ✓ |
-| `pivot_root` |  | ✓ | ✓ |  |  |
-| `pkill` | ✓ | ✓ | ✓ |  |  |
-| `pmap` |  | ✓ | ✓ |  |  |
-| `pom` | ✓ |  |  |  |  |
-| `poweroff` |  | ✓ | ✓ |  |  |
-| `pr` |  |  |  | ✓ | ✓ |
-| `printenv` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `printf` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ps` | ✓ | ✓ | ✓ |  |  |
-| `ptx` |  |  |  | ✓ | ✓ |
-| `pwd` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `pwdx` | ✓ | ✓ | ✓ |  |  |
-| `ranlib` | ✓ |  |  | ✓ |  |
-| `readahead` |  | ✓ | ✓ |  |  |
-| `readelf` | ✓ |  | ✓ | ✓ |  |
-| `readlink` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `realpath` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `reboot` |  | ✓ | ✓ |  |  |
-| `renice` | ✓ | ✓ | ✓ |  |  |
-| `reset` | ✓ | ✓ | ✓ |  |  |
-| `rev` | ✓ | ✓ | ✓ |  |  |
-| `rfkill` |  | ✓ | ✓ |  |  |
-| `rm` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `rmdir` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `rmmod` |  | ✓ | ✓ |  |  |
-| `rtcwake` |  | ✓ | ✓ |  |  |
-| `sed` | ✓ | ✓ | ✓ | ✓ |  |
-| `seq` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `setfattr` |  | ✓ | ✓ |  |  |
-| `setsid` | ✓ | ✓ | ✓ |  |  |
-| `sh` | ✓ | ✓ |  | ✓ |  |
-| `sha1sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sha224sum` | ✓ |  | ✓ | ✓ | ✓ |
-| `sha256sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sha384sum` | ✓ |  | ✓ | ✓ | ✓ |
-| `sha3sum` | ✓ | ✓ | ✓ |  |  |
-| `sha512sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `shred` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `shuf` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `size` | ✓ |  |  | ✓ |  |
-| `sleep` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sort` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `split` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `stat` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `stdbuf` |  |  |  | ✓ | ✓ |
-| `strings` | ✓ | ✓ | ✓ | ✓ |  |
-| `strip` | ✓ |  |  | ✓ |  |
-| `stty` | ✓ | ✓ |  | ✓ | ✓ |
-| `su` |  | ✓ | ✓ |  |  |
-| `sum` | ✓ | ✓ |  | ✓ | ✓ |
-| `swapoff` |  | ✓ | ✓ |  |  |
-| `swapon` |  | ✓ | ✓ |  |  |
-| `switch_root` |  | ✓ | ✓ |  |  |
-| `sync` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sysctl` |  | ✓ | ✓ |  |  |
-| `tac` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tail` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tar` | ✓ | ✓ | ✓ | ✓ |  |
-| `taskset` |  | ✓ | ✓ |  |  |
-| `tee` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `telnet` | ✓ | ✓ |  | ✓ |  |
-| `telnetd` |  | ✓ |  | ✓ |  |
-| `test` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `time` | ✓ | ✓ | ✓ | ✓ |  |
-| `timeout` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `top` | ✓ | ✓ | ✓ |  |  |
-| `touch` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tr` | ✓ | ✓ |  | ✓ | ✓ |
-| `true` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `truncate` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ts` | ✓ | ✓ | ✓ |  |  |
-| `tsort` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tty` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tunctl` |  | ✓ | ✓ |  |  |
-| `umount` | ✓ | ✓ | ✓ |  |  |
-| `uname` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `uncompress` |  | ✓ |  | ✓ |  |
-| `unexpand` | ✓ | ✓ |  | ✓ | ✓ |
-| `uniq` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `unix2dos` | ✓ | ✓ | ✓ |  |  |
-| `unlink` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `unlzma` | ✓ | ✓ |  |  |  |
-| `unshare` |  | ✓ | ✓ |  |  |
-| `unxz` | ✓ | ✓ |  |  |  |
-| `uptime` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `users` | ✓ |  |  | ✓ | ✓ |
-| `usleep` | ✓ | ✓ | ✓ |  |  |
-| `uudecode` | ✓ | ✓ | ✓ |  |  |
-| `uuencode` | ✓ | ✓ | ✓ |  |  |
-| `vconfig` |  | ✓ | ✓ |  |  |
-| `vdir` | ✓ |  |  | ✓ | ✓ |
-| `vi` | ✓ | ✓ |  |  |  |
-| `watch` | ✓ | ✓ | ✓ |  |  |
-| `watchdog` |  | ✓ | ✓ |  |  |
-| `wc` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `wget` | ✓ | ✓ | ✓ | ✓ |  |
-| `which` | ✓ | ✓ | ✓ | ✓ |  |
-| `who` | ✓ |  | ✓ | ✓ | ✓ |
-| `whoami` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `www` | ✓ |  |  |  |  |
-| `xargs` | ✓ | ✓ | ✓ | ✓ |  |
-| `xxd` | ✓ | ✓ | ✓ |  |  |
-| `xz` | ✓ | ✓ |  |  |  |
-| `xzcat` | ✓ | ✓ |  |  |  |
-| `yes` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `zcat` | ✓ | ✓ | ✓ | ✓ |  |
+| tool | kore | busybox | toybox | GNU | uutils | plan9port | util-linux |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| `[` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `ar` | ✓ | ✓ |  | ✓ |  |  |  |
+| `arch` | ✓ | ✓ | ✓ |  | ✓ |  |  |
+| `as` | ✓ |  |  | ✓ |  |  |  |
+| `ascii` | ✓ | ✓ | ✓ |  |  | ✓ |  |
+| `awk` | ✓ | ✓ |  | ✓ |  | ✓ |  |
+| `b2sum` | ✓ |  |  | ✓ | ✓ |  |  |
+| `base32` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `base64` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `basename` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `basenc` | ✓ |  |  | ✓ | ✓ |  |  |
+| `bc` | ✓ | ✓ |  | ✓ |  | ✓ |  |
+| `blkdiscard` |  | ✓ | ✓ |  |  |  | ✓ |
+| `blkid` |  | ✓ | ✓ |  |  |  | ✓ |
+| `blockdev` |  | ✓ | ✓ |  |  |  | ✓ |
+| `bunzip2` | ✓ | ✓ | ✓ |  |  | ✓ |  |
+| `bzcat` | ✓ | ✓ | ✓ |  |  |  |  |
+| `bzip2` | ✓ | ✓ |  |  |  | ✓ |  |
+| `cal` | ✓ | ✓ | ✓ |  |  | ✓ | ✓ |
+| `cat` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `cc` | ✓ |  |  | ✓ |  |  |  |
+| `chattr` |  | ✓ | ✓ |  |  |  |  |
+| `chgrp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `chmod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `chown` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `chroot` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `chrt` |  | ✓ | ✓ |  |  |  | ✓ |
+| `chvt` |  | ✓ | ✓ |  |  |  |  |
+| `cksum` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `clear` | ✓ | ✓ | ✓ |  |  |  |  |
+| `cmp` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
+| `col` |  |  |  |  |  | ✓ | ✓ |
+| `column` | ✓ |  |  |  |  |  | ✓ |
+| `comm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `cp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `cpio` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `crc32` | ✓ | ✓ | ✓ |  |  |  |  |
+| `csplit` |  |  |  | ✓ | ✓ |  |  |
+| `cut` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `date` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `dc` | ✓ | ✓ |  | ✓ |  | ✓ |  |
+| `dd` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `deallocvt` |  | ✓ | ✓ |  |  |  |  |
+| `df` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `diff` | ✓ | ✓ |  | ✓ |  | ✓ |  |
+| `dir` | ✓ |  |  | ✓ | ✓ |  |  |
+| `dircolors` | ✓ |  |  | ✓ | ✓ |  |  |
+| `dirname` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `dmesg` |  | ✓ | ✓ |  |  |  | ✓ |
+| `dnsdomainname` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `dos2unix` | ✓ | ✓ | ✓ |  |  |  |  |
+| `du` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `echo` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `ed` | ✓ | ✓ |  |  |  | ✓ |  |
+| `egrep` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `eject` |  | ✓ | ✓ |  |  |  | ✓ |
+| `env` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `ex` | ✓ |  |  |  |  |  |  |
+| `expand` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `expr` | ✓ | ✓ |  | ✓ | ✓ |  |  |
+| `factor` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `fallocate` |  | ✓ | ✓ |  |  |  | ✓ |
+| `false` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `fat` | ✓ |  |  |  |  |  |  |
+| `fdisk` |  | ✓ |  |  |  |  | ✓ |
+| `fgrep` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `file` |  |  | ✓ |  |  | ✓ |  |
+| `find` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `findfs` |  | ✓ |  |  |  |  | ✓ |
+| `flock` |  | ✓ | ✓ |  |  |  | ✓ |
+| `fmt` |  |  | ✓ | ✓ | ✓ | ✓ |  |
+| `fold` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `free` | ✓ | ✓ | ✓ |  |  |  |  |
+| `freeramdisk` |  | ✓ | ✓ |  |  |  |  |
+| `fsck` |  | ✓ |  |  |  |  | ✓ |
+| `fsck.minix` |  | ✓ |  |  |  |  | ✓ |
+| `fsfreeze` |  | ✓ | ✓ |  |  |  | ✓ |
+| `fstrim` |  | ✓ |  |  |  |  | ✓ |
+| `fsync` | ✓ | ✓ | ✓ |  |  |  |  |
+| `ftpd` |  | ✓ |  | ✓ |  |  |  |
+| `ftpget` |  | ✓ | ✓ |  |  |  |  |
+| `ftpput` |  | ✓ | ✓ |  |  |  |  |
+| `getopt` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `grep` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
+| `groups` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `gunzip` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
+| `gzip` | ✓ | ✓ |  | ✓ |  | ✓ |  |
+| `halt` |  | ✓ | ✓ |  |  |  |  |
+| `hd` | ✓ | ✓ | ✓ |  |  |  |  |
+| `head` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `hexdump` | ✓ | ✓ |  |  |  |  | ✓ |
+| `hexedit` | ✓ | ✓ | ✓ |  |  |  |  |
+| `hostid` | ✓ | ✓ |  | ✓ | ✓ |  |  |
+| `hostname` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `html2text` | ✓ |  |  |  |  |  |  |
+| `httpd` | ✓ | ✓ | ✓ |  |  |  |  |
+| `hwclock` |  | ✓ | ✓ |  |  |  | ✓ |
+| `i2cdetect` |  | ✓ | ✓ |  |  |  |  |
+| `i2cdump` |  | ✓ | ✓ |  |  |  |  |
+| `i2cget` |  | ✓ | ✓ |  |  |  |  |
+| `i2cset` |  | ✓ | ✓ |  |  |  |  |
+| `i2ctransfer` |  | ✓ | ✓ |  |  |  |  |
+| `iconv` |  |  | ✓ |  |  | ✓ |  |
+| `id` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `ifconfig` |  | ✓ | ✓ |  |  |  |  |
+| `inotifyd` |  | ✓ | ✓ |  |  |  |  |
+| `insmod` |  | ✓ | ✓ |  |  |  |  |
+| `install` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `ionice` |  | ✓ | ✓ |  |  |  | ✓ |
+| `ipcrm` |  | ✓ |  |  |  |  | ✓ |
+| `ipcs` |  | ✓ |  |  |  |  | ✓ |
+| `join` | ✓ |  |  | ✓ | ✓ | ✓ |  |
+| `kill` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `killall` | ✓ | ✓ | ✓ |  |  |  |  |
+| `killall5` |  | ✓ | ✓ |  |  |  |  |
+| `ld` | ✓ |  |  | ✓ |  |  |  |
+| `less` | ✓ | ✓ |  |  |  |  |  |
+| `lift` | ✓ |  |  |  |  |  |  |
+| `link` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `linux32` |  | ✓ | ✓ |  |  |  | ✓ |
+| `linux64` |  | ✓ |  |  |  |  | ✓ |
+| `ln` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `logger` |  | ✓ | ✓ |  |  |  | ✓ |
+| `login` |  | ✓ | ✓ |  |  |  | ✓ |
+| `logname` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `look` |  |  |  |  |  | ✓ | ✓ |
+| `losetup` |  | ✓ | ✓ |  |  |  | ✓ |
+| `ls` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `lsattr` |  | ✓ | ✓ |  |  |  |  |
+| `lsmod` |  | ✓ | ✓ |  |  |  |  |
+| `lspci` |  | ✓ | ✓ |  |  |  |  |
+| `lsusb` |  | ✓ | ✓ |  |  |  |  |
+| `lzcat` | ✓ | ✓ |  |  |  |  |  |
+| `mac2unix` | ✓ |  |  |  |  |  |  |
+| `make` | ✓ |  |  | ✓ |  |  |  |
+| `makedevs` |  | ✓ | ✓ |  |  |  |  |
+| `man` | ✓ | ✓ |  |  |  | ✓ |  |
+| `markdown` | ✓ |  |  |  |  |  |  |
+| `mc` | ✓ |  |  |  |  | ✓ |  |
+| `mcookie` |  |  | ✓ |  |  |  | ✓ |
+| `md5sum` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `mesg` |  | ✓ |  |  |  |  | ✓ |
+| `microcom` | ✓ | ✓ | ✓ |  |  |  |  |
+| `mkdir` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `mkdosfs` | ✓ | ✓ |  |  |  |  |  |
+| `mkfifo` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `mkfs.minix` |  | ✓ |  |  |  |  | ✓ |
+| `mkfs.vfat` | ✓ | ✓ |  |  |  |  |  |
+| `mknod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `mkpasswd` |  | ✓ | ✓ |  |  |  |  |
+| `mkswap` |  | ✓ | ✓ |  |  |  | ✓ |
+| `mktemp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `modinfo` |  | ✓ | ✓ |  |  |  |  |
+| `more` | ✓ | ✓ |  |  | ✓ |  | ✓ |
+| `mount` | ✓ | ✓ | ✓ |  |  | ✓ | ✓ |
+| `mountpoint` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `mv` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `nbd-client` |  | ✓ | ✓ |  |  |  |  |
+| `nc` | ✓ | ✓ | ✓ |  |  |  |  |
+| `netstat` |  | ✓ | ✓ |  |  |  |  |
+| `nice` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `nl` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `nm` | ✓ |  |  | ✓ |  |  |  |
+| `nohup` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `nologin` |  |  | ✓ |  |  |  | ✓ |
+| `nproc` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `nsenter` |  | ✓ | ✓ |  |  |  | ✓ |
+| `nslookup` | ✓ | ✓ |  |  |  |  |  |
+| `numfmt` |  |  |  | ✓ | ✓ |  |  |
+| `objcopy` | ✓ |  |  | ✓ |  |  |  |
+| `od` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `openvt` |  | ✓ | ✓ |  |  |  |  |
+| `partprobe` |  | ✓ | ✓ |  |  |  |  |
+| `passwd` |  | ✓ |  |  |  | ✓ |  |
+| `paste` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `patch` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `pathchk` | ✓ |  |  | ✓ | ✓ |  |  |
+| `pgrep` | ✓ | ✓ | ✓ |  |  |  |  |
+| `pidof` | ✓ | ✓ | ✓ |  |  |  |  |
+| `ping` | ✓ | ✓ | ✓ |  |  |  |  |
+| `ping6` | ✓ | ✓ | ✓ |  |  |  |  |
+| `pinky` | ✓ |  |  | ✓ | ✓ |  |  |
+| `pivot_root` |  | ✓ | ✓ |  |  |  | ✓ |
+| `pkill` | ✓ | ✓ | ✓ |  |  |  |  |
+| `pmap` |  | ✓ | ✓ |  |  |  |  |
+| `pom` | ✓ |  |  |  |  |  |  |
+| `poweroff` |  | ✓ | ✓ |  |  |  |  |
+| `pr` |  |  |  | ✓ | ✓ | ✓ |  |
+| `printenv` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `printf` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `prlimit` |  |  | ✓ |  |  |  | ✓ |
+| `ps` | ✓ | ✓ | ✓ |  |  | ✓ |  |
+| `ptx` |  |  |  | ✓ | ✓ |  |  |
+| `pwd` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `pwdx` | ✓ | ✓ | ✓ |  |  |  |  |
+| `ranlib` | ✓ |  |  | ✓ |  |  |  |
+| `readahead` |  | ✓ | ✓ |  |  |  |  |
+| `readelf` | ✓ |  | ✓ | ✓ |  |  |  |
+| `readlink` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `readprofile` |  | ✓ |  |  |  |  | ✓ |
+| `realpath` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `reboot` |  | ✓ | ✓ |  |  |  |  |
+| `renice` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `reset` | ✓ | ✓ | ✓ |  |  |  |  |
+| `rev` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `rfkill` |  | ✓ | ✓ |  |  |  | ✓ |
+| `rm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `rmdir` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `rmmod` |  | ✓ | ✓ |  |  |  |  |
+| `rtcwake` |  | ✓ | ✓ |  |  |  | ✓ |
+| `scp` | ✓ |  |  |  |  |  |  |
+| `script` |  | ✓ |  |  |  |  | ✓ |
+| `scriptreplay` |  | ✓ |  |  |  |  | ✓ |
+| `sed` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
+| `seq` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `setarch` |  | ✓ |  |  |  |  | ✓ |
+| `setfattr` |  | ✓ | ✓ |  |  |  |  |
+| `setpriv` |  | ✓ |  |  |  |  | ✓ |
+| `setsid` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `sh` | ✓ | ✓ |  | ✓ |  |  |  |
+| `sha1sum` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `sha224sum` | ✓ |  | ✓ | ✓ | ✓ |  |  |
+| `sha256sum` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `sha384sum` | ✓ |  | ✓ | ✓ | ✓ |  |  |
+| `sha3sum` | ✓ | ✓ | ✓ |  |  |  |  |
+| `sha512sum` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `shred` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `shuf` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `size` | ✓ |  |  | ✓ |  |  |  |
+| `sleep` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `sort` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `split` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `ssh` | ✓ |  |  |  |  |  |  |
+| `sshd` | ✓ |  |  |  |  |  |  |
+| `stat` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `stdbuf` |  |  |  | ✓ | ✓ |  |  |
+| `strings` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
+| `strip` | ✓ |  |  | ✓ |  |  |  |
+| `stty` | ✓ | ✓ |  | ✓ | ✓ |  |  |
+| `su` |  | ✓ | ✓ |  |  |  | ✓ |
+| `sulogin` |  | ✓ |  |  |  |  | ✓ |
+| `sum` | ✓ | ✓ |  | ✓ | ✓ | ✓ |  |
+| `swapoff` |  | ✓ | ✓ |  |  |  | ✓ |
+| `swapon` |  | ✓ | ✓ |  |  |  | ✓ |
+| `switch_root` |  | ✓ | ✓ |  |  |  | ✓ |
+| `sync` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `sysctl` |  | ✓ | ✓ |  |  |  |  |
+| `tac` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `tail` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `tar` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
+| `taskset` |  | ✓ | ✓ |  |  |  | ✓ |
+| `tee` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `telnet` | ✓ | ✓ |  | ✓ |  |  |  |
+| `telnetd` | ✓ | ✓ |  | ✓ |  |  |  |
+| `test` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `time` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
+| `timeout` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `top` | ✓ | ✓ | ✓ |  |  |  |  |
+| `touch` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `tr` | ✓ | ✓ |  | ✓ | ✓ | ✓ |  |
+| `traceroute` | ✓ | ✓ |  |  |  |  |  |
+| `traceroute6` | ✓ | ✓ |  |  |  |  |  |
+| `true` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `truncate` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `ts` | ✓ | ✓ | ✓ |  |  |  |  |
+| `tsort` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `tty` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `tunctl` |  | ✓ | ✓ |  |  |  |  |
+| `uclampset` |  |  | ✓ |  |  |  | ✓ |
+| `umount` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `uname` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `uncompress` |  | ✓ |  | ✓ |  | ✓ |  |
+| `unexpand` | ✓ | ✓ |  | ✓ | ✓ |  |  |
+| `unicode` |  |  | ✓ |  |  | ✓ |  |
+| `uniq` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `unix2dos` | ✓ | ✓ | ✓ |  |  |  |  |
+| `unlink` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `unlzma` | ✓ | ✓ |  |  |  |  |  |
+| `unshare` |  | ✓ | ✓ |  |  |  | ✓ |
+| `unxz` | ✓ | ✓ |  |  |  |  |  |
+| `unzip` |  | ✓ |  |  |  | ✓ |  |
+| `uptime` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `users` | ✓ |  |  | ✓ | ✓ |  |  |
+| `usleep` | ✓ | ✓ | ✓ |  |  |  |  |
+| `uudecode` | ✓ | ✓ | ✓ |  |  |  |  |
+| `uuencode` | ✓ | ✓ | ✓ |  |  |  |  |
+| `uuidgen` |  |  | ✓ |  |  |  | ✓ |
+| `vconfig` |  | ✓ | ✓ |  |  |  |  |
+| `vdir` | ✓ |  |  | ✓ | ✓ |  |  |
+| `vi` | ✓ | ✓ |  |  |  |  |  |
+| `watch` | ✓ | ✓ | ✓ |  |  |  |  |
+| `watchdog` |  | ✓ | ✓ |  |  |  |  |
+| `wc` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `wget` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `which` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `who` | ✓ |  | ✓ | ✓ | ✓ |  |  |
+| `whoami` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `www` | ✓ |  |  |  |  |  |  |
+| `xargs` | ✓ | ✓ | ✓ | ✓ |  |  |  |
+| `xxd` | ✓ | ✓ | ✓ |  |  |  |  |
+| `xz` | ✓ | ✓ |  |  |  |  |  |
+| `xzcat` | ✓ | ✓ |  |  |  |  |  |
+| `yes` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
+| `zcat` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
 
 The names only one carries:
 
-* **busybox alone** (159): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
-  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond` `crontab`
-  `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap` `dumpleases`
-  `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash` `fdflush`
-  `fdformat` `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser` `getty` `hdparm`
-  `ifdown` `ifenslave` `ifplugd` `ifup` `inetd` `init` `iostat` `ip` `ipaddr` `ipcalc` `ipcrm`
-  `ipcs` `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode` `klogd` `linux64`
-  `linuxrc` `loadfont` `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma` `lzopcat`
-  `makemime` `mdev` `mesg` `mke2fs` `mkfs.ext2` `mkfs.minix` `modprobe` `mpstat` `mt` `nameif`
-  `nmeter` `ntpd` `passwd` `pipe_progress` `popmaildir` `powertop` `pscan` `pstree`
-  `raidautorun` `rdate` `rdev` `readprofile` `reformime` `resize` `resume` `route` `rpm2cpio`
-  `run-init` `run-parts` `runsv` `runsvdir` `rx` `script` `scriptreplay` `seedrng` `sendmail`
-  `setarch` `setconsole` `setfont` `setkeycodes` `setlogcons` `setpriv` `setserial` `setuidgid`
-  `showkey` `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon` `sulogin` `sv`
-  `svc` `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `traceroute` `traceroute6`
-  `tree` `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol`
-  `ubirsvol` `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `unzip`
-  `vlock` `volname` `whois` `zcip`
-* **toybox alone** (33): `acpi` `count` `devmem` `file` `fstype` `getconf` `gpiodetect`
-  `gpiofind` `gpioget` `gpioinfo` `gpioset` `help` `host` `iconv` `iorenice` `iotop` `mcookie`
-  `memeater` `mix` `nbd-server` `netcat` `nologin` `oneit` `prlimit` `pwgen` `sntp` `uclampset`
-  `ucsicontrol` `ulimit` `unicode` `uuidgen` `vmstat` `w`
-* **GNU alone** (58): `addr2line` `bash` `bashbug` `c++` `c++filt` `c89` `c99` `cpp` `diff3`
-  `dwp` `elfedit` `ftp` `g++` `gawk` `gawkbug` `gcc` `gcc-ar` `gcc-nm` `gcc-ranlib` `gcov`
-  `gcov-dump` `gcov-tool` `gp-archive` `gp-collect-app` `gp-display-html` `gp-display-src`
-  `gp-display-text` `gprof` `gprofng` `gprofng-archive` `gprofng-collect-app`
-  `gprofng-display-html` `gprofng-display-src` `gprofng-display-text` `gprofng-gmon` `gzexe`
-  `ld.bfd` `ld.gold` `m4` `objdump` `rbash` `rcp` `rlogin` `rlogind` `rsh` `rshd` `sdiff`
-  `talk` `talkd` `zcmp` `zdiff` `zegrep` `zfgrep` `zforce` `zgrep` `zless` `zmore` `znew`
-* **uutils alone** (1): `coreutils`
+* **busybox alone** (136): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping`
+  `bbconfig` `beep` `bootchartd` `brctl` `chat` `chpasswd` `chpst` `crond` `crontab` `cryptpw`
+  `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap` `dumpleases` `envdir`
+  `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash` `fdflush` `fdformat`
+  `fgconsole` `fuser` `getty` `hdparm` `ifdown` `ifenslave` `ifplugd` `ifup` `inetd` `init`
+  `iostat` `ip` `ipaddr` `ipcalc` `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode`
+  `klogd` `loadfont` `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma` `lzopcat`
+  `makemime` `mdev` `mke2fs` `mkfs.ext2` `modprobe` `mpstat` `mt` `nameif` `nmeter` `ntpd`
+  `pipe_progress` `popmaildir` `powertop` `pscan` `pstree` `raidautorun` `rdate` `rdev`
+  `reformime` `resize` `resume` `route` `rpm2cpio` `run-init` `run-parts` `runsv` `runsvdir`
+  `rx` `seedrng` `sendmail` `setconsole` `setfont` `setkeycodes` `setlogcons` `setserial`
+  `setuidgid` `showkey` `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon` `sv`
+  `svc` `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `tree` `ttysize` `tune2fs`
+  `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol` `ubirsvol` `ubiupdatevol` `udhcpc`
+  `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `vlock` `volname` `whois` `zcip`
+* **toybox alone** (25): `acpi` `count` `devmem` `fstype` `getconf` `gpiodetect` `gpiofind`
+  `gpioget` `gpioinfo` `gpioset` `help` `host` `iorenice` `iotop` `memeater` `mix` `nbd-server`
+  `netcat` `oneit` `pwgen` `sntp` `ucsicontrol` `ulimit` `vmstat` `w`
+* **GNU alone** (48): `addr2line` `bashbug` `c++` `c++filt` `c89` `c99` `cpp` `diff3` `dwp`
+  `elfedit` `ftp` `gawkbug` `gcov` `gcov-dump` `gcov-tool` `gp-archive` `gp-collect-app`
+  `gp-display-html` `gp-display-src` `gp-display-text` `gprof` `gprofng` `gprofng-archive`
+  `gprofng-collect-app` `gprofng-display-html` `gprofng-display-src` `gprofng-display-text`
+  `gprofng-gmon` `gzexe` `m4` `objdump` `rcp` `rlogin` `rlogind` `rsh` `rshd` `sdiff` `talk`
+  `talkd` `zcmp` `zdiff` `zegrep` `zfgrep` `zforce` `zgrep` `zless` `zmore` `znew`
+* **uutils alone** (0): none
+* **plan9port alone** (201): `"` `""` `9660srv` `9ar` `9c` `9fs` `9import` `9l` `9p` `9pfuse`
+  `9pserve` `9term` `B` `E` `Getdir` `Mail` `Netfiles` `acid` `acidtypes` `acme` `acmeevent`
+  `adict` `aescbc` `asn12dsa` `asn12rsa` `astro` `auxclog` `auxstats` `awd` `bmp` `bundle`
+  `calendar` `cb` `cleanname` `clock` `cmapcube` `colors` `compress` `core` `crop` `db`
+  `delatex` `deroff` `devdraw` `dial` `dict` `disknfs` `dns` `dnsdebug` `dnsquery` `dnstcp`
+  `doctype` `dsa2pub` `dsa2ssh` `dsagen` `dsasign` `dump9660` `eqn` `factotum` `fontsrv`
+  `fortune` `freq` `fsize` `g` `getflags` `gif` `grap` `graph` `gview` `hget` `hist` `hoc`
+  `htmlfmt` `htmlroff` `ico` `idiff` `img` `import` `ipso` `jpg` `label` `lc` `lex` `listen1`
+  `lookman` `macedit` `mapd` `mk` `mk9660` `mklatinkbd` `mntgen` `mtime` `namespace`
+  `ndbipquery` `ndbmkdb` `ndbmkhash` `ndbmkhosts` `ndbquery` `netfileget` `netfileput`
+  `netfilestat` `netkey` `news` `nobs` `nroff` `osxvers` `p` `page` `paint` `pbd` `pemdecode`
+  `pemencode` `pic` `plot` `plumb` `plumber` `png` `ppm` `primes` `proof` `psdownload`
+  `psfonts` `psu` `psv` `quote1` `quote2` `ramfs` `rc` `read` `readcons` `resample` `rio`
+  `rsa2csr` `rsa2pub` `rsa2ssh` `rsa2x509` `rsafill` `rsagen` `sam` `samsave` `samterm` `scat`
+  `secstore` `secstored` `secuser` `sftpcache` `sig` `slay` `soelim` `spell` `sprog` `src`
+  `srv` `ssam` `ssh-agent` `stack` `start` `stats` `statusbar` `stop` `svgpic` `tbl` `tcolors`
+  `tcs` `togif` `toico` `topng` `toppm` `tpic` `tr2post` `tref` `troff` `troff2html`
+  `troff2png` `tweak` `u` `units` `unmount` `unutf` `unvac` `usage` `vac` `vacfs` `vbackup`
+  `vcat` `vmount` `vmount0` `vnfs` `vwhois` `web` `win` `wintext` `winwatch` `wmail` `xd`
+  `xshove` `yacc` `yesterday` `yuv` `zerotrunc` `zip`
+* **util-linux alone** (75): `addpart` `agetty` `bits` `blkpr` `blkzone` `cfdisk` `chcpu`
+  `chfn` `chmem` `choom` `chsh` `colcrt` `colrm` `copyfilerange` `coresched` `ctrlaltdel`
+  `delpart` `enosys` `exch` `fadvise` `fincore` `findmnt` `fsck.cramfs` `getino` `hardlink`
+  `i386` `ipcmk` `irqtop` `isosize` `last` `lastb` `lastlog2` `ldattach` `lsblk` `lsclocks`
+  `lscpu` `lsfd` `lsipc` `lsirq` `lslocks` `lslogins` `lsmem` `lsns` `mkfs` `mkfs.bfs`
+  `mkfs.cramfs` `namei` `newgrp` `partx` `pg` `pipesz` `rename` `resizepart` `runuser`
+  `scriptlive` `setpgid` `setterm` `sfdisk` `swaplabel` `tunelp` `ul` `uname26` `utmpdump`
+  `uuidd` `uuidparse` `vigr` `vipw` `waitpid` `wall` `wdctl` `whereis` `wipefs` `write`
+  `x86_64` `zramctl`

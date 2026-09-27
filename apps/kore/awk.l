@@ -516,8 +516,9 @@
                      (pf-die "%: invalid conversion specification"))
                  (: _ (put out c) (go (k + 1) l u)))))
        (go 0 l 0))
-   (printf-main as)
-    (: _ (? (two? as) 0 (udie 1 "printf: missing operand\nTry 'printf --help' for more information."))
+   (printf-main as0)
+    (: as (? (two? as0 && <as0 = "--") >as0 as0)          ; -- ends the options, as POSIX's
+       _ (? (two? as) 0 (udie 1 "printf: missing operand\nTry 'printf --help' for more information."))
        st {'bad 0}
        f <as
        (go l) (: r (pf-pass st f l)

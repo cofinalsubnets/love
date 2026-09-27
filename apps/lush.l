@@ -1360,40 +1360,6 @@
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
    sh-imgc {}                           ; word -> (1 fn whole?) | 0, decided once
-   ; the words that run in this very process. each one is BOUNDED, ending on its own
-   ; in a time nobody wants to cut short -- the shell ignores INT in here, so an
-   ; in-process `sleep` or `yes` could not be taken back; reads NO STDIN however it is
-   ; called -- `cat f` ends where the file does, bare `cat` drinks the terminal, and a
-   ; list of words cannot tell the two calls apart; LEAVES THE SHELL AS IT FOUND IT --
-   ; `env X=1 CMD` and chroot would move us; and ANSWERS THE SAME WHOEVER ASKS --
-   ; pidof, pgrep and killall skip their own pid, which in here is the shell's. a
-   ; main answers a status or scares 'leave, and urun makes either a charm.
-   sh-imgok '("mooncc" "cc"
-              "test" "[" "echo" "printf" "uname"
-              "basename" "dirname" "readlink" "seq" "ls" "dir" "vdir" "cmp" "diff"
-              "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
-              ; the sums DO read stdin when bare: the build spells them with a file,
-              ; and a per-call answer is what would move them off this list
-              "objcopy" "cksum" "md5sum" "sha1sum" "sha224sum" "sha256sum" "sha384sum"
-              "sha512sum" "sha3sum" "b2sum" "crc32" "sum"
-              ; each wants its operands, or it is usage
-              "nm" "ar" "ld" "as" "readelf" "size" "strip" "ranlib"
-              "libra" "fat" "mkfs.vfat" "mkdosfs"   ; bounded by the image named (tar reads stdin: f -)
-              ; the facts: the clock, the box, this process, the environment, a path
-              "date" "cal" "uptime" "arch" "nproc" "hostname" "tty" "whoami" "id"
-              "groups" "printenv" "which" "realpath" "expr" "free" "ps" "pwdx"
-              "logname" "users" "who" "pinky" "hostid" "dnsdomainname" "mountpoint" "pathchk"
-              ; ..and the syscalls said plainly, each bounded by what it names
-              "stat" "df" "du" "link" "unlink" "mktemp" "mkfifo" "mknod" "sync" "fsync"
-              "chown" "chgrp" "truncate" "shred" "mount" "umount" "clear" "lift")
-   ; the words whose main is not spelled <word>-main. kore-main wants the whole argv
-   ; (it reads its own program seat); the rest take the args after the name.
-   sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
-                 ("[" "bracket-main") ("dir" "ls-main") ("objcopy" "objcopy" "holo")
-                 ; the crew tools live in their own modules, not the applets' home
-                 ("libra" "libra-main" "libra")
-                 ("fat" "fat-main" "fatcmd")
-                 ("mkfs.vfat" "mkfsv-main" "fatcmd") ("mkdosfs" "mkfsv-main" "fatcmd"))
    (sh-pathdirs _)
     (:- (go 0 0 ())
      p ("" + (getenv "PATH")) n #p
@@ -1483,19 +1449,14 @@
                (go >l (two? (stat p) ? (p . acc) acc))))
         (go (sh-pathdirs ()) ()))
 
+   ; the self lane: a word runs in this very process when its verb says it is safe to
+   ; (the 'self trait, post.l's verbs) and the word is ours by the mode. the verb runs
+   ; through verbs' call, under urun, so a leave from deep in is a status here
    (sh-imgask w)
-     (: al (sh-assoc w sh-imgalias)
-        mn (two? al ? <>al (w + "-main"))
-        md (two? al && two? >>al ? (cite (nom <>>al)))   ; the row's module, or ()
-        nm (intern mn)
-        f0 (? (tablet? md) (md nm)                    ; the alias row named the module
-              (elem nm (names ())) (ev nm)         ; a bare global
-              (cite 'kore nm))                        ; else the applets' home module
-        (? (sh-smem? w sh-imgok && !(sh-slashed? w) && !!f0 && sh-ours? w)
-           [1 (sh-imgwrap f0 mn) (mn = "kore-main")]
+     (: V (cite 'verbs) k (name w)
+        (? (!(sh-slashed? w) && lit? ((V 'get) k) && !(0 = ((V 'trait) k 'self)) && sh-ours? w)
+           [1 (\ as ((V 'call) k as)) 0]
            0))
-   (sh-imgwrap f mn) (? (mn = "moon-run") f (urun f))
-   (sh-assoc w l) (? (one? l) 0 (w = <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (sh-pathfresh 0, peep sh-imgc w 'no @ 'no (sh-imgask w @ f (pin sh-imgc w f, f)) v v)
    (sh-dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sh-cliline _) (? (elem 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
@@ -1558,16 +1519,22 @@
    ; exec -- a fresh image, its buffers its own. the only lane for a foreign word.
    ; the trusts NEST -- self implies fork implies exec -- so the fork test below asks
    ; the self question rather than keeping a second list beside it.
+   ; a word may be self, and a call is: a verb whose answer turns on its args is asked
+   ; of this one; the lane, picked before a word expands, trusts only a plain yes
    (sh-selfok? w) (two? (sh-imgfn w))
+   (sh-selfcall? av) (sh-selfok? <av && (cite 'verbs 'holds) (name <av) 'self >av)
+   (sh-selfplain? w) (sh-selfok? w && 1 = (cite 'verbs 'trait) (name w) 'self)
+   ; a verb that wants a fresh process says so ('exec, verbs' traits), asked of this call
+   ; under the name its word runs as -- a path to this binary is `love`
+   (sh-exec? av) (: V (cite 'verbs) ((V 'holds) (name ((V 'bn) <av)) 'exec >av))
    (sh-forkok? av fdmap)
-     (: a >av                                    ; cap is total, so a bare word reads () here
-        (? (<a = "bake" || <a = "wake") 0
-           (0 < #(getenv "LOVE_NO_IMAGE") && elem 'love-image (names ())) 0
-           (sh-tty ()) 1                         ; our stdin is the terminal: nothing to duplicate
-           !(sh-inread ()) 1                     ; we never read our stdin: nothing buffered to duplicate
-           (sh-fd0? fdmap) 1                     ; the child's stdin is its own
-           (sh-selfok? <av) 1                    ; run in our own process, so ours to fork
-           0))
+     (? (sh-exec? av) 0
+        (0 < #(getenv "LOVE_NO_IMAGE") && elem 'love-image (names ())) 0
+        (sh-tty ()) 1                         ; our stdin is the terminal: nothing to duplicate
+        !(sh-inread ()) 1                     ; we never read our stdin: nothing buffered to duplicate
+        (sh-fd0? fdmap) 1                     ; the child's stdin is its own
+        (sh-selfcall? av) 1                   ; run in our own process, so ours to fork
+        0)
    ; spawnio does the job-control dance in C for a child it execs; a forked stage never
    ; execs, so it does its own. both sides set the group, as spawnio's two calls do, so
    ; neither a wait nor a signal can race it. pg < 0 keeps the shell's group (the non-tty
@@ -1612,7 +1579,9 @@
                 "read" "set" "shift" "unset" "eval" "." "wait" "local" "exec"
                 "break" "continue" "return" "ev" "trap" "which" "where" "type"
                 "kill" "umask" "getopts" "readonly" "alias" "unalias" "times" "hash" "ulimit")
-   (sh-bi? nm) (sh-smem? nm sh-binames)
+   ; ..and the verbs that say they are builtins (echo, test ..): every mode, ahead of PATH
+   (sh-verbbi? nm) (0 < ((cite 'verbs 'trait) (name nm) 'builtin))
+   (sh-bi? nm) (sh-smem? nm sh-binames || sh-verbbi? nm)
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
         nms (? (two? args2) args2 ["REPLY"])
@@ -1921,7 +1890,7 @@
               _ (? dash (puts (cwd 0 + "\n")) 0)
               0)))
    (sh-builtin argv)
-     (<argv @- 'nope                             ; a word no builtin answers to
+     (<argv @- (? (sh-verbbi? <argv) ((cite 'verbs 'call) (name <argv) >argv) 'nope)
       "exit"   (: st (? >argv (sh-int <>argv) (sh-status ())) (sh-leave st))
       "cd"     (sh-cdb >argv)
       "trap"   (sh-trapb >argv)
@@ -2158,7 +2127,7 @@
                 (? (two? b) b                            ; brk/cnt/ret ride out
                    (charm? b) (: _ (pin sh-status () b) (sh-echk b))
                    b))
-           (sh-selfok? <argv)                            ; the self lane
+           (sh-selfcall? argv)                           ; the self lane
              (: g (sh-imgfn <argv)
                 f (g 1)
                 s (sh-withrs rs (\ _ (f (? (g 2) argv >argv))))
@@ -2372,7 +2341,8 @@
            (? !nm 'sub
               (sh-fn? nm) 'sub
               (string? (sh-aliases nm)) 'sub
-              (&& !(sh-bi? nm) (sh-selfok? nm)) (? (one? (a 2)) 'jug 'sub)   ; ours to run in here
+              (sh-verbbi? nm || (!(sh-bi? nm) && sh-selfplain? nm)) (? (one? (a 2)) 'jug 'sub)   ; ours to run in here
+              (!(sh-bi? nm) && sh-selfok? nm) 'sub      ; maybe ours, asked of the expanded call
               !(sh-bi? nm) 'ext
               (&& (one? (a 2)) (sh-smem? nm sh-purebi)) 'jug   ; a redirect wants an fd
               'sub)))
@@ -2490,6 +2460,13 @@
               _ (flush out)                    ; the bytes already in hand are the caller's
               sv (dup 1)
               _ (dup2 wfd 1)
+              ; the body's own words go through a port over the pipe, never the static
+              ; stdout: its write waits on the device, and here the device's only reader
+              ; is a task of this process -- one say bigger than the pipe would wait on
+              ; itself. a port's write parks instead. a child sheds it and writes fd 1
+              po (fdopen (dup wfd))
+              w0 (worn ())
+              _ (sh-wearout po)
               caps (sh-subfds ())
               _ (pin sh-subfds () ((rfd . d) . caps))
               snap (sh-subsave ())
@@ -2500,7 +2477,9 @@
               ; once, in the teardown both ways out share.
               got (tablet 0)
               st (mind (_ \ sh-guarded (_ \ sh-eval a)) ()
-                       (\ _ (flush out,             ; the body's bytes, before the ends go
+                       (\ _ (flush out,             ; the body's bytes, before the ends go:
+                               wear w0,             ; a flush parks until the drain has them
+                               close po,
                                sh-subback snap,
                                pin sh-subfds () caps,
                                ; fd 1 is a write end too (the dup2 above), so it has to be
