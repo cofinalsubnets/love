@@ -172,8 +172,6 @@ usage: xz [-cdfkqtvz] [-0..-9] [-e] [-T N] [-C CHECK] [-S SUF] [FILE..]
 no file, or a bare -, is the filter: stdin -> stdout"
    xzc-dicts [262144 1048576 2097152 4194304 4194304 8388608 8388608 16777216 33554432 67108864]
 
-   (xzc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
-   (xzc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
    (xzc-moan t m) (? (peep t 'q 0) 0 (: _ (say err ("xz: " + m + "\n")) (flush err)))
    (xzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
    (xzc-worse a b) (max a b)
@@ -193,13 +191,13 @@ no file, or a bare -, is the filter: stdin -> stdout"
           ()))
    (xzc-put t p dst bytes st)           ; the output laid, the input's mode and time carried
     (? (two? (lstat dst) && !(peep t 'f 0)) (: _ (xzc-moan t (dst + ": File exists")) 1)
-       !(xzc-blurt dst bytes) (: _ (xzc-moan t (dst + ": Cannot write")) 1)
+       !(uwrite dst bytes) (: _ (xzc-moan t (dst + ": Cannot write")) 1)
        (: _ (two? st && (: _ (chmod dst (st 2 & 4095)) (utime dst (st 1))))
           _ (peep t 'k 0 ? 0 (unlink p))
           _ (peep t 'v 0 && (: _ (say err ("xz: " + p + " -> " + dst + "\n")) (flush err)))
           0))
    (xzc-one t p)
-    (: r (xzc-slurp p)
+    (: r (uread p)
        st (stat p)
        (? !r (: _ (xzc-moan t (p + ": No such file or directory")) 1)
           (two? st && (st 2 & 61440) = 16384) (: _ (xzc-moan t (p + ": Is a directory, skipping")) 2)

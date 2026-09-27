@@ -13,7 +13,6 @@
 ;   efi_call -- every UEFI service goes back OUT through this.
 ;   efi_go(tables, entry) -- the instructions C cannot spell: interrupts off,
 ;     our tables in, jump to the kernel. never returns.
-(borrow 'kore)   ; the u-floor (uread), off the module the cat's own u.l registered
 
 ;; -- x86-64: ms_abi in, sysv out -------------------------------------------
 ;; rsi/rdi are ms callee-saved and sysv scratch, so they are the only registers
