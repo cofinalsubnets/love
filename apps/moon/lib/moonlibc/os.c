@@ -504,6 +504,7 @@ int __ai_sofb(long *lv, long *op) {
   *lv = 0xffff;
   switch (*op) {
     case 2: *op = 4; return 0;          /* SO_REUSEADDR */
+    case 3: *op = 0x1008; return 0;     /* SO_TYPE */
     case 4: *op = 0x1007; return 0;     /* SO_ERROR */
     case 9: *op = 8; return 0; }        /* SO_KEEPALIVE */
   return -1; }

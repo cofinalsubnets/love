@@ -82,7 +82,8 @@ static int quad(struct ai_str *hv, uint32_t *out) {
 //   connect  (tcp "1.2.3.4" 80)   (unix "/tmp/.X11-unix/X0")
 //   listen   (tcp 80)  or a bare port, which is tcp   (unix "/run/x.sock")
 //   bind     (udp 53)   (icmp)   -- options after: (icmp ttl) asks each datagram's ttl
-// icmp is the unprivileged echo socket, which only linux has; elsewhere it answers the errno
+// icmp is linux's unprivileged echo socket, or where that is refused a raw one (root's, and
+// the bsds' only kind) dressed as it: recv and send answer and take the same bytes either way
 // a host is a dotted quad and nothing else: names resolve one layer up (apps/dns.l).
 enum { FamTcp = 1, FamUdp, FamIcmp, FamUnix };
 enum { HowConnect = 1, HowListen, HowBind };
@@ -127,16 +128,20 @@ static int parse_addr(word x, int how, struct saddr *a) {
   a->fam = FamIcmp; }
  else return -1;
  while ((v = nth_take(&x)))                       // the options
-  if (nom_is(v, "ttl") && a->fam == FamIcmp) a->ttl = 1;   // IP_RECVTTL is linux's number, and so is this socket
+  if (nom_is(v, "ttl") && a->fam == FamIcmp) a->ttl = 1;
   else return -1;
  return 0; }
 
 // the fd for a, or a negated errno: socket(2) by the family's row, then the verb's own
 // steps. a connect leaves the socket nonblocking with its handshake in flight
 ai_noinline static int call_sock(struct saddr const *a, int how) {
- int un = a->fam == FamUnix;
+ int un = a->fam == FamUnix, raw = 0;
  int type = a->fam == FamTcp || un ? SOCK_STREAM : SOCK_DGRAM;
  int fd = socket(un ? AF_UNIX : AF_INET, type, a->fam == FamIcmp ? IPPROTO_ICMP : 0);
+ if (fd < 0 && a->fam == FamIcmp) {              // no echo socket: a raw one, if we may
+  int e = errno;
+  fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP), raw = 1;
+  if (fd < 0 && e != EPROTONOSUPPORT) errno = e; }   // linux's refusal names its knob
  if (fd < 0) return -errno;
  cloexec(fd);
  struct sockaddr_in in = {0};
@@ -158,7 +163,7 @@ ai_noinline static int call_sock(struct saddr const *a, int how) {
   int one = 1;
   if (un) unlink(ua.sun_path);                   // a stale socket file from a dead listener
   else setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
-  if (a->ttl) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);
+  if (a->ttl && !raw) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);   // linux's number
   r = bind(fd, sa, sl);
   if (!r && how == HowListen) r = listen(fd, ai_listen_backlog);
   if (!r) return fd; }
@@ -283,8 +288,9 @@ static lvm(lvm_shutdown) {
 //   (send p peer bytes) -> p | a nom | 'badarg
 // a peer is ("1.2.3.4" port): the shape recv answers is the shape send takes, so a reply
 // goes back to (car d). an icmp socket's port is its echo id, and send does not read it.
-// the ttl rides when the socket was bound asking for it. a quiet socket parks the task on
-// its fd, like accept: "nothing else to do" is the scheduler's judgement, not this nif's.
+// the ttl rides when the socket was bound asking for it, and always off a raw one. a quiet
+// socket parks the task on its fd, like accept: "nothing else to do" is the scheduler's
+// judgement, not this nif's.
 
 // the dotted quad of a, into q -> its length
 static int quad_show(char *q, uint32_t a) {
@@ -300,7 +306,7 @@ static int quad_show(char *q, uint32_t a) {
 // one datagram and who sent it. the sockaddr and the control buffer are &-taken here, so
 // the lvm wrapper stays TCO-clean; what it needs back rides in the caller's rbuf
 struct rmeta { uint32_t ip; int port, ttl; };
-struct rbuf { char b[DgMax]; struct rmeta m; };
+struct rbuf { char b[DgMax + 60]; struct rmeta m; };   // room for a raw socket's ip header
 ai_noinline static ssize_t call_recv(int fd, struct rbuf *r) {
  struct sockaddr_in peer;
  memset(&peer, 0, sizeof peer);
@@ -321,6 +327,27 @@ ai_noinline static ssize_t call_recv(int fd, struct rbuf *r) {
    memcpy(&t, CMSG_DATA(c), sizeof t);
    r->m.ttl = t; }
  return n; }
+
+// the raw icmp socket standing in for an echo socket: its id is the pid's low bits, where
+// linux's kernel picks one, fills it in, and filters to the replies bearing it
+static int is_raw(int fd) {
+ int t = 0;
+ socklen_t n = sizeof t;
+ return getsockopt(fd, SOL_SOCKET, SO_TYPE, &t, &n) == 0 && t == SOCK_RAW; }
+static unsigned echo_id(void) { return (unsigned) getpid() & 0xffff; }
+
+// the next echo reply to us, its ip header off and that header's ttl kept; the rest of what
+// a raw socket hears (our own requests on loopback, other pings' replies) is skipped
+ai_noinline static ssize_t call_recv_raw(int fd, struct rbuf *r) {
+ for (;;) {
+  ssize_t n = call_recv(fd, r);
+  if (n < 0) return n;
+  unsigned char const *b = (unsigned char const*) r->b;
+  ssize_t h = (b[0] & 15) * 4;
+  if (n < h + 8 || b[h] != 0 || (unsigned) (b[h + 4] << 8 | b[h + 5]) != echo_id()) continue;
+  r->m.ttl = b[8];
+  memmove(r->b, r->b + h, (size_t) (n - h));
+  return n - h; } }
 
 // the datagram's bytes and its peer's quad as strings, then the list over them: pushes
 // (("quad" port) bytes) or (("quad" port) bytes ttl)
@@ -350,7 +377,7 @@ static lvm(lvm_recv) {
  // a stack buffer is safe in an lvm_ only while its address never reaches the tail, and
  // every exit here unwinds the frame first; ai_musttail refuses at compile if one did not.
  struct rbuf r;
- ssize_t n = call_recv(fd, &r);
+ ssize_t n = is_raw(fd) ? call_recv_raw(fd, &r) : call_recv(fd, &r);
  // no datagram yet -> park on the socket; nothing was taken off the wire, so the op re-runs
  if (n == -EAGAIN) { g->next_wait_fd = fd; ai_musttail return Ap(lvm_yield_sw, g); }
  if (n < 0) ai_musttail return Answer(ai_err(g, (int) -n));
@@ -368,6 +395,21 @@ ai_noinline static ssize_t call_send(int fd, uint32_t ip, int port, void const *
  while (w < 0 && errno == EINTR);
  return w < 0 ? -errno : w; }
 
+// an echo request through a raw socket: our id and the checksum written into a copy, the
+// two things linux's echo socket fills in itself. it takes only echo requests, as that does
+ai_noinline static ssize_t call_send_raw(int fd, uint32_t ip, void const *p, size_t n) {
+ unsigned char b[DgMax];
+ if (n < 8 || n > sizeof b || *(unsigned char const*) p != 8) return -EINVAL;
+ memcpy(b, p, n);
+ unsigned id = echo_id();
+ uint32_t s = 0;
+ b[2] = b[3] = 0, b[4] = (unsigned char) (id >> 8), b[5] = (unsigned char) id;
+ for (size_t i = 0; i < n; i += 2) s += (uint32_t) b[i] << 8 | (i + 1 < n ? b[i + 1] : 0);
+ while (s >> 16) s = (s & 0xffff) + (s >> 16);
+ s = ~s & 0xffff;
+ b[2] = (unsigned char) (s >> 8), b[3] = (unsigned char) s;
+ return call_send(fd, ip, 0, b, n); }
+
 static lvm(lvm_send) {
  int fd = (int) ai_port_fd(Sp[0]);
  word x = Sp[1], h = nth_take(&x);
@@ -376,7 +418,7 @@ static lvm(lvm_send) {
  if (fd < 0 || !h || !strp(h) || quad(str(h), &ip) < 0 || port < 0 || !strp(Sp[2]))
   ai_musttail return Answerp(2, ai_badarg(g));
  struct ai_str *s = str(Sp[2]);
- ssize_t w = call_send(fd, ip, port, txt(s), len(s));
+ ssize_t w = is_raw(fd) ? call_send_raw(fd, ip, txt(s), len(s)) : call_send(fd, ip, port, txt(s), len(s));
  ai_musttail return Answerp(2, w < 0 ? ai_err(g, (int) -w) : Sp[0]); }   // [p, peer, bytes] -> [p]
 
 static union u const

@@ -622,8 +622,8 @@ seconds (1 by default, fractions allowed), `-c` times or until ^C, and prints ea
 size, sequence, TTL and round trip, then the loss and min/avg/max, in busybox's format.
 After the last echo it waits up to `-W` seconds (10) for the rest. It exits 0 when any
 reply came back and 1 otherwise. It uses Linux's unprivileged ICMP echo socket, open to the
-groups in `net.ipv4.ping_group_range`; where that is refused it says so. FreeBSD and NetBSD
-have no such socket, so there it needs a raw socket and root, which is not built yet.
+groups in `net.ipv4.ping_group_range`, or else a raw ICMP socket, which needs root; FreeBSD
+and NetBSD have only the raw kind. Where both are refused it says so.
 
 ## not built
 

@@ -1502,6 +1502,15 @@
       !(elem '(mov r9 r0) gf)                     ;  (the die: no r0 bridge)
       !(sp? gf)                                   ; no frame: i rides a register too
       (0 = (splds gf)))
+   ; if (__builtin_expect(c, 0)): the parser drops the call (no call reaches the analyses) and
+   ; marks the arm cold, laid past the ret with its jump back; the test stays one test
+   irX (cgn "long f3(long *s, long x) { if (__builtin_expect(x & 1, 0)) { s[1] = 2; } return x + s[3]; }\nint main() { long a[4] = {0}; return (int) f3(a, 2); }")
+   xf (fnf 'f3 <>irX)
+   _ (test
+      (two? irX)
+      !(foldl (\ a f (a || (two? f && <f = 'call))) () xf)   ; no call: the hint is gone
+      (<(rev xf) @ ('jmp _) 1 ())                            ; the arm lays last and jumps back
+      (elem '(ret) xf))
    ; a park under the caller's loop resets from its source every iteration -- that mov wears
    ; the entry-home shape (mov H A), and unhome renaming it away erases the reset. pears stops
    ; at the first body label, so the reset stands and the walk stays on the park.
