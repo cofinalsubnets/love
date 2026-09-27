@@ -17,6 +17,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'text)
 
 (:
    ; -- cat: files (or -) onto out, verbatim -- and a DIRECTORY lists, the way ls does.
@@ -1039,7 +1040,7 @@
    ; -- rev: every line back to front --
    (rev-main as)
     ; the last line keeps the source's end, which is exactly what term? carries
-    (: (dot ln term?) (: _ (say out (urev ln)) _ (? term? (put out 10) 0) 1)
+    (: (dot ln term?) (: _ (say out (cprev ln)) _ (? term? (put out 10) 0) 1)
        (ulines "rev" dot as))
 
    ; ---- the column tools: fold, expand, unexpand --------------------------------

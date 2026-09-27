@@ -142,8 +142,7 @@
       !(words "  \n") !(words "")))
 
 ; --- the field-tool floor: usplit keeps every piece (cut's face, where lines drops
-; the empty tail), uspec/upick read cut's list, uset expands tr's ranges + escapes,
-; urev walks a text backwards ---
+; the empty tail), uspec/upick read cut's list, uset expands tr's ranges + escapes ---
 (: (test
       (usplit 58 "a:b:c" = '("a" "b" "c"))
       (usplit 58 "a:" = '("a" ""))                                 ; the kept empty tail
@@ -156,8 +155,7 @@
       (uset "a-c" = '(97 98 99))
       (uset "abc" = '(97 98 99))
       (uset "x-" = '(120 45)) (uset "-x" = '(45 120))              ; an edge dash stays literal
-      (uset "\\n\\t" = '(10 9))                                    ; the escapes
-      (urev "abc" = "cba") !(urev "")))
+      (uset "\\n\\t" = '(10 9))))                                  ; the escapes
 
 ; --- the column floor (apps/kore/core.l): fold, expand and unexpand all count
 ; columns, which is the one thing they share and the one thing a byte count

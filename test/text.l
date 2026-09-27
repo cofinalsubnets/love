@@ -17,3 +17,26 @@
  (1 = #(utf8 127)) (2 = #(utf8 128)) (2 = #(utf8 2047)) (3 = #(utf8 2048))
  (3 = #(utf8 65535)) (4 = #(utf8 65536)) (4 = #(utf8 1114111))
  (utf8 1114112 = "") (utf8 -1 = ""))
+
+; 'text: utf-8 read as characters, and the columns a terminal gives them. a bad sequence is one
+; U+FFFD per byte; the widths are glibc's, so a prompt lines up where the terminal draws it
+(: cpat (cite 'text 'cpat) cpnext (cite 'text 'cpnext) cps (cite 'text 'cps)
+   cplen (cite 'text 'cplen) cpsnip (cite 'text 'cpsnip) cprev (cite 'text 'cprev)
+   wcwidth (cite 'text 'wcwidth) swidth (cite 'text 'swidth) scut (cite 'text 'scut)
+   (test
+      (cps "a日本語é" = [97 26085 26412 35486 233]) (cps "" = ()) (cplen "a日本語é" = 5)
+      (cps (utf8 128512) = [128512]) (cps (utf8 1114111) = [1114111])
+      (cpat "a日" 1 = 26085) (cpnext "a日" 1 = 4) (cpnext "a日" 0 = 1)
+      (cps "\xc0\x80" = [65533 65533])                     ; overlong
+      (cps "\xed\xa0\x80" = [65533 65533 65533])           ; a surrogate
+      (cps "\xe2\x82" = [65533 65533]) (cps "\x80a" = [65533 97])   ; torn, stray
+      (cps "\xf4\x90\x80\x80" = [65533 65533 65533 65533]) ; past U+10FFFF
+      (cpsnip "a日本語é" 1 3 = "日本") (cpsnip "a日" 1 9 = "日") (cpsnip "a日" 2 1 = "")
+      (cprev "a日本語é" = "é語本日a") (cprev "" = "") (cprev "\xe2\x82a" = "a\x82\xe2")
+      (wcwidth 65 = 1) (wcwidth 0 = 0) (wcwidth 10 = -1) (wcwidth 127 = -1) (wcwidth 159 = -1)
+      (wcwidth 173 = 1) (wcwidth 768 = 0) (wcwidth 8203 = 0) (wcwidth 4448 = 0)
+      (wcwidth 19968 = 2) (wcwidth 44032 = 2) (wcwidth 65313 = 2) (wcwidth 128512 = 2)
+      (wcwidth 4447 = 2) (wcwidth 12872 = 2) (wcwidth 19904 = 2) (wcwidth 1114112 = -1)
+      (swidth "a日本語é" = 8) (swidth "e\xcc\x81" = 1) (swidth "a\tb" = 2) (swidth "" = 0)
+      (scut "a日本語é" 4 = "a日") (scut "a日本語é" 3 = "a日") (scut "a日本語é" 99 = "a日本語é")
+      (scut "e\xcc\x81x" 1 = "e\xcc\x81") (scut "日" 1 = "")))
