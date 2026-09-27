@@ -394,7 +394,7 @@
    ; is the point -- inle/rp2040's .vectors is read by the core before an instruction runs --
    ; so both its existence and its order are the program's to fix, never ours.
    ; the two wide tuples are named once, here: parse.l's `tops` answers fourteen fields and
-   ; gen.l's cgen-obj twelve, and `[]` is the strict arity, so a shape that gains a member is
+   ; gen.l's cgen-obj thirteen, and `[]` is the strict arity, so a shape that gains a member is
    ; a refusal naming the file rather than every site quietly reading its neighbour.
    (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
     (@ (cc-parse src t)
@@ -406,19 +406,24 @@
        (: ob (cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs] tgt)
           _ (okv? ob || ccdie ob src ("cc: codegen error in " + src))
-          (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns]
+          (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
              (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                         + map ([nm forms al] \ objsec-code nm forms al) xfns)   ; ..and the fns that named a section
+                ; the file-scope asm's sections, and the names its .globl exports by where they landed
+                at (? (two? asecs) asecs [() () ()])
+                fns (fnames + filter (s \ !(elem s fnames)) (at 1))
+                gns (gnames + filter (s \ !(elem s gnames)) (at 2))
                 ; the two writers, one shape: the standard set for the width, plus whatever
                 ; the TU named. arm32 has no .image lane and no local func symbols for
                 ; statics -- objsecs3 refuses the first, and `lnames` does not ride.
                 (? (= tgt 'wasm)
-                   (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks])
+                   (? (two? <at) (udie 1 ("cc: a file-scope asm has no wasm lane, in " + src))
+                      (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                    (arm32? tgt)
-                   (objsecs32 tgt (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs)
-                              fnames gnames weaks)
-                   (objsecs tgt (objsecs4 tforms dforms nforms iforms bforms rforms + xs)
-                            fnames gnames weaks lnames)))
+                   (objsecs32 tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
+                              fns gns weaks)
+                   (objsecs tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
+                            fns gns weaks lnames)))
              (udie 1 ("cc: the code generator answered an unexpected shape for " + src))))
        (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
    ; a wasm object is the gen tuple as TEXT (above), so it goes to the port whole:

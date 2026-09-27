@@ -4131,26 +4131,31 @@
                        (? (two? k) (<k + (['jmpm (f 2) (k 1)] . go (k 2)))
                           (f . go >l))))
           (go fs)))
-   ; an early exit lays last: (br cc L), a run with no label and no branch that ends in a jump or
-   ; ret, then (label L) -> (br !cc K) (label L) .., and (label K) run after the function. the
-   ; fall-through is the path that goes on. a label an if with __builtin_expect(c, 1) made stays
+   ; an early exit lays last: (br cc L), a run that ends in a jump or ret, then (label L) -> (br !cc K)
+   ; (label L) .., and (label K) run after the function; the fall-through is the path that goes on.
+   ; the run may hold labels but no branch. an if whose test is __builtin_expect(c, 0) makes L cold:
+   ; its run may branch, and one that falls into L jumps there. __builtin_expect(c, 1) keeps its arm
    (tailarm g fs)
     (? (t32? g) fs                                            ; thumb's short branches stay put
-       (: hot (peep g 'hot ())
-          (run l L acc n)                                     ; -> [run rest] | ()
-           (? (!(two? l) || 48 < n) ()
+       (: hot (peep g 'hot ()) cold (peep g 'cold ())
+          (term? f) (two? f && elem <f '(jmp jmpr jmpm ret))
+          (run l L acc n c)                                   ; -> [run rest] | ()
+           (? (!(two? l) || (c ? 96 48) < n) ()
               (: f <l
-                 (? !(two? f) (run >l L (f . acc) (n + 1))
-                    (<f = 'label) (? (<>f = L && two? acc && two? <acc && elem <<acc '(jmp jmpr jmpm ret))
-                                     [(rev acc) l] ())
-                    (elem <f '(br br8 jmpt align)) ()
-                    (run >l L (f . acc) (n + 1)))))
+                 (? !(two? f) (run >l L (f . acc) (n + 1) c)
+                    (<f = 'label && <>f = L) (? !(two? acc) ()
+                                                (term? <acc) [(rev acc) l]
+                                                c [(rev (['jmp L] . acc)) l]
+                                                ())
+                    (elem <f '(jmpt align)) ()
+                    (!c && elem <f '(br br8)) ()
+                    (run >l L (f . acc) (n + 1) c))))
           (go l acc cs)
            (? !(two? l) (rev acc + cs)
               (: f <l
                  k (? (two? f && <f = 'br && elem <>f '(eq ne lt le gt ge below be above ae s ns) &&
                        nelem <>>f hot)
-                      (run >l <>>f () 0))
+                      (run >l <>>f () 0 (elem <>>f cold)))
                  (? (two? k)
                      (: K (nlab g ".k")
                         (go (k 1) (['br (negcc <>f) K] . acc) (cs + (['label K] . <k))))
@@ -5088,14 +5093,14 @@
        (go fs0 ()))
 
    ; two constant adds onto one register fold to one: (add d a k1)(add d d k2) -> (add d a k1+k2).
-   ; Have's Hp + n + floor is the shape. x64, whose add immediate is any le32
+   ; Have's Hp + n + floor is the shape. every target but thumb, while the sum is an immediate
    (addk g fs)
-    (? !(x64? g) fs
+    (? (t32? g) fs
        (: (go l) (? !(two? l) l
                     (: f <l nx (two? >l ? <>l)
                        (? (two? f && <f = 'add && two? nx && <nx = 'add &&
                            charm? (f 3) && charm? (nx 3) && nx 1 == f 1 && nx 2 == f 1 &&
-                           fits32? (f 3 + nx 3))
+                           imma g 'add (f 3 + nx 3))              ; the sum is still the target's immediate
                           (go (['add (f 1) (f 2) (f 3 + nx 3)] . >>l))
                           (f . go >l))))
           (go fs)))
@@ -6451,7 +6456,10 @@
           ('if . cnd . thn . er)
            (: le (nlab g ".e")
               xk >(xpct cnd)
-              _ (? (two? xk && <<xk = 'num && <><xk = 1) (pin g 'hot (le . peep g 'hot ())) 0)   ; tailarm leaves it
+              xv (? (two? xk && <<xk = 'num) <><xk ())
+              _ (xv @ 1 (pin g 'hot (le . peep g 'hot ()))                 ; tailarm leaves the arm
+                      0 (pin g 'cold (le . peep g 'cold ()))               ; ..or lays it past the function
+                      ())
               c (cbranch g env cnd 'eq le)
               t (cgstmt g env thn)
               (? (bad? c || bad? t) 'bad
@@ -7692,19 +7700,20 @@
        sp1 (? (uni9 || !(two? vzf)) sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
        irf (? uni9 (ubuild (alive g f)) (build sp1))
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):
-       ; the a64 sweeps, then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
-       (swp irx) (? !(a64? g) irx
+       ; the a64 sweeps (rv64 takes addk alone), then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
+       (swp irx) (? !(a64? g) (? (rv64? g) (addk g irx) irx)      ; rv64's one sweep
                     (tailst g
                     (deadst g
                      (deaddef g
                      (addrfold g
+                     (addk g
                      (rezx g
                      (copyprop g
                      (stld g
                      (spmerge
                      (deaddef g
                      (deadcell g
-                     (cfoldir g irx))))))))))))
+                     (cfoldir g irx)))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
        (? (bad? irf) irf (dp 'final (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))
@@ -7882,6 +7891,9 @@
                                                       pin g 'globs (<p . g 'globs)))
                            (one >ps)))
                     (one <>f)))))
+       ; the file-scope asm, one text in declaration order (gas's section state runs across them)
+       asrc (foldl (\ a f (? (<f = 'tasm) (a + <>f + "\n") a)) "" <>ast)
+       _ (pin g 'asecs (? (0 < #asrc) (gas-top tgt asrc) ()))
        ok (rec <>ast)
        ; -- lazy lowering: lay the roots (every exported fn, alias target, section-named fn, and every
        ; fn an initializer names), then what their laid forms still call, to closure; a spliced static's body ships only if named --
@@ -7949,7 +7961,9 @@
                     (go <>ast ()))
            ; what the sectioned bodies call joins the worklist like any other ref
            sq (foldl (\ a x (: t (unom x) (t && !(laid t) ? (t . a) a))) () snoms)
-           _ (drive (roots + sq))
+           ; ..and a static the file-scope asm names, which no C reference may reach
+           aq (foldl (\ a x (: t (unom x) (t && !(laid t) ? (t . a) a))) () (keys (cg-refs (g 'asecs) {})))
+           _ (drive (roots + sq + aq))
            ; the data lane's fn references, read off the initializers in g 'glob (block-scope statics
            ; included); a laid body can add its own, so this closes rather than passes
            (datclose _)
@@ -7985,11 +7999,12 @@
        (? (gripe? r) r                               ; a named cause rides out to the driver (a gripe is a chain, so guard before two?)
           !(two? r) ()
           !(r 3) ()                               ; no main -> no program (the exe has nothing to start)
+          (two? (<r 'asecs)) (gripe () () () "a file-scope asm lays sections, which only an object carries")
           (: dat <>>r                           ; one flat image: nifs, rodata and bss (as real zeros) all ride the one lane
              [1 (crt0 + <>r + <>>>>>dat + <dat + <>dat + <>>>>dat)])))
    ; the relocatable object view: the .o emitter turns the names into a symbol table + relocations;
    ; the static fns ride as lnames (local func symbols, so nm/gdb see real boundaries)
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs asecs) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           !(two? r) ()
@@ -8046,5 +8061,5 @@
                         (map (nm \ [nm (forsec nm src) (grain nm src)]) (noms src ()))))
              [1 <>r <dat fnames gnames
                 <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat
-                xfns]))))
+                xfns (<r 'asecs)]))))
 ) ; module 'moon

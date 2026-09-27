@@ -573,9 +573,21 @@ keys over less's:
 * **A page opened without a `#name` opens where its own content starts**, past the menus:
   lapiz marks the first `<main>` (or `role="main"`), else an `<article>`. **`m`** goes back
   there, and **`g`** is still the very top.
+* **`TAB`** moves to the next link on the screen and **shift-`TAB`** to the one before. The
+  current link shows in standout with its URL on the status line, and **`RETURN`** follows it.
+* **A form that sends by GET shows each text field as a link**, `[n][name____]`. Following
+  one asks for the text, prefilled with what the field holds, and `RETURN` sends the form.
+  lapiz writes the form's other controls into the link as they stand: hidden fields, checked
+  boxes, the chosen option and the first submit button. A form that POSTs shows no field.
+* **Pages come gzipped** when the server will send them that way (apps/gz.l unzips them). A
+  page in latin-1 or windows-1252, by its header or else its own `<meta>`, is converted to
+  utf-8. A `<base href>` is what the page's links resolve against, and an image shows as its
+  alt text.
+* **Resizing the window lays the page out again at the new width**, keeping the first link
+  that was on the screen at the same place.
 
-Absent: forms, scripts, cookies, images, and any charset but utf-8. The TLS peer is not
-verified (wget's client).
+Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
+utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
 
 ## not built
 

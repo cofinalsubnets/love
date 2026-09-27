@@ -41,6 +41,9 @@
 ; has a last-resort block rule, so a construct neither can place costs its own line and
 ; never the rest of the document. accepting more input cannot break law 1, which is why
 ; both were safe to add; what they owe instead is stated in test/host/lapiz.l.
+; the html scrub also lays what a browser wants from a page's controls in the middle's own
+; terms: an image is its [alt], and a GET form's text field is a link to form:ACTION?PAIRS
+; (htscrub's `hform` says the shape), so no node is added for either.
 ;
 ; --- the terminal, which is not a surface ---
 ; `ttyshow` lays the middle out for a terminal at a width, and `kore man` is built on it.
@@ -50,7 +53,8 @@
 ; is still a heading after roff and the shower, and no line overruns the width.
 ; a link shows its <url> after its text, as man wants; a browser wants numbers instead, and
 ; `ttlinks` rewrites a doc so each link reads [n] and hands back the urls by n. `ttpage`
-; lays that and lifts the marks out too, answering the line each one landed on.
+; lays that and lifts the marks out too, answering the line each one landed on, and the
+; line each link did.
 ;
 ; --- the roff domain ---
 ; man macros are a smaller surface. law 1 holds on man-page-shaped docs: meta, head 1-2,
@@ -349,126 +353,12 @@
                  "")
    (htshow d) (joins (map htb d) "\n"))
 
-; ---------------------------------------------------------------- html, scrubbed
-; the roff surface learned this first, and html wants it for the same reason: a page in the
-; wild is mostly not prose. a doctype, a comment, a <head> and everything under it, and the
-; <script>/<style> bodies are not blocks; and a container -- div, nav, section, span -- is
-; not one either, since it wraps blocks rather than being one. so the scrub deletes the
-; first kind whole, opening tag to matching close, and UNWRAPS the second, dropping the tag
-; and keeping what it held. the aliases go here too: <b> is <strong> to a reader with one
-; font, and <br> ends a line the only way this middle can say it.
-(: hkill '("script" "style" "head" "svg" "noscript" "template" "iframe" "object")
-   hbare '("div" "nav" "section" "article" "main" "header" "footer" "aside" "span" "body"
-           "html" "figure" "figcaption" "form" "label" "picture" "video" "audio" "canvas"
-           "caption" "colgroup" "col"
-           "font" "center" "small" "big" "abbr" "cite" "time" "mark" "ins" "del" "sup" "sub")
-   halias '(("b" "strong") ("i" "em") ("u" "em") ("strike" "em") ("s" "em") ("q" "em")
-            ("tt" "code") ("kbd" "code") ("samp" "code") ("var" "code") ("dfn" "em")
-            ("h7" "h6") ("h8" "h6") ("menu" "ul") ("dir" "ul"))
-   (hlow t) (:- (go 0) n #t o (jug 0) (go i)
-             (n <= i ? (slurp o) (t i @ c (put o (64 < c < 91 ? (c + 32) c), go (i + 1)))))
-   ; the tag starting at i: [name end-index open?], or () where none does
-   (htag s i)
-    (: n #s
-       (? !(i < n && s i = 60) ()
-          (: c? (i + 1 < n && s (i + 1) = 47)
-             b (? c? (i + 2) (i + 1))
-             (nm k) (? (n <= k) k (elem (s k) '(32 9 10 13 47 62)) k (nm (k + 1)))
-             e (nm b)
-             (go k) (? (n <= k) k (s k = 62) (k + 1) (go (k + 1)))
-             (? (n <= b || e = b) () [(hlow (snip s b e)) (go e) !c?]))))
-   (halias? t) ((: (g l) (? (one? l) t (<<l = t) <><l (g >l))) halias)
-   ; from i, past the matching close of t -- nesting counted, so a <div> inside a killed
-   ; <div> does not end it early. an unclosed one runs to the end, as it does in a browser.
-   (hpast s i t)
-    (:- (go i 1) n #s (go k d)
-     (n <= k ? k
-      (: h (htag s k) (?
-       (one? h) (go (k + 1) d)
-       (<h != t) (go <>h d)
-       <>>h (go <>h (d + 1))
-       (d <= 1) <>h
-       (go <>h (d - 1))))))
-   ; the href inside an open tag's attributes, single or double quoted, or ()
-   (href s k e)
-    ((: (go i) (? (e <= i + 6) ()
-                  ("href=" != snip s i (i + 5)) (go (i + 1))
-                  (s (i + 5) @ ((34 || 39) @ c)
-                   ((: (h j) (? (e <= j) () (s j = c) (snip s (i + 6) j) (h (j + 1))))
-                    (i + 6)))))
-     k)
-   ; an attribute's value by name, where the name starts a word -- so id= is not data-id=
-   ; every open tag asks, so it compares in place and allocates only the answer
-   (hattr s k e nm)
-    (: n #nm m (n + 1)
-       (at? i) (: (g j) (? (n <= j) (s (i + n) = 61) (s (i + j) != nm j) 0 (g (j + 1))) (g 0))
-       ((: (go i) (? (e <= i + m) ()
-                     !(s i = nm 0 && elem (s (i - 1)) '(32 9 10 13) && at? i) (go (i + 1))
-                     (s (i + m) @ ((34 || 39) @ c)
-                      ((: (h j) (? (e <= j) () (s j = c) (snip s (i + m + 1) j) (h (j + 1))))
-                       (i + m + 1)))))
-        k))
-   ; a place a link can land, in the one shape the reader knows. a name with a quote in it
-   ; cannot be spelled there, and is no place
-   (hmk v)
-    (? (string? v && 0 < #v && (: (g i) (? (#v <= i) 1 (v i = 34) 0 (g (i + 1))) (g 0)))
-       ("<a id=\"" + v + "\"></a>") "")
-   ; the tags whose content is a line of text: a mark goes inside, where the text is; any
-   ; other tag holds blocks or is dropped, and its mark goes ahead of it
-   hinside '("p" "h1" "h2" "h3" "h4" "h5" "h6" "li" "dt" "dd" "td" "th")
-   ; where the page's own content starts, past its menus: a mark whose name has a space,
-   ; which no id can, so it never meets one. <main> or role=main, else an <article>
-   (hmain s t k e)
-    (? (t = "main" || hattr s k e "role" = "main") (hmk " main")
-       (t = "article") (hmk " article")
-       "")
-   (hfind s i pat)                                  ; past the next pat, or the end
-    (:- (go i) n #s m #pat
-     (go k) (? (n < k + m) n (pat = snip s k (k + m)) (k + m) (go (k + 1))))
-   ; an id is the other attribute the middle keeps: it becomes a mark, inside a tag whose
-   ; content is a line and ahead of any other. `ba` is 1 while an <a> with no href is open:
-   ; that is an anchor, not a link, so its tags go and only its mark and its text stay.
-   (htscrub s)
-    (:- (go 0 0) n #s o (jug 0) (go i ba)
-      (? (n <= i) (slurp o)
-         (i + 3 < n && s i = 60 && s (i + 1) = 33 && s (i + 2) = 45 && s (i + 3) = 45)
-          (go (hfind s (i + 4) "-->") ba)
-         (i + 1 < n && s i = 60 && s (i + 1) = 33)                       ; <!doctype ..>
-          (go ((: (g k) (? (n <= k) k (s k = 62) (k + 1) (g (k + 1)))) (i + 1)) ba)
-         (: h (htag s i)
-            (? (one? h) (put o (s i), go (i + 1) ba)
-               (: t <h e <>h op? <>>h
-                  k (i + 1 + #t)
-                  mk (? op? (hmk (hattr s k (e - 1) "id") + hmain s t k (e - 1)) "")
-                  (? (elem t hkill) (go (? op? (hpast s e t) e) ba)
-                     (elem t hbare) (say o mk, go e ba)
-                     (t = "br") (say o "</p><p>", go e ba)
-                     ; a link is the one tag whose attribute the middle keeps, so it is
-                     ; normalized to the shape the reader knows: href alone, and first
-                     (t = "a") (: v (op? && href s (i + 2) (e - 1))
-                                  m2 (? #mk mk op? (hmk (hattr s k (e - 1) "name")) "")
-                                (? !op? (say o (ba ? "" "</a>"), go e 0)
-                                   (string? v) (say o (m2 + "<a href=\"" + v + "\">"), go e 0)
-                                   (say o m2, go e 1)))
-                     (: a (halias? t)
-                      (say o $ op? ? (: tg ("<" + a + snip s k (e - 1) + ">")
-                                        (elem a hinside ? (tg + mk) (mk + tg)))
-                                     ("</" + a + ">"),
-                       go e ba)))))))))
-
-; ---------------------------------------------------------------- html, read
-; an open tag may carry attributes -- `<h1 id="x">` is the same head as `<h1>`, and a page
-; not written by htshow always carries some. accepting them costs law 1 nothing: htshow
-; emits none, so its own output always takes the bare branch.
-(: (otag t)    (alts [(lit ("<" + t + ">"))
-                      (seqs [(lit ("<" + t)) (one ws?) (span (!= 62)) (lit ">")])])
-   (ctag t)    (lit ("</" + t + ">"))
-   hws         (skip (span ws?))
-   (wrapt t a) (seqs [(skip (otag t)) a hws (skip (ctag t))])
-   ; the named entities a document actually spells, and the numeric forms. an unknown name
-   ; rides through as it was written, which is what the markdown surface does with a sigil
-   ; it cannot claim -- better a literal `&foo;` on the page than a silently eaten word.
-   hents '(("amp" "&") ("lt" "<") ("gt" ">") ("quot" "\"") ("apos" "'") ("nbsp" " ")
+; ---------------------------------------------------------------- html entities
+; the named entities a document actually spells, and the numeric forms. an unknown name
+; rides through as it was written, which is what the markdown surface does with a sigil
+; it cannot claim -- better a literal `&foo;` on the page than a silently eaten word.
+; the reader decodes text with these, and the scrub an attribute's value (`hdec`).
+(: hents '(("amp" "&") ("lt" "<") ("gt" ">") ("quot" "\"") ("apos" "'") ("nbsp" " ")
            ("middot" "·") ("mdash" "—") ("ndash" "–") ("hellip" "…") ("bull" "•")
            ("lsquo" "‘") ("rsquo" "’") ("ldquo" "“") ("rdquo" "”") ("copy" "©")
            ("reg" "®") ("trade" "™") ("deg" "°") ("times" "×") ("divide" "÷")
@@ -496,10 +386,237 @@
           (elem (nm 1) '(120 88)) (go 2 16 -1) (go 1 10 -1)))
    (entof nm) ((: (g l) (? (one? l) (: u (hnum nm) (? (string? u) u ("&" + nm + ";")))
                            (<<l = nm) <><l (g >l))) hents)
+   (hdec s)
+    (: n #s o (jug 0)
+       (semi i) ((: (g k) (? (n <= k || i + 12 < k) -1 (s k = 59) k (g (k + 1)))) (i + 1))
+       (go i) (? (n <= i) (slurp o)
+                 (s i = 38) (: e (semi i)
+                               (? (e < 0) (: _ (put o 38) (go (i + 1)))
+                                  (: _ (say o (entof (snip s (i + 1) e))) (go (e + 1)))))
+                 (: _ (put o (s i)) (go (i + 1))))
+       (go 0)))
 
+; ---------------------------------------------------------------- html, scrubbed
+; the roff surface learned this first, and html wants it for the same reason: a page in the
+; wild is mostly not prose. a doctype, a comment, a <head> and everything under it, and the
+; <script>/<style> bodies are not blocks; and a container -- div, nav, section, span -- is
+; not one either, since it wraps blocks rather than being one. so the scrub deletes the
+; first kind whole, opening tag to matching close, and UNWRAPS the second, dropping the tag
+; and keeping what it held. the aliases go here too: <b> is <strong> to a reader with one
+; font, and <br> ends a line the only way this middle can say it.
+(: hkill '("script" "style" "head" "svg" "noscript" "template" "iframe" "object" "select" "datalist")
+   hbare '("div" "nav" "section" "article" "main" "header" "footer" "aside" "span" "body"
+           "html" "figure" "figcaption" "form" "label" "picture" "video" "audio" "canvas"
+           "caption" "colgroup" "col" "button"
+           "font" "center" "small" "big" "abbr" "cite" "time" "mark" "ins" "del" "sup" "sub")
+   halias '(("b" "strong") ("i" "em") ("u" "em") ("strike" "em") ("s" "em") ("q" "em")
+            ("tt" "code") ("kbd" "code") ("samp" "code") ("var" "code") ("dfn" "em")
+            ("h7" "h6") ("h8" "h6") ("menu" "ul") ("dir" "ul"))
+   (hlow t) (:- (go 0) n #t o (jug 0) (go i)
+             (n <= i ? (slurp o) (t i @ c (put o (64 < c < 91 ? (c + 32) c), go (i + 1)))))
+   ; the tag starting at i: [name end-index open?], or () where none does
+   (htag s i)
+    (: n #s
+       (? !(i < n && s i = 60) ()
+          (: c? (i + 1 < n && s (i + 1) = 47)
+             b (? c? (i + 2) (i + 1))
+             (nm k) (? (n <= k) k (elem (s k) '(32 9 10 13 47 62)) k (nm (k + 1)))
+             e (nm b)
+             ; a > inside a quoted value does not end the tag
+             (go k q) (? (n <= k) k
+                         (0 < q) (go (k + 1) (? (s k = q) 0 q))
+                         (s k = 62) (k + 1)
+                         (elem (s k) '(34 39) && s (k - 1) = 61) (go (k + 1) (s k))
+                         (go (k + 1) 0))
+             (? (n <= b || e = b) () [(hlow (snip s b e)) (go e 0) !c?]))))
+   (halias? t) ((: (g l) (? (one? l) t (<<l = t) <><l (g >l))) halias)
+   ; from i, past the matching close of t -- nesting counted, so a <div> inside a killed
+   ; <div> does not end it early. an unclosed one runs to the end, as it does in a browser.
+   (hpast s i t)
+    (:- (go i 1) n #s (go k d)
+     (n <= k ? k
+      (: h (htag s k) (?
+       (one? h) (go (k + 1) d)
+       (<h != t) (go <>h d)
+       <>>h (go <>h (d + 1))
+       (d <= 1) <>h
+       (go <>h (d - 1))))))
+   ; an attribute's value by name, where the name starts a word -- so id= is not data-id= --
+   ; quoted either way, or bare to the next space
+   ; every open tag asks, so it compares in place and allocates only the answer
+   (hattr s k e nm)
+    (: n #nm m (n + 1)
+       (at? i) (: (g j) (? (n <= j) (s (i + n) = 61) (s (i + j) != nm j) 0 (g (j + 1))) (g 0))
+       ((: (go i) (? (e <= i + m) ()
+                     !(s i = nm 0 && elem (s (i - 1)) '(32 9 10 13) && at? i) (go (i + 1))
+                     (s (i + m) @ ((34 || 39) @ c)
+                      ((: (h j) (? (e <= j) () (s j = c) (snip s (i + m + 1) j) (h (j + 1))))
+                       (i + m + 1))
+                      ((: (h j) (? (e <= j || elem (s j) '(32 9 10 13)) (snip s (i + m) j) (h (j + 1))))
+                       (i + m)))))
+        k))
+   ; a place a link can land, in the one shape the reader knows. a name with a quote in it
+   ; cannot be spelled there, and is no place
+   (hmk v)
+    (? (string? v && 0 < #v && (: (g i) (? (#v <= i) 1 (v i = 34) 0 (g (i + 1))) (g 0)))
+       ("<a id=\"" + v + "\"></a>") "")
+   ; the tags whose content is a line of text: a mark goes inside, where the text is; any
+   ; other tag holds blocks or is dropped, and its mark goes ahead of it
+   hinside '("p" "h1" "h2" "h3" "h4" "h5" "h6" "li" "dt" "dd" "td" "th")
+   ; where the page's own content starts, past its menus: a mark whose name has a space,
+   ; which no id can, so it never meets one. <main> or role=main, else an <article>
+   (hmain s t k e)
+    (? (t = "main" || hattr s k e "role" = "main") (hmk " main")
+       (t = "article") (hmk " article")
+       "")
+   (hfind s i pat)                                  ; past the next pat, or the end
+    (:- (go i) n #s m #pat
+     (go k) (? (n < k + m) n (pat = snip s k (k + m)) (k + m) (go (k + 1))))
+   ; a bare attribute -- <input checked> -- by name, where the name starts a word
+   (hflag s k e nm)
+    (: n #nm
+       (go i) (? (e < i + n) 0
+                 (elem (s (i - 1)) '(32 9 10 13) && nm = hlow (snip s i (i + n))
+                  && (i + n = e || elem (s (i + n)) '(32 9 10 13 47 61 62))) 1
+                 (go (i + 1)))
+       (go k))
+   ; a form's name or value as a query spells it: space a +, the rest past the unreserved %XX
+   (hpe s)
+    (: o (jug 0) hx "0123456789ABCDEF"
+       (go i) (? (#s <= i) (slurp o)
+                 (: c (s i)
+                    _ (? ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || elem c '(45 46 95 126)) (put o c)
+                         (c = 32) (put o 43)
+                         (: _ (put o 37) _ (put o (hx (c // 16))) (put o (hx (c % 16)))))
+                    (go (i + 1))))
+       (go 0))
+   ; an attribute's value decoded, or "" where there is none
+   (hval s k e nm) (: v (hattr s k e nm) (? (string? v) (hdec v) ""))
+   ; the option a <select> sends: the selected one, else the first; its value, else its text
+   (hopt s i z)
+    (: (val k e e2) (: v (hattr s k e "value")
+                       (? (string? v) (hdec v)
+                          (hdec ((: (g j) (? (z <= j || s j = 60) (snip s e2 j) (g (j + 1)))) e2))))
+       (go i first)
+        (? (z <= i) (? (string? first) first "")
+           (: h (htag s i)
+              (? (one? h) (go (i + 1) first)
+                 !(<h = "option" && <>>h) (go <>h first)
+                 (: k (i + 7) e (<>h - 1) v (val k e <>h)
+                    (? (hflag s k e "selected") v (go <>h (? (string? first) first v)))))))
+       (go i ()))
+   ; a form's controls from i to z, in order: [at kind name value label], kind 'text for what
+   ; a person types, 'fix for what goes as it stands, 'sub for a submit button
+   (hctls s i z)
+    (: (go i acc)
+        (? (z <= i) (rev acc)
+           (: h (htag s i)
+              (? (one? h) (go (i + 1) acc)
+                 (: t <h e2 <>h k (i + 1 + #t) e (e2 - 1)
+                    nm (hattr s k e "name") v (hval s k e "value")
+                    (? !(<>>h && string? nm) (go e2 acc)
+                       (t = "input")
+                        (: y (hattr s k e "type") ty (? (string? y) (hlow y) "text")
+                           (go e2 (? (ty = "hidden") ([i 'fix nm v ""] . acc)
+                                     (elem ty '("checkbox" "radio"))
+                                      (? (hflag s k e "checked") ([i 'fix nm (? #v v "on") ""] . acc) acc)
+                                     (ty = "submit") ([i 'sub nm v ""] . acc)
+                                     (elem ty '("image" "reset" "button" "file")) acc
+                                     ([i 'text nm v (? #v v (: p (hval s k e "placeholder") (? #p p nm)))] . acc))))
+                       (t = "textarea")
+                        (: z2 (hpast s e2 t)
+                           c (hdec (snip s e2 ((: (g j) (? (j <= e2) e2 (s j = 60) j (g (j - 1)))) (z2 - 1))))
+                           (go z2 ([i 'text nm c (? #c c nm)] . acc)))
+                       (t = "select") (: z2 (hpast s e2 t) (go z2 ([i 'fix nm (hopt s e2 z2) ""] . acc)))
+                       (t = "button")
+                        (: y (hattr s k e "type")
+                           (go e2 (? (!(string? y) || hlow y = "submit") ([i 'sub nm v ""] . acc) acc)))
+                       (go e2 acc))))))
+       (go i ()))
+   ; a get form -> a tablet of its text fields' links by where each tag starts. a field is a
+   ; link to form: + the action + ? + every other control's pair + its own name=value, so a
+   ; browser sends what was typed by putting it in place of what follows that last =. the
+   ; first submit button goes too, as return in a field sends it. a post form lays no field
+   (hform s k e0 e)
+    (: m (hattr s k e0 "method") t (tablet 0)
+       (? (string? m && hlow m != "get") t
+          (: a (hval s k e0 "action")
+             act (: j ((: (g j) (? (#a <= j || elem (a j) '(35 63)) j (g (j + 1)))) 0)
+                    (hesc [[34 "%22"] [38 "%26"] [60 "%3C"]] (snip a 0 j)))
+             cs (hctls s e (hpast s e "form"))
+             sub (: l (filter (c \ c 1 = 'sub) cs) (? (two? l) [<l] ()))
+             kept (filter (c \ c 1 != 'sub) cs)
+             (pair c) (hpe (c 2) + "=" + hpe (c 3))
+             (link c) (: ot (map pair (filter (d \ <d != <c) kept + sub))
+                         lb (c 4)
+                         ("<a href=\"form:" + act + "?" + cats (map (x \ x + "&") ot) + pair c + "\">["
+                          + hq lb + rep "_" (12 - #lb) + "]</a>"))
+             _ (map (c \ pin t <c (link c)) (filter (c \ c 1 = 'text) kept))
+             t)))
+   ; an image is its alt text, bracketed, as lynx shows it; one with none is not there
+   (halt s k e)
+    (: v (hattr s k e "alt")
+       (? (string? v && 0 < #v) ("[" + hesc [[60 "&lt;"]] v + "]") ""))
+   ; s with each byte the table names spelled its way
+   (hesc tb s)
+    (: o (jug 0)
+       (go i) (? (#s <= i) (slurp o)
+                 (: c (s i) r ((: (g l) (? (one? l) () (<(<l) = c) <>(<l) (g >l))) tb)
+                    _ (? r (say o r) (put o c))
+                    (go (i + 1))))
+       (go 0))
+   ; an id is the other attribute the middle keeps: it becomes a mark, inside a tag whose
+   ; content is a line and ahead of any other. `ba` is 1 while an <a> with no href is open:
+   ; that is an anchor, not a link, so its tags go and only its mark and its text stay.
+   (htscrub s)
+    (:- (go 0 0) n #s o (jug 0) fs (pin (tablet 0) 'f (tablet 0))
+     (field i) (peep (fs 'f) i "")
+     (go i ba)
+      (? (n <= i) (slurp o)
+         (i + 3 < n && s i = 60 && s (i + 1) = 33 && s (i + 2) = 45 && s (i + 3) = 45)
+          (go (hfind s (i + 4) "-->") ba)
+         (i + 1 < n && s i = 60 && s (i + 1) = 33)                       ; <!doctype ..>
+          (go ((: (g k) (? (n <= k) k (s k = 62) (k + 1) (g (k + 1)))) (i + 1)) ba)
+         (: h (htag s i)
+            (? (one? h) (put o (s i), go (i + 1) ba)
+               (: t <h e <>h op? <>>h
+                  k (i + 1 + #t)
+                  mk (? op? (hmk (hattr s k (e - 1) "id") + hmain s t k (e - 1)) "")
+                  (? (t = "form") (: _ (pin fs 'f (? op? (hform s k (e - 1) e) (tablet 0))) (say o mk, go e ba))
+                     (t = "input") (say o (mk + field i), go e ba)
+                     (t = "textarea") (say o (mk + field i), go (? op? (hpast s e t) e) ba)
+                     (t = "img") (say o (mk + (? op? (halt s k (e - 1)) "")), go e ba)
+                     (elem t hkill) (go (? op? (hpast s e t) e) ba)
+                     (elem t hbare) (say o mk, go e ba)
+                     (t = "br") (say o "</p><p>", go e ba)
+                     ; a link is the one tag whose attribute the middle keeps, so it is
+                     ; normalized to the shape the reader knows: href alone, and first
+                     (t = "a") (: v (op? && hattr s k (e - 1) "href")
+                                  m2 (? #mk mk op? (hmk (hattr s k (e - 1) "name")) "")
+                                (? !op? (say o (ba ? "" "</a>"), go e 0)
+                                   (string? v) (say o (m2 + "<a href=\"" + v + "\">"), go e 0)
+                                   (say o m2, go e 1)))
+                     (: a (halias? t)
+                      (say o $ op? ? (: tg ("<" + a + snip s k (e - 1) + ">")
+                                        (elem a hinside ? (tg + mk) (mk + tg)))
+                                     ("</" + a + ">"),
+                       go e ba)))))))))
+
+; ---------------------------------------------------------------- html, read
+; an open tag may carry attributes -- `<h1 id="x">` is the same head as `<h1>`, and a page
+; not written by htshow always carries some. accepting them costs law 1 nothing: htshow
+; emits none, so its own output always takes the bare branch.
+(: (otag t)    (alts [(lit ("<" + t + ">"))
+                      (seqs [(lit ("<" + t)) (one ws?) (span (!= 62)) (lit ">")])])
+   (ctag t)    (lit ("</" + t + ">"))
+   hws         (skip (span ws?))
+   (wrapt t a) (seqs [(skip (otag t)) a hws (skip (ctag t))])
    (hraw? c)   (c != 60 && c != 38)                        ; ordinary text runs to the next < or &
 
-   hent    (tag (\ p ['text (entof <p)]) (seqs [(skip (lit "&")) (span (!= 59)) (skip (lit ";"))]))
+   (hname? c)  ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || c = 35)
+   ; an & that starts no entity is itself -- a query's a=1&b=2, or "fish & chips"
+   hent    (alts [(tag (\ p ['text (entof <p)]) (seqs [(skip (lit "&")) (span hname?) (skip (lit ";"))]))
+                  (tag (const '(text "&")) (lit "&"))])
    htext   (tag (\ p ['text (cats p)]) (seq (one hraw?) (span hraw?)))
    hcode   (tag (\ p ['code (plain <p)]) (wrapt "code" (pack (many (alts [hent htext])))))
    hmark   (tag (\ p ['mark (plain (runp (many (alts [hent htext])) <p))])
@@ -569,10 +686,13 @@
 ; ---------------------------------------------------------------- a table, laid out
 ; roff and the terminal both show a table as its columns in plain text: a cell's words, the
 ; columns padded to their widest by the alignment, two spaces between, a dashed rule under
-; the head. a width is counted in characters, not bytes -- a mark like a check is three.
+; the head. a width is counted in characters, not bytes -- a mark like a check is three --
+; and a place ttlinks marked rides in its sentinels (bytes 1 and 2), which have none.
 (: (tplain l) (catmap (x \ <x @ 'text <>x 'code <>x 'strong (tplain <>x) 'em (tplain <>x)
-                            'link (tplain <>x) "") l)
-   (tvw s) ((: (g i n) (? (#s <= i) n (g (i + 1) (? (128 <= s i && s i < 192) n (n + 1))))) 0 0)
+                            'link (tplain <>x) 'tmark (string 1 + <>x + string 2) "") l)
+   (tvw s) ((: (g i n) (? (#s <= i) n
+                          (s i = 1) (g ((: (h k) (? (#s <= k || s k = 2) (k + 1) (h (k + 1)))) i) n)
+                          (g (i + 1) (? (128 <= s i && s i < 192) n (n + 1))))) 0 0)
    (tpad a w s) (: k (w - tvw s)
                    (? (k < 1) s (a = 'r) (rep " " k + s)
                       (a = 'c) (rep " " (k // 2) + s + rep " " (k - k // 2)) (s + rep " " k)))
@@ -1040,12 +1160,13 @@
     (one? l ? [() acc]
      (: r (f <l acc) s (tlmap f >l (r 1)) [(<r . <s) (s 1)]))
    ; an inl -> [inl acc]: a link with a url becomes [n] and its text, acc the urls newest
-   ; first, so n is #acc. an anchor keeps its node -- no url, nothing to number
+   ; first, so n is #acc, and a mark named byte 3 and n goes ahead of it for ttpage to find
+   ; the line by. an anchor keeps its node -- no url, nothing to number
    (tlgo l acc)
     (one? l ? [() acc]
      (: x <l
         r (<x @ 'link   (#(x 2) ? (: a ((x 2) . acc) i (tlspans <>x a)
-                                     [(['text ("[" + show #a + "]")] . <i) (i 1)])
+                                     [(['tmark (string 3 + show #a)] . ['text ("[" + show #a + "]")] . <i) (i 1)])
                                   (: i (tlspans <>x acc) [[['link <i (x 2)]] (i 1)]))
                  'em     (: i (tlspans <>x acc) [[['em <i]] (i 1)])
                  'strong (: i (tlspans <>x acc) [[['strong <i]] (i 1)])
@@ -1102,8 +1223,14 @@
                         (go (e + 1) ln ([(snip t (i + 1) e) ln] . acc)))
            (: c (t i) _ (put o c) (go (i + 1) (c = 10 ? (ln + 1) ln) acc)))
        (go 0 0 ()))
-   ; [text urls anchors]: what a browser shows, follows, and lands on
-   (ttpage d w) (: r (ttlinks d) l (ttlift (ttyshow <r w)) [<l (r 1) <>l])
+   ; [text urls anchors lines]: what a browser shows, follows, and lands on, and the line
+   ; each link was laid on, by n
+   (tldig s) ((: (g i v) (? (#s <= i) v (g (i + 1) ((v * 10) + (s i - 48))))) 1 0)
+   (ttpage d w)
+    (: r (ttlinks d) l (ttlift (ttyshow <r w))
+       (lk? a) (0 < #<a && <a 0 = 3)
+       t (foldl (\ t a (pin t (tldig <a) <>a)) (tablet 0) (filter lk? <>l))
+       [<l (r 1) (filter (a \ !(lk? a)) <>l) (map (i \ peep t (i + 1) -1) ^#(r 1))])
    (ttyshow d w) (catmap (ln \ ln + "\n") (ttdoc d (w < 20 ? 20 w) 5))
    (rf->tty s w) (ttyshow (rfread s) w)
    (md->tty s w) (ttyshow (mdread s) w)

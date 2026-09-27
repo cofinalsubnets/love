@@ -622,10 +622,11 @@
    (x64-lower ins) (: f lower-via (? (lit? f) (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; two relocation kinds: rel32, a 32-bit pc-relative field measured from the end of the field
-   ;; (branches, la); and abs64, an 8-byte absolute address of the label (a pointer baked into data --
+   ;; (branches, la; aux a byte addend, gas's `.long sym - .` riding 4); and abs64, an 8-byte
+   ;; absolute address of the label (a pointer baked into data --
    ;; needs the assembly org set to the load vaddr, which elf64 does).
    (x64-patch kind target site width aux)
-      (kind @ 'rel32 (le32 (target - (site + width)))
+      (kind @ 'rel32 (le32 (target + aux - (site + width)))
           'rel8  (: d (target - (site + width))          ; the relaxer proved the fit at the
                     _ (fits8 d ? 0 (scare 'rel8-range d))   ; pessimistic layout; this scare
                   [(byte d)])                               ; is the loud net under that proof

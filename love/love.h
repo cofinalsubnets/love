@@ -1077,7 +1077,7 @@ static ai_inline word *task_io(struct ai *g) { return &g->tasks[7].x; }
 // on a successful read, and a yield inheriting it would park there for good. g->parked joins the
 // guard: a server whose every client is blocked leaves a self-ring.
 #define YieldCheck() \
-  if ((g->tasks->m != g->tasks || g->parked) && ++g->yield_ctr >= yield_interval) \
+  if (__builtin_expect((g->tasks->m != g->tasks || g->parked) && ++g->yield_ctr >= yield_interval, 0)) \
     { g->next_wait_fd = -1; g->next_wake_at = 0; ai_musttail return Ap(lvm_yield_sw, g); }
 
 // --------------------------------------------------------------------------

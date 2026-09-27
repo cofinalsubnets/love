@@ -60,7 +60,7 @@
 ; tool that would have quit -- the SEAT below is the one site that quits, and a main here
 ; leaves deep through `die`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
-        www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step
+        www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         diff-main as-main ar-main ld-main nm-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
