@@ -65,7 +65,7 @@
 ; leaves deep through `udie`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
-        telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t
+        telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
@@ -783,6 +783,7 @@
             'telnetd telnetd-main                     ; ... and the terminal's server
             'nslookup nslookup-main 'ping ping-main ; a name's records, and icmp echoes (the same)
             'ping6 ping6-main                   ; ... over ipv6
+            'traceroute traceroute-main 'traceroute6 traceroute6-main   ; the hops to a host
             'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
             'nice nice-main 'renice renice-main 'stty stty-main 'microcom microcom-main 'truncate truncate-main
             'setsid setsid-main 'watch watch-main 'usleep usleep-main 'ts ts-main
@@ -1002,6 +1003,8 @@
     'nslookup "usage: nslookup [-type=A|AAAA|CNAME|MX|NS|PTR|SOA|TXT] [-port=N] HOST [SERVER]"
     'ping "usage: ping [-46q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
     'ping6 "usage: ping6 [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
+    'traceroute "usage: traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
+    'traceroute6 "usage: traceroute6 [-nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
     'dd "usage: dd [if=F] [of=F] [bs=N] [count=N] [skip=N] [status=none]"
     'xxd "usage: xxd [-r] [FILE..]"
     'hexdump "usage: hexdump [-Cv] [-n LEN] [-s SKIP] [FILE..]"
@@ -1124,6 +1127,7 @@ every tool answers --help and --version, and -h where the letter is free
   nslookup [-type=T] HOST [SERVER]        a name's records, from a nameserver (apps/kore/net.l)
   ping [-46q] [-c N] [-i S] [-W S] HOST   icmp echoes and their round trips (apps/kore/net.l)
   ping6 [-q] [-c N] [-i S] [-W S] HOST    the same over ipv6 (apps/kore/net.l)
+  traceroute [-46n] [-m MAX] [-q N] HOST  the routers on the way, by icmp echoes (the same)
   sh [-c CMD | FILE]                      the shell, lush (apps/lush.l)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (apps/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs

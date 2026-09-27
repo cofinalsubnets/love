@@ -28,10 +28,13 @@ struct sockaddr_in6 {
 #define IPPROTO_UDP 17
 #define IPPROTO_IPV6 41
 #define IPPROTO_ICMPV6 58
-/* IPPROTO_IP's options, linux's numbers: the bsd seam passes these through untranslated.
- * IPPROTO_IPV6's are translated, and a name without a row there is refused */
+/* IPPROTO_IP's and IPPROTO_IPV6's options, linux's numbers: the bsd seam translates
+ * both, and a name without a row there is refused (the error queue's have none) */
 #define IP_TTL           2
+#define IP_RECVERR       11
 #define IP_RECVTTL       12
+#define IPV6_UNICAST_HOPS 16
+#define IPV6_RECVERR     25
 #define IPV6_V6ONLY      26
 #define IPV6_RECVHOPLIMIT 51
 #define IPV6_HOPLIMIT    52

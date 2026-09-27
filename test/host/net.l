@@ -223,6 +223,68 @@
          ((K 'ping-ms) "1" = 1000) ((K 'ping-ms) "0.2" = 200) ((K 'ping-ms) "2.5" = 2500)
          ((K 'ping-ms) "x" = ()) ((K 'ping-t) 84000 = "0.084") ((K 'ping-t) 11331000 = "11.331")))
 
+; -- traceroute ---------------------------------------------------------------------------
+; a small internet in namespaces, where unshare, ip and nsenter can make one: ours, a router
+; (its icmp rate limits off) and a target behind it, v4 and v6. each traceroute runs twice,
+; first on a raw socket (a fresh namespace shuts ping_group_range) and then on the echo
+; socket with its error queue: the router at hop 1, the target at 2, and !N for a network
+; the router has no route to. a ping6 first, so neighbour discovery is done before timing.
+; the unreachable marks off tr-mark, and the loopback trace, run everywhere
+(: K (cite 'kore)
+   love <cmdline
+   dir "out/.nettest"
+   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
+   sfile (dir + "/nsnet.sh")
+   _ (: p (open sfile "w")
+        _ (say p "LOVE=$1
+ip link set lo up || exit 99
+unshare -n sleep 30 & R=$!
+unshare -n sleep 30 & D=$!
+sleep 0.3
+ip link add a0 type veth peer name r0 netns $R || exit 99
+nsenter -t $R -n ip link add r1 type veth peer name d0 netns $D || exit 99
+ip addr add 10.1.0.1/24 dev a0; ip -6 addr add fd01::1/64 dev a0 nodad; ip link set a0 up
+ip route add default via 10.1.0.2; ip -6 route add default via fd01::2
+nsenter -t $R -n sh -c 'ip link set lo up
+  ip addr add 10.1.0.2/24 dev r0; ip -6 addr add fd01::2/64 dev r0 nodad; ip link set r0 up
+  ip addr add 10.2.0.1/24 dev r1; ip -6 addr add fd02::1/64 dev r1 nodad; ip link set r1 up
+  echo 1 > /proc/sys/net/ipv4/ip_forward; echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
+  echo 0 > /proc/sys/net/ipv4/icmp_ratelimit; echo 0 > /proc/sys/net/ipv6/icmp/ratelimit' || exit 99
+nsenter -t $D -n sh -c 'ip link set lo up
+  ip addr add 10.2.0.2/24 dev d0; ip -6 addr add fd02::2/64 dev d0 nodad; ip link set d0 up
+  ip route add default via 10.2.0.1; ip -6 route add default via fd02::1' || exit 99
+$LOVE kore ping6 -c 1 -W 2 fd02::2 > /dev/null
+for mode in raw echo; do
+  [ $mode = echo ] && echo '0 0' > /proc/sys/net/ipv4/ping_group_range
+  echo \"== $mode\"
+  $LOVE kore traceroute -n -q 1 -w 1 10.2.0.2
+  $LOVE kore traceroute -n -q 1 -w 1 -m 3 10.3.0.9
+  $LOVE kore traceroute6 -n -q 1 -w 1 fd02::2
+  $LOVE kore traceroute6 -n -q 1 -w 1 -m 3 fd03::9
+done
+kill $R $D
+")
+        (close p))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (has? t s) (0 <= (K 'wg-find) t s 0)
+   (count t s) ((: (g i k) (: j ((K 'wg-find) t s i) (? (j < 0) k (g (j + 1) (k + 1))))) 0 0)
+   r (tether ["/bin/sh" "-c" ("unshare -rn true 2>/dev/null || exit 99; exec unshare -rn sh " + sfile + " " + love)])
+   txt (slurp >r)
+   st <(waitfor <r)
+   k ((K 'wg-find) txt "== echo" 0)
+   halves (? (0 <= k) [(snip txt 0 k) (snip txt k #txt)] ["" ""])
+   _ (? (st = 99) 0
+        (map (h \ test (has? h " 1  10.1.0.2  ") (has? h " 2  10.2.0.2  ") (has? h " 1  fd01::2  ")
+                        (has? h " 2  fd02::2  ") (count h " ms !N" = 2))
+             halves))
+   ; the marks: v4's unreachable codes, v6's, and a time exceeded that marks nothing
+   _ (test ((K 'tr-mark) 0 3 1 = " !H") ((K 'tr-mark) 0 3 3 = "") ((K 'tr-mark) 0 11 0 = "")
+           ((K 'tr-mark) 1 1 0 = " !N") ((K 'tr-mark) 1 1 4 = "") ((K 'tr-mark) 1 3 0 = ""))
+   lo (: r (tether [love "kore" "traceroute" "-n" "-q" "1" "127.0.0.1"]) t (slurp >r) [t <(waitfor <r)])
+   (? (has? <lo "no icmp echo socket") (test (lo 1 = 2))
+      (test (has? <lo "traceroute to 127.0.0.1 (127.0.0.1), 30 hops max, 60 byte packets")
+            (has? <lo " 1  127.0.0.1  ") (lo 1 = 0))))
+
 ; -- httpd -------------------------------------------------------------------------------
 (: K (cite 'kore)
    love <cmdline

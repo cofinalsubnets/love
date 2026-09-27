@@ -7,6 +7,7 @@
 ;   nslookup [-type=T] HOST [SERVER]  a name's records, asked of a nameserver directly
 ;   ping [-46q] [-c N] [-i S] [-W S] [-s N] HOST  icmp echoes and their round trips
 ;   ping6 [-q] [-c N] [-i S] [-W S] [-s N] HOST   the same over ipv6 (ping -6)
+;   traceroute [-46nI] [-f F] [-m M] [-q N] [-w S] HOST   the routers on the way (traceroute6)
 ;
 ; telnet is nc (apps/ain.l) with the protocol's options answered (RFC 854, 855): it lets the
 ; server echo and suppress go-ahead, offers to suppress go-ahead itself, refuses every other
@@ -386,6 +387,107 @@
        t1 (clock 0)
        _ ((: (g _) (? (st 'got < st 'sent && clock 0 - t1 < wait) (: _ (rest 10) (g 0)) 0)) 0)
        (fin 0))
+
+   ; -- traceroute ---------------------------------------------------------------------
+   ; icmp echoes with the ttl rising from -f (1) to -m (30), -q (3) to each hop: the routers'
+   ; time-exceeded errors come back through (bind [.. 'errs]), the target's echo reply ends
+   ; it, and so does an unreachable (marked !N !H !P !X). each probe waits -w seconds (3).
+   ; a router's name is its PTR off the first nameserver unless -n. busybox's probes are udp;
+   ; these are what its -I sends, the one kind an unprivileged linux socket may send
+   tr-usage "usage: traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
+   tr6-usage "usage: traceroute6 [-nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
+   (traceroute-main as) (tr-run 0 as)
+   (traceroute6-main as) (tr-run 1 as)
+   ; an unreachable's code -> its mark, "" when it means the target answered (port, v4 3; v6 4)
+   (tr-mark six type code)
+    (? six (? (type = 1) (? (code = 4) "" (code = 0) " !N" (code = 3) " !H" " !X") "")
+       (type = 3) (? (code = 3) "" (code = 0) " !N" (code = 1) " !H" (code = 2) " !P" " !X")
+       "")
+   (tr-run six? as)
+    (: t (tablet 0)
+       nm (? six? "traceroute6" "traceroute")
+       use (? six? tr6-usage tr-usage)
+       o (uopt as t '(102 109 113 119) () ())
+       _ (? (two? o) 0 (udie 2 use))
+       _ (: u (uoptun t (? six? '(102 109 113 119 110 73) '(102 109 113 119 110 73 52 54)))
+            (? (nil? u) 0 (udie 2 (nm + ": unknown option -" + string u + "\n" + use))))
+       ops (o 2)
+       _ (? ((two? ops) && (one? >ops)) 0 (udie 2 use))
+       (num c d lo) (: v (uoptv t c)
+                       (? (nil? v) d (: n (unum v) (? (charm? n && lo <= n && n <= 255) n (udie 2 (nm + ": bad -" + string c + " " + v))))))
+       first (num 102 1 1) most (num 109 30 1) nq (num 113 3 1)
+       wait (: v (uoptv t 119) (? (nil? v) 3000 (: m (ping-ms v) (? (charm? m && 0 < m) m (udie 2 (nm + ": bad -w " + v))))))
+       _ (? (first <= most) 0 (udie 2 (nm + ": -f is past -m")))
+       names? !(peep t 110 0)
+       host <ops
+       D (cite 'dns)
+       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 ((D 'dns-colon?) host))
+       ad (? six ((D 'resolve6) host)
+             (two? ((D 'dns-quad) host)) (map (D 'dns-show) ((D 'dns-quad) host))
+             (map (D 'dns-show) ((D 'resolve) host)))
+       _ (? (two? ad) 0 (udie 1 (nm + ": bad address '" + host + "'")))
+       ip <ad
+       p (bind [(? six 'icmp6 'icmp) 'errs])
+       _ (? (nom? p)
+            (udie 2 (nm + ": no icmp" + (? six "6" "") + " echo socket here (" + show p
+                     + "); it wants root, or on linux your group in net.ipv4.ping_group_range")) 0)
+       size (8 + 32)
+       _ (: _ (say out (nm + " to " + host + " (" + ip + "), " + show most + " hops max, "
+                        + show (size + (? six 40 20)) + " byte packets\n")) (flush out))
+       (pkt n) (string (? six 128 8) + string 0 + "\x00\x00\x00\x00" + string (n >> 8 & 255) + string (n & 255)
+                + catmap (i \ string (i & 255)) ^32)
+       ; a router's name, once each: its PTR off the first nameserver, else its address
+       names (tablet 0)
+       ns (: s ((D 'dns-servers) "/etc/resolv.conf") (? (two? s) <s ()))
+       (name a)
+        (? (!names? || six || nil? ns) a
+           (: c (peep names a ())
+              (? !(nil? c) c
+                 (: r ((D 'dns-raw) <ns >ns ((D 'dns-qedns) 7711 (ns-rev a) 12) 1000)
+                    rs (? (string? r) ((D 'dns-records) r 7711) ())
+                    ptr (? (two? rs) (filter (x \ x 1 = 12) (rs 2)) ())
+                    v (? (two? ptr) (<ptr 2) a)
+                    _ (pin names a v)
+                    v))))
+       ; the answer to probe n, or () when -w passes first: a stray (a late answer to an
+       ; earlier probe) is skipped
+       (answer n until)
+        (: left (until - clock 0)
+           (? (left < 1) ()
+              (: r (twirl (_ \ recv p) ())
+                 w (twirl (_ \ (: _ (rest left) (freeze r))) ())
+                 d (catch r)
+                 _ (freeze w)
+                 b (? (two? d) <>d "")
+                 (? !(two? d) ()
+                    ((8 <= #b) && ((b 6 * 256 + b 7) = n)) d
+                    (answer n until)))))
+       ; one hop: nq probes, a line -> 1 once the target or an unreachable answered
+       (hop h)
+        (: _ (say out (? (h < 10) (" " + show h) (show h)))
+           (probe k last done)
+            (? (nq <= k) done
+               (: n (: v (peep t 'seq 0) _ (pin t 'seq ((v + 1) & 65535)) v)
+                  t0 (nclock 0)
+                  _ (send p [ip 0 'ttl h] (pkt n))
+                  d (answer n (clock 0 + wait))
+                  (? (nil? d)
+                     (: _ (say out " *") _ (flush out) (probe (k + 1) last done))
+                     (: rt (nclock t0)
+                        a <<d
+                        kind (? (two? >>>d) (d 3) ())
+                        _ (? (a = last) 0 (say out ("  " + (? names? (name a + " (" + a + ")") a))))
+                        mark (? (two? kind) (tr-mark six <kind (kind 1)) "")
+                        _ (: _ (say out ("  " + ping-t rt + " ms" + mark)) (flush out))
+                        end (? (nil? kind) 1 (? six (<kind = 1) (<kind = 3)) 1 0)
+                        (probe (k + 1) a (? end 1 done))))))
+           r (probe 0 "" 0)
+           _ (: _ (say out "\n") (flush out))
+           r)
+       (go h) (? (most < h) 0 (? (hop h) 0 (go (h + 1))))
+       _ (go first)
+       _ (close p)
+       (quit 0))
 
    ; -- httpd --------------------------------------------------------------------------
    ; busybox's flags onto kiosko's serve. the value flags it does not have are still read

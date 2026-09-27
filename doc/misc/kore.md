@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (192 tools, 199 names)
+## the inventory (193 tools, 201 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -104,7 +104,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
-| net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6) |
+| net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -592,7 +592,7 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
 utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
 
-## telnet, telnetd, httpd, nslookup, ping and ping6 (apps/kore/net.l)
+## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (apps/kore/net.l)
 
 `telnet HOST [PORT]` is nc (apps/ain.l) with the telnet protocol's options answered
 (RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
@@ -643,6 +643,16 @@ After the last echo it waits up to `-W` seconds (10) for the rest. It exits 0 wh
 reply came back and 1 otherwise. It uses Linux's unprivileged ICMP echo socket, open to the
 groups in `net.ipv4.ping_group_range`, or else a raw ICMP socket, which needs root; FreeBSD
 and NetBSD have only the raw kind. Where both are refused it says so.
+
+`traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST` (and `traceroute6`) sends
+ICMP echoes with the TTL rising from `-f` (1) to `-m` (30), `-q` (3) to each hop, and prints
+busybox's lines: each hop's router, as its PTR name off the first nameserver unless `-n`, and
+each probe's round trip or `*` after `-w` seconds (3). The target's reply ends it, and so does
+an unreachable, marked `!N` `!H` `!P` or `!X`. Busybox's probes are UDP by default; these are
+the ICMP ones its `-I` sends, the one kind Linux's unprivileged echo socket can send, and
+that socket brings the routers' errors back on its error queue (`IP_RECVERR`). A raw socket
+(root, and the BSDs) reads them as they come. NetBSD's raw socket sends every packet at TTL
+255 whatever it is asked, so there traceroute sees only the target.
 
 `ping6`, or `ping -6`, or `ping` given an address with a colon in it, does the same over
 ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` in
@@ -769,9 +779,9 @@ over the packages above.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 202 | 389 | 239 | 191 | 107 | 260 |
-| shared with kore | | 168 | 142 | 135 | 101 | 49 |
-| carried by no one else | 11 | 154 | 30 | 48 | 0 | 203 |
+| names | 204 | 389 | 239 | 191 | 107 | 260 |
+| shared with kore | | 170 | 142 | 135 | 101 | 49 |
+| carried by no one else | 11 | 152 | 30 | 48 | 0 | 203 |
 
 What at least three of the other five carry and kore does not: `fmt`, `pr`, `uncompress`.
 
@@ -1015,6 +1025,8 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 | `top` | ✓ | ✓ | ✓ |  |  |  |
 | `touch` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `tr` | ✓ | ✓ |  | ✓ | ✓ | ✓ |
+| `traceroute` | ✓ | ✓ |  |  |  |  |
+| `traceroute6` | ✓ | ✓ |  |  |  |  |
 | `true` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `truncate` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `ts` | ✓ | ✓ | ✓ |  |  |  |
@@ -1058,7 +1070,7 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 
 The names only one carries:
 
-* **busybox alone** (154): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping`
+* **busybox alone** (152): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping`
   `bbconfig` `beep` `bootchartd` `brctl` `chat` `chpasswd` `chpst` `crond` `crontab` `cryptpw`
   `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap` `dumpleases` `envdir`
   `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash` `fdflush` `fdformat`
@@ -1072,9 +1084,9 @@ The names only one carries:
   `runsvdir` `rx` `script` `scriptreplay` `seedrng` `sendmail` `setarch` `setconsole` `setfont`
   `setkeycodes` `setlogcons` `setpriv` `setserial` `setuidgid` `showkey` `slattach` `smemcap`
   `softlimit` `ssl_client` `start-stop-daemon` `sulogin` `sv` `svc` `svlogd` `svok` `syslogd`
-  `tc` `tcpsvd` `tftp` `tftpd` `traceroute` `traceroute6` `tree` `ttysize` `tune2fs`
-  `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol` `ubirsvol` `ubiupdatevol` `udhcpc`
-  `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `vlock` `volname` `whois` `zcip`
+  `tc` `tcpsvd` `tftp` `tftpd` `tree` `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol`
+  `ubirename` `ubirmvol` `ubirsvol` `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd`
+  `uevent` `unlzop` `vlock` `volname` `whois` `zcip`
 * **toybox alone** (30): `acpi` `count` `devmem` `fstype` `getconf` `gpiodetect` `gpiofind`
   `gpioget` `gpioinfo` `gpioset` `help` `host` `iorenice` `iotop` `mcookie` `memeater` `mix`
   `nbd-server` `netcat` `nologin` `oneit` `prlimit` `pwgen` `sntp` `uclampset` `ucsicontrol`
