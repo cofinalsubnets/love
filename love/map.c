@@ -324,17 +324,38 @@ uintptr_t hash(struct ai *g, intptr_t x) {
 // it will not residualize; 3 fold the cells of the object tray in *src over the header hash
 // in *out. a chain never arrives -- hash_at spines it -- and a sourced lambda leaves by 1
 // or 2, which is what keeps this side free of the source walk.
+// a function hashes as `=` reads it (arr.c's fn_eq): its thread's words from the value to the
+// terminator, a pointer back into its own thread by its offset, any other heap word by being
+// one -- the worklist compares those, and a hash owes `=` only that what it joins hashes alike.
+// a partial folds its base and its captures, a native is its twin, a carrier its length (it
+// is equal to itself alone). out of the pool, an offset from hash_base. all GC-stable
+static uintptr_t fn_hash(struct ai *g, word x) {
+ x = fn_meaning(g, x);
+ if (!in_heap(g, x)) return rot(((intptr_t) x - (intptr_t) hash_base) * mix);
+ union u *k = cell(x);
+ struct ai_tag *tg = ttag(g, k);
+ uintptr_t h = mix;
+ if (fn_carrier(k)) {
+  for (union u *y = k; y < (union u*) tg; y++) h ^= h * mix;
+  return h; }
+ if (fn_partialp(k)) {
+  int n;
+  union u *b = fn_base(k, &n);
+  h = (fn_hash(g, (word) b) ^ (uintptr_t) n) * mix;
+  for (int i = 0; i < n; i++) { word v = fn_arg(k, i, n); h = (h ^ (uintptr_t) (charmp(v) ? v : 2)) * mix; }
+  return h; }
+ word hd = (word) tag_head(tg), e = (word) tg;
+ for (union u *y = k; y < (union u*) tg; y++) {
+  word v = y->x;
+  uintptr_t t = (v & 1) ? (uintptr_t) v
+              : v >= hd && v <= e ? (uintptr_t) (v - x)
+              : in_heap(g, v) ? 2 : (uintptr_t) (v - (intptr_t) hash_base);
+  h = (h ^ t) * mix; }
+ return h; }
+
 int hash_leaf(struct ai *g, word x, uintptr_t *out, word *src) {
  if (charmp(x)) return *out = rot(x*mix), 0;
- if (!datp(x)) {
-   // out-of-pool: offset from hash_base. in-pool: a sourced lambda hashes its
-   // \-expr α-invariantly (agreeing with `=`), else by length. all GC-stable.
-   if (!in_heap(g, x)) return *out = rot(((intptr_t) x - (intptr_t) hash_base) * mix), 0;   // a tenured closure lives in the major pool, still in-heap
-   union u *k = cell(x); struct ai_tag *tg = ttag(g, k);
-   if (tag_head(tg) < k) return *src = k[-1].x, 1;      // no-capture lambda: α-invariant source hash
-   uintptr_t r = mix;                                   // the fallback if the bridge declines (continuation /
-   for (union u *y = k; y < (union u*) tg; y++) r ^= r * mix;   // handle / bif-based partial-app): by object length
-   return *out = r, *src = x, 2; }
+ if (!datp(x)) return *out = fn_hash(g, x), 0;
  switch (typ(x)) {
    case DChain: break;                            // hash_at spines a chain; one reaching here is a bug
    case DMint: return *out = sym(x)->serial, 0;

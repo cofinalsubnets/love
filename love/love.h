@@ -1122,6 +1122,7 @@ uintptr_t
 struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
 intptr_t
  fn_arg(union u *k, int i, int nargs),
+ fn_meaning(struct ai *c, word x),
  vcmp_flo(int op, ai_flo_t a, ai_flo_t b),
  vcmp_int(int op, intptr_t a, intptr_t b),
  io_route(struct ai *g, word x),
@@ -1135,6 +1136,7 @@ bool
  bio_rpending(struct ai_bio *b),
  wait_buffered(struct ai *g, lvm_t *ap, word x, int fd),
  fn_partialp(union u *k),
+ fn_carrier(union u *k),
  in_heap(struct ai *c, word x),
  iop(word x),
  lam_isp(struct ai *g, word x);

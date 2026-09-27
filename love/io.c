@@ -522,6 +522,22 @@ word fn_arg(union u *k, int i, int nargs) { // i-th arg in application order
  union u *u = fn_unc0(k);
  for (int w = nargs - 1 - i; w > 0; w--) u = u[2].m;
  return u[1].x; }
+// what `=` and the hash read a function value as: a native is its bytecode twin (the code
+// is a copy of it, at an address of its own), anything else itself. a native is the one
+// cell whose header repeats its code word, two words ahead of the value (map.c's nifx), and
+// a twin may be a native again -- a lane that wraps another's answer -- so this unwraps to
+// the bytecode
+word fn_meaning(struct ai *c, word x) {
+ while (evenp(x) && !datp(x) && in_heap(c, x)) {
+  union u *k = cell(x), *h = tag_head(ttag(c, k)), *cd = k[0].ap == lvm_cur ? k + 2 : k;
+  if (!(h == k - 2 && h[0].ap == cd[0].ap && cd[2].ap == lvm_ret)) break;
+  x = cd[1].x; }
+ return x; }
+// the threads that are carriers, not code: a tablet's two halves, a cask, a coin, a port.
+// they are what they are by identity, never by their words
+bool fn_carrier(union u *k) {
+ return k[0].ap == lvm_map_lookup || k[0].ap == lvm_map_data || k[0].ap == lvm_cask
+     || k[0].ap == lvm_coin || k[0].ap == lvm_port_io; }
 
 // the source \-expr stashed at value[-1] by a compiled lambda, or 0. only an ala/k0s
 // lambda reserves that leading cell, so probe the tag rather than read value[-1] -- a
