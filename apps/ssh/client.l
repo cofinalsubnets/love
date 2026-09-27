@@ -1,13 +1,15 @@
 ; apps/ssh/client.l -- an ssh-2 client: transport (RFC 4253), publickey auth (4252), one
 ; session channel (4254). one of everything: curve25519-sha256 for the exchange, an
-; ssh-ed25519 host key, chacha20-poly1305@openssh.com both ways, and an unencrypted
-; ed25519 identity -- what a modern OpenSSH offers first.
+; ssh-ed25519 host key, chacha20-poly1305@openssh.com both ways, and an ed25519
+; identity, bare or as ssh-keygen locks one -- what a modern OpenSSH offers first.
 ;
 ;   (ssh-dial host port)          connect, exchange keys, check the host -> session | a reason string
 ;   (ssh-auth t user seed pub)    publickey auth -> 1 | a reason string
 ;   (ssh-run t cmd pty?)          a session channel: exec cmd, or a shell for () -> exit status;
 ;                                 a pty follows the terminal's size on each SIGWINCH
-;   (ssh-key path)                an openssh-key-v1 file -> [seed pub] | a reason string
+;   (ssh-key path ask)            an openssh-key-v1 file -> [seed pub] | a reason string;
+;                                 (ask path) -> the passphrase | (), asked only of a locked key
+;   (ssh-keytext path txt ask)    the same over the file's text, path only naming it
 ;
 ; the session is a tablet like tls's: the socket, a pending run, a sequence number and
 ; key pair each way, the session id. the chacha key is 64 bytes, the payload key first
@@ -197,23 +199,37 @@
                         ("permission denied (" + join "," (g-names c) + ")"))
           "unexpected auth reply"))
 
-   ; --- the identity: openssh-key-v1 (PROTOCOL.key), unencrypted ed25519 only ---
-   (ssh-key path)
+   ; --- the identity: openssh-key-v1 (PROTOCOL.key), an ed25519 key, bare or under aes-ctr ---
+   ; the cipher's key length, 0 for none, -1 for what is not read
+   (key-len ciph) (? (ciph = "none") 0 (ciph = "aes128-ctr") 16 (ciph = "aes192-ctr") 24
+                     (ciph = "aes256-ctr") 32 -1)
+   ; the private section in the clear: bcrypt_pbkdf gives the aes key and then the iv
+   (unlock kl ko pass enc)
+    (: salt (g-str ko) rounds (g-u32 ko)
+       kiv (bcrypt-pbkdf pass salt rounds (kl + 16))
+       (aes-ctr (aes-keys (snip kiv 0 kl)) (snip kiv kl (kl + 16)) enc))
+   (ssh-key path ask)
     (: q (open path "r")
        (? !(hot? q) ("cannot read " + path)
-          (: txt (slurp q) _ (close q)
-             body (join "" (filter (l \ !((0 < #l) && (l 0 = 45))) (split txt 10)))
-             b (b64d body)
-             magic "openssh-key-v1"
-             (? !((snip b 0 14) = magic) (path + ": not an openssh private key")
-                (: c (cur b) _ (g-skip c 15)
-                   ciph (g-str c) _ (g-str c) _ (g-str c) _ (g-u32 c) _ (g-str c)
-                   pc (cur (g-str c))
-                   c1 (g-u32 pc) c2 (g-u32 pc) ty (g-str pc) pk (g-str pc) sk (g-str pc)
-                   (? !(ciph = "none") (path + ": encrypted keys are not supported yet")
-                      !(c1 = c2) (path + ": damaged key")
-                      !(ty = "ssh-ed25519") (path + ": " + ty + " keys are not supported yet")
-                      [(snip sk 0 32) pk]))))))
+          (: txt (slurp q) _ (close q) (ssh-keytext path txt ask))))
+   (ssh-keytext path txt ask)
+    (: body (join "" (filter (l \ !((0 < #l) && (l 0 = 45))) (split txt 10)))
+       b (b64d body)
+       magic "openssh-key-v1"
+       (? !((snip b 0 14) = magic) (path + ": not an openssh private key")
+          (: c (cur b) _ (g-skip c 15)
+             ciph (g-str c) kdf (g-str c) ko (cur (g-str c)) _ (g-u32 c) _ (g-str c)
+             enc (g-str c)
+             kl (key-len ciph)
+             (? (kl < 0) (path + ": keys under " + ciph + " are not supported")
+                ((0 < kl) && !(kdf = "bcrypt")) (path + ": the kdf " + kdf + " is not supported")
+                (: pass (? (0 < kl) (ask path) "")
+                   (? !(string? pass) (path + ": no passphrase")
+                      (: pc (cur (? (0 < kl) (unlock kl ko pass enc) enc))
+                         c1 (g-u32 pc) c2 (g-u32 pc) ty (g-str pc) pk (g-str pc) sk (g-str pc)
+                         (? !(c1 = c2) (path + (? (0 < kl) ": incorrect passphrase" ": damaged key"))
+                            !(ty = "ssh-ed25519") (path + ": " + ty + " keys are not supported yet")
+                            [(snip sk 0 32) pk]))))))))
 
    ; --- the session channel (RFC 4254) ---
    lwin (1 << 21)

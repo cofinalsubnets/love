@@ -7,6 +7,10 @@
 ;   ed25519  RFC 8032 §7.1 tests 1-3: the public key, the signature, and verify's
 ;            answer on it and on each way of spoiling it.
 ;   wire     RFC 4251 §5's mpint examples, and base64 both ways on a key blob.
+;   aes      FIPS 197 appendix C's three key sizes, and SP 800-38A F.5.5's ctr blocks.
+;   locked   a key ssh-keygen locked (aes256-ctr, bcrypt 4 rounds, "hunter2 pass"):
+;            the seed and public key come out as the bare key's, a wrong passphrase
+;            and none are told apart, and bcrypt-hash refuses a short state.
 ;
 ; the transport runs against a live sshd, which no gate stands up; see apps/ssh/ssh.l.
 ;
@@ -66,7 +70,39 @@
  ((b64d "YWJj\nZA==") = "abcd")
  ((split "a,b,,c" 44) = ["a" "b" "" "c"]))
 
+; --- aes ---------------------------------------------------------------------------
+(: ssht-pt (unhex "00112233445566778899aabbccddeeff")
+   ssht-k (\ n (bytes n (i \ i))))
+(test
+ ((hex (aes-block (aes-keys (ssht-k 16)) ssht-pt)) = "69c4e0d86a7b0430d8cdb78070b4c55a")
+ ((hex (aes-block (aes-keys (ssht-k 24)) ssht-pt)) = "dda97ca4864cdfe06eaf70a0ec0d7191")
+ ((hex (aes-block (aes-keys (ssht-k 32)) ssht-pt)) = "8ea2b7ca516745bfeafc49904b496089")
+ ((hex (aes-ctr (aes-keys (unhex "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4"))
+                (unhex "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff")
+                (unhex "6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e5130c8")))
+  = "601ec313775789a5b7a7f504bbf3d228f443e3ca4d62b59aca84e990cacaf5c52b09"))
+
+; --- locked ------------------------------------------------------------------------
+(: ssht-locked "-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABAq+kveuN
+Z17BsmPa1Md8wXAAAABAAAAAEAAAAzAAAAC3NzaC1lZDI1NTE5AAAAIDcERXZe0kI6eIjy
+5PUJU++85fY6HsCmyORUx/NzZHOyAAAAkPN3f5IjZ2sIsQeYZzexRxAA+EgLNM+MebY3VC
+m594r+i1s31ys6d00QWdtc50oWaqi9ulHjKG2pHzs1gwVASTmxJAiVZmeg3xuQQRyGj4n0
+yhcmcvR1Kk/5mDAkkx6AfTGCj1aECfbQ0DY0aadgW+MGRmQn3ZqCXwiKZO/KYWdeipu8Gy
+fW2MNFrwA/N0XZFA==
+-----END OPENSSH PRIVATE KEY-----
+"
+   ssht-open (\ pw (ssh-keytext "k" ssht-locked (_ \ pw))))
+(test
+ ((ssht-open "hunter2 pass")
+  = [(unhex "d4f658b3f8b868eab4eb83ad53111e2d8662b20739cf7067d6a14ea7de9dce29")
+     (unhex "370445765ed2423a7888f2e4f50953efbce5f63a1ec0a6c8e454c7f3736473b2")])
+ ((ssht-open "hunter3 pass") = "k: incorrect passphrase")
+ ((ssht-open ()) = "k: no passphrase")
+ (nil? (bcrypt-hash (zeros 4167) (zeros 64) (zeros 64))))
+
 (test_fin (),
- puts "apps/ssh: ok -- sha512 (fips 180-4), ed25519 (rfc 8032 7.1), mpint + base64
+ puts "apps/ssh: ok -- sha512 (fips 180-4), ed25519 (rfc 8032 7.1), mpint + base64,
+aes (fips 197, sp 800-38a), a locked key (bcrypt_pbkdf + aes256-ctr)
 ",
  0)
