@@ -38,25 +38,25 @@
    t (ticker n)
    _ (rest 20)                          ; both reach their parks; the ticker spins
    k (peep n 0 0)
-   c (connect "127.0.0.1" port)
+   c (connect ['tcp "127.0.0.1" port])
    _ (catch srv)
    _ (freeze t)
    _ (close c)
    _ (close l)
    _ (assert (0 < k)))                  ; a blocking accept never gets here at all
 
-; --- law 2: udp-recv parks on a quiet socket ----------------------------------
+; --- law 2: recv parks on a quiet socket ----------------------------------
 ; the same law on the datagram side. The peer address is (ipv4 << 16) | port --
 ; 127.0.0.1 is 2130706433 -- which is how inle/sock.c marshals a sockaddr into a
 ; charm.
-(: p (udp-bind 7395)
+(: p (bind ['udp 7395])
    n {}
-   rx (twirl (\ _ (: d (udp-recv p) (close p, >d))) ())
+   rx (twirl (\ _ (: d (recv p) (close p, <>d))) ())
    t (ticker n)
    _ (rest 20)
    k (peep n 0 0)
-   s (udp-bind 7396)
-   _ (udp-send s (2130706433 * 65536 + 7395) "ping")
+   s (bind ['udp 7396])
+   _ (send s ["127.0.0.1" 7395] "ping")
    got (catch rx)
    _ (freeze t)
    _ (close s)
@@ -121,11 +121,11 @@
 (: port 7397
    l (listen port)
    n {}
-   a (connect "127.0.0.1" port)         ; the witness: one that lands, kept open
-   (fillq k) (k @ 0 0 (: c (connect "127.0.0.1" port) (close c, fillq (k - 1))))
+   a (connect ['tcp "127.0.0.1" port])         ; the witness: one that lands, kept open
+   (fillq k) (k @ 0 0 (: c (connect ['tcp "127.0.0.1" port]) (close c, fillq (k - 1))))
    _ (fillq 512)                        ; a + 512 = 513 = backlog + 1: the queue is full
    t (ticker n)
-   s (twirl (_ \ connect "127.0.0.1" port) ())   ; the next: syn dropped, stalls
+   s (twirl (_ \ connect ['tcp "127.0.0.1" port]) ())   ; the next: syn dropped, stalls
    _ (rest 50)
    k (peep n 0 0)
    _ (close l)                          ; ... which resets it, so the task ends

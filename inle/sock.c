@@ -1,13 +1,14 @@
 // FIXME merge into posix.c?
-// inle/sock.c -- every socket nif, both address families: TCP/UDP (ain's netcat core and
-// inle's oracle wire), unix-domain connect (lux's X display door) and listen (the shore
-// lux moors at). auto-globbed and LvNif-registered. every stream nif mirrors main.c's
-// lvm_open: produce an OS fd, hand it to host_port -> a heap port carrying a close
-// finalizer. once an fd is a port, read and write come free through fgetc/fputc.
+// inle/sock.c -- every socket nif. three make a socket -- connect, listen, bind, POSIX's
+// three verbs -- and each takes its address as data, the family named at its head: tcp,
+// udp, icmp, unix (the section below). accept, seal, recv and send work the port one made.
+// auto-globbed and LvNif-registered. every nif mirrors main.c's lvm_open: produce an OS
+// fd, hand it to host_port -> a heap port carrying a close finalizer. once an fd is a
+// port, read and write come free through fgetc/fputc.
 // every nif here parks rather than blocking (love.h's nif park: leave Ip unadvanced and
-// yield, so the op re-runs) -- accept and udp-recv on their fd, connect on its handshake.
-// nothing in this file waits: `connect` takes a dotted quad, and a name resolves one layer
-// up in love, where the lookup itself can park.
+// yield, so the op re-runs) -- accept and recv on their fd, connect on its handshake.
+// nothing in this file waits: an address takes a dotted quad, and a name resolves one
+// layer up in love, where the lookup itself can park.
 // the answers wear posix.c's convention: a port on success, the errno's nom on a failure,
 // 'badarg on a call refused before any syscall. hot? is the success test.
 #define _GNU_SOURCE     // SOCK_CLOEXEC
@@ -64,65 +65,6 @@ static int quad(struct ai_str *hv, uint32_t *out) {
  if (*p) return -1;
  return *out = a, 0; }
 
-// (connect quad port) -- TCP client, in two aps because the handshake parks and the op is
-// not re-runnable there (a socket is made and a SYN sent). the first ap starts the
-// handshake, the second waits for it, and the fd rides the stack between them as a charm.
-// the port | 'econnrefused .. | 'badarg (a name string is a misuse; dial resolves above).
-// the helper answers the fd, or a negated errno the wrapper names.
-ai_noinline static int call_connect(uint32_t a, int port) {
- int fd = socket(AF_INET, SOCK_STREAM, 0);
- if (fd < 0) return -errno;
- cloexec(fd);
- // and it stays nonblocking: the handshake needs it, and a heap port toggles per call
- int fl = fcntl(fd, F_GETFL);
- if (fl >= 0) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
- struct sockaddr_in sa = {0};
- sa.sin_family = AF_INET;
- sa.sin_addr.s_addr = htonl(a);
- sa.sin_port = htons((uint16_t) port);
- int r;
- do r = connect(fd, (struct sockaddr*) &sa, sizeof sa); while (r < 0 && errno == EINTR);
- // EINPROGRESS and no EALREADY: this is the first connect on a fresh socket, so "a
- // previous one is still going" cannot be the answer -- and moonlibc has no EALREADY.
- if (r == 0 || errno == EINPROGRESS) return fd;   // in hand, or in flight
- int e = errno;
- close(fd);
- return -e; }
-
-struct sock_to { uint32_t a; int port; };
-static int mk_connect(struct ai *g, void *env) {
- struct sock_to *t = env; (void) g;
- return call_connect(t->a, t->port); }
-ai_noinline static struct ai *host_connect(struct ai *g) {
- struct sock_to t;
- intptr_t port = oddp(g->sp[1]) ? getcharm(g->sp[1]) : -1;
- if (!strp(g->sp[0]) || port < 0 || port > 65535 || quad(str(g->sp[0]), &t.a) < 0)
-  return g->sp[0] = ai_badarg(g), g;
- t.port = (int) port;
- int fd = mk_connect(g, &t);
- if (!ai_ok(g = ai_fd_retry(g, &fd, mk_connect, &t))) return g;
- return g->sp[0] = fd < 0 ? ai_err(g, -fd) : putcharm(fd), g; }
-static lvm(lvm_connect) { LvmCall(g, host_connect) }
-
-// the second ap: the handshake, waited on by the scheduler. SO_ERROR reads 0 on a socket
-// still trying, so POLLOUT first and the error after is the one order that tells
-// "connected" from "refused".
-static lvm(lvm_connectw) {
- if (!charmp(Sp[0])) ai_musttail return Answerp(1, Sp[0]);   // the first ap's nom rides through
- int fd = (int) getcharm(Sp[0]);
- if (!ai_ready(fd, ai_wait_out)) {
-  g->next_wait_fd = fd;
-  g->next_wait_events = ai_wait_out;
-  ai_musttail return Ap(lvm_yield_sw, g); }
- int err = 0;
- socklen_t el = sizeof err;
- if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) || err) {
-  close(fd); ai_musttail return Answerp(1, ai_err(g, err ? err : errno)); }
- LvmCallp(g, 2, host_port, fd) }                // [fd, port#, ret] -> [port, ret]
-
-// (listen port) -- TCP server socket: socket()+SO_REUSEADDR+bind(INADDR_ANY,port)+listen().
-// the listening port | 'eacces (a low port) | 'eaddrinuse | 'badarg. IPv4 only; `accept`
-// gives the connection.
 // the backlog is the accept queue, and a server that twirls a task per client is off
 // serving rather than sitting in accept. too small and the kernel drops SYNs into an
 // exponential retry that reads as our latency (1s at 25 arrivals, 30s at 100). 512 is
@@ -133,37 +75,153 @@ static lvm(lvm_connectw) {
 // the only way to reach the write-direction park offline. move one and move both.
 #define ai_listen_backlog 512
 
-// socket + SO_REUSEADDR + bind(INADDR_ANY, port), listening too when backlog > 0: the
-// fd, or a negated errno. the bound socket both server nifs start from.
-ai_noinline static int bind_any(int type, int port, int backlog) {
- int fd = socket(AF_INET, type, 0);
- if (fd < 0) return -errno;
- int one = 1;
- setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
- struct sockaddr_in a = {0};
- a.sin_family = AF_INET;
- a.sin_addr.s_addr = htonl(INADDR_ANY);
- a.sin_port = htons((uint16_t) port);
- if (bind(fd, (struct sockaddr*) &a, sizeof a) || (backlog && listen(fd, backlog))) {
-  int e = errno;
-  close(fd);
-  return -e; }
- return fd; }
+// --- the address, as data -------------------------------------------------------
+// every nif that makes a socket takes one operand: the address, a list whose head names the
+// family and whose rest is what that family needs, options last. the family picks the
+// socket(2) triple and the sockaddr, so a new family is a row here and not a nif.
+//   connect  (tcp "1.2.3.4" 80)   (unix "/tmp/.X11-unix/X0")
+//   listen   (tcp 80)  or a bare port, which is tcp   (unix "/run/x.sock")
+//   bind     (udp 53)   (icmp)   -- options after: (icmp ttl) asks each datagram's ttl
+// icmp is the unprivileged echo socket, which only linux has; elsewhere it answers the errno
+// a host is a dotted quad and nothing else: names resolve one layer up (apps/dns.l).
+enum { FamTcp = 1, FamUdp, FamIcmp, FamUnix };
+enum { HowConnect = 1, HowListen, HowBind };
+struct saddr { int fam, port, ttl; uint32_t ip; struct ai_str *path; };
 
-struct sock_bind { int type, port, backlog; };
-static int mk_bind(struct ai *g, void *env) {
- struct sock_bind *b = env; (void) g;
- return bind_any(b->type, b->port, b->backlog); }
-ai_noinline static struct ai *host_bind(struct ai *g, int type, int port, int backlog) {
- struct sock_bind b = { type, port, backlog };
- int fd = mk_bind(g, &b);
- if (!ai_ok(g = ai_fd_retry(g, &fd, mk_bind, &b))) return g;
+// is x the symbol spelled s
+static int nom_is(word x, char const *s) {
+ if (!x || !namep(x)) return 0;
+ struct ai_str *n = str(nom(x)->name);
+ size_t k = strlen(s);
+ return n->len == k && !memcmp(n->bytes, s, k); }
+
+// the next element of a list walk, or 0 past its end
+static word nth_take(word *x) {
+ if (!chainp(*x)) return 0;
+ word v = (word) two(*x)->a;
+ *x = (word) two(*x)->b;
+ return v; }
+
+static int port_of(word v) {
+ intptr_t p = v && oddp(v) ? getcharm(v) : -1;
+ return p >= 0 && p <= 65535 ? (int) p : -1; }
+
+// the address operand -> a, or -1 for one this verb cannot take. read afresh on every
+// call: a path points into the heap, and a collection between calls moves it
+static int parse_addr(word x, int how, struct saddr *a) {
+ memset(a, 0, sizeof *a);
+ if (how == HowListen && oddp(x)) return a->fam = FamTcp, (a->port = port_of(x)) < 0 ? -1 : 0;
+ word f = nth_take(&x), v;
+ if (nom_is(f, "unix")) {
+  if (how == HowBind || !(v = nth_take(&x)) || !strp(v)) return -1;
+  struct sockaddr_un un;
+  a->fam = FamUnix, a->path = str(v);
+  if (a->path->len == 0 || a->path->len >= sizeof un.sun_path) return -1; }
+ else if (nom_is(f, "tcp") || nom_is(f, "udp")) {
+  a->fam = nom_is(f, "tcp") ? FamTcp : FamUdp;
+  if ((a->fam == FamTcp) != (how != HowBind)) return -1;
+  if (how == HowConnect && (!(v = nth_take(&x)) || !strp(v) || quad(str(v), &a->ip) < 0)) return -1;
+  if ((a->port = port_of(nth_take(&x))) < 0) return -1; }
+ else if (nom_is(f, "icmp")) {
+  if (how != HowBind) return -1;
+  a->fam = FamIcmp; }
+ else return -1;
+ while ((v = nth_take(&x)))                       // the options
+  if (nom_is(v, "ttl") && a->fam == FamIcmp) a->ttl = 1;   // IP_RECVTTL is linux's number, and so is this socket
+  else return -1;
+ return 0; }
+
+// the fd for a, or a negated errno: socket(2) by the family's row, then the verb's own
+// steps. a connect leaves the socket nonblocking with its handshake in flight
+ai_noinline static int call_sock(struct saddr const *a, int how) {
+ int un = a->fam == FamUnix;
+ int type = a->fam == FamTcp || un ? SOCK_STREAM : SOCK_DGRAM;
+ int fd = socket(un ? AF_UNIX : AF_INET, type, a->fam == FamIcmp ? IPPROTO_ICMP : 0);
+ if (fd < 0) return -errno;
+ cloexec(fd);
+ struct sockaddr_in in = {0};
+ struct sockaddr_un ua = {0};
+ in.sin_family = AF_INET;
+ in.sin_addr.s_addr = htonl(how == HowConnect ? a->ip : INADDR_ANY);
+ in.sin_port = htons((uint16_t) a->port);
+ if (un) ua.sun_family = AF_UNIX, memcpy(ua.sun_path, a->path->bytes, a->path->len);
+ struct sockaddr *sa = un ? (struct sockaddr*) &ua : (struct sockaddr*) &in;
+ socklen_t sl = un ? (socklen_t) sizeof ua : (socklen_t) sizeof in;
+ int r;
+ if (how == HowConnect) {
+  int fl = fcntl(fd, F_GETFL);
+  if (fl >= 0) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+  do r = connect(fd, sa, sl); while (r < 0 && errno == EINTR);
+  // EINPROGRESS and no EALREADY: this is the first connect on a fresh socket
+  if (r == 0 || errno == EINPROGRESS) return fd; }
+ else {
+  int one = 1;
+  if (un) unlink(ua.sun_path);                   // a stale socket file from a dead listener
+  else setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+  if (a->ttl) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);
+  r = bind(fd, sa, sl);
+  if (!r && how == HowListen) r = listen(fd, ai_listen_backlog);
+  if (!r) return fd; }
+ int e = errno;
+ close(fd);
+ return -e; }
+
+struct sock_how { int how; };
+static int mk_sock(struct ai *g, void *env) {
+ struct saddr a;
+ int how = ((struct sock_how*) env)->how;
+ return parse_addr(g->sp[0], how, &a) ? -EINVAL : call_sock(&a, how); }
+
+// a listener or a bound socket for the address on top of the stack: pushes the port, or
+// the errno's nom, or 'badarg for an address this verb cannot take
+ai_noinline static struct ai *host_sock(struct ai *g, int how) {
+ struct saddr a;
+ if (parse_addr(g->sp[0], how, &a)) return ai_push(g, 1, ai_badarg(g));
+ struct sock_how h = { how };
+ int fd = mk_sock(g, &h);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_sock, &h))) return g;
  return host_port(g, fd); }
 
-static lvm(lvm_listen) {
- intptr_t port = oddp(Sp[0]) ? getcharm(Sp[0]) : -1;
- if (port < 0 || port > 65535) ai_musttail return Answer(ai_badarg(g));
- LvmCallp(g, 1, host_bind, SOCK_STREAM, (int) port, ai_listen_backlog) }   // [port#] -> [port]
+// a connect's first half, over the address in place: its fd as a charm for the second ap,
+// or the errno's nom. a unix connect to a listener whose queue is full answers EAGAIN at
+// once rather than in flight; the address is left where it was, the ap's cue to park
+ai_noinline static struct ai *host_conn(struct ai *g) {
+ struct sock_how h = { HowConnect };
+ int fd = mk_sock(g, &h);
+ if (!ai_ok(g = ai_fd_retry(g, &fd, mk_sock, &h))) return g;
+ if (fd == -EAGAIN) return g;
+ return g->sp[0] = fd < 0 ? ai_err(g, -fd) : putcharm(fd), g; }
+
+// (connect addr) -- a stream to a listener, in two aps because the handshake parks and the
+// first is not re-runnable once it has sent a SYN. the port | the errno's nom | 'badarg
+static lvm(lvm_connect) {
+ struct saddr a;
+ if (parse_addr(Sp[0], HowConnect, &a)) ai_musttail return Answer(ai_badarg(g));
+ LvmPack(g, host_conn);
+ Unpack(g);
+ if (chainp(Sp[0])) { g->next_wake_at = ai_clock() + 1; ai_musttail return Ap(lvm_yield_sw, g); }
+ ai_musttail return Next(1); }
+
+// the second ap: the handshake, waited on by the scheduler. SO_ERROR reads 0 on a socket
+// still trying, so POLLOUT first and the error after is the one order that tells
+// "connected" from "refused".
+static lvm(lvm_connectw) {
+ if (!charmp(Sp[0])) ai_musttail return Next(1);   // the first ap's nom rides through
+ int fd = (int) getcharm(Sp[0]);
+ if (!ai_ready(fd, ai_wait_out)) {
+  g->next_wait_fd = fd;
+  g->next_wait_events = ai_wait_out;
+  ai_musttail return Ap(lvm_yield_sw, g); }
+ int err = 0;
+ socklen_t el = sizeof err;
+ if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) || err) {
+  close(fd); ai_musttail return Answer(ai_err(g, err ? err : errno)); }
+ LvmCallp(g, 1, host_port, fd) }                // [fd] -> [port]
+
+// (listen addr) -- a stream listener; `accept` takes its clients. (bind addr) -- a datagram
+// socket; `recv` and `send` carry its datagrams. each the port | the errno's nom | 'badarg
+static lvm(lvm_listen) LvmCallp(g, 1, host_sock, HowListen)
+static lvm(lvm_bind) LvmCallp(g, 1, host_sock, HowBind)
 
 // accept(2) without waiting: >=0 the fd, else a negated errno -- -EAGAIN is "nobody there
 // yet", the park the wrapper reads by name. the O_NONBLOCK toggle is per call for main.c's
@@ -219,162 +277,120 @@ static lvm(lvm_shutdown) {
  Sp[1] = Sp[0];
  ai_musttail return Nextp(1, 1); }
 
-// --- UDP (inle's milestone-5 oracle wire) ---------------------------------
-// inle speaks UDP datagrams, each carrying its own sender address to reply to, which a
-// connected byte-stream port cannot express. so UDP gets three nifs that recvfrom/sendto
-// off a bound port's fd and marshal the peer as a fixnum, (ipv4 << 16) | port:
-//   (udp-bind port)            -> a port on a bound UDP socket | a nom | 'badarg
-//   (udp-recv p)               -> (peerfix . datagram-bytes) | a nom | 'badarg  [parks]
-//   (udp-send p peerfix bytes) -> p (chainable) | a nom | 'badarg
-// a quiet socket parks the task on its fd, like accept above: "nothing else to do" is the
-// scheduler's judgement, not this nif's.
 
-static lvm(lvm_udpbind) {
- intptr_t port = oddp(Sp[0]) ? getcharm(Sp[0]) : -1;
- if (port < 0 || port > 65535) ai_musttail return Answer(ai_badarg(g));
- LvmCallp(g, 1, host_bind, SOCK_DGRAM, (int) port, 0) }   // [port#] -> [port]
+// --- datagrams ----------------------------------------------------------------------
+//   (recv p)            -> (peer bytes) | (peer bytes ttl) | a nom | 'badarg   [parks]
+//   (send p peer bytes) -> p | a nom | 'badarg
+// a peer is ("1.2.3.4" port): the shape recv answers is the shape send takes, so a reply
+// goes back to (car d). an icmp socket's port is its echo id, and send does not read it.
+// the ttl rides when the socket was bound asking for it. a quiet socket parks the task on
+// its fd, like accept: "nothing else to do" is the scheduler's judgement, not this nif's.
 
-// recvfrom + peer marshaling; the &-taken sockaddr lives here so the lvm wrapper stays
-// TCO-clean. the struct must stay two words: at 24 bytes the ABI returns it through memory,
-// which puts an address-taken slot in an lvm_ frame and turns the tail Continue() into a
-// ret (make vmret). so the would-block answer rides `n` as a negated errno rather than a
-// third field -- >=0 bytes, -EAGAIN the park, any other negative the failure.
-struct dgram { ssize_t n; uintptr_t peerfix; };
-ai_noinline static struct dgram call_udprecv(int fd, char *buf, size_t cap) {
- struct sockaddr_in peer; memset(&peer, 0, sizeof peer);
- socklen_t plen = sizeof peer;
+// the dotted quad of a, into q -> its length
+static int quad_show(char *q, uint32_t a) {
+ int k = 0;
+ for (int i = 3; i >= 0; i--) {
+  unsigned b = (a >> (8 * i)) & 255;
+  if (b >= 100) q[k++] = (char) ('0' + b / 100);
+  if (b >= 10) q[k++] = (char) ('0' + b / 10 % 10);
+  q[k++] = (char) ('0' + b % 10);
+  if (i) q[k++] = '.'; }
+ return k; }
+
+// one datagram and who sent it. the sockaddr and the control buffer are &-taken here, so
+// the lvm wrapper stays TCO-clean; what it needs back rides in the caller's rbuf
+struct rmeta { uint32_t ip; int port, ttl; };
+struct rbuf { char b[DgMax]; struct rmeta m; };
+ai_noinline static ssize_t call_recv(int fd, struct rbuf *r) {
+ struct sockaddr_in peer;
+ memset(&peer, 0, sizeof peer);
+ struct iovec iov = { r->b, sizeof r->b };
+ union { struct cmsghdr h; char c[64]; } cb;
+ struct msghdr m;
+ memset(&m, 0, sizeof m);
+ m.msg_name = &peer, m.msg_namelen = sizeof peer;
+ m.msg_iov = &iov, m.msg_iovlen = 1;
+ m.msg_control = cb.c, m.msg_controllen = sizeof cb.c;
  ssize_t n;
- do n = recvfrom(fd, buf, cap, MSG_DONTWAIT, (struct sockaddr*) &peer, &plen);
- while (n < 0 && errno == EINTR);
- if (n < 0) n = -(errno == EWOULDBLOCK ? EAGAIN : errno);
- return (struct dgram) { n, ((uintptr_t) ntohl(peer.sin_addr.s_addr) << 16)
-                          | (uintptr_t) ntohs(peer.sin_port) }; }
+ do n = recvmsg(fd, &m, MSG_DONTWAIT); while (n < 0 && errno == EINTR);
+ if (n < 0) return -(errno == EWOULDBLOCK ? EAGAIN : errno);
+ r->m.ip = ntohl(peer.sin_addr.s_addr), r->m.port = ntohs(peer.sin_port), r->m.ttl = -1;
+ for (struct cmsghdr *c = CMSG_FIRSTHDR(&m); c; c = CMSG_NXTHDR(&m, c))
+  if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_TTL) {
+   int t;
+   memcpy(&t, CMSG_DATA(c), sizeof t);
+   r->m.ttl = t; }
+ return n; }
 
-static lvm(lvm_udprecv) {
- word e;
+// the datagram's bytes and its peer's quad as strings, then the list over them: pushes
+// (("quad" port) bytes) or (("quad" port) bytes ttl)
+ai_noinline static struct ai *host_dgram(struct ai *g, char const *b, uintptr_t n, struct rmeta m) {
+ char q[16];
+ int k = quad_show(q, m.ip);
+ if (n) {
+  if (!ai_ok(g = str0(g, n))) return g;
+  memcpy(txt(g->sp[0]), b, n), len(g->sp[0]) = n; }
+ else if (!ai_ok(g = ai_push(g, 1, EmptyString))) return g;
+ if (!ai_ok(g = str0(g, (uintptr_t) k))) return g;
+ memcpy(txt(g->sp[0]), q, (size_t) k), len(g->sp[0]) = (uintptr_t) k;
+ if (!ai_ok(g = ai_have(g, 5 * Width(struct ai_chain)))) return g;
+ struct ai_chain *c = bump(g, 5 * Width(struct ai_chain));
+ word host = g->sp[0], bytes = g->sp[1];         // read after ai_have, which may move them
+ ini_chain(c + 0, m.ttl >= 0 ? putcharm(m.ttl) : ZeroPoint, ZeroPoint);
+ ini_chain(c + 1, bytes, m.ttl >= 0 ? word(c + 0) : ZeroPoint);
+ ini_chain(c + 2, putcharm(m.port), ZeroPoint);
+ ini_chain(c + 3, host, word(c + 2));
+ ini_chain(c + 4, word(c + 3), word(c + 1));
+ g->sp[1] = word(c + 4), g->sp += 1;
+ return g; }
+
+static lvm(lvm_recv) {
  int fd = (int) ai_port_fd(Sp[0]);
- if (fd < 0) { e = ai_badarg(g); goto fail; }
+ if (fd < 0) ai_musttail return Answer(ai_badarg(g));
  // a stack buffer is safe in an lvm_ only while its address never reaches the tail, and
  // every exit here unwinds the frame first; ai_musttail refuses at compile if one did not.
- char buf[DgMax];
- struct dgram d = call_udprecv(fd, buf, sizeof buf);
- // no datagram yet -> park on the socket, exactly as accept does. nothing has been
- // taken off the wire, so the op re-runs whole.
- if (d.n == -EAGAIN) { g->next_wait_fd = fd; ai_musttail return Ap(lvm_yield_sw, g); }
- ssize_t n = d.n;
- if (n < 0) { e = ai_err(g, (int) -n); goto fail; }
- uintptr_t peerfix = d.peerfix;
- Pack(g);                                            // bytes + chain allocate -> Pack
- if (n > 0) {                                        // datagram -> a fresh love string
-  g = str0(g, (uintptr_t) n);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  memcpy(txt(g->sp[0]), buf, (uintptr_t) n);
-  len(g->sp[0]) = (uintptr_t) n;
- } else {                                            // empty datagram -> the singleton
-  g = ai_push(g, 1, (uintptr_t) EmptyString);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g); }
- g = ai_have(g, Width(struct ai_chain));             // (peerfix . bytes)
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- struct ai_chain *w = bump(g, Width(struct ai_chain));
- ini_chain(w, putcharm(peerfix), g->sp[0]);          // read sp[0] after ai_have (may move)
- g->sp[0] = word(w);
- Unpack(g);
- // stack: [port, ...] -> [(peerfix . bytes), ...]
- Sp[1] = Sp[0];
- ai_musttail return Nextp(1, 1);
- fail:
- Sp[0] = e;
- ai_musttail return Next(1); }
+ struct rbuf r;
+ ssize_t n = call_recv(fd, &r);
+ // no datagram yet -> park on the socket; nothing was taken off the wire, so the op re-runs
+ if (n == -EAGAIN) { g->next_wait_fd = fd; ai_musttail return Ap(lvm_yield_sw, g); }
+ if (n < 0) ai_musttail return Answer(ai_err(g, (int) -n));
+ LvmCallp(g, 1, host_dgram, r.b, (uintptr_t) n, r.m) }   // [p] -> [(peer bytes ..)]
 
-// sendto with the peer unmarshaled from its fixnum; the &-taken sockaddr
-// lives here so the lvm wrapper stays TCO-clean.
-ai_noinline static ssize_t call_udpsend(int fd, uintptr_t peerfix, void const *p, size_t n) {
- struct sockaddr_in a; memset(&a, 0, sizeof a);
+// sendto with the peer read off its list; the &-taken sockaddr lives here
+ai_noinline static ssize_t call_send(int fd, uint32_t ip, int port, void const *p, size_t n) {
+ struct sockaddr_in a;
+ memset(&a, 0, sizeof a);
  a.sin_family = AF_INET;
- a.sin_addr.s_addr = htonl((uint32_t) (peerfix >> 16));
- a.sin_port = htons((uint16_t) (peerfix & 0xffff));
+ a.sin_addr.s_addr = htonl(ip);
+ a.sin_port = htons((uint16_t) port);
  ssize_t w;
  do w = sendto(fd, p, n, 0, (struct sockaddr*) &a, sizeof a);
  while (w < 0 && errno == EINTR);
  return w < 0 ? -errno : w; }
 
-static lvm(lvm_udpsend) {
+static lvm(lvm_send) {
  int fd = (int) ai_port_fd(Sp[0]);
- if (!oddp(Sp[1]) || !strp(Sp[2]) || fd < 0) ai_musttail return Answerp(2, ai_badarg(g));
+ word x = Sp[1], h = nth_take(&x);
+ int port = port_of(nth_take(&x));
+ uint32_t ip;
+ if (fd < 0 || !h || !strp(h) || quad(str(h), &ip) < 0 || port < 0 || !strp(Sp[2]))
+  ai_musttail return Answerp(2, ai_badarg(g));
  struct ai_str *s = str(Sp[2]);
- ssize_t w = call_udpsend(fd, getcharm(Sp[1]), txt(s), len(s));
- ai_musttail return Answerp(2, w < 0 ? ai_err(g, (int) -w) : Sp[0]); }   // [p, peerfix, bytes] -> [p]
+ ssize_t w = call_send(fd, ip, port, txt(s), len(s));
+ ai_musttail return Answerp(2, w < 0 ? ai_err(g, (int) -w) : Sp[0]); }   // [p, peer, bytes] -> [p]
 
 static union u const
- nif_connect[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_connect}, {lvm_connectw}, {lvm_ret0}},
+ nif_connect[]  = {{lvm_connect}, {lvm_connectw}, {lvm_ret0}},
  nif_listen[]   = {{lvm_listen}, {lvm_ret0}},
+ nif_bind[]     = {{lvm_bind}, {lvm_ret0}},
  nif_accept[]   = {{lvm_accept}, {lvm_ret0}},
  nif_shutdown[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_shutdown}, {lvm_ret0}},
- nif_udpbind[]  = {{lvm_udpbind}, {lvm_ret0}},
- nif_udprecv[]  = {{lvm_udprecv}, {lvm_ret0}},
- nif_udpsend[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_udpsend}, {lvm_ret0}};
+ nif_recv[]     = {{lvm_recv}, {lvm_ret0}},
+ nif_send[]     = {{lvm_cur}, {.x = putcharm(3)}, {lvm_send}, {lvm_ret0}};
 LvNif("connect", nif_connect, NULL);
 LvNif("listen", nif_listen, NULL);
+LvNif("bind", nif_bind, NULL);
 LvNif("accept", nif_accept, NULL);
 LvNif("seal", nif_shutdown, NULL);
-LvNif("udp-bind", nif_udpbind, NULL);
-LvNif("udp-recv", nif_udprecv, NULL);
-LvNif("udp-send", nif_udpsend, NULL);
-// --- unix-domain connect: lux's X display door ----------------------------------
-// (connectu path) -- connect to a unix-domain stream socket and wrap the fd as a port | a
-// nom | 'badarg. the load-bearing case is an X display socket (/tmp/.X11-unix/X<n>), which
-// real X servers listen on and the TCP nifs cannot open.
-ai_noinline static int call_connectu(struct ai_str *pv) {
- struct sockaddr_un a;
- memset(&a, 0, sizeof a);
- a.sun_family = AF_UNIX;
- memcpy(a.sun_path, pv->bytes, pv->len);
- int fd = socket(AF_UNIX, SOCK_STREAM, 0);
- if (fd < 0) return -errno;
- if (connect(fd, (struct sockaddr*) &a, sizeof a)) { int e = errno; close(fd); return -e; }
- return fd; }
-
-static int mk_connectu(struct ai *g, void *env) { (void) env; return call_connectu((struct ai_str*) g->sp[0]); }
-ai_noinline static struct ai *host_connectu(struct ai *g) {
- int fd = mk_connectu(g, NULL);
- if (!ai_ok(g = ai_fd_retry(g, &fd, mk_connectu, NULL))) return g;
- return host_port(g, fd); }
-
-static lvm(lvm_connectu) {
- struct ai_str *pv = strp(Sp[0]) ? (struct ai_str*) Sp[0] : 0;
- struct sockaddr_un un;
- if (!pv || pv->len == 0 || pv->len >= sizeof un.sun_path) ai_musttail return Answer(ai_badarg(g));
- LvmCallp(g, 1, host_connectu) }   // [path] -> [port]
-
-static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};
-LvNif("connectu", nif_connectu, NULL);
-// --- the unix listener ----------------------------------------------------------
-//   (shore path)          -> a listening unix port | a nom | 'badarg ; unlinks
-//                            stale first (accept/await/close ride the core port nifs)
-
-// (shore path): bind + listen a unix stream socket at path -- lux's moor, the door a
-// running lux takes forms through. the fd, or a negated errno.
-ai_noinline static int call_shore(struct ai_str *p) {
- struct sockaddr_un a = {0};
- a.sun_family = AF_UNIX;
- memcpy(a.sun_path, p->bytes, p->len);
- unlink(a.sun_path);
- int fd = socket(AF_UNIX, SOCK_STREAM, 0);
- if (fd < 0) return -errno;
- if (bind(fd, (struct sockaddr*) &a, sizeof a) || listen(fd, 8)) { int e = errno; close(fd); return -e; }
- return fd; }
-
-static int mk_shore(struct ai *g, void *env) { (void) env; return call_shore(cask_bytes(g->sp[0])); }
-ai_noinline static struct ai *host_shore(struct ai *g) {
- int fd = mk_shore(g, NULL);
- if (!ai_ok(g = ai_fd_retry(g, &fd, mk_shore, NULL))) return g;
- return host_port(g, fd); }
-
-static lvm(lvm_shore) {
- struct ai_str *p = cask_bytes(Sp[0]);
- struct sockaddr_un un;
- if (!p || p->len + 1 > sizeof un.sun_path) ai_musttail return Answer(ai_badarg(g));
- LvmCallp(g, 1, host_shore) }   // [path] -> [port]
-
-static union u const nif_shore[] = {{lvm_shore}, {lvm_ret0}};
-LvNif("shore", nif_shore, NULL);
+LvNif("recv", nif_recv, NULL);
+LvNif("send", nif_send, NULL);

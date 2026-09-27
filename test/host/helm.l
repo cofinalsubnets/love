@@ -114,7 +114,7 @@
    sock "out/.helm-test.sock"
    _ (twirl (\ _ (helm-moor sock)) 0)
    _ (rest 50)
-   c (connectu sock)
+   c (connect ['unix sock])
    _ (test (lit? c))
    ; the reply, one line. the accumulator is a charlist, and `string` is what
    ; makes it one string -- a `+ ""` leaves it a list of charms.

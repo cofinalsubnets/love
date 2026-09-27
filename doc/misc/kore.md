@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (183 tools, 189 names)
+## the inventory (185 tools, 191 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -102,7 +102,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
-| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags) |
+| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping (icmp echoes) |
 | apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -590,7 +590,7 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
 utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
 
-## telnet and httpd (apps/kore/net.l)
+## telnet, httpd, nslookup and ping (apps/kore/net.l)
 
 `telnet HOST [PORT]` is nc (apps/ain.l) with the telnet protocol's options answered
 (RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
@@ -607,6 +607,23 @@ always in force, because it never runs in the background. kiosko listens on ever
 so `-p IP:PORT` with a specific address is refused rather than silently served more widely;
 `0.0.0.0:PORT` and `:PORT` are taken. Busybox's other flags (`-c -u -r -m -e -d -i`) are
 refused by name.
+
+`nslookup [-type=T] [-port=N] HOST [SERVER]` asks a nameserver directly and prints what it
+says, laid out as busybox's nslookup lays it. The server is SERVER (a dotted quad or a name)
+or else the first in `/etc/resolv.conf` that answers; no hosts file and no search domains
+are read. With no `-type` it asks A and AAAA, and a dotted quad asks its PTR. The types are
+A, AAAA, CNAME, MX, NS, PTR, SOA and TXT. The query offers EDNS0's 1232 bytes, so a long
+answer such as a TXT set arrives whole; one that still does not fit is said to be cut, as
+there is no TCP retry. A name that does not exist exits 1. The protocol pieces live in
+apps/dns.l (`dns-qedns`, `dns-raw`, `dns-records`), beside the resolver.
+
+`ping [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST` sends an ICMP echo every `-i`
+seconds (1 by default, fractions allowed), `-c` times or until ^C, and prints each reply's
+size, sequence, TTL and round trip, then the loss and min/avg/max, in busybox's format.
+After the last echo it waits up to `-W` seconds (10) for the rest. It exits 0 when any
+reply came back and 1 otherwise. It uses Linux's unprivileged ICMP echo socket, open to the
+groups in `net.ipv4.ping_group_range`; where that is refused it says so. FreeBSD and NetBSD
+have no such socket, so there it needs a raw socket and root, which is not built yet.
 
 ## not built
 
