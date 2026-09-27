@@ -5088,14 +5088,14 @@
        (go fs0 ()))
 
    ; two constant adds onto one register fold to one: (add d a k1)(add d d k2) -> (add d a k1+k2).
-   ; Have's Hp + n + floor is the shape. x64, whose add immediate is any le32
+   ; Have's Hp + n + floor is the shape. every target but thumb, while the sum is an immediate
    (addk g fs)
-    (? !(x64? g) fs
+    (? (t32? g) fs
        (: (go l) (? !(two? l) l
                     (: f <l nx (two? >l ? <>l)
                        (? (two? f && <f = 'add && two? nx && <nx = 'add &&
                            charm? (f 3) && charm? (nx 3) && nx 1 == f 1 && nx 2 == f 1 &&
-                           fits32? (f 3 + nx 3))
+                           imma g 'add (f 3 + nx 3))              ; the sum is still the target's immediate
                           (go (['add (f 1) (f 2) (f 3 + nx 3)] . >>l))
                           (f . go >l))))
           (go fs)))
@@ -7692,19 +7692,20 @@
        sp1 (? (uni9 || !(two? vzf)) sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
        irf (? uni9 (ubuild (alive g f)) (build sp1))
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):
-       ; the a64 sweeps, then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
-       (swp irx) (? !(a64? g) irx
+       ; the a64 sweeps (rv64 takes addk alone), then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
+       (swp irx) (? !(a64? g) (? (rv64? g) (addk g irx) irx)      ; rv64's one sweep
                     (tailst g
                     (deadst g
                      (deaddef g
                      (addrfold g
+                     (addk g
                      (rezx g
                      (copyprop g
                      (stld g
                      (spmerge
                      (deaddef g
                      (deadcell g
-                     (cfoldir g irx))))))))))))
+                     (cfoldir g irx)))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
        (? (bad? irf) irf (dp 'final (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))
