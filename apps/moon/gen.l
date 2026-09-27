@@ -8246,6 +8246,27 @@
     (? (nom? x) (pin t x 1)
        !(two? x) t
        (cg-refs >x (cg-refs <x t)))
+   ; ..narrowed over a laid body's own forms: an opcode is never a reference, and a register's
+   ; spelling (r8, f0, sp) is one only where an op carries its label -- the operand indexes
+   ; below, the backends' fixup-laying ops -- or in a form holo lays whole. so a static named
+   ; r8 dies unless a call, jmp or la names it. a label op missing here scares undef-label
+   cg-labpos {'call [1] 'jmp [1] 'jmp8 [1] 'br [2] 'br8 [2] 'la [2] 'lar [2] 'lia [2]
+              'ldsdl [2] 'mulo [5] 'jmpt [2 3]}
+   cg-wholeops '(raw addr fix)
+   (cg-regnom? x) (: s (show x) n #s
+                     (? (s = "sp" || s = "fp") 1
+                        (1 < n && elem (s 0) '(114 102 120) && all digit? (map s (map (+ 1) ^(n - 1)))) 1 0))
+   (cg-frefs fm t)
+    (foldl (\ t ins (? !(two? ins) t
+                       (!(nom? <ins) || elem <ins cg-wholeops) (cg-orefs ins () t)   ; a nested run, or laid whole
+                       (: lp (cg-labpos <ins)
+                          (go os i t) (? !(two? os) t (go >os (i + 1) (cg-orefs <os !(elem i lp) t)))
+                          (go >ins 1 t))))
+           t fm)
+   (cg-orefs x reg? t)
+    (? (nom? x) (? (reg? && cg-regnom? x) t (pin t x 1))
+       !(two? x) t
+       (cg-orefs >x reg? (cg-orefs <x reg? t)))
    ; the same relation over an AST, where a name is still text (laid forms wear the nom): only a
    ; mention names one -- a struct tag, a field's designator or a string literal that spells a
    ; function's name is not a reference to it
@@ -8361,7 +8382,10 @@
                      _ (nm = "main" ? (pin g 'saw 1))
                      _ (? sc (pin g 'xfns ([sc fm an] . g 'xfns)) (pin lfm nm fm))
                      _ (pin laid nm 1)          ; before the walk: a recursive fn names itself
-                     (keys (cg-refs fm {})))))
+                     ; the wide relation's order, narrowed: tablet keys run in no fixed order, so
+                     ; walking the narrow tablet's own would re-deal the layout
+                     pr (cg-frefs fm {})
+                     (filter (k \ pr k) (keys (cg-refs fm {}))))))
            (drive q)
             (? (gripe? (g 'genfail) || !(two? q)) 0
                (: nm <q
