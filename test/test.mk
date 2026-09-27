@@ -35,7 +35,7 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_spin test_cookdiff test_glazebench test_dist test_seed test_moon test_links test_kernel_wasm
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_spin test_cookdiff test_glazebench test_dist test_seed test_moon test_links test_kernel_wasm test_harp
 
 
 # really slow gate

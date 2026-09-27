@@ -215,7 +215,7 @@
         1)))
 
    ; --- printing, for eyes rather than ears ----------------------------------
-   (qshow t) (: p (load t) (? (1 = <>p) (show <p) (show <p + "/" + show <>p)))
+   (qshow t) (: p (qparts t) (? (1 = <>p) (show <p) (show <p + "/" + show <>p)))
    (harp-print p c0 ncyc)
     (each ^ncyc
           (\ i (: c (c0 + i)

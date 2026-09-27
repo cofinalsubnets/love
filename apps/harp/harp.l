@@ -35,7 +35,7 @@
 (:: 'psets (\ l (foldl (\ a q (list 'pset a q)) (cap l) (cup l))))
 
 (module '(harp
-  qi qzero qone qhalf qneg qmin qmax qfl qfq qnum
+  qi qzero qone qhalf qneg qmin qmax qparts qdiv qfl qfq qnum
   evwb evwe evpb evpe evv onset? evtime cycles
   hush pure stack slowcat fastcat timecat squeeze fast slow rev late early
   pmap pkeep onsets appl pset whenc every off jux iter palin seg sig super whenmod ply
@@ -48,9 +48,9 @@
    ; < <= = are exact over them and over bignums, `sort` orders them, and `load`
    ; answers (num den). only the two operations the coin does not carry are here.
    ;
-   ; EVERY time value is a coin, whole cycles included -- qi is how an integer
-   ; becomes one, and nothing below writes a bare one. `load` is why: qfl and qnum
-   ; take a coin apart, and a plain integer has no parts to take.
+   ; a whole rational is its integer (`4 /// 2` is 2), so a time is a coin or an
+   ; integer, and qparts is the one place either is taken apart: `load` answers the
+   ; parts of a coin only. qi still spells a time, and nothing below writes a bare one.
    ; a rational meeting a TRAY answers () -- `+` takes the coin lane before the
    ;   array lane and the rational's method refuses a non-star. so a time crosses
    ;   into frame arithmetic through qnum and never after; see apps/harp/play.l.
@@ -61,11 +61,13 @@
    (qneg a)   (qzero - a)
    (qmin a b) (a < b ? a b)
    (qmax a b) (a < b ? b a)
+   (qparts a) (? (coin? a) (load a) [a 1])                  ; (num den), den 1 for a whole one
+   (qdiv a b) (: p (qparts b) (a * (<>p /// <p)))           ; exact: `/` on two integers is a float
    ; // truncates toward zero, so a negative cycle needs the step down by hand
-   (qfl a)    (: p (load a)  n <p  d <>p  t (n // d)
+   (qfl a)    (: p (qparts a)  n <p  d <>p  t (n // d)
                  (? (t * d = n) t (n < 0) (t - 1) t))
    qfq        (qi * qfl)
-   (qnum a)   (load a @ p (<p / <>p))
+   (qnum a)   (qparts a @ p (<p / <>p))
    ; the same two, on plain integers, with n > 0
    (imod a n) (a % n @ r (r < 0 ? (r + n) r))
    (idiv a n) (a // n @ t (t * n > a ? (t - 1) t))
@@ -117,8 +119,8 @@
    (fast n0 p0) (: n (coin n0)  p (pat p0)
                   (? (n = qzero) hush
                      (n < qzero) (rev (fast (qneg n) p))
-                     (\ b e (map (evtime (t \ t / n)) (p (b * n) (e * n))))))
-   (slow n0 p) (: n (coin n0) (n = qzero ? hush (fast (qone / n) p)))
+                     (\ b e (map (evtime (t \ qdiv t n)) (p (b * n) (e * n))))))
+   (slow n0 p) (: n (coin n0) (n = qzero ? hush (fast (qdiv qone n) p)))
    (fastcat ps) (fast (qi #ps) (slowcat ps))
 
    ; p's cycle squeezed into the window [b0,e0) of every cycle, silence outside it.
@@ -130,7 +132,7 @@
                         (: c  (qfl <s)  cq (qi c)
                            wb (cq + b0)  we (cq + e0)
                            ib (qmax <s wb)  ie (qmin >s we)
-                           (fwd t) (cq + (t - wb) / w)
+                           (fwd t) (cq + qdiv (t - wb) w)
                            (bak u) (wb + (u - cq) * w)
                            (ib < ie ? (map (evtime bak) (p (fwd ib) (fwd ie))))))
                        (cycles b e)))))
@@ -140,7 +142,7 @@
     (: tot (foldl (a \ x \ a + coin <x) qzero wps)
        (go acc l) (two? l ?
                    (: x <l  w (coin <x)
-                      b (acc / tot)  e ((acc + w) / tot)
+                      b (qdiv acc tot)  e (qdiv (acc + w) tot)
                     (squeeze b e >x . go (acc + w) >l)))
        (tot = qzero ? hush (stack (go qzero wps))))
 
@@ -212,7 +214,7 @@
    (ply n p0) (: p (pat p0) (n < 2 ? p
               (\ b e (flip cmap (p b e) (\ x
                (:- (mk 0)
-                d ((evwe x - evwb x) / qi n)
+                d (qdiv (evwe x - evwb x) (qi n))
                 (mk i) (i < n ?
                         (: sb (evwb x + qi i * d)
                            se (sb + d)
@@ -250,7 +252,7 @@
              nx (foldl (\ a x (? (wb0 < evwb x && (one? a || evwb x < evwb a)) x a))
                        () (p c (c + qi 2)))
              v (? (charm? v0 && two? nx && charm? (evv nx))
-                  (v0 + (evv nx - v0) * qnum ((m - wb0) / (evwb nx - wb0)))
+                  (v0 + (evv nx - v0) * qnum (qdiv (m - wb0) (evwb nx - wb0)))
                   v0)
            [[b e b e v]]))))))
 
@@ -265,7 +267,7 @@
    ; the seed k separates two `?`s that would otherwise see the same span: a step's
    ; own pattern is degraded BEFORE it is squeezed into its slot, so every `?` in a
    ; sequence asks about cycle-begin and would answer alike. mini passes the cursor.
-   (rndk k t) (load t @ p (mix32 (<p * 2654435761 + <>p * 2246822519 + k * 668265263)
+   (rndk k t) (qparts t @ p (mix32 (<p * 2654435761 + <>p * 2246822519 + k * 668265263)
                            / 4294967296.0))
    (rnd t) (rndk 0 t)
    (degbyk k amt p) (pkeep (x \ amt <= rndk k <x) p)
@@ -332,7 +334,7 @@
    ; a numeric word is a number, anything else the word itself
    ; a whole number comes out as an integer, not as a rational: the value is the
    ; caller's (a note, a sample index), and only the TIMES want the coin
-   (matom w) (? (mnum? w) (load (mrat w) @ p (<>p @ 1 <p (<p / <>p))) w)
+   (matom w) (? (mnum? w) (qparts (mrat w) @ p (<>p @ 1 <p (<p / <>p))) w)
    (mratat s i) (mword s (mspace s i) @ r (mrat <r . >r))
    (mintat s i) (mratat s i @ r (qfl <r . >r))
 
