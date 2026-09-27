@@ -809,6 +809,7 @@
 ; text -- utf-8 read as characters and laid in terminal columns. a string stays its bytes and
 ; these walk it; a bad or torn sequence reads as U+FFFD and costs one byte, as a terminal draws it.
 ;   (cpat s i) (cpnext s i) -> the code point at byte i, and the byte after it
+;   (cpn s i)               -> the bytes a valid character at i wears, else 0
 ;   (cps s) (cplen s)       -> the code points, and how many
 ;   (cpsnip s a b)          -> characters a to b
 ;   (cprev s)               -> s back to front by character
@@ -816,7 +817,7 @@
 ;   (swidth s)              -> the columns s takes, a control none
 ;   (scut s n)              -> the longest head of s at most n columns wide
 
-(module '(text cpat cpnext cps cplen cpsnip cprev wcwidth swidth scut)
+(module '(text cpat cpnext cpn cps cplen cpsnip cprev wcwidth swidth scut)
    ; tools/mkwidth.l's runs, unicode 17: each entry cp * 4 + w opens a run of width w
 (: cpw
    @(1 3072 3521 4620 4649 5700 5881 5884 5889 5892 5901 5904 5913 5916 5921 6208 6253 6256
