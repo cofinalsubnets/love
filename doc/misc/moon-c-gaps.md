@@ -91,9 +91,9 @@ All of C89 passes. What remains is C99/C11/GNU.
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
 | computed goto | `&&label`, `goto *p` |
-| gcc's `x ?: y` | `return r ?: 7;` — the middle operand omitted; linux's first stop (below) |
 | `typeof` of the object its own initializer declares | `int *p = (typeof(p))0;` — the name is not in scope until the declarator ends |
 | `__builtin_offsetof` over a runtime index | `__builtin_offsetof(struct S, n[i])` — gcc answers an expression in `i`, not a constant |
+| `__builtin_clzll` over a constant where a constant is owed | `unsigned w : 63 - __builtin_clzll(8);` — parse folds no builtin call |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
@@ -113,7 +113,7 @@ definitions, bitfields including compound assignment, flexible array members, va
 `frame_address`,
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
 arrays, statement expressions (`({ .. })`), `__auto_type`, named asm operands (`%[x]`),
-`asm inline`, `case A ... B` and `[a ... b] =` ranges, a global register variable on the
+`asm inline`, `asm goto`, `x ?: y` (x read once), `typeof` over a qualified type-name, `case A ... B` and `[a ... b] =` ranges, a global register variable on the
 stack pointer, `__typeof_unqual__`, an enumerator past the int word, a `_Static_assert` or a
 bare `;` standing as a struct member, an anonymous bitfield over a typedef or mid-list, brace elision in nested initialisers, pointer-to-array declarators, functions returning
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
@@ -806,20 +806,25 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
   output stores and the clobber pops. GCC 11+ allows outputs, and the kernel's uaccess takes
   them whenever the configuring compiler has `CC_HAS_ASM_GOTO_OUTPUT`.
 
-**linux, measured 2026-09-26** against 6.19.14, x86_64 defconfig: each translation unit gcc
-`-E` with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C
-units, every ninth by path: **3 compile**, and the rest stop at
+---
+
+## linux
+
+**measured 2026-09-26** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
+with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
+every ninth by path: **3 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 134 | `x ?: y` (the table above) |
-| 7 | `typeof` of the object in its own initializer (`__get_unaligned_t`) |
-| 2 | `__builtin_offsetof` over a runtime index (`container_of(.., node[idx])`) |
-| 6 | top-level asm, which `EXPORT_SYMBOL` writes |
-| 7 | an x86 instruction holo does not encode (`pushf`, `lcallw`, a `%fs` operand) |
+| 122 | `__builtin_offsetof` over a runtime index (`container_of(.., node[idx])`) |
+| 8 | `typeof` of the object in its own initializer (`__get_unaligned_t`) |
+| 13 | top-level asm, which `EXPORT_SYMBOL` writes |
+| 12 | an x86 instruction holo does not encode (`pushf` in 10, `lcallw`, a `%fs` operand) |
+| 1 | `__builtin_clzll` over a constant in a bit-field width (`ilog2`) |
 | 1 | `&&label` (computed goto: `_THIS_IP_`) |
 
-`typeof(const T)` stopped 80 of them before it read as a type-name (142-syntax.c holds it).
+each row that lands moves the next up: `typeof(const T)` stopped 80 units and `x ?: y` 134
+before they read (142-syntax.c and 174-elvis.c hold them).
 **154 of the 160 units carry `asm goto`**, and every kernel template (jump labels,
 alternatives, the exception table) is written in assembler directives: `.pushsection`,
 `.long 1b - .`, `.skip` over label arithmetic, `%c0`. none of that is in gas.l's reach, so

@@ -143,6 +143,11 @@
       ((cexp "++*p++") = '(bin + (post (deref (post (var "p") 1)) 1) (num 1)))
       ((cexp "x--") = '(post (var "x") -1))
       ((cexp "a?1:2") = '(cond (var "a") (num 1) (num 2)))
+      ; gcc's a ?: b: a pure a repeats, anything else is read once into a temp
+      ((cexp "a ?: 2 ?: 3") = '(cond (var "a") (var "a") (cond (num 2) (num 2) (num 3))))
+      (= (cast "int f(void); int main() { return f() ?: 2; }" 1 1 3 1 0 1)
+         '(sexpr ((decl (("__elvis_1" int (call (var "f") ())))))
+                 (cond (var "__elvis_1") (var "__elvis_1") (num 2)) int))
       ((cexp "1,2") = '(comma (num 1) (num 2)))
       ((cexp "a&&b||c") = '(lor (land (var "a") (var "b")) (var "c")))
       ((cexp "*p") = '(deref (var "p")))
