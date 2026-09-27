@@ -12,6 +12,8 @@
 (borrow "apps/tls/tls.l")
 (borrow "apps/ssh/sha512.l")
 (borrow "apps/ssh/ed25519.l")
+(borrow "apps/ssh/aes.l")
+(borrow "apps/ssh/bcrypt.l")
 (borrow "apps/ssh/client.l")
 
 (module (ssh-cli ssh-main)
@@ -49,6 +51,16 @@
                  (: _ (kh-add path name key)
                     (say err ("ssh: added " + name + " (" + ssh-fingerprint t + ") to " + path + "\n")))))))
 
+    ; a locked key's passphrase off the terminal, its echo off while it is typed
+    (askpass path)
+     (: q (open "/dev/tty" "r")
+        (? !(hot? q) ()
+           (: _ (say err ("Enter passphrase for key '" + path + "': ")) _ (flush err)
+              _ (ptyecho q 0) ch (see q) _ (unsee q ch) l (chug q) _ (ptyecho q 1) _ (close q)
+              _ (say err "\n") _ (flush err)
+              n (? (string? l) #l 0)
+              (? !(string? l) () ((0 < n) && (l (n - 1) = 10)) (snip l 0 (n - 1)) l))))
+
     (opt o kv)
      (: i (: (go i) (? (#kv <= i) i (kv i = 61) i (go (i + 1))) (go 0))
         k (snip kv 0 i) v (snip kv (i + 1) #kv)
@@ -80,7 +92,7 @@
     t (ssh-dial host (o 'port))
     _ (? (string? t) (die t) 0)
     _ (hostcheck t o (kh-name host (o 'port)))
-    k (ssh-key (o 'key))
+    k (ssh-key (o 'key) askpass)
     _ (? (string? k) (die k) 0)
     a (ssh-auth t (o 'user) <k <>k)
     _ (? (string? a) (die a) 0)
