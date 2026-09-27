@@ -741,7 +741,10 @@ nothing about flags (plan9port's `ls` or `grep` answers to the name in Plan 9's 
 tool kore has is a row, and so is every tool at least two of the others share; a name only
 one other carries is listed after the table instead, since those are mostly one system's own
 (busybox's init and network daemons, GNU's toolchain driver names, plan9port's graphics and
-file servers).
+file servers). Not counted in any column: one implementation's spelling of a general tool
+(kore's `lush` `cook` `ain`, busybox's `ash` `linuxrc`, GNU's `bash` `rbash` `gawk` `gcc`
+`gcc-ar` `gcc-nm` `gcc-ranlib` `g++` `ld.bfd` `ld.gold`) and a userland's name for itself
+(`coreutils`, plan9port's `9`).
 
 * **kore** — the `applets` tablet in kore.l, plus the love verbs that are unix tools: `cc`
   (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `mc`, `pom`.
@@ -766,16 +769,15 @@ over the packages above.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 205 | 392 | 239 | 201 | 108 | 261 |
+| names | 202 | 389 | 239 | 191 | 107 | 260 |
 | shared with kore | | 168 | 142 | 135 | 101 | 49 |
-| carried by no one else | 14 | 157 | 30 | 58 | 1 | 204 |
+| carried by no one else | 11 | 154 | 30 | 48 | 0 | 203 |
 
 What at least three of the other five carry and kore does not: `fmt`, `pr`, `uncompress`.
 
 | tool | kore | busybox | toybox | GNU | uutils | plan9port |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
 | `[` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
-| `ain` | ✓ |  |  |  |  |  |
 | `ar` | ✓ | ✓ |  | ✓ |  |  |
 | `arch` | ✓ | ✓ | ✓ |  | ✓ |  |
 | `as` | ✓ |  |  | ✓ |  |  |
@@ -807,7 +809,6 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 | `clear` | ✓ | ✓ | ✓ |  |  |  |
 | `cmp` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
 | `comm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `cook` | ✓ |  |  |  |  |  |
 | `cp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `cpio` | ✓ | ✓ | ✓ | ✓ |  |  |
 | `crc32` | ✓ | ✓ | ✓ |  |  |  |
@@ -897,7 +898,6 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 | `lsmod` |  | ✓ | ✓ |  |  |  |
 | `lspci` |  | ✓ | ✓ |  |  |  |
 | `lsusb` |  | ✓ | ✓ |  |  |  |
-| `lush` | ✓ |  |  |  |  |  |
 | `lzcat` | ✓ | ✓ |  |  |  |  |
 | `mac2unix` | ✓ |  |  |  |  |  |
 | `make` | ✓ |  |  | ✓ |  |  |
@@ -1058,53 +1058,51 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 
 The names only one carries:
 
-* **busybox alone** (157): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
-  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond` `crontab`
-  `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap` `dumpleases`
-  `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash` `fdflush`
-  `fdformat` `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser` `getty` `hdparm`
-  `ifdown` `ifenslave` `ifplugd` `ifup` `inetd` `init` `iostat` `ip` `ipaddr` `ipcalc` `ipcrm`
-  `ipcs` `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode` `klogd` `linux64`
-  `linuxrc` `loadfont` `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma` `lzopcat`
-  `makemime` `mdev` `mesg` `mke2fs` `mkfs.ext2` `mkfs.minix` `modprobe` `mpstat` `mt` `nameif`
-  `nmeter` `ntpd` `pipe_progress` `popmaildir` `powertop` `pscan` `pstree` `raidautorun`
-  `rdate` `rdev` `readprofile` `reformime` `resize` `resume` `route` `rpm2cpio` `run-init`
-  `run-parts` `runsv` `runsvdir` `rx` `script` `scriptreplay` `seedrng` `sendmail` `setarch`
-  `setconsole` `setfont` `setkeycodes` `setlogcons` `setpriv` `setserial` `setuidgid` `showkey`
-  `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon` `sulogin` `sv` `svc`
-  `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `traceroute` `traceroute6` `tree`
-  `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol` `ubirsvol`
-  `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `vlock` `volname`
-  `whois` `zcip`
+* **busybox alone** (154): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping`
+  `bbconfig` `beep` `bootchartd` `brctl` `chat` `chpasswd` `chpst` `crond` `crontab` `cryptpw`
+  `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap` `dumpleases` `envdir`
+  `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash` `fdflush` `fdformat`
+  `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser` `getty` `hdparm` `ifdown`
+  `ifenslave` `ifplugd` `ifup` `inetd` `init` `iostat` `ip` `ipaddr` `ipcalc` `ipcrm` `ipcs`
+  `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode` `klogd` `linux64` `loadfont`
+  `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma` `lzopcat` `makemime` `mdev`
+  `mesg` `mke2fs` `mkfs.ext2` `mkfs.minix` `modprobe` `mpstat` `mt` `nameif` `nmeter` `ntpd`
+  `pipe_progress` `popmaildir` `powertop` `pscan` `pstree` `raidautorun` `rdate` `rdev`
+  `readprofile` `reformime` `resize` `resume` `route` `rpm2cpio` `run-init` `run-parts` `runsv`
+  `runsvdir` `rx` `script` `scriptreplay` `seedrng` `sendmail` `setarch` `setconsole` `setfont`
+  `setkeycodes` `setlogcons` `setpriv` `setserial` `setuidgid` `showkey` `slattach` `smemcap`
+  `softlimit` `ssl_client` `start-stop-daemon` `sulogin` `sv` `svc` `svlogd` `svok` `syslogd`
+  `tc` `tcpsvd` `tftp` `tftpd` `traceroute` `traceroute6` `tree` `ttysize` `tune2fs`
+  `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol` `ubirsvol` `ubiupdatevol` `udhcpc`
+  `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `vlock` `volname` `whois` `zcip`
 * **toybox alone** (30): `acpi` `count` `devmem` `fstype` `getconf` `gpiodetect` `gpiofind`
   `gpioget` `gpioinfo` `gpioset` `help` `host` `iorenice` `iotop` `mcookie` `memeater` `mix`
   `nbd-server` `netcat` `nologin` `oneit` `prlimit` `pwgen` `sntp` `uclampset` `ucsicontrol`
   `ulimit` `uuidgen` `vmstat` `w`
-* **GNU alone** (58): `addr2line` `bash` `bashbug` `c++` `c++filt` `c89` `c99` `cpp` `diff3`
-  `dwp` `elfedit` `ftp` `g++` `gawk` `gawkbug` `gcc` `gcc-ar` `gcc-nm` `gcc-ranlib` `gcov`
-  `gcov-dump` `gcov-tool` `gp-archive` `gp-collect-app` `gp-display-html` `gp-display-src`
-  `gp-display-text` `gprof` `gprofng` `gprofng-archive` `gprofng-collect-app`
-  `gprofng-display-html` `gprofng-display-src` `gprofng-display-text` `gprofng-gmon` `gzexe`
-  `ld.bfd` `ld.gold` `m4` `objdump` `rbash` `rcp` `rlogin` `rlogind` `rsh` `rshd` `sdiff`
-  `talk` `talkd` `zcmp` `zdiff` `zegrep` `zfgrep` `zforce` `zgrep` `zless` `zmore` `znew`
-* **uutils alone** (1): `coreutils`
-* **plan9port alone** (204): `"` `""` `9` `9660srv` `9ar` `9c` `9fs` `9import` `9l` `9p`
-  `9pfuse` `9pserve` `9term` `B` `E` `Getdir` `Mail` `Netfiles` `acid` `acidtypes` `acme`
-  `acmeevent` `adict` `aescbc` `asn12dsa` `asn12rsa` `astro` `auxclog` `auxstats` `awd` `bmp`
-  `bundle` `calendar` `cb` `cleanname` `clock` `cmapcube` `col` `colors` `compress` `core`
-  `crop` `db` `delatex` `deroff` `devdraw` `dial` `dict` `disknfs` `dns` `dnsdebug` `dnsquery`
-  `dnstcp` `doctype` `dsa2pub` `dsa2ssh` `dsagen` `dsasign` `dump9660` `eqn` `factotum`
-  `fontsrv` `fortune` `freq` `fsize` `g` `getflags` `gif` `grap` `graph` `gview` `hget` `hist`
-  `hoc` `htmlfmt` `htmlroff` `ico` `idiff` `img` `import` `ipso` `jpg` `label` `lc` `lex`
-  `listen1` `look` `lookman` `macedit` `mapd` `mk` `mk9660` `mklatinkbd` `mntgen` `mtime`
-  `namespace` `ndbipquery` `ndbmkdb` `ndbmkhash` `ndbmkhosts` `ndbquery` `netfileget`
-  `netfileput` `netfilestat` `netkey` `news` `nobs` `nroff` `osxvers` `p` `page` `paint` `pbd`
-  `pemdecode` `pemencode` `pic` `plot` `plumb` `plumber` `png` `ppm` `primes` `proof`
-  `psdownload` `psfonts` `psu` `psv` `quote1` `quote2` `ramfs` `rc` `read` `readcons`
-  `resample` `rio` `rsa2csr` `rsa2pub` `rsa2ssh` `rsa2x509` `rsafill` `rsagen` `sam` `samsave`
-  `samterm` `scat` `secstore` `secstored` `secuser` `sftpcache` `sig` `slay` `soelim` `spell`
-  `sprog` `src` `srv` `ssam` `ssh-agent` `stack` `start` `stats` `statusbar` `stop` `svgpic`
-  `tbl` `tcolors` `tcs` `togif` `toico` `topng` `toppm` `tpic` `tr2post` `tref` `troff`
-  `troff2html` `troff2png` `tweak` `u` `units` `unmount` `unutf` `unvac` `usage` `vac` `vacfs`
-  `vbackup` `vcat` `vmount` `vmount0` `vnfs` `vwhois` `web` `win` `wintext` `winwatch` `wmail`
-  `xd` `xshove` `yacc` `yesterday` `yuv` `zerotrunc` `zip`
+* **GNU alone** (48): `addr2line` `bashbug` `c++` `c++filt` `c89` `c99` `cpp` `diff3` `dwp`
+  `elfedit` `ftp` `gawkbug` `gcov` `gcov-dump` `gcov-tool` `gp-archive` `gp-collect-app`
+  `gp-display-html` `gp-display-src` `gp-display-text` `gprof` `gprofng` `gprofng-archive`
+  `gprofng-collect-app` `gprofng-display-html` `gprofng-display-src` `gprofng-display-text`
+  `gprofng-gmon` `gzexe` `m4` `objdump` `rcp` `rlogin` `rlogind` `rsh` `rshd` `sdiff` `talk`
+  `talkd` `zcmp` `zdiff` `zegrep` `zfgrep` `zforce` `zgrep` `zless` `zmore` `znew`
+* **uutils alone** (0): none
+* **plan9port alone** (203): `"` `""` `9660srv` `9ar` `9c` `9fs` `9import` `9l` `9p` `9pfuse`
+  `9pserve` `9term` `B` `E` `Getdir` `Mail` `Netfiles` `acid` `acidtypes` `acme` `acmeevent`
+  `adict` `aescbc` `asn12dsa` `asn12rsa` `astro` `auxclog` `auxstats` `awd` `bmp` `bundle`
+  `calendar` `cb` `cleanname` `clock` `cmapcube` `col` `colors` `compress` `core` `crop` `db`
+  `delatex` `deroff` `devdraw` `dial` `dict` `disknfs` `dns` `dnsdebug` `dnsquery` `dnstcp`
+  `doctype` `dsa2pub` `dsa2ssh` `dsagen` `dsasign` `dump9660` `eqn` `factotum` `fontsrv`
+  `fortune` `freq` `fsize` `g` `getflags` `gif` `grap` `graph` `gview` `hget` `hist` `hoc`
+  `htmlfmt` `htmlroff` `ico` `idiff` `img` `import` `ipso` `jpg` `label` `lc` `lex` `listen1`
+  `look` `lookman` `macedit` `mapd` `mk` `mk9660` `mklatinkbd` `mntgen` `mtime` `namespace`
+  `ndbipquery` `ndbmkdb` `ndbmkhash` `ndbmkhosts` `ndbquery` `netfileget` `netfileput`
+  `netfilestat` `netkey` `news` `nobs` `nroff` `osxvers` `p` `page` `paint` `pbd` `pemdecode`
+  `pemencode` `pic` `plot` `plumb` `plumber` `png` `ppm` `primes` `proof` `psdownload`
+  `psfonts` `psu` `psv` `quote1` `quote2` `ramfs` `rc` `read` `readcons` `resample` `rio`
+  `rsa2csr` `rsa2pub` `rsa2ssh` `rsa2x509` `rsafill` `rsagen` `sam` `samsave` `samterm` `scat`
+  `secstore` `secstored` `secuser` `sftpcache` `sig` `slay` `soelim` `spell` `sprog` `src`
+  `srv` `ssam` `ssh-agent` `stack` `start` `stats` `statusbar` `stop` `svgpic` `tbl` `tcolors`
+  `tcs` `togif` `toico` `topng` `toppm` `tpic` `tr2post` `tref` `troff` `troff2html`
+  `troff2png` `tweak` `u` `units` `unmount` `unutf` `unvac` `usage` `vac` `vacfs` `vbackup`
+  `vcat` `vmount` `vmount0` `vnfs` `vwhois` `web` `win` `wintext` `winwatch` `wmail` `xd`
+  `xshove` `yacc` `yesterday` `yuv` `zerotrunc` `zip`
