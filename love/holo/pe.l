@@ -27,7 +27,6 @@
 (: pe-ibase 65536                        ; the preferred base; .reloc frees the loader from it
    pe-hraw 512                           ; file bytes reserved for every header
    pe-falign 512
-   (pe-al a n) ((n + a - 1) & -a)
 
    (pe-secname s) (map s ^#s + map (_ \ 0) ^(8 - #s))
    (pe-sect nm vsz rva raw off ch)
@@ -83,17 +82,17 @@
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs ()))
        en (ldemit cx 'nifs n0 objs (>ed + [(ld-zeros (- n0 <ed))]))
        tfsz (<eo - base)                  ; .text: text + rodata
-       traw (pe-al pe-falign tfsz)
+       traw (aup tfsz pe-falign)
        dfsz (<en - d0)                    ; .data: data + nifs, and bss past it
-       draw (pe-al pe-falign dfsz)
+       draw (aup dfsz pe-falign)
        text-vsz (d0 - base)
        data-rva (d0 - pe-ibase)
        data-vsz (bend - d0)
-       reloc-rva (pe-al 4096 (data-rva + data-vsz))
+       reloc-rva (aup (data-rva + data-vsz) 4096)
        reloc (pe-relocs (rev (peep relbox 0 ())))
        rsz #reloc
-       rraw (pe-al pe-falign rsz)
-       img-sz (reloc-rva + pe-al 4096 rsz)
+       rraw (aup rsz pe-falign)
+       img-sz (reloc-rva + aup rsz 4096)
        opt (catall [
          (le16 523) '(0 0)                               ; pe32+ magic, linker 0.0
          (le32 traw) (le32 draw) (le32 0)

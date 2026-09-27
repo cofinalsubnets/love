@@ -168,6 +168,7 @@
        (n < 0) ("-" + radix (0 - n) b)
        (radix (n // b) b + string ("0123456789abcdefghijklmnopqrstuvwxyz" (n % b))))
    (zpad w s) (#s < w ? (zpad w ("0" + s)) s)
+   (aup n a) ((n + a - 1) & -a)                   ; n up to a multiple of a, a power of two
    ; a code point as its utf-8 bytes, "" outside unicode. `string` on a number is one byte
    (utf8 v)
     (? (v < 0) ""

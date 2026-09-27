@@ -428,7 +428,6 @@
                                  (string? x) (go xs (a + #x) ((a . x) . flush 0) () (a + #x))
                                  (go xs (a + 1) acc (x . run) (two? run ? r0 a))))))
            x (scare 'wasm-data-form x)))
-   (w-align16 a) (a + ((16 - (a % 16)) % 16))
    ;; an object off disk: the gen tuple as text, or a container -- `wo1 TEXTLEN BLOBLEN..` on
    ;; the first line, the text, then the blobs (a carried archive, a wad) behind it, each
    ;; standing as (blob k) in its raw form: a megabyte of string literal is what the reader
@@ -502,14 +501,14 @@
        ;;    (love_nifs, love_rela, every named section) gets its __start_/__stop_ pair here.
        syms {}
        base (peep opts 'base 4096)
-       (lay st forms) (: r (w-lay-data forms (w-align16 <st) syms (st 1)) [<r (r 1)])
+       (lay st forms) (: r (w-lay-data forms (aup <st 16) syms (st 1)) [<r (r 1)])
        (lane st forms) (foldl lay st forms)
        ;; a bracketed lane is read as an ARRAY of one struct, so its tus must BUTT: a
        ;; 16-align between two of them is a gap the stride knows nothing about, and the
        ;; drain then walks past the end. an explicit aligned(N) still lands, as its own form.
        (snug st forms) (: r (w-lay-data forms <st syms (st 1)) [<r (r 1)])
        (bracket nm st forms)                          ; the pair around one lane's whole
-        (: a (w-align16 <st) r (foldl snug [a (st 1)] forms)
+        (: a (aup <st 16) r (foldl snug [a (st 1)] forms)
            _ (pin syms (nom ("__start_" + nm)) ['data a])
            _ (pin syms (nom ("__stop_" + nm)) ['data <r])
            r)
@@ -525,9 +524,9 @@
        dend <st6
        _ (pin syms '__data_start__ ['data base]) _ (pin syms '__data_load__ ['data base])
        _ (pin syms '__data_end__ ['data dend])
-       st7 (lane [(w-align16 dend) (st6 1)] d8)
+       st7 (lane [(aup dend 16) (st6 1)] d8)
        bend <st7
-       _ (pin syms '__bss_start__ ['data (w-align16 dend)]) _ (pin syms '__bss_end__ ['data bend])
+       _ (pin syms '__bss_start__ ['data (aup dend 16)]) _ (pin syms '__bss_end__ ['data bend])
        _ (pin syms '__load_size__ ['data (bend - base)])
        items (rev (st7 1))
        ;; 5. the index space: the imports the program names, then the functions. what is
@@ -570,7 +569,7 @@
               items)
        ;; 7. the stack above the data, sp at its top; the memory holds it all
        stack (peep opts 'stack 4194304)
-       sp0 (w-align16 bend + stack)
+       sp0 (aup bend 16 + stack)
        pages ((sp0 + 65535) // 65536 + 1)
        exports (: e (peep opts 'exports 'all)
                   seen {}                                 ; a weak twin names the same export once

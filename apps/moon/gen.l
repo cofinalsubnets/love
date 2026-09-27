@@ -481,7 +481,7 @@
    ; the memory class: an aggregate past 16 bytes, passed wholly on the stack (x64 only; AAPCS64 differs)
    (amem? g ty) (stru? ty && !(aclass g ty) && !(arm? g) && !(t32? g))
    (asalign g ty) (: e (peep (g 'stag) <>ty 0) (two? e ? <>>e 8))        ; a struct tag's alignment
-   (aslots g ty) (((tsz g ty + 7) & -8) >> 3)                              ; its eightbyte count
+   (aslots g ty) (aup (tsz g ty) 8 >> 3)                              ; its eightbyte count
    ; a memory-class return: a hidden pointer as the first gp argument, filled and answered by
    ; the callee. v6-M past 4 bytes, SysV past 16
    (sretm? g ty) (stru? ty && (v6m? g && 4 < tsz g ty || amem? g ty))
@@ -1494,7 +1494,7 @@
                   (: (go l) (two? l ?
                              (: o <l (<o <= x && x < <o + <>o ? o (go >l))))
                      (go sl)))
-   (ntmp g ty) (nslot g $ (tsz g ty + 7) & -8)
+   (ntmp g ty) (nslot g $ aup (tsz g ty) 8)
    ; the store-immediate op for (ty, k) | (), the vi fold's license (x64 only). st sign-extends
    ; imm32, the narrow forms truncate
    (fitsw? v) (-2147483648 <= v <= 4294967295)      ; sits in a 32-bit word under either signedness
@@ -1539,7 +1539,7 @@
    (clitcode g env off ty ini)
     (? (arr? ty || stru? ty)
         (: f (cgfill g env off ty ini)
-           (? (bad? f) 'bad (cgzero g off ((tsz g ty + 7) & -8) + f)))
+           (? (bad? f) 'bad (cgzero g off (aup (tsz g ty) 8) + f)))
        (: v (? (two? ini && <ini = 'init)
                (? (two? <>ini) <<>ini '(num 0)) ini)
           (cgstore g env off ty v)))
@@ -2580,11 +2580,11 @@
                        (d128? aty)                               ; a wide arg: not carried (love.c passes limbs, never dlimbs)
                         (nolane g "a wide value is not carried as an argument")
                        (pair? g aty)                             ; a pair arg: an even-odd register pair (AAPCS32
-                        (: gpe ((gpc + 1) & -2)                  ;  rounds up), else the stack 8-aligned -- and gp
+                        (: gpe (aup gpc 2)                  ;  rounds up), else the stack 8-aligned -- and gp
                            (? ((gpe + 2) <= ngp g)               ;  assignment closes behind a stack arg (C.13)
                                (kls >as (i + 1) (gpe + 2) xmmc ovc
                                     ([['g2 gpe] (asll g a + spush2)] . acc))
-                               (: ov8 ((ovc + 7) & -8)
+                               (: ov8 (aup ovc 8)
                                   (kls >as (i + 1) 4 xmmc (ov8 + 8)
                                        (. [['ov ov8 8]
                                                 (asll g a + pstw 'sp ov8 'r0 'r1)]
@@ -2631,7 +2631,7 @@
                               (: k (vfpn xmmc 2 2)
                                  (? (0 <= k) (kls >as (i + 1) gpc (vfpm xmmc k 2) ovc
                                                   ([['x (k // 2)] rpush] . acc))
-                                    (: ov8 ((ovc + 7) & -8)
+                                    (: ov8 (aup ovc 8)
                                        (kls >as (i + 1) gpc vfpx (ov8 + 8)
                                             ([['ov ov8 8]
                                               (aval + pstw 'sp ov8 'r0 'r1)] . acc)))))
@@ -2644,11 +2644,11 @@
                                     (kls >as (i + 1) gpc xmmc (ovc + 4)
                                          ([['ov ovc 4] (av1 + [['st 'sp ovc 'r0]])] . acc))))
                              (v6m? g && wd2)               ; v6-M base ABI: a double/8B-blob arg is an even-odd gp
-                              (: gpe ((gpc + 1) & -2)      ;  pair (aval already lands r0:r1), else the 8-aligned stack
+                              (: gpe (aup gpc 2)      ;  pair (aval already lands r0:r1), else the 8-aligned stack
                                  (? (gpe + 2 <= (ngp g))
                                      (kls >as (i + 1) (gpe + 2) xmmc ovc
                                           ([['g2 gpe] (aval + spush2)] . acc))
-                                     (: ov8 ((ovc + 7) & -8)
+                                     (: ov8 (aup ovc 8)
                                         (kls >as (i + 1) 4 xmmc (ov8 + 8)
                                              (. [['ov ov8 8]
                                                       (aval + pstw 'sp ov8 'r0 'r1)]
@@ -2732,7 +2732,7 @@
              padn ((nov & 1) = 1 ? 8 0)               ; keep sp 16-aligned across the overflow block
              ; t32 slots are byte offsets: the block spans to the highest slot's end, rounded to 8; x64/a64 count 8-byte slots
              ovblk (? (t32? g)
-                      (: (go9 l9 m9) (? !(two? l9) ((m9 + 7) & -8)
+                      (: (go9 l9 m9) (? !(two? l9) (aup m9 8)
                                         (: ce <<l9
                                            e9 (<ce @ 'ov (<>ce + (two? >>ce ? <>>ce 4)) 0)
                                            (go9 >l9 (m9 < e9 ? e9 m9))))
@@ -4049,7 +4049,7 @@
                                                      (pin ldconv <ls o, pl >ls)) pl)
                                        (clds (e 1)))
                                     (cvt >l))) cvt) cvl)
-                F2 ((F + 8 * tally ds + 15) & -16)
+                F2 (aup (F + 8 * tally ds) 16)
                 ; a converted cell joins the slot map, or deadst/repack meet an unclaimed r4 touch and
                 ; bar the fn; one 8-byte slot per record depth, at the offset cvt hands the st/ld
                 _ (foldl (\ _ d (: o ((F + 8) + (8 * rank d ds 0))
@@ -4854,8 +4854,8 @@
                                   (go csused 1))
                          csaves (map (r \ ['st 'r4 (peep cslot r 0) r]) csused)
                          csrests (map (r \ ['ld r 'r4 (peep cslot r 0)]) csused)
-                         K2 ((high2 + 15) & -16)
-                         K3 (? (two? csused) (((high2 + (8 * tally csused)) + 15) & -16) K2)
+                         K2 (aup high2 16)
+                         K3 (? (two? csused) (aup (high2 + 8 * tally csused) 16) K2)
                          ; a jmp off the label table is a sibcall; so is one to the entry label (a self tail call)
                          (exit9? f) (xit? f || xjmp? f labt ||
                                      (two? f && <f = 'jmp && 0 = (peep labt <>f -1)))
@@ -5844,7 +5844,7 @@
    (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
     (: b (imgbytes g ty val) (? (bad? b) 'bad (b + zeros (w - imbytelen b))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
-    (: span ((tsz g ty + wsize g - 1) & -(wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
+    (: span (aup (tsz g ty) (wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
        raw (imgbytes g ty ini)
        (? (bad? raw) 'bad (raw + zeros (span - imbytelen raw))))
 
@@ -5897,7 +5897,7 @@
                      !(elem (gtgt g) '(x64 a64 rv64))
                       (nolane g ("no lane for a variable-length array" + ontgt g))
                      (vone ps env2 acc p ty))
-                 (: span ((tsz g ty + 7) & -8)
+                 (: span (aup (tsz g ty) 8)
               off (nslot g span)
               hreg (? (g 'inlining) ()                   ; a statement expression's decl takes no seat
                       !(lhomable? ty || fhomable? ty || (d128? ty && w128? g)) ()
@@ -7478,7 +7478,7 @@
                    (: off (nslot g 8)
                       (spill hp >ps (gpe + 2) xmmi ovi ([<p off pty] . env)
                              (acc + pstw 'r4 off (argr g gpe) (argr g (gpe + 1)))))
-                  (: ov8 ((ovi + 7) & -8)
+                  (: ov8 (aup ovi 8)
                      (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
               (? (v6m? g && sse2? g pty)                ; v6-M: a position-0 16B composite arrives whole in r0-r3
                   (gpi != 0 ? 'bad                          ;  (the caller's g4 lane); any later start splits -- deferred
@@ -7514,10 +7514,10 @@
                      (: k (vfpn xmmi 2 2) off (nslot g 8)
                         (spill hp >ps gpi (vfpm xmmi k 2) ovi ([<p off pty] . env)
                                (acc + fstf g 'double 'r4 off (xmmreg (k // 2)))))
-                     (: ov8 ((ovi + 7) & -8)
+                     (: ov8 (aup ovi 8)
                         (spill hp >ps gpi vfpx (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
                  (v6m? g && stru? pty && aone g pty == 'sse)           ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
-                  (gpair ((gpi + 1) & -2))
+                  (gpair (aup gpi 2))
                  (stru? pty && two? (aeb2 g pty))       ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
                   (? (pol? hp && !(sse2? g pty)) 'bad        ; a policy homes gp scalars only -- mixed/int-pair 16B deopts
                      (: cls (aeb2 g pty) c0 <cls c1 <>cls
@@ -7563,7 +7563,7 @@
                                (acc + [['st 'r4 off (argr g gpi)]])))
                      (spill hp >ps gpi xmmi (ovi + 4) ([<p (ovb g + ovi) pty] . env) acc))
                  (v6m? g && flo? pty)                   ; v6-M base ABI: a double param is a gp pair (no FPU regs exist)
-                  (gpair ((gpi + 1) & -2))
+                  (gpair (aup gpi 2))
                  ; a double granted an xmm seat rides there off its arrival; the rest take a slot
                  (fhomable? pty && xmmi < 8 && nom? (peep (g 'fpar) <p ()))
                   (: fr (peep (g 'fpar) <p ())
@@ -7573,7 +7573,7 @@
                   (: off (nslot g 8)
                      (spill hp >ps gpi (xmmi + 1) ovi ([<p off pty] . env)
                             (acc + fstf g pty 'r4 off (xmmreg xmmi))))
-                 (pair? g pty) (gpair ((gpi + 1) & -2))   ; a pair param: the even-odd register pair
+                 (pair? g pty) (gpair (aup gpi 2))   ; a pair param: the even-odd register pair
                  (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
                   (nolane g "a wide value is not carried as a parameter")
                  (!(flo? pty) && gpi < ngp g)
@@ -7673,7 +7673,7 @@
            (: body (bldreset g,
                     cgitems g <>sp0 <><>>>f ())
               (? (bad? body) 'bad
-                 (: frame ((peep g 'off 0 + 15) & -16)
+                 (: frame (aup (peep g 'off 0) 16)
                     (? (arm? g)
                        ; the IR sweeps stay out of the arm build (a64 sweeps post-choice, where r4 is unambiguously fp:
                        ; a raw r4 is also the 5th argument); a4ize retargets r4 -> fp after sibcall. no sav3: r3 is caller-saved
