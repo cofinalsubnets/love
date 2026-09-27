@@ -654,11 +654,11 @@ kore does not is the census's to say.
 
 ## the census (kore against the other userlands)
 
-Taken 2026-09-26. A row is a tool NAME and a mark says the implementation answers to it —
-the same reach as the inventory, nothing about flags. Every tool kore has is a row, and so is
-every tool at least two of the others share; a name only one other carries is listed after
-the table instead, since those are mostly one system's own administration (busybox's init and
-network daemons, GNU's toolchain driver names).
+Taken 2026-09-26, kore's column retaken 2026-09-27. A row is a tool NAME and a mark says the
+implementation answers to it — the same reach as the inventory, nothing about flags. Every
+tool kore has is a row, and so is every tool at least two of the others share; a name only
+one other carries is listed after the table instead, since those are mostly one system's own
+administration (busybox's init and network daemons, GNU's toolchain driver names).
 
 * **kore** — the `applets` tablet in kore.l, plus the love verbs that are unix tools: `cc`
   (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `mc`, `pom`.
@@ -679,9 +679,9 @@ packages above.
 
 | | kore | busybox | toybox | GNU | uutils |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| names | 192 | 392 | 239 | 201 | 108 |
-| shared with kore | | 160 | 138 | 133 | 101 |
-| carried by no one else | 10 | 161 | 33 | 58 | 1 |
+| names | 198 | 392 | 239 | 201 | 108 |
+| shared with kore | | 165 | 141 | 134 | 101 |
+| carried by no one else | 11 | 160 | 33 | 58 | 1 |
 
 What at least three of the other four carry and kore does not: `fmt`.
 
@@ -774,7 +774,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `hostid` | ✓ | ✓ |  | ✓ | ✓ |
 | `hostname` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `html2text` | ✓ |  |  |  |  |
-| `httpd` |  | ✓ | ✓ |  |  |
+| `httpd` | ✓ | ✓ | ✓ |  |  |
 | `hwclock` |  | ✓ | ✓ |  |  |
 | `i2cdetect` |  | ✓ | ✓ |  |  |
 | `i2cdump` |  | ✓ | ✓ |  |  |
@@ -838,6 +838,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `nohup` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `nproc` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `nsenter` |  | ✓ | ✓ |  |  |
+| `nslookup` | ✓ | ✓ |  |  |  |
 | `numfmt` |  |  |  | ✓ | ✓ |
 | `objcopy` | ✓ |  |  | ✓ |  |
 | `od` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -848,8 +849,8 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `pathchk` | ✓ |  |  | ✓ | ✓ |
 | `pgrep` | ✓ | ✓ | ✓ |  |  |
 | `pidof` | ✓ | ✓ | ✓ |  |  |
-| `ping` |  | ✓ | ✓ |  |  |
-| `ping6` |  | ✓ | ✓ |  |  |
+| `ping` | ✓ | ✓ | ✓ |  |  |
+| `ping6` | ✓ | ✓ | ✓ |  |  |
 | `pinky` | ✓ |  |  | ✓ | ✓ |
 | `pivot_root` |  | ✓ | ✓ |  |  |
 | `pkill` | ✓ | ✓ | ✓ |  |  |
@@ -911,7 +912,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `tar` | ✓ | ✓ | ✓ | ✓ |  |
 | `taskset` |  | ✓ | ✓ |  |  |
 | `tee` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `telnet` |  | ✓ |  | ✓ |  |
+| `telnet` | ✓ | ✓ |  | ✓ |  |
 | `telnetd` |  | ✓ |  | ✓ |  |
 | `test` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `time` | ✓ | ✓ | ✓ | ✓ |  |
@@ -950,6 +951,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `which` | ✓ | ✓ | ✓ | ✓ |  |
 | `who` | ✓ |  | ✓ | ✓ | ✓ |
 | `whoami` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `www` | ✓ |  |  |  |  |
 | `xargs` | ✓ | ✓ | ✓ | ✓ |  |
 | `xxd` | ✓ | ✓ | ✓ |  |  |
 | `xz` | ✓ | ✓ |  |  |  |
@@ -959,24 +961,24 @@ What at least three of the other four carry and kore does not: `fmt`.
 
 The names only one carries:
 
-* **busybox alone** (161): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
-  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond`
-  `crontab` `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap`
-  `dumpleases` `ed` `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash`
-  `fdflush` `fdformat` `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser`
-  `getty` `hdparm` `ifdown` `ifenslave` `ifplugd` `ifup` `inetd` `init` `iostat` `ip` `ipaddr`
-  `ipcalc` `ipcrm` `ipcs` `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode` `klogd`
-  `linux64` `linuxrc` `loadfont` `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma`
-  `lzopcat` `makemime` `mdev` `mesg` `mke2fs` `mkfs.ext2` `mkfs.minix` `modprobe` `mpstat` `mt`
-  `nameif` `nmeter` `nslookup` `ntpd` `passwd` `pipe_progress` `popmaildir` `powertop` `pscan`
-  `pstree` `raidautorun` `rdate` `rdev` `readprofile` `reformime` `resize` `resume` `route`
-  `rpm2cpio` `run-init` `run-parts` `runsv` `runsvdir` `rx` `script` `scriptreplay` `seedrng`
-  `sendmail` `setarch` `setconsole` `setfont` `setkeycodes` `setlogcons` `setpriv` `setserial`
-  `setuidgid` `showkey` `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon`
-  `sulogin` `sv` `svc` `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `traceroute`
-  `traceroute6` `tree` `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol` `ubirename`
-  `ubirmvol` `ubirsvol` `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop`
-  `unzip` `vlock` `volname` `whois` `zcip`
+* **busybox alone** (160): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
+  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond` `crontab`
+  `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap` `dumpleases`
+  `ed` `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash` `fdflush`
+  `fdformat` `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser` `getty` `hdparm`
+  `ifdown` `ifenslave` `ifplugd` `ifup` `inetd` `init` `iostat` `ip` `ipaddr` `ipcalc` `ipcrm`
+  `ipcs` `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode` `klogd` `linux64`
+  `linuxrc` `loadfont` `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma` `lzopcat`
+  `makemime` `mdev` `mesg` `mke2fs` `mkfs.ext2` `mkfs.minix` `modprobe` `mpstat` `mt` `nameif`
+  `nmeter` `ntpd` `passwd` `pipe_progress` `popmaildir` `powertop` `pscan` `pstree`
+  `raidautorun` `rdate` `rdev` `readprofile` `reformime` `resize` `resume` `route` `rpm2cpio`
+  `run-init` `run-parts` `runsv` `runsvdir` `rx` `script` `scriptreplay` `seedrng` `sendmail`
+  `setarch` `setconsole` `setfont` `setkeycodes` `setlogcons` `setpriv` `setserial` `setuidgid`
+  `showkey` `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon` `sulogin` `sv`
+  `svc` `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `traceroute` `traceroute6`
+  `tree` `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol`
+  `ubirsvol` `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `unzip`
+  `vlock` `volname` `whois` `zcip`
 * **toybox alone** (33): `acpi` `count` `devmem` `file` `fstype` `getconf` `gpiodetect`
   `gpiofind` `gpioget` `gpioinfo` `gpioset` `help` `host` `iconv` `iorenice` `iotop` `mcookie`
   `memeater` `mix` `nbd-server` `netcat` `nologin` `oneit` `prlimit` `pwgen` `sntp` `uclampset`
