@@ -196,6 +196,7 @@
     (: p (? #dir (dir + "/" + nm) nm)
        st (lstat p)
        (? (two? st) [nm st p] ()))
+   (vdir-main as) (ls-main ("-l" . as))           ; coreutils' long one
    (ls-main as)
     (: t (tablet 0)
        o (uopt as t '() '(101) ())
