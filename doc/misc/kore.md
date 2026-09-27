@@ -689,11 +689,13 @@ kore does not is the census's to say.
 
 ## the census (kore against the other userlands)
 
-Taken 2026-09-26, kore's column retaken 2026-09-27. A row is a tool NAME and a mark says the
-implementation answers to it — the same reach as the inventory, nothing about flags. Every
+Taken 2026-09-26; kore's column retaken and plan9port's added 2026-09-27. A row is a tool
+NAME and a mark says the implementation answers to it — the same reach as the inventory,
+nothing about flags (plan9port's `ls` or `grep` answers to the name in Plan 9's manner). Every
 tool kore has is a row, and so is every tool at least two of the others share; a name only
 one other carries is listed after the table instead, since those are mostly one system's own
-administration (busybox's init and network daemons, GNU's toolchain driver names).
+(busybox's init and network daemons, GNU's toolchain driver names, plan9port's graphics and
+file servers).
 
 * **kore** — the `applets` tablet in kore.l, plus the love verbs that are unix tools: `cc`
   (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `mc`, `pom`.
@@ -708,297 +710,306 @@ administration (busybox's init and network daemons, GNU's toolchain driver names
   packages (texinfo, gettext, groff, gdb, bison).
 * **uutils** — uutils-coreutils 0.12.0, the `uu-*` names. Its findutils and diffutils are
   separate projects, not installed.
+* **plan9port** — 20260826 as Arch packages it: the files in `$PLAN9/bin`
+  (/usr/lib/plan9/bin), less the three `.rc` libraries its scripts source. The commands in
+  its subdirectories (`venti/`, `fossil/`, `upas/`, `fs/`, `disk/`) are reached by those
+  prefixed names and are not counted.
 
-Retaken with `busybox --list`, `toybox`, `ls /usr/bin/uu-*` and `pacman -Qql` over the
-packages above.
+Retaken with `busybox --list`, `toybox`, `ls /usr/bin/uu-*`, `ls $PLAN9/bin` and `pacman -Qql`
+over the packages above.
 
-| | kore | busybox | toybox | GNU | uutils |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| names | 200 | 392 | 239 | 201 | 108 |
-| shared with kore | | 166 | 141 | 134 | 101 |
-| carried by no one else | 12 | 159 | 33 | 58 | 1 |
+| | kore | busybox | toybox | GNU | uutils | plan9port |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| names | 200 | 392 | 239 | 201 | 108 | 261 |
+| shared with kore | | 166 | 141 | 134 | 101 | 49 |
+| carried by no one else | 11 | 157 | 30 | 58 | 1 | 204 |
 
-What at least three of the other four carry and kore does not: `fmt`.
+What at least three of the other five carry and kore does not: `fmt`, `pr`, `uncompress`.
 
-| tool | kore | busybox | toybox | GNU | uutils |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| `[` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ain` | ✓ |  |  |  |  |
-| `ar` | ✓ | ✓ |  | ✓ |  |
-| `arch` | ✓ | ✓ | ✓ |  | ✓ |
-| `as` | ✓ |  |  | ✓ |  |
-| `ascii` | ✓ | ✓ | ✓ |  |  |
-| `awk` | ✓ | ✓ |  | ✓ |  |
-| `b2sum` | ✓ |  |  | ✓ | ✓ |
-| `base32` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `base64` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `basename` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `basenc` | ✓ |  |  | ✓ | ✓ |
-| `bc` | ✓ | ✓ |  | ✓ |  |
-| `blkdiscard` |  | ✓ | ✓ |  |  |
-| `blkid` |  | ✓ | ✓ |  |  |
-| `blockdev` |  | ✓ | ✓ |  |  |
-| `bunzip2` | ✓ | ✓ | ✓ |  |  |
-| `bzcat` | ✓ | ✓ | ✓ |  |  |
-| `bzip2` | ✓ | ✓ |  |  |  |
-| `cal` | ✓ | ✓ | ✓ |  |  |
-| `cat` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `cc` | ✓ |  |  | ✓ |  |
-| `chattr` |  | ✓ | ✓ |  |  |
-| `chgrp` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `chmod` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `chown` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `chroot` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `chrt` |  | ✓ | ✓ |  |  |
-| `chvt` |  | ✓ | ✓ |  |  |
-| `cksum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `clear` | ✓ | ✓ | ✓ |  |  |
-| `cmp` | ✓ | ✓ | ✓ | ✓ |  |
-| `comm` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `cook` | ✓ |  |  |  |  |
-| `cp` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `cpio` | ✓ | ✓ | ✓ | ✓ |  |
-| `crc32` | ✓ | ✓ | ✓ |  |  |
-| `csplit` |  |  |  | ✓ | ✓ |
-| `cut` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `date` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `dc` | ✓ | ✓ |  | ✓ |  |
-| `dd` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `deallocvt` |  | ✓ | ✓ |  |  |
-| `df` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `diff` | ✓ | ✓ |  | ✓ |  |
-| `dir` | ✓ |  |  | ✓ | ✓ |
-| `dircolors` | ✓ |  |  | ✓ | ✓ |
-| `dirname` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `dmesg` |  | ✓ | ✓ |  |  |
-| `dnsdomainname` | ✓ | ✓ | ✓ | ✓ |  |
-| `dos2unix` | ✓ | ✓ | ✓ |  |  |
-| `du` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `echo` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ed` | ✓ | ✓ |  |  |  |
-| `egrep` | ✓ | ✓ | ✓ | ✓ |  |
-| `eject` |  | ✓ | ✓ |  |  |
-| `env` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ex` | ✓ |  |  |  |  |
-| `expand` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `expr` | ✓ | ✓ |  | ✓ | ✓ |
-| `factor` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `fallocate` |  | ✓ | ✓ |  |  |
-| `false` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `fat` | ✓ |  |  |  |  |
-| `fgrep` | ✓ | ✓ | ✓ | ✓ |  |
-| `find` | ✓ | ✓ | ✓ | ✓ |  |
-| `flock` |  | ✓ | ✓ |  |  |
-| `fmt` |  |  | ✓ | ✓ | ✓ |
-| `fold` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `free` | ✓ | ✓ | ✓ |  |  |
-| `freeramdisk` |  | ✓ | ✓ |  |  |
-| `fsfreeze` |  | ✓ | ✓ |  |  |
-| `fsync` | ✓ | ✓ | ✓ |  |  |
-| `ftpd` |  | ✓ |  | ✓ |  |
-| `ftpget` |  | ✓ | ✓ |  |  |
-| `ftpput` |  | ✓ | ✓ |  |  |
-| `getopt` | ✓ | ✓ | ✓ |  |  |
-| `grep` | ✓ | ✓ | ✓ | ✓ |  |
-| `groups` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `gunzip` | ✓ | ✓ | ✓ | ✓ |  |
-| `gzip` | ✓ | ✓ |  | ✓ |  |
-| `halt` |  | ✓ | ✓ |  |  |
-| `hd` | ✓ | ✓ | ✓ |  |  |
-| `head` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `hexdump` | ✓ | ✓ |  |  |  |
-| `hexedit` | ✓ | ✓ | ✓ |  |  |
-| `hostid` | ✓ | ✓ |  | ✓ | ✓ |
-| `hostname` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `html2text` | ✓ |  |  |  |  |
-| `httpd` | ✓ | ✓ | ✓ |  |  |
-| `hwclock` |  | ✓ | ✓ |  |  |
-| `i2cdetect` |  | ✓ | ✓ |  |  |
-| `i2cdump` |  | ✓ | ✓ |  |  |
-| `i2cget` |  | ✓ | ✓ |  |  |
-| `i2cset` |  | ✓ | ✓ |  |  |
-| `i2ctransfer` |  | ✓ | ✓ |  |  |
-| `id` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ifconfig` |  | ✓ | ✓ |  |  |
-| `inotifyd` |  | ✓ | ✓ |  |  |
-| `insmod` |  | ✓ | ✓ |  |  |
-| `install` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ionice` |  | ✓ | ✓ |  |  |
-| `join` | ✓ |  |  | ✓ | ✓ |
-| `kill` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `killall` | ✓ | ✓ | ✓ |  |  |
-| `killall5` |  | ✓ | ✓ |  |  |
-| `ld` | ✓ |  |  | ✓ |  |
-| `less` | ✓ | ✓ |  |  |  |
-| `lift` | ✓ |  |  |  |  |
-| `link` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `linux32` |  | ✓ | ✓ |  |  |
-| `ln` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `logger` |  | ✓ | ✓ |  |  |
-| `login` |  | ✓ | ✓ |  |  |
-| `logname` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `losetup` |  | ✓ | ✓ |  |  |
-| `ls` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `lsattr` |  | ✓ | ✓ |  |  |
-| `lsmod` |  | ✓ | ✓ |  |  |
-| `lspci` |  | ✓ | ✓ |  |  |
-| `lsusb` |  | ✓ | ✓ |  |  |
-| `lush` | ✓ |  |  |  |  |
-| `lzcat` | ✓ | ✓ |  |  |  |
-| `mac2unix` | ✓ |  |  |  |  |
-| `make` | ✓ |  |  | ✓ |  |
-| `makedevs` |  | ✓ | ✓ |  |  |
-| `man` | ✓ | ✓ |  |  |  |
-| `markdown` | ✓ |  |  |  |  |
-| `mc` | ✓ |  |  |  |  |
-| `md5sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `microcom` |  | ✓ | ✓ |  |  |
-| `mkdir` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `mkdosfs` | ✓ | ✓ |  |  |  |
-| `mkfifo` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `mkfs.vfat` | ✓ | ✓ |  |  |  |
-| `mknod` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `mkpasswd` |  | ✓ | ✓ |  |  |
-| `mkswap` |  | ✓ | ✓ |  |  |
-| `mktemp` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `modinfo` |  | ✓ | ✓ |  |  |
-| `more` | ✓ | ✓ |  |  | ✓ |
-| `mount` | ✓ | ✓ | ✓ |  |  |
-| `mountpoint` | ✓ | ✓ | ✓ |  |  |
-| `mv` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nbd-client` |  | ✓ | ✓ |  |  |
-| `nc` | ✓ | ✓ | ✓ |  |  |
-| `netstat` |  | ✓ | ✓ |  |  |
-| `nice` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nl` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nm` | ✓ |  |  | ✓ |  |
-| `nohup` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nproc` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `nsenter` |  | ✓ | ✓ |  |  |
-| `nslookup` | ✓ | ✓ |  |  |  |
-| `numfmt` |  |  |  | ✓ | ✓ |
-| `objcopy` | ✓ |  |  | ✓ |  |
-| `od` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `openvt` |  | ✓ | ✓ |  |  |
-| `partprobe` |  | ✓ | ✓ |  |  |
-| `paste` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `patch` | ✓ | ✓ | ✓ | ✓ |  |
-| `pathchk` | ✓ |  |  | ✓ | ✓ |
-| `pgrep` | ✓ | ✓ | ✓ |  |  |
-| `pidof` | ✓ | ✓ | ✓ |  |  |
-| `ping` | ✓ | ✓ | ✓ |  |  |
-| `ping6` | ✓ | ✓ | ✓ |  |  |
-| `pinky` | ✓ |  |  | ✓ | ✓ |
-| `pivot_root` |  | ✓ | ✓ |  |  |
-| `pkill` | ✓ | ✓ | ✓ |  |  |
-| `pmap` |  | ✓ | ✓ |  |  |
-| `pom` | ✓ |  |  |  |  |
-| `poweroff` |  | ✓ | ✓ |  |  |
-| `pr` |  |  |  | ✓ | ✓ |
-| `printenv` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `printf` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ps` | ✓ | ✓ | ✓ |  |  |
-| `ptx` |  |  |  | ✓ | ✓ |
-| `pwd` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `pwdx` | ✓ | ✓ | ✓ |  |  |
-| `ranlib` | ✓ |  |  | ✓ |  |
-| `readahead` |  | ✓ | ✓ |  |  |
-| `readelf` | ✓ |  | ✓ | ✓ |  |
-| `readlink` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `realpath` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `reboot` |  | ✓ | ✓ |  |  |
-| `renice` | ✓ | ✓ | ✓ |  |  |
-| `reset` | ✓ | ✓ | ✓ |  |  |
-| `rev` | ✓ | ✓ | ✓ |  |  |
-| `rfkill` |  | ✓ | ✓ |  |  |
-| `rm` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `rmdir` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `rmmod` |  | ✓ | ✓ |  |  |
-| `rtcwake` |  | ✓ | ✓ |  |  |
-| `sed` | ✓ | ✓ | ✓ | ✓ |  |
-| `seq` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `setfattr` |  | ✓ | ✓ |  |  |
-| `setsid` | ✓ | ✓ | ✓ |  |  |
-| `sh` | ✓ | ✓ |  | ✓ |  |
-| `sha1sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sha224sum` | ✓ |  | ✓ | ✓ | ✓ |
-| `sha256sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sha384sum` | ✓ |  | ✓ | ✓ | ✓ |
-| `sha3sum` | ✓ | ✓ | ✓ |  |  |
-| `sha512sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `shred` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `shuf` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `size` | ✓ |  |  | ✓ |  |
-| `sleep` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sort` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `split` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `stat` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `stdbuf` |  |  |  | ✓ | ✓ |
-| `strings` | ✓ | ✓ | ✓ | ✓ |  |
-| `strip` | ✓ |  |  | ✓ |  |
-| `stty` | ✓ | ✓ |  | ✓ | ✓ |
-| `su` |  | ✓ | ✓ |  |  |
-| `sum` | ✓ | ✓ |  | ✓ | ✓ |
-| `swapoff` |  | ✓ | ✓ |  |  |
-| `swapon` |  | ✓ | ✓ |  |  |
-| `switch_root` |  | ✓ | ✓ |  |  |
-| `sync` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sysctl` |  | ✓ | ✓ |  |  |
-| `tac` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tail` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tar` | ✓ | ✓ | ✓ | ✓ |  |
-| `taskset` |  | ✓ | ✓ |  |  |
-| `tee` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `telnet` | ✓ | ✓ |  | ✓ |  |
-| `telnetd` |  | ✓ |  | ✓ |  |
-| `test` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `time` | ✓ | ✓ | ✓ | ✓ |  |
-| `timeout` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `top` | ✓ | ✓ | ✓ |  |  |
-| `touch` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tr` | ✓ | ✓ |  | ✓ | ✓ |
-| `true` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `truncate` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ts` | ✓ | ✓ | ✓ |  |  |
-| `tsort` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tty` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `tunctl` |  | ✓ | ✓ |  |  |
-| `umount` | ✓ | ✓ | ✓ |  |  |
-| `uname` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `uncompress` |  | ✓ |  | ✓ |  |
-| `unexpand` | ✓ | ✓ |  | ✓ | ✓ |
-| `uniq` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `unix2dos` | ✓ | ✓ | ✓ |  |  |
-| `unlink` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `unlzma` | ✓ | ✓ |  |  |  |
-| `unshare` |  | ✓ | ✓ |  |  |
-| `unxz` | ✓ | ✓ |  |  |  |
-| `uptime` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `users` | ✓ |  |  | ✓ | ✓ |
-| `usleep` | ✓ | ✓ | ✓ |  |  |
-| `uudecode` | ✓ | ✓ | ✓ |  |  |
-| `uuencode` | ✓ | ✓ | ✓ |  |  |
-| `vconfig` |  | ✓ | ✓ |  |  |
-| `vdir` | ✓ |  |  | ✓ | ✓ |
-| `vi` | ✓ | ✓ |  |  |  |
-| `watch` | ✓ | ✓ | ✓ |  |  |
-| `watchdog` |  | ✓ | ✓ |  |  |
-| `wc` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `wget` | ✓ | ✓ | ✓ | ✓ |  |
-| `which` | ✓ | ✓ | ✓ | ✓ |  |
-| `who` | ✓ |  | ✓ | ✓ | ✓ |
-| `whoami` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `www` | ✓ |  |  |  |  |
-| `xargs` | ✓ | ✓ | ✓ | ✓ |  |
-| `xxd` | ✓ | ✓ | ✓ |  |  |
-| `xz` | ✓ | ✓ |  |  |  |
-| `xzcat` | ✓ | ✓ |  |  |  |
-| `yes` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `zcat` | ✓ | ✓ | ✓ | ✓ |  |
+| tool | kore | busybox | toybox | GNU | uutils | plan9port |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| `[` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `ain` | ✓ |  |  |  |  |  |
+| `ar` | ✓ | ✓ |  | ✓ |  |  |
+| `arch` | ✓ | ✓ | ✓ |  | ✓ |  |
+| `as` | ✓ |  |  | ✓ |  |  |
+| `ascii` | ✓ | ✓ | ✓ |  |  | ✓ |
+| `awk` | ✓ | ✓ |  | ✓ |  | ✓ |
+| `b2sum` | ✓ |  |  | ✓ | ✓ |  |
+| `base32` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `base64` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `basename` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `basenc` | ✓ |  |  | ✓ | ✓ |  |
+| `bc` | ✓ | ✓ |  | ✓ |  | ✓ |
+| `blkdiscard` |  | ✓ | ✓ |  |  |  |
+| `blkid` |  | ✓ | ✓ |  |  |  |
+| `blockdev` |  | ✓ | ✓ |  |  |  |
+| `bunzip2` | ✓ | ✓ | ✓ |  |  | ✓ |
+| `bzcat` | ✓ | ✓ | ✓ |  |  |  |
+| `bzip2` | ✓ | ✓ |  |  |  | ✓ |
+| `cal` | ✓ | ✓ | ✓ |  |  | ✓ |
+| `cat` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `cc` | ✓ |  |  | ✓ |  |  |
+| `chattr` |  | ✓ | ✓ |  |  |  |
+| `chgrp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `chmod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `chown` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `chroot` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `chrt` |  | ✓ | ✓ |  |  |  |
+| `chvt` |  | ✓ | ✓ |  |  |  |
+| `cksum` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `clear` | ✓ | ✓ | ✓ |  |  |  |
+| `cmp` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `comm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `cook` | ✓ |  |  |  |  |  |
+| `cp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `cpio` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `crc32` | ✓ | ✓ | ✓ |  |  |  |
+| `csplit` |  |  |  | ✓ | ✓ |  |
+| `cut` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `date` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `dc` | ✓ | ✓ |  | ✓ |  | ✓ |
+| `dd` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `deallocvt` |  | ✓ | ✓ |  |  |  |
+| `df` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `diff` | ✓ | ✓ |  | ✓ |  | ✓ |
+| `dir` | ✓ |  |  | ✓ | ✓ |  |
+| `dircolors` | ✓ |  |  | ✓ | ✓ |  |
+| `dirname` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `dmesg` |  | ✓ | ✓ |  |  |  |
+| `dnsdomainname` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `dos2unix` | ✓ | ✓ | ✓ |  |  |  |
+| `du` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `echo` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ed` | ✓ | ✓ |  |  |  | ✓ |
+| `egrep` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `eject` |  | ✓ | ✓ |  |  |  |
+| `env` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `ex` | ✓ |  |  |  |  |  |
+| `expand` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `expr` | ✓ | ✓ |  | ✓ | ✓ |  |
+| `factor` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `fallocate` |  | ✓ | ✓ |  |  |  |
+| `false` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `fat` | ✓ |  |  |  |  |  |
+| `fgrep` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `file` |  |  | ✓ |  |  | ✓ |
+| `find` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `flock` |  | ✓ | ✓ |  |  |  |
+| `fmt` |  |  | ✓ | ✓ | ✓ | ✓ |
+| `fold` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `free` | ✓ | ✓ | ✓ |  |  |  |
+| `freeramdisk` |  | ✓ | ✓ |  |  |  |
+| `fsfreeze` |  | ✓ | ✓ |  |  |  |
+| `fsync` | ✓ | ✓ | ✓ |  |  |  |
+| `ftpd` |  | ✓ |  | ✓ |  |  |
+| `ftpget` |  | ✓ | ✓ |  |  |  |
+| `ftpput` |  | ✓ | ✓ |  |  |  |
+| `getopt` | ✓ | ✓ | ✓ |  |  |  |
+| `grep` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `groups` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `gunzip` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `gzip` | ✓ | ✓ |  | ✓ |  | ✓ |
+| `halt` |  | ✓ | ✓ |  |  |  |
+| `hd` | ✓ | ✓ | ✓ |  |  |  |
+| `head` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `hexdump` | ✓ | ✓ |  |  |  |  |
+| `hexedit` | ✓ | ✓ | ✓ |  |  |  |
+| `hostid` | ✓ | ✓ |  | ✓ | ✓ |  |
+| `hostname` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `html2text` | ✓ |  |  |  |  |  |
+| `httpd` | ✓ | ✓ | ✓ |  |  |  |
+| `hwclock` |  | ✓ | ✓ |  |  |  |
+| `i2cdetect` |  | ✓ | ✓ |  |  |  |
+| `i2cdump` |  | ✓ | ✓ |  |  |  |
+| `i2cget` |  | ✓ | ✓ |  |  |  |
+| `i2cset` |  | ✓ | ✓ |  |  |  |
+| `i2ctransfer` |  | ✓ | ✓ |  |  |  |
+| `iconv` |  |  | ✓ |  |  | ✓ |
+| `id` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `ifconfig` |  | ✓ | ✓ |  |  |  |
+| `inotifyd` |  | ✓ | ✓ |  |  |  |
+| `insmod` |  | ✓ | ✓ |  |  |  |
+| `install` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `ionice` |  | ✓ | ✓ |  |  |  |
+| `join` | ✓ |  |  | ✓ | ✓ | ✓ |
+| `kill` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `killall` | ✓ | ✓ | ✓ |  |  |  |
+| `killall5` |  | ✓ | ✓ |  |  |  |
+| `ld` | ✓ |  |  | ✓ |  |  |
+| `less` | ✓ | ✓ |  |  |  |  |
+| `lift` | ✓ |  |  |  |  |  |
+| `link` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `linux32` |  | ✓ | ✓ |  |  |  |
+| `ln` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `logger` |  | ✓ | ✓ |  |  |  |
+| `login` |  | ✓ | ✓ |  |  |  |
+| `logname` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `losetup` |  | ✓ | ✓ |  |  |  |
+| `ls` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `lsattr` |  | ✓ | ✓ |  |  |  |
+| `lsmod` |  | ✓ | ✓ |  |  |  |
+| `lspci` |  | ✓ | ✓ |  |  |  |
+| `lsusb` |  | ✓ | ✓ |  |  |  |
+| `lush` | ✓ |  |  |  |  |  |
+| `lzcat` | ✓ | ✓ |  |  |  |  |
+| `mac2unix` | ✓ |  |  |  |  |  |
+| `make` | ✓ |  |  | ✓ |  |  |
+| `makedevs` |  | ✓ | ✓ |  |  |  |
+| `man` | ✓ | ✓ |  |  |  | ✓ |
+| `markdown` | ✓ |  |  |  |  |  |
+| `mc` | ✓ |  |  |  |  | ✓ |
+| `md5sum` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `microcom` |  | ✓ | ✓ |  |  |  |
+| `mkdir` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `mkdosfs` | ✓ | ✓ |  |  |  |  |
+| `mkfifo` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `mkfs.vfat` | ✓ | ✓ |  |  |  |  |
+| `mknod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `mkpasswd` |  | ✓ | ✓ |  |  |  |
+| `mkswap` |  | ✓ | ✓ |  |  |  |
+| `mktemp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `modinfo` |  | ✓ | ✓ |  |  |  |
+| `more` | ✓ | ✓ |  |  | ✓ |  |
+| `mount` | ✓ | ✓ | ✓ |  |  | ✓ |
+| `mountpoint` | ✓ | ✓ | ✓ |  |  |  |
+| `mv` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `nbd-client` |  | ✓ | ✓ |  |  |  |
+| `nc` | ✓ | ✓ | ✓ |  |  |  |
+| `netstat` |  | ✓ | ✓ |  |  |  |
+| `nice` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `nl` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `nm` | ✓ |  |  | ✓ |  |  |
+| `nohup` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `nproc` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `nsenter` |  | ✓ | ✓ |  |  |  |
+| `nslookup` | ✓ | ✓ |  |  |  |  |
+| `numfmt` |  |  |  | ✓ | ✓ |  |
+| `objcopy` | ✓ |  |  | ✓ |  |  |
+| `od` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `openvt` |  | ✓ | ✓ |  |  |  |
+| `partprobe` |  | ✓ | ✓ |  |  |  |
+| `passwd` |  | ✓ |  |  |  | ✓ |
+| `paste` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `patch` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `pathchk` | ✓ |  |  | ✓ | ✓ |  |
+| `pgrep` | ✓ | ✓ | ✓ |  |  |  |
+| `pidof` | ✓ | ✓ | ✓ |  |  |  |
+| `ping` | ✓ | ✓ | ✓ |  |  |  |
+| `ping6` | ✓ | ✓ | ✓ |  |  |  |
+| `pinky` | ✓ |  |  | ✓ | ✓ |  |
+| `pivot_root` |  | ✓ | ✓ |  |  |  |
+| `pkill` | ✓ | ✓ | ✓ |  |  |  |
+| `pmap` |  | ✓ | ✓ |  |  |  |
+| `pom` | ✓ |  |  |  |  |  |
+| `poweroff` |  | ✓ | ✓ |  |  |  |
+| `pr` |  |  |  | ✓ | ✓ | ✓ |
+| `printenv` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `printf` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `ps` | ✓ | ✓ | ✓ |  |  | ✓ |
+| `ptx` |  |  |  | ✓ | ✓ |  |
+| `pwd` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `pwdx` | ✓ | ✓ | ✓ |  |  |  |
+| `ranlib` | ✓ |  |  | ✓ |  |  |
+| `readahead` |  | ✓ | ✓ |  |  |  |
+| `readelf` | ✓ |  | ✓ | ✓ |  |  |
+| `readlink` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `realpath` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `reboot` |  | ✓ | ✓ |  |  |  |
+| `renice` | ✓ | ✓ | ✓ |  |  |  |
+| `reset` | ✓ | ✓ | ✓ |  |  |  |
+| `rev` | ✓ | ✓ | ✓ |  |  |  |
+| `rfkill` |  | ✓ | ✓ |  |  |  |
+| `rm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `rmdir` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `rmmod` |  | ✓ | ✓ |  |  |  |
+| `rtcwake` |  | ✓ | ✓ |  |  |  |
+| `sed` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `seq` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `setfattr` |  | ✓ | ✓ |  |  |  |
+| `setsid` | ✓ | ✓ | ✓ |  |  |  |
+| `sh` | ✓ | ✓ |  | ✓ |  |  |
+| `sha1sum` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `sha224sum` | ✓ |  | ✓ | ✓ | ✓ |  |
+| `sha256sum` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `sha384sum` | ✓ |  | ✓ | ✓ | ✓ |  |
+| `sha3sum` | ✓ | ✓ | ✓ |  |  |  |
+| `sha512sum` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `shred` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `shuf` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `size` | ✓ |  |  | ✓ |  |  |
+| `sleep` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `sort` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `split` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `stat` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `stdbuf` |  |  |  | ✓ | ✓ |  |
+| `strings` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `strip` | ✓ |  |  | ✓ |  |  |
+| `stty` | ✓ | ✓ |  | ✓ | ✓ |  |
+| `su` |  | ✓ | ✓ |  |  |  |
+| `sum` | ✓ | ✓ |  | ✓ | ✓ | ✓ |
+| `swapoff` |  | ✓ | ✓ |  |  |  |
+| `swapon` |  | ✓ | ✓ |  |  |  |
+| `switch_root` |  | ✓ | ✓ |  |  |  |
+| `sync` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `sysctl` |  | ✓ | ✓ |  |  |  |
+| `tac` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `tail` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `tar` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `taskset` |  | ✓ | ✓ |  |  |  |
+| `tee` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `telnet` | ✓ | ✓ |  | ✓ |  |  |
+| `telnetd` |  | ✓ |  | ✓ |  |  |
+| `test` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `time` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `timeout` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `top` | ✓ | ✓ | ✓ |  |  |  |
+| `touch` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `tr` | ✓ | ✓ |  | ✓ | ✓ | ✓ |
+| `true` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `truncate` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `ts` | ✓ | ✓ | ✓ |  |  |  |
+| `tsort` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `tty` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `tunctl` |  | ✓ | ✓ |  |  |  |
+| `umount` | ✓ | ✓ | ✓ |  |  |  |
+| `uname` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `uncompress` |  | ✓ |  | ✓ |  | ✓ |
+| `unexpand` | ✓ | ✓ |  | ✓ | ✓ |  |
+| `unicode` |  |  | ✓ |  |  | ✓ |
+| `uniq` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `unix2dos` | ✓ | ✓ | ✓ |  |  |  |
+| `unlink` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `unlzma` | ✓ | ✓ |  |  |  |  |
+| `unshare` |  | ✓ | ✓ |  |  |  |
+| `unxz` | ✓ | ✓ |  |  |  |  |
+| `unzip` |  | ✓ |  |  |  | ✓ |
+| `uptime` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `users` | ✓ |  |  | ✓ | ✓ |  |
+| `usleep` | ✓ | ✓ | ✓ |  |  |  |
+| `uudecode` | ✓ | ✓ | ✓ |  |  |  |
+| `uuencode` | ✓ | ✓ | ✓ |  |  |  |
+| `vconfig` |  | ✓ | ✓ |  |  |  |
+| `vdir` | ✓ |  |  | ✓ | ✓ |  |
+| `vi` | ✓ | ✓ |  |  |  |  |
+| `watch` | ✓ | ✓ | ✓ |  |  |  |
+| `watchdog` |  | ✓ | ✓ |  |  |  |
+| `wc` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `wget` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `which` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `who` | ✓ |  | ✓ | ✓ | ✓ |  |
+| `whoami` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `www` | ✓ |  |  |  |  |  |
+| `xargs` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `xxd` | ✓ | ✓ | ✓ |  |  |  |
+| `xz` | ✓ | ✓ |  |  |  |  |
+| `xzcat` | ✓ | ✓ |  |  |  |  |
+| `yes` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `zcat` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
 
 The names only one carries:
 
-* **busybox alone** (159): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
+* **busybox alone** (157): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
   `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond` `crontab`
   `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap` `dumpleases`
   `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash` `fdflush`
@@ -1007,19 +1018,19 @@ The names only one carries:
   `ipcs` `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode` `klogd` `linux64`
   `linuxrc` `loadfont` `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma` `lzopcat`
   `makemime` `mdev` `mesg` `mke2fs` `mkfs.ext2` `mkfs.minix` `modprobe` `mpstat` `mt` `nameif`
-  `nmeter` `ntpd` `passwd` `pipe_progress` `popmaildir` `powertop` `pscan` `pstree`
-  `raidautorun` `rdate` `rdev` `readprofile` `reformime` `resize` `resume` `route` `rpm2cpio`
-  `run-init` `run-parts` `runsv` `runsvdir` `rx` `script` `scriptreplay` `seedrng` `sendmail`
-  `setarch` `setconsole` `setfont` `setkeycodes` `setlogcons` `setpriv` `setserial` `setuidgid`
-  `showkey` `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon` `sulogin` `sv`
-  `svc` `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `traceroute` `traceroute6`
-  `tree` `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol`
-  `ubirsvol` `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `unzip`
-  `vlock` `volname` `whois` `zcip`
-* **toybox alone** (33): `acpi` `count` `devmem` `file` `fstype` `getconf` `gpiodetect`
-  `gpiofind` `gpioget` `gpioinfo` `gpioset` `help` `host` `iconv` `iorenice` `iotop` `mcookie`
-  `memeater` `mix` `nbd-server` `netcat` `nologin` `oneit` `prlimit` `pwgen` `sntp` `uclampset`
-  `ucsicontrol` `ulimit` `unicode` `uuidgen` `vmstat` `w`
+  `nmeter` `ntpd` `pipe_progress` `popmaildir` `powertop` `pscan` `pstree` `raidautorun`
+  `rdate` `rdev` `readprofile` `reformime` `resize` `resume` `route` `rpm2cpio` `run-init`
+  `run-parts` `runsv` `runsvdir` `rx` `script` `scriptreplay` `seedrng` `sendmail` `setarch`
+  `setconsole` `setfont` `setkeycodes` `setlogcons` `setpriv` `setserial` `setuidgid` `showkey`
+  `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon` `sulogin` `sv` `svc`
+  `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `traceroute` `traceroute6` `tree`
+  `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol` `ubirsvol`
+  `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `vlock` `volname`
+  `whois` `zcip`
+* **toybox alone** (30): `acpi` `count` `devmem` `fstype` `getconf` `gpiodetect` `gpiofind`
+  `gpioget` `gpioinfo` `gpioset` `help` `host` `iorenice` `iotop` `mcookie` `memeater` `mix`
+  `nbd-server` `netcat` `nologin` `oneit` `prlimit` `pwgen` `sntp` `uclampset` `ucsicontrol`
+  `ulimit` `uuidgen` `vmstat` `w`
 * **GNU alone** (58): `addr2line` `bash` `bashbug` `c++` `c++filt` `c89` `c99` `cpp` `diff3`
   `dwp` `elfedit` `ftp` `g++` `gawk` `gawkbug` `gcc` `gcc-ar` `gcc-nm` `gcc-ranlib` `gcov`
   `gcov-dump` `gcov-tool` `gp-archive` `gp-collect-app` `gp-display-html` `gp-display-src`
@@ -1028,3 +1039,23 @@ The names only one carries:
   `ld.bfd` `ld.gold` `m4` `objdump` `rbash` `rcp` `rlogin` `rlogind` `rsh` `rshd` `sdiff`
   `talk` `talkd` `zcmp` `zdiff` `zegrep` `zfgrep` `zforce` `zgrep` `zless` `zmore` `znew`
 * **uutils alone** (1): `coreutils`
+* **plan9port alone** (204): `"` `""` `9` `9660srv` `9ar` `9c` `9fs` `9import` `9l` `9p`
+  `9pfuse` `9pserve` `9term` `B` `E` `Getdir` `Mail` `Netfiles` `acid` `acidtypes` `acme`
+  `acmeevent` `adict` `aescbc` `asn12dsa` `asn12rsa` `astro` `auxclog` `auxstats` `awd` `bmp`
+  `bundle` `calendar` `cb` `cleanname` `clock` `cmapcube` `col` `colors` `compress` `core`
+  `crop` `db` `delatex` `deroff` `devdraw` `dial` `dict` `disknfs` `dns` `dnsdebug` `dnsquery`
+  `dnstcp` `doctype` `dsa2pub` `dsa2ssh` `dsagen` `dsasign` `dump9660` `eqn` `factotum`
+  `fontsrv` `fortune` `freq` `fsize` `g` `getflags` `gif` `grap` `graph` `gview` `hget` `hist`
+  `hoc` `htmlfmt` `htmlroff` `ico` `idiff` `img` `import` `ipso` `jpg` `label` `lc` `lex`
+  `listen1` `look` `lookman` `macedit` `mapd` `mk` `mk9660` `mklatinkbd` `mntgen` `mtime`
+  `namespace` `ndbipquery` `ndbmkdb` `ndbmkhash` `ndbmkhosts` `ndbquery` `netfileget`
+  `netfileput` `netfilestat` `netkey` `news` `nobs` `nroff` `osxvers` `p` `page` `paint` `pbd`
+  `pemdecode` `pemencode` `pic` `plot` `plumb` `plumber` `png` `ppm` `primes` `proof`
+  `psdownload` `psfonts` `psu` `psv` `quote1` `quote2` `ramfs` `rc` `read` `readcons`
+  `resample` `rio` `rsa2csr` `rsa2pub` `rsa2ssh` `rsa2x509` `rsafill` `rsagen` `sam` `samsave`
+  `samterm` `scat` `secstore` `secstored` `secuser` `sftpcache` `sig` `slay` `soelim` `spell`
+  `sprog` `src` `srv` `ssam` `ssh-agent` `stack` `start` `stats` `statusbar` `stop` `svgpic`
+  `tbl` `tcolors` `tcs` `togif` `toico` `topng` `toppm` `tpic` `tr2post` `tref` `troff`
+  `troff2html` `troff2png` `tweak` `u` `units` `unmount` `unutf` `unvac` `usage` `vac` `vacfs`
+  `vbackup` `vcat` `vmount` `vmount0` `vnfs` `vwhois` `web` `win` `wintext` `winwatch` `wmail`
+  `xd` `xshove` `yacc` `yesterday` `yuv` `zerotrunc` `zip`
