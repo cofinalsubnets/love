@@ -1454,7 +1454,7 @@
    ; through verbs' call, under urun, so a leave from deep in is a status here
    (sh-imgask w)
      (: V (cite 'verbs) k (name w)
-        (? (!(sh-slashed? w) && lit? ((V 'get) k) && 0 < ((V 'trait) k 'self) && sh-ours? w)
+        (? (!(sh-slashed? w) && lit? ((V 'get) k) && !(0 = ((V 'trait) k 'self)) && sh-ours? w)
            [1 (\ as ((V 'call) k as)) 0]
            0))
    (sh-imgfn w) (sh-pathfresh 0, peep sh-imgc w 'no @ 'no (sh-imgask w @ f (pin sh-imgc w f, f)) v v)
@@ -1519,7 +1519,11 @@
    ; exec -- a fresh image, its buffers its own. the only lane for a foreign word.
    ; the trusts NEST -- self implies fork implies exec -- so the fork test below asks
    ; the self question rather than keeping a second list beside it.
+   ; a word may be self, and a call is: a verb whose answer turns on its args is asked
+   ; of this one; the lane, picked before a word expands, trusts only a plain yes
    (sh-selfok? w) (two? (sh-imgfn w))
+   (sh-selfcall? av) (sh-selfok? <av && (cite 'verbs 'holds) (name <av) 'self >av)
+   (sh-selfplain? w) (sh-selfok? w && 1 = (cite 'verbs 'trait) (name w) 'self)
    ; a verb that wants a fresh process says so ('exec, verbs' traits), asked of this call
    ; under the name its word runs as -- a path to this binary is `love`
    (sh-exec? av) (: V (cite 'verbs) ((V 'holds) (name ((V 'bn) <av)) 'exec >av))
@@ -1529,7 +1533,7 @@
         (sh-tty ()) 1                         ; our stdin is the terminal: nothing to duplicate
         !(sh-inread ()) 1                     ; we never read our stdin: nothing buffered to duplicate
         (sh-fd0? fdmap) 1                     ; the child's stdin is its own
-        (sh-selfok? <av) 1                    ; run in our own process, so ours to fork
+        (sh-selfcall? av) 1                   ; run in our own process, so ours to fork
         0)
    ; spawnio does the job-control dance in C for a child it execs; a forked stage never
    ; execs, so it does its own. both sides set the group, as spawnio's two calls do, so
@@ -2123,7 +2127,7 @@
                 (? (two? b) b                            ; brk/cnt/ret ride out
                    (charm? b) (: _ (pin sh-status () b) (sh-echk b))
                    b))
-           (sh-selfok? <argv)                            ; the self lane
+           (sh-selfcall? argv)                           ; the self lane
              (: g (sh-imgfn <argv)
                 f (g 1)
                 s (sh-withrs rs (\ _ (f (? (g 2) argv >argv))))
@@ -2337,7 +2341,8 @@
            (? !nm 'sub
               (sh-fn? nm) 'sub
               (string? (sh-aliases nm)) 'sub
-              (sh-verbbi? nm || (!(sh-bi? nm) && sh-selfok? nm)) (? (one? (a 2)) 'jug 'sub)   ; ours to run in here
+              (sh-verbbi? nm || (!(sh-bi? nm) && sh-selfplain? nm)) (? (one? (a 2)) 'jug 'sub)   ; ours to run in here
+              (!(sh-bi? nm) && sh-selfok? nm) 'sub      ; maybe ours, asked of the expanded call
               !(sh-bi? nm) 'ext
               (&& (one? (a 2)) (sh-smem? nm sh-purebi)) 'jug   ; a redirect wants an fd
               'sub)))

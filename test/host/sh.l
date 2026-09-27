@@ -797,6 +797,16 @@
 (: T (cite 'verbs 'trait)
    (test (1 = sh-verbbi? "echo") (1 = sh-verbbi? "[") (0 = sh-verbbi? "ls")
          (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (0 = T 'cat 'self)))
+;; a reader is self per call: every operand a regular file, or it forks -- bare, a -,
+;; a missing file, a device, or an option's word
+(: f "test/00-init.l"
+   (test (1 = sh-selfcall? ["wc" "-l" f f]) (1 = sh-selfcall? ["sha256sum" f])
+         (0 = sh-selfcall? ["wc"]) (0 = sh-selfcall? ["wc" "-"]) (0 = sh-selfcall? ["wc" f "/nonexistent-qq"])
+         (0 = sh-selfcall? ["md5sum" "/dev/zero"]) (0 = sh-selfcall? ["cat" f])
+         (1 = sh-selfcall? ["ls" "-l"]) (0 = sh-selfplain? "wc") (1 = sh-selfplain? "ls")))
+;; ..and a capture of a big in-image reader lives: cat forks, so the pipe has a reader
+(: r (hark ["out/love" "out/lush" "-a" "-c" "f() { cat love/*.c; cat love/*.c; }; x=$(f); echo ${#x}"])
+   (test (0 < #(>r))))
 ;; a crew main answers its status to a caller in the image, a failure from deep in
 ;; included -- only the seats quit
 (: C (cite 'verbs 'call)
