@@ -1,4 +1,4 @@
-/* the GZIP floor -- love/gz.c, both directions, through mooncc, gcc and
+/* the GZIP floor -- love/lib/gz.c, both directions, through mooncc, gcc and
  * clang, with the three reports diffed and the three builds timed. ccnif.sh
  * drives it.
  *
@@ -16,7 +16,7 @@
  * licensed choice: a differing byte is a differing compiler.
  *
  * THE SUMMARY IS THIS FILE'S OWN ARITHMETIC. an FNV-1a over the output, not
- * the crc32 next door in inle/hash.c -- a summary computed by the code under
+ * the crc32 next door in love/lib/hash.c -- a summary computed by the code under
  * test can agree with itself while both halves are wrong.
  *
  * AND THE MALFORMED STREAMS ARE PART OF THE SUBJECT, not a robustness check.
@@ -24,7 +24,7 @@
  * describe a code -- first-writer-wins in the table, a zeroed symbol array --
  * so what it answers on garbage is as specified as what it answers on a valid
  * block, and the refusal paths are where the bit reader's edges live. */
-#include "../../love/gz.c"
+#include "../../love/lib/gz.c"
 #include "stub.h"
 #include "say.h"
 

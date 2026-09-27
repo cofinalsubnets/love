@@ -155,7 +155,7 @@ printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an integer reaches a pointer only as a NULL POINTER CONSTANT, so
-# `return 1` from a T* is a constraint violation -- inle/main.c carried one for years,
+# `return 1` from a T* is a constraint violation -- love/main.c carried one for years,
 # clang named it, and we took it in silence and handed back address 1
 printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
@@ -191,14 +191,14 @@ clref 'static void d(int *p){ (void)p; }\nint g __attribute__((cleanup(d)));\nin
   "cleanup)) is not carried out" "file scope was skipped"
 
 # a file-scope asm (test/cc/178 holds the well-formed side): a directive gas-top does not
-# read, label arithmetic past one symbol, a `- .` word on arm32 and the wasm lane refuse by
+# read, label arithmetic across sections, a `- .` word on arm32 and the wasm lane refuse by
 # name -- a dropped directive is a section the linker never sees
 taref() {
   printf "$1" > "$ho/.feat.c"
   moonrun -c -t "$2" -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "$3" || fail "file-scope asm: $4"
 }
 taref 'asm(".weak x");\n' x64 "gas-directive" "an unread directive was not refused"
-taref 'asm(".data\\na: .long a - b\\nb:");\n' x64 "gas-data" "a label difference was not refused"
+taref 'asm(".data\\na: .long a - b\\n.text\\nb:");\n' x64 "gas-data" "a label difference across sections was not refused"
 taref 'int f(void){return 0;}\nasm(".data\\n.long f - .");\n' thumb2 "gas-data-pcrel" "a pc-relative word on arm32 was not refused"
 taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file-scope asm"
 # an "i" operand (test/cc/181 holds the well-formed side): a local, or a global a local
@@ -720,7 +720,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
 # member-compile lane fast too, so a warm cache passes this leg whether the archive was
 # read or refused, and a refusal can sit here green for as long as the cache lives. So ask
-# the BINARY what it carries -- inle/src.c matches the arch word and its width, and a
+# the BINARY what it carries -- love/src.c matches the arch word and its width, and a
 # miss there is silent -- then take the cache away and let the clock mean something.
 for a in x64 a64 rv64; do
   n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + runtime-gz \"$a\")))) 0)" | head -1)

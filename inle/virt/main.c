@@ -59,7 +59,7 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-// the readiness law (inle/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// the readiness law (love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy. fd 0 is the honest poll;
 // others nominal.
@@ -92,7 +92,7 @@ struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_b
 struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-#include "../fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+#include "../../love/fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
 
 // --- the exit builtin -----------------------------------------------------
 // (vexit code) -- leave the machine through the test finisher with `code` as

@@ -4,6 +4,8 @@ vgcore.*
 .gdb_history
 .claude/
 /out/
+# the build stamp, written by selfpack into the archive and read back by an unpacked release
+/STAMP
 # downloaded, never built: OVMF, package sources. outside out/ so `make clean`
 # leaves it -- `make distclean` is what takes it.
 /dl/

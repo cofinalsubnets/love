@@ -789,7 +789,7 @@
        ; hands over the difference already zeroed.
        bend (ldlayn 'bss (ldlay1 'bss dend objs) objs)
        ; .image last of all -- past .bss, so `love bake` can grow it at the tail of the file
-       ; (inle/image.c: the section that ends the segment is the one that can grow without
+       ; (love/image.c: the section that ends the segment is the one that can grow without
        ; moving anything). it takes a segment of its own, because .bss sits between it and
        ; everything written and one segment would carry that gap as file zeros. no .image
        ; section in the set and the lane costs nothing: one segment, as before.

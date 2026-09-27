@@ -1,5 +1,5 @@
 ; apps/kore/net.l -- telnet, telnetd, httpd, nslookup, ping and ping6: network tools over
-; doors the tree already has (inle/sock.c's connect/listen/bind, apps/dns.l, kiosko).
+; doors the tree already has (love/sock.c's connect/listen/bind, apps/dns.l, kiosko).
 ;
 ;   telnet HOST [PORT]                a remote terminal over tcp, port 23 by default
 ;   telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]   its server

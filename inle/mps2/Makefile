@@ -75,7 +75,7 @@ $(R)/$(o)/love.img: $(R)/$(o)/baker.elf
 # (-D BAKER_RUNE), and a qemu wake-check (waker-pd) BEFORE the pdx ships it.
 imgpd: $(R)/$(o)/love-pd.img
 $(R)/out/playdate/cas.h:
-	@$(MAKE) -C $(R)/inle/playdate ../../out/playdate/cas.h
+	@$(MAKE) -C $(R)/love/user/playdate ../../../out/playdate/cas.h
 
 pdmainc = main.c $(R)/love/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
 $(eval $(call p_obj,main-baker-pd,inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D BAKER -D BAKER_RUNE -Iout/playdate))

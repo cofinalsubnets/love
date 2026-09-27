@@ -29,7 +29,7 @@
 ; run: love slop
 ; the game is pure love -- slop-new, slop-key, slop-tick and slop-frame are state in
 ; and state out, gated headless by test/host/slop.l; only slop-run ties the tty (raw /
-; tty / cue?, over inle/posix.c), so slop never joins the corpus. ink lends the skin and
+; tty / cue?, over love/posix.c), so slop never joins the corpus. ink lends the skin and
 ; the palette, rove the helm and the die.
 (module (slop slop-run slop-walk slop-main slop-new slop-sy slop-gap slop-cost slop-rate
          slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-bar-fit slop-road slop-turf slop-post

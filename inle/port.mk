@@ -74,24 +74,24 @@ be_lc   = $(subst $(R)/,,$(p_be_l))
 # (common.mk names both). a port compiles every one under its own <x>_cc, since love.c
 # owes the rest and snap.c owes the codecs. love_m is the object stems, love_dep what
 # each one watches.
-# ..plus love/bare.c, the answers a seat with no inle/fd.c gives to the runtime's own doors,
+# ..plus love/bare.c, the answers a seat with no love/fd.c gives to the runtime's own doors,
 # and love/nohorn.c, the horn's refusal where there is no card. only a bare seat links
-# either: everything else carries inle/fd.c, whose bodies are the real ones, and two of
+# either: everything else carries love/fd.c, whose bodies are the real ones, and two of
 # them in one link is a collision that says so. a board that grows a speaker drops
-# nohorn for inle/horn.c, which answers ai_horn_writen itself -- out/front is the link that
+# nohorn for love/horn.c, which answers ai_horn_writen itself -- out/front is the link that
 # shows the shape.
 love_m   = $(basename $(love_tu) $(love_codec)) bare nohorn
 love_dep = $(love_h) $(lib_hR) $(lv)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
-# ..and the seat's heap beside them: inle/alloc.c answers ai_alloc over malloc and free,
+# ..and the seat's heap beside them: love/alloc.c answers ai_alloc over malloc and free,
 # which is what a board whose memory is already those wants. it is not in love_m because
 # that list is compiled out of love/ and this answer is the seat's, not the runtime's -- a
 # board with a heap of its own defines ai_alloc and names no alloc.o, and a board that
 # names neither fails to link, which is the right answer for a runtime with nowhere to
 # put its pools. $1 is the board's own <x>_cc, $2 an object-stem suffix.
 define p_heap
-$$(eval $$(call p_obj,alloc$2,inle/alloc.c,$$(R)/inle/alloc.c $$(love_dep),$1))
+$$(eval $$(call p_obj,alloc$2,love/alloc.c,$$(R)/love/alloc.c $$(love_dep),$1))
 endef
 heap_o = $(R)/$(o)/alloc.o
 
@@ -137,7 +137,7 @@ endef
 define p_obj
 $$(R)/$$(o)/$1.o: $3
 	@echo 'MOON	'$$@
-	@mkdir -p $$(R)/$$(o)
+	@mkdir -p "$$(dir $$@)"
 	@cd $$(R) && $4 -c $2 $$(o)/$1.o
 endef
 

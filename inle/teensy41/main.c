@@ -28,7 +28,7 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-// the readiness law (inle/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// the readiness law (love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy (lvm_sound's park law
 // spins sound -> yield -> sound forever: the Enter-key freeze that walled
@@ -79,7 +79,7 @@ struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_b
 struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-#include "../fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+#include "../../love/fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
 
 // --- GPIO builtins --------------------------------------------------------
 // (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin.
@@ -244,6 +244,7 @@ int main(void) {
   // inle/mps2's baker -- fully symbolic, so this differently-linked binary
   // may wake it). A good image skips the ~55 s on-device bake; any problem
   // answers NULL and the egg lane below bakes from source as always.
+  uintptr_t t0 = ai_clock();
   struct ai *g = ai_image_load(_binary_love_img_start,
                                (uintptr_t)(_binary_love_img_end - _binary_love_img_start));
   int woke = g != NULL;
@@ -251,6 +252,10 @@ int main(void) {
     for (; *s; s++) serial_putc(*s); }
   if (!woke) g = ai_ini();
   g = ai_defn(g, defs, countof(defs));
+  // born: this wake's cost, as love/main.c defines it -- the egg lane's egg.l pins its own
+  if (woke && ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {
+    g = ai_defv(g, "born");
+    if (ai_ok(g)) g->sp++; }
   // BOUND the collector to the arena (the Appel knob -- ai_please, love.c):
   // 2*minor + 2*major carve out of the free list, and a major resize holds old
   // and new at once, so an unbounded budget OOMs inside the collector. A

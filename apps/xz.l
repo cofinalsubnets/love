@@ -1,4 +1,4 @@
-; apps/xz.l -- the .xz container (and the old .lzma one, read) over inle/xz.c's LZMA2
+; apps/xz.l -- the .xz container (and the old .lzma one, read) over love/lib/xz.c's LZMA2
 ; codec. `(borrow 'xz)`, then:
 ;   (xz-pack s dict check)  -> the .xz bytes of s: one block, one LZMA2 filter, the check
 ;                              one of 'none 'crc32 'crc64 'sha256
@@ -155,7 +155,7 @@
 (borrow 'xz)
 (borrow 'path)
 (borrow 'posix)
-(: xzc-help "xz -- the .xz container in love (inle/xz.c is the LZMA2 codec)
+(: xzc-help "xz -- the .xz container in love (love/lib/xz.c is the LZMA2 codec)
 usage: xz [-cdfkqtvz] [-0..-9] [-e] [-T N] [-C CHECK] [-S SUF] [FILE..]
   -z  compress (the default)            -d  decompress (unxz; .xz and .lzma)
   -c  write on stdout, keep the files   -k  keep the input file

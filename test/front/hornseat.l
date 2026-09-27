@@ -1,19 +1,19 @@
 ; test/front/hornseat.l -- the horn's seat door, and the ring a card pulls it through.
 ;
 ; these run under out/frontseat: test/front/main.c built with -D ai_horn_seat=1, where
-; inle/horn.c asks k_horn_* for the device instead of hunting a kernel's. that is the lane
+; love/horn.c asks k_horn_* for the device instead of hunting a kernel's. that is the lane
 ; inle runs over inle/hda.c and the playdate over its sdk, and it is the only one of the
 ; horn's three kinds no gate could reach -- the other two want a card, or want no card
 ; at all.
 ;
-; the frontend's k_horn_* are the device, over inle/hornring.h: the same header
-; inle/playdate/pdglue.c hands its sdk audio callback. (tapped ()) drains that ring the way
+; the frontend's k_horn_* are the device, over love/hornring.h: the same header
+; love/user/playdate/pdglue.c hands its sdk audio callback. (tapped ()) drains that ring the way
 ; a card would and lays it back interleaved, so every law here rides a real push, a real
 ; pull and -- the ring being 1024 frames against writes of a few hundred -- a real wrap.
 ; a ring is otherwise the one piece of a seat's sound a gate cannot see, because a gate
 ; has no card to pull with.
 ;
-; the difference worth gating twice is the doubling. inle/horn.c's horn_land sits between
+; the difference worth gating twice is the doubling. love/horn.c's horn_land sits between
 ; the port and this door and widens a mono port to stereo, a device being always stereo
 ; -- and the sink is not a device, so nothing widens there. test/front/horn.l says a mono
 ; port taps as mono; this file says the same port reaches a seat as stereo. which of the

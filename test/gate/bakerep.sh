@@ -12,7 +12,7 @@
 # until a release.
 #
 # the path is NOT in the image -- `love-image` is the literal "<baked>" wherever the binary
-# carries its own .image section (inle/main.c), and a bake unpins it besides. the two below run
+# carries its own .image section (love/main.c), and a bake unpins it besides. the two below run
 # at one path because that is the question's shape, bake THIS binary twice.
 #
 # usage: bakerep.sh OUTDIR
@@ -60,7 +60,7 @@ out=$(cd "$w" && env -u LOVE_NO_IMAGE ./b1 -e '(puts (? (3 = 1 + 2) "wake-ok" "w
   || fail "the reproducible bake does not run"
 case $out in *wake-ok*) ;; *) fail "the reproducible bake woke wrong: [$out]" ;; esac
 
-# THE TWO STATES (inle/image.c): a binary is baked or raw, and each state emits the other --
+# THE TWO STATES (love/image.c): a binary is baked or raw, and each state emits the other --
 # a bake takes the crew off the carried source where no -l names one, and -n lays the
 # section's stub back. the round trip has to land on the bytes it started from, both ways.
 # it runs in $w, with no tree in reach, because that is the claim: the source is aboard.

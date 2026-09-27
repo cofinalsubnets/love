@@ -216,7 +216,6 @@ lvm(lvm_yield_sw) {
  // a task on its way out is not live, and its own node cannot say so yet -- the
  // snapshot that records the exit is written at the foot of this op.
  int me_live = Ip->ap != lvm_task_exit;
- uintptr_t now = ai_clock();
  uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd, my_events = g->next_wait_events;
  // a fairness yield never reaches yield_sw_wait, so this counter is the only thing
@@ -227,11 +226,15 @@ lvm(lvm_yield_sw) {
  // it answers Continue(), which lands back on the same op, so "keep running" is a spin.
  // a catcher is one; a task on its way out is the other, and it has no work left to keep.
  int fair = !my_wake && my_wait_fd < 0 && Ip->ap != lvm_wait && Ip->ap != lvm_task_exit;
- if (fair && g->parked && ++g->sweep_ctr >= sweep_interval) {
-  g->sweep_ctr = 0;
-  Pack(g);                     // the sweep lays its fd block in the [hp, sp) gap
-  poll_parked(g, now);
-  Unpack(g); }                 // nothing allocated, so these come back unchanged
+ // the clock rides the same tick: on wasm a read is a trip out to the host, and between
+ // ticks a peer's deadline is late by at most sweep_interval fairness yields.
+ uintptr_t now = g->clock_at;
+ if (!fair || ++g->sweep_ctr >= sweep_interval) {
+  now = g->clock_at = ai_clock();
+  if (fair && (g->sweep_ctr = 0, g->parked)) {
+   Pack(g);                    // the sweep lays its fd block in the [hp, sp) gap
+   poll_parked(g, now);
+   Unpack(g); } }              // nothing allocated, so these come back unchanged
  union u *next = find_runnable(g, g->tasks, now, me_live);
  if (!next) {
   // a fairness yield with no runnable peer just keeps running: falling into
@@ -367,7 +370,7 @@ lvm(lvm_donep) {
  ai_musttail return Continue(); }
 
 // (scoop _) -> (pid . retval) of one finished task, or () when none have -- the
-// task-side twin of `glean` (inle/posix.c). presence rides the pair, never the
+// task-side twin of `glean` (love/posix.c). presence rides the pair, never the
 // net: a retval is legitimately (), so `two?` is the test and ZeroPoint the empty
 // answer. only the run ring is walked (parked = blocked = unfinished); the arg is
 // a dummy, so a bare (scoop) curries -- call it (scoop 0).
