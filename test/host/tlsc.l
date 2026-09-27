@@ -92,7 +92,40 @@
     (16 = #(poly1305 ckey ""))
     ((poly1305 ckey "") = (po-mac ckey ""))))
 
+; --- aes-gcm: C alone, so the numbers are NIST's (the GCM spec's test cases 1-4, 13, 14,
+; 16) -- empty and one-block messages under zero keys, the 64-byte message, the 60-byte
+; one with 20 bytes of aad, and aes-256's. then a message round-trips at every length
+; 0..70 across the block edges, a flipped tag or byte is refused, and misuse answers ()
+(: k0 (unhex "00000000000000000000000000000000") iv0 (unhex "000000000000000000000000")
+   k3 (unhex "feffe9928665731c6d6a8f9467308308") iv3 (unhex "cafebabefacedbaddecaf888")
+   p3 (unhex "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255")
+   c3 (unhex "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091473f5985")
+   a4 (unhex "feedfacedeadbeeffeedfacedeadbeefabaddad2")
+   k32 (unhex "0000000000000000000000000000000000000000000000000000000000000000")
+   k16 (unhex "feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308")
+   (hx s) (hex s)
+   _ (test ((hx (aes-gcm-seal k0 iv0 "" "")) = "58e2fccefa7e3061367f1d57a4e7455a")
+         ((hx (aes-gcm-seal k0 iv0 "" (unhex "00000000000000000000000000000000")))
+          = "0388dace60b6a392f328c2b971b2fe78ab6e47d42cec13bdf53a67b21257bddf")
+         ((aes-gcm-seal k3 iv3 "" p3) = c3 + unhex "4d5c2af327cd64a62cf35abd2ba6fab4")
+         ((aes-gcm-seal k3 iv3 a4 (snip p3 0 60)) = snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a47")
+         ((hx (aes-gcm-seal k32 iv0 "" "")) = "530f8afbc74536b9a963b4f1c4cb738b")
+         ((hx (aes-gcm-seal k32 iv0 "" (unhex "00000000000000000000000000000000")))
+          = "cea7403d4d606b6e074ec5d3baf39d18d0d1c8a799996bf0265b98b5d48ab919")
+         ((aes-gcm-seal k16 iv3 a4 (snip p3 0 60))
+          = unhex "522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b08b1056828838c5f61e6393ba7a0abcc9f662"
+            + unhex "76fc6ece0f4e1768cddf8853bb2d551b")
+         ((aes-gcm-open k3 iv3 a4 (snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a47")) = snip p3 0 60)
+         (nil? (aes-gcm-open k3 iv3 a4 (snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a46")))
+         (nil? (aes-gcm-open k3 iv3 "" (snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a47")))
+         (nil? (aes-gcm-seal (snip k3 0 15) iv3 "" "x")) (nil? (aes-gcm-seal k3 (snip iv3 0 11) "" "x"))
+         (nil? (aes-gcm-open k3 iv3 "" (zeros 15))))
+   (rt n) (: m (bytes n (i \ (i * 13 + 7) & 255)) s (aes-gcm-seal k3 iv3 a4 m)
+             flip (? (0 < n) (string ((s 0) ^ 1) + snip s 1 #s) ())
+             ((#s = n + 16) && ((aes-gcm-open k3 iv3 a4 s) = m) && ((0 = n) || (nil? (aes-gcm-open k3 iv3 a4 flip)))))
+   (test (0 = #(filter (n \ !(rt n)) (jot 71)))))
+
 (test_fin (),
- puts "apps/tls: ok -- the C twins agree with love (vectors, lengths, counters, misuse)
+ puts "apps/tls: ok -- the C twins agree with love (vectors, lengths, counters, misuse); aes-gcm holds NIST's cases
 ",
  0)
