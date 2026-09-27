@@ -45,6 +45,7 @@
 (: edwide (cite 'cli 'edwide) edcut (cite 'cli 'edcut) edfit (cite 'cli 'edfit)
    (test
       (edwide "\e[1m日本\e[0m>" = 5) (edwide "abc" = 3) (edwide "e\xcc\x81" = 1)
+      (edwide "a\tb" = 3) (edfit "a\tb" 4 " " = "a\tb ")   ; an ascii byte is a column, a tab too
       (edcut "日本語" 3 = "日") (edcut "日本語" 4 = "日本") (edcut "abc" 9 = "abc")
       (edcut "\e[31mab\e[0mcd" 2 = "\e[31mab\e[0m")        ; a cut coloured run ends in a reset
       (edcut "e\xcc\x81x" 1 = "e\xcc\x81")                  ; the combining mark rides its base

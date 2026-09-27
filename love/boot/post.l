@@ -2365,14 +2365,16 @@
                        (47 < s k < 58 || s k = 59) (g (k + 1))
                        0)) (i + 2))))
 
-   ; a prompt's width on the screen, which is not its tally: an sgr run costs no column and a
-   ; character costs its wcwidth, a wide one two. edrender's cursor math is relative motion off
-   ; this number, so a prompt measured in bytes lands the cursor one column per escape byte out.
+   ; a prompt's width on the screen, which is not its tally: an sgr run costs no column, an
+   ; ascii byte one (a tab or a control included, as the fields have always counted them) and
+   ; any other character its wcwidth, a wide one two. edrender's cursor math is relative motion
+   ; off this number, so a prompt measured in bytes lands the cursor one column per escape byte out.
+   (edcw s i) (? (s i < 128) 1 (max 0 (wcwidth (cpat s i))))
    (edwide s)
     (: n #s
        (go i c) (? (n <= i) c
                    (: e (edsgr s i)
-                      (? e (go (i + e) c) (go (cpnext s i) (c + max 0 (wcwidth (cpat s i)))))))
+                      (? e (go (i + e) c) (go (cpnext s i) (c + edcw s i)))))
        (go 0 0))
 
    ; the first n columns of s, by the same measure, a wide character that would straddle the
@@ -2385,7 +2387,7 @@
         (? (m <= i) s
            (: e (edsgr s i)
               (? e (n <= c ? (cut i pen) (go (i + e) c 1))
-                 (: v (c + max 0 (wcwidth (cpat s i)))
+                 (: v (c + edcw s i)
                     (n < v ? (cut i pen) (go (cpnext s i) v pen))))))
        (go 0 0 0))
 
