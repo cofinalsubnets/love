@@ -21,7 +21,7 @@ compares to busybox, toybox, GNU and uutils, name by name, is the census at the 
 
 ONE roster — `$(korefiles)` in the Makefile: kore_head (kore's own toolboxes, apps/libra/lint.l,
 apps/vi/, apps/tui.l, apps/dns.l, apps/ain.l, the lush files, apps/cook.l), the holo linker
-files, kore_arc (gz.l tar.l cpio.l) and kore_net (the tls stack and wget.l). The
+files, kore_arc (gz.l tar.l cpio.l) and kore_net (the tls stack, wget.l and www.l). The
 crew rides IN the default binary's own image, so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a four-line sh
 shim — re-evaling the cat per spawn costs ~1.3s, so only the distro, which has no image
@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (177 tools, 183 names)
+## the inventory (178 tools, 184 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -101,6 +101,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | apps/gz.l, apps/xz.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
+| www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
 | apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -553,6 +554,23 @@ What is man's own is the search path, the decompression, and the handing over.
 here) is a different macro set, and rendering it through the man-macro reader produces a page
 of macro names rather than prose. So it is named as unsupported instead of rendered wrong.
 Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one.
+
+## www (apps/kore/www.l)
+
+`www [-w COLS] URL|FILE`. A text browser that owns none of the hard parts. wget's round trip
+fetches, lapiz's `ttpage` lays the page out with every link as `[n]`, and less's engine pages
+it. What www adds is URL resolution (RFC 3986 5.2, held to 5.4's table), the history, and a few
+keys over less's:
+
+* **`N RETURN`** follows link N, **`N U`** shows its URL, and **`U`** shows the page's own.
+* **`o URL`** opens a URL, **`B`** or backspace goes back, **`r`** reloads, and **`h`** is the help.
+* **A URL without a scheme is https**, unless it names a file here. A file opens as `file:`,
+  and its links resolve against it.
+* **With no terminal the page is poured plain, with its references after it**, as `lynx -dump`
+  does. A server's error status still shows its page, and exits 8, as wget does.
+
+Absent: forms, scripts, cookies, images, and any charset but utf-8. The TLS peer is not
+verified (wget's client). An in-page link (`#name`) does not land, because lapiz keeps no anchors.
 
 ## not built
 
