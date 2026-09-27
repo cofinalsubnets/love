@@ -5,7 +5,7 @@
 ; it is its own file because of the compiler. mooncc's cat needs exactly two of these
 ; (ubase usplit) and nothing else in kore -- but core.l held all 53 names, so
 ; the whole toolbox sat in `moonfiles`, and editing the `ls` applet re-baked mooncc0.image and
-; recompiled love.c and every inle/*.c behind it. ~95 s to move a printf. The floor moved out;
+; recompiled love.c and every love/*.c behind it. ~95 s to move a printf. The floor moved out;
 ; the applets are no longer the compiler's business.
 ;
 ; a body-less top-level `:` -- these names leak on purpose, which is what makes them a floor.

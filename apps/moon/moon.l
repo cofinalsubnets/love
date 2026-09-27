@@ -696,7 +696,7 @@
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
             (\ _ (sha256 ("moon-rtc 1\n" + (mcsrctext home)))))
    ; the carried runtime: the build lays each ISA's compiled archive beside the source blob
-   ; (tools/mkrt.l; inle/src.c answers runtime-gz), so a link owes no member compiles -- the
+   ; (tools/mkrt.l; love/src.c answers runtime-gz), so a link owes no member compiles -- the
    ; bare door's ~28 s becomes a read. only when the identity matches: the blob lane's
    ; identity is the carried source, and a disk home serves iff its slice hashes to the
    ; stamped id (a laid seed tree does; an edited dev tree does not, and falls through to the

@@ -2005,7 +2005,7 @@
 ; two front doors, because the two dispatch lanes carry different shadow rules:
 ;   (word w)  a leading positional -- cli's rail. refuses a `/` or a `.l`, so `make`, `env`,
 ;             `true` and `cmp` cannot eat a local script of the same name.
-;   (seat p)  argv[0] -- inle/main.c's door, which fires before the cli runs at all. always a
+;   (seat p)  argv[0] -- love/main.c's door, which fires before the cli runs at all. always a
 ;             path, so the basename decides.
 ; a verb takes the args after its name and answers a status charm; the rail quits with it,
 ; which is kore's convention and why `love kore sed ..` nests.
@@ -2098,7 +2098,7 @@
 ; program-name head:
 ;   (cli-rail ln)     the walk over ln = (program-name . args)
 ;   (cli-line ln tty) a frontend's whole tail: the argv[0] door, the rail, the repl, stdin
-; inle/main.c calls cli-line, and so does a forked lush child -- a word whose PATH winner is
+; love/main.c calls cli-line, and so does a forked lush child -- a word whose PATH winner is
 ; this binary need not exec, and what it would have exec'd is (cli-line its-line) on a warm
 ; heap. the shadow rule lives in one place, verbs' `word`.
 

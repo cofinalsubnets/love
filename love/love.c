@@ -14,7 +14,7 @@ static ai_inline uintptr_t nom_dig(uintptr_t name) {
 // on any link that carries it; this is the same word for a link that does not -- love0
 // under the ambient cc, and the boards, which take moonlibc's string members and no os.c.
 //
-// WEAK, where this tree's doors are plain definitions on purpose (love/bare.c, inle/nokern.c).
+// WEAK, where this tree's doors are plain definitions on purpose (love/bare.c, love/user/nokern.c).
 // the rule those state is about DOORS: a missing implementation quietly becoming a no-op
 // is the bug it prevents. this is a data word whose zero is already an answer -- os.c
 // spells 0 "unprobed", and 0 is exactly what the seats below read today -- so there is no
@@ -607,7 +607,7 @@ struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a fr
 #if __STDC_HOSTED__
 // which kernel underneath: moonlibc's os.c defines it (0 unprobed; 1..3 the
 // hosted kernels; negative = we ARE the kernel). moonlibc defines it (os.c);
-// a seat without one gives its own -- love0 in inle/main0.c.
+// a seat without one gives its own -- love0 in love/user/main0.c.
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif

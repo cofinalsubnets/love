@@ -2711,7 +2711,7 @@
 ; a real unix command shell in love: a line in, real programs out through spawn +
 ; wait, stdio inherited -- so output is live and the command owns the terminal,
 ; unlike `run`. it is also what init execs on the distro console (the Makefile cats
-; this file to /lib/sh.l), which is the pid1 story end to end. it rides inle/posix.c's
+; this file to /lib/sh.l), which is the pid1 story end to end. it rides love/posix.c's
 ; job-control nifs (spawn/spawnmap/wait/chdir/cwd), getenv, fdopen, and bao's edln.
 ; run it:
 ;   out/lush                    ; interactive (or cooked when stdin is a pipe)

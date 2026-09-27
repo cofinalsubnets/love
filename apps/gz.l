@@ -22,7 +22,7 @@
 ; apps/forge.l on an input big enough to pay for loading it and answers byte for byte what
 ; the twin answers; it is in love rather than C because `(s i)` is a VM apply and the
 ; compare wants an instruction (test/gate/gzfind.l is the differential). gz-inflate is a door
-; onto love/gz.c's nif, falling back to gz-puff -- and that one is NOT a holo kernel: the C
+; onto love/lib/gz.c's nif, falling back to gz-puff -- and that one is NOT a holo kernel: the C
 ; indexes a table where puff walks a canonical code a bit at a time, and building the same
 ; table in love costs more than the whole C decode. test/host/gzc.l fuzzes that differential,
 ; because a corrupt block is where two decoders part.
@@ -67,7 +67,7 @@
        (? (charm? v) v
           (: w (trap (\ _ (: _ (f 0) 1)) () (\ a b 0)) _ (pin gz-door k w) w)))
 
-   ; inle/hash.c where the artifact carries it, the walk above where it does not.
+   ; love/lib/hash.c where the artifact carries it, the walk above where it does not.
    ; the walk is here as the statement of the polynomial and the oracle test/host/gzc.l holds
    ; the C to, not as the fallback.
    ; `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
@@ -519,7 +519,7 @@
        _ (gz-blocks (gz-finder n) s n j t head prev 0)
        _ (gz-align j t)
        ((slurp j) + ""))
-   ; love/gz.c where the artifact carries it, the coder above where it does not --
+   ; love/lib/gz.c where the artifact carries it, the coder above where it does not --
    ; and the C is a twin held to the bytes, so the door changes cost and never content.
    ; the love lane is the oracle test/host/gzc.l holds it to.
    (gz-deflate s)
@@ -712,7 +712,7 @@
                (? (!r || peep t 1 0) ()
                   <>r [1 (gz-take b)]
                   (go ()))))
-   ; the door. love/gz.c where the artifact carries it, gz-puff where it does not
+   ; the door. love/lib/gz.c where the artifact carries it, gz-puff where it does not
    ; and wherever it declines -- and a torn stream declines, so a torn one is read twice
    ; and answers () both times. `string?`, never `?`: a string of NULs sums to zero and
    ; would read as absent. The presence probe is gz-nif's, and why is written there.

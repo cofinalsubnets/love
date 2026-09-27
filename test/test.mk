@@ -62,7 +62,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 # love0 self-tests BOTH compilers in one run (-Dai_tco=0, the trampoline lane too), so it
 # must print two "tests pass" summaries -- a reader stop drops the rest and exits 0. status
 # rides `.rc`, no pipefail. corpus.list is a runtime input, not a stamp: love0 reads it to
-# find the corpus (inle/main.c), and nothing else asks for it, so it is named here or a fresh
+# find the corpus (love/main.c), and nothing else asks for it, so it is named here or a fresh
 # tree dies with `love0: corpus: cannot open out/lib/corpus.list`.
 test_love0: $(love0) out/lib/corpus.list
 	@echo TEST $(love0)
@@ -179,27 +179,27 @@ test_stdincorpus: $(ho)/love
 # test_front -- the test-only frontend: out/front links liblove.a (love/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer would-block on
 # cue. it exits 97 on a wait with no deadline -- a deadlock, said loudly.
-$(ho)/front: test/front/main.c $(R)/love/bare.c $(R)/inle/alloc.c $(R)/inle/horn.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/love/love_data.ld \
+$(ho)/front: test/front/main.c $(R)/love/bare.c $(R)/love/alloc.c $(R)/love/horn.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/love/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ test/front/main.c $(R)/love/bare.c $(R)/inle/alloc.c $(R)/inle/horn.c $(ho)/liblove.a $(data_ld)
+	@$(hcc) -o $@ test/front/main.c $(R)/love/bare.c $(R)/love/alloc.c $(R)/love/horn.c $(ho)/liblove.a $(data_ld)
 # ..and the same frontend with the horn's SEAT door in place of its sink: ai_horn_seat
-# makes inle/horn.c ask k_horn_* for the device, which is the lane inle runs over inle/hda.c
+# makes love/horn.c ask k_horn_* for the device, which is the lane inle runs over inle/hda.c
 # and the playdate over its SDK. no gate can reach that lane WITH hardware, and this one
 # reaches it without -- the frontend's k_horn_* are the device, over the same
-# inle/hornring.h the playdate hands its SDK callback.
-$(ho)/frontseat: test/front/main.c $(R)/love/bare.c $(R)/inle/alloc.c $(R)/inle/horn.c $(R)/inle/hornring.h $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/love/love_data.ld \
+# love/hornring.h the playdate hands its SDK callback.
+$(ho)/frontseat: test/front/main.c $(R)/love/bare.c $(R)/love/alloc.c $(R)/love/horn.c $(R)/love/hornring.h $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/love/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -D ai_horn_seat=1 -o $@ test/front/main.c $(R)/love/bare.c $(R)/inle/alloc.c $(R)/inle/horn.c $(ho)/liblove.a $(data_ld)
+	@$(hcc) -D ai_horn_seat=1 -o $@ test/front/main.c $(R)/love/bare.c $(R)/love/alloc.c $(R)/love/horn.c $(ho)/liblove.a $(data_ld)
 test_front: $(ho)/front $(ho)/frontseat
 	@echo TEST $(ho)/front
 	@sh test/gate/run.sh -a front "$(ho)/front" "front: ok" test/front/io.l
-	@echo TEST $(ho)/front "(inle/horn.c's sink, read back through the tap)"
+	@echo TEST $(ho)/front "(love/horn.c's sink, read back through the tap)"
 	@sh test/gate/run.sh -a horn "env HORN=none $(ho)/front" "horn: ok" test/front/horn.l
-	@echo TEST $(ho)/frontseat "(inle/horn.c's seat door, over the device's own ring)"
+	@echo TEST $(ho)/frontseat "(love/horn.c's seat door, over the device's own ring)"
 	@sh test/gate/run.sh -a hornseat "$(ho)/frontseat" "hornseat: ok" test/front/hornseat.l
 # standalone smoke tests, held out of the corpus glob ($t is a non-recursive test/*.l).
 # a file is held back for one of three reasons and says which: it wants a crew module and
@@ -565,7 +565,7 @@ test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
-	  for f in $(love_tu_c) $(host_c) $(R)/inle/nokern.c $(R)/inle/noblob.c; do b=`basename $$f .c`; \
+	  for f in $(love_tu_c) $(host_c) $(R)/love/user/nokern.c $(R)/love/noblob.c; do b=`basename $$f .c`; \
 	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Ilove -Iinle -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $$d/am.o \
@@ -582,7 +582,7 @@ test_selfhost: host
 # libc (moonlibc/), math floor (am.c) and sys.o, bound by our static linker -- no gcc, no
 # glibc, no ld anywhere. in test_slow, x86-64 only; supersedes test_selfhost. the two cross
 # twins below take the same roster, so it is spelled once.
-raw_env = gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/inle/nokern.c $(R)/inle/noblob.c'
+raw_env = gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/love/user/nokern.c $(R)/love/noblob.c'
 test_raw: host
 	@$(raw_env) $(gsh) test/gate/raw.sh x64 $(ho) $m $t
 # test_tco0 -- the trampoline at full strength. love0 is the tree's other tco=0 lane and
@@ -669,7 +669,7 @@ test_vec: host
 test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
 	@$(MAKE) -s a=$(hosta) $(ko)/$(hosta)/mkvec.l
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
-	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/inle/noblob.c' \
+	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/love/noblob.c' \
 	  $(gsh) test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o) $(kart_o)
 # the cross-machine fixpoint, in effigy: the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
@@ -679,7 +679,7 @@ test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
 .PHONY: test_xfixpoint
 test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/inle/$(xa)/*.c)' \
-	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/inle/noblob.c' \
+	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/love/noblob.c' \
 	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o) $(xkart_o)
 # test_fat -- the fat container (seed-universal U1): the one file answers through
 # its prefix + cache on the native machine, the pack is byte-deterministic, and
