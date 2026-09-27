@@ -820,16 +820,17 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 **measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
 with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
-every ninth by path: **75 compile**, and the rest stop at
+every ninth by path: **84 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 25 | a function's inline asm: `bsr`/`pause` (10), a register variable in `%rax`/`%rdx` (6), `.macro` (3), `tzcnt`/`mfence`/`lcallw`, `mov %fs, r`, a debug register (`%db0`), a register pinned twice |
-| 4 | `cause unnamed` (`page_ref_dec_and_test`, `notify_uffd`, `acpi_pci_probe_root_resources`) |
+| 13 | a function's inline asm: a register variable in `%rax`/`%rdx` (6), `.macro` (3), `lcallw`, `mov %fs, r`, a debug register (`%db0`), a register pinned twice |
+| 5 | `cause unnamed` (`page_ref_dec_and_test`, `notify_uffd`, `dma_direct_sync_sg_for_device`, `acpi_pci_probe_root_resources`) |
+| 1 | a `?:` over a function in a static initializer (`serial_port_pm`'s `.suspend`) |
 | 20 | `__builtin_bswap16` over a constant in a case label |
 | 20 | `typeof` of the object in its own initializer (`get_unaligned`, `container_of`) |
 | 6 | `__label__`, a block's local label (`unsafe_get_user`, rseq) |
-| 3 | `__builtin_isdigit`, `__builtin_ffsll` |
+| 5 | `__builtin_isdigit`, `__builtin_ffsll`, `__builtin_ffs` |
 | 2 | gcc's `__attribute` spelling |
 | 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), `__builtin_clzll` in a bit-field width, a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label`, a register variable in `%rax` |
 
@@ -837,9 +838,9 @@ each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?:
 runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm 76 and
 `pushf` 102, an address as an `"i"` operand 22, a `%gs:` operand 20, a `"+m"` output 17 and a
 flag output 10, an `"i"` only a splice makes constant 17, a lock's or tracepoint's static
-initializer 20 and `.skip` over label arithmetic 4 before they read (142-syntax.c, 174-elvis.c,
-175-offsetof.c, 176-cleanup.c, 178-toplevelasm.c, 179-pushf.c, 181..185-asm*.c,
-186-staticinit.c and 188-asmskip.c hold them). a file-scope asm is gas's whole language, and
+initializer 20, `.skip` over label arithmetic 4 and the bit scans and `pause` 9 before they read
+(142-syntax.c, 174-elvis.c, 175-offsetof.c, 176-cleanup.c, 178-toplevelasm.c, 179-pushf.c,
+181..185-asm*.c, 186-staticinit.c, 188-asmskip.c and 189-asmbits.c hold them). a file-scope asm is gas's whole language, and
 holo's gas-top reads what C headers write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
 `.byte`..`.quad` over a symbol plus a constant or less `.`, `.ascii`/`.asciz`, `.balign`,
 `.zero`, `.org`, and `.skip` or a word over label arithmetic (read once the whole text has,

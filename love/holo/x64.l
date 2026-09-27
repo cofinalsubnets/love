@@ -568,6 +568,15 @@
    ;; 03 faults at iopl < 3 and CC does not). so: `trap` for a breakpoint, `int` for a vector.
    (emit-int n) (0 <= n <= 255 ? 0 (scare 'x64-int-vector n), [205 n])
    (emit-seg s) (s @ 'fs [100] 'gs [101] (scare 'x64-seg s))      ; the override prefix; the next form is its instruction
+   ;; the bit scans and counts, sized: bsr bsf 0F BD/BC, lzcnt tzcnt popcnt F3 0F BD/BC/B8 --
+   ;; a 32-bit scan reads only the low half, so the width is the op's own (66 a word, REX.W a quad)
+   (emit-bscan op w d s)
+    (: dn (rn d) sn (rn s)
+       (? (w = 1) (scare 'x64-bscan-byte op)
+          ((w = 2 ? [102] ()) + (elem op '(lzcnt tzcnt popcnt) ? [243] ())
+           + (w = 8 || dn >= 8 || sn >= 8 ? [(rex (w = 8 ? 1 0) (hi dn) 0 (hi sn))] ())
+           + [15 (op @ 'bsr 189 'bsf 188 'lzcnt 189 'tzcnt 188 'popcnt 184 (scare 'x64-bscan op))
+              (modrm 3 (lo dn) (lo sn))])))
 
    ;; the dispatch: an emitter tablet, operand shapes in holo.l's ir-arity. a row is a
    ;; partial application where the form fixes early arguments ((emit-sx 1), (emit-div 0 1),
@@ -655,7 +664,8 @@
          ('vmxon . emit-vmp '(243)) ('vmclear . emit-vmp '(102)) ('vmptrld . emit-vmp ())
          ('vmread . emit-vmread) ('vmwrite . emit-vmwrite)
          ('sgdt . emit-m0f 0 '(15 1)) ('sidt . emit-m0f 1 '(15 1))
-         ('int . emit-int) ('ltr . emit-ltr) ('seg . emit-seg)
+         ('int . emit-int) ('ltr . emit-ltr) ('seg . emit-seg) ('bscan . emit-bscan)
+         ('pause . '(243 144)) ('mfence . '(15 174 240)) ('lfence . '(15 174 232)) ('sfencex . '(15 174 248))
          ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
          ('alum . emit-alum) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
          ('ldcr . emit-ldcr) ('stcr . emit-stcr)
