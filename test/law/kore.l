@@ -208,19 +208,6 @@
       (uoct "755" = 493) (uoct "644" = 420) (uoct "0" = 0) (uoct "7" = 7)
       (rp-parts "/a//b/" = '("a" "b")) (rp-parts "a" = '("a")) !(rp-parts "///")))
 
-; --- the calendar floor (apps/kore/core.l): civil-from-days and its inverse. exact by
-; construction (no month table, no float), and the round trip is what holds it: stat's
-; %y and date both read them, and a leap-year slip would only show on one day a year ---
-(: (rt z) (: c (ucivil z) (udays <c <>c <>>c = z))
-   (test
-      (ucivil 0 = '(1970 1 1)) (ucivil 1 = '(1970 1 2)) (ucivil -1 = '(1969 12 31))
-      (ucivil 19675 = '(2023 11 14)) (ucivil 20682 = '(2026 8 17))
-      (ucivil 11016 = '(2000 2 29))                     ; a century divisible by 400 is leap
-      (ucivil 11017 = '(2000 3 1))
-      (ucivil -25508 = '(1900 3 1))                     ; ..and 1900 is not
-      (udays 1970 1 1 = 0) (udays 2000 2 29 = 11016) (udays 1900 3 1 = -25508)
-      (rt 0) (rt 1) (rt -1) (rt 19675) (rt 11016) (rt 20682) (rt 40000) (rt -25508)))
-
 ; --- the record floor (apps/kore/core.l): paste's delimiter list, split's suffix and
 ; size words, join's field split, and od's three readings ---
 (: (test

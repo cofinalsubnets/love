@@ -8,6 +8,8 @@
 ; (udur -- lawed in test/law/kore.l) and the mains.
 (module 'kore
 (borrow 'cli)
+(borrow 'bytes)
+(borrow 'cal)
 (borrow 'path)
 (borrow 'posix)
 
@@ -117,20 +119,14 @@
    ; taken and changes nothing; -d @seconds and -r file name a moment other than now,
    ; which is also the only thing that makes this tool gateable against GNU at all.
    ; +format, or GNU's C-locale default when none is given.
-   udt-wd '("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat")
-   udt-wdl '("Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday")
-   ; udt-mo lives in u.l: ls -l's date column reads it too, and fs.l is catted ahead
-   ; of this file, so the one table has to sit under both of them.
-   udt-mol '("January" "February" "March" "April" "May" "June" "July" "August"
-             "September" "October" "November" "December")
    (udatef fmt ms)
     (: s (// ms 1000)
        days (// s 86400) secs (% s 86400)
-       ymd (ucivil days)
+       ymd (civil days)
        Y <ymd M <>ymd D <>>ymd
        hh (// secs 3600) mm (// (% secs 3600) 60) ss (% secs 60)
-       wd (% (days + 4) 7)
-       yday ((days - (udays Y 1 1)) + 1)
+       wd (wday days)
+       yday ((days - (epoch-days Y 1 1)) + 1)
        (p2 v) (zpad 2 (show v))
        n (tally fmt) o (jug 0)
        (go k)
@@ -153,10 +149,10 @@
                          (d = 84) (say o ((p2 hh) + ":" + (p2 mm) + ":" + (p2 ss)))
                          (d = 68) (say o ((p2 M) + "/" + (p2 D) + "/" + (p2 (% Y 100))))
                          (d = 115) (say o (show s))
-                         (d = 97) (say o (udt-wd wd))
-                         (d = 65) (say o (udt-wdl wd))
-                         ((d = 98) || (d = 104)) (say o (udt-mo (M - 1)))
-                         (d = 66) (say o (udt-mol (M - 1)))
+                         (d = 97) (say o (wd3 wd))
+                         (d = 65) (say o (wdl wd))
+                         ((d = 98) || (d = 104)) (say o (mon3 (M - 1)))
+                         (d = 66) (say o (monl (M - 1)))
                          (d = 112) (say o (? (hh < 12) "AM" "PM"))
                          (d = 73) (say o (p2 (: h (% hh 12) (? h h 12))))
                          (d = 117) (say o (show (? wd wd 7)))
@@ -189,20 +185,14 @@
        fmt (? (string? <>p) <>p "%a %b %e %H:%M:%S %Z %Y")
        _ (say out (udatef fmt ms)) _ (put out 10) _ (flush out) 0)
 
-   ; -- cal: a month, laid out. the whole thing rides core.l's two calendar rows -- the
-   ; weekday of the 1st is its day count mod 7, and the length of the month is the gap
-   ; to the next 1st, so the leap year needs no table and no test. `cal` alone is this
-   ; month, `cal M Y` a named one, `cal Y` the twelve. weeks open on Sunday, as cal's do.
-   ; it sits here and not beside udays because the month names do: fs.l and core.l are
-   ; catted ahead of this file and neither wants the long spelling.
-   (ucal-wd y m) (% ((udays y m 1) + 4) 7)          ; the 1st's weekday, 0 Sunday
-   (ucal-len y m) ((udays (? (m = 12) (y + 1) y) (? (m = 12) 1 (m + 1)) 1) - (udays y m 1))
+   ; -- cal: a month, laid out on 'cal's rows. `cal` alone is this month, `cal M Y` a
+   ; named one, `cal Y` the twelve. weeks open on Sunday, as cal's do.
    ucal-hdr "Su Mo Tu We Th Fr Sa"                  ; 20 wide, and so is every row under it
    (ucal-mid w s) (: n (tally s) (urpad w (upad ((// ((w - n) + 1) 2) + n) s)))
    ; SIX rows always, blank ones included, each the full 20 -- cal pads rather than
    ; trims, which is the whole reason a month is a fixed block that tiles across
    (ucal-weeks y m)
-    (: lead (ucal-wd y m) len (ucal-len y m)
+    (: lead (wday (epoch-days y m 1)) len (mdays y m)
        (cell d) (? ((d < 1) || (len < d)) "  " (upad 2 (show d)))
        (row r) (: o (jug 0)
                   (go c) (? (7 <= c) (slurp o)
@@ -215,7 +205,7 @@
    (ucal-say l) (: _ (say out l) (put out 10))
    (ucal-tri a b c) (a + "   " + b + "   " + c)     ; three columns -> the 66-wide line
    (cal-main as)
-    (: ymd (ucivil (// (// (clock 0) 1000) 86400))
+    (: ymd (civil (// (// (clock 0) 1000) 86400))
        (bad _) (udie 2 "usage: cal [[MONTH] YEAR]")
        ms (? !(two? as) [<>ymd <ymd]
              !(two? >as) (: y (uatoi <as) _ (? (0 < y) 0 (bad 0)) ['all y])
@@ -227,7 +217,7 @@
        (quarter k)
         (: ms3 [k (k + 1) (k + 2)]
            (col f) (map f ms3)
-           ts (col (\ j (ucal-mid 20 (udt-mol (j - 1)))))
+           ts (col (\ j (ucal-mid 20 (monl (j - 1)))))
            ws (col (\ j (ucal-weeks y j)))
            w1 <ws w2 <>ws w3 <>>ws
            _ (ucal-say (ucal-tri <ts <>ts <>>ts))
@@ -240,7 +230,7 @@
             (: _ (ucal-say (ucal-mid 66 (show y)))
                _ (put out 10)
                (: (go k) (? (12 < k) 1 (: _ (quarter k) (go (k + 3)))) (go 1)))
-            (: _ (ucal-say (ucal-mid 20 ((udt-mol (m - 1)) + " " + (show y))))
+            (: _ (ucal-say (ucal-mid 20 ((monl (m - 1)) + " " + (show y))))
                _ (ucal-say ucal-hdr)
                _ (map ucal-say (ucal-weeks y m))
                1))
@@ -1099,19 +1089,17 @@
    ; (type pid line id user host secs term exit), the type in sysv's numbering --
    (ucz s i n)                         ; the NUL-ended text in s[i, i+n)
     (: e (i + n) (go j) (? ((j < e) && !(s j = 0)) (go (j + 1)) (snip s i j)) (go i))
-   (ule s i n) (? (n < 1) 0 (s i + (256 * ule s (i + 1) (n - 1))))
-   (ube s i n) (: (go k a) (? (n <= k) a (go (k + 1) ((a * 256) + s (i + k)))) (go 0 0))
    (uut-glibc s i)
-    [(ule s i 2) (ule s (i + 4) 4) (ucz s (i + 8) 32) (ucz s (i + 40) 4) (ucz s (i + 44) 32)
-     (ucz s (i + 76) 256) (ule s (i + 340) 4) (ule s (i + 332) 2) (ule s (i + 334) 2)]
+    [(rdle s i 2) (rdle s (i + 4) 4) (ucz s (i + 8) 32) (ucz s (i + 40) 4) (ucz s (i + 44) 32)
+     (ucz s (i + 76) 256) (rdle s (i + 340) 4) (rdle s (i + 332) 2) (rdle s (i + 334) 2)]
    (uut-nbsd s i)                      ; its run level rides the exit pair, not the pid
-    [(ule s (i + 326) 2)
-     (? (ule s (i + 326) 2 = 1) (ule s (i + 332) 2 + 256 * ule s (i + 334) 2) (ule s (i + 328) 4)) (ucz s (i + 36) 32) (ucz s (i + 32) 4) (ucz s i 32)
-     (ucz s (i + 68) 256) (ule s (i + 464) 8) (ule s (i + 332) 2) (ule s (i + 334) 2)]
+    [(rdle s (i + 326) 2)
+     (? (rdle s (i + 326) 2 = 1) (rdle s (i + 332) 2 + 256 * rdle s (i + 334) 2) (rdle s (i + 328) 4)) (ucz s (i + 36) 32) (ucz s (i + 32) 4) (ucz s i 32)
+     (ucz s (i + 68) 256) (rdle s (i + 464) 8) (rdle s (i + 332) 2) (rdle s (i + 334) 2)]
    (uut-fbsd s i)                      ; freebsd counts its types from boot = 1
     [(: t (s i) (? (t < 8) ([0 2 3 4 7 5 6 8] t) 0))
-     (ube s (i + 17) 4) (ucz s (i + 53) 16) (ucz s (i + 9) 8) (ucz s (i + 21) 32)
-     (ucz s (i + 69) 128) (ube s (i + 1) 8 // 1000000) 0 0]
+     (rdbe s (i + 17) 4) (ucz s (i + 53) 16) (ucz s (i + 9) 8) (ucz s (i + 21) 32)
+     (ucz s (i + 69) 128) (rdbe s (i + 1) 8 // 1000000) 0 0]
    ; the shape goes by the name, as each host names its own file
    (uut-read p)                        ; -> (1 records) | () for no file to read
     (: r (uread p)

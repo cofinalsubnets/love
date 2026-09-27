@@ -38,6 +38,7 @@
 ; the compile once and (borrow 'gz) is a splice afterwards. unwrapped, the names leaked into
 ; the cat's layer, `borrow` found no module, and every caller recompiled this file.
 (module 'gz
+(borrow 'bytes)
 (:
    ; --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -----------------
    ; built once at load into a tray, read with peep. the final xor is the same
@@ -721,11 +722,6 @@
        (gz-puff s hint))
 
    ; --- the container (RFC 1952) --------------------------------------------
-   (gz-le32s v)
-    (: b (cask 4)
-       _ (pins b 0 (v & 255)         1 ((v >> 8) & 255)
-                 2 ((v >> 16) & 255) 3 ((v >> 24) & 255))
-       (string b))
    (gz-zip s nom stamp)
     (: txt (s + "")
        named (? #nom 1 0)
@@ -735,7 +731,7 @@
           6 ((stamp >> 16) & 255) 7 ((stamp >> 24) & 255)
           8 0 9 3)               ; xfl none, os 3 = unix
        (string h + (? named (nom + string 0) "") + gz-deflate txt
-        + gz-le32s (gz-crc32 txt) + gz-le32s (#txt & 4294967295)))
+        + wrle (gz-crc32 txt) 4 + wrle (#txt & 4294967295) 4))
 
    ; the header's optional fields are four flags, and every one of them must be
    ; stepped over even though we write none of them -- the far side is gzip, and

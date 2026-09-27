@@ -104,9 +104,9 @@
    nfile (dir + "/ns.l")
    _ (: p (open nfile "w")
         _ (say p "(borrow 'posix)
-(borrow 'dns)
+(borrow 'bytes)
 (: p (bind ['udp 7441])
-   (b16 v) (dns-be16 v)
+   (b16 v) (wrbe v 2)
    (one _) (: d (recv p) q <>d
               nx (q 13 = 110) e (? nx 25 22) t (q e * 256 + q (e + 1))
               a (? (!nx && t = 1) [(string 192 + string 12 + b16 1 + b16 1 + b16 0 + b16 60 + b16 4

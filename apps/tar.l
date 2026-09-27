@@ -38,6 +38,7 @@
 ; and `borrow` found no module, so every caller recompiled this file from lib/.
 (module 'tar
 (borrow 'posix)
+(borrow 'bytes)
 (:
    tar-blk 512
 
@@ -160,9 +161,7 @@
        (go es ? (sha256-feed h (string (cask (tar-blk * 2))),
                  sha256-done h)))
 
-   (tar-pad s)                              ; up to the next 512
-    (: n #s r (n % tar-blk)
-       (? r (: c (cask (tar-blk - r)) (s + string c)) s))
+   (tar-pad s) (s + zbytes (padk #s tar-blk))  ; up to the next 512
    (tar-pack es)
     (:- (go es ? (say j (string (cask (tar-blk * 2))), (slurp j) + ""))
      j (jug 0)

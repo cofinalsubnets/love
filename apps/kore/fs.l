@@ -8,6 +8,7 @@
 ; a body-less top-level `:` leaking uoct (lawed in test/law/kore.l) and the mains.
 (module 'kore
 (borrow 'cli)
+(borrow 'cal)
 (borrow 'posix)
 
 (:
@@ -127,8 +128,8 @@
    ; months is 31556952/2 -- the average Gregorian year halved, coreutils' own
    ; constant, not 180 days.
    (uls-when s now)
-    (: ymd (ucivil (// s 86400)) secs (% s 86400)
-       mo (udt-mo (<>ymd - 1))
+    (: ymd (civil (// s 86400)) secs (% s 86400)
+       mo (mon3 (<>ymd - 1))
        d (upad 2 (show <>>ymd))
        (? (((now - 15778476) <= s) && (s <= now))
           (mo + " " + d + " " + (zpad 2 (show (// secs 3600)))
@@ -632,7 +633,7 @@
        ((ust-kindc m) + ((tri 6 2048 "s") + ((tri 3 1024 "s") + (tri 0 512 "t")))))
    (ustamp ns)                         ; %y: 2026-08-17 13:32:41.073610912 +0000
     (: s (// ns 1000000000) frac (% ns 1000000000)
-       ymd (ucivil (// s 86400)) secs (% s 86400)
+       ymd (civil (// s 86400)) secs (% s 86400)
        (p2 v) (zpad 2 (show v))
        ((((show <ymd) + "-" + (p2 <>ymd) + "-" + (p2 <>>ymd)) + " ")
         + (((p2 (// secs 3600)) + ":" + (p2 (// (% secs 3600) 60)) + ":" + (p2 (% secs 60)))

@@ -86,6 +86,14 @@
       (\ _ (st 'quit))
       (\ v (? (elem (st 'mode) '(i c s)) (type (text v))
               (: _ (pin st 'reg v) _ (vstep st 112) (keep ()))))])
+   ; a buffer handed over from elsewhere (ex's `vi`), visited full screen on cli's stage:
+   ; its lines, its file, whether it already differs from that file, the line to open on
+   (vi-buffer ls f dirty row)
+    (: st (vi-open "")
+       _ (vload st ls f)
+       _ (pins st 'dirty dirty 'row (? (0 < row) (row - 1) 0))
+       fc (vi-face st {})
+       (stage (fc 0) (fc 1) (fc 2)))
    ; the visit: on a harbour where the seat has one -- every buffer a stage in a pane
    ; of its own, :sp and :vs and the prefix's C-a s and C-a v opening another, :q
    ; shutting the one it is typed in, one register between them -- else cli's stage,
