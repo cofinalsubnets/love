@@ -90,6 +90,38 @@
    _ (test (0 <= (K 'wg-find) (slurp >r3) "telnet: not a port: http" 0) (<(waitfor <r3) = 2))
    0)
 
+; -- telnetd -------------------------------------------------------------------------------
+; the input side byte by byte: a CR's LF or NUL is part of it, IAC IAC is a 255, an unasked
+; will is refused and what was asked or offered answers nothing, a subnegotiation is kept
+; out of the data. then kore's telnet against kore's telnetd running /bin/sh on loopback
+(: K (cite 'kore)
+   st ((K 'td-new) 0)
+   (ch s) ((K 'td-chunk) st s ())
+   (iac v x) (string 255 + string v + string x)
+   _ (test (ch "ls\r\n" = ["ls\r" ""]) (ch "a\r\x00b" = ["a\rb" ""])
+           (ch ("x" + string 255 + string 255 + "y") = [("x" + string 255 + "y") ""])
+           (ch (iac 251 24) = ["" (iac 254 24)]) (ch (iac 253 5) = ["" (iac 252 5)])
+           (ch (iac 251 31 + iac 253 1 + iac 253 3 + iac 252 1) = ["" ""])
+           (ch ("a" + string 255 + string 250 + "\x1f\x00\x50\x00\x18" + string 255 + string 240 + "b") = ["ab" ""])
+           ((K 'td-esc) ("q" + string 255) = "q" + string 255 + string 255))
+   love <cmdline
+   port 7454
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   srv (tether [love "kore" "telnetd" "-p" (show port) "-b" "127.0.0.1" "-l" "/bin/sh" "-f" "/dev/null"])
+   _ (rest 300)
+   r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
+   m >r
+   _ (rest 500)                                  ; the options settled, the shell's prompt up
+   _ (: _ (say m "echo td-$((6*7))\rexit\r") (flush m))
+   txt (slurp m)
+   st2 (waitfor <r)
+   _ (still <srv 15)
+   log (slurp >srv)
+   _ (waitfor <srv)
+   (test (0 <= (K 'wg-find) txt "td-42" 0)
+         (0 <= (K 'wg-find) txt "Connection closed by foreign host." 0) (<st2 = 0)
+         (0 <= (K 'wg-find) log "no login: whoever reaches port 7454 runs /bin/sh" 0)))
+
 ; -- nslookup and ping --------------------------------------------------------------------
 ; nslookup against a nameserver that is a process of its own (the pty read holds this one):
 ; four queries, box.test's a and aaaa -- one address, then an empty yes -- and nosuch.test's

@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (190 tools, 197 names)
+## the inventory (191 tools, 198 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -104,7 +104,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
-| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6) |
+| net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6) |
 | apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -592,7 +592,7 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
 utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
 
-## telnet, httpd, nslookup, ping and ping6 (apps/kore/net.l)
+## telnet, telnetd, httpd, nslookup, ping and ping6 (apps/kore/net.l)
 
 `telnet HOST [PORT]` is nc (apps/ain.l) with the telnet protocol's options answered
 (RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
@@ -602,6 +602,17 @@ server's echo. While the server echoes, the terminal is raw and each key is sent
 mode). A line ends CR LF on the wire, and `^]` closes the connection. When stdin is not a
 terminal, its lines are sent, and its end half-closes the connection so the server's
 answer can still arrive.
+
+`telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]` is busybox's: each client
+gets LOGIN on a pty of its own, `/bin/login` unless `-l` names another program, and anything
+else it names is said on stderr (whoever reaches the port runs it, unauthenticated). `-b`
+takes a dotted quad to listen on one address, loopback's say, where `listen` answers every
+address by default. The server offers to echo and suppress go-ahead and asks the client's
+window size, which the pty follows as it changes; every other option is refused, and TERM is
+xterm. A client's CR LF or CR NUL is a CR, as the pty's ICRNL expects. The program's end
+closes the connection and the client's going hangs the program up. `/etc/issue.net`, or
+`-f`'s file, is shown first. `-F` and `-K` are what it always does; `-i`, `-w` and `-S` are
+refused by name.
 
 `httpd [-fv] [-p PORT] [-h DIR]` is kiosko under busybox's name and flags: the port
 defaults to 80 and the directory to `.`, and `-v` logs each request. `-f` is accepted and
@@ -749,8 +760,8 @@ over the packages above.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 203 | 392 | 239 | 201 | 108 | 261 |
-| shared with kore | | 166 | 141 | 134 | 101 | 49 |
+| names | 204 | 392 | 239 | 201 | 108 | 261 |
+| shared with kore | | 167 | 141 | 135 | 101 | 49 |
 | carried by no one else | 14 | 157 | 30 | 58 | 1 | 204 |
 
 What at least three of the other five carry and kore does not: `fmt`, `pr`, `uncompress`.
@@ -991,7 +1002,7 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 | `taskset` |  | ✓ | ✓ |  |  |  |
 | `tee` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `telnet` | ✓ | ✓ |  | ✓ |  |  |
-| `telnetd` |  | ✓ |  | ✓ |  |  |
+| `telnetd` | ✓ | ✓ |  | ✓ |  |  |
 | `test` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `time` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
 | `timeout` | ✓ | ✓ | ✓ | ✓ | ✓ |  |

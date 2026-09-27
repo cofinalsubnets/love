@@ -74,9 +74,10 @@ static int quad(struct ai_str *hv, uint32_t *out) {
 // family and whose rest is what that family needs, options last. the family picks the
 // socket(2) triple and the sockaddr, so a new family is a row here and not a nif.
 //   connect  (tcp "1.2.3.4" 80)   (unix "/tmp/.X11-unix/X0")
-//   listen   (tcp 80)  or a bare port, which is tcp   (unix "/run/x.sock")
-//   bind     (udp 53)   (icmp)   (icmp6)   -- options after: (icmp ttl) asks each datagram's
-//            ttl, (icmp6 ttl) its hop limit
+//   listen   (tcp 80)  or a bare port, which is tcp   (tcp "127.0.0.1" 80)   (unix "/run/x.sock")
+//   bind     (udp 53)   (udp "127.0.0.1" 53)   (icmp)   (icmp6)   -- options after: (icmp ttl)
+//            asks each datagram's ttl, (icmp6 ttl) its hop limit
+// a listen or bind without a quad takes every address
 // icmp is linux's unprivileged echo socket, or where that is refused a raw one (root's, and
 // the bsds' only kind) dressed as it: recv and send answer and take the same bytes either
 // way. icmp6 is the same pair over ipv6, and the only family that speaks it.
@@ -117,8 +118,10 @@ static int parse_addr(word x, int how, struct saddr *a) {
  else if (nom_is(f, "tcp") || nom_is(f, "udp")) {
   a->fam = nom_is(f, "tcp") ? FamTcp : FamUdp;
   if ((a->fam == FamTcp) != (how != HowBind)) return -1;
-  if (how == HowConnect && (!(v = nth_take(&x)) || !strp(v) || quad(str(v), &a->ip) < 0)) return -1;
-  if ((a->port = port_of(nth_take(&x))) < 0) return -1; }
+  v = nth_take(&x);
+  if (v && strp(v)) { if (quad(str(v), &a->ip) < 0) return -1; v = nth_take(&x); }
+  else if (how == HowConnect) return -1;
+  if ((a->port = port_of(v)) < 0) return -1; }
  else if (nom_is(f, "icmp") || nom_is(f, "icmp6")) {
   if (how != HowBind) return -1;
   a->fam = nom_is(f, "icmp6") ? FamIcmp6 : FamIcmp; }
@@ -147,7 +150,7 @@ ai_noinline static int call_sock(struct saddr const *a, int how) {
  struct sockaddr_in6 i6 = {0};                   // an icmp6 bind is to any address
  i6.sin6_family = AF_INET6;
  in.sin_family = AF_INET;
- in.sin_addr.s_addr = htonl(how == HowConnect ? a->ip : INADDR_ANY);
+ in.sin_addr.s_addr = htonl(a->ip);                // 0, INADDR_ANY, unless one was named
  in.sin_port = htons((uint16_t) a->port);
  if (un) ua.sun_family = AF_UNIX, memcpy(ua.sun_path, a->path->bytes, a->path->len);
  struct sockaddr *sa = un ? (struct sockaddr*) &ua : v6 ? (struct sockaddr*) &i6 : (struct sockaddr*) &in;

@@ -1,7 +1,8 @@
-; apps/kore/net.l -- telnet, httpd, nslookup, ping and ping6: network tools over doors the tree
-; already has (inle/sock.c's connect/listen/bind, apps/dns.l, kiosko).
+; apps/kore/net.l -- telnet, telnetd, httpd, nslookup, ping and ping6: network tools over
+; doors the tree already has (inle/sock.c's connect/listen/bind, apps/dns.l, kiosko).
 ;
 ;   telnet HOST [PORT]                a remote terminal over tcp, port 23 by default
+;   telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]   its server
 ;   httpd [-fv] [-p PORT] [-h DIR]    kiosko under busybox's name and flags
 ;   nslookup [-type=T] HOST [SERVER]  a name's records, asked of a nameserver directly
 ;   ping [-46q] [-c N] [-i S] [-W S] [-s N] HOST  icmp echoes and their round trips
@@ -123,6 +124,105 @@
               (c = 29) (: _ (? tty? (raw 0) 0) _ (say err "\nConnection closed.\n") _ (close s) 0)
               (: _ (say s (tn-send c (st 'raw))) _ (flush s) (up 0))))
        (up 0))
+
+   ; -- telnetd ------------------------------------------------------------------------
+   ; busybox's: each connection a program on a pty, /bin/login unless -l names another.
+   ; the server offers to echo and suppress go-ahead and asks the window size (NAWS), which
+   ; the pty follows; every other option is refused. the state of one connection's input:
+   ; 'm 0 data, 1 past IAC, 2 past a verb ('v), 3 inside SB (its bytes in 'sb), 4 past IAC
+   ; inside SB; 'cr a CR just passed, whose LF or NUL is part of it
+   td-usage "usage: telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]"
+   td-offer (tn-cmd 251 1 + tn-cmd 251 3 + tn-cmd 253 31)
+   (td-new _) (: st (tablet 0) _ (pins st 'm 0 'v 0 'cr 0 'sb "") st)
+   ; the client's verb about option x -> the reply owed: its will of NAWS or go-ahead and its
+   ; do of echo or go-ahead are what we asked or offered, and a won't or don't needs none
+   (td-opt v x) (? ((v = 251) && !(x = 31) && !(x = 3)) (tn-cmd 254 x)
+                   ((v = 253) && !(x = 1) && !(x = 3)) (tn-cmd 252 x)
+                   "")
+   ; NAWS's width and height, two bytes each, onto the pty
+   (td-sb b pty) (? ((#b = 5) && (b 0 = 31) && !(nil? pty)) (settty pty (b 3 * 256 + b 4) (b 1 * 256 + b 2)) 0)
+   ; one byte off the wire -> [bytes for the pty, the reply owed]
+   (td-byte st c pty)
+    (: m (st 'm)
+       (? (m = 0)
+           (? (c = 255) (: _ (pin st 'm 1) ["" ""])
+              (((st 'cr) = 1) && ((c = 10) || (c = 0))) (: _ (pin st 'cr 0) ["" ""])
+              (: _ (pin st 'cr (? (c = 13) 1 0)) [(string c) ""]))
+          (m = 1)
+           (? (c = 255) (: _ (pins st 'm 0 'cr 0) [(string 255) ""])
+              (251 <= c <= 254) (: _ (pins st 'm 2 'v c) ["" ""])
+              (c = 250) (: _ (pins st 'm 3 'sb "") ["" ""])
+              (: _ (pin st 'm 0) ["" ""]))
+          (m = 2) (: _ (pin st 'm 0) ["" (td-opt (st 'v) c)])
+          (m = 3) (: _ (? (c = 255) (pin st 'm 4) (pin st 'sb (st 'sb + string c))) ["" ""])
+          (: _ (? (c = 240) (: _ (pin st 'm 0) (td-sb (st 'sb) pty))
+                  (c = 255) (pins st 'm 3 'sb (st 'sb + string 255))
+                  (pin st 'm 3))
+             ["" ""])))
+   ; a chunk off the wire -> [bytes for the pty, the replies owed]
+   (td-chunk st s pty)
+    (: (go i d r) (? (#s <= i) [d r] (: x (td-byte st (s i) pty) (go (i + 1) (d + <x) (r + x 1))))
+       (go 0 "" ""))
+   ; the pty's bytes for the wire: a 255 doubled
+   (td-esc s) (? (wg-find s (string 255) 0 < 0) s
+                 ((: (go i a) (? (#s <= i) a (go (i + 1) (a + (? (s i = 255) (string 255 + string 255) (string (s i)))))))
+                  0 ""))
+   ; one connection: the program's output to the client in this task, the client's bytes
+   ; to the program in another; the program's end is the session's, and the client's going
+   ; hangs the program up
+   (td-session c argv issue)
+    (: _ (setenv "TERM" "xterm")
+       r (tether argv)
+       (? !(two? r) (: _ (say c ("telnetd: cannot run " + <argv + " (" + show r + ")\r\n")) (flush c))
+          (: pid <r m >r st (td-new 0)
+             _ (say c (td-offer + issue)) _ (flush c)
+             (up _) (: ch (see c)
+                       (? (ch = -1) (still pid 1)
+                          (: _ (unsee c ch) x (td-chunk st (chug c) m)
+                             _ (? (0 < #<x) (: _ (say m <x) (flush m)) 0)
+                             _ (? (0 < #(x 1)) (: _ (say c (x 1)) (flush c)) 0)
+                             (up 0))))
+             u (twirl (_ \ trap up 0 (\ a b (still pid 1))) 0)
+             (down _) (: _ (await m) ch (see m)
+                         (? (ch = -1) 0
+                            (: _ (unsee m ch) _ (say c (td-esc (chug m))) _ (flush c) (down 0))))
+             _ (trap down 0 (\ a b 0))
+             _ (freeze u)
+             _ (close m)
+             (wait pid))))
+   (td-loop l argv issue)
+    (: _ (await l)
+       c (accept l)
+       _ ((: (g _) (? (two? (scoop 0)) (g 0) 0)) 0)
+       _ (? (hot? c) (twirl (\ _ (: _ (trap (\ c (td-session c argv issue)) c (\ a b 0)) (close c))) ()) 0)
+       (td-loop l argv issue))
+   (telnetd-main as)
+    (: t (tablet 0)
+       o (uopt as t '(112 98 108 102 119) () ())
+       _ (? (two? o) 0 (udie 2 td-usage))
+       _ (: u (uoptun t '(112 98 108 102 70 75))
+            (? (nil? u) 0 (udie 2 ("telnetd: -" + string u + " is not supported\n" + td-usage))))
+       _ (? (two? (o 2)) (udie 2 td-usage) 0)
+       login (: l (uoptv t 108) (? (string? l) l "/bin/login"))
+       (portof s) (: n (unum s) (? (charm? n && 0 < n < 65536) n (udie 2 ("telnetd: not a port: " + s))))
+       ; -b ADDR[:PORT], a quad; -p PORT
+       bv (uoptv t 98)
+       bk (? (string? bv) ((: (g i) (? (#bv <= i) -1 (bv i = 58) i (g (i + 1)))) 0) -1)
+       addr (? (string? bv) (? (bk < 0) bv (snip bv 0 bk)) ())
+       _ (? (nil? addr) 0 (two? ((cite 'dns 'dns-quad) addr)) 0 (udie 2 ("telnetd: -b takes a dotted quad, not " + addr)))
+       pv (uoptv t 112)
+       port (? (string? pv) (portof pv) (0 <= bk) (portof (snip bv (bk + 1) #bv)) 23)
+       l (? (nil? addr) (listen port) (listen ['tcp addr port]))
+       _ (? (hot? l) 0 (udie 1 ("telnetd: cannot listen on port " + show port + " (" + show l + ")")))
+       _ (? (login = "/bin/login") 0
+            (: _ (say err ("telnetd: no login: whoever reaches port " + show port + " runs " + login + "\n")) (flush err)))
+       ip (: f (uoptv t 102) (? (string? f) f "/etc/issue.net"))
+       issue (: q (open ip "r")
+                (? (hot? q) (: s (slurp q) _ (close q)
+                                ((: (go i a) (? (#s <= i) a (go (i + 1) (a + (? (s i = 10) "\r\n" (string (s i)))))))
+                                 0 ""))
+                   ""))
+       (td-loop l [login] issue))
 
    ; -- nslookup -----------------------------------------------------------------------
    (ns-assoc k l) ((: (g l) (? (one? l) () (<<l = k) <><l (g >l))) l)
