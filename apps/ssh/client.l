@@ -5,7 +5,8 @@
 ;
 ;   (ssh-dial host port)          connect, exchange keys, check the host -> session | a reason string
 ;   (ssh-auth t user seed pub)    publickey auth -> 1 | a reason string
-;   (ssh-run t cmd pty?)          a session channel: exec cmd, or a shell for () -> exit status
+;   (ssh-run t cmd pty?)          a session channel: exec cmd, or a shell for () -> exit status;
+;                                 a pty follows the terminal's size on each SIGWINCH
 ;   (ssh-key path)                an openssh-key-v1 file -> [seed pub] | a reason string
 ;
 ; the session is a tablet like tls's: the socket, a pending run, a sequence number and
@@ -265,6 +266,14 @@
                 (ty = 97) (: _ (ssh-send t (u8 97 + u32 (t 'rch))) (t 'status))
                 (drain t)))))
 
+   ; the terminal's size as the wire's cols, rows and two zero pixel counts
+   (geom _) (: a (tty 1) sz (? (two? a) a (tty 0))
+               ((? (two? sz) (u32 >sz + u32 <sz) (u32 80 + u32 24)) + u32 0 + u32 0))
+   ; SIGWINCH (28 on linux and the BSDs) queued to a signalfd; each wake sends the size now
+   (winch t sig) (: _ (await sig) _ (sigtake sig)
+                    _ (chreq t "window-change" 0 (geom 0))
+                    (winch t sig))
+
    (ssh-run t cmd pty?)
     (: _ (ssh-send t (u8 90 + sstr "session" + u32 0 + u32 lwin + u32 32768))
        r (ssh-next t)
@@ -272,15 +281,14 @@
           (: c (cur r) _ (g-skip c 5)
              _ (pin t 'rch (g-u32 c)) _ (pin t 'rwin (g-u32 c)) _ (pin t 'rmax (g-u32 c))
              _ (pin t 'used 0) _ (pin t 'status -1)
-             sz (tty 1)
              term (: e (getenv "TERM") (? (string? e) e "xterm"))
-             _ (? pty? (chreq t "pty-req" 1 (sstr term + u32 (? (two? sz) >sz 80) + u32 (? (two? sz) <sz 24)
-                                           + u32 0 + u32 0 + sstr (u8 0)))
-                  0)
+             _ (? pty? (chreq t "pty-req" 1 (sstr term + geom 0 + sstr (u8 0))) 0)
              okp (? pty? (reply t) 1)
              _ (? (nil? cmd) (chreq t "shell" 1 "") (chreq t "exec" 1 (sstr cmd)))
              (? !(reply t) -1
                 (: _ (? pty? (raw 1) 0)
+                   sig (? pty? (sigfd [28]) ())
+                   _ (? (hot? sig) (twirl (_ \ winch t sig) 0) 0)
                    _ (twirl (_ \ pump t) 0)
                    st (drain t)
                    _ (? pty? (raw 0) 0)
