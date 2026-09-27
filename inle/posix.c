@@ -89,23 +89,37 @@ struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
  *cavp = NULL;
  word argv = g->sp[0];
  uintptr_t argc = 0, total = 0;
+ // the head may be (path . name): the child is named name and the file is path, laid
+ // past argv's NULL where ai_argv_file finds it -- a shell that searched PATH once
+ // says where it landed, and the exec does not walk PATH a second time
+ word h = chainp(argv) ? A(argv) : ZeroPoint;
+ int alt = chainp(h) && strp(A(h)) && strp(B(h));
  for (word p = argv; chainp(p); p = B(p)) {
-  if (!strp(A(p))) return g;                              // misuse: non-string argv
-  argc++, total += len(A(p)) + 1; }                          // +1 for the NUL
+  word e = !argc && alt ? B(h) : A(p);
+  if (!strp(e)) return g;                                 // misuse: non-string argv
+  argc++, total += len(e) + 1; }                             // +1 for the NUL
  if (!argc) return g;                                        // empty argv
- if (!ai_ok(g = ai_have(g, argc + 1 + b2w(total)))) return g;
+ if (alt) total += len(A(h)) + 1;
+ if (!ai_ok(g = ai_have(g, argc + 2 + b2w(total)))) return g;
  argv = g->sp[0];                            // ai_have may have GC'd; argv is the only
                                              // root, at sp[0], so it is forwarded there
+ h = A(argv);
  char **cav = (char**) g->hp,                                // at Hp: aligned
-      *blob = (char*) (g->hp + (argc + 1));                  // whole words after
+      *blob = (char*) (g->hp + (argc + 2));                  // whole words after
  uintptr_t off = 0, i = 0;
  for (word p = argv; chainp(p); p = B(p), i++) {
-  struct ai_str *s = str(A(p));
+  struct ai_str *s = str(!i && alt ? B(h) : A(p));
   memcpy(blob + off, txt(s), len(s));
   blob[off + len(s)] = 0;
   cav[i] = blob + off;
   off += len(s) + 1; }
  cav[argc] = NULL;
+ cav[argc + 1] = NULL;
+ if (alt) {
+  struct ai_str *s = str(A(h));
+  memcpy(blob + off, txt(s), len(s));
+  blob[off + len(s)] = 0;
+  cav[argc + 1] = blob + off; }
  *cavp = cav;
  return g; }
 
@@ -239,7 +253,7 @@ ai_noinline static struct ai *host_spawnx(struct ai *g, int in, int out, int err
    intptr_t fd = getcharm(A(p));
    if (fd > 2) close((int) fd); }
   sig_dfl_job();                                // undo the shell's ignores (TTOU too)
-  execvp(cav[0], cav);
+  execvp(ai_argv_file(cav), cav);
   _exit(127); }                                 // seen by the next glean
  if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
  return ai_push(g, 1, putcharm(pid)); }                      // parent: the live pid
@@ -1274,7 +1288,7 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
   ioctl(sfd, TIOCSCTTY, 0);                       // belt-and-braces; harmless if already ctty
   dup2(sfd, 0); dup2(sfd, 1); dup2(sfd, 2);
   if (sfd > 2) close(sfd);
-  execvp(cav[0], cav);
+  execvp(ai_argv_file(cav), cav);
   e = errno;
   childfail:
   { ssize_t w = write(ep[1], &e, sizeof e); (void) w; }

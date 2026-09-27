@@ -28,6 +28,7 @@ long recvmsg(int fd, struct msghdr *m, int fl) {
       int lv = *(int*) (cb + at + 4), ty = *(int*) (cb + at + 8);
       if (l < 12 || l > cn - at) break;
       if (lv == 0xffff) lv = 1;
+      if (lv == 41 && ty == 47) ty = 52;  /* IPV6_HOPLIMIT */
       *(unsigned long*) (o + at) = l;
       *(int*) (o + at + 8) = lv;
       *(int*) (o + at + 12) = ty;

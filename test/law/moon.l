@@ -1116,8 +1116,10 @@
       (two? g3) (hasraw <>g3 want3)
       (two? g4) (hasraw <>g4 want4)
       (two? g5) (hassaved <>g5 want5)
-      ; "=m" is refused: an output to memory wants a store the body cannot be asked to make
-      (refused? (cgn "int main() { long v; asm(\"sys\" : \"=m\"(v)); return 0; }"))
+      ; "=m" is the asm's own store, its address in a register; "=@ccz" a register the flags set
+      !(refused? (cgn "int main() { long v; asm(\"movq $1, %0\" : \"=m\"(v)); return 0; }"))
+      !(refused? (cgn "int main() { int z; asm(\"testq %1, %1\" : \"=@ccz\"(z) : \"r\"(1L)); return z; }"))
+      (refused? (cgn "int main() { int z; asm(\"testq %1, %1\" : \"=@ccq\"(z) : \"r\"(1L)); return z; }"))
       (refused? (cgn "int main() { long v; asm(\"mov $1, %0\" : \"=f\"(v)); return 0; }"))
       (refused? (cgn "int main() { asm(\"syscall\" : : \"r0\"(1), \"r0\"(2)); return 0; }"))
       (refused? (cgn "int main() { asm(\"syscall\" : : \"r4\"(1)); return 0; }"))
