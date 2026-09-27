@@ -41,7 +41,8 @@
 ;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l); httpd, kiosko
 ;                                    under busybox's flags, beside it
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
-;                                    one (apps/xz.l, inle/xz.c's LZMA2); tar and cpio the
+;                                    one (apps/xz.l, inle/xz.c's LZMA2), bzip2|bunzip2|bzcat
+;                                    (apps/bz2.l, inle/bz2.c); tar and cpio the
 ;   kore tar czf|xzf|tzf ARCHIVE      two containers over it (apps/tar.l, apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
@@ -796,6 +797,8 @@
             'xz (cite 'xzcmd 'xz-main) 'unxz (cite 'xzcmd 'unxz-main)
             'xzcat (cite 'xzcmd 'xzcat-main) 'unlzma (cite 'xzcmd 'unxz-main)
             'lzcat (cite 'xzcmd 'xzcat-main)
+            'bzip2 (cite 'bz2cmd 'bzip2-main) 'bunzip2 (cite 'bz2cmd 'bunzip2-main)
+            'bzcat (cite 'bz2cmd 'bzcat-main)
             'tar (cite 'tarcmd 'tar-main) 'cpio (cite 'cpiocmd 'cpio-main)
             ; the byte tools, the clock's other face, and the four one-liners
             'dd dd-main 'xxd xxd-main 'strings strings-main 'hexdump hexdump-main 'hd hd-main
@@ -1002,7 +1005,8 @@
     'gunzip (cite 'gzcmd 'gzc-help)
     'zcat (cite 'gzcmd 'gzc-help)
     'xz (cite 'xzcmd 'xzc-help) 'unxz (cite 'xzcmd 'xzc-help) 'xzcat (cite 'xzcmd 'xzc-help)
-    'unlzma (cite 'xzcmd 'xzc-help) 'lzcat (cite 'xzcmd 'xzc-help)}
+    'unlzma (cite 'xzcmd 'xzc-help) 'lzcat (cite 'xzcmd 'xzc-help)
+    'bzip2 (cite 'bz2cmd 'bzc-help) 'bunzip2 (cite 'bz2cmd 'bzc-help) 'bzcat (cite 'bz2cmd 'bzc-help)}
 
    ; echo, test and [ read no options at all -- posix says so, and a script writing
    ; `echo --help` means the word. cook and lush answer the flags themselves, each
@@ -1110,7 +1114,8 @@ every tool answers --help and --version, and -h where the letter is free
   echo seq yes true false basename dirname     ... and the trivia
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (apps/xz.l)
-  tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive (apps/tar.l)
+  bzip2 | bunzip2 | bzcat [-cdfkqtvz1-9]       the block-sorting one (apps/bz2.l)
+  tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive, j for bzip2 (apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
   xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs

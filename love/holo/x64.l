@@ -599,7 +599,7 @@
          ('outsb . '(243 110)) ('outsw . '(102 243 111)) ('outsl . '(243 111))
           ; the system lane. `trap` is already int3 (CC), so `int` covers only the
           ; vectored form; `iretq` is the 64-bit return (the REX.W is what widens it).
-         ('cli . '(250)) ('sti . '(251)) ('hlt . '(244))
+         ('cli . '(250)) ('sti . '(251)) ('hlt . '(244)) ('pushf . '(156)) ('popf . '(157))
          ('ud2 . '(15 11)) ('iretq . '(72 207)) ('swapgs . '(15 1 248))
          ('rdmsr . '(15 50)) ('wrmsr . '(15 48)) ('cpuid . '(15 162)) ('rdtsc . '(15 49))
           ; the SVM lane (AMD-V), all of 0f 01 /3 with mod=11 and all

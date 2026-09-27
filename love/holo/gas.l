@@ -133,6 +133,7 @@
    (gx-sop w) (w @ 8 'st 4 'st4 2 'st2 'st1)
    (gx-iop w) (w @ 8 'si 4 'si4 2 'si2 'si1)
    gx-nils (gtab '((cli cli) (sti sti) (hlt hlt) (ud2 ud2) (iretq iretq) (swapgs swapgs)
+                   (pushf pushf) (pushfq pushf) (popf popf) (popfq popf)
                    (rdmsr rdmsr) (wrmsr wrmsr) (cpuid cpuid) (rdtsc rdtsc)
                    (vmrun vmrun) (vmload vmload) (vmsave vmsave) (stgi stgi) (clgi clgi)
                    (vmlaunch vmlaunch) (vmxoff vmxoff) (cld cld)

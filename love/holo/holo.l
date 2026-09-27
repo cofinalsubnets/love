@@ -118,7 +118,7 @@
               ; operation NAME then a register, `zr` whole-system), the exception generators, the waits.
               ; riscv: the Zicsr accesses (a CSR by name or number, the pseudos writing x0 into the
               ; slot they do not name), the two fences, the TLB flush, the privileged returns.
-             'cli 0 'sti 0 'hlt 0 'ud2 0 'iretq 0 'swapgs 0
+             'cli 0 'sti 0 'hlt 0 'ud2 0 'iretq 0 'swapgs 0 'pushf 0 'popf 0
              'rdmsr 0 'wrmsr 0 'cpuid 0 'rdtsc 0
               ; the SVM lane: register-contracted too -- the vmcb's physical address rides rax.
              'vmrun 0 'vmload 0 'vmsave 0 'stgi 0 'clgi 0

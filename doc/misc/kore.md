@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (180 tools, 186 names)
+## the inventory (183 tools, 189 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -98,7 +98,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
-| apps/gz.l, apps/xz.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), tar, cpio |
+| apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (inle/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
@@ -657,9 +657,9 @@ packages above.
 
 | | kore | busybox | toybox | GNU | uutils |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| names | 189 | 392 | 239 | 201 | 108 |
-| shared with kore | | 157 | 136 | 133 | 101 |
-| carried by no one else | 10 | 162 | 33 | 58 | 1 |
+| names | 192 | 392 | 239 | 201 | 108 |
+| shared with kore | | 160 | 138 | 133 | 101 |
+| carried by no one else | 10 | 161 | 33 | 58 | 1 |
 
 What at least three of the other four carry and kore does not: `fmt`.
 
@@ -681,8 +681,9 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `blkdiscard` |  | ✓ | ✓ |  |  |
 | `blkid` |  | ✓ | ✓ |  |  |
 | `blockdev` |  | ✓ | ✓ |  |  |
-| `bunzip2` |  | ✓ | ✓ |  |  |
-| `bzcat` |  | ✓ | ✓ |  |  |
+| `bunzip2` | ✓ | ✓ | ✓ |  |  |
+| `bzcat` | ✓ | ✓ | ✓ |  |  |
+| `bzip2` | ✓ | ✓ |  |  |  |
 | `cal` | ✓ | ✓ | ✓ |  |  |
 | `cat` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `cc` | ✓ |  |  | ✓ |  |
@@ -936,8 +937,8 @@ What at least three of the other four carry and kore does not: `fmt`.
 
 The names only one carries:
 
-* **busybox alone** (162): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
-  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `bzip2` `chat` `chpasswd` `chpst` `crond`
+* **busybox alone** (161): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
+  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond`
   `crontab` `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap`
   `dumpleases` `ed` `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash`
   `fdflush` `fdformat` `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser`

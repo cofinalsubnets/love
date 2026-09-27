@@ -334,6 +334,7 @@
 ;   love tar czf A.tar.gz DIR     pack DIR's contents (paths relative)
 ;   love tar xzf A.tar.gz [DIR]   unpack into DIR (default ".")
 ;   love tar tzf A.tar.gz         list, one path a line
+;   love tar cjf A.tar.bz2 DIR    j in place of z: bzip2 (apps/bz2.l)
 ;
 ; tools/tgz.l is the same two engines behind c|x|t; this is the spelling a hand types.
 ; our deflate lands a few percent above `gzip -9`; the numbers live in apps/gz.l.
@@ -355,12 +356,15 @@
    (tarc-blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
    (tarc-has? fl c) (:- (go 0) n #fl (go k) (? (n <= k) 0 (fl k = c) 1 (go (k + 1))))
 
+   ; z? is 'z for gzip, 'j for bzip2, () for neither. bz2 is reached at the call: the
+   ; path-loaded tools (selfpack, mkrootfs) take tar with gz alone
+   (tarc-bz f) (: b (cite 'bz2 f) (lit? b ? b (tarc-die "no bzip2 aboard")))
    (tarc-c arch dir z?)
     (: g (tar-gather dir "")
        _ (!g && tarc-die ("cannot read " + dir))
        a (tar-pack <>g)
        _ (!a && tarc-die "cannot pack (a path too long for ustar?)")
-       b (z? ? (gz-zip a "" 0) a)
+       b (z? @ 'z (gz-zip a "" 0) 'j (tarc-bz 'bz2-pack a 9) a)
        _ (tarc-blurt arch b ? 0 (tarc-die ("cannot write " + arch)))
        0)
 
@@ -369,8 +373,9 @@
    (tarc-open arch z?)
     (: b (tarc-slurp arch)
        _ (!b && tarc-die ("cannot read " + arch))
-       u (z? ? (gz-unzip <>b) [1 <>b])
-       _ (!u && tarc-die (arch + ": not a gzip stream, or its crc32 disagrees"))
+       u (z? @ 'z (gz-unzip <>b) 'j (: v (tarc-bz 'bz2-unpack <>b) (two? v && v)) [1 <>b])
+       _ (!u && tarc-die (arch + (z? = 'j ? ": not a bzip2 stream, or its crc disagrees"
+                                          ": not a gzip stream, or its crc32 disagrees")))
        r (tar-unpack <>u)
        _ (!r && tarc-die (arch + ": not a tar archive, or it is truncated"))
        <>r)
@@ -383,11 +388,11 @@
 
    (tarc-t arch z?) (each (tarc-open arch z?) (e \ say out (peep e 'nom "" + "\n")), 0)
 
-   usage "usage: tar czf|xzf|tzf ARCHIVE [DIR]"
+   usage "usage: tar czf|xzf|tzf ARCHIVE [DIR] (j for z: bzip2)"
    (tar-main av)
     (: n #av
        fl (n ? <av "")
-       z? (tarc-has? fl 122)                       ; z
+       z? (? (tarc-has? fl 122) 'z (tarc-has? fl 106) 'j ())   ; z, j
        a (2 <= n ? <>av "")
        d (3 <= n ? <>>av ".")
        (? (n < 2) (tarc-die usage)
