@@ -7996,7 +7996,7 @@
                      (cfoldir g irx)))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))
+       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (copyprop g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
