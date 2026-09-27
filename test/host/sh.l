@@ -779,9 +779,13 @@
    _ (pin sh-inread () 1)
    b (sh-forkok? ["cat" "f"] ())
    c (sh-forkok? ["cat"] [(0 . 5)])
+   ; ..and a foreign bare word spawns as (path . word), the path PATH gave it here
+   w (sh-whichp "git")
+   v (sh-spawnv ["git" "--version"])
+   d (? (two? w) (<v = (<>w . "git") && >v = ["--version"]) 1)
    _ (pin sh-tty () tty0)
    _ (pin sh-inread () in0)
-   (test (1 = a) (0 = b) (1 = c)))
+   (test (1 = a) (0 = b) (1 = c) (1 = d)))
 
 ;; readonly, alias, times, hash and ulimit: each acts on this process or its tables.
 ;; a readonly assignment is an error, fatal to a script, from every setter
