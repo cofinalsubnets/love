@@ -1116,8 +1116,10 @@
       (two? g3) (hasraw <>g3 want3)
       (two? g4) (hasraw <>g4 want4)
       (two? g5) (hassaved <>g5 want5)
-      ; "=m" is refused: an output to memory wants a store the body cannot be asked to make
-      (refused? (cgn "int main() { long v; asm(\"sys\" : \"=m\"(v)); return 0; }"))
+      ; "=m" is the asm's own store, its address in a register; "=@ccz" a register the flags set
+      !(refused? (cgn "int main() { long v; asm(\"movq $1, %0\" : \"=m\"(v)); return 0; }"))
+      !(refused? (cgn "int main() { int z; asm(\"testq %1, %1\" : \"=@ccz\"(z) : \"r\"(1L)); return z; }"))
+      (refused? (cgn "int main() { int z; asm(\"testq %1, %1\" : \"=@ccq\"(z) : \"r\"(1L)); return z; }"))
       (refused? (cgn "int main() { long v; asm(\"mov $1, %0\" : \"=f\"(v)); return 0; }"))
       (refused? (cgn "int main() { asm(\"syscall\" : : \"r0\"(1), \"r0\"(2)); return 0; }"))
       (refused? (cgn "int main() { asm(\"syscall\" : : \"r4\"(1)); return 0; }"))
@@ -1362,14 +1364,23 @@
    ; r0:r2 protocol; the slot never opens. &-taken and ++ shapes deopt through clval.
    irV (cgn "long w2(long *a, int n) { unsigned __int128 c = 0; for (int i = 0; i < n; i++) { for (int k = 0; k < 2; k++) { c = c + (unsigned __int128) a[i] * 3; a[i] = (long) c; } } return (long)(c >> 64); } int main() { return 0; }")
    vf (fnf 'w2 <>irV)
+   ; -- the schoolbook row: the product stays on the pair, the limb it adds is built in the
+   ; park (a zero high half), the carry adds from its home, and s >> 64 lands the carry's halves
+   irM (cgn "void mr(unsigned long *r, unsigned long *a, int na, unsigned long *b, int nb) { for (int i = 0; i < na; i++) { unsigned __int128 c = 0; unsigned long ai = a[i]; for (int j = 0; j < nb; j++) { unsigned __int128 s = (unsigned __int128) ai * b[j] + r[i+j] + c; r[i+j] = (unsigned long) s; c = s >> 64; } r[i+nb] = (unsigned long) c; } } int main() { return 0; }")
+   mrf (fnf 'mr <>irM)
+   _ (test
+      (two? irM)
+      (1 = #(filter (f \ two? f && <f = 'a128r && <>>f = 0) mrf))   ; + r[i+j]: the park never opens
+      (2 = (occh mrf 'a128r))                    ; + c reads c's home
+      (0 = (occh mrf 'shr128))                   ; c = s >> 64: two moves, the high half a zero
+      (: ws (filter (f \ two? f && <f = 'a128r) mrf) (elem ['li <>>(ws 1) 0] mrf)))
    (test
       (two? irV)
       (elem '(mov r11 r0) vf)                     ; c's write lands its lo home...
       (elem '(mov r12 r2) vf)                     ; ...and its hi
       (elem '(m128r r7 r8) vf)                    ; the mul rides the parked twins -- the
-      (elem '(a128r r6 r5) vf)                    ;   machine-stack cell never opens, and the
-                                                     ;   combine reads its own park (the arrivals:
-                                                     ;   the file ranks them last, the locals took r9/r10)
+      (elem '(a128r r11 r12) vf)                  ;   machine-stack cell never opens, and the
+                                                     ;   combine reads c's home, the park copied out
       (4 = (splds vf))))                             ; full-word sp loads: a's two wd9-spill reloads + the cs restores
 
 ; -- the callee-saved contract (cskeep): every cgn above already compiles under it -- a

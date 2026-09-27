@@ -10,6 +10,7 @@
 (borrow 'cli)
 (borrow 'cal)
 (borrow 'posix)
+(borrow 'text)
 
 (:
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
@@ -163,9 +164,9 @@
      (uls-when (// (st 3) 1000000000) now)
      (uls-nom p nm (st 2) (? tty? (uls-hue p (st 2)) ""))]
    ; the names as a grid. a cell's width is the NAME's and not the coloured text's:
-   ; the sgr bytes ride along and take up no screen.
+   ; the sgr bytes ride along and take up no screen, and a wide character takes two.
    (uls-grid es tty? w down?)
-    (: cs (map (\ e ((uls-name e tty?) . #<e)) es)
+    (: cs (map (\ e ((uls-name e tty?) . swidth <e)) es)
        (go l) (? !(two? l) () (: _ (say out <l) _ (put out 10) (go >l)))
        (go ((cite 'grid 'lay) cs w down?)))
    (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)

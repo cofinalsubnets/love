@@ -873,5 +873,42 @@
       (st? (vgob '("a") ((bytes ":hl") + [CR])) 'hl)
       !(st? (vgob '("a") ((bytes ":hl") + [CR] + (bytes ":hl") + [CR])) 'hl))
 
+; --- characters, not bytes: the cursor sits on a character's first byte, every
+; motion steps whole ones, and the screen counts columns -- a wide one takes two.
+; "a日本b" is a(0) 日(1) 本(4) b(7), eight bytes and six columns
+   _ (test
+      (at (vgo '("a日本b") "l") = '(0 1)) (at (vgo '("a日本b") "ll") = '(0 4))
+      (at (vgo '("a日本b") "$") = '(0 7)) (at (vgo '("a日本b") "$h") = '(0 4))
+      (at (vgo '("a日本b") "9l") = '(0 7))                   ; the fence is a character
+      (lns (vgo '("a日本b") "lx") = '("a本b"))
+      (lns (vgo '("a日本b") "l2x") = '("ab"))
+      (lns (vgo '("a日本b") "llX") = '("a本b"))
+      (lns (vgo '("a日本b") "ld$") = '("a"))                  ; $ takes its character whole
+      (lns (vgo '("a日本b") "vld") = '("本b"))
+      (lns (vgo '("a日本b") "lr中") = '("a中本b"))             ; a multibyte argument waits for its tail
+      (lns (vgo '("a日本b") "l2r.") = '("a..b"))
+      (at (vgo '("a日本b") "f本") = '(0 4)) (at (vgo '("a日本b") "t本") = '(0 1))
+      (at (vgo '("a日本b") "$F日") = '(0 1)) (at (vgo '("a日本b") "$T日") = '(0 4))
+      (at (vgo '("a日本b") "f本;") = '(0 4))
+      (at (vgo '("日本 語") "w") = '(0 7)) (at (vgo '("日本 語") "e") = '(0 3))
+      (at (vgo '("café au") "w") = '(0 6))                    ; é is a letter, not punctuation
+      (at (vgo '("日本語" "abcdef") "$j") = '(1 4))           ; the goal is a screen column
+      (at (vgo '("abcdef" "日本語") "4lj") = '(1 6))
+      (at (vgo '("abcdef" "日本語") "3lj") = '(1 3))          ; a column inside 本 lands on it
+      (lns (vgo '("") "i日\e") = '("日")) (at (vgo '("") "i日\e") = '(0 0))
+      (lns (vgob '("a日") [65 BS 27]) = '("a"))              ; backspace takes a character
+      (lns (vgo '("日b") "ax\e") = '("日xb"))                 ; a appends after the character
+      (lns (vgo '("日b") "ylp") = '("日日b")) (at (vgo '("日b") "ylp") = '(0 3))
+      (: st (see (box '("a日本b") 4 4) "")
+         (body st = '("a日" "~" "~")))                        ; 本 would cross the margin
+      (: st (see (box '("a日本b") 4 4) "$")
+         L (vlay st)
+         ((st 'left = 2) && (body st = '(" 本b" "~" "~")) && (<>>>L = 4)))
+      (: st (see (box '("日本語日") 5 4) ":set wrap\r")
+         (body st = '("日本" "語日" "~")))
+      (: st (see (see (box '("日本語日") 5 4) ":set wrap\r") "$")
+         L (vlay st)
+         ((<>>L = 2) && (<>>>L = 3))))
+
    _ (test_fin ())                                    ; no zz-fin here: quit before claiming ok
    _ (say err "test/law/vi: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue + hues ok") _ (put err 10) 0)
