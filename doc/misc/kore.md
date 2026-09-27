@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (185 tools, 191 names)
+## the inventory (187 tools, 194 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -95,6 +95,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | apps/vi/ | vi |
+| ed.l | ed (the line editor), ex (the same buffer by word; its `vi` hands the buffer to vi) |
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
@@ -102,7 +103,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
-| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping (icmp echoes) |
+| net.l | telnet (a remote terminal: nc with the protocol's options answered), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6) |
 | apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -590,7 +591,7 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
 utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
 
-## telnet, httpd, nslookup and ping (apps/kore/net.l)
+## telnet, httpd, nslookup, ping and ping6 (apps/kore/net.l)
 
 `telnet HOST [PORT]` is nc (apps/ain.l) with the telnet protocol's options answered
 (RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
@@ -617,13 +618,52 @@ answer such as a TXT set arrives whole; one that still does not fit is said to b
 there is no TCP retry. A name that does not exist exits 1. The protocol pieces live in
 apps/dns.l (`dns-qedns`, `dns-raw`, `dns-records`), beside the resolver.
 
-`ping [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST` sends an ICMP echo every `-i`
+`ping [-46q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST` sends an ICMP echo every `-i`
 seconds (1 by default, fractions allowed), `-c` times or until ^C, and prints each reply's
 size, sequence, TTL and round trip, then the loss and min/avg/max, in busybox's format.
 After the last echo it waits up to `-W` seconds (10) for the rest. It exits 0 when any
 reply came back and 1 otherwise. It uses Linux's unprivileged ICMP echo socket, open to the
 groups in `net.ipv4.ping_group_range`, or else a raw ICMP socket, which needs root; FreeBSD
 and NetBSD have only the raw kind. Where both are refused it says so.
+
+`ping6`, or `ping -6`, or `ping` given an address with a colon in it, does the same over
+ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` in
+apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
+1452 here, one datagram on a 1500-byte link.
+
+## ed and ex (apps/kore/ed.l)
+
+One buffer and two dialects over it. The addresses are POSIX's in both: `N . $ 'x /re/
+?re?` with `+ - ^` offsets (a bare number after an address adds too), joined by `,` and `;`,
+either side of which may be missing -- `,` is `1,$`, `;` is `.,$`, `,N` is `1,N`, `N,` is
+`N,N` -- and `%` is `1,$`. The regexes are re.l's BRE.
+
+`ed [-s] [-p PROMPT] [FILE]` has POSIX's commands and GNU's few beside them: `a c d e E f
+g G h H i j k l m n p P q Q r s t u v V w W wq z = !` and the bare newline, with the `p l n`
+suffixes. An error prints `?`, and `H` turns the reason on beneath it. `s` reads `&` and
+`\1`..`\9`, `%` alone for the last replacement, and a backslash-newline to split the line;
+its flags are `g`, a count N (the Nth match on), and `p l n`, and a bare `s` repeats the last,
+with `g` and `p` toggling and `r` taking the last search pattern. A `g` list runs on over
+lines ending in a backslash and may carry `a i c` text; `u` takes a whole `g` back at once.
+`!cmd` runs the shell, `%` in it is the file and a leading `!` the last command; `r !cmd`,
+`e !cmd` and `w !cmd` read and write through one.
+
+`ex [-s] [-R] [-v] [-c CMD | +CMD] [FILE]` reads the same buffer by word: `[range]
+word[!] [args]`, any unambiguous head of the word (`d`, `del`, `delete`; `co` is copy and `c`
+change), `|` between commands (`g`, `v` and `!` take the rest of the line), and a count after
+the word taking that many lines from the range's last. Beyond ed's: named registers `a`-`z`
+for `d`, `ya` and `pu` (an upper-case name appends), `> <` by `shiftwidth`, `&` and `~`, a
+range filtered through `!cmd`, `j` joining at the blanks, `set` (`number list autoprint
+ignorecase shiftwidth report window`), and `vi`, which hands the buffer to the vi engine
+(apps/vi/vi.l's `vi-buffer`) and ends with it; `-v` starts there. Its messages are vim's
+shapes (`"f" 5L, 31B`), and errors are words on stderr.
+
+Standard input that is not a terminal is a script, and an error in one ends the edit with
+status 1 -- POSIX's rule, and GNU ed's; vim's ex carries on. The buffer is records in chunks
+of 64: an address walks the chunk counts and an edit rebuilds only the chunks it touches, so
+`g` over 20,000 lines runs in a fraction of a second. Absent: `^C` handling (it ends the
+editor, as it does every tool here), ex's file list (`next`, `args`), open mode, `s`'s `c`
+flag, and ed's `-x` and `-r`.
 
 ## not built
 
@@ -649,11 +689,11 @@ kore does not is the census's to say.
 
 ## the census (kore against the other userlands)
 
-Taken 2026-09-26. A row is a tool NAME and a mark says the implementation answers to it —
-the same reach as the inventory, nothing about flags. Every tool kore has is a row, and so is
-every tool at least two of the others share; a name only one other carries is listed after
-the table instead, since those are mostly one system's own administration (busybox's init and
-network daemons, GNU's toolchain driver names).
+Taken 2026-09-26, kore's column retaken 2026-09-27. A row is a tool NAME and a mark says the
+implementation answers to it — the same reach as the inventory, nothing about flags. Every
+tool kore has is a row, and so is every tool at least two of the others share; a name only
+one other carries is listed after the table instead, since those are mostly one system's own
+administration (busybox's init and network daemons, GNU's toolchain driver names).
 
 * **kore** — the `applets` tablet in kore.l, plus the love verbs that are unix tools: `cc`
   (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `mc`, `pom`.
@@ -674,9 +714,9 @@ packages above.
 
 | | kore | busybox | toybox | GNU | uutils |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| names | 192 | 392 | 239 | 201 | 108 |
-| shared with kore | | 160 | 138 | 133 | 101 |
-| carried by no one else | 10 | 161 | 33 | 58 | 1 |
+| names | 200 | 392 | 239 | 201 | 108 |
+| shared with kore | | 166 | 141 | 134 | 101 |
+| carried by no one else | 12 | 159 | 33 | 58 | 1 |
 
 What at least three of the other four carry and kore does not: `fmt`.
 
@@ -735,9 +775,11 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `dos2unix` | ✓ | ✓ | ✓ |  |  |
 | `du` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `echo` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ed` | ✓ | ✓ |  |  |  |
 | `egrep` | ✓ | ✓ | ✓ | ✓ |  |
 | `eject` |  | ✓ | ✓ |  |  |
 | `env` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ex` | ✓ |  |  |  |  |
 | `expand` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `expr` | ✓ | ✓ |  | ✓ | ✓ |
 | `factor` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -769,7 +811,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `hostid` | ✓ | ✓ |  | ✓ | ✓ |
 | `hostname` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `html2text` | ✓ |  |  |  |  |
-| `httpd` |  | ✓ | ✓ |  |  |
+| `httpd` | ✓ | ✓ | ✓ |  |  |
 | `hwclock` |  | ✓ | ✓ |  |  |
 | `i2cdetect` |  | ✓ | ✓ |  |  |
 | `i2cdump` |  | ✓ | ✓ |  |  |
@@ -833,6 +875,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `nohup` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `nproc` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `nsenter` |  | ✓ | ✓ |  |  |
+| `nslookup` | ✓ | ✓ |  |  |  |
 | `numfmt` |  |  |  | ✓ | ✓ |
 | `objcopy` | ✓ |  |  | ✓ |  |
 | `od` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -843,8 +886,8 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `pathchk` | ✓ |  |  | ✓ | ✓ |
 | `pgrep` | ✓ | ✓ | ✓ |  |  |
 | `pidof` | ✓ | ✓ | ✓ |  |  |
-| `ping` |  | ✓ | ✓ |  |  |
-| `ping6` |  | ✓ | ✓ |  |  |
+| `ping` | ✓ | ✓ | ✓ |  |  |
+| `ping6` | ✓ | ✓ | ✓ |  |  |
 | `pinky` | ✓ |  |  | ✓ | ✓ |
 | `pivot_root` |  | ✓ | ✓ |  |  |
 | `pkill` | ✓ | ✓ | ✓ |  |  |
@@ -906,7 +949,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `tar` | ✓ | ✓ | ✓ | ✓ |  |
 | `taskset` |  | ✓ | ✓ |  |  |
 | `tee` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `telnet` |  | ✓ |  | ✓ |  |
+| `telnet` | ✓ | ✓ |  | ✓ |  |
 | `telnetd` |  | ✓ |  | ✓ |  |
 | `test` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `time` | ✓ | ✓ | ✓ | ✓ |  |
@@ -945,6 +988,7 @@ What at least three of the other four carry and kore does not: `fmt`.
 | `which` | ✓ | ✓ | ✓ | ✓ |  |
 | `who` | ✓ |  | ✓ | ✓ | ✓ |
 | `whoami` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `www` | ✓ |  |  |  |  |
 | `xargs` | ✓ | ✓ | ✓ | ✓ |  |
 | `xxd` | ✓ | ✓ | ✓ |  |  |
 | `xz` | ✓ | ✓ |  |  |  |
@@ -954,24 +998,24 @@ What at least three of the other four carry and kore does not: `fmt`.
 
 The names only one carries:
 
-* **busybox alone** (161): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
-  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond`
-  `crontab` `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap`
-  `dumpleases` `ed` `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash`
-  `fdflush` `fdformat` `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser`
-  `getty` `hdparm` `ifdown` `ifenslave` `ifplugd` `ifup` `inetd` `init` `iostat` `ip` `ipaddr`
-  `ipcalc` `ipcrm` `ipcs` `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode` `klogd`
-  `linux64` `linuxrc` `loadfont` `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma`
-  `lzopcat` `makemime` `mdev` `mesg` `mke2fs` `mkfs.ext2` `mkfs.minix` `modprobe` `mpstat` `mt`
-  `nameif` `nmeter` `nslookup` `ntpd` `passwd` `pipe_progress` `popmaildir` `powertop` `pscan`
-  `pstree` `raidautorun` `rdate` `rdev` `readprofile` `reformime` `resize` `resume` `route`
-  `rpm2cpio` `run-init` `run-parts` `runsv` `runsvdir` `rx` `script` `scriptreplay` `seedrng`
-  `sendmail` `setarch` `setconsole` `setfont` `setkeycodes` `setlogcons` `setpriv` `setserial`
-  `setuidgid` `showkey` `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon`
-  `sulogin` `sv` `svc` `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `traceroute`
-  `traceroute6` `tree` `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol` `ubirename`
-  `ubirmvol` `ubirsvol` `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop`
-  `unzip` `vlock` `volname` `whois` `zcip`
+* **busybox alone** (159): `[[` `acpid` `addgroup` `adduser` `adjtimex` `arp` `arping` `ash`
+  `bbconfig` `beep` `bootchartd` `brctl` `busybox` `chat` `chpasswd` `chpst` `crond` `crontab`
+  `cryptpw` `cttyhack` `delgroup` `deluser` `depmod` `dhcprelay` `dnsd` `dumpkmap` `dumpleases`
+  `envdir` `envuidgid` `ether-wake` `fakeidentd` `fatattr` `fbset` `fbsplash` `fdflush`
+  `fdformat` `fdisk` `fgconsole` `findfs` `fsck` `fsck.minix` `fstrim` `fuser` `getty` `hdparm`
+  `ifdown` `ifenslave` `ifplugd` `ifup` `inetd` `init` `iostat` `ip` `ipaddr` `ipcalc` `ipcrm`
+  `ipcs` `iplink` `ipneigh` `iproute` `iprule` `iptunnel` `kbd_mode` `klogd` `linux64`
+  `linuxrc` `loadfont` `loadkmap` `logread` `lpd` `lpq` `lpr` `lsof` `lsscsi` `lzma` `lzopcat`
+  `makemime` `mdev` `mesg` `mke2fs` `mkfs.ext2` `mkfs.minix` `modprobe` `mpstat` `mt` `nameif`
+  `nmeter` `ntpd` `passwd` `pipe_progress` `popmaildir` `powertop` `pscan` `pstree`
+  `raidautorun` `rdate` `rdev` `readprofile` `reformime` `resize` `resume` `route` `rpm2cpio`
+  `run-init` `run-parts` `runsv` `runsvdir` `rx` `script` `scriptreplay` `seedrng` `sendmail`
+  `setarch` `setconsole` `setfont` `setkeycodes` `setlogcons` `setpriv` `setserial` `setuidgid`
+  `showkey` `slattach` `smemcap` `softlimit` `ssl_client` `start-stop-daemon` `sulogin` `sv`
+  `svc` `svlogd` `svok` `syslogd` `tc` `tcpsvd` `tftp` `tftpd` `traceroute` `traceroute6`
+  `tree` `ttysize` `tune2fs` `ubiattach` `ubidetach` `ubimkvol` `ubirename` `ubirmvol`
+  `ubirsvol` `ubiupdatevol` `udhcpc` `udhcpc6` `udhcpd` `udpsvd` `uevent` `unlzop` `unzip`
+  `vlock` `volname` `whois` `zcip`
 * **toybox alone** (33): `acpi` `count` `devmem` `file` `fstype` `getconf` `gpiodetect`
   `gpiofind` `gpioget` `gpioinfo` `gpioset` `help` `host` `iconv` `iorenice` `iotop` `mcookie`
   `memeater` `mix` `nbd-server` `netcat` `nologin` `oneit` `prlimit` `pwgen` `sntp` `uclampset`

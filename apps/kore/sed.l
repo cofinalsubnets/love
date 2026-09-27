@@ -34,7 +34,9 @@
 
 (:
    ; -- the substitution: replace matches of nodes in ln by repl (g? = all) --
-   (usub nodes repl ln g?)
+   (usub nodes repl ln g?) (usubn nodes repl ln g? 1)
+   ; ..from the nth match on: the ones before it ride through as they were (ed's s///N)
+   (usubn nodes repl ln g? nth)
     (: n (tally ln)
        ; the replacement text for one match at (ms me) with group spans sp
        (expand ms me sp)
@@ -54,20 +56,23 @@
            (xgo 0 ""))
        ; ate marks "a match ended exactly here": an empty match at that point is
        ; discarded (the POSIX rule -- s/x*/-/g on "xbz" is "-b-z-", one dash)
-       (walk i acc ate hit)
+       ; k counts the matches met, so the ones before nth keep their own text
+       (walk i acc ate hit k)
         (refindm nodes ln i @ [_ ms me sp]
           (? (&& ate (me = ms) (ms = i))
-             (? (i < n) (walk (i + 1) (acc + snip ln i (i + 1)) () hit)
+             (? (i < n) (walk (i + 1) (acc + snip ln i (i + 1)) () hit k)
                 [hit acc])
-             (: acc2 (acc + snip ln i ms + expand ms me sp)
-                (? !g? [1 (acc2 + snip ln me n)]
+             (: rep? (nth <= k)
+                acc2 (acc + snip ln i ms + (? rep? (expand ms me sp) (snip ln ms me)))
+                hit2 (? rep? 1 hit)
+                (? (rep? && !g?) [1 (acc2 + snip ln me n)]
                    ; g at an empty match: keep one charm and step past it
                    (me = ms) (? (me < n)
-                                (walk (me + 1) (acc2 + snip ln me (me + 1)) () 1)
-                                [1 acc2])
-                   (walk me acc2 1 1))))
+                                (walk (me + 1) (acc2 + snip ln me (me + 1)) () hit2 (k + 1))
+                                [hit2 acc2])
+                   (walk me acc2 1 hit2 (k + 1)))))
           [hit (acc + snip ln i n)])
-       (walk 0 "" () ()))
+       (walk 0 "" () () 1))
 
    ; -- the script parser: text -> (1 cmds) | (). a command is
    ; (a1 a2 verb payload); an address is () | ('ln N) | ('last) | ('re nodes);
