@@ -856,11 +856,11 @@
    ; the type of an expression without its emission (arrays undecayed); every accumulator the
    ; walk touched is handed back as it was
    (peekty g env e)
-    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc)
+    (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fa0 (g 'fasecs)
        lv (clval g env e)
        _ (? (vm? lv) (rfree g (vmb lv)) ())
        ty (? (bad? lv) (: r (cgexpr g env e ()) (? (bad? r) 'bad (rfree g (vreg r), vty r))) (vty lv))
-       _ (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0)
+       _ (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fasecs fa0)
        ty)
    ; a targetable leaf re-emitted straight into rX -> forms | 'no. leaves are pure (no strs pin,
    ; no argpos), so re-aiming costs nothing
@@ -5838,6 +5838,34 @@
                      (? (bad? ty) 8 (: n (tsz g ty) (? (elem n '(1 2 4 8)) n 8))))
    asmhb holo-bytes                                 ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
    asmho holo-bytes-open
+   ; a template's bytes: one opaque raw, unless it carries a directive or a label beside an
+   ; instruction -- then gas-top reads it from the function's own place. what stays here lays
+   ; as raw runs split at its labels, which are the function's (another section's word may name
+   ; one), numbered per reading so an inlined copy lays its own; the other sections ride
+   ; 'fasecs out to the object, beside the file-scope asm's
+   (asmbody g tgt neutral? txt labs)
+    (? (neutral? || gas-plain? tgt txt)
+       [['raw (: prog (? neutral? (asm-text txt) (gas-text tgt txt))
+                 (? (two? labs) (asmho tgt prog (foldl (\ t l9 (pin t l9 1)) {} labs))
+                    (asmhb tgt prog)))]]
+       (: r (gas-top-in tgt txt "" [1 6] (show (nlab g (g 'fn + ".asm")) + "."))
+          home (foldl (\ a x (? (<x = "") (x 3) a)) () <r)
+          _ (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2)] . (g 'fasecs)))
+          (asmruns tgt home)))
+   ; forms -> raw runs between the labels and aligns, every fix left open for the function's lay
+   (asmruns tgt fs)
+    (: (flush cur acc) (? (two? cur) (: p (rev cur) (['raw (asmho tgt p (cg-refs p {}))] . acc)) acc)
+       (go l cur acc)
+        (? !(two? l) (rev (flush cur acc))
+           (: f <l
+              (? (two? f && elem <f '(label align)) (go >l () (f . (flush cur acc)))
+                 (go >l (f . cur) acc))))
+       (go fs () ()))
+   ; the file-scope asm's sections and every function's, one [secs fns objs]
+   (asecs-all g) (foldl (\ a r (? (two? a) [(<a + <r) (a 1 + r 1) (a 2 + r 2)] r))
+                        (g 'asecs) (rev (g 'fasecs)))
+   ; a refusal that names what the asm asked for, for cgfn's report
+   (asmno g msg) (: _ (pin g 'nolane msg) 'bad)
    (cgasm g env s)
     (: _ (pin g 'hasasm 1)
        tmpl <>s
@@ -5854,14 +5882,14 @@
               h (0 < n ? (c 0) 0)
               c2 (? (1 < n && c 1 = 38) (snip c 2 n) (snip c 1 n))    ; "=&r": the early clobber is the picking rule already
               k (h @ (61 || 43) (asmc g c2) 'bad)
-              (? (bad? k || elem k '(imm mem either) || two? k) 'bad
+              (? (bad? k || elem k '(imm mem either) || two? k) (asmno g ("an asm output constrained \"" + c + "\""))
                  (oconv >l ([(h @ 43 'x 'o) (pinof k <><l) <><l (asmw g env <><l)] . acc)))))
        (iconv l acc)
         (? !(two? l) (rev acc)
            (: k (asmc g <<l) e <><l
               const? (two? e && <e = 'num && charm? <>e)
-              (k @ 'bad 'bad
-                   'imm (const? ? (iconv >l (['m <>e 0 0] . acc)) 'bad)
+              (k @ 'bad (asmno g ("an asm input constrained \"" + <<l + "\""))
+                   'imm (const? ? (iconv >l (['m <>e 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
                    'either (? const? (iconv >l (['m <>e 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
                    'mem (iconv >l (['b 'pick ['addr e] 0] . acc))
                    (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
@@ -5878,7 +5906,7 @@
                        (elem k acc) 'bad
                        (pinset >l (k . acc)))))
              pinned (pinset ops9 ())
-             (? (bad? pinned) 'bad
+             (? (bad? pinned) (asmno g "an asm register pinned twice, or one no operand may take")
                 (: (assign l fr acc)
                     (? !(two? l) (rev acc)
                        (: e2 <l k <>e2
@@ -5893,13 +5921,15 @@
                        (: c <l
                           (? (c = "memory" || c = "cc") (clobs >l acc)
                              (: r9 (? neutral? (intern c) (gas-regname tgt c))
-                                (? !(nom? r9) 'bad
+                                (? !(nom? r9) (asmno g ("an asm clobber of \"" + c + "\""))
                                    (asmreg? g r9) (clobs >l acc)
                                    (asmsave? g r9) (clobs >l (r9 . acc))
-                                   'bad)))))
+                                   (asmno g ("an asm clobber of \"" + c + "\"")))))))
                    saves (clobs <>>>>s ())
                    ; a jump out of the body would skip the output stores and the clobber pops
-                   (? (bad? asgn || bad? saves || (two? labs && (two? os || two? saves))) 'bad
+                   (? (bad? saves) 'bad
+                      (bad? asgn) (asmno g "more asm operands than registers to seat them")
+                      (two? labs && (two? os || two? saves)) (asmno g "an asm goto with outputs or a callee-saved clobber")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
                          (rtext a9 w) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
                          (itext v) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (show v)) (gas-imm tgt v md)))
@@ -5912,7 +5942,7 @@
                                                        'b (mtext a9)
                                                        (rtext a9 <>>>e2)) . acc))))
                          txt (asmsub tmpl (optext ops9 asgn () + map ltext labs))
-                         (? (bad? txt) 'bad
+                         (? (bad? txt) (asmno g "an asm operand the template spells with a modifier it has no lane for")
                             (: ; inputs (and in-out outputs) evaluate and push..
                                (loads l acc)
                                 (? !(two? l) acc
@@ -5920,7 +5950,7 @@
                                       (? (elem <e2 '(x i b))
                                           (: r (cgexpr g env <>>e2 ())
                                              (? (bad? r) 'bad
-                                                (flo? (vty r) || stru? (vty r)) 'bad
+                                                (flo? (vty r) || stru? (vty r)) (asmno g "a float or struct asm operand")
                                                 (loads >l (acc + tor0 g r + spush 'r0))))
                                          (loads >l acc))))
                                lf (loads ops9 ())
@@ -5931,11 +5961,9 @@
                                          (? (elem <<l '(x i b))
                                             (pops >l >al (spop <al + acc))
                                             (pops >l >al acc)))
-                                     ; the body: one opaque raw, the saved clobbers pushed around it
+                                     ; the body, the saved clobbers pushed around it
                                      body ((map (r9 \ ['push r9]) saves)
-                                           + [['raw (: prog (? neutral? (asm-text txt) (gas-text tgt txt))
-                                                      (? (two? labs) (asmho tgt prog (foldl (\ t l9 (pin t l9 1)) {} labs))
-                                                         (asmhb tgt prog)))]]
+                                           + asmbody g tgt neutral? txt labs
                                            + map (r9 \ ['pop r9]) (rev saves))
                                      ; outputs: push each register, store back reverse
                                      (opush l al acc)
@@ -5950,7 +5978,7 @@
                                                (: lv (matv g (clval g env <>>e2))
                                                   (? (bad? lv) 'bad
                                                      (: ty (vty lv)
-                                                        (? (flo? ty || stru? ty || arr? ty || bitf? ty) 'bad
+                                                        (? (flo? ty || stru? ty || arr? ty || bitf? ty) (asmno g "a float, struct, array or bit-field asm output")
                                                            (ostores >l >al
                                                             ((vfs lv + spop 'r1 + [[(stop ty) 'r0 0 'r1]]) + acc)))))))))
                                      osf (ostores ops9 asgn ())
@@ -7668,18 +7696,18 @@
                                    (? (elem A '(r0 r1 r2 r3)) (A . go >l) (go >l))))
                       (go rides))
                (? (qk && two? qrr && qclob? irU qrr)
-                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'pool0 tpool 'pool tpool,
+                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool,
                    attempt ())
                   (bad? irU ||
                    (two? av9 && peep g 'lsq 0 != av9 3) ||
                    !(peep g 'dseq 0 = (two? av9 ? (av9 13) (peep g 'dseq 0))))
-                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'pool0 tpool 'pool tpool)
+                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 tpool 'pool tpool)
                      sb (spill () params 0 0 0 () ())
                      sb (? (two? vzf) [(<sb + vzf) <>sb] sb)
                      (build sb))
                   irU))
            (attempt 1))
-       n0 (peep g 'n 0) strs0 (g 'strs) sts0 (g 'statics)   ; snapshot the accumulators for ubuild's retry
+       n0 (peep g 'n 0) strs0 (g 'strs) sts0 (g 'statics) fas0 (g 'fasecs)   ; snapshot the accumulators for ubuild's retry
        ; no pool on t32 (r4-r11 callee-saved, r0-r3/r12 scratch); riscv pools t0..t3 then a5..a7, as
        ; a64 pools x5..x7 -- an arg register is dead once spilled or homed
        tpool (? (abl? g 'tpool) () (t32? g) () (rv64? g) '(r8 r9 r10 r11 r5 r6 r7) opool)
@@ -7852,6 +7880,7 @@
           ; file-scope `register T nm asm("R")` names: vent answers the register, nothing is laid
           'gregs (two? xtra && 10 < #xtra ? (xtra 10) {})
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
+          'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}}                               ; a const candidate's image, laid once and read by both walks
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
@@ -7971,6 +8000,8 @@
                _ (foldl (\ _ k (: e (g 'glob k)
                                   (? (two? e) (cg-srefs <>>e t, 0) 0)))
                         0 (keys (g 'glob)))
+               ; ..and what a function's asm names from another section
+               _ (foldl (\ _ x (: s (unom x) (? s (pin t s 1) 0))) 0 (keys (cg-refs (g 'fasecs) {})))
                q (foldl (\ a s (? (fnix s && !(laid s)) (s . a) a))
                         () (keys t))
                (? (two? q && !(gripe? (g 'genfail))) (drive q, datclose 0) 0))
@@ -7999,7 +8030,7 @@
        (? (gripe? r) r                               ; a named cause rides out to the driver (a gripe is a chain, so guard before two?)
           !(two? r) ()
           !(r 3) ()                               ; no main -> no program (the exe has nothing to start)
-          (two? (<r 'asecs)) (gripe () () () "a file-scope asm lays sections, which only an object carries")
+          (two? (asecs-all <r)) (gripe () () () "an asm's sections ride only an object")
           (: dat <>>r                           ; one flat image: nifs, rodata and bss (as real zeros) all ride the one lane
              [1 (crt0 + <>r + <>>>>>dat + <dat + <>dat + <>>>>dat)])))
    ; the relocatable object view: the .o emitter turns the names into a symbol table + relocations;
@@ -8061,5 +8092,5 @@
                         (map (nm \ [nm (forsec nm src) (grain nm src)]) (noms src ()))))
              [1 <>r <dat fnames gnames
                 <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat
-                xfns (<r 'asecs)]))))
+                xfns (asecs-all <r)]))))
 ) ; module 'moon
