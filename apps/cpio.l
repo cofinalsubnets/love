@@ -34,6 +34,7 @@
 
 (borrow 'path)
 (borrow 'posix)
+(borrow 'bytes)
 (:
    cpio-mag "070701"
    cpio-trail "TRAILER!!!"
@@ -56,8 +57,6 @@
                         ; the digit 0 answers it as readily as a miss does
                         (d != () ? (go (i + 1) (acc << 4 | d)))))
        (go 0 0))
-   (cpio-pad n) ((4 - n % 4) % 4)           ; the NULs after a name or a body
-   (cpio-nuls k) (: (go i acc) (k <= i ? acc (go (i + 1) (acc + string 0))) (go 0 ""))
 
    ; --- the kind, which lives in the mode here --------------------------------
    (cpio-kmode k) (k @ 'dir 16384 'link 40960 32768)
@@ -92,19 +91,19 @@
            _ (say o (cpio-head i nom mode (peep e 'mtime 0)
                                (peep e 'uid 0) (peep e 'gid 0) nb))
            _ (say o (nom + string 0))
-           _ (say o (cpio-nuls (cpio-pad (110 + #nom + 1))))
+           _ (say o (zbytes (padk (110 + #nom + 1) 4)))
            _ (say o b)
-           _ (say o (cpio-nuls (cpio-pad nb)))
+           _ (say o (zbytes (padk nb 4)))
            (i + 1))
        _ (foldl one 1 es)
        ; the trailer is a member like any other, and its own name is the end mark
        _ (say o (cpio-head 0 cpio-trail 0 0 0 0 0))
        _ (say o (cpio-trail + string 0))
-       _ (say o (cpio-nuls (cpio-pad (110 + #cpio-trail + 1))))
+       _ (say o (zbytes (padk (110 + #cpio-trail + 1) 4)))
        s (slurp o)
        ; the archive ends on a 512 boundary. the kernel does not care and GNU cpio does
        ; not either, but `cmp` against a GNU archive does, and that is the oracle
-       (s + cpio-nuls ((512 - #s % 512) % 512)))
+       (s + zbytes (padk #s 512)))
 
    ; --- reading ---------------------------------------------------------------
    (cpio-read1 s n o)                       ; -> (1 entry next) | 'end | ()
@@ -118,7 +117,7 @@
           (? (mode = () || nb = () || nz = ()) ()
              (n < o + 110 + nz) ()
              (: nom (snip s (o + 110) (o + 110 + nz - 1))
-                b0 (o + 110 + nz + cpio-pad (110 + nz))
+                b0 (o + 110 + nz + padk (110 + nz) 4)
                 (? (nom = cpio-trail) 'end
                    (n < b0 + nb) ()
                    (: kind (cpio-kind mode)
@@ -126,7 +125,7 @@
                       e (tar-entry nom kind (= kind 'link ? "" body))
                       _ (pins e 'mode (mode & 4095) 'mtime mtime 'uid uid 'gid gid)
                       _ (kind = 'link && pin e 'to body)
-                      [1 e (b0 + nb + cpio-pad nb)]))))))
+                      [1 e (b0 + nb + padk nb 4)]))))))
    (cpio-unpack s)
     (:- (go 0 ()) n #s
      (go o acc) (: r (cpio-read1 s n o)

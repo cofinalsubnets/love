@@ -33,11 +33,12 @@
 ; the head names the exports. `dial` and `resolve` are the door; the rest are the
 ; wire-format pieces test/host/dns.l drives directly, a protocol being unit-tested.
 (module (dns dial resolve dns-show
-         dns-answers dns-ask dns-be16 dns-conf dns-query dns-servers
+         dns-answers dns-ask dns-conf dns-query dns-servers
          dns-hosts dns-labels resolve-in dns-quad
          dns-qtype dns-qedns dns-raw dns-name dns-records dns-v6
          resolve6 resolve6-in dns-hosts6 dns-colon? dns-walk6)
 (borrow 'posix)
+(borrow 'bytes)
 (:
    ; --- files, lines, words ----------------------------------------------------
    ; the two config files are line-oriented text, not love data, so `sound` is no
@@ -81,8 +82,6 @@
        (oct 0 0 4))
 
    ; --- the wire ---------------------------------------------------------------
-   (dns-be16 v) (string (v >> 8 & 255) + string (v & 255))
-   (dns-hi r p)  (r p * 256 + r (p + 1))
 
    ; a name as length-prefixed labels, NUL-terminated. () if any label is empty
    ; or over 63 bytes -- a malformed name must not become a malformed packet.
@@ -101,15 +100,15 @@
    (dns-qtype id h t)
     (: q (dns-labels h)
        (string? q &&
-        (dns-be16 id + dns-be16 256 + dns-be16 1 + dns-be16 0
-         + dns-be16 0 + dns-be16 0 + q + dns-be16 t + dns-be16 1)))
+        (wrbe id 2 + wrbe 256 2 + wrbe 1 2 + wrbe 0 2
+         + wrbe 0 2 + wrbe 0 2 + q + wrbe t 2 + wrbe 1 2)))
    (dns-query id h) (dns-qtype id h 1)
    ; ..and with an EDNS0 OPT record (RFC 6891) offering 1232 bytes, the size that crosses
    ; any path unfragmented, so a long answer -- a txt set -- is not cut at udp's 512
    (dns-qedns id h t)
     (: q (dns-qtype id h t)
-       (string? q && (snip q 0 10 + dns-be16 1 + snip q 12 #q
-                      + string 0 + dns-be16 41 + dns-be16 1232 + dns-be16 0 + dns-be16 0 + dns-be16 0)))
+       (string? q && (snip q 0 10 + wrbe 1 2 + snip q 12 #q
+                      + string 0 + wrbe 41 2 + wrbe 1232 2 + wrbe 0 2 + wrbe 0 2 + wrbe 0 2)))
 
    ; skip a name at `pos` -> the position after it, or -1. a compression pointer ends
    ; the name: its top two bits are set and it is two bytes wide, so a walk that
@@ -130,18 +129,18 @@
         (? (k < 1 || n <= pos) ()
            (: p (dns-skip r pos n)
               (? (p < 0 || n < p + 10) ()
-                 (: ty (dns-hi r p)  cl (dns-hi r (p + 2))  rl (dns-hi r (p + 8))
+                 (: ty (rdbe r p 2)  cl (rdbe r (p + 2) 2)  rl (rdbe r (p + 8) 2)
                     q (p + 10)
                     (? (n < q + rl) ()
                        (ty = 1 && cl = 1 && rl = 4)
-                         ((dns-hi r q * 65536 + dns-hi r (q + 2)) . go (k - 1) (q + rl))
+                         ((rdbe r q 2 * 65536 + rdbe r (q + 2) 2) . go (k - 1) (q + rl))
                        (go (k - 1) (q + rl)))))))
        (? (n < 12) ()
-          !(dns-hi r 0 = id) ()                      ; not the question we asked
+          !(rdbe r 0 2 = id) ()                      ; not the question we asked
           (0 < r 2 & 2) 'torn                        ; TC: it did not fit
           (0 < r 3 & 15) ()                          ; NXDOMAIN, SERVFAIL, ..
           (: p0 (dns-skip r 12 n)
-             (? (p0 < 0) () (go (dns-hi r 6) (p0 + 4))))))
+             (? (p0 < 0) () (go (rdbe r 6 2) (p0 + 4))))))
 
    ; --- one question to one nameserver ------------------------------------------
    ; a packet to a server -> its answer's bytes, () on none within `ms`. the three-task
@@ -184,7 +183,7 @@
    ; sixteen bytes at q -> the ipv6 address as RFC 5952 writes it: each group in lower
    ; hex without its leading zeros, and the longest run of two or more zero groups as ::
    (dns-v6 r q)
-    (: gs (map (i \ dns-hi r (q + 2 * i)) ^8)
+    (: gs (map (i \ rdbe r (q + 2 * i) 2) ^8)
        hx "0123456789abcdef"
        (h4 v) (? (v < 16) (string (hx v)) (h4 (v // 16) + string (hx (v % 16))))
        (cat l) (? (one? l) "" !(two? >l) <l (<l + ":" + cat >l))
@@ -206,7 +205,7 @@
     (: a (dns-name r q) b (? (two? a) (dns-name r (a 1)) ())
        (? !(two? b) " ?"
           (: p (b 1)
-             (u k) (dns-hi r (p + 4 * k) * 65536 + dns-hi r (p + 4 * k + 2))
+             (u k) (rdbe r (p + 4 * k) 2 * 65536 + rdbe r (p + 4 * k + 2) 2)
              ("\n\torigin = " + <a + "\n\tmail addr = " + <b + "\n\tserial = " + show (u 0)
               + "\n\trefresh = " + show (u 1) + "\n\tretry = " + show (u 2)
               + "\n\texpire = " + show (u 3) + "\n\tminimum = " + show (u 4)))))
@@ -217,10 +216,10 @@
     (: n #r
        (name-at q) (: m (dns-name r q) (? (two? m) <m "?"))
        (rd t q l)
-        (? (t = 1 && l = 4) (dns-show (dns-hi r q * 65536 + dns-hi r (q + 2)))
+        (? (t = 1 && l = 4) (dns-show (rdbe r q 2 * 65536 + rdbe r (q + 2) 2))
            (t = 28 && l = 16) (dns-v6 r q)
            (elem t '(2 5 12)) (name-at q)
-           (t = 15) (show (dns-hi r q) + " " + name-at (q + 2))
+           (t = 15) (show (rdbe r q 2) + " " + name-at (q + 2))
            (t = 16) (dns-txt r q (q + l))
            (t = 6) (dns-soa r q)
            ("type " + show t + ", " + show l + " bytes"))
@@ -228,13 +227,13 @@
         (: m (? (k < 1) () (dns-name r pos))
            p (? (two? m) <>m n)
            (? (n < p + 10) (rev acc)
-              (: ty (dns-hi r p) rl (dns-hi r (p + 8)) q (p + 10)
+              (: ty (rdbe r p 2) rl (rdbe r (p + 8) 2) q (p + 10)
                  (? (n < q + rl) (rev acc)
                     (go (k - 1) (q + rl) ([<m ty (rd ty q rl)] . acc))))))
-       (? (n < 12 || dns-hi r 0 != id) ()
+       (? (n < 12 || rdbe r 0 2 != id) ()
           (0 < r 2 & 2) 'torn
           (: p0 (dns-skip r 12 n)
-             [(r 3 & 15) (0 < r 2 & 4) (? (p0 < 0) () (go (dns-hi r 6) (p0 + 4) ()))])))
+             [(r 3 & 15) (0 < r 2 & 4) (? (p0 < 0) () (go (rdbe r 6 2) (p0 + 4) ()))])))
 
    ; --- the two config files -----------------------------------------------------
    ; every word after `k` on every line that starts with it, in file order. this
