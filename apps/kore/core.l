@@ -1281,6 +1281,198 @@
    (base64-main as) (ubmain "base64" ub64set 6 as)
    (base32-main as) (ubmain "base32" ub32set 5 as)
 
+   ; -- basenc: GNU's many encodings over one front. base64 and base32 (and their url
+   ; and hex alphabets) ride the coder above; base16, the two bit orders of base2 and
+   ; z85 are each a short walk of their own. -d reads back, -i drops what is not in
+   ; the alphabet first, -w wraps (76) --
+   ub64url "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+   ub32hex "0123456789ABCDEFGHIJKLMNOPQRSTUV"
+   ubz85 "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
+   (ubeach s f) (: o (jug 0) n #s (go k) (? (n <= k) (slurp o) (: _ (f o (s k)) (go (k + 1)))) (go 0))
+   (ub16enc s) (ubeach s (\ o c (: _ (put o ("0123456789ABCDEF" (c >> 4))) (put o ("0123456789ABCDEF" (c & 15))))))
+   (ub2enc s msb) (ubeach s (\ o c (map (\ i (put o (48 + ((c >> (? msb (7 - i) i)) & 1)))) ^8)))
+   (ubz85enc s)
+    (: o (jug 0) n #s
+       (dig v k) (? (k < 1) () (: _ (dig (v // 85) (k - 1)) (put o (ubz85 (v % 85)))))
+       (go k) (? (n <= k) (slurp o)
+                 (: _ (dig ((s k << 24) + (s (k + 1) << 16) + (s (k + 2) << 8) + s (k + 3)) 5) (go (k + 4))))
+       (go 0))
+   (ubhexv c) (? (47 < c && c < 58) (c - 48) (64 < c && c < 71) (c - 55) (96 < c && c < 103) (c - 87) ())
+   ; the decoders answer [ok text]: GNU says what read before it complains
+   (ub16dec s)
+    (: o (jug 0) n #s
+       (go k hi) (? (n <= k) [(? (charm? hi) 0 1) (slurp o)]
+                    (s k = 10) (go (k + 1) hi)
+                    (: v (ubhexv (s k))
+                       (? !(charm? v) [0 (slurp o)]
+                          (charm? hi) (: _ (put o (hi * 16 + v)) (go (k + 1) ()))
+                          (go (k + 1) v))))
+       (go 0 ()))
+   (ub2dec s msb)
+    (: o (jug 0) n #s
+       (go k acc nb) (? (n <= k) [(? (nb = 0) 1 0) (slurp o)]
+                        (s k = 10) (go (k + 1) acc nb)
+                        !(s k = 48 || s k = 49) [0 (slurp o)]
+                        (: b (s k - 48)
+                           a2 (? msb (acc * 2 + b) (acc + (b << nb)))
+                           (? (nb = 7) (: _ (put o a2) (go (k + 1) 0 0)) (go (k + 1) a2 (nb + 1)))))
+       (go 0 0 0))
+   (ubz85dec s)
+    (: t (filter (\ c !(c = 10)) (map s ^#s))
+       o (jug 0)
+       (ix c) (findsub ubz85 (string c))
+       (go l) (? !(two? l) [1 (slurp o)]
+                 (: g (take 5 l)
+                    vs (map ix g)
+                    (? (#g < 5 || any (\ v (v < 0)) vs) [0 (slurp o)]
+                       (: v (foldl (\ a d (a * 85 + d)) 0 vs)
+                          (? (4294967295 < v) [0 (slurp o)]
+                             (: _ (map (\ i (put o ((v >> (24 - 8 * i)) & 255))) ^4) (go (drop 5 l))))))))
+       (go t))
+   (basenc-main as)
+    (: (usage m) (udie 1 ("basenc: " + m + "\nTry 'basenc --help' for more information."))
+       encs ["--base64" "--base64url" "--base32" "--base32hex" "--base16" "--base2msbf" "--base2lsbf" "--z85"]
+       (go a o)
+        (? !(two? a) o
+           (: w <a n #w
+              (? (w = "--") (: _ (pin o 'fs (o 'fs + >a)) o)
+                 (elem w encs) (: _ (pin o 'e w) (go >a o))
+                 (w = "-d" || w = "--decode") (: _ (pin o 'd 1) (go >a o))
+                 (w = "-i" || w = "--ignore-garbage") (: _ (pin o 'i 1) (go >a o))
+                 (w = "-w" || w = "--wrap") (? (two? >a) (: _ (pin o 'w <>a) (go >>a o)) (usage "option requires an argument -- 'w'"))
+                 (7 < n && snip w 0 7 = "--wrap=") (: _ (pin o 'w (snip w 7 n)) (go >a o))
+                 (2 < n && snip w 0 2 = "-w") (: _ (pin o 'w (snip w 2 n)) (go >a o))
+                 (2 < n && snip w 0 2 = "--") (usage ("unrecognized option '" + w + "'"))
+                 (1 < n && w 0 = 45 && elem (w 1) "di")
+                  (: _ (map (\ c (? (elem c "di") (pin o (? (c = 100) 'd 'i) 1) (usage ("invalid option -- '" + string c + "'")))) (map w (drop 1 ^n)))
+                     (go >a o))
+                 (1 < n && w 0 = 45) (usage ("invalid option -- '" + string (w 1) + "'"))
+                 (: _ (pin o 'fs (o 'fs + [w])) (go >a o)))))
+       o (go as {'fs ()})
+       e (o 'e)
+       _ (? e 0 (usage "missing encoding type"))
+       fs (o 'fs)
+       _ (? (two? fs && two? >fs) (usage ("extra operand '" + <>fs + "'")) 0)
+       ww (? (o 'w) (unum (o 'w)) 76)
+       _ (? (charm? ww && 0 <= ww) 0 (udie 1 ("basenc: invalid wrap size: '" + o 'w + "'")))
+       txt (? (two? fs && !(<fs = "-")) (: r (uread <fs) (? (two? r) <>r (udie 1 ("basenc: " + <fs + ": No such file or directory"))))
+              (slurp in))
+       set (e @ "--base64" ub64set "--base64url" ub64url "--base32" ub32set "--base32hex" ub32hex
+                "--base16" "0123456789ABCDEFabcdef" "--z85" ubz85 "01")
+       t2 (? (o 'i && o 'd) (: keep (? (e = "--base64" || e = "--base64url" || e = "--base32" || e = "--base32hex") (set + "=") set)
+                               (ubeach txt (\ o c (? (elem c keep) (put o c) 0))))
+             txt)
+       (? (o 'd)
+          ; a group left short reads when what its last character carries past the
+          ; last whole byte is zero bits, and a pad fills its group, as GNU reads it
+          (: (rfc set bits gc)
+              (: r (ubdec set bits t2)
+                 cs (filter (\ c (elem c set)) (map t2 ^#t2))
+                 lb (((#cs % gc) * bits) % 8)
+                 v (? (two? cs) (findsub set (string (cs (#cs - 1)))) 0)
+                 pads (tally (filter (\ c (c = 61)) (map t2 ^#t2)))
+                 (? !(two? r)                ; what read before the stranger, then the complaint
+                    (: (bad j) (? (#t2 <= j) j (elem (t2 j) (set + "=\n\r")) (bad (j + 1)) j)
+                       r2 (ubdec set bits (snip t2 0 (bad 0)))
+                       [0 (? (two? r2) <>r2 "")])
+                    [(? (lb < bits && (v & ((1 << lb) - 1)) = 0 && (pads = 0 || ((#cs + pads) % gc) = 0)) 1 0) <>r]))
+             r (e @ "--base64" (rfc ub64set 6 4) "--base64url" (rfc ub64url 6 4)
+                    "--base32" (rfc ub32set 5 8) "--base32hex" (rfc ub32hex 5 8)
+                    "--base16" (ub16dec t2) "--base2msbf" (ub2dec t2 1) "--base2lsbf" (ub2dec t2 0)
+                    (ubz85dec t2))
+             ; a padded base32 group reads whole or not at all
+             t (? (<r || !(e = "--base32" || e = "--base32hex") || !(elem 61 t2)) <>r
+                  (: g (tally (filter (\ c (elem c "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=0123456789")) (map t2 ^#t2)))
+                     (snip <>r 0 (min #<>r (5 * (g // 8))))))
+             _ (say out t) _ (flush out)
+             (? <r 0 (udie 1 "basenc: invalid input")))
+          (: _ (? (e = "--z85" && #txt % 4) (udie 1 "basenc: invalid input (length must be multiple of 4 characters)") 0)
+             c (e @ "--base64" (ubenc ub64set 6 txt) "--base64url" (ubenc ub64url 6 txt)
+                    "--base32" (ubenc ub32set 5 txt) "--base32hex" (ubenc ub32hex 5 txt)
+                    "--base16" (ub16enc txt) "--base2msbf" (ub2enc txt 1) "--base2lsbf" (ub2enc txt 0)
+                    (ubz85enc txt))
+             _ (say out (ubwrap ww c)) _ (flush out) 0)))
+
+   ; -- uuencode and uudecode: the old mail armour, busybox's faces. a 45-byte line
+   ; wears its length as a character, then its groups of three bytes as four printable
+   ; ones (` for 0); -m is base64 in 60-column lines between begin-base64 and ==== --
+   (uu-ch v) (? (v = 0) 96 (v + 32))
+   (uu-line s)
+    (: n #s p (s + string (cask 2))
+       o (jug 0)
+       _ (put o (uu-ch n))
+       (go k) (? (n <= k) (: _ (put o 10) (slurp o))
+                 (: v ((p k << 16) + (p (k + 1) << 8) + p (k + 2))
+                    _ (map (\ i (put o (uu-ch ((v >> (18 - 6 * i)) & 63)))) ^4)
+                    (go (k + 3))))
+       (go 0))
+   (uuencode-main as)
+    (: m? (two? as && <as = "-m")
+       ops (? m? >as as)
+       _ (? (two? ops && #ops <= 2) 0 (udie 1 "usage: uuencode [-m] [INFILE] STORED_FILENAME"))
+       fin (? (two? >ops) <ops "-")
+       nm (? (two? >ops) <>ops <ops)
+       st (? (fin = "-") () (stat fin))
+       _ (? (fin = "-" || two? st) 0 (udie 1 ("uuencode: " + fin + ": " + uerrno st)))
+       mode (? (two? st) (st 2 & 511) (438 & (511 ^ umask-now 0)))
+       txt (? (fin = "-") (slurp in) (: r (uread fin) (? (two? r) <>r "")))
+       (show3 v) (string (48 + ((v >> 6) & 7)) + string (48 + ((v >> 3) & 7)) + string (48 + (v & 7)))
+       _ (say out ((? m? "begin-base64 " "begin ") + show3 mode + " " + nm + "\n"))
+       n #txt
+       (go k) (? (n <= k) 0
+                 (: e (min n (k + 45)) c (snip txt k e)
+                    _ (say out (? m? (ubenc ub64set 6 c + "\n") (uu-line c)))
+                    (go e)))
+       _ (go 0)
+       _ (say out (? m? "====\n" "`\nend\n"))
+       _ (flush out) 0)
+   (umask-now _) (: o (umask 18) _ (umask o) o)
+   (uudecode-main as)
+    (: (go a o) (? !(two? a) o
+                   (<a = "-o") (? (two? >a) (: _ (pin o 'o <>a) (go >>a o)) (udie 1 "uudecode: option requires an argument -- 'o'"))
+                   (: _ (pin o 'f <a) (go >a o)))
+       o (go as {})
+       f (o 'f)
+       txt (? (!f || f = "-") (slurp in) (: r (uread f) (? (two? r) <>r (udie 1 ("uudecode: " + f + ": No such file or directory")))))
+       ls (lines txt)
+       (begin l) (? !(two? l) (udie 1 "uudecode: no 'begin' line")
+                    (: ws (usplit 32 <l)
+                       (? (3 <= #ws && (<ws = "begin" || <ws = "begin-base64")) l (begin >l))))
+       bl (begin ls)
+       hw (usplit 32 <bl)
+       b64 (<hw = "begin-base64")
+       mode (foldl (\ a c (a * 8 + c - 48)) 0 (map (hw 1) ^#(hw 1)))
+       nm (ujoin (drop 2 hw))
+       (body l acc) (? !(two? l) (udie 1 "uudecode: short file")
+                       b64 (? (<l = "====") (rev acc) (body >l (<l . acc)))
+                       (<l = "end") (rev acc)
+                       (body >l (<l . acc)))
+       bls (body >bl ())
+       (uu1 l) (: n (((l 0) - 32) & 63) o (jug 0)
+                  (v k) (((l k) - 32) & 63)
+                  (go k left) (? (left <= 0 || #l <= k) (slurp o)
+                                 (: x ((v k << 18) + (v (k + 1) << 12) + (v (k + 2) << 6) + v (k + 3))
+                                    _ (map (\ i (? (i < left) (put o ((x >> (16 - 8 * i)) & 255)) 0)) ^3)
+                                    (go (k + 4) (left - 3))))
+                  (? (#l = 0) "" (go 1 n)))
+       data (? b64 (: r (ubdec ub64set 6 (ujoinc 10 bls)) (? (two? r) <>r (udie 1 "uudecode: invalid input")))
+               (foldl (\ a l (a + uu1 l)) "" bls))
+       dst (? (o 'o) (o 'o) nm)
+       (? (dst = "-" || dst = "/dev/stdout") (: _ (say out data) _ (flush out) 0)
+          (: _ (? (uwrite dst data) (chmod dst mode) (udie 1 ("uudecode: " + dst + ": cannot write"))) 0)))
+
+   ; -- ascii: toybox's table, eight columns of dec, hex and the character --
+   ascii-low "NULSOHSTXETXEOTENQACKBELBS HT LF VT FF CR SO SI DLEDC1DC2DC3DC4NAKSYNETBCANEM SUBESCFS GS RS US "
+   (ascii-main _)
+    (: o (jug 0)
+       (cell x y) (: i (x * 16 + y)
+                     _ (say o (upad (3 + (? (5 < x) 1 0)) (show i) + " " + upadc 2 48 (uhex2 i) + " "))
+                     (? (i < 32) (say o (snip ascii-low (3 * i) (3 * i + 3))) (i = 127) (say o "DEL") (put o i)))
+       (uhex2 i) (string ("0123456789ABCDEF" (i >> 4)) + string ("0123456789ABCDEF" (i & 15)))
+       _ (map (\ x (: _ (say o ("Dec Hex" + upad (1 + (? (x < 2) 2 0) + (? (4 < x) 1 0)) " ")) (put o (? (6 < x) 10 32)))) ^8)
+       _ (map (\ y (map (\ x (: _ (cell x y) (put o (? (6 < x) 10 32)))) ^8)) ^16)
+       _ (say out (slurp o)) _ (flush out) 0)
+
    ; ---- the two little computations: tsort and factor ---------------------------
 
    ; -- tsort: the pairs' partial order made total. the answer is a topological

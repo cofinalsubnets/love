@@ -101,4 +101,21 @@ for l in 12 520 x; do
   same "b2sum -l $l refused"
   [ "$rg" -eq "$ro" ] || fail "b2sum -l $l exit ($rg vs $ro)"
 done
-echo "kore: checksums (cksum/sum/md5sum/sha*sum/b2sum GNU-identical over the block boundaries, -c both ways round) ok"
+# sha3sum and crc32 against busybox's (toybox's faces: sha3sum's -a is any length
+# 128..512, 224 by default), and each list read back
+if command -v busybox >/dev/null 2>&1; then
+  for a in 224 256 384 512; do
+    for n in $lens; do
+      busybox sha3sum -a $a "$ck/n$n" > "$g"; korerun sha3sum -a $a "$ck/n$n" > "$o"; same "sha3sum -a $a n$n"
+    done
+  done
+  busybox sha3sum "$ck/a" "$ck/bin" > "$g"; korerun sha3sum "$ck/a" "$ck/bin" > "$o"; same "sha3sum's default"
+  korerun sha3sum -a 512 "$ck/a" "$ck/bin" > "$ck/s3.list"
+  busybox sha3sum -a 512 -c "$ck/s3.list" > "$g" 2>&1; korerun sha3sum -a 512 -c "$ck/s3.list" > "$o" 2>&1; same "sha3sum -c"
+  busybox crc32 "$ck/a" "$ck/bin" "$ck/n1000" > "$g"; korerun crc32 "$ck/a" "$ck/bin" "$ck/n1000" > "$o"; same "crc32"
+  busybox crc32 < "$ck/n1000" > "$g"; korerun crc32 < "$ck/n1000" > "$o"; same "crc32 stdin"
+fi
+[ "$(printf abc | korerun sha3sum -a 256 -b)" = 3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532 ] \
+  || fail "kore sha3sum -a 256 of abc (fips 202)"
+korerun sha3sum -a 100 "$ck/a" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore sha3sum -a 100 is 1 (got $r)"
+echo "kore: checksums (cksum/sum/crc32/md5sum/sha*sum/b2sum/sha3sum over the block boundaries, -c both ways round) ok"

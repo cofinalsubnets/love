@@ -170,4 +170,26 @@ COLUMNS=60 korerun watch -t -e -n 0.1 'echo hi; exit 2' > "$o"; r=$?
 [ $r -eq 1 ] && grep -q hi "$o" && ! grep -q Every "$o" || fail "kore watch -te (got $r)"
 COLUMNS=60 korerun watch -t -g -x -n 0.1 date +%N > /dev/null || fail "kore watch -x"
 korerun watch 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore watch: no command is 1 (got $r)"
-echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup/nice/renice/stty/who/users/hostid/dnsdomainname/setsid/watch) ok"
+# pinky: GNU's two faces over the host's own utmp and passwd (TZ=UTC: ours keeps no zones)
+if command -v pinky >/dev/null 2>&1; then
+  me=$(id -un)
+  for v in "" -f -w -i -q "-s $me" nobody "-l $me" "-lb $me" "-lhp $me" "-l nosuchuser" -l; do
+    # shellcheck disable=SC2086
+    TZ=UTC LC_ALL=C pinky $v > "$g" 2>&1; rg=$?; korerun pinky $v > "$o" 2>&1; ro=$?
+    same "pinky $v"; [ $rg -eq $ro ] || fail "kore pinky $v exit ($ro vs $rg)"
+  done
+fi
+# ts: each line stamped, toybox's formats; since the start and between lines, the
+# stamps are the elapsed time, zero here
+[ "$(printf 'a\nb\n' | korerun ts -s)" = "00:00:00 a
+00:00:00 b" ] || fail "kore ts -s"
+printf 'a\n' | korerun ts -m -i | grep -qx '00:00:00\.[0-9][0-9][0-9] a' || fail "kore ts -m -i"
+printf 'x\n' | korerun ts '%Y' | grep -qx '[0-9][0-9][0-9][0-9] x' || fail "kore ts FORMAT"
+printf 'x\n' | korerun ts | grep -qx '[A-Z][a-z][a-z] [0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] x' || fail "kore ts's default"
+# usleep, reset, fsync
+korerun usleep 1000 || fail "kore usleep"
+korerun usleep x 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore usleep x is 1 (got $r)"
+[ "$(korerun reset < /dev/null | od -An -c | tr -d ' ')" = '033c' ] || fail "kore reset's RIS"
+: > "$ho/.kore-fsync"; korerun fsync "$ho/.kore-fsync" || fail "kore fsync"
+korerun fsync -d "$ho/.kore-fsync" "$ho/.kore-nosuch" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore fsync of no file is 1 (got $r)"
+echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup/nice/renice/stty/who/users/hostid/dnsdomainname/setsid/watch/pinky/ts/usleep/reset/fsync) ok"

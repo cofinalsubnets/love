@@ -165,4 +165,20 @@ printf 'hello\n' > "$SH/z"; korerun shred -x -z "$SH/z"
 head -c 100 /dev/zero > "$SH/s"; korerun shred -x -s 10 -n 1 "$SH/s"
 [ "$(tail -c 90 "$SH/s" | od -An -v -tx1 | tr -d ' \n' | tr -d 0)" = "" ] && [ "$(wc -c < "$SH/s")" -eq 100 ] \
   || fail "kore shred -s 10 reached past its ten bytes"
-echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred) ok"
+# dircolors: GNU's own database, printed and spelled for both shells under several
+# terminals, and a file of the language with its quoting and its complaints
+if command -v dircolors >/dev/null 2>&1; then
+  DC=$HO/.dircolors; mkdir -p "$DC"
+  printf "TERM xterm*\nCOLOR tty\nDIR 01;34\nLINK 01;36 # x\n.tar 01;31\n*.gz 01;31\n*README 00;33\n*# 1\nEXEC 01;32\nOTHER_WRITABLE 34;42\nnormal 0\n.a'b 1\n*x=y 1:2\n" > "$DC/good"
+  printf 'TERM xterm\nBOGUS 3\nDIR\n' > "$DC/bad"
+  for tm in xterm dumb linux screen-256color; do
+    for v in "-b" "-c" "--print-ls-colors" "-b $DC/good" "-c $DC/good" "--print-ls-colors $DC/good" "-b $DC/bad"; do
+      # shellcheck disable=SC2086
+      TERM=$tm COLORTERM= LC_ALL=C dircolors $v > "$g" 2>&1; rg=$?; TERM=$tm COLORTERM= korerun dircolors $v > "$o" 2>&1; ro=$?
+      same "dircolors $v (TERM=$tm)"; [ $rg -eq $ro ] || fail "kore dircolors $v exit ($ro vs $rg)"
+    done
+  done
+  dircolors -p > "$g"; korerun dircolors -p > "$o"; same "dircolors -p"
+  COLORTERM=truecolor TERM=dumb dircolors -b > "$g"; COLORTERM=truecolor TERM=dumb korerun dircolors -b > "$o"; same "dircolors under COLORTERM"
+fi
+echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"

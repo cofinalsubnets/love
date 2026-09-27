@@ -1,15 +1,18 @@
 // inle/hash.c -- digests over a string's bytes. auto-globbed and LvNif-registered,
 // the fs.c discipline; value ops, so absence or misuse answers ().
 //   (md5 str) (sha1 str) (sha224 str) (sha256 str) (sha384 str) (sha512 str)
-//   (blake2b str)             -> the lowercase hex digest (blake2b's the 64-byte one)
-//   (crc32 str)               -> the IEEE crc32, a charm
+//   (blake2b str) (sha3 str)  -> the lowercase hex digest (blake2b's the 64-byte one,
+//                                sha3's the 256-bit one)
+//   (crc32 str)               -> the IEEE crc32, a charm; (crc32-on c str) carries c on
 //   (cksum str)               -> POSIX cksum's crc with the length folded in, a charm
 //   (bsdsum acc str)          -> bsd sum's 16-bit checksum carried on over str
-// all but crc32 also stream, the state in a cask the caller allocates (the nifs do not):
+// the others stream too, the state in a cask the caller allocates (the nifs do not):
 //   (X-init b) / (X-feed b str) / (X-done b), b a cask of X's width:
 //   md5 89, sha1 93, sha224 106, sha256 105, sha384 202, sha512 201, cksum 12;
-//   blake2b 210, its init (blake2b-init b n) for an n-byte digest
-// FIPS 180-4, RFC 1321, RFC 7693, IEEE 802.3 and POSIX cksum, all the compact
+//   blake2b 210, its init (blake2b-init b n) for an n-byte digest; sha3 204, its init
+//   (sha3-init b bits shake) for any length 8..512 (bits under 128 a shake's), shake's pad
+//   when shake is truthy
+// FIPS 180-4, FIPS 202, RFC 1321, RFC 7693, IEEE 802.3 and POSIX cksum, all the compact
 // single-pass shape. apps/kore's checksum tools are these plus a line of output.
 // they do not all stand on the same footing. crc32 shadows apps/gz.l's gz-crcwalk and
 // cksum test/digest.l's hash-ckwalk -- both polynomials are stated in love and the C
@@ -327,6 +330,61 @@ ai_noinline static struct ai *host_blake2b(struct ai *g) {
  return dig_push(g, hex); }
 static lvm(lvm_blake2b) LvmCall(g, host_blake2b)
 
+// --- sha-3 (fips 202): keccak-f[1600] as a sponge ---------------------------------
+// no block buffer: a byte is xored straight into the state where the sponge stands,
+// and the permutation runs whenever the rate fills. the rate is 200 less twice the
+// digest, so any length rides one loop; past the rate the digest squeezes on.
+static void keccak(uint64_t a[25]) {
+ static uint8_t const rho[25] = {0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14},
+                      pi[25] = {0,10,20,5,15,16,1,11,21,6,7,17,2,12,22,23,8,18,3,13,14,24,9,19,4};
+ uint64_t rc = 1, c[5], b[25];
+ for (int r = 0; r < 24; r++) {
+  for (int x = 0; x < 5; x++) c[x] = a[x] ^ a[x + 5] ^ a[x + 10] ^ a[x + 15] ^ a[x + 20];
+  for (int x = 0; x < 5; x++) {
+   uint64_t d = c[(x + 4) % 5] ^ (c[(x + 1) % 5] << 1 | c[(x + 1) % 5] >> 63);
+   for (int y = 0; y < 25; y += 5) a[y + x] ^= d; }
+  for (int i = 0; i < 25; i++) b[pi[i]] = rho[i] ? (a[i] << rho[i] | a[i] >> (64 - rho[i])) : a[i];
+  for (int y = 0; y < 25; y += 5)
+   for (int x = 0; x < 5; x++) a[y + x] = b[y + x] ^ (~b[y + (x + 1) % 5] & b[y + (x + 2) % 5]);
+  uint64_t k = 0;                              // the round constant off the lfsr, bit 2^j - 1 for j < 7
+  for (int j = 0; j < 7; j++) {
+   if (rc & 1) k |= (uint64_t) 1 << ((1 << j) - 1);
+   rc = rc & 0x80 ? (rc << 1) ^ 0x171 : rc << 1; }
+  a[0] ^= k; } }
+
+// the state rides as 200 little-endian bytes, lane i at 8i, so byte k of the sponge is byte k
+static void k_ld(const uint8_t *st, uint64_t a[25]) { for (int i = 0; i < 25; i++) a[i] = ld64le(st + 8 * i); }
+static void k_st(uint8_t *st, const uint64_t a[25]) {
+ for (int i = 0; i < 25; i++) for (int j = 0; j < 8; j++) st[8 * i + j] = (uint8_t) (a[i] >> (8 * j)); }
+static void k_perm(uint8_t *st) { uint64_t a[25]; k_ld(st, a); keccak(a); k_st(st, a); }
+
+// -> the new position in the rate
+static unsigned k_feed(uint8_t *st, unsigned pos, unsigned rate, const uint8_t *p, uintptr_t n) {
+ for (; n; p++, n--) {
+  st[pos++] ^= *p;
+  if (pos == rate) { k_perm(st); pos = 0; } }
+ return pos; }
+
+static void k_done(uint8_t *st, unsigned pos, unsigned rate, unsigned outn, uint8_t pad, char *out) {
+ st[pos] ^= pad; st[rate - 1] ^= 0x80;
+ k_perm(st);
+ for (unsigned i = 0; i < outn; i++) {
+  if (i && !(i % rate)) k_perm(st);
+  uint8_t b = st[i % rate];
+  out[2 * i] = hexd[b >> 4]; out[2 * i + 1] = hexd[b & 15]; }
+ out[2 * outn] = 0; }
+
+ai_noinline static struct ai *host_sha3(struct ai *g) {
+ if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ struct ai_str *s = (struct ai_str*) g->sp[0];
+ uint8_t st[200];
+ char hex[65];
+ memset(st, 0, sizeof st);
+ unsigned pos = k_feed(st, 0, 136, (const uint8_t*) s->bytes, (uintptr_t) s->len);
+ k_done(st, pos, 136, 32, 0x06, hex);
+ return dig_push(g, hex); }
+static lvm(lvm_sha3) LvmCall(g, host_sha3)
+
 // --- bsd sum: a 16-bit checksum rotated right a bit before each byte ---------------
 // (bsdsum acc str) -> acc with str's bytes folded in | (); a whole file is a fold from 0
 static lvm(lvm_bsdsum) {
@@ -367,8 +425,8 @@ static void crc_init(void) {
 #define LD32(p) ((uint32_t) (p)[0] | (uint32_t) (p)[1] << 8 \
                | (uint32_t) (p)[2] << 16 | (uint32_t) (p)[3] << 24)
 
-static uint32_t crc32_of(const uint8_t *p, uintptr_t n) {
- uint32_t c = 0xffffffff;
+// the register walk; c is the register, complemented on the way in and out by its callers
+static uint32_t crc32_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  if (!crc_ready) crc_init();
  for (; n >= 8; p += 8, n -= 8) {
   uint32_t a = c ^ LD32(p), b = LD32(p + 4);
@@ -377,7 +435,9 @@ static uint32_t crc32_of(const uint8_t *p, uintptr_t n) {
     ^ crc_t[3][b & 0xff] ^ crc_t[2][(b >> 8) & 0xff]
     ^ crc_t[1][(b >> 16) & 0xff] ^ crc_t[0][b >> 24]; }
  for (; n; p++, n--) c = crc_t[0][(c ^ *p) & 0xff] ^ (c >> 8);
- return c ^ 0xffffffff; }
+ return c; }
+
+static uint32_t crc32_of(const uint8_t *p, uintptr_t n) { return ~crc32_run(0xffffffff, p, n); }
 
 static ai_inline struct ai *host_crc32(struct ai *g) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
@@ -386,6 +446,15 @@ static ai_inline struct ai *host_crc32(struct ai *g) {
  return g; }
 static lvm(lvm_crc32) {
  LvmCall(g, host_crc32) }
+
+// (crc32-on c str) -> the crc32 of whatever c was the crc32 of, str's bytes after it
+static lvm(lvm_crc32_on) {
+ word c = Sp[0], x = Sp[1];
+ if (!charmp(c) || !strp(x)) Sp[1] = ZeroPoint;
+ else {
+  struct ai_str *s = (struct ai_str*) x;
+  Sp[1] = putcharm(~crc32_run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
+ ai_musttail return Nextp(1, 1); }
 
 // --- cksum (POSIX: not reflected, polynomial 0x04c11db7, the length folded in) -----
 // a different crc from the one above in every part: the register runs the other way,
@@ -463,12 +532,14 @@ static lvm(lvm_cksum) {
 //
 //   blake2b, 210:  0..63 h[8] be | 64..71 count be | 72..79 zero | 80 held len
 //                  | 81 digest bytes | 82.. held block
+//   sha3,    204:  0..199 the sponge | 200 position | 201 rate | 202 digest bytes | 203 pad
 //   cksum,    12:  0..3 crc be   | 4..11 count be                    (no block, no rem)
 //
 // the size is the type. every entry point checks the width it wants -- which is what
 // stops an md5 state being fed to sha256-feed and answering a number that looks like
 // a digest.
 #define B2St 210
+#define K3St 204
 #define CkSt 12
 
 static struct ai_str *dig_cask(word x, uintptr_t want) {   // the cask's bytes, or NULL
@@ -598,6 +669,42 @@ static lvm(lvm_b2_feed) {
  ai_musttail return Nextp(1, 1); }
 static lvm(lvm_b2_done) LvmCall(g, host_b2_done)
 
+// (sha3-init b bits shake) -> b, set for a bits-long digest | ()
+static word host_k3_init(word x, word bw, word sw) {
+ struct ai_str *s = dig_cask(x, K3St);
+ if (!s || !charmp(bw) || getcharm(bw) < 8 || getcharm(bw) > 512) return ZeroPoint;
+ uint8_t *st = (uint8_t*) s->bytes;
+ intptr_t bits = getcharm(bw);
+ memset(st, 0, K3St);
+ st[201] = (uint8_t) (200 - bits / 4);
+ st[202] = (uint8_t) (bits / 8);
+ st[203] = charmp(sw) && getcharm(sw) > 0 ? 0x1f : 0x06;
+ return x; }
+
+static word host_k3_feed(word x, word a) {
+ struct ai_str *cs = dig_cask(x, K3St);
+ if (!cs || !strp(a) || !((uint8_t*) cs->bytes)[201]) return ZeroPoint;
+ struct ai_str *in = (struct ai_str*) a;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ st[200] = (uint8_t) k_feed(st, st[200], st[201], (const uint8_t*) in->bytes, (uintptr_t) in->len);
+ return x; }
+
+static ai_noinline struct ai *host_k3_done(struct ai *g) {
+ struct ai_str *cs = dig_cask(g->sp[0], K3St);
+ if (!cs || !((uint8_t*) cs->bytes)[201]) return g->sp[0] = ZeroPoint, g;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ char hex[129];
+ k_done(st, st[200], st[201], st[202], st[203], hex);
+ return dig_push(g, hex); }
+
+static lvm(lvm_k3_init) {
+ Sp[2] = host_k3_init(Sp[0], Sp[1], Sp[2]);
+ ai_musttail return Nextp(1, 2); }
+static lvm(lvm_k3_feed) {
+ Sp[1] = host_k3_feed(Sp[0], Sp[1]);
+ ai_musttail return Nextp(1, 1); }
+static lvm(lvm_k3_done) LvmCall(g, host_k3_done)
+
 ai_noinline static word host_ck_feed(word x, word a) {
  struct ai_str *cs = dig_cask(x, CkSt);
  if (!cs || !strp(a)) return ZeroPoint;
@@ -653,8 +760,13 @@ Nif1(nif_blake2b, lvm_blake2b)
 Nif2(nif_b2_init, lvm_b2_init)
 Nif2(nif_b2_feed, lvm_b2_feed)
 Nif1(nif_b2_done, lvm_b2_done)
+Nif1(nif_sha3, lvm_sha3)
+static union u const nif_k3_init[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_k3_init}, {lvm_ret0}};
+Nif2(nif_k3_feed, lvm_k3_feed)
+Nif1(nif_k3_done, lvm_k3_done)
 Nif2(nif_bsdsum, lvm_bsdsum)
 Nif1(nif_crc32, lvm_crc32)
+Nif2(nif_crc32_on, lvm_crc32_on)
 Nif1(nif_cksum, lvm_cksum)
 Nif1(nif_ck_init, lvm_ck_init)
 Nif2(nif_ck_feed, lvm_ck_feed)
@@ -688,8 +800,13 @@ LvNif("blake2b", nif_blake2b, NULL);
 LvNif("blake2b-init", nif_b2_init, NULL);
 LvNif("blake2b-feed", nif_b2_feed, NULL);
 LvNif("blake2b-done", nif_b2_done, NULL);
+LvNif("sha3", nif_sha3, NULL);
+LvNif("sha3-init", nif_k3_init, NULL);
+LvNif("sha3-feed", nif_k3_feed, NULL);
+LvNif("sha3-done", nif_k3_done, NULL);
 LvNif("bsdsum", nif_bsdsum, NULL);
 LvNif("crc32", nif_crc32, NULL);
+LvNif("crc32-on", nif_crc32_on, NULL);
 LvNif("cksum", nif_cksum, NULL);
 LvNif("cksum-init", nif_ck_init, NULL);
 LvNif("cksum-feed", nif_ck_feed, NULL);

@@ -1011,6 +1011,373 @@
        _ (flush err)
        r)
 
+   ; -- fsync: what the kernel holds of each file written down (-d fdatasync's lesser
+   ; promise, the file's data alone) --
+   (fsync-main as)
+    (: d? (two? as && <as = "-d")
+       fs (? d? >as as)
+       ok (foldl (\ a f (: e (fsync f d?)
+                           (? (nom? e) (: _ (say err ("fsync: " + f + ": " + uerrno e + "\n")) 0) a)))
+                 1 fs)
+       _ (flush err)
+       (? ok 0 1))
+
+   ; -- dircolors: LS_COLORS spelled for a shell, off GNU's database -- its own text,
+   ; which says it may be copied, as -p prints it -- or a file of that language: the
+   ; TERM and COLORTERM globs pick the stanzas that apply, a keyword names a file kind,
+   ; .ext and *glob name a suffix. -b and -c pick the shell, else $SHELL does --
+   udc-db "# Configuration file for dircolors, a utility to help you set the
+# LS_COLORS environment variable used by GNU ls with the --color option.
+# Copyright (C) 1996-2026 Free Software Foundation, Inc.
+# Copying and distribution of this file, with or without modification,
+# are permitted provided the copyright notice and this notice are preserved.
+#
+# The keywords COLOR, OPTIONS, and EIGHTBIT (honored by the
+# slackware version of dircolors) are recognized but ignored.
+# Global config options can be specified before TERM or COLORTERM entries
+# ===================================================================
+# Terminal filters
+# ===================================================================
+# Below are TERM or COLORTERM entries, which can be glob patterns, which
+# restrict following config to systems with matching environment variables.
+COLORTERM ?*
+TERM Eterm
+TERM ansi
+TERM *color*
+TERM con[0-9]*x[0-9]*
+TERM cons25
+TERM console
+TERM cygwin
+TERM *direct*
+TERM dtterm
+TERM gnome
+TERM hurd
+TERM jfbterm
+TERM konsole
+TERM kterm
+TERM linux
+TERM linux-c
+TERM mlterm
+TERM putty
+TERM rxvt*
+TERM screen*
+TERM st
+TERM terminator
+TERM tmux*
+TERM vt100
+TERM vt220
+TERM xterm*
+# ===================================================================
+# Basic file attributes
+# ===================================================================
+# Below are the color init strings for the basic file types.
+# One can use codes for 256 or more colors supported by modern terminals.
+# The default color codes use the capabilities of an 8 color terminal
+# with some additional attributes as per the following codes:
+# Attribute codes:
+# 00=none 01=bold 04=underscore 05=blink 07=reverse 08=concealed
+# Text color codes:
+# 30=black 31=red 32=green 33=yellow 34=blue 35=magenta 36=cyan 37=white
+# Background color codes:
+# 40=black 41=red 42=green 43=yellow 44=blue 45=magenta 46=cyan 47=white
+#NORMAL 00 # no color code at all
+#FILE 00 # regular file: use no color at all
+RESET 0 # reset to \"normal\" color
+DIR 01;34 # directory
+LINK 01;36 # symbolic link. (If you set this to 'target' instead of a
+ # numerical value, the color is as for the file pointed to.)
+MULTIHARDLINK 00 # regular file with more than one link
+FIFO 40;33 # pipe
+SOCK 01;35 # socket
+DOOR 01;35 # door
+BLK 40;33;01 # block device driver
+CHR 40;33;01 # character device driver
+ORPHAN 40;31;01 # symlink to nonexistent file, or non-stat'able file ...
+MISSING 00 # ... and the files they point to
+SETUID 37;41 # regular file that is setuid (u+s)
+SETGID 30;43 # regular file that is setgid (g+s)
+CAPABILITY 00 # regular file with capability (very expensive to lookup)
+STICKY_OTHER_WRITABLE 30;42 # dir that is sticky and other-writable (+t,o+w)
+OTHER_WRITABLE 34;42 # dir that is other-writable (o+w) and not sticky
+STICKY 37;44 # dir with the sticky bit set (+t) and not other-writable
+# This is for regular files with execute permission:
+EXEC 01;32
+# ===================================================================
+# File extension attributes
+# ===================================================================
+# List any file extensions like '.gz' or '.tar' that you would like ls
+# to color below. Put the suffix, a space, and the color init string.
+# (and any comments you want to add after a '#').
+# Suffixes are matched case insensitively, but if you define different
+# init strings for separate cases, those will be honored.
+#
+# If you use DOS-style suffixes, you may want to uncomment the following:
+#.cmd 01;32 # executables (bright green)
+#.exe 01;32
+#.com 01;32
+#.btm 01;32
+#.bat 01;32
+# Or if you want to color scripts even if they do not have the
+# executable bit actually set.
+#.sh 01;32
+#.csh 01;32
+# archives or compressed (bright red)
+.7z 01;31
+.ace 01;31
+.alz 01;31
+.apk 01;31
+.arc 01;31
+.arj 01;31
+.bz 01;31
+.bz2 01;31
+.cab 01;31
+.cpio 01;31
+.crate 01;31
+.deb 01;31
+.drpm 01;31
+.dwm 01;31
+.dz 01;31
+.ear 01;31
+.egg 01;31
+.esd 01;31
+.gz 01;31
+.jar 01;31
+.lha 01;31
+.lrz 01;31
+.lz 01;31
+.lz4 01;31
+.lzh 01;31
+.lzma 01;31
+.lzo 01;31
+.pyz 01;31
+.rar 01;31
+.rpm 01;31
+.rz 01;31
+.sar 01;31
+.swm 01;31
+.t7z 01;31
+.tar 01;31
+.taz 01;31
+.tbz 01;31
+.tbz2 01;31
+.tgz 01;31
+.tlz 01;31
+.txz 01;31
+.tz 01;31
+.tzo 01;31
+.tzst 01;31
+.udeb 01;31
+.war 01;31
+.whl 01;31
+.wim 01;31
+.xz 01;31
+.z 01;31
+.zip 01;31
+.zoo 01;31
+.zst 01;31
+# image formats
+.avif 01;35
+.jpg 01;35
+.jpeg 01;35
+.jxl 01;35
+.mjpg 01;35
+.mjpeg 01;35
+.gif 01;35
+.bmp 01;35
+.pbm 01;35
+.pgm 01;35
+.ppm 01;35
+.tga 01;35
+.xbm 01;35
+.xpm 01;35
+.tif 01;35
+.tiff 01;35
+.png 01;35
+.svg 01;35
+.svgz 01;35
+.mng 01;35
+.pcx 01;35
+.mov 01;35
+.mpg 01;35
+.mpeg 01;35
+.m2v 01;35
+.mkv 01;35
+.webm 01;35
+.webp 01;35
+.ogm 01;35
+.mp4 01;35
+.m4v 01;35
+.mp4v 01;35
+.vob 01;35
+.qt 01;35
+.nuv 01;35
+.wmv 01;35
+.asf 01;35
+.rm 01;35
+.rmvb 01;35
+.flc 01;35
+.avi 01;35
+.fli 01;35
+.flv 01;35
+.gl 01;35
+.dl 01;35
+.xcf 01;35
+.xwd 01;35
+.yuv 01;35
+.cgm 01;35
+.emf 01;35
+# https://wiki.xiph.org/MIME_Types_and_File_Extensions
+.ogv 01;35
+.ogx 01;35
+# audio formats
+.aac 00;36
+.au 00;36
+.flac 00;36
+.m4a 00;36
+.mid 00;36
+.midi 00;36
+.mka 00;36
+.mp3 00;36
+.mpc 00;36
+.ogg 00;36
+.ra 00;36
+.wav 00;36
+# https://wiki.xiph.org/MIME_Types_and_File_Extensions
+.oga 00;36
+.opus 00;36
+.spx 00;36
+.xspf 00;36
+# backup files
+*~ 00;90
+*# 00;90
+.bak 00;90
+.crdownload 00;90
+.dpkg-dist 00;90
+.dpkg-new 00;90
+.dpkg-old 00;90
+.dpkg-tmp 00;90
+.old 00;90
+.orig 00;90
+.part 00;90
+.rej 00;90
+.rpmnew 00;90
+.rpmorig 00;90
+.rpmsave 00;90
+.swp 00;90
+.tmp 00;90
+.ucf-dist 00;90
+.ucf-new 00;90
+.ucf-old 00;90
+#
+# Subsequent TERM or COLORTERM entries, can be used to add / override
+# config specific to those matching environment variables.
+"
+   udc-slack '("NORMAL" "NORM" "FILE" "RESET" "DIR" "LNK" "LINK" "SYMLINK" "ORPHAN" "MISSING"
+               "FIFO" "PIPE" "SOCK" "BLK" "BLOCK" "CHR" "CHAR" "DOOR" "EXEC" "LEFT" "LEFTCODE"
+               "RIGHT" "RIGHTCODE" "END" "ENDCODE" "SUID" "SETUID" "SGID" "SETGID" "STICKY"
+               "OTHER_WRITABLE" "OWR" "STICKY_OTHER_WRITABLE" "OWT" "CAPABILITY" "MULTIHARDLINK"
+               "CLRTOEOL")
+   udc-ls '("no" "no" "fi" "rs" "di" "ln" "ln" "ln" "or" "mi" "pi" "pi" "so" "bd" "bd" "cd" "cd"
+            "do" "ex" "lc" "lc" "rc" "rc" "ec" "ec" "su" "su" "sg" "sg" "st" "ow" "ow" "tw" "tw"
+            "ca" "mh" "cl")
+   (udc-up s) (: o (jug 0) _ (map (\ c (put o (? (96 < c && c < 123) (c - 32) c))) (map s ^#s)) (slurp o))
+   ; fnmatch's three, enough for the database's globs: * ? and a [set]
+   (udc-glob p s)
+    (: (m i j)
+        (? (#p <= i) (#s <= j)
+           (p i = 42) (: (any k) (? (m (i + 1) k) 1 (k < #s) (any (k + 1)) 0) (any j))
+           (#s <= j) 0
+           (p i = 63) (m (i + 1) (j + 1))
+           (p i = 91)
+            (: e (: (f k) (? (#p <= k) -1 (p k = 93 && i + 1 < k) k (f (k + 1))) (f (i + 1)))
+               (? (e < 0) (? (s j = 91) (m (i + 1) (j + 1)) 0)
+                  (: (inset k) (? (e <= k) 0
+                                  (k + 2 < e && p (k + 1) = 45) (? (p k <= s j && s j <= p (k + 2)) 1 (inset (k + 3)))
+                                  (p k = s j) 1 (inset (k + 1)))
+                     (? (inset (i + 1)) (m (e + 1) (j + 1)) 0))))
+           (p i = s j) (m (i + 1) (j + 1))
+           0)
+       (m 0 0))
+   ; GNU's quoting: a ' closes and reopens, a : or = after an odd run of \ and ^ is escaped
+   (udc-q s)
+    (: o (jug 0) n #s
+       (go k nb) (? (n <= k) (slurp o)
+                    (: c (s k)
+                       nb2 (? (c = 39) (: _ (say o "'\\'") 1)
+                              (c = 92 || c = 94) !nb
+                              (c = 58 || c = 61) (: _ (? nb (put o 92) 0) 1)
+                              1)
+                       _ (put o c)
+                       (go (k + 1) nb2)))
+       (go 0 1))
+   (udc-parse txt nm)                   ; -> [ok [key val]..]
+    (: term (: t (getenv "TERM") (? (string? t && 0 < #t) t "none"))
+       cterm (: t (getenv "COLORTERM") (? (string? t) t ""))
+       ; GNU's line: a keyword to the first blank (a # in it is its own), then the
+       ; argument to the next #, its trailing blanks trimmed
+       (words l)
+        (: n #l
+           (sp? j) (j < n && (l j = 32 || l j = 9))
+           (skip j) (? (sp? j) (skip (j + 1)) j)
+           (tok j) (? (j < n && !(sp? j)) (tok (j + 1)) j)
+           (upto j) (? (j < n && !(l j = 35)) (upto (j + 1)) j)
+           (trim j a) (? (a < j && (l (j - 1) = 32 || l (j - 1) = 9)) (trim (j - 1) a) j)
+           a (skip 0)
+           (? (n <= a || l a = 35) ()
+              (: e (tok a) b (skip e)
+                 (? (n <= b || l b = 35) [(snip l a e)]
+                    [(snip l a e) (snip l b (trim (upto b) b))]))))
+       (go ls i st ok acc)
+        (? !(two? ls) [ok (rev acc)]
+           (: ws (words <ls)
+              (? !(two? ws) (go >ls (i + 1) st ok acc)
+                 !(two? >ws) (: _ (say err ("dircolors: " + nm + ":" + show i + ": invalid line;  missing second token\n"))
+                                (go >ls (i + 1) st 0 acc))
+                 (: kw <ws arg <>ws up (udc-up kw)
+                    (? (up = "TERM" || up = "COLORTERM")
+                        (go >ls (i + 1) (? (udc-glob arg (? (up = "TERM") term cterm)) 'sure (st = 'sure) 'sure 'no) ok acc)
+                       (: st2 (? (st = 'sure) 'yes st)
+                          (? (st2 = 'no) (go >ls (i + 1) st2 ok acc)
+                             (kw 0 = 46) (go >ls (i + 1) st2 ok ([("*" + kw) arg] . acc))
+                             (kw 0 = 42) (go >ls (i + 1) st2 ok ([kw arg] . acc))
+                             (elem up ["OPTIONS" "COLOR" "EIGHTBIT"]) (go >ls (i + 1) st2 ok acc)
+                             (: k (: (f l j) (? !(two? l) -1 (<l = up) j (f >l (j + 1))) (f udc-slack 0))
+                                (? (k < 0)
+                                   (: _ (? (st2 = 'global) 0 (say err ("dircolors: " + nm + ":" + show i + ": unrecognized keyword " + kw + "\n")))
+                                      (go >ls (i + 1) st2 (? (st2 = 'global) ok 0) acc))
+                                   (go >ls (i + 1) st2 ok ([(udc-ls k) arg] . acc)))))))))))
+       (go (lines txt) 1 'global 1 ()))
+   (dircolors-main as)
+    (: (usage m) (udie 1 ("dircolors: " + m + "\nTry 'dircolors --help' for more information."))
+       (go a o)
+        (? !(two? a) o
+           (: w <a
+              (? (elem w ["-b" "--sh" "--bourne-shell"]) (: _ (pin o 'sh 'b) (go >a o))
+                 (elem w ["-c" "--csh" "--c-shell"]) (: _ (pin o 'sh 'c) (go >a o))
+                 (elem w ["-p" "--print-database"]) (: _ (pin o 'p 1) (go >a o))
+                 (w = "--print-ls-colors") (: _ (pin o 'l 1) (go >a o))
+                 (w = "--") (: _ (pin o 'fs (o 'fs + >a)) o)
+                 (1 < #w && w 0 = 45 && !(w = "-")) (usage (? (w 1 = 45) ("unrecognized option '" + w + "'") ("invalid option -- '" + string (w 1) + "'")))
+                 (: _ (pin o 'fs (o 'fs + [w])) (go >a o)))))
+       o (go as {'fs ()})
+       fs (o 'fs)
+       _ (? (two? >fs) (usage ("extra operand '" + <>fs + "'")) 0)
+       _ (? (o 'p && (o 'sh || o 'l)) (usage "the options to output non shell syntax,\nand to select a shell syntax are mutually exclusive") 0)
+       _ (? (o 'p && two? fs) (usage ("extra operand '" + <fs + "'\nfile operands cannot be combined with --print-database (-p)")) 0)
+       (? (o 'p) (: _ (say out udc-db) _ (flush out) 0)
+          (: nm (? (two? fs) <fs "")
+             txt (? !(two? fs) udc-db (nm = "-") (slurp in)
+                    (: r (uread nm) (? (two? r) <>r (udie 1 ("dircolors: " + nm + ": No such file or directory")))))
+             r (udc-parse txt (? (nm = "-") "-" nm))
+             sh (? (o 'sh) (o 'sh)
+                   (: s (getenv "SHELL") b (? (string? s) (ubase s "") "")
+                      (? (b = "csh" || b = "tcsh") 'c 'b)))
+             (? !<r (uleave 1)
+                (o 'l) (: _ (map (\ e (say out ("\e[" + <>e + "m" + <e + "\t" + <>e + "\e[0m\n"))) <>r) _ (flush out) 0)
+                (: v (foldl (\ a e (a + udc-q <e + "=" + udc-q <>e + ":")) "" <>r)
+                   _ (say out (? (sh = 'c) ("setenv LS_COLORS '" + v + "'\n") ("LS_COLORS='" + v + "';\nexport LS_COLORS\n")))
+                   _ (flush out) 0)))))
+
    ; -- pathchk: would these names work. bare, each is asked of the system as it stands
    ; (a component that is a file, a name past the limits where it does not exist yet);
    ; -p asks POSIX's portable floor instead (the 65 characters, 14 a component, 255 a
