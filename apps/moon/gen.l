@@ -5199,6 +5199,50 @@
               (two? m && dieb? g X fs >r ? (m . go >r) (f . go r)))
        (go fs))
 
+   ; memory forward: within a straight run a full word stored or loaded rides the register that
+   ; holds it, off any base but the frame's (stld's). an address is its base's root plus an offset,
+   ; through the lea/add/sub/mov that made the base. a store forgets what it may overlap (a
+   ; different root may alias), any other write or a call forgets all, a label starts over. runs
+   ; only where the unit names no volatile: the types carry no qualifier to say which loads are
+   (memfw g fs)
+    (? !(x64? g && peep g 'novol ()) fs
+       (: fr '(sp fp r4)
+          mw (stops9 + siops + stxops + fstxops + '(push pop call callr raw sys asm))
+          (root A b o) (: e (assoc b A) (? (two? e) [(e 1) (o + e 2)] [b o]))
+          (kill M A x) [(filter (\ e (e 0 != x && e 2 != x)) M)
+                        (filter (\ e (e 0 != x && e 1 != x)) A)]
+          (go l M A)
+           (? !(two? l) ()
+              (: f <l op (two? f ? <f)
+                 (? !(two? f) (f . go >l M A)
+                    (op = 'label) (f . go >l () ())
+                    (elem op '(jmp jmpr jmpm ret ud2)) (f . go >l () ())
+                    (elem op '(br br8 align)) (f . go >l M A)
+                    ; a full-word load: the register that holds the word answers it
+                    (op = 'ld && nom? (f 1) && nom? (f 2) && charm? (f 3) && nelem (f 2) fr && f 1 != 'sp)
+                     (: D (f 1) a (root A (f 2) (f 3))
+                        hit (foldl (\ r e (? (r || !(e 0 = a 0 && e 1 = a 1)) r (e 2))) () M)
+                        k (kill M A D)
+                        M2 (? (a 0 != D) ([(a 0) (a 1) D] . <k) <k)
+                        (? (hit = D) (go >l M2 (k 1))
+                           hit (['mov D hit] . go >l M2 (k 1))
+                           (f . go >l M2 (k 1))))
+                    ; a full-word store: what it may overlap goes, the stored register holds its word
+                    (op = 'st && nom? (f 1) && charm? (f 2) && nelem (f 1) fr)
+                     (: a (root A (f 1) (f 2))
+                        M1 (filter (\ e (e 0 = a 0 && (7 < e 1 - a 1 || e 1 - a 1 < -7))) M)
+                        (f . go >l (? (nom? (f 3)) ([(a 0) (a 1) (f 3)] . M1) M1) A))
+                    (: rd (rdsp g f)
+                       (? (rd = 'bar || elem op mw) (f . go >l () (? (rd = 'bar) () ((foldl (\ k x (kill <k (k 1) x)) [() A] <>rd) 1)))
+                          ; a base made by lea/add/sub off another, or a register copy, roots at that one
+                          (: D (f 1)
+                             bs (? (elem op '(lea add sub) && nom? D && nom? (f 2) && charm? (f 3) && nelem (f 2) fr)
+                                   (root A (f 2) (op = 'sub ? (0 - f 3) (f 3)))
+                                   (op = 'mov && nom? D && nom? (f 2) && nelem (f 2) fr) (root A (f 2) 0))
+                             k (foldl (\ k x (kill <k (k 1) x)) [M A] <>rd)
+                             (f . go >l <k (? (two? bs && bs 0 != D) ([D (bs 0) (bs 1)] . k 1) (k 1)))))))))
+          (go fs () ())))
+
    ; store-forward: within a straight run a full-word frame slot rides the register that last
    ; touched it; r3/cs reloads stay (epilogue anchors); an lea off r4 keeps the adjacent pair only
    stldkeep ('r3 . csx64)
@@ -7529,6 +7573,8 @@
                        (dp 'sweeps (deadst g
                         (deaddef g      ; rerun: the widened addrfold strands live-dest addr insns
                         (cmpfuse g
+                        (copyprop g                 ; memfw's movs fold before cmpfuse reads the pair
+                        (memfw g                    ; after addrfold: an address is a base and an offset
                         (addrfold g
                         (addk g
                         (rezx g         ; after stld: the forward mints zx, this drops the redundant
@@ -7542,7 +7588,7 @@
                           (vrfix g
                           ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp frame] sav3] +
                            g 'cssv + <sp0 +
-                           body + '((li r0 0)) + peep g 'epi epi))))))))))))))))))))))
+                           body + '((li r0 0)) + peep g 'epi epi))))))))))))))))))))))))
        ; an r4 arrival (a64's 5th gp) is never ridden: gen spells the frame base r4 and a4ize retargets
        ; it to fp by position, so a ridden r4 in a base slot would turn into fp
        (a4rider? A) (fbase g !== 'r4 && A == 'r4)
@@ -7956,6 +8002,8 @@
           'rstrs (two? xtra && 8 < #xtra ? (xtra 8) {})
           ; file-scope `register T nm asm("R")` names: vent answers the register, nothing is laid
           'gregs (two? xtra && 10 < #xtra ? (xtra 10) {})
+          ; the unit names no volatile (the parser's word; absent reads as named): memfw may run
+          'novol (two? xtra && 11 < #xtra && !(xtra 11))
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}}                               ; a const candidate's image, laid once and read by both walks

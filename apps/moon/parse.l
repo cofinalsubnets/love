@@ -2545,6 +2545,10 @@
    (cparse-d ts tgt dia)
     (: ps (psnew-d tgt dia)
        toks (fsbody ts) spans (fspans ts)
+       ; does the unit name volatile anywhere? mooncc's types carry no qualifier, so a unit that
+       ; does keeps every load and store where the source put it (gen's memfw stands down)
+       vol (foldl (\ a t (a || tkk t = 'kw && tkv t = 'volatile ||
+                          tkk t = 'id && elem (tkv t) '("__volatile__" "__volatile"))) () toks)
        ; note the completed form's staticness/section per declared name, then
        ; clear the stashes for the next form
        (note f)
@@ -2612,7 +2616,7 @@
         ; C's tentative rule lets a real definition later in the TU take the entry back
         (? !(two? ts2) [1 ['prog ((ps 'hoist) + (rev acc))] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                               (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                              (ps 'consts) (ps 'rstrs) (ps 'gregs)]
+                              (ps 'consts) (ps 'rstrs) (ps 'gregs) vol]
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (<r . acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))
