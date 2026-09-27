@@ -1188,9 +1188,12 @@
 ; keeps the seat quiet under any other program name.
 ; and the verb, pinned here rather than by whoever cats this file: every image carrying
 ; moon.l answers `love mooncc ..`, and the baked mooncc.image is a compiler with no `-e` shim
-; to make it one. `cc` is the same row -- a Makefile's default CC is `cc`. fn takes the args
-; after the name and answers a status charm; moon-main quits instead, the same contract.
-(: _ (pins (cite 'verbs 'tab) 'mooncc moon-main 'cc moon-main)
+; to make it one. `cc` is the same row -- a Makefile's default CC is `cc`. the row is
+; moon-run, which answers its status: every door quits with it, and a shell runs it in
+; its own process (a build spends its life calling the compiler).
+(: E (cite 'verbs 'enlist)
+   _ (E 'mooncc moon-run ['self])
+   _ (E 'cc moon-run ['self])
    s ((cite 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"])
    (two? s && moon-main >s))
 ) ; module 'moon

@@ -1156,13 +1156,29 @@ every tool answers --help and --version, and -h where the letter is free
    ; userland this is.
    ; each row closes over its own f -- the inner `:` is a fresh scope per step, so the
    ; closures do not all end up holding the last applet.
-   _ (: T (cite 'verbs 'tab)
+   ; what each applet says of itself to a shell (post.l's verbs has the traits' meaning).
+   ; the builtins are POSIX's, run ahead of PATH in every mode
+   korebuiltin ['echo 'printf 'test (name "[")]
+   ; ..and the ones safe to run in a caller's own process. the sums do read stdin when
+   ; bare; the build spells them with a file, and a per-call answer would move them off
+   koreself ['uname 'basename 'dirname 'readlink 'seq 'ls 'dir 'vdir 'cmp 'diff
+             'mkdir 'rmdir 'rm 'ln 'touch 'chmod 'mv 'cp 'install
+             'objcopy 'cksum 'md5sum 'sha1sum 'sha224sum 'sha256sum 'sha384sum
+             'sha512sum 'sha3sum 'b2sum 'crc32 'sum
+             'nm 'ar 'ld 'as 'readelf 'size 'strip 'ranlib
+             'date 'cal 'uptime 'arch 'nproc 'hostname 'tty 'whoami 'id
+             'groups 'printenv 'which 'realpath 'expr 'free 'ps 'pwdx
+             'logname 'users 'who 'pinky 'hostid 'dnsdomainname 'mountpoint 'pathchk
+             'stat 'df 'du 'link 'unlink 'mktemp 'mkfifo 'mknod 'sync 'fsync
+             'chown 'chgrp 'truncate 'shred 'mount 'umount 'clear 'lift]
+   (koretraits k) (? (elem k korebuiltin) ['builtin 'self] (elem k koreself) ['self] ())
+   _ (: E (cite 'verbs 'enlist)
         ; kore-main is unbound here -- it binds later in this same form -- so the
         ; closure reads it through the registry at the call, when module 'kore holds
         ; it. a bare read compiled here would ride a missing cell against the
         ; caller's walk, where kore never walks.
-        _ (pin T 'kore (\ as ((cite 'kore 'kore-main) ("kore" . as))))
-        (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (koredoor <ks f)) (go >ks)) 0)
+        _ (E 'kore (\ as ((cite 'kore 'kore-main) ("kore" . as))) ())
+        (go ks) (? (two? ks) (: f (applets <ks) _ (E <ks (koredoor <ks f) (koretraits <ks)) (go >ks)) 0)
         (go (keys applets)))
    ; kore-main is the dispatch door, and the in-image door too: it dispatches a
    ; program-relative arg list -- argv0 a tool symlink, or `kore`/a dev path then the

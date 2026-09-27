@@ -787,6 +787,14 @@
    _ (pin sh-inread () in0)
    (test (1 = a) (0 = b) (1 = c) (1 = d)))
 
+;; a verb that says it is a builtin (verbs' traits) runs as one in every mode, ahead of
+;; PATH, and says so; the self lane reads the same table
+(: r (hark ["out/love" "out/lush" "-p" "-c" "PATH=/nonexistent; echo hi; printf '%s\\n' pf; [ a = a ] && test 1 = 1 && echo t; type echo"])
+   (test ("hi\npf\nt\necho is a shell builtin\n" = >r)))
+(: T (cite 'verbs 'trait)
+   (test (1 = sh-verbbi? "echo") (1 = sh-verbbi? "[") (0 = sh-verbbi? "ls")
+         (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (0 = T 'cat 'self)))
+
 ;; readonly, alias, times, hash and ulimit: each acts on this process or its tables.
 ;; a readonly assignment is an error, fatal to a script, from every setter
 (: r (hark ["out/love" "out/lush" "-c" "readonly R=1 S; readonly; R=2; echo after"])

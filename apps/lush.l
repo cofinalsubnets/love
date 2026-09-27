@@ -1360,40 +1360,6 @@
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
    sh-imgc {}                           ; word -> (1 fn whole?) | 0, decided once
-   ; the words that run in this very process. each one is BOUNDED, ending on its own
-   ; in a time nobody wants to cut short -- the shell ignores INT in here, so an
-   ; in-process `sleep` or `yes` could not be taken back; reads NO STDIN however it is
-   ; called -- `cat f` ends where the file does, bare `cat` drinks the terminal, and a
-   ; list of words cannot tell the two calls apart; LEAVES THE SHELL AS IT FOUND IT --
-   ; `env X=1 CMD` and chroot would move us; and ANSWERS THE SAME WHOEVER ASKS --
-   ; pidof, pgrep and killall skip their own pid, which in here is the shell's. a
-   ; main answers a status or scares 'leave, and urun makes either a charm.
-   sh-imgok '("mooncc" "cc"
-              "test" "[" "echo" "printf" "uname"
-              "basename" "dirname" "readlink" "seq" "ls" "dir" "vdir" "cmp" "diff"
-              "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
-              ; the sums DO read stdin when bare: the build spells them with a file,
-              ; and a per-call answer is what would move them off this list
-              "objcopy" "cksum" "md5sum" "sha1sum" "sha224sum" "sha256sum" "sha384sum"
-              "sha512sum" "sha3sum" "b2sum" "crc32" "sum"
-              ; each wants its operands, or it is usage
-              "nm" "ar" "ld" "as" "readelf" "size" "strip" "ranlib"
-              "libra" "fat" "mkfs.vfat" "mkdosfs"   ; bounded by the image named (tar reads stdin: f -)
-              ; the facts: the clock, the box, this process, the environment, a path
-              "date" "cal" "uptime" "arch" "nproc" "hostname" "tty" "whoami" "id"
-              "groups" "printenv" "which" "realpath" "expr" "free" "ps" "pwdx"
-              "logname" "users" "who" "pinky" "hostid" "dnsdomainname" "mountpoint" "pathchk"
-              ; ..and the syscalls said plainly, each bounded by what it names
-              "stat" "df" "du" "link" "unlink" "mktemp" "mkfifo" "mknod" "sync" "fsync"
-              "chown" "chgrp" "truncate" "shred" "mount" "umount" "clear" "lift")
-   ; the words whose main is not spelled <word>-main. kore-main wants the whole argv
-   ; (it reads its own program seat); the rest take the args after the name.
-   sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
-                 ("[" "bracket-main") ("dir" "ls-main") ("objcopy" "objcopy" "holo")
-                 ; the crew tools live in their own modules, not the applets' home
-                 ("libra" "libra-main" "libra")
-                 ("fat" "fat-main" "fatcmd")
-                 ("mkfs.vfat" "mkfsv-main" "fatcmd") ("mkdosfs" "mkfsv-main" "fatcmd"))
    (sh-pathdirs _)
     (:- (go 0 0 ())
      p ("" + (getenv "PATH")) n #p
@@ -1483,19 +1449,14 @@
                (go >l (two? (stat p) ? (p . acc) acc))))
         (go (sh-pathdirs ()) ()))
 
+   ; the self lane: a word runs in this very process when its verb says it is safe to
+   ; (the 'self trait, post.l's verbs) and the word is ours by the mode. the verb runs
+   ; through verbs' call, under urun, so a leave from deep in is a status here
    (sh-imgask w)
-     (: al (sh-assoc w sh-imgalias)
-        mn (two? al ? <>al (w + "-main"))
-        md (two? al && two? >>al ? (cite (nom <>>al)))   ; the row's module, or ()
-        nm (intern mn)
-        f0 (? (tablet? md) (md nm)                    ; the alias row named the module
-              (elem nm (names ())) (ev nm)         ; a bare global
-              (cite 'kore nm))                        ; else the applets' home module
-        (? (sh-smem? w sh-imgok && !(sh-slashed? w) && !!f0 && sh-ours? w)
-           [1 (sh-imgwrap f0 mn) (mn = "kore-main")]
+     (: V (cite 'verbs) k (name w)
+        (? (!(sh-slashed? w) && lit? ((V 'get) k) && 0 < ((V 'trait) k 'self) && sh-ours? w)
+           [1 (\ as ((V 'call) k as)) 0]
            0))
-   (sh-imgwrap f mn) (? (mn = "moon-run") f (urun f))
-   (sh-assoc w l) (? (one? l) 0 (w = <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (sh-pathfresh 0, peep sh-imgc w 'no @ 'no (sh-imgask w @ f (pin sh-imgc w f, f)) v v)
    (sh-dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sh-cliline _) (? (elem 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
@@ -1612,7 +1573,9 @@
                 "read" "set" "shift" "unset" "eval" "." "wait" "local" "exec"
                 "break" "continue" "return" "ev" "trap" "which" "where" "type"
                 "kill" "umask" "getopts" "readonly" "alias" "unalias" "times" "hash" "ulimit")
-   (sh-bi? nm) (sh-smem? nm sh-binames)
+   ; ..and the verbs that say they are builtins (echo, test ..): every mode, ahead of PATH
+   (sh-verbbi? nm) (0 < ((cite 'verbs 'trait) (name nm) 'builtin))
+   (sh-bi? nm) (sh-smem? nm sh-binames || sh-verbbi? nm)
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
         nms (? (two? args2) args2 ["REPLY"])
@@ -1921,7 +1884,7 @@
               _ (? dash (puts (cwd 0 + "\n")) 0)
               0)))
    (sh-builtin argv)
-     (<argv @- 'nope                             ; a word no builtin answers to
+     (<argv @- (? (sh-verbbi? <argv) ((cite 'verbs 'call) (name <argv) >argv) 'nope)
       "exit"   (: st (? >argv (sh-int <>argv) (sh-status ())) (sh-leave st))
       "cd"     (sh-cdb >argv)
       "trap"   (sh-trapb >argv)
@@ -2372,7 +2335,7 @@
            (? !nm 'sub
               (sh-fn? nm) 'sub
               (string? (sh-aliases nm)) 'sub
-              (&& !(sh-bi? nm) (sh-selfok? nm)) (? (one? (a 2)) 'jug 'sub)   ; ours to run in here
+              (sh-verbbi? nm || (!(sh-bi? nm) && sh-selfok? nm)) (? (one? (a 2)) 'jug 'sub)   ; ours to run in here
               !(sh-bi? nm) 'ext
               (&& (one? (a 2)) (sh-smem? nm sh-purebi)) 'jug   ; a redirect wants an fd
               'sub)))

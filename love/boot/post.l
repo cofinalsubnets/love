@@ -1877,8 +1877,16 @@
 ;             path, so the basename decides.
 ; a verb takes the args after its name and answers a status charm; the rail quits with it,
 ; which is kore's convention and why `love kore sed ..` nests.
-(module '(verbs any? bn dash fills fire get seat seatof tab word)
+(module '(verbs any? bn call dash enlist fills fire get seat seatof tab trait word)
 (: tab {}   ; nil? when empty, like every empty -- ask it with peep, not by testing it
+   ; what a verb says of itself, for a shell deciding where to run it -- name -> {trait 1}:
+   ;   'builtin  run in the caller in every mode, ahead of PATH (echo, test ..)
+   ;   'self     safe to run in the caller: BOUNDED (a shell ignores INT while it runs, so
+   ;             sleep or yes could not be taken back), reads NO STDIN however it is called
+   ;             (bare cat drinks the terminal), LEAVES THE CALLER AS IT FOUND IT (env X=1,
+   ;             chroot), and ANSWERS THE SAME WHOEVER ASKS (pidof skips its own pid)
+   ; a verb that says nothing is still ours, and a shell forks it warm
+   traits {}
    ; a seat whose verbs are not all in the image installs a filler here, and the first miss runs
    ; it -- once, the slot cleared before the call so a fill registering through this same door
    ; cannot re-enter. a lazily-loaded verb must arrive at the miss, since the registry is what
@@ -1889,6 +1897,12 @@
                 (lit? v ? v
                  (: f (fill 'f)
                     (lit? f ? (: _ (pin fill 'f ()) _ (f ()) (tab k)) ()))))
+   ; a verb and what it says of itself, in one registration: ts a list of trait words
+   (enlist k f ts) (: _ (pin tab k f) (pin traits k (foldl (\ t x (pin t x 1)) {} ts)))
+   (trait k t) (peep (peep traits k {}) t 0)
+   ; the verb run in the caller as a builtin: urun is the driver, so a leave from deep in
+   ; answers a status and never ends the caller. () when no verb has the name
+   (call k as) (: f (get k) (? (lit? f) (urun f as) ()))
    (bn p)    (: n #p
                 (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n))
                 (go 0 0))
