@@ -820,22 +820,24 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 **measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
 with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
-every ninth by path: **4 compile**, and the rest stop at
+every ninth by path: **30 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 104 | an x86 instruction holo does not encode: `pushf` (102, irqflags.h), `lcallw`, a `%fs` operand |
+| 71 | a function's inline asm: directives in the template (`LOCK_PREFIX`'s `.smp_locks`, the bug table, alternatives -- 34 of these read `cause unnamed`), a `N: insn` label sharing its line (19), `"+m"` outputs, `%%gs:` operands (percpu, 10), `"=@ccc"` flag outputs, `pause`/`bsr`/`lock` |
 | 20 | `__builtin_bswap16` over a constant in a case label |
 | 20 | `typeof` of the object in its own initializer (`get_unaligned`, `container_of`) |
 | 6 | `__label__`, a block's local label (`unsafe_get_user`, rseq) |
+| 3 | a spinlock's compound literal nested in a static initializer |
+| 3 | `__builtin_isdigit`, `__builtin_ffsll` |
 | 2 | gcc's `__attribute` spelling |
-| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), `__builtin_clzll` in a bit-field width, a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label` |
+| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), `__builtin_clzll` in a bit-field width, a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label`, a register variable in `%rax` |
 
 each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
-runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143 and file-scope asm 76 before
-they read (142-syntax.c, 174-elvis.c, 175-offsetof.c, 176-cleanup.c and 178-toplevelasm.c
-hold them). a file-scope asm is gas's whole language, and holo's gas-top reads what C headers
-write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
+runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm 76 and
+`pushf` 102 before they read (142-syntax.c, 174-elvis.c, 175-offsetof.c, 176-cleanup.c,
+178-toplevelasm.c and 179-pushf.c hold them). a file-scope asm is gas's whole language, and
+holo's gas-top reads what C headers write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
 `.byte`..`.quad` over a symbol plus a constant or less `.`, `.ascii`/`.asciz`, `.balign`,
 `.zero` -- into sections the object carries; any other directive refuses by name.
 **154 of the 160 units carry `asm goto`**, and every kernel template (jump labels,

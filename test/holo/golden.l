@@ -81,6 +81,7 @@
       ;; the system lane -- the kernel's own vocabulary: the flag/halt nullaries, the MSR pair,
       ;; the interrupt return, the vectored int (int3 is `trap`, CC, already above)
       ("sys.flags"   "fafbf4"                ((cli) (sti) (hlt)))
+      ("sys.pushf"   "9c9d"                  ((pushf) (popf)))
       ("sys.ud2"     "0f0b"                  ((ud2)))
       ("sys.iretq"   "48cf"                  ((iretq)))
       ("sys.swapgs"  "0f01f8"                ((swapgs)))
@@ -337,6 +338,9 @@
         '((lgdt r6 0) (stcr 3 r6) (ld r1 r0 0) (ldu4 r1 r0 4) (st r0 8 r1) (ldu1 r1 r0 0) (add sp sp 8)
           (cmp r1 r0) (br ne l1.0) (shl r0 3) (shrv r2 r1) (not r0) (push r3) (pop r3) (callr r0) (ret))
         (gas-text 'x64 "lgdt (%rdi)\nmov %rdi, %cr3\nmov (%rax), %rcx\nmovl 4(%rax), %ecx\nmov %rcx, 8(%rax)\nmovzbl (%rax), %ecx\nadd $8, %rsp\ncmp %rax, %rcx\njne 1b\nshl $3, %rax\nshr %cl, %rdx\nnot %rax\npush %rbx\npop %rbx\ncall *%rax\nret"))
+   _ (chk-eq "gas.x64.flags"                       ; the flags word through the stack, both spellings
+        '((pushf) (pop r0) (pushf) (popf))
+        (gas-text 'x64 "# __raw_save_flags\n\tpushf ; pop %rax\npushfq\npopfq"))
    _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
         '((mov r1 r0) (zx4 r1) (li r0 4294967295))
         (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))

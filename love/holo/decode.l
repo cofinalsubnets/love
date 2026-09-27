@@ -169,6 +169,7 @@
           232 (rel 4 'call)  233 (rel 4 'jmp)  235 (rel 1 'jmp)
           244 (nil 'hlt)  245 (nil 'cmc)  248 (nil 'clc)  249 (nil 'stc)
           250 (nil 'cli)  251 (nil 'sti)  252 (nil 'cld)  253 (nil 'std)
+          156 (nil 'pushf)  157 (nil 'popf)
           246 (grp3 1)  247 (grp3 w)
           254 (: r (dc-modrm s k p 1 1) dg (r 3)
                        (dg < 2 ? (fin (r 0) [(op1 (dg = 0 ? 'inc 'dec) 1 [(r 2)])]) (fin k [(dc-byte c)])))
