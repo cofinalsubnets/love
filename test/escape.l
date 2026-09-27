@@ -48,3 +48,19 @@
    (string (. 97 (. 13 (. 98 0))) = parse '(34 97 92 114 98 34))         ; "a\rb"
    (string (. 97 (.  0 (. 98 0))) = parse '(34 97 92 48 98 34))          ; "a\0b"
    (string (. 97 (. 66 (. 98 0))) = parse '(34 97 92 120 52 50 98 34)))) ; "a\x42b"
+
+; \u{h..}: one to six hex digits naming a code point, laid as its utf-8 bytes. anything
+; else after \u is no escape and reads as the letter, the rest as written
+(test
+  ("\u{41}" = "A")                ("\u{0}" = "\0")
+  ("\u{e9}" = "\xc3\xa9")         ("\u{E9}" = "\u{e9}")
+  ("\u{20ac}" = "\xe2\x82\xac")   ("\u{1f600}" = "\xf0\x9f\x98\x80")
+  ("\u{65e5}\u{672c}" = "日本")   ("a\u{65e5}b" = "a日b")
+  ("\u{7ff}" = "\xdf\xbf")        ("\u{800}" = "\xe0\xa0\x80")
+  ("\u{ffff}" = "\xef\xbf\xbf")   ("\u{10000}" = "\xf0\x90\x80\x80")
+  ("\u{10ffff}" = "\xf4\x8f\xbf\xbf")
+  ("\u" = "u")                    ("\uab" = "uab")
+  ("\u{}" = "u{}")                ("\u{110000}" = "u{110000}")    ; none, and past unicode
+  ("\u{d800}" = "u{d800}")        ("\u{dfff}" = "u{dfff}")        ; a surrogate is no character
+  ("\u{0000041}" = "u{0000041}")  ("\u{4g}" = "u{4g}")            ; seven digits, a non-digit
+  ('torn = sound '(34 92 117 123 52 49)))                         ; input ending inside one

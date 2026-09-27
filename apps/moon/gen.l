@@ -862,6 +862,24 @@
        ty (? (bad? lv) (: r (cgexpr g env e ()) (? (bad? r) 'bad (rfree g (vreg r), vty r))) (vty lv))
        _ (pins g 'n n0 'strs s0 'off o0 'slots sl0 'fesc fe0 'fasecs fa0)
        ty)
+   ; a counted loop's step: for (..; v < E; v++ | ++v) with E no wider than v and v unwritten
+   ; elsewhere steps only once v < E held, so v + 1 still fits and the home's re-narrow is the
+   ; identity -> v | ()
+   (bndv g env cnd stp body)
+    (: v (stp @ ('post ('var v) 1) v ('asn ('var v) ('bin '+ ('var v2) ('num 1))) (v = v2 ? v ()) ())
+       (wr? e) (? (atom? e) ()
+                  (elem <e '(asm goto label) || (elem <e '(asn post rmw addr) && two? >e && <>e = ['var v])) 1
+                  (: (go l) (? (atom? l) () (wr? <l) 1 (go >l)) (go e)))
+       (? !v ()
+          (cnd @ ('bin 'lt ('var v3) E)
+           (? (v3 != v || wr? body || wr? E) ()
+              (: tv (peekty g env ['var v]) te (peekty g env E)
+                 k (E @ ('num k) (charm? k ? k ()) ())       ; a literal bound: its value, not its type
+                 (? (tv = 'int && (k ? (k <= 2147483647) (elem te '(int short ushort char schar uchar bool)))) v
+                    (tv = 'uint && (k ? (0 <= k <= 4294967295) (elem te '(uint ushort uchar bool)))) v
+                    ())))
+           ())))
+   (hcvt g nm ty r) (? (nm = g 'bndv) () (cvt ty r))   ; the counted loop's step skips its re-narrow
    ; a targetable leaf re-emitted straight into rX -> forms | 'no. leaves are pure (no strs pin,
    ; no argpos), so re-aiming costs nothing
    (cgleaf g env e rX)
@@ -1085,6 +1103,10 @@
                    (vfs a + pnum <k + pbrf g o (usg? (vty a)) 'r0 'r1 'r2 'r3 cc lbl)
                   (d128? (vty a))
                    (? !(w128? g) (no128 g)
+                      ; against zero: a signed pair's sign is its high word's, and == 0 is lo | hi
+                      (<k = 0 && (elem o '(eq ne) || vty a = 'i128 && elem o '(lt ge)))
+                       (: z (elem o '(eq ne))
+                          (as128 g a + (z ? '((or r0 r0 r2)) ()) + [['cmp (z ? 'r0 'r2) 0] ['br (bcc o ()) lbl]]))
                       (wbr o (as128 g a + wpush + wnum <k) (vty a = 'u128)))
                   (: n <k
                      cc9 (bcc o (cmpu g (vty a) <>k))
@@ -1981,8 +2003,8 @@
                (: r (cgexpr g env rhs <>rv)   ; the rhs aims straight at the home
                   (? (bad? r) 'bad
                      (flo? (vty r)) (mkv <>>rv 'r0 (asintt g r <>>rv + [['mov <>rv 'r0]] + cvt <>>rv <>rv))
-                     (vreg r = <>rv) (mkv <>>rv <>rv (vfs r + cvt <>>rv <>rv))   ; landed in the home already (re-narrowed)
-                     (: fs (vfs r + [['mov <>rv (vreg r)]] + cvt <>>rv <>rv)   ; straight from the value's register
+                     (vreg r = <>rv) (mkv <>>rv <>rv (vfs r + hcvt g <>dst <>>rv <>rv))   ; landed in the home already (re-narrowed)
+                     (: fs (vfs r + [['mov <>rv (vreg r)]] + hcvt g <>dst <>>rv <>rv)   ; straight from the value's register
                         _ (rfree g (vreg r))
                         (mkv <>>rv <>rv fs))))
               (two? rv && <rv = 'regw)     ; store into a pair-homed d128: land on the protocol, mov both halves
@@ -2142,7 +2164,7 @@
               (two? rv && <rv = 'regv)   ; p++ on a register-homed scalar: old in r0, home += step
                (: ty <>>rv stp (ptr? ty ? (tsz g <>ty) 1)
                   (mkv ty 'r0 ([['mov 'r0 <>rv]
-                                ['add <>rv <>rv (stp * step)]] + cvt ty <>rv)))
+                                ['add <>rv <>rv (stp * step)]] + hcvt g <>dst ty <>rv)))
               ; store-direct (the asn twin): a direct frame ld+st leaves no lean, so the local can still home
               (two? rv && <rv = 'loc &&
                (: t9 <>>rv !(stru? t9 || arr? t9 || flo? t9 || bitf? t9)))
@@ -4498,6 +4520,18 @@
                       reg? <>m1 && reg? <>m2 && nelem <>m1 '(r0 r2) && nelem <>m2 '(r0 r2) && <>m1 != <>m2)) &&
                   dead? '(r0 r2) (i + 2))
                   ([['mov <><>l 'r2] ['li <><>>l 0]] + go >>>l (i + 3))
+                 ; the pair's constants: a widened li is two, a known pair shifts up 64 by moving its lo, and a
+                 ; known pair with lo 0 adds as its hi alone (the halves then die apart)
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && two? >l && <>l = '(sx128))
+                  (go (f . ['li 'r2 (<>>f < 0 ? -1 0)] . >>l) i)        ; same length: the indices hold
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && fitsw? <>>f && two? >>>l &&
+                  (: f2 <>l (two? f2 && <f2 = 'li && <>f2 = 'r2 && charm? <>>f2)) && <>>l = '(shl128 64) &&
+                  (: f4 <>>>l (two? f4 && <f4 = 'a128r && reg? <>f4 && reg? <>>f4)))
+                  (: f4 <>>>l
+                     ([['mov 'r0 <>f4] ['mov 'r2 <>>f4] ['add 'r2 'r2 <>>f]] + go >>>>l (i + 4)))
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && two? >>l &&
+                  (: f2 <>l (two? f2 && <f2 = 'li && <>f2 = 'r2 && charm? <>>f2)) && <>>l = '(shl128 64))
+                  ([['li 'r0 0] ['li 'r2 <>>f]] + go >>>l (i + 3))
                  (f . go >l (i + 1)))))
        (lot @ 'no fs (go fs 0)))
 
@@ -6580,12 +6614,22 @@
             (go 1)) ||
             (: (go l) (? !(two? l) () (d128? <><l) 1 (go >l)) (go params)) ||
             wdc items)
+       ; the wide park's peak draw: a wide binop holds its left's two-register park while its right
+       ; evaluates, so a right that parks again doubles it. a miss costs speed only (the cell lane)
+       wdn (: (go i acc) (? (peep n9 'sq 0 < i) acc
+                             (: e2 (sqm i) (go (i + 1) (? (two? e2 && d128? <>e2) (<e2 . acc) acc))))
+              (go 1 (map (p \ <p) (filter (p \ d128? <>p) params))))
+       (wide? e) (? (atom? e) ()
+                    (e @ ('cast ty _) (d128? ty) ('var nm) (elem nm wdn) ('bin _ l r) (wide? l || wide? r) ()))
+       (wpd e) (? (atom? e) 0
+                  (e @ ('bin _ l r) (? (wide? l || wide? r) (max (wpd l) (2 + wpd r)) (max (wpd l) (wpd r)))
+                       (foldl (\ m x (max m (wpd x))) 0 e)))
        pq9 (0 = pdtl items && !wd9)
        (? (0 = peep n9 'q 0)
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
            (peep n9 'asm 0) (peep n9 'vla 0) (peep n9 'sq 0) tak
-           (pmxl items 1 1) (? pq9 1 ()) (? wd9 1 ())] ()))
+           (pmxl items 1 1) (? pq9 1 ()) (? wd9 1 ()) (? wd9 (wpd items) 0)] ()))
    ; alive's forward twin: cgstmt/cgdecl/cgsdecl entries tick and pin the wrapset off livtab
    ; (a miss pins 'all); a statement expression's statements neither tick nor re-pin
    (stq g)
@@ -6752,7 +6796,9 @@
                     _ (pins g 'brk >(g 'brk)
                               'cnt >(g 'cnt)
                               'stwrap myw)           ; the body re-pinned as it went; the step is ours
+                    _ (pin g 'bndv (bndv g env2 cnd stp body))
                     st2 (two? stp ? (cgexpr g env2 stp ()))
+                    _ (pin g 'bndv ())
                     (? (bad? c || bad? b || bad? st2) 'bad
                        (<ir + (two? cnd ? ([['jmp lc]] + lalign g)) + [['label lb]] +
                         b + [['label ls]] + (two? st2 ? (vdrop g st2)) +
@@ -7846,17 +7892,19 @@
         (: uv <>>av9 crh9 (av9 6) rdc9 (av9 7) rdt9 (av9 8)
            lf9 (av9 15 <= 2)                  ; leaf-shaped: at most two cold hard crossings (see ulloc)
            pq9 (qk && av9 16)                    ; protocol-quiet: nothing in the body writes a quad
-           wd9 (av9 17 &&                      ; d128 material: the wide kit owns the file --
-                !(a64? g || t32? g || rv64? g))         ; on x64, whose mul/div pin the rax:rdx pair
+           wm9 (av9 17 && !(a64? g || t32? g || rv64? g))   ; d128 material on x64, whose mul/div pin rax:rdx
+           wd9 (wm9 && 2 < av9 18)             ; a nested park would starve: the wide kit owns the file
+           dp9 (? wm9 5 3)                     ; else a take leaves the file two deeper, one park's draw
            (homefold g params 0 [() () () #tpool]
             (\ a4 gpi p9
               (: nm <p9 pty <>p9
                  A (argr g gpi)
                  nv (a4 3)                       ; the file's running depth (homes and rides drain it)
-                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2)
+                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2 &&
+                     (!wm9 || 64 <= peep rdt9 nm 0))  ; beside the wide kit only a hot param takes a seat
                  ; a bool's entry cvt defs through set, which qclob? cannot tell from a clobber: a bool quad vacates
                  qb9 (= pty 'bool && elem A '(r0 r1 r2 r3))
-                 (? (ok && homable? pty)
+                 (? (ok && homable? pty && (!wm9 || dp9 <= nv))
                     (? (A = homereg gpi) [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                        (a4rider? A) [<a4 (gpi . <>a4) (a4 2) nv]
                        (elem A '(r0 r1 r2 r3))
@@ -7869,7 +7917,7 @@
                     ; an int param rides its arrival if read at least once, no d128 about, and the file
                     ; stays two deep after the take; a64's r4 arrival rides free
                     (ok && lhomable? pty && !qb9 && (0 < peep rdc9 nm 0) && !wd9 &&
-                     (elem A tpool && 3 <= nv || a4rider? A))
+                     (elem A tpool && dp9 <= nv || a4rider? A))
                      [(gpi . <a4) <>a4
                       (? (elem A tpool) (A . a4 2) (a4 2))
                       (? (elem A tpool) (nv - 1) nv)]
@@ -7878,7 +7926,7 @@
                      [(gpi . <a4) <>a4 (a4 2) nv]
                     ; ..and a hot one (weighted reads >= 64, the blocker bar) that cannot ride vacates to its positional seat
                     (ok && lhomable? pty && !wd9 && 64 <= peep rdt9 nm 0 &&
-                     elem A '(r0 r1 r2 r3) && 3 <= nv)
+                     elem A '(r0 r1 r2 r3) && dp9 <= nv)
                      [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                     a4)))))
        ; the quad-ride check: a ridden r0-r3 arrival's only legitimate def is its entry cvt; any other
@@ -8004,7 +8052,7 @@
                      (cfoldir g irx)))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))
+       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (copyprop g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_

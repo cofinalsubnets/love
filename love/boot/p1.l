@@ -33,7 +33,7 @@
    p1-cls (: (go k acc) (? (< k 0) (string acc) (go (- k 1) (. (p1-bits k) acc)))
              (go 255 ()))
    ; 12 is spelled out, here and in every class below: love's escapes are
-   ; n t r e 0 x and nothing else, so "\f" in a love string is the letter f --
+   ; n t r e 0 x u and nothing else, so "\f" in a love string is the letter f --
    ; which would quietly make f whitespace and eat it out of `infinity`.
    (p1-ws? c)   (& (p1-cls c) 2)
    (p1-dig? c)  (? (<= 48 c) (<= c 57))
@@ -155,12 +155,36 @@
 
    ; --- strings -------------------------------------------------------------
    (p1-esc c) (? (= c 110) 10 (= c 116) 9 (= c 114) 13 (= c 101) 27 (= c 48) 0 c)
+   ; code point v's utf-8 bytes onto acc, last first
+   (p1-u8 v acc)
+     (? (< v 128) (. v acc)
+        (? (< v 2048) (. (+ 128 (% v 64)) (. (+ 192 (// v 64)) acc))
+           (? (< v 65536)
+              (. (+ 128 (% v 64)) (. (+ 128 (% (// v 64) 64)) (. (+ 224 (// v 4096)) acc)))
+              (. (+ 128 (% v 64)) (. (+ 128 (% (// v 64) 64))
+                 (. (+ 128 (% (// v 4096) 64)) (. (+ 240 (// v 262144)) acc)))))))
+   ; \u{h..}: one to six hex digits naming a code point, surrogates out -> (v . rest).
+   ; 'torn when the input ends inside it, () when it is no such escape
+   (p1-uhex cl v k)
+     (? (one? cl) 'torn
+        (: c (cap cl)
+           (? (= c 125) (? (? (< 0 k) (? (<= v 1114111) (? (< v 55296) 1 (< 57343 v)) ()) ())
+                           (. v (p1-cup cl)) ())
+              (? (? (p1-hex? c) (< k 6) ())
+                 (p1-uhex (p1-cup cl) (+ (* v 16) (p1-dval c)) (+ k 1))
+                 ()))))
+   (p1-ucl cl) (? (one? cl) 'torn (? (= (cap cl) 123) (p1-uhex (p1-cup cl) 0 0) ()))
    (p1-str cl acc)
      (? (one? cl) 'torn
         (: c (cap cl) r (p1-cup cl)
            (? (= c 34) (. (string (p1-rev acc ())) r)
               (!= c 92) (p1-str r (. c acc))
               (one? r) 'torn
+              (= (cap r) 117)                              ; \u{h..}, else a plain u
+                (: u (p1-ucl (p1-cup r))
+                   (? (= u 'torn) 'torn
+                      (two? u) (p1-str (cup u) (p1-u8 (cap u) acc))
+                      (p1-str (p1-cup r) (. 117 acc))))
               (= (cap r) 120)                              ; \xhh
                 (? (! (? (two? (p1-cup r)) (two? (p1-cup (p1-cup r))))) 'torn
                    (p1-str (p1-cup (p1-cup (p1-cup r)))
