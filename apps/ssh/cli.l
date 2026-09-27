@@ -11,9 +11,10 @@
 (borrow 'posix)
 
 ; what ssh and scp share: the options and their defaults, and the login -- dial, the host key
-; held to known_hosts, the identity, publickey auth. a failure is said as prog's, exit 255
+; held to known_hosts, the identity, publickey auth. a failure is said as prog's and leaves
+; with 255 through udie; the mains answer their status, and the seat (ssh.l) quits with it
 (:
-   (cl-die prog m) (say err (prog + ": " + m + "\n"), quit 255)
+   (cl-die prog m) (udie 255 (prog + ": " + m))
    (cl-env k d) (: v (getenv k) (? (string? v) v d))
    (cl-opts _)
     (: home (cl-env "HOME" "") o (tablet 8)
@@ -91,7 +92,7 @@
     cmd (o 'cmd)
     pty? (? (o 'pty < 0) ((nil? cmd) && (two? (tty 0))) (o 'pty))
     st (ssh-run t cmd pty?)
-    (quit (? (st < 0) 255 st))))
+    (? (st < 0) 255 st)))
 
 ; sshd serves the user it runs as. the host key is -h's, else the system's when this user
 ; can read it, else one of its own at ~/.ssh/sshd_ed25519_key, made on first use and said.
@@ -99,7 +100,7 @@
 (: (sshd-main as)
  (:
     usage "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
-    (die m) (say err ("sshd: " + m + "\n"), quit 255)
+    (die m) (udie 255 ("sshd: " + m))
     (readable? p) (: q (open p "r") (? (hot? q) (: _ (close q) 1) 0))
     me (ssh-me 0)
     _ (? (two? me) 0 (die "no /etc/passwd line for this uid"))
@@ -267,11 +268,17 @@
     ops (parse as)
     rec (peep fl 114 0) pres (peep fl 112 0)
     _ (map (c \ ? (elem c [114 112 113 79 116 102 100 118]) 0 (die ("unknown option -" + string c + "\n" + usage))) (keys fl))
-    ; the remote ends, over stdin and stdout
-    (quitn e) (quit (? (0 < e) 1 0))
-    _ (? (peep fl 116 0) (? ((two? ops) && (one? >ops)) (quitn (sc-sink (sc-stdio 0) <ops rec pres)) (die usage)) 0)
-    _ (? (peep fl 102 0) (quitn (sc-source (sc-stdio 0) ops rec pres)) 0)
-    _ (? ((two? ops) && (two? >ops)) 0 (die usage))
+    ; the remote ends over stdin and stdout, else the client
+    (st e) (? (0 < e) 1 0)
+    (? (peep fl 116 0) (? ((two? ops) && (one? >ops)) (st (sc-sink (sc-stdio 0) <ops rec pres)) (die usage))
+       (peep fl 102 0) (st (sc-source (sc-stdio 0) ops rec pres))
+       ((two? ops) && (two? >ops)) (scp-client o ops rec pres)
+       (die usage))))
+
+; the client's end: sources and a target, one side remote -> the status
+(: (scp-client o ops rec pres)
+ (:
+    (die m) (cl-die "scp" m)
     target (last ops)
     srcs (rev >(rev ops))
     tr (sc-remote target)
@@ -290,6 +297,6 @@
     io (sc-chan t)
     e (? up (sc-source io srcs rec pres) (sc-sink io target rec pres))
     st (ch-end t)
-    (quit (? ((0 < e) || !(st = 0)) 1 0))))
+    (? ((0 < e) || !(st = 0)) 1 0)))
 
 ) ; module ssh-cli

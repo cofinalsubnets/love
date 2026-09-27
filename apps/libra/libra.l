@@ -193,7 +193,7 @@
 ; on the artifact, the seat fires libra-main iff this file sits in the program
 ; seat of the real command line. body-having, so nothing leaks.
 (: door (udoor 'libra libra-main libra-help 1 1)
-   _ (pins (cite 'verbs 'tab) 'libra door)
+   _ ((cite 'verbs 'enlist) 'libra door ['self])
    s ((cite 'verbs 'fire) ["libra" "libra.l"])
    ; quit, never return: the shebang's -l makes this a preload, so a path that
    ; merely answers leaves cli holding our arguments and loads the first as a

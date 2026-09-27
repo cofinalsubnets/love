@@ -19,4 +19,4 @@
 (borrow "apps/ssh/cli.l")
 
 (: s (cite 'verbs 'fire ["ssh" "ssh.l"])
-   (two? s ? ((cite 'ssh-cli 'ssh-main) >s)))
+   (two? s ? (quit (urun (cite 'ssh-cli 'ssh-main) >s))))
