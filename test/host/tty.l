@@ -23,19 +23,31 @@
 ; no escape key, ever. the stage tells a lone ESC from a sequence by a short rest, so
 ; an ESC with a key hard behind it reads as alt-<key> -- and alt-q is not quit. that
 ; run never lands and `slurp` waits on a child that is still playing. a hung gate is
-; worse than a red one, so every sequence here ends in a quit the app cannot misread.
+; worse than a red one, so every sequence here ends in a quit the app cannot misread --
+; and a child that never ends anyway is killed at the deadline, so its law reads red.
 (borrow 'synth)   ; the keyboard's own naming of a note, for the alt law
-(: (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
+(: reaped (tablet 0)                                           ; pids waitfor has had back
+   deadline 20000                                              ; ms a child may take
+   (waitfor pid) (: s (gather pid)
+                    (? (two? s || nom? s) (pin reaped pid 1, s) (do (rest 2) (waitfor pid))))
+   ; the child's whole session goes at the deadline (tether's child leads one), so the
+   ; read at the master ends and the waitfor after it lands
+   (watch pid t0) (? (peep reaped pid 0) 0
+                     (deadline < clock t0) (still (0 - pid) 9)
+                     (rest 50, watch pid t0))
+   (guard t) (: _ (? (two? t) (twirl (_ \ watch <t (clock 0)) 0) 0) t)
    (has? h n) (: k #n m #h
                  (go i) (? ((m - k) < i) 0 (n = snip h i (i + k)) 1 (go (i + 1)))
                  (go 0))
-   ; the wire read until a phrase has passed, as the text so far: chars kept newest
-   ; first and the phrase matched at the head, so a frame costs the frame, not its square
-   (wire p n) (: rn (rev (map n ^#n))
-                 (pre? a b) (a ? (b ? (<a = <b ? (pre? >a >b) 0) 0) 1)
-                 (go acc) (: ch (see p)
-                             (ch = -1 ? acc (: acc2 (ch . acc) (pre? rn acc2 ? acc2 (go acc2)))))
-                 (string (rev (go ()))))
+   ; the wire read until a phrase has passed, as the text so far: a read at a time, the
+   ; phrase sought only where the new bytes could finish it. a byte at a time costs a
+   ; frame half a second, which is longer than the deafest box stays deaf
+   (wire p n) (: (go acc) (: ch (see p)
+                             (ch = -1 ? acc
+                                (: acc2 (acc + string ch + chug p)
+                                   from (max 0 (#acc - #n))
+                                   (0 <= findsub (snip acc2 from #acc2) n ? acc2 (go acc2)))))
+                 (go ""))
    (blank? t) (foldl (\ a ch (a && (ch = 32))) 1 t)
    (count h n) (: k #n m #h
                   (go i c) (? ((m - k) < i) c
@@ -62,7 +74,7 @@
              (go i) (? ((r * c) <= i) () (64 = chat s i) ((i // c) . (i % c)) (go (i + 1)))
              (go 0))
    (spawn cmd r c)
-    (tether ["sh" "-c" ("stty rows " + show r + " columns " + show c + " -echo; exec " + cmd)])
+    (guard (tether ["sh" "-c" ("stty rows " + show r + " columns " + show c + " -echo; exec " + cmd)]))
    ; spawn at r x c, type, read to the end, and lay the held grid: [stream screen]
    (run cmd keys r c)
     (: t (spawn cmd r c)
@@ -134,14 +146,16 @@
 ; the sign down, q leaves, and the four behind them are the ones that must not survive.
 ; the reader after it is non-blocking (min 0 time), so it answers whether or not there
 ; is anything there, which is the whole question.
- dr (: t (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; out/love tower; "
-                             + "stty -icanon min 0 time 3; cat")])
+ dr (: t (guard (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; out/love tower; "
+                                    + "stty -icanon min 0 time 3; cat")]))
        m >t
        ; the keys wait for raw mode: typed before it, the tty echoes them back and the
        ; leftovers cannot be told from the echo of the ones that were read
        _ (rest 500)
        _ (say m "zqzzzz")
-       (slurp m))
+       txt (slurp m)
+       _ (waitfor <t)
+       txt)
  _ (test (has? dr "you leave the tower")                    ; it did play and did leave
          !(has? dr "zzzz"))                                 ; ..and ate what was behind it
 
