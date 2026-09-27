@@ -638,14 +638,16 @@
 (: r (hark ["out/love" "out/lush" "-g" "-c"
             "p=$PATH; PATH=/nonexistent; a=$(which tr); PATH=$p; b=$(ev '(selfpath 0)'); [ \"$a\" = \"$b\" ] && echo seat || echo other"])
    (test ("seat\n" = >r)))
-; the in-image lane, widened: the toolchain's other half plus the three crew tools
-; that answer a status instead of quitting. each is claimed by name, from its own
-; module where that is not the applets' home.
+; the in-image lane, widened: the toolchain's other half plus the crew tools that
+; answer a status instead of quitting. each is claimed by name, from its own module
+; where that is not the applets' home.
 (test (all (\ w (two? (sh-imgfn w)))
-             '("nm" "ar" "ld" "as" "tar" "libra" "fat" "mkfs.vfat" "mkdosfs")))
+             '("nm" "ar" "ld" "as" "readelf" "strip" "libra" "fat" "mkfs.vfat" "mkdosfs"
+               "vdir" "sha1sum" "who" "chgrp" "truncate")))
 ; ..and the stdin readers stay out: a filter with no file operand would drink the
-; terminal in here, where ^C kills the shell and no pid answers `kill %1`
-(test (all (\ w !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "cat" "sort")))
+; terminal in here, where ^C kills the shell and no pid answers `kill %1`. tar is one
+; (f -, or no f at all)
+(test (all (\ w !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "cat" "sort" "tar")))
 ; the door is what makes that safe. a tool that used to `quit` on its error path
 ; would have taken the shell with it; now every failure is one command's status and
 ; the line after it still runs.
@@ -654,7 +656,7 @@
              libra /nonexistent-xyz.l 2>/dev/null; echo l=$?
              mkfs.vfat 2>/dev/null; echo m=$?
              echo alive"])
-   (test ("t=1\nl=1\nm=2\nalive\n" = >r)))
+   (test ("t=2\nl=1\nm=2\nalive\n" = >r)))
 ; a capture of one takes the jug: no pipe, no fd, no child, which is the whole
 ; point of `cc=$(which cc)`
 (: pr (sh-parse-line "which cc")
@@ -766,6 +768,20 @@
    _ (test (1 = sh-forkask seat) (1 = sh-forkask ours) (0 = sh-forkask sh) (0 = sh-forkask "/bin/date")
            (("(\"" + ours + "\" \"a\" \"b\")\nsh\n") = >r))
    (unlink ours, unlink sh))
+;; a script's stdin forks only while the shell has read none of it: a script file, -c
+;; and cook's lines never have, so their stdin readers fork; once `read` or the stdin
+;; loop has, a buffer may hold read-ahead the child would see again, and it execs --
+;; unless the word's own stdin is redirected
+(: tty0 (sh-tty ()) in0 (sh-inread ())
+   _ (pin sh-tty () 0)
+   _ (pin sh-inread () 0)
+   a (sh-forkok? ["cat" "f"] ())
+   _ (pin sh-inread () 1)
+   b (sh-forkok? ["cat" "f"] ())
+   c (sh-forkok? ["cat"] [(0 . 5)])
+   _ (pin sh-tty () tty0)
+   _ (pin sh-inread () in0)
+   (test (1 = a) (0 = b) (1 = c)))
 
 ;; readonly, alias, times, hash and ulimit: each acts on this process or its tables.
 ;; a readonly assignment is an error, fatal to a script, from every setter

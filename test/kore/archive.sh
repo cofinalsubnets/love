@@ -117,4 +117,21 @@ if command -v bzip2 >/dev/null 2>&1; then
   bzip2 -dc "$ho/.arc.tbz" | tar tf - > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "tar -j of kore's tar cjf"
 fi
 hv "bzip2 --help" '^bzip2 -- the' korerun bzip2 --help
+# tar's spelling beyond the bundled key: dashed letters, -C, members, f - both ways, J,
+# the codec sniffed on a read that names none, --strip-components and -O
+T=$HO/.arctar; rm -rf "$T"; mkdir -p "$T/o"
+korerun tar -cJf "$T/a.txz" -C "$ho" .arcd || fail "kore tar -cJf -C"
+korerun tar tf "$T/a.txz" > "$o"; grep -q '^\.arcd/sub/two\.txt$' "$o" || fail "kore tar: a sniffed xz listing"
+korerun tar cf - -C "$ho" .arcd/sub | korerun tar tf - > "$o"
+[ "$(cat "$o")" = "$(printf '.arcd/sub\n.arcd/sub/two.txt')" ] || fail "kore tar cf - | tar tf -"
+korerun tar xf "$T/a.txz" -C "$T/o" --strip-components=1 .arcd/sub || fail "kore tar x a member, stripped"
+cmp -s "$ho/.arcd/sub/two.txt" "$T/o/sub/two.txt" || fail "kore tar --strip-components"
+[ ! -e "$T/o/one.txt" ] || fail "kore tar x took a member it was not asked for"
+[ "$(korerun tar -xOf "$T/a.txz" .arcd/one.txt)" = x ] || fail "kore tar -O"
+korerun tar tf "$T/a.txz" no/such 2> /dev/null; r=$?; [ $r -eq 2 ] || fail "kore tar: a missing member (rc $r)"
+if command -v tar >/dev/null 2>&1 && command -v xz >/dev/null 2>&1; then
+  tar tJf "$T/a.txz" > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "tar -J of kore's tar cJf"
+  tar cJf "$T/g.txz" -C "$ho" .arcd && korerun tar tf "$T/g.txz" > "$o"
+  grep -q '^\.arcd/one\.txt$' "$o" || fail "kore tar: GNU's xz tarball, sniffed"
+fi
 echo "kore: gzip/gunzip/zcat/xz/unxz/bzip2/bunzip2/tar/cpio under kore's door ok"

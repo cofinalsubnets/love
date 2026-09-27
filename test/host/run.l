@@ -90,7 +90,7 @@
 
 (puts "run parked: ok\n")
 
-; --- the nif floor: accept / udp-recv / wait all park --------------------------
+; --- the nif floor: accept / recv / wait all park --------------------------
 ; the laws and the shapes live in test/host/nifpark.l -- driven from here for the
 ; same reason parked.l is: two of its three regressions are hangs (a blocking accept
 ; waits for a connection only the wedged vm could still make), and a wedged gate is
