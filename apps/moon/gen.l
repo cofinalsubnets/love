@@ -5925,19 +5925,32 @@
 
    ; inline asm: the target's GNU dialect (love/holo/gas.l; holo's neutral text under __attribute__((holo))), spliced as one opaque ('raw ..)
    ; a constraint's register part: r/q/g/rm 'pick, i/n 'imm, m 'mem, a digit ('tie n), rN the nom,
-   ; x86's a b c d S D letters by name (rax rbx rcx rdx rsi rdi, Nd dx), ir 'either
+   ; x86's a b c d S D letters by name (rax rbx rcx rdx rsi rdi, Nd dx), ir 'either. a longer
+   ; set reads by its letters: immediates alone (x86's I J K L M N e Z beside i n) 'imm, a
+   ; register letter among immediates 'either, among memory 'pick
+   asmimm '(105 110 73 74 75 76 77 78 101 90)
+   ; x86's "=@cc<cond>" flag outputs -> the set's condition
+   asmflags {"e" 'eq "z" 'eq "ne" 'ne "nz" 'ne "c" 'below "b" 'below "nae" 'below
+             "nc" 'ae "ae" 'ae "nb" 'ae "a" 'above "nbe" 'above "be" 'be "na" 'be
+             "g" 'gt "nle" 'gt "ge" 'ge "nl" 'ge "l" 'lt "nge" 'lt "le" 'le "ng" 'le
+             "s" 's "ns" 'ns "o" 'vs "no" 'vc "p" 'p "np" 'np}
    (asmc g c9)
     (: n #c9
        c0 (? (n > 0) (c9 0) 0)
        x86 (x64t? g)
+       cs (map (i \ c9 i) ^n)
+       (in? l) (all (c \ elem c l) cs)
        (? (n < 1) 'bad
           (n = 1 && 48 <= c0 <= 57) ['tie (c0 - 48)]
-          (n = 1) (c0 @ 114 'pick 113 'pick 103 'pick 105 'imm 110 'imm 109 'mem
+          (n = 1) (c0 @ 114 'pick 113 'pick 103 'pick 109 'mem
                       97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
-                      100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad) 'bad)
-          (c9 = "rm" || c9 = "mr") 'pick
+                      100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
+                      (elem c0 asmimm ? 'imm 'bad))
           (c9 = "Nd" || c9 = "dN") (x86 ? 'r2 'bad)
           (c9 = "ir" || c9 = "ri" || c9 = "in" || c9 = "ni") 'either
+          (in? asmimm) 'imm
+          (in? (asmimm + '(114 113 103 109 111)) && any (c \ elem c '(114 113 103)) cs)
+           (any (c \ elem c asmimm) cs ? 'either 'pick)
           (name c9)))
    ; a `register T v asm("reg")` variable named as an operand: its pin, else ()
    (asmvpin g env e)
@@ -6015,7 +6028,8 @@
        ; asm goto's labels, mangled as cgstmt's lbl; %lN spells one, and the blob leaves them as fixes
        labs (map (nm \ (name (g 'fn + "." + nm))) <>>>>>s)
        ; one operand list, GNU order: ('o|'x reg expr w) an output (x in-out), ('i reg expr w) a
-       ; register input, ('b reg (addr expr) 0) a memory input, ('m imm 0 0) an immediate
+       ; register input, ('b reg (addr expr) 0) a memory input or output, ('m imm 0 0) an
+       ; immediate, ('f reg expr 1 cond) a flag output, ('k sp expr 8) the stack pointer as it stands
        (pinof k e) (k @ 'pick (: p (asmvpin g env e) (? (nom? p) p k)) k)
        (oconv l acc)
         (? !(two? l) (rev acc)
@@ -6023,7 +6037,18 @@
               h (0 < n ? (c 0) 0)
               c2 (? (1 < n && c 1 = 38) (snip c 2 n) (snip c 1 n))    ; "=&r": the early clobber is the picking rule already
               k (h @ (61 || 43) (asmc g c2) 'bad)
-              (? (bad? k || elem k '(imm mem either) || two? k) (asmno g ("an asm output constrained \"" + c + "\""))
+              fc (? (3 < #c2 && snip c2 0 3 = "@cc") (peep asmflags (snip c2 3 #c2) ()) ())
+              gv (<><l @ ('var nm) (two? (peep (g 'gregs) nm ())) ())
+              ; the stack-pointer register variable ("+r"(current_stack_pointer): the asm uses the
+              ; stack) is that register as it stands -- nothing loads it or stores it back
+              (? (gv && elem h '(61 43)) (oconv >l (['k 'sp <><l 8] . acc))
+                 (0 < #c2 && c2 0 = 64)
+                  ; a flag output: a picked register the condition sets right after the body
+                  (? (h = 61 && nom? fc && x64t? g) (oconv >l (['f 'pick <><l 1 fc] . acc))
+                     (asmno g ("an asm flag output \"" + c + "\"" + ontgt g)))
+                 (bad? k || elem k '(imm either) || two? k) (asmno g ("an asm output constrained \"" + c + "\""))
+                 ; a memory output is the asm's own store: its address rides a register, as "m" in
+                 (k = 'mem) (oconv >l (['b 'pick ['addr <><l] 0] . acc))
                  (oconv >l ([(h @ 43 'x 'o) (pinof k <><l) <><l (asmw g env <><l)] . acc)))))
        (iconv l acc)
         (? !(two? l) (rev acc)
@@ -6042,7 +6067,7 @@
              (pinset l acc)
               (? !(two? l) acc
                  (: e2 <l k <>e2
-                    (? (= <e2 'm || (k = 'pick) || two? k) (pinset >l acc)
+                    (? (elem <e2 '(m k) || (k = 'pick) || two? k) (pinset >l acc)
                        !(asmreg? g k) 'bad
                        (elem k acc) 'bad
                        (pinset >l (k . acc)))))
@@ -6051,7 +6076,7 @@
                 (: (assign l fr acc)
                     (? !(two? l) (rev acc)
                        (: e2 <l k <>e2
-                          (? (<e2 = 'm) (assign >l fr (k . acc))
+                          (? (elem <e2 '(m k)) (assign >l fr (k . acc))
                              (two? k) (? (<>k < #acc) (: r9 ((rev acc) <>k) (assign >l fr (r9 . acc))) 'bad)
                              (k = 'pick)
                               (? (two? fr) (assign >l >fr (<fr . acc)) 'bad)
@@ -6070,7 +6095,7 @@
                    ; a jump out of the body would skip the output stores and the clobber pops
                    (? (bad? saves) 'bad
                       (bad? asgn) (asmno g "more asm operands than registers to seat them")
-                      (two? labs && (two? os || two? saves)) (asmno g "an asm goto with outputs or a callee-saved clobber")
+                      (two? labs && (any (e2 \ elem <e2 '(o x f)) os || two? saves)) (asmno g "an asm goto with register outputs or a callee-saved clobber")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
                          (rtext a9 w) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
                          (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(charm? v) ? 'bad (show v)) (gas-imm tgt v md)))
@@ -6081,6 +6106,7 @@
                              (: e2 <l a9 <al
                                 (optext >l >al ((<e2 @ 'm (itext a9)
                                                        'b (mtext a9)
+                                                       'f (md \ 'bad)       ; a flag output has no spelling
                                                        (rtext a9 <>>>e2)) . acc))))
                          txt (asmsub tmpl (optext ops9 asgn () + map ltext labs))
                          (? (bad? txt) (asmno g "an asm operand the template spells with a modifier it has no lane for")
@@ -6106,16 +6132,20 @@
                                      body ((map (r9 \ ['push r9]) saves)
                                            + asmbody g tgt neutral? txt
                                            + map (r9 \ ['pop r9]) (rev saves))
+                                     ; flag outputs: each set reads the flags before any push moves them
+                                     (fsets l al acc)
+                                      (? !(two? l) acc
+                                         (fsets >l >al (<<l = 'f ? (acc + [['set (<l 4) <al]]) acc)))
                                      ; outputs: push each register, store back reverse
                                      (opush l al acc)
                                       (? !(two? l) acc
-                                         (? (elem <<l '(o x))
+                                         (? (elem <<l '(o x f))
                                             (opush >l >al (acc + spush <al))
                                             (opush >l >al acc)))
                                      (ostores l al acc)
                                       (? !(two? l) acc
                                          (: e2 <l
-                                            (? !(elem <e2 '(o x)) (ostores >l >al acc)
+                                            (? !(elem <e2 '(o x f)) (ostores >l >al acc)
                                                (: lv (matv g (clval g env <>>e2))
                                                   (? (bad? lv) 'bad
                                                      (: ty (vty lv)
@@ -6124,7 +6154,7 @@
                                                             ((vfs lv + spop 'r1 + [[(stop ty) 'r0 0 'r1]]) + acc)))))))))
                                      osf (ostores ops9 asgn ())
                                      (? (bad? osf) 'bad
-                                        (lf + pops ops9 asgn () + body + opush ops9 asgn () + osf)))))))))))))
+                                        (lf + pops ops9 asgn () + body + fsets ops9 asgn () + opush ops9 asgn () + osf)))))))))))))
 
    ; a statement's child statements in tick order (a for's init only when it declares): alive's
    ; prepass and scasel walk by it, and cgstmt's walk must agree node for node
@@ -6703,8 +6733,9 @@
            (? !(two? (g 'cases)) 'bad
               (: lab (peep <(g 'cases) 'dflt 'no)
                  (? (lab = 'no) 'bad [['label lab]])))
-          ('switch ce items)
+          ('switch ce items9)
            (: c (cgexpr g env ce ())
+              items (: sw (swdead g env ce items9) (sw @ 'no items9 sw))
               (? (bad? c) 'bad
                  (: cr9 (vreg c)
                     lend (nlab g ".d")
@@ -6790,6 +6821,31 @@
              ('switch . _) acc                                   ; a nested switch owns its labels
              (scasel-l g (stkids it) tab acc)))
    (scasel-l g l tab acc) (? !(two? l) acc (scasel-l g >l tab (scasel g <l tab acc)))
+   ; a switch over a constant (sizeof, as the kernel's width macros write it) never reaches the
+   ; cases it does not select, and gcc never assembles their asm: there it lays as an empty
+   ; statement, which ticks as the asm did. only with every label at the top and no goto's label
+   ; in the body -> items | 'no
+   (swdead g env ce items)
+    (: v (ce @ ('szof e2) (: ty (peekty g env e2) (? (bad? ty || gvarr? ty) () (tsz g ty)))
+              (memk g ce))
+       (lab? it) (two? it && elem <it '(case dflt))
+       (nest? x) (? !(two? x) () (elem <x '(case dflt)) 1 (<x = 'switch) () (any nest? x))
+       (lbl? x) (? !(two? x) () (<x = 'lbl) 1 (any lbl? x))
+       (idx k) ((: (go l i) (? !(two? l) -1 (= <l k) i (go >l (i + 1)))) items 0)
+       at (: j (idx ['case v]) (? (j < 0) (idx ['dflt]) j))
+       (strip x) (? !(two? x) x (<x = 'asm) ['expr ['num 0]] (map strip x))
+       ; live from the selected label to the first break at the top, or a block's last statement
+       (ends? it) (it = ['brk] || (<it = 'blk && two? <>it && <>it (#<>it - 1) = ['brk]))
+       (go l i live acc)
+        (? !(two? l) (rev acc)
+           (: it <l
+              kept (live || i = at || lab? it)
+              (go >l (i + 1) (? (i = at) !(ends? it) (live && !(ends? it)))
+                  ((kept ? it (strip it)) . acc))))
+       (? (!(charm? v) || any (it \ (<it = 'case && #it != 2) || (!(lab? it) && nest? it)) items
+           || any lbl? items)
+          'no
+          (go items 0 () ())))
 
    ; -- the inline lane: a small (or always_inline) fn splices its whole body at the call site, each arg
    ; in a fresh 8-byte temp, every return computing into r0 then jumping to the splice's end label. --

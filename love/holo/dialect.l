@@ -208,6 +208,7 @@
    ;; the stems that take an at&T size suffix
    xa-sfxable '(mov add or and sub xor cmp test neg not inc dec push pop lea
                 imul mul div idiv adc sbb sal shl shr sar rol ror shld shrd xchg bswap bsr bsf
+                xadd cmpxchg bt bts btr btc
                 movabs cvttsd2si cvttss2si cvtsd2si cvtss2si cvtsi2sd cvtsi2ss)
    ;; the nullaries at&T spells c<from>t<to>, and Intel c<from><to>; the middle keeps Intel's
    xa-att-nil {'cltq 'cdqe  'cltd 'cdq  'cqto 'cqo  'cwtl 'cwde  'cbtw 'cbw  'cwtd 'cwd

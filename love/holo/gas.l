@@ -144,6 +144,7 @@
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
+   gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp inc dec not neg bt bts btr btc)
    gx-ext (gtab '((movzb (zx1 ldu1)) (movzw (zx2 ldu2)) (movsb (sx1 ld1)) (movsw (sx2 ld2)) (movsl (sx4 ld4))))
    ; a %gs:/%fs: operand: the override byte before the one form that reaches memory. an absolute
    ; address (percpu's `%gs:sym`, `%gs:40`) loads through its destination: the address, then the word
@@ -172,6 +173,14 @@
           (= m 'call) (? (<d = 'lbl) [['call <>d]] (<d = 'ind) [['callr (gx-r <>d)]] (scare 'gas-x64-operand ops))
           (= m 'int) [['int (gx-imm d)]]
           (elem m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
+          ; a read-modify-write on memory: atomics and counters. no suffix takes the register's width
+          (<d = 'mem && elem m gx-rmw)
+           (: bm (gx-mem d) wm (w0 > 0 ? w0 (<s = 'rg) (s 2) 8)
+              (? (elem m '(xadd cmpxchg xchg)) (? (<s = 'rg) [[(name (show m + "m")) wm <bm <>bm (gx-r s)]] (scare 'gas-x64-operand ops))
+                 (elem m '(inc dec not neg)) [['unm m wm <bm <>bm]]
+                 (elem m '(bt bts btr btc)) [['btm m wm <bm <>bm (gx-rv s)]]
+                 [['alum m wm <bm <>bm (gx-rv s)]]))
+          (= m 'xchg && <s = 'mem && <d = 'rg) (gx-ins m w0 [s d])
           (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
           (= m 'vmwrite) [['vmwrite (gx-r d) (gx-r s)]]
           (= m 'mov)
