@@ -101,6 +101,17 @@ for c in "0 a -ef h" "0 a -ef s" "1 a -ef b" "1 a -ef none" "0 a -nt old" "1 old
   [ "$k" = "${c%% *}" ] || fail "kore test ${c#? } (got $k, want ${c%% *})"
 done
 (cd "$T" && "$K" kore [ a -ef h ]) || fail "kore [ a -ef h ]"
+# the connectives, POSIX's count rules to four words and the grammar past them (-o
+# under -a under ! and parens), GNU's == < >, owner and group, and -t on an fd that
+# is no terminal. each answer is GNU's
+for c in "0 \\( x \\)" "1 \\( '' \\)" "0 ! ''" "1 ! x" "0 x -a y" "1 x -a ''" "0 '' -o y" \
+         "0 ! \\( a = b \\)" "0 \\( a = a \\) -a \\( b = b \\)" "0 a = a -o b = c -a c = d" \
+         "1 ! a = b -a c = d" "0 1 -eq 1 -a 2 -eq 3 -o 4 -eq 4" "0 a == a" "0 a \\< b" \
+         "1 a \\> b" "0 -f a -a -s a" "1 -f old -a -s old" "1 -e none -o -d none" \
+         "0 -O a" "0 -G a" "1 -O none" "1 -t 0" "1 -t 9" "2 -t x" "2 \\( x" "2 a = a -a"; do
+  (cd "$T" && eval "$K kore test ${c#? }" < /dev/null); k=$?
+  [ "$k" = "${c%% *}" ] || fail "kore test ${c#? } (got $k, want ${c%% *})"
+done
 # truncate: each size form against GNU's where there is one, else the sizes written out;
 # -c makes no file, and GNU's refusals come back as 1
 T2=$HO/.trunc; rm -rf "$T2"; mkdir "$T2"
