@@ -10,6 +10,7 @@
 ;   (tls-say t s)          send s as application data
 ;   (tls-slurp t)          every byte of application data the peer sends, to its close
 ;   (tls-close t)          a close_notify, and the socket shut
+;   (t 'cert)              the server's leaf certificate, its der, as it came -- unverified
 ;
 ; the session is a tablet: the socket, a pending-bytes run, the two traffic keys and their
 ; sequence numbers, the transcript. x25519 rides the bignums (RFC 7748's ladder, the field
@@ -210,21 +211,35 @@
                          _ (pin t 'ckey (hkdf-label chs "key" "" kl)) _ (pin t 'civ (hkdf-label chs "iv" "" 12))
                          _ (pin t 'skey (hkdf-label shs "key" "" kl)) _ (pin t 'siv (hkdf-label shs "iv" "" 12))
                          ; the server's flight: extensions, the certificate, its verify, finished
+                         ; the leaf certificate kept as 'cert, its der: unverified, but a
+                         ; caller may pin it (gemini's trust on first use)
                          (flight _) (: m (hs-next t)
                                       (? !(two? m) ()
                                          (<m = 20) m
-                                         (flight 0)))
+                                         (: _ (? ((<m = 11) && (8 <= #<>m))
+                                                 (: b <>m i (1 + b 0)
+                                                    (pin t 'cert (snip b (i + 6) (i + 6 + rd24 b (i + 3)))))
+                                                 ; a request for our certificate: its context kept
+                                                 (<m = 13) (pin t 'creq (snip <>m 1 (1 + (<>m) 0)))
+                                                 0)
+                                            (flight 0))))
                          fin (flight 0)
                          (? !(two? fin) (close s, ())
                             (: ; the client finished is over the transcript through the server's
+                               ; asked for one, we send an empty certificate (we have none),
+                               ; and our finished covers it; the traffic keys stop at the server's
+                               tr0 (t 'tr)
+                               cx (t 'creq)
+                               ccert (? (string? cx) (: b (u8 #cx + cx + u24 0) (u8 11 + u24 #b + b)) "")
                                fkey (hkdf-label chs "finished" "" 32)
-                               vd (hmac fkey (sha (t 'tr)))
+                               vd (hmac fkey (sha (tr0 + ccert)))
                                cfin (u8 20 + u24 32 + vd)
                                _ (wr t (u8 20 + u16 771 + u16 1 + u8 1))          ; a CCS for the middleboxes
+                               _ (? (0 < #ccert) (seal t 22 ccert) 0)
                                _ (seal t 22 cfin)
                                master (hkdf-extract (derive hs "derived" "") (zeros 32))
-                               cap (derive master "c ap traffic" (t 'tr))
-                               sap (derive master "s ap traffic" (t 'tr))
+                               cap (derive master "c ap traffic" tr0)
+                               sap (derive master "s ap traffic" tr0)
                                _ (pin t 'ckey (hkdf-label cap "key" "" kl)) _ (pin t 'civ (hkdf-label cap "iv" "" 12))
                                _ (pin t 'skey (hkdf-label sap "key" "" kl)) _ (pin t 'siv (hkdf-label sap "iv" "" 12))
                                _ (pin t 'cseq 0) _ (pin t 'sseq 0)
