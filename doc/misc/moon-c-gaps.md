@@ -92,7 +92,6 @@ All of C89 passes. What remains is C99/C11/GNU.
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
 | computed goto | `&&label`, `goto *p` |
 | `typeof` of the object its own initializer declares | `int *p = (typeof(p))0;` — the name is not in scope until the declarator ends |
-| `__attribute__((cleanup(f)))` | refused by name: it runs f at every exit from the scope, and skipped as decoration it dropped the call in silence (linux's `guard()` never unlocked) |
 | a builtin over constants where a constant is owed | `unsigned w : 63 - __builtin_clzll(8);`, `case __builtin_bswap16(0x0800):` — parse folds no builtin call |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
@@ -115,7 +114,13 @@ string-literal concatenation, self-referential structs, enum trailing commas, mu
 arrays, statement expressions (`({ .. })`), `__auto_type`, named asm operands (`%[x]`),
 `asm inline`, `asm goto`, `x ?: y` (x read once), `typeof` over a qualified type-name,
 `__builtin_offsetof` over a runtime index (the address itself; a constant index before a
-member still folds), a variably modified object at file scope refused by name, `case A ... B` and `[a ... b] =` ranges, a global register variable on the
+member still folds), a variably modified object at file scope refused by name,
+`__attribute__((cleanup(f)))` on a local (parse.l's pcln lays f(&v) on every way out of the
+scope -- a block's end, return after its value, break/continue, a goto outside, an asm goto
+through a landing pad; a jump into the scope, a static, file scope and the specifiers of a
+many-declarator declaration refuse by name), a statement expression's value typed where its
+own locals stand and a for-init's variable typing the rest of the loop (177-scopetype.c; clay
+says the statement expression back as `({ .. })`), `case A ... B` and `[a ... b] =` ranges, a global register variable on the
 stack pointer, `__typeof_unqual__`, an enumerator past the int word, a `_Static_assert` or a
 bare `;` standing as a struct member, an anonymous bitfield over a typedef or mid-list, brace elision in nested initialisers, pointer-to-array declarators, functions returning
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four

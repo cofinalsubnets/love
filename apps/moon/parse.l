@@ -1206,7 +1206,7 @@
                        (butl l) (? !(two? l) () !(two? >l) () (<l . butl >l))
                        lv (lst items)
                        val? (two? lv && (= <lv 'expr))
-                       ty0 (? val? (ptype ps <>lv) ())
+                       ty0 (? val? (peep ps 'blkval ()) ())         ; pblock typed it in scope
                        (? !(two? rest) ()
                           val? [['sexpr (butl items) <>lv (? ty0 ty0 'long)] rest]
                           [['sexpr items () 'void] rest]))))
@@ -1665,7 +1665,41 @@
    (sassert? ts) (two? ts && idv? <ts "_Static_assert")
 
    ; decl := type [dtor [= asn] (, dtor [= asn])*] ;
+   ; a local's __attribute__((cleanup(f))) comes off its tokens before the declaration reads,
+   ; and the block gets ('cln name f id) after it; pcln lays the calls. one declarator only
    (pdecl ps ts)
+    (: cs (clstrip ts)
+       (? !<cs (pdecl0 ps ts)
+          (= <cs 'many) (blame ts "more than one cleanup in one declaration")
+          (: r (pdecl0 ps <>cs)
+             d (? (two? r) <r ())
+             es (? (two? d) <>d ())
+             (? !(two? d) r
+                ; the attribute trails the first declarator's name; in the specifiers of a
+                ; many-declarator declaration it would clean them all
+                !(<d = 'decl && two? es && (one? >es || (<>>cs = <<es)))
+                 (blame <>r "a cleanup wants one automatic variable")
+                (: n (1 + peep ps 'clid 0)
+                   _ (pins ps 'clid n 'clfn 1 'clpend ['cln <<(<>d) <cs n])
+                   r)))))
+   (clat l i) (? !(two? l) () (i = 0) l (clat >l (i - 1)))   ; the tail at token i
+   (clp? l i s) (: t (clat l i) (two? t && tp? <t s))
+   (cli? l i s) (: t (clat l i) (two? t && idv? <t s))
+   (clgrp? l) (cli? l 0 "__attribute__" && clp? l 1 "(" && clp? l 2 "(" &&
+               (cli? l 3 "cleanup" || cli? l 3 "__cleanup__") &&
+               clp? l 4 "(" && idat? (clat l 5) && clp? l 6 ")" && clp? l 7 ")" && clp? l 8 ")")
+   ; over the first declarator, up to its `=` `,` or `;` -> (f-name | () | 'many  tokens
+   ; the-word-before-the-attribute)
+   (clstrip ts)
+    (: (go l d acc f pv)
+        (? !(two? l) [() ts]
+           (d = 0 && (tp? <l ";" || tp? <l "=" || tp? <l ",")) (? f [f (rev acc + l) pv] [() ts])
+           (clgrp? l) (go (clat l 9) d acc (? f 'many (tkv <(clat l 5))) (? (two? acc) (tkv <acc) ()))
+           (tp? <l "(" || tp? <l "[" || tp? <l "{") (go >l (d + 1) (<l . acc) f pv)
+           (tp? <l ")" || tp? <l "]" || tp? <l "}") (go >l (d - 1) (<l . acc) f pv)
+           (go >l d (<l . acc) f pv))
+       (go ts 0 () () ()))
+   (pdecl0 ps ts)
     (: br (pbty ps ts)
        stat (leadstatic? ps ts)                          ; block-scope `static` -> ('sdecl ..), laid in .bss
        ; block-scope `extern` declares the file-scope object -- no slot laid, no local name,
@@ -1901,17 +1935,17 @@
                              (peekp r1 ";") [() >r1]
                              (: r (thenw (pexpr ps r1) ";")
                                 (? (two? r) [['expr <r] <>r] ())))
-                       (? !(two? ri) ()
-                          (: rc (? (peekp <>ri ";") [() ><>ri]
-                                   (thenw (pexpr ps <>ri) ";"))
-                             (? !(two? rc) ()
-                                (: rs (? (peekp <>rc ")") [() ><>rc]
-                                         (thenw (pexpr ps <>rc) ")"))
-                                   (? !(two? rs) ()
-                                      (: rb (parm ps <>rs)
-                                         (? (two? rb)
-                                            [['for <ri <rc <rs <rb] <>rb]
-                                            ()))))))))))
+                       ; a cleanup variable in the init lives across the whole loop: it moves
+                       ; into a block around the for, so a break leaves its scope and a continue does not
+                       cm (clpop ps)
+                       ; the init's names type the rest of the for, as a block's declarations do
+                       fsh (? (two? ri && two? <ri && <<ri = 'decl)
+                              (bindlocs ps (loctypes <ri) (shadowdecl ps (declnames <ri) ())) ())
+                       res (? !(two? ri) ()
+                              cm (: r (pfor ps [() <>ri]) (? (two? r) [['blk [<ri cm <r]] <>r] ()))
+                              (pfor ps ri))
+                       _ (unshadow ps fsh)
+                       res)))
              (tkw? t 'switch)
               (: rc (pparen ps ts)
                  r2 (? (two? rc) <>rc ())
@@ -2044,7 +2078,12 @@
        (? !(two? ts0) (bend ())
           (: (items ts2 acc sh)
               (? !(two? ts2) (: _ (bend sh) ())
-                 (tp? <ts2 "}") (: _ (bend sh) [['blk (rev acc)] >ts2])
+                 ; the last expression's type, read while the block's names still stand (a
+                 ; statement expression's value is typed off it)
+                 (tp? <ts2 "}") (: lv (? (two? acc) <acc ())
+                                   _ (pin ps 'blkval (? (two? lv && <lv = 'expr) (ptype ps <>lv) ()))
+                                   _ (bend sh)
+                                   [['blk (rev acc)] >ts2])
                  (idv? <ts2 "__extension__") (items >ts2 acc sh)
                  (idv? <ts2 "__label__") (items (plabs >ts2) acc sh)
                  (tkw? <ts2 'typedef)
@@ -2053,11 +2092,21 @@
                      (? !(two? r) (: _ (bend sh) ())
                         (items <r acc <>r)))
                  (: r (? (tyat? ps ts2) (pdecl ps ts2) (pstmt ps ts2))
+                    cm (clpop ps)                   ; a cleanup's marker rides after its decl
                     (? !(two? r) (: _ (bend sh) ())
                        ; the enum body parses before the declarators bind, so its entries go
                        ; under theirs -- unshadow walks newest first and the oldest wins
-                       (items <>r (<r . acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (sdrain ps epre sh)))))))
+                       (items <>r ((? cm [cm <r] [<r]) + acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (sdrain ps epre sh)))))))
              (items ts0 () ()))))
+
+   ; a for past its init: ri is (init rest-after-;) -> (('for ..) rest) | ()
+   (pfor ps ri)
+    (: rc (? (peekp <>ri ";") [() ><>ri] (thenw (pexpr ps <>ri) ";"))
+       (? !(two? rc) ()
+          (: rs (? (peekp <>rc ")") [() ><>rc] (thenw (pexpr ps <>rc) ")"))
+             (? !(two? rs) ()
+                (: rb (parm ps <>rs)
+                   (? (two? rb) [['for <ri <rc <rs <rb] <>rb] ()))))))
 
    ; params := void | type '*'* id (, ..)* [, ...]   -> (entries rest variadic?)
    (pparams ps ts acc)
@@ -2131,11 +2180,128 @@
    (pfbody ps name prms ts)
     (: psh (bindlocs ps prms ())
        _ (pin ps 'fnname name)
-       _ (pin ps 'labs {})
+       _ (pins ps 'labs {} 'clfn ())
        b (pblock ps ts)
        _ (pin ps 'fnname ())
        _ (unshadow ps psh)
-       (? (two? b) [['fn name prms <b] <>b] ()))
+       sig (peep (ps 'sigs) name ())
+       b2 (? (two? b && peep ps 'clfn ())
+              (: r (pcln ps <b (? (two? sig) <sig 'int))
+                 (? (= r 'bad) (clblame "a jump into the scope of a cleanup variable") [r <>b]))
+              b)
+       (? (two? b2) [['fn name prms <b2] <>b2] ()))
+
+   ; -- cleanup: the pending marker a declaration left, taken once by the block that holds it
+   (clpop ps) (: m (peep ps 'clpend ()) _ (pin ps 'clpend ()) m)
+   ; a refusal found past the tokens: the sentence files at the deepest point read
+   (clblame msg) (: _ (pins far 'why msg 'wseq (peep far 'seq -1)) ())
+   ; lays f(&v) on every way out of a cleanup variable's scope: a block's end, return (its
+   ; value first held), break and continue to their loop or switch, a goto to a label
+   ; outside, an asm goto through a landing pad. a jump into a scope answers 'bad
+   (clcalls cs) (map (c \ ['expr ['call ['var (c 2)] [['addr ['var (c 1)]]]]]) cs)
+   (clup st stops) (? !(two? st) ()                  ; the live cleanups inside the nearest stop
+                      (two? <st) (<st . clup >st stops)
+                      (elem <st stops) ()
+                      (clup >st stops))
+   (clids st) (map (c \ c 3) (clup st ()))
+   (clbad? x) (= x 'bad)
+   (clmap f l) (? !(two? l) l                      ; map, 'bad if any element answered it
+                  (: h (f <l) t (clmap f >l)
+                     (? (clbad? h || clbad? t) 'bad (h . t))))
+   (cllabs x st t)                                  ; every label -> the cleanup ids live at it
+    (? !(two? x) t
+       (<x = 'lbl) (pin t <>x (clids st))
+       (: (go l st2) (? !(two? l) t
+                        (: e <l
+                           (? (two? e && <e = 'cln) (go >l (['c (e 1) (e 2) (e 3)] . st2))
+                              (: _ (cllabs e st2 t) (go >l st2)))))
+          (go x st)))
+   (pcln ps body rty)
+    (: labt (cllabs body () {})
+       (fresh s) (: n (1 + peep ps 'clid 0) _ (pin ps 'clid n) (s + show n))
+       (wrap cs s) (? (two? cs) ['blk (clcalls cs + [s])] s)
+       ; the cleanups a jump from st to label nm runs, 'bad into a scope, 'none for no such label
+       (leave st nm)
+        (: lt (peep labt nm 'none)
+           (? (= lt 'none) ()
+              (: here (clids st)
+                 (? (any (i \ nelem i here) lt) 'bad
+                    (filter (c \ nelem (c 3) lt) (clup st ()))))))
+       ; a block's items -> (items' live-cleanups) | 'bad
+       (wi items st)
+        (: (go l st2 loc acc)
+            (? !(two? l) [(rev acc) loc st2]
+               (: e <l
+                  (? (two? e && <e = 'cln)
+                      (: c ['c (e 1) (e 2) (e 3)] (go >l (c . st2) (c . loc) acc))
+                     (two? e && elem <e '(case dflt))
+                      (? (two? (clup st2 '(S))) 'bad (go >l st2 loc (e . acc)))
+                     (: e2 (ws e st2) (? (clbad? e2) 'bad (go >l st2 loc (e2 . acc)))))))
+           (go items st () ()))
+       (xw e st)                                    ; an expression: its statement expressions
+        (? !(two? e) e
+           (<e = 'sexpr)
+            (: r (wi (e 1) st)
+               (? (clbad? r) 'bad
+                  (: loc <>r v (xw (e 2) <>>r)
+                     (? (clbad? v) 'bad
+                        !(two? loc) ['sexpr <r v (e 3)]
+                        !(two? v) ['sexpr (<r + clcalls loc) v (e 3)]
+                        (: t (fresh "__cln_val_")
+                           ['sexpr (<r + [['decl [[t (e 3) v]]]] + clcalls loc) ['var t] (e 3)])))))
+           (clmap (x \ xw x st) e))
+       (ws s st)
+        (? !(two? s) s
+           (: k <s
+              (? (k = 'blk)
+                  (: r (wi (s 1) st) (? (clbad? r) 'bad ['blk (<r + clcalls <>r)]))
+                 (k = 'if)
+                  (: c (xw (s 1) st) a (ws (s 2) st) b (? (two? >>>s) (ws (s 3) st) ())
+                     (? (clbad? c || clbad? a || clbad? b) 'bad
+                        (two? >>>s) ['if c a b] ['if c a]))
+                 (k = 'while)
+                  (: c (xw (s 1) st) b (ws (s 2) ('L . st))
+                     (? (clbad? c || clbad? b) 'bad ['while c b]))
+                 (k = 'do)
+                  (: b (ws (s 1) ('L . st)) c (xw (s 2) st)
+                     (? (clbad? c || clbad? b) 'bad ['do b c]))
+                 (k = 'for)
+                  (: i (xw (s 1) st) c (xw (s 2) st) n (xw (s 3) st) b (ws (s 4) ('L . st))
+                     (? (clbad? i || clbad? c || clbad? n || clbad? b) 'bad ['for i c n b]))
+                 (k = 'switch)
+                  (: c (xw (s 1) st) r (wi (s 2) ('S . st))
+                     (? (clbad? c || clbad? r) 'bad ['switch c (<r + clcalls <>r)]))
+                 (k = 'ret)
+                  (: cs (clup st ())
+                     x (xw (s 1) st)
+                     (? (clbad? x) 'bad
+                        !(two? cs) (['ret x] + >>s)
+                        (two? >>s) 'bad                ; a musttail cannot run code after its call
+                        !(two? x) (wrap cs ['ret ()])
+                        (= rty 'void) ['blk ([['expr x]] + clcalls cs + ['(ret ())])]
+                        (: t (fresh "__cln_ret_")
+                           ['blk ([['decl [[t rty x]]]] + clcalls cs + [['ret ['var t]]])])))
+                 (k = 'brk) (wrap (clup st '(L S)) s)
+                 (k = 'cont) (wrap (clup st '(L)) s)
+                 (k = 'goto) (: cs (leave st (s 1)) (? (clbad? cs) 'bad (wrap cs s)))
+                 ; an asm goto's edge to a label outside lands on a pad that runs the cleanups
+                 (k = 'asm && two? (s 5))
+                  (: (go ls nl pads)
+                      (? !(two? ls) [(rev nl) pads]
+                         (: l9 <ls cs (leave st l9)
+                            (? (clbad? cs) 'bad
+                               !(two? cs) (go >ls (l9 . nl) pads)
+                               (: p9 (fresh "__cln_pad_")
+                                  (go >ls (p9 . nl) (pads + [['lbl p9]] + clcalls cs + [['goto l9]]))))))
+                     r (go (s 5) () ())
+                     (? (clbad? r) 'bad
+                        !(two? <>r) s
+                        (: sk (fresh "__cln_pad_")
+                           a2 ([(s 0) (s 1) (s 2) (s 3) (s 4) <r] + >>>>>>s)
+                           ['blk ([a2 ['goto sk]] + <>r + [['lbl sk]])])))
+                 (elem k '(lbl case dflt nop goto asm tdef)) s
+                 (xw s st))))
+       (ws body ()))
    ; a comma-list of `*.. name (params)` prototypes sharing one base type; registers each sig,
    ; answers [rest-after-`;`] | (). each sibling's own stars ride into its sig's return slot --
    ; dropped, `struct ai *ai_strof(..)` reads as a struct-by-value return.
