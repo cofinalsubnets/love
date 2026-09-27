@@ -840,7 +840,7 @@
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
     'objcopy "usage: objcopy -O binary|ihex IN OUT"
     'cat "usage: cat [FILE..]"
-    'tac "usage: tac [FILE..]"
+    'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-n N] [-c N] [-N] [FILE..]"
     'tail "usage: tail [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwc] [FILE..]"
@@ -1192,20 +1192,25 @@ every tool answers --help and --version, and -h where the letter is free
              'chown 'chgrp 'truncate 'shred 'mount 'umount 'clear 'lift]
    ; ..and the readers, safe per call: stdin when bare, and a fifo or a device need not end.
    ; each takes no option word of its own, so a call whose every operand is a regular file
-   ; reads only those; any other word -- an option's argument, a -, nothing at all -- forks.
-   ; each says a line a file. cat, tac and rev say what they read, and in a $( ) the
-   ; shell is the pipe's only reader: one say bigger than the pipe would wait on itself
-   korefiles ['wc 'cksum 'md5sum 'sha1sum 'sha224sum 'sha256sum 'sha384sum
+   ; reads only those; any other word -- an option's argument, a -, nothing at all -- forks
+   korefiles ['cat 'wc 'tac 'rev 'cksum 'md5sum 'sha1sum 'sha224sum 'sha256sum 'sha384sum
               'sha512sum 'sha3sum 'b2sum 'crc32 'sum]
+   (kregs? os) (: (reg? p) (: st (stat p) (two? st && (st 2 & 61440) = 32768))
+                  (two? os && all (p \ !(p = "-") && reg? p) os))
    (kfiles? as)
     (: (ops l) (? !(two? l) () (<l = "--") >l
                   (1 < #<l && <l 0 = 45) (ops >l)
                   (<l . ops >l))
-       os (ops as)
-       (reg? p) (: st (stat p) (two? st && (st 2 & 61440) = 32768))
-       (two? os && all (p \ !(p = "-") && reg? p) os))
+       (kregs? (ops as)))
+   ; ..and the filters whose options carry words: each asks its own parser for its
+   ; operands, so a word an option took is never mistaken for a file
+   korepreds {'head (\ as (: p (uclip-args "head" as) (kregs? <>p)))
+              'tail (\ as (: p (uclip-args "tail" as) (kregs? <>p)))
+              'cut (\ as (: p (cut-args as) (kregs? (p 4))))
+              'grep (\ as (: t (tablet 0) o (grep-opt as t) (two? o && kregs? (grep-fs o))))}
    (koretraits k) (? (elem k korebuiltin) ['builtin 'self] (elem k koreself) ['self]
-                     (elem k korefiles) [('self . kfiles?)] ())
+                     (elem k korefiles) [('self . kfiles?)]
+                     (lit? (peep korepreds k ())) [('self . peep korepreds k ())] ())
    _ (: E (cite 'verbs 'enlist)
         ; kore-main is unbound here -- it binds later in this same form -- so the
         ; closure reads it through the registry at the call, when module 'kore holds

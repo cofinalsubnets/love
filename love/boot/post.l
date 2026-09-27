@@ -2038,7 +2038,8 @@
                       (pin traits k (foldl (\ t x (? (two? x) (pin t <x >x) (pin t x 1))) {} ts)))
    (trait k t) (peep (peep traits k {}) t 0)
    ; ..and the trait asked of one call: a function of the args answers for them
-   (holds k t as) (: v (trait k t) (? (lit? v) (bit (v as)) v))
+   ; a verb's parser may leave on a word it cannot read: that call is not the trait's
+   (holds k t as) (: v (trait k t) (? (lit? v) (trap (\ _ (bit (v as))) () (\ a b 0)) v))
    ; the verb run in the caller as a builtin: urun is the driver, so a leave from deep in
    ; answers a status and never ends the caller. () when no verb has the name
    (call k as) (: f (get k) (? (lit? f) (urun f as) ()))
