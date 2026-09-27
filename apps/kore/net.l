@@ -28,8 +28,9 @@
 ;
 ; ping sends an icmp echo every -i seconds (1), -c times or until ^C, and prints each
 ; reply's round trip and ttl, then the loss and min/avg/max. it rides linux's unprivileged
-; echo socket, open to the groups in net.ipv4.ping_group_range; where that refuses, it
-; says so. no reply at all is exit 1, as busybox's.
+; echo socket, open to the groups in net.ipv4.ping_group_range, or else a raw one, which is
+; root's (the bsds have only that); where both refuse, it says so. no reply at all is exit
+; 1, as busybox's.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -222,8 +223,8 @@
        ip ((D 'dns-show) <ad)
        p (bind ['icmp 'ttl])
        _ (? (nom? p)
-            (udie 2 ("ping: no icmp echo socket here (" + show p + "); on linux it wants your group"
-                     + " in net.ipv4.ping_group_range")) 0)
+            (udie 2 ("ping: no icmp echo socket here (" + show p + "); it wants root, or on linux"
+                     + " your group in net.ipv4.ping_group_range")) 0)
        _ (: _ (say out ("PING " + host + " (" + ip + "): " + show size + " data bytes\n")) (flush out))
        st {'sent 0 'got 0 'min () 'max 0 'sum 0}
        at (tablet 0)                                   ; seq -> the nclock it went at
@@ -238,12 +239,13 @@
            _ (? (nil? t0) 0
                 (: rt (nclock t0)
                    _ (pull at n ())
-                   _ (pins st 'got (st 'got + 1) 'sum (st 'sum + rt) 'max (max rt (st 'max))
-                           'min (? (nil? (st 'min)) rt (min rt (st 'min))))
-                   (? quiet 0
-                      (: _ (say out (show #b + " bytes from " + ip + ": seq=" + show n
-                                     + (? (two? >>d) (" ttl=" + show (d 2)) "") + " time=" + ping-t rt + " ms\n"))
-                         (flush out)))))
+                   _ (? quiet 0
+                        (: _ (say out (show #b + " bytes from " + ip + ": seq=" + show n
+                                       + (? (two? >>d) (" ttl=" + show (d 2)) "") + " time=" + ping-t rt + " ms\n"))
+                           (flush out)))
+                   ; 'got last: its count is what ends the wait for the last reply
+                   (pins st 'sum (st 'sum + rt) 'max (max rt (st 'max))
+                         'min (? (nil? (st 'min)) rt (min rt (st 'min))) 'got (st 'got + 1))))
            (rx 0))
        r (twirl rx 0)
        ; the summary, then out: 0 when anything came back
