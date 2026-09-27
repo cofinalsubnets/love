@@ -678,28 +678,66 @@
           (op = "-ot") (? !(two? y) 0 !(two? x) 1 (at x < at y))
           'no))
    (t-not v) (? (= v 'no) 'no !v)
+   t-uops (["-z" "-n" "-t" "-O" "-G"] + t-fops)
+   t-bops (["=" "!=" "==" "<" ">" "-a" "-o" "-ef" "-nt" "-ot"] + t-nops)
+   (t-un op p)                                 ; a unary primary: a bit, or 'no
+    (: r (t-file op p)
+       (? !(= r 'no) r
+          (op = "-z") (0 = tally p)
+          (op = "-n") (0 < tally p)
+          (op = "-t") (: k (t-int p) (? (two? k) (two? (tty <>k)) 'no))
+          (elem op '("-O" "-G")) (: s (stat p)
+                                    (? !(two? s) 0
+                                       (op = "-O") (s 4 = getuid 0)
+                                       (s 5 = getgid 0)))
+          'no))
+   (t-bin a op b)                              ; a binary primary: a bit, or 'no
+    (? (op = "=" || op = "==") (a = b)
+       (op = "!=") !(a = b)
+       (op = "<") (a < b)
+       (op = ">") (b < a)
+       (op = "-a") (0 < tally a && 0 < tally b)
+       (op = "-o") (0 < tally a || 0 < tally b)
+       (elem op '("-ef" "-nt" "-ot")) (t-rel a op b)
+       !(elem op t-nops) 'no
+       (: x (t-int a) y (t-int b)
+          (? (!(two? x) || !(two? y)) 'no
+             (: p <>x q <>y
+                (? (op = "-eq") (p = q) (op = "-ne") !(p = q)
+                   (op = "-lt") (p < q)  (op = "-le") (p <= q)
+                   (op = "-gt") (q < p)  (q <= p))))))
+   ; past four words, the grammar: -o over -a over ! and ( ), each answering
+   ; (bit . the words left) or 'no
+   (t-prim l)
+    (? !(two? l) 'no
+       (<l = "!") (: r (t-prim >l) (? (= r 'no) 'no (!<r . >r)))
+       (<l = "(") (: r (t-or >l) (? (= r 'no) 'no (two? >r && <>r = ")") (<r . >>r) 'no))
+       (two? >>l && elem <>l t-bops && !(<>l = "-a" || <>l = "-o"))
+        (: v (t-bin <l <>l <>>l) (? (= v 'no) 'no (v . >>>l)))
+       (two? >l && elem <l t-uops) (: v (t-un <l <>l) (? (= v 'no) 'no (v . >>l)))
+       ((0 < tally <l) . >l))
+   (t-andr r) (? (= r 'no) 'no
+                 (two? >r && <>r = "-a")
+                  (: s (t-prim >>r) (? (= s 'no) 'no (t-andr ((? <r <s 0) . >s))))
+                 r)
+   (t-orr r) (? (= r 'no) 'no
+                (two? >r && <>r = "-o")
+                 (: s (t-andr (t-prim >>r)) (? (= s 'no) 'no (t-orr ((? <r 1 <s) . >s))))
+                r)
+   (t-or l) (t-orr (t-andr (t-prim l)))
    (t-eval as)                                 ; a bit, or 'no for a malformed expression
     (: n (tally as)
+       ; POSIX decides up to four words by their count, then the grammar takes over
        (? (0 = n) 0
-          ((1 < n) && (<as = "!")) (t-not (t-eval >as))
           (1 = n) (0 < tally <as)
-          (2 = n) (: op <as p <>as r (t-file op p)
-                     (? !(= r 'no) r
-                        (op = "-z") (0 = tally p)
-                        (op = "-n") (0 < tally p)
-                        'no))
-          (3 = n) (: a <as op <>as b <>>as
-                     (? (op = "=") (a = b)
-                        (op = "!=") !(a = b)
-                        (elem op '("-ef" "-nt" "-ot")) (t-rel a op b)
-                        !(elem op t-nops) 'no
-                        (: x (t-int a) y (t-int b)
-                           (? (!(two? x) || !(two? y)) 'no
-                              (: p <>x q <>y
-                                 (? (op = "-eq") (p = q) (op = "-ne") !(p = q)
-                                    (op = "-lt") (p < q)  (op = "-le") (p <= q)
-                                    (op = "-gt") (q < p)  (q <= p)))))))
-          'no))
+          (2 = n) (? (<as = "!") (0 = tally <>as) (t-un <as <>as))
+          (3 = n) (? (elem <>as t-bops) (t-bin <as <>as <>>as)
+                     (<as = "!") (t-not (t-eval >as))
+                     (<as = "(" && <>>as = ")") (0 < tally <>as)
+                     'no)
+          (4 = n && <as = "!") (t-not (t-eval >as))
+          (4 = n && <as = "(" && as 3 = ")") (t-eval [<>as <>>as])
+          (: r (t-or as) (? (= r 'no) 'no (two? >r) 'no <r))))
    (test-main as) (: v (t-eval as)
                      (? (= v 'no) (udie 2 "test: bad expression") (? v 0 1)))
    (t-clip l) (? !(two? >l) () (<l . t-clip >l))    ; every element but the last

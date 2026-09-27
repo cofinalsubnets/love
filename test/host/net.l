@@ -90,6 +90,68 @@
    _ (test (0 <= (K 'wg-find) (slurp >r3) "telnet: not a port: http" 0) (<(waitfor <r3) = 2))
    0)
 
+; -- nslookup and ping --------------------------------------------------------------------
+; nslookup against a nameserver that is a process of its own (the pty read holds this one):
+; four queries, box.test's a and aaaa -- one address, then an empty yes -- and nosuch.test's
+; two, both NXDOMAIN. it tells them apart by the first letter of the name and finds the
+; type just past it. ping sends two echoes to loopback, where the kernel lets it, and again
+; in a fresh user and network namespace: there ping_group_range shuts the echo socket and
+; the namespace's root may open a raw one, the socket the bsds ping through.
+(: K (cite 'kore)
+   love <cmdline
+   dir "out/.nettest"
+   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
+   nfile (dir + "/ns.l")
+   _ (: p (open nfile "w")
+        _ (say p "(borrow 'posix)
+(borrow 'dns)
+(: p (bind ['udp 7441])
+   (b16 v) (dns-be16 v)
+   (one _) (: d (recv p) q <>d
+              nx (q 13 = 110) e (? nx 25 22) t (q e * 256 + q (e + 1))
+              a (? (!nx && t = 1) [(string 192 + string 12 + b16 1 + b16 1 + b16 0 + b16 60 + b16 4
+                                    + string 10 + string 1 + string 2 + string 3)] ())
+              r (snip q 0 2 + b16 (? nx 33155 33152) + b16 1 + b16 #a + b16 0 + b16 0
+                 + snip q 12 (e + 4) + catmap (x \\ x) a)
+              _ (send p <d r) 0)
+   _ (map one ^4)
+   _ (rest 50)
+   0)
+")
+        (close p))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (run args) (: r (tether (love . "kore" . args)) t (slurp >r) [t <(waitfor <r)])
+   (has? t s) (0 <= (K 'wg-find) t s 0)
+   srv (tether [love nfile])
+   _ (rest 300)                                   ; its bind, before our queries
+   a (run ["nslookup" "-port=7441" "box.test" "127.0.0.1"])
+   b (run ["nslookup" "-port=7441" "nosuch.test" "127.0.0.1"])
+   _ (slurp >srv) _ (waitfor <srv)
+   c (run ["nslookup" "-type=bogus" "box.test"])
+   _ (test (has? <a "Address:\t127.0.0.1:7441") (has? <a "Name:\tbox.test") (has? <a "Address: 10.1.2.3")
+           !(has? <a "can't find") (a 1 = 0)
+           (has? <b "** server can't find nosuch.test: NXDOMAIN") (b 1 = 1)
+           (has? <c "nslookup: unknown option -type=bogus") (c 1 = 2))
+   ; ping: two echoes and the summary, or the socket refused and said so
+   g (run ["ping" "-c" "2" "-i" "0.2" "127.0.0.1"])
+   _ (? (has? <g "no icmp echo socket") (test (g 1 = 2))
+        (test (has? <g "PING 127.0.0.1 (127.0.0.1): 56 data bytes") (has? <g "64 bytes from 127.0.0.1: seq=1 ttl=")
+              (has? <g "2 packets transmitted, 2 packets received, 0% packet loss")
+              (has? <g "round-trip min/avg/max = ") (g 1 = 0)))
+   ; the raw socket, where unshare and ip are there to make the namespace (99 when not)
+   rw (: r (tether ["/bin/sh" "-c" ("unshare -rn sh -c 'ip link set lo up' 2>/dev/null || exit 99; "
+                                   + "exec unshare -rn sh -c 'ip link set lo up && exec " + love
+                                   + " kore ping -c 2 -i 0.2 127.0.0.1'")])
+           t (slurp >r) [t <(waitfor <r)])
+   _ (? (rw 1 = 99) 0
+        (test (has? <rw "64 bytes from 127.0.0.1: seq=1 ttl=")
+              (has? <rw "2 packets transmitted, 2 packets received, 0% packet loss") (rw 1 = 0)))
+   h (run ["ping" "-c" "x" "127.0.0.1"])
+   ; -i and -W read seconds with up to three places; a time prints as ms to three
+   (test (has? <h "ping: bad -c x") (h 1 = 2)
+         ((K 'ping-ms) "1" = 1000) ((K 'ping-ms) "0.2" = 200) ((K 'ping-ms) "2.5" = 2500)
+         ((K 'ping-ms) "x" = ()) ((K 'ping-t) 84000 = "0.084") ((K 'ping-t) 11331000 = "11.331")))
+
 ; -- httpd -------------------------------------------------------------------------------
 (: K (cite 'kore)
    love <cmdline

@@ -1289,7 +1289,7 @@ static intptr_t ai_saturate(word x) {
 
 lvm(lvm_saturate) {
  if (coinp(Sp[0])) { g->b = (word) KnCeil; ai_musttail return Ap(lvm_coin_rung, g); }
- if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
+ if (__builtin_expect(!ai_leafp(Sp[0]), 0)) ai_musttail return Ap(lvm_measure, g);
  Sp[0] = putcharm(ai_saturate(Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
 // (ceil x): ceil (re (net x)), clamped to a charm -- a net past the charm range answers the
@@ -1304,7 +1304,7 @@ static intptr_t ai_ceilnet(word x) {
 
 lvm(lvm_ceil) {
  if (coinp(Sp[0])) { g->b = (word) KnCeil; ai_musttail return Ap(lvm_coin_rung, g); }
- if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
+ if (__builtin_expect(!ai_leafp(Sp[0]), 0)) ai_musttail return Ap(lvm_measure, g);
  Sp[0] = putcharm(ai_ceilnet(Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
 // === ordered comparison: the true-blue total order over all values ===========
@@ -1480,7 +1480,7 @@ lvm(lvm_sort) {
 // 0 as it is, 1 negated (<= and >= ask the other way round), 2 the extreme (max and min:
 // a on a true answer, else b). [x f y land code ret] lies over the operands, which stay
 static lvm(lvm_coin_cmp_land) {
- if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);   // a compound answer: measured, then here again
+ if (__builtin_expect(!ai_leafp(Sp[0]), 0)) ai_musttail return Ap(lvm_measure, g);   // a compound answer: measured, then here again
  bool t = !leaf_nilp(Sp[0]); intptr_t code = getcharm(Sp[1]);
  Ip = cell(Sp[2]);
  Sp += 3;                                                    // [ans code ret a b] -> [a b]

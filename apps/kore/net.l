@@ -1,7 +1,10 @@
-; apps/kore/net.l -- telnet and httpd: two network tools over doors the tree already has.
+; apps/kore/net.l -- telnet, httpd, nslookup and ping: network tools over doors the tree
+; already has (inle/sock.c's connect/listen/bind, apps/dns.l, kiosko).
 ;
 ;   telnet HOST [PORT]                a remote terminal over tcp, port 23 by default
 ;   httpd [-fv] [-p PORT] [-h DIR]    kiosko under busybox's name and flags
+;   nslookup [-type=T] HOST [SERVER]  a name's records, asked of a nameserver directly
+;   ping [-q] [-c N] [-i S] [-W S] [-s N] HOST    icmp echoes and their round trips
 ;
 ; telnet is nc (apps/ain.l) with the protocol's options answered (RFC 854, 855): it lets the
 ; server echo and suppress go-ahead, offers to suppress go-ahead itself, refuses every other
@@ -16,6 +19,18 @@
 ; -h DIR (. by default), -v logs each request, and -f is taken and always true -- it never
 ; detaches. kiosko listens on every address, so -p IP:PORT is refused rather than half
 ; obeyed, and so is the rest of busybox's set (-c -u -r -m -e -d -i), by name.
+;
+; nslookup asks the first nameserver in /etc/resolv.conf that answers (or SERVER, a quad or
+; a name, on -port or 53), with no hosts file and no search domains -- what it says, as busybox's
+; nslookup prints it. with no -type it asks A and AAAA; a dotted quad asks its PTR. the
+; query offers EDNS0's 1232 bytes, so a long answer arrives whole; one that still does not
+; fit is said to be cut. a name that does not exist is exit 1.
+;
+; ping sends an icmp echo every -i seconds (1), -c times or until ^C, and prints each
+; reply's round trip and ttl, then the loss and min/avg/max. it rides linux's unprivileged
+; echo socket, open to the groups in net.ipv4.ping_group_range, or else a raw one, which is
+; root's (the bsds have only that); where both refuse, it says so. no reply at all is exit
+; 1, as busybox's.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -23,6 +38,10 @@
 (:
    tn-usage "usage: telnet HOST [PORT]"
    httpd-usage "usage: httpd [-fv] [-p PORT] [-h DIR]"
+   ns-usage "usage: nslookup [-type=A|AAAA|CNAME|MX|NS|PTR|SOA|TXT] [-port=N] HOST [SERVER]"
+   ping-usage "usage: ping [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
+   ns-types '(("a" 1) ("aaaa" 28) ("cname" 5) ("mx" 15) ("ns" 2) ("ptr" 12) ("soa" 6) ("txt" 16))
+   ns-rcodes '((1 "FORMERR") (2 "SERVFAIL") (3 "NXDOMAIN") (4 "NOTIMP") (5 "REFUSED"))
 
    ; -- telnet: the option talk -------------------------------------------------------
    ; the state of one connection: 'm is where the next byte falls -- 0 data, 1 past IAC,
@@ -101,6 +120,160 @@
               (c = 29) (: _ (? tty? (raw 0) 0) _ (say err "\nConnection closed.\n") _ (close s) 0)
               (: _ (say s (tn-send c (st 'raw))) _ (flush s) (up 0))))
        (up 0))
+
+   ; -- nslookup -----------------------------------------------------------------------
+   (ns-assoc k l) ((: (g l) (? (one? l) () (<<l = k) <><l (g >l))) l)
+   ; a record as busybox's nslookup lays it
+   (ns-line x)
+    (: nm <x t (x 1) v (x 2)
+       (? (t = 1 || t = 28) ("Name:\t" + nm + "\nAddress: " + v)
+          (t = 5) (nm + "\tcanonical name = " + v)
+          (t = 2) (nm + "\tnameserver = " + v)
+          (t = 15) (nm + "\tmail exchanger = " + v)
+          (t = 16) (nm + "\ttext = " + v)
+          (t = 12) (nm + "\tname = " + v)
+          (t = 6) (nm + v)
+          (nm + "\t" + v)))
+   ; a dotted quad's reverse name, in-addr.arpa's
+   (ns-rev q) (: a (<((cite 'dns 'dns-quad) q)) (o k) (show (a >> k & 255))
+                 (o 0 + "." + o 8 + "." + o 16 + "." + o 24 + ".in-addr.arpa"))
+   (nslookup-main as)
+    (: D (cite 'dns)
+       fl (filter (w \ 1 < #w && w 0 = 45) as)
+       ops (filter (w \ !(1 < #w && w 0 = 45)) as)
+       _ (? (0 < #ops < 3) 0 (udie 2 ns-usage))
+       ; -type=T (or -query=T) and -port=N, each NAME=VALUE; anything else is refused by name
+       (bad w) (udie 2 ("nslookup: unknown option " + w + "\n" + ns-usage))
+       kvs (map (w \ (: k ((: (g i) (? (#w <= i) -1 (w i = 61) i (g (i + 1)))) 0)
+                        (? (k < 0) (bad w) [(snip w 1 k) (snip w (k + 1) #w) w])))
+                fl)
+       tys (map (x \ (: t (ns-assoc (wg-lower (x 1)) ns-types) (? (nil? t) (bad (x 2)) t)))
+                (filter (x \ <x = "type" || <x = "query") kvs))
+       port (: ps (filter (x \ <x = "port") kvs)
+               (? (one? ps) 53 (: n (unum ((last ps) 1)) (? (charm? n && 0 < n < 65536) n (bad ((last ps) 2))))))
+       _ (map (x \ ? (elem <x '("type" "query" "port")) 0 (bad (x 2))) kvs)
+       host <ops
+       quad? (two? ((D 'dns-quad) host))
+       ; what is asked: the flag's type, else a quad's PTR, else A and AAAA
+       ask (? (two? tys) [(last tys)] quad? [12] [1 28])
+       qname (? (quad? && elem 12 ask) (ns-rev host) host)
+       ; the servers: SERVER as a quad or a name, else resolv.conf's in order
+       sv (? (two? >ops)
+              (: a (? (two? ((D 'dns-quad) <>ops)) ((D 'dns-quad) <>ops) ((D 'resolve) <>ops))
+                 (? (two? a) [(<a . port)] (udie 1 ("nslookup: can't resolve server " + <>ops))))
+              (map (s \ <s . port) ((D 'dns-servers) "/etc/resolv.conf")))
+       ; one type asked of the servers in turn -> [server records-answer], or () from none
+       (one t l) (? (one? l) ()
+                    (: id (clock 0 & 65535) s <l
+                       r ((D 'dns-raw) <s >s ((D 'dns-qedns) id qname t) 2500)
+                       (? (string? r) [s ((D 'dns-records) r id)] (one t >l))))
+       rs (map (t \ one t sv) ask)
+       got (filter two? rs)
+       _ (? (one? got) (udie 1 ";; connection timed out; no servers could be reached") 0)
+       s <(<got)
+       _ (say out ("Server:\t\t" + (D 'dns-show) <s + "\nAddress:\t" + (D 'dns-show) <s + ":" + show >s + "\n\n"))
+       ; each type's answer: its records under the heading, or the server's no
+       (show1 a)
+        (? (a = 'torn) (: _ (say out ("*** the answer for " + qname + " did not fit and was cut\n\n")) 0)
+           (one? a) 0
+           (: rc <a
+              (? (0 < rc) (: _ (say out ("** server can't find " + qname + ": "
+                                          + (: m (ns-assoc rc ns-rcodes) (? (string? m) m ("rcode " + show rc))) + "\n\n")) 1)
+                 (one? (a 2)) 0
+                 (: _ (? (a 1) 0 (say out "Non-authoritative answer:\n"))
+                    _ (map (x \ say out (ns-line x + "\n")) (a 2))
+                    _ (say out "\n")
+                    2))))
+       marks (map (r \ ? (two? r) (show1 (r 1)) 0) rs)
+       _ (flush out)
+       (? (elem 2 marks) 0
+          (elem 1 marks) 1
+          (: _ (say out ("*** Can't find " + qname + ": No answer\n\n")) _ (flush out) 0)))
+
+   ; -- ping ---------------------------------------------------------------------------
+   ; "1", "0.2", "2.5" seconds -> ms, or () for anything else
+   (ping-ms s)
+    (: k ((: (g i) (? (#s <= i) -1 (s i = 46) i (g (i + 1)))) 0)
+       w (unum (? (k < 0) s (snip s 0 k)))
+       f (? (k < 0) "" (snip s (k + 1) #s))
+       fr (? (#f = 0) 0 (: v (unum (snip (f + "000") 0 3)) (? (charm? v) v ())))
+       (? (charm? w && charm? fr && (k != 0 || 0 < #f)) (w * 1000 + fr) ()))
+   ; ns -> "m.mmm", the ms busybox prints
+   (ping-t ns) (: us (ns // 1000) f (show (us % 1000))
+                  (show (us // 1000) + "." + snip ("00" + f) (#f - 1) (#f + 2)))
+   (ping-main as)
+    (: t (tablet 0)
+       o (uopt as t '(99 105 87 115) () ())
+       _ (? (two? o) 0 (udie 2 ping-usage))
+       _ (: u (uoptun t '(99 105 87 115 113)) (? (nil? u) 0 (udie 2 ("ping: unknown option -" + string u + "\n" + ping-usage))))
+       ops (o 2)
+       _ (? (two? ops && one? >ops) 0 (udie 2 ping-usage))
+       (num c d lo) (: v (uoptv t c)
+                       (? (nil? v) d (: n (unum v) (? (charm? n && lo <= n) n (udie 2 ("ping: bad -" + string c + " " + v))))))
+       count (num 99 () 1)
+       size (num 115 56 0)
+       _ (? (size <= 1464) 0 (udie 2 "ping: -s is at most 1464, one datagram"))
+       ms (: v (uoptv t 105) (? (nil? v) 1000 (: m (ping-ms v) (? (charm? m && 0 < m) m (udie 2 ("ping: bad -i " + v))))))
+       wait (: v (uoptv t 87) (? (nil? v) 10000 (: m (ping-ms v) (? (charm? m) m (udie 2 ("ping: bad -W " + v))))))
+       quiet (peep t 113 0)
+       host <ops
+       D (cite 'dns)
+       ad (? (two? ((D 'dns-quad) host)) ((D 'dns-quad) host) ((D 'resolve) host))
+       _ (? (two? ad) 0 (udie 1 ("ping: bad address '" + host + "'")))
+       ip ((D 'dns-show) <ad)
+       p (bind ['icmp 'ttl])
+       _ (? (nom? p)
+            (udie 2 ("ping: no icmp echo socket here (" + show p + "); it wants root, or on linux"
+                     + " your group in net.ipv4.ping_group_range")) 0)
+       _ (: _ (say out ("PING " + host + " (" + ip + "): " + show size + " data bytes\n")) (flush out))
+       st {'sent 0 'got 0 'min () 'max 0 'sum 0}
+       at (tablet 0)                                   ; seq -> the nclock it went at
+       (pkt n) (string 8 + string 0 + "\x00\x00\x00\x00" + string (n >> 8 & 255) + string (n & 255)
+                + catmap (i \ string (i & 255)) ^size)
+       ; the replies, as they come: each seq once, its round trip off its send time
+       (rx _)
+        (: d (recv p)
+           b <>d
+           n (? (8 <= #b && b 0 = 0) (b 6 * 256 + b 7) -1)
+           t0 (peep at n ())
+           _ (? (nil? t0) 0
+                (: rt (nclock t0)
+                   _ (pull at n ())
+                   _ (? quiet 0
+                        (: _ (say out (show #b + " bytes from " + ip + ": seq=" + show n
+                                       + (? (two? >>d) (" ttl=" + show (d 2)) "") + " time=" + ping-t rt + " ms\n"))
+                           (flush out)))
+                   ; 'got last: its count is what ends the wait for the last reply
+                   (pins st 'sum (st 'sum + rt) 'max (max rt (st 'max))
+                         'min (? (nil? (st 'min)) rt (min rt (st 'min))) 'got (st 'got + 1))))
+           (rx 0))
+       r (twirl rx 0)
+       ; the summary, then out: 0 when anything came back
+       (fin _)
+        (: sn (st 'sent) gt (st 'got)
+           _ (freeze r) _ (close p)
+           _ (say out ("\n--- " + host + " ping statistics ---\n" + show sn + " packets transmitted, "
+                       + show gt + " packets received, " + show (? (0 < sn) ((sn - gt) * 100 // sn) 0)
+                       + "% packet loss\n"
+                       + (? (0 < gt) ("round-trip min/avg/max = " + ping-t (st 'min) + "/"
+                                      + ping-t (st 'sum // gt) + "/" + ping-t (st 'max) + " ms\n") "")))
+           _ (flush out)
+           (quit (? (0 < gt) 0 1)))
+       ; ^C ends it with the summary, as ping's own does
+       sg (sigfd [2])
+       _ (? (hot? sg) (twirl (\ _ (: _ (await sg) _ (sigtake sg) (fin 0))) 0) 0)
+       (tx n)
+        (? (charm? count && count <= n) 0
+           (: _ (pin at (n & 65535) (nclock 0))
+              _ (send p [ip 0] (pkt (n & 65535)))
+              _ (pin st 'sent (st 'sent + 1))
+              _ (? (charm? count && count <= n + 1) 0 (rest ms))
+              (tx (n + 1))))
+       _ (tx 0)
+       ; the last echoes get up to -W to come home
+       t1 (clock 0)
+       _ ((: (g _) (? (st 'got < st 'sent && clock 0 - t1 < wait) (: _ (rest 10) (g 0)) 0)) 0)
+       (fin 0))
 
    ; -- httpd --------------------------------------------------------------------------
    ; busybox's flags onto kiosko's serve. the value flags it does not have are still read

@@ -69,7 +69,7 @@
    (lux-sweep own)
     (: dir (lux-rundir ())
        (sockish? n) (snip n 0 4 = "lux-" && snip n (#n - 5) #n = ".sock")
-       (dead? p) (connectu p @ c (hot? c ? (close c, 0) 1))
+       (dead? p) (connect ['unix p] @ c (hot? c ? (close c, 0) 1))
        (go ns acc) (? !(two? ns) acc
                     (: p (dir + ("/" + <ns))
                      (p != own && dead? p ? (unlink p, go >ns (p . acc))
@@ -116,7 +116,7 @@
     (: gone (lux-sweep path)
        _ (two? gone ? (say out ("lux: swept " + (show #gone + " stale socket(s)\n")),
                        flush out))
-       lp (shore path)
+       lp (listen ['unix path])
        (? !(lit? lp) (say out ("lux: no moor at " + (path + "\n")), flush out)
           (: _ (say out ("lux: moored at " + (path + "\n")))
              _ (flush out)

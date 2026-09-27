@@ -33,7 +33,8 @@
 ; wire-format pieces test/host/dns.l drives directly, a protocol being unit-tested.
 (module (dns dial resolve dns-show
          dns-answers dns-ask dns-be16 dns-conf dns-query dns-servers
-         dns-hosts dns-labels resolve-in)
+         dns-hosts dns-labels resolve-in dns-quad
+         dns-qtype dns-qedns dns-raw dns-name dns-records dns-v6)
 (borrow 'posix)
 (:
    ; --- files, lines, words ----------------------------------------------------
@@ -93,12 +94,20 @@
                           (string? r && string l + snip h i j + r)))))
        (0 < n && go 0))
 
-   ; the query packet: header (RD set, one question), the name, QTYPE A QCLASS in.
-   (dns-query id h)
+   ; the query packet: header (RD set, one question), the name, the QTYPE, QCLASS in.
+   ; a resolver asks for A (1); nslookup asks for whatever it was told
+   (dns-qtype id h t)
     (: q (dns-labels h)
        (string? q &&
         (dns-be16 id + dns-be16 256 + dns-be16 1 + dns-be16 0
-         + dns-be16 0 + dns-be16 0 + q + dns-be16 1 + dns-be16 1)))
+         + dns-be16 0 + dns-be16 0 + q + dns-be16 t + dns-be16 1)))
+   (dns-query id h) (dns-qtype id h 1)
+   ; ..and with an EDNS0 OPT record (RFC 6891) offering 1232 bytes, the size that crosses
+   ; any path unfragmented, so a long answer -- a txt set -- is not cut at udp's 512
+   (dns-qedns id h t)
+    (: q (dns-qtype id h t)
+       (string? q && (snip q 0 10 + dns-be16 1 + snip q 12 #q
+                      + string 0 + dns-be16 41 + dns-be16 1232 + dns-be16 0 + dns-be16 0 + dns-be16 0)))
 
    ; skip a name at `pos` -> the position after it, or -1. a compression pointer ends
    ; the name: its top two bits are set and it is two bytes wide, so a walk that
@@ -133,23 +142,97 @@
              (? (p0 < 0) () (go (dns-hi r 6) (p0 + 4))))))
 
    ; --- one question to one nameserver ------------------------------------------
-   ; -> the addresses, () on no answer within `ms`. the three-task park is the
-   ; header note: receiver on the socket, watchdog on the clock, caller in catch.
-   ; the server is named by address and port: resolv.conf has no port syntax and
-   ; every line it yields means 53, but a stub on another port is a real thing to
-   ; want and the walk carries the pair either way.
+   ; a packet to a server -> its answer's bytes, () on none within `ms`. the three-task
+   ; park is the header note: receiver on the socket, watchdog on the clock, caller in
+   ; catch. the server is named by address and port: resolv.conf has no port syntax and
+   ; every line it yields means 53, but a stub on another port is a real thing to want
+   ; and the walk carries the pair either way.
+   (dns-raw ns port q ms)
+    (bind ['udp 0] @ (p && hot? p)
+     (: _ (send p [(dns-show ns) port] q)
+        r (twirl (_ \ (recv p)) ())
+        w (twirl (_ \ (rest ms, freeze r)) ())
+        d (catch r)
+      (freeze w,
+       close p,
+       two? d ? <>d)))
+   ; -> the addresses, () on no answer
    (dns-ask ns port h ms)
-    (udp-bind 0 @ (p && hot? p)
-     (: id (clock 0 & 65535)
-        q (dns-query id h)
-      (? !(string? q) (close p, ())
-       (udp-send p (ns * 65536 + port) q,
-        (: r (twirl (_ \ (udp-recv p)) ())
-           w (twirl (_ \ (rest ms, freeze r)) ())
-           d (catch r)
-         (freeze w,
-          close p,
-          two? d ? (dns-answers >d id)))))))
+    (: id (clock 0 & 65535)
+       q (dns-query id h)
+       r (? (string? q) (dns-raw ns port q ms) ())
+       (? (string? r) (dns-answers r id) ()))
+
+   ; --- a whole answer, for a person to read ---------------------------------------
+   ; a name at pos, compression pointers followed -> [the dotted name, the position just
+   ; past it where it was written], or () for one that runs off the packet or loops
+   (dns-name r pos)
+    (: n #r
+       (dots l) (? (one? l) "." !(two? >l) <l (<l + "." + dots >l))
+       (go p acc hops after)
+        (? (n <= p || 64 < hops) ()
+           (: l (r p)
+              (? (l = 0) [(dots (rev acc)) (? (after < 0) (p + 1) after)]
+                 (l & 192 = 192)
+                  (? (n <= p + 1) ()
+                     (go ((l & 63) * 256 + r (p + 1)) acc (hops + 1) (? (after < 0) (p + 2) after)))
+                 (n < p + 1 + l) ()
+                 (go (p + 1 + l) (snip r (p + 1) (p + 1 + l) . acc) hops after))))
+       (go pos () 0 -1))
+   ; sixteen bytes at q -> the ipv6 address as RFC 5952 writes it: each group in lower
+   ; hex without its leading zeros, and the longest run of two or more zero groups as ::
+   (dns-v6 r q)
+    (: gs (map (i \ dns-hi r (q + 2 * i)) ^8)
+       hx "0123456789abcdef"
+       (h4 v) (? (v < 16) (string (hx v)) (h4 (v // 16) + string (hx (v % 16))))
+       (cat l) (? (one? l) "" !(two? >l) <l (<l + ":" + cat >l))
+       (zrun i st k best)
+        (? (8 <= i) (? (<>best < k) [st k] best)
+           (gs i = 0) (zrun (i + 1) (? (k = 0) i st) (k + 1) best)
+           (zrun (i + 1) 0 0 (? (<>best < k) [st k] best)))
+       b (zrun 0 0 0 [0 0])
+       st <b ln <>b
+       (? (ln < 2) (cat (map h4 gs))
+          (cat (map (i \ h4 (gs i)) ^st) + "::" + cat (map (i \ h4 (gs (st + ln + i))) ^(8 - st - ln)))))
+   ; a txt record's strings, each quoted, from q to e
+   (dns-txt r q e)
+    (? (e <= q) ""
+       (: l (r q) t (dns-txt r (q + 1 + l) e)
+          ("\"" + snip r (q + 1) (min e (q + 1 + l)) + "\"" + (? #t (" " + t) ""))))
+   ; a soa record's seven fields, a line each, as nslookup lays them under the name
+   (dns-soa r q)
+    (: a (dns-name r q) b (? (two? a) (dns-name r (a 1)) ())
+       (? !(two? b) " ?"
+          (: p (b 1)
+             (u k) (dns-hi r (p + 4 * k) * 65536 + dns-hi r (p + 4 * k + 2))
+             ("\n\torigin = " + <a + "\n\tmail addr = " + <b + "\n\tserial = " + show (u 0)
+              + "\n\trefresh = " + show (u 1) + "\n\tretry = " + show (u 2)
+              + "\n\texpire = " + show (u 3) + "\n\tminimum = " + show (u 4)))))
+   ; a response -> [rcode authoritative? records], a record [name type text] in the server's
+   ; order, its data written as nslookup shows it; 'torn when TC says the answer did not
+   ; fit, () when it answers some other question
+   (dns-records r id)
+    (: n #r
+       (name-at q) (: m (dns-name r q) (? (two? m) <m "?"))
+       (rd t q l)
+        (? (t = 1 && l = 4) (dns-show (dns-hi r q * 65536 + dns-hi r (q + 2)))
+           (t = 28 && l = 16) (dns-v6 r q)
+           (elem t '(2 5 12)) (name-at q)
+           (t = 15) (show (dns-hi r q) + " " + name-at (q + 2))
+           (t = 16) (dns-txt r q (q + l))
+           (t = 6) (dns-soa r q)
+           ("type " + show t + ", " + show l + " bytes"))
+       (go k pos acc)
+        (: m (? (k < 1) () (dns-name r pos))
+           p (? (two? m) <>m n)
+           (? (n < p + 10) (rev acc)
+              (: ty (dns-hi r p) rl (dns-hi r (p + 8)) q (p + 10)
+                 (? (n < q + rl) (rev acc)
+                    (go (k - 1) (q + rl) ([<m ty (rd ty q rl)] . acc))))))
+       (? (n < 12 || dns-hi r 0 != id) ()
+          (0 < r 2 & 2) 'torn
+          (: p0 (dns-skip r 12 n)
+             [(r 3 & 15) (0 < r 2 & 4) (? (p0 < 0) () (go (dns-hi r 6) (p0 + 4) ()))])))
 
    ; --- the two config files -----------------------------------------------------
    ; every word after `k` on every line that starts with it, in file order. this
@@ -207,7 +290,7 @@
    ; resolve, then connect to each address in turn until one takes. a dotted quad
    ; costs no lookup at all -- `resolve` hands it straight back.
    (dial h port)
-    (: (go (a . u)) (: c (connect (dns-show a) port) (hot? c ? c (go u)))
+    (: (go (a . u)) (: c (connect ['tcp (dns-show a) port]) (hot? c ? c (go u)))
      (go (resolve h)))
 
    ; an address back to its dotted quad, which is the only spelling `connect` takes.

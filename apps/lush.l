@@ -32,6 +32,7 @@
    sh-jobs (tablet 0)
    sh-njob {0}
    sh-tty {0}                                  ; 1 = interactive: jobs get their own pgrp + the tty
+   sh-inread {0}                               ; 1 = the shell has read its own stdin, so a buffer may hold read-ahead
    sh-login {0}                                ; 1 = a login shell (--login, or a -argv0 seat): profiles read
    ; job control is the interactive shell's own, and it does not nest: a forked child
    ; that goes on to run shell code clears this, so what it runs rides ITS group and the
@@ -1369,25 +1370,28 @@
    ; main answers a status or scares 'leave, and urun makes either a charm.
    sh-imgok '("mooncc" "cc"
               "test" "[" "echo" "printf" "uname"
-              "basename" "dirname" "readlink" "seq" "ls" "dir" "cmp" "diff"
+              "basename" "dirname" "readlink" "seq" "ls" "dir" "vdir" "cmp" "diff"
               "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
-              ; the three that DO read stdin when bare: the build spells them with a
-              ; file, and a per-call answer is what would move them off this list
-              "objcopy" "cksum" "md5sum" "sha256sum"
-              "nm" "ar" "ld" "as"                  ; each wants its operands, or it is usage
-              "tar" "libra" "fat" "mkfs.vfat" "mkdosfs"   ; bounded by the archive or image named
+              ; the sums DO read stdin when bare: the build spells them with a file,
+              ; and a per-call answer is what would move them off this list
+              "objcopy" "cksum" "md5sum" "sha1sum" "sha224sum" "sha256sum" "sha384sum"
+              "sha512sum" "sha3sum" "b2sum" "crc32" "sum"
+              ; each wants its operands, or it is usage
+              "nm" "ar" "ld" "as" "readelf" "size" "strip" "ranlib"
+              "libra" "fat" "mkfs.vfat" "mkdosfs"   ; bounded by the image named (tar reads stdin: f -)
               ; the facts: the clock, the box, this process, the environment, a path
               "date" "cal" "uptime" "arch" "nproc" "hostname" "tty" "whoami" "id"
               "groups" "printenv" "which" "realpath" "expr" "free" "ps" "pwdx"
+              "logname" "users" "who" "pinky" "hostid" "dnsdomainname" "mountpoint" "pathchk"
               ; ..and the syscalls said plainly, each bounded by what it names
-              "stat" "df" "du" "link" "unlink" "mktemp" "mkfifo" "mknod" "sync"
-              "chown" "mount" "umount" "clear" "lift")
+              "stat" "df" "du" "link" "unlink" "mktemp" "mkfifo" "mknod" "sync" "fsync"
+              "chown" "chgrp" "truncate" "shred" "mount" "umount" "clear" "lift")
    ; the words whose main is not spelled <word>-main. kore-main wants the whole argv
    ; (it reads its own program seat); the rest take the args after the name.
    sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
                  ("[" "bracket-main") ("dir" "ls-main") ("objcopy" "objcopy" "holo")
                  ; the crew tools live in their own modules, not the applets' home
-                 ("tar" "tar-main" "tarcmd") ("libra" "libra-main" "libra")
+                 ("libra" "libra-main" "libra")
                  ("fat" "fat-main" "fatcmd")
                  ("mkfs.vfat" "mkfsv-main" "fatcmd") ("mkdosfs" "mkfsv-main" "fatcmd"))
    (sh-pathdirs _)
@@ -1546,8 +1550,9 @@
    ;         across a fork, and parent and child then answer the same byte, so a line
    ;         the child eats the shell reads again -- `head -1 | cat` down a script ran
    ;         the line after it twice. a TERMINAL reads no further than it is asked and
-   ;         cannot duplicate, so the guard is a script's, never a prompt's; past that,
-   ;         a stdin of the word's own or the roster's clearance each answer it too.
+   ;         cannot duplicate, and a shell that never read its stdin (a script file, -c,
+   ;         cook's lines) has no buffer to duplicate; past those, a stdin of the word's
+   ;         own or the roster's clearance each answer it too.
    ; exec -- a fresh image, its buffers its own. the only lane for a foreign word.
    ; the trusts NEST -- self implies fork implies exec -- so the fork test below asks
    ; the self question rather than keeping a second list beside it.
@@ -1557,6 +1562,7 @@
         (? (<a = "bake" || <a = "wake") 0
            (0 < #(getenv "LOVE_NO_IMAGE") && elem 'love-image (names ())) 0
            (sh-tty ()) 1                         ; our stdin is the terminal: nothing to duplicate
+           !(sh-inread ()) 1                     ; we never read our stdin: nothing buffered to duplicate
            (sh-fd0? fdmap) 1                     ; the child's stdin is its own
            (sh-selfok? <av) 1                    ; run in our own process, so ours to fork
            0))
@@ -1608,6 +1614,7 @@
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
         nms (? (two? args2) args2 ["REPLY"])
+        _ (pin sh-inread () 1)
         ln (sh-getline in)
         (? (ln = 'eof) 1 (: _ (sh-readset nms ln 0 #ln) 0)))
    (sh-readset nms ln i n)
@@ -2676,6 +2683,7 @@
    (sh-cooked buf)
      (: _ (? #buf 0 (sh-reapbg 0))
         _ (say out (? #buf "> " ((cwd 0) + "$ ")))  _ (flush out)
+        _ (pin sh-inread () 1)
         line (sh-getline in)
         (? (line = 'eof)
            (#buf && say err "lush: unexpected eof\n", puts "\n")

@@ -309,7 +309,7 @@ test_drat: host
 	@cd apps/sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
 # The lux app's pure core (apps/lux/core.l): xmonad's StackSet -- focus zipper, workspace
 # sheaf, floating half -- with xmonad's QuickCheck laws + a seeded fuzz. Pure love, so it
-# self-tests portably; the X layers need connectu and are proven against Xephyr, not here.
+# self-tests portably; the X layers need a unix connect and are proven against Xephyr, not here.
 test_lux: host
 	@$m test/gate/gates.l lux < /dev/null
 # harp (apps/harp/harp.l): tidal's cycle algebra, where a pattern is a function from a
