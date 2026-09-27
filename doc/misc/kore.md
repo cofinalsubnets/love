@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (193 tools, 201 names)
+## the inventory (194 tools, 202 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -66,7 +66,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | apps/cook.l | make / cook |
 | core.l, the line tools | cat tac shuf echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
-| core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
+| core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop), column (lines laid in columns, or `-t` a table) |
 | core.l, the line endings | dos2unix unix2dos mac2unix (in place by default; a binary file is refused, the mode is kept) |
 | core.l, the encodings | base64 base32 basenc (RFC 4648; basenc's url, hex, base16, the two base2 orders and z85 too; `-d` reads it back, `-w` says the wrap), uuencode uudecode (busybox's, `-m` base64), ascii (toybox's table) |
 | core.l, the two little computations | tsort factor |
@@ -166,6 +166,17 @@ COLUMNS, so a tab steps to the next stop, `\b` steps back one and `\r` starts th
 `fold -b` asks for bytes instead, `-s` backs the break up to the last blank, `-w N` and the
 obsolescent `-N` both say the width; `expand -t N -i`; `unexpand -a`, and `-t N` means `-a`
 too, as GNU's does.
+
+`column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]` lays lines out as util-linux's does,
+byte for byte (test/kore/column.sh holds it to the system's). Filling, every column is one
+width: the widest entry's, taken past the next tab stop, the pad in tabs, down the columns
+unless `-x`, across `-c`'s width, else `$COLUMNS` or the terminal or 80. `-t` makes a table:
+fields split on whitespace (a run as one, the ends dropped), or on each of `-s`'s characters
+so an empty field stays; each column as wide as its widest cell, `-o` between (two spaces),
+a short row padded out to the last column. Blank lines are skipped and widths are screen
+columns, a wide character two. One corner parts from util-linux: with `-x` and no room for
+even one column, util-linux runs every name onto one line; kore writes a name a line, as the
+BSDs do and as util-linux itself does without `-x`.
 
 * **a tab lands only where it saves at least two columns**, which is why a lone space
   sitting on a tab stop stays a space. It is the one rule the obvious unexpand gets wrong.
@@ -751,7 +762,8 @@ nothing about flags (plan9port's `ls` or `grep` answers to the name in Plan 9's 
 tool kore has is a row, and so is every tool at least two of the others share; a name only
 one other carries is listed after the table instead, since those are mostly one system's own
 (busybox's init and network daemons, GNU's toolchain driver names, plan9port's graphics and
-file servers). Not counted in any column: one implementation's spelling of a general tool
+file servers). `mc` is a name and not a tool shared: kore's is a file browser, plan9port's
+lays its input in columns, which kore's `column` does. Not counted in any column: one implementation's spelling of a general tool
 (kore's `lush` `cook` `ain`, busybox's `ash` `linuxrc`, GNU's `bash` `rbash` `gawk` `gcc`
 `gcc-ar` `gcc-nm` `gcc-ranlib` `g++` `ld.bfd` `ld.gold`) and a userland's name for itself
 (`coreutils`, plan9port's `9`).
@@ -779,9 +791,9 @@ over the packages above.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 204 | 389 | 239 | 191 | 107 | 260 |
+| names | 205 | 389 | 239 | 191 | 107 | 260 |
 | shared with kore | | 170 | 142 | 135 | 101 | 49 |
-| carried by no one else | 11 | 152 | 30 | 48 | 0 | 203 |
+| carried by no one else | 12 | 152 | 30 | 48 | 0 | 203 |
 
 What at least three of the other five carry and kore does not: `fmt`, `pr`, `uncompress`.
 
@@ -818,6 +830,7 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 | `cksum` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `clear` | ✓ | ✓ | ✓ |  |  |  |
 | `cmp` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `column` | ✓ |  |  |  |  |  |
 | `comm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `cp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `cpio` | ✓ | ✓ | ✓ | ✓ |  |  |

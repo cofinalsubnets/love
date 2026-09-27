@@ -71,7 +71,7 @@
         chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
         date-main dirname-main dos2unix-main dsplit du-main echo-main env-main expand-main expr-main
         mac2unix-main unix2dos-main
-        factor-main false-main find-main fold-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
+        factor-main false-main find-main fold-main column-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
         head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main markdown-main
         ln-main ls-main vdir-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
         mv-main myers nl-main nice-main nohup-main nproc-main
@@ -742,7 +742,7 @@
             ; the three line endings, one walk (apps/kore/core.l)
             'dos2unix dos2unix-main 'unix2dos unix2dos-main 'mac2unix mac2unix-main
             'nl nl-main 'rev rev-main
-            'fold fold-main 'expand expand-main 'unexpand unexpand-main
+            'fold fold-main 'expand expand-main 'unexpand unexpand-main 'column column-main
             'base64 base64-main 'base32 base32-main 'basenc basenc-main
             'uuencode uuencode-main 'uudecode uudecode-main 'ascii ascii-main
             'tsort tsort-main 'factor factor-main
@@ -863,6 +863,7 @@
     'nl "usage: nl [FILE..]"
     'rev "usage: rev [FILE..]"
     'fold "usage: fold [-w N] [-s] [-b] [FILE..]"
+    'column "usage: column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]"
     'expand "usage: expand [-t N] [-i] [FILE..]"
     'unexpand "usage: unexpand [-a] [-t N] [FILE..]"
     'base64 "usage: base64 [-d] [-w N] [FILE]"
@@ -1076,6 +1077,7 @@ every tool answers --help and --version, and -h where the letter is free
   cut tr nl rev                           the field tools
   dos2unix | unix2dos | mac2unix [-fkqn] [F..]   the line endings, converted IN PLACE
   fold [-w N] [-s] [-b] | expand [-t N] [-i] | unexpand [-a] [-t N]   the columns
+  column [-tx] [-c N] [-s SEP] [-o SEP] [FILE..]   lines laid in columns, or -t a table
   base64 | base32 [-d] [-w N] [F]         the encodings (RFC 4648)
   tsort [F] | factor [N..]                the two little computations
   paste comm join split od                the record tools
