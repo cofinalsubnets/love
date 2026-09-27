@@ -17,6 +17,7 @@
 (cite 'posix ? (borrow 'posix) ())
 
 (: _ (borrow 'dns))
+(: _ (borrow 'bytes))
 
 ; --- the fake nameserver -------------------------------------------------------
 ; answer `q` (a query) with one a record for `addr`, or with the TC bit set and
@@ -25,13 +26,13 @@
 ; what the parser's skip has to get right.
 (: (dns-reply q addr tc)
     ((snip q 0 2)                                     ; the id, echoed
-     + (dns-be16 (tc ? 33664 33152))                  ; qr|RD|ra, and TC if asked
-     + (dns-be16 1) + (dns-be16 (tc ? 0 1)) + (dns-be16 0) + (dns-be16 0)
+     + (wrbe (tc ? 33664 33152) 2)                  ; qr|RD|ra, and TC if asked
+     + (wrbe 1 2) + (wrbe (tc ? 0 1) 2) + (wrbe 0 2) + (wrbe 0 2)
      + (snip q 12 #q)                          ; the question, verbatim
      + (tc ? "" ((string 192) + (string 12)             ; name: a pointer to offset 12
-           + (dns-be16 1) + (dns-be16 1)              ; type A, class in
-           + (dns-be16 0) + (dns-be16 60)             ; ttl
-           + (dns-be16 4)
+           + (wrbe 1 2) + (wrbe 1 2)              ; type A, class in
+           + (wrbe 0 2) + (wrbe 60 2)             ; ttl
+           + (wrbe 4 2)
            + (string ((addr >> 24) & 255)) + (string ((addr >> 16) & 255))
            + (string ((addr >> 8) & 255)) + (string (addr & 255)))))
 
@@ -110,14 +111,14 @@
 ; into the question. a pointer to itself is no name, and an answer to another id is none.
 (: q0 (dns-qtype 4661 "ex.test" 1)
    ptr (string 192 + string 12)
-   (rr ty rd) (ptr + dns-be16 ty + dns-be16 1 + dns-be16 0 + dns-be16 60 + dns-be16 #rd + rd)
+   (rr ty rd) (ptr + wrbe ty 2 + wrbe 1 2 + wrbe 0 2 + wrbe 60 2 + wrbe #rd 2 + rd)
    (bytes l) (catmap string l)
    rrs [(rr 5 (dns-labels "al.ex.test")) (rr 1 (bytes [1 2 3 4]))
         (rr 28 (bytes [32 1 13 184 0 0 0 0 0 0 0 0 0 0 0 1]))
         (rr 28 (bytes [0 1 0 0 0 2 0 0 0 0 0 0 0 3 0 4]))
-        (rr 15 (dns-be16 10 + dns-labels "mx.ex.test")) (rr 16 (string 2 + "hi" + string 3 + "you"))
+        (rr 15 (wrbe 10 2 + dns-labels "mx.ex.test")) (rr 16 (string 2 + "hi" + string 3 + "you"))
         (rr 2 ptr) (rr 12 (string 3 + "srv" + ptr))]
-   (resp fl) (snip q0 0 2 + dns-be16 fl + dns-be16 1 + dns-be16 #rrs + dns-be16 0 + dns-be16 0
+   (resp fl) (snip q0 0 2 + wrbe fl 2 + wrbe 1 2 + wrbe #rrs 2 + wrbe 0 2 + wrbe 0 2
               + snip q0 12 #q0 + catmap (x \ x) rrs)
    r (dns-records (resp 33152) 4661)
    _ (assert (r = [0 0 [["ex.test" 5 "al.ex.test"] ["ex.test" 1 "1.2.3.4"] ["ex.test" 28 "2001:db8::1"]
@@ -130,6 +131,6 @@
    qe (dns-qedns 4661 "ex.test" 1)
    _ (assert (snip qe 0 10 = snip q0 0 10) (qe 11 = 1)
              (snip qe 12 #q0 = snip q0 12 #q0)
-             (snip qe #q0 #qe = string 0 + dns-be16 41 + dns-be16 1232 + dns-be16 0 + dns-be16 0 + dns-be16 0)))
+             (snip qe #q0 #qe = string 0 + wrbe 41 2 + wrbe 1232 2 + wrbe 0 2 + wrbe 0 2 + wrbe 0 2)))
 
 (say out "dns: ok", putc 10)

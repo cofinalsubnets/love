@@ -28,6 +28,7 @@
          harp-scale harp-chunk mkvoice cyc-voices mixdown pack song-out
          twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice)
 (borrow (: m (cite 'harp) (? m m "apps/harp/harp.l")))
+(borrow 'bytes)
 (:
    ; the fs doors by VALUE, off their module: a module layer does not see the
    ; session's posix splice, and a seat carrying none (inle/wasm) holds () here --
@@ -193,12 +194,9 @@
 
    ; --- the two sinks --------------------------------------------------------
    (wav-head rate n)                      ; 44 bytes of canonical PCM riff
-    (: (u32 v) (string (v & 255) + string ((v >> 8) & 255)
-                + string ((v >> 16) & 255) + string ((v >> 24) & 255))
-       (u16 v) (string (v & 255) + string ((v >> 8) & 255))
-       d (n * 4)
-       ("RIFF" + u32 (36 + d) + "WAVEfmt " + u32 16 + u16 1 + u16 2
-        + u32 rate + u32 (rate * 4) + u16 4 + u16 16 + "data" + u32 d))
+    (: d (n * 4)
+       ("RIFF" + wrle (36 + d) 4 + "WAVEfmt " + wrle 16 4 + wrle 1 2 + wrle 2 2
+        + wrle rate 4 + wrle (rate * 4) 4 + wrle 4 2 + wrle 16 2 + "data" + wrle d 4))
    (harp-wav p c0 ncyc rate cps tail g path)
     (: q (open path "w")
        (? !(hot? q) (say err $ "harp: cannot write " + path + "\n", 0)
