@@ -797,6 +797,11 @@
 (: T (cite 'verbs 'trait)
    (test (1 = sh-verbbi? "echo") (1 = sh-verbbi? "[") (0 = sh-verbbi? "ls")
          (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (0 = T 'cat 'self)))
+;; a crew main answers its status to a caller in the image, a failure from deep in
+;; included -- only the seats quit
+(: C (cite 'verbs 'call)
+   (test (1 = C 'cook ["-f" "/nonexistent-qq.mk"]) (2 = C 'sb ["no-such-verb"])
+         (2 = C 'kiosko ["-z"])))
 ;; ..and a trait may turn on the call: love's bake and wake want a fresh process, asked
 ;; under the name the word runs as, so a path to this binary is love too
 (: H (cite 'verbs 'holds)

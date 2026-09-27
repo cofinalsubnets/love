@@ -365,7 +365,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
   SRC               a .md file or a directory of them; with none, README.md and doc/
 "
    _ (:
-   (pdie c m) (: _ (say err ("papel: " + m)) _ (put err 10) (quit c))
+   (pdie c m) (udie c ("papel: " + m))
    (papel-main as)
    (: _ (? (lit? (cite 'papel)) (borrow 'papel) 0)   ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
@@ -406,8 +406,8 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
               _ (pin c 'quiet 1)
               box (: t (tablet 0) _ (pin t 'f (fprint c)) t)
               _ (? (cite 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box)) 0
-                   (say err $ "papel: cannot listen on :" + show port + "\n", quit 1))))
-      (quit 0))
+                   (pdie 1 ("cannot listen on :" + show port)))))
+      0)
    papel-main)
 
    papel-main _)
@@ -416,6 +416,6 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 ; script -- sits in the program seat of the real command line, on the args after it.
 ; body-having, so the machinery leaks nothing; papel-main reads bare -- whichever
 ; layer holds this file's binds is still the head here.
-(: door (udoor 'papel papel-main papel-usage 1 1)
+(: door (udoor 'papel (urun papel-main) papel-usage 1 1)
    s (cite 'verbs 'fire ["papel" "papel.l"])
-   (two? s ? (door >s)))
+   (two? s ? (quit (door >s))))

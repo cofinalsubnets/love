@@ -203,7 +203,7 @@
       (: _ (? (jobw () <= #running) (jobreap 0) 0)          ; wait for a slot
          _ (flush out) _ (flush err)
          p (fork 0)
-         (? (0 = p) (: _ (recur item steps) (quit 0))       ; the child: run it and go
+         (? (0 = p) (quit (urun (\ _ (: _ (recur item steps) 0)) ()))   ; the child: run it and go, a leave its status
             (0 < p) (: _ (pin running p item) p)
             (: _ (recur item steps) 0))))
 
@@ -220,8 +220,7 @@
    (jobwait p)
    (: v (peep verdicts p 'no)
       (? !(= v 'no) (: _ (pull verdicts p 0) v)
-         (0 = #running) (: _ (say err ("cook: lost the job for pid " + show p))
-                            _ (put err 10) (quit 1))
+         (0 = #running) (udie 1 ("cook: lost the job for pid " + show p))
          (: _ (jobreap 0) (jobwait p))))
 
    (jobdrain _) (? (0 < #running) (: _ (jobreap 0) (jobdrain 0)) 0)
@@ -258,11 +257,8 @@
        _ (flush out)
        r (herald step)
        (? (two? r)
-          (? (0 = <r) 0
-             (: _ (say err ("cook: command failed (exit " + show <r + ")"))
-                _ (put err 10) (quit 1)))
-          (: _ (say err ("cook: cannot run " + join " " step))
-             _ (put err 10) (quit 1))))
+          (? (0 = <r) 0 (udie 1 ("cook: command failed (exit " + show <r + ")")))
+          (udie 1 ("cook: cannot run " + join " " step))))
 
    ; the in-image shell, decided once and kept: where the shell we would spawn is the binary
    ; already running, the recipe line runs here -- one image wake for a whole make instead of
@@ -289,9 +285,9 @@
        r (? (two? o) [<>o] (herald (([sh] + flags) + [cmd])))
        ec (? (two? r) <r -1)
        (? (0 = ec) 0
-          !(two? r) (: _ (say err ("cook: cannot run " + cmd)) _ (put err 10) (quit 1))
+          !(two? r) (udie 1 ("cook: cannot run " + cmd))
           ignore (say err $ "cook: " + cmd + " (exit " + show ec + ", ignored)\n")
-          (say err $ "cook: command failed (exit " + show ec + ")\n", quit 1))))
+          (udie 1 ("cook: command failed (exit " + show ec + ")")))))
 
 ; --- the entry points ----------------------------------------------------------
 
@@ -353,8 +349,8 @@
                 (lit? g && lit? o ? (pat \ g pat (o #pat)))))
 
 ; the whole importer lives in one body-having `:`, so none of its many helper names leak; it
-; reads the outer globals freely and its body answers cook-main (args -> the whole job, exiting
-; via quit). the outer `_`-holder leaks cook-main as the one public -- the multi-call `kore`
+; reads the outer globals freely and its body answers cook-main (args -> the whole job, answering
+; its status; a failure leaves by udie). the outer `_`-holder leaks cook-main as the one public -- the multi-call `kore`
 ; calls it as `make` -- and the seat at the bottom fires it when this file was invoked.
 (: _ (:
    ; --emit: when set, expand-steps emits a serializable ("sh" "-c" cmd) step instead of a
@@ -889,8 +885,7 @@
            (: t (trim (strip-comment <l))
               (? (first-word t = "define")
                  (: nm (trim (after-word t))
-                    (body r bs) (? (one? r) (: _ (say err "cook: define with no endef.  Stop.")
-                                                 _ (put err 10) (quit 2))
+                    (body r bs) (? (one? r) (udie 2 "cook: define with no endef.  Stop.")
                                     (trim (strip-comment <r) = "endef") [>r bs]
                                     (body >r (bs + <r + "\n")))
                     p (body >l "")
@@ -899,7 +894,7 @@
      (lines (uncont src)) ())
 
    ; read a file whole (for `include`), then split it into classified lines.
-   (slurp-of path) (: q (open path "r") (? (hot? q) (slurp q) (: _ (say err ("cook: cannot read " + path)) _ (put err 10) (quit 1))))
+   (slurp-of path) (: q (open path "r") (? (hot? q) (slurp q) (udie 1 ("cook: cannot read " + path))))
    (file-lines ip) (text-lines (slurp-of ip))
 
    ; seed the variable table as make does: the environment first (every NAME=value, origin
@@ -1177,7 +1172,7 @@
    ; back-compat with `cook <Makefile> [recipe]`: with no -f, a first positional naming an
    ; existing file may be the build file, but only where discovery would find nothing else or
    ; would find that very file. everywhere else, and always with -f, a positional is a recipe.
-   (bye s) (puts s, putc 10, flush out, quit 0)
+   (bye s) (puts s, putc 10, flush out, uleave 0)
    (version _) (bye ("cook (love " + love-version + ")"))
    (usage _) (bye ("usage: cook [-C DIR] [-f FILE] [-j [N]] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
                    + "  -C, --directory DIR  cook in DIR\n"
@@ -1189,7 +1184,7 @@
                    + "  VAR=VAL           a command-line variable (silences the file's assignments)\n"
                    + "  RECIPE ...        the items to build (default: the first recipe declared)\n"
                    + "a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary love source."))
-   (need-arg h r) (? (two? r) 0 (: _ (say err ("cook: " + h + " needs an argument")) _ (put err 10) (quit 2)))
+   (need-arg h r) (? (two? r) 0 (udie 2 ("cook: " + h + " needs an argument")))
    ; is this word the count, or the next argument? all digits and at least one.
    (jobword? w)
    (: n #w
@@ -1270,8 +1265,9 @@
     ws (tablet 0))
 
    ; -- cook-main (this form's body answers it) --
-   ; the whole job from the args: parse flags, find the build file, cook, and exit first (quit),
-   ; so a -l preload's CLI driver never tries to read the chosen file as love source. a Makefile
+   ; the whole job from the args: parse flags, find the build file, cook, and answer the status
+   ; (a failure leaves by udie). the seat below quits with it, so a -l preload's CLI driver never
+   ; tries to read the chosen file as love source. a Makefile
    ; is imported and its recipes cooked; a Cookfile is read and evaluated -- it drives cook
    ; itself, the ticket read live by (ticket 0) from the tickets box.
    ; it splices its own layer first, and owns that for every caller: a Cookfile is love source
@@ -1288,7 +1284,7 @@
       ; -C DIR: the cook runs there -- discovery, the build file, every recipe -- as make's does
       _ (: d (peep opt 'dir 0)
            (? (!d || !(nom? (chdir d))) 0
-              (: _ (say err ("cook: cannot cd to " + d)) _ (put err 10) (quit 2))))
+              (udie 2 ("cook: cannot cd to " + d))))
       _ (pin clivars 0 (peep opt 'var ()))                   ; the VAR=VAL words, for seed-defaults
       _ (pin jobs 0 (peep opt 'jobs 1))                      ; the -j width; 1 is the serial cook
       ; ..and the width goes down the environment, for a recipe that forks on its own account.
@@ -1298,7 +1294,7 @@
       emit? (peep opt 'emit 0)
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)
-      _ (? (xf && !(exists? xf)) (: _ (say err ("cook: cannot open " + xf)) _ (put err 10) (quit 1)) 0)
+      _ (? (xf && !(exists? xf)) (udie 1 ("cook: cannot open " + xf)) 0)
       ; a positional is a recipe wherever discovery can name the build file itself; the back-compat
       ; form is kept for the case it was written for, a build file discovery cannot find.
       disc0 (? xf 0 (discover 0))                                    ; what discovery would name, if anything
@@ -1306,26 +1302,23 @@
       file (? xf xf (? posfile posfile (: _ (autoregen 0) (discover 0))))     ; discovery may auto-regen a stale Cookfile from a newer Makefile
       _ (pin tickets 0 (? posfile >pos pos))                 ; the recipe words; the positional file is not a recipe
       (? emit?
-         (: _ (? file 0 (: _ (say err "cook: --emit needs a Makefile") _ (put err 10) (quit 1)))
+         (: _ (? file 0 (udie 1 "cook: --emit needs a Makefile"))
              q (open file "r")
              _ (pin emitp 0 1)
              _ (register-makefile (slurp q))
              _ (emit-cookfile out)
-             (quit 0))
+             0)
          file
          (: q (open file "r")
             _ (? (asmake? file xf)
                  (: _ (register-makefile (slurp q)) (cook-all 0))
                  ((: (g x) (: r (sound x)
                                   (? (two? r) (: _ (ev 'ev <r) (g >r))
-                                     (= r 'torn)
-                                       (: _ (say err ("cook: unfinished form in " + file))
-                                          _ (put err 10) (quit 1))
+                                     (= r 'torn) (udie 1 ("cook: unfinished form in " + file))
                                      0)))
                    (slurp q)))
-            (quit 0))
-         (two? pos)
-         (: _ (say err "cook: no Cards.l, Cookfile or Makefile found") _ (put err 10) (quit 1))
+            0)
+         (two? pos) (udie 1 "cook: no Cards.l, Cookfile or Makefile found")
          0))
 
    cook-main)
@@ -1337,8 +1330,8 @@
 ; is the full C argv, never rebound, so the read is the same in both load orders; inside the
 ; multi-call `kore` nothing matches and kore's dispatcher calls cook-main itself.
 ; cook-main reads bare here: the module's layer holds this file's binds and is still the head.
-(: _ (pins (cite 'verbs 'tab) 'cook cook-main)
+(: _ ((cite 'verbs 'enlist) 'cook (urun cook-main) ())
    s (cite 'verbs 'fire ["cook" "cook.l"])
-   (? (two? s) (cook-main >s) ()))
+   (? (two? s) (quit (urun cook-main >s)) ()))
 
 ) ; module 'cook
