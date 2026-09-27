@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (187 tools, 194 names)
+## the inventory (189 tools, 196 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -99,6 +99,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
+| apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as) |
 | apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (inle/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
@@ -631,6 +632,26 @@ ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` 
 apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
 1452 here, one datagram on a 1500-byte link.
 
+## ssh and sshd (apps/ssh/)
+
+One of everything, OpenSSH's first choices: curve25519-sha256 for the exchange, ssh-ed25519
+keys, chacha20-poly1305@openssh.com both ways, public-key authentication. The client came first
+(`ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]`,
+known_hosts held as OpenSSH's accept-new holds it); the server is its other half.
+
+`sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]` serves the user it runs
+as and only that user: there is no setuid here, so a login naming anyone else is refused. It
+listens on 22 by default, never detaches (`-D` and `-e` are taken for OpenSSH's sake) and logs
+to stderr. The host key is `-h`'s, else /etc/ssh/ssh_host_ed25519_key when that user can read
+it, else `~/.ssh/sshd_ed25519_key`, written on first use (0600, OpenSSH's format, a `.pub`
+beside it). authorized_keys is read at each login, so an edit counts at once; a line with
+options ahead of its key type (`command=`, `from=` ..) grants nothing, since none are honoured.
+Each connection is a task, and it carries one session channel: the login shell, or a command
+under it with `-c`, on a pty when the client asks for one (`window-change` follows it) and on
+three pipes when not, so bytes pass clean and stderr stays apart. The exit status goes home.
+Refused: rekeying (OpenSSH asks after 1 GB; the connection ends there), port forwarding, agent
+forwarding, subsystems (so sftp, and OpenSSH 9's scp, which rides it), and passwords.
+
 ## ed and ex (apps/kore/ed.l)
 
 One buffer and two dialects over it. The addresses are POSIX's in both: `N . $ 'x /re/
@@ -720,9 +741,9 @@ over the packages above.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 200 | 392 | 239 | 201 | 108 | 261 |
+| names | 202 | 392 | 239 | 201 | 108 | 261 |
 | shared with kore | | 166 | 141 | 134 | 101 | 49 |
-| carried by no one else | 11 | 157 | 30 | 58 | 1 | 204 |
+| carried by no one else | 13 | 157 | 30 | 58 | 1 | 204 |
 
 What at least three of the other five carry and kore does not: `fmt`, `pr`, `uncompress`.
 
@@ -941,6 +962,8 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 | `sleep` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `sort` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `split` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ssh` | ✓ |  |  |  |  |  |
+| `sshd` | ✓ |  |  |  |  |  |
 | `stat` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `stdbuf` |  |  |  | ✓ | ✓ |  |
 | `strings` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
