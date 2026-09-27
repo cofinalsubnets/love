@@ -85,6 +85,8 @@
       ("rdtsc"       "0f31"                  "rdtsc")
       ("cli"         "fa"                    "cli")
       ("sti"         "fb"                    "sti")
+      ("pushf"       "9c"                    "pushf")
+      ("popf"        "9d"                    "popf")
       ("clc"         "f8"                    "clc")
       ("stc"         "f9"                    "stc")
       ("cmc"         "f5"                    "cmc")
