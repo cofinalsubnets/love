@@ -13,6 +13,8 @@
 (borrow 'posix)
 ; lastslash, for the two path clips below (love/boot/post.l)
 (borrow 'path)
+; cpat/cpnext/cpn, for tr's sets and wc -m (love/boot/post.l)
+(borrow 'text)
 
 (:
    ; -- the u-floor --
@@ -72,6 +74,20 @@
    (ucount-for l? w?)
     (? w? ucount-go (? l? (ucount-l (cite 'scan 'scanner ())) ucount-b))
    ucount0 [0 0 0 0]
+   ; wc -m as its own fold: st is [chars held], held the torn sequence a gulp ended in,
+   ; so a character straddling the boundary counts once. a byte that begins no valid
+   ; character counts nothing, and a torn one at the very end is left in held
+   (ucharc-go st s)
+    (: t (<>st + s) n #t
+       (need b) (? (b < 194) 0 (b < 224) 2 (b < 240) 3 (b < 245) 4 0)
+       (tails? k) (? (n <= k) 1 ((t k & 192) = 128) (tails? (k + 1)) 0)
+       (go i m) (? (n <= i) [m ""]
+                   (: w (cpn t i)
+                      (? (0 < w) (go (i + w) (m + 1))
+                         (n < i + need (t i) && tails? (i + 1)) [m (snip t i n)]
+                         (go (i + 1) m))))
+       (go 0 <st))
+   ucharc0 [0 ""]
    (ucount-say st) [<>st <>>st <>>>st]      ; the state's (lines words bytes) face
    ; text -> (lines words bytes), a word a maximal ink run (lawed in test/law/kore.l)
    (ucount t) (ucount-say (ucount-go ucount0 t))
@@ -127,7 +143,7 @@
    (upick spec k)
     (? !(two? spec) 0
      (: r <spec (k >= <r && <>r >= k || upick >spec k)))
-   ; tr's set -> the charm list: a-z ranges expand, \n \t \r \0 \\ escape, a dash at
+   ; tr's set -> the code point list: a-z ranges expand, \n \t \r \0 \\ escape, a dash at
    ; either end stays literal
    (uset s)
     (: n #s
@@ -152,12 +168,12 @@
           (e >= 0 ?  (clstab (snip s (k + 2) e) @ () () rs [rs (e + 2)]))))
        (go k acc)
         (n <= k ? (rev acc)
-           (: c (s k) hit (cls k)
+           (: c (cpat s k) j (cpnext s k) hit (cls k)
               (? (two? hit) (go <>hit (spans <hit acc))
-                 (c = 92 && k + 1 < n) (go (k + 2) (esc (s (k + 1)) . acc))
-                 (k + 2 < n && s (k + 1) = 45 && s (k + 2) >= c)
-                  (go (k + 3) (rev (span c (s (k + 2)) ()) + acc))
-                 (go (k + 1) (c . acc)))))
+                 (c = 92 && j < n) (go (cpnext s j) (esc (cpat s j) . acc))
+                 (j + 1 < n && s j = 45 && cpat s (j + 1) >= c)
+                  (go (cpnext s (j + 1)) (rev (span c (cpat s (j + 1)) ()) + acc))
+                 (go j (c . acc)))))
        (go 0 ()))
    ; --- reading an input without holding it ----------------------------------
    ; uread + `lines` keeps four whole copies of the input alive at once -- `rev` of

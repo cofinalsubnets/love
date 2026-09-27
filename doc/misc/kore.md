@@ -103,7 +103,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (love/lib/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (love/lib/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
-| www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number) |
+| www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | apps/lush.l | sh / lush |
 
@@ -599,9 +599,24 @@ keys over less's:
   alt text.
 * **Resizing the window lays the page out again at the new width**, keeping the first link
   that was on the screen at the same place.
+* **`gopher://` opens gopher** (RFC 1436, its URLs RFC 4266's). A menu's text lines keep
+  their spacing, so the ASCII art stands, and each item is a link marked with its kind:
+  `(DIR)`, `(TXT)`, `(?)` for a search, `(HTML)`, `(BIN)`, `(TEL)`. A search item is a field
+  like a form's, its answer sent after a tab; a text item has its escaped dots undone; an
+  `h` item with a `URL:` selector goes to that URL.
+* **`gemini://` opens gemini.** text/gemini is laid as a page: headings, lists, quotes,
+  preformatted blocks kept as written, and each `=>` line a link resolved against the page;
+  other text shows as it is. A request for input (1x) is a field whose answer goes back as
+  the query, a redirect (3x) is followed, and the rest of the statuses are said. The server's
+  certificate is pinned the first time it is seen, host:port and its SHA-256 a line in
+  `~/.love/gemini_hosts`, and held to after: gemini's own trust on first use. A changed one
+  is refused with the line to delete to accept it. When a server asks for a client
+  certificate, an empty one goes back.
 
-Absent: forms that POST, scripts, cookies, the images themselves, and charsets other than
-utf-8, latin-1 and windows-1252. The TLS peer is not verified (wget's client).
+Absent: forms that POST, scripts, cookies, the images themselves, charsets other than
+utf-8, latin-1 and windows-1252, and gemini's client certificates. An https peer is not
+verified (wget's client). The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
+second what RFC 8446 has every server speak.
 
 ## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (apps/kore/net.l)
 

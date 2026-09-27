@@ -130,6 +130,11 @@
       (utail 9 "a\nb" = "a\nb") (utail 1 "a\nb" = "b")
       (ucount "a b\nc\n" = '(2 3 6)) (ucount "" = '(0 0 0))        ; (lines words bytes)
       (ucount "  a  b  " = '(0 2 8))                               ; a word is a maximal ink run
+      ; wc -m: valid characters only, and one torn across two gulps counts once
+      (ucharc-go ucharc0 "日本\n" = '(3 ""))
+      (ucharc-go ucharc0 "a\xffb\xc0\x80" = '(2 ""))               ; a bad byte, an overlong
+      (ucharc-go ucharc0 "a\xe6\x97" = '(1 "\xe6\x97"))            ; the torn tail is held
+      (ucharc-go (ucharc-go ucharc0 "a\xe6\x97") "\xa5b" = '(3 ""))
       (ubase "/a/b.txt" "" = "b.txt") (ubase "/a/b.txt" ".txt" = "b")
       (ubase "/a/b/" "" = "b") (ubase "///" "" = "/")
       (ubase "b" "b" = "b")                                        ; the suffix never eats the whole name
@@ -155,7 +160,9 @@
       (uset "a-c" = '(97 98 99))
       (uset "abc" = '(97 98 99))
       (uset "x-" = '(120 45)) (uset "-x" = '(45 120))              ; an edge dash stays literal
-      (uset "\\n\\t" = '(10 9))))                                  ; the escapes
+      (uset "\\n\\t" = '(10 9))                                    ; the escapes
+      (uset "α-γ日" = '(945 946 947 26085))                         ; code points, ranges too
+      (uset "\\日-" = '(26085 45))))
 
 ; --- the column floor (apps/kore/core.l): fold, expand and unexpand all count
 ; columns, which is the one thing they share and the one thing a byte count

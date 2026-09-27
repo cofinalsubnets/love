@@ -144,7 +144,13 @@
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
-   gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp inc dec not neg bt bts btr btc)
+   gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp test inc dec not neg bt bts btr btc)
+   ; a memory operand -> (base off): a register base, or 'rip and (sym k) for `sym+k(%rip)` and
+   ; the absolute `sym+k`, the same address wherever the image sits
+   (gx-mref o) (<o @ 'mem (gx-mem o)
+                    'rip ['rip [<>o <>>o]]
+                    'lbl (: so (xa-symoff (show <>o)) ['rip [<so >so]])
+                    (scare 'gas-x64-operand o))
    gx-ext (gtab '((movzb (zx1 ldu1)) (movzw (zx2 ldu2)) (movsb (sx1 ld1)) (movsw (sx2 ld2)) (movsl (sx4 ld4))))
    ; a %gs:/%fs: operand: the override byte before the one form that reaches memory. an absolute
    ; address (percpu's `%gs:sym`, `%gs:40`) loads through its destination: the address, then the word
@@ -174,11 +180,12 @@
           (= m 'int) [['int (gx-imm d)]]
           (elem m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
           ; a read-modify-write on memory: atomics and counters. no suffix takes the register's width
-          (<d = 'mem && elem m gx-rmw)
-           (: bm (gx-mem d) wm (w0 > 0 ? w0 (<s = 'rg) (s 2) 8)
+          ((<d = 'mem || (elem <d '(lbl rip) && nom? <>d)) && elem m gx-rmw)
+           (: bm (gx-mref d) wm (w0 > 0 ? w0 (<s = 'rg) (s 2) 8)
               (? (elem m '(xadd cmpxchg xchg)) (? (<s = 'rg) [[(name (show m + "m")) wm <bm <>bm (gx-r s)]] (scare 'gas-x64-operand ops))
                  (elem m '(inc dec not neg)) [['unm m wm <bm <>bm]]
                  (elem m '(bt bts btr btc)) [['btm m wm <bm <>bm (gx-rv s)]]
+                 (m = 'test) [['testm wm <bm <>bm (gx-rv s)]]
                  [['alum m wm <bm <>bm (gx-rv s)]]))
           (= m 'xchg && <s = 'mem && <d = 'rg) (gx-ins m w0 [s d])
           (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
@@ -199,7 +206,11 @@
                      (scare 'gas-x64-operand s)))
               (scare 'gas-x64-operand d))
           (= m 'lea)
-           (? (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
+           (? ; no symbol: the address past this lea (the kernel's _THIS_IP_) -- its own bytes,
+              ; REX.W 8D, modrm rm=101 over the displacement; nothing for a fix to name
+              (<s = 'rip && !(nom? <>s) && <d = 'rg)
+               (: n <>d [['raw ([(72 | (n >= 8 ? 4 0)) 141 (((n & 7) << 3) | 5)] + gf-le <>>s 4)]])
+              (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
               (<s = 'rip && nom? <>s) [['la (gx-r d) <>s] ['lea (gx-r d) (gx-r d) <>>s]]   ; sym+k: lea keeps the flags too
               (<s = 'mem) (: bm (gx-mem s) [['lea (gx-r d) <bm <>bm]])
               (scare 'gas-x64-operand ops))
@@ -503,7 +514,9 @@
    (gf-word tgt w e rl)
     (: v (gf-val e rl) pc <v s <>v k <>>v
        (? !(string? s) (gf-le k w)
-          pc (? (w = 4 && !(gthumb? tgt)) [['fix 4 'rel32 (name s) (k + 4)]] (scare 'gas-data-pcrel e))
+          pc (? (w = 4 && !(gthumb? tgt)) [['fix 4 'rel32 (name s) (k + 4)]]
+                (w = 8 && tgt = 'x64) [['fix 8 'rel64 (name s) (k + 8)]]     ; the jump table's `key - .`
+                (scare 'gas-data-pcrel e))
           (w = 8) [['fix 8 'abs64 (name s) k]]
           (w = 4 && (tgt = 'x64 || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
           (scare 'gas-data-width e)))
@@ -564,11 +577,25 @@
            (? (<v || gbad? at || <>>v < at) (scare 'gas-org e) (raw (map (i \ 0) ^(<>>v - at)))))
        (dir mn rest)
         (: xs (xa-oplist rest) w (gf-width tgt mn)
-           (? (0 < w) (raw (catmap (e \ gf-word tgt w e rl) xs))
+           (? (0 < w)
+               ; a word over two labels (`.byte 773b-771b`) waits like a .skip: ('wordx toks w)
+               (emit (rev (foldl (\ acc f (? (<f = 'raw && two? acc && <<acc = 'raw)   ; neighbouring words lay as one raw
+                                              (['raw (<><acc + <>f)] . >acc) (f . acc)))
+                                 ()
+                                 (map (e \ (: ts (gtoks e)
+                                              (? (1 < #(filter (t \ <t = 'lref || (<t = 'sym && <>t != ".")) ts) &&
+                                                  !(any (t \ t = ['sym "."]) ts))
+                                                  ['wordx (map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) ts) w]
+                                                 ['raw (gf-word tgt w e rl)])))
+                                      xs))))
               (mn = ".ascii") (raw (catall (gf-strs rest)))
               (elem mn '(".asciz" ".string")) (raw (catmap (b \ b + [0]) (gf-strs rest)))
               (elem mn '(".zero" ".skip" ".space"))
-               (: f (? (two? >xs) (num <>xs) 0) (raw (map (i \ f & 255) ^(num <xs))))
+               (: f (? (two? >xs) (num <>xs) 0) ts (gtoks <xs)
+                  ; a count over labels waits for the whole template: ('skipx toks fill n)
+                  (? (any (t \ <t = 'lref || <t = 'sym) ts)
+                      (emit [['skipx (map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) ts) f 0]])
+                     (raw (map (i \ f & 255) ^(num <xs)))))
               (mn = ".org") (org rest)
               (mn = ".balign") (emit [['align (num <xs)]])
               (mn = ".p2align") (emit [['align (1 << num <xs)]])
@@ -605,6 +632,50 @@
                     (pin st 'run ((gf-lsub s rl) . (st 'run)))))))
        _ (foldl (\ _ x (line x)) 0 (gf-lines tgt src))
        _ (flush 0)
+       ; a .skip over label arithmetic (the alternatives' padding): each section's forms are
+       ; sized -- an instruction assembled alone -- and the count read with the labels' section
+       ; offsets in place, again until the sizes hold; then it lays its fill
+       (width l) (foldl (\ a x (a + (two? x ? (x 1) 1))) 0 l)
+       (noms x t) (? (nom? x) (pin t x 1) !(two? x) t (noms >x (noms <x t)))
+       (fsz f off) (<f @ 'raw (width <>f) 'label 0 'align ((<>f - off % <>f) % <>f) 'skipx (f 3) 'wordx (f 2)
+                         (width (holo-bytes-open tgt [f] (noms f {}))))
+       ; label -> its offset, each section's shifted by k times its own large stride
+       (offs k) (: t {} si {'i 1}
+                   _ (foldl (\ _ nm (: b (k * 1000003 * si 'i) _ (pin si 'i (si 'i + 1))
+                                       _ (foldl (\ off f (: _ (? (<f = 'label) (pin t (show <>f) (b + off)) 0)
+                                                            (off + fsz f off)))
+                                                0 (rev <>>(secs nm)))
+                                       0))
+                            0 (st 'order))
+                   t)
+       (ev f t) (gimm (map (k \ (k @ ('sym s) (: v (peep t s ()) (? (charm? v) ['num v] (scare 'gas-skip s)))
+                                    k)) (f 1)))
+       ; ..and a count that moves with where a section lands is no constant (a difference across sections)
+       (skv f t) (: v (ev f t) (? (v = ev f (offs 1)) v (scare 'gas-data (f 1))))
+       (skip? f) (two? f && <f = 'skipx)
+       (settle n)
+        (: t (offs 0) ch {'c 0}
+           _ (foldl (\ _ nm (: r (secs nm)
+                               fs (map (f \ (? (skip? f)
+                                                (: v (skv f t) v2 (? (v < 0) 0 v)
+                                                   _ (? (v2 != (f 3)) (pin ch 'c 1) 0)
+                                                   ['skipx (f 1) (f 2) v2])
+                                                f)) <>>r)
+                               (pin secs nm [<r <>r fs])))
+                    0 (st 'order))
+           (? !(ch 'c) 0 (n > 4) (scare 'gas-skip-settle src) (settle (n + 1))))
+       (later? f) (two? f && elem <f '(skipx wordx))
+       _ (? (any (nm \ any later? <>>(secs nm)) (st 'order))
+            (: _ (settle 0)
+               t (offs 0)
+               (lay f) (<f @ 'skipx ['raw (map (i \ (f 2) & 255) ^(f 3))]
+                             'wordx ['raw (gf-le (skv f t) (f 2))]
+                             f)
+               (foldl (\ _ nm (: r (secs nm)
+                                 (pin secs nm [<r <>r (filter (f \ !(<f = 'raw && !(two? <>f)))
+                                                              (map (f \ (? (later? f) (lay f) f)) <>>r))])))
+                      0 (st 'order)))
+            0)
        (sec nm) (: r (secs nm) [nm <r <>r (rev <>>r)])
        (exec? l) (0 < (<>(secs (labs l)) & 4))
        def (filter (l \ string? (labs l)) (rev (st 'globl)))

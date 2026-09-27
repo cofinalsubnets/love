@@ -16,6 +16,7 @@
 // love (apps/fat.l); this file is the small part that must be C.
 #include "k.h"
 #include "asmops.h"
+#include "mmio.h"
 #include <stdint.h>
 
 void serial_putc(int);
@@ -38,18 +39,6 @@ static struct {
   volatile uint32_t *notify32;       // mmio writes it here
 } kblk;
 
-// LE scalar access over device memory / the ring, all through volatile so the
-// compiler keeps program order. both arches are little-endian, so a plain
-// typed load IS the LE read.
-static inline uint8_t  r8 (volatile uint8_t *p) { return *p; }
-static inline uint16_t r16(volatile uint8_t *p) { return *(volatile uint16_t*) p; }
-static inline uint32_t r32(volatile uint8_t *p) { return *(volatile uint32_t*) p; }
-static inline void w8 (volatile uint8_t *p, uint8_t v)  { *p = v; }
-static inline void w16(volatile uint8_t *p, uint16_t v) { *(volatile uint16_t*) p = v; }
-static inline void w32(volatile uint8_t *p, uint32_t v) { *(volatile uint32_t*) p = v; }
-static inline void w64(volatile uint8_t *p, uint64_t v) {   // two 32-bit halves: the
-  w32(p, (uint32_t) v); w32(p + 4, (uint32_t) (v >> 32)); } // width every transport takes
-
 // the hardware fence DMA needs around the avail publish and the used read.
 // x86 is TSO and every ring access above is volatile, so program order is
 // enough; a64 reorders Normal-vs-Device, so a real barrier stands there.
@@ -60,8 +49,6 @@ static inline void dma_fence(void) {
   k_fence();
 #endif
 }
-
-static inline uintptr_t vtop(volatile void *p) { return (uintptr_t) p - khhdm; }
 
 // --- the split virtqueue, shared by both transports ------------------------
 // lays desc/avail/used plus the request header and status byte into the DMA
@@ -108,15 +95,7 @@ static int vq_go(uint32_t type, uint64_t lba, void *data, uint32_t bytes) {
   return r8(kblk.sts) == 0 ? 0 : -1; }
 
 #if defined(__x86_64__)
-// --- PCI config space, and the modern virtio-pci transport ------------------
-static uint32_t pci_r32(uint32_t bdf, uint32_t off) {
-  k_outl(0xcf8, 0x80000000u | bdf << 8 | (off & 0xfc));
-  return k_inl(0xcfc); }
-static void pci_w32(uint32_t bdf, uint32_t off, uint32_t v) {
-  k_outl(0xcf8, 0x80000000u | bdf << 8 | (off & 0xfc));
-  k_outl(0xcfc, v); }
-static uint32_t pci_r8(uint32_t bdf, uint32_t off) {
-  return pci_r32(bdf, off) >> 8 * (off & 3) & 0xff; }
+// --- the modern virtio-pci transport ----------------------------------------
 
 // a memory BAR's assigned address (the firmware laid it), 0 when empty/io.
 static uint64_t pci_bar(uint32_t bdf, uint32_t bar) {

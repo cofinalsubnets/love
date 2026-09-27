@@ -809,6 +809,7 @@
 ; text -- utf-8 read as characters and laid in terminal columns. a string stays its bytes and
 ; these walk it; a bad or torn sequence reads as U+FFFD and costs one byte, as a terminal draws it.
 ;   (cpat s i) (cpnext s i) -> the code point at byte i, and the byte after it
+;   (cpn s i)               -> the bytes a valid character at i wears, else 0
 ;   (cps s) (cplen s)       -> the code points, and how many
 ;   (cpsnip s a b)          -> characters a to b
 ;   (cprev s)               -> s back to front by character
@@ -816,7 +817,7 @@
 ;   (swidth s)              -> the columns s takes, a control none
 ;   (scut s n)              -> the longest head of s at most n columns wide
 
-(module '(text cpat cpnext cps cplen cpsnip cprev wcwidth swidth scut)
+(module '(text cpat cpnext cpn cps cplen cpsnip cprev wcwidth swidth scut)
    ; tools/mkwidth.l's runs, unicode 17: each entry cp * 4 + w opens a run of width w
 (: cpw
    @(1 3072 3521 4620 4649 5700 5881 5884 5889 5892 5901 5904 5913 5916 5921 6208 6253 6256
@@ -2567,7 +2568,8 @@
           (: _ (edrender pl t)
              _ (edstep t (edkey in))
              (t 'ev @ 0 (loop ())
-                (-7 || 4) eofsym
+                ; ^D leaves the line ended, so whatever runs next starts on its own
+                (-7 || 4) ((0 < (t 'below) ? (csi (t 'below) 66) ()), putc 10, eofsym)
                 ; enter cashes the buffer as long as it parses complete
                 10 (parseall (edchars t) @
                     ^no (ednl (eddetach t), loop ())
@@ -2671,12 +2673,12 @@
     ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
     ; open is posix's, and a seat without it answers () here rather than at the bake
     (load1 p) (: q ((cite 'posix 'open) p "r")
-                 (? (hot? q) (reads q) (say err $ "love: cannot open " + p, cli-leave 1)))
+                 (? (hot? q) (reads q) (say err $ "love: cannot open " + p + "\n", cli-leave 1)))
     (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, ==-safe
        (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
                                (a . b)  (rdl b (a . acc))
                                (rev acc))
-       (rdl s () @ ^m (say err "love: -e: unfinished form", cli-leave 2)
+       (rdl s () @ ^m (say err "love: -e: unfinished form\n", cli-leave 2)
                    (d @ (a . u)) (ev 'ev (atom? u ? a d)))) ; many datums fold to one application
     v-msg ("love " + love-version + "\n")   ; _ arg: love has no nullary calls
     h-msg
@@ -2692,7 +2694,7 @@
      "argument ends the chain, on the rest of its word (-m8m) or the next one\n" +
      "with no arguments then start a repl if on a tty else eval expressions from stdin\n" +
      "try `love verbs` to see a list of commands\n")
-    (need h '()) (say err $ "love: " + h + " needs an argument", cli-leave 2)
+    (need h '()) (say err $ "love: " + h + " needs an argument\n", cli-leave 2)
     K 1024 M 1048576 G 1073741824
     wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit
     ; validate here: a bad value reaching `tune` writes a non-Z tray, which the nif refuses
@@ -2707,7 +2709,7 @@
                                                  ; `:` body slot folds into the binding chain
                   (charm? v && v >= 0 ?
                    (v * (u || M) // wordsz)
-                   (say err $ "love: " + h + ": not a size: " + s,
+                   (say err $ "love: " + h + ": not a size: " + s + "\n",
                     cli-leave 2)))
     ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin / 'none.
     ; 'none is the line running out with no program named: -v and -h are not terminal, so

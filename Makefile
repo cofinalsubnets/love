@@ -914,7 +914,7 @@ endif
 
 # ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore sb mooncc cook papel kiosko libra ain lux bao lush
+binnames = $(BIN) kore sb mooncc cook papel libra ain lux bao lush
 mannames = $(BIN) cook lush
 installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
@@ -961,9 +961,8 @@ $d/bin/$(BIN): $(ho)/love
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    apps/cook.l    $(ho)/love
 $d/bin/papel:   apps/papel.l  $(ho)/love
-$d/bin/kiosko:  apps/kiosko/kiosko.l $(ho)/love
 $d/bin/libra:   apps/libra/libra.l  $(ho)/love
-$d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
+$d/bin/cook $d/bin/papel $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
