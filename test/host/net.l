@@ -122,6 +122,32 @@
          (0 <= (K 'wg-find) txt "Connection closed by foreign host." 0) (<st2 = 0)
          (0 <= (K 'wg-find) log "no login: whoever reaches port 7454 runs /bin/sh" 0)))
 
+; -- microcom ------------------------------------------------------------------------------
+; the serial line is a pty whose far end is a sleeping sh, its path off sh's tty; microcom
+; runs on a pty of its own. keys typed at microcom reach the line, the line's bytes reach
+; microcom's screen, and ^X leaves with 0
+(: love <cmdline
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (upto m n a) (? (n <= #a) a (: c (see m) (? (c < 0) a (upto m n (a + string c)))))
+   dv (tether ["sh" "-c" "tty; exec sleep 20"])
+   dm >dv
+   (line a) (: c (see dm) (? ((c < 0) || (c = 10)) a (line (a + string c))))
+   path (: l (line "") (? ((0 < #l) && (l (#l - 1) = 13)) (snip l 0 (#l - 1)) l))
+   mc (tether [love "kore" "microcom" "-s" "9600" path])
+   mm >mc
+   _ (rest 400)
+   _ (: _ (say mm "ping") (flush mm))
+   got (upto dm 4 "")
+   _ (: _ (say dm "pong") (flush dm))
+   shown (upto mm 4 "")
+   _ (: _ (say mm (string 24)) (flush mm))
+   st (waitfor <mc)
+   _ (still <dv 15)
+   _ (waitfor <dv)
+   bad (: r (tether [love "kore" "microcom" "-d" "5" path]) t (slurp >r) [t <(waitfor <r)])
+   (test (got = "ping") (shown = "pong") (<st = 0)
+         (0 <= ((cite 'kore 'wg-find) <bad "microcom: -d is not supported" 0)) (bad 1 = 1)))
+
 ; -- nslookup and ping --------------------------------------------------------------------
 ; nslookup against a nameserver that is a process of its own (the pty read holds this one):
 ; four queries, box.test's a and aaaa -- one address, then an empty yes -- and nosuch.test's

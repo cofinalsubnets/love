@@ -79,7 +79,7 @@
         printf-main ps-main pwd-main pwdx-main ranlib-main readlink-main realpath-main rebre refind refold renice-main
         rem reparse rev-main rmdir-main rm-main sed-main seq-main sha1sum-main sha224sum-main sha256sum-main
         sha384sum-main sha512sum-main b2sum-main sum-main shuf-main size-main sleep-main
-        sort-main sparse split-main srun stat-main strip-main stty-main sync-main df-main time-main tac-main tail-main
+        sort-main sparse split-main srun stat-main strip-main stty-main microcom-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
         touch-main lift-main tr-main true-main truncate-main tsort-main uatoi ubase uclk ucopy udiff udirp ujoin
         umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main
@@ -784,7 +784,7 @@
             'nslookup nslookup-main 'ping ping-main ; a name's records, and icmp echoes (the same)
             'ping6 ping6-main                   ; ... over ipv6
             'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
-            'nice nice-main 'renice renice-main 'stty stty-main 'truncate truncate-main
+            'nice nice-main 'renice renice-main 'stty stty-main 'microcom microcom-main 'truncate truncate-main
             'setsid setsid-main 'watch watch-main 'usleep usleep-main 'ts ts-main
             'getopt getopt-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
@@ -954,6 +954,7 @@
     'nice "usage: nice [-n N] [CMD [ARG..]]"
     'renice "usage: renice [-n|--relative] PRIORITY [-p|-g|-u] ID.."
     'stty "usage: stty [-F DEV] [-a|-g|SETTING..]"
+    'microcom "usage: microcom [-X] [-s SPEED] [-t TIMEOUT] TTY"
     'truncate "usage: truncate [-co] [-r RFILE] [-s [+-<>/%]SIZE] FILE.."
     'getopt "usage: getopt [-o SHORTS] [-l LONGS].. [-n NAME] [-aqQTu] [-s sh] [--] PARAMS  |  getopt SHORTS PARAMS"
     'printenv "usage: printenv [NAME..]"
@@ -1095,6 +1096,7 @@ every tool answers --help and --version, and -h where the letter is free
   setsid [-cfw] CMD | watch [-begtx] [-n S] CMD   a new session; a command every S seconds
   ts [-ism] [FMT] | usleep US | reset | pinky [-lsfwiq] [USER..]   stamps, a pause, the tty, who
   stty [-F DEV] [-a|-g|SETTING..]         the terminal's line discipline, shown or set
+  microcom [-X] [-s SPEED] [-t MS] TTY    a serial line and this terminal, byte for byte; ^X leaves
   getopt -o SHORTS [-l LONGS] -- PARAMS   options parsed and quoted for `eval set --`
   chroot DIR [CMD [ARG..]]                the root changed, then CMD in it
   mount [-t TYPE] [-o OPTS] SRC TGT       ... or bare, to list /proc/self/mounts

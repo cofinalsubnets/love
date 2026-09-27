@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (191 tools, 198 names)
+## the inventory (192 tools, 199 names)
 
 The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
 and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
@@ -87,7 +87,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
 | proc.l, the processes and the world | env nohup nice renice setsid printenv sleep usleep kill xargs time ts date id whoami groups |
-| proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them) |
+| proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them), microcom (a serial line and this terminal, byte for byte) |
 | proc.l, the host's utmp, read | who users pinky logname (glibc's, netbsd's utmpx and freebsd's utx.active; kore writes none) |
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
 | proc.l, the one-liners | cal hostname hostid dnsdomainname tty clear reset which timeout watch |
@@ -614,6 +614,12 @@ closes the connection and the client's going hangs the program up. `/etc/issue.n
 `-f`'s file, is shown first. `-F` and `-K` are what it always does; `-i`, `-w` and `-S` are
 refused by name.
 
+`microcom [-X] [-s SPEED] [-t TIMEOUT] TTY` (apps/kore/proc.l) is busybox's serial terminal,
+the other way onto a board: the line is opened read-write, never as the controlling terminal
+and without waiting on its carrier, then set raw 8N1 with no flow control at `-s`'s speed or
+its own. Bytes pass as they are both ways; ^X leaves unless `-X`, `-t` milliseconds of quiet
+leave too, and the line's settings go back as they were. `-d` is refused by name.
+
 `httpd [-fv] [-p PORT] [-h DIR]` is kiosko under busybox's name and flags: the port
 defaults to 80 and the directory to `.`, and `-v` logs each request. `-f` is accepted and
 always in force, because it never runs in the background. kiosko listens on every address,
@@ -760,8 +766,8 @@ over the packages above.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 204 | 392 | 239 | 201 | 108 | 261 |
-| shared with kore | | 167 | 141 | 135 | 101 | 49 |
+| names | 205 | 392 | 239 | 201 | 108 | 261 |
+| shared with kore | | 168 | 142 | 135 | 101 | 49 |
 | carried by no one else | 14 | 157 | 30 | 58 | 1 | 204 |
 
 What at least three of the other five carry and kore does not: `fmt`, `pr`, `uncompress`.
@@ -900,7 +906,7 @@ What at least three of the other five carry and kore does not: `fmt`, `pr`, `unc
 | `markdown` | ✓ |  |  |  |  |  |
 | `mc` | ✓ |  |  |  |  | ✓ |
 | `md5sum` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `microcom` |  | ✓ | ✓ |  |  |  |
+| `microcom` | ✓ | ✓ | ✓ |  |  |  |
 | `mkdir` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `mkdosfs` | ✓ | ✓ |  |  |  |  |
 | `mkfifo` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
