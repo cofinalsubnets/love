@@ -31,6 +31,7 @@
 ;   kore ps|top|free|uptime|pidof|pgrep|pkill|killall|pwdx   the /proc family
 ;   kore whoami|groups|arch|nproc    the four one-line answers
 ;   kore vi [file]                   the editor (apps/vi/)
+;   kore ed|ex [-s] [FILE]           the line editors, one buffer (apps/kore/ed.l)
 ;   kore less|more [-Nise] [+N|+/P] [F..]   the pager (apps/kore/less.l; one pager,
 ;                                           two spellings, less's keys and its manners)
 ;   kore man [-w] [SEC] NAME..       the manual pages (apps/kore/man.l): the roff a page is
@@ -64,7 +65,7 @@
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         telnet-main httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping-ms ping-t
-        diff-main as-main ar-main ld-main nm-main
+        diff-main as-main ar-main ld-main nm-main ed-main ex-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
         date-main dirname-main dos2unix-main dsplit du-main echo-main env-main expand-main expr-main
@@ -768,6 +769,7 @@
             'egrep (\ as (grep-main ("-E" . as))) 'fgrep (\ as (grep-main ("-F" . as)))
             'awk awk-main 'find find-main
             'vi (cite 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
+            'ed ed-main 'ex ex-main   ; the line editors (apps/kore/ed.l)
             'hexedit hexedit-main
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'man man-main    ; the pages the build writes, read back (apps/kore/man.l)
@@ -937,6 +939,8 @@
   -l  the math library (e l a s c j), and scale = 20
   -q  accepted: nothing is printed at start with or without it"
     'vi "usage: vi [FILE]"
+    'ed ed-usage
+    'ex ex-usage
     'env "usage: env [-i] [-u NAME].. [NAME=VALUE].. [CMD [ARG..]]"
     'nohup "usage: nohup CMD [ARG..]"
     'nice "usage: nice [-n N] [CMD [ARG..]]"
@@ -1094,6 +1098,7 @@ every tool answers --help and --version, and -h where the letter is free
   date [-u] [-d @SEC] [-r F] [+FMT]       the clock, UTC (no tz database here)
   id [-u|-g|-G] [-n]                      who this process is
   vi [FILE]                               the editor (apps/vi/)
+  ed [-s] [-p P] [F] | ex [-sRv] [-c CMD] [F]  the line editors (apps/kore/ed.l)
   less | more [-Nise] [+N|+/PAT] [F..]    the pager (apps/kore/less.l); h is its help
   man [-w] [SECTION] NAME..               the manual pages (apps/kore/man.l)
   html2text [-w COLS] [F..]               a page's prose, laid out (apps/kore/lens.l)
