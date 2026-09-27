@@ -1379,8 +1379,25 @@
       (0 = (occh mrf 'shr128))                   ; c = s >> 64: two moves, the high half a zero
       (: ws (filter (f \ two? f && <f = 'a128r) mrf) (elem ['li <>>(ws 1) 0] mrf))
       ; the park never nests here, so the hot params r and b take seats: the full-word sp loads
-      ; are the four cs restores, cold a's read per row and ai's in the inner loop
-      (6 = (splds mrf)))
+      ; are the two cs restores (c's pair; s's folded away, so csdrop drops its save), cold a's
+      ; read per row and ai's in the inner loop
+      (4 = (splds mrf))
+      ; r[i+j] is loaded and stored off one i + j: recse renames the load out of its register
+      (: ks (map (f \ >>f) (filter (f \ two? f && <f = 'add && #f = 4 && nom? (f 3)) mrf))
+         (0 = #(filter (k \ 1 < #(filter (= k) ks)) ks)))
+      ; no cs seat is saved without a use
+      (: (sv r) (two? (filter (f \ two? f && <f = 'st && <>f = 'sp && (f 3) = r) mrf))
+         (us r) (two? (filter (f \ two? f && elem r >f && !(<f = 'st && <>f = 'sp) && !(<f = 'ld && <>>f = 'sp)) mrf))
+         (0 = #(filter (r \ sv r && !(us r)) '(r11 r12 r13 r14)))))
+   ; recse never renames an in-place def (zx4 h reads the field it writes): a zx4 behind an
+   ; add extends what the add wrote
+   irP (cgn "void pz(unsigned *pa, unsigned a, unsigned b, unsigned top) { pa[a] = top + 1; pa[b] = top + 1; } int main() { return 0; }")
+   pzf (fnf 'pz <>irP)
+   _ (test
+      (two? irP)
+      (0 = #(filter (i \ (: f (pzf i) q (pzf (i - 1))
+                            (two? f && <f = 'zx4 && two? q && <q = 'add && <>q != <>f)))
+                    (map (+ 1) (jot (#pzf - 1))))))
    ; -- the borrow row: d < 0 is the high word's sign, the widened constants are two li, and
    ; d + 2^64 adds to the high half alone
    irS (cgn "int ms(unsigned long *r, unsigned long *a, unsigned long *b, int n) { __int128 w = 0; for (int i = 0; i < n; i++) { __int128 d = (__int128) a[i] - b[i] - w; if (d < 0) d += (__int128) ((unsigned __int128) 1 << 64), w = 1; else w = 0; r[i] = (unsigned long) d; } return n; } int main() { return 0; }")
