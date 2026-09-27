@@ -164,6 +164,24 @@ printf 'struct s;\nstatic struct s *f(int x){ if (x) return (struct s*)1; return
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   || fail "a CAST to the pointer type must still pass"
 
+# a bound that does not fold at file scope is refused and named, never laid as a pointer's
+# worth of storage -- a runtime __builtin_offsetof reaching one must not pass in silence
+printf 'int n = 3;\nstatic int x[n];\nstruct S { int a[4]; };\nint i;\nchar y[__builtin_offsetof(struct S, a[i])];\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "variably modified 'x' at file scope" \
+  || fail "a variably modified object at file scope was not refused by name"
+printf 'struct S { int a[4]; };\nint i;\nchar y[__builtin_offsetof(struct S, a[i])];\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+  && fail "a runtime offsetof as a file-scope bound was accepted"
+
+# cleanup runs code at every exit from a scope; skipped as decoration it drops the call
+# (linux's guard() would never unlock). refused by name wherever the attribute stands
+printf 'static void d(int *p){ (void)p; }\nint m(void){ int __attribute__((cleanup(d))) k = 1; return k; }\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "cleanup)) is not carried out" \
+  || fail "__attribute__((cleanup)) before the name was skipped"
+printf 'static void d(int *p){ (void)p; }\nint m(void){ int k __attribute__((__cleanup__(d))) = 1; return k; }\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "cleanup)) is not carried out" \
+  || fail "__attribute__((__cleanup__)) after the name was skipped"
+
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the
 # well-formed side; only the refusals live here.
