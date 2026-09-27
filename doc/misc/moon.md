@@ -451,7 +451,9 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   local labels, the system lane (control registers, msr, cpuid, in/out, SVM, VMX, the descriptor
   tables; mrs/msr/tlbi/dc/ic/at/brk/hvc; the csr pseudos, ecall/ebreak/unimp). x64's 32-bit forms
   ride the 64-bit op plus a zero-extend (`movl`, `addl`, `xorl`); the 8/16-bit register forms and
-  indexed memory refuse. A template separates on `\n` or `;`, as GNU does. A line that fits
+  indexed memory refuse. A `%gs:`/`%fs:` override rides a base-register access, or an absolute
+  address a load reaches through its destination (percpu's `%gs:sym`). A template separates on
+  `\n` or `;`, as GNU does. A line that fits
   nothing SCARES (`cc: internal error: gas-x64-op ..`) rather than dropping out.
 * The body assembles AT CODEGEN into one opaque `('raw bytes)`: the IR passes barrier on raw,
   labels inside a template stay LOCAL to it, and no pass ever rewrites user instructions.
