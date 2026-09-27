@@ -219,7 +219,7 @@
    ;; the register twins: the left pair rides two registers (rl lo : rh hi) instead of the cell,
    ;; the right keeps the rdx:rax protocol -- one form each, so the carry pair still can't part.
    ;; s128r answers through the park (rl/rh clobbered: they die with the op).
-   (emit-a128r rl rh) (alu-rr 1 'r0 rl + alu-rr 17 'r2 rh)        ; add rax,rl; adc rdx,rh
+   (emit-a128r rl rh) (alu-rr 1 'r0 rl + (charm? rh ? [72 131 210 (byte rh)] (alu-rr 17 'r2 rh)))   ; add rax,rl; adc rdx,rh|imm8
    (emit-s128r rl rh) (alu-rr 41 rl 'r0 + (alu-rr 25 rh 'r2       ; sub rl,rax; sbb rh,rdx
                      + (emit-mov 'r0 rl + emit-mov 'r2 rh)))      ; the pair back on the protocol
    (emit-mw128r rl) (: n (rn rl) [(rex 1 0 0 (hi n)) 247 (modrm 3 4 n)])    ; mul rl -> rdx:rax
