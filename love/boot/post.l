@@ -2039,7 +2039,8 @@
                       (pin traits k (foldl (\ t x (? (two? x) (pin t <x >x) (pin t x 1))) {} ts)))
    (trait k t) (peep (peep traits k {}) t 0)
    ; ..and the trait asked of one call: a function of the args answers for them
-   (holds k t as) (: v (trait k t) (? (lit? v) (bit (v as)) v))
+   ; a verb's parser may leave on a word it cannot read: that call is not the trait's
+   (holds k t as) (: v (trait k t) (? (lit? v) (trap (\ _ (bit (v as))) () (\ a b 0)) v))
    ; the verb run in the caller as a builtin: urun is the driver, so a leave from deep in
    ; answers a status and never ends the caller. () when no verb has the name
    (call k as) (: f (get k) (? (lit? f) (urun f as) ()))
@@ -2196,34 +2197,66 @@
    (splitat k acc n xs)
     (xs @- (k acc xs) ((ax . ux) && 0 < n) (splitat k (ax . acc) (n - 1) ux))
 
-   ; map non-printables to space; otherwise pass through
-   (prc c) (putc $ 32 <= c < 127 ? c 32)
+   ; the same by character: a utf-8 tail byte goes with the lead before it
+   (splitc k acc n xs)
+    (xs @- (k acc xs) ((ax . ux) && (0 < n || edtail? ax))
+     (splitc k (ax . acc) (edtail? ax ? n (n - 1)) ux))
+
+   ; map non-printables to space; otherwise pass through. a utf-8 byte is printable: the
+   ; terminal puts the character together
+   (prc c) (putc (32 <= c < 127 || 127 < c ? c 32))
+
+   ; the buffer holds bytes and the cursor moves by character
+   (edtail? c) (128 <= c < 192)
+   ; the columns a charlist of bytes takes: a control shows as a space (prc), a character
+   ; its wcwidth, and a sequence still arriving at the end none yet
+   (edpend? s i)
+    (: n #s need (? (s i < 224) 2 (s i < 240) 3 4)
+       (go k) (? (n <= k) 1 (edtail? (s k)) (go (k + 1)) ())
+       (n - i < need && go (i + 1)))
+   (edw cs)
+    (: s (string cs) n #s
+       (go i a) (? (n <= i) a
+                   (: b (s i)
+                      (? (b < 128) (go (i + 1) (a + 1))
+                         (192 <= b && cpnext s i = i + 1 && edpend? s i) a
+                         (go (cpnext s i) (a + max 0 (wcwidth (cpat s i)))))))
+       (go 0 0))
 
    (ednew _) {'u () 'l () 'r () 'd () 'ev 0}
    (edleft t) (: l (t 'l) u (t 'u) (?- t
-    (two? l) (pins t 'l >l 'r (<l . t 'r))
+    (two? l) (: (go l r) (: c <l (? (edtail? c && two? >l) (go >l (c . r)) [>l (c . r)]))
+                p (go l (t 'r))
+                (pins t 'l <p 'r <>p))
     (two? u) (pins t 'u >u 'l (rev <u) 'r () 'd (revcat l (t 'r) . t 'd))))
    (edright t) (: r (t 'r) d (t 'd) (?- t
-    (two? r) (pins t 'l (<r . t 'l) 'r >r)
+    (two? r) (: (go l r) (? (two? r && edtail? <r) (go (<r . l) >r) [l r])
+                p (go (<r . t 'l) >r)
+                (pins t 'l <p 'r <>p))
     (two? d) (pins t 'u (revcat (t 'l) r . t 'u) 'l () 'r <d 'd >d)))
-   (edbsp t) (: l (t 'l) u (t 'u) (?- t (two? l) (pin t 'l >l) (two? u) (pins t 'u >u 'l (rev <u))))
-   (eddel t) (: r (t 'r) d (t 'd) (?- t (two? r) (pin t 'r >r) (two? d) (pins t 'r <d 'd >d)))
+   (edbsp t) (: l (t 'l) u (t 'u) (?- t
+    (two? l) (: (go l) (? (two? >l && edtail? <l) (go >l) >l) (pin t 'l (go l)))
+    (two? u) (pins t 'u >u 'l (rev <u))))
+   (eddel t) (: r (t 'r) d (t 'd) (?- t
+    (two? r) (: (go r) (? (two? r && edtail? <r) (go >r) r) (pin t 'r (go >r)))
+    (two? d) (pins t 'r <d 'd >d)))
    (edhome t) (pins t 'l () 'r (revcat (t 'l) (t 'r)))
    (edend t) (pins t 'l (revcat (t 'r) (t 'l)) 'r ())
    ; edtop / edbot jump across the whole buffer: the start of the topmost line, the end
    ; of the bottommost. on a single-line buffer they are edhome / edend
    (edtop t) (rev (t 'u) @- (edhome t) (au . uu) (pins t 'u () 'l () 'r au 'd (uu + (revcat (t 'l) (t 'r) . t 'd))))
    (edbot t) (rev (t 'd) @- (edend t)  (ad . ud) (pins t 'u (ud + (revcat (t 'l) (t 'r) . t 'u)) 'l (rev ad) 'r () 'd ()))
-   ; up and down keep the column, clamped to the line
-   (edup t) (t 'u @- t (au . uu) (splitat (\ lz rr (pins t 'u uu 'l lz 'r rr 'd (revcat (t 'l) (t 'r) . t 'd))) () #(t 'l) au))
-   (eddown t) (t 'd @- t (ad . ud) (splitat (\ lz rr (pins t 'u (revcat (t 'l) (t 'r) . t 'u) 'l lz 'r rr 'd ud)) () #(t 'l) ad))
+   ; up and down keep the column (in characters), clamped to the line
+   (edn l) (foldl (a \ c \ edtail? c ? a (a + 1)) 0 l)
+   (edup t) (t 'u @- t (au . uu) (splitc (\ lz rr (pins t 'u uu 'l lz 'r rr 'd (revcat (t 'l) (t 'r) . t 'd))) () (edn (t 'l)) au))
+   (eddown t) (t 'd @- t (ad . ud) (splitc (\ lz rr (pins t 'u (revcat (t 'l) (t 'r) . t 'u) 'l lz 'r rr 'd ud)) () (edn (t 'l)) ad))
    (edput t c) (pin t 'l (c . t 'l))                       ; insert at the cursor
    (ednl t) (pins t 'u (rev (t 'l) . t 'u) 'l ())           ; break the line at the cursor
    (edclear t) (pins t 'u () 'l () 'r () 'd ())
    (edchars t) (joinln (revcat (t 'u) (revcat (t 'l) (t 'r) . t 'd)))   ; the whole buffer, one charlist
    edempty? (nil? * edchars)
    edtext (string * edchars)
-   (edcol t) #(t 'l)
+   (edcol t) (edw (rev (t 'l)))                            ; the cursor's screen column
    edparses? (two? * parseall * edchars)
    (edframe t) (t 'u . t 'l . t 'r . t 'd)           ; the buffer packed for history
    (edload t f) (pins t 'u <f 'l <>f 'r <>>f 'd >>>f)
@@ -2251,7 +2284,7 @@
    (edstep t c)
     (: (took f) (pin (f t) 'ev 0)
        (edit f) (took (f * eddetach))
-     (32 <= c < 127 ? (edit (b \ edput b c))
+     (32 <= c < 127 || 127 < c < 256 ? (edit (b \ edput b c))   ; a utf-8 byte too
       (c @ -1 (took edleft)
            -2 (took edright)
            (127 || 8 || -3) (edit edbsp)
@@ -2338,11 +2371,11 @@
    ; cursor pending there, so a line of n from column s covers (s + n - 1) // w + 1 rows
    (edlay w pl u l r d)
      (: (rows s n) (0 < n ? (((s + n - 1) // w) + 1) 1)
-        (span top s) (? (one? top) 0 ((rows s (tally <top)) + (span >top 0)))
+        (span top s) (? (one? top) 0 ((rows s (edw <top)) + (span >top 0)))
         above (span (rev u) pl)
         s0 (two? u ? 0 pl)
-        k (s0 + #l)
-        [(above + (k // w)) (k % w) (above + (rows s0 (#l + #r)) + (span d 0) - 1)])
+        k (s0 + edw (rev l))
+        [(above + (k // w)) (k % w) (above + (rows s0 (edw (revcat l r))) + (span d 0) - 1)])
    ; the screen already carries this line but for its last character: nothing above or below
    ; it, the cursor at its end, and an l that is the drawn one with a character pushed on top.
    ; l grows by prepending, so the drawn one is the tail and the question is an identity.

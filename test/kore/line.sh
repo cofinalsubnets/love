@@ -48,6 +48,19 @@ both "tac"      tac "$ho/.cu1" "$ho/.cu2"
 # back FIRST without one, which is the whole of tac's shape and easy to get wrong
 printf 'x\ny' > "$ho/.cu3"
 both "tac no-nl" tac "$ho/.cu3"
+# the separator (-s, NUL when empty), before rather than after (-b), and a regex in
+# Emacs's syntax (-r), GNU's backward search cutting a run into single digits
+printf 'x,y,,z,' > "$ho/.cu4"; printf 'one12two345three6' > "$ho/.cu5"
+printf 'aXXXbXXc' > "$ho/.cu6"; printf 'a\0b\0c' > "$ho/.cu7"; printf 'catdogcowdog' > "$ho/.cu8"
+both "tac -s"           tac -s , "$ho/.cu4"
+both "tac -bs"          tac -bs , "$ho/.cu4"
+both "tac -b"           tac -b "$ho/.cu1"
+both "tac overlap"      tac -s XX "$ho/.cu6"
+both "tac -s ''"        tac -s '' "$ho/.cu7"
+both "tac -r backward"  tac -r -s '[0-9][0-9]*' "$ho/.cu5"
+both "tac -r emacs"     tac -r -s '[0-9]\+' "$ho/.cu5"
+both "tac -r group"     tac -r -s '\(o\|g\)' "$ho/.cu8"
+both "tac -br"          tac -b -r -s 'd.g' "$ho/.cu8"
 # shuf answers no fixed order, so it is held to GNU through sort: the same records,
 # each once, a last one without its newline given one
 for t in "shuf" "shuf -n 9"; do

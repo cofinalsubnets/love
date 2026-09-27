@@ -39,8 +39,9 @@
 ;   kore html2text [-w N] [F..]      a page's prose, laid out (apps/kore/lens.l)
 ;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
 ;   kore www [-w N] URL|FILE         a web page, its links numbered (apps/kore/www.l)
-;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l); httpd, kiosko
-;                                    under busybox's flags, nslookup, ping and ping6 beside it
+;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l), telnetd its server;
+;                                    httpd, kiosko under busybox's flags, nslookup, ping, ping6
+;   kore ssh|sshd|scp ..             the ssh client and server, and scp over them (apps/ssh/cli.l)
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
 ;                                    one (apps/xz.l, inle/xz.c's LZMA2), bzip2|bunzip2|bzcat
 ;                                    (apps/bz2.l, inle/bz2.c); tar and cpio the
@@ -64,13 +65,13 @@
 ; leaves deep through `udie`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
-        telnet-main httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t
+        telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
         date-main dirname-main dos2unix-main dsplit du-main echo-main env-main expand-main expr-main
         mac2unix-main unix2dos-main
-        factor-main false-main find-main fold-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
+        factor-main false-main find-main fold-main column-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
         head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main markdown-main
         ln-main ls-main vdir-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
         mv-main myers nl-main nice-main nohup-main nproc-main
@@ -78,7 +79,7 @@
         printf-main ps-main pwd-main pwdx-main ranlib-main readlink-main realpath-main rebre refind refold renice-main
         rem reparse rev-main rmdir-main rm-main sed-main seq-main sha1sum-main sha224sum-main sha256sum-main
         sha384sum-main sha512sum-main b2sum-main sum-main shuf-main size-main sleep-main
-        sort-main sparse split-main srun stat-main strip-main stty-main sync-main df-main time-main tac-main tail-main
+        sort-main sparse split-main srun stat-main strip-main stty-main microcom-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
         touch-main lift-main tr-main true-main truncate-main tsort-main uatoi ubase uclk ucopy udiff udirp ujoin
         umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main
@@ -716,6 +717,8 @@
    applets {'diff diff-main
             'nm nm-main
             'nc (cite 'ain 'ain-main) 'ain (cite 'ain 'ain-main)   ; ain's wrap registered ahead in the cat
+            'ssh (cite 'ssh-cli 'ssh-main) 'sshd (cite 'ssh-cli 'sshd-main)   ; apps/ssh, ahead in the cat
+            'scp (cite 'ssh-cli 'scp-main)
             'make (cite 'cook 'cook-main) 'cook (cite 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
@@ -739,7 +742,7 @@
             ; the three line endings, one walk (apps/kore/core.l)
             'dos2unix dos2unix-main 'unix2dos unix2dos-main 'mac2unix mac2unix-main
             'nl nl-main 'rev rev-main
-            'fold fold-main 'expand expand-main 'unexpand unexpand-main
+            'fold fold-main 'expand expand-main 'unexpand unexpand-main 'column column-main
             'base64 base64-main 'base32 base32-main 'basenc basenc-main
             'uuencode uuencode-main 'uudecode uudecode-main 'ascii ascii-main
             'tsort tsort-main 'factor factor-main
@@ -777,10 +780,12 @@
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'www www-main               ; a page to read, its links followed (apps/kore/www.l)
             'telnet telnet-main 'httpd httpd-main   ; a remote terminal, and kiosko (apps/kore/net.l)
+            'telnetd telnetd-main                     ; ... and the terminal's server
             'nslookup nslookup-main 'ping ping-main ; a name's records, and icmp echoes (the same)
             'ping6 ping6-main                   ; ... over ipv6
+            'traceroute traceroute-main 'traceroute6 traceroute6-main   ; the hops to a host
             'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
-            'nice nice-main 'renice renice-main 'stty stty-main 'truncate truncate-main
+            'nice nice-main 'renice renice-main 'stty stty-main 'microcom microcom-main 'truncate truncate-main
             'setsid setsid-main 'watch watch-main 'usleep usleep-main 'ts ts-main
             'getopt getopt-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
@@ -826,13 +831,16 @@
    {'diff "usage: diff OLD NEW   (0 same / 1 differ / 2 trouble)"
     'nm "usage: nm [-g] [-u] [-p] FILE.."
     'nc "usage: nc HOST PORT  |  nc -l PORT"
+    'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
+    'sshd "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
+    'scp "usage: scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target"
     'ain "usage: ain HOST PORT  |  ain -l PORT"
     'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
     'objcopy "usage: objcopy -O binary|ihex IN OUT"
     'cat "usage: cat [FILE..]"
-    'tac "usage: tac [FILE..]"
+    'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-n N] [-c N] [-N] [FILE..]"
     'tail "usage: tail [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwmc] [FILE..]"
@@ -855,6 +863,7 @@
     'nl "usage: nl [FILE..]"
     'rev "usage: rev [FILE..]"
     'fold "usage: fold [-w N] [-s] [-b] [FILE..]"
+    'column "usage: column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]"
     'expand "usage: expand [-t N] [-i] [FILE..]"
     'unexpand "usage: unexpand [-a] [-t N] [FILE..]"
     'base64 "usage: base64 [-d] [-w N] [FILE]"
@@ -947,6 +956,7 @@
     'nice "usage: nice [-n N] [CMD [ARG..]]"
     'renice "usage: renice [-n|--relative] PRIORITY [-p|-g|-u] ID.."
     'stty "usage: stty [-F DEV] [-a|-g|SETTING..]"
+    'microcom "usage: microcom [-X] [-s SPEED] [-t TIMEOUT] TTY"
     'truncate "usage: truncate [-co] [-r RFILE] [-s [+-<>/%]SIZE] FILE.."
     'getopt "usage: getopt [-o SHORTS] [-l LONGS].. [-n NAME] [-aqQTu] [-s sh] [--] PARAMS  |  getopt SHORTS PARAMS"
     'printenv "usage: printenv [NAME..]"
@@ -989,10 +999,13 @@
     'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
     'www "usage: www [-w COLS] URL|FILE"
     'telnet "usage: telnet HOST [PORT]"
+    'telnetd "usage: telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]"
     'httpd "usage: httpd [-fv] [-p PORT] [-h DIR]"
     'nslookup "usage: nslookup [-type=A|AAAA|CNAME|MX|NS|PTR|SOA|TXT] [-port=N] HOST [SERVER]"
     'ping "usage: ping [-46q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
     'ping6 "usage: ping6 [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
+    'traceroute "usage: traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
+    'traceroute6 "usage: traceroute6 [-nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
     'dd "usage: dd [if=F] [of=F] [bs=N] [count=N] [skip=N] [status=none]"
     'xxd "usage: xxd [-r] [FILE..]"
     'hexdump "usage: hexdump [-Cv] [-n LEN] [-s SKIP] [FILE..]"
@@ -1050,6 +1063,8 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
 every tool answers --help and --version, and -h where the letter is free
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
   nc HOST PORT       netcat; nc -l PORT listens
+  ssh [user@]HOST    the ssh client; sshd [-p PORT] serves this user (apps/ssh)
+  scp SRC.. DEST     copies over ssh, [user@]host:path on one side (rcp's protocol)
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
   as TGT IN OUT      assemble IR forms from IN (x64|a64) into ELF OUT
   ar rcs OUT M..     the archive, GNU shape + ranlib index (ar t OUT lists)
@@ -1062,6 +1077,7 @@ every tool answers --help and --version, and -h where the letter is free
   cut tr nl rev                           the field tools
   dos2unix | unix2dos | mac2unix [-fkqn] [F..]   the line endings, converted IN PLACE
   fold [-w N] [-s] [-b] | expand [-t N] [-i] | unexpand [-a] [-t N]   the columns
+  column [-tx] [-c N] [-s SEP] [-o SEP] [FILE..]   lines laid in columns, or -t a table
   base64 | base32 [-d] [-w N] [F]         the encodings (RFC 4648)
   tsort [F] | factor [N..]                the two little computations
   paste comm join split od                the record tools
@@ -1085,6 +1101,7 @@ every tool answers --help and --version, and -h where the letter is free
   setsid [-cfw] CMD | watch [-begtx] [-n S] CMD   a new session; a command every S seconds
   ts [-ism] [FMT] | usleep US | reset | pinky [-lsfwiq] [USER..]   stamps, a pause, the tty, who
   stty [-F DEV] [-a|-g|SETTING..]         the terminal's line discipline, shown or set
+  microcom [-X] [-s SPEED] [-t MS] TTY    a serial line and this terminal, byte for byte; ^X leaves
   getopt -o SHORTS [-l LONGS] -- PARAMS   options parsed and quoted for `eval set --`
   chroot DIR [CMD [ARG..]]                the root changed, then CMD in it
   mount [-t TYPE] [-o OPTS] SRC TGT       ... or bare, to list /proc/self/mounts
@@ -1107,10 +1124,12 @@ every tool answers --help and --version, and -h where the letter is free
   markdown [-t html|roff|text] [F..]      markdown laid out the other way
   www [-w COLS] URL|FILE                  a web page, its links numbered (apps/kore/www.l)
   telnet HOST [PORT]                      a remote terminal; ^] closes (apps/kore/net.l)
+  telnetd [-p PORT] [-b ADDR] [-l LOGIN]  its server: LOGIN (/bin/login) on a pty per client
   httpd [-fv] [-p PORT] [-h DIR]          kiosko under busybox's flags (apps/kore/net.l)
   nslookup [-type=T] HOST [SERVER]        a name's records, from a nameserver (apps/kore/net.l)
   ping [-46q] [-c N] [-i S] [-W S] HOST   icmp echoes and their round trips (apps/kore/net.l)
   ping6 [-q] [-c N] [-i S] [-W S] HOST    the same over ipv6 (apps/kore/net.l)
+  traceroute [-46n] [-m MAX] [-q N] HOST  the routers on the way, by icmp echoes (the same)
   sh [-c CMD | FILE]                      the shell, lush (apps/lush.l)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (apps/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
@@ -1173,20 +1192,25 @@ every tool answers --help and --version, and -h where the letter is free
              'chown 'chgrp 'truncate 'shred 'mount 'umount 'clear 'lift]
    ; ..and the readers, safe per call: stdin when bare, and a fifo or a device need not end.
    ; each takes no option word of its own, so a call whose every operand is a regular file
-   ; reads only those; any other word -- an option's argument, a -, nothing at all -- forks.
-   ; each says a line a file. cat, tac and rev say what they read, and in a $( ) the
-   ; shell is the pipe's only reader: one say bigger than the pipe would wait on itself
-   korefiles ['wc 'cksum 'md5sum 'sha1sum 'sha224sum 'sha256sum 'sha384sum
+   ; reads only those; any other word -- an option's argument, a -, nothing at all -- forks
+   korefiles ['cat 'wc 'tac 'rev 'cksum 'md5sum 'sha1sum 'sha224sum 'sha256sum 'sha384sum
               'sha512sum 'sha3sum 'b2sum 'crc32 'sum]
+   (kregs? os) (: (reg? p) (: st (stat p) (two? st && (st 2 & 61440) = 32768))
+                  (two? os && all (p \ !(p = "-") && reg? p) os))
    (kfiles? as)
     (: (ops l) (? !(two? l) () (<l = "--") >l
                   (1 < #<l && <l 0 = 45) (ops >l)
                   (<l . ops >l))
-       os (ops as)
-       (reg? p) (: st (stat p) (two? st && (st 2 & 61440) = 32768))
-       (two? os && all (p \ !(p = "-") && reg? p) os))
+       (kregs? (ops as)))
+   ; ..and the filters whose options carry words: each asks its own parser for its
+   ; operands, so a word an option took is never mistaken for a file
+   korepreds {'head (\ as (: p (uclip-args "head" as) (kregs? <>p)))
+              'tail (\ as (: p (uclip-args "tail" as) (kregs? <>p)))
+              'cut (\ as (: p (cut-args as) (kregs? (p 5))))
+              'grep (\ as (: t (tablet 0) o (grep-opt as t) (two? o && kregs? (grep-fs o))))}
    (koretraits k) (? (elem k korebuiltin) ['builtin 'self] (elem k koreself) ['self]
-                     (elem k korefiles) [('self . kfiles?)] ())
+                     (elem k korefiles) [('self . kfiles?)]
+                     (lit? (peep korepreds k ())) [('self . peep korepreds k ())] ())
    _ (: E (cite 'verbs 'enlist)
         ; kore-main is unbound here -- it binds later in this same form -- so the
         ; closure reads it through the registry at the call, when module 'kore holds

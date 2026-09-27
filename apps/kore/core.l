@@ -1,6 +1,6 @@
 ; apps/kore/core.l -- the line tools, the coreutils batch of kore: cat, tac, shuf, echo,
 ; head, tail, wc, sort, uniq, tee, seq, yes, true, false, basename, dirname -- the
-; field tools cut, tr, nl, rev -- the column tools fold, expand, unexpand -- and the
+; field tools cut, tr, nl, rev -- the column tools fold, expand, unexpand, column -- and the
 ; encodings base64 and base32 beside tsort and factor. every tool is a
 ; <name>-main (the args after its name -> conversation on the ports -> the exit status,
 ; answered as a charm; a leave from deep inside rides udie, and urun is the door both
@@ -42,14 +42,88 @@
    ; the end is known. Reading it a line at a time still drops the whole-text copy and
    ; the `lines` list over it, and prepending is the reversal, so there is no rev.
    ; utac stays as the pure face test/law/kore.l holds.
+   ; -- tac: each operand's records, last first. a record ends with its separator -- a
+   ; newline unsaid, -s SEP, a basic regex under -r -- or opens with it under -b; the
+   ; last keeps what it has, a separator or none, as GNU's does --
+   (tac-cuts s sep rx)                 ; each separator's (start . end), left to right
+    ; GNU's looks from the end back, each separator ending at or before the start of the
+    ; last one found -- so a regex's run is cut shorter than a forward walk would cut it
+    (: n #s m #sep
+       RF (cite 're 'refind)
+       (lit p acc) (? (p < 0) acc
+                      (snip s p (p + m) = sep) (lit (p - m) ((p . (p + m)) . acc))
+                      (lit (p - 1) acc))
+       ; every place a match can start, rightmost first; then from the end back, the
+       ; longest match at each that ends by the bound
+       (starts i acc) (? (n <= i) acc (RF rx s i @ [_ a _ _] (starts (a + 1) (a . acc)) acc))
+       (back bound cs acc)
+        (? !(two? cs) acc
+           (bound <= <cs) (back bound >cs acc)
+           (: q <cs
+              (RF rx (snip s q bound) 0 @ [_ a e _] (? (a = 0 && 0 < e) (back q >cs ((q . (q + e)) . acc))
+                                                       (back bound >cs acc))
+                                         (back bound >cs acc))))
+       (? rx (back n (starts 0 ()) ()) (lit (n - m) ())))
+   ; GNU's tac reads its regex in Emacs's syntax: \( \) \| are the operators and a bare
+   ; ( ) | { } is itself, where ERE has it the other way; + ? are bare in both
+   (tac-emacs p)
+    (: n #p
+       (close i) (: j0 (i + 1) j1 (? (j0 < n && p j0 = 94) (j0 + 1) j0)
+                    j2 (? (j1 < n && p j1 = 93) (j1 + 1) j1)
+                    (go j) (? (n <= j) n (p j = 93) (j + 1) (go (j + 1)))
+                    (go j2))
+       (go i acc) (? (n <= i) acc
+                     (: c (p i)
+                        (? (c = 91) (: e (close i) (go e (acc + snip p i e)))
+                           (c = 92 && i + 1 < n)
+                            (: d (p (i + 1))
+                               (? (elem d [40 41 124]) (go (i + 2) (acc + string d))
+                                  (go (i + 2) (acc + snip p i (i + 2)))))
+                           (elem c [40 41 124 123 125]) (go (i + 1) (acc + "\\" + string c))
+                           (go (i + 1) (acc + string c)))))
+       (go 0 ""))
+   (tac-recs s ks)                     ; s cut at each of ks, empty pieces dropped
+    (: (go from ks acc) (? !(two? ks) (rev (? (from < #s) (snip s from #s . acc) acc))
+                           (go <ks >ks (? (from < <ks) (snip s from <ks . acc) acc)))
+       (go 0 ks ()))
+   (tac-noarg _) (udie 1 "tac: option requires an argument -- 's'")
+   (tac-opts t l)                      ; -> the operands; -b -r -s take clusters and long names
+    (? !(two? l) ()
+       (<l = "--") >l
+       (<l = "--before") (: _ (pin t 'b 1) (tac-opts t >l))
+       (<l = "--regex") (: _ (pin t 'r 1) (tac-opts t >l))
+       (<l = "--separator") (? (two? >l) (: _ (pin t 's <>l) (tac-opts t >>l)) (tac-noarg ()))
+       (12 < #<l && snip <l 0 12 = "--separator=") (: _ (pin t 's (snip <l 12 #<l)) (tac-opts t >l))
+       (1 < #<l && <l 0 = 45 && <l 1 = 45) (udie 1 ("tac: unrecognized option '" + <l + "'"))
+       (1 < #<l && <l 0 = 45)
+        (: w <l
+           (go k) (? (#w <= k) (tac-opts t >l)
+                     (w k = 98) (: _ (pin t 'b 1) (go (k + 1)))
+                     (w k = 114) (: _ (pin t 'r 1) (go (k + 1)))
+                     (w k = 115) (? (k + 1 < #w) (: _ (pin t 's (snip w (k + 1) #w)) (tac-opts t >l))
+                                    (two? >l) (: _ (pin t 's <>l) (tac-opts t >>l))
+                                    (tac-noarg ()))
+                     (udie 1 ("tac: invalid option -- '" + string (w k) + "'")))
+           (go 1))
+       (<l . tac-opts t >l))
    (tac-main as)
-    (ureach "tac"
-            (\ f first rd
-               (: (go acc) (: l (urd-line rd)
-                              (? !(two? l) acc (go ((<l + (? <>l "\n" "")) . acc))))
-                  (out1 m) (? (two? m) (: _ (say out <m) (out1 >m)) 1)
-                  (out1 (go ()))))
-            as)
+    (: t {'s "\n"}
+       fs (tac-opts t as)
+       sep (: v (t 's) (? (0 = #v) (string 0) v))   ; an empty separator is the NUL, as GNU's
+       rc (? (peep t 'r 0) ((cite 're 'reere) (tac-emacs sep)) ())
+       _ (? (peep t 'r 0) (? (two? rc) 0 (udie 1 ("tac: invalid regular expression: " + sep))) 0)
+       rx (? (two? rc) (rc 1) ())
+       b? (peep t 'b 0)
+       (ureach "tac"
+               (\ f first rd
+                  (: j (jug 0)
+                     (gulp _) (: h (urd-gulp rd) (? #h (: _ (say j h) (gulp 0)) 0))
+                     _ (gulp 0)
+                     s (slurp j)
+                     ks (map (c \ (? b? <c >c)) (tac-cuts s sep rx))
+                     _ (each (rev (tac-recs s ks)) (r \ say out r))
+                     1))
+               fs))
 
    ; -- shuf: the records in a random order; -e takes the operands as the records, -i
    ; LO-HI the numbers, -n caps the count, -r draws with replacement, -z splits on NUL.
@@ -838,7 +912,7 @@
 
    ; -- cut: -f list [-d C] [-s] over fields, -c list over characters, -b list over
    ; bytes (flags glue or not) --
-   (cut-main as)
+   (cut-args as)                       ; -> (delim fields chars b? s? files)
     (: (fl a d f c b? s?)
         (? !(two? a) [d f c b? s? a]
            (: h <a
@@ -856,7 +930,9 @@
                  ((2 < tally h) && (snip h 0 2 = "-c")) (fl >a d f (snip h 2 (tally h)) 0 s?)
                  ((2 < tally h) && (snip h 0 2 = "-b")) (fl >a d f (snip h 2 (tally h)) 1 s?)
                  [d f c b? s? a])))
-       p (fl as 9 () () 0 0)
+       (fl as 9 () () 0 0))
+   (cut-main as)
+    (: p (cut-args as)
        d <p fspec <>p cspec <>>p b? <>>>p s? <>>>>p
        fs <>>>>>p
        _ (? (fspec || cspec) () (udie 2 "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST"))
@@ -1131,6 +1207,73 @@
                         (go >m)))
            (go (ufold w s? b? ln)))
        (ulines "fold" dot <>>o))
+
+   ; -- column: lines laid in columns, util-linux's and the BSDs' byte for byte. filling,
+   ; every column is one width, the widest entry's taken past the next tab stop, and the pad
+   ; is tabs; down the columns unless -x, across -c's width (the screen's, else 80), a name
+   ; a line when even two will not fit. -t makes a table: fields split on whitespace (a run
+   ; as one, the ends dropped) or on each of -s's characters (so an empty field stays), each
+   ; column as wide as its widest cell, -o between (two spaces), a short row padded to the
+   ; last column. blank lines are skipped; widths are screen columns, a wide character two
+   (col-sp n) (? (n < 1) "" (" " + col-sp (n - 1)))
+   (col-vec l) (: t (tablet 0) (go l j) (? !(two? l) t (: _ (pin t j <l) (go >l (j + 1)))) (go l 0))
+   ; tabs from screen column c up to the stop end, util-linux's loop
+   (col-stop c) (((c // 8) + 1) * 8)
+   (col-tabs c end) (: n (col-stop c) (? (end < n) "" ("\t" + col-tabs n end)))
+   (col-fill ls w across?)
+    (: n #ls v (col-vec ls)
+       ws (col-vec (map swidth ls))
+       mx (col-stop (foldl max 0 (map swidth ls)))
+       (? (n < 1) 0
+          (w <= mx) (map (l \ say out (l + "\n")) ls)
+          (: cols (: k (w // mx) (? (k < 1) 1 k))
+             rows (((n + cols) - 1) // cols)
+             ; one line's entries, the tabs between them: past an entry the position is the
+             ; column's stop when a tab reached it, else where the entry ended
+             (line js c end acc)
+              (? !(two? js) acc
+                 (: j <js c2 (c + ws j)
+                    (? (two? >js)
+                       (line >js (? ((col-stop c2) <= end) end c2) (end + mx) (acc + v j + col-tabs c2 end))
+                       (acc + v j))))
+             (idx r) (filter (j \ j < n) (map (k \ ? across? ((r * cols) + k) (r + (k * rows))) (jot cols)))
+             (map (r \ say out (line (idx r) 0 mx "" + "\n")) (jot rows)))))
+   (col-split ln sep)
+    (? (string? sep)
+       (: cs (map (i \ sep i) (jot #sep))
+          (go i j acc) (? (#ln <= i) (rev (snip ln j i . acc))
+                          (elem (ln i) cs) (go (i + 1) (i + 1) (snip ln j i . acc))
+                          (go (i + 1) j acc))
+          (go 0 0 ()))
+       (: (go i j acc) (? (#ln <= i) (rev (? (j < i) (snip ln j i . acc) acc))
+                          ((ln i = 32) || (ln i = 9))
+                           (go (i + 1) (i + 1) (? (j < i) (snip ln j i . acc) acc))
+                          (go (i + 1) j acc))
+          (go 0 0 ())))
+   (col-table ls sep osep)
+    (: rows (map (l \ col-split l sep) ls)
+       nc (foldl max 0 (map tally rows))
+       wd (col-vec (map (c \ foldl max 0 (map (r \ ? (c < #r) (swidth (r c)) 0) rows)) (jot nc)))
+       (cell r c) (? (c < #r) (r c) "")
+       (lay r c) (? (nc <= c + 1) (cell r c)
+                    (: s (cell r c) (s + col-sp (wd c - swidth s) + osep + lay r (c + 1))))
+       (map (r \ say out (lay r 0 + "\n")) rows))
+   (column-main as)
+    (: t (tablet 0)
+       o (uopt as t '(99 115 111) () ())
+       _ (? (two? o) 0 (udie 1 "usage: column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]"))
+       _ (: c (uoptun t "csotx") (? (nil? c) 0 (udie 1 ("column: unknown option -" + string c))))
+       wv (uoptv t 99)
+       w (? (string? wv)
+            (: n (unum wv) (? (charm? n && 0 < n) n (udie 1 ("column: invalid columns argument: '" + wv + "'"))))
+            ((cite 'grid 'screen) 1))
+       osep (: v (uoptv t 111) (? (string? v) v "  "))
+       box (tablet 1) _ (pin box 'l ())
+       st (ulines "column" (\ ln _ (: _ (? (0 < #ln) (pin box 'l (ln . box 'l)) 0) 1)) (o 2))
+       ls (rev (box 'l))
+       _ (? (peep t 116 0) (col-table ls (uoptv t 115) osep) (col-fill ls w (peep t 120 0)))
+       _ (flush out)
+       st)
 
    ; -- expand: tabs to spaces, a stop every n (8 unsaid); -i converts only the
    ; blanks a line opens with --

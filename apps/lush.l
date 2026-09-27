@@ -2460,6 +2460,13 @@
               _ (flush out)                    ; the bytes already in hand are the caller's
               sv (dup 1)
               _ (dup2 wfd 1)
+              ; the body's own words go through a port over the pipe, never the static
+              ; stdout: its write waits on the device, and here the device's only reader
+              ; is a task of this process -- one say bigger than the pipe would wait on
+              ; itself. a port's write parks instead. a child sheds it and writes fd 1
+              po (fdopen (dup wfd))
+              w0 (worn ())
+              _ (sh-wearout po)
               caps (sh-subfds ())
               _ (pin sh-subfds () ((rfd . d) . caps))
               snap (sh-subsave ())
@@ -2470,7 +2477,9 @@
               ; once, in the teardown both ways out share.
               got (tablet 0)
               st (mind (_ \ sh-guarded (_ \ sh-eval a)) ()
-                       (\ _ (flush out,             ; the body's bytes, before the ends go
+                       (\ _ (flush out,             ; the body's bytes, before the ends go:
+                               wear w0,             ; a flush parks until the drain has them
+                               close po,
                                sh-subback snap,
                                pin sh-subfds () caps,
                                ; fd 1 is a write end too (the dup2 above), so it has to be

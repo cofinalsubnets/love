@@ -90,6 +90,64 @@
    _ (test (0 <= (K 'wg-find) (slurp >r3) "telnet: not a port: http" 0) (<(waitfor <r3) = 2))
    0)
 
+; -- telnetd -------------------------------------------------------------------------------
+; the input side byte by byte: a CR's LF or NUL is part of it, IAC IAC is a 255, an unasked
+; will is refused and what was asked or offered answers nothing, a subnegotiation is kept
+; out of the data. then kore's telnet against kore's telnetd running /bin/sh on loopback
+(: K (cite 'kore)
+   st ((K 'td-new) 0)
+   (ch s) ((K 'td-chunk) st s ())
+   (iac v x) (string 255 + string v + string x)
+   _ (test (ch "ls\r\n" = ["ls\r" ""]) (ch "a\r\x00b" = ["a\rb" ""])
+           (ch ("x" + string 255 + string 255 + "y") = [("x" + string 255 + "y") ""])
+           (ch (iac 251 24) = ["" (iac 254 24)]) (ch (iac 253 5) = ["" (iac 252 5)])
+           (ch (iac 251 31 + iac 253 1 + iac 253 3 + iac 252 1) = ["" ""])
+           (ch ("a" + string 255 + string 250 + "\x1f\x00\x50\x00\x18" + string 255 + string 240 + "b") = ["ab" ""])
+           ((K 'td-esc) ("q" + string 255) = "q" + string 255 + string 255))
+   love <cmdline
+   port 7454
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   srv (tether [love "kore" "telnetd" "-p" (show port) "-b" "127.0.0.1" "-l" "/bin/sh" "-f" "/dev/null"])
+   _ (rest 300)
+   r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
+   m >r
+   _ (rest 500)                                  ; the options settled, the shell's prompt up
+   _ (: _ (say m "echo td-$((6*7))\rexit\r") (flush m))
+   txt (slurp m)
+   st2 (waitfor <r)
+   _ (still <srv 15)
+   log (slurp >srv)
+   _ (waitfor <srv)
+   (test (0 <= (K 'wg-find) txt "td-42" 0)
+         (0 <= (K 'wg-find) txt "Connection closed by foreign host." 0) (<st2 = 0)
+         (0 <= (K 'wg-find) log "no login: whoever reaches port 7454 runs /bin/sh" 0)))
+
+; -- microcom ------------------------------------------------------------------------------
+; the serial line is a pty whose far end is a sleeping sh, its path off sh's tty; microcom
+; runs on a pty of its own. keys typed at microcom reach the line, the line's bytes reach
+; microcom's screen, and ^X leaves with 0
+(: love <cmdline
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (upto m n a) (? (n <= #a) a (: c (see m) (? (c < 0) a (upto m n (a + string c)))))
+   dv (tether ["sh" "-c" "tty; exec sleep 20"])
+   dm >dv
+   (line a) (: c (see dm) (? ((c < 0) || (c = 10)) a (line (a + string c))))
+   path (: l (line "") (? ((0 < #l) && (l (#l - 1) = 13)) (snip l 0 (#l - 1)) l))
+   mc (tether [love "kore" "microcom" "-s" "9600" path])
+   mm >mc
+   _ (rest 400)
+   _ (: _ (say mm "ping") (flush mm))
+   got (upto dm 4 "")
+   _ (: _ (say dm "pong") (flush dm))
+   shown (upto mm 4 "")
+   _ (: _ (say mm (string 24)) (flush mm))
+   st (waitfor <mc)
+   _ (still <dv 15)
+   _ (waitfor <dv)
+   bad (: r (tether [love "kore" "microcom" "-d" "5" path]) t (slurp >r) [t <(waitfor <r)])
+   (test (got = "ping") (shown = "pong") (<st = 0)
+         (0 <= ((cite 'kore 'wg-find) <bad "microcom: -d is not supported" 0)) (bad 1 = 1)))
+
 ; -- nslookup and ping --------------------------------------------------------------------
 ; nslookup against a nameserver that is a process of its own (the pty read holds this one):
 ; four queries, box.test's a and aaaa -- one address, then an empty yes -- and nosuch.test's
@@ -164,6 +222,68 @@
    (test (has? <h "ping: bad -c x") (h 1 = 2)
          ((K 'ping-ms) "1" = 1000) ((K 'ping-ms) "0.2" = 200) ((K 'ping-ms) "2.5" = 2500)
          ((K 'ping-ms) "x" = ()) ((K 'ping-t) 84000 = "0.084") ((K 'ping-t) 11331000 = "11.331")))
+
+; -- traceroute ---------------------------------------------------------------------------
+; a small internet in namespaces, where unshare, ip and nsenter can make one: ours, a router
+; (its icmp rate limits off) and a target behind it, v4 and v6. each traceroute runs twice,
+; first on a raw socket (a fresh namespace shuts ping_group_range) and then on the echo
+; socket with its error queue: the router at hop 1, the target at 2, and !N for a network
+; the router has no route to. a ping6 first, so neighbour discovery is done before timing.
+; the unreachable marks off tr-mark, and the loopback trace, run everywhere
+(: K (cite 'kore)
+   love <cmdline
+   dir "out/.nettest"
+   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
+   sfile (dir + "/nsnet.sh")
+   _ (: p (open sfile "w")
+        _ (say p "LOVE=$1
+ip link set lo up || exit 99
+unshare -n sleep 30 & R=$!
+unshare -n sleep 30 & D=$!
+sleep 0.3
+ip link add a0 type veth peer name r0 netns $R || exit 99
+nsenter -t $R -n ip link add r1 type veth peer name d0 netns $D || exit 99
+ip addr add 10.1.0.1/24 dev a0; ip -6 addr add fd01::1/64 dev a0 nodad; ip link set a0 up
+ip route add default via 10.1.0.2; ip -6 route add default via fd01::2
+nsenter -t $R -n sh -c 'ip link set lo up
+  ip addr add 10.1.0.2/24 dev r0; ip -6 addr add fd01::2/64 dev r0 nodad; ip link set r0 up
+  ip addr add 10.2.0.1/24 dev r1; ip -6 addr add fd02::1/64 dev r1 nodad; ip link set r1 up
+  echo 1 > /proc/sys/net/ipv4/ip_forward; echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
+  echo 0 > /proc/sys/net/ipv4/icmp_ratelimit; echo 0 > /proc/sys/net/ipv6/icmp/ratelimit' || exit 99
+nsenter -t $D -n sh -c 'ip link set lo up
+  ip addr add 10.2.0.2/24 dev d0; ip -6 addr add fd02::2/64 dev d0 nodad; ip link set d0 up
+  ip route add default via 10.2.0.1; ip -6 route add default via fd02::1' || exit 99
+$LOVE kore ping6 -c 1 -W 2 fd02::2 > /dev/null
+for mode in raw echo; do
+  [ $mode = echo ] && echo '0 0' > /proc/sys/net/ipv4/ping_group_range
+  echo \"== $mode\"
+  $LOVE kore traceroute -n -q 1 -w 1 10.2.0.2
+  $LOVE kore traceroute -n -q 1 -w 1 -m 3 10.3.0.9
+  $LOVE kore traceroute6 -n -q 1 -w 1 fd02::2
+  $LOVE kore traceroute6 -n -q 1 -w 1 -m 3 fd03::9
+done
+kill $R $D
+")
+        (close p))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (has? t s) (0 <= (K 'wg-find) t s 0)
+   (count t s) ((: (g i k) (: j ((K 'wg-find) t s i) (? (j < 0) k (g (j + 1) (k + 1))))) 0 0)
+   r (tether ["/bin/sh" "-c" ("unshare -rn true 2>/dev/null || exit 99; exec unshare -rn sh " + sfile + " " + love)])
+   txt (slurp >r)
+   st <(waitfor <r)
+   k ((K 'wg-find) txt "== echo" 0)
+   halves (? (0 <= k) [(snip txt 0 k) (snip txt k #txt)] ["" ""])
+   _ (? (st = 99) 0
+        (map (h \ test (has? h " 1  10.1.0.2  ") (has? h " 2  10.2.0.2  ") (has? h " 1  fd01::2  ")
+                        (has? h " 2  fd02::2  ") (count h " ms !N" = 2))
+             halves))
+   ; the marks: v4's unreachable codes, v6's, and a time exceeded that marks nothing
+   _ (test ((K 'tr-mark) 0 3 1 = " !H") ((K 'tr-mark) 0 3 3 = "") ((K 'tr-mark) 0 11 0 = "")
+           ((K 'tr-mark) 1 1 0 = " !N") ((K 'tr-mark) 1 1 4 = "") ((K 'tr-mark) 1 3 0 = ""))
+   lo (: r (tether [love "kore" "traceroute" "-n" "-q" "1" "127.0.0.1"]) t (slurp >r) [t <(waitfor <r)])
+   (? (has? <lo "no icmp echo socket") (test (lo 1 = 2))
+      (test (has? <lo "traceroute to 127.0.0.1 (127.0.0.1), 30 hops max, 60 byte packets")
+            (has? <lo " 1  127.0.0.1  ") (lo 1 = 0))))
 
 ; -- httpd -------------------------------------------------------------------------------
 (: K (cite 'kore)
