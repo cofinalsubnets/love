@@ -433,16 +433,19 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
     __attribute__((holo)) asm ("li %0, 40" : "=r"(v));    // holo's neutral text instead
 
 * Registers spell as the dialect does, at the operand's C width on x64 (a `uint8_t` is `%al`,
-  a `uint16_t` `%dx`; the `%b0 %w0 %k0 %q0` modifiers override, `%c0` prints an immediate bare;
+  a `uint16_t` `%dx`; the `%b0 %w0 %k0 %q0` modifiers override, `%c0`/`%a0`/`%P0` print an
+  immediate bare;
   a64's `%w0`/`%x0` pick w/x). The neutral file under `holo` is x64 r0=rax r1=rcx r2=rdx r3=rbx
   r4=rbp (the frame) r5=rsi r6=rdi r7..r14=r8..r15; a64 rN=xN; rv64 r0..r7=a0..a7.
 * Constraints: `"r"`/`"=r"`/`"+r"` (and `q`/`g`/`rm`) pick a register, `"rN"` pins a neutral
   one, x86's `a`/`b`/`c`/`d`/`S`/`D` letters pin theirs and `"Nd"` is dx, a digit `"0"` ties an
-  input to that output's register, `"i"`/`"n"` an immediate (parse-time constant; `"ir"` picks by
-  whether the operand is one), `"m"` a memory operand (the address in a register, spelled as the
+  input to that output's register, `"i"`/`"n"` an immediate (a constant, a const local that
+  folds, or an address constant -- a global, a function, a string, `&a.b[k]` -- which spells
+  `label+k` for the linker; `"ir"` picks by whether the operand is an integer), `"m"` a memory operand (the address in a register, spelled as the
   dialect's base form). A `register T v asm("x0")` local pins wherever the asm names it — the
   a64/riscv way of pinning, and the only one those dialects have. `%0..%9` substitute (outputs
-  first), `%%` a literal `%`; adjacent template strings concatenate.
+  first), `%[name]` and `%c[name]` a named one, `%%` a literal `%`; adjacent template strings
+  concatenate.
 * What a line may say is what the neutral IR carries: the 64-bit register ops, immediates
   (C expressions: `$~(1 << 2)`, `#(3 << 20)`), base + displacement memory, GNU's `1:`/`1f`/`1b`
   local labels, the system lane (control registers, msr, cpuid, in/out, SVM, VMX, the descriptor
@@ -452,8 +455,7 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   nothing SCARES (`cc: internal error: gas-x64-op ..`) rather than dropping out.
 * The body assembles AT CODEGEN into one opaque `('raw bytes)`: the IR passes barrier on raw,
   labels inside a template stay LOCAL to it, and no pass ever rewrites user instructions.
-  External symbols cannot be named in a template — reach values through operands (`"r"(&x)`
-  works, and the address-taken local also fences deadst).
+  A name the template does not define (a global, an `"i"` address) stays a fix for the linker.
 * Operands stage through the machine stack, so calls inside operand expressions are safe, and
   any scalar lvalue output works (`*p`, `a[i]`). Float/struct/bitfield operands refuse.
 * Registers an operand may take: x64 r0-r3 + r5-r10 (r3 rides every prologue's -8 slot; r4 is
