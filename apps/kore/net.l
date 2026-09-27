@@ -1,11 +1,13 @@
-; apps/kore/net.l -- telnet, httpd, nslookup, ping and ping6: network tools over doors the tree
-; already has (inle/sock.c's connect/listen/bind, apps/dns.l, kiosko).
+; apps/kore/net.l -- telnet, telnetd, httpd, nslookup, ping and ping6: network tools over
+; doors the tree already has (inle/sock.c's connect/listen/bind, apps/dns.l, kiosko).
 ;
 ;   telnet HOST [PORT]                a remote terminal over tcp, port 23 by default
+;   telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]   its server
 ;   httpd [-fv] [-p PORT] [-h DIR]    kiosko under busybox's name and flags
 ;   nslookup [-type=T] HOST [SERVER]  a name's records, asked of a nameserver directly
 ;   ping [-46q] [-c N] [-i S] [-W S] [-s N] HOST  icmp echoes and their round trips
 ;   ping6 [-q] [-c N] [-i S] [-W S] [-s N] HOST   the same over ipv6 (ping -6)
+;   traceroute [-46nI] [-f F] [-m M] [-q N] [-w S] HOST   the routers on the way (traceroute6)
 ;
 ; telnet is nc (apps/ain.l) with the protocol's options answered (RFC 854, 855): it lets the
 ; server echo and suppress go-ahead, offers to suppress go-ahead itself, refuses every other
@@ -123,6 +125,105 @@
               (c = 29) (: _ (? tty? (raw 0) 0) _ (say err "\nConnection closed.\n") _ (close s) 0)
               (: _ (say s (tn-send c (st 'raw))) _ (flush s) (up 0))))
        (up 0))
+
+   ; -- telnetd ------------------------------------------------------------------------
+   ; busybox's: each connection a program on a pty, /bin/login unless -l names another.
+   ; the server offers to echo and suppress go-ahead and asks the window size (NAWS), which
+   ; the pty follows; every other option is refused. the state of one connection's input:
+   ; 'm 0 data, 1 past IAC, 2 past a verb ('v), 3 inside SB (its bytes in 'sb), 4 past IAC
+   ; inside SB; 'cr a CR just passed, whose LF or NUL is part of it
+   td-usage "usage: telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]"
+   td-offer (tn-cmd 251 1 + tn-cmd 251 3 + tn-cmd 253 31)
+   (td-new _) (: st (tablet 0) _ (pins st 'm 0 'v 0 'cr 0 'sb "") st)
+   ; the client's verb about option x -> the reply owed: its will of NAWS or go-ahead and its
+   ; do of echo or go-ahead are what we asked or offered, and a won't or don't needs none
+   (td-opt v x) (? ((v = 251) && !(x = 31) && !(x = 3)) (tn-cmd 254 x)
+                   ((v = 253) && !(x = 1) && !(x = 3)) (tn-cmd 252 x)
+                   "")
+   ; NAWS's width and height, two bytes each, onto the pty
+   (td-sb b pty) (? ((#b = 5) && (b 0 = 31) && !(nil? pty)) (settty pty (b 3 * 256 + b 4) (b 1 * 256 + b 2)) 0)
+   ; one byte off the wire -> [bytes for the pty, the reply owed]
+   (td-byte st c pty)
+    (: m (st 'm)
+       (? (m = 0)
+           (? (c = 255) (: _ (pin st 'm 1) ["" ""])
+              (((st 'cr) = 1) && ((c = 10) || (c = 0))) (: _ (pin st 'cr 0) ["" ""])
+              (: _ (pin st 'cr (? (c = 13) 1 0)) [(string c) ""]))
+          (m = 1)
+           (? (c = 255) (: _ (pins st 'm 0 'cr 0) [(string 255) ""])
+              (251 <= c <= 254) (: _ (pins st 'm 2 'v c) ["" ""])
+              (c = 250) (: _ (pins st 'm 3 'sb "") ["" ""])
+              (: _ (pin st 'm 0) ["" ""]))
+          (m = 2) (: _ (pin st 'm 0) ["" (td-opt (st 'v) c)])
+          (m = 3) (: _ (? (c = 255) (pin st 'm 4) (pin st 'sb (st 'sb + string c))) ["" ""])
+          (: _ (? (c = 240) (: _ (pin st 'm 0) (td-sb (st 'sb) pty))
+                  (c = 255) (pins st 'm 3 'sb (st 'sb + string 255))
+                  (pin st 'm 3))
+             ["" ""])))
+   ; a chunk off the wire -> [bytes for the pty, the replies owed]
+   (td-chunk st s pty)
+    (: (go i d r) (? (#s <= i) [d r] (: x (td-byte st (s i) pty) (go (i + 1) (d + <x) (r + x 1))))
+       (go 0 "" ""))
+   ; the pty's bytes for the wire: a 255 doubled
+   (td-esc s) (? (wg-find s (string 255) 0 < 0) s
+                 ((: (go i a) (? (#s <= i) a (go (i + 1) (a + (? (s i = 255) (string 255 + string 255) (string (s i)))))))
+                  0 ""))
+   ; one connection: the program's output to the client in this task, the client's bytes
+   ; to the program in another; the program's end is the session's, and the client's going
+   ; hangs the program up
+   (td-session c argv issue)
+    (: _ (setenv "TERM" "xterm")
+       r (tether argv)
+       (? !(two? r) (: _ (say c ("telnetd: cannot run " + <argv + " (" + show r + ")\r\n")) (flush c))
+          (: pid <r m >r st (td-new 0)
+             _ (say c (td-offer + issue)) _ (flush c)
+             (up _) (: ch (see c)
+                       (? (ch = -1) (still pid 1)
+                          (: _ (unsee c ch) x (td-chunk st (chug c) m)
+                             _ (? (0 < #<x) (: _ (say m <x) (flush m)) 0)
+                             _ (? (0 < #(x 1)) (: _ (say c (x 1)) (flush c)) 0)
+                             (up 0))))
+             u (twirl (_ \ trap up 0 (\ a b (still pid 1))) 0)
+             (down _) (: _ (await m) ch (see m)
+                         (? (ch = -1) 0
+                            (: _ (unsee m ch) _ (say c (td-esc (chug m))) _ (flush c) (down 0))))
+             _ (trap down 0 (\ a b 0))
+             _ (freeze u)
+             _ (close m)
+             (wait pid))))
+   (td-loop l argv issue)
+    (: _ (await l)
+       c (accept l)
+       _ ((: (g _) (? (two? (scoop 0)) (g 0) 0)) 0)
+       _ (? (hot? c) (twirl (\ _ (: _ (trap (\ c (td-session c argv issue)) c (\ a b 0)) (close c))) ()) 0)
+       (td-loop l argv issue))
+   (telnetd-main as)
+    (: t (tablet 0)
+       o (uopt as t '(112 98 108 102 119) () ())
+       _ (? (two? o) 0 (udie 2 td-usage))
+       _ (: u (uoptun t '(112 98 108 102 70 75))
+            (? (nil? u) 0 (udie 2 ("telnetd: -" + string u + " is not supported\n" + td-usage))))
+       _ (? (two? (o 2)) (udie 2 td-usage) 0)
+       login (: l (uoptv t 108) (? (string? l) l "/bin/login"))
+       (portof s) (: n (unum s) (? (charm? n && 0 < n < 65536) n (udie 2 ("telnetd: not a port: " + s))))
+       ; -b ADDR[:PORT], a quad; -p PORT
+       bv (uoptv t 98)
+       bk (? (string? bv) ((: (g i) (? (#bv <= i) -1 (bv i = 58) i (g (i + 1)))) 0) -1)
+       addr (? (string? bv) (? (bk < 0) bv (snip bv 0 bk)) ())
+       _ (? (nil? addr) 0 (two? ((cite 'dns 'dns-quad) addr)) 0 (udie 2 ("telnetd: -b takes a dotted quad, not " + addr)))
+       pv (uoptv t 112)
+       port (? (string? pv) (portof pv) (0 <= bk) (portof (snip bv (bk + 1) #bv)) 23)
+       l (? (nil? addr) (listen port) (listen ['tcp addr port]))
+       _ (? (hot? l) 0 (udie 1 ("telnetd: cannot listen on port " + show port + " (" + show l + ")")))
+       _ (? (login = "/bin/login") 0
+            (: _ (say err ("telnetd: no login: whoever reaches port " + show port + " runs " + login + "\n")) (flush err)))
+       ip (: f (uoptv t 102) (? (string? f) f "/etc/issue.net"))
+       issue (: q (open ip "r")
+                (? (hot? q) (: s (slurp q) _ (close q)
+                                ((: (go i a) (? (#s <= i) a (go (i + 1) (a + (? (s i = 10) "\r\n" (string (s i)))))))
+                                 0 ""))
+                   ""))
+       (td-loop l [login] issue))
 
    ; -- nslookup -----------------------------------------------------------------------
    (ns-assoc k l) ((: (g l) (? (one? l) () (<<l = k) <><l (g >l))) l)
@@ -286,6 +387,107 @@
        t1 (clock 0)
        _ ((: (g _) (? (st 'got < st 'sent && clock 0 - t1 < wait) (: _ (rest 10) (g 0)) 0)) 0)
        (fin 0))
+
+   ; -- traceroute ---------------------------------------------------------------------
+   ; icmp echoes with the ttl rising from -f (1) to -m (30), -q (3) to each hop: the routers'
+   ; time-exceeded errors come back through (bind [.. 'errs]), the target's echo reply ends
+   ; it, and so does an unreachable (marked !N !H !P !X). each probe waits -w seconds (3).
+   ; a router's name is its PTR off the first nameserver unless -n. busybox's probes are udp;
+   ; these are what its -I sends, the one kind an unprivileged linux socket may send
+   tr-usage "usage: traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
+   tr6-usage "usage: traceroute6 [-nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
+   (traceroute-main as) (tr-run 0 as)
+   (traceroute6-main as) (tr-run 1 as)
+   ; an unreachable's code -> its mark, "" when it means the target answered (port, v4 3; v6 4)
+   (tr-mark six type code)
+    (? six (? (type = 1) (? (code = 4) "" (code = 0) " !N" (code = 3) " !H" " !X") "")
+       (type = 3) (? (code = 3) "" (code = 0) " !N" (code = 1) " !H" (code = 2) " !P" " !X")
+       "")
+   (tr-run six? as)
+    (: t (tablet 0)
+       nm (? six? "traceroute6" "traceroute")
+       use (? six? tr6-usage tr-usage)
+       o (uopt as t '(102 109 113 119) () ())
+       _ (? (two? o) 0 (udie 2 use))
+       _ (: u (uoptun t (? six? '(102 109 113 119 110 73) '(102 109 113 119 110 73 52 54)))
+            (? (nil? u) 0 (udie 2 (nm + ": unknown option -" + string u + "\n" + use))))
+       ops (o 2)
+       _ (? ((two? ops) && (one? >ops)) 0 (udie 2 use))
+       (num c d lo) (: v (uoptv t c)
+                       (? (nil? v) d (: n (unum v) (? (charm? n && lo <= n && n <= 255) n (udie 2 (nm + ": bad -" + string c + " " + v))))))
+       first (num 102 1 1) most (num 109 30 1) nq (num 113 3 1)
+       wait (: v (uoptv t 119) (? (nil? v) 3000 (: m (ping-ms v) (? (charm? m && 0 < m) m (udie 2 (nm + ": bad -w " + v))))))
+       _ (? (first <= most) 0 (udie 2 (nm + ": -f is past -m")))
+       names? !(peep t 110 0)
+       host <ops
+       D (cite 'dns)
+       six (? six? 1 (peep t 52 0) 0 (peep t 54 0) 1 ((D 'dns-colon?) host))
+       ad (? six ((D 'resolve6) host)
+             (two? ((D 'dns-quad) host)) (map (D 'dns-show) ((D 'dns-quad) host))
+             (map (D 'dns-show) ((D 'resolve) host)))
+       _ (? (two? ad) 0 (udie 1 (nm + ": bad address '" + host + "'")))
+       ip <ad
+       p (bind [(? six 'icmp6 'icmp) 'errs])
+       _ (? (nom? p)
+            (udie 2 (nm + ": no icmp" + (? six "6" "") + " echo socket here (" + show p
+                     + "); it wants root, or on linux your group in net.ipv4.ping_group_range")) 0)
+       size (8 + 32)
+       _ (: _ (say out (nm + " to " + host + " (" + ip + "), " + show most + " hops max, "
+                        + show (size + (? six 40 20)) + " byte packets\n")) (flush out))
+       (pkt n) (string (? six 128 8) + string 0 + "\x00\x00\x00\x00" + string (n >> 8 & 255) + string (n & 255)
+                + catmap (i \ string (i & 255)) ^32)
+       ; a router's name, once each: its PTR off the first nameserver, else its address
+       names (tablet 0)
+       ns (: s ((D 'dns-servers) "/etc/resolv.conf") (? (two? s) <s ()))
+       (name a)
+        (? (!names? || six || nil? ns) a
+           (: c (peep names a ())
+              (? !(nil? c) c
+                 (: r ((D 'dns-raw) <ns >ns ((D 'dns-qedns) 7711 (ns-rev a) 12) 1000)
+                    rs (? (string? r) ((D 'dns-records) r 7711) ())
+                    ptr (? (two? rs) (filter (x \ x 1 = 12) (rs 2)) ())
+                    v (? (two? ptr) (<ptr 2) a)
+                    _ (pin names a v)
+                    v))))
+       ; the answer to probe n, or () when -w passes first: a stray (a late answer to an
+       ; earlier probe) is skipped
+       (answer n until)
+        (: left (until - clock 0)
+           (? (left < 1) ()
+              (: r (twirl (_ \ recv p) ())
+                 w (twirl (_ \ (: _ (rest left) (freeze r))) ())
+                 d (catch r)
+                 _ (freeze w)
+                 b (? (two? d) <>d "")
+                 (? !(two? d) ()
+                    ((8 <= #b) && ((b 6 * 256 + b 7) = n)) d
+                    (answer n until)))))
+       ; one hop: nq probes, a line -> 1 once the target or an unreachable answered
+       (hop h)
+        (: _ (say out (? (h < 10) (" " + show h) (show h)))
+           (probe k last done)
+            (? (nq <= k) done
+               (: n (: v (peep t 'seq 0) _ (pin t 'seq ((v + 1) & 65535)) v)
+                  t0 (nclock 0)
+                  _ (send p [ip 0 'ttl h] (pkt n))
+                  d (answer n (clock 0 + wait))
+                  (? (nil? d)
+                     (: _ (say out " *") _ (flush out) (probe (k + 1) last done))
+                     (: rt (nclock t0)
+                        a <<d
+                        kind (? (two? >>>d) (d 3) ())
+                        _ (? (a = last) 0 (say out ("  " + (? names? (name a + " (" + a + ")") a))))
+                        mark (? (two? kind) (tr-mark six <kind (kind 1)) "")
+                        _ (: _ (say out ("  " + ping-t rt + " ms" + mark)) (flush out))
+                        end (? (nil? kind) 1 (? six (<kind = 1) (<kind = 3)) 1 0)
+                        (probe (k + 1) a (? end 1 done))))))
+           r (probe 0 "" 0)
+           _ (: _ (say out "\n") (flush out))
+           r)
+       (go h) (? (most < h) 0 (? (hop h) 0 (go (h + 1))))
+       _ (go first)
+       _ (close p)
+       (quit 0))
 
    ; -- httpd --------------------------------------------------------------------------
    ; busybox's flags onto kiosko's serve. the value flags it does not have are still read

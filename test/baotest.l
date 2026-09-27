@@ -78,6 +78,19 @@
   (-8 = ((typed (ednew ()) [97 -8]) 'ev))                          ; up with no line above
   ("a" = (edtext (typed (ednew ()) [97 -8 -9])))                  ; ..and the text stands
   (: t (typed (ed ['(1 2)] () () ()) [-8]) (0 = (t 'ev) && '(1 2 10) = (edchars t)))  ; up with a line above is a motion
+   ; --- utf-8: the keys arrive a byte at a time and the cursor moves by character.
+   ; 日 is 230 151 165, 本 230 156 172, each two columns wide ---
+  ("日本" = (edtext (typed (ednew ()) [230 151 165 230 156 172])))
+  ("日a本" = (edtext (typed (ednew ()) [230 151 165 230 156 172 -1 97])))   ; left over a whole one
+  ("日" = (edtext (typed (ednew ()) [230 151 165 230 156 172 127])))        ; backspace takes it whole
+  ("本" = (edtext (typed (ednew ()) [230 151 165 230 156 172 -1 -1 -4])))   ; left left del
+  ("日a本" = (edtext (typed (ednew ()) [230 151 165 230 156 172 -5 -2 97]))) ; home, right
+  (4 = (edcol (typed (ednew ()) [230 151 165 230 156 172])))               ; the column is a width
+  (0 = (edcol (typed (ednew ()) [230 151])))                               ; a character still arriving
+  (3 = (edcol (typed (ednew ()) [97 98 99])))
+  ; up keeps the column in characters, so it never lands inside one
+  (: t (edup (ed ['(230 151 165 230 156 172 120)] '(98 97) () ()))
+     ('(172 156 230 165 151 230) = (t 'l) && '(120) = (t 'r)))
    ; --- joinln / splitat ---
   (() = (joinln ()))
   ('(1 2 3) = (joinln ['(1 2 3)]))

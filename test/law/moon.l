@@ -1263,9 +1263,15 @@
       (elem '(cmp r12 r2) zf)                     ; ...and the bound compare reads it register-register
       (elem '(sx4 r7) zf)                         ; nb rides too -- no slot, no wrap
       (elem '(cmp r9 r7) zf)                      ; ...the inner bound register-register as well
-      (elem '(sx4 r12) zf)                        ; i's defs re-narrow: the home stays canonical
+      !(elem '(sx4 r12) zf)                       ; i's step: i < na held, so i + 1 fits and stays canonical
       (elem '(add r12 r12 1) zf)                  ; i on its cs home
       (2 = (splds zf)))                              ; full-word sp loads: only the two cs restores
+   ; ..and a body that writes the counter keeps the step's re-narrow
+   irZ3 (cgn "long g3(long *a, int na) { long s = 0; for (int i = 0; i < na; i++) { s = s + a[i]; if (s < 0) i = i + 1; } return s; } int main() { return 0; }")
+   z3f (fnf 'g3 <>irZ3)
+   _ (test
+      (two? irZ3)
+      (3 = #(filter (f \ two? f && <f = 'sx4) z3f)))   ; na's entry, the body's write, the step
    ; the guard law: with a call remaining there is no ride, so an int param keeps its slot
    ; (a pool home would starve the locals and pay wraps -- the measured anti-lever)
    irZp (cgn "long ext(long); long h3(int n, long *a) { long s = 0; for (int i = 0; i < n; i++) { s = s + ext(a[i]) + n; } return s; } int main() { return 0; }")
@@ -1373,7 +1379,20 @@
       (1 = #(filter (f \ two? f && <f = 'a128r && <>>f = 0) mrf))   ; + r[i+j]: the park never opens
       (2 = (occh mrf 'a128r))                    ; + c reads c's home
       (0 = (occh mrf 'shr128))                   ; c = s >> 64: two moves, the high half a zero
-      (: ws (filter (f \ two? f && <f = 'a128r) mrf) (elem ['li <>>(ws 1) 0] mrf)))
+      (: ws (filter (f \ two? f && <f = 'a128r) mrf) (elem ['li <>>(ws 1) 0] mrf))
+      ; the park never nests here, so the hot params r and b take seats: the full-word sp loads
+      ; are the four cs restores, cold a's read per row and ai's in the inner loop
+      (6 = (splds mrf)))
+   ; -- the borrow row: d < 0 is the high word's sign, the widened constants are two li, and
+   ; d + 2^64 adds to the high half alone
+   irS (cgn "int ms(unsigned long *r, unsigned long *a, unsigned long *b, int n) { __int128 w = 0; for (int i = 0; i < n; i++) { __int128 d = (__int128) a[i] - b[i] - w; if (d < 0) d += (__int128) ((unsigned __int128) 1 << 64), w = 1; else w = 0; r[i] = (unsigned long) d; } return n; } int main() { return 0; }")
+   msf (fnf 'ms <>irS)
+   _ (test
+      (two? irS)
+      (0 = (occh msf 'c128))                     ; no cell compare
+      (elem '(cmp r2 0) msf)                     ; the sign test
+      (0 = (occh msf 'sx128))                    ; w = 0 and w = 1: two li each
+      (0 = (occh msf 'shl128)))                  ; the 2^64 add rides the high word
    (test
       (two? irV)
       (elem '(mov r11 r0) vf)                     ; c's write lands its lo home...

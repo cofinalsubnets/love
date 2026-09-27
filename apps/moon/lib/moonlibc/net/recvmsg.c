@@ -5,6 +5,7 @@
  * comes back MSG_CTRUNC -- the kernel's own word for it. */
 long recvmsg(int fd, struct msghdr *m, int fl) {
   if (__ai_osv < 2) return er(sc3(NR_recvmsg, fd, (long) m, fl));
+  if (fl & MSG_ERRQUEUE) return er(-EAGAIN);   /* linux's alone: a bsd has no error queue */
   struct sockaddr_storage sa;
   unsigned char cb[256];
   struct __fb_msghdr f = {0, 0, 0, 0, 0, 0, 0, 0, 0};

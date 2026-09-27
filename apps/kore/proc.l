@@ -1,5 +1,5 @@
 ; apps/kore/proc.l -- the process and world tools of kore: env, nohup, nice, renice,
-; printenv, sleep, kill, xargs, date, id, whoami, groups, stty, who, users, logname.
+; printenv, sleep, kill, xargs, date, id, whoami, groups, stty, microcom, who, users, logname.
 ; a toolbox file, no seat -- kore is its door; loads after core.l and rides the
 ; u-floor. no nifs of its own: environ/getenv/setenv (inle/main.c + init.c),
 ; spawn/wait (init.c's posix lane -- spawn answers the pid or a NEGATIVE errno,
@@ -750,6 +750,51 @@
                           (udie 1 ("stty: " + nm + ": unable to perform all requested operations"))))
           (: _ (ustty-show st0 all w rc) _ (flush out) 0)))
    (ustty-byte0 w) (: v (ustty-int w) (? (charm? v && v <= 65535) v (udie 1 ("stty: invalid integer argument: '" + w + "'"))))
+
+   ; -- microcom: a serial line and this terminal, byte for byte, busybox's. the device is
+   ; opened read-write, never as our controlling terminal, and set raw 8N1 without flow
+   ; control at -s's speed (or its own); ^X leaves unless -X, and -t ms of quiet both ways
+   ; leaves too. the device's termios goes back as it was
+   (microcom-main as)
+    (: usage "usage: microcom [-X] [-s SPEED] [-t TIMEOUT] TTY"
+       t (tablet 0)
+       o (uopt as t '(115 116 100) () ())
+       _ (? (two? o) 0 (udie 1 usage))
+       _ (: u (uoptun t '(115 116 88)) (? (nil? u) 0 (udie 1 ("microcom: -" + string u + " is not supported\n" + usage))))
+       ops (o 2)
+       _ (? ((two? ops) && (one? >ops)) 0 (udie 1 usage))
+       dev <ops
+       sp (: v (uoptv t 115) (? (nil? v) -1 (: n (ustty-int v) (? (elem n ustty-bauds) n (udie 1 ("microcom: bad speed " + v))))))
+       tmo (: v (uoptv t 116) (? (nil? v) () (: n (ustty-int v) (? (charm? n) n (udie 1 ("microcom: bad timeout " + v))))))
+       x? (peep t 88 0)
+       fd (openfd dev 5)
+       _ (? (charm? fd) 0 (udie 1 ("microcom: " + dev + ": " + uerrno fd)))
+       st0 (termios fd)
+       _ (? (nom? st0) (udie 1 ("microcom: " + dev + ": " + uerrno st0)) 0)
+       ; iflag, oflag and lflag off, cflag CS8 CREAD CLOCAL, a read of one byte at a time
+       st (ustty-at (ustty-at ([0 0 2224 0 (? (sp < 0) (st0 4) sp)] + drop 5 st0) 11 1) 10 0)
+       e (settermios fd st)
+       _ (? (nom? e) (udie 1 ("microcom: " + dev + ": " + uerrno e)) 0)
+       p (fdopen fd)
+       tty? (two? (tty 0))
+       _ (? tty? (raw 1) 0)
+       last (tablet 1) _ (pin last 't (clock 0))
+       (done _) (: _ (settermios fd st0) _ (? tty? (raw 0) 0) _ (flush out) (quit 0))
+       ; the line to the screen, in its own task
+       (down _) (: _ (await p) c (see p)
+                   (? (c = -1) (done 0)
+                      (: _ (unsee p c) _ (say out (chug p)) _ (flush out) _ (pin last 't (clock 0)) (down 0))))
+       _ (twirl down 0)
+       _ (? (charm? tmo) (twirl (\ _ ((: (g _) (? (tmo < ((clock 0) - (last 't))) (done 0) (: _ (rest 50) (g 0)))) 0)) 0) 0)
+       ; the keys to the line, up to a ^X
+       (up _) (: _ (await in) c (see in)
+                 (? (c = -1) (done 0)
+                    (: _ (unsee in c) s (chug in)
+                       k (? x? -1 ((: (g i) (? (#s <= i) -1 (s i = 24) i (g (i + 1)))) 0))
+                       _ (say p (? (k < 0) s (snip s 0 k))) _ (flush p)
+                       _ (pin last 't (clock 0))
+                       (? (k < 0) (up 0) (done 0)))))
+       (up 0))
 
    ; -- clear: home, erase, and drop the scrollback. the third (xterm's 3J) is what a
    ; modern clear sends and the reason `clear` and ^L are not the same key --

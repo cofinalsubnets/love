@@ -483,7 +483,9 @@ static lvm(lvm_selfpath) {
 // (openfd path m) -> a raw fd opening `path`: m 0 = read, 1 = write/create/trunc,
 //                   2 = write/create/append, 3 = write/create/EXCL at mode 0600 -- the one
 //                   that fails on an existing name, 4 = write in place (no create, no
-//                   trunc). a nom on failure, 'badarg on a bad path.
+//                   trunc), 5 = a device read and written, never made the controlling
+//                   terminal, nonblocking so a serial line's open does not wait on its
+//                   carrier. a nom on failure, 'badarg on a bad path.
 // (spawnio argv in out err closes pg fg) -> pid | a nom. fork; in the child, the
 //                   job-control dance first -- pg < 0 stays in the parent's pgrp (the
 //                   non-tty lane), pg = 0 leads a fresh group, pg > 0 joins that group
@@ -521,6 +523,7 @@ static int mk_openfd(struct ai *g, void *env) {
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
            : m == 4 ? O_WRONLY
+           : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
            : O_RDONLY,
      fd = open(str_c(g->sp[0]), flags, m == 3 ? 0600 : 0644);
  return fd < 0 ? -errno : fd; }
