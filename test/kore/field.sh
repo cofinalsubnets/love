@@ -55,4 +55,12 @@ de
 '                rev
 [ "$(printf '日本語é\nab\n' | korerun rev)" = "$(printf 'é語本日\nba')" ] \
   || fail "kore rev: a character reverses whole, never its bytes"
+[ "$(printf 'a日本b\n' | korerun cut -c 2-3)" = "日本" ] \
+  || fail "kore cut -c: a list counts characters, never bytes"
+[ "$(printf 'a日本b\n' | korerun cut -b 1,5)" = "$(printf 'a\xe6')" ] \
+  || fail "kore cut -b: a list counts bytes"
+[ "$(printf 'aa日日本 é\xff\n' | korerun tr -s 日é 日e)" = "$(printf 'aa日本 e\xff')" ] \
+  || fail "kore tr: sets are characters, and a stray byte passes as itself"
+[ "$(printf 'a日\xffb\n' | korerun tr -cd a-z)" = "ab" ] \
+  || fail "kore tr -c: the complement takes a whole character, and a stray byte"
 echo "kore: field tools (cut/tr/nl/rev GNU-identical) ok"

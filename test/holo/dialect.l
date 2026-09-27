@@ -9,6 +9,15 @@
 (: (slurpf f) (: q (open f "r") (slurp q))
    (strip its) (map (it \ <it = 'dir ? ['dir <>it] it) its)
    (words s) (filter (w \ #w > 0) (xa-split s 32))
+   ; an inline asm's template lands verbatim, in its author's one dialect, under both flags:
+   ; gcc brackets it #APP .. #NO_APP, and those lines are the author's, not the compiler's
+   (noapp s) (: (go l in acc) (? !(two? l) (rev acc)
+                                 (: t (xa-trim <l)
+                                    (? (t = "#APP") (go >l 1 acc)
+                                       (t = "#NO_APP") (go >l () acc)
+                                       in (go >l in acc)
+                                       (go >l in (<l . acc)))))
+                (xa-join "\n" (go (xa-lines s) () ())))
    (report a i) ((: (g a i k)
                     (? (!(two? a) && !(two? i)) 0
                        (!(two? a) || !(two? i) || !(<a = <i))
@@ -17,8 +26,8 @@
    ls (filter (l \ #l > 0) (xa-lines (slurpf "@PAIRS@")))
    n {0 0} bad {0 0}
    _ (each ls (\ l (: ws (words l)
-                      a (strip (att-read (slurpf <ws)))
-                      i (strip (intel-read (slurpf <>ws)))
+                      a (strip (att-read (noapp (slurpf <ws))))
+                      i (strip (intel-read (noapp (slurpf <>ws))))
                       _ (pin n 0 (peep n 0 0 + 1))
                       (? (a = i) 0
                          (: _ (pin bad 0 (peep bad 0 0 + 1))

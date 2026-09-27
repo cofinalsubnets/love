@@ -843,7 +843,7 @@
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-n N] [-c N] [-N] [FILE..]"
     'tail "usage: tail [-n N] [-c N] [-N] [FILE..]"
-    'wc "usage: wc [-lwc] [FILE..]"
+    'wc "usage: wc [-lwmc] [FILE..]"
     'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
     'uniq "usage: uniq [-c] [FILE]"
     'shuf "usage: shuf [-rz] [-n N] [-o F] [FILE]  |  shuf -e [ARG..]  |  shuf -i LO-HI"
@@ -858,7 +858,7 @@
     'printf "usage: printf FORMAT [ARG..]"
     'basename "usage: basename NAME [SUFFIX]"
     'dirname "usage: dirname NAME"
-    'cut "usage: cut -f LIST [-d C] [-s] | cut -c LIST"
+    'cut "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST"
     'tr "usage: tr SET1 SET2 | tr -d SET1 | tr -s SET1"
     'nl "usage: nl [FILE..]"
     'rev "usage: rev [FILE..]"
@@ -1206,7 +1206,7 @@ every tool answers --help and --version, and -h where the letter is free
    ; operands, so a word an option took is never mistaken for a file
    korepreds {'head (\ as (: p (uclip-args "head" as) (kregs? <>p)))
               'tail (\ as (: p (uclip-args "tail" as) (kregs? <>p)))
-              'cut (\ as (: p (cut-args as) (kregs? (p 4))))
+              'cut (\ as (: p (cut-args as) (kregs? (p 5))))
               'grep (\ as (: t (tablet 0) o (grep-opt as t) (two? o && kregs? (grep-fs o))))}
    (koretraits k) (? (elem k korebuiltin) ['builtin 'self] (elem k koreself) ['self]
                      (elem k korefiles) [('self . kfiles?)]

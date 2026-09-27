@@ -144,7 +144,13 @@
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
-   gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp inc dec not neg bt bts btr btc)
+   gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp test inc dec not neg bt bts btr btc)
+   ; a memory operand -> (base off): a register base, or 'rip and (sym k) for `sym+k(%rip)` and
+   ; the absolute `sym+k`, the same address wherever the image sits
+   (gx-mref o) (<o @ 'mem (gx-mem o)
+                    'rip ['rip [<>o <>>o]]
+                    'lbl (: so (xa-symoff (show <>o)) ['rip [<so >so]])
+                    (scare 'gas-x64-operand o))
    gx-ext (gtab '((movzb (zx1 ldu1)) (movzw (zx2 ldu2)) (movsb (sx1 ld1)) (movsw (sx2 ld2)) (movsl (sx4 ld4))))
    ; a %gs:/%fs: operand: the override byte before the one form that reaches memory. an absolute
    ; address (percpu's `%gs:sym`, `%gs:40`) loads through its destination: the address, then the word
@@ -174,11 +180,12 @@
           (= m 'int) [['int (gx-imm d)]]
           (elem m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
           ; a read-modify-write on memory: atomics and counters. no suffix takes the register's width
-          (<d = 'mem && elem m gx-rmw)
-           (: bm (gx-mem d) wm (w0 > 0 ? w0 (<s = 'rg) (s 2) 8)
+          ((<d = 'mem || (elem <d '(lbl rip) && nom? <>d)) && elem m gx-rmw)
+           (: bm (gx-mref d) wm (w0 > 0 ? w0 (<s = 'rg) (s 2) 8)
               (? (elem m '(xadd cmpxchg xchg)) (? (<s = 'rg) [[(name (show m + "m")) wm <bm <>bm (gx-r s)]] (scare 'gas-x64-operand ops))
                  (elem m '(inc dec not neg)) [['unm m wm <bm <>bm]]
                  (elem m '(bt bts btr btc)) [['btm m wm <bm <>bm (gx-rv s)]]
+                 (m = 'test) [['testm wm <bm <>bm (gx-rv s)]]
                  [['alum m wm <bm <>bm (gx-rv s)]]))
           (= m 'xchg && <s = 'mem && <d = 'rg) (gx-ins m w0 [s d])
           (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
@@ -199,7 +206,11 @@
                      (scare 'gas-x64-operand s)))
               (scare 'gas-x64-operand d))
           (= m 'lea)
-           (? (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
+           (? ; no symbol: the address past this lea (the kernel's _THIS_IP_) -- its own bytes,
+              ; REX.W 8D, modrm rm=101 over the displacement; nothing for a fix to name
+              (<s = 'rip && !(nom? <>s) && <d = 'rg)
+               (: n <>d [['raw ([(72 | (n >= 8 ? 4 0)) 141 (((n & 7) << 3) | 5)] + gf-le <>>s 4)]])
+              (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
               (<s = 'rip && nom? <>s) [['la (gx-r d) <>s] ['lea (gx-r d) (gx-r d) <>>s]]   ; sym+k: lea keeps the flags too
               (<s = 'mem) (: bm (gx-mem s) [['lea (gx-r d) <bm <>bm]])
               (scare 'gas-x64-operand ops))
@@ -503,7 +514,9 @@
    (gf-word tgt w e rl)
     (: v (gf-val e rl) pc <v s <>v k <>>v
        (? !(string? s) (gf-le k w)
-          pc (? (w = 4 && !(gthumb? tgt)) [['fix 4 'rel32 (name s) (k + 4)]] (scare 'gas-data-pcrel e))
+          pc (? (w = 4 && !(gthumb? tgt)) [['fix 4 'rel32 (name s) (k + 4)]]
+                (w = 8 && tgt = 'x64) [['fix 8 'rel64 (name s) (k + 8)]]     ; the jump table's `key - .`
+                (scare 'gas-data-pcrel e))
           (w = 8) [['fix 8 'abs64 (name s) k]]
           (w = 4 && (tgt = 'x64 || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
           (scare 'gas-data-width e)))

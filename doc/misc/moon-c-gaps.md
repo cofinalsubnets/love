@@ -820,15 +820,15 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 **measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
 with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
-every ninth by path: **46 compile**, and the rest stop at
+every ninth by path: **71 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 55 | a function's inline asm: an `"i"` only inlining makes constant (jump labels' `arch_static_branch` key, `_static_cpu_has`'s bit, 23), a register variable in `%rax`/`%rdx` (6), `pause`/`bsr`/`mfence`/`lcallw`, `mov %fs, r`, `.macro`; 12 still read `cause unnamed` |
+| 31 | a function's inline asm: `.skip` over label arithmetic (the alternatives' padding, 7), a register variable in `%rax`/`%rdx` (6), `bsr`/`pause` (10), `tzcnt`/`mfence`/`lcallw`, `mov %fs, r`, `.macro` (3), a register pinned twice |
+| 2 | `cause unnamed` (`page_ref_dec_and_test`, `acpi_pci_probe_root_resources`) |
 | 20 | `__builtin_bswap16` over a constant in a case label |
 | 20 | `typeof` of the object in its own initializer (`get_unaligned`, `container_of`) |
 | 6 | `__label__`, a block's local label (`unsafe_get_user`, rseq) |
-| 3 | a spinlock's compound literal nested in a static initializer |
 | 3 | `__builtin_isdigit`, `__builtin_ffsll` |
 | 2 | gcc's `__attribute` spelling |
 | 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), `__builtin_clzll` in a bit-field width, a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label`, a register variable in `%rax` |
@@ -836,8 +836,9 @@ every ninth by path: **46 compile**, and the rest stop at
 each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
 runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm 76 and
 `pushf` 102, an address as an `"i"` operand 22, a `%gs:` operand 20, a `"+m"` output 17 and a
-flag output 10 before they read (142-syntax.c, 174-elvis.c, 175-offsetof.c, 176-cleanup.c,
-178-toplevelasm.c, 179-pushf.c and 181..184-asm*.c hold them). a file-scope asm is gas's whole language, and
+flag output 10, an `"i"` only a splice makes constant 17 and a lock's or tracepoint's static
+initializer 20 before they read (142-syntax.c, 174-elvis.c, 175-offsetof.c, 176-cleanup.c,
+178-toplevelasm.c, 179-pushf.c, 181..185-asm*.c and 186-staticinit.c hold them). a file-scope asm is gas's whole language, and
 holo's gas-top reads what C headers write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
 `.byte`..`.quad` over a symbol plus a constant or less `.`, `.ascii`/`.asciz`, `.balign`,
 `.zero`, `.org` -- into sections the object carries; any other directive refuses by name.

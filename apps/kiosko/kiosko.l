@@ -1,4 +1,3 @@
-#!/usr/bin/env -S love -l
 ; kiosko -- the newsstand: a static web server over a directory.
 ;
 ; it knows nothing about markdown, or about papel, or about how the files under its root
@@ -25,12 +24,10 @@
 ;     server small enough to read in one sitting.
 ;   Cache-Control: no-cache, because the thing kiosko is for is watching a site change.
 ;
-; usage:  kiosko [-p port] [-q] [DIR]        (with the `kiosko` script on PATH)
-;     or: love -l apps/kiosko/kiosko.l [-p port] [DIR]
-; DIR defaults to the working directory, port to 8080. it serves until interrupted.
+; its command line is kore's httpd (apps/kore/net.l), busybox's flags onto `serve`.
 ; gulp is exported for test/host/kiosko.l alone: it drives the cask/string lane
 ; boundary directly, which nothing else reaches
-(module (kiosko serve serve5 serve1 kiosko-main gulp)
+(module (kiosko serve serve5 serve1 gulp)
 
 ; --- little utils -------------------------------------------------------------------
 (borrow 'posix)
@@ -337,48 +334,4 @@
         1)
        l)))
 
-; --- the command line ---------------------------------------------------------------------
-(: kiosko-usage "kiosko -- the newsstand: a static web server over a directory
-usage: kiosko [-p PORT] [-q] [DIR]
-  -p, --port N   the port to serve on (default 8080)
-  -q, --quiet    do not log requests
-  DIR            the document root (default .)
-"
-   _ (:
-   (kdie c m) (udie c ("kiosko: " + m))
-   (kiosko-main as)
-   (: _ (? !(nil? (cite 'kiosko)) (borrow 'kiosko))  ; splice my registered self if I am one (cook-main's
-                                                  ; guard); on a -l load my names already walk
-      ; ..and posix beside it. a global name reads the LIVE book (love/ev.c's lvm_index),
-      ; and this is called on a chain that carries neither: the line above puts back
-      ; this file's own names, and nothing puts back the doors it was loaded with.
-      _ (borrow 'posix)
-      t (tablet 0)
-      o (uopt as t '(112) () {"port" 112 "quiet" 113})
-      _ (two? o ? 0 (kdie 2 (last as + " needs an argument")))
-      un (uoptun t '(112 113))
-      _ (nil? un ? 0 (kdie 2 ("unknown option -" + string un)))
-      rest <>>o
-      sy (uoptstray as rest)
-      _ (nil? sy ? 0 (kdie 2 ("unknown option " + sy)))
-      _ (two? >rest ? (kdie 2 ("one directory at a time, not " + <>rest)) 0)
-      root (two? rest ? <rest ".")
-      pt (uoptv t 112)
-      port (: v (unum pt) (? (nil? pt) 8080 (charm? v) v (kdie 2 ("not a port: " + pt))))
-      _ (!(dir? root) ? (kdie 1 ("not a directory: " + root)))
-      r (serve root port (peep t 113 0) ())
-      _ (nom? r ? (kdie 1 ("cannot listen on :" + show port + " -- " + show r)))
-      0)
-   kiosko-main)
-
-   kiosko-main _)
-
-; the seat (cook's shape): fire kiosko-main iff this file -- or the installed `kiosko`
-; script -- sits in the program seat of the real command line. kiosko-main reads bare:
-; whichever layer holds this file's binds is still the head here. body-having, so
-; nothing leaks.
-(: door (udoor 'kiosko (urun kiosko-main) kiosko-usage 1 1)
-   _ ((cite 'verbs 'enlist) 'kiosko door ())
-   s (cite 'verbs 'fire ["kiosko" "kiosko.l"])
-   (two? s ? (quit (door >s))))
 ) ; module kiosko
