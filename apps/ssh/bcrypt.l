@@ -22,10 +22,9 @@
     (: pi (bf-pi 0)
        hp (sha512 pass)
        stride ((n + 31) // 32)
-       (xs a b) (bytes #a (j \ a j ^ b j))
        (blk count)
         (: (go i t acc) (? (rounds <= i) acc
-                           (: t2 (bcrypt-hash pi hp (sha512 t)) (go (i + 1) t2 (xs acc t2))))
+                           (: t2 (bcrypt-hash pi hp (sha512 t)) (go (i + 1) t2 (xors acc t2))))
            t1 (bcrypt-hash pi hp (sha512 (salt + u32 count)))
            (go 1 t1 t1))
        bs (map (c \ blk (c + 1)) (jot stride))

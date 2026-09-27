@@ -9,25 +9,20 @@
 ; its fields are plain to read. the xz spec is tukaani's .xz file format 1.2.
 (module 'xz
 (borrow 'posix)
+(borrow 'bytes)
 
 (:
    (xz-bytes l) (foldl (\ a b (a + string b)) "" l)
    xz-magic (xz-bytes [253 55 122 88 90 0])
-   (xz-le v n) (? (n < 1) "" (string (v & 255) + xz-le (v >> 8) (n - 1)))
-   (xz-rle s i n) (? (n < 1) 0 (s i + (256 * xz-rle s (i + 1) (n - 1))))
    (xz-vli v) (? (v < 128) (string v) (string (128 | (v & 127)) + xz-vli (v >> 7)))
    (xz-rvli s i)                       ; -> (value next) | () for a run off the end or past 9
     (: (go j v sh) (? (#s <= j || 9 <= j - i) ()
                       (: b (s j) v2 (v + ((b & 127) << sh))
                          (? (b < 128) [v2 (j + 1)] (go (j + 1) v2 (sh + 7)))))
        (go i 0 0))
-   (xz-pad4 n) ((4 - (n % 4)) % 4)
-   (xz-zeros n) (? (n < 1) "" (string 0 + xz-zeros (n - 1)))
    xz-checks {'none 0 'crc32 1 'crc64 4 'sha256 10}
    (xz-csize id) (? (id = 0) 0 (id = 1) 4 (id = 4) 8 (id = 10) 32 ())
-   (xz-hex2 s) (: (d c) (? (c < 58) (c - 48) (c - 87))
-                  (foldl (\ a k (a + string (d (s (2 * k)) * 16 + d (s (2 * k + 1))))) "" ^(#s // 2)))
-   (xz-check id u) (? (id = 1) (xz-le (crc32 u) 4) (id = 4) (crc64 u) (id = 10) (xz-hex2 (sha256 u)) "")
+   (xz-check id u) (? (id = 1) (wrle (crc32 u) 4) (id = 4) (crc64 u) (id = 10) (hex2b (sha256 u)) "")
    ; the dictionary as LZMA2's one props byte spells it: (2 | p&1) << (p/2 + 11)
    (xz-dsize p) ((2 | (p & 1)) << (p // 2 + 11))
    (xz-dprop d) (: (go p) (? (40 <= p || d <= xz-dsize p) p (go (p + 1))) (go 0))
@@ -36,29 +31,29 @@
    (xz-pack s dict check)
     (: cid (peep xz-checks check 4)
        flags (xz-bytes [0 cid])
-       head (xz-magic + flags + xz-le (crc32 flags) 4)
+       head (xz-magic + flags + wrle (crc32 flags) 4)
        p (xz-dprop dict)
        body (? (#s = 0) "" (lzma2e s (xz-dsize p)))
        ; the block header: its size byte, flags (one filter, both sizes), the sizes, the
        ; LZMA2 filter with its props byte, padding to four, and its own crc32
        bh0 (string 192 + xz-vli #body + xz-vli #s + xz-bytes [33 1 p])
-       bh1 (string ((#bh0 + 1 + xz-pad4 (#bh0 + 1) + 4) // 4 - 1) + bh0)
-       bh2 (bh1 + xz-zeros (xz-pad4 #bh1))
-       bh (bh2 + xz-le (crc32 bh2) 4)
+       bh1 (string ((#bh0 + 1 + padk (#bh0 + 1) 4 + 4) // 4 - 1) + bh0)
+       bh2 (bh1 + zbytes (padk #bh1 4))
+       bh (bh2 + wrle (crc32 bh2) 4)
        ck (xz-check cid s)
-       block (? (#s = 0) "" (bh + body + xz-zeros (xz-pad4 #body) + ck))
+       block (? (#s = 0) "" (bh + body + zbytes (padk #body 4) + ck))
        ; the index: one record (unpadded size, uncompressed size), or none for no block
        ix0 (string 0 + (? (#s = 0) (xz-vli 0) (xz-vli 1 + xz-vli (#bh + #body + #ck) + xz-vli #s)))
-       ix1 (ix0 + xz-zeros (xz-pad4 #ix0))
-       ix (ix1 + xz-le (crc32 ix1) 4)
-       ft0 (xz-le (#ix // 4 - 1) 4 + flags)
-       (head + block + ix + xz-le (crc32 ft0) 4 + ft0 + "YZ"))
+       ix1 (ix0 + zbytes (padk #ix0 4))
+       ix (ix1 + wrle (crc32 ix1) 4)
+       ft0 (wrle (#ix // 4 - 1) 4 + flags)
+       (head + block + ix + wrle (crc32 ft0) 4 + ft0 + "YZ"))
 
    ;; --- reading ---
    (xz-block s i cid)                  ; a block at i -> (bytes next unpadded) | a word
     (: hs ((s i + 1) * 4)
        (? (#s < i + hs) 'end
-          !(xz-rle s (i + hs - 4) 4 = crc32 (snip s i (i + hs - 4))) 'corrupt
+          !(rdle s (i + hs - 4) 4 = crc32 (snip s i (i + hs - 4))) 'corrupt
           (: hd (snip s i (i + hs))
              fl (hd 1)
              nf ((fl & 3) + 1)
@@ -73,7 +68,7 @@
                          cl (? (charm? <r1) <r1 (: n (lzma2len (snip s d0 #s)) (? (charm? n) n -1)))
                          u (? (0 <= cl && d0 + cl <= #s) (lzma2d (snip s d0 (d0 + cl))) ())
                          cz (xz-csize cid)
-                         e (d0 + cl + xz-pad4 cl)
+                         e (d0 + cl + padk cl 4)
                          (? (cl < 0 || #s < d0 + cl) 'end
                             (!(string? u) || (charm? <r2 && !(#u = <r2))) 'corrupt
                             (#s < e + cz) 'end
@@ -83,7 +78,7 @@
     (? (#s < i + 12) 'end
           !(snip s i (i + 6) = xz-magic) 'format
           (: fl (snip s (i + 6) (i + 8))
-             (? !(xz-rle s (i + 8) 4 = crc32 fl) 'corrupt
+             (? !(rdle s (i + 8) 4 = crc32 fl) 'corrupt
                 (0 < (fl 0) || 15 < (fl 1)) 'corrupt
                 !(charm? (xz-csize (fl 1))) 'check
                 (: cid (fl 1)
@@ -102,9 +97,9 @@
                                          (? b (rec (k - 1) <>b) ())))
                          e (n && rec <n <>n)
                          (? (!e || !(<n = #recs)) 'corrupt
-                            (: e2 (e + xz-pad4 (e - ix))
+                            (: e2 (e + padk (e - ix) 4)
                                (? (#s < e2 + 16) 'end
-                                  !(xz-rle s e2 4 = crc32 (snip s ix e2)) 'corrupt
+                                  !(rdle s e2 4 = crc32 (snip s ix e2)) 'corrupt
                                   ; each record, as the blocks read it
                                   !(: (chk k j) (? (k < 1) 1
                                                    (: a (xz-rvli s j) b (xz-rvli s <>a) m (recs (<n - k))
@@ -112,8 +107,8 @@
                                       (chk <n <>n))
                                    'corrupt
                                   (: f (e2 + 4)
-                                     (? (!(xz-rle s f 4 = crc32 (snip s (f + 4) (f + 10)))
-                                         || !(xz-rle s (f + 4) 4 = (e2 + 4 - ix) // 4 - 1)
+                                     (? (!(rdle s f 4 = crc32 (snip s (f + 4) (f + 10)))
+                                         || !(rdle s (f + 4) 4 = (e2 + 4 - ix) // 4 - 1)
                                          || !(snip s (f + 8) (f + 10) = fl)
                                          || !(snip s (f + 10) (f + 12) = "YZ"))
                                         'corrupt
@@ -122,7 +117,7 @@
     (: (go i acc)
         (: r (xz-stream s i)
            (? !(two? r) r
-              (: (pad j) (? (j + 4 <= #s && snip s j (j + 4) = xz-zeros 4) (pad (j + 4)) j)
+              (: (pad j) (? (j + 4 <= #s && snip s j (j + 4) = zbytes 4) (pad (j + 4)) j)
                  j (pad <>r)
                  (? (#s <= j) [1 (acc + <r)]
                     (#s < j + 4) 'corrupt
@@ -133,14 +128,14 @@
    ; liblzma's sniff: props under 225, a dictionary of 2^n or 2^n + 2^(n-1) (or all ones),
    ; and a size of at most 2^38 or unsaid
    (xz-lzma? s)
-    (: d (? (13 <= #s) (xz-rle s 1 4) 0) us (? (13 <= #s) (xz-rle s 5 8) 0)
+    (: d (? (13 <= #s) (rdle s 1 4) 0) us (? (13 <= #s) (rdle s 5 8) 0)
        (up v) (: a (v - 1) b (a | (a >> 2)) c (b | (b >> 3)) e (c | (c >> 4)) f (e | (e >> 8))
                  ((f | (f >> 16)) + 1))
        (13 <= #s && s 0 < 225 && (d = 4294967295 || up d = d)
         && (us <= 274877906944 || us = 18446744073709551615)))
    (xz-unlzma s)
-    (: us (xz-rle s 5 8)
-       u (lzmad (snip s 13 #s) (s 0) (xz-rle s 1 4) (? (us = 18446744073709551615) -1 us))
+    (: us (rdle s 5 8)
+       u (lzmad (snip s 13 #s) (s 0) (rdle s 1 4) (? (us = 18446744073709551615) -1 us))
        (? (string? u) [1 u] 'corrupt))
 )
 ) ; module 'xz

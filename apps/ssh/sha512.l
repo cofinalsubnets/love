@@ -25,7 +25,6 @@
 
    (rotr x n) (((x >> n) | (x << (64 - n))) & m64)
    (be64 s i) (: (go j a) (? (j = 8) a (go (j + 1) ((a << 8) | s (i + j)))) (go 0 0))
-   (be64s n) (bytes 8 (i \ (n >> (8 * (7 - i))) & 255))
    (add64 a b) ((a + b) & m64)
 
    ; one 128-byte block into the eight-word state h
@@ -51,7 +50,7 @@
 
    (sha512 s)
     (: n #s
-       pad (s + string 128 + zeros ((((111 - n) % 128) + 128) % 128) + zeros 8 + be64s (n * 8))
+       pad (s + string 128 + zeros ((((111 - n) % 128) + 128) % 128) + zeros 8 + u64be (n * 8))
        (go h o) (? (#pad <= o) h (go (sha512-block h pad o) (o + 128)))
-       (foldl (+) "" (map be64s (go sha512-h 0)))))
+       (foldl (+) "" (map u64be (go sha512-h 0)))))
 ) ; module 'ssh
