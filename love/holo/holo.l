@@ -130,7 +130,7 @@
              'vmxon 2 'vmclear 2 'vmptrld 2 'sgdt 2 'sidt 2
              'vmread 2 'vmwrite 2
              'isb 0 'wfi 0 'wfe 0 'eret 0
-             'int 1 'ltr 1 'dsb 1 'dmb 1
+             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1
              'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
              'ldcr 2 'stcr 2 'lgdt 2 'lidt 2 'invlpg 2
              'mrs 2 'msr 2 'msri 2
