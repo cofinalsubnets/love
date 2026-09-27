@@ -452,6 +452,11 @@ bool ai_ready(int fd, int events);
 // --- the seat's doors ---
 // one definition each: inle/posix.c..
 struct ai *ai_argv_marshal(struct ai*, char***);   // argv -> char** in the heap gap
+// the file a marshalled argv execs: the path a (path . name) head laid past the NULL, else argv[0]
+static ai_inline char const *ai_argv_file(char **cav) {
+ char **p = cav;
+ while (*p) p++;
+ return p[1] ? p[1] : cav[0]; }
 void host_spawn_guard(struct ai*, int);            // exec-bound forks drop the pools
 int ai_raw_mode(intptr_t on);                      // the (raw on) latch; main.c's repl too
 size_t host_selfpath(char*, size_t);               // the one selfpath door (per-OS ladder)
