@@ -832,7 +832,7 @@
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
     'objcopy "usage: objcopy -O binary|ihex IN OUT"
     'cat "usage: cat [FILE..]"
-    'tac "usage: tac [FILE..]"
+    'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-n N] [-c N] [-N] [FILE..]"
     'tail "usage: tail [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwc] [FILE..]"
