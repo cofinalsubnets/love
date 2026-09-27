@@ -5,13 +5,7 @@
 ; turns into a qemu exit; a boot that reaches the shell instead just times out
 ; and reports. Run on the host love (the `hark` nif). argv = (this elf append expect..).
 
-; the helpers keep their own form: folding them into the driver's `:` below blows
-; the C stack on the host, so sub-at and has? may not share a letrec with it.
 (borrow 'posix)
-(: (sub-at s i t j) (? (j >= #t) 1                           ; does t occur in s at index i?
-       (s (i + j) = t j ? (sub-at s i t (j + 1)) 0))
-   (has? s t) ((: (g i) (? (i + #t > #s) 0
-       (sub-at s i t 0 ? 1 (g (i + 1))))) 0))
 
 (: a    >argv
    elf  <a

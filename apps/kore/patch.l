@@ -25,7 +25,6 @@
 (borrow 'posix)
 
 (:
-   (pt-pfx s p) ((tally p <= tally s) && (snip s 0 (tally p) = p))
    ; the say flushes: the hunk reports go to err and the file report to out, so an
    ; unflushed out lands its line in the middle of a later one -- patch's own output
    ; reads as one conversation and has to stay one
@@ -84,7 +83,7 @@
                    ((c = 32) || (c = 0)) (pt-body >m (no - 1) (nn - 1) ([32 txt 1] . acc))
                    [(rev acc) m])))))
    (pt-hunks m acc)
-    (? (!(two? m) || !(pt-pfx <m "@@")) [(rev acc) m]
+    (? (!(two? m) || !(starts? <m "@@")) [(rev acc) m]
        (: hd (pt-hdr <m)
           (? !(two? hd) [(rev acc) m]
              (: b (pt-body >m <>hd (hd 3) ())
@@ -92,7 +91,7 @@
    (pt-parse ls)
     (: (go m acc)
         (? !(two? m) (rev acc)
-           (? ((pt-pfx <m "--- ") && ((two? >m) && (pt-pfx <>m "+++ ")))
+           (? ((starts? <m "--- ") && ((two? >m) && (starts? <>m "+++ ")))
               (: h (pt-hunks >>m ())
                  (go <>h (? (two? <h) ([(pt-hname <m) (pt-hname <>m) <h] . acc) acc)))
               (go >m acc)))

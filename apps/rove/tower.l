@@ -1333,7 +1333,6 @@
 
  ; the tree: a node's sign is its lines, then its choices numbered, then the foot
  (talk-node k) (: (go (e . u)) (<e @ ^k e (go u)) (go her-tree))
- (joins-with sp l) (? (one? l) "" (one? >l) <l (<l + sp + joins-with sp >l))
 
  ; a choice's line is marked off between the bytes 1 and 2, which fit paints as a button
  (choice-line c) (string 1 + " " + show <c + "  " + c 1 + " " + string 2)
@@ -1341,7 +1340,7 @@
                txt (nd 1) chs (nd 2)
                ks (map (show * cap) chs)
                lines (txt + (two? chs ? [""] ()) + (map choice-line chs)
-                          + ["" (fill talk-foot [(two? chs ? (joins-with ", " ks) "any key")])])
+                          + ["" (fill talk-foot [(two? chs ? (join ", " ks) "any key")])])
                (pins g 'talk k 'sign (her-ttl . lines)))
 
 

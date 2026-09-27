@@ -85,10 +85,6 @@
 
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
 (: (strcat l)    (foldl (+) "" l)
-   (joins l sp)  (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
-   (ends? s t)   (: n #s m #t ((m <= n) && (snip s (n - m) n = t)))
-   (sub? s t)    (: n #s m #t
-                    ((: (g i) (? ((i + m) <= n) (? (snip s i (i + m) = t) 1 (g (i + 1))) 0)) 0))
    (base p)      (snip p (lastslash p) #p)
    (slurpf f)    (: q (open f "r") (? (hot? q) (slurp q) ""))
    (spitf f s)   (: q (open f "w") _ (? (hot? q) (: _ (say q s) (close q)) 0) (? (hot? q) 1 0))
@@ -175,7 +171,7 @@
 ; builds. anything absolute, anchored, or pointing outside stays exactly as written --
 ; papel will not manufacture a dead link that the markdown did not already have.
 (: (mdurl known u)
-   (? (sub? u "://") u
+   (? (has? u "://") u
       !(ends? u ".md") u
       (: b (base u)
          (peep known b 0 ? (snip u 0 (tally u - 3) + ".html") u)))
@@ -204,10 +200,10 @@
    (: (row sl it) ("<dt id=\"" + hq sl + "\">" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>")
       (rows sls its) (? !(two? its) () (row <sls <its . rows >sls >its))
       ("<dl" + (0 < #cls ? (" class=\"" + hq cls + "\"") "") + ">\n"
-       + joins (rows sls items) "\n" + "\n</dl>"))
+       + join "\n" (rows sls items) + "\n</dl>"))
    (pshow d hs ts)
    ((: (g l hs ts acc cls)
-       (? !(two? l) (joins (rev acc) "\n")
+       (? !(two? l) (join "\n" (rev acc))
           (: b <l
              (? (head? b)
                 (: h (hhead <(<hs) (<>(<hs)) <>>b)

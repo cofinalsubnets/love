@@ -91,10 +91,6 @@
  ; complaint and the loop keeps what it had. an empty text is hush. sending starts
  ; the loop if it stood
  (synth-text ls) (foldl (\ a l (a + "\n" + l)) <ls >ls)
- (blank? c) (c = 32 || c = 9 || c = 10 || c = 13)
- (strip s) (:- (go 0 #s) (go a b) (? (a < b && blank? (s a)) (go (a + 1) b)
-                                    (a < b && blank? (s (b - 1))) (go a (b - 1))
-                                    (snip s a b)))
  (synth-send st text) (: t (strip text)
                          r (? (0 = #t) hush
                               (trap (_ \ harp-read t) () (\ a b ['bad (show a + " " + show b)])))
