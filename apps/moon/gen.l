@@ -1103,6 +1103,10 @@
                    (vfs a + pnum <k + pbrf g o (usg? (vty a)) 'r0 'r1 'r2 'r3 cc lbl)
                   (d128? (vty a))
                    (? !(w128? g) (no128 g)
+                      ; against zero: a signed pair's sign is its high word's, and == 0 is lo | hi
+                      (<k = 0 && (elem o '(eq ne) || vty a = 'i128 && elem o '(lt ge)))
+                       (: z (elem o '(eq ne))
+                          (as128 g a + (z ? '((or r0 r0 r2)) ()) + [['cmp (z ? 'r0 'r2) 0] ['br (bcc o ()) lbl]]))
                       (wbr o (as128 g a + wpush + wnum <k) (vty a = 'u128)))
                   (: n <k
                      cc9 (bcc o (cmpu g (vty a) <>k))
@@ -4516,6 +4520,18 @@
                       reg? <>m1 && reg? <>m2 && nelem <>m1 '(r0 r2) && nelem <>m2 '(r0 r2) && <>m1 != <>m2)) &&
                   dead? '(r0 r2) (i + 2))
                   ([['mov <><>l 'r2] ['li <><>>l 0]] + go >>>l (i + 3))
+                 ; the pair's constants: a widened li is two, a known pair shifts up 64 by moving its lo, and a
+                 ; known pair with lo 0 adds as its hi alone (the halves then die apart)
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && two? >l && <>l = '(sx128))
+                  (go (f . ['li 'r2 (<>>f < 0 ? -1 0)] . >>l) i)        ; same length: the indices hold
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && fitsw? <>>f && two? >>>l &&
+                  (: f2 <>l (two? f2 && <f2 = 'li && <>f2 = 'r2 && charm? <>>f2)) && <>>l = '(shl128 64) &&
+                  (: f4 <>>>l (two? f4 && <f4 = 'a128r && reg? <>f4 && reg? <>>f4)))
+                  (: f4 <>>>l
+                     ([['mov 'r0 <>f4] ['mov 'r2 <>>f4] ['add 'r2 'r2 <>>f]] + go >>>>l (i + 4)))
+                 (two? f && <f = 'li && <>f = 'r0 && charm? <>>f && two? >>l &&
+                  (: f2 <>l (two? f2 && <f2 = 'li && <>f2 = 'r2 && charm? <>>f2)) && <>>l = '(shl128 64))
+                  ([['li 'r0 0] ['li 'r2 <>>f]] + go >>>l (i + 3))
                  (f . go >l (i + 1)))))
        (lot @ 'no fs (go fs 0)))
 

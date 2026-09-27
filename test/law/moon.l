@@ -1381,6 +1381,16 @@
       ; the park never nests here, so the hot params r and b take seats: the full-word sp loads
       ; are the four cs restores, cold a's read per row and ai's in the inner loop
       (6 = (splds mrf)))
+   ; -- the borrow row: d < 0 is the high word's sign, the widened constants are two li, and
+   ; d + 2^64 adds to the high half alone
+   irS (cgn "int ms(unsigned long *r, unsigned long *a, unsigned long *b, int n) { __int128 w = 0; for (int i = 0; i < n; i++) { __int128 d = (__int128) a[i] - b[i] - w; if (d < 0) d += (__int128) ((unsigned __int128) 1 << 64), w = 1; else w = 0; r[i] = (unsigned long) d; } return n; } int main() { return 0; }")
+   msf (fnf 'ms <>irS)
+   _ (test
+      (two? irS)
+      (0 = (occh msf 'c128))                     ; no cell compare
+      (elem '(cmp r2 0) msf)                     ; the sign test
+      (0 = (occh msf 'sx128))                    ; w = 0 and w = 1: two li each
+      (0 = (occh msf 'shl128)))                  ; the 2^64 add rides the high word
    (test
       (two? irV)
       (elem '(mov r11 r0) vf)                     ; c's write lands its lo home...
