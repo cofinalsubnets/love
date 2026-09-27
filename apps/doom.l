@@ -175,7 +175,7 @@
        r (fetch dg-url tgz)
        (? (r != 0) r
           (two? (stat (dl + "/doomgeneric"))) 0
-          (cite 'tarcmd 'tar-main ["xzf" tgz dl],
+          (cite 'tarcmd 'tar-main ["xzf" tgz "-C" dl],
            (two? (stat (dl + "/doomgeneric-master")) ?
               (rename (dl + "/doomgeneric-master") (dl + "/doomgeneric")) 0),
            unlink (dl + "/pax_global_header"),              ; the tarball's pax row, laid as a file

@@ -52,7 +52,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    (hup c)    (: ch (see in) (? (ch == -1) (seal c 1)
                                 (put c ch, (ch == 10 ? (flush c) 0), hup c)))
    (helm-ctl sock as)
-    (: c (connectu sock)
+    (: c (connect ['unix sock])
        (? !(lit? c) (say err ("helm: no moor at " + sock + "\n"), 1)
           (two? as)
             (: _ (say c (hargv-line as + "\n")) _ (flush c) _ (seal c 1)

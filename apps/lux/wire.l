@@ -1,6 +1,6 @@
 ; apps/lux/wire.l -- the x11 wire protocol: connect, the setup handshake, request
 ; writers, the substructure redirect, keyboard mapping/grabs, and the event
-; decoder. Host-only (needs the connectu nif, inle/sock.c). Every op takes the
+; decoder. Host-only (needs connect's unix family, inle/sock.c). Every op takes the
 ; socket port `s` explicitly -- no closure over a free `s` and no nif shadow (the
 ; codec's byte writers call the real `put`/`get` nifs, never a wm helper).
 ;
@@ -52,7 +52,7 @@
    ; --- connect + the setup handshake -> the screen record | (). auth is ()
    ;     (an -ac server) or (name data) -- the mit-magic-cookie-1 pair a real
    ;     server demands; xauth-cookie reads it out of ~/.Xauthority. ---
-   (x-connect path) (connectu path)
+   (x-connect path) (connect ['unix path])
    (x-wpad s t)                                                                  ; a string + its 4-byte padding
     (x-wname s t, (: (go i) (i < x-pad4 #t ? (put s 0, go (i + 1))) (go 0)))
    (x-setup s auth)

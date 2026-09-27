@@ -62,7 +62,7 @@
    ; () -- so the drain costs what actually finished and helm keeps no roster.
    (hscoop _) (two? (scoop 0) ? (hscoop 0) 0)
    (helm-moor path)
-    (: l (shore path)
+    (: l (listen ['unix path])
        (? !(lit? l) (hnote ("no moor at " + path), 0)
           (: _ (hnote ("moored at " + path))
              (go _) (: _ (await l)

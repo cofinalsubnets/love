@@ -40,11 +40,11 @@
 ;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
 ;   kore www [-w N] URL|FILE         a web page, its links numbered (apps/kore/www.l)
 ;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l); httpd, kiosko
-;                                    under busybox's flags, beside it
+;                                    under busybox's flags, nslookup and ping beside it
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
 ;                                    one (apps/xz.l, inle/xz.c's LZMA2), bzip2|bunzip2|bzcat
 ;                                    (apps/bz2.l, inle/bz2.c); tar and cpio the
-;   kore tar czf|xzf|tzf ARCHIVE      two containers over it (apps/tar.l, apps/cpio.l). these
+;   kore tar {c|x|t}[vzjJ] -f A      two containers over it (apps/tar.l, apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
 ;   kore xxd [-r] [F..]              the canonical dump, and back again
@@ -64,7 +64,7 @@
 ; leaves deep through `die`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
-        telnet-main httpd-main tn-new tn-byte tn-send tn-echo?
+        telnet-main httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping-ms ping-t
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chgrp-main chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
@@ -72,7 +72,7 @@
         mac2unix-main unix2dos-main
         factor-main false-main find-main fold-main free-main getopt-main gfind grep-main groups-main hd-main hexdump-main
         head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main markdown-main
-        ln-main ls-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
+        ln-main ls-main vdir-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
         mv-main myers nl-main nice-main nohup-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main ranlib-main readlink-main realpath-main rebre refind refold renice-main
@@ -751,7 +751,7 @@
             'sha224sum sha224sum-main 'sha256sum sha256sum-main 'sha384sum sha384sum-main
             'sha512sum sha512sum-main 'b2sum b2sum-main 'sha3sum sha3sum-main 'crc32 crc32-main
             'ls ls-main 'dir ls-main   ; one lister, and the name DOS and coreutils ask it by
-            'vdir (\ as (ls-main ("-l" . as)))   ; ..and coreutils' long one
+            'vdir vdir-main   ; ..and coreutils' long one
             'pathchk pathchk-main 'mountpoint mountpoint-main 'shred shred-main
             'fsync fsync-main 'dircolors dircolors-main
             'cp cp-main 'mv mv-main
@@ -779,6 +779,7 @@
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'www www-main               ; a page to read, its links followed (apps/kore/www.l)
             'telnet telnet-main 'httpd httpd-main   ; a remote terminal, and kiosko (apps/kore/net.l)
+            'nslookup nslookup-main 'ping ping-main ; a name's records, and icmp echoes (the same)
             'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
             'nice nice-main 'renice renice-main 'stty stty-main 'truncate truncate-main
             'setsid setsid-main 'watch watch-main 'usleep usleep-main 'ts ts-main
@@ -990,6 +991,8 @@
     'www "usage: www [-w COLS] URL|FILE"
     'telnet "usage: telnet HOST [PORT]"
     'httpd "usage: httpd [-fv] [-p PORT] [-h DIR]"
+    'nslookup "usage: nslookup [-type=A|AAAA|CNAME|MX|NS|PTR|SOA|TXT] [-port=N] HOST [SERVER]"
+    'ping "usage: ping [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
     'dd "usage: dd [if=F] [of=F] [bs=N] [count=N] [skip=N] [status=none]"
     'xxd "usage: xxd [-r] [FILE..]"
     'hexdump "usage: hexdump [-Cv] [-n LEN] [-s SKIP] [FILE..]"
@@ -1105,6 +1108,8 @@ every tool answers --help and --version, and -h where the letter is free
   www [-w COLS] URL|FILE                  a web page, its links numbered (apps/kore/www.l)
   telnet HOST [PORT]                      a remote terminal; ^] closes (apps/kore/net.l)
   httpd [-fv] [-p PORT] [-h DIR]          kiosko under busybox's flags (apps/kore/net.l)
+  nslookup [-type=T] HOST [SERVER]        a name's records, from a nameserver (apps/kore/net.l)
+  ping [-q] [-c N] [-i S] [-W S] HOST     icmp echoes and their round trips (apps/kore/net.l)
   sh [-c CMD | FILE]                      the shell, lush (apps/lush.l)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (apps/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
@@ -1120,7 +1125,7 @@ every tool answers --help and --version, and -h where the letter is free
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (apps/xz.l)
   bzip2 | bunzip2 | bzcat [-cdfkqtvz1-9]       the block-sorting one (apps/bz2.l)
-  tar czf|xzf|tzf ARCHIVE [DIR]                the ustar archive, j for bzip2 (apps/tar.l)
+  tar {c|x|t}[vzjJaO] [-f A] [-C D] [M..]      the ustar archive; z gzip, j bzip2, J xz (apps/tar.l)
   cpio {-o|-i|-t} [-H newc] [-dutv]            ... and the other one (apps/cpio.l)
   dd [if=F] [of=F] [bs=N] [count=N] [skip=N]   blocks in, blocks out
   xxd [-r] [F..] | strings [-n LEN] [F..]      the dump, and the printable runs
