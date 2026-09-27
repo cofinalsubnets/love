@@ -471,6 +471,12 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   each run of instructions to gas-text. Its sections merge into the object (a name already laid
   takes the forms at its tail), and a static it names is laid. Anything else refuses by name,
   as do a `- .` word on arm32 and the wasm lane.
+* A function's template that carries a directive, or a label beside an instruction, reads
+  through the same gas-top from the function's own place: what stays there lays as raw runs
+  split at its labels, which become the function's own (numbered per reading, so two asms'
+  `1:` never meet), and a pushed section's forms join the file-scope asm's in the object --
+  the kernel's `LOCK_PREFIX`, bug table and alternatives. A refusal names what the asm asked
+  for (an output constraint, a clobber, a float operand).
 * Deferred until a consumer demands them: `"f"` float operands, indexed memory operands.
 
 ## the installed shape

@@ -133,7 +133,7 @@
    (gx-sop w) (w @ 8 'st 4 'st4 2 'st2 'st1)
    (gx-iop w) (w @ 8 'si 4 'si4 2 'si2 'si1)
    gx-nils (gtab '((cli cli) (sti sti) (hlt hlt) (ud2 ud2) (iretq iretq) (swapgs swapgs)
-                   (pushf pushf) (pushfq pushf) (popf popf) (popfq popf)
+                   (pushf pushf) (pushfq pushf) (popf popf) (popfq popf) (lock lock)
                    (rdmsr rdmsr) (wrmsr wrmsr) (cpuid cpuid) (rdtsc rdtsc)
                    (vmrun vmrun) (vmload vmload) (vmsave vmsave) (stgi stgi) (clgi clgi)
                    (vmlaunch vmlaunch) (vmxoff vmxoff) (cld cld)
@@ -497,17 +497,31 @@
                        (go j (acc + snip s i j))))
                  (go (i + 1) (acc + string c)))))
        (go 0 ""))
+   ; a leading `name:`'s colon, or -1
+   (gf-labat s) (: n #s j ((: (g j) (? (j < n && gidc? (s j)) (g (j + 1)) j)) 0)
+                   (? (0 < j && j < n && s j = 58) j -1))
+   (gf-lines tgt src)
+    (: hash? (elem tgt '(x64 rv64))
+       (catmap (ln \ xa-lines (? hash? (xa-decomment ln) (gcut2 ln 47))) (gsplit src 10)))
+   ; does gas-text read it whole: instructions, and labels on lines of their own
+   (gas-plain? tgt src)
+    (all (l \ (: s (xa-trim l) c (gf-labat s)
+                 (? (0 = #s) 1 (0 <= c) (0 = #(xa-trim (snip s (c + 1) #s))) (s 0 != 46))))
+         (gf-lines tgt src))
    ; -> [secs fns objs]: secs ((name type flags forms)..) first-seen, fns and objs the .globl
    ; names a label here defines, split by whether its section executes
-   (gas-top tgt src)
-    (: st {'cur ".text" 'prev ".text" 'stk () 'run () 'order () 'globl ()}
+   (gas-top tgt src) (gas-top-in tgt src ".text" [1 6] "")
+   ; ..read from a section of the caller's own, home, wearing [type flags] htd; a numeric label
+   ; is named pfx + GNU's own, so two readings never lay one twice
+   (gas-top-in tgt src home htd pfx)
+    (: st {'cur home 'prev home 'stk () 'run () 'order () 'globl ()}
        secs {}                                      ; name -> [type flags forms-reversed]
        labs {}                                      ; label -> its section
        lc {}                                        ; N -> how many `N:` so far
-       (rl n d) (show (glabel n (? (d = 102) (1 + peep lc n 0) (peep lc n 0))))
+       (rl n d) (pfx + show (glabel n (? (d = 102) (1 + peep lc n 0) (peep lc n 0))))
        (row nm td) (? (two? (secs nm)) 0
                       (: _ (pin st 'order (nm . (st 'order))) (pin secs nm [<td <>td ()])))
-       (emit fs) (: nm (st 'cur) _ (row nm (gf-dflt nm)) r (secs nm)
+       (emit fs) (: nm (st 'cur) _ (row nm (? (nm = home) htd (gf-dflt nm))) r (secs nm)
                     (pin secs nm [<r <>r (revcat fs <>>r)]))
        (flush _) (: r (st 'run)
                     (? (two? r) (: _ (pin st 'run ()) (emit (gas-text tgt (xa-join "\n" (rev r))))) 0))
@@ -540,26 +554,21 @@
               ; what a static link never reads: symbol types and sizes, visibility, unwind rows
               (elem mn '(".type" ".size" ".hidden" ".protected" ".internal") || xa-starts? mn ".cfi_") 0
               (scare 'gas-directive mn)))
-       ; a leading `name:`'s colon, or -1
-       (labat s) (: n #s j ((: (g j) (? (j < n && gidc? (s j)) (g (j + 1)) j)) 0)
-                    (? (0 < j && j < n && s j = 58) j -1))
        (line s0)
         (: s (xa-trim s0)
            (? (0 = #s) 0
-              (: c (labat s)
+              (: c (gf-labat s)
                  (? (0 <= c)
                     (: l (snip s 0 c)
                        _ (flush 0)
                        _ (? (xa-allof? l gdig? 0)
                             (: n (gdecv l) k (1 + peep lc n 0) _ (pin lc n k)
-                               (emit [['label (glabel n k)]]))
+                               (emit [['label (name (pfx + show (glabel n k)))]]))
                             (: _ (pin labs l (st 'cur)) (emit [['label (name l)]])))
                        (line (snip s (c + 1) #s)))
                     (s 0 = 46) (: _ (flush 0) (dir (xa-mnem s) (xa-rest s)))
                     (pin st 'run ((gf-lsub s rl) . (st 'run)))))))
-       hash? (elem tgt '(x64 rv64))
-       _ (foldl (\ _ ln (: _ (foldl (\ _ x (line x)) 0 (xa-lines (? hash? (xa-decomment ln) (gcut2 ln 47)))) 0))
-                0 (gsplit src 10))
+       _ (foldl (\ _ x (line x)) 0 (gf-lines tgt src))
        _ (flush 0)
        (sec nm) (: r (secs nm) [nm <r <>r (rev <>>r)])
        (exec? l) (0 < (<>(secs (labs l)) & 4))
