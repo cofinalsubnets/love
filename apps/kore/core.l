@@ -632,7 +632,7 @@
    ; `.. > $t && test -s $t && mv $t $@` recipe looks it up on PATH, and a missing one
    ; fails the link with the tmp file already swept -- which is exactly how a 0-byte
    ; lcat header reads as a broken bootstrap. 0 true, 1 false, 2 a bad expression.
-   t-fops '("-e" "-f" "-d" "-s" "-r" "-w" "-x")
+   t-fops '("-e" "-f" "-d" "-s" "-r" "-w" "-x" "-b" "-c" "-p" "-S" "-h" "-L" "-u" "-g" "-k")
    t-nops '("-eq" "-ne" "-lt" "-le" "-gt" "-ge")
    (t-int s)                                   ; "-12" -> (1 -12); anything else -> ()
     (: n (tally s)
@@ -645,12 +645,21 @@
                           (? (two? r) [1 (? neg (0 - <>r) <>r)] ()))))
    ; the stat tuple is (size mtime mode ..); 61440 masks the kind, 32768 a file, 16384 a dir
    (t-file op p)                               ; a file test, or 'no if op is not one
-    (: s (stat p) m (? (two? s) <>>s 0)
+    (: s (? (op = "-h" || op = "-L") (lstat p) (stat p)) m (? (two? s) <>>s 0)
+       k (& m 61440)
        (? !(elem op t-fops) 'no
           !(two? s) 0
           (op = "-e") 1
-          (op = "-f") (32768 = (& m 61440))
-          (op = "-d") (16384 = (& m 61440))
+          (op = "-f") (32768 = k)
+          (op = "-d") (16384 = k)
+          (op = "-b") (24576 = k)
+          (op = "-c") (8192 = k)
+          (op = "-p") (4096 = k)
+          (op = "-S") (49152 = k)
+          (op = "-h" || op = "-L") (40960 = k)
+          (op = "-u") (0 < (& m 2048))
+          (op = "-g") (0 < (& m 1024))
+          (op = "-k") (0 < (& m 512))
           (op = "-s") (0 < <s)
           (op = "-r") (0 < (& m 292))
           (op = "-w") (0 < (& m 146))
@@ -703,7 +712,8 @@
     (e @ 'enoent "No such file or directory" 'eacces "Permission denied"
          'eperm "Operation not permitted" 'esrch "No such process"
          'enotty "Inappropriate ioctl for device" 'eisdir "Is a directory"
-         'enotdir "Not a directory" 'einval "Invalid argument" 'erofs "Read-only file system"
+         'enotdir "Not a directory" 'enametoolong "File name too long"
+         'eloop "Too many levels of symbolic links" 'einval "Invalid argument" 'erofs "Read-only file system"
          'efbig "File too large" 'ebadf "Bad file descriptor" 'enxio "No such device or address"
          (show e))
    ; -- uname: -s -n -r -m, or -a for all four. the machine is love-arch respelled --

@@ -452,7 +452,8 @@ static lvm(lvm_selfpath) {
 // (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or a nom.
 // (openfd path m) -> a raw fd opening `path`: m 0 = read, 1 = write/create/trunc,
 //                   2 = write/create/append, 3 = write/create/EXCL at mode 0600 -- the one
-//                   that fails on an existing name. a nom on failure, 'badarg on a bad path.
+//                   that fails on an existing name, 4 = write in place (no create, no
+//                   trunc). a nom on failure, 'badarg on a bad path.
 // (spawnio argv in out err closes pg fg) -> pid | a nom. fork; in the child, the
 //                   job-control dance first -- pg < 0 stays in the parent's pgrp (the
 //                   non-tty lane), pg = 0 leads a fresh group, pg > 0 joins that group
@@ -489,6 +490,7 @@ static int mk_openfd(struct ai *g, void *env) {
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
+           : m == 4 ? O_WRONLY
            : O_RDONLY,
      fd = open(str_c(g->sp[0]), flags, m == 3 ? 0600 : 0644);
  return fd < 0 ? -errno : fd; }
@@ -1138,6 +1140,29 @@ static lvm(lvm_posix_truncate) {
  Sp[2] = host_posix_truncate(g, Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
 
+// (setsid ctty) -> the new session's id | a nom: the caller leads a fresh session and
+// group, and takes fd 0's terminal as its controlling one when ctty is truthy
+static ai_noinline word host_posix_setsid(struct ai *g, word cw) {
+ pid_t s = setsid();
+ if (s < 0) return ai_err(g, errno);
+ if (charmp(cw) && getcharm(cw) > 0 && ioctl(0, TIOCSCTTY, 1)) return ai_err(g, errno);
+ return putcharm(s); }
+static lvm(lvm_posix_setsid) { Sp[0] = host_posix_setsid(g, Sp[0]); ai_musttail return Next(1); }
+
+// (fsync path data) -> () | a nom | 'badarg: what the kernel holds of path's contents
+// written down, fdatasync's lesser promise when data is truthy
+ai_noinline static word host_posix_fsync(struct ai *g, word pw, word dw) {
+ char const *p = str_c(pw);
+ if (!p) return ai_badarg(g);
+ int fd = open(p, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+ if (fd < 0) return ai_err(g, errno);
+ int e = (charmp(dw) && getcharm(dw) > 0 ? fdatasync(fd) : fsync(fd)) ? errno : 0;
+ close(fd);
+ return e ? ai_err(g, e) : ZeroPoint; }
+static lvm(lvm_posix_fsync) {
+ Sp[1] = host_posix_fsync(g, Sp[0], Sp[1]);
+ ai_musttail return Nextp(1, 1); }
+
 static lvm(lvm_posix_umask) {
  Sp[0] = charmp(Sp[0]) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
                      : ai_badarg(g);
@@ -1156,6 +1181,8 @@ static union u const
   nif_posix_prio[]     = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_prio}, {lvm_ret0}},
   nif_posix_setprio[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_setprio}, {lvm_ret0}},
   nif_posix_truncate[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_truncate}, {lvm_ret0}},
+  nif_posix_setsid[]   = {{lvm_posix_setsid}, {lvm_ret0}},
+  nif_posix_fsync[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_fsync}, {lvm_ret0}},
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
   nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
   nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
@@ -1171,6 +1198,8 @@ LvNif("setrlimit", nif_posix_setrlimit, "posix");
 LvNif("prio", nif_posix_prio, "posix");
 LvNif("setprio", nif_posix_setprio, "posix");
 LvNif("truncate", nif_posix_truncate, "posix");
+LvNif("setsid", nif_posix_setsid, "posix");
+LvNif("fsync", nif_posix_fsync, "posix");
 LvNif("rmdir", nif_posix_rmdir, "posix");
 LvNif("hardlink", nif_posix_hardlink, NULL);
 LvNif("copyfile", nif_posix_copyfile, "posix");

@@ -95,7 +95,8 @@ T=$P/rel; mkdir "$T"; : > "$T/old"; sleep 1; printf 'a\n' > "$T/a"; printf 'b\n'
 ln "$T/a" "$T/h"; ln -s a "$T/s"
 for c in "0 a -ef h" "0 a -ef s" "1 a -ef b" "1 a -ef none" "0 a -nt old" "1 old -nt a" \
          "0 a -nt none" "1 none -nt a" "0 old -ot a" "1 a -ot old" "0 none -ot a" \
-         "1 a -ot none" "0 ! a -ef b"; do
+         "1 a -ot none" "0 ! a -ef b" "0 -h s" "0 -L s" "1 -h a" "1 -h none" "0 -c /dev/null" \
+         "1 -b /dev/null" "1 -p a" "1 -S a" "1 -u a" "1 -k a"; do
   (cd "$T" && eval "$K kore test ${c#? }"); k=$?
   [ "$k" = "${c%% *}" ] || fail "kore test ${c#? } (got $k, want ${c%% *})"
 done
@@ -119,4 +120,49 @@ korerun truncate -s 9 "$T2/new"; [ "$(wc -c < "$T2/new")" -eq 9 ] || fail "kore 
 for v in "" "-s 5" "-s abc $T2/f" "-s /0 $T2/f" "-r $T2/ref -s 3 $T2/f"; do
   korerun truncate $v 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore truncate $v is 1 (got $r)"
 done
-echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate) ok"
+# pathchk: each mode against GNU's -- the verdict, the sentence and the status
+PC=$HO/.pathchk; rm -rf "$PC"; mkdir "$PC"; : > "$PC/f"
+long=$(printf '%0300d' 0)
+pc() { LC_ALL=C pathchk "$@" > "$g" 2>&1; rg=$?; korerun pathchk "$@" > "$o" 2>&1; ro=$?
+       same "pathchk $*"; [ "$rg" -eq "$ro" ] || fail "kore pathchk $* exit ($ro vs $rg)"; }
+if command -v pathchk >/dev/null 2>&1; then
+  pc "$PC/f/x"; pc "$PC/nope/x"; pc "nope/x"; pc "$long"; pc "nope/$long"; pc ""
+  pc -p 'a b/c'; pc -p xxxxxxxxxxxxxxxxxxxx; pc -p ''; pc -p "a'b"; pc -p "$(printf 'x\303\251')"
+  pc -p "$(printf '%0300d' 0 | sed 's/0000000000/abcdefghi\//g')"
+  pc -P -- -x ''; pc -P a//b a/-b; pc -P -; pc --portability /a/b; pc -pP ok/name; pc; pc -q
+fi
+# mountpoint: util-linux's verdicts off the same mount table
+mp() { mountpoint "$@" > "$g" 2>&1; rg=$?; korerun mountpoint "$@" > "$o" 2>&1; ro=$?
+       same "mountpoint $*"; [ "$rg" -eq "$ro" ] || fail "kore mountpoint $* exit ($ro vs $rg)"; }
+if command -v mountpoint >/dev/null 2>&1 && [ -r /proc/self/mountinfo ]; then
+  mp /; mp /proc; mp -d /proc; mp -d /; mp "$PC"; mp -d "$PC"; mp "$PC/f"; mp "$PC/nope"
+  mp -q /; mp -q "$PC"; mp --nofollow /; mp -x /dev/null; mp -x "$PC/f"; mp; mp / /proc
+  for d in /dev/nvme0n1 /dev/sda /dev/vda; do [ -b "$d" ] && { mp -x "$d"; break; }; done
+fi
+# shred: the file overwritten where it lies, at GNU's size, and its -v sentences
+SH=$HO/.shred; rm -rf "$SH"; mkdir -p "$SH/g" "$SH/o"
+printf 'hello\n' > "$SH/a"; cp "$SH/a" "$SH/b"
+korerun shred -n 1 "$SH/a" || fail "kore shred"
+cmp -s "$SH/a" "$SH/b" && fail "kore shred left the bytes"
+if command -v shred >/dev/null 2>&1; then
+  shred -n 1 "$SH/b"; [ "$(wc -c < "$SH/a")" -eq "$(wc -c < "$SH/b")" ] || fail "kore shred's size vs GNU's"
+  for v in "-v" "-vz" "-vzu" "-vu -n 2" "-vzu -n 0" "-vx -n 1"; do
+    printf 'hello\n' > "$SH/g/abc"; printf 'hello\n' > "$SH/o/abc"
+    # shellcheck disable=SC2086
+    (cd "$SH/g" && LC_ALL=C shred $v abc) 2> "$g"; (cd "$SH/o" && "$K" kore shred $v abc) 2> "$o"
+    same "shred $v"
+    { [ -e "$SH/g/abc" ] && [ -e "$SH/o/abc" ]; } || { [ ! -e "$SH/g/abc" ] && [ ! -e "$SH/o/abc" ]; } \
+      || fail "kore shred $v: the file's fate differs"
+  done
+  LC_ALL=C shred "$SH/nope" 2> "$g"; rg=$?; korerun shred "$SH/nope" 2> "$o"; ro=$?
+  same "shred of no file"; [ "$rg" -eq "$ro" ] || fail "kore shred of no file exit ($ro vs $rg)"
+fi
+printf 'hello\n' > "$SH/z"; korerun shred -x -z "$SH/z"
+[ "$(od -An -tx1 "$SH/z" | tr -d ' \n')" = 000000000000 ] || fail "kore shred -xz is six zeros"
+# GNU's arrangement: 30 passes put random first, last, and evenly between
+[ "$(korerun shred -v -n 30 "$SH/z" 2>&1 | grep -n random | cut -d: -f1 | tr '\n' ' ')" = "1 11 21 30 " ] \
+  || fail "kore shred -n 30's random passes"
+head -c 100 /dev/zero > "$SH/s"; korerun shred -x -s 10 -n 1 "$SH/s"
+[ "$(tail -c 90 "$SH/s" | od -An -v -tx1 | tr -d ' \n' | tr -d 0)" = "" ] && [ "$(wc -c < "$SH/s")" -eq 100 ] \
+  || fail "kore shred -s 10 reached past its ten bytes"
+echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred) ok"
