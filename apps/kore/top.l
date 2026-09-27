@@ -48,8 +48,8 @@
        (go k 0))
    (tp-time tk)                        ; ticks -> procps' TIME+, mm:ss.hh
     (: s (// tk tp-hz)
-       ((show (// s 60)) + ":" + (uzpad 2 (show (% s 60)))
-                        + "." + (uzpad 2 (show (% tk tp-hz)))))
+       ((show (// s 60)) + ":" + (zpad 2 (show (% s 60)))
+                        + "." + (zpad 2 (show (% tk tp-hz)))))
    (tp-cut s w) (? (w < #s) (snip s 0 w) s)
 
    ; ---- the samples -------------------------------------------------------------

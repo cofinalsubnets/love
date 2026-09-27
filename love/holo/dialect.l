@@ -95,10 +95,9 @@
    (gdig? c) (48 <= c <= 57)
    (galpha? c) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || c = 46)
    (gidc? c) (galpha? c || gdig? c)
-   (ghexd c) (? (gdig? c) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) -1)
-   (ghex? c) (ghexd c >= 0)
+   (ghex? c) (hexv c >= 0)
    (gdecv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
-   (ghexv s) (foldl (a \ i \ a * 16 + ghexd (s i)) 0 ^#s)
+   (ghexv s) (foldl (a \ i \ a * 16 + hexv (s i)) 0 ^#s)
    (gtoks s) (: n #s
       (span i p) ((: (g j) (? (j < n && p (s j)) (g (j + 1)) j)) i)
       (go i acc)

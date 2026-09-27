@@ -108,7 +108,6 @@
 ; (or terms) that spell the same slug are deduped by a counter, so an anchor is stable
 ; for a given page even when its text is not unique.
 (: (down c)   (? ((65 <= c) && (c <= 90)) (c + 32) c)
-   (alnum? c) (((48 <= c) && (c <= 57)) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
    (squash s) ((: (g i acc prev) (? (i < tally s)
                                     (: c (s i)
                                        (? ((c = 45) && (prev = 45)) (g (i + 1) acc c)

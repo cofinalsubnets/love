@@ -221,8 +221,6 @@
    ; a walk answers paths relative to root and stores them that way: an archive
    ; carrying "/home/gwen/..." is one that unpacks over somebody's system. tar's own
    ; "removing leading /" warning exists because the naive spelling does that.
-   (tar-slurp p) (: q (open p "r") (? (hot? q) (: s (slurp q) (close q, [1 (s + "")]))))
-   (tar-blurt p s) (: q (open p "w") (? (hot? q) (say q s, close q, 1)))
    (tar-join a b) (? #a (a + "/" + b) b)
    ; stat answers (size mtime-ms mode mtime-ns), and its mtime is milliseconds where
    ; tar's field is seconds. it follows a symlink -- there is no lstat here -- so the
@@ -272,7 +270,7 @@
              _ (pins e 'mode (tar-mode st) 'mtime (tar-secs st)
                        'size <st           'path full)
              [1 [e]])
-          (: b (tar-slurp full)
+          (: b (uread full)
              (b ?
                 (: e (tar-entry rel 'file (<(>b)))
                    _ (pins e 'mode (tar-mode st) 'mtime (tar-secs st))
@@ -323,7 +321,7 @@
                                 tar-there? p)
                (kind == 'link) (symlink (tar-get e 'to "") p,
                                 string? (readlink p))
-               (tar-blurt p (tar-get e 'body ""),
+               (uwrite p (tar-get e 'body ""),
                 tar-there? p && chmod p (tar-get e 'mode 420),
                 tar-there? p))
        (ok && go >xs (k + 1))))))) ; module 'tar
@@ -349,14 +347,8 @@
 (borrow 'tar)
 
 (borrow 'posix)
-(: ; the exit door: a status raised, not a process ended, so a caller already in
-   ; this image gets a charm back. loaded without kore there is no catcher and we
-   ; quit as before -- the two ride together in every artifact that carries tar.
-   (tarc-leave c) (: u (cite 'kore 'uleave) (lit? u ? (u c) (quit c)))
-   (tarc-die m) (say err ("tar: " + m + "\n"), tarc-leave 2)
+(: (tarc-die m) (udie 2 ("tar: " + m))
    (tarc-warn m) (say err ("tar: " + m + "\n"), flush err)
-   (tarc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, [1 (s + "")]))))
-   (tarc-blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
    (tarc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
    (tarc-lazy m f what) (: b (cite m f) (lit? b ? b (tarc-die ("no " + what + " aboard"))))
 
@@ -502,7 +494,7 @@
        z (? (peep t 'z ()) (peep t 'z ()) (peep t 'auto 0) (tarc-bysuf a) ())
        b (tarc-zip z ar)
        _ (? (a = "-") (: _ (say out b) (flush out))
-            (tarc-blurt a b) 0
+            (uwrite a b) 0
             (tarc-die (a + ": Cannot open")))
        (peep t 'bad 0 ? 2 0))
 
@@ -511,7 +503,7 @@
    (tarc-open t)
     (: a (tarc-arch t)
        _ (a = "-" && two? (tty in) && tarc-die "Refusing to read archive contents from terminal (missing -f option?)")
-       b (? (a = "-") [1 (slurp in + "")] (tarc-slurp a))
+       b (? (a = "-") [1 (slurp in + "")] (uread a))
        _ (!b && tarc-die (a + ": Cannot open: No such file or directory"))
        z (: w (peep t 'z ()) (? w w (tarc-sniff <>b)))
        u (tarc-unzip z <>b)
@@ -554,7 +546,6 @@
          (tarc-die "You must specify one of the '-ctx' options")))
 
    T (cite 'verbs 'tab)
-   (tarc-run av) (: r (cite 'kore 'urun) (lit? r ? (r tar-main av) (tar-main av)))
-   _ (pins T 'tar (udoor 'tar tarc-run usage 1 1)))
+   _ (pins T 'tar (udoor 'tar (urun tar-main) usage 1 1)))
 
 ) ; module 'tarcmd

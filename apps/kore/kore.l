@@ -57,10 +57,10 @@
 ; loads LAST in the kore cat, when every tool main is defined, and its leave prunes the
 ; module down to the head below: every tool's <name>-main (the spelling lush's in-image lane
 ; and any (cite 'kore ..) reach), the u/text floors later cat members read bare, and
-; kore-main. die, read-text and the registry stay private.
+; kore-main. the registry stays private.
 ; every path answers a charm through core.l's urun, so an in-image caller lives through a
 ; tool that would have quit -- the SEAT below is the one site that quits, and a main here
-; leaves deep through `die`.
+; leaves deep through `udie`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         telnet-main httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t
@@ -79,8 +79,8 @@
         sha384sum-main sha512sum-main b2sum-main sum-main shuf-main size-main sleep-main
         sort-main sparse split-main srun stat-main strip-main stty-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
-        touch-main lift-main tr-main true-main truncate-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
-        uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
+        touch-main lift-main tr-main true-main truncate-main tsort-main uatoi ubase uclk ucopy udiff udirp ujoin
+        umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main
         users-main uset usignames usplit ustatf utag utty uupsay wc-main who-main whoami-main xargs-main yes-main
         cal-main clear-main dd-main hostname-main logname-main strings-main timeout-main tty-main
         hostid-main dnsdomainname-main setsid-main watch-main pathchk-main mountpoint-main shred-main
@@ -90,34 +90,32 @@
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (borrow 'posix)
-(: (read-text p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))    ; (1 text) | ()
-   (die m) (: _ (say err m) _ (put err 10) (uleave 2))
-
+(:
    ; diff: two files -> unified hunks on out; the classic exit triple
    (diff-main as)
-    (? !(two? >as) (die "usage: kore diff OLD NEW")
+    (? !(two? >as) (udie 2 "usage: kore diff OLD NEW")
        (: fa <as fb <>as
-          ta (read-text fa) tb (read-text fb)
-          _ (? (two? ta) () (die ("diff: cannot open " + fa)))
-          _ (? (two? tb) () (die ("diff: cannot open " + fb)))
+          ta (uread fa) tb (uread fb)
+          _ (? (two? ta) () (udie 2 ("diff: cannot open " + fa)))
+          _ (? (two? tb) () (udie 2 ("diff: cannot open " + fb)))
           d (udiff fa fb <>ta <>tb)
           (? (nil? d) 0
              (: _ (puts d) _ (flush out) 1))))
 
    ; as: IR forms -> a runnable ELF (love/holo/elf.l over the baked holo book)
    (as-main as)
-    (? !(two? >>as) (die "usage: kore as TARGET IN OUT   (TARGET: x64 | a64)")
+    (? !(two? >>as) (udie 2 "usage: kore as TARGET IN OUT   (TARGET: x64 | a64)")
        (: tgt (arch-nom <as) src <>as dst <>>as
           _ (? ((tgt = 'x64) || (tgt = 'a64)) ()
-               (die ("as: unknown target " + <as)))
+               (udie 2 ("as: unknown target " + <as)))
           q (open src "r")
-          _ (? (hot? q) () (die ("as: cannot open " + src)))
+          _ (? (hot? q) () (udie 2 ("as: cannot open " + src)))
           (rd x acc) (: r (sound x)
                       (? (two? r) (rd >r (<r . acc))
-                         (= r 'torn) (die ("as: unfinished form in " + src))
+                         (= r 'torn) (udie 2 ("as: unfinished form in " + src))
                          (rev acc)))
           ir (rd (slurp q) ())
-          _ (? (two? ir) () (die ("as: no IR forms in " + src)))
+          _ (? (two? ir) () (udie 2 ("as: no IR forms in " + src)))
           res (elf64 tgt (\ _ ir) ())
           _ (write-bytes dst (peep res 'bytes 0))
           _ (say err ("as: wrote " + dst)) _ (put err 10)
@@ -128,7 +126,7 @@
    ; one share a writer. `ar rcs OUT M..` writes out whole; names stored as basenames.
    (ar-write dst ms)                                          ; ms: ((basename bytes)..)
     (: q (open dst "w")
-       _ (? (hot? q) () (die ("ar: cannot write " + dst)))
+       _ (? (hot? q) () (udie 2 ("ar: cannot write " + dst)))
        _ (say q (arbytes ms))
        (close q))
    ; an archive's members as ((name bytes)..), the index and the long-name table read
@@ -153,23 +151,23 @@
                     (go nx lt ([shown (snip b d0 (d0 + sz))] . acc))))))
        (? ((<= 8 n) && (snip b 0 8 = "!<arch>\n")) (go 8 "" ()) ()))
    (ar-t p)                                                   ; list member names
-    (: r (uread p) _ (? (two? r) () (die ("ar: cannot open " + p)))
+    (: r (uread p) _ (? (two? r) () (udie 2 ("ar: cannot open " + p)))
        b <>r
-       _ (? ((<= 8 (tally b)) && (snip b 0 8 = "!<arch>\n")) () (die ("ar: not an archive: " + p)))
+       _ (? ((<= 8 (tally b)) && (snip b 0 8 = "!<arch>\n")) () (udie 2 ("ar: not an archive: " + p)))
        _ (map (m \ puts (<m + "\n")) (ar-mems b))
        0)
    (ar-main as)
-    (? !(two? as) (die "usage: kore ar rcs OUT MEMBER..   |   kore ar t OUT")
+    (? !(two? as) (udie 2 "usage: kore ar rcs OUT MEMBER..   |   kore ar t OUT")
        (: fl <as
-          (? (fl = "t") (? (two? >as) (ar-t <>as) (die "ar: t wants an archive"))
+          (? (fl = "t") (? (two? >as) (ar-t <>as) (udie 2 "ar: t wants an archive"))
              (: hasr ((: (go i) (? (< i (tally fl)) (? (fl i = 114) 1 (go (i + 1))) 0)) 0)
-                _ (? hasr () (die ("ar: unsupported command " + fl + " (rcs / t)")))
-                _ (? (two? >as) () (die "ar: no archive named"))
+                _ (? hasr () (udie 2 ("ar: unsupported command " + fl + " (rcs / t)")))
+                _ (? (two? >as) () (udie 2 "ar: no archive named"))
                 dst <>as
                 fs >>as
-                _ (? (two? fs) () (die "ar: no members"))
+                _ (? (two? fs) () (udie 2 "ar: no members"))
                 ms (map (\ f (: r (uread f)
-                                 (? (two? r) [(ubase f "") <>r] (die ("ar: cannot open " + f)))))
+                                 (? (two? r) [(ubase f "") <>r] (udie 2 ("ar: cannot open " + f)))))
                         fs)
                 _ (ar-write dst ms)
                 0))))
@@ -186,26 +184,26 @@
                                                 (? ((<= 48 b) && (< b 58)) (b - 48)
                                                    ((<= 97 b) && (< b 103)) (b - 87)
                                                    ((<= 65 b) && (< b 71)) (b - 55)
-                                                   (die ("ld: bad number " + s))))))
+                                                   (udie 2 ("ld: bad number " + s))))))
                               a)
                   (go (? hex 2 0) 0))
        (go a fs o pie org tgt rd)
         (? !(two? a) [(rev fs) o pie org tgt rd]
-           (<a = "-o")     (? (two? >a) (go >>a fs <>a pie org tgt rd) (die "ld: -o wants a path"))
+           (<a = "-o")     (? (two? >a) (go >>a fs <>a pie org tgt rd) (udie 2 "ld: -o wants a path"))
            (<a = "-pie")   (go >a fs o 1 org tgt rd)
-           (<a = "-t")     (? (two? >a) (go >>a fs o pie org (intern <>a) rd) (die "ld: -t wants a target"))
-           (<a = "-Ttext") (? (two? >a) (go >>a fs o pie (num <>a) tgt rd) (die "ld: -Ttext wants an address"))
+           (<a = "-t")     (? (two? >a) (go >>a fs o pie org (intern <>a) rd) (udie 2 "ld: -t wants a target"))
+           (<a = "-Ttext") (? (two? >a) (go >>a fs o pie (num <>a) tgt rd) (udie 2 "ld: -Ttext wants an address"))
            ; --readme file: plain text into `.love.README`, for whoever opens the output
            (<a = "--readme") (? (two? >a)
                                 (: t (uread <>a) (? (two? t) (go >>a fs o pie org tgt <>t)
-                                                    (die ("ld: cannot open " + <>a))))
-                                (die "ld: --readme wants a path"))
+                                                    (udie 2 ("ld: cannot open " + <>a))))
+                                (udie 2 "ld: --readme wants a path"))
            (go >a (<a . fs) o pie org tgt rd))
        r (go as () () 0 () 'x64 ())
        fs <r o <>r pie <>>r org (r 3) tgt (r 4) rdme (r 5)
-       _ (? (two? fs) () (die "usage: kore ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
-       _ (? (tally o) () (die "ld: no -o OUT"))
-       srcs (map (\ f (: r2 (uread f) (? (two? r2) [f <>r2] (die ("ld: cannot open " + f))))) fs)
+       _ (? (two? fs) () (udie 2 "usage: kore ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
+       _ (? (tally o) () (udie 2 "ld: no -o OUT"))
+       srcs (map (\ f (: r2 (uread f) (? (two? r2) [f <>r2] (udie 2 ("ld: cannot open " + f))))) fs)
        ps (ldlink tgt pie org srcs ("love " + <(usplit 43 love-version)) rdme)
        _ (ld-write o ps)
        _ (chmod o 493)
@@ -232,7 +230,7 @@
           (sy 1 = 0) (nm-low u)
           u))
    (nm-file p wide g u srt)
-    (: r (uread p) _ (? (two? r) () (die ("nm: cannot open " + p)))
+    (: r (uread p) _ (? (two? r) () (udie 2 ("nm: cannot open " + p)))
        b <>r
        w (? (b 4 = 2) 16 8)
        ; a section or file symbol names no value of the program's -- nm shows
@@ -258,7 +256,7 @@
               (? (c = 103) (nm-flags t (k + 1) 1 u srt)
                  (c = 117) (nm-flags t (k + 1) g 1 srt)
                  (c = 112) (nm-flags t (k + 1) g u 1)
-                 (die ("nm: unknown flag -" + (string c))))))
+                 (udie 2 ("nm: unknown flag -" + (string c))))))
        (go a g u srt fs)
         (? !(two? a) [g u srt (rev fs)]
            ((1 < tally <a) && (<a 0 = 45))
@@ -266,7 +264,7 @@
            (go >a g u srt (<a . fs)))
        r (go as () () () ())
        fs (r 3)
-       _ (? (two? fs) () (die "usage: kore nm [-g] [-u] [-p] FILE.."))
+       _ (? (two? fs) () (udie 2 "usage: kore nm [-g] [-u] [-p] FILE.."))
        wide (two? >fs)
        any (foldl (\ a p (? (nm-file p wide <r <>r <>>r) 1 a)) () fs)
        _ (flush out)
@@ -313,7 +311,7 @@
         (: _ (? (hd 0) 0 (: _ (pin hd 0 1) (puts "   text\t   data\t    bss\t    dec\t    hex\tfilename\n")))
            d (s 0 + s 1 + s 2)
            (puts (upad 7 (show (s 0)) + "\t" + upad 7 (show (s 1)) + "\t" + upad 7 (show (s 2)) + "\t"
-                  + upad 7 (show d) + "\t" + upad 7 (uradix d 16) + "\t" + nm + "\n")))
+                  + upad 7 (show d) + "\t" + upad 7 (radix d 16) + "\t" + nm + "\n")))
        ; the status is the last trouble's: 1 a file not there, 3 one not an object
        (add a s) [(a 0 + s 0) (a 1 + s 1) (a 2 + s 2) (? (0 < s 3) (s 3) (a 3))]
        (bad c m) (: _ (say err ("size: " + m + "\n")) [0 0 0 c])
@@ -434,16 +432,16 @@
    ; -- readelf: binutils' -h -l -S -s (and -e, all three headers), wide or at 80
    ; columns, over little-endian ELF of either class. out of reach, deliberately: the
    ; relocations, the dynamic section, notes, versions and the dumps --
-   (re-hex v w) (upadc w 48 (? (v = 0) "0" (ubase-hex v)))
-   (re-0x v) ("0x" + (? (v = 0) "0" (ubase-hex v)))
+   (re-hex v w) (zpad w (? (v = 0) "0" (radix v 16)))
+   (re-0x v) ("0x" + (? (v = 0) "0" (radix v 16)))
    (re-u v w) (upad w (show v))
    (re-cut s w) (? (w < #s) (snip s 0 (w - 5) + "[...]") s)
    (re-at s w) (? (w < #s) (snip s 0 w) s)
    (re-lbl l) ("  " + urpad 35 l)
    (re-mach m) (m @ 3 "Intel 80386" 40 "ARM" 62 "Advanced Micro Devices X86-64" 183 "AArch64"
-                    243 "RISC-V" 8 "MIPS R3000" 20 "PowerPC" 21 "PowerPC64" ("<unknown>: 0x" + ubase-hex m))
+                    243 "RISC-V" 8 "MIPS R3000" 20 "PowerPC" 21 "PowerPC64" ("<unknown>: 0x" + radix m 16))
    (re-osabi o) (o @ 0 "UNIX - System V" 1 "UNIX - HP-UX" 2 "UNIX - NetBSD" 3 "UNIX - GNU" 6 "UNIX - Solaris"
-                     9 "UNIX - FreeBSD" 12 "UNIX - OpenBSD" ("<unknown: " + ubase-hex o + ">"))
+                     9 "UNIX - FreeBSD" 12 "UNIX - OpenBSD" ("<unknown: " + radix o 16 + ">"))
    (re-dyn fs b)                        ; the dynamic section's (tag . value) pairs
     (: w (? (b 4 = 2) 8 4)
        d (filter (\ sc (sc 2 = 6)) (bu-secs fs b))
@@ -454,9 +452,9 @@
     (t @ 0 "NONE (None)" 1 "REL (Relocatable file)" 2 "EXEC (Executable file)" 4 "CORE (Core file)"
          3 (? (any (\ p (<p = 1879048187 && 0 < (<>p & 134217728))) (re-dyn fs b))
               "DYN (Position-Independent Executable file)" "DYN (Shared object file)")
-         ("<unknown>: " + ubase-hex t))
+         ("<unknown>: " + radix t 16))
    (re-flags b m f)
-    ("0x" + ubase-hex f
+    ("0x" + radix f 16
      + (? (m = 40) (? (f >> 24) (", Version" + show (f >> 24) + " EABI"
                                + (? (f & 1024) ", hard-float ABI" (f & 512) ", soft-float ABI" "")) "")
           (m = 243) ((? (f & 1) ", RVC" "") + ([", soft-float ABI" ", single-float ABI" ", double-float ABI" ", quad-float ABI"] ((f & 6) >> 1))
@@ -496,9 +494,9 @@
        (m = 40 && t = 1879048193) "ARM_EXIDX" (m = 40 && t = 1879048194) "ARM_PREEMPTMAP"
        (m = 40 && t = 1879048195) "ARM_ATTRIBUTES" (m = 243 && t = 1879048195) "RISCV_ATTRIBUTES"
        (m = 183 && t = 1879048195) "AARCH64_ATTRIBUTES"
-       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + ubase-hex (t - 1610612736))
-       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + ubase-hex (t - 1879048192))
-       (2147483648 <= t) ("LOUSER+0x" + ubase-hex (t - 2147483648))
+       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + radix (t - 1610612736) 16)
+       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + radix (t - 1879048192) 16)
+       (2147483648 <= t) ("LOUSER+0x" + radix (t - 2147483648) 16)
        (re-hex t 8 + ": <unknown>"))
    (re-shflags b m f)
     (: gnu (b 7 = 3 || b 7 = 9)
@@ -550,9 +548,9 @@
        (t = 1685382480) "GNU_EH_FRAME" (t = 1685382481) "GNU_STACK" (t = 1685382482) "GNU_RELRO"
        (t = 1685382483) "GNU_PROPERTY" (t = 1685382484) "GNU_SFRAME"
        (m = 40 && t = 1879048193) "EXIDX" (m = 243 && t = 1879048195) "RISCV_ATTRIBUT"
-       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + ubase-hex (t - 1610612736))
-       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + ubase-hex (t - 1879048192))
-       ("<unknown>: " + ubase-hex t))
+       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + radix (t - 1610612736) 16)
+       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + radix (t - 1879048192) 16)
+       ("<unknown>: " + radix t 16))
    (re-phs fs b)                        ; [type off vaddr paddr filesz memsz flags align]
     (: e64 (b 4 = 2) o (ld-f fs b 0 'e-phoff) n (ld-f fs b 0 'e-phnum) e (ld-f fs b 0 'e-phent)
        (map (\ i (: h (o + i * e)
@@ -600,7 +598,7 @@
                     ps)
              _ (say out "\n Section to Segment mapping:\n  Segment Sections...\n")
              (map (\ i (: p (ps i)
-                          (say out ("   " + upadc 2 48 (show i) + "     "
+                          (say out ("   " + zpad 2 (show i) + "     "
                                     + foldl (\ a sc (? (re-in? sc p) (a + sc 1 + " ") a)) "" ss + "\n"))))
                   ^#ps))))
    ; a version index's name, off .gnu.version_r (what the file needs) and
