@@ -1146,6 +1146,7 @@
    ; the section stack: push, switch, .previous, pop -- and gas's flags for a name given none
    st (gas-top 'x64 "x: .byte 1\n.pushsection .a\n.section .b\n.byte 2\n.previous\n.byte 3\n.popsection\n.byte 4\n.section .text.hot\nret\n.section .rodata.k\n.short -2\n.bss\n.zero 2\n")
    ob (tacob "static int hidden(void) { return 3; } asm(\".section .tb, \\\"a\\\"\\n.long hidden - .\\n.previous\");")
+   fob (tacob "long f(long x) { long r; asm(\"1: lea 1(%1), %0\\n.pushsection .t, \\\"a\\\"\\n.long 1b - .\\n.popsection\" : \"=r\"(r) : \"r\"(x)); return r; }")
    (test
       (= (tacast "asm(\"nop\");") '(prog ((tasm "nop"))))
       (= (tacast "__asm__ volatile (\"a\" \"b\"); int x;") '(prog ((tasm "ab") (gdecl (("x" int ()))))))
@@ -1163,7 +1164,20 @@
       (= (<st 4 3) '((raw (254 255))))
       (two? ob)
       (= (ob 12) '(((".tb" 1 2 ((raw ((fix 4 rel32 hidden 4)))))) () ()))
-      (elem '(label hidden) (ob 1))))
+      (elem '(label hidden) (ob 1))
+      ; a function's template: gas-text takes it whole unless it carries a directive or a label
+      ; beside an instruction; then gas-top reads it from the function's own place, "", its
+      ; numbered labels wearing the reading's prefix
+      (gas-plain? 'x64 "1:\n jne 1b")
+      !(gas-plain? 'x64 "1: jne 1b")
+      !(gas-plain? 'x64 ".pushsection .x\n.popsection")
+      (= (gas-top-in 'x64 "671: dec %rax\n.pushsection .smp_locks,\"a\"\n.long 671b - .\n.popsection" "" [1 6] "f.asm.3.")
+         '((("" 1 6 ((label f.asm.3.l671.1) (dec r0)))
+            (".smp_locks" 1 2 ((raw ((fix 4 rel32 f.asm.3.l671.1 4))))))
+           () ()))
+      ; ..and gen keeps that label in the function, where the pushed section's word names it
+      (= (fob 12) '(((".t" 1 2 ((raw ((fix 4 rel32 f.asm.0.l1.1 4)))))) () ()))
+      (elem '(label f.asm.0.l1.1) (fob 1))))
 
 ; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params spill/reload
 ; only around calls they are live across. a param shadowed by an inner local conflates two
