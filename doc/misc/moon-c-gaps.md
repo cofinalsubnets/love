@@ -824,7 +824,7 @@ every ninth by path: **30 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 71 | a function's inline asm: directives in the template (`LOCK_PREFIX`'s `.smp_locks`, the bug table, alternatives -- 34 of these read `cause unnamed`), a `N: insn` label sharing its line (19), `"+m"` outputs, `%%gs:` operands (percpu, 10), `"=@ccc"` flag outputs, `pause`/`bsr`/`lock` |
+| 71 | a function's inline asm: an address as an `"i"` input (27: percpu, jump labels), `"+m"` outputs (13), `%%gs:` operands (percpu, 10), `"=@ccc"` flag outputs, `pause`/`bsr`/`lcallw`, `%fs`, a memory operand under an ALU op, `.macro`; 7 still read `cause unnamed` |
 | 20 | `__builtin_bswap16` over a constant in a case label |
 | 20 | `typeof` of the object in its own initializer (`get_unaligned`, `container_of`) |
 | 6 | `__label__`, a block's local label (`unsafe_get_user`, rseq) |
@@ -843,10 +843,9 @@ holo's gas-top reads what C headers write there -- `.section`/`.pushsection` and
 **154 of the 160 units carry `asm goto`**, and every kernel template (jump labels,
 alternatives, the exception table) is written in the same directives inside a function:
 `.pushsection`, `.long 1b - .`, `.skip` over label arithmetic, `%c0`. a function's template
-still goes through gas-text, which reads no directive, so past the rows above the kernel
-stops on the assembler, not the compiler. that is the toolchain half: gas-top's sections
-carried out of a function's asm, a linker-script reader, and a 32/16-bit x86 backend for
-arch/x86/boot and the 32-bit vDSO.
+with a directive reads through gas-top too (180-asmsections.c), so what stops the kernel now
+is operands and instructions: the rows above, then `.skip` over label arithmetic, `%c0`, a
+linker-script reader, and a 32/16-bit x86 backend for arch/x86/boot and the 32-bit vDSO.
 
 ---
 
