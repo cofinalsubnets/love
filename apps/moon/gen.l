@@ -4131,26 +4131,31 @@
                        (? (two? k) (<k + (['jmpm (f 2) (k 1)] . go (k 2)))
                           (f . go >l))))
           (go fs)))
-   ; an early exit lays last: (br cc L), a run with no label and no branch that ends in a jump or
-   ; ret, then (label L) -> (br !cc K) (label L) .., and (label K) run after the function. the
-   ; fall-through is the path that goes on. a label an if with __builtin_expect(c, 1) made stays
+   ; an early exit lays last: (br cc L), a run that ends in a jump or ret, then (label L) -> (br !cc K)
+   ; (label L) .., and (label K) run after the function; the fall-through is the path that goes on.
+   ; the run may hold labels but no branch. an if whose test is __builtin_expect(c, 0) makes L cold:
+   ; its run may branch, and one that falls into L jumps there. __builtin_expect(c, 1) keeps its arm
    (tailarm g fs)
     (? (t32? g) fs                                            ; thumb's short branches stay put
-       (: hot (peep g 'hot ())
-          (run l L acc n)                                     ; -> [run rest] | ()
-           (? (!(two? l) || 48 < n) ()
+       (: hot (peep g 'hot ()) cold (peep g 'cold ())
+          (term? f) (two? f && elem <f '(jmp jmpr jmpm ret))
+          (run l L acc n c)                                   ; -> [run rest] | ()
+           (? (!(two? l) || (c ? 96 48) < n) ()
               (: f <l
-                 (? !(two? f) (run >l L (f . acc) (n + 1))
-                    (<f = 'label) (? (<>f = L && two? acc && two? <acc && elem <<acc '(jmp jmpr jmpm ret))
-                                     [(rev acc) l] ())
-                    (elem <f '(br br8 jmpt align)) ()
-                    (run >l L (f . acc) (n + 1)))))
+                 (? !(two? f) (run >l L (f . acc) (n + 1) c)
+                    (<f = 'label && <>f = L) (? !(two? acc) ()
+                                                (term? <acc) [(rev acc) l]
+                                                c [(rev (['jmp L] . acc)) l]
+                                                ())
+                    (elem <f '(jmpt align)) ()
+                    (!c && elem <f '(br br8)) ()
+                    (run >l L (f . acc) (n + 1) c))))
           (go l acc cs)
            (? !(two? l) (rev acc + cs)
               (: f <l
                  k (? (two? f && <f = 'br && elem <>f '(eq ne lt le gt ge below be above ae s ns) &&
                        nelem <>>f hot)
-                      (run >l <>>f () 0))
+                      (run >l <>>f () 0 (elem <>>f cold)))
                  (? (two? k)
                      (: K (nlab g ".k")
                         (go (k 1) (['br (negcc <>f) K] . acc) (cs + (['label K] . <k))))
@@ -6451,7 +6456,10 @@
           ('if . cnd . thn . er)
            (: le (nlab g ".e")
               xk >(xpct cnd)
-              _ (? (two? xk && <<xk = 'num && <><xk = 1) (pin g 'hot (le . peep g 'hot ())) 0)   ; tailarm leaves it
+              xv (? (two? xk && <<xk = 'num) <><xk ())
+              _ (xv @ 1 (pin g 'hot (le . peep g 'hot ()))                 ; tailarm leaves the arm
+                      0 (pin g 'cold (le . peep g 'cold ()))               ; ..or lays it past the function
+                      ())
               c (cbranch g env cnd 'eq le)
               t (cgstmt g env thn)
               (? (bad? c || bad? t) 'bad

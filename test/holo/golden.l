@@ -44,8 +44,8 @@
       ;; three-address -> two-address lowering
       ("alu.movop"   "4889c24829da"          ((sub r2 r0 r3)))    ; mov rdx,rax ; sub rdx,rbx
       ("alu.swap"    "4801d8"                ((add r0 r3 r0)))    ; commutes -> add rax,rbx, no mov
-      ("add.movop"   "4889c24801da"          ((add r2 r0 r3)))    ; mov rdx,rax ; add rdx,rbx (no lea fusion -- the emit-alu note)
-      ("add.movop.i" "4889c14883c105"        ((add r1 r0 5)))     ; imm form keeps the dance too
+      ("add.movop"   "488d1418"              ((add r2 r0 r3)))    ; a fresh dest is one lea rdx,[rax+rbx] (the emit-alu note)
+      ("add.movop.i" "488d4805"              ((add r1 r0 5)))     ; lea rcx,[rax+5]
       ;; ('align n) pads to the boundary with the backend's nop unit (lay-level, no lowering)
       ("align.pad"   "c3909090c3"            ((ret) (align 4) (label x) (ret)))
       ("align.zero"  "c3"                    ((align 16) (ret)))   ; already on the boundary: no pad
