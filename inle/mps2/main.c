@@ -205,9 +205,13 @@ int main(void) {
   if (sh_call(SH_READ, (uintptr_t) rd)) { sh_puts("; short read\n"); m7_exit(4); }
   uintptr_t cl[1] = { (uintptr_t) fd };
   sh_call(SH_CLOSE, (uintptr_t) cl);
+  uintptr_t t0 = ai_clock();
   struct ai *g = ai_image_load(buf, len);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
   g = ai_defn(g, defs, countof(defs));
+  if (ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {   // born: this wake's cost
+    g = ai_defv(g, "born");
+    if (ai_ok(g)) g->sp++; }
   if (ai_ok(g)) g->budget = freelist->len / 4;
   struct ai *r = ai_evals_(g,
     "(: ok (&& "
@@ -282,7 +286,8 @@ int main(void) {
 #else
     "(borrow 'cli)"
 #endif
-    "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
+    "(: _ (pull book 'born 0)"            // this boot's cost, not the image's: off before the dump
+    "   _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {
     if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
     m7_exit(3); }

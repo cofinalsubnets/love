@@ -164,6 +164,7 @@ void love_init(void) {
   // problem answers NULL and the egg lane below bakes from source (the
   // 64-bit simulator refuses the 32-bit image this way BY DESIGN).
   struct ai *g0 = NULL;
+  uintptr_t t0 = ai_clock();
   { enum { imgcap = 2u << 20 };
     void *ib = pdg_realloc(NULL, imgcap);
     int n = ib ? pdg_file_read("love-pd.img", ib, imgcap) : -1;
@@ -179,6 +180,10 @@ void love_init(void) {
   // ..and the LvNif slice of every TU linked beside this one, as love/main.c drains it:
   // love/horn.c's rows ride the section, not the table above.
   g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+  // born: this wake's cost, as love/main.c defines it -- the egg lane's egg.l pins its own
+  if (woke && ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {
+    g = ai_defv(g, "born");
+    if (ai_ok(g)) g->sp++; }
   pdg_log(ai_ok(g) ? "love: core up" : "love: core FAILED");
   // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
   // teensy's law): a major resize holds old and new pools at once, so the
