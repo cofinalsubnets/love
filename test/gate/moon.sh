@@ -201,6 +201,11 @@ taref 'asm(".weak x");\n' x64 "gas-directive" "an unread directive was not refus
 taref 'asm(".data\\na: .long a - b\\nb:");\n' x64 "gas-data" "a label difference was not refused"
 taref 'int f(void){return 0;}\nasm(".data\\n.long f - .");\n' thumb2 "gas-data-pcrel" "a pc-relative word on arm32 was not refused"
 taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file-scope asm"
+# an "i" operand (test/cc/181 holds the well-formed side): a local, or a global a local
+# shadows, is no constant; an .org behind its own section refuses
+taref 'int f(int b){asm("# %%0" : : "i"(b)); return 0;}\n' x64 "not a constant" "a local as an \"i\" operand was not refused"
+taref 'int g;\nint f(void){int g = 1; g++; asm("# %%c0" : : "i"(&g)); return g;}\n' x64 "not a constant" "a shadowed global as an \"i\" operand was not refused"
+taref 'asm(".data\\n2: .quad 0\\n.org 2b + 4");\n' x64 "gas-org" "an .org behind its section was not refused"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the
