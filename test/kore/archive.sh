@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/kore/archive.sh -- gzip, gunzip, zcat, xz, unxz, tar, cpio under kore's door
+# test/kore/archive.sh -- gzip, gunzip, zcat, xz, unxz, bzip2, bunzip2, tar, cpio under kore's door
 . "$(dirname "$0")/common.sh"
 
 # gz.l, tar.l and the two cpio files are kore members now, not crew ones: the distro's
@@ -82,4 +82,39 @@ if command -v xz >/dev/null 2>&1; then
   cat "$ho/.arc1" | xz --format=lzma | korerun lzcat > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore lzcat of a sizeless .lzma"
 fi
 hv "xz --help" '^xz -- the' korerun xz --help
-echo "kore: gzip/gunzip/zcat/xz/unxz/tar/cpio under kore's door ok"
+# bzip2: the round trip, the empty stream (14 bytes), a torn one and a stranger refused
+# with bzip2's statuses, tar's j, and both directions against bzip2 itself where it is
+# there -- the 600 KiB binary crosses a 100k block at -1
+korerun bzip2 -c < "$ho/.arc1" > "$ho/.arc1.bz2" || fail "kore bzip2"
+korerun bunzip2 -c < "$ho/.arc1.bz2" > "$o"; cmp -s "$ho/.arc1" "$o" || fail "kore bzip2 | bunzip2 round trip"
+korerun bzip2 -c "$ho/.arc0" > "$ho/.arc0.bz2"
+[ "$(wc -c < "$ho/.arc0.bz2")" -eq 14 ] || fail "kore bzip2: an empty input is a 14-byte stream"
+korerun bzcat "$ho/.arc0.bz2" > "$o"; [ ! -s "$o" ] || fail "kore bzcat of the empty stream"
+dd if="$ho/.arc1.bz2" of="$ho/.arct.bz2" bs=1 count=20 2>/dev/null
+korerun bzip2 -t "$ho/.arct.bz2" 2> "$ho/.arct.say"; r=$?
+[ $r -eq 2 ] || fail "kore bzip2 -t of a torn stream (rc $r)"
+grep -q 'ends unexpectedly' "$ho/.arct.say" || fail "kore bzip2: a torn stream says so"
+korerun bunzip2 -t "$ho/.arc1.xz" 2> "$ho/.arct.say"; r=$?
+[ $r -eq 2 ] || fail "kore bunzip2 of an xz stream (rc $r)"
+grep -q 'is not a bzip2 file' "$ho/.arct.say" || fail "kore bunzip2: a stranger says so"
+cp "$ho/.arc1" "$ho/.arcz"; korerun bzip2 "$ho/.arcz"; korerun bzip2 "$ho/.arcz.bz2" 2>/dev/null; r=$?
+[ $r -eq 1 ] || fail "kore bzip2: a .bz2 name is refused, not a second layer (rc $r)"
+korerun bunzip2 "$ho/.arcz.bz2"; cmp -s "$ho/.arc1" "$ho/.arcz" || fail "kore bunzip2 in place"
+korerun bzip2 -1 -c "$ho/.arcb" | korerun bzip2 -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore bzip2 round trip, 600 KiB"
+( cd "$ho" && "$K" kore tar cjf .arc.tbz .arcd ) || fail "kore tar cjf"
+korerun tar tjf "$ho/.arc.tbz" > "$o" 2>&1 || fail "kore tar tjf"
+grep -q 'sub/two\.txt' "$o" || fail "kore tar j: the listing"
+if command -v bzip2 >/dev/null 2>&1; then
+  for p in -1 -9; do
+    bzip2 $p -c "$ho/.arcb" > "$ho/.arcg.bz2"
+    korerun bzip2 -dc "$ho/.arcg.bz2" > "$o"; cmp -s "$ho/.arcb" "$o" || fail "kore bunzip2 of bzip2 $p"
+  done
+  korerun bzip2 -1 -c "$ho/.arcb" | bzip2 -dc > "$o"; cmp -s "$ho/.arcb" "$o" || fail "bzip2 -d of kore's bzip2, 600 KiB"
+  bzip2 -t "$ho/.arc0.bz2" || fail "bzip2 -t of kore's empty stream"
+  cat "$ho/.arcg.bz2" "$ho/.arc1.bz2" > "$ho/.arcs.bz2"
+  cat "$ho/.arcb" "$ho/.arc1" > "$g"
+  korerun bzcat "$ho/.arcs.bz2" > "$o"; cmp -s "$g" "$o" || fail "kore bzcat of two streams"
+  bzip2 -dc "$ho/.arc.tbz" | tar tf - > "$o" 2>&1; grep -q 'sub/two\.txt' "$o" || fail "tar -j of kore's tar cjf"
+fi
+hv "bzip2 --help" '^bzip2 -- the' korerun bzip2 --help
+echo "kore: gzip/gunzip/zcat/xz/unxz/bzip2/bunzip2/tar/cpio under kore's door ok"
