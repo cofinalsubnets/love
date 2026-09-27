@@ -30,7 +30,6 @@ static ai_noinline int
 static ai_noinline void
  mag_divmod(ai_limb *q, ai_limb *r, ai_limb const *u, int m, ai_limb const *v, int n,
             ai_limb *un, ai_limb *vn),
- mag_mul(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb),
  vbin_fill(struct ai_tray *r, word a, word b, int op, bool fdom),
  vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t)),
  vmap2_fill(struct ai_tray *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t));
@@ -119,17 +118,21 @@ static ai_noinline int mag_sub(ai_limb *r, ai_limb const *a, int na, ai_limb con
   r[i] = (ai_limb) d; }
  return na; }
 
-// r = a * b (schoolbook). r must be distinct from a,b; capacity >= na+nb. used
-// one-shot by ai_big_binop (the object-array elementwise lane); the scalar `*`
-// path instead drives a chunked, yieldable copy of this loop in lvm_bmul.
-static ai_noinline void mag_mul(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb) {
- for (int i = 0; i < na + nb; i++) r[i] = 0;
- for (int i = 0; i < na; i++) {
+// rows [i, end) of the schoolbook r = a * b: row i adds into r[i..i+nb) and writes its top
+// limb r[i+nb], so only row 0 reads limbs no row wrote. mag_mul runs every row; lvm_bmul
+// runs a chunk per dispatch so a long product yields
+static ai_noinline void mag_mul_rows(ai_limb *r, ai_limb const *a, int i0, int end, ai_limb const *b, int nb) {
+ if (!i0) for (int j = 0; j < nb; j++) r[j] = 0;
+ for (int i = i0; i < end; i++) {
   ai_dlimb carry = 0; ai_limb ai = a[i];            // ai stays a limb so ai*b[j] is the hardware 64x64->128 (not a 128x128 __multi3)
   for (int j = 0; j < nb; j++) {
    ai_dlimb s = (ai_dlimb) ai * b[j] + r[i+j] + carry;
    r[i+j] = (ai_limb) s; carry = s >> limb_bits; }
   r[i+nb] = (ai_limb) carry; } }
+
+// r = a * b (schoolbook). r must be distinct from a,b; capacity >= na+nb
+static ai_inline void mag_mul(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb) {
+ mag_mul_rows(r, a, 0, na, b, nb); }
 
 // a = a*mul + add, in place (mul,add < 2^limb_bits). a capacity must allow one
 // carry limb at a[n]. returns the new limb count. used by the decimal reader.
@@ -651,12 +654,8 @@ static lvm(lvm_bmul) {
   word ret = Sp[2]; Sp += 4; Sp[0] = zero; Ip = cell(ret); ai_musttail return Continue(); }
  ai_limb *la = A->limb, *lb = B->limb, *rl = (ai_limb*) txt(cask(Sp[1])->str);
  int end = min(i + max(1, bmul_chunk / nb), na);
- for (; i < end; i++) {                           // schoolbook outer loop, one chunk of rows
-  ai_dlimb carry = 0; ai_limb ai = la[i];           // limb-typed so ai*lb[j] is the hardware 64x64->128, not a 128x128 multiply
-  for (int j = 0; j < nb; j++) {
-   ai_dlimb t = (ai_dlimb) ai * lb[j] + rl[i+j] + carry;
-   rl[i+j] = (ai_limb) t, carry = t >> limb_bits; }
-  rl[i+nb] = (ai_limb) carry; }
+ mag_mul_rows(rl, la, i, end, lb, nb);             // one chunk of rows
+ i = end;
  Sp[0] = putcharm(i);                               // persist progress before any yield/GC
  if (i < na) {
    YieldCheck();
