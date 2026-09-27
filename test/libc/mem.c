@@ -66,6 +66,22 @@ int main(void) {
   memmove(buf, buf + d, 24);                /* backward overlap */
   say_b("memmove.dn", buf, 40); }
 
+ /* --- memmove backward past the quad: every overlap shift a word and a half
+    either way of agreement, at every source offset, against a byte-copied reference --- */
+ { static char const lens[] = {32, 33, 39, 40, 47, 63, 64, 65};
+  static char mb[112], ref[112];
+  long bad = 0;
+  for (unsigned li = 0; li < sizeof lens; li++)
+   for (int so = 0; so < 8; so++)
+    for (int sh = 1; sh < 16; sh++) {
+     int n = lens[li];
+     fill(mb, sizeof mb, so + sh);
+     for (int i = 0; i < (int) sizeof mb; i++) ref[i] = mb[i];
+     for (int i = n - 1; i >= 0; i--) ref[so + sh + i] = ref[so + i];
+     memmove(mb + so + sh, mb + so, (size_t) n);
+     for (int i = 0; i < (int) sizeof mb; i++) bad += mb[i] != ref[i]; }
+  say_n("memmove.shift.bad", bad); }
+
  fill(buf, 40, 0);
  memmove(buf, buf, 20);                        /* exactly equal: a no-op */
  say_b("memmove.eq", buf, 24);

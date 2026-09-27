@@ -1017,9 +1017,12 @@
                                                        (? (rpeq? g rA rB) () [['cmov cc 'r0 rA]])))
                                               _ (? rA (rfree g rA) ()) _ (? rB (rfree g rB) ())
                                               (mkv rt 'r0 fs)))))))))))))))
+   ; __builtin_expect(e, k) -> its argument list, else ()
+   (xpct e) (? (two? e && <e = 'call && <>e = ['var "__builtin_expect"] && two? (e 2)) (e 2) ())
    (cbranch g env e cc lbl)
     (: k (cfold !(t32? g) e)                      ; a constant test is a jmp or nothing: do { } while (0)
      (? (cint? k) (? ((k != 0) = (cc = 'ne)) [['jmp lbl]] ())
+    (? (two? (xpct e)) (cbranch g env <(e 2) cc lbl)          ; the hint is its first argument's test
     (e @
        ('un 'not x)
         (cbranch g env x (cc @ 'eq 'ne 'eq) lbl)
@@ -1197,7 +1200,7 @@
                   (vfs c + '((or r0 r0 r2) (cmp r0 0)) + [['br cc lbl]])
                  (: fs (vfs c + [['cmp (vreg c) 0] ['br cc lbl]])
                     _ (rfree g (vreg c))
-                    fs))))))))
+                    fs)))))))))
    ; n little-endian bytes of a constant (the global initializer image)
    (les n v) (: (go i acc) (? (n <= i) (rev acc)
                               (go (i + 1) (((v >> (8 * i)) & 255) . acc)))
@@ -4128,6 +4131,31 @@
                        (? (two? k) (<k + (['jmpm (f 2) (k 1)] . go (k 2)))
                           (f . go >l))))
           (go fs)))
+   ; an early exit lays last: (br cc L), a run with no label and no branch that ends in a jump or
+   ; ret, then (label L) -> (br !cc K) (label L) .., and (label K) run after the function. the
+   ; fall-through is the path that goes on. a label an if with __builtin_expect(c, 1) made stays
+   (tailarm g fs)
+    (? !(x64? g) fs
+       (: hot (peep g 'hot ())
+          (run l L acc n)                                     ; -> [run rest] | ()
+           (? (!(two? l) || 48 < n) ()
+              (: f <l
+                 (? !(two? f) (run >l L (f . acc) (n + 1))
+                    (<f = 'label) (? (<>f = L && two? acc && two? <acc && elem <<acc '(jmp jmpr jmpm ret))
+                                     [(rev acc) l] ())
+                    (elem <f '(br br8 jmpt align)) ()
+                    (run >l L (f . acc) (n + 1)))))
+          (go l acc cs)
+           (? !(two? l) (rev acc + cs)
+              (: f <l
+                 k (? (two? f && <f = 'br && elem <>f '(eq ne lt le gt ge below be above ae s ns) &&
+                       nelem <>>f hot)
+                      (run >l <>>f () 0))
+                 (? (two? k)
+                     (: K (nlab g ".k")
+                        (go (k 1) (['br (negcc <>f) K] . acc) (cs + (['label K] . <k))))
+                    (go >l (f . acc) cs))))
+          (go fs () ())))
    (unhome g fs)
     (: ar (argr g) hr (hregs g)
        (pears l n acc)                                ; the leading (mov H A) movs -> ((H A)..)
@@ -5171,8 +5199,9 @@
                    (elem fb <>rd) (f . stldw g fb keep r ())
                    (f . stldw g fb keep r (filter (e9 \ (nelem <>e9 <>rd)) bs)))))))
 
-   ; rezx: a zxN over a register already clean to N drops (clean: zx, ldu, the 32-bit rotates, li,
-   ; mov). a set is clean to 1, so `cmp r 0; set ne r` over it drops unless the next form reads flags
+   ; rezx: a zxN over a register already clean to N drops, and an sxN over one clean below N
+   ; (clean: zx, ldu, the 32-bit rotates, li, mov). a set is clean to 1, so `cmp r 0; set ne r`
+   ; over it drops unless the next form reads flags
    (rezx g fs)
     (: (go l t acc)
         (? !(two? l) (rev acc)
@@ -5190,6 +5219,11 @@
                            c (peep t <>f 0)
                            (? (0 < c && c <= w) (go r t acc)
                               (pin t <>f w, go r t (f . acc))))
+                       (elem op '(sx1 sx2 sx4))                 ; clean below the sign bit: a no-op
+                        (: w (? (op = 'sx1) 8 (op = 'sx2) 16 32)
+                           c (peep t <>f 0)
+                           (? (0 < c && c < w) (go r t acc)
+                              (pin t <>f 0, go r t (f . acc))))
                        (elem op '(ldu1 ldu2 ldu4))
                         (pin t <>f (? (op = 'ldu1) 8 (op = 'ldu2) 16 32),
                          go r t (f . acc))
@@ -6416,6 +6450,8 @@
           ('blk items) (cgitems g env items ())
           ('if . cnd . thn . er)
            (: le (nlab g ".e")
+              xk >(xpct cnd)
+              _ (? (two? xk && <<xk = 'num && <><xk = 1) (pin g 'hot (le . peep g 'hot ())) 0)   ; tailarm leaves it
               c (cbranch g env cnd 'eq le)
               t (cgstmt g env thn)
               (? (bad? c || bad? t) 'bad
@@ -7671,7 +7707,7 @@
                      (cfoldir g irx))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))
+       (? (bad? irf) irf (dp 'final (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
