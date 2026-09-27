@@ -238,7 +238,13 @@
           (164 || 172) (: r (dc-modrm s k2 p w w)
                         (fin (r 0 + 1) [(op1 (c @ 164 'shld 'shrd) w [(r 2) (r 1) ['im (dc-imm s (r 0) 1)]])]))
           (165 || 173) (: r (dc-modrm s k2 p w w) (fin (r 0) [(op1 (c @ 165 'shld 'shrd) w [(r 2) (r 1) ['rg 1 1]])]))
-          188 (ge 'bsf w w)  189 (ge 'bsr w w)
+          ;; the scans, and under F3 the counts (tzcnt lzcnt popcnt)
+          188 (? (px = 'f3) (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'tzcnt w [(r 1) (r 2)])])) (ge 'bsf w w))
+          189 (? (px = 'f3) (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'lzcnt w [(r 1) (r 2)])])) (ge 'bsr w w))
+          (c && c = 184 && px = 'f3) (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'popcnt w [(r 1) (r 2)])]))
+          ;; the fences: 0F AE with modrm F0 E8 F8
+          174 (dc-at s k2 @ 240 (fin (k2 + 1) [(op1 'mfence 0 ())]) 232 (fin (k2 + 1) [(op1 'lfence 0 ())])
+                           248 (fin (k2 + 1) [(op1 'sfence 0 ())]) m (bad 0))
           (c && 200 <= c <= 207) (fin k2 [(op1 'bswap w [['rg ((c & 7) | (pf p 'b << 3)) w]])])
           ;; SSE
           16 (xx (px @ 'none 'movups '66 'movupd 'f3 'movss 'movsd))
