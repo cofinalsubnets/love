@@ -173,14 +173,22 @@ printf 'struct S { int a[4]; };\nint i;\nchar y[__builtin_offsetof(struct S, a[i
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   && fail "a runtime offsetof as a file-scope bound was accepted"
 
-# cleanup runs code at every exit from a scope; skipped as decoration it drops the call
-# (linux's guard() would never unlock). refused by name wherever the attribute stands
-printf 'static void d(int *p){ (void)p; }\nint m(void){ int __attribute__((cleanup(d))) k = 1; return k; }\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "cleanup)) is not carried out" \
-  || fail "__attribute__((cleanup)) before the name was skipped"
-printf 'static void d(int *p){ (void)p; }\nint m(void){ int k __attribute__((__cleanup__(d))) = 1; return k; }\n' > "$ho/.feat.c"
-moonrun -c -t x64 -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "cleanup)) is not carried out" \
-  || fail "__attribute__((__cleanup__)) after the name was skipped"
+# cleanup (test/cc/176 holds the well-formed side): what it cannot carry refuses by name,
+# never a skipped attribute -- a dropped call is linux's guard() never unlocking
+clref() {
+  printf "$1" > "$ho/.feat.c"
+  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "$2" || fail "cleanup: $3"
+}
+clref 'static void d(int *p){ (void)p; }\nint m(int x){ if (x) goto in; { int k __attribute__((cleanup(d))) = 1; in: return k; } }\n' \
+  "a jump into the scope of a cleanup variable" "a goto into the scope was not refused"
+clref 'static void d(int *p){ (void)p; }\nint m(int x){ switch (x) { int k __attribute__((cleanup(d))) = 1; case 1: return k; } return 0; }\n' \
+  "a jump into the scope of a cleanup variable" "a case into the scope was not refused"
+clref 'static void d(int *p){ (void)p; }\nint m(void){ int __attribute__((cleanup(d))) a = 1, b = 2; return a + b; }\n' \
+  "a cleanup wants one automatic variable" "the specifiers of two declarators were not refused"
+clref 'static void d(int *p){ (void)p; }\nint m(void){ static int k __attribute__((cleanup(d))) = 1; return k; }\n' \
+  "a cleanup wants one automatic variable" "a static was not refused"
+clref 'static void d(int *p){ (void)p; }\nint g __attribute__((cleanup(d)));\nint m(void){ return g; }\n' \
+  "cleanup)) is not carried out" "file scope was skipped"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the
