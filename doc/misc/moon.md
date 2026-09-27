@@ -441,8 +441,12 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   one, x86's `a`/`b`/`c`/`d`/`S`/`D` letters pin theirs and `"Nd"` is dx, a digit `"0"` ties an
   input to that output's register, `"i"`/`"n"` an immediate (a constant, a const local that
   folds, or an address constant -- a global, a function, a string, `&a.b[k]` -- which spells
-  `label+k` for the linker; `"ir"` picks by whether the operand is an integer), `"m"` a memory operand (the address in a register, spelled as the
-  dialect's base form). A `register T v asm("x0")` local pins wherever the asm names it — the
+  `label+k` for the linker; `"ir"` picks by whether the operand is an integer), `"m"` a memory
+  operand (the address in a register, spelled as the dialect's base form) -- an input, or a
+  `"+m"`/`"=m"` output the asm stores itself. A longer set reads by its letters: x86's
+  `I J K L M N e Z` beside `i n` are immediates, a register letter among them picks by the
+  operand (`"Ir"`, `"re"`, `"qi"`), among memory a register. A flag output (`"=@ccz"`) refuses
+  by name. A `register T v asm("x0")` local pins wherever the asm names it — the
   a64/riscv way of pinning, and the only one those dialects have. `%0..%9` substitute (outputs
   first), `%[name]` and `%c[name]` a named one, `%%` a literal `%`; adjacent template strings
   concatenate.
@@ -452,14 +456,18 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   tables; mrs/msr/tlbi/dc/ic/at/brk/hvc; the csr pseudos, ecall/ebreak/unimp). x64's 32-bit forms
   ride the 64-bit op plus a zero-extend (`movl`, `addl`, `xorl`); the 8/16-bit register forms and
   indexed memory refuse. A `%gs:`/`%fs:` override rides a base-register access, or an absolute
-  address a load reaches through its destination (percpu's `%gs:sym`). A template separates on
-  `\n` or `;`, as GNU does. A line that fits
+  address a load reaches through its destination (percpu's `%gs:sym`). A read-modify-write on
+  memory lays whole -- `xadd`, `cmpxchg`, `xchg`, add/or/and/sub/xor/cmp, inc/dec/not/neg,
+  bt/bts/btr/btc, under a `lock` -- at the suffix's width, or the register's with none. A
+  template separates on `\n` or `;`, as GNU does. A line that fits
   nothing SCARES (`cc: internal error: gas-x64-op ..`) rather than dropping out.
 * The body assembles AT CODEGEN into one opaque `('raw bytes)`: the IR passes barrier on raw,
   labels inside a template stay LOCAL to it, and no pass ever rewrites user instructions.
   A name the template does not define (a global, an `"i"` address) stays a fix for the linker.
 * Operands stage through the machine stack, so calls inside operand expressions are safe, and
-  any scalar lvalue output works (`*p`, `a[i]`). Float/struct/bitfield operands refuse.
+  any scalar lvalue output works (`*p`, `a[i]`). Float/struct/bitfield operands refuse. A
+  switch over a constant (the kernel's `switch (sizeof(*p))` width macros) lays the asm of the
+  cases it cannot reach as empty statements, as gcc never assembles them.
 * Registers an operand may take: x64 r0-r3 + r5-r10 (r3 rides every prologue's -8 slot; r4 is
   the frame and refuses), a64 adds r4 (x4, an argument register there). Clobbers: `"memory"`,
   `"cc"` and those registers need no action — an asm-containing function turns register HOMING

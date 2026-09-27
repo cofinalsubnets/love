@@ -206,6 +206,8 @@ taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file
 taref 'int f(int b){asm("# %%0" : : "i"(b)); return 0;}\n' x64 "not a constant" "a local as an \"i\" operand was not refused"
 taref 'int g;\nint f(void){int g = 1; g++; asm("# %%c0" : : "i"(&g)); return g;}\n' x64 "not a constant" "a shadowed global as an \"i\" operand was not refused"
 taref 'asm(".data\\n2: .quad 0\\n.org 2b + 4");\n' x64 "gas-org" "an .org behind its section was not refused"
+# a flag output ("=@ccz") names its cause, never a register it cannot pin (test/cc/183 holds "+m")
+taref 'int f(long *p){int z; asm("cmpq $0, %%1" : "=@ccz"(z) : "m"(*p)); return z;}\n' x64 "an asm flag output" "a flag output was not refused by name"
 # a %gs: store to an absolute address has no register to reach it through (test/cc/182)
 taref 'void f(long x){asm volatile("movq %%0, %%%%gs:40" : : "r"(x));}\n' x64 "gas-x64-seg" "a gs store to an absolute address was not refused"
 
