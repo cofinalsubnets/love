@@ -189,6 +189,21 @@ void host_spawn_guard(struct ai *g, int on) {
 #endif
 }
 
+// stdin made exact before a fork: the bytes the reader holds ahead go back to the fd and
+// out of the buffer, so parent and child both stand where the reader does. a seekable
+// stdin's offset is shared across the fork, and a child that exits holding them gives
+// them back through it (inle/main.c's stdin_give) while the parent still reads its copy:
+// a `while read` loop around a subshell read every line past the first again. an exec'd
+// child wants the same, or it starts past what the shell had read ahead of it.
+static void stdin_exact(struct ai *g) {
+ if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // a pipe or a tty
+ struct ai_io *i = (struct ai_io*) g->inport;
+ int u = getcharm(ai_stdin.io.ungetc_buf) != EOF;
+ uintptr_t n = ai_io_pending(g, i) + (u ? 1 : 0);
+ if (!n || lseek(STDIN_FILENO, -(off_t) n, SEEK_CUR) < 0) return;
+ ai_io_unread(g, i, -(intptr_t) ai_io_pending(g, i));
+ if (u) ai_stdin.io.ungetc_buf = putcharm(EOF); }
+
 // the one fork + exec. argv rides at sp[0]; in/out/err are spawnio's fixed triple (-1: leave
 // it), applied first; fdmap is a list of (childfd . srcfd) pairs and closes a list of fds,
 // both read off the stack after the marshal (a GC may have moved them), -1 for none.
@@ -201,6 +216,7 @@ ai_noinline static struct ai *host_spawnx(struct ai *g, int in, int out, int err
  word fdmap = mapat >= 0 ? g->sp[mapat] : ZeroPoint,
          closes = closeat >= 0 ? g->sp[closeat] : ZeroPoint;
  fflush(NULL);                                               // flush now, not twice in the child
+ stdin_exact(g);
  pid_t pid = fork();
  if (pid < 0) return ai_push(g, 1, ai_err(g, errno));
  if (!pid) {
@@ -554,6 +570,7 @@ static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); ai_musttail return Next(1);
 // discipline is all in the caller -- flush out/err before, child = eval+quit.
 static ai_inline word host_fork(struct ai *g) {
  fflush(NULL);
+ stdin_exact(g);
  pid_t pid = fork();
  return pid < 0 ? ai_err(g, errno) : putcharm(pid); }
 static lvm(lvm_fork) { Sp[0] = host_fork(g); ai_musttail return Next(1); }
