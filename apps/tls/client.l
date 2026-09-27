@@ -1,7 +1,8 @@
 ; apps/tls/client.l -- a TLS 1.3 client over the ciphers beside it: x25519 for the key
-; share, HKDF-SHA256 for the schedule, chacha20-poly1305 for the records. one suite, one
-; group, one version -- what every server of the last five years speaks, and what a
-; fetch needs. the peer is NOT verified: the certificate is read into the transcript and
+; share, HKDF-SHA256 for the schedule, and the records under chacha20-poly1305 or, when the
+; server picks it, aes-128-gcm (inle/tls.c's nifs) -- the one suite RFC 8446 makes every
+; server speak. one group, one version, the two suites; a key's length says which cipher
+; it is for (32 bytes chacha, 16 aes). the peer is NOT verified: the certificate is read into the transcript and
 ; believed. that is an integrity-and-privacy channel against a passive wire, not an
 ; identity, and a caller that needs identity should say so before trusting a byte.
 ;
@@ -80,14 +81,16 @@
               _ (close q)
               b)
 
-   ; --- the aead, RFC 8439: the poly key is block zero of the stream ---
+   ; --- the aead: RFC 8439's, the poly key block zero of the stream; or aes-gcm's nifs ---
    (nonce iv seq) (xors iv (zeros 4 + u64be seq))
    (aead-seal key iv seq aad pt)
+    (? (#key = 16) (aes-gcm-seal key (nonce iv seq) aad pt)
     (: nn (nonce iv seq)
        pk (snip (cc-stream key nn 0 1) 0 32)
        ct (cc-xor key nn 1 pt)
-       (ct + po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct)))
+       (ct + po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct))))
    (aead-open key iv seq aad ctag)
+    (? (#key = 16) (: p (aes-gcm-open key (nonce iv seq) aad ctag) (? (string? p) [1 p] ()))
     (: n (#ctag - 16)
        (? (n < 0) ()
           (: nn (nonce iv seq)
@@ -96,7 +99,7 @@
              tag (snip ctag n #ctag)
              (? (= tag (po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct)))
                 [1 (cc-xor key nn 1 ct)]
-                ()))))
+                ())))))
 
    ; --- the wire: exact reads over the socket, a run kept between records ---
    (rd t n)
@@ -163,21 +166,22 @@
        modes (ext 45 (u8 1 + u8 1))
        share (ext 51 (u16 36 + u16 29 + u16 32 + pub))
        exts (sni + groups + sigs + vers + modes + share)
-       body (u16 771 + rnd 32 + u8 32 + sid + u16 2 + u16 4867 + u8 1 + u8 0 + u16 #exts + exts)
+       body (u16 771 + rnd 32 + u8 32 + sid + u16 4 + u16 4867 + u16 4865 + u8 1 + u8 0 + u16 #exts + exts)
        (u8 1 + u24 #body + body))
-   ; the server hello's key share, and its version: () for any hello we cannot use
+   ; the server hello's key share and the key length of its suite (32 chacha20, 16 aes-128),
+   ; its version checked: () for any hello we cannot use
    (server-share body)
     (: sidn (body 34)
        i (35 + sidn)
        suite (rd16 body i)
        extn (rd16 body (i + 3))
        (go j end share ok)
-        (? (j + 4 > end) (? (ok && (string? share)) share ())
+        (? (j + 4 > end) (? (ok && (string? share)) [share (? (suite = 4865) 16 32)] ())
            (: ty (rd16 body j) ln (rd16 body (j + 2)) d (snip body (j + 4) (j + 4 + ln))
               (go (j + 4 + ln) end
                   (? ((ty = 51) && (rd16 d 0 = 29) && (rd16 d 2 = 32)) (snip d 4 36) share)
                   (? ((ty = 43) && (rd16 d 0 = 772)) 1 ok))))
-       (? !(suite = 4867) ()
+       (? !((suite = 4867) || (suite = 4865)) ()
           (go (i + 5) (i + 5 + extn) () 0)))
 
    ; --- the handshake, whole ---
@@ -195,15 +199,16 @@
              (? (!(two? r) || !(<r = 22) || !((<>r) 0 = 2)) (close s, ())
                 (: sh <>r
                    _ (pin t 'tr (t 'tr + sh))
-                   share (server-share (snip sh 4 #sh))
-                   (? !(string? share) (close s, ())
-                      (: shared (x25519 priv share)
+                   ss (server-share (snip sh 4 #sh))
+                   (? !(two? ss) (close s, ())
+                      (: share <ss kl <>ss
+                         shared (x25519 priv share)
                          early (hkdf-extract (zeros 32) (zeros 32))
                          hs (hkdf-extract (derive early "derived" "") shared)
                          chs (derive hs "c hs traffic" (t 'tr))
                          shs (derive hs "s hs traffic" (t 'tr))
-                         _ (pin t 'ckey (hkdf-label chs "key" "" 32)) _ (pin t 'civ (hkdf-label chs "iv" "" 12))
-                         _ (pin t 'skey (hkdf-label shs "key" "" 32)) _ (pin t 'siv (hkdf-label shs "iv" "" 12))
+                         _ (pin t 'ckey (hkdf-label chs "key" "" kl)) _ (pin t 'civ (hkdf-label chs "iv" "" 12))
+                         _ (pin t 'skey (hkdf-label shs "key" "" kl)) _ (pin t 'siv (hkdf-label shs "iv" "" 12))
                          ; the server's flight: extensions, the certificate, its verify, finished
                          (flight _) (: m (hs-next t)
                                       (? !(two? m) ()
@@ -220,8 +225,8 @@
                                master (hkdf-extract (derive hs "derived" "") (zeros 32))
                                cap (derive master "c ap traffic" (t 'tr))
                                sap (derive master "s ap traffic" (t 'tr))
-                               _ (pin t 'ckey (hkdf-label cap "key" "" 32)) _ (pin t 'civ (hkdf-label cap "iv" "" 12))
-                               _ (pin t 'skey (hkdf-label sap "key" "" 32)) _ (pin t 'siv (hkdf-label sap "iv" "" 12))
+                               _ (pin t 'ckey (hkdf-label cap "key" "" kl)) _ (pin t 'civ (hkdf-label cap "iv" "" 12))
+                               _ (pin t 'skey (hkdf-label sap "key" "" kl)) _ (pin t 'siv (hkdf-label sap "iv" "" 12))
                                _ (pin t 'cseq 0) _ (pin t 'sseq 0)
                                t)))))))))
 
