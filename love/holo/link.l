@@ -86,6 +86,11 @@
    ; the numbers are obj.l's plus rel32, and a kind outside the set refuses: they collide
    ; with the x86-64 and riscv numbers, which is why the machine picks the lane first.
    ldarm-kinds (ld-cls '((2 abs32) (3 rel32) (10 bl) (30 b) (47 movw16) (48 movt16)))
+   ; the a64 and riscv instruction fields, by relocation number, in the backend's own names.
+   ; rela: S+a arrives whole, and the backend ors its field into the word already there
+   lda64-kinds (ld-cls '((275 adrp21) (277 addlo12) (278 addlo12) (282 b26) (283 b26)
+                         (284 lo12s2) (285 lo12s4) (286 lo12s8) (299 lo12s16)))
+   ldrv-kinds (ld-cls '((17 j21) (19 pcrel)))
    (ldarm be s off sv kind site)
     (: r (ldarm-kinds kind)
        _ (atom? r ? (scare 'link-reloc kind))
@@ -551,7 +556,7 @@
    ; kind dispatch below switches on the machine and never on the number alone.
    ; cx is the context every lane shares: (glo n0 n1 r0 r1 relbox rv arm? be xt) -- the
    ; symbol book, the two brackets, the -pie site box, the riscv and EM_ARM flags, the
-   ; backend the ARM lane re-encodes through, and the named-lane extents.
+   ; backend an instruction field re-encodes through, and the named-lane extents.
    (ldpatch ob ix base [glo n0 n1 r0 r1 relbox rv arm? be xt])
     (: s (peep ob 'src 0) se (peep (peep ob 'secs 0) ix ())
        off0 (se 1) sz (se 2)
@@ -609,9 +614,6 @@
                                               '(1 2 4 10 11 257 261 275 277 278 282 283 284 285 286 299))
                          0 (scare 'link-reloc kind))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
-                    ; the a64/riscv field kinds patch bits of the instruction word the
-                    ; placeholder carries -- read it back and or the field in
-                    wd (? abs64? 0 (rle32 s (off0 + ro)))
                     bs (? abs64? (le64 sa)                             ; the abs64 three: S + a outright
                           abs32?                                       ; ..and the two abs32, range-checked
                            ; _32 is unsigned and _32S signed, so each reads the wrapped sum
@@ -619,36 +621,15 @@
                            (: v (kind = 10 ? sa (sg64 sa))
                               _ (kind = 10 && v <= 4294967295 || ld-fits32 v ? 0 (scare 'link-range <sy))
                               (le32 v))
-                          (rv && kind = 17)                          ; R_RISCV_JAL: S+a-p into jal's j-imm
-                           (: v prel
-                              _ (? (-1048576 <= v <= 1048575) 0 (scare 'link-range <sy))
-                              u (v & 2097151)
-                              (le32 (wd | ((((u >> 20) & 1) << 31) | ((((u >> 1) & 1023) << 21)
-                                        | ((((u >> 11) & 1) << 20) | (((u >> 12) & 255) << 12)))))))
-                          (rv && kind = 19)                          ; R_RISCV_CALL_PLT: S+a-p as hi20 + signed lo12
-                           (: v prel
-                              low (v & 4095) lo (low > 2047 ? (low - 4096) low)
-                              hi ((v - lo) // 4096)
-                              _ (? (-524288 <= hi <= 524287) 0 (scare 'link-range <sy))
-                              (le32 (wd | ((hi & 1048575) << 12))
-                               + le32 (rle32 s (off0 + ro + 4) | ((lo & 4095) << 20))))
                           (elem kind '(2 4 261) || (rv && kind = 57))
                            (: v prel                          ; pc32/plt32/32_pcrel: S + A - P
                               _ (ld-fits32 v ? 0 (scare 'link-range <sy))
                               (le32 v))
-                          (elem kind '(282 283))           ; jump26/call26: (S+A-P)>>2 into imm26
-                           (: v prel
-                              _ (-134217728 <= v <= 134217727 ? 0 (scare 'link-range <sy))
-                              (le32 (wd | (v // 4 & 67108863))))
-                          (kind = 275)                        ; adr_prel_pg_hi21: page(S+A)-page(P) into adrp
-                           (: pg (sa // 4096 - (base + ro) // 4096)
-                              _ (-1048576 <= pg <= 1048575 ? 0 (scare 'link-range <sy))
-                              (le32 (wd | (((pg & 3) << 29) | (((pg >> 2) & 524287) << 5)))))
-                          ; the abs_lo12_nc family is one field: the low 12 bits of S+a into
-                          ; imm12, scaled by the width the opcode implies (an `ldr x` counts
-                          ; 8-byte units). the ldst widths arrive from a foreign object.
-                          (: sc (kind @ 284 2 285 4 286 8 299 16 1)
-                             (le32 (wd | (((sa % 4096) // sc) << 10)))))
+                          ; an instruction field: the encoding is the backend's, and () says
+                          ; the target is past the field's reach
+                          (: k <((? rv ldrv-kinds lda64-kinds) kind)
+                             r (refix-with be k (map (i \ s (off0 + ro + i)) ^w) sa (base + ro) w)
+                             (? (two? r) r (scare 'link-range <sy))))
                     (go (off0 + ro + w) >es
                         (bs . snip s pos (off0 + ro) . acc))))))
        (go off0 (ent (ob 'relas)) ()))
@@ -831,7 +812,7 @@
               o1 <objs
               (? (two? e) <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
-       cx [glo n0 end r0 r1 relbox rv () () (ld-extents objs)]
+       cx [glo n0 end r0 r1 relbox rv () (backends target) (ld-extents objs)]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
@@ -944,7 +925,7 @@
        _ (atom? e ? (scare 'link-entry ent))
        ; no -pie table here and no arm32 kernel; riscv keeps its own reloc numbers,
        ; so the machine says which namespace ldpatch reads (ldlink's own slot 6).
-       cx [glo n0 n1 n1 n1 () (mach = 243) () () (ld-extents objs)]
+       cx [glo n0 n1 n1 n1 () (mach = 243) () (backends target) (ld-extents objs)]
        en (ldemit cx 'note vbase objs ())
        eb (ldemit cx 'boot b0 objs (gap vbase b0))  ; the file resumes at vbase (offset 4096)
        et (ldemitn cx 'text objs (ldemit cx 'text t0 objs (>eb + gap <eb t0)))

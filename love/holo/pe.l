@@ -72,7 +72,7 @@
        ent (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)
        ;; ldpatch destructures this, so it is ten wide or every section it is
        ;; handed patches to () -- no -pie table (r0 = r1 = end), no riscv, no arm32.
-       cx [glo n0 end end end relbox () () () (ld-extents objs)]
+       cx [glo n0 end end end relbox () () (backends target) (ld-extents objs)]
        ;; the read-only half. each lane is emitted at the address ldlay gave it,
        ;; so the gap the alignment opened is written out as zeros, and each named
        ;; lane follows the one it travels with -- ldlay laid them in that order.
