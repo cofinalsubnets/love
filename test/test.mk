@@ -10,7 +10,7 @@
   moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
-  test_ccthumb2 test_clay test_cli test_cookdiff test_cpio test_cts test_cts_a64 \
+  test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
@@ -35,7 +35,7 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_spin test_cookdiff test_glazebench test_dist test_seed test_moon test_as test_links test_kernel_wasm test_harp
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_moon test_as test_links test_kernel_wasm test_harp
 
 
 # really slow gate
@@ -332,7 +332,7 @@ test_gates: host
 # through the verb rail or a baked image instead. ~2.5s, most of it one bake, and it rides
 # test_slow because the failure it catches is silent by construction (a seat that answers
 # () is indistinguishable from an app with nothing to say).
-.PHONY: test_seat test_cli
+.PHONY: test_seat test_cli test_nest
 test_seat: host
 	@echo TEST test/gate/seat.sh "(the file-seat lane)"
 	@$(gsh) test/gate/seat.sh $m
@@ -341,6 +341,9 @@ test_seat: host
 test_cli: host
 	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
 	@$(gsh) test/gate/cli.sh $m
+test_nest: host
+	@echo TEST test/gate/nest.sh "(love nest, in a HOME of its own)"
+	@$(gsh) test/gate/nest.sh $m
 # what a machine SPENDS while it waits. no other gate weighs it: a scheduler that spins
 # answers everything it is asked and stays green through the whole tree.
 test_spin: host

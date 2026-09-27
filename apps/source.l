@@ -6,6 +6,8 @@
 (borrow 'tar)
 
 (borrow 'posix)
+; civil, for a stamp's date (love/boot/post.l)
+(borrow 'cal)
 (: (src-die m) (say err (";; " + m + "\n"), quit 1)
 
    ; the directory is positional, so a mistyped flag would be taken as one and a whole
@@ -432,12 +434,110 @@
        _ (puts (";; wrote " + out + " (" + arch + ")\n"))
        0)
 
+   ; -- nest: this binary laid as the user's love under ~/.love/bin, the tools linked to it --
+   ; the build stamp is the carried archive's STAMP, the third member (tools/selfpack.l lays
+   ; the root, the top, then it); 0 where this binary carries no source, or no stamp in it
+   (nest-stamp _)
+    (: gz (source-gz "x")
+       u (? (string? gz) (gz-unzip gz) ())
+       s (? (two? u) <>u "")
+       n #s
+       (stamp? nm) (: m #nm (6 <= m && snip nm (m - 6) m = "/STAMP"))
+       (go o k) (? (3 <= k) 0
+                   (: r (tar-read1 s n o)
+                      (? !(two? r) 0
+                         (: e <>r
+                            (? (stamp? (tar-get e 'nom ""))
+                               (: v <(sound (tar-get e 'body "")) (? (charm? v) v 0))
+                               (go <>>r (k + 1)))))))
+       (go 0 0))
+   ; a stamp as its utc minute, which is what a person compares
+   (nest-when t)
+    (? (t < 1) "unstamped"
+       (: d (civil (t // 86400)) m ((t % 86400) // 60)
+          (two x) (? (x < 10) ("0" + show x) (show x))
+          (show <d + "-" + two <>d + "-" + two <>>d + " " + two (m // 60) + ":" + two (m % 60)
+           + " utc")))
+   ; the installed love's stamp, asked of it: 0 when it has none to give. its verbs are
+   ; read first, so a love older than nest is never handed a word it would complain about
+   (nest-theirs p)
+    (: vs (hark [p "verbs"])
+       has (<vs = 0 && elem "nest" (lines >vs))
+       r (? has (hark [p "nest" "--stamp"]) [1 ""])
+       v (? (<r = 0) <(sound >r) 0)
+       (? (charm? v) v 0))
+   (nest-read p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) (s + "")) ()))
+   ; the tools a symlink to love serves by its own name, the argv[0] door
+   nest-tools ["lush" "kore" "sb" "cook" "libra" "mooncc" "ain"]
+   (nest-link bin nm)
+    (: p (bin + "/" + nm)
+       (? (readlink p = "love") 0
+          (: _ (unlink p) _ (symlink "love" p) (? (readlink p = "love") 1 0))))
+   ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
+   ; ours already is left alone
+   (nest-compat home bin nm)
+    (: d (home + "/.local/bin") p (d + "/" + nm) to (bin + "/" + nm)
+       (? (!(two? (stat d)) || string? (readlink p) || two? (stat p)) 0 (symlink to p)))
+   (nest-usage _)
+    (say err "usage: love nest [-f] [--stamp]
+  lay this binary as ~/.love/bin/love and link its tools beside it, when it is newer
+  than the love already there
+  -f, --force   replace whatever is there
+  --stamp       print this build's stamp and leave
+")
+   (nest-main as)
+    (: f? (elem "-f" as || elem "--force" as)
+       bad (filter (a \ !(elem a ["-f" "--force" "--stamp"])) as)
+       _ (? (two? bad)
+            (? (src-help? <bad) (: _ (nest-usage 0) (quit 0))
+               (src-vers? <bad) (src-vers "nest")
+               (: _ (say err ("love nest: unknown option " + <bad + "\n")) _ (nest-usage 0) (quit 2)))
+            0)
+       mine (nest-stamp 0)
+       _ (? (elem "--stamp" as) (: _ (puts (show mine + "\n")) (quit 0)) 0)
+       home (getenv "HOME")
+       _ (? (string? home && #home) 0 (src-die "nest: no HOME"))
+       me (selfpath 0)
+       _ (? (string? me) 0 (src-die "nest: cannot find this binary"))
+       bin (home + "/.love/bin") dst (bin + "/love")
+       new (nest-read me)
+       _ (? (string? new) 0 (src-die ("nest: cannot read " + me)))
+       old (? (two? (stat dst)) (nest-read dst) ())
+       theirs (? (string? old) (nest-theirs dst) 0)
+       (say1 m) (puts ("love nest: " + m + "\n"))
+       _ (? (string? old && old = new)
+            (: _ (say1 ("~/.love/bin/love is this build already, " + nest-when mine)) (quit 0)) 0)
+       _ (? (f? || !(string? old) || theirs < mine) 0
+            (: _ (say err ("love nest: ~/.love/bin/love is " + nest-when theirs + ", this is "
+                          + nest-when mine + (? (theirs = mine) ", a different build" "")
+                          + " -- -f replaces it\n"))
+               (quit 1)))
+       _ (mkdir (home + "/.love") 493) _ (mkdir bin 493)
+       tmp (bin + "/.love.new")
+       q (open tmp "w")
+       _ (? (hot? q) (: _ (say q new) (close q)) (src-die ("nest: cannot write " + tmp)))
+       _ (chmod tmp 493)
+       ; the copy runs before it takes the name: a binary cut short, or one a gate left
+       ; half-built, never becomes the love on PATH
+       ok (hark [tmp "-e" "1 + 1"])
+       _ (? (<ok = 0 && >ok = "2\n") 0
+            (: _ (unlink tmp) (src-die "nest: the copy does not run; nothing replaced")))
+       e (rename tmp dst)
+       _ (? !e 0 (: _ (unlink tmp) (src-die ("nest: cannot rename over " + dst))))
+       ls (filter (nm \ nest-link bin nm) nest-tools)
+       _ (each ("love" . nest-tools) (nest-compat home bin))
+       _ (say1 ("~/.love/bin/love is now " + nest-when mine
+                + (? (string? old) (", was " + nest-when theirs) "")))
+       _ (? (two? ls) (say1 ("linked " + foldl (a \ s \ a + " " + s) <ls >ls)) 0)
+       0)
+
    ; a binding, not a body: the letrec stays body-less, so every name above is the
    ; module's -- (cite 'source 'src-arm) for serve and doom -- and the pins still run at load
    _ (pins (cite 'verbs 'tab)
       'source source-main
       'src    source-main
       'seed   seed-main
-      'kernel kernel-main))
+      'kernel kernel-main
+      'nest   nest-main))
 
 ) ; module 'source

@@ -383,7 +383,7 @@ force_src: ;
 # selfpack rewrites the archive only when the content moved, and says so only then
 $(dist_source): force_src $(love0)
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(love_stamp) $(dist_drop)
 
 out/src.o: $(dist_source) tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
