@@ -527,6 +527,7 @@
    ;; here means the form you wrote is the form you get (they part company under vm86, where CD
    ;; 03 faults at iopl < 3 and CC does not). so: `trap` for a breakpoint, `int` for a vector.
    (emit-int n) (0 <= n <= 255 ? 0 (scare 'x64-int-vector n), [205 n])
+   (emit-seg s) (s @ 'fs [100] 'gs [101] (scare 'x64-seg s))      ; the override prefix; the next form is its instruction
 
    ;; the dispatch: an emitter tablet, operand shapes in holo.l's ir-arity. a row is a
    ;; partial application where the form fixes early arguments ((emit-sx 1), (emit-div 0 1),
@@ -614,7 +615,7 @@
          ('vmxon . emit-vmp '(243)) ('vmclear . emit-vmp '(102)) ('vmptrld . emit-vmp ())
          ('vmread . emit-vmread) ('vmwrite . emit-vmwrite)
          ('sgdt . emit-m0f 0 '(15 1)) ('sidt . emit-m0f 1 '(15 1))
-         ('int . emit-int) ('ltr . emit-ltr)
+         ('int . emit-int) ('ltr . emit-ltr) ('seg . emit-seg)
          ('ldcr . emit-ldcr) ('stcr . emit-stcr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])
