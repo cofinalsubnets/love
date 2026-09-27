@@ -742,6 +742,69 @@
 
 ) ; module path
 
+; bytes -- words in and out of byte strings, the conversions every codec and wire protocol
+; keeps writing. a reader takes anything that indexes by application: a string, a cask, a
+; list. & and >> are exact on a big and on a negative, so a 64-bit word needs no care.
+;   (rdle s i n) (rdbe s i n) -> the n-byte word at i, little- and big-endian
+;   (wrle v n) (wrbe v n)     -> v as n bytes, the low n kept (two's complement for v < 0)
+;   (padk n k)   -> the bytes from n to the next multiple of k
+;   (zbytes n)   -> n NULs
+;   (b2hex s) (hex2b h) -> bytes as lowercase hex, and hex (either case) back
+;   (xorb a b)   -> a with b xored in, byte by byte, #a long
+
+(module '(bytes rdle rdbe wrle wrbe padk zbytes b2hex hex2b xorb)
+(: (rdle s i n) (? (n < 1) 0 (s i + (rdle s (i + 1) (n - 1) << 8)))
+   (rdbe s i n) (: (go k a) (? (n <= k) a (go (k + 1) ((a << 8) + s (i + k)))) (go 0 0))
+   (wrle v n) (? (n < 1) "" (string (v & 255) + wrle (v >> 8) (n - 1)))
+   (wrbe v n) (? (n < 1) "" (wrbe (v >> 8) (n - 1) + string (v & 255)))
+   (padk n k) ((k - n % k) % k)
+   (zbytes n) (string (cask n))
+   (b2hex s) (foldl (a \ i \ a + zpad 2 (radix (s i) 16)) "" ^#s)
+   (hex2b h) (: n (#h // 2) b (cask n)
+                _ (each ^n (i \ pin b i (hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1)))))
+                (string b))
+   (xorb a b) (: n #a c (cask n) _ (each ^n (i \ pin c i (a i ^ b i))) (string c)))
+
+) ; module bytes
+
+; cal -- the proleptic gregorian calendar over days since 1970-01-01, utc. floor division
+; throughout, so a day before 1970 reads right with no sign fix-up.
+;   (civil z)           -> [y m d] for day z
+;   (epoch-days y m d)  -> its inverse
+;   (wday z)            -> 0 for sunday .. 6
+;   (mdays y m)         -> the month's length, leap years included
+;   mon3 monl wd3 wdl   -> the month and weekday names, short and long, january and sunday first
+
+(module '(cal civil epoch-days wday mdays mon3 monl wd3 wdl)
+(: (civil z0)
+    (: z (z0 + 719468)
+       era (z // 146097)
+       doe (z - era * 146097)
+       yoe ((doe - doe // 1460 + doe // 36524 - doe // 146096) // 365)
+       y (era * 400 + yoe)
+       doy (doe - (365 * yoe + yoe // 4 - yoe // 100))
+       mp ((5 * doy + 2) // 153)
+       d (doy - (153 * mp + 2) // 5 + 1)
+       m (mp < 10 ? (mp + 3) (mp - 9))
+       [(m <= 2 ? (y + 1) y) m d])
+   (epoch-days y0 m d)
+    (: y (m <= 2 ? (y0 - 1) y0)
+       era (y // 400)
+       yoe (y - era * 400)
+       doy ((153 * (m + (2 < m ? -3 9)) + 2) // 5 + d - 1)
+       doe (yoe * 365 + yoe // 4 - yoe // 100 + doy)
+       (era * 146097 + doe - 719468))
+   (wday z) (((z + 4) % 7 + 7) % 7)                   ; 1970-01-01 was a thursday
+   ; the gap to the next 1st, so a leap year needs no test
+   (mdays y m) (epoch-days (m = 12 ? (y + 1) y) (m = 12 ? 1 (m + 1)) 1 - epoch-days y m 1)
+   mon3 ["Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"]
+   monl ["January" "February" "March" "April" "May" "June" "July" "August" "September"
+         "October" "November" "December"]
+   wd3 ["Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat"]
+   wdl ["Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday"])
+
+) ; module cal
+
 ; lush 🐚 the word -- a word back into a command line, and the mask law's other half. module
 ; 'lush begins here because two catted scripts carrying no apps/lush.l still need one: sb reads
 ; the ignore patterns, helm shows what a unit will run. what stands here has no substrate under

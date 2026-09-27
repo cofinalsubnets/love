@@ -1194,31 +1194,6 @@
    (unix2dos-main as) (ud2u "unix2dos" ulfcr as)
    (mac2unix-main as) (ud2u "mac2unix" ucrlone as)
 
-   ; ---- the calendar floor (stat's %y and date both read it) --------------------
-   ; Howard Hinnant's exact integer civil-from-days and its inverse, shifted to a March
-   ; year so the leap day lands at the end and no month table is needed. love's // is
-   ; a floor division, which is what these want -- the sign dance the C originals carry
-   ; is only there because C truncates. lawed in test/law/kore.l over the round trip.
-   ; there is no time zone here and there will not be one without a tz database: every
-   ; face over these is utc, exactly as moonlibc's localtime is its gmtime.
-   (ucivil z0)                         ; days since 1970-01-01 -> (year month day)
-    (: z (z0 + 719468)
-       era (// z 146097)
-       doe (z - (* era 146097))
-       yoe (// (((doe - (// doe 1460)) + (// doe 36524)) - (// doe 146096)) 365)
-       y ((* era 400) + yoe)
-       doy (doe - (((* 365 yoe) + (// yoe 4)) - (// yoe 100)))
-       mp (// ((* 5 doy) + 2) 153)
-       d ((doy - (// ((* 153 mp) + 2) 5)) + 1)
-       m (mp + (? (mp < 10) 3 -9))
-       [(? (m <= 2) (y + 1) y) m d])
-   (udays y0 m d)                      ; (year month day) -> days since 1970-01-01
-    (: y (? (m <= 2) (y0 - 1) y0)
-       era (// y 400)
-       yoe (y - (* era 400))
-       doy ((// ((* 153 (m + (? (2 < m) -3 9))) + 2) 5) + (d - 1))
-       doe ((((* yoe 365) + (// yoe 4)) - (// yoe 100)) + doy)
-       (((* era 146097) + doe) - 719468))
 
 
    ; ---- the encodings: base64 and base32 (RFC 4648, GNU's two faces) ------------

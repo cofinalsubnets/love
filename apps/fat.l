@@ -29,19 +29,18 @@
 ; definition, so fat-mkfs refuses a device too small (~33 MB) -- absence, not divergence.
 
 ; the module head is the export list, and it is not decoration: this file's own floor
-; is spelled u16, u32, w16, w32, bcopy, zeros, group, alias, cksum -- names a shared
+; is spelled w16, w32, bcopy, group, alias, cksum -- names a shared
 ; layer would collide with on sight. only the surface at the top of this header leaves.
 (module (fat fat-mkfs fat-mount fat-ls fat-stat fat-read fat-write fat-mkdir fat-rm
          fat-disk)
+(borrow 'bytes)
+(borrow 'cal)
 (:
    ; --- little-endian scalars: strings index charms, casks pin them ---
-   (u16 s i) (s i + (s (i + 1) << 8))
-   (u32 s i) (u16 s i + (u16 s (i + 2) << 16))
    (w16 b i v) (pin b i (v & 255), pin b (i + 1) (v >> 8 & 255), ())
    (w32 b i v) (w16 b i v, w16 b (i + 2) (v >> 16))
    (bcopy b i s) (: n #s (n ? (pour b i s 0 n), ()))      ; pour refuses an empty
    (bfill b i n v) (n ? (pin b i v, bfill b (i + 1) (n - 1) v))
-   (zeros n) (string (cask n))
 
    ; --- the fs tablet, read by slot: 0 rd, 1 wr, 2 spc, 3 rsvd, 4 nfats, 5 fatsz,
    ;     6 rootcl, 7 data0, 8 nclus, 9 fat-cache lba, 10 fat-cache string, 11 free hint ---
@@ -55,13 +54,13 @@
     (: lba (fat-sec f cl)
        s (= lba (f 9) ? (f 10)
           (: t (rd1 f lba) (pin f 9 lba, pin f 10 t, t)))
-       (u32 s (cl * 4 % 512) & 0x0FFFFFFF))
+       (rdle s (cl * 4 % 512) 4 & 0x0FFFFFFF))
    (fat! f cl v)                                      ; write, both copies, top nibble kept
     (: lba (fat-sec f cl)
        s (lba = f 9 ? (f 10) (rd1 f lba))
        b (cask 512) _ (bcopy b 0 s)
        off (cl * 4 % 512)
-       _ (w32 b off ((u32 s off & 0xF0000000) + (v & 0x0FFFFFFF)))
+       _ (w32 b off ((rdle s off 4 & 0xF0000000) + (v & 0x0FFFFFFF)))
        t (string b)
        (wr1 f lba t,
         wr1 f (lba + f 5) t,                          ; the mirror
@@ -157,7 +156,7 @@
    (group nm at cl sz r11 raw) {0 nm 1 at 2 cl 3 sz 4 r11 5 raw}
    lfn-offs '(1 3 5 7 9 14 16 18 20 22 24 28 30)      ; where the 13 UCS-2 chars sit
    (lfn-part s o)                                     ; one LFN entry's text
-    (: (ch i) (: v (u16 s (o + i)) (!v || v = 0xFFFF ? () (v < 256 ? v 63)))
+    (: (ch i) (: v (rdle s (o + i) 2) (!v || v = 0xFFFF ? () (v < 256 ? v 63)))
        (go l) (one? l ? "" (ch <l @ c (charm? c ? (string [c] + go >l) "")))
      (go lfn-offs))
    (short-name s o flags)                             ; 8.3 back to text, basis flags honored
@@ -181,12 +180,12 @@
                  (: at (s (o + 11))
                     (? ((at & 15) = 15)
                        (go (o + 32) ((lfn-part s o) + lfn) (charm? start ? start o) acc)
-                       (: cl ((u16 s (o + 26)) + ((u16 s (o + 20)) << 16))
+                       (: cl ((rdle s (o + 26) 2) + ((rdle s (o + 20) 2) << 16))
                           label (at & 8 = 8)
                           nm (tally lfn ? lfn (short-name s o (s (o + 12))))
                           dot (name=? nm "." || name=? nm "..")
                           raw (snip s (charm? start && !label ? start o) (o + 32))
-                          g (group (label || dot ? () nm) at cl (u32 s (o + 28))
+                          g (group (label || dot ? () nm) at cl (rdle s (o + 28) 4)
                                    (snip s o (o + 11)) raw)
                           (go (o + 32) "" () (g . acc))))))))
        (go 0 "" () ()))
@@ -212,7 +211,7 @@
             (: extra (chain-take f (need - #cls))
              (two? extra ? (fat! f (last cls) <extra, cls + extra) cls)))
        (#cls >= need ?                     ; short of that the disk is full: refuse
-        (chain-wr f cls (s + zeros (cb * #cls - #s)),
+        (chain-wr f cls (s + zbytes (cb * #cls - #s)),
          1)))
 
    ; --- paths: "/a/b/c" -> components; the walk answers the parent's cluster,
@@ -233,15 +232,8 @@
 
    ; --- timestamps: (clock 0) ms -> the dos pair (date . time) ---
    (dos-now u)
-    (: ms (clock 0) days (ms // 86400000) secs (ms // 1000 % 86400)
-       z (days + 719468) era (z // 146097) doe (z % 146097)
-       yoe ((doe - (doe // 1460 + doe // 146096 - doe // 36524)) // 365)
-       y (era * 400 + yoe)
-       doy (doe - (365 * yoe + (yoe // 4 - yoe // 100)))
-       mp ((5 * doy + 2) // 153)
-       d (doy - ((153 * mp + 2) // 5) + 1)
-       m (mp < 10 ? (mp + 3) (mp - 9))
-       y (m <= 2 ? (y + 1) y)
+    (: ms (clock 0) secs (ms // 1000 % 86400)
+       ymd (civil (ms // 86400000)) y <ymd m <>ymd d <>>ymd
        (((y - 1980) << 9) + (m << 5) + d .
         ((secs // 3600) << 11) + ((secs // 60 % 60) << 5) + (secs % 60 // 2)))
 
@@ -295,7 +287,7 @@
              inf (string i)
              _ (wr 0 bpb, wr 1 inf, wr 6 bpb, wr 7 inf)
              ; zero both fats + the root cluster, 64 sectors a stroke
-             z64 (zeros 32768)
+             z64 (zbytes 32768)
              (go lba left) (left ?
                             (: k (left < 64 ? left 64)
                              (wr lba (k = 64 ? z64 (snip z64 0 (k * 512))),
@@ -311,10 +303,10 @@
    (fat-mount dev)
     (: rd <dev s (rd 0 1)
        (? !(string? s) ()
-          (u16 s 510 != 0xAA55 || u16 s 11 != 512 || u16 s 22 || !(u32 s 36)) ()
-          (: spc (s 13) rsvd (u16 s 14) nfats (s 16) fatsz (u32 s 36)
-             nsec (u32 s 32) data0 (rsvd + nfats * fatsz)
-             {0 rd 1 <>dev 2 spc 3 rsvd 4 nfats 5 fatsz 6 (u32 s 44)
+          (rdle s 510 2 != 0xAA55 || rdle s 11 2 != 512 || rdle s 22 2 || !(rdle s 36 4)) ()
+          (: spc (s 13) rsvd (rdle s 14 2) nfats (s 16) fatsz (rdle s 36 4)
+             nsec (rdle s 32 4) data0 (rsvd + nfats * fatsz)
+             {0 rd 1 <>dev 2 spc 3 rsvd 4 nfats 5 fatsz 6 (rdle s 44 4)
               7 data0 8 ((nsec - data0) // spc) 9 () 10 () 11 3})))
 
    ; --- the verbs ---

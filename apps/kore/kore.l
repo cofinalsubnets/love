@@ -88,6 +88,7 @@
         usleep-main reset-main ts-main fsync-main dircolors-main dc-main readelf-main hexedit-main
         which-main xxd-main)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
+(borrow 'bytes)
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (borrow 'posix)
 (:
@@ -273,8 +274,7 @@
    ; -- size, strip, ranlib: the three binutils that ride holo's ELF field table and its
    ; archive writer. little-endian ELF of either class; a section reads as
    ; (index name type flags off size link info align header-bytes) --
-   (bu-le v n) (? (n < 1) "" (string (v & 255) + bu-le (v >> 8) (n - 1)))
-   (bu-put fs h nm v) (: r (ld-row fs nm) o <r w <>r (snip h 0 o + bu-le v w + snip h (o + w) #h))
+   (bu-put fs h nm v) (: r (ld-row fs nm) o <r w <>r (snip h 0 o + wrle v w + snip h (o + w) #h))
    (bu-elf? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70 && b 5 = 1
                 && (b 4 = 1 || b 4 = 2))
    (bu-fs b) (? (b 4 = 2) elf64f elf32f)
@@ -447,7 +447,7 @@
        d (filter (\ sc (sc 2 = 6)) (bu-secs fs b))
        (? !(two? d) ()
           (: o (<d 4) n (<d 5 // (2 * w))
-             (map (\ i [(ule b (o + 2 * w * i) w) (ule b (o + 2 * w * i + w) w)]) ^n))))
+             (map (\ i [(rdle b (o + 2 * w * i) w) (rdle b (o + 2 * w * i + w) w)]) ^n))))
    (re-type fs b t)
     (t @ 0 "NONE (None)" 1 "REL (Relocatable file)" 2 "EXEC (Executable file)" 4 "CORE (Core file)"
          3 (? (any (\ p (<p = 1879048187 && 0 < (<>p & 134217728))) (re-dyn fs b))
@@ -461,7 +461,7 @@
                      + (? (f & 8) ", RVE" "") + (? (f & 16) ", TSO" ""))
           ""))
    (re-head fs b)
-    (: e64 (b 4 = 2) m (ule b 18 2) f (ule b (? e64 48 36) 4)
+    (: e64 (b 4 = 2) m (rdle b 18 2) f (rdle b (? e64 48 36) 4)
        (row l v) (say out (re-lbl l + v + "\n"))
        _ (say out "ELF Header:\n  Magic:   ")
        _ (map (\ i (say out (re-hex (b i) 2 + " "))) ^16)
@@ -471,14 +471,14 @@
        _ (row "Version:" (show (b 6) + (? (b 6 = 1) " (current)" "")))
        _ (row "OS/ABI:" (re-osabi (b 7)))
        _ (row "ABI Version:" (show (b 8)))
-       _ (row "Type:" (re-type fs b (ule b 16 2)))
+       _ (row "Type:" (re-type fs b (rdle b 16 2)))
        _ (row "Machine:" (re-mach m))
-       _ (row "Version:" (re-0x (ule b 20 4)))
+       _ (row "Version:" (re-0x (rdle b 20 4)))
        _ (row "Entry point address:" (re-0x (ld-f fs b 0 'e-entry)))
        _ (row "Start of program headers:" (show (ld-f fs b 0 'e-phoff) + " (bytes into file)"))
        _ (row "Start of section headers:" (show (ld-f fs b 0 'e-shoff) + " (bytes into file)"))
        _ (row "Flags:" (re-flags b m f))
-       _ (row "Size of this header:" (show (ule b (? e64 52 40) 2) + " (bytes)"))
+       _ (row "Size of this header:" (show (rdle b (? e64 52 40) 2) + " (bytes)"))
        _ (row "Size of program headers:" (show (ld-f fs b 0 'e-phent) + " (bytes)"))
        _ (row "Number of program headers:" (show (ld-f fs b 0 'e-phnum)))
        _ (row "Size of section headers:" (show (ld-f fs b 0 'e-shent) + " (bytes)"))
@@ -520,9 +520,9 @@
      + (? (b 7 = 3 || b 7 = 9) "R (retain), " "") + "D (mbind), "
      + (m @ 62 "l (large), " 40 "y (purecode), " "") + "p (processor specific)\n")
    (re-secs fs b w? h?)
-    (: e64 (b 4 = 2) m (ule b 18 2) ss (bu-secs fs b)
+    (: e64 (b 4 = 2) m (rdle b 18 2) ss (bu-secs fs b)
        (ent sc) (ld-f fs b 0 'e-shoff + sc 0 * ld-n fs 'sh-ent)
-       (addr sc) (ule b ((ent sc) + (? e64 16 12)) (? e64 8 4))
+       (addr sc) (rdle b ((ent sc) + (? e64 16 12)) (? e64 8 4))
        (esz sc) (ld-f fs b (ent sc) 'sh-esz)
        (? !(two? ss) (say out "\nThere are no sections in this file.\n")
           (: _ (? h? (say out "\n")
@@ -554,10 +554,10 @@
    (re-phs fs b)                        ; [type off vaddr paddr filesz memsz flags align]
     (: e64 (b 4 = 2) o (ld-f fs b 0 'e-phoff) n (ld-f fs b 0 'e-phnum) e (ld-f fs b 0 'e-phent)
        (map (\ i (: h (o + i * e)
-                    (? e64 [(ule b h 4) (ule b (h + 8) 8) (ule b (h + 16) 8) (ule b (h + 24) 8) (ule b (h + 32) 8)
-                            (ule b (h + 40) 8) (ule b (h + 4) 4) (ule b (h + 48) 8)]
-                       [(ule b h 4) (ule b (h + 4) 4) (ule b (h + 8) 4) (ule b (h + 12) 4) (ule b (h + 16) 4)
-                        (ule b (h + 20) 4) (ule b (h + 24) 4) (ule b (h + 28) 4)])))
+                    (? e64 [(rdle b h 4) (rdle b (h + 8) 8) (rdle b (h + 16) 8) (rdle b (h + 24) 8) (rdle b (h + 32) 8)
+                            (rdle b (h + 40) 8) (rdle b (h + 4) 4) (rdle b (h + 48) 8)]
+                       [(rdle b h 4) (rdle b (h + 4) 4) (rdle b (h + 8) 4) (rdle b (h + 12) 4) (rdle b (h + 16) 4)
+                        (rdle b (h + 20) 4) (rdle b (h + 24) 4) (rdle b (h + 28) 4)])))
             ^n))
    ; binutils' ELF_SECTION_IN_SEGMENT, strictly, the tbss case aside: the arithmetic is
    ; unsigned, so a size of 0 less 1 is every address
@@ -574,12 +574,12 @@
           (!(pt = 2 || pt = 4) || !(sz = 0) || p 5 = 0) 1
           ((nob || (p 1 < off && off - p 1 < p 4)) && (!alloc || (p 2 < addr && addr - p 2 < p 5)))))
    (re-segs fs b h? w?)
-    (: e64 (b 4 = 2) m (ule b 18 2) ps (re-phs fs b)
-       ss (map (\ sc (sc + [(ule b (ld-f fs b 0 'e-shoff + sc 0 * ld-n fs 'sh-ent + (? e64 16 12)) (? e64 8 4))]))
+    (: e64 (b 4 = 2) m (rdle b 18 2) ps (re-phs fs b)
+       ss (map (\ sc (sc + [(rdle b (ld-f fs b 0 'e-shoff + sc 0 * ld-n fs 'sh-ent + (? e64 16 12)) (? e64 8 4))]))
                (drop 1 (bu-secs fs b)))
        (? !(two? ps) (say out "\nThere are no program headers in this file.\n")
           (: _ (? h? 0
-                  (say out ("\nElf file type is " + re-type fs b (ule b 16 2) + "\nEntry point " + re-0x (ld-f fs b 0 'e-entry)
+                  (say out ("\nElf file type is " + re-type fs b (rdle b 16 2) + "\nEntry point " + re-0x (ld-f fs b 0 'e-entry)
                             + "\nThere are " + show #ps + " program headers, starting at offset " + show (ld-f fs b 0 'e-phoff) + "\n")))
              _ (say out (? !e64 "\nProgram Headers:\n  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align\n"
                            w? "\nProgram Headers:\n  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align\n"
@@ -608,17 +608,17 @@
        (str sc o) (ld-cstr b ((ss (sc 6)) 4 + o))
        (need sc)
         (: (vn o k) (? (k < 1) 0
-                       (: cnt (ule b (o + 2) 2) aux (ule b (o + 8) 4) nx (ule b (o + 12) 4)
+                       (: cnt (rdle b (o + 2) 2) aux (rdle b (o + 8) 4) nx (rdle b (o + 12) 4)
                           (va a j) (? (j < 1) 0
-                                      (: _ (pin t (ule b (a + 6) 2) [(str sc (ule b (a + 8) 4)) 1])
-                                         (va (a + ule b (a + 12) 4) (j - 1))))
+                                      (: _ (pin t (rdle b (a + 6) 2) [(str sc (rdle b (a + 8) 4)) 1])
+                                         (va (a + rdle b (a + 12) 4) (j - 1))))
                           _ (va (o + aux) cnt)
                           (? (nx = 0) 0 (vn (o + nx) (k - 1)))))
            (vn (sc 4) (sc 7)))
        (def sc)
         (: (vd o k) (? (k < 1) 0
-                       (: ndx (ule b (o + 4) 2) aux (ule b (o + 12) 4) nx (ule b (o + 16) 4)
-                          _ (pin t ndx [(str sc (ule b (o + aux) 4)) 0])
+                       (: ndx (rdle b (o + 4) 2) aux (rdle b (o + 12) 4) nx (rdle b (o + 16) 4)
+                          _ (pin t ndx [(str sc (rdle b (o + aux) 4)) 0])
                           (? (nx = 0) 0 (vd (o + nx) (k - 1)))))
            (vd (sc 4) (sc 7)))
        _ (map (\ sc (? (sc 2 = 1879048190) (need sc) (sc 2 = 1879048189) (def sc) 0)) ss)
@@ -628,8 +628,8 @@
        vt (re-vers ss b)
        vs (filter (\ sc (sc 2 = 1879048191)) ss)
        (sym o k) (: h (o + k * es)
-                    (? e64 [(ule b h 4) (b (h + 4)) (b (h + 5)) (ule b (h + 6) 2) (ule b (h + 8) 8) (ule b (h + 16) 8)]
-                       [(ule b h 4) (b (h + 12)) (b (h + 13)) (ule b (h + 14) 2) (ule b (h + 4) 4) (ule b (h + 8) 4)]))
+                    (? e64 [(rdle b h 4) (b (h + 4)) (b (h + 5)) (rdle b (h + 6) 2) (rdle b (h + 8) 8) (rdle b (h + 16) 8)]
+                       [(rdle b h 4) (b (h + 12)) (b (h + 13)) (rdle b (h + 14) 2) (rdle b (h + 4) 4) (rdle b (h + 8) 4)]))
        (styp t) (? (t < 7) (["NOTYPE" "OBJECT" "FUNC" "SECTION" "FILE" "COMMON" "TLS"] t) (t = 10) "IFUNC"
                    (13 <= t) ("<processor specific>: " + show t) ("<OS specific>: " + show t))
        (sbind t) (? (t < 3) (["LOCAL" "GLOBAL" "WEAK"] t) (t = 10) "UNIQUE"
@@ -645,7 +645,7 @@
                  ; a needed version says its index; a defined one says @@, or @ where hidden,
                  ; and nothing on the symbol that names the version itself
                  (ver k y nm0) (? !(two? vsec) ""
-                                  (: x (ule b (<vsec 4 + 2 * k) 2) i (x & 32767) e (peep vt i ())
+                                  (: x (rdle b (<vsec 4 + 2 * k) 2) i (x & 32767) e (peep vt i ())
                                      (? (i < 2 || !(two? e)) ""
                                         (y 3 = 0 || <>e) ("@" + <e + " (" + show i + ")")
                                         (<e = nm0) ""

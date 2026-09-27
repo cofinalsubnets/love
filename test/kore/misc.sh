@@ -53,7 +53,7 @@ if command -v strings >/dev/null 2>&1; then
   same "strings over love itself"
 fi
 # cal: SIX week rows always, each padded to 20, and the year three abreast -- the
-# leap years come off udays and want no table, so february is where a wrong one shows
+# leap years come off epoch-days and want no table, so february is where a wrong one shows
 if command -v cal >/dev/null 2>&1 && cal 9 2026 >/dev/null 2>&1; then
   for d in "9 2026" "2 2024" "2 2100" "2 2000" "2 2021" "12 1999" "1 1970" "8 2027" "5 2026"; do
     # shellcheck disable=SC2086
