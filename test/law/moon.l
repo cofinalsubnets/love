@@ -1065,9 +1065,15 @@
    (hassaved fs want) (? !(two? fs) ()
                          (fs @ (('push 'r11) . ('raw ^want) . ('pop 'r11) . _) 1
                                (hassaved >fs want)))
+   g6 (cgn "int main() { asm goto(\"jmp %l0\" : : : : out); return 1; out: return 0; }")
+   (hasfix fs l) (? !(two? fs) ()
+                    (: f2 <fs
+                       (? (two? f2 && <f2 = 'raw && vany (x \ (two? x && <x = 'fix && x 3 = l)) <>f2) 1
+                          (hasfix >fs l))))
+   (asmof p) (p 1 0 3 1 0)                        ; prog -> first fn -> its blk -> first item
    (test
       (= (cast "void f() { asm(\"sys\"); }")
-         '(prog ((fn "f" () (blk ((asm "sys" () () ())))))))
+         '(prog ((fn "f" () (blk ((asm "sys" () () () ())))))))
       ; every GNU spelling of the head and of volatile reads the same statement -- the
       ; underscored ones are also patt's decoration names, and patt runs first
       (= (cast "void f() { __asm__ volatile(\"sys\"); }")
@@ -1082,12 +1088,17 @@
          '(prog ((fn "f" () (blk ((decl (("v" long ())))
                                   (asm "li %0, 40" (("=r" (var "v")))
                                        (("r" (var "v")) ("i" (num 3)))
-                                       ("memory"))))))))
-      ; the holo attribute rides the statement as its fifth element; a register variable's
+                                       ("memory") ())))))))
+      ; the holo attribute rides the statement after its labels; a register variable's
       ; pin rides the declarator as its fourth -- and only under `register`
       (= (cast "void f() { long v; __attribute__((holo)) asm(\"li %0, 4\" : \"=r\"(v)); }")
          '(prog ((fn "f" () (blk ((decl (("v" long ())))
-                                  (asm "li %0, 4" (("=r" (var "v"))) () () holo)))))))
+                                  (asm "li %0, 4" (("=r" (var "v"))) () () () holo)))))))
+      ; asm goto: labels ride as names, numbered after every operand; %l[name] reads as %lN
+      (= (asmof (cast "void f(long x) { asm goto(\"jmp %l[b]\" : : \"r\"(x) : \"memory\" : a, b); a: b: ; }"))
+         '(asm "jmp %l2" () (("r" (var "x"))) ("memory") ("a" "b")))
+      (= (cast "void f() { asm goto(\"jmp %l[out]\" :::: out); out: ; }")
+         (cast "void f() { __asm__ goto(\"jmp %l0\" : : : : out); out: ; }"))
       (= (cast "void f() { register long v asm(\"rcx\") = 5; }")
          '(prog ((fn "f" () (blk ((decl (("v" long (num 5) "rcx")))))))))
       ((cast "void f() { long v asm(\"rcx\") = 5; }") = ())
@@ -1104,7 +1115,14 @@
       (refused? (cgn "int main() { asm(\"syscall\" : : \"r4\"(1)); return 0; }"))
       (refused? (cgn "int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"))
       (refused? (cgn "int main() { asm(\"syscall\" ::: \"rsp\"); return 0; }"))
-      (refused? (cgn "int main() { register long v asm(\"rsp\") = 1; asm(\"\" : \"+r\"(v)); return v; }"))))
+      (refused? (cgn "int main() { register long v asm(\"rsp\") = 1; asm(\"\" : \"+r\"(v)); return v; }"))
+      ; the jump leaves its fix open for the function's own label, which the blob never binds
+      (two? g6) (hasfix <>g6 'main.out)
+      ; a jump would skip the output stores and the clobber pops; %l is a label's, %N an operand's
+      (refused? (cgn "int main() { long v; asm goto(\"jmp %l1\" : \"=r\"(v) : : : out); return 1; out: return 0; }"))
+      (refused? (cgn "int main() { asm goto(\"jmp %l0\" : : : \"r12\" : out); return 1; out: return 0; }"))
+      (refused? (cgn "int main() { asm goto(\"jmp %l0\" : : \"r\"(1) : : out); return 1; out: return 0; }"))
+      (refused? (cgn "int main() { asm goto(\"jmp %0\" : : : : out); return 1; out: return 0; }"))))
 
 ; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params spill/reload
 ; only around calls they are live across. a param shadowed by an inner local conflates two

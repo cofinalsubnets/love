@@ -251,15 +251,20 @@
                   (lay >prog be (addr + <r) >r labels)))))
 
    ;; -- pass two: stream the items out, resolving each fixup against the now-known labels. --
-   (resolve items labels be addr)
+   ;; a label in `open` and bound nowhere here stays its fix, for the stream this blob splices
+   ;; into to resolve (an inline asm's jump to a label of the function around it)
+   (resolve items labels be addr) (resolve-open items labels be addr {})
+   (resolve-open items labels be addr open)
       (? (one? items) ()
          (: x <items
             (? (fix? x)
                (: tgt (labels (fix-l x))
-                  _ (? (imm? tgt) 0 (scare 'undef-label (fix-l x)))
-                  bs (patch-with be (fix-k x) tgt addr (fix-w x) (fix-a x))
-                  (bs + resolve >items labels be (addr + fix-w x)))
-               (x . resolve >items labels be (addr + 1)))))
+                  (? (imm? tgt)
+                      (patch-with be (fix-k x) tgt addr (fix-w x) (fix-a x)
+                       + resolve-open >items labels be (addr + fix-w x) open)
+                     (peep open (fix-l x) 0) (x . resolve-open >items labels be (addr + fix-w x) open)
+                     (scare 'undef-label (fix-l x))))
+               (x . resolve-open >items labels be (addr + 1) open))))
 
    ;; -- branch relaxation, fused with layout: lay's shape, but (jmp l) / (br c l) land as the
    ;; 2-byte short forms where the target provably fits rel8. one pessimistic decision pass is
@@ -351,6 +356,11 @@
          p (laylax prog be org {} {})
        {'bytes (resolve <p >p be org) 'labels >p})
    (holo-bytes target prog) (peep (assemble target prog) 'bytes 0)   ; (the module book owns the bare name `holo`)
+   (holo-bytes-open target prog open)                ; the byte list, open's labels left as fixes
+      (: be (backends target)
+         _ (tablet? be ? () (scare 'no-backend target))
+         p (lay prog be 0 () {})
+         (resolve-open <p >p be 0 open))
    (holo-bytes-at target prog org) (peep (assemble-org target prog org) 'bytes 0)
    (holo-str target prog) (string (holo-bytes target prog))
    (label-at res name)   (peep (peep res 'labels 0) name ())
