@@ -445,8 +445,10 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   operand (the address in a register, spelled as the dialect's base form) -- an input, or a
   `"+m"`/`"=m"` output the asm stores itself. A longer set reads by its letters: x86's
   `I J K L M N e Z` beside `i n` are immediates, a register letter among them picks by the
-  operand (`"Ir"`, `"re"`, `"qi"`), among memory a register. A flag output (`"=@ccz"`) refuses
-  by name. A `register T v asm("x0")` local pins wherever the asm names it — the
+  operand (`"Ir"`, `"re"`, `"qi"`), among memory a register. A flag output (`"=@ccz"`, x64
+  only) is a register its condition sets right after the body, before any store moves the
+  flags; the stack-pointer register variable as an output (`"+r"(current_stack_pointer)`, the
+  kernel's call constraint) is `%rsp` as it stands. A `register T v asm("x0")` local pins wherever the asm names it — the
   a64/riscv way of pinning, and the only one those dialects have. `%0..%9` substitute (outputs
   first), `%[name]` and `%c[name]` a named one, `%%` a literal `%`; adjacent template strings
   concatenate.
@@ -467,7 +469,8 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
 * Operands stage through the machine stack, so calls inside operand expressions are safe, and
   any scalar lvalue output works (`*p`, `a[i]`). Float/struct/bitfield operands refuse. A
   switch over a constant (the kernel's `switch (sizeof(*p))` width macros) lays the asm of the
-  cases it cannot reach as empty statements, as gcc never assembles them.
+  cases it cannot reach as empty statements, as gcc never assembles them; a case ends at a
+  break at the top or closing its block.
 * Registers an operand may take: x64 r0-r3 + r5-r10 (r3 rides every prologue's -8 slot; r4 is
   the frame and refuses), a64 adds r4 (x4, an argument register there). Clobbers: `"memory"`,
   `"cc"` and those registers need no action — an asm-containing function turns register HOMING
