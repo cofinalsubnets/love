@@ -1367,9 +1367,8 @@
       (elem '(mov r11 r0) vf)                     ; c's write lands its lo home...
       (elem '(mov r12 r2) vf)                     ; ...and its hi
       (elem '(m128r r7 r8) vf)                    ; the mul rides the parked twins -- the
-      (elem '(a128r r6 r5) vf)                    ;   machine-stack cell never opens, and the
-                                                     ;   combine reads its own park (the arrivals:
-                                                     ;   the file ranks them last, the locals took r9/r10)
+      (elem '(a128r r11 r12) vf)                  ;   machine-stack cell never opens, and the
+                                                     ;   combine reads c's home, the park copied out
       (4 = (splds vf))))                             ; full-word sp loads: a's two wd9-spill reloads + the cs restores
 
 ; -- the callee-saved contract (cskeep): every cgn above already compiles under it -- a

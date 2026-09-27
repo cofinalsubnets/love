@@ -3396,6 +3396,14 @@
           ; a variable shift defines only its dest: x64's encoder wants cl but refuses any other register outright, so no
           ; move clobbers r1 -- and a claimed r1 def would read the pair lane's carry-in or as dead
           (elem op vshops) [[<>f <>>f] [<>f] ()]
+          ; the wide register kit: the pair rides r2:r0 unspelled, so copyprop's positional probe never renames it.
+          ; x64 spends rcx inside m128r/c128r, and its subtract answers through the park
+          (op = 'sx128) ['(r0) '(r2) 1]
+          (elem op '(n128 inc128 dec128 shl128 shr128 sar128)) ['(r0 r2) '(r0 r2) 1]
+          (op = 'mw128r) [['r0 <>f] '(r0 r2) 1]
+          (elem op '(a128r s128r m128r))
+           [['r0 'r2 <>f <>>f] ('(r0 r2) + (x64? g ? (op @ 's128r [<>f <>>f] 'm128r '(r1) ()) ())) 1]
+          (op = 'c128r) [['r0 'r2 <>>f <>>>f] (x64? g ? '(r0 r1 r2) '(r0)) 1]
           'bar))
    ; the a64 retarget renames by position, not symbol: x4 is also an argument register, so only the base slot's r4 becomes fp
    a4base (: t (foldl (\ t o (pin t o 2)) {} (ldops9 + fldops + xops + fxops + leaops + '(cmprm)))
@@ -4381,7 +4389,7 @@
    lvquiet '(label align ud2 br jmp)                ; no register effect at all
    ; what an exit owes back beside the cs file. r2 (rdx, an aggregate's high half) is missing:
    ; a consumer using this for a plain dead-def test owes it first
-   (lvret g) (? (t32? g) '(r0 r1) '(r0 r1 f0 f1))
+   (lvret g) (? (t32? g) '(r0 r1) (w128? g) '(r0 r1 r2 f0 f1) '(r0 r1 f0 f1))   ; r2: a wide return's high half
    ; the blanket cases filter mints out: a mint live across a call must read as crossing, not
    ; be read+def'd into a false kill. inert post-vrfix
    (lvtx g f u)                                     ; one form's (reads defs) | 'bar
