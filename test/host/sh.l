@@ -811,7 +811,7 @@
 ;; included -- only the seats quit
 (: C (cite 'verbs 'call)
    (test (1 = C 'cook ["-f" "/nonexistent-qq.mk"]) (2 = C 'sb ["no-such-verb"])
-         (2 = C 'kiosko ["-z"])))
+         (2 = C 'kore ["httpd" "-z"])))
 ;; ..and a trait may turn on the call: love's bake and wake want a fresh process, asked
 ;; under the name the word runs as, so a path to this binary is love too
 (: H (cite 'verbs 'holds)

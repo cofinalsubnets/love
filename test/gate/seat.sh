@@ -28,9 +28,8 @@ try() {
 want='unclosed ('   ; try "libra (positional)"   apps/libra/libra.l $bad
 want='unclosed ('   ; try "libra (-l preload)"   -l apps/libra/libra.l $bad
 want='usage'        ; try "ain"                  apps/ain.l
-# a PATH neither can use, not a flag: both refuse an unknown option now, and this
-# lane is about the seat firing at all -- so the word has to reach the app's own walk
-want='not a directory'; try "kiosko"             apps/kiosko/kiosko.l /nope
+# a PATH it cannot use, not a flag: it refuses an unknown option, and this lane is
+# about the seat firing at all -- so the word has to reach the app's own walk
 want='no markdown'  ; try "papel"                apps/papel.l /nope
 
 # and the same seat UNDER A PRIME: `wake IMAGE` is the command line's word, not the
