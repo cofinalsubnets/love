@@ -23,9 +23,13 @@ struct sockaddr_in6 {
 #define INADDR_NONE      0xffffffffU
 #define INADDR_BROADCAST 0xffffffffU
 #define IPPROTO_IP   0
+#define IPPROTO_ICMP 1
 #define IPPROTO_TCP 6
 #define IPPROTO_UDP 17
 #define IPPROTO_IPV6 41
+/* IPPROTO_IP's options, linux's numbers: the bsd seam translates SOL_SOCKET's alone */
+#define IP_TTL           2
+#define IP_RECVTTL       12
 #define IPV6_V6ONLY      26
 #define IPV6_JOIN_GROUP  20
 #define IPV6_LEAVE_GROUP 21

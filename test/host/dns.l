@@ -38,9 +38,9 @@
    ; serve exactly one query on `port`, then exit. the recv parks -- this task is
    ; the peer whose running proves the resolver gave up its turn.
    (nameserver port addr tc)
-    (twirl (\ _ (: p (udp-bind port)
-                   d (udp-recv p)
-                   _ (udp-send p <d (dns-reply >d addr tc))
+    (twirl (\ _ (: p (bind ['udp port])
+                   d (recv p)
+                   _ (send p <d (dns-reply <>d addr tc))
                    _ (rest 20)                        ; let the datagram leave
                    _ (close p) 1)) ()))
 

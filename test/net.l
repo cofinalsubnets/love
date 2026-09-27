@@ -31,7 +31,7 @@
                       _ (say c (ln + "\n"))
                       _ (seal c 1)
                       _ (close c) 1)) 0)
-   c (connect "127.0.0.1" port)
+   c (connect ['tcp "127.0.0.1" port])
    _ (test
       (lit? c)                              ; the client side is a heap port too
       (hot? c))
@@ -52,10 +52,14 @@
   ; argument, and the two operator problems a () could never part now read apart.
   (: _ (test
       ('badarg = listen -1)                       ; bad port: refused up here
-      ('econnrefused = connect "127.0.0.1" 7392)  ; nothing listening on 7392
-      ('badarg = connect 12345 80)                ; non-string host
-      ('badarg = connect "example.org" 80)        ; a NAME is a misuse: connect takes a quad
-      ('badarg = udp-bind -1)))
+      ('econnrefused = connect ['tcp "127.0.0.1" 7392])  ; nothing listening on 7392
+      ('badarg = connect ['tcp 12345 80])         ; non-string host
+      ('badarg = connect ['tcp "example.org" 80])  ; a NAME is a misuse: connect takes a quad
+      ('badarg = bind ['udp -1])
+      ; the address is a list whose head names a family the verb has: nothing else goes
+      ('badarg = connect 12345) ('badarg = connect ['ftp "127.0.0.1" 21])
+      ('badarg = listen ['udp 7393]) ('badarg = bind ['tcp 7393]) ('badarg = connect ['icmp])
+      ('badarg = bind ['udp 0 'fast]) ('badarg = connect ['unix ""])))
 
   ; --- rung 5: seal lands the write run ------------------------------------------
   ; the bug: `seal` shuts the write half and never flushed. love.h has always
@@ -74,7 +78,7 @@
                       n ((: (go k) (see c @ -1 k (go (k + 1)))) 0)
                       _ (pin got 0 n)
                       _ (close c) 1)) 0)
-   c (connect "127.0.0.1" port)
+   c (connect ['tcp "127.0.0.1" port])
    _ (each [104 105] (\ b (put c b)))       ; held in the write run, not sent
    _ (seal c 1)                             ; ... and the fin it sends is the server's EOF
    _ (catch srv)
@@ -94,7 +98,7 @@
    l (listen port)
    got (tablet 0)
    srv (twirl (\ _ (: c (accept l) s (slurp c) _ (pin got 0 #s) _ (close c) 1)) 0)
-   c (connect "127.0.0.1" port)
+   c (connect ['tcp "127.0.0.1" port])
    _ (say c ("x" * 160000))
    _ (close c)
    t0 (clock 0)
@@ -116,12 +120,39 @@
                       _ ((: (go k) (? (k = 0) 0
                                       (say c ("x" * 200000), rest 5, go (k - 1)))) 30)
                       _ (close c) 1)) 0)
-   c (connect "127.0.0.1" port)
+   c (connect ['tcp "127.0.0.1" port])
    _ (rest 30)
    _ (close c)                              ; hang up mid-response
    _ (rest 400)
    _ (catch srv)
    _ (close l))                             ; reaching here at all is the law
+
+  ; --- the other families: unix streams, udp's peer, an icmp echo -----------------
+  ; one listen and one connect for every stream family: a unix one echoes the same way
+  (: path (cwd 0 + "/out/.net-unix.sock")
+   l (listen ['unix path])
+   srv (twirl (\ _ (: c (accept l) ln (rdline c) _ (say c (ln + "!\n")) _ (close c) 1)) 0)
+   c (connect ['unix path])
+   _ (say c "neko\n")
+   echo (rdline c)
+   _ (close c) _ (catch srv) _ (close l)
+   _ (test (hot? l) (echo = "neko!") ('enoent = connect ['unix (path + ".none")])))
+  ; a datagram comes with its peer as send takes one, so a reply is (send p (car d) ..)
+  (: a (bind ['udp 7396]) b (bind ['udp 7397])
+   _ (send b ["127.0.0.1" 7396] "ping")
+   d (recv a)
+   _ (send a <d "pong")
+   e (recv b)
+   _ (close a) _ (close b)
+   _ (test (<>d = "ping") (<(<d) = "127.0.0.1") (<d 1 = 7397) (e = [["127.0.0.1" 7396] "pong"])))
+  ; an echo to loopback over icmp, its ttl asked for. linux lets a group in
+  ; ping_group_range open this socket unprivileged; where it may not, the bind says so
+  (: p (bind ['icmp 'ttl])
+   (? (nom? p) (test ('eacces = p || 'eperm = p || 'eprotonosupport = p))
+      (: _ (send p ["127.0.0.1" 0] ("\x08\x00\x00\x00\x00\x00\x00\x01" + "love"))
+         d (recv p)
+         _ (close p)
+         (test (<(<d) = "127.0.0.1") (<>d 0 = 0) (snip <>d 8 12 = "love") (0 < d 2 <= 255)))))
 
   (test_fin ())
   (puts "net: ok\n")
