@@ -32,6 +32,11 @@ static int branch(struct key *k, int b) { (void)k; (void)b; return 1; }
 static int has(unsigned short bit) { return (caps[bit >> 3] >> (bit & 7)) & 1; }
 #endif
 
+#if defined(__x86_64__)
+/* _THIS_IP_: a rip displacement with no symbol is the address past the lea */
+static __attribute__((noinline)) unsigned long here(void) { unsigned long ip; asm("lea 0(%%rip), %0" : "=r"(ip)); return ip; }
+#endif
+
 int f(int x) {
   if (branch(&kx, 1)) x += 5;
   return x + branch(&ky, 0) * 10 + has(13) * 100 + has(12) * 1000;
@@ -40,6 +45,10 @@ int f(int x) {
 int main(void) {
   int bad = 0;
   if (f(1) != 116 || nm[0] != 'b') bad |= 1;
+#if defined(__x86_64__)
+  unsigned long ip = here(), fn = (unsigned long)here;
+  if (!(fn < ip && ip < fn + 64)) bad |= 8;
+#endif
 #if defined(__x86_64__) && (defined(__OPTIMIZE__) || defined(__mooncc__))
   long n = __stop_tai_jt - __start_tai_jt, sx = 0, sy = 0;
   for (long i = 0; i < n; i++) {

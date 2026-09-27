@@ -357,6 +357,10 @@
    _ (chk-eq "gas.x64.rip"                         ; an absolute or rip-relative memory operand rides rip: cpu features' `testb $m, caps+1`
         '((testm 1 rip (caps 1) 32) (alum add 4 rip (cnt 0) 1))
         (gas-text 'x64 "testb $32, caps+1\naddl $1, cnt(%rip)"))
+   ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
+   _ (chk-eq "gas.x64.thisip"
+        '((raw (76 141 29 0 0 0 0)) (raw (72 141 5 8 0 0 0)))
+        (gas-text 'x64 "lea 0(%rip), %r11\nlea 8(%rip), %rax"))
    ; ..and its fix measures from the instruction's end, past the immediate
    _ (chk-eq "x64.rip.tail"
         "f6050000000020"                           ; d sits right at the end: disp 0, not 1

@@ -206,7 +206,11 @@
                      (scare 'gas-x64-operand s)))
               (scare 'gas-x64-operand d))
           (= m 'lea)
-           (? (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
+           (? ; no symbol: the address past this lea (the kernel's _THIS_IP_) -- its own bytes,
+              ; REX.W 8D, modrm rm=101 over the displacement; nothing for a fix to name
+              (<s = 'rip && !(nom? <>s) && <d = 'rg)
+               (: n <>d [['raw ([(72 | (n >= 8 ? 4 0)) 141 (((n & 7) << 3) | 5)] + gf-le <>>s 4)]])
+              (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
               (<s = 'rip && nom? <>s) [['la (gx-r d) <>s] ['lea (gx-r d) (gx-r d) <>>s]]   ; sym+k: lea keeps the flags too
               (<s = 'mem) (: bm (gx-mem s) [['lea (gx-r d) <bm <>bm]])
               (scare 'gas-x64-operand ops))

@@ -21,7 +21,9 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
 * the whole statement/expression core; switch, goto (plain labels only — NO computed goto),
   do/while/for, the comma operator.
 * typedefs, structs, unions, enums, nested aggregates, a flexible array member, designated
-  initializers, ANONYMOUS unions and structs, compound literals.
+  initializers, ANONYMOUS unions and structs, compound literals -- in a static initializer too
+  (gcc's constant-literal extension: a struct's own literal is its image, whole or as a member),
+  and braces standing where an anonymous member begins read as its (`{ { .val = 0 } }`).
 * function pointers as first-class citizens — the lvm dispatch tables ARE the program. Pointer
   arithmetic throughout, multidimensional arrays.
 * varargs, in the real SysV shape (below).

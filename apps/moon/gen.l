@@ -5534,6 +5534,18 @@
    (initval? ('init . _)) 1
    ; a wide literal (a clit-of-array) initializes an array; a pointer element keeps the clit (it decays)
    (clarr? ty ini) (arr? ty && !(ptr? <>ty) && two? ini && <ini = 'clit && arr? <>ini)
+   ; braces standing at field fe that are an anonymous member's (`{ .tp = &x }`, qspinlock's
+   ; `{ { .val = .. } }`): fe is a scalar, or the braces open on a designator of this struct's
+   ; own fields that fe's type lacks. the anonymous member's fields are this struct's, so they read in place
+   (anonbr? g fields fe it)
+    (: has? (\ fs nm (any (f \ <f = nm) fs))           ; fidx answers 0 for a miss: ask by name
+       (<it = 'init && two? <>it &&
+        (!(aggish? <>>fe) ||
+         (: f0 <<>it
+            (two? f0 && <f0 = 'dfield && has? fields <>f0 &&
+             !(stru? <>>fe && has? <(peep (g 'stag) <><>>fe 0) <>f0))))))
+   ; ..and a struct's own compound literal a whole member (a mutex's `(raw_spinlock_t){..}`)
+   (clstru? g ty ini) (stru? ty && two? ini && <ini = 'clit && stru? <>ini && two? >>ini && tsz g <>ini = tsz g ty)
    (unelide g ty ini)                               ; normalize ini against ty
     (? (clarr? ty ini) (unelide g ty <>>ini)      ; a wide literal: take its init
        !(initval? ini) ini                        ; a scalar / non-brace: nothing to nest
@@ -5550,7 +5562,7 @@
    (normelt g ty desig dh dk val l)                 ; one element of type ty from item stream l -> (item rest)
     (? (arr? ty && !(ptr? <>ty) && two? val && <val = 'str)
         [<l >l]                                    ; a string is a char array's whole element -- never an elision run
-       (clarr? ty val)                              ; a wide literal: the whole element, as its init
+       (clarr? ty val || clstru? g ty val)          ; a wide or struct literal: the whole element, as its init
         (: w (unelide g ty <>>val)
            [(? desig (redesig dh dk w) w) >l])
        (aggish? ty && (!(gcplx? ty) && !(initval? val)))   ; elide: fill ty from the run starting at val (never into a complex -- a scalar)
@@ -5581,6 +5593,7 @@
                   ci (? desig (fidx fields <>it) cur)
                   fe (nthfield fields ci)
                   (? (bad? fe) [(rev acc) l]          ; unknown field / past the end -> leave the rest
+                     (!desig && anonbr? g fields fe it) (go (<>it + >l) cur acc)
                      (: pr (normelt g <>>fe desig 'dfield <>it (elval it) l)
                         (go <>pr (ci + 1) (<pr . acc))))))
            (go items 0 ()))
@@ -5759,6 +5772,9 @@
                  (: ty <>en (? (arr? ty) [<en 0 ['ptr <>ty]] [<en 0 ['ptr ty]])))))
        'addr
         (: lv (imlval g <>e) (lv @ 'no 'no [<lv <>lv ['ptr <>>lv]]))
+       ; an array member decays to its first element's address (&s.arr[0] reads s.arr + 0)
+       'dot
+        (: lv (imlval g e) (? (lv = 'no || !(arr? <>>lv)) 'no [<lv <>lv ['ptr <>(<>>lv)]]))
        ('bin && elem <>e '(+ -))
         ; label +/- int: a pointer type scales by the pointee, an integer-typed label ((word)&x + 8) adds bytes
         (: op <>e
@@ -5805,6 +5821,9 @@
          (bs i acc) (? (n <= i) (rev acc) (bs (i + 1) ((? (i < tally t) (t i) 0) . acc)))
          (bs 0 ()))
      (clarr? ty ini) (imgbytes g ty <>>ini)          ; a wide literal at file scope: its init is the image
+     ; a compound literal of the object's own aggregate (DEFINE_SPINLOCK's `(spinlock_t){..}`, gcc's
+     ; constant-literal extension): its init is the image
+     (<ini = 'clit && aggish? ty && two? >>ini && tsz g <>ini = tsz g ty) (imgbytes g ty <>>ini)
      (ptr? ty) (: r (imaddr g ini)                    ; a data pointer: a constant address (word-sized abs label+offset),
                    (? (r != 'no) [['fix (wsize g) (? (t32? g) 'abs32 'abs64) <r <>r]]      ; or a constant integer ((int*)0x1000, a null)
                       (: v (icfold ini) (v @ 'no 'bad (imnum g ty v)))))
@@ -5839,6 +5858,7 @@
                   ci (? (<it = 'dfield) (fidx fields <>it) cur)
                   fe (nthfield fields ci)
                 (? (bad? fe) 'bad
+                   (anonbr? g fields fe it) (place (<>it + >l) cur acc bfs)
                    (bitf? <>>fe)
                     (: v (icfold (elval it))
                        (v = 'no ? 'bad
@@ -6090,8 +6110,7 @@
    ; define (a goto label, a global) stays a fix
    (asmbody g tgt neutral? txt)
     (? (neutral? || gas-plain? tgt txt)
-       [['raw (: prog (? neutral? (asm-text txt) (gas-text tgt txt))
-                 (asmho tgt prog (cg-refs prog {})))]]
+       [['raw (: prog (? neutral? (asm-text txt) (gas-text tgt txt))                 (asmho tgt prog (cg-refs prog {})))]]
        (: r (gas-top-in tgt txt "" [1 6] (show (nlab g (g 'fn + ".asm")) + "."))
           home (foldl (\ a x (? (<x = "") (x 3) a)) () <r)
           _ (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2)] . (g 'fasecs)))
