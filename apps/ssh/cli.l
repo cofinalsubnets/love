@@ -249,6 +249,30 @@
              at (split uh 64)
              [(? (two? >at) (join "@" (rev >(rev at))) ()) (last at) (? (0 < #path) path ".")]))))
 
+; the client's end: sources and a target, one side remote -> the status
+(: (scp-client o ops rec pres)
+ (:
+    (die m) (cl-die "scp" m)
+    target (last ops)
+    srcs (rev >(rev ops))
+    tr (sc-remote target)
+    rs (map sc-remote srcs)
+    up (two? tr)
+    _ (? up (? (elem 1 (map (r \ ? (two? r) 1 0) rs)) (die "copying between two remote hosts is not supported") 0)
+            (? (elem 0 (map (r \ ? (two? r) 1 0) rs)) (die "a local copy is cp's; name a remote host") 0))
+    far (? up tr <rs)
+    _ (? up 0 (? (elem 0 (map (r \ ? ((r 1) = (far 1)) 1 0) rs)) (die "the sources must share one remote host") 0))
+    _ (? (string? <far) (pin o 'user <far) 0)
+    t (cl-login "scp" o (far 1))
+    flags ((? rec " -r" "") + (? pres " -p" ""))
+    cmd (? up ("scp" + flags + " -t -- " + (tr 2)) ("scp" + flags + " -f -- " + join " " (map (r \ r 2) rs)))
+    okc (ssh-open t cmd)
+    _ (? (string? okc) (die okc) 0)
+    io (sc-chan t)
+    e (? up (sc-source io srcs rec pres) (sc-sink io target rec pres))
+    st (ch-end t)
+    (? ((0 < e) || !(st = 0)) 1 0)))
+
 (: (scp-main as)
  (:
     usage "usage: scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target"
@@ -274,29 +298,5 @@
        (peep fl 102 0) (st (sc-source (sc-stdio 0) ops rec pres))
        ((two? ops) && (two? >ops)) (scp-client o ops rec pres)
        (die usage))))
-
-; the client's end: sources and a target, one side remote -> the status
-(: (scp-client o ops rec pres)
- (:
-    (die m) (cl-die "scp" m)
-    target (last ops)
-    srcs (rev >(rev ops))
-    tr (sc-remote target)
-    rs (map sc-remote srcs)
-    up (two? tr)
-    _ (? up (? (elem 1 (map (r \ ? (two? r) 1 0) rs)) (die "copying between two remote hosts is not supported") 0)
-            (? (elem 0 (map (r \ ? (two? r) 1 0) rs)) (die "a local copy is cp's; name a remote host") 0))
-    far (? up tr <rs)
-    _ (? up 0 (? (elem 0 (map (r \ ? ((r 1) = (far 1)) 1 0) rs)) (die "the sources must share one remote host") 0))
-    _ (? (string? <far) (pin o 'user <far) 0)
-    t (cl-login "scp" o (far 1))
-    flags ((? rec " -r" "") + (? pres " -p" ""))
-    cmd (? up ("scp" + flags + " -t -- " + (tr 2)) ("scp" + flags + " -f -- " + join " " (map (r \ r 2) rs)))
-    okc (ssh-open t cmd)
-    _ (? (string? okc) (die okc) 0)
-    io (sc-chan t)
-    e (? up (sc-source io srcs rec pres) (sc-sink io target rec pres))
-    st (ch-end t)
-    (? ((0 < e) || !(st = 0)) 1 0)))
 
 ) ; module ssh-cli
