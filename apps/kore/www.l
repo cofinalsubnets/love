@@ -8,14 +8,16 @@
 ;
 ;   N RETURN   follow link N          N U   link N's url      U   this page's url
 ;   o URL      open a url             B  BACKSPACE   back     r   reload
-;   h          the help               every other key is less's
+;   m          the page's content     h   the help            every other key is less's
 ;
 ; a url without a scheme is https, unless it names a file here -- that opens as file:, and
 ; its links resolve against it. not a terminal: the page is poured plain with its references
 ; after it, as lynx -dump does, and a server's error status is the exit 8 wget gives it.
 ;
 ; a #name lands on the line lapiz laid that id on (ttpage's anchors): on this page as a step
-; in the history with no fetch, on another after it loads.
+; in the history with no fetch, on another after it loads. a page opened without one opens
+; where its own content starts, past its menus (lapiz's " main" / " article" marks), and m
+; goes back there; g is still the top.
 ;
 ; out of scope, and said: forms, scripts, cookies, images, and any charset but utf-8. the
 ; tls peer is not verified (wget's client).
@@ -31,6 +33,7 @@
   N RETURN          follow link N              N U       show link N's url
   U                 this page's url            r         reload
   o URL             open a url                 B  BS     back a page
+  m                 the page's content         g         the very top
   h                 this page                  q         quit (or out of this page)
 
   and less's keys for the rest: SPACE b j k d u g G /PATTERN n N
@@ -120,10 +123,11 @@
                   (: _ (put o (hx (s (i + 1)) * 16 + hx (s (i + 2)))) (go (i + 3)))
                  (: _ (put o (s i)) (go (i + 1))))
        (go 1))
-   ; the line a fragment lands on, or -1
-   (ww-anchor st fr)
-    (: nm (ww-unpct fr)
-       ((: (g l) (? (one? l) -1 (<(<l) = nm) <>(<l) (g >l))) (st 'anchors)))
+   ; the line a named place was laid on, or -1
+   (ww-place st nm) ((: (g l) (? (one? l) -1 (<(<l) = nm) <>(<l) (g >l))) (st 'anchors))
+   (ww-anchor st fr) (ww-place st (ww-unpct fr))
+   ; where the page's content starts past its menus -- lapiz's " main", else " article"
+   (ww-main st) (: l (ww-place st " main") (? (0 <= l) l (ww-place st " article")))
    ; the page poured plain, then its references numbered, as lynx -dump lays them
    (ww-dump ls urls)
     (: n #urls
@@ -142,7 +146,7 @@
                     _ (pin st 'url u)
                     (pgline! st ln))))
           !(sc = "http:" || sc = "https:" || sc = "file:") (pgmsg st ("no door for " + u))
-          (: _ (pin st 'go [u 1 0]) st)))
+          (: _ (pin st 'go [u 1 -1]) st)))
    (ww-link st n)
     (: us (st 'urls) (? (0 < n <= #us) (us (n - 1)) ()))
    ; back within a page is a scroll; back to another page is a fetch
@@ -162,6 +166,8 @@
                       (? !(#cn) (pgmsg st (st 'url))
                          (: u (ww-link st n) (pgmsg st (? u (show n + ": " + u) ("no link " + show n))))))
           (c = 111) (: _ (spend ()) (pgask st 111))
+          (c = 109) (: _ (spend ()) l (ww-main st)
+                       (? (0 <= l) (pgline! st l) (pgmsg st "no main content marked on this page")))
           (c = 66 || c = 127 || c = 8) (: _ (spend ()) (ww-back st))
           (c = 114) (: _ (spend ()) _ (pin st 'go [(st 'url) 0 (st 'top)]) st)
           (c = 104 || c = 72)
@@ -177,15 +183,16 @@
        (st 'mode = 'n) (ww-norm st c)
        (pgstep st c))
    ; a fetched page into the state: the old one onto the history when asked, the new one
-   ; laid at the width and opened where it was left (a back, a reload), else at its
-   ; fragment's place, else at the top
+   ; laid at the width and opened where it was left (a back, a reload: top), or fresh
+   ; (top -1) at its fragment's place, else where its content starts, else at the top
    (ww-show st g push top)
     (: _ (? (push && #(st 'url)) (pin st 'hist ([(st 'url) (st 'top)] . st 'hist)) 0)
        p (ww-lay g (pgwidth st))
        _ (pgload st <p (g 1))
        _ (pins st 'url (g 1) 'urls (p 1) 'anchors (p 2))
-       ln (: fr ((ww-split (g 1)) 4) (? (top = 0 && 0 < #fr) (ww-anchor st fr) -1))
-       _ (? (0 <= ln) (pgline! st ln) (pggo st top))
+       fr ((ww-split (g 1)) 4)
+       ln (? (0 <= top) -1 (0 < #fr) (ww-anchor st fr) (ww-main st))
+       _ (? (0 <= ln) (pgline! st ln) (pggo st (? (0 <= top) top 0)))
        (pgmsg st (? (200 <= (g 4) < 300) (g 1) ((g 1) + " answered " + show (g 4)))))
    (ww-new w h) (: st (pgnew (tablet 0) w h) _ (pins st 'url "" 'urls () 'anchors () 'hist () 'go ()) st)
 
@@ -226,7 +233,7 @@
        g (ww-get (ww-arg <us) 8)
        _ (? (<g = 0) () (udie 1 <>g))
        (? (two? ws)
-           (: st (ww-new w <hw) _ (ww-show st g 0 0) (ww-ride st in))
+           (: st (ww-new w <hw) _ (ww-show st g 0 -1) (ww-ride st in))
           (: p (ww-lay g w)
              _ (puts (ww-dump <p (p 1)))
              (? (200 <= (g 4) < 300) 0 8)))))

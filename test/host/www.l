@@ -39,6 +39,8 @@
    ; a page long enough that landing on #here moves the view
    _ (wput "/a.html" ("<h1>Top</h1><p>go <a href=\"sub\">down</a>, <a href=\"#here\">here</a> or <a href=\"mailto:x@y\">mail</a>, not <a href=\"#gone\">gone</a></p>"
                       + catmap (i \ "<p>filler " + show i + "</p>") ^40 + "<p id=\"here\">here it is</p>"))
+   ; ..and one whose content sits under a long menu
+   _ (wput "/m.html" ("<nav>" + catmap (i \ "<p>menu " + show i + "</p>") ^40 + "</nav><main><h1>Body</h1>" + catmap (i \ "<p>text " + show i + "</p>") ^40 + "</main>"))
    _ (wput "/sub/index.html" "<p><a href=\"../a.html\">up</a> <a href=\"t.txt\">notes</a></p>")
    _ (wput "/sub/t.txt" "plain\ntext\n")
    port 7435
@@ -69,12 +71,12 @@
    ; the keys: a count and return follows, U names, B goes back, o opens, h and q are the help
    wkeys (\ st s (map (i \ wstep st (s i)) ^#s))
    ; the face's half of a request: take 'go, land the page it fetched
-   wland (\ st g (: q (st 'go) _ (pin st 'go ()) (wshow st g (two? q ? (q 1) 0) 0)))
+   wland (\ st g (: q (st 'go) _ (pin st 'go ()) (wshow st g (two? q ? (q 1) 0) (two? q ? (q 2) -1))))
    st (wnew 60 20)
    _ (wland st ga)
    _ (test (st 'url = at + "/a.html") (st 'go = ()) (st 'hist = ()))
    _ (wkeys st "1\r")
-   _ (test (st 'go = [(at + "/sub") 1 0]))
+   _ (test (st 'go = [(at + "/sub") 1 -1]))
    _ (wland st gs)
    _ (test (st 'url = at + "/sub/") (st 'hist = [[(at + "/a.html") 0]]))
    _ (wkeys st "U")
@@ -99,11 +101,21 @@
    _ (wkeys st "3\r")
    _ (test (st 'go = ()) (st 'msg = "no door for mailto:x@y"))
    _ (wkeys st "oexample.com/q\r")
-   _ (test (st 'go = ["https://example.com/q" 1 0]) (st 'mode = 'n))
+   _ (test (st 'go = ["https://example.com/q" 1 -1]) (st 'mode = 'n))
    _ (: _ (pin st 'go ()) _ (wkeys st "h") ls (st 'ls)
         (test (st 'file = "HELP") (0 <= (K 'wg-find) <ls "kore www" 0)))
    _ (wkeys st "q")
    _ (test (st 'file = at + "/a.html") !(st 'quit))
+   ; a page opened fresh opens at its <main>, past the menu; g is the top and m goes back.
+   ; one with no main says so, and a reload keeps where the reader was
+   _ (: s3 (wnew 60 20) _ (wland s3 (get (at + "/m.html") 8)) t0 (s3 'top)
+        _ (test (0 < t0) (0 <= (K 'wg-find) ((s3 'ls) (s3 'top)) "Body" 0))
+        _ (wkeys s3 "g") _ (test (s3 'top = 0))
+        _ (wkeys s3 "m") _ (test (s3 'top = t0))
+        _ (wkeys s3 "gr") _ (test (s3 'go = [(at + "/m.html") 0 0]))
+        _ (wland s3 (get (at + "/m.html") 8)) _ (test (s3 'top = 0))
+        _ (wland s3 ga) _ (wkeys s3 "m")
+        (test (s3 'top = 0) (s3 'msg = "no main content marked on this page")))
    ; a page fetched with a fragment opens at its place
    _ (: s2 (wnew 60 20) _ (wland s2 (get (at + "/a.html#here") 8)) (test (0 < s2 'top)))
    ; less's keys still reach less
