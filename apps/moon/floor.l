@@ -39,7 +39,6 @@
        (stru? ty) <>>(stag <>ty)
        (bitf? ty) (tyalign w stag <>ty)
        (tysz w stag ty))
-   (aup n a) ((n + (a - 1)) & -a)     ; round n up to alignment a
 
    ; -- the typing door: C's promotion and conversion law spelled once -- integer promotions
    ; (C11 6.3.1.1) and the usual arithmetic conversions (6.3.1.8). parse's arithmetic lanes
