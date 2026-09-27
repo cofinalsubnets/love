@@ -14,6 +14,7 @@
    r-64    1                                        ; R_X86_64_64     S + A   (an abs64 data pointer)
    r-pc32  2                                        ; R_X86_64_PC32   S + A - P (an la into .data)
    r-plt32 4                                        ; R_X86_64_PLT32  L + A - P (a call to an external fn)
+   r-pc64  24                                       ; R_X86_64_PC64   S + A - P in eight bytes (a jump table's `key - .`)
    r-32    10                                       ; R_X86_64_32     S + A, truncated to 4 bytes -- the
                                                     ; PVH note's 32-bit entry. the kernel links flat
                                                     ; under 4 GiB so it fits; nothing hosted emits it.
@@ -540,6 +541,8 @@
                  'abs64 (o-rela off si rabs (sa + aux))
                  ; ..and its 4-byte twin, the PVH note's 32-bit entry
                  'abs32 (o-rela off si r-32 (sa + aux))
+                 ; ..and a data word measured from its own start, eight bytes (the field is 8 wide)
+                 'rel64 (o-rela off si r-pc64 ((sa + aux) - 8))
                  ; x64: the field is measured from its own end, so every addend carries
                  ; the -4. a weak-defined fn or data symbol binds its own symbol through a
                  ; plt32, section-relative nailing it to this object's body past any strong

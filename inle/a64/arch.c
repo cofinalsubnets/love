@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
 #include "k.h"                       // kboot, and kputc/kputs/kputn (inle/kmain.c)
+#include "../mmio.h"                  // mmio_rd/mmio_wr, device registers off the direct map
 
 void kq(uint8_t);                      // kmain's input queue, one byte
 
@@ -21,13 +22,6 @@ void kq(uint8_t);                      // kmain's input queue, one byte
 #define VIRTIO_PHYS 0x0a000000         // the 32 virtio-mmio slots (blk.c scans them)
 #define UART_INTID  33                 // PL011 -> SPI 1 -> INTID 32+1
 #define TIMER_INTID 30                 // EL1 physical timer -> PPI INTID 30
-
-static inline uint32_t mmio_rd(uintptr_t phys, uintptr_t off) {
-  return *(volatile uint32_t*) (khhdm + phys + off); }
-static inline void mmio_wr(uintptr_t phys, uintptr_t off, uint32_t v) {
-  *(volatile uint32_t*) (khhdm + phys + off) = v; }
-static inline void mmio_wr8(uintptr_t phys, uintptr_t off, uint8_t v) {
-  *(volatile uint8_t*) (khhdm + phys + off) = v; }
 
 // --- device MMIO mapping ---------------------------------------------
 // the HHDM covers RAM but not device MMIO, so the GIC and UART

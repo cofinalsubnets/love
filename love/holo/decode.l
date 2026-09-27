@@ -230,6 +230,11 @@
           175 (ge 'imul w w)
           182 (ge 'movzb w 1)  183 (ge 'movzw w 2)  190 (ge 'movsb w 1)  191 (ge 'movsw w 2)
           176 (eg 'cmpxchg 1 1)  177 (eg 'cmpxchg w w)
+          192 (eg 'xadd 1 1)  193 (eg 'xadd w w)
+          ;; the bit tests: by a register, or 0F BA /4../7 by an imm8
+          163 (eg 'bt w w)  171 (eg 'bts w w)  179 (eg 'btr w w)  187 (eg 'btc w w)
+          186 (: r (dc-modrm s k2 p w w) mn (r 3 @ 4 'bt 5 'bts 6 'btr 7 'btc ())
+                 (nom? mn ? (fin (r 0 + 1) [(op1 mn w [(r 2) ['im (dc-imm s (r 0) 1)]])]) (bad 0)))
           (164 || 172) (: r (dc-modrm s k2 p w w)
                         (fin (r 0 + 1) [(op1 (c @ 164 'shld 'shrd) w [(r 2) (r 1) ['im (dc-imm s (r 0) 1)]])]))
           (165 || 173) (: r (dc-modrm s k2 p w w) (fin (r 0) [(op1 (c @ 165 'shld 'shrd) w [(r 2) (r 1) ['rg 1 1]])]))

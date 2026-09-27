@@ -154,7 +154,7 @@ MK
   ( cd "$sabs/w" && PATH=/usr/bin:/bin run "$dabs" sh -c 'ls Makefile' ) 2>&1 | grep -q Makefile \
     || fail "a foreign ls must still spawn"
 
-  echo "test_dist: the artifact is multi-call -- sb/cook/kore/kiosko/mooncc dispatch, files and -e untouched"
+  echo "test_dist: the artifact is multi-call -- sb/cook/kore/mooncc dispatch, files and -e untouched"
   echo "test_dist: the in-image lane -- cook's lines and mooncc run in THIS image, byte-for-byte and semantics-for-semantics what a spawned sh gives"
   ;;
 

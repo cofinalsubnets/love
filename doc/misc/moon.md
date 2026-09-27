@@ -21,7 +21,9 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
 * the whole statement/expression core; switch, goto (plain labels only — NO computed goto),
   do/while/for, the comma operator.
 * typedefs, structs, unions, enums, nested aggregates, a flexible array member, designated
-  initializers, ANONYMOUS unions and structs, compound literals.
+  initializers, ANONYMOUS unions and structs, compound literals -- in a static initializer too
+  (gcc's constant-literal extension: a struct's own literal is its image, whole or as a member),
+  and braces standing where an anonymous member begins read as its (`{ { .val = 0 } }`).
 * function pointers as first-class citizens — the lvm dispatch tables ARE the program. Pointer
   arithmetic throughout, multidimensional arrays.
 * varargs, in the real SysV shape (below).
@@ -471,6 +473,13 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   switch over a constant (the kernel's `switch (sizeof(*p))` width macros) lays the asm of the
   cases it cannot reach as empty statements, as gcc never assembles them; a case ends at a
   break at the top or closing its block.
+* An asm that names a parameter as an immediate (`"i"(key)`, the kernel's jump labels and cpu
+  features) compiles only where its function is spliced, and so does a function handing a
+  parameter on to one: the AST inliner takes such a body at any call -- through a statement
+  expression, up to eight deep -- as the jump lane: its labels (asm goto's too) take the
+  splice's suffix, each return stores and jumps to the splice's end, and the arguments fold
+  into the operands (kprop reads a pointer local from an address constant when an asm names
+  it). Anything else keeps its call, and the standalone body refuses as before.
 * Registers an operand may take: x64 r0-r3 + r5-r10 (r3 rides every prologue's -8 slot; r4 is
   the frame and refuses), a64 adds r4 (x4, an argument register there). Clobbers: `"memory"`,
   `"cc"` and those registers need no action — an asm-containing function turns register HOMING
