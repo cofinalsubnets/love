@@ -40,3 +40,12 @@
       (swidth "a日本語é" = 8) (swidth "e\xcc\x81" = 1) (swidth "a\tb" = 2) (swidth "" = 0)
       (scut "a日本語é" 4 = "a日") (scut "a日本語é" 3 = "a日") (scut "a日本語é" 99 = "a日本語é")
       (scut "e\xcc\x81x" 1 = "e\xcc\x81") (scut "日" 1 = "")))
+
+; cli's field measures ride 'text: a column is a column however many bytes wear it
+(: edwide (cite 'cli 'edwide) edcut (cite 'cli 'edcut) edfit (cite 'cli 'edfit)
+   (test
+      (edwide "\e[1m日本\e[0m>" = 5) (edwide "abc" = 3) (edwide "e\xcc\x81" = 1)
+      (edcut "日本語" 3 = "日") (edcut "日本語" 4 = "日本") (edcut "abc" 9 = "abc")
+      (edcut "\e[31mab\e[0mcd" 2 = "\e[31mab\e[0m")        ; a cut coloured run ends in a reset
+      (edcut "e\xcc\x81x" 1 = "e\xcc\x81")                  ; the combining mark rides its base
+      (edfit "日本語" 3 "." = "日.") (edfit "日" 4 " " = "日  ")))

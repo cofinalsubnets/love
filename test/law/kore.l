@@ -170,6 +170,11 @@
       (ufold 6 1 0 "aaa bbb ccc" = '("aaa " "bbb " "ccc"))           ; -s backs up to the blank
       (ufold 8 0 0 "a\tbcdefgh" = '("a\t" "bcdefgh"))                ; the tab fills to the stop
       (ufold 4 0 1 "ab\tcd" = '("ab\tc" "d"))                        ; -b counts the bytes instead
+      (ucol 2 26085 8 = 4) (ucol 2 769 8 = 2)                       ; wide two, combining none
+      (ufold 4 0 0 "日本語日本語" = '("日本" "語日" "本語"))
+      (ufold 3 0 0 "a日本" = '("a日" "本"))                          ; a wide one never splits
+      (uexpand 8 0 "日\tx" = "日      x") (uexpand 8 0 "é\tx" = "é       x")
+      (uunexpand 8 1 "日本語  x" = "日本語\tx")
       (uexpand 8 0 "a\tb" = "a       b") (uexpand 4 0 "a\tb" = "a   b")
       (uexpand 8 0 "\tx" = "        x")
       (uexpand 8 1 "\ta\tb" = "        a\tb")                        ; -i stops at the first ink

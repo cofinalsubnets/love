@@ -2084,6 +2084,7 @@
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
+(borrow 'text)
 (: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev 'ev x)))
 ; ev late-binds -- (ev 'ev a): post is baked before the glaze rebinds ev, and a direct call would
 ; keep the egg's interpreter for every form the driver runs
@@ -2365,27 +2366,27 @@
                        0)) (i + 2))))
 
    ; a prompt's width on the screen, which is not its tally: an sgr run costs no column and a
-   ; utf-8 tail byte is no character of its own. edrender's cursor math is relative motion off
+   ; character costs its wcwidth, a wide one two. edrender's cursor math is relative motion off
    ; this number, so a prompt measured in bytes lands the cursor one column per escape byte out.
    (edwide s)
     (: n #s
        (go i c) (? (n <= i) c
                    (: e (edsgr s i)
-                      (? e (go (i + e) c)
-                         (128 <= s i < 192) (go (i + 1) c)
-                         (go (i + 1) (c + 1)))))
+                      (? e (go (i + e) c) (go (cpnext s i) (c + max 0 (wcwidth (cpat s i)))))))
        (go 0 0))
 
-   ; the first n columns of s, by the same measure. a cut that dropped part of a coloured
-   ; string ends in a reset, so a pen cannot run on into whatever is laid beside it.
+   ; the first n columns of s, by the same measure, a wide character that would straddle the
+   ; edge left out. a cut that dropped part of a coloured string ends in a reset, so a pen
+   ; cannot run on into whatever is laid beside it.
    (edcut s n)
     (: m #s
-       (go i c pen) (? (m <= i) s
-                       (128 <= s i < 192) (go (i + 1) c pen)
-                       (n <= c) (snip s 0 i + (pen ? "\e[0m" ""))
-                       (: e (edsgr s i)
-                          (? e (go (i + e) c 1)
-                             (go (i + 1) (c + 1) pen))))
+       (cut i pen) (snip s 0 i + (pen ? "\e[0m" ""))
+       (go i c pen)
+        (? (m <= i) s
+           (: e (edsgr s i)
+              (? e (n <= c ? (cut i pen) (go (i + e) c 1))
+                 (: v (c + max 0 (wcwidth (cpat s i)))
+                    (n < v ? (cut i pen) (go (cpnext s i) v pen))))))
        (go 0 0 0))
 
    ; a string laid in a field n columns wide: edpad fills what the glyphs leave, edfit cuts
