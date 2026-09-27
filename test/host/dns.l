@@ -139,9 +139,9 @@
    v6 (catmap string [32 1 13 184 0 0 0 0 0 0 0 0 0 0 0 1])
    s (twirl (\ _ (: p (bind ['udp port])
                     d (recv p) q <>d
-                    r (snip q 0 2 + dns-be16 33152 + dns-be16 1 + dns-be16 1 + dns-be16 0 + dns-be16 0
-                       + snip q 12 (#q - 11) + string 192 + string 12 + dns-be16 28 + dns-be16 1
-                       + dns-be16 0 + dns-be16 60 + dns-be16 16 + v6)
+                    r (snip q 0 2 + wrbe 33152 2 + wrbe 1 2 + wrbe 1 2 + wrbe 0 2 + wrbe 0 2
+                       + snip q 12 (#q - 11) + string 192 + string 12 + wrbe 28 2 + wrbe 1 2
+                       + wrbe 0 2 + wrbe 60 2 + wrbe 16 2 + v6)
                     _ (send p <d r) _ (rest 20) _ (close p) 1)) ())
    _ (rest 20)
    a (dns-walk6 [(2130706433 . port)] "ab.cd")
