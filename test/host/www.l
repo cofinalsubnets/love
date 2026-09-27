@@ -38,11 +38,15 @@
    (wput f s) (: p (open (sroot + f) "w") _ (say p s) (close p))
    ; a page long enough that landing on #here moves the view
    _ (wput "/a.html" ("<h1>Top</h1><p>go <a href=\"sub\">down</a>, <a href=\"#here\">here</a> or <a href=\"mailto:x@y\">mail</a>, not <a href=\"#gone\">gone</a></p>"
-                      + catmap (i \ "<p>filler " + show i + "</p>") ^40 + "<p id=\"here\">here it is</p>"))
+                      + catmap (i \ "<p>filler " + show i + "</p>") ^40 + "<p id=\"here\">here it is <a href=\"sub\">again</a></p>"))
    ; ..and one whose content sits under a long menu
    _ (wput "/m.html" ("<nav>" + catmap (i \ "<p>menu " + show i + "</p>") ^40 + "</nav><main><h1>Body</h1>" + catmap (i \ "<p>text " + show i + "</p>") ^40 + "</main>"))
    _ (wput "/sub/index.html" "<p><a href=\"../a.html\">up</a> <a href=\"t.txt\">notes</a></p>")
    _ (wput "/sub/t.txt" "plain\ntext\n")
+   ; a form that sends by get, an image, a page in latin-1 by its <meta>, and a <base>
+   _ (wput "/f.html" "<form action=\"sub/t.txt?x=1\"><input type=hidden name=lang value=en><input name=q value=\"old one\"><input type=submit value=Go></form><p><img src=l.png alt=\"logo\"> x</p><form method=post><input name=p></form>")
+   _ (wput "/l.html" ("<meta charset=\"ISO-8859-1\"><p>caf" + string 233 + " " + string 147 + "q" + string 148 + "</p>"))
+   _ (wput "/b.html" "<base href=\"/sub/\"><p><a href=\"t.txt\">t</a></p>")
    port 7435
    l (listen port)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
@@ -116,6 +120,56 @@
         _ (wland s3 (get (at + "/m.html") 8)) _ (test (s3 'top = 0))
         _ (wland s3 ga) _ (wkeys s3 "m")
         (test (s3 'top = 0) (s3 'msg = "no main content marked on this page")))
+   ; TAB walks the links on the screen and shift-TAB back, the current one in standout;
+   ; RETURN follows it, and a count still wins
+   _ (: s4 (wnew 60 20) _ (wland s4 ga)
+        _ (wkeys s4 (string 9)) _ (test (s4 'cur = 1) (s4 'hi = "[1]") (s4 'msg = "1: " + at + "/sub"))
+        _ (wkeys s4 (string 9 + string 9)) _ (test (s4 'cur = 3))
+        _ (wstep s4 265) _ (test (s4 'cur = 2) (s4 'hi = "[2]"))
+        _ (wkeys s4 "\r") _ (test (s4 'go = ()) (s4 'url = at + "/a.html#here"))
+        ; the current link is off the screen now, so TAB takes the first on it: the one
+        ; beside the place landed on
+        _ (wkeys s4 (string 9)) _ (test (s4 'cur = 5))
+        _ (wkeys s4 "1\r") _ (test (s4 'go = [(at + "/sub") 1 -1]))
+        _ (wland s4 gs) _ (test (s4 'cur = 0) (s4 'hi = ""))
+        _ (wstep s4 265) (test (s4 'cur = 2)))
+   ; a form's text field is a link; following it asks for the text, what it held typed in,
+   ; and RETURN sends the form by get with it. a post form lays none; an image is its alt
+   _ (: s5 (wnew 60 20) gf (get (at + "/f.html") 8) _ (wland s5 gf)
+        (unlines l) (catmap (x \ x + "\n") l)
+        _ (test (s5 'urls = [("form:" + at + "/sub/t.txt?lang=en&q=old+one")])
+                (0 <= (K 'wg-find) (unlines (s5 'ls)) "[1][old one_____]" 0)
+                (0 <= (K 'wg-find) (unlines (s5 'ls)) "[logo] x" 0))
+        _ (wkeys s5 "1\r") _ (test (s5 'mode = 'c) (s5 'lead = "q: ") (s5 'cmd = "old one") (s5 'go = ()))
+        _ (map (_ \ wstep s5 127) ^7)
+        _ (wkeys s5 "caf\xc3\xa9 & tea\r")
+        _ (test (s5 'mode = 'n) (s5 'go = [(at + "/sub/t.txt?lang=en&q=caf%C3%A9+%26+tea") 1 -1]))
+        ; ESC leaves the field, and TAB and RETURN reach it too
+        _ (: _ (pin s5 'go ()) _ (wkeys s5 (string 9 + "\r")) _ (test (s5 'mode = 'c))
+             _ (wstep s5 27) (test (s5 'mode = 'n) (s5 'go = ())))
+        0)
+   ; the window changing width lays the page again, the link that was first on the screen
+   ; still first on it
+   _ (: s6 (wnew 60 3) _ (wland s6 (get (at + "/a.html#here") 8))
+        ; link 5 sits on the page's last line, which a screen of two rows shows
+        (seen? l) (s6 'top <= l < s6 'top + 2)
+        _ (test (seen? (s6 'links 4)) (0 <= (K 'wg-find) ((s6 'ls) (s6 'links 4)) "here it is" 0))
+        n0 (s6 'nl)
+        _ (pin s6 'w 30) _ ((K 'ww-fit) s6)
+        _ (test (s6 'lw = 30) (n0 < s6 'nl) (seen? (s6 'links 4))
+                (0 <= (K 'wg-find) ((s6 'ls) (s6 'links 4)) "here it is" 0)
+                (aall (map (l \ #l <= 30) (s6 'ls))))
+        (test ((K 'ww-fit) s6 = 0)))
+   ; a latin-1 file by its own <meta> reads as utf-8 (kiosko's header says utf-8, and a
+   ; header wins), and a body by its header; a gzip body unzips, and a torn one is no page;
+   ; a <base> is what links resolve against
+   _ (: gl (get ("file://" + sroot + "/l.html") 8) body (K 'ww-body)
+        (test (0 <= (K 'wg-find) (gl 3) "caf\xc3\xa9 \xe2\x80\x9cq\xe2\x80\x9d" 0)
+              (body "text/html; charset=\"windows-1252\"" () (string 128) = "\xe2\x82\xac")
+              (body "text/html; charset=utf-8" () "caf\xc3\xa9" = "caf\xc3\xa9")
+              (body "text/html" "gzip" ((cite 'gz 'gz-zip) "<p>hi</p>" "" 0) = "<p>hi</p>")
+              (body "text/html" "gzip" "<p>hi</p>" = ())
+              (lay (get (at + "/b.html") 8) 60 1 = [(at + "/sub/t.txt")])))
    ; a page fetched with a fragment opens at its place
    _ (: s2 (wnew 60 20) _ (wland s2 (get (at + "/a.html#here") 8)) (test (0 < s2 'top)))
    ; less's keys still reach less
