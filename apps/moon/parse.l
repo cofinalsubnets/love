@@ -1922,13 +1922,22 @@
              (tkw? t 'if)
               (: rc (pparen ps ts)
                  rt (? (two? rc) (parm ps <>rc) ())
+                 ; if (__builtin_expect(e, k)): the test is e, and a (nop cold) or (nop hot) heads
+                 ; the then-arm for the layout -- no call reaches the analyses
+                 xa (? (two? rc) (<rc @ ('call ('var "__builtin_expect") (e ('num k)) && elem k '(0 1)) [e k] ()) ())
+                 c9 (? !(two? xa) (? (two? rc) <rc)
+                       (elem (ptype ps <xa) '(float double ldouble)) ['cast 'long <xa]   ; expect's long, where it differs
+                       <xa)
+                 (arm s) (? !(two? xa) s
+                            (: m ['nop (<>xa = 0 ? 'cold 'hot)]
+                               (s @ ('blk items) ['blk (m . items)] ['blk [m s]])))
                  (? !(two? rt) ()
                     (? (two? <>rt && tkw? <<>rt 'else)
                        (: re (parm ps ><>rt)
                           (? (two? re)
-                             [['if <rc <rt <re] <>re]
+                             [['if c9 (arm <rt) <re] <>re]
                              ()))
-                       [['if <rc <rt ()] <>rt])))
+                       [['if c9 (arm <rt) ()] <>rt])))
              (tkw? t 'while)
               (: rc (pparen ps ts)
                  rb (? (two? rc) (parm ps <>rc) ())
