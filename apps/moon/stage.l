@@ -32,7 +32,7 @@
                 (vrfix (gst ir-vreg) ir-chosen)
                 (sibcall (gst a) a) (soften (gst a) a) (a4ize (a) a)
                 (cfoldir (gst a) a) (deadcell (a) a) (deaddef (a) a) (spmerge (a) a)
-                (stld (gst a) a) (copyprop (a) a) (rezx (a) a) (addrfold (gst a) a) (cmpfuse (a) a)
+                (stld (gst a) a) (copyprop (a) a) (rezx (a) a) (addrfold (gst a) a) (addk (a) a) (cmpfuse (a) a)
                 (deadst (gst a) a) (repack (gst a) a)
                 ; the post-choice chain advances: deadlab must never touch what the
                 ; rankers read, unframe re-addresses before jr0 retargets, unhome
@@ -42,7 +42,8 @@
                 (unframe (gst ir-nolab) ir-noframe)
                 (jr0 (ir-noframe) ir-jmpfix)
                 (unhome (gst ir-jmpfix) ir-final)
-                (cskeep (gst ir-final) ir-emitted))
+                (cskeep (gst ir-final) ir-emitted)
+                (jmpm (gst ir-emitted) ir-emitted))
    (forms text acc)
     (: r (sound text)
        (? (= r 'torn) (: _ (puts ";; moon-stage: gen.l reads torn") (quit 1))

@@ -40,6 +40,22 @@ int main(void) {
  memcpy(buf, b2, 0);
  say_n("memcpy.0", 1);
 
+ /* --- memcpy past the quad: every pair of offsets that disagree rides the
+    shifting lane, checked byte for byte against the source with guards either side --- */
+ { static char const lens[] = {32, 33, 39, 40, 47, 63, 64, 65};
+  long bad = 0;
+  for (unsigned li = 0; li < sizeof lens; li++)
+   for (int so = 0; so < 8; so++)
+    for (int dof = 0; dof < 8; dof++) {
+     int n = lens[li];
+     fill(b2, sizeof b2, so + li);
+     memset(buf, '.', sizeof buf);
+     memcpy(buf + dof + 1, b2 + so, (size_t) n);
+     for (int i = 0; i < n; i++) bad += buf[dof + 1 + i] != b2[so + i];
+     bad += buf[dof] != '.';
+     bad += buf[dof + 1 + n] != '.'; }
+  say_n("memcpy.shift.bad", bad); }
+
  /* --- memmove: the overlap both directions, adjacent and by a word.
     dest > src must copy BACKWARD or it eats its own tail. --- */
  for (int d = 1; d <= 9; d++) {

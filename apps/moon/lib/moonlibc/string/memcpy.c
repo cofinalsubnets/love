@@ -11,7 +11,9 @@
  * word and ride the word lane behind a byte head, and a test for absolute
  * alignment sends exactly that pair down the byte loop -- 24x, measured.
  * a byte head buys the destination its boundary; the source follows because
- * they agree, so no lane here ever needs an unaligned access (v6-M has none). ---- */
+ * they agree, so no lane here ever needs an unaligned access (v6-M has none).
+ * pointers that disagree read the source as the aligned words around it and shift
+ * two together per stored word (every seat is little-endian). ---- */
 void *memcpy(void *d, void const *s, size_t n) {
   unsigned char *dp = d; unsigned char const *sp = s;
   if ((((unsigned long) dp ^ (unsigned long) sp) & (sizeof(unsigned long) - 1)) == 0) {
@@ -24,5 +26,21 @@ void *memcpy(void *d, void const *s, size_t n) {
       dw += 4; sw += 4; n -= 4 * sizeof(unsigned long); }
     while (n >= sizeof(unsigned long)) { *dw++ = *sw++; n -= sizeof(unsigned long); }
     dp = (unsigned char *) dw; sp = (unsigned char const *) sw; }
+  else if (n >= 4 * sizeof(unsigned long)) {
+    while ((unsigned long) dp & (sizeof(unsigned long) - 1)) { *dp++ = *sp++; n--; }
+    unsigned long o = (unsigned long) sp & (sizeof(unsigned long) - 1);
+    unsigned l = 8 * (unsigned) o, r = 8 * sizeof(unsigned long) - l;
+    unsigned long *dw = (unsigned long *) dp;
+    unsigned long const *sw = (unsigned long const *) (sp - o);
+    unsigned long w = sw[0];            /* every load is an aligned word holding a byte copied */
+    while (n >= 4 * sizeof(unsigned long)) {
+      unsigned long a = sw[1], b = sw[2], c = sw[3], e = sw[4];
+      dw[0] = w >> l | a << r; dw[1] = a >> l | b << r;
+      dw[2] = b >> l | c << r; dw[3] = c >> l | e << r;
+      w = e; dw += 4; sw += 4; n -= 4 * sizeof(unsigned long); }
+    while (n >= sizeof(unsigned long)) {
+      unsigned long a = *++sw;
+      *dw++ = w >> l | a << r; w = a; n -= sizeof(unsigned long); }
+    dp = (unsigned char *) dw; sp = (unsigned char const *) sw + o; }
   while (n--) *dp++ = *sp++;
   return d; }

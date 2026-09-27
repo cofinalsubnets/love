@@ -92,12 +92,8 @@
             ([(rex 1 0 0 (hi dn)) (184 | lo dn)] + le64 imm)))
 
    ;; the three-address ALU, lowered to two-address (see the header). the lea
-   ;; fusion of a fresh-dest plain add/sub (mov+alu -> one lea) was built and
-   ;; measured 2026-07-16, both reg-reg and imm-only variants: 8/8 interleaved
-   ;; corpus rounds slower (~3-4%) despite -3.3% dynamic instructions -- the
-   ;; dance's mov is rename-eliminated (zero cycles, no port), so the saved
-   ;; insn was free, and at ipc ~3.7 the corpus is frontend/layout-bound, not
-   ;; instruction-starved (exp-1's lesson again). don't retry as written.
+   ;; a fresh-dest add or sub is one lea rather than mov + alu (lea sets no flags, and aluops
+   ;; feed none). its price is a layout's width: read it across several layouts, never one
    (emit-alu op d a b)
       (: meta (peep x64-alu op 0) rr (meta 0) ext (meta 1) comm (meta 2)
          ;; xor d,d,d is the zeroing idiom. the 32-bit form clears the whole register (a
@@ -107,6 +103,9 @@
               (: dn (rn d) (mrex 0 () dn 0 dn + [49 (modrm 3 dn dn)]))
             (reg-eq d a)                  (alu-step rr ext d b)
             (reg? b && reg-eq d b)    (? comm (alu-step rr ext d a) (scare 'alias-dst [op d a b]))
+            (op = 'add && reg? b)     (emit-leax d a b 1 0)
+            (op = 'add && fits32 b)   (emit-lea d a b)
+            (op = 'sub && fits32 (0 - b)) (emit-lea d a (0 - b))
             (emit-mov d a + alu-step rr ext d b)))
 
    ;; imul: the 3-operand reg<-reg<-imm (0x69 /r id) is a true three-address insn, no dance; the
@@ -379,6 +378,8 @@
    ;; callr: FF /2 -- an indirect call through a register (a call through a function pointer). same
    ;; shape as jmpr with the /digit at 2; REX.B for r8+, no REX.W.
    (emit-callr d) (rn d @ dn ((dn >= 8 ? '(65)) + [255 (modrm 3 2 dn)]))
+   ;; jmpm: FF /4 through [base+off] -- the dispatch's load and jump in one
+   (emit-jmpm base off) (: bn (rn base) (mrex 0 '(255) 4 0 bn + [255] + mem 4 base off))
    ;; mulo: d <- a*b (low 64), branch to lbl on signed overflow. imul (0F AF) sets OF when the
    ;; product leaves signed-64, so a plain `jo` is exact -- the scratch `t` is unused on x86 (only
    ;; a64 needs it, for smulh).
@@ -573,7 +574,7 @@
          ('test . emit-test) ('push . emit-push) ('pop . emit-pop)
          ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
          ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
-         ('jmpr . emit-jmpr) ('jmpt . emit-jmpt) ('callr . emit-callr)
+         ('jmpr . emit-jmpr) ('jmpm . emit-jmpm) ('jmpt . emit-jmpt) ('callr . emit-callr)
          ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set) ('cmov . emit-cmov)
          ('div . emit-div 0 1) ('udiv . emit-div 0 0)
          ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86

@@ -29,6 +29,7 @@
 ;   (push s) (pop d)
 ;   (jmp label) (br cond label)                ; cond: eq ne lt le gt ge below above ae be s ns vs vc
 ;   (jmpr d)                                   ; indirect: jump to the address in register d
+;   (jmpm b off)                               ; indirect: jump to the address at [b+off] (x64)
 ;   (adds d a b) (subs d a b)                  ; like add/sub but set flags -- pair with (br vs/vc ..)
 ;   (mulo d a b t lbl)                         ; d <- a*b (low 64); branch to lbl on signed overflow; t a scratch (clobbered)
 ;   (set cond d)                               ; d <- (cond holds) ? 1 : 0, from the last cmp's flags
@@ -141,7 +142,7 @@
              'csrrwi 3 'csrrsi 3 'csrrci 3
              'sx1 1 'sx2 1 'sx4 1 'zx1 1 'zx2 1 'zx4 1
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
-             'jmp 1 'jmp8 1 'jmpr 1 'jmpt 3 'callr 1 'call 1 'raw 1 'lapool 1
+             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'call 1 'raw 1 'lapool 1
              'li 2 'mov 2 'cmp 2 'test 2 'set 2 'br 2 'br8 2
              'la 2 'lar 2 'lia 2 'ldseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
@@ -237,7 +238,7 @@
             (? (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
                (elem o '(call ret sys)) 1
-               (elem o '(jmp jmpr)) 0
+               (elem o '(jmp jmpr jmpm)) 0
                (flagfree be >l (k - 1)))))
    (lay prog be addr items labels)
       (? !(two? prog) (rev items . labels)
