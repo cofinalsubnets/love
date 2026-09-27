@@ -651,14 +651,27 @@
             (kind = 'adrp21) (: pg ((target // 4096) - (site // 4096))   ; adrp: page delta, immlo[30:29] immhi[23:5]
                                 (le32 (aux | (((pg & 3) << 29) | (((pg >> 2) & 524287) << 5)))))
             (kind = 'addlo12) (le32 (aux | ((target % 4096) << 10)))  ; ADD #imm12: the target's low 12 (site-free)
+            ; a load/store's imm12 counts units of its access width: an `ldr x` reads 8s
+            (elem kind '(lo12s2 lo12s4 lo12s8 lo12s16))
+             (le32 (aux | (((target % 4096) // (kind @ 'lo12s2 2 'lo12s4 4 'lo12s8 8 16)) << 10)))
             (kind = 'adr21) (: rb ((target - site) & 2097151)            ; adr: BYTE pc-rel, low 21 bits (two's comp); immlo[30:29] immhi[23:5]
                                (le32 (aux | (((rb & 3) << 29) | ((rb >> 2) << 5)))))
             (kind = 'abs64) (le64 (target + aux))                    ; an 8-byte absolute address; aux = the byte addend (&arr[i] = label + offset)
             (scare 'badfix kind)))
 
+   ;; the linker's door (holo.l's refix-with). a64 is rela: the addend rides in the entry, so
+   ;; the word in bs is the base the field ors into. () for a target past the field's reach
+   (a64-refix kind bs target site width)
+    (: wd (bs 0 + (bs 1 << 8) + (bs 2 << 16) + (bs 3 << 24))
+       rb (target - site) pg (target // 4096 - site // 4096)
+       (? (kind = 'b26 && !(-134217728 <= rb <= 134217727)) ()
+          (kind = 'adrp21 && !(-1048576 <= pg <= 1048575)) ()
+          (a64-patch kind target site width wd)))
+
    a64 (tablet 0)
    _ (pin a64 'lower a64-lower)
    _ (pin a64 'patch a64-patch)
+   _ (pin a64 'refix a64-refix)
    _ (pin a64 'nop '(31 32 3 213))           ; the ('align n) filler unit: NOP d503201f LE
    (defbackend 'a64 a64))
 ) ; module 'holo

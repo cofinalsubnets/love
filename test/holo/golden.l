@@ -82,6 +82,10 @@
       ;; the interrupt return, the vectored int (int3 is `trap`, CC, already above)
       ("sys.flags"   "fafbf4"                ((cli) (sti) (hlt)))
       ("sys.pushf"   "9c9d"                  ((pushf) (popf)))
+      ("sys.seg"     "65488b0064488b00"      ((seg gs) (ld r0 r0 0) (seg fs) (ld r0 r0 0)))
+      ("sys.rmw"     "0fc102480fb14f088606ff0048830001660908480fba2803fe4b04"
+                     ((xaddm 4 r2 0 r0) (cmpxchgm 8 r6 8 r1) (xchgm 1 r5 0 r0) (unm inc 4 r0 0)
+                      (alum add 8 r0 0 1) (alum or 2 r0 0 r1) (btm bts 8 r0 0 3) (unm dec 1 r3 4)))
       ("sys.ud2"     "0f0b"                  ((ud2)))
       ("sys.iretq"   "48cf"                  ((iretq)))
       ("sys.swapgs"  "0f01f8"                ((swapgs)))
@@ -341,6 +345,14 @@
    _ (chk-eq "gas.x64.flags"                       ; the flags word through the stack, both spellings
         '((pushf) (pop r0) (pushf) (popf))
         (gas-text 'x64 "# __raw_save_flags\n\tpushf ; pop %rax\npushfq\npopfq"))
+   _ (chk-eq "gas.x64.seg"                         ; percpu: the override before its access; an absolute one loads through the destination
+        '((seg gs) (ld r0 r9 0) (seg gs) (ldu1 r0 r2 0) (seg gs) (st r1 8 r0)
+          (lia r6 current_task) (seg gs) (ld r6 r6 0) (li r0 40) (seg fs) (ld r0 r0 0))
+        (gas-text 'x64 "mov %gs:(%r10), %rax\nmovb %gs:(%rdx), %al\nmov %rax, %gs:8(%rcx)\nmovq %gs:current_task, %rdi\nmov %fs:40, %rax"))
+   _ (chk-eq "gas.x64.rmw"                         ; atomics and counters on memory; no suffix takes the register's width
+        '((lock) (xaddm 4 r2 0 r0) (cmpxchgm 8 r6 8 r1) (xchgm 1 r5 0 r0) (unm inc 4 r0 0)
+          (alum add 8 r0 0 1) (alum or 2 r0 0 r1) (btm bts 8 r0 0 3) (unm dec 1 r3 4))
+        (gas-text 'x64 "lock xaddl %eax, (%rdx)\ncmpxchgq %rcx, 8(%rdi)\nxchg (%rsi), %al\nincl (%rax)\naddq $1, (%rax)\norw %cx, (%rax)\nbtsq $3, (%rax)\ndecb 4(%rbx)"))
    _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
         '((mov r1 r0) (zx4 r1) (li r0 4294967295))
         (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))

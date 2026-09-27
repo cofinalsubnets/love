@@ -53,4 +53,6 @@ b
 pipe "rev"       'abc
 de
 '                rev
+[ "$(printf '日本語é\nab\n' | korerun rev)" = "$(printf 'é語本日\nba')" ] \
+  || fail "kore rev: a character reverses whole, never its bytes"
 echo "kore: field tools (cut/tr/nl/rev GNU-identical) ok"

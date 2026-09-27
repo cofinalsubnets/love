@@ -657,6 +657,9 @@
              mkfs.vfat 2>/dev/null; echo m=$?
              echo alive"])
    (test ("t=2\nl=1\nm=2\nalive\n" = >r)))
+; ..and a main's early answer too: mooncc's --version leaves, never quits, in here
+(: r (hark ["out/love" "out/lush" "-a" "-c" "mooncc --version > /dev/null; mooncc -h > /dev/null; echo alive"])
+   (test ("alive\n" = >r)))
 ; a capture of one takes the jug: no pipe, no fd, no child, which is the whole
 ; point of `cc=$(which cc)`
 (: pr (sh-parse-line "which cc")
@@ -779,9 +782,42 @@
    _ (pin sh-inread () 1)
    b (sh-forkok? ["cat" "f"] ())
    c (sh-forkok? ["cat"] [(0 . 5)])
+   ; ..and a foreign bare word spawns as (path . word), the path PATH gave it here
+   w (sh-whichp "git")
+   v (sh-spawnv ["git" "--version"])
+   d (? (two? w) (<v = (<>w . "git") && >v = ["--version"]) 1)
    _ (pin sh-tty () tty0)
    _ (pin sh-inread () in0)
-   (test (1 = a) (0 = b) (1 = c)))
+   (test (1 = a) (0 = b) (1 = c) (1 = d)))
+
+;; a verb that says it is a builtin (verbs' traits) runs as one in every mode, ahead of
+;; PATH, and says so; the self lane reads the same table
+(: r (hark ["out/love" "out/lush" "-p" "-c" "PATH=/nonexistent; echo hi; printf '%s\\n' pf; [ a = a ] && test 1 = 1 && echo t; type echo"])
+   (test ("hi\npf\nt\necho is a shell builtin\n" = >r)))
+(: T (cite 'verbs 'trait)
+   (test (1 = sh-verbbi? "echo") (1 = sh-verbbi? "[") (0 = sh-verbbi? "ls")
+         (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (0 = T 'cat 'self)))
+;; a reader is self per call: every operand a regular file, or it forks -- bare, a -,
+;; a missing file, a device, or an option's word
+(: f "test/00-init.l"
+   (test (1 = sh-selfcall? ["wc" "-l" f f]) (1 = sh-selfcall? ["sha256sum" f])
+         (0 = sh-selfcall? ["wc"]) (0 = sh-selfcall? ["wc" "-"]) (0 = sh-selfcall? ["wc" f "/nonexistent-qq"])
+         (0 = sh-selfcall? ["md5sum" "/dev/zero"]) (0 = sh-selfcall? ["cat" f])
+         (1 = sh-selfcall? ["ls" "-l"]) (0 = sh-selfplain? "wc") (1 = sh-selfplain? "ls")))
+;; ..and a capture of a big in-image reader lives: cat forks, so the pipe has a reader
+(: r (hark ["out/love" "out/lush" "-a" "-c" "f() { cat love/*.c; cat love/*.c; }; x=$(f); echo ${#x}"])
+   (test (0 < #(>r))))
+;; a crew main answers its status to a caller in the image, a failure from deep in
+;; included -- only the seats quit
+(: C (cite 'verbs 'call)
+   (test (1 = C 'cook ["-f" "/nonexistent-qq.mk"]) (2 = C 'sb ["no-such-verb"])
+         (2 = C 'kiosko ["-z"])))
+;; ..and a trait may turn on the call: love's bake and wake want a fresh process, asked
+;; under the name the word runs as, so a path to this binary is love too
+(: H (cite 'verbs 'holds)
+   (test (1 = H 'love 'exec ["bake"]) (1 = H 'love 'exec ["wake" "x"]) (0 = H 'love 'exec ["-e" "1"])
+         (1 = sh-exec? ["out/love" "bake"]) (0 = sh-exec? ["out/love" "kore" "ls"])
+         (0 = sh-forkok? ["out/love" "bake"] [(0 . 5)])))
 
 ;; readonly, alias, times, hash and ulimit: each acts on this process or its tables.
 ;; a readonly assignment is an error, fatal to a script, from every setter

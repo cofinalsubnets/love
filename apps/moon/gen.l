@@ -481,7 +481,7 @@
    ; the memory class: an aggregate past 16 bytes, passed wholly on the stack (x64 only; AAPCS64 differs)
    (amem? g ty) (stru? ty && !(aclass g ty) && !(arm? g) && !(t32? g))
    (asalign g ty) (: e (peep (g 'stag) <>ty 0) (two? e ? <>>e 8))        ; a struct tag's alignment
-   (aslots g ty) (((tsz g ty + 7) & -8) >> 3)                              ; its eightbyte count
+   (aslots g ty) (aup (tsz g ty) 8 >> 3)                              ; its eightbyte count
    ; a memory-class return: a hidden pointer as the first gp argument, filled and answered by
    ; the callee. v6-M past 4 bytes, SysV past 16
    (sretm? g ty) (stru? ty && (v6m? g && 4 < tsz g ty || amem? g ty))
@@ -1516,7 +1516,7 @@
                   (: (go l) (two? l ?
                              (: o <l (<o <= x && x < <o + <>o ? o (go >l))))
                      (go sl)))
-   (ntmp g ty) (nslot g $ (tsz g ty + 7) & -8)
+   (ntmp g ty) (nslot g $ aup (tsz g ty) 8)
    ; the store-immediate op for (ty, k) | (), the vi fold's license (x64 only). st sign-extends
    ; imm32, the narrow forms truncate
    (fitsw? v) (-2147483648 <= v <= 4294967295)      ; sits in a 32-bit word under either signedness
@@ -1561,7 +1561,7 @@
    (clitcode g env off ty ini)
     (? (arr? ty || stru? ty)
         (: f (cgfill g env off ty ini)
-           (? (bad? f) 'bad (cgzero g off ((tsz g ty + 7) & -8) + f)))
+           (? (bad? f) 'bad (cgzero g off (aup (tsz g ty) 8) + f)))
        (: v (? (two? ini && <ini = 'init)
                (? (two? <>ini) <<>ini '(num 0)) ini)
           (cgstore g env off ty v)))
@@ -2602,11 +2602,11 @@
                        (d128? aty)                               ; a wide arg: not carried (love.c passes limbs, never dlimbs)
                         (nolane g "a wide value is not carried as an argument")
                        (pair? g aty)                             ; a pair arg: an even-odd register pair (AAPCS32
-                        (: gpe ((gpc + 1) & -2)                  ;  rounds up), else the stack 8-aligned -- and gp
+                        (: gpe (aup gpc 2)                  ;  rounds up), else the stack 8-aligned -- and gp
                            (? ((gpe + 2) <= ngp g)               ;  assignment closes behind a stack arg (C.13)
                                (kls >as (i + 1) (gpe + 2) xmmc ovc
                                     ([['g2 gpe] (asll g a + spush2)] . acc))
-                               (: ov8 ((ovc + 7) & -8)
+                               (: ov8 (aup ovc 8)
                                   (kls >as (i + 1) 4 xmmc (ov8 + 8)
                                        (. [['ov ov8 8]
                                                 (asll g a + pstw 'sp ov8 'r0 'r1)]
@@ -2653,7 +2653,7 @@
                               (: k (vfpn xmmc 2 2)
                                  (? (0 <= k) (kls >as (i + 1) gpc (vfpm xmmc k 2) ovc
                                                   ([['x (k // 2)] rpush] . acc))
-                                    (: ov8 ((ovc + 7) & -8)
+                                    (: ov8 (aup ovc 8)
                                        (kls >as (i + 1) gpc vfpx (ov8 + 8)
                                             ([['ov ov8 8]
                                               (aval + pstw 'sp ov8 'r0 'r1)] . acc)))))
@@ -2666,11 +2666,11 @@
                                     (kls >as (i + 1) gpc xmmc (ovc + 4)
                                          ([['ov ovc 4] (av1 + [['st 'sp ovc 'r0]])] . acc))))
                              (v6m? g && wd2)               ; v6-M base ABI: a double/8B-blob arg is an even-odd gp
-                              (: gpe ((gpc + 1) & -2)      ;  pair (aval already lands r0:r1), else the 8-aligned stack
+                              (: gpe (aup gpc 2)      ;  pair (aval already lands r0:r1), else the 8-aligned stack
                                  (? (gpe + 2 <= (ngp g))
                                      (kls >as (i + 1) (gpe + 2) xmmc ovc
                                           ([['g2 gpe] (aval + spush2)] . acc))
-                                     (: ov8 ((ovc + 7) & -8)
+                                     (: ov8 (aup ovc 8)
                                         (kls >as (i + 1) 4 xmmc (ov8 + 8)
                                              (. [['ov ov8 8]
                                                       (aval + pstw 'sp ov8 'r0 'r1)]
@@ -2754,7 +2754,7 @@
              padn ((nov & 1) = 1 ? 8 0)               ; keep sp 16-aligned across the overflow block
              ; t32 slots are byte offsets: the block spans to the highest slot's end, rounded to 8; x64/a64 count 8-byte slots
              ovblk (? (t32? g)
-                      (: (go9 l9 m9) (? !(two? l9) ((m9 + 7) & -8)
+                      (: (go9 l9 m9) (? !(two? l9) (aup m9 8)
                                         (: ce <<l9
                                            e9 (<ce @ 'ov (<>ce + (two? >>ce ? <>>ce 4)) 0)
                                            (go9 >l9 (m9 < e9 ? e9 m9))))
@@ -4071,7 +4071,7 @@
                                                      (pin ldconv <ls o, pl >ls)) pl)
                                        (clds (e 1)))
                                     (cvt >l))) cvt) cvl)
-                F2 ((F + 8 * tally ds + 15) & -16)
+                F2 (aup (F + 8 * tally ds) 16)
                 ; a converted cell joins the slot map, or deadst/repack meet an unclaimed r4 touch and
                 ; bar the fn; one 8-byte slot per record depth, at the offset cvt hands the st/ld
                 _ (foldl (\ _ d (: o ((F + 8) + (8 * rank d ds 0))
@@ -4888,8 +4888,8 @@
                                   (go csused 1))
                          csaves (map (r \ ['st 'r4 (peep cslot r 0) r]) csused)
                          csrests (map (r \ ['ld r 'r4 (peep cslot r 0)]) csused)
-                         K2 ((high2 + 15) & -16)
-                         K3 (? (two? csused) (((high2 + (8 * tally csused)) + 15) & -16) K2)
+                         K2 (aup high2 16)
+                         K3 (? (two? csused) (aup (high2 + 8 * tally csused) 16) K2)
                          ; a jmp off the label table is a sibcall; so is one to the entry label (a self tail call)
                          (exit9? f) (xit? f || xjmp? f labt ||
                                      (two? f && <f = 'jmp && 0 = (peep labt <>f -1)))
@@ -5878,7 +5878,7 @@
    (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
     (: b (imgbytes g ty val) (? (bad? b) 'bad (b + zeros (w - imbytelen b))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
-    (: span ((tsz g ty + wsize g - 1) & -(wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
+    (: span (aup (tsz g ty) (wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
        raw (imgbytes g ty ini)
        (? (bad? raw) 'bad (raw + zeros (span - imbytelen raw))))
 
@@ -5931,7 +5931,7 @@
                      !(elem (gtgt g) '(x64 a64 rv64))
                       (nolane g ("no lane for a variable-length array" + ontgt g))
                      (vone ps env2 acc p ty))
-                 (: span ((tsz g ty + 7) & -8)
+                 (: span (aup (tsz g ty) 8)
               off (nslot g span)
               hreg (? (g 'inlining) ()                   ; a statement expression's decl takes no seat
                       !(lhomable? ty || fhomable? ty || (d128? ty && w128? g)) ()
@@ -6015,19 +6015,32 @@
 
    ; inline asm: the target's GNU dialect (love/holo/gas.l; holo's neutral text under __attribute__((holo))), spliced as one opaque ('raw ..)
    ; a constraint's register part: r/q/g/rm 'pick, i/n 'imm, m 'mem, a digit ('tie n), rN the nom,
-   ; x86's a b c d S D letters by name (rax rbx rcx rdx rsi rdi, Nd dx), ir 'either
+   ; x86's a b c d S D letters by name (rax rbx rcx rdx rsi rdi, Nd dx), ir 'either. a longer
+   ; set reads by its letters: immediates alone (x86's I J K L M N e Z beside i n) 'imm, a
+   ; register letter among immediates 'either, among memory 'pick
+   asmimm '(105 110 73 74 75 76 77 78 101 90)
+   ; x86's "=@cc<cond>" flag outputs -> the set's condition
+   asmflags {"e" 'eq "z" 'eq "ne" 'ne "nz" 'ne "c" 'below "b" 'below "nae" 'below
+             "nc" 'ae "ae" 'ae "nb" 'ae "a" 'above "nbe" 'above "be" 'be "na" 'be
+             "g" 'gt "nle" 'gt "ge" 'ge "nl" 'ge "l" 'lt "nge" 'lt "le" 'le "ng" 'le
+             "s" 's "ns" 'ns "o" 'vs "no" 'vc "p" 'p "np" 'np}
    (asmc g c9)
     (: n #c9
        c0 (? (n > 0) (c9 0) 0)
        x86 (x64t? g)
+       cs (map (i \ c9 i) ^n)
+       (in? l) (all (c \ elem c l) cs)
        (? (n < 1) 'bad
           (n = 1 && 48 <= c0 <= 57) ['tie (c0 - 48)]
-          (n = 1) (c0 @ 114 'pick 113 'pick 103 'pick 105 'imm 110 'imm 109 'mem
+          (n = 1) (c0 @ 114 'pick 113 'pick 103 'pick 109 'mem
                       97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
-                      100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad) 'bad)
-          (c9 = "rm" || c9 = "mr") 'pick
+                      100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
+                      (elem c0 asmimm ? 'imm 'bad))
           (c9 = "Nd" || c9 = "dN") (x86 ? 'r2 'bad)
           (c9 = "ir" || c9 = "ri" || c9 = "in" || c9 = "ni") 'either
+          (in? asmimm) 'imm
+          (in? (asmimm + '(114 113 103 109 111)) && any (c \ elem c '(114 113 103)) cs)
+           (any (c \ elem c asmimm) cs ? 'either 'pick)
           (name c9)))
    ; a `register T v asm("reg")` variable named as an operand: its pin, else ()
    (asmvpin g env e)
@@ -6105,7 +6118,8 @@
        ; asm goto's labels, mangled as cgstmt's lbl; %lN spells one, and the blob leaves them as fixes
        labs (map (nm \ (name (g 'fn + "." + nm))) <>>>>>s)
        ; one operand list, GNU order: ('o|'x reg expr w) an output (x in-out), ('i reg expr w) a
-       ; register input, ('b reg (addr expr) 0) a memory input, ('m imm 0 0) an immediate
+       ; register input, ('b reg (addr expr) 0) a memory input or output, ('m imm 0 0) an
+       ; immediate, ('f reg expr 1 cond) a flag output, ('k sp expr 8) the stack pointer as it stands
        (pinof k e) (k @ 'pick (: p (asmvpin g env e) (? (nom? p) p k)) k)
        (oconv l acc)
         (? !(two? l) (rev acc)
@@ -6113,7 +6127,18 @@
               h (0 < n ? (c 0) 0)
               c2 (? (1 < n && c 1 = 38) (snip c 2 n) (snip c 1 n))    ; "=&r": the early clobber is the picking rule already
               k (h @ (61 || 43) (asmc g c2) 'bad)
-              (? (bad? k || elem k '(imm mem either) || two? k) (asmno g ("an asm output constrained \"" + c + "\""))
+              fc (? (3 < #c2 && snip c2 0 3 = "@cc") (peep asmflags (snip c2 3 #c2) ()) ())
+              gv (<><l @ ('var nm) (two? (peep (g 'gregs) nm ())) ())
+              ; the stack-pointer register variable ("+r"(current_stack_pointer): the asm uses the
+              ; stack) is that register as it stands -- nothing loads it or stores it back
+              (? (gv && elem h '(61 43)) (oconv >l (['k 'sp <><l 8] . acc))
+                 (0 < #c2 && c2 0 = 64)
+                  ; a flag output: a picked register the condition sets right after the body
+                  (? (h = 61 && nom? fc && x64t? g) (oconv >l (['f 'pick <><l 1 fc] . acc))
+                     (asmno g ("an asm flag output \"" + c + "\"" + ontgt g)))
+                 (bad? k || elem k '(imm either) || two? k) (asmno g ("an asm output constrained \"" + c + "\""))
+                 ; a memory output is the asm's own store: its address rides a register, as "m" in
+                 (k = 'mem) (oconv >l (['b 'pick ['addr <><l] 0] . acc))
                  (oconv >l ([(h @ 43 'x 'o) (pinof k <><l) <><l (asmw g env <><l)] . acc)))))
        (iconv l acc)
         (? !(two? l) (rev acc)
@@ -6132,7 +6157,7 @@
              (pinset l acc)
               (? !(two? l) acc
                  (: e2 <l k <>e2
-                    (? (= <e2 'm || (k = 'pick) || two? k) (pinset >l acc)
+                    (? (elem <e2 '(m k) || (k = 'pick) || two? k) (pinset >l acc)
                        !(asmreg? g k) 'bad
                        (elem k acc) 'bad
                        (pinset >l (k . acc)))))
@@ -6141,7 +6166,7 @@
                 (: (assign l fr acc)
                     (? !(two? l) (rev acc)
                        (: e2 <l k <>e2
-                          (? (<e2 = 'm) (assign >l fr (k . acc))
+                          (? (elem <e2 '(m k)) (assign >l fr (k . acc))
                              (two? k) (? (<>k < #acc) (: r9 ((rev acc) <>k) (assign >l fr (r9 . acc))) 'bad)
                              (k = 'pick)
                               (? (two? fr) (assign >l >fr (<fr . acc)) 'bad)
@@ -6160,7 +6185,7 @@
                    ; a jump out of the body would skip the output stores and the clobber pops
                    (? (bad? saves) 'bad
                       (bad? asgn) (asmno g "more asm operands than registers to seat them")
-                      (two? labs && (two? os || two? saves)) (asmno g "an asm goto with outputs or a callee-saved clobber")
+                      (two? labs && (any (e2 \ elem <e2 '(o x f)) os || two? saves)) (asmno g "an asm goto with register outputs or a callee-saved clobber")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
                          (rtext a9 w) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
                          (itext v) (md \ (? (md = 108) 'bad neutral? (md || !(charm? v) ? 'bad (show v)) (gas-imm tgt v md)))
@@ -6171,6 +6196,7 @@
                              (: e2 <l a9 <al
                                 (optext >l >al ((<e2 @ 'm (itext a9)
                                                        'b (mtext a9)
+                                                       'f (md \ 'bad)       ; a flag output has no spelling
                                                        (rtext a9 <>>>e2)) . acc))))
                          txt (asmsub tmpl (optext ops9 asgn () + map ltext labs))
                          (? (bad? txt) (asmno g "an asm operand the template spells with a modifier it has no lane for")
@@ -6196,16 +6222,20 @@
                                      body ((map (r9 \ ['push r9]) saves)
                                            + asmbody g tgt neutral? txt
                                            + map (r9 \ ['pop r9]) (rev saves))
+                                     ; flag outputs: each set reads the flags before any push moves them
+                                     (fsets l al acc)
+                                      (? !(two? l) acc
+                                         (fsets >l >al (<<l = 'f ? (acc + [['set (<l 4) <al]]) acc)))
                                      ; outputs: push each register, store back reverse
                                      (opush l al acc)
                                       (? !(two? l) acc
-                                         (? (elem <<l '(o x))
+                                         (? (elem <<l '(o x f))
                                             (opush >l >al (acc + spush <al))
                                             (opush >l >al acc)))
                                      (ostores l al acc)
                                       (? !(two? l) acc
                                          (: e2 <l
-                                            (? !(elem <e2 '(o x)) (ostores >l >al acc)
+                                            (? !(elem <e2 '(o x f)) (ostores >l >al acc)
                                                (: lv (matv g (clval g env <>>e2))
                                                   (? (bad? lv) 'bad
                                                      (: ty (vty lv)
@@ -6214,7 +6244,7 @@
                                                             ((vfs lv + spop 'r1 + [[(stop ty) 'r0 0 'r1]]) + acc)))))))))
                                      osf (ostores ops9 asgn ())
                                      (? (bad? osf) 'bad
-                                        (lf + pops ops9 asgn () + body + opush ops9 asgn () + osf)))))))))))))
+                                        (lf + pops ops9 asgn () + body + fsets ops9 asgn () + opush ops9 asgn () + osf)))))))))))))
 
    ; a statement's child statements in tick order (a for's init only when it declares): alive's
    ; prepass and scasel walk by it, and cgstmt's walk must agree node for node
@@ -6805,8 +6835,9 @@
            (? !(two? (g 'cases)) 'bad
               (: lab (peep <(g 'cases) 'dflt 'no)
                  (? (lab = 'no) 'bad [['label lab]])))
-          ('switch ce items)
+          ('switch ce items9)
            (: c (cgexpr g env ce ())
+              items (: sw (swdead g env ce items9) (sw @ 'no items9 sw))
               (? (bad? c) 'bad
                  (: cr9 (vreg c)
                     lend (nlab g ".d")
@@ -6892,6 +6923,31 @@
              ('switch . _) acc                                   ; a nested switch owns its labels
              (scasel-l g (stkids it) tab acc)))
    (scasel-l g l tab acc) (? !(two? l) acc (scasel-l g >l tab (scasel g <l tab acc)))
+   ; a switch over a constant (sizeof, as the kernel's width macros write it) never reaches the
+   ; cases it does not select, and gcc never assembles their asm: there it lays as an empty
+   ; statement, which ticks as the asm did. only with every label at the top and no goto's label
+   ; in the body -> items | 'no
+   (swdead g env ce items)
+    (: v (ce @ ('szof e2) (: ty (peekty g env e2) (? (bad? ty || gvarr? ty) () (tsz g ty)))
+              (memk g ce))
+       (lab? it) (two? it && elem <it '(case dflt))
+       (nest? x) (? !(two? x) () (elem <x '(case dflt)) 1 (<x = 'switch) () (any nest? x))
+       (lbl? x) (? !(two? x) () (<x = 'lbl) 1 (any lbl? x))
+       (idx k) ((: (go l i) (? !(two? l) -1 (= <l k) i (go >l (i + 1)))) items 0)
+       at (: j (idx ['case v]) (? (j < 0) (idx ['dflt]) j))
+       (strip x) (? !(two? x) x (<x = 'asm) ['expr ['num 0]] (map strip x))
+       ; live from the selected label to the first break at the top, or a block's last statement
+       (ends? it) (it = ['brk] || (<it = 'blk && two? <>it && <>it (#<>it - 1) = ['brk]))
+       (go l i live acc)
+        (? !(two? l) (rev acc)
+           (: it <l
+              kept (live || i = at || lab? it)
+              (go >l (i + 1) (? (i = at) !(ends? it) (live && !(ends? it)))
+                  ((kept ? it (strip it)) . acc))))
+       (? (!(charm? v) || any (it \ (<it = 'case && #it != 2) || (!(lab? it) && nest? it)) items
+           || any lbl? items)
+          'no
+          (go items 0 () ())))
 
    ; -- the inline lane: a small (or always_inline) fn splices its whole body at the call site, each arg
    ; in a fresh 8-byte temp, every return computing into r0 then jumping to the splice's end label. --
@@ -7468,7 +7524,7 @@
                    (: off (nslot g 8)
                       (spill hp >ps (gpe + 2) xmmi ovi ([<p off pty] . env)
                              (acc + pstw 'r4 off (argr g gpe) (argr g (gpe + 1)))))
-                  (: ov8 ((ovi + 7) & -8)
+                  (: ov8 (aup ovi 8)
                      (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
               (? (v6m? g && sse2? g pty)                ; v6-M: a position-0 16B composite arrives whole in r0-r3
                   (gpi != 0 ? 'bad                          ;  (the caller's g4 lane); any later start splits -- deferred
@@ -7504,10 +7560,10 @@
                      (: k (vfpn xmmi 2 2) off (nslot g 8)
                         (spill hp >ps gpi (vfpm xmmi k 2) ovi ([<p off pty] . env)
                                (acc + fstf g 'double 'r4 off (xmmreg (k // 2)))))
-                     (: ov8 ((ovi + 7) & -8)
+                     (: ov8 (aup ovi 8)
                         (spill hp >ps gpi vfpx (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
                  (v6m? g && stru? pty && aone g pty == 'sse)           ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
-                  (gpair ((gpi + 1) & -2))
+                  (gpair (aup gpi 2))
                  (stru? pty && two? (aeb2 g pty))       ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
                   (? (pol? hp && !(sse2? g pty)) 'bad        ; a policy homes gp scalars only -- mixed/int-pair 16B deopts
                      (: cls (aeb2 g pty) c0 <cls c1 <>cls
@@ -7553,7 +7609,7 @@
                                (acc + [['st 'r4 off (argr g gpi)]])))
                      (spill hp >ps gpi xmmi (ovi + 4) ([<p (ovb g + ovi) pty] . env) acc))
                  (v6m? g && flo? pty)                   ; v6-M base ABI: a double param is a gp pair (no FPU regs exist)
-                  (gpair ((gpi + 1) & -2))
+                  (gpair (aup gpi 2))
                  ; a double granted an xmm seat rides there off its arrival; the rest take a slot
                  (fhomable? pty && xmmi < 8 && nom? (peep (g 'fpar) <p ()))
                   (: fr (peep (g 'fpar) <p ())
@@ -7563,7 +7619,7 @@
                   (: off (nslot g 8)
                      (spill hp >ps gpi (xmmi + 1) ovi ([<p off pty] . env)
                             (acc + fstf g pty 'r4 off (xmmreg xmmi))))
-                 (pair? g pty) (gpair ((gpi + 1) & -2))   ; a pair param: the even-odd register pair
+                 (pair? g pty) (gpair (aup gpi 2))   ; a pair param: the even-odd register pair
                  (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
                   (nolane g "a wide value is not carried as a parameter")
                  (!(flo? pty) && gpi < ngp g)
@@ -7663,7 +7719,7 @@
            (: body (bldreset g,
                     cgitems g <>sp0 <><>>>f ())
               (? (bad? body) 'bad
-                 (: frame ((peep g 'off 0 + 15) & -16)
+                 (: frame (aup (peep g 'off 0) 16)
                     (? (arm? g)
                        ; the IR sweeps stay out of the arm build (a64 sweeps post-choice, where r4 is unambiguously fp:
                        ; a raw r4 is also the 5th argument); a4ize retargets r4 -> fp after sibcall. no sav3: r3 is caller-saved

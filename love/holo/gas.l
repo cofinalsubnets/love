@@ -144,7 +144,21 @@
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
+   gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp inc dec not neg bt bts btr btc)
    gx-ext (gtab '((movzb (zx1 ldu1)) (movzw (zx2 ldu2)) (movsb (sx1 ld1)) (movsw (sx2 ld2)) (movsl (sx4 ld4))))
+   ; a %gs:/%fs: operand: the override byte before the one form that reaches memory. an absolute
+   ; address (percpu's `%gs:sym`, `%gs:40`) loads through its destination: the address, then the word
+   (gx-seg m w0 ops)
+    (: i ((: (g j) (? (j >= #ops) -1 (<(ops j) = 'seg) j (g (j + 1)))) 0)
+       sg <>(ops i) o <>>(ops i) w (w0 > 0 ? w0 8)
+       ab (? (<o = 'lbl) <>o (<o = 'mem && (o 1) < 0 && (o 2) < 0) (o 4) ())
+       (? (<o = 'mem && (o 1) >= 0)
+           (: fs (gx-ins m w0 (map (x \ (<x = 'seg ? <>>x x)) ops))
+              (? (#fs = 1) [['seg sg] <fs] (scare 'gas-x64-seg ops)))
+          (m = 'mov && i = 1 && <(ops 0) = 'rg && (nom? ab || charm? ab))
+           (: x (gx-r (ops 0))
+              [(nom? ab ? ['lia x ab] ['li x ab]) ['seg sg] [(gx-lop w) x x 0]])
+          (scare 'gas-x64-seg ops)))
    (gx-ins m w0 ops)
     (: k #ops w (w0 > 0 ? w0 8)
        d (k > 0 ? (ops 0) ()) s (k > 1 ? (ops 1) ())
@@ -159,6 +173,14 @@
           (= m 'call) (? (<d = 'lbl) [['call <>d]] (<d = 'ind) [['callr (gx-r <>d)]] (scare 'gas-x64-operand ops))
           (= m 'int) [['int (gx-imm d)]]
           (elem m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
+          ; a read-modify-write on memory: atomics and counters. no suffix takes the register's width
+          (<d = 'mem && elem m gx-rmw)
+           (: bm (gx-mem d) wm (w0 > 0 ? w0 (<s = 'rg) (s 2) 8)
+              (? (elem m '(xadd cmpxchg xchg)) (? (<s = 'rg) [[(name (show m + "m")) wm <bm <>bm (gx-r s)]] (scare 'gas-x64-operand ops))
+                 (elem m '(inc dec not neg)) [['unm m wm <bm <>bm]]
+                 (elem m '(bt bts btr btc)) [['btm m wm <bm <>bm (gx-rv s)]]
+                 [['alum m wm <bm <>bm (gx-rv s)]]))
+          (= m 'xchg && <s = 'mem && <d = 'rg) (gx-ins m w0 [s d])
           (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
           (= m 'vmwrite) [['vmwrite (gx-r d) (gx-r s)]]
           (= m 'mov)
@@ -213,7 +235,8 @@
                             it) . acc))
                    () items)))
    (gx-item it) (<it @ 'label [['label <>it]]
-                      'op (gx-ins (it 1) (it 2) (it 3))
+                      'op (? (any (o \ two? o && <o = 'seg) (it 3)) (gx-seg (it 1) (it 2) (it 3))
+                             (gx-ins (it 1) (it 2) (it 3)))
                       (scare 'gas-x64-line it))                    ; a directive has no place in a template
    (gx-text src) (catmap gx-item (gx-locals (att-read src)))
 
