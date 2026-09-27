@@ -844,5 +844,30 @@
 (: r (hark ["out/love" "out/lush" "-c" "ulimit -n 1000; ulimit -n; ulimit -Sn 500; ulimit -n; ulimit -Hn; ulimit -z; echo st=$?; ulimit -n abc; echo st=$?"])
    (test ("1000\n500\n1000\nst=1\nst=1\n" = >r)))
 
+;; the line editor takes utf-8 on a pty: a character's bytes arrive one at a time, and left
+;; and backspace move over it whole -- typed a日本b, left twice, backspace, it runs as a本b
+(: (has? hay ned)
+    (: n #ned m #hay
+       (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
+       (go 0))
+   (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
+   (type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   e (string 27)
+   r (tether ["out/love" "lush"])
+   m >r
+   _ (settty m 24 80)
+   sink (jug 0)
+   t (twirl (_ \ pump m sink) 0)
+   _ (rest 600)
+   _ (type m "printf '%s|\\n' a日本b")
+   _ (type m (e + "[D" + e + "[D"))        ; left over b, then over 本 whole
+   _ (type m (string 127))                 ; backspace takes 日 whole
+   _ (type m "\n")
+   _ (rest 700)
+   s (slurp sink)
+   _ (still <r 9)
+   _ (landed? t ? (catch t) (freeze t))
+   (test (has? s "a本b|") !(has? s "a日本b|") !(has? s "\xef\xbf\xbd")))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)
