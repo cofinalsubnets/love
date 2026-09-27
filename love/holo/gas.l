@@ -427,7 +427,7 @@
    ;; labels the object exports. the directives read are the ones C headers write there (the
    ;; kernel's export, initcall, tracepoint and static-call rows); a run of instructions goes to
    ;; gas-text, and any other directive scares. --
-   (gf-kin? nm b) (nm = b || xa-starts? nm (b + "."))
+   (gf-kin? nm b) (nm = b || starts? nm (b + "."))
    ; gas's own defaults for a section named without flags: the standard four and their dotted
    ; kin, .init/.fini, and otherwise none -- not even allocated
    (gf-dflt nm) (? (gf-kin? nm ".text" || elem nm '(".init" ".fini")) [1 6]
@@ -619,7 +619,7 @@
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
               ; what a static link never reads: symbol types and sizes, visibility, unwind rows
-              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal") || xa-starts? mn ".cfi_") 0
+              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal") || starts? mn ".cfi_") 0
               (scare 'gas-directive mn)))
        (line s0)
         (: s (xa-trim s0)

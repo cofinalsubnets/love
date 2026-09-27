@@ -354,7 +354,6 @@
 (borrow 'posix)
 (: (tarc-die m) (udie 2 ("tar: " + m))
    (tarc-warn m) (say err ("tar: " + m + "\n"), flush err)
-   (tarc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
    (tarc-lazy m f what) (: b (cite m f) (lit? b ? b (tarc-die ("no " + what + " aboard"))))
 
    ; --- the codecs: 'z 'j 'J, and () for a bare tar ---------------------------------
@@ -373,9 +372,9 @@
        (6 <= #b && b 0 = 253 && snip b 1 5 = "7zXZ" && b 5 = 0) 'J
        ())
    (tarc-bysuf p)
-    (? (tarc-ends? p ".gz" || tarc-ends? p ".tgz" || tarc-ends? p ".taz") 'z
-       (tarc-ends? p ".bz2" || tarc-ends? p ".tbz" || tarc-ends? p ".tbz2" || tarc-ends? p ".tb2") 'j
-       (tarc-ends? p ".xz" || tarc-ends? p ".txz") 'J
+    (? (ends? p ".gz" || ends? p ".tgz" || ends? p ".taz") 'z
+       (ends? p ".bz2" || ends? p ".tbz" || ends? p ".tbz2" || ends? p ".tb2") 'j
+       (ends? p ".xz" || ends? p ".txz") 'J
        ())
    (tarc-zname z) (z @ 'z "gzip" 'j "bzip2" "xz")
 

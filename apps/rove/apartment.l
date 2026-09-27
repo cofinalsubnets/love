@@ -215,14 +215,13 @@
 
  ; --- the talk: the tree's node as a sign, a key as its answer -----------------------
  (chat-node k) (: (go (e . u)) (<e @ ^k e (go u)) (go chat-book))
- (joins-with sp l) (? (one? l) "" (one? >l) <l (<l + sp + joins-with sp >l))
  ; a choice's line is marked off between the bytes 1 and 2, which fit paints as a button
  (choice-line c) (string 1 + " " + show <c + "  " + c 1 + " " + string 2)
  (chat g k) (: nd (chat-node k) nm (g 'npc 'nm)
                txt (map (l \ fill l [nm]) (nd 1)) chs (nd 2)
                ks (map (show * cap) chs)
                lines (txt + (two? chs ? [""] ()) + map choice-line chs
-                      + ["" (fill chat-foot [(two? chs ? (joins-with ", " ks) "any key")])])
+                      + ["" (fill chat-foot [(two? chs ? (join ", " ks) "any key")])])
                (pins g 'talk k 'sign (nm . lines)))
  ; a digit picks its choice, anything else at a node with choices shows it again, and a
  ; node without them closes -- and that is the end of the talk

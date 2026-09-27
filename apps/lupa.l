@@ -133,8 +133,6 @@
            (hit < 0 ? (tell d "not found") (pins d 'find s 'cur hit 'msg ("found at " + hexn (addr d hit)))))))
 
  ;; --- the command line: w q q! wq g / -----------------------------------------------------
- (words s) (filter (w \ 0 < #w) (split " " s))
- (joins l sep) (l @- "" (a . u) (foldl (a \ s \ a + sep + s) a u))
  (hexnum s) (foldl (a \ c \ a < 0 || hexval c < 0 ? -1 (a * 16 + hexval c)) 0 (chars s))
  (parse-addr d s)
   (: sym (elfed? d ? (peep ((d 'elf) 'names) s -1) -1)
@@ -142,7 +140,7 @@
         (#s > 2 && s 0 = 48 && (s 1 = 120 || s 1 = 88)) (: v (hexnum (snip s 2 #s)) (v < 0 ? -1 (offset d v)))
         (: v (hexnum s) (v < 0 ? -1 (offset d v)))))
  (command d line)
-  (: ws (words line) v (two? ws ? <ws "") arg (two? ws && two? >ws ? (joins >ws " ") "")
+  (: ws (words line) v (two? ws ? <ws "") arg (two? ws && two? >ws ? (join " " >ws) "")
      (v @ "w" (save d)
           "q" (d 'dirty ? (tell d "unsaved edits: :w or :q!") (pin d 'over 1))
           "q!" (pin d 'over 1)
@@ -200,7 +198,7 @@
      abs (map (\ it (<it = 'op ? ['op (it 1) (it 2) (map (o \ named d (dc-abs base 0 ln o)) (it 3))] it)) its)
      ls (lines ((d 'syn = 'att ? att-show intel-show) abs))
      ls2 (d 'syn = 'att ? ls >ls)                       ; past the .intel_syntax line
-     (joins (map strip (filter (l \ 0 < #(strip l)) ls2)) "; "))
+     (join "; " (map strip (filter (l \ 0 < #(strip l)) ls2))))
  (asmrow d off w)
   (: r (insn d off) ln <r its >r cur (off = d 'cur)
      bs (foldl (\ a i (a + (i < ln ? (hex (lupa-byte d (off + i)) 2) "  ") + " ")) "" ^7)

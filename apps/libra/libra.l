@@ -100,7 +100,6 @@
           (: a ((: (f i) (? ((i < n) && (ddashy? (s i))) (f (i + 1)) i)) 0)
              b ((: (f j) (? ((a < j) && (ddashy? (s (j - 1)))) (f (j - 1)) j)) n)
              (? (a < b) [1 (snip s a b)] ()))))
-   (dstarts? s t) (: n #s m #t ((m <= n) && (snip s 0 m = t)))
    (ditem? s) (: n #s
                  (((2 <= n) && (snip s 0 2 = "- "))
                   || ((3 <= n) && ((47 < s 0) && (s 0 < 58) && (snip s 1 3 = ". ")))))
@@ -128,7 +127,7 @@
               b (dbanner s)
               (? (dblank? s)         (go >ls 0 (acc + "\n"))
                  (two? b)            (go >ls 0 (acc + "## " + <>b + "\n"))
-                 (dstarts? s "usage:")
+                 (starts? s "usage:")
                   (: r (dtake >ls) (go <>r 0 (acc + dfence (s . <r))))
                  (&& (0 < dind s) li) (go >ls 1 (acc + s + "\n"))
                  (0 < dind s)        (: r (dtake ls) (go <>r 0 (acc + dfence <r)))

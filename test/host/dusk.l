@@ -7,9 +7,7 @@
 
 (borrow 'dusk)    ; the artifact's module, warm from the tree
 
-(: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
-   (has? h n) (find h n 0)
-   (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
+(: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    (rows s) (1 + count s "\r\n")
    (pen? s n) (has? s ("38;5;" + show n + ";") || has? s (";48;5;" + show n + "m"))
    (sun? f) (any (p \ pen? f p) sun-pens)

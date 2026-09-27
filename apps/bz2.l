@@ -34,8 +34,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
 
    (bzc-say t m) (: _ (say err (peep t 'nm "bzip2" + ": " + m + "\n")) (flush err))
    (bzc-moan t m) (? (peep t 'q 0) 0 (bzc-say t m))
-   (bzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
-   (bzc-suf p) (: (go l) (? !(two? l) () (bzc-ends? p <<l) <l (go >l)) (go bzc-sufs))
+   (bzc-suf p) (: (go l) (? !(two? l) () (ends? p <<l) <l (go >l)) (go bzc-sufs))
    (bzc-lpad w c s) (? (w <= #s) s (bzc-lpad w c (c + s)))
    (bzc-fix x m w)                     ; x at m's decimals (1000: three), right in w, printf's %w.nf
     (: v (floor (abs x * m + 0.5))

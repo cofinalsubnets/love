@@ -57,9 +57,6 @@
                            ; time and = stores the text, so the value itself cannot say which
    clivars (tablet 0)      ; a 1-cell box: the command line's VAR=VAL words, ((name . val) ..)
 
-   ; "a b c" from ("a" "b" "c"); "" from the empty list.
-   (join sep l) (? (two? l) (foldl (\ a x (a + sep + x)) <l >l) "")
-
    ; register one card, merging with any prior one for the same item: prereqs accumulate
    ; (deduped -- a caller who re-registers the same recipe would otherwise grow the card
    ; without bound) and a later non-empty recipe wins, as make does. the first item ever
@@ -591,12 +588,6 @@
    (fn-or args as d)  ((: (g l) (? (two? l) (: v (expand <l as (1 + d)) (? (0 < #(trim v)) v (g >l))) "")) args)
    (fn-and args as d) ((: (g l last) (? (two? l) (: v (expand <l as (1 + d)) (? (0 < #(trim v)) (g >l v) "")) last)) args "")
    ; -- the helpers the added builtins stand on ------------------------------------
-   (findsub s sub)                        ; index of sub in s | -1
-    (: n #s m #sub
-       (at i) (? (i + m > n) -1
-                 (: (eq k) (k >= m ? 1 (s (i + k) = sub k ? (eq (1 + k)) 0))
-                    (? (eq 0) i (at (1 + i)))))
-       (? (m = 0) 0 (at 0)))
    (num1 s) (: r (sound (trim s)) (? (two? r) <r 0))     ; a leading integer | 0
    (fn-join a b)                          ; $(join): pairwise, the longer list's tail rides alone
     (: (g x y acc) (? (two? x) (g >x (two? y && >y) (<x + (two? y ? <y "") . acc))
@@ -719,7 +710,6 @@
    (expand-words ws as) (catmap (w \ split-ws (expand w as 0)) ws)
    ; a recipe line leading with the shell's `exec` is interactive: it replaces the shell, so make
    ; already runs it on the real tty, and cook runs it through the exec nif to match.
-   (starts? s pre) (#pre <= #s && pre = snip s 0 #pre)
    (execp cmd) (: t (ltrim cmd) (starts? t "exec" && (4 = #t || chws (t 4))))
    ; build a card's steps. each raw is (silent ignore . body) from recipe-parse; expand the body
    ; now (the $@/$</$^/$* automatics are live in `as` and re-pinned per item) and close over the

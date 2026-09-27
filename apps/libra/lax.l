@@ -117,14 +117,6 @@
    ; that is what untagged means -- so the line is found by looking its text up
    ; in the source, and the count says how many sites share the spelling.
    (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ()))
-   (linesof s) (: n (tally s)
-                  (g i st acc) (? (n <= i) (rev (snip s st n . acc))
-                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
-                                  (g (i + 1) st acc))
-                  (g 0 0 ()))
-   (has? hay ndl) (: n (tally hay) m (tally ndl)
-                     (go i) (? ((n - m) < i) 0 (= ndl (snip hay i (i + m))) 1 (go (i + 1)))
-                     (? (m = 0) 0 (go 0)))
    (bare s) (: n (tally s)                       ; the line's first non-blank
                (g i) (? (n <= i) 32 (: c (s i) (? (|| (c = 32) (c = 9)) (g (i + 1)) c)))
                (g 0))
@@ -138,7 +130,7 @@
    (scan path)
     (: s (rdf path)
        (? (nil? s) (say err ("lax: cannot open " + path + "\n"))
-        (: lns (linesof s)
+        (: lns (split "\n" s)
            (go rest acc)
             (: r (sound rest)
                (? (= r 'torn) acc
