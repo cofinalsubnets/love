@@ -23,6 +23,7 @@
 // buffer are all heap.
 #include "k.h"
 #include "asmops.h"
+#include "mmio.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -54,24 +55,8 @@ static struct {
   uint64_t wpos, hw, zpos;           // running byte counts: landed, played, silenced to
 } khda;
 
-static inline uint8_t  r8 (volatile uint8_t *p) { return *p; }
-static inline uint16_t r16(volatile uint8_t *p) { return *(volatile uint16_t*) p; }
-static inline uint32_t r32(volatile uint8_t *p) { return *(volatile uint32_t*) p; }
-static inline void w8 (volatile uint8_t *p, uint8_t v)  { *p = v; }
-static inline void w16(volatile uint8_t *p, uint16_t v) { *(volatile uint16_t*) p = v; }
-static inline void w32(volatile uint8_t *p, uint32_t v) { *(volatile uint32_t*) p = v; }
-static inline uintptr_t vtop(volatile void *p) { return (uintptr_t) p - khhdm; }
-
 #if defined(__x86_64__)
 // --- PCI config space ------------------------------------------------------
-static uint32_t pci_r32(uint32_t bdf, uint32_t off) {
-  k_outl(0xcf8, 0x80000000u | bdf << 8 | (off & 0xfc));
-  return k_inl(0xcfc); }
-static void pci_w32(uint32_t bdf, uint32_t off, uint32_t v) {
-  k_outl(0xcf8, 0x80000000u | bdf << 8 | (off & 0xfc));
-  k_outl(0xcfc, v); }
-static uint32_t pci_r8(uint32_t bdf, uint32_t off) {
-  return pci_r32(bdf, off) >> 8 * (off & 3) & 0xff; }
 static void pci_w8(uint32_t bdf, uint32_t off, uint32_t v) {
   uint32_t sh = 8 * (off & 3), w = pci_r32(bdf, off) & ~(0xffu << sh);
   pci_w32(bdf, off, w | (v & 0xff) << sh); }

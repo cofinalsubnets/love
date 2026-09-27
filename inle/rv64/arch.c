@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
 #include "k.h"                       // kboot, and kputc/kputs/kputn (inle/kmain.c)
+#include "../mmio.h"                  // mmio_rd/mmio_wr, device registers off the direct map
 
 void kq(uint8_t);                      // kmain's input queue, one byte
 
@@ -18,15 +19,6 @@ void kq(uint8_t);                      // kmain's input queue, one byte
 #define UART_IRQ    10
 #define PLIC_CTX    1                  // hart 0's S-mode context: 2 * hart + 1
 #define TIMEBASE    10000000           // mtime ticks per second on virt
-
-static inline uint8_t mmio_rd8(uintptr_t phys, uintptr_t off) {
-  return *(volatile uint8_t*) (khhdm + phys + off); }
-static inline void mmio_wr8(uintptr_t phys, uintptr_t off, uint8_t v) {
-  *(volatile uint8_t*) (khhdm + phys + off) = v; }
-static inline uint32_t mmio_rd(uintptr_t phys, uintptr_t off) {
-  return *(volatile uint32_t*) (khhdm + phys + off); }
-static inline void mmio_wr(uintptr_t phys, uintptr_t off, uint32_t v) {
-  *(volatile uint32_t*) (khhdm + phys + off) = v; }
 
 // --- ns16550 serial console -------------------------------------------
 // x64's COM1 with the same register file behind memory instead of ports:

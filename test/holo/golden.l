@@ -86,6 +86,7 @@
       ("sys.rmw"     "0fc102480fb14f088606ff0048830001660908480fba2803fe4b04"
                      ((xaddm 4 r2 0 r0) (cmpxchgm 8 r6 8 r1) (xchgm 1 r5 0 r0) (unm inc 4 r0 0)
                       (alum add 8 r0 0 1) (alum or 2 r0 0 r1) (btm bts 8 r0 0 3) (unm dec 1 r3 4)))
+      ("sys.testm"   "f60020854b08"          ((testm 1 r0 0 32) (testm 4 r3 8 r1)))
       ("sys.ud2"     "0f0b"                  ((ud2)))
       ("sys.iretq"   "48cf"                  ((iretq)))
       ("sys.swapgs"  "0f01f8"                ((swapgs)))
@@ -353,6 +354,17 @@
         '((lock) (xaddm 4 r2 0 r0) (cmpxchgm 8 r6 8 r1) (xchgm 1 r5 0 r0) (unm inc 4 r0 0)
           (alum add 8 r0 0 1) (alum or 2 r0 0 r1) (btm bts 8 r0 0 3) (unm dec 1 r3 4))
         (gas-text 'x64 "lock xaddl %eax, (%rdx)\ncmpxchgq %rcx, 8(%rdi)\nxchg (%rsi), %al\nincl (%rax)\naddq $1, (%rax)\norw %cx, (%rax)\nbtsq $3, (%rax)\ndecb 4(%rbx)"))
+   _ (chk-eq "gas.x64.rip"                         ; an absolute or rip-relative memory operand rides rip: cpu features' `testb $m, caps+1`
+        '((testm 1 rip (caps 1) 32) (alum add 4 rip (cnt 0) 1))
+        (gas-text 'x64 "testb $32, caps+1\naddl $1, cnt(%rip)"))
+   ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
+   _ (chk-eq "gas.x64.thisip"
+        '((raw (76 141 29 0 0 0 0)) (raw (72 141 5 8 0 0 0)))
+        (gas-text 'x64 "lea 0(%rip), %r11\nlea 8(%rip), %rax"))
+   ; ..and its fix measures from the instruction's end, past the immediate
+   _ (chk-eq "x64.rip.tail"
+        "f6050000000020"                           ; d sits right at the end: disp 0, not 1
+        (holo-hex 'x64 '((testm 1 rip (d 0) 32) (label d))))
    _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
         '((mov r1 r0) (zx4 r1) (li r0 4294967295))
         (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))

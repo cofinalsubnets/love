@@ -24,7 +24,7 @@
 (test
  (elem 'kiosko (cite ()))
  (elem 'serve1 (keys (cite 'kiosko)))
- (lit? (cite 'kiosko 'kiosko-main))
+ (lit? (cite 'kiosko 'serve))
  !(cite 'kiosco))
 
 ; --- the shelf ------------------------------------------------------------------------
