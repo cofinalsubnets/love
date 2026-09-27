@@ -234,6 +234,7 @@
    (ldsp fs off) #(filter (f \ (two? f && (= <f 'ld) && (= <>>f 'sp) && (= off <>>>f))) fs)
    (stsp fs off) #(filter (f \ (two? f && elem <f '(st si) && (= <>f 'sp) && (= off <>>f))) fs)
    (ldc fs) #(filter (f \ (two? f && elem <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && (= <>>f 'sp))) fs)
+   (sp? fs) (foldl (\ a f (a || (two? f && <f = 'sub && <>f = 'sp))) () fs)
    (stc fs) #(filter (f \ (two? f && elem <f '(st st1 st2 st4 si si1 si2 si4) && (= <>f 'sp))) fs)
    (leac fs) #(filter (f \ (two? f && elem <f '(lea lean))) fs)
    (aeb fs) (: (go l) (? !(two? l) ()                 ; the array's base: the lea its escape leaves standing
@@ -1487,7 +1488,6 @@
    aBf (fnf 'f <>aB)
    aT (cgn "static int rng(int x) { if (x < 0) return 0; if (x > 100) return 1; return x & 1; }\nint g(int x, int y) { if (rng(x)) return y + 1; return y * 3; }\nint main() { return g(3, 4); }")
    aTf (fnf 'g <>aT)
-   (sp? fs) (foldl (\ a f (a || (two? f && <f = 'sub && <>f = 'sp))) () fs)
    (has? op fs) (foldl (\ a f (a || (two? f && <f = op))) () fs)
    (test
       (two? aP)

@@ -4135,7 +4135,7 @@
    ; ret, then (label L) -> (br !cc K) (label L) .., and (label K) run after the function. the
    ; fall-through is the path that goes on. a label an if with __builtin_expect(c, 1) made stays
    (tailarm g fs)
-    (? !(x64? g) fs
+    (? (t32? g) fs                                            ; thumb's short branches stay put
        (: hot (peep g 'hot ())
           (run l L acc n)                                     ; -> [run rest] | ()
            (? (!(two? l) || 48 < n) ()
