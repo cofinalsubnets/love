@@ -303,7 +303,7 @@ moon_mid = apps/moon/floor.l apps/moon/lex.l apps/moon/cpp.l apps/moon/parse.l \
 kore_arc = apps/gz.l apps/xz.l apps/bz2.l apps/tar.l apps/cpio.l
 # the tls stack and the multi-call door that ends kore's cat
 kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/client.l \
-  apps/kore/wget.l apps/kore/www.l apps/kore/kore.l
+  apps/kore/wget.l apps/kore/www.l apps/kore/net.l apps/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/fat.l \
