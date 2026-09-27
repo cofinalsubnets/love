@@ -674,9 +674,20 @@
             (kind = 'abs64) (le64 (target + aux))
             (scare 'badfix kind)))
 
+   ;; the linker's door (holo.l's refix-with). riscv is rela, so the words in bs are the base
+   ;; the field ors into -- two for pcrel, the auipc pair, the way rv-patch's aux packs them.
+   ;; () for a target past the field's reach
+   (rv-refix kind bs target site width)
+    (: (w i) (bs i + (bs (i + 1) << 8) + (bs (i + 2) << 16) + (bs (i + 3) << 24))
+       rb (target - site) hi ((rb - rv-lo12 rb) // 4096)
+       (? (kind = 'j21 && !(-1048576 <= rb <= 1048575)) ()
+          (kind = 'pcrel && !(-524288 <= hi <= 524287)) ()
+          (rv-patch kind target site width (kind = 'pcrel ? (w 0 + w 4 * 4294967296) (w 0)))))
+
    rv (tablet 0)
    _ (pin rv 'lower rv-lower)
    _ (pin rv 'patch rv-patch)
+   _ (pin rv 'refix rv-refix)
    ;; the prefix ahead of the hop (fp predicate, or the s/ns subtract) is plain words, never a
    ;; fixup, so its element count is its byte count -- which is what puts the branch at pa + pre.
    _ (pin rv 'short (\ ins c rel
