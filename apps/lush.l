@@ -1492,7 +1492,7 @@
         (? (sh-smem? w sh-imgok && !(sh-slashed? w) && !!f0 && sh-ours? w)
            [1 (sh-imgwrap f0 mn) (mn = "kore-main")]
            0))
-   (sh-imgwrap f mn) (? (mn = "moon-run") f ((cite 'kore 'urun) f))
+   (sh-imgwrap f mn) (? (mn = "moon-run") f (urun f))
    (sh-assoc w l) (? (one? l) 0 (w = <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (sh-pathfresh 0, peep sh-imgc w 'no @ 'no (sh-imgask w @ f (pin sh-imgc w f, f)) v v)
    (sh-dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))

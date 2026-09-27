@@ -29,10 +29,6 @@
    (jws s i n)  (i < n && elem (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)
 
    (jdigv c)    (? (48 <= c <= 57) (c - 48) -1)
-   (jhexv c)    (? (48 <= c <= 57)  (c - 48)
-                   (97 <= c <= 102) (c - 87)
-                   (65 <= c <= 70)  (c - 55)
-                   -1)
 
    ; a run of decimals -> `(value end). end = start means there were none, which the
    ; callers check: json wants at least one digit everywhere it wants a digit.
@@ -45,17 +41,9 @@
    (jhex4 s i n)   ((: (go k acc d)
                        (? (d = 0)      [acc k]
                           (k >= n)  ()
-                          (: v (jhexv (s k))
+                          (: v (hexv (s k))
                              (v >= 0 ? (go (k + 1) (acc * 16 + v) (d - 1))))))
                     i 0 4)
-
-   ; a code point out as utf-8 bytes, one (string byte) per byte.
-   (jutf8 u) (? (u < 128)   (string u)
-                (u < 2048)  (string (192 + u // 64) + string (128 + (u % 64)))
-                (u < 65536) (string (224 + u // 4096) + string (128 + ((u // 64) % 64))
-                                + string (128 + (u % 64)))
-                (string (240 + u // 262144) + string (128 + ((u // 4096) % 64))
-                    + string (128 + ((u // 64) % 64)) + string (128 + (u % 64))))
 
    ; \uxxxx, with the surrogate pair rejoined. a lone or unpaired surrogate is passed
    ; through as itself rather than refused -- the text is still json, and refusing a whole
@@ -63,15 +51,15 @@
    (juni s i n)
     (jhex4 s i n @ (u k)
      (? !(55296 <= u <= 56319)
-         [(jutf8 u) k]
+         [(utf8 u) k]
         !(k + 1 < n && s k = 92 && s (k + 1) = 117)
-         [(jutf8 u) k]
+         [(utf8 u) k]
         (: l (jhex4 s (k + 2) n)
-           (? (one? l) [(jutf8 u) k]
+           (? (one? l) [(utf8 u) k]
               (: v <l
                  (? (56320 <= v <= 57343)
-                    [(jutf8 (65536 + (u - 55296) * 1024 + (v - 56320))) <>l]
-                    [(jutf8 u) k]))))))
+                    [(utf8 (65536 + (u - 55296) * 1024 + (v - 56320))) <>l]
+                    [(utf8 u) k]))))))
 
    ; the byte after the backslash. -1 for "no such escape", never () -- 0 is a fine byte.
    (jesc s i n) (? (i < n)
