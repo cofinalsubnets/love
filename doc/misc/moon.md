@@ -462,7 +462,9 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   indexed memory refuse. A `%gs:`/`%fs:` override rides a base-register access, or an absolute
   address a load reaches through its destination (percpu's `%gs:sym`). A read-modify-write on
   memory lays whole -- `xadd`, `cmpxchg`, `xchg`, add/or/and/sub/xor/cmp, inc/dec/not/neg,
-  bt/bts/btr/btc, under a `lock` -- at the suffix's width, or the register's with none. A
+  bt/bts/btr/btc, under a `lock` -- at the suffix's width, or the register's with none; so do the
+  bit scans and counts (bsr bsf tzcnt lzcnt popcnt, a 32-bit one reading only the low half),
+  `pause` and the fences. A
   template separates on `\n` or `;`, as GNU does. A line that fits
   nothing SCARES (`cc: internal error: gas-x64-op ..`) rather than dropping out.
 * The body assembles AT CODEGEN into one opaque `('raw bytes)`: the IR passes barrier on raw,
