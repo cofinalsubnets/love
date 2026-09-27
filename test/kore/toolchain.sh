@@ -106,4 +106,22 @@ if [ "$(uname -m)" = x86_64 ]; then
     "$ho/.kore-rl.elf"; r=$?; [ $r -eq 42 ] || fail "kore ranlib: the linked exe (exit $r)"
   fi
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy + nm + size + strip + ranlib ok"
+# readelf: binutils' own headers, sections, segments and symbols, at 80 columns and
+# wide, over objects and executables of every target mooncc lays, and the one this runs
+if command -v readelf >/dev/null 2>&1; then
+  printf 'int x = 3;\nstatic int y;\nint f(void) { return x + y; }\nint main(void) { return f(); }\n' > "$ho/.kore-re.c"
+  fs="$m"
+  for t in x64 a64 rv64 thumb2; do
+    moonc -t $t -c "$ho/.kore-re.c" -o "$ho/.kore-re-$t.o" >/dev/null 2>&1 && fs="$fs $ho/.kore-re-$t.o"
+    [ $t = thumb2 ] || { moonc -t $t "$ho/.kore-re.c" -o "$ho/.kore-re-$t.elf" >/dev/null 2>&1 && fs="$fs $ho/.kore-re-$t.elf"; }
+  done
+  for f in $fs; do
+    for op in -h -S "-S -W" -l "-l -W" -s "-s -W" -e; do
+      # shellcheck disable=SC2086
+      LC_ALL=C readelf $op "$f" > "$g" 2>&1; korerun readelf $op "$f" > "$o" 2>&1; same "readelf $op $f"
+    done
+  done
+  LC_ALL=C readelf -h "$ho/.kore-re-x64.o" "$ho/.kore-re-a64.o" > "$g" 2>&1
+  korerun readelf -h "$ho/.kore-re-x64.o" "$ho/.kore-re-a64.o" > "$o" 2>&1; same "readelf over two files"
+fi
+echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf ok"
