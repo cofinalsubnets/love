@@ -393,18 +393,18 @@
    ; the TU used, appended in declaration order (cgen-obj's tail): a named section's address
    ; is the point -- inle/rp2040's .vectors is read by the core before an instruction runs --
    ; so both its existence and its order are the program's to fix, never ours.
-   ; the two wide tuples are named once, here: parse.l's `tops` answers fourteen fields and
+   ; the two wide tuples are named once, here: parse.l's `tops` answers fifteen fields and
    ; gen.l's cgen-obj thirteen, and `[]` is the strict arity, so a shape that gains a member is
    ; a refusal naming the file rather than every site quietly reading its neighbour.
    (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol]
        ; wasm rides gen's rv64 lane whole (love/holo/wasmfn.l is the machine under it) and
        ; lays no ELF: its object is the gen tuple as text, read back by the wasm link. gen
        ; takes the name itself -- rv64? covers both, and the wide multiply wasm lacks must be
        ; declined.
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol] tgt)
           _ (okv? ob || ccdie ob src ("cc: codegen error in " + src))
           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
              (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
