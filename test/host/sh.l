@@ -657,6 +657,9 @@
              mkfs.vfat 2>/dev/null; echo m=$?
              echo alive"])
    (test ("t=2\nl=1\nm=2\nalive\n" = >r)))
+; ..and a main's early answer too: mooncc's --version leaves, never quits, in here
+(: r (hark ["out/love" "out/lush" "-a" "-c" "mooncc --version > /dev/null; mooncc -h > /dev/null; echo alive"])
+   (test ("alive\n" = >r)))
 ; a capture of one takes the jug: no pipe, no fd, no child, which is the whole
 ; point of `cc=$(which cc)`
 (: pr (sh-parse-line "which cc")
@@ -794,6 +797,12 @@
 (: T (cite 'verbs 'trait)
    (test (1 = sh-verbbi? "echo") (1 = sh-verbbi? "[") (0 = sh-verbbi? "ls")
          (1 = T 'mooncc 'self) (1 = T 'fat 'self) (0 = T 'tar 'self) (0 = T 'cat 'self)))
+;; ..and a trait may turn on the call: love's bake and wake want a fresh process, asked
+;; under the name the word runs as, so a path to this binary is love too
+(: H (cite 'verbs 'holds)
+   (test (1 = H 'love 'exec ["bake"]) (1 = H 'love 'exec ["wake" "x"]) (0 = H 'love 'exec ["-e" "1"])
+         (1 = sh-exec? ["out/love" "bake"]) (0 = sh-exec? ["out/love" "kore" "ls"])
+         (0 = sh-forkok? ["out/love" "bake"] [(0 . 5)])))
 
 ;; readonly, alias, times, hash and ulimit: each acts on this process or its tables.
 ;; a readonly assignment is an error, fatal to a script, from every setter

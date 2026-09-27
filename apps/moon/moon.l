@@ -1056,9 +1056,9 @@
              ; verb on the love binary, not a separate program, and two reported versions
              ; would report a thing that cannot happen.
              (a = "--version" || a = "-v")
-              (: _ (puts ("mooncc (love " + love-version + ")")) _ (putc 10) (quit 0))
+              (: _ (puts ("mooncc (love " + love-version + ")")) _ (putc 10) _ (flush out) (uleave 0))
              (a = "--help" || a = "-h")
-              (: _ (puts usage) _ (putc 10) _ (flush out) (quit 0))
+              (: _ (puts usage) _ (putc 10) _ (flush out) (uleave 0))
              (a = "-pie") (flags r (pin t 'pie 1))
              ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
              ; linked image, so a loader placing it at a base of its own can slide them.

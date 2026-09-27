@@ -1520,15 +1520,17 @@
    ; the trusts NEST -- self implies fork implies exec -- so the fork test below asks
    ; the self question rather than keeping a second list beside it.
    (sh-selfok? w) (two? (sh-imgfn w))
+   ; a verb that wants a fresh process says so ('exec, verbs' traits), asked of this call
+   ; under the name its word runs as -- a path to this binary is `love`
+   (sh-exec? av) (: V (cite 'verbs) ((V 'holds) (name ((V 'bn) <av)) 'exec >av))
    (sh-forkok? av fdmap)
-     (: a >av                                    ; cap is total, so a bare word reads () here
-        (? (<a = "bake" || <a = "wake") 0
-           (0 < #(getenv "LOVE_NO_IMAGE") && elem 'love-image (names ())) 0
-           (sh-tty ()) 1                         ; our stdin is the terminal: nothing to duplicate
-           !(sh-inread ()) 1                     ; we never read our stdin: nothing buffered to duplicate
-           (sh-fd0? fdmap) 1                     ; the child's stdin is its own
-           (sh-selfok? <av) 1                    ; run in our own process, so ours to fork
-           0))
+     (? (sh-exec? av) 0
+        (0 < #(getenv "LOVE_NO_IMAGE") && elem 'love-image (names ())) 0
+        (sh-tty ()) 1                         ; our stdin is the terminal: nothing to duplicate
+        !(sh-inread ()) 1                     ; we never read our stdin: nothing buffered to duplicate
+        (sh-fd0? fdmap) 1                     ; the child's stdin is its own
+        (sh-selfok? <av) 1                    ; run in our own process, so ours to fork
+        0)
    ; spawnio does the job-control dance in C for a child it execs; a forked stage never
    ; execs, so it does its own. both sides set the group, as spawnio's two calls do, so
    ; neither a wait nor a signal can race it. pg < 0 keeps the shell's group (the non-tty

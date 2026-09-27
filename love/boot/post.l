@@ -1877,14 +1877,17 @@
 ;             path, so the basename decides.
 ; a verb takes the args after its name and answers a status charm; the rail quits with it,
 ; which is kore's convention and why `love kore sed ..` nests.
-(module '(verbs any? bn call dash enlist fills fire get seat seatof tab trait word)
+(module '(verbs any? bn call dash enlist fills fire get holds seat seatof tab trait word)
 (: tab {}   ; nil? when empty, like every empty -- ask it with peep, not by testing it
-   ; what a verb says of itself, for a shell deciding where to run it -- name -> {trait 1}:
+   ; what a verb says of itself, for a shell deciding where to run it -- name -> {trait v},
+   ; v 1 or a function of the call's args (holds asks it of one call):
    ;   'builtin  run in the caller in every mode, ahead of PATH (echo, test ..)
    ;   'self     safe to run in the caller: BOUNDED (a shell ignores INT while it runs, so
    ;             sleep or yes could not be taken back), reads NO STDIN however it is called
    ;             (bare cat drinks the terminal), LEAVES THE CALLER AS IT FOUND IT (env X=1,
    ;             chroot), and ANSWERS THE SAME WHOEVER ASKS (pidof skips its own pid)
+   ;   'exec     wants a fresh process, never a fork of a warm one (love bake: the image a
+   ;             fork would carry is the one being made)
    ; a verb that says nothing is still ours, and a shell forks it warm
    traits {}
    ; a seat whose verbs are not all in the image installs a filler here, and the first miss runs
@@ -1897,9 +1900,13 @@
                 (lit? v ? v
                  (: f (fill 'f)
                     (lit? f ? (: _ (pin fill 'f ()) _ (f ()) (tab k)) ()))))
-   ; a verb and what it says of itself, in one registration: ts a list of trait words
-   (enlist k f ts) (: _ (pin tab k f) (pin traits k (foldl (\ t x (pin t x 1)) {} ts)))
+   ; a verb and what it says of itself, in one registration: ts a list of trait words, or
+   ; (word . value) where the answer turns on the args -- value a function of them
+   (enlist k f ts) (: _ (pin tab k f)
+                      (pin traits k (foldl (\ t x (? (two? x) (pin t <x >x) (pin t x 1))) {} ts)))
    (trait k t) (peep (peep traits k {}) t 0)
+   ; ..and the trait asked of one call: a function of the args answers for them
+   (holds k t as) (: v (trait k t) (? (lit? v) (bit (v as)) v))
    ; the verb run in the caller as a builtin: urun is the driver, so a leave from deep in
    ; answers a status and never ends the caller. () when no verb has the name
    (call k as) (: f (get k) (? (lit? f) (urun f as) ()))
@@ -2584,6 +2591,7 @@
  ; `love` is a verb like every other program this binary carries, which is what lets a shell
  ; with no seat to exec reach the repl by name. last in the letrec: the closure takes its free
  ; names as they stand.
- _ (pins (cite 'verbs 'tab) 'love
-     (\ as (two? as ? (cli-rail (. "love" as)) (shell 0))))
+ _ ((cite 'verbs 'enlist) 'love
+     (\ as (two? as ? (cli-rail (. "love" as)) (shell 0)))
+     [('exec . (\ as (two? as && (<as = "bake" || <as = "wake"))))])
 ) ; module cli
