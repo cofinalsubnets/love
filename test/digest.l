@@ -1,11 +1,11 @@
 ; --- test/digest.l: the digests in inle/hash.c, held to what publishes them ---
 ; named digest, not hash, because test/hash.l is the tablet's.
-; apps/kore's cksum, md5sum and sha256sum are these three plus a
-; line of output, and test/kore/sum.sh holds those to GNU coreutils -- so this file is
+; apps/kore's checksum tools are these plus a line of output, and test/kore/sum.sh holds those to GNU coreutils -- so this file is
 ; the half of the rope that does not need another implementation on the box.
 ;
-;   vectors   RFC 1321's md5 suite and fips 180-4's sha-256 examples, verbatim. a digest
-;             with no love twin has nothing else to be right against.
+;   vectors   RFC 1321's md5 suite, fips 180-4's sha examples and RFC 7693's blake2b
+;             one, verbatim. a digest with no love twin has nothing else to be right
+;             against.
 ;   cksum     ..except this one, which gets a twin: the POSIX crc is short enough to
 ;             state in love, so `hash-ckwalk` below is the statement of the polynomial
 ;             and the C is held to it at every length 0..129. the walk is written from
@@ -13,15 +13,16 @@
 ;             way round from crc32's, seed 0, and the byte count walked through after
 ;             the message, low byte first, which is why an empty file is 4294967295.
 ;   lengths   the block is 64 bytes and the length rides the last 8 of it, so 55/56 and
-;             119/120 are where a padding off by one shows, at both digests.
+;             119/120 are where a padding off by one shows (sha-384/512: 128 and 16,
+;             so 111/112 and 239/240; blake2b holds a block back, so 128 and 256).
 ;   misuse    value ops: a wrong shape answers (), it does not digest.
-;   stream    <X>-init/feed/done is the same digest resumable -- all three of them --
+;   stream    <X>-init/feed/done is the same digest resumable -- every one of them --
 ;             and its oracle is the one-shot beside it: fed in chunks of every awkward
 ;             size, at every length where the padding could slip, it must answer what
 ;             the one-shot answers. a second spelling of the compression function is
 ;             exactly what this must not be, so the test is agreement and not another
-;             vector. the state's width is the only thing telling the three apart,
-;             so the misuse cases feed each nif the other two's cask.
+;             vector. the state's width is the only thing telling them apart, so the
+;             misuse cases feed each nif its neighbours' casks.
 ;
 ; run:  cat test/00-init.l test/digest.l | out/love
 (test
@@ -184,8 +185,62 @@
  !(md5-feed (cask md5-st) 7) !(cksum-feed (cask ck-st) 7)
  !(md5-done (cask 8)) !(cksum-done (cask 8)))
 
+;; --- sha-1, sha-224, sha-384, sha-512 (fips 180-4) and blake2b (rfc 7693) ---
+(test
+ (lit? sha1) (lit? sha224) (lit? sha384) (lit? sha512) (lit? blake2b)
+ (sha1 "" = "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+ (sha1 "abc" = "a9993e364706816aba3e25717850c26c9cd0d89d")
+ (sha1 hash-56 = "84983e441c3bd26ebaae4aa1f95129e5e54670f1")
+ (sha224 "abc" = "23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7")
+ (sha224 hash-56 = "75388b16512776cc5dba5da1fd890150b0c6455cb4f58b1952522525")
+ (sha384 "abc" = "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7")
+ (sha384 hash-112 = "09330c33f71147e83d192fc782cd1b4753111b173b3b05d22fa08086e3b0f712fcc7c71a557e2db966c3e9fa91746039")
+ (sha512 "abc" = "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f")
+ (sha512 hash-112 = "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909")
+ (blake2b "abc" = "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923")
+ !(string? (sha1 7)) !(string? (sha512 ())) !(string? (blake2b (cask 8))))
+
+; --- the four newer block digests and blake2b, streamed against their one-shots ---
+; sha-384/512 run a 128-byte block with a 16-byte length, so 111/112 and 239/240 are
+; their pad boundaries; blake2b holds a whole block back until it knows whether it was
+; the last, so 128, 256 and one either side are where it could slip
+(: dig-sha1 (\ _ [93 sha1-init sha1-feed sha1-done])
+   dig-sha224 (\ _ [106 sha224-init sha224-feed sha224-done])
+   dig-sha384 (\ _ [202 sha384-init sha384-feed sha384-done])
+   dig-sha512 (\ _ [201 sha512-init sha512-feed sha512-done])
+   (dig-b2 n) [210 (\ b (blake2b-init b n)) blake2b-feed blake2b-done]
+   (dig-agree2? n)
+    (: s (hash-bytes n)
+       (go ks) (? (one? ks) 1
+                  (? (sha1 s = dig-stream (dig-sha1 0) s <ks &&
+                      sha224 s = dig-stream (dig-sha224 0) s <ks &&
+                      sha384 s = dig-stream (dig-sha384 0) s <ks &&
+                      sha512 s = dig-stream (dig-sha512 0) s <ks &&
+                      blake2b s = dig-stream (dig-b2 64) s <ks)
+                     (go >ks) 0)))
+   (dig-sweep2 ns) (? !(two? ns) 1 (dig-agree2? <ns '(1 7 64 127 128 129) ? (dig-sweep2 >ns) 0))
+   ; bsd sum's rotate-then-add, stated in love
+   (hash-bsdwalk s) (: (go c i) (? (#s <= i) c (go ((((c >> 1) | ((c & 1) << 15)) + s i) & 65535) (i + 1))) (go 0 0))
+   (hash-bsdsame s) (? (bsdsum 0 s = hash-bsdwalk s) 1 0))
+(test
+ (dig-sweep2 '(0 1 55 56 63 64 65 111 112 119 120 127 128 129 239 240 255 256 257 1000))
+ (dig-stream (dig-sha512 0) (hash-bytes 100000) 1000 = sha512 (hash-bytes 100000))
+ (dig-stream (dig-b2 64) (hash-bytes 100000) 65536 = blake2b (hash-bytes 100000))
+ ; a shorter blake2b is its own digest, not a prefix of the long one
+ (dig-stream (dig-b2 32) "abc" 1 = "bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319")
+ (dig-stream (dig-b2 1) "" 1 = "2e")
+ !(blake2b-init (cask 210) 0) !(blake2b-init (cask 210) 65) !(blake2b-init (cask 202) 64)
+ ; the widths are the types: each refuses its neighbours' casks
+ !(sha224-init (cask 105)) !(sha256-init (cask 106)) !(sha384-init (cask 201))
+ !(sha512-init (cask 202)) !(sha1-init (cask 89)) !(sha1-done (cask 89))
+ !(sha384-feed (cask 202) 7)
+ ; bsd sum against the love statement, carried across a split as sum carries it
+ (hash-bsdsame "") (hash-bsdsame hash-mixed) (hash-bsdsame (hash-bytes 1000))
+ (bsdsum (bsdsum 0 (hash-bytes 500)) (snip (hash-bytes 1000) 500 1000) = bsdsum 0 (hash-bytes 1000))
+ !(charm? (bsdsum 0 7)) !(charm? (bsdsum "x" "y")))
+
 (: _ (test_fin ())
-   _ (puts "digest: ok -- md5 and sha-256 on their published vectors, the resumable sha-256
-      against the one-shot, cksum against a love walk, and md5/cksum streamed too
+   _ (puts "digest: ok -- md5, the shas and blake2b on their published vectors, each stream
+      against its one-shot, cksum and bsd sum against love walks
 ")
    0)

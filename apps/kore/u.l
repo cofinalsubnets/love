@@ -58,6 +58,8 @@
    udt-mo '("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec")
    (upad w s) (#s < w ? (upad w (" " + s)) s)
    (urpad w s) (#s < w ? (urpad w (s + " ")) s)
+   (upadc w c s) (#s < w ? (upadc w c (string c + s)) s)   ; ..with character c
+   (ubase-hex v) (v < 16 ? (string ("0123456789abcdef" v)) (ubase-hex (v >> 4) + string ("0123456789abcdef" (v & 15))))
    ; join texts with single spaces
    (ujoin a) (? !(two? a) ""
                 !(two? >a) <a

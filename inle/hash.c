@@ -1,14 +1,16 @@
 // inle/hash.c -- digests over a string's bytes. auto-globbed and LvNif-registered,
 // the fs.c discipline; value ops, so absence or misuse answers ().
-//   (sha256 str) / (md5 str)  -> the lowercase hex digest
+//   (md5 str) (sha1 str) (sha224 str) (sha256 str) (sha384 str) (sha512 str)
+//   (blake2b str)             -> the lowercase hex digest (blake2b's the 64-byte one)
 //   (crc32 str)               -> the IEEE crc32, a charm
 //   (cksum str)               -> POSIX cksum's crc with the length folded in, a charm
-// three of them also stream, the state in a cask the caller allocates (the nifs do not):
-//   (sha256-init b) / (sha256-feed b str) / (sha256-done b)   b a 105-byte cask
-//   (md5-init b)    / (md5-feed b str)    / (md5-done b)      b an 89-byte cask
-//   (cksum-init b)  / (cksum-feed b str)  / (cksum-done b)    b a 12-byte cask
-// FIPS 180-4, RFC 1321, IEEE 802.3 and POSIX cksum, all the compact single-pass shape.
-// apps/kore's cksum, md5sum and sha256sum applets are these four plus a line of output.
+//   (bsdsum acc str)          -> bsd sum's 16-bit checksum carried on over str
+// all but crc32 also stream, the state in a cask the caller allocates (the nifs do not):
+//   (X-init b) / (X-feed b str) / (X-done b), b a cask of X's width:
+//   md5 89, sha1 93, sha224 106, sha256 105, sha384 202, sha512 201, cksum 12;
+//   blake2b 210, its init (blake2b-init b n) for an n-byte digest
+// FIPS 180-4, RFC 1321, RFC 7693, IEEE 802.3 and POSIX cksum, all the compact
+// single-pass shape. apps/kore's checksum tools are these plus a line of output.
 // they do not all stand on the same footing. crc32 shadows apps/gz.l's gz-crcwalk and
 // cksum test/digest.l's hash-ckwalk -- both polynomials are stated in love and the C
 // is held to the walk at every length, so a disagreement has a right answer. sha256 and
@@ -19,16 +21,41 @@
 #include <stdint.h>
 #include <string.h>
 
+// sha-512's round constants; sha-256's are their high halves (both are the cube roots
+// of the first primes, to 64 and to 32 bits)
+static uint64_t const K512[80] = {
+ 0x428a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull,
+ 0x3956c25bf348b538ull, 0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull,
+ 0xd807aa98a3030242ull, 0x12835b0145706fbeull, 0x243185be4ee4b28cull, 0x550c7dc3d5ffb4e2ull,
+ 0x72be5d74f27b896full, 0x80deb1fe3b1696b1ull, 0x9bdc06a725c71235ull, 0xc19bf174cf692694ull,
+ 0xe49b69c19ef14ad2ull, 0xefbe4786384f25e3ull, 0x0fc19dc68b8cd5b5ull, 0x240ca1cc77ac9c65ull,
+ 0x2de92c6f592b0275ull, 0x4a7484aa6ea6e483ull, 0x5cb0a9dcbd41fbd4ull, 0x76f988da831153b5ull,
+ 0x983e5152ee66dfabull, 0xa831c66d2db43210ull, 0xb00327c898fb213full, 0xbf597fc7beef0ee4ull,
+ 0xc6e00bf33da88fc2ull, 0xd5a79147930aa725ull, 0x06ca6351e003826full, 0x142929670a0e6e70ull,
+ 0x27b70a8546d22ffcull, 0x2e1b21385c26c926ull, 0x4d2c6dfc5ac42aedull, 0x53380d139d95b3dfull,
+ 0x650a73548baf63deull, 0x766a0abb3c77b2a8ull, 0x81c2c92e47edaee6ull, 0x92722c851482353bull,
+ 0xa2bfe8a14cf10364ull, 0xa81a664bbc423001ull, 0xc24b8b70d0f89791ull, 0xc76c51a30654be30ull,
+ 0xd192e819d6ef5218ull, 0xd69906245565a910ull, 0xf40e35855771202aull, 0x106aa07032bbd1b8ull,
+ 0x19a4c116b8d2d0c8ull, 0x1e376c085141ab53ull, 0x2748774cdf8eeb99ull, 0x34b0bcb5e19b48a8ull,
+ 0x391c0cb3c5c95a63ull, 0x4ed8aa4ae3418acbull, 0x5b9cca4f7763e373ull, 0x682e6ff3d6b2b8a3ull,
+ 0x748f82ee5defb2fcull, 0x78a5636f43172f60ull, 0x84c87814a1f0ab72ull, 0x8cc702081a6439ecull,
+ 0x90befffa23631e28ull, 0xa4506cebde82bde9ull, 0xbef9a3f7b2c67915ull, 0xc67178f2e372532bull,
+ 0xca273eceea26619cull, 0xd186b8c721c0c207ull, 0xeada7dd6cde0eb1eull, 0xf57d4f7fee6ed178ull,
+ 0x06f067aa72176fbaull, 0x0a637dc5a2c898a6ull, 0x113f9804bef90daeull, 0x1b710b35131c471bull,
+ 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull, 0x431d67c49c100d4cull,
+ 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull};
+
+// initial states as 32-bit words, a 64-bit word high half first. sha-256's are
+// sha-512's high halves and sha-224's are sha-384's low halves, so each digest names
+// its table, a stride and a start; md5's are sha-1's first four. blake2b's iv is sha-512's.
 static uint32_t const
- K[64] = {
-  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2},
+ sha512_h0[16] = {
+  0x6a09e667,0xf3bcc908, 0xbb67ae85,0x84caa73b, 0x3c6ef372,0xfe94f82b, 0xa54ff53a,0x5f1d36f1,
+  0x510e527f,0xade682d1, 0x9b05688c,0x2b3e6c1f, 0x1f83d9ab,0xfb41bd6b, 0x5be0cd19,0x137e2179},
+ sha384_h0[16] = {
+  0xcbbb9d5d,0xc1059ed8, 0x629a292a,0x367cd507, 0x9159015a,0x3070dd17, 0x152fecd8,0xf70e5939,
+  0x67332667,0xffc00b31, 0x8eb44a87,0x68581511, 0xdb0c2e0d,0x64f98fa7, 0x47b5481d,0xbefa4fa4},
+ sha1_h0[5] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0},
  MK[64] = { // md5 (rfc1321)
   0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
   0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
@@ -37,11 +64,7 @@ static uint32_t const
   0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
   0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
   0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
-  0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391},
- sha_h0[8] = {
-  0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19},
- md5_h0[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
-
+  0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391};
 
 static uint8_t const MS[64] = {
  7,12,17,22, 7,12,17,22, 7,12,17,22, 7,12,17,22,
@@ -50,12 +73,20 @@ static uint8_t const MS[64] = {
  6,10,15,21, 6,10,15,21, 6,10,15,21, 6,10,15,21};
 
 static uint32_t rr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
+static ai_inline uint32_t rl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
+static ai_inline uint64_t rr64(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
+
+static uint32_t ld32be(const uint8_t *p) {
+ return (uint32_t) p[0] << 24 | (uint32_t) p[1] << 16 | (uint32_t) p[2] << 8 | p[3]; }
+static uint64_t ld64be(const uint8_t *p) { return (uint64_t) ld32be(p) << 32 | ld32be(p + 4); }
+static uint64_t ld64le(const uint8_t *p) {
+ uint64_t v = 0;
+ for (int k = 7; k >= 0; k--) v = v << 8 | p[k];
+ return v; }
 
 static void sha_block(uint32_t h[8], const uint8_t *p) {
  uint32_t w[64];
- for (int i = 0; i < 16; i++)
-  w[i] = (uint32_t) p[4*i] << 24 | (uint32_t) p[4*i+1] << 16
-       | (uint32_t) p[4*i+2] << 8 | (uint32_t) p[4*i+3];
+ for (int i = 0; i < 16; i++) w[i] = ld32be(p + 4 * i);
  for (int i = 16; i < 64; i++) {
   uint32_t s0 = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >> 3),
            s1 = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >> 10);
@@ -65,7 +96,7 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
  for (int i = 0; i < 64; i++) {
   uint32_t s1 = rr(e, 6) ^ rr(e, 11) ^ rr(e, 25),
            ch = (e & f) ^ (~e & gg),
-           t1 = hh + s1 + ch + K[i] + w[i],
+           t1 = hh + s1 + ch + (uint32_t) (K512[i] >> 32) + w[i],
            s0 = rr(a, 2) ^ rr(a, 13) ^ rr(a, 22),
            mj = (a & b) ^ (a & c) ^ (b & c),
            t2 = s0 + mj;
@@ -74,72 +105,41 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
  h[0] += a; h[1] += b; h[2] += c; h[3] += d;
  h[4] += e; h[5] += f; h[6] += gg; h[7] += hh; }
 
-// --- the buffering md5 and sha-256 share -------------------------------------------
-// the only difference between them here is which compression function runs and which
-// way the length is laid; the block arithmetic is the same, so it is written once and
-// both the one-shots and the streams below go through it.
-typedef void (*blkfn)(uint32_t *h, const uint8_t *p);
+// sha-512 keeps its eight 64-bit words as sixteen 32-bit halves, so it rides the same
+// buffering and the same state layout as the 32-bit digests
+static void sha512_block(uint32_t h[16], const uint8_t *p) {
+ uint64_t w[80], v[8];
+ for (int i = 0; i < 16; i++) w[i] = ld64be(p + 8 * i);
+ for (int i = 16; i < 80; i++) {
+  uint64_t s0 = rr64(w[i - 15], 1) ^ rr64(w[i - 15], 8) ^ (w[i - 15] >> 7),
+           s1 = rr64(w[i - 2], 19) ^ rr64(w[i - 2], 61) ^ (w[i - 2] >> 6);
+  w[i] = w[i - 16] + s0 + w[i - 7] + s1; }
+ for (int k = 0; k < 8; k++) v[k] = (uint64_t) h[2 * k] << 32 | h[2 * k + 1];
+ for (int i = 0; i < 80; i++) {
+  uint64_t e = v[4], a = v[0],
+           t1 = v[7] + (rr64(e, 14) ^ rr64(e, 18) ^ rr64(e, 41))
+              + ((e & v[5]) ^ (~e & v[6])) + K512[i] + w[i],
+           t2 = (rr64(a, 28) ^ rr64(a, 34) ^ rr64(a, 39))
+              + ((a & v[1]) ^ (a & v[2]) ^ (v[1] & v[2]));
+  v[7] = v[6]; v[6] = v[5]; v[5] = v[4]; v[4] = v[3] + t1;
+  v[3] = v[2]; v[2] = v[1]; v[1] = v[0]; v[0] = t1 + t2; }
+ for (int k = 0; k < 8; k++) {
+  uint64_t s = ((uint64_t) h[2 * k] << 32 | h[2 * k + 1]) + v[k];
+  h[2 * k] = (uint32_t) (s >> 32); h[2 * k + 1] = (uint32_t) s; } }
 
-// top the remainder up, run whole blocks straight off the input, keep the tail ->
-// the new remainder length
-static unsigned blk_feed(uint32_t *h, uint8_t *buf, unsigned rem, blkfn f,
-                         const uint8_t *p, uintptr_t n) {
- if (rem) {
-  unsigned want = 64 - rem;
-  if (n < want) { memcpy(buf + rem, p, n); return (unsigned) (rem + n); }
-  memcpy(buf + rem, p, want);
-  f(h, buf);
-  p += want; n -= want; }
- for (; n >= 64; p += 64, n -= 64) f(h, p);
- if (n) memcpy(buf, p, n);
- return (unsigned) n; }
-
-// the pad: 0x80, zeros, then the bit count -- big-endian for sha-256, little for md5
-static void blk_done(uint32_t *h, const uint8_t *buf, unsigned r, uint64_t len,
-                     blkfn f, int be) {
- uint8_t tail[128];
- memcpy(tail, buf, r);
- tail[r++] = 0x80;
- size_t pad = (r <= 56) ? 64 : 128;
- memset(tail + r, 0, pad - 8 - r);
- uint64_t bits = len << 3;
- for (int k = 0; k < 8; k++)
-  if (be) tail[pad - 1 - k] = (uint8_t) (bits >> (8 * k));
-  else    tail[pad - 8 + k] = (uint8_t) (bits >> (8 * k));
- f(h, tail);
- if (pad == 128) f(h, tail + 64); }
-
-// the hex face both digests wear, low nibble last, n words wide
-static void blk_hex(const uint32_t *h, int words, int be, char *out) {
- static const char hx[] = "0123456789abcdef";
- for (int k = 0; k < words; k++)
-  for (int j = 0; j < 4; j++) {
-   uint8_t b = (uint8_t) (h[k] >> (be ? 24 - 8 * j : 8 * j));
-   out[8 * k + 2 * j] = hx[b >> 4];
-   out[8 * k + 2 * j + 1] = hx[b & 15]; }
- out[8 * words] = 0; }
-
-static ai_inline void sha256_hex(const uint8_t *msg, size_t len, char out[65]) {
- uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                  0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
- uint8_t buf[64];
- unsigned r = blk_feed(h, buf, 0, sha_block, msg, (uintptr_t) len);
- blk_done(h, buf, r, (uint64_t) len, sha_block, 1);
- blk_hex(h, 8, 1, out); }
-
-ai_noinline static struct ai *host_sha256(struct ai *g) {
- if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- struct ai_str *s = (struct ai_str*) g->sp[0];
- char hex[65];
- sha256_hex((const uint8_t*) s->bytes, (size_t) s->len, hex);
- if (!ai_ok(g = ai_strof(g, hex))) return g;                  // pushes: digest over arg
- g->sp[1] = g->sp[0];
- g->sp += 1;
- return g; }
-
-static lvm(lvm_sha256) LvmCall(g, host_sha256)
-
-static ai_inline uint32_t rl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
+static void sha1_block(uint32_t h[5], const uint8_t *p) {
+ uint32_t w[80], a = h[0], b = h[1], c = h[2], d = h[3], e = h[4];
+ for (int i = 0; i < 16; i++) w[i] = ld32be(p + 4 * i);
+ for (int i = 16; i < 80; i++) w[i] = rl(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+ for (int i = 0; i < 80; i++) {
+  uint32_t f, k;
+  if (i < 20)      f = (b & c) | (~b & d),          k = 0x5a827999;
+  else if (i < 40) f = b ^ c ^ d,                   k = 0x6ed9eba1;
+  else if (i < 60) f = (b & c) | (b & d) | (c & d), k = 0x8f1bbcdc;
+  else             f = b ^ c ^ d,                   k = 0xca62c1d6;
+  uint32_t t = rl(a, 5) + f + e + k + w[i];
+  e = d; d = c; c = rl(b, 30); b = a; a = t; }
+ h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; }
 
 static void md5_block(uint32_t h[4], const uint8_t *p) {
  uint32_t m[16], a = h[0], b = h[1], c = h[2], d = h[3];
@@ -156,24 +156,190 @@ static void md5_block(uint32_t h[4], const uint8_t *p) {
   a = d; d = c; c = b; b += rl(f, MS[i]); }
  h[0] += a; h[1] += b; h[2] += c; h[3] += d; }
 
-static ai_inline void md5_hex(const uint8_t *msg, size_t len, char out[33]) {
- uint32_t h[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
- uint8_t buf[64];
- unsigned r = blk_feed(h, buf, 0, md5_block, msg, (uintptr_t) len);
- blk_done(h, buf, r, (uint64_t) len, md5_block, 0);
- blk_hex(h, 4, 0, out); }
+// --- the buffering the merkle-damgard digests share --------------------------------
+// md5, sha-1 and the four sha-2s differ here only in the compression function, the
+// block (64 or 128 bytes) and which way the length is laid, so the block arithmetic is
+// written once and the one-shots and the streams below both go through it.
+typedef void (*blkfn)(uint32_t *h, const uint8_t *p);
 
-ai_noinline static struct ai *host_md5(struct ai *g) {
- if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- struct ai_str *s = (struct ai_str*) g->sp[0];
- char hex[33];
- md5_hex((unsigned char const*) s->bytes, s->len, hex);
- if (!ai_ok(g = ai_strof(g, hex))) return g;                  // pushes: digest over arg
+// the row a digest is: its state's width in a cask (the width is the type), the words
+// it keeps and the words it shows, the block, the order, the compression, and where
+// its initial words sit in which table
+struct digspec { uintptr_t st; int words, outw; unsigned bs; int be; blkfn f;
+                 const uint32_t *h0; int step, first; };
+
+// the cask: h[words] be | count 8 be | remainder len 1 | remainder bs | a tag byte on
+// the truncated two, so no two widths meet
+#define DigSt(w, bs, tag) (4 * (w) + 9 + (bs) + (tag))
+static const struct digspec
+ dig_md5    = {DigSt(4, 64, 0),   4, 4,   64, 0, md5_block,    sha1_h0,   1, 0},
+ dig_sha1   = {DigSt(5, 64, 0),   5, 5,   64, 1, sha1_block,   sha1_h0,   1, 0},
+ dig_sha224 = {DigSt(8, 64, 1),   8, 7,   64, 1, sha_block,    sha384_h0, 2, 1},
+ dig_sha    = {DigSt(8, 64, 0),   8, 8,   64, 1, sha_block,    sha512_h0, 2, 0},
+ dig_sha384 = {DigSt(16, 128, 1), 16, 12, 128, 1, sha512_block, sha384_h0, 1, 0},
+ dig_sha512 = {DigSt(16, 128, 0), 16, 16, 128, 1, sha512_block, sha512_h0, 1, 0};
+
+static void dig_h0(uint32_t *h, const struct digspec *d) {
+ for (int k = 0; k < d->words; k++) h[k] = d->h0[k * d->step + d->first]; }
+
+// top the remainder up, run whole blocks straight off the input, keep the tail ->
+// the new remainder length
+static unsigned blk_feed(uint32_t *h, uint8_t *buf, unsigned rem, const struct digspec *d,
+                         const uint8_t *p, uintptr_t n) {
+ unsigned bs = d->bs;
+ if (rem) {
+  unsigned want = bs - rem;
+  if (n < want) { memcpy(buf + rem, p, n); return (unsigned) (rem + n); }
+  memcpy(buf + rem, p, want);
+  d->f(h, buf);
+  p += want; n -= want; }
+ for (; n >= bs; p += bs, n -= bs) d->f(h, p);
+ if (n) memcpy(buf, p, n);
+ return (unsigned) n; }
+
+// the pad: 0x80, zeros, then the bit count in the block's last eighth -- big-endian
+// for the shas, little for md5; the 128-byte block's 16-byte count is high zeros
+static void blk_done(uint32_t *h, const uint8_t *buf, unsigned r, uint64_t len,
+                     const struct digspec *d) {
+ uint8_t tail[256];
+ unsigned bs = d->bs;
+ memcpy(tail, buf, r);
+ tail[r++] = 0x80;
+ size_t pad = (r <= bs - bs / 8) ? bs : 2 * bs;
+ memset(tail + r, 0, pad - 8 - r);
+ uint64_t bits = len << 3;
+ for (int k = 0; k < 8; k++)
+  if (d->be) tail[pad - 1 - k] = (uint8_t) (bits >> (8 * k));
+  else       tail[pad - 8 + k] = (uint8_t) (bits >> (8 * k));
+ d->f(h, tail);
+ if (pad == 2 * bs) d->f(h, tail + bs); }
+
+static const char hexd[] = "0123456789abcdef";
+
+// the hex face every digest wears, the digest's own order, n words wide
+static void blk_hex(const uint32_t *h, int words, int be, char *out) {
+ for (int k = 0; k < words; k++)
+  for (int j = 0; j < 4; j++) {
+   uint8_t b = (uint8_t) (h[k] >> (be ? 24 - 8 * j : 8 * j));
+   out[8 * k + 2 * j] = hexd[b >> 4];
+   out[8 * k + 2 * j + 1] = hexd[b & 15]; }
+ out[8 * words] = 0; }
+
+// pushes the digest's hex over the argument, the one-shots' and the streams' shared last step
+static struct ai *dig_push(struct ai *g, const char *hex) {
+ if (!ai_ok(g = ai_strof(g, hex))) return g;
  g->sp[1] = g->sp[0];
  g->sp += 1;
  return g; }
 
+// (X str) -> the hex digest | ()
+static ai_noinline struct ai *dig_one(struct ai *g, const struct digspec *d) {
+ if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ struct ai_str *s = (struct ai_str*) g->sp[0];
+ uint32_t h[16];
+ uint8_t buf[128];
+ char hex[129];
+ dig_h0(h, d);
+ unsigned r = blk_feed(h, buf, 0, d, (const uint8_t*) s->bytes, (uintptr_t) s->len);
+ blk_done(h, buf, r, (uint64_t) s->len, d);
+ blk_hex(h, d->outw, d->be, hex);
+ return dig_push(g, hex); }
+
+static struct ai *host_sha256(struct ai *g) { return dig_one(g, &dig_sha); }
+static struct ai *host_md5(struct ai *g) { return dig_one(g, &dig_md5); }
+static struct ai *host_sha1(struct ai *g) { return dig_one(g, &dig_sha1); }
+static struct ai *host_sha224(struct ai *g) { return dig_one(g, &dig_sha224); }
+static struct ai *host_sha384(struct ai *g) { return dig_one(g, &dig_sha384); }
+static struct ai *host_sha512(struct ai *g) { return dig_one(g, &dig_sha512); }
+static lvm(lvm_sha256) LvmCall(g, host_sha256)
 static lvm(lvm_md5) LvmCall(g, host_md5)
+static lvm(lvm_sha1) LvmCall(g, host_sha1)
+static lvm(lvm_sha224) LvmCall(g, host_sha224)
+static lvm(lvm_sha384) LvmCall(g, host_sha384)
+static lvm(lvm_sha512) LvmCall(g, host_sha512)
+
+// --- blake2b (rfc 7693), unkeyed, any length 1..64 bytes ---------------------------
+// not merkle-damgard: no length pad, the last block compressed with a flag instead,
+// so a whole block is held back until the next byte (or the end) says whether it was
+// the last. its stream is a state of its own shape for that reason.
+static uint8_t const B2S[10][16] = {
+ { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15}, {14,10, 4, 8, 9,15,13, 6, 1,12, 0, 2,11, 7, 5, 3},
+ {11, 8,12, 0, 5, 2,15,13,10,14, 3, 6, 7, 1, 9, 4}, { 7, 9, 3, 1,13,12,11,14, 2, 6, 5,10, 4, 0,15, 8},
+ { 9, 0, 5, 7, 2, 4,10,15,14, 1,11,12, 6, 8, 3,13}, { 2,12, 6,10, 0,11, 8, 3, 4,13, 7, 5,15,14, 1, 9},
+ {12, 5, 1,15,14,13, 4,10, 0, 7, 6, 3, 9, 2, 8,11}, {13,11, 7,14,12, 1, 3, 9, 5, 0,15, 4, 8, 6, 2,10},
+ { 6,15,14, 9,11, 3, 0, 8,12, 2,13, 7, 1, 4,10, 5}, {10, 2, 8, 4, 7, 6, 1, 5,15,11, 9,14, 3,12,13, 0}};
+
+static uint64_t b2iv(int k) { return (uint64_t) sha512_h0[2 * k] << 32 | sha512_h0[2 * k + 1]; }
+
+static void b2_block(uint64_t h[8], const uint8_t *p, uint64_t t, int last) {
+ uint64_t m[16], v[16];
+ for (int i = 0; i < 16; i++) m[i] = ld64le(p + 8 * i);
+ for (int i = 0; i < 8; i++) v[i] = h[i], v[i + 8] = b2iv(i);
+ v[12] ^= t;
+ if (last) v[14] = ~v[14];
+ static uint8_t const G[8][4] = {{0,4,8,12},{1,5,9,13},{2,6,10,14},{3,7,11,15},
+                                 {0,5,10,15},{1,6,11,12},{2,7,8,13},{3,4,9,14}};
+ for (int r = 0; r < 12; r++)
+  for (int j = 0; j < 8; j++) {
+   int a = G[j][0], b = G[j][1], c = G[j][2], d = G[j][3];
+   v[a] += v[b] + m[B2S[r % 10][2 * j]];     v[d] = rr64(v[d] ^ v[a], 32);
+   v[c] += v[d];                             v[b] = rr64(v[b] ^ v[c], 24);
+   v[a] += v[b] + m[B2S[r % 10][2 * j + 1]]; v[d] = rr64(v[d] ^ v[a], 16);
+   v[c] += v[d];                             v[b] = rr64(v[b] ^ v[c], 63); }
+ for (int i = 0; i < 8; i++) h[i] ^= v[i] ^ v[i + 8]; }
+
+static void b2_init(uint64_t h[8], unsigned nn) {
+ for (int i = 0; i < 8; i++) h[i] = b2iv(i);
+ h[0] ^= 0x01010000u ^ nn; }
+
+// -> the new held length, 1..128 once anything came: a full block waits for the next feed
+static unsigned b2_feed(uint64_t h[8], uint64_t *t, uint8_t *buf, unsigned rem,
+                        const uint8_t *p, uintptr_t n) {
+ if (!n) return rem;
+ if (rem) {
+  unsigned want = 128 - rem;
+  if (n <= want) { memcpy(buf + rem, p, n); return (unsigned) (rem + n); }
+  memcpy(buf + rem, p, want);
+  p += want; n -= want;
+  *t += 128; b2_block(h, buf, *t, 0); }
+ for (; n > 128; p += 128, n -= 128) { *t += 128; b2_block(h, p, *t, 0); }
+ memcpy(buf, p, n);
+ return (unsigned) n; }
+
+static void b2_done(uint64_t h[8], uint64_t t, uint8_t *buf, unsigned rem, unsigned nn,
+                    char *out) {
+ memset(buf + rem, 0, 128 - rem);
+ b2_block(h, buf, t + rem, 1);
+ for (unsigned k = 0; k < nn; k++) {
+  uint8_t b = (uint8_t) (h[k / 8] >> (8 * (k % 8)));
+  out[2 * k] = hexd[b >> 4]; out[2 * k + 1] = hexd[b & 15]; }
+ out[2 * nn] = 0; }
+
+ai_noinline static struct ai *host_blake2b(struct ai *g) {
+ if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ struct ai_str *s = (struct ai_str*) g->sp[0];
+ uint64_t h[8], t = 0;
+ uint8_t buf[128];
+ char hex[129];
+ b2_init(h, 64);
+ unsigned r = b2_feed(h, &t, buf, 0, (const uint8_t*) s->bytes, (uintptr_t) s->len);
+ b2_done(h, t, buf, r, 64, hex);
+ return dig_push(g, hex); }
+static lvm(lvm_blake2b) LvmCall(g, host_blake2b)
+
+// --- bsd sum: a 16-bit checksum rotated right a bit before each byte ---------------
+// (bsdsum acc str) -> acc with str's bytes folded in | (); a whole file is a fold from 0
+static lvm(lvm_bsdsum) {
+ word a = Sp[0], x = Sp[1];
+ if (!charmp(a) || !strp(x)) Sp[1] = ZeroPoint;
+ else {
+  struct ai_str *s = (struct ai_str*) x;
+  const uint8_t *p = (const uint8_t*) s->bytes;
+  uint32_t c = (uint32_t) getcharm(a) & 0xffff;
+  for (uintptr_t i = 0; i < (uintptr_t) s->len; i++)
+   c = (((c >> 1) | ((c & 1) << 15)) + p[i]) & 0xffff;
+  Sp[1] = putcharm(c); }
+ ai_musttail return Nextp(1, 1); }
 
 // --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -------------------------
 // eight bytes at a time, and that is the whole difference: the byte-at-a-time walk
@@ -293,21 +459,16 @@ static lvm(lvm_cksum) {
 // the layout is this file's; love allocates the cask, carries it, and never reads it.
 // big-endian throughout, whatever the algorithm's own order, so the state is bytes and
 // not this machine's words -- it can be written down, and an image carrying one wakes
-// on any box.
+// on any box. the block digests' is DigSt's above; the other two:
 //
-//   sha-256, 105:  0..31 h[8] be | 32..39 count be | 40 remainder len | 41.. remainder
-//   md5,      89:  0..15 h[4] be | 16..23 count be | 24 remainder len | 25.. remainder
+//   blake2b, 210:  0..63 h[8] be | 64..71 count be | 72..79 zero | 80 held len
+//                  | 81 digest bytes | 82.. held block
 //   cksum,    12:  0..3 crc be   | 4..11 count be                    (no block, no rem)
 //
-// the size is the type. three states of three widths, and every entry point checks
-// the one it wants -- which is what stops an md5 state being fed to sha256-feed and
-// answering a number that looks like a digest.
-#define ShaSt 105
-#define ShaRem 40
-#define ShaBuf 41
-#define Md5St 89
-#define Md5Rem 24
-#define Md5Buf 25
+// the size is the type. every entry point checks the width it wants -- which is what
+// stops an md5 state being fed to sha256-feed and answering a number that looks like
+// a digest.
+#define B2St 210
 #define CkSt 12
 
 static struct ai_str *dig_cask(word x, uintptr_t want) {   // the cask's bytes, or NULL
@@ -317,12 +478,8 @@ static struct ai_str *dig_cask(word x, uintptr_t want) {   // the cask's bytes, 
 
 // h[words] then the 8-byte count, both big-endian, at the front of the state
 static void dig_ld(const uint8_t *st, uint32_t *h, int words, uint64_t *len) {
- for (int k = 0; k < words; k++)
-  h[k] = (uint32_t) st[4*k] << 24 | (uint32_t) st[4*k+1] << 16
-       | (uint32_t) st[4*k+2] << 8 | (uint32_t) st[4*k+3];
- uint64_t n = 0;
- for (int k = 0; k < 8; k++) n = n << 8 | st[4*words + k];
- *len = n; }
+ for (int k = 0; k < words; k++) h[k] = ld32be(st + 4 * k);
+ *len = ld64be(st + 4 * words); }
 
 static void dig_st(uint8_t *st, const uint32_t *h, int words, uint64_t len) {
  for (int k = 0; k < words; k++) {
@@ -330,36 +487,33 @@ static void dig_st(uint8_t *st, const uint32_t *h, int words, uint64_t len) {
   st[4*k+2] = (uint8_t) (h[k] >> 8);  st[4*k+3] = (uint8_t)  h[k]; }
  for (int k = 0; k < 8; k++) st[4*words + k] = (uint8_t) (len >> (56 - 8*k)); }
 
-// the three entry points a block digest wears, told apart by its state's width
-struct digspec { uintptr_t st; int words; unsigned remoff, bufoff; blkfn f; int be;
-                 const uint32_t *h0; };
-static const struct digspec dig_sha = {ShaSt, 8, ShaRem, ShaBuf, sha_block, 1, sha_h0},
-                            dig_md5 = {Md5St, 4, Md5Rem, Md5Buf, md5_block, 0, md5_h0};
-
 // (X-init b) -> b, carrying the standard's initial state and nothing fed | () on
 // anything that is not a cask of X's width
 static word dig_init(word x, const struct digspec *d) {
  struct ai_str *s = dig_cask(x, d->st);
  if (!s) return ZeroPoint;
  uint8_t *st = (uint8_t*) s->bytes;
+ uint32_t h[16];
  memset(st, 0, d->st);
- dig_st(st, d->h0, d->words, 0);
+ dig_h0(h, d);
+ dig_st(st, h, d->words, 0);
  return x; }
 
 // (X-feed b str) -> b, str's bytes folded in | (). any chunk size: what does not fill
 // a block stays in the remainder and rides to the next feed, which is the whole point
-// -- a caller reads by the gulp and never has to think in 64s.
+// -- a caller reads by the gulp and never has to think in blocks.
 static word dig_feed(word x, word a, const struct digspec *d) {
  struct ai_str *cs = dig_cask(x, d->st);
  if (!cs || !strp(a)) return ZeroPoint;
  struct ai_str *in = (struct ai_str*) a;
  uint8_t *st = (uint8_t*) cs->bytes;
- uint32_t h[8];
+ unsigned remoff = 4 * d->words + 8;
+ uint32_t h[16];
  uint64_t len;
  dig_ld(st, h, d->words, &len);
  len += (uint64_t) in->len;
- st[d->remoff] = (uint8_t) blk_feed(h, st + d->bufoff, st[d->remoff], d->f,
-                                    (const uint8_t*) in->bytes, (uintptr_t) in->len);
+ st[remoff] = (uint8_t) blk_feed(h, st + remoff + 1, st[remoff], d,
+                                 (const uint8_t*) in->bytes, (uintptr_t) in->len);
  dig_st(st, h, d->words, len);
  return x; }
 
@@ -369,38 +523,80 @@ static ai_noinline struct ai *dig_done(struct ai *g, const struct digspec *d) {
  struct ai_str *cs = dig_cask(g->sp[0], d->st);
  if (!cs) return g->sp[0] = ZeroPoint, g;
  uint8_t *st = (uint8_t*) cs->bytes;
- uint32_t h[8];
+ unsigned remoff = 4 * d->words + 8;
+ uint32_t h[16];
  uint64_t len;
+ char hex[129];
  dig_ld(st, h, d->words, &len);
- blk_done(h, st + d->bufoff, st[d->remoff], len, d->f, d->be);
- char hex[65];
- blk_hex(h, d->words, d->be, hex);
- if (!ai_ok(g = ai_strof(g, hex))) return g;                  // pushes: digest over arg
- g->sp[1] = g->sp[0];
- g->sp += 1;
- return g; }
+ blk_done(h, st + remoff + 1, st[remoff], len, d);
+ blk_hex(h, d->outw, d->be, hex);
+ return dig_push(g, hex); }
 
-ai_inline static struct ai *host_sha_done(struct ai *g) { return dig_done(g, &dig_sha); }
-ai_inline static struct ai *host_md5_done(struct ai *g) { return dig_done(g, &dig_md5); }
+// one digest's three lvm entry points, told apart by the row they pass
+#define DigNifs(nm, spec) \
+ static struct ai *host_##nm##_done(struct ai *g) { return dig_done(g, &spec); } \
+ static lvm(lvm_##nm##_done) LvmCall(g, host_##nm##_done) \
+ static lvm(lvm_##nm##_init) { Sp[0] = dig_init(Sp[0], &spec); ai_musttail return Next(1); } \
+ static lvm(lvm_##nm##_feed) { Sp[1] = dig_feed(Sp[0], Sp[1], &spec); ai_musttail return Nextp(1, 1); }
+DigNifs(sha, dig_sha)
+DigNifs(md5, dig_md5)
+DigNifs(sha1, dig_sha1)
+DigNifs(sha224, dig_sha224)
+DigNifs(sha384, dig_sha384)
+DigNifs(sha512, dig_sha512)
 
-static lvm(lvm_sha_done) LvmCall(g, host_sha_done)
-static lvm(lvm_md5_done) LvmCall(g, host_md5_done)
+// blake2b's h is eight 64-bit words, laid as sixteen 32-bit halves for dig_ld/dig_st
+static void b2_ld(const uint8_t *st, uint64_t h[8], uint64_t *t) {
+ uint32_t w[16];
+ dig_ld(st, w, 16, t);
+ for (int k = 0; k < 8; k++) h[k] = (uint64_t) w[2 * k] << 32 | w[2 * k + 1]; }
 
-static lvm(lvm_sha_init) {
- Sp[0] = dig_init(Sp[0], &dig_sha);
- ai_musttail return Next(1); }
+static void b2_st(uint8_t *st, const uint64_t h[8], uint64_t t) {
+ uint32_t w[16];
+ for (int k = 0; k < 8; k++) w[2 * k] = (uint32_t) (h[k] >> 32), w[2 * k + 1] = (uint32_t) h[k];
+ dig_st(st, w, 16, t); }
 
-static lvm(lvm_md5_init) {
- Sp[0] = dig_init(Sp[0], &dig_md5);
- ai_musttail return Next(1); }
+// (blake2b-init b n) -> b, set for an n-byte digest (1..64) | ()
+static word host_b2_init(word x, word n) {
+ struct ai_str *s = dig_cask(x, B2St);
+ if (!s || !charmp(n) || getcharm(n) < 1 || getcharm(n) > 64) return ZeroPoint;
+ uint8_t *st = (uint8_t*) s->bytes;
+ uint64_t h[8];
+ memset(st, 0, B2St);
+ b2_init(h, (unsigned) getcharm(n));
+ b2_st(st, h, 0);
+ st[81] = (uint8_t) getcharm(n);
+ return x; }
 
-static lvm(lvm_sha_feed) {
- Sp[1] = dig_feed(Sp[0], Sp[1], &dig_sha);
+static word host_b2_feed(word x, word a) {
+ struct ai_str *cs = dig_cask(x, B2St);
+ if (!cs || !strp(a)) return ZeroPoint;
+ struct ai_str *in = (struct ai_str*) a;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ uint64_t h[8], t;
+ b2_ld(st, h, &t);
+ st[80] = (uint8_t) b2_feed(h, &t, st + 82, st[80], (const uint8_t*) in->bytes,
+                            (uintptr_t) in->len);
+ b2_st(st, h, t);
+ return x; }
+
+static ai_noinline struct ai *host_b2_done(struct ai *g) {
+ struct ai_str *cs = dig_cask(g->sp[0], B2St);
+ if (!cs) return g->sp[0] = ZeroPoint, g;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ uint64_t h[8], t;
+ char hex[129];
+ b2_ld(st, h, &t);
+ b2_done(h, t, st + 82, st[80], st[81], hex);
+ return dig_push(g, hex); }
+
+static lvm(lvm_b2_init) {
+ Sp[1] = host_b2_init(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
-
-static lvm(lvm_md5_feed) {
- Sp[1] = dig_feed(Sp[0], Sp[1], &dig_md5);
+static lvm(lvm_b2_feed) {
+ Sp[1] = host_b2_feed(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
+static lvm(lvm_b2_done) LvmCall(g, host_b2_done)
 
 ai_noinline static word host_ck_feed(word x, word a) {
  struct ai_str *cs = dig_cask(x, CkSt);
@@ -440,22 +636,31 @@ static lvm(lvm_ck_done) {
  Sp[0] = host_ck_done(Sp[0]);
  ai_musttail return Next(1); }
 
-static union u const
- nif_sha256[] = {{lvm_sha256}, {lvm_ret0}},
- nif_sha_init[] = {{lvm_sha_init}, {lvm_ret0}},
- nif_sha_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_sha_feed}, {lvm_ret0}},
- nif_sha_done[] = {{lvm_sha_done}, {lvm_ret0}},
- nif_md5[]    = {{lvm_md5},    {lvm_ret0}},
- nif_md5_init[] = {{lvm_md5_init}, {lvm_ret0}},
- nif_md5_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_md5_feed}, {lvm_ret0}},
- nif_md5_done[] = {{lvm_md5_done}, {lvm_ret0}},
- nif_crc32[]  = {{lvm_crc32},  {lvm_ret0}},
- nif_cksum[]  = {{lvm_cksum},  {lvm_ret0}},
- nif_ck_init[] = {{lvm_ck_init}, {lvm_ret0}},
- nif_ck_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ck_feed}, {lvm_ret0}},
- nif_ck_done[] = {{lvm_ck_done}, {lvm_ret0}};
+#define Nif1(nm, f) static union u const nm[] = {{f}, {lvm_ret0}};
+#define Nif2(nm, f) static union u const nm[] = {{lvm_cur}, {.x = putcharm(2)}, {f}, {lvm_ret0}};
+#define DigBook(nm) Nif1(nif_##nm, lvm_##nm) Nif1(nif_##nm##_init, lvm_##nm##_init) \
+ Nif2(nif_##nm##_feed, lvm_##nm##_feed) Nif1(nif_##nm##_done, lvm_##nm##_done)
+Nif1(nif_sha, lvm_sha256)
+Nif1(nif_sha_init, lvm_sha_init)
+Nif2(nif_sha_feed, lvm_sha_feed)
+Nif1(nif_sha_done, lvm_sha_done)
+DigBook(md5)
+DigBook(sha1)
+DigBook(sha224)
+DigBook(sha384)
+DigBook(sha512)
+Nif1(nif_blake2b, lvm_blake2b)
+Nif2(nif_b2_init, lvm_b2_init)
+Nif2(nif_b2_feed, lvm_b2_feed)
+Nif1(nif_b2_done, lvm_b2_done)
+Nif2(nif_bsdsum, lvm_bsdsum)
+Nif1(nif_crc32, lvm_crc32)
+Nif1(nif_cksum, lvm_cksum)
+Nif1(nif_ck_init, lvm_ck_init)
+Nif2(nif_ck_feed, lvm_ck_feed)
+Nif1(nif_ck_done, lvm_ck_done)
 
-LvNif("sha256", nif_sha256, NULL);
+LvNif("sha256", nif_sha, NULL);
 LvNif("sha256-init", nif_sha_init, NULL);
 LvNif("sha256-feed", nif_sha_feed, NULL);
 LvNif("sha256-done", nif_sha_done, NULL);
@@ -463,6 +668,27 @@ LvNif("md5", nif_md5, NULL);
 LvNif("md5-init", nif_md5_init, NULL);
 LvNif("md5-feed", nif_md5_feed, NULL);
 LvNif("md5-done", nif_md5_done, NULL);
+LvNif("sha1", nif_sha1, NULL);
+LvNif("sha1-init", nif_sha1_init, NULL);
+LvNif("sha1-feed", nif_sha1_feed, NULL);
+LvNif("sha1-done", nif_sha1_done, NULL);
+LvNif("sha224", nif_sha224, NULL);
+LvNif("sha224-init", nif_sha224_init, NULL);
+LvNif("sha224-feed", nif_sha224_feed, NULL);
+LvNif("sha224-done", nif_sha224_done, NULL);
+LvNif("sha384", nif_sha384, NULL);
+LvNif("sha384-init", nif_sha384_init, NULL);
+LvNif("sha384-feed", nif_sha384_feed, NULL);
+LvNif("sha384-done", nif_sha384_done, NULL);
+LvNif("sha512", nif_sha512, NULL);
+LvNif("sha512-init", nif_sha512_init, NULL);
+LvNif("sha512-feed", nif_sha512_feed, NULL);
+LvNif("sha512-done", nif_sha512_done, NULL);
+LvNif("blake2b", nif_blake2b, NULL);
+LvNif("blake2b-init", nif_b2_init, NULL);
+LvNif("blake2b-feed", nif_b2_feed, NULL);
+LvNif("blake2b-done", nif_b2_done, NULL);
+LvNif("bsdsum", nif_bsdsum, NULL);
 LvNif("crc32", nif_crc32, NULL);
 LvNif("cksum", nif_cksum, NULL);
 LvNif("cksum-init", nif_ck_init, NULL);

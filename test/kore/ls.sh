@@ -96,5 +96,15 @@ tryw 40 -x "$t/a" "$t/bbb" "$t/zero"
 tryw 40 -C "$t/a" "$t/sub"
 tryw 12 -C "$t/empty"
 
+# vdir is ls -l by coreutils' other name
+if command -v vdir >/dev/null 2>&1; then
+  for f in "" -a -r; do
+    ran=$((ran + 1))
+    # shellcheck disable=SC2086
+    "$m" kore vdir $f "$t" > "$w/mine" 2>&1; vdir $f "$t" > "$w/theirs" 2>&1
+    cmp -s "$w/mine" "$w/theirs" || { echo "FAIL vdir $f"; fail=$((fail + 1)); }
+  done
+fi
+
 echo "kore ls: $ran rows, $fail failed"
 [ "$fail" = 0 ]

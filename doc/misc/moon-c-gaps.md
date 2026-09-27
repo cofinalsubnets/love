@@ -91,7 +91,9 @@ All of C89 passes. What remains is C99/C11/GNU.
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
 | computed goto | `&&label`, `goto *p` |
-| `asm goto` | costed below — the one refusal carrying an estimate |
+| gcc's `x ?: y` | `return r ?: 7;` — the middle operand omitted; linux's first stop (below) |
+| `typeof` of the object its own initializer declares | `int *p = (typeof(p))0;` — the name is not in scope until the declarator ends |
+| `__builtin_offsetof` over a runtime index | `__builtin_offsetof(struct S, n[i])` — gcc answers an expression in `i`, not a constant |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
@@ -497,8 +499,7 @@ Costing the fix: the frame side is small — `nslot` is the one cell allocator a
 are its own arithmetic, so an aligned variant is a `aup` on the running high-water, and x64/
 AAPCS64 hand every frame a 16-aligned base, which covers every ask up to 16. What is not small
 is **threading the ask from parse to that allocator**: the align would ride the `('decl ..)`
-entry, and every positional consumer of a decl entry in `gen.l` moves with it — the same shape
-of cost `asm goto`'s surface row carries. Past 16 the frame must be realigned at run time, and
+entry, and every positional consumer of a decl entry in `gen.l` moves with it. Past 16 the frame must be realigned at run time, and
 that should refuse rather than land wrong.
 
 Until it lands the tree cannot use either spelling on a local, and neither can a header it
@@ -787,58 +788,44 @@ beside the door, not grow a private ladder.
 
 ---
 
-## asm goto — what building it would cost
+## asm goto
 
-The one refusal that has been costed rather than just filed. Still **not built**: it is close to
-kernel-only, and it is worth doing when something we actually want to compile demands it, and
-not before. the references below were accurate when written — re-check them at the point of
-edit rather than trusting them.
+`asm [volatile] goto ("..." : outs : ins : clobbers : labels)` parses and runs on x64, a64 and
+rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node and the refusals.
 
-**The allocator is not the problem.** The obvious fear, that a terminator with multiple
-successors would break the tuned register allocator, does not apply: `hasasm` already disables
-register homing for any function containing asm, the vmap flushes at every label, and `alive`
-already answers the whole universe for both `goto` and `asm`. Keep homing off under `hasasm` and
-the allocator needs no change at all.
+- **the node** carries the labels as its sixth field, `('asm tmpl outs ins clobs labs)`, the
+  holo mark after them. labels number after every operand, and `%l[name]` reads as `%lN` in
+  `asmnm`, beside `%[name]`.
+- **the blob** assembles through `holo-bytes-open`, which leaves a fix naming one of the
+  statement's labels unresolved; the raw carries it into the function's stream, where the
+  label (`fn.NAME`, cgstmt's mangling) binds it.
+- **cfoldir** puts every label a raw names into `backs`, so the asm's edge takes the
+  assume-nothing path. without it the a64 sweeps carried the fall-through's value onto the
+  asm's edge (the battery's `nz`/`nz2`).
+- **refused**: outputs, and a callee-saved clobber. a jump out of the body would skip the
+  output stores and the clobber pops. GCC 11+ allows outputs, and the kernel's uaccess takes
+  them whenever the configuring compiler has `CC_HAS_ASM_GOTO_OUTPUT`.
 
-The three real blockers:
+**linux, measured 2026-09-26** against 6.19.14, x86_64 defconfig: each translation unit gcc
+`-E` with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C
+units, every ninth by path: **3 compile**, and the rest stop at
 
-- **The raw blob cannot name an outer label.** `cgasm` assembles the body immediately via
-  `holo-bytes` with an empty pre-bound label table, so a label not defined inside the template
-  hits `(scare 'undef-label ..)`. The hook is clean, though — raw is lowered verbatim by every
-  backend (`x64.l`, `a64.l`, `thumb2.l`, `thumb1.l`), and `chunk-len`/`resolve` already handle
-  an inline `('fix w kind label aux)` anywhere in the stream, so a raw carrying an unresolved fix
-  would lay out against the **outer** function's label table for free. What is missing is a holo
-  door — a variant of `assemble-at` that assembles while leaving a whitelist of external labels
-  as fix placeholders instead of scaring. `laylax` would treat such a fix as its widest form.
-- **`cfoldir`'s pend merge is the one correctness hazard.** A label with no recorded pending
-  state that is linearly live inherits the fall-through state verbatim, so an invisible in-edge —
-  a branch out of an opaque raw blob into a C label — makes that join unsound: constants assumed
-  at L would not hold on the asm edge. The minimum fix is to collect the asm-goto target labels
-  per function into the `backs` table, so they take the existing assume-nothing path. Cheap, and
-  it mirrors back-edge handling exactly, which exists for precisely this reason.
-- **Surface.** `pasm` hardcodes three colons as `s1`/`s2`/`s3`; a fourth (GotoLabels) needs an
-  `s4` and a fifth field on the `('asm ..)` node, which ripples to every positional consumer in
-  `gen.l` and to the goldens in `test/law/moon.l`. `asmsub` must learn `%lN` — currently `'bad` — and
-  substitute the *mangled* label `fn.NAME`, sharing the mangling with the label emitter.
-  `asm goto` is implicitly volatile and, pre-GCC-14, takes no outputs.
+| units | first stop |
+|---|---|
+| 134 | `x ?: y` (the table above) |
+| 7 | `typeof` of the object in its own initializer (`__get_unaligned_t`) |
+| 2 | `__builtin_offsetof` over a runtime index (`container_of(.., node[idx])`) |
+| 6 | top-level asm, which `EXPORT_SYMBOL` writes |
+| 7 | an x86 instruction holo does not encode (`pushf`, `lcallw`, a `%fs` operand) |
+| 1 | `&&label` (computed goto: `_THIS_IP_`) |
 
-Everything else already refuses or resets on raw: `unframe` bails, `deadcell` dirties, `deaddef`
-treats it as a barrier. **The estimate is about a week**, touching parse, one gen pass and one
-new holo door — and not the allocator.
-
-**It is now the LAST language row Linux stops on.** Measured 2026-09-09 against linux
-6.19.14, x86_64 defconfig: each translation unit gcc-preprocessed with its own kbuild
-flags and handed to mooncc, no charity but `-U` for the three macros we predefine and C11
-does not. **156 of 160 stop at `asm goto` and nowhere earlier.** Of the other four, two
-are one x86 instruction holo does not encode (`lsl`, `rdpid`, through
-`alternative_io`) and one is TOP-LEVEL asm — which modern `EXPORT_SYMBOL` writes, and
-which wants an assembler that reads `.section`/`.asciz`/`.quad`, not a compiler row.
-That is the honest shape of what is left: the compiler is a week from parsing the kernel
-and the TOOLCHAIN is the larger half (a gas-syntax assembler, a linker-script reader, and
-a 32/16-bit x86 backend for arch/x86/boot and the 32-bit vDSO).
-
-The earlier reading here — that the kernel additionally wants `__label__`, computed goto
-and `_Generic` — was stale: all three land, and none of them is what the corpus stops on.
+`typeof(const T)` stopped 80 of them before it read as a type-name (142-syntax.c holds it).
+**154 of the 160 units carry `asm goto`**, and every kernel template (jump labels,
+alternatives, the exception table) is written in assembler directives: `.pushsection`,
+`.long 1b - .`, `.skip` over label arithmetic, `%c0`. none of that is in gas.l's reach, so
+past the rows above the kernel stops on the assembler, not the compiler. that is the
+toolchain half: a directive-reading gas, a linker-script reader, and a 32/16-bit x86 backend
+for arch/x86/boot and the 32-bit vDSO.
 
 ---
 

@@ -1,11 +1,12 @@
-; apps/kore/sum.l -- the checksum tools: cksum, md5sum, sha256sum. one shape three
-; times -- read a file whole, digest its bytes, say a line -- so what is actually here
-; is the two GNU faces (cksum's "CRC BYTES NAME", the digest tools' "DIGEST  NAME")
-; and the -c lane that reads those lines back. the digests are inle/hash.c; there is
-; no love statement of any of the three, so an image carrying no host nif (the
-; kernel's, which compiles none) says which one is missing and leaves with 2.
-; loads after fs.l for udirp. a body-less top-level `:` -- the three mains leak,
-; kore.l registers them.
+; apps/kore/sum.l -- the checksum tools: cksum, sum, md5sum, sha1sum, sha224sum,
+; sha256sum, sha384sum, sha512sum, b2sum. one shape each time -- stream a file through
+; a digest, say a line -- so what is actually here is the GNU faces (cksum's "CRC BYTES
+; NAME", sum's two, the digest tools' "DIGEST  NAME") and the -c lane that reads those
+; lines back. the digests are inle/hash.c; there is no love statement of any of them,
+; so an image carrying no host nif (the kernel's, which compiles none) says which one
+; is missing and leaves with 2.
+; loads after fs.l for udirp. a body-less top-level `:` -- the mains leak, kore.l
+; registers them.
 (module 'kore
 (borrow 'posix)
 
@@ -20,6 +21,12 @@
    sum-ckp (\ _ (cksum ""))
    sum-md5p (\ _ (md5 ""))
    sum-shap (\ _ (sha256 ""))
+   sum-sha1p (\ _ (sha1 ""))
+   sum-sha224p (\ _ (sha224 ""))
+   sum-sha384p (\ _ (sha384 ""))
+   sum-sha512p (\ _ (sha512 ""))
+   sum-b2p (\ _ (blake2b ""))
+   sum-bsdp (\ _ (bsdsum 0 ""))
    (sum-nif k f)
     (: v (peep sum-door k ())
        (? (charm? v) v
@@ -32,27 +39,35 @@
    (sum-shad _) [105 sha256-init sha256-feed sha256-done]
    (sum-md5d _) [89  md5-init    md5-feed    md5-done]
    (sum-ckd _)  [12  cksum-init  cksum-feed  cksum-done]
+   (sum-sha1d _)   [93  sha1-init   sha1-feed   sha1-done]
+   (sum-sha224d _) [106 sha224-init sha224-feed sha224-done]
+   (sum-sha384d _) [202 sha384-init sha384-feed sha384-done]
+   (sum-sha512d _) [201 sha512-init sha512-feed sha512-done]
+   (sum-b2d n)     [210 (\ b (blake2b-init b n)) blake2b-feed blake2b-done]
 
-   ; one operand digested as a stream -> [digest bytes] | 'dir | (). "-" is stdin, as
-   ; it is everywhere in kore. sha256sum of a 100 MB file used to hold all 100 MB to
-   ; digest it; the state is a cask of tens of bytes and the file goes past a gulp at
-   ; a time. The byte count rides out because cksum's line says it.
+   ; one operand folded a gulp at a time -> [acc bytes] | 'dir | the open's nom. "-"
+   ; is stdin, as it is everywhere in kore. a 100 MB file goes past a gulp at a time
+   ; and is never held; the byte count rides out because cksum's and sum's lines say it.
    ; 'dir is its own answer because a directory opens and reads empty -- digested, it
    ; would be the digest of nothing, a plausible wrong number rather than a miss.
-   (sum-run mk f)
+   (sum-fold f step z)
     (? (udirp f) 'dir
-       (: p (uin (\ _ 0) f)
-          (? (! p) ()
-             (: d (mk 0)
-                b (cask <d)
-                _ (<>d b)
-                rd (urd <p)
-                (go n) (: h (urd-gulp rd) k (tally h)
-                          (? k (: _ (<>>d b h) (go (n + k))) n))
-                n (go 0)
+       (: p (? (f = "-") [in 0] (: q (open f "r") (? (hot? q) [q 1] q)))
+          (? !(two? p) p
+             (: rd (urd <p)
+                (go a n) (: h (urd-gulp rd) k #h
+                            (? k (go (step a h) (n + k)) [a n]))
+                r (go z 0)
                 _ (? <>p (close <p) 0)
-                v (<>>>d b)
-                (? (v = ()) () [v n])))))
+                r))))
+   ; ..through a digest, its state a cask of tens of bytes -> [digest bytes] | as above
+   (sum-run mk f)
+    (: d (mk 0)
+       b (cask <d)
+       _ (<>d b)
+       r (sum-fold f (\ c h (<>>d c h)) b)
+       (? !(two? r) r
+          (: v (<>>>d b) (? (v = ()) () [v <>r]))))
    ; the -c list is read whole, and should be: it is a list of digests, never the thing
    ; digested. one line a file, and nobody writes a gigabyte of them.
    (sum-list f)
@@ -60,7 +75,7 @@
        (udirp f) 'dir
        (: r (uread f) (? (two? r) [1 (<>r + "")] ())))
    (sum-nope who f r)
-    (: _ (say err (who + ": " + f + (? (= r 'dir) ": is a directory" ": cannot open")))
+    (: _ (say err (who + ": " + f + ": " + (? (= r 'dir) "Is a directory" (nom? r) (uerrno r) "cannot open")))
        (put err 10))
 
    ; --- the two output faces -------------------------------------------------
@@ -98,8 +113,12 @@
                     (? (((47 < c) && (c < 58)) || ((96 < c) && (c < 103)) || ((64 < c) && (c < 71)))
                        (go (k + 1)) 0)))
        (go 0))
-   (sum-split l n)
+   ; n 0 is b2sum's: any length it could have written, the hex run before the space,
+   ; even and at most 128 digits
+   (sum-split l n0)
     (: t (tally l)
+       (run k) (? (k < t && sum-hex? (snip l k (k + 1)) 1) (run (k + 1)) k)
+       n (? n0 n0 (: k (run 0) (? (1 < k && k <= 128 && k % 2 = 0) k t)))
        c (? ((n + 1) < t) (l (n + 1)) 0)
        (? ((n + 2) < t) (? (((l n) = 32) && ((c = 32) || (c = 42)) && (sum-hex? l n))
                            [(sum-lower (snip l 0 n)) (snip l (n + 2) t)] ())
@@ -114,7 +133,7 @@
         (: p (sum-split l n)
            bad <st unread <>st seen <>>st sour <>>>st
            (? !(two? p) st
-              (: said <p f <>p r (sum-run mk f)
+              (: said <p f <>p r (sum-run (mk #said) f)
                  (? !(two? r) (: _ (sum-nope who f r) _ (say out (f + ": FAILED open or read\n"))
                                  [bad (unread + 1) (seen + 1) sour])
                     (<r = said) (: _ (say out (f + ": OK\n")) [bad unread (seen + 1) sour])
@@ -146,14 +165,79 @@
     (: _ (say err (who + ": WARNING: " + (show n) + " " + what + (? (n = 1) "" "s") + tail))
        (put err 10))
 
-   ; --- the three mains ------------------------------------------------------
-   ; the digest pair share a front: -c reads a list back, anything else digests operands
+   ; --- the mains ------------------------------------------------------------
+   ; the digest tools share a front: -c reads a list back, anything else digests operands
    (sum-front who nm k probe mk n as)
     (: _ (sum-have who nm k probe)
-       (? ((two? as) && ((<as = "-c") || (<as = "--check"))) (sum-check who mk n >as)
+       (? ((two? as) && ((<as = "-c") || (<as = "--check"))) (sum-check who (\ _ mk) n >as)
           (sum-say who sum-hexline mk "-" as)))
    (cksum-main as) (: _ (sum-have "cksum" "cksum" 0 sum-ckp)
                        (sum-say "cksum" sum-ckline sum-ckd "" as))
    (md5sum-main as) (sum-front "md5sum" "md5" 1 sum-md5p sum-md5d 32 as)
-   (sha256sum-main as) (sum-front "sha256sum" "sha256" 2 sum-shap sum-shad 64 as))
+   (sha256sum-main as) (sum-front "sha256sum" "sha256" 2 sum-shap sum-shad 64 as)
+   (sha1sum-main as) (sum-front "sha1sum" "sha1" 3 sum-sha1p sum-sha1d 40 as)
+   (sha224sum-main as) (sum-front "sha224sum" "sha224" 4 sum-sha224p sum-sha224d 56 as)
+   (sha384sum-main as) (sum-front "sha384sum" "sha384" 5 sum-sha384p sum-sha384d 96 as)
+   (sha512sum-main as) (sum-front "sha512sum" "sha512" 6 sum-sha512p sum-sha512d 128 as)
+
+   ; b2sum: blake2b, 512 bits or -l's (a multiple of 8, 0 the default). -c reads a
+   ; line of any length b2sum could have written, unless -l pins one
+   (b2sum-main as)
+    (: _ (sum-have "b2sum" "blake2b" 7 sum-b2p)
+       (bad w m) (udie 1 ("b2sum: invalid length: '" + w + "'" + (? #m ("\nb2sum: " + m) "")))
+       (bits w) (: v (unum w)
+                   (? !(charm? v) (bad w "")
+                      (512 < v) (bad w "maximum digest length for 'BLAKE2b' is 512 bits")
+                      (v % 8) (bad w "length is not a multiple of 8")
+                      v))
+       (go a l chk ops)
+        (? !(two? a) [l chk (rev ops)]
+           (: w <a n #w
+              (? (w = "--") [l chk ((rev ops) + >a)]
+                 (w = "-c" || w = "--check") (go >a l 1 ops)
+                 (w = "-l" || w = "--length")
+                  (? (two? >a) (go >>a (bits <>a) chk ops)
+                     (udie 1 "b2sum: option requires an argument -- 'l'\nTry 'b2sum --help' for more information."))
+                 (2 < n && snip w 0 2 = "-l") (go >a (bits (snip w 2 n)) chk ops)
+                 (9 < n && snip w 0 9 = "--length=") (go >a (bits (snip w 9 n)) chk ops)
+                 (go >a l chk (w . ops)))))
+       r (go as 0 0 ())
+       l <r nn (? l (l // 8) 64)
+       (? <>r (sum-check "b2sum" (? l (\ _ (\ _ (sum-b2d nn))) (\ k (\ _ (sum-b2d (k // 2)))))
+                         (? l (2 * nn) 0) <>>r)
+          (sum-say "b2sum" sum-hexline (\ _ (sum-b2d nn)) "-" <>>r)))
+
+   ; sum: bsd's 16-bit rotating checksum over 1024-byte blocks (-r, the default), or
+   ; system v's byte total folded to 16 bits over 512-byte blocks (-s, --sysv), the
+   ; last one given winning; a name is said for a named operand only, "-" included
+   (sum-main as)
+    (: _ (sum-have "sum" "bsdsum" 8 sum-bsdp)
+       (usage m) (udie 1 ("sum: " + m + "\nTry 'sum --help' for more information."))
+       (flags w k sv) (? (#w <= k) sv
+                         (w k = 114) (flags w (k + 1) 0)
+                         (w k = 115) (flags w (k + 1) 1)
+                         (usage ("invalid option -- '" + string (w k) + "'")))
+       (go a sv ops)
+        (? !(two? a) [sv (rev ops)]
+           (: w <a n #w
+              (? (w = "--") [sv ((rev ops) + >a)]
+                 (w = "--sysv") (go >a 1 ops)
+                 (2 < n && snip w 0 2 = "--") (usage ("unrecognized option '" + w + "'"))
+                 (1 < n && w 0 = 45) (go >a (flags w 1 sv) ops)
+                 (go >a sv (w . ops)))))
+       r (go as 0 ())
+       sv <r fs <>r
+       (pad w c s) (? (w <= #s) s (pad w c (string c + s)))
+       (line v n nm)
+        ((? sv (: t (v & 4294967295) q ((t & 65535) + (t >> 16)) ((show ((q & 65535) + (q >> 16))) + " " + show ((n + 511) // 512)))
+            ((pad 5 48 (show v)) + " " + pad 5 32 (show ((n + 1023) // 1024))))
+         + (? (tally nm) (" " + nm) "") + "\n")
+       (row f nm ok)
+        (: r (sum-fold f (? sv (\ a h (a + net h)) bsdsum) 0)
+           (? (two? r) (: _ (say out (line <r <>r nm)) ok)
+              (: _ (sum-nope "sum" f r) 0)))
+       (walk a ok) (? (two? a) (walk >a (row <a <a ok)) ok)
+       ok (? (two? fs) (walk fs 1) (row "-" "" 1))
+       _ (flush out)
+       (? ok 0 1)))
 ) ; module 'kore

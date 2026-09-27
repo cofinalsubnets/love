@@ -34,6 +34,20 @@ continued on a second line"
     "5 < 6 & 7 > 2 -- the html escapes"
     "- one
 - two **bold**"
+    "* a star bullet
+* and *em* in one"
+    "| tool | kore | GNU |
+| --- | :-: | --: |
+| `a\\|b` | ✓ | |
+| a \\| bar | **x** |
+| short |"
+    "a paragraph
+
+| h |
+| :-- |
+| v |
+
+and after"
     "1. first
 2. second
 3. third"
@@ -105,6 +119,16 @@ the [end](e)."]
     ((mdread "```c\nx\n```\n") = '((fence "c" "x\n")))
     ((mdread "[t](u)") = '((para ((link ((text "t")) "u")))))
     ((mdread "---\n") = '((rule)))
+    ((mdread "* x\n") = '((bullets (((text "x"))))))
+    ; a table: aligns, the head, the rows laid to the head's width
+    ((mdread "| a | b |\n| :-: | --- |\n| 1 |\n")
+     = '((table (c n) (((text "a")) ((text "b"))) ((((text "1")) ())))))
+    ; only a head over a delimiter row is a table; a line opening with a bar is prose
+    ((mdread "| not | a table\n") = '((para ((text "| not | a table")))))
+    ((mdread "a\n| b |\n| - |\n") = '((para ((text "a"))) (table (n) (((text "b"))) ())))
+    ; html's table read off a page: no thead, the head is the first row
+    ((htread "<table><tr><th>h</th></tr><tr><td class=\"x\">v</td></tr></table>")
+     = '((table (n) (((text "h"))) ((((text "v")))))))
     ((mdread "t\n:   b\n") = '((deflist ((((text "t")) ((text "b")))))))
     ((mdread "---\ntitle: L\n---\n") = '((meta ((title "L") (section "") (date "") (source "") (manual "")))))
     ; two blank-separated lists of one kind are one list (markdown's loose-list rule,
@@ -321,6 +345,13 @@ some literal
                         ; the .th became the header line, with the page either side of it
                         (: h0 <ls (0 < #h0 && (h0 0) != 32)))))
              ["doc/love.md" "doc/cook.md"])
+      ; a document of wide tables (the census) overruns neither straight to the terminal
+      ; nor by way of roff, where a table too wide for a page is laid a row at a time
+      _ (: d (mdread (slurpf "doc/misc/kore.md"))
+           ; the width is characters: a check mark is three bytes and one column
+           (cols l) (: f (flush l) (tally (filter (c \ !(128 <= c && c < 192)) (map (i \ f i) ^#f))))
+           (test (foldl (\ a l (a && cols l <= 80)) 1 (lines (ttyshow d 80)))
+                 (foldl (\ a l (a && cols l <= 80)) 1 (lines (ttyshow (rfread (rfshow d)) 80)))))
       ; a roff page the tree did not write still lays out: the shower is total over the
       ; middle, so every block kind renders and none of them widens past the width
       _ (: d (rfread ".TH \"T\" \"1\" \"\" \"s\" \"m\"

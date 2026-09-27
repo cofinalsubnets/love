@@ -848,7 +848,7 @@
              ((tkk t = 'id) && elem (tkv t) tyofid)
               (: r1 (want >ts "(")
                  (? !(two? r1) ()
-                    (tkbty? ps <r1) (thenw (pcty ps r1) ")")
+                    (tyat? ps r1) (thenw (pcty ps r1) ")")
                     (: er (thenw (pasn ps r1) ")")
                        (? !(two? er) ()
                           (: ty (ptype ps <er)
@@ -1688,33 +1688,37 @@
                    _ (pin ps 'declaring olddecl)
                    res)))))
 
-   ; asm [volatile] ( "template" [: outputs [: inputs [: clobbers]]] ) ; -- the GNU statement
-   ; form, the template in holo's neutral text (love/holo/text.l; gen assembles it). adjacent
+   ; asm [volatile] [goto] ( "template" [: outputs [: inputs [: clobbers [: labels]]]] ) ; -- the GNU
+   ; statement form, the template in holo's neutral text (love/holo/text.l; gen assembles it). adjacent
    ; template strings concatenate. operands ride as ((constraint expr)..), clobbers as
-   ; (string..) -- the constraint grammar is gen's. -> (('asm tmpl outs ins clobs) rest) | ()
+   ; (string..), labels as (name..) -- the constraint grammar is gen's.
+   ; -> (('asm tmpl outs ins clobs labs) rest) | ()
    (asmid? t) (two? t && (tkk t = 'id) &&
                elem (tkv t) '("asm" "__asm__" "__asm"))
    ; `volatile` and `inline` may both stand between the keyword and the paren, in
    ; either order; inline is a size hint to gcc's inliner and means nothing here
-   (asmqual? t) (? (tkk t = 'kw) (elem (tkv t) '(volatile inline))
+   (asmqual? t) (? (tkk t = 'kw) (elem (tkv t) '(volatile inline goto))
                    (tkk t = 'id) (elem (tkv t) '("__volatile__" "__inline__" "__inline"))
                    ())
    ; `%[name]` -> the operand's number, so no name reaches gen's asmsub. gcc numbers outputs
-   ; first and inputs after, the order nms arrives in; an unmatched name is left for gen
+   ; first, inputs after and labels last, the order nms arrives in; `%l[name]` names a label
+   ; the same way. an unmatched name is left for gen
    (anynm? l) (? !(two? l) () (string? <l) 1 (anynm? >l))
    (asmnm tmpl nms)
     (: n (tally tmpl)
        (idx nm l k) (? !(two? l) () (= <l nm) k (idx nm >l (k + 1)))
        (rbr j) (? (n <= j) -1 ((tmpl j) = 93) j (rbr (j + 1)))
        (go i acc)
-        (? (n <= i) acc
-           ((tmpl i) = 37 && (i + 1) < n && (tmpl (i + 1)) = 91)
-            (: e (rbr (i + 2))
-               nm (? (e < 0) () (snip tmpl (i + 2) e))
-               k (? (string? nm) (idx nm nms 0) ())
-               (? (charm? k) (go (e + 1) (acc + "%" + show k))
-                  (go (i + 1) (acc + string (tmpl i)))))
-           (go (i + 1) (acc + string (tmpl i))))
+        (: l9 ((i + 2) < n && (tmpl (i + 1)) = 108)       ; %l[ reads past the l
+           b (? l9 (i + 2) (i + 1))
+           (? (n <= i) acc
+              ((tmpl i) = 37 && b < n && (tmpl b) = 91)
+               (: e (rbr (b + 1))
+                  nm (? (e < 0) () (snip tmpl (b + 1) e))
+                  k (? (string? nm) (idx nm nms 0) ())
+                  (? (charm? k) (go (e + 1) (acc + (? l9 "%l" "%") + show k))
+                     (go (i + 1) (acc + string (tmpl i)))))
+              (go (i + 1) (acc + string (tmpl i)))))
        (go 0 ""))
    (pasm ps ts)
     (: r >ts
@@ -1748,6 +1752,11 @@
                  (: c (tkv <ts2)
                     (? (peekp >ts2 ",") (clobs >>ts2 (c . acc))
                        [(rev (c . acc)) >ts2])))
+             (golabs ts2 acc)
+              (? !(idat? ts2) [(rev acc) ts2]
+                 (: c (tkv <ts2)
+                    (? (peekp >ts2 ",") (golabs >>ts2 (c . acc))
+                       [(rev (c . acc)) >ts2])))
              tr (tmpl r0 "")
              s1 (? (peekp <>tr ":") (ops ><>tr ()) [() <>tr])
              (? !(two? s1) ()
@@ -1755,12 +1764,13 @@
                    (? !(two? s2) ()
                       (: s3 (? (peekp <>s2 ":") (clobs ><>s2 ()) [() <>s2])
                          (? !(two? s3) ()
-                            (: r9 (want <>s3 ")")
+                            (: s4 (? (peekp <>s3 ":") (golabs ><>s3 ()) [() <>s3])
+                               r9 (want <>s4 ")")
                                rest (? (two? r9) (want r9 ";") ())
-                               nms (map opnm <s1 + map opnm <s2)
+                               nms (map opnm <s1 + map opnm <s2 + <s4)
                                tm (? (anynm? nms) (asmnm <tr nms) <tr)
                                (? (two? rest)
-                                  [['asm tm (map opbare <s1) (map opbare <s2) <s3] rest] ()))))))))))
+                                  [['asm tm (map opbare <s1) (map opbare <s2) <s3 <s4] rest] ()))))))))))
 
    ; a statement-position __attribute__((..)) run skips, except two: musttail lands in the
    ; ret's pre slot (clay's (ret e PRE)) and gen's sibcall pass spells the tail jump or refuses;

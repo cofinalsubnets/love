@@ -144,4 +144,30 @@ korerun who "$ho/.who-none" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore who: n
 if command -v who >/dev/null 2>&1 && [ -r /run/utmp -o -r /var/run/utmp ]; then
   [ "$(korerun users)" = "$(users)" ] || fail "kore users vs the host's"
 fi
-echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup/nice/renice/stty/who/users) ok"
+# hostid and dnsdomainname: what the host's own name resolves to, as glibc reads it here
+command -v hostid >/dev/null 2>&1 && { [ "$(korerun hostid)" = "$(hostid)" ] || fail "kore hostid vs GNU"; }
+korerun hostid | grep -qx '[0-9a-f]\{8\}' || fail "kore hostid's shape"
+command -v dnsdomainname >/dev/null 2>&1 \
+  && { [ "$(korerun dnsdomainname)" = "$(dnsdomainname 2>/dev/null)" ] || fail "kore dnsdomainname vs the host's"; }
+# setsid: the command leads a session of its own -- forked first where kore leads its
+# group, straight through where it does not -- and the statuses are util-linux's
+lead='set -- $(cat /proc/$$/stat); [ "$1" = "$6" ]'
+if [ -r /proc/self/stat ]; then
+  korerun setsid sh -c "$lead" || fail "kore setsid: not a session leader"
+  korerun setsid -f -w sh -c "$lead" || fail "kore setsid -f: not a session leader"
+fi
+korerun setsid -w sh -c 'exit 5'; r=$?; [ $r -eq 5 ] || fail "kore setsid -w status (got $r)"
+korerun setsid -f -w sh -c 'exit 6'; r=$?; [ $r -eq 6 ] || fail "kore setsid -fw status (got $r)"
+korerun setsid nosuchcommand 2>/dev/null; r=$?; [ $r -eq 127 ] || fail "kore setsid: no such command is 127 (got $r)"
+: > "$ho/.setsid-noexec"; chmod 644 "$ho/.setsid-noexec"
+korerun setsid "$ho/.setsid-noexec" 2>/dev/null; r=$?; [ $r -eq 126 ] || fail "kore setsid: not executable is 126 (got $r)"
+korerun setsid 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore setsid: no command is 1 (got $r)"
+# watch: the title procps lays, -g leaving once the output moves, -e on a failure, -x
+# the words execed rather than sh -c'd
+COLUMNS=60 korerun watch -g -n 0.1 'date +%s%N' > "$o" || fail "kore watch -g"
+head -1 "$o" | grep -q 'Every 0\.1s: date +%s%N  *[^ ]*: ' || fail "kore watch's title"
+COLUMNS=60 korerun watch -t -e -n 0.1 'echo hi; exit 2' > "$o"; r=$?
+[ $r -eq 1 ] && grep -q hi "$o" && ! grep -q Every "$o" || fail "kore watch -te (got $r)"
+COLUMNS=60 korerun watch -t -g -x -n 0.1 date +%N > /dev/null || fail "kore watch -x"
+korerun watch 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore watch: no command is 1 (got $r)"
+echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup/nice/renice/stty/who/users/hostid/dnsdomainname/setsid/watch) ok"

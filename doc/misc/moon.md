@@ -462,8 +462,11 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   off (`g 'hasasm`), so nothing lives in a register across any statement; a CALLEE-SAVED
   register (x64 r12-r15, a64 x11-x28, rv64's s-file) is pushed around the body; the stack and
   frame pointers refuse.
-* Deferred until a consumer demands them: `"f"` float operands, asm goto, named `[sym]`
-  operands, top-level asm, indexed memory operands.
+* `asm goto`'s labels are the one outside name a template may reach: `%lN` (numbered after
+  every operand) or `%l[name]` spells the function's label, and the jump's fix rides the raw
+  out to it. It refuses outputs and a callee-saved clobber, which a jump would skip.
+* Deferred until a consumer demands them: `"f"` float operands, top-level asm, indexed
+  memory operands.
 
 ## the installed shape
 

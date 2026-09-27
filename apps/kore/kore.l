@@ -15,7 +15,8 @@
 ;   kore dos2unix|unix2dos|mac2unix [-fkqn] [F..]   the three line endings, IN PLACE
 ;   kore base64|base32 [-d] [-w N]   the RFC 4648 encodings
 ;   kore tsort|factor                a partial order made total, and a number's primes
-;   kore cksum|md5sum|sha256sum [-c] [F..]   the checksums (apps/kore/sum.l)
+;   kore cksum|sum|md5sum|sha1sum|sha224sum|sha256sum|sha384sum|sha512sum|b2sum [-c] [F..]
+;                                    the checksums (apps/kore/sum.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (apps/kore/fs.l)
 ;   kore realpath|link|unlink        a path made canonical, and the two bare calls
 ;   kore stat|du|df|chown|mktemp                     ... and what they report
@@ -68,13 +69,15 @@
         mv-main myers nl-main nice-main nohup-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main ranlib-main readlink-main realpath-main rebre refind refold renice-main
-        rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main shuf-main size-main sleep-main
+        rem reparse rev-main rmdir-main rm-main sed-main seq-main sha1sum-main sha224sum-main sha256sum-main
+        sha384sum-main sha512sum-main b2sum-main sum-main shuf-main size-main sleep-main
         sort-main sparse split-main srun stat-main strip-main stty-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
         touch-main lift-main tr-main true-main truncate-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         users-main uset usignames usplit ustatf utag utty uupsay wc-main who-main whoami-main xargs-main yes-main
         cal-main clear-main dd-main hostname-main logname-main strings-main timeout-main tty-main
+        hostid-main dnsdomainname-main setsid-main watch-main pathchk-main mountpoint-main shred-main
         which-main xxd-main)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
@@ -466,8 +469,12 @@
             'tsort tsort-main 'factor factor-main
             'paste paste-main 'comm comm-main 'split split-main
             'join join-main 'od od-main
-            'cksum cksum-main 'md5sum md5sum-main 'sha256sum sha256sum-main
+            'cksum cksum-main 'sum sum-main 'md5sum md5sum-main 'sha1sum sha1sum-main
+            'sha224sum sha224sum-main 'sha256sum sha256sum-main 'sha384sum sha384sum-main
+            'sha512sum sha512sum-main 'b2sum b2sum-main
             'ls ls-main 'dir ls-main   ; one lister, and the name DOS and coreutils ask it by
+            'vdir (\ as (ls-main ("-l" . as)))   ; ..and coreutils' long one
+            'pathchk pathchk-main 'mountpoint mountpoint-main 'shred shred-main
             'cp cp-main 'mv mv-main
             'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
             'ln ln-main 'touch touch-main 'lift lift-main
@@ -491,6 +498,7 @@
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'env env-main 'printenv printenv-main 'sleep sleep-main 'nohup nohup-main
             'nice nice-main 'renice renice-main 'stty stty-main 'truncate truncate-main
+            'setsid setsid-main 'watch watch-main
             'getopt getopt-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
             ; umount, sync, mkfifo and mknod are what a root the distro builds
@@ -513,6 +521,7 @@
             'dd dd-main 'xxd xxd-main 'strings strings-main 'hexdump hexdump-main 'hd hd-main
             'cal cal-main 'timeout timeout-main
             'which which-main 'tty tty-main 'clear clear-main 'hostname hostname-main
+            'hostid hostid-main 'dnsdomainname dnsdomainname-main
             ; the /proc family -- no nif of their own, /proc is a filesystem
             'ps ps-main 'free free-main 'uptime uptime-main 'top top-main
             'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
@@ -574,6 +583,20 @@
     'cksum "usage: cksum [FILE..]"
     'md5sum "usage: md5sum [-c] [FILE..]"
     'sha256sum "usage: sha256sum [-c] [FILE..]"
+    'sha1sum "usage: sha1sum [-c] [FILE..]"
+    'sha224sum "usage: sha224sum [-c] [FILE..]"
+    'sha384sum "usage: sha384sum [-c] [FILE..]"
+    'sha512sum "usage: sha512sum [-c] [FILE..]"
+    'b2sum "usage: b2sum [-c] [-l BITS] [FILE..]"
+    'sum "usage: sum [-rs] [FILE..]"
+    'vdir "usage: vdir [-aACdlrtx1] [FILE..]"
+    'pathchk "usage: pathchk [-pP] [--portability] NAME.."
+    'mountpoint "usage: mountpoint [-qd] [--nofollow] DIR  |  mountpoint -x DEV"
+    'shred "usage: shred [-fuvxz] [-n N] [-s SIZE] FILE.."
+    'setsid "usage: setsid [-cfw] CMD [ARG..]"
+    'watch "usage: watch [-begtx] [-n SECS] CMD [ARG..]"
+    'hostid "usage: hostid"
+    'dnsdomainname "usage: dnsdomainname"
     'ls "usage: ls [-aACdlrtx1] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-f] [-p] [-r] SRC.. DST"
@@ -732,7 +755,8 @@ every tool answers --help and --version, and -h where the letter is free
   base64 | base32 [-d] [-w N] [F]         the encodings (RFC 4648)
   tsort [F] | factor [N..]                the two little computations
   paste comm join split od                the record tools
-  cksum | md5sum [-c] | sha256sum [-c]    the checksums (apps/kore/sum.l)
+  cksum | sum [-rs] | md5sum [-c] | sha1sum [-c]   the checksums (apps/kore/sum.l)
+  sha224sum | sha256sum | sha384sum | sha512sum [-c] | b2sum [-c] [-l BITS]
   expr EXPRESSION                         arithmetic, comparison and BRE matching
   bc [-l] [-q] [F..]                      the calculator language (apps/kore/bc.l)
   patch [-pN] [-R] [-i F] [--dry-run]     lay a unified diff on a tree
@@ -745,6 +769,7 @@ every tool answers --help and --version, and -h where the letter is free
                          ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
   env printenv sleep kill xargs nohup     the process tools (apps/kore/proc.l)
   nice [-n N] CMD | renice PRIO [-pgu] ID..   the niceness, for a new command or running ones
+  setsid [-cfw] CMD | watch [-begtx] [-n S] CMD   a new session; a command every S seconds
   stty [-F DEV] [-a|-g|SETTING..]         the terminal's line discipline, shown or set
   getopt -o SHORTS [-l LONGS] -- PARAMS   options parsed and quoted for `eval set --`
   chroot DIR [CMD [ARG..]]                the root changed, then CMD in it
@@ -771,6 +796,8 @@ every tool answers --help and --version, and -h where the letter is free
   realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
   stat [-c FMT] | du [-sabhc] | df [-hia] | chown | chgrp | mktemp   ... and what they report
   truncate [-co] [-r RF] [-s [+-<>/%]N] F..    ... and a file's size, set
+  shred [-fuvxz] [-n N] [-s N] F.. | vdir       ... a file overwritten, ls -l's other name
+  pathchk [-pP] NAME.. | mountpoint [-qdx] P    ... whether a name would work, or is a mount
   echo seq yes true false basename dirname     ... and the trivia
   gzip | gunzip | zcat [-cdfklnNqrtv19]        the RFC 1952 container (apps/gz.l)
   xz | unxz | xzcat [-cdfkqtz0-9] [-C CHECK]    the .xz container, .lzma read (apps/xz.l)
@@ -782,6 +809,7 @@ every tool answers --help and --version, and -h where the letter is free
   cal [[MONTH] YEAR]                           a month, laid out (weeks open Sunday)
   timeout [-s SIG] [-k DUR] DUR CMD [ARG..]    a command, and the clock that ends it
   which [-a] NAME.. | tty | clear | hostname   ... and the four short answers
+  hostid | dnsdomainname                       ... and what the host's name resolves to
 "
    (usage _) (: _ (say err kore-usage) 2)
    (bn p) (: n (tally p)

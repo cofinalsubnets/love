@@ -1011,6 +1011,243 @@
        _ (flush err)
        r)
 
+   ; -- pathchk: would these names work. bare, each is asked of the system as it stands
+   ; (a component that is a file, a name past the limits where it does not exist yet);
+   ; -p asks POSIX's portable floor instead (the 65 characters, 14 a component, 255 a
+   ; name), -P forbids the empty name and a leading '-', --portability is both --
+   (upc-oct c) ("\\" + string (48 + c // 64) + string (48 + c // 8 % 8) + string (48 + c % 8))
+   (upc-print? c) (31 < c && c < 127)
+   (upc-all p s) (: (go k) (? (#s <= k) 1 (p (s k)) (go (k + 1)) 0) (go 0))
+   (upc-q s)                            ; GNU's quote(): '..', ".." round a ', $'\ooo' for the rest
+    (? (upc-all (\ c (upc-print? c && !(c = 39))) s) ("'" + s + "'")
+       (upc-all (\ c (upc-print? c && !(elem c [34 36 92 96]))) s) ("\"" + s + "\"")
+       (: n #s
+          (go k acc) (? (n <= k) acc
+                        (upc-print? (s k) && !(s k = 39)) (go (k + 1) (acc + string (s k)))
+                        (: (run j a) (? (j < n && !(upc-print? (s j) && !(s j = 39))) (run (j + 1) (a + upc-oct (s j))) [j a])
+                           r (run k "")
+                           (go <r (acc + "'$'" + <>r + "''"))))
+          t ("'" + go 0 "" + "'")
+          (? (2 < #t && snip t (#t - 2) #t = "''") (snip t 0 (#t - 2)) t)))
+   (upc-cq c) (? (c = 39) "'\\''" (upc-print? c) ("'" + string c + "'") ("'" + upc-oct c + "'"))
+   (upc-f s)                            ; quotef: bare where nothing needs it
+    (? (#s && upc-all (\ c (elem c "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/+,:@%^-")) s) s (upc-q s))
+   (pathchk-main as)
+    (: (usage m) (udie 1 ("pathchk: " + m + "\nTry 'pathchk --help' for more information."))
+       (go a b x)
+        (? !(two? a) [b x ()]
+           (: w <a n #w
+              (? (w = "--") [b x >a]
+                 (w = "--portability") (go >a 1 1)
+                 (2 < n && snip w 0 2 = "--") (usage ("unrecognized option '" + w + "'"))
+                 (1 < n && w 0 = 45)
+                  (: (cl k b x) (? (n <= k) (go >a b x)
+                                   (w k = 112) (cl (k + 1) 1 x)
+                                   (w k = 80) (cl (k + 1) b 1)
+                                   (usage ("invalid option -- '" + string (w k) + "'")))
+                     (cl 1 b x))
+                 [b x a])))
+       r (go as 0 0)
+       b <r x <>r fs <>>r
+       _ (? (two? fs) 0 (usage "missing operand"))
+       portable "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+       (no m) (: _ (say err ("pathchk: " + m + "\n")) 0)
+       (one f)
+        (: n #f
+           comps (filter (\ c (0 < #c)) (usplit 47 f))
+           hy (: (h k) (? (n <= k) 0 (f k = 45 && (k = 0 || f (k - 1) = 47)) 1 (h (k + 1))) (h 0))
+           bad (? b (: (p k) (? (n <= k) () (elem (f k) portable) (p (k + 1)) (f k)) (p 0)) ())
+           st (? b 'enoent (0 = n) 'enoent (lstat f))
+           pmax (? b 256 4096) cmax (? b 14 255)
+           long (filter (\ c (cmax < #c)) comps)
+           (? (x && hy) (no ("leading '-' in a component of file name " + upc-q f))
+              ((b || x) && n = 0) (no "empty file name")
+              (charm? bad) (no ("non-portable character " + upc-cq bad + " in file name " + upc-q f))
+              (!b && n = 0) (no "'': No such file or directory")
+              (!b && nom? st && !(st = 'enoent)) (no (upc-f f + ": " + uerrno st))
+              (two? st) 1
+              (pmax <= n) (no ("limit " + show (pmax - 1) + " exceeded by length " + show n + " of file name " + upc-q f))
+              (two? long) (no ("limit " + show cmax + " exceeded by length " + show #<long + " of file name component " + upc-q <long))
+              1))
+       ok (foldl (\ a f (? (one f) a 0)) 1 fs)
+       _ (flush err)
+       (? ok 0 1))
+
+   ; -- mountpoint: is DIR where a filesystem is mounted -- a target in the kernel's
+   ; own table (/proc/self/mountinfo) where there is one, else a device that differs
+   ; from its parent's. -d says that filesystem's major:minor, -x DEV a block device's
+   ; own; 32 for "not", 1 for trouble, util-linux's --
+   (ump-unesc s)                        ; mountinfo's \ooo escapes put back
+    (: n #s o (jug 0)
+       (go k) (? (n <= k) (slurp o)
+                 (s k = 92 && k + 3 < n) (: _ (put o (((s (k + 1) - 48) * 64) + ((s (k + 2) - 48) * 8) + (s (k + 3) - 48))) (go (k + 4)))
+                 (: _ (put o (s k)) (go (k + 1))))
+       (go 0))
+   (ump-devno d) (show ((d >> 8) & 4095 | ((d >> 32) & -4096)) + ":" + show ((d & 255) | ((d >> 12) & -256)))
+   (mountpoint-main as)
+    (: (usage _) (udie 1 "mountpoint: bad usage\nTry 'mountpoint --help' for more information.")
+       (go a o)
+        (? !(two? a) o
+           (: w <a
+              (? (w = "--") (: _ (pin o 'ops (o 'ops + >a)) o)
+                 (w = "-q" || w = "--quiet") (: _ (pin o 'q 1) (go >a o))
+                 (w = "-d" || w = "--fs-devno") (: _ (pin o 'd 1) (go >a o))
+                 (w = "-x" || w = "--devno") (: _ (pin o 'x 1) (go >a o))
+                 (w = "--nofollow") (: _ (pin o 'nf 1) (go >a o))
+                 (1 < #w && w 0 = 45) (usage 0)
+                 (: _ (pin o 'ops (o 'ops + [w])) (go >a o)))))
+       o (go as {'ops ()})
+       ops (o 'ops)
+       _ (? (two? ops && !(two? >ops)) 0 (usage 0))
+       p <ops q (o 'q)
+       (say1 s) (? q 0 (: _ (say out (s + "\n")) (flush out)))
+       st (? (o 'nf) (lstat p) (stat p))
+       _ (? (nom? st) (: _ (? q 0 (: _ (say err ("mountpoint: " + p + ": " + uerrno st + "\n")) (flush err))) (uleave 1)) 0)
+       (? (o 'x)
+          (? ((st 2 & 61440) = 24576) (: _ (say1 (ump-devno (st 12))) 0)
+             (: _ (? q 0 (: _ (say err ("mountpoint: " + p + ": not a block device\n")) (flush err))) 32))
+          (: c (? (o 'nf) [1 (rl-clean (rl-abs p))] (rp-canon p 40))
+             mi (uread "/proc/self/mountinfo")
+             hit (? (two? mi && two? c)
+                    (foldl (\ h l (: ws (usplit 32 l) (? (4 < #ws && ump-unesc (ws 4) = <>c) (ws 2) h))) () (lines <>mi))
+                    (: up (stat (p + "/.."))
+                       (? (two? up && (!(st 11 = up 11) || st 8 = up 8)) (ump-devno (st 11)) ())))
+             (? (string? hit) (: _ (say1 (? (o 'd) hit (p + " is a mountpoint"))) 0)
+                (: _ (say1 (p + " is not a mountpoint")) 32)))))
+
+   ; -- shred: a file overwritten where it lies, -n passes (3) of random bytes and GNU's
+   ; patterns in GNU's arrangement, -z a last pass of zeros; the size rounded up to the
+   ; file's block unless -x, or -s bytes exactly; each pass forced to the disk. -u then
+   ; empties it, renames it down to one character and removes it; -v says each step as
+   ; GNU says it. the random bytes are /dev/urandom's --
+   ushr-pats '(-2 2 0 4095 2 1365 2730 -1 6 585 1170 1755 2340 2925 3510
+               12 273 546 819 1092 1638 1911 2184 2457 3003 3276 3549 3822 -1
+               8 4096 4681 5266 5851 6436 7021 7606 8191
+               14 4369 4642 4915 5188 5461 5734 6007 6280 6553 6826 7099 7372 7645 7918 -1)
+   (ushr-plan num)                      ; -> the passes: -1 random, else a 13-bit pattern
+    (: d {}
+       (stage1 p n rp k)              ; fills d from 0 -> the random pass count
+        (? (n <= 0) rp
+           !(two? p) (stage1 ushr-pats n rp k)
+           (: v <p
+              (? (v < 0) (? (n <= 0 - v) (rp + n) (stage1 >p (n + v) (rp - v) k))
+                 (v <= n) (: _ (map (\ i (pin d (k + i) (>p i))) ^v)
+                             (stage1 (drop v >p) (n - v) rp (k + v)))
+                 (n < 2 || 3 * n < v) (rp + n)
+                 (: (pad q n m k) (? (n <= 0) rp
+                                     (n = m || rand m < n) (: _ (pin d k <q) (pad >q (n - 1) (m - 1) (k + 1)))
+                                     (pad >q n (m - 1) k))
+                    (pad >p n v k)))))
+       rp (stage1 ushr-pats num 0 0)
+       ; the random passes spread evenly, the first and the last among them; the
+       ; patterns shuffled into the seats between
+       (stage2 n top nx)
+        (? (num <= n) ()
+           (nx < rp && nx * (num - 1) <= n * (rp - 1))
+            (: _ (pin d top (peep d n 0)) _ (pin d n -1) (stage2 (n + 1) (top + 1) (nx + 1)))
+           (: s (n + rand (top - n)) v (peep d n 0) _ (pin d n (peep d s 0)) _ (pin d s v)
+              (stage2 (n + 1) top nx)))
+       _ (stage2 0 (num - rp) 0)
+       (map (\ i (peep d i -1)) ^num))
+   (ushr-fill pat n)                    ; a pattern's bytes, n of them, a bit flipped per 512
+    (: bits (pat & 4095) b3 (bits | (bits << 12))
+       tri ((string ((b3 >> 4) & 255)) + string ((b3 >> 8) & 255) + string (b3 & 255))
+       (rep s) (? (n <= #s) (snip s 0 n) (rep (s + s)))
+       s (rep tri)
+       (? (pat & 4096) (: c (cask n) _ (map (\ i (pin c i (? (i % 512) (s i) ((s i) ^ 128)))) ^n) (string c)) s))
+   (ushr-hex s) (upadc 2 48 (ubase-hex (s 0)) + upadc 2 48 (ubase-hex (s 1)) + upadc 2 48 (ubase-hex (s 2)))
+   (shred-main as)
+    (: (usage m) (udie 1 ("shred: " + m + "\nTry 'shred --help' for more information."))
+       (num w what) (: v (unum w) (? (charm? v && 0 <= v) v (udie 1 ("shred: invalid number of " + what + ": '" + w + "'"))))
+       (size w) (: n #w u (? n (w (n - 1)) 0)
+                   m (? (u = 75 || u = 107) 1024 (u = 77) 1048576 (u = 71) 1073741824 1)
+                   v (unum (? (1 < m) (snip w 0 (n - 1)) w))
+                   (? (charm? v && 0 <= v) (v * m) (udie 1 ("shred: invalid file size: '" + w + "'"))))
+       (arg o k w a key f)
+        (? (k < #w) (: _ (pin o key (f (snip w k #w))) [>a])
+           (two? >a) (: _ (pin o key (f <>a)) [>>a])
+           (usage ("option requires an argument -- '" + string (w (k - 1)) + "'")))
+       (go a o)
+        (? !(two? a) o
+           (: w <a n #w
+              (? (w = "--") (: _ (pin o 'fs (o 'fs + >a)) o)
+                 (elem w ["--force" "--exact" "--verbose" "--zero"])
+                  (: _ (pin o (w 2 @ 102 'f 101 'x 118 'v 'z) 1) (go >a o))
+                 (w = "--remove" || w = "-u") (: _ (pin o 'u 1) (go >a o))
+                 (13 < n && snip w 0 13 = "--iterations=") (: _ (pin o 'n (num (snip w 13 n) "passes")) (go >a o))
+                 (7 < n && snip w 0 7 = "--size=") (: _ (pin o 's (size (snip w 7 n))) (go >a o))
+                 (2 < n && snip w 0 2 = "--") (usage ("unrecognized option '" + w + "'"))
+                 (1 < n && w 0 = 45)
+                  (: (cl k) (? (n <= k) (go >a o)
+                               (w k = 110) (go <(arg o (k + 1) w a 'n (\ v (num v "passes"))) o)
+                               (w k = 115) (go <(arg o (k + 1) w a 's size) o)
+                               (elem (w k) "fxvzu") (: _ (pin o (w k @ 102 'f 120 'x 118 'v 122 'z 'u) 1) (cl (k + 1)))
+                               (usage ("invalid option -- '" + string (w k) + "'")))
+                     (cl 1))
+                 (: _ (pin o 'fs (o 'fs + [w])) (go >a o)))))
+       o (go as {'n 3 'fs ()})
+       fs (o 'fs)
+       _ (? (two? fs) 0 (usage "missing file operand"))
+       v? (o 'v)
+       (tell m) (? v? (: _ (say err ("shred: " + m + "\n")) (flush err)) 0)
+       (no f m) (: _ (say err ("shred: " + f + ": " + m + "\n")) _ (flush err) 0)
+       rnd (open "/dev/urandom" "r")
+       buf (cask 65536)
+       (fillr k) (: g (swig rnd buf) (? (charm? g && 0 < g) (? (k <= g) (snip (string buf) 0 k) ((snip (string buf) 0 g) + fillr (k - g))) (string (cask k))))
+       (pass f n pat)                  ; -> 1 | 0, n bytes of the pattern (or random) laid over f
+        (: fd (openfd f 4)
+           (? (nom? fd) (no f ("failed to open for writing: " + uerrno fd))
+              (: p (fdopen fd)
+                 blk (? (pat < 0) () (ushr-fill pat (min n 65536)))
+                 (go k) (? (n <= k) 1
+                           (: m (min 65536 (n - k))
+                              _ (say p (? (pat < 0) (fillr m) (m < #blk) (snip blk 0 m) blk))
+                              (go (k + m))))
+                 _ (go 0)
+                 _ (close p)
+                 _ (fsync f 1)
+                 1)))
+       ; -u: the name worn down a character at a time, each a fresh name of 0s (or the
+       ; next character GNU tries where that one is taken), then removed
+       (rename-down f)
+        (: base (ubase f "")
+           pre (snip f 0 (#f - #base))
+           set "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_."
+           (zeros k) (? (k < 1) "" ("0" + zeros (k - 1)))
+           (step cur len)
+            (? (len < 1) cur
+               (: (try i) (? (#set <= i) (step cur (len - 1))
+                             (: nm (pre + zeros (len - 1) + string (set i))
+                                (? (two? (lstat nm)) (try (i + 1))
+                                   (rename cur nm) (step cur (len - 1))
+                                   (: _ (tell (cur + ": renamed to " + nm)) (step nm (len - 1))))))
+                  (try 0)))
+           (step f #base))
+       (one f)
+        (: st (stat f)
+           (? (nom? st) (no f ("failed to open for writing: " + uerrno st))
+              (: _ (? ((o 'f) && !(st 2 & 128)) (chmod f ((st 2 & 4095) | 128)) 0)
+                 reg ((st 2 & 61440) = 32768)
+                 bs (? (13 < #st && 0 < st 13) (st 13) 512)
+                 sz (? (charm? (o 's)) (o 's) !reg <st (o 'x) <st ((<st + bs - 1) // bs * bs))
+                 plan ((ushr-plan (o 'n)) + (? (o 'z) [0] ()))
+                 tot #plan
+                 (run l k) (? !(two? l) 1
+                              (: pat <l
+                                 _ (tell (f + ": pass " + show k + "/" + show tot + " ("
+                                          + (? (pat < 0) "random" (ushr-hex (ushr-fill pat 3))) + ")..."))
+                                 (? (pass f sz pat) (run >l (k + 1)) 0)))
+                 ok (run plan 1)
+                 (? !ok 0 !(o 'u) 1
+                    (: _ (tell (f + ": removing"))
+                       _ (truncate f 0 0)
+                       last (rename-down f)
+                       e (unlink last)
+                       (? (nom? e) (no f ("failed to remove: " + uerrno e))
+                          (: _ (tell (f + ": removed")) 1)))))))
+       ok (foldl (\ a f (? (one f) a 0)) 1 fs)
+       (? ok 0 1))
+
    ; -- mktemp: a name nobody else has, made and not merely proposed. the trailing run
    ; of X's in the template becomes random alphanumerics and the name is claimed with an
    ; exclusive create (openfd's mode 3) or an exclusive mkdir under -d, so the answer is

@@ -3732,6 +3732,7 @@
                                       ('jmp j)   (seen j ? (pin bt j 1))
                                       ('br _ b)  (seen b ? (pin bt b 1))
                                       ('jmpt _ _ ts) (map (j \ (seen j ? (pin bt j 1))) ts)
+                                      ('raw bs) (pinnoms bt bs, pinnoms misc bs)   ; an asm goto's edge: no state rides it
                                       (two? f ? (pinnoms misc >f)))
                                 (bscan >l)))
                 (bscan fs0))
@@ -5782,7 +5783,7 @@
               (? !(c = 37) (go (i + 1) (acc + string c))
                  (i + 1 < n)
                   (: d (tm (i + 1))
-                     md (? (elem d '(98 119 107 113 99 120) && i + 2 < n && 48 <= (tm (i + 2)) <= 57) d 0)
+                     md (? (elem d '(98 119 107 113 99 120 108) && i + 2 < n && 48 <= (tm (i + 2)) <= 57) d 0)
                      dx (? md (tm (i + 2)) d)
                      (? (d = 37) (go (i + 2) (acc + "%"))
                         (48 <= dx <= 57)
@@ -5797,11 +5798,14 @@
    (asmw g env e) (: ty (peekty g env e)
                      (? (bad? ty) 8 (: n (tsz g ty) (? (elem n '(1 2 4 8)) n 8))))
    asmhb holo-bytes                                 ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
+   asmho holo-bytes-open
    (cgasm g env s)
     (: _ (pin g 'hasasm 1)
        tmpl <>s
        tgt (gtgt g)
-       neutral? (two? >>>>>s)                       ; the holo attribute: the template is neutral text
+       neutral? (two? >>>>>>s)                      ; the holo attribute: the template is neutral text
+       ; asm goto's labels, mangled as cgstmt's lbl; %lN spells one, and the blob leaves them as fixes
+       labs (map (nm \ (name (g 'fn + "." + nm))) <>>>>>s)
        ; one operand list, GNU order: ('o|'x reg expr w) an output (x in-out), ('i reg expr w) a
        ; register input, ('b reg (addr expr) 0) a memory input, ('m imm 0 0) an immediate
        (pinof k e) (k @ 'pick (: p (asmvpin g env e) (? (nom? p) p k)) k)
@@ -5855,18 +5859,20 @@
                                    (asmsave? g r9) (clobs >l (r9 . acc))
                                    'bad)))))
                    saves (clobs <>>>>s ())
-                   (? (bad? asgn || bad? saves) 'bad
+                   ; a jump out of the body would skip the output stores and the clobber pops
+                   (? (bad? asgn || bad? saves || (two? labs && (two? os || two? saves))) 'bad
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
-                         (rtext a9 w) (md \ (? neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
-                         (itext v) (md \ (? neutral? (md ? 'bad (show v)) (gas-imm tgt v md)))
+                         (rtext a9 w) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
+                         (itext v) (md \ (? (md = 108) 'bad neutral? (md ? 'bad (show v)) (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? ((peep asmnames a9 "r?") + ", 0") (gas-mem tgt a9)))
+                         (ltext l9) (md \ (? (md = 108) (show l9) 'bad))
                          (optext l al acc)
                           (? !(two? l) (rev acc)
                              (: e2 <l a9 <al
                                 (optext >l >al ((<e2 @ 'm (itext a9)
                                                        'b (mtext a9)
                                                        (rtext a9 <>>>e2)) . acc))))
-                         txt (asmsub tmpl (optext ops9 asgn ()))
+                         txt (asmsub tmpl (optext ops9 asgn () + map ltext labs))
                          (? (bad? txt) 'bad
                             (: ; inputs (and in-out outputs) evaluate and push..
                                (loads l acc)
@@ -5888,7 +5894,9 @@
                                             (pops >l >al acc)))
                                      ; the body: one opaque raw, the saved clobbers pushed around it
                                      body ((map (r9 \ ['push r9]) saves)
-                                           + [['raw (asmhb tgt (? neutral? (asm-text txt) (gas-text tgt txt)))]]
+                                           + [['raw (: prog (? neutral? (asm-text txt) (gas-text tgt txt))
+                                                      (? (two? labs) (asmho tgt prog (foldl (\ t l9 (pin t l9 1)) {} labs))
+                                                         (asmhb tgt prog)))]]
                                            + map (r9 \ ['pop r9]) (rev saves))
                                      ; outputs: push each register, store back reverse
                                      (opush l al acc)

@@ -15,7 +15,7 @@ against GNU (`test/kore/sort.sh`, `test/kore/ls.sh`) inside `make test_kore`.
 kore is love's unix userland, and the verb for it: busybox's multi-call trick done natively.
 The love-native POSIX environment over the Linux kernel is kernel + a static `love` + .l
 files, and kore is its coreutils and more — sh, make, vi, cc, nc, the archives. How it
-compares to busybox, GNU, uutils and the two BSDs, name by name, is the census at the foot.
+compares to busybox, toybox, GNU and uutils, name by name, is the census at the foot.
 
 ## the shape
 
@@ -53,10 +53,10 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (149 tools, 154 names)
+## the inventory (162 tools, 168 names)
 
-The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir and
-less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
+The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
+and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
 doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 
 | where | tools |
@@ -71,11 +71,13 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | core.l, the encodings | base64 base32 (RFC 4648; `-d` reads it back, `-w` says the wrap) |
 | core.l, the two little computations | tsort factor |
 | core.l, the record tools | paste comm join split od |
-| sum.l, the checksums | cksum md5sum sha256sum (`-c` reads a list back) |
-| core.l, the trivia | seq yes true false basename dirname test [ uname arch nproc printf |
+| sum.l, the checksums | cksum sum md5sum sha1sum sha224sum sha256sum sha384sum sha512sum b2sum (`-c` reads a list back) |
+| core.l, the trivia | seq yes true false basename dirname test [ uname arch nproc |
+| awk.l, beside the number engine it shares | printf (C's flags, widths, precisions and conversions but `%a`, `%b` `%q`, the escapes, strto*'s reading and its complaints; reals formatted from their exact binary value, as glibc does, where GNU's are long doubles) |
 | core.l, the byte tools | dd xxd strings hexdump hd (the BSD dump: words, or -C's bytes; -n -s -v, no -e) |
 | core.l, the shell's helper | getopt (util-linux's: -o -l -n -a -q -Q -T -u, the three operand modes, quoted for `eval set --`; the old `getopt SHORTS` face; -s csh refused) |
-| fs.l, the fs tools | ls/dir cp mv rm mkdir rmdir ln touch lift pwd chmod install readlink cmp |
+| fs.l, the fs tools | ls/dir/vdir cp mv rm mkdir rmdir ln touch lift pwd chmod install readlink cmp |
+| fs.l, a name, a mount, a file undone | pathchk (the system's limits, or POSIX's portable floor under -p/-P) mountpoint (the kernel's mount table; -d, -x) shred (GNU's passes and their arrangement, -z -u -x -s, each pass synced) |
 | fs.l, the paths and the two bare calls | realpath link unlink |
 | fs.l, what they report | stat du df chown chgrp mktemp truncate |
 | expr.l, the little language | expr (arithmetic, the six comparisons, \| and &, and `:` over the BRE engine) |
@@ -84,11 +86,11 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | sed.l, the editor | sed (-n -E -i -e; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
-| proc.l, the processes and the world | env nohup nice renice printenv sleep kill xargs time date id whoami groups |
+| proc.l, the processes and the world | env nohup nice renice setsid printenv sleep kill xargs time date id whoami groups |
 | proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them) |
 | proc.l, the host's utmp, read | who users logname (glibc's, netbsd's utmpx and freebsd's utx.active; kore writes none) |
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
-| proc.l, the one-liners | cal hostname tty clear which timeout |
+| proc.l, the one-liners | cal hostname hostid dnsdomainname tty clear which timeout watch |
 | top.l | top (the process table, repainted; `-b` batch) |
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
@@ -329,15 +331,22 @@ walks several at once. Three things are worth knowing:
 
 ## the checksums (apps/kore/sum.l)
 
-`cksum`, `md5sum`, `sha256sum` — the file whole, its bytes digested, one line said. The two
-faces are GNU's: cksum's `CRC BYTES NAME` (and no name at all reading stdin), the digest pair's
-`DIGEST  NAME` with the two spaces that mean text mode. `-c` reads such a list back and says
-`NAME: OK` / `NAME: FAILED` per line, leaving with 1 if any did not match; the gate holds both
-directions, GNU reading ours and ours reading GNU's.
+`cksum`, `sum`, `md5sum`, `sha1sum`, `sha224sum`, `sha256sum`, `sha384sum`, `sha512sum`,
+`b2sum` — the file streamed a gulp at a time through its digest, one line said. The faces are
+GNU's: cksum's `CRC BYTES NAME` (and no name at all reading stdin), sum's two (bsd's 16-bit
+rotating sum over 1K blocks, `-s` system v's folded byte total over 512-byte ones), the
+digest tools' `DIGEST  NAME` with the two spaces that mean text mode. b2sum's `-l` asks for a
+shorter blake2b, which is its own digest and not a prefix of the long one. `-c` reads such a list back and says
+`NAME: OK` / `NAME: FAILED` per line, leaving with 1 if any did not match (b2sum reads a line
+of any length it could have written); the gate holds both directions, GNU reading ours and
+ours reading GNU's.
 
-The digests themselves are **inle/hash.c** (`sha256`, `md5`, `cksum` — the last being POSIX's
-own crc, a different polynomial from `crc32`'s and with the byte count folded in, which is why
-an empty file is `4294967295 0`). There is no love statement of any of the three, so an image
+The digests themselves are **inle/hash.c** (`md5`, `sha1`, the four sha-2s, `blake2b`,
+`bsdsum` and `cksum` — the last being POSIX's own crc, a different polynomial from `crc32`'s
+and with the byte count folded in, which is why an empty file is `4294967295 0`). md5, sha-1
+and the sha-2s share one buffering and one state layout; sha-512 keeps its 64-bit words as
+32-bit halves to ride it, and blake2b, which pads nothing and flags its last block, has its
+own. There is no love statement of the digests, so an image
 that carries no host nif — the kernel's, which compiles no `inle/*.c` — answers 2 and names the
 digest it is missing rather than saying a wrong number. The probe is asked at first call and
 kept, never at load: this file is baked by a love that HAS the nifs.
@@ -546,14 +555,15 @@ Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one
 
 ## not built
 
-Polish, as need arises: printf's widths, `%o` `%x` `%u` and `\NNN` (a script under lush
-reaches this printf), uniq -d/-u, cut -b, echo -e, seq over
+Polish, as need arises: printf's `%a`, uniq -d/-u, cut -b, echo -e, seq over
 gems, sed y/N and the hold space, join -o, od with several -t at once, date's spellings past
 `@SECONDS`, the checksums' `-b`/`--tag` output modes and `-c`'s `--quiet`/`--status` (a `-c`
 list written either way still READS here).
 Left out of the coreutils batch deliberately: `fmt` `pr` `csplit` `ptx` `numfmt` (each its own
-layout language, not another row), `sha1sum` and the sha512 family (inle/hash.c carries
-sha256, md5 and cksum alone).
+layout language, not another row).
+shred draws its pattern order from its own random numbers, as GNU's does, so the two agree on
+which passes are random and never on the order of the rest; watch has no `-d`, `-c` or `-p`;
+hostid and dnsdomainname ask /etc/hosts and the host's own addresses, never DNS.
 Of xz, not yet: `-l`, writing `.lzma`, and the BCJ and delta filters (a stream using one is
 refused by name). The encoder's parse is one fast greedy one, near `xz -1`'s ratio at any
 level; a level picks only the dictionary. strip leaves a relocatable object's symbol table
@@ -590,12 +600,11 @@ packages above.
 
 | | kore | busybox | toybox | GNU | uutils |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| names | 160 | 392 | 239 | 201 | 108 |
-| shared with kore | | 137 | 116 | 117 | 88 |
+| names | 174 | 392 | 239 | 201 | 108 |
+| shared with kore | | 146 | 125 | 128 | 98 |
 | carried by no one else | 10 | 162 | 33 | 58 | 1 |
 
-What at least three of the other four carry and kore does not: `dnsdomainname` `fmt` `hostid`
-`sha1sum` `sha224sum` `sha384sum` `sha512sum` `shred` `sum`.
+What at least three of the other four carry and kore does not: `fmt`.
 
 | tool | kore | busybox | toybox | GNU | uutils |
 | --- | :-: | :-: | :-: | :-: | :-: |
@@ -606,7 +615,7 @@ What at least three of the other four carry and kore does not: `dnsdomainname` `
 | `as` | ✓ |  |  | ✓ |  |
 | `ascii` |  | ✓ | ✓ |  |  |
 | `awk` | ✓ | ✓ |  | ✓ |  |
-| `b2sum` |  |  |  | ✓ | ✓ |
+| `b2sum` | ✓ |  |  | ✓ | ✓ |
 | `base32` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `base64` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `basename` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -647,7 +656,7 @@ What at least three of the other four carry and kore does not: `dnsdomainname` `
 | `dircolors` |  |  |  | ✓ | ✓ |
 | `dirname` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `dmesg` |  | ✓ | ✓ |  |  |
-| `dnsdomainname` |  | ✓ | ✓ | ✓ |  |
+| `dnsdomainname` | ✓ | ✓ | ✓ | ✓ |  |
 | `dos2unix` | ✓ | ✓ | ✓ |  |  |
 | `du` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `echo` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -682,7 +691,7 @@ What at least three of the other four carry and kore does not: `dnsdomainname` `
 | `head` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `hexdump` | ✓ | ✓ |  |  |  |
 | `hexedit` |  | ✓ | ✓ |  |  |
-| `hostid` |  | ✓ |  | ✓ | ✓ |
+| `hostid` | ✓ | ✓ |  | ✓ | ✓ |
 | `hostname` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `html2text` | ✓ |  |  |  |  |
 | `httpd` |  | ✓ | ✓ |  |  |
@@ -738,7 +747,7 @@ What at least three of the other four carry and kore does not: `dnsdomainname` `
 | `modinfo` |  | ✓ | ✓ |  |  |
 | `more` | ✓ | ✓ |  |  | ✓ |
 | `mount` | ✓ | ✓ | ✓ |  |  |
-| `mountpoint` |  | ✓ | ✓ |  |  |
+| `mountpoint` | ✓ | ✓ | ✓ |  |  |
 | `mv` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `nbd-client` |  | ✓ | ✓ |  |  |
 | `nc` | ✓ | ✓ | ✓ |  |  |
@@ -756,7 +765,7 @@ What at least three of the other four carry and kore does not: `dnsdomainname` `
 | `partprobe` |  | ✓ | ✓ |  |  |
 | `paste` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `patch` | ✓ | ✓ | ✓ | ✓ |  |
-| `pathchk` |  |  |  | ✓ | ✓ |
+| `pathchk` | ✓ |  |  | ✓ | ✓ |
 | `pgrep` | ✓ | ✓ | ✓ |  |  |
 | `pidof` | ✓ | ✓ | ✓ |  |  |
 | `ping` |  | ✓ | ✓ |  |  |
@@ -791,15 +800,15 @@ What at least three of the other four carry and kore does not: `dnsdomainname` `
 | `sed` | ✓ | ✓ | ✓ | ✓ |  |
 | `seq` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `setfattr` |  | ✓ | ✓ |  |  |
-| `setsid` |  | ✓ | ✓ |  |  |
+| `setsid` | ✓ | ✓ | ✓ |  |  |
 | `sh` | ✓ | ✓ |  | ✓ |  |
-| `sha1sum` |  | ✓ | ✓ | ✓ | ✓ |
-| `sha224sum` |  |  | ✓ | ✓ | ✓ |
+| `sha1sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `sha224sum` | ✓ |  | ✓ | ✓ | ✓ |
 | `sha256sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `sha384sum` |  |  | ✓ | ✓ | ✓ |
+| `sha384sum` | ✓ |  | ✓ | ✓ | ✓ |
 | `sha3sum` |  | ✓ | ✓ |  |  |
-| `sha512sum` |  | ✓ | ✓ | ✓ | ✓ |
-| `shred` |  | ✓ | ✓ | ✓ | ✓ |
+| `sha512sum` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `shred` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `shuf` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `size` | ✓ |  |  | ✓ |  |
 | `sleep` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -811,7 +820,7 @@ What at least three of the other four carry and kore does not: `dnsdomainname` `
 | `strip` | ✓ |  |  | ✓ |  |
 | `stty` | ✓ | ✓ |  | ✓ | ✓ |
 | `su` |  | ✓ | ✓ |  |  |
-| `sum` |  | ✓ |  | ✓ | ✓ |
+| `sum` | ✓ | ✓ |  | ✓ | ✓ |
 | `swapoff` |  | ✓ | ✓ |  |  |
 | `swapon` |  | ✓ | ✓ |  |  |
 | `switch_root` |  | ✓ | ✓ |  |  |
@@ -852,9 +861,9 @@ What at least three of the other four carry and kore does not: `dnsdomainname` `
 | `uudecode` |  | ✓ | ✓ |  |  |
 | `uuencode` |  | ✓ | ✓ |  |  |
 | `vconfig` |  | ✓ | ✓ |  |  |
-| `vdir` |  |  |  | ✓ | ✓ |
+| `vdir` | ✓ |  |  | ✓ | ✓ |
 | `vi` | ✓ | ✓ |  |  |  |
-| `watch` |  | ✓ | ✓ |  |  |
+| `watch` | ✓ | ✓ | ✓ |  |  |
 | `watchdog` |  | ✓ | ✓ |  |  |
 | `wc` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `wget` | ✓ | ✓ | ✓ | ✓ |  |

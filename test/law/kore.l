@@ -636,8 +636,9 @@
 (: (test
       ; %f %e %g by hand -- `show` spells a double round-trip exact, awk owes %.6g
       (aw-fixed 3.14159 2 = "3.14") (aw-fixed -1.005 2 = "-1.00")
-      (aw-fixed 2.5 0 = "3")                   ; half away from zero; C says "2"
-      (aw-expo 1234.5 3 = "1.235e+03") (aw-expo 0.000123 2 = "1.23e-04")
+      (aw-fixed 2.5 0 = "2") (aw-fixed 3.5 0 = "4")   ; an exact tie goes to even, as C's
+      (aw-fixed 2.675 2 = "2.67")                        ; the double is under the tie
+      (aw-expo 1234.5 3 = "1.234e+03") (aw-expo 1234.6 3 = "1.235e+03") (aw-expo 0.000123 2 = "1.23e-04")
       (aw-gen (1 / 3) 6 = "0.333333") (aw-gen 100000 6 = "100000")
       (aw-gen 1000000 6 = "1e+06") (aw-gen 0.0001 6 = "0.0001")
       (aw-gen 0.00001 6 = "1e-05") (aw-gen 0 6 = "0")

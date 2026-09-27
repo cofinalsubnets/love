@@ -19,6 +19,8 @@
 ; a doc is a list of blocks:
 ;   ('meta ((key value) ..))  ('head N inl)  ('para inl)  ('fence lang text)  ('quote doc)
 ;   ('bullets (inl ..))  ('numbers (inl ..))  ('deflist ((term-inl body-inl) ..))  ('rule)
+;   ('table aligns head rows): aligns one of 'n 'l 'c 'r a column, head a row, a row a
+;   list of inls, every row as wide as the head
 ; an inl is a list of spans:
 ;   ('text s)  ('em inl)  ('strong inl)  ('code s)  ('link inl url)
 ; ('meta ..) is document-level and heads the doc; its keys are the canonical five, always
@@ -87,7 +89,11 @@
                                     (st < i) (rev (snip s st i . acc))
                                     (rev acc)))
                  0 0 ())
-   (endnl s)    (tally s && s (tally s - 1) = 10 ? s (s + "\n")))     ; one trailing newline, always
+   (endnl s)    (tally s && s (tally s - 1) = 10 ? s (s + "\n"))     ; one trailing newline, always
+   ; a parser whose payload must also pass ok, or it fails where it began
+   (pwhen ok a s y n) (a s (\ s1 x (? (ok x) (y s1 x) (n s))) n)
+   ; a row laid to n cells: the cells past its end empty, the ones past n gone
+   (tfit n l) (? (n < 1) () ((? (two? l) <l ()) . (tfit (n - 1) (? (two? l) >l ())))))
 
 
 ; --- character classes ---
@@ -180,8 +186,35 @@
    headmark  (seqs [(lit "#") (span hash?) (lit " ")])
    nummark   (seqs [(one dig?) (span dig?) (lit ". ")])
    defmark   (lit ":   ")                                                        ; the definition-list body marker
-   starter   (alts [headmark nummark defmark (lit "```") (lit ">") (lit "- ") (lit "---")])   ; what a paragraph must not be
+   starter   (alts [headmark nummark defmark (lit "```") (lit ">") (lit "- ") (lit "* ") (lit "---")])   ; what a paragraph must not be
 
+   ; a table, GFM's piped form: a head row, a row of --- :-- :-: --: cells, the body rows.
+   ; a cell ends at a bar no backslash escapes (the escape comes off, so a code span keeps
+   ; its bar) and is one inl. only a head over a delimiter row starts one, so a line that
+   ; merely opens with a bar stays prose
+   (tbtrim s) (: n #s (l i) (? (i < n && sp? (s i)) (l (i + 1)) i)
+                 (r j) (? (0 < j && sp? (s (j - 1))) (r (j - 1)) j)
+                 a (l 0) b (r n) (? (a < b) (snip s a b) ""))
+   (tcells s)
+    (: n #s
+       (go i cur acc)
+        (? (n <= i) (rev (? (0 < #(tbtrim cur)) (tbtrim cur . acc) acc))
+           (s i = 92 && i + 1 < n && s (i + 1) = 124) (go (i + 2) (cur + "|") acc)
+           (s i = 92 && i + 1 < n) (go (i + 2) (cur + snip s i (i + 2)) acc)
+           (s i = 124) (go (i + 1) "" (tbtrim cur . acc))
+           (go (i + 1) (cur + string (s i)) acc))
+       (go 0 "" ()))
+   (tdel c)                        ; a delimiter cell -> its alignment, () for any other text
+    (: n #c lc (0 < n && c 0 = 58) rc (1 < n && c (n - 1) = 58)
+       mid (snip c (? lc 1 0) (? rc (n - 1) n))
+       dash ((: (g i) (? (#mid <= i) 1 (mid i = 45) (g (i + 1)) 0)) 0)
+       (? (0 < #mid && dash) (? (lc && rc) 'c rc 'r lc 'l 'n) ()))
+   (tdels? l) (? (one? l) 1 (nil? (tdel <l)) 0 (tdels? >l))
+   t-row   (tag (p \ tcells (cats p)) (seqs [(skip (lit "|")) (span nonl?) eol]))
+   t-del   (pwhen (p \ two? <p && tdels? <p) t-row)
+   t-start (pwhen (p \ #<p = #<>p) (seq t-row t-del))
+   b-table (tag (\ p (: w #<p ['table (map tdel <>p) (map mdinl <p) (map (r \ tfit w (map mdinl r)) >>p)]))
+                (pwhen (p \ #<p = #<>p) (seqs [t-row t-del (many t-row)])))
    b-rule  (tag (\ _ '(rule)) (seqs [(lit "---") (skip (span sp?)) (lit "\n")]))
    b-head  (tag (\ p ['head (1 + #<>p) (mdinl <>>>p)])
                      (seqs [(lit "#") (span hash?) (lit " ") (span nonl?) eol]))
@@ -199,8 +232,8 @@
    ; a paragraph line must be neither blank nor a block opener -- and must eat a character
    ; (`one nonl?` before the span), else `many` spins forever on the empty tail.
    (p-line s y n)  ((tag cats                      ; ..`tag` does the wrapping; f yields the element
-                         (seqs [(notp blankline) (notp starter) (one nonl?) (span nonl?) eol])) s y n)
-   u-item  (tag lazyj (seqs [(skip (lit "- ")) (span nonl?) eol (many p-line)]))
+                         (seqs [(notp blankline) (notp starter) (notp t-start) (one nonl?) (span nonl?) eol])) s y n)
+   u-item  (tag lazyj (seqs [(skip (alts [(lit "- ") (lit "* ")])) (span nonl?) eol (many p-line)]))
    o-item  (tag lazyj (seqs [(skip (one dig?)) (skip (span dig?)) (skip (lit ". "))
                              (span nonl?) eol (many p-line)]))
    b-bullets (tag (\ p ['bullets (map mdinl p)]) (many1 u-item))
@@ -237,7 +270,7 @@
                          (pack (many1 q-line))) s y n)
    (mdblock s y n)
     ((seqs [(skip (many blankline))
-            (alts [b-rule b-head b-fence b-quote b-bullets b-numbers b-deflist b-para b-line])]) s y n)
+            (alts [b-rule b-head b-fence b-quote b-table b-bullets b-numbers b-deflist b-para b-line])]) s y n)
    (mdread t) (bmrg (runp (seqs [(opt b-meta) (many mdblock) (skip (many blankline))]) (endnl t))))
 
 ; ---------------------------------------------------------------- markdown, show
@@ -256,6 +289,12 @@
    (nlist l i) (atom? l ? "" (show i + ". " + mdi <l + "\n" + nlist >l (i + 1)))
    (mfront kvs) ("---\n" + cats (map (p \ string <p + ": " + <>p + "\n") (mfilled kvs)) + "---\n")
    (mdefs l)    (catmap (it \ mdi <it + "\n:   " + mdi <>it + "\n") l)
+   ; a table row, a cell's bars escaped so the row splits where it should
+   (tbar l)     ("| " + joins l " | " + " |")
+   (tmcell i)   (: s (mdi i) (cats (map (k \ (? (s k = 124) "\\|" (string (s k)))) ^#s)))
+   (tmal a)     (a @ 'l ":--" 'c ":-:" 'r "--:" "---")
+   (mtable x)   (tbar (map tmcell (x 2)) + "\n" + tbar (map tmal (x 1)) + "\n"
+                 + catmap (r \ tbar (map tmcell r) + "\n") (x 3))
    (mdb x) (<x @ 'head    (rep "#" <>x + " " + mdi <>>x + "\n")
                  'para    (shield (mdi <>x) + "\n")
                  'fence   ("```" + <>x + "\n" + <>>x + "```\n")
@@ -263,6 +302,7 @@
                  'bullets (catmap (i \ "- " + mdi i + "\n") <>x)
                  'numbers (nlist <>x 1)
                  'deflist (mdefs <>x)
+                 'table   (mtable x)
                  'meta    (mfront <>x)
                  'rule    "---\n"
                  "")
@@ -281,6 +321,11 @@
    (hitems l t) (joins (map (i \ "<li>" + hti i + "</li>") l) "\n" + "\n</" + t + ">")
    (hmeta kvs)  (joins (map (p \ "<meta name=\"" + string <p + "\" content=\"" + hq <>p + "\">") (mfilled kvs)) "\n")
    (hdefs l)    ("<dl>\n" + joins (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l) "\n" + "\n</dl>")
+   (hal a)      (a @ 'l " align=\"left\"" 'c " align=\"center\"" 'r " align=\"right\"" "")
+   (hcells t al cs) (? (two? cs) ("<" + t + hal <al + ">" + hti <cs + "</" + t + ">" + hcells t >al >cs) "")
+   (hrow t al cs) ("<tr>" + hcells t al cs + "</tr>")
+   (htable x)   ("<table>\n<thead>\n" + hrow "th" (x 1) (x 2) + "\n</thead>\n<tbody>\n"
+                 + cats (map (r \ hrow "td" (x 1) r + "\n") (x 3)) + "</tbody>\n</table>")
    (htb x) (<x @ 'head    (: h ("h" + show <>x) ("<" + h + ">" + hti <>>x + "</" + h + ">"))
                  'para    ("<p>" + hti <>x + "</p>")
                  'fence   ("<pre><code" + (? (0 < #<>x) (" class=\"language-" + <>x + "\"") "")
@@ -289,6 +334,7 @@
                  'bullets ("<ul>\n" + hitems <>x "ul")
                  'numbers ("<ol>\n" + hitems <>x "ol")
                  'deflist (hdefs <>x)
+                 'table   (htable x)
                  'meta    (hmeta <>x)
                  'rule    "<hr>"
                  "")
@@ -305,7 +351,7 @@
 (: hkill '("script" "style" "head" "svg" "noscript" "template" "iframe" "object")
    hbare '("div" "nav" "section" "article" "main" "header" "footer" "aside" "span" "body"
            "html" "figure" "figcaption" "form" "label" "picture" "video" "audio" "canvas"
-           "table" "thead" "tbody" "tfoot" "tr" "td" "th" "caption" "colgroup" "col"
+           "caption" "colgroup" "col"
            "font" "center" "small" "big" "abbr" "cite" "time" "mark" "ins" "del" "sup" "sub")
    halias '(("b" "strong") ("i" "em") ("u" "em") ("strike" "em") ("s" "em") ("q" "em")
             ("tt" "code") ("kbd" "code") ("samp" "code") ("var" "code") ("dfn" "em")
@@ -443,6 +489,17 @@
    h-meta  (tag (\ p ['meta (mnorm p)]) (many1 h-meta1))
    h-dt    (seqs [hws (wrapt "dt" (pack htinl)) hws (wrapt "dd" (pack htinl))])
    h-dl    (tag (\ p ['deflist (dpair p)]) (wrapt "dl" (many h-dt)))
+   ; a table: the cells inline, th or td alike, an alignment off htshow's own attribute
+   ; and none off any other; the head is the first row, whichever section held it
+   (hcellp t) (alts ((map (a \ tag (c \ [a <c]) (seqs [hws (skip (lit ("<" + t + hal a + ">"))) (pack htinl) (skip (ctag t))]))
+                         '(l c r))
+                     + [(tag (c \ ['n <c]) (seqs [hws (skip (otag t)) (pack htinl) (skip (ctag t))]))]))
+   h-tr    (pack (seqs [hws (skip (otag "tr")) (many (alts [(hcellp "th") (hcellp "td")])) hws (skip (ctag "tr"))]))
+   (h-tsec t) (seqs [hws (skip (otag t)) (many h-tr) hws (skip (ctag t))])
+   h-table (tag (\ p (: hd <p w #hd
+                         ['table (map cap hd) (map (c \ <>c) hd) (map (r \ tfit w (map (c \ <>c) r)) >p)]))
+                (pwhen (p \ two? p && two? <p)
+                       (wrapt "table" (many (alts [(h-tsec "thead") (h-tsec "tbody") (h-tsec "tfoot") h-tr])))))
    ; the last resort, and the reason `many h-block` never stalls: a tag no block above could
    ; place is dropped, and what it wrapped is left to be read on its own. without it `runp`
    ; -- which is lenient -- keeps what it parsed and drops the rest of the page in silence,
@@ -465,8 +522,27 @@
    ; quote recurses into the block loop, so it sits with it and stays eta-expanded
    (h-quote s y n) ((tag (\ p ['quote <p]) (wrapt "blockquote" (pack (many h-block)))) s y n)
    (h-block s y n)
-    ((seqs [hws (alts [h-rule h-head h-fence h-quote h-ul h-ol h-dl h-meta h-para h-loose h-lone])]) s y n)
+    ((seqs [hws (alts [h-rule h-head h-fence h-quote h-ul h-ol h-dl h-table h-meta h-para h-loose h-lone])]) s y n)
    (htread t) (bmrg (runp (seqs [(many h-block) hws]) (htscrub t))))
+
+; ---------------------------------------------------------------- a table, laid out
+; roff and the terminal both show a table as its columns in plain text: a cell's words, the
+; columns padded to their widest by the alignment, two spaces between, a dashed rule under
+; the head. a width is counted in characters, not bytes -- a mark like a check is three.
+(: (tplain l) (catmap (x \ <x @ 'text <>x 'code <>x 'strong (tplain <>x) 'em (tplain <>x)
+                            'link (tplain <>x) "") l)
+   (tvw s) ((: (g i n) (? (#s <= i) n (g (i + 1) (? (128 <= s i && s i < 192) n (n + 1))))) 0 0)
+   (tpad a w s) (: k (w - tvw s)
+                   (? (k < 1) s (a = 'r) (rep " " k + s)
+                      (a = 'c) (rep " " (k // 2) + s + rep " " (k - k // 2)) (s + rep " " k)))
+   (tblines x)
+    (: al (x 1) rows ((map tplain (x 2)) . (map (r \ map tplain r) (x 3)))
+       ws (foldl (\ a r (map (p \ max <p <>p) (zipm a (map tvw r)))) (map (_ \ 0) (x 1)) rows)
+       (line r) (: (g as wz cs) (? (one? cs) "" (: c (tpad <as <wz <cs)
+                                                   (? (one? >cs) c (c + "  " + g >as >wz >cs))))
+                   (g al ws r))
+       (strip s) (: (b j) (? (0 < j && s (j - 1) = 32) (b (j - 1)) j) (snip s 0 (b #s)))
+       ([(strip (line <rows)) (joins (map (n \ rep "-" n) ws) "  ")] + map (r \ strip (line r)) >rows)))
 
 ; ---------------------------------------------------------------- roff (man), show
 ; man macros carry sections two deep, literal blocks with no language, and no rule or
@@ -497,6 +573,14 @@
    (rth kvs)   (".TH" + cats (map (k \ " \"" + mget kvs k + "\"") metakeys) + "\n")
    (rnums l i) (atom? l ? "" (".IP \"" + show i + ".\" 4\n" + rline (rfi <l) + "\n" + rnums >l (i + 1)))
    (rdefs l)   (catmap (it \ ".TP\n" + rline (rfi <it) + "\n" + rfill (rfi <>it)) l)
+   ; roff has no cells here: a table that fits a page is its laid columns as a display,
+   ; and a wider one each row a paragraph of head: cell lines, which the page can fill
+   (rcell hc) (? (0 < #<hc) (<hc + ": " + tplain <>hc) (tplain <>hc))
+   (rrow hd r) (".PP\n" + joins (map (hc \ rline (rq (rcell hc))) (zipm hd r)) "\n.br\n" + "\n")
+   (rtable x)
+    (: ls (tblines x)
+       (? (foldl (\ a l (a && tvw l <= 78)) 1 ls) (rfb ['fence "" (catmap (ln \ ln + "\n") ls)])
+          (: hd (map tplain (x 2)) (catmap (r \ rrow hd r) (x 3)))))
    (rfb x) (<x @ 'meta    (rth <>x)
                  'head    ((<>x < 2 ? ".SH " ".SS ") + rfi <>>x + "\n")
                  'para    (".PP\n" + rfill (rfi <>x))
@@ -505,6 +589,7 @@
                  'bullets (catmap (i \ ".IP \\(bu 2\n" + rline (rfi i) + "\n") <>x)
                  'numbers (rnums <>x 1)
                  'deflist (rdefs <>x)
+                 'table   (rtable x)
                  "")                                        ; a rule has no roff form: it vanishes
    (rfshow d) (catmap rfb d))
 
@@ -883,7 +968,17 @@
           'bullets (ttbuls <>x w ind)
           'numbers (ttnums <>x w ind 1)
           'deflist (ttdefs <>x w ind)
+          'table   (tttable x w ind)
           'rule    [(ttsp ind + rep "-" (? (w - ind < 1) 1 (w - ind)))])
+   ; a table the width holds is its columns; one it does not is each row as head: cell
+   ; lines, a blank between rows, so no line overruns and nothing is cut
+   (tttable x w ind)
+    (: ls (tblines x)
+       (? ((: (g l) (? (one? l) 1 (w < ind + tvw <l) 0 (g >l))) ls) (map (ln \ ttsp ind + ln) ls)
+          (: hd (map tplain (x 2))
+             (rw r) (catmap (hc \ ttinl [['text (? (0 < #<hc) (<hc + ": " + tplain <>hc) (tplain <>hc))]] w ind "")
+                            (zipm hd r))
+             ((: (g rs) (? (one? rs) () (one? >rs) (rw <rs) (rw <rs + [""] + g >rs))) (x 3)))))
    ; one blank line between blocks, none before the first, and none after a heading --
    ; a heading belongs to what follows it, and man sets it that way
    (ttdoc d w ind)
