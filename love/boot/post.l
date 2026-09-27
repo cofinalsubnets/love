@@ -153,6 +153,30 @@
    (ends? s p)     (#p <= #s && snip s (#s - #p) #s = p ? 1 0)
    (replace s cite to) (#cite = 0 ? s (join to (split cite s)))
    (ws? c)  (c = 32 || c = 9 || c = 10 || c = 13 ? 1 0)
+   (digit? c) (48 <= c <= 57 ? 1 0)
+   (alpha? c) (65 <= c <= 90 || 97 <= c <= 122 ? 1 0)
+   (alnum? c) (digit? c || alpha? c ? 1 0)
+   ; a hex digit's value, -1 for none: 0 is a digit and nets false, so () could not say it
+   (hexv c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) -1)
+   ; all-digits text as its number, () for anything else ("" and "abc" included)
+   (unum s) (: n #s
+               (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
+               (? (string? s && n) (go 0 0) ()))
+   ; lowercase digits past 9. putbn reads a charm only, so a big is split down to one
+   (radix n b)
+    (? (charm? n) (: o (jug 0) _ (putbn o n b) (slurp o))
+       (n < 0) ("-" + radix (0 - n) b)
+       (radix (n // b) b + string ("0123456789abcdefghijklmnopqrstuvwxyz" (n % b))))
+   (zpad w s) (#s < w ? (zpad w ("0" + s)) s)
+   ; a code point as its utf-8 bytes, "" outside unicode. `string` on a number is one byte
+   (utf8 v)
+    (? (v < 0) ""
+       (v < 128) (string v)
+       (v < 2048) (string (192 + v // 64) + string (128 + v % 64))
+       (v < 65536) (string (224 + v // 4096) + string (128 + v // 64 % 64) + string (128 + v % 64))
+       (v < 1114112) (string (240 + v // 262144) + string (128 + v // 4096 % 64)
+                      + string (128 + v // 64 % 64) + string (128 + v % 64))
+       "")
    (lstrip s) (: (go i) (i < #s && ws? (s i) ? (go (i + 1)) i) (snip s (go 0) #s))
    (rstrip s) (: (go j) (0 < j && ws? (s (j - 1)) ? (go (j - 1)) j) (snip s 0 (go #s)))
    (strip s)  (lstrip (rstrip s))       ; not `trim`: that name is ev.l's port op, mopped by egg.l
@@ -1744,7 +1768,7 @@
    ; to ask), 80 where neither says. a COLUMNS that is not a plain count is ignored.
    (screen fd)
     (: e (getenv "COLUMNS")
-       c (? (string? e) (: n ((cite 'cli 'unum) e) (? (charm? n && 0 < n) n 80)) 80)
+       c (? (string? e) (: n (unum e) (? (charm? n && 0 < n) n 80)) 80)
        t (tty fd)
        (? (two? t && 0 < >t) >t c))
    ; (lay cs w down?) -- the cells over a terminal w columns wide, as lines
@@ -1838,7 +1862,7 @@
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap
-          uopt uopt1 uoptv uoptun uoptstray unum uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptstray uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2227,12 +2251,6 @@
    ; not one, so an applet with positional operands would take `-x` for a filename. () once
    ; `--` has been spelled: the words behind it are literal by request.
    (uoptstray as rest) (? (elem "--" as) () (<(filter (w \ 1 < #w && w 0 = 45) rest)))
-   ; a flag's text as a whole number, or () for anything that is not all digits: a hand-rolled
-   ; reader answers 0 for "abc" as for "", so a port typed wrong and one nobody typed read
-   ; alike. `charm?` on the answer is the test.
-   (unum s) (: n #s
-               (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
-               (? (string? s && n) (go 0 0) ()))
 
    ; --- the two flags every applet answers, and the one place that answers them ------
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a file

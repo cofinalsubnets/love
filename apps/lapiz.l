@@ -364,23 +364,10 @@
            ("reg" "®") ("trade" "™") ("deg" "°") ("times" "×") ("divide" "÷")
            ("laquo" "«") ("raquo" "»") ("dagger" "†") ("para" "¶") ("sect" "§")
            ("larr" "←") ("rarr" "→") ("harr" "↔") ("le" "≤") ("ge" "≥") ("ne" "≠"))
-   ; a code point -> its utf-8 bytes. the tree had no encoder; `string` on a number is one
-   ; BYTE, which is the right primitive and the wrong end of this.
-   (utf8 v)
-    (? (v < 0) ""
-       (v < 128) (string v)
-       (v < 2048) (string (192 + v // 64) + string (128 + v % 64))
-       (v < 65536) (string (224 + v // 4096) + string (128 + v // 64 % 64)
-                    + string (128 + v % 64))
-       (v < 1114112) (string (240 + v // 262144) + string (128 + v // 4096 % 64)
-                      + string (128 + v // 64 % 64) + string (128 + v % 64))
-       "")
    (hnum nm)                                     ; &#NN; and &#xHH; -> the character
     (: n #nm
-       (dig16 c) (? (47 < c < 58) (c - 48) (96 < c < 103) ((c - 97) + 10)
-                    (64 < c < 71) ((c - 65) + 10) -1)
        (go i b v) (? (n <= i) (? (v < 0) () (utf8 v))
-                     (: d (dig16 (nm i))
+                     (: d (hexv (nm i))
                         (? (d < 0 || b <= d) () (go (i + 1) b ((? (v < 0) 0 v) * b + d)))))
        (? (n < 2 || nm 0 != 35) ()
           (elem (nm 1) '(120 88)) (go 2 16 -1) (go 1 10 -1)))

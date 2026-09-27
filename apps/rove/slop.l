@@ -532,12 +532,8 @@
  slop-usage "usage: love slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
  ; the two optional words, in either order: a number is pennies and anything else is
  ; the token. given either, the walk opens on a sign saying what you came in with.
- (digits? t) (: n #t
-                (go i) (i >= n ? 1 (48 <= t i <= 57 && go (i + 1)))
-                (0 < n && go 0))
- (num-of t) (:- (go 0 0) (go i a) (i >= #t ? a (go (i + 1) (a * 10 + t i - 48))))
  (slop-args as) (:- (go as () ()) (go l tk pn) (one? l ? [tk pn]
-                 (: t <l (digits? t ? (go >l tk (num-of t)) (go >l t pn)))))
+                 (: t <l n (unum t) (charm? n ? (go >l tk n) (go >l t pn)))))
  (slop-main as) (2 < #as ? (say err ("slop: " + slop-usage + "\n"), flush err, 2)
                     (: p (slop-args as) (slop-run <p <>p)))
  _ (pins (cite 'verbs 'tab) 'slop (udoor 'slop slop-main slop-usage 1 1)))

@@ -313,7 +313,7 @@
         (: _ (? (hd 0) 0 (: _ (pin hd 0 1) (puts "   text\t   data\t    bss\t    dec\t    hex\tfilename\n")))
            d (s 0 + s 1 + s 2)
            (puts (upad 7 (show (s 0)) + "\t" + upad 7 (show (s 1)) + "\t" + upad 7 (show (s 2)) + "\t"
-                  + upad 7 (show d) + "\t" + upad 7 (uradix d 16) + "\t" + nm + "\n")))
+                  + upad 7 (show d) + "\t" + upad 7 (radix d 16) + "\t" + nm + "\n")))
        ; the status is the last trouble's: 1 a file not there, 3 one not an object
        (add a s) [(a 0 + s 0) (a 1 + s 1) (a 2 + s 2) (? (0 < s 3) (s 3) (a 3))]
        (bad c m) (: _ (say err ("size: " + m + "\n")) [0 0 0 c])
@@ -434,16 +434,16 @@
    ; -- readelf: binutils' -h -l -S -s (and -e, all three headers), wide or at 80
    ; columns, over little-endian ELF of either class. out of reach, deliberately: the
    ; relocations, the dynamic section, notes, versions and the dumps --
-   (re-hex v w) (upadc w 48 (? (v = 0) "0" (ubase-hex v)))
-   (re-0x v) ("0x" + (? (v = 0) "0" (ubase-hex v)))
+   (re-hex v w) (zpad w (? (v = 0) "0" (radix v 16)))
+   (re-0x v) ("0x" + (? (v = 0) "0" (radix v 16)))
    (re-u v w) (upad w (show v))
    (re-cut s w) (? (w < #s) (snip s 0 (w - 5) + "[...]") s)
    (re-at s w) (? (w < #s) (snip s 0 w) s)
    (re-lbl l) ("  " + urpad 35 l)
    (re-mach m) (m @ 3 "Intel 80386" 40 "ARM" 62 "Advanced Micro Devices X86-64" 183 "AArch64"
-                    243 "RISC-V" 8 "MIPS R3000" 20 "PowerPC" 21 "PowerPC64" ("<unknown>: 0x" + ubase-hex m))
+                    243 "RISC-V" 8 "MIPS R3000" 20 "PowerPC" 21 "PowerPC64" ("<unknown>: 0x" + radix m 16))
    (re-osabi o) (o @ 0 "UNIX - System V" 1 "UNIX - HP-UX" 2 "UNIX - NetBSD" 3 "UNIX - GNU" 6 "UNIX - Solaris"
-                     9 "UNIX - FreeBSD" 12 "UNIX - OpenBSD" ("<unknown: " + ubase-hex o + ">"))
+                     9 "UNIX - FreeBSD" 12 "UNIX - OpenBSD" ("<unknown: " + radix o 16 + ">"))
    (re-dyn fs b)                        ; the dynamic section's (tag . value) pairs
     (: w (? (b 4 = 2) 8 4)
        d (filter (\ sc (sc 2 = 6)) (bu-secs fs b))
@@ -454,9 +454,9 @@
     (t @ 0 "NONE (None)" 1 "REL (Relocatable file)" 2 "EXEC (Executable file)" 4 "CORE (Core file)"
          3 (? (any (\ p (<p = 1879048187 && 0 < (<>p & 134217728))) (re-dyn fs b))
               "DYN (Position-Independent Executable file)" "DYN (Shared object file)")
-         ("<unknown>: " + ubase-hex t))
+         ("<unknown>: " + radix t 16))
    (re-flags b m f)
-    ("0x" + ubase-hex f
+    ("0x" + radix f 16
      + (? (m = 40) (? (f >> 24) (", Version" + show (f >> 24) + " EABI"
                                + (? (f & 1024) ", hard-float ABI" (f & 512) ", soft-float ABI" "")) "")
           (m = 243) ((? (f & 1) ", RVC" "") + ([", soft-float ABI" ", single-float ABI" ", double-float ABI" ", quad-float ABI"] ((f & 6) >> 1))
@@ -496,9 +496,9 @@
        (m = 40 && t = 1879048193) "ARM_EXIDX" (m = 40 && t = 1879048194) "ARM_PREEMPTMAP"
        (m = 40 && t = 1879048195) "ARM_ATTRIBUTES" (m = 243 && t = 1879048195) "RISCV_ATTRIBUTES"
        (m = 183 && t = 1879048195) "AARCH64_ATTRIBUTES"
-       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + ubase-hex (t - 1610612736))
-       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + ubase-hex (t - 1879048192))
-       (2147483648 <= t) ("LOUSER+0x" + ubase-hex (t - 2147483648))
+       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + radix (t - 1610612736) 16)
+       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + radix (t - 1879048192) 16)
+       (2147483648 <= t) ("LOUSER+0x" + radix (t - 2147483648) 16)
        (re-hex t 8 + ": <unknown>"))
    (re-shflags b m f)
     (: gnu (b 7 = 3 || b 7 = 9)
@@ -550,9 +550,9 @@
        (t = 1685382480) "GNU_EH_FRAME" (t = 1685382481) "GNU_STACK" (t = 1685382482) "GNU_RELRO"
        (t = 1685382483) "GNU_PROPERTY" (t = 1685382484) "GNU_SFRAME"
        (m = 40 && t = 1879048193) "EXIDX" (m = 243 && t = 1879048195) "RISCV_ATTRIBUT"
-       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + ubase-hex (t - 1610612736))
-       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + ubase-hex (t - 1879048192))
-       ("<unknown>: " + ubase-hex t))
+       (1610612736 <= t && t < 1879048192) ("LOOS+0x" + radix (t - 1610612736) 16)
+       (1879048192 <= t && t < 2147483648) ("LOPROC+0x" + radix (t - 1879048192) 16)
+       ("<unknown>: " + radix t 16))
    (re-phs fs b)                        ; [type off vaddr paddr filesz memsz flags align]
     (: e64 (b 4 = 2) o (ld-f fs b 0 'e-phoff) n (ld-f fs b 0 'e-phnum) e (ld-f fs b 0 'e-phent)
        (map (\ i (: h (o + i * e)
@@ -600,7 +600,7 @@
                     ps)
              _ (say out "\n Section to Segment mapping:\n  Segment Sections...\n")
              (map (\ i (: p (ps i)
-                          (say out ("   " + upadc 2 48 (show i) + "     "
+                          (say out ("   " + zpad 2 (show i) + "     "
                                     + foldl (\ a sc (? (re-in? sc p) (a + sc 1 + " ") a)) "" ss + "\n"))))
                   ^#ps))))
    ; a version index's name, off .gnu.version_r (what the file needs) and

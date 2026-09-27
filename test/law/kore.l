@@ -234,8 +234,8 @@
       (ujfs () "  a   1  " = '("a" "1"))                  ; blank runs, the edges dropped
       (ujfs () "" = ()) (ujfs 58 "a:b:" = '("a" "b" ""))
       (unth '("a" "b") 2 = "b") !(unth '("a" "b") 3) !(unth '("a") 0)
-      (uzpad 3 "7" = "007") (uzpad 1 "77" = "77")
-      (uradix 255 16 = "ff") (uradix 255 8 = "377")
+      (zpad 3 "7" = "007") (zpad 1 "77" = "77")
+      (radix 255 16 = "ff") (radix 255 8 = "377")
       (uodesc 10 = "\\n") (uodesc 0 = "\\0") (uodesc 92 = "\\") (uodesc 65 = "A")
       (uodesc 1 = "001") (uodesc 255 = "377") (uodesc 127 = "177")
       (uodname 10 = "nl") (uodname 32 = "sp") (uodname 127 = "del")

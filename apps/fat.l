@@ -118,7 +118,6 @@
                                (d < 0) (s . "")
                                (snip s 0 d . snip s (d + 1) n))
                    (go 0 -1))
-   (alnum? c) (48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122)
    (plain? c) (alnum? c || c = 95 || c = 45 || c = 126)
    (allc? s p) ((: (go i) (i < #s ? (p (s i) ? (go (i + 1)) 0) 1)) 0)
    (lower? s) (allc? s (\ c !(65 <= c <= 90)))

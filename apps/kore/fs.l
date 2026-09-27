@@ -131,8 +131,8 @@
        mo (udt-mo (<>ymd - 1))
        d (upad 2 (show <>>ymd))
        (? (((now - 15778476) <= s) && (s <= now))
-          (mo + " " + d + " " + (uzpad 2 (show (// secs 3600)))
-              + ":" + (uzpad 2 (show (// (% secs 3600) 60))))
+          (mo + " " + d + " " + (zpad 2 (show (// secs 3600)))
+              + ":" + (zpad 2 (show (// (% secs 3600) 60))))
           (mo + " " + d + "  " + (show <ymd))))
    ; the sgr a name wears, "" for none. the class is read off the lstat already in
    ; hand; a broken link is the one class that costs a second call, since only the
@@ -581,7 +581,7 @@
    ; over 127 rides through -- there is no locale here to tell text from a stray byte,
    ; and text is what a name usually is.
    (ushq-esc c)                        ; the text after the backslash in $'..'
-    (c @ 7 "a" 8 "b" 9 "t" 10 "n" 11 "v" 12 "f" 13 "r" (uzpad 3 (uradix c 8)))
+    (c @ 7 "a" 8 "b" 9 "t" 10 "n" 11 "v" 12 "f" 13 "r" (zpad 3 (radix c 8)))
    (ushq-ctl? c) (c < 32 || c = 127)
    (ushq w)
     (: n #w
@@ -632,10 +632,10 @@
    (ustamp ns)                         ; %y: 2026-08-17 13:32:41.073610912 +0000
     (: s (// ns 1000000000) frac (% ns 1000000000)
        ymd (ucivil (// s 86400)) secs (% s 86400)
-       (p2 v) (uzpad 2 (show v))
+       (p2 v) (zpad 2 (show v))
        ((((show <ymd) + "-" + (p2 <>ymd) + "-" + (p2 <>>ymd)) + " ")
         + (((p2 (// secs 3600)) + ":" + (p2 (// (% secs 3600) 60)) + ":" + (p2 (% secs 60)))
-           + ("." + (uzpad 9 (show frac)) + " +0000"))))
+           + ("." + (zpad 9 (show frac)) + " +0000"))))
    ; -c does not read escapes -- `stat -c 'a\tb'` prints the backslash and the t, and
    ; adds a newline of its own; --printf reads them and adds none. GNU's split, and the
    ; only way a format can carry a literal backslash at all.
@@ -648,7 +648,7 @@
      ats (ust-at st 9) cts (ust-at st 10)
      dev (ust-at st 11) rdev (ust-at st 12) iob (ust-at st 13)
      (num v) (? (charm? v) (show v) "?")
-     (hex v) (? (charm? v) (uradix v 16) "?")
+     (hex v) (? (charm? v) (radix v 16) "?")
      (secs v) (? (charm? v) (show (v // 1000000000)) "?")
      (when v) (? (charm? v) (ustamp v) "?")
      (go k) (n <= k ? (slurp o) (: c (fmt k) (?- (go (k + 2))
@@ -663,8 +663,8 @@
         115 (say o (show sz))
         98 (say o (num blk))
         66 (say o "512")
-        102 (say o (uradix md 16))
-        97 (say o (uradix (& md 4095) 8))
+        102 (say o (radix md 16))
+        97 (say o (radix (& md 4095) 8))
         65 (say o (ust-perm md))
         70 (say o (ust-kind md sz))
         117 (say o (num uid))
@@ -723,7 +723,7 @@
                 ; the block spells a device type in DECIMAL; only %t and %T are hex
                 + (? dev? (" Device type: " + (num (ust-major rdev))
                            + "," + (num (ust-minor rdev))) "")))
-       _ (line ("Access: (" + (uzpad 4 (uradix (& md 4095) 8)) + "/" + (ust-perm md)
+       _ (line ("Access: (" + (zpad 4 (radix (& md 4095) 8)) + "/" + (ust-perm md)
                 + ")  Uid: (" + (idcol (ust-at st 4) "/etc/passwd")
                 + ")   Gid: (" + (idcol (ust-at st 5) "/etc/group") + ")"))
        _ (line ("Access: " + (ustamp (ust-at st 9))))
@@ -1522,7 +1522,7 @@ EXEC 01;32
        (rep s) (? (n <= #s) (snip s 0 n) (rep (s + s)))
        s (rep tri)
        (? (pat & 4096) (: c (cask n) _ (map (\ i (pin c i (? (i % 512) (s i) ((s i) ^ 128)))) ^n) (string c)) s))
-   (ushr-hex s) (upadc 2 48 (ubase-hex (s 0)) + upadc 2 48 (ubase-hex (s 1)) + upadc 2 48 (ubase-hex (s 2)))
+   (ushr-hex s) (zpad 2 (radix (s 0) 16) + zpad 2 (radix (s 1) 16) + zpad 2 (radix (s 2) 16))
    (shred-main as)
     (: (usage m) (udie 1 ("shred: " + m + "\nTry 'shred --help' for more information."))
        (num w what) (: v (unum w) (? (charm? v && 0 <= v) v (udie 1 ("shred: invalid number of " + what + ": '" + w + "'"))))

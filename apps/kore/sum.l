@@ -240,7 +240,7 @@
     (: _ (sum-have "crc32" "crc32" 10 sum-crcp)
        (row f nm ok)
         (: r (sum-fold f crc32-on 0)
-           (? (two? r) (: _ (say out ((upadc 8 48 (ubase-hex <r)) + (? #nm (" " + nm) "") + "\n")) ok)
+           (? (two? r) (: _ (say out ((zpad 8 (radix <r 16)) + (? #nm (" " + nm) "") + "\n")) ok)
               (: _ (sum-nope "crc32" f r) 0)))
        (walk a ok) (? (two? a) (walk >a (row <a <a ok)) ok)
        ok (? (two? as) (walk as 1) (row "-" "" 1))
