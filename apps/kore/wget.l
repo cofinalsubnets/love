@@ -68,9 +68,11 @@
                              (go (e + 4 + n)))))))
        _ (go 0)
        (slurp j))
-   ; one round trip -> (status headers body) | ()
-   (wg-once tls? host port path)
-    (: req ("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: love-wget\r\nAccept: */*\r\nConnection: close\r\n\r\n")
+   ; one round trip -> (status headers body) | (); more is header lines to add, each
+   ; ending \r\n (www asks for gzip)
+   (wg-once tls? host port path) (wg-ask tls? host port path "")
+   (wg-ask tls? host port path more)
+    (: req ("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: love-wget\r\nAccept: */*\r\n" + more + "Connection: close\r\n\r\n")
        raw (? tls?
               (: t ((cite 'tls 'tls-dial) host port)
                  (? !(tablet? t) ()

@@ -158,7 +158,7 @@
     (: st (tablet 0)
        _ (pins st 'opt opt 'w w 'h h 'ls () 'rw () 'lr (tablet 0) 'nr 0 'nl 0)
        _ (pins st 'top 0 'file "" 'files () 'fi 0 'msg "" 'cnt "" 'mode 'n)
-       _ (pins st 'cmd "" 'lead 47 'pat "" 'nds () 'dir 1 'zz () 'quit () 'doe () 'sav () 'ct -1 'cr ())
+       _ (pins st 'cmd "" 'lead 47 'pat "" 'nds () 'dir 1 'zz () 'quit () 'doe () 'sav () 'ct -1 'cr () 'hi "")
        st)
    (pgwidth st) (: w (st 'w - (? (pgflag st 78) 8 0)) (? (w < 1) 1 w))
    (pgbody st) (: b (st 'h - 1) (? (b < 1) 1 b))
@@ -331,12 +331,22 @@
                     (? (z <= a) (acc + snip s i n)
                        (go z (acc + snip s i a + e + "[7m" + snip s a z + e + "[27m")))))))
        (go 0 ""))
+   ; each h in a fragment in standout: a face's own highlight ('hi), a browser's current link
+   (pgmark e h s)
+    (: n #s m #h
+       (go i st acc)
+        (? (n < i + m) (acc + snip s st n)
+           (h = snip s i (i + m)) (go (i + m) (i + m) (acc + snip s st i + e + "[7m" + h + e + "[27m"))
+           (go (i + 1) st acc))
+       (go 0 0 ""))
    (pgframe st)
     (: e (string 27)
        w (st 'w) b (pgbody st)
        nds (: v (st 'nds) (? (two? v) <v ()))
+       hi (st 'hi)
        (lay r) (: fr <r
-                  tx (? (two? nds) (pgpaint e nds fr) fr)
+                  t0 (? (two? nds) (pgpaint e nds fr) fr)
+                  tx (? (string? hi && 0 < #hi) (pgmark e hi t0) t0)
                   (? (pgflag st 78)
                      ((? <>>r (upad 7 (show (<>r + 1))) "       ") + " " + tx) tx))
        (rows l k acc)
@@ -361,7 +371,8 @@
     (? !(0 < #p) st
        (p 0 = 47) (pgsearch st (snip p 1 #p) 1)
        (pgline! st (uatoi p - 1)))
-   ; one key, the arrow and page keys decoded to their plain twins. any other byte
+   ; one key, the arrow and page keys decoded to their plain twins, and shift-tab to 265
+   ; (a tab past a byte) for a face that wants it. any other byte
    ; after ESC is delivered after the bare 27 (a one-byte pushback), so ESC q reads
    ; as the two keys it is. answers (byte next-pushback)
    (pgkey kq pend)
@@ -374,7 +385,7 @@
                                   (? (48 <= c3 <= 57) (tail c3) [d c3]))
                       r (tail -1)
                       d <r f <>r
-                      [(? (f = 65) 107 (f = 66) 106 (f = 72) 103 (f = 70) 71
+                      [(? (f = 65) 107 (f = 66) 106 (f = 72) 103 (f = 70) 71 (f = 90) 265
                           ((f = 126) && (d = 53)) 98
                           ((f = 126) && (d = 54)) 32
                           ((f = 126) && (d = 49)) 103
