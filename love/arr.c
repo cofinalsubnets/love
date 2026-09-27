@@ -333,7 +333,7 @@ op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : zero)   // (charm? x): a fixnum --
 // (nil? x): the falsy predicate, ($ x <= 0) -- every negative is nil, not just (). `?`,
 // argcond and aall ask it the same way (leaf_nilp), so the feel pass can drop a zerop wrapper.
 lvm(lvm_nilp) {
- if (!ai_leafp(Sp[0])) ai_musttail return Ap(lvm_measure, g);
+ if (__builtin_expect(!ai_leafp(Sp[0]), 0)) ai_musttail return Ap(lvm_measure, g);
  Sp[0] = leaf_nilp(Sp[0]) ? putcharm(1) : zero; Ip += 1; ai_musttail return Continue(); }
 
 // unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
