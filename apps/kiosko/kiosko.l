@@ -345,7 +345,7 @@ usage: kiosko [-p PORT] [-q] [DIR]
   DIR            the document root (default .)
 "
    _ (:
-   (kdie c m) (: _ (say err ("kiosko: " + m)) _ (put err 10) (quit c))
+   (kdie c m) (udie c ("kiosko: " + m))
    (kiosko-main as)
    (: _ (? !(nil? (cite 'kiosko)) (borrow 'kiosko))  ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
@@ -368,7 +368,7 @@ usage: kiosko [-p PORT] [-q] [DIR]
       _ (!(dir? root) ? (kdie 1 ("not a directory: " + root)))
       r (serve root port (peep t 113 0) ())
       _ (nom? r ? (kdie 1 ("cannot listen on :" + show port + " -- " + show r)))
-      (quit 0))
+      0)
    kiosko-main)
 
    kiosko-main _)
@@ -377,8 +377,8 @@ usage: kiosko [-p PORT] [-q] [DIR]
 ; script -- sits in the program seat of the real command line. kiosko-main reads bare:
 ; whichever layer holds this file's binds is still the head here. body-having, so
 ; nothing leaks.
-(: door (udoor 'kiosko kiosko-main kiosko-usage 1 1)
-   _ (pins (cite 'verbs 'tab) 'kiosko door)
+(: door (udoor 'kiosko (urun kiosko-main) kiosko-usage 1 1)
+   _ ((cite 'verbs 'enlist) 'kiosko door ())
    s (cite 'verbs 'fire ["kiosko" "kiosko.l"])
-   (two? s ? (door >s)))
+   (two? s ? (quit (door >s))))
 ) ; module kiosko

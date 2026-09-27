@@ -22,7 +22,7 @@
 ; ride is no help here. long lines wrap, which is less's default -- a display row
 ; is a fragment carrying the source line it came off, so the counts and the
 ; percentage stay the source's. a tab steps to the next 8th column, a control
-; byte shows as ^X, and a utf-8 tail byte is no column of its own.
+; byte shows as ^X, and a character takes its wcwidth, a wide one two.
 ;
 ; a colour is the exception to "a control byte shows as ^X": an sgr sequence rides
 ; the text, costs no column, and a wrap through the middle of one closes it and
@@ -38,6 +38,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'text)
 
 (:
    pg-ere (cite 're 'reere) pg-fold (cite 're 'refold) pg-find (cite 're 'refind)
@@ -99,18 +100,20 @@
                     (? (b = 9) (: p (8 - c % 8) _ (say o (pgsp p)) (go (k + 1) (c + p)))
                        (b = 127) (: _ (say o "^?") (go (k + 1) (c + 2)))
                        (b < 32) (: _ (say o ("^" + string (b + 64))) (go (k + 1) (c + 2)))
-                       (: _ (put o b) (go (k + 1) (c + 1))))))))
+                       (b < 128) (: _ (put o b) (go (k + 1) (c + 1)))
+                       (: j (cpnext ln k) _ (say o (snip ln k j))
+                          (go j (c + max 0 (wcwidth (cpat ln k))))))))))
        (go 0 0))
-   ; the byte index where column k of s falls -- a utf-8 tail byte is no column, and
-   ; neither is an sgr sequence. the count is taken at the lead byte and the stop is
-   ; before it, or the cut lands in the middle of the character that would have overflowed
+   ; the byte index where column k of s falls -- a character costs its wcwidth and an sgr
+   ; sequence none. the stop is before the character that would overflow, so a wide one
+   ; straddling the edge goes whole to the next row
    (pgspan s k)
     (: n #s
        (go i c) (? (n <= i) i
                    (: e (pgesc s i)
                       (? e (go (i + e) c)
-                         (: c2 (? (s i & 192 = 128) c (c + 1))
-                            (? (k < c2) i (go (i + 1) c2))))))
+                         (: c2 (c + max 0 (wcwidth (cpat s i)))
+                            (? (k < c2) i (go (cpnext s i) c2))))))
        (go 0 0))
    (pgclip w s) (: k (pgspan s w) (? (k < #s) (snip s 0 k) s))
    ; the status line clips from the left, the way vi's does: its tail is what

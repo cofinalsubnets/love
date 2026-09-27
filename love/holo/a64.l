@@ -419,7 +419,7 @@
    ;; the register twins: the left pair rides two pool registers (rl lo : rh hi) instead of the cell,
    ;; the right keeps the x2:x0 protocol -- one form each, so the carry pair still can't part. the
    ;; answer lands on the protocol without touching rl/rh (x86's subtract has to go through them).
-   (a64-a128r rl rh) (: l (rn rl) h (rn rh)
+   (a64-a128r rl rh) (: l (rn rl) h (charm? rh ? 31 (rn rh))                ; a zero high half: xzr
       (a64-w3 0xAB000000 0 0 l + a64-w3 0x9A000000 2 2 h))                  ; adds x0,x0,rl; adc x2,x2,rh
    (a64-s128r rl rh) (: l (rn rl) h (rn rh)
       (a64-w3 0xEB000000 0 l 0 + a64-w3 0xDA000000 2 h 2))                  ; subs x0,rl,x0; sbc x2,rh,x2

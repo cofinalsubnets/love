@@ -195,6 +195,38 @@
        (x64-mem () 1 '(129) 'r6 base off + le32 y))                          ; 81 /7 id
    (emit-cmprm s base off) (x64-mem () 1 '(59) s base off)                     ; 3B /r  cmp r64, QWORD
 
+   ;; the sized read-modify-writes on [base+off] -- inline asm's atomics and percpu counters, a
+   ;; `lock` or a segment laid before them. w 1 2 4 8: the byte opcode for a byte (a bare REX
+   ;; reaching spl..dil, never ah..bh), 66 for a word, REX.W for a quad. regf is the register
+   ;; operand, or the /digit field spelled as the register of that number
+   x64-digit '(r0 r1 r2 r3 sp r4 r5 r6)
+   (x64-mw w op8 op regf base off)
+    (: fn (rn regf) bn (rn base)
+       rx (w = 8 || fn >= 8 || bn >= 8 || (w = 1 && 4 <= fn <= 7))
+       ((w = 2 ? [102] ()) + (rx ? [(rex (w = 8 ? 1 0) (hi fn) 0 (hi bn))] ())
+        + (w = 1 ? op8 op) + mem fn base off))
+   (emit-xaddm w base off s) (x64-mw w '(15 192) '(15 193) s base off)         ; 0F C0/C1 /r  xadd m, r
+   (emit-cmpxchgm w base off s) (x64-mw w '(15 176) '(15 177) s base off)      ; 0F B0/B1 /r  cmpxchg m, r (rax the expected)
+   (emit-xchgm w base off s) (x64-mw w '(134) '(135) s base off)               ; 86/87 /r     xchg m, r
+   ;; op m, y: y a register (00+8k/01+8k /r) or an immediate (80 /k ib, 83 /k ib, 81 /k id|iw)
+   (emit-alum op w base off y)
+    (: k (op @ 'add 0 'or 1 'and 4 'sub 5 'xor 6 'cmp 7 (scare 'x64-alum op))
+       (? (reg? y) (x64-mw w [(8 * k)] [(8 * k + 1)] y base off)
+          (w = 1) (x64-mw 1 '(128) () (x64-digit k) base off + [(byte y)])
+          (-128 <= y <= 127) (x64-mw w () '(131) (x64-digit k) base off + [(byte y)])
+          (x64-mw w () '(129) (x64-digit k) base off + (w = 2 ? [(byte y) (byte (y >> 8))] (le32 y)))))
+   ;; inc dec not neg m: FE/FF /0 /1, F6/F7 /2 /3
+   (emit-unm op w base off)
+    (: d (op @ 'inc 0 'dec 1 'not 2 'neg 3 (scare 'x64-unm op))
+       (? (d < 2) (x64-mw w '(254) '(255) (x64-digit d) base off)
+          (x64-mw w '(246) '(247) (x64-digit d) base off)))
+   ;; bt bts btr btc m, y: 0F A3/AB/B3/BB /r by a register, 0F BA /4../7 ib by an immediate
+   (emit-btm op w base off y)
+    (: k (op @ 'bt 4 'bts 5 'btr 6 'btc 7 (scare 'x64-btm op))
+       (? (w = 1) (scare 'x64-btm-byte op)
+          (reg? y) (x64-mw w () [15 (k @ 4 163 5 171 6 179 187)] y base off)
+          (x64-mw w () '(15 186) (x64-digit k) base off + [(byte y)])))
+
    ;; the store-immediate family (si : li :: st : ld): mov r/m, imm through /0 (regf r0 spells
    ;; the 0 field). the 64-bit face sign-extends its imm32; the narrow faces truncate like their
    ;; register twins.
@@ -219,7 +251,7 @@
    ;; the register twins: the left pair rides two registers (rl lo : rh hi) instead of the cell,
    ;; the right keeps the rdx:rax protocol -- one form each, so the carry pair still can't part.
    ;; s128r answers through the park (rl/rh clobbered: they die with the op).
-   (emit-a128r rl rh) (alu-rr 1 'r0 rl + alu-rr 17 'r2 rh)        ; add rax,rl; adc rdx,rh
+   (emit-a128r rl rh) (alu-rr 1 'r0 rl + (charm? rh ? [72 131 210 (byte rh)] (alu-rr 17 'r2 rh)))   ; add rax,rl; adc rdx,rh|imm8
    (emit-s128r rl rh) (alu-rr 41 rl 'r0 + (alu-rr 25 rh 'r2       ; sub rl,rax; sbb rh,rdx
                      + (emit-mov 'r0 rl + emit-mov 'r2 rh)))      ; the pair back on the protocol
    (emit-mw128r rl) (: n (rn rl) [(rex 1 0 0 (hi n)) 247 (modrm 3 4 n)])    ; mul rl -> rdx:rax
@@ -616,6 +648,8 @@
          ('vmread . emit-vmread) ('vmwrite . emit-vmwrite)
          ('sgdt . emit-m0f 0 '(15 1)) ('sidt . emit-m0f 1 '(15 1))
          ('int . emit-int) ('ltr . emit-ltr) ('seg . emit-seg)
+         ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
+         ('alum . emit-alum) ('unm . emit-unm) ('btm . emit-btm)
          ('ldcr . emit-ldcr) ('stcr . emit-stcr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])

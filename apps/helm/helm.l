@@ -42,7 +42,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
   -s, --socket PATH   the control socket (default $XDG_RUNTIME_DIR/helm.sock, or /run)
   -q, --quiet         keep the journal, but do not narrate to stderr
 "
-   (hdie c m) (: _ (say err ("helm: " + m)) _ (put err 10) (quit c))
+   (hdie c m) (udie c ("helm: " + m))
 
    ; --- helm ctl: the client --------------------------------------------------
    ; a PIPE, not a protocol: the words go up as one line and whatever comes back
@@ -205,7 +205,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
 ; command line. the bare file name is deliberately NOT a seat word -- helm is
 ; four files, and a `-l apps/helm/helm.l` that seated would start supervising in
 ; the middle of loading itself.
-(: door (udoor 'helm helm-main helm-usage 1 1)
-   _ (pins (cite 'verbs 'tab) 'helm door)
+(: door (udoor 'helm (urun helm-main) helm-usage 1 1)
+   _ ((cite 'verbs 'enlist) 'helm door ())
    s (cite 'verbs 'fire ["helm"])
-   ((two? s) ? (door >s))))
+   ((two? s) ? (quit (door >s)))))

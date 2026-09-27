@@ -521,10 +521,11 @@
              bl (two? >as && fatc-size <>as)
              (fatc-mkfs img (charm? bl && bl * 1024)))))
 
-   T (cite 'verbs 'tab)
-   ; the verb wraps in urun, kore.l's own shape for a main that leaves deep
-   _ (pins T 'fat       (udoor 'fat (urun fat-main) fatc-usage 1 1)
-            'mkfs.vfat  (udoor 'mkfs.vfat (urun mkfsv-main) mkfsv-usage 1 1)
-            'mkdosfs    (udoor 'mkdosfs (urun mkfsv-main) mkfsv-usage 1 1)))
+   E (cite 'verbs 'enlist)
+   ; the verb wraps in urun, kore.l's own shape for a main that leaves deep; each is
+   ; bounded by the image it names, so a shell may run it in its own process
+   _ (E 'fat (udoor 'fat (urun fat-main) fatc-usage 1 1) ['self])
+   _ (E 'mkfs.vfat (udoor 'mkfs.vfat (urun mkfsv-main) mkfsv-usage 1 1) ['self])
+   _ (E 'mkdosfs (udoor 'mkdosfs (urun mkfsv-main) mkfsv-usage 1 1) ['self]))
 
 ) ; module 'fatcmd
