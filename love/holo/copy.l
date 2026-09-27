@@ -17,7 +17,7 @@
 ;
 ; loads after love/holo/link.l, whose field table, ld-write and ld-zeros it reads.
 (module 'holo
-(borrow 'kore) ; the text/u floors (uread, usplit ..), scoped to this module's compile
+(borrow 'kore) ; the text/u floors (usplit ..), scoped to this module's compile
 (borrow 'posix)
 
 (:

@@ -221,8 +221,6 @@
    ; a walk answers paths relative to root and stores them that way: an archive
    ; carrying "/home/gwen/..." is one that unpacks over somebody's system. tar's own
    ; "removing leading /" warning exists because the naive spelling does that.
-   (tar-slurp p) (: q (open p "r") (? (hot? q) (: s (slurp q) (close q, [1 (s + "")]))))
-   (tar-blurt p s) (: q (open p "w") (? (hot? q) (say q s, close q, 1)))
    (tar-join a b) (? #a (a + "/" + b) b)
    ; stat answers (size mtime-ms mode mtime-ns), and its mtime is milliseconds where
    ; tar's field is seconds. it follows a symlink -- there is no lstat here -- so the
@@ -272,7 +270,7 @@
              _ (pins e 'mode (tar-mode st) 'mtime (tar-secs st)
                        'size <st           'path full)
              [1 [e]])
-          (: b (tar-slurp full)
+          (: b (uread full)
              (b ?
                 (: e (tar-entry rel 'file (<(>b)))
                    _ (pins e 'mode (tar-mode st) 'mtime (tar-secs st))
@@ -323,7 +321,7 @@
                                 tar-there? p)
                (kind == 'link) (symlink (tar-get e 'to "") p,
                                 string? (readlink p))
-               (tar-blurt p (tar-get e 'body ""),
+               (uwrite p (tar-get e 'body ""),
                 tar-there? p && chmod p (tar-get e 'mode 420),
                 tar-there? p))
        (ok && go >xs (k + 1))))))) ; module 'tar
@@ -347,13 +345,7 @@
 (borrow 'tar)
 
 (borrow 'posix)
-(: ; the exit door: a status raised, not a process ended, so a caller already in
-   ; this image gets a charm back. loaded without kore there is no catcher and we
-   ; quit as before -- the two ride together in every artifact that carries tar.
-   (tarc-leave c) (: u (cite 'kore 'uleave) (lit? u ? (u c) (quit c)))
-   (tarc-die m) (say err ("tar: " + m + "\n"), tarc-leave 1)
-   (tarc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, [1 (s + "")]))))
-   (tarc-blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
+(: (tarc-die m) (udie 1 ("tar: " + m))
    (tarc-has? fl c) (:- (go 0) n #fl (go k) (? (n <= k) 0 (fl k = c) 1 (go (k + 1))))
 
    ; z? is 'z for gzip, 'j for bzip2, () for neither. bz2 is reached at the call: the
@@ -365,13 +357,13 @@
        a (tar-pack <>g)
        _ (!a && tarc-die "cannot pack (a path too long for ustar?)")
        b (z? @ 'z (gz-zip a "" 0) 'j (tarc-bz 'bz2-pack a 9) a)
-       _ (tarc-blurt arch b ? 0 (tarc-die ("cannot write " + arch)))
+       _ (uwrite arch b ? 0 (tarc-die ("cannot write " + arch)))
        0)
 
    ; each read is guarded on its own so the message names the step: "not a gzip" and
    ; "not a tar" are different repairs, and one "cannot read" sends you to the wrong one.
    (tarc-open arch z?)
-    (: b (tarc-slurp arch)
+    (: b (uread arch)
        _ (!b && tarc-die ("cannot read " + arch))
        u (z? @ 'z (gz-unzip <>b) 'j (: v (tarc-bz 'bz2-unpack <>b) (two? v && v)) [1 <>b])
        _ (!u && tarc-die (arch + (z? = 'j ? ": not a bzip2 stream, or its crc disagrees"
@@ -402,7 +394,6 @@
           (tarc-die usage)))
 
    T (cite 'verbs 'tab)
-   (tarc-run av) (: r (cite 'kore 'urun) (lit? r ? (r tar-main av) (tar-main av)))
-   _ (pins T 'tar (udoor 'tar tarc-run usage 1 1)))
+   _ (pins T 'tar (udoor 'tar (urun tar-main) usage 1 1)))
 
 ) ; module 'tarcmd

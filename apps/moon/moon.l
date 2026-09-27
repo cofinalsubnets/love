@@ -14,7 +14,7 @@
 ; math + sys) by need from the sources beside it; -nostdlib/-ffreestanding turn that off.
 ; errors speak on err and exit 1, usage exits 2. last in the mooncc cat (its own app,
 ; doc/misc/moon.md), after love/holo/{elf,obj,link}.l and apps/moon/{lex,cpp,parse,gen}.l;
-; rides the u-floor (uread udie urun). its tail seat fires moon-main when mooncc is the
+; rides post.l's door (uread udie urun). its tail seat fires moon-main when mooncc is the
 ; program; moon-run is the same compile answering its status, for a caller in the image.
 ;
 (module 'moon
@@ -1124,7 +1124,7 @@
    ; here rather than at the seat so every door below says the same thing.
    ; moon-run is the in-image door: it answers the status charm, so a caller holding this
    ; image compiles again after a failed compile instead of dying with it.
-   ; 'leave is the exit door, not a fault (apps/kore/u.l's floor, which a udie anywhere in
+   ; 'leave is the exit door, not a fault (post.l's door, which a udie anywhere in
    ; here rides out on): taking it as an internal raise would print a nonsense sentence over
    ; every usage error and flatten its 2 to a 1.
    (moon-run as)

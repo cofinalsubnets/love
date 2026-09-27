@@ -1,10 +1,9 @@
 ; apps/kore/u.l -- the u-floor: the shared helpers every kore tool stands on, and the only
-; part of kore that anything outside kore uses. `uread` answers the (1 text) presence wrapper,
-; `udie` says its piece and leaves with a status, `urun` is the door a deep leave comes back
-; through, `uleave` raises it; the rest is text and argument plumbing.
+; part of kore that anything outside kore uses: text and argument plumbing. the door under
+; it (uread uwrite udie uleave urun) is post.l's, so a tool outside kore reaches it too.
 ;
-; it is its own file because of the compiler. mooncc's cat needs exactly five of these
-; (ubase udie uread urun usplit) and nothing else in kore -- but core.l held all 53 names, so
+; it is its own file because of the compiler. mooncc's cat needs exactly two of these
+; (ubase usplit) and nothing else in kore -- but core.l held all 53 names, so
 ; the whole toolbox sat in `moonfiles`, and editing the `ls` applet re-baked mooncc0.image and
 ; recompiled love.c and every inle/*.c behind it. ~95 s to move a printf. The floor moved out;
 ; the applets are no longer the compiler's business.
@@ -22,10 +21,6 @@
     (: n #s
        (go i acc) (i >= n ? acc (go (i + 1) ((* 10 acc) + (s i - 48))))
        (? (0 < n && s 0 = 45) (0 - go 1 0) (go 0 0)))
-   ; a path -> (1 text) when it opens, () when it does not (kore.l's read-text shape)
-   (uread p) (open p "r" @ q (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))
-   ; a path + text -> 1 when it lands, () when it will not open (uread's mirror)
-   (uwrite p t) (open p "w" @ q (? (hot? q) (: _ (say q t) _ (close q) 1) ()))
    ; text with its sgr runs taken out, every other byte where it was. the shape a tool
    ; wants when its own output is going somewhere that is not a terminal -- a colour is
    ; for a reader, and a pipe is not one. lapiz's tty shower is what puts them in.
@@ -36,21 +31,6 @@
                   ((: (g k) (? (n <= k) (slurp o) (s k = 109) (go (k + 1)) (g (k + 1)))) (i + 2))
                  (put o (s i), go (i + 1)))
        (go 0))
-   ; the exit door, two faces: a main answers its status as a charm, and a leave from
-   ; deep inside scares 'leave carrying it. urun is the driver both come back through,
-   ; so a caller in the same image gets a charm instead of a dead process -- the seat
-   ; quits with what it answers. nothing unwinds through a scare (spec.l's control
-   ; section), so a port a tool holds at the leave is lost, exactly as `quit` lost it.
-   (uleave c) (scare 'leave c)
-   (urun f as)
-    (: (out! _) (flush out, flush err)
-       (trap (\ _ (: r (f as) _ (out! ()) (? (charm? r) r 0))) ()
-             (\ a b (out! (),
-                     (a @ 'leave b
-                        (say err ";; ", print err a, say err " ",
-                         print err b, put err 10, flush err, 1))))))
-   ; complain on err and leave through the exit door with code c
-   (udie c m) (: _ (say err m) _ (put err 10) (uleave c))
    ; left-pad with spaces to width w (a wider count never shrinks), and its mirror --
    ; the columns that count from the left (ps's TTY, free's label) want the other one
    ; the month abbreviations, read by proc.l's date and fs.l's `ls -l` -- two files

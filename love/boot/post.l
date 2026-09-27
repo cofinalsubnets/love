@@ -517,6 +517,30 @@
    (show x) (: o (jug 0) (px o x (), slurp o))
    (dot x) (string? x || hot? x && !(port? x) ? (say out x) (px out x ()), flush out, x)
    putx (print out))
+
+; --- the u-floor's door: a whole file in and out, and the exit every tool leaves by.
+; open and close are 'posix's, so they are cited; a module borrows them itself ---
+(: ; a path -> (1 text) when it opens, () when it does not
+   (uread p) ((cite 'posix 'open) p "r" @ q
+              (? (hot? q) (: t (slurp q) _ ((cite 'posix 'close) q) [1 t]) ()))
+   ; a path + text -> 1 when it lands, () when it will not open
+   (uwrite p t) ((cite 'posix 'open) p "w" @ q
+                 (? (hot? q) (: _ (say q t) _ ((cite 'posix 'close) q) 1) ()))
+   ; a main answers its status as a charm, or leaves from deep inside by scaring 'leave
+   ; with it. urun is the driver both come back through, so a caller in the same image
+   ; gets a charm instead of a dead process. nothing unwinds through a scare, so a port
+   ; held at the leave is lost, exactly as `quit` loses it.
+   (uleave c) (scare 'leave c)
+   (urun f as)
+    (: (out! _) (flush out, flush err)
+       (trap (\ _ (: r (f as) _ (out! ()) (? (charm? r) r 0))) ()
+             (\ a b (out! (),
+                     (a @ 'leave b
+                        (say err ";; ", print err a, say err " ",
+                         print err b, put err 10, flush err, 1))))))
+   ; say m on err and leave with code c
+   (udie c m) (: _ (say err m) _ (put err 10) (uleave c)))
+
 (seal-hook 7 show)
 (: (red? x) (+x < 0) (blue? x) (+x = 0) (green? x) (+x > 0))
 
