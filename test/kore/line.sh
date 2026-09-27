@@ -82,6 +82,8 @@ a=$(korerun shuf -i 1-30 | tr '\n' ' '); b=$(korerun shuf -i 1-30 | tr '\n' ' ')
 printf 'q\nq\nr\n' | tee "$ho/.cu-g2" > "$g"
 printf 'q\nq\nr\n' | korerun tee "$ho/.cu-o2" > "$o"
 cmp -s "$g" "$o" && cmp -s "$ho/.cu-g2" "$ho/.cu-o2" || fail "kore tee vs GNU"
+[ "$(printf '日本語 かな\n\xff' | korerun wc -m)" = "7" ] \
+  || fail "kore wc -m: valid characters, a stray byte none"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/shuf/seq/echo/basename/tee GNU-identical) ok"
 
 # sort's and ls's own flag matrices are subjects of their own (sort.sh, ls.sh): each

@@ -323,48 +323,53 @@
        ; a count of 0 is GNU's early leave: nothing said, no file opened, 0
        (? (n = 0 && !(sign = 1)) 0 (ureach "tail" body fs)))
 
-   ; -- wc: lines, words, bytes (flags pick; bare wc reads all three) --
+   ; -- wc: lines, words, characters, bytes (flags pick; bare wc reads lines words bytes) --
    (wc-main as)
     ; the flags cluster, as GNU's do: -lw is the two of them and not a filename
-    (: (fl a l w c)
-        (? !(two? a) [l w c a]
+    (: (fl a l w m c)
+        (? !(two? a) [l w m c a]
            (: g <a n (tally g)
-              (? (!(2 <= n) || !(g 0 = 45)) [l w c a]
-                 (: (cl k L W C)
-                     (? (n <= k) (fl >a L W C)
+              (? (!(2 <= n) || !(g 0 = 45)) [l w m c a]
+                 (: (cl k L W M C)
+                     (? (n <= k) (fl >a L W M C)
                         (: ch (g k)
-                           (? (ch = 108) (cl (k + 1) 1 W C)
-                              (ch = 119) (cl (k + 1) L 1 C)
-                              (ch = 99) (cl (k + 1) L W 1)
-                              [l w c a])))     ; an unknown charm: the word is not ours
-                    (cl 1 l w c)))))
-       p (fl as 0 0 0)
-       none !(<p || <>p || <>>p)
-       l? (? none 1 <p) w? (? none 1 <>p) c? (? none 1 <>>p)
-       fs <>>>p
-       (c3 x) <>>x
-       ; a row is (name (l w b)), name () for stdin. counted a gulp at a time --
-       ; nothing here needs the text, only the three numbers off it
+                           (? (ch = 108) (cl (k + 1) 1 W M C)
+                              (ch = 119) (cl (k + 1) L 1 M C)
+                              (ch = 109) (cl (k + 1) L W 1 C)
+                              (ch = 99) (cl (k + 1) L W M 1)
+                              [l w m c a])))   ; an unknown charm: the word is not ours
+                    (cl 1 l w m c)))))
+       p (fl as 0 0 0 0)
+       none !(<p || <>p || <>>p || <>>>p)
+       l? (? none 1 <p) w? (? none 1 <>p) m? <>>p c? (? none 1 <>>>p)
+       fs <>>>>p
+       (c3 x) <>>x (c4 x) <>>>x
+       ; a row is (name (l w b m)), name () for stdin. counted a gulp at a time --
+       ; nothing here needs the text, only the numbers off it
        cnt (ucount-for l? w?)
+       (mcnt st h) (? m? (ucharc-go st h) st)
        st (tablet 0) _ (pin st 'rows ()) _ (pin st 'ok 1)
        _ (ureachm (\ f (: _ (say err ("wc: cannot open " + f)) _ (put err 10)
                           _ (pin st 'ok 0) 0))
                   (\ f first rd
-                     (: (go acc) (: h (urd-gulp rd) (? (tally h) (go (cnt acc h)) acc))
-                        c (ucount-say (go ucount0))
+                     (: (go acc ma) (: h (urd-gulp rd) (? (tally h) (go (cnt acc h) (mcnt ma h)) [acc ma]))
+                        r (go ucount0 ucharc0)
+                        c (ucount-say <r + [<<>r])
                         _ (pin st 'rows ([(? (two? fs) f ()) c] . (peep st 'rows ())))
                         1))
                   fs)
        rows (rev (peep st 'rows ())) ok (peep st 'ok 0)
        (sum sel a acc) (? (two? a) (sum sel >a (acc + sel <><a)) acc)
-       tl (sum cap rows 0) tw (sum caup rows 0) tb (sum c3 rows 0)
+       tl (sum cap rows 0) tw (sum caup rows 0) tb (sum c3 rows 0) tm (sum c4 rows 0)
        ; the GNU face: pad every column to the byte total's width, even where the
        ; bytes are not printed (`wc -lw` of a 3001-byte file wears width 4).
        ; one count over one input wears none -- `wc -l f` is "1 f", never "   1 f".
        ; a one-digit byte count hides this, which is every fixture until .gs1.
-       wdt (? (((? l? 1 0) + (? w? 1 0) + (? c? 1 0) = 1) && !(two? >rows))
+       wdt (? (((? l? 1 0) + (? w? 1 0) + (? m? 1 0) + (? c? 1 0) = 1) && !(two? >rows))
               1 (tally (show tb)))
+       ; GNU's column order: lines words characters bytes
        (fmt cnt) (: a (? c? [(upad wdt (show (c3 cnt)))] ())
+                    a (? m? (upad wdt (show (c4 cnt)) . a) a)
                     a (? w? (upad wdt (show <>cnt) . a) a)
                     a (? l? (upad wdt (show <cnt) . a) a)
                     (ujoin a))
@@ -376,7 +381,7 @@
                        (emit >rs)))
        _ (emit rows)
        _ (? (two? rows && two? >rows)
-            (: _ (say out (fmt [tl tw tb])) _ (say out " total") (put out 10)) ())
+            (: _ (say out (fmt [tl tw tb tm])) _ (say out " total") (put out 10)) ())
        _ (flush out) (? ok 0 1))
 
    ; -- sort ----------------------------------------------------------------------
@@ -905,28 +910,32 @@
        (? !(two? ops) (udie 1 "usage: dirname NAME..")
           (ubn-say t ops udir)))
 
-   ; -- cut: -f list [-d C] [-s] over fields, -c list over charms (flags glue or not) --
-   (cut-args as)                       ; -> (delim fields chars s? files)
-    (: (fl a d f c s?)
-        (? !(two? a) [d f c s? a]
+   ; -- cut: -f list [-d C] [-s] over fields, -c list over characters, -b list over
+   ; bytes (flags glue or not) --
+   (cut-args as)                       ; -> (delim fields chars b? s? files)
+    (: (fl a d f c b? s?)
+        (? !(two? a) [d f c b? s? a]
            (: h <a
-              (? (h = "-s") (fl >a d f c 1)
-                 (h = "-d") (? (two? >a) (fl >>a (<>a 0) f c s?)
+              (? (h = "-s") (fl >a d f c b? 1)
+                 (h = "-d") (? (two? >a) (fl >>a (<>a 0) f c b? s?)
                                (udie 2 "cut: -d wants a delimiter"))
-                 (h = "-f") (? (two? >a) (fl >>a d <>a c s?)
+                 (h = "-f") (? (two? >a) (fl >>a d <>a c b? s?)
                                (udie 2 "cut: -f wants a list"))
-                 (h = "-c") (? (two? >a) (fl >>a d f <>a s?)
+                 (h = "-c") (? (two? >a) (fl >>a d f <>a 0 s?)
                                (udie 2 "cut: -c wants a list"))
-                 ((2 < tally h) && (snip h 0 2 = "-d")) (fl >a (h 2) f c s?)
-                 ((2 < tally h) && (snip h 0 2 = "-f")) (fl >a d (snip h 2 (tally h)) c s?)
-                 ((2 < tally h) && (snip h 0 2 = "-c")) (fl >a d f (snip h 2 (tally h)) s?)
-                 [d f c s? a])))
-       (fl as 9 () () 0))
+                 (h = "-b") (? (two? >a) (fl >>a d f <>a 1 s?)
+                               (udie 2 "cut: -b wants a list"))
+                 ((2 < tally h) && (snip h 0 2 = "-d")) (fl >a (h 2) f c b? s?)
+                 ((2 < tally h) && (snip h 0 2 = "-f")) (fl >a d (snip h 2 (tally h)) c b? s?)
+                 ((2 < tally h) && (snip h 0 2 = "-c")) (fl >a d f (snip h 2 (tally h)) 0 s?)
+                 ((2 < tally h) && (snip h 0 2 = "-b")) (fl >a d f (snip h 2 (tally h)) 1 s?)
+                 [d f c b? s? a])))
+       (fl as 9 () () 0 0))
    (cut-main as)
     (: p (cut-args as)
-       d <p fspec <>p cspec <>>p s? <>>>p
-       fs <>>>>p
-       _ (? (fspec || cspec) () (udie 2 "usage: cut -f LIST [-d C] [-s] | cut -c LIST"))
+       d <p fspec <>p cspec <>>p b? <>>>p s? <>>>>p
+       fs <>>>>>p
+       _ (? (fspec || cspec) () (udie 2 "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST"))
        spec (uspec (? fspec fspec cspec))
        (fieldline ln)
         (: ps (usplit d ln)
@@ -935,10 +944,14 @@
                                  (go >m (k + 1) (? (upick spec k) (<m . acc) acc)))
                  _ (say out (ujoinc d (go ps 1 ())))
                  (put out 10))))
+       ; seat k is the k-th character from byte i on, or the k-th byte under -b; a
+       ; byte that begins no valid character is a character of its own
        (charline ln)
         (: n (tally ln) o (jug 0)
-           (go k) (? (n < k) () (: _ (? (upick spec k) (put o (ln (k - 1))) ()) (go (k + 1))))
-           _ (go 1)
+           (step i) (? (b? || ln i < 128) (i + 1) (cpnext ln i))
+           (go i k) (? (n <= i) ()
+                       (: j (step i) _ (? (upick spec k) (say o (snip ln i j)) ()) (go j (k + 1))))
+           _ (go 0 1)
            _ (say out (slurp o)) (put out 10))
        ; cut terminates every line it writes, so the source's own end says nothing
        (dot ln term?) (: _ ((? fspec fieldline charline) ln) 1)
@@ -1090,13 +1103,35 @@
             (s? && !(two? two)) (udie 1 "tr: -ds wants SET2, the charms to squeeze")
             (!s? && two? two) (udie 1 ("tr: extra operand " + <>rest))
             ())
-       tbl (? d? (ktable (\ c [c (? (in? c) 0 (s? && peep twot c 0) 2 1)]))
-              (!(two? two) && !s?) (udie 2 "tr: SET2 wanted")
-              !(two? two) (ktable (\ c [c (? (in? c) 2 1)]))
-              (ktable (\ c (: v (image c) [v (? (s? && (peep twot v 0)) 2 1)]))))
-       _ (? (0 < n)
-            (: dst (cask n) k (xlat src tbl dst) (say out (snip dst 0 k)))
-            0)
+       rule (? d? (\ c [c (? (in? c) 0 (s? && peep twot c 0) 2 1)])
+               (!(two? two) && !s?) (udie 2 "tr: SET2 wanted")
+               !(two? two) (\ c [c (? (in? c) 2 1)])
+               (\ c (: v (image c) [v (? (s? && (peep twot v 0)) 2 1)])))
+       ; the sets are code points. when both are ascii a multibyte character never meets
+       ; them and kxlat's byte table is the reading -- unless -c, where every character
+       ; outside SET1 is one, so a byte walk would see its bytes as many
+       (hi? c) (127 < c)
+       (ahi? src) (: t (ktable (\ c [c (? (hi? c) 1 0)])) (0 < xlat src t (cask #src)))
+       bytes? (!(any hi? one) && !(any hi? two) && !(c? && ahi? src))
+       ; the character walk: rule's reading per code point, kept as [bytes image mode]. a
+       ; byte that begins no valid character reads as its own negation, which no set
+       ; names and only a complement takes in, and is written back as that byte
+       (walk o)
+        (: memo (tablet 0)
+           (look c) (: r (peep memo c ())
+                       (? (two? r) r
+                          (: q (rule c) v <q
+                             r2 [(? (v < 0) (string (0 - v)) (utf8 v)) v <>q]
+                             _ (pin memo c r2) r2)))
+           (go i prev) (? (n <= i) ()
+                          (: b (src i) w (? (b < 128) 1 (cpn src i))
+                             r (look (? (w = 1) b (w = 0) (0 - b) (cpat src i))) v <>r m <>>r
+                             (? ((m = 0) || ((m = 2) && (v = prev))) (go (i + max 1 w) prev)
+                                (: _ (say o <r) (go (i + max 1 w) v)))))
+           (go 0 -1))
+       _ (? (n = 0) 0
+            bytes? (: dst (cask n) k (xlat src (ktable rule) dst) (say out (snip dst 0 k)))
+            (walk out))
        _ (flush out) 0)
 
    ; -- nl: number the lines that hold ink (pad 6, a tab after); a blank line wears

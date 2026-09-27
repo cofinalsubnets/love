@@ -28,8 +28,16 @@
 ; a <base href> is what the links resolve against. an image is its alt text. the window
 ; changing width lays the page again, the same link at the top.
 ;
+; gopher:// and gemini:// open too. a gopher menu lays its text lines as they are and its
+; items as links with their kind, (DIR) (TXT) (?) ..; a search item is a field, sent after a
+; tab. gemini's text/gemini is laid as a page, headings, lists, quotes and preformatted
+; blocks; its ask for input is a field, the answer sent back as the query. a gemini
+; server's certificate is pinned the first time and held to after -- the protocol's trust
+; on first use -- in ~/.love/gemini_hosts; a changed one is refused, and says which line
+; to delete to take it.
+;
 ; out of scope, and said: forms that POST, scripts, cookies, and the pictures themselves.
-; the tls peer is not verified (wget's client).
+; an https peer is not verified (wget's client).
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -112,6 +120,8 @@
               htm? (: (suf? x) (#x < #nm && x = snip nm (#nm - #x) #nm) (suf? ".html" || suf? ".htm"))
               (? (two? r) [0 url (? htm? 'html 'text) (ww-body (? htm? "text/html" "") () <>r) 200]
                  [1 ("www: cannot open " + nm)]))
+          (sc = "gopher:") (ww-gopher url)
+          (sc = "gemini:") (ww-gemini url hops)
           !(sc = "http:" || sc = "https:") [1 ("www: no door for " + sc + " urls")]
           (: w (wg-url u0)
              r (? (two? w) (wg-ask <w (w 1) (w 2) (w 3) "Accept-Encoding: gzip\r\n") ())
@@ -126,6 +136,147 @@
                          (? !k [1 ("www: " + url + " is " + ct + ", not a page")]
                             !(string? b) [1 ("www: " + url + " sent a gzip body that does not open")]
                             [0 url k b code]))))))))
+   ; -- gopher and gemini: each answer built into html lapiz reads, or text ---------
+   ; a page built here: html's own characters escaped, a url's bytes past the unreserved
+   ; percent-encoded, lines without their CR
+   (ww-esc1 c) (? (c = 38) "&amp;" (c = 60) "&lt;" (c = 62) "&gt;" (c = 34) "&quot;" (string c))
+   (ww-esc s) (: o (jug 0) _ (map (i \ say o (ww-esc1 (s i))) (jot #s)) (slurp o))
+   (ww-alnum? c) ((47 < c < 58) || (64 < c < 91) || (96 < c < 123))
+   (ww-penc s keep)
+    (: o (jug 0) hx "0123456789ABCDEF"
+       (one c) (? ((ww-alnum? c) || (elem c keep)) (string c)
+                  ("%" + string (hx (c >> 4)) + string (hx (c & 15))))
+       _ (map (i \ say o (one (s i))) (jot #s))
+       (slurp o))
+   (ww-lns s) (map (l \ ? ((0 < #l) && (l (#l - 1) = 13)) (snip l 0 (#l - 1)) l) (usplit 10 s))
+   ; a url's host and port, the port the scheme's own when none is said
+   (ww-hostport u dflt)
+    (: a (ww-split u) au (snip (a 1) 2 #(a 1)) hp (ww-cut au ":")
+       [<hp (? (1 < #(hp 1)) (: n (unum (snip (hp 1) 1 #(hp 1))) (? (charm? n) n dflt)) dflt)])
+   ; the answer to a field, off a query this page's form made (?NAME=v), else ()
+   (ww-answer q nm) (? (ww-pre? ("?" + nm + "=") q) (ww-dec q (2 + #nm) #q 1) ())
+
+   ; gopher (RFC 1436; its urls, RFC 4266: gopher://host[:port]/Tselector). a menu's lines
+   ; are Tdisplay TAB selector TAB host TAB port, a lone "." after the last. i and 3 lines
+   ; are text, laid as they are; the rest are links, each with its kind; a search (7) is a
+   ; field to answer, sent after a TAB. h with a URL: selector goes to that url
+   (ww-gkind t) (? (t = 49) "(DIR)" (t = 48) "(TXT)" (t = 55) "(?)" (t = 104) "(HTML)"
+                   (elem t '(57 53 115 103 73 100)) "(BIN)" (elem t '(56 84)) "(TEL)"
+                   ("(" + string t + ")"))
+   (ww-gurl h p t sel)
+    ("gopher://" + h + (? (p = 70) "" (":" + show p)) + "/" + string t + ww-penc sel '(47 45 46 95 126))
+   (ww-pre s) ("<pre><code>" + ww-esc s + "</code></pre>\n")
+   (ww-link href txt) ("<a href=\"" + ww-esc href + "\">" + ww-esc txt + "</a>")
+   (ww-gmenu s)
+    (: o (jug 0) run (tablet 1) _ (pin run 's "")
+       (flush-run _) (: r (run 's) _ (pin run 's "") (? (0 < #r) (say o (ww-pre r)) 0))
+       (line l)
+        (? ((l = ".") || (#l < 1)) 0
+           (: t (l 0) f (usplit 9 (snip l 1 #l))
+              disp (? (two? f) <f "") sel (? (1 < #f) (f 1) "") host (? (2 < #f) (f 2) "")
+              port (: n (? (3 < #f) (unum (f 3)) ()) (? (charm? n) n 70))
+              (? ((t = 105) || (t = 51)) (pin run 's (run 's + disp + "\n"))
+                 (: _ (flush-run 0)
+                    href (? ((t = 104) && (ww-pre? "URL:" sel)) (snip sel 4 #sel)
+                            (t = 55) ("form:" + ww-gurl host port t sel + "?search=")
+                            (ww-gurl host port t sel))
+                    (say o ("<p>" + ww-gkind t + " " + ww-link href disp + "</p>\n"))))))
+       (go ls) (? (two? ls) (? (<ls = ".") 0 (: _ (line <ls) (go >ls))) 0)
+       _ (go (ww-lns s))
+       _ (flush-run 0)
+       (slurp o))
+   ; a text item's lines, its ".." back to "." and its closing "." gone
+   (ww-gtxt s) (: ls (ww-lns s)
+                  (go l) (? !(two? l) () (<l = ".") () ((? (ww-pre? ".." <l) (snip <l 1 #<l) <l) . go >l))
+                  (unlines (go ls)))
+   (ww-gopher url)
+    (: p (ww-split url) hp (ww-hostport url 70) path (p 2) q (p 3)
+       t (? (#path < 2) 49 (path 1))
+       sel (? (#path < 2) "" (ww-dec path 2 #path 0))
+       term (? (#q < 2) () (: a (ww-answer q "search") (? (string? a) a (ww-dec q 1 #q 0))))
+       s ((cite 'dns 'dial) <hp (hp 1))
+       (? !(hot? s) [1 ("www: no answer from " + url)]
+          (: _ (say s (sel + (? (string? term) ("\t" + term) "") + "\r\n")) _ (flush s)
+             b (slurp s) _ (close s)
+             (? ((t = 49) || (t = 55)) [0 url 'html (ww-gmenu b) 200]
+                (t = 48) [0 url 'text (ww-gtxt b) 200]
+                (t = 104) [0 url 'html b 200]
+                [1 ("www: " + url + " is a gopher " + ww-gkind t + " item, not a page")]))))
+
+   ; gemini: the url alone on a line, over tls on 1965; the answer's first line a status and
+   ; a meta, then the body. 1x asks for input, a field that sends it back as the query; 2x
+   ; is the page, text/gemini laid as html and other text as it is; 3x goes elsewhere; the
+   ; rest are the server's refusals, said. the certificate is pinned the first time and held
+   ; to after (trust on first use, the protocol's own), host:port and its sha-256 a line in
+   ; ~/.love/gemini_hosts; a changed one is refused and says how to take it
+   (ww-pinfile _) (: h (getenv "HOME") ((? (string? h) h ".") + "/.love/gemini_hosts"))
+   (ww-pin key fp)
+    (: path (ww-pinfile 0)
+       q (open path "r") txt (? (hot? q) (: s (slurp q) _ (close q) s) "")
+       (find l) (? !(two? l) () (: f (usplit 32 <l) (? ((1 < #f) && (<f = key)) (f 1) (find >l))))
+       old (find (ww-lns txt))
+       (? (string? old) (? (old = fp) ()
+                           ("the certificate of " + key + " has changed: it was " + old + ", now " + fp
+                            + "; delete its line in " + path + " to take the new one"))
+          (: _ (mkdir (snip path 0 (#path - 13)) 448)
+             a (open path "a")
+             _ (? (hot? a) (: _ (say a (key + " " + fp + "\n")) (close a)) 0)
+             ())))
+   (ww-gtext s)
+    (: o (jug 0) st (tablet 3) _ (pins st 'pre 0 'ul 0 'buf "")
+       (block _) (: b (st 'buf) _ (pin st 'buf "") (say o (ww-pre b)))
+       (ul on) (? (on = (st 'ul)) 0 (: _ (say o (? on "<ul>\n" "</ul>\n")) (pin st 'ul on)))
+       (trim s) (: (a i) (? ((i < #s) && ((s i = 32) || (s i = 9))) (a (i + 1)) i) (snip s (a 0) #s))
+       (line l)
+        (? ((st 'pre) = 1)
+            (? (ww-pre? "```" l) (: _ (block 0) (pin st 'pre 0))
+               (pin st 'buf (st 'buf + l + "\n")))
+           (ww-pre? "```" l) (: _ (ul 0) (pin st 'pre 1))
+           (ww-pre? "* " l) (: _ (ul 1) (say o ("<li>" + ww-esc (trim (snip l 2 #l)) + "</li>\n")))
+           (: _ (ul 0)
+              (? (ww-pre? "=>" l)
+                  (: r (trim (snip l 2 #l))
+                     k ((: (g i) (? ((#r <= i) || (r i = 32) || (r i = 9)) i (g (i + 1)))) 0)
+                     href (snip r 0 k) lab (trim (snip r k #r))
+                     (? (0 < #href) (say o ("<p>" + ww-link href (? (0 < #lab) lab href) + "</p>\n")) 0))
+                 (ww-pre? "###" l) (say o ("<h3>" + ww-esc (trim (snip l 3 #l)) + "</h3>\n"))
+                 (ww-pre? "##" l) (say o ("<h2>" + ww-esc (trim (snip l 2 #l)) + "</h2>\n"))
+                 (ww-pre? "#" l) (say o ("<h1>" + ww-esc (trim (snip l 1 #l)) + "</h1>\n"))
+                 (ww-pre? ">" l)
+                  (say o ("<blockquote>\n<p>" + ww-esc (trim (snip l 1 #l)) + "</p>\n</blockquote>\n"))
+                 (0 < #(trim l)) (say o ("<p>" + ww-esc l + "</p>\n"))
+                 0)))
+       _ (map line (ww-lns s))
+       _ (? ((st 'pre) = 1) (block 0) (ul 0))
+       (slurp o))
+   (ww-gemini url hops)
+    (: p (ww-split url) hp (ww-hostport url 1965) q (p 3)
+       a (ww-answer q "input")
+       u (? (string? a) (ww-join [(p 0) (p 1) (p 2) ("?" + ww-penc a '(45 46 95 126)) ""]) (ww-nofrag url))
+       t ((cite 'tls 'tls-dial) <hp (hp 1))
+       (? (nil? t) [1 ("www: no answer from " + url)]
+          (: bad (ww-pin (<hp + ":" + show (hp 1)) (: c (t 'cert) (sha256 (? (string? c) c ""))))
+             (? (string? bad) (: _ ((cite 'tls 'tls-close) t) [1 ("www: " + bad)])
+                (: _ ((cite 'tls 'tls-say) t (u + "\r\n"))
+                   b ((cite 'tls 'tls-slurp) t) _ (close (t 's))
+                   k (wg-find b "\r\n" 0)
+                   hd (? (k < 0) "" (snip b 0 k)) body (? (k < 0) "" (snip b (k + 2) #b))
+                   code (? (2 <= #hd) (unum (snip hd 0 2)) ())
+                   meta (? (3 < #hd) (snip hd 3 #hd) "")
+                   (? !(charm? code) [1 ("www: " + url + " answered no gemini status")]
+                      (code < 20)
+                       (: form ("form:" + ww-join [(p 0) (p 1) (p 2) "" ""] + "?input=")
+                          lab (? (code = 11) "[answer, unshown]" "[answer]")
+                          [0 u 'html ("<p>" + ww-esc meta + "</p>\n<p>" + ww-link form lab + "</p>\n") 200])
+                      (code < 30) (: mime (? (0 < #meta) (wg-lower meta) "text/gemini")
+                                     (? (ww-pre? "text/gemini" mime) [0 u 'html (ww-gtext body) 200]
+                                        (ww-pre? "text/" mime) [0 u 'text body 200]
+                                        [1 ("www: " + url + " is " + meta + ", not a page")]))
+                      (code < 40) (? (hops < 1) [1 "www: too many redirects"]
+                                     (ww-get (ww-resolve url meta) (hops - 1)))
+                      (code < 60) [1 ("www: " + url + " -- " + hd)]
+                      [1 ("www: " + url + " wants a client certificate (" + hd + ")")]))))))
+
    ; a body as it came -> utf-8 text, or () for a gzip that does not open: the content
    ; coding undone, then a latin-1 page (by its header, else its own <meta>) re-spelled
    (ww-body ct ce b)
@@ -218,7 +369,7 @@
                     _ (pin st 'url u)
                     (pgline! st ln))))
           (sc = "form:") (ww-field st u)
-          !(sc = "http:" || sc = "https:" || sc = "file:") (pgmsg st ("no door for " + u))
+          !(elem sc '("http:" "https:" "file:" "gopher:" "gemini:")) (pgmsg st ("no door for " + u))
           (: _ (pin st 'go [u 1 -1]) st)))
    (ww-link st n)
     (: us (st 'urls) (? (0 < n <= #us) (us (n - 1)) ()))
