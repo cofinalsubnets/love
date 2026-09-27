@@ -152,13 +152,7 @@
                    (snip s (skips (skipw 0)) n)))
 
 ; --- the request line ----------------------------------------------------------------
-; -1 for "not a hex digit", never () -- a valid digit can be 0, and 0 is nothing (it
-; nets blue), so a presence test on the VALUE cannot tell %00 from a bad escape.
-(: (hexv c)   (? (48 <= c <= 57) (c - 48)
-                 (97 <= c <= 102) (c - 87)
-                 (65 <= c <= 70) (c - 55)
-                 -1)
-   ; percent-decoding, and `+` left alone: it means a space in a query string, never in a
+(: ; percent-decoding, and `+` left alone: it means a space in a query string, never in a
    ; path, and the query is cut before we ever get here.
    (pdecode s) (: n #s
                   ((: (g i acc)

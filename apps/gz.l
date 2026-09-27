@@ -815,8 +815,6 @@ usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]
 no file, or a bare -, is the filter: stdin -> stdout"
 
    ; --- the small floor ------------------------------------------------------
-   (gzc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
-   (gzc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
    (gzc-moan t m) (? (peep t 'q 0) 0
                      (: _ (say err ("gzip: " + m)) _ (put err 10) (flush err)))
    (gzc-tell t m) (peep t 'v 0 && (: _ (say err m) _ (put err 10) (flush err)))
@@ -868,7 +866,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: suf (peep t 'suf ".gz")
        _ (say out (gzc-lhead + "\n"))
        (one p acc)                     ; acc: (status compressed uncompressed payload)
-        (: r (gzc-slurp p)
+        (: r (uread p)
            (? !r (: _ (gzc-moan t (p + ": No such file or directory"))
                     [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
               (: s <>r h (gzc-hdr s)
@@ -897,7 +895,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; --- one file, compressed -------------------------------------------------
    (gzc-zip1 t p)
     (: suf (peep t 'suf ".gz")
-       r (gzc-slurp p)
+       r (uread p)
        (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
           (gzc-ends? p suf && !(peep t 'c 0))
            (: _ (gzc-moan t (p + " already has " + suf + " suffix -- unchanged")) 0)
@@ -910,7 +908,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                 (: dst (p + suf)
                    (? (two? (lstat dst) && !(peep t 'f 0))
                       (: _ (gzc-moan t (dst + " already exists;\tnot overwritten")) 2)
-                      !(gzc-blurt dst z)
+                      !(uwrite dst z)
                        (: _ (gzc-moan t ("cannot write " + dst)) 1)
                       (: _ (two? st && (: _ (chmod dst (<>>st & 4095)) (utime dst ms)))
                          _ (peep t 'k 0 ? 0 (unlink p))
@@ -928,7 +926,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        ; reading first would call every plain file "not in gzip format" instead
        (? (!(peep t 'c 0) && !(peep t 't 0) && !stem0 && !(peep t 'N 0))
           (: _ (gzc-moan t (p + ": unknown suffix -- ignored")) 2)
-       (: r (gzc-slurp p)
+       (: r (uread p)
        (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
           (: s <>r
              h (gzc-hdr s)
@@ -945,7 +943,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                          st (stat p)
                          (? (two? (lstat dst) && !(peep t 'f 0))
                             (: _ (gzc-moan t (dst + " already exists;\tnot overwritten")) 2)
-                            !(gzc-blurt dst <>u)
+                            !(uwrite dst <>u)
                              (: _ (gzc-moan t ("cannot write " + dst)) 1)
                             (: _ (two? st && chmod dst (<>>st & 4095))
                                ; without -N the output keeps the .gz's own mtime and not

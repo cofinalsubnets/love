@@ -1521,7 +1521,7 @@
    (ascii-main _)
     (: o (jug 0)
        (cell x y) (: i (x * 16 + y)
-                     _ (say o (upad (3 + (? (5 < x) 1 0)) (show i) + " " + upadc 2 48 (uhex2 i) + " "))
+                     _ (say o (upad (3 + (? (5 < x) 1 0)) (show i) + " " + zpad 2 (uhex2 i) + " "))
                      (? (i < 32) (say o (snip ascii-low (3 * i) (3 * i + 3))) (i = 127) (say o "DEL") (put o i)))
        (uhex2 i) (string ("0123456789ABCDEF" (i >> 4)) + string ("0123456789ABCDEF" (i & 15)))
        _ (map (\ x (: _ (say o ("Dec Hex" + upad (1 + (? (x < 2) 2 0) + (? (4 < x) 1 0)) " ")) (put o (? (6 < x) 10 32)))) ^8)
@@ -1824,8 +1824,6 @@
    ; the -t's GNU gives them. one -t per run, the last given winning: GNU's
    ; several-at-once lane re-widens every column to the widest type in the set, which
    ; is a whole layout of its own and not another row.
-   (uzpad w s) (? (tally s < w) (uzpad w ("0" + s)) s)
-   (uradix n b) (: o (jug 0) _ (putbn o n b) (slurp o))
    uodnames '("nul" "soh" "stx" "etx" "eot" "enq" "ack" "bel" "bs" "ht" "nl" "vt"
               "ff" "cr" "so" "si" "dle" "dc1" "dc2" "dc3" "dc4" "nak" "syn" "etb"
               "can" "em" "sub" "esc" "fs" "gs" "rs" "us" "sp")
@@ -1835,7 +1833,7 @@
     (? (c = 0) "\\0" (c = 7) "\\a" (c = 8) "\\b" (c = 9) "\\t" (c = 10) "\\n"
        (c = 11) "\\v" (c = 12) "\\f" (c = 13) "\\r"
        ((31 < c) && (c < 127)) (string c)
-       (uzpad 3 (uradix c 8)))
+       (zpad 3 (radix c 8)))
    (uodtype s)                         ; a -t word -> (kind size width) | ()
     (: k (? (0 < tally s) (s 0) 0)
        z (? (1 < tally s) (uatoi (snip s 1 (tally s))) 0)
@@ -1893,9 +1891,9 @@
                       (? n (drop (k - n)) 0)))
        _ (? (drop skip) 0 (udie 1 "od: cannot skip past end of combined input"))
        (adr k) (? (ad = 110) ""
-                  (ad = 100) (uzpad 7 (show k))
-                  (ad = 120) (uzpad 6 (uradix k 16))
-                  (uzpad 7 (uradix k 8)))
+                  (ad = 100) (zpad 7 (show k))
+                  (ad = 120) (zpad 6 (radix k 16))
+                  (zpad 7 (radix k 8)))
        (val blk k)                      ; the little-endian item at k, short reads zeroed
         (: n (tally blk)
            (go i acc) (? (sz <= i) acc
@@ -1907,8 +1905,8 @@
            (= kd 'a) (upad 3 (uodname (blk k)))
            (: raw (val blk k)
               v (? ((= kd 'd) && !(raw < (((* 8 sz) - 1) 2))) (raw - ((* 8 sz) 2)) raw)
-              (? (= kd 'x) (uzpad wd (uradix v 16))
-                 (= kd 'o) (uzpad wd (uradix v 8))
+              (? (= kd 'x) (zpad wd (radix v 16))
+                 (= kd 'o) (zpad wd (radix v 8))
                  (upad wd (show v)))))
        (rowof blk cnt)
         (: items (? byte? cnt (// ((cnt + sz) - 1) sz))
@@ -1941,18 +1939,15 @@
    (uxx-esc c) (? ((32 <= c) && (c < 127)) c 46)     ; a dot for anything unprintable
    (uxx-row off blk)
     (: n (tally blk) o (jug 0)
-       _ (say o (uzpad 8 (uradix off 16))) _ (say o ": ")
+       _ (say o (zpad 8 (radix off 16))) _ (say o ": ")
        (hex i) (? (16 <= i) 0
-                  (: _ (? (i < n) (say o (uzpad 2 (uradix (blk i) 16))) (say o "  "))
+                  (: _ (? (i < n) (say o (zpad 2 (radix (blk i) 16))) (say o "  "))
                      _ (? (1 = (% i 2)) (put o 32) 0)
                      (hex (i + 1))))
        _ (hex 0) _ (put o 32)
        (asc i) (? ((16 <= i) || (n <= i)) 0 (: _ (put o (uxx-esc (blk i))) (asc (i + 1))))
        _ (asc 0)
        (slurp o))
-   (uxx-nib c) (? ((48 <= c) && (c <= 57)) (c - 48)
-                  ((97 <= c) && (c <= 102)) ((c - 97) + 10)
-                  ((65 <= c) && (c <= 70)) ((c - 65) + 10) -1)
    ; -r reads the dump back: the offset up to the colon is skipped, the gutter past
    ; two spaces is not hex and stops the row. a line with no colon is all hex
    (uxx-unrow ln)
@@ -1961,7 +1956,7 @@
        s (col 0)
        (go k acc hi)
         (? (n <= k) (rev acc)
-           (: c (ln k) v (uxx-nib c)
+           (: c (ln k) v (hexv c)
               ; two spaces in a row IS the gutter, and the gutter is text: `ab.hello` past
            ; it reads as hex to anything that only skips single spaces
            (? (v < 0) (? ((32 = c) && !(charm? hi))
@@ -1992,7 +1987,7 @@
    ; language and the one-letter faces past -C are not here --
    (uhd-row C? off blk)
     (: n #blk o (jug 0)
-       (hx v w) (say o (uzpad w (uradix v 16)))
+       (hx v w) (say o (zpad w (radix v 16)))
        _ (? C?
             (: _ (hx off 8) _ (say o "  ")
                _ (each ^16 (\ i (: _ (? (i < n) (: _ (hx (blk i) 2) (put o 32)) (say o "   "))
@@ -2032,7 +2027,7 @@
                (: _ (? star 0 (: _ (say out "*") (put out 10))) (go (off + 16) prev 1))
               (: _ (say out (uhd-row C? off blk)) _ (put out 10) (go (off + n) blk 0))))
        end (go at () 0)
-       _ (? (0 < end) (: _ (say out (uzpad (? C? 8 7) (uradix end 16))) (put out 10)) 0)
+       _ (? (0 < end) (: _ (say out (zpad (? C? 8 7) (radix end 16))) (put out 10)) 0)
        _ (flush out) 0)
    (hexdump-main as) (uhexdump "hexdump" as)
    (hd-main as) (uhexdump "hd" ("-C" . as))

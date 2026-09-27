@@ -198,8 +198,6 @@
 (borrow 'posix)
 (: cpioc-usage "usage: cpio {-o|-i|-t} [-H newc] [-dutv] [-F|-I|-O FILE] [--quiet]"
    (cpioc-moan m) (say err ("cpio: " + m), put err 10, flush err)
-   (cpioc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, [1 (s + "")]))))
-   (cpioc-blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
    (cpioc-blocks t n)                       ; GNU's parting word, on err, in 512s
     (? (peep t 'quiet 0) 0
        (: k ((n + 512 - 1) // 512)
@@ -230,7 +228,7 @@
           (one? st) (cpioc-moan (p + ": No such file or directory"), ())
           (<>>st & 61440 = 16384)
            (: e (tar-entry nom 'dir "") (pin e 'mode (<>>st & 4095), [1 (own e)]))
-          (: b (cpioc-slurp p)
+          (: b (uread p)
            (? !b (cpioc-moan (p + ": cannot read"), ())
             (: e (tar-entry nom 'file <>b)
                _ (pin e 'mode (<>>st & 4095))
@@ -250,13 +248,13 @@
        s (cpio-pack <g)
        dst (t 'out)
        _ (string? dst ?
-          (cpioc-blurt dst s ? 0 (cpioc-moan ("cannot write " + dst)))
+          (uwrite dst s ? 0 (cpioc-moan ("cannot write " + dst)))
           (say out s, flush out))
        _ (cpioc-blocks t #s)
        (<>g ? 0 1))
    (cpioc-in t)                             ; -> (1 bytes) | ()
     (: src (t 'in)
-       (string? src ? (cpioc-slurp src || (cpioc-moan ("cannot read " + src), ()))
+       (string? src ? (uread src || (cpioc-moan ("cannot read " + src), ()))
                       [1 (slurp in + "")]))
    (cpioc-strip nom)                        ; no leading /, ever
     (: n #nom
