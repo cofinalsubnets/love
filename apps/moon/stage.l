@@ -39,11 +39,13 @@
                 ; renames last, cskeep sees only what ships -- one order types
                 (deadlab (ir-chosen) ir-nolab)
                 (wpair (gst ir-nolab) ir-nolab)      ; renames and drops, like coal
+                (recse (gst ir-nolab) ir-nolab)      ; renames, like coal
                 (coal (gst ir-nolab) ir-nolab)       ; stage-preserving: it renames, never re-addresses
                 (unframe (gst ir-nolab) ir-noframe)
                 (jr0 (ir-noframe) ir-jmpfix)
                 (unhome (gst ir-jmpfix) ir-final)
                 (cskeep (gst ir-final) ir-emitted)
+                (csdrop (gst ir-emitted) ir-emitted)
                 (jmpm (gst ir-emitted) ir-emitted)
                 (tailarm (gst ir-emitted) ir-emitted)
                 (swrap (gst ir-emitted) ir-emitted))

@@ -4482,6 +4482,76 @@
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
 
+   ; a recomputed alu value (x64, a64, off liveness): within a straight run, (op h a b) again
+   ; with a and b unchanged is (mov h2 h) -- and where h was taken once in between by a def
+   ; whose value dies before the recompute, that def and its reads move to a register idle
+   ; across them, so h survives:
+   ;   (add h a b) .. (ldx h x h 8 0) U (add h2 a b) -> (add h a b) .. (ldx F x h 8 0) U[h := F] (mov h2 h)
+   (recse g fs)
+    (: lot (? (x64t? g || a64? g) (lvout g fs) 'no)
+       ; the caller-saved file (rcx too: rdsp names its implicit uses), then a cs seat the fn already writes
+       ; (its save is paid)
+       fr9 (filter (r \ nelem r '(r0 r2 r3 r4)) (lvgp g) +
+            filter (r \ nelem r '(r3 r4) && vany (f \ two? f && two? >f && <>f == r && rdsp g f != 'bar && elem r <>(rdsp g f)) fs)
+                   (csregs g))
+       (jot2 a b) (map (+ a) (jot (b - a + 1)))
+       (sp? f) (: d (? (two? f) (rdsp g f) 'bar)
+                  (? (d = 'bar) () !(two? (filter (r \ nelem r >f) (<d + <>d)))))
+       (alu? f) (two? f && elem <f '(add sub and or xor) && #f = 4 && nom? <>f && nom? <>>f &&
+                 nelem <>f '(r0 r1 r2 r3) &&                    ; off the protocol: no unspelled read of h
+                 (nom? <>>>f || charm? <>>>f) && <>f != <>>f && <>f != <>>>f && sp? f)
+       ; forms after p -> [j k u]: the recompute's offset, the one def of h between (or ()), the
+       ; last read of that def's value (or ()) | ()
+       (scan p w)
+        (: h <>p a <>>p b <>>>p
+           (go l n k u)
+            (? (!(two? l) || 16 < n) ()
+               (: f <l d (? (two? f) (rdsp g f) 'bar)
+                  (? (d = 'bar || elem <f '(label br jmp jmpr jmpt ret call callr sys)) ()
+                     (<f = <p && #f = 4 && <>>f = a && <>>>f = b && nelem <>f [a b]) [n k u]
+                     (elem a <>d || elem b <>d) ()
+                     ; renamed by its dest field alone: an in-place op (zx4 h, shl h k) reads that field too
+                     (elem h <>d) (? (k || <>f != h || 1 < #<>d || elem 'zq <(rdsp g (reop f 1 'zq))) ()
+                                     (go >l (n + 1) n u))
+                     (k && elem h <d) (? (elem h >f && nelem <f vshops) (go >l (n + 1) k n) ())   ; a read renames where spelled, off the pinned count
+                     (go >l (n + 1) k u))))
+           (go w 1 () ()))
+       (go l i)
+        (? !(two? l) ()
+           (: p <l
+              r (? (alu? p) (scan p >l) ())
+              (? !r (p . go >l (i + 1))
+                 (: j <r k <>r u <>>r h <>p
+                    ms (take (j + 1) l)
+                    e (u || k)
+                    ; F: named nowhere in the window, dead from before the def through its last read
+                    used (foldl (\ acc f (acc + <(rdsp g f))) () ms +                 ; read anywhere here, or
+                          foldl (\ acc o (acc + <>(rdsp g (ms o)))) () (? k (jot2 k e) ()))   ; written in the span
+                    F (? !k 1
+                         (: (pick c) (? !(two? c) ()
+                                        (elem <c used || vany (\ o (elem <c (lot (i + o)))) (jot2 (k - 1) e)) (pick >c)
+                                        <c)
+                            (pick fr9)))
+                    (? (!F || k && elem h (lot (i + e))) (p . go >l (i + 1))
+                       (: out (map (\ o (: f (ms o)
+                                         (? (k && o = k) (reop f 1 F)
+                                            (k && k < o && o <= e) (map (x \ (x = h ? F x)) f)
+                                            (o = j) ['mov <>f h]
+                                            f)))
+                                   (jot2 0 j))
+                          h2 <>(ms j)
+                          ; the recompute's own reads follow h until either moves (copyprop keeps off addresses)
+                          (fw w n) (? (!(two? w) || 16 < n) w
+                                      (: f <w d (? (two? f) (rdsp g f) 'bar)
+                                         (? (d = 'bar || elem <f '(label br jmp jmpr jmpt ret call callr sys)) w
+                                            (: f2 (? (elem h2 <d && elem h2 >f && nelem <f vshops && nelem h2 <>d)
+                                                     (map (x \ (x = h2 ? h x)) f) f)
+                                               (? (elem h <>d || elem h2 <>d) (f2 . >w) (f2 . fw >w (n + 1)))))))
+                          ; liveness was read before this rewrite: the rest of the block keeps its forms
+                          (skip w n) (? (!(two? w) || two? <w && <<w = 'label) (go w n) (<w . skip >w (n + 1)))
+                          (out + skip (fw (drop (j + 1) l) 1) (i + j + 1))))))))
+       (lot @ 'no fs (go fs 0)))
+
    ; the wide pair's two shuffles, off liveness (x64, a64). a word built in r0 while the pair
    ; parks, then added with a zero high half, is built in the park and the pair stays put:
    ;   (mov p r0)(mov q r2) S (li r2 0)(a128r p q) -> S[r0 := p] (a128r p 0)
@@ -4971,6 +5041,18 @@
                   (sweep >l 0)
                  (f . sweep >l (xit? f || (two? f && elem <f '(jmp jmpt)))))))
        (sweep fs 0))
+
+   ; an idle cs seat: a borrowed x64 cs register the later passes left untouched but for its
+   ; save and restores (a home whose every def folded away) owes neither. x64, past cskeep
+   (csdrop g fs)
+    (: (sv? f r) (two? f && <f = 'st && <>f = 'sp && (f 3) == r)
+       (rs? f r) (two? f && <f = 'ld && <>f = r && <>>f = 'sp)
+       (idle? r) (vany (f \ sv? f r) fs &&
+                  !(vany (f \ two? f && elem r >f && !(sv? f r || rs? f r)) fs))
+       dr (? (x64t? g && !(g 'hasasm) && !(vany (f \ two? f && elem <f '(raw asm)) fs))
+             (filter idle? csx64) ())
+       (? !(two? dr) fs
+          (filter (f \ !(vany (r \ sv? f r || rs? f r) dr)) fs)))
 
    ; the callee-saved contract, held at emission: a cs reg written anywhere must be saved before
    ; its first write and restored by every exit. an op on neither rdsp nor csquiet refuses
@@ -8052,7 +8134,7 @@
                      (cfoldir g irx)))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (cskeep g (unhome g (jr0 g (unframe g (coal g (copyprop g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))
+       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (unframe g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
