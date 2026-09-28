@@ -13,7 +13,7 @@
 (borrow 'rove)   ; the artifact's modules, warm from the tree
 (borrow 'tower)
 
-(: (find h n i) (i + tally n < 1 + tally h ? (n = snip h i (i + tally n) ? 1 (find h n (i + 1))) 0))
+(: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0))
 
 ; --- delve: a seed reproduces its floor; floors are connected and bordered ---
 (: p1 (delve 60 20 (wheel 11) (plan 2))
@@ -24,19 +24,19 @@
                 (go 0 1))
    flood (: mk (cask 1200)
             (go stk n) (!stk ? n (: xy <stk x <xy y <>xy i (x + 60 * y)
-                           (|| !(open? d x y) (peep mk i 0) ? (go >stk n) (pin mk i 1,
+                           (!(open? d x y) || peep mk i 0 ? (go >stk n) (pin mk i 1,
                              go (cat [[(x + 1) y] [(x - 1) y] [x (y + 1)] [x (y - 1)]] >stk)
                                    (n + 1)))))
             (go [(d 'in)] 0))
    floors (: (go i n) (i < 1200 ? (go (i + 1) (n + (0 < peep (d 't) i 0 ? 1 0))) n)
              (go 0 0))
-   rim (: (go i bad) (i < 60 ? (go (i + 1) (|| bad (dat d i 0) (dat d i 19))) (: (gov j b2) (j < 20 ? (gov (j + 1) (|| b2 (dat d 0 j) (dat d 59 j))) b2)
+   rim (: (go i bad) (i < 60 ? (go (i + 1) (bad || dat d i 0 || dat d i 19)) (: (gov j b2) (j < 20 ? (gov (j + 1) (b2 || dat d 0 j || dat d 59 j)) b2)
                           (gov 0 bad)))
           (go 0 0))
  (test
   (teq <p1 <p2)                                  ; one seed, one floor
   !(teq <p1 <p3)                                 ; another seed, another floor
-  (1 < tally (d 'rooms))
+  (1 < #(d 'rooms))
   (1 = dat d <(d 'in) <>(d 'in))                 ; you stand on open floor
   (2 = dat d <(d 'stair) <>(d 'stair))           ; the stair is cut
   (flood = floors)                               ; every floor cell reachable
@@ -169,7 +169,7 @@
    (walls-of rm) (sort (keys (foldl (\ t dr (pin t <dr 1)) {} (doors rm))))
    flood (: mk (cask (w * h))
             (go stk n) (!stk ? n (: xy <stk x <xy y <>xy i (x + w * y)
-                           (|| !(open? d x y) (peep mk i 0) ? (go >stk n) (pin mk i 1,
+                           (!(open? d x y) || peep mk i 0 ? (go >stk n) (pin mk i 1,
                              go (cat [[(x + 1) y] [(x - 1) y] [x (y + 1)] [x (y - 1)]] >stk)
                                    (n + 1)))))
             (go [(d 'in)] 0))
@@ -192,11 +192,11 @@
   (2 = #stairs)                                          ; two stairs up
   (all (i \ in-room? (i % w) (i // w)) stairs)           ; ..both of them in a building
   (flood = opens)                                        ; and every open cell reachable
-  (0 < tally (filter (i \ 1 = t (i % w) (i // w)) ^(w * h)))))  ; streets, which cars want
+  (0 < #(filter (i \ 1 = t (i % w) (i // w)) ^(w * h)))))       ; streets, which cars want
 
 ; ..and every delved floor has its second stair too
 (: d <(delve 60 20 (wheel 11) (plan 2))
- (test (2 = tally (filter (i \ 2 = dat d (i % 60) (i // 60)) ^(60 * 20)))))
+ (test (2 = #(filter (i \ 2 = dat d (i % 60) (i // 60)) ^(60 * 20)))))
 
 ; a car reaches you: ten off the bar, the horn asked for twice, you a step aside and the
 ; car still headed the way it was; walking into one is the same hurt. it is never struck.
@@ -264,7 +264,7 @@
    _ (pin g 'lvl 2)
    _ (pin g 'her {'x 2 'y 1 'gl "x" 'hue 1})
    _ (crawl-turn g [1 0])
- (test (= >(g 'sign) (her-lines 2)) !(her-lines 1 = her-lines 2) (her-lines 1 = her-lines 9)))
+ (test (>(g 'sign) = her-lines 2) !(her-lines 1 = her-lines 2) (her-lines 1 = her-lines 9)))
 
 ; a line wider than the screen is reflowed at its words, and the box still fits it
 (: ln "the quick brown fox jumps over the lazy dog and keeps going past the edge of the screen"
@@ -318,7 +318,7 @@
    (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    flood (: mk (cask (w * h))
             (go stk n) (!stk ? n (: xy <stk x <xy y <>xy i (x + w * y)
-                           (|| !(open? d x y) (peep mk i 0) ? (go >stk n) (pin mk i 1,
+                           (!(open? d x y) || peep mk i 0 ? (go >stk n) (pin mk i 1,
                              go (cat [[(x + 1) y] [(x - 1) y] [x (y + 1)] [x (y - 1)]] >stk)
                                    (n + 1)))))
             (go [(d 'in)] 0))
@@ -352,8 +352,8 @@
    _ (crawl-turn g [1 0])
  ; the platform mutters one of its lines, the step mutters one of its own, and the
  ; two are not the same line -- the flavour text itself is the tower's to reword
- (test (0 < tally m1)
-       (0 < tally (g 'msg))
+ (test (0 < #m1)
+       (0 < #(g 'msg))
        (m1 != (g 'msg))))
 
 ; the horn the game asked for is two voices in the song, at the write head, and the
@@ -689,7 +689,7 @@
        (9 = t (fx + 1) fy) ('fire = <(g 'loot (fx + w * fy)))   ; the fire on its dirt
        (7 = #stones) (10 = t <spot <>spot)               ; seven stand; the eighth's place is lighter grass
        (<spot < fx) (<>spot < fy)                        ; ..and it is the upper left:
-       (= <>spot <>(oct-pt fx fy 0)) (fx < <(oct-pt fx fy 0))   ; the left of the top pair, the first stone its right
+       (<>spot = <>(oct-pt fx fy 0)) (fx < <(oct-pt fx fy 0))   ; the left of the top pair, the first stone its right
        (tablet? (g 'her)) (g 'her 'x = (fx + 2)) (g 'her 'y = fy)
        (5 = t <door (<>door - 1)) (11 = t (<door - 1) (<>door - 1))   ; the cottage: timber, a door south
        (12 = t fx (<>door - 7))                          ; ..and the garden behind it
@@ -824,9 +824,9 @@
           ; rows beside it alike
           (find-l r i) (i >= #r || 124 = r i ? i (find-l r (i + 1)))
           lefts (map (r \ find-l r 0) (filter (r \ find r "|" 0) (map bare (split "\r\n" f3))))
-          (&& (find f3 "a line of some length, laid whole across the box" 0)
-              (12 = #lefts)                              ; the box's twelve barred rows
-              (all (l \ l = <lefts) lefts)))))
+          (find f3 "a line of some length, laid whole across the box" 0
+              && 12 = #lefts                              ; the box's twelve barred rows
+              && all (l \ l = <lefts) lefts))))
 
 ; ..and the front itself, which is the whole of the grading law: past the corner of
 ; the board -- which is to say nowhere on it -- while there is no ring and while the
@@ -961,13 +961,13 @@
 (: g (crawl-new 60 20 (wheel 3))
    kb {(wheel 99)}
    dirs [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 -1] [1 -1] [-1 1] 46 62]
-   (turn i ok) (&& (i < 300) !(g 'over) ? (: k (peep dirs (roll kb 10) 46)
+   (turn i ok) (i < 300 && !(g 'over) ? (: k (peep dirs (roll kb 10) 46)
                    _ (crawl-turn g k)
                    p (g 'p)
                    (turn (i + 1)
-                         (&& ok (open? (g 'd) (p 'x) (p 'y))
-                                ((p 'hp) <= p 'mx)
-                                (0 <= p 'penny)))) ok)
+                         (ok && open? (g 'd) (p 'x) (p 'y)
+                                && (p 'hp) <= p 'mx
+                                && 0 <= p 'penny))) ok)
  (test (turn 0 1)
          (g 'over || (0 < g 'p 'hp))))
 

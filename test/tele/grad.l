@@ -85,7 +85,7 @@
 
    ;; -- Stage 3: nn modules, optim, end-to-end training --
    ;; param collection: a 2-layer seq has 4 param glasses (2 linears x {W,b})
-   _ (ok "seq collects 4 params" (4 = tally (params (seq [(linear 2 3) relu (linear 3 1)]))))
+   _ (ok "seq collects 4 params" (4 = #(params (seq [(linear 2 3) relu (linear 3 1)]))))
 
    ;; seq forward == an explicit hand composition over the same fixed params
    _ (: W1 (glass (gem-tray (quote (2 2)) (quote (0.1 0.2 0.3 0.4)))) b1 (glass @(0.5 -0.5))

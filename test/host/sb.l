@@ -32,9 +32,9 @@
    again (sb-record "again"))
 
 (test
- (64 = tally p1)                                       ; a real content address
+ (64 = #p1)                                            ; a real content address
  (seq (tips ()) [p1])                               ; the one tip
- (3 = tally s1)                                        ; junk/ and out/ stayed out; .sbignore is a file like any other
+ (3 = #s1)                                             ; junk/ and out/ stayed out; .sbignore is a file like any other
  (".sbignore" = <<s1)                                  ; path-sorted
  (blob <>(s1 1) = "one\ntwo\nthree\n")               ; the blob rides its hash
  !again                                                ; a clean tree records nothing
@@ -51,7 +51,7 @@
 (test
  (3 = nd)                                              ; diff saw all three
  (seq (fld f2 'deps) [p1])                          ; the context reads p1's writes
- (3 = tally (fld f2 'hunks))
+ (3 = #(fld f2 'hunks))
  (seq (tips ()) [p2])                               ; p1 is no longer maximal
  !(elem "sub/b.txt" (: (go m acc) (two? m ? (go >m (<<m . acc)) acc)
                           (go (snap ()) ())))       ; the death left the snap
@@ -64,7 +64,7 @@
 
 (test
  !(fld f3 'deps)                                    ; no context anywhere
- (2 = tally (tips ()))                              ; two maximal patches
+ (2 = #(tips ()))                                   ; two maximal patches
  (elem p2 (tips ())) (elem p3 (tips ()))
  (3 = sb-log ()))                                    ; three patches told
 
@@ -90,7 +90,7 @@
  (nbefore < nafter)                                       ; the peer's patch arrived
  (two? (patch pp))                                     ; ...as a real, addressable patch object
  (elem pp (tips ()))                                ; and it opens a fresh tip
- (3 = tally (tips ()))                                 ; p2 + p3 + pp, all maximal
+ (3 = #(tips ()))                                      ; p2 + p3 + pp, all maximal
  (4 = got)                                                ; p1 p2 p3 + the peer's pp
  ((<>(look "peer.txt")) = "from the other machine\n")  ; materialized into the working tree
  ((<>(look "a.txt")) = "one\ntwo point five\nthree\n") ; local edits untouched
@@ -115,14 +115,14 @@
    _ (chdir ".."))
 
 (test
- (64 = tally pe)                                          ; the empty file made a real patch
+ (64 = #pe)                                               ; the empty file made a real patch
  (two? esnap)                                             ; ...and reached the snap
  (<>esnap = sha256 "")                                  ; ...under the honest empty digest
  (0 = clean)                                              ; ...so the tree came back clean
  !(sb-record "noop")                                    ; ...and stays clean -- no junk tip
  (0 < got2)                                               ; the fresh nest took the whole store
  (two? et)                                                ; ...materializing e.txt: present...
- (0 = tally <>et))                                        ; ...and 0 bytes
+ (0 = #<>et))                                             ; ...and 0 bytes
 
 ; --- divergence on one path is a merge, not a coin flip. the incoming hunk
 ;     names the base it expected, so all three sides sit in the store: disjoint
@@ -159,7 +159,7 @@
 (test
  (mtext = "ONE\ntwo\nthree\nfour\nFIVE\n")               ; both disjoint edits survived
  (0 < gotm)                                              ; ...and it was not a conflict
- (1 = tally cfm) (0 = <><cfm)                          ; one merge, zero regions unresolved
+ (1 = #cfm) (0 = <><cfm)                               ; one merge, zero regions unresolved
  (0 = gotc)                                              ; the overlap did conflict: sync answers 0
  (1 = <><cfc)                                          ; ...one region
  (elem "=======" (lines ctext))                       ; ...and the markers are in the file
@@ -184,7 +184,7 @@
  (0 = gotd)                                              ; a delete against an edit is a conflict
  (two? gtext)                                            ; the file is still there...
  (<>gtext = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
- (1 = tally (filter (\ e ("g" = <e)) cfd)))              ; ...and g is named in the report
+ (1 = #(filter (\ e ("g" = <e)) cfd)))                   ; ...and g is named in the report
 
 ; --- sync is an exchange, not a fetch: one command settles both nests. the
 ;     derive is a pure function of the patch set, so two nests over one union
@@ -316,7 +316,7 @@
 (test
  (2 = ntip)                                              ; two independent births, two tips -- normal
  (1 = b1) (1 = b2)                                       ; banked; re-banking the same head is a no-op
- (2 = tally r1)                                          ; the ref froze the tip set, not one id
+ (2 = #r1)                                               ; the ref froze the tip set, not one id
  !b3 (1 = b4)                                            ; a banked name is immutable
  (2 = n1) !(two? cgone)                                  ; apply by NAME realized exactly the release
  (3 = n2) (two? cback)                                   ; ...and the later ref brings c back

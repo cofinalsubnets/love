@@ -15,7 +15,7 @@
    home0 (getenv "HOME")
    _ (setenv "HOME" dir)
    (has? t s) (0 <= (K 'wg-find) t s 0)
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (put p s) (: q (open p "w") _ (say q s) (close q))
    ; www on a pipe, where it pours the page and its references (on a pty it would wait for
    ; keys); its complaints are stderr, so they ride along
@@ -55,8 +55,8 @@
            (has? <f "you searched for love kore"))
 
    ; -- gemini ---------------------------------------------------------------------------
-   py? (: q (open "/usr/bin/python3" "r") (? (hot? q) (: _ (close q) 1) 0))
-   ssl? (: q (open "/usr/bin/openssl" "r") (? (hot? q) (: _ (close q) 1) 0))
+   py? (: q (open "/usr/bin/python3" "r") (? (hot? q) (close q, 1) 0))
+   ssl? (: q (open "/usr/bin/openssl" "r") (? (hot? q) (close q, 1) 0))
    gm 7471
    ms (show gm)
    base ("gemini://127.0.0.1:" + ms)

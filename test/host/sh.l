@@ -13,39 +13,39 @@
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
 ; quotes as segments, # comments, the 'more protocol on an unfinished shape.
 ; (the reader has no dotted-pair syntax, so expecteds are BUILT, not quoted.)
-(: lw (\ s (. 'w [(. 'lit s)]))
-   rdt (\ ion o (. 'rd (. ion o)))
-   opt (\ o (. 'op o))
+(: lw (\ s ('w . [('lit . s)]))
+   rdt (\ ion o ('rd . ion . o))
+   opt (\ o ('op . o))
    (test
-    (= [1 (lw "a") (lw "b")] (sh-lex " a  b "))
-    (= [1 (. 'w [(. 'sq "x  y")])] (sh-lex "'x  y'"))
-    (= [1 (. 'w [(. 'lit "a") (. 'dq [(. 'lit "b c")]) (. 'lit "d")])]
-       (sh-lex "a\"b c\"d"))
-    (= [1 (lw "a") (rdt () ">") (lw "b")] (sh-lex "a>b"))
-    (= [1 (lw "x") (rdt [2] ">&") (lw "1")] (sh-lex "x 2>&1"))
-    (= [1 (lw "a") (opt "&&") (lw "b")] (sh-lex "a&&b"))
-    (= [1 (lw "a") (opt ";") (lw "b")] (sh-lex "a; b"))
-    (= [1 (lw "a")] (sh-lex "a # rest dies"))
-    (= [1 (. 'w [(. 'var "HOME")])] (sh-lex "$HOME"))
-    (= [1 (. 'w [(. 'dq [(. 'lit "v=") (. 'var "V")])])] (sh-lex "\"v=$V\""))
-    (= [1 (. 'w [(. 'sub "echo hi")])] (sh-lex "$(echo hi)"))
-    (= [1 (. 'w [(. 'sub "date")])] (sh-lex "`date`"))
+    ([1 (lw "a") (lw "b")] = sh-lex " a  b ")
+    ([1 ('w . [('sq . "x  y")])] = sh-lex "'x  y'")
+    ([1 ('w . [('lit . "a") ('dq . [('lit . "b c")]) ('lit . "d")])]
+       = sh-lex "a\"b c\"d")
+    ([1 (lw "a") (rdt () ">") (lw "b")] = sh-lex "a>b")
+    ([1 (lw "x") (rdt [2] ">&") (lw "1")] = sh-lex "x 2>&1")
+    ([1 (lw "a") (opt "&&") (lw "b")] = sh-lex "a&&b")
+    ([1 (lw "a") (opt ";") (lw "b")] = sh-lex "a; b")
+    ([1 (lw "a")] = sh-lex "a # rest dies")
+    ([1 ('w . [('var . "HOME")])] = sh-lex "$HOME")
+    ([1 ('w . [('dq . [('lit . "v=") ('var . "V")])])] = sh-lex "\"v=$V\"")
+    ([1 ('w . [('sub . "echo hi")])] = sh-lex "$(echo hi)")
+    ([1 ('w . [('sub . "date")])] = sh-lex "`date`")
     (<(sh-lex "echo 'x") = 'more)
     (<(sh-lex "echo \\") = 'more)
     ; an empty payload is a parse, not a failure. A (payload . j) answer nets
     ; its head alone -- the improper tail is out of the sum -- so "" , `` and a
     ; heredoc owed no lines all net zero, and a truth test called each of them
     ; unfinished: `echo ""` asked PS2 for a line nobody owed. The kind says it.
-    (= [1 (lw "echo") (. 'w [(. 'dq ())])] (sh-lex "echo \"\""))
-    (= [1 (lw "echo") (. 'w [(. 'lit "a") (. 'dq ()) (. 'lit "b")])]
-       (sh-lex "echo a\"\"b"))
-    (= [1 (lw "echo") (. 'w [(. 'sub "")])] (sh-lex "echo ``"))
-    (= [1 (lw "cat") (rdt () "<h") (. 'w [(. 'dq ())]) (opt "nl")]
-       (sh-lex "cat <<E\nE\n"))
+    ([1 (lw "echo") ('w . [['dq]])] = sh-lex "echo \"\"")
+    ([1 (lw "echo") ('w . [('lit . "a") ['dq] ('lit . "b")])]
+       = sh-lex "echo a\"\"b")
+    ([1 (lw "echo") ('w . [('sub . "")])] = sh-lex "echo ``")
+    ([1 (lw "cat") (rdt () "<h") ('w . [['dq]]) (opt "nl")]
+       = sh-lex "cat <<E\nE\n")
     ; ..and the same law inside a vop word, where the fallback was silent: the
     ; quotes stayed in the text instead of removing
-    (= [(. 'dq ())] (sh-wordize "\"\""))
-    (= [(. 'sub "")] (sh-wordize "``"))))
+    ([['dq]] = sh-wordize "\"\"")
+    ([('sub . "")] = sh-wordize "``")))
 
 ; the writing half of the same module, checked against the reading half just above.
 ; the pair is a retraction: (sh-read (sh-show ws)) = ws for every ws, while
@@ -97,7 +97,7 @@
            (<(a 2) = 'bg)))
 (: pr (sh-parse >(sh-lex "a | b"))
    a >pr
-   (test (<a = 'pipe) (= 2 #(a 1))))
+   (test (<a = 'pipe) (2 = #(a 1))))
 (: pr (sh-parse >(sh-lex "! false"))
    (test (<>pr = 'not)))
 (test (<(sh-parse >(sh-lex "a &&")) = 'more)
@@ -119,8 +119,8 @@
 (: lx (sh-lex "cat <<EOF\nbody\nEOF")
    t >lx
    (test (1 = <lx)
-           (<(caup t) = 'rd)                      ; (rd () . "<h")
-           (= "<h" >>(caup t))))
+           (<(<>t) = 'rd)                         ; (rd () . "<h")
+           ("<h" = >>(<>t))))
 
 ; rung 3, end to end through the built shell: control flow, functions,
 ; positionals, ${}, heredocs, subshells, set -u
@@ -225,7 +225,7 @@
 (: pr (sh-parse >(sh-lex "LUSH_PL=$(expr ${LUSH_PL:-0} + 1)"))
    p (sh-plan >pr)
    _ (p ()) _ (p ())
-   (test ('("2") = sh-fields [(. 'var "LUSH_PL")])))
+   (test ('("2") = sh-fields [('var . "LUSH_PL")])))
 (sh-line "lush_pf() { echo x; }",
  test (sh-fn? "lush_pf") !(sh-fn? "lush_pq_zz")
            !(two? (sh-fnof "lush_pf")))
@@ -297,19 +297,19 @@
 ; shield, an unset var alone is no field, a quoted empty is one, glob last
 (: _ (setenv "LUSH_T1" "quay")
    _ (setenv "LUSH_T2" "a  b")
-   v (\ nm (. 'var nm))
+   v (\ nm ('var . nm))
    (test
-    ('("pre-quay") = sh-fields [(. 'lit "pre-") (v "LUSH_T1")])
+    ('("pre-quay") = sh-fields [('lit . "pre-") (v "LUSH_T1")])
     ('("a" "b") = sh-fields [(v "LUSH_T2")])
-    ('("a  b") = sh-fields [(. 'dq [(v "LUSH_T2")])])
+    ('("a  b") = sh-fields [('dq . [(v "LUSH_T2")])])
     (() = sh-fields [(v "LUSH_NIL_ZZ")])
-    ('("") = sh-fields [(. 'sq "")])
-    ('("quay") = sh-fields [(. 'sub "echo quay")])
-    ('("apps/lush.l") = sh-fields [(. 'lit "apps/lus*.l")])
-    ('("a/zz*qq") = sh-fields [(. 'lit "a/zz*qq")])
-    ('("apps/lush/j*.l") = sh-fields [(. 'sq "apps/lush/j*.l")])))
+    ('("") = sh-fields [('sq . "")])
+    ('("quay") = sh-fields [('sub . "echo quay")])
+    ('("apps/lush.l") = sh-fields [('lit . "apps/lus*.l")])
+    ('("a/zz*qq") = sh-fields [('lit . "a/zz*qq")])
+    ('("apps/lush/j*.l") = sh-fields [('sq . "apps/lush/j*.l")])))
 (pin sh-status () 7,
- test ('("7") = sh-fields [(. 'var "?")]))
+ test ('("7") = sh-fields [('var . "?")]))
 
 ; fnmatch + the glob walk: classes, ranges, negation, the mask law
 (test (sh-match "*.l" "job.l") !(sh-match "*.l" "job.c")
@@ -356,7 +356,7 @@
 ; ... and a taken signal re-raised through the condition system is the doc's
 ; "signals arrive as conditions": scare routes it to the installed help policy
 (hear (\ a b ['gotsig a b]))
-(test (= ['gotsig 'sigusr1 (getpid 0)] (scare 'sigusr1 (getpid 0))))
+(test (['gotsig 'sigusr1 (getpid 0)] = scare 'sigusr1 (getpid 0)))
 (hear 0)
 
 ; env nifs: set, read back through environ's raw K=V, absence unsets
@@ -367,7 +367,7 @@
         ((getenv "LOVE_SH_T5") = ()))
 ; $? and export, through the shell's own line entry
 (sh-line "sh -c 'exit 7'",
- test (7 = sh-status ()) ('("7") = sh-fields [(. 'var "?")]))
+ test (7 = sh-status ()) ('("7") = sh-fields [('var . "?")]))
 (sh-line "export LOVE_SH_T6=pier",
  test ("pier" = getenv "LOVE_SH_T6"))
 
@@ -497,10 +497,10 @@
 ; to one application (so infix reads) and one staying as it is. an unfinished or
 ; raising form is a condition handed back, never a raise the shell has to survive.
 (test
- (= 3 >(sh-loveval "1 + 2"))
- (= 262144 >(sh-loveval "2 3 4"))
- (= "hi" >(sh-loveval "\"hi\""))
- (= [1 2 3] >(sh-loveval "[1 2 3]"))
+ (3 = >(sh-loveval "1 + 2"))
+ (262144 = >(sh-loveval "2 3 4"))
+ ("hi" = >(sh-loveval "\"hi\""))
+ ([1 2 3] = >(sh-loveval "[1 2 3]"))
  ('err = <(sh-loveval "(1 +"))
  ('unfinished-form = <>(sh-loveval "(1 +"))
  ('err = <(sh-loveval "nosuchname"))
@@ -516,19 +516,19 @@
 (: w1 (\ sg ('w . [sg]))                        ; a one-segment word token
    ew ('w . [('lit . "echo")])
    (test
-    (= [1 ew (w1 ('lov . "(1 + 2)"))] (sh-lex "echo ${(1 + 2)}"))
-    (= [1 ew ('w . [('lit . "x") ('lov . "(2 3 4)") ('lit . "y")])]
-       (sh-lex "echo x${(2 3 4)}y"))
-    (= [1 ew (w1 ('lov . "(\"}\")"))] (sh-lex "echo ${(\"}\")}"))
-    (= [1 ew (w1 ('lov . "('a)"))] (sh-lex "echo ${('a)}"))
+    ([1 ew (w1 ('lov . "(1 + 2)"))] = sh-lex "echo ${(1 + 2)}")
+    ([1 ew ('w . [('lit . "x") ('lov . "(2 3 4)") ('lit . "y")])]
+       = sh-lex "echo x${(2 3 4)}y")
+    ([1 ew (w1 ('lov . "(\"}\")"))] = sh-lex "echo ${(\"}\")}")
+    ([1 ew (w1 ('lov . "('a)"))] = sh-lex "echo ${('a)}")
     ; the reader wants another line, and 'more is how PS2 is asked for one
     (<(sh-lex "echo ${(1 +") = 'more)
     (<(sh-lex "echo ${(1 + 2)") = 'more)
     ; the two nesting scanners step over the body rather than through it
-    (= [1 ew (w1 ('sub . "echo ${('a)}"))] (sh-lex "echo $(echo ${('a)})"))
-    (= [1 ew (w1 ('vop . ["U" ":-" "${('a)}"]))] (sh-lex "echo ${U:-${('a)}}"))
+    ([1 ew (w1 ('sub . "echo ${('a)}"))] = sh-lex "echo $(echo ${('a)})")
+    ([1 ew (w1 ('vop . ["U" ":-" "${('a)}"]))] = sh-lex "echo ${U:-${('a)}}")
     ; the extent is the reader's, and nothing before it is: the vop lane holds
-    (= [1 ew (w1 ('vop . ["v" "#" "a"]))] (sh-lex "echo ${v#a}"))))
+    ([1 ew (w1 ('vop . ["v" "#" "a"]))] = sh-lex "echo ${v#a}")))
 
 ; the value is a VALUE, not a chomped byte stream: one field, never IFS-split,
 ; never globbed -- quiet like "${x}". Splitting can be bought later; unsplitting
@@ -871,7 +871,7 @@
    (test (1 = <r) ("zz-qq is an alias for echo L\nalias zz-qq='echo L'\n" = >r)))
 ;; times is two lines of the POSIX shape; hash remembers PATH's winners and forgets
 (: r (hark ["out/love" "out/lush" "-c" "times"])
-   (test (2 = #(lines >r)) (all (\ l (= "m" (snip l 1 2))) (lines >r))))
+   (test (2 = #(lines >r)) (all (\ l ("m" = snip l 1 2)) (lines >r))))
 (: r (hark ["out/love" "out/lush" "-c" "hash -r; hash; hash nosuch-qq; echo st=$?; hash sh; hash | sed 's/=.*//'; hash -r; hash"])
    (test ("st=1\nsh\n" = >r)))
 ;; ulimit: -n set both bounds, -S the soft alone, -H reads the hard; an unknown letter

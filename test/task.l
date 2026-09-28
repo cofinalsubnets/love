@@ -45,9 +45,9 @@
  (: a (twirl (\ x (x * 10)) 3)
     b (twirl (\ x (x * 10)) 4)
     c (twirl (\ x (x * 10)) 5)
-    (&& (50 = catch c)
-        (30 = catch a)
-        (40 = catch b)))
+    (50 = catch c
+     && 30 = catch a
+     && 40 = catch b))
 
  ; a task may yield mid-execution and still return its value through wait.
  (: p (twirl (\ x (do (rest 0) (rest 0) (rest 0) (x + 1))) 41)
@@ -106,31 +106,31 @@
  ; task some earlier section left dormant is a task scoop would rightly hand back.
 
  ; an empty ring answers the zero point.
- (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+ (: (drain _) (two? (scoop 0) ? (drain ()) 0)
     _ (drain ())
     !(scoop 0))
 
  ; a finished task comes back whole: the pid in the car, its value in the cdr.
- (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+ (: (drain _) (two? (scoop 0) ? (drain ()) 0)
     _ (drain ())
     p (twirl (\ x (x + 1)) 41)
     _ (rest 0)
     s (scoop 0)
-    ((p = cap s) && (42 = cup s)))
+    (p = <s && 42 = >s))
 
  ; presence rides the pair, never the net. a task run for its effect answers ()
  ; -- most of them do -- and it is still handed back as a pair. a drain that tested
  ; the value rather than the shape would stop dead on the first such task and leave
  ; the ring full while reporting it empty.
- (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+ (: (drain _) (two? (scoop 0) ? (drain ()) 0)
     _ (drain ())
     p (twirl (\ _ ()) ())
     _ (rest 0)
     s (scoop 0)
-    (two? s && ((p = cap s) && nil? >s)))
+    (two? s && p = <s && nil? >s))
 
  ; scooping collects, exactly as catching does: the pid is gone afterwards.
- (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+ (: (drain _) (two? (scoop 0) ? (drain ()) 0)
     _ (drain ())
     p (twirl (\ _ 42) ())
     _ (rest 0)
@@ -138,15 +138,15 @@
     (0 = catch p))
 
  ; a task still running is not harvested -- unfinished is the whole condition.
- (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+ (: (drain _) (two? (scoop 0) ? (drain ()) 0)
     _ (drain ())
-    p (twirl (\ _ (: _ (rest 0) 42)) ())
+    p (twirl (\ _ (rest 0, 42)) ())
     s (scoop 0)
     _ (catch p)
     !s)
 
  ; three finished tasks drain in three scoops, and the fourth answers nothing.
- (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+ (: (drain _) (two? (scoop 0) ? (drain ()) 0)
     (count k) (? (two? (scoop 0)) (count (k + 1)) k)
     _ (drain ())
     _ (twirl (\ _ 1) ()) _ (twirl (\ _ 2) ()) _ (twirl (\ _ 3) ())
@@ -210,7 +210,7 @@
     _ (pin t 'flag 0)
     p (twirl (\ _ (: (loop _) (do (rest 0) (pin t 'flag 1) (loop 0)) (loop 0))) 0)
     r (freeze p)
-    ((1 = r) && (0 = catch p)))
+    (1 = r && 0 = catch p))
 
  ; chill a dormant task (already finished): also returns 1, then wait sees 0.
  (: p (twirl (\ _ 42) 0)
@@ -265,7 +265,7 @@
     p (twirl (\ _ (do (rest 30) 'done)) 0)
     r (catch p)
     elapsed (clock t0)
-    (&& ('done = r) (elapsed >= 30) (elapsed < 80)))
+    ('done = r && elapsed >= 30 && elapsed < 80))
 
  ; tasks with different sleep durations wake in order: shorter sleep
  ; finishes first, longer still sleeping when we check, then completes.
@@ -274,13 +274,13 @@
     ra (catch a)               ; ~10ms; b still sleeping
     db (landed? b)              ; b should still be running
     rb (catch b)               ; ~70ms more
-    (&& (1 = ra) !db (2 = rb)))
+    (1 = ra && !db && 2 = rb))
 
  ; chill a sleeping task: scheduler skips it via wake_at, but chill walks the
  ; ring directly and finds it regardless of state.
  (: p (twirl (\ _ (do (rest 10000) 'never)) 0)
     r (freeze p)
-    ((1 = r) && (0 = catch p)))
+    (1 = r && 0 = catch p))
 
  ; sleep tasks coexist with non-sleeping ones: a worker that yields ap
  ; gets time while another sleeps.
@@ -306,7 +306,7 @@
     _ (wear [() j ()])
     _ (puts "into the jug")
     _ (wear ())
-    (("into the jug" = (slurp j)) && nil? (worn ())))
+    ("into the jug" = slurp j && !(worn ())))
 
  ; a worn tap is what the task reads
  (: _ (wear [(tap '(104 105 33)) () ()])
@@ -317,15 +317,15 @@
  ; per task, across a switch: two tasks wearing different jugs never cross, and
  ; the main task keeps the console through both
  (: a (jug 0) b (jug 0)
-    p (twirl (\ _ (: _ (wear [() a ()]) _ (puts "a1") _ (rest 0) _ (puts "a2") 1)) 0)
-    q (twirl (\ _ (: _ (wear [() b ()]) _ (puts "b1") _ (rest 0) _ (puts "b2") 2)) 0)
+    p (twirl (\ _ (wear [() a ()], puts "a1", rest 0, puts "a2", 1)) 0)
+    q (twirl (\ _ (wear [() b ()], puts "b1", rest 0, puts "b2", 2)) 0)
     _ (catch p) _ (catch q)
-    (&& ("a1a2" = (slurp a)) ("b1b2" = (slurp b)) !(worn ())))
+    ("a1a2" = slurp a && "b1b2" = slurp b && !(worn ())))
 
  ; inherited at spawn: a child says its piece into the jug its parent wears
  (: j (jug 0)
     _ (wear [() j ()])
-    p (twirl (\ _ (: _ (puts "the child's") 0)) 0)
+    p (twirl (\ _ (puts "the child's", 0)) 0)
     _ (catch p)
     _ (wear ())
     ("the child's" = (slurp j)))
@@ -333,9 +333,9 @@
  ; a child that wears its own leaves the parent's alone
  (: a (jug 0) b (jug 0)
     _ (wear [() a ()])
-    p (twirl (\ _ (: _ (wear [() b ()]) _ (puts "child") 0)) 0)
+    p (twirl (\ _ (wear [() b ()], puts "child", 0)) 0)
     _ (catch p)
     _ (puts "parent")
     _ (wear ())
-    (("parent" = (slurp a)) && ("child" = (slurp b))))
+    ("parent" = slurp a && "child" = slurp b))
 )

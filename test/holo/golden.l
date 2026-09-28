@@ -296,7 +296,7 @@
    ;; non-commutative), raising 'alias-dst rather than emitting subtly wrong bytes. the help traps
    ;; that scare and delegates everything else back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
-   _ (hear (\ a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp a b))))
+   _ (hear (\ a b (? (a = 'alias-dst) (pin caught 0 1, ()) (welp a b))))
    _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
@@ -304,7 +304,7 @@
    ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
    ;; (`neg xzr, x0`) that leave sp alone. it raises instead; moving sp is `lea`'s job. --
    spcaught (tablet 0) _ (pin spcaught 0 0)
-   _ (hear (\ a b (? (a = 'a64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp a b))))
+   _ (hear (\ a b (? (a = 'a64-alu-sp) (pin spcaught 0 1, ()) (welp a b))))
    _ (holo-bytes 'a64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
@@ -420,7 +420,7 @@
    _ (chk-eq "elf.magic"   127     (elfimg 0))        ; \x7f E L F
    _ (chk-eq "elf.machine" 62      (elfimg 18))       ; e_machine = x86-64
    _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
-   _ (chk-eq "elf.size"    (120 + (tally (holo-bytes 'x64 elfprog) + 3)) (tally elfimg))
+   _ (chk-eq "elf.size"    (120 + (#(holo-bytes 'x64 elfprog) + 3)) #elfimg)
    _ (chk-eq "elf.a64-machine" 183 ((peep (elf64 'a64 (\ a elfprog) ()) 'bytes 0) 18))
 
    ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
@@ -438,7 +438,7 @@
    _ (chk-eq "elf32.phentsize"  32 (e32img 42))
    _ (chk-eq "elf32.p-offset"   0  (e32img 56))         ; the 64-bit order would put p_flags here
    _ (chk-eq "elf32.p-flags"    7  (e32img 76))         ; ..and it sits here instead
-   _ (chk-eq "elf32.size" (84 + tally (holo-bytes 'thumb2 t32prog)) (tally e32img))
+   _ (chk-eq "elf32.size" (84 + #(holo-bytes 'thumb2 t32prog)) #e32img)
 
    ;; -- `refix`, the linker's door onto the same encoders (link.l's ldarm goes through it and
    ;; knows no instruction format). arm is rel: the field it hands back carries both the addend
@@ -464,7 +464,7 @@
    ;; linking somewhere plausible: the base encoding is rebuilt and compared, so no inverse
    ;; scatter has to exist for the check to be honest.
    rfcaught (tablet 0) _ (pin rfcaught 0 0)
-   _ (hear (\ a b (? (a = 'thumb-refix-addend) (: _ (pin rfcaught 0 1) ()) (welp a b))))
+   _ (hear (\ a b (? (a = 'thumb-refix-addend) (pin rfcaught 0 1, ()) (welp a b))))
    _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same bl two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
 

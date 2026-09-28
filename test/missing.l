@@ -27,7 +27,7 @@
 ; the help hears (help 'missing nom) and its result is the value at the site
 (hear (\ a b (? (a = 'missing) ['missing-was b] 0)))
 (test (: r an-ghost
-           (&& (two? r) ('missing-was = <r) ('an-ghost = (caup r)))))
+           (two? r && 'missing-was = <r && 'an-ghost = <>r)))
 (hear 0)
 
 ; the read of a lambda's free global happens at closure creation (the runtime
@@ -70,7 +70,7 @@
  (43 = (: c 42 d (c + 1) d)))                                ;   reads the previous value, and folds
 
 ; the help hears the cell miss too; the payload is the binding-site nom
-(hear (\ a b (? (&& (a = 'missing) (nom? b) ("an-fwd" = (string b))) 'cell-nom 0)))
+(hear (\ a b (? (a = 'missing && nom? b && "an-fwd" = (string b)) 'cell-nom 0)))
 (test ('cell-nom = (: g (\ _ an-fwd) q (g 0) an-fwd 2 q)))
 (hear 0)
 
@@ -83,8 +83,8 @@
 ; wants from a tablet is presence, and peep answers that totally: a fresh (mint 0)
 ; is unique, so no stored value can pose as it.
 (test (: t {1 0} s (mint 0)
-           (&& !(s = peep t 1 s)        ; a pinned 0 is present, not absent
-               (s = peep t 9 s)         ; an absent key is absent
-               ((:) = (peep t 9 ()))))) ; ... and the caller may still name absence ()
+           (!(s = peep t 1 s)           ; a pinned 0 is present, not absent
+               && s = peep t 9 s         ; an absent key is absent
+               && (:) = (peep t 9 ())))) ; ... and the caller may still name absence ()
 
 (hear test-strict)   ; the empty slot is this file's subject; the corpus resumes strict
