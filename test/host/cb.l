@@ -274,8 +274,8 @@
  _ (test (= [27 91 51 59 55 82] (reply s))     ; "\e[3;7R"
            !(reply s))                        ; drained: quiet
  _ (scribe s "\e[c")
- _ (test (= [27 91 63 54 99] (reply s)))       ; "\e[?6c", a vt102
- _ (scribe s "\eZ")
+ _ (test ("\e[?62;4;22c" = string (reply s)))     ; a vt220, sixel (4) and ansi colour (22)
+ _ (scribe s "\eZ")                              ; DECID: the vt102 answer it always gave
  _ (test (= [27 91 63 54 99] (reply s)))
  _ (scribe s "\e[5n")
  _ (test (= [27 91 48 110] (reply s))))        ; "\e[0n": all well
@@ -294,7 +294,7 @@
  _ (scribe s "\e[>c")
  _ (test (= [27 91 62 48 59 48 59 48 99] (reply s)))     ; secondary da
  _ (scribe s "\e[c")
- _ (test (= [27 91 63 54 99] (reply s))))      ; primary da unchanged
+ _ (test ("\e[?62;4;22c" = string (reply s))))  ; primary da unchanged
 
 ; --- 16. what must be swallowed whole ---
 (: s (mkscr 2 10)
@@ -386,6 +386,102 @@
  s (mkscr 1 8)
  (step cp) (: _ (scribe s "\e[1;1H") _ (scribe s (utf8 cp)) (cur s))
  _ (test (foldl (\ a cp (&& a (step cp = max 0 (wcwidth cp)))) 1 cps)))
+
+; --- 20. sixel: a picture decoded into the store, its tiles laid in cells at the cursor ---
+; a 10x12 picture: red, with blue over the first five columns of the first band. 8x16
+; cells, so it lands as two tiles on one row, and the cursor steps under it
+(: (pic? s i) (1 = (glass s i 0 >> 23 & 1))
+   (slot s i) (glass s i 0 >> 16 & 127)
+   (tx s i) (glass s i 0 >> 8 & 255)
+   red 4294901760 blue 4278190335                    ; 0xff over the rgb: a pixel the picture set
+   img "\eP0;1;0q#0;2;100;0;0#1;2;0;0;100#0!10~$#1!5~-#0!10~\e\\"
+   s (mkscr 4 10)
+   _ (scribe s img)
+   _ (test (pic? s 0) (pic? s 1) !(pic? s 2)
+           (0 < slot s 0) (slot s 0 = slot s 1)
+           (0 = tx s 0) (1 = tx s 1)
+           (10 = cur s))                             ; the line under it, at its column
+   _ (test (blue = tilepx s 0 0 0) (blue = tilepx s 0 4 5)
+           (red = tilepx s 0 5 0) (red = tilepx s 1 1 0)   ; x 9, the last column
+           (red = tilepx s 0 0 6)                    ; the second band
+           (0 = tilepx s 1 2 0)                      ; x 10: past the picture
+           (0 = tilepx s 0 0 12)                     ; y 12: past it
+           !(tilepx s 2 0 0))                        ; no tile at all
+   _ (scribe s "\e[1;1Hx")                           ; text over a tile replaces it
+   _ (test !(pic? s 0) (120 = chat s 0) (pic? s 1)))
+
+; --- 20b. the colour lanes, a scroll, an abort, and a store that sweeps ---
+(: (pic? s i) (1 = (glass s i 0 >> 23 & 1))
+   s (mkscr 3 10)
+   _ (scribe s "\ePq#1;1;120;50;100#1~\e\\")         ; HLS: sixel's 120 degrees is red
+   _ (test (4294901760 = tilepx s 0 0 0))
+   _ (scribe s "\e[3;1H\ePq#2;2;0;100;0#2~\e\\")     ; on the last row: the screen scrolls
+   _ (test !(pic? s 0)                               ; the red one scrolled off the top..
+           (pic? s 10) (4278255360 = tilepx s 10 0 0)   ; ..and the green sits above the cursor
+           (20 = cur s))
+   s2 (mkscr 2 10)
+   _ (scribe s2 "\ePq#0;2;100;0;0!10~\x18z")         ; CAN: the picture is dropped
+   _ (test !(pic? s2 0) (122 = chat s2 0))
+   ; two hundred pictures, each written over at once: the store would hold a few dozen,
+   ; so only the sweep keeps the last one coming
+   s3 (mkscr 4 10)
+   (many n) (? (n < 1) 0 (: _ (scribe s3 "\e[1;1H\ePq#0;2;0;0;100!10~-!10~\e\\\e[1;1Hxy") (many (n - 1))))
+   _ (many 200)
+   _ (scribe s3 "\e[1;1H\ePq#0;2;0;0;100!10~\e\\")
+   _ (test (pic? s3 0) (4278190335 = tilepx s3 0 3 3)))
+
+; --- 20c. the sizes a picture is fitted to, and the graphics asks ---
+(: s (mkscr 4 10)
+ (ask q) (: _ (scribe s q) (string (reply s)))
+ _ (test ("\e[6;16;8t" = ask "\e[16t")                    ; a cell in pixels
+         ("\e[4;64;80t" = ask "\e[14t")                   ; the grid in pixels
+         ("\e[8;4;10t" = ask "\e[18t")                    ; the grid in cells
+         ("\e[?1;0;256S" = ask "\e[?1;1S")                ; 256 registers
+         ("\e[?2;0;80;64S" = ask "\e[?2;1S")              ; the geometry
+         ("\e[?62;4;22c" = ask "\e[c")))                  ; sixel, in the DA
+
+; --- 21. kitty graphics: APC G key=value,..;base64 ST, a subset -- raw pixels, direct ---
+(: (pic? s i) (1 = (glass s i 0 >> 23 & 1))
+   (ask s q) (: _ (scribe s q) (string (reply s)))
+   red 4294901760 blue 4278190335 green 4278255360
+   ; a=T: a 2x2 red placed at the cursor, which then stands beside it on its last row
+   s (mkscr 4 10)
+   _ (test ("\e_Gi=7;OK\e\\" = ask s "\e_Ga=T,f=24,s=2,v=2,i=7;/wAA/wAA/wAA/wAA\e\\")
+           (pic? s 0) !(pic? s 1) (1 = cur s)
+           (red = tilepx s 0 1 1) (0 = tilepx s 0 2 0))
+   ; chunks: m=1 keeps the transfer open, a chunk's keys past m and q are its first's
+   _ (scribe s "\e[2;1H")
+   _ (test ("" = ask s "\e_Ga=T,f=32,s=1,v=1,i=8,m=1;AAD/\e\\")   ; half a pixel: no answer yet
+           !(pic? s 10)
+           ("\e_Gi=8;OK\e\\" = ask s "\e_Gm=0,i=99;/w==\e\\")    ; its i stays 8
+           (pic? s 10) (blue = tilepx s 10 0 0))
+   ; alpha below half is no pixel: the cell's ground shows
+   _ (scribe s "\e[3;1H")
+   _ (scribe s "\e_Ga=T,f=32,s=1,v=1,q=2;////Cg==\e\\")
+   _ (test (pic? s 20) (0 = tilepx s 20 0 0))
+   ; a=t stores by id and places nothing; a=p places it later
+   s2 (mkscr 4 10)
+   _ (test ("\e_Gi=9;OK\e\\" = ask s2 "\e_Ga=t,f=24,s=1,v=1,i=9;AP8A\e\\")
+           !(pic? s2 0) (0 = cur s2)
+           ("\e_Gi=9;OK\e\\" = ask s2 "\e_Ga=p,i=9\e\\")
+           (pic? s2 0) (green = tilepx s2 0 0 0))
+   ; a=q asks and keeps nothing; the errors say which key refused
+   _ (test ("\e_Gi=31;OK\e\\" = ask s2 "\e_Ga=q,i=31,s=1,v=1,f=24;AAAA\e\\")
+           ("\e_Gi=5;EINVAL:format\e\\" = ask s2 "\e_Ga=T,f=100,i=5;AAAA\e\\")
+           ("\e_Gi=6;EINVAL:medium\e\\" = ask s2 "\e_Ga=T,f=24,t=f,s=1,v=1,i=6;AAAA\e\\")
+           ("\e_Gi=99;ENOENT:no such image\e\\" = ask s2 "\e_Ga=p,i=99\e\\")
+           ("\e_Gi=4;EINVAL:short\e\\" = ask s2 "\e_Ga=T,f=24,s=2,v=1,i=4;AAAA\e\\")
+           ("" = ask s2 "\e_Ga=T,f=100,i=5,q=2;AAAA\e\\"))           ; q=2: silence
+   ; c and r: the placement in cells, nearest pixel; C=1 leaves the cursor
+   s3 (mkscr 4 10)
+   _ (scribe s3 "\e_Ga=T,f=24,s=2,v=2,c=2,r=1,C=1;/wAA/wAA/wAA/wAA\e\\")
+   _ (test (pic? s3 0) (pic? s3 1) !(pic? s3 2) !(pic? s3 10)
+           (red = tilepx s3 1 7 15) (0 = cur s3))
+   ; a=d: every placement goes; d=i one image's
+   _ (scribe s "\e_Ga=d,d=i,i=8\e\\")
+   _ (test (pic? s 0) !(pic? s 10))
+   _ (scribe s "\e_Ga=d\e\\")
+   _ (test !(pic? s 0) !(pic? s 20)))
 
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)

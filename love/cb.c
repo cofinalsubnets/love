@@ -16,3 +16,4 @@ LvNif("gaze", nif_gaze, NULL);
 LvNif("reply", nif_reply, NULL);
 LvNif("wet", nif_damage, NULL);
 LvNif("facerow", nif_facerow, NULL);
+LvNif("tilepx", nif_tilepx, NULL);

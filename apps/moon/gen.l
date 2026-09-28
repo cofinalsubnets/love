@@ -5886,14 +5886,7 @@
                     '/ (? (b = 0) 'no (a // b)) '% (b = 0 ? 'no (a - (a // b) * b))
                     'shl (a << b) 'shr (a >> b)
                     '& (a & b) '| (a | b) '^ (a ^ b)
-                    'eq (a = b ? 1 0) 'ne (a = b ? 0 1)
-                    'lt (a < b ? 1 0) 'le (a <= b ? 1 0) 'gt (b < a ? 1 0) 'ge (b <= a ? 1 0)
                     'no)))
-       ('land || 'lor)
-        (: a (icfold <>e) b (icfold <>>e)
-           (? (a = 'no || b = 'no) 'no
-              (<e = 'land) (a != 0 && b != 0 ? 1 0)
-              (a != 0 || b != 0 ? 1 0)))
        'no))
    ; a constant lvalue at image time -> (label byteoffset type) | 'no: a global, *(const ptr),
    ; or a .member off either; the type threads so the next .member scales
@@ -5912,8 +5905,8 @@
    ; folds, or a string or static address, which is never null (the kernel's `"f" ? .. : 0`)
    (imsel g e)
     (: c <>e
-       v (icfold c)
-       t (? (v != 'no) (v != 0)
+       v (cfold !(t32? g) c)
+       t (? (cint? v) (v != 0)
             (two? c && <c = 'str) 1
             (: a (imaddr g c) (? (a = 'no) 'no 1)))
        (? (t = 'no) 'no t <>>e <>>>e))
@@ -6254,12 +6247,17 @@
    ; string, &a.b[k]) -> its "label+k" text, else 'no. a name a local shadows is no constant
    (asmk g env e)
     (: k (memk g e)
+       ; a block-scope static is its data label (the kernel's jump-label key, "i"(&key))
+       (stat x) (? !(two? x) x
+                   (<x = 'var) (: b (assoc <>x env) (? (two? b && two? <>b && <<>b = 'glob) ['var <><>b] x))
+                   (stat <x . stat >x))
+       e2 (stat e)
        (local? x) (? !(two? x) ()
                      (<x = 'var) (two? (assoc <>x env))
                      (local? <x || local? >x))
        (? (charm? k) k
-          (local? e) 'no
-          (: a (imaddr g e)
+          (local? e2) 'no
+          (: a (imaddr g e2)
              (a @ 'no 'no
                   (: nm (nom? <a ? (show <a) <a) (<>a @ 0 nm (<>a < 0 ? (nm + show <>a) (nm + "+" + show <>a))))))))
    ; an operand's byte width, off its type by static peek (a register spells by it on x64)
@@ -7191,7 +7189,10 @@
        (two? f ?
           (: rf (respell f)
              ps <>>rf
-             body <>(rf 3)
+             ; the body's dead arms pruned before any caller splices it: a call types by its
+             ; signature, a cast by its type -- all a body's own typer here
+             (sty e) (e @ ('call ('var n) _) <(peep (g 'sigs) n [()]) ('cast t _) t ())
+             body (dprune !(t32? g) sty <>(rf 3))
              (dps x a) (? !(two? x) a
                           (<x = 'decl) (foldl (\ a2 p (p . a2)) a <>x)
                           (dps >x (dps <x a)))
@@ -7279,7 +7280,7 @@
             (aren <x m . aren >x m)))
    (ainl g f)
     (: rf (respell f)
-       tys {} dn {} tak {} n9 {'k 0} st9 {'s ()}          ; st9: the statement being laid
+       tys {} dn {} tak {} sdn {} n9 {'k 0} st9 {'s ()}   ; st9: the statement being laid; sdn the block statics
        ; the static type of an expression here, by the parser's own typer over the caller's names
        ; (and the spliced bodies' as they are pinned): () where it does not know
        gty (: t (g 'ainlg)
@@ -7291,7 +7292,7 @@
        (cen x)                                     ; the caller's names: types, and which are &-taken
         (? !(two? x) 0
            (x @ ('addr ('var nm)) (pin tak nm 1, 0)
-                (('decl || 'sdecl) ps) (map (p \ (pin tys <p <>p, pin dn <p 1, cen >>p)) ps, 0)
+                (('decl || 'sdecl) ps) (map (p \ (pin tys <p <>p, pin dn <p 1, (? (<x = 'sdecl) (pin sdn <p 1) 0), cen >>p)) ps, 0)
                 (cen <x, cen >x)))
        _ (map (p \ (pin tys <p <>p, pin dn <p 1)) <>>rf)
        _ (cen (rf 3))
@@ -7352,7 +7353,8 @@
                               a (: kc (cfold !(t32? g) <as) (? (cint? kc) ['num kc] <as))   ; a constant arg folded
                               ty9 (? (two? a && <a = 'var) (peep tys <>a 'no) 'no)
                               ax (? (two? a && <a = 'addr && two? <>a && <<>a = 'var) <><>a ())
-                              tx (? (string? ax) (peep tys ax 'no) 'no)
+                              ; (a block static's address costs no frame: it binds as any arg)
+                              tx (? (string? ax && !(sdn ax)) (peep tys ax 'no) 'no)
                               (? (ty9 = <>p && !(tak <>a) && !(wrs? <p bd))
                                   (pin m <p <>a, bind >ps >as pre)
                                  (tx != 'no)
@@ -7390,8 +7392,11 @@
                                         (map lren x)))
                        jend ("`e" + show k)
                        jrv (? (jl && rt != 'void) ("`r" + show k) ())
+                       ; a void body's `return h();` still calls h: only the value has nowhere to go
                        (jr x) (? !(two? x) x
-                                 (<x = 'ret) ['blk (? (jrv && two? >x) [['expr ['asn ['var jrv] (cv <>x rt)]] ['goto jend]] [['goto jend]])]
+                                 (<x = 'ret) ['blk (? (jrv && two? >x) [['expr ['asn ['var jrv] (cv <>x rt)]] ['goto jend]]
+                                                     (two? >x && two? <>x) [['expr <>x] ['goto jend]]
+                                                     [['goto jend]])]
                                  (map jr x))
                        jst (? jl ((? jrv [['decl [[jrv rt]]]] ()) + [['blk (jr (lren rb))] ['lbl jend]]) ())
                        _ (? jrv (pin tys jrv rt) 0)
@@ -7401,7 +7406,10 @@
                                    pm (jst + pt ['var jrv])
                                    xi (jst + into ['var jrv])
                                    jst)
-                             (mode = 'ret) (rc rb)
+                             ; the caller's `return f();`: f's returns are the caller's, and a void f
+                             ; that runs off its end owes the caller's return there too
+                             (mode = 'ret) (rc rb + (? (rt = 'void && !(: rl (rev rb) (two? rl && two? <rl && <<rl = 'ret)))
+                                                      [['ret]] ()))
                              xi (aelim rb (e \ (two? e ? (into e))) 1)
                              (xo || (val? && one)) rb
                              tr1 (: rl (rev rb) r (hx <>(<rl) (nm . d))       ; the trailing return is the test
@@ -7620,7 +7628,22 @@
               (two? fl) fl
               (: r (hxb c d) (<r + [['if <>r (hb t d) (hb e d)]]))))
        (hitems l d) (two? l ? (hs <l d + hitems >l d))
-       [<rf <>rf <>>rf ['blk (hitems <>(rf 3) [<>rf])]])
+       [<rf <>rf <>>rf ['blk (hitems (dprune !(t32? g) ety <>(rf 3)) [<>rf])]])
+   ; a test that folds (in C's types) prunes its dead arm before anything splices into it (gcc's reading:
+   ; `__builtin_constant_p(n) ? f(n) : g(n)` never lays f's "i"(n)). an arm a jump may still
+   ; reach -- a label, a case -- stays; a ?: prunes only where ty types both arms alike, and
+   ; keeps that type by a cast
+   (lbl? x) (? (atom? x) () (elem <x '(lbl case dflt)) 1 (lbl? <x || lbl? >x))
+   (dprune w64 ty x)
+    (? (atom? x) x
+       (x @ ('cond c a b)
+             (: v (cfold w64 c) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
+                (? !t (map (dprune w64 ty) x) ['cast t (dprune w64 ty (v != 0 ? a b))]))
+            ('if c th el)
+             (: v (cfold w64 c)
+                (? (!(cint? v) || lbl? th || lbl? el) (map (dprune w64 ty) x)
+                   (: s (v != 0 ? th el) (? (two? s) (dprune w64 ty s) '(nop)))))
+            (map (dprune w64 ty) x)))
    ; -- respell: a name declared twice in one fn conflates in alive and kprop, so each later decl
    ; respells (nm`2 ..) and its scope's mentions follow; a static local keeps its spelling (its label) --
    (respell f)
@@ -7675,7 +7698,7 @@
    ; written or &-taken, shadowing nothing, reads as its cast literal and its decl drops. runs to a fixpoint --
    (kprop g f)
     (: items <><>>>f
-       dcl {} tak {} wrt {} ivs {}                  ; ivs: the locals an asm names as an immediate
+       dcl {} tak {} wrt {} ivs {} sdl {}           ; ivs: the locals an asm names as an immediate; sdl the block statics
        (cen x c9)                                   ; one walk: the censuses + the decl pairs seen
         (? !(two? x) c9
            (: c8 (x @ ('addr ('var nm)) (pin tak nm 1, c9)
@@ -7690,6 +7713,7 @@
                      (('decl || 'sdecl) ps)
                       (: (dn l a) (? !(two? l) a
                                      (pin dcl <<l (1 + peep dcl <<l 0),
+                                      (? (<x = 'sdecl) (pin sdl <<l 1) 0),
                                       dn >l (? (<x = 'decl && two? >><l) (<l . a) a)))
                          (dn ps c9))
                      c9)
@@ -7697,6 +7721,7 @@
               (cen >x c8)))
        cds (cen items ())
        pns (: (go l a) (? !(two? l) a (go >l (<<l . a))) (go <>>f))
+       (onlys x) (? !(two? x) 1 (<x = 'var) (sdl <>x) (onlys <x && onlys >x))
        (kok nm ty init)
         (? !(1 = peep dcl nm 0) ()
            (tak nm || wrt nm) ()
@@ -7705,7 +7730,9 @@
            (g 'fns nm) ()
            ; a pointer an asm names as an immediate reads as its address constant (a spliced
            ; jump label's key)
-           (ptr? ty) (? (ivs nm && (init @ ('addr . _) 1 ('cast _ ('addr . _)) 1 ()) && imaddr g init != 'no)
+           ; (a block static's address is one too: every name in it one of this fn's statics)
+           (ptr? ty) (? (ivs nm && (init @ ('addr . _) 1 ('cast _ ('addr . _)) 1 ()) &&
+                         (imaddr g init != 'no || onlys init))
                         ['cast ty init] ())
            !(elem ty '(bool char uchar short ushort int uint long ulong)) ()
            (: v (: cv (cfold !(t32? g) init) (? (cint? cv) cv 'no))   ; any constant init, folded in C's types

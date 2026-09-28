@@ -28,6 +28,10 @@ static struct mem *kmem;
 static uintptr_t kram_words;
 
 static struct cb *kcb;
+// the console's picture store: a screenful deep, 8 MB at most -- a dense screen's is
+// capped, and a machine that cannot spare it runs text alone
+static uint32_t k_sn(uintptr_t rows, uintptr_t cols) {
+  return rows * cols <= 16384u ? cb_sdefault(rows, cols) : cb_sdefault(128u, 128u); }
 static uint8_t *kqf;   // the loaded face (/proc/vt/face), vetted, or 0
 
 
@@ -1719,9 +1723,12 @@ static bool k_cb_remake(void) {
   struct cb *const old = kcb;
   uint16_t const orows = old->rows, ocols = old->cols;
   if (rows == orows && cols == ocols) return fbwash(), true;  // same grid, new pixels
-  struct cb *c = kmallocw(b2w(cb_size(rows, cols)));
+  uint32_t sn = k_sn(rows, cols);
+  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn)));
+  if (!c) c = kmallocw(b2w(cb_size(rows, cols, sn = 0)));   // no room for pictures: text alone
   if (!c) return false;
   *c = *old;                           // the pen, the modes, a parser mid-sequence
+  cb_store(c, sn);                     // the pictures stay with the old grid
   c->rows = (uint16_t) rows, c->cols = (uint16_t) cols;
   c->top = 0, c->bot = (uint16_t) (rows - 1u);   // the old region addressed the old rows
   c->flag &= (uint16_t) ~cb_pend;      // a pending wrap named the old last column
@@ -1730,7 +1737,9 @@ static bool k_cb_remake(void) {
   struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };   // new ground in the DEFAULT pen
   for (uintptr_t i = 0, n = rows * cols; i < n; i++) c->cb[i] = blank;
   for (uintptr_t r = from, dr = 0; r < orows && dr < rows; r++, dr++)
-    for (uintptr_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
+    for (uintptr_t k = 0; k < w; k++) {
+      c->cb[dr * cols + k] = old->cb[r * ocols + k];
+      if (c->cb[dr * cols + k].g & cb_pic) c->cb[dr * cols + k].g = 0; }
   c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
   c->spos = cb_carry(old->spos, ocols, from, rows, cols);
   kcb = c;
@@ -1906,8 +1915,10 @@ static bool cbinit(void) {
   const uintptr_t rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
   // kmallocw, not ai_alloc: cbinit runs before ai_ini, so no g exists yet
-  if (!(kcb = kmallocw(b2w(cb_size(rows, cols))))) return false;
-  cb_open(kcb, rows, cols);
+  uint32_t sn = k_sn(rows, cols);
+  if (!(kcb = kmallocw(b2w(cb_size(rows, cols, sn))))
+      && !(kcb = kmallocw(b2w(cb_size(rows, cols, sn = 0))))) return false;
+  cb_open(kcb, rows, cols, sn);
   kcb->flag |= cb_lnm;  // the kernel console's discipline: a bare \n is a newline
   cb_attr(kcb, cb_ink(cb_idx, 15), cb_ink(cb_idx, 0));   // white on black: xterm-256's 15 and 0, what a terminal is
   cb_fill(kcb, 0);

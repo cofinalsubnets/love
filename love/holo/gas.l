@@ -198,6 +198,13 @@
           (= m 'mov)
            (? (<d = 'cr) [['stcr <>d (gx-r s)]]
               (<s = 'cr) [['ldcr (gx-r d) <>s]]
+              ; a segment register: 8C reads it into a register or memory, 8E writes it
+              (<s = 'sr) (? (<d = 'rg) [['ldseg (gx-r d) <>s]]
+                            (<d = 'mem) (: bm (gx-mem d) [['segst <>s <bm <>bm]])
+                            (scare 'gas-x64-operand d))
+              (<d = 'sr) (? (<s = 'rg) [['stseg <>d (gx-r s)]]
+                            (<s = 'mem) (: bm (gx-mem s) [['segld <>d <bm <>bm]])
+                            (scare 'gas-x64-operand s))
               (<d = 'rg)
                (: x (gx-r d)
                   (? (<s = 'im) [['li x (? (w = 4) (<>s & 4294967295) (w = 8) <>s (scare 'gas-x64-width w))]]
