@@ -16,13 +16,14 @@
 ; le32/le64 bare (asbook.l + elf.l re-leak them). moon.l: `mooncc a.o b.c -o prog`.
 (module 'holo
 (borrow 'posix)
+(borrow 'bytes)
 
 (:
    ; little-endian reads off a byte-indexable text; a u64 field can carry a
    ; signed value (a RELA addend), so s64 folds the high half back down
-   (rle16 s i) (s i + 256 * s (i + 1))
-   (rle32 s i) (rle16 s i + 65536 * rle16 s (i + 2))
-   (rle64 s i) (rle32 s i + 4294967296 * rle32 s (i + 4))
+   (rle16 s i) (rdle s i 2)
+   (rle32 s i) (rdle s i 4)
+   (rle64 s i) (rdle s i 8)
    ; a field of any width, little-endian -- the table below asks for 1, 2, 3, 4 and 8
    (rlew s i n) (n < 1 ? 0 (s i + (256 * rlew s (i + 1) (n - 1))))
 

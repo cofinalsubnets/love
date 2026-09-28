@@ -4,6 +4,7 @@
 ; conversions that keep turning up: a little-endian word out of a string, a little-endian
 ; word into a cask, a big-endian pair for the record header, and hex for the tests.
 (module 'tls
+(borrow 'bytes)
 (:
    ; a little-endian 32-bit word off a string at byte offset i. an absent byte reads the
    ; zero point, so a short input is a quiet one -- callers check the length, never this.
@@ -20,7 +21,7 @@
 
    ; the record layer counts in big-endian 16, the one place tls disagrees with the
    ; ciphers about which end a number starts at.
-   (be16 s i) ((s i << 8) + s (i + 1))
+   (be16 s i) (rdbe s i 2)
    (be16! b o v) (: _a (pin b o (v >> 8 & 255)) _b (pin b (o + 1) (v & 255)) 0)
 
    ; an n-byte string, byte i being (f i). the one constructor everything uses.
@@ -30,13 +31,7 @@
        (go 0))
 
    ; lowercase hex, and back. the tests speak hex because the RFCs do.
-   (hex s)
-    (: d "0123456789abcdef" n #s
-       (go i a) (? (n <= i) a (go (i + 1) (a + string (d (s i >> 4)) + string (d (s i & 15)))))
-       (go 0 ""))
-   (unhex h)
-    (: (nib c) (c < 58 ? (c - 48) (c - 87))
-       n (#h // 2)
-       (bytes n (i \ (nib (h (i * 2)) << 4) | nib (h (i * 2 + 1))))))
+   (hex s) (b2hex s)
+   (unhex h) (hex2b h))
 
 ) ; module 'tls
