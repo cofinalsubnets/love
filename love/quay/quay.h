@@ -76,6 +76,15 @@ int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 uint32_t cb_unfold(uint8_t);       // a cp437 glyph byte's codepoint
 uint8_t cb_437(uint32_t cp);       // the cp437 glyph that draws cp: 0xfe, the ■, for none
 uint8_t cb_width(uint32_t cp);     // the columns cp takes: 0 1 or 2, 'text's wcwidth
+int cb_437x(uint32_t cp);          // cb_437, but -1 where the page has no glyph
+
+// a loaded face, as apps/face.l lays it: "qf1\0", the cell's w and h (8 16), npages and
+// nglyphs, then a u16 page per 256 code points, the pages (glyph + 1 per code point, 0 for
+// none), and 16 little-endian u16 rows a glyph, the leftmost pixel high. cb_face_ok vets
+// every index once, so cb_face_rows may trust them; a face is only ever read.
+enum { cb_qf_dir = 4352, cb_qf_head = 12 };
+int cb_face_ok(uint8_t const *b, uintptr_t n);
+uint8_t const *cb_face_rows(uint8_t const *b, uint32_t cp);   // 32 bytes, or 0
 
 struct font { uint8_t const *glyphs, w, h; };
 extern uint8_t const cga_8x8[256][8], cleat_8x16[256][16];
@@ -88,6 +97,7 @@ extern uint8_t const cga_8x8[256][8], cleat_8x16[256][16];
 // stays sharp on a dense display by growing whole pixels, where the alternative is
 // resampling somebody else does. 1 is the bitmap as drawn; 0 paints nothing.
 struct cb_paper { volatile uint32_t *px; uintptr_t pitch, w, h, scale; };
+// qf: a face cb_face_ok passed, or 0 -- the chain is the built-in face, then qf, then the ■
 void cb_paint(struct cb_paper const*, struct cb const*, struct font const*,
-              uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur);
+              uint8_t const *qf, uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur);
 #endif

@@ -20,6 +20,9 @@
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
+//   (facerow f cp r)     -> n    row r of cp's glyph in face f (a string or cask as
+//                                apps/face.l lays it), the leftmost pixel bit 15;
+//                                () when f is no face (cb_face_ok) or lacks cp
 #include "love.h"
 #include "quay.h"
 
@@ -126,6 +129,20 @@ static lvm(lvm_damage) {
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
+// (facerow f cp r): the painter's own reading of a face, vetting and all
+static lvm(lvm_facerow) {
+ word f = Sp[0], out = ZeroPoint;
+ struct ai_str *s = 0;
+ if (!(f & 1) && strp(f)) s = str(f);
+ else if (!(f & 1) && ((union u*) f)->ap == lvm_cask) s = ((struct ai_cask*) f)->str;
+ if (s && (Sp[1] & 1) && (Sp[2] & 1) && cb_face_ok((uint8_t const*) s->bytes, s->len)) {
+  intptr_t cp = getcharm(Sp[1]), r = getcharm(Sp[2]);
+  uint8_t const *g = cp >= 0 && r >= 0 && r < 16
+                     ? cb_face_rows((uint8_t const*) s->bytes, (uint32_t) cp) : 0;
+  if (g) out = putcharm((uintptr_t) g[2 * r] | (uintptr_t) g[2 * r + 1] << 8); }
+ Sp[2] = out;
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
+
 // Workhorse for (reply scr), called with g Packed and the screen at sp[0].
 // Drains the queue into a stack buffer FIRST (ai_have may move the cask),
 // then builds the byte list tail-first. Returns a not-ok g only on OOM.
@@ -158,4 +175,5 @@ static union u const
   nif_glass[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_glass},  {lvm_ret0}},
   nif_gaze[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gaze},   {lvm_ret0}},
   nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
-  nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}};
+  nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
+  nif_facerow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_facerow}, {lvm_ret0}};

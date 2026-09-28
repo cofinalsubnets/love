@@ -417,15 +417,43 @@ static void cb_put1(struct cb *c, uint8_t i) {
 // the built-in faces draw the cp437 page (cp437.h, laid by quay.l): a codepoint's
 // glyph is ascii as itself, else the fold's -- the classic page plus aliases that
 // MEAN one of ours. anything else, astral planes included, wears the ■.
-uint8_t cb_437(uint32_t cp) {
-  if (cp < 0x7f) return (uint8_t) cp;
+int cb_437x(uint32_t cp) {
+  if (cp < 0x7f) return (int) cp;
   uintptr_t lo = 0, hi = sizeof cp437_fold / sizeof *cp437_fold;
   while (lo < hi) {
     uintptr_t m = (lo + hi) / 2;
     uint32_t k = cp437_fold[m] >> 8;
-    if (k == cp) return (uint8_t) cp437_fold[m];
+    if (k == cp) return (int) (cp437_fold[m] & 255u);
     if (k < cp) lo = m + 1; else hi = m; }
-  return 0xfe; }
+  return -1; }
+
+uint8_t cb_437(uint32_t cp) { int g = cb_437x(cp); return g < 0 ? 0xfe : (uint8_t) g; }
+
+static uint32_t cb_rd16(uint8_t const *b, uintptr_t i) { return (uint32_t) b[i] | (uint32_t) b[i + 1] << 8; }
+
+// a face is 12 bytes of head, the directory, the pages and the glyphs, each index in
+// range: a page names a real page, a glyph a real glyph. anything else is no face
+int cb_face_ok(uint8_t const *b, uintptr_t n) {
+  if (!b || n < cb_qf_head + 2u * cb_qf_dir) return 0;
+  if (b[0] != 'q' || b[1] != 'f' || b[2] != '1' || b[3] || b[4] != 8 || b[5] != 16) return 0;
+  uint32_t const np = cb_rd16(b, 6), ng = cb_rd16(b, 8) | cb_rd16(b, 10) << 16;
+  uintptr_t const pg0 = cb_qf_head + 2u * cb_qf_dir, gl0 = pg0 + (uintptr_t) np * 512u;
+  if (np > cb_qf_dir || n != gl0 + (uintptr_t) ng * 32u) return 0;
+  for (uint32_t d = 0; d < cb_qf_dir; d++) {
+    uint32_t const p = cb_rd16(b, cb_qf_head + 2u * d);
+    if (p != 0xffff && p >= np) return 0; }
+  for (uintptr_t k = 0; k < (uintptr_t) np * 256u; k++)
+    if (cb_rd16(b, pg0 + 2u * k) > ng) return 0;
+  return 1; }
+
+// cp's 16 rows in a vetted face, or 0
+uint8_t const *cb_face_rows(uint8_t const *b, uint32_t cp) {
+  if (!b || cp >= 0x110000u) return 0;
+  uint32_t const np = cb_rd16(b, 6), p = cb_rd16(b, cb_qf_head + 2u * (cp >> 8));
+  if (p == 0xffff) return 0;
+  uintptr_t const pg0 = cb_qf_head + 2u * cb_qf_dir;
+  uint32_t const gi = cb_rd16(b, pg0 + (uintptr_t) p * 512u + 2u * (cp & 255u));
+  return gi ? b + pg0 + (uintptr_t) np * 512u + (uintptr_t) (gi - 1u) * 32u : 0; }
 
 // the columns cp takes, off 'text's own runs (cpwidth.h, laid by quay.l): each entry
 // cp << 2 | w opens a run of width w. below U+0300 everything printable is one
