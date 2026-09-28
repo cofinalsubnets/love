@@ -682,7 +682,7 @@
    ; copy: show reads a function back off its words (post.l's lamform)
    s ('\ . (d 'imp + (? (two? os) >>os exp)))
    hk (gv 'natjit 0)
-   r ((!hk ? e (hq ? (hk e s a gv (farq c) (c 'lam) nm iop apx (ic 'l)) e)) . d 'imp)
+   r ((!hk ? e (hq ? (hk e s a gv (farq c) (lamsup c) nm iop apx (ic 'l)) e)) . d 'imp)
    ; the record -- (exp src-tail (entry . imports)), keyed by the node itself -- rides up to the
    ; nearest enclosing lambda's, this closure's entry ahead of its subtree's, so a hook finds an
    ; inner lambda site under its body by identity.
@@ -691,6 +691,10 @@
         (pin up 'l ((? (hq && nm == 0) ([exp (? (two? os) >>os 0) r] . ic 'l) (ic 'l)) + up 'l)))
    r)
   (lamsco c) (? !c 0 (: t (peep c 'inl 0) (? (== t 0) (lamsco (c 'par)) t)))
+  ; every enclosing letrec's lambda siblings, the nearest first: a sibling of an outer letrec is
+  ; called the way a near one is, off its cell and imports the caller carries. a nearer binding of
+  ; the name is a nearer sibling, found first, or a value, which the caller reads as an import
+  (lamsup c) (? !c () (: l (peep c 'lam ()) r (lamsup (c 'par)) (? (two? l) (l + r) r)))
   (farq k x) (? !k 0
                (: f (k 'far)
                   (? (tablet? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))

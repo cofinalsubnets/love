@@ -171,3 +171,11 @@
    _ (test (got = [[() () () ()] [0 () () ()] [0 21 () ()] [0 21 105 84] [252 273 231 210]
                    [['a 1] ['link 1] ['z 1] ['id 1]] ["sa" "slink" "sz" "sid"] [() () () ()]]))
    0)
+; a loop hoisted out of a fn lands right behind it, where a later value binding calling the fn
+; finds it; and a hoisted loop the letrec answers as a value is the hoisted one, partially applied
+; to what it captures
+(: (gzo-f x) (x + 1)
+   (gzo-s n) (: gzo-f (\ x (x * 10)) (h y acc) (? (y = 0) acc (h (y - 1) (acc + gzo-f y))) (h n 0))
+   (gzo-v n) (: (h y acc) (? (y = 0) acc (h (y - 1) (acc + y + n))) h)
+   _ (test (gzo-s 4 = 100) ((gzo-v 0) 4 0 = 10) ((gzo-v 2) 4 0 = 18))
+   0)

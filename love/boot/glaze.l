@@ -1544,7 +1544,9 @@
    ;     in GBODY threaded through g's self-calls, the body becoming (g' FV.. inits..). one level only
    (occurs? s e) (two? e ? (foldl (a \ x \ a || occurs? s x) 0 e) (e = s))                  ; s occurs (syntactically) in e?
    (subst-call g gn fv e) (? (two? e) (<e = g ? (gn . fv + (map (x \ subst-call g gn fv x) >e))   ; (g A..) -> (gn fv.. A'..)
-                                          (map (subst-call g gn fv) e)) e)
+                                          (map (subst-call g gn fv) e))
+                             (e = g) (two? fv ? (gn . fv) gn)                                   ; a bare g -> its partial
+                             e)
    (named-let? e) (two? e && (: nl <e                                                      ; e = ((: (g q..) GBODY) inits..) ?
                       (two? nl && <nl = ': && two? >nl
                        && (: gnf <>nl
@@ -1580,7 +1582,7 @@
     (? !(two? form && <form = ': && two? >form) form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           results (map lift-pair pairs)
-          allpairs (map cap results + (foldl (a \ r \ a + <>r) () results))            ; rewritten originals ++ all the lifted defs
+          allpairs (foldl (a \ r \ a + (<r . <>r)) () results)                       ; each lifted def right behind its fn: a later value binding may call it
           hasbody (1 = #>form % 2)
           (': . (? hasbody (unpair allpairs body) (cbflat allpairs)))))                       ; body-less in, body-less out
    ; --- plift: hoist a read-only self-loop out of a nested `:` to the top level, its captures as leading params -- the case
@@ -1654,7 +1656,7 @@
           extradefs (foldl (a \ r \ a + <>r) () results)
           hasbody (1 = #>form % 2)
         (? (atom? extradefs) form
-         (: allp (map cap results + extradefs)
+         (: allp (foldl (a \ r \ a + (<r . <>r)) () results)                          ; each hoisted def right behind its fn: a later value binding may call it
           (': . (? hasbody (unpair allp body) (cbflat allp))))))) ; body-less in -> body-less out
    ; --- mapfix: a group fn's param peep'd but never tally'd is a map, so (peep h k d) -> (mpeep h k d), the open-addressed
    ;     probe; the entry's mapkind guard backstops the guess -- a non-map arg deopts
