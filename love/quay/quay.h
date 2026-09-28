@@ -41,7 +41,8 @@ enum {              // face bits, the glyph word's top byte
 // cell follows the screen's def_fg/def_bg, so a recolour moves it without a rewrite.
 enum { cb_def = 0, cb_idx = 1, cb_rgb = 2 };
 #define cb_ink(kind, v) ((uint32_t) (kind) << 24 | ((uint32_t) (v) & 0xffffffu))
-#define cb_kind(k)  ((k) >> 24)
+#define cb_kind(k)  (((k) >> 24) & 0x7fu)
+#define cb_soft     ((uint32_t) 1 << 31)   // on a row's last cell's fg: the row wrapped into the next
 #define cb_val(k)   ((k) & 0xffffffu)
 
 enum {              // flag bits: the console's modes
@@ -93,6 +94,7 @@ struct cb {
   // top, hn of them held, the oldest at line hh. view is how many a reader looks back.
   // twin: a grid's room after the history, where the main grid waits out the alternate screen
   uint32_t hl, hh, hn, view, twin;
+  int32_t sel0, sel1;  // the selection: cells [sel0, sel1) as glass counts them, none when equal
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
@@ -133,6 +135,14 @@ uint32_t cb_mouse(struct cb const*, uint8_t *buf, uint32_t b, uint32_t row, uint
 // n bytes of paste as a seat sends them into buf (0 to count): newlines as returns, a crlf one,
 // no controls but tab, in CSI 200~ .. 201~ when the program asked. answers the length
 uintptr_t cb_pasted(struct cb const*, uint8_t *buf, uint8_t const *s, uintptr_t n);
+// cell i: the grid's, or the history's at a negative i (-cols the newest line's first); 0 past
+struct cb_cell const *cb_at(struct cb const*, intptr_t i);
+// select cells a..b, either order, clamped, by cell (unit 0), word (1) or line (2, across soft
+// wraps); any other unit clears. a write to a selected row, or the history leaving, clears it
+void cb_select(struct cb*, intptr_t a, intptr_t b, uint32_t unit);
+// cells [a, b) as utf-8 into buf (0 to count): a wide char once, a cluster's marks after its
+// base, a row's trailing blanks gone, and a newline where a row ended without wrapping
+uintptr_t cb_copied(struct cb const*, uint8_t *buf, intptr_t a, intptr_t b);
 struct cb_img const *cb_img(struct cb const*, uint32_t slot);   // a live picture, or 0
 uint32_t const *cb_ipx(struct cb const*);                       // the store's pixels
 // a PNG of n bytes at the head of a cap-byte region -> 0 and w x h pixels there, or -1

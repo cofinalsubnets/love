@@ -29,12 +29,17 @@
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
 //                                3 flag, 4 top, 5 bot, 6 and 7 a cell's width and
 //                                height in pixels, 8 the lines the view looks back,
-//                                9 the history's lines held; () misuse
+//                                9 the history's lines held, 10 and 11 the selection's
+//                                first cell and the one past its last; () misuse
 //   (peer scr n)         -> n    look n lines back into the history (0 the live
 //                                grid), clamped to what is held; answers the view
 //   (mouse scr b row col how) -> s  the report a pointer event makes as the program asked
 //                                (cb_mouse): b the button with its modifier bits, how
 //                                0 a press, 1 a release, 2 a move; "" when not asked
+//   (select scr a b u)   -> scr  select cells a..b (glass's counting, either order) by
+//                                cell (u 0), word (1) or line (2); another u clears
+//   (copied scr a b)     -> s    cells [a, b) as text (cb_copied): a wide char once, marks
+//                                after their base, newlines where rows did not wrap
 //   (pasted scr s)       -> s    string s as a seat pastes it into this screen (cb_pasted):
 //                                newlines as returns, controls gone, bracketed when
 //                                the program asked (?2004); () misuse
@@ -72,6 +77,7 @@ static struct cb *scr_ok(word x) {
  if (c->hn > c->hl) c->hn = c->hl;
  if (c->hh >= c->hl) c->hh = 0;
  if (c->view > c->hn) c->view = c->hn;
+ if (c->sel0 >= c->sel1 || c->sel0 < -(int32_t) (c->hn * c->cols) || c->sel1 > (int32_t) n) c->sel0 = c->sel1 = 0;
  if (!c->cw || !c->ch) c->cw = 8, c->ch = 16;
  if (c->sslot >= cb_nimg) c->sslot = 0;
  if (c->wpos >= n) c->wpos = 0;
@@ -156,22 +162,16 @@ static lvm(lvm_scribe) {
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
-// cell i of the grid, or of the history at a negative i (-cols the newest line's first); 0 past either
-static struct cb_cell const *scr_cell(struct cb const *c, intptr_t i) {
- intptr_t const back = (intptr_t) c->hn * c->cols;
- return i >= (intptr_t) c->rows * c->cols || i < -back ? 0
-      : i >= 0 ? &c->cb[i] : &cb_hline(c, (uint32_t) ((i + back) / c->cols))[(i + back) % c->cols]; }
-
 // (glass scr i k): look through to one word of one cell.
 static lvm(lvm_glass) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
   intptr_t const k = getcharm(Sp[2]);
-  struct cb_cell const *e = scr_cell(c, getcharm(Sp[1]));
+  struct cb_cell const *e = cb_at(c, getcharm(Sp[1]));
   if (e && k >= 0 && k < 6) {
    uint32_t const *v = cb_clu(c, e->g);
-   out = putcharm(k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg : k == 2 ? e->bg
+   out = putcharm(k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg & ~cb_soft : k == 2 ? e->bg
                   : v ? cb_cp(v[k - 2]) : 0u); } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
@@ -192,6 +192,8 @@ static lvm(lvm_gaze) {
   case 7: out = putcharm(c->ch);   break;
   case 8: out = putcharm(c->view); break;
   case 9: out = putcharm(c->hn);   break;
+  case 10: out = putcharm(c->sel0); break;
+  case 11: out = putcharm(c->sel1); break;
   default: break; }
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
@@ -225,7 +227,7 @@ static lvm(lvm_tilepx) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1) && (Sp[3] & 1)) {
-  struct cb_cell const *e = scr_cell(c, getcharm(Sp[1]));
+  struct cb_cell const *e = cb_at(c, getcharm(Sp[1]));
   intptr_t const x = getcharm(Sp[2]), y = getcharm(Sp[3]);
   if (e && x >= 0 && y >= 0 && x < c->cw && y < c->ch) {
    uint32_t const g = e->g;
@@ -319,6 +321,29 @@ static lvm(lvm_mouse) {
   Sp[4] = word(s); }
  Sp += 4; Ip += 1; ai_musttail return Continue(); }
 
+// (select scr a b u)
+static lvm(lvm_select) {
+ struct cb *c = scr_ok(Sp[0]);
+ word out = ZeroPoint;
+ if (c && (Sp[1] & Sp[2] & Sp[3] & 1)) {
+  intptr_t const u = getcharm(Sp[3]);
+  cb_select(c, getcharm(Sp[1]), getcharm(Sp[2]), u < 0 ? 3u : (uint32_t) u);
+  out = Sp[0]; }
+ Sp[3] = out;
+ Sp += 3; Ip += 1; ai_musttail return Continue(); }
+
+// (copied scr a b): counted first, as pasted is
+static lvm(lvm_copied) {
+ struct cb *c = scr_ok(Sp[0]);
+ if (!c || !(Sp[1] & Sp[2] & 1)) { Sp[2] = ZeroPoint; Sp += 2; Ip += 1; ai_musttail return Continue(); }
+ intptr_t const a = getcharm(Sp[1]), b = getcharm(Sp[2]);
+ uintptr_t const n = cb_copied(c, 0, a, b);
+ Have(str_width(n));
+ struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+ cb_copied(c, (uint8_t*) txt(s), a, b);
+ Sp[2] = word(s);
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
+
 // (pasted scr s): counted first, so Have's restart repeats nothing but the count
 static lvm(lvm_pasted) {
  struct cb *c = scr_ok(Sp[0]);
@@ -344,4 +369,6 @@ static union u const
   nif_regrid[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_regrid},  {lvm_ret0}},
   nif_peer[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peer},    {lvm_ret0}},
   nif_mouse[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mouse},   {lvm_ret0}},
-  nif_pasted[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_pasted},  {lvm_ret0}};
+  nif_pasted[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_pasted},  {lvm_ret0}},
+  nif_select[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_select},  {lvm_ret0}},
+  nif_copied[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_copied},  {lvm_ret0}};

@@ -74,10 +74,10 @@
                            (? (m < 6 && 0 < v) (: _ (say j (utf8 v)) (limn-marks j s k (m + 1))) 0))
 
    ; paint row i cell by cell, threading the pen. a wide char's tail says nothing: the
-   ; outer terminal steps two columns for its lead
+   ; outer terminal steps two columns for its lead. a selected cell wears the reverse face
    (limn-row j s c i q p) (? (q < c)
                            (: k (i * c + q)
-                              g (glass s k 0)
+                              g (: g0 (glass s k 0) (? ((gaze s 10) <= k < (gaze s 11)) (g0 ^ 67108864) g0))
                               (? ((g >> 21 & 3) = 2) (limn-row j s c i (q + 1) p)
                                  ((g >> 23 & 1) = 1) (: _ (say j (limn-tile s k)) (limn-row j s c i (q + 1) -1))
                                  (: p2 (limn-pen g (glass s k 1) (glass s k 2))

@@ -659,6 +659,45 @@
    _ (test (1 = (glass t -10 0 >> 23 & 1)) (blue = tilepx t -10 0 0) (red = tilepx t -9 1 0)
            !(tilepx t -11 0 0)))                        ; past what is held
 
+; --- 27. the selection: cells, words and lines, the text they copy, and what ends it ---
+(: (sel s) [(gaze s 10) (gaze s 11)]
+   s (mkscr 3 10)
+   _ (scribe s "hello big\r\nworld")
+   _ (select s 1 3 0)
+   _ (test ([1 4] = sel s) ("ell" = copied s 1 4))
+   _ (select s 7 2 1)                                  ; either order; a word each end
+   _ (test ([0 9] = sel s) ("hello big" = copied s 0 9))
+   _ (select s 12 12 1)
+   _ (test ([10 15] = sel s))
+   _ (select s 12 12 2)                                ; the line, its blanks trimmed in the copy
+   _ (test ([10 20] = sel s) ("world" = copied s 10 20)
+           ("hello big\nworld\n" = copied s 0 30))     ; newlines where rows end
+   _ (select s 0 2 0)
+   _ (scribe s "\e[3;1Hz")                              ; a write on another row
+   _ (test ([0 3] = sel s))
+   _ (scribe s "\e[1;9Hx")                              ; ... and on its own: gone
+   _ (test ([0 0] = sel s))
+   _ (select s 0 2 0)
+   _ (select s 0 0 -1)
+   _ (test ([0 0] = sel s))
+   w (mkscr 3 5)
+   _ (scribe w "abcdefgh")                             ; row 0 wraps into row 1
+   _ (test ("abcdefgh" = copied w 0 10) (0 = glass w 4 1))   ; one line; glass hides the mark
+   _ (select w 7 7 2)
+   _ (test ([0 10] = sel w))                           ; the line is both rows
+   v (mkscr 2 10)
+   _ (scribe v ("a" + utf8 20013 + "b e" + utf8 769))
+   _ (test (("a" + utf8 20013 + "b e" + utf8 769) = copied v 0 10))   ; a wide char once, a mark kept
+   _ (select v 2 2 0)                                  ; its tail takes the whole of it
+   _ (test ([1 3] = sel v))
+   t (mkscr 2 5)
+   _ (scribe t "ab")
+   _ (select t 0 1 0)
+   _ (scribe t "\r\n\r\n")                             ; its row scrolls into the history
+   _ (test ([-5 -3] = sel t) ("ab" = copied t -5 -3))
+   _ (scribe t "\e[3J")                                 ; the history cleared, the selection too
+   _ (test ([0 0] = sel t)))
+
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")

@@ -8,11 +8,19 @@
 static void cb_pen(struct cb const *c, uint32_t cp, struct cb_cell *e) {
   e->g = cb_gw(cp, c->cur_face), e->fg = c->cur_fg, e->bg = c->cur_bg; }
 
-// mark rows r1..r2 dirty (inclusive; rows past 255 fold onto bit 255).
-static void cb_dirt(struct cb *c, uint32_t r1, uint32_t r2) {
+// mark rows r1..r2 for repainting (inclusive; rows past 255 fold onto bit 255).
+static void cb_dmg(struct cb *c, uint32_t r1, uint32_t r2) {
   if (r1 > 255) r1 = 255;
   if (r2 > 255) r2 = 255;
   for (uint32_t r = r1; r <= r2; r++) c->dmg[r >> 5] |= (uint32_t) 1 << (r & 31); }
+
+// rows r1..r2 were written: marked, and a selection on any of them is over
+static void cb_dirt(struct cb *c, uint32_t r1, uint32_t r2) {
+  int32_t const cs = c->cols;
+  if (c->sel0 != c->sel1 && c->sel1 > 0 && (int32_t) r1 <= (c->sel1 - 1) / cs
+      && (int32_t) r2 >= (c->sel0 > 0 ? c->sel0 / cs : 0))
+    c->sel0 = c->sel1 = 0, r1 = 0, r2 = c->rows - 1u;
+  cb_dmg(c, r1, r2); }
 
 void cb_fill(struct cb *c, uint32_t cp) {
   struct cb_cell cell; cb_pen(c, cp, &cell);
@@ -83,11 +91,15 @@ static struct cb_cell *cb_nth(struct cb *c, uint32_t i);
 static void cb_scup(struct cb *c, uint32_t t, uint32_t b, uint32_t n) {
   if (!n) return;
   if (n > b - t + 1u) n = b - t + 1u;
-  if (!t && !(c->flag & cb_alt)) for (uint32_t r = 0; r < n; r++) cb_keep(c, r);
+  int const kept = !t && !(c->flag & cb_alt);
+  if (kept) for (uint32_t r = 0; r < n; r++) cb_keep(c, r);
   uint32_t cs = c->cols; struct cb_cell e; cb_pen(c, 0, &e);
   for (uint32_t i = t * cs, j = (b + 1u - n) * cs; i < j; i++) c->cb[i] = c->cb[i + n * cs];
   for (uint32_t i = (b + 1u - n) * cs, j = (b + 1u) * cs; i < j; i++) c->cb[i] = e;
-  cb_dirt(c, t, b);
+  if (kept && c->sel0 != c->sel1) {                 // the selection rides up with its text
+    c->sel0 -= (int32_t) (n * cs), c->sel1 -= (int32_t) (n * cs);
+    if (c->sel0 < -(int32_t) (c->hn * cs)) c->sel0 = c->sel1 = 0; }
+  if (kept) cb_dmg(c, t, b); else cb_dirt(c, t, b);
   cb_ride(c, &c->spos, t, b, -1, n); }
 
 static void cb_scdn(struct cb *c, uint32_t t, uint32_t b, uint32_t n) {
@@ -182,6 +194,75 @@ uintptr_t cb_pasted(struct cb const *c, uint8_t *o, uint8_t const *s, uintptr_t 
   if (br) for (int j = 0; shut[j]; j++, k++) if (o) o[k] = (uint8_t) shut[j];
   return k; }
 
+// --- the selection ----------------------------------------------------------------------
+struct cb_cell const *cb_at(struct cb const *c, intptr_t i) {
+  intptr_t const back = (intptr_t) c->hn * c->cols;
+  return i >= (intptr_t) c->rows * c->cols || i < -back ? 0
+       : i >= 0 ? &c->cb[i] : &cb_hline(c, (uint32_t) ((i + back) / c->cols))[(i + back) % c->cols]; }
+
+// a word's cell: not blank, not a picture, not a mark of where words end; a tail is its lead's
+static int cb_wordy(struct cb const *c, intptr_t i, intptr_t row0) {
+  struct cb_cell const *e = cb_at(c, i);
+  if (e && cb_wide(e->g) == cb_tail && i > row0) e = cb_at(c, i - 1);
+  if (!e || e->g & cb_pic) return 0;
+  uint32_t const cp = cb_base(c, e->g);
+  if (cp <= 32) return 0;
+  for (char const *d = "\"'`()[]{}<>,;|"; *d; d++) if (cp == (uint8_t) *d) return 0;
+  return 1; }
+
+// a row's first cell: glass counts rows from 0 down and from -cols up, so floor, not truncate
+static intptr_t cb_row0(struct cb const *c, intptr_t i) {
+  intptr_t const cs = c->cols;
+  return (i >= 0 ? i / cs : -((-i + cs - 1) / cs)) * cs; }
+
+void cb_select(struct cb *c, intptr_t a, intptr_t b, uint32_t unit) {
+  intptr_t const cs = c->cols, lo = -(intptr_t) c->hn * cs, hi = (intptr_t) c->rows * cs - 1;
+  if (unit > 2) {
+    if (c->sel0 != c->sel1) c->sel0 = c->sel1 = 0, cb_dmg(c, 0, c->rows - 1u);
+    return; }
+  if (a > b) { intptr_t const t = a; a = b, b = t; }
+  a = a < lo ? lo : a > hi ? hi : a, b = b < lo ? lo : b > hi ? hi : b;
+  if (unit == 1) {
+    intptr_t const ra = cb_row0(c, a), rb = cb_row0(c, b);
+    if (cb_wordy(c, a, ra)) while (a > ra && cb_wordy(c, a - 1, ra)) a--;
+    if (cb_wordy(c, b, rb)) while (b < rb + cs - 1 && cb_wordy(c, b + 1, rb)) b++; }
+  if (unit == 2) {
+    a = cb_row0(c, a), b = cb_row0(c, b) + cs - 1;
+    while (a > lo && cb_at(c, a - 1)->fg & cb_soft) a -= cs;
+    while (b < hi && cb_at(c, b)->fg & cb_soft) b += cs; }
+  if (a > cb_row0(c, a) && cb_wide(cb_at(c, a)->g) == cb_tail) a--;   // a wide char whole
+  if (b < cb_row0(c, b) + cs - 1 && cb_wide(cb_at(c, b)->g) == cb_lead) b++;
+  c->sel0 = (int32_t) a, c->sel1 = (int32_t) (b + 1);
+  cb_dmg(c, 0, c->rows - 1u); }
+
+static uintptr_t cb_u8(uint8_t *o, uintptr_t k, uint32_t cp) {
+  uint8_t b[4]; int n;
+  if (cp < 0x80) b[0] = (uint8_t) cp, n = 1;
+  else if (cp < 0x800) b[0] = (uint8_t) (0xc0 | cp >> 6), b[1] = (uint8_t) (0x80 | (cp & 63)), n = 2;
+  else if (cp < 0x10000) b[0] = (uint8_t) (0xe0 | cp >> 12), b[1] = (uint8_t) (0x80 | (cp >> 6 & 63)),
+                         b[2] = (uint8_t) (0x80 | (cp & 63)), n = 3;
+  else b[0] = (uint8_t) (0xf0 | cp >> 18), b[1] = (uint8_t) (0x80 | (cp >> 12 & 63)),
+       b[2] = (uint8_t) (0x80 | (cp >> 6 & 63)), b[3] = (uint8_t) (0x80 | (cp & 63)), n = 4;
+  for (int j = 0; j < n; j++, k++) if (o) o[k] = b[j];
+  return k; }
+
+uintptr_t cb_copied(struct cb const *c, uint8_t *o, intptr_t a, intptr_t b) {
+  intptr_t const cs = c->cols, lo = -(intptr_t) c->hn * cs, hi = (intptr_t) c->rows * cs;
+  a = a < lo ? lo : a, b = b > hi ? hi : b;
+  uintptr_t k = 0, kt = 0;                          // kt: past the row's last non-blank
+  for (intptr_t i = a; i < b; i++) {
+    struct cb_cell const *e = cb_at(c, i);
+    intptr_t const col = (i - lo) % cs;
+    if (!(e->g & cb_pic) && !(cb_wide(e->g) == cb_tail && col)) {
+      uint32_t const *v = cb_clu(c, e->g), cp = cb_base(c, e->g);
+      k = cb_u8(o, k, cp ? cp : ' ');
+      for (uint32_t m = 1; v && m < cb_clun && v[m]; m++) k = cb_u8(o, k, v[m]);
+      if (cp > ' ') kt = k; }
+    if (col == cs - 1 && !(e->fg & cb_soft)) {
+      k = kt;
+      if (i + 1 < b) { if (o) o[k] = '\n'; kt = ++k; } } }
+  return k; }
+
 // the OSC asks worth answering: colour queries (ESC]10;? fg, ESC]11;? bg)
 // -- zsh and friends probe the background at line-editor startup and WAIT;
 // silence costs the user a second of buffered keystrokes. the answers are
@@ -273,10 +354,11 @@ static void cb_glyph(struct cb *c, uint32_t cp) {
   uint32_t cs = c->cols, w = cb_width(cp);
   if (!w) return cb_mark(c, cp);
   if (w == 2 && cs < 2) w = 1;
-  if (c->flag & cb_pend)
-    c->flag &= (uint16_t) ~cb_pend, c->wpos -= c->wpos % cs, cb_ind(c);
+  if (c->flag & cb_pend) {                          // the row wraps: its last cell says so
+    c->flag &= (uint16_t) ~cb_pend, c->wpos -= c->wpos % cs;
+    c->cb[c->wpos + cs - 1u].fg |= cb_soft, cb_ind(c); }
   if (w == 2 && c->wpos % cs == cs - 1u) {
-    if (c->flag & cb_wrap) c->wpos -= cs - 1u, cb_ind(c);
+    if (c->flag & cb_wrap) c->wpos -= cs - 1u, c->cb[c->wpos + cs - 1u].fg |= cb_soft, cb_ind(c);
     else c->wpos--; }
   uint32_t const p = c->wpos;
   cb_unpair(c, p);
@@ -328,7 +410,7 @@ static struct cb_cell *cb_ring(struct cb const *c) { return (struct cb_cell*) (c
 struct cb_cell const *cb_hline(struct cb const *c, uint32_t k) {
   return k < c->hn ? cb_ring(c) + (uintptr_t) ((c->hh + k) % c->hl) * c->cols : 0; }
 
-void cb_hist(struct cb *c, uint32_t hl) { c->hl = hl, c->hh = c->hn = c->view = 0; }
+void cb_hist(struct cb *c, uint32_t hl) { c->hl = hl, c->hh = c->hn = c->view = 0, c->sel0 = c->sel1 = 0; }
 
 void cb_twin(struct cb *c, uint32_t on) { c->twin = on ? 1u : 0u; }
 
@@ -342,7 +424,7 @@ struct cb_cell const *cb_seen(struct cb const *c, uint32_t r) {
 
 void cb_peer(struct cb *c, uint32_t n) {
   n = n < c->hn ? n : c->hn;
-  if (n != c->view) c->view = n, cb_dirt(c, 0, c->rows - 1u); }
+  if (n != c->view) c->view = n, cb_dmg(c, 0, c->rows - 1u); }
 
 // a line into the history: the next free one, else the oldest's place. a reader looking
 // back goes on seeing the same lines
@@ -353,7 +435,7 @@ static void cb_line(struct cb *c, struct cb_cell const *row, uint32_t w) {
   else d = cb_ring(c) + (uintptr_t) c->hh * c->cols, c->hh = (c->hh + 1u) % c->hl;
   struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };
   for (uint32_t k = 0; k < c->cols; k++) d[k] = k < w ? row[k] : blank;
-  if (c->view) c->view = c->view < c->hn ? c->view + 1u : c->hn, cb_dirt(c, 0, c->rows - 1u); }
+  if (c->view) c->view = c->view < c->hn ? c->view + 1u : c->hn, cb_dmg(c, 0, c->rows - 1u); }
 
 static void cb_keep(struct cb *c, uint32_t r) { cb_line(c, c->cb + (uintptr_t) r * c->cols, c->cols); }
 
