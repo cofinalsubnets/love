@@ -46,6 +46,7 @@
   ; a big carrier a closure keeps reads as its size; ev keeps its caches so, and prints short
   (has? (show (: t (foldl (\ t i (pin t i i)) {} (jot 40)) (\ x (peep t (x + 1) 0)))) "{..40}")
   (tally (show ev) < 200000)
+  (! (has? (show ev) "((mint "))                     ; every name it calls is bound
   ; --- functions compare by their threads ---
   ((\ p q (p + q)) = (\ a b (a + b)))                   ; names never reach the thread
   (! ((\ a b (a + b)) = (\ a b (a - b))))              ; a different body is different code

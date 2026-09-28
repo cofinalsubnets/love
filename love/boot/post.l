@@ -433,12 +433,21 @@
                        (: n (want C u) (? (#p < #as) [(n . map (ra C) (dp #p as))] [n])))))
    (flat C h as) (rv C h . map (ra C) as)
    ; a let's names are the slots its inits sit in. an init that is a closure names its
-   ; thread, so a reference back to it from its own body or a sibling's reads as the name
-   (rlet C E imps la) (: B (C 'B)
-    _ (each la (\ s (: cl (clo C (res C (peep (C 'D) s ()))) (? cl (pin (C 'R) <cl [s >cl]) 0))))
+   ; thread, so a reference back to it from its own body or a sibling's reads as the name.
+   ; the names hold inside the let alone: a slot the thread reads before it, a cond's test
+   ; with the let in each arm, reads as the value it holds. a lambda that called itself from
+   ; its own reading was a function called, no let: it binds its name, (: n (\ ..) n), and
+   ; takes its captures and inits as args
+   (rlet C E imps la) (: B (C 'B) R (C 'R)
+    rs (catmap (\ s (: cl (clo C (res C (peep (C 'D) s ()))) (? cl [[<cl (peep R <cl ()) s >cl]] ()))) la)
+    _ (each rs (\ r (pin R <r [(r 2) (r 3)])))
     _ (each la (\ s (pin B s 1)))
-    body <>(rbody C E (imps + la))
-    (': . catmap (\ s [s (rinit C s)]) (rev la) + [body]))
+    b (rbody C E (imps + la))
+    n (peep (C 'want) E 0)
+    f (? (mint? n) 0 (': . catmap (\ s [s (rinit C s)]) (rev la) + [<>b]))
+    _ (each la (\ s (pin B s 0)))
+    _ (each rs (\ r (pin R <r (r 1))))
+    (? (mint? n) ([': n ('\ . imps + la + <b + [<>b]) n] . imps + map (rinit C) la) f))
    (rinit C s) (: d (res C (peep (C 'D) s ())) cl (clo C d)
     (? cl (rclo C <cl >cl) (rv C d)))
    ; a closure node: (lambda . capture vars), or ()
@@ -496,7 +505,9 @@
        (: n (mint 0) _ (pin (C 'memo) u n) _ (pin (C 'F) n (rclo C u ())) n)))
    ; a name met from one place outside its own form is that form in place, bound there,
    ; (: n (\ ..) n), when it recurs; one met from more is bound once, in a letrec over the
-   ; whole, as a module binds its helpers. `on` holds the names whose forms are being walked
+   ; whole, as a module binds its helpers. `on` holds the names whose forms are being walked.
+   ; a name bound in place but met again from a helper over the whole is out of its scope
+   ; there: it joins the helpers, and the form is laid again
    (tie C x) (: F (C 'F) out {} own {} seen {} O {'l ()}
     (inq x l) (? (two? l) (== x <l || inq x >l))
     (cw x on) (? (mint? x) (: _ (? (inq x on) (pin own x 1) (pin out x (1 + peep out x 0)))
@@ -505,14 +516,40 @@
                  (atom? x || qot? x) 0
                  (each x (\ e (cw e on))))
     _ (cw x ())
-    (ex x on) (? (mint? x) (? (inq x on || !(two? (peep F x ())) || 1 < peep out x 0) x
-                              (: f (ex (F x) (x . on)) (? (peep own x 0) [': x f x] f)))
-                 (atom? x || qot? x) x
-                 (: y (map (\ e (ex e on)) x) (? (== <y '\) (sole y) y)))
+    ; a form read inside a let may say that let's names, which hold nowhere else: it goes
+    ; in place wherever it is met, never over the whole
+    (fvs y) (: A {'l ()}
+             (fw x sc) (? (mint? x) (? (!(two? (peep F x ())) && !(inq x sc)) (pin A 'l (x . A 'l)) 0)
+                          (atom? x || qot? x) 0
+                          (== <x ':) (: sc2 (lets >x + sc) (each >x (\ e (fw e sc2))))
+                          (== <x '\) (: sc2 (init >x + sc) (each >x (\ e (fw e sc2))))
+                          (each x (\ e (fw e sc))))
+             _ (fw y ())
+             (A 'l))
+    (nms y) (? (mint? y) (? (two? (peep F y ())) [y] ()) (atom? y || qot? y) () (catmap nms y))
+    ; ..and so is a form that holds one
+    (spread t) (: n (foldl (\ n m (? (!(peep t m 0) && any (\ k (peep t k 0)) (nms (F m))) (: _ (pin t m 1) (1 + n)) n)) 0 (O 'l))
+                (? (0 < n) (spread t) t))
+    loc (spread (foldl (\ t m (? (two? (fvs (F m))) (pin t m 1) t)) {} (O 'l)))
+    (ex H x on) (? (mint? x) (? (inq x on || !(two? (peep F x ())) || peep H x 0) x
+                                (: f (ex H (F x) (x . on)) (? (peep own x 0) [': x f x] f)))
+                   (atom? x || qot? x) x
+                   (: y (map (\ e (ex H e on)) x) (? (== <y '\) (sole y) y)))
     ; a lambda in place as a lambda's body sits in a singleton, as rclo leaves one
     (sole y) (: b (last y) (? (two? b && == <b '\ && two? >>b) (init y + [[b]]) y))
-    hs (filter (\ m (1 < peep out m 0)) (rev (O 'l)))
-    (? (two? hs) (': . catmap (\ m [m (ex (F m) [m])]) hs + [(ex x ())]) (ex x ())))
+    (lay H) (: hs (filter (\ m (peep H m 0)) (rev (O 'l)))
+             (? (two? hs) (': . catmap (\ m [m (ex H (F m) [m])]) hs + [(ex H x ())]) (ex H x ())))
+    ; the names met where no (: ..) around them binds them
+    (free y) (: A {'l ()}
+              (fw x sc) (? (mint? x) (? (two? (peep F x ()) && !(inq x sc)) (pin A 'l (x . A 'l)) 0)
+                           (atom? x || qot? x) 0
+                           (== <x ':) (: sc2 (lets >x + sc) (each >x (\ e (fw e sc2))))
+                           (each x (\ e (fw e sc))))
+              _ (fw y ())
+              (A 'l))
+    (fix H) (: y (lay H) fs (filter (\ m !(peep loc m 0) && !(peep H m 0)) (free y))
+             (? (two? fs) (fix (foldl (\ H m (pin H m 1)) H fs)) y))
+    (fix (foldl (\ H m (? (1 < peep out m 0 && !(peep loc m 0)) (pin H m 1) H)) {} (O 'l))))
    ; by `=`: an older compile of the same function is the same function
    (busy? C u) (: (go l) (? (two? l) (u = <l || go >l)) (go (C 'busy)))
    ; the globals and module names by value, the shortest spelling first, then the least. the
