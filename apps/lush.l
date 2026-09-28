@@ -2826,8 +2826,7 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
 ; login(1)'s mark) seats us and makes a login shell, so the scan hands the raw word
 ; back and not just the match.
 (: _ (pins (cite 'verbs 'tab) 'sh sh-main 'lush sh-main)
-   (bn p) (:- (go 0 0) n #p (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n))
-             )
+   bn (cite 'path 'pbase)
    s (cite 'verbs 'fire ["lush" "lush.l" "sh"])
    (two? s ? (: w (bn <s)
               (sh-main (#w && w 0 = 45 ? ("--login" . >s) >s)))))
