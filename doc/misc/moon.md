@@ -450,7 +450,7 @@ no new encoder exists anywhere, every line lands on a backend row test/holo/gold
   operand (`"Ir"`, `"re"`, `"qi"`), among memory a register. A flag output (`"=@ccz"`, x64
   only) is a register its condition sets right after the body, before any store moves the
   flags; the stack-pointer register variable as an output (`"+r"(current_stack_pointer)`, the
-  kernel's call constraint) is `%rsp` as it stands. A `register T v asm("x0")` local pins wherever the asm names it — the
+  kernel's call constraint) is `%rsp` as it stands. A `register T v asm("x0")` local (or gas's `asm("%rdx")`) pins wherever the asm names it — the
   a64/riscv way of pinning, and the only one those dialects have. `%0..%9` substitute (outputs
   first), `%[name]` and `%c[name]` a named one, `%%` a literal `%`; adjacent template strings
   concatenate.

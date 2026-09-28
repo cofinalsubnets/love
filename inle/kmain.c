@@ -21,11 +21,8 @@ uintptr_t khhdm;
 // so the identity map is the same pages without the bit, which is what code needs.
 char *ai_code_window(char *p) { return (char*)((uintptr_t) p - khhdm); }
 
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *kmem;
+#include "ffalloc.h"
+static struct mem *kmem;
 
 // total free RAM in kmem, in words -- meminit sums it; it bounds the collector (g->budget).
 static uintptr_t kram_words;
@@ -398,44 +395,9 @@ void kb_int(const uint8_t code) {
       return; } }
 
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
+void *kmallocw(uintptr_t n) { return ff_alloc(&kmem, n); }
 
-void *kmallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (kmem && kmem->len < n + 2 * Width(struct mem))
-    t = kmem,
-    kmem = t->next,
-    t->next = r,
-    r = t;
-  if (kmem)
-    kmem->len -= n + Width(struct mem),
-    t = after(kmem),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = kmem,
-    kmem = t;
-  return p; }
-
-void kfree(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (kmem && kmem < m)
-    t = kmem,
-    kmem = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (kmem != after(m)) m->next = kmem;
-    else m->len += kmem->len,
-         m->next = kmem->next;
-    kmem = m;
-    if (!r) return; } }
+void kfree(void *p) { ff_free(&kmem, p); }
 
 
 // --- the ramfs: the baked tree, and the copies writes make -----------------

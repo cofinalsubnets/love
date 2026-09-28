@@ -110,60 +110,21 @@ static union u const nif_m7exit[] = {{ai_m7exit}, {lvm_ret0}};
 static struct ai_def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 
 // --- the arena ------------------------------------------------------------
-// The teensy first-fit free list, fed the AN500's 16 MB PSRAM (mps.ram at
+// The first-fit free list (ffalloc.h), fed the AN500's 16 MB PSRAM (mps.ram at
 // 0x60000000) by address -- no linker section, the region is just there.
-// Lengths in words, header included.
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *freelist;
+#include "../ffalloc.h"
+static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x60000000u)
 #define POOL_BYTES ((16u << 20) - 64)   // 64B short of the region edge: a one-past
                                         // read at a block boundary stays inside PSRAM
                                         // (a bus fault at 0x61000000 otherwise)
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
-
-static void *mallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (freelist && freelist->len < n + 2 * Width(struct mem))
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  if (freelist)
-    freelist->len -= n + Width(struct mem),
-    t = after(freelist),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = freelist,
-    freelist = t;
-  return p; }
+static void *mallocw(uintptr_t n) { return ff_alloc(&freelist, n); }
 
 void *malloc(size_t n) { return mallocw(b2w(n)); }
 
-void free(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (freelist && freelist < m)
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (freelist != after(m)) m->next = freelist;
-    else m->len += freelist->len,
-         m->next = freelist->next;
-    freelist = m;
-    if (!r) return; } }
+void free(void *p) { ff_free(&freelist, p); }
 
 #ifdef WAKER
 // --- the waker (-D WAKER): the CROSS-BINARY wake proof ----------------------

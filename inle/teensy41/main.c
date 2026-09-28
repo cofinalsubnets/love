@@ -135,55 +135,16 @@ static struct ai_def defs[] = {
 // --- the arena ------------------------------------------------------------
 // The generational collector is the ONLY collector, and it draws its pools
 // through ai_alloc, whose default rides malloc/free (love/love.c). So the frontend
-// supplies those: a first-fit free list over a static arena in OCRAM2 (the inle
-// kernel's kmallocw/kfree, shrunk to one region), with the C stack above it
-// under __stack_top__. Lengths are in words, header included.
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *freelist;
+// supplies those: a first-fit free list (ffalloc.h) over a static arena in OCRAM2,
+// with the C stack above it under __stack_top__.
+#include "../ffalloc.h"
+static struct mem *freelist;
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
-
-static void *mallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (freelist && freelist->len < n + 2 * Width(struct mem))
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  if (freelist)
-    freelist->len -= n + Width(struct mem),
-    t = after(freelist),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = freelist,
-    freelist = t;
-  return p; }
+static void *mallocw(uintptr_t n) { return ff_alloc(&freelist, n); }
 
 void *malloc(size_t n) { return mallocw(b2w(n)); }
 
-void free(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (freelist && freelist < m)
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (freelist != after(m)) m->next = freelist;
-    else m->len += freelist->len,
-         m->next = freelist->next;
-    freelist = m;
-    if (!r) return; } }
+void free(void *p) { ff_free(&freelist, p); }
 
 // --- entry ----------------------------------------------------------------
 // cstartup (teensy41.c) has set up the FPU, .data/.bss, VTOR, clocks, and the
