@@ -30,7 +30,8 @@
        (? (ours = theirs) 1
           (n > 2 && ours = (snip theirs 0 (n - 1)) && elem (theirs (n - 1)) '(98 119 108 113)) 1
           (: k (xa-att-nil (name theirs)) (nom? k && ours = show k)) 1
-          (theirs = "movsl" && ours = "movsd") 1
+          (: k (xa-strl (name theirs)) (nom? k && ours = show k)) 1       ; movsl, insl
+          (elem theirs '("stos" "lods" "scas") && starts? ours theirs) 1   ; the width in the operand
           (theirs = "movabs" && ours = "mov") 1
           0))
    misses {}                                        ; objdump's mnemonic -> how often we missed it

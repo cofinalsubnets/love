@@ -132,19 +132,25 @@
    (gx-sop w) (w @ 8 'st 4 'st4 2 'st2 'st1)
    (gx-iop w) (w @ 8 'si 4 'si4 2 'si2 'si1)
    gx-nils (gtab '((cli cli) (sti sti) (hlt hlt) (ud2 ud2) (iretq iretq) (swapgs swapgs)
-                   (pushf pushf) (pushfq pushf) (popf popf) (popfq popf) (lock lock)
+                   (pushf pushf) (pushfq pushf) (popf popf) (popfq popf) (lock lock) (rep rep) (repne repne)
                    (rdmsr rdmsr) (wrmsr wrmsr) (cpuid cpuid) (rdtsc rdtsc)
                    (vmrun vmrun) (vmload vmload) (vmsave vmsave) (stgi stgi) (clgi clgi)
                    (vmlaunch vmlaunch) (vmxoff vmxoff) (cld cld)
                    (inb inb) (inw inw) (inl inl) (outb outb) (outw outw) (outl outl)
-                   (insb insb) (insw insw) (insl insl) (outsb outsb) (outsw outsw) (outsl outsl)
                    (nop nop) (ret ret) (syscall sys) (int3 trap)
                    (pause pause) (mfence mfence) (lfence lfence) (sfence sfencex)
-                   (stc stc) (clc clc) (cmc cmc)))   ; sfencex: rv64's sfence is sfence.vma
+                   (stc stc) (clc clc) (cmc cmc) (stac stac) (clac clac)))   ; sfencex: rv64's sfence is sfence.vma
+   ;; the string ops by Intel's names -> (stem width); the port pair has no q
+   gx-str (gtab (catmap (\ s (map (\ p [(name (show s + <p)) [s <>p]])
+                                  ((elem s '(ins outs)) ? '(("b" 1) ("w" 2) ("d" 4))
+                                     '(("b" 1) ("w" 2) ("d" 4) ("q" 8)))))
+                  '(movs cmps stos lods scas ins outs)))
    gx-alu '(add sub and or xor imul)
    gx-cc (gtab '((je eq) (jz eq) (jne ne) (jnz ne) (jl lt) (jle le) (jg gt) (jge ge)
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
+   ;; set<cc> -> its condition, the jump's suffix read off the table above
+   (gx-setcc m) (: t (show m) (#t > 3 && starts? t "set" ? (gx-cc (name ("j" + snip t 3 #t))) ()))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
    gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp test inc dec not neg bt bts btr btc adc sbb)
    ; a memory operand -> (base off): a register base, or 'rip and (sym k) for `sym+k(%rip)` and
@@ -171,12 +177,14 @@
     (: k #ops w (w0 > 0 ? w0 8)
        d (k > 0 ? (ops 0) ()) s (k > 1 ? (ops 1) ())
        (? (ghas? gx-nils m) [[(gx-nils m)]]
+          (k = 0 && two? (peep gx-str m ())) (: e (gx-str m) [['str <e <>e]])
           (two? (peep gx-ext m ()))
            (: e (gx-ext m) x (gx-r d)
               (? (<s = 'rg) [['mov x (gx-r s)] [<e x]]
                  (<s = 'mem) (: bm (gx-mem s) [[<>e x <bm <>bm]])
                  (scare 'gas-x64-operand s)))
           (ghas? gx-cc m) [['br (gx-cc m) <>d]]
+          (k = 1 && nom? (gx-setcc m)) [['set1 (gx-setcc m) (gx-r d)]]
           (= m 'jmp) (? (<d = 'lbl) [['jmp <>d]] (<d = 'ind) [['jmpr (gx-r <>d)]] (scare 'gas-x64-operand ops))
           (= m 'call) (? (<d = 'lbl) [['call <>d]] (<d = 'ind) [['callr (gx-r <>d)]] (scare 'gas-x64-operand ops))
           (= m 'int) [['int (gx-imm d)]]
