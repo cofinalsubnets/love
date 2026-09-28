@@ -147,7 +147,7 @@
        be (peep backends target ())
        rset '(b bcc bl)                              ; thumb internal branches are pc-relative -> resolve in place
        wkset (o-names wknames)
-       nsec (tally secs)
+       nsec #secs
        _ (0 >= nsec ? (scare 'obj-no-sections target))
        (exec? s) (0 < s 2 & 4)
        ; one section is one lay: the executable ones through the relaxer, the rest plain.
@@ -401,13 +401,13 @@
        ('(65) + le32 (10 + #sub) + o-strbytes "aeabi" + '(0) + sub))
 
    (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
-    (: _ (? (two? imgforms) (scare 'obj-image-arm32 target) 0)
-       [[".text"   1 6 4 textforms]
-        [".rodata" 1 2 (o-dalign 4 rodataforms) rodataforms]
-        [".data"   1 3 (o-dalign 4 dataforms) dataforms]
-        [".bss"    8 3 (o-dalign 4 bssforms) bssforms]
-        ["love_nifs" 1 3 4 nifforms]
-        [".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]])   ; SHT_ARM_ATTRIBUTES
+    (two? imgforms ? (scare 'obj-image-arm32 target) 0,
+     [[".text"   1 6 4 textforms]
+      [".rodata" 1 2 (o-dalign 4 rodataforms) rodataforms]
+      [".data"   1 3 (o-dalign 4 dataforms) dataforms]
+      [".bss"    8 3 (o-dalign 4 bssforms) bssforms]
+      ["love_nifs" 1 3 4 nifforms]
+      [".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]])   ; SHT_ARM_ATTRIBUTES
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
     (: target (arch-nom target0)

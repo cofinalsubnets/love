@@ -119,7 +119,7 @@
                     (? (bmrun? (w ^ -1))
                        (: c (bmclo w) [(64 - c) (c + (bmones w 0) - (64 - e))])
                        ())))
-            (? (= () r) (scare 'a64-bitmask-imm imm)
+            (? (r = ()) (scare 'a64-bitmask-imm imm)
                (: i <r
                   ct <>r
                   immr ((e - i) & (e - 1))
@@ -440,7 +440,7 @@
    (a64-addsh dn bn ixn amt) (le32 (0x8B000000 | ((ixn << 16) | ((amt << 10) | ((bn << 5) | dn)))))   ; add Xdn, Xbn, Xixn, lsl #amt
    ;; ..but a register offset is one word: LDR/STR Xt|Dt|St|Wt, [Xn, Xm, LSL #s] takes no displacement
    ;; and a scale of 1 or the element's own size (S = 1 shifts by log2 size)
-   (a64-norof _) (: s (getenv "MOON_ABLATE") (string? s && (= s "rof" || (= s "fsel,rof"))))   ; MOON_ABLATE=rof prices the word
+   (a64-norof _) (: s (getenv "MOON_ABLATE") (string? s && (s = "rof" || s = "fsel,rof")))   ; MOON_ABLATE=rof prices the word
    (a64-rof? scale disp sz) (disp = 0 && (scale = 1 || scale = sz) && !(a64-norof 0))
    (a64-rofs base dn bn ixn s) (le32 (base | ((ixn << 16) | ((3 << 13) | ((s << 12) | ((bn << 5) | dn))))))
    (a64-ldx d base index scale disp)
@@ -466,7 +466,7 @@
       (? (a64-rof? scale disp 4) (a64-rofs 0xBC200800 (frn s) (rn base) (rn index) (? (scale = 4) 1 0))  ; str Ss, [base, index, lsl #2]
          (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale)) (a64-mem-raw 0xBC000000 0xBD000000 4 (frn s) 16 disp)]))
    ;; cmov: d <- s when cond holds = csel Xd, Xs, Xd, cond; d = s would be a no-op wearing a select: refused
-   (a64-cmov cond d s) (: dn (rn d) sn (rn s) (? (= dn sn) (scare 'cmov-alias d) (a64-wsel dn sn dn cond)))
+   (a64-cmov cond d s) (: dn (rn d) sn (rn s) (? (dn = sn) (scare 'cmov-alias d) (a64-wsel dn sn dn cond)))
    ;; byte indexed load/store (the string/cask/map byte lanes). LDRB zero-extends to W (clearing the top
    ;; 32 of X, == x86 movzx); strb stores the low byte. disp is a raw BYTE offset (no scaling), unsigned
    ;; 12-bit. Same address synthesis as ldx/stx: ldxb borrows the dest as the address temp, stxb uses x16.
@@ -555,7 +555,7 @@
    a64-dc-ops {'ivac (sreg 1 0 7 6 1) 'zva (sreg 1 3 7 4 1) 'cvac (sreg 1 3 7 10 1)
                'cvau (sreg 1 3 7 11 1) 'civac (sreg 1 3 7 14 1)}
    a64-at-ops {'s1e1r (sreg 1 0 7 8 0) 's1e1w (sreg 1 0 7 8 1)}
-   (a64-sysrt t) (? (= t 'zr) 31 (rn t))
+   (a64-sysrt t) (t = 'zr ? 31 (rn t))
    (a64-sys tab bad op t) (le32 (0xD5000000 | (look tab op bad | a64-sysrt t)))
 
    ;; exception generation: one shape, Dxxx | (imm16 << 5) | ll. `dbrk` is a64's hlt -- the
@@ -563,9 +563,9 @@
    ;; stops the core and is a different instruction entirely. udf is the permanently-undefined
    ;; word, all zeros, and takes no head at all.
    (a64-exc base imm)
-      (: _ (? ((imm >= 0) && (imm <= 65535)) 0 (scare 'a64-exc-imm imm))
-         (le32 (base | (imm << 5))))
-   (a64-udf imm) (: _ (? ((imm >= 0) && (imm <= 65535)) 0 (scare 'a64-exc-imm imm)) (le32 imm))
+      (imm >= 0 && imm <= 65535 ? 0 (scare 'a64-exc-imm imm),
+       le32 (base | (imm << 5)))
+   (a64-udf imm) (imm >= 0 && imm <= 65535 ? 0 (scare 'a64-exc-imm imm), le32 imm)
 
    ;; the dispatch: an emitter tablet (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their words outright, `raw` the identity. the alu group pins off its rows.
