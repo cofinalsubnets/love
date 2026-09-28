@@ -66,10 +66,15 @@
    (byte n)  (n & 255)
    (le16 n)  [(byte n) (byte (n >> 8))]
    (le32 n)  [(byte n) (byte (n >> 8)) (byte (n >> 16)) (byte (n >> 24))]
-   (le64 n)  (: u (? (n < 0) (n + 18446744073709551616) n)                            ; two's-complement into [0,2^64)
-              ((: (go i) (? (i < 8) (((u // i 256) % 256) . go (i + 1)) ())) 0))       ; 8 LE bytes via //% (i 256)=256^i
+   (le64 n)  (: u (u64 n) ((: (go i) (? (i < 8) (((u // i 256) % 256) . go (i + 1)) ())) 0))   ; 8 LE bytes via //%
+   (u64 n) (n < 0 ? (n + 18446744073709551616) n)                     ; two's-complement into [0,2^64)
+   (s64 n) (n > 9223372036854775807 ? (n - 18446744073709551616) n)   ; a u64 pattern as the signed value it encodes
    (fits8  n) ((n >= -128) && (n <= 127))
    (fits32 n) ((n >= -2147483648) && (n <= 2147483647))
+   ;; IR condition -> the 4-bit arm cond field, one encoding for a64, thumb2 and thumb1.
+   ;; p/np (x86 parity: ucomisd's unordered bit) alias vs/vc: fcmp parks unordered in V
+   arm-cc {'eq 0 'ne 1 'ae 2 'below 3 's 4 'ns 5 'vs 6 'vc 7 'p 6 'np 7
+           'above 8 'be 9 'ge 10 'lt 11 'gt 12 'le 13}
 
    ;; -- a register operand is a symbol, an immediate a number. --
    (reg? x)  !(constellation? x)

@@ -19,11 +19,10 @@
 
 (:
    ; little-endian reads off a byte-indexable text; a u64 field can carry a
-   ; signed value (a RELA addend), so sg64 folds the high half back down
+   ; signed value (a RELA addend), so s64 folds the high half back down
    (rle16 s i) (s i + 256 * s (i + 1))
    (rle32 s i) (rle16 s i + 65536 * rle16 s (i + 2))
    (rle64 s i) (rle32 s i + 4294967296 * rle32 s (i + 4))
-   (sg64 v) (v < 9223372036854775808 ? v (v - 18446744073709551616))
    ; a field of any width, little-endian -- the table below asks for 1, 2, 3, 4 and 8
    (rlew s i n) (n < 1 ? 0 (s i + (256 * rlew s (i + 1) (n - 1))))
 
@@ -68,7 +67,6 @@
    ; after v, plus f's own place in a page -- the least address that begins a fresh page
    ; and still answers p_vaddr = p_offset (mod a). a < 2 packs tight, sharing no segments.
    (ld-lift a v f) (a < 2 ? v ((ld-align a v) + (f % a)))
-   (ld-fits32 v) (-2147483648 <= v <= 2147483647)
    ; relocation field arithmetic is 64-bit modular, and % is truncated in this dialect --
    ; a negative sum comes back negative, so fold it up.
    (ld-u64 v) (: r (v % 18446744073709551616)
@@ -275,7 +273,7 @@
                                            (es (i - 1)
                                                ([(ld-f fs s e 'rl-off) (ld-f fs s e 'rl-kind)
                                                  (ld-f fs s e 'rl-sym)
-                                                 (two? ad ? (sg64 (ld-f fs s e 'rl-add)))] . acc))))
+                                                 (two? ad ? (s64 (ld-f fs s e 'rl-add)))] . acc))))
                           (<r . es (n - 1) ())))
                   (filter (\ r (? (two? (secs <r)) 1
                                   (drops <r) ()
@@ -597,7 +595,7 @@
                         (ldarm be s (off0 + ro) sv kind (base + ro)
                          . (snip s pos (off0 + ro) . acc))))
                  (: sa (ld-u64 (sv + ad))              ; S + A, wrapped as a linker wraps it
-                    prel (sg64 (ld-u64 (sa - (base + ro))))            ; ..and S + A - P, signed
+                    prel (s64 (ld-u64 (sa - (base + ro))))            ; ..and S + A - P, signed
                     abs64? (? rv (kind = 2) (elem kind '(1 257)))   ; R_RISCV_64 / R_X86_64_64 / R_AARCH64_ABS64
                     ; R_X86_64_32 / _32S: S + a absolute into a 4-byte field. always a
                     ; foreign object's -- we emit the 64-bit or pc-relative form.
@@ -619,12 +617,12 @@
                           abs32?                                       ; ..and the two abs32, range-checked
                            ; _32 is unsigned and _32S signed, so each reads the wrapped sum
                            ; its own way and checks its own range.
-                           (: v (kind = 10 ? sa (sg64 sa))
-                              _ (kind = 10 && v <= 4294967295 || ld-fits32 v ? 0 (scare 'link-range <sy))
+                           (: v (kind = 10 ? sa (s64 sa))
+                              _ (kind = 10 && v <= 4294967295 || fits32 v ? 0 (scare 'link-range <sy))
                               (le32 v))
                           (elem kind '(2 4 261) || (rv && kind = 57))
                            (: v prel                          ; pc32/plt32/32_pcrel: S + A - P
-                              _ (ld-fits32 v ? 0 (scare 'link-range <sy))
+                              _ (fits32 v ? 0 (scare 'link-range <sy))
                               (le32 v))
                           ; an instruction field: the encoding is the backend's, and () says
                           ; the target is past the field's reach
