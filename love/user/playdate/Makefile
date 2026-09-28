@@ -52,7 +52,7 @@ mc_ld_alt = -t thumb2sp -Ttext 0x100000 -nostdlib --emit-relocs
 
 # the lcat lib headers this frontend bakes (produced by the root's rules on
 # love0, delegated below so a standalone make works from a clean tree)
-lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev rune)
+lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg p1 prel ev post rune)
 pd_h = $(love_h) $(wildcard $(R)/love/quay/*.h) $(o)/cas.h $(lib_hs)
 
 # the split: mooncc carries love/love.c + am + quay + main.c; gcc carries pdglue.c

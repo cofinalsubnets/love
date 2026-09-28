@@ -447,13 +447,14 @@ test_moon: host $(love0)
 	@$(gsh) test/gate/moon.sh $(ho) $m $(love0)
 # the committed generated artifacts, laid from the tables that define them (love/mx.l the +/*
 # matrices and the kind lattice, love/nifs.l the nif + instruction registry, quay.l the
-# xterm-256 palette and the cp437 page host and kernel share). `make mx` refreshes, test_clay diffs.
+# xterm-256 palette, the cp437 page and the widths host and kernel share). `make mx` refreshes, test_clay diffs.
 # mx.h/kinds.h/nifs.h are core headers, so the gate after a refresh is `make test`, not
 # test_clay alone. each is written aside and moved only once the whole set lays.
 # dest:source:value:shape-check -- one roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
 mx_gen = love/mx.h:love/mx.l:mx-h:mx-ok love/kinds.h:love/mx.l:kinds-h:mx-ok love/nifs.h:love/nifs.l:nifs-h:nifs-ok \
-         love/quay/xterm256.h:love/quay/quay.l:q-c:q-ok love/quay/cp437.h:love/quay/quay.l:q-437:q-437-ok love/love_data.ld:love/mx.l:mx-ld:mx-ok
+         love/quay/xterm256.h:love/quay/quay.l:q-c:q-ok love/quay/cp437.h:love/quay/quay.l:q-437:q-437-ok \
+         love/quay/cpwidth.h:love/quay/quay.l:q-wid:q-wid-ok love/love_data.ld:love/mx.l:mx-ld:mx-ok
 # the \# escapes are load-bearing: a bare # in a make variable starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
@@ -462,7 +463,7 @@ mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'love/mx.h love/kinds.h love/nifs.h xterm256.h cp437.h love/love_data.ld "(love/mx.l + love/nifs.l + quay.l on $m)"
+	@echo 'LOVE	'love/mx.h love/kinds.h love/nifs.h xterm256.h cp437.h cpwidth.h love/love_data.ld "(love/mx.l + love/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # ...and the dependency, off the same roster: without it a new love/nifs.l row builds clean and
@@ -498,7 +499,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: love/mx.h, love/kinds.h, love/nifs.h, xterm256.h, cp437.h and love/love_data.ld regenerate identically"
+	@echo "clay-mx: love/mx.h, love/kinds.h, love/nifs.h, xterm256.h, cp437.h, cpwidth.h and love/love_data.ld regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 # test_moonfuzz -- moon's refusal surface: each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no scare, no hang -- plus G1 on every mutant that

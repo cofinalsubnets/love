@@ -16,7 +16,9 @@ struct cb_cell { uint32_t g, fg, bg; };
 
 #define cb_gw(cp, face) (((uint32_t) (cp) & 0x1fffffu) | (uint32_t) (uint8_t) (face) << 24)
 #define cb_cp(g)    ((g) & 0x1fffffu)
+#define cb_wide(g)  (((g) >> 21) & 3u)
 #define cb_face(g)  ((uint8_t) ((g) >> 24))
+enum { cb_lead = 1, cb_tail = 2 };  // the width field: a wide char's two halves
 
 enum {              // face bits, the glyph word's top byte
   cb_bold = 1, cb_under = 2, cb_rev = 4, cb_dim = 8,
@@ -73,6 +75,7 @@ void
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 uint32_t cb_unfold(uint8_t);       // a cp437 glyph byte's codepoint
 uint8_t cb_437(uint32_t cp);       // the cp437 glyph that draws cp: 0xfe, the ■, for none
+uint8_t cb_width(uint32_t cp);     // the columns cp takes: 0 1 or 2, 'text's wcwidth
 
 struct font { uint8_t const *glyphs, w, h; };
 extern uint8_t const cga_8x8[256][8], cleat_8x16[256][16];
