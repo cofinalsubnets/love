@@ -3,6 +3,8 @@
 ; reads a line. the window's pixels come back through GetImage: the red is there, laid by
 ; the console's own painter (dye). then `a` and Return go in through XTEST -- pier's key
 ; path to the pty -- and the child, having read `a`, paints two green cells a row down.
+; a second Return scrolls both off the top, and shift+PgUp looks back through the history
+; until the red is in the corner again; a plain key brings the view home.
 ; the child's exit takes pier with it, status 0. no Xvfb on the box -> a polite skip.
 ;   cat test/00-init.l test/host/pier.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
@@ -18,7 +20,7 @@
               0 0)
    dn (rdnum >xv)
    _ (test (charm? dn))
-   kid "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; sleep 4"
+   kid "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; read l; i=0; while [ $i -lt 80 ]; do echo; i=$((i+1)); done; sleep 4"
    ph (tether ["out/love" "pier" "-display" (":" + show dn) "sh" "-c" kid])
    _ (rest 2500)
    XW (cite 'xwire)
@@ -53,6 +55,16 @@
    _ (fake 2 38) _ (fake 3 38) _ (fake 2 36) _ (fake 3 36)
    _ (rest 1500)
    _ (test ([0 128 0] = px 0 16))                      ; a row down: the green, the child read `a`
+   _ (fake 2 36) _ (fake 3 36)                         ; Return: eighty lines scroll it all away
+   _ (rest 1500)
+   _ (test ([0 0 0] = px 0 0))
+   (pgup n) (? (0 < n) (: _ (fake 2 50) _ (fake 2 112) _ (fake 3 112) _ (fake 3 50) (pgup (n - 1))) 0)
+   _ (pgup 6)                                          ; shift+Prior, six times: past the top
+   _ (rest 1000)
+   _ (test ([128 0 0] = px 0 0))                       ; the history's first line, in the corner
+   _ (fake 2 50) _ (fake 3 50) _ (fake 2 38) _ (fake 3 38)   ; shift alone says nothing; `a` goes home
+   _ (rest 1000)
+   _ (test ([0 0 0] = px 0 0))
    _ (close s)
    st (wfx <ph)
    _ (test (two? st) (0 = <st))                        ; the child's exit took pier with it

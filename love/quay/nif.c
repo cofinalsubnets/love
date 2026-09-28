@@ -10,17 +10,27 @@
 //                         | n    b not a cask: the byte count a (cask n) needs,
 //                                so the ctor is (screen (cask (screen () r c)) r c);
 //                                the count carries a store a screenful of pictures deep
+//                                and a thousand lines of history
 //                         | ()   misuse: cask too small, or silly geometry
 //   (scribe scr x)       -> scr  feed x through the VT parser: a byte charm,
 //                                or every byte of a string/cask; () misuse
+//   (regrid scr b rows cols) -> b  scr laid across into cask b as a rows x cols
+//                                screen (cb_regrid): text, clusters, and pictures
+//                                while the store holds them; b not a cask answers
+//                                the byte count, as screen's does; () misuse
 //   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
 //                                width, picture, face), 1 the fg, 2 the bg
 //                                (the layout is quay.h's struct cb_cell); a
 //                                cluster's glyph holds its base, and 3 4 5 are
-//                                its marks, 0 past the last
+//                                its marks, 0 past the last. a negative i reads
+//                                the history: -cols is the newest line's first
+//                                cell, back to -(held * cols)
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
 //                                3 flag, 4 top, 5 bot, 6 and 7 a cell's width and
-//                                height in pixels; () misuse
+//                                height in pixels, 8 the lines the view looks back,
+//                                9 the history's lines held; () misuse
+//   (peer scr n)         -> n    look n lines back into the history (0 the live
+//                                grid), clamped to what is held; answers the view
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
@@ -49,6 +59,10 @@ static struct cb *scr_ok(word x) {
  uintptr_t n = (uintptr_t) c->rows * c->cols;
  if (!c->rows || !c->cols || cb_size(c->rows, c->cols, 0) > s->len) return 0;
  if (cb_size(c->rows, c->cols, c->sn) > s->len || (c->sn && c->sn < cb_shead)) c->sn = 0, c->sslot = 0;
+ if (cb_size(c->rows, c->cols, c->sn) + cb_hsize(c->hl, c->cols) > s->len) c->hl = 0;
+ if (c->hn > c->hl) c->hn = c->hl;
+ if (c->hh >= c->hl) c->hh = 0;
+ if (c->view > c->hn) c->view = c->hn;
  if (!c->cw || !c->ch) c->cw = 8, c->ch = 16;
  if (c->sslot >= cb_nimg) c->sslot = 0;
  if (c->wpos >= n) c->wpos = 0;
@@ -67,23 +81,52 @@ static struct cb *scr_ok(word x) {
 // (screen b rows cols): open a screen over cask b. A non-cask b answers the
 // byte count the cask needs -- the size protocol that keeps sizeof(struct cb)
 // out of the surface. Geometry is capped well under the u32 cell indices.
+// the store a rows x cols screen gets, or ~0u for a geometry refused
+static uint32_t scr_sn(word rw, word kw) {
+ intptr_t const r = (rw & 1) ? getcharm(rw) : 0, k = (kw & 1) ? getcharm(kw) : 0;
+ if (r < 1 || k < 1 || r > 65535 || k > 65535 || (uintptr_t) r * (uintptr_t) k > (uintptr_t) 1 << 22) return ~0u;
+ return r * k <= 131072 ? cb_sdefault(r, k) : 0; }   // no store past 64 MB of one
+
+// the history a screen cols wide gets: a thousand lines, fewer past 4 MB of them
+static uint32_t scr_hl(uint16_t cols) {
+ uint32_t const most = (uint32_t) ((4u << 20) / cb_hsize(1, cols));
+ return most < 1000u ? most : 1000u; }
+
 static lvm(lvm_screen) {
- word b = Sp[0];
- intptr_t r = (Sp[1] & 1) ? getcharm(Sp[1]) : 0,
-           k = (Sp[2] & 1) ? getcharm(Sp[2]) : 0;
- word out = ZeroPoint;
- if (r >= 1 && k >= 1 && r <= 65535 && k <= 65535
-      && (uintptr_t) r * (uintptr_t) k <= (uintptr_t) 1 << 22) {
-  uint32_t const sn = r * k <= 131072 ? cb_sdefault(r, k) : 0;   // no store past 64 MB of one
-  uintptr_t need = cb_size(r, k, sn);
+ word b = Sp[0], out = ZeroPoint;
+ uint32_t const sn = scr_sn(Sp[1], Sp[2]);
+ if (sn != ~0u) {
+  uint16_t const r = (uint16_t) getcharm(Sp[1]), k = (uint16_t) getcharm(Sp[2]);
+  uint32_t const hl = scr_hl(k);
+  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need) {
-    cb_open((struct cb*) s->bytes, (uint16_t) r, (uint16_t) k, sn);
+    cb_open((struct cb*) s->bytes, r, k, sn);
+    cb_hist((struct cb*) s->bytes, hl);
     out = b; } } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
+
+// (regrid scr b rows cols): as screen, but the new grid starts from scr's. b must be a
+// cask of its own -- the two may not overlap
+static lvm(lvm_regrid) {
+ struct cb *c = scr_ok(Sp[0]);
+ word b = Sp[1], out = ZeroPoint;
+ uint32_t const sn = scr_sn(Sp[2], Sp[3]);
+ if (c && sn != ~0u) {
+  uint16_t const r = (uint16_t) getcharm(Sp[2]), k = (uint16_t) getcharm(Sp[3]);
+  uint32_t const hl = scr_hl(k);
+  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k);
+  if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
+  else {
+   struct ai_str *s = ((struct ai_cask*) b)->str;
+   if (s->len >= need && (uint8_t*) s->bytes != (uint8_t*) c) {
+    cb_regrid((struct cb*) s->bytes, c, r, k, sn, hl);
+    out = b; } } }
+ Sp[3] = out;
+ Sp += 3; Ip += 1; ai_musttail return Continue(); }
 
 // (scribe scr x): the feed. A charm is one byte; a string or cask pours every
 // byte through cb_putc (the hot path: one nif call per pty read). Returns the
@@ -109,10 +152,9 @@ static lvm(lvm_glass) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
-  uintptr_t i = (uintptr_t) getcharm(Sp[1]);
-  intptr_t k = getcharm(Sp[2]);
-  if (i < (uintptr_t) c->rows * c->cols && k >= 0 && k < 6) {
-   struct cb_cell const e = c->cb[i];
+  intptr_t const i = getcharm(Sp[1]), k = getcharm(Sp[2]), back = (intptr_t) c->hn * c->cols;
+  if (i >= -back && i < (intptr_t) c->rows * c->cols && k >= 0 && k < 6) {
+   struct cb_cell const e = i >= 0 ? c->cb[i] : cb_hline(c, (uint32_t) ((i + back) / c->cols))[(i + back) % c->cols];
    uint32_t const *v = cb_clu(c, e.g);
    out = putcharm(k == 0 ? (v ? (e.g & 0xffe00000u) | cb_cp(v[0]) : e.g) : k == 1 ? e.fg : k == 2 ? e.bg
                   : v ? cb_cp(v[k - 2]) : 0u); } }
@@ -133,7 +175,20 @@ static lvm(lvm_gaze) {
   case 5: out = putcharm(c->bot);  break;
   case 6: out = putcharm(c->cw);   break;
   case 7: out = putcharm(c->ch);   break;
+  case 8: out = putcharm(c->view); break;
+  case 9: out = putcharm(c->hn);   break;
   default: break; }
+ Sp[1] = out;
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
+
+// (peer scr n): the view n lines back, clamped; answers where it landed
+static lvm(lvm_peer) {
+ struct cb *c = scr_ok(Sp[0]);
+ word out = ZeroPoint;
+ if (c && (Sp[1] & 1)) {
+  intptr_t const n = getcharm(Sp[1]);
+  cb_peer(c, n < 0 ? 0u : n > (intptr_t) c->hn ? c->hn : (uint32_t) n);
+  out = putcharm(c->view); }
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
@@ -241,4 +296,6 @@ static union u const
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
   nif_facerow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_facerow}, {lvm_ret0}},
   nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}},
-  nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}};
+  nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}},
+  nif_regrid[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_regrid},  {lvm_ret0}},
+  nif_peer[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peer},    {lvm_ret0}};

@@ -53,6 +53,7 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   c->wpos = c->spos = 0;
   c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16;
   cb_store(c, sn);
+  cb_hist(c, 0);
   c->flag = cb_show | cb_wrap;
   c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0;
   c->ucp = 0, c->un = 0, c->ol = 0;
@@ -73,9 +74,15 @@ static void cb_ride(struct cb *c, uint32_t *p, uint32_t t, uint32_t b, int dn, u
   if (dn < 0) { if (r >= t + n) *p -= k; }
   else        { if (r + n <= b) *p += k; } }
 
+static void cb_keep(struct cb *c, uint32_t r);
+static uint32_t cb_ncells(struct cb const *c);
+static struct cb_cell *cb_nth(struct cb *c, uint32_t i);
+
+// a row leaving the screen's top is kept in the history, but not the alternate screen's
 static void cb_scup(struct cb *c, uint32_t t, uint32_t b, uint32_t n) {
   if (!n) return;
   if (n > b - t + 1u) n = b - t + 1u;
+  if (!t && !(c->flag & cb_alt)) for (uint32_t r = 0; r < n; r++) cb_keep(c, r);
   uint32_t cs = c->cols; struct cb_cell e; cb_pen(c, 0, &e);
   for (uint32_t i = t * cs, j = (b + 1u - n) * cs; i < j; i++) c->cb[i] = c->cb[i + n * cs];
   for (uint32_t i = (b + 1u - n) * cs, j = (b + 1u) * cs; i < j; i++) c->cb[i] = e;
@@ -182,7 +189,8 @@ uint32_t cb_base(struct cb const *c, uint32_t g) {
   return v ? cb_cp(v[0]) : cb_cp(g); }
 
 // the slot holding v: one that already does, else a free one, else one freed by a sweep
-// of the cells (all but cell `skip`, whose slot v replaces); cb_nclu when every slot is named
+// of the cells and the history (all but cell `skip`, whose slot v replaces); cb_nclu when
+// every slot is named
 static uint32_t cb_slot(struct cb *c, uint32_t const *v, uint32_t skip) {
   uint32_t k, j;
   for (k = 0; k < cb_nclu; k++) {
@@ -191,9 +199,9 @@ static uint32_t cb_slot(struct cb *c, uint32_t const *v, uint32_t skip) {
   for (k = 0; k < cb_nclu && c->clu[k][0]; k++) ;
   if (k == cb_nclu) {
     uint32_t named[cb_nclu / 32] = { 0 };
-    for (uint32_t i = 0, n = (uint32_t) c->rows * c->cols; i < n; i++) {
-      uint32_t const *u = i == skip ? 0 : cb_clu(c, c->cb[i].g);
-      if (u) j = cb_cp(c->cb[i].g) - cb_clu0, named[j >> 5] |= (uint32_t) 1 << (j & 31); }
+    for (uint32_t i = 0, n = cb_ncells(c); i < n; i++) {
+      uint32_t const g = cb_nth(c, i)->g;
+      if (i != skip && cb_clu(c, g)) j = cb_cp(g) - cb_clu0, named[j >> 5] |= (uint32_t) 1 << (j & 31); }
     for (j = 0; j < cb_nclu; j++) if (!(named[j >> 5] >> (j & 31) & 1)) c->clu[j][0] = 0;
     for (k = 0; k < cb_nclu && c->clu[k][0]; k++) ; }
   if (k < cb_nclu) for (j = 0; j < cb_clun; j++) c->clu[k][j] = v[j];
@@ -271,6 +279,41 @@ void cb_store(struct cb *c, uint32_t sn) {
   c->kopen = 0, c->kslot = 0;
   for (uint32_t k = 0; k < 256; k++) pal[k] = 0; }
 
+// --- the history: a ring of lines after the store --------------------------------------
+static struct cb_cell *cb_ring(struct cb const *c) { return (struct cb_cell*) (cb_sbase(c) + c->sn); }
+
+struct cb_cell const *cb_hline(struct cb const *c, uint32_t k) {
+  return k < c->hn ? cb_ring(c) + (uintptr_t) ((c->hh + k) % c->hl) * c->cols : 0; }
+
+void cb_hist(struct cb *c, uint32_t hl) { c->hl = hl, c->hh = c->hn = c->view = 0; }
+
+// grid row r, a history line in its place for as many rows as the view looks back
+struct cb_cell const *cb_seen(struct cb const *c, uint32_t r) {
+  return r < c->view ? cb_hline(c, c->hn - c->view + r) : c->cb + (uintptr_t) (r - c->view) * c->cols; }
+
+void cb_peer(struct cb *c, uint32_t n) {
+  n = n < c->hn ? n : c->hn;
+  if (n != c->view) c->view = n, cb_dirt(c, 0, c->rows - 1u); }
+
+// a line into the history: the next free one, else the oldest's place. a reader looking
+// back goes on seeing the same lines
+static void cb_line(struct cb *c, struct cb_cell const *row, uint32_t w) {
+  if (!c->hl) return;
+  struct cb_cell *d;
+  if (c->hn < c->hl) d = cb_ring(c) + (uintptr_t) ((c->hh + c->hn++) % c->hl) * c->cols;
+  else d = cb_ring(c) + (uintptr_t) c->hh * c->cols, c->hh = (c->hh + 1u) % c->hl;
+  struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };
+  for (uint32_t k = 0; k < c->cols; k++) d[k] = k < w ? row[k] : blank;
+  if (c->view) c->view = c->view < c->hn ? c->view + 1u : c->hn, cb_dirt(c, 0, c->rows - 1u); }
+
+static void cb_keep(struct cb *c, uint32_t r) { cb_line(c, c->cb + (uintptr_t) r * c->cols, c->cols); }
+
+// every cell that can name a cluster or a picture: the grid's, then the history's
+static uint32_t cb_ncells(struct cb const *c) { return (uint32_t) c->rows * c->cols + c->hn * c->cols; }
+static struct cb_cell *cb_nth(struct cb *c, uint32_t i) {
+  uint32_t const n = (uint32_t) c->rows * c->cols;
+  return i < n ? c->cb + i : cb_ring(c) + (uintptr_t) ((c->hh + (i - n) / c->cols) % c->hl) * c->cols + (i - n) % c->cols; }
+
 // a live picture that fits its arena, or 0: a painter may trust what this answers
 struct cb_img const *cb_img(struct cb const *c, uint32_t slot) {
   if (!slot || slot >= cb_nimg || !cb_words(c)) return 0;
@@ -279,15 +322,15 @@ struct cb_img const *cb_img(struct cb const *c, uint32_t slot) {
   uint64_t const end = (uint64_t) im->off + (uint64_t) im->w * im->h;
   return end <= cb_words(c) ? im : 0; }
 
-// the sweep: a picture no cell names is dropped -- save, with ids, one kitty holds by id
+// the sweep: a picture no cell (nor history line) names is dropped -- save, with ids, one kitty holds by id
 // for a later placement -- and the rest packed down in the order they were laid, which is
 // the order of their offsets
 static void cb_sweep(struct cb *c, int ids) {
   struct cb_img *im = cb_imgs(c);
   uint32_t *px = cb_spx(c), seen[cb_nimg / 32] = { 0 }, top = 0;
   for (uint32_t k = 0; k < cb_nimg; k++) im[k].live = im[k].live && cb_img(c, k) ? 2u : 0u;
-  for (uint32_t i = 0, n = (uint32_t) c->rows * c->cols; i < n; i++) {
-    uint32_t const g = c->cb[i].g;
+  for (uint32_t i = 0, n = cb_ncells(c); i < n; i++) {
+    uint32_t const g = cb_nth(c, i)->g;
     if (g & cb_pic && im[cb_tslot(g)].live == 2) im[cb_tslot(g)].live = 3; }
   if (ids) for (uint32_t k = 0; k < cb_nimg; k++) if (im[k].live == 2 && im[k].id) im[k].live = 3;
   for (;;) {
@@ -301,6 +344,68 @@ static void cb_sweep(struct cb *c, int ids) {
     im[best].off = top, top += n; }
   for (uint32_t k = 0; k < cb_nimg; k++) im[k].live = im[k].live == 3;
   c->stop = top; }
+
+// a cell index carried from a grid `ocols` wide, its rows shifted up by `from` -- the
+// cursor's and DECSC's. what falls outside the new grid lands on its edge.
+static uint32_t cb_carry(uint32_t pos, uint32_t ocols, uint32_t from,
+                         uint32_t rows, uint32_t cols) {
+  uint32_t r = pos / ocols, k = pos % ocols;
+  r = r > from ? r - from : 0;
+  if (r >= rows) r = rows - 1u;
+  if (k >= cols) k = cols - 1u;
+  return r * cols + k; }
+
+// old's pictures into c's empty store, packed in slot order while they fit: the ones a
+// carried cell names first, then the ones kitty holds by id. a tile of one left behind blanks
+static void cb_restock(struct cb *c, struct cb const *old) {
+  uint32_t const n = cb_ncells(c), room = cb_words(c);
+  struct cb_img const *oi = cb_imgs(old);
+  struct cb_img *ni = cb_imgs(c);
+  uint32_t *px = cb_spx(c), *pal = cb_pal(c), named[cb_nimg / 32] = { 0 }, top = 0;
+  for (uint32_t i = 0; i < n; i++) {
+    uint32_t const g = cb_nth(c, i)->g, t = cb_tslot(g);
+    if (g & cb_pic) named[t >> 5] |= (uint32_t) 1 << (t & 31); }
+  for (uint32_t k = 0; room && k < 256; k++) pal[k] = cb_pal(old)[k];
+  for (uint32_t pass = 0; room && pass < 2; pass++)
+    for (uint32_t k = 1; k < cb_nimg; k++) {
+      uint32_t const on = named[k >> 5] >> (k & 31) & 1;
+      struct cb_img const *im = (pass ? !on && oi[k].id : on) ? cb_img(old, k) : 0;
+      uint32_t const m = im ? im->w * im->h : 0;
+      if (!im || m > room - top) continue;
+      for (uint32_t j = 0; j < m; j++) px[top + j] = cb_ipx(old)[im->off + j];
+      ni[k] = *im, ni[k].off = top, ni[k].live = 1, top += m; }
+  c->stop = top;
+  for (uint32_t i = 0; i < n; i++) {
+    uint32_t const g = cb_nth(c, i)->g;
+    if (g & cb_pic && !(room && ni[cb_tslot(g)].live)) cb_nth(c, i)->g = g & 0xff000000u; } }
+
+// old laid across into c, a fresh rows x cols screen with a store of sn bytes: the pen, the
+// modes, the clusters and a parser mid-sequence come whole; the cells row for row, clipped
+// where c is narrower, scrolled up only as far as the cursor's row needs, so shrinking
+// spends the blank tail under a prompt before it touches a line; the pictures they name as
+// far as the store holds them. nothing reflows -- a line wrapped at the old width stays
+// broken where it was. the history comes too, hl lines of it, its lines clipped or widened
+// like the rows, and the rows the shrink scrolled away join it. c and old may not overlap
+void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl) {
+  uint32_t const orows = old->rows, ocols = old->cols, cr = old->wpos / ocols,
+                 from = cr >= rows ? cr - rows + 1u : 0, w = cols < ocols ? cols : ocols;
+  *c = *old;
+  c->rows = rows, c->cols = cols;
+  cb_store(c, sn);
+  c->top = 0, c->bot = (uint16_t) (rows - 1u);   // the old region addressed the old rows
+  c->flag &= (uint16_t) ~cb_pend;                 // a pending wrap named the old last column
+  struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };   // the default pen
+  for (uint32_t i = 0, n = (uint32_t) rows * cols; i < n; i++) c->cb[i] = blank;
+  for (uint32_t r = from, dr = 0; r < orows && dr < rows; r++, dr++) {
+    for (uint32_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
+    cb_mend(c, dr); }
+  cb_hist(c, hl);
+  for (uint32_t k = 0; k < old->hn; k++) cb_line(c, cb_hline(old, k), w);
+  if (!(old->flag & cb_alt)) for (uint32_t r = 0; r < from; r++) cb_line(c, old->cb + r * ocols, w);
+  cb_restock(c, old);
+  c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
+  c->spos = cb_carry(old->spos, ocols, from, rows, cols);
+  cb_dirt(c, 0, rows - 1u); }
 
 // --- sixel: DECSIXEL into a canvas at the store's top, tiles at the cursor at the end ---
 // the canvas is a screen's width of pixels wide and as deep as the arena leaves (at most
@@ -646,8 +751,8 @@ static void cb_mode(struct cb *c, int priv, int on) {
       c->flag = on ? c->flag | cb_origin : c->flag & (uint16_t) ~cb_origin;
       cb_goto(c, 0, 0); }
     else if (p == 47 || p == 1047 || p == 1049) {
-      if (on) cb_save(c), cb_clear(c), c->wpos = 0, c->flag &= (uint16_t) ~cb_pend;
-      else cb_clear(c), cb_restore(c); } } }
+      if (on) cb_save(c), cb_clear(c), c->wpos = 0, c->flag = (uint16_t) ((c->flag & ~cb_pend) | cb_alt);
+      else cb_clear(c), cb_restore(c), c->flag &= (uint16_t) ~cb_alt; } } }
 
 // the CSI dispatch, one final byte at a time. n/m: the first two
 // parameters with their traditional default of 1.
@@ -674,7 +779,8 @@ static void cb_csi(struct cb *c, uint8_t i) {
     c->flag &= (uint16_t) ~cb_pend; return;
    case 'd': return cb_goto(c, n - 1u, col);
    case 'H': case 'f': return cb_goto(c, n - 1u, m - 1u);
-   case 'J': { struct cb_cell e; cb_pen(c, 0, &e); uint32_t all = (uint32_t) c->rows * cs;
+   case 'J': { if (c->pv[0] == 3) return cb_hist(c, c->hl), cb_dirt(c, 0, c->rows - 1u);
+    struct cb_cell e; cb_pen(c, 0, &e); uint32_t all = (uint32_t) c->rows * cs;
     uint32_t lo = c->pv[0] == 1 ? 0 : c->wpos, hi = c->pv[0] == 1 ? c->wpos + 1u : all;
     if (c->pv[0] >= 2) lo = 0, hi = all;
     for (uint32_t p = lo; p < hi; p++) c->cb[p] = e;

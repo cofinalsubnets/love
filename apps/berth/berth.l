@@ -5,8 +5,8 @@
 ; and the grids repaint the outer terminal as painted cells. keys pour down the
 ; other way; dsr/da answers ride home off each screen's reply queue; the outer
 ; size is polled each second-ish and mirrored onto every pty (the kernel raises
-; sigwinch on the children for us). a resize opens fresh grids -- the full-screen
-; guests repaint on their sigwinch, which is the one-buffer bargain throughout.
+; sigwinch on the children for us). a resize lays each grid across (regrid), and a
+; full-screen guest repaints on its sigwinch.
 ;
 ; where the panes come from: apps/berth/wharf.l, and nothing about it is berth's. it is
 ; a plan tree in and rectangles in cells out -- no nif, no pty, no framebuffer --
@@ -130,9 +130,9 @@
                          _ (hshow p)
                          p)
 
- ; --- the relay: the plan says where every berth is, so every screen is opened
- ; to its rectangle and every pty told its new size. content is the guest's to
- ; repaint on its own sigwinch -- the one-buffer bargain, now once per pane.
+ ; --- the relay: the plan says where every berth is, so every screen is laid
+ ; across to its rectangle and every pty told its new size. what the old grid
+ ; held comes along; the rest is the guest's to repaint on its own sigwinch.
  ; a berth with no room still needs a valid screen (the nifs refuse a zero
  ; axis), so its grid is 1x1 and wharf-show? is what keeps it off the glass.
  (hrelay hb) (: bs (wharf-lay (hb 'plan) (hb 'rows) (hb 'cols))
@@ -142,7 +142,7 @@
                                    bx (hbox p)
                                    s (peep bx () 0)
                                    (? (nr = gaze s 1 && nc = gaze s 2) 0
-                                    (: s2 (screen (cask (screen () nr nc)) nr nc)
+                                    (: s2 (regrid s (cask (screen () nr nc)) nr nc)
                                        _ (pin bx () s2)
                                        (? (hpty? p) (settty (hmas p) nr nc) (hshow p))))))))
                        bs)
