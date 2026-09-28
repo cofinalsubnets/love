@@ -17,7 +17,7 @@
 (:
    (k2-pairs (a . b . c)) ([a b] . k2-pairs c)
    (k2-find nm ps) <(filter (((^nm . _) . _) \ 1) ps)
-   k2-qmark (cap '(\ x))                     ; the \ head a quote wears as data
+   k2-qmark <'(\ x)                          ; the \ head a quote wears as data
    (k2-quoted? e) (two? e && <e = k2-qmark)
    (k2-qdat q) (q 1)                         ; the symbol under a quote
 

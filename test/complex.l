@@ -51,8 +51,8 @@
  ;     glued ~x lifts a real to (r, 0) and conjugates a complex ---
  ((5 ~ 0) = ~5)   (twin? ~5)                 ; ~r lifts a real to (r, 0) -- a true complex
  ((0 ~ 0) = ~0)   ((-3.5 ~ 0) = ~-3.5)       ; ~0 -> (0, 0); lift works on a negative real
- (= (conj (2 ~ 3)) ~(2 ~ 3))                 ; ~z conjugates -- glued ~ generalizes conj
- (= (2 ~ -3) ~(2 ~ 3))   (= i ~(0 ~ -1))     ; ~(r ~ i) = (r ~ -i)
+ (conj (2 ~ 3) = ~(2 ~ 3))                   ; ~z conjugates -- glued ~ generalizes conj
+ ((2 ~ -3) = ~(2 ~ 3))   (i = ~(0 ~ -1))     ; ~(r ~ i) = (r ~ -i)
 
  ; --- the band is the tightest there is, above house, so a twin binds before any
  ;     operator, coined ones too: its parts are atoms and a compound part owes parens ---
@@ -139,8 +139,8 @@
  ((0 ~ 1) = peep (i * ca-r) 0 0)                 ; i*(1+0i) = i
 
  ; --- real array meets complex: the real promotes to (v, 0) ---
- ((11 ~ 2) = peep (+ @(10 20) ca-v) 0 0)         ; z @(10 20) lifts to (10,0)/(20,0)
- ((23 ~ 4) = peep (+ ca-v @(10 20)) 1 0)
+ ((11 ~ 2) = peep (@(10 20) + ca-v) 0 0)         ; z @(10 20) lifts to (10,0)/(20,0)
+ ((23 ~ 4) = peep (ca-v + @(10 20)) 1 0)
 
  ; --- the accessors, elementwise over an array: re/im/arg drop to the real tier,
  ;     conj stays complex; a real array is its own real part and its own conjugate ---
@@ -149,7 +149,7 @@
  ((1 ~ -2) = peep (conj ca-v) 0 0)   ((3 ~ -4) = peep (conj ca-v) 1 0)
  (twin-tray = tier (conj ca-v))                   ; the tier is kept
  (near (pi / 2) (peep (arg (twin-tray '(1) [(0 ~ 1)])) 0 0))
- (= @(1.0 2.0) (conj @(1.0 2.0)))                 ; a real array conjugates to itself
+ (@(1.0 2.0) = conj @(1.0 2.0))                   ; a real array conjugates to itself
 
  ; --- `=` over complex arrays -> a boolean (whole-array); the orderings -> a mask ---
  (ca-v = ca-v)

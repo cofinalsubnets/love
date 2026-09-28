@@ -43,8 +43,9 @@
 
  ; the real driver, the same modules bin/lux ships. HOME rides a scratch seat so
  ; the box's own ~/.love/etc/lux.l cannot reach a gate driving stock-layout chords
- luxhome "out/.luxui-home"
- _ (mkdir luxhome 493)                                                          ; already there -> -EEXIST, which is the same good news
+ ; every path this lays is the pid's own, so two runs over one out/ keep apart
+ luxhome ("out/.luxui-home-" + show (getpid 0))
+ _ (mkdir luxhome 493)
  ph (tether ["env" ("DISPLAY=:" + show dn) ("HOME=" + luxhome)
            "out/love" "-l" "apps/lux/core.l" "-l" "apps/lux/layout.l"
            "-l" "apps/lux/wire.l" "-l" "apps/lux/ewmh.l"
@@ -70,5 +71,6 @@
 
  _ (strike ())
  _ (close >ph) _ (close >xv)
+ _ (hark ["rm" "-rf" luxhome])
  _ (test_fin ())
  (puts "luxui: ok"))

@@ -156,18 +156,18 @@
  (: s "a1" !(48 <= s 0 <= 57))                        ; ..and the digit test on that same letter fails
  (: s "ab" (s 0 < s 1 < 99))                          ; both ends span too -- the leading one already did
  (: t (tablet 0) _ (pin t 0 0)                        ; a span link is still evaluated once
-    (bump v) (: _ (pin t 0 (1 + (peep t 0 0))) 2)
+    (bump v) (pin t 0 (1 + peep t 0 0), 2)
     r (1 < bump () < 3)
     (r && (1 = (peep t 0 0))))
  (0 = (1 < (2 < 3)))                                  ; parens opt out: (< 2 3) is 1, and (< 1 1) is 0
  ((show (opfix '(a < b))) = (show '(< a b)))          ; one link is a plain comparison, untouched
  ((show (opfix '(< a (< b c)))) = (show '(< a (< b c))))   ; ..and the prefix spelling stays a fixed point
  (: t (tablet 0) _ (pin t 0 0)                        ; the shared operand runs once, not twice
-    (bump v) (: _ (pin t 0 (1 + (peep t 0 0))) 2)
+    (bump v) (pin t 0 (1 + peep t 0 0), 2)
     r (1 < (bump ()) < 3)
     (r && (1 = (peep t 0 0))))
  (: t (tablet 0) _ (pin t 0 0)                        ; ..and a false link never reaches the rest
-    (bump v) (: _ (pin t 0 999) 9)
+    (bump v) (pin t 0 999, 9)
     r (2 < 1 < (bump ()))
     (!r && (0 = (peep t 0 0)))))
 (test
@@ -192,4 +192,4 @@
     (r = 1 && (0 = (peep t 0 0))))
  (: t (tablet 0) _ (pin t 0 0)
     r (0 && (pin t 0 999))                            ; 0 is false -> && short-circuits, the pin never runs
-    ((! r) && (0 = (peep t 0 0)))))
+    (!r && 0 = peep t 0 0)))

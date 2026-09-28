@@ -20,8 +20,8 @@
 (: test_t0 (clock 0)
  ; a name the book lacks ends the run, file mode's law. a welp window says a miss is the
  ; subject; outside one, absence read as data is a bug the tally would otherwise hide.
- (test-strict a b) (: _ (say err (";; " + show a + " " + show b)) _ (put err 10)
-                      _ (flush err) _ (quit 1) (welp a b))
+ (test-strict a b) (say err (";; " + show a + " " + show b), put err 10,
+                      flush err, quit 1, welp a b)
  (term_esc string) (do (putc 27) (puts string))
  green_dot "[32m."
  red_x "[31mX"
@@ -47,7 +47,7 @@
    ; word: a full 64-bit-word build (native, kernel) -- which is also where reals
    ; are f64, libm is glibc's, a filesystem exists, and the RNG runs full-width.
    ; false only on the 32-bit wasm shim; gates the asserts that need any of those.
-   word (< (32 2) max-charm)
+   word (32 2 < max-charm)
    ; hosted: a kernel underneath -- processes (hark), an environ, a filesystem. false on
    ; inle and in the browser, where love-os says so; gates the laws that reach the OS.
    hosted (love-os @ ('linux || 'freebsd || 'netbsd) 1 0)
@@ -58,10 +58,10 @@
 (:: 'test (\ l
 (:
  (report x v) (do
-  (test_set 'count (+ 1 (test_get 'count)))
+  (test_set 'count (1 + test_get 'count))
    (? v (term_text green_dot)
     (do (term_text red_x)
        (test_set 'fail (x . (? (two? (test_get 'fail)) (test_get 'fail) ()))))))
- (. 'do (map (\ l [report ['\ l] l]) l)))))
+ ('do . map (\ l [report ['\ l] l]) l))))
 
 (hear test-strict)

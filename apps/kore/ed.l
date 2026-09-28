@@ -65,10 +65,10 @@
    (ed-splice e a b ins)
     (: (skip cs o pre) (? (two? cs && (o + <(<cs)) < a) (skip >cs (o + <(<cs)) (<cs . pre)) [cs o pre])
        ; the chunks the edit reaches: one at least, then each that starts by b
-       (grab cs o acc) (? (two? cs && (!(two? acc) || o < b)) (grab >cs (o + <(<cs)) (<cs . acc)) [cs (rev acc)])
+       (grab cs o acc) (? (two? cs && ((atom? acc) || o < b)) (grab >cs (o + <(<cs)) (<cs . acc)) [cs (rev acc)])
        (skip (e 'buf) 0 () @ [cs o pre]
          ; an append at the end rides into the last chunk rather than one of its own
-         (: back? (!(two? cs) && two? pre)
+         (: back? (atom? cs && two? pre)
             cs2 (? back? [<pre] cs) o2 (? back? (o - <(<pre)) o) pre2 (? back? >pre pre)
             g (grab cs2 o2 ())
             mid (ed-flat <>g)
@@ -76,10 +76,10 @@
             (pins e 'buf (rev pre2 + ed-chunks nm + <g) 'n ((e 'n) + #ins - (b - a + 1))
                   'gen (e 'gen + 1) 'dirty 1))))
    (ed-idx e id)                                   ; the line holding id, 0 when it is gone
-    (: (go l k) (? !(two? l) 0 (<(<l) = id) k (go >l (k + 1))) (go (ed-all e) 1))
+    (: (go l k) (? (atom? l) 0 (<(<l) = id) k (go >l (k + 1))) (go (ed-all e) 1))
    ; the first record from line k on whose id is in marks -> its line, unmarked; 0 if none
    (ed-nextmark e marks k)
-    (: (walk rs i cs) (? (two? rs) (? (peep marks <(<rs) ()) (: _ (pin marks <(<rs) ()) i)
+    (: (walk rs i cs) (? (two? rs) (? (peep marks <(<rs) ()) (pin marks <(<rs) (), i)
                                       (walk >rs (i + 1) cs))
                          (two? cs) (walk >(<cs) i >cs)
                          0)
@@ -118,7 +118,7 @@
    (ed-search e m fwd?)
     (: n (e 'n) d (e 'dot) l (ed-all e) d2 (? (d < 1) 1 d)
        rot (? fwd? (drop d l + take d l) (rev (take (d2 - 1) l) + rev (drop (d2 - 1) l)))
-       (go r k) (? !(two? r) (ed-fail "no match")
+       (go r k) (? (atom? r) (ed-fail "no match")
                    (ed-hit? m <>(<r)) k
                    (go >r (k + 1)))
        k (go rot 1)
@@ -179,10 +179,10 @@
    (ed-list t)
     (: n #t o (jug 0)
        (go i col)
-        (? (n <= i) (: _ (say o "$") (slurp o))
+        (? (n <= i) (say o "$", slurp o)
            (: x (ed-esc (t i)) w #x
-              (? (72 <= col + w) (: _ (say o "\\\n") (go i 0))
-                 (: _ (say o x) (go (i + 1) (col + w))))))
+              (? (72 <= col + w) (say o "\\\n", go i 0)
+                 (say o x, go (i + 1) (col + w)))))
        (go 0 0))
    ; one line out, by the flags (chars of p l n) and the ex options
    (ed-show e k t fl)
@@ -191,7 +191,7 @@
        (say out (? n? (? (e 'ex) (upad 6 (show k) + "  " + body) (show k + "\t" + body)) body),
         put out 10))
    (ed-print e a b fl)
-    (: (go l k) (? (two? l) (: _ (ed-show e k <>(<l) fl) (go >l (k + 1))) 0)
+    (: (go l k) (? (two? l) (ed-show e k <>(<l) fl, go >l (k + 1)) 0)
        _ (go (ed-span e a b) a)
        (pin e 'dot b))
    (ed-flags e fl) (? (two? fl) (ed-show e (e 'dot) (ed-line e (e 'dot)) fl) 0)
@@ -202,13 +202,12 @@
                      (elem (s i) '(112 108 110)) (go (i + 1) (s i . acc))
                      (ed-fail "invalid command suffix"))
        (go k ()))
-   (ed-say e m) (? (e 'silent) 0 (: _ (say out m) (put out 10)))
+   (ed-say e m) (? (e 'silent) 0 (say out m, put out 10))
 
    ; -- the edits --------------------------------------------------------------------
    ; texts after line at; dot the last of them, else none when nothing came
    (ed-add e at ts none)
-    (: _ (? (two? ts) (ed-splice e (at + 1) at (ed-recs e ts)) 0)
-       (pin e 'dot (? (two? ts) (at + #ts) none)))
+    ((? (two? ts) (ed-splice e (at + 1) at (ed-recs e ts)) 0), pin e 'dot (? (two? ts) (at + #ts) none))
    (ed-del e a b)                                  ; -> the texts it took
     (: t (ed-texts e a b)
        _ (ed-splice e a b ())
@@ -234,7 +233,7 @@
    ; replacement made splits its line, the first piece keeping the line's id
    (ed-subst e a b m rep g? nth)
     (: (go rs i acc last)
-        (? !(two? rs) [(rev acc) last]
+        (? (atom? rs) [(rev acc) last]
            (: r <rs res (usubn m rep <>r g? nth)
               (? <res
                   (: ps (usplit 10 <>res) k #ps
@@ -243,7 +242,7 @@
                  (go >rs (i + 1) (r . acc) last))))
        out (go (ed-span e a b) a () 0)
        (? (<>out = 0) 0
-          (: _ (ed-splice e a b <out) _ (pin e 'dot <>out) <>out)))
+          (ed-splice e a b <out, pin e 'dot <>out, <>out)))
    (ed-undo e)
     (: u (e 'undo)
        _ (? (two? u) 0 (ed-fail "nothing to undo"))
@@ -293,12 +292,12 @@
     (: t (? (a < 1) "" (unlines (ed-texts e a b)))
        (? (ed-bang? nm) (ed-sh-in <(ed-shcmd e (snip nm 1 #nm)) t)
           (: q (open nm (? app? "a" "w"))
-             (? (hot? q) (: _ (say q t) _ (close q) #t)
+             (? (hot? q) (say q t, close q, #t)
                 (ed-fail ("cannot open output file " + nm))))))
    ; the name a command reads: its own, else the remembered one, which it becomes if
    ; there was none
    (ed-name e arg)
-    (? (0 < #arg) (: _ (? (0 < #(e 'file) || ed-bang? arg) 0 (pin e 'file arg)) arg)
+    (? (0 < #arg) ((? (0 < #(e 'file) || ed-bang? arg) 0 (pin e 'file arg)), arg)
        (0 < #(e 'file)) (e 'file)
        (ed-fail "no current filename"))
    ; the buffer over again from nm -> bytes, () for a file that does not open
@@ -325,7 +324,7 @@
                     t))
        (go s))
    (ed-lsrc ls)                                    ; a list read as a source
-    (: b {'l ls} (\ _ (: l (b 'l) (? (two? l) (: _ (pin b 'l >l) <l) ()))))
+    (: b {'l ls} (_ \ (: l (b 'l) (? (two? l) (pin b 'l >l, <l) ()))))
    ; g v G V: mark the lines of a..b that match (or do not), then visit each mark still
    ; standing, dot on it. cl is the list's text; inter? reads one command per line.
    ; the hunt for the next mark goes on from the last, and once from the top when it
@@ -339,14 +338,13 @@
        ls (? (0 < #(ed-trim cl)) (usplit 10 cl) ["p"])
        _ (pin e 'ing 1)
        (run ls) (: s2 (ed-lsrc ls)
-                   (go _) (: l (s2 1) (? (string? l) (: _ (ed-exec e l s2) (go 0)) 0))
+                   (go _) (: l (s2 1) (? (string? l) (ed-exec e l s2, go 0) 0))
                    (go 0))
        (visit from last)
         (: k0 (ed-nextmark e marks from)
            k (? (0 < k0 || from = 1) k0 (ed-nextmark e marks 1))
            (? (0 < k)
-              (: _ (pin e 'dot k)
-                 (? !inter? (: _ (run ls) (visit k last))
+              (pin e 'dot k, (? !inter? (run ls, visit k last)
                     (: _ (ed-show e k (ed-line e k) ())
                        l (src 0)
                        c (? !(string? l) "" (l = "&") last l)
@@ -419,8 +417,8 @@
    (ed-arg s k) (: n #s (snip s (ed-skip s k) n))
    ; a modified buffer stops q and e once; the same command again straight after goes
    (ed-guard e)
-    (? ((e 'dirty) && ((e 'warn) != ((e 'cmdn) - 1)))
-       (: _ (pin e 'warn (e 'cmdn)) (ed-fail "warning: buffer modified"))
+    (? (e 'dirty && (e 'warn) != ((e 'cmdn) - 1))
+       (pin e 'warn (e 'cmdn), ed-fail "warning: buffer modified")
        0)
    (ed-do e s src)
     (ed-range e s 0 @ [j0 a1 a2 cnt]
@@ -459,7 +457,7 @@
             (c = 102)                             ; f
              (: _ (none 0) nm (ed-arg s k)
                 _ (? (0 < #nm) (pin e 'file nm) 0)
-                (? (0 < #(e 'file)) (: _ (say out (e 'file)) (put out 10)) (ed-fail "no current filename")))
+                (? (0 < #(e 'file)) (say out (e 'file), put out 10) (ed-fail "no current filename")))
             (c = 103 || c = 118 || c = 71 || c = 86)   ; g v G V
              (: r (real 1 (e 'n))
                 dl (? (k < n) (s k) 10)
@@ -467,11 +465,10 @@
                 d (ed-delim s (k + 1) dl)
                 m (ed-re e <>d)
                 inter? (c = 71 || c = 86)
-                cl (? inter? (: _ (ed-sfx s <d) "") (ed-glist (snip s <d n) src))
+                cl (? inter? (ed-sfx s <d, "") (ed-glist (snip s <d n) src))
                 (ed-global e <r <>r m (c = 118 || c = 86) cl inter? src))
-            (c = 104) (: _ (none 0) _ (end 0) (? (0 < #(e 'err)) (: _ (say out (e 'err)) (put out 10)) 0))
-            (c = 72) (: _ (none 0) _ (end 0) _ (pin e 'help !(e 'help))
-                        (? ((e 'help) && 0 < #(e 'err)) (: _ (say out (e 'err)) (put out 10)) 0))
+            (c = 104) (none 0, end 0, (? (0 < #(e 'err)) (say out (e 'err), put out 10) 0))
+            (c = 72) (none 0, end 0, pin e 'help !(e 'help), (? ((e 'help) && 0 < #(e 'err)) (say out (e 'err), put out 10) 0))
             (c = 106)                             ; j
              (: r (real dot (dot + 1)) fl (ed-sfx s k)
                 _ (? (<r = <>r && cnt < 2) 0 (ed-join e <r <>r (\ x y (x + y))))
@@ -492,15 +489,15 @@
                 fl (ed-sfx s (ed-skip s <d))
                 _ (? (c = 109) (ed-move e <r <>r dst) (ed-copy e <r <>r dst))
                 (ed-flags e fl))
-            (c = 80) (: _ (none 0) _ (end 0) (pin e 'pon !(e 'pon)))
+            (c = 80) (none 0, end 0, pin e 'pon !(e 'pon))
             (c = 113 || c = 81)                   ; q Q
-             (: _ (none 0) _ (end 0) _ (? (c = 113) (ed-guard e) 0) (pin e 'quit [0]))
+             (none 0, end 0, (? (c = 113) (ed-guard e) 0), pin e 'quit [0])
             (c = 114)                             ; r
              (: t (<>(rng (e 'n) (e 'n)))
                 nm (ed-name e (ed-arg s k))
                 (ed-say e (show (ed-read e t nm))))
             (c = 115) (: r (real dot dot) (ed-sub e s k <r <>r src))
-            (c = 117) (: _ (none 0) _ (end 0) (ed-undo e))
+            (c = 117) (none 0, end 0, ed-undo e)
             (c = 119 || c = 87)                   ; w W wq
              (: q? (k < n && s k = 113)
                 r (rng (? (0 < (e 'n)) 1 0) (e 'n))
@@ -518,10 +515,10 @@
                 fl (ed-sfx s <ct)
                 _ (? (0 < w) (pin e 'win w) (ed-fail "invalid window"))
                 (ed-print e t (min (e 'n) (t + w - 1)) fl))
-            (c = 61) (: _ (end 0) (: _ (say out (show (? (0 < cnt) a2 (e 'n)))) (put out 10)))
+            (c = 61) (end 0, (say out (show (? (0 < cnt) a2 (e 'n))), put out 10))
             (c = 33)                              ; !
              (: _ (none 0) r (ed-shcmd e (snip s k n))
-                _ (? <>r (: _ (say out <r) (put out 10)) 0)
+                _ (? <>r (say out <r, put out 10) 0)
                 _ (ed-sh-run <r)
                 (ed-say e "!"))
             (ed-fail "unknown command"))))
@@ -534,7 +531,7 @@
               ("shell" 2) ("substitute" 1) ("t" 1) ("undo" 1) ("vglobal" 1) ("visual" 2)
               ("write" 1) ("wq" 2) ("xit" 1) ("yank" 2) ("z" 1) ("k" 1))
    (edx-word w)
-    (: (go l) (? !(two? l) ()
+    (: (go l) (? (atom? l) ()
                  (: nm <(<l) k <>(<l)
                     (? (k <= #w <= #nm && w = snip nm 0 #w) nm (go >l))))
        (go edx-words))
@@ -547,7 +544,7 @@
    (edx-bar s k)
     (: n #s (go i) (? (n <= i) n (s i = 92 && (i + 1) < n) (go (i + 2)) (s i = 124) i (go (i + 1)))
        (go k))
-   (edx-report e k what) (? ((e 'silent) || (k <= (e 'report))) 0 (: _ (say out (show k + " " + what)) (put out 10)))
+   (edx-report e k what) (? (e 'silent || k <= (e 'report)) 0 (say out (show k + " " + what), put out 10))
    (edx-auto e) (? ((e 'silent) || (e 'ing) || !(e 'ap) || (e 'dot) < 1) 0
                   (ed-show e (e 'dot) (ed-line e (e 'dot)) ()))
    (edx-lines k) (show k + (k = 1 ? " line" " lines"))
@@ -593,7 +590,7 @@
     (: (says k) (: v (e k)
                    (? (charm? v && !(elem k '(nu list ap ic pon))) (show k + "=" + show v)
                       (v ? (show k) ("no" + show k))))
-       (all _) (: _ (each '(ap ic list nu report sw win) (\ k (say out (says k + "\n")))) 0)
+       (all _) (each '(ap ic list nu report sw win) (k \ (say out (says k + "\n"))), 0)
        (one w)
         (: n #w
            (eq i) (? (n <= i) () (w i = 61) i (eq (i + 1)))
@@ -602,21 +599,21 @@
            j (eq 0)
            nm (? (charm? j) (snip w2 0 j) w2)
            no? (2 < #nm && snip nm 0 2 = "no")
-           key (: (look l) (? !(two? l) () (<(<l) = nm) <>(<l) (look >l)) (look edx-opts))
-           key2 (? (nil? key && no?) (: (look l) (? !(two? l) () (<(<l) = snip nm 2 #nm) <>(<l) (look >l)) (look edx-opts)) key)
-           (? (nil? key2) (ed-fail ("unknown option: " + nm))
-              q? (: _ (say out (says key2)) (put out 10))
+           key (: (look l) (? (atom? l) () (<(<l) = nm) <>(<l) (look >l)) (look edx-opts))
+           key2 (? (!key && no?) (: (look l) (? (atom? l) () (<(<l) = snip nm 2 #nm) <>(<l) (look >l)) (look edx-opts)) key)
+           (? !key2 (ed-fail ("unknown option: " + nm))
+              q? (say out (says key2), put out 10)
               (charm? j) (: v (unum (snip w2 (j + 1) #w2))
                             (? (charm? v && charm? (e key2) && !(elem key2 '(nu list ap ic pon)))
                                (pin e key2 v) (ed-fail ("invalid argument: " + w))))
-              (elem key2 '(nu list ap ic pon)) (pin e key2 (? (nil? key) () 1))
-              (: _ (say out (says key2)) (put out 10))))
+              (elem key2 '(nu list ap ic pon)) (pin e key2 (? !key () 1))
+              (say out (says key2), put out 10)))
        ws (usplit 32 (ed-trim arg))
        (? (0 = #(ed-trim arg) || ed-trim arg = "all") (all 0)
           (each (filter (w \ 0 < #w) ws) one)))
    (edx-visual e)
     (: vb (cite 'vi 'vi-buffer)
-       _ (? (nil? vb) (ed-fail "no visual mode here") 0)
+       _ (? !vb (ed-fail "no visual mode here") 0)
        _ (flush out)
        _ (vb (ed-texts e 1 (e 'n)) (e 'file) (e 'dirty) (e 'dot))
        (pin e 'quit [0]))
@@ -633,8 +630,8 @@
          w (? (alpha? c) (snip s j we) (string c))
          word (? (alpha? c) (edx-word w) w)
          ; `ka` is k with its letter
-         word2 (? (nil? word && #w = 2 && w 0 = 107) "k" word)
-         k0 (? (alpha? c) (? (nil? word && #w = 2 && w 0 = 107) (j + 1) we) (? (c = 124) j (j + 1)))
+         word2 (? (!word && #w = 2 && w 0 = 107) "k" word)
+         k0 (? (alpha? c) (? (!word && #w = 2 && w 0 = 107) (j + 1) we) (? (c = 124) j (j + 1)))
          bang (k0 < n && s k0 = 33 && word2 != "!")
          k (? bang (k0 + 1) k0)
          whole? (elem word2 '("global" "vglobal" "!" "\""))
@@ -649,7 +646,7 @@
                                              [<>r (min nl (<>r + ct - 1)) (snip arg i #arg)])
                               [<r <>r arg]))
          (flagsof t) (: t2 (ed-trim t) (map (x \ (x = 35 ? 110 x)) (ed-sfx t2 0)))
-         _ (? (nil? word2) (ed-fail ("not an editor command: " + w)) 0)
+         _ (? !word2 (ed-fail ("not an editor command: " + w)) 0)
          _ (? (word2 = "|")
               (: t (? (0 < cnt) a2 (dot + 1))
                  _ (? (1 <= t <= nl) 0 (ed-fail "invalid range"))
@@ -722,13 +719,13 @@
                   d (ed-delim t 1 dl)
                   m (ed-re e <>d)
                   (ed-global e <r <>r m (bang || word2 = "vglobal") (ed-glist (snip t <d #t) src) () src))
-              (word2 = "undo") (: _ (ed-undo e) (edx-auto e))
+              (word2 = "undo") (ed-undo e, edx-auto e)
               (word2 = "write" || word2 = "wq" || word2 = "xit")
                (: t (ed-trim arg)
                   app? (1 < #t && t 0 = 62 && t 1 = 62)
                   nm0 (? app? (ed-trim (snip t 2 #t)) t)
                   go? (? (word2 = "xit") ((e 'dirty) || 0 < #nm0) 1)
-                  _ (? ((e 'ro) && !bang && !(ed-bang? nm0) && go?) (ed-fail "file is read only (add ! to override)") 0)
+                  _ (? (e 'ro && !bang && !(ed-bang? nm0) && go?) (ed-fail "file is read only (add ! to override)") 0)
                   _ (? go?
                        (: r (rng (? (0 < nl) 1 0) nl)
                           nm (ed-name e nm0)
@@ -738,11 +735,11 @@
                        0)
                   (? (word2 = "write") 0 (pin e 'quit [0])))
               (word2 = "quit")
-               (? ((e 'dirty) && !bang) (ed-fail "no write since last change (add ! to override)")
+               (? (e 'dirty && !bang) (ed-fail "no write since last change (add ! to override)")
                   (pin e 'quit [0]))
               (word2 = "edit")
                (: nm0 (ed-trim arg)
-                  _ (? ((e 'dirty) && !bang) (ed-fail "no write since last change (add ! to override)") 0)
+                  _ (? (e 'dirty && !bang) (ed-fail "no write since last change (add ! to override)") 0)
                   nm (? (0 < #nm0) nm0 (0 < #(e 'file)) (e 'file) (ed-fail "no current filename"))
                   b (ed-load e nm)
                   (? (charm? b) (edx-counts e nm b) (ed-say e ("\"" + nm + "\" [New]"))))
@@ -769,7 +766,7 @@
                   ct (edx-count arg 0)
                   w (? (charm? <>ct) <>ct (e 'win))
                   (ed-print e t (min nl (t + w - 1)) ()))
-              (word2 = "=") (: _ (say out (show (? (0 < cnt) a2 nl))) (put out 10))
+              (word2 = "=") (say out (show (? (0 < cnt) a2 nl)), put out 10)
               (word2 = "<" || word2 = ">")
                (: r0 (real dot dot)
                   ; the repeats: >> is twice the width
@@ -788,9 +785,7 @@
                          _ (ed-del e <rr <>rr)
                          _ (ed-add e (<rr - 1) ts (e 'dot))
                          (edx-report e #ts "lines filtered"))
-                     (: _ (? <>r (: _ (say out <r) (put out 10)) 0)
-                        _ (ed-sh-run <r)
-                        (ed-say e "!"))))
+                     ((? <>r (say out <r, put out 10) 0), ed-sh-run <r, ed-say e "!")))
               (ed-fail ("not an editor command: " + w)))
          (? (bar < n) (edx-do e (snip s (bar + 1) n) src) 0))))
    ; a range through a command: its lines in, its output back
@@ -801,7 +796,7 @@
        _ (close <pi) _ (close >po)
        ; the writer in a task of its own, so a command that answers as it reads
        ; cannot wedge on a full pipe
-       w (twirl (\ _ (: q (fdopen >pi) _ (say q t) (close q))) 0)
+       w (twirl (_ \ (: q (fdopen >pi) _ (say q t) (close q))) 0)
        q (fdopen <po) o (slurp q) _ (close q)
        _ (catch w)
        _ (? (charm? p && 0 <= p) (wait p) 0)
@@ -814,32 +809,30 @@
     (: (go acc) (: l (src 0) (? (!(string? l) || l = ".") (rev acc) (go (l . acc))))
        (go ()))
    (ed-complain e m)
-    (: _ (pin e 'err m)
-       _ (? (e 'ex) (: _ (flush out) _ (say err (m + "\n")) (flush err))
-            (: _ (say out "?\n") (? (e 'help) (: _ (say out m) (put out 10)) 0)))
-       (? (e 'tty) 0 (pin e 'quit [1])))
+    (pin e 'err m, (? (e 'ex) (flush out, say err (m + "\n"), flush err)
+            (say out "?\n", (? (e 'help) (say out m, put out 10) 0))), (? (e 'tty) 0 (pin e 'quit [1])))
    ; one command line from the top: an error lands here, and a change the command made
    ; is what u will undo -- g's whole visit as one
    (ed-top e l src)
     (: pre [(e 'buf) (e 'dot) (e 'n)] g0 (e 'gen)
        _ (pins e 'cmdn (e 'cmdn + 1) 'undid () 'ing ())
-       _ (trap (\ _ (ed-exec e l src)) ()
+       _ (trap (_ \ (ed-exec e l src)) ()
                (\ a b (? (a = 'ederr) (ed-complain e b) (scare a b))))
        (? ((e 'gen) != g0 && !(e 'undid)) (pin e 'undo pre) 0))
    (ed-loop e src)
     (: (go _) (? (two? (e 'quit)) <(e 'quit)
                  (: l (src 1)
-                    (? (string? l) (: _ (ed-top e l src) (go 0)) 0)))
+                    (? (string? l) (ed-top e l src, go 0) 0)))
        (go 0))
    ; stdin a line at a time, the prompt ahead of a command line
    (ed-stdin e rd)
-    (\ cmd?
-     (: pr (? (e 'ex) (? (cmd? && (e 'tty) && (e 'pon)) ":" "")
-              (? (cmd? && (e 'pon)) (e 'prompt) ""))
-        _ (? (0 < #pr) (say out pr) 0)
-        _ (flush out)
-        l (urd-line rd)
-        (? (two? l) <l ())))
+    (cmd? \
+            (: pr (? (e 'ex) (? (cmd? && e 'tty && e 'pon) ":" "")
+                     (? (cmd? && e 'pon) (e 'prompt) ""))
+               _ (? (0 < #pr) (say out pr) 0)
+               _ (flush out)
+               l (urd-line rd)
+               (? (two? l) <l ())))
    (ed-run e f cmds)
     (: _ (pin e 'tty (two? (tty 0)))
        _ (? (string? f)
@@ -847,11 +840,11 @@
                (? (charm? b)
                    (? (e 'ex) (edx-counts e f b) (ed-say e (show b)))
                   (e 'ex) (ed-say e ("\"" + f + "\" [New]"))
-                  (: _ (say err (f + ": No such file or directory\n")) (flush err))))
+                  (say err (f + ": No such file or directory\n"), flush err)))
             0)
        rd (urd in)
        src (ed-stdin e rd)
-       _ (each cmds (\ c (? (two? (e 'quit)) 0 (ed-top e c src))))
+       _ (each cmds (c \ (? (two? (e 'quit)) 0 (ed-top e c src))))
        st (ed-loop e src)
        _ (urd-give rd)
        _ (flush out)
@@ -859,11 +852,11 @@
 
    (ed-main as)
     (: e (ed-new ())
-       (opts l) (? !(two? l) ()
+       (opts l) (? (atom? l) ()
                    (: a <l
-                      (? (a = "-s" || a = "-") (: _ (pin e 'silent 1) (opts >l))
-                         (a = "-p") (? (two? >l) (: _ (pins e 'prompt <>l 'pon 1) (opts >>l)) (udie 2 ed-usage))
-                         (2 < #a && snip a 0 2 = "-p") (: _ (pins e 'prompt (snip a 2 #a) 'pon 1) (opts >l))
+                      (? (a = "-s" || a = "-") (pin e 'silent 1, opts >l)
+                         (a = "-p") (? (two? >l) (pins e 'prompt <>l 'pon 1, opts >>l) (udie 2 ed-usage))
+                         (2 < #a && snip a 0 2 = "-p") (pins e 'prompt (snip a 2 #a) 'pon 1, opts >l)
                          (a = "--") >l
                          (1 < #a && a 0 = 45) (udie 2 ("ed: unknown option " + a))
                          l)))
@@ -873,10 +866,10 @@
    (ex-main as)
     (: e (ed-new 1)
        _ (pin e 'pon 1)
-       (opts l cs) (? !(two? l) [() (rev cs)]
+       (opts l cs) (? (atom? l) [() (rev cs)]
                       (: a <l
-                         (? (a = "-s" || a = "-") (: _ (pins e 'silent 1 'pon ()) (opts >l cs))
-                            (a = "-R") (: _ (pin e 'ro 1) (opts >l cs))
+                         (? (a = "-s" || a = "-") (pins e 'silent 1 'pon (), opts >l cs)
+                            (a = "-R") (pin e 'ro 1, opts >l cs)
                             (a = "-v") (opts >l ("visual" . cs))       ; ex -v is vi
                             (a = "-c") (? (two? >l) (opts >>l (<>l . cs)) (udie 2 ex-usage))
                             (2 < #a && snip a 0 2 = "-c") (opts >l (snip a 2 #a . cs))

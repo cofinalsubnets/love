@@ -35,7 +35,7 @@
    (watch pid t0) (? (peep reaped pid 0) 0
                      (deadline < clock t0) (still (0 - pid) 9)
                      (rest 50, watch pid t0))
-   (guard t) (: _ (? (two? t) (twirl (_ \ watch <t (clock 0)) 0) 0) t)
+   (guard t) ((? (two? t) (twirl (_ \ watch <t (clock 0)) 0) 0), t)
    (has? h n) (: k #n m #h
                  (go i) (? ((m - k) < i) 0 (n = snip h i (i + k)) 1 (go (i + 1)))
                  (go 0))

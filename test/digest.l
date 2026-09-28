@@ -88,9 +88,9 @@
    (hash-shape ls)
     (? !(two? ls) 1
        (: s (hash-bytes <ls)
-          (? (! (hash-hexlen s 32)) 0
-             (! (hash-hexlen s 64)) 0
-             (! (hash-cksame s)) 0
+          (? !(hash-hexlen s 32) 0
+             !(hash-hexlen s 64) 0
+             !(hash-cksame s) 0
              (hash-shape >ls)))))
 (test (hash-shape '(0 1 54 55 56 57 63 64 65 118 119 120 127 128 129 200)))
 

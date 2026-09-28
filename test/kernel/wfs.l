@@ -14,7 +14,7 @@
 ; report only the last one.
 
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+   (wr p s) (: q (open p "w") (? (port? q) (say q s, close q, 1) 0))
    d "/tmp/l-wfs"
    f (d + "/a")
    e (d + "/e")
@@ -76,7 +76,7 @@
    ("/proc/src" = cwd 0)
    !(chdir "apps/kore")
    ("/proc/src/apps/kore" = cwd 0)
-   (0 < tally (rd "kore.l"))                  ; a relative path reads off the cwd
+   (0 < #(rd "kore.l"))                       ; a relative path reads off the cwd
    (elem "kore.l" (readdir "."))
    !(chdir "..")
    ("/proc/src/apps" = cwd 0)            ; .. unwinds ONE component
@@ -85,7 +85,7 @@
    ; member after this one down with a no-corpus-member -- which reads as a missing
    ; file and not as the walk that moved.
    !(chdir "/proc/src")
-   (= "/proc/src" (cwd 0))
+   ("/proc/src" = cwd 0)
    (nom? (chdir f))                             ; a file is no seat
    (nom? (chdir "/nope"))
    ('badarg = chdir 7)
@@ -108,10 +108,10 @@
    ("2" = getenv "WFS")
    (elem "WFS=2" (environ 0))
    !(setenv "WFS2" "x")
-   (3 = tally (environ 0))
+   (3 = #(environ 0))
    !(setenv "WFS2" ())                  ; a non-string value unsets
    (getenv "WFS2" = ())
-   (2 = tally (environ 0))
+   (2 = #(environ 0))
    ('badarg = setenv 7 "x")
    (getenv 7 = ())
    ; -- which kernel this is: the name a hosted seat probes for, said outright here --

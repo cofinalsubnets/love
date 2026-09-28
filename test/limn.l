@@ -11,8 +11,8 @@
 
 ; `sub?` is each gate's own here (test/host/berth.l carries the same three lines) --
 ; it searches from i; `at?` is the exact-position twin, which is what counting wants
-(: (at? h n i) (((i + tally n) <= tally h) && n = snip h i (i + tally n))
-   (sub? h n i) (? ((i + tally n) < (tally h + 1))
+(: (at? h n i) (((i + #n) <= #h) && n = snip h i (i + #n))
+   (sub? h n i) (? ((i + #n) < (#h + 1))
                    (? (at? h n i) 1 (sub? h n (i + 1)))
                    0)
    (mkscr r c) (screen (cask (screen () r c)) r c)
@@ -30,9 +30,9 @@
    _ (test
       ("x" = limn-glyph 120)
       (" " = limn-glyph 0)
-      (2 = tally (limn-glyph 233))                   ; é
-      (3 = tally (limn-glyph 9474))                  ; │ the box glyph
-      (4 = tally (limn-glyph 128512))                ; past the bmp: the cell holds it whole
+      (2 = #(limn-glyph 233))                        ; é
+      (3 = #(limn-glyph 9474))                       ; │ the box glyph
+      (4 = #(limn-glyph 128512))                     ; past the bmp: the cell holds it whole
       (limn-down = limn-glyph 9474)                  ; the two spellings of one line
       (limn-across = utf8 9472)
       (limn-glyph 201 = limn-glyph 201))              ; cached, and equal to itself

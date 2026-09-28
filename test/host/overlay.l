@@ -37,12 +37,12 @@
            !(sweep "apps/lux/layout.l"))
  ; ...and a known kind in the wrong seat is caught: zins wants (window zipper),
  ; the wound hands it a tag and a sheaf
- hurt (chk1 lux-dom (. '(oops (sheaf tag) top) lux-sigs)
+ hurt (chk1 lux-dom ('(oops (sheaf tag) top) . lux-sigs)
             '(: (oops s t) (zins (wstagof s t) s)))
  _ (test (two? hurt) ('oops = <<hurt))
 
  ; leg 2: the gradual laws
- sg2 (. '(g1 (rect) window) (. '(g2 (window) top) lux-sigs))
+ sg2 ('(g1 (rect) window) . '(g2 (window) top) . lux-sigs)
  _ (test !(chk1 lux-dom sg2 '(: (g1 r) (zfoc (cap r))))       ; unknown arg: consistent
            !(chk1 lux-dom sg2 '(: (g2 w) (zins w)))             ; partial app: open, not a clash
            (two? (chk1 lux-dom sg2 '(: (g1 r) (zfoc r)))))         ; a rect in the zipper seat: flagged
@@ -67,8 +67,8 @@
 (reads (open "test/uuwm.l" "r"))
 (reads (open "test/uuwmlaw.l" "r"))
 (: (encl l) (two? l ? ['ncons <l (encl >l)] 'nnil)
-   (encz z) ['zmk <z (encl (caup z)) (encl (caup >z))]
-   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (. (vv 1) acc)) (rev acc))
+   (encz z) ['zmk <z (encl <>z) (encl <>>z)]
+   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (vv 1 . acc)) (rev acc))
               (go (v 2) ()))
    (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
  z0 (zmk 5 [2] [7 9])
@@ -76,12 +76,12 @@
  _ (test
     (zrow z0 = decl (vof 0 ['zrow (encz z0)]))
     (zrow (zins 4 z0) = decl (vof 0 ['zrow ['zins 4 (encz z0)]]))
-    (= #(zrow (zins 4 z0)) (vof 0 ['zcount ['zins 4 (encz z0)]]))
+    (#(zrow (zins 4 z0)) = vof 0 ['zcount ['zins 4 (encz z0)]])
     ; focus motion, both faces: the plain step and the wrap
-    (= <(zfocup z0) (vof 0 ['zfoc ['zfocup (encz z0)]]))
+    (<(zfocup z0) = vof 0 ['zfoc ['zfocup (encz z0)]])
     (zrow (zfocup z0) = decl (vof 0 ['zrow ['zfocup (encz z0)]]))
-    (= <(zfocup z1) (vof 0 ['zfoc ['zfocup (encz z1)]]))
-    (= <(zfocdn z0) (vof 0 ['zfoc ['zfocdn (encz z0)]]))
+    (<(zfocup z1) = vof 0 ['zfoc ['zfocup (encz z1)]])
+    (<(zfocdn z0) = vof 0 ['zfoc ['zfocdn (encz z0)]])
     (zrow (zmaster z0) = decl (vof 0 ['zrow ['zmaster (encz z0)]]))
     ; delete, through the model's Maybe (ii2 carries the survivor)
     (zdel 5 z0 = decz ((vof 0 ['zdel 5 (encz z0)]) 1))
@@ -95,8 +95,8 @@
 ; moves, the result decodes) -- so a divergence names its op and its step.
 (: (rnd s) (((s * 1103515245) + 12345) % 2147483648)
    (encl l) (two? l ? ['ncons <l (encl >l)] 'nnil)
-   (encz z) ['zmk <z (encl (caup z)) (encl (caup >z))]
-   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (. (vv 1) acc)) (rev acc))
+   (encz z) ['zmk <z (encl <>z) (encl <>>z)]
+   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (vv 1 . acc)) (rev acc))
               (go (v 2) ()))
    (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
    (mstep r w t) (? (r = 0) (vof 0 ['zins w t])
@@ -115,7 +115,7 @@
                     (zdel w z))
    (fuzz i s z nid)
     (i < 1 ? 1 (: row (zrow z)
-          r (: r0 (s % 7) ((= r0 6 ? (#row < 2) 0) ? 1 r0))   ; no deletes below 2
+          r (: r0 (s % 7) ((r0 = 6 ? (#row < 2) 0) ? 1 r0))   ; no deletes below 2
           s2 (rnd s)
           w (? (r = 0) nid (r = 6) (row (s2 % #row)) 0)
           zc (cstep r w z)
@@ -124,7 +124,7 @@
              (? (0 = (i % 10))
                      (vof 0 'true = vof 0 ['zsane (encz zc)] ? 0 (dot [(\ fuzz-insane) i zc]))
                      0,
-              fuzz (i - 1) (rnd s2) zc (= r 0 ? (nid + 1) nid)))))
+              fuzz (i - 1) (rnd s2) zc (r = 0 ? (nid + 1) nid)))))
  _ (test (fuzz 150 20260705 (zmk 0 () ()) 1))
  (puts "overlay leg 5: ok"))
 
@@ -156,17 +156,17 @@
                  ps ><(w2-find nm cforms)
                  ks <>sg
                  res (w2-mty (w2-rk nm (sg 2)))
-                 ((uu 'defn) (caup (assoc nm amap))
-                   (w2-pi ps ks ['paths res (. (w2-gen nm) ps) (. (mname nm) ps)])
-                   (w2-lams ps ['idpath (. (mname nm) ps)]))))
+                 ((uu 'defn) <>(assoc nm amap)
+                   (w2-pi ps ks ['paths res (w2-gen nm . ps) (mname nm . ps)])
+                   (w2-lams ps ['idpath (mname nm . ps)]))))
         w2-want)
  (puts "overlay stage 4: 10 idpath bridges -- the compiled ops ARE the proved model"))
 
 ; the same seeded walk, the model side now stepping through the translated ops
 (: (rnd s) (((s * 1103515245) + 12345) % 2147483648)
    (encl l) (two? l ? ['ncons <l (encl >l)] 'nnil)
-   (encz z) ['zmk <z (encl (caup z)) (encl (caup >z))]
-   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (. (vv 1) acc)) (rev acc))
+   (encz z) ['zmk <z (encl <>z) (encl <>>z)]
+   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (vv 1 . acc)) (rev acc))
               (go (v 2) ()))
    (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
    (mstep r w t) (? (r = 0) (vof 0 ['gen-zins w t])
@@ -185,19 +185,19 @@
                     (zdel w z))
    (fuzz i s z nid)
     (i < 1 ? 1 (: row (zrow z)
-          r (: r0 (s % 7) ((= r0 6 ? (#row < 2) 0) ? 1 r0))
+          r (: r0 (s % 7) ((r0 = 6 ? (#row < 2) 0) ? 1 r0))
           s2 (rnd s)
           w (? (r = 0) nid (r = 6) (row (s2 % #row)) 0)
           zc (cstep r w z)
           zm (decz (mstep r w (encz z)))
           (? !(zc = zm) (dot [(\ genfuzz-diverged) i r w zc zm], 0)
-             (fuzz (i - 1) (rnd s2) zc (= r 0 ? (nid + 1) nid)))))
+             (fuzz (i - 1) (rnd s2) zc (r = 0 ? (nid + 1) nid)))))
  _ (test (fuzz 100 424242 (zmk 0 () ()) 1))
  ; and the accessors/row through the translated lane, spot-checked
  z0 (zmk 5 [2] [7 9])
  _ (test
     (zrow z0 = decl (vof 0 ['gen-zrow (encz z0)]))
-    (= <(zrev z0) (vof 0 ['zfoc ['gen-zrev (encz z0)]]))
+    (<(zrev z0) = vof 0 ['zfoc ['gen-zrev (encz z0)]])
     (znub 7 (zrow z0) = decl (vof 0 ['gen-znub 7 ['gen-zrow (encz z0)]])))
  (puts "overlay: ok"))
 
@@ -209,10 +209,10 @@
 (reads (open "apps/lux/layout.l" "r"))
 (: (rnd s) (((s * 1103515245) + 12345) % 2147483648)
    (encl l) (two? l ? ['ncons <l (encl >l)] 'nnil)
-   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (. (vv 1) acc)) (rev acc))
+   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (vv 1 . acc)) (rev acc))
               (go (v 2) ()))
-   (wincol ps) (two? ps ? (. <<ps (wincol >ps)) ())
-   (iota n b) (< n 1 ? () (. b (iota (n - 1) (b + 1))))
+   (wincol ps) (two? ps ? (<<ps . wincol >ps) ())
+   (iota n b) (n < 1 ? () (b . iota (n - 1) (b + 1)))
    (walk i s)
     (i < 1 ? 1 (: n (s % 7) nm (rnd s % 5) s2 (rnd (rnd s))
           ws (iota n (10 + i))

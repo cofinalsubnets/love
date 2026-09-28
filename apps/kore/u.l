@@ -21,7 +21,7 @@
    ; decimal text -> a charm (a leading - reads negative)
    (uatoi s)
     (: n #s
-       (go i acc) (i >= n ? acc (go (i + 1) ((* 10 acc) + (s i - 48))))
+       (go i acc) (i >= n ? acc (go (i + 1) ((10 * acc) + (s i - 48))))
        (? (0 < n && s 0 = 45) (0 - go 1 0) (go 0 0)))
    ; text with its sgr runs taken out, every other byte where it was. the shape a tool
    ; wants when its own output is going somewhere that is not a terminal -- a colour is
@@ -38,8 +38,8 @@
    (upad w s) (#s < w ? (upad w (" " + s)) s)
    (urpad w s) (#s < w ? (urpad w (s + " ")) s)
    ; join texts with single spaces
-   (ujoin a) (? !(two? a) ""
-                !(two? >a) <a
+   (ujoin a) (? (atom? a) ""
+                (atom? >a) <a
                 (<a + " " + ujoin >a))
    ; the many-file banner head and tail share: none before the first, a blank between
    (uhdr first f) (? first ("==> " + f + " <==\n") ("\n==> " + f + " <==\n"))
@@ -95,13 +95,13 @@
    ; posix's faces, not make's: trailing slashes are stripped first, and a bare name's
    ; directory is "." where make's $(dir) says "./". `chop` is that strip, and what is
    ; left is one 'glob lastslash -- the scan itself lives there.
-   (uchop p) (: (e k) (? ((0 < k) && (p (k - 1) = 47)) (e (k - 1)) k) (e (tally p)))
+   (uchop p) (: (e k) (? (0 < k && (p (k - 1) = 47)) (e (k - 1)) k) (e #p))
    (ubase p sfx)
     (: e0 (uchop p)
        (? (e0 = 0) (? (0 < #p) "/" "")
           (: s (snip p (lastslash (snip p 0 e0)) e0)
              m #sfx n #s
-             (? ((0 < m) && (m < n) && (snip s (n - m) n = sfx))
+             (? (0 < m && m < n && (snip s (n - m) n = sfx))
                 (snip s 0 (n - m)) s))))
    (udir p)
     (uchop p @
@@ -125,8 +125,8 @@
    ; join with charm c between
    (ujoinc c ls)
     (: o (jug 0)
-       (go m first) (? !(two? m) (slurp o)
-                       (: _ (? first () (put o c)) _ (say o <m) (go >m 0)))
+       (go m first) (? (atom? m) (slurp o)
+                       ((? first () (put o c)), say o <m, go >m 0))
        (go ls 1))
    ; cut's list -> ((lo hi)..): N, N-M, N- (open above), -M (from 1)
    (uspec s)
@@ -141,7 +141,7 @@
        (map one (usplit 44 s)))
    ; does 1-based seat k sit in the spec
    (upick spec k)
-    (? !(two? spec) 0
+    (? (atom? spec) 0
      (: r <spec (k >= <r && <>r >= k || upick >spec k)))
    ; tr's set -> the code point list: a-z ranges expand, \n \t \r \0 \\ escape, a dash at
    ; either end stays literal
@@ -156,7 +156,7 @@
                "blank" '((9 9) (32 32))     "punct" '((33 47) (58 64) (91 96) (123 126))
                "print" '((32 126))          "graph" '((33 126))
                "cntrl" '((0 31) (127 127))  "xdigit" '((48 57) (65 70) (97 102))}
-       (spans rs acc) (? !(two? rs) acc
+       (spans rs acc) (? (atom? rs) acc
                          (spans >rs (rev (span <<rs <><rs ()) + acc)))
        ; a [:name:] opening at k -> (spans past-the-]); () when it is not one
        (cls k)
@@ -194,16 +194,13 @@
     (: q (t 'q)
        c (see q)
        (c @ -1 (pin t 'e 1, 0)
-          (: _ (unsee q c)
-             _ (urd-drop t)
-             _ (pin t 'h ((peep t 'h "") + (chug q)))
-             1)))
+          (unsee q c, urd-drop t, pin t 'h ((peep t 'h "") + (chug q)), 1)))
    ; the next line -> [line term?], () when spent. term? is whether the source ended
    ; it with a newline -- what `nl-end?` answers on the whole-text road.
    ; the scan mark is not an optimisation: without it the held bytes are rescanned
    ; from the front every gulp, so an input with no newline costs its length squared.
    (urd-line t)
-    (: h (peep t 'h "") n (tally h) p (peep t 'p 0) m (peep t 'm 0)
+    (: h (peep t 'h "") n #h p (peep t 'p 0) m (peep t 'm 0)
        i (t 'sc h 10 (m < p ? p m))          ; the newline, natively where it can be
        (0 <= i ? (pins t 'p (i + 1) 'm (i + 1), [(snip h p i) 1])
           (peep t 'e 0)
@@ -244,8 +241,8 @@
        ; printed them and `wc DIR` counted none, both leaving 0. it is a miss like any
        ; other -- the complaint is the caller's sentence and the status follows
        (udirp f) (miss f, ())
-       (: q (open f "r") (? (hot? q) [q 1] (: _ (miss f) ()))))
-   (umiss who) (\ f (say err (who + ": cannot open " + f), put err 10, 0))
+       (: q (open f "r") (? (hot? q) [q 1] (miss f, ()))))
+   (umiss who) (f \ (say err (who + ": cannot open " + f), put err 10, 0))
    ; the driver the rest ride: body gets (name first? reader) per operand and answers
    ; truth to keep the status. first? is 1 on the leading one, all `uhdr` needs.
    (ureachm miss body as)
@@ -278,26 +275,24 @@
     {'m miss 'fs (two? fs ? fs '("-")) 'rd () 'cl () 'bad 0 'h "" 'hp 0}
    ; open the next operand; 1 when one did, 0 when the list is spent
    (urdj-step t)
-    (: _ (t 'cl ? (close (peep t 'cl ()), pin t 'cl ()) 0)
+    (: _ (t 'cl ? (close (t 'cl), pin t 'cl ()) 0)
        fs (t 'fs)
        (? (atom? fs) 0
         (: _ (pin t 'fs >fs)
-           p (uin (peep t 'm ()) <fs)
-           (? (! p) (: _ (pin t 'bad 1) (urdj-step t))
-              (: _ (pin t 'rd (urd <p))
-                 _ (? <>p (pin t 'cl <p) 0)
-                 1)))))
+           p (uin (t 'm) <fs)
+           (? !p (pin t 'bad 1, urdj-step t)
+              (pin t 'rd (urd <p), (? <>p (pin t 'cl <p) 0), 1)))))
    ; the next line ignoring the lookahead, crossing operands as it runs out of them
    (urdj-raw t)
     (: rd (t 'rd)
        l (? rd (urd-line rd))
        (? (two? l) l (urdj-step t) (urdj-raw t)))
    (urdj-line t)                            ; -> [line term? last?] | ()
-    (: pk (peep t 'pk ())
+    (: pk (t 'pk)
        (two? pk ?
         (: nx (urdj-raw t)
            _ (pin t 'pk nx)
-           [<pk <>pk !(two? nx)])))
+           [<pk <>pk (atom? nx)])))
    ; the line face: primed, so `last?` is answerable from the first line on
    (urdj miss fs) (urdj-box miss fs @ t (pin t 'pk (urdj-raw t)))
    ; the byte face: unprimed, because priming would eat a line. od dumps rows and its
@@ -312,7 +307,7 @@
    (urdj-take t k)
     (: (fill _) (? (k <= #(peep t 'h "") - peep t 'hp 0)  1
                    (: _ (urdj-drop t)
-                      rd (peep t 'rd ())
+                      rd (t 'rd)
                       g (? rd (urd-gulp rd) "")
                       (? #g (pin t 'h (peep t 'h "" + g), fill 0)
                          (urdj-step t) (fill 0)

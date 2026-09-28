@@ -95,12 +95,12 @@
        (go k c)
         (? (n <= k) (slurp o)
            (: e (pgesc ln k)
-              (? e (: _ (say o (snip ln k (k + e))) (go (k + e) c))
+              (? e (say o (snip ln k (k + e)), go (k + e) c)
                  (: b (ln k)
                     (? (b = 9) (: p (8 - c % 8) _ (say o (pgsp p)) (go (k + 1) (c + p)))
-                       (b = 127) (: _ (say o "^?") (go (k + 1) (c + 2)))
-                       (b < 32) (: _ (say o ("^" + string (b + 64))) (go (k + 1) (c + 2)))
-                       (b < 128) (: _ (put o b) (go (k + 1) (c + 1)))
+                       (b = 127) (say o "^?", go (k + 1) (c + 2))
+                       (b < 32) (say o ("^" + string (b + 64)), go (k + 1) (c + 2))
+                       (b < 128) (put o b, go (k + 1) (c + 1))
                        (: j (cpnext ln k) _ (say o (snip ln k j))
                           (go j (c + max 0 (wcwidth (cpat ln k))))))))))
        (go 0 0))
@@ -132,15 +132,15 @@
        (go (pgtabs ln) "" ()))
    ; the display rows: [fragment line first?], source order
    (pgrows w ls)
-    (: (frag fs i acc first) (? !(two? fs) acc
+    (: (frag fs i acc first) (? (atom? fs) acc
                                 (frag >fs i ([<fs i first] . acc) ()))
-       (go l i acc) (? !(two? l) (rev acc)
+       (go l i acc) (? (atom? l) (rev acc)
                        (go >l (i + 1) (frag (pgwrap w <l) i acc 1)))
        (go ls 0 ()))
    ; line -> the first row it owns. walked in order, so the first sighting wins
    (pglrow rw)
     (: t (tablet 0)
-       (go r i last) (? !(two? r) t
+       (go r i last) (? (atom? r) t
                         (: ln <>(<r)
                            _ (? (ln = last) 0 (pin t ln i))
                            (go >r (i + 1) ln)))
@@ -168,7 +168,7 @@
    (pgmax st) (: m (st 'nr - pgbody st) (? (m < 0) 0 m))
    ; blank runs to one blank (-s)
    (pgsqueeze ls)
-    (: (go l was acc) (? !(two? l) (rev acc)
+    (: (go l was acc) (? (atom? l) (rev acc)
                          (: b !(0 < #(<l))
                             (? (b && was) (go >l b acc) (go >l b (<l . acc)))))
        (go ls 0 ()))
@@ -183,7 +183,7 @@
        _ (pgwrapall st)
        _ (pin st 'top 0)
        st)
-   (pgmsg st m) (: _ (pin st 'msg m) st)
+   (pgmsg st m) (pin st 'msg m, st)
 
    ; -- the motions -------------------------------------------------------------
    (pggo st k) (: m (pgmax st) _ (pin st 'top (? (k < 0) 0 (m < k) m k)) st)
@@ -204,13 +204,13 @@
    ; a pattern -> (nodes) or (), so an empty pattern is still a presence
    (pgnds st p)
     (: r (pg-ere p)
-       (? !(two? r) () [(? (pgflag st 105) (pg-fold <>r) <>r)]))
+       (? (atom? r) () [(? (pgflag st 105) (pg-fold <>r) <>r)]))
    ; the nearest source line from i in direction d that the nodes match, or -1
    (pgseek st nds i d)
     (: ls (st 'ls)
        (hit ln) (two? (pg-find nds ln 0))
-       (fwd l k) (? !(two? l) -1 (hit <l) k (fwd >l (k + 1)))
-       (bak l k best) (? (!(two? l) || (i < k)) best
+       (fwd l k) (? (atom? l) -1 (hit <l) k (fwd >l (k + 1)))
+       (bak l k best) (? ((atom? l) || (i < k)) best
                          (bak >l (k + 1) (? (hit <l) k best)))
        (? (i < 0) (? (0 < d) (fwd ls 0) -1)
           (0 < d) (fwd (drop i ls) i)
@@ -218,46 +218,39 @@
    ; the stored pattern, one step on in direction d
    (pghunt st d)
     (: w (st 'nds)
-       (? !(two? w) (pgmsg st "no previous pattern")
+       (? (atom? w) (pgmsg st "no previous pattern")
           (: _ (pin st 'dir d)
              i (pgseek st <w (pgtopline st + d) d)
              (? (i < 0) (pgmsg st ("pattern not found: " + st 'pat)) (pgline! st i)))))
    (pgsearch st p d)
     (: w (? (0 < #p) (pgnds st p) (st 'nds))
-       (? ((0 < #p) && !(two? w)) (pgmsg st ("bad pattern: " + p))
-          !(two? w) (pgmsg st "no previous pattern")
-          (: _ (pin st 'nds w)
-             _ (? (0 < #p) (pin st 'pat p) 0)
-             (pghunt st d))))
+       (? ((0 < #p) && (atom? w)) (pgmsg st ("bad pattern: " + p))
+          (atom? w) (pgmsg st "no previous pattern")
+          (pin st 'nds w, (? (0 < #p) (pin st 'pat p) 0), pghunt st d)))
 
    ; -- the help page, and the file walk ----------------------------------------
    (pghelp st)
     (? (two? (st 'sav)) st
-       (: _ (pin st 'sav [(st 'ls) (st 'file) (st 'top)])
-          (pgload st (lines pg-help) "HELP")))
+       (pin st 'sav [(st 'ls) (st 'file) (st 'top)], pgload st (lines pg-help) "HELP"))
    ; back out of the help -- 1 when there was a page to go back to
    (pgback st)
     (: s (st 'sav)
-       (? !(two? s) ()
-          (: _ (pin st 'sav ())
-             _ (pgload st <s <>s)
-             _ (pggo st <>>s)
-             1)))
+       (? (atom? s) ()
+          (pin st 'sav (), pgload st <s <>s, pggo st <>>s, 1)))
    (pgquit st) (? (pgback st) st (pin st 'quit 1))
    ; the operand walk: the engine names the file, the face reads it
    (pgfile st d)
     (: fs (st 'files) k (st 'fi + d)
        (? (k < 0) (pgmsg st "no previous file")
           (#fs <= k) (pgmsg st "no next file")
-          (: _ (pin st 'fi k) _ (pin st 'doe [(fs k)]) st)))
+          (pin st 'fi k, pin st 'doe [(fs k)], st)))
 
    ; -- the step ----------------------------------------------------------------
    (pgcnt st d) (: c (st 'cnt) (? (0 < #c) (uatoi c) d))
-   (pgask st ld) (: _ (pins st 'mode 'c 'lead ld 'cmd "") st)
+   (pgask st ld) (pins st 'mode 'c 'lead ld 'cmd "", st)
    ; the : commands are one letter, typed straight after the colon
    (pgcolon st c)
-    (: _ (pin st 'mode 'n)
-       (? (c = 110) (pgfile st 1)
+    (pin st 'mode 'n, (? (c = 110) (pgfile st 1)
           (c = 112) (pgfile st -1)
           ((c = 113) || (c = 81)) (pin st 'quit 1)
           (c = 27) st
@@ -266,14 +259,13 @@
    (pgtyped st c)
     (: cm (st 'cmd)
        (? ((c = 13) || (c = 10))
-           (: _ (pins st 'mode 'n 'cmd "")
-              (? (st 'lead = 63) (pgsearch st cm -1) (pgsearch st cm 1)))
-          (c = 27) (: _ (pins st 'mode 'n 'cmd "") st)
+           (pins st 'mode 'n 'cmd "", (? (st 'lead = 63) (pgsearch st cm -1) (pgsearch st cm 1)))
+          (c = 27) (pins st 'mode 'n 'cmd "", st)
           ((c = 8) || (c = 127))
-           (? (0 < #cm) (: _ (pin st 'cmd (snip cm 0 (#cm - 1))) st)
-              (: _ (pins st 'mode 'n 'cmd "") st))
+           (? (0 < #cm) (pin st 'cmd (snip cm 0 (#cm - 1)), st)
+              (pins st 'mode 'n 'cmd "", st))
           (c < 32) st
-          (: _ (pin st 'cmd (cm + string c)) st)))
+          (pin st 'cmd (cm + string c), st)))
    ; one key in normal mode; a digit stacks a count and everything else spends it
    (pgnorm st c)
     (: _ (pin st 'msg "")
@@ -281,9 +273,8 @@
        half (: k (b // 2) (? (k < 1) 1 k))
        n (pgcnt st 0)
        zz (st 'zz)
-       (? (48 <= c <= 57) (: _ (pin st 'cnt (st 'cnt + string c)) st)
-          (: _ (pins st 'cnt "" 'zz ())
-             (? ((c = 32) || (c = 102) || (c = 6) || (c = 22)) (pgdown st (? n n b))
+       (? (48 <= c <= 57) (pin st 'cnt (st 'cnt + string c), st)
+          (pins st 'cnt "" 'zz (), (? ((c = 32) || (c = 102) || (c = 6) || (c = 22)) (pgdown st (? n n b))
                 ((c = 13) || (c = 10) || (c = 106) || (c = 14) || (c = 101) || (c = 5))
                  (pgdown st (? n n 1))
                 ((c = 98) || (c = 2)) (pgup st (? n n b))
@@ -297,11 +288,11 @@
                 (c = 63) (pgask st 63)
                 (c = 110) (pghunt st (st 'dir))
                 (c = 78) (pghunt st (0 - st 'dir))
-                (c = 58) (: _ (pin st 'mode 'x) st)
+                (c = 58) (pin st 'mode 'x, st)
                 ((c = 61) || (c = 7)) (pgmsg st (pgstat st))
                 ((c = 104) || (c = 72)) (pghelp st)
                 ((c = 113) || (c = 81)) (pgquit st)
-                (c = 90) (? zz (pgquit st) (: _ (pin st 'zz 1) st))
+                (c = 90) (? zz (pgquit st) (pin st 'zz 1, st))
                 st))))
    (pgstep st c)
     (? (st 'mode = 'c) (pgtyped st c)
@@ -329,7 +320,7 @@
        (go i acc)
         (? (n <= i) (acc + snip s i n)
            (: m (pg-find nds s i)
-              (? !(two? m) (acc + snip s i n)
+              (? (atom? m) (acc + snip s i n)
                  (: a <>m z <>>m
                     (? (z <= a) (acc + snip s i n)
                        (go z (acc + snip s i a + e + "[7m" + snip s a z + e + "[27m")))))))
@@ -363,7 +354,7 @@
        line (pgclipl w ask)
        (e + "[H" + rows (pgfrom st) 0 ""
           + e + "[7m" + line + e + "[0m" + e + "[K"
-          + e + "[" + show (st 'h) + ";" + show (tally line + 1) + "H"))
+          + e + "[" + show (st 'h) + ";" + show (#line + 1) + "H"))
 
    ; -- the face: keys off a port, frames onto out -------------------------------
    ; not a terminal: pour the operands through, which is what more and less both
@@ -400,7 +391,7 @@
    ; the window may move under us; the top line is what survives a rewrap
    (pgresize st)
     (: ws (tty 1)
-       (? !(two? ws) 0
+       (? (atom? ws) 0
           (: hw (pgwin ws)
              (? ((<hw = st 'h) && (<>hw = st 'w)) 0
                 (: ln (pgtopline st)
@@ -418,24 +409,22 @@
        e (string 27)
        _ (raw 1)
        _ (puts (e + "[?1049h"))
-       (fin _) (: _ (puts (e + "[0m" + e + "[?1049l")) _ (flush out) _ (raw 0) 0)
+       (fin _) (puts (e + "[0m" + e + "[?1049l"), flush out, raw 0, 0)
        (doe _)
         (: rq (st 'doe)
-           (? !(two? rq) 0
+           (? (atom? rq) 0
               (: _ (pin st 'doe ())
                  nm2 <rq
                  r (uread nm2)
-                 (? (two? r) (: _ (pgload st (lines <>r) nm2) 0)
-                    (: _ (pgmsg st (nm2 + ": cannot open")) 0)))))
+                 (? (two? r) (pgload st (lines <>r) nm2, 0)
+                    (pgmsg st (nm2 + ": cannot open"), 0)))))
        (go pend)
         (: _ (pgresize st)
            _ (puts (pgframe st)) _ (flush out)
            kr (pgkey kq pend)
            c <kr
            (? (c < 0) (fin ())
-              (: _ (pgstep st c)
-                 _ (doe ())
-                 (? (st 'quit) (fin ()) (go <>kr)))))
+              (pgstep st c, doe (), (? (st 'quit) (fin ()) (go <>kr)))))
        (go -1))
    ; the flags kore's pager knows, and the complaint for anything else
    (pgopts as)
@@ -443,7 +432,7 @@
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 "less: bad option"))
        _ (: c (uoptun t '(78 105 115 101))
-            (? (nil? c) () (udie 2 ("less: unknown option -" + string c))))
+            (? !c () (udie 2 ("less: unknown option -" + string c))))
        [t <>>o])
    ; -- hexedit: toybox's -- a file as rows of sixteen bytes, the hex and then the
    ; characters, the cursor on a nibble. 0-9 a-f change it and the byte goes to the
@@ -463,7 +452,7 @@
    (hexedit-main as)
     (: ro (two? as && <as = "-r")
        fs (? ro >as as)
-       _ (? (two? fs && !(two? >fs)) 0 (udie 1 "usage: hexedit [-r] FILE"))
+       _ (? (two? fs && (atom? >fs)) 0 (udie 1 "usage: hexedit [-r] FILE"))
        f <fs
        r (uread f)
        _ (? (two? r) 0 (udie 1 ("hexedit: " + f + ": No such file or directory")))
@@ -490,16 +479,12 @@
            (row y)
             (: a (top + 16 * y)
                _ (? (n <= a && 0 < y) (say o (e + "[K"))
-                    (: _ (say o (e + "[33m" + zpad nl (radix a 16) + e + "[0m "))
-                       _ (map (\ k (: i (a + k)
+                    (say o (e + "[33m" + zpad nl (radix a 16) + e + "[0m "), map (\ k (: i (a + k)
                                       (? (n <= i) (say o "   ")
-                                         (say o ((? (i = pos) (e + "[7m") "") + hx2 (buf i) + (? (i = pos) (e + "[0m") "") + " "))))) ^16)
-                       _ (say o " ")
-                       _ (map (\ k (: i (a + k)
+                                         (say o ((? (i = pos) (e + "[7m") "") + hx2 (buf i) + (? (i = pos) (e + "[0m") "") + " "))))) ^16, say o " ", map (\ k (: i (a + k)
                                       (? (n <= i) 0
                                          (: c (buf i)
-                                            (say o ((? (i = pos) (e + "[7m") "") + (? (31 < c && c < 127) (string c) ".") + (? (i = pos) (e + "[0m") ""))))))) ^16)
-                       (say o (e + "[K"))))
+                                            (say o ((? (i = pos) (e + "[7m") "") + (? (31 < c && c < 127) (string c) ".") + (? (i = pos) (e + "[0m") ""))))))) ^16, say o (e + "[K")))
                (say o "\r\n"))
            _ (map row ^rows)
            _ (say o (e + "[" + show h + "H" + e + "[K" + e + "[1m\"" + f + "\"" + (? ro " (read only)" "") + ", 0x"
@@ -510,10 +495,10 @@
         (: _ (say out (e + "[" + show h + "H" + e + "[K" + what + ": ")) _ (flush out)
            (go acc) (: c (see in)
                        (? (c = 13 || c = 10) acc (c = 27 || c < 0) ()
-                          (c = 127 || c = 8) (: _ (? #acc (say out "\b \b") 0) _ (flush out) (go (? #acc (snip acc 0 (#acc - 1)) acc)))
-                          (: _ (put out c) _ (flush out) (go (acc + string c)))))
+                          (c = 127 || c = 8) ((? #acc (say out "\b \b") 0), flush out, go (? #acc (snip acc 0 (#acc - 1)) acc))
+                          (put out c, flush out, go (acc + string c))))
            (go ""))
-       (move p) (: _ (pin st 'pos (max 0 (min (max 0 (n - 1)) p))) (pin st 'lo 0))
+       (move p) (pin st 'pos (max 0 (min (max 0 (n - 1)) p)), pin st 'lo 0)
        _ (raw 1)
        _ (say out (e + "[?1049h"))
        (loop _)
@@ -521,7 +506,7 @@
            _ (frame h w) _ (flush out)
            k (hx-key in) pos (st 'pos)
            (? (k = -1 || k = 3 || k = 17 || k = 113 || k = 'esc) 0
-              (: _ (? (k = 'up) (move (pos - 16)) (k = 'down) (move (pos + 16))
+              ((? (k = 'up) (move (pos - 16)) (k = 'down) (move (pos + 16))
                       (k = 'left) (move (pos - 1)) (k = 'right) (move (pos + 1))
                       (k = 'pgup) (move (pos - 16 * (h - 1))) (k = 'pgdn) (move (pos + 16 * (h - 1)))
                       (k = 'home) (move (pos - pos % 16)) (k = 'end) (move (pos - pos % 16 + 15))
@@ -533,7 +518,7 @@
                                 v (: (hv i a) (? (#body <= i) a (: d (ubhexv (body i)) (? (charm? d) (hv (i + 1) (a * 16 + d)) a))) (hv 0 0))
                                 (move (? (rel = 43) (pos + v) (rel = 45) (pos - v) v)))))
                       (k = 117) (: u (st 'undo)
-                                   (? (two? u) (: _ (set! <<u <>(<u)) _ (poke <<u <>(<u)) _ (pin st 'undo >u) (move <<u)) 0))
+                                   (? (two? u) (set! <<u <>(<u), poke <<u <>(<u), pin st 'undo >u, move <<u) 0))
                       (charm? (ubhexv k))
                        (? (ro || n = 0) (pin st 'msg "read only")
                           (: d (ubhexv k) old (buf pos)
@@ -541,8 +526,7 @@
                              _ (pin st 'undo ([pos old] . st 'undo))
                              _ (set! pos v) _ (poke pos v)
                              (? (st 'lo) (move (pos + 1)) (pin st 'lo 1))))
-                      0)
-                 (loop 0))))
+                      0), loop 0)))
        _ (loop 0)
        _ (say out (e + "[0m" + e + "[?1049l")) _ (flush out)
        _ (raw 0)
@@ -557,7 +541,7 @@
        fs (? plus? >rest rest)
        ws (tty 1)
        hw (? (two? ws) (pgwin ws) [24 80])
-       (? !(two? ws) (pgpour fs)
+       (? (atom? ws) (pgpour fs)
           (two? fs)
            (: f <fs
               rd (uread f)
@@ -574,7 +558,7 @@
              dfd (dup 0)
              tfd (openfd "/dev/tty" 0)
              (? ((nom? tfd) || (nom? dfd))
-                 (: _ (? (charm? dfd) (close dfd) 0) (pgpour ()))
+                 ((? (charm? dfd) (close dfd) 0), pgpour ())
                 (: _ (dup2 tfd 0)
                    _ (close tfd)
                    q (fdopen dfd)

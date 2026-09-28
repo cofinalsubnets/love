@@ -37,7 +37,7 @@
   ((sort l) = (sortby (\ a b ([a b (show a)], a < b)) l))
   ((sort l) = tight)                                                ; ... and the same under a budget that collects at the spine
   ; a comparator that sorts: the frames nest
-  ((sort l) = (sortby (\ a b (? (tally (sortby (<) (list a b a)) < 4) (a < b) 0)) l))
+  ((sort l) = (sortby (\ a b (? (#(sortby (<) [a b a]) < 4) (a < b) 0)) l))
   ; the answer is read as a truth, not a bit: a list answers by its net
   ('(1 2 3) = (sortby (\ a b (? (a < b) '(1 1) '(-1))) '(2 3 1)))
   ; strings and lists sort by their own comparators

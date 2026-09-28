@@ -38,7 +38,7 @@
 ; the smallest subform where two trees part -- descend while the differing child
 ; is itself a pair, then report that pair. a leaf alone says "0 vs ()" and names
 ; nothing; its parent says which form it sat in.
-(: (rd-dn a b) (&& !(a = b) (two? a) (two? b))
+(: (rd-dn a b) (!(a = b) && two? a && two? b)
    (rd-small a b) (? (rd-dn <a <b) (rd-small <a <b)
                      (rd-dn >a >b) (rd-small >a >b)
                      [a b]))
@@ -47,7 +47,7 @@
 ; out/ is generated, dot-directories are not ours. stat's mode word decides
 ; directory-or-not: (two? (readdir p)) would call an empty directory a file.
 (: rd-skip '("out")
-   (rd-dir? p) (: st (stat p) (two? st && (16384 = (61440 & cauup st))))
+   (rd-dir? p) (: st (stat p) (two? st && (16384 = (61440 & <>>st))))
    (rd-dot? n) (46 = peep n 0 0)
    (rd-dotl? n) (: t #n ((2 < t) && (".l" = snip n (t - 2) t)))
    (rd-walk d acc)

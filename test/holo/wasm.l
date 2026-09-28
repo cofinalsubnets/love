@@ -74,7 +74,7 @@
                  ("isum" func 7) ("fib" func 8) ("classify" func 9) ("memops" func 10) ("bits" func 11))
       'start 6}
    _ (wasm-write "out/.holo.wasm" m)
-   _ (puts ("test/holo/wasm: wrote out/.holo.wasm, " + show (tally (wasm-emit m)) + " bytes\n"))
+   _ (puts ("test/holo/wasm: wrote out/.holo.wasm, " + show #(wasm-emit m) + " bytes\n"))
 
    ;; rung 2, the type law, as a second module laid whole by wasm-program: the double lane
    ;; (doubles travel as their bits through r0), the float conditions after ucomisd packed as
@@ -107,7 +107,7 @@
       'exports '(dsum dops dcmp dabs dcvt fimg addo subo mulo fthen)}
    m2 (wasm-program p)
    _ (wasm-write "out/.holo2.wasm" m2)
-   _ (puts ("test/holo/wasm: wrote out/.holo2.wasm, " + show (tally (wasm-emit m2)) + " bytes\n"))
+   _ (puts ("test/holo/wasm: wrote out/.holo2.wasm, " + show #(wasm-emit m2) + " bytes\n"))
 
    ;; rung 3, the environment: a mock of the artifact's face for inle/wasm/loader.js --
    ;; the verbs the page calls, over the one import, __ai_sys with linux's numbers. [16] is the
@@ -140,5 +140,5 @@
        'data '((24 0 0 1 0 0 0 0 0))}                     ; the bump pointer starts at 65536
    m3 (wasm-program p3)
    _ (wasm-write "out/.holo3.wasm" m3)
-   _ (puts ("test/holo/wasm: wrote out/.holo3.wasm, " + show (tally (wasm-emit m3)) + " bytes\n"))
+   _ (puts ("test/holo/wasm: wrote out/.holo3.wasm, " + show #(wasm-emit m3) + " bytes\n"))
    0)

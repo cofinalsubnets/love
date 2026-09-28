@@ -25,7 +25,7 @@
       (zdel 9 z3 = z3) !(zdel 1 (zmk 1 () ()))))
 
 ; --- the sheaf laws ---
-(: (sameset? a b) ((#a = tally b) && all (x \ any (y \ x = y) b) a)         ; equal as sets
+(: (sameset? a b) ((#a = #b) && all (x \ any (y \ x = y) b) a)              ; equal as sets
    s0 (sheaf '(1 2 3)) s1 (admit s0 10) s2 (admit (admit s1 20) 30)             ; ws1 row (30 20 10)
    s4 (shiftto s2 2)
    (test

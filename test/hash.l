@@ -46,7 +46,7 @@
  (tablet? {0}) !!{0} (1 = ${0})              ; a box is a nonempty 1-entry hash
  (0 = peep bx () 9)                          ; the boxed value sits at key () (the unit)
  (9 = peep bx 0 9)                           ; ... and key 0 is a miss (the flip's tell)
- (9 = (: _ (pin bx () 9) (peep bx () 0)))    ; ... and is mutable in place
+ (9 = (pin bx () 9, peep bx () 0))           ; ... and is mutable in place
  (5 = peep {5} () 0) ("s" = peep {"s"} () 0) ; any scalar boxes (at the unit)
  ('a = peep {'a} () 0)                       ; a quote form is a chain, and the brace still boxes it
  ("{() 5}" = show {5})                       ; a box prints as {() v}, reads back

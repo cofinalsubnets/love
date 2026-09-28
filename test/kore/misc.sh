@@ -51,6 +51,9 @@ if command -v strings >/dev/null 2>&1; then
   done
   strings -n 12 "$m" > "$g" 2>/dev/null; korerun strings -n 12 "$m" > "$o" 2>/dev/null
   same "strings over love itself"
+  # a run still open at end of input ends its line too
+  printf 'hello' | strings > "$g" 2>/dev/null; printf 'hello' | korerun strings > "$o" 2>/dev/null
+  same "strings, a run at eof"
 fi
 # cal: SIX week rows always, each padded to 20, and the year three abreast -- the
 # leap years come off epoch-days and want no table, so february is where a wrong one shows

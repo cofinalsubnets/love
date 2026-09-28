@@ -55,7 +55,7 @@
     (: r (uread path)
        (? (two? r) (breaks path <>r) ((path + ": cannot read") . ())))
    bad (foldl (\ a p (a + check p)) () >argv)
-   _ (each bad (\ m (: _ (puts m) (puts "\n"))))
+   _ (each bad (\ m (puts m, puts "\n")))
    _ (puts (0 < #bad ? (("lay: " + show #bad) + " breaks\n")
                        (("lay: " + show #(>argv)) + " binaries, every segment on its own page\n")))
    (quit (0 < #bad ? 1 0)))

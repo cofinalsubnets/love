@@ -393,7 +393,7 @@
 ;     placed absolutely. the whole thing rides the terminal's synchronised-output
 ;     bracket, so a scroll lands in one piece rather than line by line ---------
    (small ls ks) (: st (vgo ls ks) _ (pin st 'w 16) _ (pin st 'h 4) st)
-   (hlon st) (: _ (pin st 'pens (hues-pens hue-theme ())) _ (pin st 'hl 1) st)
+   (hlon st) (pin st 'pens (hues-pens hue-theme ()), pin st 'hl 1, st)
    SY (E$ + "[?2026h") YS (E$ + "[?2026l")
    (place r s) (E$ + "[" + show r + ";1H" + s + E$ + "[K")
    _ (test
@@ -431,16 +431,16 @@
       (: st (hlon (small '("(map f)" "(g 1)") "")) _ (vfresh st)
          r0 ((st 'hlrow) 0)
          ; [[text carry from to] painted]: the key is what it was painted from
-         ((<r0 = ["(map f)" 0 0 7 'l]) && (0 < tally <>r0)))
+         ((<r0 = ["(map f)" 0 0 7 'l]) && (0 < #<>r0)))
       ; the cache is keyed by SCREEN row, so it is the height of the view and
       ; never the height of the file
       (: st (hlon (small '("a" "b" "c" "d" "e" "f") "")) _ (vfresh st) _ (vfeed st (bytes "G"))
          _ (vfresh st)
-         (3 = tally (keys (st 'hlrow)))))
+         (3 = #(keys (st 'hlrow)))))
 
 ; --- long lines: the view slides sideways, and :set wrap folds them instead ---
    (box ls w h) (: st (vnew ls "t") _ (pins st 'w w 'h h) _ (vframe st) st)
-   (see st ks) (: _ (vfeed st (? (string? ks) (bytes ks) ks)) _ (vframe st) st)
+   (see st ks) (vfeed st (? (string? ks) (bytes ks) ks), vframe st, st)
    (body st) <(vlay st)
    _ (test
       ; nowrap is the default: 'left slides so the cursor shows, and stops at
@@ -692,9 +692,9 @@
       (: ls (map hue-arg (hue-tagged 'word))
          ((#(filter nom? ls) = 3) &&                ; macros values names
           (#(filter two? ls) = 1)))                 ; the forms, and nothing else
-      (0 < tally (hue-words 'macros))
-      (0 < tally (hue-words 'values))
-      (0 < tally (hue-words 'names))
+      (0 < #(hue-words 'macros))
+      (0 < #(hue-words 'values))
+      (0 < #(hue-words 'names))
       ; the probes answer what they claim to: a known macro, a known constant, a
       ; known verb -- each in its lane and no other
       (elem "assert" (hue-words 'macros))
