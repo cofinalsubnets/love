@@ -541,6 +541,45 @@
    _ (test (rpic? b 0) !(rpic? x 0) (0 = chat x 0))
    _ (test !(regrid s s 4 5) (0 < regrid s () 4 5) !(regrid s (cask 10) 4 5)))
 
+; --- 23. history: rows a scroll pushes off the top are kept, and glass reads them at negative
+;     indices, -cols the newest line's first cell. the view looks back through them: the
+;     painter's rows move down, and more output keeps the view on the same lines ---
+(: (hrow s k c) (cats (map (\ q (: ch (2097151 & glass s (k + q) 0) (0 = ch ? " " (string ch)))) (jot c)))
+   s (mkscr 3 4)
+   _ (scribe s ("\e[20h" + "aa\nbb\ncc\ndd\nee"))        ; LNM: \n is a newline; five lines on three rows
+   _ (test (2 = gaze s 9) (0 = gaze s 8)
+           ("aa  " = hrow s -8 4) ("bb  " = hrow s -4 4)  ; oldest first, newest at -cols
+           ("cc  " = hrow s 0 4) ("ee  " = hrow s 8 4)
+           !(glass s -9 0) !(glass s 12 0))           ; past the history, past the grid
+   _ (test (1 = peer s 1) ("bb  " = hrow s -4 4) (1 = gaze s 8)
+           (2 = peer s 9) (0 = peer s -1))            ; clamped both ways
+   _ (peer s 1)
+   _ (scribe s "\nff")                                 ; a line in while looking back
+   _ (test (3 = gaze s 9) (2 = gaze s 8))             ; ..the view follows the same line
+   _ (scribe s "\e[3J")                                ; ED 3: the history goes, the screen stays
+   _ (test (0 = gaze s 9) (0 = gaze s 8) ("ff  " = hrow s 8 4))
+   a (mkscr 3 4)
+   _ (scribe a ("\e[20h" + "xx\nyy\nzz\nww" + "\e[?1049h" + "1\n2\n3\n4\n5" + "\e[?1049l"))
+   _ (test ("xx  " = hrow a -4 4) (1 = gaze a 9))     ; the alternate screen kept nothing
+   t (mkscr 3 4)
+   _ (scribe t ("\e[20h" + "\e[2;3r" + "\e[2;1H" + "p\nq\nr\ns"))   ; a region below the top
+   _ (test (0 = gaze t 9))                             ; ..scrolls keep no history
+   w (mkscr 3 4)
+   _ (scribe w ("\e[20h" + "e\u{301}\n\u{4e16}\n3\n4\n5"))    ; a cluster and a wide char into history
+   _ (test (769 = glass w -8 3) (19990 = 2097151 & glass w -4 0) (1 = (glass w -4 0 >> 21 & 3)))
+   r (regrid w (cask (screen () 2 3)) 2 3)             ; regrid: history and the rows shrunk away
+   _ (test (3 = gaze r 9) ("e" = snip (hrow r -9 3) 0 1) ("3  " = hrow r -3 3) ("5  " = hrow r 3 3))
+   ; the painter looks back too: row 0 one line back paints what a screen with it there does
+   (pix sc y) (: px (cask (4 * 32 * 48)) _ (dye sc px 32 y -1 ()) (snip px (y * 2048) ((y + 1) * 2048)))
+   p (mkscr 3 4)
+   _ (scribe p ("\e[20h" + "aa\nbb\ncc\ndd"))
+   q (mkscr 3 4)
+   _ (scribe q "aa")
+   _ (peer p 1)
+   _ (test (pix p 0 = pix q 0) (pix p 1 = pix (scribe (mkscr 3 4) "\nbb") 1))
+   _ (peer p 0)
+   _ (test !(pix p 0 = pix q 0)))
+
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")
