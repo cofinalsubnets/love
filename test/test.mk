@@ -882,7 +882,7 @@ test_cpio: host
 test_tfm: host
 	@echo TEST test/gate/tfm.sh
 	@$(gsh) test/gate/tfm.sh $(ho)/love
-# test_caja -- caja (apps/caja/) against TeX: the same pages through both, DVI byte for byte.
+# test_caja -- caja (apps/caja/) against TeX: the same boxes and paragraphs through both, DVI byte for byte.
 # skips without TeX Live
 test_caja: host
 	@echo TEST test/gate/caja.sh

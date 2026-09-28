@@ -8,12 +8,20 @@
 # 127), then seeded random pages from a small grammar, enough of them that the file passes
 # TeX Live's 16384-byte DVI buffer and the w/x/y/z reuse meets its flushed half.
 #
+# paragraphs (apps/caja/par.l, tex.web parts 38-43 and the main loop): test/caja/pars.l says
+# its pages as -ini TeX with hyphen.tex's patterns and as caja's tokens, the same way. fixed
+# pages pin plain TeX's settings, raggedright, looseness, hanging indentation, \parshape and
+# the emergency pass; seeded random pages draw the parameters and the text, which mixes
+# English, punctuation, explicit hyphens and discretionaries, penalties, kerns, glue, rules
+# and font changes. cajalig (test/caja/cajalig.pl, through pltotf) has every ligature op,
+# kerns and both boundary characters.
+#
 # skips where TeX Live is missing; takes the love binary as $1.
 set -e
 
 love=${1:-out/love}
 [ -x "$love" ] || { echo "caja: no $love -- run 'make host'"; exit 1; }
-for t in tex kpsewhich; do
+for t in tex kpsewhich pltotf; do
   command -v $t >/dev/null 2>&1 || { echo "caja: no $t (TeX Live), skipped"; exit 0; }
 done
 r=$(pwd)
@@ -30,19 +38,27 @@ for f in cmr10 cmbx12 cmr10 cmtt10 cmsl9 ecrm1000; do
   fonts="$fonts $p"
 done
 
-boxes() {
-  seed=$1; n=$2
-  "$L" test/caja/boxes.l "$w/ours" $seed $n $fonts || fail "boxes.l died (seed $seed)"
+hy=$(kpsewhich hyphen.tex) || true
+[ -n "$hy" ] || { echo "caja: no hyphen.tex, skipped"; exit 0; }
+pltotf test/caja/cajalig.pl "$w/cajalig.tfm" >/dev/null 2>&1 || fail "pltotf refused test/caja/cajalig.pl"
+
+# run SCRIPT SEED N ARGS..: the script's pages through TeX and through caja
+run() {
+  s=$1; seed=$2; n=$3; shift 3
+  "$L" test/caja/$s.l "$w/ours" $seed $n "$@" || fail "$s.l died (seed $seed)"
   ( cd "$w" && cp ours.tex t.tex && tex -ini -interaction=batchmode t.tex >/dev/null 2>&1 ) || true
-  [ -s "$w/t.dvi" ] || fail "TeX wrote no DVI (seed $seed)"
+  [ -s "$w/t.dvi" ] || fail "TeX wrote no DVI ($s, seed $seed)"
   cmp -s "$w/t.dvi" "$w/ours.dvi" || {
     cmp "$w/t.dvi" "$w/ours.dvi" || true
-    fail "caja's DVI differs from TeX's (seed $seed, $n random pages)"
+    fail "caja's DVI differs from TeX's ($s, seed $seed, $n random pages)"
   }
   rm -f "$w/t.dvi" "$w/ours.dvi"
 }
 
-boxes 1 0
-boxes 20260928 600
+run boxes 1 0 $fonts
+run boxes 20260928 600 $fonts
 echo "  caja: boxes -- the fixed pages and 600 random ones, DVI identical to TeX's"
+run pars 1 0 "$hy" $fonts "$w/cajalig.tfm"
+run pars 20260928 400 "$hy" $fonts "$w/cajalig.tfm"
+echo "  caja: paragraphs -- the fixed pages and 400 random ones, DVI identical to TeX's"
 echo "  caja: ok"
