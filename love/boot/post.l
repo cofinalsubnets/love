@@ -707,8 +707,11 @@
 ;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 ;   (pprefixes p) -> the directory prefixes of p, outermost first
 
-(module '(path lastslash lastdot segs pclean pprefixes)
+(module '(path lastslash lastdot pbase phead segs pclean pprefixes)
 (: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
+   ; the leaf after the last '/', and the head before it with the slash kept ("" for none)
+   (pbase p) (snip p (lastslash p) #p)
+   (phead p) (snip p 0 (lastslash p))
    (lastdot p) (: sl (lastslash p)
                   ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
    ; "/a/b/c" -> ("/a" "/a/b"): neither the leading '/' nor the leaf is a prefix, so `mkdir -p`
@@ -2532,9 +2535,7 @@
    ; the verb run in the caller as a builtin: urun is the driver, so a leave from deep in
    ; answers a status and never ends the caller. () when no verb has the name
    (call k as) (: f (get k) (? (lit? f) (urun f as) ()))
-   (bn p)    (: n #p
-                (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n))
-                (go 0 0))
+   bn (cite 'path 'pbase)
    (dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sl? w)   (: n #w (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
    (word w)  (sl? w || dotl? w ? () (get (name w)))

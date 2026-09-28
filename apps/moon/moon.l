@@ -1024,9 +1024,7 @@
    (nostd? a) (a = "-nostdlib" || a = "-nostartfiles" ||
                a = "-nodefaultlibs" || a = "-ffreestanding")
    (dirn d) (: n #d (? !n d (d (n - 1) = 47) d (d + "/")))
-   (obase p) (: n #p                               ; dir/x.c -> x.o (in the cwd, gcc-shaped)
-                (go k r) (? (k < n) (go (k + 1) (p k = 47 ? (k + 1) r)) (snip p r (n - 1)))
-                (go 0 0 + "o"))
+   (obase p) (: b (pbase p) (snip b 0 (#b - 1) + "o"))   ; dir/x.c -> x.o (in the cwd, gcc-shaped)
    ; one tablet, not a row of positional accumulators: a flag is one `pin` at its own arm and
    ; nothing anywhere else, and the reader asks for it by name. -std= is a pre-pass instead,
    ; because it names the language and belongs before the line is read at all.

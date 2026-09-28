@@ -227,7 +227,6 @@
                  (go (i + 1) (k + 1) (acc + string (r i))))))
 
  ; --- the library: a hall of shelves, one per crew module under root ------------------
- (base p) (: n #p (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n)) (go 0 0))
  (first-para md) (:- (go ls "")
   ls (split "\n" md)
   (go l acc) (? (one? l) acc
