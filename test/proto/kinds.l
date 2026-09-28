@@ -19,13 +19,13 @@
               'top)                                          ; mixed branches -> top
 
  ; --- transfer functions: a kind for an op given its operands' kinds ---
- (tnum a b) (? (|| (= a 'bot) (= b 'bot)) 'bot          ; an operand not yet known -> stay bot
-              (&& (num? a) (num? b)) (: j (join a b) (? (= j 'charm) 'whole j))  ; +/* may OVERFLOW charm -> whole
+ (tnum a b) (? (a = 'bot || b = 'bot) 'bot                 ; an operand not yet known -> stay bot
+              (num? a && num? b) (: j (join a b) (j = 'charm ? 'whole j))  ; +/* may OVERFLOW charm -> whole
               'top)                                          ; non-numeric +/* (cat/generic) -> give up
 
  ; --- env: an assoc (name . kind); a missing name reads bot ---
- (look env x) (? (atom? env) 'bot (: p (cap env) (? (= x (cap p)) (cup p) (look (cup env) x))))
- (joininto env x k) (. (. x (join (look env x) k)) env)   ; monotone shadow-update (look finds newest)
+ (look env x) (? (atom? env) 'bot (: p <env (x = <p ? >p (look >env x))))
+ (joininto env x k) ((x . join (look env x) k) . env)      ; monotone shadow-update (look finds newest)
 
  ; --- kindof: abstract-evaluate an expression under env ---
  (kindof env e) (?
@@ -33,35 +33,32 @@
    (string? e) 'str
    (nom? e) (look env e)                                     ; a variable reference
    (atom? e) 'top
-   (: h (cap e) a (cap (cup e)) b (cap (cup (cup e)))
-     (? (|| (= h '+) (= h '*)) (tnum (kindof env a) (kindof env b))
-        (= h '?) (join (kindof env b) (kindof env (cap (cup (cup (cup e))))))   ; (? c a b) -> join the branches
+   (: h <e a <>e b <>>e
+     (? (h = '+ || h = '*) (tnum (kindof env a) (kindof env b))
+        (h = '?) (join (kindof env b) (kindof env <>>>e))   ; (? c a b) -> join the branches
         'top)))                                              ; lambda / unknown form -> top
 
  ; --- the seminaive FIXPOINT over the flat (n1 e1 n2 e2 ..) binding list ---
- (pairs bs) (? (atom? bs) 0 (atom? (cup bs)) 0 (. (. (cap bs) (cap (cup bs))) (pairs (cup (cup bs)))))
- (alle a b) (? (atom? a) 1 (: p (cap a) (&& (= (cup p) (look b (cap p))) (alle (cup a) b))))
- (enveq a b) (&& (alle a b) (alle b a))                      ; same name->kind both ways = fixpoint
- (step ps env) (foldl (\ env p (joininto env (cap p) (kindof env (cup p)))) env ps)
- (fix ps env) (: e2 (step ps env) (? (enveq env e2) env (fix ps e2)))
+ (pairs bs) (? (atom? bs) 0 (atom? >bs) 0 ((<bs . <>bs) . pairs >>bs))
+ (alle a b) (? (atom? a) 1 (: p <a (>p = look b <p && alle >a b)))
+ (enveq a b) (alle a b && alle b a)                          ; same name->kind both ways = fixpoint
+ (step ps env) (foldl (env \ p \ joininto env <p (kindof env >p)) env ps)
+ (fix ps env) (: e2 (step ps env) (enveq env e2 ? env (fix ps e2)))
  (infer bs) (fix (pairs bs) 0)
 
  ; --- devirt: collect +/* sites whose operands are statically numeric ---
  (sites env e) (? (atom? e) 0
-   (: h (cap e) sub (catmap (\ s (sites env s)) (cup e))
-      (? (&& (|| (= h '+) (= h '*))
-             (num? (kindof env (cap (cup e)))) (num? (kindof env (cap (cup (cup e))))))
-         (. e sub) sub)))
+   (: h <e sub (catmap (s \ sites env s) >e)
+      ((h = '+ || h = '*) && num? (kindof env <>e) && num? (kindof env <>>e) ? (e . sub) sub)))
 
  ; --- report ---
  (showenv bs) (: env (infer bs)
-   (: _ (each (pairs bs) (\ p (: _ (puts "    ") _ (dot (string (cap p))) _ (puts " : ")
-                                _ (dot (string (look env (cap p)))) (putc 10))))
-      (: ss (catmap (\ p (sites env (cup p))) (pairs bs))
-       (: _ (puts "    devirt (numeric, skip dispatch): ") _ (dot (show ss)) (putc 10)))))
+   (each (pairs bs) (p \ (puts "    ", dot (string <p), puts " : ", dot (string (look env <p)), putc 10)),
+    (: ss (catmap (p \ sites env >p) (pairs bs))
+       (puts "    devirt (numeric, skip dispatch): ", dot (show ss), putc 10))))
 
- _ (: _ (puts ";; A. linear chain  (: x 5 y (+ x 1) z (* y y))\n") (showenv '(x 5 y (+ x 1) z (* y y))))
- _ (: _ (puts ";; B. fixpoint join (: x (? cnd 5 x))  -- x is 5-or-itself -> charm\n") (showenv '(x (? cnd 5 x))))
- _ (: _ (puts ";; C. widening      (: n 100 m (+ n n) p (* m m))  -- overflow climbs charm->whole\n") (showenv '(n 100 m (+ n n) p (* m m))))
- _ (: _ (puts ";; D. non-numeric   (: s \"hi\" t (+ s s))  -- + on str -> top, NOT devirt\n") (showenv '(s "hi" t (+ s s))))
+ _ (puts ";; A. linear chain  (: x 5 y (+ x 1) z (* y y))\n", showenv '(x 5 y (+ x 1) z (* y y)))
+ _ (puts ";; B. fixpoint join (: x (? cnd 5 x))  -- x is 5-or-itself -> charm\n", showenv '(x (? cnd 5 x)))
+ _ (puts ";; C. widening      (: n 100 m (+ n n) p (* m m))  -- overflow climbs charm->whole\n", showenv '(n 100 m (+ n n) p (* m m)))
+ _ (puts ";; D. non-numeric   (: s \"hi\" t (+ s s))  -- + on str -> top, NOT devirt\n", showenv '(s "hi" t (+ s s)))
  0)

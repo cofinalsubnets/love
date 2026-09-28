@@ -122,7 +122,7 @@
                    (n < b0 + nb) ()
                    (: kind (cpio-kind mode)
                       body (snip s b0 (b0 + nb))
-                      e (tar-entry nom kind (= kind 'link ? "" body))
+                      e (tar-entry nom kind (kind = 'link ? "" body))
                       _ (pins e 'mode (mode & 4095) 'mtime mtime 'uid uid 'gid gid)
                       _ (kind = 'link && pin e 'to body)
                       [1 e (b0 + nb + padk nb 4)]))))))
@@ -150,14 +150,14 @@
               p (#nom ? (#root ? (root + "/" + nom) nom) root)
               kind (peep e 'kind 'file)
               _ (cpio-mkp p)
-              skip (!u && !(= kind 'dir) && cpio-newer? p (peep e 'mtime 0))
+              skip (!u && kind != 'dir && cpio-newer? p (peep e 'mtime 0))
               ok (? skip 1
                     (kind = 'dir) (mkdir p (peep e 'mode 493), cpio-there? p)
                     (kind = 'link) (cpio-there? p && unlink p,
                                     symlink (peep e 'to "") p,
                                     string? (readlink p))
                     (: q (open p "w")
-                     (hot? q && (: _ (say q (peep e 'body "")) (close q)),
+                     (hot? q && (say q (peep e 'body ""), close q),
                       cpio-there? p && chmod p (peep e 'mode 420),
                       cpio-there? p)))
               (ok && go >xs (skip ? k (k + 1)))))
@@ -202,7 +202,7 @@
        (: k ((n + 512 - 1) // 512)
           _ (say err (show k + " block" + (k = 1 ? "" "s")))
           _ (put err 10) (flush err)))
-   (cpioc-tell t nom) (peep t 'v 0 && (: _ (say err nom) (put err 10)))
+   (cpioc-tell t nom) (peep t 'v 0 && (say err nom, put err 10))
    ; the name list, split here rather than by kore's `lines`: that one is module 'kore's
    ; and this file is a lib, outside it
    (cpioc-lines s)
@@ -224,7 +224,7 @@
                 e)
        (? (string? lnk)
           (: e (tar-entry nom 'link "") _ (pins e 'to lnk 'mode 511) [1 (own e)])
-          (one? st) (cpioc-moan (p + ": No such file or directory"), ())
+          (atom? st) (cpioc-moan (p + ": No such file or directory"), ())
           (<>>st & 61440 = 16384)
            (: e (tar-entry nom 'dir "") (pin e 'mode (<>>st & 4095), [1 (own e)]))
           (: b (uread p)
@@ -237,7 +237,7 @@
    (cpioc-o t)
     (: ns (cpioc-lines (slurp in + ""))
        (go l acc ok)
-        (one? l ? [(rev acc) ok]
+        (atom? l ? [(rev acc) ok]
          (: p <l
           (#p @ 0 (go >l acc ok)            ; find's trailing empty line
            (: r (cpioc-one p)
@@ -295,12 +295,12 @@
        w (? (two? rest) <rest "")
        bad (? (two? r) ((cite 'cli 'uoptun) u [111 105 116 100 117 118 104 72 70 73 79 1001 1002 1003]) ())
        (val c) (: v (peep u c ()) (two? v && <>v))
-       (? !(two? r) (: _ (cpioc-moan (<(rev as) + " wants a value")) ())
+       (? !(two? r) (cpioc-moan (<(rev as) + " wants a value"), ())
           (2 < #w && w 0 = 45 && w 1 = 45 && !(0 < k && as (k - 1) = "--"))
-           (: _ (cpioc-moan ("unknown option " + w)) ())
-          bad (: _ (cpioc-moan ("unknown option -" + string bad)) ())
+           (cpioc-moan ("unknown option " + w), ())
+          bad (cpioc-moan ("unknown option -" + string bad), ())
           (: fmt (val 72)
-             (? (fmt && fmt != "newc") (: _ (cpioc-moan ("format " + fmt + " is not here (newc only)")) ())
+             (? (fmt && fmt != "newc") (cpioc-moan ("format " + fmt + " is not here (newc only)"), ())
                 (: m ((cite 'cli 'uoptlast) as [111 105 116] [72 70 73 79] cpioc-longs)
                    _ (? m (pin t 'mode (m @ 111 'o 105 'i 't)))
                    _ (each [100 117 118 104] (c \ peep u c 0 && pin t (intern (string c)) 1))

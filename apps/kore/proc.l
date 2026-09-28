@@ -17,46 +17,46 @@
    ; a duration text -> milliseconds | (): N or N.N, an optional s/m/h/d suffix
    ; (seconds the default). 0 is a real duration -- callers test charm?, not truth
    (udur s0)
-    (: n0 (tally s0)
+    (: n0 #s0
        lc (? (0 < n0) (s0 (n0 - 1)) ())
-       sfx ((lc = 115) || (lc = 109) || (lc = 104) || (lc = 100))
+       sfx (lc = 115 || lc = 109 || lc = 104 || lc = 100)
        mul (? (lc = 109) 60000 (lc = 104) 3600000 (lc = 100) 86400000 1000)
        s (? sfx (snip s0 0 (n0 - 1)) s0)
-       n (tally s)
-       (dig? c) ((48 <= c) && (c <= 57))
-       (ip i acc) (? ((i < n) && dig? (s i)) (ip (i + 1) ((* 10 acc) + (s i - 48))) [acc i])
+       n #s
+       (dig? c) (48 <= c && c <= 57)
+       (ip i acc) (? (i < n && dig? (s i)) (ip (i + 1) ((10 * acc) + (s i - 48))) [acc i])
        r (ip 0 0)
        whole <r i <>r
-       (? ((i = n) && (0 < n)) (* whole mul)
-          ((i < n) && (s i = 46))
-           (: (fp j acc sc) (? ((j < n) && dig? (s j))
-                               (fp (j + 1) ((* 10 acc) + (s j - 48)) (* sc 10))
+       (? (i = n && 0 < n) (whole * mul)
+          (i < n && (s i = 46))
+           (: (fp j acc sc) (? (j < n && dig? (s j))
+                               (fp (j + 1) ((10 * acc) + (s j - 48)) (sc * 10))
                                [acc sc j])
               fr (fp (i + 1) 0 1)
-              (? ((<>>fr = n) && ((0 < i) || ((i + 1) < n)))
-                 ((* whole mul) + (// (* <fr mul) <>fr))
+              (? (<>>fr = n && (0 < i || (i + 1) < n))
+                 ((whole * mul) + ((<fr * mul) // <>fr))
                  ()))
           ()))
 
    ; -- env: assignments, then print the world or run a command inside it --
    (env-main as)
-    (: (eqat s) (: n (tally s)                    ; the first = past position 0, or ()
+    (: (eqat s) (: n #s                    ; the first = past position 0, or ()
                    (go k) (? (n <= k) ()
                              (s k = 61) (? (0 < k) k ())
                              (go (k + 1)))
                    (go 1))
-       (setp a) (? !(two? a) a
+       (setp a) (? (atom? a) a
                    (: i (eqat <a)
                       (? i (: s <a
-                              _ (setenv (snip s 0 i) (snip s (i + 1) (tally s)))
+                              _ (setenv (snip s 0 i) (snip s (i + 1) #s))
                               (setp >a))
                          a)))
        ; the options come first: -i empties the environment, -u NAME drops one --
        ; a non-string value unsets (love/main.c's setenv shape); then the assignments
-       (unset-all e) (? !(two? e) 0 (: k <e i (eqat k) _ (setenv (? i (snip k 0 i) k) ()) (unset-all >e)))
-       (opts a) (? !(two? a) a
-                  (<a = "-i") (: _ (unset-all (environ 0)) (opts >a))
-                  (<a = "-u") (? (two? >a) (: _ (setenv <>a ()) (opts >>a)) (udie 1 "env: -u needs a name"))
+       (unset-all e) (? (atom? e) 0 (: k <e i (eqat k) _ (setenv (? i (snip k 0 i) k) ()) (unset-all >e)))
+       (opts a) (? (atom? a) a
+                  (<a = "-i") (unset-all (environ 0), opts >a)
+                  (<a = "-u") (? (two? >a) (setenv <>a (), opts >>a) (udie 1 "env: -u needs a name"))
                   (<a = "--") >a
                   a)
        rest (setp (opts as))
@@ -64,14 +64,14 @@
           (: p (spawn rest)
              (? (nom? p) (udie 127 ("env: cannot run " + <rest))
                 (: w (wait p) _ (flush out) w)))
-          (: (pr e) (? !(two? e) (: _ (flush out) 0)
-                       (: _ (say out <e) _ (put out 10) (pr >e)))
+          (: (pr e) (? (atom? e) (flush out, 0)
+                       (say out <e, put out 10, pr >e))
              (pr (environ 0)))))
 
    ; -- sleep: the durations, summed --
    (sleep-main as)
-    (? !(two? as) (udie 1 "sleep: missing operand")
-       (: (tot a acc) (? !(two? a) acc
+    (? (atom? as) (udie 1 "sleep: missing operand")
+       (: (tot a acc) (? (atom? a) acc
                          (: m (udur <a)
                             (? (charm? m) (tot >a (acc + m))
                                (udie 1 ("sleep: invalid time interval '" + <a + "'")))))
@@ -87,13 +87,13 @@
    usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("KILL" 9) ("USR1" 10) ("SEGV" 11)
                ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18)
                ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22))
-   (usigdig? b k) (? ((tally b) <= k) (0 < (tally b))
-                     ((48 <= (b k)) && ((b k) <= 57)) (usigdig? b (k + 1))
+   (usigdig? b k) (? (#b <= k) (0 < #b)
+                     (48 <= (b k) && (b k) <= 57) (usigdig? b (k + 1))
                      0)
    (usignum w)
-    (: n (tally w)
-       (snl l b) (? !(two? l) () (<<l = b) <><l (snl >l b))
-       (? ((n < 2) || !((w 0) = 45)) ()
+    (: n #w
+       (snl l b) (? (atom? l) () (<<l = b) <><l (snl >l b))
+       (? (n < 2 || !((w 0) = 45)) ()
           (: b (snip w 1 n)
              (? (usigdig? b 0) (uatoi b) (snl usignames b)))))
 
@@ -106,12 +106,12 @@
        _ (? (two? pids) () (udie 1 "usage: kill [-SIG] PID.."))
        (one p ok)
         (? !(alldig? p)
-           (: _ (say err ("kill: invalid pid " + p)) _ (put err 10) 0)
+           (say err ("kill: invalid pid " + p), put err 10, 0)
            (: r (still (uatoi p) sg)
               (? !r ok
-                 (: _ (say err ("kill: cannot kill " + p)) _ (put err 10) 0))))
+                 (say err ("kill: cannot kill " + p), put err 10, 0))))
        (go a ok) (? (two? a) (go >a (one <a ok))
-                    (: _ (flush err) (? ok 0 1)))
+                    (flush err, (? ok 0 1)))
        (go pids 1))
 
    ; -- date: the wall clock. utc and only utc -- there is no tz database in this tree,
@@ -120,19 +120,19 @@
    ; which is also the only thing that makes this tool gateable against GNU at all.
    ; +format, or GNU's C-locale default when none is given.
    (udatef fmt ms)
-    (: s (// ms 1000)
-       days (// s 86400) secs (% s 86400)
+    (: s (ms // 1000)
+       days (s // 86400) secs (s % 86400)
        ymd (civil days)
        Y <ymd M <>ymd D <>>ymd
-       hh (// secs 3600) mm (// (% secs 3600) 60) ss (% secs 60)
+       hh (secs // 3600) mm ((secs % 3600) // 60) ss (secs % 60)
        wd (wday days)
        yday ((days - (epoch-days Y 1 1)) + 1)
        (p2 v) (zpad 2 (show v))
-       n (tally fmt) o (jug 0)
+       n #fmt o (jug 0)
        (go k)
         (? (n <= k) (slurp o)
            (: c (fmt k)
-              (? !((c = 37) && ((k + 1) < n)) (: _ (put o c) (go (k + 1)))
+              (? !(c = 37 && (k + 1) < n) (put o c, go (k + 1))
                  (: d (fmt (k + 1))
                     _ (? (d = 37) (put o 37)
                          (d = 89) (say o (show Y))
@@ -143,34 +143,34 @@
                          (d = 77) (say o (p2 mm))
                          (d = 83) (say o (p2 ss))
                          (d = 106) (say o (zpad 3 (show yday)))
-                         (d = 121) (say o (p2 (% Y 100)))
-                         (d = 67) (say o (p2 (// Y 100)))
+                         (d = 121) (say o (p2 (Y % 100)))
+                         (d = 67) (say o (p2 (Y // 100)))
                          (d = 70) (say o ((zpad 4 (show Y)) + "-" + (p2 M) + "-" + (p2 D)))
                          (d = 84) (say o ((p2 hh) + ":" + (p2 mm) + ":" + (p2 ss)))
-                         (d = 68) (say o ((p2 M) + "/" + (p2 D) + "/" + (p2 (% Y 100))))
+                         (d = 68) (say o ((p2 M) + "/" + (p2 D) + "/" + (p2 (Y % 100))))
                          (d = 115) (say o (show s))
                          (d = 97) (say o (wd3 wd))
                          (d = 65) (say o (wdl wd))
-                         ((d = 98) || (d = 104)) (say o (mon3 (M - 1)))
+                         (d = 98 || d = 104) (say o (mon3 (M - 1)))
                          (d = 66) (say o (monl (M - 1)))
                          (d = 112) (say o (? (hh < 12) "AM" "PM"))
-                         (d = 73) (say o (p2 (: h (% hh 12) (? h h 12))))
+                         (d = 73) (say o (p2 (: h (hh % 12) (? h h 12))))
                          (d = 117) (say o (show (? wd wd 7)))
                          (d = 119) (say o (show wd))
                          (d = 90) (say o "UTC")
                          (d = 122) (say o "+0000")
                          (d = 110) (put o 10)
                          (d = 116) (put o 9)
-                         (: _ (put o 37) (put o d)))
+                         (put o 37, put o d))
                     (go (k + 2))))))
        (go 0))
    (udt-when w)                        ; -d's @seconds, the one spelling this date parses
-    (? ((0 < tally w) && (w 0 = 64)) (* 1000 (uatoi (snip w 1 (tally w))))
+    (? ((0 < tally w) && (w 0 = 64)) (1000 * (uatoi (snip w 1 #w)))
        (udie 1 ("date: cannot read the date '" + w + "' (only @SECONDS here)")))
    (date-main as)
     (: (fl a when fmt)
-        (? !(two? a) [when fmt]
-           ((<a = "-u") || (<a = "--utc")) (fl >a when fmt)
+        (? (atom? a) [when fmt]
+           (<a = "-u" || <a = "--utc") (fl >a when fmt)
            (<a = "-d") (? (two? >a) (fl >>a (udt-when <>a) fmt)
                           (udie 1 "date: -d wants a time"))
            (<a = "-r") (? (two? >a)
@@ -178,7 +178,7 @@
                              (? (two? st) (fl >>a <>st fmt)
                                 (udie 1 ("date: cannot stat '" + <>a + "'"))))
                           (udie 1 "date: -r wants a file"))
-           ((0 < tally <a) && (<a 0 = 43)) (fl >a when (snip <a 1 (tally <a)))
+           ((0 < tally <a) && (<a 0 = 43)) (fl >a when (snip <a 1 #<a))
            (udie 1 ("date: cannot set the clock (" + <a + ")")))
        p (fl as () ())
        ms (? (charm? <p) <p (clock 0))
@@ -188,52 +188,45 @@
    ; -- cal: a month, laid out on 'cal's rows. `cal` alone is this month, `cal M Y` a
    ; named one, `cal Y` the twelve. weeks open on Sunday, as cal's do.
    ucal-hdr "Su Mo Tu We Th Fr Sa"                  ; 20 wide, and so is every row under it
-   (ucal-mid w s) (: n (tally s) (urpad w (upad ((// ((w - n) + 1) 2) + n) s)))
+   (ucal-mid w s) (: n #s (urpad w (upad ((((w - n) + 1) // 2) + n) s)))
    ; SIX rows always, blank ones included, each the full 20 -- cal pads rather than
    ; trims, which is the whole reason a month is a fixed block that tiles across
    (ucal-weeks y m)
     (: lead (wday (epoch-days y m 1)) len (mdays y m)
-       (cell d) (? ((d < 1) || (len < d)) "  " (upad 2 (show d)))
+       (cell d) (? (d < 1 || len < d) "  " (upad 2 (show d)))
        (row r) (: o (jug 0)
                   (go c) (? (7 <= c) (slurp o)
-                            (: _ (? c (put o 32) 0)
-                               _ (say o (cell (((* 7 r) + c) - (lead - 1))))
-                               (go (c + 1))))
+                            ((? c (put o 32) 0), say o (cell (((7 * r) + c) - (lead - 1))), go (c + 1)))
                   (go 0))
        (go r acc) (? (6 <= r) (rev acc) (go (r + 1) ((row r) . acc)))
        (go 0 ()))
-   (ucal-say l) (: _ (say out l) (put out 10))
+   (ucal-say l) (say out l, put out 10)
    (ucal-tri a b c) (a + "   " + b + "   " + c)     ; three columns -> the 66-wide line
    (cal-main as)
-    (: ymd (civil (// (// (clock 0) 1000) 86400))
+    (: ymd (civil (((clock 0) // 1000) // 86400))
        (bad _) (udie 2 "usage: cal [[MONTH] YEAR]")
-       ms (? !(two? as) [<>ymd <ymd]
-             !(two? >as) (: y (uatoi <as) _ (? (0 < y) 0 (bad 0)) ['all y])
+       ms (? (atom? as) [<>ymd <ymd]
+             (atom? >as) (: y (uatoi <as) _ (? (0 < y) 0 (bad 0)) ['all y])
              (: m (uatoi <as) y (uatoi <>as)
-                _ (? ((1 <= m <= 12) && (0 < y)) 0 (bad 0))
+                _ (? ((1 <= m <= 12) && 0 < y) 0 (bad 0))
                 [m y]))
        m <ms y <>ms
        ; a quarter: three titles, three headers, then the six week rows abreast
        (quarter k)
         (: ms3 [k (k + 1) (k + 2)]
            (col f) (map f ms3)
-           ts (col (\ j (ucal-mid 20 (monl (j - 1)))))
-           ws (col (\ j (ucal-weeks y j)))
+           ts (col (j \ (ucal-mid 20 (monl (j - 1)))))
+           ws (col (j \ (ucal-weeks y j)))
            w1 <ws w2 <>ws w3 <>>ws
            _ (ucal-say (ucal-tri <ts <>ts <>>ts))
            _ (ucal-say (ucal-tri ucal-hdr ucal-hdr ucal-hdr))
            (go r) (? (6 <= r) 1
-                     (: _ (ucal-say (ucal-tri (w1 r) (w2 r) (w3 r)))
-                        (go (r + 1))))
+                     (ucal-say (ucal-tri (w1 r) (w2 r) (w3 r)), go (r + 1)))
            (go 0))
-       _ (? (= m 'all)
-            (: _ (ucal-say (ucal-mid 66 (show y)))
-               _ (put out 10)
-               (: (go k) (? (12 < k) 1 (: _ (quarter k) (go (k + 3)))) (go 1)))
-            (: _ (ucal-say (ucal-mid 20 ((monl (m - 1)) + " " + (show y))))
-               _ (ucal-say ucal-hdr)
-               _ (map ucal-say (ucal-weeks y m))
-               1))
+       _ (? (m = 'all)
+            (ucal-say (ucal-mid 66 (show y)), put out 10,
+             (: (go k) (? (12 < k) 1 (quarter k, go (k + 3))) (go 1)))
+            (ucal-say (ucal-mid 20 ((monl (m - 1)) + " " + (show y))), ucal-say ucal-hdr, map ucal-say (ucal-weeks y m), 1))
        _ (flush out) 0)
 
    ; -- id: who this process is. -u/-g/-G the ids, -n their names, and the bare face
@@ -243,13 +236,13 @@
    ; changes nothing: this love holds only the real ids, which is what -r asks for.
    (id-main as)
     (: (fl a t)
-        (? !(two? a) t
-           ((tally <a < 2) || !(<a 0 = 45)) (udie 1 ("id: unknown argument " + <a))
+        (? (atom? a) t
+           ((#<a < 2) || !(<a 0 = 45)) (udie 1 ("id: unknown argument " + <a))
            (: w <a
-              (cl k) (? (tally w <= k) (fl >a t)
+              (cl k) (? (#w <= k) (fl >a t)
                         (: c (w k)
                            (? (elem c '(117 103 71 110 114))
-                              (: _ (pin t c 1) (cl (k + 1)))
+                              (pin t c 1, cl (k + 1))
                               (udie 1 ("id: unknown option -" + string c)))))
               (cl 1)))
        t (fl as (tablet 0))
@@ -260,7 +253,7 @@
        (one g) ((show g) + "(" + (uidname "/etc/group" g) + ")")
        _ (? (peep t 117 0) (say out (? n? nm (show uid)))
             (peep t 103 0) (say out (? n? (uidname "/etc/group" gid) (show gid)))
-            (peep t 71 0) (say out (ujoin (map (\ g (? n? (uidname "/etc/group" g) (show g))) gs)))
+            (peep t 71 0) (say out (ujoin (map (g \ (? n? (uidname "/etc/group" g) (show g))) gs)))
             (say out ((("uid=" + (show uid) + "(" + nm + ")") + (" gid=" + (one gid)))
                       + (" groups=" + (ujoinc 44 (map one gs))))))
        _ (put out 10) _ (flush out) 0)
@@ -274,19 +267,19 @@
        _ (? (two? cmd) () (udie 125 "nohup: missing operand"))
        tin (two? (tty 0)) tout (two? (tty 1)) terr (two? (tty 2))
        _ (signal 1 1)
-       (open1 p) (: new !(two? (stat p)) fd (openfd p 2)
-                    (? (nom? fd) () (: _ (? new (chmod p 384) 0) [fd p])))
+       (open1 p) (: new (atom? (stat p)) fd (openfd p 2)
+                    (? (nom? fd) () ((? new (chmod p 384) 0), [fd p])))
        ofd (? tout (: a (open1 "nohup.out") h (getenv "HOME")
                       (? (two? a) a (string? h) (open1 (h + "/nohup.out")) ()))
               ())
-       _ (? (tout && !(two? ofd)) (udie 125 "nohup: failed to open nohup.out") ())
+       _ (? (tout && atom? ofd) (udie 125 "nohup: failed to open nohup.out") ())
        what (? tout ("appending output to '" + <>ofd + "'")
                terr "redirecting stderr to stdout"
                "")
        msg (? (tin && #what) ("ignoring input and " + what) tin "ignoring input" what)
-       _ (? #msg (: _ (say err ("nohup: " + msg)) _ (put err 10) (flush err)) 0)
-       _ (? tin (: fd (openfd "/dev/null" 0) (? (nom? fd) 0 (: _ (dup2 fd 0) (close fd)))) 0)
-       _ (? tout (: _ (dup2 <ofd 1) (close <ofd)) 0)
+       _ (? #msg (say err ("nohup: " + msg), put err 10, flush err) 0)
+       _ (? tin (: fd (openfd "/dev/null" 0) (? (nom? fd) 0 (dup2 fd 0, close fd))) 0)
+       _ (? tout (dup2 <ofd 1, close <ofd) 0)
        _ (? terr (dup2 1 2) 0)
        _ (flush out)
        e (exec cmd)
@@ -298,7 +291,7 @@
    (nice-main as)
     (: (num? w k) (: n #w (k < n && 48 <= w k && w k <= 57))
        (go a adj)
-        (? !(two? a) [adj ()]
+        (? (atom? a) [adj ()]
            (: w <a n #w
               (? (w = "--") [adj >a]
                  (1 < n && w 0 = 45 && num? w (? (w 1 = 45 || w 1 = 43) 2 1)) (go >a (snip w 1 n))
@@ -311,16 +304,16 @@
        r (go as ())
        adj <r cmd <>r
        cur (prio 0 0)
-       (? !(two? cmd)
+       (? (atom? cmd)
           (? (string? adj) (udie 125 "nice: a command must be given with an adjustment\nTry 'nice --help' for more information.")
-             (: _ (say out (show cur + "\n")) _ (flush out) 0))
+             (say out (show cur + "\n"), flush out, 0))
           (: a0 (? (string? adj) (: t (? (0 < #adj && adj 0 = 43) (snip adj 1 #adj) adj)
                                    v (? (0 < #t && t 0 = 45) (: u (unum (snip t 1 #t)) (? (charm? u) (0 - u) ()))
                                         (unum t))
                                    (? (charm? v) v (udie 125 ("nice: invalid adjustment '" + adj + "'"))))
                    10)
              e (setprio 0 0 (cur + (max -39 (min 39 a0))))
-             _ (? (nom? e) (: _ (say err ("nice: cannot set niceness: " + uerrno e + "\n")) (flush err)) 0)
+             _ (? (nom? e) (say err ("nice: cannot set niceness: " + uerrno e + "\n"), flush err) 0)
              x (exec cmd)
              (udie (? (x = 'enoent) 127 126) ("nice: '" + <cmd + "': " + uerrno x)))))
 
@@ -334,25 +327,25 @@
        _ (? (two? a0) 0 (udie 1 "renice: not enough arguments\nTry 'renice --help' for more information."))
        pr (: v (? (0 < #<a0 && <a0 0 = 45) (: u (unum (snip <a0 1 #<a0)) (? (charm? u) (0 - u) ())) (unum <a0))
              (? (charm? v) v (udie 1 ("renice: invalid priority '" + <a0 + "'\nTry 'renice --help' for more information."))))
-       (warn m) (: _ (say err ("renice: " + m + "\n")) (flush err))
+       (warn m) (say err ("renice: " + m + "\n"), flush err)
        (one wh id)
         (: o (prio wh id)
-           (? (nom? o) (: _ (warn ("failed to get priority for " + show id + " (" + kinds wh + "): " + uerrno o)) 1)
+           (? (nom? o) (warn ("failed to get priority for " + show id + " (" + kinds wh + "): " + uerrno o), 1)
               (: e (setprio wh id (? rel (o + pr) pr))
-                 (? (nom? e) (: _ (warn ("failed to set priority for " + show id + " (" + kinds wh + "): " + uerrno e)) 1)
+                 (? (nom? e) (warn ("failed to set priority for " + show id + " (" + kinds wh + "): " + uerrno e), 1)
                     (: nw (prio wh id)
                        _ (say out (show id + " (" + kinds wh + ") old priority " + show o
                                    + ", new priority " + show nw + "\n"))
                        0)))))
        (go l wh bad)
-        (? !(two? l) bad
+        (? (atom? l) bad
            (: w <l
               (? (w = "-p" || w = "--pid") (go >l 0 bad)
                  (w = "-g" || w = "--pgrp") (go >l 1 bad)
                  (w = "-u" || w = "--user") (go >l 2 bad)
                  (: id (? (wh = 2) (: u (uidof "/etc/passwd" w) (? u <>u (unum w))) (unum w))
                     (? (!(charm? id) || id < 0)
-                       (: _ (warn (? (wh = 2) ("unknown user " + w) ("bad " + kinds wh + " value: " + w))) (go >l wh 1))
+                       (warn (? (wh = 2) ("unknown user " + w) ("bad " + kinds wh + " value: " + w)), go >l wh 1)
                        (go >l wh (max bad (one wh id))))))))
        b (go >a0 0 0)
        _ (flush out)
@@ -361,40 +354,39 @@
    ; -- printenv: the world, or just the names asked for (a name with no value in it
    ; says nothing and the exit remembers, like GNU's) --
    (printenv-main as)
-    (? !(two? as)
-       (: (pr e) (? !(two? e) (: _ (flush out) 0)
-                    (: _ (say out <e) _ (put out 10) (pr >e)))
+    (? (atom? as)
+       (: (pr e) (? (atom? e) (flush out, 0)
+                    (say out <e, put out 10, pr >e))
           (pr (environ 0)))
        (: (one w ok) (: v (getenv w)
-                        (? (string? v) (: _ (say out v) _ (put out 10) ok) 0))
-          (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
+                        (? (string? v) (say out v, put out 10, ok) 0))
+          (go a ok) (? (two? a) (go >a (one <a ok)) (flush out, (? ok 0 1)))
           (go as 1)))
 
    ; -- whoami and groups: id's two thin faces (id -un and id -Gn) --
    (whoami-main _)
-    (: _ (say out (uidname "/etc/passwd" (getuid 0))) _ (put out 10) _ (flush out) 0)
+    (say out (uidname "/etc/passwd" (getuid 0)), put out 10, flush out, 0)
    (groups-main _)
     (: nm (uidname "/etc/passwd" (getuid 0))
        gs (ugroups nm (getgid 0))
-       _ (say out (ujoin (map (\ g (uidname "/etc/group" g)) gs)))
+       _ (say out (ujoin (map (g \ (uidname "/etc/group" g)) gs)))
        _ (put out 10) _ (flush out) 0)
 
    ; -- hostname: the name the kernel keeps. uname -n reads the same line, and this is
    ; the spelling a script asks by; no setting, which wants privilege and a syscall --
    (hostname-main _)
-    (: _ (say out (u-1line "/proc/sys/kernel/hostname" "unknown"))
-       _ (put out 10) _ (flush out) 0)
+    (say out (u-1line "/proc/sys/kernel/hostname" "unknown"), put out 10, flush out, 0)
 
    ; -- hostid and dnsdomainname: what the resolver says of this host's own name, read
    ; the way glibc's lookup reaches it here -- /etc/hosts, then the addresses the host
    ; itself carries (systemd's myhostname, which the resolver asks next), lowest
    ; interface first and never loopback, then 127.0.0.2 where it carries none. no DNS:
    ; a name the host gives itself is not a question for a nameserver --
-   (uhw-words l) (filter (\ w (0 < #w)) (foldl (\ a w (a + usplit 9 w)) () (usplit 32 l)))
+   (uhw-words l) (filter (w \ (0 < #w)) (foldl (\ a w (a + usplit 9 w)) () (usplit 32 l)))
    (uhw-quad w)                         ; dotted quad -> the in_addr as a charm (a first, low)
     (: ps (usplit 46 w)
        ns (map unum ps)
-       (? (#ps = 4 && all (\ n (charm? n && 0 <= n && n < 256)) ns)
+       (? (#ps = 4 && all (n \ (charm? n && 0 <= n && n < 256)) ns)
           (ns 0 + (ns 1 << 8) + (ns 2 << 16) + (ns 3 << 24)) ()))
    (uhw-hosts h)                        ; -> [addr canonical] | ()
     (: r (uread "/etc/hosts")
@@ -407,17 +399,17 @@
    (uhw-local _)                        ; the host's own ipv4s, by interface index
     (: fr (uread "/proc/net/fib_trie")
        ls (? (two? fr) (lines <>fr) ())
-       (take l last acc) (? !(two? l) acc
+       (take l last acc) (? (atom? l) acc
                             (: ws (uhw-words <l)
                                (? (two? ws && <ws = "|--") (take >l (uhw-quad <>ws) acc)
-                                  (ws = ["/32" "host" "LOCAL"]) (take >l last (? (charm? last && !((last & 255) = 127) && !(elem last acc)) (last . acc) acc))
+                                  (ws = ["/32" "host" "LOCAL"]) (take >l last (? (charm? last && !((last & 255) = 127) && nelem last acc) (last . acc) acc))
                                   (take >l last acc))))
        as (take ls () ())
        rt (uread "/proc/net/route")
        rs (? (two? rt) (map uhw-words >(lines <>rt)) ())
        ; the narrowest route holding the address names its interface (the default holds all)
-       (ifx a) (: r (filter (\ w (7 < #w && (a & uhw-hex (w 7)) = uhw-hex (w 1))) rs)
-                  b (foldl (\ m w (? (!(two? m) || uhw-hex (m 7) < uhw-hex (w 7)) w m)) () r)
+       (ifx a) (: r (filter (w \ (7 < #w && (a & uhw-hex (w 7)) = uhw-hex (w 1))) rs)
+                  b (foldl (\ m w (? ((atom? m) || uhw-hex (m 7) < uhw-hex (w 7)) w m)) () r)
                   v (? (two? b) (uread ("/sys/class/net/" + <b + "/ifindex")) ())
                   (? (two? v) (unum (chomp <>v)) 1000000))
        (sortby (\ x y (: p (ifx x) q (ifx y) (? (p = q) (x <= y) (p < q)))) as))
@@ -444,7 +436,7 @@
    (setsid-main as)
     (: (usage m) (udie 1 ("setsid: " + m + "\nTry 'setsid --help' for more information."))
        (go a c f w)
-        (? !(two? a) [c f w ()]
+        (? (atom? a) [c f w ()]
            (: x <a n #x
               (? (x = "--") [c f w >a]
                  (x = "--ctty") (go >a 1 f w)
@@ -486,28 +478,28 @@
        (secs w) (: v (udur w)
                    (? (charm? v) (max v 100) (usage ("failed to parse argument: '" + w + "'"))))
        (go a o)
-        (? !(two? a) (: _ (pin o 'cmd ()) o)
+        (? (atom? a) (pin o 'cmd (), o)
            (: x <a n #x
-              (? (x = "--") (: _ (pin o 'cmd >a) o)
+              (? (x = "--") (pin o 'cmd >a, o)
                  (x = "-n" || x = "--interval")
-                  (? (two? >a) (: _ (pin o 'n (secs <>a)) (go >>a o)) (usage "option requires an argument -- 'n'"))
-                 (11 < n && snip x 0 11 = "--interval=") (: _ (pin o 'n (secs (snip x 11 n))) (go >a o))
-                 (x = "--no-title") (: _ (pin o 't 1) (go >a o))
-                 (x = "--exec") (: _ (pin o 'x 1) (go >a o))
-                 (x = "--beep") (: _ (pin o 'b 1) (go >a o))
-                 (x = "--errexit") (: _ (pin o 'e 1) (go >a o))
-                 (x = "--chgexit") (: _ (pin o 'g 1) (go >a o))
+                  (? (two? >a) (pin o 'n (secs <>a), go >>a o) (usage "option requires an argument -- 'n'"))
+                 (11 < n && snip x 0 11 = "--interval=") (pin o 'n (secs (snip x 11 n)), go >a o)
+                 (x = "--no-title") (pin o 't 1, go >a o)
+                 (x = "--exec") (pin o 'x 1, go >a o)
+                 (x = "--beep") (pin o 'b 1, go >a o)
+                 (x = "--errexit") (pin o 'e 1, go >a o)
+                 (x = "--chgexit") (pin o 'g 1, go >a o)
                  (2 < n && snip x 0 2 = "--") (usage ("unrecognized option '" + x + "'"))
                  (1 < n && x 0 = 45)
                   (: (cl k)
                       (? (n <= k) (go >a o)
-                         (x k = 110) (? (k + 1 < n) (: _ (pin o 'n (secs (snip x (k + 1) n))) (go >a o))
-                                        (two? >a) (: _ (pin o 'n (secs <>a)) (go >>a o))
+                         (x k = 110) (? (k + 1 < n) (pin o 'n (secs (snip x (k + 1) n)), go >a o)
+                                        (two? >a) (pin o 'n (secs <>a), go >>a o)
                                         (usage "option requires an argument -- 'n'"))
-                         (elem (x k) [116 120 98 101 103]) (: _ (pin o (x k @ 116 't 120 'x 98 'b 101 'e 'g) 1) (cl (k + 1)))
+                         (elem (x k) [116 120 98 101 103]) (pin o (x k @ 116 't 120 'x 98 'b 101 'e 'g) 1, cl (k + 1))
                          (usage ("invalid option -- '" + string (x k) + "'")))
                      (cl 1))
-                 (: _ (pin o 'cmd a) o))))
+                 (pin o 'cmd a, o))))
        o (go as {'n 2000})
        cmd (o 'cmd)
        _ (? (two? cmd) 0 (usage "no command specified"))
@@ -533,8 +525,8 @@
            st <r txt (? (string? >r) >r "")
            _ (frame txt st)
            (? (o 'g && string? prev && !(prev = txt)) 0
-              (o 'e && st) (: _ (say out "\ncommand exit with a non-zero status\n") _ (flush out) 1)
-              (: _ (rest iv) (loop txt))))
+              (o 'e && st) (say out "\ncommand exit with a non-zero status\n", flush out, 1)
+              (rest iv, loop txt)))
        (loop ()))
 
    ; -- tty: the terminal on stdin, named. there is no ttyname(3) here, so the answer
@@ -639,7 +631,7 @@
        (go v ""))
    (ustty-wrap w items xtra)           ; GNU's wrap: an item that would reach w starts a line
     (: (go l col acc)
-        (? !(two? l) (acc + "\n")
+        (? (atom? l) (acc + "\n")
            (: s <l n (#s + (? (two? >l) 0 xtra))
               (? (col = 0) (go >l n (acc + s))
                  ((w - col) <= n) (go >l n (acc + "\n" + s))
@@ -671,7 +663,7 @@
    (stty-main as)
     (: (bad w) (udie 1 ("stty: invalid argument '" + w + "'\nTry 'stty --help' for more information."))
        (go a all gs dev ss)
-        (? !(two? a) [all gs dev (rev ss)]
+        (? (atom? a) [all gs dev (rev ss)]
            (: w <a
               (? (w = "-a" || w = "--all") (go >a 1 gs dev ss)
                  (w = "-g" || w = "--save") (go >a all 1 dev ss)
@@ -699,17 +691,17 @@
            0)
        (gform w)                       ; -g's own output read back -> the state | ()
         (: f (usplit 58 w) vs (map (x \ ustty-int ("0x" + x)) f)
-           (? ((4 < #f) && !(elem () vs))
+           (? (4 < #f && nelem () vs)
               (: cc (: (go l k) (? (17 <= k) () ((? (two? l) <l 0) . (go >l (k + 1)))) (go (drop 4 vs) 0))
                  ([(vs 0) (vs 1) (vs 2) (vs 3) -1] + cc))
               ()))
        (apply st l)
-        (? !(two? l) st
+        (? (atom? l) st
            (: w <l
               neg (1 < #w && w 0 = 45)
               base (? neg (snip w 1 #w) w)
-              m (: (f ms) (? !(two? ms) () (<ms 0 = base) <ms (f >ms)) (f ustty-modes))
-              cc (: (f cs) (? !(two? cs) () (<cs 0 = w) <cs (f >cs)) (f ustty-ccs))
+              m (: (f ms) (? (atom? ms) () (<ms 0 = base) <ms (f >ms)) (f ustty-modes))
+              cc (: (f cs) (? (atom? cs) () (<cs 0 = w) <cs (f >cs)) (f ustty-ccs))
               cb (ustty-combos w)
               sp (ustty-int w)
               gf (? (usub? ":" w) (gform w) ())
@@ -720,13 +712,13 @@
                  (w = "ispeed" || w = "ospeed")
                   (: v (ustty-int (need l))
                      (? (elem v ustty-bauds) (apply (ustty-at st 4 v) >>l) (bad <>l)))
-                 (w = "rows") (: _ (win l 0) (apply st >>l))
-                 (w = "cols" || w = "columns") (: _ (win l 1) (apply st >>l))
+                 (w = "rows") (win l 0, apply st >>l)
+                 (w = "cols" || w = "columns") (win l 1, apply st >>l)
                  (w = "size") (: r (tty fd)
                                  _ (? (two? r) (say out (show <r + " " + show >r + "\n"))
                                       (udie 1 ("stty: " + nm + ": unable to get window size")))
                                  (apply st >l))
-                 (w = "speed") (: _ (say out (show (st 4) + "\n")) (apply st >l))
+                 (w = "speed") (say out (show (st 4) + "\n"), apply st >l)
                  (w = "raw" || w = "-cooked")
                   (apply (apply (ustty-at st 0 0) ["-opost" "-isig" "-icanon" "-xcase" "min" "1" "time" "0"]) >l)
                  (w = "sane") (apply (ustty-sane st) >l)
@@ -734,10 +726,9 @@
                  (charm? sp) (? (elem sp ustty-bauds) (apply (ustty-at st 4 sp) >l) (bad w))
                  (two? gf) (apply gf >l)
                  (bad w))))
-       (? gs (: _ (say out (ustty-hex (st0 0) + ":" + ustty-hex (st0 1) + ":" + ustty-hex (st0 2) + ":"
+       (? gs (say out (ustty-hex (st0 0) + ":" + ustty-hex (st0 1) + ":" + ustty-hex (st0 2) + ":"
                             + ustty-hex (st0 3)
-                            + foldl (\ a v (a + ":" + ustty-hex v)) "" (drop 5 st0 + map (\ _ 0) ^15) + "\n"))
-                _ (flush out) 0)
+                            + foldl (\ a v (a + ":" + ustty-hex v)) "" (drop 5 st0 + map (_ \ 0) ^15) + "\n"), flush out, 0)
           (two? ss) (: st (apply st0 ss)
                        e (? (st = st0) () (settermios fd st))
                        _ (flush out)
@@ -748,7 +739,7 @@
                        (same a b) (: sa (? (b 4 < 0) (ustty-at a 4 -1) a) sb (? (b 4 < 0) (ustty-at b 4 -1) b) (sa = sb))
                        (? (st = st0 || (two? now && same now st)) 0
                           (udie 1 ("stty: " + nm + ": unable to perform all requested operations"))))
-          (: _ (ustty-show st0 all w rc) _ (flush out) 0)))
+          (ustty-show st0 all w rc, flush out, 0)))
    (ustty-byte0 w) (: v (ustty-int w) (? (charm? v && v <= 65535) v (udie 1 ("stty: invalid integer argument: '" + w + "'"))))
 
    ; -- microcom: a serial line and this terminal, byte for byte, busybox's. the device is
@@ -760,12 +751,12 @@
        t (tablet 0)
        o (uopt as t '(115 116 100) () ())
        _ (? (two? o) 0 (udie 1 usage))
-       _ (: u (uoptun t '(115 116 88)) (? (nil? u) 0 (udie 1 ("microcom: -" + string u + " is not supported\n" + usage))))
+       _ (: u (uoptun t '(115 116 88)) (? !u 0 (udie 1 ("microcom: -" + string u + " is not supported\n" + usage))))
        ops (o 2)
-       _ (? ((two? ops) && (one? >ops)) 0 (udie 1 usage))
+       _ (? (two? ops && atom? >ops) 0 (udie 1 usage))
        dev <ops
-       sp (: v (uoptv t 115) (? (nil? v) -1 (: n (ustty-int v) (? (elem n ustty-bauds) n (udie 1 ("microcom: bad speed " + v))))))
-       tmo (: v (uoptv t 116) (? (nil? v) () (: n (ustty-int v) (? (charm? n) n (udie 1 ("microcom: bad timeout " + v))))))
+       sp (: v (uoptv t 115) (? !v -1 (: n (ustty-int v) (? (elem n ustty-bauds) n (udie 1 ("microcom: bad speed " + v))))))
+       tmo (: v (uoptv t 116) (? !v () (: n (ustty-int v) (? (charm? n) n (udie 1 ("microcom: bad timeout " + v))))))
        x? (peep t 88 0)
        fd (openfd dev 5)
        _ (? (charm? fd) 0 (udie 1 ("microcom: " + dev + ": " + uerrno fd)))
@@ -779,13 +770,13 @@
        tty? (two? (tty 0))
        _ (? tty? (raw 1) 0)
        last (tablet 1) _ (pin last 't (clock 0))
-       (done _) (: _ (settermios fd st0) _ (? tty? (raw 0) 0) _ (flush out) (quit 0))
+       (done _) (settermios fd st0, (? tty? (raw 0) 0), flush out, quit 0)
        ; the line to the screen, in its own task
        (down _) (: _ (await p) c (see p)
                    (? (c = -1) (done 0)
-                      (: _ (unsee p c) _ (say out (chug p)) _ (flush out) _ (pin last 't (clock 0)) (down 0))))
+                      (unsee p c, say out (chug p), flush out, pin last 't (clock 0), down 0)))
        _ (twirl down 0)
-       _ (? (charm? tmo) (twirl (\ _ ((: (g _) (? (tmo < ((clock 0) - (last 't))) (done 0) (: _ (rest 50) (g 0)))) 0)) 0) 0)
+       _ (? (charm? tmo) (twirl (_ \ ((: (g _) (? (tmo < ((clock 0) - (last 't))) (done 0) (rest 50, g 0))) 0)) 0) 0)
        ; the keys to the line, up to a ^X
        (up _) (: _ (await in) c (see in)
                  (? (c = -1) (done 0)
@@ -798,17 +789,17 @@
 
    ; -- clear: home, erase, and drop the scrollback. the third (xterm's 3J) is what a
    ; modern clear sends and the reason `clear` and ^L are not the same key --
-   (clear-main _) (: _ (say out "\e[H\e[2J\e[3J") _ (flush out) 0)
+   (clear-main _) (say out "\e[H\e[2J\e[3J", flush out, 0)
 
    ; -- which: the first PATH member holding NAME and letting us run it; -a names
    ; every one. a NAME carrying a slash is a path already and answers for itself.
    ; exit 1 where a name went unfound, as GNU's does --
-   (uwhich-try p) ((t-file "-f" p) && (t-file "-x" p))
+   (uwhich-try p) (t-file "-f" p && t-file "-x" p)
    (uwhich nm all?)                             ; -> the hits, in PATH order
     (? (0 < (lastslash nm)) (? (uwhich-try nm) [nm] ())
        (: pv (getenv "PATH")
           ds (usplit 58 (? (string? pv) pv ""))
-          (go l acc) (? !(two? l) (rev acc)
+          (go l acc) (? (atom? l) (rev acc)
                         (: d (? (0 < tally <l) <l ".")
                            p (d + "/" + nm)
                            (? !(uwhich-try p) (go >l acc)
@@ -816,13 +807,13 @@
                               (rev (p . acc)))))
           (go ds ())))
    (which-main as)
-    (: a? (two? as && (<as = "-a"))
+    (: a? (two? as && <as = "-a")
        ns (? a? >as as)
        _ (? (two? ns) () (udie 2 "usage: which [-a] NAME.."))
        (go l bad)
-        (? !(two? l) (: _ (flush out) bad)
+        (? (atom? l) (flush out, bad)
            (: hs (uwhich <l a?)
-              _ (map (\ p (: _ (say out p) (put out 10))) hs)
+              _ (map (p \ (say out p, put out 10)) hs)
               (go >l (? (two? hs) bad 1))))
        (go ns 0))
 
@@ -833,7 +824,7 @@
    ; would not start, and otherwise the command's own --
    ; usignum wants the dash the command line writes; -s spells the bare name
    (utmo-flags a sig kill)
-    (? !(two? a) [sig kill a]
+    (? (atom? a) [sig kill a]
        (<a = "-s") (? (two? >a) (utmo-flags >>a (usignum ("-" + <>a)) kill)
                       (udie 125 "timeout: -s wants a signal"))
        (<a = "-k") (? (two? >a) (utmo-flags >>a sig (udur <>a))
@@ -848,10 +839,10 @@
            (? (two? r) (? (charm? sent) 124 <r)  ; a child we ended reads 124, not its own
               (nom? r) 125
               (: el (clock t0)
-                 fire (? (!(charm? sent) && (lim <= el)) el sent)
-                 _ (? (= fire sent) 0 (still p sig))
-                 k2 (? ((!k? && charm? fire) && (charm? kill && ((fire + kill) <= el)))
-                       (: _ (still p 9) 1)
+                 fire (? (!(charm? sent) && lim <= el) el sent)
+                 _ (? (fire = sent) 0 (still p sig))
+                 k2 (? ((!k? && charm? fire) && (charm? kill && (fire + kill) <= el))
+                       (still p 9, 1)
                        k?)
                  _ (rest 20)
                  (go fire k2))))
@@ -867,7 +858,7 @@
        cmd >ops
        t0 (clock 0)
        p (spawn cmd)
-       (? (nom? p) (: _ (say err ("timeout: cannot run " + <cmd)) _ (put err 10) (uleave 127))
+       (? (nom? p) (say err ("timeout: cannot run " + <cmd), put err 10, uleave 127)
           (lim = 0) (wait p)                    ; a zero duration is no limit, as GNU has it
           (utmo-wait p t0 lim sig kill)))
 
@@ -900,7 +891,7 @@
        ; the chdir is not tidiness. chroot moves the ROOT and leaves the cwd where it
        ; was -- outside the new tree -- and a relative path then walks out of the jail.
        _ (? (chdir "/") (udie 1 "chroot: cannot enter the new root") ())
-       self? (!(two? >as) && hot? me)
+       self? (atom? >as && hot? me)
        cmd (? (two? >as) >as
               self? [mypath "lush"]
               (: sh (getenv "SHELL") [(? (string? sh) sh "/bin/sh") "-i"]))
@@ -917,7 +908,7 @@
    (umnt-opt w)
     (: r (assoc w umnt-flags) (? (two? r) <>r ()))
    (umnt-bits ws acc)
-    (? !(two? ws) acc
+    (? (atom? ws) acc
        (: b (umnt-opt <ws)
           _ (? (charm? b) () (udie 1 ("mount: -o " + <ws + " is not a flag this mount can carry")))
           (umnt-bits >ws (acc | b))))
@@ -927,21 +918,20 @@
    (mount-list _)
     (: r (uread "/proc/self/mounts")
        _ (? (two? r) () (udie 1 "mount: cannot read /proc/self/mounts"))
-       (go l) (? !(two? l) ()
+       (go l) (? (atom? l) ()
                  (: w (words <l)
-                    _ (? (4 <= #w) (: _ (say out ((w 0) + " on " + (w 1) + " type " + (w 2)
-                                                  + " (" + (w 3) + ")"))
-                                      (put out 10))
+                    _ (? (4 <= #w) (say out ((w 0) + " on " + (w 1) + " type " + (w 2)
+                                                  + " (" + (w 3) + ")"), put out 10)
                          ())
                     (go >l)))
-       _ (go (filter (\ s #s) (lines <>r)))
+       _ (go (filter (s \ #s) (lines <>r)))
        _ (flush out) 0)
    (mount-main as)
-    (? !(two? as) (mount-list ())
+    (? (atom? as) (mount-list ())
        (: t (tablet 0)
           o (uopt as t '(116 111) '(101) ())
           _ (? (two? o) () (udie 1 "mount: -t and -o each want a value"))
-          _ (: c (uoptun t "to") (? (nil? c) () (udie 1 ("mount: unknown option -" + string c))))
+          _ (: c (uoptun t "to") (? !c () (udie 1 ("mount: unknown option -" + string c))))
           ty (: v (uoptv t 116) (? (string? v) v "auto"))
           ob (: v (uoptv t 111) (? (string? v) (umnt-bits (usplit 44 v) 0) 0))
           fs <>>o
@@ -953,10 +943,9 @@
    (umount-main as)
     (: _ (? (two? as) () (udie 1 "usage: umount TARGET.."))
        _ (? (lit? (cite 'posix 'umount)) () (udie 1 "umount: no umount on this seat"))
-       (go l ok) (? !(two? l) ok
+       (go l ok) (? (atom? l) ok
                     (: e (umount <l)
-                       _ (? e (: _ (say err ("umount: cannot unmount " + <l + ": " + (show e)))
-                                 (put err 10))
+                       _ (? e (say err ("umount: cannot unmount " + <l + ": " + (show e)), put err 10)
                             ())
                        (go >l (? e 0 ok))))
        ok (go as 1)
@@ -974,9 +963,9 @@
 
    (uprocs _)                          ; every numeric name under /proc, ascending
     (: r (readdir "/proc")
-       (dig? s) (: n (tally s)
+       (dig? s) (: n #s
                    (go k) (? (n <= k) (0 < n)
-                             ((48 <= (s k)) && ((s k) <= 57)) (go (k + 1))
+                             (48 <= (s k) && (s k) <= 57) (go (k + 1))
                              0)
                    (go 0))
        (? (two? r) (sort (map uatoi (filter dig? r))) ()))
@@ -985,15 +974,15 @@
    ; may be named `(sd-pam)` or `a b)c`, and a naive split reads its parentheses as
    ; fields -- silently, since every field after it is then off by the same amount.
    (ustatf ln)
-    (: n (tally ln)
+    (: n #ln
        (lp k) (? (k < 0) -1 ((ln k) = 41) k (lp (k - 1)))
        (fp k) (? (n <= k) -1 ((ln k) = 40) k (fp (k + 1)))
        a (fp 0) b (lp (n - 1))
        ; the pid is taken through the word split and not off the raw slice: `uatoi`
        ; reads every charm it is handed, so the space before the "(" goes in as -16
-       (? ((a < 0) || ((b < 0) || (b < a))) ()
+       (? (a < 0 || (b < 0 || b < a)) ()
           (: h (words (snip ln 0 a))
-             (? !(two? h) ()
+             (? (atom? h) ()
                 ((uatoi <h) . ((snip ln (a + 1) b) . (words (snip ln (b + 1) n))))))))
    (upstat pid)                        ; a pid -> its stat fields | ()
     (: r (uread (("/proc/" + (show pid)) + "/stat"))
@@ -1002,12 +991,12 @@
     (: r (uread "/proc/self/stat") (? (two? r) (ustatf <>r) ()))
    (upcmd pid)                         ; the cmdline, NULs to spaces, or () when empty
     (: r (uread (("/proc/" + (show pid)) + "/cmdline"))
-       (? !(two? r) ()
-          (: s <>r n (tally s)
+       (? (atom? r) ()
+          (: s <>r n #s
              (go k acc) (? (n <= k) acc
                            (go (k + 1) (acc + (? ((s k) = 0) " " (string (s k))))))
              o (go 0 "")
-             z (tally o)
+             z #o
              (? (0 = z) () ((o (z - 1)) = 32) (snip o 0 (z - 1)) o))))
    ; argv[0]'s basename, for pidof -- the raw clip, since a kernel comm never
    ; carries a trailing slash for posix's rule to strip
@@ -1015,30 +1004,30 @@
    ; the two clocks. user_hz is 100 everywhere Linux runs a userland we could be in.
    (uclk s)                            ; a second count -> hh:mm:SS
     (: (p2 v) (zpad 2 (show v))
-       ((((p2 (// s 3600)) + ":") + ((p2 (// (% s 3600) 60)) + ":")) + (p2 (% s 60))))
-   (uhms tk) (uclk (// tk 100))
+       ((((p2 (s // 3600)) + ":") + ((p2 ((s % 3600) // 60)) + ":")) + (p2 (s % 60))))
+   (uhms tk) (uclk (tk // 100))
    ; tty_nr -> the name ps prints. the encoding is Linux's own: major in bits 8..19,
    ; minor split across 0..7 and 20..31, and 0 means no controlling terminal.
    (utty n)
     (? (n = 0) "?"
-       (: maj (& (n >> 8) 4095)
-          mn ((& n 255) | (& (n >> 12) 1048320))
+       (: maj ((n >> 8) & 4095)
+          mn ((n & 255) | ((n >> 12) & 1048320))
           (? (maj = 136) ("pts/" + (show mn))
              (maj = 4) (? (mn < 64) ("tty" + (show mn)) ("ttyS" + (show (mn - 64))))
              "?")))
    ; /proc/uptime's seconds -> procps' phrase. under an hour it counts minutes, and a
    ; day arrives with a comma: "up 26 days,  8:01", "up  2:33", "up 33 min"
    (uupsay secs)
-    (: d (// secs 86400)
-       hh (// (% secs 86400) 3600)
-       mm (// (% secs 3600) 60)
+    (: d (secs // 86400)
+       hh ((secs % 86400) // 3600)
+       mm ((secs % 3600) // 60)
        ds (? (0 < d) ((show d) + (? (d = 1) " day, " " days, ")) "")
        (? (0 < (d + hh)) ((ds + (upad 2 (show hh))) + (":" + (zpad 2 (show mm))))
           ((show mm) + " min")))
    (umeminfo _)                        ; /proc/meminfo -> a tablet, the kB counts by name
     (: r (uread "/proc/meminfo")
        t (tablet 0)
-       (one ln) (: n (tally ln)
+       (one ln) (: n #ln
                    (go k) (? (n <= k) -1 ((ln k) = 58) k (go (k + 1)))
                    i (go 0)
                    (? (i < 0) 0
@@ -1053,9 +1042,9 @@
    ; listing root's daemons would be a different tool.
    ; the owner comes off /proc/PID itself, whose directory is owned by the process:
    ; one stat where /proc/PID/status would be a second read and a second parser.
-   (upuid p) (: st (stat ("/proc/" + (show p))) (? (5 < (tally st)) (st 4) -1))
+   (upuid p) (: st (stat ("/proc/" + (show p))) (? (5 < #st) (st 4) -1))
    (ps-main as)
-    (: all (: (go l) (? !(two? l) 0
+    (: all (: (go l) (? (atom? l) 0
                         (: w <l
                            (? (elem w '("-e" "-A" "-ax" "ax" "a" "x" "-a")) 1 (go >l))))
               (go as))
@@ -1066,12 +1055,8 @@
        (one p) (: f (upstat p)
                   (? !f 0
                      (: tty (uatoi (f 6))
-                        (? (! (all || ((tty = mine) && ((upuid p) = myuid)))) 0
-                           (: _ (say out (upad 7 (show p)))
-                              _ (say out (" " + (urpad 8 (utty tty))))
-                              _ (say out (" " + (uhms ((uatoi (f 13)) + (uatoi (f 14))))))
-                              _ (say out (" " + (f 1)))
-                              (put out 10))))))
+                        (? !(all || (tty = mine && (upuid p) = myuid)) 0
+                           (say out (upad 7 (show p)), say out (" " + (urpad 8 (utty tty))), say out (" " + (uhms ((uatoi (f 13)) + (uatoi (f 14))))), say out (" " + (f 1)), put out 10)))))
        _ (foldl (\ _ p (one p)) 0 (uprocs 0))
        _ (flush out) 0)
 
@@ -1084,10 +1069,10 @@
        div (? (elem "-g" as) 1048576 (? (elem "-m" as) 1024 1))
        ; -h: the unit each number fits, procps' suffixes. the readings are KiB out of
        ; /proc/meminfo, so the ladder starts at Ki
-       (hum k) (: (go v us) (? (v < 1024 || !(two? >us)) (show v + <us) (go (// v 1024) >us))
+       (hum k) (: (go v us) (? (v < 1024 || (atom? >us)) (show v + <us) (go (v // 1024) >us))
                   (go k '("Ki" "Mi" "Gi" "Ti" "Pi")))
        h? (elem "-h" as)
-       (cell x) (upad 12 (? h? (hum x) (show (// x div))))
+       (cell x) (upad 12 (? h? (hum x) (show (x // div))))
        tot (g 'MemTotal) fre (g 'MemFree) av (g 'MemAvailable)
        bc (((g 'Buffers) + (g 'Cached)) + (g 'SReclaimable))
        st (g 'SwapTotal) sf (g 'SwapFree)
@@ -1105,24 +1090,24 @@
    ; a made-up 0. the time of day is utc, for the reason `date` gives --
    (uupticks _)                        ; /proc/uptime's first number in centiseconds --
     (: r (uread "/proc/uptime")         ; user_hz, the scale a starttime is already in
-       (? !(two? r) 0
+       (? (atom? r) 0
           (: w (words <>r)
-             (? !(two? w) 0
+             (? (atom? w) 0
                 (: p (usplit 46 <w)
                    fr (? (two? >p) (snip (<>p + "00") 0 2) "00")
                    (((uatoi <p) * 100) + (uatoi fr)))))))
-   (uupsecs _) (// (uupticks 0) 100)   ; ..and the whole seconds uptime prints
+   (uupsecs _) ((uupticks 0) // 100)   ; ..and the whole seconds uptime prints
    (uloadav _)                         ; /proc/loadavg's three figures, as one phrase
     (: l (uread "/proc/loadavg")
        ws (? (two? l) (words <>l) ())
-       (? (2 < (tally ws)) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
+       (? (2 < #ws) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
           "0.00, 0.00, 0.00"))
    (uptime-main as)
     (: secs (uupsecs 0)
        ld (uloadav 0)
-       tod (uclk (% (// (clock 0) 1000) 86400))
+       tod (uclk (((clock 0) // 1000) % 86400))
        r (uut-read (uut-file 0))
-       nu (? r (tally (filter (uut-user? 1) <>r)) ())
+       nu (? r #(filter (uut-user? 1) <>r) ())
        us (? (charm? nu) (",  " + show nu + (? (nu = 1) " user" " users")) "")
        _ (say out (" " + tod + " up " + uupsay secs + us + ",  load average: " + ld))
        _ (put out 10) _ (flush out) 0)
@@ -1132,7 +1117,7 @@
    ; 520-byte utmpx, freebsd's packed 197-byte futx (big-endian). a record reads as
    ; (type pid line id user host secs term exit), the type in sysv's numbering --
    (ucz s i n)                         ; the NUL-ended text in s[i, i+n)
-    (: e (i + n) (go j) (? ((j < e) && !(s j = 0)) (go (j + 1)) (snip s i j)) (go i))
+    (: e (i + n) (go j) (? (j < e && !(s j = 0)) (go (j + 1)) (snip s i j)) (go i))
    (uut-glibc s i)
     [(rdle s i 2) (rdle s (i + 4) 4) (ucz s (i + 8) 32) (ucz s (i + 40) 4) (ucz s (i + 44) 32)
      (ucz s (i + 76) 256) (rdle s (i + 340) 4) (rdle s (i + 332) 2) (rdle s (i + 334) 2)]
@@ -1148,7 +1133,7 @@
    (uut-read p)                        ; -> (1 records) | () for no file to read
     (: r (uread p)
        b (pbase p)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (: s <>r
              k (? (4 <= #b && snip b 0 4 = "utx.") [197 uut-fbsd]
                   (usub? "tmpx" b) [520 uut-nbsd]
@@ -1157,7 +1142,7 @@
              (go 0 ()))))
    (usub? x s) (: n #x (go i) (? (#s < i + n) () (snip s i (i + n) = x) 1 (go (i + 1))) (go 0))
    (uut-file _)                        ; the first the host keeps, else the one it would
-    (: (go l) (? !(two? >l) <l (two? (stat <l)) <l (go >l))
+    (: (go l) (? (atom? >l) <l (two? (stat <l)) <l (go >l))
        (go '("/var/run/utx.active" "/var/run/utmpx" "/run/utmp" "/var/run/utmp")))
    ; a user process is one with a name, and in the live file one whose pid is still
    ; there (GNU's check: a record a crashed session left behind is not a user)
@@ -1167,21 +1152,20 @@
    (uut-rdev l) (: st (stat (uut-dev l)) (? (two? st && 12 < #st) (st 12) -1))
    (uut-mine _)                        ; stdin's terminal as its device number, or -1
     (: st (stat 0) (? (two? st && 12 < #st && (st 2 & 61440) = 8192) (st 12) -1))
-   (utrimr s) (: (go k) (? ((0 < k) && (s (k - 1) = 32)) (go (k - 1)) (snip s 0 k)) (go #s))
+   (utrimr s) (: (go k) (? (0 < k && (s (k - 1) = 32)) (go (k - 1)) (snip s 0 k)) (go #s))
    (uwho-say c user st line tm idl pid cm ex)
-    (: _ (say out (utrimr ((urpad 8 user) + (? (c 'mesg) (" " + string st) "")
+    (say out (utrimr ((urpad 8 user) + (? (c 'mesg) (" " + string st) "")
                            + " " + urpad 12 line + " " + urpad 12 tm
-                           + (? ((c 'idle) && !(c 'short)) (" " + urpad 6 idl) "")
+                           + (? (c 'idle && !(c 'short)) (" " + urpad 6 idl) "")
                            + (? (c 'short) "" (" " + upad 10 pid))
                            + " " + urpad 8 cm
-                           + (? (c 'ext) (" " + urpad 12 ex) ""))))
-       (put out 10))
+                           + (? (c 'ext) (" " + urpad 12 ex) ""))), put out 10)
    (uwho-tm u) (udatef "%b %e %H:%M" (u 6 * 1000))
    ; an idle clock as hh:mm
    (u-hhmm s) (zpad 2 (show (s // 3600)) + ":" + zpad 2 (show (s % 3600 // 60)))
    (uwho-idle when boot now)
     (: d (now - when)
-       (? ((boot < when) && (when <= now) && (d < 86400))
+       (? (boot < when && when <= now && d < 86400)
           (? (d < 60) "  .  " (u-hhmm d))
           " old "))
    (uwho-user c u boot now)
@@ -1193,11 +1177,11 @@
    (uwho-id u) ("id=" + u 3)
    (uwho-one c u boot now)
     (: ty <u
-       (? ((c 'users) && uut-user? (c 'live) u) (uwho-user c u boot now)
+       (? (c 'users && uut-user? (c 'live) u) (uwho-user c u boot now)
           ((c 'run) && ty = 1)
            (: lst (u 1 // 256) cur (u 1 % 256)
               (uwho-say c "" 32 ("run-level " + string cur) (uwho-tm u) "" ""
-                        (? ((32 < lst) && (lst < 127)) ("last=" + string (? (lst = 78) 83 lst)) "") ""))
+                        (? (32 < lst && lst < 127) ("last=" + string (? (lst = 78) 83 lst)) "") ""))
           ((c 'boot) && ty = 2) (uwho-say c "" 32 "system boot" (uwho-tm u) "" "" "" "")
           ((c 'clock) && ty = 4) (uwho-say c "" 32 "clock change" (uwho-tm u) "" "" "" "")
           ((c 'init) && ty = 5) (uwho-say c "" 32 (u 2) (uwho-tm u) "" (show (u 1)) (uwho-id u) "")
@@ -1211,18 +1195,18 @@
               "message" 84 "writable" 84 "process" 112 "count" 113 "runlevel" 114 "short" 115
               "time" 116 "users" 117}
        (go a ops)
-        (? !(two? a) (rev ops)
+        (? (atom? a) (rev ops)
            (: w <a n #w
               (? (w = "--") (rev ops + >a)
-                 ((n < 2) || !(w 0 = 45)) (go >a (w . ops))
+                 (n < 2 || !(w 0 = 45)) (go >a (w . ops))
                  (w 1 = 45)
                   (: k (longs (snip w 2 n))
-                     (? (charm? k) (: _ (pin t k 1) (go >a ops))
+                     (? (charm? k) (pin t k 1, go >a ops)
                         (udie 1 ("who: unrecognized option '" + w + "'\nTry 'who --help' for more information."))))
                  (: (cl j) (? (n <= j) (go >a ops)
                               (: c (w j)
                                  (? (elem c [97 98 100 72 108 109 112 113 114 115 116 84 117 119])
-                                    (: _ (pin t (? (c = 119) 84 c) 1) (cl (j + 1)))
+                                    (pin t (? (c = 119) 84 c) 1, cl (j + 1))
                                     (udie 1 ("who: invalid option -- '" + string c + "'\nTry 'who --help' for more information.")))))
                     (cl 1)))))
        (go as ()))
@@ -1243,15 +1227,13 @@
        _ (? r 0 (udie 1 ("who: " + fl + ": No such file or directory")))
        us (filter (uut-user? (#o = 0)) <>r)
        (? (f? 113)
-          (: _ (say out (ujoin (map (u \ u 4) us) + "\n# users=" + show #us + "\n"))
-             _ (flush out) 0)
+          (say out (ujoin (map (u \ u 4) us) + "\n# users=" + show #us + "\n"), flush out, 0)
           (: _ (? (f? 72) (uwho-say c "NAME" 32 "LINE" "TIME" "IDLE" "PID" "COMMENT" "EXIT") 0)
-             me (? ((#o = 2) || f? 109) (uut-mine 0) ())
+             me (? (#o = 2 || f? 109) (uut-mine 0) ())
              now (clock 0 // 1000)
              _ (foldl (\ boot u
-                       (: _ (? (!(charm? me) || (0 <= me && uut-rdev (u 2) = me))
-                               (uwho-one c u boot now) 0)
-                          (? (<u = 2) (u 6) boot)))
+                       ((? (!(charm? me) || (0 <= me && uut-rdev (u 2) = me))
+                               (uwho-one c u boot now) 0), (? (<u = 2) (u 6) boot)))
                       0 <>r)
              _ (flush out) 0)))
 
@@ -1260,12 +1242,12 @@
    ; the named users off /etc/passwd (-b no home nor shell, -h no .project, -p no .plan) --
    (upw-row nm)                         ; the passwd row -> its seven fields | ()
     (: r (uread "/etc/passwd")
-       hit (? (two? r) (filter (\ l (: f (usplit 58 l) (two? f && <f = nm))) (lines <>r)) ())
+       hit (? (two? r) (filter (l \ (: f (usplit 58 l) (two? f && <f = nm))) (lines <>r)) ())
        (? (two? hit) (usplit 58 <hit) ()))
    (upw-real row)                       ; the gecos up to its comma, & the capitalized login
     (: g (row 4) k (findsub g ",") g2 (? (k < 0) g (snip g 0 k))
-       nm <row cap (? (#nm && 96 < nm 0 && nm 0 < 123) (string (nm 0 - 32) + snip nm 1 #nm) nm)
-       (go i) (? (#g2 <= i) "" (g2 i = 38) (cap + go (i + 1)) (string (g2 i) + go (i + 1)))
+       nm <row ncap (? (#nm && 96 < nm 0 && nm 0 < 123) (string (nm 0 - 32) + snip nm 1 #nm) nm)
+       (go i) (? (#g2 <= i) "" (g2 i = 38) (ncap + go (i + 1)) (string (g2 i) + go (i + 1)))
        (go 0))
    (pinky-idle s)
     (? (s < 60) "     " (s < 86400) (u-hhmm s)
@@ -1273,31 +1255,29 @@
    (pinky-main as)
     (: (usage m) (udie 1 ("pinky: " + m + "\nTry 'pinky --help' for more information."))
        (go a o)
-        (? !(two? a) o
+        (? (atom? a) o
            (: w <a n #w
-              (? (w = "--") (: _ (pin o 'us (o 'us + >a)) o)
+              (? (w = "--") (pin o 'us (o 'us + >a), o)
                  (2 < n && snip w 0 2 = "--") (usage ("unrecognized option '" + w + "'"))
                  (1 < n && w 0 = 45)
-                  (: _ (map (\ c (? (elem c "slbhpfwiq") (pin o c 1) (usage ("invalid option -- '" + string c + "'"))))
-                            (map w (drop 1 ^n)))
-                     (go >a o))
-                 (: _ (pin o 'us (o 'us + [w])) (go >a o)))))
+                  (map (c \ (? (elem c "slbhpfwiq") (pin o c 1) (usage ("invalid option -- '" + string c + "'"))))
+                            (map w (drop 1 ^n)), go >a o)
+                 (pin o 'us (o 'us + [w]), go >a o))))
        o (go as {'us ()})
        us (o 'us)
        (f? c) (peep o c 0)
        (? (f? 108)
-          (? !(two? us) (usage "no username specified; at least one must be specified when using -l")
-             (: _ (map (\ nm
-                         (: row (upw-row nm)
-                            (? !(two? row) (say out ("Login name: " + urpad 28 nm + "In real life:  ???\n"))
-                               (: _ (say out ("Login name: " + urpad 28 nm + "In real life:  " + upw-real row + "\n"))
-                                  _ (? (f? 98) 0 (say out ("Directory: " + urpad 29 (row 5) + "Shell:  " + row 6 + "\n")))
-                                  (dot f what) (: r (uread (row 5 + "/" + f)) (? (two? r) (say out (what + <>r)) 0))
-                                  _ (? (f? 104) 0 (dot ".project" "Project: "))
-                                  _ (? (f? 112) 0 (dot ".plan" "Plan:\n"))
-                                  (say out "\n")))))
-                       us)
-                _ (flush out) 0))
+          (? (atom? us) (usage "no username specified; at least one must be specified when using -l")
+             (map (nm \
+                        (: row (upw-row nm)
+                           (? (atom? row) (say out ("Login name: " + urpad 28 nm + "In real life:  ???\n"))
+                              (: _ (say out ("Login name: " + urpad 28 nm + "In real life:  " + upw-real row + "\n"))
+                                 _ (? (f? 98) 0 (say out ("Directory: " + urpad 29 (row 5) + "Shell:  " + row 6 + "\n")))
+                                 (dot f what) (: r (uread (row 5 + "/" + f)) (? (two? r) (say out (what + <>r)) 0))
+                                 _ (? (f? 104) 0 (dot ".project" "Project: "))
+                                 _ (? (f? 112) 0 (dot ".plan" "Plan:\n"))
+                                 (say out "\n")))))
+                       us, flush out, 0))
           (: full !(f? 119 || f? 105 || f? 113)
              where !(f? 105 || f? 113)
              idle !(f? 113)
@@ -1306,25 +1286,25 @@
                             + (? idle (" " + urpad 6 "Idle") "") + " " + urpad 12 "When" + (? where " Where" "") + "\n")))
              r (uut-read (uut-file 0))
              now (clock 0 // 1000)
-             _ (map (\ u
-                      (? (!(u 0 = 7) || !(#(u 4)) || (two? us && !(elem (u 4) us))) 0
-                         (: st (stat (uut-dev (u 2)))
-                            ok (two? st && 9 < #st)
-                            row (upw-row (u 4))
-                            _ (say out ((urpad 8 (u 4))
-                                        + (? full (? (two? row) (" " + urpad 19 (: t (upw-real row) (? (19 < #t) (snip t 0 19) t)))
-                                                     (" " + upad 19 "        ???")) "")
-                                        + " " + string (? !ok 63 (0 < (st 2 & 16)) 32 42) + urpad 8 (u 2)
-                                        + (? idle (" " + urpad 6 (? ok (pinky-idle (now - st 9 // 1000000000)) "???")) "")
-                                        + " " + uwho-tm u
-                                        + (? (where && #(u 5)) (" " + u 5) "") + "\n"))
-                            0)))
+             _ (map (u \
+                         (? (!(u 0 = 7) || !(#(u 4)) || (two? us && nelem (u 4) us)) 0
+                            (: st (stat (uut-dev (u 2)))
+                               ok (two? st && 9 < #st)
+                               row (upw-row (u 4))
+                               _ (say out ((urpad 8 (u 4))
+                                           + (? full (? (two? row) (" " + urpad 19 (: t (upw-real row) (? (19 < #t) (snip t 0 19) t)))
+                                                        (" " + upad 19 "        ???")) "")
+                                           + " " + string (? !ok 63 (0 < (st 2 & 16)) 32 42) + urpad 8 (u 2)
+                                           + (? idle (" " + urpad 6 (? ok (pinky-idle (now - st 9 // 1000000000)) "???")) "")
+                                           + " " + uwho-tm u
+                                           + (? (where && #(u 5)) (" " + u 5) "") + "\n"))
+                               0)))
                     (? (two? r) <>r ()))
              _ (flush out) 0)))
 
    ; -- usleep: a pause in microseconds (to the millisecond, which is the clock's grain) --
    (usleep-main as)
-    (: _ (? (two? as && !(two? >as)) 0 (udie 1 "usage: usleep MICROSECONDS"))
+    (: _ (? (two? as && atom? >as) 0 (udie 1 "usage: usleep MICROSECONDS"))
        v (unum <as)
        _ (? (charm? v && 0 <= v) (rest ((v + 999) // 1000)) (udie 1 ("usleep: invalid number '" + <as + "'")))
        0)
@@ -1332,20 +1312,19 @@
    ; -- reset: the terminal put back -- the line discipline sane where stdin is one, and
    ; the full reset (RIS) sent, toybox's pair --
    (reset-main _)
-    (: _ (? (two? (tty 0)) (stty-main ["sane"]) 0)
-       _ (say out "\ec") _ (flush out) 0)
+    ((? (two? (tty 0)) (stty-main ["sane"]) 0), say out "\ec", flush out, 0)
 
    ; -- ts: each line of the input stamped as it arrives, toybox's: the date and time
    ; ("%b %d %H:%M:%S"), or with -s the time since the start and with -i since the line
    ; before ("%H:%M:%S"); -m adds the milliseconds; a FORMAT is strftime's. UTC, as every
    ; clock here is --
    (ts-main as)
-    (: (go a o) (? !(two? a) o
+    (: (go a o) (? (atom? a) o
                    (1 < #<a && <a 0 = 45)
-                    (: w <a _ (map (\ c (? (elem c "ism") (pin o c 1) (udie 1 ("ts: Unknown option '" + string c + "' (see \"ts --help\")"))))
+                    (: w <a _ (map (c \ (? (elem c "ism") (pin o c 1) (udie 1 ("ts: Unknown option '" + string c + "' (see \"ts --help\")"))))
                                    (map w (drop 1 ^#w)))
                        (go >a o))
-                   (: _ (pin o 'fmt <a) (go >a o)))
+                   (pin o 'fmt <a, go >a o))
        o (go as {})
        rel (peep o 115 0) inc (peep o 105 0)
        fmt (? (o 'fmt) (o 'fmt) (rel || inc) "%H:%M:%S" "%b %d %H:%M:%S")
@@ -1354,7 +1333,7 @@
        (stamp ms) (udatef fmt ms + (? (peep o 109 0) ("." + zpad 3 (show (ms % 1000))) ""))
        (loop last)
         (: l (urd-line rd)
-           (? !(two? l) (: _ (flush out) 0)
+           (? (atom? l) (flush out, 0)
               (: now (clock 0)
                  _ (say out (stamp (? rel (now - t0) inc (now - last) now) + " " + <l + (? <>l "\n" "")))
                  _ (flush out)
@@ -1367,8 +1346,8 @@
        fl (? (two? as) <as (uut-file 0))
        r (uut-read fl)
        _ (? r 0 (udie 1 ("users: " + fl + ": No such file or directory")))
-       ns (sort (map (u \ u 4) (filter (uut-user? !(two? as)) <>r)))
-       _ (? (two? ns) (: _ (say out (ujoin ns)) (put out 10)) 0)
+       ns (sort (map (u \ u 4) (filter (uut-user? (atom? as)) <>r)))
+       _ (? (two? ns) (say out (ujoin ns), put out 10) 0)
        _ (flush out) 0)
 
    ; -- logname: the name this session logged in as. linux keeps it with the process
@@ -1377,10 +1356,10 @@
     (: _ (? (two? as) (udie 1 ("logname: extra operand '" + <as + "'")) 0)
        lu (u-1line "/proc/self/loginuid" "")
        id (? (0 < #lu) (uatoi lu) -1)
-       pw (? ((0 <= id) && (id < 4294967295)) (uidname "/etc/passwd" id) "")
+       pw (? (0 <= id && id < 4294967295) (uidname "/etc/passwd" id) "")
        me (uut-mine 0)
        r (? (0 < #pw && !(pw = show id)) () (0 <= me) (uut-read (uut-file 0)) ())
-       (hit l) (? !(two? l) "" ((<l 0 = 7) && uut-rdev (<l 2) = me) (<l 4) (hit >l))
+       (hit l) (? (atom? l) "" ((<l 0 = 7) && uut-rdev (<l 2) = me) (<l 4) (hit >l))
        nm (? r (hit <>r) pw)
        _ (? (0 < #nm && !(nm = show id)) 0 (udie 1 "logname: no login name"))
        _ (say out nm) _ (put out 10) _ (flush out) 0)
@@ -1395,29 +1374,29 @@
           (: r (reere pat) (? (two? r) (rehas <>r c) (udie 2 ("bad pattern: " + pat))))))
    (upfind f? x? pat)                  ; the pids answering, ours never among them
     (: me (: s (upself 0) (? s <s -1))
-       (filter (\ p (? (p = me) 0 (upmatch f? x? pat p))) (uprocs 0)))
+       (filter (p \ (? (p = me) 0 (upmatch f? x? pat p))) (uprocs 0)))
    (pidof-main as)
-    (: fs (filter (\ w !((0 < tally w) && ((w 0) = 45))) as)
+    (: fs (filter (\ w !((0 < tally w) && (w 0) = 45)) as)
        _ (? (two? fs) () (udie 1 "usage: pidof NAME.."))
        me (: s (upself 0) (? s <s -1))
        (hit p) (: s (upstat p)
                   c (? s (s 1) ())
                   a (: x (upcmd p) (? (string? x) (pbase <(usplit 32 x)) ()))
                   (? (p = me) 0
-                     (foldl (\ acc w (? acc 1 (? ((c = w) || (a = w)) 1 0))) 0 fs)))
+                     (foldl (\ acc w (? acc 1 (? (c = w || a = w) 1 0))) 0 fs)))
        ps (filter hit (rev (uprocs 0)))
-       _ (? (two? ps) (: _ (say out (ujoin (map show ps))) (put out 10)) 0)
+       _ (? (two? ps) (say out (ujoin (map show ps)), put out 10) 0)
        _ (flush out)
        (? (two? ps) 0 1))
    (pgrep-main as)
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
-       _ (: c (uoptun t "fx") (? (nil? c) () (udie 2 ("pgrep: unknown option -" + string c))))
+       _ (: c (uoptun t "fx") (? !c () (udie 2 ("pgrep: unknown option -" + string c))))
        rest <>>o
        _ (? (two? rest) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
        ps (upfind (peep t 102 0) (peep t 120 0) <rest)
-       _ (foldl (\ _ p (: _ (say out (show p)) (put out 10))) 0 ps)
+       _ (foldl (\ _ p (say out (show p), put out 10)) 0 ps)
        _ (flush out)
        (? (two? ps) 0 1))
    (pkill-main as)
@@ -1426,7 +1405,7 @@
        t (tablet 0)
        o (uopt rest t () '(101) ())
        _ (? (two? o) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
-       _ (: c (uoptun t "fx") (? (nil? c) () (udie 2 ("pkill: unknown option -" + string c))))
+       _ (: c (uoptun t "fx") (? !c () (udie 2 ("pkill: unknown option -" + string c))))
        ws <>>o
        _ (? (two? ws) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
        ps (upfind (peep t 102 0) (peep t 120 0) <ws)
@@ -1438,10 +1417,10 @@
        _ (? (two? ns) () (udie 1 "usage: killall [-SIG] NAME.."))
        me (: s (upself 0) (? s <s -1))
        (one nm ok)
-        (: ps (filter (\ p (? (p = me) 0 (: s (upstat p) (? s ((s 1) = nm) 0)))) (uprocs 0))
+        (: ps (filter (p \ (? (p = me) 0 (: s (upstat p) (? s ((s 1) = nm) 0)))) (uprocs 0))
            (? (two? ps)
-              (: _ (foldl (\ _ p (still p (? (charm? sig) sig 15))) 0 ps) ok)
-              (: _ (say err (nm + ": no process found")) _ (put err 10) 0)))
+              (foldl (\ _ p (still p (? (charm? sig) sig 15))) 0 ps, ok)
+              (say err (nm + ": no process found"), put err 10, 0)))
        ok (foldl (\ a nm (one nm a)) 1 ns)
        _ (flush err)
        (? ok 0 1))
@@ -1450,8 +1429,8 @@
     (: _ (? (two? as) () (udie 1 "usage: pwdx PID.."))
        (one w ok)
         (: d (readlink (("/proc/" + w) + "/cwd"))
-           (? (string? d) (: _ (say out ((w + ": ") + d)) _ (put out 10) ok)
-              (: _ (say err (w + ": No such process")) _ (put err 10) 0)))
+           (? (string? d) (say out ((w + ": ") + d), put out 10, ok)
+              (say err (w + ": No such process"), put err 10, 0)))
        ok (foldl (\ a w (one w a)) 1 as)
        _ (flush out) (? ok 0 1))
 
@@ -1462,20 +1441,20 @@
    ; script writes it, and read as the command it used to spawn the word `-n2`
    (xargs-main as)
     (: g1 (two? as && (2 < tally <as) && (snip <as 0 2 = "-n"))
-       nflag (g1 || (two? as && (<as = "-n")))
-       _ (? ((nflag && !g1) && !(two? >as)) (udie 1 "usage: xargs [-n N] [CMD ARGS..]") ())
-       nn (? g1 (uatoi (snip <as 2 (tally <as))) nflag (uatoi <>as) ())
-       _ (? (nflag && (nn < 1)) (udie 1 "xargs: invalid -n") ())
+       nflag (g1 || (two? as && <as = "-n"))
+       _ (? ((nflag && !g1) && atom? >as) (udie 1 "usage: xargs [-n N] [CMD ARGS..]") ())
+       nn (? g1 (uatoi (snip <as 2 #<as)) nflag (uatoi <>as) ())
+       _ (? (nflag && nn < 1) (udie 1 "xargs: invalid -n") ())
        rest (? g1 >as nflag >>as as)
        cmd (? (two? rest) rest '("echo"))
        ws (words (slurp in))
-       (chunks k l) (? !(two? l) () (take k l . chunks k (drop k l)))
-       runs (? !(two? ws) [()]                       ; no input still runs once, like GNU
+       (chunks k l) (? (atom? l) () (take k l . chunks k (drop k l)))
+       runs (? (atom? ws) [()]                       ; no input still runs once, like GNU
                nn (chunks nn ws)
                [ws])
        (go rs bad)
-        (? !(two? rs)
-           (: _ (flush out) bad)
+        (? (atom? rs)
+           (flush out, bad)
            (: p (spawn (cmd + <rs))
               w (? (nom? p) 127 (wait p))
               (go >rs (? (w = 127) 127
@@ -1492,11 +1471,11 @@
    ; a kernel with no rusage row (netbsd, and inle) reports the real line and dashes the
    ; other two, rather than call a pair of zeroes a measurement.
    (utsec us)                          ; microseconds -> seconds, two places
-    (: cs (// (us + 5000) 10000)
-       ((show (// cs 100)) + "." + (zpad 2 (show (% cs 100)))))
-   (utline nm v) (: _ (say err (nm + " " + v)) (put err 10))
+    (: cs ((us + 5000) // 10000)
+       ((show (cs // 100)) + "." + (zpad 2 (show (cs % 100)))))
+   (utline nm v) (say err (nm + " " + v), put err 10)
    (time-main as)
-    (: cmd (? (two? as && (<as = "-p")) >as as)
+    (: cmd (? (two? as && <as = "-p") >as as)
        _ (? (two? cmd) () (udie 2 "usage: time [-p] CMD [ARG..]"))
        r0 (rusage -1)
        t0 (clock 0)
@@ -1504,12 +1483,11 @@
        st (? (nom? p) 127 (wait p))
        ms (clock t0)
        r1 (rusage -1)
-       cpu? ((two? r0) && (two? r1))
-       _ (? (nom? p) (: _ (say err ("time: cannot run " + <cmd)) (put err 10)) ())
+       cpu? (two? r0 && two? r1)
+       _ (? (nom? p) (say err ("time: cannot run " + <cmd), put err 10) ())
        _ (flush out)
        _ (utline "real" (utsec (ms * 1000)))
-       _ (? cpu? (: _ (utline "user" (utsec (<r1 - <r0)))
-                     (utline "sys" (utsec (<>r1 - <>r0))))
-            (: _ (utline "user" "-") (utline "sys" "-")))
+       _ (? cpu? (utline "user" (utsec (<r1 - <r0)), utline "sys" (utsec (<>r1 - <>r0)))
+            (utline "user" "-", utline "sys" "-"))
        st))
 ) ; module 'kore

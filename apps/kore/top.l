@@ -38,18 +38,18 @@
 
    ; ---- the numbers, as columns of text ---------------------------------------
    (tp-d1 n)                           ; tenths -> "n.d"
-    ((show (// n 10)) + "." + (show (% n 10)))
+    ((show (n // 10)) + "." + (show (n % 10)))
    ; a KiB count in seven columns: six digits and procps' letter. a width is a
    ; promise the header made, and a terabyte of virtual address space is real.
    tp-sfx ["" "m" "g" "t" "p"]
    (tp-kb k)
-    (: (go v i) (? ((v < 1000000) || ((#tp-sfx - 1) <= i)) ((show v) + (tp-sfx i))
+    (: (go v i) (? (v < 1000000 || (#tp-sfx - 1) <= i) ((show v) + (tp-sfx i))
                    (go (v // 1024) (i + 1)))
        (go k 0))
    (tp-time tk)                        ; ticks -> procps' TIME+, mm:ss.hh
-    (: s (// tk tp-hz)
-       ((show (// s 60)) + ":" + (zpad 2 (show (% s 60)))
-                        + "." + (zpad 2 (show (% tk tp-hz)))))
+    (: s (tk // tp-hz)
+       ((show (s // 60)) + ":" + (zpad 2 (show (s % 60)))
+                        + "." + (zpad 2 (show (tk % tp-hz)))))
    (tp-cut s w) (? (w < #s) (snip s 0 w) s)
 
    ; ---- the samples -------------------------------------------------------------
@@ -57,7 +57,7 @@
    ; softirq steal, and whatever the kernel adds after them.
    (tp-cpu _)
     (: r (uread "/proc/stat")
-       (? !(two? r) ()
+       (two? r ?
           (: w (words <(lines <>r))
              (? (#w < 5) () (map uatoi >w)))))
    (tp-at l i) (? (i < #l) (l i) 0)            ; a field the kernel did not print reads 0
@@ -66,7 +66,7 @@
    ; read per process, which is what the SHR column costs and all that it costs.
    (tp-shr pid)
     (: r (uread ("/proc/" + (show pid) + "/statm"))
-       (? !(two? r) 0 (: w (words <>r) (? (2 < #w) (uatoi (w 2)) 0))))
+       (? (atom? r) 0 (: w (words <>r) (? (2 < #w) (uatoi (w 2)) 0))))
 
    ; one process -> a row, or () when it went away between the readdir and the read.
    ; `last` is the previous frame's ticks by pid and `ms` the milliseconds since it;
@@ -76,7 +76,7 @@
     (: f (upstat pid)
        (? !f ()
           (: tk ((uatoi (tp-at f 13)) + (uatoi (tp-at f 14)))
-             was (peep last pid ())
+             was (last pid)
              age (? (charm? was) ms (: a ((up - (uatoi (tp-at f 21))) * (1000 // tp-hz))
                                         (? (0 < a) a 1)))
              d (? (charm? was) (tk - was) tk)
@@ -99,7 +99,7 @@
    ; the rows, and the tablet of ticks the next frame subtracts
    (tp-sample last ms up memkb cmd? pids)
     (: ps (? (two? pids) pids (uprocs 0))
-       rs (filter two? (map (\ p (tp-row p last ms up memkb cmd?)) ps))
+       rs (filter two? (map (p \ (tp-row p last ms up memkb cmd?)) ps))
        nxt (foldl (\ t r (pin t <r (r 10))) {} rs)
        [rs nxt])
 
@@ -110,11 +110,11 @@
    (tp-key k r) (? (k = 77) (r 9) (k = 84) (r 10) (k = 78) (0 - <r) (r 8))
    (tp-sort k rs)
     (sortby (\ x y (: a (tp-key k x) b (tp-key k y)
-                      (? (= a b) (<x <= <y) (b < a)))) rs)
+                      (? (a = b) (<x <= <y) (b < a)))) rs)
 
    ; ---- the frame ---------------------------------------------------------------
    (tp-tasks rs)                       ; the state census the second header line is
-    (: (cnt c) (#(filter (\ r ((r 7) = c)) rs))
+    (: (cnt c) (#(filter (r \ ((r 7) = c)) rs))
        (p3 n) (upad 3 (show n))
        ((show #rs) + " total, " + (p3 (cnt "R")) + " running, "
         + (p3 ((cnt "S") + (cnt "D") + (cnt "I"))) + " sleeping, "
@@ -122,15 +122,15 @@
    ; the cpu line, off the difference between two /proc/stat reads. with no previous
    ; read there is no difference, so the first frame is the average since boot.
    (tp-cpuline now was)
-    (: d (? (two? was) (map (\ i ((tp-at now i) - (tp-at was i))) (jot 8))
-              (map (\ i (tp-at now i)) (jot 8)))
-       tot (: v (tp-sum (map (\ x (? (x < 0) 0 x)) d)) (? (0 < v) v 1))
+    (: d (? (two? was) (map (i \ ((tp-at now i) - (tp-at was i))) (jot 8))
+              (map (i \ (tp-at now i)) (jot 8)))
+       tot (: v (tp-sum (map (x \ (? (x < 0) 0 x)) d)) (? (0 < v) v 1))
        (pc i) (upad 5 (tp-d1 ((tp-at d i) * 1000 // tot)))
        ("%Cpu(s): " + (pc 0) + " us, " + (pc 2) + " sy, " + (pc 1) + " ni, "
                     + (pc 3) + " id, " + (pc 4) + " wa, " + (pc 5) + " hi, "
                     + (pc 6) + " si, " + (pc 7) + " st"))
    (tp-mem mi)
-    (: g (\ k (peep mi k 0))
+    (: g (k \ (peep mi k 0))
        tot (g 'MemTotal) free (g 'MemFree) av (g 'MemAvailable)
        bc ((g 'Buffers) + (g 'Cached) + (g 'SReclaimable))
        st (g 'SwapTotal) sf (g 'SwapFree)
@@ -158,29 +158,29 @@
        mi (umeminfo 0)
        memkb (peep mi 'MemTotal 0)
        cpu (tp-cpu 0)
-       q (tp-sample (peep st 'last {}) ms (uupticks 0) memkb (peep st 'cmd 0) (peep st 'pids ()))
+       q (tp-sample (peep st 'last {}) ms (uupticks 0) memkb (peep st 'cmd 0) (st 'pids))
        rs (tp-sort (peep st 'sort 80) <q)
        _ (pins st 'last <>q 'at now 'cpu0 cpu)
-       hd [("top - " + (uclk (% (// now 1000) 86400)) + " up " + (uupsay (uupsecs 0))
+       hd [("top - " + (uclk ((now // 1000) % 86400)) + " up " + (uupsay (uupsecs 0))
                      + ",  load average: " + (uloadav 0))
            ("Tasks: " + (tp-tasks rs))
-           (tp-cpuline cpu (peep st 'cpu ()))]
+           (tp-cpuline cpu (st 'cpu))]
        _ (pin st 'cpu cpu)
        top (hd + (tp-mem mi) + ["" tp-head])
        room (: n (h - #top) (? (0 < n) n 0))
-       body (map (\ r (tp-line r w)) (? (h < 1) rs (snip rs 0 room)))
-       ((tp-join (map (\ s (tp-cut s w)) top)) + (tp-join body)))
+       body (map (r \ (tp-line r w)) (? (h < 1) rs (snip rs 0 room)))
+       ((tp-join (map (s \ (tp-cut s w)) top)) + (tp-join body)))
 
    ; ---- the two faces -----------------------------------------------------------
    ; batch: no terminal is wanted and none is asked for, every process is shown, and
    ; the frames are separated by a blank line the way procps separates them.
    (tp-batch st n d w)
     (: (go k first)
-        (: _ (? first () (put out 10))
-           _ (say out (tp-frame st w 0))
-           _ (flush out)
-           (? ((0 < n) && (n <= k)) 0
-              (: _ (rest d) (go (k + 1) 0))))
+        ((? first () (put out 10)),
+         say out (tp-frame st w 0),
+         flush out,
+         (? (0 < n && n <= k) 0
+            (rest d, go (k + 1) 0)))
        (go 1 1))
    ; the screen: repaint, then poll the keyboard in short naps until the delay is
    ; spent. a key is read as one byte -- top's own keys are all single -- and an
@@ -192,11 +192,11 @@
           (: ks (snip b 0 n)
              (go i acc) (? (n <= i) acc
                            (: c (ks i)
-                              (? ((c = 113) || (c = 81)) 1                  ; q Q
-                                 (c = 99) (: _ (pin st 'cmd !(peep st 'cmd 0)) acc)
-                                 ((c = 80) || (c = 77) || (c = 84) || (c = 78))
-                                  (: _ (pin st 'sort c) (go (i + 1) 2))
-                                 ((c = 32) || (c = 114)) (go (i + 1) 2)     ; space r
+                              (? (c = 113 || c = 81) 1                  ; q Q
+                                 (c = 99) (pin st 'cmd !(peep st 'cmd 0), acc)
+                                 (c = 80 || c = 77 || c = 84 || c = 78)
+                                  (pin st 'sort c, go (i + 1) 2)
+                                 (c = 32 || c = 114) (go (i + 1) 2)     ; space r
                                  (go (i + 1) acc))))
              (go 0 0))))
    (tp-ride st n d)
@@ -204,7 +204,7 @@
        e (string 27)
        _ (raw 1)
        _ (puts (e + "[?1049h"))
-       (fin _) (: _ (puts (e + "[0m" + e + "[?1049l")) _ (flush out) _ (raw 0) 0)
+       (fin _) (puts (e + "[0m" + e + "[?1049l"), flush out, raw 0, 0)
        (paint _) (: ws (tty 1)
                     h (? (two? ws && 0 < <ws) <ws 24)
                     w (? (two? ws && 0 < >ws) >ws 80)
@@ -216,17 +216,17 @@
                       (? (k = 1) 1
                          (k = 2) 0
                          (left < 1) 0
-                         (: _ (rest tp-nap) (wait (left - tp-nap)))))
-       (go k) (: _ (paint 0)
-                 (? ((0 < n) && (n <= k)) (fin 0)
-                    (? (wait d) (fin 0) (go (k + 1)))))
+                         (rest tp-nap, wait (left - tp-nap))))
+       (go k) (paint 0,
+               (? (0 < n && n <= k) (fin 0)
+                  (? (wait d) (fin 0) (go (k + 1)))))
        (go 1))
 
    (top-main as)
     (: t (tablet 0)
        o (uopt as t '(110 100 112) '(112) ())       ; -n -d -p take values, -p repeats
        _ (? (two? o) () (udie 2 tp-usage))
-       _ (: c (uoptun t "bndp") (? (nil? c) () (udie 2 ("top: unknown option -- " + (string c)))))
+       _ (: c (uoptun t "bndp") (? !c () (udie 2 ("top: unknown option -- " + (string c)))))
        b? (peep t 98 0)
        n (: v (uoptv t 110) (? (string? v) (: k (unum v) (? (charm? k) k (udie 2 tp-usage))) 0))
        d (: v (uoptv t 100)
@@ -237,7 +237,7 @@
        ws (tty 1)
        ; no terminal is not a refusal: it is batch, which is what a pipe wants and
        ; what the gate reads. -b asks for the same face where there is a terminal.
-       (? (b? || !(two? ws))
+       (? (b? || (atom? ws))
           (tp-batch st (? (0 < n) n 1) d ((cite 'grid 'screen) 1))
           (tp-ride st n d))))
 

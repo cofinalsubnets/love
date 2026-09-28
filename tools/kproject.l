@@ -57,7 +57,7 @@
                                ? (rle64 pie (e + 8))
                                  (go (e + 24)))))) symo)
       (va2off v) ((: (go l)                      ; a vaddr's file offset, through its load
-                      (? (one? l) (scare 'kproject-va v)
+                      (? (atom? l) (scare 'kproject-va v)
                          (: g <l
                             (g 0 <= v && v < g 0 + g 2
                              ? (v - g 0 + g 1)
@@ -72,7 +72,7 @@
       d1 (ldlayn 'data (ldlay1 'data o1 objs) objs)
       bootend (ldlayn 'bss (ldlay1 'bss d1 objs) objs)
       bias (ld-align 4096 bootend)
-      top ((: (go l m) (? (one? l) m
+      top ((: (go l m) (? (atom? l) m
                           (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
            loads 0)
       glo (ldsyms objs)
@@ -94,7 +94,7 @@
       ; --- the patch list: every love_rela site slides by bias, and k_image_top
       ; takes the image's far edge -- ascending, for the one-pass surgery below
       ; (the table already lays ascending; the walk reverses it back)
-      (ins s l) (? (one? l) [s]
+      (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
       sites (ins [(pie-sym "k_image_top") top]
@@ -106,7 +106,7 @@
       ; one load's bytes with its patches spliced in
       (spliced go0 va fsz ss)
        ((: (go c l acc)
-            (? (one? l) (rev (snip pie c (go0 + fsz) . acc))
+            (? (atom? l) (rev (snip pie c (go0 + fsz) . acc))
                (: o (go0 + (<l 0 - va))
                   (go (o + 8) >l (le64 (<l 1) . snip pie c o . acc)))))
         go0 (filter (s \ va <= s 0 && s 0 < va + fsz) ss) ())
@@ -125,7 +125,7 @@
       ; file address-linear would put back the zeros the link took out.
       (cfo c a) (: r ((a % 4096) - (c % 4096)) (c + (r >= 0 ? r (r + 4096))))
       lds (rev ((: (go l c acc)
-                    (? (one? l) acc
+                    (? (atom? l) acc
                        (: g <l o (cfo c (bias + g 0))
                           (go >l (o + g 2) ((g + (o . ())) . acc)))))
                 loads (fo d1) ()))
@@ -148,7 +148,7 @@
       ed (ldemitn cx 'data objs (ldemit cx 'data o1 objs (>eo + (gapz <eo o1))))
       ; the image bytes, each load at the congruent file spot lds picked for it
       body ((: (go l c acc)
-                (? (one? l) [c acc]
+                (? (atom? l) [c acc]
                    (: g <l o (g 5)
                       (go >l (o + g 2)
                           (acc + ([(ld-zeros (o - c))] + spliced (g 1) (g 0) (g 2) sites))))))

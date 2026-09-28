@@ -47,8 +47,8 @@
    ; the emitted html what it actually said, without re-parsing it.
    (finds s pre)  (: m #pre n #s
                      ((: (g i acc)
-                         ((i + m) <= n ? ((snip s i (i + m)) = pre ? (: j ((: (f k) (&& (k < n) !((s k) = 34) ? (f (k + 1)) k)) (i + m))
-                                  (g j (. (snip s (i + m) j) acc))) (g (i + 1) acc)) (rev acc))) 0 ()))
+                         ((i + m) <= n ? ((snip s i (i + m)) = pre ? (: j ((: (f k) (k < n && !((s k) = 34) ? (f (k + 1)) k)) (i + m))
+                                  (g j (snip s (i + m) j . acc))) (g (i + 1) acc)) (rev acc))) 0 ()))
    (has? l x)     (elem x l)
    (uniq? l)      ((: (g l) (? !(two? l) 1 (elem <l >l) 0 (g >l))) l)
 
@@ -183,7 +183,7 @@ Only a paragraph, so the title has to come from the meta block.
 
    ; --- title: the three sources, in order ------------------------------------------
    _ (test
-      (0 < tally (finds one "<h1 id=\""))        ; from the head-1
+      (0 < #(finds one "<h1 id=\""))             ; from the head-1
       (has? (finds two "content=\"") "Two From Meta")
       ((cite 'papel 'ptitle) ((cite 'lapiz 'mdread) (get-file "src/two.md")) "x") = "Two From Meta"
       ((cite 'papel 'ptitle) ((cite 'lapiz 'mdread) (get-file "src/three.md")) "three.md") = "three.md")
@@ -192,7 +192,7 @@ Only a paragraph, so the title has to come from the meta block.
    _ (: ih (finds idx "href=\"")
         _ (test (has? ih "one.html") (has? ih "two.html") (has? ih "three.html")
                   ; the blurb is the first paragraph, clipped on a word boundary
-                  (0 < tally ((cite 'papel 'blurb) ((cite 'lapiz 'mdread) (get-file "src/one.md"))))))
+                  (0 < #((cite 'papel 'blurb) ((cite 'lapiz 'mdread) (get-file "src/one.md"))))))
 
    ; --- the slug is a function of the text, and nothing else -------------------------
    _ (: slug (cite 'papel 'slug)
@@ -218,7 +218,7 @@ Only a paragraph, so the title has to come from the meta block.
    _ (: (page f) (: q (open (dir + "/love/" + f) "r") (hot? q ? (slurp q) ""))
         _ (each (filter (\ f ((cite 'papel 'ends?) f ".html")) (readdir (dir + "/love")))
                 (\ f (: h (page f)
-                        (test (0 < tally h)
+                        (test (0 < #h)
                                 ((cite 'papel 'ends?) h "</html>\n")
                                 (anchored? h)))))
         0)

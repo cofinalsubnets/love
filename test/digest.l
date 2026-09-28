@@ -88,9 +88,9 @@
    (hash-shape ls)
     (? !(two? ls) 1
        (: s (hash-bytes <ls)
-          (? (! (hash-hexlen s 32)) 0
-             (! (hash-hexlen s 64)) 0
-             (! (hash-cksame s)) 0
+          (? !(hash-hexlen s 32) 0
+             !(hash-hexlen s 64) 0
+             !(hash-cksame s) 0
              (hash-shape >ls)))))
 (test (hash-shape '(0 1 54 55 56 57 63 64 65 118 119 120 127 128 129 200)))
 
@@ -136,7 +136,7 @@
    ; and in chunks that divide the block, straddle it, and outrun it
    (dig-agree? n)
     (: s (hash-bytes n)
-       (go ks) (? (one? ks) 1
+       (go ks) (? (atom? ks) 1
                   (? (sha256 s = sha-stream s <ks &&
                       md5 s = md5-stream s <ks &&
                       cksum s = ck-stream s <ks)
@@ -211,7 +211,7 @@
    (dig-b2 n) [210 (\ b (blake2b-init b n)) blake2b-feed blake2b-done]
    (dig-agree2? n)
     (: s (hash-bytes n)
-       (go ks) (? (one? ks) 1
+       (go ks) (? (atom? ks) 1
                   (? (sha1 s = dig-stream (dig-sha1 0) s <ks &&
                       sha224 s = dig-stream (dig-sha224 0) s <ks &&
                       sha384 s = dig-stream (dig-sha384 0) s <ks &&

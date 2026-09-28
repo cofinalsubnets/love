@@ -41,7 +41,7 @@
    (m3parts sc)
     (:- (go sc () ())
      (go m gp acc)
-      (one? m ? (rev (rev gp . acc))
+      (atom? m ? (rev (rev gp . acc))
        (: o <m op <o x <>o acc2 (rev gp . acc)                   ; the gap closes on a line op
         (op @ 'keep (go >m () ([x] . acc2))
               'del (: r (m3grab >m ()) (go <r () (<>r . acc2)))
@@ -60,7 +60,7 @@
    ; walk the three part-lists in step, chunking stable runs and resolving
    ; unstable ones. answers (chunks nconflicts), chunks newest-first.
    (m3go bs os ts ol tl acc nc)
-    (? (one? bs) [acc nc]
+    (? (atom? bs) [acc nc]
        (<os = <bs && <ts = <bs) (m3go >bs >os >ts ol tl (<bs . acc) nc)
        (: (run b o t bb ob tb)                                        ; extend while either side moved
            (? (two? b && (<o != <b || <t != <b))

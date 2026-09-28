@@ -186,8 +186,8 @@
    ;     gets evicted instead of a window that can never disappear). ---
    mapd (tablet 8) owed (tablet 8)
    (map! w) (pin mapd w 1, x-map s w)
-   (hide! w) (: _ (peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0)         ; only a mapped window echoes -- an unmap of the
-                _ (pull mapd w 0) (x-unmap s w))                                 ; already-hidden fires no event, so no count
+   (hide! w) (peep mapd w 0 ? (pin owed w (1 + peep owed w 0)) 0,              ; only a mapped window echoes -- an unmap of the
+              pull mapd w 0, x-unmap s w)                                        ; already-hidden fires no event, so no count
    (unled! w) (pull mapd w 0, pull owed w 0)                              ; the window left management: clear its ledger
    (render sh lays)                                                               ; every screen: its tag's placements configured, the dropped unmapped, floats on top
     (: f (wsfoc sh)                                                              ; the focus is the sheaf's, float or tile alike
@@ -226,9 +226,9 @@
    (do-act a sh lays hist)
     (: k <a z (wstilez sh) fw (wsfoc sh)                                         ; the layout reads the tiled zipper; fw is simply the focus
        (screen-tag n) (: ts (wsvistags sh) (n < #ts ? (ts n)))                  ; the tag on screen n, () past the last screen
-       (relay sh2 lays2) (: _ (render sh2 lays2)                                   ; render, focus whatever the sheaf focuses, loop
-                            _ (refocus sh2)
-                            (loop sh2 lays2 hist))
+       (relay sh2 lays2) (render sh2 lays2,                                        ; render, focus whatever the sheaf focuses, loop
+                          refocus sh2,
+                          loop sh2 lays2 hist)
        (? (k = 'msg) (relay sh (lays-send lays (wscur sh) <>a z))
           (k = 'focus-dn) (relay (wsmap sh zfocdn) lays)                          ; the ring IS the zipper: one op, no branch on kind
           (k = 'focus-up) (relay (wsmap sh zfocup) lays)
@@ -255,10 +255,10 @@
                           (loop sh lays hist))
           (k = 'exec) (line "lux: exec -- abdicating", exec <>a,          ; returns only on failure
                        loop sh lays hist)
-          (k = 'kill) (: _ (? fw (: _ (? (x-has-atom s fw "WM_PROTOCOLS" "WM_DELETE_WINDOW")   ; ask first (killWindow): KillClient
-                                         (x-wmdel s fw) (x-kill s fw))           ; takes the whole client, every window it owns
-                                     (x-flush s)) 0)                             ; DestroyNotify does the eviction
-                         _ (line ("lux: kill " + show fw)) (loop sh lays hist))
+          (k = 'kill) ((? fw ((? (x-has-atom s fw "WM_PROTOCOLS" "WM_DELETE_WINDOW")           ; ask first (killWindow): KillClient
+                                 (x-wmdel s fw) (x-kill s fw)),                  ; takes the whole client, every window it owns
+                               x-flush s) 0),                                    ; DestroyNotify does the eviction
+                       line ("lux: kill " + show fw), loop sh lays hist)
           (k = 'quit) (line "lux: quit")                                          ; fall out of the loop
           (k = 'restart)                                                         ; restart-in-place: exec the original argv (execvp, so love
           (line ("lux: restart -- exec, pid " + show (getpid 0)),            ; re-resolves off PATH -- an upgraded binary lands first try,
@@ -337,9 +337,9 @@
    (loop2 sh lays hist0)
     (: f (wsfoc sh)                                                              ; the mru rides the focus: floats enter too
        hist (f && f != (two? hist0 ? <hist0 ()) ? (f . znub f hist0) hist0)
-       (relay sh2 lays2) (: _ (render sh2 lays2)                                   ; render, focus, loop (do-act has its own)
-                            _ (refocus sh2)
-                            (loop sh2 lays2 hist))
+       (relay sh2 lays2) (render sh2 lays2,                                        ; render, focus, loop (do-act has its own)
+                          refocus sh2,
+                          loop sh2 lays2 hist)
        _ (glean 0)                                                                ; glean one spawned zombie home, if any
        _ (ewmh-sync s sh (scrn ()))                                              ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
@@ -413,9 +413,9 @@
                       ((st & lux-mod) && wsknownw? sh w && (btn = 2))            ; mod+btn2: promote the clicked window to master (shiftMaster)
                       (x-allow-async s, x-flush s,
                          relay (wsmaster (wsfocw sh w)) lays)
-                      (: _ (x-replay s) _ (x-flush s)                           ; a plain click: hand it to the app, then click-to-focus
-                         (? (!(wsknownw? sh w) || w = wsfoc sh) (loop sh lays hist)
-                            (relay (wsfocw sh w) lays)))))
+                      (x-replay s, x-flush s,                                   ; a plain click: hand it to the app, then click-to-focus
+                       (? (!(wsknownw? sh w) || w = wsfoc sh) (loop sh lays hist)
+                          (relay (wsfocw sh w) lays)))))
                 (code = 2)                                                       ; KeyPress: the table answers
                 (: kc (ev-detail e) stm (ev-state e & kmodmask)
                    hit (afind (r \ <r = stm && <>r = kc) (ktab ()))
@@ -477,17 +477,17 @@
                       (: lays2 (lays-send lays (wstagof sh cw) ['minimize-window cw] (wstilez sh))
                          _ (render sh lays2) _ (line ("lux: minimize " + show cw)) (loop sh lays2 hist))
                       ((ty = ewmh-atom "_NET_CLOSE_WINDOW") && wsknownw? sh cw)       ; a panel/pager closes a window -- gracefully if it can
-                      (: _ (x-has-atom s cw "WM_PROTOCOLS" "WM_DELETE_WINDOW" ? (x-wmdel s cw) (x-kill s cw))
-                         _ (x-flush s) _ (line ("lux: close " + show cw)) (loop sh lays hist))
+                      (x-has-atom s cw "WM_PROTOCOLS" "WM_DELETE_WINDOW" ? (x-wmdel s cw) (x-kill s cw),
+                       x-flush s, line ("lux: close " + show cw), loop sh lays hist)
                       (ty = ewmh-atom "_NET_CURRENT_DESKTOP")                    ; a pager switches the desktop -- the same ending, and
                       (relay (switch sh lays (ewmh-cm-d0 pkt + 1)) lays)
                       (ty = ewmh-atom "_NET_WM_DESKTOP")                         ; a pager drags a window to another desktop (W.shiftWin)
                       (: t (ewmh-cm-d0 pkt + 1) sh2 (shiftwin sh cw t)
                          (sh2 = sh ? (loop sh lays hist)                        ; unknown window/tag (or sticky 0xffffffff): a no-op
-                          (: _ (render sh2 lays)                              ; arriving on the current view: render maps it...
-                             _ (wsvisible? sh2 t ? 0 (hide! cw, x-flush s))  ; ...leaving every screen: hide the emigrant
-                             _ (line ("lux: sent " + show cw + " -> " + show t))
-                             (loop sh2 lays hist))))
+                          (render sh2 lays,                                   ; arriving on the current view: render maps it...
+                           wsvisible? sh2 t ? 0 (hide! cw, x-flush s),       ; ...leaving every screen: hide the emigrant
+                           line ("lux: sent " + show cw + " -> " + show t),
+                           loop sh2 lays hist)))
                       (ty = ewmh-atom "_NET_ACTIVE_WINDOW")                      ; activate: restore if minimized, view its tag, focus it.
                       (: t (wstagof sh cw)                                       ; source 1 is the app asking for itself, 2 a
                          lays2 (lays-send lays (t ? t (wscur sh)) ['restore-window cw] (wstilez sh))   ; pager (the user): an app may take the keyboard on this
@@ -517,7 +517,7 @@
    ; root (x-querytree's wrapper). the two reads below used to be two separate
    ; QueryTrees, which could disagree; one answer serves both.
    tree (x-querytree s root)
-   _ (one? tree ?  (line "lux: QueryTree FAILED at startup -- the stream is garbled, adopting nothing"))
+   _ (atom? tree ?  (line "lux: QueryTree FAILED at startup -- the stream is garbled, adopting nothing"))
    ; and the fault injector, the knob that actually makes a fix testable.
    ; lux_sweep_miss=1 forces the sweep to see an empty tree -- exactly what a lost
    ; race leaves behind. it is the deterministic form of the defect: the delay
@@ -542,10 +542,10 @@
        _ (map (w \ x-manageable? s w ? (pin mapd w 1) 0) ws)                 ; the viewable adoptees are mapped
        sh2)
    (settle sh ws tag)                                                           ; paint a batch and say so
-    (: _ (render sh ())
-       _ (map (w \ any (= w) (wsonscreen sh) ? 0 (hide! w)) (wstiled sh))   ; adopted onto a hidden tag: hide it
-       _ (x-flush s)                                                            ; now, or it lingers painted over workspace 1 (the WM_STATE
-       _ (refocus sh) (line (tag + show ws)))                                   ; stamp keeps it adoptable through the next restart)
+    (render sh (),
+     map (w \ any (= w) (wsonscreen sh) ? 0 (hide! w)) (wstiled sh),        ; adopted onto a hidden tag: hide it
+     x-flush s,                                                                 ; now, or it lingers painted over workspace 1 (the WM_STATE
+     refocus sh, line (tag + show ws))                                          ; stamp keeps it adoptable through the next restart)
    sh0 (take-in (rescreen (sheaf lux-tags)) kids)                            ; the screens, before any window lands
    _ (two? kids ? (settle sh0 kids "lux: adopted "))
    ; the second look, and the whole point of it: the sweep above is one shot and

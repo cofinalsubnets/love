@@ -39,7 +39,7 @@
        cs (map cup (sort (map (e \ ((<e >> sh) & 31) . e) (bx 2))))
        total +(map (e \ e 1) cs)
        ; the first k whose running weight reaches half, both halves kept
-       (cut l acc k) (? ((one? >l) || ((acc + (<l 1)) * 2 >= total)) (k + 1)
+       (cut l acc k) (? ((atom? >l) || ((acc + (<l 1)) * 2 >= total)) (k + 1)
                         (cut >l (acc + (<l 1)) (k + 1)))
        m (: k (cut cs 0 0) (? (k >= #cs) (#cs - 1) k))
        [(gif-box (take m cs)) (gif-box (drop m cs))])
@@ -74,19 +74,19 @@
        o (cask ((n * 2) + 16)) st {'acc 0 'nb 0 'len 0}
        (emit code cs)
         (: acc ((st 'acc) | (code << (st 'nb))) nb ((st 'nb) + cs)
-           (out acc nb) (? (nb < 8) (: _ (pin st 'acc acc) (pin st 'nb nb))
-                           (: _ (pin o (st 'len) (acc & 255)) _ (pin st 'len ((st 'len) + 1))
-                              (out (acc >> 8) (nb - 8))))
+           (out acc nb) (? (nb < 8) (pin st 'acc acc, pin st 'nb nb)
+                           (pin o (st 'len) (acc & 255), pin st 'len ((st 'len) + 1),
+                            out (acc >> 8) (nb - 8)))
            (out acc nb))
        (go i w d next cs)
-        (? (i = n) (: _ (emit w cs) _ (emit eoi cs) _ (? (st 'nb) (emit 0 (8 - st 'nb)) 0)
-                      (snip (string o) 0 (st 'len)))
+        (? (i = n) (emit w cs, emit eoi cs, (? (st 'nb) (emit 0 (8 - st 'nb)) 0),
+                    snip (string o) 0 (st 'len))
            (: k (peep ix i 0) key ((w << 8) | k) c (peep d key -1)
               (? (c >= 0) (go (i + 1) c d next cs)
                  (: _ (emit w cs) _ (pin d key next)
                     cs2 (? (next >= (1 << cs)) (cs + 1) cs)
                     (? (next = 4095)
-                       (: _ (emit clear cs2) (go (i + 1) k (tablet 0) (eoi + 1) (mcs + 1)))
+                       (emit clear cs2, go (i + 1) k (tablet 0) (eoi + 1) (mcs + 1))
                        (go (i + 1) k d (next + 1) cs2))))))
        _ (emit clear (mcs + 1))
        (go 1 (peep ix 0 0) (tablet 0) (eoi + 1) (mcs + 1)))
@@ -96,7 +96,7 @@
    ; bytes into sub-blocks of at most 255, then the empty one
    (gif-blocks s)
     (: o (jug 0)
-       (go i) (? (#s <= i) (: _ (say o (string 0)) (slurp o))
+       (go i) (? (#s <= i) (say o (string 0), slurp o)
                  (: k (? ((#s - i) < 255) (#s - i) 255)
                     _ (say o (string k)) _ (say o (snip s i (i + k)))
                     (go (i + k))))
@@ -134,7 +134,7 @@
    (gif-nif? _)
     (: v (peep gif-door 0 ())
        (? (charm? v) v
-          (: w (trap (\ _ (: _ (gif-clear "" 0 "") 1)) () (\ a b 0)) _ (pin gif-door 0 w) w)))
+          (: w (trap (\ _ (gif-clear "" 0 "", 1)) () (\ a b 0)) _ (pin gif-door 0 w) w)))
    ; the images laid in turn on the screen, each as the viewer sees it, at most most of them
    ; gc is the graphic control ahead of an image: [disposal trans ms]
    (gif-frames s most)

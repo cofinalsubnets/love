@@ -16,12 +16,12 @@
 (borrow 'posix)
 
 (: ovck (cite 'overlay 'ov-check)
-   _ (? !(nil? (cite 'overlay)) 0 (: _ (puts ";; moon-stage: no overlay module in this love") (quit 1)))
+   _ (? !!(cite 'overlay) 0 (puts ";; moon-stage: no overlay module in this love", quit 1))
    stage-dies '(gst ir-vreg ir-chosen ir-nolab ir-noframe ir-jmpfix ir-final ir-emitted)
-   (stage-join x y) (? (= x y) x 'top)
+   (stage-join x y) (x = y ? x 'top)
    (stage-tr op x y) 'top
    (stage-lit e) 'bot
-   (stage-okr bd decl) (elem bd '(top bot) || (= bd decl))
+   (stage-okr bd decl) (elem bd '(top bot) || bd = decl)
    stage-dom (hash 'dice stage-dies 'ctors () 'tr stage-tr 'join stage-join
                    'litdie stage-lit 'okr stage-okr)
    stage-sigs '((cgfn (gst top) top)                ; sigged so its body -- both chains -- is walked
@@ -51,20 +51,19 @@
                 (swrap (gst ir-emitted) ir-emitted))
    (forms text acc)
     (: r (sound text)
-       (? (= r 'torn) (: _ (puts ";; moon-stage: gen.l reads torn") (quit 1))
-          !(two? r) acc
+       (? (r = 'torn) (puts ";; moon-stage: gen.l reads torn", quit 1)
+          (atom? r) acc
           (forms >r (<r . acc))))
    src (open "apps/moon/gen.l" "r")
-   _ (? (hot? src) 0 (: _ (puts ";; moon-stage: cannot open apps/moon/gen.l") (quit 1)))
+   _ (? (hot? src) 0 (puts ";; moon-stage: cannot open apps/moon/gen.l", quit 1))
    text (slurp src)
-   reps (catmap (\ f (? (two? f && (= <f ':)) (ovck stage-dom stage-sigs f) ()))
+   reps (catmap (f \ (two? f && <f = ': ? (ovck stage-dom stage-sigs f) ()))
                 (forms text ()))
    _ (? (two? reps)
-        (: _ (map (\ r (: _ (puts ";; moon-stage: ") _ (putx r) (putc 10))) reps)
-           (quit 1))
+        (map (r \ (puts ";; moon-stage: ", putx r, putc 10)) reps, quit 1)
         0)
-   _ (puts "moon-stage: ")
-   _ (putx (tally stage-sigs))
-   _ (puts " sigs hold over apps/moon/gen.l (the post-choice chain types in one order)")
-   _ (putc 10)
-   0)
+   (puts "moon-stage: ",
+    putx #stage-sigs,
+    puts " sigs hold over apps/moon/gen.l (the post-choice chain types in one order)",
+    putc 10,
+    0))

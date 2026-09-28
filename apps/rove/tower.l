@@ -122,10 +122,10 @@
    (walk [ax ay] [bx by]) (:
      dx |(bx - ax) dy (0 - |(by - ay))
      sx (? (ax < bx) 1 -1) sy (? (ay < by) 1 -1)
-     (go x y e) (: _ (step (x - 1) y, step x y, step (x + 1) y)
-                   (? (x = bx && y = by) ()
-                      (: e2 (2 * e) mx (dy <= e2) my (e2 <= dx)
-                         (go (mx ? (x + sx) x) (my ? (y + sy) y) (e + (mx ? dy) + (my ? dx))))))
+     (go x y e) (step (x - 1) y, step x y, step (x + 1) y,
+                 (? (x = bx && y = by) ()
+                    (: e2 (2 * e) mx (dy <= e2) my (e2 <= dx)
+                       (go (mx ? (x + sx) x) (my ? (y + sy) y) (e + (mx ? dy) + (my ? dx))))))
      (go ax ay (dx + dy)))
    ; a cell of void between any two platforms' bounds -- a rhombus leaves its corners
    ; empty, so two that nearly touch still have the void between them
@@ -369,7 +369,7 @@
               "it's important for you to start doing what you want as soon as you can"
               ""
               "-- any key --")
- (bell-row r) (: (go a l acc) (one? l ? (rev acc) (go (a + <l) >l ((a + <l) . acc)))
+ (bell-row r) (: (go a l acc) (atom? l ? (rev acc) (go (a + <l) >l ((a + <l) . acc)))
                  (go (last r) r [(last r)]))
  (bell-page g n r) (: line ("B(" + show n + ") = " + show <r)
                       cols (peep (g 'd) 'cols (g 'd 'w))
@@ -823,13 +823,13 @@
 
  ; ..and the same for anyone else in the street: the middle keeps nobody. what it was
  ; carrying goes into the road where it falls, for whoever is still standing
- (run-over g m o) (: _ (pin o 'hp (o 'hp - car-dm))
-                     _ (note g (fill w-run [(o 'nm) car-dm]))
-                     _ (pin g 'sfx ('horn . g 'sfx))
-                     _ (shove g m o)
-                     (0 >= o 'hp ? (pin g 'ms (filter (!= o) (g 'ms)),
-                                    drop g o,
-                                    note g (fill w-kill [(o 'nm)]))))
+ (run-over g m o) (pin o 'hp (o 'hp - car-dm),
+                   note g (fill w-run [(o 'nm) car-dm]),
+                   pin g 'sfx ('horn . g 'sfx),
+                   shove g m o,
+                   0 >= o 'hp ? (pin g 'ms (filter (!= o) (g 'ms)),
+                                 drop g o,
+                                 note g (fill w-kill [(o 'nm)])))
 
  ; ..and the step aside: to either side of the car's line, where a cell is free
  (shove g m o) (: sb (g 'sb)
@@ -858,9 +858,9 @@
                    (o && o 'car) ()                    ; a car gives way to a car alone
                    o (run-over g m o)
                    (road? d nx ny)
-                    (: _ (pins m 'x nx 'y ny)
-                       _ (roll (g 'sb) 4 @ 0 (swerve g m))
-                       (go (n - 1)))
+                    (pins m 'x nx 'y ny,
+                     roll (g 'sb) 4 @ 0 (swerve g m),
+                     go (n - 1))
                    (car-back m)))))
 
 
@@ -1120,9 +1120,9 @@
                      ; a door into another scene, shut once the closing has begun
                      (ex && g 'doom && 'house = <ex) (note g w-shut)
                      ex (enter g <ex (ex 1) (ex 2))
-                     (: _ (pin p 'x nx, pin p 'y ny)
-                        _ (it ? (take g i it))
-                        (tread g nx ny))))
+                     (pin p 'x nx, pin p 'y ny,
+                      it ? (take g i it),
+                      tread g nx ny)))
 
 
 
@@ -1291,9 +1291,9 @@
                 (pins g 'phase 'ring 'r (g 'r0) 'wq (sq (2 * (oct-y + 1))), note g w-circle)
                 (pins g 'wr wr 'wq (sq (2 * wr))))
              (push-in g (g 'wq)))
-   'ring (: _ (pin g 'r (g 'r - 1))
-            _ (0 < g 'r ? (push-in g (ring-in g)))
-            (done? g ? (pin g 'over 'won))))
+   'ring (pin g 'r (g 'r - 1),
+          0 < g 'r ? (push-in g (ring-in g)),
+          done? g ? (pin g 'over 'won)))
 
 
 
@@ -1347,7 +1347,7 @@
  ; the key at a node: a digit picks its choice, anything else at a node with choices
  ; shows it again, and a node without them closes
  (talk-key g k) (: nd (talk-node (g 'talk)) chs (nd 2)
-                 (one? chs ? (pin g 'talk ())
+                 (atom? chs ? (pin g 'talk ())
                   (: c (filter (c \ 48 + <c = k) chs)
                    (talk g (two? c ? (<c 2) (g 'talk))))))
  (meet-her-vale g) (pin g 'talked 1, talk g 'start)
@@ -1477,8 +1477,8 @@
    _ (? (sg || g 'over || k = 46) (sg && g 'talk ? (talk-key g k))
         (two? k) (stride g k, mend g)
         (k @ (60 || 32 || 13 || 10) 1 0)
-         (: _ (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair))
-            (mend g)))
+         (dat (g 'd) (g 'p 'x) (g 'p 'y) @ 2 (ascend g) (note g w-stair),
+          mend g))
    _ ((sg || (g 'over || circle? g)) ? ()
       (each (g 'ms) (m \ !(g 'over) && due? g m && (m 'car ? (drive g m) (stir g m)))))
    ; the vale's closing takes a turn for every turn taken, and none for a sign's key
@@ -1632,7 +1632,7 @@
              ; the lead paced by the frame gap: rove's pacer, asked each feed
              pace (pacer ())
              (feed! _) (? (horn-lag hn < song-lead-of (pace! pace)) (song-feed sng (song-vol g)) (rest 5))
-             (idle _) (: _ (? sng (feed! ()) (rest 30)) (flick! ()))
+             (idle _) ((? sng (feed! ()) (rest 30)), flick! ())
              (hold ms) (: t (clock 0) (go _) (? ((clock 0 - t) < ms) (idle (), go ())) (go ()))
              ; ..but escape at a standing sign takes the sign down, and nothing else:
              ; a page of the book or her tree is left, not the tower
@@ -1661,7 +1661,7 @@
              ; an end shows its frame for a beat, the song still going, before the screen is given back
              _ (say out (crawl-frame g), flush out, hold 1200)
              ; ..and the card goes back before the walk asks for it
-             _ (? hn (: _ (flush hn) (close hn)) ())
+             _ (? hn (flush hn, close hn) ())
              _ (g 'over = 'won ? (tower-win g))
              _ (say out "\e[0m\e[?25h\e[?1049l")
              _ (flush out)
@@ -1676,7 +1676,7 @@
  tower-usage "usage: love tower   (no options; q or esc leaves the tower)"
 
  ; tower takes nothing: a word here is a mistake, and the climb would swallow it
- (tower-main as) (one? as ? (tower-run ())
+ (tower-main as) (atom? as ? (tower-run ())
                     (say err (fill w-args [<as]), flush err, 2))
  _ (pins (cite 'verbs 'tab) 'tower (udoor 'tower tower-main tower-usage 1 1)))
 ) ; module tower

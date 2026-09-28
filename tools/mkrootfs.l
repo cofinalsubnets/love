@@ -13,7 +13,7 @@
 (: (rf-die m) (say err ("mkrootfs: " + m + "\n"), quit 1)
    ; re-home the entries under top; the walk is sorted, so order holds
    (rf-home es top acc)
-    (? (one? es) (rev acc)
+    (? (atom? es) (rev acc)
        (: e <es
           _ (pin e 'nom (top + "/" + tar-get e 'nom ""))
           (rf-home >es top (e . acc))))

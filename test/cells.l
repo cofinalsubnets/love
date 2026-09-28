@@ -37,17 +37,17 @@
 (test
  (() = g-place 0 'nope th) (() = g-place 0 () th) (() = g-place 0 -1 th)
  (() = g-place 0 999999 th)                          ; no such index
- (: _ (g-place 0 g-ret th) (g-ret = g-pick 0 th))    ; ..and pick reads back what place wrote
- (: _ (g-place 0 g-quote th) (g-quote = g-pick 0 th))
+ (g-place 0 g-ret th, g-ret = g-pick 0 th)           ; ..and pick reads back what place wrote
+ (g-place 0 g-quote th, g-quote = g-pick 0 th)
  (() = g-peek 0 th)                                  ; an op cell is still () to peek
- (: _ (g-poke 1 'val th) ('val = g-peek 1 th))       ; and a poked value is still a value
+ (g-poke 1 'val th, 'val = g-peek 1 th)              ; and a poked value is still a value
  (() = g-pick 1 th))
 
 ; a nif VALUE in a cell is a value, whole: its address is a def1 row like an instruction's,
 ; and reading it as one left every nif call off the inline path -- silently, and everywhere.
 (test
- (: _ (g-poke 1 (+) th) (5 = g-peek 1 th 2 3))     ; poked in, read back, still adds
- (: _ (g-poke 1 cap th) (1 = g-peek 1 th [1 2]))
+ (g-poke 1 (+) th, 5 = g-peek 1 th 2 3)            ; poked in, read back, still adds
+ (g-poke 1 cap th, 1 = g-peek 1 th [1 2])
  (() = g-pick 1 th))                                 ; and pick declines it: not an instruction
 
 ; the whole point: the instruction the book hands out is a charm, not a code address, so
@@ -93,6 +93,6 @@
 ; the disassembler: one row a cell, over the whole object
 (: rows (g-dis fn) r0 (rows 0))
 (test
- (two? rows) (tally rows = g-span h)
+ (two? rows) (#rows = g-span h)
  (2 = #r0) ('op = <r0 || 'val = <r0)
  (() = g-dis 5))                                     ; nothing off the heap to walk

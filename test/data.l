@@ -21,19 +21,19 @@
  _ (Put 3 4)
  _ (Put 't 'f)
  _ (test
-    (4 = tally t)
+    (4 = #t)
     (4 = ln (keys t)))
  _ (Del 2)
  _ (Del 't)
  (test
-    (2 = tally t)
+    (2 = #t)
     (2 = ln (keys t))
     (: (lll t) (foldl (l \ k \ k . Get k . l) () (keys t))
-     (2 * tally t = ln (lll t)))))
+     (2 * #t = ln (lll t)))))
 
 (:
  (stripPrefix p s) (? (p = snip s 0 #p) (snip s #p #s))
- (lit l y n s) ((\ ss (? ss (y ss (. l ())) (n s))) (stripPrefix l s))
+ (lit l y n s) ((\ ss (? ss (y ss [l]) (n s))) (stripPrefix l s))
  (drop p y) (p (\ s _ (y s ())))
  (opt p y _) (p y (\ s (y s ())))
  (cats a b y n) (a (\ s l (b (\ s m (y s (cat l m))) n s)) n)
@@ -66,12 +66,12 @@
   ; pin writes exactly where peep reads, and text has no cell, so it answers a fresh string
   ("vapoReon" = pin "vaporeon" 4 82) ("vaporeon" = pin "vaporeon" -1 82)
   ("eon" = stripPrefix "vapor" "vaporeon")
- (= '("eon" "vapor")
-  (lit "vapor" (.) 0 "vaporeon"))
- (= '("rrq" "R")
-  (alt (lit "r") (lit "R") (.) 0 "Rrrq"))
- (= '("q" "R" "r" "r")
-  (rep (alt (lit "r") (lit "R")) (.) 0 "Rrrq"))))
+ ('("eon" "vapor")
+  = lit "vapor" (.) 0 "vaporeon")
+ ('("rrq" "R")
+  = alt (lit "r") (lit "R") (.) 0 "Rrrq")
+ ('("q" "R" "r" "r")
+  = rep (alt (lit "r") (lit "R")) (.) 0 "Rrrq")))
 
 
 ; snip is one knife over both spellings of a sequence, text and its charlist. the grid

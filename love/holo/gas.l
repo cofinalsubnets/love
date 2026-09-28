@@ -43,15 +43,15 @@
           (map (\ t (t @ ('lref n d) ['sym (show (glabel n (? (d = 102) (1 + peep lc n 0) (peep lc n 0))))] t)) toks))
    ;; the operand runs: top-level commas split, parens and brackets nest
    (gops toks) (: (go l d cur acc)
-                   (? !(two? l) (rev (? (two? cur) (rev cur . acc) acc))
+                   (? (atom? l) (rev (? (two? cur) (rev cur . acc) acc))
                       (: t <l
-                         (? ((= t '(ch 40)) || (= t '(ch 91))) (go >l (d + 1) (t . cur) acc)
-                            ((= t '(ch 41)) || (= t '(ch 93))) (go >l (d - 1) (t . cur) acc)
-                            ((= t '(ch 44)) && d = 0) (go >l d () (rev cur . acc))
+                         (? (t = '(ch 40) || t = '(ch 91)) (go >l (d + 1) (t . cur) acc)
+                            (t = '(ch 41) || t = '(ch 93)) (go >l (d - 1) (t . cur) acc)
+                            (t = '(ch 44) && d = 0) (go >l d () (rev cur . acc))
                             (go >l d (t . cur) acc))))
                   (go toks 0 () ()))
    ;; a line is a label (`name:`) or a mnemonic and its operand runs
-   (gline toks) (? !(two? toks) ()
+   (gline toks) (? (atom? toks) ()
                    (toks @ (('sym s) ('ch 58)) ['label (name s)]
                            (('sym s) . rest) ['ins (name s) (gops rest)]
                            (scare 'gas-line toks)))
@@ -94,27 +94,27 @@
    ;; the dialect's spelling of the neutral file, for operand substitution. `mod` is GNU's
    ;; modifier letter (x64 b/w/k/q, a64 w/x) or 0.
    (gas-reg tgt r w mod)
-    (? (= tgt 'x64)
+    (? (tgt = 'x64)
         (: ns (peep gx-names r ())
            w9 (mod @ 98 1 119 2 107 4 113 8 w)
-           (? !(two? ns) (scare 'gas-reg r)
+           (? (atom? ns) (scare 'gas-reg r)
               ("%" + ns (w9 @ 1 3 2 2 4 1 0))))
-       (= tgt 'a64)
+       (tgt = 'a64)
         (: k (r @ 'sp "sp" 'fp "29" 'lr "30" (snip (show r) 1 #(show r)))
            w9 (mod @ 119 4 120 8 w)
-           (? (= r 'sp) "sp" ((? (w9 <= 4) "w" "x") + k)))
-       (= tgt 'rv64) (: s (peep rv-back r ()) (? !s (scare 'gas-reg r) (show s)))
+           (? (r = 'sp) "sp" ((? (w9 <= 4) "w" "x") + k)))
+       (tgt = 'rv64) (: s (peep rv-back r ()) (? !s (scare 'gas-reg r) (show s)))
        (show r))
    (gas-imm tgt n mod) (: t (charm? n ? (show n) n)             ; n a number, or a "sym+k" text
-                          (? (elem mod '(99 97 80)) t (= tgt 'x64) ("$" + t) (gthumb? tgt) ("#" + t) t))
-   (gas-mem tgt r) (? (= tgt 'x64) ("(" + gas-reg tgt r 8 0 + ")")
-                      (= tgt 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
+                          (? (elem mod '(99 97 80)) t (tgt = 'x64) ("$" + t) (gthumb? tgt) ("#" + t) t))
+   (gas-mem tgt r) (? (tgt = 'x64) ("(" + gas-reg tgt r 8 0 + ")")
+                      (tgt = 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
    (gas-regname tgt s)                              ; gas's own `%rdx` names the register too (the kernel's __get_user)
     (: k (name (? (starts? s "%") (snip s 1 #s) s))
-       (? (= tgt 'x64) (: e (peep gx-regs k ()) (? (two? e) <e ()))
-          (= tgt 'a64) (peep a64-names k ())
-          (= tgt 'rv64) (peep rv-names k ())
+       (? (tgt = 'x64) (: e (peep gx-regs k ()) (? (two? e) <e ()))
+          (tgt = 'a64) (peep a64-names k ())
+          (tgt = 'rv64) (peep rv-names k ())
           (peep t32-names k ())))
 
    ;; -- x64: the AT&T text is read by love/holo/dialect.l (att-read) into the parsed
@@ -185,9 +185,9 @@
                  (scare 'gas-x64-operand s)))
           (ghas? gx-cc m) [['br (gx-cc m) <>d]]
           (k = 1 && nom? (gx-setcc m)) [['set1 (gx-setcc m) (gx-r d)]]
-          (= m 'jmp) (? (<d = 'lbl) [['jmp <>d]] (<d = 'ind) [['jmpr (gx-r <>d)]] (scare 'gas-x64-operand ops))
-          (= m 'call) (? (<d = 'lbl) [['call <>d]] (<d = 'ind) [['callr (gx-r <>d)]] (scare 'gas-x64-operand ops))
-          (= m 'int) [['int (gx-imm d)]]
+          (m = 'jmp) (? (<d = 'lbl) [['jmp <>d]] (<d = 'ind) [['jmpr (gx-r <>d)]] (scare 'gas-x64-operand ops))
+          (m = 'call) (? (<d = 'lbl) [['call <>d]] (<d = 'ind) [['callr (gx-r <>d)]] (scare 'gas-x64-operand ops))
+          (m = 'int) [['int (gx-imm d)]]
           (elem m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
           ; a read-modify-write on memory: atomics and counters. no suffix takes the register's width
           ((<d = 'mem || (elem <d '(lbl rip) && nom? <>d)) && elem m gx-rmw)
@@ -197,14 +197,14 @@
                  (elem m '(bt bts btr btc)) [['btm m wm <bm <>bm (gx-rv s)]]
                  (m = 'test) [['testm wm <bm <>bm (gx-rv s)]]
                  [['alum m wm <bm <>bm (gx-rv s)]]))
-          (= m 'xchg && <s = 'mem && <d = 'rg) (gx-ins m w0 [s d])
+          (m = 'xchg && <s = 'mem && <d = 'rg) (gx-ins m w0 [s d])
           ; the bit scans and counts, at the suffix's width or the destination's
           (elem m '(bsr bsf tzcnt lzcnt popcnt))
            (? (<d = 'rg && <s = 'rg) [['bscan m (w0 > 0 ? w0 (d 2)) (gx-r d) (gx-r s)]]
               (scare 'gas-x64-operand ops))
-          (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
-          (= m 'vmwrite) [['vmwrite (gx-r d) (gx-r s)]]
-          (= m 'mov)
+          (m = 'vmread) [['vmread (gx-r d) (gx-r s)]]
+          (m = 'vmwrite) [['vmwrite (gx-r d) (gx-r s)]]
+          (m = 'mov)
            (? (<d = 'cr) [['stcr <>d (gx-r s)]]
               (<s = 'cr) [['ldcr (gx-r d) <>s]]
               ; a segment register: 8C reads it into a register or memory, 8E writes it
@@ -226,7 +226,7 @@
                      (<s = 'im) [[(gx-iop w) <bm <>bm <>s]]
                      (scare 'gas-x64-operand s)))
               (scare 'gas-x64-operand d))
-          (= m 'lea)
+          (m = 'lea)
            (? ; no symbol: the address past this lea (the kernel's _THIS_IP_) -- its own bytes,
               ; REX.W 8D, modrm rm=101 over the displacement; nothing for a fix to name
               (<s = 'rip && !(nom? <>s) && <d = 'rg)
@@ -243,8 +243,8 @@
            (? (k = 3) [['imul (gx-r d) (gx-r s) (gx-imm (ops 2))]]
               (: x (gx-r d) v (gx-rv s)
                  ([[m x x v]] + (? (m = 'xor && v = x) () (gx-zx x w)))))
-          (= m 'cmp) [['cmp (gx-r d) (gx-rv s)]]
-          (= m 'test) [['test (gx-r d) (gx-rv s)]]
+          (m = 'cmp) [['cmp (gx-r d) (gx-rv s)]]
+          (m = 'test) [['test (gx-r d) (gx-rv s)]]
           (elem m '(shl sal shr sar rol ror))
            (: op (m = 'sal ? 'shl m) x (gx-r d)
               (? (k = 1) [[op x 1]]
@@ -252,10 +252,10 @@
                  (<s = 'rg && <>s = 1 && <>>s = 1) [[(name (show op + "v")) x 'r1]]
                  (scare 'gas-x64-operand ops)))
           ; push takes an immediate, or a symbol's address as a sign-extended dword (gas's `pushq $1f`)
-          (= m 'push) (? (<d = 'im) [['push <>d]] (<d = 'ims) [['pushl <>d]] [['push (gx-r d)]])
+          (m = 'push) (? (<d = 'im) [['push <>d]] (<d = 'ims) [['pushl <>d]] [['push (gx-r d)]])
           (elem m '(not neg inc dec pop)) [[m (gx-r d)]]
-          (= m 'div) [[(w = 4 ? 'divl 'divq) (gx-r d)]]
-          (= m 'ltr) [['ltr (gx-r d)]]
+          (m = 'div) [[(w = 4 ? 'divl 'divq) (gx-r d)]]
+          (m = 'ltr) [['ltr (gx-r d)]]
           (scare 'gas-x64-op m)))
    (gx-locals items)
     (: lc {}
@@ -282,7 +282,7 @@
    ;; operands: (reg rN w) | zr | (imm n) | (mem base off) | (sym s) -- a sysreg, an option, a label
    (ga-reg s) (: k (name s)
                  (? (nom? (peep a64-names k ())) ['reg (a64-names k) 8]
-                    (= k 'xzr || (= k 'wzr)) 'zr
+                    (k = 'xzr || k = 'wzr) 'zr
                     (#s > 1 && s 0 = 119 && digit? (s 1)) ['reg (peep a64-names (name ("x" + snip s 1 #s)) ()) 4]
                     ()))
    (ga-opnd toks)
@@ -294,7 +294,7 @@
             (('ch 91) ('sym b) ('ch 93)) ['mem (<>(ga-reg b)) 0]
             (('ch 91) . ('sym b) . ('ch 44) . rest)
              (: r (ga-reg b) n #rest
-                (? (!(two? r) || !((rest (n - 1)) = '(ch 93))) (scare 'gas-a64-operand toks)
+                (? ((atom? r) || !((rest (n - 1)) = '(ch 93))) (scare 'gas-a64-operand toks)
                    ['mem <>r (<>(ga-opnd (rev >(rev rest))))]))
             (scare 'gas-a64-operand toks))
    (ga-r o) (o @ ('reg x _) x 'zr 'zr (scare 'gas-a64-register o))
@@ -310,36 +310,36 @@
    ga-st (gtab '((str (st st4)) (strb (st1 st1)) (strh (st2 st2))))
    ga-sh (gtab '((lsl shl) (lsr shr) (asr sar) (ror ror)))
    (ga-bcond s) (: t (show s) (? (#t > 2 && t 0 = 98 && t 1 = 46) (peep ga-cc (name (snip t 2 #t)) ()) ()))
-   (ga-inplace op d s) (? (= d s) () [['mov d s]])       ; the IR's unary ops work in place
+   (ga-inplace op d s) (? (d = s) () [['mov d s]])       ; the IR's unary ops work in place
    (ga-ins m os)
     (: k #os
        (? (ghas? ga-nils m) [[(ga-nils m)]]
           (nom? (ga-bcond m)) [['br (ga-bcond m) (<>(os 0))]]
-          (= m 'b) [['jmp (<>(os 0))]]
-          (= m 'bl) [['call (<>(os 0))]]
-          (= m 'br) [['jmpr (ga-r (os 0))]]
-          (= m 'blr) [['callr (ga-r (os 0))]]
+          (m = 'b) [['jmp (<>(os 0))]]
+          (m = 'bl) [['call (<>(os 0))]]
+          (m = 'br) [['jmpr (ga-r (os 0))]]
+          (m = 'blr) [['callr (ga-r (os 0))]]
           (elem m '(dsb dmb)) [[m (<>(os 0))]]
-          (= m 'mrs) [['mrs (ga-r (os 0)) (<>(os 1))]]
-          (= m 'msr) ((os 1) @ ('imm n) [['msri (<>(os 0)) n]] [['msr (<>(os 0)) (ga-r (os 1))]])
+          (m = 'mrs) [['mrs (ga-r (os 0)) (<>(os 1))]]
+          (m = 'msr) ((os 1) @ ('imm n) [['msri (<>(os 0)) n]] [['msr (<>(os 0)) (ga-r (os 1))]])
           (elem m ga-sys) [[m (<>(os 0)) (? (k > 1) (ga-r (os 1)) 'zr)]]
           (ghas? ga-exc m) [[(ga-exc m) (? (k > 0) (<>(os 0)) 0)]]
-          (= m 'svc) (: n (? (k > 0) (<>(os 0)) 0) (? (n = 0) '((sys)) [['svcn n]]))
-          (= m 'mov)
+          (m = 'svc) (: n (? (k > 0) (<>(os 0)) 0) (? (n = 0) '((sys)) [['svcn n]]))
+          (m = 'mov)
            (: d (ga-r (os 0)) s (os 1)
               (s @ ('imm n) [['li d n]]
-                   (? (= d 'sp || (= (ga-r s) 'sp)) [['lea d (ga-r s) 0]] [['mov d (ga-r s)]])))
-          (= m 'movz) [['li (ga-r (os 0)) (<>(os 1))]]
+                   (? (d = 'sp || ga-r s = 'sp) [['lea d (ga-r s) 0]] [['mov d (ga-r s)]])))
+          (m = 'movz) [['li (ga-r (os 0)) (<>(os 1))]]
           (ghas? ga-alu m)
            (? (k = 3) [[(ga-alu m) (ga-r (os 0)) (ga-r (os 1)) (ga-v (os 2))]] (scare 'gas-a64-operand os))
-          (= m 'cmp) [['cmp (ga-r (os 0)) (ga-v (os 1))]]
-          (= m 'tst) [['test (ga-r (os 0)) (ga-v (os 1))]]
-          (= m 'neg) (: d (ga-r (os 0)) (ga-inplace 'neg d (ga-r (os 1)) + [['neg d]]))
-          (= m 'mvn) (: d (ga-r (os 0)) (ga-inplace 'not d (ga-r (os 1)) + [['not d]]))
+          (m = 'cmp) [['cmp (ga-r (os 0)) (ga-v (os 1))]]
+          (m = 'tst) [['test (ga-r (os 0)) (ga-v (os 1))]]
+          (m = 'neg) (: d (ga-r (os 0)) (ga-inplace 'neg d (ga-r (os 1)) + [['neg d]]))
+          (m = 'mvn) (: d (ga-r (os 0)) (ga-inplace 'not d (ga-r (os 1)) + [['not d]]))
           (ghas? ga-sh m)
            (: d (ga-r (os 0)) s (ga-r (os 1)) c (os 2)
               (c @ ('imm n) (ga-inplace m d s + [[(ga-sh m) d n]])
-                   (? (= d s) [[(name (show (ga-sh m) + "v")) d (ga-r c)]] (scare 'gas-a64-operand os))))
+                   (? (d = s) [[(name (show (ga-sh m) + "v")) d (ga-r c)]] (scare 'gas-a64-operand os))))
           (two? (peep ga-ld m ()))
            (: r (ga-rw (os 0)) ((os 1) @ ('mem b o) [[(ga-ld m (? (<>r = 8) 0 1)) <r b o]] (scare 'gas-a64-operand os)))
           (two? (peep ga-st m ()))
@@ -357,8 +357,8 @@
     (toks @ (('sym s)) (: r (gr-reg s) (? (nom? r) ['reg r 8] ['sym (name s)]))
             (('ch 40) ('sym b) ('ch 41)) ['mem (gr-reg b) 0]
             (: (mem l acc)
-                (? !(two? l) ['imm (gimm toks)]
-                   (= <l '(ch 40))
+                (? (atom? l) ['imm (gimm toks)]
+                   (<l = '(ch 40))
                     (>l @ (('sym b) ('ch 41)) (: r (gr-reg b) (? (nom? r) ['mem r (? (two? acc) (gimm (rev acc)) 0)] (scare 'gas-rv64-operand toks)))
                           (scare 'gas-rv64-operand toks))
                    (mem >l (<l . acc)))
@@ -377,25 +377,25 @@
    (gr-ins m os)
     (: k #os
        (? (ghas? gr-nils m) [[(gr-nils m)]]
-          (= m 'unimp) '((csrw cycle zr))
-          (= m 'sfence.vma) [['sfence (? (k > 0) (gr-r (os 0)) 'zr) (? (k > 1) (gr-r (os 1)) 'zr)]]
-          (= m 'li) [['li (gr-r (os 0)) (<>(os 1))]]
-          (= m 'mv) [['mov (gr-r (os 0)) (gr-r (os 1))]]
-          (= m 'j) [['jmp (<>(os 0))]]
-          (= m 'jr) [['jmpr (gr-r (os 0))]]
-          (= m 'jalr) [['callr (gr-r (os 0))]]
-          (= m 'call) [['call (<>(os 0))]]
+          (m = 'unimp) '((csrw cycle zr))
+          (m = 'sfence.vma) [['sfence (? (k > 0) (gr-r (os 0)) 'zr) (? (k > 1) (gr-r (os 1)) 'zr)]]
+          (m = 'li) [['li (gr-r (os 0)) (<>(os 1))]]
+          (m = 'mv) [['mov (gr-r (os 0)) (gr-r (os 1))]]
+          (m = 'j) [['jmp (<>(os 0))]]
+          (m = 'jr) [['jmpr (gr-r (os 0))]]
+          (m = 'jalr) [['callr (gr-r (os 0))]]
+          (m = 'call) [['call (<>(os 0))]]
           (ghas? gr-bcc m) [['cmp (gr-r (os 0)) (gr-r (os 1))] ['br (gr-bcc m) (<>(os 2))]]
           (ghas? gr-bz m) [['cmp (gr-r (os 0)) 0] ['br (gr-bz m) (<>(os 1))]]
           (ghas? gr-alu m) [[(gr-alu m) (gr-r (os 0)) (gr-r (os 1)) (gr-v (os 2))]]
           (ghas? gr-sh m)
            (: d (gr-r (os 0)) s (gr-r (os 1))
-              ((? (= d s) () [['mov d s]]) + [[(gr-sh m) d (gr-v (os 2))]]))
-          (= m 'neg) (: d (gr-r (os 0)) s (gr-r (os 1)) ((? (= d s) () [['mov d s]]) + [['neg d]]))
-          (= m 'not) (: d (gr-r (os 0)) s (gr-r (os 1)) ((? (= d s) () [['mov d s]]) + [['not d]]))
+              ((? (d = s) () [['mov d s]]) + [[(gr-sh m) d (gr-v (os 2))]]))
+          (m = 'neg) (: d (gr-r (os 0)) s (gr-r (os 1)) ((? (d = s) () [['mov d s]]) + [['neg d]]))
+          (m = 'not) (: d (gr-r (os 0)) s (gr-r (os 1)) ((? (d = s) () [['mov d s]]) + [['not d]]))
           (ghas? gr-ld m) ((os 1) @ ('mem b o) [[(gr-ld m) (gr-r (os 0)) b o]] (scare 'gas-rv64-operand os))
           (ghas? gr-st m) ((os 1) @ ('mem b o) [[(gr-st m) b o (gr-r (os 0))]] (scare 'gas-rv64-operand os))
-          (= m 'csrr) [['csrr (gr-r (os 0)) (<>(os 1))]]
+          (m = 'csrr) [['csrr (gr-r (os 0)) (<>(os 1))]]
           (elem m gr-csr1) [[m (<>(os 0)) (gr-v (os 1))]]
           (elem m gr-csr2) [[m (gr-r (os 0)) (<>(os 1)) (gr-v (os 2))]]
           (scare 'gas-rv64-op m)))
@@ -424,20 +424,20 @@
    (gt-ins m os)
     (: k #os
        (? (ghas? gt-nils m) [[(gt-nils m)]]
-          (= m 'bkpt) (: n (? (k > 0) (<>(os 0)) 0) (? (n = 0) '((trap)) [['brk n]]))
-          (= m 'svc) '((sys))
-          (= m 'dsb) [['dsb (<>(os 0))]]
-          (= m 'mrs) [['mrs (gt-r (os 0)) (<>(os 1))]]
-          (= m 'b) [['jmp (<>(os 0))]]
-          (= m 'bl) [['call (<>(os 0))]]
-          (= m 'bx) (? (= (gt-r (os 0)) 'lr) '((ret)) [['jmpr (gt-r (os 0))]])
-          (= m 'mov) ((os 1) @ ('imm n) [['li (gt-r (os 0)) n]] [['mov (gt-r (os 0)) (gt-r (os 1))]])
-          (= m 'cmp) [['cmp (gt-r (os 0)) (gt-v (os 1))]]
+          (m = 'bkpt) (: n (? (k > 0) (<>(os 0)) 0) (? (n = 0) '((trap)) [['brk n]]))
+          (m = 'svc) '((sys))
+          (m = 'dsb) [['dsb (<>(os 0))]]
+          (m = 'mrs) [['mrs (gt-r (os 0)) (<>(os 1))]]
+          (m = 'b) [['jmp (<>(os 0))]]
+          (m = 'bl) [['call (<>(os 0))]]
+          (m = 'bx) (? (gt-r (os 0) = 'lr) '((ret)) [['jmpr (gt-r (os 0))]])
+          (m = 'mov) ((os 1) @ ('imm n) [['li (gt-r (os 0)) n]] [['mov (gt-r (os 0)) (gt-r (os 1))]])
+          (m = 'cmp) [['cmp (gt-r (os 0)) (gt-v (os 1))]]
           (ghas? gt-alu m)
            (? (k = 3) [[(gt-alu m) (gt-r (os 0)) (gt-r (os 1)) (gt-v (os 2))]]
               [[(gt-alu m) (gt-r (os 0)) (gt-r (os 0)) (gt-v (os 1))]])
-          (= m 'ldr) ((os 1) @ ('mem b o) [['ld (gt-r (os 0)) b o]] (scare 'gas-thumb-operand os))
-          (= m 'str) ((os 1) @ ('mem b o) [['st b o (gt-r (os 0))]] (scare 'gas-thumb-operand os))
+          (m = 'ldr) ((os 1) @ ('mem b o) [['ld (gt-r (os 0)) b o]] (scare 'gas-thumb-operand os))
+          (m = 'str) ((os 1) @ ('mem b o) [['st b o (gt-r (os 0))]] (scare 'gas-thumb-operand os))
           (scare 'gas-thumb-op m)))
    (gt-line toks)
     (: l (gline toks)
@@ -503,18 +503,18 @@
    (gf-neg l) [(0 - <l) (map (p \ (<p . (0 - >p))) <>l)]
    (gf-plus a b) [(<a + <b) (<>a + <>b)]
    (gf-prim ts rl)
-    (? !(two? ts) 'bad
+    (? (atom? ts) 'bad
        (<ts @ ('num v) ([v ()] . >ts)
               ('sym s) ([0 [(s . 1)]] . >ts)
               ('lref n d) ([0 [((rl n d) . 1)]] . >ts)
               ('ch 40) (: r (gf-sum >ts rl)
-                          (? (gbad? r || !(two? >r) || !(= <>r '(ch 41))) 'bad (<r . >>r)))
+                          (? (gbad? r || (atom? >r) || !(<>r = '(ch 41))) 'bad (<r . >>r)))
               ('ch 45) (: r (gf-prim >ts rl) (? (gbad? r) 'bad ((gf-neg <r) . >r)))
               ('ch 43) (gf-prim >ts rl)
               'bad))
    (gf-sum ts rl)
     (: (go r) (? (gbad? r) 'bad
-                 !(two? >r) r
+                 (atom? >r) r
                  !(elem <>r '((ch 43) (ch 45))) r
                  (: q (gf-prim >>r rl)
                     (? (gbad? q) 'bad
@@ -532,8 +532,8 @@
                 (: ns (gf-norm <><r)
                    dt (filter (p \ <p = ".") ns)
                    sy (filter (p \ <p != ".") ns)
-                   (? (!(two? sy) || two? >sy || ><sy != 1) (scare 'gas-data e)
-                      !(two? dt) [() <<sy <<r]
+                   (? ((atom? sy) || two? >sy || ><sy != 1) (scare 'gas-data e)
+                      (atom? dt) [() <<sy <<r]
                       (><dt = -1) [1 <<sy <<r]
                       (scare 'gas-data e)))))))
    (gf-le v w) (: u (? (v < 0) (v + (1 << (8 * w))) v) (map (i \ byte (u >> (8 * i))) ^w))
@@ -577,13 +577,13 @@
        (word s i) ((: (g j) (? (j < #s && gidc? (s j)) (g (j + 1)) j)) i)
        ; a block's body up to its closer, nested openers counted -> (body rest)
        (grab l opens close)
-        (: (go l d acc) (? !(two? l) (scare 'gas-block close)
+        (: (go l d acc) (? (atom? l) (scare 'gas-block close)
                            (: w (dname <l)
                               (? (w = close && d = 0) [(rev acc) >l]
                                  (go >l (? (elem w opens) (d + 1) (w = close) (d - 1) d) (<l . acc)))))
            (go l 0 ()))
        ; an .if body split at its own .else
-       (split l) (: (go l d acc) (? !(two? l) [(rev acc) ()]
+       (split l) (: (go l d acc) (? (atom? l) [(rev acc) ()]
                                     (: w (dname <l)
                                        (? (w = ".else" && d = 0) [(rev acc) >l]
                                           (go >l (? (elem w gf-ifs) (d + 1) (w = ".endif") (d - 1) d) (<l . acc)))))
@@ -616,14 +616,14 @@
            kw (filter (a \ xa-has? a 61) as) po (filter (a \ !(xa-has? a 61)) as)
            (kv nm) (filter (a \ xa-trim (snip a 0 (xa-idx a 61)) = nm) kw)
            (bind ps po acc)
-            (? !(two? ps) acc
+            (? (atom? ps) acc
                (: p <ps k (kv <p)
                   (? (two? k) (bind >ps po ([<p (xa-trim (snip <k (1 + xa-idx <k 61) #<k))] . acc))
                      (bind >ps >po ([<p (? (two? po) <po <>p)] . acc)))))
            args (bind ps po ())
            (map (l \ psub l args) <>m))
        (go l acc)
-        (? !(two? l) acc
+        (? (atom? l) acc
            (: s <l t (xa-trim s) w (dname s) r (xa-rest t)
               (? (w = ".macro")
                   (: b (grab >l '(".macro") ".endm")
@@ -671,18 +671,18 @@
        lc {}                                        ; N -> how many `N:` so far
        (rl n d) (pfx + show (glabel n (? (d = 102) (1 + peep lc n 0) (peep lc n 0))))
        (row nm td) (? (two? (secs nm)) 0
-                      (: _ (pin st 'order (nm . (st 'order))) (pin secs nm [<td <>td ()])))
+                      (pin st 'order (nm . (st 'order)), pin secs nm [<td <>td ()]))
        (emit fs) (: nm (st 'cur) _ (row nm (? (nm = home) htd (gf-dflt nm))) r (secs nm)
                     (pin secs nm [<r <>r (revcat fs <>>r)]))
        (flush _) (: r (st 'run)
-                    (? (two? r) (: _ (pin st 'run ()) (emit (gas-text tgt (xa-join "\n" (rev r))))) 0))
-       (goto nm td) (: _ (row nm td) _ (pin st 'prev (st 'cur)) (pin st 'cur nm))
+                    (? (two? r) (pin st 'run (), emit (gas-text tgt (xa-join "\n" (rev r)))) 0))
+       (goto nm td) (row nm td, pin st 'prev (st 'cur), pin st 'cur nm)
        (raw bs) (? (two? bs) (emit [['raw bs]]) 0)
        (num e) (gimm (gtoks e))
        ; .org label+k (or k from the section's start): zeros up to it, over data laid since
        (org e)
         (: v (gf-val e rl) s <>v r (secs (st 'cur))
-           (back l n) (? !(two? l) (? (string? s) 'bad n)
+           (back l n) (? (atom? l) (? (string? s) 'bad n)
                          (: f <l
                             (? (<f = 'label && string? s && <>f = name s) n
                                (<f = 'raw) (back >l (n + foldl (\ a x (a + (two? x ? (x 1) 1))) 0 <>f))
@@ -741,9 +741,9 @@
                        _ (? (xa-allof? l digit? 0)
                             (: n (gdecv l) k (1 + peep lc n 0) _ (pin lc n k)
                                (emit [['label (name (pfx + show (glabel n k)))]]))
-                            (: _ (pin labs l (st 'cur)) (emit [['label (name l)]])))
+                            (pin labs l (st 'cur), emit [['label (name l)]]))
                        (line (snip s (c + 1) #s)))
-                    (s 0 = 46) (: _ (flush 0) (dir (xa-mnem s) (xa-rest s)))
+                    (s 0 = 46) (flush 0, dir (xa-mnem s) (xa-rest s))
                     (pin st 'run ((gf-lsub s rl) . (st 'run)))))))
        _ (foldl (\ _ x (line x)) 0 (gf-expand (gf-lines tgt src)))
        _ (flush 0)
@@ -751,7 +751,7 @@
        ; sized -- an instruction assembled alone -- and the count read with the labels' section
        ; offsets in place, again until the sizes hold; then it lays its fill
        (width l) (foldl (\ a x (a + (two? x ? (x 1) 1))) 0 l)
-       (noms x t) (? (nom? x) (pin t x 1) !(two? x) t (noms >x (noms <x t)))
+       (noms x t) (? (nom? x) (pin t x 1) (atom? x) t (noms >x (noms <x t)))
        (fsz f off) (<f @ 'raw (width <>f) 'label 0 'align ((<>f - off % <>f) % <>f) 'skipx (f 3) 'wordx (f 2)
                          (width (holo-bytes-open tgt [f] (noms f {}))))
        ; label -> its offset, each section's shifted by k times its own large stride
@@ -787,7 +787,7 @@
                              'wordx ['raw (gf-le (skv f t) (f 2))]
                              f)
                (foldl (\ _ nm (: r (secs nm)
-                                 (pin secs nm [<r <>r (filter (f \ !(<f = 'raw && !(two? <>f)))
+                                 (pin secs nm [<r <>r (filter (f \ !(<f = 'raw && (atom? <>f)))
                                                               (map (f \ (? (later? f) (lay f) f)) <>>r))])))
                       0 (st 'order)))
             0)
@@ -799,8 +799,8 @@
 
    ;; -- the front door: TEXT -> IR, by target. --
    (gas-text tgt src)
-    (? (= tgt 'x64) (gx-text src)
+    (? (tgt = 'x64) (gx-text src)
        (: lc {}
-          f (? (= tgt 'a64) ga-line (= tgt 'rv64) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
-          (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (= tgt 'rv64))))))
+          f (? (tgt = 'a64) ga-line (tgt = 'rv64) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
+          (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (tgt = 'rv64))))))
 ) ; module 'holo

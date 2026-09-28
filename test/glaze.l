@@ -32,15 +32,15 @@
 ; cannot hold. the wrong answers they used to give are noted; note how plausible they are,
 ; which is why this is a law and not a footnote: `(acc + " ")` compiled as `acc + k` and
 ; three spaces came back the triangular number 6.
-(: (scar-sp n)   (: (go k acc) (? (k < 1) acc (go (k - 1) (acc + " "))) (go n ""))    ; string built by +
-   (scar-dash z) (: (g j) (? (j < 1) "" ("-" + (g (j - 1)))) (g (tally z)))           ; ..the argument-applying twin
-   (scar-lit n)  (: (go k acc) (? (k < 1) acc (go (k - 1) "Q")) (go n 0))             ; a bare string constant
-   (scar-link n) (: (go k acc) (? (k < 1) acc (go (k - 1) (. acc 1))) (go n 0))    ; a cons
+(: (scar-sp n)   (: (go k acc) (k < 1 ? acc (go (k - 1) (acc + " "))) (go n ""))    ; string built by +
+   (scar-dash z) (: (g j) (j < 1 ? "" ("-" + g (j - 1))) (g #z))                     ; ..the argument-applying twin
+   (scar-lit n)  (: (go k acc) (k < 1 ? acc (go (k - 1) "Q")) (go n 0))               ; a bare string constant
+   (scar-link n) (: (go k acc) (k < 1 ? acc (go (k - 1) (acc . 1))) (go n 0))       ; a cons
    _ (test
-      ("   " = (scar-sp 3))                                  ; was 6  -- the triangular sum of k
-      ("--" = (scar-dash "ab"))                              ; was 1
-      ("Q" = (scar-lit 2))                                   ; was 0
-      ((. (. (. 0 1) 1) 1) = (scar-link 3)))        ; was 1
+      ("   " = scar-sp 3)                                    ; was 6  -- the triangular sum of k
+      ("--" = scar-dash "ab")                                ; was 1
+      ("Q" = scar-lit 2)                                     ; was 0
+      ((((0 . 1) . 1) . 1) = scar-link 3))                   ; was 1
    0)
 
 ; --- autogroup's constant fold respects a pair's own params ---------------------------
@@ -76,6 +76,16 @@
    (c5 r) (two? r && (!== <r <r))
    q [0 "x"]
    _ (test (7 = c1 q) (7 = c2 q) (7 = c3 q) (7 = c4 q) (7 = c5 q))
+   0)
+; ..and canon respells a synonym as its canonical word only where no binder took that word:
+; a local atom? leaves one? the global's, a local two? leaves link? the global's
+(: (atom? e) (charm? e ? 7 9)
+   (c r) (one? r)
+   _ (test (1 = c ()) (0 = c [1]))
+   0)
+(: (two? e) (charm? e ? 7 9)
+   (c r) (link? r)
+   _ (test (1 = c [1]) (0 = c ()))
    0)
 ; ..and `list`, in a letrec of its own: a local spelling owns that scope's [..] too
 (: (list a) (charm? a ? 7 9)
@@ -122,8 +132,8 @@
    (? G (: gw (G 'gopword)
            named [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep] [tally 'tally]
                   [(+) '+] [(-) '-] [(*) '*] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]
-                  [(<) '<] [(<=) '<=] [(>) '>] [(>=) '>=] [(=) '=] [one? 'one?] [nil? 'nil?]]
-           wordless '(list && || atom? != !== mpeep)
+                  [(<) '<] [(<=) '<=] [(>) '>] [(>=) '>=] [(=) '=] [atom? 'atom?] [nil? 'nil?]]
+           wordless '(list && || one? != !== mpeep)
            _ (test
               (all (r \ (<>r = gw <r)) named)                                 ; a value answers its word
               ('zz = gw 'zz)                                                   ; a nom is its own word
@@ -134,9 +144,9 @@
 ; the lowering behind it cannot name does not decline -- it emits a body reading a binder
 ; that never got laid, so hold the two spellings to the same number rather than to a verdict.
 (: plus (+)
-   (mk h) (list ': (list 'f 'n 'acc)
-                  (list '? (list '= 'n 0) 'acc (list 'f (list '- 'n 1) (list h 'acc 'n)))
-                  (list 'f 10 0))
+   (mk h) [': ['f 'n 'acc]
+              ['? ['= 'n 0] 'acc ['f ['- 'n 1] [h 'acc 'n]]]
+              ['f 10 0]]
    _ (test (55 = ev (mk '+)) (55 = ev (mk plus)) (ev (mk '+) = ev (mk plus)))
    0)
 ; a whole-number leaf is laid as a 64-bit immediate, so every lane's grammar admits only a
@@ -145,10 +155,10 @@
 (: (f _) 18446744073709551615
    (g _) 18446744073709551616
    (m x) (x % 18446744073709551616)
-   _ (test (= (f 0) 18446744073709551615) (= (g 0) 18446744073709551616) (= (m -5) -5))
+   _ (test (f 0 = 18446744073709551615) (g 0 = 18446744073709551616) (m -5 = -5))
    0)
 ; a polynomial fold over jot closes to its form in the bound: the map's function is sampled,
 ; so a sum of squares is not the sum of the counter. the same number as the interpreter.
 (: dq '(: (s n) (foldl (+) 0 (map (\ x (* x x)) (jot n))) (s 100))
-   _ (test (= 328350 (ev dq)))
+   _ (test (328350 = ev dq))
    0)

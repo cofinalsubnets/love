@@ -21,10 +21,10 @@
  ; recursive function: recursion via the lazily-resolved name
  (nfac n) (n < 1 ? 1 (n * nfac (n - 1)))
  ; the eta-expanded factory idiom (a *function* binding) -- still works
- (mkconst z) (\ n (n < 1 ? z (kconst (n - 1))))
+ (mkconst z) (n \ n < 1 ? z (kconst (n - 1)))
  kconst (mkconst 7)
  ; memoizing fixpoint combinator (used for the recursive-value fib below)
- (memo f) (: m (tablet 0) (\ x (: c (peep m x 0) (? c c (: y (f x) _ (pin m x y) y)))))
+ (memo f) (: m (tablet 0) (x \ (: c (peep m x 0) (c ? c (: y (f x) (pin m x y, y))))))
  (test
   ; --- recursive functions (unchanged behaviour) ---
   (120 = nfac 5) ; named recursion
@@ -42,7 +42,7 @@
   (15 = (: (f x) (v + x) v 5 (f 10)))
 
   ; --- mutual recursion among value bindings ---
-  (= 9   (: (mka z) (n \ n < 1 ? z (kb (n - 1)))
+  (9 =   (: (mka z) (n \ n < 1 ? z (kb (n - 1)))
             (mkb z) (n \ n < 1 ? z (ka (n - 1)))
             ka (mka 7) kb (mkb 9) (ka 1)))
 
@@ -64,13 +64,13 @@
   ; --- box cells must not shift an earlier ref: `a` reads an outer binding
   ; before a later init's forward capture forces `self` to be boxed; the cell
   ; sits below `a` at runtime, so `a`'s captured slot must already count it ---
-  (= 108 (: outer 100
+  (108 = (: outer 100
             (: a (outer + 1)
                (mk z) (n \ n < 1 ? z (self (n - 1)))
                self (mk 7)
                (a + self 3))))
   ; same, two cells (mutual) -- the early ref must survive both box cells ---
-  (= 110 (: outer 100
+  (110 = (: outer 100
             (: a (outer + 1)
                (mka z) (n \ n < 1 ? z (kb (n - 1)))
                (mkb z) (n \ n < 1 ? z (ka (n - 1)))
@@ -78,7 +78,7 @@
                (a + ka 1))))
   ; nested boxing let: an init reaches a sibling of an enclosing let via the
   ; data stack (g is below the inner let's box cell) -- the cell must not shift it
-  (= 108 (: g 100
+  (108 = (: g 100
             q (: a (g + 1)
                   (mk z) (n \ n < 1 ? z (self (n - 1)))
                   self (mk 7)
@@ -86,7 +86,7 @@
             q))
   ; doubly nested: `a` reaches g (two boxing lets out) and b (one out) -- the
   ; reference crosses two cell regions and must account for both ---
-  (= 114 (: g 100
+  (114 = (: g 100
             q (: b 7
                  r (: a (g + b)
                       (mk z) (n \ n < 1 ? z (self (n - 1)))
@@ -121,7 +121,7 @@
 (: rq (cap [1])
    (zap q)
     (? (two? q)
-       (: (go m ok) (? !(two? m) ok
+       (: (go m ok) (? (atom? m) ok
                        (: k (zap <m)              ; the self-site that under-applied
                           (go >m (ok && !k)))) ; every leaf must have answered ()
           (go q 1)))                           ; the leaf: nothing (falsy) -- a partial is truthy
@@ -144,6 +144,6 @@
 ; the outer let is body-less, so closure-fct defglobs -- after its own def is built.
 ; a nested lambda naming it must read the book when it runs; capturing a value that
 ; does not exist yet is what the missing condition used to report at definition.
-(: closure-fct (: (h n acc) (? (n < 1) acc (h (n - 1) (acc * n))) (\ n (h n 1))))
+(: closure-fct (: (h n acc) (n < 1 ? acc (h (n - 1) (acc * n))) (n \ h n 1)))
 (: (tl1 _) (: walk (: (kid k) (two? k ? (walk >k) k) kid) (walk '(1 2 3)))
    (test (120 = closure-fct 5) !(tl1 ())))

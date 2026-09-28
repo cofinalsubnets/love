@@ -27,7 +27,7 @@
 ; is this file -- the dependency graph, the restart policy, the checkpoint -- already love.
 
 (borrow 'posix)
-(: (note s) (: _ (puts s) (puts "\n"))               ; the narrator: a line to the console
+(: (note s) (puts s, puts "\n")                      ; the narrator: a line to the console
 
    ; --- a unit is an immutable list (name kind cmd restart deps) --- show/read
    ; checkpoints it for free (the inle.md rule: state is a love value, persistence is
@@ -38,15 +38,14 @@
    (u-name u) (u 0)   (u-kind u) (u 1)   (u-cmd u) (u 2)
    (u-restart u) (u 3) (u-deps u) (u 4)
    (find units name) (? !units ()                    ; the unit with this name, or ()
-                        (? (= (u-name (cap units)) name) (cap units)
-                           (find (cup units) name)))
+                        (u-name <units = name ? <units (find >units name)))
    (rev l) (foldl (\ a x (. x a)) () l)            ; prepend-fold = reverse
 
    ; --- the registry --- a live book name->status ('up | 'done | 'failed; absent =
    ; 'down). mutable (a book), the one place state is shared while units come and go;
    ; `snap` reads it back to the honest list for the checkpoint. a unit is "started"
    ; once it is up (a service running) or done (a oneshot that completed).
-   (up? reg name) (: s (peep reg name 'down) (? (= s 'up) 1 (= s 'done)))
+   (up? reg name) (: s (peep reg name 'down) (s = 'up ? 1 (s = 'done)))
 
    ; --- the watchdog: supervise one service (Restart=) --- twirl the thunk (the modeled
    ; process); if it faults, the `help` below welps the task to (), so `catch` comes back
@@ -58,11 +57,11 @@
      (: p (twirl thunk 0)
         r (catch p)
         (? r 1                                        ; clean -> running
-           (: n (+ 1 (peep cnt name 0)) _ (pin cnt name n)
-              (? (? (= policy 'no) 0 (< n tries-cap))
-                 (: _ (note (+ "    " (+ (show name) (+ " crashed -> restart #" (show n)))))
-                    (supervise name thunk policy cnt))
-                 (: _ (note (+ "    " (+ (show name) " gave up"))) ())))))
+           (: n (1 + peep cnt name 0) _ (pin cnt name n)
+              (? (policy = 'no ? 0 (n < tries-cap))
+                 (note ("    " + show name + " crashed -> restart #" + show n),
+                  supervise name thunk policy cnt)
+                 (note ("    " + show name + " gave up"), ())))))
 
    ; --- act: bring one unit up --- a oneshot really forks/execs/waits a child (the wire
    ; out to a real process: `hark` returns (exit-code . captured-stdout), so the real exit
@@ -70,14 +69,14 @@
    ; unit's status pinned.
    (start1 reg cnt u)
      (: name (u-name u)
-        (? (= (u-kind u) 'oneshot)
+        (? (u-kind u = 'oneshot)
              (: res  (hark (u-cmd u))                  ; real child (love/main.c fork+exec+wait)
-                code (cap res)  text (cup res)         ; (exit . stdout)
-                _    (note (+ "  [oneshot] " (+ (show name) (+ " -> \"" (+ text (+ "\" (exit " (+ (show code) ")")))))))
-                (pin reg name (? (= code 0) 'done 'failed)))
+                code <res  text >res                   ; (exit . stdout)
+                _    (note ("  [oneshot] " + show name + " -> \"" + text + "\" (exit " + show code + ")"))
+                (pin reg name (code = 0 ? 'done 'failed)))
            (: ok (supervise name (u-cmd u) (u-restart u) cnt)
-              _ (note (+ "  [service] " (+ (show name) (? ok " up" " FAILED"))))
-              (pin reg name (? ok 'up 'failed)))))
+              _ (note ("  [service] " + show name + (ok ? " up" " FAILED")))
+              (pin reg name (ok ? 'up 'failed)))))
 
    ; --- decide+act: dependency-ordered boot --- bring `name` up, but its After= deps
    ; first (a DFS over the graph; up? dedups so a shared dep starts once). `boot` folds
@@ -94,12 +93,12 @@
    ; --- shutdown --- stop in reverse start order (dependents before their deps), the
    ; mirror of boot. modeled as a status flip; on metal: sigterm, wait, sigkill on a
    ; timeout, each in its cgroup.
-   (stop1 reg name) (: _ (note (+ "  stop " (show name))) (pin reg name 'down))
+   (stop1 reg name) (note ("  stop " + show name), pin reg name 'down)
    (shutdown reg names) (foldl stop1 reg names)
 
    ; --- checkpoint --- the live book -> an immutable (name status) list, show/read-able
    ; (a book does not round-trip; the list does). persistence is show/read, end to end.
-   (snap reg names) (map (\ n [n (peep reg n 'down)]) names))
+   (snap reg names) (map (n \ [n (peep reg n 'down)]) names))
 
 ; --- install the watchdog as the global help (the floor that turns a service's fault
 ; into () so the supervisor sees a falsey `catch`) --- read control keeps the protocol;
@@ -118,33 +117,33 @@
 (: (rstart pids u)                                    ; spawn one unit, record pid->name
      (: pid (spawn (u-cmd u))
         _   (pin pids pid (u-name u))
-        _   (note (+ "  spawn " (+ (show (u-name u)) (+ " pid=" (show pid)))))
+        _   (note ("  spawn " + show (u-name u) + " pid=" + show pid))
         pid)
    ; the glean loop: poll until every service has settled (live hits 0) or steps run
    ; out. each reaped (pid . status): a 0 exit (or a give-up) settles the unit; a
    ; nonzero exit under Restart=on-fail, within the cap, respawns it (live unchanged).
    (rloop units pids tries live steps)
-     (? (? (< live 1) 1 (< steps 1)) 0                ; done: all settled / out of steps
+     (? (live < 1 ? 1 (steps < 1)) 0                  ; done: all settled / out of steps
         (: ev (glean 0)
            (? (two? ev)                               ; a child died: (pid . status)
-                (: nm (peep pids (cap ev) 0)  st (cup ev)
+                (: nm (peep pids <ev 0)  st >ev
                    u  (find units nm)
-                   n  (+ 1 (peep tries nm 0))  _ (pin tries nm n)
-                   _  (note (+ "  exit " (+ (show nm) (+ " status=" (show st)))))
-                   (? (? (= st 0) 0 (? (= (u-restart u) 'on-fail) (< n tries-cap) 0))
-                        (: _ (note (+ "    restart " (+ (show nm) (+ " #" (show n)))))
-                           _ (rstart pids u)
-                           (rloop units pids tries live (- steps 1)))         ; still live
-                        (rloop units pids tries (- live 1) (- steps 1))))     ; settled
-              (: _ (rest 2) (rloop units pids tries live (- steps 1))))))      ; nothing yet: wait
+                   n  (1 + peep tries nm 0)  _ (pin tries nm n)
+                   _  (note ("  exit " + show nm + " status=" + show st))
+                   (? (st = 0 ? 0 (u-restart u = 'on-fail ? (n < tries-cap) 0))
+                        (note ("    restart " + show nm + " #" + show n),
+                         rstart pids u,
+                         rloop units pids tries live (steps - 1))             ; still live
+                        (rloop units pids tries (live - 1) (steps - 1))))     ; settled
+              (rest 2, rloop units pids tries live (steps - 1)))))            ; nothing yet: wait
    (real _)
      (: pids (tablet 0) tries (tablet 0)
         units [
          (unit 'worker 'service ["sh" "-c" "exit 0"] 'on-fail ())       ; exits 0 -> settles
          (unit 'flaky  'service ["sh" "-c" "exit 1"] 'on-fail ())]      ; exits 1 -> restart, then give up
         _ (note "-- REAL processes: spawn each, then poll glean (the SIGCHLD core) --")
-        _ (each units (\ u (rstart pids u)))
-        _ (rloop units pids tries (tally units) 500)
+        _ (each units (u \ rstart pids u))
+        _ (rloop units pids tries #units 500)
         (note "-- all real children reaped --")))
 
 ; --- the perceive lane (Linux: love/posix.c sigfd/sigtake + the core `await`) ---
@@ -156,29 +155,29 @@
 ; sigterm (blocked -> queued to the fd: a graceful EVENT, not a kill) ends the loop.
 ; Linux signal numbers: SIGCHLD 17, sigterm 15. run: out/love -l init/init.l -e "(perceive 0)"
 (: sig-chld 17  sig-term 15
-   (heart n ms) (? (< n 1) 0 (: _ (rest ms) _ (note "  . beat") (heart (- n 1) ms)))
+   (heart n ms) (? (n < 1) 0 (rest ms, note "  . beat", heart (n - 1) ms))
 
    ; drain every dead child after a SIGCHLD wake, restarting each per policy; return
    ; the new live count. SIGCHLD coalesces, so loop glean until it drains.
    (harvest units pids tries live)
      (: ev (glean 0)
-        (? !(two? ev) live
-           (: nm (peep pids (cap ev) 0)  st (cup ev)
+        (? (atom? ev) live
+           (: nm (peep pids <ev 0)  st >ev
               u  (find units nm)
-              n  (+ 1 (peep tries nm 0))  _ (pin tries nm n)
-              _  (note (+ "  glean " (+ (show nm) (+ " status=" (show st)))))
-              (? (? (= st 0) 0 (? (= (u-restart u) 'on-fail) (< n tries-cap) 0))
-                   (: _ (note (+ "    restart " (show nm))) _ (rstart pids u)
-                      (harvest units pids tries live))
-                   (harvest units pids tries (- live 1))))))
+              n  (1 + peep tries nm 0)  _ (pin tries nm n)
+              _  (note ("  glean " + show nm + " status=" + show st))
+              (? (st = 0 ? 0 (u-restart u = 'on-fail ? (n < tries-cap) 0))
+                   (note ("    restart " + show nm), rstart pids u,
+                    harvest units pids tries live)
+                   (harvest units pids tries (live - 1))))))
 
    ; perceive: park on the sigfd, act on the signal, until all settle or a TERM.
    (watch sig units pids tries live)
-     (? (< live 1) (note "  all services settled")
+     (? (live < 1) (note "  all services settled")
         (: _  (await sig)                                ; park -- cooperative; merges with the heartbeat
            ev (sigtake sig)
-           (? (= (cap ev) sig-term) (note "  SIGTERM: a queued EVENT, not a kill -> shut down")
-              (= (cap ev) sig-chld) (watch sig units pids tries (harvest units pids tries live))
+           (? (<ev = sig-term) (note "  SIGTERM: a queued EVENT, not a kill -> shut down")
+              (<ev = sig-chld) (watch sig units pids tries (harvest units pids tries live))
               (watch sig units pids tries live))))
 
    (perceive _)
@@ -189,8 +188,8 @@
                      (unit 'flap 'service ["sh" "-c" "exit 1"]             'on-fail ())]
               _ (note "-- PERCEIVE: park on a signalfd; a heartbeat task ticks alongside (the merge) --")
               hb (twirl (\ _ (heart 5 40)) 0)             ; heartbeat task: parks on the clock
-              _ (each units (\ u (rstart pids u)))
-              _ (watch sig units pids tries (tally units))
+              _ (each units (u \ rstart pids u))
+              _ (watch sig units pids tries #units)
               _ (catch hb)                               ; join the heartbeat (the orphan law)
               0))))
 
@@ -203,23 +202,23 @@
 ; nif -- mkdir the group, then write the pid to cgroup.procs (a plain file write via the
 ; `open` port), shown against the real tree (works under root / a delegated subtree).
 (: (cg-write path s)                                     ; write s to a cgroup control file
-     (: p (open path "w") (? (hot? p) (: _ (say p s) _ (flush p) (close p) 'ok) 'denied))
+     (: p (open path "w") (? (hot? p) (say p s, flush p, close p, 'ok) 'denied))
    (try-mount src tgt typ)
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)                            ; 0 success, -errno failure
-        (note (+ "  mount " (+ typ (+ " on " (+ tgt
-                 (? (r < 0) (+ " -> EPERM (errno " (+ (show (0 - r)) ", needs root/pid-ns)")) " -> ok")))))))
+        (note ("  mount " + typ + " on " + tgt
+               + (r < 0 ? (" -> EPERM (errno " + show (0 - r) + ", needs root/pid-ns)") " -> ok"))))
    (boot-system _)
      (: e (newns 0)
-        _ (note (? (e < 0) "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"
-                     "-- pid1 bringup: private user+mount ns (root-in-ns) --"))
+        _ (note (e < 0 ? "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"
+                         "-- pid1 bringup: private user+mount ns (root-in-ns) --"))
         _ (try-mount "tmpfs" "/tmp/love-run"  "tmpfs")       ; works unprivileged -> proves mount
         _ (try-mount "proc"  "/tmp/love-proc" "proc")        ; needs a pid-ns too -> eperm here
         _ (note "-- cgroup-v2: mkdir a group, write a pid to cgroup.procs --")
         _ (: d "/sys/fs/cgroup/love.demo"
              _ (mkdir d 493)
-             r (cg-write (+ d "/cgroup.procs") (+ (show (getpid 0)) "\n"))
-             (note (+ "  place self in " (+ d (? (= r 'ok) " -> ok" " -> needs root / a delegated subtree")))))
+             r (cg-write (d + "/cgroup.procs") (show (getpid 0) + "\n"))
+             (note ("  place self in " + d + (r = 'ok ? " -> ok" " -> needs root / a delegated subtree"))))
         0))
 
 ; --- boot as PID 1 (a container) ------------------------------------------------
@@ -237,27 +236,27 @@
 ; (park on the signalfd, restart per policy, SIGTERM -> graceful shutdown).
 (: (mount1 src tgt typ)                                  ; mount as pid1 (root in a pid-ns: it works)
      (: _ (mkdir tgt 493) r (mount src tgt typ)          ; () success, +errno failure
-        (note (+ "  mount " (+ typ (+ " on " (+ tgt (? r (+ " -> errno " (show r)) " -> ok")))))))
+        (note ("  mount " + typ + " on " + tgt + (r ? (" -> errno " + show r) " -> ok"))))
 
    ; drain glean until `target` children are collected (or steps run out). classify
    ; each dead pid by `pids`: present -> a child we started; absent -> a reparented
    ; orphan (only pid 1 sees those). a non-pair glean -- () none pending or
    ; 'echild none left -- just paces the loop.
    (glean-tour pids got target steps)
-     (? (? (< steps 1) 1 (>= got target)) got
+     (? (steps < 1 ? 1 (got >= target)) got
         (: ev (glean 0)
            (? (two? ev)
-                (: pid (cap ev) st (cup ev) nm (peep pids pid ())
-                   _ (note (+ (? nm (+ "  glean " (+ (show nm) " (a service we started)"))
-                                     "  glean an ORPHAN (reparented to us -- pid 1's duty)")
-                              (+ " pid=" (+ (show pid) (+ " status=" (show st))))))
-                   (glean-tour pids (+ got 1) target (- steps 1)))
-              (: _ (rest 5) (glean-tour pids got target (- steps 1))))))
+                (: pid <ev st >ev nm (peep pids pid ())
+                   _ (note ((nm ? ("  glean " + show nm + " (a service we started)")
+                                  "  glean an ORPHAN (reparented to us -- pid 1's duty)")
+                            + " pid=" + show pid + " status=" + show st))
+                   (glean-tour pids (got + 1) target (steps - 1)))
+              (rest 5, glean-tour pids got target (steps - 1)))))
 
    (pid1 _)
      (: me (getpid 0)
-        _ (note (+ "-- love as PID " (+ (show me)
-                  (? (= me 1) " -- a real init --" " (NOT pid 1: use `make init-container`) --"))))
+        _ (note ("-- love as PID " + show me
+                 + (me = 1 ? " -- a real init --" " (NOT pid 1: use `make init-container`) --")))
         _ (note "-- mount the early filesystems (root in a pid-ns -> proc mounts) --")
         _ (mount1 "tmpfs" "/tmp/love-run"  "tmpfs")
         _ (mount1 "proc"  "/tmp/love-proc" "proc")
@@ -266,7 +265,7 @@
         p (spawn ["sh" "-c" "(sleep 0.2; exit 7) & exit 0"])      ; parent exits 0; grandchild orphaned
         _ (pin pids p 'orphan-parent)
         n (glean-tour pids 0 2 800)                                ; parent settles fast; the orphan after its sleep
-        _ (note (+ "-- reaped " (+ (show n) " children, one a reparented orphan -- love supervised pid 1 --")))
+        _ (note ("-- reaped " + show n + " children, one a reparented orphan -- love supervised pid 1 --"))
         0))
 
 ; --- the demos, as a callable function (not auto-run) ---
@@ -274,8 +273,8 @@
    (: cr (tablet 0)                                  ; per-name attempt counter for the flaky service
       ; a flaky service: crashes until its k-th start, then runs clean ('ok) -- models a
       ; process that exits nonzero until some dependency/race settles.
-      svc    (\ name k (\ _ (: n (+ 1 (peep cr name 0)) _ (pin cr name n)
-                               (? (< n k) (scare 'crash name) 'ok))))
+      svc    (\ name k (\ _ (: n (1 + peep cr name 0) _ (pin cr name n)
+                               (n < k ? (scare 'crash name) 'ok))))
       ok-svc (\ _ 'ok)                                ; a clean service: up on the first try
       units [
        (unit 'netd    'service ok-svc            'on-fail ())
@@ -289,7 +288,7 @@
       reg (boot units)
       _   (note "-- final state (the checkpoint -- a show/read-able value) --")
       _   (each (snap reg (map u-name units))
-                (\ pr (note (+ "  " (+ (show (cap pr)) (+ " = " (show (caup pr))))))))
+                (pr \ note ("  " + show <pr + " = " + show (caup pr))))
       _   (note "-- graceful shutdown (reverse start order) --")
       _   (shutdown reg (rev (map u-name units)))
       _   (note "")

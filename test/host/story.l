@@ -26,7 +26,7 @@
              (data-of (level-of <(sound (level-text L))) = data-of L))   ; a shown level reads back
    ; the palette: the space is a wall that shows nothing, the water a wall with pens, the
    ; floor a floor; a character the palette lacks is a floor drawn as itself
-   _ (test (4 = tally (keys (L 'tiles))) (wall? L 0 0) (" " = (kind-of L 32) 'gl) (wall? L 0 12) (27 = (kind-of L 126) 'fg)
+   _ (test (4 = #(keys (L 'tiles))) (wall? L 0 0) (" " = (kind-of L 32) 'gl) (wall? L 0 12) (27 = (kind-of L 126) 'fg)
              !(wall? L 3 1) (wall? L 2 0) (wall? L -1 5) (wall? L 4 99)      ; off the map is wall
              !((kind-of L 120) 'solid) ("x" = (kind-of L 120) 'gl))
 
@@ -67,7 +67,7 @@
    g2 (story-new L)
    f (plain (story-frame g2 30 14))
    rows (split "\r\n" f)
-   _ (test (14 = tally rows) (64 = (rows 8) 6) (42 = (rows 2) 6) (63 = (rows 9) 6)
+   _ (test (14 = #rows) (64 = (rows 8) 6) (42 = (rows 2) 6) (63 = (rows 9) 6)
              (32 = (rows 0) 0) (35 = (rows 0) 2) (126 = (rows 12) 0)             ; the unseen wall, the seen, the water
              (has? (rows 13) "the lighthouse") (has? (rows 13) "@ 6,8"))
    ; the pens: the water's fg and bg, the floor's fg with the terminal's own bg
@@ -100,7 +100,7 @@
 
    ; --- the library: a shelf per wing, its books through libra, the interpreter ---
    LB (library "apps")
-   _ (test (10 < tally (keys (LB 'things))) (LB 'things 'rove) (LB 'things 'lapiz) (LB 'things 'hatch)
+   _ (test (10 < #(keys (LB 'things))) (LB 'things 'rove) (LB 'things 'lapiz) (LB 'things 'hatch)
              ("|" = (LB 'things 'rove 'gl)) (LB 'things 'rove 'books 'story))
    g3 (story-new LB)
    sh (LB 'things 'rove)

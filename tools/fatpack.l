@@ -48,10 +48,10 @@
      + "exec \"$c\" \"$@\"\n")
    ; args -> ((arch . bytes) ..), in argv order (the order is the make rule's, fixed)
    (fp-members l)
-    (? (one? l) ()
-       (one? >l) (fp-die "ARCH with no FILE")
+    (? (atom? l) ()
+       (atom? >l) (fp-die "ARCH with no FILE")
        (: g (fp-read <>l)
-          _ (one? g ? (fp-die ("cannot read " + <>l)))
+          _ (atom? g ? (fp-die ("cannot read " + <>l)))
           ((<l . <>g) . fp-members >>l)))
    (fp-main av)
     (: _ (#av < 3 ? (fp-die "usage: fatpack OUT ARCH FILE [ARCH FILE ..]"))
@@ -59,7 +59,7 @@
        ms (fp-members >av)
        id (fp-id16 (sha256 (foldl (a \ m \ a + >m) "" ms)))
        ; lay the arms and the body: member k starts at block 1 + blocks-before-it
-       arms (: (go l b) (? (one? l) ""
+       arms (: (go l b) (? (atom? l) ""
                  (: n #><l (fp-arm <<l b (fp-blocks n) n + go >l (b + fp-blocks n))))
                (go ms 1))
        pre (fp-prefix id arms)

@@ -271,28 +271,28 @@
 ; --- 15. replies: dsr, da, and the drain-once law ---
 (: s (mkscr 4 10)
  _ (scribe s "\e[3;7H\e[6n")
- _ (test (= [27 91 51 59 55 82] (reply s))     ; "\e[3;7R"
+ _ (test ([27 91 51 59 55 82] = reply s)       ; "\e[3;7R"
            !(reply s))                        ; drained: quiet
  _ (scribe s "\e[c")
  _ (test ("\e[?62;4;22c" = string (reply s)))     ; a vt220, sixel (4) and ansi colour (22)
  _ (scribe s "\eZ")                              ; DECID: the vt102 answer it always gave
- _ (test (= [27 91 63 54 99] (reply s)))
+ _ (test ([27 91 63 54 99] = reply s))
  _ (scribe s "\e[5n")
- _ (test (= [27 91 48 110] (reply s))))        ; "\e[0n": all well
+ _ (test ([27 91 48 110] = reply s)))          ; "\e[0n": all well
 
 ; --- 15b. the asks a line editor waits on: colour queries, secondary da ---
 ; (silence here cost a real second of buffered keystrokes at zsh startup)
 (: s (mkscr 4 20)
  _ (scribe s "\e]11;?\x07")
- _ (test (= [27 93 49 49 59 114 103 98 58 48 48 48 48 47 48 48 48 48 47 48 48 48 48 7]
-              (reply s)))                        ; bg: rgb:0000/0000/0000, bel-terminated
+ _ (test ([27 93 49 49 59 114 103 98 58 48 48 48 48 47 48 48 48 48 47 48 48 48 48 7]
+              = reply s))                        ; bg: rgb:0000/0000/0000, bel-terminated
  _ (scribe s "\e]10;?\e\\")                      ; st-terminated ask, same answer lane
- _ (test (= [27 93 49 48 59 114 103 98 58 99 48 99 48 47 99 48 99 48 47 99 48 99 48 7]
-              (reply s)))                        ; fg: rgb:c0c0/c0c0/c0c0
+ _ (test ([27 93 49 48 59 114 103 98 58 99 48 99 48 47 99 48 99 48 47 99 48 99 48 7]
+              = reply s))                        ; fg: rgb:c0c0/c0c0/c0c0
  _ (scribe s "\e]0;just a title\x07")
  _ (test !(reply s))                        ; a title is not a question
  _ (scribe s "\e[>c")
- _ (test (= [27 91 62 48 59 48 59 48 99] (reply s)))     ; secondary da
+ _ (test ([27 91 62 48 59 48 59 48 99] = reply s))       ; secondary da
  _ (scribe s "\e[c")
  _ (test ("\e[?62;4;22c" = string (reply s))))  ; primary da unchanged
 
@@ -387,6 +387,30 @@
  (step cp) (: _ (scribe s "\e[1;1H") _ (scribe s (utf8 cp)) (cur s))
  _ (test (foldl (\ a cp (&& a (step cp = max 0 (wcwidth cp)))) 1 cps)))
 
+; --- 17f. a mark joins the cell before the cursor: glass answers the base, and 3 4 5 the
+;     marks; a pool of 128 clusters, a slot no cell names taken back when it is full ---
+(: (marks s i) (filter (< 0) (map (glass s i) [3 4 5]))
+ s (mkscr 3 4)
+ _ (scribe s "e\u{301}\u{4e16}\u{300}")           ; é, then 世 with a grave
+ _ (test (101 = chat s 0) ([769] = marks s 0) (0 = (glass s 0 0 >> 21 & 3))
+         (19990 = chat s 1) ([768] = marks s 1)     ; ..on the lead
+         (1 = (glass s 1 0 >> 21 & 3)) (2 = (glass s 2 0 >> 21 & 3))
+         (() = marks s 2) (3 = cur s))
+ _ (scribe s "\e[2;1Habcd\u{302}")                   ; a pending wrap: the last column's
+ _ (test (100 = chat s 7) ([770] = marks s 7) (7 = cur s))
+ _ (scribe s "\e[3;1H\u{301}a\u{300}\u{301}\u{302}\u{303}")   ; col 0 has nothing; three fit
+ _ (test ([770] = marks s 7) (97 = chat s 8) ([768 769 770] = marks s 8) (9 = cur s))
+ _ (scribe s "\e[3;1Hx")                             ; a write takes the cluster away
+ _ (test (120 = chat s 8) (() = marks s 8))
+ w (mkscr 1 200)
+ (clus i) (utf8 (65 + (i // 100)) + utf8 (768 + (i % 100)))   ; 200 distinct clusters
+ _ (scribe w (cats (map clus (jot 200))))
+ _ (test ([795] = marks w 127) (() = marks w 128)   ; the pool's 128, then bare bases
+         (66 = chat w 128) (200 = #(filter (\ i (0 < chat w i)) (jot 200))))
+ _ (scribe w ("\e[1;1H" + cats (map (\ i "x") (jot 64))))   ; 64 slots no longer named
+ _ (scribe w ("\e[1;130H" + clus 150))              ; ..so a new one finds room
+ _ (test ([818] = marks w 129) ([867] = marks w 99)))
+
 ; --- 20. sixel: a picture decoded into the store, its tiles laid in cells at the cursor ---
 ; a 10x12 picture: red, with blue over the first five columns of the first band. 8x16
 ; cells, so it lands as two tiles on one row, and the cursor steps under it
@@ -467,7 +491,8 @@
            (pic? s2 0) (green = tilepx s2 0 0 0))
    ; a=q asks and keeps nothing; the errors say which key refused
    _ (test ("\e_Gi=31;OK\e\\" = ask s2 "\e_Ga=q,i=31,s=1,v=1,f=24;AAAA\e\\")
-           ("\e_Gi=5;EINVAL:format\e\\" = ask s2 "\e_Ga=T,f=100,i=5;AAAA\e\\")
+           ("\e_Gi=5;EINVAL:format\e\\" = ask s2 "\e_Ga=T,f=99,i=5;AAAA\e\\")
+           ("\e_Gi=5;EBADPNG:png\e\\" = ask s2 "\e_Ga=T,f=100,i=5;AAAA\e\\")   ; no PNG in it
            ("\e_Gi=6;EINVAL:medium\e\\" = ask s2 "\e_Ga=T,f=24,t=f,s=1,v=1,i=6;AAAA\e\\")
            ("\e_Gi=99;ENOENT:no such image\e\\" = ask s2 "\e_Ga=p,i=99\e\\")
            ("\e_Gi=4;EINVAL:short\e\\" = ask s2 "\e_Ga=T,f=24,s=2,v=1,i=4;AAAA\e\\")

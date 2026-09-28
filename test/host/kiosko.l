@@ -81,7 +81,7 @@
                 _ (close c)
                 r)
    (get p)   (ask ("GET " + p + " HTTP/1.1\r\nHost: x\r\n\r\n"))
-   (code r)  (: n #r ((: (g i) (&& (i < n) !((r i) = 32) ? (g (i + 1)) (snip r (i + 1) (i + 4)))) 0))
+   (code r)  (: n #r ((: (g i) (i < n && !((r i) = 32) ? (g (i + 1)) (snip r (i + 1) (i + 4)))) 0))
    (sub? s t) (: n #s m #t
                  ((: (g i) ((i + m) <= n ? ((snip s i (i + m)) = t ? 1 (g (i + 1))) 0)) 0))
 
@@ -147,7 +147,7 @@
 
    ; --- a body past the chunk boundary ----------------------------------------------------
    bigr (get "/big.txt")
-   _ (: i ((: (g k) (&& (k < tally bigr) !((snip bigr k (k + 4)) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
+   _ (: i ((: (g k) (k < #bigr && !((snip bigr k (k + 4)) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
         body (snip bigr (i + 4) #bigr)
         _ (test (#big = 192000)                       ; the fixture is really 3 chunks
                   (sub? bigr "Content-Length: 192000")
@@ -163,13 +163,13 @@
    ; one side and wrong on the other. one file each side of the line, byte for byte.
    ; the floor is kiosko's and it moved (8192 -> 131072 when `snip` learned to read a
    ; cask), so these two follow it -- read `caskfloor` before touching the sizes.
-   (dbl s n) (n <= tally s ? (snip s 0 n) (dbl (s + s) n))     ; O(n), not (s + rep ..)
+   (dbl s n) (n <= #s ? (snip s 0 n) (dbl (s + s) n))          ; O(n), not (s + rep ..)
    under (dbl "abcdefgh" 131064)
    over  (dbl "abcdefgh" 131080)
    _ (put-file "under.txt" under)
    _ (put-file "over.txt" over)
    _ (: (bodyof r) (: n #r
-                      i ((: (g k) (&& (k < n) !((snip r k (k + 4)) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
+                      i ((: (g k) (k < n && !((snip r k (k + 4)) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
                       (snip r (i + 4) n))
         u (get "/under.txt") o (get "/over.txt")
         (test (#under = 131064) (#over = 131080)  ; really either side of 131072
@@ -191,7 +191,7 @@
         r (: q (open "/proc/self/environ" "r") (slurp q))
         big (gulp "/proc/cpuinfo")
         bigr (: q (open "/proc/cpuinfo" "r") (slurp q))
-        (test (0 < tally e)
+        (test (0 < #e)
                 (e = r)                                   ; byte for byte, through the loop
                 (#big = #bigr)))            ; ..and nothing truncated at 4096
 

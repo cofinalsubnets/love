@@ -26,53 +26,53 @@
 
 (:
  ; ---- the small string kit (this file loads only holo, so it carries its own) ----
- (trim s) (: n (tally s)
+ (trim s) (: n #s
              (a i) (? ((i < n) && (((s i) = 32) || ((s i) = 9))) (a (i + 1)) i)
              (b j) (? ((0 < j) && (((s (j - 1)) = 32) || ((s (j - 1)) = 9))) (b (j - 1)) j)
              i (a 0) j (b n)
              (? (i < j) (snip s i j) ""))
- (lines s) (: n (tally s)
+ (lines s) (: n #s
               (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) . acc) acc))
                               ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) . acc))
                               (go i (j + 1) acc))
               (go 0 0 ()))
- (fields s c) (: n (tally s)                            ; split on the charm c, empties kept
+ (fields s c) (: n #s                            ; split on the charm c, empties kept
                  (go i j acc) (? (n <= j) (rev ((snip s i j) . acc))
                                  ((s j) = c) (go (j + 1) (j + 1) ((snip s i j) . acc))
                                  (go i (j + 1) acc))
                  (go 0 0 ()))
- (toks s) (filter (\ t (0 < tally t)) (foldl (\ a t (a + (fields t 9))) () (fields s 32)))
- (idx-of s sub) (: n (tally s) k (tally sub)
+ (toks s) (filter (\ t (0 < #t)) (foldl (\ a t (a + (fields t 9))) () (fields s 32)))
+ (idx-of s sub) (: n #s k #sub
                    (at? i j) (? (k <= j) 1 ((s (i + j)) = (sub j)) (at? i (j + 1)) 0)
                    (go i) (? (n < (i + k)) () (at? i 0) i (go (i + 1)))
                    (go 0))
  (has? s sub) (charm? (idx-of s sub))
- (pfx? s p) (: k (tally p) ((k <= tally s) && ((snip s 0 k) = p)))
- (sfx? s p) (: n (tally s) k (tally p) ((k <= n) && ((snip s (n - k) n) = p)))
+ (pfx? s p) (: k #p ((k <= #s) && ((snip s 0 k) = p)))
+ (sfx? s p) (: n #s k #p ((k <= n) && ((snip s (n - k) n) = p)))
  (digit? c) ((48 <= c) && (c <= 57))
  (hexd? c) ((digit? c) || ((97 <= c) && (c <= 102)))
  (hexdv c) (? (digit? c) (c - 48) (c - 87))
- (all-hex? s) (: n (tally s) (go i) (? (n <= i) 1 (hexd? (s i)) (go (i + 1)) 0) (go 0))
- (s2i s0) (: s (trim s0) n (tally s)                    ; int(s, 0): decimal or 0x hex, sign
+ (all-hex? s) (: n #s (go i) (? (n <= i) 1 (hexd? (s i)) (go (i + 1)) 0) (go 0))
+ (s2i s0) (: s (trim s0) n #s                    ; int(s, 0): decimal or 0x hex, sign
             (? (n = 0) ()
                (: neg ((s 0) = 45)
                   b (? neg (snip s 1 n) s)
                   v (? (pfx? b "0x")
-                       (: (h i acc) (? ((tally b) <= i) acc
+                       (: (h i acc) (? (#b <= i) acc
                                        (hexd? (b i)) (h (i + 1) (16 * acc + hexdv (b i)))
                                        ())
                           (h 2 0))
-                       (: (d i acc) (? ((tally b) <= i) acc
+                       (: (d i acc) (? (#b <= i) acc
                                        (digit? (b i)) (d (i + 1) (10 * acc + ((b i) - 48)))
                                        ())
                           (d 0 0)))
                   (? (v = ()) () (? neg (0 - v) v)))))
  ; exact big division: int on an inexact big ratio rides a gem and drops digits
- (divp v d) (int ((v - (% v d)) / d))
- (show0x n) (: (h v acc) (? (v = 0) acc (h (divp v 16) (('(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (% v 16)) . acc)))
+ (divp v d) (int ((v - (v % d)) / d))
+ (show0x n) (: (h v acc) (? (v = 0) acc (h (divp v 16) (('(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (v % 16)) . acc)))
                (? (n = 0) "0x0" ("0x" + string (h n ()))))
  M64 18446744073709551616
- (mask64 x) (% ((% x M64) + M64) M64)
+ (mask64 x) (((x % M64) + M64) % M64)
  (pow2 k) (: (go i a) (? (i = k) a (go (i + 1) (2 * a))) (go 0 1))
 
  ; ---- the boxed RNG (a tablet slot; every draw is one line at the use site) ----
@@ -80,7 +80,7 @@
  (rseed s) (pin RS 0 (wheel s))
  (rnd n) (: r (random (peep RS 0 0) n) _ (pin RS 0 >r) <r)   ; [0, n)
  (rint a b) (a + rnd (b - a + 1))                            ; [a, b] inclusive
- (pick l) (l (rnd (tally l)))
+ (pick l) (l (rnd #l))
  (coin _) (rnd 2)
  (pick-n l k) (? (k = 0) ()                                  ; k distinct draws
                  (: x (pick l) (x . pick-n (filter (\ y !(y = x)) l) (k - 1))))
@@ -90,13 +90,13 @@
  (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
  (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
- (oct3 c) (string [(48 + (int (c / 64))) (48 + (% (int (c / 8)) 8)) (48 + (% c 8))])
- (hex-bytes hx) (: n (tally hx)                              ; hex string -> charm list
+ (oct3 c) (string [(48 + (int (c / 64))) (48 + ((int (c / 8)) % 8)) (48 + (c % 8))])
+ (hex-bytes hx) (: n #hx                              ; hex string -> charm list
                    (go i acc) (? (n <= i) (rev acc)
                                  (go (i + 2) ((16 * hexdv (hx i) + hexdv (hx (i + 1))) . acc)))
                    (go 0 ()))
  (lay-bin hx p) (sh ("printf '" + foldl (\ a c (a + "\\" + oct3 c)) "" (hex-bytes hx) + "' > " + p))
- (spaced-hex hx) (: n (tally hx)
+ (spaced-hex hx) (: n #hx
                     (a2 a b) (? (a = "") b (a + " " + b))
                     (go i acc) (? (n <= i) acc
                                   (go (i + 2) (a2 acc ("0x" + snip hx i (i + 2)))))
@@ -111,7 +111,7 @@
  ; objdump folds a redundant prefix into a pseudo-mnemonic -- peel to the real op
  x64-prefixes '("rex" "data16" "data32" "addr32" "lock" "rep" "repz" "repnz"
                 "bnd" "notrack" "cs" "ss" "ds" "es" "fs" "gs")
- (strip-pfx ts) (? !(two? ts) ts
+ (strip-pfx ts) (? (atom? ts) ts
                    ((elem <ts x64-prefixes) || (pfx? <ts "rex.")) (strip-pfx >ts)
                    ts)
 
@@ -121,13 +121,13 @@
   (: _ (lay-bin hx (tmpd + "/.fuzz.bin"))
      _ (sh ("objdump -D -b binary -m i386:x86-64 -M intel " + tmpd + "/.fuzz.bin > " + tmpd + "/.fuzz.out 2>/dev/null"))
      (go m acc)
-      (? !(two? m) (rev acc)
+      (? (atom? m) (rev acc)
          (: fs (fields <m 9)
-            (? ((tally fs) < 3) (go >m acc)
+            (? (#fs < 3) (go >m acc)
                (: ts (strip-pfx (toks (fs 2)))
-                  (? !(two? ts) (go >m acc)
-                     (go >m ([(cap ts) (foldl (\ a t (? (a = "") t (a + " " + t))) "" >ts)
-                              (tally (toks (fs 1))) (has? <m "(bad)")] . acc)))))))
+                  (? (atom? ts) (go >m acc)
+                     (go >m ([<ts (foldl (\ a t (? (a = "") t (a + " " + t))) "" >ts)
+                              #(toks (fs 1)) (has? <m "(bad)")] . acc)))))))
      (go (lines (rdf (tmpd + "/.fuzz.out"))) ()))
 
  ; a64/riscv: llvm-mc --disassemble. a fixed-width lane gets full consumption for free
@@ -135,7 +135,7 @@
  ; vw walks the stream instead -- an instruction's first byte has its low two bits set on a
  ; 4-byte word and clear on a 2-byte one, which is the whole of risc-v's length encoding here.
  (rv-icount bs)
-  (: n (tally bs)
+  (: n #bs
      (go i k) (? (n <= i) k (go (i + (? (((bs i) & 3) = 3) 4 2)) (k + 1)))
      (go 0 0))
  (disasm-mc hx triple mattr cmark vw)
@@ -144,14 +144,14 @@
      (one l0 acc)
       (: c (idx-of l0 cmark)
          ln (trim (? (charm? c) (snip l0 0 c) l0))
-         (? ((tally ln) = 0) acc
+         (? (#ln = 0) acc
             (pfx? ln ".text") acc
             (pfx? ln ".byte") ([".byte" "" 4 1] . acc)
             (: ts (toks ln)
-               ([(cap ts) (trim (snip ln (tally <ts) (tally ln))) 4 0] . acc))))
+               ([<ts (trim (snip ln #<ts #ln)) 4 0] . acc))))
      got (rev (foldl (\ a ln (one ln a)) () (lines (rdf (tmpd + "/.fuzz.out")))))
-     want (? vw (rv-icount (hex-bytes hx)) (int ((tally hx) / 8)))
-     (? ((tally got) = want) got
+     want (? vw (rv-icount (hex-bytes hx)) (int (#hx / 8)))
+     (? (#got = want) got
         (got + [["<count>" "" 4 1]])))
 
  ; the llvm-mc second opinion on x64 bytes (reject/.byte = undecodable)
@@ -161,8 +161,8 @@
      (? (0 < r) 0 (has? (rdf (tmpd + "/.fuzz.out")) ".byte") 0 1))
 
  ; ---- operand parsers, per arch ----
- (ops-comma s) (? ((tally s) = 0) () (map trim (fields s 44)))
- (ops-arm s) (: n (tally s)                              ; comma split respecting [...]
+ (ops-comma s) (? (#s = 0) () (map trim (fields s 44)))
+ (ops-arm s) (: n #s                              ; comma split respecting [...]
                 (go i j d acc) (? (n <= j) (rev ((trim (snip s i j)) . acc))
                                   ((s j) = 91) (go i (j + 1) (d + 1) acc)
                                   ((s j) = 93) (go i (j + 1) (d - 1) acc)
@@ -183,19 +183,19 @@
            r (? (charm? st)
                 (: ib (: (bk i) (? ((0 < i) && (: c (in (i - 1)) ((digit? c) || ((97 <= c) && (c <= 122))))) (bk (i - 1)) i) (bk st))
                    ixs (snip in ib st) scs (snip in (st + 1) (st + 2))
-                   rest ((snip in 0 ib) + (snip in (st + 2) (tally in)))
+                   rest ((snip in 0 ib) + (snip in (st + 2) #in))
                    [ixs (s2i scs) rest])
                 [() 1 in])
            ix <r sc <>r in2 (r 2)
            ; the trailing displacement: +0x../-N at the end
-           n2 (tally in2)
+           n2 #in2
            de (: (dk j) (? ((0 < j) && (: c (in2 (j - 1)) ((hexd? c) || (c = 120)))) (dk (j - 1)) j) (dk n2))
            r2 (? ((de < n2) && (0 < de) && (((in2 (de - 1)) = 43) || ((in2 (de - 1)) = 45)))
                  (: v (s2i (snip in2 de n2))
                     [(? ((in2 (de - 1)) = 45) (0 - v) v) (snip in2 0 (de - 1))])
                  [0 in2])
            dsp <r2 in3 (r2 1)
-           bts (filter (\ t (0 < tally t)) (map trim (fields in3 43)))
+           bts (filter (\ t (0 < #t)) (map trim (fields in3 43)))
            [(? (two? bts) (trim <bts) ()) ix sc dsp])))
 
  ; arm memory: '[x6, #8]' / '[sp, #-16]!' / '[x0, x1, lsl #3]'
@@ -205,10 +205,10 @@
         (: ps (map trim (fields (snip op (a + 1) b) 44))
            base <ps
            (go m ix sc dsp)
-            (? !(two? m) [base ix sc dsp]
-               (pfx? <m "#") (go >m ix sc (s2i (snip <m 1 (tally <m))))
+            (? (atom? m) [base ix sc dsp]
+               (pfx? <m "#") (go >m ix sc (s2i (snip <m 1 #<m)))
                (pfx? <m "lsl") (: hi (idx-of <m "#")
-                                  (go >m ix (? (charm? hi) (pow2 (s2i (snip <m (hi + 1) (tally <m)))) sc) dsp))
+                                  (go >m ix (? (charm? hi) (pow2 (s2i (snip <m (hi + 1) #<m))) sc) dsp))
                (go >m <m sc dsp))
            (go >ps () 1 0))))
 
@@ -219,7 +219,7 @@
         [(snip op (a + 1) b) () 1 (? (a = 0) 0 (s2i (snip op 0 a)))]))
 
  (imm-x64 op) (: v (s2i op) (? (v = ()) () (mask64 v)))   ; a decoded imm may be a big
- (imm-arm op) (s2i (? (pfx? (trim op) "#") (snip (trim op) 1 (tally (trim op))) op))
+ (imm-arm op) (s2i (? (pfx? (trim op) "#") (snip (trim op) 1 #(trim op)) op))
  (imm-rv op) (s2i op)
 
  ; ---- abstract register identity, per arch ----
@@ -234,14 +234,14 @@
  (abs-arm n0) (: nm (trim n0)
                  (? ((nm = "sp") || (nm = "wsp")) 'sp
                     ((nm = "xzr") || (nm = "wzr")) 'zr
-                    (: n (tally nm)
+                    (: n #nm
                        digits (: (dg i) (? (n <= i) 1 (digit? (nm i)) (dg (i + 1)) 0) (dg 1))
                        (? ((1 < n) && (((nm 0) = 120) || ((nm 0) = 119)) && digits)
                           (intern ("r" + snip nm 1 n)) ()))))
  (arm-width n0) (: nm (trim n0)
                    (? ((nm = "sp") || (nm = "wsp")) 'sp
-                      ((0 < tally nm) && ((nm 0) = 120)) 'x
-                      ((0 < tally nm) && ((nm 0) = 119)) 'w
+                      ((0 < #nm) && ((nm 0) = 120)) 'x
+                      ((0 < #nm) && ((nm 0) = 119)) 'w
                       '?))
  rv-abs ('(("a0" r0) ("a1" r1) ("a2" r2) ("a3" r3) ("a4" r4) ("a5" r5) ("a6" r6) ("a7" r7)
            ("t0" r8) ("t1" r9) ("t2" r10) ("t3" r11) ("t4" r12) ("s2" r13) ("s3" r14) ("s1" r15)
@@ -264,36 +264,36 @@
  ; (the riscv lane's law); the others read a prefix.
  (chk1 got w)
   (: k <w
-     (? (k = 'r) (? (= (a-abs got) (w 1)) () ("reg " + got + " != " + string (w 1)))
-        (k = 'rw) (? !(= (a-abs got) (w 1)) ("reg " + got + " != " + string (w 1))
-                       !(= (arm-width got) (w 2)) ("width " + got + " != " + string (w 2))
+     (? (k = 'r) (? ((a-abs got) = (w 1)) () ("reg " + got + " != " + string (w 1)))
+        (k = 'rw) (? !(a-abs got = w 1) ("reg " + got + " != " + string (w 1))
+                       !(arm-width got = w 2) ("width " + got + " != " + string (w 2))
                        ())
         (k = 'i) (: v (a-imm got)
                       (? (v = (w 1)) () ("imm " + got + " != " + show0x (mask64 (w 1)))))
         (k = 'x) (: t (trim got)
-                      (? ((pfx? t "xmm") && ((snip t 3 (tally t)) = show (w 1))) ()
+                      (? ((pfx? t "xmm") && ((snip t 3 #t) = show (w 1))) ()
                          ("xmm " + got + " != xmm" + show (w 1))))
         (k = 'lit) (? ((trim got) = (w 1)) () ("op " + got + " != " + (w 1)))
         (: m (a-mem got)
-           (? !(two? m) ("not a mem operand: " + got)
-              !(= (a-abs <m) (w 1)) ("mem base " + <m + " != " + string (w 1))
+           (? (atom? m) ("not a mem operand: " + got)
+              !(a-abs <m = w 1) ("mem base " + <m + " != " + string (w 1))
               !((m 3) = (w 2)) ("mem disp " + show0x (mask64 (m 3)) + " != " + show0x (mask64 (w 2)))
               (k = 'm) ()
               (: ix (m 1)
-                 (? (!(string? ix) || !(= (a-abs ix) (w 3))) ("mem index != " + string (w 3))
+                 (? (!(string? ix) || !(a-abs ix = w 3)) ("mem index != " + string (w 3))
                     !((m 2) = (w 4)) ("mem scale " + show (m 2) + " != " + show (w 4))
                     ()))))))
  (run-spec ins spec strict)
   (? (any i-bad ins) "undecodable/bad byte"
-     ((tally ins) != (tally spec)) ((show (tally ins)) + " insns, expected " + show (tally spec) + ":" + dump-ins ins)
+     (#ins != #spec) ((show #ins) + " insns, expected " + show #spec + ":" + dump-ins ins)
      (: (goi is sp)
-         (? !(two? is) ()
-            (: i <is mns (cap <sp) cks (<sp 1)
+         (? (atom? is) ()
+            (: i <is mns <<sp cks (<sp 1)
                o (a-ops (i-ops i))
                (? !(elem (i-mnem i) mns) ("mnem " + i-mnem i + " unexpected (" + i-ops i + ")")
-                  (strict && ((tally o) != (tally cks))) (i-mnem i + ": " + show (tally o) + " ops != " + show (tally cks))
-                  ((tally o) < (tally cks)) (i-mnem i + ": missing operands (" + i-ops i + ")")
-                  (: (goc os ws) (? !(two? ws) ()
+                  (strict && (#o != #cks)) (i-mnem i + ": " + show #o + " ops != " + show #cks)
+                  (#o < #cks) (i-mnem i + ": missing operands (" + i-ops i + ")")
+                  (: (goc os ws) (? (atom? ws) ()
                                     (: r (chk1 <os <ws) (? (string? r) r (goc >os >ws))))
                      r (goc o cks)
                      (? (string? r) r (goi >is >sp))))))
@@ -313,7 +313,7 @@
  (disp-any _) (: k (rnd 3) (? (k = 0) 0 (k = 1) (rint -128 127) (rint (0 - 2147483648) 2147483647)))
 
  ; ================================================================ x64 lane
- (fno f) (s2i (snip (string f) 1 (tally (string f))))       ; 'f7 -> 7
+ (fno f) (s2i (snip (string f) 1 #(string f)))       ; 'f7 -> 7
  x64-alu '("add" "sub" "and" "or" "xor" "imul")
  x64-sized-ld '(("ld1" ("movsx")) ("ld2" ("movsx")) ("ld4" ("movsxd"))
                 ("ldu1" ("movzx")) ("ldu2" ("movzx")) ("ldu4" ("mov")))
@@ -367,7 +367,7 @@
    ["setcc" (\ _ (: row (pick x64-setcc) d (rrand 0)
                     [[['set <row d]]
                      (\ ins (? (any i-bad ins) "undecodable/bad byte"
-                               ((tally ins) != 2) ((show (tally ins)) + " insns, want setcc+movzx:" + dump-ins ins)
+                               (#ins != 2) ((show #ins) + " insns, want setcc+movzx:" + dump-ins ins)
                                (: a <ins b (ins 1)
                                   r1 (run-spec [a] [[[(row 1)] [['r d]]]] 0)
                                   (? (string? r1) r1
@@ -396,18 +396,18 @@
  ; the movz/movk(/movn/orr) chain reassembled into its 64-bit value; () = unreadable
  (recon-li2 ins d)
   (: (go m val)
-      (? !(two? m) (mask64 val)
+      (? (atom? m) (mask64 val)
          (: i <m
             (? (i-bad i) ()
                (: o (ops-arm (i-ops i))
-                  (? !(= (abs-arm <o) d) ()
+                  (? !(abs-arm <o = d) ()
                      (: hi (idx-of (i-ops i) "lsl #")
-                        sh (? (charm? hi) (s2i (snip (i-ops i) (hi + 5) (tally (i-ops i)))) 0)
-                        imm (? (1 < tally o) (: v (imm-arm (o 1)) (? (nil? v) 0 v)) 0)
+                        sh (? (charm? hi) (s2i (snip (i-ops i) (hi + 5) #(i-ops i))) 0)
+                        imm (? (1 < #o) (: v (imm-arm (o 1)) (? !v 0 v)) 0)
                         mn (i-mnem i)
                         (? ((mn = "mov") || (mn = "movz")) (go >m (mask64 (imm * pow2 sh)))
-                           (mn = "movk") (go >m (mask64 ((mask64 (val - (% (divp val (pow2 sh)) 65536) * pow2 sh)) + (% imm 65536) * pow2 sh)))
-                           (mn = "movn") (go >m (mask64 (M64 - 1 - (% imm 65536) * pow2 sh)))
+                           (mn = "movk") (go >m (mask64 ((mask64 (val - ((divp val (pow2 sh)) % 65536) * pow2 sh)) + (imm % 65536) * pow2 sh)))
+                           (mn = "movn") (go >m (mask64 (M64 - 1 - (imm % 65536) * pow2 sh)))
                            (mn = "orr") (go >m (mask64 imm))
                            ())))))))
      (go ins 0))
@@ -418,7 +418,7 @@
                  imm (? (k = 0) (imm-small 0) (k = 1) (rnd 65536) (k = 2) (imm-s32 0)
                         (k = 3) (imm-u32 0) (k = 4) (imm-big 0) (0 - rint 1 65535))
                  [[['li d imm]]
-                  (\ ins (? !(two? ins) "no insns"
+                  (\ ins (? (atom? ins) "no insns"
                             (: got (recon-li2 ins d)
                                (? !(charm? got) "li chain unreadable"
                                   (got != mask64 imm) ("li value " + show0x got + " != " + show0x (mask64 imm))
@@ -441,7 +441,7 @@
                        b (rrand 0) o (arm-disp 0) s (nrand 0)
                        [[[(intern <row) b o s]] (spec1 (row 1) [['rw s 'w] ['m b o]])]))]
    ["pushpop" (\ _ (: base-sp? (\ ins (: m (mem-arm ((ops-arm (i-ops <ins)) 1))
-                                          (? (!(two? m) || !((abs-arm <m) = 'sp)) "base != sp" ())))
+                                          (? ((atom? m) || !((abs-arm <m) = 'sp)) "base != sp" ())))
                       (? (coin 0)
                          (: s (nrand 0)
                             [[['push s]]
@@ -490,16 +490,16 @@
                         (0 - rint 4294967296 4611686018427387904))
                  [[['li d imm]]
                   (\ ins
-                     (? (!(two? ins) || any i-bad ins) "bad li decode"
+                     (? ((atom? ins) || any i-bad ins) "bad li decode"
                         (: (go m val)
-                            (? !(two? m) (? ((mask64 val) = (mask64 imm)) ()
+                            (? (atom? m) (? ((mask64 val) = (mask64 imm)) ()
                                             ("li value " + show0x (mask64 val) + " != " + show0x (mask64 imm)))
                                (: i <m o (ops-comma (i-ops i)) mn (i-mnem i)
-                                  (? !(= (abs-rv <o) d) ("li dest " + <o + " != " + string d)
+                                  (? !(abs-rv <o = d) ("li dest " + <o + " != " + string d)
                                      (: v2 (? (mn = "li") (imm-rv (o 1))
-                                              (mn = "lui") (: v (* (imm-rv (o 1)) 4096)
+                                              (mn = "lui") (: v ((imm-rv (o 1)) * 4096)
                                                               (? (2147483648 <= v) (v - 4294967296) v))
-                                              (mn = "addiw") (: s (% (mask64 (val + imm-rv (o 2))) 4294967296)
+                                              (mn = "addiw") (: s ((mask64 (val + imm-rv (o 2))) % 4294967296)
                                                                 (? (2147483648 <= s) (s - 4294967296) s))
                                               (mn = "addi") (val + imm-rv (o 2))
                                               (mn = "slli") (val * pow2 (imm-rv (o 2)))
@@ -547,9 +547,9 @@
                  [[[(intern <row) b o s]] (rv-spec [[[(row 1)] [['r s] ['m b o]]]])]))]
    ["ld_far" (\ _ (: d (rv-rand 0) b (rv-rand 0)
                      off ((? (coin 0) 1 -1) * rint 2048 2147479552)
-                     l0 (% (mask64 off) 4096)
+                     l0 ((mask64 off) % 4096)
                      lo (? (2047 < l0) (l0 - 4096) l0)
-                     hi (% (int ((mask64 (off - lo)) / 4096)) 1048576)
+                     hi ((int ((mask64 (off - lo)) / 4096)) % 1048576)
                      [[['ld d b off]]
                       (rv-spec [['("lui") [['r 't6] ['i hi]]]
                                 ['("add") [['r 't6] ['r 't6] ['r b]]]
@@ -569,10 +569,10 @@
    ["shift" (\ _ (: row (pick '(("shl" "slli") ("shr" "srli") ("sar" "srai"))) d (rv-rand 0) c (rint 1 63)
                     [[[(intern <row) d c]] (rv-spec [[[(row 1)] [['r d] ['r d] ['i c]]]])]))]
    ["rot" (\ _ (: op (pick '("rol" "ror")) d (rv-rand 0) c (rint 1 63)
-                  k (? (op = "ror") c (% (64 - c) 64))
+                  k (? (op = "ror") c ((64 - c) % 64))
                   [[[(intern op) d c]]
                    (rv-spec [['("srli") [['r 't6] ['r d] ['i k]]]
-                             ['("slli") [['r d] ['r d] ['i (% (64 - k) 64)]]]
+                             ['("slli") [['r d] ['r d] ['i ((64 - k) % 64)]]]
                              ['("or") [['r d] ['r d] ['r 't6]]]])]))]
    ["shiftv" (\ _ (: row (pick '(("shlv" "sll") ("shrv" "srl") ("sarv" "sra")))
                      d (pick (filter (\ r !(r = 'r1)) rv-gpregs))
@@ -622,7 +622,7 @@
                        (\ ins (: r (run-spec ins [['("fcvt.l.d") [['r g] ['r f]]]] 0)
                                  (? (string? r) r
                                     (: o (ops-comma (i-ops <ins))
-                                       (? (((tally o) = 3) && ((o 2) = "rtz")) ()
+                                       (? ((#o = 3) && ((o 2) = "rtz")) ()
                                           "fcvt.l.d rm != rtz")))))])))]
    ["fldst" (\ _ (: which (pick '("ldsd" "stsd" "ldss" "stss"))
                     f (rv-frand 0) b (rv-rand 0) o (rv-imm12 0)
@@ -651,8 +651,8 @@
    ["rv64" 'rv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d,+c" "#" 1)) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
  (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
- fz-n (: v ("" + getenv "FUZZ_N") (? (0 < tally v) (s2i v) 8))
- fz-seed (: v ("" + getenv "FUZZ_SEED") (? (0 < tally v) (s2i v) 20250717))
+ fz-n (: v ("" + getenv "FUZZ_N") (? (0 < #v) (s2i v) 8))
+ fz-seed (: v ("" + getenv "FUZZ_SEED") (? (0 < #v) (s2i v) 20250717))
  fz-arch ("" + getenv "FUZZ_ARCH")
 
  (run-lane row)
@@ -674,9 +674,8 @@
                                      (llvm2 && !(llvm-ok? hx)) "llvm-mc reject"
                                      ())))
                           (? (string? r)
-                             (: _ (puts ("  [" + cn + "#" + show k + "] " + show ir + "\n      hex="
-                                         + ("" + hx) + "  :: " + r + "\n"))
-                                (go (k + 1) p (fl + 1)))
+                             (puts ("  [" + cn + "#" + show k + "] " + show ir + "\n      hex="
+                                         + ("" + hx) + "  :: " + r + "\n"), go (k + 1) p (fl + 1))
                              (go (k + 1) (p + 1) fl))))
                    (: r (go 0 0 0)
                       _ (puts ("  " + cn + "  " + show <r + " pass  " + show <>r + " fail"
@@ -686,12 +685,12 @@
 
  ; a fuzz_arch no lane answers to refuses: filtering to nothing would run zero
  ; classes, print "all classes green" and exit 0 -- a spelling mistake reading as a pass.
- lanes (? (0 < tally fz-arch)
+ lanes (? (0 < #fz-arch)
            (: ls (filter (\ r (<r = fz-arch)) arches)
               (? (two? ls) ls (scare 'fuzz-arch fz-arch)))
            arches)
  bad (foldl (\ a r (? (tool? (r 9)) (a + run-lane r)
-                      (: _ (puts ("  (" + <r + " skipped: no " + r 9 + ")\n")) a)))
+                      (puts ("  (" + <r + " skipped: no " + r 9 + ")\n"), a)))
             0 lanes)
  _ (puts ("\nholo fuzz: " + (? (0 < bad) ((show bad) + " FAILURES\n") "all classes green\n")))
  (? (0 < bad) (quit 1) (quit 0)))

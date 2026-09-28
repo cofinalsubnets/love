@@ -126,7 +126,8 @@ many-declarator declaration refuse by name), a statement expression's value type
 own locals stand and a for-init's variable typing the rest of the loop (177-scopetype.c; clay
 says the statement expression back as `({ .. })`), `case A ... B` and `[a ... b] =` ranges, a global register variable on the
 stack pointer, `__typeof_unqual__`, an enumerator past the int word, a `_Static_assert` or a
-bare `;` standing as a struct member, an anonymous bitfield over a typedef or mid-list, brace elision in nested initialisers, pointer-to-array declarators, functions returning
+bare `;` standing as a struct member, an anonymous bitfield over a typedef or mid-list, brace elision in nested initialisers, a struct element given an expression of its own struct
+(`{ v }`, `{ mk(1), 4 }`: taken whole, never elided into its first field; 206-structinit.c), pointer-to-array declarators, functions returning
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
 chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
 `__typeof__` over locals, globals, struct members, dereferences and function names, a local

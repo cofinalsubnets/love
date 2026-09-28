@@ -179,7 +179,7 @@
                     x-w32 s 0, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-w32 s 0,
                     x-flush s)
       _ (withdraw ())
-      _ (waitp "wv-withdraw-unstamped" (u \ one? (x-getprop-atoms s wv (x-intern s "WM_STATE"))) 50)
+      _ (waitp "wv-withdraw-unstamped" (u \ atom? (x-getprop-atoms s wv (x-intern s "WM_STATE"))) 50)
       _ (rest 300)                                                               ; let any resurrecting render land before the read
       _ (waitp "wv-withdraw-unmapped" (u \ 0 = mstv ()) 50)
       _ (mapv ())
@@ -195,11 +195,11 @@
       a-ic (x-intern s "WM_CHANGE_STATE")
       a-li (x-intern s "_NET_CLIENT_LIST")
       wr (w1 + 3)
-      _ (: _ (x-w8 s 1) _ (x-w8 s 0) _ (x-w16 s 9)                               ; a plain tile
-           _ (x-w32 s wr) _ (x-w32 s root)
-           _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w16 s 300) _ (x-w16 s 200)
-           _ (x-w16 s 1) _ (x-w16 s 1) _ (x-w32 s 0)
-           _ (x-w32 s 2) _ (x-w32 s 16777215) (x-flush s))
+      _ (x-w8 s 1, x-w8 s 0, x-w16 s 9,                                          ; a plain tile
+           x-w32 s wr, x-w32 s root,
+           x-w16 s 0, x-w16 s 0, x-w16 s 300, x-w16 s 200,
+           x-w16 s 1, x-w16 s 1, x-w32 s 0,
+           x-w32 s 2, x-w32 s 16777215, x-flush s)
       (mapr u) (x-w8 s 8, x-w8 s 0, x-w16 s 2, x-w32 s wr, x-flush s)
       (mstr u) <(x-attrs s wr)
       (known? u) (any (= wr) (x-getprop-atoms s root a-li))
@@ -503,8 +503,8 @@
       ; --- 8. MappingNotify: poke one unused keycode's mapping (a stand-in for
       ;     setxkbmap / a keyboard replug) -- lux re-resolves and regrabs, and
       ;     the chord still lands ---
-      _ (: _ (x-w8 s 100) _ (x-w8 s 1) _ (x-w16 s 3) _ (x-w8 s 255) _ (x-w8 s 1)   ; ChangeKeyboardMapping: keycode 255 -> NoSymbol
-           _ (x-w16 s 0) _ (x-w32 s 0) (x-flush s))
+      _ (x-w8 s 100, x-w8 s 1, x-w16 s 3, x-w8 s 255, x-w8 s 1,                    ; ChangeKeyboardMapping: keycode 255 -> NoSymbol
+           x-w16 s 0, x-w32 s 0, x-flush s)
       _ (rest 200)                                                               ; let the regrab land
       _ (chord ())
       _ (waitp "chord-after-remap" (u \ ! (i0 = ask chidx)) 50)

@@ -32,7 +32,7 @@
 (borrow 'tui)
 (:
  ; --- reading a cell: repl-style, one form, unreadable text is a label ---
- (glean s) (sound (+ "(" (+ s ")")) @ (d . _) (two? d ? d))
+ (glean s) (sound ("(" + s + ")") @ (d . _) (two? d ? d))
 
  ; --- the cell-name shape: one letter, then digits (a1 .. z999) ---
  (cell? n) (? (name? n) (: s (string n) t (tally s)
@@ -73,13 +73,13 @@
  (cell! sh n s) (#s ? (pin (sh 0) n s) (pull (sh 0) n 0),
                  pin sh 1 {},
                  sh)
- (cell sh n) (peep (sh 0) n ())
+ (cell sh n) ((sh 0) n)
 
  ; --- worth: demand-evaluate, memoize. the formula becomes a lambda over
  ; its deps and is applied to their worths (cells recurse; labels are their
  ; spelling), so nothing global is touched and no missing ever fires ---
  (worth1 sh s) (: f (glean s)
-                  (? (one? f) s                        ; unreadable: the text itself
+                  (? (atom? f) s                        ; unreadable: the text itself
                    (: ds (deps f)
                       lam (ev $ !ds ? f (['\] + ds + [f]))
                       vs (map (d \ cell? d ? (worth sh d) (string d)) ds)
@@ -107,14 +107,14 @@
  (stow sh path) (: p (open path "w")
                  (lit? p ?
                   (say p "(manifest\n",
-                   map (\ n (say p $ " (" + string n + " " + show (peep (sh 0) n "") + ")\n"))
+                   map (n \ say p $ " (" + string n + " " + show (peep (sh 0) n "") + ")\n")
                        (sort (keys (sh 0))),
                    say p ")\n",
                    flush p,
                    close p,
                    1)))
  (unstow sh path) (: p (open path "r")
-                     (? !(lit? p) sh
+                     (!(lit? p) ? sh
                       (: t (slurp p)
                          r (sound t)
                          d (two? r ? <r)
@@ -135,7 +135,7 @@
  ; {'sh 'path 'cx 'cy 'top 'edit 'over 'w 'h}, the shape lupa and mc hold. the stage
  ; brackets raw mode and the alternate screen, re-reads the tty every keystroke (so a
  ; resize lands), and decodes keys through edkey; eof leaves.
- (upto n f) ((: (go i) (i < n ? (f i, go (i + 1)))) 0)
+ (upto n f) (:- (go 0) (go i) (i < n ? (f i, go (i + 1))))
  (cnom cx cy) (name $ string (97 + cx) + show (cy + 1))
  (min2 a b) (a < b ? a b)
  (max2 a b) (a < b ? b a)
@@ -172,14 +172,14 @@
      say j "\e[K\r\n",
      ; the header row: column letters, the cursor's lit
      say j "    ",
-     upto nc (\ i (: t (padl (string (97 + i) + "    ") 7)
+     upto nc (i \ (: t (padl (string (97 + i) + "    ") 7)
                    (i = cx ? (say j "\e[7m"),
                     say j (padr t 9),
                     i = cx ? (say j "\e[0m"),
                     say j " "))),
      say j "\e[K\r\n",
      ; the sheet
-     upto nr (\ k (: cy2 (top + k)
+     upto nr (k \ (: cy2 (top + k)
                    (say j (padl (show (cy2 + 1)) 3),
                     say j " ",
                     upto nc (i \ drawcell j sh i cy2 (i = cx && cy2 = cy)),
@@ -193,7 +193,7 @@
      say j "\e[J",
      ; editing: the terminal cursor rides the formula bar's end
      string? edit ?
-      (say j (+ "\e[1;" (+ (show (+ (tally (string cur)) (+ 4 (tally edit)))) "H\e[?25h"))),
+      (say j ("\e[1;" + show (#(string cur) + 4 + #edit) + "H\e[?25h")),
      (slurp j)))
 
  ; one key, one step on the tablet. the codes are cli's edkey: arrows are the
@@ -225,8 +225,8 @@
                     (stage (manifest-frame d) (manifest-key d) (_ \ d 'over)))
 
  manifest-usage "usage: love manifest [FILE]   (arrows move . enter edits . w stows . q quits)"
- (manifest-main as) (? (one? as) (manifest "", 0)
-                       (one? >as) (manifest <as, 0)
+ (manifest-main as) (? (atom? as) (manifest "", 0)
+                       (atom? >as) (manifest <as, 0)
                        (say err "manifest: one sheet at a time\n", flush err, 2))
  _ (pins (cite 'verbs 'tab) 'manifest
          (udoor 'manifest manifest-main manifest-usage 1 1)))

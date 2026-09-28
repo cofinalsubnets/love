@@ -40,7 +40,7 @@
    (lname t) (: n #t (go k) (k < n && t k = 39 ? (go (k + 1)) (snip t k n)) (go 0))
    ; the roster entry for the token text t: a bare name, or (name "hint")
    (lint-dep roster t)
-    (? (one? roster) ()
+    (? (atom? roster) ()
        (: e <roster
           nm (two? e ? <e e)
           (string nm = t ? [1 e] (lint-dep >roster t))))
@@ -61,7 +61,7 @@
    ; at, pl/qd the singleton rule's two bits, am the match bit, pd the deferred
    ; verdicts. e1 is an index read back out of src, never accumulated as text.
    (lelem stk i)
-    (one? stk ? stk
+    (atom? stk ? stk
      (: f <stk ne (f 'ne + 1)
       (pin f 'ne ne, (ne = 1 ? (pin f 'e1 i) 0), stk)))
 
@@ -111,9 +111,9 @@
    ; the deferral home: () to warn now, else [depth idx] naming the binder frame
    ; (1 parent, 2 grandparent) and the element index the verdict keys on
    (ldefer src n rest)
-    (? (one? rest) ()
+    (? (atom? rest) ()
        (lbind? src n <rest) [1 (<rest 'ne)]
-       (one? >rest) ()
+       (atom? >rest) ()
        (lbind? src n <>rest) [2 (<>rest 'ne)])
    ; hang (idx . warn) on the binder's pend slot
    (lpend rest d idx wr)
@@ -135,7 +135,7 @@
        ; a token just ended at i, having started at ti/tc. a no-op until a config asks
        (lend line tc ti i warns)
         (: t (snip src ti i)
-         (? (one? dp) warns
+         (? (atom? dp) warns
           (: r (lint-dep dp (lname t))
            (two? r ? ([line tc (lint-depmsg <>r) 'deprecated] . warns) warns))))
 
@@ -179,7 +179,7 @@
                      (? it (lend line tc ti i warns) warns))
                  (c = 41 || c = 93 || c = 125)                                 ; ) ] }  -- match
                   (: w0 (? it (lend line tc ti i warns) warns)
-                     (? (one? stk)
+                     (? (atom? stk)
                          (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
                             ([line col ("stray " + string c) 'balance] . w0))
                         !(<stk 'cl = c)

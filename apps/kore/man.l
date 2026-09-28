@@ -46,7 +46,7 @@
                     (go i) (? (i < 0) f (f i = 46) (snip f 0 i) (go (i - 1)))
                     (go (n - 1)))
    (man-stem f)
-    (man-nodot ((: (go l) (? (one? l) f (man-suf? f <l) (snip f 0 (#f - #(<l))) (go >l))) manzs))
+    (man-nodot ((: (go l) (? (atom? l) f (man-suf? f <l) (snip f 0 (#f - #(<l))) (go >l))) manzs))
    ; a path's last component, and the first component of a relative one
    (man-base p) (: n #p
                    (go i) (? (i < 0) p (p i = 47) (snip p (i + 1) n) (go (i - 1)))
@@ -58,31 +58,31 @@
    ; is preferred to foo.1p.gz without either being spelled out here
    (man-hits d nm)
     (: r (readdir d)
-       (? !(two? r) () (sort (filter (\ f (man-stem f = nm)) r))))
+       (? (atom? r) () (sort (filter (f \ (man-stem f = nm)) r))))
    (man-look nm sec)
     ((: (go rs)
-        (? !(two? rs) ()
+        (? (atom? rs) ()
            (: d (<rs + "/man" + sec)
               h (? (udirp d) (man-hits d nm) ())
               (? (two? h) (d + "/" + <h) (go >rs)))))
      (man-roots ()))
    ; a name with no section given walks the sections in order
    (man-find nm sec)
-    (? (tally sec) (man-look nm sec)
-       ((: (go ss) (? !(two? ss) ()
+    (? #sec (man-look nm sec)
+       ((: (go ss) (? (atom? ss) ()
                       (: p (man-look nm <ss) (? p p (go >ss))))) mansecs))
    ; the magic decides, not the name: gzip is 1f 8b, and a page may carry either spelling
    (man-gz? s) (1 < #s && s 0 = 31 && s 1 = 139)
    (man-text p)
     (: r (uread p)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (: s <>r
              (? !(man-gz? s) s
                 (: u ((cite 'gz 'gz-unzip) s) (? (two? u) <>u ()))))))
    ; `.so man1/other.1` is the whole of a redirect page
    (man-so s)
-    (: l (filter (\ x (tally x && !(man-pre? x ".\\\""))) (lines s))
-       (? !(two? l) () (man-pre? <l ".so ") (snip <l 4 #(<l)) ()))
+    (: l (filter (x \ (#x && !(man-pre? x ".\\\""))) (lines s))
+       (? (atom? l) () (man-pre? <l ".so ") (snip <l 4 #(<l)) ()))
    ; the man root a page path sits under -- up past the file AND its section directory
    (man-root p) (: n #p
                    (go i k) (? (i < 0) "" (p i = 47) (? k (snip p 0 i) (go (i - 1) 1)) (go (i - 1) k))
@@ -99,7 +99,7 @@
    (man-mdoc? s)
     (: l (lines s)
        (go ls th)
-        (? !(two? ls) th
+        (? (atom? ls) th
            (man-pre? <ls ".TH ") 0
            (man-pre? <ls ".Dd ") 1
            (man-pre? <ls ".Sh ") 1
@@ -122,17 +122,17 @@
                          (? (man-mdoc? s2)
                              [0 ("man: " + nm + " is an mdoc page, which is not read yet")]
                             [1 (? p2 p2 p) ((cite 'lapiz 'rf->tty) s2 w)]))))))))
-   (man-moan m) (: _ (say err m) _ (put err 10) 1)
+   (man-moan m) (say err m, put err 10, 1)
    ; a leading operand is the section only if it LOOKS like one -- a digit, then up to three
    ; more -- and only if a name follows it. `man 411toppm` names a page, and taking its
    ; first byte for a section leaves no name at all and answers the usage instead.
    (man-sec? rest)
-    ((two? rest) && (two? >rest) && (0 < #(<rest) <= 4) && (47 < (<rest 0) < 58))
+    (two? rest && two? >rest && (0 < #(<rest) <= 4) && (47 < (<rest 0) < 58))
    (man-main as)
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 man-usage))
-       _ (: c (uoptun t '(119)) (? (nil? c) () (udie 2 ("man: unknown option -" + string c))))
+       _ (: c (uoptun t '(119)) (? !c () (udie 2 ("man: unknown option -" + string c))))
        rest <>>o
        sec? (man-sec? rest)
        sec (? sec? <rest "")
@@ -143,15 +143,14 @@
        w (? (two? hw) <>hw 80)
        ; -w reads nothing: the search is the whole answer
        (wh nm) (: p (man-find nm sec)
-                  (? p (: _ (puts (p + "\n")) 0)
+                  (? p (puts (p + "\n"), 0)
                      (man-moan ("man: no manual entry for " + nm))))
        (one nm) (: r (man-lay nm sec w)
                    (? !<r (man-moan <>r)
-                      !(two? hw) (: _ (puts (usgr <>>r)) 0)
-                      (: _ (pgride () (lines <>>r)
-                                   (nm + (tally sec ? ("(" + sec + ")") "")) in
-                                   <>hw <hw (tablet 0) "")
-                         0)))
+                      (atom? hw) (puts (usgr <>>r), 0)
+                      (pgride () (lines <>>r)
+                                   (nm + (#sec ? ("(" + sec + ")") "")) in
+                                   <>hw <hw (tablet 0) "", 0)))
        ; the status is the worst of the names, and a charm: the seat quits with it
        (foldl (\ a nm (: r (peep t 119 0 ? (wh nm) (one nm)) (? (a || r) 1 0))) 0 nms)))
 ) ; module 'kore

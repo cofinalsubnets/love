@@ -35,7 +35,7 @@
    ;; own surface carries the rest (imm?, at, jot).
    parts (peep (peep backends 'rv64 ()) 'parts ())
    _ (? (tablet? parts) 0
-        (: _ (say err "FAIL test_rvc: the rv64 backend lays no `parts` door\n") (quit 1)))
+        (say err "FAIL test_rvc: the rv64 backend lays no `parts` door\n", quit 1))
    rvc-of   (peep parts 'rvc-of ())
    rv-patch (peep parts 'rv-patch ())
    rv-cbase (peep parts 'rv-cbase ())
@@ -46,14 +46,14 @@
    (wrf p t) (: q (open p "w") _ (say q t) (close q))
    (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
-   (lines s) (: n (tally s)
+   (lines s) (: n #s
                 (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) . acc) acc))
                                 ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) . acc))
                                 (go i (j + 1) acc))
                 (go 0 0 ()))
    (ws? c) ((c = 32) || (c = 9))
    ; squash runs of blank to one space and strip the ends -- llvm-mc indents with a tab
-   (norm s) (: n (tally s)
+   (norm s) (: n #s
                (go i acc sp) (? (n <= i) (rev acc)
                                 (ws? (s i)) (go (i + 1) acc 1)
                                 (go (i + 1) ((s i) . (? (sp && (two? acc)) (32 . acc) acc)) 0))
@@ -108,12 +108,12 @@
    ; keep only those that compress, paired with their C word
    pairs (foldl (\ a w (: c (rvc-of w)
                            (? (two? c) ([w ((c 0) | ((c 1) << 8))] . a) a))) () words)
-   npair (tally pairs)
+   npair #pairs
 
    _ (? (tool? "llvm-mc") 0
-        (: _ (say out "test_rvc: skipped (needs llvm-mc)\n") (quit 0)))
+        (say out "test_rvc: skipped (needs llvm-mc)\n", quit 0))
    _ (? (0 < npair) 0
-        (: _ (say err "FAIL test_rvc: the sweep compressed nothing -- is rvc-of wired in?\n") (quit 1)))
+        (say err "FAIL test_rvc: the sweep compressed nothing -- is rvc-of wired in?\n", quit 1))
 
    _ (wrf (tmpd + "/.rvc32.s") (foldl (\ a p (a + (bytes-of <p 4) + "\n")) "" pairs))
    _ (wrf (tmpd + "/.rvc16.s") (foldl (\ a p (a + (bytes-of (p 1) 2) + "\n")) "" pairs))
@@ -123,32 +123,32 @@
    d32 (lines (rdf (tmpd + "/.rvc32.out")))
    d16 (lines (rdf (tmpd + "/.rvc16.out")))
 
-   (pfx? s p) (: k (tally p) ((k <= tally s) && ((snip s 0 k) = p)))
-   (idx-of s sub) (: n (tally s) k (tally sub)
+   (pfx? s p) (: k #p ((k <= #s) && ((snip s 0 k) = p)))
+   (idx-of s sub) (: n #s k #sub
                      (go i) (? ((n - k) < i) () ((snip s i (i + k)) = sub) i (go (i + 1)))
                      (go 0))
    ; `add rd, zero, rs2` and `mv rd, rs2` are one instruction -- see the header
    (demv s) (: t (norm s)
                (? (pfx? t "add ")
                   (: c (idx-of t ", zero, ")
-                     (? (charm? c) ("mv " + (snip t 4 c) + ", " + (snip t (c + 8) (tally t))) t))
+                     (? (charm? c) ("mv " + (snip t 4 c) + ", " + (snip t (c + 8) #t)) t))
                   t))
-   (firstn n l) (? ((n < 1) || !(two? l)) () (<l . firstn (n - 1) >l))
+   (firstn n l) (? ((n < 1) || (atom? l)) () (<l . firstn (n - 1) >l))
 
-   _ (? ((tally d32) = npair) 0
-        (: _ (say err ("FAIL test_rvc: llvm-mc decoded " + show (tally d32)
-                        + " of " + show npair + " full words\n")) (quit 1)))
-   _ (? ((tally d16) = npair) 0
-        (: _ (say err ("FAIL test_rvc: llvm-mc decoded " + show (tally d16)
-                        + " of " + show npair + " compressed words -- an unencodable C form?\n")) (quit 1)))
+   _ (? (#d32 = npair) 0
+        (say err ("FAIL test_rvc: llvm-mc decoded " + show #d32
+                        + " of " + show npair + " full words\n"), quit 1))
+   _ (? (#d16 = npair) 0
+        (say err ("FAIL test_rvc: llvm-mc decoded " + show #d16
+                        + " of " + show npair + " compressed words -- an unencodable C form?\n"), quit 1))
 
    bad (foldl (\ a i (: x (demv (d32 i)) y (norm (d16 i))
                          (? (x = y) a ([((pairs i) 0) x y] . a)))) () (jot npair))
-   _ (foldl (\ _ b (: _ (say err ("  word " + show (b 0) + ": 32-bit `" + (b 1)
-                                   + "` vs C `" + (b 2) + "`\n")) 0)) 0 (firstn 12 bad))
-   _ (? !(two? bad) 0
-        (: _ (say err ("FAIL test_rvc: " + show (tally bad) + " of " + show npair
-                        + " compressions change meaning\n")) (quit 1)))
+   _ (foldl (\ _ b (say err ("  word " + show (b 0) + ": 32-bit `" + (b 1)
+                                   + "` vs C `" + (b 2) + "`\n"), 0)) 0 (firstn 12 bad))
+   _ (? (atom? bad) 0
+        (say err ("FAIL test_rvc: " + show #bad + " of " + show npair
+                        + " compressions change meaning\n"), quit 1))
 
    ;; -- part two: the label-relative C forms. laid consecutively, so instruction i sits at 2i
    ;;    and its target at 2i + rel -- which is the offset llvm-mc prints back.
@@ -159,36 +159,36 @@
    cjrels (map (\ i ((i * 2) - 2048)) (upto 2047))       ; every even offset cj reaches
    cbrels (map (\ i ((i * 2) - 256)) (upto 255))         ; and every even offset cb reaches
    cbcases (flat (map (\ r (flat (map (\ f3 (map (\ rl [r f3 rl]) cbrels)) '(0 1)))) pregs))
-   cjw (map (\ i (rv-patch 'cj ((i * 2) + (cjrels i)) (i * 2) 2 0xA001)) (jot (tally cjrels)))
+   cjw (map (\ i (rv-patch 'cj ((i * 2) + (cjrels i)) (i * 2) 2 0xA001)) (jot #cjrels))
    cbw (map (\ i (: c (cbcases i)
                      (rv-patch 'cb ((i * 2) + (c 2)) (i * 2) 2
                                (rv-cbase (bform (c 1) (c 0) 0) (c 2)))))
-            (jot (tally cbcases)))
+            (jot #cbcases))
    want (map (\ r ("j " + show r)) cjrels
           + map (\ c ((? ((c 1) = 0) "beqz " "bnez ") + ((abin ((c 0) - 8))
                         + (", " + show (c 2))))) cbcases)
    _ (wrf (tmpd + "/.cbr.s") (foldl (\ a b (a + (bhex b) + "\n")) "" (cjw + cbw)))
    _ (sh (mc + " < " + tmpd + "/.cbr.s > " + tmpd + "/.cbr.out 2>/dev/null"))
    dbr (map norm (lines (rdf (tmpd + "/.cbr.out"))))
-   _ (? ((tally dbr) = tally want) 0
-        (: _ (say err ("FAIL test_rvc: llvm-mc decoded " + show (tally dbr) + " of "
-                        + show (tally want) + " compressed branches\n")) (quit 1)))
+   _ (? (#dbr = #want) 0
+        (say err ("FAIL test_rvc: llvm-mc decoded " + show #dbr + " of "
+                        + show #want + " compressed branches\n"), quit 1))
    bbad (foldl (\ a i (? ((dbr i) = (want i)) a ([(want i) (dbr i)] . a)))
-               () (jot (tally want)))
-   _ (foldl (\ _ b (: _ (say err ("  wanted `" + (b 0) + "` got `" + (b 1) + "`\n")) 0))
+               () (jot #want))
+   _ (foldl (\ _ b (say err ("  wanted `" + (b 0) + "` got `" + (b 1) + "`\n"), 0))
             0 (firstn 12 bbad))
-   _ (? !(two? bbad) 0
-        (: _ (say err ("FAIL test_rvc: " + show (tally bbad) + " of " + show (tally want)
-                        + " compressed branches carry the wrong offset\n")) (quit 1)))
+   _ (? (atom? bbad) 0
+        (say err ("FAIL test_rvc: " + show #bbad + " of " + show #want
+                        + " compressed branches carry the wrong offset\n"), quit 1))
    ;; the domain: rv-cbase must refuse what cb cannot say -- out of reach either way, a
    ;; register outside the window, a second source, a compare that is not beq/bne.
    nocb '((0 8 0 256) (0 8 0 -258) (0 7 0 100) (0 16 0 100) (0 8 9 100) (4 8 0 100) (6 8 0 100))
    loose (foldl (\ a c (? (imm? (rv-cbase (bform (c 0) (c 1) (c 2)) (c 3)))
                           (c . a) a)) () nocb)
-   _ (? !(two? loose) 0
-        (: _ (say err ("FAIL test_rvc: rv-cbase took " + show (tally loose)
-                        + " cases CB cannot encode\n")) (quit 1)))
+   _ (? (atom? loose) 0
+        (say err ("FAIL test_rvc: rv-cbase took " + show #loose
+                        + " cases CB cannot encode\n"), quit 1))
    _ (say out ("test_rvc: " + show npair
                 + " compressed words decode identically to the 32-bit words they replace, and "
-                + show (tally want) + " c.j/c.beqz/c.bnez offsets read back exactly\n"))
+                + show #want + " c.j/c.beqz/c.bnez offsets read back exactly\n"))
    0)

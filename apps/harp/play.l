@@ -250,7 +250,7 @@
    (harp-atof s) (sound s @ (r . _) r 0)
    (harp-main as)
     (: (go l o ps)
-        (one? l ? (harp-fire o (lrev ps))
+        (atom? l ? (harp-fire o (lrev ps))
          (<l @
                "-n" (go >>l (pin o 'cycles (harp-atoi <>l)) ps)
                "-r" (go >>l (pin o 'rate (harp-atoi <>l)) ps)
@@ -287,10 +287,10 @@
        tail (int (rate / 2))                       ; half a second for the last decay
        g    (harp-scale * (o 'gain))
        (? (bars = 'bad) 1
-          !(two? ps2) (: _ (say err (harp-usage + "\n")) 1)
-          (o 'print) (: _ (harp-print p c0 ncyc) 0)
-          (peep o 'wav ()) (: _ (harp-wav p c0 ncyc rate cps tail g (o 'wav)) 0)
-          (: _ (harp-horn p c0 ncyc rate cps tail g) 0)))
+          !(two? ps2) (say err (harp-usage + "\n"), 1)
+          (o 'print) (harp-print p c0 ncyc, 0)
+          (peep o 'wav ()) (harp-wav p c0 ncyc rate cps tail g (o 'wav), 0)
+          (harp-horn p c0 ncyc rate cps tail g, 0)))
    ; ..and as a verb of the artifact: `love harp`
    _ (pins (cite 'verbs 'tab) 'harp (udoor 'harp harp-main harp-usage 0 0)))
 ) ; module play

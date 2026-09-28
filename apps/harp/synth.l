@@ -95,8 +95,8 @@
                          r (? (0 = #t) hush
                               (trap (_ \ harp-read t) () (\ a b ['bad (show a + " " + show b)])))
                          (? (two? r) (pins st 'lmsg <>r 'dirty 1)
-                            (: _ (pins st 'nextp r 'lmsg "sent" 'dirty 1)
-                               (st 'on ? st (synth-play st)))))
+                            (pins st 'nextp r 'lmsg "sent" 'dirty 1,
+                             st 'on ? st (synth-play st))))
  ; play: from the next frame written, cycle 0; stop: no more pulled, what has not
  ; begun dropped, what rings rings out
  (synth-play st) (st 'on ? st (pins st 'on 1 'cyc 0 'cstart (st 'fpos) 'dirty 1))
@@ -120,9 +120,9 @@
          (go ()))))
  ; the buffer's ex words, vi's door: answers true for one of the loop's
  (synth-ex st s w arg) (: (num t) (: v <(sound t) (charm? v ? v ()))
-   (? (w = "send") (: _ (synth-send st (synth-text (s 'lines))) _ (pin s 'msg (st 'lmsg)) 1)
-      (w = "play") (: _ (synth-play st) _ (pin s 'msg "playing") 1)
-      (w = "stop") (: _ (synth-stop st) _ (pin s 'msg "stopped") 1)
+   (? (w = "send") (synth-send st (synth-text (s 'lines)), pin s 'msg (st 'lmsg), 1)
+      (w = "play") (synth-play st, pin s 'msg "playing", 1)
+      (w = "stop") (synth-stop st, pin s 'msg "stopped", 1)
       (w = "cps") (: v (num arg)
                      _ (? v (synth-cps! st v) ())
                      _ (pin s 'msg (v ? ("cps " + show (st 'cps)) "cps N"))
@@ -192,9 +192,9 @@
    pace (pacer ())
    (feed _) (: l (lead-of (pace! pace))
                (? hn (song-fill hn l (\ _ (synth-feed st hn))) 0))
-   (go _) (: _ (feed ())
-             _ (? (st 'dirty) (say out (synth-frame st), flush out, pin st 'dirty 0))
-             (keys st = 'quit || st 'over ? () (rest 4, go ())))
+   (go _) (feed (),
+           (? (st 'dirty) (say out (synth-frame st), flush out, pin st 'dirty 0)),
+           keys st = 'quit || st 'over ? () (rest 4, go ()))
    _ (go ())
    _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"), flush out)
    _ (hn ? (flush hn, close hn))

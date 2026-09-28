@@ -81,7 +81,7 @@
  (story-new lvl) {'lvl lvl 'x (lvl 'sx) 'y (lvl 'sy) 'vx 0 'vy 0 'win () 'over 0 'msg "" 'mode 'map 'cmd (ednew ())}
  ; the window's prompt and the command line are cli's editor, a key at a time: enter
  ; takes the line and clears it, escape is the caller's, the rest the editor's
- (wrap s w) (: (go ws cur acc) (? (one? ws) (rev (cur . acc))
+ (wrap s w) (: (go ws cur acc) (? (atom? ws) (rev (cur . acc))
                                   (: nx (0 < #cur ? (cur + " " + <ws) <ws)
                                      (? (#nx <= w) (go >ws nx acc)
                                         (0 < #cur) (go ws "" (cur . acc))
@@ -106,7 +106,7 @@
  ; the next step of the dialog: a say appends its words, an ask opens the prompt, a
  ; hatch runs the crawl, and nothing left closes the window
  (step g) (: w (g 'win) st (w 'steps)
-             (one? st ? (pin g 'win ())
+             (atom? st ? (pin g 'win ())
               (: s (pin w 'steps >st, <st)
                (<s @- (window-say g $ "?? " + show s)
                 'say (each >s (window-say g))
@@ -200,7 +200,7 @@
                shown (take k (drop (win 'top) ls))
                foot (? (win 'prompt) ("> " + edtext (win 'line))
                        (win 'top + k < #ls) "-- more --"
-                       (one? (win 'steps)) "-- esc --" "-- enter --")
+                       (atom? (win 'steps)) "-- esc --" "-- enter --")
                inner (map (l \ "| " + edfit l (ww - 4) " " + " |") (shown + (map (const "") ^(k - #shown)) + [foot]))
                top ("+-" + edfit (win 'title + " ") (ww - 3) "-" + "+")
                box ([top] + inner + [("+" + ((ww - 2) (\ t (t + "-")) "") + "+")])
@@ -229,7 +229,7 @@
  ; --- the library: a hall of shelves, one per crew module under root ------------------
  (first-para md) (:- (go ls "")
   ls (split "\n" md)
-  (go l acc) (? (one? l) acc
+  (go l acc) (? (atom? l) acc
                 (0 < #<l && <l 0 != 35) (go >l (0 < #acc ? (acc + " " + <l) <l))
                 (0 < #acc) acc
                 (go >l acc)))

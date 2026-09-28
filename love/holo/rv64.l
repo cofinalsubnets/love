@@ -112,7 +112,7 @@
    ;;    numbers (GPR, or FPR when 'f), 'v the overflow-bit register (-1 = no adds/subs yet). --
    rv-flags (tablet 0)
    (rv-flag-set f a b v)
-      (: _ (pin rv-flags 'f f) _ (pin rv-flags 'a a) _ (pin rv-flags 'b b) _ (pin rv-flags 'v v) ())
+      (pin rv-flags 'f f, pin rv-flags 'a a, pin rv-flags 'b b, pin rv-flags 'v v, ())
 
    (rv-cmp a b)
       (: an (rvn a)
@@ -403,7 +403,7 @@
          (? ((f3 < 2) && ((((w >> 20) & 31) = 0) && ((rvc-p? rs1) && rvcb-fits? rel)))
             (((6 + f3) << 13) | (((rvc-p rs1) << 7) | 1)) ()))
    (rv-shorten bs label rel)
-      (: n (tally bs)
+      (: n #bs
          (? (n < 5) ()
             !(fix? (bs (n - 1))) ()                  ; the tail must BE the jal fixup
             (: w ((bs (n - 5)) | (((bs (n - 4)) << 8)
@@ -655,22 +655,22 @@
    (rv-patch kind target site width aux)
       (: rb (target - site)
          (? (kind = 'j21)
-            (: _ (? ((rb >= -1048576) && (rb <= 1048575)) 0 (scare 'rv-jal-range rb))
-               (le32 (aux | rv-jword rb)))
+            (rb >= -1048576 && rb <= 1048575 ? 0 (scare 'rv-jal-range rb),
+             le32 (aux | rv-jword rb))
             (kind = 'pcrel)
             (: lo (rv-lo12 rb) hi ((rb - lo) // 4096)
                _ (? ((hi >= -524288) && (hi <= 524287)) 0 (scare 'rv-pcrel-range rb))
                (le32 ((aux % 4294967296) | ((hi & 1048575) << 12))
                 + le32 ((aux // 4294967296) | ((lo & 4095) << 20))))
             (kind = 'b13)
-            (: _ (? (rvb-fits? rb) 0 (scare 'rv-b13-range rb))
-               (le32 (aux | rv-bword rb)))
+            (rvb-fits? rb ? 0 (scare 'rv-b13-range rb),
+             le32 (aux | rv-bword rb))
             (kind = 'cj)
-            (: _ (? (rvj-fits? rb) 0 (scare 'rv-cj-range rb))
-               (le16 (aux | rv-cjword rb)))
+            (rvj-fits? rb ? 0 (scare 'rv-cj-range rb),
+             le16 (aux | rv-cjword rb))
             (kind = 'cb)
-            (: _ (? (rvcb-fits? rb) 0 (scare 'rv-cb-range rb))
-               (le16 (aux | rv-cbword rb)))
+            (rvcb-fits? rb ? 0 (scare 'rv-cb-range rb),
+             le16 (aux | rv-cbword rb))
             (kind = 'abs64) (le64 (target + aux))
             (scare 'badfix kind)))
 
@@ -691,14 +691,14 @@
    ;; the prefix ahead of the hop (fp predicate, or the s/ns subtract) is plain words, never a
    ;; fixup, so its element count is its byte count -- which is what puts the branch at pa + pre.
    _ (pin rv 'short (\ ins c rel
-        (? (= <ins 'jmp)                        ; the lone jal, and pa is its address
-           (? !((tally c) = 1) ()                 ; the chunk must BE that jal
+        (? (<ins = 'jmp)                        ; the lone jal, and pa is its address
+           (? (#c != 1) ()                 ; the chunk must BE that jal
               !(fix? <c) ()
-              !(= (fix-k <c) 'j21) ()
+              (fix-k <c != 'j21) ()
               (rvj-fits? rel) [(fix 2 'cj (ins 1) 0xA001)]
               ())
-           !(= <ins 'br) ()
-           (: pre ((tally c) - 5)
+           (<ins != 'br) ()
+           (: pre (#c - 5)
               (? ((pre < 0) || !(rvb-fits? (rel - pre))) ()
                  (rv-shorten c (ins 2) (rel - pre)))))))
    ;; the ('align n) filler unit: C.NOP 0001 LE. two bytes, not the wide nop's four -- pad-to

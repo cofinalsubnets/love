@@ -41,8 +41,8 @@
        rows (x64-disasm s 0)
        n {0 0} bmiss {0 0} mmiss {0 0} shown {0 0}
        (tell why r) (? (peep shown 0 0 < 4)
-                      (: _ (pin shown 0 (peep shown 0 0 + 1))
-                         (puts ("  " + why + " at " + show <r + " in " + bin + ": " + show (r 2) + " objdump: " + show (peep od <r ()) + "\n")))
+                      (pin shown 0 (peep shown 0 0 + 1),
+                         puts ("  " + why + " at " + show <r + " in " + bin + ": " + show (r 2) + " objdump: " + show (peep od <r ()) + "\n"))
                       0)
        _ (each rows (\ r (: their (peep od <r "") ours (ourmn (r 2))
                             _ (pin n 0 (peep n 0 0 + 1))

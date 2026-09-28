@@ -7,7 +7,8 @@
 
 (borrow 'salt)
 
-(: st-dir "out/.salt"
+; every path this lays is the pid's own, so two runs over one out/ keep apart
+(: st-dir ("out/.salt-" + show (getpid 0))
    _ (mkdir "out" 493) _ (mkdir st-dir 493)
    (st-put nm text) (: p (st-dir + "/" + nm)
                        q (open p "w")
@@ -54,8 +55,7 @@
 (: st-b (st-put "b.l" "(singleton 0)\n"))
 (test
  (: c (salt-file st-b (salt-file st-a {}))
-    (&& (0 = (salt-one c 'singleton 9))                  ; replaced
-        (2 = #(salt-all c 'deprecated))))         ; untouched
+    ((0 = (salt-one c 'singleton 9)) && (2 = #(salt-all c 'deprecated))))         ; untouched
  (: c (salt-file st-a (salt-file st-b {}))
     (1 = (salt-one c 'singleton 9))))                    ; ...and the other way round
 
@@ -73,7 +73,7 @@
 (: st-t (st-put "trunc.l" "(singleton 1)\n(deprecated foo\n"))
 (test
  (: c (salt-file st-t {})
-    (&& (1 = (salt-one c 'singleton 0)) !(salt-all c 'deprecated))))
+    ((1 = (salt-one c 'singleton 0)) && !(salt-all c 'deprecated))))
 
 ; --- reading a setting ------------------------------------------------------
 ; salt-all cannot tell an absent key from one written with no operand -- both
@@ -81,10 +81,9 @@
 (: st-n (st-put "none.l" "(singleton)\n"))
 (test
  (: c (salt-file st-n {})
-    (&& !(salt-all c 'singleton) ('dflt = (salt-one c 'singleton 'dflt))))
+    (!(salt-all c 'singleton) && ('dflt = (salt-one c 'singleton 'dflt))))
  (: c (salt-file st-a {})
-    (&& ('dflt = (salt-one c 'never-written 'dflt))
-        !(salt-all c 'never-written))))
+    (('dflt = (salt-one c 'never-written 'dflt)) && !(salt-all c 'never-written))))
 
 ; the roster lane: an entry is either a bare name or `(name "hint"), and the
 ; answer is the entry wrapped -- presence out of band, since a bare name nets
@@ -105,6 +104,7 @@
  (tablet? (salt 'salt-test-no-such-app))                 ; neither file exists: an empty tablet
  !(salt-all (salt 'salt-test-no-such-app) 'singleton))
 
+(hark ["rm" "-rf" st-dir])
 (test_fin ())
 (puts "salt: ok")
 (putc 10)

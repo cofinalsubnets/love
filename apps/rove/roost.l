@@ -73,7 +73,7 @@
    (pins d 'shelves shelves 'perch [cx (y0 + room-h // 2)] 'door [cx y1]))
  ; a shelf wears the first letter of its tool that no shelf before it wears
  (shelf-glyphs nms) (:- (go nms "" ()) (go l used acc)
-   (? (one? l) (rev acc)
+   (? (atom? l) (rev acc)
       (: nm <l
          (pick i) (? (#nm <= i) "?" (elem (nm i) used) (pick (i + 1)) (string (nm i)))
          g (pick 0)
@@ -108,20 +108,20 @@
  (answer g k) (: what (g 'ask) pl (g 'pl)
    done (\ _ (pins g 'ask () 'sign ()))
    (? (what = 'perch)
-      (k @ 49 (: _ (pin pl 'lay 'lay) _ (done ()) (note g w-lay))
-           50 (: _ (pin pl 'lay 'keep) _ (done ()) (note g w-keep))
+      (k @ 49 (pin pl 'lay 'lay, done (), note g w-lay)
+           50 (pin pl 'lay 'keep, done (), note g w-keep)
            ())
       (what = 'door)
-      (k @ 49 (: _ (done ()) (pin g 'over 'apply))
-           50 (: _ (done ()) (pin g 'over 'cancel))
+      (k @ 49 (done (), pin g 'over 'apply)
+           50 (done (), pin g 'over 'cancel)
            51 (done ())
            ())
       ()))
  ; a shelf bumped: its tool's link on or off. one that is love's already has nothing to do
  (toggle g k) (: t ((g 'pl 'tools) k)
    (? (t 'was = "love") (note g (fill w-already [(t 'nm)]))
-      (: _ (pin t 'act (t 'act = 'link ? 'keep 'link))
-         (note g ((src 'nest-tool-line) (g 'pl) t)))))
+      (pin t 'act (t 'act = 'link ? 'keep 'link),
+       note g ((src 'nest-tool-line) (g 'pl) t))))
 
  ; --- a turn: a question takes a digit, a sign any key, else a step --------------------
  (roost-stride g mv) (: p (g 'p) d (g 'd) nx (p 'x + <mv) ny (p 'y + <>mv) t (dat d nx ny)

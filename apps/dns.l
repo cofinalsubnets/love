@@ -75,7 +75,7 @@
                (: w (v * 10 + s j - 48) (? (255 < w) () (dig (j + 1) w 1)))
                (any ? [j v] ()))
            r (dig i 0 0)
-           (? (one? r) ()
+           (? (atom? r) ()
               (: j <r  b (a * 256 + <>r)
                  (? (k = 1) (n <= j ? [b] ())
                     (j < n && s j = 46) (oct (j + 1) b (k - 1))))))
@@ -169,7 +169,7 @@
    ; past it where it was written], or () for one that runs off the packet or loops
    (dns-name r pos)
     (: n #r
-       (dots l) (? (one? l) "." !(two? >l) <l (<l + "." + dots >l))
+       (dots l) (? (atom? l) "." !(two? >l) <l (<l + "." + dots >l))
        (go p acc hops after)
         (? (n <= p || 64 < hops) ()
            (: l (r p)
@@ -186,7 +186,7 @@
     (: gs (map (i \ rdbe r (q + 2 * i) 2) ^8)
        hx "0123456789abcdef"
        (h4 v) (? (v < 16) (string (hx v)) (h4 (v // 16) + string (hx (v % 16))))
-       (cat l) (? (one? l) "" !(two? >l) <l (<l + ":" + cat >l))
+       (cat l) (? (atom? l) "" !(two? >l) <l (<l + ":" + cat >l))
        (zrun i st k best)
         (? (8 <= i) (? (<>best < k) [st k] best)
            (gs i = 0) (zrun (i + 1) (? (k = 0) i st) (k + 1) best)
@@ -248,7 +248,7 @@
    (dns-hosts path h)
     (: (go (l . u))
      (: w (dns-words l)
-      (? (one? w) (go u)
+      (? (atom? w) (go u)
        (: a (dns-quad <w)
         (two? a && elem h >w ? a (go u)))))
      (go (dns-lines (dns-look path))))
@@ -256,7 +256,7 @@
    (dns-hosts6 path h)
     (: (go (l . u))
      (: w (dns-words l)
-      (? (one? w) (go u)
+      (? (atom? w) (go u)
          (dns-colon? <w && elem h >w) [<w]
          (go u)))
      (go (dns-lines (dns-look path))))
@@ -298,7 +298,7 @@
           (: servers (dns-servers conf)
              a (walk servers h)
              (? (two? a) a
-                (: (go ds) (? (one? ds) ()
+                (: (go ds) (? (atom? ds) ()
                               (: b (walk servers (h + "." + <ds))
                                  (two? b ? b (go >ds))))
                    (go (dns-conf conf "search")))))))

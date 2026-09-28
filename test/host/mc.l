@@ -37,7 +37,7 @@
 
    ; --- the listing: "..", the directories, then the rest, each by name -------------
    es (mc-read R)
-   _ (test (= [".." "sub" "bad" "good" "plain.txt" "run.sh"] (map cap es)))
+   _ (test ([".." "sub" "bad" "good" "plain.txt" "run.sh"] = map cap es))
    _ (test !(mc-read (R + "/plain.txt")))     ; not a directory, so no listing
    _ (test !(mc-read (R + "/nosuch")))
    _ (test (".." != <(<(mc-read "/"))))             ; the root owes no ".."

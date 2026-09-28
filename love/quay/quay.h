@@ -27,6 +27,12 @@ enum { cb_lead = 1, cb_tail = 2 };  // the width field: a wide char's two halves
 #define cb_ttx(g)   (((g) >> 8) & 255u)
 #define cb_tty(g)   ((g) & 255u)
 
+// a grapheme cluster: a base and up to three combining marks, in a pool the header holds.
+// a mark joins the cell before the cursor; a slot is free while its base is 0, and one no
+// cell names is taken back when the pool is full
+enum { cb_nclu = 128, cb_clun = 4 };
+#define cb_clu0 0x110000u
+
 enum {              // face bits, the glyph word's top byte
   cb_bold = 1, cb_under = 2, cb_rev = 4, cb_dim = 8,
   cb_ital = 16, cb_strike = 32, cb_blink = 64, cb_hide = 128 };
@@ -73,6 +79,7 @@ struct cb {
   // flight, and the transfer (slot, pixels laid) a chunked image keeps open across commands
   uint32_t ks, kv, ki, kc, kr, kval, kacc, kpx, kpix, kslot;
   uint8_t ka, kf, km, kq, kcur, kd, kt, ko, kkey, kvc, kn, kbyte, kpad, kopen;
+  uint32_t clu[cb_nclu][cb_clun];  // the clusters, their unused words 0
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
@@ -98,6 +105,10 @@ void
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 struct cb_img const *cb_img(struct cb const*, uint32_t slot);   // a live picture, or 0
 uint32_t const *cb_ipx(struct cb const*);                       // the store's pixels
+// a PNG of n bytes at the head of a cap-byte region -> 0 and w x h pixels there, or -1
+int cb_png(uint8_t *buf, uintptr_t n, uintptr_t cap, uint32_t *w, uint32_t *h);
+uint32_t const *cb_clu(struct cb const*, uint32_t g);   // the cluster g names, or 0
+uint32_t cb_base(struct cb const*, uint32_t g);          // g's codepoint, a cluster's base
 uint32_t cb_unfold(uint8_t);       // a cp437 glyph byte's codepoint
 uint8_t cb_437(uint32_t cp);       // the cp437 glyph that draws cp: 0xfe, the ■, for none
 uint8_t cb_width(uint32_t cp);     // the columns cp takes: 0 1 or 2, 'text's wcwidth

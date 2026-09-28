@@ -15,7 +15,9 @@
 //                                or every byte of a string/cask; () misuse
 //   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
 //                                width, picture, face), 1 the fg, 2 the bg
-//                                (the layout is quay.h's struct cb_cell)
+//                                (the layout is quay.h's struct cb_cell); a
+//                                cluster's glyph holds its base, and 3 4 5 are
+//                                its marks, 0 past the last
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
 //                                3 flag, 4 top, 5 bot, 6 and 7 a cell's width and
 //                                height in pixels; () misuse
@@ -24,6 +26,11 @@
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
 //   (tilepx scr i x y)   -> n    pixel (x,y) of cell i's tile: 0xff over its rgb where
 //                                the picture set it, 0 where not; () for no tile
+//   (dye scr buf w row cur face) -> scr   grid row `row` painted into cask buf, a
+//                                32bpp picture w pixels wide, by the console's own
+//                                painter (paint.c) in the built-in 8x16, face a
+//                                loaded one (as facerow takes) or (); cur the cell
+//                                the cursor wears, -1 for none; () misuse
 //   (facerow f cp r)     -> n    row r of cp's glyph in face f (a string or cask as
 //                                apps/face.l lays it), the leftmost pixel bit 15;
 //                                () when f is no face (cb_face_ok) or lacks cp
@@ -50,7 +57,7 @@ static struct cb *scr_ok(word x) {
  if (c->top > c->bot) c->top = 0;
  if (c->esc > 15) c->esc = 0;
  if (c->kslot >= cb_nimg) c->kslot = 0, c->kopen = 0;
- if (c->kf != 24) c->kf = 32;
+ if (c->kf != 24 && c->kf != 32 && c->kf != 100) c->kf = 32;
  if (c->pn > 8) c->pn = 8;
  if (c->on > cb_outn) c->on = 0;
  if (c->un > 3) c->un = 0;
@@ -104,9 +111,11 @@ static lvm(lvm_glass) {
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
   uintptr_t i = (uintptr_t) getcharm(Sp[1]);
   intptr_t k = getcharm(Sp[2]);
-  if (i < (uintptr_t) c->rows * c->cols && k >= 0 && k < 3) {
+  if (i < (uintptr_t) c->rows * c->cols && k >= 0 && k < 6) {
    struct cb_cell const e = c->cb[i];
-   out = putcharm(k == 0 ? e.g : k == 1 ? e.fg : e.bg); } }
+   uint32_t const *v = cb_clu(c, e.g);
+   out = putcharm(k == 0 ? (v ? (e.g & 0xffe00000u) | cb_cp(v[0]) : e.g) : k == 1 ? e.fg : k == 2 ? e.bg
+                  : v ? cb_cp(v[k - 2]) : 0u); } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
 
@@ -157,6 +166,32 @@ static lvm(lvm_tilepx) {
  Sp[3] = out;
  Sp += 3; Ip += 1; ai_musttail return Continue(); }
 
+// the bytes of a string or cask, or 0
+static struct ai_str *nif_bytes(word x) {
+ if (x & 1) return 0;
+ if (strp(x)) return str(x);
+ if (((union u*) x)->ap == lvm_cask) return ((struct ai_cask*) x)->str;
+ return 0; }
+
+// (dye scr buf w row cur face): one row of the screen as pixels, the same draw the
+// kernel's framebuffer takes. the paper is buf, clipped to its own bytes; a face that
+// fails its vetting is no face. no allocation, so every pointer holds throughout
+static lvm(lvm_dye) {
+ struct cb *c = scr_ok(Sp[0]);
+ struct ai_str *b = !(Sp[1] & 1) && ((union u*) Sp[1])->ap == lvm_cask ? ((struct ai_cask*) Sp[1])->str : 0;
+ word out = ZeroPoint;
+ if (c && b && (Sp[2] & 1) && (Sp[3] & 1) && (Sp[4] & 1)) {
+  intptr_t const w = getcharm(Sp[2]), row = getcharm(Sp[3]), cur = getcharm(Sp[4]);
+  if (w > 0 && row >= 0 && row < c->rows) {
+   struct ai_str *f = nif_bytes(Sp[5]);
+   uint8_t const *qf = f && cb_face_ok((uint8_t const*) f->bytes, f->len) ? (uint8_t const*) f->bytes : 0;
+   struct cb_paper const p = { (uint32_t*) b->bytes, (uintptr_t) w, (uintptr_t) w, b->len / 4u / (uintptr_t) w, 1 };
+   struct font const ft = { (uint8_t const*) cleat_8x16, 8, 16 };
+   cb_paint(&p, c, &ft, qf, (uint16_t) row, 0, 0, cur < 0 ? ~0u : (uint32_t) cur);
+   out = Sp[0]; } }
+ Sp[5] = out;
+ Sp += 5; Ip += 1; ai_musttail return Continue(); }
+
 // (facerow f cp r): the painter's own reading of a face, vetting and all
 static lvm(lvm_facerow) {
  word f = Sp[0], out = ZeroPoint;
@@ -205,4 +240,5 @@ static union u const
   nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
   nif_facerow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_facerow}, {lvm_ret0}},
-  nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}};
+  nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}},
+  nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}};

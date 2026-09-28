@@ -264,7 +264,7 @@ some literal
  _ (: (slurpf f) (: q (open f "r") (slurp q))
       _ (map (\ f (: d (mdread (slurpf f))
                      (test
-                        (0 < tally d)                    ; it parsed
+                        (0 < #d)                         ; it parsed
                         (d = (mdread (mdshow d)))        ; law 1 on real markdown
                         (d = (htread (htshow d)))
                         !(t0? d))))
@@ -329,7 +329,7 @@ some literal
  ; which is why 'tty is no row in `surfaces`: a row owes law 1 and this cannot pay it.
  _ (: (slurpf f) (: q (open f "r") (slurp q))
       ; an inl down to its text -- lapiz keeps its own `plain` off the export list
-      (flat l) (one? l ? "" (: x <l
+      (flat l) (atom? l ? "" (: x <l
                      ((<x @ 'text <>x 'code <>x 'strong (flat <>x) 'em (flat <>x)
                              'link (flat <>x) "") + flat >l)))
       ; the line a heading should have become: a .SH flush left, a .SS indented three
@@ -359,7 +359,7 @@ some literal
       ; nor by way of roff, where a table too wide for a page is laid a row at a time
       _ (: d (mdread (slurpf "doc/misc/kore.md"))
            ; the width is characters: a check mark is three bytes and one column
-           (cols l) (: f (flush l) (tally (filter (c \ !(128 <= c && c < 192)) (map (i \ f i) ^#f))))
+           (cols l) (: f (flush l) #(filter (c \ !(128 <= c && c < 192)) (map (i \ f i) ^#f)))
            (test (foldl (\ a l (a && cols l <= 80)) 1 (lines (ttyshow d 80)))
                  (foldl (\ a l (a && cols l <= 80)) 1 (lines (ttyshow (rfread (rfshow d)) 80)))))
       ; a roff page the tree did not write still lays out: the shower is total over the

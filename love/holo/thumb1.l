@@ -126,10 +126,10 @@
             (an <= 7 && bn <= 7 ?
              (t16 (0x4280 | ((bn << 3) | an)))              ; T1, both low
              (t16 (0x4500 | ((((an >> 3) & 1) << 7) | ((bn << 3) | (an & 7)))))))    ; t2, hi allowed
-         (: _ (b < 0 ? (scare 'cmp-neg-imm b))         ; no CMP #neg (CMN is reg-only) -- immok blocks upstream
-            _ (b > 255 ? (scare 'cmp-imm-range b))
-            _ (need-lo a 'cmp-hi-imm)
-          (t16 (0x2800 | ((rn a << 8) | b)))))
+         (b < 0 ? (scare 'cmp-neg-imm b), ; no CMP #neg (CMN is reg-only) -- immok blocks upstream
+          b > 255 ? (scare 'cmp-imm-range b),
+          need-lo a 'cmp-hi-imm,
+          t16 (0x2800 | ((rn a << 8) | b))))
 
    (t1-test a b)                                           ; tst Rn,Rm (format-4, register only, low)
       (? (reg? b) (: an (rn a) bn (rn b) (t16 (0x4200 | ((bn << 3) | an))))
@@ -150,13 +150,13 @@
             (: s (t1-lowscratch d base '(r0 r1 r2 r3 r4 r5 r6 r7))
                (? ldq
                   (catall [(t1-push s) (t1-li s off) (t1-add-any s base) (op1 s s) (t1-movr d s) (t1-pop s)])
-                  (: _ (need-lo d 'st-src-hi)                          ; a store's source has no bounce: must be low
-                     (catall [(t1-push s) (t1-li s off) (t1-add-any s base) (op1 d s) (t1-pop s)]))))))
+                  (need-lo d 'st-src-hi, ; a store's source has no bounce: must be low
+                   catall [(t1-push s) (t1-li s off) (t1-add-any s base) (op1 d s) (t1-pop s)])))))
    (t1-mem base16 sp16 sh d base off ldq)                 ; base16: [Rn,#imm5] op ; sp16: [sp,#imm8] op
       (: dn (rn d)
          (? (reg-eq base 'sp)
-            (: _ (off >= 0 && 0 = off & 3 && off >> 2 <= 255 ? 0 (scare 'mem-sp-range off)) _ (need-lo d 'mem-sp-hi)
-               (t16 (sp16 | ((dn << 8) | (off >> 2)))))
+            (off >= 0 && 0 = off & 3 && off >> 2 <= 255 ? 0 (scare 'mem-sp-range off), need-lo d 'mem-sp-hi,
+             t16 (sp16 | ((dn << 8) | (off >> 2))))
             (: u (off >> sh)
                ok (lo? d && lo? base &&
                    off >= 0 && 0 = off & ((1 << sh) - 1) && u <= 31)
@@ -274,7 +274,7 @@
    ;; (la Rd lbl) into (align 4) (lapool Rd) (raw ((fix 4 abs32 lbl 0))) -- the pooled address word sits
    ;; immediately after, 4-aligned by the align, so LDR Rd,[pc,#0] (Align(pc+4,4)=here+4) reaches it;
    ;; then B #2 hops the 4-byte word. Rd must be low (LDR-literal T1 is 3-bit).
-   (t1-lapool d) (: _ (need-lo d 'lapool-hi) (catall [(t16 (0x4800 | (rn d << 8))) (t16 0xE001)]))
+   (t1-lapool d) (need-lo d 'lapool-hi, catall [(t16 (0x4800 | (rn d << 8))) (t16 0xE001)])
 
    ;; set: d <- (cond) ? 1 : 0 without it. the branch must come first: MOVS sets N/Z on v6-M (no
    ;; flag-preserving MOV #imm exists below r8), so any movs before the Bcc destroys the compare.
@@ -290,8 +290,8 @@
          (reg-eq d 'sp && reg-eq base 'sp)
             (t1-addsub-imm 'add d base off)                ; the sp-arith form (chunked; negative flips)
          (reg-eq base 'sp && off > 0)
-            (: _ (0 = off & 3 && off >> 2 <= 255 ? 0 (scare 'lea-sp-off-range off)) _ (need-lo d 'lea-hi)
-               (t16 (0xA800 | ((rn d << 8) | (off >> 2)))))
+            (0 = off & 3 && off >> 2 <= 255 ? 0 (scare 'lea-sp-off-range off), need-lo d 'lea-hi,
+             t16 (0xA800 | ((rn d << 8) | (off >> 2))))
          (0 < off <= 255) (t1-addsub-imm 'add d base off)     ; imm3 3-addr, or mov+imm8 2-addr
          (!(reg-eq d base) && lo? d)                       ; far (or negative): build the offset in d, fold the base in
             (catall [(t1-li d off) (t1-add-any d base)])

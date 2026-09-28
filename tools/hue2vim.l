@@ -63,14 +63,14 @@
          put err 10, quit 1))
    wtab (: seen {}
            (go l t)
-            (? (one? l) t
+            (? (atom? l) t
                (: r <l
                   ws (filter (w \ !(seen w) && !(pre? w "hue-")) (hue-words (hue-arg r)))
                   _ (each ws (w \ pin seen w 1))
                   _ (pin t (hue-cls r) ws)
                   (go >l t)))
            (go (hue-tagged 'word) {}))
-   (kwlines g ws) (one? ws ? ()
+   (kwlines g ws) (atom? ws ? ()
                    (line $ "syn keyword " + g + " " + join (map kwesc (take 8 ws)) " ",
                     kwlines g (drop 8 ws)))
 
@@ -98,11 +98,11 @@
           (tag = 'num)
            ; hex first: `0x1f` would otherwise take the plain-integer match on its
            ; leading 0 and leave the rest bare, which is a worse lie than no colour
-           (: _ (line ("syn match " + g + " \"\\<-\\?0[xX]\\x\\+\\>\""))
-              _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\>\""))
-              _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
-              _ (line ("syn match " + g + " \"\\<-\\?\\.\\d\\+\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
-              (line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\"")))
+           (line ("syn match " + g + " \"\\<-\\?0[xX]\\x\\+\\>\""),
+            line ("syn match " + g + " \"\\<-\\?\\d\\+\\>\""),
+            line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""),
+            line ("syn match " + g + " \"\\<-\\?\\.\\d\\+\\([eE][-+]\\?\\d\\+\\)\\?\\>\""),
+            line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\""))
           (tag = 'word) (kwlines g (wtab (hue-cls r)))
           (tag = 'punct)
            ; the valence law as vim reads it: a punct run leads a token (the
@@ -132,7 +132,7 @@
     (line ("    hi def LoveLevel" + show i + " ctermfg=" + string (l k)
            + (: p (13 - #(string (l k))) (: (sp j) (j < 1 ? "" (" " + (sp (j - 1)))) (sp p)))
            + "guifg=" + string (l (k + 1))))
-   (levels-of k) (: (go l i) (one? l ? () (levline i <l k, go >l (i + 1))) (go levels 0))
+   (levels-of k) (: (go l i) (atom? l ? () (levline i <l k, go >l (i + 1))) (go levels 0))
 
    pgroup (grp <(hue-tagged 'delim))
    cluster (join ((map grp (filter (r \ hue-tag r != 'delim) hue-classes)) + '("LoveTodo")) ",")

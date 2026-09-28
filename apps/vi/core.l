@@ -77,11 +77,11 @@
           (: t (st 'lines (st 'row))
              _ (pin st 'lncar [(st 'row) (st 'hlgen) t])
              t)))
-   (vlen st) (tally (vln st))
-   (vnl st) (tally (st 'lines))
-   (vdrop l k) (? ((k < 1) || one? l) l (vdrop >l (k - 1)))
+   (vlen st) #(vln st)
+   (vnl st) #(st 'lines)
+   (vdrop l k) (? ((k < 1) || atom? l) l (vdrop >l (k - 1)))
    ; a line's height in screen rows: 1 unwrapped, else what it folds to
-   (vhgt st ln) (? !(st 'wrap) 1 (tally (vsegs ln (st 'w))))
+   (vhgt st ln) (? !(st 'wrap) 1 #(vsegs ln (st 'w)))
    ; the last file row the body can show -- what H M L stop at. wrapped, that
    ; is a walk down the heights from the view's corner
    (vbot st)
@@ -106,10 +106,10 @@
    ; every edit to 'lines bumps the generation, which is what lets the paint's
    ; string carry be recomputed once per edit instead of once per keystroke
    (vgen st) (pin st 'hlgen (st 'hlgen + 1))
-   (vput st r ln) (: _ (pin st 'lines (: (go l i) (? !(two? l) ()
-                                                     ((? (i = r) ln <l) . go >l (i + 1)))
-                                         (go (st 'lines) 0)))
-                     (vgen st))
+   (vput st r ln) (pin st 'lines (: (go l i) (? !(two? l) ()
+                                                ((? (i = r) ln <l) . go >l (i + 1)))
+                                    (go (st 'lines) 0)),
+                   vgen st)
    ; -- characters: 'col is a byte, always a character's first, and the screen counts
    ; columns -- a wide character two, a combining mark none, an ascii byte one (a tab
    ; renders raw, so it is the terminal's one column here too)
@@ -165,8 +165,8 @@
    (vblanks n) (: (go i acc) (? (i < 1) acc (go (i - 1) (acc + " "))) (go n ""))
    (vmsg st m) (pin st 'msg m)
    (vsnap st) (pins st 'undo ([(st 'lines) (st 'row) (st 'col)] . st 'undo) 'redo ())
-   (vrest st fr) (: _ (pins st 'lines <fr 'row <>fr) _ (vgen st)
-                     _ (vgole st <>>fr) (pin st 'dirty 1))
+   (vrest st fr) (pins st 'lines <fr 'row <>fr, vgen st,
+                  vgole st <>>fr, pin st 'dirty 1)
 
    ; the pure half of :e -- the face reads the file and hands the lines over, this
    ; starts the buffer over on them: cursor home, no history, not dirty. the paint
@@ -229,7 +229,7 @@
                            (? (cf (ln c2) = 0) (skipb r2 (c2 - 1)) [r2 c2])))
        p (skipb r (c - 1))
        r2 <p c2 <>p ln (ls r2)
-       (? (tally ln <= c2) [r2 c2]
+       (? (#ln <= c2) [r2 c2]
           (: k (cf (ln c2))
              (run j) (? ((0 <= (j - 1)) && (cf (ln (j - 1)) = k)) (run (j - 1)) j)
              [r2 (run c2)])))
@@ -378,7 +378,7 @@
    ; f F t T with the argument character a, as text: a utf-8 lead is never a tail
    ; byte, so a byte-wise hit is a character's start
    (vfind st k a n)
-    (: ln (vln st) len (tally ln) col (st 'col) m #a
+    (: ln (vln st) len #ln col (st 'col) m #a
        fwd (k = 'f || k = 't)
        (go i c2 left) (? (left < 1) c2
                          (: nx (? fwd (fx (i + 1)) (bx (i - 1)))
@@ -420,11 +420,11 @@
           mid (vtake st (r1 + 1) (r2 - 1))
           piece (foldl (\ s l (s + l + "\n")) (snip a h #a + "\n") mid + snip b 0 t)
           _ (vyank st 'chr piece)
-          (? (opc = 121) (: _ (pin st 'row r1) (vgole st h, st))
-             (: _ (vsnap st)
-                _ (vsplice st r1 r2 [(snip a 0 h + snip b t #b)])
-                _ (pin st 'row r1) _ (vgole st h)
-                (? (opc = 99) (pin st 'mode 'i) (vclampn st))))))
+          (? (opc = 121) (pin st 'row r1, vgole st h, st)
+             (vsnap st,
+              vsplice st r1 r2 [(snip a 0 h + snip b t #b)],
+              pin st 'row r1, vgole st h,
+              (? (opc = 99) (pin st 'mode 'i) (vclampn st))))))
    ; > and < -- rows r1..r2 in or out by one shiftwidth. an empty line stays empty,
    ; the way vim leaves it, and the register is not touched: a shift is not a cut
    (vshift st opc r1 r2)
@@ -441,18 +441,18 @@
    (vopl st opc r1 r2)                             ; linewise rows r1..r2
     (: a (r1 < r2 ? r1 r2) b (r1 < r2 ? r2 r1)
        (? (vlinop? opc) (vshift st opc a b)
-          (: _ (vyank st 'lin (vtake st a b))
-             (? (opc = 121) (: _ (pin st 'row a) st)
-                (: _ (vsnap st)
-                   (? (opc = 99)
-                      (: _ (vsplice st a b '(""))
-                         _ (pin st 'row a) _ (vgole st 0)
-                         (pin st 'mode 'i))
-                      (: _ (vsplice st a b ())
-                         nl (vnl st)
-                         _ (pin st 'row (? (a < nl) a (nl - 1)))
-                         _ (vgole st (vink (vln st)))
-                         st)))))))
+          (vyank st 'lin (vtake st a b),
+           (? (opc = 121) (pin st 'row a, st)
+              (vsnap st,
+               (? (opc = 99)
+                  (vsplice st a b '(""),
+                   pin st 'row a, vgole st 0,
+                   pin st 'mode 'i)
+                  (: _ (vsplice st a b ())
+                     nl (vnl st)
+                     _ (pin st 'row (? (a < nl) a (nl - 1)))
+                     _ (vgole st (vink (vln st)))
+                     st)))))))
    ; a motion answered mr while operator (opc . ocnt) was pending. 'spn and 'linr
    ; are absolute -- a text object knows both its ends -- and the rest are relative
    ; to the cursor, which is the other end of the range
@@ -540,7 +540,7 @@
           (<rg = 'lin)
            (: _ (vsnap st)
               at (? after (st 'row + 1) (st 'row))
-              (rep i s2) (? (i < 1) s2 (rep (i - 1) (: _ (vsplice s2 at (at - 1) <>rg) s2)))
+              (rep i s2) (? (i < 1) s2 (rep (i - 1) (vsplice s2 at (at - 1) <>rg, s2)))
               _ (rep n st)
               _ (pin st 'row at)
               _ (vgole st (vink (vln st)))
@@ -561,9 +561,9 @@
              ; a charwise register that crossed rows carries its newlines: the
              ; line opens at the cursor and the tail rides the register's last row
              (? (#ps < 2)
-                (: _ (vput st r (snip ln 0 at + tt + snip ln at len))
-                   _ (vgole st (vpv (vln st) (at + #tt)))
-                   st)
+                (vput st r (snip ln 0 at + tt + snip ln at len),
+                 vgole st (vpv (vln st) (at + #tt)),
+                 st)
                 (: lst (vexlast ps)
                    mid (: (go l acc) (? !(two? >l) (rev acc) (go >l (<l . acc))) (go >ps ()))
                    _ (vput st r (snip ln 0 at + <ps))
@@ -607,17 +607,17 @@
    (vundo st)
     (: u (st 'undo)
        (? !(two? u) (vmsg st "already at oldest change")
-          (: _ (pins st 'redo ([(st 'lines) (st 'row) (st 'col)] . st 'redo)
-                        'undo >u)
-             _ (vrest st <u)
-             (vclampn st))))
+          (pins st 'redo ([(st 'lines) (st 'row) (st 'col)] . st 'redo)
+                   'undo >u,
+           vrest st <u,
+           vclampn st)))
    (vredo st)
     (: r (st 'redo)
        (? !(two? r) (vmsg st "already at newest change")
-          (: _ (pin st 'undo ([(st 'lines) (st 'row) (st 'col)] . st 'undo))
-             _ (pin st 'redo >r)
-             _ (vrest st <r)
-             (vclampn st))))
+          (pin st 'undo ([(st 'lines) (st 'row) (st 'col)] . st 'undo),
+           pin st 'redo >r,
+           vrest st <r,
+           vclampn st)))
 
    ; -- search (re.l): hunt for 'pat from the cursor, dir 1 fwd / -1 back --
    ; a word boundary is not a node re.l's engine can hold, so `*` asks for one
@@ -644,13 +644,13 @@
               cite (steps = 0 ? (c + 1) 0)
               m (? (cite <= #ln) (vfind1 st ln cite) ())
               (? (two? m) [i <>m]
-                 (fwd (% (i + 1) nl) (steps + 1)))))
+                 (fwd ((i + 1) % nl) (steps + 1)))))
        (bwd i steps)
         (? (nl < steps) ()
            (: ln (ls i)
               m (vlast st ln (steps = 0 ? c (#ln + 1)))
               (charm? m ? [i m]
-               (bwd (% ((i - 1) + nl) nl) (steps + 1)))))
+               (bwd ((i - 1 + nl) % nl) (steps + 1)))))
        hit (0 < dir ? (fwd r 0) (bwd r 0))
        (two? hit ?
         (pin st 'row <hit, vgole st (vhead (ls <hit) <>hit), st)
@@ -673,9 +673,9 @@
              w (snip ln a (fw a))
              b (rebre (vbesc w))
              (? !(two? b) st
-                (: _ (pins st 'pat <>b 'pattx w 'patw 1 'dir dir)
-                   _ (vgole st a)
-                   (vhunt st dir))))))
+                (pins st 'pat <>b 'pattx w 'patw 1 'dir dir,
+                 vgole st a,
+                 vhunt st dir)))))
 
    ; -- libra, on the buffer --------------------------------------------------
    ; both weighings are pure functions over text, so they run here, and over the
@@ -798,8 +798,8 @@
                (vexdelim s j dl @ [k rep]
                  (: cp (vexpat st pat)
                     (? !(two? cp) ()
-                       (: _ (? (0 < #pat) (pins st 'pat <>cp 'pattx pat 'patw ()) ())
-                          [1 (recomp <>cp) rep (vexhas? (snip s k n) 103)]))))))))
+                       ((? (0 < #pat) (pins st 'pat <>cp 'pattx pat 'patw ()) ()),
+                        [1 (recomp <>cp) rep (vexhas? (snip s k n) 103)]))))))))
    (vexsubs st m rep a b g?)                       ; ((row text)..) for the rows that change
     (: (go r acc) (? (b < r) (rev acc)
                      (: res (usub m rep (st 'lines r) g?)
@@ -809,7 +809,7 @@
     (: (go l lr) (? !(two? l) lr (: h <l _ (vput st <h <>h) (go >l <h)))
        (go ps 0))
    (vexdrop st rows)                               ; delete rows, given descending
-    (: (go l) (? !(two? l) () (: _ (vsplice st <l <l ()) (go >l)))
+    (: (go l) (? !(two? l) () (vsplice st <l <l (), go >l))
        (go rows))
    (vexsub st s i r1 r2)
     (: sp (vexspec st s i)
@@ -860,15 +860,15 @@
                            (: rows (vexhits st <>cp a b inv?)
                               (? !(two? rows) (vmsg st $ "not found: " + st 'pattx)
                                  (<sp = 'p)
-                                  (: _ (vexgo st (vexlast rows))
-                                     (vmsg st (show #rows + " lines")))
+                                  (vexgo st (vexlast rows),
+                                   vmsg st (show #rows + " lines"))
                                  (: plan (vexplan st rows sp)
                                     (? !(two? plan) (vmsg st "not found")
-                                       (: _ (vsnap st)
-                                          _ (? (<sp = 'd) (vexdrop st plan) (vexlay st plan))
-                                          _ (vexgo st (<sp = 'd ? (vexlast rows) <(vexlast plan)))
-                                          (vmsg st (show #plan +
-                                                    (<sp = 'd ? " fewer lines" " lines changed"))))))))))))))))
+                                       (vsnap st,
+                                        (? (<sp = 'd) (vexdrop st plan) (vexlay st plan)),
+                                        vexgo st (<sp = 'd ? (vexlast rows) <(vexlast plan)),
+                                        vmsg st (show #plan +
+                                                 (<sp = 'd ? " fewer lines" " lines changed")))))))))))))))
 
    ; -- move, copy, join --
    ; the destination is one address after the verb, and 0 (row -1) is the line
@@ -915,8 +915,8 @@
        j (eq 0)
        nm (vextrim (? (charm? j) (snip arg 0 j) arg))
        (? (nm = "wrap" || nm = "nowrap")
-           (: _ (pin st 'wrap (nm = "wrap" ? 1 ()))
-              (vmsg st (st 'wrap ? "wrap" "nowrap")))
+           (pin st 'wrap (nm = "wrap" ? 1 ()),
+            vmsg st (st 'wrap ? "wrap" "nowrap"))
           !(nm = "sw" || nm = "shiftwidth") (vmsg st $ "not an option: " + nm)
           !(charm? j) (vmsg st $ "shiftwidth=" + show (st 'sw))
           (: t (vextrim (snip arg (j + 1) n)) k #t
@@ -952,7 +952,7 @@
    (vexfull st w)
     (: ws (vexwords + map (x \ [x x]) (peep st 'exmore ()))
        hit (filter (p \ w = <p) ws)
-       heads (filter (p \ (: k (tally <p) (#w < k && w = snip <p 0 #w))) ws)
+       heads (filter (p \ (: k #<p (#w < k && w = snip <p 0 #w))) ws)
        means (foldl (\ a p (elem <>p a ? a (<>p . a))) () heads)
        (? (two? hit) <>(<hit)
           !(two? means) w
@@ -982,22 +982,22 @@
             ; spell control characters, and this frame does not
             (w = "print" || w = "number" || w = "#")
              (? (vexbad? st r1 r2) (vmsg st "out of range")
-                (: _ (vexgo st r2) (vmsg st (show (r2 - r1 + 1) + " lines"))))
+                (vexgo st r2, vmsg st (show (r2 - r1 + 1) + " lines")))
             (w = "=") (vmsg st (show (r2 + 1)))
             (w = "q") (? (bang || !(st 'dirty)) (pin st 'quit 1)
                          (vmsg st "no write since last change (q! overrides)"))
             (w = "w") (pin st 'dow [nm])
-            (w = "wq" || w = "x") (: _ (pin st 'dow [nm]) (pin st 'quit 1))
+            (w = "wq" || w = "x") (pin st 'dow [nm], pin st 'quit 1)
             (w = "edit") (vedit st nm bang)
             (w = "split") (pin st 'dos ['stack arg])
             (w = "vsplit") (pin st 'dos ['beside arg])
-            (w = "hl") (: _ (pin st 'hl (st 'hl ? () 1))
-                          (vmsg st (st 'hl ? "syntax on" "syntax off")))
+            (w = "hl") (pin st 'hl (st 'hl ? () 1),
+                        vmsg st (st 'hl ? "syntax on" "syntax off"))
             ; :set knows one option, which is the one > and < need a number for
             (w = "set") (vexset st arg)
             (w = "lint") (vlint st)                    ; libra's scan, on the buffer
             ; unknown here, but left on the state: a face with more ex words takes it
-            (: _ (pin st 'dox [w arg]) (vmsg st $ "not an ex command: " + w)))))
+            (pin st 'dox [w arg], vmsg st $ "not an ex command: " + w))))
    (vex st)
     (: s (edtext (st 'cmd))
        n #s
@@ -1013,14 +1013,14 @@
    ; -- insert mode --
    (vins st c)
     (: r (st 'row) col (st 'col) ln (vln st) len #ln
-       (? (c = 27) (: _ (pin st 'mode 'n)
-                      _ (vgole st (vpv ln col))
-                      (vclampn st))
+       (? (c = 27) (pin st 'mode 'n,
+                    vgole st (vpv ln col),
+                    vclampn st)
           (c = 13 || c = 10)
-           (: _ (vput st r (snip ln 0 col))
-              _ (vsplice st (r + 1) r [(snip ln col len)])
-              _ (pin st 'row (r + 1))
-              (vgole st 0))
+           (vput st r (snip ln 0 col),
+            vsplice st (r + 1) r [(snip ln col len)],
+            pin st 'row (r + 1),
+            vgole st 0)
           (c = 8 || c = 127)
            (? (0 < col) (: p (vpv ln col)
                            _ (vput st r (snip ln 0 p + snip ln col len))
@@ -1035,13 +1035,13 @@
           (c = 23)
            (: (bk i p) (? (0 < i && p (vcl (ln (i - 1)))) (bk (i - 1) p) i)
               a (: j (bk col (\ k (k = 0))) (bk j (\ k (k != 0))))
-              (? (a < col) (: _ (vput st r (snip ln 0 a + snip ln col len)) (vgole st a)) st))
+              (? (a < col) (vput st r (snip ln 0 a + snip ln col len), vgole st a) st))
           (c = 21)
            (: k (vink ln) a (? (k < col) k 0)
-              (? (a < col) (: _ (vput st r (snip ln 0 a + snip ln col len)) (vgole st a)) st))
+              (? (a < col) (vput st r (snip ln 0 a + snip ln col len), vgole st a) st))
           (c = 9 || 32 <= c)
-           (: _ (vput st r (snip ln 0 col + string c + snip ln col len))
-              (vgole st (col + 1)))
+           (vput st r (snip ln 0 col + string c + snip ln col len),
+            vgole st (col + 1))
           ; the arrows: insert's cursor may sit past the last char, so the fences are
           ; the line's length, and up and down keep the goal column as j and k do
           (c = -1) (vgole st (vpv ln col))
@@ -1049,7 +1049,7 @@
           (c = -8 || c = -9)
            (: k (c = -8 ? (r - 1) (r + 1))
               (? (k < 0 || vnl st <= k) st
-                 (: _ (pin st 'row k) (pin st 'col (vcolat (vln st) (st 'goal))))))
+                 (pin st 'row k, pin st 'col (vcolat (vln st) (st 'goal)))))
           st))
 
    ; -- the pending char-argument commands --
@@ -1058,11 +1058,11 @@
    (vpcu st c)
     (: b (st 'pcb)
        s (? (0 < #b) (b + string c) (192 <= c < 248) (string c) ())
-       (? (c = 27) (: _ (pin st 'pcb "") (vpc st c))
+       (? (c = 27) (pin st 'pcb "", vpc st c)
           !s (vpc st c)
           (: l (s 0) need (? (l < 224) 2 (l < 240) 3 4)
              (? (#s < need && (#s = 1 || (c & 192) = 128)) (pin st 'pcb s)
-                (: _ (pin st 'pcb "") (vpc st s))))))
+                (pin st 'pcb "", vpc st s)))))
    (vpc st c)
     (: k (st 'pc) n (: v (st 'cnt) (? (0 < v) v 1))
        _ (pin st 'pc ()) _ (pin st 'cnt 0)
@@ -1127,14 +1127,14 @@
    (vnorm st c)
     (: n (: v (st 'cnt) (? (0 < v) v 1))
        (mv1 mr)                                    ; a motion result, no operator
-        (? (one? mr) st
+        (? (atom? mr) st
            (<mr = 'lin)
             (: t <>mr _ (pin st 'row t)
              (pin st 'col (: ln (vln st) k (vcolat ln (st 'goal))
                            (? (k < #ln) k (vend ln)))))
            ; 'linb is 'lin that lands on the line's first ink: + - _ and the ex
            ; addresses do that and j and k deliberately do not
-           (<mr = 'linb) (: _ (pin st 'row <>mr) (vgole st (vink (vln st))))
+           (<mr = 'linb) (pin st 'row <>mr, vgole st (vink (vln st)))
            ; a span with no operator lands on whichever end the cursor is not at,
            ; which is what makes % a motion as well as a range
            (<mr = 'spn)
@@ -1143,8 +1143,8 @@
                     [<>mr <>>mr])
                _ (pin st 'row <p)
                (vgole st <>p))
-           (: _ (pin st 'row <>mr)
-              (vgole st (: c2 <>>mr lim (vend (vln st)) (lim < c2 ? lim c2)))))
+           (pin st 'row <>mr,
+            vgole st (: c2 <>>mr lim (vend (vln st)) (lim < c2 ? lim c2))))
        (motion mr)
         (: op (st 'op) _ (pin st 'op ())
            (? !(two? mr) st
@@ -1158,7 +1158,7 @@
        ; a diagonal is its two halves, each a plain motion of the count; an operator
        ; pending is dropped -- a diagonal is not a range
        (diag vc hc) (? (two? (st 'op)) (pin st 'op ())
-                       (: _ (mv1 (vmot st vc n rawc)) (mv1 (vmot st hc n rawc))))
+                       (mv1 (vmot st vc n rawc), mv1 (vmot st hc n rawc)))
        (? ; an operator is pending and i or a arrives: a text object, not insert
           (two? (st 'op) && (c = 105 || c = 97))
            (pins st 'cnt n 'pc (c @ 105 'ti 'ta))
@@ -1174,10 +1174,10 @@
           (elem c '(102 70 116 84))                            ; f F t T
            (pin st 'cnt n,
             pin st 'pc (? (c = 102) 'f (c = 70) 'F (c = 116) 't 'T))
-          (c = 103) (: _ (pin st 'gcnt rawc) (pin st 'pc 'g))
+          (c = 103) (pin st 'gcnt rawc, pin st 'pc 'g)
           (c = 90) (pin st 'pc 'Z)
           (c = 122) (pin st 'pc 'z)                             ; zt zz zb
-          (c = 114) (: _ (pin st 'cnt n) (pin st 'pc 'r))
+          (c = 114) (pin st 'cnt n, pin st 'pc 'r)
           ; ; and , -- the last f F t T again, forward and the other way
           (c = 59 || c = 44)
            (: lf (st 'lastf)
@@ -1186,11 +1186,11 @@
           (elem c '(100 121 99 62 60))                       ; d y c > <
            (: op (st 'op)
               (? (two? op && (<op = c))
-                 (: total (* n <>op)
+                 (: total (n * <>op)
                     _ (pin st 'op ())
                     (vopl st c (st 'row) (: t ((st 'row + total) - 1) nl (vnl st)
                                             (? (t < nl) t (nl - 1)))))
-                 (: _ (pin st 'op [c n]) st)))
+                 (pin st 'op [c n], st)))
           (c = 120) (: ln (vln st)                              ; x
                        (? (0 < #ln) (vopc st 100 (st 'row) (st 'col) (vchars ln (st 'col) n)) st))
           (c = 88) (? (0 < st 'col)                             ; X
@@ -1200,12 +1200,12 @@
                       (? (st 'col < len) (vopc st 100 (st 'row) (st 'col) len) st))
           (c = 67) (: len (vlen st)                             ; C
                       _ (? (st 'col < len) (vopc st 99 (st 'row) (st 'col) len)
-                           (: _ (vsnap st) (pin st 'mode 'i)))
+                           (vsnap st, pin st 'mode 'i))
                       st)
           (c = 115) (: ln (vln st)                              ; s
                        (? (0 < #ln)
                           (vopc st 99 (st 'row) (st 'col) (vchars ln (st 'col) n))
-                          (: _ (vsnap st) _ (pin st 'mode 'i) st)))
+                          (vsnap st, pin st 'mode 'i, st)))
           (c = 74) (vjoin st n 1)                               ; J
           (c = 89) (vopl st 121 (st 'row)                       ; Y: yy, the whole line
                          (: t ((st 'row + n) - 1) nl (vnl st) (? (t < nl) t (nl - 1))))
@@ -1222,30 +1222,30 @@
           (c = 42) (vstar st 1)  (c = 35) (vstar st -1)         ; * #
           (c = 1) (vincr st n)   (c = 24) (vincr st (0 - n))    ; ^A ^X
           (c = 46) (vdot st rawc)                               ; .
-          (c = 105) (: _ (vsnap st) (pin st 'mode 'i))          ; i
-          (c = 97) (: _ (vsnap st)                              ; a
-                      _ (vgole st (? (0 < vlen st) (vnx (vln st) (st 'col)) 0))
-                      (pin st 'mode 'i))
-          (c = 73) (: _ (vsnap st) _ (vgole st (vink (vln st))) (pin st 'mode 'i))   ; I
-          (c = 65) (: _ (vsnap st) _ (vgole st (vlen st)) (pin st 'mode 'i))         ; A
-          (c = 111) (: _ (vsnap st)                             ; o
-                       _ (vsplice st (st 'row + 1) (st 'row) '(""))
-                       _ (pin st 'row (st 'row + 1))
-                       _ (vgole st 0)
-                       (pin st 'mode 'i))
-          (c = 79) (: _ (vsnap st)                              ; O
-                      _ (vsplice st (st 'row) (st 'row - 1) '(""))
-                      _ (vgole st 0)
-                      (pin st 'mode 'i))
+          (c = 105) (vsnap st, pin st 'mode 'i)          ; i
+          (c = 97) (vsnap st, ; a
+                    vgole st (? (0 < vlen st) (vnx (vln st) (st 'col)) 0),
+                    pin st 'mode 'i)
+          (c = 73) (vsnap st, vgole st (vink (vln st)), pin st 'mode 'i)   ; I
+          (c = 65) (vsnap st, vgole st (vlen st), pin st 'mode 'i)         ; A
+          (c = 111) (vsnap st, ; o
+                     vsplice st (st 'row + 1) (st 'row) '(""),
+                     pin st 'row (st 'row + 1),
+                     vgole st 0,
+                     pin st 'mode 'i)
+          (c = 79) (vsnap st, ; O
+                    vsplice st (st 'row) (st 'row - 1) '(""),
+                    vgole st 0,
+                    pin st 'mode 'i)
           (c = 112) (vpaste st 1 n)                             ; p
           (c = 80) (vpaste st () n)                             ; P
           (c = 118 || c = 86)                                   ; v V: visual, from here
-           (: _ (pin st 'op ()) (pins st 'va [(st 'row) (st 'col)] 'mode (c = 118 ? 'v 'V)))
+           (pin st 'op (), pins st 'va [(st 'row) (st 'col)] 'mode (c = 118 ? 'v 'V))
           (c = 117) (vundo st)                                  ; u
           (c = 18) (vredo st)                                   ; ^R
-          (c = 58) (: _ (pin st 'cmd (ednew ())) (pin st 'mode 'c))     ; :
+          (c = 58) (pin st 'cmd (ednew ()), pin st 'mode 'c)     ; :
           ((c = 47) || (c = 63))                                ; / ?
-           (: _ (pin st 'cmd (ednew ())) _ (pin st 'dir (? (c = 47) 1 -1)) (pin st 'mode 's))
+           (pin st 'cmd (ednew ()), pin st 'dir (? (c = 47) 1 -1), pin st 'mode 's)
           (c = 110) (? (two? (st 'pat)) (vhunt st (st 'dir)) (vmsg st "no previous search"))
           (c = 78) (? (two? (st 'pat)) (vhunt st (0 - st 'dir)) (vmsg st "no previous search"))
           (c = 6) (page 1) (c = 2) (page -1)                    ; ^F ^B
@@ -1274,22 +1274,22 @@
        fwd? (<a < r || (<a = r && <>a <= col))
        c1 (? fwd? <>a col) c2 (? fwd? col <>a)
        (leave _) (pins st 'va () 'mode 'n)
-       (op opc) (: _ (leave ())
-                   (? (kind = 'V || vlinop? opc) (vopl st opc r1 r2)
-                      (vospn st opc r1 c1 r2 (vnx (st 'lines r2) c2))))
+       (op opc) (leave (),
+                 (? (kind = 'V || vlinop? opc) (vopl st opc r1 r2)
+                    (vospn st opc r1 c1 r2 (vnx (st 'lines r2) c2))))
        (? (c = 27) (leave ())
           (c = 118 || c = 86) (: k (c = 118 ? 'v 'V) (? (k = kind) (leave ()) (pin st 'mode k)))
-          (c = 111) (: _ (pin st 'va [r col]) _ (pin st 'row <a) (vgole st <>a))
+          (c = 111) (pin st 'va [r col], pin st 'row <a, vgole st <>a)
           (elem c '(121 100 120 99 62 60)) (op (c = 120 ? 100 c))
           (48 <= c <= 57 && (48 < c || 0 < st 'cnt)) (pin st 'cnt (10 * st 'cnt + c - 48))
-          (c = 47 || c = 63) (: _ (pin st 'vkind kind) (vnorm st c))
-          (c = 58) (: _ (leave ()) (vnorm st c))
+          (c = 47 || c = 63) (pin st 'vkind kind, vnorm st c)
+          (c = 58) (leave (), vnorm st c)
           (elem (arrow c) vmotions) (vnorm st (arrow c))
           st))
    (vdigits k) (: s (show k) (map (\ i (s i)) (jot #s)))
    (vdot st raw)
     (: d (st 'dot)
-       (? (one? d) (vmsg st "nothing to repeat")
+       (? (atom? d) (vmsg st "nothing to repeat")
           (: k (0 < raw ? raw <d)
              ks (0 < k ? ((vdigits k) + <>d) <>d)
              _ (pin st 'op ())                     ; `.` is not a motion: d. is just .
@@ -1322,15 +1322,15 @@
            (: t (st 'cmd)
               (? ((c = 127 || c = 8 || c = -3) && edempty? t) (pin st 'mode 'n)
                  (edcmd st 'cmd c
-                  (s \ (: _ (pin st 'mode (m = 's ? (vback st) 'n))
-                          _ (vmsg st "")
-                          (? (m = 'c) (vex st)
-                             (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
-                             (: b (rebre s)
-                                (? (two? b)
-                                   (pins st 'pat <>b 'pattx s 'patw (),
-                                    vhunt st (st 'dir))
-                                   (vmsg st $ "bad pattern: " + s))))))
+                  (s \ (pin st 'mode (m = 's ? (vback st) 'n),
+                        vmsg st "",
+                        (? (m = 'c) (vex st)
+                           (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
+                           (: b (rebre s)
+                              (? (two? b)
+                                 (pins st 'pat <>b 'pattx s 'patw (),
+                                  vhunt st (st 'dir))
+                                 (vmsg st $ "bad pattern: " + s))))))
                   (_ \ pin st 'mode (m = 's ? (vback st) 'n)))))
           ; normal
           (? (st 'pc) (vpcu st c)
@@ -1443,7 +1443,7 @@
               (b <= a) ""
               !paint (snip raw a b)
               (: rw (st 'hlrow) ky [raw in a b lg] c (peep rw i ())
-                 (? (two? c && (= <c ky)) <>c
+                 (? (two? c && <c = ky) <>c
                     (: p (hue-win (st 'pens) lx raw in a b)
                        _ (pin rw i [ky p])
                        p))))))
@@ -1480,7 +1480,7 @@
        key [(st 'hlgen) w top tops left body (paint ? 1 ()) (wrap? ? 1 ())
             (? vis? [(st 'mode) vr1 vc1 vr2 vc2] ())]
        lc (st 'laycar)
-       rs (? (two? lc && (= <lc key)) <>lc
+       rs (? (two? lc && <lc = key) <>lc
              (: k (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops () top)
                 _ (pin st 'laycar [key k])
                 k))
@@ -1489,7 +1489,7 @@
    ; -- the frame: one full redraw as a single text --
    (vframe st)
     (: e (string 27) L (vlay st)
-       (go l acc) (? (one? l) acc (go >l (acc + <l + e + "[K" + "\r\n")))
+       (go l acc) (? (atom? l) acc (go >l (acc + <l + e + "[K" + "\r\n")))
        (e + "[H" + go <L "" + <>L + e + "[K"
           + e + "[" + show <>>L + ";" + show <>>>L + "H"))
 

@@ -26,23 +26,23 @@
    (tp? ('p . v . _) s) ?(v = s)
    (tkw? ('kw . v . _) k) ?(v = k)
    (idv? ('id . v . _) s) ?(v = s)
-   (idat? ts) (two? ts && (tkk <ts = 'id))         ; an identifier heads ts
-   (strat? ts) (two? ts && (tkk <ts = 'str))
+   (idat? ts) (two? ts && tkk <ts = 'id)         ; an identifier heads ts
+   (strat? ts) (two? ts && tkk <ts = 'str)
    ; -- where a refusal stood --
    ; cpp hands the spans -- ((index file)..), which file each stretch of the flat stream
    ; came from -- on a marker token at the head; a caller feeding raw lexer output reads ().
    ; the file is carried because an #include splices the header's own line numbering in:
    ; a line number alone cannot say which file it means, and lines run backwards at a splice.
-   (fspans ts) (? (two? ts && (tkk <ts = 'fspans)) (tkv <ts) ())
-   (fsbody ts) (? (two? ts && (tkk <ts = 'fspans)) >ts ts)
+   (fspans ts) (? (two? ts && tkk <ts = 'fspans) (tkv <ts) ())
+   (fsbody ts) (? (two? ts && tkk <ts = 'fspans) >ts ts)
    (filat spans i)                                  ; the file in force at stream index i
-    (: (go l cur) (? !(two? l) cur (i < <<l) cur (go >l <><l))
+    (: (go l cur) (? (atom? l) cur (i < <<l) cur (go >l <><l))
        (go spans ()))
    ; a token the failing form's re-parse stamped: (kind val line seq file). slots 4 and 5
    ; are free -- the cpp hideset and the lexer's glued-paren flag die once parse holds the
    ; stream, which reads kind and val and nothing else.
    (stampf ts i spans)
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (: t <ts
           ([(tkk t) (tkv t) <>>t i (filat spans i)] . stampf >ts (i + 1) spans)))
    (stamped? t) (two? >>>>t)                       ; a 5th cell -- probed on every lookahead, never counted
@@ -54,23 +54,21 @@
    ; one costs mark a length test and nothing else (a peep+pin per lookahead was +25%).
    far {}
    (mark ts)
-    (: _ (? !(two? ts) ()
-            (: t <ts s (seqof t)
-               (? (charm? s && (peep far 'seq -1 < s))
-                  (: _ (pin far 'seq s) (pin far 'tok t))
-                  ())))
-       ts)
-   (want ts s) (: _ (mark ts) (? (two? ts && tp? <ts s) >ts ()))
-   (peekp ts s) (: _ (mark ts) (two? ts && tp? <ts s))
+    ((? (atom? ts) ()
+        (: t <ts s (seqof t)
+           (? (charm? s && peep far 'seq -1 < s) (pin far 'seq s, pin far 'tok t) ()))),
+     ts)
+   (want ts s) (mark ts, (? (two? ts && tp? <ts s) >ts ()))
+   (peekp ts s) (mark ts, two? ts && tp? <ts s)
    ; a (v rest) | () answer carried past one required token s -> (v rest') | ()
-   (thenw r s) (? !(two? r) () (: rest (want <>r s) (? (two? rest) [<r rest] ())))
+   (thenw r s) (? (atom? r) () (: rest (want <>r s) (? (two? rest) [<r rest] ())))
    ; a refusal that knows its cause files the sentence beside the watermark; pfail
    ; reports it in place of the generic near-token line when it is still the deepest
    (blame ts msg)
     (: _ (mark ts)
        s (? (two? ts) (seqof <ts) ())
-       _ (? (charm? s && ((peep far 'seq -1) = s))
-            (: _ (pin far 'why msg) (pin far 'wseq s)) ())
+       _ (? (charm? s && peep far 'seq -1 = s)
+            (pin far 'why msg, pin far 'wseq s) ())
        ())
    asnops [["=" ()] '("+=" +) '("-=" -) '("*=" *) '("/=" /) '("%=" %)
              '("&=" &) '("|=" |) '("^=" ^) '("<<=" shl) '(">>=" shr)]
@@ -88,7 +86,7 @@
        (elem 'float specs) 'float
        (elem '__int128 specs) (? (elem 'unsigned specs) 'u128 'i128)
        (: uns (elem 'unsigned specs)
-          ll (pst32? ps && (: (n2 l k) (? !(two? l) k (n2 >l (? (= <l 'long) (k + 1) k)))
+          ll (pst32? ps && (: (n2 l k) (? (atom? l) k (n2 >l (? (<l = 'long) (k + 1) k)))
                              (1 < n2 specs 0)))                             ; two longs on t32
           base (? (elem 'char specs) 'char (elem 'short specs) 'short
                   ll 'llong (elem 'long specs) 'long 'int)
@@ -119,7 +117,7 @@
             "__builtin_memcmp" "__builtin_strlen" "__builtin_strcpy")
    ; ..and the shape test the builtin arms hide their string compares behind: pprim sees
    ; every identifier in the TU, and the shortest name any of them answers to is 16 long
-   (bib? s) (: n (tally s) (? (n < 16) () ((s 2) = 98)))     ; `__b..`, 16+
+   (bib? s) (: n #s (? (n < 16) () (s 2 = 98)))     ; `__b..`, 16+
    (libsig ps nm)
     (: vp '(ptr void) cp '(ptr char) sz (szty ps)
        (? (nm = "memset") [vp [vp 'int sz] ()]
@@ -130,7 +128,7 @@
    ; one qualifier token, and the cursor past it (an attribute id carries its parens)
    (qual? t) (? (tkk t = 'kw) (elem (tkv t) qualkw) (tkk t = 'id) (elem (tkv t) qualid) ())
    (qskip ts) (: r >ts
-                 (? ((tkk <ts = 'id) && peekp r "(")
+                 (? (tkk <ts = 'id && peekp r "(")
                      (: e (skipbal >r 1) (? (idv? <ts "__attribute__" && cleanup? ts e) (nocleanup e) e))
                     r))
    (pquals ts) (? (two? ts && qual? <ts) (pquals (qskip ts)) ts)
@@ -138,16 +136,16 @@
    ; off a declarator's tail. the `(` is required to skip: a bare one of these names is not
    ; decoration, and eating it strands whatever followed.
    (patt ts)
-    (? !(two? ts) ts
-       (((tkk <ts = 'id) && elem (tkv <ts) '("__attribute__" "__asm__" "__asm")) &&
+    (? (atom? ts) ts
+       ((tkk <ts = 'id && elem (tkv <ts) '("__attribute__" "__asm__" "__asm")) &&
         peekp >ts "(")
         (: e (skipbal >>ts 1) (? (cleanup? ts e) (nocleanup e) (patt e)))
        ts)
    ; the statement-position skip: __attribute__ only -- a leading __asm__(..) there is the
    ; inline-asm statement, and patt would balance-skip it as decoration.
    (pattr ts)
-    (? !(two? ts) ts
-       ((idv? <ts "__attribute__") && peekp >ts "(")
+    (? (atom? ts) ts
+       (idv? <ts "__attribute__" && peekp >ts "(")
         (: e (skipbal >>ts 1) (? (cleanup? ts e) (nocleanup e) (pattr e)))
        ts)
    ; cleanup is not decoration: it runs code at every exit from the scope, which a skip drops
@@ -157,7 +155,7 @@
    ; rest of its block (ps 'lren, restored with the block's shadows), so a macro that lays
    ; one twice in a function lays two labels. -> (rest shadows)
    (plabs ps ts sh)
-    (? !(two? ts) [ts sh]
+    (? (atom? ts) [ts sh]
        (peekp ts ";") [>ts sh]
        (idat? ts)
         (: nm (tkv <ts) k (ps 'lrn)
@@ -172,22 +170,22 @@
    ; ..and does the run pquals is about to drop carry `restrict`? read-only: pquals still
    ; drops it, and the fact rides out of band (ps 'rstrs) rather than in the type.
    (rstrq? ts)
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (: t <ts
           (? (tkw? t 'restrict) 1
-             ((tkk t = 'id) && elem (tkv t) '("__restrict" "__restrict__")) 1
+             (tkk t = 'id && elem (tkv t) '("__restrict" "__restrict__")) 1
              (qual? t) (rstrq? (qskip ts))
              ())))
    (leadkw? ps ts k)
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (: t <ts
           (? (tkw? t k) 1
-             ((tkk t = 'kw) && elem (tkv t) tyspec) (leadkw? ps >ts k)
+             (tkk t = 'kw && elem (tkv t) tyspec) (leadkw? ps >ts k)
              (qual? t) (leadkw? ps (qskip ts) k)
              ; a typedef name is a type specifier like any other, and C lets a qualifier
              ; follow the type: `uint32_t const x` is `const uint32_t x`. a struct/union/
              ; enum head is not walked -- its tag, and a body, sit between it and the run.
-             ((tkk t = 'id) && tkbty? ps t) (leadkw? ps >ts k)
+             (tkk t = 'id && tkbty? ps t) (leadkw? ps >ts k)
              ())))
    ; the `static` storage class -- a block-scope `static` local is laid in .bss (a real
    ; global), not a stack slot
@@ -198,29 +196,29 @@
    ; that machine register, so no storage is laid. it must be caught before patt, which
    ; would skip the asm name as decoration and rename the object in silence
    (pgreg ps ts nm regv)
-    (? (!regv || !(two? ts)) ts
+    (? (!regv || atom? ts) ts
        (!(asmid? <ts) || !(peekp >ts "(") || !(strat? >>ts) || !(peekp >>>ts ")")) ts
        (: s (tkv <>>ts)
           ; only the stack pointer: gcc reserves the register for the whole TU and we
           ; cannot, so any register the allocator uses would answer whatever it last held
           (? !(elem s '("rsp" "sp" "esp" "%rsp" "%esp"))
              (blame >>>>ts ("a global register variable is taken on the stack pointer only, not '" + s + "'"))
-             (: _ (pin (ps 'gregs) nm [s 'long]) >>>>ts))))
+             (pin (ps 'gregs) nm [s 'long], >>>>ts))))
    ; `const` in the specifier run; it names the object only when the declarator adds no
    ; pointer of its own, which cobj? decides per declarator.
    (leadconst? ps ts) (leadkw? ps ts 'const)
    ; does a specifier-run `const` reach the object? arrays are transparent (`const char
    ; a[3]` is three const chars), a pointer is not: `const char *p` qualifies the pointee.
    ; a declarator-side `char * const p` reads unqualified here and keeps its .data home.
-   (cobj? ty) (? !(two? ty) 1 (<ty = 'arr) (cobj? <>ty) !(<ty = 'ptr))
+   (cobj? ty) (? (atom? ty) 1 (<ty = 'arr) (cobj? <>ty) (<ty != 'ptr))
    ; the declaration's alias attribute: `alias("TARGET")` inside an __attribute__ run anywhere
    ; in the form (musl's weak_alias), to the first depth-0 `;` or `{` like secat?, noting a
    ; `weak` in the same run -- binding decides which definition wins. -> (TARGET weak?) | ()
    (aliasat? ts)
     (: (go s d tgt wk)
-        (? !(two? s) (? tgt [tgt wk] ())
+        (? (atom? s) (? tgt [tgt wk] ())
            (: t <s
-              (? ((d < 1) && (tp? t ";" || tp? t "{")) (? tgt [tgt wk] ())
+              (? (d < 1 && (tp? t ";" || tp? t "{")) (? tgt [tgt wk] ())
                  (tp? t "(") (go >s (d + 1) tgt wk)
                  (tp? t ")") (go >s (d - 1) tgt wk)
                  (idv? t "weak" || idv? t "__weak__") (go >s d tgt 1)
@@ -237,9 +235,9 @@
    ; symbol resolves to zero at static link. always_inline admits the name to gen's inline
    ; table size-unbounded, noinline bars it.
    (attrany? ts a b)
-    (: (go s d) (? !(two? s) ()
+    (: (go s d) (? (atom? s) ()
                    (: t <s
-                      (? ((d < 1) && (tp? t ";" || tp? t "{")) ()
+                      (? (d < 1 && (tp? t ";" || tp? t "{")) ()
                          (tp? t "(") (go >s (d + 1))
                          (tp? t ")") (go >s (d - 1))
                          (idv? t a || idv? t b) 1
@@ -252,9 +250,9 @@
    ; depth-0 `;` or `{` -- inside a declaration that shape only occurs in an __attribute__.
    ; -> NAME | ()
    (secat? ts)
-    (: (go s d) (? !(two? s) ()
+    (: (go s d) (? (atom? s) ()
                    (: t <s
-                      (? ((d < 1) && (tp? t ";" || tp? t "{")) ()
+                      (? (d < 1 && (tp? t ";" || tp? t "{")) ()
                          (tp? t "(") (go >s (d + 1))
                          (tp? t ")") (go >s (d - 1))
                          (idv? t "section" || idv? t "__section__")
@@ -268,19 +266,19 @@
    ; depth-0 `;` or `{` like secat?. `aligned` counts only inside parens, since at depth 0 it
    ; is an ordinary identifier. -> N | ()
    (alignat? ps ts)
-    (: (go s d) (? !(two? s) ()
+    (: (go s d) (? (atom? s) ()
                    (: t <s
-                      (? ((d < 1) && (tp? t ";" || tp? t "{")) ()
+                      (? (d < 1 && (tp? t ";" || tp? t "{")) ()
                          (tp? t "(") (go >s (d + 1))
                          (tp? t ")") (go >s (d - 1))
-                         ((0 < d) && (idv? t "aligned" || idv? t "__aligned__"))
+                         (0 < d && (idv? t "aligned" || idv? t "__aligned__"))
                           (? (peekp >s "(")
-                             (? (two? >>s && (tkk <>>s = 'num)) (tkv <>>s) (go >s d))
+                             (? (two? >>s && tkk <>>s = 'num) (tkv <>>s) (go >s d))
                              (? (pst32? ps) 8 16))
                          ; C11 6.7.5: `_Alignas(T)` is `_Alignof(T)`, so the type lane
                          ; answers through talign like the operator does
                          (idv? t "_Alignas" && peekp >s "(")
-                          (? (two? >>s && (tkk <>>s = 'num)) (tkv <>>s)
+                          (? (two? >>s && tkk <>>s = 'num) (tkv <>>s)
                              (: tr (pcty ps >>s)
                                 (? (two? tr) (talign ps <tr) (go >s d))))
                          (go >s d))))
@@ -327,8 +325,8 @@
                 ; gen bakes the va offsets, so only size/align/decay ride the type here
                 _ (pin (t 'stag) "__va_list_tag"
                        (? (pst32? t) '((("__ap" 0 (ptr void))) 4 4)
-                          (= tgt 'rv64) '((("__ap" 0 (ptr void))) 8 8)   ; LP64: one walking pointer, 8-byte slots
-                          (= tgt 'a64)
+                          (tgt = 'rv64) '((("__ap" 0 (ptr void))) 8 8)   ; LP64: one walking pointer, 8-byte slots
+                          (tgt = 'a64)
                            '((("__stack" 0 (ptr void)) ("__gr_top" 8 (ptr void)) ("__vr_top" 16 (ptr void))
                               ("__gr_offs" 24 int) ("__vr_offs" 28 int)) 32 8)
                           '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
@@ -357,10 +355,10 @@
                 t)
    ; does a type begin here?
    (tkbty? ps t)
-    (? !(two? t) ()
+    (? (atom? t) ()
        (tkk t = 'kw) (elem (tkv t) tyspec || elem (tkv t) '(struct union enum))
        (tkk t = 'id) (? (elem (tkv t) tyofid) 1
-                          ((tkv t) = autoid) 1
+                          (tkv t = autoid) 1
                           (peep (ps 'types) (tkv t) 0) 1 ())
        ())
 
@@ -379,35 +377,35 @@
    ; expr, () when unknown (the caller keeps a deferred 'szof then, and gen sizes it). arrays
    ; stay undecayed -- sizeof of an array is its span, and gen's szof reads the same via clval.
    (fldty ps sty nm) (: e (peep (ps 'stag) <>sty ())     ; the type of member nm off a struct type
-                        (? !(two? e) ()
+                        (? (atom? e) ()
                            (: f (assoc nm <e) (? (two? f) <>>f ()))))
    (fmof ps sty nm) (? !(stru? sty) ()                  ; a member's (byte-offset ty) off a struct type
                        (: e (peep (ps 'stag) <>sty ())
-                          (? !(two? e) ()
+                          (? (atom? e) ()
                              (: f (assoc nm <e) (? (two? f) [<>f <>>f] ())))))
    ; &((T*)0)->fld (and a.b chains over it) folds to the member's byte offset -- the offsetof
    ; idiom. the chain must ground in a deref of a null pointer cast, else it stays an address.
    (nulloff ps e)
     (: (ground b)                                    ; -> (byte-offset struct-ty) | ()
-        (? !(two? b) ()
+        (? (atom? b) ()
            (<b = 'deref)
             (: c <>b
-               (? (two? c && (<c = 'cast))
+               (? (two? c && <c = 'cast)
                    (: ty <>c v (cfold (pw64 ps) <>>c)
-                      (? (ptr? ty && charm? v && (v = 0)) [0 <>ty] ()))
+                      (? (ptr? ty && charm? v && v = 0) [0 <>ty] ()))
                   ; a constant index off a null-grounded array or pointer: in[1].b
                   (: pv (? (zbase? c) (pval c) ())
                      t (? (two? pv) (ptype ps c) ())
                      (? (ptr? t || arr? t) [<pv <>t] ()))))
            (<b = 'dot)
             (: gr (ground <>b)
-               (? !(two? gr) ()
+               (? (atom? gr) ()
                   (: f (fmof ps <>gr <>>b)
                      (? (two? f) [(<gr + <f) <>f] ()))))
            ())
        ; the pointer under an index grounds at null itself, never at another constant
        (zbase? x)
-        (? !(two? x) ()
+        (? (atom? x) ()
            (<x = 'cast) (: v (cfold (pw64 ps) <>>x) (charm? v && v = 0))
            (<x = 'bin) (zbase? <>>x || zbase? <>>>x)
            (<x = 'dot) (two? (ground x))
@@ -415,42 +413,42 @@
        ; a null-grounded pointer value -> (byte-address stride) | (): the cast ((T*)K), and
        ; + arithmetic over it scaled by the pointee. not so grounded stays an address.
        (pval x)
-        (? !(two? x) ()
-           ((<x = 'cast) && ptr? <>x)
+        (? (atom? x) ()
+           (<x = 'cast && ptr? <>x)
             (: ty <>x
                v (cfold (pw64 ps) <>>x)
                (? (charm? v) [v (tsz ps <>ty)] ()))
-           ((<x = 'bin) && (= <>x '+))
+           (<x = 'bin && <>x = '+)
             (: pa (pval <>>x)
                (? (two? pa)
-                  (: n (cfold (pw64 ps) <>>>x) (? (charm? n) [(<pa + (* n <>pa)) <>pa] ()))
+                  (: n (cfold (pw64 ps) <>>>x) (? (charm? n) [(<pa + (n * <>pa)) <>pa] ()))
                   (: pb (pval <>>>x)
-                     (? !(two? pb) ()
-                        (: n (cfold (pw64 ps) <>>x) (? (charm? n) [(<pb + (* n <>pb)) <>pb] ()))))))
+                     (? (atom? pb) ()
+                        (: n (cfold (pw64 ps) <>>x) (? (charm? n) [(<pb + (n * <>pb)) <>pb] ()))))))
            ; a null-grounded array member decays to its (constant) address with
            ; the element stride -- &((T*)0)->ts[i] (musl's ioctl compat table)
            (<x = 'dot)
             (: gr (ground x)
-               (? !(two? gr) ()
+               (? (atom? gr) ()
                   (: ty <>gr
                      (? (arr? ty) [<gr (tsz ps <>ty)] ()))))
            ())
-       (? (two? e && (<e = 'deref))                  ; &*(ptr-expr): the pointer's own value
+       (? (two? e && <e = 'deref)                  ; &*(ptr-expr): the pointer's own value
            (: pv (pval <>e) (? (two? pv) <pv ()))
-          !(two? e && (<e = 'dot)) ()
+          !(two? e && <e = 'dot) ()
           (: gr (ground <>e)
-             (? !(two? gr) ()
+             (? (atom? gr) ()
                 (: f (fmof ps <>gr <>>e)
                    (? (two? f) (<gr + <f) ()))))))
-   (ptrarg ps e) (? !(two? e && (<e = 'bin)) ()          ; the ptr/arr operand of a `bin + ptr idx` (a[i] desugars so)
+   (ptrarg ps e) (? !(two? e && <e = 'bin) ()          ; the ptr/arr operand of a `bin + ptr idx` (a[i] desugars so)
                     (: a (ptype ps <>>e) b (ptype ps <>>>e)
                        (? (ptr? a || arr? a) a (ptr? b || arr? b) b ())))
    ; a null pointer constant (C11 6.3.2.3p3): an integer constant expression folding to 0,
    ; with or without a cast to a pointer type -- cfold folds through a cast whose target is
    ; not an integer type, so both spellings arrive here as 0
-   (npc? e) (: v (cfold 1 e) (? (cint? v && (v = 0)) 1 ()))
+   (npc? e) (: v (cfold 1 e) (? (cint? v && v = 0) 1 ()))
    (ptype ps e)
-    (? !(two? e) ()
+    (? (atom? e) ()
        (: k <e
           (? (k = 'sexpr) <>>>e                            ; a statement expression carries its own
              (k = 'var) (: lt (peep (ps 'locals) <>e ())   ; locals shadow; a file-scope name falls through
@@ -472,51 +470,51 @@
              (k = 'addr) (: it (ptype ps <>e) (? it ['ptr it] ()))
              ; a call through a named function: its 'sigs return type (the
              ; complex promotion below needs clog's answer to type complex)
-             (k = 'call) (? (two? <>e && (= <<>e 'var))
+             (k = 'call) (? (two? <>e && <<>e = 'var)
                             (: sg (peep (ps 'sigs) <><>e ())
                                (? (two? sg) <sg ()))
                             ())
-             (k = 'str) ['arr 'char (tally <>e + 1)]     ; a literal is its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
+             (k = 'str) ['arr 'char (#<>e + 1)]     ; a literal is its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
              ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
-             (k = 'num) (? ((-2147483648 <= <>e) && (<>e <= 2147483647)) 'int 'long)
+             (k = 'num) (? (-2147483648 <= <>e && <>e <= 2147483647) 'int 'long)
              (k = 'flo) 'double
              (k = 'flof) 'float
              ; arithmetic rides the typing door: ptr - ptr is ptrdiff_t, ptr +- int the
              ; decayed pointer, both-arithmetic puac of the operands -- so sizeof(c + x)
              ; folds to 4, not the register's 8. either side unknown defers to gen's szof.
-             ((k = 'bin) && elem <>e '(+ - * / % & ^ |))
+             (k = 'bin && elem <>e '(+ - * / % & ^ |))
               (: a (ptype ps <>>e) b (ptype ps <>>>e)
-                 (? ((ptr? a || arr? a) && (ptr? b || arr? b)) (? (= <>e '-) 'long ())
+                 (? ((ptr? a || arr? a) && (ptr? b || arr? b)) (? (<>e = '-) 'long ())
                     (ptr? a || arr? a) (? (elem <>e '(+ -)) (tdecay a) ())
-                    (ptr? b || arr? b) (? (= <>e '+) (tdecay b) ())
+                    (ptr? b || arr? b) (? (<>e = '+) (tdecay b) ())
                     (parith? a && parith? b) (puac !(pst32? ps) a b)
                     ()))
              ; a shift's type is the promoted left operand alone (C11 6.5.7) --
              ; the right side never converts into it
-             ((k = 'bin) && elem <>e '(shl shr))
+             (k = 'bin && elem <>e '(shl shr))
               (: a (ptype ps <>>e) (? (parith? a) (pprom a) ()))
-             ((k = 'un) && elem <>e '(neg bnot))
+             (k = 'un && elem <>e '(neg bnot))
               (: a (ptype ps <>>e) (? (parith? a) (pprom a) ()))
              ; ?: arms meet by puac (6.5.15); same non-arithmetic type rides
              ; through whole (sizeof(c ? s1 : s2) over one struct type)
              (k = 'cond)
               (: a (ptype ps <>>e) b (ptype ps <>>>e)
                  (? (parith? a && parith? b) (puac !(pst32? ps) a b)
-                    (two? a && (a = b)) a
+                    (two? a && a = b) a
                     ; C11 6.5.15p6: with one operand a null pointer constant the result
                     ; takes the other's type -- the cast is a null pointer constant only
                     ; when its operand folds, which is what the kernel's __is_constexpr reads
                     (npc? <>>e && ptr? b) b
                     (npc? <>>>e && ptr? a) a
                     ; both pointers, one of them to void: pointer to void, same paragraph
-                    (ptr? a && ptr? b && (= a '(ptr void))) a
-                    (ptr? a && ptr? b && (= b '(ptr void))) b
+                    (ptr? a && ptr? b && a = '(ptr void)) a
+                    (ptr? a && ptr? b && b = '(ptr void)) b
                     ()))
              ; a truth value is an int (C11 6.5.3.3, 6.5.8, 6.5.13): !, the six relations,
              ; && and || -- whatever the operand, so no operand typing here
-             ((k = 'un) && (= <>e 'not)) 'int
-             ((k = 'bin) && elem <>e '(eq ne lt le gt ge)) 'int
+             (k = 'un && <>e = 'not) 'int
+             (k = 'bin && elem <>e '(eq ne lt le gt ge)) 'int
              (elem k '(land lor)) 'int
              ; an assignment and an increment answer the lvalue's type, a comma its right side
              (elem k '(asn post)) (ptype ps <>e)
@@ -528,7 +526,7 @@
    ; knows a double result, ptys so it classifies its arguments by the prototype -- the only
    ; thing that tells a float argument from the double it widened to.
    (skipbal s d) (? (d < 1) s
-                    !(two? s) ()
+                    (atom? s) ()
                     (peekp s "(") (skipbal >s (d + 1))
                     (peekp s ")") (skipbal >s (d - 1))
                     (skipbal >s d))
@@ -542,17 +540,17 @@
                             (? (peekp t2 "]") (adims ps >t2 (0 . acc))
                                ; C11 6.7.6.2p4: `[*]` is a prototype's unspecified VLA
                                ; bound, and a parameter decays to a pointer either way
-                               ((peekp t2 "*") && peekp >t2 "]") (adims ps >>t2 (0 . acc))
+                               (peekp t2 "*" && peekp >t2 "]") (adims ps >>t2 (0 . acc))
                                (: er (thenw (pexpr ps t2) "]")
-                                  (? !(two? er) ()
+                                  (? (atom? er) ()
                                      (: dv (cfold (pw64 ps) <er)
                                         (? (charm? dv) (adims ps <>er (dv . acc))
                                            (adims ps <>er (['vdim <er] . acc)))))))))
    ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3);
    ; a 'vdim dim lays ('varr elt expr) instead
-   (mkarr ety dims) (? !(two? dims) ety
+   (mkarr ety dims) (? (atom? dims) ety
                        (: d <dims
-                          (? (two? d && (= <d 'vdim)) ['varr (mkarr ety >dims) <>d]
+                          (? (two? d && <d = 'vdim) ['varr (mkarr ety >dims) <>d]
                              ['arr (mkarr ety >dims) d])))
    (varr? ('varr . _)) 1
    (vmod? ty) (? (varr? ty) 1 ((ptr? ty || arr? ty) && vmod? <>ty))   ; a VLA anywhere in the derivation
@@ -567,10 +565,10 @@
            ; unprototyped one: AAPCS-VFP keeps a variadic argument out of the co-processor
            ; registers, and no `...` rides the type, so the list would place them wrong.
            pt9 (two? rp && !(rp 2) ? (map caup <rp))
-           (? !(two? rp) () (psufs ps <>rp name (\ t (w ['fn t pt9])) (? bare rp dat) ())))
+           (? (atom? rp) () (psufs ps <>rp name (\ t (w ['fn t pt9])) (? bare rp dat) ())))
        (peekp ts "[")
         (: ar (adims ps ts ())
-           (? !(two? ar) () (psufs ps <>ar name (\ t (w (mkarr t <ar))) dat ())))
+           (? (atom? ar) () (psufs ps <>ar name (\ t (w (mkarr t <ar))) dat ())))
        [[name w dat bare] ts])
    ; direct declarator, recursive: name | ( *.. dtor ), then suffixes -- covers (*name)(params),
    ; the redundant (name), (*const p), and nested forms like `void (*(*x)(a))(b)`. a paren
@@ -587,11 +585,11 @@
           (: sr (nstars >ts 0)
              k <sr t2 <>sr
              dr (pdirect ps t2)
-             (? !(two? dr) ()
+             (? (atom? dr) ()
                 (: e <dr
                    r (want <>dr ")")
-                   (? !(two? r) ()
-                      (psufs ps r <e (\ t (<>e (ptrk k t))) <>>e (<>>>e && (k = 0)))))))))
+                   (? (atom? r) ()
+                      (psufs ps r <e (\ t (<>e (ptrk k t))) <>>e (<>>>e && k = 0))))))))
    ; a leading `*..` run (quals interleaved) over ty -> (ty rest)
    (pstars ts ty) (: s (pquals ts) (? (peekp s "*") (pstars >s ['ptr ty]) [ty s]))
    (pdtor ps ts base)                               ; ps threads to adims for const-expr array dims; -> ((name ty) rest) | ()
@@ -607,13 +605,13 @@
            ; its wrap lays the declared type over ty; dat (the name's own params)
            ; rides out as the third result element when the declarator is a fn
            (: dr (pdirect ps ts2)
-              (? !(two? dr) ()
+              (? (atom? dr) ()
                  (: e <dr ty2 (<>e ty) dat <>>e
                     [(? (two? dat) [<e ty2 dat] [<e ty2]) <>dr])))
           !(idat? ts2)           ; no name: an abstract declarator (unnamed proto param)
            (? (peekp ts2 "[")                          ; abstract array `T [n]..` (e.g. `struct timespec const[2]`)
                (: dr (adims ps ts2 ())                 ; -> nested arr of ty; pparams decays it to a pointer
-                  (? !(two? dr) () [[() (mkarr ty <dr)] <>dr]))
+                  (? (atom? dr) () [[() (mkarr ty <dr)] <>dr]))
               ; ":" is _Generic's association -- an anonymous bitfield never reaches
               ; here (pmembers takes its own ":" arm first), so the widening costs it nothing
               (peekp ts2 ")" || peekp ts2 "," || peekp ts2 ":") [[() ty] ts2]
@@ -625,7 +623,7 @@
                     (? (two? t2) [[name ['fn ty]] t2] ()))
                 !(peekp ts3 "[") [[name ty] ts3]
                 (: dr (adims ps ts3 ())               ; one or more [n]/[] suffixes -> a nested arr of ty
-                   (? !(two? dr) ()
+                   (? (atom? dr) ()
                       [[name (mkarr ty <dr)] <>dr]))))))
 
    ; -- base types: scalars, struct/union (with bodies), enum, typedef names --
@@ -633,18 +631,18 @@
    ; ": const-expr" bitfield width (ts starts AT the ":") -> (width rest) | ()
    (pbits ps ts) (? !(peekp ts ":") ()
                     (: er (pasn ps >ts)
-                       (? !(two? er) ()
+                       (? (atom? er) ()
                           (: cv (cfold (pw64 ps) <er) (? (charm? cv) [cv <>er] ())))))
    ; the extensions ride the `moon` dialect -- ours, and the default. `-std=c` is the fence.
-   (moon? ps) (= (peep ps 'dia 'moon) 'moon)
+   (moon? ps) (peep ps 'dia 'moon = 'moon)
    ; a label is an identifier then `:` -- and not `::`, which nothing here spells but a
    ; reader might, so the test is on the pair rather than the first token alone.
    (plabel? ts) (: t <ts
-                   (? !(two? ts) 0
-                      !(= (tkk t) 'id) 0
+                   (? (atom? ts) 0
+                      (tkk t != 'id) 0
                       (peekp >ts ":")))
    (pmembers ps ts acc)                             ; member pairs ((name ty)..); () name = anonymous splice; (name ty width) = a bitfield
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (peekp ts "}") [(rev acc) >ts]
        ; a bare `;` in a struct body declares nothing. C11 has no such struct-declaration and
        ; gcc takes one anyway (C23 spells it); a macro that cannot know whether it is empty lays one
@@ -662,27 +660,27 @@
         (: nm (tkv <ts)
            (? (two? (want >ts ":")) (pmembers ps >>ts ([nm 'label] . acc)) ()))
        (: br (pbty ps ts)
-          (? !(two? br) ()
+          (? (atom? br) ()
              (: bty <br ts2 <>br
                 (? (peekp ts2 ";")                   ; an anonymous struct/union member
                    (? (stru? bty) (pmembers ps >ts2 ([() bty] . acc)) ())
                    (: mq (qspec ps ts bty)   ; _Generic's mask for this run; playout has no slot for it
                       (dfin mem2 toks acc2)          ; after a declarator (+ optional bitfield): , or ;
-                       (: _ (? (<mem2 && mq) (pin ps 'qmemacc ([<mem2 mq] . peep ps 'qmemacc ())) 0)
-                          (? (peekp toks ",") (dts >toks (mem2 . acc2))
-                             (: rest (want toks ";")
-                                (? (two? rest) [(mem2 . acc2) rest] ()))))
+                       ((? (<mem2 && mq) (pin ps 'qmemacc ([<mem2 mq] . peep ps 'qmemacc ())) 0),
+                        (? (peekp toks ",") (dts >toks (mem2 . acc2))
+                           (: rest (want toks ";")
+                              (? (two? rest) [(mem2 . acc2) rest] ()))))
                       (dts ts3 acc2)                 ; dtor [: width] (, dtor [: width])* ;
                        ; an anonymous bitfield (padding, or a `:0` aligner) is a declarator of
                        ; the list like any other -- `u32 : 31, invalid : 1;` names only the second
                        (? (peekp ts3 ":")
                           (: bw (pbits ps ts3)
-                             (? !(two? bw) () (dfin [() bty <bw] (pattr <>bw) acc2)))
+                             (? (atom? bw) () (dfin [() bty <bw] (pattr <>bw) acc2)))
                        (: dr (pdtor ps ts3 bty)
-                          (? !(two? dr) ()
+                          (? (atom? dr) ()
                              (peekp <>dr ":")        ; a bitfield: append the width to (name ty)
                               (: bw (pbits ps <>dr)
-                                 (? !(two? bw) () (dfin (<dr + [<bw]) (pattr <>bw) acc2)))
+                                 (? (atom? bw) () (dfin (<dr + [<bw]) (pattr <>bw) acc2)))
                              ; a trailing __attribute__((..)) on a member declarator. an
                              ; `aligned` ask drops here as it does on the leading spelling
                              (dfin <dr (pattr <>dr) acc2))))
@@ -701,36 +699,36 @@
        (: r >ts
           (? !(peekp r "(") [0 ts]
              (: (scan s d pk)
-                 (? (!(two? s) || (d < 1)) [pk s]
+                 (? (atom? s || d < 1) [pk s]
                     (peekp s "(") (scan >s (d + 1) pk)
                     (peekp s ")") (scan >s (d - 1) pk)
-                    ((tkk <s = 'id) && elem (tkv <s) '("packed" "__packed__")) (scan >s d 1)
+                    (tkk <s = 'id && elem (tkv <s) '("packed" "__packed__")) (scan >s d 1)
                     (scan >s d pk))
                 r2 (scan >r 1 0)
                 nx (pattpk <>r2)
                 [(<r2 | <nx) <>nx]))))
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
     (: (go l bit mx acc)
-        (? !(two? l)
+        (? (atom? l)
            (: a2 (? (mx < 1) 1 mx)
               [(rev acc) (aup (>> (bit + 7) 3) a2) a2])
            (: m <l name <m ty <>m
-              (? (= ty 'label)
+              (? (ty = 'label)
                  ; a struct label is a zero-width marker, typed as a zero-length char array so
                  ; `s.hdr` decays to the address and stays an lvalue (offsetof still answers).
                  ; it aligns as what follows it: before a member, that member's own alignment,
                  ; or the label names the padding and &s.hdr != &s.b; at the end, the struct's
                  ; alignment, so a trailing label equals sizeof and mx is already final.
-                 (: (nxt r) (? !(two? r) () (: t2 <>(<r) (? (= t2 'label) (nxt >r) t2)))
+                 (: (nxt r) (? (atom? r) () (: t2 <>(<r) (? (t2 = 'label) (nxt >r) t2)))
                     nt (nxt >l)
                     la (? pk 1 nt (talign ps nt) (? (mx < 1) 1 mx))
-                    at (? uni 0 ((aup bit (la * 8)) >> 3))   ; a union flattens every offset
+                    at (? uni 0 (aup bit (la * 8) >> 3))   ; a union flattens every offset
                     (go >l bit mx ([name at ['arr 'char 0]] . acc)))
                  (bfmem? m)                          ; a bitfield member (named or anonymous): (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
                     nmx (? (mx < a) a mx)
-                    (? (= w 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
+                    (? (w = 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
                        uni (: fld (? name [name 0 ['bitfield ty 0 w]] ())
                               (go >l (? (bit < ubits) ubits bit) nmx (? name (fld . acc) acc)))
                        (: bit2 (? (((& bit (ubits - 1)) + w) > ubits) (aup bit ubits) bit)   ; bump to avoid straddling the unit
@@ -744,7 +742,7 @@
                     isz <>inner
                     sbit (? uni 0 (aup bit (ia * 8)))
                     at (sbit >> 3)
-                    (spl fs acc2) (? !(two? fs) acc2
+                    (spl fs acc2) (? (atom? fs) acc2
                                      (: f <fs
                                         (spl >fs ([<f (at + <>f) <>>f] . acc2))))
                     nmx (? (mx < ia) ia mx)
@@ -782,15 +780,15 @@
    (tagref ps nm) (peep (ps 'tags) nm nm)
    (pbty ps ts0)
     (: ts (pquals ts0)
-     (? !(two? ts) ()
+     (? (atom? ts) ()
        (: t <ts
-          (? ((tkk t = 'kw) && elem (tkv t) tyspec)         ; a run of type specifiers -> one canonical type
-              (: (grab l acc) (? (two? l && (tkk <l = 'kw) && elem (tkv <l) tyspec)
+          (? (tkk t = 'kw && elem (tkv t) tyspec)         ; a run of type specifiers -> one canonical type
+              (: (grab l acc) (? (two? l && tkk <l = 'kw && elem (tkv <l) tyspec)
                                  (grab >l (tkv <l . acc))
                                  ; a qualifier interleaved in the run (`unsigned const char`):
                                  ; C's declaration specifiers are order-free -- skip and continue
                                  (: l2 (pquals l)
-                                    (? (two? l2 && (tkk <l2 = 'kw) && elem (tkv <l2) tyspec)
+                                    (? (two? l2 && tkk <l2 = 'kw && elem (tkv <l2) tyspec)
                                        (grab l2 acc)
                                        [(rev acc) l])))
                  r (grab ts ())
@@ -809,7 +807,7 @@
                     (: tag2 (? tag (ptagkey ps tag) (panon ps))
                        qpre (peep ps 'qmemacc ())    ; _Generic's member marks stack with the bodies
                        mr (pmembers ps >ts3 ())
-                       (? !(two? mr) ()
+                       (? (atom? mr) ()
                           (: pa (pattpk <>mr)          ; a trailing __attribute__((packed)) lays align-1
                              lay (playout ps <mr uni (<pb | <pa))
                              _ (pin (ps 'stag) tag2 lay)
@@ -833,8 +831,8 @@
                   (: wide (? (pos && 4294967295 < hi) 'ulong
                              (!pos && (hi > 2147483647 || lo < -2147483648)) 'long ())
                      narrow (? pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
-                               ((-128 <= lo) && (hi <= 127)) 'char
-                               ((-32768 <= lo) && (hi <= 32767)) 'short
+                               (-128 <= lo && hi <= 127) 'char
+                               (-32768 <= lo && hi <= 32767) 'short
                                'int)
                      ty (? wide wide
                            (pst32? ps || pk) narrow
@@ -850,13 +848,13 @@
                               ts5 >ts4
                               vr (? (peekp ts5 "=")
                                     (: er (pasn ps >ts5)              ; = const-expr: fold it (enum consts, 1<<n, A+1) -- not just a literal
-                                       (? !(two? er) ()
+                                       (? (atom? er) ()
                                           (: cv (cfold (pw64 ps) <er)
                                              ; a sun-sized enumerator is still a number, and gcc
                                              ; widens the underlying type rather than refusing
                                              (? (cint? cv) [cv <>er] ()))))
                                     [v ts5])
-                              (? !(two? vr) ()
+                              (? (atom? vr) ()
                                  (: _ (spin ps 'enums name <vr)
                                     ts6 <>vr
                                     pos2 (pos && !(<vr < 0))
@@ -867,26 +865,26 @@
                                           (? (two? rest) [(ety pos2 lo2 hi2 <pa) <>pa] ())))))))
                        (consts >ts3 0 1 0 0))
                     [(peep (ps 'etag) tag 'int) ts3]))
-             ((tkk t = 'id) && (? (peep (ps 'types) (tkv t) 0) 1 ()))
+             (tkk t = 'id && (? (peep (ps 'types) (tkv t) 0) 1 ()))
               [(peep (ps 'types) (tkv t) 0) >ts]
              ; __auto_type NAME = init: the initializer's own type, parsed here with the cursor
              ; left at the name so the ordinary declarator path runs. gcc allows no other declarator
-             ((tkk t = 'id) && ((tkv t) = autoid))
+             (tkk t = 'id && tkv t = autoid)
               (: r1 >ts
                  (? !(idat? r1) ()
                     !(peekp >r1 "=") ()
                     (: er (pasn ps >>r1)
-                       (? !(two? er) ()
+                       (? (atom? er) ()
                           (: ty (ptype ps <er)
                              (? ty [ty r1] ()))))))
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time type --
              ; a type-name reads pcty, an expression ptype (whose 'sigs lane carries weak_alias)
-             ((tkk t = 'id) && elem (tkv t) tyofid)
+             (tkk t = 'id && elem (tkv t) tyofid)
               (: r1 (want >ts "(")
-                 (? !(two? r1) ()
+                 (? (atom? r1) ()
                     (tyat? ps r1) (thenw (pcty ps r1) ")")
                     (: er (thenw (pasn ps r1) ")")
-                       (? !(two? er) ()
+                       (? (atom? er) ()
                           (: ty (ptype ps <er)
                              (? ty [ty <>er] ()))))))
              ()))))
@@ -894,7 +892,7 @@
    ; arrays, and the function-pointer form `T (*)(params)` (name = ()).
    (pcty ps ts)
     (: br (pbty ps ts)
-       (? !(two? br) ()
+       (? (atom? br) ()
           (: dr (pdtor ps <>br <br)
              (? (two? dr) [<><dr <>dr] ()))))
 
@@ -918,10 +916,10 @@
    (qbare ty) (? (cq? ty) <>>ty ty)         ; lvalue conversion drops the top-level qualifier
    ; one token's const/volatile bit. restrict is not in it -- that qualifies aliasing, not
    ; the type's identity, and rides (ps 'rstrs) out of band.
-   (cvq t) (? ((tkk t = 'kw) && (tkv t = 'const)) 1
+   (cvq t) (? (tkk t = 'kw && tkv t = 'const) 1
               (idv? t "__const") 1
-              ((tkk t = 'kw) && (tkv t = 'volatile)) 2
-              ((tkk t = 'id) && elem (tkv t) '("__volatile__" "__volatile")) 2
+              (tkk t = 'kw && tkv t = 'volatile) 2
+              (tkk t = 'id && elem (tkv t) '("__volatile__" "__volatile")) 2
               0)
    ; the specifier run read twice over: its own const/volatile, and what a typedef name in
    ; it brought (`typedef const char *ccp`). -> (own typedef's). sawty ends the walk at the
@@ -929,11 +927,11 @@
    ; a string scan plus a hash lookup per declaration in the TU for an answer that is always 0.
    (qrun ps ts)
     (: (go l sawty)
-        (? !(two? l) [0 0]
+        (? (atom? l) [0 0]
            (: t <l
-              (? ((tkk t = 'kw) && (elem (tkv t) qualkw || elem (tkv t) tyspec))
+              (? (tkk t = 'kw && (elem (tkv t) qualkw || elem (tkv t) tyspec))
                   (: r (go >l (sawty || elem (tkv t) tyspec)) [(<r | cvq t) <>r])
-                 !(tkk t = 'id) [0 0]
+                 (tkk t != 'id) [0 0]
                  sawty [0 0]
                  (elem (tkv t) qualid) (go (qskip l) sawty)
                  (: q (peep (ps 'qtdef) (tkv t) 0)
@@ -944,7 +942,7 @@
    ; lvalue-converted controlling expression is compatible with, so the row is unreachable.
    ; stops at anything that is not a star or a qualifier.
    (qtop? ts)
-    (: (go l q) (? !(two? l) q
+    (: (go l q) (? (atom? l) q
                    (tp? <l "*") (go >l ())
                    (0 < cvq <l) (go >l 1)
                    (qual? <l) (go >l q)
@@ -959,27 +957,27 @@
    (qmempin ps tag qpre)
     (: now (peep ps 'qmemacc ())
        (go l k) (? (k < 1) 0
-                   (: _ (pin (ps 'qmem) (tag + "." + <<l) <><l) (go >l (k - 1))))
-       _ (go now (tally now - tally qpre))
+                   (pin (ps 'qmem) (tag + "." + <<l) <><l, go >l (k - 1)))
+       _ (go now (#now - #qpre))
        (pin ps 'qmemacc qpre))
    ; a type-name for an association: pcty's answer marked, plus that top-level bit.
    ; -> (ty topq rest) | ()
    (pcqty ps ts)
     (: br (pbty ps ts)
-       (? !(two? br) ()
+       (? (atom? br) ()
           (: dts <>br
              bq (qspec ps ts <br)
              dr (pdtor ps dts <br)
-             (? !(two? dr) ()
+             (? (atom? dr) ()
                 (: ty <><dr
                    [(qmark bq ty) (qtop? dts) <>dr])))))
    ; the controlling expression's marked type; everything not on file falls back to ptype,
    ; an unqualified answer.
    (qtype ps e)
     (: p (ptype ps e)
-       (? !(two? e) p
+       (? (atom? e) p
           (: k <e
-             (? (k = 'var) (: q (peep (ps 'qtys) <>e 'none) (? (= q 'none) p q))
+             (? (k = 'var) (: q (peep (ps 'qtys) <>e 'none) (? (q = 'none) p q))
                 (k = 'deref) (: it (qtype ps <>e) (? (ptr? it || arr? it) <>it p))
                 (k = 'addr) (: it (qtype ps <>e) (? it ['ptr it] p))
                 (k = 'dot) (: bt (qtype ps <>e)
@@ -991,17 +989,17 @@
    ; taking the answer only when it strips back to what the node kept.
    (qctl ps ts e)
     (: p (qtype ps e)
-       (? !(two? e && (<e = 'cast)) p
+       (? !(two? e && <e = 'cast) p
           !(ptyat? ps ts) p
           (: cr (pcqty ps >ts)
-             (? (two? cr && (qstrip <cr = p)) <cr p))))
+             (? (two? cr && qstrip <cr = p) <cr p))))
    ; _Generic's associations: `type-name : expr` rows, `default` wearing 'dflt.
    ; a row is (ty topq expr). -> (rows rest) | ()
    (pgarms ps ts)
     (: tr (? (tkw? <ts 'default) ['dflt () >ts] (pcqty ps ts))
        rk (? (two? tr) (want <>>tr ":") ())
        er (? (two? rk) (pasn ps rk) ())
-       (? !(two? er) ()
+       (? (atom? er) ()
           (: r <>er row [<tr <>tr <er]
              (? !(peekp r ",") [[row] r]
                 (: more (pgarms ps >r)
@@ -1009,9 +1007,9 @@
    ; the selected expression, presence-wrapped. equality is structural over the marked type,
    ; so `const int *` and `int *` are two rows; a top-level-qualified row matches nothing.
    (gpick rows ty)
-    (: (go l w) (? !(two? l) w                       ; w carries the default: one pass settles it
+    (: (go l w) (? (atom? l) w                       ; w carries the default: one pass settles it
                    (: r <l t <r q <>r e <>>r
-                      (? (!q && (t = ty)) [1 e] (go >l (? (t = 'dflt) [1 e] w)))))
+                      (? (!q && t = ty) [1 e] (go >l (? (t = 'dflt) [1 e] w)))))
        (go rows ()))
 
    ; complex usual-arithmetic conversion (C99 6.3.1.8): one side complex, the other
@@ -1029,11 +1027,11 @@
    ; one left-associative binary level
    (plevel ps sub ops ts)
     (: r (sub ps ts)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (: (more l ts2)
               (: t (? (two? ts2) <ts2 ())
-                 hit (? (two? t && (tkk t = 'p)) (assoc (tkv t) ops) ())
-                 (? !(two? hit) [l ts2]
+                 hit (? (two? t && tkk t = 'p) (assoc (tkv t) ops) ())
+                 (? (atom? hit) [l ts2]
                     (: r2 (sub ps >ts2)
                        (? (two? r2)
                           (more (mkbin ps <>hit l <r2) <>r2)
@@ -1042,7 +1040,7 @@
 
    ; primary := num | str | id (an enum constant folds here) | ( expr )
    (pprim ps ts)
-    (? !(two? (mark ts)) ()         ; the bottom of the expression ladder: mark here and a bad operand reports itself, not the operator before it
+    (? (atom? (mark ts)) ()         ; the bottom of the expression ladder: mark here and a bad operand reports itself, not the operator before it
        (: t <ts
           (? (tkk t = 'num)                           ; past int on t32, long is too narrow: long long
               [(? (pst32? ps && 2147483647 < tkv t) ['cast 'llong ['num (tkv t)]] ['num (tkv t)]) >ts]
@@ -1050,7 +1048,7 @@
               [['cast 'uint ['num (tkv t)]] >ts]     ; 1u an unsigned INT (-1u wraps at 32 bits),
              (tkk t = 'ulnum)                                   ; 1ul an unsigned long -- and on t32, a
               (: v (tkv t)                                      ; value past the 32-bit word promotes to
-                 uty (? (pst32? ps && ((v < 0) || (4294967295 < v))) 'ullong 'ulong)     ; ullong (C99 6.4.4.1)
+                 uty (? (pst32? ps && (v < 0 || 4294967295 < v)) 'ullong 'ulong)     ; ullong (C99 6.4.4.1)
                  [['cast uty ['num v]] >ts])
              (tkk t = 'ullnum)                                  ; 1ull: the suffix forces 64 bits on t32
               [['cast (? (pst32? ps) 'ullong 'ulong) ['num (tkv t)]] >ts]
@@ -1083,13 +1081,13 @@
                         (tkk t = 'str32) 'uint
                         (elem (peep ps 'tgt ()) '(a64 thumb2 thumb2sp thumb1)) 'uint
                         'int)
-                 (s16 l) (? !(two? l) ()
+                 (s16 l) (? (atom? l) ()
                             (65536 <= <l) (: v (<l - 65536)
                                              ((55296 + (v >> 10)) . ((56320 + (v & 1023)) . s16 >l)))
                             (<l . s16 >l))
                  cps (: raw (utf8dec (tkv t)) (? (tkk t = 'str16) (s16 raw) raw))
-                 (nums l) (? !(two? l) [['num 0]] (['num <l] . nums >l))
-                 [['clit ['arr ety (tally cps + 1)] ['init (nums cps)]] >ts])
+                 (nums l) (? (atom? l) [['num 0]] (['num <l] . nums >l))
+                 [['clit ['arr ety (#cps + 1)] ['init (nums cps)]] >ts])
              ; _Generic (C11 6.5.1.1): the controlling expression is typed, never
              ; evaluated -- only the selected arm reaches gen. no match, no default: refuse.
              (idv? t "_Generic")
@@ -1131,8 +1129,8 @@
                  (? (two? rest) [['asn ['deref <ra] ['deref <rb]] rest] ()))
              ; a library builtin is its plain name: rewrite it, and declare the name if
              ; nothing else has, so the call binds and the link pulls the member by need
-             ((tkk t = 'id) && bib? (tkv t) && elem (tkv t) libbin)
-              (: nm (snip (tkv t) 10 (tally (tkv t)))
+             (tkk t = 'id && bib? (tkv t) && elem (tkv t) libbin)
+              (: nm (snip (tkv t) 10 #(tkv t))
                  _ (? (peep (ps 'sigs) nm ()) 0 (pin (ps 'sigs) nm (libsig ps nm)))
                  [['var nm] >ts])
              ; the type-level builtins each answer a constant at parse: their operands are
@@ -1140,7 +1138,7 @@
              ; __builtin_offsetof seeds &((T*)0)->NAME, lets the postfix ladder take the
              ; `.b` / `[i]` tail, then folds the address through nulloff like the hand idiom.
              ; a runtime index (`[i]`) folds nowhere: the address itself is the answer, as gcc's
-             ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_offsetof"))
+             (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_offsetof")
               (: r1 (want >ts "(")
                  tr (? (two? r1) (pcty ps r1) ())
                  r2 (? (two? tr) (want <>tr ",") ())
@@ -1153,7 +1151,7 @@
                     ()))
              ; __builtin_types_compatible_p: structural equality over the two bare types and
              ; no decay -- an array is not its element pointer (the kernel's __must_be_array)
-             ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_types_compatible_p"))
+             (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_types_compatible_p")
               (: r1 (want >ts "(")
                  ta (? (two? r1) (pcqty ps r1) ())
                  r2 (? (two? ta) (want <>>ta ",") ())
@@ -1161,11 +1159,11 @@
                  rest (? (two? tb) (want <>>tb ")") ())
                  ; _Generic's marked types, so an inner const tells `const char *` from `char
                  ; *`; the top-level one is dropped, C11's own reading and gcc's for this builtin
-                 (? (two? rest) [['num (? ((qbare <ta) = (qbare <tb)) 1 0)] rest] ()))
+                 (? (two? rest) [['num (? (qbare <ta = qbare <tb) 1 0)] rest] ()))
              ; __builtin_constant_p: 1 when the parse-time fold settles the operand, 0 when
              ; it does not -- a miss sends the consumer down its runtime lane, the safe end.
              ; the operand is not evaluated, so its side effects are gone.
-             ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_constant_p"))
+             (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_constant_p")
               (: r1 (want >ts "(")
                  ra (? (two? r1) (pasn ps r1) ())
                  rest (? (two? ra) (want <>ra ")") ())
@@ -1173,7 +1171,7 @@
              ; __builtin_object_size(p,t) and the dynamic spelling: the answer gcc gives when
              ; it cannot see the object -- (size_t)-1 for types 0/1, 0 for 2/3, the conservative
              ; end both ways, which is what the kernel's fortify checks read to stand down
-             ((tkk t = 'id) && bib? (tkv t) &&
+             (tkk t = 'id && bib? (tkv t) &&
               elem (tkv t) '("__builtin_object_size" "__builtin_dynamic_object_size"))
               (: r1 (want >ts "(")
                  ra (? (two? r1) (pasn ps r1) ())
@@ -1181,11 +1179,11 @@
                  rb (? (two? r2) (pasn ps r2) ())
                  rest (? (two? rb) (want <>rb ")") ())
                  tv (? (two? rb) (cfold (pw64 ps) <rb) ())
-                 (? !(two? rest) ()
+                 (? (atom? rest) ()
                     [['cast (szty ps) ['num (? (charm? tv && 1 < tv) 0 -1)]] rest]))
              ; __builtin_choose_expr(c,a,b): c must fold, the unchosen arm is parsed and
              ; dropped, so a call to an undefined function in it links clean. arms need not type alike
-             ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_choose_expr"))
+             (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_choose_expr")
               (: r1 (want >ts "(")
                  rc (? (two? r1) (pasn ps r1) ())
                  r2 (? (two? rc) (want <>rc ",") ())
@@ -1194,7 +1192,7 @@
                  rb (? (two? r3) (pasn ps r3) ())
                  rest (? (two? rb) (want <>rb ")") ())
                  cv (? (two? rc) (cfold (pw64 ps) <rc) ())
-                 (? !(two? rest) ()
+                 (? (atom? rest) ()
                     !(charm? cv) (blame r1 "__builtin_choose_expr wants a constant condition")
                     [(? (cv = 0) <rb <ra) rest]))
              ; __func__ (C99 6.4.2.2): the enclosing function's name as a string, pinned by the
@@ -1214,15 +1212,15 @@
              ; and that value expression, which gen compiles against the env the decls built
              (tp? t "(" && peekp >ts "{")
               (: br (pblock ps >ts)
-                 (? !(two? br) ()
+                 (? (atom? br) ()
                     (: rest (want <>br ")")
-                       items (? (two? <br && (= <<br 'blk)) <><br [<br])
-                       (lst l) (? !(two? l) () !(two? >l) <l (lst >l))
-                       (butl l) (? !(two? l) () !(two? >l) () (<l . butl >l))
+                       items (? (two? <br && <<br = 'blk) <><br [<br])
+                       (lst l) (? (atom? l) () (atom? >l) <l (lst >l))
+                       (butl l) (? (atom? l) () (atom? >l) () (<l . butl >l))
                        lv (lst items)
-                       val? (two? lv && (= <lv 'expr))
+                       val? (two? lv && <lv = 'expr)
                        ty0 (? val? (peep ps 'blkval ()) ())         ; pblock typed it in scope
-                       (? !(two? rest) ()
+                       (? (atom? rest) ()
                           val? [['sexpr (butl items) <>lv (? ty0 ty0 'long)] rest]
                           [['sexpr items () 'void] rest]))))
              (tp? t "(") (thenw (pexpr ps >ts) ")")
@@ -1231,7 +1229,7 @@
    (pargs ps ts acc)
     (? (peekp ts ")") [(rev acc) >ts]
        (: r (pasn ps ts)
-          (? !(two? r) ()
+          (? (atom? r) ()
              (peekp <>r ",") (pargs ps ><>r (<r . acc))
              (: rest (want <>r ")")
                 (? (two? rest) [(rev (<r . acc)) rest] ())))))
@@ -1240,7 +1238,7 @@
    ; a call, or a builtin gcc lowers to plain C: isdigit(c) is (unsigned)(c - '0') < 10,
    ; which folds over a constant like any comparison
    (bicall e as)
-    (? (e = ['var "__builtin_isdigit"] && two? as && !(two? >as))
+    (? (e = ['var "__builtin_isdigit"] && two? as && atom? >as)
         ['bin 'lt ['cast 'uint ['bin '- <as '(num 48)]] '(num 10)]
        ['call e as])
    (ppostfrom ps e0 ts0)
@@ -1268,14 +1266,14 @@
        (? (two? <m) m ()))
    (ppost ps ts)
     (: r (pprim ps ts)
-       (? !(two? r) () (ppostfrom ps <r <>r)))
+       (? (atom? r) () (ppostfrom ps <r <>r)))
    ; ++x desugars by duplicating x, and (asn x (bin + x 1)) evaluates the lvalue twice -- so a
    ; side-effecting one runs its effect twice and the store lands where the load did not. a calm
    ; lvalue duplicates harmlessly and keeps the lanes gen has for it (a bitfield, a pair, a wide
    ; -- `post` refuses all three); anything else rides `post`, which takes the address once and
    ; adds the step back. `op=` has the same wound and goes one door over, to pasn's ('rmw ..).
    (calm? e)
-    (? !(two? e) 1
+    (? (atom? e) 1
        (: k <e
           (? (elem k '(var num flo str szof)) 1
              (elem k '(deref addr dot)) (calm? <>e)
@@ -1288,25 +1286,25 @@
           ['bin op ['post lv step] '(num 1)]))
    ; unary (casts and sizeof(TYPE) fold here)
    (punary ps ts)
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (: t <ts
           (? (ptyat? ps ts)             ; skip quals: (const T*)x is a cast, like the decl sites
               (: tr (thenw (pcty ps >ts) ")")
-                 (? !(two? tr) ()
+                 (? (atom? tr) ()
                     (: cty <tr rest <>tr
                        (? (peekp rest "{")               ; a compound literal (type){ init } -- an unnamed object,
                                                            ; and a postfix head (member/index ride ppostfrom)
                         (: iv (pinit ps rest)
                            (? (two? iv) (ppostfrom ps ['clit (fillarr ps cty <iv) <iv] <>iv) ()))
                        (: r (punary ps rest)
-                          (? !(two? r) ()
+                          (? (atom? r) ()
                              ; the complex cast lanes (C99 6.3.1.7): same complex passes
                              ; through, a width flip converts componentwise, real -> complex
                              ; is {x, 0}, complex -> real reads .re. a non-lvalue operand
                              ; evaluates once per component read.
                              (: sty (ptype ps <r)
                                 (? (cplxty? cty)
-                                    (? (cplxty? sty && (<>sty = <>cty)) [<r <>r]
+                                    (? (cplxty? sty && <>sty = <>cty) [<r <>r]
                                        (cplxty? sty)
                                         [['clit cty ['init [['dot <r "re"] ['dot <r "im"]]]] <>r]
                                        [['clit cty ['init [<r '(flo 0.0)]]] <>r])
@@ -1317,7 +1315,7 @@
               (: r1 >ts
                  (? (ptyat? ps r1)             ; sizeof(const T) too
                      (: tr (thenw (pcty ps >r1) ")")      ; sizeof ( type-name ) -- folds to a constant now
-                        (? !(two? tr) ()
+                        (? (atom? tr) ()
                            ; sizeof of a VLA type (struct T[n+1], if_nameindex's malloc):
                            ; the runtime multiply dim * sizeof(elt)
                            (varr? <tr) [['bin '* <>><tr ['num (tsz ps <><tr)]] <>tr]
@@ -1328,14 +1326,14 @@
                                          [['cast (szty ps) ['num (tsz ps ty)]] <>r] [['szof <r] <>r])) ()))))
              ; _Alignof (C11 6.5.3.4) through talign, the door playout lays members with, so it
              ; cannot drift. the expression operand is gcc's __alignof__ alone, C11's a type-name.
-             ((tkk t = 'id) && elem (tkv t) '("_Alignof" "__alignof__"))
+             (tkk t = 'id && elem (tkv t) '("_Alignof" "__alignof__"))
               (: r1 >ts
                  (? (ptyat? ps r1)
                      (: tr (thenw (pcty ps >r1) ")")
                         (? (two? tr) [['cast (szty ps) ['num (talign ps <tr)]] <>tr] ()))
-                    !(tkv t = "__alignof__") ()
+                    (tkv t != "__alignof__") ()
                     (: r (punary ps r1)
-                       (? !(two? r) ()
+                       (? (atom? r) ()
                           (: ty (ptype ps <r)
                              (? ty [['cast (szty ps) ['num (talign ps ty)]] <>r] ()))))))
              ; __extension__ (gcc) prefixes a cast-expression as a no-op
@@ -1343,7 +1341,7 @@
              (tp? t "*") (: r (punary ps >ts)
                             (? (two? r) [['deref <r] <>r] ()))
              (tp? t "&") (: r (punary ps >ts)
-                            (? !(two? r) ()
+                            (? (atom? r) ()
                                (: n (nulloff ps <r)   ; the offsetof idiom folds to a constant
                                   (? (charm? n) [['num n] <>r] [['addr <r] <>r]))))
              (tp? t "+") (punary ps >ts)
@@ -1370,7 +1368,7 @@
    ; one left-associative level over the single token s, laying nodes of kind k
    (pone ps sub s k ts)
     (: r (sub ps ts)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (: (more l ts2) (? (peekp ts2 s)
                              (: r2 (sub ps >ts2)
                                 (? (two? r2) (more [k l <r2] <>r2) ()))
@@ -1400,29 +1398,29 @@
              ['sexpr [['decl [[t (pdecay ty) a]]]] ['cond ['var t] ['var t] b] ty2])))
    (pcond ps ts)
     (: r (plor ps ts)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (peekp <>r "?" && peekp ><>r ":")
            (: re (pcond ps >><>r)
               e (? (two? re) (pelvis ps <r <re) ())
               (? (two? e) [e <>re] ()))
           (peekp <>r "?")
            (: rt (thenw (pexpr ps ><>r) ":")
-              (? !(two? rt) ()
+              (? (atom? rt) ()
                  (: re (pcond ps <>rt)
                     (? (two? re) [['cond <r <rt <re] <>re] ()))))
           r))
    (pasn ps ts)
     (: r (pcond ps ts)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (: t (? (two? <>r) <<>r ())
-             hit (? (two? t && (tkk t = 'p)) (assoc (tkv t) asnops) ())
-             (? !(two? hit) r
+             hit (? (two? t && tkk t = 'p) (assoc (tkv t) asnops) ())
+             (? (atom? hit) r
                 (: r2 (pasn ps ><>r)
-                   (? !(two? r2) ()
+                   (? (atom? r2) ()
                       (: lv <r op <>hit
                          ; a global register variable is read-only here: writing the stack
                          ; pointer through a plain assignment is a program losing its frame
-                         greg (two? lv && (= <lv 'var) && two? (peep (ps 'gregs) <>lv ()))
+                         greg (two? lv && <lv = 'var && two? (peep (ps 'gregs) <>lv ()))
                          (? greg (blame <>r2 "a write to a global register variable")
                             [(? !op ['asn lv <r2]                      ; plain =: no duplicate to make
                                  (calm? lv) ['asn lv ['bin op lv <r2]] ; the desugar, exact here
@@ -1440,8 +1438,8 @@
         (: (items ts2 acc)
             (? (peekp ts2 "}") [['init (dbuild (rev acc))] >ts2]
                (: it (pinititem ps ts2)
-                  (rcat l a) (? !(two? l) a (rcat >l (<l . a)))
-                  (? !(two? it) ()
+                  (rcat l a) (? (atom? l) a (rcat >l (<l . a)))
+                  (? (atom? it) ()
                      (: es <it ts3 <>it
                         (? (peekp ts3 ",") (items >ts3 (rcat es acc))
                            (peekp ts3 "}") [['init (dbuild (rev (rcat es acc)))] >ts3]
@@ -1450,17 +1448,17 @@
        ; a scalar initializer that folds is its number -- `(Bits>>3)`-style macro values
        ; image as constants (globals demand it, a local loses nothing)
        (: r (pasn ps ts)
-          (? !(two? r) ()
+          (? (atom? r) ()
              (: e <r v (cfold (pw64 ps) e)
                 (? (cint? v) [['num v] <>r]            ; cint?: a sun-sized fold (max-charm's image) is still a number
-                   ((<e = 'un) &&
-                    (<>e = 'neg) && (<<>>e = 'flo))
+                   (<e = 'un &&
+                    <>e = 'neg && <<>>e = 'flo)
                     [['flo (-1.0 * <><>>e)] <>r]           ; -1.0 in a global image: fold the neg into the literal (times -1, so -0.0 keeps its sign)
                    r)))))
    ; a `[]` bound completes from the initializer (C11 6.7.9p22, 6.5.2.5p22 for a
    ; compound literal); one that implies no count leaves the type as it stands
    (fillarr ps ty ini)
-    (? (arr? ty && (<>>ty = 0) && charm? (initcount ps <>ty ini))
+    (? (arr? ty && <>>ty = 0 && charm? (initcount ps <>ty ini))
        ['arr <>ty (initcount ps <>ty ini)] ty)
    ; the plain items one object of `ty` takes when its braces are elided (C 6.7.9p20),
    ; answering what is left over: a scalar one, an aggregate its members in order, a union
@@ -1469,11 +1467,11 @@
    (uni? ps ty) (stru? ty && peep (ps 'utag) <>ty 0)
    (chart? ty) (elem ty '(char uchar))
    (fills ps ty items)
-    (? !(two? items) items
+    (? (atom? items) items
        (arr? ty)
-        (? ((chart? <>ty && two? <items && (<<items = 'str)) ||
-            (!(ptr? <>ty) && two? <items && (<<items = 'clit) && arr? <><items)) >items   ; a string / wide literal is the array
-           (: (go n l) (? (!(< 0 n) || !(two? l)) l (go (n - 1) (fills ps <>ty l)))
+        (? ((chart? <>ty && two? <items && <<items = 'str) ||
+            (!(ptr? <>ty) && two? <items && <<items = 'clit && arr? <><items)) >items   ; a string / wide literal is the array
+           (: (go n l) (? (!(0 < n) || atom? l) l (go (n - 1) (fills ps <>ty l)))
               (go <>>ty items)))
        (stru? ty)
         (: e (peep (ps 'stag) <>ty 0)
@@ -1487,27 +1485,27 @@
    ; many times `fills` walks one -- int a[][2] = {1,2,3,4} is 2 rows.
    (allplain? items) (foldl (\ ok it (ok && !(elem <it '(init didx dfield)))) 1 items)
    (initcount ps elt ini)
-    (? (two? ini && (<ini = 'str)) (tally <>ini + 1)
+    (? (two? ini && <ini = 'str) (#<>ini + 1)
        ; a wide literal (a bounded clit-of-array after the desugar): its own bound
-       (two? ini && (<ini = 'clit) && arr? <>ini && !(ptr? elt)) <>><>ini
-       (two? ini && (<ini = 'init))
+       (two? ini && <ini = 'clit && arr? <>ini && !(ptr? elt)) <>><>ini
+       (two? ini && <ini = 'init)
         (: items <>ini
            ; { "s" } sizing a char array (6.7.9p14): the string's own count,
            ; not one item (a lone str on a POINTER elt stays one: char *p[])
            (? (two? items &&
-               !(two? >items) &&
-               two? <items && (<<items = 'str) && !(ptr? elt))
-               (tally <><items + 1)
+               atom? >items &&
+               two? <items && <<items = 'str && !(ptr? elt))
+               (#<><items + 1)
               (two? items &&                            ; { L"s" }: p14's wide twin
-               !(two? >items) &&
-               two? <items && (<<items = 'clit) && arr? <><items && !(ptr? elt))
+               atom? >items &&
+               two? <items && <<items = 'clit && arr? <><items && !(ptr? elt))
                <>><><items
               ((arr? elt || stru? elt) && two? items && allplain? items)
-               (: (rows l n) (? !(two? l) n
-                                 (: r (fills ps elt l) (? (= r l) n (rows r (n + 1)))))
+               (: (rows l n) (? (atom? l) n
+                                 (: r (fills ps elt l) (? (r = l) n (rows r (n + 1)))))
                   (rows items 0))
                (: (go l i mx)
-                   (? !(two? l) mx
+                   (? (atom? l) mx
                       (: it <l
                          ci (? (<it = 'didx) <>it i)
                          (go >l (ci + 1) (? (mx < (ci + 1)) (ci + 1) mx))))
@@ -1521,50 +1519,50 @@
               (pdesigs ps >t2 (['f (tkv <t2)] . acc))))
        (peekp ts "[")
         (: er (pexpr ps >ts)                         ; a designator index: any const-expr ([KMint]=.., [2]=..)
-           (? !(two? er) ()
+           (? (atom? er) ()
               (peekp <>er "...")                     ; gcc's range designator: one item per index
                (: e2 (thenw (pexpr ps ><>er) "]")
                   n (cfold (pw64 ps) <er)
                   m (? (two? e2) (cfold (pw64 ps) <e2) ())
-                  (? !(two? e2) ()
+                  (? (atom? e2) ()
                      !(charm? n && charm? m) ()
                      (pdesigs ps <>e2 (['r n m] . acc))))
               (: r2 (want <>er "]")
                  n (cfold (pw64 ps) <er)
-                 (? !(two? r2) () (charm? n) (pdesigs ps r2 (['i n] . acc)) ()))))
-       !(two? acc) ()
+                 (? (atom? r2) () (charm? n) (pdesigs ps r2 (['i n] . acc)) ()))))
+       (atom? acc) ()
        (: r (want ts "=")
           (? (two? r) [(rev acc) r] ())))
    ; the item stream carries (path value) pairs (path () = a plain item); dbuild folds them
    ; into 'dfield/'didx items, one nested init per consecutive same-head run
    (dbuild prs)
-    (? !(two? prs) ()
+    (? (atom? prs) ()
        (: pv <prs path <pv v <>pv
-          (? !(two? path) (v . dbuild >prs)
+          (? (atom? path) (v . dbuild >prs)
              (: h <path
                 (grab l acc)                         ; consecutive pairs whose head = h, stripped
-                 (? !(two? l) [(rev acc) ()]
+                 (? (atom? l) [(rev acc) ()]
                     (: p2 <<l
-                       (? (two? p2 && (= <p2 h))
+                       (? (two? p2 && <p2 = h)
                           (grab >l ([>p2 <><l] . acc))
                           [(rev acc) l])))
                 gr (grab >prs [[>path v]])
                 subs <gr
                 sub (dbuild subs)
-                node (? (!(two? >subs) && !(two? <<subs)) <sub ['init sub])
-                ([(? (= <h 'f) 'dfield 'didx) <>h node] . dbuild <>gr)))))
+                node (? (atom? >subs && atom? <<subs) <sub ['init sub])
+                ([(? (<h = 'f) 'dfield 'didx) <>h node] . dbuild <>gr)))))
    ; -> (((path value)..) rest) | () -- a list, because a range designator is one item per
    ; index. gcc takes a range as an array designator only and only alone; capped, so a wide
    ; one refuses rather than imaging thousands of elements in silence
-   (rng1? p) (two? p && !(two? >p) && two? <p && (= <<p 'r))
+   (rng1? p) (two? p && atom? >p && two? <p && <<p = 'r)
    (rexp lo hi v acc) (? (hi < lo) (rev acc) (rexp (lo + 1) hi v ([[['i lo]] v] . acc)))
    (pinititem ps ts)
     (? (peekp ts "." || peekp ts "[")
         (: dr (pdesigs ps ts ())
-           (? !(two? dr) ()
+           (? (atom? dr) ()
               (: v (pinit ps <>dr)
                  pth <dr
-                 (? !(two? v) ()
+                 (? (atom? v) ()
                     (rng1? pth)
                      (: lo <><pth hi <>><pth
                         (? (hi < lo) (blame ts "an empty range designator")
@@ -1599,17 +1597,17 @@
           "__builtin_popcountll" '(pop ullong)
           "__builtin_ffs" '(ffs uint) "__builtin_ffsl" '(ffs ulong) "__builtin_ffsll" '(ffs ullong)
           ())
-   (blen v) (? (v = 0) 0 (1 + (blen (v >> 1))))
-   (bctz v) (? ((v & 1) = 1) 0 (1 + (bctz (v >> 1))))
-   (bpop v) (? (v = 0) 0 ((v & 1) + (bpop (v >> 1))))
-   (bswp v n) (? (n = 0) 0 (((v & 255) * (2 ** (8 * (n - 1)))) + (bswp (v >> 8) (n - 1))))
+   (blen v) (? (v = 0) 0 (1 + blen (v >> 1)))
+   (bctz v) (? ((v & 1) = 1) 0 (1 + bctz (v >> 1)))
+   (bpop v) (? (v = 0) 0 ((v & 1) + bpop (v >> 1)))
+   (bswp v n) (? (n = 0) 0 (((v & 255) * (2 ** (8 * (n - 1)))) + bswp (v >> 8) (n - 1)))
    ; v already in ty, unsigned -> (value type) | (); clz and ctz of 0 are undefined, no fold
    (bfold w64 op ty v)
-    (op @ 'bswap [(bswp v ((tbits w64 ty) // 8)) ty]
-          'clz (? (v = 0) () [((tbits w64 ty) - (blen v)) 'int])
+    (op @ 'bswap [(bswp v (tbits w64 ty // 8)) ty]
+          'clz (? (v = 0) () [(tbits w64 ty - blen v) 'int])
           'ctz (? (v = 0) () [(bctz v) 'int])
           'pop [(bpop v) 'int]
-          'ffs [(v = 0 ? 0 ((bctz v) + 1)) 'int]
+          'ffs [(v = 0 ? 0 (bctz v + 1)) 'int]
           ())
    ; a literal is an int where it fits, else the long that holds it (ilp32 spells one past int llong)
    (numt w64 n) (? (-2147483648 <= n && n <= 2147483647) 'int
@@ -1618,17 +1616,17 @@
    ; a const float expression -> its gem | 'bad, for the one place cfold needs one. gen.l's
    ; ffold is the image-time twin; both stand on love's own doubles, which are the target's.
    (fcfold w64 e)
-    (? !(two? e) 'bad
+    (? (atom? e) 'bad
        (: iv (cfold w64 e)
           (? (cint? iv) (0.0 + iv)
              (<e = 'flo) (0.0 + <>e)
              (<e = 'cast) (? (elem <>e '(double float)) (fcfold w64 <>>e) 'bad)
              (<e = 'un) (: v (fcfold w64 <>>e)
-                           (? (= v 'bad) 'bad (<>e = 'neg) (0.0 - v) 'bad))
+                           (? (v = 'bad) 'bad (<>e = 'neg) (0.0 - v) 'bad))
              (<e = 'bin)
               (: op <>e a (fcfold w64 <>>e) b (fcfold w64 <>>>e)
-                 (? (= a 'bad || (= b 'bad)) 'bad
-                    (op = '+) (a + b) (op = '-) (a - b) (op = '*) (* a b)
+                 (? (a = 'bad || b = 'bad) 'bad
+                    (op = '+) (a + b) (op = '-) (a - b) (op = '*) (a * b)
                     (op = '/) (? (b = 0.0) 'bad (a / b))
                     'bad))
              'bad)))
@@ -1636,11 +1634,11 @@
    ; e -> (value type) | (), the value canonical in its type
    (cfty w64 e)
     (: (wr ty v) [(wrapt w64 ty v) ty]
-       (? !(two? e) ()
+       (? (atom? e) ()
           (<e = 'num) (? (cint? <>e) [<>e (numt w64 <>e)] ())
           (<e = 'bin)
            (: op <>e ra (cfty w64 <>>e) rb (cfty w64 <>>>e)
-              (? (!(two? ra) || !(two? rb)) ()
+              (? (atom? ra || atom? rb) ()
                  (elem op '(shl shr))                   ; the left operand's promoted type; the count is a count
                   (: ty (pprom <>ra) a (wrapt w64 ty <ra) b <rb
                      (? !(0 <= b && b <= 256) ()
@@ -1649,8 +1647,8 @@
                  (: ty (puac w64 <>ra <>rb)
                     a (wrapt w64 ty <ra) b (wrapt w64 ty <rb)
                     (op @ '+ (wr ty (a + b)) '- (wr ty (a - b)) '* (wr ty (a * b))
-                          '/ (? (b = 0) () (wr ty (// a b)))
-                          '% (? (b = 0) () (wr ty (a - (* (// a b) b))))
+                          '/ (? (b = 0) () (wr ty (a // b)))
+                          '% (? (b = 0) () (wr ty (a - ((a // b) * b))))
                           '& (wr ty (a & b)) '| (wr ty (a | b)) '^ (wr ty (a ^ b))
                           'eq [(a = b ? 1 0) 'int] 'ne [(a = b ? 0 1) 'int]
                           'lt [(a < b ? 1 0) 'int] 'le [(a <= b ? 1 0) 'int]
@@ -1658,7 +1656,7 @@
                           ()))))
           (<e = 'un)
            (: r (cfty w64 <>>e)
-              (? !(two? r) ()
+              (? (atom? r) ()
                  (: ty (pprom <>r) v (wrapt w64 ty <r)
                     (<>e @ 'neg (wr ty (0 - v)) 'bnot (wr ty ((0 - v) - 1))
                            'not [(v = 0 ? 1 0) 'int] ()))))
@@ -1672,29 +1670,29 @@
                              r)                       ; a type this fold does not know: the value rides
                  !(ity? ty) ()
                  (: f (fcfold w64 <>>e)
-                    (? (= f 'bad) ()
+                    (? (f = 'bad) ()
                        (ty = 'bool) [(f = 0.0 ? 0 1) 'bool]   ; to _Bool is a compare, never a truncation
                        (wr ty (ceil (f // 1)))))))           ; and every other one truncates toward zero
           ; the bit builtins over a constant fold, so one can label a case or size a bit-field
           (<e = 'call)
            (: h <>e as <>>e
-              k (? (two? h && (<h = 'var)) (bltab w64 <>h) ())
-              r (? (two? k && two? as && !(two? >as)) (cfty w64 <as) ())
-              (? !(two? r) () (bfold w64 <k <>k (wrapt w64 <>k <r))))
+              k (? (two? h && <h = 'var) (bltab w64 <>h) ())
+              r (? (two? k && two? as && atom? >as) (cfty w64 <as) ())
+              (? (atom? r) () (bfold w64 <k <>k (wrapt w64 <>k <r))))
           ; land/lor are 3-element ('land l r); truthiness is != 0 (-1 && 1 == 1)
           (elem <e '(land lor))
            (: a (cfty w64 <>e) b (cfty w64 <>>e)
-              (? (!(two? a) || !(two? b)) ()
-                 (<e = 'land) [(!(<a = 0) && !(<b = 0) ? 1 0) 'int]
-                 [(!(<a = 0) || !(<b = 0) ? 1 0) 'int]))
+              (? (atom? a || atom? b) ()
+                 (<e = 'land) [(<a != 0 && (<b != 0) ? 1 0) 'int]
+                 [(<a != 0 || (<b != 0) ? 1 0) 'int]))
           ; ('cond c a b): only the selected arm need be constant (C11 6.6: 1 ? 0 : 1/0 is one);
           ; when the other folds too, the arms meet at their common type
           (<e = 'cond)
            (: c (cfty w64 <>e)
-              (? !(two? c) ()
+              (? (atom? c) ()
                  (: r (? (<c = 0) (cfty w64 <>>>e) (cfty w64 <>>e))
                     o (? (<c = 0) (cfty w64 <>>e) (cfty w64 <>>>e))
-                    (? !(two? r) () !(two? o) r (wr (puac w64 <>r <>o) <r)))))
+                    (? (atom? r) () (atom? o) r (wr (puac w64 <>r <>o) <r)))))
           ()))
    ; _Static_assert ( const-expr [, "message"] ) ; -> (('tdef) rest) | () -- an assertion that
    ; folds to false fails the compile, a non-constant one is let by. the message is optional
@@ -1710,7 +1708,7 @@
        ; token was the last one -- a TU that is only an assert would read as no `;` found
        (? !(two? r4 && peekp r4 ";") ()
           (: v (cfold (pw64 ps) <re)
-             (? (charm? v && (v <= 0)) () ['(tdef) >r4]))))
+             (? (charm? v && v <= 0) () ['(tdef) >r4]))))
    (sassert? ts) (two? ts && idv? <ts "_Static_assert")
 
    ; decl := type [dtor [= asn] (, dtor [= asn])*] ;
@@ -1719,19 +1717,19 @@
    (pdecl ps ts)
     (: cs (clstrip ts)
        (? !<cs (pdecl0 ps ts)
-          (= <cs 'many) (blame ts "more than one cleanup in one declaration")
+          (<cs = 'many) (blame ts "more than one cleanup in one declaration")
           (: r (pdecl0 ps <>cs)
              d (? (two? r) <r ())
              es (? (two? d) <>d ())
-             (? !(two? d) r
+             (? (atom? d) r
                 ; the attribute trails the first declarator's name; in the specifiers of a
                 ; many-declarator declaration it would clean them all
-                !(<d = 'decl && two? es && (one? >es || (<>>cs = <<es)))
+                !(<d = 'decl && two? es && (atom? >es || <>>cs = <<es))
                  (blame <>r "a cleanup wants one automatic variable")
                 (: n (1 + peep ps 'clid 0)
                    _ (pins ps 'clid n 'clfn 1 'clpend ['cln <<(<>d) <cs n])
                    r)))))
-   (clat l i) (? !(two? l) () (i = 0) l (clat >l (i - 1)))   ; the tail at token i
+   (clat l i) (? (atom? l) () (i = 0) l (clat >l (i - 1)))   ; the tail at token i
    (clp? l i s) (: t (clat l i) (two? t && tp? <t s))
    (cli? l i s) (: t (clat l i) (two? t && idv? <t s))
    (clgrp? l) (cli? l 0 "__attribute__" && clp? l 1 "(" && clp? l 2 "(" &&
@@ -1741,7 +1739,7 @@
    ; the-word-before-the-attribute)
    (clstrip ts)
     (: (go l d acc f pv)
-        (? !(two? l) [() ts]
+        (? (atom? l) [() ts]
            (d = 0 && (tp? <l ";" || tp? <l "=" || tp? <l ",")) (? f [f (rev acc + l) pv] [() ts])
            (clgrp? l) (go (clat l 9) d acc (? f 'many (tkv <(clat l 5))) (? (two? acc) (tkv <acc) ()))
            (tp? <l "(" || tp? <l "[" || tp? <l "{") (go >l (d + 1) (<l . acc) f pv)
@@ -1755,13 +1753,13 @@
        ; exactly as the function declaration below already reads
        ext (leadextern? ps ts)
        regv (leadregister? ps ts)
-       (? !(two? br) ()
+       (? (atom? br) ()
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; the run's const/volatile -- _Generic's, staged below
              (? (peekp ts0 ";") [['decl ()] >ts0]   ; a bare definition (struct S {..};)
                 (: (one ts2)
                     (: dr (pdtor ps ts2 base)
-                       (? !(two? dr) ()
+                       (? (atom? dr) ()
                           (: name <<dr ty0 <><dr
                              ; a VLA local: stamp the decl site's slot index onto the type
                              ; (gen's prescan keys its ptr/size slots by it); an initializer
@@ -1796,23 +1794,23 @@
                                 (: old (peep (ps 'locals) name 'none)
                                    _ (pin (ps 'locals) name ty)
                                    r (pinit ps >ts3)
-                                   _ (? (= old 'none) (pull (ps 'locals) name 0) (pin (ps 'locals) name old))
-                                   (? !(two? r) ()
+                                   _ (? (old = 'none) (pull (ps 'locals) name 0) (pin (ps 'locals) name old))
+                                   (? (atom? r) ()
                                       (: ini <r
                                          [([name (fillarr ps ty ini) ini] + pinl) <>r])))   ; [] local: infer size
                                 [([name ty ()] + pinl) ts3]))))
                    (more ts2 acc)
                     (: r (one ts2)
-                       (? !(two? r) ()
+                       (? (atom? r) ()
                           (peekp <>r ",") (more ><>r (<r . acc))
                           (: rest (want <>r ";")
                              es (filter (\ e !(fn? <>e)) (rev (<r . acc)))
                              ; the extern entries hoist to the TU's top, where gen's global
                              ; pass reads them, and the block keeps none of them
                              _ (? (ext && two? es)
-                                  (: (gox l) (? !(two? l) 1
-                                                (: _ (pin (ps 'globals) <<l <><l (gox >l))))
-                                     _ (pin ps 'hoist (['xdecl es] . (ps 'hoist)))
+                                  (: (gox l) (? (atom? l) 1
+                                                (pin (ps 'globals) <<l <><l, gox >l))
+                                     _ (pin ps 'hoist (['xdecl es] . ps 'hoist))
                                      (gox es))
                                   ())
                              (? (two? rest) [[(? stat 'sdecl 'decl) (? ext () es)] rest] ()))))
@@ -1829,7 +1827,7 @@
    ; template strings concatenate. operands ride as ((constraint expr)..), clobbers as
    ; (string..), labels as (name..) -- the constraint grammar is gen's.
    ; -> (('asm tmpl outs ins clobs labs) rest) | ()
-   (asmid? t) (two? t && (tkk t = 'id) &&
+   (asmid? t) (two? t && tkk t = 'id &&
                elem (tkv t) '("asm" "__asm__" "__asm"))
    ; `volatile` and `inline` may both stand between the keyword and the paren, in
    ; either order; inline is a size hint to gcc's inliner and means nothing here
@@ -1839,17 +1837,17 @@
    ; `%[name]` -> the operand's number, so no name reaches gen's asmsub. gcc numbers outputs
    ; first, inputs after and labels last, the order nms arrives in; a modifier letter keeps its
    ; place (`%l[name]` a label, `%c[name]` a bare constant). an unmatched name is left for gen
-   (anynm? l) (? !(two? l) () (string? <l) 1 (anynm? >l))
+   (anynm? l) (? (atom? l) () (string? <l) 1 (anynm? >l))
    (asmnm tmpl nms)
-    (: n (tally tmpl)
-       (idx nm l k) (? !(two? l) () (= <l nm) k (idx nm >l (k + 1)))
-       (rbr j) (? (n <= j) -1 ((tmpl j) = 93) j (rbr (j + 1)))
+    (: n #tmpl
+       (idx nm l k) (? (atom? l) () (<l = nm) k (idx nm >l (k + 1)))
+       (rbr j) (? (n <= j) -1 (tmpl j = 93) j (rbr (j + 1)))
        (go i acc)
         (: md ((i + 2) < n && alpha? (tmpl (i + 1)))     ; %c[ reads past the letter
            b (? md (i + 2) (i + 1))
            (? (n <= i) acc
-              ((tmpl i) = 37 && (i + 1) < n && (tmpl (i + 1)) = 37) (go (i + 2) (acc + "%%"))
-              ((tmpl i) = 37 && b < n && (tmpl b) = 91)
+              (tmpl i = 37 && (i + 1) < n && tmpl (i + 1) = 37) (go (i + 2) (acc + "%%"))
+              (tmpl i = 37 && b < n && tmpl b = 91)
                (: e (rbr (b + 1))
                   nm (? (e < 0) () (snip tmpl (b + 1) e))
                   k (? (string? nm) (idx nm nms 0) ())
@@ -1879,7 +1877,7 @@
                  (: c (tkv <ts2)
                     r1 (want >ts2 "(")
                     re (? (two? r1) (thenw (pexpr ps r1) ")") ())
-                    (? !(two? re) ()
+                    (? (atom? re) ()
                        (peekp <>re ",") (ops ><>re ([c <re nm] . acc))
                        [(rev ([c <re nm] . acc)) <>re])))
              (opbare e) [<e <>e]                        ; the (constraint expr) pair gen takes
@@ -1896,11 +1894,11 @@
                        [(rev (c . acc)) >ts2])))
              tr (tmpl r0 "")
              s1 (? (peekp <>tr ":") (ops ><>tr ()) [() <>tr])
-             (? !(two? s1) ()
+             (? (atom? s1) ()
                 (: s2 (? (peekp <>s1 ":") (ops ><>s1 ()) [() <>s1])
-                   (? !(two? s2) ()
+                   (? (atom? s2) ()
                       (: s3 (? (peekp <>s2 ":") (clobs ><>s2 ()) [() <>s2])
-                         (? !(two? s3) ()
+                         (? (atom? s3) ()
                             (: s4 (? (peekp <>s3 ":") (golabs ><>s3 ()) [() <>s3])
                                r9 (want <>s4 ")")
                                semi (two? r9 && peekp r9 ";")      ; the rest may be empty: a file can end here
@@ -1914,15 +1912,15 @@
    ; -> (('tasm tmpl) rest) | ()
    (ptasm ps ts)
     (: r (pasm ps ts)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (<r @ ('asm t () () () ()) [['tasm t] <>r]
                 (blame >ts "a file-scope asm takes no operands"))))
 
    ; a statement-position __attribute__((..)) run skips, except two: musttail lands in the
    ; ret's pre slot (clay's (ret e PRE)) and gen's sibcall pass spells the tail jump or refuses;
    ; holo marks an asm template as holo's neutral text. on any other statement either refuses.
-   (attrin a b nm) (? (= a b) ()                  ; a `nm` token before the b spine?
-                      ((idv? <a nm) || attrin >a b nm))
+   (attrin a b nm) (? (a = b) ()                  ; a `nm` token before the b spine?
+                      (idv? <a nm || attrin >a b nm))
    ; a bare non-zero integer constant returned where the enclosing sig says pointer.
    ; the literal alone: a cast (or any expression) says the program means it
    (intptr? ps e)
@@ -1930,20 +1928,20 @@
        sg (? fn (peep (ps 'sigs) fn ()) ())
        rt (? (two? sg) <sg ())
        (? !(ptr? rt) ()
-          (two? e && (<e = 'num) && charm? <>e && !(<>e = 0)) 1
+          (two? e && <e = 'num && charm? <>e && <>e != 0) 1
           ()))
    (pstmt ps ts0)
-    (? !(two? ts0) ()
+    (? (atom? ts0) ()
        (: ts (pattr ts0)
-          (? !(two? ts) ()
+          (? (atom? ts) ()
              (: r (? (sassert? ts) (pstatic ps ts) (pstmt2 ps ts))
                 mt (attrin ts0 ts "musttail")
                 ho (attrin ts0 ts "holo")
                 (? (!mt && !ho) r
-                   !(two? r) ()
+                   (atom? r) ()
                    (: st <r
-                      (? (mt && (= <st 'ret && two? <>st)) [(st + '("__attribute__((musttail))")) <>r]
-                         (ho && !mt && (= <st 'asm)) [(st + '(holo)) <>r]
+                      (? (mt && <st = 'ret && two? <>st) [(st + '("__attribute__((musttail))")) <>r]
+                         (ho && !mt && <st = 'asm) [(st + '(holo)) <>r]
                          ())))))))
    ; a label is a flat marker so a block can splice it beside the statement it labels. an arm --
    ; a brace-less if/while/do/for body -- has no list to splice into, and the marker alone would
@@ -1952,20 +1950,20 @@
    (parm ps ts)
     ((: (go ts acc)
         (: r (pstmt ps ts)
-           (? !(two? r) ()
+           (? (atom? r) ()
               (markerp <r) (go <>r (<r . acc))
-              !(two? acc) r
+              (atom? acc) r
               [['blk (rev (<r . acc))] <>r])))
      ts ())
    ; the `( expr )` after a statement keyword at ts -> (expr rest) | ()
    (pparen ps ts) (: r1 (want >ts "(") (? (two? r1) (thenw (pexpr ps r1) ")") ()))
    (pstmt2 ps ts)
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (: t <ts
           (? (tkw? t 'return)
               (? (peekp >ts ";") [['ret ()] >>ts]    ; bare `return;` -- a void return
                  (: r (pexpr ps >ts)
-                    (? !(two? r) ()
+                    (? (atom? r) ()
                        ; C11 6.8.6.4 hands `return` to the assignment constraints, and 6.5.16.1
                        ; takes an integer for a pointer only as a null pointer constant
                        (intptr? ps <r) (blame <>r "an integer where a pointer is owed")
@@ -1977,13 +1975,13 @@
                  ; if (__builtin_expect(e, k)): the test is e, and a (nop cold) or (nop hot) heads
                  ; the then-arm for the layout -- no call reaches the analyses
                  xa (? (two? rc) (<rc @ ('call ('var "__builtin_expect") (e ('num k)) && elem k '(0 1)) [e k] ()) ())
-                 c9 (? !(two? xa) (? (two? rc) <rc)
+                 c9 (? (atom? xa) (? (two? rc) <rc)
                        (elem (ptype ps <xa) '(float double ldouble)) ['cast 'long <xa]   ; expect's long, where it differs
                        <xa)
-                 (arm s) (? !(two? xa) s
+                 (arm s) (? (atom? xa) s
                             (: m ['nop (<>xa = 0 ? 'cold 'hot)]
                                (s @ ('blk items) ['blk (m . items)] ['blk [m s]])))
-                 (? !(two? rt) ()
+                 (? (atom? rt) ()
                     (? (two? <>rt && tkw? <<>rt 'else)
                        (: re (parm ps ><>rt)
                           (? (two? re)
@@ -1996,14 +1994,14 @@
                  (? (two? rb) [['while <rc <rb] <>rb] ()))
              (tkw? t 'do)
               (: rb (parm ps >ts)
-                 (? !(two? rb) ()
+                 (? (atom? rb) ()
                     !(two? <>rb && tkw? <<>rb 'while) ()
                     (: rc (pparen ps <>rb)
                        rest (? (two? rc) (want <>rc ";") ())
                        (? (two? rest) [['do <rb <rc] rest] ()))))
              (tkw? t 'for)
               (: r1 (want >ts "(")
-                 (? !(two? r1) ()
+                 (? (atom? r1) ()
                     (: ri (? (tyat? ps r1) (pdecl ps r1)        ; the decl gate skips quals, like a block's (`for (const char *x; ..`)
                              (peekp r1 ";") [() >r1]
                              (: r (thenw (pexpr ps r1) ";")
@@ -2014,7 +2012,7 @@
                        ; the init's names type the rest of the for, as a block's declarations do
                        fsh (? (two? ri && two? <ri && <<ri = 'decl)
                               (bindlocs ps (loctypes <ri) (shadowdecl ps (declnames <ri) ())) ())
-                       res (? !(two? ri) ()
+                       res (? (atom? ri) ()
                               cm (: r (pfor ps [() <>ri]) (? (two? r) [['blk [<ri cm <r]] <>r] ()))
                               (pfor ps ri))
                        _ (unshadow ps fsh)
@@ -2025,7 +2023,7 @@
                  ; a braced body is a block (its declarations scope to it, case and default
                  ; are statements pstmt reads) and the switch keeps its flat items. a brace-less
                  ; body is one labeled statement, which parm takes with its label run
-                 (? !(two? r2) ()
+                 (? (atom? r2) ()
                     (peekp r2 "{")
                      (: rb (pblock ps r2)
                         (? (two? rb) [['switch <rc <><rb] <>rb] ()))
@@ -2047,17 +2045,17 @@
              ; table -- and is capped, so a wide range refuses rather than laying thousands.
              (tkw? t 'case)
               (: rv (pexpr ps >ts)
-                 (? !(two? rv) ()
+                 (? (atom? rv) ()
                     (: v (cfold (pw64 ps) <rv)
                        (crange lo hi acc) (? (hi < lo) (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
                        (? !(charm? v) ()
                           (peekp <>rv "...")
                            (: r2 (pexpr ps ><>rv)
-                              (? !(two? r2) ()
+                              (? (atom? r2) ()
                                  (: hi (cfold (pw64 ps) <r2)
                                     rest (want <>r2 ":")
                                     (? !(charm? hi) ()
-                                       !(two? rest) ()
+                                       (atom? rest) ()
                                        (hi < v) (blame <>rv "an empty case range")
                                        (1024 < (hi - v)) (blame <>rv "case range too wide")
                                        [['blk (crange v hi ())] rest]))))
@@ -2074,22 +2072,22 @@
               ; label emitted twice and every goto to it takes the first -- silently.
               (: nm (lname ps (tkv t))
                  (? (peep (ps 'labs) nm ()) (blame ts ("duplicate label '" + nm + "'"))
-                    (: _ (pin (ps 'labs) nm 1) [['lbl nm] >>ts])))
+                    (pin (ps 'labs) nm 1, [['lbl nm] >>ts])))
              (: r (thenw (pexpr ps ts) ";")
                 (? (two? r) [['expr <r] <>r] ())))))
    ; block-scoped shadowing (C scope): a local whose name is a typedef or an enum constant
    ; hides it for the rest of the block, so `name op name` reads as an expression and a read
    ; of the local stays a var. record (table name old); a typedef pins to 0 (not-a-type), an
    ; enum constant is pulled (the fold site tests charm?, and 0 is a charm); restore on exit.
-   (declnames form) (? (two? form && (<form = 'decl)) (map cap <>form) ())
+   (declnames form) (? (two? form && <form = 'decl) (map cap <>form) ())
    (shadow1 ps nm shadows)
     (: s1 (: old (peep (ps 'types) nm 'none)
              (? (old = 'none) shadows
-                (: _ (pin (ps 'types) nm 0) (['types nm old] . shadows))))
+                (pin (ps 'types) nm 0, ['types nm old] . shadows)))
        olde (peep (ps 'enums) nm 'none)
        (? (olde = 'none) s1
-          (: _ (pull (ps 'enums) nm 0) (['enums nm olde] . s1))))
-   (shadowdecl ps names shadows) (? !(two? names) shadows
+          (pull (ps 'enums) nm 0, ['enums nm olde] . s1)))
+   (shadowdecl ps names shadows) (? (atom? names) shadows
                                      (shadowdecl ps >names (shadow1 ps <names shadows)))
    ; a type specifier binds names wherever it is written (an enum body's constants and its
    ; tag's signedness, a block tag's spelling) and at block scope C11 gives every one of them
@@ -2100,8 +2098,8 @@
     (: now (peep ps 'scopacc ())
        (go l k) (? (k < 1) shadows (<l . go >l (k - 1)))
        _ (pin ps 'scopacc epre)
-       (go now (tally now - tally epre)))
-   (unshadow ps shadows) (? !(two? shadows) ()
+       (go now (#now - #epre)))
+   (unshadow ps shadows) (? (atom? shadows) ()
                             (: e <shadows
                                _ (? (<>>e = 'none) (pull (ps <e) <>e 0) (pin (ps <e) <>e <>>e))   ; 'none = the name was absent (a fresh local): remove it, don't pin the sentinel
                                (unshadow ps >shadows)))
@@ -2112,9 +2110,9 @@
    ; the type actually filed, else the name's old mark goes too
    (qtake ps nm ty)
     (: nq (peep (ps 'qstage) nm 'none)
-       st !(= nq 'none)          ; a stage is there -- (== ..) not the datum's own truth
-       _ (? (st && (qstrip nq = ty)) (pin (ps 'qtys) nm nq)
-            !(= (peep (ps 'qtys) nm 'none) 'none) (pull (ps 'qtys) nm 0)
+       st (nq != 'none)          ; a stage is there -- a comparison, not the datum's own truth
+       _ (? (st && qstrip nq = ty) (pin (ps 'qtys) nm nq)
+            (peep (ps 'qtys) nm 'none != 'none) (pull (ps 'qtys) nm 0)
             0)
        (? st (pull (ps 'qstage) nm 0) 0))
    (bindloc ps ent shadows) (: nm <ent
@@ -2123,14 +2121,14 @@
                                 _ (pin (ps 'locals) nm <>ent)
                                 _ (qtake ps nm <>ent)
                                 (['locals nm old] . (['qtys nm oq] . shadows)))
-   (bindlocs ps ents shadows) (? !(two? ents) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
+   (bindlocs ps ents shadows) (? (atom? ents) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
    (loctypes form) (? (two? form && elem <form '(decl sdecl)) <>form ())       ; a block decl's entries, () otherwise
    ; a block-scope typedef: pin each declarator into ps 'types, saving the old binding on the
    ; block's shadow list ('none = fresh); file scope (tdeflist) hands an empty list and drops
    ; the answer. -> (rest sh2) | (); peek for the `;`, the remainder may be empty (EOF).
    (btdefs ps base ts sh bq)
     (: dr (pdtor ps ts base)
-       (? !(two? dr) ()
+       (? (atom? dr) ()
           (: nm <<dr
              old (peep (ps 'types) nm 'none)
              _ (pin (ps 'types) nm <><dr)
@@ -2147,10 +2145,10 @@
        ; alongside the shadow list on every way out of the block
        d0 (peep ps 'blkd 0)
        _ (pin ps 'blkd (d0 + 1))
-       (bend sh) (: _ (pin ps 'blkd d0) (unshadow ps sh))
-       (? !(two? ts0) (bend ())
+       (bend sh) (pin ps 'blkd d0, unshadow ps sh)
+       (? (atom? ts0) (bend ())
           (: (items ts2 acc sh)
-              (? !(two? ts2) (: _ (bend sh) ())
+              (? (atom? ts2) (bend sh, ())
                  ; the last expression's type, read while the block's names still stand (a
                  ; statement expression's value is typed off it)
                  (tp? <ts2 "}") (: lv (? (two? acc) <acc ())
@@ -2162,11 +2160,11 @@
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
                      r (? (two? br) (btdefs ps <br <>br (sdrain ps epre sh) (qspec ps >ts2 <br)) ())
-                     (? !(two? r) (: _ (bend sh) ())
+                     (? (atom? r) (bend sh, ())
                         (items <r acc <>r)))
                  (: r (? (tyat? ps ts2) (pdecl ps ts2) (pstmt ps ts2))
                     cm (clpop ps)                   ; a cleanup's marker rides after its decl
-                    (? !(two? r) (: _ (bend sh) ())
+                    (? (atom? r) (bend sh, ())
                        ; the enum body parses before the declarators bind, so its entries go
                        ; under theirs -- unshadow walks newest first and the oldest wins
                        (items <>r ((? cm [cm <r] [<r]) + acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (sdrain ps epre sh)))))))
@@ -2175,9 +2173,9 @@
    ; a for past its init: ri is (init rest-after-;) -> (('for ..) rest) | ()
    (pfor ps ri)
     (: rc (? (peekp <>ri ";") [() ><>ri] (thenw (pexpr ps <>ri) ";"))
-       (? !(two? rc) ()
+       (? (atom? rc) ()
           (: rs (? (peekp <>rc ")") [() ><>rc] (thenw (pexpr ps <>rc) ")"))
-             (? !(two? rs) ()
+             (? (atom? rs) ()
                 (: rb (parm ps <>rs)
                    (? (two? rb) [['for <ri <rc <rs <rb] <>rb] ()))))))
 
@@ -2187,10 +2185,10 @@
        (two? ts && tkw? <ts 'void && peekp >ts ")") [() >>ts ()]
        !(tyat? ps ts) ()
        (: br (pbty ps ts)
-          (? !(two? br) ()
+          (? (atom? br) ()
              (: _ (pin ps 'sawrstr ())          ; clear before the report, so it cannot leak between params
                 dr (pdtor ps <>br <br)
-                (? !(two? dr) ()
+                (? (atom? dr) ()
                    ; a parameter of array type decays to a pointer, so `int a[]` and a
                    ; va_list (an array typedef) both ride as pointers
                    (: e0 <dr ty0 <>e0
@@ -2222,10 +2220,10 @@
               (peekp r ")") [(rev (nm . acc)) >r]
               ()))
        ())
-   (klook nm l) (? !(two? l) 'int (<<l = nm) <><l (klook nm >l))
+   (klook nm l) (? (atom? l) 'int (<<l = nm) <><l (klook nm >l))
    (kdtors ps ts base acc)                           ; `dtor (, dtor)* ;` -> (name ty) pairs, K&R arrays decay to ptr
     (: dr (pdtor ps ts base)
-       (? !(two? dr) ()
+       (? (atom? dr) ()
           (: nm <<dr ty0 <><dr rest <>dr
              ty (tdecay ty0)
              acc2 ([nm ty] . acc)
@@ -2235,13 +2233,13 @@
    (kdecls ps ts acc)                                ; the run of parameter declarations up to `{` -> (tmap rest)
     (? (peekp ts "{") [acc ts]
        (: br (pbty ps ts)
-          (? !(two? br) () (kdtors ps <>br <br acc))))
+          (? (atom? br) () (kdtors ps <>br <br acc))))
    (pkr ps ts)                                       ; ts after `(` -> (entries rest-at-`{` ()) | ()
     (: kr (kids ts ())
-       (? !(two? kr) ()
+       (? (atom? kr) ()
           (: names <kr afterp <>kr
              dr (kdecls ps afterp ())
-             (? !(two? dr) ()
+             (? (atom? dr) ()
                 (: tmap <dr rest <>dr
                    [(map (\ nm [nm (klook nm tmap)]) names) rest ()])))))
 
@@ -2260,34 +2258,34 @@
        sig (peep (ps 'sigs) name ())
        b2 (? (two? b && peep ps 'clfn ())
               (: r (pcln ps <b (? (two? sig) <sig 'int))
-                 (? (= r 'bad) (clblame "a jump into the scope of a cleanup variable") [r <>b]))
+                 (? (r = 'bad) (clblame "a jump into the scope of a cleanup variable") [r <>b]))
               b)
        (? (two? b2) [['fn name prms <b2] <>b2] ()))
 
    ; -- cleanup: the pending marker a declaration left, taken once by the block that holds it
    (clpop ps) (: m (peep ps 'clpend ()) _ (pin ps 'clpend ()) m)
    ; a refusal found past the tokens: the sentence files at the deepest point read
-   (clblame msg) (: _ (pins far 'why msg 'wseq (peep far 'seq -1)) ())
+   (clblame msg) (pins far 'why msg 'wseq (peep far 'seq -1), ())
    ; lays f(&v) on every way out of a cleanup variable's scope: a block's end, return (its
    ; value first held), break and continue to their loop or switch, a goto to a label
    ; outside, an asm goto through a landing pad. a jump into a scope answers 'bad
    (clcalls cs) (map (c \ ['expr ['call ['var (c 2)] [['addr ['var (c 1)]]]]]) cs)
-   (clup st stops) (? !(two? st) ()                  ; the live cleanups inside the nearest stop
+   (clup st stops) (? (atom? st) ()                  ; the live cleanups inside the nearest stop
                       (two? <st) (<st . clup >st stops)
                       (elem <st stops) ()
                       (clup >st stops))
    (clids st) (map (c \ c 3) (clup st ()))
-   (clbad? x) (= x 'bad)
-   (clmap f l) (? !(two? l) l                      ; map, 'bad if any element answered it
+   (clbad? x) (x = 'bad)
+   (clmap f l) (? (atom? l) l                      ; map, 'bad if any element answered it
                   (: h (f <l) t (clmap f >l)
                      (? (clbad? h || clbad? t) 'bad (h . t))))
    (cllabs x st t)                                  ; every label -> the cleanup ids live at it
-    (? !(two? x) t
+    (? (atom? x) t
        (<x = 'lbl) (pin t <>x (clids st))
-       (: (go l st2) (? !(two? l) t
+       (: (go l st2) (? (atom? l) t
                         (: e <l
                            (? (two? e && <e = 'cln) (go >l (['c (e 1) (e 2) (e 3)] . st2))
-                              (: _ (cllabs e st2 t) (go >l st2)))))
+                              (cllabs e st2 t, go >l st2))))
           (go x st)))
    (pcln ps body rty)
     (: labt (cllabs body () {})
@@ -2296,14 +2294,14 @@
        ; the cleanups a jump from st to label nm runs, 'bad into a scope, 'none for no such label
        (leave st nm)
         (: lt (peep labt nm 'none)
-           (? (= lt 'none) ()
+           (? (lt = 'none) ()
               (: here (clids st)
                  (? (any (i \ nelem i here) lt) 'bad
                     (filter (c \ nelem (c 3) lt) (clup st ()))))))
        ; a block's items -> (items' live-cleanups) | 'bad
        (wi items st)
         (: (go l st2 loc acc)
-            (? !(two? l) [(rev acc) loc st2]
+            (? (atom? l) [(rev acc) loc st2]
                (: e <l
                   (? (two? e && <e = 'cln)
                       (: c ['c (e 1) (e 2) (e 3)] (go >l (c . st2) (c . loc) acc))
@@ -2312,19 +2310,19 @@
                      (: e2 (ws e st2) (? (clbad? e2) 'bad (go >l st2 loc (e2 . acc)))))))
            (go items st () ()))
        (xw e st)                                    ; an expression: its statement expressions
-        (? !(two? e) e
+        (? (atom? e) e
            (<e = 'sexpr)
             (: r (wi (e 1) st)
                (? (clbad? r) 'bad
                   (: loc <>r v (xw (e 2) <>>r)
                      (? (clbad? v) 'bad
-                        !(two? loc) ['sexpr <r v (e 3)]
-                        !(two? v) ['sexpr (<r + clcalls loc) v (e 3)]
+                        (atom? loc) ['sexpr <r v (e 3)]
+                        (atom? v) ['sexpr (<r + clcalls loc) v (e 3)]
                         (: t (fresh "__cln_val_")
                            ['sexpr (<r + [['decl [[t (e 3) v]]]] + clcalls loc) ['var t] (e 3)])))))
            (clmap (x \ xw x st) e))
        (ws s st)
-        (? !(two? s) s
+        (? (atom? s) s
            (: k <s
               (? (k = 'blk)
                   (: r (wi (s 1) st) (? (clbad? r) 'bad ['blk (<r + clcalls <>r)]))
@@ -2348,10 +2346,10 @@
                   (: cs (clup st ())
                      x (xw (s 1) st)
                      (? (clbad? x) 'bad
-                        !(two? cs) (['ret x] + >>s)
+                        (atom? cs) (['ret x] + >>s)
                         (two? >>s) 'bad                ; a musttail cannot run code after its call
-                        !(two? x) (wrap cs ['ret ()])
-                        (= rty 'void) ['blk ([['expr x]] + clcalls cs + ['(ret ())])]
+                        (atom? x) (wrap cs ['ret ()])
+                        (rty = 'void) ['blk ([['expr x]] + clcalls cs + ['(ret ())])]
                         (: t (fresh "__cln_ret_")
                            ['blk ([['decl [[t rty x]]]] + clcalls cs + [['ret ['var t]]])])))
                  (k = 'brk) (wrap (clup st '(L S)) s)
@@ -2360,15 +2358,15 @@
                  ; an asm goto's edge to a label outside lands on a pad that runs the cleanups
                  (k = 'asm && two? (s 5))
                   (: (go ls nl pads)
-                      (? !(two? ls) [(rev nl) pads]
+                      (? (atom? ls) [(rev nl) pads]
                          (: l9 <ls cs (leave st l9)
                             (? (clbad? cs) 'bad
-                               !(two? cs) (go >ls (l9 . nl) pads)
+                               (atom? cs) (go >ls (l9 . nl) pads)
                                (: p9 (fresh "__cln_pad_")
                                   (go >ls (p9 . nl) (pads + [['lbl p9]] + clcalls cs + [['goto l9]]))))))
                      r (go (s 5) () ())
                      (? (clbad? r) 'bad
-                        !(two? <>r) s
+                        (atom? <>r) s
                         (: sk (fresh "__cln_pad_")
                            a2 ([(s 0) (s 1) (s 2) (s 3) (s 4) <r] + >>>>>>s)
                            ['blk ([a2 ['goto sk]] + <>r + [['lbl sk]])])))
@@ -2385,7 +2383,7 @@
           (: nm (tkv <s0) s1 >s0
              (? !(peekp s1 "(") ()
                 (: rp (pparams ps >s1 ())
-                   (? !(two? rp) ()
+                   (? (atom? rp) ()
                       (: _ (pin (ps 'sigs) nm (mksig rty rp))
                          af <>rp
                          (? (peekp af ",") (mproto ps base >af)
@@ -2402,14 +2400,14 @@
    ; section attribute are noted at entry (the attribute-skip lanes recurse, so the outermost
    ; sighting wins) and pinned per name by tops.
    (ptop ps ts)
-    (: _ (? (peep ps 'curstat ()) () (? (leadstatic? ps ts) (pin ps 'curstat 1) ()))
-       _ (? (peep ps 'cursect ()) () (: sc (secat? ts) (? sc (pin ps 'cursect sc) ())))
-       _ (? (peep ps 'curalias ()) () (: al (aliasat? ts) (? al (pin ps 'curalias al) ())))
-       _ (? (peep ps 'curweak ()) () (? (wkany? ts) (pin ps 'curweak 1) ()))
-       _ (? (peep ps 'curinl ()) () (? (inlany? ts) (pin ps 'curinl 1) ()))
-       _ (? (peep ps 'curnoinl ()) () (? (noinlany? ts) (pin ps 'curnoinl 1) ()))
-       _ (? (peep ps 'curalign ()) () (: an (alignat? ps ts) (? an (pin ps 'curalign an) ())))
-       (ptop9 ps ts))
+    ((? (peep ps 'curstat ()) () (? (leadstatic? ps ts) (pin ps 'curstat 1) ())),
+     (? (peep ps 'cursect ()) () (: sc (secat? ts) (? sc (pin ps 'cursect sc) ()))),
+     (? (peep ps 'curalias ()) () (: al (aliasat? ts) (? al (pin ps 'curalias al) ()))),
+     (? (peep ps 'curweak ()) () (? (wkany? ts) (pin ps 'curweak 1) ())),
+     (? (peep ps 'curinl ()) () (? (inlany? ts) (pin ps 'curinl 1) ())),
+     (? (peep ps 'curnoinl ()) () (? (noinlany? ts) (pin ps 'curnoinl 1) ())),
+     (? (peep ps 'curalign ()) () (: an (alignat? ps ts) (? an (pin ps 'curalign an) ()))),
+     ptop9 ps ts)
    (ptop9 ps ts)
     (? (peekp ts ";") ['(tdef) >ts]           ; a stray top-level `;` -- an empty declaration
        ; a leading __extension__ (gcc, a no-op) strips before the keyword checks --
@@ -2419,22 +2417,22 @@
        (asmid? <ts) (ptasm ps ts)
        ; a leading __attribute__((..)): the scans at ptop's entry read the whole form, so
        ; skip it and parse the declaration proper
-       !(= (pattr ts) ts) (ptop ps (pattr ts))
+       (pattr ts != ts) (ptop ps (pattr ts))
        ; `extern` data declares, never defines: an init-less gdecl under a leading extern
        ; becomes ('xdecl pairs) -- addressable, no storage laid. protos/typedefs pass through.
        (tkw? <ts 'extern)
         (: r (ptop ps >ts)
-           (? !(two? r) ()
-              !(<<r = 'gdecl) r
-              (: (initless? prs) (? !(two? prs) 1
+           (? (atom? r) ()
+              (<<r != 'gdecl) r
+              (: (initless? prs) (? (atom? prs) 1
                                     (two? <>><prs) ()
                                     (initless? >prs))
                  (? (initless? <><r) [['xdecl <><r] <>r] r))))
        (tkw? <ts 'typedef)
         (: br (pbty ps >ts)
-           (? !(two? br) () (tdeflist ps <br <>br (qspec ps >ts <br))))
+           (? (atom? br) () (tdeflist ps <br <>br (qspec ps >ts <br))))
        (: br (pbty ps ts)
-          (? !(two? br) ()
+          (? (atom? br) ()
              (: base <br ts0 <>br
                 gbq (qspec ps ts base)  ; the run's mask, _Generic's; one stages it
                 (? (peekp ts0 ";") ['(tdef) >ts0]     ; a bare struct/enum definition
@@ -2447,11 +2445,11 @@
                       fdr (? (idat? ts1) [(tkv <ts1) >ts1 () ()]
                              (peekp ts1 "(")
                               (: dr (pdtor ps ts1 rty)
-                                 (? !(two? dr) ()
+                                 (? (atom? dr) ()
                                     !<<dr ()                          ; abstract at top level: refuse
                                     [<<dr <>dr <><dr <>><dr]))                                 ; 4th = a fn declarator's parsed params
                              ())
-                      (? !(two? fdr) ()
+                      (? (atom? fdr) ()
                          (: name <fdr
                             ts2 <>fdr
                             fpty <>>fdr
@@ -2466,12 +2464,12 @@
                             (one0 ts3 nm t2)                ; t2 is the element type (stars included)
                              (? (peekp ts3 "[")
                                 (: dr (adims ps ts3 ())  ; one or more [n]/[] dims (enum consts fold)
-                                   (? !(two? dr) ()
+                                   (? (atom? dr) ()
                                       (: dims <dr rest0 (patt <>dr)   ; an array declarator carries trailing attributes too
-                                         (? (!(two? >dims) && (<dims = 0))      ; a lone [] -- size from init, or 0 (extern)
+                                         (? (atom? >dims && <dims = 0)      ; a lone [] -- size from init, or 0 (extern)
                                              (? !(peekp rest0 "=") [[nm ['arr t2 0] ()] rest0]      ; no init: incomplete, size 0
                                                 (: ir (pinit ps >rest0)
-                                                   (? !(two? ir) ()
+                                                   (? (atom? ir) ()
                                                       (: n (initcount ps t2 <ir)
                                                          (? (charm? n)
                                                             [[nm ['arr t2 n] <ir] <>ir]
@@ -2481,12 +2479,12 @@
                                             (: aty0 (mkarr t2 dims)
                                                (? (peekp rest0 "=")     ; T a[n].. = init
                                                    (: ir (pinit ps >rest0)
-                                                      (? !(two? ir) ()
+                                                      (? (atom? ir) ()
                                                          [[nm (fillarr ps aty0 <ir) <ir] <>ir]))
                                                   [[nm aty0 ()] rest0]))))))
                                 (peekp ts3 "=")
                                  (: r (pinit ps >ts3)
-                                    (? !(two? r) ()
+                                    (? (atom? r) ()
                                        ; a later declarator arrives with its dims already parsed
                                        ; (`more` runs pdtor first, so t2 is the whole array type and
                                        ; ts3 sits on the `=`), where the first still has its `[`
@@ -2500,7 +2498,7 @@
                             (more ts3 acc)
                                 (? (peekp ts3 ",")
                                    (: dr (pdtor ps >ts3 base)
-                                      (? !(two? dr) ()
+                                      (? (atom? dr) ()
                                          (: r (one (patt (pgreg ps <>dr <<dr (leadregister? ps ts))) <<dr <><dr)
                                             (? (two? r) (more <>r (<r . acc)) ()))))
                                    ; a declarator whose type is a function type (a function-type
@@ -2510,7 +2508,7 @@
                                    (? !(peekp ts3 ";") ()
                                       (: rest >ts3
                                          (fnp? pr) (fn? <>pr)
-                                         _ (: (regs l) (? !(two? l) ()
+                                         _ (: (regs l) (? (atom? l) ()
                                                           (: p2 <l
                                                              ; never clobber a filed sig: this door carries no params, and
                                                              ; over a real prototype it drops the types the call ABI reads
@@ -2522,12 +2520,12 @@
                                                              ; (musl's weak_alias) answers a nameless 'tdef,
                                                              ; so the name is recorded here, still in hand
                                                              _ (: al (peep ps 'curalias ())
-                                                                  (? !(two? al) ()
-                                                                     (: _ (pin (ps 'alias) <p2 <al)
-                                                                        (? <>al (addweak ps <p2) ()))))
+                                                                  (? (atom? al) ()
+                                                                     (pin (ps 'alias) <p2 <al,
+                                                                      (? <>al (addweak ps <p2) ()))))
                                                              (regs >l)))
                                               (regs acc))
-                                         vps (: (go2 l a2) (? !(two? l) a2
+                                         vps (: (go2 l a2) (? (atom? l) a2
                                                               (go2 >l (? (fnp? <l || two? (peep (ps 'gregs) <<l ()))
                                                                          a2 (<l . a2))))
                                                 (go2 acc ()))
@@ -2536,7 +2534,7 @@
                                          ; them all and only some carry a star. an init-less one
                                          ; rides .bss, where it costs no file bytes.
                                          _ (? !(leadconst? ps ts) ()
-                                              (: (goc l) (? !(two? l) 1
+                                              (: (goc l) (? (atom? l) 1
                                                             (: p <l
                                                                _ (? (cobj? <>p && two? <>>p)
                                                                     (pin (ps 'consts) <p 1) ())
@@ -2547,9 +2545,9 @@
                                          (? (two? vm) (blame rest ("variably modified '" + <<vm + "' at file scope"))
                                             (two? vps) [['gdecl vps] rest]
                                             ['(tdef) rest]))))
-                            (? (!(two? fpty) && peekp ts2 "(")        ; a function (the return type rides the sig table)
+                            (? (atom? fpty && peekp ts2 "(")        ; a function (the return type rides the sig table)
                                (: rp (? (krhead? ps >ts2) (pkr ps >ts2) (pparams ps >ts2 ()))
-                                  (? !(two? rp) ()
+                                  (? (atom? rp) ()
                                      (: _ (pin (ps 'sigs) name (mksig rty rp))
                                         aft (patt <>rp)                     ; a trailing __attribute__((..)) after the proto/fn declarator
                                         (? (peekp aft ";") [['proto name] >aft]
@@ -2560,8 +2558,8 @@
                                            (peekp aft ",")
                                             (: rest (mproto ps base >aft)
                                                (? (two? rest) [['proto name] <rest]
-                                                  (: _ (? (peep ps 'curstat ()) (pin (ps 'sfns) name 1) ())
-                                                     (more aft ()))))
+                                                  ((? (peep ps 'curstat ()) (pin (ps 'sfns) name 1) ()),
+                                                   more aft ())))
                                            (pfbody ps name <rp aft)))))
                                (fn? fpty)                                ; the declarator is a function (returns a fn-ptr):
                                                                          ; the return type is <>fpty, the params rode fprm out of pdtor
@@ -2579,7 +2577,7 @@
    ; succeeds (ps carries the first attempt's half-registered typedefs). no line number in the
    ; message text -- the stamped line is what the driver reports.
    (pfail ps ts2 spans toks)
-    (: i0 (tally toks - tally ts2)       ; the failing form's index -- an O(n) walk, on the path that is already dying
+    (: i0 (#toks - #ts2)       ; the failing form's index -- an O(n) walk, on the path that is already dying
        ft (? (two? ts2) <ts2 ())
        _ (pin far 'seq -1)
        _ (pin far 'tok ())
@@ -2590,8 +2588,8 @@
        t (? (two? dt) dt ft)
        ; a cause filed at the deepest token names the program's fault; anywhere shallower it
        ; belongs to a branch that was abandoned, and does not
-       why (? ((peep far 'wseq ()) = (peep far 'seq ())) (peep far 'why ()) ())
-       (? !(two? t) (gripe () () () "parse error at end of input")
+       why (? (peep far 'wseq () = peep far 'seq ()) (peep far 'why ()) ())
+       (? (atom? t) (gripe () () () "parse error at end of input")
           (gripe (? (two? dt) (filof t) (filat spans i0)) <>>t ()
                  (? why why ("parse error near " + spell t)))))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
@@ -2609,7 +2607,7 @@
         (: _ (? (elem <f '(gdecl xdecl))         ; register file-scope names -> types (ptype's global fallback)
                 ; ..and consume the mark ptop staged for each, on bindloc's terms: only
                 ; when it strips back to the type actually filed
-                (: (gogl prs) (? !(two? prs) 1
+                (: (gogl prs) (? (atom? prs) 1
                                  (: nm <<prs
                                     _ (pin (ps 'globals) nm <><prs)
                                     _ (qtake ps nm <><prs)
@@ -2623,8 +2621,8 @@
            ; where the code lands is the point, and the align is what pins the spacing
            _ (? (sc && fnp) (pin (ps 'sects) <>f sc) ())
            _ (? (an && fnp) (pin (ps 'aligns) <>f an) ())
-           _ (? ((<f = 'gdecl) && (st || sc || an))
-                (: (go2 prs) (? !(two? prs) 1
+           _ (? (<f = 'gdecl && (st || sc || an))
+                (: (go2 prs) (? (atom? prs) 1
                                 (: nm <<prs
                                    _ (? st (pin (ps 'svars) nm 1) ())
                                    _ (? sc (pin (ps 'sects) nm sc) ())
@@ -2635,9 +2633,9 @@
            ; an alias declaration names no storage of its own: it is another name for a symbol
            ; defined in this TU (musl's weak_alias). record name -> target; cgen lays the label.
            _ (: al (peep ps 'curalias ())
-                (? !(two? al) ()
+                (? (atom? al) ()
                    (: nms (? (<f = 'gdecl) (map cap <>f) fnp [<>f] ())
-                      (go3 l) (? !(two? l) 1
+                      (go3 l) (? (atom? l) 1
                                  (: _ (pin (ps 'alias) <l <al)
                                     _ (? <>al (addweak ps <l) ())
                                     (go3 >l)))
@@ -2646,7 +2644,7 @@
                 (? !wk ()
                    (: nms (? (elem <f '(gdecl xdecl)) (map cap <>f)
                              fnp [<>f] ())
-                      (go4 l) (? !(two? l) 1 (: _ (addweak ps <l) (go4 >l)))
+                      (go4 l) (? (atom? l) 1 (addweak ps <l, go4 >l))
                       (go4 nms))))
            _ (? (peep ps 'curinl () && fnp)
                 (pin ps 'ainl (<>f . ps 'ainl)) ())
@@ -2668,10 +2666,10 @@
        (tops ts2 acc)
         ; the hoisted block-scope externs lead the program: gen's global pass reads them, and
         ; C's tentative rule lets a real definition later in the TU take the entry back
-        (? !(two? ts2) [1 ['prog ((ps 'hoist) + (rev acc))] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
+        (? (atom? ts2) [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                               (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                               (ps 'consts) (ps 'rstrs) (ps 'gregs) vol]
            (: r (ptop ps ts2)
-              (? (two? r) (: _ (note <r) (tops <>r (<r . acc))) (pfail ps ts2 spans toks))))
+              (? (two? r) (note <r, tops <>r (<r . acc)) (pfail ps ts2 spans toks))))
        (tops toks ())))
 ) ; module 'moon

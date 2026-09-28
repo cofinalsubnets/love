@@ -34,7 +34,7 @@
            (png-unfilter "abc" 0 1 3 0 = ()))
 
    ; -- images against magick ------------------------------------------------------------
-   (has p) (: q (open p "r") (? (hot? q) (: _ (close q) 1) 0))
+   (has p) (: q (open p "r") (? (hot? q) (close q, 1) 0))
    pil? (: r (hark ["python3" "-c" "import PIL"]) (two? r) && (<r = 0))
    ok? (pil? && has "/usr/bin/magick")
    _ (put (dir + "/mk.py") "import sys
@@ -80,7 +80,7 @@ for n in (2, 4, 16, 256):
                       got (png-decode (rd f))
                       (? ((two? want) && (<want = 0) && (two? got) && (got 0 = 37) && (got 1 = 23)
                           && (got 2 = >want))
-                         1 (: _ (puts ("png: " + n + " differs from magick\n")) 0)))
+                         1 (puts ("png: " + n + " differs from magick\n"), 0)))
            (test (filter (n \ !(one n)) names = ())))
         (puts "png: no python3 PIL or magick, images skipped\n"))
 

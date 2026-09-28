@@ -323,7 +323,7 @@
    ; wchar_t forks by ABI, not by width: signed int on x64/rv64 (SysV), unsigned int on
    ; a64/arm32 (AAPCS) -- gcc's values, so a header's typedef lays what a gcc object carries.
    (wchdefs tgt)
-    (? (= tgt 'a64 || arm32? tgt)
+    (? (tgt = 'a64 || arm32? tgt)
        '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"))
    (stddefs tgt) ((? (arm32? tgt) stdt32 stdlp64) + wchdefs tgt + stdcommon)
@@ -396,7 +396,7 @@
                 ; the two writers, one shape: the standard set for the width, plus whatever
                 ; the TU named. arm32 has no .image lane and no local func symbols for
                 ; statics -- objsecs3 refuses the first, and `lnames` does not ride.
-                (? (= tgt 'wasm)
+                (? (tgt = 'wasm)
                    (? (two? <at) (udie 1 ("cc: a file-scope asm has no wasm lane, in " + src))
                       (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                    (arm32? tgt)
@@ -652,15 +652,15 @@
        ; compilers -- so the room here is deliberate. three shapes are kept: the archives,
        ; the members they index, and the .cid memos naming the compiler that cut them, each
        ; bounded on its own count. anything else goes.
-       _ (foldl (\ a f (? (dota? f || dotcid? f || dotrto? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
+       _ (foldl (\ a f (? (dota? f || dotcid? f || dotrto? f) a (unlink (d + f), a))) 0 (readdir d))
        (ages pk) (foldl (\ a f (: st (stat (d + f))
                                   (pk f && two? st ? (a + [[(st 1) f]]) a)))
                         () (readdir d))
-       (go l k cap) (? !(two? l) 0
+       (go l k most) (? !(two? l) 0
                        (: e <l
-                          _ (cap <= k && unlink (d + <>e))
-                          (go >l (k + 1) cap)))
-       (old pk cap) (go (sortby (\ a b (<b <= <a)) (ages pk)) 0 cap)
+                          _ (most <= k && unlink (d + <>e))
+                          (go >l (k + 1) most)))
+       (old pk most) (go (sortby (\ a b (<b <= <a)) (ages pk)) 0 most)
        _ (old dota? mckeep)
        _ (old dotrto? mckeepo)
        (old dotcid? mckeep))
@@ -733,8 +733,8 @@
        (swap47 s) (: n #s c (cask n)
                      _ (pour c 0 s 0 n)
                      (go i) (? (n <= i) (string c)
-                               (: _ (peep c i 0 = 47 && pin c i 95)
-                                  (go (i + 1))))
+                               (peep c i 0 = 47 && pin c i 95,
+                                go (i + 1)))
                      (go 0))
        (nlmems d)
         (? disk
@@ -790,8 +790,8 @@
        (!(string? cd) ? 0
           (each tgts
                 (t \ (: (go l k) (? !(two? l) 0
-                                    (: _ (i = k // run % w && rtmem1 t os vb id cd <l)
-                                       (go >l (k + 1))))
+                                    (i = k // run % w && rtmem1 t os vb id cd <l,
+                                     go >l (k + 1)))
                         (go (rtplan home t os vb) 0))))))
    (rtpull srcs tgt os nostd vb)
     (: mach (peep elf-machines tgt 0)
@@ -853,8 +853,8 @@
        ; the runtime by need: a member whose defs meet an owed name joins, and its own
        ; wants join the owe, until nothing more is owed or nothing more answers
        ledger (ss \ (: defs {} refs {}
-                       _ (map (s \ (: _ (map (d \ pin defs d 1) <s)
-                                       (map (r \ pin refs r 1) >s)))
+                       _ (map (s \ (map (d \ pin defs d 1) <s,
+                                     map (r \ pin refs r 1) >s))
                               ss)
                        (filter (r \ !(defs r)) (keys refs))))
        ; crt0 rides when an input defines main; a module with a face of its own (the wasm
@@ -1023,19 +1023,19 @@
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia}
    (flags as t)
     (? !(two? as)
-       (: _ (pin t 'is (rev (t 'is)))
-          _ (pin t 'ds (rev (t 'ds)))
-          _ (pin t 'ins (rev (t 'ins)))
-          t)
+       (pin t 'is (rev (t 'is)),
+        pin t 'ds (rev (t 'ds)),
+        pin t 'ins (rev (t 'ins)),
+        t)
        (: a <as r >as
           (? (a = "-c") (flags r (pin t 'c 1))
              ; the same string love answers, because they are one artifact: mooncc is a
              ; verb on the love binary, not a separate program, and two reported versions
              ; would report a thing that cannot happen.
              (a = "--version" || a = "-v")
-              (: _ (puts ("mooncc (love " + love-version + ")")) _ (putc 10) _ (flush out) (uleave 0))
+              (puts ("mooncc (love " + love-version + ")"), putc 10, flush out, uleave 0)
              (a = "--help" || a = "-h")
-              (: _ (puts usage) _ (putc 10) _ (flush out) (uleave 0))
+              (puts usage, putc 10, flush out, uleave 0)
              (a = "-pie") (flags r (pin t 'pie 1))
              ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
              ; linked image, so a loader placing it at a base of its own can slide them.
@@ -1140,22 +1140,22 @@
        (ins @
         []      (udie 2 usage)
         (? o)   (c ? (two? >ins ? (udie 2 "cc: -o takes one input")
-                                  (: _ (cc-obj <ins o f) 0))
-                     (: _ (cc-link ins o f) 0))
+                                  (cc-obj <ins o f, 0))
+                     (cc-link ins o f, 0))
         ; the legacy pair: exactly two bare args, the second no .c -- in out. a .c/.o mix is
         ; a link, never a pair (-c keeps its .o out), and a .a is never an out: `mooncc a.o
         ; libgcc.a` as a pair would write the library it was asked to read from.
         (? (!(dotc? b) && !(dota? a) && !(dota? b)
             && (c || (!(doto? a) && !(doto? b)))) [a b])
-                (: _ (c ? (cc-obj a b f) (cc-link [a] b f)) 0)
+                (c ? (cc-obj a b f) (cc-link [a] b f), 0)
         (? c)   (: (go l) (? !(two? l) 0
                              ; stdin has no name to derive an .o from -- obase would
                              ; answer the bare suffix and write a file called `o`.
                              (<l = "-") (udie 2 "cc: a source on stdin needs -o")
                              !(dotc? <l) (udie 2 ("cc: not a .c input: " + <l))
-                             (: _ (cc-obj <l (obase <l) f) (go >l)))
+                             (cc-obj <l (obase <l) f, go >l))
                    (go ins))
-                (: _ (cc-link ins "a.out" f) 0))))
+                (cc-link ins "a.out" f, 0))))
 
 ; the seat: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the

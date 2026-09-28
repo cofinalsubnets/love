@@ -58,11 +58,11 @@
        hdr (x-reply s)
        op (<hdr = 1 ? (hdr 9) 0)
        (? (op < 1) 0
-          (: _ (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w16 s 1, x-w16 s 0, x-flush s)
-             _ (x-reply s)
-             _ (x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s)
-             _ (x-reply s)
-             1)))
+          (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w16 s 1, x-w16 s 0, x-flush s,
+           x-reply s,
+           x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s,
+           x-reply s,
+           1)))
    ; one band of rows out of the frame cask: ZPixmap at the window's depth, 32 bpp
    (x-putband s win gc depth buf y rows)
     (: n (rows * 2560)
@@ -104,7 +104,7 @@
        ; every event waiting on the wire, none waited for; 1 = the window is gone
        (events _) (? !(cue? s) 0
                      (: e (x-next s)
-                        (? (one? e) 1
+                        (? (atom? e) 1
                          (: c (ev-code e)
                             gone (c @ (17 || 33 && u32 (ev-raw e) 12 = dl) 1)
                             _ (c = 2 || c = 3 ?
@@ -115,8 +115,8 @@
                    (frames && n >= frames) n
                    (: drew (doom-tick ())                                     ; -1: the game quit itself
                       (? (drew < 0) n
-                         (: _ (drew ? (doom-frame buf, x-putframe s win gc depth buf))
-                            (loop (n + drew))))))
+                         (drew ? (doom-frame buf, x-putframe s win gc depth buf),
+                          loop (n + drew)))))
        (loop 0))
 
    ; --- the nest: a love with doom in it, laid in ./love-<ver>/ off this binary's source --
@@ -168,8 +168,8 @@
              _ (mkdir d 493)
              _ (mkdir (d + "/doomgeneric") 493)
              _ (note ("laying " + show #ps + " files of doomgeneric off " + dg-raw))
-             bad (tally (filter (p \ (grab (dg-raw + p) (d + "/" + p) != 0)) ps))
-             (? (nil? ps) 1 bad 1 0))))
+             bad #(filter (p \ (grab (dg-raw + p) (d + "/" + p) != 0)) ps)
+             (? !ps 1 bad 1 0))))
    (dg-tar dl)
     (: tgz (dl + "/doomgeneric.tgz")
        r (fetch dg-url tgz)
@@ -194,12 +194,12 @@
    ; the three rungs both nests climb: source laid under here, downloads in dl, the build.
    ; answers the sentence to fail with, or () when the nest stands ready; arm runs before cook
    (nest-lay here nest dl arm cook)
-    (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
-       (? (one? (stat (nest + "/Makefile"))) ("the source did not lay under " + here)
-          (doom-fetch dl) "the downloads did not land"
-          (: _ (arm 0)
-             st (run-in nest cook)
-             (st != 0 ? "the doom build failed" ()))))
+    (cite 'source 'src-nest here,                         ; laid once, shared by every verb
+     (? (atom? (stat (nest + "/Makefile"))) ("the source did not lay under " + here)
+        (doom-fetch dl) "the downloads did not land"
+        (: _ (arm 0)
+           st (run-in nest cook)
+           (st != 0 ? "the doom build failed" ()))))
    (doom-nest as)
     (: exe (selfpath 0)
        here (cwd 0)
@@ -242,13 +242,13 @@
           (: m (nest-lay here nest dl (\ _ (note "building this machine's love with doom inside"))
                          ["cook" "wasm" "DOOM=1" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])
              (? (string? m) (fail m)
-                (one? (stat mod)) (fail ("the build left no module at " + mod))
+                (atom? (stat mod)) (fail ("the build left no module at " + mod))
                 (enter 0)))))
    (digits s) (:- (go 0 0) n #s (go i a) (n <= i ? a
                (: c (s i) (47 < c < 58 ? (go (i + 1) (a * 10 + c - 48)) a))))
    doom-usage "usage: love doom [-iwad FILE] [-display :N] [-frames N]"
    (doom-main as)
-    (: (opt a k d) (? (one? a) d (<a = k && two? >a) <>a (opt >a k d))
+    (: (opt a k d) (? (atom? a) d (<a = k && two? >a) <>a (opt >a k d))
        nestwad (cwd 0 + "/love-" + love-version + "/dl/doom1.wad")
        wad (opt as "-iwad" (two? (stat "dl/doom1.wad") ? "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
@@ -257,12 +257,12 @@
        ; fetch with -- the WAD is a baked file and (doom ()) runs it whole
        (? (inle? 0) (? (elem 'doom (names ())) (doom ()) (doom-nest-inle 0))
           !(elem 'doom-start (names ())) (doom-nest as)
-          (one? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
+          (atom? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (: dn (dispof (string? disp ? disp ""))
              s (x-connect ("/tmp/.X11-unix/X" + dn))
              (? !(hot? s) (say err ("doom: no display :" + dn + "\n"), 1)
                 (: sc (x-setup s (xauth-cookie (xauth 0) dn))
-                   (one? sc ? (say err "doom: the display refused us\n", 1)
+                   (atom? sc ? (say err "doom: the display refused us\n", 1)
                       (: win (scr-idbase sc) gc (scr-idbase sc + 1)
                          n (x-create s win (scr-root sc) 640 400 (scr-depth sc) (scr-visual sc),
                             x-gc s gc win,
