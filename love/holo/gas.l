@@ -238,7 +238,9 @@
                  (<s = 'im) [[op x <>s]]
                  (<s = 'rg && <>s = 1 && <>>s = 1) [[(name (show op + "v")) x 'r1]]
                  (scare 'gas-x64-operand ops)))
-          (elem m '(not neg inc dec push pop)) [[m (gx-r d)]]
+          ; push takes an immediate, or a symbol's address as a sign-extended dword (gas's `pushq $1f`)
+          (= m 'push) (? (<d = 'im) [['push <>d]] (<d = 'ims) [['pushl <>d]] [['push (gx-r d)]])
+          (elem m '(not neg inc dec pop)) [[m (gx-r d)]]
           (= m 'div) [[(w = 4 ? 'divl 'divq) (gx-r d)]]
           (= m 'ltr) [['ltr (gx-r d)]]
           (scare 'gas-x64-op m)))
@@ -248,7 +250,7 @@
                    (? (n > 1 && (c = 102 || c = 98) && xa-allof? (snip t 0 (n - 1)) digit? 0)
                       ((xa-num (snip t 0 (n - 1))) . c) ()))
        (ref s) (: r (lref s) (? !(two? r) s (glabel <r (>r = 102 ? (1 + peep lc <r 0) (peep lc <r 0)))))
-       (fix o) (<o @ 'lbl ['lbl (ref <>o)] 'rip ['rip (ref <>o) <>>o] o)
+       (fix o) (<o @ 'lbl ['lbl (ref <>o)] 'rip ['rip (ref <>o) <>>o] 'ims ['ims (ref <>o)] o)
        (rev (foldl (\ acc it
                       ((<it @ 'label (: t (show <>it)
                                         (? (xa-allof? t digit? 0)

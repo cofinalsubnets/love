@@ -10,7 +10,7 @@
   moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
-  test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 \
+  test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
@@ -45,7 +45,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates \
 	test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
+	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_tfm test_caja test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
@@ -877,6 +877,16 @@ test_fat32: host
 test_cpio: host
 	@echo TEST test/gate/cpio.sh
 	@$(gsh) test/gate/cpio.sh $(ho)/love
+# test_tfm -- apps/tfm.l against TeX Live: tfm-pl = tftopl and tfm-read = TeX's own font
+# loading on every installed TFM, and on seeded copies with bytes hit. skips without TeX Live
+test_tfm: host
+	@echo TEST test/gate/tfm.sh
+	@$(gsh) test/gate/tfm.sh $(ho)/love
+# test_caja -- caja (apps/caja/) against TeX: the same pages through both, DVI byte for byte.
+# skips without TeX Live
+test_caja: host
+	@echo TEST test/gate/caja.sh
+	@$(gsh) test/gate/caja.sh $(ho)/love
 # The neutral assembler (love/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (test/holo/golden.l). a host-only app -- it adds no nif and is not
 # baked into love0. The sources are cat'd in because the host bakes its native backend
