@@ -17,6 +17,7 @@
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
 (borrow 'x11)
+(borrow 'text)
 (:
  ; the computed pens first: a value bound below the lambdas that read it is missing at
  ; the bake, where a literal would fold
@@ -265,6 +266,7 @@
  ; each, and only the first of them is a cell -- the tails ride along with it
  (tail? c) (128 <= c < 192)
  (lead c) (tail? c ? 0 1)
+ (cw s i) (max 0 (wcwidth (cpat s i)))                  ; the cells of the character at i
  ; ..and its braces, put on at the port, and a choice between the bytes 1 and 2 on its
  ; own ground. an escape is no width, so this is also where a line is cut to fit: the
  ; row's span is what a reader sees, not what a cask holds. off is what comes back
@@ -275,11 +277,12 @@
               (go i n acc)
                (? (i >= #s) acc
                   (: c (s i)
-                     (? (n >= w && !(tail? c)) acc
+                     (? (n >= w) acc
                         (c = 123) (go (i + 1) n (acc + on))
                         (c = 1) (go (i + 1) n (acc + on2))
                         (c = 125 || c = 2) (go (i + 1) n (acc + off))
-                        (go (i + 1) (n + lead c) (acc + string c)))))
+                        (: k (cpnext s i) v (n + cw s i)
+                           (? (w < v) acc (go k v (acc + snip s i k)))))))
               (go 0 0 ""))
  (fit s w) (fit-in s w "\e[0m")
 
@@ -288,7 +291,7 @@
  sign-pen (x11-256 "lavender")                          ; the frame, and the title in its own
  sign-tpen (x11-256 "honeydew")
  (vlen s) (:- (go 0 0) (go i n) (i >= #s ? n
-           (s i @ c (go (i + 1) (c @ (123 || 125 || 1 || 2) n (n + lead c))))))
+           (s i @ c (go (cpnext s i) (c @ (123 || 125 || 1 || 2) n (n + cw s i))))))
  (pad s n c) (: v (vlen s) (v >= n ? s (s + ((n - v) (\ t (t + c)) ""))))
  (sign-box ttl ls) (:
    w (foldl (\ a l (vlen l @ v (a < v ? v a))) (vlen ttl) ls)

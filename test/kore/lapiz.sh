@@ -18,6 +18,15 @@ grep -q '^\.SH T' "$o" || { cat "$o"; fail "kore markdown -t roff: no .SH"; }
 korerun markdown -t text -w 40 "$md" > "$o" 2>&1 || fail "kore markdown -t text"
 grep -q 'quoted' "$o" || { cat "$o"; fail "kore markdown -t text: the quote did not read"; }
 awk 'length > 40 { exit 1 }' "$o" || fail "kore markdown -t text -w 40: a line overran"
+# -t cells: the same words as -t text, each paragraph broken by caja, so a long one breaks
+# elsewhere -- and still no line past the width
+printf '\nthe inventory below names tools, never their flag coverage, and the two are not the same reach. a tool listed here answers to its name; which options it answers to is stated at the head of its own source, absences included.\n' >> "$md"
+korerun markdown -t text -w 40 "$md" > "$g" 2>&1 || fail "kore markdown -t text (long)"
+korerun markdown -t cells -w 40 "$md" > "$o" 2>&1 || fail "kore markdown -t cells"
+grep -q 'quoted' "$o" || { cat "$o"; fail "kore markdown -t cells: the quote did not read"; }
+awk 'length > 40 { exit 1 }' "$o" || fail "kore markdown -t cells -w 40: a line overran"
+[ "$(tr -s ' \n' '\n\n' < "$g")" = "$(tr -s ' \n' '\n\n' < "$o")" ] || fail "kore markdown -t cells: the words differ from -t text"
+cmp -s "$g" "$o" && fail "kore markdown -t cells: broke every line as -t text does"
 # the default is html, and stdin is a filter
 korerun markdown < "$md" > "$g" 2>&1
 korerun markdown -t html "$md" > "$o" 2>&1

@@ -11,7 +11,7 @@ static int
  img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j),
  img_nom_before(word a, word b),
  img_tok(word const *key, uint16_t const *tk, word v),
- img_walk(word *base, uintptr_t nw, char *code);
+ img_walk(word *base, uintptr_t nw, char *code, int lazy);
 static intptr_t
  image_ap_index(intptr_t ap),
  image_ap_resolve(intptr_t idx),
@@ -23,7 +23,7 @@ static intptr_t
  img_encode(struct img_ctx *x, intptr_t v);
 static struct ai
  *img_canon_symbols(struct ai *g),
- *img_wake(void const *buf, uintptr_t len);
+ *img_wake(void const *buf, uintptr_t len, int kept);
 static uintptr_t
  hc_hchain(struct ai_chain *c),
  hc_hstr(struct ai_str *s),
@@ -174,9 +174,11 @@ static intptr_t image_imm_index(word v) {
 // the image is binary-specific: its indices and kept absolutes mean anything only in the
 // binary that dumped it. two guards reject a mismatch -> NULL -> normal boot: `arch`, and
 // `anchor`, the gap between two of the binary's own symbols, which a cross-arch or stale
-// build lays out differently. the code segment leads with [raw length, deflated?] so it
-// describes itself -- the header says how many bytes are stored, these two what they hold.
+// build lays out differently. the code segment leads with [raw length, chunks] so it
+// describes itself -- the header says how many bytes are stored, these two what they hold:
+// nch chunks' [raw offset, deflated offset] pairs and their bytes, or with none the raw blobs.
 #define CodeSegHead (2 * sizeof(uint64_t))
+#define CodeZChunk ((uintptr_t) 64 << 10)
 // the root table is sized from the core itself: symbols, tasks, then every WORD of v0..end,
 // in this target's word. the enc and dec loops take their bound from here too, so the table's
 // length and the count written into it cannot be spelled in two units and disagree.
@@ -220,6 +222,7 @@ static uintptr_t img_chash(char const *p, uintptr_t n) {          // FNV-1a over
  return h; }
 static intptr_t img_code_off(struct img_ctx *x, uintptr_t a) {
  for (uintptr_t i = 0; i < x->ctn; i++) if (x->ct[i].a == a) return (intptr_t) x->ct[i].off;
+ if (code_seat(x->g, (char const*) a)) return -1;                 // a woken blob's bytes, unseated yet
  uintptr_t hd = 2 * sizeof(uintptr_t), n = code_len((char*) a), span = (hd + n + 1 + 15) & ~(uintptr_t) 15;
  // closures compiled from different sites often assemble to the same bytes, so an identical
  // blob is packed once and both name its offset. the alias still gets a table row, since the
@@ -379,8 +382,9 @@ static ai_noinline intptr_t img_decode_cold(intptr_t v, char *code) {
 // what a decode needs, gathered once: the pool it re-seats into, the woken code segment,
 // and `b1`, the top of the lvm lane -- ImageNLvm reads ai_def1_n, a link-time quantity no
 // compiler folds, and the ladder would ask for it at every word of the image. one
-// argument, not four: an inline site copies each actual into a slot of its own.
-struct img_dec { word *base; char *code; uintptr_t b1; };
+// argument, not four: an inline site copies each actual into a slot of its own. lazy: a
+// native's entry wakes as lvm_lazy, its chunk of code seated at first call.
+struct img_dec { word *base; char *code; uintptr_t b1; int lazy; };
 static ai_inline intptr_t img_decode(intptr_t v, struct img_dec const *d) {
  if (oddp(v)) return v;
  uintptr_t uv = (uintptr_t) v;
@@ -839,7 +843,8 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
                                  w * sizeof(word) - n);
                    break; }
    default: break; }                                     // DMint/DBig/DGem/DTwin: flat leaves
-  else { for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ptr(p)[i]);   // thread interior + terminator
+  else { for (uintptr_t i = 1; i < sz; i++)                                                  // thread interior + terminator;
+          blob[off + i] = img_encode(x, ptr(p)[i] == (word) lvm_lazy ? ptr(p)[0] : ptr(p)[i]);  // a woken entry is its header
          if (p->ap == lvm_map_lookup) {                                                // a tablet's serial, a charm
           if (nslot < ncap) slots[nslot++] = (off + 2) | SlotCharm; else slotover = true; } }
   p = cell(ptr(p) + sz); }
@@ -921,17 +926,29 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  for (uintptr_t i = nd; i < ImageNAll; i++) d->dict[i] = nd ? d->dict[0] : 0;    // the spare seats
  uintptr_t ns = img_stream(NULL, blob, nw, d->key, d->tk), db = ImageNAll * sizeof(word);
  H->nstream = ns;
- // the code segment ships deflated: thousands of blobs share prologue and epilogue
- // shapes, so it makes about a tenth of itself and the wake pays one inflate. a stream
- // that would not shrink is stored raw under the same two words.
- uintptr_t craw = H->ncode, cstore = 0;
+ // the code segment ships as chunks deflated apart, whole blobs and about CodeZChunk raw
+ // apiece, so a wake inflates only the chunks whose natives run. thousands of blobs share
+ // prologue and epilogue shapes, and a chunk is past deflate's window, so the parts make
+ // about what the whole did. a segment that would not shrink is stored raw, nch 0
+ uintptr_t craw = H->ncode, cstore = 0, nch = 0;
  unsigned char *cz = NULL;
  if (craw) {
-  intptr_t got = -1;
-  if ((cz = ai_alloc(NULL, craw)))
-   got = ai_deflate_raw(g, (unsigned char const*) cseg, craw, cz, craw);
-  if (got > 0) cstore = CodeSegHead + (uintptr_t) got;
-  else { if (cz) ai_alloc(cz, 0); cz = NULL; cstore = CodeSegHead + craw; }
+  uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2;
+  uint64_t *tab = ai_alloc(NULL, 2 * ncap * sizeof(uint64_t));
+  if (tab && (cz = ai_alloc(NULL, craw)))
+   for (uintptr_t a = 0, b; a < craw; a = b) {
+    for (b = a; b < craw && b - a < CodeZChunk; )
+     b += (hd + ((uintptr_t const*)(cseg + b))[0] + 1 + 15) & ~(uintptr_t) 15;
+    intptr_t got = nch < ncap && b <= craw ? ai_deflate_raw(g, (unsigned char const*) cseg + a, b - a, cz + zn, craw - zn) : -1;
+    if (got <= 0) { nch = 0; break; }
+    tab[2 * nch] = a, tab[2 * nch + 1] = zn, nch++, zn += (uintptr_t) got; }
+  unsigned char *t = nch && 16 * nch + zn < craw ? ai_alloc(NULL, 16 * nch + zn) : NULL;   // the table, then the chunks
+  if (t) memcpy(t, tab, 16 * nch), memcpy(t + 16 * nch, cz, zn);
+  else nch = 0;
+  if (cz) ai_alloc(cz, 0);
+  if (tab) ai_alloc(tab, 0);
+  cz = t;
+  cstore = CodeSegHead + (nch ? 16 * nch + zn : craw);
   H->ncode = cstore; }
  uintptr_t total = sizeof *H + db + ns + cstore;
  char *buf = ai_alloc(NULL, total);
@@ -941,7 +958,7 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  img_stream((unsigned char*)(buf + sizeof *H + db), blob, nw, d->key, d->tk);
  if (craw) {
   char *p = buf + sizeof *H + db + ns;
-  ((uint64_t*) p)[0] = craw, ((uint64_t*) p)[1] = cz ? 1 : 0;
+  ((uint64_t*) p)[0] = craw, ((uint64_t*) p)[1] = nch;
   memcpy(p + CodeSegHead, cz ? (char const*) cz : cseg, cstore - CodeSegHead); }
  if (cz) ai_alloc(cz, 0);
  ai_alloc(d, 0);
@@ -961,8 +978,8 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) {
 // array -- a word is read encoded and written live at the same index -- so a payload is
 // already seated by the time its head names it. 0 refuses, and the caller boots normally.
 // its own function on purpose: in img_wake's frame every value here spills to the stack.
-static int img_walk(word *base, uintptr_t nw, char *code) {
- struct img_dec D = { base, code, ImageIdxBase + 2 * ImageNLvm }, *d = &D;
+static int img_walk(word *base, uintptr_t nw, char *code, int lazy) {
+ struct img_dec D = { base, code, ImageIdxBase + 2 * ImageNLvm, lazy }, *d = &D;
  // the chain lane. two words in three of a live image are a chain's, and its head is one
  // constant of this binary -- so the token is compared where it lies, ahead of the decode
  // ladder, the size call and the kind switch alike. the seat is image_extra_aps', the same
@@ -979,7 +996,8 @@ static int img_walk(word *base, uintptr_t nw, char *code) {
    o[1] = (word) img_decode((intptr_t) o[1], d);
    o[2] = (word) img_decode((intptr_t) o[2], d);
    off += Width(struct ai_chain); continue; }
-  o[0] = (word) img_decode((intptr_t) o[0], d);                                   // word0 first: the ap (kinding needs it real)
+  word w0 = o[0];
+  o[0] = (word) img_decode((intptr_t) w0, d);                                     // word0 first: the ap (kinding needs it real)
   if (in_data(p->ap)) { sz = image_datasize(p, o);                                // data kinds: size by ai_typ + the source's raw length words
    switch (ai_typ(p)) {                                                          // DChain went up the lane above
     case DNom:   o[1] = (word) img_decode((intptr_t) o[1], d); break;             // dig rides raw
@@ -990,7 +1008,12 @@ static int img_walk(word *base, uintptr_t nw, char *code) {
   } else {                                                                        // thread: the encoded terminator is its head's byte offset | tag
    word term = (word)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
    uintptr_t kmax = nw - off;                                                     // bound the walk: a mis-decoded word0 must refuse
-   for (;; k++) {                                                                 // one pass, decoding to the terminator (rung 2):
+   if (d->lazy && evenp(w0) && (uintptr_t) w0 >= ImageCodeBase)                   // a native: its header's twin is its entry
+    for (;; k++) {
+     if (k >= kmax) return 0;
+     if (o[k] == term) break;
+     o[k] = o[k] == w0 ? (word) lvm_lazy : (word) img_decode((intptr_t) o[k], d); }
+   else for (;; k++) {                                                            // one pass, decoding to the terminator (rung 2):
     if (k >= kmax) return 0;                                                      // the load, never march off the pool (on metal the
     if (o[k] == term) break;                                                      // pool's edge is a dead bus, and a dead bus is mute)
     o[k] = (word) img_decode((intptr_t) o[k], d); }
@@ -1000,7 +1023,7 @@ static int img_walk(word *base, uintptr_t nw, char *code) {
  return 1; }
 
 // the wake: `buf` holds the header, dictionary and token stream to read.
-static struct ai *img_wake(void const *buf, uintptr_t len) {
+static struct ai *img_wake(void const *buf, uintptr_t len, int kept) {
  struct image_hdr H;
  if (len < sizeof H) return NULL;
  memcpy(&H, buf, sizeof H);
@@ -1042,23 +1065,21 @@ static struct ai *img_wake(void const *buf, uintptr_t len) {
  unsigned char const *p0 = (unsigned char const*) buf + sizeof H + db,
                      *q = img_expand(base, nw, p0, p0 + ns, (word const*)((char const*) buf + sizeof H));
  if (!q || q != p0 + ns) goto no;                              // an image consumes its stream exactly
- // the natives' code, seated before the walk names it: a chunk of the arena, sealed
+ // the natives' code: a chunk of the arena the walk names, seated a chunk at a time as its
+ // natives first run when buf stays, else here and now
  char *code = NULL;
+ int lazy = 0;
  if (H.ncode) {
   unsigned char const *p = (unsigned char const*) buf + sizeof H + db + ns;
-  uintptr_t craw;
+  uint64_t craw, nch;
   if (H.ncode < CodeSegHead) goto no;
-  craw = (uintptr_t) ((uint64_t const*) p)[0];
-  if (((uint64_t const*) p)[1]) {                        // deflated: inflate, then adopt the blobs
-   unsigned char *t = ai_alloc(NULL, craw);
-   if (!t) goto no;
-   if (ai_inflate_raw(p + CodeSegHead, H.ncode - CodeSegHead, t, craw) != (intptr_t) craw) {
-    ai_alloc(t, 0); goto no; }
-   code = code_adopt(g, (char const*) t, craw);
-   ai_alloc(t, 0); }
-  else code = code_adopt(g, (char const*) p + CodeSegHead, craw);
+  memcpy(&craw, p, 8), memcpy(&nch, p + 8, 8);
+  if (!nch) code = craw == H.ncode - CodeSegHead ? code_adopt(g, (char const*) p + CodeSegHead, craw) : NULL;
+  else if (nch <= (H.ncode - CodeSegHead) / 16)
+   code = code_lazy(g, craw, p + CodeSegHead + 16 * nch, H.ncode - CodeSegHead - 16 * nch,
+                    p + CodeSegHead, nch, kept), lazy = kept;
   if (!code) goto no; }
- if (!img_walk(base, nw, code)) goto no;
+ if (!img_walk(base, nw, code, lazy)) goto no;
  uintptr_t nv = LvImgRoots - 2;                                          // same struct/binary (anchor-checked) -> same layout
  if (H.nroot != LvImgRoots) goto no;                                     // root count mismatch -> stale/foreign image -> normal boot
  g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
@@ -1087,5 +1108,5 @@ static struct ai *img_wake(void const *buf, uintptr_t len) {
 no:
  return ai_fin(g), NULL; }
 
-struct ai *ai_image_load(void const *buf, uintptr_t len) {
- return img_wake(buf, len); }
+struct ai *ai_image_load(void const *buf, uintptr_t len, int kept) {
+ return img_wake(buf, len, kept); }

@@ -259,7 +259,7 @@ struct ai *image_load(char const *path) {
       if (n > 2 && ((char*) buf)[0] == '#' && ((char*) buf)[1] == '!') {
         char *nl = memchr(buf, '\n', n);
         if (nl) off = (size_t)(nl - (char*) buf) + 1; }
-      if (off < n) g = ai_image_load((char*) buf + off, (uintptr_t)(n - off));
+      if (off < n) g = ai_image_load((char*) buf + off, (uintptr_t)(n - off), 0);
       munmap(buf, n); } }
   close(fd);
   return g; }

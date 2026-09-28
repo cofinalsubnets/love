@@ -5,12 +5,15 @@
 ; faces with a command line around them, so each cost an operand walk and not a parser.
 ;
 ;   html2text [-w COLS] [FILE..]                          html2text index.html
-;   markdown [-t html|roff|text] [-w COLS] [FILE..]       markdown README.md > readme.html
+;   markdown [-t html|roff|text|cells] [-w COLS] [FILE..] markdown README.md > readme.html
+;   markdown -t dvi [FILE]                                markdown README.md > readme.dvi
 ;
 ; the width is the terminal's, or -w, or 80 where there is no terminal to ask. with no
 ; operands either reads stdin, which is what makes them filters worth having on the end of
 ; a pipe. attributes ride out of a text layout when the output is a terminal and come off
-; when it is not; html and roff carry none to begin with.
+; when it is not; html and roff carry none to begin with. -t cells is -t text with each
+; paragraph broken by caja (apps/caja/cell.l) -- the fewest demerits over the paragraph where
+; text fills each line greedily -- and a man page read as roff, as -t dvi reads one.
 ;
 ; `markdown` writes a FRAGMENT, which is what the name has always meant: the blocks, no
 ; doctype and no head. papel owns the template that wraps one into a page, and a second
@@ -26,6 +29,7 @@
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
+(borrow 'cal)
 
 (:
    ; the width the output wants: -w, else the terminal on fd 1, else 80
@@ -82,11 +86,40 @@
        tty? (two? ws)
        (lensrun (\ s p (h2t-lay s w tty? p)) "html2text" <>>o))
 
-   md-usage "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
-   md-tos ["html" "roff" "text"]
+   md-usage "usage: markdown [-t html|roff|text|cells|dvi] [-w COLS] [FILE..]"
+   md-tos ["html" "roff" "text" "cells" "dvi"]
+   ; -t dvi: caja sets the document in pages (apps/caja/doc.l), with Computer Modern's
+   ; metrics and plain's patterns out of a TeX tree -- $CAJA_TEXMF, else where TeX Live puts
+   ; one. one file or stdin; a man page (its first line a request) is read as roff
+   texmf-roots ["/usr/share/texmf-dist" "/usr/share/texlive/texmf-dist" "/usr/local/share/texmf-dist"]
+   (lens-texmf rel)
+    (: e (getenv "CAJA_TEXMF")
+       rs (? (string? e && 0 < #e) (e . texmf-roots) texmf-roots)
+       (go l) (? (two? l) (: r (uread (<l + "/" + rel)) (? (two? r) (<>r + "") (go >l))) ())
+       (go rs))
+   (lens-roff? s) (0 < #s && (s 0 = 46 || (1 < #s && s 0 = 39 && s 1 = 92)))
+   (md-dvi s)
+    (: tfms (map (n \ lens-texmf ("fonts/tfm/public/cm/" + n + ".tfm")) (cite 'caja-doc 'cd-fonts))
+       hy (lens-texmf "tex/generic/hyphen/hyphen.tex")
+       _ (? (elem () (hy . tfms))
+            (udie 1 "markdown: -t dvi wants Computer Modern's TFMs and hyphen.tex from a TeX tree; set CAJA_TEXMF"))
+       ms (clock 0) sec (ms // 1000) ymd (civil (sec // 86400))
+       J ((cite 'caja-doc 'cd-job) tfms hy [(ymd 0) (ymd 1) (ymd 2) (sec % 86400 // 60)])
+       doc (? (lens-roff? s) ((cite 'lapiz 'rfread) s) ((cite 'lapiz 'mdread) s))
+       ((cite 'caja-doc 'cd-dvi) J doc))
+   (md-dvi-main fs)
+    (: _ (? (two? (tty 1)) (udie 2 "markdown: a DVI is not for a terminal; send it to a file"))
+       _ (? (1 < #fs) (udie 2 "markdown: -t dvi sets one document"))
+       s (? (two? fs) (: r (uread <fs) (? (two? r) (<>r + "") (udie 1 ("markdown: cannot open " + <fs)))) (slurp in))
+       _ (say out (md-dvi s))
+       _ (flush out)
+       0)
    (md-lay s to w tty? p)
     (? (to = "roff") ((cite 'lapiz 'md->rf) s)
        (to = "text") (? tty? (lens-pics ((cite 'lapiz 'mdread) s) w p) (usgr ((cite 'lapiz 'md->tty) s w)))
+       (to = "cells") (: d (? (lens-roff? s) ((cite 'lapiz 'rfread) s) ((cite 'lapiz 'mdread) s))
+                         o ((cite 'caja-cell 'cc-show) d w)
+                         (? tty? o (usgr o)))
        ((cite 'lapiz 'md->ht) s))
    (markdown-main as)
     (: t (tablet 0)
@@ -99,6 +132,7 @@
        _ (? (elem to md-tos) () (udie 2 md-usage))
        ws (tty 1)
        w (lens-w t ws)
-       tty? ((two? ws) && (to = "text"))
-       (lensrun (\ s p (md-lay s to w tty? p)) "markdown" <>>o)))
+       tty? ((two? ws) && (to = "text" || to = "cells"))
+       (? (to = "dvi") (md-dvi-main <>>o)
+          (lensrun (\ s p (md-lay s to w tty? p)) "markdown" <>>o))))
 ) ; module 'kore

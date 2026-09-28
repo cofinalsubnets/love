@@ -34,6 +34,7 @@
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
 (? (cite 'posix) (borrow 'posix) ())
+(borrow 'text)
 (:
  ; --- levels as data ------------------------------------------------------------
  ; in play: level {'title 'rows (strings) 'w 'h 'sx 'sy 'tiles {ch kind ..} 'things {id
@@ -83,9 +84,9 @@
  ; takes the line and clears it, escape is the caller's, the rest the editor's
  (wrap s w) (: (go ws cur acc) (? (atom? ws) (rev (cur . acc))
                                   (: nx (0 < #cur ? (cur + " " + <ws) <ws)
-                                     (? (#nx <= w) (go >ws nx acc)
+                                     (? (swidth nx <= w) (go >ws nx acc)
                                         (0 < #cur) (go ws "" (cur . acc))
-                                        (go >ws "" (snip nx 0 w . acc)))))
+                                        (go >ws "" (scut nx w . acc)))))
                (go (words s) "" ()))
  (concat ls) (foldl (+) () ls)               ; cat is the pairwise append
  (lines-of s w) (concat (map (l \ wrap l w) (split "\n" s)))

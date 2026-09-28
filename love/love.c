@@ -182,7 +182,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
  g->reach[ReachChain] = (word) lvm_chain, g->reach[ReachStr] = (word) lvm_str, g->reach[ReachMap] = (word) lvm_map_lookup;
  g->reach[ReachNom] = (word) lvm_nom, g->reach[ReachMint] = (word) lvm_sym, g->reach[ReachGem] = (word) lvm_gembox;
  g->reach[ReachCask] = (word) lvm_cask, g->reach[ReachDrive] = (word) callout_drive, g->reach[ReachResume] = (word) callout_resume;
- g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc;
+ g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
  // book + macro maps (lookup-lambdas) then the main task thread.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 9))) {
   union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
@@ -453,12 +453,21 @@ static lvm(lvm_apof) {
 // (reach-offset x) -> the byte offset of g->reach, so the emitter's `reach` law reads a slot as `ld r g off`
 lvm(lvm_reach_offset) { ai_musttail return Answer(putcharm((intptr_t) offsetof(struct ai, reach))); }
 // (nat? f) -> 1 when f is a native closure: arity 1 enters its code directly; an
-// arity>=2 cell curries through lvm_cur with the code at value[2]
+// arity>=2 cell curries through lvm_cur with the code at value[2]. a woken one's entry may be
+// lvm_lazy still, its header naming the code
 lvm(lvm_natp) {
  word x = Sp[0];
- int nat = evenp(x) && (code_in(g, (uintptr_t) cell(x)->ap) ||
-  (cell(x)->ap == lvm_cur && code_in(g, (uintptr_t) cell(x)[2].ap)));
+ union u *k = evenp(x) ? cell(x) : NULL, *e = k && k->ap == lvm_cur ? k + 2 : k;
+ int nat = e && code_in(g, (uintptr_t)(e->ap == lvm_lazy ? k[-1].ap : e->ap));
  ai_musttail return Answer(putcharm(nat)); }
+// a woken native's entry until its chunk of the image's code is seated: seat it, write the
+// code into the cell, enter. the header already names the code, one word behind an arity-1
+// entry and three behind a curried one's (lvm_cur and the arity between)
+lvm(lvm_lazy) {
+ union u *h = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? Ip - 3 : Ip - 1;
+ if (code_seat(g, (char const*) h->ap)) { Pack(g); ai_musttail return Ap(_lvm_ghelp, encode(g, ai_status_scare)); }
+ Ip->ap = h->ap;
+ ai_musttail return Continue(); }
 
 
 // (cue? p): would `see` answer without parking? the dual of the park law -- all
@@ -602,7 +611,7 @@ static lvm(lvm_casknew) {
 // one chunk; used is its bump, fixed = the image's own (shared blobs, never freed one at a
 // time). own is what the allocator was handed, NULL off mmap: a seat whose executable
 // window is an alias frees by the address it asked for, not the address it runs.
-struct ai_code { char *base, *own; size_t len, used; int fixed; struct ai_code *next; };
+struct ai_code { char *base, *own; size_t len, used; int fixed; struct ai_lazy *lz; struct ai_code *next; };
 struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a freed blob (its whole span)
 #if __STDC_HOSTED__
 // which kernel underneath: moonlibc's os.c defines it (0 unprobed; 1..3 the
@@ -628,7 +637,7 @@ static struct ai_code *code_chunk(struct ai *g, size_t need) {
  if (b == MAP_FAILED) return NULL;
  struct ai_code *c = ai_alloc(NULL, sizeof *c);
  if (!c) { munmap(b, len); return NULL; }
- c->base = b, c->own = NULL, c->len = len, c->used = 0, c->fixed = 0, c->next = g->code, g->code = c;
+ c->base = b, c->own = NULL, c->len = len, c->used = 0, c->fixed = 0, c->lz = NULL, c->next = g->code, g->code = c;
  return c; }
 // (code_install g src n): n bytes of code -> their executable address, NULL when no seat can hold them
 char *code_install(struct ai *g, char const *src, size_t n) {
@@ -668,34 +677,28 @@ size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
 // the seat's executable alias for a heap block: itself, unless a seat maps its heap
 // non-executable and keeps a second window that runs. inle does (inle/kmain.c).
 
-// the image lane: a packed segment of blobs becomes a chunk of its own, sealed for the
-// session -- image code is text, nothing frees it
-char *code_adopt(struct ai *g, char const *src, size_t n) {
- // inle: mmap hands back the hhdm, which is NX by construction (inle/mkboot.l puts the
- // bit on the whole window), and its mprotect cannot lift that off a 2 MiB entry the
- // identity map shares. so take the block through the window that runs -- the same
- // memory, the address the low map reaches it by -- and seat it as a fixed chunk, so
- // code_in and code_free read it the way they read the hosted one.
+// the image lane: a segment of blobs gets a chunk of its own, text nothing frees, empty
+// until a seat writes it through *w. inle's mmap hands back the hhdm, NX by construction
+// (inle/mkboot.l puts the bit on the whole window), and its mprotect cannot lift that off a
+// 2 MiB entry the identity map shares -- so there the block runs through the window that
+// does, the same memory by the low map's address
+static struct ai_code *code_region(struct ai *g, size_t n, char **w) {
+ struct ai_code *c = ai_alloc(NULL, sizeof *c);
+ if (!c) return NULL;
  if (__ai_osv < 0) {
   char *b = ai_alloc(NULL, n);
-  if (!b) return NULL;
-  memcpy(b, src, n);
-  char *x = ai_code_window(b);
-  ai_code_sync(x, x + n);
-  struct ai_code *c = ai_alloc(NULL, sizeof *c);
-  if (!c) { ai_alloc(b, 0); return NULL; }
-  c->base = x, c->own = b, c->len = n, c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
-  return x; }
- size_t ps = code_page(), len = (n + ps - 1) & ~(ps - 1);
- void *b = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
- if (b == MAP_FAILED) return NULL;
- memcpy(b, src, n);
- if (mprotect(b, len, PROT_READ | PROT_EXEC)) { munmap(b, len); return NULL; }
- ai_code_sync((char*) b, (char*) b + n);
- struct ai_code *c = ai_alloc(NULL, sizeof *c);
- if (!c) { munmap(b, len); return NULL; }
- c->base = b, c->own = NULL, c->len = len, c->used = len, c->fixed = 1, c->next = g->code, g->code = c;   // used = len: the tail is nobody's
- return b; }
+  if (!b) { ai_alloc(c, 0); return NULL; }
+  c->base = ai_code_window(b), c->own = *w = b, c->len = c->used = n; }
+ else {
+  size_t ps = code_page(), len = (n + ps - 1) & ~(ps - 1);
+  void *b = mmap(0, len, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (b == MAP_FAILED) { ai_alloc(c, 0); return NULL; }
+  c->base = *w = b, c->own = NULL, c->len = c->used = len; }       // used = len: the tail is nobody's
+ c->fixed = 1, c->lz = NULL, c->next = g->code, g->code = c;
+ return c; }
+// open [p, p+n) of a region for its seat to write, or seal it; a heap block is writable as it is
+static int code_wopen(struct ai_code *c, char *p, size_t n, int seal) {
+ return c->own ? 0 : code_open(p, n, seal ? PROT_READ | PROT_EXEC : PROT_READ | PROT_WRITE); }
 static void code_drop(struct ai *g, struct ai_code *c) {
  if (c->own) ai_alloc(c->own, 0); else munmap(c->base, c->len); }
 #else
@@ -706,20 +709,70 @@ int code_in(struct ai *g, uintptr_t v) { return 0; }
 size_t code_len(char *code) { return 0; }
 void code_free(struct ai *g, char *code) { }
 static void code_drop(struct ai *g, struct ai_code *c) { ai_alloc(c->own, 0); }
-// seated as a chunk like the hosted lane's, so the session owns it and code_fin frees it
-char *code_adopt(struct ai *g, char const *src, size_t n) {
- char *b = ai_alloc(NULL, n);
- if (!b) return NULL;
- memcpy(b, src, n), ai_code_sync(b, b + n);
+// a chunk like the hosted lane's, so the session owns it and code_fin frees it
+static struct ai_code *code_region(struct ai *g, size_t n, char **w) {
  struct ai_code *c = ai_alloc(NULL, sizeof *c);
- if (!c) { ai_alloc(b, 0); return NULL; }
- c->base = c->own = b, c->len = c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
- return b; }
+ char *b = c ? ai_alloc(NULL, n) : NULL;
+ if (!b) { if (c) ai_alloc(c, 0); return NULL; }
+ c->base = c->own = *w = b, c->len = c->used = n, c->fixed = 1, c->lz = NULL, c->next = g->code, g->code = c;
+ return c; }
+static int code_wopen(struct ai_code *c, char *p, size_t n, int seal) { return 0; }
 #endif
+// a packed segment, seated whole
+char *code_adopt(struct ai *g, char const *src, size_t n) {
+ char *w;
+ struct ai_code *c = code_region(g, n, &w);
+ if (!c || code_wopen(c, c->base, n, 0)) return NULL;
+ memcpy(w, src, n);
+ if (code_wopen(c, c->base, n, 1)) return NULL;
+ ai_code_sync(c->base, c->base + n);
+ return c->base; }
+// a segment deflated a chunk at a time, each seated when a native in it first runs: tab
+// holds where each chunk starts in the segment and in z, two words apiece
+struct ai_lazy { unsigned char const *z; char *w; unsigned char *seated; uintptr_t n, nz, nch; uint64_t tab[]; };
+static int code_seat1(struct ai_code *c, uintptr_t k) {
+ struct ai_lazy *l = c->lz;
+ if (l->seated[k]) return 0;
+ uintptr_t a = (uintptr_t) l->tab[2 * k], b = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 2] : l->n,
+           za = (uintptr_t) l->tab[2 * k + 1], zb = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 3] : l->nz;
+ if (code_wopen(c, c->base + a, b - a, 0)
+     || ai_inflate_raw(l->z + za, zb - za, (unsigned char*) l->w + a, b - a) != (intptr_t)(b - a)
+     || code_wopen(c, c->base + a, b - a, 1)) return -1;
+ ai_code_sync(c->base + a, c->base + b);
+ return l->seated[k] = 1, 0; }
+// kept: z outlives the session, else every chunk is seated now. NULL on a table that does
+// not describe n bytes from nz
+char *code_lazy(struct ai *g, size_t n, unsigned char const *z, size_t nz,
+                unsigned char const *tab, uintptr_t nch, int kept) {
+ char *w;
+ struct ai_code *c = code_region(g, n, &w);
+ struct ai_lazy *l = c ? ai_alloc(NULL, sizeof *l + nch * (2 * sizeof(uint64_t) + 1)) : NULL;
+ if (!l) return NULL;
+ l->z = z, l->w = w, l->n = n, l->nz = nz, l->nch = nch, l->seated = (unsigned char*)(l->tab + 2 * nch);
+ memcpy(l->tab, tab, 2 * nch * sizeof(uint64_t)), memset(l->seated, 0, nch);
+ c->lz = l;
+ for (uintptr_t k = 0; k < nch; k++) {
+  uint64_t a = l->tab[2 * k], za = l->tab[2 * k + 1],
+           b = k + 1 < nch ? l->tab[2 * k + 2] : n, zb = k + 1 < nch ? l->tab[2 * k + 3] : nz;
+  if (a >= b || za >= zb || b > n || zb > nz || (k == 0 && a)) return NULL; }
+ if (!kept)
+  for (uintptr_t k = 0; k < nch; k++) if (code_seat1(c, k)) return NULL;
+ return c->base; }
+// seat the chunk holding a, when a lazy segment has it; 0 unless that fails
+int code_seat(struct ai *g, char const *a) {
+ for (struct ai_code *c = g->code; c; c = c->next)
+  if (c->lz && a >= c->base && a < c->base + c->lz->n) {
+   uintptr_t off = (uintptr_t)(a - c->base), lo = 0, hi = c->lz->nch;
+   while (hi - lo > 1) { uintptr_t m = (lo + hi) / 2; if (c->lz->tab[2 * m] <= off) lo = m; else hi = m; }
+   return code_seat1(c, lo); }
+ return 0; }
 // the arena is the session's, not the collector's: no root names a chunk, so nothing but
 // the end of the session can free one. blobs still live are dead code by then.
 void code_fin(struct ai *g) {
- for (struct ai_code *c = g->code, *n; c; c = n) n = c->next, code_drop(g, c), ai_alloc(c, 0);
+ for (struct ai_code *c = g->code, *n; c; c = n) {
+  n = c->next, code_drop(g, c);
+  if (c->lz) ai_alloc(c->lz, 0);
+  ai_alloc(c, 0); }
  for (struct ai_cfree *f = g->cfree, *n; f; f = n) n = f->next, ai_alloc(f, 0);
  g->code = NULL, g->cfree = NULL; }
 

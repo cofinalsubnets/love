@@ -261,6 +261,14 @@
                              (go >s d))
                          (go >s d))))
        (go ts 0))
+   ; one `aligned` ask, the tokens after the word -> (N rest): bare is the target's widest, a
+   ; parenthesised constant expression folds (the kernel's `2 * sizeof(unsigned long)`), and one
+   ; that will not fold asks nothing
+   (palask ps ts)
+    (? !(peekp ts "(") [(? (pst32? ps) 8 16) ts]
+       (: er (thenw (pexpr ps >ts) ")")
+          (? (atom? er) [0 ts]
+             (: v (cfold (pw64 ps) <er) [(charm? v ? v 0) <>er]))))
    ; the alignment ask, both spellings at one door: gcc's `aligned(N)` (bare is the target's
    ; widest -- 8 under AAPCS32, 16 elsewhere) and C11's `_Alignas(N|type-name)`, to the first
    ; depth-0 `;` or `{` like secat?. `aligned` counts only inside parens, since at depth 0 it
@@ -272,9 +280,7 @@
                          (tp? t "(") (go >s (d + 1))
                          (tp? t ")") (go >s (d - 1))
                          (0 < d && (idv? t "aligned" || idv? t "__aligned__"))
-                          (? (peekp >s "(")
-                             (? (two? >>s && tkk <>>s = 'num) (tkv <>>s) (go >s d))
-                             (? (pst32? ps) 8 16))
+                          (: a (palask ps >s) (? (0 < <a) <a (go >s d)))
                          ; C11 6.7.5: `_Alignas(T)` is `_Alignof(T)`, so the type lane
                          ; answers through talign like the operator does
                          (idv? t "_Alignas" && peekp >s "(")
@@ -665,6 +671,8 @@
                 (? (peekp ts2 ";")                   ; an anonymous struct/union member
                    (? (stru? bty) (pmembers ps >ts2 ([() bty] . acc)) ())
                    (: mq (qspec ps ts bty)   ; _Generic's mask for this run; playout has no slot for it
+                      lal (specask ps ts)   ; an ask among the specifiers, every declarator's
+                      (asked m a) (: n (max lal a) (? (0 < n) (m + [() n]) m))
                       (dfin mem2 toks acc2)          ; after a declarator (+ optional bitfield): , or ;
                        ((? (<mem2 && mq) (pin ps 'qmemacc ([<mem2 mq] . peep ps 'qmemacc ())) 0),
                         (? (peekp toks ",") (dts >toks (mem2 . acc2))
@@ -681,9 +689,8 @@
                              (peekp <>dr ":")        ; a bitfield: append the width to (name ty)
                               (: bw (pbits ps <>dr)
                                  (? (atom? bw) () (dfin (<dr + [<bw]) (pattr <>bw) acc2)))
-                             ; a trailing __attribute__((..)) on a member declarator. an
-                             ; `aligned` ask drops here as it does on the leading spelling
-                             (dfin <dr (pattr <>dr) acc2))))
+                             ; a trailing __attribute__((..)) on a member declarator: its own ask
+                             (dfin (asked <dr (pattpk ps <>dr 2)) (pattr <>dr) acc2))))
                       r (dts ts2 ())
                       ; <r is reversed (dts links) and acc accumulates reversed too
                       ; (pmembers revs at "}"), so prepend as is -- a second rev flips members
@@ -691,22 +698,27 @@
    ; lay a member list out; a union flattens every offset to 0. the cursor is a bit position
    ; from the struct start: a bitfield sits at it, bumped to the next declared-type unit only
    ; to avoid straddling (the SysV/gcc packing); its (unit-byte-offset bitoff) is gen's load.
-   (bfmem? m) (two? >>m)                            ; a member pair carrying a width: (name ty width)
-   ; a trailing __attribute__((..)) run on a struct body: consume it, reading whether
-   ; `packed` rides inside (x64 epoll_event's kernel ABI needs it, or `data` mislays at 8)
-   (pattpk ts)
-    (? !(two? ts && idv? <ts "__attribute__") [0 ts]
+   (bfmem? m) (two? >>m && charm? (m 2))            ; a member carrying a width: (name ty width); (name ty () N) asks N
+   ; a __attribute__((..)) run on a struct body, before the tag or after the body: consume
+   ; it -> (packed rest aligned), reading whether `packed` rides inside (x64 epoll_event's
+   ; kernel ABI needs it, or `data` mislays at 8) and the widest `aligned` ask (0 for none)
+   (pattpk ps ts)
+    (? !(two? ts && idv? <ts "__attribute__") [0 ts 0]
        (: r >ts
-          (? !(peekp r "(") [0 ts]
-             (: (scan s d pk)
-                 (? (atom? s || d < 1) [pk s]
-                    (peekp s "(") (scan >s (d + 1) pk)
-                    (peekp s ")") (scan >s (d - 1) pk)
-                    (tkk <s = 'id && elem (tkv <s) '("packed" "__packed__")) (scan >s d 1)
-                    (scan >s d pk))
-                r2 (scan >r 1 0)
-                nx (pattpk <>r2)
-                [(<r2 | <nx) <>nx]))))
+          (? !(peekp r "(") [0 ts 0]
+             (: (scan s d pk al)
+                 (? (atom? s || d < 1) [pk s al]
+                    (peekp s "(") (scan >s (d + 1) pk al)
+                    (peekp s ")") (scan >s (d - 1) pk al)
+                    (tkk <s = 'id && elem (tkv <s) '("packed" "__packed__")) (scan >s d 1 al)
+                    (tkk <s = 'id && elem (tkv <s) '("aligned" "__aligned__"))
+                     (: a (palask ps >s) (scan <>a d pk (max al <a)))
+                    (scan >s d pk al))
+                r2 (scan >r 1 0 0)
+                nx (pattpk ps <>r2)
+                [(<r2 | <nx) <>nx (max (r2 2) (nx 2))]))))
+   ; an aligned ask raises a laid struct's alignment, and its size rounds up to it
+   (alask lay a) (? (a > lay 2) [<lay (a * ((lay 1 + a - 1) // a)) a] lay)
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
     (: (go l bit mx acc)
         (? (atom? l)
@@ -748,7 +760,7 @@
                     nmx (? (mx < ia) ia mx)
                     nbit (? uni (? (bit < (isz * 8)) (isz * 8) bit) (sbit + (isz * 8)))
                     (go >l nbit nmx (spl <inner acc)))
-                 (: a (? pk 1 (talign ps ty))
+                 (: a (max (? pk 1 (talign ps ty)) (? (two? >>>m) (m 3) 0))   ; an ask outranks packed, as gcc has it
                     sz (tsz ps ty)
                     abit (? uni 0 (aup bit (a * 8)))
                     at (abit >> 3)
@@ -797,7 +809,7 @@
               (: uni (tkw? t 'union)
                  ; an attribute run sits before the tag as well as after the body; unread,
                  ; its own `__attribute__` is taken for the tag name
-                 pb (pattpk >ts)
+                 pb (pattpk ps >ts)
                  ts2 <>pb
                  tag (? (idat? ts2) (tkv <ts2) ())
                  ts3 (? tag >ts2 ts2)
@@ -808,8 +820,8 @@
                        qpre (peep ps 'qmemacc ())    ; _Generic's member marks stack with the bodies
                        mr (pmembers ps >ts3 ())
                        (? (atom? mr) ()
-                          (: pa (pattpk <>mr)          ; a trailing __attribute__((packed)) lays align-1
-                             lay (playout ps <mr uni (<pb | <pa))
+                          (: pa (pattpk ps <>mr)       ; a trailing __attribute__((packed)) lays align-1
+                             lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
                              _ (pin (ps 'stag) tag2 lay)
                              _ (? uni (pin (ps 'utag) tag2 1) 0)
                              _ (qmempin ps tag2 qpre)
@@ -842,7 +854,7 @@
                  (? (peekp ts3 "{")
                     (: (consts ts4 v pos lo hi)
                         (? (peekp ts4 "}")                         ; a trailing comma (or empty body): the enum ends
-                            (: pa (pattpk >ts4) [(ety pos lo hi <pa) <>pa])
+                            (: pa (pattpk ps >ts4) [(ety pos lo hi <pa) <>pa])
                            !(idat? ts4) ()
                            (: name (tkv <ts4)
                               ts5 >ts4
@@ -861,7 +873,7 @@
                                     lo2 (? (<vr < lo) <vr lo)   hi2 (? (hi < <vr) <vr hi)
                                     (? (peekp ts6 ",") (consts >ts6 (<vr + 1) pos2 lo2 hi2)
                                        (: rest (want ts6 "}")
-                                          pa (? (two? rest) (pattpk rest) [0 rest])
+                                          pa (? (two? rest) (pattpk ps rest) [0 rest])
                                           (? (two? rest) [(ety pos2 lo2 hi2 <pa) <>pa] ())))))))
                        (consts >ts3 0 1 0 0))
                     [(peep (ps 'etag) tag 'int) ts3]))
@@ -938,6 +950,20 @@
                     r (go >l 1)
                     [<r (<>r | q)]))))
        (go ts ()))
+   ; the widest alignment ask in a specifier run -- `_Alignas(..)` or an `aligned` inside an
+   ; attribute -- walked as qrun walks it, to the declarator's name; 0 for none
+   (specask ps ts)
+    (: (go l sawty a)
+        (? (atom? l) a
+           (: t <l
+              (? (tkk t = 'kw && (elem (tkv t) qualkw || elem (tkv t) tyspec)) (go >l (sawty || elem (tkv t) tyspec) a)
+                 (tkk t != 'id) a
+                 (tkv t = "__attribute__") (: r (pattpk ps l) (go <>r sawty (max a (r 2))))
+                 (tkv t = "_Alignas") (go (qskip l) sawty (max a (: n (alignat? ps l) (? n n 0))))
+                 (elem (tkv t) qualid) (go (qskip l) sawty a)
+                 sawty a
+                 (go >l 1 a))))
+       (go ts () 0))
    ; a qualifier after the last star qualifies the pointer -- `int * const`, which no
    ; lvalue-converted controlling expression is compatible with, so the row is unreachable.
    ; stops at anything that is not a star or a qualifier.
@@ -1756,6 +1782,7 @@
        (? (atom? br) ()
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; the run's const/volatile -- _Generic's, staged below
+             lal (specask ps ts)   ; an ask among the specifiers, every declarator's
              (? (peekp ts0 ";") [['decl ()] >ts0]   ; a bare definition (struct S {..};)
                 (: (one ts2)
                     (: dr (pdtor ps ts2 base)
@@ -1774,7 +1801,10 @@
                              ap (? (regv && two? ts30 && asmid? <ts30 && peekp >ts30 "(" &&
                                     strat? >>ts30 && peekp >>>ts30 ")")
                                    [(tkv <>>ts30) >>>>ts30] ())
-                             pinl (? (two? ap) [<ap] ())
+                             pinl0 (? (two? ap) [<ap] ())
+                             ; the ask past the type's own rides a fifth slot, the fourth () unless pinned
+                             ask (max lal (pattpk ps <>dr 2))
+                             pinl (? (talign ps ty < ask) ((? (two? pinl0) pinl0 [()]) + [ask]) pinl0)
                              ts3 (? (two? ap) <>ap ts30)
                              ; stage the marked type for the bind that follows; bindloc
                              ; consumes it, so a mark cannot outlive its declaration
