@@ -281,8 +281,8 @@
 
  ; a stage with a tick door is on a clock of its own -- a card to feed -- so the swim
  ; turns faster while one is berthed
- (hquick? hb) (any (\ id (: p (hpane hb id) sg (? (two? p) (hstage p) ()))
-                          (tablet? sg && sg 'tick))
+ (hquick? hb) (any (\ id (: p (hpane hb id) sg (? (two? p) (hstage p) ())
+                             (tablet? sg && sg 'tick)))
                   (wharf-berths (hb 'plan)))
  ; --- the swim: repaint on dirt at ~30fps, feel the tide every half second,
  ; and end when the last berth empties ---
