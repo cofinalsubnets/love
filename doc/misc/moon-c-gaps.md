@@ -91,8 +91,6 @@ All of C89 passes. What remains is C99/C11/GNU.
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
 | computed goto | `&&label`, `goto *p` |
-| `typeof` of the object its own initializer declares | `int *p = (typeof(p))0;` — the name is not in scope until the declarator ends |
-| a builtin over constants where a constant is owed | `unsigned w : 63 - __builtin_clzll(8);`, `case __builtin_bswap16(0x0800):` — parse folds no builtin call |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
@@ -105,11 +103,12 @@ each one came from.
 
 The more surprising half, and all of it on every target unless the parity table below says
 otherwise: designated initialisers (both `.field =` and `[i] =`), compound literals, K&R
-definitions, bitfields including compound assignment, flexible array members, variadic macros,
+definitions, bitfields including compound assignment and postfix `++`/`--` (194-bitfpost.c), flexible array members, variadic macros,
 `long long`, hex floats, anonymous unions, `restrict`, `static inline`, mixed declarations,
 `for`-scoped declarations, `_Static_assert` (including `&&`/`||`/`?:` in the constant),
 `_Generic` and `_Alignof`, `__builtin_choose_expr`/`object_size`/`prefetch`/`return_address`/
-`frame_address`,
+`frame_address`, the bit builtins (`bswap`, `clz`, `ctz`, `popcount`, `ffs`) folded over a constant
+where one is owed -- a case label, a bit-field width, an array dimension (193-bswapcase.c),
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
 arrays, statement expressions (`({ .. })`), `__auto_type`, named asm operands (`%[x]`),
 `asm inline`, `asm goto`, a file-scope asm (holo's gas-top: sections, labels, data words over
@@ -126,7 +125,9 @@ stack pointer, `__typeof_unqual__`, an enumerator past the int word, a `_Static_
 bare `;` standing as a struct member, an anonymous bitfield over a typedef or mid-list, brace elision in nested initialisers, pointer-to-array declarators, functions returning
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
 chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
-`__typeof__` over locals, globals, struct members, dereferences and function names.
+`__typeof__` over locals, globals, struct members, dereferences and function names, a local
+typed in its own initializer (`T *p = (typeof(p))x`, 195-typeofself.c), and gcc's byte-stepping
+`void *` arithmetic (`sizeof(void)` is 1).
 
 **A block-scope `extern` declaration names the FILE-SCOPE object, landed 2026-08-25**
 (test/cc/154-blockextern.c, held to gcc). C11 6.2.2p4: `extern int x;` inside a function
@@ -717,6 +718,10 @@ also takes — probe the one you mean.
   <tgt>`; bswap16/32 and clz/ctz ride every target (t32 clz is the CLZ word / `__clzsi2`,
   ctz the isolate-and-clz / `__ctzsi2`), but the 64-bit swap wants the r0:r1 pair lane and
   the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
+  a `bswap64` over a constant folds in parse and needs no lane.
+- **a packed member at an odd address on thumb1** faults (v6-M has no unaligned `ldrh`/`ldr`):
+  a load reads the member's width whatever its alignment. every other lane takes the unaligned
+  access in hardware.
 
 What **thumb2** carries, so it is not re-derived (thumb1 reaches apps/moon/lib/rt.c, the
 compiler runtime, for most of this — the above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
@@ -820,28 +825,26 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 **measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
 with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
-every ninth by path: **91 compile**, and the rest stop at
+every ninth by path: **124 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 5 | a function's inline asm: `sbb`, `lcallw`, `mov %fs, r`, a debug register (`%db0`), a register pinned twice |
-| 6 | `cause unnamed` (`page_ref_dec_and_test`, `notify_uffd`, `dma_direct_sync_sg_for_device`, `acpi_pci_probe_root_resources`) |
+| 8 | a function's inline asm: `sbb`, `lcallw`, `mov %fs, r`, a debug register (`%db0`), a register pinned twice, an `"i"` input no fold makes constant |
+| 8 | `cause unnamed` (`page_ref_dec_and_test`, `notify_uffd`, `dma_direct_sync_sg_for_device`, `acpi_pci_probe_root_resources`, `nf_conntrack_tcp_packet`) |
 | 1 | a `?:` over a function in a static initializer (`serial_port_pm`'s `.suspend`) |
-| 20 | `__builtin_bswap16` over a constant in a case label |
-| 20 | `typeof` of the object in its own initializer (`get_unaligned`, `container_of`) |
-| 6 | `__label__`, a block's local label (`unsafe_get_user`, rseq) |
-| 5 | `__builtin_isdigit`, `__builtin_ffsll`, `__builtin_ffs` |
+| 7 | `__label__`, a block's local label (`unsafe_get_user`, rseq, a security hook's `OUT`) |
+| 7 | `__builtin_isdigit`, `__builtin_ffsll`, `__builtin_ffs` over a runtime value |
 | 2 | gcc's `__attribute` spelling |
-| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), `__builtin_clzll` in a bit-field width, a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label`, a register variable in `%rax` |
+| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label` |
 
 each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
 runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm 76 and
 `pushf` 102, an address as an `"i"` operand 22, a `%gs:` operand 20, a `"+m"` output 17 and a
 flag output 10, an `"i"` only a splice makes constant 17, a lock's or tracepoint's static
 initializer 20, `.skip` over label arithmetic 4, the bit scans and `pause` 9 and a register
-spelled `%rdx` 4 and gas's macro language 3 before they read (142-syntax.c, 174-elvis.c,
+spelled `%rdx` 4, gas's macro language 3 and a bit builtin over a constant 9 and `typeof` of the object in its own initializer 31 before they read (142-syntax.c, 174-elvis.c,
 175-offsetof.c, 176-cleanup.c, 178-toplevelasm.c, 179-pushf.c, 181..185-asm*.c, 186-staticinit.c
-and 188..191-asm*.c hold them). a file-scope asm is gas's whole language, and
+188..191-asm*.c, 193-bswapcase.c and 195-typeofself.c hold them). a file-scope asm is gas's whole language, and
 holo's gas-top reads what C headers write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
 `.byte`..`.quad` over a symbol plus a constant or less `.`, `.ascii`/`.asciz`, `.balign`,
 `.zero`, `.org`, and `.skip` or a word over label arithmetic (read once the whole text has,
