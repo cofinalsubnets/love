@@ -90,5 +90,12 @@ nl -m zz -e 1
 # neither; `verbs` is a row, and naming itself is the check that cannot rot.
 try 0 verbs verbs                         # the rail's own listing, off the tab
 
+# a program's own udie leaves by the same door, with its status and no raise line
+die=$d/die.l; printf '(udie 3 "boom")\n' > $die
+try 3 boom -e '(udie 3 "boom")'
+try 3 boom $die
+try 3 boom -l $die -e 1
+try 1 ";; boo 7" -e '(scare (quote boo) 7)'   # any other scare is still a raise
+
 [ $fails -eq 0 ] || { echo "FAIL cli ($fails)"; exit 1; }
 echo "cli: every exit lane keeps its status -- 0 working, 1 unopenable, 2 malformed, and the verb's own"

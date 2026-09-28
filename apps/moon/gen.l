@@ -392,6 +392,8 @@
    ; a base-slot r4 to fp) and no r7 in v6m's (fp there); riscv leads with s1 (r15), the rvc window's one cs seat
    (cspool g) (? (abl? g 'cs) ()
                  (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+                 ; wasm's r16..r18 are riscv's gp tp and flag scratch: plain locals there
+                 (wasm? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r16 r17 r18)
                  (rv64? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
                  (v6m? g) '(r5 r6)                    ; the 16-bit str/ldr reach r0-r7 only, and r7 is fp
                  (t32? g) '(r5 r6 r7 r8 r9 r10)
@@ -4433,6 +4435,7 @@
    ; the callee-saved file per target, read off holo's own tables (love/holo/<tgt>.l): x64 rbx rbp
    ; r12..r15, a64 x19..x28, riscv s1..s11, thumb2 r4..r10 (r11 is fp)
    (csregs g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+                 (wasm? g) '(r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26)
                  (rv64? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                  (t32? g) '(r4 r5 r6 r7 r8 r9 r10)
                  ('(r3 r4) + csx64))
@@ -5170,6 +5173,11 @@
                    _ (step fs () 0 1)
                    fs)))))
 
+   ; the door set a call or a tail jump kills: caller-saved, never an argument (a64 args ride r0-r7,
+   ; x64's al is li'd by setal first); a wasm call writes only r0 r1, so its locals ride it
+   (doors g tail) (? (a64? g) '(r9 r10 r11 r12 r13 r14 r15)
+                     (rv64? g) (? (wasm? g && !tail) () '(r8 r9 r10 r11 r12))
+                     '(r0 r9 r10))
    ; dies on the straight line: overwritten before any read. a ret rides only r0 out; a call or
    ; sibcall jmp (a function symbol -- labels are dot-interned, 46 = '.') kills the door set
    (dies? g rd (f . l))
@@ -5177,10 +5185,8 @@
        (: rs (rdsp g f)
           (? (rs = 'bar)
               (? (retx? f) (rd != 'r0)
-                 (elem <f '(call callr) ||
-                  (= <f 'jmp && !(46 = ((show <>f) 0))))
-                  ; the door set: caller-saved, never an argument (a64 args ride r0-r7; x64's al is li'd by setal first)
-                  (elem rd (? (a64? g) '(r9 r10 r11 r12 r13 r14 r15) '(r0 r9 r10)))
+                 (elem <f '(call callr)) (elem rd (doors g 0))
+                 (= <f 'jmp && !(46 = ((show <>f) 0))) (elem rd (doors g 1))
                  ())
              (elem rd <rs) ()
              (elem rd <>rs) 1
@@ -5236,6 +5242,7 @@
           hit (? (two? lx || two? sx) ()
                  !(two? f && two? nx  && elem <nx ldops9) ()
                  (<>>nx != <>f) ()               ; the load's base is f's dest
+                 (<>f = 'fp) ()                  ; riscv's (lea fp sp 0): a slot stays on the frame base
                  !(charm? <>>>nx) ()
                  (elem <f '(lea lean))
                   (charm? <>>>f ? [<>>f (<>>>f + <>>>nx)])
@@ -5251,6 +5258,7 @@
           sh (? (two? lx || two? sx || two? hit) ()
                 !(two? f && two? nx && (elem <nx stops9 || elem <nx siops)) ()
                 (<>nx != <>f) ()
+                (<>f = 'fp) ()
                 !(charm? <>>nx) ()
                 (<>>>nx = <>f) ()
                 (elem <f '(lea lean))
@@ -5358,7 +5366,7 @@
                  (elem <f '(jmp jmp8))
                   (? (46 = ((show <>f) 0)) (next (<>f . wl))
                      ; a tail jump to a function: an exit reading its arguments -- the door set alone dies (dies?'s law)
-                     (elem rd (? (a64? g) '(r9 r10 r11 r12 r13 r14 r15) '(r0 r9 r10))) (next wl)
+                     (elem rd (doors g 1)) (next wl)
                      ())
                  (<f = 'jmpt) (next ((f 3) + wl))   ; a table jump: every target, and no fall-through
                  (elem <f '(br br8)) (go >l (<>>f . wl))
@@ -5378,10 +5386,10 @@
     (? (t32? g) fs
        (: (go l) (? !(two? l) l
                     (: f <l nx (two? >l ? <>l)
-                       (? (two? f && <f = 'add && two? nx && <nx = 'add &&
+                       (? (two? f && elem <f '(add lea) && two? nx && <nx = 'add &&
                            charm? (f 3) && charm? (nx 3) && nx 1 == f 1 && nx 2 == f 1 &&
                            imma g 'add (f 3 + nx 3))              ; the sum is still the target's immediate
-                          (go (['add (f 1) (f 2) (f 3 + nx 3)] . >>l))
+                          (go ([<f (f 1) (f 2) (f 3 + nx 3)] . >>l))
                           (f . go >l))))
           (go fs)))
 
@@ -5456,7 +5464,7 @@
    ; store-forward: within a straight run a full-word frame slot rides the register that last
    ; touched it; r3/cs reloads stay (epilogue anchors); an lea off r4 keeps the adjacent pair only
    stldkeep ('r3 . csx64)
-   (stldkp g) (? (a64? g) (csregs g) stldkeep)      ; the epilogue-anchor destinations, per target
+   (stldkp g) (? (a64? g || rv64? g) (csregs g) stldkeep)      ; the epilogue-anchor destinations, per target
    (bdropr bs r9) (filter (e9 \ (<>e9 != r9)) bs)
    (bdropo bs o9) (filter (e9 \ (: d (<e9 - o9) (7 < d || d < -7))) bs)
    (stld g fs)
@@ -7954,6 +7962,7 @@
                         (cmpfuse g
                         (copyprop g                 ; memfw's movs fold before cmpfuse reads the pair
                         (memfw g                    ; after addrfold: an address is a base and an offset
+                        (addk g                     ; again: addrfold's constant-index lea meets its add
                         (addrfold g
                         (addk g
                         (rezx g         ; after stld: the forward mints zx, this drops the redundant
@@ -7967,7 +7976,7 @@
                           (vrfix g
                           ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp frame] sav3] +
                            g 'cssv + <sp0 +
-                           body + '((li r0 0)) + peep g 'epi epi))))))))))))))))))))))))
+                           body + '((li r0 0)) + peep g 'epi epi)))))))))))))))))))))))))
        ; an r4 arrival (a64's 5th gp) is never ridden: gen spells the frame base r4 and a4ize retargets
        ; it to fp by position, so a ridden r4 in a base slot would turn into fp
        (a4rider? A) (fbase g !== 'r4 && A == 'r4)
@@ -8235,22 +8244,24 @@
        sp1 (? (uni9 || !(two? vzf)) sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
        irf (? uni9 (ubuild (alive g f)) (build sp1))
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):
-       ; the a64 sweeps (rv64 takes addk and memfw), then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is x64-only
-       (swp irx) (? !(a64? g) (? (rv64? g) (copyprop g (memfw g (addk g irx))) irx)   ; rv64's sweeps
+       ; the arm sweeps, then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is
+       ; x64-only; rezx is a64's (riscv's 32-bit ops sign-extend)
+       (swp irx) (? !(a64? g || rv64? g) irx
                     (tailst g
                     (deadst g
                      (deaddef g
                      (copyprop g
                      (memfw g
+                     (addk g
                      (addrfold g
                      (addk g
-                     (rezx g
+                     ((? (a64? g) (rezx g) 1)
                      (copyprop g
                      (stld g
                      (spmerge
                      (deaddef g
                      (deadcell g
-                     (cfoldir g irx)))))))))))))))
+                     (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
        (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))))))
