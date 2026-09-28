@@ -1,9 +1,7 @@
 ; test/law/moon.l -- the compiler's laws (stage 0), held by assertion over the pure
 ; pipeline: lexer goldens, parser AST goldens, and the whole IR for return-42 compared
 ; form by form. the end-to-end (elf64, the run, the gcc differential) lives in the
-; Makefile smoke through the real `mooncc`. the cat (`make test_moon`):
-;
-;   cat test/00-init.l apps/moon/floor.l apps/moon/lex.l apps/moon/parse.l apps/moon/val.l apps/moon/gen.l test/law/moon.l | out/love
+; Makefile smoke through the real `mooncc`. the cat is test/gate/moon.sh's (`make test_moon`).
 ;
 ; a mid-letrec test must bind to `_` -- a bare one sits in binding position, becomes
 ; define-sugar, and never runs.
@@ -17,8 +15,7 @@
 
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---
 (: (tn ts k) (? (k < 1) <ts (tn >ts (k - 1)))
-(tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
-   (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; lists don't index by application
+   (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
    r (clex "int main() { return 42; }")
    ts <>r
    (test
