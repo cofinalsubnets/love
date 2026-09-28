@@ -520,9 +520,9 @@
  ; ..and the verb around it: the screen is raised here and put back here, and the
  ; walk between the two neither knows nor cares which door it came in by
  (slop-run tk pn) (: _ (raw 1)
-                 _ (say out (esc + "[?1049h" + esc + "[2J"))
+                 _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?9h" + esc + "[?1006h"))   ; a tap's press, as edkey's -12
                  g (slop-walk tk pn)
-                 _ (say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
+                 _ (say out (esc + "[?1006l" + esc + "[?9l" + esc + "[0m" + esc + "[?25h" + esc + "[?1049l"))
                  _ (flush out)
                  _ (drain-keys ())
                  _ (raw 0)

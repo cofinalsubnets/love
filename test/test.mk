@@ -1280,6 +1280,9 @@ test_kernel_wasm: host
 	@echo TEST test/gate/echo.mjs "(a keystroke reaches the glass, not just the guest)"
 	@$(NODE) $(R)/test/gate/echo.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/echo \
 	   || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST test/gate/point.mjs "(the page's pointer and clipboard: select, copy, paste, the wheel)"
+	@$(NODE) $(R)/test/gate/point.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/point.log \
+	   || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/gate/idle.mjs "(the machine still sleeps once it has been typed at)"
 	@$(NODE) $(R)/test/gate/idle.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/idle.log \
 	   || { tail -5 out/wasm/idle.log; echo "FAIL test_kernel_wasm"; exit 1; }

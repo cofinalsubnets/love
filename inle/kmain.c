@@ -48,20 +48,24 @@ static struct {
 // keyboard input: kb_int decodes scancodes into the ascii queue (q/qh/qt) kb_readn and
 // (key) drain, g holds the modifier flags, `raw` arms the scancode tap (r/rh/rt) beside it.
 // the history's scroll is only asked for here (peer, snap) and done where the console paints.
-static struct { uint8_t g, q[16], qh, qt; uint16_t lost;
+// a paste streams through the same queue (pasting, its bracket, the byte before), and a
+// pointer's press anchors a selection (anchor, the ticks it came at, clicks in a row).
+static struct { uint8_t g, q[64], qh, qt; uint16_t lost;
                 uint8_t raw, r[64], rh, rt;
-                int16_t peer; uint8_t snap; } kkb;   // shift+pgup/pgdn asks, a key snaps back
+                int16_t peer; uint8_t snap;          // shift+pgup/pgdn asks, a key snaps back
+                uint8_t pasting, pbr, pprev, clicks;
+                intptr_t anchor; uint64_t tp; } kkb;
 // enqueue one input byte; the COM1 serial RX ap (k_uart) feeds the same queue. an interrupt
 // cannot wait, so the ring is bounded: a drop is counted (serial_flush says how many fell)
 // and the count saturates rather than wrapping.
 void kq(uint8_t b) {
-  uint8_t n = (kkb.qt + 1) & 15;
+  uint8_t n = (kkb.qt + 1) & 63;
   if (n != kkb.qh) kkb.q[kkb.qt] = b, kkb.qt = n;
   else if (kkb.lost != (uint16_t) -1) kkb.lost++; }
 static int kqpop(void) {                   // dequeue one byte, -1 if empty
   if (kkb.qh == kkb.qt) return -1;
   int b = kkb.q[kkb.qh];
-  return kkb.qh = (kkb.qh + 1) & 15, b; }
+  return kkb.qh = (kkb.qh + 1) & 63, b; }
 
 // the console's face: glyphs and their size; kfb.scale says how large, paint.c the palette.
 static struct font const kface = { (uint8_t const*) cleat_8x16, 8, 16 };
@@ -134,7 +138,59 @@ struct k_source {
 // a seat with no keyboard interrupt (wasm) looks here whenever a task asks after a key,
 // and is told the room left, so a burst waits in its own buffer. metal has nothing to do.
 __attribute__((weak)) void k_kb_sync(int room) { (void) room; }
-void k_kb_poll(void) { k_kb_sync(15 - ((kkb.qt - kkb.qh) & 15)); }
+void k_kb_poll(void) { k_kb_sync(63 - ((kkb.qt - kkb.qh) & 63)); }
+
+// a paste arriving in pieces (a seat's clipboard): each piece as quay lays a paste's bytes,
+// the program's bracket around the whole when it asked, and the view brought home as a key
+// does. k_paste_end closes it; a seat calls it once its paste has run dry
+void k_paste_in(uint8_t const *s, long n) {
+  if (!kkb.pasting) {
+    kkb.pasting = 1, kkb.pprev = 0, kkb.pbr = kcb && kcb->flag & cb_paste, kkb.snap = 1;
+    if (kkb.pbr) for (char const *p = cb_popen; *p; p++) kq((uint8_t) *p); }
+  for (long i = 0; i < n; i++) {
+    int const b = cb_paste1(kkb.pprev, s[i]);
+    kkb.pprev = s[i];
+    if (b >= 0) kq((uint8_t) b); } }
+void k_paste_end(void) {
+  if (!kkb.pasting) return;
+  if (kkb.pbr) for (char const *p = cb_pshut; *p; p++) kq((uint8_t) *p);
+  kkb.pasting = 0; }
+
+// a selection's text to a seat that can carry it out (a page's clipboard); metal has none
+__attribute__((weak)) void k_copy_out(uint8_t const *s, uintptr_t n) { (void) s, (void) n; }
+
+// a pointer at a console cell: how 0 a press, 1 a release, 2 a move; b the button (0 1 2, 64
+// 65 the wheel, 3 none held) with modifiers 4 shift 8 meta 16 ctrl. a program that asked for
+// the mouse gets its report (cb_mouse); else, or with shift, the left button selects -- a
+// second or third press in quick succession on the same cell takes the word or the line --
+// and the release carries the text out, and the wheel scrolls the history, or on the
+// alternate screen sends three arrows
+void k_pointer(uint32_t how, uint32_t b, uint32_t row, uint32_t col) {
+  if (!kcb || row >= kcb->rows || col >= kcb->cols) return;
+  uint32_t const btn = b & ~28u;
+  if (!(b & 4) && kcb->flag & cb_mice) {
+    uint8_t o[cb_mousen];
+    for (uint32_t i = 0, n = cb_mouse(kcb, o, b, row, col, how); i < n; i++) kq(o[i]);
+    return; }
+  if (btn == 64 || btn == 65) {
+    if (how) return;
+    if (kcb->flag & cb_alt) for (int k = 0; k < 3; k++) kq(27), kq('['), kq(btn == 64 ? 'A' : 'B');
+    else {
+      intptr_t const v = (intptr_t) kcb->view + (btn == 64 ? 3 : -3);
+      cb_peer(kcb, v < 0 ? 0u : (uint32_t) v), fbdraw(); }
+    return; }
+  if (btn) return;
+  intptr_t const gi = ((intptr_t) row - (intptr_t) kcb->view) * kcb->cols + col;
+  if (how == 0) {
+    kkb.clicks = kticks - kkb.tp < 40 && gi == kkb.anchor && kkb.clicks < 3 ? kkb.clicks + 1 : 1;
+    kkb.tp = kticks, kkb.anchor = gi;
+    cb_select(kcb, gi, gi, kkb.clicks > 1 ? kkb.clicks - 1u : 3u); }
+  else if (how == 2) cb_select(kcb, kkb.anchor, gi, kkb.clicks - 1u);
+  else if (kcb->sel0 < kcb->sel1) {
+    uintptr_t const n = cb_copied(kcb, 0, kcb->sel0, kcb->sel1);
+    uint8_t *t = kmallocw(b2w(n + 1));
+    if (t) cb_copied(kcb, t, kcb->sel0, kcb->sel1), k_copy_out(t, n), kfree(t); }
+  fbdraw(); }
 
 // slot 0: PS/2 keyboard. drains what the interrupt queued and answers 0 when there is
 // nothing -- never the end, the kb queue being endless. the scheduler owns the wait.
@@ -1727,11 +1783,11 @@ static bool k_cb_remake(void) {
   struct cb *const old = kcb;
   uint16_t const orows = old->rows, ocols = old->cols;
   if (rows == orows && cols == ocols) return fbwash(), true;  // same grid, new pixels
-  uint32_t sn = k_sn(rows, cols), hl = k_hl(cols);
-  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols)));
-  if (!c) c = kmallocw(b2w(cb_size(rows, cols, sn = 0) + cb_hsize(hl = 0, cols)));   // no room: text alone
+  uint32_t sn = k_sn(rows, cols), hl = k_hl(cols), tw = 1;
+  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols)));
+  if (!c) sn = hl = tw = 0, c = kmallocw(b2w(cb_size(rows, cols, 0)));   // no room: the grid alone
   if (!c) return false;
-  cb_regrid(c, old, (uint16_t) rows, (uint16_t) cols, sn, hl);
+  cb_regrid(c, old, (uint16_t) rows, (uint16_t) cols, sn, hl, tw);
   kcb = c;
   kfree(old);
   fbwash();
@@ -1905,11 +1961,12 @@ static bool cbinit(void) {
   const uintptr_t rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
   // kmallocw, not ai_alloc: cbinit runs before ai_ini, so no g exists yet
-  uint32_t sn = k_sn(rows, cols), hl = k_hl(cols);
-  if (!(kcb = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols))))
-      && !(kcb = kmallocw(b2w(cb_size(rows, cols, sn = 0) + cb_hsize(hl = 0, cols))))) return false;
+  uint32_t sn = k_sn(rows, cols), hl = k_hl(cols), tw = 1;
+  if (!(kcb = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols)))))
+    sn = hl = tw = 0, kcb = kmallocw(b2w(cb_size(rows, cols, 0)));   // no room: the grid alone
+  if (!kcb) return false;
   cb_open(kcb, rows, cols, sn);
-  cb_hist(kcb, hl);
+  cb_hist(kcb, hl), cb_twin(kcb, tw);
   kcb->flag |= cb_lnm;  // the kernel console's discipline: a bare \n is a newline
   cb_attr(kcb, cb_ink(cb_idx, 15), cb_ink(cb_idx, 0));   // white on black: xterm-256's 15 and 0, what a terminal is
   cb_fill(kcb, 0);

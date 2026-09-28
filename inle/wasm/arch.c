@@ -25,6 +25,9 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_scan 0x4011
 #define hc_drew 0x4012
 #define hc_kexec 0x4013                     // ("path\\0cmd", n): what the next reset boots
+#define hc_point 0x4014                     // (buf, n) -> whole 8-byte pointer records taken
+#define hc_paste 0x4015                     // (buf, n) -> paste bytes taken; n 0 counts them
+#define hc_copy 0x4016                      // (text, n): a selection, for the page's clipboard
 #define hc_fetch_open 0x4020                // (url, n) -> the body's length, or -errno
 #define hc_fetch_read 0x4021                // (buf, n) -> bytes copied, on from the last
 #define hc_fetch_close 0x4022
@@ -59,12 +62,32 @@ void k_tick_sync(void) {
 // it answers what is there, and never more than kmain's queue has room for: the rest
 // waits in the worker's ring, which is deep, so a pasted line arrives whole. asking is
 // the one way a guest that never idles -- a frame loop the horn paces -- hears a key.
+// the page's pointer and clipboard ride lanes of their own beside the keys: a pointer record
+// is how, the button with its modifiers, a pad, then the row and the column as two
+// little-endian bytes each, and kmain's k_pointer takes it; a paste is plain bytes, taken
+// as the queue has room (with its bracket's room kept back) and closed once it runs dry
 void k_kb_poll(void);
+void k_pointer(uint32_t how, uint32_t b, uint32_t row, uint32_t col);
+void k_paste_in(uint8_t const *s, long n);
+void k_paste_end(void);
+static void k_point_sync(void) {
+  unsigned char r[8 * 8];
+  long const n = __ai_sys(hc_point, (long) r, sizeof r, 0, 0, 0, 0);
+  for (long i = 0; i + 8 <= n; i += 8)
+    k_pointer(r[i], r[i + 1], r[i + 4] | (uint32_t) r[i + 5] << 8, r[i + 6] | (uint32_t) r[i + 7] << 8); }
 void k_kb_sync(int room) {
-  unsigned char b[16];
+  unsigned char b[48];
+  k_point_sync();
   if (room <= 0) return;
-  long n = __ai_sys(hc_read, 0, (long) b, room < (int) sizeof b ? room : (long) sizeof b, 0, 0, 0);
-  for (long i = 0; i < n; i++) kq(b[i]); }
+  long n = __ai_sys(hc_read, 0, (long) b, room < 16 ? room : 16, 0, 0, 0);
+  for (long i = 0; i < n; i++) kq(b[i]);
+  room -= (int) n;
+  if (!__ai_sys(hc_paste, 0, 0, 0, 0, 0, 0)) { if (room >= 6) k_paste_end(); }
+  else if (room > 12) {
+    n = __ai_sys(hc_paste, (long) b, room - 12 < (int) sizeof b ? room - 12 : (long) sizeof b, 0, 0, 0, 0);
+    k_paste_in(b, n); } }
+
+void k_copy_out(uint8_t const *s, uintptr_t n) { __ai_sys(hc_copy, (long) s, (long) n, 0, 0, 0, 0); }
 
 // the scancodes the page queued on their own lane (inle/wasm/machine.js's scan lane), for the tap when a
 // game armed it (kmain's k_scan_put) and dropped otherwise, so the lane never fills
