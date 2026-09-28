@@ -32,6 +32,7 @@
 ; and a computed double essentially never does.
 (module 'kore
 (borrow 'posix)
+(borrow 'text)
 
 (:
    ; -- values --------------------------------------------------------------
@@ -177,14 +178,17 @@
                     (string? v) v
                     (aw-sn? v) <>>v
                     (aw-numstr v cf))
+   ; by character, as gawk's towupper/towlower: a byte no character wears goes through as is
    (aw-map-case s up)
     (: n #s o (jug 0)
        (go k) (n <= k ? (slurp o)
-               (: c (s k)
-                (put o (? (up && 97 <= c <= 122) (c - 32)
-                          (!up && 65 <= c <= 90) (c + 32)
-                          c),
-                 go (k + 1))))
+               (: c (s k) m (c < 128 ? 1 (cpn s k))
+                _ (? (c < 128) (put o (? (up && 97 <= c <= 122) (c - 32)
+                                         (!up && 65 <= c <= 90) (c + 32)
+                                         c))
+                     (m < 1) (put o c)
+                     (say o (utf8 ((up ? cpupper cplower) (cpat s k)))))
+                (go (k + (m < 1 ? 1 m)))))
        (go 0))
    (aw-up s) (aw-map-case s 1)
    (aw-down s) (aw-map-case s 0)

@@ -75,4 +75,10 @@ printf 'BEGIN{x=1}\n' > "$ho/.kore-awk1"; printf 'BEGIN{print x+1}\n' > "$ho/.ko
 awk -f "$ho/.kore-awk1" -f "$ho/.kore-awk2" < "$awkin" > "$g" 2>/dev/null
 korerun awk -f "$ho/.kore-awk1" -f "$ho/.kore-awk2" < "$awkin" > "$o" 2>/dev/null
 same "awk -f"
+# case by character: gawk's answers under a utf-8 locale, spelled out so the gate's own
+# locale cannot move them; a byte no character wears goes through as is
+ac() { want=$1; got=$(printf '%s\n' "$2" | korerun awk "{print $3}")
+       [ "$got" = "$want" ] || fail "kore awk $3 on $2: got [$got] want [$want]"; }
+ac 'ÉAßÉ日X ǄSIİ ΣΣΣΩ' 'éaßÉ日x ǅſıİ ΣσςΩ' 'toupper($0)'
+ac 'éaßé日x ǆſıi σσςω' 'éaßÉ日x ǅſıİ ΣσςΩ' 'tolower($0)'
 echo "kore: awk (41 checks byte-identical to gawk, the exit code, -f, the refusal) ok"
