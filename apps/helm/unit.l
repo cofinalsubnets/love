@@ -46,17 +46,17 @@
    (hforms t)
     (: (go x acc) (: r (sound x)
                      (? (two? r)     (go >r (<r . acc))
-                        (== r 'torn) [(rev acc) 1]
+                        (r == 'torn) [(rev acc) 1]
                         [(rev acc) 0]))
        (go t ()))
 
    ; --- one unit --------------------------------------------------------------
    (hclause u c gs)
-    (? !(two? c) (("a clause is a form, not " + show c) . gs)
-       (: k <c v >c m (peep hkeys k ())
-          (? !m           (("unknown clause " + string k) . gs)
-             (== m 'one) (? !(two? v) (("(" + string k + ") wants an operand") . gs)
-                             (pin u k <v, gs))
+    (? (atom? c) (("a clause is a form, not " + show c) . gs)
+       (: k <c v >c m (hkeys k)
+          (? !m          (("unknown clause " + string k) . gs)
+             (m == 'one) (atom? v ? (("(" + string k + ") wants an operand") . gs)
+                            (pin u k <v, gs))
              (pin u k v, gs))))
 
    ; (KIND NAME clause..) -> [unit gripes]
@@ -69,11 +69,11 @@
    ; forms -> [units gripes], units in file order.
    (hunits fs)
     (: (go fs us gs)
-        (? !(two? fs) [(rev us) (rev gs)]
+        (? (atom? fs) [(rev us) (rev gs)]
            (: f <fs
-              (? !(two? f)              (go >fs us (("not a unit form: " + show f) . gs))
-                 !(elem <f hkinds)   (go >fs us (("unknown kind " + show <f) . gs))
-                 !(two? >f)             (go >fs us (("a " + string <f + " wants a name") . gs))
+              (? (atom? f)            (go >fs us (("not a unit form: " + show f) . gs))
+                 !(elem <f hkinds)    (go >fs us (("unknown kind " + show <f) . gs))
+                 (atom? >f)           (go >fs us (("a " + string <f + " wants a name") . gs))
                  !(name? <>f)           (go >fs us (("a unit name is a name, not " + show <>f) . gs))
                  (: nm <>f  cs >>f
                     r (hunit <f nm cs gs)
@@ -81,16 +81,16 @@
        (go fs () ()))
 
    ; --- the unit by name ------------------------------------------------------
-   (hby us nm) (? !(two? us) () (: u <us (peep u 'name () == nm ? u (hby >us nm))))
-   (hnames us) (map (\ u (peep u 'name ())) us)
+   (hby us nm) (? (atom? us) () (: u <us (u 'name == nm ? u (hby >us nm))))
+   (hnames us) (map (u \ u 'name) us)
 
    ; --- what is wrong with it -------------------------------------------------
    ; every check answers a list of complaints, and `hcheck` is their concatenation
    ; in reading order. nothing here raises: a bad config is a report, not a fault.
    (happend a b) (foldl (\ l x (x . l)) b (rev a))
-   (hdedup l seen) (? !(two? l) (rev seen)
+   (hdedup l seen) (? (atom? l) (rev seen)
                       (elem <l seen ? (hdedup >l seen) (hdedup >l (<l . seen))))
-   (hstrings? l) (? !(two? l) 1 (string? <l ? (hstrings? >l) 0))
+   (hstrings? l) (? (atom? l) 1 (string? <l ? (hstrings? >l) 0))
 
    ; a cycle in `after` is the one error the supervisor cannot survive: the dep
    ; walk would never bottom out. answers the name the walk came back to, or ().
@@ -99,12 +99,12 @@
        (: u (hby us nm)
           (? !u ()
              (: path (nm . seen)
-                (go ds) (? !(two? ds) ()
+                (go ds) (? (atom? ds) ()
                            (: r (hcycle us <ds path) (? r r (go >ds))))
                 (go (peep u 'after []))))))
 
    (hcheck1 us u)
-    (: nm  (peep u 'name ())    kind (peep u 'kind ())
+    (: nm  (u 'name)            kind (u 'kind)
        ex  (peep u 'exec [])    tag  ("unit " + string nm + ": ")
        run? (kind !== 'target)
        (deps k) (: bad (filter (\ d !(hby us d)) (peep u k []))
@@ -115,7 +115,7 @@
             (? !(elem r hrestarts) [(tag + "restart " + show r + " is not no|on-fail|always")]
                (: n (peep u 'tries 0)
                   (? (charm? n && 0 < n) () [(tag + "tries wants a positive count")]))))
-         (? (run? && !(two? ex))       [(tag + "no (exec ..) -- nothing to run")]
+         (? (run? && atom? ex)         [(tag + "no (exec ..) -- nothing to run")]
             (run? && !(hstrings? ex))  [(tag + "(exec ..) wants strings")]
             (!run? && (two? ex))       [(tag + "a target has nothing to exec")]
             ()))
@@ -144,10 +144,10 @@
    ; --- showing ---------------------------------------------------------------
    ; a name list is joined; an argv is a command line, so it goes through shword --
    ; `sh -c "date > f"` laid out with spaces reads as a redirect helm performs
-   (hargv-line l) (? !(two? l) "" !(two? >l) <l (<l + " " + hargv-line >l))
+   (hargv-line l) (? (atom? l) "" (atom? >l) <l (<l + " " + hargv-line >l))
    hargv-show (cite 'lush 'sh-show)
    (hunit-line u)
-    (: nm (peep u 'name ()) kind (peep u 'kind ())
+    (: nm (u 'name) kind (u 'kind)
        af (peep u 'after [])  ex (peep u 'exec [])
        head (string kind + " " + string nm)
        body (kind == 'target

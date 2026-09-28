@@ -29,8 +29,8 @@
    ; --- a binding row ---
    (kb lib sym act) [lib sym act]
    (kb-mods r) <r  (kb-sym r) <>r  (kb-act r) (r 2)
-   (keys-has t lib sym) (any (r \ (kb-mods r = lib) && (kb-sym r = sym)) t)
-   (keys-find t lib sym) (: hit (afind (r \ (kb-mods r = lib) && (kb-sym r = sym)) t)
+   (keys-has t lib sym) (any (r \ kb-mods r = lib && kb-sym r = sym) t)
+   (keys-find t lib sym) (: hit (afind (r \ kb-mods r = lib && kb-sym r = sym) t)
                              (two? hit ? (kb-act hit) ()))
    (keys-union custom def) (custom + (filter (r \ !(keys-has custom (kb-mods r) (kb-sym r))) def))
    (keys-syms t) (foldl (\ a r (any (x \ x = kb-sym r) a ? a (kb-sym r . a))) () t)
@@ -65,17 +65,17 @@
                       (#nm = 1) (nm 0)                                      ; one char is its ascii keysym
                       (: hit (afind (r \ <r = nm) xk-names)
                          (two? hit ? <>hit ())))))                             ; unknown name -> () (no keysym is 0, so nothing is lost)
-   (kmod-of m modm) (? (= m 'sup || (= m 'super) || (= m 'mod4)) supm
-                       (= m 'alt || (= m 'mod1)) altm
-                       (= m 'ctrl || (= m 'control)) ctrlm
-                       (= m 'shift) shiftm
-                       (= m 'mod) modm                                         ; `mod` follows whatever the config chose
+   (kmod-of m modm) (? (m = 'sup || m = 'super || m = 'mod4) supm
+                       (m = 'alt || m = 'mod1) altm
+                       (m = 'ctrl || m = 'control) ctrlm
+                       (m = 'shift) shiftm
+                       (m = 'mod) modm                                         ; `mod` follows whatever the config chose
                        ())
    ; a spec -> (lib keysym), or () if any field is unknown. the mask accumulates
    ; through a `(1 mask)` wrapper: a bare mask of 0 (no modifiers) is a legitimate
    ; answer and would read as failure on its own.
    (kspec modm spec)
-    (? !(two? spec) ()
+    (? (atom? spec) ()
        (: n #spec
           ks (xk-of (spec (n - 1)))
           ms (foldl (\ a m (: b (kmod-of m modm) (two? a && b ? [(<a | b)] ())))
@@ -85,8 +85,8 @@
    ; --- a config's own rows. `spawn`/`exec` carry their argv flat in a config
    ;     ((spawn "rofi" "-show" "drun")) and nested in a binding row, so they are
    ;     the two the reader re-wraps; every other action is already its own shape. ---
-   (kb-act-of a) (? !(two? a) a
-                    (= <a 'spawn || (= <a 'exec)) [<a >a]
+   (kb-act-of a) (? (atom? a) a
+                    (<a = 'spawn || <a = 'exec) [<a >a]
                     a)
    (keys-rows modm rows)                                                         ; ((spec action) ..) -> binding rows; an unreadable spec is dropped
     (foldr (\ r acc (: k (two? r ? (kspec modm <r) ())
@@ -94,8 +94,8 @@
            () rows)
    (keys-drop modm t specs)                                                      ; remove every chord named in specs
     (: ks (filter two? (map (s \ kspec modm s) specs))
-       (? !(two? ks) t
-          (filter (r \ !(any (k \ (<k = kb-mods r) && (<>k = kb-sym r)) ks)) t)))
+       (? (atom? ks) t
+          (filter (r \ !(any (k \ <k = kb-mods r && <>k = kb-sym r) ks)) t)))
 
    ; --- the directional block: the .hs list comprehension as a map --
    ;     (dir keysyms delta) x {hjkl, arrows} x {mod, mod+shift, mod+ctrl} ---
@@ -186,7 +186,7 @@
    ;     the most recently used other window (the alt-tab flip); Backward to
    ;     the least. Windows never yet focused count as oldest. ---
    (nm-pick row f hist fwd)
-    (: cands (filter (w \ !(w = f) && any (x \ x = w) row) hist)
-       fresh (filter (w \ !(w = f) && !(any (x \ x = w) cands)) row)
+    (: cands (filter (w \ w != f && any (x \ x = w) row) hist)
+       fresh (filter (w \ w != f && !(any (x \ x = w) cands)) row)
        order (cands + fresh)
-       (? !(two? order) () fwd <order <(rev order))))
+       (? (atom? order) () fwd <order <(rev order))))
