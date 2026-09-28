@@ -6334,8 +6334,12 @@
                    (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
        is9 (iconv <>>>s ())
+       ; an input pinned where an output is ("=a"(n) : "a"(0), cpuid's) is that output's tie
+       (oix l k j) (? !(two? l) () (elem <<l '(o x) && <><l = k) j (oix >l k (j + 1)))
+       (tieup e) (: j (? (<e = 'i && !(two? <>e) && <>e != 'pick) (oix os <>e 0) ())
+                    (? (charm? j) ['i ['tie j] <>>e <>>>e] e))
        (? (bad? os || bad? is9) 'bad
-          (: ops9 (os + is9)
+          (: ops9 (os + map tieup is9)
              ; pinned registers: validated, a duplicate refuses; a tie takes its output's
              (pinset l acc)
               (? !(two? l) acc
