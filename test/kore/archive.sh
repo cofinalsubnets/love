@@ -134,4 +134,25 @@ if command -v tar >/dev/null 2>&1 && command -v xz >/dev/null 2>&1; then
   tar cJf "$T/g.txz" -C "$ho" .arcd && korerun tar tf "$T/g.txz" > "$o"
   grep -q '^\.arcd/one\.txt$' "$o" || fail "kore tar: GNU's xz tarball, sniffed"
 fi
+# the coders read flags in gnu order (post.l's uoptp): a flag may follow a file, the later
+# of two levels or directions wins, and a bad flag names itself
+F=$HO/.arcflag; rm -rf "$F"; mkdir -p "$F"; cp "$ho/.arc1" "$F/a"; cp "$ho/.arc1" "$F/b"
+korerun gzip "$F/a" -k || fail "kore gzip FILE -k"
+[ -f "$F/a" ] && [ -f "$F/a.gz" ] || fail "kore gzip: -k after the file was not read"
+korerun bzip2 "$F/b" -k -c > "$F/b.bz2" || fail "kore bzip2 FILE -k -c"
+[ -f "$F/b" ] || fail "kore bzip2: -c after the file was not read"
+korerun xz -c -z -d < "$F/a.gz" > /dev/null 2>&1 && fail "kore xz: -d after -z did not win"
+korerun xz -c -d -z < "$F/a" | korerun xz -dc > "$o" || fail "kore xz: -z after -d did not win"
+cmp -s "$F/a" "$o" || fail "kore xz -d -z round trip"
+korerun gzip -x "$F/a" 2> "$o" && fail "kore gzip -x was taken"
+grep -q 'unknown option -x' "$o" || fail "kore gzip -x: not named"
+korerun bzip2 -cx "$F/a" 2> "$o" && fail "kore bzip2 -cx was taken"
+grep -q 'Bad flag `-cx' "$o" || fail "kore bzip2 -cx: the word not named"
+korerun gzip --suffix 2> "$o" && fail "kore gzip --suffix with no value was taken"
+grep -q -- '--suffix wants' "$o" || fail "kore gzip --suffix: not named"
+hv "bzip2 -V" '^bzip2 (love' korerun bzip2 -V
+( cd "$ho" && printf '.arc1\n' | "$K" kore cpio -o > "$F/c.cpio" ) || fail "kore cpio -o for the flags"
+korerun cpio -t --file="$F/c.cpio" > "$o" 2>/dev/null; grep -q '\.arc1' "$o" || fail "kore cpio --file=F"
+korerun cpio --format=odc -t < "$F/c.cpio" 2> "$o" && fail "kore cpio --format=odc was taken"
+grep -q 'format odc is not here' "$o" || fail "kore cpio --format=odc: the refusal"
 echo "kore: gzip/gunzip/zcat/xz/unxz/bzip2/bunzip2/tar/cpio under kore's door ok"

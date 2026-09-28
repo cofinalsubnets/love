@@ -45,7 +45,6 @@
 (:
    (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, string? s && [1 s]))))
    ; the directory a path sits in, as a link back up: "/a/b/c.l" -> "/a/b/"
-   (sv-up p) (snip p 0 (lastslash p))
 
    ; the cache key: an edit that moves neither mtime nor size is one nobody can see
    (sv-stamp p) (stat p @ st (two? st ? (<>st + <st * 7) 0))
@@ -57,7 +56,7 @@
    ; the nav line every page wears: up to the directory, across to the file's
    ; other reading. alt is `(href text), or () where there is no other reading.
    (sv-nav path alt)
-   ("<p class=\"srcnav\"><a href=\"" + sv-up path + "\">" + sv-up path + "</a> &middot; " + path
+   ("<p class=\"srcnav\"><a href=\"" + phead path + "\">" + phead path + "</a> &middot; " + path
     + (two? alt ? (" &middot; <a href=\"" + <alt + "\">" + <>alt + "</a>") "") + "</p>\n")
    (sv-page path body alt) (hw-page path '("/hue.css") "/" (sv-nav path alt + body))
 

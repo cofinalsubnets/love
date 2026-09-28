@@ -906,8 +906,11 @@
 ;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 ;   (pprefixes p) -> the directory prefixes of p, outermost first
 
-(module '(path lastslash lastdot segs pclean pprefixes)
+(module '(path lastslash lastdot pbase phead segs pclean pprefixes)
 (: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
+   ; the leaf after the last '/', and the head before it with the slash kept ("" for none)
+   (pbase p) (snip p (lastslash p) #p)
+   (phead p) (snip p 0 (lastslash p))
    (lastdot p) (: sl (lastslash p)
                   ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
    ; "/a/b/c" -> ("/a" "/a/b"): neither the leading '/' nor the leaf is a prefix, so `mkdir -p`
@@ -2731,9 +2734,7 @@
    ; the verb run in the caller as a builtin: urun is the driver, so a leave from deep in
    ; answers a status and never ends the caller. () when no verb has the name
    (call k as) (: f (get k) (? (lit? f) (urun f as) ()))
-   (bn p)    (: n #p
-                (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n))
-                (go 0 0))
+   bn (cite 'path 'pbase)
    (dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sl? w)   (: n #w (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
    (word w)  (sl? w || dotl? w ? () (get (name w)))
@@ -2791,7 +2792,7 @@
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap
-          uopt uopt1 uoptv uoptun uoptstray uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptstray uoptp uoptlast uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -3215,6 +3216,40 @@
    ; not one, so an applet with positional operands would take `-x` for a filename. () once
    ; `--` has been spelled: the words behind it are literal by request.
    (uoptstray as rest) (? (elem "--" as) () (<(filter (w \ 1 < #w && w 0 = 45) rest)))
+   ; (uoptp as t vals reps longs) -> [t stacked operands stray] | (): uopt in gnu order, a flag
+   ; free to follow an operand and every word behind `--` an operand. stray is the first long
+   ; word that was not ours (uopt reads it as an operand), or ()
+   (uoptp as t vals reps longs)
+    (: (go as es ops stray)
+        (: r (uopt as t vals reps longs)
+           (? !(two? r) ()
+              (: es2 (es + r 1) rest (r 2) k (#as - #rest)
+                 (? !(two? rest) [t es2 (rev ops) stray]
+                    (0 < k && as (k - 1) = "--") [t es2 (rev ops + rest) stray]
+                    (: w <rest
+                       (go >rest es2 (w . ops)
+                           (stray || (2 < #w && w 0 = 45 && w 1 = 45 ? w ()))))))))
+       (go as () () ()))
+   ; the last of `keys` spelled in the flag words before `--`, short or long, or (): the order
+   ; uopt's tablet drops, for the flags where the later one wins (a level, a mode)
+   (uoptlast as keys vals longs)
+    (: (lkey w) (: e ((: (go i) (? (#w <= i || w i = 61) i (go (i + 1)))) 2)
+                   (? (tablet? longs) (peep longs (snip w 2 e) ()) ()))
+       (short w k got)                                   ; -> [got skip-the-next-word]
+        (? (#w <= k) [got 0]
+           (: c (w k)
+              (? (elem c vals) [got (k + 1 = #w ? 1 0)]
+                 (short w (k + 1) (elem c keys ? c got)))))
+       (go as got)
+        (? !(two? as) got
+           (: w <as
+              (? (w = "--") got
+                 (2 < #w && w 0 = 45 && w 1 = 45)
+                  (: c (lkey w) (go >as (elem c keys ? c got)))
+                 (2 <= #w && w 0 = 45)
+                  (: r (short w 1 got) (go (r 1 ? >>as >as) <r))
+                 (go >as got))))
+       (go as ()))
 
    ; --- the two flags every applet answers, and the one place that answers them ------
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a file

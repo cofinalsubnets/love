@@ -59,6 +59,7 @@
  (5432 = digits "5432") !(digits "8x")
  (show '("h" 8080 "/a") = show (urlsplit "http://h:8080/a"))
  (show '("h" 80 "/") = show (urlsplit "http://h"))
+ !(urlsplit "https://h/") !(urlsplit "http://h:x/") !(urlsplit "http:///a")
  (show '(1 2) = show (readform "(1 2)"))                         ; a form off a string
  (0 < got)                                                           ; the pull went through
  (2 = npat) (4 = nblob)                                              ; every patch, every blob

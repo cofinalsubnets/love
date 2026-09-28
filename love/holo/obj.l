@@ -109,9 +109,7 @@
                (pin seen lbl 1, go >rs (lbl . acc)))))
        (rev (go rels ())))
 
-   ; a 24-byte symbol-table entry, and a 24-byte RELA entry.
-   (o-sym nameoff bind typ shndx value)
-    (catall [(le32 nameoff) [((bind << 4) | typ) 0] (le16 shndx) (le64 value) (le64 0)])
+   ; a 24-byte RELA entry (the symbols are elf.l's elf-sym, st_size 0).
    (o-rela offset symidx typ addend)
     (catall [(le64 offset) (le64 (symidx * 4294967296 + typ)) (le64 addend)])
 
@@ -140,14 +138,8 @@
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
    r-thm-movw 47                                    ; R_ARM_THM_MOVW_ABS_NC  (S+A)|T, low 16   (thumb2 la)
    r-thm-movt 48                                    ; R_ARM_THM_MOVT_ABS     S+A, high 16
-   ; a 16-byte ELF32 symbol entry (name value size info other shndx) and an 8-byte rel entry.
-   (o-sym32 nameoff bind typ shndx value)
-    (catall [(le32 nameoff) (le32 value) (le32 0) [((bind << 4) | typ) 0] (le16 shndx)])
+   ; an 8-byte rel entry (the symbols are elf.l's elf-sym32, st_size 0).
    (o-rel32 offset symidx typ) (catall [(le32 offset) (le32 (symidx * 256 + typ))])
-   ; a 40-byte ELF32 section header.
-   (sh32 nameoff typ flags off sz link info align entsz)
-    (catall [(le32 nameoff) (le32 typ) (le32 flags) (le32 0)
-              (le32 off) (le32 sz) (le32 link) (le32 info) (le32 align) (le32 entsz)])
    (objsecs32 target0 secs funcnames globnames wknames)
     (: target (arch-nom target0)
        machine (elf-machines target)
@@ -248,25 +240,25 @@
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
                                            (? (sec-exec? si)
-                                              (o-sym32 (stroffs i) 0 2 si (off | 1))   ; stb_local stt_func, +thumb bit
-                                              (o-sym32 (stroffs i) 0 1 si off))))      ; stb_local stt_object
+                                              (elf-sym32 (stroffs i) 0 2 si (off | 1) 0)   ; stb_local stt_func, +thumb bit
+                                              (elf-sym32 (stroffs i) 0 1 si off 0))))      ; stb_local stt_object
                                  locs))
            fsyms (catall (o-mapi (\ i fs (: w (o-place fs)
-                                            (o-sym32 (stroffs (nloc + i))
+                                            (elf-sym32 (stroffs (nloc + i))
                                                      (elem fs wknames ? 2 1)         ; stb_weak vs stb_global
-                                                     2 <w (<>w | 1))))                    ; stt_func, +thumb bit
+                                                     2 <w (<>w | 1) 0)))                    ; stt_func, +thumb bit
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (: w (o-place gs)
-                                            (o-sym32 (stroffs (nloc + nfun + i))
-                                                     (elem gs wknames ? 2 1) 1 <w <>w)))
+                                            (elf-sym32 (stroffs (nloc + nfun + i))
+                                                     (elem gs wknames ? 2 1) 1 <w <>w 0)))
                                  globnames))
            ; a weak undef resolves to zero at static link, where a strong one is an
            ; error -- the binding is the whole difference
-           esyms (catall (o-mapi (\ i e (o-sym32 (stroffs (nloc + nfun + nglob + i))
-                                                 (o-has? wkset e ? 2 1) 0 0 0))
+           esyms (catall (o-mapi (\ i e (elf-sym32 (stroffs (nloc + nfun + nglob + i))
+                                                 (o-has? wkset e ? 2 1) 0 0 0 0))
                                  exts))
-           ssyms (catall (o-mapi (\ i l (o-sym32 0 0 3 (i + 1) 0)) lanes))
-           (catall [(o-sym32 0 0 0 0 0) ssyms lsyms fsyms gsyms esyms]))    ; the NULL symbol leads
+           ssyms (catall (o-mapi (\ i l (elf-sym32 0 0 3 (i + 1) 0 0)) lanes))
+           (catall [(elf-sym32 0 0 0 0 0 0) ssyms lsyms fsyms gsyms esyms]))    ; the NULL symbol leads
        nsym (1 + nsec + nloc + nfun + nglob + #exts)
        ; -- the relocations, one emitter dispatching on the fixup's kind. --
        ; a branch's target is a symbol, never a section+offset: the thumb bit rides the
@@ -314,15 +306,15 @@
        shs-off <>ro               shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
        sht (catall ([(o-zeros 40)]                                             ; 0 NULL
-              + (o-mapi (\ i l (sh32 (shname i) (ln-ty l) (l 2)             ; 1..nsec the content sections
-                                     (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
+              + (o-mapi (\ i l (elf-shdr32 (shname i) (ln-ty l) (l 2)             ; 1..nsec the content sections
+                                     0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
                         lanes)
-              + [(sh32 (shname nsec) 2 0 sym-off sym-sz i-str (1 + nsec + nloc) 4 16)   ; .symtab link=.strtab info=first-global
-                 (sh32 (shname (nsec + 1)) 3 0 str-off str-sz 0 0 1 0)]                   ; .strtab
-              + (o-mapi (\ i l (sh32 (shname (nsec + 2 + i)) 9 0                        ; one .rel per section, link=.symtab
-                                     (roffs i) (rcnt i * 8) i-sym (i + 1) 4 8))
+              + [(elf-shdr32 (shname nsec) 2 0 0 sym-off sym-sz i-str (1 + nsec + nloc) 4 16)   ; .symtab link=.strtab info=first-global
+                 (elf-shdr32 (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                   ; .strtab
+              + (o-mapi (\ i l (elf-shdr32 (shname (nsec + 2 + i)) 9 0                        ; one .rel per section, link=.symtab
+                                     0 (roffs i) (rcnt i * 8) i-sym (i + 1) 4 8))
                         lanes)
-              + [(sh32 (shname (2 * nsec + 2)) 3 0 shs-off shs-sz 0 0 1 0)]))           ; .shstrtab
+              + [(elf-shdr32 (shname (2 * nsec + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))           ; .shstrtab
        hdr (catall [
              '(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)                      ; e_ident: \x7fELF 32-bit LSB
              (le16 1) (le16 machine) (le32 1)                             ; et_rel, EM_ARM, version
@@ -496,29 +488,29 @@
        (o-place nm) (: w (o-where lanes (name nm)) (two? w ? w '(1 0)))
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local func
-                                            (o-sym (stroffs i) 0 2 <w <>w)))
+                                            (elf-sym (stroffs i) 0 2 <w <>w 0)))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (: w (o-place fs)
-                                            (o-sym (stroffs (nloc + i))
+                                            (elf-sym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak: a strong def elsewhere wins
-                                             2 <w <>w)))
+                                             2 <w <>w 0)))
                                  funcnames))
            ; a data symbol honours wknames too: musl defines __stdout_used weakly so
            ; stdout.c's real one wins, where a strong binding makes the pair a link-dup
            gsyms (catall (o-mapi (\ i gs (: w (o-place gs)
-                                            (o-sym (stroffs (nloc + nfun + i))
-                                                   (elem gs wknames ? 2 1) 1 <w <>w)))
+                                            (elf-sym (stroffs (nloc + nfun + i))
+                                                   (elem gs wknames ? 2 1) 1 <w <>w 0)))
                                  globnames))
            ; an external symbol honours wknames too: a weak undefined reference
            ; resolves to zero at static link (musl's _DYNAMIC), where a strong
            ; one is an error -- the binding is the whole difference
-           esyms (catall (o-mapi (\ i e (o-sym (stroffs (nloc + nfun + nglob + i))
-                                               (o-has? wkset e ? 2 1) 0 0 0))
+           esyms (catall (o-mapi (\ i e (elf-sym (stroffs (nloc + nfun + nglob + i))
+                                               (o-has? wkset e ? 2 1) 0 0 0 0))
                                  exts))
            ; one stt_section symbol per section, in section order -- a relocation
            ; against a label defined here binds its section's symbol + offset
-           ssyms (catall (o-mapi (\ i l (o-sym 0 0 3 (i + 1) 0)) lanes))
-           (catall [(o-sym 0 0 0 0 0) ssyms lsyms fsyms gsyms esyms]))    ; the NULL symbol leads
+           ssyms (catall (o-mapi (\ i l (elf-sym 0 0 3 (i + 1) 0 0)) lanes))
+           (catall [(elf-sym 0 0 0 0 0 0) ssyms lsyms fsyms gsyms esyms]))    ; the NULL symbol leads
        nsym (1 + nsec + nloc + nfun + nglob + #exts)
 
        ; -- the relocations, one emitter dispatching on the fixup's kind, never on the
@@ -600,20 +592,16 @@
        shs-off <>ro             shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
 
-       ; a 64-byte section header
-       (sh nameoff typ flags off sz link info align entsz)
-        (catall [(le32 nameoff) (le32 typ) (le64 flags) (le64 0)
-                  (le64 off) (le64 sz) (le32 link) (le32 info) (le64 align) (le64 entsz)])
        sht (catall ([(o-zeros 64)]                                         ; 0 NULL
-              + (o-mapi (\ i l (sh (shname i) (ln-ty l) (l 2)           ; 1..nsec the content sections
-                                   (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
+              + (o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2)           ; 1..nsec the content sections
+                                   0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
                         lanes)
-              + [(sh (shname nsec) 2 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
-                 (sh (shname (nsec + 1)) 3 0 str-off str-sz 0 0 1 0)]                    ; .strtab
-              + (o-mapi (\ i l (sh (shname (nsec + 2 + i)) 4 0                          ; one .rela per section, link=.symtab
-                                   (roffs i) (rcnt i * 24) i-sym (i + 1) 8 24))
+              + [(elf-shdr (shname nsec) 2 0 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
+                 (elf-shdr (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                    ; .strtab
+              + (o-mapi (\ i l (elf-shdr (shname (nsec + 2 + i)) 4 0                          ; one .rela per section, link=.symtab
+                                   0 (roffs i) (rcnt i * 24) i-sym (i + 1) 8 24))
                         lanes)
-              + [(sh (shname ((2 * nsec) + 2)) 3 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
+              + [(elf-shdr (shname ((2 * nsec) + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
 
        hdr (catall [
              '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)                      ; e_ident: \x7fELF 64-bit LSB

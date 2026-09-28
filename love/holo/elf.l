@@ -19,6 +19,18 @@
    ; canonical keys only (love/boot/prel.l's arch-canon): every spelling anyone types is
    ; already one of these by the time a target reaches holo, so a second alias here would
    ; be a second place to keep in step.
+   ;; the table records: Elf64_Sym (24 bytes) and Elf64_Shdr (64), and the elf32 twins (16
+   ;; and 40). Elf32_Sym puts st_value and st_size ahead of st_info/st_other/st_shndx.
+   (elf-sym nameoff bind typ shndx value size)
+    (catall [(le32 nameoff) [((bind << 4) | typ) 0] (le16 shndx) (le64 value) (le64 size)])
+   (elf-shdr nm ty fl ad off sz lk inf al es)
+    (catall [(le32 nm) (le32 ty) (le64 fl) (le64 ad) (le64 off) (le64 sz)
+             (le32 lk) (le32 inf) (le64 al) (le64 es)])
+   (elf-sym32 nameoff bind typ shndx value size)
+    (catall [(le32 nameoff) (le32 value) (le32 size) [((bind << 4) | typ) 0] (le16 shndx)])
+   (elf-shdr32 nm ty fl ad off sz lk inf al es)
+    (catall [(le32 nm) (le32 ty) (le32 fl) (le32 ad) (le32 off) (le32 sz)
+             (le32 lk) (le32 inf) (le32 al) (le32 es)])
    elf-machines {'x64 62 'a64 183
                  'thumb1 40 'thumb2 40 'thumb2sp 40 'arm 40    ; EM_ARM
                  'rv64 243}                                  ; em_rv64
