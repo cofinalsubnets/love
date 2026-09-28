@@ -3,17 +3,7 @@
 // and a coder and a decoder that disagree there disagree about the format. apps/gz.l's
 // gz-lbase/gz-lext/gz-dbase/gz-dext say the same numbers in love.
 #include "love.h"
-// an unaligned little-endian read, where the machine takes one in a single instruction --
-// mooncc lays a byte gather as eight loads and as many shifts and ors. the caller owns the
-// bound: these read their full width.
-#if defined(__x86_64__) || defined(__aarch64__)
-#define ai_wideld 1
-struct ai_u64u { uint64_t v; } __attribute__((packed, aligned(1)));
-#define ai_ld64(p) (((struct ai_u64u const*)(p))->v)
-#define ai_st64(p, x) (((struct ai_u64u*)(p))->v = (x))
-#else
-#define ai_wideld 0
-#endif
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -47,14 +37,11 @@ static const uint8_t gz_clord[19] = {
 // allocated once. a positive n is believed and verified; a wrong or absent one costs a
 // counting pass first, which is the decode with the stores dropped.
 // eight unaligned bytes as a word, little-endian by construction, once per symbol --
-// love.h's ai_ld64 where the machine takes one load, the byte gather where it does not.
+// bytes.h's ai_ld64 where the machine takes one load, the byte gather where it does not.
 #if ai_wideld
 #define LD64(p) ai_ld64(p)
 #else
-#define LD64(p) ((uint64_t) (p)[0]       | (uint64_t) (p)[1] <<  8 \
-               | (uint64_t) (p)[2] << 16 | (uint64_t) (p)[3] << 24 \
-               | (uint64_t) (p)[4] << 32 | (uint64_t) (p)[5] << 40 \
-               | (uint64_t) (p)[6] << 48 | (uint64_t) (p)[7] << 56)
+#define LD64(p) ld64le(p)
 #endif
 
 // the table roots. a code longer than its root falls through to the bit walk, so these

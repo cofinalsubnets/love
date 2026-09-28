@@ -21,6 +21,7 @@
 // them; only the published vectors in test/digest.l and GNU coreutils in
 // test/gate/kore.sh hold them honest. the fix for that thin rope is a love sha-256.
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -78,14 +79,6 @@ static uint8_t const MS[64] = {
 static uint32_t rr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
 static ai_inline uint32_t rl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
 static ai_inline uint64_t rr64(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
-
-static uint32_t ld32be(const uint8_t *p) {
- return (uint32_t) p[0] << 24 | (uint32_t) p[1] << 16 | (uint32_t) p[2] << 8 | p[3]; }
-static uint64_t ld64be(const uint8_t *p) { return (uint64_t) ld32be(p) << 32 | ld32be(p + 4); }
-static uint64_t ld64le(const uint8_t *p) {
- uint64_t v = 0;
- for (int k = 7; k >= 0; k--) v = v << 8 | p[k];
- return v; }
 
 static void sha_block(uint32_t h[8], const uint8_t *p) {
  uint32_t w[64];
@@ -422,14 +415,11 @@ static void crc_init(void) {
   for (k = 1; k < 8; k++) { c = crc_t[0][c & 0xff] ^ (c >> 8); crc_t[k][i] = c; } }
  crc_ready = 1; }
 
-#define LD32(p) ((uint32_t) (p)[0] | (uint32_t) (p)[1] << 8 \
-               | (uint32_t) (p)[2] << 16 | (uint32_t) (p)[3] << 24)
-
 // the register walk; c is the register, complemented on the way in and out by its callers
 static uint32_t crc32_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  if (!crc_ready) crc_init();
  for (; n >= 8; p += 8, n -= 8) {
-  uint32_t a = c ^ LD32(p), b = LD32(p + 4);
+  uint32_t a = c ^ ld32le(p), b = ld32le(p + 4);
   c = crc_t[7][a & 0xff] ^ crc_t[6][(a >> 8) & 0xff]
     ^ crc_t[5][(a >> 16) & 0xff] ^ crc_t[4][a >> 24]
     ^ crc_t[3][b & 0xff] ^ crc_t[2][(b >> 8) & 0xff]
@@ -465,17 +455,13 @@ static lvm(lvm_crc32_on) {
 // ck_bit is the statement of the polynomial, and it is the table's only source -- the
 // walk below is derived from it, not a second spelling of it. the tables are worth their
 // space: bit-at-a-time is 8 shifts and a branch a byte, 3.5 s of a 3.9 s run over 100 MB.
-static uint32_t ck_bit(uint32_t c, uint8_t b) {
- c ^= (uint32_t) b << 24;
- for (int k = 0; k < 8; k++) c = (c & 0x80000000u) ? (c << 1) ^ 0x04c11db7u : c << 1;
- return c; }
 
 static uint32_t ck_t[8][256];
 static int ck_ready;
 
 static ai_noinline void ck_init(void) {
  unsigned i, k;
- for (i = 0; i < 256; i++) ck_t[0][i] = ck_bit(0, (uint8_t) i);
+ for (i = 0; i < 256; i++) ck_t[0][i] = crc_msb(0, (uint8_t) i);
  for (i = 0; i < 256; i++) {                    // table k is table 0 shifted k bytes on
   uint32_t c = ck_t[0][i];
   for (k = 1; k < 8; k++) {
@@ -483,15 +469,12 @@ static ai_noinline void ck_init(void) {
    ck_t[k][i] = c; } }
  ck_ready = 1; }
 
-#define LD32BE(p) ((uint32_t) (p)[0] << 24 | (uint32_t) (p)[1] << 16 \
-                 | (uint32_t) (p)[2] << 8  | (uint32_t) (p)[3])
-
 // eight bytes at a time, the same trade crc32 takes above: eight independent lookups
 // the machine can overlap, against a dependency chain one link per byte.
 static uint32_t ck_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  if (!ck_ready) ck_init();
  for (; n >= 8; p += 8, n -= 8) {
-  uint32_t a = c ^ LD32BE(p), b = LD32BE(p + 4);
+  uint32_t a = c ^ ld32be(p), b = ld32be(p + 4);
   c = ck_t[7][(a >> 24) & 0xff] ^ ck_t[6][(a >> 16) & 0xff]
     ^ ck_t[5][(a >> 8) & 0xff]  ^ ck_t[4][a & 0xff]
     ^ ck_t[3][(b >> 24) & 0xff] ^ ck_t[2][(b >> 16) & 0xff]

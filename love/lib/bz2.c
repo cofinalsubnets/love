@@ -6,6 +6,7 @@
 // move-to-front with the zero runs in RUNA/RUNB, and 2..6 huffman tables refined four times.
 #ifndef BZ_STANDALONE
 #include "love.h"
+#include "bytes.h"
 #endif
 #include <stdint.h>
 #include <string.h>
@@ -17,11 +18,8 @@
 #define BZ_MAXSEL (2 + 900000 / BZ_GSIZE)
 #define BZ_FAST 10                               // the decode table's root, in bits
 
-static void bz_crcs(uint32_t *t) {               // CRC-32/BZIP2: msb first
- for (uint32_t i = 0; i < 256; i++) {
-  uint32_t c = i << 24;
-  for (int k = 0; k < 8; k++) c = c & 0x80000000u ? c << 1 ^ 0x04c11db7u : c << 1;
-  t[i] = c; } }
+static void bz_crcs(uint32_t *t) {               // CRC-32/BZIP2: cksum's msb-first register
+ for (uint32_t i = 0; i < 256; i++) t[i] = crc_msb(0, (uint8_t) i); }
 
 // --- a growing byte sink, msb-first bits -----------------------------------------------------
 struct bz_w { uint8_t *p; uintptr_t n, cap; uint64_t acc; unsigned k; int bad; };
