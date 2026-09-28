@@ -646,11 +646,11 @@ never silent**.
 | by-value composite arg, MEMORY class | ✓ | — | — | — | — | — |
 | composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
 | composite NAMED in a variadic parameter list | ✓ | ✓ | — | — | — | — |
-| composite return, 16B all-int | ✓ | ✓ | ✓ | — | — | ✓ |
-| composite return, MEMORY class | ✓ | — | — | — | — | ✓ |
+| composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| composite return, MEMORY class | ✓ | — | — | ✓ | ✓ | ✓ |
 | `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
 | `__sync` spin-lock pair | ✓ | ✓ | ✓ | — | — | — |
-| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | — | — | rt.c |
+| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | rt.c | rt.c | rt.c |
 | 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | rt.c |
 | `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c |
 
@@ -674,11 +674,12 @@ gcc's libgcc.a answered them until 2026-09-10 and rides no board link now. A cal
 LINK-time dependency, invisible to a compile: it shows up as an undefined `__aeabi_*` in the
 object, which is how the table finds it. Everywhere else the lane is ours or there is no lane.
 
-**The two struct rows do not move together, and thumb1 inverts them.** v6-M returns *any*
-struct over 4 bytes through memory (`sretm?`), so thumb1 takes both composite returns while
-refusing every composite *argument*; a64 and rv64 are the mirror image, taking arguments
-and the 16B return but refusing the MEMORY-class return — which is what stops PDCLib's dlmalloc
-on the cross targets.
+**The two struct rows do not move together, and t32 inverts them.** AAPCS32 returns a
+struct over 4 bytes through memory (`sretm?`) -- every one on v6-M, and on thumb2/thumb2sp
+every one that is no VFP HFA (at most four of one float type, which the s/d file carries) --
+so t32 takes both composite returns while refusing the int composite *argument*; a64 and rv64
+are the mirror image, taking arguments and the 16B return but refusing the MEMORY-class
+return — which is what stops PDCLib's dlmalloc on the cross targets.
 
 **The register-exhausted by-value composite is x64-only, and even there only the gp half.**
 A 9..16B aggregate argument with too few *integer* registers left now goes wholly to the
@@ -699,19 +700,14 @@ also takes — probe the one you mean.
 - **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
   not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
   doubles/pairs/structs across a t32 VARIADIC seam. love.c reaches none of them.
-- **a 16B all-int composite RETURN on t32** refuses on thumb2 and thumb2sp; a64, rv64 and
-  x64 all take it. the probe must DEFINE one, not declare it —
-  `typedef struct {int a,b,c,d;} R; static R mk(int x){ R r = {x,x,x,x}; return r; }` plus a
-  caller; a bare prototype compiles everywhere. AAPCS32 wants the hidden-pointer memory
-  return the v6-M lane already implements (`sretm?`); thumb2 has no such lane. It is NOT what
-  stops the Playdate SDK header — `mooncc -t thumb2sp -c` compiles `pd_api.h` clean, and the
-  `LCDMakeRect` this note used to cite is in no shipped SDK.
+- **a memory-returning call through a POINTER on t32** — `no lane for an indirect call to a
+  MEMORY-returning function`: the direct call stages the hidden pointer, the indirect one
+  does not yet. test/thumb2/libr.c is the direct lane's differential against gcc.
 - **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this
   80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
   definition that returns one; a bare prototype compiles everywhere.
-- **signed 64-bit `/` and `%` on thumb2 and thumb2sp** refuse (`cgfn refuses`) — love.c's lane
-  is unsigned; wrap the unsigned expansion in an abs/refix sleeve when needed. thumb1 answers
-  it, through the runtime's own `__divdi3`/`__moddi3` (apps/moon/lib/rt.c).
+- **signed 64-bit `/` and `%` on t32** call out to the runtime's own `__divdi3`/`__moddi3`
+  (apps/moon/lib/rt.c) on all three targets.
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
