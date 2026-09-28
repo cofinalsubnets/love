@@ -61,6 +61,8 @@
    (xa-regname o) (xa-names (<>o * 32 + <>>o))
    (xa-gpr? o) (<o = 'rg && <>>o < 16)
    (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && digit? (s 2) ? ['cr (s 2 - 48)] ())   ; a control register
+   (xa-sr s) (: (go l i) (? !(two? l) () (<l = s) ['sr i] (go >l (i + 1)))   ; a segment register, es..gs = 0..5
+              (go '("es" "cs" "ss" "ds" "fs" "gs") 0))
    ;; an immediate written as a C expression, `~(1 << 2)` -- the lexer and gimm below evaluate it
    (xa-expr? v) (#v > 0 && (v 0 = 40 || v 0 = 126 || ((v 0 = 45 || v 0 = 43) && #v > 1 && (v 1 = 40 || v 1 = 126))))
 
@@ -270,7 +272,8 @@
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (: c (xa-idx t 58) o (at-operand (snip t (c + 1) #t))
                                        ['seg (name (snip t 1 c)) (<o = 'abs ? ['mem -1 -1 1 <>o] o)])
-         (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) (two? cr ? cr (at-reglook nm)))
+         (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) sr (xa-sr nm)
+                       (? (two? cr) cr (two? sr) sr (at-reglook nm)))
          (t 0 = 36) (: v (snip t 1 #t)
                       (? (xa-num? v) ['im (xa-num v)]
                          (xa-expr? v) ['im (gimm (gtoks v))]
@@ -319,6 +322,7 @@
    (at-op o)
       (<o @ 'rg ("%" + xa-regname o)
             'cr ("%cr" + show <>o)
+            'sr ("%" + snip "escsssdsfsgs" (2 * <>o) (2 * <>o + 2))
             'im ("$" + show <>o)
             'ims ("$" + show <>o)
             'lbl (show <>o)
@@ -439,6 +443,7 @@
    (in-op mn w o k)
       (<o @ 'rg (xa-regname o)
             'cr ("cr" + show <>o)
+            'sr (snip "escsssdsfsgs" (2 * <>o) (2 * <>o + 2))
             'im (show <>o)
             'ims ("OFFSET FLAT:" + show <>o)
             'lbl (show <>o)
