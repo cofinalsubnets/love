@@ -116,7 +116,7 @@
    ; almost nothing. a flagged pattern prints the way the source spells it --
    ; that is what untagged means -- so the line is found by looking its text up
    ; in the source, and the count says how many sites share the spelling.
-   (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ()))
+   (rdf p) (uread p @ [1 t] t ())
    (bare s) (: n (tally s)                       ; the line's first non-blank
                (g i) (? (n <= i) 32 (: c (s i) (? (|| (c = 32) (c = 9)) (g (i + 1)) c)))
                (g 0))

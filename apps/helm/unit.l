@@ -40,7 +40,7 @@
           'restart 'one 'tries 'one 'log 'one 'dir 'one}
 
    ; --- reading ---------------------------------------------------------------
-   (hslurp path) (: q (open path "r") (? !q () (: t (slurp q) _ (close q) t)))
+   (hslurp path) (uread path @ [1 t] t ())
    ; text -> [forms torn?]. a dropped paren hides every unit under it, so it is
    ; answered and not swallowed.
    (hforms t)

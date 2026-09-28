@@ -466,7 +466,7 @@
        r (? has (hark [p "nest" "--stamp"]) [1 ""])
        v (? (<r = 0) <(sound >r) 0)
        (? (charm? v) v 0))
-   (nest-read p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) (s + "")) ()))
+   (nest-read p) (uread p @ [1 s] (s + "") ())
    ; the tools a symlink to love serves by its own name, the argv[0] door
    nest-tools ["lush" "kore" "sb" "cook" "libra" "mooncc" "ain"]
    ; lux is a script over love, so it is written beside it, not linked: the modules the

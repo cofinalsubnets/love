@@ -43,7 +43,7 @@
 
 (borrow 'posix)
 (:
-   (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, string? s && [1 s]))))
+   (sv-rdf p) (uread p @ [1 s] (string? s && [1 s]) ())
    ; the directory a path sits in, as a link back up: "/a/b/c.l" -> "/a/b/"
 
    ; the cache key: an edit that moves neither mtime nor size is one nobody can see

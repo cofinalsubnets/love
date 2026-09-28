@@ -115,5 +115,5 @@
                                    (gain (pure 0.6)))))
                      bs))
    (stack [mel low]))
- (score-file p) (: q (open p "r") (? (hot? q) (: s (slurp q) (close q, score-lines s)) ())))
+ (score-file p) (uread p @ [1 s] (score-lines s) ()))
 ) ; module score
