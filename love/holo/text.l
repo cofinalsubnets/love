@@ -21,12 +21,8 @@
 (borrow 'peg)
 
 (: ;; -- byte-class predicates (the combinator leaves feed a parser one byte at a time). --
-   (txws?  c) (c = 32 || c = 9)                             ; space / tab
-   (txsep? c) (txws? c || c = 44)                             ; ... or a comma, between operands
-   (txdig? c) (48 <= c <= 57)
-   (txidc? c) (97 <= c <= 122 ||                     ; a-z
-               65 <= c <= 90 ||                      ; a-z
-               txdig? c || c = 95 || c = 45)                ; 0-9 _ -  (kebab labels welcome)
+   (txsep? c) (blank? c || c = 44)                             ; ... or a comma, between operands
+   (txidc? c) (alnum? c || c = 95 || c = 45)                ; _ and - too (kebab labels welcome)
 
    ;; -- small string helpers (a payload piece is a one-char string from `one` or a substring
    ;; from `span`, so `+` joins either by plain concat). --
@@ -36,7 +32,7 @@
 
    ;; -- the line grammar. a token is at least one char (so `many` can't twirl on the empty match). --
    txtsym (pmap (\ x [(name (txjoin x))]) (seq (one txidc?) (span txidc?)))
-   txtnum (pmap (\ x [(txnum x)]) (seq (opt (lit "-")) (seq (one txdig?) (span txdig?))))
+   txtnum (pmap (\ x [(txnum x)]) (seq (opt (lit "-")) (seq (one digit?) (span digit?))))
    txop   (alt txtnum txtsym)                                   ; an operand: number first, else symbol
    txgap  (skip (span txsep?))                                  ; a run of spaces/commas, dropped
    txline (seq txtsym (many (seq txgap txop)))                  ; head symbol then operands -> one form
@@ -45,8 +41,8 @@
    (txdecomment s) (: n #s
       ((: (g i) (? (i >= n) s (s i = 59) (snip s 0 i) (g (i + 1)))) 0))
    (txtrim s) (: n #s
-      a ((: (gl i) (? (i < n && txws? (s i)) (gl (i + 1)) i)) 0)
-      b ((: (gr j) (? (j > a && txws? (s (j - 1))) (gr (j - 1)) j)) n)
+      a ((: (gl i) (? (i < n && blank? (s i)) (gl (i + 1)) i)) 0)
+      b ((: (gr j) (? (j > a && blank? (s (j - 1))) (gr (j - 1)) j)) n)
       (snip s a b))
    (txsplit s) (: n #s
       ((: (g i start acc)

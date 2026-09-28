@@ -69,6 +69,16 @@
    (le64 n)  (: u (u64 n) ((: (go i) (? (i < 8) (((u // i 256) % 256) . go (i + 1)) ())) 0))   ; 8 LE bytes via //%
    (u64 n) (n < 0 ? (n + 18446744073709551616) n)                     ; two's-complement into [0,2^64)
    (s64 n) (n > 9223372036854775807 ? (n - 18446744073709551616) n)   ; a u64 pattern as the signed value it encodes
+   ;; a 32-bit thumb instruction: two halfwords, the high one first, each little-endian
+   (t32 w) (le16 (w >> 16) + le16 (w & 65535))
+   ;; the wide thumb branch, byte offset o: S:J1:J2:imm10:imm11 with i1=~(J1^S), i2=~(J2^S);
+   ;; hw2's base says which -- 0xd000 BL, 0x9000 B.W
+   (tbw o base)
+      (: imm11 ((o >> 1) & 2047)  imm10 ((o >> 12) & 1023)
+         i2 ((o >> 22) & 1)  i1 ((o >> 23) & 1)  s ((o >> 24) & 1)
+         j1 (((i1 ^ 1) ^ s) & 1)  j2 (((i2 ^ 1) ^ s) & 1)
+         (t32 (((0xF000 | ((s << 10) | imm10)) << 16) | (base | ((j1 << 13) | ((j2 << 11) | imm11))))))
+   (blank? c) (c = 32 || c = 9)                      ; a lexer's space or tab; a newline ends the line
    (fits8  n) ((n >= -128) && (n <= 127))
    (fits32 n) ((n >= -2147483648) && (n <= 2147483647))
    ;; IR condition -> the 4-bit arm cond field, one encoding for a64, thumb2 and thumb1.
