@@ -165,7 +165,7 @@ int main(void) {
   uintptr_t cl[1] = { (uintptr_t) fd };
   sh_call(SH_CLOSE, (uintptr_t) cl);
   uintptr_t t0 = ai_clock();
-  struct ai *g = ai_image_load(buf, len);
+  struct ai *g = ai_image_load(buf, len, 0);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
   g = ai_defn(g, defs, countof(defs));
   if (ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {   // born: this wake's cost
@@ -269,7 +269,7 @@ int main(void) {
   // round-trip PROOF before the file exists: wake the buffer we just dumped
   // and run a law through the woken heap. (same-binary wake -- the cross-
   // binary truth is the teensy's -- but it catches every codec desync here.)
-  struct ai *g2 = ai_image_load(img, len);
+  struct ai *g2 = ai_image_load(img, len, 0);
   if (!g2) { sh_puts("; round-trip load FAILED\n"); m7_exit(7); }
   struct ai *r2 = ai_evals_(g2,
     "(: _ (? "

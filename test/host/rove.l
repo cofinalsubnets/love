@@ -86,7 +86,10 @@
  ("abc" = fit "abcdef" 3)                             ; a row is cut to fit
  (find (fit "a {b} c" 40) "38;5;201" 0)               ; the token's pen goes on
  (find (fit "{abcde}" 5) "abcde" 0)                   ; ..and an escape costs no width
- !(find (fit "{abcde}" 3) "abcde" 0))                 ; ..so the cut is still honest
+ !(find (fit "{abcde}" 3) "abcde" 0)                  ; ..so the cut is still honest
+ ("日本" = fit "日本語" 5)                               ; a wide character is two cells, and
+ ("a" = fit "a日" 2)                                   ; ..one that would cross the edge stays off
+ (4 = vlen "{日本}"))
 
 ; --- the climb on a hand floor: every verb of the game, deterministic ---
 (: (hand-g _) (: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms [[1 1 3 3] [5 1 3 3]]}

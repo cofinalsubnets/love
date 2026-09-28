@@ -203,7 +203,7 @@ int main(void) {
   // answers NULL and the egg lane below bakes from source as always.
   uintptr_t t0 = ai_clock();
   struct ai *g = ai_image_load(_binary_love_img_start,
-                               (uintptr_t)(_binary_love_img_end - _binary_love_img_start));
+                               (uintptr_t)(_binary_love_img_end - _binary_love_img_start), 0);
   int woke = g != NULL;
   { char const *s = woke ? "; image awake\r\n" : "; no image -- baking the egg\r\n";
     for (; *s; s++) serial_putc(*s); }

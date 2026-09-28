@@ -162,3 +162,20 @@
 (: dq '(: (s n) (foldl (+) 0 (map (\ x (* x x)) (jot n))) (s 100))
    _ (test (328350 = ev dq))
    0)
+; (t 'k) in an ambled body probes a tablet inline: a hit, a miss (), a key of the other kind in
+; the same table, a grown table, and a callee that is no tablet all answer as the interpreter does
+(: ks ['a 'b 'c 'link 'type 'width 'height 'depth 'glue 'font 'char 'sub 'id 'x 'y 'z 'shift 'list]
+   (gz-reads l acc) (? (atom? l) (rev acc) (: t <l (gz-reads >l ([(t 'a) (t 'link) (t 'z) (t 'id)] . acc))))
+   (gz-mk n) (: t {} _ (map (k \ pin t (ks (k % #ks)) (k * 7)) ^n) _ (pin t 3 'three) t)
+   got (gz-reads (map gz-mk [0 1 8 18 40] + [(k \ [k 1]) "s" [1 2]]) ())
+   _ (test (got = [[() () () ()] [0 () () ()] [0 21 () ()] [0 21 105 84] [252 273 231 210]
+                   [['a 1] ['link 1] ['z 1] ['id 1]] ["sa" "slink" "sz" "sid"] [() () () ()]]))
+   0)
+; a loop hoisted out of a fn lands right behind it, where a later value binding calling the fn
+; finds it; and a hoisted loop the letrec answers as a value is the hoisted one, partially applied
+; to what it captures
+(: (gzo-f x) (x + 1)
+   (gzo-s n) (: gzo-f (\ x (x * 10)) (h y acc) (? (y = 0) acc (h (y - 1) (acc + gzo-f y))) (h n 0))
+   (gzo-v n) (: (h y acc) (? (y = 0) acc (h (y - 1) (acc + y + n))) h)
+   _ (test (gzo-s 4 = 100) ((gzo-v 0) 4 0 = 10) ((gzo-v 2) 4 0 = 18))
+   0)

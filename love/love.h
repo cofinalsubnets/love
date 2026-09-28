@@ -515,7 +515,7 @@ struct ai_image_bad { uintptr_t q[3 * 2]; int n, why; };
 // the running stack is ballast: its objects ride into the blob and the load side resets sp/ip
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_bad*);
 struct ai
- *ai_image_load(void const *buf, uintptr_t len);
+ *ai_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session
 
 // the terminal scare face: ";; a b\n" (show forms) to the err port from the stashed
 // condition data; the bare oom prints ";; oom@len=N\n".
@@ -704,7 +704,8 @@ lvm_t lvm_kcall,
  lvm_nifx,        // ... with an extras word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the plain twin and the image revert (img_nif_interp) never dereferences a pack
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reaches them through g->reach)
  lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
- lvm_natp;        // (nat? f): is f a native closure -- its code in the arena
+ lvm_natp,        // (nat? f): is f a native closure -- its code in the arena
+ lvm_lazy;        // a woken native's entry, until its chunk of the image's code is seated
 // the attributes are the declaration: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both.
 ai_noinline ai_noicf lvm_t
@@ -1100,7 +1101,9 @@ extern uintptr_t const ai_def1_n;
 extern union u const callout_drive[], callout_resume[];
 extern union u const yield_c[];
 struct ai_bio *bio_of(struct ai *g, struct ai_io *i);
-char *code_install(struct ai *g, char const *src, size_t n), *code_adopt(struct ai *g, char const *src, size_t n);
+char *code_install(struct ai *g, char const *src, size_t n), *code_adopt(struct ai *g, char const *src, size_t n),
+     *code_lazy(struct ai *g, size_t n, unsigned char const *z, size_t nz, unsigned char const *tab, uintptr_t nch, int kept);
+int code_seat(struct ai *g, char const *a);
 char *ai_code_window(char *p);
 void code_free(struct ai *g, char *code), code_fin(struct ai *g);
 int code_in(struct ai *g, uintptr_t v);
@@ -1110,7 +1113,7 @@ intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i);
 int ai_nif_cell(union u const *k);
 size_t code_len(char *code);
 // the reach (g->reach): what a native reaches through g instead of carrying -- the emitter's `reach` law names them the same
-enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc };
+enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap };
 union u *fn_base(union u *k, int *nargs);
 struct ai
  *ai_eval(struct ai *g),

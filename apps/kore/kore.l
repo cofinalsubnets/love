@@ -983,7 +983,7 @@
     'mac2unix "usage: mac2unix [-fkqn] [FILE..]"
     'man "usage: man [-w] [SECTION] NAME.."
     'html2text "usage: html2text [-w COLS] [FILE..]"
-    'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
+    'markdown "usage: markdown [-t html|roff|text|dvi] [-w COLS] [FILE..]"
     'www "usage: www [-w COLS] URL|FILE"
     'pic "usage: pic [-w COLS] [-h ROWS] [FILE..]"
     'picless "usage: picless FILE.."
@@ -1109,7 +1109,7 @@ every tool answers --help and --version, and -h where the letter is free
   less | more [-Nise] [+N|+/PAT] [F..]    the pager (apps/kore/less.l); h is its help
   man [-w] [SECTION] NAME..               the manual pages (apps/kore/man.l)
   html2text [-w COLS] [F..]               a page's prose, laid out (apps/kore/lens.l)
-  markdown [-t html|roff|text] [F..]      markdown laid out the other way
+  markdown [-t html|roff|text|dvi] [F..]  markdown laid out the other way
   www [-w COLS] URL|FILE                  a web page, its links numbered (apps/kore/www.l)
   pic [-w COLS] [-h ROWS] [F..]           png, jpeg, gif in cells (apps/kore/pic.l); pngcat ..
   picless F..                             a picture viewer, a gif played; pngless gifless ..

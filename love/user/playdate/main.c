@@ -168,7 +168,7 @@ void love_init(void) {
   { enum { imgcap = 2u << 20 };
     void *ib = pdg_realloc(NULL, imgcap);
     int n = ib ? pdg_file_read("love-pd.img", ib, imgcap) : -1;
-    if (n > 0) g0 = ai_image_load(ib, (uintptr_t) n);
+    if (n > 0) g0 = ai_image_load(ib, (uintptr_t) n, 0);
     if (ib) pdg_realloc(ib, 0); }
   int woke = g0 != NULL;
   pdg_log(woke ? "love: image awake" : "love: no image -- baking the egg");

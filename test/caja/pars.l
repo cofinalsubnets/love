@@ -8,69 +8,23 @@
 ; the fonts are boxes.l's and cajalig, test/caja/cajalig.pl through pltotf, which TeX must
 ; find beside OUT.tex
 ;
-; the tokens are par.l's; 'set takes a parameter, a glue one as [w st sto sh sho]
+; the tokens are par.l's, and so is their TeX spelling (cp-tex)
 (: _ (borrow 'posix)
    _ (borrow "apps/tfm.l")
    _ (borrow "apps/caja/box.l")
    _ (borrow 'caja-box)
    _ (borrow "apps/caja/par.l")
    _ (borrow 'caja-par)
+   _ (borrow "apps/caja/page.l")
+   _ (borrow 'caja-page)
    (die m) (: _ (say err ("pars: " + m + "\n")) _ (flush err) (quit 1))
    (slurpf p) (uread p @ [1 x] (x + "") (die ("cannot read " + p)))
    (spit p s) (: q (open p "w") (? (hot? q) (: _ (say q s) (close q)) (die ("cannot write " + p))))
 
    fonts [["cmr10" -1000] ["cmbx12" -1000] ["cmr10" 478413] ["cmtt10" 1310720] ["cmsl9" -1000]
           ["ecrm1000" -1000] ["cajalig" -1000]]
-   (fname k) ("\\f" + string (97 + k))
+   (fname k) ("\\f" + string (96 + k))
    sfcodes [[46 3000] [63 3000] [33 3000] [58 2000] [59 1500] [44 1250] [41 0] [39 0] [93 0]]
-   glues ['leftskip 'rightskip 'parfillskip 'baselineskip 'lineskip 'parskip 'spaceskip 'xspaceskip]
-   dims ['hsize 'parindent 'emergencystretch 'hangindent 'lineskiplimit 'overfullrule]
-
-   ; --- the TeX side ---------------------------------------------------------------------------
-   (units o) (["sp" "fil" "fill" "filll"] o)
-   (amt v o) (? (o = 0) (show v + "sp")
-                (: whole (v // 65536) frac (v % 65536)
-                   (? (frac = 0) (show whole + units o) (show whole + ".5" + units o))))
-   (glue-tex g) (show (g 0) + "sp plus " + amt (g 1) (g 2) + " minus " + amt (g 3) (g 4))
-   (plain? b) (32 < b && b < 127 && !(elem b [92 123 125 37]))
-   ; each token said, and whether it ended in a plain character (a space may follow it bare)
-   (tok-tex t)
-    (? (two? t)
-       (t 0 @
-        'c (? (plain? (t 1)) [(string (t 1)) 1] [("\\char" + show (t 1) + " ") 0])
-        'f [(fname (t 1) + " ") 0]
-        'pen [("\\penalty" + show (t 1) + " ") 0]
-        'kern [("\\kern" + show (t 1) + "sp ") 0]
-        'skip [("\\hskip" + glue-tex >t + "\\relax ") 0]
-        'rule [("\\vrule width" + show (t 1) + "sp height" + show (t 2) + "sp depth" + show (t 3) + "sp\\relax ") 0]
-        'set (: k (t 1) v (t 2) nm ("\\" + show k)
-                [(? (k = 'parshape) (nm + " " + show #v + cats (map (e \ " " + show (e 0) + "sp " + show (e 1) + "sp") v) + "\\relax ")
-                    (elem k glues) (nm + "=" + glue-tex v + "\\relax ")
-                    (elem k dims) (nm + "=" + show v + "sp\\relax ")
-                    (nm + "=" + show v + "\\relax "))
-                 0])
-        (die ("no token " + show t)))
-       (t @
-        'sp ["\\sp " 0]
-        'xsp ["\\ " 0]
-        'nb ["\\noboundary " 0]
-        'dash ["\\-" 0]
-        'par ["\\par " 0]
-        'indent ["\\indent " 0]
-        'noindent ["\\noindent " 0]
-        (die ("no token " + show t))))
-   (toks-tex ts)
-    (: (go ts bare acc)
-        (? (!(two? ts)) (cats (rev acc))
-           (: t <ts
-              (? (t = 'sp && bare) (go >ts 0 (" " . acc))
-                 (: r (tok-tex t) (go >ts (r 1) (r 0 . acc))))))
-       (go ts 0 ()))
-
-   ; --- the caja side ------------------------------------------------------------------------
-   (spec-of v) (cp-spec (v 0) (v 1) (v 2) (v 3) (v 4))
-   (caja-tok t) (? (two? t && t 0 = 'set && elem (t 1) glues) ['set (t 1) (spec-of (t 2))] t)
-
    ; --- words -------------------------------------------------------------------------------
    vocab ["the" "of" "and" "a" "to" "in" "is" "that" "it" "for" "as" "with" "was" "on" "be"
           "by" "this" "which" "or" "from" "at" "an" "are" "not" "but" "have" "all" "one" "their"
@@ -176,8 +130,21 @@
        w2 (? (chance st 8) (: u (w 0) (? (97 <= u && u <= 122) (string (u - 32) + snip w 1 #w) w)) w)
        p (pick st prefixes) x (pick st suffixes)
        (str-toks p + word-toks w2 (chance st 12) + str-toks x))
+   ; a box in a paragraph or between them: its own words, spaces, a stretch, maybe a hyphen
+   (rand-hbox st)
+    (: n (1 + rnd st % 4)
+       body (cats (map (_ \ rand-word st + (pick st [['sp] ['sp] [['skip 0 65536 1 65536 1]] ['dash] [['c 45]]])) ^n))
+       ['hbox (pick st [() () (rnd st % (200 * pt)) (rnd st % (20 * pt))]) (? (chance st 3) (['f (1 + rnd st % 7)] . body) body)])
+   (rand-vert st)
+    (: k (rnd st % 6)
+       (? (k = 0) [('vskip . rand-glue st (8 * pt))]
+          (k = 1) [['pen (pick st [-10000 0 150 10000 -50])]]
+          (k = 2) [['hrule (pick st [() (rnd st % (100 * pt))]) (rnd st % pt) (rnd st % (pt // 2))]]
+          (k = 3) [(rand-hbox st)]
+          (k = 4) [['vskip (rnd st % (3 * pt)) 0 0 0 0] (rand-hbox st)]
+          []))
    (rand-between st)
-    (: k (rnd st % 40)
+    (: k (rnd st % 42)
        (? (k < 30) ['sp] (k = 30) ['xsp] (k = 31) [['pen (rnd st % 400 - 150)] 'sp]
           (k = 32) [['kern (rnd st % (3 * pt) - pt)]]
           (k = 33) [['skip (rnd st % (6 * pt)) (rnd st % (3 * pt)) 0 (rnd st % pt) 0]]
@@ -185,6 +152,9 @@
           (k = 35) ['sp 'nb]
           (k = 36) [['rule (rnd st % pt) (rnd st % (8 * pt)) (rnd st % (2 * pt))]]
           (k = 37) [['pen -10000]]
+          (k = 38) ['sp (rand-hbox st) 'sp]
+          (k = 39) [(rand-hbox st)]
+          (k = 40) ['sp ['vskip (rnd st % (4 * pt)) 0 0 0 0] 'noindent]
           ['sp]))
    (rand-para st)
     (: n (5 + rnd st % 90)
@@ -192,7 +162,7 @@
                      [['set 'hangindent (rnd st % (60 * pt) - 30 * pt)] ['set 'hangafter (rnd st % 5 - 2)]]
                      [['set 'parshape (map (_ \ [(rnd st % (30 * pt)) ((30 + rnd st % 250) * pt)]) ^(1 + rnd st % 4))]]])
        (go k acc) (? (k >= n) acc (go (k + 1) (acc + rand-word st + (? (k < n - 1) (rand-between st) []))))
-       (per + [(pick st ['indent 'indent 'noindent])] + go 0 [] + ['par]))
+       (rand-vert st + per + [(pick st ['indent 'indent 'noindent])] + go 0 [] + ['par]))
    (rand-page st)
     (: np (1 + rnd st % 3)
        (['f (1 + rnd st % 7)] . plain + rand-settings st + cats (map (_ \ rand-para st) ^np)))
@@ -231,8 +201,13 @@
        hyph (slurpf (args 3))
        only (getenv "CAJA_PAGE")
        one? (string? only && 0 < #only)
-       pages0 (map (p \ [p (map (_ \ 45) ^#fonts)]) fixed
-              + map (_ \ (: p (rand-page st) [p (hyph-chars st)])) ^n)
+       ; a page is [tokens hyphenchars split]: split () ships the vbox, else [h topskip maxdepth]
+       ; builds it in box 0 and ships \vsplit0 to h until the box is void
+       pages0 (map (p \ [p (map (_ \ 45) ^#fonts) ()]) fixed
+              + map (_ \ (: p (rand-page st) hc (hyph-chars st)
+                            sp (? (chance st 3) [((30 + rnd st % 300) * pt) (rand-glue st (15 * pt)) (rnd st % (6 * pt) - pt)] ())
+                            [p hc sp]))
+                    ^n)
        pages (? one? [(pages0 (read only))] pages0)
        J (cp-setup (cb-job 0))
        _ (map (e \ pin (J 'sf) (e 0) (e 1)) sfcodes)
@@ -247,24 +222,35 @@
        base (: t {} _ (map (k \ pin t k (J 'params k)) (keys (J 'params))) t)
        tex ("\\catcode`\\{=1 \\catcode`\\}=2 \\batchmode\\year=1776 \\month=7 \\day=4 \\time=720\n"
             + "\\def\\sp{ }\\input " + args 3 + "\n\\defaulthyphenchar=45\n"
+            + "\\def\\pages{\\ifvoid0 \\else\\setbox1\\vsplit0 to\\dimen0 \\shipout\\box1 \\expandafter\\pages\\fi}\n"
             + cats (map (k \ (: e (fonts k) sz (e 1)
                                 ("\\font" + fname (k + 1) + "=" + (e 0)
                                  + (? (sz = -1000) "" (" at " + show sz + "sp")) + "\\relax\n")))
                         ^#fonts)
             + cats (map (e \ "\\sfcode" + show (e 0) + "=" + show (e 1) + "\\relax\n") sfcodes)
             + cats (map (pg \ cats (map (k \ "\\hyphenchar" + fname (k + 1) + "=" + show (pg 1 k) + "\\relax ") ^#fonts)
-                              + (? one? "\n\\showboxdepth=100 \\showboxbreadth=1000000 \\setbox1\\vbox{" "\n\\shipout\\vbox{")
-                              + toks-tex (pg 0) + (? one? "}\\showbox1 \\shipout\\box1\n" "}\n"))
+                              + (: sp (pg 2)
+                                   (? (sp != ())
+                                      ("\n\\setbox0\\vbox{" + cp-tex (pg 0) + "}"
+                                       + cp-tex [['set 'splittopskip (sp 1)] ['set 'splitmaxdepth (sp 2)]]
+                                       + "\\dimen0=" + show (sp 0) + "sp\\relax\\pages\n")
+                                      one? ("\n\\showboxdepth=100 \\showboxbreadth=1000000 \\setbox1\\vbox{"
+                                            + cp-tex (pg 0) + "}\\showbox1 \\shipout\\box1\n")
+                                      ("\n\\shipout\\vbox{" + cp-tex (pg 0) + "}\n"))))
                         pages)
             + "\\end\n")
        _ (spit (out + ".tex") tex)
        _ (map (pg \ (: _ (map (k \ pin (J 'params) k (base k)) (keys base))
                        _ (map (k \ pin (J 'fonts (fm (k + 1))) 'hyphenchar (pg 1 k)) ^#fonts)
-                       ts (map (t \ (? (two? t && t 0 = 'f) ['f (fm (t 1))] (caja-tok t))) (pg 0))
-                       M (cp-run J (cp-mode J) ts)
+                       M (cp-run J (cp-mode J) (pg 0))
                        l (cp-vlist J M)
                        _ (? one? (dump l))
-                       (cb-ship J (cb-vpackage J l 0 'additional 0))))
+                       b (cb-vpackage J l 0 'additional 0)
+                       sp (pg 2)
+                       (? (sp = ()) (cb-ship J b)
+                          (: _ (cp-run J M [['set 'splittopskip (sp 1)] ['set 'splitmaxdepth (sp 2)]])
+                             (go v) (? (v != ()) (: r (cg-vsplit J v (sp 0)) _ (cb-ship J <r) (go (r 1))))
+                             (go (cp-node J b))))))
               pages)
        (spit (out + ".dvi") (cb-dvi J)))
    (main >argv))

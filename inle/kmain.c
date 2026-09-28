@@ -2046,7 +2046,7 @@ void kmain(void) {
   void const *bimg = NULL;
   if (kboot.image_len) bimg = kboot.image, blen = kboot.image_len;
   else if (!ai_baked_pick(&bimg, &blen)) blen = 0;
-  if (blen) g = ai_image_load(bimg, blen);
+  if (blen) g = ai_image_load(bimg, blen, 0);
   bool woke = g != NULL;
   char const *s = woke ? "; inle -- image awake\n" : "; inle -- baking the egg\n";
   for (; *s; s++) serial_putc(*s);

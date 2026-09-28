@@ -1423,7 +1423,7 @@ lvm(lvm_span) { return
 static ai_inline word ai_cellval(struct ai *g, word w) {
  if ((w & 3) == ai_thread_tag) return ZeroPoint;
  if (evenp(w) && in_live_pool(g, ptr(w))) return w;
- return ai_op_index((intptr_t) w) >= 0 || (evenp(w) && code_in(g, (uintptr_t) w))
+ return ai_op_index((intptr_t) w) >= 0 || w == (word) lvm_lazy || (evenp(w) && code_in(g, (uintptr_t) w))
   ? ZeroPoint : w; }
 
 lvm(lvm_peek) {
