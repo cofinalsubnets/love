@@ -28,6 +28,11 @@ static struct mem *kmem;
 static uintptr_t kram_words;
 
 static struct cb *kcb;
+// the console's picture store: a screenful deep, 8 MB at most -- a dense screen's is
+// capped, and a machine that cannot spare it runs text alone
+static uint32_t k_sn(uintptr_t rows, uintptr_t cols) {
+  return rows * cols <= 16384u ? cb_sdefault(rows, cols) : cb_sdefault(128u, 128u); }
+static uint8_t *kqf;   // the loaded face (/proc/vt/face), vetted, or 0
 
 
 static struct {
@@ -512,8 +517,10 @@ static int k_ents_n, k_ents_cap;
 
 // /proc/vt -- the console's colours as files, xterm-256 indices in decimal. an ordinary
 // entry each: the open refreshes a read off the live pen, the close applies a write.
+// face takes a face apps/face.l laid, for the code points the built-in one lacks; an
+// empty write drops it.
 static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg",
-                  k_vtscale[] = "proc/vt/scale";
+                  k_vtscale[] = "proc/vt/scale", k_vtface[] = "proc/vt/face";
 // /proc/lift -- a path written here asks the seat to carry that file out of the machine
 // (the page saves a download); a seat with nowhere to put it does nothing.
 static char const k_plift[] = "proc/lift";
@@ -538,16 +545,18 @@ static intptr_t k_null_writen(int fd, unsigned char const *src, uintptr_t n) {
   return (intptr_t) n; }
 static bool k_dev_ready(int fd) { return true; }
 
-// 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale, 4 the lift.
+// 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale, 4 the lift, 5 the face.
 static int k_vt_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_vtfg - 1 && !memcmp(p, k_vtfg, n)) return 1;
   if (n == sizeof k_vtbg - 1 && !memcmp(p, k_vtbg, n)) return 2;
   if (n == sizeof k_vtscale - 1 && !memcmp(p, k_vtscale, n)) return 3;
   if (n == sizeof k_plift - 1 && !memcmp(p, k_plift, n)) return 4;
+  if (n == sizeof k_vtface - 1 && !memcmp(p, k_vtface, n)) return 5;
   return 0; }
 
 static char *k_strdup(char const *p, uintptr_t n);   // below, with the entry doors
 static bool k_vt_rescale(unsigned v);                // below, with fbdraw's cached cursor
+static void fbwash(void);                            // below: the whole paper again
 
 // lay the table on first use: every baked row live off .rodata, plus tmp and the home.
 // idempotent, and a refusal leaves the console standing (the caller answers ENOMEM).
@@ -559,7 +568,7 @@ static bool k_fs_init(void) {
     struct k_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
     k_extra = xr, k_extra_n = k_baked(xr, xn); }
-  int n = k_bakes_n + k_extra_n, cap = n + 15;
+  int n = k_bakes_n + k_extra_n, cap = n + 16;
   struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
   if (!t) return false;
   for (int i = 0; i < n; i++) {
@@ -583,6 +592,9 @@ static bool k_fs_init(void) {
   // compat loop below starts where the numbered rows stop.
   t[n + 8] = (struct k_ent) { .path = k_vtscale, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0644, .own = true, .live = true };
+  // ..and the face, written and never read, at n + 15 past the home
+  t[n + 15] = (struct k_ent) { .path = k_vtface, .bake = -1, .ms = k_clock_ms(),
+                               .mode = 0644, .own = true, .live = true };
   // and the two the open fills: read-only, since nothing here is anyone's to set.
   t[n + 3] = (struct k_ent) { .path = k_pmem, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0444, .own = true, .live = true };
@@ -612,7 +624,7 @@ static bool k_fs_init(void) {
                             .mode = 0777, .own = true, .live = true,
                             .dir = !to, .to = to };
     m++; }
-  k_ents = t, k_ents_n = m + 1, k_ents_cap = cap;
+  k_ents = t, k_ents_n = cap, k_ents_cap = cap;
   return true; }
 
 // the cwd, canonical ("" is the root), what k_canon resolves relative paths against.
@@ -826,7 +838,7 @@ static bool k_fit(int i, uintptr_t need) {
 // content standing: a stale number is answerable, an open that failed here would not be.
 static void k_vt_read(int i, int slot) {
   // serial-only: no console to ask, so the file reads empty rather than the last write
-  if (!kcb || slot == 4) { k_ents[i].len = 0; return; }   // ..and the lift is written, never read
+  if (!kcb || slot >= 4) { k_ents[i].len = 0; return; }   // ..and the lift and the face are written, never read
   // the colours come off the pen, the scale off the paper
   unsigned v = slot == 3 ? kfb.scale : cb_val(slot == 1 ? kcb->def_fg : kcb->def_bg) & 255u;
   char d[4]; int n = 0;
@@ -838,6 +850,17 @@ static void k_vt_read(int i, int slot) {
   memcpy(k_ents[i].bytes, d, (uintptr_t) n);
   k_ents[i].len = (uintptr_t) n; }
 
+// the face <- a write's bytes: vetted, then copied out of the entry, whose bytes move on
+// the next write. a face that fails the vetting leaves the one in use; none drops it.
+static void k_vt_face(unsigned char const *b, uintptr_t n) {
+  uint8_t *q = 0;
+  if (n) {
+    if (!cb_face_ok(b, n) || !(q = kmallocw(b2w(n)))) return;
+    memcpy(q, b, n); }
+  if (kqf) kfree(kqf);
+  kqf = q;
+  if (kcb) fbwash(); }
+
 // the pen <- entry i's bytes, at the close of a write. a leading number is the whole
 // grammar; no number, or one past the palette's 256, leaves the console alone.
 static void k_vt_write(int i, int slot) {
@@ -848,6 +871,7 @@ static void k_vt_write(int i, int slot) {
     while (len && (b[len - 1] == '\n' || b[len - 1] == '\r')) len--;
     if (len) k_lift_ask(b, len);
     return; }
+  if (slot == 5) return k_vt_face(b, len);
   if (!kcb) return;
   unsigned v = 0;
   while (j < len && b[j] >= '0' && b[j] <= '9' && v < 256) v = v * 10 + (unsigned) (b[j++] - '0');
@@ -1655,7 +1679,7 @@ void fbdraw(void) {
   for (uint16_t i = 0; i < rows; i++) {
     uint32_t const r = i > 255 ? 255 : i;   // quay's fold: bit 255 stands for 255-and-past
     if (kcb->dmg[r >> 5] >> (r & 31) & 1 || (moved && (i == was || i == now)))
-      cb_paint(&paper, kcb, &kface, i, 0, 0, blink ? cur : ~0u), painted = true; }
+      cb_paint(&paper, kcb, &kface, kqf, i, 0, 0, blink ? cur : ~0u), painted = true; }
   for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
   fbcur = cur, fbblink = blink;
   // a seat that SHOWS this paper rather than scanning it out hears about it here, and here
@@ -1699,9 +1723,12 @@ static bool k_cb_remake(void) {
   struct cb *const old = kcb;
   uint16_t const orows = old->rows, ocols = old->cols;
   if (rows == orows && cols == ocols) return fbwash(), true;  // same grid, new pixels
-  struct cb *c = kmallocw(b2w(cb_size(rows, cols)));
+  uint32_t sn = k_sn(rows, cols);
+  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn)));
+  if (!c) c = kmallocw(b2w(cb_size(rows, cols, sn = 0)));   // no room for pictures: text alone
   if (!c) return false;
   *c = *old;                           // the pen, the modes, a parser mid-sequence
+  cb_store(c, sn);                     // the pictures stay with the old grid
   c->rows = (uint16_t) rows, c->cols = (uint16_t) cols;
   c->top = 0, c->bot = (uint16_t) (rows - 1u);   // the old region addressed the old rows
   c->flag &= (uint16_t) ~cb_pend;      // a pending wrap named the old last column
@@ -1710,7 +1737,9 @@ static bool k_cb_remake(void) {
   struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };   // new ground in the DEFAULT pen
   for (uintptr_t i = 0, n = rows * cols; i < n; i++) c->cb[i] = blank;
   for (uintptr_t r = from, dr = 0; r < orows && dr < rows; r++, dr++)
-    for (uintptr_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
+    for (uintptr_t k = 0; k < w; k++) {
+      c->cb[dr * cols + k] = old->cb[r * ocols + k];
+      if (c->cb[dr * cols + k].g & cb_pic) c->cb[dr * cols + k].g = 0; }
   c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
   c->spos = cb_carry(old->spos, ocols, from, rows, cols);
   kcb = c;
@@ -1886,8 +1915,10 @@ static bool cbinit(void) {
   const uintptr_t rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
   // kmallocw, not ai_alloc: cbinit runs before ai_ini, so no g exists yet
-  if (!(kcb = kmallocw(b2w(cb_size(rows, cols))))) return false;
-  cb_open(kcb, rows, cols);
+  uint32_t sn = k_sn(rows, cols);
+  if (!(kcb = kmallocw(b2w(cb_size(rows, cols, sn))))
+      && !(kcb = kmallocw(b2w(cb_size(rows, cols, sn = 0))))) return false;
+  cb_open(kcb, rows, cols, sn);
   kcb->flag |= cb_lnm;  // the kernel console's discipline: a bare \n is a newline
   cb_attr(kcb, cb_ink(cb_idx, 15), cb_ink(cb_idx, 0));   // white on black: xterm-256's 15 and 0, what a terminal is
   cb_fill(kcb, 0);

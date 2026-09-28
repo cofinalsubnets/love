@@ -16,7 +16,16 @@ struct cb_cell { uint32_t g, fg, bg; };
 
 #define cb_gw(cp, face) (((uint32_t) (cp) & 0x1fffffu) | (uint32_t) (uint8_t) (face) << 24)
 #define cb_cp(g)    ((g) & 0x1fffffu)
+#define cb_wide(g)  (((g) >> 21) & 3u)
 #define cb_face(g)  ((uint8_t) ((g) >> 24))
+enum { cb_lead = 1, cb_tail = 2 };  // the width field: a wide char's two halves
+// a tile: the picture bit, then a store slot (1..127) and the cell's column and row in
+// that picture -- pictures are runs of cells like wide chars, so the grid carries them
+#define cb_pic      ((uint32_t) 1 << 23)
+#define cb_tile(slot, tx, ty) (cb_pic | (uint32_t) (slot) << 16 | (uint32_t) (tx) << 8 | (uint32_t) (ty))
+#define cb_tslot(g) (((g) >> 16) & 127u)
+#define cb_ttx(g)   (((g) >> 8) & 255u)
+#define cb_tty(g)   ((g) & 255u)
 
 enum {              // face bits, the glyph word's top byte
   cb_bold = 1, cb_under = 2, cb_rev = 4, cb_dim = 8,
@@ -55,14 +64,30 @@ struct cb {
   uint32_t dmg[8];  // dirty rows, one bit each (row 255 stands for 255-and-past);
                     // every grid write marks, a renderer reads-and-clears --
                     // repainting only what moved is what keeps a wide window quick
+  uint8_t cw, ch;   // a cell in pixels: the store's grain, and what CSI 16 t answers
+  uint8_t sm, sp2;  // sixel: the parameter command in flight ('#' '!' '"'), P2
+  uint16_t sslot;   // sixel: the slot being decoded, 0 for none
+  uint32_t sn, stop;  // the store's bytes past the cells (0: no pictures), its bump top
+  uint32_t sx, sy, sw, sh, sreg, srep;  // sixel: the pen, the extent, the register, the repeat
+  // kitty: the command's keys, the key and value being read, base64 in flight, the pixel in
+  // flight, and the transfer (slot, pixels laid) a chunked image keeps open across commands
+  uint32_t ks, kv, ki, kc, kr, kval, kacc, kpx, kpix, kslot;
+  uint8_t ka, kf, km, kq, kcur, kd, kt, ko, kkey, kvc, kn, kbyte, kpad, kopen;
   struct cb_cell cb[]; };
 
-// the bytes a screen of rows x cols needs, header and cells
-#define cb_size(rows, cols) \
-  (sizeof(struct cb) + (uintptr_t) (rows) * (uintptr_t) (cols) * sizeof(struct cb_cell))
+// the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
+// pixels, xrgb with the top byte 0xff where a pixel was set -- the rest is the cell's bg
+struct cb_img { uint32_t off, w, h, live, id; };   // id: a kitty image's, 0 for none
+enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
+// the bytes a screen of rows x cols needs, header, cells and a store of sn bytes
+#define cb_size(rows, cols, sn) \
+  (sizeof(struct cb) + (uintptr_t) (rows) * (uintptr_t) (cols) * sizeof(struct cb_cell) + (uintptr_t) (sn))
+// a store a screenful of pictures deep, at 8x16 cells
+#define cb_sdefault(rows, cols) ((uint32_t) cb_shead + (uint32_t) (rows) * (uint32_t) (cols) * 512u)
 
 void
-  cb_open(struct cb*, uint16_t rows, uint16_t cols),
+  cb_open(struct cb*, uint16_t rows, uint16_t cols, uint32_t sn),
+  cb_store(struct cb*, uint32_t sn),   // lay an empty store of sn bytes after the cells
   cb_clear(struct cb*),
   cb_putc(struct cb*, char),
   cb_stamp(struct cb*, uint8_t),
@@ -71,8 +96,20 @@ void
   cb_recolor(struct cb*, uint32_t fg, uint32_t bg),
   cb_cur(struct cb*, uint32_t row, uint32_t col);
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
+struct cb_img const *cb_img(struct cb const*, uint32_t slot);   // a live picture, or 0
+uint32_t const *cb_ipx(struct cb const*);                       // the store's pixels
 uint32_t cb_unfold(uint8_t);       // a cp437 glyph byte's codepoint
 uint8_t cb_437(uint32_t cp);       // the cp437 glyph that draws cp: 0xfe, the ■, for none
+uint8_t cb_width(uint32_t cp);     // the columns cp takes: 0 1 or 2, 'text's wcwidth
+int cb_437x(uint32_t cp);          // cb_437, but -1 where the page has no glyph
+
+// a loaded face, as apps/face.l lays it: "qf1\0", the cell's w and h (8 16), npages and
+// nglyphs, then a u16 page per 256 code points, the pages (glyph + 1 per code point, 0 for
+// none), and 16 little-endian u16 rows a glyph, the leftmost pixel high. cb_face_ok vets
+// every index once, so cb_face_rows may trust them; a face is only ever read.
+enum { cb_qf_dir = 4352, cb_qf_head = 12 };
+int cb_face_ok(uint8_t const *b, uintptr_t n);
+uint8_t const *cb_face_rows(uint8_t const *b, uint32_t cp);   // 32 bytes, or 0
 
 struct font { uint8_t const *glyphs, w, h; };
 extern uint8_t const cga_8x8[256][8], cleat_8x16[256][16];
@@ -85,6 +122,7 @@ extern uint8_t const cga_8x8[256][8], cleat_8x16[256][16];
 // stays sharp on a dense display by growing whole pixels, where the alternative is
 // resampling somebody else does. 1 is the bitmap as drawn; 0 paints nothing.
 struct cb_paper { volatile uint32_t *px; uintptr_t pitch, w, h, scale; };
+// qf: a face cb_face_ok passed, or 0 -- the chain is the built-in face, then qf, then the ■
 void cb_paint(struct cb_paper const*, struct cb const*, struct font const*,
-              uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur);
+              uint8_t const *qf, uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur);
 #endif

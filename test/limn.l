@@ -62,6 +62,24 @@
            (sub? f "\e[0;1;38;2;1;2;3;49m" 0)
            (sub? f "\u{4e16}" 0)))
 
+; --- a wide char's tail says nothing: the outer terminal steps two columns for the lead,
+;     so the cell after it lands where the grid has it ---
+   _ (: s (mkscr 1 4)
+        _ (scribe s "\u{4e16}a")
+        f (paint s 1 4 0 0)
+        _ (test (sub? f "\u{4e16}a " 0)))
+
+; --- a picture's tile is one ▀: its top half's mean colour over its bottom half's, each
+;     from the pixels the picture set; a bare half is the cell's own bg ---
+   _ (: s (mkscr 3 4)                               ; room for its two tile rows and the line under
+        _ (scribe s "\ePq#0;2;100;0;0!8~-!8~-!8~\e\\")    ; solid red, 8x18: one tile and a sliver
+        f (paint s 3 4 0 0)
+        _ (test (sub? f "\e[0;38;2;255;0;0;48;2;255;0;0m\u{2580}" 0)))
+   _ (: s (mkscr 2 4)                               ; two rows: the line under a picture
+        _ (scribe s "\ePq#0;2;0;0;100!8~\e\\")             ; blue, one band: the top half only
+        f (paint s 2 4 0 0)
+        _ (test (sub? f "\e[0;38;2;0;0;255;49m\u{2580}" 0)))
+
 ; --- the law that matters: every row is addressed at its own origin, which is
 ;     the whole difference between painting a rectangle and painting full lines ---
    _ (: s (mkscr 3 4)

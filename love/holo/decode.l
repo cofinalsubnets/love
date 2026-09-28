@@ -136,6 +136,9 @@
           134 (eg 'xchg 1 1)  135 (eg 'xchg w w)
           136 (eg 'mov 1 1)  137 (eg 'mov w w)  138 (ge 'mov 1 1)  139 (ge 'mov w w)
           141 (ge 'lea w w)
+          ; a segment register in the reg field: 8C stores it to r/m, 8E loads it
+          140 (: r (dc-modrm s k p w w) (fin (r 0) [(op1 'mov 2 [(r 2) ['sr (r 3)]])]))
+          142 (: r (dc-modrm s k p w w) (fin (r 0) [(op1 'mov 2 [['sr (r 3)] (r 2)])]))
           143 (: r (dc-modrm s k p w8 w8) (fin (r 0) [(op1 'pop w8 [(r 2)])]))
           144 (? (pf p 'rep) (fin1 k [(op1 'pause 0 ())])
                        (pf p 'b) (fin k [(op1 'xchg w [['rg 8 w] ['rg 0 w]])])

@@ -65,5 +65,35 @@ ink "" "$out/ink-plain.ppm"
 ink 2 "$out/ink-scaled.ppm"
 "$love" test/gate/ink.l 2 "$out/ink-plain.ppm" "$out/ink-scaled.ppm" || bad=1
 
+# A LOADED FACE DRAWS WHAT THE BUILT-IN ONE LACKS. two boots print 世 and Ā, their glyphs
+# solid in the first face written to /proc/vt/face and empty in the second; the pictures
+# differ by exactly those glyphs, 世 two cells wide.
+face() {
+  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+    --image "$image" "$wasm" test/kernel/face.l $1 < /dev/null > "$log" 2>&1
+}
+face full "$out/face-full.ppm"
+face empty "$out/face-empty.ppm"
+"$love" test/gate/lit.l face 384 "$out/face-full.ppm" "$out/face-empty.ppm" || bad=1   # 16x16 + 8x16
+
+# A SIXEL PICTURE PAINTS OFF THE STORE, A PIXEL A PIXEL. a 16x16 square, white then black
+# (the console's ground): the pictures differ by exactly its 256 pixels, two tiles wide.
+six() {
+  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+    --image "$image" "$wasm" test/kernel/six.l $1 < /dev/null > "$log" 2>&1
+}
+six full "$out/six-full.ppm"
+six empty "$out/six-empty.ppm"
+"$love" test/gate/lit.l sixel 256 "$out/six-full.ppm" "$out/six-empty.ppm" || bad=1
+
+# A KITTY PICTURE PAINTS THE SAME WAY: 16x16, white then black, 256 pixels between them.
+kit() {
+  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+    --image "$image" "$wasm" test/kernel/kit.l $1 < /dev/null > "$log" 2>&1
+}
+kit full "$out/kit-full.ppm"
+kit empty "$out/kit-empty.ppm"
+"$love" test/gate/lit.l kitty 256 "$out/kit-full.ppm" "$out/kit-empty.ppm" || bad=1
+
 [ $bad = 0 ] || exit 1
-echo "  glass: ok -- real pixels in, rows and columns out, and the text across a new grid"
+echo "  glass: ok -- real pixels in, rows and columns out, the text across a new grid, a loaded face, and sixel and kitty pictures"

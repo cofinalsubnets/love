@@ -16,6 +16,12 @@ test/uu.l, the ported section only (from "UniMath Foundations PartA")
 
 --- fonts ---
 
+love/quay/cga_8x8.c
+  Public domain. Letters, digits and Latin-1 from font8x8 by Daniel Hepper
+  (https://github.com/dhepper/font8x8), after Marcel Sondaar's copy of IBM's
+  public domain VGA fonts; pictures, box lines, blocks and maths from unscii-8
+  by viznut (http://viznut.fi/unscii/). Four glyphs drawn for the tree.
+
 love/quay/cleat_8x16.c
   Terminus Font, Copyright (c) 2020 Dimitar Toshkov Zhekov,
   with Reserved Font Name "Terminus Font".
