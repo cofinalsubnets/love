@@ -447,6 +447,14 @@
       (ok "^[^a]$" "日") (no "[^a]" (string 255)) (ok "[à-ÿ]" "é") (no "[à-é]" "ÿ")
       (ok "^é*$" "éé") (ok "^é\\{2\\}$" "éé") (no "^é\\{2\\}$" "é")  ; a repeat takes all of é
       (refind <>(rebre "本.") "日本語" 0 = '(1 3 9 ()))
+      ; the POSIX classes past ascii, and -i by gnulib's fold
+      (ok "^[[:alpha:]]*$" "naïve") (ok "[[:alpha:]]" "日") (no "[[:digit:]]" "٣")
+      (ok "[[:punct:]]" "—") (no "[[:punct:]]" " ") (ok "[[:space:]]" " ") (ok "[^[:alpha:]]" "—")
+      (: (iok p s) (: r (rebre p) (two? r && rehas (refold <>r) s))
+         (ino p s) (: r (rebre p) (two? r && !(rehas (refold <>r) s)))
+         (test (iok "é" "É") (iok "s" "ſ") (iok "ſ" "S") (ino "k" "\xe2\x84\xaa") (ino "i" "İ")
+               (iok "σ" "ς") (iok "[à-é]" "É") (ino "[^é]" "É") (iok "[[:upper:]]" "a")
+               (iok "[[:upper:]]" "日") (iok "ᲀ" "В") (ino "В" "ᲀ") (iok "[a-z]" "ſ")))
       (refind <>(rebre "b*") "abbc" 0 = '(1 0 0 ()))           ; leftmost, before longest
       (refind <>(rebre "bb") "abbc" 0 = '(1 1 3 ()))
       (refind <>(rebre "b*") "abbc" 1 = '(1 1 3 ()))           ; greedy at its own start
@@ -488,7 +496,7 @@
                    (t = 'rep) (<>>nd < 1 || dnul <>nd)
                    ()))
    (dnulq ns) (? (two? ns) (dnul <ns && dnulq >ns) 1)
-   (dhit nd c) (: h (any (r \ <r <= c <= <>r) <>>nd)
+   (dhit nd c) (: h (any (r \ (? (string? r) ((cite 'text 'cpis) r c) (<r <= c <= <>r))) <>>nd)
                   (? <>nd !h h))
    ; one node's derivative by charm c -> a list of alternative node lists
    (dn nd c) (: t <nd

@@ -9,6 +9,7 @@
 // double-bake runs under emulation -- then the driver tail asserts a few
 // spec laws and exits through m7exit, so `make test_mps2` sees 42.
 #include "../../love/love.h"
+#include "../bput.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -27,21 +28,18 @@ static void m7_exit(uintptr_t code) {
   sh_call(SH_EXIT_X, (uintptr_t) blk);
   for (;;) ; }
 
-static void sh_putc(char c) { sh_call(SH_WRITEC, (uintptr_t) &c); }
+static void sh_putc(int c) { char b = (char) c; sh_call(SH_WRITEC, (uintptr_t) &b); }
 
 uintptr_t ai_clock(void) { return sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
 
 // any fault vectors here (start.S): name the stacked pc/lr, then exit 98 --
 // loud and greppable where the bare M7 would sit in a lockup.
-static void sh_hex(uintptr_t v) {
-  int i;
-  for (i = 28; i >= 0; i -= 4) sh_putc("0123456789abcdef"[(v >> i) & 15]); }
+static void sh_hex(uintptr_t v) { bput_x(sh_putc, v, 8); }
 
 void fault_report(uintptr_t *frame) {    // frame: r0 r1 r2 r3 r12 lr pc xPSR
-  char const *s;
-  for (s = "\n; fault pc="; *s; s++) sh_putc(*s);
+  bput_s(sh_putc, "\n; fault pc=");
   sh_hex(frame[6]);
-  for (s = " lr="; *s; s++) sh_putc(*s);
+  bput_s(sh_putc, " lr=");
   sh_hex(frame[5]);
   sh_putc('\n');
   m7_exit(98); }

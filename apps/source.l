@@ -469,6 +469,22 @@
    (nest-read p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) (s + "")) ()))
    ; the tools a symlink to love serves by its own name, the argv[0] door
    nest-tools ["lush" "kore" "sb" "cook" "libra" "mooncc" "ain"]
+   ; lux is a script over love, so it is written beside it, not linked: the modules the
+   ; Makefile cats, off the source this binary carries, so the wm and its love never skew
+   nest-luxfiles ["core" "layout" "wire" "ewmh" "manage" "keys" "config" "lux"]
+   (nest-lux _)
+    (: gz (source-gz "x")
+       u (? (string? gz) (gz-unzip gz) ())
+       t (? (two? u) (tar-unpack <>u) ())
+       es (? (two? t) <>t ())
+       top (? (two? es) (src-top es) "")
+       (pick nm) (: want (top + "/apps/lux/" + nm + ".l")
+                    (go l) (? !(two? l) () (tar-get <l 'nom "" = want) (tar-get <l 'body "") (go >l))
+                    (go es))
+       bs (map pick nest-luxfiles)
+       (? (two? es && !(any (b \ !(string? b)) bs))
+          (foldl (a \ b \ a + b) "#!/usr/bin/env -S love -l\n" bs)
+          ()))
 
    ; the plan: what is there, what this build is, and what to do about each. the verdict
    ; says how the two builds stand -- 'fresh (none there) 'older 'same (these very bytes)
@@ -490,8 +506,10 @@
        (tool nm) (: p (bin + "/" + nm) l (readlink p)
                     was (? (string? l) l (two? (stat p)) "a file" "")
                     {'nm nm 'was was 'act (? (was = "love") 'keep 'link)})
+       lux (nest-lux 0)
+       luxact (? !(string? lux) 'none (nest-read (bin + "/lux") = lux) 'keep 'lay)
        {'home home 'bin bin 'dst dst 'me me 'new new 'mine mine 'theirs theirs 'verdict vd
-        'lay (? lay 'lay 'keep) 'tools (map tool nest-tools)})
+        'lay (? lay 'lay 'keep) 'tools (map tool nest-tools) 'lux lux 'luxact luxact})
    ; the verdict, said
    (nest-verdict pl)
     (: v (pl 'verdict)
@@ -514,7 +532,15 @@
       (nest-verdict pl)
       (pl 'lay = 'lay ? "lay this build as ~/.love/bin/love" "leave ~/.love/bin/love as it is")
       "the tools:"]
-     + map (t \ "  " + nest-tool-line pl t) (pl 'tools))
+     + map (t \ "  " + nest-tool-line pl t) (pl 'tools)
+     + nest-lux-lines pl)
+   ; lux follows the love that stays: written only when that is this build
+   (nest-ours? pl) (pl 'lay = 'lay || pl 'verdict = 'same)
+   (nest-lux-lines pl)
+    (: a (pl 'luxact)
+       (? (a = 'lay) [("  lux      " + (? (nest-ours? pl) "written from this build" "kept, beside the love there"))]
+          (a = 'keep) ["  lux      this build's"]
+          ()))
    ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
    ; ours already is left alone
    (nest-compat home bin nm)
@@ -545,8 +571,19 @@
                    _ (unlink p) _ (symlink "love" p)
                    (readlink p = "love"))
        ls (? there (filter (t \ t 'act = 'link && link t) (pl 'tools)) ())
-       _ (? there (each ("love" . map (t \ t 'nm) (pl 'tools)) (nest-compat home bin)) 0)
-       (laid + (? (two? ls) [("linked " + foldl (a \ t \ a + " " + t 'nm) (<ls 'nm) >ls)] ())))
+       ; the script takes its name by rename, as the love does: a torn write never runs
+       wrote (? (there && nest-ours? pl && pl 'luxact = 'lay)
+                (: p (bin + "/lux") tmp (bin + "/.lux.new")
+                   q (open tmp "w")
+                   _ (? (hot? q) (: _ (say q (pl 'lux)) (close q)) (src-die ("nest: cannot write " + tmp)))
+                   _ (chmod tmp 493)
+                   e (rename tmp p)
+                   _ (? !e 0 (: _ (unlink tmp) (src-die ("nest: cannot rename over " + p))))
+                   ["wrote ~/.love/bin/lux from this build"])
+                ())
+       luxed (two? (stat (bin + "/lux")))
+       _ (? there (each ("love" . (map (t \ t 'nm) (pl 'tools) + (? luxed ["lux"] ()))) (nest-compat home bin)) 0)
+       (laid + (? (two? ls) [("linked " + foldl (a \ t \ a + " " + t 'nm) (<ls 'nm) >ls)] ()) + wrote))
    (nest-usage _)
     (say err "usage: love nest [-f] [-y | -n] [--stamp]
   lay this binary as ~/.love/bin/love and link its tools beside it. on a terminal the

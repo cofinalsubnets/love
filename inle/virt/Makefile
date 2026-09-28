@@ -32,7 +32,7 @@ $(foreach u,$(love_m),$(eval $(call p_obj,$u,love/$u.c,\
 $(eval $(call p_heap,$(virt_cc),))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
   $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(virt_cc) -Iapps/moon/include)))
-$(eval $(call p_obj,main,inle/virt/main.c,main.c $(R)/love/love.h $(lib_hR) $(mc),$(virt_cc)))
+$(eval $(call p_obj,main,inle/virt/main.c,main.c $(R)/love/love.h $(R)/inle/bput.h $(R)/inle/ffalloc.h $(lib_hR) $(mc),$(virt_cc)))
 
 $(R)/$(o)/love.elf: $(objs)
 	@echo MOON	$@

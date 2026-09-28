@@ -24,15 +24,13 @@
 #include "k.h"
 #include "asmops.h"
 #include "mmio.h"
+#include "bput.h"
 #include <stdint.h>
 #include <string.h>
 
 void serial_putc(int);
-static void hputs(char const *s) { while (*s) serial_putc(*s++); }
-static void hputn(uint64_t v) {
-  char b[20]; int i = 0;
-  do b[i++] = (char) ('0' + v % 10), v /= 10; while (v);
-  while (i) serial_putc(b[--i]); }
+static void hputs(char const *s) { bput_s(serial_putc, s); }
+static void hputn(uintptr_t v) { bput_n(serial_putc, v, 10); }
 
 #define hda_ring   (128u << 10)      // 0.68 s at 48k stereo: deep enough that a slow
                                      // frame loop never underruns; a writer wanting less

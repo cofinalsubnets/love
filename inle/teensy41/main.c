@@ -11,6 +11,7 @@
 // exactly as it drives the kernel's.
 #include "../../love/love.h"
 #include "teensy41.h"
+#include "../bput.h"
 #include "psram.h"
 
 #ifndef EOF
@@ -65,12 +66,9 @@ static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n)
 static struct ai *fd_flush(struct ai *g) {
   uint32_t lost = serial_rx_lost();
   if (lost) {
-    char d[10];
-    int i = 0;
-    for (char const *s = "\r\n; input lost: "; *s; s++) serial_putc(*s);
-    do d[i++] = (char) ('0' + lost % 10); while ((lost /= 10));
-    while (i) serial_putc(d[--i]);
-    for (char const *s = " bytes\r\n"; *s; s++) serial_putc(*s); }
+    bput_s(serial_putc, "\r\n; input lost: ");
+    bput_n(serial_putc, lost, 10);
+    bput_s(serial_putc, " bytes\r\n"); }
   return g; }
 
 struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
@@ -181,12 +179,10 @@ int main(void) {
       mhz = 24u * (REG(CCM_ANALOG_PLL_ARM) & 0x7Fu) / 2u
           / ((REG(CCM_CACRR) & 7u) + 1u)
           / (((REG(CCM_CBCDR) >> 10) & 7u) + 1u);
-    for (char const *s = "; core "; *s; s++) serial_putc(*s);
-    if (mhz) { char b[8]; int n = 0;
-      do { b[n++] = '0' + mhz % 10u; mhz /= 10u; } while (mhz);
-      while (n) serial_putc(b[--n]);
-      for (char const *s = " MHz\r\n"; *s; s++) serial_putc(*s); }
-    else for (char const *s = "on the ROM path\r\n"; *s; s++) serial_putc(*s); }
+    bput_s(serial_putc, "; core ");
+    if (mhz) { bput_n(serial_putc, mhz, 10);
+      bput_s(serial_putc, " MHz\r\n"); }
+    else bput_s(serial_putc, "on the ROM path\r\n"); }
   uint32_t psram_mb = psram_init();
   { char const *s = psram_mb ? "; psram arena up\r\n" : "; NO psram -- ocram fallback\r\n";
     for (; *s; s++) serial_putc(*s); }

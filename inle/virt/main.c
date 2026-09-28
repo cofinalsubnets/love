@@ -11,6 +11,7 @@
 // laws and exits through vexit, so `make test_virt` sees 42 (98 = a trap,
 // reported by start.o's mtvec tail through fault_report below).
 #include "../../love/love.h"
+#include "../bput.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -19,7 +20,7 @@
 // --- the metal ------------------------------------------------------------
 // ns16550: THR/RBR at +0, LSR at +5 (bit 5 = THR empty, bit 0 = data ready).
 #define UART ((volatile uint8_t *) 0x10000000u)
-static void v_putc(char c) {
+static void v_putc(int c) {
   while (!(UART[5] & 0x20)) ;
   UART[0] = (uint8_t) c; }
 static int uart_rx_ready(void) { return UART[5] & 1; }
@@ -35,10 +36,8 @@ static void v_exit(uintptr_t code) {
   TESTDEV = ((uint32_t) code << 16) | 0x3333u;
   for (;;) ; }
 
-static void v_puts(char const *s) { while (*s) v_putc(*s++); }
-static void v_hex(uintptr_t v) {
-  int i;
-  for (i = 60; i >= 0; i -= 4) v_putc("0123456789abcdef"[(v >> i) & 15]); }
+static void v_puts(char const *s) { bput_s(v_putc, s); }
+static void v_hex(uintptr_t v) { bput_x(v_putc, v, 16); }
 
 // any machine trap vectors here (start.o's mtvec tail hands over mcause/mepc):
 // name the cause, then exit 98 -- loud and greppable where the bare hart would
