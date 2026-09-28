@@ -366,6 +366,11 @@
    ; gas's comparisons answer -1 for true: the alternatives' `-(d > 0) * d` is d when d > 0, else 0
    _ (chk-eq "gimm.cmp" [3 0 -1 0] [(gimm (gtoks "-((5-2) > 0) * (5-2)")) (gimm (gtoks "-((2-5) > 0) * (2-5)"))
                                     (gimm (gtoks "1 < 2")) (gimm (gtoks "2 < 1"))])
+   _ (chk-eq "gimm.eq" [-1 0 -1 -1] [(gimm (gtoks "(1 != 2)")) (gimm (gtoks "3 == 4")) (gimm (gtoks "2 >= 2")) (gimm (gtoks "1 <= 2"))])
+   ; gas's macro language unrolls before gas-top reads: a keyword call, .irp, .ifc, .set values
+   _ (chk-eq "gas.expand"
+        '(".long 11 + (1 << 8)")
+        (gf-expand (gf-lines 'x64 ".macro m t:req r:req\n.set .Ln, 0\n.irp s,rax,rcx\n.ifc \\r, %\\s\n.long \\t + (.Ln << 8)\n.endif\n.set .Ln, .Ln+1\n.endr\n.endm\nm r=%rcx, t=11\n.purgem m")))
    ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
    _ (chk-eq "gas.x64.thisip"
         '((raw (76 141 29 0 0 0 0)) (raw (72 141 5 8 0 0 0)))

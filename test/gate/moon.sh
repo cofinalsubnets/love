@@ -206,6 +206,8 @@ taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file
 taref 'int f(int b){asm("# %%0" : : "i"(b)); return 0;}\n' x64 "not a constant" "a local as an \"i\" operand was not refused"
 taref 'int g;\nint f(void){int g = 1; g++; asm("# %%c0" : : "i"(&g)); return g;}\n' x64 "not a constant" "a shadowed global as an \"i\" operand was not refused"
 taref 'asm(".data\\n2: .quad 0\\n.org 2b + 4");\n' x64 "gas-org" "an .org behind its section was not refused"
+# gas's .error, reached through the macro language's .if, refuses by name (test/cc/191 holds the rest)
+taref 'asm(".set .Lx, 2\\n.if (.Lx != 1)\\n.error \\"bad\\"\\n.endif");\n' x64 "gas-error" "a reached .error was not refused"
 # a flag output has an x64 lane only (test/cc/184); elsewhere it names its cause
 taref 'int f(long x){int z; asm("cmp %%1, #0" : "=@cceq"(z) : "r"(x)); return z;}\n' a64 "an asm flag output" "an a64 flag output was not refused by name"
 # a %gs: store to an absolute address has no register to reach it through (test/cc/182)
