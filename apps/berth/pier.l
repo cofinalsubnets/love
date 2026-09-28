@@ -18,10 +18,10 @@
 (:
    ; --- the requests the wire does not carry: a window of ours, a GC, a title, the delete
    ;     protocol, and PutImage ---
-   (pier-mkwin s win parent w h)                      ; CreateWindow: back pixel, and keys + expose + structure
+   (pier-mkwin s win parent w h)                      ; CreateWindow: back pixel, and keys + buttons + expose + structure
     (x-w8 s 1, x-w8 s 0, x-w16 s 10, x-w32 s win, x-w32 s parent,
      x-w16 s 0, x-w16 s 0, x-w16 s w, x-w16 s h, x-w16 s 0, x-w16 s 1, x-w32 s 0,
-     x-w32 s 2050, x-w32 s 0, x-w32 s 163841)
+     x-w32 s 2050, x-w32 s 0, x-w32 s 163845)
    (pier-gc s gc win) (x-w8 s 55, x-w8 s 0, x-w16 s 4, x-w32 s gc, x-w32 s win, x-w32 s 0)
    (pier-title s win t)
     (: n #t
@@ -69,16 +69,19 @@
                  65470 "\eOP" 65471 "\eOQ" 65472 "\eOR" 65473 "\eOS" 65474 "\e[15~"
                  65475 "\e[17~" 65476 "\e[18~" 65477 "\e[19~" 65478 "\e[20~" 65479 "\e[21~"
                  65480 "\e[23~" 65481 "\e[24~"}
-   ; a KeyPress -> what a terminal sends. shift (or caps lock, on a letter) takes the second
-   ; column; ctrl folds @..~ onto C0; alt goes ahead as ESC; latin-1 and unicode keysyms go
-   ; out as utf-8. a key with nothing to say is ""
-   (pier-keybytes km kc st)
+   ; a KeyPress's keysym: shift (or caps lock, on a letter) takes the second column; 0 for none
+   (pier-sym km kc st)
     (: p (peep km kc ())
-       (? !(two? p) ""
+       (? !(two? p) 0
           (: lower <p upper <>p
              letter (97 <= lower <= 122)
-             sym (? (((st & 1) != 0) || (letter && ((st & 2) != 0))) (? (0 < upper) upper lower) lower)
-             sp (peep pier-special sym ())
+             (? (((st & 1) != 0) || (letter && ((st & 2) != 0))) (? (0 < upper) upper lower) lower))))
+   ; a KeyPress -> what a terminal sends. ctrl folds @..~ onto C0; alt goes ahead as ESC;
+   ; latin-1 and unicode keysyms go out as utf-8. a key with nothing to say is ""
+   (pier-keybytes km kc st)
+    (: sym (pier-sym km kc st)
+       (? (sym = 0) ""
+          (: sp (peep pier-special sym ())
              b (? (string? sp) sp
                   ((st & 4) && (64 <= sym <= 126)) (string (sym & 31))
                   ((st & 4) && (sym = 32)) (string 0)
@@ -98,11 +101,12 @@
     (: sc (peep bx () 0) fb (peep fx () 0)
        r (gaze sc 1) c (gaze sc 2) w (c * 8)
        cur (? ((gaze sc 3) & 1) (gaze sc 0) -1)
+       v (gaze sc 8)                                 ; the view looks back v lines: rows show v down
        rows (tablet 8)
        ds (pier-dirty sc)
        _ (map (\ y (? (y < r) (pin rows y 1) 0)) (? all (jot r) ds))
-       _ (? (-1 < cur) (pin rows (cur // c) 1) 0)
-       _ (? ((-1 < last) && (last != cur) && ((last // c) < r)) (pin rows (last // c) 1) 0)
+       _ (? ((-1 < cur) && (((cur // c) + v) < r)) (pin rows ((cur // c) + v) 1) 0)
+       _ (? ((-1 < last) && (last != cur) && (((last // c) + v) < r)) (pin rows ((last // c) + v) 1) 0)
        ys (sort (keys rows))
        _ (map (\ y (dye sc fb w y cur face)) ys)
        ; each run of rows one band
@@ -119,16 +123,32 @@
        _ (rest 8)                                    ; a keystroke's echo within ~10 ms
        (pier-paints s win gc depth bx fx face dirty l2))
 
-   ; --- a resize: the window manager retiled us. a fresh grid and frame to fit, and the
-   ;     pty learns its size (the kernel raises SIGWINCH) ---
+   ; --- a resize: the window manager retiled us. the grid laid across to fit, a fresh
+   ;     frame, and the pty learns its size (the kernel raises SIGWINCH) ---
    (pier-resize bx fx m dirty wp hp)
     (: r (max 1 (hp // 16)) c (max 2 (wp // 8))
        sc (peep bx () 0)
        (? ((r = gaze sc 1) && (c = gaze sc 2)) 0
-          (: _ (pin bx () (screen (cask (screen () r c)) r c))
+          (: _ (pin bx () (regrid sc (cask (screen () r c)) r c))
              _ (pin fx () (cask (((c * 8) * (r * 16)) * 4)))
              _ (settty m r c)
              (pin dirty () 2))))
+
+   ; --- the history: shift+PgUp/PgDn half a screen, the wheel three lines; any other key
+   ;     brings the view home before its bytes go ---
+   (pier-peer bx dirty n)
+    (: sc (peep bx () 0)
+       _ (peer sc (max 0 ((gaze sc 8) + n)))
+       (pin dirty () 1))
+   (pier-key m km bx dirty kc st)
+    (: sym (pier-sym km kc st) sc (peep bx () 0) half (max 1 ((gaze sc 1) // 2))
+       (? (((st & 1) != 0) && (sym = 65365)) (pier-peer bx dirty half)
+          (((st & 1) != 0) && (sym = 65366)) (pier-peer bx dirty (0 - half))
+          (: b (pier-keybytes km kc st)
+             (? (0 < #b)
+                (: _ (? (0 < gaze sc 8) (pier-peer bx dirty (0 - gaze sc 8)) 0)
+                   (say m b, flush m))
+                0))))
 
    ; --- the watch: X events in the main task. the moor pumps the child in another and
    ;     seals the socket when the child hangs up, so x-next wakes with () and we leave ---
@@ -136,8 +156,9 @@
     (: e (x-next s)
        (? !(two? e) ()
           (: code (ev-code e)
-             _ (? (code = 2) (: b (pier-keybytes km (ev-detail e) (ev-state e))
-                                (? (0 < #b) (say m b, flush m) 0))
+             _ (? (code = 2) (pier-key m km bx dirty (ev-detail e) (ev-state e))
+                  ((code = 4) && (ev-detail e = 4)) (pier-peer bx dirty 3)
+                  ((code = 4) && (ev-detail e = 5)) (pier-peer bx dirty -3)
                   (code = 12) (pin dirty () 2)
                   (code = 22) (: raw (ev-raw e) (pier-resize bx fx m dirty (u16 raw 20) (u16 raw 22)))
                   0)

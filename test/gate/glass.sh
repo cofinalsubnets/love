@@ -85,6 +85,11 @@ six() {
 six full "$out/six-full.ppm"
 six empty "$out/six-empty.ppm"
 "$love" test/gate/lit.l sixel 256 "$out/six-full.ppm" "$out/six-empty.ppm" || bad=1
+# ..AND COMES ACROSS A NEW GRID: the same square with the grid re-made at scale 2 under it,
+# a picture pixel now four -- 1024 between them where a store left behind answers 0
+six full2 "$out/six-full2.ppm"
+six empty2 "$out/six-empty2.ppm"
+"$love" test/gate/lit.l sixel-regrid 1024 "$out/six-full2.ppm" "$out/six-empty2.ppm" || bad=1
 
 # A KITTY PICTURE PAINTS THE SAME WAY: 16x16, white then black, 256 pixels between them.
 kit() {
@@ -96,4 +101,4 @@ kit empty "$out/kit-empty.ppm"
 "$love" test/gate/lit.l kitty 256 "$out/kit-full.ppm" "$out/kit-empty.ppm" || bad=1
 
 [ $bad = 0 ] || exit 1
-echo "  glass: ok -- real pixels in, rows and columns out, the text across a new grid, a loaded face, and sixel and kitty pictures"
+echo "  glass: ok -- real pixels in, rows and columns out, the text and a picture across a new grid, a loaded face, and sixel and kitty pictures"
