@@ -4,9 +4,13 @@
 // what is host here is only the registration -- the love_nifs section glob is the
 // host's trick, and another seat wires the same bodies its own way (the kernel a
 // defs[] row, the playdate its own table). the quay sources ride along by unity
-// include: they are not otherwise linked into the host binary.
+// include, the painter and its two fonts with them: every seat that links this file
+// (the host, and each kernel through $(host_c)) has them once.
 #include "love.h"
 #include "quay/quay.c"
+#include "quay/paint.c"
+#include "quay/cga_8x8.c"
+#include "quay/cleat_8x16.c"
 #include "quay/nif.c"
 
 LvNif("screen", nif_screen, NULL);
@@ -17,3 +21,4 @@ LvNif("reply", nif_reply, NULL);
 LvNif("wet", nif_damage, NULL);
 LvNif("facerow", nif_facerow, NULL);
 LvNif("tilepx", nif_tilepx, NULL);
+LvNif("dye", nif_dye, NULL);

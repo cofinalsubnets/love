@@ -209,7 +209,7 @@ static uint8_t *cb_sbase(struct cb const *c) {
 static struct cb_img *cb_imgs(struct cb const *c) { return (struct cb_img*) cb_sbase(c); }
 static uint32_t *cb_pal(struct cb const *c) { return (uint32_t*) (cb_sbase(c) + cb_nimg * sizeof(struct cb_img)); }
 uint32_t const *cb_ipx(struct cb const *c) { return (uint32_t const*) (cb_sbase(c) + cb_shead); }
-static uint32_t *cb_px(struct cb *c) { return (uint32_t*) (cb_sbase(c) + cb_shead); }
+static uint32_t *cb_spx(struct cb *c) { return (uint32_t*) (cb_sbase(c) + cb_shead); }
 // the arena's words, 0 for a screen with no store
 static uint32_t cb_words(struct cb const *c) { return c->sn > cb_shead ? (c->sn - cb_shead) / 4u : 0; }
 
@@ -236,7 +236,7 @@ struct cb_img const *cb_img(struct cb const *c, uint32_t slot) {
 // the order of their offsets
 static void cb_sweep(struct cb *c, int ids) {
   struct cb_img *im = cb_imgs(c);
-  uint32_t *px = cb_px(c), seen[cb_nimg / 32] = { 0 }, top = 0;
+  uint32_t *px = cb_spx(c), seen[cb_nimg / 32] = { 0 }, top = 0;
   for (uint32_t k = 0; k < cb_nimg; k++) im[k].live = im[k].live && cb_img(c, k) ? 2u : 0u;
   for (uint32_t i = 0, n = (uint32_t) c->rows * c->cols; i < n; i++) {
     uint32_t const g = c->cb[i].g;
@@ -321,13 +321,13 @@ static void cb_six(struct cb *c, uint8_t i) {
   if (c->sy + 6 > c->sh) {                          // a band's first touch clears its rows
     uint32_t const to = c->sy + 6 < cv->h ? c->sy + 6 : cv->h;
     for (uint32_t y = c->sh; y < to; y++)
-      for (uint32_t x = 0; x < stride; x++) cb_px(c)[cv->off + y * stride + x] = 0;
+      for (uint32_t x = 0; x < stride; x++) cb_spx(c)[cv->off + y * stride + x] = 0;
     if (to > c->sh) c->sh = to; }
   uint32_t const ink = 0xff000000u | cb_pal(c)[c->sreg];
   for (uint32_t n = 0; n < c->srep && c->sx + n < stride; n++) {
     uint32_t const x = c->sx + n;
     for (uint32_t b = 0; b < 6; b++)
-      if (bits >> b & 1 && c->sy + b < cv->h) cb_px(c)[cv->off + (c->sy + b) * stride + x] = ink;
+      if (bits >> b & 1 && c->sy + b < cv->h) cb_spx(c)[cv->off + (c->sy + b) * stride + x] = ink;
     if (bits && x + 1 > c->sw) c->sw = x + 1; }
   c->sx += c->srep, c->srep = 1; }
 
@@ -375,7 +375,7 @@ static void cb_six_close(struct cb *c) {
   struct cb_img *im = cb_imgs(c) + k;
   uint32_t const w = c->sw, h = c->sh < im->h ? c->sh : im->h, stride = im->w;
   if (!w || !h) return;
-  uint32_t *px = cb_px(c);
+  uint32_t *px = cb_spx(c);
   for (uint32_t y = 1; y < h; y++)
     for (uint32_t x = 0; x < w; x++) px[im->off + y * w + x] = px[im->off + y * stride + x];
   im->w = w, im->h = h, im->live = 1;
@@ -437,7 +437,7 @@ static uint32_t cb_kit_scale(struct cb *c, uint32_t k) {
   uint32_t k2 = 1;
   while (k2 < cb_nimg && cb_imgs(c)[k2].live) k2++;
   if (k2 == cb_nimg || (uint64_t) W * H > cb_words(c) - c->stop) return k;
-  uint32_t *px = cb_px(c);
+  uint32_t *px = cb_spx(c);
   uint32_t const off = c->stop;
   for (uint32_t y = 0; y < H; y++)
     for (uint32_t x = 0; x < W; x++)
@@ -485,7 +485,7 @@ static void cb_kit_byte(struct cb *c, uint32_t b) {
   uint32_t const a = bpp == 4 ? c->kpx & 255u : 255u, rgb = bpp == 4 ? c->kpx >> 8 : c->kpx;
   struct cb_img const *im = cb_imgs(c) + c->kslot;
   if (c->kpix < im->w * im->h && im->off + c->kpix < cb_words(c))
-    cb_px(c)[im->off + c->kpix] = a >= 128 ? 0xff000000u | (rgb & 0xffffffu) : 0;
+    cb_spx(c)[im->off + c->kpix] = a >= 128 ? 0xff000000u | (rgb & 0xffffffu) : 0;
   c->kpix++, c->kpx = 0, c->kbyte = 0; }
 
 static void cb_kit_b64(struct cb *c, uint8_t i) {
