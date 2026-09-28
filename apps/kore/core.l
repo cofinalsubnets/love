@@ -1040,7 +1040,7 @@
     (: h (cite 'holo) g (cite 'glaze)
        (? (nil? h || nil? g || !(elem love-arch '(x64 a64))) twin
           (: bs (peep ((h 'assemble) love-arch (ir love-arch)) 'bytes 0)
-             ((g 'nif) (cask bs) twin '(\ q (q)) arity))))
+             ((g 'nif) (cask bs) twin arity))))
    kbox (tablet 0)
    (kernel nm ir twin arity)
     (: k (peep kbox nm 'none)

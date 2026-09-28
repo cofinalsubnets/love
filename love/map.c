@@ -324,17 +324,39 @@ uintptr_t hash(struct ai *g, intptr_t x) {
 // it will not residualize; 3 fold the cells of the object tray in *src over the header hash
 // in *out. a chain never arrives -- hash_at spines it -- and a sourced lambda leaves by 1
 // or 2, which is what keeps this side free of the source walk.
+// a function hashes as `=` reads it (arr.c's fn_eq): its thread's words from the value to the
+// terminator, a pointer back into its own thread by its offset, any other heap word by being
+// one -- the worklist compares those, and a hash owes `=` only that what it joins hashes alike.
+// a partial folds its base and its captures, a native is its twin, a carrier its length (it
+// is equal to itself alone). out of the pool, an offset from hash_base. all GC-stable
+static uintptr_t fn_hash(struct ai *g, word x) {
+ x = fn_meaning(g, x);
+ if (!in_heap(g, x)) return rot(((intptr_t) x - (intptr_t) hash_base) * mix);
+ union u *k = cell(x);
+ struct ai_tag *tg = ttag(g, k);
+ uintptr_t h = mix;
+ if (fn_carrier(k)) {
+  for (union u *y = k; y < (union u*) tg; y++) h ^= h * mix;
+  return h; }
+ if (fn_partialp(k)) {
+  int n;
+  union u *b = fn_base(k, &n);
+  h = (fn_hash(g, (word) b) ^ (uintptr_t) n) * mix;
+  for (int i = 0; i < n; i++) { word v = fn_arg(k, i, n); h = (h ^ (uintptr_t) (charmp(v) ? v : 2)) * mix; }
+  return h; }
+ word hd = (word) tag_head(tg), e = (word) tg;
+ for (union u *y = k; y < (union u*) tg; y++) {
+  word v = y->x;
+  if (!(v & 1) && !(v >= hd && v <= e)) { word m = fn_meaning(g, v); if (m >= hd && m <= e) v = m; }
+  uintptr_t t = (v & 1) ? (uintptr_t) v
+              : v >= hd && v <= e ? (uintptr_t) (v - x)
+              : in_heap(g, v) ? 2 : (uintptr_t) (v - (intptr_t) hash_base);
+  h = (h ^ t) * mix; }
+ return h; }
+
 int hash_leaf(struct ai *g, word x, uintptr_t *out, word *src) {
  if (charmp(x)) return *out = rot(x*mix), 0;
- if (!datp(x)) {
-   // out-of-pool: offset from hash_base. in-pool: a sourced lambda hashes its
-   // \-expr α-invariantly (agreeing with `=`), else by length. all GC-stable.
-   if (!in_heap(g, x)) return *out = rot(((intptr_t) x - (intptr_t) hash_base) * mix), 0;   // a tenured closure lives in the major pool, still in-heap
-   union u *k = cell(x); struct ai_tag *tg = ttag(g, k);
-   if (tag_head(tg) < k) return *src = k[-1].x, 1;      // no-capture lambda: α-invariant source hash
-   uintptr_t r = mix;                                   // the fallback if the bridge declines (continuation /
-   for (union u *y = k; y < (union u*) tg; y++) r ^= r * mix;   // handle / bif-based partial-app): by object length
-   return *out = r, *src = x, 2; }
+ if (!datp(x)) return *out = fn_hash(g, x), 0;
  switch (typ(x)) {
    case DChain: break;                            // hash_at spines a chain; one reaching here is a bug
    case DMint: return *out = sym(x)->serial, 0;
@@ -381,8 +403,8 @@ static void nat_free(struct ai *g, void *p) { code_free(g, (char*) ((union u*) p
 #endif
 
 // FIXME doesn't belong in this file
-// (nif code interp src arity): emitted bytes -> a transparent applicable native closure
-// (the lvm ABI: g=rdi Ip=rsi Hp=rdx Sp=rcx). the cell is [header src code|cur (arity)
+// (nif code interp arity): emitted bytes -> a transparent applicable native closure
+// (the lvm ABI: g=rdi Ip=rsi Hp=rdx Sp=rcx). the cell is [header code|cur (arity)
 // interp lvm_ret n (extras)] -- arity 1 enters the body directly, arity>=2 curries to
 // saturation through lvm_cur, and lvm_ret sits at the same offset in both so the emitted
 // body is layout-blind. value[1] is the interp twin, so a decline (bad args, no code
@@ -390,10 +412,10 @@ static void nat_free(struct ai *g, void *p) { code_free(g, (char*) ((union u*) p
 // duplicates the code addr for run_finalizers' dead/live test; internal, the egg mops it.
 // nifx adds an extras word (value[3]+8 = Ip+32) for refs a native needs beyond the twin.
 // code is the arena's (hosted) or a heap string's (freestanding, where RAM runs as it is)
-lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=src Sp[3]=arity [Sp[4]=extras]
- int xtra = Ip->ap == lvm_nifx, nsp = xtra ? 4 : 3;   // entered at its own word (nif's tail-jumps here with Ip at nif's)
+lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=arity [Sp[3]=extras]
+ int xtra = Ip->ap == lvm_nifx, nsp = xtra ? 3 : 2;   // entered at its own word (nif's tail-jumps here with Ip at nif's)
  word codebuf = Sp[0];
- intptr_t ar = oddp(Sp[3]) ? getcharm(Sp[3]) : 0;
+ intptr_t ar = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
  if (!(strp(codebuf) || caskp(codebuf)) || ar < 1) ai_musttail return Answerp(nsp, Sp[1]);
  uintptr_t n = len(bytes_of(codebuf));
  if (n == 0) ai_musttail return Answerp(nsp, Sp[1]);
@@ -405,11 +427,11 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=s
  // inle declines: its heap rides the NX hhdm window and would move under the collector
  // besides, so the interp twin runs. a metal door would want low-window pages, which keep X.
  if (__ai_osv < 0) ai_musttail return Answerp(nsp, Sp[1]);
- Have(11 + Width(struct ai_fz));              // 11 covers every cell (6..9 words) + tag + fz
+ Have(10 + Width(struct ai_fz));              // 10 covers every cell (5..8 words) + tag + fz
  code = code_install(g, txt(bytes_of(Sp[0])), n);   // reload codebuf: a GC in Have may have moved it
  if (!code) ai_musttail return Answerp(nsp, Sp[1]);
 #else
- Have(str_width(n) + 11);                     // freestanding: RAM is executable, a heap copy runs
+ Have(str_width(n) + 10);                     // freestanding: RAM is executable, a heap copy runs
  struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
  __builtin___clear_cache(txt(s), txt(s) + n);
@@ -419,30 +441,28 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=s
  uintptr_t w;
  if (ar == 1) {                               // direct-entry cell
   k[0].ap = (lvm_t*) code;                    // header (== code, out-of-pool): finalizer dead-detect
-  k[1].x  = Sp[2];                            // src   (value[-1], for =/show)
-  k[2].ap = (lvm_t*) code;                    // code  (value[0]): the emitted body, the entry
-  k[3].x  = Sp[1];                            // interp(value[1]): deopt fallback
-  k[4].ap = lvm_ret;                          // value[2]: fast-path return
-  k[5].x  = putcharm(0);                      // ret n=1
-  w = 6;
+  k[1].ap = (lvm_t*) code;                    // code  (value[0]): the emitted body, the entry
+  k[2].x  = Sp[1];                            // interp(value[1]): deopt fallback
+  k[3].ap = lvm_ret;                          // value[2]: fast-path return
+  k[4].x  = putcharm(0);                      // ret n=1
+  w = 5;
  } else {                                     // lvm_cur cell
   k[0].ap = (lvm_t*) code;                    // header (out-of-pool): finalizer dead-detect
-  k[1].x  = Sp[2];                            // src (value[-1])
-  k[2].ap = lvm_cur;                          // value[0]: curry to saturation
-  k[3].x  = putcharm(ar);
-  k[4].ap = (lvm_t*) code;                    // native body (lvm_cur resume Ip+2)
-  k[5].x  = Sp[1];                            // interp: deopt fallback
-  k[6].ap = lvm_ret;
-  k[7].x  = putcharm(ar - 1);                 // ret pops n=arity
-  w = 8; }
- if (xtra) k[w++].x = Sp[4];                  // extras at Ip+32 from the body entry, either arity
+  k[1].ap = lvm_cur;                          // value[0]: curry to saturation
+  k[2].x  = putcharm(ar);
+  k[3].ap = (lvm_t*) code;                    // native body (lvm_cur resume Ip+2)
+  k[4].x  = Sp[1];                            // interp: deopt fallback
+  k[5].ap = lvm_ret;
+  k[6].x  = putcharm(ar - 1);                 // ret pops n=arity
+  w = 7; }
+ if (xtra) k[w++].x = Sp[3];                  // extras at Ip+32 from the body entry, either arity
  Hp += w + 1;
  tagthread(k, w);
 #if __STDC_HOSTED__
  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
  z->p = k, z->fn = nat_free, z->next = g->fz, g->fz = z;
 #endif
- ai_musttail return Answerp(nsp, word(k + 2)); }
+ ai_musttail return Answerp(nsp, word(k + 1)); }
 lvm(lvm_nif) { ai_musttail return Ap(lvm_nifx, g); }   // the same build, no extras word
 
 

@@ -729,7 +729,7 @@
                                        (rev acc . t))
                          r (go >ts2 ())
                          (pfordo nm <r >r))
-                    (pfordo nm [[('var . "@")]] ts2))))))
+                    (pfordo nm [[('dq . [('var . "@")])]] ts2))))))   ; bare: "$@"
    (pfordo nm ws ts)
      (: d (expw ts "do" "for wants `do`")
         (? !(charm? <d) d
@@ -878,7 +878,12 @@
 
 (module 'lush
 (: sh-subeval {0}
-   (sh-ifs? (32 || 9 || 10)) 1
+   ; IFS: unset is space, tab and newline; "" splits nothing. its white space runs
+   ; together, and any other byte of it is a delimiter on its own
+   (sh-ifs _) (sh-vget "IFS" @ (_ . v) v " \t\n")
+   (sh-ifin f c) (:- (go 0) (go k) (k < #f && (f k = c || go (k + 1))))
+   (sh-ifw? f c) ((c = 32 || c = 9 || c = 10) && sh-ifin f c)
+   (sh-ifn? f c) (!(c = 32 || c = 9 || c = 10) && sh-ifin f c)
    (sh-chomp t)
      (:- (go #t) (go k) (0 < k && t (k - 1) = 10 ? (go (k - 1)) (snip t 0 k)))
    (sh-runsub x) (sh-chomp ("" + sh-subeval () x))
@@ -1177,15 +1182,24 @@
    ; field in progress (rev run list), seen "this field exists"
    (addrun runs t a) (? #t ((t . a) . runs) runs)
    (closef done runs seen) (? seen (runs . done) done)
-   (skifs t i n) (i < n && sh-ifs? (t i) ? (skifs t (i + 1) n) i)
-   (chunk t i n) (i < n && !(sh-ifs? (t i)) ? (chunk t (i + 1) n) i)
-   ; split expansion output on IFS: chunks join the field, runs of IFS close it
-   (spl t i n done runs seen)
+   (skifs f t i n) (i < n && sh-ifw? f (t i) ? (skifs f t (i + 1) n) i)
+   (chunk f t i n) (i < n && !(sh-ifin f (t i)) ? (chunk f t (i + 1) n) i)
+   ; past a delimiter -- IFS white space around at most one other IFS byte -- at j: (k . hard?),
+   ; hard when that other byte is there, which ends a field even an empty one
+   (delim f t j n) (: k (skifs f t j n)
+                    (? (k < n && sh-ifn? f (t k)) (skifs f t (k + 1) n . 1) (k . 0)))
+   ; split expansion output on IFS: chunks join the field, a delimiter closes it
+   (spl f t i n done runs seen)
      (? (i = n) [done runs seen]
-        (? (sh-ifs? (t i))
-           (spl t (skifs t i n) n (closef done runs seen) () 0)
-           (: j (chunk t i n)
-              (spl t j n done (addrun runs (snip t i j) 1) 1))))
+        (sh-ifin f (t i))
+          (: d (delim f t i n) (spl f t <d n (closef done runs (seen || >d)) () 0))
+        (: j (chunk f t i n)
+           (spl f t j n done (addrun runs (snip t i j) 1) 1)))
+   (split t d r sn) (spl (sh-ifs ()) t 0 #t d r sn)
+   ; bare $@ and $*: each positional splits on its own, and a field ends between two
+   (splitpos ps d r sn) (? (one? ps) [d r sn]
+                           (: st (split <ps d r sn)
+                              (? (two? >ps) (splitpos >ps (closef (st 0) (st 1) (st 2)) () 0) st)))
 
    ; ".." with the $@ law: each positional its own field, edges glue
    (dqat inner st)
@@ -1222,10 +1236,10 @@
            ; "": a real (seen) field even empty -- except a lone "$@" over zero
            ; positionals, which contributes nothing (dqat's glue lane sets seen)
              'dq  (dqat v [d r (two? v ? sn 1)])
-             'var (sh-vval v @ t (spl t 0 #t d r sn))
-             'vop (sh-vopseg sg @ t (spl t 0 #t d r sn))
-             'sub (sh-runsub v @ t (spl t 0 #t d r sn))
-             'ari (sh-arith v @ t (spl t 0 #t d r sn))
+             'var (? (v = "@" || v = "*") (splitpos (sh-pos ()) d r sn) (split (sh-vval v) d r sn))
+             'vop (split (sh-vopseg sg) d r sn)
+             'sub (split (sh-runsub v) d r sn)
+             'ari (split (sh-arith v) d r sn)
              st))
    (wsegs segs st) (? !segs st (wsegs >segs (wseg <segs st)))
 
@@ -1587,15 +1601,16 @@
         nms (? (two? args2) args2 ["REPLY"])
         _ (pin sh-inread () 1)
         ln (sh-getline in)
-        (? (ln = 'eof) 1 (: _ (sh-readset nms ln 0 #ln) 0)))
-   (sh-readset nms ln i n)
-     (: i2 (skifs ln i n)
-        (? (one? >nms) (sh-setvar <nms (sh-rtrim (snip ln i2 n)))
-           (: j (chunk ln i2 n)
+        (? (ln = 'eof) 1 (: _ (sh-readset (sh-ifs ()) nms ln 0 #ln) 0)))
+   ; each name but the last takes a field; the last takes the rest, less trailing IFS white space
+   (sh-readset f nms ln i n)
+     (: i2 (skifs f ln i n)
+        (? (one? >nms) (sh-setvar <nms (sh-rtrim f (snip ln i2 n)))
+           (: j (chunk f ln i2 n)
               _ (sh-setvar <nms (snip ln i2 j))
-              (sh-readset >nms ln j n))))
-   (sh-rtrim s) (:- (go #s) (go k)
-    (0 < k && sh-ifs? (s (k - 1)) ? (go (k - 1)) (snip s 0 k)))
+              (sh-readset f >nms ln (? (j < n) <(delim f ln j n) j) n))))
+   (sh-rtrim f s) (:- (go #s) (go k)
+    (0 < k && sh-ifw? f (s (k - 1)) ? (go (k - 1)) (snip s 0 k)))
    (sh-setb args)
      (one? args ? 0
       (: a <args
@@ -2014,7 +2029,7 @@
         (sh-leave st) st)
    ; a background job shows the line that started it, and that line already carries the
    ; & unless it held several and_ors and this was not the last
-   (sh-bgline _) (: s (sh-rtrim (sh-curline ()))
+   (sh-bgline _) (: s (sh-rtrim " \t\n" (sh-curline ()))
                     (? (0 < #s && s (#s - 1) = 38) s (s + " &")))
    (sh-pipeline cmds bg)
      (: sx (sh-stagex cmds ())

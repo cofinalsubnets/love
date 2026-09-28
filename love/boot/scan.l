@@ -103,7 +103,7 @@
    (mk _) (: h (cite 'holo) g (cite 'glaze)
              (? (!h || !g || !(elem love-arch '(x64 a64))) walk
                 (: bs (peep (h 'assemble love-arch (scan-ir love-arch)) 'bytes 0)
-                   (g 'nif (cask bs) walk '(\ q (q)) 3))))
+                   (g 'nif (cask bs) walk 3))))
    box {}                                ; one install for the process, not one per ask
    ; (scanner ()) -> (f s c i), answering the index of charm c at-or-after i, or -1.
    ; a caller with many texts asks once and holds f: this is a tablet read, which is

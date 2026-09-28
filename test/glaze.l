@@ -2,7 +2,7 @@
 ; is machine-specific) -- plus the decline laws below, which run everywhere and answer the same on
 ; every target by construction: that is the whole point of a lane that knows when to stand down.
 ; The executing tests are test/glaze-x86.l; the mechanism, love/boot/glaze.l's header.
-; `nif` -- the codegen-backend install seam (love.c): (nif code interp src ..) wraps
+; `nif` -- the codegen-backend install seam (love.c): (nif code interp arity) wraps
 ; emitted bytes in a transparent applicable native closure. neutral here (no
 ; install/run -- the bytes are x86-64; the real round-trip lives in love/boot/glaze.l):
 ; non-byte / empty code installs nothing.
@@ -14,7 +14,7 @@
 (: G (cite 'glaze)
    (? G (: N (G 'nif)
            (test (lit? N)
-                   !(N 5 0 0 1) !(N 'x 0 0 1) !(N () 0 0 1) !(N "" 0 0 1)))
+                   !(N 5 0 1) !(N 'x 0 1) !(N () 0 1) !(N "" 0 1)))
       0))
 
 ; --- the natjit group lane declines what it cannot emit -------------------------------

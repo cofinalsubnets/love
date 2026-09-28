@@ -668,7 +668,7 @@ char const *ai_nif_name(intptr_t);
 lvm_t lvm_kcall,
  lvm_putn, lvm_seal, lvm_heard, lvm_worn, lvm_myself,
  lvm_nilp, lvm_putc, lvm_intern,
- lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy, lvm_xlat,
+ lvm_saturate, lvm_ceil, lvm_peep, lvm_nifnom, lvm_cask, lvm_bcopy, lvm_xlat,
  lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_kind, lvm_sub_coin, lvm_quot_coin,   // coins: a kind's values, typed hots on the KHot row
  lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
  lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,
@@ -1123,11 +1123,11 @@ uintptr_t
 struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
 intptr_t
  fn_arg(union u *k, int i, int nargs),
+ fn_meaning(struct ai *c, word x),
  vcmp_flo(int op, ai_flo_t a, ai_flo_t b),
  vcmp_int(int op, intptr_t a, intptr_t b),
  io_route(struct ai *g, word x),
- hot_hook(word h),
- fn_src(struct ai *c, union u *k, word x);
+ hot_hook(word h);
 void
  gen_wb(struct ai *g, word src, word p),
  gen_wb_cell(struct ai *g, void *cl, word v);
@@ -1136,6 +1136,7 @@ bool
  bio_rpending(struct ai_bio *b),
  wait_buffered(struct ai *g, lvm_t *ap, word x, int fd),
  fn_partialp(union u *k),
+ fn_carrier(union u *k),
  in_heap(struct ai *c, word x),
  iop(word x),
  lam_isp(struct ai *g, word x);
