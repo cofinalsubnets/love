@@ -26,9 +26,9 @@
 ; a page asks for gzip and is unzipped (apps/gz.l); one in latin-1 or windows-1252, by its
 ; header or its own <meta>, is re-spelled as utf-8, and any other charset is taken as utf-8.
 ; a <base href> is what the links resolve against. an image is its alt text, and on a
-; terminal a png or jpeg is drawn under it as it comes near the screen, two pixels a cell
-; (24-bit colour where COLORTERM says so, else the 256-colour cube). the window changing
-; width lays the page again, the same link at the top.
+; terminal a png, jpeg or gif is drawn under it as it comes near the screen, two pixels a
+; cell (apps/kore/pic.l). the window changing width lays the page again, the same link at
+; the top.
 ;
 ; gopher:// and gemini:// open too. a gopher menu lays its text lines as they are and its
 ; items as links with their kind, (DIR) (TXT) (?) ..; a search item is a field, sent after a
@@ -38,8 +38,8 @@
 ; on first use -- in ~/.love/gemini_hosts; a changed one is refused, and says which line
 ; to delete to take it.
 ;
-; out of scope, and said: forms that POST, scripts, cookies, and pictures other than png
-; and jpeg. an https peer is not verified (wget's client).
+; out of scope, and said: forms that POST, scripts, cookies, pictures other than png, jpeg
+; and gif, and a gif's motion. an https peer is not verified (wget's client).
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -377,54 +377,21 @@
                        (ww-fetch (ww-resolve url loc) (hops - 1))
                       (200 <= code < 300) (r 2)
                       ()))))))
-   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png or jpeg of up to
-   ; 4 megapixels
-   (ww-be4 b i) ((((b i * 256) + b (i + 1)) * 256 + b (i + 2)) * 256 + b (i + 3))
+   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png, jpeg or gif (its first
+   ; frame) of up to 4 megapixels
    (ww-picture b)
-    (: (drawn r) (? (two? r) r 'none)
-       (? !(string? b && 24 <= #b) 'none
-          (snip b 1 4 = "PNG")
-           (? (4194304 < ww-be4 b 16 * ww-be4 b 20) 'none (drawn ((cite 'png 'png-decode) b)))
-          ((b 0 = 255) && (b 1 = 216))
-           (: d ((cite 'jpeg 'jpeg-size) b)
-              (? (!(two? d) || (4194304 < (d 0 * d 1))) 'none (drawn ((cite 'jpeg 'jpeg-decode) b))))
-          'none))
-   ; a colour as sgr: 24-bit where the terminal says it takes it, else the 256-colour cube
-   (ww-sgr deep fg c)
-    (? deep ((? fg "38;2;" "48;2;") + show (c 0) + ";" + show (c 1) + ";" + show (c 2))
-       (: (q v) ((v * 5 + 127) // 255)
-          ((? fg "38;5;" "48;5;") + show (16 + 36 * q (c 0) + 6 * q (c 1) + q (c 2)))))
-   ; a picture as rows of cells at most cols wide and rows tall, never enlarged, set in
-   ; at the text's own margin where there is room for it
+    (: d (pic-size b)
+       (? (!(two? d) || (4194304 < (d 0 * d 1))) 'none
+          (: r (pic-decode b) (? (two? r) r 'none))))
+   ; a picture as rows of cells at most cols wide and rows tall, set in at the text's own
+   ; margin where there is room for it
    (ww-art im cols0 rows deep)
-    (: w (im 0) h (im 1) px (im 2) e (string 27)
-       pad (? (20 < cols0) "     " "") cols (cols0 - #pad)
-       s (max 1.0 (max (w / cols) (h / (2 * rows))))
-       ow (max 1 (int (w / s))) oh (max 1 (int (h / s)))
-       ; the pixel at output x y: its box's mean over four samples, or () when see-through
-       ; (alpha under half)
-       (at x y) (: i (4 * ((y * w) + x)) [(peep px i 0) (peep px (i + 1) 0) (peep px (i + 2) 0) (peep px (i + 3) 0)])
-       (pix x y)
-        (? (oh <= y) ()
-           (: xs (map (f \ min (w - 1) (int ((x + f) * s))) [0.25 0.75])
-              ys (map (f \ min (h - 1) (int ((y + f) * s))) [0.25 0.75])
-              ss (foldl (\ acc a (foldl (\ acc b ((at a b) . acc)) acc ys)) () xs)
-              ; colour weighted by alpha, so a see-through sample does not darken
-              a +(map (p \ p 3) ss)
-              (? (a < 512) () (map (k \ (+(map (p \ p k * p 3) ss)) // a) ^3))))
-       (sg fg c) (e + "[" + ww-sgr deep fg c + "m")
-       (cell t b) (? (!t && !b) (e + "[0m ")
-                     !b (e + "[0m" + sg 1 t + "▀")
-                     !t (e + "[0m" + sg 1 b + "▄")
-                     (sg 1 t + sg 0 b + "▀"))
-       (row r) (: o (jug 0)
-                  _ (map (x \ say o (cell (pix x (2 * r)) (pix x (2 * r + 1)))) ^ow)
-                  (pad + slurp o + e + "[0m"))
-       (map row ^((oh + 1) // 2)))
+    (: pad (? (20 < cols0) "     " "")
+       (map (r \ pad + r) (pic-art im (cols0 - #pad) rows deep)))
    ; each drawn picture as [line rows], off the marks of the raw layout
    (ww-arts st p)
     (: g (st 'page) base (ww-base (g 1) (g 3)) c (st 'imgs)
-       ct (getenv "COLORTERM") deep (string? ct && (ct = "truecolor" || ct = "24bit"))
+       deep (pic-deep 0)
        rows (max 2 (pgbody st - 1))
        (foldl (\ acc m (: im (peep c (ww-resolve base (m 1)) 'none)
                           (? (im = 'none) acc (acc + [[<m (ww-art im (pgwidth st) rows deep)]]))))

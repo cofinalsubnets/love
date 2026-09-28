@@ -53,11 +53,12 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (194 tools, 202 names)
+## the inventory (196 tools, 210 names)
 
-The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir
-and less/more. love's own verbs carry the rest of the userland the census counts: `cc` (mooncc,
-doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
+The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir,
+less/more, pic/pngcat/jpegcat/gifcat and picless/pngless/jpegless/gifless. love's own verbs
+carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md),
+`mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 
 | where | tools |
 | --- | --- |
@@ -104,6 +105,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
+| pic.l, over png.l, jpeg.l and gif.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, a gif played) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | apps/lush.l | sh / lush |
 
@@ -597,9 +599,8 @@ keys over less's:
   page in latin-1 or windows-1252, by its header or else its own `<meta>`, is converted to
   utf-8. A `<base href>` is what the page's links resolve against, and an image shows as its
   alt text.
-* **A PNG or JPEG is drawn under its alt text** on a terminal, two pixels to a cell: the upper
-  pixel is the colour of a `▀`, the lower its background, 24-bit where `COLORTERM` says the
-  terminal takes it and the 256-colour cube otherwise. A picture is fetched when it comes
+* **A PNG, JPEG or GIF is drawn under its alt text** on a terminal, two pixels to a cell, as
+  `pic` draws it (a GIF stands at its first frame). A picture is fetched when it comes
   within a screen of the view, shrunk to the page's width and the screen's height (never
   enlarged), and kept by URL for the session. The rows are text, so they scroll, page and
   re-lay with the rest.
@@ -619,10 +620,30 @@ keys over less's:
   is refused with the line to delete to accept it. When a server asks for a client
   certificate, an empty one goes back.
 
-Absent: forms that POST, scripts, cookies, pictures other than PNG and JPEG, charsets other than
+Absent: forms that POST, scripts, cookies, pictures other than PNG, JPEG and GIF, charsets other than
 utf-8, latin-1 and windows-1252, and gemini's client certificates. An https peer is not
 verified (wget's client). The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.
+
+## pic and picless (apps/kore/pic.l)
+
+`pic [-w COLS] [-h ROWS] [FILE..]` prints each picture, PNG, JPEG or GIF, as rows of text,
+two pixels to a cell: the upper pixel is the colour of a `▀` and the lower its background,
+24-bit where `COLORTERM` says `truecolor` or `24bit` and the 256-colour cube otherwise. A
+picture is as wide as the terminal (or `COLS`, or 80 when there is none) and no taller than
+`ROWS` cells, shrunk and never enlarged; each cell is the alpha-weighted mean of its pixels'
+boxes, and a mostly see-through pixel is left blank. With no FILE it reads stdin, and with
+several it names each above it. `pngcat`, `jpegcat` and `gifcat` are the same tool.
+
+`picless FILE..` shows one picture at a time, fitted to the screen. `+` and `-` zoom (past the
+fit into single pixels, and back out below it), `0` fits it again, `h` `j` `k` `l` or the arrows
+pan a quarter of the view, `n` and `p` move between files. A GIF plays at its own delays;
+`space` pauses it and `.` and `,` step a frame. The status line holds the name, the size, the
+zoom and the frame. `pngless`, `jpegless` and `gifless` are the same tool.
+
+The decoders: apps/png.l (every colour type and depth, Adam7), love/lib/jpeg.c (baseline and
+progressive, any sampling), love/lib/gif.c (LZW, interlace, transparency, and the three
+disposals across frames). A GIF keeps at most 1000 frames and 128 MB of them.
 
 ## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (apps/kore/net.l)
 

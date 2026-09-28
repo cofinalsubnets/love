@@ -39,6 +39,8 @@
 ;   kore html2text [-w N] [F..]      a page's prose, laid out (apps/kore/lens.l)
 ;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
 ;   kore www [-w N] URL|FILE         a web page, its links numbered (apps/kore/www.l)
+;   kore pic|pngcat|jpegcat|gifcat [-w N] [-h N] [F..]   pictures in cells (apps/kore/pic.l),
+;   kore picless|pngless|jpegless|gifless F..            and a viewer: zoom, pan, a gif played
 ;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l), telnetd its server;
 ;                                    httpd, kiosko under busybox's flags, nslookup, ping, ping6
 ;   kore ssh|sshd|scp ..             the ssh client and server, and scp over them (apps/ssh/cli.l)
@@ -66,6 +68,8 @@
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         ww-art ww-splice ww-marks ww-pictures
+        pic-main picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view
+        pv-new pv-step pv-frame pv-tick pv-keys pv-view
         telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
@@ -780,6 +784,8 @@
             'html2text html2text-main   ; a page's prose (apps/kore/lens.l), the same lens
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'www www-main               ; a page to read, its links followed (apps/kore/www.l)
+            'pic pic-main 'pngcat pic-main 'jpegcat pic-main 'gifcat pic-main   ; pictures (apps/kore/pic.l)
+            'picless picless-main 'pngless picless-main 'jpegless picless-main 'gifless picless-main
             'telnet telnet-main 'httpd httpd-main   ; a remote terminal, and kiosko (apps/kore/net.l)
             'telnetd telnetd-main                     ; ... and the terminal's server
             'nslookup nslookup-main 'ping ping-main ; a name's records, and icmp echoes (the same)
@@ -999,6 +1005,8 @@
     'html2text "usage: html2text [-w COLS] [FILE..]"
     'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
     'www "usage: www [-w COLS] URL|FILE"
+    'pic "usage: pic [-w COLS] [-h ROWS] [FILE..]"
+    'picless "usage: picless FILE.."
     'telnet "usage: telnet HOST [PORT]"
     'telnetd "usage: telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]"
     'httpd "usage: httpd [-fv] [-p PORT] [-h DIR]"
@@ -1124,6 +1132,8 @@ every tool answers --help and --version, and -h where the letter is free
   html2text [-w COLS] [F..]               a page's prose, laid out (apps/kore/lens.l)
   markdown [-t html|roff|text] [F..]      markdown laid out the other way
   www [-w COLS] URL|FILE                  a web page, its links numbered (apps/kore/www.l)
+  pic [-w COLS] [-h ROWS] [F..]           png, jpeg, gif in cells (apps/kore/pic.l); pngcat ..
+  picless F..                             a picture viewer, a gif played; pngless gifless ..
   telnet HOST [PORT]                      a remote terminal; ^] closes (apps/kore/net.l)
   telnetd [-p PORT] [-b ADDR] [-l LOGIN]  its server: LOGIN (/bin/login) on a pty per client
   httpd [-fv] [-p PORT] [-h DIR]          kiosko under busybox's flags (apps/kore/net.l)
