@@ -597,7 +597,7 @@ keys over less's:
   page in latin-1 or windows-1252, by its header or else its own `<meta>`, is converted to
   utf-8. A `<base href>` is what the page's links resolve against, and an image shows as its
   alt text.
-* **A PNG is drawn under its alt text** on a terminal, two pixels to a cell: the upper
+* **A PNG or JPEG is drawn under its alt text** on a terminal, two pixels to a cell: the upper
   pixel is the colour of a `▀`, the lower its background, 24-bit where `COLORTERM` says the
   terminal takes it and the 256-colour cube otherwise. A picture is fetched when it comes
   within a screen of the view, shrunk to the page's width and the screen's height (never
@@ -619,7 +619,7 @@ keys over less's:
   is refused with the line to delete to accept it. When a server asks for a client
   certificate, an empty one goes back.
 
-Absent: forms that POST, scripts, cookies, pictures other than PNG, charsets other than
+Absent: forms that POST, scripts, cookies, pictures other than PNG and JPEG, charsets other than
 utf-8, latin-1 and windows-1252, and gemini's client certificates. An https peer is not
 verified (wget's client). The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.

@@ -26,9 +26,9 @@
 ; a page asks for gzip and is unzipped (apps/gz.l); one in latin-1 or windows-1252, by its
 ; header or its own <meta>, is re-spelled as utf-8, and any other charset is taken as utf-8.
 ; a <base href> is what the links resolve against. an image is its alt text, and on a
-; terminal a png is drawn under it as it comes near the screen, two pixels a cell (24-bit
-; colour where COLORTERM says so, else the 256-colour cube). the window changing width
-; lays the page again, the same link at the top.
+; terminal a png or jpeg is drawn under it as it comes near the screen, two pixels a cell
+; (24-bit colour where COLORTERM says so, else the 256-colour cube). the window changing
+; width lays the page again, the same link at the top.
 ;
 ; gopher:// and gemini:// open too. a gopher menu lays its text lines as they are and its
 ; items as links with their kind, (DIR) (TXT) (?) ..; a search item is a field, sent after a
@@ -38,8 +38,8 @@
 ; on first use -- in ~/.love/gemini_hosts; a changed one is refused, and says which line
 ; to delete to take it.
 ;
-; out of scope, and said: forms that POST, scripts, cookies, and pictures other than png.
-; an https peer is not verified (wget's client).
+; out of scope, and said: forms that POST, scripts, cookies, and pictures other than png
+; and jpeg. an https peer is not verified (wget's client).
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -377,12 +377,18 @@
                        (ww-fetch (ww-resolve url loc) (hops - 1))
                       (200 <= code < 300) (r 2)
                       ()))))))
-   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png of up to 4 megapixels
+   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png or jpeg of up to
+   ; 4 megapixels
    (ww-be4 b i) ((((b i * 256) + b (i + 1)) * 256 + b (i + 2)) * 256 + b (i + 3))
    (ww-picture b)
-    (? !(string? b && 24 <= #b && snip b 1 4 = "PNG") 'none
-       (4194304 < ww-be4 b 16 * ww-be4 b 20) 'none
-       (: r ((cite 'png 'png-decode) b) (? (two? r) r 'none)))
+    (: (drawn r) (? (two? r) r 'none)
+       (? !(string? b && 24 <= #b) 'none
+          (snip b 1 4 = "PNG")
+           (? (4194304 < ww-be4 b 16 * ww-be4 b 20) 'none (drawn ((cite 'png 'png-decode) b)))
+          ((b 0 = 255) && (b 1 = 216))
+           (: d ((cite 'jpeg 'jpeg-size) b)
+              (? (!(two? d) || (4194304 < (d 0 * d 1))) 'none (drawn ((cite 'jpeg 'jpeg-decode) b))))
+          'none))
    ; a colour as sgr: 24-bit where the terminal says it takes it, else the 256-colour cube
    (ww-sgr deep fg c)
     (? deep ((? fg "38;2;" "48;2;") + show (c 0) + ";" + show (c 1) + ";" + show (c 2))
