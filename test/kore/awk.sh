@@ -75,4 +75,17 @@ printf 'BEGIN{x=1}\n' > "$ho/.kore-awk1"; printf 'BEGIN{print x+1}\n' > "$ho/.ko
 awk -f "$ho/.kore-awk1" -f "$ho/.kore-awk2" < "$awkin" > "$g" 2>/dev/null
 korerun awk -f "$ho/.kore-awk1" -f "$ho/.kore-awk2" < "$awkin" > "$o" 2>/dev/null
 same "awk -f"
+# case by character: gawk's answers under a utf-8 locale, spelled out so the gate's own
+# locale cannot move them; a byte no character wears goes through as is
+ac() { want=$1; got=$(printf '%s\n' "$2" | korerun awk "{print $3}")
+       [ "$got" = "$want" ] || fail "kore awk $3 on $2: got [$got] want [$want]"; }
+ac 'ÉAßÉ日X ǄSIİ ΣΣΣΩ' 'éaßÉ日x ǅſıİ ΣσςΩ' 'toupper($0)'
+ac 'éaßé日x ǆſıi σσςω' 'éaßÉ日x ǅſıİ ΣσςΩ' 'tolower($0)'
+ac '8 é語' 'héllo 語x' 'length($0), substr($0, 2, 1) substr($0, 7, 1)'
+ac '3 7 0' 'héllo 語x' 'index($0, "l"), index($0, "語"), index($0, "q")'
+ac '7 7 2' 'héllo 語xx' 'match($0, /語x/) " " RSTART " " RLENGTH'
+ac '[ 日本][é  ][ é][語]' '日本語' 'sprintf("[%3.2s][%-3s][%3c][%c]", $0, "é", 233, 35486)'
+ac '2 -é-' 'éa' 'gsub(/a*/, "-") " " $0'
+ac '3 XaXcX' 'abc' 'gsub(/b*/, "X") " " $0'
+ac "3 $(printf '\377')" "$(printf 'a\377b')" 'length($0), substr($0, 2, 1)'
 echo "kore: awk (41 checks byte-identical to gawk, the exit code, -f, the refusal) ok"
