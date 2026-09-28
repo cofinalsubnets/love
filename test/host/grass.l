@@ -9,9 +9,7 @@
 (borrow 'grass)   ; the artifact's module, warm from the tree
 (borrow 'score)   ; the tune's reader, for the song laws
 
-(: (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
-   (has? h n) (find h n 0)
-   (ticks g n) (0 < n ? (grass-tick g, ticks g (n - 1)) g)
+(: (ticks g n) (0 < n ? (grass-tick g, ticks g (n - 1)) g)
    ; a row in cells: a glyph's tail bytes ride the lead that began it
    (wide s) (:- (go 0 0) (go i n) (i >= #s ? n (go (i + 1) (n + (128 <= s i < 192 ? 0 1)))))
    (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))

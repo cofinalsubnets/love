@@ -815,7 +815,6 @@ no file, or a bare -, is the filter: stdin -> stdout"
                      (: _ (say err ("gzip: " + m)) _ (put err 10) (flush err)))
    (gzc-tell t m) (peep t 'v 0 && (: _ (say err m) _ (put err 10) (flush err)))
    (gzc-pad w s) (#s < w ? (gzc-pad w (" " + s)) s)
-   (gzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
    ; the raw clips, not posix's: no trailing slash is stripped first, so "a/b/" is
    ; a base of "" and a dir of "a/b/". a tar member wants the text it was handed
    (gzc-base p) (snip p (lastslash p) #p)
@@ -884,8 +883,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; .gz (or -S's) comes off; .tgz answers .tar, which is the one rename gzip does.
    (gzc-stem p suf)                    ; -> (1 stem) | ()
     (: n #p
-       (? (gzc-ends? p suf) [1 (snip p 0 (n - #suf))]
-          (gzc-ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]
+       (? (ends? p suf) [1 (snip p 0 (n - #suf))]
+          (ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]
           ()))
 
    ; --- one file, compressed -------------------------------------------------
@@ -893,7 +892,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: suf (peep t 'suf ".gz")
        r (uread p)
        (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
-          (gzc-ends? p suf && !(peep t 'c 0))
+          (ends? p suf && !(peep t 'c 0))
            (: _ (gzc-moan t (p + " already has " + suf + " suffix -- unchanged")) 0)
           (: s <>r
              st (stat p)

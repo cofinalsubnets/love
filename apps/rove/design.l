@@ -25,7 +25,6 @@
  (touch d) (pin d 'dirty 1)
  (nat n) (0 <= n ? n 0)
  (move d dx dy) (pins d 'cx (nat (d 'cx + dx)) 'cy (nat (d 'cy + dy)))
- (words s) (filter (w \ 0 < #w) (split " " s))
  (num s) (: v <(sound s) (charm? v ? v 0))
 
  ; --- the tiles: a row grows to reach the cursor, and the map grows a row ------------
@@ -126,7 +125,7 @@
           + (t ? (show (t 'id) + " " + t 'gl + " " + show (t 'fg) + "/" + show (t 'bg) + " " + t 'name)
                  (string (k 'ch) + " " + (k 'solid ? "wall" "floor") + " " + show (k 'fg) + "/" + show (k 'bg)))
           + "   brush: " + string (d 'brush) + " " + (bk 'solid ? "wall" "floor") + " " + show (bk 'fg) + "/" + show (bk 'bg)
-          + "   palette: " + joins (map string (palette d)) " ")
+          + "   palette: " + join " " (map string (palette d)))
    _ (say j ("\e[K" + edfit about w " " + "\r\n"))
    _ (say j ("\e[K" + edfit " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  :w save  :q leave" w " " + "\r\n"))
    _ (say j ("\e[K" + (d 'mode @ 'map (edfit (d 'msg) w " " + "\e[?25l")

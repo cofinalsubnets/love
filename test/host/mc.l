@@ -16,9 +16,6 @@
                                      (? esc (g (i + 1) acc (65 <= c < 91 || 97 <= c < 123 ? 0 1))
                                         (c = 27) (g (i + 1) acc 1)
                                         (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)
-   (find h n i) (i + #n < 1 + #h ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
-   (has? h n) (find h n 0)
-   (starts? s p) (p = snip s 0 #p)
    (blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
    (scrub _) (each ["/sub/deep.txt" "/plain.txt" "/run.sh" "/good" "/bad" "/zeta.txt"]
                         (n \ unlink (R + n)),

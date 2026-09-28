@@ -29,7 +29,7 @@
 ;                                         or a root to lift the library from (apps)
 (module (story story-main story-run story-new story-key story-frame open-window window-say
          level kind thing level-of data-of level-text load-level save-level library
-         tile kind-of wall? thing-at pen wrap joins)
+         tile kind-of wall? thing-at pen wrap)
 ; posix is OPTIONAL: the page's seat (inle/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
@@ -66,9 +66,9 @@
                    ('things . map row (sort (keys (lvl 'things))))])
  ; the map one row per line, a tile and a thing per line, so the file reads as a level
  (level-text lvl) (: d (data-of lvl)
-                     (block k) (joins (map (r \ "   " + show r) >(d k)) "\n")
+                     (block k) (join "\n" (map (r \ "   " + show r) >(d k)))
                      ("(level " + show (d 1) + " " + show (d 2) + "\n  (map\n"
-                      + joins (map (r \ "   " + show r) (lvl 'rows)) "\n" + ")\n  (tiles\n"
+                      + join "\n" (map (r \ "   " + show r) (lvl 'rows)) + ")\n  (tiles\n"
                       + block 4 + ")\n  (things\n" + block 5 + "))\n"))
  (load-level p) (: q (open p "r")
                    (? !(hot? q) ()
@@ -81,8 +81,6 @@
  (story-new lvl) {'lvl lvl 'x (lvl 'sx) 'y (lvl 'sy) 'vx 0 'vy 0 'win () 'over 0 'msg "" 'mode 'map 'cmd (ednew ())}
  ; the window's prompt and the command line are cli's editor, a key at a time: enter
  ; takes the line and clears it, escape is the caller's, the rest the editor's
- (words s) (filter (w \ 0 < #w) (split " " s))
- (joins l sp) (? (one? l) "" (one? >l) <l (<l + sp + joins >l sp))
  (wrap s w) (: (go ws cur acc) (? (one? ws) (rev (cur . acc))
                                   (: nx (0 < #cur ? (cur + " " + <ws) <ws)
                                      (? (#nx <= w) (go >ws nx acc)
@@ -137,7 +135,7 @@
            ("open" || "o") (with (p \ (: vi (mod 'vi 'vi-main)
                                           (? vi (vi [p], window-say g ("you close " + n + "."))
                                              (window-say g "no editor on this seat.")))))
-           ("look" || "l") (window-say g ("books: " + joins (map show (sort (keys (t 'books)))) ", "))
+           ("look" || "l") (window-say g ("books: " + join ", " (map show (sort (keys (t 'books))))))
            ("help" || "?") (window-say g "read <book>, open <book>, look -- or a love form in parens. esc closes.")
            (window-say g ("you cannot " + ln + ".")))))
 
@@ -230,7 +228,6 @@
 
  ; --- the library: a hall of shelves, one per crew module under root ------------------
  (base p) (: n #p (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n)) (go 0 0))
- (ends? s t) (: n #s m #t (m <= n && snip s (n - m) n = t))
  (first-para md) (:- (go ls "")
   ls (split "\n" md)
   (go l acc) (? (one? l) acc
@@ -258,7 +255,7 @@
                   fs (dir? ? (sort (filter (f \ ends? f ".l") (readdir p))) [(d + ".l")])
                   txt (: t (head-of (b + "/" + d + ".l")) (0 < #t ? t ("the " + d + " shelf. source, bound.")))
                   th (thing (nom d) (3 + 4 * (i % cols)) (2 + 3 * (i // cols)) "|" 220 -1 (d + "'s shelf")
-                            [['say txt ("books: " + joins (map (f \ snip f 0 (#f - 2)) fs) ", ") "read one, open one, or look."] '(ask)])
+                            [['say txt ("books: " + join ", " (map (f \ snip f 0 (#f - 2)) fs)) "read one, open one, or look."] '(ask)])
                   _ (pin th 'books (foldl (\ t f (pin t (nom (snip f 0 (#f - 2))) (b + "/" + f))) {} fs))
                   th)
    things (foldl (\ t i (: th (shelf i (wings i)) (pin t (th 'id) th))) {} (jot n))

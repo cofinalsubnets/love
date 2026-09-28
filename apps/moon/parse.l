@@ -1791,7 +1791,6 @@
     (: n (tally tmpl)
        (idx nm l k) (? !(two? l) () (= <l nm) k (idx nm >l (k + 1)))
        (rbr j) (? (n <= j) -1 ((tmpl j) = 93) j (rbr (j + 1)))
-       (alpha? c) (65 <= c <= 90 || 97 <= c <= 122)
        (go i acc)
         (: md ((i + 2) < n && alpha? (tmpl (i + 1)))     ; %c[ reads past the letter
            b (? md (i + 2) (i + 1))
