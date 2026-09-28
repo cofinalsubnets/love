@@ -32,7 +32,7 @@ $(eval $(call p_heap,$(te_cc),))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
   $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Iapps/moon/include)))
 $(eval $(call p_obj,teensy41,inle/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/inle/bput.h $(R)/love/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,main,inle/teensy41/main.c,main.c teensy41.h $(R)/inle/bput.h $(R)/love/love.h $(lib_hR) $(mc),$(te_cc)))
+$(eval $(call p_obj,main,inle/teensy41/main.c,main.c teensy41.h $(R)/inle/bput.h $(R)/inle/ffalloc.h $(R)/love/love.h $(lib_hR) $(mc),$(te_cc)))
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. inle/mps2/mkstart.l is the same shape with one section,
