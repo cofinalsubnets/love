@@ -101,22 +101,22 @@
       ((tn3 <>(clex "'\\f'") 0) = ['num 12 1])               ; \f form feed, \a bell, \v vtab
       ((tn3 <>(clex "'\\a'") 0) = ['num 7 1])
       ((tn3 <>(clex "'\\v'") 0) = ['num 11 1])
-      (= <>(clex "") ())))                                   ; empty text, empty tokens
+      (<>(clex "") = ())))                                   ; empty text, empty tokens
 
 ; --- the parser: precedence, associativity, desugarings, statement shapes ---
 (: (cast src) <>(cparse <>(clex src))
-   (cexp src) (: ast (cast ("int main() { return " + (+ src "; }")))
+   (cexp src) (: ast (cast ("int main() { return " + (src + "; }")))
                  fn <<>ast
                  items <><>>>fn
                  <><items)
    (test
-      (= (cast "int main() { return 42; }")
+      ((cast "int main() { return 42; }") =
          '(prog ((fn "main" () (blk ((ret (num 42))))))))
-      (= (cast "int add(int a, int b) { return a+b; }")
+      ((cast "int add(int a, int b) { return a+b; }") =
          '(prog ((fn "add" (("a" int) ("b" int)) (blk ((ret (bin + (var "a") (var "b")))))))))
-      (= (cast "long f(char c, short s) { return c; }")
+      ((cast "long f(char c, short s) { return c; }") =
          '(prog ((fn "f" (("c" char) ("s" short)) (blk ((ret (var "c"))))))))
-      (= (cast "int f(void); int main() { return 0; }")
+      ((cast "int f(void); int main() { return 0; }") =
          '(prog ((proto "f") (fn "main" () (blk ((ret (num 0))))))))
       ; a call's head is an expression now (function pointers) -- (call headexpr args)
       ((cexp "f(1, 2+3)") = '(call (var "f") ((num 1) (bin + (num 2) (num 3)))))
@@ -135,7 +135,7 @@
       ((cexp "x+=2") = '(asn (var "x") (bin + (var "x") (num 2))))   ; the desugar
       ((cexp "++x") = '(asn (var "x") (bin + (var "x") (num 1))))
       ; a calm lvalue duplicates; a stepping one is kept whole (rmw) or taken once (post)
-      (= (cexp "a[i]+=2") '(asn (deref (bin + (var "a") (var "i")))
+      ((cexp "a[i]+=2") = '(asn (deref (bin + (var "a") (var "i")))
                                 (bin + (deref (bin + (var "a") (var "i"))) (num 2))))
       ((cexp "*p++|=2") = '(rmw | (deref (post (var "p") 1)) (num 2)))
       ((cexp "a[i++]-=2") = '(rmw - (deref (bin + (var "a") (post (var "i") 1))) (num 2)))
@@ -145,7 +145,7 @@
       ((cexp "a?1:2") = '(cond (var "a") (num 1) (num 2)))
       ; gcc's a ?: b: a pure a repeats, anything else is read once into a temp
       ((cexp "a ?: 2 ?: 3") = '(cond (var "a") (var "a") (cond (num 2) (num 2) (num 3))))
-      (= (cast "int f(void); int main() { return f() ?: 2; }" 1 1 3 1 0 1)
+      ((cast "int f(void); int main() { return f() ?: 2; }" 1 1 3 1 0 1) =
          '(sexpr ((decl (("__elvis_1" int (call (var "f") ())))))
                  (cond (var "__elvis_1") (var "__elvis_1") (num 2)) int))
       ((cexp "1,2") = '(comma (num 1) (num 2)))
@@ -158,29 +158,29 @@
       ((cexp "(char*)x") = '(cast (ptr char) (var "x")))
       ((cexp "(const char*)x") = '(cast (ptr char) (var "x")))    ; a qualifier opens the cast type too -- quals drop, like the decl sites
       ((cexp "sizeof(const int)") = '(cast ulong (num 4)))
-      (= (cast "int main() { int *p; int a[4]; return 0; }")
+      ((cast "int main() { int *p; int a[4]; return 0; }") =
          '(prog ((fn "main" () (blk ((decl (("p" (ptr int) ())))
                                      (decl (("a" (arr int 4) ())))
                                      (ret (num 0))))))))
-      (= (cast "long g = 5; int main() { return 0; }")
+      ((cast "long g = 5; int main() { return 0; }") =
          '(prog ((gdecl (("g" long (num 5))))
                  (fn "main" () (blk ((ret (num 0))))))))
       (okv? (cparse <>(clex "int main() { int *a[3]; return 0; }")))        ; an array of pointers parses (4d)
-      (= (cast "int main() { int x=1; if (x) return 2; return 3; }")
+      ((cast "int main() { int x=1; if (x) return 2; return 3; }") =
          '(prog ((fn "main" () (blk ((decl (("x" int (num 1))))
                                      (if (var "x") (ret (num 2)) ())
                                      (ret (num 3))))))))
       ; a label is a flat marker in a statement list, but a labeled statement is one
       ; statement: as an unbraced arm it takes what it labels with it, into a block.
-      (= (cast "int main() { lab: return 2; }")
+      ((cast "int main() { lab: return 2; }") =
          '(prog ((fn "main" () (blk ((lbl "lab") (ret (num 2))))))))
-      (= (cast "int main() { if (1) return 1; else e0: return 2; }")
+      ((cast "int main() { if (1) return 1; else e0: return 2; }") =
          '(prog ((fn "main" () (blk ((if (num 1) (ret (num 1))
                                          (blk ((lbl "e0") (ret (num 2)))))))))))
-      (= (cast "int main() { if (0) x0: return 1; return 3; }")
+      ((cast "int main() { if (0) x0: return 1; return 3; }") =
          '(prog ((fn "main" () (blk ((if (num 0) (blk ((lbl "x0") (ret (num 1)))) ())
                                      (ret (num 3))))))))
-      (= (cast "int main() { char c; long a=1, b; return 0; }")
+      ((cast "int main() { char c; long a=1, b; return 0; }") =
          '(prog ((fn "main" () (blk ((decl (("c" char ())))
                                      (decl (("a" long (num 1)) ("b" long ())))
                                      (ret (num 0))))))))
@@ -205,16 +205,16 @@
       ((cexp "sizeof(x<y)") = '(cast ulong (num 4)))
       ((cexp "sizeof(x&&y)") = '(cast ulong (num 4)))
       ((cexp "sizeof(x||y)") = '(cast ulong (num 4)))
-      (= (cast "int main() { while (1) break; return 0; }")
+      ((cast "int main() { while (1) break; return 0; }") =
          '(prog ((fn "main" () (blk ((while (num 1) (brk)) (ret (num 0))))))))
       ; musttail comes back through a parse now -- the ret's pre slot (clay's (ret e PRE));
       ; every other statement attribute still skips
-      (= (cast "int main() { __attribute__((musttail)) return main(); }")
+      ((cast "int main() { __attribute__((musttail)) return main(); }") =
          '(prog ((fn "main" () (blk ((ret (call (var "main") ()) "__attribute__((musttail))")))))))
       (gripe? (cparse <>(clex "int main() { return (1+2; }")))            ; the lost )
       (gripe? (cparse <>(clex "int main() { if 1 return 2; }")))          ; if wants parens
       (gripe? (cparse <>(clex "int main() { return 42 }")))
-      (= <>(cparse ()) '(prog ()))))          ; an empty token list is a valid empty TU (crypt.c), not a parse failure
+      (<>(cparse ()) = '(prog ()))))          ; an empty token list is a valid empty TU (crypt.c), not a parse failure
 
 ; --- the gen-law kit: compile, cut one fn, count its traffic -- shared by every gen
 ; block below (a body-less `:` leaks, the corpus convention). ---
@@ -222,30 +222,30 @@
               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
    ; one fn's own forms, label to the next align seam (the inliner copies bodies into
    ; main, where a folded store may read a home register legitimately)
-   (fnf nm fs) (: (seek l) (? !(two? l) () (? (<l = ['label nm]) >l (seek >l)))
-                  (take l) (? !(two? l) ()
+   (fnf nm fs) (: (seek l) (? (atom? l) () (? (<l = ['label nm]) >l (seek >l)))
+                  (take l) (? (atom? l) ()
                               (<l = '(align 2)) ()
                               (<l . take >l))
                   (take (seek fs)))
-   (movs fs) #(filter (f \ (two? f && (= <f 'mov))) fs)
-   (splds fs) (: (go l n) (? !(two? l) n
+   (movs fs) #(filter (f \ (two? f && (<f = 'mov))) fs)
+   (splds fs) (: (go l n) (? (atom? l) n
                             (go >l (? (two? <l && (<<l = 'ld) && (<>><l = 'sp)) (n + 1) n)))
                  (go fs 0))
-   (ldsp fs off) #(filter (f \ (two? f && (= <f 'ld) && (= <>>f 'sp) && (= off <>>>f))) fs)
-   (stsp fs off) #(filter (f \ (two? f && elem <f '(st si) && (= <>f 'sp) && (= off <>>f))) fs)
-   (ldc fs) #(filter (f \ (two? f && elem <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && (= <>>f 'sp))) fs)
+   (ldsp fs off) #(filter (f \ (two? f && (<f = 'ld) && (<>>f = 'sp) && (off = <>>>f))) fs)
+   (stsp fs off) #(filter (f \ (two? f && elem <f '(st si) && (<>f = 'sp) && (off = <>>f))) fs)
+   (ldc fs) #(filter (f \ (two? f && elem <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && (<>>f = 'sp))) fs)
    (sp? fs) (foldl (\ a f (a || (two? f && <f = 'sub && <>f = 'sp))) () fs)
-   (stc fs) #(filter (f \ (two? f && elem <f '(st st1 st2 st4 si si1 si2 si4) && (= <>f 'sp))) fs)
+   (stc fs) #(filter (f \ (two? f && elem <f '(st st1 st2 st4 si si1 si2 si4) && (<>f = 'sp))) fs)
    (leac fs) #(filter (f \ (two? f && elem <f '(lea lean))) fs)
-   (aeb fs) (: (go l) (? !(two? l) ()                 ; the array's base: the lea its escape leaves standing
+   (aeb fs) (: (go l) (? (atom? l) ()                 ; the array's base: the lea its escape leaves standing
                          (: f <l (? (two? f && elem <f '(lea lean) && (<>>f = 'sp))
                                     <>>>f (go >l))))
                 (go fs))
-   (stofs fs op rg) (? !(two? fs) ()                  ; offsets of (op sp K rg) stores...
+   (stofs fs op rg) (? (atom? fs) ()                  ; offsets of (op sp K rg) stores...
                        (: f2 <fs r (stofs >fs op rg)
                           (? (two? f2 && (<f2 = op) && (<>f2 = 'sp) && (<>>>f2 = rg))
                              (<>>f2 . r) r)))
-   (ldofs fs op rg) (? !(two? fs) ()                  ; ...and of (op rg sp K) loads
+   (ldofs fs op rg) (? (atom? fs) ()                  ; ...and of (op rg sp K) loads
                        (: f2 <fs r (ldofs >fs op rg)
                           (? (two? f2 && (<f2 = op) && (<>f2 = rg) && (<>>f2 = 'sp))
                              (<>>>f2 . r) r)))
@@ -260,15 +260,15 @@
    (copyof? fs rg) (two? (filter (\ f (two? f && (<f = 'mov) &&
                                        ((f 2) = rg) && !((f 1) = rg)))
                                  fs))
-   (ldinto fs rg) #(filter (f \ (two? f && (= <f 'ld) && (= (f 1) rg))) fs)
+   (ldinto fs rg) #(filter (f \ (two? f && (<f = 'ld) && ((f 1) = rg))) fs)
    (cspair? fs rg)                                    ; some slot holds rg's save/restore pair, once each
     (: so (stofs fs 'st rg) lo (ldofs fs 'ld rg)
-       (once k l) (: (go e n) (? !(two? e) n (go >e (? (<e = k) (n + 1) n))) (go l 0))
-       (seek l) (? !(two? l) ()
+       (once k l) (: (go e n) (? (atom? e) n (go >e (? (<e = k) (n + 1) n))) (go l 0))
+       (seek l) (? (atom? l) ()
                    (: k <l (? (((once k so) = 1) && ((once k lo) = 1)) 1 (seek >l))))
        (seek so))
    (spillrd? fs srg lop lrg) (: so (stofs fs 'st srg)             ; a spill some lop re-reads
-                                (? !(two? so) () (elem <so (ldofs fs lop lrg)))))
+                                (? (atom? so) () (elem <so (ldofs fs lop lrg)))))
 
 ; --- the generator: one full golden, and the refusals that guard the seams ---
 (: (cast src) <>(cparse <>(clex src))
@@ -277,7 +277,7 @@
       ; nothing here touches r3 (rbx, SysV callee-saved), so its save/restore pair sweeps;
       ; the default `return 0` tail is dead after the explicit return; and main is a slotless
       ; leaf, so the frame link elides -- no push/mov/sub at entry, a bare ret at the exit.
-      (= ir '((call main) (mov r6 r0) (li r0 60) (sys)
+      (ir = '((call main) (mov r6 r0) (li r0 60) (sys)
               (align 2) (label main) (li r0 42) (ret)))
       (two? (cgn "int main() { int x=1; while (x<5) x++; return x; }"))
       ; a ret-position call tail-jumps: the epilogue is (jmp F), no (call F), so deep tail
@@ -289,7 +289,7 @@
       (elem '(call g) <>(cgn "int g(int*p){ static int k; k++; return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }"))
       ; kprop: a write-once constant local reads as its literal and its slot vanishes --
       ; a write or a taken address keeps the slot (the store stays), and the chain folds whole
-      (= (fnf 'f <>(cgn "long f(void) { long w = 8; return w; } int main() { return (int)f(); }"))
+      ((fnf 'f <>(cgn "long f(void) { long w = 8; return w; } int main() { return (int)f(); }")) =
          '((li r0 8) (ret)))
       (: fs (fnf 'f <>(cgn "int use(long *p); long f(void) { long w = 8; use(&w); return w; } int main() { return (int)f(); }"))
          (two? (filter (f9 \ (two? f9 && elem <f9 '(si st))) fs)))
@@ -298,7 +298,7 @@
       (: fs (fnf 'f <>(cgn "long f(void) { long a = 8; long b = a; long c = a + b; return c * b; } int main() { return (int)f(); }"))
          (elem '(li r0 128) fs &&
           (0 = splds fs) &&
-          !(two? (filter (f9 \ (two? f9 && elem <f9 '(si st ld imul add))) fs))))
+          (atom? (filter (f9 \ (two? f9 && elem <f9 '(si st ld imul add))) fs))))
       ; a statement-position attribute run skips (fallthrough..) -- except musttail: it rides
       ; the ret's pre slot and sibs spells the jump, or the compile refuses. no silent fallback
       (elem '(jmp rec) <>(cgn "int rec(int n){ if(n==0) return 5; __attribute__((musttail)) return rec(n-1); } int main(){ return rec(3); }"))
@@ -341,9 +341,9 @@
 ; counts ride ror4/ror (rotate-right always: rotl c lands as W-c), a variable count rorv4/rorv
 ; off the splice's param; a shape off the law -- signed, split operands -- keeps its shifts.
 (: (rots src) (filter (f \ (two? f && elem <f '(ror4 ror rorv4 rorv))) <>(cgn src))
-   (rotn src op c) (two? (filter (f \ (= <f op && (= <>>f c))) (rots src)))
-   (rotv src op) (two? (filter (f \ (= <f op)) (rots src)))
-   (negs src) (two? (filter (f \ (two? f && (= <f 'neg))) <>(cgn src)))
+   (rotn src op c) (two? (filter (f \ <f = op && <>>f = c) (rots src)))
+   (rotv src op) (two? (filter (f \ (<f = op)) (rots src)))
+   (negs src) (two? (filter (f \ (two? f && (<f = 'neg))) <>(cgn src)))
    (test
       (rotn "unsigned f(unsigned x){ return (x >> 7) | (x << 25); } int main(){ return f(9u) & 63; }" 'ror4 7)
       (rotn "unsigned f(unsigned x){ return (x << 12) | (x >> 20); } int main(){ return f(9u) & 63; }" 'ror4 20)
@@ -359,13 +359,13 @@
       ; call site rides the immediate beside the standalone body's register form
       (rotn "unsigned f(unsigned x, int n){ return (x >> n) | (x << (32 - n)); } int main(int c, char **v){ return f((unsigned)c, 3) & 63; }" 'ror4 3)
       (rotn "unsigned f(unsigned x, int n){ return (x << n) | (x >> (32 - n)); } int main(int c, char **v){ return f((unsigned)c, 3) & 63; }" 'ror4 29)
-      !(two? (rots "int f(int x){ return (x >> 3) | (x << 29); } int main(){ return f(9) & 63; }"))
-      !(two? (rots "unsigned f(unsigned x, unsigned y){ return (x >> 5) | (y << 27); } int main(){ return f(9u, 2u) & 63; }"))
-      !(two? (rots "unsigned f(unsigned x){ return (x >> 5) | (x << 26); } int main(){ return f(9u) & 63; }"))))
+      (atom? (rots "int f(int x){ return (x >> 3) | (x << 29); } int main(){ return f(9) & 63; }"))
+      (atom? (rots "unsigned f(unsigned x, unsigned y){ return (x >> 5) | (y << 27); } int main(){ return f(9u, 2u) & 63; }"))
+      (atom? (rots "unsigned f(unsigned x){ return (x >> 5) | (x << 26); } int main(){ return f(9u) & 63; }"))))
 
 ; --- stage 4a: aggregates -- layout to the C rules, members, the new statements ---
 (: (cast src) <>(cparse <>(clex src))
-   (cexpp pre e) (: ast (cast (pre + (+ " int main() { return " (+ e "; }"))))
+   (cexpp pre e) (: ast (cast (pre + (" int main() { return " + (e + "; }"))))
                     (last l) (? (two? >l) (last >l) <l)
                     fn (last <>ast)
                     items <><>>>fn
@@ -387,9 +387,9 @@
       ((cexpp "" "p->a.b") = '(dot (dot (deref (var "p")) "a") "b"))
       ; sizeof over a typed local/member folds at parse (an array bound needs it -- gen's
       ; szof lane only sizes at codegen); `h->p` sizes to its undecayed array span.
-      (= (citems "struct H { char n[100]; char p[155]; }; int f(struct H *h) { char buf[sizeof h->p]; return sizeof buf; }")
+      ((citems "struct H { char n[100]; char p[155]; }; int f(struct H *h) { char buf[sizeof h->p]; return sizeof buf; }") =
          '((decl (("buf" (arr char 155) ()))) (ret (cast ulong (num 155)))))
-      (= (citems "int f(int a[7]) { char buf[sizeof a[0]]; return sizeof buf; }")   ; a[i] element sizeof (a param decays to a pointer: sizeof *ptr = 4)
+      ((citems "int f(int a[7]) { char buf[sizeof a[0]]; return sizeof buf; }") =   ; a[i] element sizeof (a param decays to a pointer: sizeof *ptr = 4)
          '((decl (("buf" (arr char 4) ()))) (ret (cast ulong (num 4)))))
       ; the typing door (parse.l pprom/puac -- C11 6.3.1.1 + 6.3.1.8, the one spelling;
       ; gen's cmpu consumes it): promoted arithmetic sizeofs to its C type, not the
@@ -406,9 +406,9 @@
       ((citems "int f(int *p) { return sizeof(p + 1); }") = '((ret (cast ulong (num 8)))))
       ; a wide literal desugars at parse to a bounded clit of its element type (L ->
       ; wchar, u -> char16 pairs, U -> char32, u8 bytes); an [] bound counts them
-      (= (citems "int f(void) { int w[] = L\"hi\"; return sizeof w; }")
+      ((citems "int f(void) { int w[] = L\"hi\"; return sizeof w; }") =
          '((decl (("w" (arr int 3) (clit (arr int 3) (init ((num 104) (num 105) (num 0))))))) (ret (cast ulong (num 12)))))
-      (= (citems "int f(void) { unsigned short s[] = u\"a\\x1d11e\"; return sizeof s; }")   ; U+1d11e: the surrogate pair
+      ((citems "int f(void) { unsigned short s[] = u\"a\\x1d11e\"; return sizeof s; }") =   ; U+1d11e: the surrogate pair
          '((decl (("s" (arr ushort 4) (clit (arr ushort 4) (init ((num 97) (num 55348) (num 56606) (num 0))))))) (ret (cast ulong (num 8)))))
       ((citems "int f(void) { return sizeof(L\"ab\"); }") = '((ret (cast ulong (num 12)))))
       ((citems "int f(void) { return sizeof(U\"ab\"); }") = '((ret (cast ulong (num 12)))))
@@ -466,11 +466,11 @@
       ; a dispatch table -- an array of function pointers, the love.c pattern
       (two? (cgn "int a(int x){return x+1;} int b(int x){return x*2;} int main(){ int (*t[2])(int); t[0]=a; t[1]=b; return t[0](10)+t[1](10); }"))
       ; --- stage 4c: brace/designated initializers, string inits, [] inference, flexible arrays ---
-      (= (cast "int main() { int a[3] = {1,2,3}; return a[0]; }")
+      ((cast "int main() { int a[3] = {1,2,3}; return a[0]; }") =
          '(prog ((fn "main" () (blk ((decl (("a" (arr int 3) (init ((num 1) (num 2) (num 3)))))) (ret (deref (bin + (var "a") (num 0))))))))))
-      (= (cast "struct S { int x; int y; }; int main() { struct S s = {.y=5,.x=2}; return s.x; }")
+      ((cast "struct S { int x; int y; }; int main() { struct S s = {.y=5,.x=2}; return s.x; }") =
          '(prog ((tdef) (fn "main" () (blk ((decl (("s" (struct "S") (init ((dfield "y" (num 5)) (dfield "x" (num 2))))))) (ret (dot (var "s") "x"))))))))
-      (= (cast "int g[] = {10,20,30}; int main() { return 0; }")   ; [] size inferred from the brace list
+      ((cast "int g[] = {10,20,30}; int main() { return 0; }") =   ; [] size inferred from the brace list
          '(prog ((gdecl (("g" (arr int 3) (init ((num 10) (num 20) (num 30)))))) (fn "main" () (blk ((ret (num 0))))))))
       (okv? (cparse <>(clex "struct T { int n; char d[]; }; int main() { return sizeof(struct T); }")))        ; a flexible array member parses
       (two? (cgn "int main() { int a[4] = {5}; return a[0] + a[3]; }"))            ; partial init zero-fills the rest
@@ -515,7 +515,7 @@
    (tnk ts k) (: t (tn ts k) [<t <>>t])       ; kind/line, for a token whose value is pieces
    (tnf ts k) (cflo <>(tn ts k))              ; ..and the value those pieces fold to
    irbits <>(cgn "int main() { double d = 1.0; return (int)d; }")
-   (has op forms) (: (go l) (? !(two? l) () (two? <l && (<<l = op)) 1 (go >l)) (go forms))
+   (has op forms) (: (go l) (? (atom? l) () (two? <l && (<<l = op)) 1 (go >l)) (go forms))
    (test
       ; a float literal is a 'flo token carrying the pieces, and cflo folds them. the kind
       ; and the fold are both law; which pieces they are is not.
@@ -536,7 +536,7 @@
       ((tnk <>(clex ".5i") 0) = ['iflo 1])      (0.5 = (tnf <>(clex ".5i") 0))
       ((tn3 <>(clex "42") 0) = ['num 42 1])                 ; an integer stays 'num
       ; the parser: a double type and a 'flo primary
-      (= (cast "int main() { double d = 1.5; return 0; }")
+      ((cast "int main() { double d = 1.5; return 0; }") =
          '(prog ((fn "main" () (blk ((decl (("d" double (flo 1.5)))) (ret (num 0))))))))
       ; the 1.0 constant is one load off the unit's double pool (x64)
       (has 'ldsdl irbits)
@@ -569,41 +569,41 @@
    (csig src name) (: r (cparse <>(clex src)) (peep <>>>r name 'none))
    (test
       ; the `...` leaves the fn node clean; the variadic bit lives in the signature
-      (= (cast "int f(int n, ...) { return n; }")
+      ((cast "int f(int n, ...) { return n; }") =
          '(prog ((fn "f" (("n" int)) (blk ((ret (var "n"))))))))
       ((csig "int f(int n, ...) { return n; }" "f") = '(int (int) 1))    ; rettype, params, variadic=1
       ((csig "int g(int a, int b) { return a; }" "g") = '(int (int int) ()))  ; a fixed fn, variadic=()
       ((csig "int p(int n, ...);" "p") = '(int (int) 1))                 ; a variadic prototype records too
       ; the three va builtins parse to their marker forms
-      (= (cast "int f(int n, ...) { char *ap; __builtin_va_start(ap, n); int x = __builtin_va_arg(ap, int); __builtin_va_end(ap); return x; }")
+      ((cast "int f(int n, ...) { char *ap; __builtin_va_start(ap, n); int x = __builtin_va_arg(ap, int); __builtin_va_end(ap); return x; }") =
          '(prog ((fn "f" (("n" int)) (blk ((decl (("ap" (ptr char) ())))
                                            (expr (vastart (var "ap")))
                                            (decl (("x" int (vaarg (var "ap") int))))
                                            (expr (vaend (var "ap")))
                                            (ret (var "x"))))))))
       ; _Static_assert folds and vanishes to a (tdef) no-op, at file and block scope
-      (= (cast "int main() { _Static_assert(1, \"ok\"); return 0; }")
+      ((cast "int main() { _Static_assert(1, \"ok\"); return 0; }") =
          '(prog ((fn "main" () (blk ((tdef) (ret (num 0))))))))
-      (= (cast "_Static_assert(sizeof(int) == 4, \"w\"); int main() { return 0; }")
+      ((cast "_Static_assert(sizeof(int) == 4, \"w\"); int main() { return 0; }") =
          '(prog ((tdef) (fn "main" () (blk ((ret (num 0))))))))
       ; cfold folds 64-bit machine patterns: >> under an unsigned left is logical, a signed
       ; >> arithmetic; a narrow cast masks to width, sign-extending the signed
-      (= (cast "long mx = (long)((unsigned long)-1 >> 2); int main() { return 0; }")
+      ((cast "long mx = (long)((unsigned long)-1 >> 2); int main() { return 0; }") =
          '(prog ((gdecl (("mx" long (num 4611686018427387903)))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "long mc = (long)(((unsigned long)(long)((long)((unsigned long)-1 >> 2))<<1)|1); int main() { return 0; }")
+      ((cast "long mc = (long)(((unsigned long)(long)((long)((unsigned long)-1 >> 2))<<1)|1); int main() { return 0; }") =
          '(prog ((gdecl (("mc" long (num 9223372036854775807)))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "long a = -8 >> 2; int main() { return 0; }")
+      ((cast "long a = -8 >> 2; int main() { return 0; }") =
          '(prog ((gdecl (("a" long (num -2)))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "unsigned int u = (unsigned int)-1; int main() { return 0; }")
+      ((cast "unsigned int u = (unsigned int)-1; int main() { return 0; }") =
          '(prog ((gdecl (("u" uint (num 4294967295)))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "int s = (short)100000; int main() { return 0; }")
+      ((cast "int s = (short)100000; int main() { return 0; }") =
          '(prog ((gdecl (("s" int (num -31072)))) (fn "main" () (blk ((ret (num 0))))))))
       ; the generator: a variadic fn and a variadic call both compile
       (two? (cgn "int f(int n, ...) { return n; } int main() { return f(1); }"))
       (two? (cgn "int s(int n, ...) { char *ap; __builtin_va_start(ap,n); int t=0; int i=0; while(i<n){ t=t+__builtin_va_arg(ap,int); i++; } __builtin_va_end(ap); return t; } int main() { return s(2, 3, 4); }"))
       ; a parameter of array type decays to a pointer (the C rule -- so a va_list,
       ; which is an array typedef, rides as a pointer and can be handed on)
-      (= (cast "int f(int a[], int n) { return n; }")
+      ((cast "int f(int a[], int n) { return n; }") =
          '(prog ((fn "f" (("a" (ptr int)) ("n" int)) (blk ((ret (var "n"))))))))
       (two? (cgn "int sum(int a[], int n) { int s = 0; for (int i = 0; i < n; i++) s += a[i]; return s; } int main() { int x[2]; x[0] = 40; x[1] = 2; return sum(x, 2); }"))
       ; a true _Static_assert compiles; a false one refuses the whole program
@@ -613,11 +613,11 @@
       (refused? (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))
       ; every declarator infers its own [] bound, not just the first. the bytes come from
       ; the initializer either way; only the type goes wrong -- a countof() then reads zero.
-      (= (cast "char a[]={1}, b[]={2,2}, c[]={3,3,3};")
+      ((cast "char a[]={1}, b[]={2,2}, c[]={3,3,3};") =
          '(prog ((gdecl (("a" (arr char 1) (init ((num 1))))
                          ("b" (arr char 2) (init ((num 2) (num 2))))
                          ("c" (arr char 3) (init ((num 3) (num 3) (num 3)))))))))
-      (= (cast "char *p, q[]={1,2};")
+      ((cast "char *p, q[]={1,2};") =
          '(prog ((gdecl (("p" (ptr char) ()) ("q" (arr char 2) (init ((num 1) (num 2)))))))))
       (two? (cgn "static const char a[]={1,2,3}, b[]={4,5,6}; _Static_assert(sizeof(b) == 3, \"m\"); int main() { return a[0]; }"))
       (refused? (cgn "static const char a[]={1,2,3}, b[]={4,5,6}; _Static_assert(sizeof(b) == 0, \"m\"); int main() { return a[0]; }"))
@@ -627,15 +627,15 @@
       (refused? (cgn "_Static_assert(sizeof(int) == 5); int main() { return 0; }"))
       (refused? (cgn "int main() { _Static_assert(0); return 0; }"))
       ; cfold: ?: folds the selected arm (both directions); &&/|| fold != 0 (a negative is true).
-      (= (cast "int g = 1?2:3; int main() { return 0; }")
+      ((cast "int g = 1?2:3; int main() { return 0; }") =
          '(prog ((gdecl (("g" int (num 2)))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "int g = 0?2:3; int main() { return 0; }")
+      ((cast "int g = 0?2:3; int main() { return 0; }") =
          '(prog ((gdecl (("g" int (num 3)))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "int g = -1 && 1; int main() { return 0; }")
+      ((cast "int g = -1 && 1; int main() { return 0; }") =
          '(prog ((gdecl (("g" int (num 1)))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "int g = 0 && 5; int main() { return 0; }")
+      ((cast "int g = 0 && 5; int main() { return 0; }") =
          '(prog ((gdecl (("g" int (num 0)))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "int g = 0 || 5; int main() { return 0; }")
+      ((cast "int g = 0 || 5; int main() { return 0; }") =
          '(prog ((gdecl (("g" int (num 1)))) (fn "main" () (blk ((ret (num 0))))))))
       ; the dead ternary arm need not be constant (or defined): 1 ? 1 : 1/0 is a valid const expr
       (two? (cgn "_Static_assert(1 ? 1 : 1/0, \"dead div0 unevaluated\"); int main() { return 0; }"))
@@ -652,12 +652,12 @@
 ; but shares the double register lane (a load widens, a store narrows); a compound literal
 ; (type){init} parses to ('clit ty init), an unnamed object whose address is an lvalue. ---
 (: (cast src) <>(cparse <>(clex src))
-   (cexp src) (: ast (cast ("int main() { return " + (+ src "; }")))
+   (cexp src) (: ast (cast ("int main() { return " + (src + "; }")))
                  fn <<>ast
                  items <><>>>fn
                  <><items)
    (test
-      (= (cast "int main() { float f = 1.5; return 0; }")
+      ((cast "int main() { float f = 1.5; return 0; }") =
          '(prog ((fn "main" () (blk ((decl (("f" float (flo 1.5)))) (ret (num 0))))))))
       ((cexp "sizeof(float)") = '(cast ulong (num 4)))
       ((cexp "sizeof(float*)") = '(cast ulong (num 8)))
@@ -718,15 +718,15 @@
       !(elem '(label e) (ob 2))
       (elem '(label plain) (ob 2))                  ; an unattributed global still does
       ; the underscored spelling is the same attribute
-      (= (<<((cobx "__attribute__((__section__(\".u\"))) long u = 1; int main() { return 0; }") 8)) ".u")
+      ((<<((cobx "__attribute__((__section__(\".u\"))) long u = 1; int main() { return 0; }") 8)) = ".u")
       ; a braced bitfield images its unit's bits, not a placement apiece: {0,1} is bit 1
       ; alone, and 5 with 21 above it is 5 + 21*8
-      (= ((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}") 2)
+      (((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}") 2) =
          '((label g) (raw (2 0 0 0 0 0 0 0))))
-      (= ((cobx "struct C { unsigned a:3; unsigned b:5; } h = {5,21}; int main(){return 0;}") 2)
+      (((cobx "struct C { unsigned a:3; unsigned b:5; } h = {5,21}; int main(){return 0;}") 2) =
          '((label h) (raw (173 0 0 0 0 0 0 0))))
       ; the unit overlays what shares its bytes -- pre lives in byte 0 of the same word
-      (= ((cobx "struct E { unsigned char pre; unsigned a:3; unsigned b:5; } e = {200,5,21}; int main(){return 0;}") 2)
+      (((cobx "struct E { unsigned char pre; unsigned a:3; unsigned b:5; } e = {200,5,21}; int main(){return 0;}") 2) =
          '((label e) (raw (200 173 0 0 0 0 0 0))))
       ; the two special names keep their own streams and stay out of the extras
       (((cobx "__attribute__((section(\"love_nifs\"))) static long n = 1; int main() { return 0; }") 8) = ())
@@ -735,14 +735,14 @@
 ; --- the preprocessor (stage 5). pps runs cpp (no includes) and joins the output
 ; tokens' spellings to a string. --
 (: (spell1 t) (: k <t
-                 (? (k = 'str) ("\"" + (+ <>t "\""))
+                 (? (k = 'str) ("\"" + (<>t + "\""))
                     (elem k '(wstr str16 str32))
-                     ((? (= k 'wstr) "L\"" (= k 'str16) "u\"" "U\"") + (+ <>t "\""))
+                     ((? (k = 'wstr) "L\"" (k = 'str16) "u\"" "U\"") + (<>t + "\""))
                     ((k = 'num) || (k = 'kw)) (show <>t)
                     <>t))
    (pps src) (: r (cpp <>(clex src) () "<law>")
                 (? !(okv? r) 'FAIL
-                   (: (go l) (? !(two? l) "" ((spell1 <l) + (+ (? (two? >l) " " "") (go >l))))
+                   (: (go l) (? (atom? l) "" ((spell1 <l) + ((? (two? >l) " " "") + (go >l))))
                       (go (fsbody <>r)))))        ; peel cpp's leading spans marker (parse.l fsbody)
    ; the refusal side of the same door: the message a cpp gripe carries, and its line
    (cppno src) (: r (cpp <>(clex src) () "<law>") (? (gripe? r) <>>>>r 'FAIL))
@@ -754,7 +754,7 @@
       ((pps "#define EOF (-1)\nEOF") = "( - 1 )")                      ; 7c-iii: a space before ( = an object macro whose body is parenthesized
       ((pps "#define M(x, ...) f(x, ##__VA_ARGS__)\nM(a)") = "f ( a )")        ; GNU `, ##__VA_ARGS__` elides the comma at zero args
       ((pps "#define M(x, ...) f(x, ##__VA_ARGS__)\nM(a, b, c)") = "f ( a , b , c )")
-      (= (pps "#define SQ(x) ((x)*(x))\nSQ(SQ(2))")                    ; nested / re-expansion
+      ((pps "#define SQ(x) ((x)*(x))\nSQ(SQ(2))") =                    ; nested / re-expansion
          "( ( ( ( 2 ) * ( 2 ) ) ) * ( ( ( 2 ) * ( 2 ) ) ) )")
       ((pps "#define S(x) #x\nS(a b)") = "\"a b\"")                    ; # stringize
       ; # owes the argument's spelling, which its value cannot answer: 0777 and 511
@@ -788,9 +788,9 @@
       ((cppno "#if 1\nx") = "unterminated #if -- no #endif")           ; unterminated #if refuses
       ((cppno "#endif") = "#endif without #if")                        ; ..and so does a stray closer
       ((cppno "#error boom") = "#error: boom")                         ; #error is fatal, and says the program's own words
-      (= (cppno "#cmakedefine X 1")                                    ; an unimplemented directive refuses (C11 6.10p1)
+      ((cppno "#cmakedefine X 1") =                                    ; an unimplemented directive refuses (C11 6.10p1)
          "invalid preprocessing directive #cmakedefine")
-      (= (cppno "#include_next <x.h>")                                 ; include_next among them: dropping it loses a header in silence
+      ((cppno "#include_next <x.h>") =                                 ; include_next among them: dropping it loses a header in silence
          "invalid preprocessing directive #include_next")
       ((cppline "a\nb\n#error late") = 3)                              ; the gripe carries the directive's line
       ((cppline "#if 1\na\nb") = 1)                                    ; ..and an unterminated one carries its opener's
@@ -824,7 +824,7 @@
          (gripe? g && (gline g = 5)))
       ; adjacent string literals join across an include boundary -- love/main.c
       ; splices the egg exactly so, and the file marks stay invisible to phase 6
-      (= <>(pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n")
+      (<>(pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n") =
          '(prog ((gdecl (("s" (ptr char) (str "abc")))))))
       ; a clean parse is still a plain result, never mistaken for a gripe
       (okv? (pgi "int main(void) { return 0; }\n" hdr))))
@@ -871,45 +871,45 @@
 (: (cast src) <>(cparse <>(clex src))
    (test
       ((cast "static const int x = 5;") = (cast "int x = 5;"))
-      (= (cast "int f(int const a, volatile int b){return a;}")
+      ((cast "int f(int const a, volatile int b){return a;}") =
          (cast "int f(int a, int b){return a;}"))
-      (= (cast "int g(char * restrict p){return *p;}")
+      ((cast "int g(char * restrict p){return *p;}") =
          (cast "int g(char *p){return *p;}"))
-      (= (cast "__attribute__((unused)) static int h(void){return 1;}")
+      ((cast "__attribute__((unused)) static int h(void){return 1;}") =
          (cast "int h(void){return 1;}"))
       ; trailing __attribute__((..)) / __asm__(..) on a declarator (glibc's prototypes:
       ; `int f(void) __attribute__((__nothrow__));`) skip the same -- proto, fn def, data, multi
-      (= (cast "int f(int n) __attribute__((__nothrow__ , __leaf__));")
+      ((cast "int f(int n) __attribute__((__nothrow__ , __leaf__));") =
          (cast "int f(int n);"))
-      (= (cast "int g(void) __attribute__((__nothrow__)){return 0;}")
+      ((cast "int g(void) __attribute__((__nothrow__)){return 0;}") =
          (cast "int g(void){return 0;}"))
       ((cast "int v __attribute__((aligned(8)));") = (cast "int v;"))
       ; ..an array declarator carries the trailing run too. the aligned(N) itself is
       ; honored out of band, parse's 'aligns tablet -> cgdata's ('align n)
       ((cast "int a[16] __attribute__((aligned(64)));") = (cast "int a[16];"))
-      (= (cast "int a[2][3] __attribute__((aligned(16))) = {{1,2,3},{4,5,6}};")
+      ((cast "int a[2][3] __attribute__((aligned(16))) = {{1,2,3},{4,5,6}};") =
          (cast "int a[2][3] = {{1,2,3},{4,5,6}};"))
       ((cast "int a __attribute__((unused)), b;") = (cast "int a, b;"))
       ((cast "extern int x __asm__(\"realx\");") = (cast "extern int x;"))
-      (= (cast "int main(void){register int a=3; const int b=4; return a+b;}")
+      ((cast "int main(void){register int a=3; const int b=4; return a+b;}") =
          (cast "int main(void){int a=3; int b=4; return a+b;}"))
-      (= (cast "int f(void const *p){return 0;}")             ; a qual between type and star keeps the pointer
+      ((cast "int f(void const *p){return 0;}") =             ; a qual between type and star keeps the pointer
          (cast "int f(void *p){return 0;}"))
-      (= (cast "int f(int, long); int main(void){return 0;}") ; unnamed proto params -> abstract declarators
+      ((cast "int f(int, long); int main(void){return 0;}") = ; unnamed proto params -> abstract declarators
          '(prog ((proto "f") (fn "main" () (blk ((ret (num 0))))))))
       ; __extension__ (gcc, a no-op) skips at a declaration's head -- file scope,
       ; block, member, before typedef -- and as a unary prefix in an expression
       ((cast "__extension__ unsigned long long v;") = (cast "unsigned long long v;"))
-      (= (cast "__extension__ typedef unsigned long long u; u x;")
+      ((cast "__extension__ typedef unsigned long long u; u x;") =
          (cast "typedef unsigned long long u; u x;"))
       ((cast "struct S { __extension__ long long w; };") = (cast "struct S { long long w; };"))
-      (= (cast "int main(void){ __extension__ long long x = 5; return __extension__ (int)x; }")
+      ((cast "int main(void){ __extension__ long long x = 5; return __extension__ (int)x; }") =
          (cast "int main(void){ long long x = 5; return (int)x; }"))
-      (= (cast "int main(void){ __extension__ typedef int t; t y = __extension__ 3; return y; }")
+      ((cast "int main(void){ __extension__ typedef int t; t y = __extension__ 3; return y; }") =
          (cast "int main(void){ typedef int t; t y = 3; return y; }"))
       ; a typedef's declarator carries the trailing attribute run too (glibc's
       ; `} __pthread_unwind_buf_t __attribute__((__aligned__));`)
-      (= (cast "typedef struct TT { int a; } T __attribute__((__aligned__)); T t;")
+      ((cast "typedef struct TT { int a; } T __attribute__((__aligned__)); T t;") =
          (cast "typedef struct TT { int a; } T; T t;"))))
 
 ; -- 7c-ii: a type-specifier run canonicalizes to one type symbol. the unsigned scalars
@@ -928,7 +928,7 @@
 ; -- 7c-iii: the C-feature tail cc needs to read love.c. the object-vs-function macro
 ; distinction rides in the cpp section above.
 (: (cast src) <>(cparse <>(clex src))
-   (cexp src) (: ast (cast ("int main() { return " + (+ src "; }")))
+   (cexp src) (: ast (cast ("int main() { return " + (src + "; }")))
                  fn <<>ast
                  items <><>>>fn
                  <><items)
@@ -937,10 +937,10 @@
       ((cexp "sizeof x") = '(szof (var "x")))                                       ; sizeof EXPR -> a node (not folded)
       ((cexp "(int (*)(int)) p") = '(cast (ptr (fn int (int))) (var "p")))                ; a function-pointer cast type (return and parameters ride)
       ((cexp "sizeof(int)") = '(cast ulong (num 4)))                              ; sizeof type folds to a coated num (size_t)
-      (= (cast "typedef long a, b; int main(void){ b x; return x; }")                ; a multi-declarator typedef binds both names as `long`
+      ((cast "typedef long a, b; int main(void){ b x; return x; }") =                ; a multi-declarator typedef binds both names as `long`
          '(prog ((tdef) (fn "main" () (blk ((decl (("x" long ()))) (ret (var "x"))))))))
       ((cast "typedef int F(int); int main(void){return 0;}") = '(prog ((tdef) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "extern int v[]; int main(void){return 0;}")                         ; an incomplete array: extern declares, no storage
+      ((cast "extern int v[]; int main(void){return 0;}") =                         ; an incomplete array: extern declares, no storage
          '(prog ((xdecl (("v" (arr int 0) ()))) (fn "main" () (blk ((ret (num 0))))))))))
 
 ; -- 7c-iii part 2: multidimensional arrays. [3][4] of T folds outer..inner into
@@ -981,7 +981,7 @@
       ((dty "int (*p[2])[3];") = '(arr (ptr (arr int 3)) 2))        ; array[2] of pointer-to-array
       ((dty "int (*p)(void);") = '(ptr (fn int ())))                   ; pointer to function (unregressed)
       ((dty "int (*fp[4])(void);") = '(arr (ptr (fn int ())) 4))       ; dispatch table (unregressed)
-      (= (cast "enum q { A, B, KN }; int m[KN][KN]; int main(void){return 0;}")   ; an enum constant dim folds (KN = 2)
+      ((cast "enum q { A, B, KN }; int m[KN][KN]; int main(void){return 0;}") =   ; an enum constant dim folds (KN = 2)
          '(prog ((tdef) (gdecl (("m" (arr (arr int 2) 2) ()))) (fn "main" () (blk ((ret (num 0))))))))))
 
 ; -- 7c-iii part 3: the last of love.c's parse tail. an array dimension is any integer
@@ -989,27 +989,27 @@
 ; whose name is a typedef (love.h's `num`/`word`) hides it for the rest of the block, so
 ; `num + num` reads as an expression, not a cast -- restored at block exit.
 (: (cast src) <>(cparse <>(clex src))
-   (cexp src) (: ast (cast ("int main() { return " + (+ src "; }")))
+   (cexp src) (: ast (cast ("int main() { return " + (src + "; }")))
                  fn <<>ast items <><>>>fn <><items)
    (dty src)  (: ast (cast (src + " int main(void){return 0;}")) <><<><<>ast)
    (test
       ((cexp "0x1p4") = '(flo 16.0))                               ; 0x1p4 = 1 * 2^4
       ((cexp "0xff") = '(num 255))                                 ; a plain hex integer is unchanged
       ((dty "int m[2 * 3];") = '(arr int 6))                       ; a const-expression dimension folds
-      (= (cast "enum e { A, B, C }; int t[3] = { [A]=10, [C]=30 }; int main(void){return 0;}")   ; designated init, enum index
+      ((cast "enum e { A, B, C }; int t[3] = { [A]=10, [C]=30 }; int main(void){return 0;}") =   ; designated init, enum index
          '(prog ((tdef) (gdecl (("t" (arr int 3) (init ((didx 0 (num 10)) (didx 2 (num 30))))))) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "typedef long num; int main(void){ long num = 1; return (int)(num + num); }")   ; a local shadows the `num` typedef
+      ((cast "typedef long num; int main(void){ long num = 1; return (int)(num + num); }") =   ; a local shadows the `num` typedef
          '(prog ((tdef) (fn "main" () (blk ((decl (("num" long (num 1)))) (ret (cast int (bin + (var "num") (var "num"))))))))))))
 
 ; -- block-scoped enum-constant shadowing, the typedef shadow's sibling: a local named
 ; after an enum constant is a variable for the rest of the block, not a folded number.
 (: (cast src) <>(cparse <>(clex src))
    (test
-      (= (cast "enum { K = 5 }; int main(void){ int K = 1; K *= 2; return K; }")
+      ((cast "enum { K = 5 }; int main(void){ int K = 1; K *= 2; return K; }") =
          '(prog ((tdef) (fn "main" () (blk ((decl (("K" int (num 1))))
                                             (expr (asn (var "K") (bin * (var "K") (num 2))))
                                             (ret (var "K"))))))))
-      (= (cast "enum { K = 5 }; int f(void){ { int K = 1; } return K; }")   ; restored at `}`
+      ((cast "enum { K = 5 }; int f(void){ { int K = 1; } return K; }") =   ; restored at `}`
          '(prog ((tdef) (fn "f" () (blk ((blk ((decl (("K" int (num 1))))))
                                          (ret (num 5))))))))))
 
@@ -1020,9 +1020,9 @@
 ; overflow block whole and returns through the caller's hidden pointer.
 (: (stg src) (: r (cparse <>(clex src)) (<>>r "S"))
    (test
-      (= (stg "struct S { double re, im; }; int main(){return 0;}")
+      ((stg "struct S { double re, im; }; int main(){return 0;}") =
          '((("re" 0 double) ("im" 8 double)) 16 8))
-      (= (stg "struct S { char a, b; int c, d; }; int main(){return 0;}")
+      ((stg "struct S { char a, b; int c, d; }; int main(){return 0;}") =
          '((("a" 0 char) ("b" 1 char) ("c" 4 int) ("d" 8 int)) 12 4))
       (two? (cgn "struct S { double re, im; }; static struct S mk(double a, double b){ struct S z = {a,b}; return z; } static double re(struct S z){ return z.re; } int main(){ return (int)re(mk(41.0, 1.0)) + 1; }"))
       (two? (cgn "struct T { int x, y, z; } t; struct T id(struct T a); int main(){ return id(t).x; }"))   ; a 9..16B two-eightbyte struct (int:int) now rides calls
@@ -1049,7 +1049,7 @@
 ; constraint refusal answers () out of cgen, never fudged bytes.
 (: (cast src) <>(cparse <>(clex src))
    hb (cite 'holo 'holo-bytes)
-   (hasraw fs want) (? !(two? fs) ()
+   (hasraw fs want) (? (atom? fs) ()
                        (: f2 <fs
                           (? (two? f2 && (<f2 = 'raw) && (<>f2 = want)) 1 (hasraw >fs want))))
    want (hb 'x64 (asm-text "li r10, 40"))
@@ -1070,44 +1070,44 @@
    ; a register variable pins the operand; a callee-saved clobber is pushed around the body
    want5 (hb 'x64 (asm-text "add r2, r2, 2"))
    g5 (cgn "int main() { register long v asm(\"rdx\") = 40; asm(\"addq $2, %%rdx\" : \"+r\"(v) :: \"r12\"); return v; }")
-   (hassaved fs want) (? !(two? fs) ()
+   (hassaved fs want) (? (atom? fs) ()
                          (fs @ (('push 'r11) . ('raw ^want) . ('pop 'r11) . _) 1
                                (hassaved >fs want)))
    g6 (cgn "int main() { asm goto(\"jmp %l0\" : : : : out); return 1; out: return 0; }")
-   (hasfix fs l) (? !(two? fs) ()
+   (hasfix fs l) (? (atom? fs) ()
                     (: f2 <fs
                        (? (two? f2 && <f2 = 'raw && vany (x \ (two? x && <x = 'fix && x 3 = l)) <>f2) 1
                           (hasfix >fs l))))
    (asmof p) (p 1 0 3 1 0)                        ; prog -> first fn -> its blk -> first item
    (test
-      (= (cast "void f() { asm(\"sys\"); }")
+      ((cast "void f() { asm(\"sys\"); }") =
          '(prog ((fn "f" () (blk ((asm "sys" () () () ())))))))
       ; every GNU spelling of the head and of volatile reads the same statement -- the
       ; underscored ones are also patt's decoration names, and patt runs first
-      (= (cast "void f() { __asm__ volatile(\"sys\"); }")
+      ((cast "void f() { __asm__ volatile(\"sys\"); }") =
          (cast "void f() { asm(\"sys\"); }"))
-      (= (cast "void f() { __asm volatile(\"sys\"); }")
+      ((cast "void f() { __asm volatile(\"sys\"); }") =
          (cast "void f() { asm(\"sys\"); }"))
-      (= (cast "void f() { __asm__ __volatile__(\"sys\"); }")
+      ((cast "void f() { __asm__ __volatile__(\"sys\"); }") =
          (cast "void f() { asm(\"sys\"); }"))
-      (= (cast "void f() { __asm(\"sys\"); }")
+      ((cast "void f() { __asm(\"sys\"); }") =
          (cast "void f() { asm(\"sys\"); }"))
-      (= (cast "void f() { long v; asm volatile(\"li %0, 4\" \"0\" : \"=r\"(v) : \"r\"(v), \"i\"(3) : \"memory\"); }")
+      ((cast "void f() { long v; asm volatile(\"li %0, 4\" \"0\" : \"=r\"(v) : \"r\"(v), \"i\"(3) : \"memory\"); }") =
          '(prog ((fn "f" () (blk ((decl (("v" long ())))
                                   (asm "li %0, 40" (("=r" (var "v")))
                                        (("r" (var "v")) ("i" (num 3)))
                                        ("memory") ())))))))
       ; the holo attribute rides the statement after its labels; a register variable's
       ; pin rides the declarator as its fourth -- and only under `register`
-      (= (cast "void f() { long v; __attribute__((holo)) asm(\"li %0, 4\" : \"=r\"(v)); }")
+      ((cast "void f() { long v; __attribute__((holo)) asm(\"li %0, 4\" : \"=r\"(v)); }") =
          '(prog ((fn "f" () (blk ((decl (("v" long ())))
                                   (asm "li %0, 4" (("=r" (var "v"))) () () () holo)))))))
       ; asm goto: labels ride as names, numbered after every operand; %l[name] reads as %lN
-      (= (asmof (cast "void f(long x) { asm goto(\"jmp %l[b]\" : : \"r\"(x) : \"memory\" : a, b); a: b: ; }"))
+      ((asmof (cast "void f(long x) { asm goto(\"jmp %l[b]\" : : \"r\"(x) : \"memory\" : a, b); a: b: ; }")) =
          '(asm "jmp %l2" () (("r" (var "x"))) ("memory") ("a" "b")))
-      (= (cast "void f() { asm goto(\"jmp %l[out]\" :::: out); out: ; }")
+      ((cast "void f() { asm goto(\"jmp %l[out]\" :::: out); out: ; }") =
          (cast "void f() { __asm__ goto(\"jmp %l0\" : : : : out); out: ; }"))
-      (= (cast "void f() { register long v asm(\"rcx\") = 5; }")
+      ((cast "void f() { register long v asm(\"rcx\") = 5; }") =
          '(prog ((fn "f" () (blk ((decl (("v" long (num 5) "rcx")))))))))
       ((cast "void f() { long v asm(\"rcx\") = 5; }") = ())
       (two? g1) (hasraw <>g1 want)
@@ -1150,22 +1150,22 @@
    ob (tacob "static int hidden(void) { return 3; } asm(\".section .tb, \\\"a\\\"\\n.long hidden - .\\n.previous\");")
    fob (tacob "long f(long x) { long r; asm(\"1: lea 1(%1), %0\\n.pushsection .t, \\\"a\\\"\\n.long 1b - .\\n.popsection\" : \"=r\"(r) : \"r\"(x)); return r; }")
    (test
-      (= (tacast "asm(\"nop\");") '(prog ((tasm "nop"))))
-      (= (tacast "__asm__ volatile (\"a\" \"b\"); int x;") '(prog ((tasm "ab") (gdecl (("x" int ()))))))
+      ((tacast "asm(\"nop\");") = '(prog ((tasm "nop"))))
+      ((tacast "__asm__ volatile (\"a\" \"b\"); int x;") = '(prog ((tasm "ab") (gdecl (("x" int ()))))))
       (refused? (cparse <>(clex "int x; asm(\"\" : : \"r\"(x));")))
-      (= ex '(((".export_symbol" 1 2 ((label __export_symbol_x) (raw (0)) (align 8) (raw ((fix 8 abs64 x 0))))))
+      (ex = '(((".export_symbol" 1 2 ((label __export_symbol_x) (raw (0)) (align 8) (raw ((fix 8 abs64 x 0))))))
               () ()))
-      (= tp '((("__tracepoints_ptrs" 1 2 ((align 4) (raw ((fix 4 rel32 __tracepoint_x 4)))))) () ()))
-      (= sc [[[".static_call.text" 1 6 [['label 'sc] ['label l9] ['raw [233]] ['raw [['fix 4 'rel32 'it 0]]]]]
+      (tp = '((("__tracepoints_ptrs" 1 2 ((align 4) (raw ((fix 4 rel32 __tracepoint_x 4)))))) () ()))
+      (sc = [[[".static_call.text" 1 6 [['label 'sc] ['label l9] ['raw [233]] ['raw [['fix 4 'rel32 'it 0]]]]]
               [".discard.annotate_insn" 1 0 [['raw [['fix 4 'rel32 l9 4] 1 0 0 0]]]]]
              ["sc"] ()])
-      (= (map (s \ [<s (s 1) (s 2)]) <st)
+      ((map (s \ [<s (s 1) (s 2)]) <st) =
          '((".text" 1 6) (".a" 1 0) (".b" 1 0) (".text.hot" 1 6) (".rodata.k" 1 2) (".bss" 8 3)))
-      (= (<st 0 3) '((label x) (raw (1)) (raw (4))))
-      (= (<st 1 3) '((raw (3))))
-      (= (<st 4 3) '((raw (254 255))))
+      ((<st 0 3) = '((label x) (raw (1)) (raw (4))))
+      ((<st 1 3) = '((raw (3))))
+      ((<st 4 3) = '((raw (254 255))))
       (two? ob)
-      (= (ob 12) '(((".tb" 1 2 ((raw ((fix 4 rel32 hidden 4)))))) () ()))
+      ((ob 12) = '(((".tb" 1 2 ((raw ((fix 4 rel32 hidden 4)))))) () ()))
       (elem '(label hidden) (ob 1))
       ; a function's template: gas-text takes it whole unless it carries a directive or a label
       ; beside an instruction; then gas-top reads it from the function's own place, "", its
@@ -1173,12 +1173,12 @@
       (gas-plain? 'x64 "1:\n jne 1b")
       !(gas-plain? 'x64 "1: jne 1b")
       !(gas-plain? 'x64 ".pushsection .x\n.popsection")
-      (= (gas-top-in 'x64 "671: dec %rax\n.pushsection .smp_locks,\"a\"\n.long 671b - .\n.popsection" "" [1 6] "f.asm.3.")
+      ((gas-top-in 'x64 "671: dec %rax\n.pushsection .smp_locks,\"a\"\n.long 671b - .\n.popsection" "" [1 6] "f.asm.3.") =
          '((("" 1 6 ((label f.asm.3.l671.1) (dec r0)))
             (".smp_locks" 1 2 ((raw ((fix 4 rel32 f.asm.3.l671.1 4))))))
            () ()))
       ; ..and gen keeps that label in the function, where the pushed section's word names it
-      (= (fob 12) '(((".t" 1 2 ((raw ((fix 4 rel32 f.asm.0.l1.1 4)))))) () ()))
+      ((fob 12) = '(((".t" 1 2 ((raw ((fix 4 rel32 f.asm.0.l1.1 4)))))) () ()))
       (elem '(label f.asm.0.l1.1) (fob 1))))
 
 ; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params spill/reload
@@ -1188,7 +1188,7 @@
 (: ; counts stores of the param-home registers (r6 r5) to the frame: the vmap's direct
    ; slot stores ride the operand pool (r9 r10 r7 r8) and are not spills. these fns carry
    ; no spush cells, so an sp store is a wrap.
-   (wraps fs) (: (go l n) (? !(two? l) n
+   (wraps fs) (: (go l n) (? (atom? l) n
                              (: f2 <l
                                 (go >l (? (two? f2 &&
                                            (<f2 = 'st) &&
@@ -1200,11 +1200,11 @@
 
    ; a call-crossing fn's param cells: the spills land at entry (the first arg
    ; store precedes every ALU op); the cells are repack's to place from here
-   (fsti fs rg) (: (go l i) (? !(two? l) 99
+   (fsti fs rg) (: (go l i) (? (atom? l) 99
                                (two? <l && (<<l = 'st) && ((<l 3) = rg)) i
                                (go >l (i + 1)))
                    (go fs 0))
-   (falu fs) (: (go l i) (? !(two? l) 99
+   (falu fs) (: (go l i) (? (atom? l) 99
                              (two? <l && elem <<l '(add imul sub) && !(<><l = 'sp)) i
                              (go >l (i + 1)))
                  (go fs 0))
@@ -1231,7 +1231,7 @@
    ; reads the r-twins -- the machine-stack cell opens only for a callish right.
    irW (cgn (pre9 + "unsigned long w(unsigned long a, unsigned long b, unsigned long c) { unsigned __int128 s = (unsigned __int128) a * b + c; return (unsigned long)(s >> 64) ^ (unsigned long) s; } int main() { return (int) w(3,4,5); }"))
    irX (cgn (pre9 + "unsigned long v(unsigned long a) { unsigned __int128 s = (unsigned __int128) a * a + (unsigned __int128) g(1); return (unsigned long) s; } int main() { return (int) v(3); }"))
-   (occh l h9) (: (go l2 n) (? !(two? l2) n (go >l2 (? (two? <l2 && (<<l2 = h9)) (n + 1) n))) (go l 0))
+   (occh l h9) (: (go l2 n) (? (atom? l2) n (go >l2 (? (two? <l2 && (<<l2 = h9)) (n + 1) n))) (go l 0))
    _ (test
       (two? irW) (two? irX)
       (1 = (occh (fnf 'w <>irW) 'mw128r))            ; the widening mul reads its parked register
@@ -1321,7 +1321,7 @@
       (elem '(mov r9 r2) hvf)                     ; f7: n vacates r2 to its positional seat...
       (elem '(sx4 r9) hvf)                        ; ...canonicalized there once
       (elem '(cmp r10 r9) hvf)                    ; ...and both bounds compare register-register
-      (= 0 #(filter (f \ (two? f && (= <f 'ld4))) hvf))
+      (0 = #(filter (f \ (two? f && (<f = 'ld4))) hvf))
       (elem '(st sp 0 r2) cvf)                    ; f8: a cold n spills...
       (elem '(ld4 r0 sp 0) cvf)                   ; ...and re-extends from its slot
       (elem '(sx4 r4) r4f)                        ; f9: nb rides r4 on a64
@@ -1395,10 +1395,10 @@
       (two? irTC) (two? irBN)
       (elem '(add r9 r6 r0) tcf)                  ; fc: t lands on a pool seat...
       (elem '(mov r6 r9) tcf)                     ; ...and hands itself to the tail call
-      (= 0 #(stofs tcf 'st 'r9))              ; never a cell
+      (0 = #(stofs tcf 'st 'r9))              ; never a cell
       (elem '(mov r5 r0) bnf)                     ; fd: r takes its seat from g's answer...
       (elem '(ldx r6 r9 r5 8 0) bnf)              ; ...and p[r] indexes it
-      (= 0 #(stofs bnf 'st 'r5)))
+      (0 = #(stofs bnf 'st 'r5)))
    ; -- d128 locals home as cs pairs: a loop-carried __int128 local takes (lo hi) off the cs
    ; pool -- call-safe, no wraps, no operand-pool pressure. reads/writes are mov pairs on the
    ; r0:r2 protocol; the slot never opens. &-taken and ++ shapes deopt through clval.
@@ -1472,11 +1472,11 @@
       ('(r12) = (csdefs ck9 '(mov r12 r0)))
       ('(r11) = (csdefs ck9 '(ld r11 sp 80)))
       ('(r12) = (csdefs ck9 '(div r12 r0 r5)))       ; idiv writes r0 + its dst, never r3 (self-saved r2)
-      !(two? (csdefs ck9 '(a128r r11 r12)))          ; the d128 family only speaks r0:r2
-      !(two? (csdefs ck9 '(st sp 80 r11)))           ; a save writes memory, not the register
+      (atom? (csdefs ck9 '(a128r r11 r12)))          ; the d128 family only speaks r0:r2
+      (atom? (csdefs ck9 '(st sp 80 r11)))           ; a save writes memory, not the register
       ('dark = (csdefs ck9 '(frob r0))))           ; an op on neither roster is dark -> refuses
    klog {}
-   _ (hear (\ p e (: _ (pin klog p (1 + (peep klog p 0))) 0)))
+   _ (hear (\ p e (pin klog p (1 + peep klog p 0), 0)))
    _ (cskeep ck9 '((label f9) (mov r12 r6) (ret)))                 ; written bare: the cs9 shape
    _ (cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6)
                    (cmp r6 r5) (br lt .k9) (ret)                   ; one path exits dirty
@@ -1500,7 +1500,7 @@
       (elem '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
       !(elem '(call g9 must) (sibcall mg9 ('((label f9) (call g9 must)) + mepi))))
    mlog {}
-   _ (hear (\ p e (: _ (pin mlog p (1 + (peep mlog p 0))) 0)))
+   _ (hear (\ p e (pin mlog p (1 + peep mlog p 0), 0)))
    _ (sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi))   ; a live insn after the call: no tail
    _ (: t9 {} _ (pin t9 'tgt 'x64) _ (pin t9 'fesc 1) _ (pin t9 'fn "f9")
         (sibcall t9 '((label f9) (call g9 must) (ret))))               ; the whole-fn decline
@@ -1672,7 +1672,7 @@
 ; label, no control) runs with the left parked in r1 -- one mov, no push/pop round-trip; and
 ; stld carries a slot's binding through reg-reg movs, so a forwarded value survives its
 ; source register's death and the reload (then the dead store, via deadst) drops.
-(: (spsts fs) (: (go l n) (? !(two? l) n
+(: (spsts fs) (: (go l n) (? (atom? l) n
                             (go >l (? (two? <l && (<<l = 'st) && (<><l = 'sp)) (n + 1) n)))
                  (go fs 0))
    g4 {}                                     ; no 'tgt: the x64 shapes, which every law here speaks
@@ -1771,16 +1771,16 @@
    ; the destination already holds is a self-mov that never lands
    _ (test
       ((cp '((mov r0 r6) (mov r1 r0) (mov r0 r5) (div r1 r1 r0) (ret))) = '((div r1 r6 r5) (ret)))
-      (= (cp '((mov r0 r11) (add r2 r2 r0) (mov r0 r5) (ret)))
+      ((cp '((mov r0 r11) (add r2 r2 r0) (mov r0 r5) (ret))) =
          '((add r2 r2 r11) (mov r0 r5) (ret)))
       ((cp '((mov r5 r0) (mov r3 r5) (ret))) = '((mov r3 r0) (ret))))
    ; the map's edges: a br rides its fall-through at any distance, a label and a call reset it
    _ (test
-      (= (cp '((mov r5 r0) (test r5 1) (br ne .x9) (mov r0 r5) (ret)))
+      ((cp '((mov r5 r0) (test r5 1) (br ne .x9) (mov r0 r5) (ret))) =
          '((mov r5 r0) (test r0 1) (br ne .x9) (ret)))
-      (= (cp '((mov r5 r0) (label .x9) (mov r0 r5) (ret)))
+      ((cp '((mov r5 r0) (label .x9) (mov r0 r5) (ret))) =
          '((mov r5 r0) (label .x9) (mov r0 r5) (ret)))
-      (= (cp '((mov r5 r0) (call foo) (mov r0 r5) (ret)))
+      ((cp '((mov r5 r0) (call foo) (mov r0 r5) (ret))) =
          '((mov r5 r0) (call foo) (mov r0 r5) (ret))))
    ; what keeps its operands: la's second operand is a symbol and rdsp never reads it; the
    ; variable shift's count is a seat, not a value; an address form belongs to addrfold
@@ -1788,7 +1788,7 @@
       ((cp '((mov r5 r0) (la r6 r5) (mov r0 r5) (ret))) = '((la r6 r5) (ret)))
       ((cp '((mov r1 r0) (shlv r5 r1) (ret))) = '((mov r1 r0) (shlv r5 r1) (ret)))
       ((cp '((mov r5 r0) (ld r6 r5 8) (ret))) = '((mov r5 r0) (ld r6 r5 8) (ret)))
-      (= (cp '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret)))
+      ((cp '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret))) =
          '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret))))
    ; cfoldir's root-restore drop rides past reads; the epilogue sp restore stands
    _ (test
@@ -1801,7 +1801,7 @@
       ((cf '((li r9 5) (neg r9) (add r0 r9 1) (ret))) = '((li r9 5) (li r9 -5) (li r0 -4) (ret)))   ; a unop on a known outside r0..r3
       ((cf '((li r9 200) (sx1 r9) (add r0 r9 1) (ret))) = '((li r9 200) (li r9 -56) (li r0 -55) (ret)))
       ((cf '((li r0 2) (sx4 r0) (shl r0 1) (or r0 r0 1) (ret))) = '((li r0 2) (li r0 4) (li r0 5) (ret)))   ; the fixnum tag
-      (= (cf '((li r0 9223372036854775807) (neg r0) (sub r0 r0 1) (ret)))
+      ((cf '((li r0 9223372036854775807) (neg r0) (sub r0 r0 1) (ret))) =
          '((li r0 9223372036854775807) (li r0 -9223372036854775807) (li r0 -9223372036854775808) (ret)))
       ((cf '((li r0 -1) (shr r0 60) (ret))) = '((li r0 -1) (li r0 15) (ret)))
       ((cf '((li r0 -16) (sar r0 2) (ret))) = '((li r0 -16) (li r0 -4) (ret)))
@@ -1833,7 +1833,7 @@
 ; the coverage assert, and a guard relaxed too far fails an emit.
 (: hb9 (cite 'holo 'holo-bytes)
    ; the label rides along for la's fixup; a scare anywhere in the encode answers 0
-   (emits? f) (trap (_ \ (: _ (hb9 'x64 [f '(label zz9)]) 1)) () (\ a b 0))
+   (emits? f) (trap (_ \ (hb9 'x64 [f '(label zz9)], 1)) () (\ a b 0))
    gX {}
    cpfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)
    pro9 '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
@@ -1872,17 +1872,17 @@
    ; form -- no guard is restated here, cpwalk decides and holo judges
    (fwd f) (catmap (\ i (catmap (\ r9
               (: out (cpwalk gX [['mov (f i) r9] f] {})
-                 f2 (out (tally out - 1))
+                 f2 (out (#out - 1))
                  (? (emits? f2) () [[f i r9 f2]])))
             cpfile)) (cprp gX f))
    nfwd ((foldl (\ n f9 (n + tally (cprp gX f9))) 0 shapes) * tally cpfile)
    bad1 (catmap fwd shapes)
    ; the backward carrier: a copy off the shape's own destination, folded by the real coal
    (soled f) (: d (rdsp gX f)                          ; the shapes coal can fold: one gp def
-                (? (d = 'bar) () (: dfs <>d (? (two? dfs && !(two? >dfs) && elem <dfs cpfile)
+                (? (d = 'bar) () (: dfs <>d (? (two? dfs && (atom? >dfs) && elem <dfs cpfile)
                                                  dfs ()))))
    (bwd f) (: S (soled f)
-              (? !(two? S) ()
+              (? (atom? S) ()
                  (catmap (\ r9
                    (: out (coal gX (pro9 + [f ['mov r9 <S] '(ret)]))
                       f2 (out 5)
@@ -1893,12 +1893,12 @@
    (test
       ; the carrier is what it says it is, and every shape is one both halves already accept
       (87 = #shapes)
-      !(two? (filter (f9 \ (= (rdsp gX f9) 'bar)) shapes))
+      (atom? (filter (f9 \ ((rdsp gX f9) = 'bar)) shapes))
       (all emits? shapes)
-      !(two? (filter (\ o9 !(elem o9 heads)) rostered))    ; the drift gate
+      (atom? (filter (\ o9 !(elem o9 heads)) rostered))    ; the drift gate
       (405 = nfwd) (675 = nbwd)                               ; a silent narrowing shows up here
-      !(two? bad1)                                            ; forward: 390 renames, all encodable
-      !(two? bad2)                                            ; backward: 660 folds, all encodable
+      (atom? bad1)                                            ; forward: 390 renames, all encodable
+      (atom? bad2)                                            ; backward: 660 folds, all encodable
       ; the two shapes the guards exist for, refused by holo itself, plus the alias emit-alu
       ; welcomes when the op commutes -- coal's decline there is conservative, not necessary
       !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))
@@ -1910,8 +1910,8 @@
 ; protocol (its cvt normalizes to 0/1 where si would store the raw constant), as does a
 ; value-position asn, whose answer is read.
 (: (sis fs) #(filter (f \ (two? f && elem <f '(si si1 si2 si4))) fs)
-   (lik fs k) #(filter (f \ (two? f && (= <f 'li) && (= <>>f k))) fs)
-   (sivk fs k) #(filter (f \ (two? f && elem <f '(si si1 si2 si4) && (= (f 3) k))) fs)
+   (lik fs k) #(filter (f \ (two? f && (<f = 'li) && (<>>f = k))) fs)
+   (sivk fs k) #(filter (f \ (two? f && elem <f '(si si1 si2 si4) && ((f 3) = k))) fs)
    ; every local here escapes through a call: a merely &-taken local promotes, and a law about
    ; the si lane needs a slot no analysis can close -- only a departing address guarantees one
    irS1 (cgn "void e9(int*); int q(int n) { int i; i = 5; if (n) i = 6; e9(&i); return i + n; } int main() { return q(0) - 5; }")
@@ -1940,7 +1940,7 @@
 ; -- the destination die reaches the compare lane (the second lane): with no call on either
 ; side, cbranch's left aims at its park before it evaluates and the bridge mov dies. a call on
 ; either side bars the aim: the left keeps its sp cell (cmpfuse's cmpm reads it).
-(: (brid fs) #(filter (f \ (two? f && (= <f 'mov) && (= <>>>f 'r0))) fs)
+(: (brid fs) #(filter (f \ (two? f && (<f = 'mov) && (<>>>f = 'r0))) fs)
    irC1 (cgn "struct s { long tag; long size; }; int ef(struct s *a, struct s *b) { if (a->tag == b->tag && a->size == b->size) return 1; return 0; } int main() { return 0; }")
    irC2 (cgn "int g(int x); int h(int x, int y) { if (x == g(y)) return 1; return 0; } int main() { return 0; }")
    ef (fnf 'ef <>irC1)
@@ -1961,7 +1961,7 @@
 ; right-to-left, so the first cell arg evaluates last and nothing after it writes its seat --
 ; it aims there, and an honored load skips the whole push/pop cell. an indirect call bars the
 ; aim, its head evaluating after the staging.
-(: (cells fs) #(filter (f \ (two? f && (= <f 'st) && (= <>f 'sp))) fs)
+(: (cells fs) #(filter (f \ (two? f && (<f = 'st) && (<>f = 'sp))) fs)
    irC1 (cgn "struct s { long tag; long size; }; long f(long a, long b); long c2(struct s *p) { return f(1, p->size); } long caller(struct s *p) { return f(p->tag, p->size); } long ci(long (*fp)(long, long), struct s *p) { return fp(p->tag, p->size); } int main() { return 0; }")
    c2 (fnf 'c2 <>irC1)
    ca (fnf 'caller <>irC1)
@@ -1976,7 +1976,7 @@
       (elem '(mov r5 r0) ca)                      ;   anywhere: ld/mov/ld/mov/jmp is the whole call
       !(elem '(ld r6 r5 0) ci)                    ; an indirect call bars the aim: neither arg
       !(elem '(ld r5 r5 8) ci)                    ;   is delivered onto its seat, so both must
-      (= 2 #(filter (f \ (two? f && (= <f 'ld) && !(= <>>f 'sp))) ci))  ; stage -- two loads
+      (2 = #(filter (f \ (two? f && (<f = 'ld) && !(<>>f = 'sp))) ci))  ; stage -- two loads
       (0 = (ldinto ci 'r6)) (0 = (ldinto ci 'r5))))  ;   and neither lands on a seat. anchored on
                                                      ;   the struct loads, not on the staging
                                                      ;   register and not on every load
@@ -2058,7 +2058,7 @@
       c7 (co '((li r5 1) (add r6 r7 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
       (test
          (c1 = (pro + '((li r5 1) (li r7 2) (add r0 r5 r7) (ret))))   ; the def takes the copy's name
-         (= #c2 #(pro + '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret))))
+         (#c2 = #(pro + '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret))))
          (elem '(mov r7 r6) c2)                     ; the source lives on: the copy stays
          (elem '(mov r7 r6) c3)                     ; a def reading its own dest: no rename
          (elem '(mov r7 r6) c4)                     ; the new dest is the def's second source
@@ -2066,7 +2066,7 @@
          (elem '(mov r7 r6) c5)                     ; a label between them: not adjacent
          (elem '(mov r7 r6) c6)                     ; a dead copy at index 5: the floor holds it
          !(elem '(mov r7 r6) c8)                    ; ...one form later it drops
-         (= (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)) ||
+         ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret)) ||
           ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret)))))))
 
 ; --- the value layer (apps/moon/val.l, moon-ssa rung 0): cfg, escape census, cells, dead
@@ -2220,7 +2220,7 @@ int main() { return 0; }"
                   (keys t))
    fJ (fnf 'f <>(cgn srcJ))
    (test
-      (= 2 #(csset fJ))))                     ; shared: a and b ride one seat
+      (2 = #(csset fJ))))                     ; shared: a and b ride one seat
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/moon: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, a64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the AST inliner + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")
