@@ -2,15 +2,17 @@
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
 ; `make test_sb`: cat test/00-init.l this | out/love -- host nifs
 ; (sha256, readdir, chdir), so it stays off the corpus like the other hostnif
-; tests. the make target clears the sandbox first; cwd is the repo root, and
-; everything here happens inside out/.sbtest.
+; tests. cwd is the repo root, and everything here happens inside out/.sbtest-PID,
+; the pid's own so two runs over one out/ keep apart, removed at the end.
 ; the use below splices svalbard under the session layer: every internal reads
 ; bare, and the test's own helpers stay above in the session.
 (borrow 'sb)
 (borrow 'kore)          ; sb splices the text floor below itself, so the session must ask for it too
 
-(: _ (mkdir "out/.sbtest" 493)
-   cd (chdir "out/.sbtest")
+(: sb-home (cwd 0))
+(: sb-dir ("out/.sbtest-" + show (getpid 0)))
+(: _ (mkdir sb-dir 493)
+   cd (chdir sb-dir)
    _ (!cd ? () (puts "sbtest: chdir failed\n", quit 1))
    ; the same-text equality for list-shaped store values
    (seq a b) (show a = show b)
@@ -350,4 +352,6 @@
  (show lkept = show lrel)                                ; each side kept its own -- no silent loss
  (show dkept = show drel))
 
+(chdir sb-home)
+(hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)

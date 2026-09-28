@@ -31,8 +31,8 @@
    _ (test ((K 'ww-arg) "example.com/a" = "https://example.com/a")
            ((K 'ww-arg) "http://x" = "http://x"))
 
-   root "out/.www"
-   _ (hark ["rm" "-rf" root])
+   ; every path this lays is the pid's own, so two runs over one out/ keep apart
+   root ("out/.www-" + show (getpid 0))
    _ (mkdir root 493) _ (mkdir (root + "/site") 493) _ (mkdir (root + "/site/sub") 493)
    sroot (cwd 0 + "/" + root + "/site")
    (wput f s) (: p (open (sroot + f) "w") _ (say p s) (close p))
@@ -224,6 +224,7 @@
    _ (test (0 <= st 'top))
    _ (wkeys st "q")
    _ (test (st 'quit))
+   _ (hark ["rm" "-rf" root])
    0)
 
 (test_fin (), puts "www: ok", putc 10, 0)
