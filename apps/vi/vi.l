@@ -17,33 +17,30 @@
    ; a state for a file, read or new; the pens are the face's to hand over -- they
    ; want $colorterm and the user's own theme file, and the engine reads neither
    (vi-open f)
-    (: r (? (< 0 (tally f)) (uread f) ())
+    (: r (? (0 < #f) (uread f) ())
        st (vnew (? (two? r) (lines <>r) ()) f)
-       _ (? ((< 0 (tally f)) && !(two? r)) (vmsg st (+ f ": new file")) ())
-       _ (pin st 'pens (hues-wake ()))
-       st)
+       _ (? (0 < #f && atom? r) (vmsg st (f + ": new file")) ())
+       (pin st 'pens (hues-wake ()), st))
    ; the ex write requests: (name) means write, "" means the buffer's file
    (dow s2)
     (: rq (s2 'dow)
-       (? !(two? rq) s2
+       (? (atom? rq) s2
           (: _ (pin s2 'dow ())
              nm <rq
-             (? (< 0 (tally nm))
+             (? (0 < #nm)
                 (: q (open nm "w")
-                   (? (hot? q) (: _ (say q (unlines (s2 'lines))) _ (close q)
-                           _ (pin s2 'dirty ())
-                           (vmsg s2 (+ nm " written")))
-                      (: _ (pin s2 'quit ())          ; a failed wq must not quit
-                         (vmsg s2 (+ "cannot write " nm)))))
-                (: _ (pin s2 'quit ())
-                   (vmsg s2 "no file name"))))))
+                   (? (hot? q) (say q (unlines (s2 'lines)), close q, pin s2 'dirty (),
+                                vmsg s2 (nm + " written"))
+                      (pin s2 'quit (),                   ; a failed wq must not quit
+                       vmsg s2 ("cannot write " + nm))))
+                (pin s2 'quit (), vmsg s2 "no file name")))))
    ; the ex read requests: (name) means put that file in the buffer. a name
    ; that does not open is not an error -- it is a new file, the same welcome
    ; the startup above gives one. presence is uread's (1 text) wrapper, not
    ; the text: an empty file is a real file with nothing in it.
    (doe s2)
     (: rq (s2 'doe)
-       (? !(two? rq) s2
+       (? (atom? rq) s2
           (: _ (pin s2 'doe ())
              nm <rq
              r (uread nm)
@@ -54,20 +51,16 @@
    ; or under this one. split is the harbour's door, or () on a seat with no harbour
    (dos s2 split)
     (: rq (s2 'dos)
-       (? !(two? rq) s2
-          (: _ (pin s2 'dos ())
-             _ (? split (split <rq <>rq) (vmsg s2 "no splits on this seat"))
-             s2)))
+       (? (atom? rq) s2
+          (pin s2 'dos (), split ? (split <rq <>rq) (vmsg s2 "no splits on this seat"), s2)))
    ; the ex words the engine does not know: (word arg) goes to the face's ex door,
    ; which answers true when it took it and the complaint stands otherwise
    (dox s2 ex)
     (: rq (s2 'dox)
-       (? !(two? rq) s2
-          (: _ (pin s2 'dox ())
-             _ (? ex (: m (s2 'msg) _ (pin s2 'msg "")
-                        (? (ex s2 <rq <>rq) 0 (pin s2 'msg m)))
-                  0)
-             s2)))
+       (? (atom? rq) s2
+          (pin s2 'dox (),
+           ex ? (: m (s2 'msg) (pin s2 'msg "", ex s2 <rq <>rq ? 0 (pin s2 'msg m))) 0,
+           s2)))
    ; the face: cli's triple over a state and a paste, with the doors a host lends it
    ; -- 'split (dir name), 'ex (state word arg) and 'reg, a box the register is kept
    ; in between steps so every buffer on a wharf shares one; any may be missing. the
@@ -79,13 +72,13 @@
     (: box (peep doors 'reg ())
        (load _) (? box (pin st 'reg (peep box () (st 'reg))) 0)
        (keep _) (? box (pin box () (st 'reg)) 0)
-       (text v) (? !(two? v) "" (<v = 'lin) (foldl (\ a l (a + l + "\n")) "" <>v) <>v)
+       (text v) (? (atom? v) "" (<v = 'lin) (foldl (\ a l (a + l + "\n")) "" <>v) <>v)
        (type s) (map (c \ vstep st c) (map (i \ s i) ^#s))
      [(\ w h (pins st 'w w 'h h, "\e[?25h" + vfresh st))
       (\ c (load (), vstep st c, keep (), dow st, doe st, dos st (peep doors 'split ()), dox st (peep doors 'ex ())))
       (\ _ (st 'quit))
       (\ v (? (elem (st 'mode) '(i c s)) (type (text v))
-              (: _ (pin st 'reg v) _ (vstep st 112) (keep ()))))])
+              (pin st 'reg v, vstep st 112, keep ())))])
    ; a buffer handed over from elsewhere (ex's `vi`), visited full screen on cli's stage:
    ; its lines, its file, whether it already differs from that file, the line to open on
    (vi-buffer ls f dirty row)
@@ -108,11 +101,10 @@
           (: sz (br 'hsize 0) hb (br 'harbour <sz <>sz)
              (stage-of s) (: fc (vi-face s {'split split 'reg (hb 'clip)})
                               sg (br 'berth-stage (fc 0) (fc 1) (fc 2))
-                              _ (pin sg 'paste (fc 3))
-                              sg)
+                              (pin sg 'paste (fc 3), sg))
              (split d nm) (br 'hberth hb d 50 (br 'hopen-stage (stage-of (vi-open nm)) 1 1))
-             _ (pin hb 'more (\ _ (br 'hopen-stage (stage-of (vi-open "")) 1 1)))
-             _ (br 'hberth hb 'stack 50 (br 'hopen-stage (stage-of st) <sz <>sz))
-             (br 'hsail hb))
+             (pin hb 'more (\ _ (br 'hopen-stage (stage-of (vi-open "")) 1 1)),
+              br 'hberth hb 'stack 50 (br 'hopen-stage (stage-of st) <sz <>sz),
+              br 'hsail hb))
           (: fc (vi-face st {}) (stage (fc 0) (fc 1) (fc 2))))))
 ) ; module 'vi

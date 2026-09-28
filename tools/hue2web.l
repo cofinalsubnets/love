@@ -23,14 +23,14 @@
    ; one design, then hue.css over it for the syntax.
    (h2w-src path)
    (: r (h2w-rdf path)
-      (one? r ? (udie 1 ("hue2web: cannot open " + path))
+      (atom? r ? (udie 1 ("hue2web: cannot open " + path))
        (say out (hw-page path '("papel.css" "hue.css") "index.html"
                          ("<p class=\"srcnav\">the source of <code>" + path + "</code></p>\n"
                           + hw-body path <>r)),
         0)))
 
    (h2w-main as)
-   (? (one? as) (h2w-usage 0)
+   (? (atom? as) (h2w-usage 0)
       (<as = "css") (say out (hw-css 'paper), 0)
       (<as = "src" && two? >as) (h2w-src <>as)
       (h2w-usage 0))

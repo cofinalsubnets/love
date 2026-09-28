@@ -22,24 +22,24 @@
 (borrow 'holo)
 
 (:
- (trim s) (: n (tally s)
+ (trim s) (: n #s
              (a i) (? ((i < n) && (((s i) = 32) || ((s i) = 9))) (a (i + 1)) i)
              (b j) (? ((0 < j) && (((s (j - 1)) = 32) || ((s (j - 1)) = 9))) (b (j - 1)) j)
              i (a 0) j (b n)
              (? (i < j) (snip s i j) ""))
- (lines s) (: n (tally s)
+ (lines s) (: n #s
               (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) . acc) acc))
                               ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) . acc))
                               (go i (j + 1) acc))
               (go 0 0 ()))
- (idx-from s sub i0) (: n (tally s) k (tally sub)
+ (idx-from s sub i0) (: n #s k #sub
                         (at? i j) (? (k <= j) 1 ((s (i + j)) = (sub j)) (at? i (j + 1)) 0)
                         (go i) (? (n < (i + k)) () (at? i 0) i (go (i + 1)))
                         (go i0))
  (idx-of s sub) (idx-from s sub 0)
  (has? s sub) (charm? (idx-of s sub))
  (digit? c) ((48 <= c) && (c <= 57))
- (s2d s) (: n (tally s)                                  ; decimal, () on a non-digit
+ (s2d s) (: n #s                                  ; decimal, () on a non-digit
             (go i acc) (? (n <= i) acc (digit? (s i)) (go (i + 1) (10 * acc + ((s i) - 48))) ())
             (? (n = 0) () (go 0 0)))
  (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
@@ -52,7 +52,7 @@
  rv64src (rdf "love/holo/rv64.l")
  (table-in src nm)
   (: i (idx-of src ("\n   " + nm + " (tabof"))
-     _ (? (charm? i) 0 (: _ (puts ("sysdiff: no table " + nm + "\n")) (quit 1)))
+     _ (? (charm? i) 0 (puts ("sysdiff: no table " + nm + "\n"), quit 1))
      j0 (idx-from src "(tabof" i)
      ; walk to the (tabof ..) close, then harvest ('name . inside [i, j)
      (close j d) (? ((src j) = 40) (close (j + 1) (d + 1))
@@ -185,9 +185,9 @@
                                  (? (!(charm? j) || !(charm? e)) a
                                     (: n (s2d (snip ln (i + 8) j))
                                        (? (n = ()) a
-                                          ([(n - 1 - nhead) (snip ln (e + 9) (tally ln))] . a))))))))
+                                          ([(n - 1 - nhead) (snip ln (e + 9) #ln)] . a))))))))
                 () (lines (rdf (tmpd + "/.sysd.err"))))
-     good (: (go i m acc) (? !(two? m) (rev acc)
+     good (: (go i m acc) (? (atom? m) (rev acc)
                              (? (two? (assoc i bad)) (go (i + 1) >m acc)
                                 (go (i + 1) >m (<m . acc))))
              (go 0 asms ()))
@@ -198,7 +198,7 @@
                            (? !(charm? i) a
                               (: j (idx-from ln "]" i)
                                  raw (snip ln (i + 11) j)
-                                 hx (: (go k acc) (? ((tally raw) <= k) (string (rev acc))
+                                 hx (: (go k acc) (? (#raw <= k) (string (rev acc))
                                                      (: c (raw k)
                                                         (? ((c = 48) && (k + 1 < tally raw) && ((raw (k + 1)) = 120))
                                                            (go (k + 2) acc)
@@ -207,12 +207,12 @@
                                        (go 0 ()))
                                  (a + [hx])))))
                 () (lines (rdf (tmpd + "/.sysd.out"))))
-     _ (? ((tally enc) = (tally good)) 0
-          (: _ (puts ("sysdiff: llvm-mc gave " + show (tally enc) + " encodings for "
-                      + show (tally good) + " lines\n")) (quit 1)))
+     _ (? (#enc = #good) 0
+          (puts ("sysdiff: llvm-mc gave " + show #enc + " encodings for "
+                      + show #good + " lines\n"), quit 1))
      ; reassemble the full column: [hex ()] accepted, [() why] rejected
      (: (go i m es acc)
-         (? !(two? m) (rev acc)
+         (? (atom? m) (rev acc)
             (: b (assoc i bad)
                (? (two? b) (go (i + 1) >m es ([() <>b] . acc))
                   (go (i + 1) >m >es ([<es ()] . acc)))))
@@ -236,20 +236,18 @@
                !(pair = ()) [<st (st 1 + 1) (st 2)]
                [<st (st 1) ((st 2) + [[ir asm got ("llvm-mc reject: " + why)]])])
             (? (got = want)
-               (: _ (? (pair = ()) 0 (pin seen (intern pair) 1))
-                  [(<st + 1) (st 1) (st 2)])
+               ((? (pair = ()) 0 (pin seen (intern pair) 1)), [(<st + 1) (st 1) (st 2)])
                [<st (st 1) ((st 2) + [[ir asm got ("want " + want)]])])))
-     st (: (go m rs st) (? !(two? m) st (go >m >rs (one <m <rs st)))
+     st (: (go m rs st) (? (atom? m) st (go >m >rs (one <m <rs st)))
            (go cs ref [0 0 ()]))
      ; a pair whose spellings llvm-mc both refused hides a table typo -- fail it
      fails ((st 2)
             + (foldl (\ a c (: pk (c 2)
                                (? (pk = ()) a
                                   (? (peep seen (intern pk) 0) a
-                                     (: _ (pin seen (intern pk) 1)
-                                        (a + [[pk pk () "llvm-mc took NEITHER spelling"]]))))))
+                                     (pin seen (intern pk) 1, a + [[pk pk () "llvm-mc took NEITHER spelling"]])))))
                      () cs))
-     _ (puts ("  " + show <st + " match  " + show (tally fails) + " fail  "
+     _ (puts ("  " + show <st + " match  " + show #fails + " fail  "
               + show (st 1) + " skipped (read-only / wrong-arity spelling)\n"))
      _ (map (\ f (puts ("  " + show <f + "\n      as " + f 1 + " got=" + ("" + f 2)
                         + " :: " + f 3 + "\n")))

@@ -27,7 +27,7 @@
    (blob h) (: t (look (".sb/blob/" + h)) (two? t ? <>t))
    (keep s) (: h (sha256 s) _ (lay (".sb/blob/" + h) s) h)
    (patch id) (form (".sb/patch/" + id))
-   (fld f k) (:- (go >f) (go m) (? (one? m) () (two? <m && <<m = k) ><m (go >m)))
+   (fld f k) (:- (go >f) (go m) (? (atom? m) () (two? <m && <<m = k) ><m (go >m)))
 
    ; --- ignores: one rule a line in .sbignore, over the built-ins. a rule holding
    igsdir '(".sb" ".git" "out")
@@ -38,13 +38,13 @@
                  (two? t ? (filter ig-live? (lines <>t)) ()))
    (ign1? p g) (: n #g (ig-glob? g ? (ig-match g p)
                         (p = g || n + 1 < #p && snip p 0 (n + 1) = (g + "/"))))
-   (ign? p igs) (? (one? igs) 0 (ign1? p <igs) 1 (ign? p >igs))
+   (ign? p igs) (? (atom? igs) 0 (ign1? p <igs) 1 (ign? p >igs))
 
    ; --- the walk: every regular file under the root, paths relative ---
    (walk dir igs acc)
     (: es (readdir (? !dir "." dir))
        (go m acc)
-        (? (one? m) acc
+        (? (atom? m) acc
            (: p (? !dir <m (dir + "/" + <m))
               (? (ign? p igs) (go >m acc)
                  (: st (stat p)
@@ -58,15 +58,15 @@
    ;     blob writes); a hunk is (path old new), old/new content hashes | () ---
    (h1 p e)                                                   ; one path vs its snap entry|()
     (: t (look p)
-       (one? t ? (two? e ? [p <>e ()])                 ; unreadable: dead if known
+       (atom? t ? (two? e ? [p <>e ()])                 ; unreadable: dead if known
         (: h (sha256 <>t)
-           (? (one? e) [p () h]                               ; born
+           (? (atom? e) [p () h]                               ; born
               (<>e = h) ()                                   ; unchanged
               [p <>e h]))))                                  ; changed
    (scan ps sn acc)                                           ; ps sorted paths, sn the snap
-    (? (one? ps)
-        (one? sn ? (rev acc) (scan ps >sn ([<<sn <><sn ()] . acc)))         ; the tail of snap: dead
-       (one? sn)
+    (? (atom? ps)
+        (atom? sn ? (rev acc) (scan ps >sn ([<<sn <><sn ()] . acc)))         ; the tail of snap: dead
+       (atom? sn)
         (: h (h1 <ps ()) (scan >ps sn (two? h ? (h . acc) acc)))
        (: p <ps e <sn
           (? (p = <e) (: h (h1 p e) (scan >ps >sn (two? h ? (h . acc) acc)))
@@ -86,7 +86,7 @@
                   (go hunks))
              ; the deps: the patches whose writes this one's contexts read
              deps (:- (go hunks ()) (go m acc)
-                   (? (one? m) (sort acc)
+                   (? (atom? m) (sort acc)
                     (: old <><m
                      (? !old (go >m acc)
                       (: e (st <<m)
@@ -105,8 +105,8 @@
 
    ; --- snap under a patch's hunks (both path-sorted) ---
    (snap+ sn hs pid acc)
-    (? (one? hs) (rev acc + sn)
-       (one? sn) (: h <hs nw <>>h
+    (? (atom? hs) (rev acc + sn)
+       (atom? sn) (: h <hs nw <>>h
                         (snap+ () >hs pid (? !nw acc ([<h nw pid] . acc))))
        (: h <hs e <sn
           (? (<h = <e) (: nw <>>h
@@ -116,15 +116,15 @@
              (snap+ >sn hs pid (<sn . acc)))))
 
    ; --- log: the patches newest first; * marks a tip ---
-   (ins e l) (? (one? l) [e]                                 ; insert desc by time (seat 0)
+   (ins e l) (? (atom? l) [e]                                 ; insert desc by time (seat 0)
               (<<l <= <e) (e . l)
               (<l . ins e >l))
    (sb-log _)
     (: tp (tips ())
        (go m acc)
-        (one? m ? acc
+        (atom? m ? acc
          (: id <m f (patch id)
-          (one? f ? (go >m acc)
+          (atom? f ? (go >m acc)
            (go >m (ins [<(fld f 'time) id <(fld f 'note) #(fld f 'hunks)] acc)))))
        es (go (readdir ".sb/patch") ())
        (pr m)
@@ -152,7 +152,7 @@
     (: sn (snap ())
        hunks (scan (sort (walk () (igs ()) ())) sn ())
        (pr m n)
-        (? (one? m) n
+        (? (atom? m) n
            (: h <m p <h
               ot (? !<>h "" (blob <>h))
               nt (? !<>>h "" (: t (look p) (two? t ? <>t "")))
@@ -176,7 +176,7 @@
               (? (64 != #h) (go >m n bad)                   ; only the sha256-named files
                  (two? (look (td + h))) (go >m n bad)         ; already there
                  (: t (look (fd + h))
-                    (? (one? t) (go >m n bad)
+                    (? (atom? t) (go >m n bad)
                        (sha256 <>t != h)
                         (say err ("sb: bad address " + h + "\n"), go >m n (bad + 1))
                        (lay (td + h) <>t) (go >m (n + 1) bad)
@@ -184,7 +184,7 @@
        (go (readdir fd) 0 0))
    ; bring this nest to the state a given patch set implies
    (tell cfs)
-    (: (go m n) (? (one? m) n
+    (: (go m n) (? (atom? m) n
           (: e <m p <e k <>e
              _ (say (k @ 0 out err)
                     ("sb: " + (k @ 0 "merged " "CONFLICT in ") + p + " -- " + <>>e + "\n"))
@@ -213,16 +213,16 @@
    (topo ids)                                                 ; deps before dependents, ties by sorted id
     (: have {} idl (sort ids)
        (ready _)
-        (: (go m a) (? (one? m) (rev a)
+        (: (go m a) (? (atom? m) (rev a)
              (: id <m
                 (? (peep have id 0) (go >m a)
                    (: f (patch id)
-                      ok (: (gd d) (? (one? d) 1 (? (peep have <d 0) (gd >d) 0)) (gd (fld f 'deps)))
+                      ok (: (gd d) (? (atom? d) 1 (? (peep have <d 0) (gd >d) 0)) (gd (fld f 'deps)))
                       (go >m (? ok (id . a) a))))))
            (go idl ()))
        (pass acc)
         (: b (ready ())
-           (? (one? b) acc
+           (? (atom? b) acc
               (: _ (: (mk m) (two? m ? (pin have <m 1, mk >m)) (mk b))
                  (pass (acc + b)))))
        (pass ()))
@@ -246,9 +246,9 @@
                     [mh n (show n + " region" + (? (1 = n) "" "s") + " left in markers")]))))))
    (derive-snap ids)                                          ; fold the DAG -> (snap conflicts)
     (: order (topo ids) snap {} cf {}
-       _ (:- (go order) (go m) (? (one? m) ()
+       _ (:- (go order) (go m) (? (atom? m) ()
                (: pid <m f (patch pid)
-                  _ (:- (h1 (fld f 'hunks)) (h1 hs) (? (one? hs) ()
+                  _ (:- (h1 (fld f 'hunks)) (h1 hs) (? (atom? hs) ()
                           (: h <hs p <h old <>h nw <>>h
                              cur (snap p) curh (two? cur ? <cur)
                              curpid (two? cur ? <>cur)
@@ -261,9 +261,9 @@
                                       ())))
                              (h1 >hs))))
                   (go >m))))
-       (: (em ps a) (? (one? ps) (rev a)
+       (: (em ps a) (? (atom? ps) (rev a)
             (: p <ps e (peep snap p ()) (em >ps [p <e <>e . a])))
-          (cm ps a) (? (one? ps) (rev a)
+          (cm ps a) (? (atom? ps) (rev a)
             (: p <ps e (peep cf p ()) (cm >ps [p <e <>e . a])))
           [(em (sort (keys snap)) ()) (cm (sort (keys cf)) ())]))
    (mkparents p)                                              ; mkdir every "/"-prefix of a nested path
@@ -271,10 +271,10 @@
    (mater oldsnap newsnap)                                    ; make the tree match newsnap; #files touched
     (: np {}
        _ (: (go m) (two? m ? (pin np <<m <><m, go >m)) (go newsnap))
-       w (: (go m n) (? (one? m) n
+       w (: (go m n) (? (atom? m) n
               (: e <m p <e ch <>e bl (look (".sb/blob/" + ch))   ; presence, not net: an empty blob is real
                  cur (look p) curh (? (two? cur) (sha256 <>cur) ())
-                 (? (one? bl) (say err ("sb: missing blob " + ch + "\n"), go >m n)
+                 (? (atom? bl) (say err ("sb: missing blob " + ch + "\n"), go >m n)
                     (curh = ch) (go >m n)
                     (mkparents p, lay p <>bl, go >m (n + 1)))))
             (go newsnap 0))
@@ -291,23 +291,23 @@
         (? !h 1
            (two? (look (".sb/blob/" + h))) 1
            (: b (http-fetch base ("/blob/" + h))
-              (? (one? b) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
+              (? (atom? b) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
                  (sha256 <>b = h) (lay (".sb/blob/" + h) <>b, bump 'b, 1)
                  (say err ("sb: bad address on blob " + sh h + "\n"), 0))))
        (getpatch id)                                   ; ensure a patch is local; answer its form
         (: local (look (".sb/patch/" + id))
            (? (two? local) (readform <>local)
               (: b (http-fetch base ("/patch/" + id))
-                 (? (one? b) (say err ("sb: cannot fetch patch " + sh id + "\n"), ())
+                 (? (atom? b) (say err ("sb: cannot fetch patch " + sh id + "\n"), ())
                     (sha256 <>b = id) (lay (".sb/patch/" + id) <>b, bump 'p, readform <>b)
                     (say err ("sb: bad address on patch " + sh id + "\n"), ())))))
        (walk ids ok)                                   ; the transitive closure, by reading as we go
-        (? (one? ids) ok
+        (? (atom? ids) ok
            (: id <ids
               (? (seen id) (walk >ids ok)
                  (: _ (pin seen id 1)
                     f (getpatch id)
-                    (? (one? f) (walk >ids 0)
+                    (? (atom? f) (walk >ids 0)
                        (: hs (fld f 'hunks)
                           ; fetch first, then combine: && short-circuits, so folding the
                           ; calls into the accumulator would stop fetching at the first miss
@@ -317,9 +317,9 @@
                                 (hb hs 1))
                           (walk (fld f 'deps + >ids) (ok && bo))))))))
        tt (http-fetch base "/tips")
-       (? (one? tt) (say err ("sb: no store at " + base + " (no /tips)\n"), ())
+       (? (atom? tt) (say err ("sb: no store at " + base + " (no /tips)\n"), ())
           (: tips (readform <>tt)
-             (? (one? tips) (say err ("sb: " + base + " has no tips\n"), ())
+             (? (atom? tips) (say err ("sb: " + base + " has no tips\n"), ())
                 (: ok (walk tips 1)
                    rt (http-fetch base "/refs")             ; the refs ride along
                    theirs (two? rt ? (readform <>rt))
@@ -334,7 +334,7 @@
           (: base (? (snip peer (tally peer - 1) #peer = "/")
                      (snip peer 0 (tally peer - 1)) peer)        ; one trailing slash, ours to add
              r (pull-http base)
-             (? (one? r) 0
+             (? (atom? r) 0
                 (: st (settle (readdir ".sb/patch"))
                    nleft (tell <>>st)
                    nref <>>>r
@@ -401,7 +401,7 @@
     (: n #pfx
        hits (filter (i \ #i = 64 && snip i 0 n = pfx) (readdir ".sb/patch"))
        (? (1 = #hits) <hits
-          (one? hits) (say err ("sb: no ref or patch matches " + pfx + "\n"), ())
+          (atom? hits) (say err ("sb: no ref or patch matches " + pfx + "\n"), ())
           (say err ("sb: " + show #hits + " patches match " + pfx + "\n"), ())))
    (idsof a)                                                     ; a ref -> its whole tip set;
     (refof a @ r (two? r ? r (idpfx a @ i (i ? [i]))))
@@ -414,9 +414,9 @@
        (? (0 < dirty ())
           (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: all (readdir ".sb/patch")
-             want (: (go m acc) (one? m ? acc (: l (idsof <m) (two? l ? (go >m (acc + l)))))
+             want (: (go m acc) (atom? m ? acc (: l (idsof <m) (two? l ? (go >m (acc + l)))))
                      (go args ()))
-             (? (two? args && one? want) 0                 ; a prefix failed to resolve; it said so
+             (? (two? args && atom? want) 0                 ; a prefix failed to resolve; it said so
                 (: ids (two? args ? (closure want) all)
                    st (settle ids)
                    nleft (tell <>>st)
@@ -434,15 +434,15 @@
    ; --- the ref exchange. a ref is a single file, not a content-addressed one,
    (refadd base extra loud)                                     ; loud: only one side tells it
     (: (go m acc n)
-        (? (one? m) [(sort acc) n]
+        (? (atom? m) [(sort acc) n]
            (: e <m mine (refof-in base <e)
-              (? (one? mine) (go >m (e . acc) n)               ; theirs alone: take it
+              (? (atom? mine) (go >m (e . acc) n)               ; theirs alone: take it
                  (show mine = show <>e) (go >m acc n)          ; the same head: already ours
                  (: _ (? loud (say err ("sb: REF CLASH on " + <e
                                         + " -- banked to different heads\n")) ())
                     (go >m acc (n + 1))))))
        (go extra base 0))
-   (refof-in rs nm) (: (go m) (? (one? m) () (<<m = nm) <><m (go >m)) (go rs))
+   (refof-in rs nm) (: (go m) (? (atom? m) () (<<m = nm) <><m (go >m)) (go rs))
 
    (sb-bank args)
     (: _ (mk ())
@@ -452,7 +452,7 @@
           (0 < dirty ())
           (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: tp (sort (tips ()))
-             (? (one? tp) (say err "sb: nothing recorded to bank\n", 0)
+             (? (atom? tp) (say err "sb: nothing recorded to bank\n", 0)
                 (: old (refof nm)
                    (? (two? old && show old != show tp)
                       (: _ (say err ("sb: " + nm + " is already banked at a different head"
@@ -474,7 +474,7 @@
                    ix (: (go m t) (two? m ? (pin t <<m <><m, go >m t) t))
                    sn (ix (snap ()) {})
                    nc (:- (go hs 0) (go m n)
-                          (one? m ? n
+                          (atom? m ? n
                              (: h <m p <h pold <>h pnew <>>h
                                 cur (sn p)             ; the index maps path -> chash directly
                                 (? (cur = pnew)                ; P still owns the path: a clean lift
@@ -528,12 +528,12 @@ usage: sb VERB ..
    ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
    (usage _) (say err sb-usage, uleave 2)
    ; a verb answers its status: 0, or 1 when it did not take
-   (sb-main as) (one? as ? (usage ())
+   (sb-main as) (atom? as ? (usage ())
     (<as @ "record" (sb-record (two? >as ? <>as ""), 0)
-           "sync" (one? >as ? (usage ()) !(sb-sync <>as))
+           "sync" (atom? >as ? (usage ()) !(sb-sync <>as))
            "apply" !(sb-apply >as)
-           "bank" (one? >as ? (usage ()) !(sb-bank >as))
-           "undo" (one? >as ? (usage ()) !(sb-undo >as))
+           "bank" (atom? >as ? (usage ()) !(sb-bank >as))
+           "undo" (atom? >as ? (usage ()) !(sb-undo >as))
            "log" (sb-log (), 0)
            "diff" (0 < sb-diff ())
            (usage ()))))

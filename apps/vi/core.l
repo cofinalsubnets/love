@@ -79,7 +79,7 @@
              t)))
    (vlen st) (tally (vln st))
    (vnl st) (tally (st 'lines))
-   (vdrop l k) (? ((k < 1) || one? l) l (vdrop >l (k - 1)))
+   (vdrop l k) (? ((k < 1) || atom? l) l (vdrop >l (k - 1)))
    ; a line's height in screen rows: 1 unwrapped, else what it folds to
    (vhgt st ln) (? !(st 'wrap) 1 (tally (vsegs ln (st 'w))))
    ; the last file row the body can show -- what H M L stop at. wrapped, that
@@ -1127,7 +1127,7 @@
    (vnorm st c)
     (: n (: v (st 'cnt) (? (0 < v) v 1))
        (mv1 mr)                                    ; a motion result, no operator
-        (? (one? mr) st
+        (? (atom? mr) st
            (<mr = 'lin)
             (: t <>mr _ (pin st 'row t)
              (pin st 'col (: ln (vln st) k (vcolat ln (st 'goal))
@@ -1289,7 +1289,7 @@
    (vdigits k) (: s (show k) (map (\ i (s i)) (jot #s)))
    (vdot st raw)
     (: d (st 'dot)
-       (? (one? d) (vmsg st "nothing to repeat")
+       (? (atom? d) (vmsg st "nothing to repeat")
           (: k (0 < raw ? raw <d)
              ks (0 < k ? ((vdigits k) + <>d) <>d)
              _ (pin st 'op ())                     ; `.` is not a motion: d. is just .
@@ -1489,7 +1489,7 @@
    ; -- the frame: one full redraw as a single text --
    (vframe st)
     (: e (string 27) L (vlay st)
-       (go l acc) (? (one? l) acc (go >l (acc + <l + e + "[K" + "\r\n")))
+       (go l acc) (? (atom? l) acc (go >l (acc + <l + e + "[K" + "\r\n")))
        (e + "[H" + go <L "" + <>L + e + "[K"
           + e + "[" + show <>>L + ";" + show <>>>L + "H"))
 

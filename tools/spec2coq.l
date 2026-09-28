@@ -65,20 +65,20 @@
               (two? o && charm? <o && allv? o) (charm? (ev o))
               0)
    bs '\                                                ; the quote symbol \ (for '(..) z-list data)
-   (zel? e) (charm? e || (= e ()))                      ; a charm element, or the unit (reads 0)
-   (zlist? l) (two? l ? (zel? <l && zlist? >l) (= l ()))  ; proper list of them (ends in (), not any atom)
+   (zel? e) (charm? e || (e = ()))                      ; a charm element, or the unit (reads 0)
+   (zlist? l) (two? l ? (zel? <l && zlist? >l) (l = ()))  ; proper list of them (ends in (), not any atom)
    ; a nettable quoted list may also hold noms (each nets its spelling) -- good for the
    ; measure lanes (sat/net/tally) only: extraction or elementwise = would conflate a
    ; nom with its net (caup answers the symbol, never a number)
-   (znlist? l) (two? l ? ((zel? <l || nom? <l) && znlist? >l) (= l ()))
-   (qnlist? x) (two? x && (= <x bs) && un2? x && znlist? <>x)
-   (qlist? x) (two? x && (= <x bs) && un2? x && zlist? <>x)  ; '(1 2 3): \ + a z-list, exactly 2 (a lambda is 3+)
-   (arrv? x)  (two? x && (= <x 'tuple) && zlist? >x)      ; @(1 2 3) = (tuple 1 2 3): a z-array
-   (iotav? x) (two? x && (= <x 'iota) && un2? x && intv? <>x)  ; (iota n): the z-array 0..n-1
+   (znlist? l) (two? l ? ((zel? <l || nom? <l) && znlist? >l) (l = ()))
+   (qnlist? x) (two? x && (<x = bs) && un2? x && znlist? <>x)
+   (qlist? x) (two? x && (<x = bs) && un2? x && zlist? <>x)  ; '(1 2 3): \ + a z-list, exactly 2 (a lambda is 3+)
+   (arrv? x)  (two? x && (<x = 'tuple) && zlist? >x)      ; @(1 2 3) = (tuple 1 2 3): a z-array
+   (iotav? x) (two? x && (<x = 'iota) && un2? x && intv? <>x)  ; (iota n): the z-array 0..n-1
    (un2? x) (two? >x && atom? >>x)                      ; a 2-element (op arg) form
 
    ; -- lambdas as Coq funs (single param, exact body), sections, escaped operators --
-   (lamform? x) (two? x && (= <x bs) && two? >x && two? >>x)  ; (\ p .. b): 3+ elements (2 is quote)
+   (lamform? x) (two? x && (<x = bs) && two? >x && two? >>x)  ; (\ p .. b): 3+ elements (2 is quote)
    (lam1? x) (lamform? x && atom? >>>x && nom? <>x)           ; exactly (\ p b), p a nom
    (inlam f k) (: v ("v" + show (peep vc 0 0)) _ (pin vc 0 (1 + peep vc 0 0))
                   _ (pin vtab <>f v) r (k v) _ (pull vtab <>f 0) r)
@@ -101,10 +101,10 @@
 
    ; -- the unit lane: () (and a fresh mint) rides + and absorbs every numeric op --
    (mintv? ('mint . _)) 1
-   (unit? x)  (= x () || mintv? x)
+   (unit? x)  (x = () || mintv? x)
    ; a unit among the elements (never a proper list's own terminal ())
    (hasu? x)  (? (unit? x) 1 (two? x) (hasu? <x || (two? >x ? (hasu? >x) 0)) 0)
-   (uzf h) (binop h || shiftf h || (= h '/ ? "Z.div" 0))  ; / only ever meets its unit (the Some/Some lane never fires)
+   (uzf h) (binop h || shiftf h || (h = '/ ? "Z.div" 0))  ; / only ever meets its unit (the Some/Some lane never fires)
    ; scalar u-tree: + - * recurse; the narrower ops take their unit directly
    (uz? x) (? (unit? x) 1  (intv? x) 1
               (x @ [h i j] (? (elem h '(+ - *)) (uz? i && uz? j)
@@ -112,22 +112,22 @@
                               0)
                    0))
    (tuz x) (? (unit? x) "None"  (intv? x) ("(Some " + tv x + ")")
-              (= <x '*) ("(umul " + tuz <>x + " " + tuz <>>x + ")")   ; * : the unit annihilates
-              (= <x '+) ("(uop " + uzf <x + " " + tuz <>x + " " + tuz <>>x + ")")   ; + : it rides
+              (<x = '*) ("(umul " + tuz <>x + " " + tuz <>>x + ")")   ; * : the unit annihilates
+              (<x = '+) ("(uop " + uzf <x + " " + tuz <>x + " " + tuz <>>x + ")")   ; + : it rides
               ("(uabs " + uzf <x + " " + tuz <>x + " " + tuz <>>x + ")"))            ; the numeric lanes absorb
    ; list u-tree: a unit on either side of + answers the list side; under * it
    ; annihilates (() is the zero -- the associativity law)
    (ul? x) (? (lst? x) 1
-              !(len3? x && (= <x '+ || (= <x '*))) 0
+              !(len3? x && (<x = '+ || <x = '*)) 0
               ((unit? <>x && ul? <>>x) || (ul? <>x && unit? <>>x)))
    (tul x) (? (unit? x) "None"  (lst? x) ("(Some " + tl x + ")")
-              (= <x '*) ("(ulmul " + tul <>x + " " + tul <>>x + ")")
+              (<x = '*) ("(ulmul " + tul <>x + " " + tul <>>x + ")")
               ("(ulop " + tul <>x + " " + tul <>>x + ")"))
 
    ; -- text as spelling: strings are byte lists under + (concat) and * (repeat); a symbol is
    ;    a point under both, the identity and the absorber, and stays out of this lane.
    ;    equality is band-guarded (a symbol never = a string, whatever the spelling)
-   (qnom? x) (two? x && (= <x bs) && un2? x && nom? <>x)     ; 'ef
+   (qnom? x) (two? x && (<x = bs) && un2? x && nom? <>x)     ; 'ef
    (txt? x) (? (string? x) 1
                (atom? x) 0
                (<x @ ('+ && len3? x) (txt? <>x && txt? <>>x)
@@ -147,13 +147,13 @@
    ;    unit rides + and - (under * it annihilates, out of this band's reach), and
    ;    the sign (so the order too) is lex on (re, im);
    ;    $ of a lex-positive twin is its magnitude (the corpus instances are pythagorean)
-   (twinv? x) (len3? x && (= <x 'twin) && charm? <>x && charm? <>>x)
+   (twinv? x) (len3? x && (<x = 'twin) && charm? <>x && charm? <>>x)
    ; a twin/conj/i anywhere in the term: the gate into the gaussian lane (a bare charm
    ; or unit is gaussian-coercible, but only in gaussian company)
    (hasg? x) (? (nom? x) (elem x '(i twin conj)) (two? x) (hasg? <x || hasg? >x) 0)
    (gneg? x) (two? x && un2? x && two? <x &&
-              (: s <x (un2? s && (= <s '-) && (= <>s 0))))        ; ((- 0) g): negation
-   (gz? x) (? (twinv? x) 1  (= x 'i) 1  (charm? x) 1  (unit? x) 1
+              (: s <x (un2? s && (<s = '-) && (<>s = 0))))        ; ((- 0) g): negation
+   (gz? x) (? (twinv? x) 1  (x = 'i) 1  (charm? x) 1  (unit? x) 1
               (atom? x) 0
               (gneg? x) (gz? <>x)
               (<x @ ('conj && un2? x) (gz? <>x)
@@ -163,20 +163,20 @@
                     ('+ && len3? x) (gz? <>x && gz? <>>x)
                     0))
    (tg x) (? (twinv? x) ("(" + tv <>x + ", " + tv <>>x + ")")
-             (= x 'i) "(0, 1)"
+             (x = 'i) "(0, 1)"
              (charm? x) ("(" + tv x + ", 0)")
              (gneg? x) ("(gsub (0, 0) " + tg <>x + ")")
              (: h <x
-                (? (= h 'conj) ("(gconj " + tg <>x + ")")
+                (? (h = 'conj) ("(gconj " + tg <>x + ")")
                    (unit? <>x) (tg <>>x)                     ; the unit rides + : the twin side is the answer
                    (unit? <>>x) (tg <>x)
-                   (= h '+) ("(gadd " + tg <>x + " " + tg <>>x + ")")
-                   (= h '-) ("(gsub " + tg <>x + " " + tg <>>x + ")")
+                   (h = '+) ("(gadd " + tg <>x + " " + tg <>>x + ")")
+                   (h = '-) ("(gsub " + tg <>x + " " + tg <>>x + ")")
                    ("(gmul " + tg <>x + " " + tg <>>x + ")"))))
    ; a (list ..) / (array n ..) of gaussian elements: its net is the gadd fold
-   (gels x) (= <x 'array ? >>x >x)
+   (gels x) (<x = 'array ? >>x >x)
    (allg? l) (two? l ? (gz? <l && allg? >l) 1)
-   (glist? x) (two? x && (= <x 'list || (= <x 'array && charm? <>x))
+   (glist? x) (two? x && (<x = 'list || <x = 'array && charm? <>x)
                && two? (gels x) && allg? (gels x))
    (tgsum l) (two? >l ? ("(gadd " + tg <l + " " + tgsum >l + ")") (tg <l))
 
@@ -187,7 +187,7 @@
    ;    literal is ln; quote data and special forms in a body stay out
    (lidx nm) (peep ltab nm 0 ||
               (: n (1 + peep lc 0 0) _ (pin lc 0 n) _ (pin ltab nm n) n))
-   (idxof nm l k) (? (atom? l) -1 (= <l nm) k (idxof nm >l (k + 1)))
+   (idxof nm l k) (? (atom? l) -1 (<l = nm) k (idxof nm >l (k + 1)))
    colon ': qm '?
    (lt x env) (? (charm? x) ("(LN " + tv x + ")")
                  (nom? x) (: p (idxof x env 0)
@@ -208,8 +208,8 @@
 
    ; -- forms that read the unit: (:) (?) (\) and '(), a cond whose literal tests all
    ;    fail with no else, a map over (), && / || landing on nothing (the and-or-unit law)
-   (qempty? x) (two? x && (= <x bs) && un2? x && (= <>x ()))   ; '()
-   (nothing? x) (= x 0 || (= x ()))
+   (qempty? x) (two? x && (<x = bs) && un2? x && (<>x = ()))   ; '()
+   (nothing? x) (x = 0 || x = ())
    (condu? l) (? (atom? l) 1                                    ; pairs exhausted, no else: the unit
                  (atom? >l) 0                                   ; a lone else would answer
                  (nothing? <l && condu? >>l))
@@ -218,19 +218,19 @@
                 (charm? <l) (andu? >l)
                 0)
    (allnothing? l) (two? l ? (nothing? <l && allnothing? >l) 1)
-   (unitv? x) (? (= x ()) 1  (qempty? x) 1
+   (unitv? x) (? (x = ()) 1  (qempty? x) 1
                  (atom? x) 0
                  (atom? >x) (elem <x [colon qm bs])   ; (:) (?) (\): an empty form reads its head
                  (<x @ '? (condu? >x)  '&& (andu? >x)  '|| (allnothing? >x)
-                       ('map && len3? x) (= <>>x ())
+                       ('map && len3? x) (<>>x = ())
                        0))
    ; == on literals: noms intern (spelling decides), a charm is its tagged word, every
    ; unit-reading form is the one unit; a quoted nonempty list or a lambda is a fresh
    ; allocation, never ==-equal to another; and the unit is ==-distinct from 0
-   (qplist? x) (two? x && (= <x bs) && un2? x && two? <>x)
-   (idv a b) (? (qnom? a && qnom? b) (= <>a <>b ? "true" "false")
+   (qplist? x) (two? x && (<x = bs) && un2? x && two? <>x)
+   (idv a b) (? (qnom? a && qnom? b) (<>a = <>b ? "true" "false")
                 (unitv? a && unitv? b) "true"
-                (charm? a && charm? b) (= a b ? "true" "false")
+                (charm? a && charm? b) (a = b ? "true" "false")
                 ((unitv? a && charm? b)  || (charm? a && unitv? b) ||
                  (unitv? a && qnom? b)   || (qnom? a && unitv? b) ||
                  (qplist? a && qplist? b) || (lamform? a && lamform? b) ||
@@ -253,7 +253,7 @@
                     ['sortby a b] (cmpb a && lst? b)
                     ['cat a b]    (lst? a && lst? b)
                     [('take || 'drop) a b] (intv? a && lst? b)
-                    ['link a b]   (intv? a && (lst? b || (= b ())))
+                    ['link a b]   (intv? a && (lst? b || (b = ())))
                     [('rev || 'sort || 'init || 'cup) a] (lst? a)
                     ['jot a]      (intv? a)
                     0))
@@ -266,7 +266,7 @@
    (satf h) (elem h '(sat saturate $))
    ; a hash literal {k v ..} = (hash k v ..): an assoc list of fixnum chains (even count)
    (even? l) (two? l ? !(even? >l) 1)
-   (hashv? x) (two? x && (= <x 'hash) && zlist? >x && even? >x)
+   (hashv? x) (two? x && (<x = 'hash) && zlist? >x && even? >x)
    (len4? [_ _ _ _]) 1
    (chains l) (atom? l || atom? >l ? ""
                ("(" + tv <l + ", " + tv <>l + ")" + (two? >>l ? ";" "") + chains >>l))
@@ -280,20 +280,20 @@
              (iotav? x)  ("(iotaZ " + tv <>x + ")")  ; spec.v's iota, Z-arg face
              (string? x) ("[" + joinb x 0 + "]")
              (: h <x                                          ; the broadcast / append / repeat ops
-                (? (= h '+)  (? (arr? x)    ("(vaddt " + tl <>x + " " + tl <>>x + ")")
+                (? (h = '+)  (? (arr? x)    ("(vaddt " + tl <>x + " " + tl <>>x + ")")
                                   (intv? <>x)  (tl <>>x)   ; degenerate: a number against a list arrives as the unit
                                   (intv? <>>x) (tl <>x)    ; ... either side (the associativity law)
                                   ("(" + tl <>x + " ++ " + tl <>>x + ")"))              ; list append
-                   (= h '*)  (? (arr? x) ("(vscale " + tv <>>x + " " + tl <>x + ")")   ; array scale
+                   (h = '*)  (? (arr? x) ("(vscale " + tv <>>x + " " + tl <>x + ")")   ; array scale
                                   ("(srep (Z.abs_nat " + tv <>>x + ") " + tl <>x + ")")) ; list repeat
-                   (= h '//) ("(vquot " + tv <>>x + " " + tl <>x + ")")
+                   (h = '//) ("(vquot " + tv <>>x + " " + tl <>x + ")")
                    (h @ 'map    ("(map " + tfn <>x + " " + tl <>>x + ")")
                         'filter ("(filter " + tfb <>x + " " + tl <>>x + ")")
                         'sortby ("(insortby " + cmpb <>x + " " + tl <>>x + ")")
                         'cat    ("(" + tl <>x + " ++ " + tl <>>x + ")")
                         'take   ("(firstn (Z.to_nat " + tv <>x + ") " + tl <>>x + ")")
                         'drop   ("(skipn (Z.to_nat " + tv <>x + ") " + tl <>>x + ")")
-                        'link   ("(" + tv <>x + " :: " + (= <>>x () ? "[]" (tl <>>x)) + ")")
+                        'link   ("(" + tv <>x + " :: " + (<>>x = () ? "[]" (tl <>>x)) + ")")
                         'rev    ("(rev " + tl <>x + ")")
                         'sort   ("(insort " + tl <>x + ")")
                         'init   ("(removelast " + tl <>x + ")")
@@ -315,9 +315,9 @@
                                (satf h)        (un2? x && (intv? <>x || listv? <>x || hashv? <>x ||
                                                              qnlist? <>x || lamform? <>x ||
                                                              (hasg? <>x && glist? <>x)))
-                               (= h 'peep)  (len4? x && (hashv? <>x || listv? <>x) && intv? <>>x && intv? <>>>x)
+                               (h = 'peep)  (len4? x && (hashv? <>x || listv? <>x) && intv? <>>x && intv? <>>>x)
                                (lop? h)       (un2? x && (listv? <>x || qnlist? <>x))
-                               (= h 'abs)   (un2? x && intv? <>x)
+                               (h = 'abs)   (un2? x && intv? <>x)
                                (elem h '(cap caup last)) (un2? x && lst? <>x)
                                (elem h '(foldl foldr))
                                               (len4? x && tfn2 <>x && intv? <>>x && lst? <>>>x)
@@ -349,18 +349,18 @@
                                         (hasg? <>x && glist? <>x) ("(gsat " + tgsum (gels <>x) + ")")
                                         (listv? <>x || qnlist? <>x) ("(satZ (asum " + tl <>x + "))")
                                         ("(satZ " + tv <>x + ")"))  ; $list / $int -- spec.v's clamp, floor and ceiling
-                   (= h 'net)   ("(asum " + tl <>x + ")")   ; net/+list -- the sum
-                   (= h 'tally) ("(Z.of_nat (length " + tl <>x + "))")  ; count
-                   (= h 'max)  ("(amax " + tl <>x + ")")
-                   (= h 'min)  ("(amin " + tl <>x + ")")
-                   (= h 'prod) ("(aprod " + tl <>x + ")")
-                   (= h 'abs)   ("(Z.abs " + tv <>x + ")")
-                   (= h 'cap)   ("(hd 0 " + tl <>x + ")")
-                   (= h 'caup)  ("(nth (Z.to_nat 1) " + tl <>x + " 0)")
-                   (= h 'last)  ("(last " + tl <>x + " 0)")
-                   (= h 'foldl) ("(fold_left " + tfn2 <>x + " " + tl <>>>x + " " + tv <>>x + ")")
-                   (= h 'foldr) ("(fold_right " + tfn2 <>x + " " + tv <>>x + " " + tl <>>>x + ")")
-                   (= h 'peep)  (hashv? <>x ? ("(hget " + th <>x + " " + tv <>>x + " " + tv <>>>x + ")")
+                   (h = 'net)   ("(asum " + tl <>x + ")")   ; net/+list -- the sum
+                   (h = 'tally) ("(Z.of_nat (length " + tl <>x + "))")  ; count
+                   (h = 'max)  ("(amax " + tl <>x + ")")
+                   (h = 'min)  ("(amin " + tl <>x + ")")
+                   (h = 'prod) ("(aprod " + tl <>x + ")")
+                   (h = 'abs)   ("(Z.abs " + tv <>x + ")")
+                   (h = 'cap)   ("(hd 0 " + tl <>x + ")")
+                   (h = 'caup)  ("(nth (Z.to_nat 1) " + tl <>x + " 0)")
+                   (h = 'last)  ("(last " + tl <>x + " 0)")
+                   (h = 'foldl) ("(fold_left " + tfn2 <>x + " " + tl <>>>x + " " + tv <>>x + ")")
+                   (h = 'foldr) ("(fold_right " + tfn2 <>x + " " + tv <>>x + " " + tl <>>>x + ")")
+                   (h = 'peep)  (hashv? <>x ? ("(hget " + th <>x + " " + tv <>>x + " " + tv <>>>x + ")")
                                      ("(nth (Z.to_nat " + tv <>>x + ") " + tl <>x + " " + tv <>>>x + ")"))  ; hash lookup / array index
                    (hashv? h)     ("(hget " + th h + " " + tv <>x + " 0)")  ; ({..} k) -- lookup, default 0
                    (two? h && tfn h) ("(" + tfn h + " " + tv <>x + ")")  ; beta / applied section
@@ -376,11 +376,11 @@
    (tk x) (? (unitv? x) "Vunit"                                        ; () and every form that reads it
              (intv? x) (? !(concrete-int? x) "Vz"
                           (: v (ev x) (? (charm? v) "Vz" (gem? v) "Vflo" "Vbot")))
-             (gem? x) "Vflo"  (string? x) "Vstr"  (= x 'i) "Vcx"
+             (gem? x) "Vflo"  (string? x) "Vstr"  (x = 'i) "Vcx"
              (two? x) (: h <x
-                        (? (= h bs) (tkq <>x)                        ; '(..) or 'x
+                        (? (h = bs) (tkq <>x)                        ; '(..) or 'x
                            (elem h '(twin conj)) "Vcx"              ; (re ~ im); conj always answers a twin
-                           (= h 'hash) "Vmap"                        ; {..}
+                           (h = 'hash) "Vmap"                        ; {..}
                            (elem h '(tuple iota)) "Varr"            ; @(..) / (iota n)
                            "Vbot"))
              "Vbot")
@@ -408,7 +408,7 @@
    ; (nil? (nil? x)) is `!!x`, x truthy -- the negation of the inner bit.
    (tp f) (? (atom? f) 0
              (: h <f
-                (? (= h 'nil?) (: a <>f
+                (? (h = 'nil?) (: a <>f
                                    (? (intv? a)  ("(Z.leb " + tv a + " 0)")
                                       (listv? a) ("(Z.leb (asum " + tl a + ") 0)")   ; !list: net <= 0
                                       (unitv? a) "true"                              ; the unit is nothing
@@ -417,15 +417,15 @@
                                       (hasg? a && glist? a) ("(negb (gpos " + tgsum (gels a) + "))")
                                       (: p (tp a) (? p ("(negb " + p + ")") 0))))
                    (kpred h)  (: t (tk <>f) (t = "Vbot" ? 0 ("(" + kpred h + " " + t + ")")))  ; (charm? 5), (two? '(..))..
-                   (= h 'elem) (len3? f && intv? <>f && lst? <>>f ?
+                   (h = 'elem) (len3? f && intv? <>f && lst? <>>f ?
                                      ("(existsb (Z.eqb " + tv <>f + ") " + tl <>>f + ")") 0)
-                   (= h 'all) (len3? f && lst? <>>f && tfb <>f ?
+                   (h = 'all) (len3? f && lst? <>>f && tfb <>f ?
                                  ("(forallb " + tfb <>f + " " + tl <>>f + ")") 0)
-                   (= h 'any) (len3? f && lst? <>>f && tfb <>f ?
+                   (h = 'any) (len3? f && lst? <>>f && tfb <>f ?
                                  ("(existsb " + tfb <>f + " " + tl <>>f + ")") 0)
                    !(len3? f) 0
-                   (= h '==) (idv <>f <>>f)                        ; == on literals: the verdict, or 0 (skip)
-                   (= h '=) (? (intv? <>f && intv? <>>f)   ("(Z.eqb " + tv <>f + " " + tv <>>f + ")")
+                   (h = '==) (idv <>f <>>f)                        ; == on literals: the verdict, or 0 (skip)
+                   (h = '=) (? (intv? <>f && intv? <>>f)   ("(Z.eqb " + tv <>f + " " + tv <>>f + ")")
                                  (listv? <>f && listv? <>>f) ("(leqb " + tl <>f + " " + tl <>>f + ")")  ; list/array =
                                  ; gaussian =: numeric within the band, so a zero-im twin equals its charm
                                  ((hasg? <>f || hasg? <>>f) && gz? <>f && gz? <>>f)
@@ -458,7 +458,7 @@
                              '<= ("(negb (gltb " + b + " " + a + "))")
                                  ("(negb (gltb " + a + " " + b + "))")))
                    ; functions carry no strict order: < and > answer nothing
-                   ((= h '< || (= h '>)) && lamform? <>f && lamform? <>>f) "false"
+                   ((h = '< || h = '>) && lamform? <>f && lamform? <>>f) "false"
                    (xband? f) (xband f)                               ; cross-kind ordering: symbol<string<number<chain<map
                    (ordop? h && lst? <>f && lst? <>>f)                ; same-band chain/string order is lex
                      (: a (tl <>f) b (tl <>>f)
@@ -466,7 +466,7 @@
                              '>  ("(lexltb " + b + " " + a + ")")
                              '<= ("(negb (lexltb " + b + " " + a + "))")
                                  ("(negb (lexltb " + a + " " + b + "))")))
-                   (ordop? h && (= <>f () || (= <>>f ())) && uz? <>f && uz? <>>f)
+                   (ordop? h && (<>f = () || <>>f = ()) && uz? <>f && uz? <>>f)
                      (: a ("(unet " + tuz <>f + ")") b ("(unet " + tuz <>>f + ")")
                         (h @ '<  ("(Z.ltb " + a + " " + b + ")")
                              '>  ("(Z.ltb " + b + " " + a + ")")
@@ -502,7 +502,7 @@
                     (walkops >ops)))
    (walk fs) (? !fs 0
                 (: f <fs
-                   _ (? (two? f && (= <f 'test)) (walkops >f) 0)
+                   _ (? (two? f && (<f = 'test)) (walkops >f) 0)
                    (walk >fs)))
 
    _ (dot (join [

@@ -43,7 +43,7 @@
 (:
    ; the first row of tbl headed by k. config.l's two tables are both keyed that
    ; way and there is no assoc in the vocabulary, so this is the one walk for both
-   (hw-find tbl k) (:- (f tbl) (f l) (? (one? l) () (<<l = k) <l (f >l)))
+   (hw-find tbl k) (:- (f tbl) (f l) (? (atom? l) () (<<l = k) <l (f >l)))
    (hw-q s) ((cite 'lapiz 'hq) s)          ; the three characters html cannot hear otherwise
    ; the final newline ends the last line, it does not open another: a file of n lines
    ; that ends in one would otherwise paint an n+1'th empty row.
@@ -62,7 +62,7 @@
       ; the parens around the first `roles` are load-bearing: bare, the + binds its
       ; two neighbours and leaves `roles` standing as an element of the ? -- a
       ; predicate, always true, and the call never happens
-      (? (one? s) ""
+      (? (atom? s) ""
          (roles (s 1)) + (two? >>s ? ("@media (prefers-color-scheme:dark){" + roles (s 2) + "}\n") "")))
 
    ; --- the stylesheet -------------------------------------------------------
@@ -113,13 +113,13 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
    (:- (go <r 0 "")
     r (hue-lex bk s in 1)
     (go rs i acc)
-     (? (one? rs) [(acc + hw-q (snip s i #s)) <>r]
+     (? (atom? rs) [(acc + hw-q (snip s i #s)) <>r]
       (<rs @ [c a b] (go >rs b (acc + hw-q (snip s i a) + hw-span c a b s)))))
    (hw-body path src)
    (:- ("<pre class=\"hue\">" + go (hw-lines src) 1 0 "" + "</pre>")
     bk (hue-book 0)
     (go ls k in acc)
-     (? (one? ls) acc
+     (? (atom? ls) acc
         (hw-paint bk <ls in @ (txt in2)
          (go >ls (k + 1) in2
              (acc + "<span class=\"ln\" id=\"L" + show k + "\">" + txt + "\n</span>")))))

@@ -150,7 +150,7 @@
        src (slurp port)
        _ (close port)
        (go ls n fn acc)
-        (? (one? ls) (rev acc)
+        (? (atom? ls) (rev acc)
            (: line (uncomment (rtrim <ls))
               hdr (header? line)
               fn2 (hdr ? (hdr-name line) fn)
@@ -173,8 +173,8 @@
    (llen l) (foldl (\ n _ (n + 1)) 0 l)
 
    paths >argv
-   _ (one? paths ? (die "usage: waits.l FILE .."))
-   found (foldl (\ a p (+ a (scan p))) () paths)
+   _ (atom? paths ? (die "usage: waits.l FILE .."))
+   found (foldl (\ a p (a + scan p)) () paths)
    fkeys (map key found)
    rkeys (map key roster)
    extra (filter (e \ !(seen? rkeys (key e))) found)

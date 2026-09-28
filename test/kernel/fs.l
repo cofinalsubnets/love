@@ -21,9 +21,9 @@
 
 (: f "apps/json.l" d "apps" g "/tmp/l-fs-dns.l"
    (rd p) (: q (open p "r") s (slurp q) _ (close q) s)
-   (wr p s) (: q (open p "w") _ (say q s) (close q))
+   (wr p s) (: q (open p "w") (say q s, close q))
    st (stat f)
-   sz (tally (rd f))
+   sz #(rd f)
    orig (rd "apps/dns.l")
    _ (wr g orig)                                 ; the scratch: the tree itself refuses a write
    was (stat g)
@@ -35,20 +35,20 @@
  (test
    ; stat answers the four fields, and the size is the bytes a read hands over
    (two? st)
-   (= sz <st)
+   (sz = <st)
    ; the mtime is the source's, off the archive: milliseconds, and a 2020s stamp
-   (< 1600000000000 <>st)
-   (= 32768 (& 61440 <>>st))                     ; s_ifmt bits say regular file
-   (= (* 1000000 <>st) <>>>st)                   ; ns is that same date whole
+   (1600000000000 < <>st)
+   (32768 = 61440 & <>>st)                     ; s_ifmt bits say regular file
+   (1000000 * <>st = <>>>st)                   ; ns is that same date whole
    ; a directory wears the dir bits and the newest date under it
-   (= 16384 (& 61440 <>>(stat d)))
-   (< 1600000000000 <>(stat d))
+   (16384 = 61440 & <>>(stat d))
+   (1600000000000 < <>(stat d))
    ; absence is the real (), never an empty tray of fields
    ((stat (d + "/no-such-thing.l")) = 'enoent)
-   (! (charm? (stat (d + "/no-such-thing.l"))))
+   !(charm? (stat (d + "/no-such-thing.l")))
    ; readdir hands over the baked names as strings
    (elem "json.l" (readdir d))
-   (string? (cap (readdir d)))
+   (string? <(readdir d))
    ; "" and "." are both the seat, the tree's top: its own top names, each deduped
    ; across every row beneath it. the root holds the home, empty, and tmp -- the scratch
    ; the rung-2 tree seeds at boot -- and no row of the tree, which lists under /proc/src
@@ -70,38 +70,38 @@
    ((readdir (d + "/nope")) = 'enoent)
    ; lseek rides the raw openfd lane: end is the size, set and cur the arithmetic
    (: fd (openfd f 0)
-      (&& (= sz (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
-          !(close fd)))
+      (sz = lseek fd 0 2 && 1 = lseek fd 1 0 && 3 = lseek fd 2 1
+          && !(close fd)))
    ('ebadf = (lseek -1 0 0))                   ; a bad fd is its nom, never a seek
    ('enoent = (openfd (d + "/no-such-thing.l") 0))  ; and so is an absent path
    ; a whence no seat knows is the row's 'einval and moves nothing -- read as SET
    ; it would have seeked to 0 and called that success
    (: fd (openfd f 0)
-      (&& (= 2 (lseek fd 2 0)) ('einval = (lseek fd 0 7)) ('einval = (lseek fd 0 -3))
-          (= 2 (lseek fd 0 1)) !(close fd)))
+      (2 = lseek fd 2 0 && 'einval = lseek fd 0 7 && 'einval = lseek fd 0 -3
+          && 2 = lseek fd 0 1 && !(close fd)))
    ; stat takes a charm as an fd, which is fstat under another name: the same
    ; tuple the path answers, and nothing for a row that is not there
-   (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
+   (: fd (openfd f 0) r (stat fd = stat f) _ (close fd) r)
    ((stat 4096) = 'ebadf) !(charm? (stat 4096))
    ; and stat reads a row's KIND off the fd: a file, and a directory, which opens
    ; read-only by POSIX's own rule and answers as the tree it is
-   (: fd (openfd f 0) s (stat fd) _ (close fd) (= 32768 (& 61440 <>>s)))
-   (: fd (openfd d 0) s (stat fd) _ (close fd) (= 16384 (& 61440 <>>s)))
+   (: fd (openfd f 0) s (stat fd) _ (close fd) (32768 = 61440 & <>>s))
+   (: fd (openfd d 0) s (stat fd) _ (close fd) (16384 = 61440 & <>>s))
    ; close wears the errno convention: a stranger row is 'ebadf, and so is the
    ; second close of a real one -- the row is gone, which is what the answer says
-   (: fd (openfd f 0) a (close fd) b (close fd) (&& !a ('ebadf = b)))
+   (: fd (openfd f 0) a (close fd) b (close fd) (!a && 'ebadf = b))
    ('ebadf = (close 4096))
    !(close -1)                                 ; closing nothing still answers ok
    ; the raw-fd lane reads the ramfs byte for byte where the port lane does, gulp
    ; boundaries and all -- one file is longer than a single gulp
-   (: fd (openfd f 0) a (slurp fd) _ (close fd) (&& (= a (rd f)) (= sz (tally a))))
+   (: fd (openfd f 0) a (slurp fd) _ (close fd) (a = rd f && sz = #a))
    ; a write moves the size, and the date with it: stat reads the copy's stamp once
    ; there is a copy, the bake's until then
-   (= 3 <now)
-   (<= <>was <>now)
-   (= (tally orig) <back)
+   (3 = <now)
+   (<>was <= <>now)
+   (#orig = <back)
    ; the wall clock, which every line above leans on: the door's date if it left
    ; one, else the machine's own rtc (mc146818 on x64, PL031 on a64). It reads as
    ; milliseconds since the epoch here exactly as it does on the host -- an uptime
    ; in ticks is what it used to be, and would fail this by a factor of a thousand.
-   (< 1600000000000 (clock 0))))
+   (1600000000000 < clock 0)))

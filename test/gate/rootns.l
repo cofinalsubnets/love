@@ -17,8 +17,7 @@
 
 (borrow 'posix)
 (: e (newns 0)
-   (? e (: _ (puts "rootns: no unprivileged user namespace here, laws skipped")
-           _ (putc 10) 0)
+   (? e (puts "rootns: no unprivileged user namespace here, laws skipped", putc 10, 0)
       (:
    me (selfpath 0)
    W ("/tmp/l-rootns-" + (show (getpid 0)))
@@ -54,7 +53,7 @@
    _ (assert (0 = (run ["mount" "-o" "bind" "/etc" (W + "/b")])))
    _ (assert (elem "hosts" (readdir (W + "/b"))))   ; the bind is not a nod
    ; a tmpfs is writable, which is what says the mount is a mount and not a mkdir
-   _ (assert (: q (open (W + "/t/x") "w") (port? q && (: _ (say q "hi") _ (close q) 1)))
+   _ (assert (: q (open (W + "/t/x") "w") (port? q && (say q "hi", close q, 1)))
              ("hi" = (: q (open (W + "/t/x") "r") s (slurp q) _ (close q) s)))
 
    ; -- bare mount lists what we just did, /proc/self/mounts being the one truth ---
@@ -66,7 +65,7 @@
    ; -- umount, both of them, and the tmpfs's file goes with it ------------------
    _ (assert (0 = (run ["umount" (W + "/b")])))
    _ (assert (0 = (run ["umount" (W + "/t")])))
-   _ (assert !(two? (stat (W + "/t/x"))))          ; the tmpfs took its contents away
+   _ (assert (atom? (stat (W + "/t/x"))))          ; the tmpfs took its contents away
    _ (assert !(elem "hosts" (readdir (W + "/b"))))
 
    ; -- mkfifo and mknod ---------------------------------------------------------
@@ -76,15 +75,15 @@
    ; that it comes back as a status and a word rather than a crash is the half this
    ; gate can actually say.
    _ (assert (0 != (nope ["mknod" (W + "/null") "c" "1" "3"])))
-   _ (assert !(two? (stat (W + "/null"))))
+   _ (assert (atom? (stat (W + "/null"))))
    ; the fifo lane is allowed, both ways of spelling it
    _ (assert (0 = (run ["mkfifo" (W + "/f")])))
-   _ (assert (: st (stat (W + "/f")) (two? st && (4096 = (& 61440 (st 2))))))
+   _ (assert (: st (stat (W + "/f")) (two? st && (4096 = (61440 & (st 2))))))
    _ (assert (0 = (run ["mknod" (W + "/f2") "p"])))
-   _ (assert (: st (stat (W + "/f2")) (two? st && (4096 = (& 61440 (st 2))))))
+   _ (assert (: st (stat (W + "/f2")) (two? st && (4096 = (61440 & (st 2))))))
    ; -m lands: 0600 on the second, the default 0666 on the first
    _ (assert (0 = (run ["mkfifo" "-m" "600" (W + "/f3")])))
-   _ (assert (: st (stat (W + "/f3")) (two? st && (384 = (& 4095 (st 2))))))
+   _ (assert (: st (stat (W + "/f3")) (two? st && (384 = (4095 & (st 2))))))
    ; and the refusals a script reads
    _ (assert (0 != (nope ["mknod" (W + "/bad") "z"])))
    _ (assert (0 != (nope ["mknod" (W + "/bad") "c"])))    ; a device with no major/minor

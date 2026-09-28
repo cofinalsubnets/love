@@ -664,7 +664,7 @@
     (aw-elist ts 0 () @ [es r]
       [es (aw-want r "]" "expected ] after a subscript")] ())
    (aw-e-prim ts ng)
-    (one? ts ? (aw-err "unexpected end of program")
+    (atom? ts ? (aw-err "unexpected end of program")
      (: t <ts k <t v <>t r >ts
         (k @ 'num [['num v] r]
              'str [['str v] r]
@@ -811,7 +811,7 @@
        (aw-redir ts @ [rd r] [() rd r] ())
        (aw-elist ts 1 () @ [es r]
          ; `print (a, b)` is the whole list in brackets, not one grouped operand
-         (: es2 (one? >es && <<es == 'glist ? <><es es)
+         (: es2 (atom? >es && <<es == 'glist ? <><es es)
             (aw-redir r @ [rd r2] [es2 rd r2] ()))
          ()))
    (aw-simple ts)                                ; a statement with no body of its own
@@ -1135,7 +1135,7 @@
    ; the subscripts of a[i,j] -> one lambda answering the subsep-joined key
    (aw-ankey es)
     (: fs (map aw-an es)
-       (one? >fs ? (: f <fs (E \ aw-sv E (f E)))
+       (atom? >fs ? (: f <fs (E \ aw-sv E (f E)))
           (E \ aw-key E (map (f \ f E) fs))))
    ; an lvalue -> [read write], both lambdas of E
    d0 "division by zero"
@@ -1390,7 +1390,7 @@
        ; iff the callee subscripted it -- awk decides late, so the answer only
        ; exists now. carry the tablet back to the caller's name
        _ (: (back l a)
-             (one? l || one? a ? 0
+             (atom? l || atom? a ? 0
                 (: vnm <a
                    v (loc <l)
                    (!(aw-nil? vnm) && tablet? v && !(tablet? (aw-get E vnm))
@@ -1436,8 +1436,8 @@
    ; paying one per record, per iteration and per call
    (aw-anlist rk ss)
     (: fs (map (aw-ax rk) ss)
-       (? (one? fs) (_ \ 0)
-          (one? >fs) <fs
+       (? (atom? fs) (_ \ 0)
+          (atom? >fs) <fs
           (E \ (: (go l) (l @ (f . u) (: r (f E) (r == 0 ? (go u) r)) 0)
                   (go fs)))))
    ; one turn of a loop: 1 go round again, 0 the break came through, else the
@@ -1592,7 +1592,7 @@
 
    ; -- the tool --------------------------------------------------------------
    (aw-flags a fs vs pfs)
-    (one? a ? [fs (rev vs) (rev pfs) a]
+    (atom? a ? [fs (rev vs) (rev pfs) a]
      (: w <a n #w
         glued (2 < n ? (snip w 2 n))
         (w @ "--" [fs (rev vs) (rev pfs) >a]
@@ -1614,7 +1614,7 @@
      (: fns {}
         src (two? pfs ?
                (:- (cat pfs "")
-                (cat l acc) (one? l ? acc
+                (cat l acc) (atom? l ? acc
                              (: r (uread <l)
                                 (two? r ? (cat >l (acc + <>r + "\n"))
                                    (udie 2 ("awk: cannot open " + <l))))))

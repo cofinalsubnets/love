@@ -60,7 +60,7 @@
                 (axq? c) ['axm (unq (c 1)) (unq (c 2)) ()])
    (kids ks acc) (two? ks ? (kids >ks (deq? <ks || axq? <ks ? (entry <ks . acc) acc)) acc)
    (gather fs acc) (? (two? fs)
-                      (gather (cup fs) (: F (cap fs)
+                      (gather >fs (: F <fs
                         (? (two? F && <F = 'test) (kids >F acc)
                            (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
@@ -127,7 +127,7 @@
           'empty "Empty" 'true "true" 'false "false" 'tt "PUnit.unit"}
    (atom-l t) (peep bases t (? (corpus? t) (leann t) (string t)))   ; base type / global / bound var
 
-   (spine-l l) (one? l ? "" (u2l <l + (? (two? >l) " " "") + spine-l >l))
+   (spine-l l) (atom? l ? "" (u2l <l + (? (two? >l) " " "") + spine-l >l))
    (u2l t)
    (?- (show t)
     (charm? t) (show t)
@@ -166,28 +166,28 @@
    ; --- translatability: every head handled (no unhandled constructor anywhere) ---
    (alltr? l) (two? l ? (tr? <l && alltr? >l) 1)
    (tr? t) (? (charm? t) 1  (nom? t) 1
-              (two? t) (? (peep un (cap t) 0) 0 (alltr? (cup t)))  1)
+              (two? t) (? (peep un <t 0) 0 (alltr? >t))  1)
 
    ; --- the global names a term mentions (corpus names only), accumulated into a set ---
-   (ment t acc) (? (nom? t) (? (corpus? t) (: _ (pin acc t 1) acc) acc)
+   (ment t acc) (? (nom? t) (? (corpus? t) (pin acc t 1, acc) acc)
                    (two? t) (ment-l t acc)  acc)
-   (ment-l l acc) (? (two? l) (ment-l (cup l) (ment (cap l) acc)) acc)
+   (ment-l l acc) (? (two? l) (ment-l >l (ment <l acc)) acc)
 
    ; candidates: a def, in the fragment, not blacklisted, present in glob (uu-certified)
    (cand? e) (<e = 'def && !(peep bl (e 1) 0) && !(peep np (e 1) 0)
               && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
-   cands (foldl (\ a e (? (cand? e) (. e a) a)) () ents)   ; reversed; restore order at emit
+   cands (foldl (\ a e (? (cand? e) (e . a) a)) () ents)   ; reversed; restore order at emit
    ; each candidate's mentioned-names list (its global dependencies)
    (mlist e) (keys (ment-l (. (e 2) (. (e 3) ())) (tablet 0)))
 
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
-   (allin? l ex) (? (two? l) (&& (peep ex (cap l) 0) (allin? (cup l) ex)) 1)
-   (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (: _ (pin a (e 1) 1) a) a)) (tablet 0) cs)
+   (allin? l ex) (? (two? l) (peep ex <l 0 && allin? >l ex) 1)
+   (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (pin a (e 1) 1, a) a)) (tablet 0) cs)
    ; the measure is the key COUNT: pass only ever shrinks ex, so the counts settle
    ; exactly when the set does. not glued $, which nets any tablet to 1 and would
    ; stop the walk after one pass, past defs whose dependency that pass dropped.
    (fix ex) (: ex2 (pass cands ex) (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
-   ex0 (foldl (\ a e (: _ (pin a (e 1) 1) a)) (tablet 0) cands)    ; seed: all candidates
+   ex0 (foldl (\ a e (pin a (e 1) 1, a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
    ; --- emit, in source order ---

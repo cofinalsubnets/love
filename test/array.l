@@ -71,17 +71,13 @@
  (aall (star-tray '(3) '(2 4 6) = (1 + star-tray '(3) '(1 3 5))))  ; scalar on the left
 
  ; --- array (op) array, same shape ---
- (aall (= (star-tray '(3) '(11 22 33))
-          (star-tray '(3) '(10 20 30) + star-tray '(3) '(1 2 3))))
- (aall (= (star-tray '(3) '(9 18 27))
-          (star-tray '(3) '(10 20 30) - star-tray '(3) '(1 2 3))))
+ (aall ((star-tray '(3) '(11 22 33)) = (star-tray '(3) '(10 20 30) + star-tray '(3) '(1 2 3))))
+ (aall ((star-tray '(3) '(9 18 27)) = (star-tray '(3) '(10 20 30) - star-tray '(3) '(1 2 3))))
 
  ; --- numpy broadcasting: outer sum of a column and a row ---
- (aall (= (star-tray '(3 3) '(11 21 31 12 22 32 13 23 33))
-          (star-tray '(3 1) '(1 2 3) + star-tray '(1 3) '(10 20 30))))
+ (aall ((star-tray '(3 3) '(11 21 31 12 22 32 13 23 33)) = (star-tray '(3 1) '(1 2 3) + star-tray '(1 3) '(10 20 30))))
  ; size-1 axis stretches
- (aall (= (star-tray '(2 2) '(11 21 12 22))
-          (star-tray '(2 2) '(1 1 2 2) + star-tray '(1 2) '(10 20))))
+ (aall ((star-tray '(2 2) '(11 21 12 22)) = (star-tray '(2 2) '(1 1 2 2) + star-tray '(1 2) '(10 20))))
 
  ; --- mixed element-type promotes to the widest ---
  (gem-tray = tier (star-tray '(2) 0 + 1.5))            ; z array + r scalar -> r

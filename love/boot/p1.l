@@ -3,7 +3,7 @@
 ; this file may not use prefix or infix operators.
 (: sound (: ; the input is a colist. thunk tails must be memoized or idempotent.
    ! nil?
-   (one? x) (! (two? x))
+   (atom? x) (! (two? x))
    (!= a b) (! (= a b))
    (caap a) (cap (cap a)) (caup a) (cap (cup a))
    (cuap a) (cup (cap a)) (cuup a) (cup (cup a))
@@ -48,11 +48,11 @@
 
    ; --- whitespace and comments --------------------------------------------
    ; `;` runs to end of line; `#!` does too; a bare `#` is the tally sigil.
-   (p1-eol cl) (? (one? cl) cl
+   (p1-eol cl) (? (atom? cl) cl
                   (? (= (cap cl) 10) 1 (= (cap cl) 13)) (p1-cup cl)
                   (p1-eol (p1-cup cl)))
    (p1-skip cl)
-     (? (one? cl) cl
+     (? (atom? cl) cl
         (: c (cap cl)
            (? (p1-ws? c) (p1-skip (p1-cup cl))
               (= c 59) (p1-skip (p1-eol (p1-cup cl)))
@@ -65,29 +65,29 @@
    ; arithmetic's and there is no width to get wrong (rung 2's law).
    (p1-dval c) (? (p1-dig? c) (- c 48) (- (p1-low c) 87))
    (p1-digits cl radix n)
-     (? (one? cl) n
+     (? (atom? cl) n
         (p1-digits (cup cl) radix (+ (* n radix) (p1-dval (cap cl)))))
    ; the three predicates, love.c's is_dec_int / is_hex_int / is_oct_int. they
    ; are exhaustive over what a base-0 strtol took whole, which is why a token
    ; that is none of them (0x, 08, 1e5, abc) goes on to the float lane.
-   (p1-all? p cl) (? (one? cl) 1 (p (cap cl)) (p1-all? p (cup cl)) ())
+   (p1-all? p cl) (? (atom? cl) 1 (p (cap cl)) (p1-all? p (cup cl)) ())
    (p1-oct? c)  (? (<= 48 c) (<= c 55) ())
    (p1-dec-int? cl)
-     (? (one? cl) ()
+     (? (atom? cl) ()
         ; a leading zero belongs to octal, below -- but "0" alone is decimal
         (? (= (cap cl) 48) (two? (cup cl)) ()) ()
         (p1-all? p1-dig? cl))
    (p1-hex-int? cl)                            ; [+-]?0[xX]<hex>+, sign peeled
-     (? (one? cl) ()
+     (? (atom? cl) ()
         (!= (cap cl) 48) ()
-        (one? (cup cl)) ()
+        (atom? (cup cl)) ()
         (!= (p1-low (caup cl)) 120) ()
-        (one? (cuup cl)) ()         ; a bare 0x is an honest symbol
+        (atom? (cuup cl)) ()         ; a bare 0x is an honest symbol
         (p1-all? p1-hex? (cuup cl)))
    (p1-oct-int? cl)                            ; [+-]?0<oct>+, the zero the prefix
-     (? (one? cl) ()
+     (? (atom? cl) ()
         (!= (cap cl) 48) ()
-        (one? (cup cl)) ()
+        (atom? (cup cl)) ()
         (p1-all? p1-oct? (cup cl)))
    ; a token charlist -> (1 . its number), or () if it is not one. the sign is
    ; peeled first so every base agrees about it.
@@ -95,19 +95,19 @@
    ; so a bare answer tested with nil? calls every negative and every zero "not
    ; a number" -- silently, and only for the literals most likely to matter.
    (p1-int cl)
-     (: sgn (? (one? cl) 0 (= (cap cl) 45) -1 (= (cap cl) 43) 1 0)
+     (: sgn (? (atom? cl) 0 (= (cap cl) 45) -1 (= (cap cl) 43) 1 0)
         body (? (= sgn 0) cl (cup cl))
         mag (? (p1-dec-int? body) (. 1 (p1-digits body 10 0))
                (p1-hex-int? body) (. 1 (p1-digits (cup (cup body)) 16 0))
                (p1-oct-int? body) (. 1 (p1-digits (cup body) 8 0))
                ())
-        (? (one? mag) ()
+        (? (atom? mag) ()
            (< sgn 0) (. 1 (- 0 (cup mag)))
            mag))
 
    ; --- the token lanes -----------------------------------------------------
    (p1-tok cl acc)                                   ; a name-led token
-     (? (one? cl) (. (p1-rev acc ()) cl)
+     (? (atom? cl) (. (p1-rev acc ()) cl)
         (p1-tend? (cap cl)) (. (p1-rev acc ()) cl)
         (p1-tok (p1-cup cl) (. (cap cl) acc)))
    (p1-rev l acc) (? (two? l) (p1-rev (cup l) (. (cap l) acc)) acc)
@@ -115,7 +115,7 @@
    (p1-take l k acc) (? (< 0 k) (p1-take (cup l) (- k 1) (. (cap l) acc)) (p1-rev acc ()))
    ; one past a token's last operator char, or 0 -- where its run ends.
    (p1-runend l i best)
-     (? (one? l) best
+     (? (atom? l) best
         (p1-runend (cup l) (+ i 1) (? (p1-opc? (cap l)) (+ i 1) best)))
    ; an operator run: a maximal run of operator chars, read as one plain symbol
    ; and factored later by opfix. a trailing '-' right before a digit is the
@@ -124,14 +124,14 @@
    ; @ may start a run (@- and friends) but never extend one: past the first char it
    ; is the tuple sigil, so `!@0` is ! then @0 and not the symbol !@.
    (p1-run cl acc)
-     (? (? (two? cl) (? (= (cap cl) 64) (one? acc) (p1-opc? (cap cl))) ())
+     (? (? (two? cl) (? (= (cap cl) 64) (atom? acc) (p1-opc? (cap cl))) ())
         (p1-run (p1-cup cl) (. (cap cl) acc))
         ; the run ended: shed a trailing '-' if a digit follows and the run has
         ; more than that '-' to it, and hand the '-' back for the number lane.
-        (: shed (? (one? acc) ()
+        (: shed (? (atom? acc) ()
                    (!= (cap acc) 45) ()
-                   (one? (cup acc)) ()
-                   (one? cl) ()
+                   (atom? (cup acc)) ()
+                   (atom? cl) ()
                    (p1-dig? (cap cl)))
            (? shed (. (p1-rev (cup acc) ()) (. 45 cl))
               (. (p1-rev acc ()) cl))))
@@ -146,7 +146,7 @@
         (? (two? n) (cup n)
            (= s "infinity") (/ 1.0 0.0)
            (= s "-infinity") (/ -1.0 0.0)
-           (: lead (? (one? tok) 0
+           (: lead (? (atom? tok) 0
                       (& (p1-cls (cap tok)) 64) (? (two? (cup tok)) (caup tok) 0)
                       (cap tok))
               (? (? (p1-dig? lead) 1 (= lead 46))
@@ -166,20 +166,20 @@
    ; \u{h..}: one to six hex digits naming a code point, surrogates out -> (v . rest).
    ; 'torn when the input ends inside it, () when it is no such escape
    (p1-uhex cl v k)
-     (? (one? cl) 'torn
+     (? (atom? cl) 'torn
         (: c (cap cl)
            (? (= c 125) (? (? (< 0 k) (? (<= v 1114111) (? (< v 55296) 1 (< 57343 v)) ()) ())
                            (. v (p1-cup cl)) ())
               (? (? (p1-hex? c) (< k 6) ())
                  (p1-uhex (p1-cup cl) (+ (* v 16) (p1-dval c)) (+ k 1))
                  ()))))
-   (p1-ucl cl) (? (one? cl) 'torn (? (= (cap cl) 123) (p1-uhex (p1-cup cl) 0 0) ()))
+   (p1-ucl cl) (? (atom? cl) 'torn (? (= (cap cl) 123) (p1-uhex (p1-cup cl) 0 0) ()))
    (p1-str cl acc)
-     (? (one? cl) 'torn
+     (? (atom? cl) 'torn
         (: c (cap cl) r (p1-cup cl)
            (? (= c 34) (. (string (p1-rev acc ())) r)
               (!= c 92) (p1-str r (. c acc))
-              (one? r) 'torn
+              (atom? r) 'torn
               (= (cap r) 117)                              ; \u{h..}, else a plain u
                 (: u (p1-ucl (p1-cup r))
                    (? (= u 'torn) 'torn
@@ -216,7 +216,7 @@
    ; whole list, so a run glued at head does not fuse for those two.
    (p1-read1 cl0 head)
      (: cl (p1-skip cl0)
-        (? (one? cl) ()
+        (? (atom? cl) ()
            (: c (cap cl) r (p1-cup cl)
               ; a numeral has to start somewhere (rung 1): + and - are operator
               ; runs like every other punctuation, except that a digit -- or a
@@ -253,7 +253,7 @@
         open (? (p1-splice? w) (? (two? s) (& (p1-cls (cap s)) 16)))
         (? open (p1-open w (p1-cup s))
            (: d (p1-read1 s head)
-              (? (one? d) 'torn
+              (? (atom? d) 'torn
                  (. (p1-wrap w (cap d)) (cup d))))))
 
    ; the valence law, reader half: a run glued to the datum after it is monadic
@@ -271,7 +271,7 @@
         (? (= run "\\") (. sym rest)
            (! (? shed 1 (p1-glued? rest))) (. sym rest)
            (: d (p1-read1 rest ())
-              (? (one? d) 'torn
+              (? (atom? d) 'torn
                  (. (. 'mono (. (. sym (. (cap d) ())) ())) (cup d))))))
    ; a digit-led token carrying a sigil is a run, not a name: 2?<>x is 2?<>
    ; around x. a digit breaks p1-run, so the run is cut from the whole token,
@@ -291,7 +291,7 @@
            (! (p1-glued? r)) (. a rest)             ; run ends the form: the plain symbol
            (: sym (nom (string (p1-take tok k ())))
               d (p1-read1 r ())
-              (? (one? d) 'torn
+              (? (atom? d) 'torn
                  (. (. 'mono (. (. sym (. (cap d) ())) ())) (cup d))))))
    ; glued = the next char starts a datum rather than ending the form.
    (p1-glued? cl)
@@ -303,9 +303,9 @@
    ; not the reader's (a reader of a subset, not a validator).
    (p1-list cl0 head acc)
      (: cl (p1-skip cl0)
-        (? (one? cl) 'torn
+        (? (atom? cl) 'torn
            (& (p1-cls (cap cl)) 32) (. (p1-rev acc ()) (p1-cup cl))
-           (: d (p1-read1 cl head) (? (one? d) 'torn (p1-list (cup d) () (. (cap d) acc))))))
+           (: d (p1-read1 cl head) (? (atom? d) 'torn (p1-list (cup d) () (. (cap d) acc))))))
 
    ; --- a port is a charlist ------------------------------------------------
    ; p1-flow lays a port's readable run down as ordinary conses and closes it on a

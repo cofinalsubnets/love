@@ -14,7 +14,7 @@
 
    ; our own line-sayer: kore's say1 would want the whole u-floor spliced into the layer
    ; the rows load into, and this file's job is to keep that layer thin.
-   (say1 s) (: _ (puts s) (putc 10))
+   (say1 s) (puts s, putc 10)
 
    ; FIRST, and the order is the point: these rows' subject IS the ambient book, so they
    ; want the one a fresh process would hand them. apps/vi/hue.l names its word lanes
@@ -60,7 +60,7 @@
        _ (? (string? here) (chdir here) 0)
        df (nfail () - f0) dc (test_get 'count - c0)
        _ (say1 ("gates: " + show nm + " " + show dc + " tests, " + show df + " failed"))
-       (? (0 < df) 1 (0 = dc) (: _ (say1 ("gates: " + show nm + " ran NO test")) 1) 0))
+       (? (0 < df) 1 (0 = dc) (say1 ("gates: " + show nm + " ran NO test"), 1) 0))
 
    ; a tail of row names runs just those, so every lane keeps a name of its own to be run
    ; by -- `love test/gate/gates.l lux` is what `make test_lux` asks for, and the make

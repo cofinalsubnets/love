@@ -58,7 +58,7 @@
    0)
 "))
         (close p))
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    srv (tether [love sfile])
    _ (rest 300)                                   ; its listen, before our connect
    r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
@@ -70,7 +70,7 @@
                                 (: t2 (t + string b) (? (0 <= (K 'wg-find) t2 pat 0) t2 (upto pat t2)))))
    seen (upto "hello" "")
    _ (test (0 < #seen))
-   _ (: _ (say m "x\r") (flush m))
+   _ (say m "x\r", flush m)
    more (slurp m)
    txt (seen + more)
    st2 (waitfor <r)
@@ -106,13 +106,13 @@
            ((K 'td-esc) ("q" + string 255) = "q" + string 255 + string 255))
    love <cmdline
    port 7454
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    srv (tether [love "kore" "telnetd" "-p" (show port) "-b" "127.0.0.1" "-l" "/bin/sh" "-f" "/dev/null"])
    _ (rest 300)
    r (tether [love "kore" "telnet" "127.0.0.1" (show port)])
    m >r
    _ (rest 500)                                  ; the options settled, the shell's prompt up
-   _ (: _ (say m "echo td-$((6*7))\rexit\r") (flush m))
+   _ (say m "echo td-$((6*7))\rexit\r", flush m)
    txt (slurp m)
    st2 (waitfor <r)
    _ (still <srv 15)
@@ -127,7 +127,7 @@
 ; runs on a pty of its own. keys typed at microcom reach the line, the line's bytes reach
 ; microcom's screen, and ^X leaves with 0
 (: love <cmdline
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (upto m n a) (? (n <= #a) a (: c (see m) (? (c < 0) a (upto m n (a + string c)))))
    dv (tether ["sh" "-c" "tty; exec sleep 20"])
    dm >dv
@@ -136,11 +136,11 @@
    mc (tether [love "kore" "microcom" "-s" "9600" path])
    mm >mc
    _ (rest 400)
-   _ (: _ (say mm "ping") (flush mm))
+   _ (say mm "ping", flush mm)
    got (upto dm 4 "")
-   _ (: _ (say dm "pong") (flush dm))
+   _ (say dm "pong", flush dm)
    shown (upto mm 4 "")
-   _ (: _ (say mm (string 24)) (flush mm))
+   _ (say mm (string 24), flush mm)
    st (waitfor <mc)
    _ (still <dv 15)
    _ (waitfor <dv)
@@ -178,7 +178,7 @@
    0)
 ")
         (close p))
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (run args) (: r (tether (love . "kore" . args)) t (slurp >r) [t <(waitfor <r)])
    (has? t s) (0 <= (K 'wg-find) t s 0)
    srv (tether [love nfile])
@@ -198,10 +198,9 @@
                          (has? <r ("64 bytes from " + h + ": seq=1 ttl="))
                          (has? <r "2 packets transmitted, 2 packets received, 0% packet loss")
                          (has? <r "round-trip min/avg/max = ") (r 1 = 0)))
-   v6? (: q (open "/proc/net/if_inet6" "r") (? (hot? q) (: _ (close q) 1) 0))
+   v6? (: q (open "/proc/net/if_inet6" "r") (? (hot? q) (close q, 1) 0))
    _ (echoes (run ["ping" "-c" "2" "-i" "0.2" "127.0.0.1"]) "127.0.0.1")
-   _ (? v6? (: _ (echoes (run ["ping6" "-c" "2" "-i" "0.2" "::1"]) "::1")
-               (echoes (run ["ping" "-6" "-c" "2" "-i" "0.2" "::1"]) "::1")) 0)
+   _ (? v6? (echoes (run ["ping6" "-c" "2" "-i" "0.2" "::1"]) "::1", echoes (run ["ping" "-6" "-c" "2" "-i" "0.2" "::1"]) "::1") 0)
    ; the raw sockets, where unshare and ip are there to make the namespace (99 when not)
    (inns cmd) (: r (tether ["/bin/sh" "-c" ("unshare -rn sh -c 'ip link set lo up' 2>/dev/null || exit 99; "
                                            + "exec unshare -rn sh -c 'ip link set lo up && exec " + love
@@ -209,9 +208,8 @@
                  t (slurp >r) [t <(waitfor <r)])
    rw (inns "ping -c 2 -i 0.2 127.0.0.1")
    _ (? (rw 1 = 99) 0
-        (: _ (test (has? <rw "64 bytes from 127.0.0.1: seq=1 ttl=")
-                   (has? <rw "2 packets transmitted, 2 packets received, 0% packet loss") (rw 1 = 0))
-           (? v6? (: r6 (inns "ping6 -c 2 -i 0.2 ::1")
+        (test (has? <rw "64 bytes from 127.0.0.1: seq=1 ttl=")
+                   (has? <rw "2 packets transmitted, 2 packets received, 0% packet loss") (rw 1 = 0), (? v6? (: r6 (inns "ping6 -c 2 -i 0.2 ::1")
                      (test (has? <r6 "64 bytes from ::1: seq=1 ttl=")
                            (has? <r6 "2 packets transmitted, 2 packets received, 0% packet loss") (r6 1 = 0)))
               0)))
@@ -265,7 +263,7 @@ done
 kill $R $D
 ")
         (close p))
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (has? t s) (0 <= (K 'wg-find) t s 0)
    (count t s) ((: (g i k) (: j ((K 'wg-find) t s i) (? (j < 0) k (g (j + 1) (k + 1))))) 0 0)
    r (tether ["/bin/sh" "-c" ("unshare -rn true 2>/dev/null || exit 99; exec unshare -rn sh " + sfile + " " + love)])
@@ -291,7 +289,7 @@ kill $R $D
    root "out/.httpd"
    _ (hark ["rm" "-rf" root]) _ (mkdir root 493)
    _ (: p (open (root + "/index.html") "w") _ (say p "<p>served</p>") (close p))
-   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (run args) (: r (tether (love . "kore" . "httpd" . args)) t (slurp >r) [t <(waitfor <r)])
    ; the refusals, each by name and before any socket
    a (run ["-p" "127.0.0.1:8080" "-h" root])
@@ -305,7 +303,7 @@ kill $R $D
    ; a page off -h on -p, fetched by wget's round trip; -f taken, 0.0.0.0: and :PORT too
    port 7437
    (fetch _) ((K 'wg-once) 0 "127.0.0.1" port "/")
-   (try k) (: r (fetch 0) (? (two? r) r (k < 1) r (: _ (rest 50) (try (k - 1)))))
+   (try k) (: r (fetch 0) (? (two? r) r (k < 1) r (rest 50, try (k - 1))))
    srv (tether [love "kore" "httpd" "-f" "-p" ("0.0.0.0:" + show port) "-h" root])
    g (try 100)
    _ (test (two? g) (<g = 200) (g 2 = "<p>served</p>"))

@@ -226,7 +226,7 @@
  ; a digit picks its choice, anything else at a node with choices shows it again, and a
  ; node without them closes -- and that is the end of the talk
  (chat-key g k) (: nd (chat-node (g 'talk)) chs (nd 2)
-                   (one? chs ? (chat-end g)
+                   (atom? chs ? (chat-end g)
                     (: c (filter (c \ 48 + <c = k) chs)
                        (chat g (two? c ? (<c 2) (g 'talk))))))
  ; the end: the stranger gone, the pane to shards, a drum, the others bones where they

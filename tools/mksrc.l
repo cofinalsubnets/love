@@ -62,7 +62,7 @@
    (mksrc arch src dst)
     (: _ (arch = 'wasm ? 0 (mksrc-be arch))
        g (mksrc-slurp src)
-       _ (one? g ? (mksrc-die ("cannot read " + src)))
+       _ (atom? g ? (mksrc-die ("cannot read " + src)))
        s <>g
        n #s
        _ (n < 1 ? (mksrc-die (src + " is empty")))

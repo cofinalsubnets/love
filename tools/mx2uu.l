@@ -45,8 +45,8 @@
    ; a kind's dispatch signature: its row and column in both matrices -- equal
    ; signature = same band. mx2coq derives the partition from this same datum.
    (sig i) (list (rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i))
-   (idxin x l k) (? (one? l) -1 (<l = x) k (idxin x >l (k + 1)))
-   sigs ((: (go is acc) (? (one? is) (rev acc)
+   (idxin x l k) (? (atom? l) -1 (<l = x) k (idxin x >l (k + 1)))
+   sigs ((: (go is acc) (? (atom? is) (rev acc)
                            (: s (sig <is)
                               (go >is (-1 < idxin s acc 0 ? acc (s . acc))))))
          ridx ())
@@ -61,7 +61,7 @@
    ; here, so it comes off -- mxLaddn, matching mx.v's Laddn.
    (ln x) (: t (string x) ("mxL" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
    lanes ((: (go rows acc)                           ; distinct lanes, appearance order
-            (? (one? rows) (rev acc)
+            (? (atom? rows) (rev acc)
                (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
    (lcode x) (idxin x lanes 0)

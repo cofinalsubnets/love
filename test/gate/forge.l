@@ -21,7 +21,7 @@
 ; come with a reason in `forge-why`, and a silent one is still red. Where nothing installs the
 ; roster still has to answer, so the twins are exercised either way.
 (: _ (borrow "apps/forge.l")
-   (die m) (: _ (say err ("forge-gate: " + m + "\n")) _ (flush err) (quit 1))
+   (die m) (say err ("forge-gate: " + m + "\n"), flush err, quit 1)
    fitted (forge-fit 0)
    ; read before the roster grows a deliberately-bogus kernel below, whose own decline
    ; would else answer for a fit that died silently
@@ -36,7 +36,7 @@
    ; answers 1 for an array whose only zero is last.
    (seq sh) (: k (foldl (*) 1 sh) (foldl (\ g j (g (j + 1))) (array sh) (jot k)))
    zs [(iota 0) (iota 1) (iota 2) (iota 9) (iota 64)
-       (+ 1 (iota 1)) (+ 1 (iota 2)) (+ 1 (iota 9)) (+ 1 (iota 64)) (+ 1 (iota 4096))
+       (1 + iota 1) (1 + iota 2) (1 + iota 9) (1 + iota 64) (1 + iota 4096)
        (array '(3) -1 2 3) (array '(3) -1 0 3) (array '(3) 1 2 0) (array '(3) 0 2 3)
        (array '(2 2) 1 2 3 4) (array '(2 2) 1 2 3 0) (array '(2 3) 1 1 1 1 1 1)
        (array '(2 2 2) 1 1 1 1 1 1 1 0) (array '(4 0) )]
@@ -49,21 +49,21 @@
        5 0 -3 2.5 () "text" '(1 2 3)]
 
    ; an answer is a tray or a scalar: `=` is a mask on a tray, and aall the whole question
-   (same? a b) (aall (= a b))
+   (same? a b) (aall (a = b))
    (chk1 nm f g xs)                                  ; a one-argument kernel against its twin
-    (: bad (filter (\ x !(same? (f x) (g x))) xs)
-       (? (nil? bad) (say out ("  " + nm + ": agrees on " + show (tally xs) + " shapes\n"))
+    (: bad (filter (x \ !(same? (f x) (g x))) xs)
+       (? !bad (say out ("  " + nm + ": agrees on " + show #xs + " shapes\n"))
           (die (nm + " DISAGREES with its twin on " + show bad))))
    (chk2 nm f g xs)                                  ; a two-argument kernel, every pair
-    (: bad (filter (\ a (any (\ b !(same? (f a b) (g a b))) xs)) xs)
-       (? (nil? bad)
-          (say out ("  " + nm + ": agrees on " + show (tally xs * tally xs) + " pairs\n"))
-          (: _ (each xs (\ a (each xs (\ b (? (same? (f a b) (g a b)) 0
+    (: bad (filter (a \ any (b \ !(same? (f a b) (g a b))) xs) xs)
+       (? !bad
+          (say out ("  " + nm + ": agrees on " + show (#xs * #xs) + " pairs\n"))
+          (each xs (\ a (each xs (\ b (? (same? (f a b) (g a b)) 0
                  (say out ("    " + nm + " " + show (shape a) + " x " + show (shape b)
-                           + "\n      twin " + show (g a b) + "\n      holo " + show (f a b) + "\n")))))))
-             (die (nm + " DISAGREES with its twin")))))
+                           + "\n      twin " + show (g a b) + "\n      holo " + show (f a b) + "\n")))))),
+           die (nm + " DISAGREES with its twin"))))
    (want nm) (: v (forge-of nm)
-                (? (lit? v) v (die ("forge-of " + show nm + " answered nothing"))))
+                (lit? v ? v (die ("forge-of " + show nm + " answered nothing"))))
 
    _ (chk1 "aall  native" (want 'aall) aall zs)
    _ (chk1 "aall  deopt " (want 'aall) aall ds)
@@ -96,17 +96,17 @@
    ; conditional on the seam, like every other native-only claim here: where nothing can
    ; install, `fitted` stays 0 and the row not growing is the correct answer, not a red. The
    ; one requirement that is not conditional is the last line of the file.
-   _ (? (|| (= fitted 0) (= fitted2 (fitted + 2))) 0
+   _ (? (fitted = 0 || fitted2 = fitted + 2) 0
         (die ("the roster did not grow: fit " + show fitted + " -> " + show fitted2)))
-   _ (? (= ((want 'xt) 0) xtval) 0
+   _ (? ((want 'xt) 0 = xtval) 0
         (die ("the extras slot answered " + show ((want 'xt) 0) + ", want " + show xtval)))
-   _ (? (= ((want 'xt) '(anything at all)) xtval) 0 (die "the extras kernel read its argument"))
+   _ (? ((want 'xt) '(anything at all) = xtval) 0 (die "the extras kernel read its argument"))
    _ (say out ("  extras: the Ip+32 slot answers " + show xtval + "\n"))
    nat2 (want 'fx-and)
    pairs [[0 0] [1 1] [6 3] [255 15] [1023 992] [7 0] [65535 4096]
           [12345678 87654321] [1 2.5] ["a" 3] [() 7] [3 ()]]
-   bad2 (filter (\ p !(= (nat2 <p <>p) (& <p <>p))) pairs)
-   _ (? (nil? bad2) (say out ("  arity 2: agrees on " + show (tally pairs) + " pairs\n"))
+   bad2 (filter (p \ !(nat2 <p <>p = <p & <>p)) pairs)
+   _ (? !bad2 (say out ("  arity 2: agrees on " + show #pairs + " pairs\n"))
         (die ("the arity-2 kernel DISAGREES with its twin on " + show bad2)))
 
    ; --- allocation: the room guard, and the law that no collection runs mid-body --------------
@@ -130,28 +130,28 @@
        + forge-epi-ptr))
    _ (forge-put 'cons2 2 link-ir (.))
    fitted3 (forge-fit 0)
-   _ (? (|| (= fitted 0) (= fitted3 (fitted2 + 1))) 0
+   _ (? (fitted = 0 || fitted3 = fitted2 + 1) 0
         (die ("the allocating kernel did not fit: " + show fitted2 + " -> " + show fitted3)))
    natc (want 'cons2)
    cx [1 0 -3 2.5 () "s" 'nom '(1 2) (iota 3)]
-   badc (filter (\ a (any (\ b !(= (natc a b) (. a b))) cx)) cx)
-   _ (? (nil? badc) 0 (die ("the cons kernel DISAGREES with `.` on " + show badc)))
+   badc (filter (a \ any (b \ !(natc a b = (a . b))) cx) cx)
+   _ (? !badc 0 (die ("the cons kernel DISAGREES with `.` on " + show badc)))
    deep (: (go i a) (? (i < 1) a (go (i - 1) (natc i a))) (go 5000 ()))
-   deepc (: (go i a) (? (i < 1) a (go (i - 1) (. i a))) (go 5000 ()))
-   _ (? (= deep deepc) 0 (die "a 5000-deep native build differs from the C one"))
-   _ (: (go i) (? (i < 1) 0 (: _ (go2 500) (go (i - 1))))
-        (go2 k) (: (g3 j a) (? (j < 1) (tally a) (g3 (j - 1) (natc j a))) (g3 k ()))
+   deepc (: (go i a) (? (i < 1) a (go (i - 1) (i . a))) (go 5000 ()))
+   _ (? (deep = deepc) 0 (die "a 5000-deep native build differs from the C one"))
+   _ (: (go i) (? (i < 1) 0 (go2 500, go (i - 1)))
+        (go2 k) (: (g3 j a) (? (j < 1) #a (g3 (j - 1) (natc j a))) (g3 k ()))
         (go 4000))
-   _ (? (= (natc 1 '(2 3)) '(1 2 3)) 0 (die "the cons kernel is wrong after the churn"))
-   _ (say out ("  allocation: " + show (tally cx * tally cx) + " pairs, a 5000-deep build and 2M conses\n"))
+   _ (? (natc 1 '(2 3) = '(1 2 3)) 0 (die "the cons kernel is wrong after the churn"))
+   _ (say out ("  allocation: " + show (#cx * #cx) + " pairs, a 5000-deep build and 2M conses\n"))
 
    ; --- the wake rung: a fit is idempotent, because a woken image must be able to re-run it ---
    ; a native cell does not survive a bake (the image codec reverts it to the twin), so
    ; `forge-fit` is what a wake calls to get native back. Called twice it must install twice and
    ; answer the same, never accumulate a second roster or hand back a stale cell.
    again (forge-fit 0)
-   _ (? (= again fitted3) 0 (die ("refit fitted " + show again + ", first fit " + show fitted3)))
-   _ (? (= fitted 0) 0 (? (= (forge-fitted? 0) again) 0
+   _ (? (again = fitted3) 0 (die ("refit fitted " + show again + ", first fit " + show fitted3)))
+   _ (? (fitted = 0) 0 (? (forge-fitted? 0 = again) 0
         (die ("refit installed " + show again + " but " + show (forge-fitted? 0) + " are native"))))
    _ (chk1 "aall  refit" (want 'aall) aall zs)
    _ (chk2 "outer refit" (want 'outer) outer ts)
@@ -164,10 +164,10 @@
    (bogus-ir _) '((no-such-op r0 r1))
    _ (forge-put 'bogus 1 bogus-ir aall)
    fitted4 (forge-fit 0)
-   _ (? (= fitted4 fitted3) 0
+   _ (? (fitted4 = fitted3) 0
         (die ("a bogus kernel changed the fitted count: " + show fitted3 + " -> " + show fitted4)))
    _ (? (forge-why 0) 0 (die "the bogus kernel declined without naming a reason"))
-   _ (? (= ((forge-of 'bogus) (+ 1 (iota 4))) 1) 0 (die "the bogus kernel did not fall back to its twin"))
+   _ (? ((forge-of 'bogus) (1 + iota 4) = 1) 0 (die "the bogus kernel did not fall back to its twin"))
    _ (chk1 "aall  after a decline" (want 'aall) aall zs)
    _ (say out ("  decline: named " + show (forge-why 0) + ", roster intact\n"))
 

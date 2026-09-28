@@ -11,19 +11,19 @@
   (gget i) (peep (gauge 0) i 0)
   (pct a b) (b @ 0 0 (a * 100 // b))                             ; a/b as an integer percent
   (per a b) (b @ 0 0 (a // b))                                     ; integer a/b
-  (runk work k) ((: (go i a) (? (< i k) (go (+ i 1) (work 0)) a)) 0 0)  ; run work k times -> last chk
+  (runk work k) ((: (go i a) (i < k ? (go (i + 1) (work 0)) a)) 0 0)  ; run work k times -> last chk
 
   ; run `work` k times between two gauge reads; print the window's churn.
   (gcwin name k work)
    (: s0 (gget G_SEEN) e0 (gget G_EVAC) g0 (gget G_GC)
       chk (runk work k)
       ds (gget G_SEEN - s0) de (gget G_EVAC - e0) dg (gget G_GC - g0)
-    (: _ (puts name) _ (puts "  colls=") _ (putx dg)
-       _ (puts "  mortality=") _ (putx (pct (- ds de) ds)) _ (puts "%")
-       _ (puts "  copied/coll=") _ (putx (per de dg))
-       _ (puts "  scanned/coll=") _ (putx (per ds dg))
-       _ (puts "  copied=") _ (putx de)
-       _ (putc 10) chk))
+    (puts name, puts "  colls=", putx dg,
+     puts "  mortality=", putx (pct (ds - de) ds), puts "%",
+     puts "  copied/coll=", putx (per de dg),
+     puts "  scanned/coll=", putx (per ds dg),
+     puts "  copied=", putx de,
+     putc 10, chk))
 
   ; --- workloads --------------------------------------------------------------
   (sq x) (x * x)   (odd x) (1 = x % 2)
@@ -49,7 +49,7 @@
   ; --- whole-run cumulative ---------------------------------------------------
   _ (putc 10)
   _ (puts "cumulative (incl boot)  colls=") _ (putx (gget G_GC))
-  _ (puts "  mortality=") _ (putx (pct (- (gget G_SEEN) (gget G_EVAC)) (gget G_SEEN))) _ (puts "%")
-  _ (puts "  copy-amp(x100)=") _ (putx (per (* (gget G_EVAC) 100) (gget G_MAXH)))
+  _ (puts "  mortality=") _ (putx (pct (gget G_SEEN - gget G_EVAC) (gget G_SEEN))) _ (puts "%")
+  _ (puts "  copy-amp(x100)=") _ (putx (per (gget G_EVAC * 100) (gget G_MAXH)))
   _ (puts "  peak-live=") _ (putx (gget G_MAXH))
   (putc 10))

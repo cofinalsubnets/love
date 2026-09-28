@@ -280,7 +280,7 @@
    (urdj-step t)
     (: _ (t 'cl ? (close (peep t 'cl ()), pin t 'cl ()) 0)
        fs (t 'fs)
-       (? (one? fs) 0
+       (? (atom? fs) 0
         (: _ (pin t 'fs >fs)
            p (uin (peep t 'm ()) <fs)
            (? (! p) (: _ (pin t 'bad 1) (urdj-step t))
@@ -330,7 +330,7 @@
    ; further than it has to.
    (ulines who dot as)
     (ureach who
-            (\ f fst rd (: (go _) (urd-line rd @ l (? (one? l) 1 (dot <l <>l) (go 0) 1))
+            (\ f fst rd (: (go _) (urd-line rd @ l (? (atom? l) 1 (dot <l <>l) (go 0) 1))
                            (go 0)))
             as))
 ) ; module 'kore

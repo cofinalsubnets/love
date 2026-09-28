@@ -11,7 +11,7 @@
    (words s) (filter (w \ #w > 0) (xa-split s 32))
    ; an inline asm's template lands verbatim, in its author's one dialect, under both flags:
    ; gcc brackets it #APP .. #NO_APP, and those lines are the author's, not the compiler's
-   (noapp s) (: (go l in acc) (? !(two? l) (rev acc)
+   (noapp s) (: (go l in acc) (? (atom? l) (rev acc)
                                  (: t (xa-trim <l)
                                     (? (t = "#APP") (go >l 1 acc)
                                        (t = "#NO_APP") (go >l () acc)
@@ -19,8 +19,8 @@
                                        (go >l in (<l . acc)))))
                 (xa-join "\n" (go (xa-lines s) () ())))
    (report a i) ((: (g a i k)
-                    (? (!(two? a) && !(two? i)) 0
-                       (!(two? a) || !(two? i) || !(<a = <i))
+                    (? (atom? a && atom? i) 0
+                       (atom? a || atom? i || !(<a = <i))
                        (putx ["item" k (two? a ? <a ()) (two? i ? <i ())], puts "\n")
                        (g >a >i (k + 1)))) a i 0)
    ls (filter (l \ #l > 0) (xa-lines (slurpf "@PAIRS@")))
@@ -30,9 +30,8 @@
                       i (strip (intel-read (noapp (slurpf <>ws))))
                       _ (pin n 0 (peep n 0 0 + 1))
                       (? (a = i) 0
-                         (: _ (pin bad 0 (peep bad 0 0 + 1))
-                            _ (puts ("DIFF " + <ws + "\n"))
-                            (report a i))))))
+                         (pin bad 0 (peep bad 0 0 + 1), puts ("DIFF " + <ws + "\n"),
+                          report a i)))))
    _ (puts ("test/holo/dialect: " + show (peep n 0 0) + " pairs, " + show (peep bad 0 0) + " differ\n"))
    _ (flush out)
    (? (0 = peep bad 0 0) 0 (quit 1)))

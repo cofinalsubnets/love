@@ -45,8 +45,8 @@
    w-FA 53  w-FB 54
    (w-locals n) (? (w-uni? 0) '((21 i64) (1 i32) (3 i64) (14 f64))
                    [[(29 - n) 'i64] '(1 i32) '(3 i64) '(22 f64)])
-   (w-val x) (? (= x 'sp) '((global.get 0)) (reg? x) [['local.get (w-reg x)]] [['i64.const x]])
-   (w-set r) (? (= r 'sp) '((global.set 0)) [['local.set (w-reg r)]])
+   (w-val x) (? (x = 'sp) '((global.get 0)) (reg? x) [['local.get (w-reg x)]] [['i64.const x]])
+   (w-set r) (? (r = 'sp) '((global.set 0)) [['local.set (w-reg r)]])
    (w-fval r) [['local.get (w-freg r)]]
    (w-fset r) [['local.set (w-freg r)]]
 
@@ -79,7 +79,7 @@
             'vc [['local.get (w-V 0)] '(i64.const 0) '(i64.ge_s)]
                 (: op (peep w-cc c ())
                    (? !(nom? op) (scare 'wasm-badcond c) [['local.get (w-A 0)] ['local.get (w-B 0)] [op]]))))
-   (w-flags a b) (: _ (pin w-st 'fl 0) (w-val a + [['local.set (w-A 0)]] + w-val b + [['local.set (w-B 0)]]))
+   (w-flags a b) (pin w-st 'fl 0, w-val a + [['local.set (w-A 0)]] + w-val b + [['local.set (w-B 0)]])
    ;; adds/subs: d = a op b off saved operands (d may alias), V the overflow sign, flags d vs 0
    (w-addsub op d a b)
     (w-flags a b
@@ -182,8 +182,8 @@
      'zx4  (w-val (f 1) + '((i64.const 4294967295) (i64.and)) + w-set (f 1))
      'clz  (w-val (f 2) + '((i64.clz)) + w-set (f 1))
      'cmp  (w-flags (f 1) (f 2))
-     'test (: _ (pin w-st 'fl 0)                    ; the flags are the ALU's again
-              (w-val (f 1) + w-val (f 2) + [['i64.and] ['local.set (w-A 0)] ['i64.const 0] ['local.set (w-B 0)]]))
+     'test (pin w-st 'fl 0,                         ; the flags are the ALU's again
+            w-val (f 1) + w-val (f 2) + [['i64.and] ['local.set (w-A 0)] ['i64.const 0] ['local.set (w-B 0)]])
      'set  (w-cond (f 1) + '((i64.extend_i32_u)) + w-set (f 2))
      ('jmp || 'jmp8) (w-jmp (f 1) d)
      ('br || 'br8)   (w-cond (f 1) + [['if]] + w-jump (f 2) (d + 1) + [['end]])
@@ -206,9 +206,9 @@
      ;; builtins, which this one-thread machine lowers: the fence is nothing, the atomic
      ;; swap (amoswap.w/d.aq a0,a0,(a1)) an exchange through A
      'raw (: bs (f 1)
-             (? (= bs '(15 0 16 3)) ()
-                (= bs '(47 165 165 12)) (w-xchg 4)
-                (= bs '(47 181 165 12)) (w-xchg 8)
+             (? (bs = '(15 0 16 3)) ()
+                (bs = '(47 165 165 12)) (w-xchg 4)
+                (bs = '(47 181 165 12)) (w-xchg 8)
                 (scare 'wasm-noasm bs)))
      'trap '((unreachable))
      ('nop || 'align) ()
@@ -217,7 +217,7 @@
      ('addsd || 'subsd || 'mulsd || 'divsd)
            (w-fval (f 1) + w-fval (f 2) + [[(w-fp3 <f)]] + w-fset (f 1))
      'xorpd (w-fval (f 1) + '((i64.reinterpret_f64)) + w-fval (f 2) + '((i64.reinterpret_f64) (i64.xor) (f64.reinterpret_i64)) + w-fset (f 1))
-     'ucomisd (: _ (pin w-st 'fl 1) (w-fval (f 1) + [['local.set w-FA]] + w-fval (f 2) + [['local.set w-FB]]))
+     'ucomisd (pin w-st 'fl 1, w-fval (f 1) + [['local.set w-FA]] + w-fval (f 2) + [['local.set w-FB]])
      'cvtsi2sd  (w-val (f 2) + '((f64.convert_i64_s)) + w-fset (f 1))
      'cvtui2sd  (w-val (f 2) + '((f64.convert_i64_u)) + w-fset (f 1))
      'cvttsd2si (w-fval (f 2) + '((i64.trunc_sat_f64_s)) + w-set (f 1))
@@ -235,9 +235,9 @@
    (w-segs prog)
     (: labs {}
        (go l cur segs k)
-        (? !(two? l) (rev ((rev cur) . segs))
+        (? (atom? l) (rev ((rev cur) . segs))
            (: ins <l
-              (? (<ins = 'label) (: _ (pin labs (ins 1) (k + 1)) (go >l () ((rev cur) . segs) (k + 1)))
+              (? (<ins = 'label) (pin labs (ins 1) (k + 1), go >l () ((rev cur) . segs) (k + 1))
                  (go >l (ins . cur) segs k))))
        ((go prog () () 0) . labs))
    ;; -- the relooper (rung 5b): the function as basic blocks and their graph, and structured
@@ -255,7 +255,7 @@
        labs {}
        (mk code kind tg cond) [(rev code) kind tg cond]
        (go l cur acc)
-        (? (one? l) (rev (mk cur 'fall () () . acc))
+        (? (atom? l) (rev (mk cur 'fall () () . acc))
            (: f <l op <f
               (? (op = 'label) (: bs (mk cur 'fall () () . acc) _ (pin labs (f 1) #bs) (go >l () bs))
                  ((op = 'jmp || op = 'jmp8) && labset (f 1)) (go >l () (mk cur 'jmp (f 1) () . acc))
@@ -266,7 +266,7 @@
        bs (go prog () ())
        ((map (b \ [<b (b 1) ((b 1) @ ('jmp || 'br) (labs (b 2)) ()) (b 3)]) bs) . labs))
    (w-abl? nm) (: s (getenv "MOON_ABLATE") t (show nm) n (string? s ? #s 0) m #t   ; gen's knob, its spelling
-                  (go i) (? (n < i + m) 0 (= (snip s i (i + m)) t) 1 (go (i + 1)))
+                  (go i) (? (n < i + m) 0 (snip s i (i + m) = t) 1 (go (i + 1)))
                   (n ? (go 0) 0))
    ;; the body, or () where the graph is irreducible
    (w-reloop prog)
@@ -278,7 +278,7 @@
                             ()))
        ;; reverse postorder from the entry; what it misses is dead and never laid
        seen {}
-       (visit i acc) (? (seen i) acc (: _ (pin seen i 1) (i . foldl (a \ j \ visit j a) acc (succs i))))
+       (visit i acc) (? (seen i) acc (pin seen i 1, i . foldl (a \ j \ visit j a) acc (succs i)))
        rpo (visit 0 ())
        rpon (foldl (t \ k \ pin t (rpo k) k) {} ^#rpo)
        (rk i) (peep rpon i -1)
@@ -304,7 +304,7 @@
        (merge-kids x) (filter (v \ v != 0 && mg? v && idom v = x) (rev rpo))   ; last in order outermost
        ;; the emission. ctx: the labels open around the point, innermost first --
        ;; (loop . h), (block . y), if
-       (depth e c k) (? (one? c) (scare 'wasm-reloop e) (= <c e) k (depth e >c (k + 1)))
+       (depth e c k) (? (atom? c) (scare 'wasm-reloop e) (<c = e) k (depth e >c (k + 1)))
        (needs-br? x y) (y < n && (dom? y x || mg? y))
        (br-to x y ctx) [['br (depth (dom? y x ? ('loop . y) ('block . y)) ctx 0)]]
        (tree x ctx)
@@ -328,13 +328,13 @@
        (? reducible (tree 0 () + '((unreachable))) ()))
    ;; -> (locals . body). mode: 'uni, or the parameter count of the per-arity lane
    (wasm-fn prog mode env)
-    (: uni (= mode 'uni)
+    (: uni (mode = 'uni)
        _ (pin w-st 'uni (? uni 1 0)) _ (pin w-st 'fl 0) _ (pin w-st 'env env)
        _ (pin w-st 'labs {})
        r (w-abl? 'reloop ? () (w-reloop prog))
        (? (two? r) ((w-locals (? uni 0 mode)) . r)
           (: _ (pin w-st 'fl 0)
-             s (w-segs prog) segs <s k ((tally segs) - 1)
+             s (w-segs prog) segs <s k (#segs - 1)
              _ (pin w-st 'labs >s)
              (seg j) (catmap (\ f (w-ins f (k - j))) (segs j))
              ((w-locals (? uni 0 mode))
@@ -350,14 +350,14 @@
    (wasm-program p)
     (: imps (peep p 'imports ())  fns (peep p 'fns ())
        ars (: t {} _ (map (\ i (pin t (i 2) 1)) imps) _ (map (\ f (pin t (f 1) 1)) fns) (sort (keys t)))
-       tyof (: t {} _ (map (\ i (pin t (ars i) i)) (jot (tally ars))) t)
+       tyof (: t {} _ (map (i \ pin t (ars i) i) (jot #ars)) t)
        (ty n) (peep tyof n ())
-       env (: t {} ni (tally imps)
+       env (: t {} ni #imps
               _ (map (\ i (pin t (nom ((imps i) 1)) ['fn i ((imps i) 2)])) (jot ni))   ; a call names it by nom
-              _ (map (\ i (pin t ((fns i) 0) ['fn (i + ni) ((fns i) 1)])) (jot (tally fns)))
+              _ (map (i \ pin t ((fns i) 0) ['fn (i + ni) ((fns i) 1)]) (jot #fns))
               t)
-       (idx name) (: e (peep env name ()) (? !(two? e) (scare 'wasm-noname name) (e 1)))
-       n (tally imps + tally fns)
+       (idx name) (: e (peep env name ()) (? (atom? e) (scare 'wasm-noname name) (e 1)))
+       n (#imps + #fns)
        start (peep p 'start ())
        {'types (map (\ a [(map (\ _ 'i64) (jot a)) '(i64)]) ars)
         'imports (map (\ i [(i 0) (i 1) ['func (ty (i 2))]]) imps)
@@ -366,7 +366,7 @@
         'memory (peep p 'memory '(1))
         'data (peep p 'data ())
         'exports ((map (\ e [(show e) 'func (idx e)]) (peep p 'exports ())) + '(("mem" memory 0)))
-        'start (? (= start ()) -1 (idx start))})
+        'start (? (start = ()) -1 (idx start))})
 
    ;; -- the whole program, off gen.l's objects (rung 4). a tu is cgen-obj's tuple with the
    ;;    weak names appended: (tforms dforms fnames gnames nforms iforms lnames xsecs bforms
@@ -374,7 +374,7 @@
    ;; the symbol positions: where a nom in a form is a label and not a register or an op
    (w-symap f ren)
     (: (m x) (peep ren x x)
-       (? !(two? f) f
+       (? (atom? f) f
           (<f @ ('label || 'call || 'jmp || 'jmp8 || 'lapool) [<f (m (f 1))]
                 ('la || 'lar) [<f (f 1) (m (f 2))]
                 'br [<f (f 1) (m (f 2))]
@@ -405,10 +405,10 @@
    (w-split forms fnset)
     (: als {}
        (go l cur name acc)
-        (? (one? l) (rev (name = () ? acc ([name (rev cur)] . acc)))
+        (? (atom? l) (rev (name = () ? acc ([name (rev cur)] . acc)))
            (: f <l
               (? (two? f && <f = 'label && fnset <>f)
-                 (? (name != () && one? cur) (pin als <>f name, go >l cur name acc)
+                 (? (name != () && atom? cur) (pin als <>f name, go >l cur name acc)
                     (go >l () <>f (name = () ? acc ([name (rev cur)] . acc))))
                  (two? f && <f = 'align) (go >l cur name acc)
                  (go >l (f . cur) name acc))))
@@ -441,7 +441,7 @@
            (c = 32) (go (i + 1) 0 (any ? (n . acc) acc) 0)
            (go (i + 1) (n * 10 + c - 48) acc 1))))
    (wo-blobs text lens at)
-    (:- (go lens at ()) (go ls a acc) (? !(two? ls) (rev acc) (go >ls (a + <ls) (snip text a (a + <ls) . acc))))
+    (:- (go lens at ()) (go ls a acc) (? (atom? ls) (rev acc) (go >ls (a + <ls) (snip text a (a + <ls) . acc))))
    (wo-fill tu blobs)
     (: (item x) (? (two? x && <x = 'blob) (blobs (x 1)) x)
        (form f) (? (two? f && <f = 'raw) ['raw (map item (f 1))] f)
@@ -454,7 +454,7 @@
    ;; 'stack bytes; 'base addr. an input is a tu, or its text -- read here, so nothing holds
    ;; the forms but the functions they split into: the link's live set is one copy of the program
    (wasm-link tus0 opts)
-    (: ntu (tally tus0)
+    (: ntu #tus0
        ;; 1. per object: every tu-local label wears the tu's number, so two statics never meet,
        ;;    and the text streams split into functions at once. a part: [fns names gnames weaks
        ;;    dforms nforms iforms xsecs bforms rforms aliases]
@@ -514,7 +514,7 @@
            _ (pin syms (nom ("__start_" + nm)) ['data a])
            _ (pin syms (nom ("__stop_" + nm)) ['data <r])
            r)
-       xnames (: (go l acc) (? !(two? l) (rev acc) (go >l (? (elem <l acc) acc (<l . acc))))
+       xnames (: (go l acc) (? (atom? l) (rev acc) (go >l (? (elem <l acc) acc (<l . acc))))
                  (go (catmap (x \ map cap x) d7) ()))
        st1 (lane [base ()] d9)
        st2 (lane st1 d1)
@@ -538,9 +538,9 @@
                _ (map (\ d (w-labels-into t d)) dlanes)
                t)
        refs (keys (: t {} _ (map (\ fn (w-refs <>fn t)) fns) _ (map (\ d (w-refs d t)) dlanes) t))
-       owed0 (filter (\ x (!(peep defd x 0) && !(two? (peep syms x ())))) refs)   ; a bracket is the link's
+       owed0 (filter (x \ !(peep defd x 0) && atom? (peep syms x ())) refs)   ; a bracket is the link's
        ;; a weak reference nothing defines is null, as at a static link; the rest are imports
-       wkall (foldl (\ a p (: _ (map (\ s (pin a (nom s) 1)) (p 3)) a)) {} parts)
+       wkall (foldl (\ a p (map (s \ pin a (nom s) 1) (p 3), a)) {} parts)
        _ (pin wkall 'main 1)                            ; a module with a face of its own has no main; the runtime's start never runs
        _ (map (\ x (? (peep wkall x 0) (pin syms x '(null)) 0)) owed0)
        owed (filter (\ x !(peep wkall x 0)) owed0)
@@ -548,16 +548,16 @@
        bad (filter (\ x !(elem x allowed)) owed)
        _ (? (two? bad) (scare 'wasm-undefined bad) 0)
        imps (filter (\ x (elem x owed)) allowed)
-       ni (tally imps)
-       _ (map (\ i (pin syms (imps i) ['fn i])) (jot ni))
-       _ (map (\ i (pin syms ((fns i) 0) ['fn (i + ni)])) (jot (tally fns)))
+       ni #imps
+       _ (map (i \ pin syms (imps i) ['fn i]) (jot ni))
+       _ (map (i \ pin syms ((fns i) 0) ['fn (i + ni)]) (jot #fns))
        _ (map (\ a (pin syms (a 0) (peep syms (a 1) ()))) (als + als))   ; twice: an alias of an alias
        ;; 6. the data image, its pointers resolved. symidx is the module's own numbering (a
        ;; funcidx, what the export section wants); symval is the ADDRESS a data word holds,
        ;; which for a function is w-fnaddr's -- the same word w-la lays for it.
-       (symidx x) (: e (peep syms x ()) (? !(two? e) (scare 'wasm-unresolved x) (e 1)))
+       (symidx x) (: e (peep syms x ()) (? (atom? e) (scare 'wasm-unresolved x) (e 1)))
        (symval x) (: e (peep syms x ())
-                     (? !(two? e) (scare 'wasm-unresolved x)
+                     (? (atom? e) (scare 'wasm-unresolved x)
                         (<e = 'fn) (w-fnaddr (e 1))
                         (e 1)))
        dsize (dend - base)
@@ -576,7 +576,7 @@
        exports (: e (peep opts 'exports 'all)
                   seen {}                                 ; a weak twin names the same export once
                   (ff s) (seen s @ () (pin seen s 1, two? (syms (nom s))))
-                  (? (= e 'all) (catmap (p \ filter ff (p 1)) parts) e))
+                  (? (e = 'all) (catmap (p \ filter ff (p 1)) parts) e))
        ;; each function lowered and encoded as it comes: a body is a string from here on
        funcs (map (\ f (: r (wasm-fn (f 1) 'uni syms) [0 (wentry <r >r)])) fns)
        {'types '(((i64 i64 i64 i64 i64 i64 i64 i64 f64 f64 f64 f64 f64 f64 f64 f64) (i64 i64 f64 f64)))
@@ -587,6 +587,6 @@
         'globals [['i64 1 [['i64.const sp0]]]]
         'exports ((map (\ s [s 'func (symidx (nom s))]) exports) + '(("mem" memory 0)))
         'data [(base . string img)]
-        'names (map (\ i [i (show (imps i))]) ^ni + map (\ i [(i + ni) (show ((fns i) 0))]) (jot (tally fns)))
+        'names (map (i \ [i (show (imps i))]) ^ni + map (i \ [(i + ni) (show ((fns i) 0))]) (jot #fns))
         'start -1}))
 ) ; module 'holo

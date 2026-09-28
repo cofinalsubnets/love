@@ -667,7 +667,7 @@
        (0 = tap 40 10) (0 = tap 40 0) (0 = tap 40 23)
        (crawl-turn g (tap 40 12), 'who = g 'talk)
        (crawl-turn g (tap 40 10), 'who = g 'talk)
-       (talk g 'bye, crawl-turn g (tap 40 12), one? (g 'talk))
+       (talk g 'bye, crawl-turn g (tap 40 12), atom? (g 'talk))
        (talk g 'bye, pin g 'talk (), '(1 0) = tap (g 'p 'x + 9) (g 'p 'y + 1))))
 
 ; --- the vale: the last floor is three screens tall, lit end to end, and laid rather
@@ -697,7 +697,7 @@
        (tablet? (g 'scenes 'house)) (tablet? (g 'scenes 'attic))
        (d 'lit) (all (i \ peep (d 'seen) i 0) ^(w * h))    ; all of it lit, and all of it seen
        (: si (filter (i \ 'sign = <(g 'loot i)) (keys (g 'loot)))   ; the wooden sign: one, on grass, by the foot
-          (two? si && one? >si && 1 = t (<si % w) (<si // w) && (h - 5) = (<si // w)))))
+          (two? si && atom? >si && 1 = t (<si % w) (<si // w) && (h - 5) = (<si // w)))))
 
 ; ..and the story of it: in at the door, up the stair, the box opened and the token
 ; named there; down and out with it, the ground shudders, the sign, and she is gone

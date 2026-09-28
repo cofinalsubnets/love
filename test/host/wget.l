@@ -44,6 +44,6 @@
        ct ((T 'aead-seal) k iv 3 "aad" "the plaintext")
        ok ((T 'aead-open) k iv 3 "aad" ct)
        bad ((T 'aead-open) k iv 3 "aad" ((T 'bytes) #ct (\ i (i = 0 ? (ct 0 ^ 1) (ct i)))))
-       (&& (two? ok) ("the plaintext" = <>ok) !(two? bad)))))
+       (&& (two? ok) ("the plaintext" = <>ok) (atom? bad)))))
 
 (test_fin (), puts "wget: ok", putc 10, 0)

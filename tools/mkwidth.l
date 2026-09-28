@@ -33,7 +33,7 @@
    _ (fill t 19904 19967 2)
    ; the runs: an entry wherever the width changes, a gap in the keys reading as 1
    (go ks prev pw acc)
-    (? (one? ks) (rev (pw = 1 ? acc ((prev + 1) * 4 + 1 . acc)))
+    (? (atom? ks) (rev (pw = 1 ? acc ((prev + 1) * 4 + 1 . acc)))
        (: k <ks w (t k)
           gap (k > prev + 1 && pw != 1)
           acc1 (gap ? ((prev + 1) * 4 + 1 . acc) acc)
@@ -41,7 +41,7 @@
           (go >ks k w (w = pw1 ? acc1 (k * 4 + w . acc1)))))
    runs (go (sort (keys t)) -1 1 [1])
    ; a line of entries at a time, ninety-odd columns wide
-   (lay l ln) (? (one? l) (puts (ln + ")\n"))
+   (lay l ln) (? (atom? l) (puts (ln + ")\n"))
                  (: s (show <l)
                     (#ln + #s > 92 ? (puts (ln + "\n"), lay l "     ")
                        (lay >l (ln + (ln (#ln - 1) = 32 || ln (#ln - 1) = 40 ? "" " ") + s)))))

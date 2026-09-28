@@ -570,9 +570,9 @@
    (fmem g ty name)
     (? !(stru? ty) 'bad
      (: e (g 'stag <>ty)
-      (one? e ? 'bad
+      (atom? e ? 'bad
        (: f (assoc name <e)
-        (one? f ? 'bad [<>f <>>f])))))
+        (atom? f ? 'bad [<>f <>>f])))))
    (lg2 n) (: (go k v) (v <= 1 ? k (go (k + 1) (v >> 1))) (go 0 n))   ; a true log2 -- a pointer diff over a >8-byte struct needs sar 4+, not a capped 3
    (imby g rX sz) (? (arm? g) [['li 'r3 sz] ['imul rX rX 'r3]] [['imul rX rX sz]])   ; arm mul has no imm form: the size rides r3 (free mid-expression)
    (homable? pty) (ptr? pty || elem pty '(long ulong))       ; an 8-byte gp scalar: what a register home can carry
@@ -4981,10 +4981,10 @@
                              (<a = 'st) (vany (i \ (<>c <= i) && (i <= (c 2))) <>a)
                              (vany (i \ (<>a <= i) && (i <= (a 2))) <>c))
                          (fit9 o oc) !(foldl (\ x t (x || hits? oc t)) 0 (ten9 o))
-                         (seat9 oc) (: (go l) (? (one? l) () (fit9 <l oc ? <l (go >l)))
+                         (seat9 oc) (: (go l) (? (atom? l) () (fit9 <l oc ? <l (go >l)))
                                        (go (seats9 'l)))
                          (place rs high)                     ; sweep by lo -> the packed high-water
-                          (? (one? rs) high
+                          (? (atom? rs) high
                              (: r1 <rs lo <r1 b <>r1 n (r1 2) hi (r1 3)
                                 oc (occ9 b lo hi)
                                 o9 (n = 8 ? (seat9 oc) ())

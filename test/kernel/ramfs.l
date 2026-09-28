@@ -20,37 +20,37 @@
    ; slurp a path, closing behind -- () when it would not open, so presence rides
    ; `port?` and never the emptiness of what was read.
    (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s m) (: q (open p m) (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+   (wr p s m) (: q (open p m) (? (port? q) (say q s, close q, 1) 0))
    orig (rd f)
  (test
    ; a baked path opens, and carries the bytes the archive put in the row
    (port? (open f "r"))
-   (< 0 (tally orig))
+   (0 < #orig)
    ; ... and reads the same on the second open: a file does not drain
-   (= orig (rd f))
+   (orig = rd f)
    ; an unbaked path is absent for a read; a write creates it now (rung 2 --
    ; wfs.l holds those laws), so here it is unmade the moment it is proved
-   (! (port? (open "/tmp/no-such-thing.l" "r")))
+   !(port? (open "/tmp/no-such-thing.l" "r"))
    (: q (open "/tmp/no-such-thing.l" "w")
-      (&& (port? q) (: _ (close q) !(unlink "/tmp/no-such-thing.l"))))
+      (port? q && (close q, !(unlink "/tmp/no-such-thing.l"))))
    ; the write copies the blob out of .rodata, and the next open sees it
    (wr f "hi" "w")
-   (= "hi" (rd f))
+   ("hi" = rd f)
    ; ... and append lands past what is there, not over it
    (wr f "!" "a")
-   (= "hi!" (rd f))
+   ("hi!" = rd f)
    ; a truncate drops the copy's bytes without losing the row
    (wr f "" "w")
-   (= "" (rd f))
+   ("" = rd f)
    ; a write bigger than the baked blob grows the copy
-   (wr f (+ orig orig) "w")
-   (= (+ orig orig) (rd f))
+   (wr f (orig + orig) "w")
+   (orig + orig = rd f)
    ; the tree under /proc/src is what a module loads from, and nobody's to write
-   (< 0 (tally (rd "/proc/src/apps/json.l")))
-   (! (wr "/proc/src/apps/json.l" "no" "w"))
+   (0 < tally (rd "/proc/src/apps/json.l"))
+   !(wr "/proc/src/apps/json.l" "no" "w")
    ; put it back, and the tree reads as the bake left it
    (wr f orig "w")
-   (= orig (rd f))))
+   (orig = rd f)))
 
 ; the payoff, and the end-to-end proof the rung is real: prel's module walk is gated
 ; on the presence of `open` (love/boot/prel.l's fsopen, by peep), so with the row in
@@ -66,20 +66,20 @@
 ; the law that matters is that a read arrives at all and wears the shape. `key value`
 ; lines, and the first key names the file.
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+   (wr p s) (: q (open p "w") (? (port? q) (say q s, close q, 1) 0))
  (test
-   (= "ram-words " (snip (rd "/proc/meminfo") 0 10))
-   (= "pool-words " (snip (rd "/proc/gauge") 0 11))
+   ("ram-words " = snip (rd "/proc/meminfo") 0 10)
+   ("pool-words " = snip (rd "/proc/gauge") 0 11)
    ; the boot line, the row that says what this machine was asked to run. love's own
    ; `cmdline` is (. "love" bootargv), so the file opens on that word whatever the
    ; line after it, and ends the way a line does
-   (= "love" (snip (rd "/proc/cmdline") 0 4))
-   (: c (rd "/proc/cmdline") (= 10 (c (- (tally c) 1))))
-   (! (wr "/proc/cmdline" "no"))
+   ("love" = snip (rd "/proc/cmdline") 0 4)
+   (: c (rd "/proc/cmdline") (10 = c (#c - 1)))
+   !(wr "/proc/cmdline" "no")
    ; nobody's to set: the ramfs never reads its own mode bits, so 0444 is a label and
    ; the refusal has to be the open's
-   (! (wr "/proc/meminfo" "no"))
-   (! (wr "/proc/gauge" "no"))
+   !(wr "/proc/meminfo" "no")
+   !(wr "/proc/gauge" "no")
    ; the console's pen opens either way -- it reads empty on a seat with no console,
    ; which every headless lane in this corpus is
    (port? (open "/proc/vt/fg" "r"))
@@ -92,46 +92,46 @@
 ; law is already "writes discard, reads answer the end", and zero is that slot with a
 ; read door that fills. the table rows exist only so stat and dents can see them.
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+   (wr p s) (: q (open p "w") (? (port? q) (say q s, close q, 1) 0))
  (test
-   (= "" (rd "/dev/null"))
+   ("" = rd "/dev/null")
    (wr "/dev/null" "into the hole")
-   (= "" (rd "/dev/null"))                       ; and it kept none of it
+   ("" = rd "/dev/null")                       ; and it kept none of it
    ; zero has NO END, so it is read a byte at a time and never slurped
-   (: q (open "/dev/zero" "r") a (see q) _ (close q) (= 0 a))))
+   (: q (open "/dev/zero" "r") a (see q) _ (close q) (0 = a))))
 
 ; symlinks, first class: k_walk follows one at EVERY component, so a directory can be a
 ; link. the machine's own compat names are three of them -- /bin, /sbin and /usr/sbin all
 ; name /usr/bin -- and a link made here answers the same way.
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+   (wr p s) (: q (open p "w") (? (port? q) (say q s, close q, 1) 0))
  (test
    ; one directory, four doors: written through the real name, read back through each
    ; link -- which is what following one MID-path buys and the leaf-only walk could not.
    (wr "/usr/bin/hello" "hi")
-   (= "hi" (rd "/bin/hello"))
-   (= "hi" (rd "/sbin/hello"))
-   (= "hi" (rd "/usr/sbin/hello"))
-   (= "/usr/bin" (readlink "/bin"))              ; the target as WRITTEN, unfollowed
+   ("hi" = rd "/bin/hello")
+   ("hi" = rd "/sbin/hello")
+   ("hi" = rd "/usr/sbin/hello")
+   ("/usr/bin" = readlink "/bin")              ; the target as WRITTEN, unfollowed
    ; a link of our own, then a link to that link
-   (! (symlink "/usr/bin" "/opt"))
-   (= "hi" (rd "/opt/hello"))
-   (! (symlink "/opt" "/opt2"))
-   (= "hi" (rd "/opt2/hello"))
+   !(symlink "/usr/bin" "/opt")
+   ("hi" = rd "/opt/hello")
+   !(symlink "/opt" "/opt2")
+   ("hi" = rd "/opt2/hello")
    ; .. lands on the RESOLVED path: /opt is /usr/bin, so its parent is /usr
-   (= "hi" (rd "/opt/../bin/hello"))
+   ("hi" = rd "/opt/../bin/hello")
    ; unlink takes the link and never what it names
-   (! (unlink "/opt2"))
-   (= "hi" (rd "/opt/hello"))
+   !(unlink "/opt2")
+   ("hi" = rd "/opt/hello")
    ; a pair naming each other is answered, not spun
-   (! (symlink "/loop2" "/loop1"))
-   (! (symlink "/loop1" "/loop2"))
-   (! (port? (open "/loop1" "r")))))
+   !(symlink "/loop2" "/loop1")
+   !(symlink "/loop1" "/loop2")
+   !(port? (open "/loop1" "r"))))
 
 ; stat follows the last name and lstat does not -- the pair POSIX has, and the only
 ; reason k_walk carries a leaf flag. /bin is a link TO a directory, so the two answer
 ; different kinds of the same path. (stat p) -> (size mtime-ms mode ns).
 (test
-  (= 16384 (& ((stat "/bin") 2) 61440))          ; 040000: through the link, a directory
-  (= 40960 (& ((lstat "/bin") 2) 61440))         ; 0120000: the link itself
-  (= 8 (cap (lstat "/bin"))))                    ; sized by its target, "/usr/bin"
+  (16384 = (stat "/bin") 2 & 61440)          ; 040000: through the link, a directory
+  (40960 = (lstat "/bin") 2 & 61440)         ; 0120000: the link itself
+  (8 = <(lstat "/bin")))                    ; sized by its target, "/usr/bin"
