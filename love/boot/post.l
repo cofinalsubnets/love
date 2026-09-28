@@ -1,7 +1,7 @@
 
 ; post -- the third egg stage, sat once on the hatchling, after prel and ev and before
 ; the mop. the one seat that sees both the finished compiler and the runtime-internal
-; noms (peek seek atype, lamsrc, nifnom) the mop is about to take off the book: a
+; noms (peek seek atype, nifnom) the mop is about to take off the book: a
 ; reference compiled here folds to a value and survives, so love that needs to read the
 ; heap raw belongs here.
 ; the printer is the bulk of it, the reader's mirror image -- love.c's facex is the
@@ -224,15 +224,14 @@
    (lift z f) (\ a b (z (f (load a) (load b)))))
 
 ;;; FIXME help/io setters below here. redesign the API with more structure
-; binary?: does f take exactly two operands? the arity off the n-ary closure marker, else the
-; param count off a compiled lambda's stashed source. one-sided on purpose: a shape neither
-; reads (a nif, a partial) passes. the marker is read off a known binary rather than named,
-; and must be lvm_cur -- binding lvm_ret0 the same way segfaults the image bake, so a
-; one-armed nif goes uncaught.
-(: hcur (pick 0 (\ a b a))
+; binary?: does f take exactly two operands? the arity off the n-ary closure marker; any other
+; compiled lambda takes one. one-sided on purpose: a nif or a partial passes. the markers are
+; read off known values rather than named.
+(: hcur (pick 0 (\ a b a)) hunc (pick 0 (+ 1))
    (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
                   (== hcur (pick 0 f)) (2 = peek 1 f)
-                  (: s (lamsrc f) (? (two? s) (4 = #s) 1)))
+                  (== hunc (pick 0 f) || string? (nifnom f)) 1
+                  !(lit? f && !(tablet? f) && !(hot? f)))
    (hear f) (? !f (seal-hook 5 ())                  ; every nothing uninstalls
                (binary? f) (seal-hook 5 f)
                (scare 'help-arity f)))
@@ -306,6 +305,235 @@
    ; `elem`/`assoc` above stay love's, a bit and a pair by `=`.
    (memq x l)   (? (two? l) (? (== x (cap l)) l (memq x (cup l))))
    (member x l) (? (two? l) (? (= x (cap l)) l (member x (cup l)))))
+
+; lamform -- a function read back off its thread into a source form that evaluates to an `=`
+; function, or 0 when the thread is not one ev writes (a nif's body, a continuation). a
+; symbolic run of the stack machine: every value pushed is a slot, a fresh mint whose node
+; says how it was made, and the nodes render as source once the run is done.
+(: lamform (:
+   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) gcache {}
+   ; the load runs, a spec per load: a an arg operand, q a quote operand, a number an
+   ; immediate arg, (q v) an immediate quote. the flag says the last load carries the apply
+   lds (foldl (\ t r (pin t <r >r)) {}
+        [[lvm_arg '(a) 0] [lvm_quote '(q) 0] [lvm_argap '(a) 1] [lvm_quoteap '(q) 1]
+         [lvm_aa '(a a) 0] [lvm_aq '(a q) 0] [lvm_qa '(q a) 0] [lvm_qq '(q q) 0]
+         [lvm_aap '(a a) 1] [lvm_aqp '(a q) 1] [lvm_qap '(q a) 1] [lvm_qqp '(q q) 1]
+         [lvm_arg0 '(0) 0] [lvm_arg1 '(1) 0] [lvm_arg2 '(2) 0] [lvm_arg3 '(3) 0]
+         [lvm_quo0 '((q 0)) 0] [lvm_quo1 '((q 1)) 0] [lvm_quo2 '((q 2)) 0]
+         [lvm_quo3 '((q 3)) 0] [lvm_quom1 '((q -1)) 0] [lvm_quom2 '((q -2)) 0]])
+   ; an arg load fused with the nif that consumes it
+   fus (pins {} lvm_argcap 'cap lvm_argcup 'cup lvm_argtwo 'two?)
+   ; a nif's body op -> (name . arity), the shape ev's opof reads
+   nops (foldl (\ t v (: nm (nifnom v)
+                         b (? (string? nm) (? (ret0 == pick 1 v) (pick 0 v)
+                                              (cur == pick 0 v && ret0 == pick 3 v) (pick 2 v)))
+                         (? (? b (nil? (peep t b ()))) (pin t b ((name nm) . (? (ret0 == pick 1 v) 1 (peek 1 v)))) t)))
+               {} (catmap (\ l (map l (keys l))) (stack ())))
+   (tk n l) (? (0 < n) (<l . tk (n - 1) >l) ())
+   (dp n l) (? (0 < n) (dp (n - 1) >l) l)
+   (unw v) (? (nat? v) (unw (? (== cur (pick 0 v)) (peek 3 v) (peek 1 v))) v)   ; a native is its twin
+   (fn? v) (lit? v && !(tablet? v) && !(hot? v))
+   (arity e) (? (== cur (pick 0 e)) (peek 1 e) 1)
+   (entry e) (? (== cur (pick 0 e)) (seek 2 e) e)
+   (partp v) (== unc (pick 0 v) || == cur (pick 0 v) && == unc (pick 2 v))
+   (unc0 v) (? (== cur (pick 0 v)) (seek 2 v) v)
+   (pargs v) (: (go u a) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l (peek 1 u . a)) (peek 1 u . a))) (go (unc0 v) ()))
+   (fbase v) (: (go u) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
+   ; a row's value is a binding power, negative as often as not: ask for presence
+   (infix? x) (? (name? x) (any (\ k (k != 0 && peep (operators k) x () !== ())) (keys operators)))
+
+   ; C is one reading's state: D a slot's node, B the let names in scope, R a let-bound
+   ; closure's (name captures), memo a lambda already read, want a name recursion asked for
+   (lamform v) (: r (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'want {} 'pre {}}
+                                    (rename (? (partp v) (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v)))))))
+                 (? (== r 0) (: g (glob v) (? g g 0)) r))
+   (fail C) ((C 'k) 0)
+   (push C n S) (: s (mint 0) _ (pin (C 'D) s n) (s . S))
+
+   ; --- the run: S is the stack, a slot per value. it answers (r node), a return, or
+   ; (j at S), a jump to a join, and st is the join this stretch ends at
+   (run C p S st) (? (== p st) ['j p S] (step C p S st (pick 0 p)))
+   (step C p S st op) (: l (peep lds op ())
+    (? (two? l) (: (go S sp i) (? (two? sp)
+                                (: s <sp (go (push C (? (charm? s) (S s) (s = 'a) (S (peek i p))
+                                                        (s = 'q) ['k (peek i p)] ['k <>s]) S)
+                                             >sp (? (charm? s) i (two? s) i (1 + i))))
+                                (? <>l (run C (seek i p) (push C ['a (S 1) [<S]] >>S) st)
+                                      (run C (seek i p) S st)))
+                    (go S <l 1))
+       (== op lvm_ret) ['r <S]
+       (== op lvm_tap) ['r ['a (S 1) [<S]]]
+       (== op lvm_argtap) (: S2 (push C (S (peek 1 p)) S) ['r ['a (S2 1) [<S2]]])
+       (== op lvm_tapn) (: n (peek 1 p) ['r ['a (S n) (tk n S)]])
+       (== op lvm_ap) (run C (seek 1 p) (push C ['a (S 1) [<S]] >>S) st)
+       (== op lvm_apn) (: n (peek 1 p) (run C (seek 2 p) (push C ['a (S n) (tk n S)] (dp (1 + n) S)) st))
+       (== op lvm_jump) ['j (peek 1 p) S]
+       (== op lvm_cond) (branch C <S (seek 2 p) (peek 1 p) >S st)
+       (== op lvm_argcond) (branch C (S (peek 1 p)) (seek 3 p) (peek 2 p) S st)
+       (== op lvm_argtwocond) (branch C ['o 'two? [(S (peek 1 p))]] (seek 3 p) (peek 2 p) S st)
+       (== op lvm_index) (run C (seek 2 p) (push C ['g (peek 1 p)] S) st)
+       (: f (peep fus op ())
+        (? f (run C (seek 2 p) (push C ['o f [(S (peek 1 p))]] S) st)
+           (: n (peep nops op ())
+            (? (two? n) (run C (seek 1 p) (push C ['o <n (tk >n S)] (dp >n S)) st)
+               (fail C)))))))
+   ; a cond: the then arm first, which finds the join if there is one; the else arm runs to it
+   (branch C t a e S st) (: r1 (run C a S st)
+    (? (<r1 = 'j) (: J (r1 1) r2 (run C e S J)
+                   (? (<r2 = 'j) (run C J (push C ['c J t <(r1 2) <(r2 2)] S) st) (fail C)))
+       (: r2 (run C e S st)
+        (? (<r2 = 'r) ['r ['c 0 t (r1 1) (r2 1)]] (fail C)))))
+
+   ; --- rendering: a node to a source form, the binders still mints
+   (res C x) (? (mint? x) (: b (peep (C 'B) x 0) d (peep (C 'D) x C)
+                           (? (b || == d C) x (res C d)))
+                x)
+   (var? C x) (mint? (res C x))
+   (rv C x) (: y (res C x)
+    (? (mint? y) y
+       (y @ ('k v) (rk C v)
+            ('g n) n
+            ('o n as) (n . map (ra C) as)
+            ('c . J . cl) ('? . rcl C J cl)
+            ('a . _) (rapp C y)
+            (fail C))))
+   (alleq C xs ys) (? (two? ys) (== (res C <xs) <ys && alleq C >xs >ys) 1)
+   ; an operator away from the head is parenthesised, or it reads as infix
+   (ra C x) (: r (rv C x) (? (infix? r) [r] r))
+   ; a cond whose else is a cond of the same join is one cond of more clauses
+   (rcl C J cl) (: t <cl a <>cl e <>>cl y (res C e)
+    (rv C t . rv C a . (? (two? y && <y = 'c && y 1 == J) (rcl C J >>y) [(rv C e)])))
+   ; the application spine: the head, then each apply's group, outermost last
+   (spine C x gs) (: y (res C x) (? (two? y && <y = 'a) (spine C (y 1) ((y 2) . gs)) (y . gs)))
+   ; a lambda to read back: no name of its own, not a partial, not being read already
+   (lam C h) (? (two? h && <h = 'k)
+               (: v (unw (h 1)) (? (fn? v && !(partp v) && fname C v == 0 && !(busy? C v)) v)))
+   (nlet C h) (? (two? h && <h = 'k) (named C (unw (h 1))))
+   ; a lambda head: fewer args than params are its captures, a closure; the group that
+   ; saturates it is a let's inits, the groups before it its captures
+   (rapp C x) (: sp (spine C x ()) h <sp gs >sp E (lam C h) as (catmap id gs) nl (nlet C h)
+    (? (two? nl) (: ic <>nl ni #ic
+                  (? (ni <= #as && alleq C as ic)
+                     (? (ni < #as) (<nl . map (ra C) (dp ni as)) <nl)
+                     (flat C h as)))
+       E (: n (arity E) m #as
+          (? (m < n) (? (all (var? C) as) (rclo C E (map (res C) as)) (flat C h as))
+             (: (cut gs acc k) (? (two? gs) (: a (acc + #<gs) (? (a = n) k (a < n) (cut >gs a (1 + k)) -1)) -1)
+                k (cut gs 0 0) imps (catmap id (tk k gs)) la (? (0 <= k) (gs k)) rest (catmap id (dp (1 + k) gs))
+              (? (0 <= k && all (var? C) imps)
+                 (: lt (rlet C E (map (res C) imps) la) (? (two? rest) (lt . map (ra C) rest) lt))
+                 (flat C h as)))))
+       (: s (self C h as) (? (two? s) <s (flat C h as)))))
+   ; a closure calling itself from inside its own reading passes its captures along first:
+   ; its name stands for the closure, captures and all
+   (self C h as) (? (two? h && <h = 'k)
+                   (: u (unw (h 1)) p (peep (C 'pre) u ())
+                    (? (two? p && busy? C u && #p <= #as && alleq C as p)
+                       (: n (want C u) (? (#p < #as) [(n . map (ra C) (dp #p as))] [n])))))
+   (flat C h as) (rv C h . map (ra C) as)
+   ; a let's names are the slots its inits sit in. an init that is a closure names its
+   ; thread, so a reference back to it from its own body or a sibling's reads as the name
+   (rlet C E imps la) (: B (C 'B)
+    _ (each la (\ s (: cl (clo C (res C (peep (C 'D) s ()))) (? cl (pin (C 'R) <cl [s >cl]) 0))))
+    _ (each la (\ s (pin B s 1)))
+    body <>(rbody C E (imps + la))
+    (': . catmap (\ s [s (rinit C s)]) (rev la) + [body]))
+   (rinit C s) (: d (res C (peep (C 'D) s ())) cl (clo C d)
+    (? cl (rclo C <cl >cl) (rv C d)))
+   ; a closure node: (lambda . capture vars), or ()
+   (clo C d) (? (two? d && <d = 'k) (: v (unw (d 1)) (? (fn? v && !(partp v) && !(nifnom v)) [v]))
+                (two? d && <d = 'a)
+                (: sp (spine C d ()) h <sp as (catmap id >sp) E (? (two? h && <h = 'k) (unw (h 1)))
+                 (? (E && fn? E && !(partp E) && !(nifnom E) && #as < arity E && all (var? C) as)
+                    (E . map (res C) as))))
+   (named C v) (peep (C 'R) v ())
+   (rbody C E pre) (: bz (C 'busy)
+    (inq l) (? (two? l) (== E <l || inq >l))
+    _ (? (inq bz) (fail C))
+    _ (pin C 'busy (E . bz))
+    _ (pin (C 'pre) E pre)
+    S0 (: (ps i) (? (i < arity E) (? (i < #pre) (pre i . ps (1 + i)) (mint 0 . ps (1 + i))) ()) (ps 0))
+    r (run C (entry E) S0 ())
+    b (? (<r = 'r) [(dp #pre S0) (rv C (r 1))] (fail C))
+    _ (pin C 'busy bz)
+    b)
+   ; a body that is itself a lambda sits in a singleton, which reads as the lambda: bare,
+   ; the reader would merge its params into ours, one closure where the thread has two
+   ; one reached again from inside its own reading is recursion with no name to say it by: it
+   ; takes one, and its form binds it, (: n (\ ..) n)
+   (rclo C E pre) (: b (rbody C E pre) y <>b
+                   f ('\ . <b + [(? (two? y && == <y '\ && two? >>y) [y] y)])
+                   n (peep (C 'want) E 0)
+                   (? (mint? n) [': n f n] f))
+   (want C u) (: W (C 'want) n (peep W u 0) (? (mint? n) n (: n (mint 0) (pin W u n, n))))
+   (rk C v) (? (charm? v) v
+               (== v ()) ()
+               (nom? v || two? v) ['\ v]
+               (fn? v) (rfn C v)
+               (tablet? v || hot? v) (: g (glob v) (? g g v))
+               v)
+   ; a function's own name: a nif's, a glued sigil's, a let's, a global's. 0 for none, a
+   ; let's name being a mint, and a mint falsy
+   (fname C v) (: nm (nifnom v)
+    (? (string? nm) (name nm)
+       (: gn (opnom v) u (unw v) r (named C u)
+        (? gn gn
+           (? (two? r) (nil? <>r)) <r
+           (glob v) (glob v)
+           (glob u) (glob u)
+           0))))
+   (rfn C v) (: nm (fname C v)
+    (? (!== nm 0) nm
+       (partp v) (rfn C (fbase v) . map (rk C) (pargs v))
+       (rlam C (unw v))))
+   ; a lambda constant is read once, a helper reached from many places being one form
+   (rlam C u) (: M (C 'memo) f (peep M u ())
+    (? f f (busy? C u) (want C u) (: f (rclo C u ()) (pin M u f, f))))
+   ; by `=`: an older compile of the same function is the same function
+   (busy? C u) (: (go l) (? (two? l) (u = <l || go >l)) (go (C 'busy)))
+   ; the globals and module names by value, the shortest spelling first, then the least. the
+   ; table outlives a reading and is rebuilt when a layer or a module gains or loses a name;
+   ; a hit is held to the binding it came from, so a name since rebound rebuilds too
+   (glob v) (: e (peep (gtab 0) v ())
+    (? (nil? e) ()
+       (== (unw (<>e <e)) (unw v)) <e
+       (: e (peep (gtab 1) v ()) (? (two? e) <e ()))))
+   (gsig L) (+ (foldl (\ n l (n + #l)) 0 (stack ()))
+               (foldl (\ n k (: l (L k) (n + 1 + (? (tablet? l) #l 0)))) 0 (keys L)))
+   (gtab force) (: L (lib ()) s (gsig L)
+    (? (? force 0 (s = peep gcache 's -1)) (gcache 't)
+       (: t {} m {} seen {}
+          (better a b) (: x (string a) y (string b) (? (#x < #y) 1 (#x = #y) (x < y) 0))
+          (put t v k l) (: old (peep t v ()) (? (? (nil? old) 1 (better k <old)) (pin t v [k l]) 0))
+          ; a native is keyed by its bytecode too: a thread quotes whichever the compiler held
+          (add t l k) (: v (l k)
+                       (? (? (name? k) (fn? v || tablet? v || hot? v))
+                          (: _ (put t v k l) (? (fn? v) (put t (unw v) k l) 0)) 0))
+          _ (each (stack ()) (\ l (each (keys l) (\ k (? (peep seen k 0) 0 (: _ (pin seen k 1) (add t l k)))))))
+          ; a module's names fill in where the book has none
+          _ (each (keys L) (\ n (: l (L n) (? (tablet? l) (each (keys l) (add m l)) 0))))
+          _ (each (keys m) (\ v (? (nil? (peep t v ())) (pin t v (m v)) 0)))
+          _ (pins gcache 's s 't t)
+          t)))
+   ; --- naming: a binder is a letter by its depth, a b .. z aa ab .., skipping any name the
+   ; form spells free, which a binder of that spelling would capture
+   (sxch n a) (: q ((n - 1) // 26) c (97 + ((n - 1) % 26))
+               (? (0 < q) (sxch q (c . a)) (c . a)))
+   (lnom i) (name (string (sxch (1 + i) ())))
+   (nxt i fv) (? (peep fv (lnom i) 0) (nxt (1 + i) fv) i)
+   (qot? x) (two? x && == <x '\ && two? >x && !(two? >>x))
+   (fvn x t) (? (name? x) (pin t x 1) (atom? x || qot? x) t (foldl (\ t e (fvn e t)) t x))
+   (asg bs i m fv) (? (two? bs) (: j (nxt i fv) (asg >bs (1 + j) ((<bs . lnom j) . m) fv)) (i . m))
+   (lets l) (? (two? >l) (<l . lets >>l) ())
+   (ren x i m fv) (? (mint? x) (: p (assq x m) (? (two? p) >p x))
+                     (atom? x || qot? x) x
+                     (== <x '\) (: a (asg (init >x) i m fv)
+                                 ('\ . map (\ e (ren e <a >a fv)) >x))
+                     (== <x ':) (: a (asg (lets >x) i m fv)
+                                 (': . map (\ e (ren e <a >a fv)) >x))
+                     (map (\ e (ren e i m fv)) x))
+   (rename f) (ren f 0 () (fvn f {}))
+   lamform))
 
 (: px (:
   ; every eager binding sits in this outer `:`. where boxfix engages (any forward
@@ -452,35 +680,6 @@
   (nargs v) (: (go u n) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
   (fbase v) (: (go u) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
   (farg v i n) (: (go u w) (? (0 < w) (go (peek 2 u) (w - 1)) (peek 1 u)) (go (unc0 v) ((n - 1) - i)))
-  ; --- a lambda's source, de Bruijn renamed: a \-bound variable prints as its level's
-  ; letter, so a-equivalent lambdas print alike and inspect agrees with `=`. free, global
-  ; and :-bound names keep their spelling; quoted data is shared verbatim.
-  (inq x l) (? !(two? l) 0 (== x <l) 1 (inq x >l))
-  ; the shortlex letters: a b .. z aa ab .. , one-based so the digits carry no zero
-  (sxch n a) (: q ((n - 1) // 26) c (97 + ((n - 1) % 26))
-              (? (0 < q) (sxch q (c . a)) (c . a)))
-  (lnom i) (name (string (sxch (1 + i) ())))
-  ; a binder takes the next letter not spelled free anywhere in the source: a name kept as
-  ; written is one a rename would capture. the candidate index threads, so the letters are
-  ; walked once across the whole term.
-  (nxt i fv) (? (peep fv (lnom i) 0) (nxt (1 + i) fv) i)
-  (lam? x) (two? x && == <x '\ && two? >x && two? >>x)
-  (qot? x) (two? x && == <x '\ && two? >x && !(two? >>x))
-  ; the noms canon leaves spelled as written: free, global and :-bound. quoted data is data,
-  ; never a reference, so a binder cannot capture into it; bd is the binders in scope, a stack.
-  (fvs x bd t) (? (one? x) (? (nom? x) (? (inq x bd) t (pin t x 1)) t)
-                  (qot? x) t
-                  (lam? x) (fvl >x bd t)
-                  (fvs >x bd (fvs <x bd t)))
-  (fvl l bd t) (? (one? >l) (fvs <l bd t)
-                  (fvl >l (<l . bd) t))
-  (canon x sc i fv) (? (one? x) (? (nom? x) (: r (assoc x sc) (? r >r x)) x)
-                       (qot? x) x
-                       (lam? x) ('\ . cops >x sc i fv)
-                       (canon <x sc i fv . canon >x sc i fv))
-  (cops l sc i fv) (? !(two? >l) [(canon <l sc i fv)]          ; the last operand is the body
-                      (: j (nxt i fv) nm (lnom j)
-                       (nm . cops >l ((<l . nm) . sc) (1 + j) fv)))
 
   (pfn o v sn) (? (partp v)
     (: n (nargs v)
@@ -492,9 +691,9 @@
           ; say that instead of inlining its whole body wherever `<x` was written.
           (: gn (opnom v)
              (? gn (say o (string gn))
-                (: s (lamsrc v)
-                   (? (two? s) (px o (canon s 0 0 (fvs s () {})) sn)
-                      (: _ (put o 92) (pnum o (abs (dig v)))))))))))   ; opaque: a distinguisher, nothing more -- C spelled the address here, this is the digest, which at least survives a collection
+                (: s (lamform v)
+                   (? (== s 0) (: _ (put o 92) (pnum o (abs (dig v))))   ; opaque: the digest, a distinguisher and nothing more
+                      (px o s sn))))))))
 
   (px o x sn) (? (charm? x) (pnum o x)
                 (coin? x) (pcoin o x sn)
@@ -707,8 +906,11 @@
 ;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 ;   (pprefixes p) -> the directory prefixes of p, outermost first
 
-(module '(path lastslash lastdot segs pclean pprefixes)
+(module '(path lastslash lastdot pbase phead segs pclean pprefixes)
 (: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
+   ; the leaf after the last '/', and the head before it with the slash kept ("" for none)
+   (pbase p) (snip p (lastslash p) #p)
+   (phead p) (snip p 0 (lastslash p))
    (lastdot p) (: sl (lastslash p)
                   ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
    ; "/a/b/c" -> ("/a" "/a/b"): neither the leading '/' nor the leaf is a prefix, so `mkdir -p`
@@ -816,8 +1018,13 @@
 ;   (wcwidth c)             -> the columns c takes: 0 1 or 2, -1 for a control, 0 for NUL
 ;   (swidth s)              -> the columns s takes, a control none
 ;   (scut s n)              -> the longest head of s at most n columns wide
+;   (cpupper c) (cplower c) -> c's simple case mapping, c where it has none
+;   (cpis nm c)             -> is c in the POSIX class named nm ("alpha" .. "xdigit"), glibc's
+;   (cpfold c)              -> the characters grep -i takes for c, c not among them
+;   (cpfolds lo hi)         -> cpfold of every character lo..hi, together
 
-(module '(text cpat cpnext cpn cps cplen cpsnip cprev wcwidth swidth scut)
+(module '(text cpat cpnext cpn cps cplen cpsnip cprev wcwidth swidth scut
+          cpupper cplower cpis cpclass? cpfold cpfolds)
    ; tools/mkwidth.l's runs, unicode 17: each entry cp * 4 + w opens a run of width w
 (: cpw
    @(1 3072 3521 4620 4649 5700 5881 5884 5889 5892 5901 5904 5913 5916 5921 6208 6253 6256
@@ -896,6 +1103,453 @@
      514990 514997 515026 515061 515970 516017 516034 516037 517170 517357 517362 517401
      517406 518145 518594 518645 518658 518701 518714 518941 518946 518949 518966 519029
      519038 519085 519102 519141 524290 786425 786434 1048569 3670016 3686401)
+   ; tools/mkctype.l's classes, unicode 17 and equal to glibc 2.44's: each tray's entries open
+   ; and close runs in turn. then the case maps, each as runs of start count stride delta
+   cpalpha
+   @(65 91 97 123 170 171 181 182 186 187 192 215 216 247 248 706 710 722 736 741 748 749 750
+     751 837 838 867 885 886 888 890 894 895 896 902 903 904 907 908 909 910 930 931 1014
+     1015 1154 1162 1328 1329 1367 1369 1370 1376 1417 1456 1470 1471 1472 1473 1475 1476
+     1478 1479 1480 1488 1515 1519 1523 1552 1563 1568 1624 1625 1642 1646 1748 1749 1757
+     1761 1769 1773 1789 1791 1792 1808 1856 1869 1970 1984 2027 2036 2038 2042 2043 2048
+     2072 2074 2093 2112 2137 2144 2155 2160 2184 2185 2192 2199 2200 2208 2250 2260 2272
+     2275 2282 2288 2364 2365 2381 2382 2385 2389 2404 2406 2416 2417 2436 2437 2445 2447
+     2449 2451 2473 2474 2481 2482 2483 2486 2490 2493 2501 2503 2505 2507 2509 2510 2511
+     2519 2520 2524 2526 2527 2532 2534 2546 2556 2557 2561 2564 2565 2571 2575 2577 2579
+     2601 2602 2609 2610 2612 2613 2615 2616 2618 2622 2627 2631 2633 2635 2637 2641 2642
+     2649 2653 2654 2655 2662 2678 2689 2692 2693 2702 2703 2706 2707 2729 2730 2737 2738
+     2740 2741 2746 2749 2758 2759 2762 2763 2765 2768 2769 2784 2788 2790 2800 2809 2813
+     2817 2820 2821 2829 2831 2833 2835 2857 2858 2865 2866 2868 2869 2874 2877 2885 2887
+     2889 2891 2893 2902 2904 2908 2910 2911 2916 2918 2928 2929 2930 2946 2948 2949 2955
+     2958 2961 2962 2966 2969 2971 2972 2973 2974 2976 2979 2981 2984 2987 2990 3002 3006
+     3011 3014 3017 3018 3021 3024 3025 3031 3032 3046 3056 3072 3085 3086 3089 3090 3113
+     3114 3130 3133 3141 3142 3145 3146 3149 3157 3159 3160 3163 3164 3166 3168 3172 3174
+     3184 3200 3204 3205 3213 3214 3217 3218 3241 3242 3252 3253 3258 3261 3269 3270 3273
+     3274 3277 3285 3287 3292 3295 3296 3300 3302 3312 3313 3316 3328 3341 3342 3345 3346
+     3387 3389 3397 3398 3401 3402 3405 3406 3407 3412 3416 3423 3428 3430 3440 3450 3456
+     3457 3460 3461 3479 3482 3506 3507 3516 3517 3518 3520 3527 3535 3541 3542 3543 3544
+     3552 3558 3568 3570 3572 3585 3643 3648 3655 3661 3662 3664 3674 3713 3715 3716 3717
+     3718 3723 3724 3748 3749 3750 3751 3770 3771 3774 3776 3781 3782 3783 3789 3790 3792
+     3802 3804 3808 3840 3841 3872 3882 3904 3912 3913 3949 3953 3972 3976 3992 3993 4029
+     4096 4151 4152 4153 4155 4170 4176 4254 4256 4294 4295 4296 4301 4302 4304 4347 4348
+     4681 4682 4686 4688 4695 4696 4697 4698 4702 4704 4745 4746 4750 4752 4785 4786 4790
+     4792 4799 4800 4801 4802 4806 4808 4823 4824 4881 4882 4886 4888 4955 4992 5008 5024
+     5110 5112 5118 5121 5741 5743 5760 5761 5787 5792 5867 5870 5881 5888 5908 5919 5940
+     5952 5972 5984 5997 5998 6001 6002 6004 6016 6068 6070 6089 6103 6104 6108 6109 6112
+     6122 6160 6170 6176 6265 6272 6315 6320 6390 6400 6431 6432 6444 6448 6457 6470 6510
+     6512 6517 6528 6572 6576 6602 6608 6618 6656 6684 6688 6751 6753 6773 6784 6794 6800
+     6810 6823 6824 6847 6849 6860 6863 6912 6964 6965 6980 6981 6989 6992 7002 7040 7082
+     7084 7142 7143 7154 7168 7223 7232 7242 7245 7294 7296 7307 7312 7355 7357 7360 7401
+     7405 7406 7412 7413 7415 7418 7419 7424 7616 7635 7669 7680 7958 7960 7966 7968 8006
+     8008 8014 8016 8024 8025 8026 8027 8028 8029 8030 8031 8062 8064 8117 8118 8125 8126
+     8127 8130 8133 8134 8141 8144 8148 8150 8156 8160 8173 8178 8181 8182 8189 8305 8306
+     8319 8320 8336 8349 8450 8451 8455 8456 8458 8468 8469 8470 8473 8478 8484 8485 8486
+     8487 8488 8489 8490 8494 8495 8506 8508 8512 8517 8522 8526 8527 8544 8585 9398 9450
+     11264 11493 11499 11503 11506 11508 11520 11558 11559 11560 11565 11566 11568 11624
+     11631 11632 11648 11671 11680 11687 11688 11695 11696 11703 11704 11711 11712 11719
+     11720 11727 11728 11735 11736 11743 11744 11776 11823 11824 12293 12296 12321 12330
+     12337 12342 12344 12349 12353 12439 12445 12448 12449 12539 12540 12544 12549 12592
+     12593 12687 12704 12736 12784 12800 13312 19904 19968 42125 42192 42238 42240 42509
+     42512 42540 42560 42607 42612 42620 42623 42736 42775 42784 42786 42889 42891 42973
+     42993 43014 43015 43048 43072 43124 43136 43204 43205 43206 43216 43226 43250 43256
+     43259 43260 43261 43307 43312 43347 43360 43389 43392 43443 43444 43456 43471 43482
+     43488 43519 43520 43575 43584 43598 43600 43610 43616 43639 43642 43711 43712 43713
+     43714 43715 43739 43742 43744 43760 43762 43766 43777 43783 43785 43791 43793 43799
+     43808 43815 43816 43823 43824 43867 43868 43882 43888 44011 44016 44026 44032 55204
+     55216 55239 55243 55292 63744 64110 64112 64218 64256 64263 64275 64280 64285 64297
+     64298 64311 64312 64317 64318 64319 64320 64322 64323 64325 64326 64434 64467 64830
+     64848 64912 64914 64968 65008 65020 65136 65141 65142 65277 65296 65306 65313 65339
+     65345 65371 65382 65471 65474 65480 65482 65488 65490 65496 65498 65501 65536 65548
+     65549 65575 65576 65595 65596 65598 65599 65614 65616 65630 65664 65787 65856 65909
+     66176 66205 66208 66257 66304 66336 66349 66379 66384 66427 66432 66462 66464 66500
+     66504 66512 66513 66518 66560 66718 66720 66730 66736 66772 66776 66812 66816 66856
+     66864 66916 66928 66939 66940 66955 66956 66963 66964 66966 66967 66978 66979 66994
+     66995 67002 67003 67005 67008 67060 67072 67383 67392 67414 67424 67432 67456 67462
+     67463 67505 67506 67515 67584 67590 67592 67593 67594 67638 67639 67641 67644 67645
+     67647 67670 67680 67703 67712 67743 67808 67827 67828 67830 67840 67862 67872 67898
+     67904 67930 67968 68024 68030 68032 68096 68100 68101 68103 68108 68116 68117 68120
+     68121 68150 68192 68221 68224 68253 68288 68296 68297 68325 68352 68406 68416 68438
+     68448 68467 68480 68498 68608 68681 68736 68787 68800 68851 68864 68904 68912 68922
+     68928 68966 68969 68970 68975 68998 69248 69290 69291 69293 69296 69298 69314 69320
+     69370 69373 69376 69405 69415 69416 69424 69446 69488 69506 69552 69573 69600 69623
+     69632 69702 69734 69744 69745 69750 69760 69817 69826 69827 69840 69865 69872 69882
+     69888 69939 69942 69952 69956 69960 69968 70003 70006 70007 70016 70080 70081 70085
+     70094 70107 70108 70109 70144 70162 70163 70197 70199 70200 70206 70210 70272 70279
+     70280 70281 70282 70286 70287 70302 70303 70313 70320 70377 70384 70394 70400 70404
+     70405 70413 70415 70417 70419 70441 70442 70449 70450 70452 70453 70458 70461 70469
+     70471 70473 70475 70477 70480 70481 70487 70488 70493 70500 70528 70538 70539 70540
+     70542 70543 70544 70582 70583 70593 70594 70595 70597 70598 70599 70603 70604 70606
+     70609 70610 70611 70612 70656 70722 70723 70726 70727 70731 70736 70746 70751 70754
+     70784 70850 70852 70854 70855 70856 70864 70874 71040 71094 71096 71103 71128 71134
+     71168 71231 71232 71233 71236 71237 71248 71258 71296 71350 71352 71353 71360 71370
+     71376 71396 71424 71451 71453 71467 71472 71482 71488 71495 71680 71737 71840 71914
+     71935 71943 71945 71946 71948 71956 71957 71959 71960 71990 71991 71993 71995 71997
+     71999 72003 72016 72026 72096 72104 72106 72152 72154 72160 72161 72162 72163 72165
+     72192 72243 72245 72255 72272 72344 72349 72350 72368 72441 72544 72552 72640 72673
+     72688 72698 72704 72713 72714 72759 72760 72767 72768 72769 72784 72794 72818 72848
+     72850 72872 72873 72887 72960 72967 72968 72970 72971 73015 73018 73019 73020 73022
+     73023 73026 73027 73028 73030 73032 73040 73050 73056 73062 73063 73065 73066 73103
+     73104 73106 73107 73111 73112 73113 73120 73130 73136 73180 73184 73194 73440 73463
+     73472 73489 73490 73531 73534 73537 73552 73562 73648 73649 73728 74650 74752 74863
+     74880 75076 77712 77809 77824 78896 78913 78919 78944 82939 82944 83527 90368 90415
+     90416 90426 92160 92729 92736 92767 92768 92778 92784 92863 92864 92874 92880 92910
+     92928 92976 92992 92996 93008 93018 93027 93048 93053 93072 93504 93549 93552 93562
+     93760 93824 93856 93881 93883 93908 93952 94027 94031 94088 94095 94112 94176 94178
+     94179 94180 94192 94199 94208 101590 101631 101663 101760 101875 110576 110580 110581
+     110588 110589 110591 110592 110883 110898 110899 110928 110931 110933 110934 110948
+     110952 110960 111356 113664 113771 113776 113789 113792 113801 113808 113818 113822
+     113823 118000 118010 119808 119893 119894 119965 119966 119968 119970 119971 119973
+     119975 119977 119981 119982 119994 119995 119996 119997 120004 120005 120070 120071
+     120075 120077 120085 120086 120093 120094 120122 120123 120127 120128 120133 120134
+     120135 120138 120145 120146 120486 120488 120513 120514 120539 120540 120571 120572
+     120597 120598 120629 120630 120655 120656 120687 120688 120713 120714 120745 120746
+     120771 120772 120780 120782 120832 122624 122655 122661 122667 122880 122887 122888
+     122905 122907 122914 122915 122917 122918 122923 122928 122990 123023 123024 123136
+     123181 123191 123198 123200 123210 123214 123215 123536 123566 123584 123628 123632
+     123642 124112 124140 124144 124154 124368 124398 124400 124411 124608 124639 124640
+     124662 124670 124672 124896 124903 124904 124908 124909 124911 124912 124927 124928
+     125125 125184 125252 125255 125256 125259 125260 125264 125274 126464 126468 126469
+     126496 126497 126499 126500 126501 126503 126504 126505 126515 126516 126520 126521
+     126522 126523 126524 126530 126531 126535 126536 126537 126538 126539 126540 126541
+     126544 126545 126547 126548 126549 126551 126552 126553 126554 126555 126556 126557
+     126558 126559 126560 126561 126563 126564 126565 126567 126571 126572 126579 126580
+     126584 126585 126589 126590 126591 126592 126602 126603 126620 126625 126628 126629
+     126634 126635 126652 127280 127306 127312 127338 127344 127370 130032 130042 131072
+     173792 173824 178206 178208 183982 183984 191457 191472 192094 194560 195102 196608
+     201547 201552 210042)
+   cpupc
+   @(65 91 192 215 216 223 256 257 258 259 260 261 262 263 264 265 266 267 268 269 270 271
+     272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293
+     294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 313 314 315 316
+     317 318 319 320 321 322 323 324 325 326 327 328 330 331 332 333 334 335 336 337 338 339
+     340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361
+     362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 378 379 380 381 382 385 387
+     388 389 390 392 393 396 398 402 403 405 406 409 412 414 415 417 418 419 420 421 422 424
+     425 426 428 429 430 432 433 436 437 438 439 441 444 445 452 454 455 457 458 460 461 462
+     463 464 465 466 467 468 469 470 471 472 473 474 475 476 478 479 480 481 482 483 484 485
+     486 487 488 489 490 491 492 493 494 495 497 499 500 501 502 505 506 507 508 509 510 511
+     512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533
+     534 535 536 537 538 539 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555
+     556 557 558 559 560 561 562 563 570 572 573 575 577 578 579 583 584 585 586 587 588 589
+     590 591 880 881 882 883 886 887 895 896 902 903 904 907 908 909 910 912 913 930 931 940
+     975 976 978 981 984 985 986 987 988 989 990 991 992 993 994 995 996 997 998 999 1000
+     1001 1002 1003 1004 1005 1006 1007 1012 1013 1015 1016 1017 1019 1021 1072 1120 1121
+     1122 1123 1124 1125 1126 1127 1128 1129 1130 1131 1132 1133 1134 1135 1136 1137 1138
+     1139 1140 1141 1142 1143 1144 1145 1146 1147 1148 1149 1150 1151 1152 1153 1162 1163
+     1164 1165 1166 1167 1168 1169 1170 1171 1172 1173 1174 1175 1176 1177 1178 1179 1180
+     1181 1182 1183 1184 1185 1186 1187 1188 1189 1190 1191 1192 1193 1194 1195 1196 1197
+     1198 1199 1200 1201 1202 1203 1204 1205 1206 1207 1208 1209 1210 1211 1212 1213 1214
+     1215 1216 1218 1219 1220 1221 1222 1223 1224 1225 1226 1227 1228 1229 1230 1232 1233
+     1234 1235 1236 1237 1238 1239 1240 1241 1242 1243 1244 1245 1246 1247 1248 1249 1250
+     1251 1252 1253 1254 1255 1256 1257 1258 1259 1260 1261 1262 1263 1264 1265 1266 1267
+     1268 1269 1270 1271 1272 1273 1274 1275 1276 1277 1278 1279 1280 1281 1282 1283 1284
+     1285 1286 1287 1288 1289 1290 1291 1292 1293 1294 1295 1296 1297 1298 1299 1300 1301
+     1302 1303 1304 1305 1306 1307 1308 1309 1310 1311 1312 1313 1314 1315 1316 1317 1318
+     1319 1320 1321 1322 1323 1324 1325 1326 1327 1329 1367 4256 4294 4295 4296 4301 4302
+     5024 5110 7305 7306 7312 7355 7357 7360 7680 7681 7682 7683 7684 7685 7686 7687 7688
+     7689 7690 7691 7692 7693 7694 7695 7696 7697 7698 7699 7700 7701 7702 7703 7704 7705
+     7706 7707 7708 7709 7710 7711 7712 7713 7714 7715 7716 7717 7718 7719 7720 7721 7722
+     7723 7724 7725 7726 7727 7728 7729 7730 7731 7732 7733 7734 7735 7736 7737 7738 7739
+     7740 7741 7742 7743 7744 7745 7746 7747 7748 7749 7750 7751 7752 7753 7754 7755 7756
+     7757 7758 7759 7760 7761 7762 7763 7764 7765 7766 7767 7768 7769 7770 7771 7772 7773
+     7774 7775 7776 7777 7778 7779 7780 7781 7782 7783 7784 7785 7786 7787 7788 7789 7790
+     7791 7792 7793 7794 7795 7796 7797 7798 7799 7800 7801 7802 7803 7804 7805 7806 7807
+     7808 7809 7810 7811 7812 7813 7814 7815 7816 7817 7818 7819 7820 7821 7822 7823 7824
+     7825 7826 7827 7828 7829 7838 7839 7840 7841 7842 7843 7844 7845 7846 7847 7848 7849
+     7850 7851 7852 7853 7854 7855 7856 7857 7858 7859 7860 7861 7862 7863 7864 7865 7866
+     7867 7868 7869 7870 7871 7872 7873 7874 7875 7876 7877 7878 7879 7880 7881 7882 7883
+     7884 7885 7886 7887 7888 7889 7890 7891 7892 7893 7894 7895 7896 7897 7898 7899 7900
+     7901 7902 7903 7904 7905 7906 7907 7908 7909 7910 7911 7912 7913 7914 7915 7916 7917
+     7918 7919 7920 7921 7922 7923 7924 7925 7926 7927 7928 7929 7930 7931 7932 7933 7934
+     7935 7944 7952 7960 7966 7976 7984 7992 8000 8008 8014 8025 8026 8027 8028 8029 8030
+     8031 8032 8040 8048 8072 8080 8088 8096 8104 8112 8120 8125 8136 8141 8152 8156 8168
+     8173 8184 8189 8450 8451 8455 8456 8459 8462 8464 8467 8469 8470 8473 8478 8484 8485
+     8486 8487 8488 8489 8490 8494 8496 8500 8510 8512 8517 8518 8544 8560 8579 8580 9398
+     9424 11264 11312 11360 11361 11362 11365 11367 11368 11369 11370 11371 11372 11373 11377
+     11378 11379 11381 11382 11390 11393 11394 11395 11396 11397 11398 11399 11400 11401
+     11402 11403 11404 11405 11406 11407 11408 11409 11410 11411 11412 11413 11414 11415
+     11416 11417 11418 11419 11420 11421 11422 11423 11424 11425 11426 11427 11428 11429
+     11430 11431 11432 11433 11434 11435 11436 11437 11438 11439 11440 11441 11442 11443
+     11444 11445 11446 11447 11448 11449 11450 11451 11452 11453 11454 11455 11456 11457
+     11458 11459 11460 11461 11462 11463 11464 11465 11466 11467 11468 11469 11470 11471
+     11472 11473 11474 11475 11476 11477 11478 11479 11480 11481 11482 11483 11484 11485
+     11486 11487 11488 11489 11490 11491 11499 11500 11501 11502 11506 11507 42560 42561
+     42562 42563 42564 42565 42566 42567 42568 42569 42570 42571 42572 42573 42574 42575
+     42576 42577 42578 42579 42580 42581 42582 42583 42584 42585 42586 42587 42588 42589
+     42590 42591 42592 42593 42594 42595 42596 42597 42598 42599 42600 42601 42602 42603
+     42604 42605 42624 42625 42626 42627 42628 42629 42630 42631 42632 42633 42634 42635
+     42636 42637 42638 42639 42640 42641 42642 42643 42644 42645 42646 42647 42648 42649
+     42650 42651 42786 42787 42788 42789 42790 42791 42792 42793 42794 42795 42796 42797
+     42798 42799 42802 42803 42804 42805 42806 42807 42808 42809 42810 42811 42812 42813
+     42814 42815 42816 42817 42818 42819 42820 42821 42822 42823 42824 42825 42826 42827
+     42828 42829 42830 42831 42832 42833 42834 42835 42836 42837 42838 42839 42840 42841
+     42842 42843 42844 42845 42846 42847 42848 42849 42850 42851 42852 42853 42854 42855
+     42856 42857 42858 42859 42860 42861 42862 42863 42873 42874 42875 42876 42877 42879
+     42880 42881 42882 42883 42884 42885 42886 42887 42891 42892 42893 42894 42896 42897
+     42898 42899 42902 42903 42904 42905 42906 42907 42908 42909 42910 42911 42912 42913
+     42914 42915 42916 42917 42918 42919 42920 42921 42922 42927 42928 42933 42934 42935
+     42936 42937 42938 42939 42940 42941 42942 42943 42944 42945 42946 42947 42948 42952
+     42953 42954 42955 42957 42958 42959 42960 42961 42962 42963 42964 42965 42966 42967
+     42968 42969 42970 42971 42972 42973 42997 42998 65313 65339 66560 66600 66736 66772
+     66928 66939 66940 66955 66956 66963 66964 66966 68736 68787 68944 68966 71840 71872
+     93760 93792 93856 93881 119808 119834 119860 119886 119912 119938 119964 119965 119966
+     119968 119970 119971 119973 119975 119977 119981 119982 119990 120016 120042 120068
+     120070 120071 120075 120077 120085 120086 120093 120120 120122 120123 120127 120128
+     120133 120134 120135 120138 120145 120172 120198 120224 120250 120276 120302 120328
+     120354 120380 120406 120432 120458 120488 120513 120546 120571 120604 120629 120662
+     120687 120720 120745 120778 120779 125184 125218 127280 127306 127312 127338 127344
+     127370)
+   cplowc
+   @(97 123 170 171 181 182 186 187 223 247 248 256 257 258 259 260 261 262 263 264 265 266
+     267 268 269 270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288
+     289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310
+     311 313 314 315 316 317 318 319 320 321 322 323 324 325 326 327 328 330 331 332 333 334
+     335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356
+     357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 378 379
+     380 381 382 385 387 388 389 390 392 393 396 398 402 403 405 406 409 412 414 415 417 418
+     419 420 421 422 424 425 426 428 429 430 432 433 436 437 438 439 441 443 445 448 453 455
+     456 458 459 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 478 479 480
+     481 482 483 484 485 486 487 488 489 490 491 492 493 494 495 497 498 500 501 502 505 506
+     507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528
+     529 530 531 532 533 534 535 536 537 538 539 540 541 542 543 544 545 546 547 548 549 550
+     551 552 553 554 555 556 557 558 559 560 561 562 563 570 572 573 575 577 578 579 583 584
+     585 586 587 588 589 590 591 660 662 697 704 706 736 741 837 838 881 882 883 884 887 888
+     890 894 912 913 940 975 976 978 981 984 985 986 987 988 989 990 991 992 993 994 995 996
+     997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1012 1013 1014 1016 1017 1019 1021
+     1072 1120 1121 1122 1123 1124 1125 1126 1127 1128 1129 1130 1131 1132 1133 1134 1135
+     1136 1137 1138 1139 1140 1141 1142 1143 1144 1145 1146 1147 1148 1149 1150 1151 1152
+     1153 1154 1163 1164 1165 1166 1167 1168 1169 1170 1171 1172 1173 1174 1175 1176 1177
+     1178 1179 1180 1181 1182 1183 1184 1185 1186 1187 1188 1189 1190 1191 1192 1193 1194
+     1195 1196 1197 1198 1199 1200 1201 1202 1203 1204 1205 1206 1207 1208 1209 1210 1211
+     1212 1213 1214 1215 1216 1218 1219 1220 1221 1222 1223 1224 1225 1226 1227 1228 1229
+     1230 1232 1233 1234 1235 1236 1237 1238 1239 1240 1241 1242 1243 1244 1245 1246 1247
+     1248 1249 1250 1251 1252 1253 1254 1255 1256 1257 1258 1259 1260 1261 1262 1263 1264
+     1265 1266 1267 1268 1269 1270 1271 1272 1273 1274 1275 1276 1277 1278 1279 1280 1281
+     1282 1283 1284 1285 1286 1287 1288 1289 1290 1291 1292 1293 1294 1295 1296 1297 1298
+     1299 1300 1301 1302 1303 1304 1305 1306 1307 1308 1309 1310 1311 1312 1313 1314 1315
+     1316 1317 1318 1319 1320 1321 1322 1323 1324 1325 1326 1327 1328 1376 1417 4304 4347
+     4348 4352 5112 5118 7296 7305 7306 7307 7424 7616 7681 7682 7683 7684 7685 7686 7687
+     7688 7689 7690 7691 7692 7693 7694 7695 7696 7697 7698 7699 7700 7701 7702 7703 7704
+     7705 7706 7707 7708 7709 7710 7711 7712 7713 7714 7715 7716 7717 7718 7719 7720 7721
+     7722 7723 7724 7725 7726 7727 7728 7729 7730 7731 7732 7733 7734 7735 7736 7737 7738
+     7739 7740 7741 7742 7743 7744 7745 7746 7747 7748 7749 7750 7751 7752 7753 7754 7755
+     7756 7757 7758 7759 7760 7761 7762 7763 7764 7765 7766 7767 7768 7769 7770 7771 7772
+     7773 7774 7775 7776 7777 7778 7779 7780 7781 7782 7783 7784 7785 7786 7787 7788 7789
+     7790 7791 7792 7793 7794 7795 7796 7797 7798 7799 7800 7801 7802 7803 7804 7805 7806
+     7807 7808 7809 7810 7811 7812 7813 7814 7815 7816 7817 7818 7819 7820 7821 7822 7823
+     7824 7825 7826 7827 7828 7829 7838 7839 7840 7841 7842 7843 7844 7845 7846 7847 7848
+     7849 7850 7851 7852 7853 7854 7855 7856 7857 7858 7859 7860 7861 7862 7863 7864 7865
+     7866 7867 7868 7869 7870 7871 7872 7873 7874 7875 7876 7877 7878 7879 7880 7881 7882
+     7883 7884 7885 7886 7887 7888 7889 7890 7891 7892 7893 7894 7895 7896 7897 7898 7899
+     7900 7901 7902 7903 7904 7905 7906 7907 7908 7909 7910 7911 7912 7913 7914 7915 7916
+     7917 7918 7919 7920 7921 7922 7923 7924 7925 7926 7927 7928 7929 7930 7931 7932 7933
+     7934 7935 7944 7952 7958 7968 7976 7984 7992 8000 8006 8016 8024 8032 8040 8048 8062
+     8064 8072 8080 8088 8096 8104 8112 8117 8118 8120 8126 8127 8130 8133 8134 8136 8144
+     8148 8150 8152 8160 8168 8178 8181 8182 8184 8305 8306 8319 8320 8336 8349 8458 8459
+     8462 8464 8467 8468 8495 8496 8500 8501 8505 8506 8508 8510 8518 8522 8526 8527 8560
+     8576 8580 8581 9424 9450 11312 11360 11361 11362 11365 11367 11368 11369 11370 11371
+     11372 11373 11377 11378 11379 11381 11382 11390 11393 11394 11395 11396 11397 11398
+     11399 11400 11401 11402 11403 11404 11405 11406 11407 11408 11409 11410 11411 11412
+     11413 11414 11415 11416 11417 11418 11419 11420 11421 11422 11423 11424 11425 11426
+     11427 11428 11429 11430 11431 11432 11433 11434 11435 11436 11437 11438 11439 11440
+     11441 11442 11443 11444 11445 11446 11447 11448 11449 11450 11451 11452 11453 11454
+     11455 11456 11457 11458 11459 11460 11461 11462 11463 11464 11465 11466 11467 11468
+     11469 11470 11471 11472 11473 11474 11475 11476 11477 11478 11479 11480 11481 11482
+     11483 11484 11485 11486 11487 11488 11489 11490 11491 11493 11500 11501 11502 11503
+     11507 11508 11520 11558 11559 11560 11565 11566 42561 42562 42563 42564 42565 42566
+     42567 42568 42569 42570 42571 42572 42573 42574 42575 42576 42577 42578 42579 42580
+     42581 42582 42583 42584 42585 42586 42587 42588 42589 42590 42591 42592 42593 42594
+     42595 42596 42597 42598 42599 42600 42601 42602 42603 42604 42605 42606 42625 42626
+     42627 42628 42629 42630 42631 42632 42633 42634 42635 42636 42637 42638 42639 42640
+     42641 42642 42643 42644 42645 42646 42647 42648 42649 42650 42651 42654 42787 42788
+     42789 42790 42791 42792 42793 42794 42795 42796 42797 42798 42799 42802 42803 42804
+     42805 42806 42807 42808 42809 42810 42811 42812 42813 42814 42815 42816 42817 42818
+     42819 42820 42821 42822 42823 42824 42825 42826 42827 42828 42829 42830 42831 42832
+     42833 42834 42835 42836 42837 42838 42839 42840 42841 42842 42843 42844 42845 42846
+     42847 42848 42849 42850 42851 42852 42853 42854 42855 42856 42857 42858 42859 42860
+     42861 42862 42863 42873 42874 42875 42876 42877 42879 42880 42881 42882 42883 42884
+     42885 42886 42887 42888 42892 42893 42894 42895 42897 42898 42899 42902 42903 42904
+     42905 42906 42907 42908 42909 42910 42911 42912 42913 42914 42915 42916 42917 42918
+     42919 42920 42921 42922 42927 42928 42933 42934 42935 42936 42937 42938 42939 42940
+     42941 42942 42943 42944 42945 42946 42947 42948 42952 42953 42954 42955 42957 42958
+     42959 42960 42961 42962 42963 42964 42965 42966 42967 42968 42969 42970 42971 42972
+     42993 42997 42998 42999 43000 43003 43824 43867 43868 43882 43888 43968 64256 64263
+     64275 64280 65345 65371 66600 66640 66776 66812 66967 66978 66979 66994 66995 67002
+     67003 67005 67456 67457 67459 67462 67463 67505 67506 67515 68800 68851 68976 68998
+     71872 71904 93792 93824 93883 93908 119834 119860 119886 119893 119894 119912 119938
+     119964 119990 119994 119995 119996 119997 120004 120005 120016 120042 120068 120094
+     120120 120146 120172 120198 120224 120250 120276 120302 120328 120354 120380 120406
+     120432 120458 120486 120514 120539 120540 120546 120572 120597 120598 120604 120630
+     120655 120656 120662 120688 120713 120714 120720 120746 120771 120772 120778 120779
+     120780 122624 122634 122635 122655 122661 122667 122928 122990 125218 125252)
+   cpprint
+   @(32 127 160 888 890 896 900 907 908 909 910 930 931 1328 1329 1367 1369 1419 1421 1424
+     1425 1480 1488 1515 1519 1525 1536 1806 1807 1867 1869 1970 1984 2043 2045 2094 2096
+     2111 2112 2140 2142 2143 2144 2155 2160 2194 2199 2436 2437 2445 2447 2449 2451 2473
+     2474 2481 2482 2483 2486 2490 2492 2501 2503 2505 2507 2511 2519 2520 2524 2526 2527
+     2532 2534 2559 2561 2564 2565 2571 2575 2577 2579 2601 2602 2609 2610 2612 2613 2615
+     2616 2618 2620 2621 2622 2627 2631 2633 2635 2638 2641 2642 2649 2653 2654 2655 2662
+     2679 2689 2692 2693 2702 2703 2706 2707 2729 2730 2737 2738 2740 2741 2746 2748 2758
+     2759 2762 2763 2766 2768 2769 2784 2788 2790 2802 2809 2816 2817 2820 2821 2829 2831
+     2833 2835 2857 2858 2865 2866 2868 2869 2874 2876 2885 2887 2889 2891 2894 2901 2904
+     2908 2910 2911 2916 2918 2936 2946 2948 2949 2955 2958 2961 2962 2966 2969 2971 2972
+     2973 2974 2976 2979 2981 2984 2987 2990 3002 3006 3011 3014 3017 3018 3022 3024 3025
+     3031 3032 3046 3067 3072 3085 3086 3089 3090 3113 3114 3130 3132 3141 3142 3145 3146
+     3150 3157 3159 3160 3163 3164 3166 3168 3172 3174 3184 3191 3213 3214 3217 3218 3241
+     3242 3252 3253 3258 3260 3269 3270 3273 3274 3278 3285 3287 3292 3295 3296 3300 3302
+     3312 3313 3316 3328 3341 3342 3345 3346 3397 3398 3401 3402 3408 3412 3428 3430 3456
+     3457 3460 3461 3479 3482 3506 3507 3516 3517 3518 3520 3527 3530 3531 3535 3541 3542
+     3543 3544 3552 3558 3568 3570 3573 3585 3643 3647 3676 3713 3715 3716 3717 3718 3723
+     3724 3748 3749 3750 3751 3774 3776 3781 3782 3783 3784 3791 3792 3802 3804 3808 3840
+     3912 3913 3949 3953 3992 3993 4029 4030 4045 4046 4059 4096 4294 4295 4296 4301 4302
+     4304 4681 4682 4686 4688 4695 4696 4697 4698 4702 4704 4745 4746 4750 4752 4785 4786
+     4790 4792 4799 4800 4801 4802 4806 4808 4823 4824 4881 4882 4886 4888 4955 4957 4989
+     4992 5018 5024 5110 5112 5118 5120 5789 5792 5881 5888 5910 5919 5943 5952 5972 5984
+     5997 5998 6001 6002 6004 6016 6110 6112 6122 6128 6138 6144 6170 6176 6265 6272 6315
+     6320 6390 6400 6431 6432 6444 6448 6460 6464 6465 6468 6510 6512 6517 6528 6572 6576
+     6602 6608 6619 6622 6684 6686 6751 6752 6781 6783 6794 6800 6810 6816 6830 6832 6878
+     6880 6892 6912 6989 6990 7156 7164 7224 7227 7242 7245 7307 7312 7355 7357 7368 7376
+     7419 7424 7958 7960 7966 7968 8006 8008 8014 8016 8024 8025 8026 8027 8028 8029 8030
+     8031 8062 8064 8117 8118 8133 8134 8148 8150 8156 8157 8176 8178 8181 8182 8191 8192
+     8232 8234 8293 8294 8306 8308 8335 8336 8349 8352 8386 8400 8433 8448 8588 8592 9258
+     9280 9291 9312 11124 11126 11508 11513 11558 11559 11560 11565 11566 11568 11624 11631
+     11633 11647 11671 11680 11687 11688 11695 11696 11703 11704 11711 11712 11719 11720
+     11727 11728 11735 11736 11743 11744 11870 11904 11930 11931 12020 12032 12246 12272
+     12352 12353 12439 12441 12544 12549 12592 12593 12687 12688 12774 12783 12831 12832
+     42125 42128 42183 42192 42540 42560 42744 42752 42973 42993 43053 43056 43066 43072
+     43128 43136 43206 43214 43226 43232 43348 43359 43389 43392 43470 43471 43482 43486
+     43519 43520 43575 43584 43598 43600 43610 43612 43715 43739 43767 43777 43783 43785
+     43791 43793 43799 43808 43815 43816 43823 43824 43884 43888 44014 44016 44026 44032
+     55204 55216 55239 55243 55292 57344 64110 64112 64218 64256 64263 64275 64280 64285
+     64311 64312 64317 64318 64319 64320 64322 64323 64325 64326 64976 65008 65050 65056
+     65107 65108 65127 65128 65132 65136 65141 65142 65277 65279 65280 65281 65471 65474
+     65480 65482 65488 65490 65496 65498 65501 65504 65511 65512 65519 65529 65534 65536
+     65548 65549 65575 65576 65595 65596 65598 65599 65614 65616 65630 65664 65787 65792
+     65795 65799 65844 65847 65935 65936 65949 65952 65953 66000 66046 66176 66205 66208
+     66257 66272 66300 66304 66340 66349 66379 66384 66427 66432 66462 66463 66500 66504
+     66518 66560 66718 66720 66730 66736 66772 66776 66812 66816 66856 66864 66916 66927
+     66939 66940 66955 66956 66963 66964 66966 66967 66978 66979 66994 66995 67002 67003
+     67005 67008 67060 67072 67383 67392 67414 67424 67432 67456 67462 67463 67505 67506
+     67515 67584 67590 67592 67593 67594 67638 67639 67641 67644 67645 67647 67670 67671
+     67743 67751 67760 67808 67827 67828 67830 67835 67868 67871 67898 67903 67930 67968
+     68024 68028 68048 68050 68100 68101 68103 68108 68116 68117 68120 68121 68150 68152
+     68155 68159 68169 68176 68185 68192 68256 68288 68327 68331 68343 68352 68406 68409
+     68438 68440 68467 68472 68498 68505 68509 68521 68528 68608 68681 68736 68787 68800
+     68851 68858 68904 68912 68922 68928 68966 68969 68998 69006 69008 69216 69247 69248
+     69290 69291 69294 69296 69298 69314 69320 69328 69337 69370 69416 69424 69466 69488
+     69514 69552 69580 69600 69623 69632 69710 69714 69750 69759 69827 69837 69838 69840
+     69865 69872 69882 69888 69941 69942 69960 69968 70007 70016 70112 70113 70133 70144
+     70162 70163 70210 70272 70279 70280 70281 70282 70286 70287 70302 70303 70314 70320
+     70379 70384 70394 70400 70404 70405 70413 70415 70417 70419 70441 70442 70449 70450
+     70452 70453 70458 70459 70469 70471 70473 70475 70478 70480 70481 70487 70488 70493
+     70500 70502 70509 70512 70517 70528 70538 70539 70540 70542 70543 70544 70582 70583
+     70593 70594 70595 70597 70598 70599 70603 70604 70614 70615 70617 70625 70627 70656
+     70748 70749 70754 70784 70856 70864 70874 71040 71094 71096 71134 71168 71237 71248
+     71258 71264 71277 71296 71354 71360 71370 71376 71396 71424 71451 71453 71468 71472
+     71495 71680 71740 71840 71923 71935 71943 71945 71946 71948 71956 71957 71959 71960
+     71990 71991 71993 71995 72007 72016 72026 72096 72104 72106 72152 72154 72165 72192
+     72264 72272 72355 72368 72441 72448 72458 72544 72552 72640 72674 72688 72698 72704
+     72713 72714 72759 72760 72774 72784 72813 72816 72848 72850 72872 72873 72887 72960
+     72967 72968 72970 72971 73015 73018 73019 73020 73022 73023 73032 73040 73050 73056
+     73062 73063 73065 73066 73103 73104 73106 73107 73113 73120 73130 73136 73180 73184
+     73194 73440 73465 73472 73489 73490 73531 73534 73563 73648 73649 73664 73714 73727
+     74650 74752 74863 74864 74869 74880 75076 77712 77811 77824 78934 78944 82939 82944
+     83527 90368 90426 92160 92729 92736 92767 92768 92778 92782 92863 92864 92874 92880
+     92910 92912 92918 92928 92998 93008 93018 93019 93026 93027 93048 93053 93072 93504
+     93562 93760 93851 93856 93881 93883 93908 93952 94027 94031 94088 94095 94112 94176
+     94181 94192 94199 94208 101590 101631 101663 101760 101875 110576 110580 110581 110588
+     110589 110591 110592 110883 110898 110899 110928 110931 110933 110934 110948 110952
+     110960 111356 113664 113771 113776 113789 113792 113801 113808 113818 113820 113828
+     117760 118013 118016 118452 118458 118481 118496 118513 118528 118574 118576 118599
+     118608 118724 118784 119030 119040 119079 119081 119275 119296 119366 119488 119508
+     119520 119540 119552 119639 119648 119673 119808 119893 119894 119965 119966 119968
+     119970 119971 119973 119975 119977 119981 119982 119994 119995 119996 119997 120004
+     120005 120070 120071 120075 120077 120085 120086 120093 120094 120122 120123 120127
+     120128 120133 120134 120135 120138 120145 120146 120486 120488 120780 120782 121484
+     121499 121504 121505 121520 122624 122655 122661 122667 122880 122887 122888 122905
+     122907 122914 122915 122917 122918 122923 122928 122990 123023 123024 123136 123181
+     123184 123198 123200 123210 123214 123216 123536 123567 123584 123642 123647 123648
+     124112 124154 124368 124411 124415 124416 124608 124639 124640 124662 124670 124672
+     124896 124903 124904 124908 124909 124911 124912 124927 124928 125125 125127 125143
+     125184 125260 125264 125274 125278 125280 126065 126133 126209 126270 126464 126468
+     126469 126496 126497 126499 126500 126501 126503 126504 126505 126515 126516 126520
+     126521 126522 126523 126524 126530 126531 126535 126536 126537 126538 126539 126540
+     126541 126544 126545 126547 126548 126549 126551 126552 126553 126554 126555 126556
+     126557 126558 126559 126560 126561 126563 126564 126565 126567 126571 126572 126579
+     126580 126584 126585 126589 126590 126591 126592 126602 126603 126620 126625 126628
+     126629 126634 126635 126652 126704 126706 126976 127020 127024 127124 127136 127151
+     127153 127168 127169 127184 127185 127222 127232 127406 127462 127491 127504 127548
+     127552 127561 127568 127570 127584 127590 127744 128729 128732 128749 128752 128765
+     128768 128986 128992 129004 129008 129009 129024 129036 129040 129096 129104 129114
+     129120 129160 129168 129198 129200 129212 129216 129218 129232 129241 129280 129624
+     129632 129646 129648 129661 129664 129675 129678 129735 129736 129737 129741 129757
+     129759 129771 129775 129785 129792 129939 129940 130043 131072 173792 173824 178206
+     178208 183982 183984 191457 191472 192094 194560 195102 196608 201547 201552 210042
+     917505 917506 917536 917632 917760 918000 983040 1048574 1048576 1114110)
+   cpspace
+   @(9 14 32 33 5760 5761 8192 8199 8200 8203 8232 8234 8287 8288 12288 12289)
+   cpblank
+   @(9 10 32 33 5760 5761 8192 8199 8200 8203 8287 8288 12288 12289)
+   cpcntrl
+   @(0 32 127 160 8232 8234)
+   cptou
+   @(97 26 1 -32 181 1 1 743 224 23 1 -32 248 7 1 -32 255 1 1 121 257 24 2 -1 305 1 1 -232
+     307 3 2 -1 314 8 2 -1 331 23 2 -1 378 3 2 -1 383 1 1 -300 384 1 1 195 387 2 2 -1 392 1 1
+     -1 396 1 1 -1 402 1 1 -1 405 1 1 97 409 1 1 -1 410 1 1 163 411 1 1 42561 414 1 1 130 417
+     3 2 -1 424 1 1 -1 429 1 1 -1 432 1 1 -1 436 2 2 -1 441 1 1 -1 445 1 1 -1 447 1 1 56 453
+     1 1 -1 454 1 1 -2 456 1 1 -1 457 1 1 -2 459 1 1 -1 460 1 1 -2 462 8 2 -1 477 1 1 -79 479
+     9 2 -1 498 1 1 -1 499 1 1 -2 501 1 1 -1 505 20 2 -1 547 9 2 -1 572 1 1 -1 575 2 1 10815
+     578 1 1 -1 583 5 2 -1 592 1 1 10783 593 1 1 10780 594 1 1 10782 595 1 1 -210 596 1 1
+     -206 598 2 1 -205 601 1 1 -202 603 1 1 -203 604 1 1 42319 608 1 1 -205 609 1 1 42315 611
+     1 1 -207 612 1 1 42343 613 1 1 42280 614 1 1 42308 616 1 1 -209 617 1 1 -211 618 1 1
+     42308 619 1 1 10743 620 1 1 42305 623 1 1 -211 625 1 1 10749 626 1 1 -213 629 1 1 -214
+     637 1 1 10727 640 1 1 -218 642 1 1 42307 643 1 1 -218 647 1 1 42282 648 1 1 -218 649 1 1
+     -69 650 2 1 -217 652 1 1 -71 658 1 1 -219 669 1 1 42261 670 1 1 42258 837 1 1 84 881 2 2
+     -1 887 1 1 -1 891 3 1 130 940 1 1 -38 941 3 1 -37 945 17 1 -32 962 1 1 -31 963 9 1 -32
+     972 1 1 -64 973 2 1 -63 976 1 1 -62 977 1 1 -57 981 1 1 -47 982 1 1 -54 983 1 1 -8 985
+     12 2 -1 1008 1 1 -86 1009 1 1 -80 1010 1 1 7 1011 1 1 -116 1013 1 1 -96 1016 1 1 -1 1019
+     1 1 -1 1072 32 1 -32 1104 16 1 -80 1121 17 2 -1 1163 27 2 -1 1218 7 2 -1 1231 1 1 -15
+     1233 48 2 -1 1377 38 1 -48 4304 43 1 3008 4349 3 1 3008 5112 6 1 -8 7296 1 1 -6254 7297
+     1 1 -6253 7298 1 1 -6244 7299 2 1 -6242 7301 1 1 -6243 7302 1 1 -6236 7303 1 1 -6181
+     7304 1 1 35266 7306 1 1 -1 7545 1 1 35332 7549 1 1 3814 7566 1 1 35384 7681 75 2 -1 7835
+     1 1 -59 7841 48 2 -1 7936 8 1 8 7952 6 1 8 7968 8 1 8 7984 8 1 8 8000 6 1 8 8017 4 2 8
+     8032 8 1 8 8048 2 1 74 8050 4 1 86 8054 2 1 100 8056 2 1 128 8058 2 1 112 8060 2 1 126
+     8064 8 1 8 8080 8 1 8 8096 8 1 8 8112 2 1 8 8115 1 1 9 8126 1 1 -7205 8131 1 1 9 8144 2
+     1 8 8160 2 1 8 8165 1 1 7 8179 1 1 9 8526 1 1 -28 8560 16 1 -16 8580 1 1 -1 9424 26 1
+     -26 11312 48 1 -48 11361 1 1 -1 11365 1 1 -10795 11366 1 1 -10792 11368 3 2 -1 11379 1 1
+     -1 11382 1 1 -1 11393 50 2 -1 11500 2 2 -1 11507 1 1 -1 11520 38 1 -7264 11559 1 1 -7264
+     11565 1 1 -7264 42561 23 2 -1 42625 14 2 -1 42787 7 2 -1 42803 31 2 -1 42874 2 2 -1
+     42879 5 2 -1 42892 1 1 -1 42897 2 2 -1 42900 1 1 48 42903 10 2 -1 42933 8 2 -1 42952 2 2
+     -1 42957 8 2 -1 42998 1 1 -1 43859 1 1 -928 43888 80 1 -38864 65345 26 1 -32 66600 40 1
+     -40 66776 36 1 -40 66967 11 1 -39 66979 15 1 -39 66995 7 1 -39 67003 2 1 -39 68800 51 1
+     -64 68976 22 1 -32 71872 32 1 -32 93792 32 1 -32 93883 25 1 -27 125218 34 1 -34)
+   cptol
+   @(65 26 1 32 192 23 1 32 216 7 1 32 256 24 2 1 304 1 1 -199 306 3 2 1 313 8 2 1 330 23 2 1
+     376 1 1 -121 377 3 2 1 385 1 1 210 386 2 2 1 390 1 1 206 391 1 1 1 393 2 1 205 395 1 1 1
+     398 1 1 79 399 1 1 202 400 1 1 203 401 1 1 1 403 1 1 205 404 1 1 207 406 1 1 211 407 1 1
+     209 408 1 1 1 412 1 1 211 413 1 1 213 415 1 1 214 416 3 2 1 422 1 1 218 423 1 1 1 425 1
+     1 218 428 1 1 1 430 1 1 218 431 1 1 1 433 2 1 217 435 2 2 1 439 1 1 219 440 1 1 1 444 1
+     1 1 452 1 1 2 453 1 1 1 455 1 1 2 456 1 1 1 458 1 1 2 459 9 2 1 478 9 2 1 497 1 1 2 498
+     2 2 1 502 1 1 -97 503 1 1 -56 504 20 2 1 544 1 1 -130 546 9 2 1 570 1 1 10795 571 1 1 1
+     573 1 1 -163 574 1 1 10792 577 1 1 1 579 1 1 -195 580 1 1 69 581 1 1 71 582 5 2 1 880 2
+     2 1 886 1 1 1 895 1 1 116 902 1 1 38 904 3 1 37 908 1 1 64 910 2 1 63 913 17 1 32 931 9
+     1 32 975 1 1 8 984 12 2 1 1012 1 1 -60 1015 1 1 1 1017 1 1 -7 1018 1 1 1 1021 3 1 -130
+     1024 16 1 80 1040 32 1 32 1120 17 2 1 1162 27 2 1 1216 1 1 15 1217 7 2 1 1232 48 2 1
+     1329 38 1 48 4256 38 1 7264 4295 1 1 7264 4301 1 1 7264 5024 80 1 38864 5104 6 1 8 7305
+     1 1 1 7312 43 1 -3008 7357 3 1 -3008 7680 75 2 1 7838 1 1 -7615 7840 48 2 1 7944 8 1 -8
+     7960 6 1 -8 7976 8 1 -8 7992 8 1 -8 8008 6 1 -8 8025 4 2 -8 8040 8 1 -8 8072 8 1 -8 8088
+     8 1 -8 8104 8 1 -8 8120 2 1 -8 8122 2 1 -74 8124 1 1 -9 8136 4 1 -86 8140 1 1 -9 8152 2
+     1 -8 8154 2 1 -100 8168 2 1 -8 8170 2 1 -112 8172 1 1 -7 8184 2 1 -128 8186 2 1 -126
+     8188 1 1 -9 8486 1 1 -7517 8490 1 1 -8383 8491 1 1 -8262 8498 1 1 28 8544 16 1 16 8579 1
+     1 1 9398 26 1 26 11264 48 1 48 11360 1 1 1 11362 1 1 -10743 11363 1 1 -3814 11364 1 1
+     -10727 11367 3 2 1 11373 1 1 -10780 11374 1 1 -10749 11375 1 1 -10783 11376 1 1 -10782
+     11378 1 1 1 11381 1 1 1 11390 2 1 -10815 11392 50 2 1 11499 2 2 1 11506 1 1 1 42560 23 2
+     1 42624 14 2 1 42786 7 2 1 42802 31 2 1 42873 2 2 1 42877 1 1 -35332 42878 5 2 1 42891 1
+     1 1 42893 1 1 -42280 42896 2 2 1 42902 10 2 1 42922 1 1 -42308 42923 1 1 -42319 42924 1
+     1 -42315 42925 1 1 -42305 42926 1 1 -42308 42928 1 1 -42258 42929 1 1 -42282 42930 1 1
+     -42261 42931 1 1 928 42932 8 2 1 42948 1 1 -48 42949 1 1 -42307 42950 1 1 -35384 42951 2
+     2 1 42955 1 1 -42343 42956 8 2 1 42972 1 1 -42561 42997 1 1 1 65313 26 1 32 66560 40 1
+     40 66736 36 1 40 66928 11 1 39 66940 15 1 39 66956 7 1 39 66964 2 1 39 68736 51 1 64
+     68944 22 1 32 71840 32 1 32 93760 32 1 32 93856 25 1 27 125184 34 1 34)
    (tl s k) (k < #s && (s k & 192) = 128)
    ; the bytes the character at i wears, 0 when it is none: an overlong, a surrogate or a torn tail
    (cpn s i)
@@ -930,6 +1584,45 @@
                         (: m ((lo + hi) // 2) ((peep cpw m 0 >> 2) <= c ? (go m hi) (go lo m))))
           (go 0 #cpw)))
    (cpcols s i) (max 0 (wcwidth (cpat s i)))
+   ; is c inside one of a class tray's runs: an odd count of entries at or below it
+   (cpin t c)
+    (: (go lo hi) (? (hi <= lo) lo (: m ((lo + hi) // 2) (peep t m 0 <= c ? (go (m + 1) hi) (go lo m))))
+       ((go 0 #t) % 2 = 1))
+   ; c through a case map: the last run opening at or below c, if c is one of its steps
+   (cpmap t c)
+    (: (go lo hi) (? (hi - lo < 2) lo (: m ((lo + hi) // 2) (peep t (4 * m) 0 <= c ? (go m hi) (go lo m))))
+       k (go 0 (#t // 4)) j (c - peep t (4 * k) 0) st (peep t (4 * k + 2) 0)
+       (? (0 <= j && j % st = 0 && j // st < peep t (4 * k + 1) 0) (c + peep t (4 * k + 3) 0) c))
+   (cpupper c) (? (c < 128) (97 <= c <= 122 ? (c - 32) c) (cpmap cptou c))
+   (cplower c) (? (c < 128) (65 <= c <= 90 ? (c + 32) c) (cpmap cptol c))
+   cpclasses ["alpha" "upper" "lower" "digit" "xdigit" "alnum" "punct" "graph" "print" "space"
+              "blank" "cntrl"]
+   (cpclass? nm) (elem nm cpclasses)
+   (cpis nm c)
+    (: dig (48 <= c <= 57)
+       (nm @ "alpha" (cpin cpalpha c) "upper" (cpin cpupc c) "lower" (cpin cplowc c)
+             "digit" dig "xdigit" (dig || 65 <= c <= 70 || 97 <= c <= 102)
+             "alnum" (dig || cpin cpalpha c) "print" (cpin cpprint c)
+             "graph" (cpin cpprint c && !(cpin cpspace c))
+             "punct" (cpin cpprint c && !(cpin cpspace c) && !dig && !(cpin cpalpha c))
+             "space" (cpin cpspace c) "blank" (cpin cpblank c) "cntrl" (cpin cpcntrl c)
+             0))
+   ; gnulib's case_folded_counterparts: c's uppercase, that one's lowercase if it comes back,
+   ; and the lowercase letters with no way back, each only if it shares c's uppercase. not an
+   ; equivalence: U+1C80 takes U+0412, which does not take it
+   cplone [181 305 383 453 456 459 498 837 962 976 977 981 982 1008 1009 1010 1013 7835 8126]
+   (cpfold c)
+    (: uc (cpupper c) lc (cplower uc)
+       (cat (? (uc != c) [uc] ())
+            (cat (? (lc != uc && lc != c && cpupper lc = uc) [lc] ())
+                 (filter (x \ x != lc && x != uc && x != c && cpupper x = uc) cplone))))
+   ; only a character one of the maps moves, or a lonesome one, has any
+   (cpfolds lo hi)
+    (: (steps t) (catmap (k \ (: s (peep t (4 * k) 0) n (peep t (4 * k + 1) 0) st (peep t (4 * k + 2) 0)
+                                 (? (hi < s || s + (n - 1) * st < lo) ()
+                                    (filter (x \ lo <= x <= hi) (map (j \ s + j * st) (jot n))))))
+                        (jot (#t // 4)))
+       (catmap cpfold (cat (steps cptou) (cat (steps cptol) (filter (x \ lo <= x <= hi) cplone)))))
    (swidth s) (: n #s (go i w) (? (n <= i) w (go (cpnext s i) (w + cpcols s i))) (go 0 0))
    (scut s n)
     (: m #s
@@ -1613,7 +2306,7 @@
 ;
 ; shapes: (rebre p) / (reere p) answer (1 nodes ngroups) or () on a malformed pattern --
 ; uread's success shape, since the empty pattern's nodes are legitimately (). a node is
-; ['chr c] | ['any] | ['cls neg ([lo hi]..)] | ['bol] | ['eol] | ['grp idx nodes] |
+; ['chr c] | ['any] | ['cls neg items] | ['bol] | ['eol] | ['grp idx nodes] |
 ; ['rep atom lo hi] | ['alt (nodes..)], hi () for unbounded; groups number in ( order from 1.
 ; (rehas nodes s) answers the boolean face, (refind nodes s i) the leftmost match at-or-after
 ; i as (1 start end spans), spans an ([idx start end]..) with the newest pin of each group
@@ -1621,14 +2314,6 @@
 (module 're
 (borrow 'text)
 (:
-   ; -- the twelve POSIX [:name:] classes, each written once as its ranges --
-   cnames '(("alnum" (48 57) (65 90) (97 122))  ("alpha" (65 90) (97 122))
-            ("blank" (9 9) (32 32))             ("cntrl" (0 31) (127 127))
-            ("digit" (48 57))                   ("graph" (33 126))
-            ("lower" (97 122))                  ("print" (32 126))
-            ("punct" (33 47) (58 64) (91 96) (123 126))
-            ("space" (9 13) (32 32))            ("upper" (65 90))
-            ("xdigit" (48 57) (65 70) (97 102)))
    ; the `:` of a closing `:]` at-or-after j -> (1 j) | (). the presence wrapper,
    ; not a bare index: a `:]` can legitimately sit at 0 and 0 nets blue
    (recend p n j)
@@ -1636,14 +2321,14 @@
        (p j = 58 && p (j + 1) = 93) [1 j]
        (recend p n (j + 1)))
    ; a class body at i (past [ and any ^): `first` keeps a leading ] literal.
-   ; answers (items j) | (), items an ([lo hi]..) of code points. one scanner, both
-   ; dialects -- POSIX spells the bracket expression the same in BRE and ERE
+   ; answers (items j) | (), an item a range [lo hi] of code points or the name of one
+   ; of the twelve POSIX classes, 'text's cpis. one scanner, both dialects -- POSIX
+   ; spells the bracket expression the same in BRE and ERE
    (recitems p n i first acc) (n > i ? (: c (cpat p i) j (cpnext p i)
     (? (c = 93 && !first) [acc (i + 1)]
        (c = 91 && i + 1 < n && p (i + 1) = 58)
         (recend p n (i + 2) @ [_ e]
-          (assoc (snip p (i + 2) e) cnames @
-           (_ . rs) (recitems p n (e + 2) 0 (cat rs acc))))
+          (: nm (snip p (i + 2) e) (? (cpclass? nm) (recitems p n (e + 2) 0 (nm . acc)))))
        (j + 1 < n && p j = 45 && p (j + 1) != 93)
         (recitems p n (cpnext p (j + 1)) 0 ([c (cpat p (j + 1))] . acc))
        (recitems p n j 0 ([c c] . acc)))))
@@ -1748,23 +2433,17 @@
    (reere p) (reparse p 1)
 
    ; -- case folding, as an AST pass: -i never reaches the matcher --
-   ; the other case of a letter, or () for anything else
-   (recase c) (? (65 <= c <= 90) (c + 32) (97 <= c <= 122) (c - 32))
-   ; the part of [lo hi] lying in [a b], shifted by d -- how a range gains its mirror
-   (rovl lo hi a b d)
-    (: x (lo < a ? a lo)
-       y (b < hi ? b hi)
-     (x <= y ? [[(x + d) (y + d)]]))
+   ; GNU's: each character also takes cpfold's, and upper and lower both widen to alpha,
+   ; since a class cannot be walked for its members. a negation applies after the fold
    (refoldr rs)
-    (catmap (\ [lo hi] (cat (rovl lo hi 97 122 -32) (rovl lo hi 65 90 32))) rs)
-   ; a literal becomes the two-charm class, a class gains its mirror ranges, and everything
-   ; with children recurses. the matcher is untouched by -i
+    (cat (map (r \ (? (string? r) (? (r = "upper" || r = "lower") "alpha" r) r)) rs)
+         (map (c \ [c c]) (catmap (r \ (? (string? r) () (cpfolds <r <>r))) rs)))
+   ; a literal becomes the class of itself and its fold, a class gains its folds, and
+   ; everything with children recurses. the matcher is untouched by -i
    (refold nds)
     (map (\ nd
-           ; not (recase c @ () .. m ..): pat.l reads () as the form at zero, which asks
-           ; nothing and so fits everything. presence here is a plain test
-           (nd @ ['chr c]      (: m (recase c) (? m ['cls 0 [[c c] [m m]]] nd))
-                 ['cls neg rs] ['cls neg (cat rs (refoldr rs))]
+           (nd @ ['chr c]      (: f (cpfold c) (? (two? f) ['cls 0 (map (x \ [x x]) (c . f))] nd))
+                 ['cls neg rs] ['cls neg (refoldr rs)]
                  ['grp gi sub] ['grp gi (refold sub)]
                  ['alt brs]    ['alt (map refold brs)]
                  ['rep a lo hi] ['rep <(refold [a]) lo hi]
@@ -1775,9 +2454,9 @@
    ; a node list becomes one lambda of (s i sp k), once, before any text is read, so what a
    ; character costs at match time is a call and a compare. the node vocabulary is renode's
    ; arm list -- a shape with no arm there cannot be built above
-   ; does charm c sit in a class of these ranges, negated or not?
+   ; does charm c sit in a class of these items, negated or not?
    (rcls neg rs c)
-    (: hit (any (\ [lo hi] (lo <= c <= hi)) rs) (? neg !hit hit))
+    (: hit (any (r \ (? (string? r) (cpis r c) (<r <= c <= <>r))) rs) (? neg !hit hit))
    ; the class as a 256-wide table, one native string index: a range walk per charm was the
    ; whole cost of [a-z]. past ascii it can only say a lead byte might open a member
    (recls neg rs)
@@ -2055,9 +2734,7 @@
    ; the verb run in the caller as a builtin: urun is the driver, so a leave from deep in
    ; answers a status and never ends the caller. () when no verb has the name
    (call k as) (: f (get k) (? (lit? f) (urun f as) ()))
-   (bn p)    (: n #p
-                (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n))
-                (go 0 0))
+   bn (cite 'path 'pbase)
    (dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sl? w)   (: n #w (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
    (word w)  (sl? w || dotl? w ? () (get (name w)))
@@ -2115,7 +2792,7 @@
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap
-          uopt uopt1 uoptv uoptun uoptstray uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptstray uoptp uoptlast uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2539,6 +3216,40 @@
    ; not one, so an applet with positional operands would take `-x` for a filename. () once
    ; `--` has been spelled: the words behind it are literal by request.
    (uoptstray as rest) (? (elem "--" as) () (<(filter (w \ 1 < #w && w 0 = 45) rest)))
+   ; (uoptp as t vals reps longs) -> [t stacked operands stray] | (): uopt in gnu order, a flag
+   ; free to follow an operand and every word behind `--` an operand. stray is the first long
+   ; word that was not ours (uopt reads it as an operand), or ()
+   (uoptp as t vals reps longs)
+    (: (go as es ops stray)
+        (: r (uopt as t vals reps longs)
+           (? !(two? r) ()
+              (: es2 (es + r 1) rest (r 2) k (#as - #rest)
+                 (? !(two? rest) [t es2 (rev ops) stray]
+                    (0 < k && as (k - 1) = "--") [t es2 (rev ops + rest) stray]
+                    (: w <rest
+                       (go >rest es2 (w . ops)
+                           (stray || (2 < #w && w 0 = 45 && w 1 = 45 ? w ()))))))))
+       (go as () () ()))
+   ; the last of `keys` spelled in the flag words before `--`, short or long, or (): the order
+   ; uopt's tablet drops, for the flags where the later one wins (a level, a mode)
+   (uoptlast as keys vals longs)
+    (: (lkey w) (: e ((: (go i) (? (#w <= i || w i = 61) i (go (i + 1)))) 2)
+                   (? (tablet? longs) (peep longs (snip w 2 e) ()) ()))
+       (short w k got)                                   ; -> [got skip-the-next-word]
+        (? (#w <= k) [got 0]
+           (: c (w k)
+              (? (elem c vals) [got (k + 1 = #w ? 1 0)]
+                 (short w (k + 1) (elem c keys ? c got)))))
+       (go as got)
+        (? !(two? as) got
+           (: w <as
+              (? (w = "--") got
+                 (2 < #w && w 0 = 45 && w 1 = 45)
+                  (: c (lkey w) (go >as (elem c keys ? c got)))
+                 (2 <= #w && w 0 = 45)
+                  (: r (short w 1 got) (go (r 1 ? >>as >as) <r))
+                 (go >as got))))
+       (go as ()))
 
    ; --- the two flags every applet answers, and the one place that answers them ------
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a file

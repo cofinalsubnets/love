@@ -5,6 +5,7 @@
 // semihosting helpers live in mkboot.l (bare instructions, laid from holo IR).
 #include <stdint.h>
 #include "nucleo446.h"
+#include "../bput.h"
 
 // Linker-provided bounds (nucleo446.lds) + the mkboot.l vector table.
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
@@ -19,13 +20,12 @@ int main(void);
 // on the wire, then idles (QSMOKE: leaves through qemu as 98 -- loud, not a
 // mute lockup).
 void hardfault_report(uint32_t *frame) {
-  static const char hx[] = "0123456789abcdef";
   const char *tags[5] = { "\r\n; FAULT pc=", " lr=", " cfsr=", " bfar=", " mmfar=" };
   uint32_t v[5] = { frame[6], frame[5],
                     REG(0xE000ED28u), REG(0xE000ED38u), REG(0xE000ED34u) };
   for (int k = 0; k < 5; k++) {
-    for (const char *s = tags[k]; *s; s++) serial_putc(*s);
-    for (int b = 28; b >= 0; b -= 4) serial_putc(hx[(v[k] >> b) & 15]); }
+    bput_s(serial_putc, tags[k]);
+    bput_x(serial_putc, v[k], 8); }
   serial_putc('\r'); serial_putc('\n');
 #ifdef QSMOKE
   sh_exit(98);

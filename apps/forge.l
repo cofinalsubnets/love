@@ -121,8 +121,8 @@
           (foldl (\ n lr
              (: r <lr  bs <>lr  nom <r  ar <>r  twin <>>>r  xt <>>>>r
                 (? !(two? bs) n
-                   (: j (xt @ 'none (forge-seam (cask bs) twin ['\ 'q '(q)] ar)
-                         (forge-seamx (cask bs) twin ['\ 'q '(q)] ar xt))
+                   (: j (xt @ 'none (forge-seam (cask bs) twin ar)
+                         (forge-seamx (cask bs) twin ar xt))
                       (? !(lit? j) (forge-no 'declined nom, n)
                          (pin forge-fits nom j, pin forge-nat nom 1, n + 1))))))
              0 laid)))

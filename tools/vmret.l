@@ -151,8 +151,8 @@
     ls 0 0 BIG 0 0 0))
 
 ; --- report helpers --------------------------------------------------
-(: (basename p) ((: (f i last) (? (i < #p) (f (i + 1) (p i @ 47 (i + 1) last)) (snip p last #p))) 0 0)
-   (spaces n)    (0 >= n ? "" (" " + spaces (n - 1)))
+(borrow 'path)
+(: (spaces n)    (0 >= n ? "" (" " + spaces (n - 1)))
    (str< a b)    ((: (f i) (? (i >= #a) (#a < #b)
                               (i >= #b) 0
                               (: ca (peep a i 0) cb (peep b i 0)
@@ -197,7 +197,7 @@
    prefix   <>parsed
    od       <>>parsed
    _        (? path 0 (die "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]"))
-   base     (basename path)
+   base     (pbase path)
    port     (open path "r")
    _        (? port 0 (die (+ "cannot open " path)))
    hdr      (slurp port)                                 ; whole image: e_ident/e_machine + .symtab

@@ -22,7 +22,7 @@
 ;   ('table aligns head rows): aligns one of 'n 'l 'c 'r a column, head a row, a row a
 ;   list of inls, every row as wide as the head
 ; an inl is a list of spans:
-;   ('text s)  ('em inl)  ('strong inl)  ('code s)  ('link inl url)  ('mark name)
+;   ('text s)  ('em inl)  ('strong inl)  ('code s)  ('link inl url)  ('mark name)  ('img alt src)
 ; a mark is a place a link can land -- an html id. it is html's alone: markdown, roff and
 ; the terminal show nothing for it, which is the normalization the other surfaces owe it.
 ; two names have a space, which no id can: " main" and " article", where a page's own
@@ -42,8 +42,9 @@
 ; never the rest of the document. accepting more input cannot break law 1, which is why
 ; both were safe to add; what they owe instead is stated in test/host/lapiz.l.
 ; the html scrub also lays what a browser wants from a page's controls in the middle's own
-; terms: an image is its [alt], and a GET form's text field is a link to form:ACTION?PAIRS
-; (htscrub's `hform` says the shape), so no node is added for either.
+; terms: a GET form's text field is a link to form:ACTION?PAIRS (htscrub's `hform` says the
+; shape), so no node is added for it. an image is a node, its alt plain text: roff and the
+; terminal show it as [alt], and ttlinks lays a mark " img SRC" ahead for a viewer to draw at.
 ;
 ; --- the terminal, which is not a surface ---
 ; `ttyshow` lays the middle out for a terminal at a width, and `kore man` is built on it.
@@ -54,7 +55,8 @@
 ; a link shows its <url> after its text, as man wants; a browser wants numbers instead, and
 ; `ttlinks` rewrites a doc so each link reads [n] and hands back the urls by n. `ttpage`
 ; lays that and lifts the marks out too, answering the line each one landed on, and the
-; line each link did.
+; line each link did. `ttpics` lifts them from ttyshow's own layout, links left as they
+; are, so a text tool can draw a picture under its image's line.
 ;
 ; --- the roff domain ---
 ; man macros are a smaller surface. law 1 holds on man-page-shaped docs: meta, head 1-2,
@@ -86,8 +88,8 @@
 ; the head names the exports: the ten faces, plus the four pieces papel's template
 ; reaches through the accessor. everything else is machinery and stays off the
 ; tablet -- catted, an unwrapped lapiz put all ~163 of its names on the session.
-(module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow ttlinks ttpage
-         md->ht ht->md md->rf rf->md rf->tty md->tty ht->tty convert  htb hti hq mget)
+(module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow ttlinks ttpage ttpics
+         md->ht ht->md md->rf rf->md rf->tty md->tty ht->tty convert  htb hti hq hpe mget)
 
 ; the combinators (love/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
 ; module, so peg splices for this compile alone.
@@ -178,7 +180,10 @@
 ; starting nothing falls through to `mdchar` as one-char text and `mrg` glues it back on.
 (: mdesc    (tag (\ p ['text (string <>p)]) (seq (lit "\\") (one chr?)))
    mdcode   (tag (\ p ['code <>p]) (seqs [(lit "`") (span (!= 96)) (lit "`")]))
-   mdtext   (tag (\ p ['text (cats p)]) (seq (one ord?) (span ord?)))
+   ; a text run stops short of a `!`, so a `![` can start an image
+   mdtext   (tag (\ p ['text (cats p)]) (seq (one ord?) (span (c \ ord? c && c != 33))))
+   mdimg    (tag (\ p ['img <p <>p])
+                 (seqs [(skip (lit "![")) (span (!= 93)) (skip (lit "](")) (span (!= 41)) (skip (lit ")"))]))
    mdchar   (tag (\ p ['text (string <p)]) (one chr?))
    ; the leaves are values; the cycle (span -> strong/em/link -> inls -> span) rides
    ; eta-expanded parsers, so a member is reached at call time and not while the layer builds.
@@ -187,7 +192,7 @@
    (mdlink s y n)   ((tag (\ p ['link <p <>p])
                           (seqs [(skip (lit "[")) (pack (mdinls "]")) (skip (lit "]"))
                                  (skip (lit "(")) (span (!= 41)) (skip (lit ")"))])) s y n)
-   (mdspan s y n)   ((alts [mdesc mdcode mdstrong mdem mdlink mdtext mdchar]) s y n)
+   (mdspan s y n)   ((alts [mdesc mdcode mdstrong mdem mdimg mdlink mdtext mdchar]) s y n)
    (mdinls stop) (pmap mrg (many (seq (notp (lit stop)) mdspan)))   ; spans up to a closer
    mdinl        (runp (pmap mrg (many mdspan))))
 
@@ -286,12 +291,18 @@
 
 ; ---------------------------------------------------------------- markdown, show
 (: (mq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (s i @ c (g (i + 1) (acc + (spec? c ? "\\" "") + string c)))))
-   (mdi l)  (catmap mdi1 l)
+   ; a text ending in `!` ahead of a link wears one backslash, else the pair reads as an image
+   (mdi l)  (? (one? l) ""
+               (: s (mdi1 <l)
+                  (? ((<(<l) = 'text) && (two? >l) && (<(<>l) = 'link) && (0 < #s) && (s (#s - 1) = 33))
+                      (snip s 0 (#s - 1) + "\\!" + mdi >l)
+                     (s + mdi >l))))
    (mdi1 x) (<x @ 'text (mq <>x)
                   'code ("`" + <>x + "`")
                   'strong ("**" + mdi <>x + "**")
                   'em ("*" + mdi <>x + "*")
                   'link ("[" + mdi <>x + "](" + <>>x + ")")
+                  'img ("![" + <>x + "](" + <>>x + ")")
                   "")
    ; a paragraph whose first characters would re-read as another block wears one backslash --
    ; the escape leaf takes it back off, so law 1 survives a paragraph that starts "- " or "# ".
@@ -329,7 +340,10 @@
                   'em     ("<em>" + hti <>x + "</em>")
                   'link   ("<a href=\"" + hq <>>x + "\">" + hti <>x + "</a>")
                   'mark   ("<a id=\"" + hq <>x + "\"></a>")
+                  'img    ("<img src=\"" + hqa <>>x + "\" alt=\"" + hqa <>x + "\">")
                   "")
+   ; an attribute's value: hq's three and the quote that would end it
+   (hqa s)  (catmap (c \ c @ 34 "&quot;" 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)) (map (i \ s i) ^#s))
    (hitems l t) (join "\n" (map (i \ "<li>" + hti i + "</li>") l) + "\n</" + t + ">")
    (hmeta kvs)  (join "\n" (map (p \ "<meta name=\"" + string <p + "\" content=\"" + hq <>p + "\">") (mfilled kvs)))
    (hdefs l)    ("<dl>\n" + join "\n" (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l) + "\n</dl>")
@@ -539,10 +553,10 @@
                           + hq lb + rep "_" (12 - #lb) + "]</a>"))
              _ (map (c \ pin t <c (link c)) (filter (c \ c 1 = 'text) kept))
              t)))
-   ; an image is its alt text, bracketed, as lynx shows it; one with none is not there
-   (halt s k e)
-    (: v (hattr s k e "alt")
-       (? (string? v && 0 < #v) ("[" + hesc [[60 "&lt;"]] v + "]") ""))
+   ; an image in the one shape the reader knows, src then alt; one with neither is not there
+   (himg s k e)
+    (: v (hval s k e "src") a (hval s k e "alt")
+       (? ((0 < #v) || (0 < #a)) ("<img src=\"" + hqa v + "\" alt=\"" + hqa a + "\">") ""))
    ; s with each byte the table names spelled its way
    (hesc tb s)
     (: o (jug 0)
@@ -571,7 +585,7 @@
                   (? (t = "form") (: _ (pin fs 'f (? op? (hform s k (e - 1) e) (tablet 0))) (say o mk, go e ba))
                      (t = "input") (say o (mk + field i), go e ba)
                      (t = "textarea") (say o (mk + field i), go (? op? (hpast s e t) e) ba)
-                     (t = "img") (say o (mk + (? op? (halt s k (e - 1)) "")), go e ba)
+                     (t = "img") (say o (mk + (? op? (himg s k (e - 1)) "")), go e ba)
                      (elem t hkill) (go (? op? (hpast s e t) e) ba)
                      (elem t hbare) (say o mk, go e ba)
                      (t = "br") (say o "</p><p>", go e ba)
@@ -607,6 +621,11 @@
    hcode   (tag (\ p ['code (plain <p)]) (wrapt "code" (pack (many (alts [hent htext])))))
    hmark   (tag (\ p ['mark (plain (runp (many (alts [hent htext])) <p))])
                 (seqs [(skip (lit "<a id=\"")) (span (!= 34)) (skip (lit "\"></a>"))]))
+   ; an image, src then alt as the scrub lays it, each entity-decoded as an href is
+   himgp   (tag (\ p (: (dec s) (: r (plain (runp (many (alts [hent htext])) s)) (? (string? r) r ""))
+                        ['img (dec <>p) (dec <p)]))
+                (seqs [(skip (lit "<img src=\"")) (span (!= 34)) (skip (lit "\" alt=\""))
+                       (span (!= 34)) (skip (lit "\">"))]))
    ; the inline cycle (htinl -> strong/em/link -> htinl) rides eta-expanded parsers
    (hstrong s y n) ((tag (\ p ['strong <p]) (wrapt "strong" (pack htinl))) s y n)
    (hem s y n)     ((tag (\ p ['em <p]) (wrapt "em" (pack htinl))) s y n)
@@ -614,7 +633,7 @@
    (hlink s y n)   ((tag (\ p ['link <>p (plain (runp (many (alts [hent htext])) <p))])
                          (seqs [(skip (lit "<a href=\"")) (span (!= 34)) (skip (lit "\">"))
                                 (pack htinl) (skip (lit "</a>"))])) s y n)
-   (htinl s y n)   ((pmap mrg (many (alts [hent hcode hstrong hem hmark hlink htext]))) s y n)
+   (htinl s y n)   ((pmap mrg (many (alts [hent hcode hstrong hem hmark himgp hlink htext]))) s y n)
 
    (hlev n)  (tag (\ p ['head n <p]) (wrapt ("h" + show n) (pack htinl)))
    hlang     (seqs [(skip (lit " class=\"language-")) (span (!= 34)) (skip (lit "\""))])
@@ -662,7 +681,7 @@
    ; its inline content bare at block level, which is where most of a real page's prose
    ; turns out to live; `many1` is what keeps it from matching nothing and looping.
    h-loose (tag (\ p ['para <p])
-                (pack (pmap mrg (many1 (alts [hent hcode hstrong hem hmark hlink htext])))))
+                (pack (pmap mrg (many1 (alts [hent hcode hstrong hem hmark himgp hlink htext])))))
    ; quote recurses into the block loop, so it sits with it and stays eta-expanded
    (h-quote s y n) ((tag (\ p ['quote <p]) (wrapt "blockquote" (pack (many h-block)))) s y n)
    (h-block s y n)
@@ -675,7 +694,8 @@
 ; the head. a width is counted in characters, not bytes -- a mark like a check is three --
 ; and a place ttlinks marked rides in its sentinels (bytes 1 and 2), which have none.
 (: (tplain l) (catmap (x \ <x @ 'text <>x 'code <>x 'strong (tplain <>x) 'em (tplain <>x)
-                            'link (tplain <>x) 'tmark (string 1 + <>x + string 2) "") l)
+                            'link (tplain <>x) 'tmark (string 1 + <>x + string 2)
+                            'img (? (0 < #<>x) ("[" + <>x + "]") "") "") l)
    (tvw s) ((: (g i n) (? (#s <= i) n
                           (s i = 1) (g ((: (h k) (? (#s <= k || s k = 2) (k + 1) (h (k + 1)))) i) n)
                           (g (i + 1) (? (128 <= s i && s i < 192) n (n + 1))))) 0 0)
@@ -716,6 +736,7 @@
                   'strong ("\\fB" + rfi <>x + "\\fR")
                   'em     ("\\fI" + rfi <>x + "\\fR")
                   'link   (rfi <>x + " \\(la" + rq <>>x + "\\(ra")
+                  'img    (? (0 < #<>x) (rq ("[" + <>x + "]")) "")
                   "")
    (rth kvs)   (".TH" + cats (map (k \ " \"" + mget kvs k + "\"") metakeys) + "\n")
    (rnums l i) (atom? l ? "" (".IP \"" + show i + ".\" 4\n" + rline (rfi <l) + "\n" + rnums >l (i + 1)))
@@ -1038,6 +1059,7 @@
                 'link   ((ttsegs <>x a) + (#<>>x ? [[(" <" + <>>x + ">") a]] ()) + ttsegs >l a)
                 ; ttlinks' own node: a place, laid as a sentinel with no width that ttpage lifts
                 'tmark  ([[(ttmk0 + <>x + ttmk1) 'mark]] + ttsegs >l a)
+                'img    ((? (0 < #<>x) [[("[" + <>x + "]") a]] ()) + ttsegs >l a)
                 (ttsegs >l a))))
    ; a run's text at its space breaks; the empty pieces at each end are what lets a word
    ; carry on across a style change with no space between the halves. a newline is a break
@@ -1157,6 +1179,9 @@
                  'em     (: i (tlspans <>x acc) [[['em <i]] (i 1)])
                  'strong (: i (tlspans <>x acc) [[['strong <i]] (i 1)])
                  'mark   [[['tmark <>x]] acc]
+                 ; an image: a mark " img SRC" for a viewer to draw at, then its [alt]
+                 'img    [((? (0 < #(x 2)) [['tmark (" img " + x 2)]] ())
+                           + (? (0 < #<>x) [['text ("[" + <>x + "]")]] ())) acc]
                  [[x] acc])
         s (tlgo >l (r 1))
         [(<r + <s) (s 1)]))
@@ -1176,10 +1201,12 @@
    ; block that holds text; past the end of a doc there is none, and they go
    ; ..and so does one whose only text is blank, which is what a page's indenting leaves
    (tlblank? x) (<x = 'text && (: t <>x (g i) (? (#t <= i) 1 (elem (t i) '(32 9 10 13)) (g (i + 1)) 0) (g 0)))
+   ; ..an image with no alt among them, which lays nothing but its mark
+   (tlmk? x) ((<x = 'mark) || ((<x = 'img) && (0 = #(x 1))))
    (tlmarks? l)
-    (: (g m k) (? (one? m) k (<(<m) = 'mark) (g >m 1) (tlblank? <m) (g >m k) 0)
+    (: (g m k) (? (one? m) k (tlmk? <m) (g >m 1) (tlblank? <m) (g >m k) 0)
        (g l 0))
-   (tlonly l) (filter (x \ <x = 'mark) l)
+   (tlonly l) (filter tlmk? l)
    (tlput x pend)
     (<x @ 'head    ['head <>x (pend + <>>x)]
           'para    ['para (pend + <>x)]
@@ -1217,6 +1244,25 @@
        (lk? a) (0 < #<a && <a 0 = 3)
        t (foldl (\ t a (pin t (tldig <a) <>a)) (tablet 0) (filter lk? <>l))
        [<l (r 1) (filter (a \ !(lk? a)) <>l) (map (i \ peep t (i + 1) -1) ^#(r 1))])
+   ; [text anchors]: ttyshow's layout, links as they are, with the marks lifted as ttpage
+   ; lifts them -- an image's " img SRC" among them, for a viewer to draw under its line
+   (tpspans f l) (catmap (x \ <x @ 'em [['em (tpspans f <>x)]] 'strong [['strong (tpspans f <>x)]]
+                                   'link [['link (tpspans f <>x) (x 2)]] (f x)) l)
+   (tpblk f x)
+    (<x @ 'head    ['head <>x (tpspans f (x 2))]
+          'para    ['para (tpspans f <>x)]
+          'quote   ['quote (map (tpblk f) <>x)]
+          'bullets ['bullets (map (tpspans f) <>x)]
+          'numbers ['numbers (map (tpspans f) <>x)]
+          'deflist ['deflist (map (p \ [(tpspans f <p) (tpspans f <>p)]) <>x)]
+          'table   ['table <>x (map (tpspans f) (x 2)) (map (map (tpspans f)) (x 3))]
+          x)
+   (ttpics d w)
+    (: (img x) (? (<x = 'img) ((? (0 < #(x 2)) [['mark (" img " + x 2)]] ())
+                               + (? (0 < #<>x) [['text ("[" + <>x + "]")]] ()))
+                  [x])
+       (mk x) (? (<x = 'mark) [['tmark <>x]] [x])
+       (ttlift (ttyshow (map (tpblk mk) (tlcarry (map (tpblk img) d))) w)))
    (ttyshow d w) (catmap (ln \ ln + "\n") (ttdoc d (w < 20 ? 20 w) 5))
    (rf->tty s w) (ttyshow (rfread s) w)
    (md->tty s w) (ttyshow (mdread s) w)

@@ -153,12 +153,20 @@
    ; cleanup is not decoration: it runs code at every exit from the scope, which a skip drops
    (cleanup? a b) (attrin a b "cleanup" || attrin a b "__cleanup__")
    (nocleanup ts) (blame ts "__attribute__((cleanup)) is not carried out")
-   ; gcc's `__label__ a, b;` declares local labels; skipped, since a label already mangles
-   ; to fn.NAME -- two blocks of one function spelling a name land as a duplicate, loudly.
-   (plabs ts)
-    (? !(two? ts) ts
-       (peekp ts ";") >ts
-       (plabs >ts))
+   ; gcc's `__label__ a, b;` declares local labels: each name takes a fresh spelling for the
+   ; rest of its block (ps 'lren, restored with the block's shadows), so a macro that lays
+   ; one twice in a function lays two labels. -> (rest shadows)
+   (plabs ps ts sh)
+    (? !(two? ts) [ts sh]
+       (peekp ts ";") [>ts sh]
+       (idat? ts)
+        (: nm (tkv <ts) k (ps 'lrn)
+           _ (pin ps 'lrn (k + 1))
+           old (peep (ps 'lren) nm 'none)
+           _ (pin (ps 'lren) nm (nm + "__L" + show k))   ; C-legal, so clay reads it back
+           (plabs ps >ts (['lren nm old] . sh)))
+       (plabs ps >ts sh))
+   (lname ps nm) (peep (ps 'lren) nm nm)
    ; does the leading declaration-specifier run carry keyword k? the run is order-free, so
    ; `static char const` and `const static char` answer alike, which is what C says.
    ; ..and does the run pquals is about to drop carry `restrict`? read-only: pquals still
@@ -292,6 +300,8 @@
                 _ (pin t 'enums {})         ; enum constant -> value
                 _ (pin t 'declaring {})     ; the names of the declaration being parsed right now (C11 6.2.1p7)
                 _ (pin t 'labs {})          ; the labels defined in the function being parsed (C11 6.8.1p3)
+                _ (pin t 'lren {})          ; a __label__ name -> its spelling in the current block
+                _ (pin t 'lrn 0)
                 _ (pin t 'etag {})          ; enum tag -> the type its enumerators lowered to (see ety)
                 _ (pin t 'stag {})          ; tag -> (fields size align)
                 _ (pin t 'tags {})          ; a block tag's spelling -> the key it took in stag (C11 6.7.2.3)
@@ -1569,6 +1579,28 @@
     (? (ty = 'bool) (v = 0 ? 0 1)
        (: n (tbits w64 ty) m (v & ((2 ** n) - 1))
           (? (tusg? ty || m < (2 ** (n - 1))) m (m - (2 ** n)))))
+   ; a bit builtin's name -> (op operand-type) | ()
+   (bltab w64 nm)
+    (nm @ "__builtin_bswap16" '(bswap ushort) "__builtin_bswap32" '(bswap uint)
+          "__builtin_bswap64" ['bswap (w64 ? 'ulong 'ullong)]
+          "__builtin_clz" '(clz uint) "__builtin_clzl" '(clz ulong) "__builtin_clzll" '(clz ullong)
+          "__builtin_ctz" '(ctz uint) "__builtin_ctzl" '(ctz ulong) "__builtin_ctzll" '(ctz ullong)
+          "__builtin_popcount" '(pop uint) "__builtin_popcountl" '(pop ulong)
+          "__builtin_popcountll" '(pop ullong)
+          "__builtin_ffs" '(ffs uint) "__builtin_ffsl" '(ffs ulong) "__builtin_ffsll" '(ffs ullong)
+          ())
+   (blen v) (? (v = 0) 0 (1 + (blen (v >> 1))))
+   (bctz v) (? ((v & 1) = 1) 0 (1 + (bctz (v >> 1))))
+   (bpop v) (? (v = 0) 0 ((v & 1) + (bpop (v >> 1))))
+   (bswp v n) (? (n = 0) 0 (((v & 255) * (2 ** (8 * (n - 1)))) + (bswp (v >> 8) (n - 1))))
+   ; v already in ty, unsigned -> (value type) | (); clz and ctz of 0 are undefined, no fold
+   (bfold w64 op ty v)
+    (op @ 'bswap [(bswp v ((tbits w64 ty) // 8)) ty]
+          'clz (? (v = 0) () [((tbits w64 ty) - (blen v)) 'int])
+          'ctz (? (v = 0) () [(bctz v) 'int])
+          'pop [(bpop v) 'int]
+          'ffs [(v = 0 ? 0 ((bctz v) + 1)) 'int]
+          ())
    ; a literal is an int where it fits, else the long that holds it (ilp32 spells one past int llong)
    (numt w64 n) (? (-2147483648 <= n && n <= 2147483647) 'int
                    w64 (n < (2 ** 63) ? 'long 'ulong)
@@ -1633,6 +1665,12 @@
                     (? (= f 'bad) ()
                        (ty = 'bool) [(f = 0.0 ? 0 1) 'bool]   ; to _Bool is a compare, never a truncation
                        (wr ty (ceil (f // 1)))))))           ; and every other one truncates toward zero
+          ; the bit builtins over a constant fold, so one can label a case or size a bit-field
+          (<e = 'call)
+           (: h <>e as <>>e
+              k (? (two? h && (<h = 'var)) (bltab w64 <>h) ())
+              r (? (two? k && two? as && !(two? >as)) (cfty w64 <as) ())
+              (? !(two? r) () (bfold w64 <k <>k (wrapt w64 <>k <r))))
           ; land/lor are 3-element ('land l r); truthiness is != 0 (-1 && 1 == 1)
           (elem <e '(land lor))
            (: a (cfty w64 <>e) b (cfty w64 <>>e)
@@ -1743,7 +1781,12 @@
                              _ (pin (ps 'declaring) name 1)
                              (? (varr? ty && (stat || peekp ts3 "=")) ()
                                 (peekp ts3 "=")
-                                (: r (pinit ps >ts3)
+                                ; the name types in its own initializer (typeof(p), sizeof *p),
+                                ; bound for the initializer's parse and put back after
+                                (: old (peep (ps 'locals) name 'none)
+                                   _ (pin (ps 'locals) name ty)
+                                   r (pinit ps >ts3)
+                                   _ (? (= old 'none) (pull (ps 'locals) name 0) (pin (ps 'locals) name old))
                                    (? !(two? r) ()
                                       (: ini <r
                                          [([name (fillarr ps ty ini) ini] + pinl) <>r])))   ; [] local: infer size
@@ -1838,7 +1881,7 @@
                        [(rev (c . acc)) >ts2])))
              (golabs ts2 acc)
               (? !(idat? ts2) [(rev acc) ts2]
-                 (: c (tkv <ts2)
+                 (: c (lname ps (tkv <ts2))
                     (? (peekp >ts2 ",") (golabs >>ts2 (c . acc))
                        [(rev (c . acc)) >ts2])))
              tr (tmpl r0 "")
@@ -1982,7 +2025,7 @@
               (: t2 >ts
                  (? !(idat? t2) ()
                     (: rest (want >t2 ";")
-                       (? (two? rest) [['goto (tkv <t2)] rest] ()))))
+                       (? (two? rest) [['goto (lname ps (tkv <t2))] rest] ()))))
              (tkw? t 'break)
               (: rest (want >ts ";") (? (two? rest) ['(brk) rest] ()))
              (tkw? t 'continue)
@@ -2019,7 +2062,7 @@
              (plabel? ts)
               ; C11 6.8.1p3: a label's scope is its whole function, so two of a name are one
               ; label emitted twice and every goto to it takes the first -- silently.
-              (: nm (tkv t)
+              (: nm (lname ps (tkv t))
                  (? (peep (ps 'labs) nm ()) (blame ts ("duplicate label '" + nm + "'"))
                     (: _ (pin (ps 'labs) nm 1) [['lbl nm] >>ts])))
              (: r (thenw (pexpr ps ts) ";")
@@ -2105,7 +2148,7 @@
                                    _ (bend sh)
                                    [['blk (rev acc)] >ts2])
                  (idv? <ts2 "__extension__") (items >ts2 acc sh)
-                 (idv? <ts2 "__label__") (items (plabs >ts2) acc sh)
+                 (idv? <ts2 "__label__") (: r (plabs ps >ts2 sh) (items <r acc <>r))
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
                      r (? (two? br) (btdefs ps <br <>br (sdrain ps epre sh) (qspec ps >ts2 <br)) ())

@@ -26,7 +26,7 @@ default: bin
 bin: $(R)/$(o)/love.bin
 objs: $(objs)
 
-$(eval $(call p_obj,main,inle/rp2040/main.c,main.c rp2040.h $(mc),$(rp_cc)))
+$(eval $(call p_obj,main,inle/rp2040/main.c,main.c rp2040.h $(R)/inle/bput.h $(mc),$(rp_cc)))
 $(eval $(call p_obj,rp2040,inle/rp2040/rp2040.c,rp2040.c rp2040.h $(mc),$(rp_cc)))
 
 # boot2: 240 payload bytes zero-padded to 252 and CRC-stamped, in .boot2. no gas -- the

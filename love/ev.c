@@ -67,8 +67,7 @@ struct env {
  struct env *par; // enclosing scope
  word tab, // the mutable scope, keyed by the E* fixnums: positional and closure variables,
            //   the stack of computed args and let bindings, the let's lambdas, the cond
-           //   branch and exit addresses, the backpatch sites, a lambda's source \-expr,
-           //   and fars, the binding names pinned before a let's lambdas compile. ev.l's
+           //   branch and exit addresses, the backpatch sites, and fars, the binding names pinned before a let's lambdas compile. ev.l's
            //   own scope is a tablet read the same way -- (c 'stk), (c 'imp), (c 'lam).
   len,     // thread length accumulator: a fixnum, so no store to it needs a barrier
   end[]; };
@@ -86,7 +85,7 @@ static ai_inline struct ai *c0_i(struct ai *g, struct env **c, lvm_t *i) {
 // the scope's mutable fields ride a tablet, the way ev.l's own scope does ((c 'stk),
 // (c 'imp), ..). ai_mapput barriers its own stores, so none of these writes carries a
 // barrier of its own -- the hand-kept invariant retires with them.
-enum { EStack, EArgs, EImps, ELams, EBranch, EExit, ESites, ESrc, EFars };
+enum { EStack, EArgs, EImps, ELams, EBranch, EExit, ESites, EFars };
 static ai_inline word eget(struct ai *g, struct env *e, int k) {
  return ai_mapget(g, zero, putcharm(k), e->tab); }
 static struct ai *eset(struct ai *g, struct env **c, int k, word v) {
@@ -190,21 +189,12 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
 
 static Cata(c1) {
  uintptr_t l = getcharm((*c)->len);
- // a lambda carries its source \-expr: reserve one extra leading word for it so
- // it sits at value[-1] (the printer's discriminator) and rides inside the thread
- // span (head = src word) for free GC tracing. top-level/aux threads have no src.
- uintptr_t extra = zerop(eget(g, (*c), ESrc)) ? 0 : 1;
- g = ai_have(g, l + extra + Width(struct ai_tag));
+ g = ai_have(g, l + Width(struct ai_tag));
  if (ai_ok(g)) {
-  union u *k = bump(g, l + extra + Width(struct ai_tag));
-  memset(k, -1, (l + extra) * sizeof(word));
-  Kp = tagthread(k, l + extra) + l + extra;
-  if (ai_ok(g = pull(g, c))) {           // pull emits l words (may GC); Kp now = entry
-   // read src after all allocation: ai_have/pull can GC and relocate the env's src.
-   if (extra) Kp[-1].x = eget(g, (*c), ESrc),     // value[-1] = source \-expr
-              gen_wb_cell(g, Kp - 1, Kp[-1].x),
-              clip(g, Kp - 1);          // tag head spans [src .. body]; value stays Kp
-   else clip(g, Kp); } }
+  union u *k = bump(g, l + Width(struct ai_tag));
+  memset(k, -1, l * sizeof(word));
+  Kp = tagthread(k, l) + l;
+  if (ai_ok(g = pull(g, c))) clip(g, Kp); }   // pull emits l words (may GC); Kp now = entry
  return g; }
 
 static Cata(c1_yield) { return g; }
@@ -415,11 +405,10 @@ static struct ai *subst1(struct ai *g, word x, word p, word m) {
 
 static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_t exp) {
  union u *k, *ip;
- word ops = exp;             // the full operand list (params… body) for the stored src
  struct env *d = NULL;
  // imps is rooted like the rest: the rename loop below mints and substitutes, and a
  // collection there leaves an unrooted argument pointing into the from-space.
- mm(g, &d); mm(g, &exp); mm(g, &ops); mm(g, &imps);
+ mm(g, &d); mm(g, &exp); mm(g, &imps);
 
  // a param that shadows an enclosing binder renames to a fresh mint over the whole
  // operand list -- one cluster, so a like-named inner : renames with it and a
@@ -445,7 +434,6 @@ static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_
    um(g);
    if (ai_ok(g)) exp = pop1(g), again = true;
    break; } }
- ops = exp;
 
  g = enscope(g, *c, exp, imps);
 
@@ -463,24 +451,13 @@ static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_
   incl(d, 4);
   g = ai_push(g, 2, c1_cur, d);
   g = analyze(g, &d, exp);
-  // stash the source \-expr for the printer after analyze (imps now known),
-  // prepending the imports as leading params so a closure round-trips
-  if (ai_ok(g)) {
-   word l = eget(g, d, EImps); int ni = 0;
-   mm(g, &l);
-   for (; chainp(l); l = B(l), ni++) g = ai_push(g, 1, A(l));  // push imp1..impN
-   um(g);
-   g = ai_push(g, 1, ops);                                   // tail = (params… body)
-   while (ni-- > 0) g = gxr(g);                             // fold: imps ++ ops
-   g = gxl(pushl(g));                                       // link '\ onto the front
-   if (ai_ok(g)) g = eset(g, &d, ESrc, pop1(g)); }
   if (ai_ok(g = ai_push(g, 2, c1_ret, d)))
     ip = g->ip,
     avec(g, ip, g = c1(g, &d)); }
 
  if (ai_ok(g)) k = g->ip, g->ip = ip, g = gxl(ai_push(g, 2, k, eget(g, d, EImps)));
 
- return um(g), um(g), um(g), um(g), g; }
+ return um(g), um(g), um(g), g; }
 
 static Ana(c0_cond_exit) { return
  incl(*c, 3),

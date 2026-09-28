@@ -2,6 +2,9 @@
 // (jpeg-encode w h rgba q) -> a baseline jfif of the w*h rgba image at quality 1..100 | ()
 // jpeg's own tables (itu t.81 annex k) scaled by quality as libjpeg scales them, 4:2:0
 // chroma, alpha dropped. the stream is sized by a counting pass, then written.
+// (jpeg-pixels s) -> the rgba of a baseline or progressive jpeg, grey or ycbcr (rgb by
+// adobe's word), any sampling | why not: 1 not a jpeg, 2 cut short, 3 a kind it can't
+// read (arithmetic, lossless, 12-bit, cmyk), 4 a bad table or scan, 5 past 2^24 pixels
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -210,3 +213,344 @@ static lvm(lvm_jpeg) LvmCall(g, host_jpeg)
 static union u const
   nif_jpeg[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_jpeg}, {lvm_ret0}};
 LvNif("jpeg-encode", nif_jpeg, NULL);
+
+// ---- decoding ---------------------------------------------------------------------------
+// coefficients land in a scratch string, 128 bytes a block, and each block's samples are
+// then written over the front half of its own place; chroma is upsampled linearly.
+
+struct jd_huff { uint16_t fast[512]; uint32_t first[17]; uint16_t count[17], off[17];
+                 uint8_t vals[256]; int ok; };
+struct jd_comp { int id, h, v, tq, td, ta, pred; uintptr_t bw, bh, cw, ch, off; };
+struct jd {
+ const uint8_t *s; uintptr_t n, pos;
+ uint8_t *base;                  // the scratch, null until it is laid
+ uint32_t acc; int bits, marker, bad;
+ uint16_t q[4][64];              // natural order
+ struct jd_huff dc[4], ac[4];
+ struct jd_comp c[3];
+ int nc, hmax, vmax, w, h, prog, frame, scans, ri, adobe, transform, eobrun;
+ uintptr_t mcux, mcuy;
+ int ns, sc[3], ss, se, ah, al; };
+
+static int jd_be16(const uint8_t *p) { return p[0] << 8 | p[1]; }
+
+// entropy bytes, msb first into acc; a marker (or the end) feeds zeros
+static void jd_fill(struct jd *d) {
+ while (d->bits <= 24) {
+  int b = 0;
+  if (!d->marker && d->pos < d->n) {
+   b = d->s[d->pos];
+   if (b != 0xff) d->pos++;
+   else {
+    int c = d->pos + 1 < d->n ? d->s[d->pos + 1] : 0xd9;
+    if (c == 0) d->pos += 2;
+    else if (c == 0xff) { d->pos++; continue; }
+    else d->marker = 1, b = 0; } }
+  d->acc |= (uint32_t) b << (24 - d->bits), d->bits += 8; } }
+
+static int jd_get(struct jd *d, int n) {
+ if (!n) return 0;
+ jd_fill(d);
+ int v = (int) (d->acc >> (32 - n));
+ d->acc <<= n, d->bits -= n;
+ return v; }
+
+static int jd_extend(int v, int s) { return s && v < 1 << (s - 1) ? v - (1 << s) + 1 : v; }
+
+static int jd_huff_build(struct jd_huff *h, const uint8_t *nbits, const uint8_t *vals, int total) {
+ uint32_t code = 0; int k = 0;
+ memset(h, 0, sizeof *h);
+ for (int l = 1; l <= 16; l++, code <<= 1) {
+  h->first[l] = code, h->count[l] = nbits[l - 1], h->off[l] = (uint16_t) k;
+  for (int i = 0; i < nbits[l - 1]; i++, k++, code++) {
+   if (code >= 1u << l) return 0;                  // more codes than the length holds
+   if (l <= 9)
+    for (uint32_t j = code << (9 - l), e = (code + 1) << (9 - l); j < e; j++)
+     h->fast[j] = (uint16_t) (l << 8 | vals[k]); } }
+ memcpy(h->vals, vals, (size_t) total);
+ return h->ok = 1; }
+
+static int jd_decode(struct jd *d, const struct jd_huff *h) {
+ jd_fill(d);
+ uint32_t v = d->acc >> 16;
+ int f = h->fast[v >> 7];
+ if (f) { d->acc <<= f >> 8, d->bits -= f >> 8; return f & 255; }
+ for (int l = 10; l <= 16; l++) {
+  uint32_t c = v >> (16 - l);
+  if (c - h->first[l] < h->count[l]) {
+   d->acc <<= l, d->bits -= l;
+   return h->vals[h->off[l] + c - h->first[l]]; } }
+ return -1; }
+
+static int16_t *jd_coef(struct jd *d, struct jd_comp *c, uintptr_t bx, uintptr_t by) {
+ return (int16_t*) (d->base + c->off) + 64 * (by * c->bw + bx); }
+
+// one block of one scan; a bad code sets d->bad and the scan stops
+static void jd_block(struct jd *d, struct jd_comp *c, int16_t *b) {
+ const struct jd_huff *dc = &d->dc[c->td], *ac = &d->ac[c->ta];
+ if (!d->prog) {
+  int t = jd_decode(d, dc);
+  if (t < 0 || t > 11) { d->bad = 1; return; }
+  c->pred += jd_extend(jd_get(d, t), t), b[0] = (int16_t) c->pred;
+  for (int k = 1; k < 64;) {
+   int rs = jd_decode(d, ac), r = rs >> 4, s = rs & 15;
+   if (rs < 0) { d->bad = 1; return; }
+   if (!s) { if (r != 15) break; k += 16; continue; }
+   if ((k += r) > 63) { d->bad = 1; return; }
+   b[jp_zigzag[k++]] = (int16_t) jd_extend(jd_get(d, s), s); }
+  return; }
+ if (!d->ss) {                                   // dc, first or refined
+  if (d->ah) { if (jd_get(d, 1)) b[0] = (int16_t) (b[0] | 1 << d->al); return; }
+  int t = jd_decode(d, dc);
+  if (t < 0 || t > 11) { d->bad = 1; return; }
+  c->pred += jd_extend(jd_get(d, t), t), b[0] = (int16_t) (c->pred * (1 << d->al));
+  return; }
+ if (!d->ah) {                                   // ac, first
+  if (d->eobrun) { d->eobrun--; return; }
+  for (int k = d->ss; k <= d->se;) {
+   int rs = jd_decode(d, ac), r = rs >> 4, s = rs & 15;
+   if (rs < 0) { d->bad = 1; return; }
+   if (!s) {
+    if (r < 15) { d->eobrun = (1 << r) - 1 + jd_get(d, r); return; }
+    k += 16; continue; }
+   if ((k += r) > 63) { d->bad = 1; return; }
+   b[jp_zigzag[k++]] = (int16_t) (jd_extend(jd_get(d, s), s) * (1 << d->al)); }
+  return; }
+ int bit = 1 << d->al, k = d->ss;               // ac, refined
+ if (d->eobrun) {
+  d->eobrun--;
+  for (; k <= d->se; k++) {
+   int16_t *p = &b[jp_zigzag[k]];
+   if (*p && jd_get(d, 1) && !(*p & bit)) *p = (int16_t) (*p + (*p > 0 ? bit : -bit)); }
+  return; }
+ while (k <= d->se) {
+  int rs = jd_decode(d, ac), r = rs >> 4, s = rs & 15;
+  if (rs < 0) { d->bad = 1; return; }
+  if (!s) {
+   if (r < 15) d->eobrun = (1 << r) - 1 + jd_get(d, r), r = 64; }
+  else s = jd_get(d, 1) ? bit : -bit;
+  for (; k <= d->se; k++) {
+   int16_t *p = &b[jp_zigzag[k]];
+   if (*p) { if (jd_get(d, 1) && !(*p & bit)) *p = (int16_t) (*p + (*p > 0 ? bit : -bit)); }
+   else if (!r) { *p = (int16_t) s; k++; break; }
+   else r--; } } }
+
+// past the RSTn a restart interval ends on; a marker that isn't one stays for the caller
+static void jd_restart(struct jd *d) {
+ d->acc = 0, d->bits = 0, d->marker = 0, d->eobrun = 0;
+ for (int i = 0; i < d->nc; i++) d->c[i].pred = 0;
+ while (d->pos + 1 < d->n) {
+  int a = d->s[d->pos], m = d->s[d->pos + 1];
+  if (a == 0xff && m >= 0xd0 && m <= 0xd7) { d->pos += 2; return; }
+  if (a == 0xff && m && m != 0xff) return;
+  d->pos++; } }
+
+static void jd_scan(struct jd *d) {
+ struct jd_comp *one = &d->c[d->sc[0]];
+ uintptr_t mx = d->ns == 1 ? (one->cw + 7) / 8 : d->mcux,
+           my = d->ns == 1 ? (one->ch + 7) / 8 : d->mcuy, todo = (uintptr_t) d->ri;
+ d->acc = 0, d->bits = 0, d->marker = 0, d->eobrun = 0;
+ for (int i = 0; i < d->nc; i++) d->c[i].pred = 0;
+ for (uintptr_t y = 0; y < my && !d->bad; y++)
+  for (uintptr_t x = 0; x < mx && !d->bad; x++) {
+   if (d->ri && !todo) jd_restart(d), todo = (uintptr_t) d->ri;
+   if (d->ns == 1) jd_block(d, one, jd_coef(d, one, x, y));
+   else
+    for (int i = 0; i < d->ns; i++) {
+     struct jd_comp *c = &d->c[d->sc[i]];
+     for (int v = 0; v < c->v; v++)
+      for (int h = 0; h < c->h; h++)
+       jd_block(d, c, jd_coef(d, c, x * (uintptr_t) c->h + (uintptr_t) h,
+                                    y * (uintptr_t) c->v + (uintptr_t) v)); }
+   todo--; }
+ d->bad = 0;                                     // what decoded is kept
+ while (d->pos + 1 < d->n) {                     // on to the next marker
+  int a = d->s[d->pos], m = d->s[d->pos + 1];
+  if (a == 0xff && m && m != 0xff && (m < 0xd0 || m > 0xd7)) break;
+  d->pos++; } }
+
+static int jd_sof(struct jd *d, const uint8_t *p, int n, int m) {
+ if (m != 0xc0 && m != 0xc1 && m != 0xc2) return 3;
+ if (n < 6 || p[0] != 8) return 3;
+ d->h = jd_be16(p + 1), d->w = jd_be16(p + 3), d->nc = p[5], d->prog = m == 0xc2;
+ if (!d->h || !d->w || (d->nc != 1 && d->nc != 3)) return 3;
+ if (n < 6 + 3 * d->nc) return 4;
+ if ((uintptr_t) d->w * (uintptr_t) d->h > (uintptr_t) 1 << 24) return 5;
+ d->hmax = d->vmax = 1;
+ for (int i = 0; i < d->nc; i++) {
+  struct jd_comp *c = &d->c[i];
+  c->id = p[6 + 3 * i], c->h = p[7 + 3 * i] >> 4, c->v = p[7 + 3 * i] & 15, c->tq = p[8 + 3 * i] & 3;
+  if (c->h < 1 || c->h > 4 || c->v < 1 || c->v > 4) return 4;
+  if (c->h > d->hmax) d->hmax = c->h;
+  if (c->v > d->vmax) d->vmax = c->v; }
+ if (d->nc == 1) d->c[0].h = d->c[0].v = d->hmax = d->vmax = 1;
+ d->mcux = ((uintptr_t) d->w + 8 * (uintptr_t) d->hmax - 1) / (8 * (uintptr_t) d->hmax);
+ d->mcuy = ((uintptr_t) d->h + 8 * (uintptr_t) d->vmax - 1) / (8 * (uintptr_t) d->vmax);
+ uintptr_t off = 0;
+ for (int i = 0; i < d->nc; i++) {
+  struct jd_comp *c = &d->c[i];
+  c->bw = d->mcux * (uintptr_t) c->h, c->bh = d->mcuy * (uintptr_t) c->v;
+  c->cw = ((uintptr_t) d->w * (uintptr_t) c->h + (uintptr_t) d->hmax - 1) / (uintptr_t) d->hmax;
+  c->ch = ((uintptr_t) d->h * (uintptr_t) c->v + (uintptr_t) d->vmax - 1) / (uintptr_t) d->vmax;
+  c->off = off, off += c->bw * c->bh * 128; }
+ d->frame = 1;
+ return 0; }
+
+static int jd_sos(struct jd *d, const uint8_t *p, int n) {
+ if (!d->frame || n < 1) return 4;
+ d->ns = p[0];
+ if (d->ns < 1 || d->ns > d->nc || n < 4 + 2 * d->ns) return 4;
+ for (int i = 0; i < d->ns; i++) {
+  int j = 0;
+  while (j < d->nc && d->c[j].id != p[1 + 2 * i]) j++;
+  if (j == d->nc) return 4;
+  d->sc[i] = j, d->c[j].td = p[2 + 2 * i] >> 4 & 3, d->c[j].ta = p[2 + 2 * i] & 3; }
+ const uint8_t *t = p + 1 + 2 * d->ns;
+ d->ss = t[0], d->se = t[1], d->ah = t[2] >> 4, d->al = t[2] & 15;
+ if (d->prog) {
+  if (d->ss > d->se || d->se > 63 || d->al > 13 || (d->ss && d->ns != 1) || (!d->ss && d->se))
+   return 4; }
+ else d->ss = 0, d->se = 63, d->ah = d->al = 0;
+ for (int i = 0; i < d->ns; i++) {
+  struct jd_comp *c = &d->c[d->sc[i]];
+  if ((!d->ss && !d->ah && !d->dc[c->td].ok) || (d->se && !d->ac[c->ta].ok)) return 4; }
+ return 0; }
+
+static int jd_dqt(struct jd *d, const uint8_t *p, int n) {
+ while (n > 0) {
+  int wide = p[0] >> 4, t = p[0] & 3, need = 1 + 64 * (wide ? 2 : 1);
+  if (wide > 1 || n < need) return 4;
+  for (int k = 0; k < 64; k++)
+   d->q[t][jp_zigzag[k]] = (uint16_t) (wide ? jd_be16(p + 1 + 2 * k) : p[1 + k]);
+  p += need, n -= need; }
+ return 0; }
+
+static int jd_dht(struct jd *d, const uint8_t *p, int n) {
+ while (n > 0) {
+  if (n < 17 || p[0] >> 4 > 1) return 4;
+  int total = 0;
+  for (int i = 0; i < 16; i++) total += p[1 + i];
+  if (total > 256 || n < 17 + total) return 4;
+  struct jd_huff *h = p[0] >> 4 ? &d->ac[p[0] & 3] : &d->dc[p[0] & 3];
+  if (!jd_huff_build(h, p + 1, p + 17, total)) return 4;
+  p += 17 + total, n -= 17 + total; }
+ return 0; }
+
+// the markers from the top: up to the frame header when head, else through every scan
+static int jd_walk(struct jd *d, int head) {
+ d->frame = 0, d->scans = 0, d->ri = 0, d->adobe = 0, d->pos = 2;
+ if (d->n < 4 || d->s[0] != 0xff || d->s[1] != 0xd8) return 1;
+ for (;;) {
+  while (d->pos < d->n && d->s[d->pos] != 0xff) d->pos++;
+  while (d->pos < d->n && d->s[d->pos] == 0xff) d->pos++;
+  if (d->pos >= d->n) return d->scans ? 0 : 2;
+  int m = d->s[d->pos++];
+  if (m == 0xd9) return d->scans ? 0 : 2;
+  if (m == 0x01 || (m >= 0xd0 && m <= 0xd7)) continue;
+  if (d->pos + 2 > d->n) return d->scans ? 0 : 2;
+  int len = jd_be16(d->s + d->pos);
+  if (len < 2 || d->pos + (uintptr_t) len > d->n) return d->scans ? 0 : 2;
+  const uint8_t *p = d->s + d->pos + 2; int n = len - 2, why = 0;
+  d->pos += (uintptr_t) len;
+  if (m >= 0xc0 && m <= 0xcf && m != 0xc4 && m != 0xc8 && m != 0xcc) {
+   if (d->frame) return 4;
+   if ((why = jd_sof(d, p, n, m)) || head) return why; }
+  else if (m == 0xc4) why = jd_dht(d, p, n);
+  else if (m == 0xdb) why = jd_dqt(d, p, n);
+  else if (m == 0xdd) d->ri = n >= 2 ? jd_be16(p) : 0;
+  else if (m == 0xee) { if (n >= 12 && !memcmp(p, "Adobe", 5)) d->adobe = 1, d->transform = p[11]; }
+  else if (m == 0xdc) return 3;
+  else if (m == 0xda) {
+   if (head) return 4;
+   if ((why = jd_sos(d, p, n))) return why;
+   jd_scan(d), d->scans++; }
+  if (why) return why; } }
+
+// dequantised, inverted, level-shifted, clamped: each block's samples over its own front
+static void jd_idct(struct jd *d) {
+ for (int i = 0; i < d->nc; i++) {
+  struct jd_comp *c = &d->c[i];
+  const uint16_t *q = d->q[c->tq];
+  uint8_t *o = d->base + c->off;
+  for (uintptr_t k = 0; k < c->bw * c->bh; k++) {
+   int16_t z[64]; double t[64]; int flat = 1;
+   memcpy(z, o + 128 * k, sizeof z);
+   for (int j = 1; j < 64 && flat; j++) flat = !z[j];
+   if (flat) {
+    double v = z[0] * q[0] / 8.0 + 128.5;
+    memset(o + 64 * k, (uint8_t) (v < 0 ? 0 : v > 255 ? 255 : v), 64); continue; }
+   for (int u = 0; u < 8; u++)
+    for (int x = 0; x < 8; x++) {
+     double s = 0;
+     for (int v = 0; v < 8; v++) s += z[u * 8 + v] * q[u * 8 + v] * jp_dct_c[v][x];
+     t[u * 8 + x] = s; }
+   for (int y = 0; y < 8; y++)
+    for (int x = 0; x < 8; x++) {
+     double s = 128.5;
+     for (int u = 0; u < 8; u++) s += jp_dct_c[u][y] * t[u * 8 + x];
+     o[64 * k + y * 8 + x] = (uint8_t) (s < 0 ? 0 : s > 255 ? 255 : s); } } } }
+
+static int jd_at(struct jd *d, struct jd_comp *c, uintptr_t x, uintptr_t y) {
+ return d->base[c->off + 64 * ((y >> 3) * c->bw + (x >> 3)) + (y & 7) * 8 + (x & 7)]; }
+
+// component c's sample under pixel (x, y), its grid centred on the full one
+static int jd_sample(struct jd *d, struct jd_comp *c, uintptr_t x, uintptr_t y) {
+ if (c->h == d->hmax && c->v == d->vmax) return jd_at(d, c, x, y);
+ intptr_t dx = 2 * d->hmax, dy = 2 * d->vmax,
+          px = (intptr_t) (2 * x + 1) * c->h - d->hmax, py = (intptr_t) (2 * y + 1) * c->v - d->vmax;
+ if (px < 0) px = 0;
+ if (py < 0) py = 0;
+ uintptr_t x0 = (uintptr_t) (px / dx), y0 = (uintptr_t) (py / dy);
+ int wx = (int) (px % dx * 256 / dx), wy = (int) (py % dy * 256 / dy);
+ if (x0 > c->cw - 1) x0 = c->cw - 1;
+ if (y0 > c->ch - 1) y0 = c->ch - 1;
+ uintptr_t x1 = x0 + 1 < c->cw ? x0 + 1 : x0, y1 = y0 + 1 < c->ch ? y0 + 1 : y0;
+ int a = jd_at(d, c, x0, y0) * (256 - wx) + jd_at(d, c, x1, y0) * wx,
+     b = jd_at(d, c, x0, y1) * (256 - wx) + jd_at(d, c, x1, y1) * wx;
+ return (a * (256 - wy) + b * wy + 32768) >> 16; }
+
+static uint8_t jd_clamp(int v) { return (uint8_t) (v < 0 ? 0 : v > 255 ? 255 : v); }
+
+static void jd_rgba(struct jd *d, uint8_t *o) {
+ int rgb = d->nc == 3 && ((d->adobe && !d->transform)
+                          || (d->c[0].id == 'R' && d->c[1].id == 'G' && d->c[2].id == 'B'));
+ for (uintptr_t y = 0; y < (uintptr_t) d->h; y++)
+  for (uintptr_t x = 0; x < (uintptr_t) d->w; x++, o += 4) {
+   int l = jd_sample(d, &d->c[0], x, y);
+   if (d->nc == 1) o[0] = o[1] = o[2] = (uint8_t) l;
+   else {
+    int b = jd_sample(d, &d->c[1], x, y), r = jd_sample(d, &d->c[2], x, y);
+    if (rgb) o[0] = (uint8_t) l, o[1] = (uint8_t) b, o[2] = (uint8_t) r;
+    else {
+     b -= 128, r -= 128;                          // + 2^24 keeps the shifts on positives
+     o[0] = jd_clamp(l + ((91881 * r + 32768 + (1 << 24)) >> 16) - 256);
+     o[1] = jd_clamp(l + ((-22554 * b - 46802 * r + 32768 + (1 << 24)) >> 16) - 256);
+     o[2] = jd_clamp(l + ((116130 * b + 32768 + (1 << 24)) >> 16) - 256); } }
+   o[3] = 255; } }
+
+static uintptr_t jd_scratch(struct jd *d) {
+ struct jd_comp *c = &d->c[d->nc - 1];
+ return c->off + c->bw * c->bh * 128; }
+
+ai_noinline static struct ai *host_jpegd(struct ai *g) {
+ struct jd d;
+ if (!strp(g->sp[0])) return g->sp[0] = putcharm(1), g;
+ memset(&d, 0, sizeof d), d.s = (const uint8_t*) txt(g->sp[0]), d.n = len(g->sp[0]);
+ int why = jd_walk(&d, 1);
+ if (why) return g->sp[0] = putcharm(why), g;
+ uintptr_t need = jd_scratch(&d);
+ if (!ai_ok(g = str0(g, need))) return g;           // pushes: the scratch over s
+ d.s = (const uint8_t*) txt(g->sp[1]), d.base = (uint8_t*) txt(g->sp[0]);
+ memset(d.base, 0, need);
+ if ((why = jd_walk(&d, 0))) return g->sp[1] = putcharm(why), g->sp += 1, g;
+ jd_idct(&d);
+ if (!ai_ok(g = str0(g, (uintptr_t) d.w * (uintptr_t) d.h * 4))) return g;
+ d.base = (uint8_t*) txt(g->sp[1]);
+ jd_rgba(&d, (uint8_t*) txt(g->sp[0]));
+ g->sp[2] = g->sp[0], g->sp += 2;
+ return g; }
+static lvm(lvm_jpegd) LvmCall(g, host_jpegd)
+
+static union u const
+  nif_jpegd[] = {{lvm_cur}, {.x = putcharm(1)}, {lvm_jpegd}, {lvm_ret0}};
+LvNif("jpeg-pixels", nif_jpegd, NULL);

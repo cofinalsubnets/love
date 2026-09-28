@@ -412,7 +412,9 @@
                                 (snip src i j0))
                            s (intern t)
                            k (? ((t 0) = 95) (peep kwal s s) s)
-                           (go j0 line ((? (kwt k) ['kw k line] ['id t line]) . acc)))))
+                           ; gcc's short spelling of __attribute__, read as the long one
+                           ti (? (t = "__attribute") "__attribute__" t)
+                           (go j0 line ((? (kwt k) ['kw k line] ['id ti line]) . acc)))))
                  (: hit (firstat i (pmap c))
                     (? hit (go (i + #hit) line (['p hit line] . acc))
                        (in1? c)                        ; a '(' GLUED to a preceding id (no space) carries a 4th field: the function-macro paren

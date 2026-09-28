@@ -110,4 +110,12 @@ gc '日本|éé|a|b|' -E '[^ 語]+'
 gc '語 é|' '[à-語][^a]é'
 gc '' 'a.b'
 gc '' 'a[^x]b'
+# the POSIX classes past ascii, and -i by gnulib's fold (ſ takes s, İ does not take i)
+gi() { want=$1; shift; got=$(printf 'naïve ٣—x\nSTRAßE ſ İ\n' | korerun grep -o "$@" | tr '\n' '|')
+       [ "$got" = "$want" ] || fail "kore grep -o $* by class: got [$got] want [$want]"; }
+gi 'naïve|٣|x|STRAßE|ſ|İ|' '[[:alpha:]]*'
+gi '—|' '[[:punct:]]'
+gi 'STRAßE|' -i 'straße'
+gi 'S|ſ|' -i 's'
+gi '' -i 'i'
 echo "kore: grep (BRE + ERE batteries + the clustered flag matrix GNU-identical, the exit triple, egrep/fgrep) ok"

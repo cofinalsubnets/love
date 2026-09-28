@@ -29,7 +29,6 @@
    (uleb n) (: b (n % 128) r (n // 128) (r @ 0 [b] (b + 128 . uleb r)))
    (sleb n) (: m (n % 128) b (? (m < 0) (m + 128) m) r ((n - b) // 128)
                (? ((r = 0 && b < 64) || (r = -1 && b >= 64)) [b] (b + 128 . sleb r)))
-   (wrap64 n) (? (n > 9223372036854775807) (n - 18446744073709551616) n)   ; a u64 pattern as the signed i64 it encodes
    (wrap32 n) (? (n > 2147483647) (n - 4294967296) n)
    (wbytes s) (map s ^#s)                 ; a string's bytes
    (wname s) (uleb #s + wbytes s)
@@ -117,7 +116,7 @@
         'brt  (code + wvec (map uleb g) + uleb (f 2))
         'mem  (code + uleb g + uleb <>>f)
         'i32c (code + sleb (wrap32 g))
-        'i64c (code + sleb (wrap64 g))
+        'i64c (code + sleb (s64 g))
         'f32c (code + le32 g)
         'f64c (code + le64 g)
         'ci   (code + uleb g + uleb <>>f)

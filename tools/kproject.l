@@ -170,10 +170,10 @@
       syo (ld-align 8 fsz)
       sto (syo + symz) ssto (sto + strz) sstz #<shstr
       shto (ld-align 8 (ssto + sstz))
-      sht (catall [(ld-shdr 0 0 0 0 0 0 0 0 0 0)
-                   (ld-shdr (snm 0) 2 0 0 syo symz 2 syminf 8 24)
-                   (ld-shdr (snm 1) 3 0 0 sto strz 0 0 1 0)
-                   (ld-shdr (snm 2) 3 0 0 ssto sstz 0 0 1 0)])
+      sht (catall [(elf-shdr 0 0 0 0 0 0 0 0 0 0)
+                   (elf-shdr (snm 0) 2 0 0 syo symz 2 syminf 8 24)
+                   (elf-shdr (snm 1) 3 0 0 sto strz 0 0 1 0)
+                   (elf-shdr (snm 2) 3 0 0 ssto sstz 0 0 1 0)])
       hdr (elf64-hdrn 2 eaddr mach [shto 4 3]
                       (map (g \ elf64-phdr <g (g 1) (g 2) (g 3)
                                            (g 4) (g 5) (g 6) (g 7))

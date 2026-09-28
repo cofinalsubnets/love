@@ -3,6 +3,7 @@
 #include "cats.h"
 #include "quay.h"
 #include "asmops.h"                    // the privileged instructions, both spellings
+#include "bput.h"
 #include <stdarg.h>
 #include <limits.h>
 #include <string.h>
@@ -64,12 +65,8 @@ bool k_ready(int fd, int events);
 // the panic-time console: the ring buffer (kcb) when there is one, mirrored to serial.
 // takes no l state, so it runs from a fault handler with no live `struct g`.
 void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
-void kputs(char const *s) { while (*s) kputc(*s++); }
-void kputn(uintptr_t n, int base) {
- static char const d[] = "0123456789abcdef";
- char buf[24]; int i = 0;
- do buf[i++] = d[n % base], n /= base; while (n);
- while (i) kputc(buf[--i]); }
+void kputs(char const *s) { bput_s(kputc, s); }
+void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
 extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 // the bracket, for the image codec's nif slice (love/snap.c's weak default answers none)

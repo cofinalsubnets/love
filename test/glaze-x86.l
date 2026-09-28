@@ -150,7 +150,7 @@
   (: mnn (jit2 '(\ x y (? (< x y) x y))) (&& (3 = (mnn 3 5)) (4 = (mnn 9 4))))              ; cgn -> condcode (min)
   ; *-fold counted loop -- jitsum hardcodes +/<, so drive acc-mul + nonzero r11-init via loopcode
   (: prodf (: psrc ['\ 'n [[': ['go 'i 'a] ['? ['< 'i 'n] ['go ['+ 'i 1] ['* 'a ['+ 'i 1]]] 'a]] 0 1]]
-              (nif (emit (loopcode '(+ i 1) 'i '* '< 'x64)) (ev psrc) psrc 1))
+              (nif (emit (loopcode '(+ i 1) 'i '* '< 'x64)) (ev psrc) 1))
      pf (\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
      (&& (120 = (prodf 5)) (= (pf 8) (prodf 8))))                                           ; n! via a product fold
   ; divide-by-zero takes the guardz deopt -- only nonzero divisors were tested
@@ -811,12 +811,11 @@
          (&& (1 = ((jitgroupir eo 'evn 'x64) 10)) (0 = ((jitgroupir eo 'evn 'x64) 7)) (1 = ((jitgroupir eo 'odn 'x64) 7))))   ; mutual recursion (either entry)
       (= (jitgroupir [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64)
          (jitgroupir [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64))                 ; two natives, same source -> = (transparent)
-      ; jitgroupirx stamps the supplied outer src (=/show) -- the hook passes `s` so a group-glazed closure
-      ; is transparent against its bytecode twin; the elam entry-lambda is only the fallback (jitgroupir).
+      ; jitgroupirx takes its deopt target directly -- the hook passes the bytecode twin, and a native is
+      ; its twin to `=`
       (: dfs [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))]  dopt (jitgroupir dfs 'fib 'x64)
-         (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) 10))                                          ; runs correct
-             (= (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))))  ; same supplied src -> =
-             !(= (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) (jitgroupir dfs 'fib 'x64))))                     ; supplied src differs from the elam default
+         (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt) 10))                                     ; runs correct
+             (= (jitgroupirx dfs 'fib 'x64 dopt) (jitgroupirx dfs 'fib 'x64 dopt))))         ; one twin -> =
       ; string lane (peep/tally): s a string param (kind-guarded, passed RAW); peep reads byte [s+16], tally the len [s+8]
       (: data (string [72 105 90 33 65])                                                                         ; "HiZ!A": byte-sum 365, len 5
          sbn (jitgroupir [(. '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))] 'sb 'x64)              ; recursive byte-sum

@@ -17,14 +17,12 @@
 #include "k.h"
 #include "asmops.h"
 #include "mmio.h"
+#include "bput.h"
 #include <stdint.h>
 
 void serial_putc(int);
-static void bputs(char const *s) { while (*s) serial_putc(*s++); }
-static void bputn(uint64_t v) {
-  char b[20]; int i = 0;
-  do b[i++] = (char) ('0' + v % 10), v /= 10; while (v);
-  while (i) serial_putc(b[--i]); }
+static void bputs(char const *s) { bput_s(serial_putc, s); }
+static void bputn(uintptr_t v) { bput_n(serial_putc, v, 10); }
 
 // one request moves at most this many sectors; k_blk_rw chunks larger asks.
 // 64K keeps a single data descriptor comfortably under every qemu bound.
