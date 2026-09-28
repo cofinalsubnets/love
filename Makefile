@@ -572,7 +572,7 @@ k_libc_c = $(c_c)
 k_c = $(love_c) \
   $R/love/quay/cga_8x8.c $R/love/quay/cleat_8x16.c $R/love/quay/paint.c \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
-k_h = $(love_h) $(R)/inle/k.h $(R)/love/lib/ustar.h $(R)/inle/asmops.h $(wildcard $(R)/inle/$a/*.h)
+k_h = $(love_h) $(R)/love/lib/ustar.h $(wildcard $(R)/inle/*.h) $(wildcard $(R)/inle/$a/*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf

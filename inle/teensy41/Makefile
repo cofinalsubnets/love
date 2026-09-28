@@ -31,8 +31,8 @@ $(foreach u,$(love_m),$(eval $(call p_obj,$u,love/$u.c,\
 $(eval $(call p_heap,$(te_cc),))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
   $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Iapps/moon/include)))
-$(eval $(call p_obj,teensy41,inle/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/love/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,main,inle/teensy41/main.c,main.c teensy41.h $(R)/love/love.h $(lib_hR) $(mc),$(te_cc)))
+$(eval $(call p_obj,teensy41,inle/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/inle/bput.h $(R)/love/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,main,inle/teensy41/main.c,main.c teensy41.h $(R)/inle/bput.h $(R)/love/love.h $(lib_hR) $(mc),$(te_cc)))
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. inle/mps2/mkstart.l is the same shape with one section,
@@ -77,7 +77,7 @@ flash: $(R)/$(o)/love.hex
 # chips, report over serial. `make psramtest` then `make flashpsram`.
 pt_objs = $(R)/$(o)/psram.o $(R)/$(o)/psram-test.o $(R)/$(o)/teensy41.o $(R)/$(o)/boot.o
 $(eval $(call p_obj,psram,inle/teensy41/psram.c,psram.c psram.h teensy41.h $(mc),$(te_cc)))
-$(eval $(call p_obj,psram-test,inle/teensy41/psram-test.c,psram-test.c psram.h teensy41.h $(mc),$(te_cc)))
+$(eval $(call p_obj,psram-test,inle/teensy41/psram-test.c,psram-test.c psram.h teensy41.h $(R)/inle/bput.h $(mc),$(te_cc)))
 psramtest: $(R)/$(o)/psram-test.hex
 flashpsram: $(R)/$(o)/psram-test.hex
 	teensy_loader_cli --mcu=TEENSY41 -w -v $(R)/$(o)/psram-test.hex

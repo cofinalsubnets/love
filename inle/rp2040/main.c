@@ -14,14 +14,12 @@
 // USB-serial adapter.
 #include <stdint.h>
 #include "rp2040.h"
+#include "../bput.h"
 
 static void puts_(const char *s) {
   for (; *s; s++) { if (*s == '\n') serial_putc('\r'); serial_putc(*s); } }
 
-static void putu(uint32_t v) {
-  char b[10]; int n = 0;
-  do { b[n++] = '0' + (char)(v % 10u); v /= 10u; } while (v);
-  while (n) serial_putc(b[--n]); }
+static void putu(uint32_t v) { bput_n(serial_putc, v, 10); }
 
 // --- the battery ----------------------------------------------------------
 // volatile inputs keep every operand a runtime value, so nothing here folds at

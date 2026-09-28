@@ -7,6 +7,7 @@
 // FlexSPI/IVT lore (wrong-offset first-silicon stories) rides mkboot.l now.
 #include <stdint.h>
 #include "teensy41.h"
+#include "../bput.h"
 
 // Linker-provided bounds (teensy41.lds) + the mkboot.l vector table.
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
@@ -32,13 +33,12 @@ void hardfault_report(uint32_t *frame) {
   // say it on the wire while we still can (serial is polled, no IRQs needed);
   // the bootloader chip resets us shortly after the bkpt, and RAM re-zeroes.
   // CFSR/BFAR/MMFAR classify the fault (precise bus faults carry the address).
-  { static const char hx[] = "0123456789abcdef";
-    const char *tags[6] = { "\r\n; FAULT pc=", " lr=", " sp=", " cfsr=", " bfar=", " mmfar=" };
+  { const char *tags[6] = { "\r\n; FAULT pc=", " lr=", " sp=", " cfsr=", " bfar=", " mmfar=" };
     uint32_t v[6] = { frame[6], frame[5], (uint32_t)(uintptr_t) frame,
                       REG(0xE000ED28u), REG(0xE000ED38u), REG(0xE000ED34u) };
     for (int k = 0; k < 6; k++) {
-      for (const char *s = tags[k]; *s; s++) serial_putc(*s);
-      for (int b = 28; b >= 0; b -= 4) serial_putc(hx[(v[k] >> b) & 15]); }
+      bput_s(serial_putc, tags[k]);
+      bput_x(serial_putc, v[k], 8); }
     serial_putc('\r'); serial_putc('\n'); }
   for (;;) {} }   // idle, report delivered (a bkpt here would re-enter DebugMon)
 
