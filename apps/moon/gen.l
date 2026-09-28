@@ -416,9 +416,9 @@
        (t32? g)
         (cls @ 'addsub (-4095 <= n <= 4095)           ; addw/subw imm12
                'cmp (-255 <= n <= 255))               ; cmp/cmn imm8
-       (fits32? n))
+       (fits32 n))
    ; may this op take n as its immediate? (the sweeps ask before rewriting a reg-reg form)
-   (imma g op n) (op @ 'imul ((x64t? g || rv64? g) && fits32? n)   ; imul imm: x64's three-operand form, riscv materializes; a64/t32 have none
+   (imma g op n) (op @ 'imul ((x64t? g || rv64? g) && fits32 n)   ; imul imm: x64's three-operand form, riscv materializes; a64/t32 have none
                        ('add || 'sub) (immok g 'addsub n)
                        'cmp (immok g 'cmp n)
                        (immok g 'log n))
@@ -512,7 +512,7 @@
    (rbin g ta tb) (u32bin? g ta tb ? 'uint (ubin !(t32? g) ta tb))
    ; what C calls the literal: an unsuffixed literal that fits is an int, so `uint x * <lit>`
    ; wraps; one too wide is long and the result must not wrap -- hence the range test
-   (numty n) (fits32? n ? 'int 'long)
+   (numty n) (fits32 n ? 'int 'long)
    ; a literal through its written face: -1 is (un neg (num 1)), ~0 (un bnot (num 0)). litv
    ; folds it to (v) | (); numty9 types an operand as C reads the source, else the tuple's type
    (litv e) (e @ ('num n) [n]
@@ -560,7 +560,6 @@
    fsete '((set eq r0) (set np r1) (and r0 r0 r1))
    fsetn '((set ne r0) (set p r1) (or r0 r0 r1))
    (negrel op) (op @ 'eq 'ne 'ne 'eq 'lt 'ge 'ge 'lt 'le 'gt 'le)   ; negated: branch-if-false
-   (fits32? v) (-2147483648 <= v <= 2147483647)    ; holo's ALU/cmp/imul immediates ride le32
    (tsz g ty) (tysz (wsize g) (g 'stag) ty)
    ; a member's (offset ty) off a struct type, | 'bad
    (fmem g ty name)
@@ -773,7 +772,7 @@
    ; the double constant pool (x64): one rodata block per distinct pattern, named by the pattern
    ; itself so a label is stable across the build's retries and shared across the unit
    (dbname u) (name (".D" + show u))
-   (dblab g d) (: v (fbits d) u (? (v < 0) (v + 18446744073709551616) v)
+   (dblab g d) (: u (u64 (fbits d))
                   _ (pin (g 'dbls) u 1)
                   (dbname u))
    (mkflo g d)                                      ; a double constant -> its value tuple
@@ -1520,7 +1519,7 @@
    ; the store-immediate op for (ty, k) | (), the vi fold's license (x64 only). st sign-extends
    ; imm32, the narrow forms truncate
    (fitsw? v) (-2147483648 <= v <= 4294967295)      ; sits in a 32-bit word under either signedness
-   (sik sop k) (sop @ 'st  (fits32? k ? 'si)         ; the si twin of a gp store sop for k | ()
+   (sik sop k) (sop @ 'st  (fits32 k ? 'si)         ; the si twin of a gp store sop for k | ()
                      'st4 (fitsw? k ? 'si4)
                      'st2 (-32768 <= k <= 65535 ? 'si2)
                      'st1 (-128 <= k <= 255 ? 'si1))
@@ -1592,7 +1591,7 @@
                                    !(gvarr? <>(<>>en)))
                                   <>>en)))
                  off9 (? pty (: d (<>pv * tsz g <>pty)
-                               (? (fits32? d) d 'no)) 'no)
+                               (? (fits32 d) d 'no)) 'no)
                  (? (charm? off9)
                     (: r (cgexpr g env <pv ())
                        (? (bad? r) 'bad
@@ -1918,7 +1917,7 @@
         (? (t32? g && !(fitsw? v))
            ; a literal past the 32-bit word: the pair (C99 decimal picks long long), split by
            ; // and % -- a big literal has no bitwise ops
-           (: u (v < 0 ? (v + 18446744073709551616) v)
+           (: u (u64 v)
               (mkv (v < 0 ? 'llong 'ullong) 'r0
                    [['li 'r0 (u % 4294967296)] ['li 'r1 (u // 4294967296)]]))
            (t32? g && 2147483647 < v)
@@ -4149,7 +4148,7 @@
            (? (!(two? l) || 8 < n) ()
               (: f <l
                  (? !(two? f) ()
-                    (<f = 'jmpr) (<>f = X && fits32? o ? [(rev acc) o >l])
+                    (<f = 'jmpr) (<>f = X && fits32 o ? [(rev acc) o >l])
                     !(elem <f '(mov ld add sub pop li lea)) ()
                     (: rd (rdsp g f)
                        (? (rd = 'bar || elem X <rd || elem X <>rd) ()
@@ -5210,10 +5209,10 @@
                  (elem <f '(lea lean))
                   (charm? <>>>f ? [<>>f (<>>>f + <>>>nx)])
                  (<f = 'add)
-                  (charm? <>>>f && (<>>f != 'sp) && fits32? (<>>>f + <>>>nx) ?
+                  (charm? <>>>f && (<>>f != 'sp) && fits32 (<>>>f + <>>>nx) ?
                      [<>>f (<>>>f + <>>>nx)])
                  (<f = 'sub)
-                  (charm? <>>>f && (<>>f != 'sp) && fits32? (<>>>nx - <>>>f) ?
+                  (charm? <>>>f && (<>>f != 'sp) && fits32 (<>>>nx - <>>>f) ?
                      [<>>f (<>>>nx - <>>>f)])
                  (<f = 'mov) [<>>f <>>>nx]
                  ())
@@ -5226,10 +5225,10 @@
                 (elem <f '(lea lean))
                  (charm? <>>>f ? [<>>f (<>>>f + <>>nx)])
                 (<f = 'add)
-                 (charm? <>>>f && (<>>f != 'sp) && fits32? (<>>>f + <>>nx) ?
+                 (charm? <>>>f && (<>>f != 'sp) && fits32 (<>>>f + <>>nx) ?
                     [<>>f (<>>>f + <>>nx)])
                 (<f = 'sub)
-                 (charm? <>>>f && (<>>f != 'sp) && fits32? (<>>nx - <>>>f) ?
+                 (charm? <>>>f && (<>>f != 'sp) && fits32 (<>>nx - <>>>f) ?
                     [<>>f (<>>nx - <>>>f)])
                 (<f = 'mov) [<>>f <>>nx]
                 ())
@@ -5257,17 +5256,17 @@
                 (elem <nx '(ldx ldxb leax ldsdx ldssx))
                  (: d9 (nx 5 + <>>f * nx 4)
                     (? (<>>>nx != <>f) () (<>>nx = <>f) ()
-                       !(fits32? d9) ()
+                       !(fits32 d9) ()
                        (<nx = 'leax && !(imma g 'add d9)) ()   ; the lea lands as an add imm
                        [(<nx @ 'ldx 'ld 'ldxb 'ldu1 'ldsdx 'ldsd 'ldssx 'ldss 'lea) <>nx <>>nx d9]))
                 (elem <nx '(stx stxb stsdx stssx))
                  (: d9 (nx 4 + (<>>f * <>>>nx))
                     (? (<>>nx != <>f) () (<>nx = <>f) () (nx 5 = <>f) ()
-                       !(fits32? d9) ()
+                       !(fits32 d9) ()
                        [(<nx @ 'stx 'st 'stxb 'st1 'stsdx 'stsd 'stss) <>nx d9 (nx 5)])))
           ; a constant right operand rides the alu/cmp imm forms (cfoldir's knowns are green-only)
           aj (? (two? lx || two? sx || two? hit || two? sh || two? vh || two? vi || two? ng || two? xj) ()
-                !(two? f && <f = 'li && charm? <>>f && fits32? <>>f && two? nx) ()
+                !(two? f && <f = 'li && charm? <>>f && fits32 <>>f && two? nx) ()
                 (elem <nx aluops)
                  (? (<>>>nx = <>f) (? (<>>nx = <>f) () (imma g <nx <>>f) [<nx <>nx <>>nx <>>f]))
                 (<nx = 'cmp)
@@ -5364,7 +5363,7 @@
               m (? !(nom? X) ()
                    (<>nx = X)
                     (? (<>>nx = X) ()             ; X both sides never fuses
-                       (charm? <>>nx && !(fits32? <>>nx)) ()
+                       (charm? <>>nx && !(fits32 <>>nx)) ()
                        ['cmpm <>>f <>>>f <>>nx])
                    (<>>nx = X)
                     (charm? <>nx ? () ['cmprm <>nx <>>f <>>>f]))
