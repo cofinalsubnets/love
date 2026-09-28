@@ -467,7 +467,8 @@
            (pic? s2 0) (green = tilepx s2 0 0 0))
    ; a=q asks and keeps nothing; the errors say which key refused
    _ (test ("\e_Gi=31;OK\e\\" = ask s2 "\e_Ga=q,i=31,s=1,v=1,f=24;AAAA\e\\")
-           ("\e_Gi=5;EINVAL:format\e\\" = ask s2 "\e_Ga=T,f=100,i=5;AAAA\e\\")
+           ("\e_Gi=5;EINVAL:format\e\\" = ask s2 "\e_Ga=T,f=99,i=5;AAAA\e\\")
+           ("\e_Gi=5;EBADPNG:png\e\\" = ask s2 "\e_Ga=T,f=100,i=5;AAAA\e\\")   ; no PNG in it
            ("\e_Gi=6;EINVAL:medium\e\\" = ask s2 "\e_Ga=T,f=24,t=f,s=1,v=1,i=6;AAAA\e\\")
            ("\e_Gi=99;ENOENT:no such image\e\\" = ask s2 "\e_Ga=p,i=99\e\\")
            ("\e_Gi=4;EINVAL:short\e\\" = ask s2 "\e_Ga=T,f=24,s=2,v=1,i=4;AAAA\e\\")
