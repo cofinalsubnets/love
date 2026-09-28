@@ -2,7 +2,8 @@
 ; not a law of the language, a demo that keeps. show prints a function as a form its
 ; thread reads back to, and the biggest function there is is ev -- the evaluator with the
 ; glaze around it. its show, read and evaluated, is an ev again, and that ev's show is one
-; too: each generation answers every form below as ev does.
+; too: each generation answers every form below as ev does. the bare interpreter under the
+; glaze reads back the same way.
 ;   cat test/00-init.l test/host/evback.l | out/love
 
 (: forms ['5 '(+ 1 2) '(* 3 4) '(cap [7 8]) '((\ x (x + 1)) 4) '(map (+ 1) [1 2])
@@ -12,8 +13,9 @@
    s0 (show ev)
    e1 (ev <(sound s0))
    e2 (ev <(sound (show e1)))
+   b1 (ev <(sound (show (cite 'glaze 'base-ev))))
    _ (test (tally s0 < 200000) (has? s0 "(cite 'glaze ")   ; the glaze's own names, cited
-           (agree e1) (agree e2))
+           (agree e1) (agree e2) (agree b1))
    _ (test_fin ())
-   _ (puts "evback: ok -- ev's show read back is an ev, and so is that one's\n")
+   _ (puts "evback: ok -- ev's show read back is an ev, and so is that one's; the interpreter's too\n")
    0)
