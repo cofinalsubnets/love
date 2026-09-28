@@ -48,7 +48,9 @@ static struct cb *scr_ok(word x) {
  if (c->spos >= n) c->spos = 0;
  if (c->bot >= c->rows) c->bot = (uint16_t) (c->rows - 1u);
  if (c->top > c->bot) c->top = 0;
- if (c->esc > 11) c->esc = 0;
+ if (c->esc > 15) c->esc = 0;
+ if (c->kslot >= cb_nimg) c->kslot = 0, c->kopen = 0;
+ if (c->kf != 24) c->kf = 32;
  if (c->pn > 8) c->pn = 8;
  if (c->on > cb_outn) c->on = 0;
  if (c->un > 3) c->un = 0;

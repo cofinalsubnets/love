@@ -69,11 +69,15 @@ struct cb {
   uint16_t sslot;   // sixel: the slot being decoded, 0 for none
   uint32_t sn, stop;  // the store's bytes past the cells (0: no pictures), its bump top
   uint32_t sx, sy, sw, sh, sreg, srep;  // sixel: the pen, the extent, the register, the repeat
+  // kitty: the command's keys, the key and value being read, base64 in flight, the pixel in
+  // flight, and the transfer (slot, pixels laid) a chunked image keeps open across commands
+  uint32_t ks, kv, ki, kc, kr, kval, kacc, kpx, kpix, kslot;
+  uint8_t ka, kf, km, kq, kcur, kd, kt, ko, kkey, kvc, kn, kbyte, kpad, kopen;
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
 // pixels, xrgb with the top byte 0xff where a pixel was set -- the rest is the cell's bg
-struct cb_img { uint32_t off, w, h, live; };
+struct cb_img { uint32_t off, w, h, live, id; };   // id: a kitty image's, 0 for none
 enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
 // the bytes a screen of rows x cols needs, header, cells and a store of sn bytes
 #define cb_size(rows, cols, sn) \

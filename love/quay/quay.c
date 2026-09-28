@@ -219,7 +219,8 @@ void cb_store(struct cb *c, uint32_t sn) {
   if (!c->sn) return;
   struct cb_img *im = cb_imgs(c);
   uint32_t *pal = cb_pal(c);
-  for (uint32_t k = 0; k < cb_nimg; k++) im[k] = (struct cb_img) { 0, 0, 0, 0 };
+  for (uint32_t k = 0; k < cb_nimg; k++) im[k] = (struct cb_img) { 0, 0, 0, 0, 0 };
+  c->kopen = 0, c->kslot = 0;
   for (uint32_t k = 0; k < 256; k++) pal[k] = 0; }
 
 // a live picture that fits its arena, or 0: a painter may trust what this answers
@@ -230,15 +231,17 @@ struct cb_img const *cb_img(struct cb const *c, uint32_t slot) {
   uint64_t const end = (uint64_t) im->off + (uint64_t) im->w * im->h;
   return end <= cb_words(c) ? im : 0; }
 
-// the sweep: a picture no cell names is dropped, the rest packed down in the order they
-// were laid, which is the order of their offsets
-static void cb_sweep(struct cb *c) {
+// the sweep: a picture no cell names is dropped -- save, with ids, one kitty holds by id
+// for a later placement -- and the rest packed down in the order they were laid, which is
+// the order of their offsets
+static void cb_sweep(struct cb *c, int ids) {
   struct cb_img *im = cb_imgs(c);
   uint32_t *px = cb_px(c), seen[cb_nimg / 32] = { 0 }, top = 0;
   for (uint32_t k = 0; k < cb_nimg; k++) im[k].live = im[k].live && cb_img(c, k) ? 2u : 0u;
   for (uint32_t i = 0, n = (uint32_t) c->rows * c->cols; i < n; i++) {
     uint32_t const g = c->cb[i].g;
     if (g & cb_pic && im[cb_tslot(g)].live == 2) im[cb_tslot(g)].live = 3; }
+  if (ids) for (uint32_t k = 0; k < cb_nimg; k++) if (im[k].live == 2 && im[k].id) im[k].live = 3;
   for (;;) {
     uint32_t best = 0;
     for (uint32_t k = 1; k < cb_nimg; k++)
@@ -257,14 +260,16 @@ static void cb_sweep(struct cb *c) {
 static void cb_six_open(struct cb *c) {
   c->sslot = 0;
   if (!cb_words(c)) return;
-  cb_sweep(c);
+  cb_sweep(c, 1);
   uint32_t k = 1;
+  while (k < cb_nimg && cb_imgs(c)[k].live) k++;
+  if (k == cb_nimg) cb_sweep(c, 0), k = 1;
   while (k < cb_nimg && cb_imgs(c)[k].live) k++;
   uint32_t const stride = (uint32_t) c->cols * c->cw, room = cb_words(c) - c->stop;
   uint32_t h = stride ? room / stride : 0;
   if (h > 256u * c->ch) h = 256u * c->ch;
   if (k == cb_nimg || h < 6) return;
-  cb_imgs(c)[k] = (struct cb_img) { c->stop, stride, h, 0 };
+  cb_imgs(c)[k] = (struct cb_img) { c->stop, stride, h, 0, 0 };
   c->sslot = (uint16_t) k, c->sx = c->sy = c->sw = c->sh = 0, c->sreg = 0, c->srep = 1, c->sm = 0; }
 
 // a colour off HLS, sixel's hue wheel putting blue at 0, red at 120 and green at 240;
@@ -328,6 +333,37 @@ static void cb_six(struct cb *c, uint8_t i) {
 
 static void cb_ind(struct cb *c);
 
+// picture k's tiles at the cursor, a text row a cell row, scrolling as text would. the
+// cursor then ends under it at its first column (sixel), or beside its last tile on its
+// last row (kitty), or stays where it was (kitty's C=1)
+enum { cb_under_pic = 0, cb_beside_pic = 1, cb_stay = 2 };
+static void cb_place(struct cb *c, uint32_t k, int after) {
+  struct cb_img const *im = cb_img(c, k);
+  if (!im) return;
+  uint32_t const cs = c->cols, col0 = c->wpos % cs, save = c->wpos;
+  uint32_t tw = (im->w + c->cw - 1u) / c->cw, th = (im->h + c->ch - 1u) / c->ch;
+  if (tw > 256) tw = 256;
+  if (th > 256) th = 256;
+  if (col0 + tw > cs) tw = cs - col0;
+  c->flag &= (uint16_t) ~cb_pend;
+  for (uint32_t ty = 0; ty < th; ty++) {
+    if (ty) cb_ind(c);
+    uint32_t const rb = c->wpos - c->wpos % cs;
+    for (uint32_t tx = 0; tx < tw; tx++) {
+      uint32_t const p = rb + col0 + tx;
+      cb_unpair(c, p);
+      cb_pen(c, 0, &c->cb[p]);
+      c->cb[p].g = cb_tile(k, tx, ty); }
+    cb_mend(c, rb / cs), cb_dirt(c, rb / cs, rb / cs); }
+  if (after == cb_stay) { c->wpos = save; return; }
+  if (after == cb_beside_pic) {
+    uint32_t const rb = c->wpos - c->wpos % cs, end = col0 + tw;
+    if (end < cs) c->wpos = rb + end;
+    else { c->wpos = rb + cs - 1u; if (c->flag & cb_wrap) c->flag |= cb_pend; }
+    return; }
+  cb_ind(c);
+  c->wpos = c->wpos - c->wpos % cs + col0; }
+
 // the string's end: the canvas packed to its own width becomes the slot's picture, and its
 // tiles land at the cursor, a text row a cell row, scrolling as text would. the cursor
 // ends under the picture, at the column it started in
@@ -344,22 +380,147 @@ static void cb_six_close(struct cb *c) {
     for (uint32_t x = 0; x < w; x++) px[im->off + y * w + x] = px[im->off + y * stride + x];
   im->w = w, im->h = h, im->live = 1;
   c->stop = im->off + w * h;
-  uint32_t const cs = c->cols, col0 = c->wpos % cs;
-  uint32_t tw = (w + c->cw - 1u) / c->cw, th = (h + c->ch - 1u) / c->ch;
-  if (tw > 256) tw = 256;
-  if (col0 + tw > cs) tw = cs - col0;
-  c->flag &= (uint16_t) ~cb_pend;
-  for (uint32_t ty = 0; ty < th; ty++) {
-    if (ty) cb_ind(c);
-    uint32_t const rb = c->wpos - c->wpos % cs;
-    for (uint32_t tx = 0; tx < tw; tx++) {
-      uint32_t const p = rb + col0 + tx;
-      cb_unpair(c, p);
-      cb_pen(c, 0, &c->cb[p]);
-      c->cb[p].g = cb_tile(k, tx, ty); }
-    cb_mend(c, rb / cs), cb_dirt(c, rb / cs, rb / cs); }
-  cb_ind(c);
-  c->wpos = c->wpos - c->wpos % cs + col0; }
+  cb_place(c, k, 0); }
+
+// --- kitty graphics, a subset: APC G key=value,..;base64 ST -----------------------------
+// a=t stores an image by id, a=T stores and places it, a=p places one stored, a=q asks
+// whether it would take one, a=d deletes (all, or by id). f=24 and f=32 raw pixels, direct
+// (t=d), sent whole or in m=1 chunks; c and r size the placement in cells, nearest pixel.
+// png, compression and the other media answer an error. an image a kitty id holds outlives
+// its placements until a delete or a store too full to keep it.
+static void cb_kit_reply(struct cb *c, int ok, char const *err) {
+  if (!c->ki || c->kq >= 2 || (ok && c->kq == 1)) return;
+  cb_say(c, "\033_Gi="), cb_sayn(c, c->ki), cb_say(c, ";"), cb_say(c, ok ? "OK" : err), cb_say(c, "\033\\"); }
+
+static void cb_kit_open(struct cb *c) {
+  c->kkey = 0, c->kval = 0, c->kvc = 0, c->kacc = 0, c->kn = 0, c->kpad = 0, c->km = 0;
+  if (c->kopen) return;                      // a chunk: only m and q are its own
+  c->ka = 't', c->kf = 32, c->ks = c->kv = c->ki = c->kc = c->kr = 0;
+  c->kq = 0, c->kcur = 0, c->kd = 'a', c->kt = 'd', c->ko = 0; }
+
+static void cb_kit_key(struct cb *c) {
+  uint32_t const v = c->kval;
+  uint8_t const k = c->kkey, ch = c->kvc;
+  c->kkey = 0, c->kval = 0, c->kvc = 0;
+  if (!k || (c->kopen && k != 'm' && k != 'q')) return;
+  switch (k) {
+   case 'a': c->ka = ch; break;   case 'd': c->kd = ch; break;
+   case 't': c->kt = ch; break;   case 'o': c->ko = ch; break;
+   case 'f': c->kf = (uint8_t) v; break;   case 's': c->ks = v; break;
+   case 'v': c->kv = v; break;    case 'i': c->ki = v; break;
+   case 'm': c->km = (uint8_t) v; break;   case 'q': c->kq = (uint8_t) v; break;
+   case 'c': c->kc = v; break;    case 'r': c->kr = v; break;
+   case 'C': c->kcur = (uint8_t) v; break;
+   default: break; } }
+
+// a free slot with room for n words at the store's top: the sweep first keeps what ids
+// hold, then, pressed, lets it go. 0 for none
+static uint32_t cb_kit_slot(struct cb *c, uint32_t n) {
+  for (int ids = 1; ids >= 0; ids--) {
+    cb_sweep(c, ids);
+    uint32_t k = 1;
+    while (k < cb_nimg && cb_imgs(c)[k].live) k++;
+    if (k < cb_nimg && n <= cb_words(c) - c->stop) return k; }
+  return 0; }
+
+// a copy of picture k at c x r cells (one of them 0: kept to the aspect), nearest pixel
+static uint32_t cb_kit_scale(struct cb *c, uint32_t k) {
+  struct cb_img const *im = cb_img(c, k);
+  if (!im || (!c->kc && !c->kr)) return k;
+  uint32_t W = c->kc * c->cw, H = c->kr * c->ch;
+  if (!W) W = im->w * H / im->h;
+  if (!H) H = im->h * W / im->w;
+  if (W > 256u * c->cw) W = 256u * c->cw;
+  if (H > 256u * c->ch) H = 256u * c->ch;
+  if (!W || !H) return k;
+  // no sweep here: k itself may be one no cell names yet
+  uint32_t k2 = 1;
+  while (k2 < cb_nimg && cb_imgs(c)[k2].live) k2++;
+  if (k2 == cb_nimg || (uint64_t) W * H > cb_words(c) - c->stop) return k;
+  uint32_t *px = cb_px(c);
+  uint32_t const off = c->stop;
+  for (uint32_t y = 0; y < H; y++)
+    for (uint32_t x = 0; x < W; x++)
+      px[off + y * W + x] = px[im->off + (uint64_t) y * im->h / H * im->w + (uint64_t) x * im->w / W];
+  cb_imgs(c)[k2] = (struct cb_img) { off, W, H, 1, 0 };
+  c->stop = off + W * H;
+  return k2; }
+
+static void cb_kit_show(struct cb *c, uint32_t k) {
+  cb_place(c, cb_kit_scale(c, k), c->kcur == 1 ? cb_stay : cb_beside_pic); }
+
+// the delete: every placement, or every one of image i (whose store then goes too)
+static void cb_kit_del(struct cb *c) {
+  int const byid = c->kd == 'i' || c->kd == 'I';
+  if (byid && !c->ki) return;
+  struct cb_img *im = cb_imgs(c);
+  for (uint32_t i = 0, n = (uint32_t) c->rows * c->cols; i < n; i++) {
+    uint32_t const g = c->cb[i].g;
+    if (!(g & cb_pic) || (byid && im[cb_tslot(g)].id != c->ki)) continue;
+    c->cb[i].g = 0;
+    cb_dirt(c, i / c->cols, i / c->cols); }
+  for (uint32_t k = 1; k < cb_nimg; k++) if (!byid || im[k].id == c->ki) im[k].id = 0; }
+
+// the keys are in: act, or open the transfer the payload fills
+static void cb_kit_begin(struct cb *c) {
+  if (c->kopen) return;
+  if (c->ka == 'd') return cb_kit_del(c);
+  if (c->ka == 'p') {
+    for (uint32_t k = 1; k < cb_nimg; k++)
+      if (c->ki && cb_imgs(c)[k].id == c->ki && cb_img(c, k)) return cb_kit_show(c, k), cb_kit_reply(c, 1, 0);
+    return cb_kit_reply(c, 0, "ENOENT:no such image"); }
+  if (c->ka != 't' && c->ka != 'T' && c->ka != 'q') return cb_kit_reply(c, 0, "EINVAL:action");
+  if (c->kt != 'd' || c->ko) return cb_kit_reply(c, 0, "EINVAL:medium");
+  if (c->kf != 24 && c->kf != 32) return cb_kit_reply(c, 0, "EINVAL:format");
+  if (!c->ks || !c->kv || c->ks > 65536u || c->kv > 65536u) return cb_kit_reply(c, 0, "EINVAL:size");
+  uint32_t const k = cb_kit_slot(c, c->ks * c->kv);
+  if (!k) return cb_kit_reply(c, 0, "ENOSPC:store full");
+  cb_imgs(c)[k] = (struct cb_img) { c->stop, c->ks, c->kv, 0, c->ki };
+  c->kslot = k, c->kpix = 0, c->kpx = 0, c->kbyte = 0, c->kopen = 1; }
+
+static void cb_kit_byte(struct cb *c, uint32_t b) {
+  uint32_t const bpp = c->kf / 8u;
+  c->kpx = c->kpx << 8 | b;
+  if (++c->kbyte < bpp) return;
+  uint32_t const a = bpp == 4 ? c->kpx & 255u : 255u, rgb = bpp == 4 ? c->kpx >> 8 : c->kpx;
+  struct cb_img const *im = cb_imgs(c) + c->kslot;
+  if (c->kpix < im->w * im->h && im->off + c->kpix < cb_words(c))
+    cb_px(c)[im->off + c->kpix] = a >= 128 ? 0xff000000u | (rgb & 0xffffffu) : 0;
+  c->kpix++, c->kpx = 0, c->kbyte = 0; }
+
+static void cb_kit_b64(struct cb *c, uint8_t i) {
+  if (!c->kopen) return;
+  uint32_t v;
+  if (i >= 'A' && i <= 'Z') v = i - 'A';
+  else if (i >= 'a' && i <= 'z') v = i - 'a' + 26u;
+  else if (i >= '0' && i <= '9') v = i - '0' + 52u;
+  else if (i == '+') v = 62;
+  else if (i == '/') v = 63;
+  else if (i == '=') v = 0, c->kpad++;
+  else return;
+  c->kacc = c->kacc << 6 | v;
+  if (++c->kn < 4) return;
+  uint32_t const n = c->kpad < 3 ? 3u - c->kpad : 0;
+  for (uint32_t j = 0; j < n; j++) cb_kit_byte(c, c->kacc >> (16 - 8 * j) & 255u);
+  c->kacc = 0, c->kn = 0, c->kpad = 0; }
+
+// the command's end: a chunk waits for the next; the last one finishes what it asked
+static void cb_kit_end(struct cb *c) {
+  if (c->kn > 1) {                           // an unpadded tail: its whole bytes
+    uint32_t const n = c->kn - 1u;
+    c->kacc <<= 6 * (4 - c->kn);
+    for (uint32_t j = 0; j < n; j++) cb_kit_byte(c, c->kacc >> (16 - 8 * j) & 255u); }
+  c->kacc = 0, c->kn = 0, c->kpad = 0;
+  if (!c->kopen || c->km == 1) return;
+  c->kopen = 0;
+  uint32_t const k = c->kslot;
+  struct cb_img *im = cb_imgs(c) + k;
+  if (c->kpix < im->w * im->h) return cb_kit_reply(c, 0, "EINVAL:short");
+  if (c->ka == 'q') return cb_kit_reply(c, 1, 0);          // asked, not kept
+  if (c->ki) for (uint32_t j = 1; j < cb_nimg; j++) if (j != k && cb_imgs(c)[j].id == c->ki) cb_imgs(c)[j].id = 0;
+  im->live = 1, c->stop = im->off + im->w * im->h;
+  if (c->ka == 'T') cb_kit_show(c, k);
+  cb_kit_reply(c, 1, 0); }
 
 // RIS: everything back to the floor -- pens, faces, region, modes,
 // cursor, ground. LNM survives: the newline discipline belongs to the
@@ -370,7 +531,7 @@ static void cb_ris(struct cb *c) {
   c->top = 0, c->bot = c->rows - 1u;
   c->flag = (uint16_t) (cb_show | cb_wrap | lnm);
   c->wpos = c->spos = 0;
-  c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0, c->sslot = 0, c->sm = 0;
+  c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0, c->sslot = 0, c->sm = 0, c->kopen = 0;
   cb_clear(c); }
 
 static void cb_save(struct cb *c) {  // DECSC: cursor + pen
@@ -534,7 +695,8 @@ static void cb_put1(struct cb *c, uint8_t i) {
       c->flag &= (uint16_t) ~(cb_priv | cb_junk | cb_gt); return;
      case ']': c->esc = 7, c->ol = 0; return;       // OSC: capture the head (colour asks answer)
      case 'P': c->esc = 9, c->pn = 0, c->arg = 0; return;  // DCS: its parameters, then its final
-     case '^': case '_': c->esc = 3; return;               // PM/APC: swallow
+     case '^': c->esc = 3; return;                          // PM: swallow
+     case '_': c->esc = 12; return;                         // APC: kitty's G, else swallowed
      case '(': case ')': case '*': case '+': c->esc = 4; return;  // charset designator
      case '#': c->esc = 6; return;
      case '7': return cb_save(c);           // DECSC
@@ -592,6 +754,27 @@ static void cb_put1(struct cb *c, uint8_t i) {
     if (i == 27) { c->esc = 11; return; }
     if (i == 0x18 || i == 0x1a) { c->esc = 0, c->sslot = 0, c->sm = 0; return; }   // CAN, SUB: dropped
     return cb_six(c, i);
+   case 12:                                 // an APC's first byte: G is kitty graphics
+    if (i == 'G') { cb_kit_open(c); c->esc = 13; return; }
+    c->esc = i == 27 ? 5 : 3;
+    return;
+   case 13:                                 // kitty's keys, a=T,f=32,..: ; opens the payload
+    if (i == 0x18 || i == 0x1a) { c->esc = 0, c->kopen = 0; return; }
+    if (i == 27 || i == ';') { cb_kit_key(c), cb_kit_begin(c); c->esc = i == 27 ? 15 : 14; return; }
+    if (i == ',') return cb_kit_key(c);
+    if (i == '=') return;
+    if (i >= '0' && i <= '9' && c->kkey) { if (c->kval < 429496729u) c->kval = c->kval * 10u + (i - '0'); return; }
+    if (i > ' ' && i < 0x7f) { if (!c->kkey) c->kkey = i; else c->kvc = i; }
+    return;
+   case 14:                                 // kitty's payload, base64 to ST
+    if (i == 27) { c->esc = 15; return; }
+    if (i == 0x18 || i == 0x1a) { c->esc = 0, c->kopen = 0; return; }
+    return cb_kit_b64(c, i);
+   case 15:                                 // ESC inside kitty: \ ends it; anything else ends it too, and begins
+    cb_kit_end(c), c->esc = 0;
+    if (i == '\\') return;
+    c->esc = 1;
+    return cb_put1(c, i);
    case 11:                                 // ESC inside sixel: \ ends it; anything else ends it too, and begins
     cb_six_close(c), c->esc = 0;
     if (i == '\\') return;

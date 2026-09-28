@@ -86,5 +86,14 @@ six full "$out/six-full.ppm"
 six empty "$out/six-empty.ppm"
 "$love" test/gate/lit.l sixel 256 "$out/six-full.ppm" "$out/six-empty.ppm" || bad=1
 
+# A KITTY PICTURE PAINTS THE SAME WAY: 16x16, white then black, 256 pixels between them.
+kit() {
+  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+    --image "$image" "$wasm" test/kernel/kit.l $1 < /dev/null > "$log" 2>&1
+}
+kit full "$out/kit-full.ppm"
+kit empty "$out/kit-empty.ppm"
+"$love" test/gate/lit.l kitty 256 "$out/kit-full.ppm" "$out/kit-empty.ppm" || bad=1
+
 [ $bad = 0 ] || exit 1
-echo "  glass: ok -- real pixels in, rows and columns out, the text across a new grid, a loaded face, and a sixel picture"
+echo "  glass: ok -- real pixels in, rows and columns out, the text across a new grid, a loaded face, and sixel and kitty pictures"
