@@ -277,6 +277,9 @@
          (t 0 = 36) (: v (snip t 1 #t)
                       (? (xa-num? v) ['im (xa-num v)]
                          (xa-expr? v) ['im (gimm (gtoks v))]
+                         ; $1f / $1b: a numeric label's address, which gas-text names
+                         (1 < #v && (v (#v - 1) = 102 || v (#v - 1) = 98) && xa-allof? (snip v 0 (#v - 1)) digit? 0)
+                          ['ims (name v)]
                          (digit? (v 0) || xa-neg? v) (scare 'as-badnum v)
                          ['ims (name (xa-unquote v))]))
          (xa-has? t 40)
