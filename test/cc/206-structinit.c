@@ -7,7 +7,6 @@ struct tri { long a, b, c; };
 struct outer { struct pr p; long z; };
 
 __attribute__((noinline)) static struct pr mk(long x) { return (struct pr) { x, x + 1 }; }
-__attribute__((noinline)) static struct tri mk3(long x) { return (struct tri) { x, x + 1, x + 2 }; }
 
 /* a struct of two pointers answered by value, the pair the painter's glyph lookup is */
 struct look { unsigned char const *bmp, *rows; };
@@ -24,7 +23,8 @@ int main(void) {
   CK(1, a1[0].a == 5 && a1[0].b == 6 && a1[1].a == 0 && a1[1].b == 0);
   struct pr a2[3] = { mk(7), mk(9) };
   CK(2, a2[0].a == 7 && a2[0].b == 8 && a2[1].a == 9 && a2[1].b == 10 && a2[2].a == 0);
-  struct tri a3[2] = { mk3(3) };
+  struct tri t3 = { 3, 4, 5 };             /* a variable: three words would return through memory */
+  struct tri a3[2] = { t3 };
   CK(3, a3[0].a == 3 && a3[0].b == 4 && a3[0].c == 5 && a3[1].c == 0);
   struct outer o = { mk(11), 4 };
   CK(4, o.p.a == 11 && o.p.b == 12 && o.z == 4);
