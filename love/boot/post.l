@@ -409,7 +409,9 @@
             ('c . J . cl) ('? . rcl C J cl)
             ('a . _) (rapp C y)
             (fail C))))
-   (alleq C xs ys) (? (two? ys) (== (res C <xs) <ys && alleq C >xs >ys) 1)
+   ; the same captures: a name bound to a slot is that slot, whether or not the name holds
+   (sees C x) (: d (? (mint? x) (peep (C 'D) x C) C) (? (== d C) x (sees C d)))
+   (alleq C xs ys) (? (two? ys) (== (sees C <xs) (sees C <ys) && alleq C >xs >ys) 1)
    ; an operator away from the head is parenthesised, or it reads as infix
    (ra C x) (: r (rv C x) (? (infix? r) [r] r))
    ; a cond whose else is a cond of the same join is one cond of more clauses
@@ -528,7 +530,7 @@
     (? (string? nm) (nifn v (name nm))
        (: gn (opnom v) u (unw v) r (named C u)
         (? gn gn
-           (? (two? r) (nil? <>r)) <r
+           (? (two? r) (atom? <>r)) <r                  ; a let's name, when it holds no captures
            (: g (glob v) (? (!== g ()) g (: g (glob u) (? (!== g ()) g 0))))))))
    (rfn C v) (: nm (fname C v)
     (? (!== nm 0) nm
