@@ -118,6 +118,7 @@
       (w2-if t r els env sigs rk)))
    (w2-if t then-x else-x env sigs rk)
     (? (two? t && w2-not? <t) (w2-if <>t else-x then-x env sigs rk)
+       (two? t && <t = 'atom?) (w2-if ['two? <>t] else-x then-x env sigs rk)   ; two? with the arms traded
        (two? t && <t = 'two?)
          (: x <>t
             (? (w2-kof x env sigs = 'zipper)

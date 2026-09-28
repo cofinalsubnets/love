@@ -218,8 +218,8 @@
    ;; the memory operand size an SSE mnemonic (and an indirect branch) implies: Intel spells it
    ;; as a PTR, at&T not at all, and neither makes it the operand size
    ;; the string ops: Intel's names in the middle; at&T spells the 4-byte ones with an l
-   xa-strl {'movsl 'movsd 'cmpsl 'cmpsd 'stosl 'stosd 'lodsl 'lodsd 'scasl 'scasd}
-   xa-strd {'movsd 'movsl 'cmpsd 'cmpsl 'stosd 'stosl 'lodsd 'lodsl 'scasd 'scasl}
+   xa-strl {'movsl 'movsd 'cmpsl 'cmpsd 'stosl 'stosd 'lodsl 'lodsd 'scasl 'scasd 'insl 'insd 'outsl 'outsd}
+   xa-strd {'movsd 'movsl 'cmpsd 'cmpsl 'stosd 'stosl 'lodsd 'lodsl 'scasd 'scasl 'insd 'insl 'outsd 'outsl}
    xa-ptrfix {'movsd 8 'movss 4 'movq 8 'movd 4 'movaps 16 'movapd 16
           'movdqa 16 'movdqu 16 'movups 16 'movupd 16
           'addsd 8 'subsd 8 'mulsd 8 'divsd 8 'sqrtsd 8 'maxsd 8 'minsd 8

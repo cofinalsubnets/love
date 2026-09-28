@@ -28,7 +28,7 @@
 
 ; --- the machine: ops are (op x); state [stack locals seats trace]; A the
 ; --- caller's environment. emitters prepend, compose runs left first.
-(: (kop op x) (\ k (. [op x] k))
+(: (kop op x) (k \ [op x] . k)
    (kpushk x) (kop 'pushk x)                        ; push a constant
    (kpusha i) (kop 'pusha i)                        ; push caller arg i
    (kpushl i) (kop 'pushl i)                        ; push local i
@@ -37,42 +37,41 @@
    (ksets i) (kop 'sets i)                          ; pop into seat i
    kadd (kop 'add 0)                                ; pop two, push the sum
    kemit (kop 'emit 0)                              ; append TOS to the trace, keep it
-   (kseq a b) (\ k (a (b k)))                       ; compose: a's ops first
+   (kseq a b) (k \ a (b k))                         ; compose: a's ops first
 
    ; the interpreter: a thread against env A -> (value . trace)
-   (put9 al i v) (. [i v] al)
-   (get9 al i) (: e (assoc i al) (? (two? e) (cap (cup e)) (scare 'spl-unbound i)))
+   (put9 al i v) ([i v] . al)
+   (get9 al i) (: e (assoc i al) (two? e ? <>e (scare 'spl-unbound i)))
    (in9 th A st lo se tr)
-    (? !(two? th) (. (cap st) (rev tr))
+    (? (atom? th) (<st . rev tr)
        (: op (<th 0) x (<th 1)
-          (? (= op 'pushk) (in9 >th A (. x st) lo se tr)
-             (= op 'pusha) (in9 >th A (. (get9 A x) st) lo se tr)
-             (= op 'pushl) (in9 >th A (. (get9 lo x) st) lo se tr)
-             (= op 'pushs) (in9 >th A (. (get9 se x) st) lo se tr)
-             (= op 'setl)  (in9 >th A >st (put9 lo x <st) se tr)
-             (= op 'sets)  (in9 >th A >st lo (put9 se x <st) tr)
-             (= op 'add)   (in9 >th A (. ((cap (cup st)) + <st) (cuup st)) lo se tr)
-             (= op 'emit)  (in9 >th A st lo se (. <st tr))
-             (scare 'spl-op op))))
+          (op @ 'pushk (in9 >th A (x . st) lo se tr)
+                'pusha (in9 >th A (get9 A x . st) lo se tr)
+                'pushl (in9 >th A (get9 lo x . st) lo se tr)
+                'pushs (in9 >th A (get9 se x . st) lo se tr)
+                'setl  (in9 >th A >st (put9 lo x <st) se tr)
+                'sets  (in9 >th A >st lo (put9 se x <st) tr)
+                'add   (in9 >th A (<>st + <st . >>st) lo se tr)
+                'emit  (in9 >th A st lo se (<st . tr))
+                (scare 'spl-op op))))
    (run em A) (in9 (em ()) A () () () ())
 
    ; --- the body compiler: exprs ('p i) ('a i) ('k n) ('add e e) ('emit e),
    ; --- prd the param reader -- the three strategies ARE three prd's
    (cb e prd)
-    (? (= <e 'p) (prd <>e)
-       (= <e 'a) (kpusha <>e)
-       (= <e 'k) (kpushk <>e)
-       (= <e 'add) (kseq (cb <>e prd) (kseq (cb <>>e prd) kadd))
-       (= <e 'emit) (kseq (cb <>e prd) kemit)
-       (scare 'spl-expr e))
+    (<e @ 'p (prd <>e)
+          'a (kpusha <>e)
+          'k (kpushk <>e)
+          'add (kseq (cb <>e prd) (kseq (cb <>>e prd) kadd))
+          'emit (kseq (cb <>e prd) kemit)
+          (scare 'spl-expr e))
 
    ; --- the three call-site compilers, one body against three readers ---
-   (args9 as f) (: (go as i) (? !(two? as) (\ k k)
-                                (kseq (kseq (cb <as ()) (f i)) (go >as (i + 1))))
-                   (go as 0))
+   (args9 as f) (:- (go as 0)
+                 (go as i) (atom? as ? (k \ k) (kseq (kseq (cb <as ()) (f i)) (go >as (i + 1)))))
    (ecall as body) (kseq (args9 as ksets) (cb body kpushs))
    (ebind as body) (kseq (args9 as ksetl) (cb body kpushl))
-   (esubst as body) (cb body (\ i (cb (as i) ())))
+   (esubst as body) (cb body (i \ cb (as i) ()))
 
    ; --- the samples; a0e is the effectful arg (reads caller arg 0, emits it) ---
    a0e '(emit (a 0))
@@ -95,8 +94,8 @@
 (test
  ((both esubst e0) = (both ebind e0))              ; pure: substitution is licensed
  ((both esubst e1) = (both ebind e1))              ; read once: still licensed
- (!(= (both esubst e2) (both ebind e2)))          ; read twice: the breach
+ (both esubst e2 != both ebind e2)                ; read twice: the breach
  ('(14 7 7) = (both esubst e2))                    ; ... value 14 EQUAL, effect DOUBLED
- ((cap (both esubst e2)) = (cap (both ebind e2))))
+ (<(both esubst e2) = <(both ebind e2)))
 
 (puts "spl: ok") (putc 10)

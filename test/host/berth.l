@@ -178,7 +178,7 @@
    keys {} ticks {}
    sg (berth-stage (\ w h ("\e[H\e[2J" + show w + "x" + show h + " k" + show (peep keys () 0) + " t" + show (peep ticks () 0)))
                    (\ c (pin keys () c))
-                   (\ _ (= 113 (peep keys () 0))))
+                   (\ _ (113 = peep keys () 0)))
    ; the harbour's opening with a stage as its first berth, the tty parts left out
    (mkhb r c sg argv)
     (: p0 (hopen-stage sg r c)
@@ -214,7 +214,7 @@
    _ (waitfor p2)
    _ (test (sub? (rowtx (scrof hb 1) 0) "21x10 k97" 0))   ; the bar's column back too
    ; the tick door: no on a no, a repaint on a yes
-   _ (pin sg 'tick (\ _ (: n (1 + peep ticks () 0) _ (pin ticks () n) (= 0 (n % 2)))))
+   _ (pin sg 'tick (\ _ (: n (1 + peep ticks () 0) _ (pin ticks () n) (0 = n % 2))))
    _ (pin (hb 'dirt) () 0)
    _ (htick hb)
    _ (test (1 = (peep ticks () 0)) (0 = (peep (hb 'dirt) () 0)) (sub? (rowtx (scrof hb 1) 0) " t0" 0))

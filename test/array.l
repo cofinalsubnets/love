@@ -15,7 +15,7 @@
 (test
  ; --- constructor + accessors ---
  (2 = rank (star-tray '(2 3) 0))
- (6 = tally (star-tray '(2 3) 0))
+ (6 = #(star-tray '(2 3) 0))
  (star-tray = tier (star-tray '(2 3) 0))
  (gem-tray = tier (gem-tray '(4) 0))
  ('(2 3) = shape (star-tray '(2 3) 0))
@@ -30,8 +30,8 @@
  (gem? (gem-tray 0 0)) (0.0 = gem-tray 0 0) ; -> a boxed 0.0
  (tray? (star-tray '(1) '(5)))              ; rank-1 len-1 -> a one-cell array, not the fixnum 5
  (5 = (peep (star-tray '(1) '(5)) 0 -1))    ; ...its lone cell reads back
- (tray? @(3.5)) (tray? (= 3.5 @(3.5)))      ; @(3.5) is a one-cell array: = with its scalar is a mask, not a bit
- (1 = (tally @(3.5))) (1 = (rank @(3.5)))
+ (tray? @(3.5)) (tray? (3.5 = @(3.5)))      ; @(3.5) is a one-cell array: = with its scalar is a mask, not a bit
+ (1 = tally @(3.5)) (1 = rank @(3.5))
  !(rank (star-tray 0 0))           ; a demoted scalar is not a tuple
  !#(gem-tray 0 0)
  !(shape (star-tray 0 0))
@@ -135,8 +135,8 @@
  ("@(1.5 2.5)" = show (gem-tray '(2) '(1.5 2.5)))
  ("@(1 2 3)" = show (star-tray '(3) '(1 2 3)))   ; z aliases the word-int kind -> terse @
  ; @(…) reads back to an equal array; the explicit form is a plain constructor call
- (aall (= (star-tray '(3) '(10 20 30)) @(10 20 30)))
- (aall (= (gem-tray '(2) '(1.5 2.5)) @(1.5 2.5)))
+ (aall (star-tray '(3) '(10 20 30) = @(10 20 30)))
+ (aall (gem-tray '(2) '(1.5 2.5) = @(1.5 2.5)))
  (aall (star-tray '(2 2) '(1 2 3 4) = star-tray '(2 2) '(1 2 3 4)))
  ; the printed form reads back to an equal array
  (aall (star-tray '(3) '(10 20 30) = tuple 10 20 30))
@@ -167,7 +167,7 @@
   (-1 = (peep e 0 -1))                         ; out of bounds -> the default
   ('(0 3) = (shape ((gem-tray '(0 3) 0) + 1))) ; rank-2 empties keep their shape
   (: rt @()                                    ; the printed form (@()) reads back
-     (&& (0 = #rt) ('(0) = (shape rt)) (star-tray = (tier rt))))))
+     (0 = #rt && '(0) = shape rt && star-tray = tier rt))))
 
 ; --- the apl rule: `=` and `!=` are masks, the whole question a reduction; max and min
 ; are binary and elementwise, the operand itself; floor and int take a float tray to an int tray ---

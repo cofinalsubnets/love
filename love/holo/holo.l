@@ -122,11 +122,12 @@
    ;; (an arity-0 row IS its chunk), and its 'lower is the lower-via shim -- so the op ->
    ;; operand-shape mapping lives here, once, instead of four hand-kept dispatch chains. --
    ir-arity {'ret 0 'sys 0 'nop 0 'trap 0 'udivll 0 'uremll 0
-              ; x86 port I/O, register-contracted like `sys` (dx the port, al/ax/eax the datum; the
-              ; string forms walk rsi/rdi by rcx). zero operands: the contract is the register file.
+              ; x86 port I/O, register-contracted like `sys` (dx the port, al/ax/eax the datum).
+              ; zero operands: the contract is the register file. str, a string op by stem and
+              ; width, walks rsi/rdi (by rcx under rep, a prefix of its own like lock).
              'inb 0 'inw 0 'inl 0 'outb 0 'outw 0 'outl 0
              'cld 0
-             'insb 0 'insw 0 'insl 0 'outsb 0 'outsw 0 'outsl 0
+             'str 2 'rep 0 'repne 0
               ; the system lane -- privileged instructions, arch-specific like the port i/o above.
               ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
               ; a64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
@@ -145,7 +146,7 @@
              'vmxon 2 'vmclear 2 'vmptrld 2 'sgdt 2 'sidt 2
              'vmread 2 'vmwrite 2
              'isb 0 'wfi 0 'wfe 0 'eret 0
-             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0
+             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0 'stac 0 'clac 0
              'carry 4 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
              'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
              'ldcr 2 'stcr 2 'lgdt 2 'lidt 2 'invlpg 2
@@ -159,7 +160,7 @@
              'sx1 1 'sx2 1 'sx4 1 'zx1 1 'zx2 1 'zx4 1
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
              'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'call 1 'raw 1 'lapool 1
-             'li 2 'mov 2 'cmp 2 'test 2 'set 2 'br 2 'br8 2
+             'li 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
              'la 2 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
@@ -205,7 +206,7 @@
                       (scare 'arity-skew op))
    (lower-via ems ins)
       (: op <ins  r (peep ems op 'no)
-         _ (? (= r 'no) (scare 'bad-op op) 0)
+         _ (r = 'no ? (scare 'bad-op op) 0)
          (feed >r >ins <r op))
 
    ;; -- the backend registry. a backend is a tablet { 'lower 'patch }, plus 'refix where the
@@ -260,7 +261,7 @@
       (? !(two? prog) (rev items . labels)
          (: ins <prog
             (? (<ins = 'label)
-               (: _ (pin labels (ins 1) addr) (lay >prog be addr items labels))
+               (pin labels (ins 1) addr, lay >prog be addr items labels)
                (<ins = 'align)
                (: r (revonto (pad-to be addr (ins 1)) items 0)
                   (lay >prog be (addr + <r) >r labels))
@@ -337,7 +338,7 @@
                (? (atom? p) (rev items . labels)
                   (: ins <p  k <<cs  c ><cs
                      (? (<ins = 'label)
-                        (: _ (pin labels (ins 1) fa) (stitch >p >cs pa fa era items))
+                        (pin labels (ins 1) fa, stitch >p >cs pa fa era items)
                         (<ins = 'align)
                         (: pad (pad-to be fa (ins 1))
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)

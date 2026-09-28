@@ -123,7 +123,7 @@
    d32 (lines (rdf (tmpd + "/.rvc32.out")))
    d16 (lines (rdf (tmpd + "/.rvc16.out")))
 
-   (pfx? s p) (: k #p ((k <= tally s) && ((snip s 0 k) = p)))
+   (pfx? s p) (: k #p ((k <= #s) && ((snip s 0 k) = p)))
    (idx-of s sub) (: n #s k #sub
                      (go i) (? ((n - k) < i) () ((snip s i (i + k)) = sub) i (go (i + 1)))
                      (go 0))
@@ -170,7 +170,7 @@
    _ (wrf (tmpd + "/.cbr.s") (foldl (\ a b (a + (bhex b) + "\n")) "" (cjw + cbw)))
    _ (sh (mc + " < " + tmpd + "/.cbr.s > " + tmpd + "/.cbr.out 2>/dev/null"))
    dbr (map norm (lines (rdf (tmpd + "/.cbr.out"))))
-   _ (? (#dbr = tally want) 0
+   _ (? (#dbr = #want) 0
         (say err ("FAIL test_rvc: llvm-mc decoded " + show #dbr + " of "
                         + show #want + " compressed branches\n"), quit 1))
    bbad (foldl (\ a i (? ((dbr i) = (want i)) a ([(want i) (dbr i)] . a)))

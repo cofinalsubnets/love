@@ -5,6 +5,10 @@
 ; flags: a page served off -h on -p, and the flags it will not half obey refused.
 ;   cat test/00-init.l test/host/net.l | out/love
 (borrow 'posix)
+; every path this lays is the pid's own, so two runs over one out/ keep apart
+(: net-dir ("out/.nettest-" + show (getpid 0)))
+(: net-root ("out/.httpd-" + show (getpid 0)))
+
 (: K (cite 'kore)
    new (K 'tn-new) byte (K 'tn-byte) send (K 'tn-send)
    (feed st s) (: (go i sh rp) (? (#s <= i) [sh rp] (: r (byte st (s i)) (go (i + 1) (sh + <r) (rp + r 1))))
@@ -40,7 +44,7 @@
    ; what it read in a file
    love <cmdline
    port 7436
-   dir "out/.nettest"
+   dir net-dir
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
    sfile (dir + "/srv.l")
    _ (: p (open sfile "w")
@@ -158,7 +162,7 @@
 ; a raw one, the socket the bsds ping through.
 (: K (cite 'kore)
    love <cmdline
-   dir "out/.nettest"
+   dir net-dir
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
    nfile (dir + "/ns.l")
    _ (: p (open nfile "w")
@@ -230,7 +234,7 @@
 ; the unreachable marks off tr-mark, and the loopback trace, run everywhere
 (: K (cite 'kore)
    love <cmdline
-   dir "out/.nettest"
+   dir net-dir
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
    sfile (dir + "/nsnet.sh")
    _ (: p (open sfile "w")
@@ -286,7 +290,7 @@ kill $R $D
 ; -- httpd -------------------------------------------------------------------------------
 (: K (cite 'kore)
    love <cmdline
-   root "out/.httpd"
+   root net-root
    _ (hark ["rm" "-rf" root]) _ (mkdir root 493)
    _ (: p (open (root + "/index.html") "w") _ (say p "<p>served</p>") (close p))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
@@ -311,4 +315,5 @@ kill $R $D
    _ (waitfor <srv)
    0)
 
+(hark ["rm" "-rf" net-dir net-root])
 (test_fin (), puts "net: ok", putc 10, 0)

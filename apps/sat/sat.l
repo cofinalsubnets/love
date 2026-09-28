@@ -82,11 +82,11 @@
    ; watch[l] lists the clauses watching l, wl[cid] is the watched pair. unassigning only
    ; relaxes the invariant, which is why backjump need only rewind qhead.
    (enqueue s lit cid)                                      ; level-0 / forced literal: assign if free, () ok, 'conflict if already false
-    (: lv (lit-val s lit) (? (lv = 1) 0  (lv = -1) 'conflict  (: _ (assign s lit cid) 0)))
+    (: lv (lit-val s lit) (? (lv = 1) 0  (lv = -1) 'conflict  (assign s lit cid, 0)))
    (watch2 s cid a b)                                       ; register clause cid as watching literals a and b
-    (: _ (pin (vmap s 'wl) cid (a . b))
-       _ (pin (vmap s 'watch) a (cid . peep (vmap s 'watch) a ()))
-       _ (pin (vmap s 'watch) b (cid . peep (vmap s 'watch) b ())) 0)
+    (pin (vmap s 'wl) cid (a . b),
+     pin (vmap s 'watch) a (cid . peep (vmap s 'watch) a ()),
+     pin (vmap s 'watch) b (cid . peep (vmap s 'watch) b ()), 0)
    (dedup-lits c) (? (atom? c) () (elem <c >c) (dedup-lits >c) (<c . dedup-lits >c))                                ; drop duplicate literals
    (taut? c) (? (atom? c) 0 (elem (neg <c) >c) 1 (taut? >c))                  ; contains a literal and its negation?
    (load-clause s c0)                                       ; add a source clause to the db + watches (clean it first: dedupe, drop tautologies)
@@ -105,10 +105,10 @@
                      (? (lit-val s wo = 1) (go rest (cid . kept))             ; satisfied by wo -> keep watching f
                         (: k (find-watch s cid wo)
                            (? (k != 0)                                            ; slide the watch f -> k
-                              (: _ (pin (vmap s 'wl) cid (wo . k))
-                                 _ (pin (vmap s 'watch) k (cid . peep (vmap s 'watch) k ()))
-                                 (go rest kept))                                  ; cid no longer watches f
-                              (lit-val s wo = 0) (: _ (assign s wo cid) (go rest (cid . kept)))     ; unit -> force wo
+                              (pin (vmap s 'wl) cid (wo . k),
+                               pin (vmap s 'watch) k (cid . peep (vmap s 'watch) k ()),
+                               go rest kept)                                      ; cid no longer watches f
+                              (lit-val s wo = 0) (assign s wo cid, go rest (cid . kept))            ; unit -> force wo
                               (cid . cat kept (cid . rest))))))))               ; wo false -> conflict; f keeps cid + the unprocessed rest
             (peep (vmap s 'watch) f ()) ())
        _ (pin (vmap s 'watch) f >res) <res)
@@ -126,9 +126,9 @@
                  (? (v = skipv) st
                     (peep seen v 0 != 0) st
                     (peep (vmap s 'lvl) v 0 = 0) st
-                    (: _ (pin seen v 1) _ (bump s v)
-                       (peep (vmap s 'lvl) v 0 = dl ? ((<st + 1) . >st)
-                          (<st . (l . >st)))))))
+                    (pin seen v 1, bump s v,
+                     peep (vmap s 'lvl) v 0 = dl ? ((<st + 1) . >st)
+                       (<st . (l . >st))))))
            acc c)
    (find-seen tr seen idx) (peep seen (vof (peep tr idx ())) 0 = 0 ? (find-seen tr seen (idx - 1)) idx)
    (bj-level s learnt) (foldl (\ m l (: lv (peep (vmap s 'lvl) (vof l) 0) (lv > m ? lv m))) 0 learnt)
@@ -156,7 +156,7 @@
               (? (t = 0) 0
                  (: l (peep tr (t - 1) ()) v (vof l)
                     (? (peep lm v 0 > lvl)
-                       (: _ (pin ph v (peep val v 1)) _ (pull val v 0) _ (pull lm v 0) _ (pull rs v 0) (go (t - 1)))   ; save phase before unassigning
+                       (pin ph v (peep val v 1), pull val v 0, pull lm v 0, pull rs v 0, go (t - 1))                   ; save phase before unassigning
                        t))))
            (peep s 'top 0))
        _ (pin s 'top nt) _ (pin s 'qhead nt) _ (pin s 'level lvl) 0)   ; rewind the propagation queue to the new top
@@ -167,7 +167,7 @@
    (bump s v) (pin (vmap s 'act) v (peep (vmap s 'act) v 0.0 + peep s 'vinc 1.0))
    (rescale s) (foldl (\ _ v (pin (vmap s 'act) v (peep (vmap s 'act) v 0.0 * 1e-100))) 0 (rng 1 (peep s 'nvars 0 + 1)))
    (decay s) (: vi (peep s 'vinc 1.0 * 1.05)
-                (vi > 1e100 ? (: _ (rescale s) (pin s 'vinc (vi * 1e-100))) (pin s 'vinc vi)))
+                (vi > 1e100 ? (rescale s, pin s 'vinc (vi * 1e-100)) (pin s 'vinc vi)))
    (pick-branch s)                                          ; highest-activity free var, 0 if none
     ((: (go v best ba)
         (? (v > peep s 'nvars 0) best
@@ -190,11 +190,11 @@
                     _ (atom? >learnt ? 0 (watch2 s cid <learnt <>learnt))                  ; watch the learnt clause (unit learnt: a level-0 fact, unwatched)
                     _ (assign s <learnt cid) (loop ())))
               (peep s 'level 0 > 0 && peep s 'nconf 0 >= peep s 'climit 0)      ; Luby restart: keep learnt clauses, jump to level 0
-                 (: _ (backjump s 0) _ (next-restart s) (loop ()))
+                 (backjump s 0, next-restart s, loop ())
               (: v (pick-branch s)                            ; decide: highest-activity free var, saved phase
                  (? (v = 0) 'sat
-                    (: _ (pin s 'level (peep s 'level 0 + 1))
-                       _ (assign s (v * peep (vmap s 'phase) v -1) -1) (loop ()))))))) ())
+                    (pin s 'level (peep s 'level 0 + 1),
+                     assign s (v * peep (vmap s 'phase) v -1) -1, loop ())))))) ())
    (extract-model s nvars) (map (v \ v . val-of s v) (rng 1 (nvars + 1)))
    (cdcl formula nvars) (: s (mk formula nvars)
                            (? (peep s 'bad 0 = 1) 'unsat                       ; empty clause / contradictory units at construction

@@ -18,7 +18,7 @@
 ; names land on the book and half the roster would answer its own copies.
 (assert (elem 'glaze (cite ()))
         (400 < #(keys (cite 'glaze)))
-        (: nm (names ()) (&& (! (elem 'autogroup nm)) (! (elem 'jitir nm)) (! (elem 'glaze nm)))))
+        (: nm (names ()) (!(elem 'autogroup nm) && !(elem 'jitir nm) && !(elem 'glaze nm))))
 (: assemble (cite 'holo 'assemble)
    bcat (\ ps (foldl (\ a b (a + b)) () ps))
    G (cite 'glaze)
@@ -265,18 +265,18 @@
           ; list constant answers the same source node interp does (==-transparent, never folded
           ; with an =-equal sibling).
           (: dsp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) (\ r)) (+ a 1) (? ((cap l) = (\ R)) (+ a 10) a))) a)) l a)))
-             (&& (23 = (dsp '(r R r x R r) 0)) (0 = (dsp () 0)) (5 = (dsp '(x y) 5))))
+             (23 = dsp '(r R r x R r) 0 && 0 = dsp () 0 && 5 = dsp '(x y) 5))
           (: qz (ev '(\ x (? (= x (\ k)) (\ (1 2)) ())))
-             (&& ('(1 2) = (qz 'k)) (qz 'k = qz 'k) (() = qz 'nope)))
+             ('(1 2) = qz 'k && qz 'k = qz 'k && () = qz 'nope))
           (: qe (ev '(\ x (? (= x (\ q)) 1 0)))
-             (&& (1 = (qe 'q)) (0 = (qe 'r)) (0 = (qe 5)) (0 = (qe "q")) (0 = (qe '(q)))))
+             (1 = qe 'q && 0 = qe 'r && 0 = qe 5 && 0 = qe "q" && 0 = qe '(q)))
           ; global callees (v4): a free head resolves via gv and drive-calls through its extras
           ; slot -- per-element (am-sq), multi-arg via the curry chain (am-mul2), in an init
           ; (am-seed), and a nif head (%). all == their literal references.
           (: gw (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (+ a (am-sq (cap l)))) a)) l a)))
-             ((32 = (gw '(2 3 4) 0)) && ((gw am-l 0) = (am-gref am-l 0))))
+             (32 = gw '(2 3 4) 0 && gw am-l 0 = am-gref am-l 0))
           (: gm (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (am-mul2 i 2))) a)) (am-seed 0) 0)))
-             ((98 = (gm 10)) && (0 = (gm 0))))                                    ; inits ran: (am-seed 0) = 3 -> i starts at 3
+             (98 = gm 10 && 0 = gm 0))                                    ; inits ran: (am-seed 0) = 3 -> i starts at 3
           (: gp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (+ a (% (cap l) 3))) a)) l a)))
              (4 = (gp '(10 11 12 13) 0)))                                         ; 1+2+0+1 -- a nif callee curries through two drives
           ; the rc4 regression: a global namesake of the loop name exists (am-go, *1000000); a
@@ -284,8 +284,8 @@
           ; gn candidate, so amble declines the outer body and the value is the bytecode's
           ; (a baked global answers 11 here, not 10: rc4's miscompile, bref summing dref's loop).
           (: r4 (ev '(\ n ((: (am-go i a) (? (< i n) (am-go (+ i 1) (+ a i)) (+ a (tally (am-go n))))) 0 0)))
-             (&& (10 = (r4 5))
-                 ((r4 5) = ((\ n ((: (am-go i a) (? (i < n) (am-go (i + 1) (a + i)) (a + tally (am-go n)))) 0 0)) 5))))
+             (10 = r4 5
+              && r4 5 = ((\ n ((: (am-go i a) (? (i < n) (am-go (i + 1) (a + i)) (a + tally (am-go n)))) 0 0)) 5)))
           ; the string lane: a 1-arg frame-callee call carries a text fast path (kind-guarded,
           ; falls to the drive -- never a deopt), so a non-negative in-range (s i) in a loop is
           ; a native byte index; the fast lane's unsigned compare wraps a negative huge, so both
@@ -297,13 +297,13 @@
           (: dg (ev '(\ s n ((: (go i a) (? (< i n) (go (+ i 1) (+ (* a 10) (- (s i) 48))) a)) 0 0)))
              (31415926 = (dg "31415926" 8)))
           (: bs (ev '(\ s ((: (go i a) (? (< i (tally s)) (go (+ i 1) (+ a (s i))) a)) 0 0)))
-             ((294 = (bs "abc")) && (0 = (bs ""))))
+             (294 = bs "abc" && 0 = bs ""))
           (: pk (ev '(\ s n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (s (- i 2)))) a)) 0 0)))
              (195 = (pk "ab" 6)))                                                 ; 97+98: i=0,1 index -2,-1 and i>=4 runs past the end -- every out-of-range read joins nothing on
           (: mx (ev '(\ f n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0)))
-             ((90 = (mx (\ x (x * 2)) 10)) && (294 = (mx "abc" 5))))              ; one site, both callee kinds; 97+98+99, the two past-end reads joining nothing on
+             (90 = mx (\ x (x * 2)) 10 && 294 = mx "abc" 5))              ; one site, both callee kinds; 97+98+99, the two past-end reads joining nothing on
           (: ct (ev '(\ l n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally l))) a)) 0 0)))
-             ((12 = (ct '(1 2 3) 4)) && (8 = (ct "ab" 4))))                       ; chain tally drives; text tally native
+             (12 = ct '(1 2 3) 4 && 8 = ct "ab" 4))                       ; chain tally drives; text tally native
           (: ts (ev '(\ tally n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally i))) a)) 0 0)))
              (10 = (ts (\ x (x + 1)) 4)))
           ; sibling callees (v6): a letrec lambda sibling is a free head in the weave re-analysis
@@ -315,7 +315,7 @@
              lx (ev '(: (dig? c) (? (< c 58) (< 47 c) ())
                         (digrun s n) (: (go k v) (? (&& (k < n) (dig? (s k))) (go (k + 1) ((* 10 v) + ((s k) - 48))) v) (go 0 0))
                         digrun))
-             (&& (31415 = (lx "31415x" 6)) (0 = (lx "x" 1)) (fired? n2)))         ; the lexer class ambles (fires) and == interp
+             (31415 = lx "31415x" 6 && 0 = lx "x" 1 && fired? n2))         ; the lexer class ambles (fires) and == interp
           (: mk (ev '(\ b (: (addb x) (+ x b)
                              (suml l) ((: (go l a) (? (two? l) (go (cup l) (+ a (addb (cap l)))) a)) l 0)
                              suml)))
@@ -908,9 +908,9 @@
       (0 = (elem 'x ())) (0 = (elem 'x 5))                   ; no chain -> the walk never starts
       (200000 = ((: (go i a) (? (i < 200000) (go (i + 1) (a + elem 'q '(a b q))) a)) 0 0))
       (: pg (jitgroupir [(. '(pm2 x l) '(? (two? l) (? (= x (cap l)) 1 (pm2 x (cup l))) 0))] 'pm2 'x64)     ; the group lane direct: exec x64 ...
-         (&& (1 = (pg 'b '(a b))) (0 = (pg 'z '(a b))) (0 = (pg 'z 7))))
-      (< 0 (tally (peep (assemble 'a64 (bcat [(mkouterir 'a64 2 'pm3 2 0 () () () () '(0))     ; ... and the point-guarded outer assembles on a64
-                (mkhir 'a64 '(pm3) 'pm3 '(x l) '(? (two? l) (? (= x (cap l)) 1 (pm3 x (cup l))) 0))])) 'bytes 0))))
+         (1 = pg 'b '(a b) && 0 = pg 'z '(a b) && 0 = pg 'z 7))
+      (0 < #(peep (assemble 'a64 (bcat [(mkouterir 'a64 2 'pm3 2 0 () () () () '(0))     ; ... and the point-guarded outer assembles on a64
+                (mkhir 'a64 '(pm3) 'pm3 '(x l) '(? (two? l) (? (= x (cap l)) 1 (pm3 x (cup l))) 0))])) 'bytes 0)))
    (say err "glaze emit: the point-= grammar -- elem group-native, admission + both deopt lanes ok\n"))
 
 (say err "test/glaze-x86: emit + auto + ir native codegen ok\n")

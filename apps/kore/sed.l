@@ -37,10 +37,10 @@
    (usub nodes repl ln g?) (usubn nodes repl ln g? 1)
    ; ..from the nth match on: the ones before it ride through as they were (ed's s///N)
    (usubn nodes repl ln g? nth)
-    (: n (tally ln)
+    (: n #ln
        ; the replacement text for one match at (ms me) with group spans sp
        (expand ms me sp)
-        (: rn (tally repl)
+        (: rn #repl
            (xgo i acc)
             (? (rn <= i) acc
                (: c (repl i)
@@ -59,7 +59,7 @@
        ; k counts the matches met, so the ones before nth keep their own text
        (walk i acc ate hit k)
         (refindm nodes ln i @ [_ ms me sp]
-          (? (&& ate (me = ms) (ms = i))
+          (? (ate && me = ms && ms = i)
              (? (i < n) (walk (i + 1) (acc + snip ln i (i + 1)) () hit k)
                 [hit acc])
              (: rep? (nth <= k)
@@ -78,19 +78,19 @@
    ; (a1 a2 verb payload); an address is () | ('ln N) | ('last) | ('re nodes);
    ; an s payload is (nodes repl g? p?). ere? picks the regex dialect --
    (sparse sc ere?)
-    (: n (tally sc)
+    (: n #sc
        (rx p) ((? ere? reere rebre) p)
        (sep? c) ((c = 32) || (c = 9) || (c = 10) || (c = 59))
        (skip i) (? ((i < n) && sep? (sc i)) (skip (i + 1)) i)
        (spc i) (? ((i < n) && ((sc i = 32) || (sc i = 9))) (spc (i + 1)) i)
        (dig? c) ((48 <= c) && (c <= 57))
-       (num i v) (? ((i < n) && dig? (sc i)) (num (i + 1) ((* 10 v) + (sc i - 48))) [v i])
+       (num i v) (? ((i < n) && dig? (sc i)) (num (i + 1) ((10 * v) + (sc i - 48))) [v i])
        ; to the unescaped delimiter d: \d -> d, all else verbatim -> (text j) | ()
        (until i d acc)
         (? (n <= i) ()
            (: c (sc i)
               (? (c = d) [acc (i + 1)]
-                 (&& (c = 92) ((i + 1) < n) (sc (i + 1) = d))
+                 (c = 92 && i + 1 < n && sc (i + 1) = d)
                   (until (i + 2) d (acc + string d))
                  ((c = 92) && ((i + 1) < n))
                   (until (i + 2) d (acc + string 92 + string (sc (i + 1))))
@@ -129,9 +129,9 @@
            (? (n <= j) [1 (rev acc)]
               (raddr j @ [a1 j2]
                 (: comma ((j2 < n) && (sc j2 = 44))
-                   (? (comma && !(two? a1)) ()               ; a , with no left leg
+                   (? (comma && (atom? a1)) ()               ; a , with no left leg
                       (: r2 (? comma (raddr (j2 + 1)) [() j2])
-                         (? (!(two? r2) || (comma && !(two? <r2))) ()
+                         (? ((atom? r2) || (comma && (atom? <r2))) ()
                             (: a2 <r2 j3 (spc <>r2)
                                (? (n <= j3) ()
                                   (: v (sc j3)
@@ -157,7 +157,7 @@
    (srun cmds rd n? op)
     (: t (tablet 0)                                  ; the range toggles, keyed by command index
        (amatch a no ln last?)
-        (? !(two? a) 1
+        (? (atom? a) 1
            (<a = 'ln) (no = <>a)
            (<a = 'last) last?
            (rehasm <>a ln))
@@ -165,7 +165,7 @@
        ; a range opens on its first address and closes on a later line's second
        (sel? c idx no ln last?)
         (: a1 <c a2 <>c
-           (? !(two? a2) (amatch a1 no ln last?)
+           (? (atom? a2) (amatch a1 no ln last?)
               (peep t idx 0)
                (: fin (? (<a2 = 'ln) (<>a2 <= no) (amatch a2 no ln last?))
                   _ (? fin (pin t idx 0) ())
@@ -182,13 +182,12 @@
               (: v <>>c
                  (? (v = 'd) [1 ps]
                     (v = 'q) [2 ps]
-                    (v = 'p) (: _ (say q ps) _ (put q 10)
-                                (rline more (idx + 1) ps no q last?))
+                    (v = 'p) (say q ps, put q 10, rline more (idx + 1) ps no q last?)
                     (: pay <>>>c
                        pr >>pay
                        r (usub <pay <>pay ps <pr)
                        ps2 <>r
-                       _ (? (<r && <>pr) (: _ (say q ps2) (put q 10)) ())
+                       _ (? (<r && <>pr) (say q ps2, put q 10) ())
                        (rline more (idx + 1) ps2 no q last?)))))
            [0 ps])
        ; the last line of an unterminated source rides a jug. the newline goes missing
@@ -201,9 +200,7 @@
            (: hold (? (? last? term? 1) () (jug 0))
               q (? hold hold op)
               (rline cmds 0 x no q last? @ [kind ps]
-                (: _ (? (kind = 1) () (? n? () (: _ (say q ps) (put q 10))))
-                   _ (? hold (say op (chomp (slurp hold))) 0)
-                   (? (kind = 2) 0 (mline (no + 1))))
+                ((? (kind = 1) () (? n? () (say q ps, put q 10))), (? hold (say op (chomp (slurp hold))) 0), (? (kind = 2) 0 (mline (no + 1))))
                 0))
            0)
        (mline 1))
@@ -213,7 +210,7 @@
     (: t (tablet 0)
        o (uopt as t '(101) '(101) ())                      ; -e script, stacking
        _ (? (two? o) () (udie 1 "sed: bad option"))
-       _ (: c (uoptun t "nEie") (? (nil? c) () (udie 1 ("sed: unknown option -" + string c))))
+       _ (: c (uoptun t "nEie") (? !c () (udie 1 ("sed: unknown option -" + string c))))
        eps <>o rest <>>o
        _ (? (two? eps || two? rest) ()
             (udie 1 "usage: sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]"))
@@ -224,8 +221,7 @@
        _ (? (two? pc) () (udie 1 ("sed: invalid script: " + sc)))
        cmds <>pc
        ; GNU's own sentence for an unreadable operand, and the one the gate pins
-       (sed-miss f) (: _ (say err ("sed: can't read " + f + ": No such file or directory"))
-                       _ (put err 10) 0)
+       (sed-miss f) (say err ("sed: can't read " + f + ": No such file or directory"), put err 10, 0)
        ; -i: each file its own stream, edited and written back. a file that will
        ; not open complains and the rest still flow, exactly as the joined lane.
        ; the answer is still held whole, and must be: it overwrites its own input.
@@ -236,9 +232,9 @@
               _ (srun cmds rd n? j)
               b (peep rd 'bad 0)
               _ (? b () (? (uwrite f (slurp j)) ()
-                           (: _ (say err ("sed: couldn't open " + f)) (put err 10))))
+                           (say err ("sed: couldn't open " + f), put err 10)))
               (inplace more (? b 1 bad)))
-           (: _ (flush err) (? bad 2 0)))
+           (flush err, (? bad 2 0)))
        (? (i? && two? fs) (inplace fs ())
           ; the joined lane: every file one stream, so the numbers and $ run through
           (: rd (urdj sed-miss fs)

@@ -93,7 +93,7 @@
                 (: ps (cparse-t <>pp 'x64)
                    (? !(okv? ps) ['bad 'parse ps]
                       (: g (cgen-obj <>ps (cauup ps) (caup (cuup ps)) (cauup (cuup ps)) () 'x64)
-                         (? !(okv? g) ['bad 'gen g] ['ok <>ps]))))))))
+                         (? !(okv? g) ['bad 'gen g] ['ok <>ps (ps 3)]))))))))
 
    ; --- one mutant -> a verdict symbol, plus the stage it died in when it died.
    ; ('scare ..) beats everything: a case that scared is not a refusal, it is a fall.
@@ -111,8 +111,11 @@
           ; it parsed. the clay leg -- G1 over a tree the corpus never had.
           (: a (r 1)
              v (cok? a)
+             ; cparse keeps a definition's return type in its sigs, not the tree;
+             ; clay's RET slot is where the shower reads it
+             (rety f) (? (two? f && <f = 'fn && #f = 4 && two? (r 2 (f 1))) (f + [<(r 2 (f 1))]) f)
              (? !(v = 1) ['badshape 'clay]
-                (: t (cshow a)
+                (: t (cshow (<a = 'prog ? ['prog (map rety <>a)] a))
                    (? (gripe? t) ['inexpr 'clay]
                       (: b (front t)
                          (? !(<b = 'ok) ['reparse 'clay]

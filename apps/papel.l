@@ -61,10 +61,10 @@
    ; the source tree (root came off our own seat), else by NAME off the registry
    ; an installed love baked. the tree lane probes first, so a tree papel running
    ; under an installed love reads its own siblings, never the baked older copies.
-   (want nm f) (? (cite nm) 1
+   (want nm f) (cite nm ? 1
                   (: q (open (root + f) "r")
-                     (? (hot? q) (: _ (close q) _ (borrow (root + f)) 1)
-                        (: _ (borrow nm) 1))))
+                     (hot? q ? (close q, borrow (root + f), 1)
+                        (borrow nm, 1))))
    _ (want 'lapiz "lapiz/lapiz.l")
    _ (want 'cook "cook/cook.l")
    _ (want 'hueweb "vi/hueweb.l"))
@@ -82,7 +82,7 @@
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
 (: (strcat l)    (foldl (+) "" l)
    (slurpf f)    (uread f @ [1 s] s "")
-   (spitf f s)   (: q (open f "w") _ (? (hot? q) (: _ (say q s) (close q)) 0) (? (hot? q) 1 0))
+   (spitf f s)   (: q (open f "w") (hot? q ? (say q s, close q, 1) 0))
    ; a directory answers a list from readdir, a file answers nothing -- that is the test,
    ; and it needs no mode bits (love has no bitwise and to pick S_IFDIR out of stat's mode).
    (dir? p)      (two? (readdir p))
@@ -92,74 +92,74 @@
    ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.
    ; the prefixes keep a leading slash where splitting on / and rejoining would
    ; quietly turn /tmp/x into tmp/x, and the whole build then writes nowhere
-   (mkdirp p)    (each (pprefixes p) (\ d (mkdir d 493)), #p ? (mkdir p 493) 0))
+   (mkdirp p)    (each (pprefixes p) (d \ mkdir d 493), #p ? (mkdir p 493) 0))
 
 ; --- slugs: a heading becomes an id ----------------------------------------------------
 ; lowercase, runs of anything-else collapsed to one dash, the ends trimmed. two headings
 ; (or terms) that spell the same slug are deduped by a counter, so an anchor is stable
 ; for a given page even when its text is not unique.
-(: (down c)   (? ((65 <= c) && (c <= 90)) (c + 32) c)
-   (squash s) ((: (g i acc prev) (? (i < tally s)
+(: (down c)   (65 <= c && c <= 90 ? (c + 32) c)
+   (squash s) (:- (g 0 "" 0)
+                  (g i acc prev) (i < #s ?
                                     (: c (s i)
-                                       (? ((c = 45) && (prev = 45)) (g (i + 1) acc c)
+                                       (c = 45 && prev = 45 ? (g (i + 1) acc c)
                                           (g (i + 1) (acc + string c) c)))
-                                    acc)) 0 "" 0)
+                                    acc))
    (trimd s)  (: n #s
-                 a ((: (f i) (? ((i < n) && (s i = 45)) (f (i + 1)) i)) 0)
-                 b ((: (f i) (? ((a < i) && (s (i - 1) = 45)) (f (i - 1)) i)) n)
+                 a (:- (f 0) (f i) (i < n && s i = 45 ? (f (i + 1)) i))
+                 b (:- (f n) (f i) (a < i && s (i - 1) = 45 ? (f (i - 1)) i))
                  (snip s a b))
-   (slug s)   (: raw ((: (g i acc) (? (i < tally s)
-                                      (: c (s i) (g (i + 1) (acc + (? (alnum? c) (string (down c)) "-"))))
-                                      acc)) 0 "")
+   (slug s)   (: raw (:- (g 0 "")
+                         (g i acc) (i < #s ?
+                                      (: c (s i) (g (i + 1) (acc + (alnum? c ? (string (down c)) "-"))))
+                                      acc))
                  out (trimd (squash raw))
-                 (? (0 < tally out) out "section")))
+                 (0 < #out ? out "section")))
 
 ; --- reading the middle: the site-level facts of one page ------------------------------
 ; every one of these is a walk over the AST, which is the point of having one.
-(: (itext l) (strcat (map (\ x (: t <x
-                                  (? (= t 'text) <>x
-                                     (= t 'code) <>x
-                                     (= t 'strong || (= t 'em) || (= t 'link)) (itext <>x)
+(: (itext l) (strcat (map (x \ (: t <x
+                                  (? (t = 'text) <>x
+                                     (t = 'code) <>x
+                                     (t = 'strong || t = 'em || t = 'link) (itext <>x)
                                      ""))) l))
-   (head? b)  (= <b 'head)
-   (pmeta d)  (: m (filter (\ b (= <b 'meta)) d) (? (two? m) (<>(<m)) ()))
-   (pbody d)  (filter (\ b !(= <b 'meta)) d)
+   (head? b)  (<b = 'head)
+   (pmeta d)  (: m (filter (b \ <b = 'meta) d) (two? m ? <><m ()))
+   (pbody d)  (filter (b \ <b != 'meta) d)
    ; the heads, each with its deduped slug: ((level slug label) ..). one parse feeds both
    ; the anchors in the body and the toc beside it, so the two cannot drift apart.
-   (pheads d) ((: (g l seen acc)
-                  (? !(two? l) (rev acc)
+   (pheads d) (:- (g d (tablet 0) ())
+                  (g l seen acc)
+                  (atom? l ? (rev acc)
                      (: b <l
-                        (? (head? b)
+                        (head? b ?
                            (: lab (itext (b 2))
                               s0 (slug lab)
                               k (peep seen s0 0)
-                              sn (? (0 < k) (s0 + "-" + show k) s0)
-                              _ (pin seen s0 (k + 1))
-                              (g >l seen ([<>b sn lab] . acc)))
+                              sn (0 < k ? (s0 + "-" + show k) s0)
+                              (pin seen s0 (k + 1), g >l seen ([<>b sn lab] . acc)))
                            (g >l seen acc)))))
-               d (tablet 0) ())
    ; the deflist terms, each with its slug: one list per deflist, in document order, deduped
    ; after the heads so a term and a heading never share an anchor. a glossary entry is
    ; linkable the way a heading is, and a link to one is checked the same way.
    (pterms d hs) (: seen (foldl (\ t h (: s0 (slug (h 2)) (pin t s0 (peep t s0 0 + 1)))) (tablet 0) hs)
                     (one it) (: s0 (slug (itext <it))
                                 k (peep seen s0 0)
-                                _ (pin seen s0 (k + 1))
-                                (0 < k ? (s0 + "-" + show k) s0))
+                                (pin seen s0 (k + 1), (0 < k ? (s0 + "-" + show k) s0)))
                     (map (b \ map one <>b) (filter (b \ <b = 'deflist) d)))
    ; the title: the first head-1, else the meta `title`, else the caller's fallback.
-   (ptitle d dflt) (: h1 (filter (\ b (head? b && (<>b = 1))) d)
+   (ptitle d dflt) (: h1 (filter (b \ head? b && <>b = 1) d)
                       mt (mget (pmeta d) 'title)
                       (? (two? h1) (itext (<h1 2))
-                         (0 < tally mt) mt
+                         (0 < #mt) mt
                          dflt))
    ; the blurb: the first paragraph, clipped on a word boundary. () when the page has none.
    (clip s n) (: t #s
-                 (? (t <= n) s
-                    (: b ((: (f i) (? ((0 < i) && !(s (i - 1) = 32)) (f (i - 1)) i)) n)
-                       (snip s 0 (? (0 < b) (b - 1) n) + "..."))))
-   (blurb d)  (: ps (filter (\ b (= <b 'para)) d)
-                 (? (two? ps) [['text (clip (itext (<>(<ps))) 160)]] ())))
+                 (t <= n ? s
+                    (: b (:- (f n) (f i) (0 < i && s (i - 1) != 32 ? (f (i - 1)) i))
+                       (snip s 0 (0 < b ? (b - 1) n) + "..."))))
+   (blurb d)  (: ps (filter (b \ <b = 'para) d)
+                 (two? ps ? [['text (clip (itext <><ps) 160)]] ())))
 
 ; --- cross-links: .md becomes .html, but only inside the site --------------------------
 ; a url is rewritten iff it is a bare relative `*.md` naming a page the site actually
@@ -169,8 +169,8 @@
    (? (has? u "://") u
       !(ends? u ".md") u
       (: b (pbase u)
-         (peep known b 0 ? (snip u 0 (tally u - 3) + ".html") u)))
-   (rli f l)  (map (\ x (<x @ 'link ['link (rli f <>x) (f <>>x)]
+         (peep known b 0 ? (snip u 0 (#u - 3) + ".html") u)))
+   (rli f l)  (map (x \ (<x @ 'link ['link (rli f <>x) (f <>>x)]
                               ('strong || 'em) [<x (rli f <>x)]
                               x)) l)
    (rlb f b) (<b @ 'para    ['para (rli f <>b)]
@@ -193,23 +193,23 @@
                          ("<" + h + " id=\"" + hq sl + "\">" + hti inl + "</" + h + ">"))
    (hdl cls sls items)
    (: (row sl it) ("<dt id=\"" + hq sl + "\">" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>")
-      (rows sls its) (? !(two? its) () (row <sls <its . rows >sls >its))
+      (rows sls its) (atom? its ? () (row <sls <its . rows >sls >its))
       ("<dl" + (0 < #cls ? (" class=\"" + hq cls + "\"") "") + ">\n"
        + join "\n" (rows sls items) + "\n</dl>"))
    (pshow d hs ts)
-   ((: (g l hs ts acc cls)
-       (? !(two? l) (join "\n" (rev acc))
+   (:- (g d hs ts () "")
+       (g l hs ts acc cls)
+       (atom? l ? (join "\n" (rev acc))
           (: b <l
              (? (head? b)
-                (: h (hhead <(<hs) (<>(<hs)) <>>b)
-                   (g >l >hs ts (h . acc) (<>(<hs))))
+                (: h (hhead <<hs <><hs <>>b)
+                   (g >l >hs ts (h . acc) <><hs))
                 (<b = 'deflist) (g >l hs >ts (hdl cls <ts <>b . acc) cls)
                 (g >l hs ts (htb b . acc) cls)))))
-    d hs ts () "")
    ; the toc: the same heads, minus the one that became the title. a page with fewer than
    ; two of them gets none -- a one-item contents is furniture, not navigation.
-   (ptoc d hs) (: rest (? (two? hs && (1 = <(<hs))) >hs hs)
-                  (? !(two? >rest) ""
+   (ptoc d hs) (: rest (two? hs && 1 = <<hs ? >hs hs)
+                  (atom? >rest ? ""
                      ("<ul>\n" + strcat (map (h \ "<li class=\"l" + show <h + "\"><a href=\"#"
                                                    + hq <>h + "\">" + hq <>>h + "</a></li>\n") rest)
                       + "</ul>")))
@@ -269,33 +269,32 @@ table{border-collapse:collapse}
 "))
 
 ; --- one page, and the index ------------------------------------------------------------
-(: (outname s) (: b (pbase s) (snip b 0 (tally b - 3) + ".html"))
+(: (outname s) (: b (pbase s) (snip b 0 (#b - 3) + ".html"))
    (render conf known src dst)
    (: d0 (mdread (slurpf src))
       d  (relink (u \ mdurl known u) d0)
       body (pbody d)
       hs (pheads body)
       ttl (ptitle body (pbase src))
-      _ (spitf dst (wrap conf ttl (pmetah (pmeta d)) (ptoc body hs)
-                         (pshow body hs (pterms body hs))))
-      dst)
+      (spitf dst (wrap conf ttl (pmetah (pmeta d)) (ptoc body hs)
+                       (pshow body hs (pterms body hs))),
+       dst))
    ; the index is a page like any other: papel builds an AST -- a head, then a deflist of
    ; link/blurb pairs -- and lapiz shows it. no second template, no html here at all.
    (index-doc conf srcs)
    (: site (peep conf 'title "papel")
-      rows (map (\ s (: d (mdread (slurpf s))
+      rows (map (s \ (: d (mdread (slurpf s))
                       [[['link [['text (ptitle d (pbase s))]] (outname s)]] (blurb d)])) srcs)
     [['head 1 [['text site]]] ['deflist rows]])
    (windex conf srcs dst)
    (: d (index-doc conf srcs)
       hs (pheads d)
-      _ (spitf dst (wrap conf (peep conf 'title "papel") "" "" (pshow d hs (pterms d hs))))
-      dst))
+      (spitf dst (wrap conf (peep conf 'title "papel") "" "" (pshow d hs (pterms d hs))), dst)))
 
 ; --- the sources, and the build -----------------------------------------------------------
 (: (mdsof p) (? (dir? p) (map (f \ p + "/" + f) (sort (filter (f \ ends? f ".md") (readdir p))))
                 (ends? p ".md") [p])
-   (sources conf) (foldl (+) () (map mdsof (peep conf 'src ())))
+   (sources conf) (foldl (+) () (map mdsof (conf 'src)))
    (conf0 _) {'out "out/site" 'title "papel" 'src () 'self "apps/papel.l"}
    ; the build is a declaration, not a loop: one recipe per page, one for the stylesheet,
    ; one for the index, and a phony `site` over the lot -- then cook decides what is stale.
@@ -315,7 +314,7 @@ table{border-collapse:collapse}
    ; request compares against that same reading and sees it. and `build` itself is
    ; untouched, so the decision that actually matters stays cook's, at cook's resolution.
    ; mtime and size, because an edit can preserve either one alone.
-   (fprint conf) (foldl (+) 0 (map (\ s (: st (stat s) (two? st ? (<>st + <st) 0)))
+   (fprint conf) (foldl (+) 0 (map (s \ (: st (stat s) (two? st ? (<>st + <st) 0)))
                                    (sources conf)))
    (refresh conf box) (: f (fprint conf)
                          (f = peep box 'f -1 ? 0 (pin box 'f f, build conf)))
@@ -335,13 +334,13 @@ table{border-collapse:collapse}
       _ (recipe sheet dep [(_ \ spitf sheet css)])
       idx (out + "/index.html")
       own? (peep known "index.md" 0)                 ; a real index.md wins; papel adds none
-      _ (? own? 0 (recipe idx (srcs + dep) [(_ \ windex conf srcs idx)]))
-      _ (recipe 'site (dsts + [sheet] + (? own? () [idx])) ())
+      _ (own? ? 0 (recipe idx (srcs + dep) [(_ \ windex conf srcs idx)]))
+      _ (recipe 'site (dsts + [sheet] + (own? ? () [idx])) ())
       ; cook's own `cook` prints its verdict; papel wants the number, so it takes the
       ; quiet entry. $ of a map is its key count, and cook marks an item shipped only when
       ; the recipe really advanced its mtime -- so this is exactly "files written".
       n #(prepped 'site)
-      _ (? !(peep conf 'quiet 0)
+      _ (!(peep conf 'quiet 0) ?
          (puts $ "papel: " + (0 < n ? (show n + " written to " + out + "/\n")
                                       (out + "/ is up to date\n"))))
       n))
@@ -358,7 +357,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
    _ (:
    (pdie c m) (udie c ("papel: " + m))
    (papel-main as)
-   (: _ (? (lit? (cite 'papel)) (borrow 'papel) 0)   ; splice my registered self if I am one (cook-main's
+   (: _ (lit? (cite 'papel) ? (borrow 'papel) 0)   ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
       ; ..and posix beside it. a global name reads the LIVE book (love/ev.c's lvm_index),
       ; and this is called on a chain that carries neither: the line above puts back
@@ -369,15 +368,15 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       o (uopt as t '(111 116 115) () {"out" 111 "title" 116 "quiet" 113 "serve" 115})
       _ (two? o ? 0 (pdie 2 (last as + " needs an argument")))
       un (uoptun t '(111 116 113 115))
-      _ (nil? un ? 0 (pdie 2 ("unknown option -" + string un)))
+      _ (!un ? 0 (pdie 2 ("unknown option -" + string un)))
       src <>>o
       sy (uoptstray as src)
-      _ (nil? sy ? 0 (pdie 2 ("unknown option " + sy)))
-      _ (: v (uoptv t 111) (nil? v ? 0 (pin c 'out v)))
-      _ (: v (uoptv t 116) (nil? v ? 0 (pin c 'title v)))
+      _ (!sy ? 0 (pdie 2 ("unknown option " + sy)))
+      _ (: v (uoptv t 111) (!v ? 0 (pin c 'out v)))
+      _ (: v (uoptv t 116) (!v ? 0 (pin c 'title v)))
       _ (peep t 113 0 ? (pin c 'quiet 1) 0)
       sp (uoptv t 115)
-      _ (nil? sp ? 0 (: v (unum sp) (charm? v ? (pin c 'serve v) (pdie 2 ("not a port: " + sp)))))
+      _ (!sp ? 0 (: v (unum sp) (charm? v ? (pin c 'serve v) (pdie 2 ("not a port: " + sp)))))
       _ (pin c 'src (two? src ? src '("README.md" "doc")))
       _ (build c)
       ; --serve: hand the finished directory to kiosko, which is a separate crew member and
@@ -391,13 +390,13 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       ; because a rebuild per request is not news. the box carries the last fingerprint,
       ; seeded from the build we just did so the first request is not a false alarm.
       port (peep c 'serve 0)
-      _ (? port
+      _ (port ?
            (: _ (want 'kiosko "kiosko/kiosko.l")
               q (peep c 'quiet 0)
               _ (pin c 'quiet 1)
-              box (: t (tablet 0) _ (pin t 'f (fprint c)) t)
-              _ (? (cite 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box)) 0
-                   (pdie 1 ("cannot listen on :" + show port)))))
+              box (pin (tablet 0) 'f (fprint c))
+              (cite 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box) ? 0
+               (pdie 1 ("cannot listen on :" + show port)))))
       0)
    papel-main)
 

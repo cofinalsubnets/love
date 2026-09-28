@@ -362,7 +362,6 @@ test_web: host
 	@echo "  web: ok -- the icon is what web/ lays"
 test_sb: host out$(hsuf)/sb
 	@echo TEST apps/sb/sb.l + test/host/sb.l
-	@rm -rf out/.sbtest
 	@cat test/00-init.l test/host/sb.l | $(gsh) test/gate/run.sh sb "$m" "sb: ok"
 # the kore smokes drive love's own crew layer (`love kore ..` -- the layered bake),
 # warm per spawn; the argv0 smoke lays its own two-line shim,

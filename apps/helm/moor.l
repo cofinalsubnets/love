@@ -23,7 +23,7 @@
 ; itself down -- the supervisor it is a window into keeps running.
 (module 'helm
 (borrow 'posix)
-(: (hrundir _) (: r (getenv "XDG_RUNTIME_DIR") ((string? r) && (1 < tally r) ? r "/run"))
+(: (hrundir _) (: r (getenv "XDG_RUNTIME_DIR") (string? r && 1 < #r ? r "/run"))
    (helm-sock _) (hrundir 0 + "/helm.sock")
 
    ; --- one session -----------------------------------------------------------
@@ -39,19 +39,17 @@
        ; a report already ends in a newline and must not gain a blank line: one
        ; value, one trailing newline, so a client can read a reply as a line.
        (reply v) (: t (string? v ? v (show v))
-                    n (tally t)
-                    s ((0 < n) && ((t (n - 1)) == 10) ? t (t + "\n"))
-                    _ (say c s)
-                    (flush c))
+                    n #t
+                    s (0 < n && t (n - 1) == 10 ? t (t + "\n"))
+                    (say c s, flush c))
        (go pend)
         (: cl (rdline ())
-           (? !(two? cl) 0
+           (? (atom? cl) 0
               ((: (h x) (: r (sound x)
                            (? (two? r)
                                 (: v (trap (\ _ (ev 'ev <r)) 0 (\ a b ['scare a b]))
-                                   _ (reply v)
-                                   (h >r))
-                              (== r 'torn) (go x)
+                                   (reply v, h >r))
+                              (r == 'torn) (go x)
                               (go ()))))
                (pend + cl))))
        (go ()))
@@ -64,30 +62,27 @@
    (helm-moor path)
     (: l (listen ['unix path])
        (? !(lit? l) (hnote ("no moor at " + path), 0)
-          (: _ (hnote ("moored at " + path))
-             (go _) (: _ (await l)
-                       c (accept l)
-                       _ (hscoop 0)
-                       _ (lit? c ? (twirl (\ _ (hsession c, close c)) 0) 0)
-                       (go 0))
-             (go 0))))
+          (hnote ("moored at " + path),
+           (: (go _) (await l,
+                      (: c (accept l)
+                         (hscoop 0, lit? c ? (twirl (\ _ (hsession c, close c)) 0) 0, go 0)))
+              (go 0)))))
 
    ; --- the vocabulary --------------------------------------------------------
    ; short names, because they are typed at a prompt. they answer strings where a
    ; person is reading and love values where a program is.
    (hlines l)  (foldl (\ a s (a + s + "\n")) "" l)
-   (status x)  (hlines (map hstatus-line ((name? x) ? [x] (hnames (hunits-now 0)))))
-   (units x)   (map (\ u [(peep u 'name ()) (peep u 'kind ())
-                          (hstate (peep u 'name ())) (peep u 'exec [])])
+   (status x)  (hlines (map hstatus-line (name? x ? [x] (hnames (hunits-now 0)))))
+   (units x)   (map (\ u [(u 'name) (u 'kind) (hstate (u 'name)) (peep u 'exec [])])
                     (hunits-now 0))
    (start nm)  (hensure nm [])
    (stop nm)   (hstop1 nm)
    (bounce nm) (hbounce nm)
-   (logs n)    (hlines (htake (hcell 'events []) ((charm? n) && (0 < n) ? n 20)))
+   (logs n)    (hlines (htake (hcell 'events []) (charm? n && 0 < n ? n 20)))
    (reload x)  (hreload 0)
    ; halt signals US, so the answer goes out before anything stops and the
    ; shutdown itself runs where every other shutdown runs -- hloop's TERM arm.
-   (halt x)    (: _ (still (getpid 0) sig-term) "halting")
+   (halt x)    (still (getpid 0) sig-term, "halting")
    (helm-help x)
     ("helm -- the moor answers love forms.\n"
      + "  (status 0)      every unit; (status 'name) just one\n"

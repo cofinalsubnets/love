@@ -15,7 +15,7 @@
    smp (sm 2)
    smq (sm 3)
    ; a counted kind -- nets by tally, not by content
-   cnt (coin 'cnt {'net (\ c (tally (load c)))})
+   cnt (coin 'cnt {'net (\ c #(load c))})
    (tail-from k l) (? (atom? l) () (<l = k) l (tail-from k >l))
    (test
     ; --- what a coin is ---

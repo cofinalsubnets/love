@@ -12,7 +12,7 @@
 (test
  ; --- state-tuple structure: rank-1, length 4, 64-bit limbs (Z array, or C on
  ; a 32-bit word where C is the 8-byte-wide kind -- the 256-bit payload either way) ---
- (4 = tally (wheel 1))
+ (4 = #(wheel 1))
  (1 = rank (wheel 1))
  (tier (wheel 0) = tier (wheel 1))       ; a seed's limb type is stable...
  (? word (star-tray = tier (wheel 1)) 1) ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
@@ -61,7 +61,7 @@
  (: _ (rng-set (wheel 5)) a (randf 0) _ (rng-set (wheel 5)) b (randf 0) (a = b))
  (: _ (rng-set (wheel 5)) a (rand 0) _ (rng-set (wheel 6)) b (rand 0) !(a = b))
  (0 = rng-set 'junk)                          ; a bad state answers 0, the stream unchanged
- (4 = tally (rng-get 0))
+ (4 = #(rng-get 0))
 
  ; --- cross-target reproducibility pins (the same on host, kernel, and wasm) ---
  (rseq3 42 = '(1186220554705070239 1269524112903976849 4314585860703317388))

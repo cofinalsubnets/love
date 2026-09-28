@@ -10,7 +10,7 @@
 ; this is the acceptance test for a reader rewritten in love (p0/p1): every law must
 ; survive that flip byte for byte, so a case deliberately allowed to change is edited
 ; here first, or the differential cannot tell the two apart.
-(: (rdr s) (: r (sound s) (? (two? r) (cap r) r)))
+(: (rdr s) (: r (sound s) (two? r ? <r r)))
 
 ; --- the read protocol ---------------------------------------------------------
 ; `sound` takes TEXT -- a string, or the charlist a previous read left -- and
@@ -23,12 +23,12 @@
 ; and the residue is a charlist whichever went in: the string is spread once at
 ; the door, so the two doors meet after the first datum and never diverge.
 (test
- (: r (sound '(49)) (&& (two? r) (1 = (cap r)) (nil? (cup r))))  ; a datum, nothing after
- (nil? (sound ()))                                    ; a clean end -- the blue floor
- ('torn = (sound '(40)))                            ; the text ran out inside a shape
+ (: r (sound '(49)) (two? r && 1 = <r && !>r))                 ; a datum, nothing after
+ !(sound ())                                          ; a clean end -- the blue floor
+ ('torn = sound '(40))                              ; the text ran out inside a shape
  (: r (sound '(49 32 50))                             ; ...and the residue reads the next
-    (&& (1 = (cap r)) (2 = (cap (sound (cup r))))))
- (: r (sound '(40 41)) (&& (two? r) (nil? (cap r)))))  ; the datum () is still a datum
+    (1 = <r && 2 = <(sound >r)))
+ (: r (sound '(40 41)) (two? r && !<r)))                ; the datum () is still a datum
 
 ; --- the string door -----------------------------------------------------------
 ; text is a string or a charlist and the reader spreads the first itself -- every
@@ -36,12 +36,12 @@
 ; a value with no text in it (a number, a name) has no datum in it either.
 (test
  (: r (sound "(1 2) 3")
-    (&& ('(1 2) = (cap r)) (3 = (cap (sound (cup r))))))  ; ...and the residue resumes
- (: r (sound "1") (&& (two? r) (1 = (cap r))))
- (nil? (sound ""))                                    ; empty text: a clean end, not torn
- ('torn = (sound "(1"))
- (nil? (sound 42)) (nil? (sound 'notaport))           ; nothing to read is a clean end
- ((sound "(1 2) 3") = (sound (map "(1 2) 3" (jot 7)))))  ; the two doors agree, datum and rest
+    ('(1 2) = <r && 3 = <(sound >r)))                  ; ...and the residue resumes
+ (: r (sound "1") (two? r && 1 = <r))
+ !(sound "")                                          ; empty text: a clean end, not torn
+ ('torn = sound "(1")
+ !(sound 42) !(sound 'notaport)                       ; nothing to read is a clean end
+ ((sound "(1 2) 3") = sound (map "(1 2) 3" ^7)))  ; the two doors agree, datum and rest
 
 ; --- the port door ---------------------------------------------------------------
 ; a port is the third door: sound lifts it to the flowing charlist it already is, so
@@ -54,19 +54,19 @@
 ; runs every reader lane through that sieve and demands the string's answer back.
 (: (rdr-all x)                                      ; every datum of a text, in order
    (: (go cl acc) (: r (sound cl)
-                     (? (two? r)      (go (cup r) (. (cap r) acc))
+                     (? (two? r)      (go >r (<r . acc))
                         (r = 'torn) 'torn
                         (rev acc)))
       (go x ()))
-   (rdr-doors s) (: cl (map s (jot (tally s)))      ; string, charlist and port agree
+   (rdr-doors s) (: cl (map s (jot #s))             ; string, charlist and port agree
                     d (rdr-all s)
-                    (&& (d = (rdr-all cl)) (d = (rdr-all (tap cl))))))
+                    (d = rdr-all cl && d = rdr-all (tap cl))))
 (test
- (: p (tap (map "(1 2) 3" (jot 7))) r (sound p)
-    (&& ('(1 2) = (cap r)) (3 = (cap (sound (cup r))))))   ; a port, and its residue resumes
- (nil? (sound (tap ())))                            ; a spent port is a clean end
- (nil? (sound (jug 0)))                             ; ...and so is one with no read door
- ('torn = (sound (tap (map "(1" (jot 2)))))       ; torn reads torn off a port too
+ (: p (tap (map "(1 2) 3" ^7)) r (sound p)
+    ('(1 2) = <r && 3 = <(sound >r)))                     ; a port, and its residue resumes
+ !(sound (tap ()))                                  ; a spent port is a clean end
+ !(sound (jug 0))                                   ; ...and so is one with no read door
+ ('torn = sound (tap (map "(1" ^2)))              ; torn reads torn off a port too
  ; the sieve: one byte per gulp, so every lane crosses a thunk at every position.
  (rdr-doors "(1 2) 3 \"hi\" 'q")
  (rdr-doors "#!/usr/bin/env love\n(a b)")           ; the lookahead: one position, 3 forces
@@ -81,27 +81,27 @@
 ; maximal run of operator chars. the kebab law is about the inside of a
 ; name-led token: it never governed a token that starts with punctuation.
 (test
- ('old-thing = (rdr "old-thing"))                     ; - inside a name
- ('nl->sp = (rdr "nl->sp"))                           ; ...and -> inside one too
- ('x? = (rdr "x?")) ('x! = (rdr "x!"))
+ ('old-thing = rdr "old-thing")                     ; - inside a name
+ ('nl->sp = rdr "nl->sp")                           ; ...and -> inside one too
+ ('x? = rdr "x?") ('x! = rdr "x!")
  ("x'" = (string (rdr "x'")))                         ; the prime: x' is a name
- ('<= = (rdr "<= ")))                                 ; a spaced run is a plain symbol
+ ('<= = rdr "<= "))                                 ; a spaced run is a plain symbol
 
 ; --- comments ------------------------------------------------------------------
 ; `;` runs to end of line; `#!` is a shebang line. there are no block comments.
 (test
- (7 = (rdr "; nope
+ (7 = rdr "; nope
+7")
+ (7 = rdr "#! nope ( ( \"
 7"))
- (7 = (rdr "#! nope ( ( \"
-7")))
 
 ; --- strings -------------------------------------------------------------------
 ; "..." is the only string, with \ escapes. an unterminated one is `more`.
 (test
- ("hi" = (rdr "\"hi\""))
- ("a\"b" = (rdr "\"a\\\"b\""))
- ("" = (rdr "\"\""))
- ('torn = (sound "\"oops")))
+ ("hi" = rdr "\"hi\"")
+ ("a\"b" = rdr "\"a\\\"b\"")
+ ("" = rdr "\"\"")
+ ('torn = sound "\"oops"))
 
 ; --- numbers -------------------------------------------------------------------
 ; an integer literal reads its value -- in all three bases, at full precision, and the
@@ -111,24 +111,24 @@
 ; strtol accepted whole, so the reader never calls it. a float goes by am_strtod, which
 ; is ours and correctly rounded on every target.
 (test
- (3 = (rdr "3")) (-3 = (rdr "-3")) (3 = (rdr "+3"))
- (16 = (rdr "0x10")) (255 = (rdr "0xff")) (255 = (rdr "0XFF"))  ; hex, either case
- (-255 = (rdr "-0xff")) (255 = (rdr "+0xff"))
- (493 = (rdr "0755")) (7 = (rdr "007")) (0 = (rdr "00"))        ; octal, the leading zero its whole prefix
- ((0 - (1 / 2)) = (rdr "-.5")) ((1 / 2) = (rdr "+.5"))
- (18446744073709551615 = (rdr "18446744073709551615"))          ; decimal above the word: a big
+ (3 = rdr "3") (-3 = rdr "-3") (3 = rdr "+3")
+ (16 = rdr "0x10") (255 = rdr "0xff") (255 = rdr "0XFF")  ; hex, either case
+ (-255 = rdr "-0xff") (255 = rdr "+0xff")
+ (493 = rdr "0755") (7 = rdr "007") (0 = rdr "00")        ; octal, the leading zero its whole prefix
+ ((0 - (1 / 2)) = rdr "-.5") ((1 / 2) = rdr "+.5")
+ (18446744073709551615 = rdr "18446744073709551615")          ; decimal above the word: a big
  ; ..and the same value in the other two bases, in every build
- (18446744073709551615 = (rdr "0xffffffffffffffff"))
- (18446744073709551615 = (rdr "01777777777777777777777"))
- (18446744071564165120 = (rdr "0xffffffff80200000"))            ; a high-half address
- (9223372036854775807 = (rdr "0x7fffffffffffffff"))             ; the old strtol ceiling
- (340282366920938463463374607431768211455 = (rdr "0xffffffffffffffffffffffffffffffff"))
- (73786976294838206463 = (rdr "007777777777777777777777"))      ; 2^66-1, octal
+ (18446744073709551615 = rdr "0xffffffffffffffff")
+ (18446744073709551615 = rdr "01777777777777777777777")
+ (18446744071564165120 = rdr "0xffffffff80200000")            ; a high-half address
+ (9223372036854775807 = rdr "0x7fffffffffffffff")             ; the old strtol ceiling
+ (340282366920938463463374607431768211455 = rdr "0xffffffffffffffffffffffffffffffff")
+ (73786976294838206463 = rdr "007777777777777777777777")      ; 2^66-1, octal
  ; a prefix with no digits is no number: an honest symbol, free for binding.
  ; and 08 is neither octal (8 is not a digit there) nor decimal (the leading
  ; zero is a prefix) -- it falls through to the float lane, as it always has.
- ('0x = (rdr "0x")) ('0xg = (rdr "0xg")) ('0b101 = (rdr "0b101"))
- (8.0 = (rdr "08")))
+ ('0x = rdr "0x") ('0xg = rdr "0xg") ('0b101 = rdr "0b101")
+ (8.0 = rdr "08"))
 
 ; --- quote and the constructor wraps -------------------------------------------
 ; a sigil glued to its datum builds it: ' quote, @ tuple. those two are the
@@ -136,19 +136,19 @@
 ; and the twin is the infix `~`. a list operand splices into the call rather than
 ; being wrapped, and the empty collections go to a direct one-arg nif.
 (test
- ('(\ x) = (rdr "'x"))
- ('(hash a b) = (rdr "{a b}"))
- ('(tuple 1 2) = (rdr "@(1 2)"))
- ('(0 ~ 1) = (rdr "(0 ~ 1)"))                         ; ~ spaced is a plain operator symbol:
- ('(mono (~ x)) = (rdr "~x"))                         ; the twin is opfix's, not the reader's.
+ ('(\ x) = rdr "'x")
+ ('(hash a b) = rdr "{a b}")
+ ('(tuple 1 2) = rdr "@(1 2)")
+ ('(0 ~ 1) = rdr "(0 ~ 1)")                         ; ~ spaced is a plain operator symbol:
+ ('(mono (~ x)) = rdr "~x")                         ; the twin is opfix's, not the reader's.
                                                       ; ~ glued is conj (the valence law)
  ; the empty collections go direct to a one-arg nif (a zero-arg macro is not
  ; expanded by the self-hosted feel on love0). every reader emission is ()-tailed,
  ; these two included, so they compare whole against a source-quoted form.
- ('(tablet 0) = (rdr "{}"))
- ('(iota 0) = (rdr "@()"))
- (() = (cup (cup (rdr "{}"))))
- (() = (cup (cup (rdr "<x")))))
+ ('(tablet 0) = rdr "{}")
+ ('(iota 0) = rdr "@()")
+ (() = >>(rdr "{}"))
+ (() = >>(rdr "<x")))
 
 ; --- the valence law, reader half ----------------------------------------------
 ; glued is monadic, spaced is dyadic -- everywhere, head included. a run glued to
@@ -156,12 +156,12 @@
 ; opfix decides later. only : and ? are suppressed at head (they take the whole
 ; list); \ never fuses.
 (test
- ('(mono (< x)) = (rdr "<x"))
- ('(f (mono (< x))) = (rdr "(f <x)"))
- ('(mono (<> b)) = (rdr "<>b"))
- ('(< x) = (rdr "(< x)"))                             ; spaced: no wrap
- ('(: a 1) = (rdr "(: a 1)"))                         ; : at head is not fused
- ('(mono (! -5)) = (rdr "!-5")))                      ; the shed: ! then -5
+ ('(mono (< x)) = rdr "<x")
+ ('(f (mono (< x))) = rdr "(f <x)")
+ ('(mono (<> b)) = rdr "<>b")
+ ('(< x) = rdr "(< x)")                             ; spaced: no wrap
+ ('(: a 1) = rdr "(: a 1)")                         ; : at head is not fused
+ ('(mono (! -5)) = rdr "!-5"))                      ; the shed: ! then -5
 
 ; --- + and - are operator runs too -------------------------------------------
 ; `+` and `-` are runs like every other punctuation; the one exception is that a numeral
@@ -171,17 +171,17 @@
 ; before the digit and reads (mono (- -5)), while ++5 has no shed and reads (mono (++ 5))
 ; for opfix to split -- so both are asserted, or a later change breaks one lane silently.
 (test
- ('(mono (- -5)) = (rdr "--5"))       (5 = --5)
- ('(mono (++ 5)) = (rdr "++5"))       (5 = ++5)
- ('(mono (-- -5)) = (rdr "---5"))     (-5 = ---5)
- ('(mono (-+ 5)) = (rdr "-+5"))       (-5 = -+5)
- ('(mono (- x)) = (rdr "-x"))
- ('(mono (+ x)) = (rdr "+x"))
+ ('(mono (- -5)) = rdr "--5")       (5 = --5)
+ ('(mono (++ 5)) = rdr "++5")       (5 = ++5)
+ ('(mono (-- -5)) = rdr "---5")     (-5 = ---5)
+ ('(mono (-+ 5)) = rdr "-+5")       (-5 = -+5)
+ ('(mono (- x)) = rdr "-x")
+ ('(mono (+ x)) = rdr "+x")
  ; ...and the numeral exception, which is the whole reason for the carve-out
- (-3 = (rdr "-3")) (3 = (rdr "+3"))
- ('- = (rdr "- x"))                                   ; a lone - is the symbol
- ('(mono (- (f x))) = (rdr "-(f x)"))                 ; glued to a form: negate
- ('(mono (+ (tuple 3 4))) = (rdr "+@(3 4)")))         ; ...or to a constructor
+ (-3 = rdr "-3") (3 = rdr "+3")
+ ('- = rdr "- x")                                   ; a lone - is the symbol
+ ('(mono (- (f x))) = rdr "-(f x)")                 ; glued to a form: negate
+ ('(mono (+ (tuple 3 4))) = rdr "+@(3 4)"))         ; ...or to a constructor
 
 ; --- delimiters and the zero point ---------------------------------------------
 ; the opener carries the wrap: [..] is the list and {..} the hash -- each is its
@@ -191,13 +191,13 @@
 ; reads the opener's wrap in silence -- matching them is libra's, not the reader's.
 ; the empty form is the zero point, not the number 0.
 (test
- ('(list a b) = (rdr "[a b]"))          ('(hash a b) = (rdr "{a b}"))
- ('(list) = (rdr "[]"))                 ('(tablet 0) = (rdr "{}"))
- ('(list (list a b) (list c d)) = (rdr "[[a b] [c d]]"))   ; the nest is the whole point
- ((rdr "-(list 1 2)") = (rdr "-[1 2]"))               ; and it glues like a form does
- ('(list a b) = (rdr "[a b)")) ('(a b) = (rdr "(a b]"))    ; a crossed pair, silent
- (() = (rdr "()")) !(0 = (rdr "()"))
- (', = (rdr ",")))                                    ; the comma is its own datum
+ ('(list a b) = rdr "[a b]")          ('(hash a b) = rdr "{a b}")
+ ('(list) = rdr "[]")                 ('(tablet 0) = rdr "{}")
+ ('(list (list a b) (list c d)) = rdr "[[a b] [c d]]")   ; the nest is the whole point
+ ((rdr "-(list 1 2)") = rdr "-[1 2]")               ; and it glues like a form does
+ ('(list a b) = rdr "[a b)") ('(a b) = rdr "(a b]")    ; a crossed pair, silent
+ (() = rdr "()") !(0 = rdr "()")
+ (', = rdr ","))                                    ; the comma is its own datum
 
 ; --- a constructor sigil over an open form renames the wrap ---------------------
 ; @ -- the one splicing wrap that still wears a sigil -- names the constructor the
@@ -209,10 +209,10 @@
 ; @ reads glue, and it alone: spaced it is the plain symbol -- the head of the
 ; match form, which is why a tray never wears a space.
 (test
- ((rdr "@(1 2 3)") = (rdr "@[1 2 3]")) ((rdr "@()") = (rdr "@[]"))
- ((rdr "@(a b)") = (rdr "@{a b}"))
- ((rdr "@(1 2)") = (rdr "@[1 2]"))
- ('@ = (rdr "@ [1 2]")) ('(@ x (list _a b) b) = (rdr "(@ x [_a b] b)"))  ; @ reads glue
- ('(\ (list a b)) = (rdr "'[a b]"))                   ; ' is not a constructor: it quotes the form
- ('(\ (tuple 1 2)) = (rdr "'@(1 2)"))                 ; sigil over sigil still stacks
- ('torn = (rdr "@[")))
+ ((rdr "@(1 2 3)") = rdr "@[1 2 3]") ((rdr "@()") = rdr "@[]")
+ ((rdr "@(a b)") = rdr "@{a b}")
+ ((rdr "@(1 2)") = rdr "@[1 2]")
+ ('@ = rdr "@ [1 2]") ('(@ x (list _a b) b) = rdr "(@ x [_a b] b)")  ; @ reads glue
+ ('(\ (list a b)) = rdr "'[a b]")                   ; ' is not a constructor: it quotes the form
+ ('(\ (tuple 1 2)) = rdr "'@(1 2)")                 ; sigil over sigil still stacks
+ ('torn = rdr "@["))

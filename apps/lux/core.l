@@ -26,27 +26,27 @@
    (zrow z) (two? z ? (rev <>z + (<z . <>>z)))               ; the stack as an ordered row, master first
    (zfrom l) (two? l ? (zmk <l () >l))                        ; a row -> a zipper, head focused
    (zrev z) (two? z ? (zmk <z <>>z <>z))                      ; mirror: up <-> down
-   (zfocup z) (? !(two? z) ()                                      ; focus up, wrapping to the bottom
+   (zfocup z) (? (atom? z) ()                                      ; focus up, wrapping to the bottom
                  (: up <>z
                     (? (two? up) (zmk <up >up (<z . <>>z))
                        (: all (rev (<z . <>>z)) (zmk <all >all ())))))
    (zfocdn z) (zrev (zfocup (zrev z)))                             ; focus down = mirrored focus up
-   (zswapup z) (? !(two? z) ()                                     ; swap the focused window upward
+   (zswapup z) (? (atom? z) ()                                     ; swap the focused window upward
                   (: up <>z
                      (? (two? up) (zmk <z >up (<up . <>>z))
                         (zmk <z (rev <>>z) ()))))                  ; at the top: rotate to the bottom
    (zswapdn z) (zrev (zswapup (zrev z)))
-   (zmaster z) (!(two? z) ? () (zmk <z () (rev <>z + <>>z)))       ; focused becomes master
+   (zmaster z) (atom? z ? () (zmk <z () (rev <>z + <>>z)))       ; focused becomes master
    (zins w z) (two? z ? (zmk w <>z (<z . <>>z)) (zmk w () ()))  ; insert above the focus, focused
    (znub w l) (filter (x \ x != w) l)
-   (zdel w z) (? !(two? z) ()                                      ; delete w; focus falls down, then up
+   (zdel w z) (? (atom? z) ()                                      ; delete w; focus falls down, then up
                  (: f <z up (znub w <>z) dn (znub w <>>z)
                     (? (f != w) (zmk f up dn)
                        (two? dn) (zmk <dn up >dn)
                        (two? up) (zmk <up >up ())
                        ())))
    (zhas? w z) (any (x \ x = w) (zrow z))
-   (zfromrow row f) (: (go up m) (? !(two? m) ()                   ; a row -> a zipper focused at f (() if absent)
+   (zfromrow row f) (: (go up m) (? (atom? m) ()                   ; a row -> a zipper focused at f (() if absent)
                                     (<m = f) (zmk f up >m)
                                     (go (<m . up) >m))
                        (go () row))
@@ -88,14 +88,14 @@
    (wspair ts rs) (two? ts && two? rs ? ([<ts <rs] . wspair >ts >rs))
    (wswithin? a b) (b 0 <= a 0 && b 1 <= a 1 && a 0 + a 2 <= b 0 + b 2 && a 1 + a 3 <= b 1 + b 3)   ; rect a inside rect b
    (wsclean rects)                                                 ; a rect inside another (a clone, a nested output) is no screen: the first of equals stays
-    (: (go seen l) (? !(two? l) (rev seen)
+    (: (go seen l) (? (atom? l) (rev seen)
                       (any (k \ wswithin? <l k) seen) (go seen >l)                   ; inside one already kept
                       (any (k \ wswithin? <l k && <l != k) >l) (go seen >l)          ; inside a larger one still to come
                       (go (<l . seen) >l))
        (go () rects))
    (wsrescreen sh rects)                                           ; the screens changed: visible tags keep their screens in order,
     (: rs (sort (wsclean rects))                                   ; hidden ones fill new screens, tags past the last screen hide;
-       (? !(two? rs) sh                                            ; screens go by position (x, then y): the leftmost is screen 0
+       (? (atom? rs) sh                                            ; screens go by position (x, then y): the leftmost is screen 0
           (: tags (take #rs (wsvistags sh + wshidden sh))
              cur (any (= (wscur sh)) tags ? (wscur sh) <tags)
              (wsmake cur (wsboard sh) (wsfloat sh) (wspair tags rs)))))
@@ -133,7 +133,7 @@
           (: z (zfromrow (wsrow sh) f)
              (? !z sh
                 (: ts (zrow (zop z)) row (wsring sh)
-                   (fill m r) (? !(two? m) ()
+                   (fill m r) (? (atom? m) ()
                                  (wsfloating? sh <m) (<m . fill >m r)
                                  (<r . fill >m >r))
                    (wsmap sh (zz \ zfromrow (fill row ts) f)))))))
@@ -169,4 +169,4 @@
                   && all (p \ wsknownw? sh <p) (wsfloat sh)        ; no rect without a window,
                   && wsvisible? sh (wscur sh) && znodup? (wsvistags sh)   ; the current tag on a screen, no tag on two,
                   && all (t \ wsknown? sh t) (wsvistags sh))       ; and every screen showing a real tag
-   (znodup? l) (? !(two? l) 1 (any (x \ x = <l) >l) 0 (znodup? >l)))
+   (znodup? l) (? (atom? l) 1 (any (x \ x = <l) >l) 0 (znodup? >l)))

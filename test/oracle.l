@@ -23,8 +23,8 @@
 ; free vars are never renumbered) -- that arithmetic is covered by spec.v, not ev.
 (: ; de Bruijn terms as tagged chains: (0 n) Var | (1 b) Lam | (2 f a) App
  (dvar n) [0 n]   (dlam b) [1 b]   (dapp f a) [2 f a]
- (dtag t) <t   (dn t) (caup t)   (dbody t) (caup t)
- (dfun t) (caup t)  (darg t) (cauup t)
+ (dtag t) <t   (dn t) <>t   (dbody t) <>t
+ (dfun t) <>t  (darg t) <>>t
 
  ; shift d c t -- bump free vars (index >= c) by d   (spec.v: shift)
  (tshift d c t)
@@ -43,7 +43,7 @@
  (apply-n t args n) (? (n < 1) t (apply-n (tsubst 0 <args (dbody t)) >args (n - 1)))
  (evs fuel t args)
    (? (fuel < 1) (rebuild t args)
-      (dtag t = 2) (: a (evs (fuel - 1) (darg t) 0) (evs (fuel - 1) (dfun t) (. a args)))
+      (dtag t = 2) (: a (evs (fuel - 1) (darg t) 0) (evs (fuel - 1) (dfun t) (a . args)))
       (dtag t = 1)
         (: n (darity t) k #args
            (? (k < 1) t
@@ -64,30 +64,30 @@
  (partition sc st)
    (? !sc [0 0 st]
       (: r (random st 2) rest (partition >sc >r)
-         (? (cap r = 0)
-            [(. <sc <rest) (caup rest) (cauup rest)]
-            [<rest (. <sc (caup rest)) (cauup rest)])))
+         (? (<r = 0)
+            [(<sc . <rest) <>rest <>>rest]
+            [<rest (<sc . <>rest) <>>rest])))
  tI (dlam (dvar 0))
  (gen g sc st)
    (: r (random st 10) pick <r st1 >r
       (? (g < 1) (? !sc [tI 0 st1] [(dvar <sc) >sc st1])
          (!!sc && (pick < 4)) [(dvar <sc) >sc st1]
          (pick < 7)
-           (: bsc (. 0 (map (+ 1) sc))
-              res (gen (g - 1) bsc st1) b <res lo (caup res) st2 (cauup res)
+           (: bsc (0 . map (+ 1) sc)
+              res (gen (g - 1) bsc st1) b <res lo <>res st2 <>>res
               lo' (map (\ x (x - 1)) (filter (\ x (0 < x)) lo))
               [(dlam b) lo' st2])
-           (: pr (partition sc st1) sc1 <pr sc2 (caup pr) st2 (cauup pr)
-              rf (gen (g - 1) sc1 st2) f <rf lof (caup rf) st3 (cauup rf)
-              ra (gen (g - 1) (cat lof sc2) st3) a <ra st4 (cauup ra)
-              [(dapp f a) (caup ra) st4])))
+           (: pr (partition sc st1) sc1 <pr sc2 <>pr st2 <>>pr
+              rf (gen (g - 1) sc1 st2) f <rf lof <>rf st3 <>>rf
+              ra (gen (g - 1) (cat lof sc2) st3) a <ra st4 <>>ra
+              [(dapp f a) <>ra st4])))
 
  ; extensional agreement: apply both results to marker symbols, then compare
  (ground v) (v 'm1 'm2 'm3 'm4 'm5)
  (oracle-ok n sd g)
    (: (go n st good)
         (? (n < 1) good
-           (: res (gen g 0 st) t <res st' (cauup res)
+           (: res (gen g 0 st) t <res st' <>>res
               ok (ground (ev (render 0 t)) = ground (ev (render 0 (teval t))))
               (go (n - 1) st' (good + (? ok 1 0)))))
       (n = go n (wheel sd) 0))

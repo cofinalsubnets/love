@@ -36,7 +36,7 @@
            (jpeg-encode 0 48 (grad 2) 90 = ()) (jpeg-encode 64 48 (grad 2) 101 = ()))
 
    ; -- against magick ------------------------------------------------------------------
-   magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (: _ (close q) 1) 0))
+   magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (close q, 1) 0))
    ; decode a file with magick -> its rgba | ()
    (back f) (: r (hark ["magick" f "-depth" "8" "rgba:-"]) (? ((two? r) && (<r = 0)) >r ()))
    ; the mean squared error of two rgba strings over r g b

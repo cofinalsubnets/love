@@ -7,7 +7,8 @@
 
 (borrow 'salt)
 
-(: st-dir "out/.salt"
+; every path this lays is the pid's own, so two runs over one out/ keep apart
+(: st-dir ("out/.salt-" + show (getpid 0))
    _ (mkdir "out" 493) _ (mkdir st-dir 493)
    (st-put nm text) (: p (st-dir + "/" + nm)
                        q (open p "w")
@@ -103,6 +104,7 @@
  (tablet? (salt 'salt-test-no-such-app))                 ; neither file exists: an empty tablet
  !(salt-all (salt 'salt-test-no-such-app) 'singleton))
 
+(hark ["rm" "-rf" st-dir])
 (test_fin ())
 (puts "salt: ok")
 (putc 10)
