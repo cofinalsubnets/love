@@ -47,14 +47,16 @@
    limn-down (utf8 9474)                      ; │
    limn-across (utf8 9472)                    ; ─
 
-   ; paint row i cell by cell, threading the pen
+   ; paint row i cell by cell, threading the pen. a wide char's tail says nothing: the
+   ; outer terminal steps two columns for its lead
    (limn-row j s c i q p) (? (q < c)
                            (: k (i * c + q)
                               g (glass s k 0)
-                              p2 (limn-pen g (glass s k 1) (glass s k 2))
-                              _ (p = p2 ? 0 (say j (limn-sgr p2)))
-                              _ (say j (limn-glyph (g & 2097151)))
-                              (limn-row j s c i (q + 1) p2))
+                              (? ((g >> 21 & 3) = 2) (limn-row j s c i (q + 1) p)
+                                 (: p2 (limn-pen g (glass s k 1) (glass s k 2))
+                                    _ (p = p2 ? 0 (say j (limn-sgr p2)))
+                                    _ (say j (limn-glyph (g & 2097151)))
+                                    (limn-row j s c i (q + 1) p2))))
                            p)
 
    ; one pane: every grid row addressed at its own origin, which is the whole

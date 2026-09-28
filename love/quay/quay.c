@@ -1,5 +1,6 @@
 #include "quay.h"
 #include "cp437.h"
+#include "cpwidth.h"
 
 // *e <- a cell of codepoint cp in the current pen. the blank a clear or scroll
 // leaves behind is cp 0 in the current pen,
@@ -28,7 +29,7 @@ void cb_clear(struct cb *c) { cb_fill(c, 0); }
 void cb_recolor(struct cb *c, uint32_t fg, uint32_t bg) {
   cb_attr(c, fg, bg);
   for (uint32_t i = 0, j = (uint32_t) c->rows * c->cols; i < j; i++)
-    c->cb[i].g = cb_cp(c->cb[i].g), c->cb[i].fg = c->cb[i].bg = cb_ink(cb_def, 0);
+    c->cb[i].g &= 0x7fffffu, c->cb[i].fg = c->cb[i].bg = cb_ink(cb_def, 0);
   cb_dirt(c, 0, c->rows - 1u); }
 
 void cb_cur(struct cb *c, uint32_t row, uint32_t col) {
@@ -160,14 +161,46 @@ static void cb_ctl(struct cb *c, uint8_t i) {
 // one carries it to a fresh line), then the stamp, then the step -- a
 // stamp on the last column pends rather than moving, or overwrites in
 // place with autowrap off.
+// a wide char is two cells, a lead holding the codepoint and a tail holding 0; one
+// that meets the last column wraps first (or steps back, autowrap off). a zero-width
+// one is dropped. cb_unpair blanks the other half of whatever pair a write lands on.
+static void cb_unpair(struct cb *c, uint32_t p) {
+  uint32_t const cs = c->cols, col = p % cs, w = cb_wide(c->cb[p].g);
+  if (w == cb_tail && col) c->cb[p - 1].g &= 0xff000000u;
+  if (w == cb_lead && col + 1u < cs) c->cb[p + 1].g &= 0xff000000u; }
+
 static void cb_glyph(struct cb *c, uint32_t cp) {
-  uint32_t cs = c->cols;
+  uint32_t cs = c->cols, w = cb_width(cp);
+  if (!w) return;
+  if (w == 2 && cs < 2) w = 1;
   if (c->flag & cb_pend)
     c->flag &= (uint16_t) ~cb_pend, c->wpos -= c->wpos % cs, cb_ind(c);
-  cb_pen(c, cp, &c->cb[c->wpos]);
-  cb_dirt(c, c->wpos / cs, c->wpos / cs);
-  if (c->wpos % cs == cs - 1u) { if (c->flag & cb_wrap) c->flag |= cb_pend; }
-  else c->wpos++; }
+  if (w == 2 && c->wpos % cs == cs - 1u) {
+    if (c->flag & cb_wrap) c->wpos -= cs - 1u, cb_ind(c);
+    else c->wpos--; }
+  uint32_t const p = c->wpos;
+  cb_unpair(c, p);
+  if (w == 2) cb_unpair(c, p + 1u);
+  cb_pen(c, cp, &c->cb[p]);
+  if (w == 2) {
+    c->cb[p].g |= (uint32_t) cb_lead << 21;
+    cb_pen(c, 0, &c->cb[p + 1u]);
+    c->cb[p + 1u].g |= (uint32_t) cb_tail << 21; }
+  cb_dirt(c, p / cs, p / cs);
+  uint32_t const last = p + w - 1u;
+  if (last % cs == cs - 1u) { c->wpos = last; if (c->flag & cb_wrap) c->flag |= cb_pend; }
+  else c->wpos = last + 1u; }
+
+// row r after an erase or a shift: a lead with no tail beside it, or a tail with no
+// lead, is blanked -- half a wide char draws as nothing
+static void cb_mend(struct cb *c, uint32_t r) {
+  uint32_t const cs = c->cols, rb = r * cs;
+  for (uint32_t j = 0; j < cs; j++) {
+    uint32_t const w = cb_wide(c->cb[rb + j].g);
+    if (w == cb_lead && (j + 1u == cs || cb_wide(c->cb[rb + j + 1u].g) != cb_tail))
+      c->cb[rb + j].g &= 0xff000000u;
+    if (w == cb_tail && (!j || cb_wide(c->cb[rb + j - 1u].g) != cb_lead))
+      c->cb[rb + j].g &= 0xff000000u; } }
 
 // RIS: everything back to the floor -- pens, faces, region, modes,
 // cursor, ground. LNM survives: the newline discipline belongs to the
@@ -263,13 +296,13 @@ static void cb_csi(struct cb *c, uint8_t i) {
     uint32_t lo = c->pv[0] == 1 ? 0 : c->wpos, hi = c->pv[0] == 1 ? c->wpos + 1u : all;
     if (c->pv[0] >= 2) lo = 0, hi = all;
     for (uint32_t p = lo; p < hi; p++) c->cb[p] = e;
-    if (hi > lo) cb_dirt(c, lo / cs, (hi - 1u) / cs);
+    if (hi > lo) cb_mend(c, lo / cs), cb_mend(c, (hi - 1u) / cs), cb_dirt(c, lo / cs, (hi - 1u) / cs);
     return; }
    case 'K': { struct cb_cell e; cb_pen(c, 0, &e);
     uint32_t lo = c->pv[0] == 1 ? rb : c->wpos, hi = c->pv[0] == 1 ? c->wpos + 1u : re;
     if (c->pv[0] >= 2) lo = rb, hi = re;
     for (uint32_t p = lo; p < hi; p++) c->cb[p] = e;
-    cb_dirt(c, r, r);
+    cb_mend(c, r), cb_dirt(c, r, r);
     return; }
    case 'L': if (r >= c->top && r <= c->bot) cb_scdn(c, r, c->bot, n); return;
    case 'M': if (r >= c->top && r <= c->bot) cb_scup(c, r, c->bot, n); return;
@@ -277,18 +310,18 @@ static void cb_csi(struct cb *c, uint8_t i) {
     struct cb_cell e; cb_pen(c, 0, &e);
     for (uint32_t p = re; p-- > c->wpos + n;) c->cb[p] = c->cb[p - n];
     for (uint32_t p = c->wpos, j = c->wpos + n; p < j; p++) c->cb[p] = e;
-    cb_dirt(c, r, r);
+    cb_mend(c, r), cb_dirt(c, r, r);
     return; }
    case 'P': { if (n > cs - col) n = cs - col;
     struct cb_cell e; cb_pen(c, 0, &e);
     for (uint32_t p = c->wpos; p < re - n; p++) c->cb[p] = c->cb[p + n];
     for (uint32_t p = re - n; p < re; p++) c->cb[p] = e;
-    cb_dirt(c, r, r);
+    cb_mend(c, r), cb_dirt(c, r, r);
     return; }
    case 'X': { if (n > cs - col) n = cs - col;
     struct cb_cell e; cb_pen(c, 0, &e);
     for (uint32_t p = c->wpos, j = c->wpos + n; p < j; p++) c->cb[p] = e;
-    cb_dirt(c, r, r);
+    cb_mend(c, r), cb_dirt(c, r, r);
     return; }
    case 'S': return cb_scup(c, c->top, c->bot, n);
    case 'T': return cb_scdn(c, c->top, c->bot, n);
@@ -384,15 +417,53 @@ static void cb_put1(struct cb *c, uint8_t i) {
 // the built-in faces draw the cp437 page (cp437.h, laid by quay.l): a codepoint's
 // glyph is ascii as itself, else the fold's -- the classic page plus aliases that
 // MEAN one of ours. anything else, astral planes included, wears the ■.
-uint8_t cb_437(uint32_t cp) {
-  if (cp < 0x7f) return (uint8_t) cp;
+int cb_437x(uint32_t cp) {
+  if (cp < 0x7f) return (int) cp;
   uintptr_t lo = 0, hi = sizeof cp437_fold / sizeof *cp437_fold;
   while (lo < hi) {
     uintptr_t m = (lo + hi) / 2;
     uint32_t k = cp437_fold[m] >> 8;
-    if (k == cp) return (uint8_t) cp437_fold[m];
+    if (k == cp) return (int) (cp437_fold[m] & 255u);
     if (k < cp) lo = m + 1; else hi = m; }
-  return 0xfe; }
+  return -1; }
+
+uint8_t cb_437(uint32_t cp) { int g = cb_437x(cp); return g < 0 ? 0xfe : (uint8_t) g; }
+
+static uint32_t cb_rd16(uint8_t const *b, uintptr_t i) { return (uint32_t) b[i] | (uint32_t) b[i + 1] << 8; }
+
+// a face is 12 bytes of head, the directory, the pages and the glyphs, each index in
+// range: a page names a real page, a glyph a real glyph. anything else is no face
+int cb_face_ok(uint8_t const *b, uintptr_t n) {
+  if (!b || n < cb_qf_head + 2u * cb_qf_dir) return 0;
+  if (b[0] != 'q' || b[1] != 'f' || b[2] != '1' || b[3] || b[4] != 8 || b[5] != 16) return 0;
+  uint32_t const np = cb_rd16(b, 6), ng = cb_rd16(b, 8) | cb_rd16(b, 10) << 16;
+  uintptr_t const pg0 = cb_qf_head + 2u * cb_qf_dir, gl0 = pg0 + (uintptr_t) np * 512u;
+  if (np > cb_qf_dir || n != gl0 + (uintptr_t) ng * 32u) return 0;
+  for (uint32_t d = 0; d < cb_qf_dir; d++) {
+    uint32_t const p = cb_rd16(b, cb_qf_head + 2u * d);
+    if (p != 0xffff && p >= np) return 0; }
+  for (uintptr_t k = 0; k < (uintptr_t) np * 256u; k++)
+    if (cb_rd16(b, pg0 + 2u * k) > ng) return 0;
+  return 1; }
+
+// cp's 16 rows in a vetted face, or 0
+uint8_t const *cb_face_rows(uint8_t const *b, uint32_t cp) {
+  if (!b || cp >= 0x110000u) return 0;
+  uint32_t const np = cb_rd16(b, 6), p = cb_rd16(b, cb_qf_head + 2u * (cp >> 8));
+  if (p == 0xffff) return 0;
+  uintptr_t const pg0 = cb_qf_head + 2u * cb_qf_dir;
+  uint32_t const gi = cb_rd16(b, pg0 + (uintptr_t) p * 512u + 2u * (cp & 255u));
+  return gi ? b + pg0 + (uintptr_t) np * 512u + (uintptr_t) (gi - 1u) * 32u : 0; }
+
+// the columns cp takes, off 'text's own runs (cpwidth.h, laid by quay.l): each entry
+// cp << 2 | w opens a run of width w. below U+0300 everything printable is one
+uint8_t cb_width(uint32_t cp) {
+  if (cp < 0x300) return cp ? 1 : 0;
+  uintptr_t lo = 0, hi = sizeof cpwidth / sizeof *cpwidth;
+  while (hi - lo > 1) {
+    uintptr_t m = (lo + hi) / 2;
+    if (cpwidth[m] >> 2 <= cp) lo = m; else hi = m; }
+  return (uint8_t) (cpwidth[lo] & 3u); }
 
 // a cp437 glyph byte's codepoint: the page read forward
 uint32_t cb_unfold(uint8_t g) { return cp437[g]; }

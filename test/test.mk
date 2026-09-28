@@ -206,7 +206,7 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/gcpause.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/berth.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/pic.l test/host/story.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/synth.l test/host/lupa.l test/host/mc.l test/host/pom.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l
+hostnif_tests = test/host/gcpause.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/berth.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/pic.l test/host/face.l test/host/story.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/synth.l test/host/lupa.l test/host/mc.l test/host/pom.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l
 # out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -447,13 +447,14 @@ test_moon: host $(love0)
 	@$(gsh) test/gate/moon.sh $(ho) $m $(love0)
 # the committed generated artifacts, laid from the tables that define them (love/mx.l the +/*
 # matrices and the kind lattice, love/nifs.l the nif + instruction registry, quay.l the
-# xterm-256 palette and the cp437 page host and kernel share). `make mx` refreshes, test_clay diffs.
+# xterm-256 palette, the cp437 page and the widths host and kernel share). `make mx` refreshes, test_clay diffs.
 # mx.h/kinds.h/nifs.h are core headers, so the gate after a refresh is `make test`, not
 # test_clay alone. each is written aside and moved only once the whole set lays.
 # dest:source:value:shape-check -- one roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
 mx_gen = love/mx.h:love/mx.l:mx-h:mx-ok love/kinds.h:love/mx.l:kinds-h:mx-ok love/nifs.h:love/nifs.l:nifs-h:nifs-ok \
-         love/quay/xterm256.h:love/quay/quay.l:q-c:q-ok love/quay/cp437.h:love/quay/quay.l:q-437:q-437-ok love/love_data.ld:love/mx.l:mx-ld:mx-ok
+         love/quay/xterm256.h:love/quay/quay.l:q-c:q-ok love/quay/cp437.h:love/quay/quay.l:q-437:q-437-ok \
+         love/quay/cpwidth.h:love/quay/quay.l:q-wid:q-wid-ok love/love_data.ld:love/mx.l:mx-ld:mx-ok
 # the \# escapes are load-bearing: a bare # in a make variable starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
@@ -462,7 +463,7 @@ mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'love/mx.h love/kinds.h love/nifs.h xterm256.h cp437.h love/love_data.ld "(love/mx.l + love/nifs.l + quay.l on $m)"
+	@echo 'LOVE	'love/mx.h love/kinds.h love/nifs.h xterm256.h cp437.h cpwidth.h love/love_data.ld "(love/mx.l + love/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # ...and the dependency, off the same roster: without it a new love/nifs.l row builds clean and
@@ -498,7 +499,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: love/mx.h, love/kinds.h, love/nifs.h, xterm256.h, cp437.h and love/love_data.ld regenerate identically"
+	@echo "clay-mx: love/mx.h, love/kinds.h, love/nifs.h, xterm256.h, cp437.h, cpwidth.h and love/love_data.ld regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 # test_moonfuzz -- moon's refusal surface: each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no scare, no hang -- plus G1 on every mutant that

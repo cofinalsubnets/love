@@ -104,7 +104,9 @@
  ; come out as limn paints them
  (hscreen-text p) (: s (peep (hbox p) () 0) r (gaze s 1) c (gaze s 2)
                      (cp i) (glass s i 0 & 2097151)
-                     (row i) (: (go q acc) (? (q < 0) acc (go (q - 1) ((limn-glyph (cp (i * c + q))) + acc)))
+                     (tail? i) ((glass s i 0 >> 21 & 3) = 2)      ; a wide char's right half: its lead says both
+                     (glyph i) (tail? i ? "" (limn-glyph (cp i)))
+                     (row i) (: (go q acc) (? (q < 0) acc (go (q - 1) ((glyph (i * c + q)) + acc)))
                                 (last q) (? (q < 0) -1 (32 = cp (i * c + q) || 0 = cp (i * c + q)) (last (q - 1)) q)
                                 (go (last (c - 1)) ""))
                      (map row (jot r)))

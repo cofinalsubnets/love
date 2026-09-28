@@ -330,21 +330,62 @@
  _ (test (9617 = chat s 7) (9608 = chat s 8))
  _ (scribe s "\xce\xb1\xe2\x88\x9e\xc2\xb0")      ; α ∞ °
  _ (test (945 = chat s 9) (8734 = chat s 10) (176 = chat s 11))
- _ (scribe s "\xf0\x9f\x98\x80")                  ; an emoji: one cell, held whole
- _ (test (128512 = chat s 12) (13 = cur s))
+ _ (scribe s "\xf0\x9f\x98\x80")                  ; an emoji: wide, held whole
+ _ (test (128512 = chat s 12) (0 = chat s 13) (14 = cur s))
  _ (scribe s 226) _ (scribe s 148)                ; a sequence split across feeds
  _ (scribe s 144)                                 ; ... still one ┐
- _ (test (9488 = chat s 13))
+ _ (test (9488 = chat s 14))
  _ (scribe s "\x80")                              ; a stray continuation: U+FFFD
- _ (test (65533 = chat s 14))
+ _ (test (65533 = chat s 15))
  _ (scribe s "\xc3\e[Dx")                         ; torn mid-sequence: a U+FFFD lands,
- _ (test (120 = chat s 15)                    ; the ESC rides on -- cub steps
-           (16 = cur s))                        ; back and x overwrites it
+ _ (test (120 = chat s 16)                    ; the ESC rides on -- cub steps
+           (17 = cur s))                        ; back and x overwrites it
  _ (scribe s "\xe2\x96\xba\xe2\x96\xb2\xe2\x99\xaa")   ; ► ▲ ♪: pictures whose cp437 bytes
- _ (test (9658 = chat s 16) (9650 = chat s 17) (9834 = chat s 18)   ; ..are controls
-           (19 = cur s))                        ; and act as none (no CR for ♪)
+ _ (test (9658 = chat s 17) (9650 = chat s 18) (9834 = chat s 19)   ; ..are controls
+           (19 = cur s))                        ; and act as none: ♪ holds the last column
  _ (scribe s "\xc2\x9b\xed\xa0\x80")              ; a C1 control and a surrogate:
- _ (test (65533 = chat s 19) (65533 = chat s 20)))    ; neither lands as itself
+ _ (test (65533 = chat s 20) (65533 = chat s 21)))    ; neither lands as itself
+; --- 17c. wide characters: two cells, a lead holding the codepoint and a tail holding 0 ---
+(: (cwide s i) (glass s i 0 >> 21 & 3)            ; 0 single, 1 lead, 2 tail
+ s (mkscr 3 6)
+ _ (scribe s "\u{4e16}a")                          ; 世 then a
+ _ (test (19990 = chat s 0) (1 = cwide s 0)
+         (0 = chat s 1) (2 = cwide s 1)
+         (97 = chat s 2) (3 = cur s))              ; the cursor stepped two, then one
+ _ (scribe s "\e[1;2Hx")                           ; x over the tail
+ _ (test (0 = chat s 0) (0 = cwide s 0)            ; ..blanks the lead
+         (120 = chat s 1) (0 = cwide s 1))
+ _ (scribe s "\e[1;1H\u{4e16}\e[1;1Hy")            ; y over the lead
+ _ (test (121 = chat s 0) (0 = chat s 1) (0 = cwide s 1))   ; ..blanks the tail
+ _ (scribe s "\e[1;6H\u{4e16}")                    ; a wide char at the last column
+ _ (test (0 = cwide s 5)                           ; ..leaves it
+         (19990 = chat s 6) (1 = cwide s 6)        ; ..and wraps first
+         (8 = cur s))
+ _ (scribe s "\e[2;5H\u{4e16}")                    ; filling the last two columns
+ _ (test (1 = cwide s 10) (2 = cwide s 11)
+         (11 = cur s) (16 = (16 & gaze s 3)))      ; ..pends the wrap on the tail
+ _ (scribe s "\e[3;1H\u{0301}e\u{0301}")           ; combining marks take no cell
+ _ (test (101 = chat s 12) (13 = cur s)))
+
+; --- 17d. an erase or a shift that splits a pair blanks the half left over ---
+(: s (mkscr 1 8)
+ _ (scribe s "\u{4e16}\u{754c}\u{4e16}\u{754c}")    ; 世界世界: four pairs, the row full
+ _ (scribe s "\e[1;2H\e[1X")                       ; ech on the first tail
+ _ (test (0 = chat s 0) (0 = cwide s 0))           ; ..the lead goes with it
+ _ (scribe s "\e[1;4H\e[1P")                       ; dch on 界's tail: 世 shifts onto col 3
+ _ (test (19990 = chat s 3) (1 = cwide s 3) (2 = cwide s 4)
+         (0 = cwide s 2))                          ; ..and 界's lead, alone, blanks
+ _ (scribe s "\e[1;5H\e[K")                        ; el from 世's tail
+ _ (test (0 = chat s 3) (0 = cwide s 3)))          ; ..takes its lead too
+
+; --- 17e. the vt's widths are 'text's: a cursor steps what wcwidth says, on every plane ---
+(: _ (borrow 'text)
+ cps [161 768 4352 4447 8203 9728 9749 11904 12288 12351 19968 40959 44032 55203
+      63744 65024 65040 65281 65377 94176 110592 119648 127744 128512 129280 131072
+      173782 194560 917505 917760 983040]
+ s (mkscr 1 8)
+ (step cp) (: _ (scribe s "\e[1;1H") _ (scribe s (utf8 cp)) (cur s))
+ _ (test (foldl (\ a cp (&& a (step cp = max 0 (wcwidth cp)))) 1 cps)))
 
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)

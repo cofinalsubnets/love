@@ -62,6 +62,13 @@
            (sub? f "\e[0;1;38;2;1;2;3;49m" 0)
            (sub? f "\u{4e16}" 0)))
 
+; --- a wide char's tail says nothing: the outer terminal steps two columns for the lead,
+;     so the cell after it lands where the grid has it ---
+   _ (: s (mkscr 1 4)
+        _ (scribe s "\u{4e16}a")
+        f (paint s 1 4 0 0)
+        _ (test (sub? f "\u{4e16}a " 0)))
+
 ; --- the law that matters: every row is addressed at its own origin, which is
 ;     the whole difference between painting a rectangle and painting full lines ---
    _ (: s (mkscr 3 4)
