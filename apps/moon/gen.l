@@ -5627,6 +5627,12 @@
    (fidx fields name) (: (go l i) (? (atom? l) 0 (<<l = name) i (go >l (i + 1)))
                           (go fields 0))
    (nthfield fields i) (0 <= i && i < #fields ? (fields i) 'bad)
+   ; the member a positional initializer reaches after field ci: a union's later members start inside
+   ; ci's storage (an anonymous union's are spliced flat), and brace elision passes them by
+   (fnext g fields ci)
+    (: fe (fields ci) end (<>fe + tsz g <>>fe)
+       (go i) (? (i < #fields && !(bitf? <>>(fields i)) && <>(fields i) < end) (go (i + 1)) i)
+       (? (bitf? <>>fe) (ci + 1) (go (ci + 1))))
 
    ; brace elision (C 6.7.9): the init tree normalizes up front, each elided run wrapped in an
    ; explicit ('init ..), so layout only sees fully-braced inits. idempotent
@@ -5694,7 +5700,7 @@
                   (? (bad? fe) [(rev acc) l]          ; unknown field / past the end -> leave the rest
                      (!desig && anonbr? g fields fe it) (go (<>it + >l) cur acc)
                      (: pr (normelt g <>>fe desig 'dfield <>it (elval it) l)
-                        (go <>pr (ci + 1) (<pr . acc))))))
+                        (go <>pr (fnext g fields ci) (<pr . acc))))))
            (go items 0 ()))
        [items ()])
 
@@ -5748,7 +5754,7 @@
                           (stru? fty && !(<val = 'str)) (cgsfill g env foff fty val)
                           (bitf? fty) (cgbffill g env foff fty val)
                           (cgstore g env foff fty val))
-                     (bad? r ? 'bad (fill >l (ci + 1) (acc + r))))))))))
+                     (bad? r ? 'bad (fill >l (fnext g fields ci) (acc + r))))))))))
    ; a bitfield member: read-modify-write its unit at [r4+off] (cgstore would flatten the unit)
    (cgbffill g env off bt val)
     (: r (cgexpr g env val ())
@@ -5963,7 +5969,7 @@
                        (v = 'no ? 'bad
                         (place >l (ci + 1) acc (bfmerge g <>fe <>>fe v bfs))))
                    (: fb (imgpad g <>>fe (tsz g <>>fe) (elval it))
-                    (bad? fb ? 'bad (place >l (ci + 1) ([<>fe fb] . acc) bfs))))))
+                    (bad? fb ? 'bad (place >l (fnext g fields ci) ([<>fe fb] . acc) bfs))))))
              pr (place <>nini 0 () ())
              (bad? pr ? 'bad (bfover g <>pr (imflat (imsort <pr) size)))))))
    ; bitfield units, ((uoff uty value)..): arithmetic only, a 64-bit unit's mask is a big (% takes low bits, * shifts)
