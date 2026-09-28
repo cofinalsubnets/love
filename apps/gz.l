@@ -817,8 +817,6 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-pad w s) (#s < w ? (gzc-pad w (" " + s)) s)
    ; the raw clips, not posix's: no trailing slash is stripped first, so "a/b/" is
    ; a base of "" and a dir of "a/b/". a tar member wants the text it was handed
-   (gzc-base p) (snip p (lastslash p) #p)
-   (gzc-dir p)  (snip p 0 (lastslash p))             ; the head with its slash, "" for none
    (gzc-dirp? q) (: st (stat q) (two? st && <>>st & 61440 = 16384))
    (gzc-worse a b) (? (a = 1 || b = 1) 1 (a = 2 || b = 2) 2 0)
 
@@ -870,7 +868,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                     (: fs2 #s un (gzc-isize s) pay (fs2 - <>>>h - 8)
                        ; the name column is the path as it was typed, stem and all --
                        ; only -N's stored name arrives without a directory to keep
-                       nom (? (peep t 'N 0 && 0 < #<>>h) (gzc-base <>>h)
+                       nom (? (peep t 'N 0 && 0 < #<>>h) (pbase <>>h)
                               (: st (gzc-stem p suf) (st ? <>st p)))
                        _ (say out ((gzc-lrow fs2 un pay nom) + "\n"))
                        [<acc (<>acc + fs2) (<>>acc + un) (<>>>acc + pay)])))))
@@ -898,7 +896,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
              st (stat p)
              ms (two? st ? <>st 0)
              n? (peep t 'n 0)
-             z (gz-zip s (n? ? "" (gzc-base p)) (n? ? 0 (ms // 1000)))
+             z (gz-zip s (n? ? "" (pbase p)) (n? ? 0 (ms // 1000)))
              (? (peep t 'c 0) (: _ (say out z) _ (flush out) 0)
                 (: dst (p + suf)
                    (? (two? (lstat dst) && !(peep t 'f 0))
@@ -934,7 +932,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                    N? (peep t 'N 0 && 0 < #<>>h)
                    (? (!stem && !N?)
                       (: _ (gzc-moan t (p + ": unknown suffix -- ignored")) 2)
-                      (: dst (N? ? (gzc-dir p + gzc-base <>>h) <>stem)
+                      (: dst (N? ? (phead p + pbase <>>h) <>stem)
                          st (stat p)
                          (? (two? (lstat dst) && !(peep t 'f 0))
                             (: _ (gzc-moan t (dst + " already exists;\tnot overwritten")) 2)

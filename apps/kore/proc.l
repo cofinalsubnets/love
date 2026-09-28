@@ -1011,7 +1011,6 @@
              (? (0 = z) () ((o (z - 1)) = 32) (snip o 0 (z - 1)) o))))
    ; argv[0]'s basename, for pidof -- the raw clip, since a kernel comm never
    ; carries a trailing slash for posix's rule to strip
-   (ubase0 p) (snip p (lastslash p) #p)
 
    ; the two clocks. user_hz is 100 everywhere Linux runs a userland we could be in.
    (uclk s)                            ; a second count -> hh:mm:SS
@@ -1148,7 +1147,7 @@
    ; the shape goes by the name, as each host names its own file
    (uut-read p)                        ; -> (1 records) | () for no file to read
     (: r (uread p)
-       b (ubase0 p)
+       b (pbase p)
        (? !(two? r) ()
           (: s <>r
              k (? (4 <= #b && snip b 0 4 = "utx.") [197 uut-fbsd]
@@ -1401,7 +1400,7 @@
        me (: s (upself 0) (? s <s -1))
        (hit p) (: s (upstat p)
                   c (? s (s 1) ())
-                  a (: x (upcmd p) (? (string? x) (ubase0 <(usplit 32 x)) ()))
+                  a (: x (upcmd p) (? (string? x) (pbase <(usplit 32 x)) ()))
                   (? (p = me) 0
                      (foldl (\ acc w (? acc 1 (? ((c = w) || (a = w)) 1 0))) 0 fs)))
        ps (filter hit (rev (uprocs 0)))

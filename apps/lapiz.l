@@ -89,7 +89,7 @@
 ; reaches through the accessor. everything else is machinery and stays off the
 ; tablet -- catted, an unwrapped lapiz put all ~163 of its names on the session.
 (module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow ttlinks ttpage ttpics
-         md->ht ht->md md->rf rf->md rf->tty md->tty ht->tty convert  htb hti hq mget)
+         md->ht ht->md md->rf rf->md rf->tty md->tty ht->tty convert  htb hti hq hpe mget)
 
 ; the combinators (love/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
 ; module, so peg splices for this compile alone.

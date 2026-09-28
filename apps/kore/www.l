@@ -337,16 +337,7 @@
        (go i))
    ; a fragment's name: the # off and each %XX back to its byte, the way an id is spelled
    (ww-unpct s) (ww-dec s 1 #s 0)
-   ; typed text as a form sends it: a space a +, the rest past the unreserved %XX
-   (ww-qenc s)
-    (: o (jug 0) hx "0123456789ABCDEF"
-       (go i) (? (#s <= i) (slurp o)
-                 (: c (s i)
-                    _ (? ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || elem c '(45 46 95 126)) (put o c)
-                         (c = 32) (put o 43)
-                         (: _ (put o 37) _ (put o (hx (c // 16))) (put o (hx (c % 16)))))
-                    (go (i + 1))))
-       (go 0))
+   (ww-qenc s) ((cite 'lapiz 'hpe) s)      ; typed text as a form sends it
    ; the line a named place was laid on, or -1
    (ww-place st nm) ((: (g l) (? (one? l) -1 (<(<l) = nm) <>(<l) (g >l))) (st 'anchors))
    (ww-anchor st fr) (ww-place st (ww-unpct fr))

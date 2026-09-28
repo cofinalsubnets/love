@@ -109,7 +109,7 @@
    (wg-name url)
     (: u (wg-url url)
        p (? (two? u) (u 3) "/")
-       nm (snip p (lastslash p) #p)
+       nm (pbase p)
        q (wg-find nm "?" 0)
        nm2 (? (q < 0) nm (snip nm 0 q))
        (? (0 < #nm2) nm2 "index.html"))
