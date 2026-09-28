@@ -45,7 +45,7 @@
  ("(, (1) (2 3))" = show (opfix '(1 , 2 3)))) ; the emission, reparsable
 ; effects run in source order and the last clause is the value
 (: cq (tablet 0)
-   (cnote v) (: _ (pin cq (tally cq) v) v)
+   (cnote v) (pin cq #cq v, v)
    (: r ((cnote 'a), (cnote 'b), (cnote 'c))
       (test ('c = r) ('a = cq 0) ('b = cq 1) ('c = cq 2) (3 = #cq))))
 ; quote interiors are data: the comma stays a plain symbol, and reading is
@@ -93,6 +93,6 @@
 (: rows [[1.0 'float] '(b two)]
    (test
       (assoc 1 rows = [1.0 'float])         ; 1 IS 1.0 by value
-      (nil? (assq 1 rows))                       ; ..and is not the same word
+      !(assq 1 rows)                             ; ..and is not the same word
       (assoc 'b rows = '(b two)) (assq 'b rows = '(b two))
-      (nil? (assoc 'z rows)) (nil? (assq 'z rows))))
+      !(assoc 'z rows) !(assq 'z rows)))

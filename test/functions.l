@@ -12,7 +12,7 @@
 (test
  (2 = (1 2))               ; (1 2) = 2 ** 1
  (1 = (2 1))               ; (2 1) = 1 ** 2
- (9 = ((\ f n (f n)) 2 3)) ; (2 3) = 3 ** 2
+ (9 = ((f \ n \ f n) 2 3)) ; (2 3) = 3 ** 2
  ('abc = ('abc 0))         ; a point is its own constant: applied, it answers itself
  ('abc = ('abc 'x))        ;   whatever the operand
  (: m (mint 0) (m = m 5))  ; an anonymous one too
@@ -43,13 +43,13 @@
 ; basic arithmetic
 (: zero? (= 0)
 (test
- (17 = ((\ f (f 9)) (+ 8)))
+ (17 = ((f \ f 9) (+ 8)))
  (13 = (: a 9 b 7 c -3 (a + (b + c))))
  (: (even? n) (? (zero? n) 1 (odd? (-1 + n)))
     (odd? n) (? (zero? n) 0 (even? (-1 + n)))
   (odd? 99))
  ; a higher-order param applied past its own arity: f takes g, then over-applies it
- (3 = ((\ f g (f g 1 2 3)) (\ g a b c (g c b)) (\ a b a)))))
+ (3 = ((f \ g \ f g 1 2 3) (g \ a \ b \ c \ g c b) (a \ b \ a)))))
 
 ; ackermann function
 (: (ack m n p) (?
@@ -66,23 +66,23 @@
                          (たらい (z - 1) x y)))
  (test (1013 = (たらい 1012 1013 1014))))
 
-(: (c1895 m n) (m + (((m + n) * (m + (n + 1))) / 2))
+(: (c1895 m n) (m + (m + n) * (m + (n + 1)) / 2)
    (c1895_inv p) (:
-    (f t n) (? ((t + n) > p) (. t (n - 1)) (f (t + n) (n + 1)))
+    (f t n) (t + n > p ? (t . n - 1) (f (t + n) (n + 1)))
     x (f 0 1)
-    m (p - cap x)
-    n (cup x - m)
+    m (p - <x)
+    n (>x - m)
     [m n])
    p (c1895 103 110)
    l (c1895_inv p)
-   (test (= 103 (cap l)) (= 110 (cap (cup l)))))
+   (test (103 = <l) (110 = <>l)))
 
 ; heron's method for finding square roots (integer Newton -- floor division `//`,
 ; so it converges to the exact integer root and the `=` test terminates)
 (: (heron x g) (? (g = (x // g)) g
     (heron x ((g + (x // g)) // 2)))
    guess 1337
- (test (= 6 (heron 36 guess))))
+ (test (6 = heron 36 guess)))
 
 ; church numerals
 (: (add a b f x) (a f (b f x))

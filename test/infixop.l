@@ -13,7 +13,7 @@
  (1 = (3 = 3.0)) (0 = (3 = 4))
  (1 = (1 < 2)) (1 = (1 <= 1)) (1 = (2 > 1)) (1 = (2 >= 2)) (0 = (2 < 1))
  (15 = (8 | 4 | 2 | 1)) (0 = (5 & 2)) (7 = (5 | 2))
- (1 = (5 % 2)) ('% = caup '(5 % 2))               ; % is plain infix at two (mod is gone); quotes stay data
+ (1 = (5 % 2)) ('% = <>'(5 % 2))               ; % is plain infix at two (mod is gone); quotes stay data
 
  ; right-associativity; parens override
  (7 = (1 + 2 * 3))                              ; (+ 1 (* 2 3))
@@ -58,13 +58,13 @@
 
 ; a fresh dyadic operator needs no table at all -- define-then-use (the DEFAULT
 ; infix section below); ** here rides the default, right-associatively
-(: ** (\ b n (n b))
+(: ** (b \ n \ n b)
  (test (8.0 = (2 ** 3)) (512.0 = (2 ** 3 ** 2))))  ; right-assoc: 2^(3^2)
 
 ; default infix: any all-punct symbol acts dyadic (arity two) with no table pin --
 ; the table holds only the exceptions -- the other grips and hands.
 ; a fresh punct symbol, never registered, reads infix all the same.
-(: . (\ a b [a b])                              ; a fresh punct op, never registered
+(: . (a \ b \ [a b])                            ; a fresh punct op, never registered
  (test
   ('(3 5) = (3 . 5))                             ; infix: captures the left operand
   ('(7 (3 5)) = (7 . 3 . 5))                    ; nests right-associatively
