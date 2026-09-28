@@ -14,7 +14,7 @@
 (: unimath "/usr/lib/ocaml/coq/user-contrib/UniMath"
    uul "test/uu.l"
 
-   (rdf p) (: q (open p "r") t (slurp q) (close q, t))
+   (rdf p) (uread p @ [1 t] t ())
    (dir? p) (: st (stat p) (one? st ? 0 (61440 & <>>st = 16384)))
    (sfx-v? s) (: n #s (2 < n && s (n - 2) = 46 && s (n - 1) = 118))
    (vnamec? c) (alnum? c || c = 95 || c = 39)            ; [a-za-z0-9_']

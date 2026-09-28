@@ -32,7 +32,7 @@
 
 (borrow 'posix)
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
-   (sp-read p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
+   (sp-read p) (uread p @ [1 s] [1 (s + "")] ())
    (sp-write p s) (: q (open p "w")
                      (!(hot? q) ? (sp-die ("cannot write " + p)), say q s, close q))
    ; the structural skips, which no ignore file may take away. doc/ itself stays:

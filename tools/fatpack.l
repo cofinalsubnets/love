@@ -14,7 +14,7 @@
 
 (borrow 'posix)
 (: (fp-die m) (udie 1 ("fatpack: " + m))
-   (fp-read p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
+   (fp-read p) (uread p @ [1 s] [1 (s + "")] ())
    (fp-write p s) (: q (open p "w") (!(hot? q) ? (fp-die ("cannot write " + p)), say q s, close q))
    bs 4096
    (fp-blocks n) ((n + bs - 1) // bs)              ; // outranks +, so the sum keeps its parens

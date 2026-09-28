@@ -6,6 +6,7 @@
 
 (module 'kore
 (borrow 'cli)
+(borrow 'text)
 (: rebre (cite 're 'rebre) reere (cite 're 'reere)      ; the four engine names grep reads
    refold (cite 're 'refold) refindp (cite 're 'refindp)
    recomp (cite 're 'recomp) refindpm (cite 're 'refindpm)
@@ -35,13 +36,15 @@
        (go (? (two? ls) ls [""]) ()))
    ; -w: the span must not sit inside a word. checked at the span, not the
    ; pattern, because a word boundary is not a node this engine can hold
+   ; a word character, 'text's: ascii by the byte, past it by the character
    (gword? c) ((48 <= c <= 57) || (65 <= c <= 90) || (97 <= c <= 122) || (c = 95))
+   (gwat ln j) (: b (ln j) (? (b < 128) (gword? b) (cpword? (cpat ln j))))
+   (gwbefore ln j) (: b (ln (j - 1)) (? (b < 128) (gword? b) (cpword? (cpat ln (cpback ln j)))))
    ; the leftmost match of any of ms (compiled) in ln, word-bounded if w? -> (1 st en) | ()
    (gfind ms ln w? i)
     (: n (tally ln)
        (bnd st en) (? !w? 1
-                      ((st = 0 || !(gword? (ln (st - 1)))) &&
-                       (en = n || !(gword? (ln en)))))
+                      ((st = 0 || !(gwbefore ln st)) && (en = n || !(gwat ln en))))
        (best acc m)
         (refindpm m ln i bnd @ [_ st en _]
           (? !(two? acc) [1 st en] (st < <>acc) [1 st en] acc)

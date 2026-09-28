@@ -16,7 +16,7 @@
 (borrow 'hueweb)
 
 (borrow 'posix)
-(: (h2w-rdf p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, (string? s ? [1 s])))))
+(: (h2w-rdf p) (uread p @ [1 s] (string? s ? [1 s]) ())
    (h2w-usage _) (udie 2 "usage: love tools/hue2web.l css | src FILE")
 
    ; the site's own chrome: papel.css first, so a painted page and a doc page are

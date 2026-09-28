@@ -214,7 +214,7 @@
    (ww-pinfile _) (: h (getenv "HOME") ((? (string? h) h ".") + "/.love/gemini_hosts"))
    (ww-pin key fp)
     (: path (ww-pinfile 0)
-       q (open path "r") txt (? (hot? q) (: s (slurp q) _ (close q) s) "")
+       txt (uread path @ [1 s] s "")
        (find l) (? !(two? l) () (: f (usplit 32 <l) (? ((1 < #f) && (<f = key)) (f 1) (find >l))))
        old (find (ww-lns txt))
        (? (string? old) (? (old = fp) ()

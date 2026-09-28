@@ -1022,9 +1022,11 @@
 ;   (cpis nm c)             -> is c in the POSIX class named nm ("alpha" .. "xdigit"), glibc's
 ;   (cpfold c)              -> the characters grep -i takes for c, c not among them
 ;   (cpfolds lo hi)         -> cpfold of every character lo..hi, together
+;   (cpback s i)            -> the byte where the character ending at i opens
+;   (cpword? c)             -> is c a word character: _ or alnum, grep's \w
 
 (module '(text cpat cpnext cpn cps cplen cpsnip cprev wcwidth swidth scut
-          cpupper cplower cpis cpclass? cpfold cpfolds)
+          cpupper cplower cpis cpclass? cpfold cpfolds cpback cpword?)
    ; tools/mkwidth.l's runs, unicode 17: each entry cp * 4 + w opens a run of width w
 (: cpw
    @(1 3072 3521 4620 4649 5700 5881 5884 5889 5892 5901 5904 5913 5916 5921 6208 6253 6256
@@ -1584,6 +1586,12 @@
                         (: m ((lo + hi) // 2) ((peep cpw m 0 >> 2) <= c ? (go m hi) (go lo m))))
           (go 0 #cpw)))
    (cpcols s i) (max 0 (wcwidth (cpat s i)))
+   ; back over at most three tails; a byte that ends no whole character stands alone
+   (cpback s i)
+    (: (go j) (? (j < 1 || i - j > 2 || !(tl s j)) j (go (j - 1)))
+       j (go (i - 1))
+       (? (cpnext s j = i) j (i - 1)))
+   (cpword? c) (c = 95 || cpis "alnum" c)
    ; is c inside one of a class tray's runs: an odd count of entries at or below it
    (cpin t c)
     (: (go lo hi) (? (hi <= lo) lo (: m ((lo + hi) // 2) (peep t m 0 <= c ? (go (m + 1) hi) (go lo m))))
@@ -2415,7 +2423,13 @@
                  (c = 92)
                   (n <= i + 1 ? ()
                      (: d (p (i + 1))
-                        (49 <= d <= 57 ? () ; backrefs: refused, both dialects
+                        wd (d = 119 || d = 87) sd (d = 115 || d = 83)
+                        (? (49 <= d <= 57) ()                 ; backrefs: refused, both dialects
+                           ; GNU's \w \W \s \S: a class of _ and alnum, or of space, the
+                           ; capital negated
+                           (wd || sd)
+                            (pseq (i + 2) (['cls (? (d < 97) 1 0) (? wd ["alnum" [95 95]] ["space"])]
+                                           . acc) lvl gi)
                            (lit (i + 1) @ [nd w] (pseq (i + 1 + w) (nd . acc) lvl gi)))))
                  (lit i @ [nd w] (pseq (i + w) (nd . acc) lvl gi)))))
        ; the alternation above the sequence: branches joined by the bar, kept flat
