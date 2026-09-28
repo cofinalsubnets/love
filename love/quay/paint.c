@@ -86,23 +86,26 @@ static void cb_px(struct cb_paper const *p, struct cb const *c, struct font cons
         uint32_t const v = ul || (o >> (31 - k) & 1) ? fg : bg;
         for (uintptr_t e = 0; e < s; e++) px[k * s + e] = v; } } } }
 
-// one grid ROW of `c` onto the paper at (x0,y0) -- the origin is what lets a screen
-// hold a RECTANGLE of the target rather than all of it. `cur` names the cell wearing
-// the cursor (~0u for none), worn as the reverse face so a cell already reversed
-// reads normally under it, which is the only way a block stays visible on one. a tail
-// is its lead's to paint, and the cursor on one is worn by the lead.
+// one ROW of `c` as a reader sees it (cb_seen: a history line while the view looks back)
+// onto the paper at (x0,y0) -- the origin is what lets a screen hold a RECTANGLE of the
+// target rather than all of it. `cur` names the grid cell wearing the cursor (~0u for
+// none), worn as the reverse face so a cell already reversed reads normally under it,
+// which is the only way a block stays visible on one; it rides down with its row as the
+// view looks back. a tail is its lead's to paint, and the cursor on one is worn by the lead.
 void cb_paint(struct cb_paper const *p, struct cb const *c, struct font const *f,
               uint8_t const *qf, uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur) {
-  if (row >= c->rows) return;
+  struct cb_cell const *line = row < c->rows ? cb_seen(c, row) : 0;
+  if (!line) return;
+  uint32_t const at = row < c->view ? ~0u : (uint32_t) (row - c->view) * c->cols;
   for (uint16_t j = 0; j < c->cols; j++) {
-    uint32_t const pos = (uint32_t) row * c->cols + j;
-    struct cb_cell cell = c->cb[pos];
+    uint32_t const pos = at == ~0u ? ~0u : at + j;
+    struct cb_cell cell = line[j];
     int const lead = cb_wide(cell.g) == cb_lead && j + 1u < c->cols
-                     && cb_wide(c->cb[pos + 1].g) == cb_tail;
-    if (j && cb_wide(cell.g) == cb_tail && cb_wide(c->cb[pos - 1].g) == cb_lead) continue;
+                     && cb_wide(line[j + 1].g) == cb_tail;
+    if (j && cb_wide(cell.g) == cb_tail && cb_wide(line[j - 1].g) == cb_lead) continue;
     if (!lead) cell.g &= ~((uint32_t) 3 << 21);             // a lone half paints single
     uintptr_t const px0 = x0 + (uintptr_t) j * f->w * p->scale, py0 = y0 + (uintptr_t) row * f->h * p->scale;
     if (cell.g & cb_pic) { cb_tpx(p, c, f, &cell, px0, py0); continue; }
-    if (pos == cur || (lead && pos + 1 == cur)) cell.g ^= (uint32_t) cb_rev << 24;
+    if (pos != ~0u && (pos == cur || (lead && pos + 1 == cur))) cell.g ^= (uint32_t) cb_rev << 24;
     cb_px(p, c, f, qf, &cell, x0 + (uintptr_t) j * f->w * p->scale,
           y0 + (uintptr_t) row * f->h * p->scale); } }

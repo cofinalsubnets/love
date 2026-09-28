@@ -52,7 +52,8 @@ enum {              // flag bits: the console's modes
   cb_pend   = 16,   // wrap pending: a glyph landed on the last column
   cb_priv   = 32,   // parser transient: the CSI had a DEC '?'/'='/'<' marker
   cb_junk   = 64,   // parser transient: the CSI had intermediates we don't speak
-  cb_gt     = 128 };// parser transient: the CSI had the '>' marker (secondary DA)
+  cb_gt     = 128,  // parser transient: the CSI had the '>' marker (secondary DA)
+  cb_alt    = 256 };// the alternate screen (?1049 and kin): scrolls keep no history
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
 
@@ -80,6 +81,9 @@ struct cb {
   uint32_t ks, kv, ki, kc, kr, kval, kacc, kpx, kpix, kslot;
   uint8_t ka, kf, km, kq, kcur, kd, kt, ko, kkey, kvc, kn, kbyte, kpad, kopen;
   uint32_t clu[cb_nclu][cb_clun];  // the clusters, their unused words 0
+  // history: a ring of hl lines, cols wide, after the store -- rows a scroll pushed off the
+  // top, hn of them held, the oldest at line hh. view is how many a reader looks back
+  uint32_t hl, hh, hn, view;
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
@@ -89,12 +93,18 @@ enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
 // the bytes a screen of rows x cols needs, header, cells and a store of sn bytes
 #define cb_size(rows, cols, sn) \
   (sizeof(struct cb) + (uintptr_t) (rows) * (uintptr_t) (cols) * sizeof(struct cb_cell) + (uintptr_t) (sn))
+// the bytes a history of hl lines takes, after the store
+#define cb_hsize(hl, cols) ((uintptr_t) (hl) * (uintptr_t) (cols) * sizeof(struct cb_cell))
 // a store a screenful of pictures deep, at 8x16 cells
 #define cb_sdefault(rows, cols) ((uint32_t) cb_shead + (uint32_t) (rows) * (uint32_t) (cols) * 512u)
 
 void
   cb_open(struct cb*, uint16_t rows, uint16_t cols, uint32_t sn),
   cb_store(struct cb*, uint32_t sn),   // lay an empty store of sn bytes after the cells
+  cb_hist(struct cb*, uint32_t hl),    // lay an empty history of hl lines after the store
+  // old laid across into a fresh rows x cols screen, a store of sn bytes, hl lines of history
+  cb_regrid(struct cb*, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl),
+  cb_peer(struct cb*, uint32_t n),     // look n lines back into the history, 0 the live grid
   cb_clear(struct cb*),
   cb_putc(struct cb*, char),
   cb_stamp(struct cb*, uint8_t),
@@ -109,6 +119,10 @@ uint32_t const *cb_ipx(struct cb const*);                       // the store's p
 int cb_png(uint8_t *buf, uintptr_t n, uintptr_t cap, uint32_t *w, uint32_t *h);
 uint32_t const *cb_clu(struct cb const*, uint32_t g);   // the cluster g names, or 0
 uint32_t cb_base(struct cb const*, uint32_t g);          // g's codepoint, a cluster's base
+// grid row r as a reader sees it: a history line while the view looks back, else the grid's
+struct cb_cell const *cb_seen(struct cb const*, uint32_t r);
+// history line k, 0 the oldest, or 0 past what is held
+struct cb_cell const *cb_hline(struct cb const*, uint32_t k);
 uint32_t cb_unfold(uint8_t);       // a cp437 glyph byte's codepoint
 uint8_t cb_437(uint32_t cp);       // the cp437 glyph that draws cp: 0xfe, the ■, for none
 uint8_t cb_width(uint32_t cp);     // the columns cp takes: 0 1 or 2, 'text's wcwidth
