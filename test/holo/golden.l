@@ -76,11 +76,14 @@
       ;; port i/o: the dx-port forms, and the rep-prefixed string walks
       ("io.in"       "ec66eded"              ((inb) (inw) (inl)))
       ("io.out"      "ee66efef"              ((outb) (outw) (outl)))
-      ("io.str"      "fcf36c66f36df36d"      ((cld) (insb) (insw) (insl)))
-      ("io.strout"   "f36e66f36ff36f"        ((outsb) (outsw) (outsl)))
+      ("io.str"      "fcf36cf3666d6d"        ((cld) (rep) (str ins 1) (rep) (str ins 2) (str ins 4)))
+      ("io.strout"   "6e666ff26f"            ((str outs 1) (str outs 2) (repne) (str outs 4)))
+      ("str.movs"    "a466a5a548a5"          ((str movs 1) (str movs 2) (str movs 4) (str movs 8)))
+      ("str.rest"    "a6ab48adae"            ((str cmps 1) (str stos 4) (str lods 8) (str scas 1)))
       ;; the system lane -- the kernel's own vocabulary: the flag/halt nullaries, the MSR pair,
       ;; the interrupt return, the vectored int (int3 is `trap`, CC, already above)
       ("sys.flags"   "fafbf4"                ((cli) (sti) (hlt)))
+      ("sys.smap"    "0f01cb0f01ca"          ((stac) (clac)))
       ("sys.pushf"   "9c9d"                  ((pushf) (popf)))
       ("sys.seg"     "65488b0064488b00"      ((seg gs) (ld r0 r0 0) (seg fs) (ld r0 r0 0)))
       ("sys.rmw"     "0fc102480fb14f088606ff0048830001660908480fba2803fe4b04"

@@ -830,17 +830,17 @@ every ninth by path: **151 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 6 | a function's inline asm: `rep`, `lcallw`, `fnsave`, `clflush`, a debug register (`%db0`) |
-| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label` |
+| 5 | a function's inline asm: `lcallw`, `fnsave`, `clflush`, a debug register (`%db0`) |
+| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label`, an asm goto with outputs (refused, above) |
 
 each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
 runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm 76 and
 `pushf` 102, an address as an `"i"` operand 22, a `%gs:` operand 20, a `"+m"` output 17 and a
 flag output 10, an `"i"` only a splice makes constant 17, a lock's or tracepoint's static
 initializer 20, `.skip` over label arithmetic 4, the bit scans and `pause` 9 and a register
-spelled `%rdx` 4, gas's macro language 3 and a bit builtin over a constant 9, `typeof` of the object in its own initializer 31, `__label__` 7, `ffs`/`isdigit` over a runtime value 7, a static initializer's `?:` 3 an inlined empty callee alone in an if's arm 8 an asm input pinned where an output is 3 an `"i"` only a dead arm lays or a block static's address 2 a segment register moved to or from 2 a push of a label's address 1 and `sbb`/`adc` 3 before they read (142-syntax.c, 174-elvis.c,
+spelled `%rdx` 4, gas's macro language 3 and a bit builtin over a constant 9, `typeof` of the object in its own initializer 31, `__label__` 7, `ffs`/`isdigit` over a runtime value 7, a static initializer's `?:` 3 an inlined empty callee alone in an if's arm 8 an asm input pinned where an output is 3 an `"i"` only a dead arm lays or a block static's address 2 a segment register moved to or from 2 a push of a label's address 1 `sbb`/`adc` 3 and the string ops under `rep` with `stac` 1 before they read (142-syntax.c, 174-elvis.c,
 175-offsetof.c, 176-cleanup.c, 178-toplevelasm.c, 179-pushf.c, 181..185-asm*.c, 186-staticinit.c
-188..191-asm*.c, 193-bswapcase.c, 195-typeofself.c, 196-locallabel.c, 197-ffsdigit.c, 198-staticcond.c, 199-emptyinl.c, 200-asmsamereg.c, 202-asmdeadimm.c, 203-segreg.c, 204-pushimm.c and 205-carry.c hold them). a file-scope asm is gas's whole language, and
+188..191-asm*.c, 193-bswapcase.c, 195-typeofself.c, 196-locallabel.c, 197-ffsdigit.c, 198-staticcond.c, 199-emptyinl.c, 200-asmsamereg.c, 202-asmdeadimm.c, 203-segreg.c, 204-pushimm.c, 205-carry.c and 207-repstring.c hold them). a file-scope asm is gas's whole language, and
 holo's gas-top reads what C headers write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
 `.byte`..`.quad` over a symbol plus a constant or less `.`, `.ascii`/`.asciz`, `.balign`,
 `.zero`, `.org`, and `.skip` or a word over label arithmetic (read once the whole text has,
