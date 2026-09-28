@@ -11,7 +11,7 @@
 (: (count s n) (:- (go 0 0) (go i k) (i + #n <= #s ? (go (i + 1) (k + (n = snip s i (i + #n)))) k))
    (rows s) (1 + count s "\r\n")
    ; so many frames, a key each or none
-   (tick st k) (: _ (? (charm? k) (shaft-step st k)) _ (shaft-move st) (pin st 't (st 't + 1)))
+   (tick st k) ((? (charm? k) (shaft-step st k)), shaft-move st, pin st 't (st 't + 1))
    (run st n) (? (0 < n) (tick st (), run st (n - 1)) st)
    (walk st k n) (? (0 < n) (tick st k, walk st k (n - 1)) st)
    ; ..until the player stands on something, or too long
@@ -79,13 +79,13 @@
    _ (shaft-jump st) vy-mid (st 'vy)
    _ (settle st 200)
    st2 (fresh ()) _ (shaft-jump st2) _ (settle st2 200)
- (test (nil? g0) (0.0 < y3) (vy-mid < jump-v) (st 'ground) (0.0 = st 'y) (x0 < st 'px)
+ (test !g0 (0.0 < y3) (vy-mid < jump-v) (st 'ground) (0.0 = st 'y) (x0 < st 'px)
        (st2 'ground) (near? (st2 'px) x0)))                           ; stood still: straight up and down
 
 ; --- a gap: walked into, the player falls to what is under it; jumped, they land past it ---
 (: st (fresh ()) lay (st 'lay) g <(peep (lay 'gaps) 1 ()) g0 (g 0) g1 (g 1) th (tangent-of g0)
    _ (on st (g0 - 0.3) floor-h) _ (pin st 'th th)
-   _ (walk st 107 12) fell (nil? (st 'ground)) yf (st 'y)
+   _ (walk st 107 12) fell !(st 'ground) yf (st 'y)
    _ (settle st 300) yl (st 'y)
    st2 (fresh ()) _ (on st2 (g0 - 0.1) floor-h) _ (pin st2 'th th)
    _ (tick st2 107, shaft-jump st2) _ (settle st2 300)
@@ -117,10 +117,10 @@
    _ (settle st 300)
    st2 (fresh ()) _ (shaft-step st2 32)                              ; space away from a ladder: a jump
  (test (two? held) (l 1 < yb < l 2) (near? th (tangent-of (l 0) + 1.5707963))
-       (ya = l 2) (nil? held2) (st 'ground)
+       (ya = l 2) !held2 (st 'ground)
        (two? held3) (yd = l 1) (st 'ground)
-       (l 1 < ym) (nil? let-go) (st 'ground) (st 'y = l 1)
-       (nil? (st2 'rung)) (nil? (st2 'ground))))
+       (l 1 < ym) !let-go (st 'ground) (st 'y = l 1)
+       !(st2 'rung) !(st2 'ground)))
 
 ; --- the look: u and n tilt it and no further than the screen allows ---
 (: st (fresh ()) hz0 (st 'hz) h (st 'h)
@@ -138,7 +138,7 @@
    _ (run st 3) d2 (st 'done)
    open (shaft-frame st)
    _ (shaft-step st 107) _ (run st 2) x (st 'px)
- (test (nil? d1) (d2 = 1) (shut != open) (near? x (ring-pt door-s walk-q 0)) (elem 'door (st 'sfx))))
+ (test !d1 (d2 = 1) (shut != open) (near? x (ring-pt door-s walk-q 0)) (elem 'door (st 'sfx))))
 
 ; --- the song: silence until something happens, then not; a chunk a feed ---
 (: j (jug 0) s (shaft-song-new j (wheel 7)) st (fresh ())
@@ -149,7 +149,7 @@
    _ (each ^5 (i \ (shaft-sfx s2 st, shaft-song-feed s2)))
    loud (slurp j2)
  (test (#quiet = 5 * 4 * song-chunk) (all (i \ 0 = quiet i) ^#quiet)
-       (#loud = #quiet) (any (i \ 0 != loud i) ^#loud) (nil? (st 'sfx))))
+       (#loud = #quiet) (any (i \ 0 != loud i) ^#loud) !(st 'sfx)))
 
 (test_fin (),
  puts "shaft: ok -- the walk goes where you face, a jump lands, a gap is jumped or fallen through, a fall flashes by the fall, the ladder climbs on space, the lights blink, and the top door opens\n")

@@ -33,7 +33,7 @@
    cok? (cite 'clay 'clay-ok?)
    nl (string 10)
    (say1 s) (puts (s + nl))
-   (dotc? s) (: n (tally s) (&& (2 < n) (&& ((s (n - 2)) = 46) ((s (n - 1)) = 99))))
+   (dotc? s) (: n #s ((2 < n) && (((s (n - 2)) = 46) && ((s (n - 1)) = 99))))
    (mn a b) (? (a < b) a b)
 
    ; --- the scare trap. help resumes with its value (test/help.l), so a caught
@@ -42,7 +42,7 @@
    ; stage that then loops is p1's other face, a hang, which the recipe's timeout
    ; owns because nothing inside the process can.
    scared (tablet 0)
-   _ (hear (\ a b (: _ (pin scared 0 1) 0)))
+   _ (hear (\ a b (pin scared 0 1, 0)))
    (unscared _) (pin scared 0 0)
    (scared? _) (peep scared 0 0)
 
@@ -52,15 +52,15 @@
    ; punctuation insert in the parser, a dropped line in the type checker.
    punct "(){}[];,*&+-/%<>=!?:#\\\"'"
    (linelo txt i) (: (go k) (? (k < 1) 0 ((txt (k - 1)) = 10) k (go (k - 1))) (go i))
-   (linehi txt i) (: n (tally txt)
+   (linehi txt i) (: n #txt
                      (go k) (? (n <= k) n ((txt k) = 10) (k + 1) (go (k + 1)))
                      (go i))
    (mut txt st)
-    (: n (tally txt)
+    (: n #txt
        r0 (random st 8)      k <r0
        r1 (random >r0 n)     i <r1
        r2 (random >r1 24)    m (<r2 + 1)
-       r3 (random >r2 (tally punct)) c (string (punct <r3))
+       r3 (random >r2 #punct) c (string (punct <r3))
        st' >r3
        a (snip txt 0 i)
        lo (linelo txt i) hi (linehi txt i)
@@ -87,13 +87,13 @@
    ; been measuring the harness.
    (front txt)
     (: lx (clex txt)
-       (? (! (okv? lx)) ['bad 'lex lx]
+       (? !(okv? lx) ['bad 'lex lx]
           (: pp (cpp <>lx (\ n s (incload () () "test/cc/" n s)) "<fuzz>")
-             (? (! (okv? pp)) ['bad 'cpp pp]
+             (? !(okv? pp) ['bad 'cpp pp]
                 (: ps (cparse-t <>pp 'x64)
-                   (? (! (okv? ps)) ['bad 'parse ps]
+                   (? !(okv? ps) ['bad 'parse ps]
                       (: g (cgen-obj <>ps (cauup ps) (caup (cuup ps)) (cauup (cuup ps)) () 'x64)
-                         (? (! (okv? g)) ['bad 'gen g] ['ok <>ps]))))))))
+                         (? !(okv? g) ['bad 'gen g] ['ok <>ps]))))))))
 
    ; --- one mutant -> a verdict symbol, plus the stage it died in when it died.
    ; ('scare ..) beats everything: a case that scared is not a refusal, it is a fall.
@@ -111,11 +111,11 @@
           ; it parsed. the clay leg -- G1 over a tree the corpus never had.
           (: a (r 1)
              v (cok? a)
-             (? (! (= v 1)) ['badshape 'clay]
+             (? !(v = 1) ['badshape 'clay]
                 (: t (cshow a)
                    (? (gripe? t) ['inexpr 'clay]
                       (: b (front t)
-                         (? (! (<b = 'ok)) ['reparse 'clay]
+                         (? !(<b = 'ok) ['reparse 'clay]
                             ((b 1) = a) ['ok 'clay]
                             ['diff 'clay]))))))))
 
@@ -135,7 +135,7 @@
 
    (runfile idx f)
     (: r (uread ("test/cc/" + f))
-       (? (! (two? r)) 0
+       (? (atom? r) 0
           (: src <>r
              (go j st) (? (muts <= j) 0
                 (: mr (mut src st)
@@ -146,7 +146,7 @@
                    (go (j + 1) >mr)))
              (go 0 (wheel (1 + idx))))))
 
-   (walk l i) (? (! (two? l)) 0 (: _ (runfile i <l) (walk >l (i + 1))))
+   (walk l i) (? (atom? l) 0 (runfile i <l, walk >l (i + 1)))
    _ (walk files 0)
 
    ; --- the report. the census first (P2, a measurement), then the reds (P1, P3).
@@ -157,7 +157,7 @@
    nscare ((foldl (\ a s (a + (cnt 'scare s))) 0 stages)
            + (cnt 'scare 'clay) + (cnt 'scare 'late))
    ndiff (cnt 'diff 'clay) nrep (cnt 'reparse 'clay) nbs (cnt 'badshape 'clay)
-   nfile (tally files)
+   nfile #files
    total (nfile * muts)
 
    _ (each stages (\ s (: b (cnt 'bare s) g (cnt 'named s)
@@ -174,12 +174,10 @@
 
    ; the floors. a run where nothing refused, or nothing survived to reach clay,
    ; measured nothing and must not print pass.
-   _ (? (|| ((nbare + nnamed) < 100) (nok < 100))
-        (: _ (say1 ("moonfuzz: FAIL -- vacuous run (" + (show (nbare + nnamed))
-                    + " refusals, " + (show nok) + " round-trips): the front end is not in scope"))
-           (quit 1)) 0)
-   (? (! (nscare + ndiff + nbs + nrep))
-      (: _ (say1 "moonfuzz: pass") (quit 0))
-      (: _ (say1 ("moonfuzz: FAIL -- " + (show nscare) + " scared, " + (show ndiff)
-                  + " clay diff, " + (show nbs) + " malformed, " + (show nrep) + " unreadable"))
-         (quit 1))))
+   _ (? (((nbare + nnamed) < 100) || (nok < 100))
+        (say1 ("moonfuzz: FAIL -- vacuous run (" + (show (nbare + nnamed))
+                    + " refusals, " + (show nok) + " round-trips): the front end is not in scope"), quit 1) 0)
+   (? !(nscare + ndiff + nbs + nrep)
+      (say1 "moonfuzz: pass", quit 0)
+      (say1 ("moonfuzz: FAIL -- " + (show nscare) + " scared, " + (show ndiff)
+                  + " clay diff, " + (show nbs) + " malformed, " + (show nrep) + " unreadable"), quit 1)))

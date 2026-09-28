@@ -17,9 +17,9 @@
            ; while it waits another task gets to run
            z (: (mk n acc) (? (n = 0) acc (mk (n - 1) (0 . acc))) (string (mk 4096 ())))
            box {}
-           _ (twirl (\ _ (: _ (rest 20) (pin box 'ran 1))) ())
+           _ (twirl (\ _ (rest 20, pin box 'ran 1)) ())
            t0 (clock 0)
-           _ (: (go n) (? (n = 0) () (: _ (say h z) (go (n - 1)))) (go 47))
+           _ (: (go n) (? (n = 0) () (say h z, go (n - 1))) (go 47))
            dt (clock t0)
            lag (horn-lag h)
            _ (test (hot? h) (dt >= 200) (dt < 5000) (0 < lag) (lag <= 48000) (box 'ran))
