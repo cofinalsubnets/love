@@ -2368,15 +2368,18 @@
 ; in ERE and \-escaped in BRE, while * . [ ^ $ are bare in both.
 ; the surface: literals, `.`, `*`, `+`, `?`, `{n,m}` intervals, `|` alternation (an empty
 ; branch is legal and matches the empty text), `^` and `$` (anchors anywhere in ERE; in BRE
-; where nothing is read yet or left, which is GNU's rule), ( ) groups, and [..] classes with
+; where nothing is read yet or left, which is GNU's rule), GNU's word edges \b \B \< \> and
+; \w \W \s \S (both dialects), ( ) groups, and [..] classes with
 ; ranges, ^-negation and the twelve POSIX [:name:] classes. out of scope, refused by the
 ; parser in both dialects: backrefs (\1..\9). the ragged edges were read off GNU, not guessed,
 ; and each is commented where the parser makes it.
 ;
 ; shapes: (rebre p) / (reere p) answer (1 nodes ngroups) or () on a malformed pattern --
 ; uread's success shape, since the empty pattern's nodes are legitimately (). a node is
-; ['chr c] | ['any] | ['cls neg items] | ['bol] | ['eol] | ['grp idx nodes] |
+; ['chr c] | ['any] | ['cls neg items] | ['bol] | ['eol] | ['edge kind] | ['grp idx nodes] |
 ; ['rep atom lo hi] | ['alt (nodes..)], hi () for unbounded; groups number in ( order from 1.
+; an edge is GNU's \b \B \< \>, its kind the escaped byte: a word boundary, none, a word's
+; start, its end.
 ; (rehas nodes s) answers the boolean face, (refind nodes s i) the leftmost match at-or-after
 ; i as (1 start end spans), spans an ([idx start end]..) with the newest pin of each group
 ; first -- (..)*'s \1 is the last iteration, like GNU; read it with assoc.
@@ -2426,7 +2429,7 @@
                  (rnum (j + 1) 0 0 @ [_ hi j2] (clo j2 ? [lo hi (j2 + bw)])
                                     (clo (j + 1) ? [lo () (j + 1 + bw)])))))
        ; can a repeat land? nothing repeats an anchor or an empty head
-       (repable acc) (two? acc && !(elem <<acc '(bol eol)))
+       (repable acc) (two? acc && !(elem <<acc '(bol eol edge)))
        ; where a sigil is an anchor. POSIX leaves BRE undefined outside the head and the
        ; tail; GNU reads `^` wherever nothing has been read yet -- an empty acc, since a
        ; group and a branch each open a fresh pseq -- and `$` wherever nothing is left to
@@ -2486,6 +2489,7 @@
                      (: d (p (i + 1))
                         wd (d = 119 || d = 87) sd (d = 115 || d = 83)
                         (? (49 <= d <= 57) ()                 ; backrefs: refused, both dialects
+                           (elem d [98 66 60 62]) (pseq (i + 2) (['edge d] . acc) lvl gi)
                            ; GNU's \w \W \s \S: a class of _ and alnum, or of space, the
                            ; capital negated
                            (wd || sd)
@@ -2587,6 +2591,13 @@
        (nd @ ['bol]       1
              ['grp _ sub] (reanch sub)
              ['alt brs]   (all reanch brs)))
+   ; is the character at i a word's: _ or alnum. a byte no character wears reads as the
+   ; latin-1 character of its value, as glibc's regex reads it: \377 is a word's, \200 is not
+   (rewc s i) (: b (s i) (? (b < 128) (b = 95 || alnum? b) (cpword? (? (cpn s i < 1) b (cpat s i)))))
+   ; is byte i a tail inside a character that opens before it
+   (remid s i)
+    (: (lead k) (? (k < 1 || i - k > 2 || (s k & 192) != 128) k (lead (k - 1)))
+       (? (0 < i && i < #s && (s i & 192) = 128) (: k (lead (i - 1)) (k + cpn s k > i)) 0))
    (renode nd tail)
     (nd @ ['chr c]      (\ s i sp k (i < #s && s i = c ? (tail s (i + 1) sp k)))
           ; `.` and a class each take a character, and never a byte no character wears.
@@ -2597,6 +2608,12 @@
                            (\ s i sp k (i < #s && t (s i) ? (s i < 128 ? (tail s (i + 1) sp k)
                                                                (rewide p s i sp k tail)))))
           ['bol]        (\ s i sp k (i = 0 && tail s i sp k))
+          ; a word edge compares the characters either side (rewc); no edge stands inside
+          ; a character
+          ['edge kd]    (: (ok a z) (? (kd = 98) (a != z) (kd = 66) (a = z) (kd = 60) (a < z) (z < a))
+                           (\ s i sp k (!(remid s i)
+                                        && ok (bit (0 < i && rewc s (cpback s i))) (bit (i < #s && rewc s i))
+                                        && tail s i sp k)))
           ['eol]        (\ s i sp k (i = #s && tail s i sp k))
           ['grp gi sub] (: b (recompm sub)
                            (\ s i sp k

@@ -460,6 +460,14 @@
       (ok "\\s" " ") (no "\\s" "\xc2\xa0") (ok "^\\S*$" "a_é")
       (ok "[\\w]" "\\") (no "[\\w]" "a")
       (reere "\\w+" = (rebre "\\w\\+"))
+      ; GNU's word edges: \b a boundary, \B none, \< a word's start, \> its end
+      (ok "\\bba" "foo bar") (no "\\bba" "foobar") (ok "\\Bba" "foobar") (no "\\Bba" "foo bar")
+      (ok "\\<b" "foo bar") (no "\\<o" "foo") (ok "o\\>" "foo bar") (no "f\\>" "foo")
+      (no "\\b" "") (ok "\\B" "") (ok "\\B" "-") (no "\\B" "a")      ; an empty line has no edge
+      (ok "\\<本" "日本 本") (ok "a\\Bï" "naïve") (no "\\B" "ö")      ; never inside a character
+      (no "x\\b" ("x" + string 255)) (ok "\\Ba" ("x" + string 200 + "a"))   ; latin-1 reading
+      (ok "\\b*a" "x*a") (no "\\b*a" "ab")                          ; BRE: a star after an edge is ink
+      (ok "[\\b]" "b") (reere "\\<a+\\>" = (rebre "\\<a\\+\\>"))
       (refind <>(rebre "b*") "abbc" 0 = '(1 0 0 ()))           ; leftmost, before longest
       (refind <>(rebre "bb") "abbc" 0 = '(1 1 3 ()))
       (refind <>(rebre "b*") "abbc" 1 = '(1 1 3 ()))           ; greedy at its own start
