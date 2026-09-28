@@ -884,7 +884,7 @@
      (lines (uncont src)) ())
 
    ; read a file whole (for `include`), then split it into classified lines.
-   (slurp-of path) (: q (open path "r") (? (hot? q) (slurp q) (udie 1 ("cook: cannot read " + path))))
+   (slurp-of path) (uread path @ [1 s] s (udie 1 ("cook: cannot read " + path)))
    (file-lines ip) (text-lines (slurp-of ip))
 
    ; seed the variable table as make does: the environment first (every NAME=value, origin
