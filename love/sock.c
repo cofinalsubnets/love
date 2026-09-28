@@ -45,19 +45,9 @@ ai_noinline static struct ai *host_port(struct ai *g, int fd) {
 // accepts: getaddrinfo has no nonblocking form and can burn fifteen seconds of dead vm,
 // so names resolve one layer up in love, where a lookup can park -- apps/dns.l's `dial`.
 static int quad(struct ai_str *hv, uint32_t *out) {
- if (hv->len < 7 || hv->len > 15) return -1;      // "0.0.0.0" .. "255.255.255.255"
- uint32_t a = 0;
- char const *p = hv->bytes;                      // NUL-terminated where it lies, so the walk stops
- for (int i = 0; i < 4; i++) {
-  uint32_t b = 0, any = 0;
-  while (*p >= '0' && *p <= '9') {
-   b = b * 10 + (uint32_t) (*p++ - '0'), any = 1;
-   if (b > 255) return -1; }
-  if (!any) return -1;
-  a = (a << 8) | b;
-  if (i < 3 && *p++ != '.') return -1; }
- if (*p) return -1;
- return *out = a, 0; }
+ struct in_addr a;                               // bytes are NUL-terminated where they lie
+ if ((uintptr_t) hv->len != strlen(hv->bytes) || inet_pton(AF_INET, hv->bytes, &a) != 1) return -1;
+ return *out = ntohl(a.s_addr), 0; }
 
 // the backlog is the accept queue, and a server that twirls a task per client is off
 // serving rather than sitting in accept. too small and the kernel drops SYNs into an

@@ -23,6 +23,7 @@
   xauth-cookie x-decode x-next ev-code ev-detail ev-window ev-state ev-raw
   i16 x-queryext x-randr-init x-monitors x-warp x-queryptr)
 (borrow 'posix)
+(borrow 'bytes)
 (:
    ; --- byte IO over the socket (little-endian) ---
    (x-w8 s v)  (put s v)
@@ -34,11 +35,11 @@
    (x-r32 s) (: a (x-r16 s) b (x-r16 s) (a | (b << 16)))
    (x-skip s n) (: (go i) (i < n ? (see s, go (i + 1))) (go 0))
    (x-rstr s n) (: (go i acc) (i >= n ? acc (go (i + 1) (acc + string (see s)))) (go 0 ""))
-   (x-pad4 n) ((4 - (n % 4)) % 4)
+   (x-pad4 n) (padk n 4)
    (x-wname s t) (: (go i) (i < #t ? (put s (t i), go (i + 1))) (go 0))
    (x-rbytes s n) (: (go i acc) (i >= n ? (rev acc) (go (i + 1) (see s . acc))) (go 0 ()))       ; n raw bytes -> a list
-   (u16 l off) (l off | (l (off + 1) << 8))                            ; little-endian reads out of a byte list
-   (u32 l off) (u16 l off | (u16 l (off + 2) << 16))
+   (u16 l off) (rdle l off 2)                                          ; little-endian reads out of a byte list
+   (u32 l off) (rdle l off 4)
 
    ; --- the reply/event demux. With SubstructureNotify selected, a request's
    ;     reply arrives interleaved with events on the one socket -- byte0 marks

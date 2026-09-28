@@ -11,11 +11,16 @@
 ; here holds under inle too -- this file is the emulator's executable spec.
 
 ; --- the little vocabulary ---
+; a cell is three words (love/quay/quay.h): the glyph -- codepoint, width, picture,
+; face -- then the fg and bg, each a kind in its top byte over a 24-bit value
 (: (mkscr r c) (screen (cask (screen () r c)) r c)   ; the ctor: size protocol + open
-   (chat s i) (255 & glass s i)                    ; the char byte of cell i
-   (cface s i) (glass s i >> 28)                   ; the face nibble
-   (cfg s i) (255 & (glass s i >> 8))              ; fg index
-   (cbg s i) (255 & (glass s i >> 16))             ; bg index
+   (chat s i) (2097151 & glass s i 0)              ; the codepoint of cell i
+   (cface s i) (glass s i 0 >> 24)                 ; the face byte
+   (cink k) ((k >> 24) @- 'def                      ; a colour: 'def, an index, or [r g b]
+              1 (k & 255)
+              2 [(k >> 16 & 255) (k >> 8 & 255) (k & 255)])
+   (cfg s i) (cink (glass s i 1))
+   (cbg s i) (cink (glass s i 2))
    (cur s) (gaze s 0)
    (rowtx s r)                                       ; row r's chars, blanks as spaces
     (: c (gaze s 2)
@@ -29,7 +34,7 @@
     !(screen (cask 8) 4 10)   ; a too-small cask is refused
     !(screen (cask n) 0 10)   ; silly geometry is refused
     !(scribe 5 "x")           ; feeding a non-screen is nothing
-    !(glass (cask 8) 0))      ; glassing a non-screen is nothing
+    !(glass (cask 8) 0 0))    ; glassing a non-screen is nothing
  s (mkscr 4 10)
  _ (test
     (4 = gaze s 1) (10 = gaze s 2)   ; rows, cols
@@ -37,14 +42,15 @@
     (3 = (3 & gaze s 3))               ; cursor shown + autowrap on
     (0 = cur s)
     (0 = chat s 0)
-    !(glass s 40)))                   ; off the grid: nothing
+    !(glass s 40 0)                   ; off the grid: nothing
+    !(glass s 0 3)))                  ; a cell has three words
 
 ; --- 2. plain text, the byte lanes, and controls ---
 (: s (mkscr 4 10)
  _ (scribe s "hi")
  _ (test
     (104 = chat s 0) (105 = chat s 1)
-    (7 = cfg s 0)                      ; the default pen: 7 on 0
+    ('def = cfg s 0) ('def = cbg s 0)  ; the default pen: the screen's own colours
     (2 = cur s))
  _ (scribe s 33)                         ; a bare charm is one byte
  _ (test (33 = chat s 2))
@@ -204,14 +210,22 @@
  _ (scribe s "\e[22;27mz")
  _ (test (2 = cface s 2))                            ; bold and reverse off, underline holds
  _ (scribe s "\e[mw")
- _ (test (7 = cfg s 3) (0 = cbg s 3) (0 = cface s 3))   ; SGR 0: the floor
+ _ (test ('def = cfg s 3) ('def = cbg s 3) (0 = cface s 3))   ; SGR 0: the floor
  _ (scribe s "\e[92ma\e[38;5;196mb\e[38;2;255;0;0mc")
  _ (test
     (10 = cfg s 4)                          ; bright green: the high half
     (196 = cfg s 5)                         ; 256-colour, straight index
-    (196 = cfg s 6))                        ; truecolour red lands on the cube's 196
+    ([255 0 0] = cfg s 6))                  ; truecolour: the rgb itself
  _ (scribe s "\e[48;5;238;39mq")
- _ (test (238 = cbg s 7) (7 = cfg s 7)))
+ _ (test (238 = cbg s 7) ('def = cfg s 7))
+ _ (scribe s "\e[48;2;1;2;300mr")
+ _ (test ([1 2 255] = cbg s 8))                  ; a channel past 255 holds at 255
+ _ (scribe s "\e[0;2;3;5;8;9ms")
+ _ (test (248 = cface s 9))                     ; dim 8 italic 16 strike 32 blink 64 hidden 128
+ _ (scribe s "\e[23;25;28;29mt")
+ _ (test (8 = cface s 10))                       ; ..each with its own off
+ _ (scribe s "\e[1;22mu")
+ _ (test (0 = cface s 11)))                      ; 22 ends bold and dim both
 
 ; --- 12. save/restore (ESC 7/8 and CSI s/u carry cursor + pen) ---
 (: s (mkscr 4 10)
@@ -221,7 +235,7 @@
  _ (test
     (120 = chat s 12)                       ; restored to 2;3 and stamped there
     (5 = cfg s 12)                          ; ... with the saved magenta pen
-    (0 = cbg s 12))                         ; ... not the green that came after
+    ('def = cbg s 12))                      ; ... not the green that came after
  _ (scribe s "\e[1;1H\e[s\e[3;3H\e[u")
  _ (test (0 = cur s)))
 
@@ -303,32 +317,34 @@
     (0 = gaze s 4) (2 = gaze s 5)            ; region reopened
     (0 = cur s)))
 
-; --- 17b. utf-8 folds onto the cp437 the fonts carry ---
+; --- 17b. utf-8 decodes: a cell holds the codepoint, whatever face draws it ---
 (: s (mkscr 4 20)
  _ (scribe s "\xc3\xa9")                          ; é
- _ (test (130 = chat s 0))                    ; -> cp437 0x82
+ _ (test (233 = chat s 0))
  _ (scribe s "\xe2\x94\x80\xe2\x94\x82\xe2\x94\x8c\xe2\x95\x90\xe2\x95\x94")   ; ─ │ ┌ ═ ╔
- _ (test (196 = chat s 1) (179 = chat s 2) (218 = chat s 3)
-           (205 = chat s 4) (201 = chat s 5))
- _ (scribe s "\xe2\x95\xad")                      ; ╭ rounded aliases the ┌
- _ (test (218 = chat s 6))
+ _ (test (9472 = chat s 1) (9474 = chat s 2) (9484 = chat s 3)
+           (9552 = chat s 4) (9556 = chat s 5))
+ _ (scribe s "\xe2\x95\xad")                      ; ╭ stays itself: the face aliases it
+ _ (test (9581 = chat s 6))
  _ (scribe s "\xe2\x96\x91\xe2\x96\x88")          ; ░ █
- _ (test (176 = chat s 7) (219 = chat s 8))
+ _ (test (9617 = chat s 7) (9608 = chat s 8))
  _ (scribe s "\xce\xb1\xe2\x88\x9e\xc2\xb0")      ; α ∞ °
- _ (test (224 = chat s 9) (236 = chat s 10) (248 = chat s 11))
- _ (scribe s "\xf0\x9f\x98\x80")                  ; an emoji: one ■, one cell
- _ (test (254 = chat s 12) (13 = cur s))
+ _ (test (945 = chat s 9) (8734 = chat s 10) (176 = chat s 11))
+ _ (scribe s "\xf0\x9f\x98\x80")                  ; an emoji: one cell, held whole
+ _ (test (128512 = chat s 12) (13 = cur s))
  _ (scribe s 226) _ (scribe s 148)                ; a sequence split across feeds
  _ (scribe s 144)                                 ; ... still one ┐
- _ (test (191 = chat s 13))
- _ (scribe s "\x80")                              ; a stray continuation: the ■
- _ (test (254 = chat s 14))
- _ (scribe s "\xc3\e[Dx")                         ; torn mid-sequence: a ■ lands,
+ _ (test (9488 = chat s 13))
+ _ (scribe s "\x80")                              ; a stray continuation: U+FFFD
+ _ (test (65533 = chat s 14))
+ _ (scribe s "\xc3\e[Dx")                         ; torn mid-sequence: a U+FFFD lands,
  _ (test (120 = chat s 15)                    ; the ESC rides on -- cub steps
-           (16 = cur s))                        ; back and x overwrites the ■
- _ (scribe s "\xe2\x96\xba\xe2\x96\xb2\xe2\x99\xaa")   ; ► ▲ ♪: pictures on low bytes, cells
- _ (test (16 = chat s 16) (30 = chat s 17) (13 = chat s 18)   ; ..not the controls
-           (19 = cur s)))                       ; those bytes would be (no CR for ♪)
+           (16 = cur s))                        ; back and x overwrites it
+ _ (scribe s "\xe2\x96\xba\xe2\x96\xb2\xe2\x99\xaa")   ; ► ▲ ♪: pictures whose cp437 bytes
+ _ (test (9658 = chat s 16) (9650 = chat s 17) (9834 = chat s 18)   ; ..are controls
+           (19 = cur s))                        ; and act as none (no CR for ♪)
+ _ (scribe s "\xc2\x9b\xed\xa0\x80")              ; a C1 control and a surrogate:
+ _ (test (65533 = chat s 19) (65533 = chat s 20)))    ; neither lands as itself
 
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
@@ -340,7 +356,7 @@
     (3 = (3 & gaze s 3))                       ; shown + wrapping again
     (0 = gaze s 4) (2 = gaze s 5))
  _ (scribe s "w")
- _ (test (7 = cfg s 0) (0 = cface s 0)))
+ _ (test ('def = cfg s 0) (0 = cface s 0)))
 
 ; --- 19. wet: every write names its rows; a read clears the ledger ---
 (: s (mkscr 4 10)

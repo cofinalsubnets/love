@@ -19,20 +19,21 @@
 (module 'tls
 (borrow 'dns)
 (borrow 'posix)
+(borrow 'bytes)
 
 (:
    ; --- bytes and words ---
    (u8 v) (string (v & 255))
-   (u16 v) (u8 (v >> 8) + u8 v)
-   (u24 v) (u8 (v >> 16) + u16 v)
-   (u32 v) (u8 (v >> 24) + u24 v)
-   (rd16 s i) ((s i << 8) + s (i + 1))
-   (rd24 s i) ((s i << 16) + rd16 s (i + 1))
-   (zeros n) (bytes n (i \ 0))
-   (xors a b) (bytes #a (i \ a i ^ b i))
+   (u16 v) (wrbe v 2)
+   (u24 v) (wrbe v 3)
+   (u32 v) (wrbe v 4)
+   (rd16 s i) (rdbe s i 2)
+   (rd24 s i) (rdbe s i 3)
+   (zeros n) (zbytes n)
+   (xors a b) (xorb a b)
    ; a small count as eight bytes, either end first
    (u64le n) (bytes 8 (i \ (n >> (8 * i)) & 255))
-   (u64be n) (bytes 8 (i \ (n >> (8 * (7 - i))) & 255))
+   (u64be n) (wrbe n 8)
    (pad16 s) (zeros ((16 - (#s % 16)) % 16))
 
    ; --- the hash floor: sha256 raw, hmac, hkdf ---

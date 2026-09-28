@@ -673,9 +673,12 @@
       !(aw-looks-num? "12a") !(aw-looks-num? "") !(aw-looks-num? "e3") !(aw-looks-num? "1e")
       (aw-s2n "  12.5xyz" = 12.5) (aw-s2n "1e3" = 1000) (aw-s2n "abc" = 0)
       ; substr clamps its start and does not dock the length for it -- gnu's reading
-      (aw-substr "hello" 2 3 1 = "ell") (aw-substr "hello" 0 3 1 = "hel")
-      (aw-substr "hello" 4 0 0 = "lo") (aw-substr "hello" 2 -1 1 = "")
-      (aw-index "hello" "ll" = 3) (aw-index "hello" "z" = 0)
+      (aw-substr {} "hello" 2 3 1 = "ell") (aw-substr {} "hello" 0 3 1 = "hel")
+      (aw-substr {} "hello" 4 0 0 = "lo") (aw-substr {} "hello" 2 -1 1 = "")
+      (aw-index {} "hello" "ll" = 3) (aw-index {} "hello" "z" = 0)
+      ; by character
+      (aw-substr {} "h\u{e9}l\u{8a9e}x" 2 3 1 = "\u{e9}l\u{8a9e}") (aw-index {} "\u{8a9e}\u{e9}x" "x" = 3)
+      (aw-cpn {} "a\u{8a9e}\xff" = 3)
       (aw-repl "[&]" "b" = "[b]") (aw-repl "\\&" "b" = "&")
       (aw-slt "ab" "b") !(aw-slt "b" "ab") !(aw-slt "a" "a") (aw-slt "a" "ab")
       ; the lexer's one context: / after a value divides, / anywhere else opens a regex

@@ -60,15 +60,12 @@
    (xa-reg nm) (: r (xa-regs (name nm)) (two? r ? ['rg <r <>r] ()))    ; a register operand, or ()
    (xa-regname o) (xa-names (<>o * 32 + <>>o))
    (xa-gpr? o) (<o = 'rg && <>>o < 16)
-   (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && xa-dig? (s 2) ? ['cr (s 2 - 48)] ())   ; a control register
+   (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && digit? (s 2) ? ['cr (s 2 - 48)] ())   ; a control register
    ;; an immediate written as a C expression, `~(1 << 2)` -- the lexer and gimm below evaluate it
    (xa-expr? v) (#v > 0 && (v 0 = 40 || v 0 = 126 || ((v 0 = 45 || v 0 = 43) && #v > 1 && (v 1 = 40 || v 1 = 126))))
 
    ;; --- numerals: decimal, 0x-hex, optionally signed -- every byte, or it is not one. ---
-   (xa-hexd c) (? (48 <= c <= 57)  (c - 48)
-                  (97 <= c <= 102) (c - 87)
-                  (65 <= c <= 70)  (c - 55)
-                  (scare 'as-hexdigit c))
+   (xa-hexd c) (: v (hexv c) (v < 0 ? (scare 'as-hexdigit c) v))
    (xa-decv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
    (xa-hexv s) (foldl (a \ i \ a * 16 + xa-hexd (s i)) 0 ^#s)
    (xa-neg? s) (#s > 0 && s 0 = 45)
@@ -76,12 +73,10 @@
    (xa-num s)  (? (xa-neg? s) (0 - xa-num (snip s 1 #s))
                   (xa-hex? s) (xa-hexv (snip s 2 #s))
                   (xa-decv s))
-   (xa-dig? c)  (48 <= c <= 57)
-   (xa-hexc? c) (xa-dig? c || 97 <= c <= 102 || 65 <= c <= 70)
    (xa-allof? s p k) (: n #s ((: (g i) (i >= n ? (n > k) (p (s i)) (g (i + 1)) 0)) k))
    (xa-num? s) (? (xa-neg? s) (xa-num? (snip s 1 #s))
-                  (xa-hex? s) (xa-allof? s xa-hexc? 2)
-                  (xa-allof? s xa-dig? 0))
+                  (xa-hex? s) (xa-allof? s ghex? 2)
+                  (xa-allof? s digit? 0))
    (xa-imm s) (xa-num? s ? (xa-num s) (scare 'as-badnum s))       ; a number where one is required
    ;; a symbol, or a symbol with an offset either side: sym, sym+4, sym-8, 4+sym -> (sym . off)
    (xa-symoff s) (: i ((: (g i) (? (i >= #s) -1 (s i = 43 || s i = 45) i (g (i + 1)))) 1)
@@ -91,10 +86,8 @@
                        ((name (xa-unquote (snip s 0 i))) . (xa-imm (snip s (s i = 43 ? (i + 1) i) #s)))))
 
    ;; -- the lexer: one line -> tokens (sym "s") (num n) (pct "reg") (lref n dir) (ch c) (op "<<"). --
-   (gws? c) (c = 32 || c = 9)
-   (gdig? c) (48 <= c <= 57)
-   (galpha? c) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || c = 46)
-   (gidc? c) (galpha? c || gdig? c)
+   (galpha? c) (alpha? c || c = 95 || c = 46)
+   (gidc? c) (galpha? c || digit? c)
    (ghex? c) (hexv c >= 0)
    (gdecv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
    (ghexv s) (foldl (a \ i \ a * 16 + hexv (s i)) 0 ^#s)
@@ -103,11 +96,11 @@
       (go i acc)
        (? (i >= n) (rev acc)
           (: c (s i)
-             (? (gws? c) (go (i + 1) acc)
+             (? (blank? c) (go (i + 1) acc)
                 (c = 48 && i + 1 < n && (s (i + 1) = 120 || s (i + 1) = 88))
                  (: j (span (i + 2) ghex?) (go j (['num (ghexv (snip s (i + 2) j))] . acc)))
-                (gdig? c)
-                 (: j (span i gdig?) v (gdecv (snip s i j))
+                (digit? c)
+                 (: j (span i digit?) v (gdecv (snip s i j))
                     (? (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))))
                        (go (j + 1) (['lref v (s j)] . acc))
                        (go j (['num v] . acc))))
@@ -159,12 +152,11 @@
    ;; --- string helpers over the byte string. ---
    (xa-has? s c) ((: (g i) (? (i >= #s) 0 (s i = c) 1 (g (i + 1)))) 0)
    (xa-idx s c)  ((: (g i) (? (i >= #s) -1 (s i = c) i (g (i + 1)))) 0)
-   (xa-ws? c) (c = 32 || c = 9)
    (xa-trim s)   (: n #s
-      a ((: (gl i) (i < n && xa-ws? (s i) ? (gl (i + 1)) i)) 0)
-      b ((: (gr j) (j > a && xa-ws? (s (j - 1)) ? (gr (j - 1)) j)) n)
+      a ((: (gl i) (i < n && blank? (s i) ? (gl (i + 1)) i)) 0)
+      b ((: (gr j) (j > a && blank? (s (j - 1)) ? (gr (j - 1)) j)) n)
       (snip s a b))
-   (xa-nows s) (string (filter (c \ !(xa-ws? c)) (chars s)))
+   (xa-nows s) (string (filter (c \ !(blank? c)) (chars s)))
    ;; gcc quotes a symbol in its Intel output: "main", and "printf"@PLT -- splice the quotes out
    (xa-unquote s) (: j (#s >= 2 && s 0 = 34 ? (xa-idx (snip s 1 #s) 34) -1)
                      (j < 0 ? s (snip s 1 (j + 1) + snip s (j + 2) #s)))
@@ -282,7 +274,7 @@
          (t 0 = 36) (: v (snip t 1 #t)
                       (? (xa-num? v) ['im (xa-num v)]
                          (xa-expr? v) ['im (gimm (gtoks v))]
-                         (xa-dig? (v 0) || xa-neg? v) (scare 'as-badnum v)
+                         (digit? (v 0) || xa-neg? v) (scare 'as-badnum v)
                          ['ims (name (xa-unquote v))]))
          (xa-has? t 40)
          (: op ((: (g i) (? (i < 1 || t i = 40) i (g (i - 1)))) (#t - 1))   ; the last paren: `(2f)(%rip)`

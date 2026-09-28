@@ -32,7 +32,6 @@
 
    ;; -- emit: a narrow halfword, or a 32-bit word as hi-halfword-first little-endian pair. --
    (t16 w) (le16 w)
-   (t32 w) (le16 (w >> 16) + le16 (w & 65535))
 
    ;; (li d imm): MOVW the low 16, then MOVT the high 16 if nonzero. imm normalizes into [0,2^32).
    ;; the shared scatter (i/imm4/imm3/imm8) takes the hw register number -- `patch` reuses it below.
@@ -385,13 +384,7 @@
    ;;   bcc (T3, conditional br):      imm21 = S:j2:j1:imm6:imm11:0 (no ~), cond in hw1, aux carries it
    (thumb-patch kind target site width aux)
       (: o (target - (site + 4))
-         (kind @ ('b || 'bl)
-            (: imm11 ((o >> 1) & 2047)  imm10 ((o >> 12) & 1023)
-               i2 ((o >> 22) & 1)  i1 ((o >> 23) & 1)  s ((o >> 24) & 1)
-               j1 (((i1 ^ 1) ^ s) & 1)  j2 (((i2 ^ 1) ^ s) & 1)
-               hw1 (0xF000 | ((s << 10) | imm10))
-               hw2 ((? (kind = 'bl) 0xD000 0x9000) | ((j1 << 13) | ((j2 << 11) | imm11)))
-               (t32 ((hw1 << 16) | hw2)))
+         (kind @ ('b || 'bl) (tbw o (? (kind = 'bl) 0xD000 0x9000))
             'bcc
             (: imm11 ((o >> 1) & 2047)  imm6 ((o >> 12) & 63)
                j1 ((o >> 18) & 1)  j2 ((o >> 19) & 1)  s ((o >> 20) & 1)

@@ -4,6 +4,7 @@
 // spelling k_hhdm and k_map_top ahead of the include -- the constants fold and the
 // door is one function, with no wrapper standing between it and its caller.
 #include "k.h"
+#include "../love/bytes.h"
 
 #if !defined(k_hhdm) || !defined(k_map_top)
 #error "dtb.h: spell k_hhdm (the stub's window) and k_map_top (its far edge) first"
@@ -15,11 +16,6 @@
 // the file (tools/kproject.l), where the flat link's kimage_end symbol used to stand.
 extern uintptr_t const k_image_top;
 
-static uint32_t be32(uint8_t const *p) {
-  return (uint32_t) p[0] << 24 | (uint32_t) p[1] << 16
-       | (uint32_t) p[2] << 8  | p[3]; }
-static uint64_t be64(uint8_t const *p) {
-  return (uint64_t) be32(p) << 32 | be32(p + 4); }
 
 // flat-tree tokens (all fields big-endian, everything 4-aligned)
 #define FDT_BEGIN_NODE 1
@@ -34,15 +30,15 @@ static int is(char const *a, char const *b) {      // tiny strcmp, self-containe
 
 void dtb_to_kboot(uint64_t dtb_pa) {
   uint8_t const *f = (uint8_t const *) (k_hhdm + dtb_pa);
-  if (be32(f) != 0xd00dfeed) return;
-  uint8_t const *p   = f + be32(f + 8);            // off_dt_struct
-  char const *str    = (char const *) (f + be32(f + 12));   // off_dt_strings
+  if (ld32be(f) != 0xd00dfeed) return;
+  uint8_t const *p   = f + ld32be(f + 8);            // off_dt_struct
+  char const *str    = (char const *) (f + ld32be(f + 12));   // off_dt_strings
   uint64_t k1 = (k_image_top + 0xfff) & ~0xfffull;   // page-rounded physical far edge
   kboot.hhdm = k_hhdm;
   uint32_t ac = 2, sc = 2;                         // root's cell counts (virt: 2/2)
   int depth = 0, memd = 0, chos = 0;               // memd/chos: the depth of a memory / chosen node we are inside
   for (;;) {
-    uint32_t tok = be32(p); p += 4;
+    uint32_t tok = ld32be(p); p += 4;
     if (tok == FDT_END) break;
     if (tok == FDT_NOP) continue;
     if (tok == FDT_BEGIN_NODE) {
@@ -62,19 +58,19 @@ void dtb_to_kboot(uint64_t dtb_pa) {
       depth--;
       continue; }
     if (tok != FDT_PROP) break;                    // a malformed tree: stop, keep what we have
-    uint32_t len = be32(p), nameoff = be32(p + 4);
+    uint32_t len = ld32be(p), nameoff = ld32be(p + 4);
     p += 8;
     char const *pn = str + nameoff;
-    if (depth == 1 && is(pn, "#address-cells")) ac = be32(p);
-    if (depth == 1 && is(pn, "#size-cells"))    sc = be32(p);
+    if (depth == 1 && is(pn, "#address-cells")) ac = ld32be(p);
+    if (depth == 1 && is(pn, "#size-cells"))    sc = ld32be(p);
     if (chos && depth == chos && is(pn, "bootargs") && len)
       k_cmdline((char const *) p, len);
 
     if (memd && depth == memd && is(pn, "reg")) {
       uint32_t step = (ac + sc) * 4;
       for (uint32_t o = 0; step && o + step <= len; o += step) {
-        uint64_t a = ac == 2 ? be64(p + o) : be32(p + o);
-        uint64_t s = sc == 2 ? be64(p + o + ac*4) : be32(p + o + ac*4);
+        uint64_t a = ac == 2 ? ld64be(p + o) : ld32be(p + o);
+        uint64_t s = sc == 2 ? ld64be(p + o + ac*4) : ld32be(p + o + ac*4);
         uint64_t b = a + s;
         if (a < k1) a = k1;                        // firmware + dtb + hole + image, one span
         if (b > k_map_top) b = k_map_top;          // above the mapped window

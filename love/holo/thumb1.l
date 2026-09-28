@@ -39,7 +39,6 @@
 
    ;; -- emit. one narrow halfword; t32 is the BL pair (hi halfword first, each little-endian). --
    (t16 w) (le16 (w & 65535))
-   (t32 w) (le16 (w >> 16) + le16 (w & 65535))
 
    ;; ---- constant materialization (no MOVW/MOVT on v6-M) ----
    ;; MOVS Rd,#imm8 (T1); mvns/LSLS/ADDS the byte-build for the rest. all low-reg.
@@ -374,13 +373,7 @@
             'bcc
             (-254 <= o <= 254 ? 0 (scare 'bcc-range-needs-veneer o),
              t16 (0xD000 | ((aux << 8) | ((o >> 1) & 255))))
-            'bl
-            (: imm11 ((o >> 1) & 2047)  imm10 ((o >> 12) & 1023)
-               i2 ((o >> 22) & 1)  i1 ((o >> 23) & 1)  s ((o >> 24) & 1)
-               j1 (((i1 ^ 1) ^ s) & 1)  j2 (((i2 ^ 1) ^ s) & 1)
-               hw1 (0xF000 | ((s << 10) | imm10))
-               hw2 (0xD000 | ((j1 << 13) | ((j2 << 11) | imm11)))
-               (t32 ((hw1 << 16) | hw2)))
+            'bl (tbw o 0xD000)
             'abs32                                 ; a pooled 32-bit absolute address (la's word)
             (le32 (target + aux))                           ; internal resolve only; a .o leaves it an R_ARM_ABS32
             (scare 'badfix kind)))

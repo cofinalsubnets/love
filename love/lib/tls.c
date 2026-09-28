@@ -3,12 +3,9 @@
 // (poly1305 key msg)           -> the 16-byte tag           | () misuse
 // (aes-gcm-seal key iv aad pt) -> ct and tag; (aes-gcm-open key iv aad ctag) -> pt | ()
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
-
-static uint32_t le32(const uint8_t *p) {
- return (uint32_t) p[0] | (uint32_t) p[1] << 8
-      | (uint32_t) p[2] << 16 | (uint32_t) p[3] << 24; }
 
 // --- chacha20 (rfc 8439 §2.3) -----------------------------------------------------
 #define ROTL(x, n) (((x) << (n)) | ((x) >> (32 - (n))))
@@ -35,8 +32,8 @@ static void cc_xor(const uint8_t *key, const uint8_t *nonce, uint32_t ctr,
                    const uint8_t *txt, uint8_t *out, uintptr_t n) {
  uint32_t st[16] = {0x61707865, 0x3320646e, 0x79622d32, 0x6b206574};
  uint8_t ks[64];
- for (int i = 0; i < 8; i++)  st[4 + i] = le32(key + 4*i);
- for (int i = 0; i < 3; i++)  st[13 + i] = le32(nonce + 4*i);
+ for (int i = 0; i < 8; i++)  st[4 + i] = ld32le(key + 4*i);
+ for (int i = 0; i < 3; i++)  st[13 + i] = ld32le(nonce + 4*i);
  for (uintptr_t o = 0; o < n; o += 64) {
   uintptr_t r = n - o < 64 ? n - o : 64;
   st[12] = ctr + (uint32_t) (o / 64);
@@ -48,7 +45,7 @@ static void cc_xor(const uint8_t *key, const uint8_t *nonce, uint32_t ctr,
 
 // r, clamped by the masks folded into the split (§2.5.1).
 static void po_r(const uint8_t *k, uint64_t r[5]) {
- uint32_t t0 = le32(k), t1 = le32(k + 4), t2 = le32(k + 8), t3 = le32(k + 12);
+ uint32_t t0 = ld32le(k), t1 = ld32le(k + 4), t2 = ld32le(k + 8), t3 = ld32le(k + 12);
  r[0] = t0 & M26;
  r[1] = ((t0 >> 26) | (t1 << 6))  & 0x3ffff03;
  r[2] = ((t1 >> 20) | (t2 << 12)) & 0x3ffc0ff;
@@ -58,7 +55,7 @@ static void po_r(const uint8_t *k, uint64_t r[5]) {
 // h += the 16 bytes at p; hi is the 2^128 term (2^24 for a full block, 0 for the
 // padded final one, whose 0x01 already sits inside the sixteen).
 static void po_absorb(uint64_t h[5], const uint8_t *p, uint64_t hi) {
- uint32_t t0 = le32(p), t1 = le32(p + 4), t2 = le32(p + 8), t3 = le32(p + 12);
+ uint32_t t0 = ld32le(p), t1 = ld32le(p + 4), t2 = ld32le(p + 8), t3 = ld32le(p + 12);
  h[0] += t0 & M26;
  h[1] += ((t0 >> 26) | ((uint64_t) t1 << 6))  & M26;
  h[2] += ((t1 >> 20) | ((uint64_t) t2 << 12)) & M26;
@@ -112,7 +109,7 @@ static void po_fin(const uint64_t h[5], const uint8_t *key, uint8_t out[16]) {
  w[2] = (uint64_t) ((p2 >> 12) | (p3 << 14)) & 0xffffffff;
  w[3] = (uint64_t) ((p3 >> 18) | (p4 << 8))  & 0xffffffff;
  for (int i = 0; i < 4; i++) {
-  f = w[i] + le32(key + 16 + 4*i) + (f >> 32);
+  f = w[i] + ld32le(key + 16 + 4*i) + (f >> 32);
   out[4*i] = (uint8_t) f;           out[4*i+1] = (uint8_t) (f >> 8);
   out[4*i+2] = (uint8_t) (f >> 16); out[4*i+3] = (uint8_t) (f >> 24); } }
 
@@ -184,15 +181,11 @@ static void aes_block(const struct aes_ks *s, const uint8_t in[16], uint8_t out[
   for (int i = 0; i < 16; i++) a[i] = b[i] ^ s->rk[16 * r + i]; }
  memcpy(out, a, 16); }
 
-static uint64_t be64(const uint8_t *p) {
- uint64_t v = 0;
- for (int i = 0; i < 8; i++) v = v << 8 | p[i];
- return v; }
 static void put64(uint8_t *p, uint64_t v) { for (int i = 7; i >= 0; i--) p[i] = (uint8_t) v, v >>= 8; }
 
 // y = (y ^ x) * h in gf(2^128), gcm's bit order: shift and mask, 128 steps, no branch
 static void gh_mul(uint64_t y[2], const uint8_t x[16], const uint64_t h[2]) {
- uint64_t x0 = y[0] ^ be64(x), x1 = y[1] ^ be64(x + 8), z0 = 0, z1 = 0, v0 = h[0], v1 = h[1];
+ uint64_t x0 = y[0] ^ ld64be(x), x1 = y[1] ^ ld64be(x + 8), z0 = 0, z1 = 0, v0 = h[0], v1 = h[1];
  for (int i = 0; i < 128; i++) {
   uint64_t bit = i < 64 ? x0 >> (63 - i) : x1 >> (127 - i), m = 0 - (bit & 1), lsb = 0 - (v1 & 1);
   z0 ^= v0 & m, z1 ^= v1 & m;
@@ -229,7 +222,7 @@ static void gcm_tag(const struct aes_ks *s, const uint8_t iv[12], const uint8_t 
                     const uint8_t *ct, uintptr_t nc, uint8_t tag[16]) {
  uint8_t z[16] = {0}, hb[16], j0[16], e[16];
  aes_block(s, z, hb);
- uint64_t h[2] = {be64(hb), be64(hb + 8)};
+ uint64_t h[2] = {ld64be(hb), ld64be(hb + 8)};
  memcpy(j0, iv, 12), j0[12] = j0[13] = j0[14] = 0, j0[15] = 1;
  aes_block(s, j0, e);
  gh_all(h, aad, na, ct, nc, tag);

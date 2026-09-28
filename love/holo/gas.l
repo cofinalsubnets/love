@@ -72,7 +72,7 @@
                          0 gx-rows)
                 t)
    gx-names (gtab (map (\ row [<row >row]) gx-rows))   ; rN -> (q l w b)
-   (gx-cr s) (? (#s = 3 && s 0 = 99 && s 1 = 114 && gdig? (s 2)) ['cr (s 2 - 48)] ())
+   (gx-cr s) (? (#s = 3 && s 0 = 99 && s 1 = 114 && digit? (s 2)) ['cr (s 2 - 48)] ())
    a64-names (: t (tablet 0)
                 _ (foldl (\ _ i (pin t (name ("x" + show i)) (name ("r" + show i)))) 0 ^29)
                 _ (foldl (\ _ p (pin t <p <>p)) 0 '((x29 fp) (x30 lr) (sp sp) (xzr zr)))
@@ -238,13 +238,13 @@
    (gx-locals items)
     (: lc {}
        (lref s) (: t (show s) n #t c (t (n - 1))                  ; "1f" / "1b" -> (n . dir), else ()
-                   (? (n > 1 && (c = 102 || c = 98) && xa-allof? (snip t 0 (n - 1)) xa-dig? 0)
+                   (? (n > 1 && (c = 102 || c = 98) && xa-allof? (snip t 0 (n - 1)) digit? 0)
                       ((xa-num (snip t 0 (n - 1))) . c) ()))
        (ref s) (: r (lref s) (? !(two? r) s (glabel <r (>r = 102 ? (1 + peep lc <r 0) (peep lc <r 0)))))
        (fix o) (<o @ 'lbl ['lbl (ref <>o)] 'rip ['rip (ref <>o) <>>o] o)
        (rev (foldl (\ acc it
                       ((<it @ 'label (: t (show <>it)
-                                        (? (xa-allof? t xa-dig? 0)
+                                        (? (xa-allof? t digit? 0)
                                            (: n (xa-num t) k (1 + peep lc n 0) _ (pin lc n k) ['label (glabel n k)])
                                            it))
                             'op ['op (it 1) (it 2) (map fix (it 3))]
@@ -261,7 +261,7 @@
    (ga-reg s) (: k (name s)
                  (? (nom? (peep a64-names k ())) ['reg (a64-names k) 8]
                     (= k 'xzr || (= k 'wzr)) 'zr
-                    (#s > 1 && s 0 = 119 && gdig? (s 1)) ['reg (peep a64-names (name ("x" + snip s 1 #s)) ()) 4]
+                    (#s > 1 && s 0 = 119 && digit? (s 1)) ['reg (peep a64-names (name ("x" + snip s 1 #s)) ()) 4]
                     ()))
    (ga-opnd toks)
     (toks @ (('ch 35) . rest) ['imm (gimm rest)]
@@ -472,7 +472,7 @@
            (str (i + 1) (s i . acc)))
        (go i acc)
         (? (i >= n) (rev acc)
-           (gws? (s i) || s i = 44) (go (i + 1) acc)
+           (blank? (s i) || s i = 44) (go (i + 1) acc)
            (s i = 34) (: r (str (i + 1) ()) (go <>r (<r . acc)))
            (scare 'gas-string s))
        (go 0 ()))
@@ -531,8 +531,8 @@
        (go i acc)
         (? (i >= n) acc
            (: c (s i)
-              (? (gdig? c && (i = 0 || !(gidc? (s (i - 1)))))
-                 (: j ((: (g j) (? (j < n && gdig? (s j)) (g (j + 1)) j)) i)
+              (? (digit? c && (i = 0 || !(gidc? (s (i - 1)))))
+                 (: j ((: (g j) (? (j < n && digit? (s j)) (g (j + 1)) j)) i)
                     (? (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))))
                        (go (j + 1) (acc + rl (gdecv (snip s i j)) (s j)))
                        (go j (acc + snip s i j))))
@@ -716,7 +716,7 @@
                  (? (0 <= c)
                     (: l (snip s 0 c)
                        _ (flush 0)
-                       _ (? (xa-allof? l gdig? 0)
+                       _ (? (xa-allof? l digit? 0)
                             (: n (gdecv l) k (1 + peep lc n 0) _ (pin lc n k)
                                (emit [['label (name (pfx + show (glabel n k)))]]))
                             (: _ (pin labs l (st 'cur)) (emit [['label (name l)]])))

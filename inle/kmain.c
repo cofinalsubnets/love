@@ -828,7 +828,7 @@ static void k_vt_read(int i, int slot) {
   // serial-only: no console to ask, so the file reads empty rather than the last write
   if (!kcb || slot == 4) { k_ents[i].len = 0; return; }   // ..and the lift is written, never read
   // the colours come off the pen, the scale off the paper
-  unsigned v = slot == 3 ? kfb.scale : slot == 1 ? kcb->def_fg : kcb->def_bg;
+  unsigned v = slot == 3 ? kfb.scale : cb_val(slot == 1 ? kcb->def_fg : kcb->def_bg) & 255u;
   char d[4]; int n = 0;
   if (v >= 100) d[n++] = (char) ('0' + v / 100);
   if (v >= 10)  d[n++] = (char) ('0' + v / 10 % 10);
@@ -853,8 +853,8 @@ static void k_vt_write(int i, int slot) {
   while (j < len && b[j] >= '0' && b[j] <= '9' && v < 256) v = v * 10 + (unsigned) (b[j++] - '0');
   if (!j || v > 255) return;
   if (slot == 3) { k_vt_rescale(v); return; }   // a scale is a new grid, not a new pen
-  cb_recolor(kcb, slot == 1 ? (uint8_t) v : kcb->def_fg,
-                  slot == 1 ? kcb->def_bg : (uint8_t) v); }
+  cb_recolor(kcb, slot == 1 ? cb_ink(cb_idx, v) : kcb->def_fg,
+                  slot == 1 ? kcb->def_bg : cb_ink(cb_idx, v)); }
 
 // --- /proc's live rows ------------------------------------------------------------
 // filled at the open, off state only this side of the door can see: the kernel's own free
@@ -1699,7 +1699,7 @@ static bool k_cb_remake(void) {
   struct cb *const old = kcb;
   uint16_t const orows = old->rows, ocols = old->cols;
   if (rows == orows && cols == ocols) return fbwash(), true;  // same grid, new pixels
-  struct cb *c = kmallocw(b2w(sizeof *c + rows * cols * sizeof(uint32_t)));
+  struct cb *c = kmallocw(b2w(cb_size(rows, cols)));
   if (!c) return false;
   *c = *old;                           // the pen, the modes, a parser mid-sequence
   c->rows = (uint16_t) rows, c->cols = (uint16_t) cols;
@@ -1707,7 +1707,7 @@ static bool k_cb_remake(void) {
   c->flag &= (uint16_t) ~cb_pend;      // a pending wrap named the old last column
   uintptr_t const cr = old->wpos / ocols, from = cr >= rows ? cr - rows + 1u : 0,
                   w = cols < ocols ? cols : ocols;
-  uint32_t const blank = cb_cell(0, c->def_fg, c->def_bg, 0);   // new ground in the DEFAULT pen
+  struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };   // new ground in the DEFAULT pen
   for (uintptr_t i = 0, n = rows * cols; i < n; i++) c->cb[i] = blank;
   for (uintptr_t r = from, dr = 0; r < orows && dr < rows; r++, dr++)
     for (uintptr_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
@@ -1786,7 +1786,7 @@ static lvm(key) {
 // two in and one out, so the answer lands in the deeper slot and Sp moves by one.
 static lvm(color) {
  uint8_t fg = getcharm(Sp[0]), bg = getcharm(Sp[1]);
- if (kcb) cb_recolor(kcb, fg, bg);
+ if (kcb) cb_recolor(kcb, cb_ink(cb_idx, fg), cb_ink(cb_idx, bg));
  Sp[1] = ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
@@ -1886,10 +1886,10 @@ static bool cbinit(void) {
   const uintptr_t rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
   // kmallocw, not ai_alloc: cbinit runs before ai_ini, so no g exists yet
-  if (!(kcb = kmallocw(b2w(sizeof(struct cb) + rows * cols * sizeof(uint32_t))))) return false;
+  if (!(kcb = kmallocw(b2w(cb_size(rows, cols))))) return false;
   cb_open(kcb, rows, cols);
   kcb->flag |= cb_lnm;  // the kernel console's discipline: a bare \n is a newline
-  cb_attr(kcb, 15, 0, 0);   // white on black: xterm-256's 15 and 0, what a terminal is
+  cb_attr(kcb, cb_ink(cb_idx, 15), cb_ink(cb_idx, 0));   // white on black: xterm-256's 15 and 0, what a terminal is
   cb_fill(kcb, 0);
   return true; }
 

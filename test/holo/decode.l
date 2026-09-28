@@ -16,7 +16,7 @@
     (: c (xa-idx l 58)
        (? (c <= 0) ()
           (: off (xa-trim (snip l 0 c)) rest (xa-trim (snip l (c + 1) #l))
-             (? (!(xa-allof? off xa-hexc? 0) || 0 = #rest) ()
+             (? (!(xa-allof? off ghex? 0) || 0 = #rest) ()
                 (: ws (filter (w \ !(elem w objdump-prefixes) && !(xa-has? w 46))
                               (words (string (map (c \ c = 9 ? 32 c) (chars rest)))))
                    (two? ws ? [(hexv off) <ws] ()))))))
