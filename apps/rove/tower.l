@@ -1656,14 +1656,14 @@
                                   _ (? sng (song-tier sng g) ())
                                   (loop k (clock 0))))
              _ (raw 1)
-             _ (say out "\e[?1049h\e[?25l\e[2J")
+             _ (say out "\e[?1049h\e[?25l\e[2J\e[?9h\e[?1006h")   ; a tap's press, as edkey's -12
              _ (loop 0 0)
              ; an end shows its frame for a beat, the song still going, before the screen is given back
              _ (say out (crawl-frame g), flush out, hold 1200)
              ; ..and the card goes back before the walk asks for it
              _ (? hn (flush hn, close hn) ())
              _ (g 'over = 'won ? (tower-win g))
-             _ (say out "\e[0m\e[?25h\e[?1049l")
+             _ (say out "\e[?1006l\e[?9l\e[0m\e[?25h\e[?1049l")
              _ (flush out)
              _ (drain-keys ())
              _ (raw 0)

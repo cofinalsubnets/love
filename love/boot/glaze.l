@@ -49,7 +49,7 @@
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-t/auto.l)
    (gfind p l) (atom? l ? () (p <l) <l (gfind p >l))     ; first elt matching p
    ; a blob names no address of the binary: sentinels and drives are reached through g (love.h's Reach* slots)
-   (reach tgt r k) ['ld r (greg tgt 'g) ((reach-offset 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc
+   (reach tgt r k) ['ld r (greg tgt 'g) ((reach-offset 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
    (asmx ir) ((hasm 'x64 ir) 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
@@ -250,6 +250,10 @@
    amble-lam (mint 0)                                             ; the inner-lambda site marker: (amble-lam i n v..) -- entry i of arity n, curried through the imports v..
    (amax a b) (a < b ? b a)
    (adistinct l) (l @ (a . u) (!(elem a u) && adistinct u) 1)
+   (amentions? x e) (? (aquote? e) 0  (e = x) 1  (two? e) (foldl (\ a y (a || amentions? x y)) 0 e)  0)
+   ; the params name distinct slots; a captured sequencing binder may arrive as several _, harmless
+   ; while nothing reads _
+   (aparams? ps M) (adistinct (filter (p \ p != '_) ps) && (adistinct ps || !(amentions? '_ M)))
    ; a constant rides as the immediate 2e+1, so only a fixnum (charm?): a big would be laid truncated, silently
    (afix? e) (charm? e)
    (aconst? e) (afix? e || (e = amble-nil))
@@ -354,7 +358,19 @@
    aopv [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep]
            [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
            [(>) '>] [(>=) '>=] [(=) '=] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]]
-   (aopn x l) (atom? l ? (opnom x) (x = <<l) <><l (aopn x >l))
+   ; ev.l's iop carries a nif as its op word (a charm), which aopv's values never equal: the
+   ; words of the globals amble can name, word -> nom, filled at the first ask -- guts is not
+   ; there yet when this file bakes
+   aopix {}
+   (aopw x)
+    (: _ (? (#(keys aopix) = 0)
+            (: nf (cite 'guts 'nifop) gv (cite 'guts 'gv)
+               (each '(pin peep elem max min snip tally two? cap cup + - * // % & | ^ < <= > >= = == .
+                       rev cat assoc last string charm? nom? tablet? lit? string? gem? atom? nil? abs)
+                     (n \ (: v (? gv (gv n 0) 0) w (? (nf && v && !(charm? v)) (nf v) 0)
+                             (? (charm? w && w != 0) (pin aopix w n) 0))))))
+       (peep aopix x 0))
+   (aopn x l) (atom? l ? (: n (opnom x) (? n n (charm? x) (aopw x) 0)) (x = <<l) <><l (aopn x >l))
    ; gopword: a head as its canonical word; test/glaze.l holds every aopnames word to an aopv row.
    ; a compound or unmapped head passes through; shadowing is the caller's
    (gopword h) (? (nom? h) h  (two? h) h  (: w (aopn h aopv) (w ? w h)))
@@ -536,13 +552,26 @@
                     (elem oop '(cap cup . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
                     (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
                     (aseq cl as @ 'bad 'bad 1)))))             ; a call: its args, then the call
-       ok (two? s && two? >s && all nom? ps && adistinct ps
+       ok (two? s && two? >s && all nom? ps && aparams? ps M
            && a = #ps && 0 < a && lpok && drok && lts != 'bad && two? body
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the call-lane bisect knob: splits the call machinery from the rest
            && all lit? gvals && all lit? ovals && nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48   ; slots are cheap once the prologue guards the room (below)
            && all (amble-ok? ps shd kn 0 0 0) inits
            && amble-ok? env shd kn go k 1 body
            && asafe 1 (foldl (\ ac i (asafe 0 ac i)) 0 inits) body != 'bad)   ; the restart law, over the gated body
+       _ (? (getenv "LOVE_AMBLE_WHY" && !ok)
+            (: (small e) (? (atom? e) e (aquote? e) e
+                            (: bad (filter (x \ two? x && !(aquote? x) && !(amble-ok? envl shd kn go k 0 x)) >e)
+                               (? (two? bad) (small <bad) e)))
+               why (? !(two? s && two? >s && all nom? ps && aparams? ps M && a = #ps && 0 < a) 'shape
+                      !lpok 'loop !drok 'cost (lts = 'bad) 'lets !(two? body) 'nobody
+                      !(all lit? gvals) ['globals (filter (p \ !(lit? <>p)) (map (f \ [f (gv f 0)]) gn))] !(all lit? ovals) 'ops
+                      !(nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48) 'slots
+                      !(all (amble-ok? ps shd kn 0 0 0) inits) 'inits
+                      !(amble-ok? env shd kn go k 1 body) ['grammar (small body)]
+                      'restart)
+               (say err ("why: " + show why + "  " + snip (show s) 0 (min 160 #(show s)) + "\n")))
+            0)
        (? ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)   ; the compile trace: names every ambled source
              ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin)   ; extras = [() | globals | siblings | quotes | = | inner entries] (+ op values, chain-only):
@@ -659,6 +688,28 @@
                   ['jmp en] ['label ld]]
                + adrive cso
                + [['label en]]))
+             ; the tablet fast lane at a 1-arg site keyed by a quoted nom, (t 'k): a map callee is probed
+             ; inline off the nom's cached hash (dig, word 2) -- a hit its value, a gap () -- and anything
+             ; else drives. a slot holding another nom of the same dig may be =, so that drives too
+             (amap1 cso d) (: lp (mint 0) nx (mint 0) ht (mint 0) ms (mint 0) ld (mint 0) dr (mint 0) en (mint 0)
+              ([['ld T SP cso] ['test T 1] ['br 'ne dr]
+                 ['ld X T 0] (reach tgt SC 2) ['cmp X SC] ['br 'ne dr]                                   ; a map? else drive, the key still in A
+                 ['st SP (spill d) A]                                                                    ; the key, for the loop and the drive
+                 ['ld T T 8] ['ld X T 16] ['shr X 1] ['dec X]                                            ; backing ; mask = cap - 1
+                 ['ld SC A 16] ['and SC SC X] ['add T T 24]                                             ; i = dig & mask ; T = the slots
+                 ['label lp] ['leax A SC SC 1 0] ['ldx A T A 8 0]                                      ; A = slot[i].key
+                 ['ld X SP (spill d)] ['cmp A X] ['br 'eq ht]
+                 (reach tgt X 11) ['cmp A X] ['br 'eq ms]
+                 ['test A 1] ['br 'ne nx]
+                 ['ld X A 0] (reach tgt A 3) ['cmp X A] ['br 'ne nx]                                  ; another nom:
+                 ['leax A SC SC 1 0] ['ldx A T A 8 0] ['ld A A 16]
+                 ['ld X SP (spill d)] ['ld X X 16] ['cmp A X] ['br 'eq ld]                             ; the same dig -> drive
+                 ['label nx] ['inc SC] ['ld X T -8] ['shr X 1] ['dec X] ['and SC SC X] ['jmp lp]
+                 ['label ht] ['leax A SC SC 1 0] ['ldx A T A 8 8] ['jmp en]
+                 ['label ms] ['ld A SP gbo] ['jmp en]
+                 ['label ld] ['ld A SP (spill d)] ['label dr]]
+               + adrive cso
+               + [['label en]]))
              (atally sx d) (: ld (mint 0) en (mint 0)                                                       ; (tally X) on a text: A = tag([X+8]); anything else drives the tally global off its gn slot
               (acg sx d
                + [['test A 1] ['br 'ne ld]
@@ -698,7 +749,8 @@
                     (two? >sas ? (asat sas sso d) (achain sas sso d)))
                  (: fr  (elem f vars || elem f ps || elem f lts)                           ; f in the frame, else a gn slot
                     cso (fr ? (voff f) (gbo + 8 * (1 + posof f gn 0)))
-                    (? ((lp ? 1 sfq) && atom? >as && fr) (acg <as d + astr1 cso)
+                    (? (atom? >as && aqnom? <as) (acg <as d + amap1 cso d)
+                       ((lp ? 1 sfq) && atom? >as && fr) (acg <as d + astr1 cso)
                        (two? >as) (asat as cso d)                                                      ; multi-arg saturates when the callee's arity agrees
                        (achain as cso d))))
              (agous us j d) (two? us ? (acg <us (d + j) + [['st SP (spill (d + j)) A]] + agous >us (j + 1) d))
@@ -1492,7 +1544,9 @@
    ;     in GBODY threaded through g's self-calls, the body becoming (g' FV.. inits..). one level only
    (occurs? s e) (two? e ? (foldl (a \ x \ a || occurs? s x) 0 e) (e = s))                  ; s occurs (syntactically) in e?
    (subst-call g gn fv e) (? (two? e) (<e = g ? (gn . fv + (map (x \ subst-call g gn fv x) >e))   ; (g A..) -> (gn fv.. A'..)
-                                          (map (subst-call g gn fv) e)) e)
+                                          (map (subst-call g gn fv) e))
+                             (e = g) (two? fv ? (gn . fv) gn)                                   ; a bare g -> its partial
+                             e)
    (named-let? e) (two? e && (: nl <e                                                      ; e = ((: (g q..) GBODY) inits..) ?
                       (two? nl && <nl = ': && two? >nl
                        && (: gnf <>nl
@@ -1528,7 +1582,7 @@
     (? !(two? form && <form = ': && two? >form) form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           results (map lift-pair pairs)
-          allpairs (map cap results + (foldl (a \ r \ a + <>r) () results))            ; rewritten originals ++ all the lifted defs
+          allpairs (foldl (a \ r \ a + (<r . <>r)) () results)                       ; each lifted def right behind its fn: a later value binding may call it
           hasbody (1 = #>form % 2)
           (': . (? hasbody (unpair allpairs body) (cbflat allpairs)))))                       ; body-less in, body-less out
    ; --- plift: hoist a read-only self-loop out of a nested `:` to the top level, its captures as leading params -- the case
@@ -1602,7 +1656,7 @@
           extradefs (foldl (a \ r \ a + <>r) () results)
           hasbody (1 = #>form % 2)
         (? (atom? extradefs) form
-         (: allp (map cap results + extradefs)
+         (: allp (foldl (a \ r \ a + (<r . <>r)) () results)                          ; each hoisted def right behind its fn: a later value binding may call it
           (': . (? hasbody (unpair allp body) (cbflat allp))))))) ; body-less in -> body-less out
    ; --- mapfix: a group fn's param peep'd but never tally'd is a map, so (peep h k d) -> (mpeep h k d), the open-addressed
    ;     probe; the entry's mapkind guard backstops the guess -- a non-map arg deopts

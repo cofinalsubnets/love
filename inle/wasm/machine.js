@@ -24,6 +24,7 @@
 // keypress in twenty-odd SECONDS, and the floor is somewhere under 512. `love seed` wants
 // the same 1024 and ooms under 768, so one number covers both.
 import { ctl_n, ring_n, ring_at, shared_n, scan_at, scan_n, c_sh, c_st,
+         point_at, point_n, c_ph, c_pt, paste_at, paste_n, c_xh, c_xt,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
 
 // --- the glass: a canvas as REAL pixels ------------------------------------------------
@@ -136,6 +137,33 @@ export function scanning(ring, ctl, el, k) {
   const send = scanlane(ring, ctl, k);
   el.addEventListener('keydown', (e) => { if (!e.repeat && send(e.code, 0)) e.preventDefault(); });
   el.addEventListener('keyup', (e) => { if (send(e.code, 1)) e.preventDefault(); }); }
+
+// --- the pointer and the clipboard: lanes of their own ---------------------------------
+// a pointer event is a record the kernel takes whole (inle/wasm/arch.c): how (0 a press, 1
+// a release, 2 a move), the button (0 1 2, 64 65 the wheel, 3 none held) with modifiers 4
+// shift 8 meta 16 ctrl, and the cell, 0-based. what it MEANS is the console's to say: a
+// program that asked for the mouse gets a report, and otherwise a drag selects, the release
+// comes back as { copy } and the wheel scrolls the history. a paste is its text, which the
+// console lays as a paste (bracketed when the program asked). full lanes drop the rest.
+export function pointlane(ring, ctl) {
+  const lane = new Uint8Array(ring, point_at, point_n);
+  return (how, b, row, col) => {
+    const tail = Atomics.load(ctl, c_pt), n = (tail + 8) % point_n;
+    if (n === Atomics.load(ctl, c_ph)) return false;
+    lane.set([how, b, 0, 0, row & 255, row >> 8, col & 255, col >> 8], tail);
+    Atomics.store(ctl, c_pt, n);
+    Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2);
+    return true; }; }
+export function pastelane(ring, ctl) {
+  const lane = new Uint8Array(ring, paste_at, paste_n);
+  return (text) => {
+    let tail = Atomics.load(ctl, c_xt);
+    for (const b of new TextEncoder().encode(text)) {
+      const n = (tail + 1) % paste_n;
+      if (n === Atomics.load(ctl, c_xh)) break;
+      lane[tail] = b; tail = n; }
+    Atomics.store(ctl, c_xt, tail);
+    Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2); }; }
 
 // --- hearing: letting the machine be heard ---------------------------------------------
 // ring by the time this matters (inle/wasm/horn.c, then cpu.mjs); what is left is the
@@ -267,8 +295,15 @@ export async function loveMachine(root) {
   const coarse = matchMedia('(pointer: coarse)').matches;
   const refocus = () => (coarse ? canvas : keys).focus({ preventScroll: true });
   chip.addEventListener('click', () => { rearm(); keys.focus({ preventScroll: true }); });
-  // a hardware key, off either element: the bytes a serial terminal sends
+  // a hardware key, off either element: the bytes a serial terminal sends -- but for the
+  // clipboard's chords, ctrl+shift+C or cmd+C to copy the console's selection and
+  // ctrl+shift+V or cmd+V to paste, which the browser's own paste event then carries in
+  let copied = '';
+  const copy = () => { if (copied) navigator.clipboard?.writeText(copied).catch(() => {}); };
+  const chord = (e, k) => e.code === k && ((e.ctrlKey && e.shiftKey) || e.metaKey);
   const onkey = e => {
+    if (chord(e, 'KeyC')) { e.preventDefault(); copy(); return; }
+    if (chord(e, 'KeyV')) return;
     const b = keybytes(e);
     if (!b) return;
     e.preventDefault(); push(b); };
@@ -346,8 +381,22 @@ export async function loveMachine(root) {
     a.href = url; a.download = m.lift.split('/').pop() || 'lift';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000); };
+  // a selection the console made comes back as text: it is the clipboard's at once where
+  // the browser lets a page write it after a gesture, and kept for the copy chord and the
+  // browser's own copy event besides
+  const paste = pastelane(ring, ctl);
+  const ours = () => root.contains(document.activeElement);
+  document.addEventListener('copy', e => {
+    if (!copied || !ours()) return;
+    e.clipboardData.setData('text/plain', copied); e.preventDefault(); });
+  document.addEventListener('paste', e => {
+    if (!ours()) return;
+    const t = e.clipboardData?.getData('text/plain');
+    if (t) paste(t);
+    e.preventDefault(); });
   cpu.onmessage = ({ data: m }) => {
     if (m.frame) { latest = m; if (!due) due = requestAnimationFrame(draw); }
+    else if (m.copy !== undefined) { copied = m.copy; copy(); }
     else if (m.lift !== undefined) lifted(m);
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
@@ -360,25 +409,40 @@ export async function loveMachine(root) {
   const cols = Number(at('cols', 80));
   const ratio = Number(at('ratio', 1));
   const fb = { ...glass(canvas, cols, ratio), post: true };
-  // A TAP IS A PLACE. the report is xterm's SGR form (ESC [ < b ; col ; row M) -- what a
-  // terminal sends an app that asked for one, and a key an app that did not reads as
-  // unknown and drops. the PRESS only: nothing aboard drags, and the release is another
-  // escape for the guest's key reader to wait a beat on and then throw away.
-  // the cell is the canvas's own pixels over the glyph box, so it follows the zoom;
-  // `zoom` is the last one this page handed the machine, which a /proc/vt/scale aboard
-  // would leave behind until the next reflow.
+  // A TAP IS A PLACE: the pointer goes to the console as the cell it is over, and the
+  // console says what it means (pointlane above) -- a game that asked for the mouse gets
+  // its report, a shell's screen is selected. the cell is the canvas's own pixels over the
+  // glyph box, so it follows the zoom; `zoom` is the last one this page handed the machine,
+  // which a /proc/vt/scale aboard would leave behind until the next reflow. a move goes
+  // once per cell, and the wheel once per three lines' worth of scrolling
   let zoom = fb.scale;
   canvas.style.touchAction = 'none';               // a finger on the screen steers, never scrolls
-  const digits = n => [...String(n)].map(c => c.charCodeAt(0));
-  const tap = e => {
+  const point = pointlane(ring, ctl);
+  const cell = e => {
     const box = canvas.getBoundingClientRect();
-    if (box.width < 1 || box.height < 1) return;
+    if (box.width < 1 || box.height < 1) return null;
     const x = (e.clientX - box.left) * canvas.width / box.width,
-          y = (e.clientY - box.top) * canvas.height / box.height,
-          col = 1 + Math.floor(x / (8 * zoom)), row = 1 + Math.floor(y / (16 * zoom));
-    push([27, 91, 60, 48, 59, ...digits(col), 59, ...digits(row), 77]); };
+          y = (e.clientY - box.top) * canvas.height / box.height;
+    return [Math.max(0, Math.floor(y / (16 * zoom))), Math.max(0, Math.floor(x / (8 * zoom)))]; };
+  const mods = e => (e.shiftKey ? 4 : 0) | (e.altKey || e.metaKey ? 8 : 0) | (e.ctrlKey ? 16 : 0);
+  const button = n => n === 0 ? 0 : n === 1 ? 1 : n === 2 ? 2 : 3;
+  let over = '', spun = 0;
+  const send = (how, b, e) => { const c = cell(e); if (c) over = c.join(), point(how, b | mods(e), c[0], c[1]); };
   // a finger focuses the canvas (no keyboard over the floor), a mouse the field
-  canvas.addEventListener('pointerdown', e => ((e.pointerType === 'touch' ? canvas : keys).focus({ preventScroll: true }), tap(e)));
+  canvas.addEventListener('pointerdown', e => {
+    (e.pointerType === 'touch' ? canvas : keys).focus({ preventScroll: true });
+    canvas.setPointerCapture?.(e.pointerId);
+    send(0, button(e.button), e); });
+  canvas.addEventListener('pointerup', e => send(1, button(e.button), e));
+  canvas.addEventListener('pointermove', e => {
+    const c = cell(e);
+    if (!c || c.join() === over) return;
+    send(2, e.buttons & 1 ? 0 : e.buttons & 4 ? 1 : e.buttons & 2 ? 2 : 3, e); });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    spun += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+    for (; Math.abs(spun) >= 48; spun -= Math.sign(spun) * 48) send(0, spun < 0 ? 64 : 65, e); },
+    { passive: false });
   cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'sh --login'), fb, image },
                   image ? [wasm, image] : [wasm]);
   // the box reflowed -- the window resized, or the island's column did. the new size goes

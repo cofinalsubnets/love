@@ -87,11 +87,14 @@
        ; the adjustment list, when J asks for one, takes ins, mark and adjust nodes out
        (walk q p)
         (? (p = ()) ()
+           ; a run of characters, the font's metrics kept while the font is
            (char? p)
-            (: f (p 'font) c (p 'char)
-               _ (pin dims 'x (dims 'x + cwd J f c))
-               _ (grow 'h (cht J f c)) _ (grow 'd (cdp J f c))
-               (walk p (p 'link)))
+            (: (run p f t x h d)
+                (? (char? p)
+                   (: f2 (p 'font) t2 (? (f2 = f) t (fnt J f2)) q (t2 'ci (p 'char)) i <>q
+                      (run (p 'link) f2 t2 (x + t2 'wd <q) (max h (t2 'ht (i // 16))) (max d (t2 'dp (i % 16)))))
+                   (: _ (pin dims 'x x) _ (pin dims 'h h) _ (pin dims 'd d) (walk () p)))
+               (run p 0 () (dims 'x) (dims 'h) (dims 'd)))
            (: t (p 'type)
               (? (elem t [0 1 2 13])
                   (: s (? (t >= 2) 0 (p 'shift))

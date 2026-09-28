@@ -107,5 +107,7 @@ void cb_paint(struct cb_paper const *p, struct cb const *c, struct font const *f
     uintptr_t const px0 = x0 + (uintptr_t) j * f->w * p->scale, py0 = y0 + (uintptr_t) row * f->h * p->scale;
     if (cell.g & cb_pic) { cb_tpx(p, c, f, &cell, px0, py0); continue; }
     if (pos != ~0u && (pos == cur || (lead && pos + 1 == cur))) cell.g ^= (uint32_t) cb_rev << 24;
+    int32_t const gi = ((int32_t) row - (int32_t) c->view) * c->cols + j;   // glass's count: history below 0
+    if (c->sel0 <= gi && gi < c->sel1) cell.g ^= (uint32_t) cb_rev << 24;
     cb_px(p, c, f, qf, &cell, x0 + (uintptr_t) j * f->w * p->scale,
           y0 + (uintptr_t) row * f->h * p->scale); } }

@@ -73,10 +73,10 @@
                            (m < 6 && 0 < v ? (say j (utf8 v), limn-marks j s k (m + 1)) 0))
 
    ; paint row i cell by cell, threading the pen. a wide char's tail says nothing: the
-   ; outer terminal steps two columns for its lead
+   ; outer terminal steps two columns for its lead. a selected cell wears the reverse face
    (limn-row j s c i q p) (q < c ?
                            (: k (i * c + q)
-                              g (glass s k 0)
+                              g (: g0 (glass s k 0) ((gaze s 10) <= k < (gaze s 11) ? (g0 ^ 67108864) g0))
                               (? ((g >> 21 & 3) = 2) (limn-row j s c i (q + 1) p)
                                  ((g >> 23 & 1) = 1) (say j (limn-tile s k), limn-row j s c i (q + 1) -1)
                                  (: p2 (limn-pen g (glass s k 1) (glass s k 2))
@@ -88,11 +88,12 @@
 
    ; one pane: every grid row addressed at its own origin, which is the whole
    ; difference between painting a rectangle and painting a run of full lines.
-   ; p is the pen carried in and answered back, so a caller threads it across panes
+   ; p is the pen carried in and answered back, so a caller threads it across panes.
+   ; a view looking v lines back shows the history first: row i is grid row i - v
    (limn-rows j s r c row0 col0 i p)
     (i < r ?
        (say j (limn-go (row0 + i) col0),
-        limn-rows j s r c row0 col0 (i + 1) (limn-row j s c i 0 p))
+        limn-rows j s r c row0 col0 (i + 1) (limn-row j s c (i - gaze s 8) 0 p))
        p)
 
    (limn-run j n s) (0 < n ? (say j s, limn-run j (n - 1) s) 0)

@@ -94,6 +94,7 @@
 ; the combinators (love/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
 ; module, so peg splices for this compile alone.
 (borrow 'peg)
+(borrow 'text)  ; a line's width in cells
 
 ; --- little utils ---
 (: (rep s n)    (? (n < 1) "" (s + rep s (n - 1)))
@@ -691,14 +692,14 @@
 ; ---------------------------------------------------------------- a table, laid out
 ; roff and the terminal both show a table as its columns in plain text: a cell's words, the
 ; columns padded to their widest by the alignment, two spaces between, a dashed rule under
-; the head. a width is counted in characters, not bytes -- a mark like a check is three --
+; the head. a width is counted in cells, not bytes -- a mark like a check is three bytes --
 ; and a place ttlinks marked rides in its sentinels (bytes 1 and 2), which have none.
 (: (tplain l) (catmap (x \ <x @ 'text <>x 'code <>x 'strong (tplain <>x) 'em (tplain <>x)
                             'link (tplain <>x) 'tmark (string 1 + <>x + string 2)
                             'img (? (0 < #<>x) ("[" + <>x + "]") "") "") l)
    (tvw s) ((: (g i n) (? (#s <= i) n
                           (s i = 1) (g ((: (h k) (? (#s <= k || s k = 2) (k + 1) (h (k + 1)))) i) n)
-                          (g (i + 1) (? (128 <= s i && s i < 192) n (n + 1))))) 0 0)
+                          (g (cpnext s i) (n + max 0 (wcwidth (cpat s i)))))) 0 0)
    (tpad a w s) (: k (w - tvw s)
                    (? (k < 1) s (a = 'r) (rep " " k + s)
                       (a = 'c) (rep " " (k // 2) + s + rep " " (k - k // 2)) (s + rep " " k)))
@@ -1086,30 +1087,30 @@
                 (pc >p "" (#v2 ? "" s2) (#v2 ? ([v2 s2] . acc) acc)))))
           (? (a = 'mark) (go >l vis (sty + s) acc) (pc (ttsplit s) vis sty acc)))))
      segs "" "" ())
-   ; greedy fill: the words onto lines of at most (w - ind) visible columns, each indented
+   ; greedy fill: the words onto lines of at most (w - ind) cells, each indented; n is the
+   ; line's width so far, -1 before its first word
    (ttfill words w ind)
     (: pad (ttsp ind)
        room (w - ind @ r (r < 8 ? 8 r))
-       (go l vis sty acc)
-        (? (atom? l) (#vis ? (rev ((pad + sty) . acc)) (rev acc))
-           (: v <<l s <><l
-              (? !#vis (go >l v s acc)
-                 (#vis + 1 + #v <= room) (go >l (vis + " " + v) (sty + " " + s) acc)
+       (go l n sty acc)
+        (? (atom? l) (n < 0 ? (rev acc) (rev ((pad + sty) . acc)))
+           (: v (swidth <<l) s <><l
+              (? (n < 0) (go >l v s acc)
+                 (n + 1 + v <= room) (go >l (n + 1 + v) (sty + " " + s) acc)
                  (go >l v s ((pad + sty) . acc)))))
-       (go words "" "" ()))
+       (go words -1 "" ()))
    (ttinl l w ind a) (ttfill (ttwords (ttsegs l a)) w ind)
-   ; a marker replaces the head of the first line's indent -- which is spaces, so the byte
-   ; arithmetic is the column arithmetic even where the marker itself is not one byte
+   ; a marker replaces the head of the first line's indent, which is spaces
    (ttmark ls mk ind)
     (? (atom? ls) ls
-       (: h <ls (((ttsp ind + mk) + snip h (ind + #mk) #h) . >ls)))
-   (ttitem l w ind mk) (ttmark (ttinl l w (ind + #mk) "") mk ind)
+       (: h <ls (((ttsp ind + mk) + snip h (ind + swidth mk) #h) . >ls)))
+   (ttitem l w ind mk) (ttmark (ttinl l w (ind + swidth mk) "") mk ind)
    ; the .th line: the page either side of its manual, which is what a terminal reader
    ; looks at to know what they opened. it is dropped whole if the width cannot hold it.
    (ttmeta kvs w)
     (: t (mget kvs 'title) sec (mget kvs 'section) mn (mget kvs 'manual)
        l (#sec ? (t + "(" + sec + ")") t)
-       gap (w - 1 - 2 * #l - #mn)                          ; the last column stays empty
+       gap (w - 1 - 2 * swidth l - swidth mn)                          ; the last column stays empty
        lf (gap // 2)
        (? (!#t || gap < 2) (#t ? [l] ())
           [(l + ttsp lf + mn + ttsp (gap - lf) + l)]))
@@ -1125,8 +1126,9 @@
         tv (ttvis tw)
         tl (ttfill tw w ind)
         bl (ttinl <>it w (ind + 7) "")
-        h  (? (#tv && #tv < 7 && atom? >tl && two? bl)
-              (((ttsp ind + snip <tl ind #(<tl) + ttsp (7 - #tv))
+        tc (swidth tv)
+        h  (? (#tv && tc < 7 && atom? >tl && two? bl)
+              (((ttsp ind + snip <tl ind #(<tl) + ttsp (7 - tc))
                 + snip <bl (ind + 7) #(<bl)) . >bl)
               (tl + bl))
         r  (ttdefs >l w ind)

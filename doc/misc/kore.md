@@ -536,9 +536,11 @@ None of this is law 1 — that says `htread` reads what `htshow` writes, and rea
 
 ## markdown (apps/kore/lens.l)
 
-`markdown [-t html|roff|text] [-w COLS] [FILE..]` — the same lens, driven the direction papel
+`markdown [-t html|roff|text|dvi] [-w COLS] [FILE..]` — the same lens, driven the direction papel
 drives it. `-t html` (the default) is `md->ht`, `-t roff` is `md->rf`, `-t text` is `md->tty`
-at a width. The roff lane is the build's own page path a command away: `markdown -t roff
+at a width. `-t dvi` sets one document (a file or stdin; a man page is read as roff) in pages
+with caja, TeX's engine in love (apps/caja/), from Computer Modern's metrics and plain TeX's
+hyphenation patterns in a TeX tree -- `$CAJA_TEXMF`, else TeX Live's usual places. The roff lane is the build's own page path a command away: `markdown -t roff
 doc/love.md` writes what `doc/love.1` is made of, `.TH` and all, because the `.TH` comes from
 the document's front matter and lapiz reads front matter as the meta block.
 

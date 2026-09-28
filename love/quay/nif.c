@@ -10,7 +10,8 @@
 //                         | n    b not a cask: the byte count a (cask n) needs,
 //                                so the ctor is (screen (cask (screen () r c)) r c);
 //                                the count carries a store a screenful of pictures deep
-//                                and a thousand lines of history
+//                                and a thousand lines of history, and a twin grid
+//                                for the main one to wait out the alternate screen in
 //                         | ()   misuse: cask too small, or silly geometry
 //   (scribe scr x)       -> scr  feed x through the VT parser: a byte charm,
 //                                or every byte of a string/cask; () misuse
@@ -28,9 +29,20 @@
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
 //                                3 flag, 4 top, 5 bot, 6 and 7 a cell's width and
 //                                height in pixels, 8 the lines the view looks back,
-//                                9 the history's lines held; () misuse
+//                                9 the history's lines held, 10 and 11 the selection's
+//                                first cell and the one past its last; () misuse
 //   (peer scr n)         -> n    look n lines back into the history (0 the live
 //                                grid), clamped to what is held; answers the view
+//   (mouse scr b row col how) -> s  the report a pointer event makes as the program asked
+//                                (cb_mouse): b the button with its modifier bits, how
+//                                0 a press, 1 a release, 2 a move; "" when not asked
+//   (select scr a b u)   -> scr  select cells a..b (glass's counting, either order) by
+//                                cell (u 0), word (1) or line (2); another u clears
+//   (copied scr a b)     -> s    cells [a, b) as text (cb_copied): a wide char once, marks
+//                                after their base, newlines where rows did not wrap
+//   (pasted scr s)       -> s    string s as a seat pastes it into this screen (cb_pasted):
+//                                newlines as returns, controls gone, bracketed when
+//                                the program asked (?2004); () misuse
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
@@ -60,9 +72,12 @@ static struct cb *scr_ok(word x) {
  if (!c->rows || !c->cols || cb_size(c->rows, c->cols, 0) > s->len) return 0;
  if (cb_size(c->rows, c->cols, c->sn) > s->len || (c->sn && c->sn < cb_shead)) c->sn = 0, c->sslot = 0;
  if (cb_size(c->rows, c->cols, c->sn) + cb_hsize(c->hl, c->cols) > s->len) c->hl = 0;
+ if (c->twin && cb_size(c->rows, c->cols, c->sn) + cb_hsize(c->hl, c->cols) + cb_tsize(c->rows, c->cols) > s->len)
+  c->twin = 0;
  if (c->hn > c->hl) c->hn = c->hl;
  if (c->hh >= c->hl) c->hh = 0;
  if (c->view > c->hn) c->view = c->hn;
+ if (c->sel0 >= c->sel1 || c->sel0 < -(int32_t) (c->hn * c->cols) || c->sel1 > (int32_t) n) c->sel0 = c->sel1 = 0;
  if (!c->cw || !c->ch) c->cw = 8, c->ch = 16;
  if (c->sslot >= cb_nimg) c->sslot = 0;
  if (c->wpos >= n) c->wpos = 0;
@@ -98,13 +113,13 @@ static lvm(lvm_screen) {
  if (sn != ~0u) {
   uint16_t const r = (uint16_t) getcharm(Sp[1]), k = (uint16_t) getcharm(Sp[2]);
   uint32_t const hl = scr_hl(k);
-  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k);
+  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need) {
     cb_open((struct cb*) s->bytes, r, k, sn);
-    cb_hist((struct cb*) s->bytes, hl);
+    cb_hist((struct cb*) s->bytes, hl), cb_twin((struct cb*) s->bytes, 1);
     out = b; } } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
@@ -118,12 +133,12 @@ static lvm(lvm_regrid) {
  if (c && sn != ~0u) {
   uint16_t const r = (uint16_t) getcharm(Sp[2]), k = (uint16_t) getcharm(Sp[3]);
   uint32_t const hl = scr_hl(k);
-  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k);
+  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need && (uint8_t*) s->bytes != (uint8_t*) c) {
-    cb_regrid((struct cb*) s->bytes, c, r, k, sn, hl);
+    cb_regrid((struct cb*) s->bytes, c, r, k, sn, hl, 1);
     out = b; } } }
  Sp[3] = out;
  Sp += 3; Ip += 1; ai_musttail return Continue(); }
@@ -152,11 +167,11 @@ static lvm(lvm_glass) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
-  intptr_t const i = getcharm(Sp[1]), k = getcharm(Sp[2]), back = (intptr_t) c->hn * c->cols;
-  if (i >= -back && i < (intptr_t) c->rows * c->cols && k >= 0 && k < 6) {
-   struct cb_cell const e = i >= 0 ? c->cb[i] : cb_hline(c, (uint32_t) ((i + back) / c->cols))[(i + back) % c->cols];
-   uint32_t const *v = cb_clu(c, e.g);
-   out = putcharm(k == 0 ? (v ? (e.g & 0xffe00000u) | cb_cp(v[0]) : e.g) : k == 1 ? e.fg : k == 2 ? e.bg
+  intptr_t const k = getcharm(Sp[2]);
+  struct cb_cell const *e = cb_at(c, getcharm(Sp[1]));
+  if (e && k >= 0 && k < 6) {
+   uint32_t const *v = cb_clu(c, e->g);
+   out = putcharm(k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg & ~cb_soft : k == 2 ? e->bg
                   : v ? cb_cp(v[k - 2]) : 0u); } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
@@ -177,6 +192,8 @@ static lvm(lvm_gaze) {
   case 7: out = putcharm(c->ch);   break;
   case 8: out = putcharm(c->view); break;
   case 9: out = putcharm(c->hn);   break;
+  case 10: out = putcharm(c->sel0); break;
+  case 11: out = putcharm(c->sel1); break;
   default: break; }
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
@@ -210,10 +227,10 @@ static lvm(lvm_tilepx) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1) && (Sp[3] & 1)) {
-  uintptr_t const i = (uintptr_t) getcharm(Sp[1]);
+  struct cb_cell const *e = cb_at(c, getcharm(Sp[1]));
   intptr_t const x = getcharm(Sp[2]), y = getcharm(Sp[3]);
-  if (i < (uintptr_t) c->rows * c->cols && x >= 0 && y >= 0 && x < c->cw && y < c->ch) {
-   uint32_t const g = c->cb[i].g;
+  if (e && x >= 0 && y >= 0 && x < c->cw && y < c->ch) {
+   uint32_t const g = e->g;
    struct cb_img const *im = g & cb_pic ? cb_img(c, cb_tslot(g)) : 0;
    if (im) {
     uint32_t const X = cb_ttx(g) * c->cw + (uint32_t) x, Y = cb_tty(g) * c->ch + (uint32_t) y;
@@ -287,6 +304,58 @@ static lvm(lvm_reply) {
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 
+// (mouse scr b row col how): the bytes are laid before Have, which may move the cask
+static lvm(lvm_mouse) {
+ struct cb *c = scr_ok(Sp[0]);
+ uint8_t buf[cb_mousen];
+ uint32_t n = 0;
+ if (c && (Sp[1] & Sp[2] & Sp[3] & Sp[4] & 1) && getcharm(Sp[1]) >= 0 && getcharm(Sp[2]) >= 0
+     && getcharm(Sp[3]) >= 0 && getcharm(Sp[4]) >= 0)
+  n = cb_mouse(c, buf, (uint32_t) getcharm(Sp[1]), (uint32_t) getcharm(Sp[2]),
+               (uint32_t) getcharm(Sp[3]), (uint32_t) getcharm(Sp[4]));
+ if (!n) Sp[4] = word(EmptyString);
+ else {
+  Have(str_width(n));
+  struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+  memcpy(txt(s), buf, n);
+  Sp[4] = word(s); }
+ Sp += 4; Ip += 1; ai_musttail return Continue(); }
+
+// (select scr a b u)
+static lvm(lvm_select) {
+ struct cb *c = scr_ok(Sp[0]);
+ word out = ZeroPoint;
+ if (c && (Sp[1] & Sp[2] & Sp[3] & 1)) {
+  intptr_t const u = getcharm(Sp[3]);
+  cb_select(c, getcharm(Sp[1]), getcharm(Sp[2]), u < 0 ? 3u : (uint32_t) u);
+  out = Sp[0]; }
+ Sp[3] = out;
+ Sp += 3; Ip += 1; ai_musttail return Continue(); }
+
+// (copied scr a b): counted first, as pasted is
+static lvm(lvm_copied) {
+ struct cb *c = scr_ok(Sp[0]);
+ if (!c || !(Sp[1] & Sp[2] & 1)) { Sp[2] = ZeroPoint; Sp += 2; Ip += 1; ai_musttail return Continue(); }
+ intptr_t const a = getcharm(Sp[1]), b = getcharm(Sp[2]);
+ uintptr_t const n = cb_copied(c, 0, a, b);
+ Have(str_width(n));
+ struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+ cb_copied(c, (uint8_t*) txt(s), a, b);
+ Sp[2] = word(s);
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
+
+// (pasted scr s): counted first, so Have's restart repeats nothing but the count
+static lvm(lvm_pasted) {
+ struct cb *c = scr_ok(Sp[0]);
+ if (!c || !strp(Sp[1])) { Sp[1] = ZeroPoint; Sp += 1; Ip += 1; ai_musttail return Continue(); }
+ struct ai_str *in = str(Sp[1]);
+ uintptr_t const n = cb_pasted(c, 0, (uint8_t const*) txt(in), len(in));
+ Have(str_width(n));
+ struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+ cb_pasted(c, (uint8_t*) txt(s), (uint8_t const*) txt(in), len(in));
+ Sp[1] = word(s);
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
+
 static union u const
   nif_screen[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_screen}, {lvm_ret0}},
   nif_scribe[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_scribe}, {lvm_ret0}},
@@ -298,4 +367,8 @@ static union u const
   nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}},
   nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}},
   nif_regrid[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_regrid},  {lvm_ret0}},
-  nif_peer[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peer},    {lvm_ret0}};
+  nif_peer[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peer},    {lvm_ret0}},
+  nif_mouse[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mouse},   {lvm_ret0}},
+  nif_pasted[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_pasted},  {lvm_ret0}},
+  nif_select[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_select},  {lvm_ret0}},
+  nif_copied[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_copied},  {lvm_ret0}};

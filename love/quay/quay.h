@@ -41,7 +41,8 @@ enum {              // face bits, the glyph word's top byte
 // cell follows the screen's def_fg/def_bg, so a recolour moves it without a rewrite.
 enum { cb_def = 0, cb_idx = 1, cb_rgb = 2 };
 #define cb_ink(kind, v) ((uint32_t) (kind) << 24 | ((uint32_t) (v) & 0xffffffu))
-#define cb_kind(k)  ((k) >> 24)
+#define cb_kind(k)  (((k) >> 24) & 0x7fu)
+#define cb_soft     ((uint32_t) 1 << 31)   // on a row's last cell's fg: the row wrapped into the next
 #define cb_val(k)   ((k) & 0xffffffu)
 
 enum {              // flag bits: the console's modes
@@ -53,9 +54,17 @@ enum {              // flag bits: the console's modes
   cb_priv   = 32,   // parser transient: the CSI had a DEC '?'/'='/'<' marker
   cb_junk   = 64,   // parser transient: the CSI had intermediates we don't speak
   cb_gt     = 128,  // parser transient: the CSI had the '>' marker (secondary DA)
-  cb_alt    = 256 };// the alternate screen (?1049 and kin): scrolls keep no history
+  cb_alt    = 256,  // the alternate screen (?1049 and kin): scrolls keep no history
+  cb_mx10   = 512,  // mouse (?9): presses alone
+  cb_mbtn   = 1024, // mouse (?1000): presses and releases
+  cb_mdrag  = 2048, // mouse (?1002): and moves while a button is held
+  cb_many   = 4096, // mouse (?1003): and every move
+  cb_msgr   = 8192, // mouse reports as CSI < b ; x ; y M/m (?1006), else CSI M and three bytes
+  cb_paste  = 16384 };// bracketed paste (?2004): a seat wraps what it pastes in CSI 200~ .. 201~
+enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
+enum { cb_mousen = 24 };  // a mouse report's longest (cb_mouse's buffer size)
 
 struct cb {
   uint32_t wpos, spos;        // the write cursor, and DECSC's saved one
@@ -82,8 +91,10 @@ struct cb {
   uint8_t ka, kf, km, kq, kcur, kd, kt, ko, kkey, kvc, kn, kbyte, kpad, kopen;
   uint32_t clu[cb_nclu][cb_clun];  // the clusters, their unused words 0
   // history: a ring of hl lines, cols wide, after the store -- rows a scroll pushed off the
-  // top, hn of them held, the oldest at line hh. view is how many a reader looks back
-  uint32_t hl, hh, hn, view;
+  // top, hn of them held, the oldest at line hh. view is how many a reader looks back.
+  // twin: a grid's room after the history, where the main grid waits out the alternate screen
+  uint32_t hl, hh, hn, view, twin;
+  int32_t sel0, sel1;  // the selection: cells [sel0, sel1) as glass counts them, none when equal
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
@@ -93,8 +104,9 @@ enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
 // the bytes a screen of rows x cols needs, header, cells and a store of sn bytes
 #define cb_size(rows, cols, sn) \
   (sizeof(struct cb) + (uintptr_t) (rows) * (uintptr_t) (cols) * sizeof(struct cb_cell) + (uintptr_t) (sn))
-// the bytes a history of hl lines takes, after the store
+// the bytes a history of hl lines takes, after the store, and a twin grid's after that
 #define cb_hsize(hl, cols) ((uintptr_t) (hl) * (uintptr_t) (cols) * sizeof(struct cb_cell))
+#define cb_tsize(rows, cols) ((uintptr_t) (rows) * (uintptr_t) (cols) * sizeof(struct cb_cell))
 // a store a screenful of pictures deep, at 8x16 cells
 #define cb_sdefault(rows, cols) ((uint32_t) cb_shead + (uint32_t) (rows) * (uint32_t) (cols) * 512u)
 
@@ -102,8 +114,11 @@ void
   cb_open(struct cb*, uint16_t rows, uint16_t cols, uint32_t sn),
   cb_store(struct cb*, uint32_t sn),   // lay an empty store of sn bytes after the cells
   cb_hist(struct cb*, uint32_t hl),    // lay an empty history of hl lines after the store
-  // old laid across into a fresh rows x cols screen, a store of sn bytes, hl lines of history
-  cb_regrid(struct cb*, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl),
+  cb_twin(struct cb*, uint32_t on),    // lay (1) or take away (0) the twin grid after the history
+  // old laid across into a fresh rows x cols screen: a store of sn bytes, hl lines of
+  // history, and a twin grid when tw
+  cb_regrid(struct cb*, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl,
+            uint32_t tw),
   cb_peer(struct cb*, uint32_t n),     // look n lines back into the history, 0 the live grid
   cb_clear(struct cb*),
   cb_putc(struct cb*, char),
@@ -113,6 +128,26 @@ void
   cb_recolor(struct cb*, uint32_t fg, uint32_t bg),
   cb_cur(struct cb*, uint32_t row, uint32_t col);
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
+// a pointer event at row, col -> the report the program asked for into buf (cb_mousen), its
+// length, 0 for none. b the button (0 1 2, 64 65 the wheel up and down, 3 none held) with
+// modifiers 4 shift 8 meta 16 ctrl; how 0 a press, 1 a release, 2 a move
+uint32_t cb_mouse(struct cb const*, uint8_t *buf, uint32_t b, uint32_t row, uint32_t col, uint32_t how);
+// n bytes of paste as a seat sends them into buf (0 to count): newlines as returns, a crlf one,
+// no controls but tab, in CSI 200~ .. 201~ when the program asked. answers the length
+uintptr_t cb_pasted(struct cb const*, uint8_t *buf, uint8_t const *s, uintptr_t n);
+// ..and for a seat that streams one: byte b after prev as it goes, or -1 for none, and the
+// brackets it wears when the screen has cb_paste
+int cb_paste1(uint8_t prev, uint8_t b);
+#define cb_popen "\033[200~"
+#define cb_pshut "\033[201~"
+// cell i: the grid's, or the history's at a negative i (-cols the newest line's first); 0 past
+struct cb_cell const *cb_at(struct cb const*, intptr_t i);
+// select cells a..b, either order, clamped, by cell (unit 0), word (1) or line (2, across soft
+// wraps); any other unit clears. a write to a selected row, or the history leaving, clears it
+void cb_select(struct cb*, intptr_t a, intptr_t b, uint32_t unit);
+// cells [a, b) as utf-8 into buf (0 to count): a wide char once, a cluster's marks after its
+// base, a row's trailing blanks gone, and a newline where a row ended without wrapping
+uintptr_t cb_copied(struct cb const*, uint8_t *buf, intptr_t a, intptr_t b);
 struct cb_img const *cb_img(struct cb const*, uint32_t slot);   // a live picture, or 0
 uint32_t const *cb_ipx(struct cb const*);                       // the store's pixels
 // a PNG of n bytes at the head of a cap-byte region -> 0 and w x h pixels there, or -1
