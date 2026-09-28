@@ -111,6 +111,19 @@
    _ (pstep st 113)
    _ (test (st 'quit))
 
+   ; -- markdown and html2text on a terminal: a local picture under its image's line ------
+   _ (put (dir + "/sub.gif") gf)
+   md ((cite 'lapiz 'mdread) "# t\n\nsee ![it](sub.gif) here\n\n![gone](nope.png) and ![w](http://x/y.png)\n")
+   lp ((K 'lens-pics) md 40 (dir + "/doc.md"))
+   ll (: (go i st acc) (? (#lp <= i) (rev acc) (lp i = 10) (go (i + 1) (i + 1) (snip lp st i . acc)) (go (i + 1) st acc))
+         (go 0 0 ()))
+   at (: (go i) (? (#ll <= i) -1 (has (ll i) "see [it] here") i (go (i + 1))) (go 0))
+   _ (test (0 <= at) (has (ll (at + 1)) "▀") (has (ll (at + 6)) "▀") !(has (ll (at + 7)) "▀")
+           ; 16 wide at 40 columns: the picture's own size, set in at the text's margin
+           (snip (ll (at + 1)) 0 5 = "     ")
+           (#(filter (l \ has l "▀") ll) = 6)
+           (has lp "[gone] and [w]"))
+
    ; -- against magick: every disposal, frame by frame -----------------------------------
    magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (: _ (close q) 1) 0))
    (coalesced f) (: r (hark ["magick" f "-coalesce" "-depth" "8" "rgba:-"]) (? ((two? r) && (<r = 0)) >r ()))

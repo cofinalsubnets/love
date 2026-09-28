@@ -31,6 +31,8 @@ continued on a second line"
     "**bold with *em* inside** and [a *link*](http://x.y/p?q=1&r=2)"
     "sigils that start nothing: a - b, 2 * 3, x[1], a \\* literal star"
     "\\- not a bullet"  "\\# not a head"  "\\--- not a rule"
+    "an ![image, *not em*](pics/a.png) inline, [![inside](i.png)](u) a link, and wow\\![a link](u)"
+    "![](bare.png)"
     "5 < 6 & 7 > 2 -- the html escapes"
     "- one
 - two **bold**"
@@ -118,6 +120,12 @@ the [end](e)."]
     ((mdread "> q\n") = '((quote ((para ((text "q")))))))
     ((mdread "```c\nx\n```\n") = '((fence "c" "x\n")))
     ((mdread "[t](u)") = '((para ((link ((text "t")) "u")))))
+    ; an image: its alt plain, its src; a bang ahead of a link is text, escaped to stay so
+    ((mdread "![a *b*](c.png)") = '((para ((img "a *b*" "c.png")))))
+    ((mdread "wow\\![t](u)") = '((para ((text "wow!") (link ((text "t")) "u")))))
+    ((mdread "wow! [t](u)") = '((para ((text "wow! ") (link ((text "t")) "u")))))
+    ((md->ht "![a & b](c \"d\".png)") = "<p><img src=\"c &quot;d&quot;.png\" alt=\"a &amp; b\"></p>")
+    ((ht->md "<p><img src=\"c.png\" alt=\"a\"></p>") = "![a](c.png)\n")
     ((mdread "---\n") = '((rule)))
     ((mdread "* x\n") = '((bullets (((text "x"))))))
     ; a table: aligns, the head, the rows laid to the head's width
@@ -431,8 +439,10 @@ t \\- a thing
            (test (f = '((para ((link ((text "[Find________]")) "form:/w/i.php?t=Special%3AS+%26+b&k=B+b&c=on&n=x+%3C+y&go=Go&q=")
                                 (link ((text "[x < y_______]")) "form:/w/i.php?t=Special%3AS+%26+b&q=&k=B+b&c=on&go=Go&n=x+%3C+y")))))
                  (htread "<p>a <img src=x alt=\"the logo\"> b <img alt=\"\" src=y> c</p>"
-                  = '((para ((text "a ") (mark " img x") (text "[the logo] b ") (mark " img y") (text " c")))))
-                 (htread "<p>a <img alt=\"no src\"> b</p>" = '((para ((text "a [no src] b")))))
+                  = '((para ((text "a ") (img "the logo" "x") (text " b ") (img "" "y") (text " c")))))
+                 (htread "<p>a <img alt=\"no src\"> b</p>" = '((para ((text "a ") (img "no src" "") (text " b")))))
+                 (htread "<div><img src=\"a&amp;b.png\"></div>" = '((para ((img "" "a&b.png")))))
+                 (htread "<p><img></p>" = htread "<p></p>")
                  (htread "<p>fish & chips, <a href=\"q?a=1&b=2&amp;c=3\">q</a></p>"
                   = '((para ((text "fish & chips, ") (link ((text "q")) "q?a=1&b=2&c=3")))))
                  (htread "<p><a href=/u/v title=\"a > b\">u</a> <span id=s>s</span></p>"
@@ -468,6 +478,14 @@ t \\- a thing
                  (htread "<article><p>y</p></article>" = '((para ((mark " article"))) (para ((text "y")))))
                  ; a page's indenting leaves blank text beside the marks, and they still move on
                  (ttpage (htread "<nav><p>m</p></nav><main>\n    <p>x</p></main>") 60 2 = [[" main" 2]])))
+      ; an image shows its [alt] and lays a mark " img SRC" on its line for a viewer; one
+      ; with no alt is its mark alone, carried onto the next block's line. ttpics lays the
+      ; same with the links left as ttyshow shows them, and roff says the [alt]
+      _ (: d (mdread "a ![logo](l.png) b\n\n![](bare.png)\n\nnext [x](u)\n")
+           (test (ttpage d 60 = ["     a [logo] b\n\n     next [1]x\n" ["u"] [[" img l.png" 0] [" img bare.png" 2]] [2]])
+                 (ttpics d 60 = ["     a [logo] b\n\n     next x <u>\n" [[" img l.png" 0] [" img bare.png" 2]]])
+                 (md->tty "![a](b)" 60 = "     [a]\n")
+                 (md->rf "![a](b) c" = ".PP\n[a] c\n")))
       0)
 
  _ (test_fin ())

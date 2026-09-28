@@ -68,7 +68,7 @@
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         ww-art ww-splice ww-marks ww-pictures
-        pic-main picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view
+        pic-main picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep lens-pics
         pv-new pv-step pv-frame pv-tick pv-keys pv-view
         telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
         diff-main as-main ar-main ld-main nm-main ed-main ex-main

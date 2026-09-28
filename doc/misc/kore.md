@@ -527,6 +527,9 @@ inline spans. `<b>` is `<strong>` and `<tt>` is `<code>` to a reader with one fo
   an `<a>` with no href is an anchor, not a link, and prints as its text alone.
 * Named and numeric entities both decode; an unknown name rides through as written, which is
   better than eating the word it was part of.
+* **An `<img>` shows as its `[alt]`**, and on a terminal a local picture is drawn under that
+  line, two pixels a cell as `pic` draws it, its path taken from the page's own directory.
+  One on the web stays its `[alt]`: this reads files, it does not fetch.
 
 None of this is law 1 — that says `htread` reads what `htshow` writes, and reading a page
 *nobody* wrote with `htshow` is a different promise. It is stated in `test/host/lapiz.l` instead.
@@ -543,6 +546,8 @@ the document's front matter and lapiz reads front matter as the meta block.
   doctype and no head. papel owns the template that wraps one into a page, and a second
   template here would be a second thing to keep true.
 * `-w` and the terminal attributes matter to `-t text` only; html and roff carry neither.
+* **`![alt](src)` is an image**: an `<img>` in html, its `[alt]` in roff and text, and on a
+  terminal `-t text` draws a local picture under its line as html2text does.
 * The roff lane normalizes what roff cannot spell — a head at 3+ lands at 2, a fence language
   is dropped, a rule vanishes, a link flattens to its text with the url trailing. That is
   lapiz's stated rf behaviour, not this tool's.
