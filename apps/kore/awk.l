@@ -216,8 +216,9 @@
                     pr (k2 < n && f k2 = 46 ? (num (k2 + 1) 0 1) [0 0 k2])
                     [m z p sp <w (<>pr ? <pr -1) <>>pr]))))
        (fl k0 0 0 0 0))
+   ; a width counts characters, as gawk's does
    (aw-pad m z w s)
-    (: t #s
+    (: t (cplen s)
        (? (t >= w) s
           m (s + aw-spaces (w - t))
           z (0 < t && (s 0 = 45 || s 0 = 43) ?
@@ -237,12 +238,17 @@
            (d @ 37 (put o 37, [(j + 1) l])
               99
                (: t (? (aw-nil? v) "" (string? v) v (aw-sn? v) <>>v ())
-                  s (string? t ? (0 < #t ? (string (t 0)) "")
-                       (string (aw-trunc num)))
-                  (say o (aw-pad m 0 w s), done))
+                  c (aw-trunc num)
+                  ; a number is a code point: a surrogate is a nul, as glibc's wcrtomb leaves it
+                  s (? (string? t) (cpsnip t 0 1)
+                       (55296 <= c < 57344) (string 0)
+                       (127 < c < 1114112) (utf8 c)
+                       (string c))
+                  ; gawk pads a number's character by its bytes, a string's by characters
+                  (say o (aw-pad m 0 (? (string? t) w (w - #s + cplen s)) s), done))
               115
                (: s0 (aw-str v cf)
-                  s (pr < 0 ? s0 (snip s0 0 (#s0 < pr ? #s0 pr)))
+                  s (pr < 0 ? s0 (cpsnip s0 0 pr))
                   (say o (aw-pad m 0 w s), done))
               (100 || 105)
                (: s (aw-sgn pl spc (aw-sp-int num))
@@ -1091,7 +1097,7 @@
           ; k in the array for a later `in`
           'idx (: nm <>e k (aw-ankey <>>e) (E \ (aw-idx E nm (k E))))
           'cat (: a (aw-an <>e) b (aw-an <>>e)
-                  (E \ (aw-sv E (a E) + aw-sv E (b E))))
+                  (E \ (: x (aw-sv E (a E)) (x + aw-sv E (b E)))))
           'and (: a (aw-an <>e) b (aw-an <>>e)
                   (E \ (aw-bool (a E) && aw-bool (b E) ? 1 0)))
           'or (: a (aw-an <>e) b (aw-an <>>e)
@@ -1100,7 +1106,7 @@
           'neg (: a (aw-an <>e) (E \ -(aw-numv (a E))))
           'pos (: a (aw-an <>e) (E \ (aw-numv (a E))))
           'pow (: a (aw-an <>e) b (aw-an <>>e)
-                  (E \ (aw-numv (a E) ** aw-numv (b E))))
+                  (E \ (: x (aw-numv (a E)) (x ** aw-numv (b E)))))
           'cond (: c (aw-an <>e) a (aw-an <>>e) b (aw-an <>>>e)
                    (E \ (aw-bool (c E) ? (a E) (b E))))
           'cmp (aw-ancmp <>e (aw-an <>>e) (aw-an <>>>e))
@@ -1189,18 +1195,25 @@
    ; -- the builtins ----------------------------------------------------------
    ; a start under 1 clamps and the length is not docked for it -- gnu's reading,
    ; not POSIX's: substr("hello",0,3) is "hel" there and "he" by the standard
-   (aw-substr s m n has)
-    (: len #s
+   ; the characters in s; the last answer is kept, so a loop over one string walks it once
+   (aw-cpn E s)
+    (: c (peep E 'cpn ())
+       (? (two? c && <c = s) >c (: n (cplen s) (pin E 'cpn (s . n), n))))
+   (aw-substr E s m n has)
+    (: len (aw-cpn E s)
        st (m < 1 ? 1 m)
        en0 (? has (st + n) (len + 1))
        en (len + 1 < en0 ? (len + 1) en0)
-       (en <= st ? "" (snip s (st - 1) (en - 1))))
-   (aw-index s t)
-    (: n #s m #t
-       (go k) (? (n - m < k) 0
-                 (snip s k (k + m) = t) (k + 1)
-                 (go (k + 1)))
-       (m = 0 ? (n != 0) (go 0)))
+       (? (en <= st) ""
+          (len = #s) (snip s (st - 1) (en - 1))
+          (cpsnip s (st - 1) (en - 1))))
+   ; by character: t is tried where each character of s starts
+   (aw-index E s t)
+    (: n #s m #t asc (aw-cpn E s = n)
+       (go k i) (? (n - m < k) 0
+                   (snip s k (k + m) = t) i
+                   (go (? asc (k + 1) (cpnext s k)) (i + 1)))
+       (m = 0 ? (n != 0) (go 0 1)))
    ; & in a replacement is the matched text; \& is a literal &
    (aw-repl rep matched)
     (:- (go 0) n #rep o (jug 0)
@@ -1213,16 +1226,21 @@
          92 (put o 92, go (k + 2))
             (put o 92, go (k + 1)))))))
    (aw-subst E nds s rep glob)                   ; -> [text count]
-    (:- (go 0 0) n #s o (jug 0)
-     (go i cnt) (n < i ? [(slurp o) cnt]
+    (:- (go 0 0 -1) n #s o (jug 0)
+     ; ban: where the last match ended, and an empty one may not stand
+     (go i cnt ban) (n < i ? [(slurp o) cnt]
        (refindm nds s i @-
         (say o (snip s i n), [(slurp o) cnt])
         [_ st en _]
-         (say o (snip s i st),
-          say o (aw-repl rep (snip s st en)),
-          (?- (go en (cnt + 1))
-           !glob     (say o (snip s en n), [(slurp o) (cnt + 1)])
-           (en = st) (st < n && put o (s st), go (st + 1) (cnt + 1)))))))
+         (? (en = st && st = ban)
+            (? (n <= st) [(slurp o) cnt]
+               (: nx (cpnext s st) (say o (snip s st nx), go nx cnt -1)))
+            (say o (snip s i st),
+             say o (aw-repl rep (snip s st en)),
+             (?- (go en (cnt + 1) en)
+              !glob     (say o (snip s en n), [(slurp o) (cnt + 1)])
+              ; an empty match steps past a whole character, as gawk's does
+              (en = st) (: nx (cpnext s st) (st < n && say o (snip s st nx), go nx (cnt + 1) -1))))))))
    (aw-anbi nm as)
     (: cnt #as
        (an k) (as k @- (E \ ()) ((_ . _) @ nd) (aw-an nd))
@@ -1232,17 +1250,17 @@
        (x0 E) (aw-numv (a0 E))
        (x1 E) (aw-numv (a1 E))
        (nm @ "length"
-           (cnt = 0 ? (E \ #(aw-rec E))
+           (cnt = 0 ? (E \ aw-cpn E (aw-rec E))
               (: nd (as 0)
                  vnm (<nd == 'var ? <>nd ())
-                 (E \ #(: cur (aw-nil? vnm ? () (aw-get E vnm))
-                          (tablet? cur ? (aw-akeys cur) (s0 E))))))
+                 (E \ (: cur (aw-nil? vnm ? () (aw-get E vnm))
+                         (tablet? cur ? #(aw-akeys cur) (aw-cpn E (s0 E)))))))
           "substr"
            (cnt < 2 ? (aw-err "substr wants two arguments")
               (: has (2 < cnt)
-                 (E \ (aw-substr (s0 E) (aw-trunc (x1 E))
-                                 (aw-trunc (aw-numv (a2 E))) has))))
-          "index" (E \ (aw-index (s0 E) (s1 E)))
+                 (E \ (: s (s0 E) m (aw-trunc (x1 E))
+                         (aw-substr E s m (aw-trunc (aw-numv (a2 E))) has)))))
+          "index" (E \ (: s (s0 E) (aw-index E s (s1 E))))
           "sprintf"
            (: rest (map aw-an >as)
               (E \ (aw-sprintf (s0 E) (map (f \ f E) rest)
@@ -1255,7 +1273,8 @@
                  pf (2 < cnt && aw-anfs (as 2) || (E \ aw-sv E (peep (aw-g E) "FS" " ")))
                  (E \ (: a (aw-arr E anm)
                          _ (:- (clr (keys a)) (clr l) (two? l && (pin a <l 'nope, clr >l)))
-                         ps (aw-fields E (s0 E) (pf E))
+                         t (s0 E)
+                         ps (aw-fields E t (pf E))
                          (go l k) (two? l ? (pin a (show k) (aw-mk <l), go >l (k + 1))
                                      (k - 1))
                          (go ps 1)))))
@@ -1266,24 +1285,28 @@
                  lp (aw-anl lv) get <lp put <>lp
                  pf (aw-anpat (as 0))
                  glob (nm = "gsub" ? 1 0)
-                 (E \ (: r (aw-subst E (pf E) (aw-sv E (get E)) (s1 E) glob)
+                 (E \ (: re (pf E) rep (s1 E)
+                         r (aw-subst E re (aw-sv E (get E)) rep glob)
                          (0 < <>r && put E <r, <>r)))))
           "match"
            (: pf (aw-anpat (as 1))
-              (E \ (refindm (pf E) (s0 E) 0 @ [_ st en _]
-                     (pin (aw-g E) "RSTART" (st + 1),
-                      pin (aw-g E) "RLENGTH" (en - st),
-                      st + 1)
-                     (pin (aw-g E) "RSTART" 0,
-                      pin (aw-g E) "RLENGTH" -1,
-                      0))))
+              (E \ (: s (s0 E) re (pf E)
+                      (refindm re s 0 @ [_ st en _]
+                       (: asc (aw-cpn E s = #s)
+                          r (? asc (st + 1) (cplen (snip s 0 st) + 1))
+                        (pin (aw-g E) "RSTART" r,
+                         pin (aw-g E) "RLENGTH" (? asc (en - st) (cplen (snip s st en))),
+                         r))
+                       (pin (aw-g E) "RSTART" 0,
+                        pin (aw-g E) "RLENGTH" -1,
+                        0)))))
           "int" (E \ aw-trunc (x0 E))
           "sqrt" (E \ (1 / 2) (x0 E))
           "exp" (E \ e ** x0 E)
           "log" (E \ log (x0 E))
           "sin" (E \ sine (x0 E))
           "cos" (E \ cosine (x0 E))
-          "atan2" (E \ (aw-atan2 (x0 E) (x1 E)))
+          "atan2" (E \ (: y (x0 E) (aw-atan2 y (x1 E))))
           "rand" randf
           "srand" (E \ (: old (peep E 'seed 0)
                           v (0 < cnt ? (aw-trunc (x0 E)) 0)
