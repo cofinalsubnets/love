@@ -282,56 +282,34 @@
              0)))
 
    ; --- the options -----------------------------------------------------------
-   (cpioc-long t w)                         ; -> 1 taken | 'val a word is wanted | ()
-    (w @ ("create" || "extract") (pin t 'mode (w = "create" ? 'o 'i))
-         "list" (pin t 'mode 't)
-         "make-directories" (pin t 'd 1)
-         "unconditional" (pin t 'u 1)
-         "verbose" (pin t 'v 1)
-         "quiet" (pin t 'quiet 1)
-         "no-absolute-filenames" 1      ; what we do anyway, said out loud
-         "help" (pin t 'h 1)
-         "version" (pin t 'vers 1)
-         ("format" || "file") 'val)
+   ; the cli walker in posix order: the flags lead, the first operand ends them. a long flag
+   ; with no short twin pins under a key past the byte range, so no letter reaches it
+   cpioc-longs {"create" 111 "extract" 105 "list" 116 "make-directories" 100 "unconditional" 117
+                "verbose" 118 "quiet" 1001 "no-absolute-filenames" 1002 "help" 104 "version" 1003
+                "format" 72 "file" 70}
    (cpioc-opts as t)                        ; -> (1 rest) | ()
-    (:- (go as)
-     (want k v)                           ; a value word landing in its place
-      (k @- (pins t 'in v 'out v, 1) "format"
-       (v @ "newc" 1 (cpioc-moan ("format " + v + " is not here (newc only)"), ())))
-     (go a)
-      (one? a ? '(1 ())
-         (: w <a n #w
-            (? (w = "--") [1 >a]
-               (n < 2 || w 0 != 45) [1 a]
-               (w 1 = 45)
-                (: k (snip w 2 n)
-                 (cpioc-long t k @- (go >a)
-                  () (cpioc-moan ("unknown option " + w), ())
-                  'val (two? >a ? (want k <>a ? (go >>a))
-                        (cpioc-moan (w + " wants a value"), ()))))
-               (:- (cl 1 >a) (cl i rest)
-                (n <= i ? (go rest)
-                  (: c (w i)
-                     (c @ (111 || 105 || 116)            ; -o -i -t
-                         (pin t 'mode (c @ 111 'o 105 'i 't),
-                          cl (i + 1) rest)
-                        (100 || 117 || 118)            ; -d -u -v
-                         (pin t (c @ 100 'd 117 'u 'v) 1,
-                          cl (i + 1) rest)
-                        104 (pin t 'h 1, cl (i + 1) rest)   ; -h, the help
-                        (72 || 70 || 73 || 79)            ; -H -F -I -O
-                         (: glue (snip w (i + 1) n)
-                            v (0 < #glue ? glue (two? rest && <rest))
-                            rest2 (0 < #glue ? rest (two? rest ? >rest rest))
-                            (? !(string? v)
-                                (cpioc-moan ("-" + string c + " wants a value"), ())
-                               ; -H answers the recursion itself: a format we refuse
-                               ; must stop the parse, not fall through it
-                               (c = 72) (want "format" v ? (go rest2))
-                               (c @ 73 (pin t 'in v) 79 (pin t 'out v)
-                                       (pins t 'in v 'out v),
-                                go rest2)))
-                        (cpioc-moan ("unknown option -" + string c), ())))))))))
+    (: u (tablet 0)
+       r ((cite 'cli 'uopt) as u [72 70 73 79] () cpioc-longs)
+       rest (? (two? r) (r 2) ())
+       k (#as - #rest)
+       w (? (two? rest) <rest "")
+       bad (? (two? r) ((cite 'cli 'uoptun) u [111 105 116 100 117 118 104 72 70 73 79 1001 1002 1003]) ())
+       (val c) (: v (peep u c ()) (two? v && <>v))
+       (? !(two? r) (: _ (cpioc-moan (<(rev as) + " wants a value")) ())
+          (2 < #w && w 0 = 45 && w 1 = 45 && !(0 < k && as (k - 1) = "--"))
+           (: _ (cpioc-moan ("unknown option " + w)) ())
+          bad (: _ (cpioc-moan ("unknown option -" + string bad)) ())
+          (: fmt (val 72)
+             (? (fmt && fmt != "newc") (: _ (cpioc-moan ("format " + fmt + " is not here (newc only)")) ())
+                (: m ((cite 'cli 'uoptlast) as [111 105 116] [72 70 73 79] cpioc-longs)
+                   _ (? m (pin t 'mode (m @ 111 'o 105 'i 't)))
+                   _ (each [100 117 118 104] (c \ peep u c 0 && pin t (intern (string c)) 1))
+                   _ (? (peep u 1001 0) (pin t 'quiet 1))
+                   _ (? (peep u 1003 0) (pin t 'vers 1))
+                   _ (: f (val 70) (? f (pins t 'in f 'out f)))
+                   _ (: v (val 73) (? v (pin t 'in v)))
+                   _ (: v (val 79) (? v (pin t 'out v)))
+                   [1 rest])))))
    (cpio-main as)
     (: t {}
        o (cpioc-opts as t)
