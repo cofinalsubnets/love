@@ -329,6 +329,12 @@
                                               (cur == pick 0 v && ret0 == pick 3 v) (pick 2 v)))
                          (? (? b (nil? (peep t b ()))) (pin t b ((name nm) . (? (ret0 == pick 1 v) 1 (peek 1 v)))) t)))
                {} (catmap (\ l (map l (keys l))) (stack ())))
+   ; ..and a nif's name -> the nif, to say one the egg moved off the book by its module
+   nval (foldl (\ t v (: nm (nifnom v) (? (string? nm) (pin t (name nm) v) t)))
+               {} (catmap (\ l (map l (keys l))) (stack ())))
+   (onm n) (: v (peep nval n ()) (? (nil? v) n (nifn v n)))
+   ; a nif by its own name while the book binds it, else by what does: another name, a cite
+   (nifn v n) (? (any (\ l (!== (peep l n ()) ())) (stack ())) n (: g (glob v) (? (!== g ()) g n)))
    (tk n l) (? (0 < n) (<l . tk (n - 1) >l) ())
    (dp n l) (? (0 < n) (dp (n - 1) >l) l)
    (unw v) (? (nat? v) (unw (? (== cur (pick 0 v)) (peek 3 v) (peek 1 v))) v)   ; a native is its twin
@@ -345,10 +351,12 @@
    ; C is one reading's state: D a slot's node, B the let names in scope, R a let-bound
    ; closure's (name captures), memo a lambda already read -> its name, F a name's form,
    ; want a name recursion asked for
-   (lamform v) (: r (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {}}
-                                    (rename (tie C (? (partp v) (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v))))))))
-                 (? (== r 0) (: g (glob v) (? g g 0)) r))
+   (lamform v) (: nm (nifnom v) r (? (string? nm) (nifn v (name nm)) (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {} 'obj {} 'objs () 'letE {} 'thene 0}
+                                    (rename (cites (tie C (? (partp v) (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v))))))))))
+                 (? (== r 0) (: g (glob v) (? (!== g ()) g 0)) r))
    (fail C) ((C 'k) 0)
+   ; e lies past p, short of t -- within the thread, whose words past p span counts
+   (over p t e) (: (go q n) (? (n < 1) 0 (== q e) 1 (== q t) 0 (go (seek 1 q) (n - 1))) (go p (span p)))
    (push C n S) (: s (mint 0) _ (pin (C 'D) s n) (s . S))
 
    ; --- the run: S is the stack, a slot per value. it answers (r node), a return, or
@@ -368,7 +376,10 @@
        (== op lvm_tapn) (: n (peek 1 p) ['r ['a (S n) (tk n S)]])
        (== op lvm_ap) (run C (seek 1 p) (push C ['a (S 1) [<S]] >>S) st)
        (== op lvm_apn) (: n (peek 1 p) (run C (seek 2 p) (push C ['a (S n) (tk n S)] (dp (1 + n) S)) st))
-       (== op lvm_jump) ['j (peek 1 p) S]
+       ; a jump over the else arm ends a then arm at its join; any other is a cond the
+       ; compiler folded, its dead arm jumped over, and the reading goes on where it lands
+       (== op lvm_jump) (: t (peek 1 p) e (C 'thene)
+                         (? (== t st || (e && over p t e)) ['j t S] (run C t S st)))
        (== op lvm_cond) (branch C <S (seek 2 p) (peek 1 p) >S st)
        (== op lvm_argcond) (branch C (S (peek 1 p)) (seek 3 p) (peek 2 p) S st)
        (== op lvm_argtwocond) (branch C ['o 'two? [(S (peek 1 p))]] (seek 3 p) (peek 2 p) S st)
@@ -379,8 +390,8 @@
             (? (two? n) (run C (seek 1 p) (push C ['o <n (tk >n S)] (dp >n S)) st)
                (fail C)))))))
    ; a cond: the then arm first, which finds the join if there is one; the else arm runs to it
-   (branch C t a e S st) (: r1 (run C a S st)
-    (? (<r1 = 'j) (: J (r1 1) r2 (run C e S J)
+   (branch C t a e S st) (: th (C 'thene) _ (pin C 'thene e) r1 (run C a S st) _ (pin C 'thene th)
+    (? (<r1 = 'j) (: J (r1 1) _ (pin C 'thene 0) r2 (run C e S J) _ (pin C 'thene th)
                    (? (<r2 = 'j) (run C J (push C ['c J t <(r1 2) <(r2 2)] S) st) (fail C)))
        (: r2 (run C e S st)
         (? (<r2 = 'r) ['r ['c 0 t (r1 1) (r2 1)]] (fail C)))))
@@ -394,11 +405,13 @@
     (? (mint? y) y
        (y @ ('k v) (rk C v)
             ('g n) n
-            ('o n as) (n . map (ra C) as)
+            ('o n as) (onm n . map (ra C) as)
             ('c . J . cl) ('? . rcl C J cl)
             ('a . _) (rapp C y)
             (fail C))))
-   (alleq C xs ys) (? (two? ys) (== (res C <xs) <ys && alleq C >xs >ys) 1)
+   ; the same captures: a name bound to a slot is that slot, whether or not the name holds
+   (sees C x) (: d (? (mint? x) (peep (C 'D) x C) C) (? (== d C) x (sees C d)))
+   (alleq C xs ys) (? (two? ys) (== (sees C <xs) (sees C <ys) && alleq C >xs >ys) 1)
    ; an operator away from the head is parenthesised, or it reads as infix
    (ra C x) (: r (rv C x) (? (infix? r) [r] r))
    ; a cond whose else is a cond of the same join is one cond of more clauses
@@ -430,7 +443,9 @@
    (self C h as) (? (two? h && <h = 'k)
                    (: u (unw (h 1)) p (peep (C 'pre) u ())
                     (? (two? p && busy? C u && #p <= #as && alleq C as p)
-                       (: n (want C u) (? (#p < #as) [(n . map (ra C) (dp #p as))] [n])))))
+                       (: n (want C u)
+                        (? (peep (C 'letE) u 0) [(n . map (ra C) as)]   ; a let's lambda is bound bare: every arg
+                           (#p < #as) [(n . map (ra C) (dp #p as))] [n])))))
    (flat C h as) (rv C h . map (ra C) as)
    ; a let's names are the slots its inits sit in. an init that is a closure names its
    ; thread, so a reference back to it from its own body or a sibling's reads as the name.
@@ -449,7 +464,18 @@
     _ (each rs (\ r (pin R <r (r 1))))
     (? (mint? n) ([': n ('\ . imps + la + <b + [<>b]) n] . imps + map (rinit C) la) f))
    (rinit C s) (: d (res C (peep (C 'D) s ())) cl (clo C d)
-    (? cl (rclo C <cl >cl) (rv C d)))
+    (? cl (unself s (eta (rclo C <cl >cl))) (rv C d)))
+   ; a named closure over captures, ((: n (\ caps.. ps.. body) n) caps..), is a lambda over
+   ; its ps, as a let's sibling must be to see the siblings after it
+   (eta y) (: h <y
+    (? (two? h && == <h ': && 4 = #h && two? (h 2) && == <(h 2) '\)
+       (: m (#(h 2) - 2 - #>y) ps (map (\ _ (mint 0)) (jot m))
+        (? (0 < m) ('\ . ps + [(y + ps)]) y))
+       y))
+   ; a closure bound by name that names itself, (: n (\ ..) n), is its lambda under that
+   ; name: a value would see only the siblings bound before it
+   (unself m y) (? (two? y && == <y ': && 4 = #y && mint? (y 1) && == (y 1) (y 3)) (sub (y 1) m (y 2)) y)
+   (sub a b x) (? (== x a) b (atom? x || qot? x) x (map (\ e (sub a b e)) x))
    ; a closure node: (lambda . capture vars), or ()
    (clo C d) (? (two? d && <d = 'k) (: v (unw (d 1)) (? (fn? v && !(partp v) && !(nifnom v)) [v]))
                 (two? d && <d = 'a)
@@ -457,44 +483,55 @@
                  (? (E && fn? E && !(partp E) && !(nifnom E) && #as < arity E && all (var? C) as)
                     (E . map (res C) as))))
    (named C v) (peep (C 'R) v ())
-   (rbody C E pre) (: bz (C 'busy)
+   ; read with captures, a lambda's own name is the bare lambda -- a call of it from inside
+   ; can pass other captures (a walk up a chain) -- so a call through its self passes every arg
+   (rbody C E pre) (: bz (C 'busy) le (peep (C 'letE) E 0)
     (inq l) (? (two? l) (== E <l || inq >l))
     _ (? (inq bz) (fail C))
     _ (pin C 'busy (E . bz))
     _ (pin (C 'pre) E pre)
+    _ (? (two? pre) (pin (C 'letE) E 1) 0)
     S0 (: (ps i) (? (i < arity E) (? (i < #pre) (pre i . ps (1 + i)) (mint 0 . ps (1 + i))) ()) (ps 0))
     r (run C (entry E) S0 ())
     b (? (<r = 'r) [(dp #pre S0) (rv C (r 1))] (fail C))
+    _ (pin (C 'letE) E le)
     _ (pin C 'busy bz)
     b)
    ; a body that is itself a lambda sits in a singleton, which reads as the lambda: bare,
    ; the reader would merge its params into ours, one closure where the thread has two
    ; one reached again from inside its own reading is recursion with no name to say it by: it
    ; takes one, and its form binds it, (: n (\ ..) n)
+   ; with captures, the name binds the bare lambda and the closure is it applied to them
    (rclo C E pre) (: b (rbody C E pre) y <>b
-                   f ('\ . <b + [(? (two? y && == <y '\ && two? >>y) [y] y)])
+                   yb (? (two? y && == <y '\ && two? >>y) [y] y)
+                   f ('\ . <b + [yb])
                    n (peep (C 'want) E 0)
-                   (? (mint? n) [': n f n] f))
+                   (? !(mint? n) f
+                      (two? pre) ([': n ('\ . pre + <b + [yb]) n] . pre)
+                      [': n f n]))
    (want C u) (: W (C 'want) n (peep W u 0) (? (mint? n) n (: n (mint 0) (pin W u n, n))))
    (rk C v) (? (charm? v) v
                (== v ()) ()
+               ; a sentinel: the name that holds it, else one fresh mint said by one name
+               (mint? v) (: g (glob v) (? (!== g ()) g (obj C v ['mint 0])))
                (nom? v || two? v) ['\ v]
                (fn? v) (rfn C v)
                ; a carrier is `=` to itself alone, so no spelling reads back as it: a big
                ; one, a cache the function keeps, is its size
-               (tablet? v || hot? v) (: g (glob v) (? g g (tablet? v && 16 < #v) (name ("{.." + dec #v + "}")) v))
+               (tablet? v || hot? v) (: g (glob v) (? (!== g ()) g (tablet? v && 16 < #v) (name ("{.." + dec #v + "}")) v))
                v)
+   ; an object only itself is `=` to, named once and bound over the whole to a fresh one
+   (obj C v init) (: n (peep (C 'obj) v 0)
+    (? (mint? n) n (: n (mint 0) _ (pin (C 'obj) v n) _ (pin C 'objs ([n init] . C 'objs)) n)))
    (dec n) (? (n < 10) (string (48 + n)) (dec (n // 10) + string (48 + n % 10)))   ; show is later
    ; a function's own name: a nif's, a glued sigil's, a let's, a global's. 0 for none, a
    ; let's name being a mint, and a mint falsy
    (fname C v) (: nm (nifnom v)
-    (? (string? nm) (name nm)
+    (? (string? nm) (nifn v (name nm))
        (: gn (opnom v) u (unw v) r (named C u)
         (? gn gn
-           (? (two? r) (nil? <>r)) <r
-           (glob v) (glob v)
-           (glob u) (glob u)
-           0))))
+           (? (two? r) (atom? <>r)) <r                  ; a let's name, when it holds no captures
+           (: g (glob v) (? (!== g ()) g (: g (glob u) (? (!== g ()) g 0))))))))
    (rfn C v) (: nm (fname C v)
     (? (!== nm 0) nm
        (partp v) (rfn C (fbase v) . map (rk C) (pargs v))
@@ -509,6 +546,8 @@
    ; a name bound in place but met again from a helper over the whole is out of its scope
    ; there: it joins the helpers, and the form is laid again
    (tie C x) (: F (C 'F) out {} own {} seen {} O {'l ()}
+    ON (foldl (\ t p (pin t <p 1)) {} (C 'objs))      ; rk's objects, bound first over the whole
+    ob (catmap id (rev (C 'objs)))
     (inq x l) (? (two? l) (== x <l || inq x >l))
     (cw x on) (? (mint? x) (: _ (? (inq x on) (pin own x 1) (pin out x (1 + peep out x 0)))
                              (? (two? (peep F x ()) && !(peep seen x 0))
@@ -519,7 +558,7 @@
     ; a form read inside a let may say that let's names, which hold nowhere else: it goes
     ; in place wherever it is met, never over the whole
     (fvs y) (: A {'l ()}
-             (fw x sc) (? (mint? x) (? (!(two? (peep F x ())) && !(inq x sc)) (pin A 'l (x . A 'l)) 0)
+             (fw x sc) (? (mint? x) (? (!(two? (peep F x ())) && !(peep ON x 0) && !(inq x sc)) (pin A 'l (x . A 'l)) 0)
                           (atom? x || qot? x) 0
                           (== <x ':) (: sc2 (lets >x + sc) (each >x (\ e (fw e sc2))))
                           (== <x '\) (: sc2 (init >x + sc) (each >x (\ e (fw e sc2))))
@@ -538,7 +577,7 @@
     ; a lambda in place as a lambda's body sits in a singleton, as rclo leaves one
     (sole y) (: b (last y) (? (two? b && == <b '\ && two? >>b) (init y + [[b]]) y))
     (lay H) (: hs (filter (\ m (peep H m 0)) (rev (O 'l)))
-             (? (two? hs) (': . catmap (\ m [m (ex H (F m) [m])]) hs + [(ex H x ())]) (ex H x ())))
+             (? (two? hs || two? ob) (': . ob + catmap (\ m [m (unself m (ex H (F m) [m]))]) hs + [(ex H x ())]) (ex H x ())))
     ; the names met where no (: ..) around them binds them
     (free y) (: A {'l ()}
               (fw x sc) (? (mint? x) (? (two? (peep F x ()) && !(inq x sc)) (pin A 'l (x . A 'l)) 0)
@@ -555,27 +594,46 @@
    ; the globals and module names by value, the shortest spelling first, then the least. the
    ; table outlives a reading and is rebuilt when a layer or a module gains or loses a name;
    ; a hit is held to the binding it came from, so a name since rebound rebuilds too. the
-   ; hit is by `=`, its binding held by what it held when the table was built
-   (glob v) (: e (peep (gtab 0) v ())
+   ; hit is by `=`, its binding held by what it held when the table was built. a module's
+   ; name reads back as (cite 'module 'name), the book's as itself; () for none
+   (glob v) (? (tablet? v || hot? v) (gcar v)
+             (: e (peep (gtab 0) v ())
+              (? (nil? e) ()
+                 (== (<>e <e) (e 2)) (spell e)
+                 (: e (peep (gtab 1) v ()) (? (two? e) (spell e) ())))))
+   (spell e) (? (e 3) ['cite ['\ (e 3)] ['\ <e]] <e)
+   ; a carrier is found by `==` down a list: its hash moves as it is written, so a table
+   ; keyed by it misses one written since the build. the book's name first, then the best
+   (gcar v) (: e (cbest v (: _ (gtab 0) (gcache 'c)))
     (? (nil? e) ()
-       (== (<>e <e) (e 2)) <e
-       (: e (peep (gtab 1) v ()) (? (two? e) <e ()))))
-   (gsig L) (+ (foldl (\ n l (n + #l)) 0 (stack ()))
-               (foldl (\ n k (: l (L k) (n + 1 + (? (tablet? l) #l 0)))) 0 (keys L)))
+       (== (<>e <e) v) (spell e)
+       (: e (cbest v (: _ (gtab 1) (gcache 'c))) (? (two? e) (spell e) ()))))
+   (cbest v l) (foldl (\ b e (? (!(== (e 2) v)) b
+                                 (nil? b) e
+                                 (!(e 3) && (b 3)) e
+                                 (!(b 3) && (e 3)) b
+                                 (better <e <b) e
+                                 b)) () l)
+   (better a b) (: x (string a) y (string b) (? (#x < #y) 1 (#x = #y) (x < y) 0))
+   ; the book's count and the modules' apart: a name moved from one to the other moves it
+   (gsig L) [(foldl (\ n l (n + #l)) 0 (stack ()))
+             (foldl (\ n k (: l (L k) (n + 1 + (? (tablet? l) #l 0)))) 0 (keys L))]
    (gtab force) (: L (lib ()) s (gsig L)
     (? (? force 0 (s = peep gcache 's -1)) (gcache 't)
-       (: t {} m {} seen {}
-          (better a b) (: x (string a) y (string b) (? (#x < #y) 1 (#x = #y) (x < y) 0))
-          (put t v k l) (: old (peep t v ()) (? (? (nil? old) 1 (better k <old)) (pin t v [k l (l k)]) 0))
+       (: t {} m {} seen {} cs {'l ()}
+          (put t v k l n) (: old (peep t v ()) (? (? (nil? old) 1 (better k <old)) (pin t v [k l (l k) n]) 0))
           ; a native is keyed by its bytecode too: a thread quotes whichever the compiler held
-          (add t l k) (: v (l k)
-                       (? (? (name? k) (fn? v || tablet? v || hot? v))
-                          (: _ (put t v k l) (? (fn? v) (put t (unw v) k l) 0)) 0))
-          _ (each (stack ()) (\ l (each (keys l) (\ k (? (peep seen k 0) 0 (: _ (pin seen k 1) (add t l k)))))))
+          (add t n l k) (: v (l k)
+                         (? !(name? k) 0
+                            (tablet? v || hot? v) (pin cs 'l ([k l v n] . cs 'l))
+                            (fn? v || mint? v || string? (nifnom v))
+                            (: _ (put t v k l n) (? (fn? v) (put t (unw v) k l n) 0))
+                            0))
+          _ (each (stack ()) (\ l (each (keys l) (\ k (? (peep seen k 0) 0 (: _ (pin seen k 1) (add t 0 l k)))))))
           ; a module's names fill in where the book has none
-          _ (each (keys L) (\ n (: l (L n) (? (tablet? l) (each (keys l) (add m l)) 0))))
+          _ (each (keys L) (\ n (: l (L n) (? (tablet? l) (each (keys l) (add m n l)) 0))))
           _ (each (keys m) (\ v (? (nil? (peep t v ())) (pin t v (m v)) 0)))
-          _ (pins gcache 's s 't t)
+          _ (pins gcache 's s 't t 'c (cs 'l))
           t)))
    ; --- naming: a binder is a letter by its depth, a b .. z aa ab .., skipping any name the
    ; form spells free, which a binder of that spelling would capture
@@ -595,6 +653,21 @@
                                  (': . map (\ e (ren e <a >a fv)) >x))
                      (map (\ e (ren e i m fv)) x))
    (rename f) (ren f 0 () (fvn f {}))
+   ; a (cite 'module 'name) met more than once is bound once over the whole, by its own
+   ; spelling where the form spells it nowhere else, else by a letter
+   (cites y) (: T {} O {'l ()}
+    (cite? x) (two? x && == <x 'cite && 3 = #x)
+    (cc x) (? (atom? x || qot? x) 0
+              (cite? x) (: c (peep T x 0) _ (? (c = 0) (pin O 'l (x . O 'l)) 0) (pin T x (1 + c)))
+              (each x cc))
+    _ (cc y)
+    fv (fvn y {})
+    bs (filter (\ c (1 < T c)) (rev (O 'l)))
+    N (foldl (\ t c (: k (c 2 1) (pin t c (? (peep fv k 0) (mint 0) k)))) {} bs)
+    (rp x) (? (atom? x || qot? x) x (cite? x) (: b (peep N x ()) (? (nil? b) x b)) (map rp x))
+    (? (two? bs) (: z (rp y) ds (catmap (\ c [(N c) c]) bs)
+                  (? (== <z ':) (': . ds + >z) (': . ds + [z])))
+       y))
    lamform))
 
 (: px (:
@@ -744,7 +817,7 @@
   (farg v i n) (: (go u w) (? (0 < w) (go (peek 2 u) (w - 1)) (peek 1 u)) (go (unc0 v) ((n - 1) - i)))
 
   (pfn o v sn) (: nm (nifnom v)
-    (? (string? nm) (say o nm)
+    (? (string? nm) (: s (lamform v) (? (== s (name nm)) (say o nm) (px o s sn)))   ; off the book: what binds it
        ; a glued sigil's backing value has no nif name but it has exactly one word;
        ; say that instead of inlining its whole body wherever `<x` was written.
        (: gn (opnom v)
