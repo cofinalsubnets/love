@@ -1,10 +1,16 @@
-; apps/gif.l -- gif encoding: an rgba image to a gif89a of one frame. `(borrow 'gif)`, then:
+; apps/gif.l -- gif encoding, an rgba image to a gif89a of one frame, and decoding.
+; `(borrow 'gif)`, then:
 ;
-;   (gif-encode w h rgba)  -> the gif's bytes
+;   (gif-encode w h rgba)   -> the gif's bytes
+;   (gif-decode s)          -> (w h rgba), the first frame | a string saying why not
+;   (gif-frames s most)     -> (w h ((rgba ms) ..)), each frame as shown and how long,
+;                              at most most of them | why not
 ;
+; decoding is love/lib/gif.c's, frame by frame onto the screen; disposal 2 clears a
+; frame's box to see-through (as browsers do) and 3 restores what was under it.
 ; a pixel under half alpha is the transparent index. up to 256 colours stay exact; past
 ; that each channel is cut to 5 bits and a median cut over what is left picks the palette.
-(module (gif gif-encode)
+(module (gif gif-encode gif-decode gif-frames)
 (:
    ; --- the palette ----------------------------------------------------------------------
    ; a pixel's colour as one number, -1 when it is transparent
@@ -115,6 +121,47 @@
         + (? trans (bytes [33 249 4 1 0 0 #cols 0]) "")
         + string 44 + gif-le16 0 + gif-le16 0 + gif-le16 w + gif-le16 h + bytes [0 mcs]
         + gif-blocks (gif-lzw ix n mcs)
-        + string 59)))
+        + string 59))
+
+   ; --- decoding, over love/lib/gif.c's gif-frame and gif-clear ----------------------------
+   (gif-rd16 s i) (s i + 256 * s (i + 1))
+   ; the offset past the sub-blocks that start at p and their empty one
+   (gif-skip s p) (? (#s <= p) #s (s p = 0) (p + 1) (gif-skip s (p + 1 + s p)))
+   ; the palette's length in bytes by a flags byte
+   (gif-table f) (? (f & 128) (3 * (2 << (f & 7))) 0)
+   ; the door: asked at first call, never at load
+   gif-door (tablet 0)
+   (gif-nif? _)
+    (: v (peep gif-door 0 ())
+       (? (charm? v) v
+          (: w (trap (\ _ (: _ (gif-clear "" 0 "") 1)) () (\ a b 0)) _ (pin gif-door 0 w) w)))
+   ; the images laid in turn on the screen, each as the viewer sees it, at most most of them
+   ; gc is the graphic control ahead of an image: [disposal trans ms]
+   (gif-frames s most)
+    (? ((#s < 13) || (snip s 0 4 != "GIF8")) "not a gif"
+       !(gif-nif? 0) "no decoder here"
+       (: w (gif-rd16 s 6) h (gif-rd16 s 8)
+          (? ((w * h) = 0) "not a gif"
+             (16777216 < (w * h)) "too big"
+             (: (go p cv gc acc)
+                 (? ((#acc = most) || (#s <= p) || (s p = 59)) acc
+                    (s p = 33)
+                     (: nx (gif-skip s (p + 2))
+                        (? ((s (p + 1) = 249) && ((p + 7) < #s))
+                            (: pk (s (p + 3)) cs (gif-rd16 s (p + 4))
+                               (go nx cv [((pk >> 2) & 7) (? (pk & 1) (s (p + 6)) -1)
+                                          (? (cs < 2) 100 (10 * cs))] acc))
+                           (go nx cv gc acc)))
+                    (s p = 44)
+                     (: f (gif-frame s p cv (gc 1))
+                        (? !(string? f) acc
+                           (: q (gif-skip s (p + 11 + gif-table (s (p + 9))))
+                              c (gif-clear s p f)
+                              under (? (gc 0 = 2) (? (string? c) c f) (gc 0 = 3) cv f)
+                              (go q under [0 -1 100] (acc + [[f (gc 2)]])))))
+                    acc)
+                fs (go (13 + gif-table (s 10)) (string (cask (4 * w * h))) [0 -1 100] ())
+                (? (two? fs) [w h fs] "no image")))))
+   (gif-decode s) (: r (gif-frames s 1) (? (two? r) [(r 0) (r 1) <(<(r 2))] r)))
 
 ) ; module gif

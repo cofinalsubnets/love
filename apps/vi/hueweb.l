@@ -44,11 +44,7 @@
    ; the first row of tbl headed by k. config.l's two tables are both keyed that
    ; way and there is no assoc in the vocabulary, so this is the one walk for both
    (hw-find tbl k) (:- (f tbl) (f l) (? (one? l) () (<<l = k) <l (f >l)))
-   ; the three characters html cannot hear otherwise
-   (hw-q s) (:- (g 0 "")
-             (g i acc) (i >= #s ? acc
-                        (: c (s i)
-                         (g (i + 1) (acc + (c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)))))))
+   (hw-q s) ((cite 'lapiz 'hq) s)          ; the three characters html cannot hear otherwise
    ; the final newline ends the last line, it does not open another: a file of n lines
    ; that ends in one would otherwise paint an n+1'th empty row.
    (hw-lines s) (:- (g 0 0 ())

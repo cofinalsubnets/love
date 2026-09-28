@@ -30,11 +30,6 @@
                'r10 10 'r11 11 'r12 12}
    (rn r) (look thumb-regs r 'badreg)
 
-   ;; -- condition codes: IR name -> the aarch32 cond field (same 4-bit encoding a64 uses). --
-   thumb-cc {'eq 0 'ne 1 'ae 2 'below 3 's 4 'ns 5
-             'vs 6 'vc 7 'p 6 'np 7
-             'above 8 'be 9 'ge 10 'lt 11 'gt 12 'le 13}
-
    ;; -- emit: a narrow halfword, or a 32-bit word as hi-halfword-first little-endian pair. --
    (t16 w) (le16 w)
    (t32 w) (le16 (w >> 16) + le16 (w & 65535))
@@ -245,7 +240,7 @@
    ;; set: d <- (cond) ? 1 : 0, via an it block. MOV d,#0 ; it cond ; MOV d,#1 (the conditional one).
    ;; MOVW reaches all of r0..r12 (the narrow MOV only r0..r7), so use it uniformly.
    (thumb-set cond d)
-      (: cc (look thumb-cc cond 'badcc)
+      (: cc (look arm-cc cond 'badcc)
          (catall [(thumb-movw d 0) (t16 (0xBF08 | (cc << 4))) (thumb-movw d 1)]))
 
    ;; -- scalar-double vfp (moon rung 4): f0..f15 -> d0..d15 (fpv5-d16, the M7's FPU). the IR
@@ -312,7 +307,7 @@
    ;; one (br) rides t3, and BL (call) rides T1 -- all 32-bit, all 4-byte fixups.
    (thumb-jmp  label) [(fix 4 'b   label 0)]
    (thumb-call label) [(fix 4 'bl  label 0)]
-   (thumb-br cond label) (: cc (look thumb-cc cond 'badcc)
+   (thumb-br cond label) (: cc (look arm-cc cond 'badcc)
                             [(fix 4 'bcc label cc)])
    (thumb-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))    ; BX Rm
    ;; the table jump: jmpr, with the table's label and its target list riding along --
