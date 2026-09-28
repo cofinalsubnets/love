@@ -71,7 +71,7 @@
            'pop   [15 (tr (f 1)) 0 0]
            h (scare 'dest2uu-op h))
 
-   (pre fs) (? (one? fs) ()
+   (pre fs) (? (atom? fs) ()
                (elem (<fs 0) '(call jmp ret)) ()
                (<fs . pre >fs))
    (emit1 g)

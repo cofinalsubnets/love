@@ -14,7 +14,7 @@
 
 (: M64 18446744073709551616
    H64 9223372036854775808
-   (mask64 x) (% ((% x M64) + M64) M64)
+   (mask64 x) (((x % M64) + M64) % M64)
    (sgn64 u) (u >= H64 ? (u - M64) u)                 ; the answer node hands back is signed
    (pow2 k) ((: (go i a) (i = k ? a (go (i + 1) (2 * a)))) 0 1)
 
@@ -57,7 +57,7 @@
        (op = 'xor)  (a ^ b)
        (b = 0 ? 0 (a // b)))                          ; div_u; the generator keeps b nonzero
    (shift op a k)
-    (: s (% k 64) v (a >> s)
+    (: s (k % 64) v (a >> s)
        (? (op = 'shl) (mask64 (a << s))
           (op = 'shr) v                                ; shr_u
           (a >= H64 && s > 0 ? (v | (M64 - pow2 (64 - s))) v)))   ; shr_s sign-extends
@@ -80,7 +80,7 @@
    ; r1..r7 are loaded before anything reads them: an undefined register is the generator's
    ; bug, not the lowering's, and it would read as a disagreement all the same.
    (gen-prog n)
-    (: pre (map (\ r ['li r (imm 0)]) (cup regs))
+    (: pre (map (\ r ['li r (imm 0)]) >regs)
        body ((: (go i a) (i = n ? (rev a) (go (i + 1) (gen-op 0 . a)))) 0 ())
        (pre + body + [['mov 'r0 (pick regs)] ['ret]]))
 
@@ -106,5 +106,5 @@
    q (open "out/.wasmfuzz.json" "w")
    _ (say q ("[" + (foldl (\ a r (a = "" ? r (a + "," + r))) "" rows) + "]\n"))
    _ (close q)
-   (puts ("wasmfuzz: " + show N + " programs, " + show (tally rows) + " calls, "
-          + show (tally (wasm-emit m)) + " bytes\n")))
+   (puts ("wasmfuzz: " + show N + " programs, " + show #rows + " calls, "
+          + show #(wasm-emit m) + " bytes\n")))

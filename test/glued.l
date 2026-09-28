@@ -19,7 +19,7 @@
 
  ; --- the factor pass, and the value
  ('(two? (cap (cup x))) = unglue (opfix '2?<>x))
- ('(one? (cup x)) = unglue (opfix '1?>x))
+ ('(atom? (cup x)) = unglue (opfix '1?>x))
  ('(two? -5) = unglue (opfix '2?-5))
  (1 = 2?[7 8]) (0 = 2?5) (0 = 2?<>[[1 2] 9]) (1 = 1?<>[[1 2] 9]) (1 = 0?[]) (0 = 0?[7]))
 

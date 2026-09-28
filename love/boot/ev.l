@@ -533,7 +533,7 @@
                 ; tables are keyed by value, and a value has no name to shadow, hence no bnd guard.
                 ; ahead of cpap on purpose: cpap's licence stops at the first partial, and the
                 ; residual it bakes reads as a two? head that feels' sticky lane then declines.
-                (<hk && one? >hk && allk as && pure-hv? >hk as)
+                (<hk && atom? >hk && allk as && pure-hv? >hk as)
                   (foldc >hk as)
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a pure-applying head with a known operand: fold the whole
                   (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head

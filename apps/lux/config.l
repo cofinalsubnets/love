@@ -61,22 +61,22 @@
    lux-phi (lux-fib 0 1 32 / lux-fib 0 1 31)
    ; one ||| member as data: the head names the layout, the tail its operands, and
    ; `phi` stands for the golden ratio wherever a number would go.
-   (lux-arg a i d) (: (go l k) (? !(two? l) d
+   (lux-arg a i d) (: (go l k) (? (atom? l) d
                                   (0 < k) (go >l (k - 1))
-                                  (: v <l (= v 'phi ? lux-phi (constellation? v ? v d))))
+                                  (: v <l (v = 'phi ? lux-phi (constellation? v ? v d))))
                       (go a i))
    (lux-lay-of sp)
     (: h (two? sp ? <sp sp) a (two? sp ? >sp ())
-       (? (= h 'rtall)   (resizable-tall (lux-arg a 0 1) (lux-arg a 1 0.02) (lux-arg a 2 0.5))
-          (= h 'tall)    (tall (lux-arg a 0 1))
-          (= h 'dwindle) (dwindle (lux-arg a 0 lux-phi))
-          (= h 'full)    full
-          ()))
-   (lux-wrap-of w inner) (? (= w 'minimize)    (minimize inner)
-                            (= w 'smart)       (smart-borders inner)
-                            (= w 'toggle-full) (toggle-full inner)
-                            (= w 'mirror)      (mirror inner)
-                            inner)
+       (h @ 'rtall   (resizable-tall (lux-arg a 0 1) (lux-arg a 1 0.02) (lux-arg a 2 0.5))
+            'tall    (tall (lux-arg a 0 1))
+            'dwindle (dwindle (lux-arg a 0 lux-phi))
+            'full    full
+            ()))
+   (lux-wrap-of w inner) (w @ 'minimize    (minimize inner)
+                              'smart       (smart-borders inner)
+                              'toggle-full (toggle-full inner)
+                              'mirror      (mirror inner)
+                              inner)
    lux-lays (filter two? (map lux-lay-of
                               (conf-roster lux-conf 'layout '((rtall 1 0.02 0.5) (dwindle phi)))))
    lux-wraps (conf-roster lux-conf 'layout-wrap '(minimize smart toggle-full mirror))
@@ -107,10 +107,10 @@
    ;   ~/.Xauthority behind, whose cookie the server refuses
    (lux-dispof d) (? (#d < 2) "7"                                           ; unset: the Xephyr harness habit
                      (: b (snip d 1 #d)
-                        (: (go i) ((i = tally b) || (b i = 46) ? (snip b 0 i) (go (i + 1)))
+                        (: (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))
                            (go 0))))
    (lux-dispnum u) (lux-dispof (: d (salt-one lux-conf 'display ()) (string? d ? d (getenv "DISPLAY"))))
-   (lux-xauth u) (: v (getenv "XAUTHORITY") (0 < tally v ? v (getenv "HOME" + "/.Xauthority")))
+   (lux-xauth u) (: v (getenv "XAUTHORITY") (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
    (lux-auth-for disp) (xauth-cookie (salt-one lux-conf 'xauthority (lux-xauth ())) disp)
    lux-display ("/tmp/.X11-unix/X" + lux-dispnum ())
    lux-auth (lux-auth-for (lux-dispnum ())))

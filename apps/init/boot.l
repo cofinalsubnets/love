@@ -12,7 +12,7 @@
 ; safe to dry-run on the host: `out/love init/boot.l` sees getpid != 1, prints the
 ; banner and returns -- no mounts, no shell handoff (so it never blocks a dev machine).
 (borrow 'posix)
-(: (say1 s) (: _ (puts s) (puts "\n"))              ; a console line
+(: (say1 s) (puts s, puts "\n")                     ; a console line
 
    ; mount one early filesystem at its fhs path (mkdir first; mount is () success /
    ; -errno failure -- e.g. ebusy when the kernel already auto-mounted devtmpfs).
@@ -20,8 +20,8 @@
    (mnt src tgt typ)
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)
-        (say1 (+ "  mount " (+ typ (+ " on " (+ tgt
-                 (? (r < 0) (+ " -> errno " (show (0 - r))) " -> ok")))))))
+        (say1 ("  mount " + typ + " on " + tgt
+               + (r < 0 ? (" -> errno " + show (0 - r)) " -> ok"))))
 
    ; the console job: a fresh `love` running the shell over the inherited console fds.
    ; the -l registers module 'lush (the parts' own wraps); the -e reads it through
@@ -33,8 +33,8 @@
    ; returns (exit . stdout); the shebang on /bin/kore points at /bin/love.
    (selfcheck _)
      (: r (hark ["/bin/kore" "ls" "/proc"])
-        (say1 (+ "-- self-check: kore ls /proc -> exit " (+ (show (cap r))
-                 (+ ", " (+ (show (tally (cup r))) " bytes --"))))))
+        (say1 ("-- self-check: kore ls /proc -> exit " + show <r
+               + ", " + show #>r + " bytes --")))
 
    ; pid 1's forever loop: harvest every child (waitpid(-1) via `glean`). the console dying
    ; respawns it (a getty); any other pid is a reparented orphan we just harvest. a
@@ -42,22 +42,20 @@
    (harvest shpid)
      (: ev (glean 0)
         (? (two? ev)
-             (? (= (cap ev) shpid)
-                  (: _ (say1 "  [init] console exited -> respawn")
-                     (harvest (spawn (console 0))))
-                  (: _ (say1 "  [init] reaped a reparented orphan") (harvest shpid)))
-           (: _ (rest 50) (harvest shpid))))
+             (<ev = shpid ? (say1 "  [init] console exited -> respawn", harvest (spawn (console 0)))
+                            (say1 "  [init] reaped a reparented orphan", harvest shpid))
+           (rest 50, harvest shpid)))
 
    (boot-init _)
      (: me (getpid 0)
-        _ (say1 (+ "-- love as PID " (+ (show me) " -- the initramfs /init --")))
-        (? (= me 1)
-             (: _ (say1 "-- mount the early filesystems --")
-                _ (mnt "proc"     "/proc" "proc")
-                _ (mnt "sysfs"    "/sys"  "sysfs")
-                _ (mnt "devtmpfs" "/dev"  "devtmpfs")
-                _ (selfcheck 0)
-                _ (say1 "-- start the console shell (init -> sh -> real programs) --")
-                (harvest (spawn (console 0))))
-           (: _ (say1 "  (NOT pid 1 -- host dry run: no mounts, no handoff)") 0))))
+        _ (say1 ("-- love as PID " + show me + " -- the initramfs /init --"))
+        (? (me = 1)
+             (say1 "-- mount the early filesystems --",
+              mnt "proc"     "/proc" "proc",
+              mnt "sysfs"    "/sys"  "sysfs",
+              mnt "devtmpfs" "/dev"  "devtmpfs",
+              selfcheck 0,
+              say1 "-- start the console shell (init -> sh -> real programs) --",
+              harvest (spawn (console 0)))
+           (say1 "  (NOT pid 1 -- host dry run: no mounts, no handoff)", 0))))
 (boot-init 0)

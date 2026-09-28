@@ -77,6 +77,16 @@
    q [0 "x"]
    _ (test (7 = c1 q) (7 = c2 q) (7 = c3 q) (7 = c4 q) (7 = c5 q))
    0)
+; ..and canon respells a synonym as its canonical word only where no binder took that word:
+; a local atom? leaves one? the global's, a local two? leaves link? the global's
+(: (atom? e) (charm? e ? 7 9)
+   (c r) (one? r)
+   _ (test (1 = c ()) (0 = c [1]))
+   0)
+(: (two? e) (charm? e ? 7 9)
+   (c r) (link? r)
+   _ (test (1 = c [1]) (0 = c ()))
+   0)
 ; ..and `list`, in a letrec of its own: a local spelling owns that scope's [..] too
 (: (list a) (charm? a ? 7 9)
    (c6 r) (two? r && (list <r))
@@ -122,8 +132,8 @@
    (? G (: gw (G 'gopword)
            named [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep] [tally 'tally]
                   [(+) '+] [(-) '-] [(*) '*] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]
-                  [(<) '<] [(<=) '<=] [(>) '>] [(>=) '>=] [(=) '=] [one? 'one?] [nil? 'nil?]]
-           wordless '(list && || atom? != !== mpeep)
+                  [(<) '<] [(<=) '<=] [(>) '>] [(>=) '>=] [(=) '=] [atom? 'atom?] [nil? 'nil?]]
+           wordless '(list && || one? != !== mpeep)
            _ (test
               (all (r \ (<>r = gw <r)) named)                                 ; a value answers its word
               ('zz = gw 'zz)                                                   ; a nom is its own word

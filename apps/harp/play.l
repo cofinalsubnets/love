@@ -250,7 +250,7 @@
    (harp-atof s) (sound s @ (r . _) r 0)
    (harp-main as)
     (: (go l o ps)
-        (one? l ? (harp-fire o (lrev ps))
+        (atom? l ? (harp-fire o (lrev ps))
          (<l @
                "-n" (go >>l (pin o 'cycles (harp-atoi <>l)) ps)
                "-r" (go >>l (pin o 'rate (harp-atoi <>l)) ps)

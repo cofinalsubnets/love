@@ -50,11 +50,11 @@
  (score-bar ws key beats) (:- (go ws 0.0 (map (\ _ ()) ^(beats * 4)) () ())
    (go l pos sl bs err)
    (? err {'err err}
-      (one? l) (: sum (int (pos * 4.0 + 0.5))
+      (atom? l) (: sum (int (pos * 4.0 + 0.5))
                   (? (sum != beats * 4) {'err ("adds up to " + show pos + " beats, not " + show beats)}
                      (score-strings sl bs beats)))
       (<l 0 = 91) (: b (score-chord <l) (b = () ? (go () pos sl bs ("bad chord " + <l)) (go >l pos sl b err)))
-      (one? >l) (go () pos sl bs ("no beats after " + <l))
+      (atom? >l) (go () pos sl bs ("no beats after " + <l))
       (: n (score-note <l key) d (score-num <>l)
          k (pos * 4.0) i (int (k + 0.5))
          (? (<l != "-" && n = ()) (go () pos sl bs ("not a note: " + <l))
@@ -63,7 +63,7 @@
             (d < 0.25) (go () pos sl bs ("too short at " + <l))
             ; a note past the bar lays nothing; the sum says how far over the bar ran
             (go >>l (pos + d) (n = () || i >= beats * 4 ? sl (lay sl i [n (int (d * 4.0 + 0.5))])) bs err)))))
- (lay l i v) (:- (go l 0) (go l k) (one? l ? () ((k = i ? v <l) . go >l (k + 1))))
+ (lay l i v) (:- (go l 0) (go l k) (atom? l ? () ((k = i ? v <l) . go >l (k + 1))))
  ; the mini strings: a word a beat, subdivided only where an onset falls between beats.
  ; the legato string carries the same shape with a sixteenth count in every slot, since
  ; pset takes its shape from the notes and a rest in the legato would drop the note
@@ -71,8 +71,8 @@
    (cell x) (two? x ? (show <x) "~")
    (dur x) (two? x ? (show <>x) "1")
    (word f b) (: a (sl (b * 4)) c (sl (b * 4 + 1)) d (sl (b * 4 + 2)) e (sl (b * 4 + 3))
-                 (? (one? c && one? d && one? e) (f a)
-                    (one? c && one? e) ("[" + f a + " " + f d + "]")
+                 (? (atom? c && atom? d && atom? e) (f a)
+                    (atom? c && atom? e) ("[" + f a + " " + f d + "]")
                     ("[" + f a + " " + f c + " " + f d + " " + f e + "]")))
    (line f) (foldl (\ acc b (acc + (0 < b ? " " "") + word f b)) "" ^beats)
    {'notes (line cell) 'legs (line dur) 'bass bs 'beats beats
@@ -83,7 +83,7 @@
  (score-lines s) (split "\n" s)
  (score-parse ls) (:
    (bare ln) (:- (go 0) (go i) (? (i >= #ln) ln (ln i = 59) (snip ln 0 i) (go (i + 1))))
-   (bars-of ln i key beats) (map (t \ (: ws (score-words t) (one? ws ? () (pin (score-bar ws key beats) 'line i)))) (split "|" (bare ln)))
+   (bars-of ln i key beats) (map (t \ (: ws (score-words t) (atom? ws ? () (pin (score-bar ws key beats) 'line i)))) (split "|" (bare ln)))
    ; the fold carries [bars key beats]
    (line acc i) (: ws (score-words (bare (ls i))) key (acc 1) beats (acc 2)
                    (? (two? ws && <ws = "key") [(acc 0) (score-key >ws) beats]

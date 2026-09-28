@@ -330,7 +330,7 @@
  ; the line under screen row y, as an index into ls, or -1 off the box and its frame
  (sign-line ttl ls a n w y) (:- (go (y - sign-top a n (2 + net (map tally fl)) - 1) 0 fl)
    fl (sign-flow ls w)
-   (go j i l) (? (j < 0 || one? l) -1
+   (go j i l) (? (j < 0 || atom? l) -1
                  (j < #<l) i
                  (go (j - #<l) (i + 1) >l)))
  ; where the box lands on the screen: [x0 y0 w rows], as sign-over lays it

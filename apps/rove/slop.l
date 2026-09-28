@@ -187,7 +187,7 @@
  (slop-key g k) (: mv (steer (k = -12 ? 107 k))
                    (? (g 'over) g
                       (k @ (113 || 27) 1 0) (pin g 'over 'fled)
-                      (one? mv) g
+                      (atom? mv) g
                       (<>mv < 0) (slop-push g)
                       (pin g 'msg "only forward")))
 
@@ -532,7 +532,7 @@
  slop-usage "usage: love slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
  ; the two optional words, in either order: a number is pennies and anything else is
  ; the token. given either, the walk opens on a sign saying what you came in with.
- (slop-args as) (:- (go as () ()) (go l tk pn) (one? l ? [tk pn]
+ (slop-args as) (:- (go as () ()) (go l tk pn) (atom? l ? [tk pn]
                  (: t <l n (unum t) (charm? n ? (go >l tk n) (go >l t pn)))))
  (slop-main as) (2 < #as ? (say err ("slop: " + slop-usage + "\n"), flush err, 2)
                     (: p (slop-args as) (slop-run <p <>p)))

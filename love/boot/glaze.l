@@ -383,7 +383,7 @@
                              (['? (adesug env ti ta <l) (adesug env ti ta <>l)] + (two? >>l ? [(go >>l)] ()))))
                 as)
              (op = 'nil? && 1 = #as && !(elem op env))    ; opfix spells the negations as ?s: (nil? x) is (? x 0 1),
-               ['? (adesug env ti ta <as) 0 1]                 ; (one? x) is (? (two? x) 0 1), (!= a b) is (? (= a b) 0 1)
+               ['? (adesug env ti ta <as) 0 1]                 ; (atom? x) is (? (two? x) 0 1), (!= a b) is (? (= a b) 0 1)
              ((op = 'one? || op = 'atom?) && 1 = #as && !(elem op env))
                ['? ['two? (adesug env ti ta <as)] 0 1]
              (op = '!= && 2 = #as && !(elem op env))
@@ -2061,7 +2061,7 @@
    ; pwcar?: w is a raw chain-car word, <ce/>ce over a chain-valued operand -- the point-= production is the one compare it may reach
    (pwcar? cm cands cps ps w) (two? w && elem <w '(cap cup) && 2 = #w && cok? cm cands cps ps <>w)
    (gargok? cm pm cands cps pps ps as i callee)
-    (one? as ||
+    (atom? as ||
      ((? (elem i (cmlook callee cm)) (cok? cm cands cps ps <as)
          (elem i (cmlook callee pm)) (elem <as pps)                             ; a point slot takes a point param, nothing else (the guard is at the entry only)
                                      (groupok? cm pm cands cps pps ps <as))
@@ -2171,7 +2171,7 @@
                                       && all (x \ swhope? names ps x) >e)))
    (autogroup form0)
     (srcrec form0, ; record global fn sources (flag-gated inside srcrec) before any decline
-     (? (one? form0) form0
+     (? (atom? form0) form0
        (<form0 != ':) form0
        (atom? >form0) form0
        ; decline a body-less `:`, the global-leaking define every crew file is made of: autogroup is all-or-nothing per form and
@@ -2305,8 +2305,8 @@
    ; meets the recognizers, which read source by name. gv is ala's global read, pinned into gvbox by hook.l's first closure; before that the spelling stands
    gvbox {}
    gone (mint 0)
-   canon-names '(+ - * // % & | ^ < <= > >= = == twin re im cap cup . two? one? tally peep pin   ; the tree's canonical spellings, one per value:
-                 map filter foldl foldr jot iota net string list && ||)                       ; link reads ., atom? reads one?, ~ reads twin
+   canon-names '(+ - * // % & | ^ < <= > >= = == twin re im cap cup . two? atom? tally peep pin   ; the tree's canonical spellings, one per value:
+                 map filter foldl foldr jot iota net string list && ||)                       ; link reads ., one? reads atom?, ~ reads twin
    ctab {}
    (ctable gv) (peep ctab 'ok 0 ? ctab
                 (each canon-names (n \ (: v (gv n gone) (? (v = gone) 0 (pin ctab v n)))),
@@ -2318,7 +2318,7 @@
                          (cnom x bnd hd) (? (elem x bnd) x
                                             (: c (: m (peep mt x gone)
                                                   (? (m = gone) (: v (gv x gone) c (? (v = gone) 0 (peep tab v 0)) _ (pin mt x c) c) m))
-                                               (? !c x  (hd || !(elem c ops)) c  x)))
+                                               (? (!c || elem c bnd) x  (hd || !(elem c ops)) c  x)))   ; a binder that took the canonical word keeps the spelling
                          (cbinders bs) (? (atom? >bs) () (: b <bs ((? (two? b) <b b) . cbinders >>bs)))   ; a :'s names, sugared heads too
                          (cw x bnd) (?
                           (nom? x) (cnom x bnd 0)

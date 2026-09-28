@@ -1726,7 +1726,7 @@
              (? !(two? d) r
                 ; the attribute trails the first declarator's name; in the specifiers of a
                 ; many-declarator declaration it would clean them all
-                !(<d = 'decl && two? es && (one? >es || (<>>cs = <<es)))
+                !(<d = 'decl && two? es && (atom? >es || (<>>cs = <<es)))
                  (blame <>r "a cleanup wants one automatic variable")
                 (: n (1 + peep ps 'clid 0)
                    _ (pins ps 'clid n 'clfn 1 'clpend ['cln <<(<>d) <cs n])

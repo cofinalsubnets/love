@@ -46,8 +46,8 @@
    ; read a file's top-level forms as data (the reader strips ; comments)
 
    ; a uu name -> a Rocq identifier: prefix uu_, kebab '-' -> '_'
-   (sanit s) (: (g i acc) (? (< i #s) (g (+ 1 i) (+ acc (string (: c (s i) (? (= c 45) 95 c))))) acc) (g 0 ""))
-   (rocqn nm) (+ "uu_" (sanit (string nm)))
+   (sanit s) (: (g i acc) (? (i < #s) (g (1 + i) (acc + string (: c (s i) (? (c = 45) 95 c)))) acc) (g 0 ""))
+   (rocqn nm) ("uu_" + sanit (string nm))
 
    ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---
    (deq? c) (two? c && (<c = 'defn || <c = 'defq))
@@ -56,7 +56,7 @@
                 (axq? c) ['axm (unq (c 1)) (unq (c 2)) ()])
    (kids ks acc) (two? ks ? (kids >ks (deq? <ks || axq? <ks ? (entry <ks . acc) acc)) acc)
    (gather fs acc) (? (two? fs)
-                      (gather (cup fs) (: F (cap fs)
+                      (gather >fs (: F <fs
                         (? (two? F && <F = 'test) (kids >F acc)
                            (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
@@ -70,7 +70,7 @@
    ; nothing and paints its assert dot green. redden here instead. the empty seat is
    ; `== ()` and not `!`: a term of 0 is a legal def (a code table's first row) and
    ; falsy, so truthiness would redden it.
-   _ (map (\ e (? (<e = 'def && (= (e 3) ()) || !(peep GLOB (e 1) 0))
+   _ (map (\ e (? (<e = 'def && e 3 = () || !(peep GLOB (e 1) 0))
                   (puts "MALFORMED-OR-UNPINNED-DEF ", puts (string (e 1)), quit 1)
                   0))
         ents)
@@ -95,11 +95,11 @@
    _ (pin bases 'true "true") _ (pin bases 'false "false") _ (pin bases 'tt "tt")
    (atom-c t) (peep bases t (? (corpus? t) (rocqn t) (string t)))   ; base type / global / bound var
 
-   (spine-c l) (? (two? l) ((u2c (cap l)) + (? (two? (cup l)) " " "") + (spine-c (cup l))) "")
+   (spine-c l) (? (two? l) (u2c <l + (two? >l ? " " "") + spine-c >l) "")
    (u2c t)
    (? (charm? t) (show t)
       (nom? t) (atom-c t)
-      (two? t) (: h (cap t)
+      (two? t) (: h <t
         (? (h = 'pi)        ("(forall " + (string (t 1)) + " : " + (u2c (t 2)) + ", " + (u2c (t 3)) + ")")
            (h = 'lam)       ("(fun " + (string (t 1)) + " => " + (u2c (t 2)) + ")")
            (h = 'let)       ("(let " + (string (t 1)) + " := " + (u2c (t 2)) + " in " + (u2c (t 3)) + ")")
@@ -133,36 +133,36 @@
       (show t))
 
    ; --- translatability: every head handled (no unhandled constructor anywhere) ---
-   (alltr? l) (? (two? l) (&& (tr? (cap l)) (alltr? (cup l))) 1)
+   (alltr? l) (? (two? l) (tr? <l && alltr? >l) 1)
    (tr? t) (? (charm? t) 1  (nom? t) 1
-              (two? t) (? (peep un (cap t) 0) 0 (alltr? (cup t)))  1)
+              (two? t) (? (peep un <t 0) 0 (alltr? >t))  1)
 
    ; --- the global names a term mentions (corpus names only), accumulated into a set ---
-   (ment t acc) (? (nom? t) (? (corpus? t) (: _ (pin acc t 1) acc) acc)
+   (ment t acc) (? (nom? t) (? (corpus? t) (pin acc t 1, acc) acc)
                    (two? t) (ment-l t acc)  acc)
-   (ment-l l acc) (? (two? l) (ment-l (cup l) (ment (cap l) acc)) acc)
+   (ment-l l acc) (? (two? l) (ment-l >l (ment <l acc)) acc)
 
    ; candidates: a def, in the fragment, not blacklisted, present in glob (uu-certified)
-   (cand? e) (&& (<e = 'def) (! (peep bl (e 1) 0)) (peep GLOB (e 1) 0) (tr? (e 2)) (tr? (e 3)))
-   cands (foldl (\ a e (? (cand? e) (. e a) a)) () ents)   ; reversed; restore order at emit
+   (cand? e) (<e = 'def && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
+   cands (foldl (\ a e (? (cand? e) (e . a) a)) () ents)   ; reversed; restore order at emit
    ; each candidate's mentioned-names list (its global dependencies)
    (mlist e) (keys (ment-l (. (e 2) (. (e 3) ())) (tablet 0)))
 
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
-   (allin? l ex) (? (two? l) (&& (peep ex (cap l) 0) (allin? (cup l) ex)) 1)
-   (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (: _ (pin a (e 1) 1) a) a)) (tablet 0) cs)
+   (allin? l ex) (? (two? l) (peep ex <l 0 && allin? >l ex) 1)
+   (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (pin a (e 1) 1, a) a)) (tablet 0) cs)
    ; the measure is the key COUNT: pass only ever shrinks ex, so the counts settle
    ; exactly when the set does. not glued $, which nets any tablet to 1 and would
    ; stop the walk after one pass, past defs whose dependency that pass dropped.
    (fix ex) (: ex2 (pass cands ex) (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
-   ex0 (foldl (\ a e (: _ (pin a (e 1) 1) a)) (tablet 0) cands)    ; seed: all candidates
+   ex0 (foldl (\ a e (pin a (e 1) 1, a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
    ; --- emit, in source order ---
    (emit e) (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=" (string 10)
                   "  " (u2c (e 3)) "." (string 10)])
    ; foldr keeps ents' order, and coq wants every definition before its uses (foldl flips)
-   exports (foldr (\ e a (? (peep keep (e 1) 0) (. e a) a)) () ents)
+   exports (foldr (\ e a (? (peep keep (e 1) 0) (e . a) a)) () ents)
 
    _ (dot (cat [
       "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by tools/uu2coq.l. Do not edit;" (string 10)

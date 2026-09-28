@@ -369,7 +369,7 @@
               "it's important for you to start doing what you want as soon as you can"
               ""
               "-- any key --")
- (bell-row r) (: (go a l acc) (one? l ? (rev acc) (go (a + <l) >l ((a + <l) . acc)))
+ (bell-row r) (: (go a l acc) (atom? l ? (rev acc) (go (a + <l) >l ((a + <l) . acc)))
                  (go (last r) r [(last r)]))
  (bell-page g n r) (: line ("B(" + show n + ") = " + show <r)
                       cols (peep (g 'd) 'cols (g 'd 'w))
@@ -1347,7 +1347,7 @@
  ; the key at a node: a digit picks its choice, anything else at a node with choices
  ; shows it again, and a node without them closes
  (talk-key g k) (: nd (talk-node (g 'talk)) chs (nd 2)
-                 (one? chs ? (pin g 'talk ())
+                 (atom? chs ? (pin g 'talk ())
                   (: c (filter (c \ 48 + <c = k) chs)
                    (talk g (two? c ? (<c 2) (g 'talk))))))
  (meet-her-vale g) (pin g 'talked 1, talk g 'start)
@@ -1676,7 +1676,7 @@
  tower-usage "usage: love tower   (no options; q or esc leaves the tower)"
 
  ; tower takes nothing: a word here is a mistake, and the climb would swallow it
- (tower-main as) (one? as ? (tower-run ())
+ (tower-main as) (atom? as ? (tower-run ())
                     (say err (fill w-args [<as]), flush err, 2))
  _ (pins (cite 'verbs 'tab) 'tower (udoor 'tower tower-main tower-usage 1 1)))
 ) ; module tower

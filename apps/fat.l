@@ -97,7 +97,7 @@
    (chain-wr f cls s)
     (: cb (clu-bytes f)
        n #s
-       (go c off) (one? c ? 1
+       (go c off) (atom? c ? 1
                    (: hi (off + cb < n ? (off + cb) n)
                       b (cask cb)
                     (bcopy b 0 (snip s off hi),
@@ -157,7 +157,7 @@
    lfn-offs '(1 3 5 7 9 14 16 18 20 22 24 28 30)      ; where the 13 UCS-2 chars sit
    (lfn-part s o)                                     ; one LFN entry's text
     (: (ch i) (: v (rdle s (o + i) 2) (!v || v = 0xFFFF ? () (v < 256 ? v 63)))
-       (go l) (one? l ? "" (ch <l @ c (charm? c ? (string [c] + go >l) "")))
+       (go l) (atom? l ? "" (ch <l @ c (charm? c ? (string [c] + go >l) "")))
      (go lfn-offs))
    (short-name s o flags)                             ; 8.3 back to text, basis flags honored
     (: (part i n lc) ((: (go j acc) (? (j < n)
@@ -225,7 +225,7 @@
              c  (go (i + 1) (w + string [c]) acc))))
    (fat-walk f path)
     (: (go cl cs) (: nm <cs g (dir-find (dir-load f cl) nm)
-                   (? (one? >cs) [cl nm g]
+                   (? (atom? >cs) [cl nm g]
                     (tablet? g && (16 & peep g 1 ()) ? (go (peep g 2 ()) >cs))))
        cs (comps path)
        (two? cs ? (go (f 6) cs) [(f 6) "" ()]))
@@ -330,7 +330,7 @@
         (: cb (clu-bytes f)
            need ((#s + cb - 1) // cb)
            cls (chain-take f need)
-           (? (need && one? cls) ()                  ; the disk is full; nothing changed
+           (? (need && atom? cls) ()                  ; the disk is full; nothing changed
               (: _ (need ? (chain-wr f cls s))
                  gs (dir-drop (dir-load f dcl) nm)
                  ng (mk-group gs nm 32 (need ? <cls 0) #s)
@@ -342,7 +342,7 @@
     (fat-walk f path @ [dcl nm g]
      (? (!#nm || tablet? g) ()                 ; no name, or it exists already
         (: cls (chain-take f 1)
-           (? (one? cls) ()
+           (? (atom? cls) ()
               (: c <cls cb (clu-bytes f)
                  b (cask cb)
                  _ (bcopy b 0 (mk-short ".          " 0 16 c 0),
@@ -459,7 +459,7 @@
    (fatc-get img path dst)
     (: b (fatc-open img)
        r (fat-read <>>b path)
-       (? (one? r) (fatc-moan (path + ": no such file"))
+       (? (atom? r) (fatc-moan (path + ": no such file"))
           (dst = "" || dst = "-") (say out <>r, flush out, 0)
           (uwrite dst <>r ? 0 (fatc-moan ("cannot write " + dst)))))
    (fatc-put img path src)
@@ -516,7 +516,7 @@
    (mkfsv-main av)
     (: w (two? av ? <av "")
        as (? (two? av && (<av = "-C")) >av av)
-       (? (one? as) (say err (mkfsv-usage + "\n"), 2)
+       (? (atom? as) (say err (mkfsv-usage + "\n"), 2)
           (: img <as
              bl (two? >as && fatc-size <>as)
              (fatc-mkfs img (charm? bl && bl * 1024)))))

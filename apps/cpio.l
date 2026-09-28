@@ -224,7 +224,7 @@
                 e)
        (? (string? lnk)
           (: e (tar-entry nom 'link "") _ (pins e 'to lnk 'mode 511) [1 (own e)])
-          (one? st) (cpioc-moan (p + ": No such file or directory"), ())
+          (atom? st) (cpioc-moan (p + ": No such file or directory"), ())
           (<>>st & 61440 = 16384)
            (: e (tar-entry nom 'dir "") (pin e 'mode (<>>st & 4095), [1 (own e)]))
           (: b (uread p)
@@ -237,7 +237,7 @@
    (cpioc-o t)
     (: ns (cpioc-lines (slurp in + ""))
        (go l acc ok)
-        (one? l ? [(rev acc) ok]
+        (atom? l ? [(rev acc) ok]
          (: p <l
           (#p @ 0 (go >l acc ok)            ; find's trailing empty line
            (: r (cpioc-one p)

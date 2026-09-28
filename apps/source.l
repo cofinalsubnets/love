@@ -24,7 +24,7 @@
                      (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
                      (go 0))
 
-   (src-top es) (? (one? es) ""
+   (src-top es) (? (atom? es) ""
     (src-head (tar-get <es 'nom "") @ ("." || "") (src-top >es) c c))
 
    (src-lay-tgz root top gz)
@@ -41,14 +41,14 @@
     (: gz (source-gz "x")
        _ (!(string? gz) ? (src-die "this love carries no source"))
        u (gz-unzip gz)
-       _ (one? u ? (src-die "the embedded archive did not inflate"))
+       _ (atom? u ? (src-die "the embedded archive did not inflate"))
        t (tar-unpack <>u)
-       _ (one? t ? (src-die "the embedded archive is torn"))
+       _ (atom? t ? (src-die "the embedded archive is torn"))
        es <>t
        top (src-top es)
        _ (0 >= #top ? (src-die "the embedded archive names no top directory"))
        w (tar-scatter dir es)
-       _ (one? w ? (src-die ("can't write " + dir)))
+       _ (atom? w ? (src-die ("can't write " + dir)))
        root (dir = "." ? top (dir + "/" + top))
        ; no love is laid beside the source: which mode a build is in belongs to whoever
        ; drives it. bare make has no love and can only mean the ambient cc; a love driving
@@ -109,7 +109,7 @@
              (0 = st))))
    (src-cc dir)
     (: (try (w . x))
-     (: (go ds) (one? ds ? (try x)
+     (: (go ds) (atom? ds ? (try x)
               (: d (#<ds ? <ds ".") p (d + "/" + w)
                (src-foreign? p && src-ccworks? p dir ? [1 p] (go >ds))))
       (go (src-dirs ())))
@@ -148,9 +148,9 @@
                "test" "uname" "printf" "install" "cmp" "chmod" "touch" "echo")
    ; kore's ujoin is not in this layer -- src-dirs rolls its own split for the
    ; same reason, so the join is local too.
-   (src-words l) (? (one? l) "" (one? >l) <l (<l + " " + (src-words >l)))
+   (src-words l) (? (atom? l) "" (atom? >l) <l (<l + " " + (src-words >l)))
    (src-ours ns) (:- (go ns ())
-    (go l acc) (? (one? l) (rev acc)
+    (go l acc) (? (atom? l) (rev acc)
                 (: w <l
                    (any ds) (two? ds ?
                              (: d (#<ds ? <ds ".") p (d + "/" + w)
@@ -361,7 +361,7 @@
        (src-die ("can't wait for the build (exec: " + show e + ")")))
 
    (seed-main as0)
-    (? (one? as0 || <as0 != "-wait") (seed-lay as0)
+    (? (atom? as0 || <as0 != "-wait") (seed-lay as0)
        (: a1 >as0
           root (two? a1 ? <a1 ".")
           a2 (two? a1 ? >a1)
@@ -380,7 +380,7 @@
    ; projection of self can be nothing else.
    (kern-pick es top nm)
     (: want (top + "/" + nm)
-       (go l) (? (one? l) (src-die ("the blob carries no " + nm))
+       (go l) (? (atom? l) (src-die ("the blob carries no " + nm))
                  (tar-get <l 'nom "" = want) (tar-get <l 'body "")
                  (go >l))
        (go es))

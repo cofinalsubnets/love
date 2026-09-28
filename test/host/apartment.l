@@ -108,7 +108,7 @@
    root (chat-node 'start) c1 <(root 2)
    _ (apartment-turn g (48 + <c1)) k1 (g 'talk)
    _ (apartment-turn g 120) k2 (g 'talk)                          ; x is no choice: shown again
-   leaf <(filter (e \ one? (e 2)) chat-book)
+   leaf <(filter (e \ atom? (e 2)) chat-book)
    ; a grass cell outside the cube, and one inside, before the end
    out (<(filter (i \ 1 = peep (d 't) i 0 && !(inside? c (i % w) (i // w))) ^(w * h)))
    _ (chat g <leaf) s1 (g 'sign)

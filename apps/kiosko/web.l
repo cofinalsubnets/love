@@ -100,7 +100,7 @@
          !(md? || ends? p ".l") ()
          (: f (root + src)
             r (sv-rdf f)
-            (? (one? r) ()                       ; not there: let kiosko say 404
+            (? (atom? r) ()                       ; not there: let kiosko say 404
                ; ..and a .l.md is a rendering with no file behind it, so it is always made
                !(hd? || sv-doc? head) ["text/plain; charset=utf-8" <>r]
                ["text/html; charset=utf-8"
@@ -148,7 +148,7 @@ tree is served. this binary drives the page's build; no love is compiled for it.
    (: box {}
       t {}
       o (uopt as t '(112) () {"port" 112 "no-build" 110})
-      _ (one? o && sv-die 2 (last as + " needs an argument"))
+      _ (atom? o && sv-die 2 (last as + " needs an argument"))
       un (uoptun t '(112 110))
       _ (un && sv-die 2 ("unknown option -" + string un))
       rest <>>o

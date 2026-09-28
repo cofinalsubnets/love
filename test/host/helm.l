@@ -60,15 +60,15 @@
    us <r
    _ (test
       (4 = #us)
-      (= ['once 'fails 'settles 'default] (hnames us))
-      !(two? <>r)                                  ; a clean config gripes about nothing
+      (['once 'fails 'settles 'default] = (hnames us))
+      (atom? <>r)                                  ; a clean config gripes about nothing
       (== 'oneshot (peep (hby us 'once) 'kind ()))
       (== 'no      (peep (hby us 'once) 'restart ()))   ; a oneshot does not restart
       (== 'on-fail (peep (hby us 'settles) 'restart 'x)) ; ... a service does, by default
       (3 = peep (hby us 'settles) 'tries 0)            ; ... three times
       (1 = peep (hby us 'fails) 'tries 0)              ; unless the config says otherwise
       (['once] = peep (hby us 'fails) 'after [])
-      (= ["/bin/sh" "-c" "exit 3"] (peep (hby us 'fails) 'exec []))
+      (["/bin/sh" "-c" "exit 3"] = (peep (hby us 'fails) 'exec []))
       ; what check prints of an exec is a command line, not a list laid out with
       ; spaces: the one word sh is handed comes back as one word
       (has? (hunit-line (hby us 'fails)) "exec /bin/sh -c 'exit 3'"))
@@ -77,7 +77,7 @@
    ; every complaint at once, and each one names the unit it is about
    b  (hconf bad)
    gs <>b
-   (says? t) ((: (go l) (? !(two? l) 0 (has? <l t) 1 (go >l))) gs)
+   (says? t) ((: (go l) (? (atom? l) 0 (has? <l t) 1 (go >l))) gs)
    _ (test
       (5 < #gs)
       (says? "unknown kind")
@@ -159,7 +159,7 @@
    k   (hscatter scd)
    _   (test (0 < k))
    _   (test (two? (stat (scd + "/apps/helm/helm.l"))))
-   _   (test !(two? (stat (scd + "/love-0.1"))))  ; the top is dropped, not laid
+   _   (test (atom? (stat (scd + "/love-0.1"))))  ; the top is dropped, not laid
    _   (hark [(selfpath 0) "rm" "-rf" scd])           ; 13M of tree, and out/ is not a nest
 
    _ (unlink good) _ (unlink bad) _ (unlink stamp)

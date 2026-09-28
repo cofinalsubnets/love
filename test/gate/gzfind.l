@@ -18,9 +18,9 @@
 ; two agree, and that it says out loud which one it was comparing.
 (: _ (borrow 'gz)
    _ (borrow "apps/forge.l")
-   (die m) (: _ (say err ("gzfind: " + m + "\n")) _ (flush err) (quit 1))
+   (die m) (say err ("gzfind: " + m + "\n"), flush err, quit 1)
    (safe f) (trap (\ _ (f 0)) () (\ a b ['scared a]))
-   (mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1)))) (go 0))
+   (mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (pin b i (f i), go (i + 1))) (go 0))
    win (32768 * 4)
 
    nat (gz-finder (gz-floor + 1))
@@ -51,27 +51,27 @@
    ; passed, because a chain is only interesting once it is deep and a synthetic one would
    ; not have the shape the two can disagree about.
    (walk nom s)
-    (: n (tally s)
+    (: n #s
        head (cask win)   prev (cask win)
        (go i)
         (? ((i + gz-minmatch) > n) (n - gz-minmatch + 1)
            (: a (gz-find s n i head prev)
               b (nat s n i head prev)
-              _ (? (= a b) 0
+              _ (? (a = b) 0
                    (die (show nom + " at " + show i + ": twin " + show a + ", native " + show b)))
               _ (gz-ins s n i head prev)
               (go (i + 1))))
        (go 0))
-   seen (foldl (\ a r (a + (walk <r <>r))) 0 corpora)
+   seen (foldl (\ a r (a + walk <r <>r)) 0 corpora)
    _ (say out ("  agree on " + show seen + " positions over "
-               + show (tally corpora) + " corpora\n"))
+               + show #corpora + " corpora\n"))
 
    ; --- the shapes the IR does not say --------------------------------------------------
    ; a real window pair, so that in every row below exactly one thing is odd.
    wn 20000
    ws (mk wn (\ i (65 + (i % 11))))
    wh (cask win)   wp (cask win)
-   _ (: (go i) (? (wn <= i) 0 (: _ (gz-ins ws wn i wh wp) (go (i + 1)))) (go 0))
+   _ (: (go i) (? (wn <= i) 0 (gz-ins ws wn i wh wp, go (i + 1))) (go 0))
    bads [['s-cask   (cask 64)  wn        100        wh          wp]
          ['s-tray   (iota 40)  wn        100        wh          wp]
          ['s-fix    7          wn        100        wh          wp]
@@ -93,10 +93,10 @@
    _ (map (\ [nom s n i h p]
              (: a (safe (\ _ (gz-find s n i h p)))
                 b (safe (\ _ (nat s n i h p)))
-                (? (= a b) 0
+                (? (a = b) 0
                    (die ("deopt " + show nom + ": twin " + show a + ", native " + show b)))))
           bads)
-   _ (say out ("  " + show (tally bads) + " shapes the IR declines come back through the twin\n"))
+   _ (say out ("  " + show #bads + " shapes the IR declines come back through the twin\n"))
 
    ; a doctored window. None of these can come out of gz-ins and each is one `pin` away,
    ; and each is a different wrong read: a cell naming a position ahead of i walks the
@@ -109,7 +109,7 @@
    ; answer no-match. Without the row, dropping `zx4` passes this whole gate.
    (doc h) (: dh (cask win)   dp (cask win)
               _ (map (\ [w k v] (gz-c32! (? w dp dh) k v)) h)
-              (? (= (safe (\ _ (gz-find ws wn 100 dh dp))) (safe (\ _ (nat ws wn 100 dh dp))))
+              (? (safe (\ _ (gz-find ws wn 100 dh dp)) = safe (\ _ (nat ws wn 100 dh dp)))
                  1 0))
    hs (gz-hash ws 100)
    docs [['ahead     [[0 hs 20000]]]
@@ -124,13 +124,13 @@
                       [1 (4294967294 & gz-wmask) 90]]]]
    _ (map (\ [nom h] (? (doc h) 0 (die ("a doctored window disagrees: " + show nom))))
           docs)
-   _ (say out ("  a doctored window agrees " + show (tally docs) + " ways\n"))
+   _ (say out ("  a doctored window agrees " + show #docs + " ways\n"))
 
    ; --- and the whole coder, both finders -----------------------------------------------
    ; the finder feeds the greedy parse, so one differing match moves every token after it:
    ; a byte-identical stream over a corpus this size is a much stronger claim than the
    ; per-position walk above, and it is the one a user would notice breaking.
-   (defl fn s) (: n (tally s)
+   (defl fn s) (: n #s
                   j (jug 0)   t (tablet 0)
                   head (cask win)   prev (cask win)
                   _ (gz-blocks fn s n j t head prev 0)
@@ -139,17 +139,17 @@
    big (foldl (\ a r (a + <>r)) "" corpora)
    dt (defl gz-find big)
    dn (defl nat big)
-   _ (? (= dt dn) 0 (die ("the two deflates differ: " + show (tally dt) + " vs " + show (tally dn))))
-   r (gz-inflate dn (tally big))
+   _ (? (dt = dn) 0 (die ("the two deflates differ: " + show #dt + " vs " + show #dn)))
+   r (gz-inflate dn #big)
    _ (? (two? r) 0 (die "the native stream will not inflate"))
-   _ (? (= <(>r) big) 0 (die "the native stream inflates to something else"))
-   _ (say out ("  " + show (tally big) + " bytes deflate byte-identical both ways, and round-trip\n"))
+   _ (? (<>r = big) 0 (die "the native stream inflates to something else"))
+   _ (say out ("  " + show #big + " bytes deflate byte-identical both ways, and round-trip\n"))
 
    ; --- the floor ------------------------------------------------------------------------
    ; `use 'forge` costs ~24 ms of parse and eval and a tar member is a few hundred bytes,
    ; so below the floor the twin is the better program and the finder must not reach for
    ; the kernel at all. Above it, having reached once, the answer is cached.
-   _ (? (= (gz-finder (gz-floor - 1)) gz-find) 0 (die "a small input forged anyway"))
-   _ (? (= (gz-finder (gz-floor + 1)) nat) 0 (die "the forged finder is not cached"))
+   _ (? (gz-finder (gz-floor - 1) = gz-find) 0 (die "a small input forged anyway"))
+   _ (? (gz-finder (gz-floor + 1) = nat) 0 (die "the forged finder is not cached"))
    _ (say out "gzfind: 0 failed\n")
    0)

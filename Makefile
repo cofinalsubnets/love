@@ -131,7 +131,7 @@ $(ho)/liblove.a: $(h_o)
 # love/user/main0.c, which host_c holds back because only this link has a use for it.
 love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/love/cats.c,$(host_c)) $(R)/love/user/main0.c $(R)/love/user/nokern.c $(R)/love/noblob.c $(love_c))
 out/0/love/user/main0.o: out/lib/boot0.h
-out/0/love/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h love/quay/cp437.h love/quay/cpwidth.h
+out/0/love/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h love/quay/cp437.h love/quay/cpwidth.h love/quay/paint.c love/quay/cga_8x8.c love/quay/cleat_8x16.c
 boot_cc = $(CCACHE) $(CC) $(cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Ilove -Iinle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
@@ -158,7 +158,7 @@ $(ho)/o/love/love.o: out/lib/love_version.h
 # the carried-blob reader both a carried-source bake and the kernel's ram fs decode with
 $(ho)/o/love/main.o $(ho)/o/love/lib/ustar.o: $(R)/love/lib/ustar.h
 # love/cb.c rides the love/quay sources by unity include -- recompile when they move.
-$(ho)/o/love/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h love/quay/cp437.h love/quay/cpwidth.h
+$(ho)/o/love/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h love/quay/cp437.h love/quay/cpwidth.h love/quay/paint.c love/quay/cga_8x8.c love/quay/cleat_8x16.c
 
 moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/mooncc0.image
@@ -229,7 +229,7 @@ $$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep
 	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Ilove -Iinle -Iout/lib -c $$< $$@
 $$($(2))/love/main.o: out/lib/distlist.h
 $$($(2))/love/cats.o: out/lib/baked.h
-$$($(2))/love/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h love/quay/cp437.h love/quay/cpwidth.h
+$$($(2))/love/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h love/quay/cp437.h love/quay/cpwidth.h love/quay/paint.c love/quay/cga_8x8.c love/quay/cleat_8x16.c
 $$($(1)_math_o): $$($(2))/moonlibc/%.o: apps/moon/lib/moonlibc/%.c $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
@@ -313,7 +313,7 @@ crewfiles = apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/libra/salt.l apps/libra/libra.l apps/vi/hueweb.l apps/kiosko/web.l \
   apps/harp/harp.l apps/harp/play.l apps/harp/score.l \
   apps/x11.l apps/ink.l apps/manifest/manifest.l apps/rove/rove.l apps/rove/view.l apps/rove/tower.l apps/rove/story.l apps/rove/design.l apps/rove/slop.l apps/rove/grass.l apps/rove/wade.l apps/rove/apartment.l apps/rove/dusk.l apps/rove/garage.l apps/rove/shaft.l apps/rove/roost.l apps/harp/synth.l \
-  apps/berth/wharf.l apps/berth/limn.l apps/berth/berth.l apps/face.l apps/lux/wire.l apps/doom.l apps/lupa.l apps/mc.l apps/pom.l
+  apps/berth/wharf.l apps/berth/limn.l apps/berth/berth.l apps/face.l apps/lux/wire.l apps/berth/pier.l apps/doom.l apps/lupa.l apps/mc.l apps/pom.l
 korefiles = $(kore_head) $(holo_obj) love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
@@ -565,12 +565,11 @@ endif
 # addresses names one. $a=wasm empties it: that link pulls a member when its defs meet an
 # owed symbol, so spelling the set here would only compile what the ledger already answers.
 k_libc_c = $(c_c)
-# the whole kernel compile, in link order: the runtime and its math floor, the console
-# engine with its two fonts, moonlibc, the metal, the free trio -- and $(host_c) itself,
-# because the kernel runs the same frontend the host does. taking that roster rather than
-# copying it is what lets a new inle/<app>.c reach the kernel with no rule edit.
+# the whole kernel compile, in link order: the runtime and its math floor, moonlibc, the
+# metal, the free trio -- and $(host_c) itself, because the kernel runs the same frontend the
+# host does (the console's engine, painter and fonts ride love/cb.c). taking that roster
+# rather than copying it is what lets a new inle/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
-  $R/love/quay/cga_8x8.c $R/love/quay/cleat_8x16.c $R/love/quay/paint.c \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(R)/love/lib/ustar.h $(wildcard $(R)/inle/*.h) $(wildcard $(R)/inle/$a/*.h)
 
@@ -604,7 +603,7 @@ kcc = $(mooncc) $(kcppflags) -t $a
 
 kernel: $(k_elf)
 
-$(k_odir)/love/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h love/quay/cp437.h love/quay/cpwidth.h
+$(k_odir)/love/cb.o: love/quay/quay.c love/quay/nif.c love/quay/quay.h love/quay/cp437.h love/quay/cpwidth.h love/quay/paint.c love/quay/cga_8x8.c love/quay/cleat_8x16.c
 $(k_odir)/moonlibc.o: $(rt_slice) tools/mkrt.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
@@ -703,16 +702,14 @@ kart_bake = out/lib/korelist.h out/lib/crewlist.h
 define kart
 $(1)_h = $$(love_h) $$R/inle/k.h $$R/love/lib/ustar.h $$(wildcard $$R/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$R/%.c,$$($(2))/%.o,$$(wildcard $$R/inle/$$($(4))/*.c))
-# the console's painter and its fonts: kernel-only draws the host link never had
-$(1)_quay_o = $$(patsubst %,$$($(2))/love/quay/%.o,paint cga_8x8 cleat_8x16)
 $(1)_kern_o = $$(k_free_c:$$R/%.c=$$($(2))/%.o)
 $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \
-  $$($(1)_arch_o) $$($(1)_quay_o) $$($(2))/kvec.o,)
+  $$($(1)_arch_o) $$($(2))/kvec.o,)
 $(1)_lay_l = $$R/apps/kore/text.l $$R/apps/kore/u.l $$R/apps/kore/asbook.l \
   $$R/love/holo/$$($(4)).l $$R/love/holo/elf.l $$R/love/holo/obj.l
-# the kernel-only trio, the per-ISA seat and the console draws take one flag set and
-# one rule -- named lists, so the frontend's own %.o rule above cannot claim them.
-$$($(1)_kern_o) $$($(1)_arch_o) $$($(1)_quay_o): $$($(2))/%.o: $$R/%.c $$($(1)_h) $$(kart_bake) $$(moon0_dep)
+# the kernel-only trio and the per-ISA seat take one flag set and one rule -- named
+# lists, so the frontend's own %.o rule above cannot claim them.
+$$($(1)_kern_o) $$($(1)_arch_o): $$($(2))/%.o: $$R/%.c $$($(1)_h) $$(kart_bake) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p "$$(dir $$@)"
 	@$$($(3)) $$(kart_inc) -c $$< $$@
