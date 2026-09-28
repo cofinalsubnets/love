@@ -218,55 +218,40 @@ no file, or a bare -, is the filter: stdin -> stdout"
            (: _ (say err "xz: Compressed data cannot be written to a terminal\n") 1)
           (: _ (say out (xz-pack s2 (xzc-dict t #s2) (peep t 'ck 'crc64))) 0)))
 
+   ; the cli walker in gnu order. -d, -z and -t decide the direction by the last one said,
+   ; and a level digit likewise; -C -S -T -F take a word, glued or next
+   xzc-longs {"stdout" 99 "to-stdout" 99 "decompress" 100 "uncompress" 100 "compress" 122
+              "keep" 107 "force" 102 "test" 116 "quiet" 113 "verbose" 118 "extreme" 101
+              "fast" 101 "best" 101 "help" 104 "version" 86
+              "check" 67 "suffix" 83 "threads" 84 "format" 70}
+   xzc-vals [67 83 84 70]
    (xzc-opts as t)                     ; -> (1 files) | () for a bad option
     (: (ck w) (? (elem w '("none" "crc32" "crc64" "sha256")) (: _ (pin t 'ck (intern w)) 1)
                  (: _ (xzc-moan t ("--check=" + w + ": Unsupported integrity check type")) ()))
-       (long w)                        ; -> 1 | () for a bad one
-        (: eq (\ k (#k < #w && snip w 0 #k = k))
-           (? (w = "stdout" || w = "to-stdout") (: _ (pin t 'c 1) 1)
-              (w = "decompress" || w = "uncompress") (: _ (pin t 'd 1) 1)
-              (w = "compress") (: _ (pin t 'd 0) 1)
-              (w = "keep") (: _ (pin t 'k 1) 1)
-              (w = "force") (: _ (pin t 'f 1) 1)
-              (w = "test") (: _ (pin t 't 1) _ (pin t 'd 1) 1)
-              (w = "quiet") (: _ (pin t 'q 1) 1)
-              (w = "verbose") (: _ (pin t 'v 1) 1)
-              (w = "extreme" || w = "fast" || w = "best") 1
-              (w = "help") (: _ (pin t 'h 1) 1)
-              (w = "version") (: _ (pin t 'V 1) 1)
-              (eq "check=") (ck (snip w 6 #w))
-              (eq "suffix=") (: _ (pin t 'suf (snip w 7 #w)) 1)
-              (eq "threads=") 1
-              (eq "format=") (: f (snip w 7 #w)
-                                (? (elem f '("auto" "xz" "lzma" "alone")) 1
-                                   (: _ (xzc-moan t ("--format=" + f + ": not here (auto, xz, lzma)")) ())))
-              (: _ (xzc-moan t ("unrecognized option '--" + w + "'")) ())))
-       (go a fs)
-        (? !(two? a) [1 (rev fs)]
-           (: w <a n #w
-              (? (w = "--") [1 (rev fs + >a)]
-                 (n < 2 || !(w 0 = 45)) (go >a (w . fs))
-                 (w 1 = 45) (? (long (snip w 2 n)) (go >a fs) ())
-                 (: (cl k rest)
-                     (? (n <= k) (go rest fs)
-                        (: c (w k)
-                           (? (48 <= c && c <= 57) (: _ (pin t 'lvl (c - 48)) (cl (k + 1) rest))
-                              (elem c [67 83 84])     ; -C -S -T take a word, glued or next
-                               (: g (snip w (k + 1) n)
-                                  v (? (0 < #g) [g rest] (two? rest) [<rest >rest] ())
-                                  (? !v (: _ (xzc-moan t ("option requires an argument -- '" + string c + "'")) ())
-                                     (c = 67) (? (ck <v) (go <>v fs) ())
-                                     (c = 83) (: _ (pin t 'suf <v) (go <>v fs))
-                                     (go <>v fs)))
-                              (c = 122) (: _ (pin t 'd 0) (cl (k + 1) rest))
-                              (c = 116) (: _ (pin t 't 1) _ (pin t 'd 1) (cl (k + 1) rest))
-                              (elem c [99 100 102 107 113 118]) (: _ (pin t (intern (string c)) 1) (cl (k + 1) rest))
-                              (c = 101) (cl (k + 1) rest)
-                              (c = 104) (: _ (pin t 'h 1) (cl (k + 1) rest))
-                              (c = 86) (: _ (pin t 'V 1) (cl (k + 1) rest))
-                              (: _ (xzc-moan t ("invalid option -- '" + string c + "'")) ()))))
-                    (cl 1 >a)))))
-       (go as ()))
+       (fmt f) (? (elem f '("auto" "xz" "lzma" "alone")) 1
+                  (: _ (xzc-moan t ("--format=" + f + ": not here (auto, xz, lzma)")) ()))
+       (last ks) ((cite 'cli 'uoptlast) as ks xzc-vals xzc-longs)
+       u (tablet 0)
+       r ((cite 'cli 'uoptp) as u xzc-vals () xzc-longs)
+       bad (? (two? r) ((cite 'cli 'uoptun) u "cdzktqvfehVCSTF0123456789") ())
+       (? !(two? r)
+           (: w <(rev as)
+              (: _ (xzc-moan t (w 1 = 45 ? ("option '" + w + "' requires an argument")
+                                  ("option requires an argument -- '" + string (w (#w - 1)) + "'"))) ()))
+          (r 3) (: _ (xzc-moan t ("unrecognized option '" + r 3 + "'")) ())
+          bad (: _ (xzc-moan t ("invalid option -- '" + string bad + "'")) ())
+          (: _ (each (chars "ckfqvhV") (c \ peep u c 0 && pin t (intern (string c)) 1))
+             dir (last [100 122 116])
+             _ (? dir (pin t 'd (dir = 122 ? 0 1)))
+             _ (? (peep u 116 0) (pin t 't 1))
+             lv (last "0123456789")
+             _ (? lv (pin t 'lvl (lv - 48)))
+             s (peep u 83 ())
+             _ (? (two? s) (pin t 'suf <>s))
+             c (peep u 67 ()) f (peep u 70 ())
+             (? (two? c && !(ck <>c)) ()
+                (two? f && !(fmt <>f)) ()
+                [1 (r 2)]))))
 
    (xzc-run as t)
     (: o (xzc-opts as t)

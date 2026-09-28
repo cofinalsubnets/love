@@ -90,7 +90,7 @@
               (rv-li-rec dn ((s - lo) // 4096))                             ; the high chunks
               (rv-i 12 dn 1 dn 0x13)                                        ; slli d, d, 12
               (? (lo = 0) () (rv-i lo dn 0 dn 0x13))])))                    ; addi d, d, lo
-   (rv-li d imm) (rv-li-rec (rvn d) (? (imm > 9223372036854775807) (imm - 18446744073709551616) imm))
+   (rv-li d imm) (rv-li-rec (rvn d) (s64 imm))
 
    (rv-mov d s) (rv-i 0 (rvn s) 0 (rvn d) 0x13)                             ; addi d, s, 0
 

@@ -87,29 +87,26 @@ no file, or a bare -, is the filter: stdin -> stdout"
         (: _ (bzc-say t "I won't write compressed data to a terminal.") 1)
        (: _ (say out (bz2-pack (slurp in + "") (peep t 'lvl 9))) 0))
 
-   ; each flag's rows: what it pins. -t tests, which is a decompress
-   bzc-longs [["stdout" 'c 1] ["decompress" 'd 1] ["compress" 'd 0] ["keep" 'k 1]
-              ["force" 'f 1] ["test" 't 1] ["test" 'd 1] ["quiet" 'q 1] ["verbose" 'v 1]
-              ["fast" 'lvl 1] ["best" 'lvl 9] ["help" 'h 1] ["version" 'V 1] ["license" 'V 1]
-              ["small" 's 1] ["repetitive-fast" 's 1] ["repetitive-best" 's 1]]
-   bzc-shorts [[99 'c 1] [100 'd 1] [122 'd 0] [107 'k 1] [102 'f 1] [116 't 1] [116 'd 1]
-               [113 'q 1] [118 'v 1] [104 'h 1] [86 'V 1] [76 'V 1] [115 's 1]
-               [49 'lvl 1] [50 'lvl 2] [51 'lvl 3] [52 'lvl 4] [53 'lvl 5] [54 'lvl 6]
-               [55 'lvl 7] [56 'lvl 8] [57 'lvl 9]]
-   (bzc-flag t rows k)                 ; pins every row keyed k -> 1 | () for none
-    (foldl (\ a e (? (<e = k) (: _ (pin t (e 1) (e 2)) 1) a)) () rows)
+   ; the cli walker in gnu order. -d, -z and -t decide the direction by the last one said,
+   ; and a level digit (or --fast, --best) likewise
+   bzc-longs {"stdout" 99 "decompress" 100 "compress" 122 "keep" 107 "force" 102 "test" 116
+              "quiet" 113 "verbose" 118 "fast" 49 "best" 57 "help" 104 "version" 86
+              "license" 76 "small" 115 "repetitive-fast" 115 "repetitive-best" 115}
    (bzc-opts as t)                     ; -> (1 files) | () for a bad flag
-    (: (shorts w k) (? (#w <= k) 1 (bzc-flag t bzc-shorts (w k)) (shorts w (k + 1)) ())
-       (bad w) (: _ (bzc-say t ("Bad flag `" + w + "'")) ())
-       (go a fs)
-        (? !(two? a) [1 (rev fs)]
-           (: w <a n #w
-              (? (w = "--") [1 (rev fs + >a)]
-                 (n < 2 || !(w 0 = 45)) (go >a (w . fs))
-                 (w 1 = 45) (? (bzc-flag t bzc-longs (snip w 2 n)) (go >a fs) (bad w))
-                 (shorts w 1) (go >a fs)
-                 (bad w))))
-       (go as ()))
+    (: u (tablet 0)
+       r ((cite 'cli 'uoptp) as u () () bzc-longs)
+       bad ((cite 'cli 'uoptun) u "cdzkftqvhVLs123456789")
+       (? (r 3) (: _ (bzc-say t ("Bad flag `" + r 3 + "'")) ())
+          bad (: w <(filter (w \ 1 < #w && w 0 = 45 && w 1 != 45 && elem bad w) as)
+                 (: _ (bzc-say t ("Bad flag `" + w + "'")) ()))
+          (: _ (each (chars "ckfqvhVs") (c \ peep u c 0 && pin t (intern (string c)) 1))
+             _ (? (peep u 76 0) (pin t 'V 1))
+             _ (? (peep u 116 0) (pin t 't 1))
+             dir ((cite 'cli 'uoptlast) as [100 122 116] () bzc-longs)
+             _ (? dir (pin t 'd (dir = 122 ? 0 1)))
+             lv ((cite 'cli 'uoptlast) as "123456789" () bzc-longs)
+             _ (? lv (pin t 'lvl (lv - 48)))
+             [1 (r 2)])))
 
    (bzc-run as t)
     (: o (bzc-opts as t)

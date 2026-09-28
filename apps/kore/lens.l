@@ -19,10 +19,10 @@
 ; what html2text is NOT is a browser. a page is prose to this tool: lapiz's scrub drops the
 ; script, the style and the head, and unwraps the containers, so what arrives at the reader
 ; is headings, paragraphs, lists, definition lists, quotes, displays and the inline spans.
-; a table is unwrapped to its cells, which reads as prose and not as a table -- the middle
-; has no table node and inventing one here would be a lie about the lens. forms, images and
-; anything positioned by css are gone, and that is the whole design: this answers "what does
-; the page SAY", and nothing about what it looks like.
+; forms and anything positioned by css are gone, and that is the whole design: this answers
+; "what does the page SAY", and nothing about what it looks like. an image says its [alt];
+; on a terminal a local one is drawn under that line too (apps/kore/pic.l), its path taken
+; from the document's own directory, and one on the web stays its [alt].
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -40,13 +40,37 @@
    ; of the files, and a charm: the seat quits with it
    (lensrun lay nm fs)
     (: (one p) (: r (uread p)
-                  (? (two? r) (: _ (puts (lensnl (lay <>r))) 0)
+                  (? (two? r) (: _ (puts (lensnl (lay <>r p))) 0)
                      (: _ (say err (nm + ": cannot open " + p)) _ (put err 10) 1)))
        (? (two? fs) (foldl (\ a p (: r (one p) (? (a || r) 1 0))) 0 fs)
-          (: _ (puts (lensnl (lay (slurp in)))) 0)))
+          (: _ (puts (lensnl (lay (slurp in) ""))) 0)))
+   ; the directory a path is in, with its slash; "" for a bare name
+   (lens-dir p) (: (g i) (? (i < 0) "" (p i = 47) (snip p 0 (i + 1)) (g (i - 1))) (g (#p - 1)))
+   (lens-has s p) (: n #p (g i) (? (#s < (i + n)) 0 (snip s i (i + n) = p) 1 (g (i + 1))) (g 0))
+   ; an image's src -> the file it names, () for one on the web
+   (lens-path dir src)
+    (? (snip src 0 7 = "file://") (snip src 7 #src)
+       ((lens-has src "://") || (snip src 0 5 = "data:")) ()
+       (src 0 = 47) src
+       (dir + src))
+   ; a doc laid at w for a terminal, each local picture drawn under its image's line, no
+   ; taller than the screen
+   (lens-pics d w p)
+    (: r ((cite 'lapiz 'ttpics) d w) ls (lines <r)
+       ws (tty 1) rows (? (two? ws && 3 < <ws) (<ws - 2) ())
+       deep ((cite 'kore 'pic-deep) 0) dir (lens-dir p)
+       (draw t a)
+        (: nm <a
+           (? !((5 < #nm) && (snip nm 0 5 = " img ")) t
+              (: f (lens-path dir (snip nm 5 #nm))
+                 rd (? (string? f) (uread f) ())
+                 im (? (two? rd) ((cite 'kore 'pic-decode) <>rd) ())
+                 (? (two? im) (pin t (a 1) (peep t (a 1) () + ((cite 'kore 'ww-art) im w rows deep))) t))))
+       pics (foldl draw (tablet 0) (r 1))
+       (catmap (i \ (ls i) + "\n" + catmap (x \ x + "\n") (peep pics i ())) ^#ls))
 
    h2t-usage "usage: html2text [-w COLS] [FILE..]"
-   (h2t-lay s w tty?) (: t ((cite 'lapiz 'ht->tty) s w) (? tty? t (usgr t)))
+   (h2t-lay s w tty? p) (? tty? (lens-pics ((cite 'lapiz 'htread) s) w p) (usgr ((cite 'lapiz 'ht->tty) s w)))
    (html2text-main as)
     (: t (tablet 0)
        o (uopt as t '(119) '(101) ())                       ; -w takes a value
@@ -56,13 +80,13 @@
        ws (tty 1)                                     ; the width is the OUTPUT's
        w (lens-w t ws)
        tty? (two? ws)
-       (lensrun (\ s (h2t-lay s w tty?)) "html2text" <>>o))
+       (lensrun (\ s p (h2t-lay s w tty? p)) "html2text" <>>o))
 
    md-usage "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
    md-tos ["html" "roff" "text"]
-   (md-lay s to w tty?)
+   (md-lay s to w tty? p)
     (? (to = "roff") ((cite 'lapiz 'md->rf) s)
-       (to = "text") (: t ((cite 'lapiz 'md->tty) s w) (? tty? t (usgr t)))
+       (to = "text") (? tty? (lens-pics ((cite 'lapiz 'mdread) s) w p) (usgr ((cite 'lapiz 'md->tty) s w)))
        ((cite 'lapiz 'md->ht) s))
    (markdown-main as)
     (: t (tablet 0)
@@ -76,5 +100,5 @@
        ws (tty 1)
        w (lens-w t ws)
        tty? ((two? ws) && (to = "text"))
-       (lensrun (\ s (md-lay s to w tty?)) "markdown" <>>o)))
+       (lensrun (\ s p (md-lay s to w tty? p)) "markdown" <>>o)))
 ) ; module 'kore

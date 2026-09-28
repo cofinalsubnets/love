@@ -1,0 +1,76 @@
+; --- test/host/jpeg.l: apps/jpeg.l and love/lib/jpeg.c's jpeg-pixels --------------------
+; jpeg-encode's own output read back near its source, and the refusals; where magick is
+; here, a picture written every way it writes one -- baseline and progressive, each
+; sampling, grey, restart markers, one pixel -- and each decode held to magick's.
+;   cat test/00-init.l test/host/jpeg.l | out/love
+(borrow 'posix)
+(borrow "apps/jpeg.l")
+(: dir ((cwd 0) + "/out/.jpegd")
+   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
+   (put p s) (: q (open p "w") _ (say q s) (close q))
+   (image w h f)
+    (: c (cask (4 * w * h))
+       _ (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
+                      (pins c o (p 0) (o + 1) (p 1) (o + 2) (p 2) (o + 3) (p 3))))
+              (jot (w * h)))
+       [w h (string c)])
+   grad (image 64 48 (\ x y [(x * 4) (y * 5) ((x + y) * 2) 255]))
+   odd (image 13 7 (\ x y [(x * 19) 200 (y * 36) 255]))
+   noise (image 64 48 (\ x y (: v (((((y * 64) + x) * 2654435761) >> 7) & 255)
+                                [v (255 - v) (v // 2) 255])))
+   ; the mean squared error of two rgba strings over r g b
+   (mse a b) (: n (#a // 4)
+                (go i acc) (? (i = #a) (acc / (3 * n))
+                              ((i % 4) = 3) (go (i + 1) acc)
+                              (: d ((a i) - (b i)) (go (i + 1) (acc + (d * d)))))
+                (go 0 0))
+   (enc im q) (jpeg-encode (im 0) (im 1) (im 2) q)
+
+   ; -- its own, and the refusals -------------------------------------------------------
+   g95 (jpeg-decode (enc grad 95))
+   o90 (jpeg-decode (enc odd 90))
+   j (enc grad 90)
+   jn (enc noise 90)
+   _ (test (jpeg-size j = [64 48]) (jpeg-size (enc odd 50) = [13 7])
+           (two? g95) (g95 0 = 64) (g95 1 = 48) (#(g95 2) = #(grad 2)) (mse (g95 2) (grad 2) < 4)
+           (two? o90) (#(o90 2) = 13 * 7 * 4) (mse (o90 2) (odd 2) < 40)
+           ((g95 2) 3 = 255)
+           (jpeg-decode "hello" = "not a jpeg") (jpeg-size "hello" = "not a jpeg")
+           (jpeg-decode (snip j 0 300) = "cut short")
+           (jpeg-pixels (snip j 0 300) = 2) (jpeg-pixels 7 = 1)
+           ; the entropy data cut halfway still draws, the rest of it grey
+           (2000 < #jn) (two? (jpeg-decode (snip jn 0 (#jn // 2)))))
+
+   ; -- against magick ------------------------------------------------------------------
+   magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (: _ (close q) 1) 0))
+   src (dir + "/src.rgba")
+   _ (put src (grad 2))
+   ; grad written with magick's flags -> [ours magick's] | ()
+   (both nm flags)
+    (: f (dir + "/" + nm + ".jpg")
+       r (hark (["magick" "-size" "64x48" "-depth" "8" ("rgba:" + src)] + flags + [f]))
+       m (hark ["magick" f "-depth" "8" "rgba:-"])
+       (? ((two? m) && (<m = 0))
+          (: q (open f "r") s (slurp q) _ (close q) d (jpeg-decode s)
+             (? (two? d) [(d 2) >m] ()))
+          ()))
+   (near nm flags lim) (: p (both nm flags) (? (two? p) (mse (p 0) (p 1) < lim) 0))
+   _ (? magick?
+        (test (near "b420" ["-sampling-factor" "4:2:0"] 1)
+              (near "b422" ["-sampling-factor" "4:2:2"] 1)
+              (near "b444" ["-sampling-factor" "4:4:4" "-quality" "95"] 1)
+              ; 4:1:1 upsampled linearly where libjpeg repeats the sample
+              (near "b411" ["-sampling-factor" "4:1:1"] 30)
+              (near "p420" ["-interlace" "JPEG"] 1)
+              (near "p444" ["-interlace" "JPEG" "-sampling-factor" "4:4:4"] 1)
+              (near "grey" ["-colorspace" "gray"] 1)
+              (near "pgrey" ["-colorspace" "gray" "-interlace" "JPEG"] 1)
+              (near "rst" ["-define" "jpeg:restart-interval=2"] 1)
+              (near "prst" ["-define" "jpeg:restart-interval=1" "-interlace" "JPEG"] 1)
+              (near "q10" ["-quality" "10"] 1)
+              (near "one" ["-resize" "1x1!"] 1))
+        (puts "jpeg: no magick, decodes against it skipped\n"))
+   _ (hark ["rm" "-rf" dir])
+   0)
+
+(test_fin (), puts "jpeg: ok", putc 10, 0)

@@ -39,19 +39,7 @@
 
    (url? u) ((7 <= tally u) && (snip u 0 7 = "http://"))
    ; "http://host[:port]/path" -> (host port path) | ()
-   (url-split u)
-    (? !(url? u) ()
-       (: r (snip u 7 #u) m #r
-          (sl i) (? (m <= i) m (r i = 47) i (sl (i + 1)))
-          k (sl 0)
-          auth (snip r 0 k)
-          path (? (k < m) (snip r k m) "/")
-          a #auth
-          (cn i) (? (a <= i) -1 (auth i = 58) i (cn (i + 1)))
-          c (cn 0)
-          host (? (c < 0) auth (snip auth 0 c))
-          port (? (c < 0) 80 (digits (snip auth (c + 1) a)))
-          (? ((0 < tally host) && port) [host port path] ())))
+   (url-split u) (: w ((cite 'kore 'wg-url) u) (? (w && !<w) >w ()))   ; wget's split, http only
 
    ; one get -> (status body) | (). () is a dead socket or an unreadable
    ; response; a 404 is a perfectly good answer and comes back as (404 ..), so
