@@ -974,7 +974,7 @@
       (t = (usgr t)) (! (t = (md-lay md "text" 80 1 "")))
       ; an unnamed face is html: that is what a bare `markdown` means
       (h = (md-lay md "" 80 0 ""))
-      (md-tos = ["html" "roff" "text"])
+      (md-tos = ["html" "roff" "text" "cells" "dvi"])
       ; one trailing newline on the way out, whether the shower left one or not
       (lensnl h = (h + "\n")) (lensnl r = r) (lensnl "" = "\n")))
 
