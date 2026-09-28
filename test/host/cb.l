@@ -387,6 +387,30 @@
  (step cp) (: _ (scribe s "\e[1;1H") _ (scribe s (utf8 cp)) (cur s))
  _ (test (foldl (\ a cp (&& a (step cp = max 0 (wcwidth cp)))) 1 cps)))
 
+; --- 17f. a mark joins the cell before the cursor: glass answers the base, and 3 4 5 the
+;     marks; a pool of 128 clusters, a slot no cell names taken back when it is full ---
+(: (marks s i) (filter (< 0) (map (glass s i) [3 4 5]))
+ s (mkscr 3 4)
+ _ (scribe s "e\u{301}\u{4e16}\u{300}")           ; é, then 世 with a grave
+ _ (test (101 = chat s 0) ([769] = marks s 0) (0 = (glass s 0 0 >> 21 & 3))
+         (19990 = chat s 1) ([768] = marks s 1)     ; ..on the lead
+         (1 = (glass s 1 0 >> 21 & 3)) (2 = (glass s 2 0 >> 21 & 3))
+         (() = marks s 2) (3 = cur s))
+ _ (scribe s "\e[2;1Habcd\u{302}")                   ; a pending wrap: the last column's
+ _ (test (100 = chat s 7) ([770] = marks s 7) (7 = cur s))
+ _ (scribe s "\e[3;1H\u{301}a\u{300}\u{301}\u{302}\u{303}")   ; col 0 has nothing; three fit
+ _ (test ([770] = marks s 7) (97 = chat s 8) ([768 769 770] = marks s 8) (9 = cur s))
+ _ (scribe s "\e[3;1Hx")                             ; a write takes the cluster away
+ _ (test (120 = chat s 8) (() = marks s 8))
+ w (mkscr 1 200)
+ (clus i) (utf8 (65 + (i // 100)) + utf8 (768 + (i % 100)))   ; 200 distinct clusters
+ _ (scribe w (cats (map clus (jot 200))))
+ _ (test ([795] = marks w 127) (() = marks w 128)   ; the pool's 128, then bare bases
+         (66 = chat w 128) (200 = #(filter (\ i (0 < chat w i)) (jot 200))))
+ _ (scribe w ("\e[1;1H" + cats (map (\ i "x") (jot 64))))   ; 64 slots no longer named
+ _ (scribe w ("\e[1;130H" + clus 150))              ; ..so a new one finds room
+ _ (test ([818] = marks w 129) ([867] = marks w 99)))
+
 ; --- 20. sixel: a picture decoded into the store, its tiles laid in cells at the cursor ---
 ; a 10x12 picture: red, with blue over the first five columns of the first band. 8x16
 ; cells, so it lands as two tiles on one row, and the cursor steps under it

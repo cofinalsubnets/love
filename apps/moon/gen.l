@@ -5689,8 +5689,11 @@
              !(stru? <>>fe && has? <(peep (g 'stag) <><>>fe 0) <>f0))))))
    ; ..and a struct's own compound literal a whole member (a mutex's `(raw_spinlock_t){..}`)
    (clstru? g ty ini) (stru? ty && two? ini && <ini = 'clit && stru? <>ini && two? >>ini && tsz g <>ini = tsz g ty)
-   (unelide g ty ini)                               ; normalize ini against ty
-    (? (clarr? ty ini) (unelide g ty <>>ini)      ; a wide literal: take its init
+   ; ..and so is an expression of its own struct type (6.7.9p13), where there is a frame to type
+   ; it in: env is 'none for a static image
+   (whole? g env ty val) (stru? ty && env != 'none && (: t (peekty g env val) (stru? t && <t = <ty && <>t = <>ty)))
+   (unelide g env ty ini)                               ; normalize ini against ty
+    (? (clarr? ty ini) (unelide g env ty <>>ini)      ; a wide literal: take its init
        !(initval? ini) ini                        ; a scalar / non-brace: nothing to nest
        !(aggish? ty) ini                           ; a brace on a scalar type: leave (layout unwraps/scares)
        ; { "s" } on a char array (C11 6.7.9p14): unwrap to the bare literal
@@ -5699,22 +5702,23 @@
         <<>ini
        (arr? ty && !(ptr? <>ty) &&                   ; { L"s" }: p14's wide twin
         (: its <>ini (two? its && !(two? >its) && two? <its && <<its = 'clit && arr? <><its)))
-        (unelide g ty <>><<>ini)
-       (: pr (normfill g ty <>ini) ['init <pr]))     ; <pr = normed items; <>pr (excess) dropped
+        (unelide g env ty <>><<>ini)
+       (: pr (normfill g env ty <>ini) ['init <pr]))     ; <pr = normed items; <>pr (excess) dropped
    (redesig dh dk v) [dh dk v]   ; ('didx k v) | ('dfield k v)
-   (normelt g ty desig dh dk val l)                 ; one element of type ty from item stream l -> (item rest)
+   (normelt g env ty desig dh dk val l)                 ; one element of type ty from item stream l -> (item rest)
     (? (arr? ty && !(ptr? <>ty) && two? val && <val = 'str)
         [<l >l]                                    ; a string is a char array's whole element -- never an elision run
        (clarr? ty val || clstru? g ty val)          ; a wide or struct literal: the whole element, as its init
-        (: w (unelide g ty <>>val)
+        (: w (unelide g env ty <>>val)
            [(? desig (redesig dh dk w) w) >l])
+       (whole? g env ty val) [(? desig (redesig dh dk val) val) >l]
        (aggish? ty && (!(gcplx? ty) && !(initval? val)))   ; elide: fill ty from the run starting at val (never into a complex -- a scalar)
-        (: pr (normfill g ty (val . >l))
+        (: pr (normfill g env ty (val . >l))
            w ['init <pr]
            [(? desig (redesig dh dk w) w) <>pr])
-       (: nv (? (initval? val) (unelide g ty val) val)  ; a braced sub -> recurse-normalize; a scalar -> as-is
+       (: nv (? (initval? val) (unelide g env ty val) val)  ; a braced sub -> recurse-normalize; a scalar -> as-is
           [(? desig (redesig dh dk nv) (? (nv = val) <l nv)) >l]))
-   (normfill g ty items)                            ; consume items to fill aggregate ty -> (normed-items rest)
+   (normfill g env ty items)                            ; consume items to fill aggregate ty -> (normed-items rest)
     (? (arr? ty)
         (: elt <>ty n <>>ty
            (go l idx acc)
@@ -5724,7 +5728,7 @@
                   ; full and plain ends the walk; a designator may jump back ({ [2] = 9, [0] = 1 })
                   (!desig && 0 < n && n <= idx ? [(rev acc) l]
                      (: ci (? desig <>it idx)
-                        pr (normelt g elt desig 'didx ci (elval it) l)
+                        pr (normelt g env elt desig 'didx ci (elval it) l)
                         (go <>pr (ci + 1) (<pr . acc))))))
            (go items 0 ()))
        (stru? ty)
@@ -5737,7 +5741,7 @@
                   fe (nthfield fields ci)
                   (? (bad? fe) [(rev acc) l]          ; unknown field / past the end -> leave the rest
                      (!desig && anonbr? g fields fe it) (go (<>it + >l) cur acc)
-                     (: pr (normelt g <>>fe desig 'dfield <>it (elval it) l)
+                     (: pr (normelt g env <>>fe desig 'dfield <>it (elval it) l)
                         (go <>pr (fnext g fields ci) (<pr . acc))))))
            (go items 0 ()))
        [items ()])
@@ -5760,7 +5764,7 @@
           (pair? g ty) (asll g r + pst 'r4 off)
           (asintt g r ty + cvt ty 'r0 + [[(stop ty) 'r4 off 'r0]])))
    (cgfill g env off ty ini0)                       ; fill an aggregate at frame offset off (no zero)
-    (: ini (unelide g ty ini0)                        ; normalize elided braces (idempotent)
+    (: ini (unelide g env ty ini0)                    ; normalize elided braces (idempotent)
      (?- 'bad
       (<ini == 'str) (arr? ty ? (cgstr off <>ini) 'bad)
       (<ini != 'init) 'bad
@@ -5993,7 +5997,7 @@
      (!(aggish? ty) && !(flo? ty) && elem <ini '(bin un cast))
       (: v (icfold ini) (v @ 'no 'bad (imnum g ty v)))
      (<ini = 'init)
-      (: nini (unelide g ty ini)                     ; normalize elided braces (idempotent)
+      (: nini (unelide g 'none ty ini)               ; normalize elided braces (idempotent)
        (?- 'bad
         (<nini != 'init) (imgbytes g ty nini)           ; unwrapped ({ "s" } -> the bare literal): re-dispatch
         (arr? ty) (: elt <>ty esz (tsz g elt)

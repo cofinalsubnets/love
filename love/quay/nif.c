@@ -15,7 +15,9 @@
 //                                or every byte of a string/cask; () misuse
 //   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
 //                                width, picture, face), 1 the fg, 2 the bg
-//                                (the layout is quay.h's struct cb_cell)
+//                                (the layout is quay.h's struct cb_cell); a
+//                                cluster's glyph holds its base, and 3 4 5 are
+//                                its marks, 0 past the last
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
 //                                3 flag, 4 top, 5 bot, 6 and 7 a cell's width and
 //                                height in pixels; () misuse
@@ -109,9 +111,11 @@ static lvm(lvm_glass) {
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
   uintptr_t i = (uintptr_t) getcharm(Sp[1]);
   intptr_t k = getcharm(Sp[2]);
-  if (i < (uintptr_t) c->rows * c->cols && k >= 0 && k < 3) {
+  if (i < (uintptr_t) c->rows * c->cols && k >= 0 && k < 6) {
    struct cb_cell const e = c->cb[i];
-   out = putcharm(k == 0 ? e.g : k == 1 ? e.fg : e.bg); } }
+   uint32_t const *v = cb_clu(c, e.g);
+   out = putcharm(k == 0 ? (v ? (e.g & 0xffe00000u) | cb_cp(v[0]) : e.g) : k == 1 ? e.fg : k == 2 ? e.bg
+                  : v ? cb_cp(v[k - 2]) : 0u); } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
 
