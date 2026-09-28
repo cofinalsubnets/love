@@ -799,6 +799,7 @@ static void cb_mode(struct cb *c, int priv, int on) {
       uint16_t const m = p == 9 ? cb_mx10 : p == 1000 ? cb_mbtn : p == 1002 ? cb_mdrag : cb_many;
       c->flag = (uint16_t) ((c->flag & ~cb_mice) | (on ? m : 0)); }
     else if (p == 1006) c->flag = on ? c->flag | cb_msgr : c->flag & (uint16_t) ~cb_msgr;
+    else if (p == 2004) c->flag = on ? c->flag | cb_paste : c->flag & (uint16_t) ~cb_paste;
     else if (p == 6) {
       c->flag = on ? c->flag | cb_origin : c->flag & (uint16_t) ~cb_origin;
       cb_goto(c, 0, 0); }

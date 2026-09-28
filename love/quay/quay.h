@@ -58,7 +58,8 @@ enum {              // flag bits: the console's modes
   cb_mbtn   = 1024, // mouse (?1000): presses and releases
   cb_mdrag  = 2048, // mouse (?1002): and moves while a button is held
   cb_many   = 4096, // mouse (?1003): and every move
-  cb_msgr   = 8192 };// mouse reports as CSI < b ; x ; y M/m (?1006), else CSI M and three bytes
+  cb_msgr   = 8192, // mouse reports as CSI < b ; x ; y M/m (?1006), else CSI M and three bytes
+  cb_paste  = 16384 };// bracketed paste (?2004): a seat wraps what it pastes in CSI 200~ .. 201~
 enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)

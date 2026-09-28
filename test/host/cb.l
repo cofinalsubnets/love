@@ -632,7 +632,15 @@
    _ (scribe w "\e[?1000h")
    _ (test ((ml 32 255 34) = mouse w 0 1 240 0))         ; a column past a byte's reach
    _ (scribe s "\e[?1000h\ec")
-   _ (test ("" = mouse s 0 2 3 0)))                       ; ris turns it off
+   _ (test ("" = mouse s 0 2 3 0))                        ; ris turns it off
+   (pasting s) (0 < ((gaze s 3) & 16384))                 ; ?2004, which a seat reads to bracket a paste
+   _ (test !(pasting s))
+   _ (scribe s "\e[?2004h")
+   _ (test (pasting s))
+   _ (scribe s "\e[?2004l")
+   _ (test !(pasting s))
+   _ (scribe s "\e[?2004h\ec")
+   _ (test !(pasting s)))
 
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)

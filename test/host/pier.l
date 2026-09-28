@@ -6,7 +6,9 @@
 ; a second Return scrolls both off the top, and shift+PgUp looks back through the history
 ; until the red is in the corner again; a plain key brings the view home. then the child
 ; asks for the mouse (?1000, ?1006), and a click at row 1, col 2 through XTEST reaches it
-; as its press and release reports: it paints a blue cell in the corner.
+; as its press and release reports: it paints a blue cell in the corner. last it asks for
+; bracketed paste, the test takes the primary selection, and a middle click has pier ask
+; for it: "p\nq" arrives bracketed, the newline a return, and the child paints magenta.
 ; the child's exit takes pier with it, status 0. no Xvfb on the box -> a polite skip.
 ;   cat test/00-init.l test/host/pier.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
@@ -22,7 +24,7 @@
               0 0)
    dn (rdnum >xv)
    _ (test (charm? dn))
-   kid "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; read l; i=0; while [ $i -lt 80 ]; do echo; i=$((i+1)); done; stty raw -echo; printf '\\033[?1000h\\033[?1006h'; r=$(dd bs=1 count=19 2>/dev/null); [ \"$r\" = \"$(printf 'a\\033[<0;3;2M\\033[<0;3;2m')\" ] && printf '\\033[H\\033[44m  \\033[m'; sleep 2"
+   kid "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; read l; i=0; while [ $i -lt 80 ]; do echo; i=$((i+1)); done; stty raw -echo; printf '\\033[?1000h\\033[?1006h'; r=$(dd bs=1 count=19 2>/dev/null); [ \"$r\" = \"$(printf 'a\\033[<0;3;2M\\033[<0;3;2m')\" ] && printf '\\033[H\\033[44m  \\033[m'; printf '\\033[?1000l\\033[?1006l\\033[?2004h'; r=$(dd bs=1 count=15 2>/dev/null); [ \"$r\" = \"$(printf '\\033[200~p\\rq\\033[201~')\" ] && printf '\\033[H\\033[45m  \\033[m'; sleep 2"
    ph (tether ["out/love" "pier" "-display" (":" + show dn) "sh" "-c" kid])
    _ (rest 2500)
    XW (cite 'xwire)
@@ -74,6 +76,29 @@
    _ (fakeat 6 0 20 24) _ (fake 4 1) _ (fake 5 1)      ; to row 1, col 2, and a click
    _ (rest 1000)
    _ (test ([0 0 128] = px 0 0))                       ; the child read `a` and both reports
+   ; the primary, held by a window of the test's: create it, own the selection, and answer
+   ; the one SelectionRequest pier's middle click makes (in a task, so a silence can't hang)
+   ow ((XW 'scr-idbase) sc)
+   _ (: _ (w8 s 1) _ (w8 s 0) _ (w16 s 8) _ (w32 s ow) _ (w32 s ((XW 'scr-root) sc))
+        _ (w16 s 0) _ (w16 s 0) _ (w16 s 1) _ (w16 s 1) _ (w16 s 0) _ (w16 s 2) _ (w32 s 0) _ (w32 s 0)
+        _ (w8 s 22) _ (w8 s 0) _ (w16 s 4) _ (w32 s ow) _ (w32 s 1) _ (w32 s 0)
+        ((XW 'x-flush) s))
+   (owner _) (: e ((XW 'x-next) s)
+              (? !(two? e) 0
+                 !(((XW 'ev-code) e) = 30) (owner 0)
+                 (: raw ((XW 'ev-raw) e) u32 (XW 'u32)
+                    rq (u32 raw 12) sel (u32 raw 16) ty (u32 raw 20) pr (u32 raw 24)
+                    _ (w8 s 18) _ (w8 s 0) _ (w16 s 7) _ (w32 s rq) _ (w32 s pr) _ (w32 s ty)
+                    _ (w8 s 8) _ (w8 s 0) _ (w16 s 0) _ (w32 s 3) _ ((XW 'x-wpad) s "p\nq")
+                    _ (w8 s 25) _ (w8 s 0) _ (w16 s 11) _ (w32 s rq) _ (w32 s 0)
+                    _ (w8 s 31) _ (w8 s 0) _ (w16 s 0) _ (w32 s 0) _ (w32 s rq) _ (w32 s sel)
+                    _ (w32 s ty) _ (w32 s pr) _ (w32 s 0) _ (w32 s 0)
+                    ((XW 'x-flush) s))))
+   ot (twirl (\ _ (owner 0)) 0)
+   _ (fake 4 2) _ (fake 5 2)                           ; the middle button: paste
+   _ (rest 1500)
+   _ (? (landed? ot) 0 (freeze ot))
+   _ (test ([128 0 128] = px 0 0))                     ; the child read the paste, bracketed
    _ (close s)
    st (wfx <ph)
    _ (test (two? st) (0 = <st))                        ; the child's exit took pier with it
