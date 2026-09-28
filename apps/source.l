@@ -8,7 +8,7 @@
 (borrow 'posix)
 ; civil, for a stamp's date (love/boot/post.l)
 (borrow 'cal)
-(: (src-die m) (say err (";; " + m + "\n"), quit 1)
+(: (src-die m) (udie 1 (";; " + m))
 
    ; the directory is positional, so a mistyped flag would be taken as one and a whole
    ; tree laid under it. a leading dash is never a directory here: name the flags, ask

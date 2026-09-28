@@ -3354,6 +3354,8 @@
 ; defglob has to sit between them.
 (: (cli-rail ln)
  (: (charm0 x) (charm? x ? x 0)
+    ; a program's own uleave ('leave, udie's) goes out the same door
+    (door a b) (? (a == 'cli-leave || a == 'leave) (charm0 b) (scare a b))
     cli2
  (trap (\ x
  (: (cli-leave c) (scare 'cli-leave c)
@@ -3429,18 +3431,18 @@
            'none  0                   ; the flags did their printing; leaving is the answer
            (reads in, 0)))
     [av run]))
-       () (a \ b \ a == 'cli-leave ? (charm0 b) (scare a b)))
+       () door)
  (? (charm? cli2) cli2                  ; a leave in pre: the status is the answer
     (ev [': 'argv ['\ <cli2]], ; the program's view, before the run
      trap (x \ <>cli2 ())    ; (run ()): dispatch, argv now the program's view
-      () (a \ b \ a == 'cli-leave ? (charm0 b) (scare a b)))))
+      () door)))
 
  (cli-line ln tty)
    (: (charm0 x) (charm? x ? x 0)
       V  (cite 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
       f  (V 'seat <ln)
-      (charm0 (? f          (f >ln)
+      (charm0 (? f          (trap (\ _ (f >ln)) () (\ a b (a == 'leave ? (charm0 b) (scare a b))))
                  (two? >ln) (cli-rail ln)
                  tty        (shell 0)
                  (reads in, 0)))))         ; non-tty stdin: the stream face drinks the in port
