@@ -13,7 +13,7 @@
    g (roost-new 80 22 pl)
    d (g 'd) p (g 'p)
    ; a step onto (x y) from the cell below it: stand there, then press k
-   (bump x y k) (: _ (pins p 'x x 'y (y + 1)) (roost-turn g k))
+   (bump x y k) (pins p 'x x 'y (y + 1), roost-turn g k)
    _ (test (two? (g 'sign)))                               ; the opening sign stands
    _ (roost-turn g 32)
    _ (test !(g 'sign))                                     ; ..and any key takes it down

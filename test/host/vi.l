@@ -13,7 +13,7 @@
                                                   (? (charm? n && 0 < n) (go (acc + snip b 0 n)) acc))
                                     (rest 150, cue? m) (go acc)
                                     acc))
-   (say! m s) (: _ (say m s) _ (flush m) (drink m))
+   (say! m s) (say m s, flush m, drink m)
    ; n within a row of at: the row's cells follow its address, pens between them
    (after? h at n) (:- (go 0) (go i) (? (#h < i + #at) 0
                                         (at = snip h i (i + #at)) (sub? (snip h i (min #h (i + 120))) n 0)

@@ -106,7 +106,7 @@
    bad (elem 'love-image (names ()) ? ()
           (filter (n \ !(q-bit? n)) (filter (n \ q-nom? n && !!(ev n)) (names ()))))
    _ (two? bad ? (puts ("bit-law offenders: " + show bad + "\n"), 0) 0)   ; name them: the
-   (test !(two? bad)))                                           ; seat that fails is not always this one
+   (test (atom? bad)))                                           ; seat that fails is not always this one
 (hear test-strict)
 
 ; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
@@ -336,18 +336,18 @@
  (2.0 = re (2 ~ 3)) (i < 1) !(1 < i) ("(0.0 ~ 1.0)" = show i)
  (0.0 = (peep (arg (1 ~ @(1 0))) 1 0)))          ; arg broadcasts -- (arg (1 ~ x)) = atan, elementwise
 (test
- (: v (array 2 (1 ~ 2) (3 ~ 4)) (&& (twin-tray = (tier v)) ((1 ~ 2) = (peep v 0 0)) ((4 ~ 6) = (net v))
-    ((2 ~ 4) = (peep (v + v) 0 0)) ((2 ~ 4) = (peep ((2 ~ 0) * v) 0 0)) !(v < v)
-    ($v = $(net v)) ("@((1.0 ~ 2.0) (3.0 ~ 4.0))" = show v)))
+ (: v (array 2 (1 ~ 2) (3 ~ 4)) (twin-tray = tier v && (1 ~ 2) = peep v 0 0 && (4 ~ 6) = net v
+    && (2 ~ 4) = peep (v + v) 0 0 && (2 ~ 4) = peep ((2 ~ 0) * v) 0 0 && !(v < v)
+    && $v = $(net v) && "@((1.0 ~ 2.0) (3.0 ~ 4.0))" = show v))
  ; phases sum as vectors to (0 ~ 8) either way; the twin gem is read by its real part alone --
  ; $ clamps re, never |z| -- so a sum with no real component measures 0 however large
  (0 = $(array 2 (3 ~ 4) (-3 ~ 4))) (0 = $[(3 ~ 4) (-3 ~ 4)])
  (3 = $(array 2 (3 ~ 4) (0 ~ 0))) ((0.0 ~ 8.0) = (net (array 2 (3 ~ 4) (-3 ~ 4)))))
 (test
  (: m (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)))
-    (&& (aall ((re m) = (star-tray '(2 2) '(1 2 3 4)))) (aall ((im m) = (star-tray '(2 2) '(5 6 7 8))))
-        (aall (m = (twin (re m) (im m)))) ('(2 2) = (shape (re m)))       ; the parts rebuild the whole
-        (gem-tray = (tier (re m))) (gem-tray = (tier (im m)))))
+    (aall (re m = star-tray '(2 2) '(1 2 3 4)) && aall (im m = star-tray '(2 2) '(5 6 7 8))
+        && aall (m = twin (re m) (im m)) && '(2 2) = shape (re m)       ; the parts rebuild the whole
+        && gem-tray = tier (re m) && gem-tray = tier (im m)))
  (aall ((re @(1 2 3)) = @(1 2 3))) (star-tray = (tier (re @(1 2 3))))     ; a real tray is its own re,
  (aall ((im @(1 2 3)) = @(0 0 0))) (star-tray = (tier (im @(1.5 2.5))))   ; and its im is 0, shaped
  ("@()" = show (re (twin-tray '(0) 0))) ("@()" = show (im @()))           ; an empty tray stays a tray
@@ -468,9 +468,9 @@
  ; name? and mint? partition nom?: () is neither and nothing else is either. `string` cannot
  ; tell them apart (a mint spells ""). a mint binds and captures; () binds nothing.
  (: m (mint 0) s (nom "x")
-    ((&& (mint? m) !(name? m)) && (&& (name? s) !(mint? s))))
- (&& !(mint? 'x) (&& !(mint? "x") (&& !(mint? 0) !(mint? '(1 2)))))
- (("" = (string (mint 0))) && ("" = (string ())))                                   ; the anonymous ones spell empty
+    (mint? m && !(name? m) && name? s && !(mint? s)))
+ (!(mint? 'x) && !(mint? "x") && !(mint? 0) && !(mint? '(1 2)))
+ ("" = string (mint 0) && "" = string ())                                   ; the anonymous ones spell empty
  (: m (mint 0) (m = m 5)) ('xyz = ('xyz 1))                                         ; a point applied answers itself, named or not
  ((mint 0) != (mint 0)) (: m (mint 0) (m = m))                                      ; distinct always; itself only
  (nom? (nom "x")) (name? (nom "x")) !(mint? (nom "x")) (name? 'x) !(two? (nom "x")) ; `nom` answers an interned symbol: nom? and name?, an atom, never a chain
@@ -478,7 +478,7 @@
  ((mint 0) < 'x)                                                                    ; within the symbol band: an anonymous one below a spelled one
  ((mint 0) < 0)                                                                     ; the blue floor: every symbol sits below the numbers (true-blue)
  (: a (mint 0) b (mint 0) t (tablet 0) _ (pin t a 1) _ (pin t b 2)
-    (&& (1 = (t a)) (2 = (t b)) (2 = #t)))      ; distinct mints are distinct map keys
+    (1 = t a && 2 = t b && 2 = #t))             ; distinct mints are distinct map keys
  (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
  !(string 0) !!(string 1) (1 = #(string 0))          ; a NUL nets nothing: the chain of nothings reaches the bytes, and (string 0) is one of them
  !(snip ("a" + 0) 1 2) (97 = $("a" + 0))        ; ... an all-NUL text is nothing, and the NUL byte appends for free
@@ -683,8 +683,8 @@
 ; word budget), so a size-fixed or growthless base runs free ((pin apcap 0 n) retunes both).
 ; in anger: test/help.l, test/missing.l, test/apcap.l, test/task.l (the scoop ring), test/random.l.
 (test
- (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
- ('(boom 7) = (trap (_ \ scare 'boom 7) () (\ a b [a b]))) (3 = (trap (+ 1) 2 welp))
+ (3 = (ev '(+ 1 2))) (lit? ev) (41 = call-cc (k \ k 41)) (42 = 1 + call-cc (k \ 41))
+ ('(boom 7) = trap (_ \ scare 'boom 7) () (a \ b \ [a b])) (3 = (trap (+ 1) 2 welp))
  (: t (tablet 0) _ (pin t 0 'held)                            ; mind: c fires, f's value answers
     v (mind (_ \ 'value) () (_ \ pin t 0 'freed))
     (v = 'value && t 0 = 'freed))

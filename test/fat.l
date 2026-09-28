@@ -9,8 +9,8 @@
 ; the device: 70000 sectors in one cask. rd answers fresh strings, wr pours.
 (: img (cask (70000 * 512))
    (mkdev im) [(\ lba n (: b (cask (n * 512)) _ (pour b 0 im (lba * 512) (n * 512)) (string b)))
-               (\ lba s (: _ (pour im (lba * 512) s 0 #s) (#s // 512)))
-               (tally im // 512)]
+               (\ lba s (pour im (lba * 512) s 0 #s, (#s // 512)))
+               (#im // 512)]
    dev (mkdev img))
 
 ; mkfs: a whole format answers 1; a device under FAT32's own floor refuses
@@ -82,12 +82,12 @@
 ; --- the other side of the format: mtools reads what we wrote, we read what it
 ; wrote. guarded on mdir being installed (the hdd lane already leans on it).
 (: (lines* s) (: n #s
-                 (go i w acc) (? (n <= i) (rev (? #w (. w acc) acc))
-                                 (? (s i = 10) (go (i + 1) "" (. w acc))
+                 (go i w acc) (? (n <= i) (rev (? #w (w . acc) acc))
+                                 (? (s i = 10) (go (i + 1) "" (w . acc))
                                     (go (i + 1) (w + string [(s i)]) acc)))
                  (go 0 "" ()))
    have-mtools (: r (hark '("sh" "-c" "command -v mdir >/dev/null && echo yes"))
-                  ((! <r) && (0 < tally >r)))
+                  ((! <r) && (0 < #>r)))
    _ (? have-mtools
         (: ip "out/.fat-probe.img"
            _ (: p (open ip "w") _ (say p (string img)) (close p))
@@ -106,7 +106,7 @@
             ("timeout: 1" = >mt)
             (tablet? f3)
             ("from the host side" = <>(fat-read f3 "fromhost.txt"))
-            (: _ (unlink ip) _ (unlink lp) 1)))
+            (unlink ip, unlink lp, 1)))
         (puts "  (mtools interop skipped: no mdir here)")))
 
 (test_fin ())

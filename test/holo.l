@@ -30,8 +30,8 @@
         ; -- label fixups resolve to rel32: a whole loop assembles, and its addresses are exposed
         ; (plain assemble lays branches long-form; the relaxing layout is the object writer's
         ; entry, gated byte-exact in test/holo/golden.l) --
-        (= "4839c80f840800000048ffc8e9efffffffc3"
-           (holo-hex 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))))
+        ("4839c80f840800000048ffc8e9efffffffc3"
+           = holo-hex 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
         (17 = label-at (assemble 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))) 'done))
        0)
       ; -- the a64 backend rides the same neutral IR (a second target, byte-checked as data) --

@@ -30,26 +30,24 @@
    natco (jitcalloutx ca-sq  '(\ n 0) '+ 'i '(* i i) 'a64)                       ; non-(F i): sum sq(i*i) = i^4 (overflows -> bignum twin)
    natcd (jitcalloutx ca-md7 '(\ n 0) '+ 'i '(* (* i i) 1000000000) 'a64)        ; non-(F i): arg overflows ~i=68k -> caargdeopt -> twin (bounded clos)
    r3m ((: (go i a) (? (< i 3000000) (go (+ i 1) (+ a (ca-sq i))) a)) 0 0)   ; interp reference (inline sum; a closure never glazed -> pure interp) for the boundary case
-   ; NB: strict prefix `(= a b)` throughout -- opfix currently mis-factors compound=compound infix
-   ; (((f x) = (g y)) -> (f (= x (g y)))), so prefix sidesteps it entirely (opfix fix is a follow-up).
    _ (test
-       (= 0 (nat 0))                                 ; empty
-       (= 285 (nat 10))                              ; fixnum fast path
-       (= 2666664666667000000 (nat 2000000))         ; ~2.6e15 fixnum
-       (= 8999995500000500000 (nat 3000000))         ; [2^62,2^63): tag-overflow -> bignum (garbage on the untagged gate)
-       (= (nat 3000000) r3m)                          ; ... == interp
-       (= 333333283333335000000 (nat 10000000))      ; ~3.3e20, well past 2^63
-       (= 95.0 (natf 20))                             ; gate 1: float call-out result -> deopt to interp twin, gem
+       (0 = (nat 0))                                 ; empty
+       (285 = (nat 10))                              ; fixnum fast path
+       (2666664666667000000 = (nat 2000000))         ; ~2.6e15 fixnum
+       (8999995500000500000 = (nat 3000000))         ; [2^62,2^63): tag-overflow -> bignum (garbage on the untagged gate)
+       ((nat 3000000) = r3m)                          ; ... == interp
+       (333333283333335000000 = (nat 10000000))      ; ~3.3e20, well past 2^63
+       (95.0 = (natf 20))                             ; gate 1: float call-out result -> deopt to interp twin, gem
        ; * fold: sa kept raw (mulo accumulator), retagged with an overflow gate at the end
-       (= 1 (natp 0))                                 ; empty product = the identity 1
-       (= 120 (natp 5))                               ; 5! fixnum fast path
-       (= 51090942171709440000 (natp 21))            ; 21! -> gate 2 (product overflow) -> bignum
-       (= 1.875 (natpf 3))                            ; gate 1: float product -> deopt -> gem
-       (= 6917529027641081856 (natp3 62))            ; 3*2^61 in [2^62,2^63): the end-retag adds-vc gate must deopt
+       (1 = (natp 0))                                 ; empty product = the identity 1
+       (120 = (natp 5))                               ; 5! fixnum fast path
+       (51090942171709440000 = (natp 21))            ; 21! -> gate 2 (product overflow) -> bignum
+       (1.875 = (natpf 3))                            ; gate 1: float product -> deopt -> gem
+       (6917529027641081856 = (natp3 62))            ; 3*2^61 in [2^62,2^63): the end-retag adds-vc gate must deopt
        ; non-(F i) computed args: caarg compiles arg natively; an arg leaving fixnum range deopts (caargdeopt)
-       (= 55 (natc 5)) (= 0 (natc 0)) (= 91 (natc 6))    ; sum sq(i+1) native fast path
-       (= 979 (natco 6)) (= 1950333330 (natco 100))      ; sum i^4: fixnum then overflow -> bignum twin
-       (= 280000 (natcd 70000)) (= 399999 (natcd 100000))))   ; arg overflow -> caargdeopt -> twin
+       (55 = (natc 5)) (0 = (natc 0)) (91 = (natc 6))    ; sum sq(i+1) native fast path
+       (979 = (natco 6)) (1950333330 = (natco 100))      ; sum i^4: fixnum then overflow -> bignum twin
+       (280000 = (natcd 70000)) (399999 = (natcd 100000))))   ; arg overflow -> caargdeopt -> twin
 
 ; --- auto-glaze: the natjit hook (now installed on a64) glazes these at closure creation, no manual
 ; jitcalloutx. ag-sum is a top-level global-f sum (hook's calloutinfo -> jitcalloutx arch); ag-summer
@@ -68,19 +66,19 @@
    cs (ag-summer ag-sq)  cf (ag-summer ag-half)  cp (ag-multiplier ag-inc)  cpf (ag-multiplier ag-ph)  ccg (ag-capcg ag-sq)
    ag30 (ag-sum 30)                                                                  ; global reference for the captured==global cross-check
    _ (test
-       (= 285 (ag-sum 10)) (= 0 (ag-sum 0))                                          ; global auto-glaze fast path + empty
-       (= 8555 (ag-sum 30))                                                          ; global auto-glaze == 0+1+4+..+841
-       (= 8999995500000500000 (ag-sum 3000000))                                      ; global gate-2 boundary -> bignum
-       (= 285 (cs 10)) (= 0 (cs 0)) (= 8555 (cs 30))                                 ; captured auto-glaze fast path
-       (= (cs 30) ag30)                                                              ; captured == global
-       (= 8999995500000500000 (cs 3000000))                                          ; captured gate-2 boundary -> bignum
-       (= 95.0 (cf 20))                                                              ; captured gate-1 float
+       (285 = (ag-sum 10)) (0 = (ag-sum 0))                                          ; global auto-glaze fast path + empty
+       (8555 = (ag-sum 30))                                                          ; global auto-glaze == 0+1+4+..+841
+       (8999995500000500000 = (ag-sum 3000000))                                      ; global gate-2 boundary -> bignum
+       (285 = (cs 10)) (0 = (cs 0)) (8555 = (cs 30))                                 ; captured auto-glaze fast path
+       ((cs 30) = ag30)                                                              ; captured == global
+       (8999995500000500000 = (cs 3000000))                                          ; captured gate-2 boundary -> bignum
+       (95.0 = (cf 20))                                                              ; captured gate-1 float
        ; * fold auto-glaze (both lanes): global-F product + captured product
-       (= 1 (ag-prod 0)) (= 120 (ag-prod 5)) (= 51090942171709440000 (ag-prod 21))   ; global product: empty, 5!, 21!-overflow->bignum
-       (= 1 (cp 0)) (= 120 (cp 5)) (= 51090942171709440000 (cp 21))                  ; captured product: same
-       (= (cp 5) (ag-prod 5))                                                        ; captured == global
-       (= 1.875 (cpf 3))                                                            ; captured product gate-1 float
+       (1 = (ag-prod 0)) (120 = (ag-prod 5)) (51090942171709440000 = (ag-prod 21))   ; global product: empty, 5!, 21!-overflow->bignum
+       (1 = (cp 0)) (120 = (cp 5)) (51090942171709440000 = (cp 21))                  ; captured product: same
+       ((cp 5) = (ag-prod 5))                                                        ; captured == global
+       (1.875 = (cpf 3))                                                            ; captured product gate-1 float
        ; non-(F i) auto-glaze: global-F sum sq(i*i) + captured sum sq(i+1)
-       (= 979 (ag-cgsum 6)) (= 1950333330 (ag-cgsum 100))                            ; global computed arg: fixnum + overflow -> bignum
-       (= 55 (ccg 5)) (= 0 (ccg 0)) (= 91 (ccg 6)))                                  ; captured computed arg (frame lane)
+       (979 = (ag-cgsum 6)) (1950333330 = (ag-cgsum 100))                            ; global computed arg: fixnum + overflow -> bignum
+       (55 = (ccg 5)) (0 = (ccg 0)) (91 = (ccg 6)))                                  ; captured computed arg (frame lane)
    (say err "test/a64/callout: a64 call-out execution (direct + auto-glaze, lar/ADR + fold gates + computed args) ok\n"))

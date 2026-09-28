@@ -58,11 +58,11 @@
        hdr (x-reply s)
        op (<hdr = 1 ? (hdr 9) 0)
        (? (op < 1) 0
-          (: _ (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w16 s 1, x-w16 s 0, x-flush s)
-             _ (x-reply s)
-             _ (x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s)
-             _ (x-reply s)
-             1)))
+          (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w16 s 1, x-w16 s 0, x-flush s,
+           x-reply s,
+           x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s,
+           x-reply s,
+           1)))
    ; one band of rows out of the frame cask: ZPixmap at the window's depth, 32 bpp
    (x-putband s win gc depth buf y rows)
     (: n (rows * 2560)
@@ -115,8 +115,8 @@
                    (frames && n >= frames) n
                    (: drew (doom-tick ())                                     ; -1: the game quit itself
                       (? (drew < 0) n
-                         (: _ (drew ? (doom-frame buf, x-putframe s win gc depth buf))
-                            (loop (n + drew))))))
+                         (drew ? (doom-frame buf, x-putframe s win gc depth buf),
+                          loop (n + drew)))))
        (loop 0))
 
    ; --- the nest: a love with doom in it, laid in ./love-<ver>/ off this binary's source --
@@ -168,8 +168,8 @@
              _ (mkdir d 493)
              _ (mkdir (d + "/doomgeneric") 493)
              _ (note ("laying " + show #ps + " files of doomgeneric off " + dg-raw))
-             bad (tally (filter (p \ (grab (dg-raw + p) (d + "/" + p) != 0)) ps))
-             (? (nil? ps) 1 bad 1 0))))
+             bad #(filter (p \ (grab (dg-raw + p) (d + "/" + p) != 0)) ps)
+             (? !ps 1 bad 1 0))))
    (dg-tar dl)
     (: tgz (dl + "/doomgeneric.tgz")
        r (fetch dg-url tgz)
@@ -194,12 +194,12 @@
    ; the three rungs both nests climb: source laid under here, downloads in dl, the build.
    ; answers the sentence to fail with, or () when the nest stands ready; arm runs before cook
    (nest-lay here nest dl arm cook)
-    (: _ (cite 'source 'src-nest here)                    ; laid once, shared by every verb
-       (? (atom? (stat (nest + "/Makefile"))) ("the source did not lay under " + here)
-          (doom-fetch dl) "the downloads did not land"
-          (: _ (arm 0)
-             st (run-in nest cook)
-             (st != 0 ? "the doom build failed" ()))))
+    (cite 'source 'src-nest here,                         ; laid once, shared by every verb
+     (? (atom? (stat (nest + "/Makefile"))) ("the source did not lay under " + here)
+        (doom-fetch dl) "the downloads did not land"
+        (: _ (arm 0)
+           st (run-in nest cook)
+           (st != 0 ? "the doom build failed" ()))))
    (doom-nest as)
     (: exe (selfpath 0)
        here (cwd 0)

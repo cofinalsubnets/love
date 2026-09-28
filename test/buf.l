@@ -24,7 +24,7 @@
     _ (pour d 0 s 0 3)
     (7 = peep d 0 0 && 9 = peep d 2 0))
  ; ... and an oversized count clamps
- (: b (cask 2) _ (pour b 0 "ABCD" 0 100) (2 = tally b))
+ (: b (cask 2) _ (pour b 0 "ABCD" 0 100) (2 = #b))
 
  ; --- snip reads a range back out as a string ---
  (: b (cask 4) _ (pour b 0 "ABCD" 0 4) ("AB" = snip b 0 2))
@@ -52,7 +52,7 @@
 
    ; a run laid contiguously reads back as itself, and the lay answers the cask it wrote
    _ (: c (cask 16) v (iota 4 + 1)
-        g (: _ (test (c = lay c 0 4 4 v)) (see c 0 4 4 4))
+        g ((test (c = lay c 0 4 4 v)), see c 0 4 4 4)
         (test (4 = #g) (1 = peep g 0 0) (2 = peep g 1 0) (4 = peep g 3 0)))
 
    ; little-endian, low bytes first: 0x01020304 lands 04 03 02 01

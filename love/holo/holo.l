@@ -205,7 +205,7 @@
                       (scare 'arity-skew op))
    (lower-via ems ins)
       (: op <ins  r (peep ems op 'no)
-         _ (? (= r 'no) (scare 'bad-op op) 0)
+         _ (r = 'no ? (scare 'bad-op op) 0)
          (feed >r >ins <r op))
 
    ;; -- the backend registry. a backend is a tablet { 'lower 'patch }, plus 'refix where the
@@ -260,7 +260,7 @@
       (? !(two? prog) (rev items . labels)
          (: ins <prog
             (? (<ins = 'label)
-               (: _ (pin labels (ins 1) addr) (lay >prog be addr items labels))
+               (pin labels (ins 1) addr, lay >prog be addr items labels)
                (<ins = 'align)
                (: r (revonto (pad-to be addr (ins 1)) items 0)
                   (lay >prog be (addr + <r) >r labels))
@@ -337,7 +337,7 @@
                (? (atom? p) (rev items . labels)
                   (: ins <p  k <<cs  c ><cs
                      (? (<ins = 'label)
-                        (: _ (pin labels (ins 1) fa) (stitch >p >cs pa fa era items))
+                        (pin labels (ins 1) fa, stitch >p >cs pa fa era items)
                         (<ins = 'align)
                         (: pad (pad-to be fa (ins 1))
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)

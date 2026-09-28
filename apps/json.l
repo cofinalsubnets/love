@@ -97,7 +97,7 @@
                    iv  <ip
                    b   <>ip
                    (? (b = a) ()                       ; a sign with no digits is nothing
-                      (: fd (? (&& (b < n) ((s b) = 46)) (jdigits s (b + 1) n) ())
+                      (: fd (? (b < n && s b = 46) (jdigits s (b + 1) n) ())
                          c  (two? fd ? <>fd b)
                          fv (two? fd ? <fd 0)
                          fl (two? fd ? (c - (b + 1)) 0)
@@ -167,7 +167,7 @@
                 (c < 32 ? ("\\u00" + (jhexd (c // 16)) + (jhexd (c % 16)))
                           (string c)))
 
-   (jqt s) (: n (tally s)
+   (jqt s) (: n #s
               ((: (go k acc) (? (k < n) (go (k + 1) (acc + (jqc (s k)))) (acc + "\"")))
                0 "\""))
 
@@ -179,8 +179,8 @@
    ; friends show as names, so anything not starting with a digit or a minus becomes null
    ; rather than riding out as text that no parser would take back.
    (jnumshow v) (: t (show v)
-                   c (? (0 < (tally t)) (t 0) 0)
-                   (? (|| (c = 45) (&& (48 <= c) (c <= 57))) t "null"))
+                   c (? (0 < #t) (t 0) 0)
+                   (? (c = 45 || (48 <= c && c <= 57)) t "null"))
 
    ; the () = v test is exact -- true only for () itself, never 0 or "" (different bands)
    ; -- so a bare () after a map or a filter writes `[]` with no renaming step. anything

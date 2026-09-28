@@ -66,7 +66,7 @@
    (gz-nif k f)
     (: v (peep gz-door k ())
        (? (charm? v) v
-          (: w (trap (\ _ (: _ (f 0) 1)) () (\ a b 0)) _ (pin gz-door k w) w)))
+          (: w (trap (\ _ (f 0, 1)) () (\ a b 0)) _ (pin gz-door k w) w)))
 
    ; love/lib/hash.c where the artifact carries it, the walk above where it does not.
    ; the walk is here as the statement of the polynomial and the oracle test/host/gzc.l holds
@@ -81,12 +81,12 @@
    ; MSB-first, so a code is reversed on the way in and its extra bits are not.
    ; the cursor is a tablet: 0 the accumulator, 1 how many bits it holds.
    (gz-put j t v k)
-    (: (go a n) (? (n < 8) (: _ (pin t 0 a) _ (pin t 1 n) 0)
-                    (: _ (say j (string (a & 255))) (go (a >> 8) (n - 8))))
+    (: (go a n) (? (n < 8) (pin t 0 a, pin t 1 n, 0)
+                    (say j (string (a & 255)), go (a >> 8) (n - 8)))
        (go ((peep t 0 0) | ((v & ((1 << k) - 1)) << (peep t 1 0))) ((peep t 1 0) + k)))
    (gz-align j t)                          ; flush the tail byte, zero-padded
     (? (peep t 1 0)
-       (: _ (say j (string ((peep t 0 0) & 255))) _ (pin t 0 0) _ (pin t 1 0) 0)
+       (say j (string ((peep t 0 0) & 255)), pin t 0 0, pin t 1 0, 0)
        0)
    (gz-rev v k) (: (go i a w) (? (k <= i) a (go (i + 1) ((a << 1) | (w & 1)) (w >> 1))) (go 0 0 v))
 
@@ -123,7 +123,7 @@
                        (: c (gz-c32 f i) (gz-hkeys f (i - 1) (? c (((c << 9) + i) . a) a))))
    (gz-hcopy f nsym) (: c (cask (nsym * 4))
                         _ (: (go i) (? (nsym <= i) 0
-                                       (: _ (gz-c32! c i (gz-c32 f i)) (go (i + 1))))
+                                       (gz-c32! c i (gz-c32 f i), go (i + 1)))
                              (go 0))
                         c)
    (gz-hdep pa i d) (: p (gz-c32 pa i) (? p (gz-hdep pa (p - 1) (d + 1)) d))
@@ -162,7 +162,7 @@
                             _ (pin lens (gz-c32 sy i) d)
                             (go (i + 1) (? (m < d) d m))))
              (go 0 0))
-       (? ((lim < mx) & (pass < 32)) (: _ (gz-hhalve f nsym 0) (gz-hpass f nsym lim (pass + 1)))
+       (? ((lim < mx) & (pass < 32)) (gz-hhalve f nsym 0, gz-hpass f nsym lim (pass + 1))
           [lens mx]))
    ; a code needs two symbols even where the block used one or none: a lone symbol wants a
    ; zero-bit code and the format cannot spell one. the two cheapest are conjured at count 1.
@@ -172,8 +172,8 @@
                         (go (i + 1) (? (gz-c32 c i) (k + 1) k)))
             (go 0 0))
        _ (? (2 <= u) 0
-            (: _ (? (gz-c32 c 0) 0 (gz-c32! c 0 1))
-               _ (? (gz-c32 c 1) 0 (gz-c32! c 1 1)) 0))
+            ((? (gz-c32 c 0) 0 (gz-c32! c 0 1)),
+             (? (gz-c32 c 1) 0 (gz-c32! c 1 1)), 0))
        (gz-hpass c nsym lim 0))
    ; canonical: shortest codes first, ties by symbol. the code goes in reversed, since
    ; a Huffman code is stored MSB-first and gz-put spends bits the other way.
@@ -186,7 +186,7 @@
             (go 0))
        nxt (tablet 0)
        _ (: (go l c) (? (mx < l) 0
-                        (: _ (pin nxt l c) (go (l + 1) ((c + (peep cnt l 0)) << 1))))
+                        (pin nxt l c, go (l + 1) ((c + (peep cnt l 0)) << 1)))
             (go 1 0))
        code (tablet 0)
        _ (: (go i) (? (nsym <= i) 0
@@ -342,8 +342,8 @@
                           putx (cite 'forge 'forge-putx)
                           fit  (cite 'forge 'forge-fit)
                           of   (cite 'forge 'forge-of)
-                          _ (? (lit? putx) (: _ (putx 'gz-find 5 gz-find-ir gz-find ())
-                                                _ (fit 0) 0)
+                          _ (? (lit? putx) (putx 'gz-find 5 gz-find-ir gz-find (),
+                                            fit 0, 0)
                                0)
                           w (? (lit? of) (of 'gz-find) gz-find)
                           (? (lit? w) w gz-find)))
@@ -357,7 +357,7 @@
           _ (gz-c32! head h (i + 1)) 0)
        0)
    (gz-fill s n head prev i l)              ; index every position a match covered
-    (: (go k) (? (l <= k) 0 (: _ (gz-ins s n (i + k) head prev) (go (k + 1)))) (go 0))
+    (: (go k) (? (l <= k) 0 (gz-ins s n (i + k) head prev, go (k + 1))) (go 0))
 
    ; --- the token buffer -----------------------------------------------------
    ; a block is tokenized first and coded second, because a code of the block's own
@@ -410,7 +410,7 @@
    (gz-trim lens k lo) (? (k <= lo) lo (peep lens (k - 1) 0) k (gz-trim lens (k - 1) lo))
    (gz-run cl tot rl)                       ; -> how many entries rl holds
     (: (span v k) (? (tot <= k) k ((peep cl k 0) = v) (span v (k + 1)) k)
-       (put j sy ex) (: _ (gz-c32! rl j ((sy << 7) + ex)) (j + 1))
+       (put j sy ex) (gz-c32! rl j ((sy << 7) + ex), j + 1)
        (zeros i r j) (? (r < 3) (? r (zeros (i + 1) (r - 1) (put j 0 0)) [i j])
                           (r < 11) (zeros (i + r) 0 (put j 17 (r - 3)))
                           (: t (? (138 < r) 138 r) (zeros (i + t) (r - t) (put j 18 (t - 11)))))
@@ -436,8 +436,8 @@
     (? (k <= i) (gz-put j t (peep codl 256 0) (peep lenl 256 0))   ; 256 ends the block
        (: v (gz-c32 tok i)
           (? (v < 256)
-             (: _ (gz-put j t (peep codl v 0) (peep lenl v 0))
-                (gz-wtoks j t tok k codl lenl codd lend (i + 1)))
+             (gz-put j t (peep codl v 0) (peep lenl v 0),
+              gz-wtoks j t tok k codl lenl codd lend (i + 1))
              (: u (v - 256)   lc (u >> 23)   dc ((u >> 18) & 31)
                 _ (gz-put j t (peep codl (257 + lc) 0) (peep lenl (257 + lc) 0))
                 _ (: e (peep gz-lext lc 0) (? e (gz-put j t ((u >> 13) & 31) e) 0))
@@ -451,7 +451,7 @@
        _ (gz-put j t (len & 255) 8)          _ (gz-put j t ((len >> 8) & 255) 8)
        _ (gz-put j t ((len ^ 65535) & 255) 8)
        _ (gz-put j t (((len ^ 65535) >> 8) & 255) 8)
-       (: (go k) (? (len <= k) 0 (: _ (gz-put j t (s (i0 + k)) 8) (go (k + 1)))) (go 0)))
+       (: (go k) (? (len <= k) 0 (gz-put j t (s (i0 + k)) 8, go (k + 1))) (go 0)))
 
    ; three ways to spell one block, and the cheapest in bits wins. the tree the third
    ; must declare ahead of itself is the only reason the other two still win anything:
@@ -462,9 +462,9 @@
        rd (gz-hlens fd 30 15)    lend <rd   mxd <>rd
        hlit (gz-trim lenl 286 257)   hdist (gz-trim lend 30 1)
        cl (tablet 0)                        ; the two length runs, laid end to end
-       _ (: (go i) (? (hlit <= i) 0 (: _ (pin cl i (peep lenl i 0)) (go (i + 1)))) (go 0))
+       _ (: (go i) (? (hlit <= i) 0 (pin cl i (peep lenl i 0), go (i + 1))) (go 0))
        _ (: (go i) (? (hdist <= i) 0
-                      (: _ (pin cl (hlit + i) (peep lend i 0)) (go (i + 1))))
+                      (pin cl (hlit + i) (peep lend i 0), go (i + 1)))
             (go 0))
        rlb (cask (320 * 4))
        nr (gz-run cl (hlit + hdist) rlb)
@@ -484,16 +484,16 @@
        raw (? ((i1 - i0) < 65536) (42 + ((i1 - i0) * 8)) (dyn + fix))
        (? (raw < (? (dyn <= fix) dyn fix)) (gz-wstored j t s i0 i1 last)
           (fix < dyn)
-           (: _ (gz-put j t (? last 1 0) 1)   _ (gz-put j t 1 2)
-              (gz-wtoks j t tok k gz-fixcodl gz-fixlenl gz-fixcodd gz-fixlend 0))
+           (gz-put j t (? last 1 0) 1, gz-put j t 1 2,
+            gz-wtoks j t tok k gz-fixcodl gz-fixlenl gz-fixcodd gz-fixlend 0)
           (: codl (gz-hcodes lenl 286 mxl)   codd (gz-hcodes lend 30 mxd)
              codc (gz-hcodes lenc 19 mxc)
              _ (gz-put j t (? last 1 0) 1)   _ (gz-put j t 2 2)
              _ (gz-put j t (hlit - 257) 5)   _ (gz-put j t (hdist - 1) 5)
              _ (gz-put j t (hclen - 4) 4)
              _ (: (go i) (? (hclen <= i) 0
-                            (: _ (gz-put j t (peep lenc (peep gz-clord i 0) 0) 3)
-                               (go (i + 1))))
+                            (gz-put j t (peep lenc (peep gz-clord i 0) 0) 3,
+                             go (i + 1)))
                   (go 0))
              _ (: (go i) (? (nr <= i) 0
                             (: v (gz-c32 rlb i)   sy (v >> 7)
@@ -546,7 +546,7 @@
    ; the artifact carries.
    (gz-push b v)
     (: c (peep b 0 0) len (peep b 1 0)
-       (? (len < #c) (: _ (pin c len v) _ (pin b 1 (len + 1)) 0)
+       (? (len < #c) (pin c len v, pin b 1 (len + 1), 0)
           (: _ (gz-room b 1) c2 (peep b 0 0)
              _ (pin c2 len v) _ (pin b 1 (len + 1)) 0)))
    (gz-take b)
@@ -562,9 +562,9 @@
    (gz-copy b dist len)
     (: _ (gz-room b len)
        c (peep b 0 0)
-       (go k p) (? (len <= k) (: _ (pin b 1 p) 1)
-                   (p < dist) (: _ (pin b 1 p) ())         ; a reach before the start
-                   (: _ (pin c p (peep c (p - dist) 0)) (go (k + 1) (p + 1))))
+       (go k p) (? (len <= k) (pin b 1 p, 1)
+                   (p < dist) (pin b 1 p, ())         ; a reach before the start
+                   (pin c p (peep c (p - dist) 0), go (k + 1) (p + 1)))
        (go 0 (peep b 1 0)))
 
    ; --- the bit source -------------------------------------------------------
@@ -573,8 +573,8 @@
    ; through the ordinary return path and the caller reads presence at the end.
    (gz-bit s n t)
     (: p (peep t 0 0)
-       (? (n <= (p >> 3)) (: _ (pin t 1 1) 0)
-          (: _ (pin t 0 (p + 1)) (((s (p >> 3)) >> (p & 7)) & 1))))
+       (? (n <= (p >> 3)) (pin t 1 1, 0)
+          (pin t 0 (p + 1), (((s (p >> 3)) >> (p & 7)) & 1))))
    ; the position rides a local, read once and written back once. `gz-bit` pays a
    ; peep and a pin per bit because the cursor is a tablet, and a deflate stream is
    ; twenty-seven million bits -- so the cursor is taken in hand for the length of a
@@ -582,7 +582,7 @@
    ; all: past the end sets torn, answers a 0 bit, and does not advance.
    (gz-bits s n t k)
     (: (go i a p)
-        (? (k <= i) (: _ (pin t 0 p) a)
+        (? (k <= i) (pin t 0 p, a)
            (: over (n <= (p >> 3))
               _ (? over (pin t 1 1) 0)
               (go (i + 1) (? over a (a | ((((s (p >> 3)) >> (p & 7)) & 1) << i)))
@@ -600,7 +600,7 @@
             (go 0))
        _ (pin cnt 0 0)                       ; a zero length is "no code", not a code
        ofs (tablet 0)
-       _ (: (go l a) (? (15 < l) 0 (: _ (pin ofs l a) (go (l + 1) (a + (peep cnt l 0)))))
+       _ (: (go l a) (? (15 < l) 0 (pin ofs l a, go (l + 1) (a + (peep cnt l 0))))
             (go 1 0))
        sym (tablet 0)
        _ (: (go i) (? (nsym <= i) 0
@@ -615,13 +615,13 @@
    (gz-dec s n t h)                          ; -> (1 symbol) | ()
     (: cnt <h sym (<(>h))
        (go l code first index p)
-        (? (15 < l) (: _ (pin t 0 p) ())
+        (? (15 < l) (pin t 0 p, ())
            (: over (n <= (p >> 3))
               _ (? over (pin t 1 1) 0)
               c (? over code (code | (((s (p >> 3)) >> (p & 7)) & 1)))
               p2 (? over p (p + 1))
               k (peep cnt l 0)
-              (? ((c - k) < first) (: _ (pin t 0 p2) [1 (peep sym (index + (c - first)) 0)])
+              (? ((c - k) < first) (pin t 0 p2, [1 (peep sym (index + (c - first)) 0)])
                  (go (l + 1) (c << 1) ((first + k) << 1) (index + k) p2))))
        (go 1 0 0 0 (peep t 0 0)))
 
@@ -630,13 +630,13 @@
 
    ; --- the three block kinds ------------------------------------------------
    (gz-stored s n t b)
-    (: p (// ((peep t 0 0) + 7) 8)            ; a stored block starts at a byte
+    (: p ((peep t 0 0 + 7) // 8)            ; a stored block starts at a byte
        (? (n < (p + 4)) ()
           (: len ((s p) + ((s (p + 1)) << 8))
              nl ((s (p + 2)) + ((s (p + 3)) << 8))
              (? ((((len ^ 65535) & 65535) = nl) & 1)
                 (? (n < (p + 4 + len)) ()
-                   (: (go k) (? (len <= k) 1 (: _ (gz-push b (s (p + 4 + k))) (go (k + 1))))
+                   (: (go k) (? (len <= k) 1 (gz-push b (s (p + 4 + k)), go (k + 1)))
                       _ (go 0)
                       _ (pin t 0 ((p + 4 + len) * 8))
                       1))
@@ -648,7 +648,7 @@
            (? (! d) ()
               (peep t 1 0) ()                                  ; ran off the end
               (: sy (<(>d))
-                 (? (sy < 256) (: _ (gz-push b sy) (go ()))
+                 (? (sy < 256) (gz-push b sy, go ())
                     (sy = 256) 1
                     (285 < sy) ()
                     (: lc (sy - 257)
@@ -815,8 +815,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
 
    ; --- the small floor ------------------------------------------------------
    (gzc-moan t m) (? (peep t 'q 0) 0
-                     (: _ (say err ("gzip: " + m)) _ (put err 10) (flush err)))
-   (gzc-tell t m) (peep t 'v 0 && (: _ (say err m) _ (put err 10) (flush err)))
+                     (say err ("gzip: " + m), put err 10, flush err))
+   (gzc-tell t m) (peep t 'v 0 && (say err m, put err 10, flush err))
    (gzc-pad w s) (#s < w ? (gzc-pad w (" " + s)) s)
    (gzc-dirp? q) (: st (stat q) (two? st && <>>st & 61440 = 16384))
    (gzc-worse a b) (? (a = 1 || b = 1) 1 (a = 2 || b = 2) 2 0)
@@ -845,11 +845,11 @@ no file, or a bare -, is the filter: stdin -> stdout"
        _ (say out (gzc-lhead + "\n"))
        (one p acc)                     ; acc: (status compressed uncompressed payload)
         (: r (uread p)
-           (? !r (: _ (gzc-moan t (p + ": No such file or directory"))
-                    [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
+           (? !r (gzc-moan t (p + ": No such file or directory"),
+                  [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
               (: s <>r h (gz-head s)
-                 (? !h (: _ (gzc-moan t (p + ": not in gzip format"))
-                          [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
+                 (? !h (gzc-moan t (p + ": not in gzip format"),
+                        [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
                     (: fs2 #s un (gzc-isize s) pay (fs2 - <>>>h - 8)
                        ; the name column is the path as it was typed, stem and all --
                        ; only -N's stored name arrives without a directory to keep
@@ -874,26 +874,26 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-zip1 t p)
     (: suf (peep t 'suf ".gz")
        r (uread p)
-       (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
+       (? !r (gzc-moan t (p + ": No such file or directory"), 1)
           (ends? p suf && !(peep t 'c 0))
-           (: _ (gzc-moan t (p + " already has " + suf + " suffix -- unchanged")) 0)
+           (gzc-moan t (p + " already has " + suf + " suffix -- unchanged"), 0)
           (: s <>r
              st (stat p)
              ms (two? st ? <>st 0)
              n? (peep t 'n 0)
              z (gz-zip s (n? ? "" (pbase p)) (n? ? 0 (ms // 1000)))
-             (? (peep t 'c 0) (: _ (say out z) _ (flush out) 0)
+             (? (peep t 'c 0) (say out z, flush out, 0)
                 (: dst (p + suf)
                    (? (two? (lstat dst) && !(peep t 'f 0))
-                      (: _ (gzc-moan t (dst + " already exists;\tnot overwritten")) 2)
+                      (gzc-moan t (dst + " already exists;\tnot overwritten"), 2)
                       !(uwrite dst z)
-                       (: _ (gzc-moan t ("cannot write " + dst)) 1)
-                      (: _ (two? st && (: _ (chmod dst (<>>st & 4095)) (utime dst ms)))
-                         _ (peep t 'k 0 ? 0 (unlink p))
-                         _ (gzc-tell t (p + ":\t" + gzc-ratio (#s - gzc-pay z) #s
-                                          + (peep t 'k 0 ? " -- created " " -- replaced with ")
-                                          + dst))
-                         0)))))))
+                       (gzc-moan t ("cannot write " + dst), 1)
+                      (two? st && (chmod dst (<>>st & 4095), utime dst ms),
+                       peep t 'k 0 ? 0 (unlink p),
+                       gzc-tell t (p + ":\t" + gzc-ratio (#s - gzc-pay z) #s
+                                     + (peep t 'k 0 ? " -- created " " -- replaced with ")
+                                     + dst),
+                       0)))))))
 
    ; --- one file, decompressed (and -t, which is the same read and no write) --
    (gzc-unzip1 t p)
@@ -903,39 +903,39 @@ no file, or a bare -, is the filter: stdin -> stdout"
        ; warning and not an error, so a `gunzip *` over a mixed directory walks on --
        ; reading first would call every plain file "not in gzip format" instead
        (? (!(peep t 'c 0) && !(peep t 't 0) && !stem0 && !(peep t 'N 0))
-          (: _ (gzc-moan t (p + ": unknown suffix -- ignored")) 2)
+          (gzc-moan t (p + ": unknown suffix -- ignored"), 2)
        (: r (uread p)
-       (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
+       (? !r (gzc-moan t (p + ": No such file or directory"), 1)
           (: s <>r
              h (gz-head s)
              u (h && gz-unzip s)
-             (? !h (: _ (gzc-moan t (p + ": not in gzip format")) 1)
-                !u (: _ (gzc-moan t (p + ": invalid compressed data--crc error")) 1)
-                (peep t 't 0) (: _ (gzc-tell t (p + ":\t OK")) 0)
-                (peep t 'c 0) (: _ (say out <>u) _ (flush out) 0)
+             (? !h (gzc-moan t (p + ": not in gzip format"), 1)
+                !u (gzc-moan t (p + ": invalid compressed data--crc error"), 1)
+                (peep t 't 0) (gzc-tell t (p + ":\t OK"), 0)
+                (peep t 'c 0) (say out <>u, flush out, 0)
                 (: stem stem0
                    N? (peep t 'N 0 && 0 < #<>>h)
                    (? (!stem && !N?)
-                      (: _ (gzc-moan t (p + ": unknown suffix -- ignored")) 2)
+                      (gzc-moan t (p + ": unknown suffix -- ignored"), 2)
                       (: dst (N? ? (phead p + pbase <>>h) <>stem)
                          st (stat p)
                          (? (two? (lstat dst) && !(peep t 'f 0))
-                            (: _ (gzc-moan t (dst + " already exists;\tnot overwritten")) 2)
+                            (gzc-moan t (dst + " already exists;\tnot overwritten"), 2)
                             !(uwrite dst <>u)
-                             (: _ (gzc-moan t ("cannot write " + dst)) 1)
-                            (: _ (two? st && chmod dst (<>>st & 4095))
-                               ; without -N the output keeps the .gz's own mtime and not
-                               ; the one in the header: gzip restores the stored stamp
-                               ; only when asked, which is what -N means on this side
-                               _ (? N? (utime dst (<>h * 1000))
-                                    (two? st) (utime dst <>st)
-                                    0)
-                               _ (peep t 'k 0 ? 0 (unlink p))
-                               _ (gzc-tell t (p + ":\t" + gzc-ratio (#<>u - gzc-pay s) #<>u
-                                                + (peep t 'k 0 ? " -- created "
-                                                     " -- replaced with ")
-                                                + dst))
-                               0)))))))))))
+                             (gzc-moan t ("cannot write " + dst), 1)
+                            (two? st && chmod dst (<>>st & 4095),
+                             ; without -N the output keeps the .gz's own mtime and not
+                             ; the one in the header: gzip restores the stored stamp
+                             ; only when asked, which is what -N means on this side
+                             (? N? (utime dst (<>h * 1000))
+                                (two? st) (utime dst <>st)
+                                0),
+                             peep t 'k 0 ? 0 (unlink p),
+                             gzc-tell t (p + ":\t" + gzc-ratio (#<>u - gzc-pay s) #<>u
+                                           + (peep t 'k 0 ? " -- created "
+                                                " -- replaced with ")
+                                           + dst),
+                             0)))))))))))
 
    ; --- the walk -------------------------------------------------------------
    (gzc-one t p) (peep t 'd 0 ? (gzc-unzip1 t p) (gzc-zip1 t p))
@@ -943,17 +943,17 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (? !(gzc-dirp? p) (gzc-one t p)
        (peep t 'r 0)
         (foldl (\ acc c (gzc-worse acc (gzc-walk t (p + "/" + c)))) 0 (sort (readdir p)))
-       (: _ (gzc-moan t (p + " is a directory -- ignored")) 2))
+       (gzc-moan t (p + " is a directory -- ignored"), 2))
 
    ; --- the filter: no file named, so stdin -> stdout -------------------------
    (gzc-filter t)
     (: s (slurp in)
        (? (peep t 'd 0)
           (: u (gz-unzip (s + ""))
-             (? !u (: _ (gzc-moan t "stdin: not in gzip format") 1)
+             (? !u (gzc-moan t "stdin: not in gzip format", 1)
                 (peep t 't 0) 0
-                (: _ (say out <>u) _ (flush out) 0)))
-          (: _ (say out (gz-zip (s + "") "" 0)) _ (flush out) 0)))
+                (say out <>u, flush out, 0)))
+          (say out (gz-zip (s + "") "" 0), flush out, 0)))
 
    ; --- the options ----------------------------------------------------------
    ; the cli walker in gnu order: clustered shorts, the long names beside them, and -S's
@@ -967,9 +967,9 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: u (tablet 0)
        r ((cite 'cli 'uoptp) as u [83] () gzc-longs)
        bad (? (two? r) ((cite 'cli 'uoptun) u (gzc-flags + "S0123456789")) ())
-       (? !(two? r) (: w <(rev as) (: _ (gzc-moan t ((w 1 = 45 ? "--suffix" "-S") + " wants a suffix")) ()))
-          (r 3) (: _ (gzc-moan t ("unknown option " + r 3)) ())
-          bad (: _ (gzc-moan t ("unknown option -" + string bad)) ())
+       (? !(two? r) (: w <(rev as) (gzc-moan t ((w 1 = 45 ? "--suffix" "-S") + " wants a suffix"), ()))
+          (r 3) (gzc-moan t ("unknown option " + r 3), ())
+          bad (gzc-moan t ("unknown option -" + string bad), ())
           (: _ (each (chars gzc-flags) (c \ peep u c 0 && pin t (intern (string c)) 1))
              v (peep u 83 ())
              _ (? (two? v) (pin t 'suf <>v))
@@ -979,12 +979,12 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: t t0
        o (gzc-opts as t)
        (? !o 1
-          (peep t 'h 0) (: _ (say out (gzc-help + "\n")) _ (flush out) 0)
+          (peep t 'h 0) (say out (gzc-help + "\n"), flush out, 0)
           (peep t 'V 0)
-           (: _ (say out ("gzip (love " + love-version + ")\n")) _ (flush out) 0)
+           (say out ("gzip (love " + love-version + ")\n"), flush out, 0)
           (: fs (filter (p \ !(p = "-")) <>o)
              _ (? (peep t 'l 0) 0 (peep t 't 0) (pin t 'd 1) 0)
-             (? !(two? fs) (peep t 'l 0 ? (: _ (gzc-moan t "-l wants a file") 1)
+             (? !(two? fs) (peep t 'l 0 ? (gzc-moan t "-l wants a file", 1)
                                           (gzc-filter t))
                 (peep t 'l 0) (gzc-list t fs)
                 (foldl (\ acc p (gzc-worse acc (gzc-walk t p))) 0 fs)))))

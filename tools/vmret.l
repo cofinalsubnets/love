@@ -142,7 +142,7 @@
                       ha   (parse-header-addr line)
                       sz   (peep sizes ha 0)                     ; symtab size, 0 if absent
                       lim2 (0 < sz ? (ha + sz) BIG)           ; extent end, or unbounded
-                      (loop rest h w2 lim2 0 fl2 (? w2 (+ total 1) total))))
+                      (loop rest h w2 lim2 0 fl2 (? w2 (total + 1) total))))
                 (: ins (? watching (parse-insn line) 0)         ; instruction: maybe a ret
                    (? (ins && hex->int <ins < lim && ret? (mnemonic >ins))
                       (loop rest name watching lim (<ins . rets) flagged total)

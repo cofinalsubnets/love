@@ -20,8 +20,8 @@
    record (SD 'sb-record) sync (SD 'sb-sync) bank (SD 'sb-bank)
    look (SD 'look) lay (SD 'lay) mk (SD 'mk) dirty (SD 'dirty) refof (SD 'refof)
    urlsplit (SD 'url-split) urlp (SD 'url?) digits (SD 'digits) readform (SD 'readform)
-   root "out/.sbhttp"
-   _ (hark ["rm" "-rf" root])
+   ; every path this lays is the pid's own, so two runs over one out/ keep apart
+   root ("out/.sbhttp-" + show (getpid 0))
    _ (mkdir root 493)
    _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)
    home (cwd 0)
@@ -52,7 +52,8 @@
    clean (dirty ())
    ref (refof "v1")
    npat #(readdir ".sb/patch")
-   _ (chdir home))
+   _ (chdir home)
+   _ (hark ["rm" "-rf" root]))
 
 (test
  (urlp "http://h/") !(urlp "https://h/") !(urlp "../peer")     ; the url gate

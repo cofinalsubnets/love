@@ -35,7 +35,7 @@
     (: d (s - <>n)
        (? (d = 0) n
           (0 < d) [(<n * bn-p10 d) s]
-          [(// <n (bn-p10 (0 - d))) s]))
+          [(<n // bn-p10 (0 - d)) s]))
    (bn-zero? n) (<n = 0)
    (bn-int n) <(bn-at n 0)
    (bn-cmp a b)
@@ -52,7 +52,7 @@
     (: _ (? (<b = 0) (bc-err "Divide by zero") 0)
        num (<a * bn-p10 (sc + <>b))
        den (<b * bn-p10 <>a)
-       [(// num den) sc])
+       [(num // den) sc])
    ; a % b is a - (a/b)*b with the quotient taken at scale and the product kept
    ; whole, which is where the result's max(scale + sb, sa) digits come from
    (bn-mod sc a b)
@@ -71,16 +71,16 @@
    (bn-isqrt v)                                ; floor sqrt, newton from above
     (? (v < 2) v
        (: t (show v)
-          (go x) (: y (// (x + (// v x)) 2) (? (y < x) (go y) x))
-          (go (bn-p10 ((// #t 2) + 1)))))
+          (go x) (: y ((x + (v // x)) // 2) (? (y < x) (go y) x))
+          (go (bn-p10 ((#t // 2) + 1)))))
    ; 0 and 1 answer themselves, scale and all -- GNU's own two short circuits,
    ; and the reason `scale=5; sqrt(1)` is 1 where sqrt(4) is 2.00000
    (bn-sqrt sc a)
-    (: _ (? (<a < 0) (bc-err "Square root of a negative number") 0)
-       (? (<a = 0) bn-zero
-          (bn-cmp a bn-one = 0) bn-one
-          (: r (bn-wide sc <>a)
-             [(bn-isqrt <(bn-at a (2 * r))) r])))
+    ((? (<a < 0) (bc-err "Square root of a negative number") 0),
+     (? (<a = 0) bn-zero
+        (bn-cmp a bn-one = 0) bn-one
+        (: r (bn-wide sc <>a)
+           [(bn-isqrt <(bn-at a (2 * r))) r])))
    ; bc's length: the significant digits, where a whole zero still owns one
    (bn-len n)
     (: v (abs <n) s <>n
@@ -97,7 +97,7 @@
        (go k p) (? (t <= p) k (go (k + 1) (p * b)))
        (go 0 1))
    (bc-basedig b v)                            ; -> the base-b digits, () for 0
-    (: (go x acc) (? (x = 0) acc (go (// x b) ((x % b) . acc)))
+    (: (go x acc) (? (x = 0) acc (go (x // b) ((x % b) . acc)))
        (go v ()))
    ; a base over 16 has no charm per digit, so each one is written as a
    ; zero-padded decimal with a space in front -- all but the first of a
@@ -107,11 +107,11 @@
        w (: t (show (b - 1)) #t)
        o (jug 0)
        (go m first)
-        (? !(two? m) (slurp o)
-           (: _ (? wide (: _ (? (first && !lead) 0 (put o 32))
-                           (say o (zpad w (show <m))))
-                   (put o (bc-figs <m)))
-              (go >m 0)))
+        (? (atom? m) (slurp o)
+           ((? wide ((? (first && !lead) 0 (put o 32)),
+                     say o (zpad w (show <m)))
+               (put o (bc-figs <m))),
+            go >m 0))
        (go ds 1))
    (bc-show st n)
     (: b (peep st 'obase 10)
@@ -119,10 +119,10 @@
        (? (v = 0) "0"
           (: a (abs v)
              p (bn-p10 s)
-             ip (bc-digs b (bc-basedig b (// a p)) 1)
+             ip (bc-digs b (bc-basedig b (a // p)) 1)
              fp (? (s = 0) ""
                    (: k (bc-fdigits b s)
-                      fn (// ((a % p) * (** b k)) p)
+                      fn (((a % p) * (** b k)) // p)
                       ("." + bc-digs b (bc-padl k (bc-basedig b fn)) 0)))
              ((? (v < 0) "-" "") + ip + fp))))
 
@@ -131,16 +131,16 @@
    ; then a backslash and a break. that is why a long string wraps exactly as a
    ; long number does, and why two numbers in one `print` wrap as a single run
    (bc-put st c)
-    (? (c = 10) (: _ (pin st 'col 0) (put out 10))
+    (? (c = 10) (pin st 'col 0, put out 10)
        (: n (peep st 'col 0)
-          _ (? (n = peep st 'wrap 68) (: _ (put out 92) _ (put out 10) (pin st 'col 0)) 0)
+          _ (? (n = peep st 'wrap 68) (put out 92, put out 10, pin st 'col 0) 0)
           _ (put out c)
           (pin st 'col ((peep st 'col 0) + 1))))
    (bc-say st t)
     (: n #t
-       (go k) (? (n <= k) 0 (: _ (bc-put st (t k)) (go (k + 1))))
+       (go k) (? (n <= k) 0 (bc-put st (t k), go (k + 1)))
        (go 0))
-   (bc-print st n) (: _ (pin st 'last n) (bc-say st (bc-show st n)))
+   (bc-print st n) (pin st 'last n, bc-say st (bc-show st n))
 
    ; -- the complaints --------------------------------------------------------
    ; `?` sums what it is handed, so a signal or a node may not be asked for its
@@ -150,7 +150,7 @@
    (bc-there? v) !(bc-nil? v)
    (bc-err m) (scare 'bc-err m)
    (bc-syn m) (scare 'bc-syn m)
-   (bc-warn m) (: _ (say err ("bc: warning: " + m)) (put err 10))
+   (bc-warn m) (say err ("bc: warning: " + m), put err 10)
 
    ; -- the lexer -------------------------------------------------------------
    (bc-dig? c) (48 <= c <= 57)
@@ -179,7 +179,7 @@
                         (: e (bc-esc (s (k + 1)))
                            _ (? (e < 0) 0 (put o e))
                            (go (k + 2)))
-                       (: _ (put o c) (go (k + 1))))))
+                       (put o c, go (k + 1)))))
        (go i))
    ; a numeral keeps its TEXT. its digits are worth what the ibase of the
    ; moment says, and `ibase=16` is a statement -- so nothing may be converted
@@ -228,7 +228,7 @@
        iv (acc ip 0 0)
        fk #fp
        (? (fk = 0) [iv 0]
-          [((iv * bn-p10 fk) + (// ((acc fp 0 0) * bn-p10 fk) (** ib fk))) fk]))
+          [((iv * bn-p10 fk) + (((acc fp 0 0) * bn-p10 fk) // ** ib fk)) fk]))
 
    ; -- the parser ------------------------------------------------------------
    ; every door answers [node rest]; a refusal scares, so no arm carries a
@@ -249,11 +249,11 @@
        (bc-expr ts @ [e r]
          (? (bc-op? r ",") (bc-args (bc-nl >r) (e . acc)) [(rev (e . acc)) r]) ()))
    (bc-prim ts)
-    (? !(two? ts) (bc-syn "unexpected end of program")
+    (? (atom? ts) (bc-syn "unexpected end of program")
        (: t <ts k <t v <>t r >ts
-          (? (= k 'num) [['num v] r]
-             (= k 'str) (bc-syn "a string is not an expression")
-             (= k 'name)
+          (? (k = 'num) [['num v] r]
+             (k = 'str) (bc-syn "a string is not an expression")
+             (k = 'name)
               ; `b[]` is the whole array, and only a call has any use for one --
               ; a subscript that is not there is not an empty one
               (? (bc-op? r "[")
@@ -264,10 +264,10 @@
                   (bc-args (bc-nl >r) () @ [es r2]
                     [['call v es] (bc-want r2 ")" "expected ) after the arguments")] ())
                  [['var v] r])
-             (= k 'kw)
+             (k = 'kw)
               ; `scale` is both: the register, and the function when a ( follows.
               ; the register arm has to come second or scale(x) never reads
-              (? ((elem v '("length" "sqrt")) || ((v = "scale") && bc-op? r "("))
+              (? (elem v '("length" "sqrt") || (v = "scale" && bc-op? r "("))
                   (: r2 (bc-want r "(" ("expected ( after " + v))
                      (bc-expr (bc-nl r2) @ [e r3]
                        [[(? (v = "length") 'len (v = "scale") 'scl 'sqrt) e]
@@ -340,7 +340,7 @@
       ())
    (bc-expr ts)
     (bc-or ts @ [n r]
-      (? ((bc-k? r 'op) && (elem <><r bc-assigns) && bc-lval? n)
+      (? (bc-k? r 'op && elem <><r bc-assigns && bc-lval? n)
          (bc-expr >r @ [v r2] [['asgn <><r n v] r2] ())
          [n r])
       ())
@@ -378,7 +378,7 @@
        ; walk reads both, and only a statement's end means no value at all
        (bc-kwd? ts "return")
         (: r >ts
-           (? ((bc-k? r 'nl) || (bc-op? r ";") || (bc-op? r "}") || bc-eof? r)
+           (? (bc-k? r 'nl || bc-op? r ";" || bc-op? r "}" || bc-eof? r)
               [['ret ()] r]
               (bc-expr r @ [e r2] [['ret e] r2] ())))
        (bc-kwd? ts "if")
@@ -428,26 +428,26 @@
              (go >m acc @ [a2 r] (bc-autos r a2) ()))))
 
    ; -- the environment -------------------------------------------------------
-   (bc-vars st) (peep st 'v ())
-   (bc-arrs st) (peep st 'a ())
-   (bc-fns st) (peep st 'f ())
+   (bc-vars st) (st 'v)
+   (bc-arrs st) (st 'a)
+   (bc-fns st) (st 'f)
    (bc-sc st) (peep st 'scale 0)
    (bc-arr st nm)
     (: t (bc-arrs st)
-       a (peep t nm ())
+       a (t nm)
        (? (bc-there? a) a (: b (tablet 0) _ (pin t nm b) b)))
    (bc-getreg st nm)
     (? (nm == 'last) (peep st 'last bn-zero) [(peep st nm 0) 0])
    (bc-setreg st nm v)
     (: k (bn-int v)
        (? (nm == 'scale)
-           (pin st 'scale (? (k < 0) (: _ (bc-warn "negative scale, set to 0") 0) k))
+           (pin st 'scale (? (k < 0) (bc-warn "negative scale, set to 0", 0) k))
           (nm == 'ibase)
-           (pin st 'ibase (? (k < 2) (: _ (bc-warn "ibase too small, set to 2") 2)
-                              (16 < k) (: _ (bc-warn "ibase too large, set to 16") 16)
+           (pin st 'ibase (? (k < 2) (bc-warn "ibase too small, set to 2", 2)
+                              (16 < k) (bc-warn "ibase too large, set to 16", 16)
                               k))
           (nm == 'obase)
-           (pin st 'obase (? (k < 2) (: _ (bc-warn "obase too small, set to 2") 2) k))
+           (pin st 'obase (? (k < 2) (bc-warn "obase too small, set to 2", 2) k))
           (pin st 'last v)))
    ; a place is the lvalue with its subscript already counted, so `a[i++] = 1`
    ; moves i once
@@ -520,13 +520,13 @@
    ; bc's autos are dynamically scoped: the old values are stacked on entry and
    ; put back on the way out, which is the whole of what `auto` means. an array
    ; goes in by VALUE, so a callee's a[] is a copy and the caller's is untouched
-   (bc-copy t) (: b (tablet 0) _ (map (\ k (pin b k (peep t k bn-zero))) (keys t)) b)
+   (bc-copy t) (: b (tablet 0) _ (map (k \ (pin b k (peep t k bn-zero))) (keys t)) b)
    (bc-save st ns)
-    (map (\ p (? (<p == 's) ['s <>p (peep (bc-vars st) <>p bn-zero)]
+    (map (p \ (? (<p == 's) ['s <>p (peep (bc-vars st) <>p bn-zero)]
                  ['a <>p (bc-copy (bc-arr st <>p))]))
          ns)
    (bc-restore st sv)
-    (map (\ p (? (<p == 's) (pin (bc-vars st) <>p <>>p)
+    (map (p \ (? (<p == 's) (pin (bc-vars st) <>p <>>p)
                  (pin (bc-arrs st) <>p <>>p)))
          sv)
    (bc-bind st p v)
@@ -539,38 +539,38 @@
             (bc-err ("Function " + nm + " called with the wrong count of arguments")))
        ; the operands are counted in the caller's frame, before anything is stacked
        (val p a) (? (<p == 'a)
-                    (: _ (? (<a == 'aref) 0 (bc-err "an array parameter wants an array"))
-                       (bc-copy (bc-arr st <>a)))
+                    ((? (<a == 'aref) 0 (bc-err "an array parameter wants an array")),
+                     bc-copy (bc-arr st <>a))
                     (bc-ev st a))
-       (vals m u acc) (? !(two? m) (rev acc) (vals >m >u ((val <m <u) . acc)))
+       (vals m u acc) (? (atom? m) (rev acc) (vals >m >u ((val <m <u) . acc)))
        vs (vals ps args ())
        sv (bc-save st (ps + au))
-       (put1 m u) (? !(two? m) 0 (: _ (bc-bind st <m <u) (put1 >m >u)))
+       (put1 m u) (? (atom? m) 0 (bc-bind st <m <u, put1 >m >u))
        _ (put1 ps vs)
-       _ (map (\ p (bc-bind st p (? (<p == 'a) (tablet 0) bn-zero))) au)
+       _ (map (p \ (bc-bind st p (? (<p == 'a) (tablet 0) bn-zero))) au)
        ; the frame comes back even when the body dies: nothing unwinds through a
        ; scare here, so the restore is laid on the error path by hand -- without it
        ; a divide by zero leaves the callee's parameters standing as globals
-       r (trap (\ _ (bc-runs st body)) ()
-               (\ a b (: _ (bc-restore st sv) (scare a b))))
+       r (trap (_ \ (bc-runs st body)) ()
+               (\ a b (bc-restore st sv, scare a b)))
        _ (bc-restore st sv)
        (? (two? r && <r == 'ret) <>r bn-zero))
 
    ; -- running ---------------------------------------------------------------
    ; a statement answers () to walk on, 'brk, 'cnt, or ['ret v]
    (bc-runs st ss)
-    (? !(two? ss) ()
+    (two? ss ?
        (: r (bc-run st <ss) (? (bc-there? r) r (bc-runs st >ss))))
    (bc-run st s)
     (<s @ 'nop ()
           'expr (: v (bc-ev st <>s)
-                   _ (? (<<>s == 'asgn) 0 (: _ (bc-print st v) (bc-put st 10)))
+                   _ (? (<<>s == 'asgn) 0 (bc-print st v, bc-put st 10))
                    ())
-          'say (: _ (bc-say st <>s) ())
-          'print (: _ (map (\ i (? (<i == 'say) (bc-say st <>i)
-                                   (bc-print st (bc-ev st i))))
-                           <>s)
-                    ())
+          'say (bc-say st <>s, ())
+          'print (map (i \ (? (<i == 'say) (bc-say st <>i)
+                              (bc-print st (bc-ev st i))))
+                      <>s,
+                  ())
           'blk (bc-runs st <>s)
           'if (? (bc-true? (bc-ev st <>s)) (bc-run st <>>s)
                  (bc-there? <>>>s) (bc-run st <>>>s)
@@ -583,23 +583,23 @@
                   (go _) (? !(bc-true? (? (bc-there? <>>s) (bc-ev st <>>s) bn-one)) ()
                             (: r (bc-run st <>>>>s)
                                (? (r == 'brk) () (two? r) r
-                                  (: _ (? (bc-there? <>>>s) (bc-ev st <>>>s) 0)
-                                     (go 0)))))
+                                  ((? (bc-there? <>>>s) (bc-ev st <>>>s) 0),
+                                   go 0))))
                   (go 0))
           'brk 'brk
           'cnt 'cnt
           'ret ['ret (? (bc-there? <>s) (bc-ev st <>s) bn-zero)]
-          'quit (: _ (flush out) (uleave 0))
+          'quit (flush out, uleave 0)
           (bc-err "internal: a statement shape with no runner"))
 
    ; -- the source walk -------------------------------------------------------
    ; one input item at a time, so a runtime error costs its own statement and the
    ; source walks on -- and so `quit` in a file is never read past
    (bc-guard st f)
-    (trap f () (\ a b (? (= a 'bc-err)
-                         (: _ (flush out) _ (say err ("bc: " + b))
-                            _ (put err 10) _ (flush err) 0)
-                         (scare a b))))
+    (trap f () (\ a b (a @ 'bc-err
+                           (flush out, say err ("bc: " + b),
+                            put err 10, flush err, 0)
+                           (scare a b))))
    (bc-define st ts)
     (: r (? (bc-k? >ts 'name) >ts (bc-syn "expected a function name"))
        nm <><r
@@ -611,7 +611,7 @@
               (: (go m acc)
                   (: m2 (bc-term m)
                      (? (bc-op? m2 "}")
-                         (: _ (pin (bc-fns st) nm [ps au (rev acc)]) >m2)
+                         (pin (bc-fns st) nm [ps au (rev acc)], >m2)
                         (bc-eof? m2) (bc-syn ("unexpected end of program in " + nm))
                         (bc-stmt m2 @ [s r7] (go r7 (s . acc)) ())))
                  (go r6 ()))
@@ -619,30 +619,30 @@
          ()))
    (bc-top st m)
     (: m0 (bc-term m)
-       (? (!(two? m0) || bc-eof? m0) ()
+       (? ((atom? m0) || bc-eof? m0) ()
           (bc-kwd? m0 "define") (bc-define st m0)
-          (bc-stmt m0 @ [s r] (: _ (bc-guard st (\ _ (bc-run st s))) r) ())))
+          (bc-stmt m0 @ [s r] (bc-guard st (_ \ (bc-run st s)), r) ())))
    ; a syntax error stops this source where a runtime one does not: nothing past
    ; the bad token has a meaning to walk on to
    (bc-source st src)
-    (trap (\ _ (: ts (bc-lex src)
+    (trap (_ \ (: ts (bc-lex src)
                   (go m) (: r (bc-top st m) (? (two? r) (go r) 0))
                   _ (go ts)
                   (flush out)))
           ()
-          (\ a b (? (= a 'bc-syn)
-                    (: _ (flush out) _ (say err ("bc: " + b)) _ (put err 10)
-                       _ (flush err) 0)
-                    (scare a b))))
+          (\ a b (a @ 'bc-syn
+                      (flush out, say err ("bc: " + b), put err 10,
+                       flush err, 0)
+                      (scare a b))))
    ; is the buffer still mid-item? the lexer answers it: an unclosed brace, or a
    ; string or comment that ran off the end. this is what makes stdin a prompt
    ; rather than a slurp. asked once per line, over the open text only -- a closed
    ; line costs one line, and only a define pays for its own length twice
    (bc-open? t)
     (: n #t
-       (? ((0 < n) && (t (n - 1) = 10) && (1 < n) && (t (n - 2) = 92)) 1
-          (trap (\ _ (: ts (bc-lex t)
-                        (go m d) (? !(two? m) (0 < d)
+       (? (0 < n && (t (n - 1) = 10) && 1 < n && (t (n - 2) = 92)) 1
+          (trap (_ \ (: ts (bc-lex t)
+                        (go m d) (? (atom? m) (0 < d)
                                     (bc-op? m "{") (go >m (d + 1))
                                     (bc-op? m "}") (go >m (d - 1))
                                     (go >m d))
@@ -653,9 +653,9 @@
     (: rd (urd in)
        (go acc)
         (: l (urd-line rd)
-           (? !(two? l) (? (0 < #acc) (bc-source st acc) 0)
+           (? (atom? l) (? (0 < #acc) (bc-source st acc) 0)
               (: t (acc + <l + "\n")
-                 (? (bc-open? t) (go t) (: _ (bc-source st t) (go ""))))))
+                 (? (bc-open? t) (go t) (bc-source st t, go "")))))
        (go ""))
 
    ; -- the math library, in bc's own language --------------------------------
@@ -767,22 +767,22 @@ define j(n, x) {
    ; (s l S L) and arrays (: ;), macros run by x and the six comparisons, q leaves two
    ; levels (dc itself from the top two), Q n levels --
    (dc-state _) {'stk () 'reg {} 'arr {} 'k 0 'ibase 10 'obase 10 'col 0 'wrap 69 'depth 0 'exit 0}
-   (dc-err st m) (: _ (? (0 < peep st 'col 0) (: _ (put out 10) (pin st 'col 0)) 0)
-                    _ (flush out) _ (say err ("dc: " + m + "\n")) (flush err))
+   (dc-err st m) ((? (0 < peep st 'col 0) (put out 10, pin st 'col 0) 0),
+                  flush out, say err ("dc: " + m + "\n"), flush err)
    (dc-push st v) (pin st 'stk (v . st 'stk))
    (dc-pop st) (: s (st 'stk) _ (pin st 'stk >s) <s)
    (dc-num? v) !(string? v)
    (dc-print st v nl)
-    (: _ (? (string? v) (say out v) (bc-say st (bc-show st v)))
-       (? nl (bc-put st 10) 0))
+    ((? (string? v) (say out v) (bc-say st (bc-show st v))),
+     (? nl (bc-put st 10) 0))
    ; the n values the command wants, top first, or a complaint and nothing taken;
    ; nums? asks that they be numbers too
    (dc-args st n nums?)
     (: s (st 'stk)
-       (? (#s < n) (: _ (dc-err st "stack empty") ())
+       (? (#s < n) (dc-err st "stack empty", ())
           (: vs (take n s)
-             (? (nums? && any string? vs) (: _ (dc-err st "non-numeric value") ())
-                (: _ (pin st 'stk (drop n s)) [1 vs])))))
+             (? (nums? && any string? vs) (dc-err st "non-numeric value", ())
+                (pin st 'stk (drop n s), [1 vs])))))
    (dc-unpop st vs) (pin st 'stk (vs + st 'stk))
    (dc-int v) (bn-int v)
    (dc-bytes v) (: (go x acc) (? (x < 1) acc (go (x >> 8) (string (x & 255) + acc))) (go (abs (dc-int v)) ""))
@@ -790,16 +790,16 @@ define j(n, x) {
    ; the arithmetic, each answering the values it leaves or a complaint
    (dc-arith st c)
     (: r (dc-args st (? (c = 124) 3 (c = 118) 1 2) 1)
-       (? !(two? r) 0
+       (? (atom? r) 0
           (: vs <>r b <vs a (? (1 < #vs) <>vs ()) k (st 'k)
-             (fail m) (: _ (dc-unpop st vs) (dc-err st m))
+             (fail m) (dc-unpop st vs, dc-err st m)
              (? (c = 43) (dc-push st (bn-add a b))
                 (c = 45) (dc-push st (bn-sub a b))
                 (c = 42) (dc-push st (bn-mul k a b))
                 (c = 47) (? (<b = 0) (fail "divide by zero") (dc-push st (bn-div k a b)))
                 (c = 37) (? (<b = 0) (fail "remainder by zero") (dc-push st (bn-mod k a b)))
                 (c = 126) (? (<b = 0) (fail "divide by zero")
-                             (: _ (dc-push st (bn-div k a b)) (dc-push st (bn-mod k a b))))
+                             (dc-push st (bn-div k a b), dc-push st (bn-mod k a b)))
                 (c = 94) (? !(<>b = 0 || (<b % bn-p10 <>b) = 0) (fail "exponent too large in raise")
                             (dc-push st (bn-pow k a b)))
                 (c = 118) (? (<b < 0) (fail "square root of negative number") (dc-push st (bn-sqrt k b)))
@@ -812,7 +812,7 @@ define j(n, x) {
    (dc-run st s)
     (: n #s
        _ (pin st 'depth (st 'depth + 1))
-       (out1 u) (: _ (pin st 'depth (st 'depth - 1)) u)
+       (out1 u) (pin st 'depth (st 'depth - 1), u)
        (numend j) (? (j < n && (bc-dv (s j) >= 0 && bc-dv (s j) < 16 || s j = 46)) (numend (j + 1)) j)
        (strend j lv) (? (n <= j) -1 (s j = 93) (? (lv = 0) j (strend (j + 1) (lv - 1))) (s j = 91) (strend (j + 1) (lv + 1)) (strend (j + 1) lv))
        (regc j) (? (j < n) (s j) ())
@@ -820,7 +820,7 @@ define j(n, x) {
         (: rc (regc j)
            (? !(charm? rc) (out1 0)
               (: r (dc-args st 2 1)
-                 (? !(two? r) (go (j + 1))
+                 (? (atom? r) (go (j + 1))
                     (: t (bn-cmp <<>r <>(<>r)) ; top against the one below
                        hit (c @ 60 (t < 0) 62 (0 < t) (t = 0))
                        m (dc-reg st rc)
@@ -838,17 +838,17 @@ define j(n, x) {
                      _ (dc-push st (? neg [(0 - <v) <>v] v))
                      (go e))
                  (c = 91) (: e (strend (i + 1) 0)
-                             (? (e < 0) (out1 0) (: _ (dc-push st (snip s (i + 1) e)) (go (e + 1)))))
-                 (c = 93) (: _ (dc-err st "unbalanced ']'") (go (i + 1)))
-                 (elem c [43 45 42 47 37 126 94 124 118]) (: _ (dc-arith st c) (go (i + 1)))
-                 (c = 112) (: _ (? (two? (st 'stk)) (dc-print st <(st 'stk) 1) (dc-err st "stack empty")) (go (i + 1)))
+                             (? (e < 0) (out1 0) (dc-push st (snip s (i + 1) e), go (e + 1))))
+                 (c = 93) (dc-err st "unbalanced ']'", go (i + 1))
+                 (elem c [43 45 42 47 37 126 94 124 118]) (dc-arith st c, go (i + 1))
+                 (c = 112) ((? (two? (st 'stk)) (dc-print st <(st 'stk) 1) (dc-err st "stack empty")), go (i + 1))
                  (c = 110) (: r (dc-args st 1 0) _ (? (two? r) (dc-print st <<>r 0) 0) (go (i + 1)))
                  (c = 80) (: r (dc-args st 1 0)
                              _ (? (two? r) (: v <<>r (say out (? (string? v) v (dc-bytes v)))) 0)
                              (go (i + 1)))
-                 (c = 102) (: _ (map (\ v (dc-print st v 1)) (st 'stk)) (go (i + 1)))
-                 (c = 99) (: _ (pin st 'stk ()) (go (i + 1)))
-                 (c = 100) (: _ (? (two? (st 'stk)) (dc-push st <(st 'stk)) (dc-err st "stack empty")) (go (i + 1)))
+                 (c = 102) (map (v \ (dc-print st v 1)) (st 'stk), go (i + 1))
+                 (c = 99) (pin st 'stk (), go (i + 1))
+                 (c = 100) ((? (two? (st 'stk)) (dc-push st <(st 'stk)) (dc-err st "stack empty")), go (i + 1))
                  (c = 114) (: r (dc-args st 2 0) _ (? (two? r) (dc-unpop st [<>(<>r) <<>r]) 0) (go (i + 1)))
                  (c = 82) (: r (dc-args st 1 1)
                              _ (? (two? r)
@@ -868,10 +868,10 @@ define j(n, x) {
                               _ (? (two? r) (: v <<>r b (? (string? v) 0 (dc-int v))
                                                (? (2 <= b) (pin st 'obase b) (dc-err st "output base must be a number greater than 1"))) 0)
                               (go (i + 1)))
-                 (c = 75) (: _ (dc-push st [(st 'k) 0]) (go (i + 1)))
-                 (c = 73) (: _ (dc-push st [(st 'ibase) 0]) (go (i + 1)))
-                 (c = 79) (: _ (dc-push st [(st 'obase) 0]) (go (i + 1)))
-                 (c = 122) (: _ (dc-push st [#(st 'stk) 0]) (go (i + 1)))
+                 (c = 75) (dc-push st [(st 'k) 0], go (i + 1))
+                 (c = 73) (dc-push st [(st 'ibase) 0], go (i + 1))
+                 (c = 79) (dc-push st [(st 'obase) 0], go (i + 1))
+                 (c = 122) (dc-push st [#(st 'stk) 0], go (i + 1))
                  (c = 90) (: r (dc-args st 1 0) _ (? (two? r) (: v <<>r (dc-push st [(? (string? v) #v (bn-len [(abs <v) <>v])) 0])) 0) (go (i + 1)))
                  (c = 88) (: r (dc-args st 1 0) _ (? (two? r) (: v <<>r (dc-push st [(? (string? v) 0 <>v) 0])) 0) (go (i + 1)))
                  (c = 97) (: r (dc-args st 1 0)
@@ -884,55 +884,55 @@ define j(n, x) {
                  (elem c [115 108 83 76 58 59])
                   (: rc (regc (i + 1))
                      (? !(charm? rc) (out1 0)
-                        (: _ (? (c = 115) (: r (dc-args st 1 0) (? (two? r) (: m (dc-reg st rc) (pin (st 'reg) rc (<<>r . (? (two? m) >m ())))) 0))
-                                (c = 83) (: r (dc-args st 1 0) (? (two? r) (pin (st 'reg) rc (<<>r . dc-reg st rc)) 0))
-                                (c = 108) (: m (dc-reg st rc) (dc-push st (? (two? m) <m bn-zero)))
-                                (c = 76) (: m (dc-reg st rc) (? (two? m) (: _ (pin (st 'reg) rc >m) (dc-push st <m)) (dc-err st ("stack register '" + string rc + "' (0" + radix rc 8 + ") is empty"))))
-                                (c = 58) (: r (dc-args st 2 0)
-                                            (? !(two? r) 0
-                                               (: ix <<>r v <>(<>r)
-                                                  (? (string? ix || <ix < 0) (: _ (dc-unpop st <>r) (dc-err st "array index must be a nonnegative integer"))
-                                                     (: t (peep (st 'arr) rc ()) t2 (? t t {}) _ (pin (st 'arr) rc t2) (pin t2 (dc-int ix) v))))))
-                                (: r (dc-args st 1 0)
-                                   (? !(two? r) 0
-                                      (: ix <<>r
-                                         (? (string? ix || <ix < 0) (: _ (dc-unpop st <>r) (dc-err st "array index must be a nonnegative integer"))
-                                            (: t (peep (st 'arr) rc ()) (dc-push st (? t (peep t (dc-int ix) bn-zero) bn-zero))))))))
-                           (go (i + 2)))))
+                        ((? (c = 115) (: r (dc-args st 1 0) (? (two? r) (: m (dc-reg st rc) (pin (st 'reg) rc (<<>r . (? (two? m) >m ())))) 0))
+                            (c = 83) (: r (dc-args st 1 0) (? (two? r) (pin (st 'reg) rc (<<>r . dc-reg st rc)) 0))
+                            (c = 108) (: m (dc-reg st rc) (dc-push st (? (two? m) <m bn-zero)))
+                            (c = 76) (: m (dc-reg st rc) (? (two? m) (pin (st 'reg) rc >m, dc-push st <m) (dc-err st ("stack register '" + string rc + "' (0" + radix rc 8 + ") is empty"))))
+                            (c = 58) (: r (dc-args st 2 0)
+                                        (? (atom? r) 0
+                                           (: ix <<>r v <>(<>r)
+                                              (? (string? ix || <ix < 0) (dc-unpop st <>r, dc-err st "array index must be a nonnegative integer")
+                                                 (: t (peep (st 'arr) rc ()) t2 (? t t {}) _ (pin (st 'arr) rc t2) (pin t2 (dc-int ix) v))))))
+                            (: r (dc-args st 1 0)
+                               (? (atom? r) 0
+                                  (: ix <<>r
+                                     (? (string? ix || <ix < 0) (dc-unpop st <>r, dc-err st "array index must be a nonnegative integer")
+                                        (: t (peep (st 'arr) rc ()) (dc-push st (? t (peep t (dc-int ix) bn-zero) bn-zero)))))))),
+                         go (i + 2))))
                  (c = 120) (: r (dc-args st 1 0)
-                              (? !(two? r) (go (i + 1))
+                              (? (atom? r) (go (i + 1))
                                  (: v <<>r
                                     (? (string? v)
                                        (: u (dc-run st v) (? (0 < u) (out1 (u - 1)) (st 'exit) (out1 0) (go (i + 1))))
-                                       (: _ (dc-push st v) (go (i + 1)))))))
+                                       (dc-push st v, go (i + 1))))))
                  (elem c [60 62 61]) (cmpx c (i + 1) 0)
                  (c = 33) (: c2 (regc (i + 1))
                              (? (elem c2 [60 62 61]) (cmpx c2 (i + 2) 1)
-                                (: _ (dc-err st "'!' (041) unimplemented") (go (i + 1)))))
-                 (c = 113) (: _ (? (st 'depth <= 2) (pin st 'exit 1) 0) (out1 1))
+                                (dc-err st "'!' (041) unimplemented", go (i + 1))))
+                 (c = 113) ((? (st 'depth <= 2) (pin st 'exit 1) 0), out1 1)
                  (c = 81) (: r (dc-args st 1 1)
-                             (? !(two? r) (go (i + 1))
+                             (? (atom? r) (go (i + 1))
                                 (: m (dc-int <<>r)
                                    (? (m < 1) (go (i + 1))
-                                      (st 'depth <= m) (: _ (dc-err st "Q command argument exceeded string execution depth") (go (i + 1)))
+                                      (st 'depth <= m) (dc-err st "Q command argument exceeded string execution depth", go (i + 1))
                                       (out1 (m - 1))))))
                  (c = 63) (: l (urd-line (st 'rd))
                              (? (two? l) (: u (dc-run st <l) (? (0 < u) (out1 (u - 1)) (go (i + 1)))) (go (i + 1))))
-                 (: _ (dc-err st ("'" + string c + "' (0" + radix c 8 + ") unimplemented")) (go (i + 1))))))
+                 (dc-err st ("'" + string c + "' (0" + radix c 8 + ") unimplemented"), go (i + 1)))))
        (go 0))
    (dc-main as)
     (: st (dc-state 0)
        _ (pin st 'rd (urd in))
        (usage m) (udie 1 ("dc: " + m + "\nTry 'dc --help' for more information."))
        (go a acc)
-        (? !(two? a) (rev acc)
+        (? (atom? a) (rev acc)
            (: w <a n #w
               (? (w = "-e" || w = "--expression") (? (two? >a) (go >>a ([0 <>a] . acc)) (usage "option requires an argument -- 'e'"))
                  (13 < n && snip w 0 13 = "--expression=") (go >a ([0 (snip w 13 n)] . acc))
                  (2 < n && snip w 0 2 = "-e") (go >a ([0 (snip w 2 n)] . acc))
                  (w = "-f" || w = "--file") (? (two? >a) (go >>a ([1 <>a] . acc)) (usage "option requires an argument -- 'f'"))
                  (7 < n && snip w 0 7 = "--file=") (go >a ([1 (snip w 7 n)] . acc))
-                 (w = "--") (rev acc + map (\ f [1 f]) >a)
+                 (w = "--") (rev acc + map (f \ [1 f]) >a)
                  (1 < n && w 0 = 45) (usage ("invalid option -- '" + string (w 1) + "'"))
                  (go >a ([1 w] . acc)))))
        jobs (go as ())
@@ -940,15 +940,15 @@ define j(n, x) {
        ; reads the line after the one that asked
        (stdin _)
         (: (item acc) (: l (urd-line (st 'rd))
-                         (? !(two? l) (? #acc (dc-run st acc) 0)
+                         (? (atom? l) (? #acc (dc-run st acc) 0)
                             (: t (acc + <l + "\n")
                                (? (dc-open? t) (item t)
-                                  (: _ (dc-run st t) (? (st 'exit) 0 (item "")))))))
+                                  (dc-run st t, (? (st 'exit) 0 (item "")))))))
            (item ""))
        (one j) (? (st 'exit) 0
                   (<j = 0) (dc-run st <>j)
                   (<>j = "-") (stdin 0)
-                  (: r (uread <>j) (? (two? r) (dc-run st <>r) (: _ (dc-err st ("Could not open file " + <>j)) 0))))
+                  (: r (uread <>j) (? (two? r) (dc-run st <>r) (dc-err st ("Could not open file " + <>j), 0))))
        _ (? (two? jobs) (map one jobs) (stdin 0))
        _ (flush out)
        0)
@@ -959,29 +959,29 @@ define j(n, x) {
        (go 0 0))
 
    ; the bad-option face; the flags themselves are spelled out under `bc --help`
-   (bc-usage _) (: _ (say err "usage: bc [-l] [-q] [FILE..]") (put err 10))
+   (bc-usage _) (say err "usage: bc [-l] [-q] [FILE..]", put err 10)
    (bc-main as)
     (: st (bc-state 0)
        (opts m fs bad ml)
-        (? !(two? m) [fs bad ml]
+        (? (atom? m) [fs bad ml]
            (: a <m
               (? (a = "--") [((rev >m) + fs) bad ml]
                  (a = "-l" || a = "--mathlib") (opts >m fs bad 1)
                  (a = "-q" || a = "--quiet") (opts >m fs bad ml)
                  (a = "-lq" || a = "-ql") (opts >m fs bad 1)
-                 ((1 < #a) && (a 0 = 45)) (opts >m fs a ml)
+                 (1 < #a && (a 0 = 45)) (opts >m fs a ml)
                  (opts >m (a . fs) bad ml))))
        r (opts as () () 0)
        fs (rev <r) bad <>r ml <>>r
-       _ (? bad (: _ (say err ("bc: unknown option " + bad)) _ (put err 10)
-                   _ (bc-usage 0) (uleave 1))
+       _ (? bad (say err ("bc: unknown option " + bad), put err 10,
+                 bc-usage 0, uleave 1)
             0)
        _ (? ml (bc-source st bc-mathlib) 0)
        ; the files in turn, then stdin -- POSIX's own order, and a missing one
        ; costs the status without stopping the walk
        ok (foldl (\ a f (: t (uread f)
-                           (? (two? t) (: _ (bc-source st <>t) a)
-                              (: _ (say err ("bc: cannot open " + f)) _ (put err 10) 0))))
+                           (? (two? t) (bc-source st <>t, a)
+                              (say err ("bc: cannot open " + f), put err 10, 0))))
                  1 fs)
        _ (bc-stdin st)
        _ (flush out)

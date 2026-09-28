@@ -85,8 +85,8 @@
     (? !(0 < #p && p 0 = 47) p
        (: sg >(usplit 47 p)
           (go l acc)
-           (? !(two? l) acc
-              (: s <l end? !(two? >l)
+           (? (atom? l) acc
+              (: s <l end? (atom? >l)
                  a2 (? (s = "..") (? (two? acc) >acc acc) (s = ".") acc (s . acc))
                  (go >l (? (end? && (s = "." || s = "..")) ("" . a2) a2))))
           ("/" + ujoinc 47 (rev (go sg ())))))
@@ -127,7 +127,7 @@
           !(sc = "http:" || sc = "https:") [1 ("www: no door for " + sc + " urls")]
           (: w (wg-url u0)
              r (? (two? w) (wg-ask <w (w 1) (w 2) (w 3) "Accept-Encoding: gzip\r\n") ())
-             (? !(two? r) [1 ("www: no answer from " + url)]
+             (? (atom? r) [1 ("www: no answer from " + url)]
                 (: code <r hd (r 1)
                    loc (wg-header hd "location")
                    (? (300 <= code < 400 && string? loc)
@@ -146,11 +146,11 @@
    (ww-alnum? c) ((47 < c < 58) || (64 < c < 91) || (96 < c < 123))
    (ww-penc s keep)
     (: o (jug 0) hx "0123456789ABCDEF"
-       (one c) (? ((ww-alnum? c) || (elem c keep)) (string c)
+       (one c) (? (ww-alnum? c || elem c keep) (string c)
                   ("%" + string (hx (c >> 4)) + string (hx (c & 15))))
        _ (map (i \ say o (one (s i))) (jot #s))
        (slurp o))
-   (ww-lns s) (map (l \ ? ((0 < #l) && (l (#l - 1) = 13)) (snip l 0 (#l - 1)) l) (usplit 10 s))
+   (ww-lns s) (map (l \ ? (0 < #l && (l (#l - 1) = 13)) (snip l 0 (#l - 1)) l) (usplit 10 s))
    ; a url's host and port, the port the scheme's own when none is said
    (ww-hostport u dflt)
     (: a (ww-split u) au (snip (a 1) 2 #(a 1)) hp (ww-cut au ":")
@@ -173,23 +173,23 @@
     (: o (jug 0) run (tablet 1) _ (pin run 's "")
        (flush-run _) (: r (run 's) _ (pin run 's "") (? (0 < #r) (say o (ww-pre r)) 0))
        (line l)
-        (? ((l = ".") || (#l < 1)) 0
+        (? (l = "." || #l < 1) 0
            (: t (l 0) f (usplit 9 (snip l 1 #l))
               disp (? (two? f) <f "") sel (? (1 < #f) (f 1) "") host (? (2 < #f) (f 2) "")
               port (: n (? (3 < #f) (unum (f 3)) ()) (? (charm? n) n 70))
-              (? ((t = 105) || (t = 51)) (pin run 's (run 's + disp + "\n"))
+              (? (t = 105 || t = 51) (pin run 's (run 's + disp + "\n"))
                  (: _ (flush-run 0)
-                    href (? ((t = 104) && (starts? sel "URL:")) (snip sel 4 #sel)
+                    href (? (t = 104 && starts? sel "URL:") (snip sel 4 #sel)
                             (t = 55) ("form:" + ww-gurl host port t sel + "?search=")
                             (ww-gurl host port t sel))
                     (say o ("<p>" + ww-gkind t + " " + ww-link href disp + "</p>\n"))))))
-       (go ls) (? (two? ls) (? (<ls = ".") 0 (: _ (line <ls) (go >ls))) 0)
+       (go ls) (? (two? ls) (? (<ls = ".") 0 (line <ls, go >ls)) 0)
        _ (go (ww-lns s))
        _ (flush-run 0)
        (slurp o))
    ; a text item's lines, its ".." back to "." and its closing "." gone
    (ww-gtxt s) (: ls (ww-lns s)
-                  (go l) (? !(two? l) () (<l = ".") () ((? (starts? <l "..") (snip <l 1 #<l) <l) . go >l))
+                  (go l) (? (atom? l) () (<l = ".") () ((? (starts? <l "..") (snip <l 1 #<l) <l) . go >l))
                   (unlines (go ls)))
    (ww-gopher url)
     (: p (ww-split url) hp (ww-hostport url 70) path (p 2) q (p 3)
@@ -200,7 +200,7 @@
        (? !(hot? s) [1 ("www: no answer from " + url)]
           (: _ (say s (sel + (? (string? term) ("\t" + term) "") + "\r\n")) _ (flush s)
              b (slurp s) _ (close s)
-             (? ((t = 49) || (t = 55)) [0 url 'html (ww-gmenu b) 200]
+             (? (t = 49 || t = 55) [0 url 'html (ww-gmenu b) 200]
                 (t = 48) [0 url 'text (ww-gtxt b) 200]
                 (t = 104) [0 url 'html b 200]
                 [1 ("www: " + url + " is a gopher " + ww-gkind t + " item, not a page")]))))
@@ -215,30 +215,29 @@
    (ww-pin key fp)
     (: path (ww-pinfile 0)
        txt (uread path @ [1 s] s "")
-       (find l) (? !(two? l) () (: f (usplit 32 <l) (? ((1 < #f) && (<f = key)) (f 1) (find >l))))
+       (find l) (? (atom? l) () (: f (usplit 32 <l) (? (1 < #f && <f = key) (f 1) (find >l))))
        old (find (ww-lns txt))
        (? (string? old) (? (old = fp) ()
                            ("the certificate of " + key + " has changed: it was " + old + ", now " + fp
                             + "; delete its line in " + path + " to take the new one"))
           (: _ (mkdir (snip path 0 (#path - 13)) 448)
              a (open path "a")
-             _ (? (hot? a) (: _ (say a (key + " " + fp + "\n")) (close a)) 0)
+             _ (? (hot? a) (say a (key + " " + fp + "\n"), close a) 0)
              ())))
    (ww-gtext s)
     (: o (jug 0) st (tablet 3) _ (pins st 'pre 0 'ul 0 'buf "")
        (block _) (: b (st 'buf) _ (pin st 'buf "") (say o (ww-pre b)))
-       (ul on) (? (on = (st 'ul)) 0 (: _ (say o (? on "<ul>\n" "</ul>\n")) (pin st 'ul on)))
-       (trim s) (: (a i) (? ((i < #s) && ((s i = 32) || (s i = 9))) (a (i + 1)) i) (snip s (a 0) #s))
+       (ul on) (? (on = (st 'ul)) 0 (say o (? on "<ul>\n" "</ul>\n"), pin st 'ul on))
+       (trim s) (: (a i) (? (i < #s && ((s i = 32) || (s i = 9))) (a (i + 1)) i) (snip s (a 0) #s))
        (line l)
         (? ((st 'pre) = 1)
-            (? (starts? l "```") (: _ (block 0) (pin st 'pre 0))
+            (? (starts? l "```") (block 0, pin st 'pre 0)
                (pin st 'buf (st 'buf + l + "\n")))
-           (starts? l "```") (: _ (ul 0) (pin st 'pre 1))
-           (starts? l "* ") (: _ (ul 1) (say o ("<li>" + ww-esc (trim (snip l 2 #l)) + "</li>\n")))
-           (: _ (ul 0)
-              (? (starts? l "=>")
+           (starts? l "```") (ul 0, pin st 'pre 1)
+           (starts? l "* ") (ul 1, say o ("<li>" + ww-esc (trim (snip l 2 #l)) + "</li>\n"))
+           (ul 0, (? (starts? l "=>")
                   (: r (trim (snip l 2 #l))
-                     k ((: (g i) (? ((#r <= i) || (r i = 32) || (r i = 9)) i (g (i + 1)))) 0)
+                     k ((: (g i) (? (#r <= i || (r i = 32) || (r i = 9)) i (g (i + 1)))) 0)
                      href (snip r 0 k) lab (trim (snip r k #r))
                      (? (0 < #href) (say o ("<p>" + ww-link href (? (0 < #lab) lab href) + "</p>\n")) 0))
                  (starts? l "###") (say o ("<h3>" + ww-esc (trim (snip l 3 #l)) + "</h3>\n"))
@@ -256,9 +255,9 @@
        a (ww-answer q "input")
        u (? (string? a) (ww-join [(p 0) (p 1) (p 2) ("?" + ww-penc a '(45 46 95 126)) ""]) (ww-nofrag url))
        t ((cite 'tls 'tls-dial) <hp (hp 1))
-       (? (nil? t) [1 ("www: no answer from " + url)]
+       (? !t [1 ("www: no answer from " + url)]
           (: bad (ww-pin (<hp + ":" + show (hp 1)) (: c (t 'cert) (sha256 (? (string? c) c ""))))
-             (? (string? bad) (: _ ((cite 'tls 'tls-close) t) [1 ("www: " + bad)])
+             (? (string? bad) (((cite 'tls 'tls-close) t), [1 ("www: " + bad)])
                 (: _ ((cite 'tls 'tls-say) t (u + "\r\n"))
                    b ((cite 'tls 'tls-slurp) t) _ (close (t 's))
                    k (wg-find b "\r\n" 0)
@@ -283,7 +282,7 @@
    ; coding undone, then a latin-1 page (by its header, else its own <meta>) re-spelled
    (ww-body ct ce b)
     (: z (? (string? ce && wg-lower ce = "gzip") ((cite 'gz 'gz-unzip) b) [1 b])
-       (? !(two? z) ()
+       (? (atom? z) ()
           (: t <>z cs (: c (ww-cs ct) (? #c c (ww-cs (snip t 0 (min #t 4096)))))
              (? (elem cs ww-latins) (ww-latin t) t))))
    ; the charset a content type or a <meta> names, lower case, or ""
@@ -296,9 +295,9 @@
    (ww-latin s)
     (: n #s o (jug 0) tb (tablet 0)
        _ (map (i \ pin tb (128 + i) (utf8 (? (i < 32) (ww-1252 i) (128 + i)))) ^128)
-       (go i st) (? (n <= i) (: _ (say o (snip s st n)) (slurp o))
+       (go i st) (? (n <= i) (say o (snip s st n), slurp o)
                     (s i < 128) (go (i + 1) st)
-                    (: _ (say o (snip s st i)) _ (say o (tb (s i))) (go (i + 1) (i + 1))))
+                    (say o (snip s st i), say o (tb (s i)), go (i + 1) (i + 1)))
        (go 0 0))
    ; what a page's links resolve against: its <base href>, else the page itself
    (ww-base url b)
@@ -330,8 +329,8 @@
     (: o (jug 0)
        (go i) (? (n <= i) (slurp o)
                  (s i = 37 && i + 2 < n && 0 <= hexv (s (i + 1)) && 0 <= hexv (s (i + 2)))
-                  (: _ (put o (hexv (s (i + 1)) * 16 + hexv (s (i + 2)))) (go (i + 3)))
-                 (: _ (put o (? (plus? && s i = 43) 32 (s i))) (go (i + 1))))
+                  (put o (hexv (s (i + 1)) * 16 + hexv (s (i + 2))), go (i + 3))
+                 (put o (? (plus? && s i = 43) 32 (s i)), go (i + 1)))
        (go i))
    ; a fragment's name: the # off and each %XX back to its byte, the way an id is spelled
    (ww-unpct s) (ww-dec s 1 #s 0)
@@ -360,9 +359,9 @@
           !(sc = "http:" || sc = "https:") ()
           (: w (wg-url (ww-nofrag url))
              r (? (two? w) (wg-ask <w (w 1) (w 2) (w 3) "") ())
-             (? !(two? r) ()
+             (? (atom? r) ()
                 (: code <r loc (wg-header (r 1) "location")
-                   (? ((300 <= code < 400) && string? loc && (0 < hops))
+                   (? ((300 <= code < 400) && string? loc && 0 < hops)
                        (ww-fetch (ww-resolve url loc) (hops - 1))
                       (200 <= code < 300) (r 2)
                       ()))))))
@@ -370,7 +369,7 @@
    ; frame) of up to 4 megapixels
    (ww-picture b)
     (: d (pic-size b)
-       (? (!(two? d) || (4194304 < (d 0 * d 1))) 'none
+       (? (atom? d || 4194304 < (d 0 * d 1)) 'none
           (: r (pic-decode b) (? (two? r) r 'none))))
    ; a picture as rows of cells at most cols wide and rows tall, set in at the text's own
    ; margin where there is room for it
@@ -404,13 +403,13 @@
    ; fetch the pictures whose marks are on the screen or the one after, then lay them in
    (ww-pictures st)
     (: p (st 'raw) g (st 'page)
-       (? (!(two? p) || two? (st 'sav)) 0
+       (? (atom? p || two? (st 'sav)) 0
           (: base (ww-base (g 1) (g 3)) c (st 'imgs) ins (st 'ins)
              top (pgtopline st) end (pglast st) reach (end + (end - top))
              due (filter (m \ (: l (ww-shift ins <m) u (ww-resolve base (m 1))
                                (top <= l <= reach && nil? (peep c u ()))))
                          (ww-marks p))
-             (? !(two? due) 0
+             (? (atom? due) 0
                 (: n #due
                    _ (map (i \ (: u (ww-resolve base ((due i) 1))
                                   _ (pgmsg st ("fetching picture " + show (i + 1) + " of " + show n + " ..."))
@@ -428,12 +427,10 @@
            ; a place on this page: a step in the history, and no fetch
            (: ln (ww-anchor st fr)
               (? (ln < 0) (pgmsg st ("no anchor " + fr + " on this page"))
-                 (: _ (pin st 'hist ([(st 'url) (st 'top)] . st 'hist))
-                    _ (pin st 'url u)
-                    (pgline! st ln))))
+                 (pin st 'hist ([(st 'url) (st 'top)] . st 'hist), pin st 'url u, pgline! st ln)))
           (sc = "form:") (ww-field st u)
           !(elem sc '("http:" "https:" "file:" "gopher:" "gemini:")) (pgmsg st ("no door for " + u))
-          (: _ (pin st 'go [u 1 -1]) st)))
+          (pin st 'go [u 1 -1], st)))
    (ww-link st n)
     (: us (st 'urls) (? (0 < n <= #us) (us (n - 1)) ()))
    ; a form's field: ask for its text, what it holds already typed in. what follows the last
@@ -463,30 +460,28 @@
    (ww-back st)
     (? (pgback st) st
        (: h (st 'hist)
-          (? !(two? h) (pgmsg st "no previous page")
+          (? (atom? h) (pgmsg st "no previous page")
              (ww-nofrag <(<h) = ww-nofrag (st 'url))
-              (: _ (pins st 'hist >h 'url <(<h)) (pggo st <>(<h)))
-             (: _ (pins st 'hist >h 'go [<(<h) 0 <>(<h)]) st))))
+              (pins st 'hist >h 'url <(<h), pggo st <>(<h))
+             (pins st 'hist >h 'go [<(<h) 0 <>(<h)], st))))
    (ww-norm st c)
     (: cn (st 'cnt) n (pgcnt st 0)
-       spend (\ _ (pins st 'cnt "" 'msg ""))
+       spend (_ \ (pins st 'cnt "" 'msg ""))
        (? ((c = 13 || c = 10) && 0 < #cn)
            (: _ (spend ()) u (ww-link st n) (? u (ww-goto st u) (pgmsg st ("no link " + show n))))
           ((c = 13 || c = 10) && 0 <= ww-seen st (st 'cur))
-           (: _ (spend ()) (ww-goto st (ww-link st (st 'cur))))
-          (c = 9 || c = 265) (: _ (spend ()) (ww-tab st (? (c = 9) 1 -1)))
-          (c = 85) (: _ (spend ())
-                      (? !(#cn) (pgmsg st (st 'url))
+           (spend (), ww-goto st (ww-link st (st 'cur)))
+          (c = 9 || c = 265) (spend (), ww-tab st (? (c = 9) 1 -1))
+          (c = 85) (spend (), (? !(#cn) (pgmsg st (st 'url))
                          (: u (ww-link st n) (pgmsg st (? u (show n + ": " + u) ("no link " + show n))))))
-          (c = 111) (: _ (spend ()) (pgask st 111))
+          (c = 111) (spend (), pgask st 111)
           (c = 109) (: _ (spend ()) l (ww-main st)
                        (? (0 <= l) (pgline! st l) (pgmsg st "no main content marked on this page")))
-          (c = 66 || c = 127 || c = 8) (: _ (spend ()) (ww-back st))
-          (c = 114) (: _ (spend ()) _ (pin st 'go [(st 'url) 0 (st 'top)]) st)
+          (c = 66 || c = 127 || c = 8) (spend (), ww-back st)
+          (c = 114) (spend (), pin st 'go [(st 'url) 0 (st 'top)], st)
           (c = 104 || c = 72)
-           (: _ (spend ())
-              (? (two? (st 'sav)) st
-                 (: _ (pin st 'sav [(st 'ls) (st 'file) (st 'top)]) (pgload st (lines ww-help) "HELP"))))
+           (spend (), (? (two? (st 'sav)) st
+                 (pin st 'sav [(st 'ls) (st 'file) (st 'top)], pgload st (lines ww-help) "HELP")))
           (pgstep st c)))
    (ww-step st c)
     (? (st 'mode = 'c && st 'lead = 111)
@@ -520,7 +515,7 @@
    ; first on the screen as far down it as before (the help, laid by less, just rewraps)
    (ww-fit st)
     (: g (st 'page) w (pgwidth st)
-       (? (!(two? g) || st 'lw = w || two? (st 'sav)) 0
+       (? ((atom? g) || st 'lw = w || two? (st 'sav)) 0
           (: ls (st 'links) top (pgtopline st) nl (st 'nl)
              k ((: (f k l) (? (atom? l) 0 (top <= <l) k (f (k + 1) >l))) 1 ls)
              off (? (0 < k) (ls (k - 1) - top) 0)
@@ -531,7 +526,7 @@
    ; -- the face -----------------------------------------------------------------
    (ww-do st)
     (: g (st 'go)
-       (? !(two? g) 0
+       (? (atom? g) 0
           (: _ (pin st 'go ())
              _ (pgmsg st ("fetching " + <g + " ..."))
              _ (puts (pgframe st)) _ (flush out)
@@ -541,7 +536,7 @@
     (: e (string 27)
        _ (raw 1)
        _ (puts (e + "[?1049h"))
-       (fin _) (: _ (puts (e + "[0m" + e + "[?1049l")) _ (flush out) _ (raw 0) 0)
+       (fin _) (puts (e + "[0m" + e + "[?1049l"), flush out, raw 0, 0)
        (go pend)
         (: _ (ww-do st)
            _ (pgresize st)
@@ -551,13 +546,13 @@
            kr (pgkey kq pend)
            c <kr
            (? (c < 0) (fin ())
-              (: _ (ww-step st c) (? (st 'quit) (fin ()) (go <>kr)))))
+              (ww-step st c, (? (st 'quit) (fin ()) (go <>kr)))))
        (go -1))
    (www-main as)
     (: t (tablet 0)
        o (uopt as t '(119) '(101) ())                       ; -w takes a value
        _ (? (two? o) () (udie 2 ww-usage))
-       _ (: c (uoptun t '(119)) (? (nil? c) () (udie 2 ("www: unknown option -" + string c))))
+       _ (: c (uoptun t '(119)) (? !c () (udie 2 ("www: unknown option -" + string c))))
        us <>>o
        _ (? (two? us && atom? >us) () (udie 2 ww-usage))
        ws (tty 1)

@@ -49,12 +49,12 @@
 ; a real lsp message: publishDiagnostics with an empty diagnostics array, the shape
 ; that forced the design -- [] must come back [], never null
 (test
- (: r (json-read (+ "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
-                    "\"params\":{\"uri\":\"file:///x.l\",\"diagnostics\":[]}}"))
+ (: r (json-read ("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
+                    + "\"params\":{\"uri\":\"file:///x.l\",\"diagnostics\":[]}}"))
     v <>r
     p (v "params")
-    (&& (two? r) (() = (p "diagnostics")) ("file:///x.l" = (p "uri"))
-        (: r2 (json-read (json-show v)) (two? r2 && (() = ((<>r2 "params") "diagnostics")))))))
+    (two? r && () = (p "diagnostics") && "file:///x.l" = (p "uri")
+        && (: r2 (json-read (json-show v)) (two? r2 && (() = ((<>r2 "params") "diagnostics")))))))
 
 (test_fin ())
 (puts "json: ok")

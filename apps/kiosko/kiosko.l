@@ -33,9 +33,10 @@
 (borrow 'posix)
 ; the path clips (love/boot/post.l): segs and pclean under the request guard below.
 (borrow 'path)
-(: (splits s c) ((: (g i st acc) (? (i < #s) (s i = c ? (g (i + 1) (i + 1) (snip s st i . acc))
-                                                        (g (i + 1) st acc))
-                                    (rev (snip s st #s . acc)))) 0 0 ())
+(: (splits s c) (:- (g 0 0 ())
+                    (g i st acc) (i < #s ? (s i = c ? (g (i + 1) (i + 1) (snip s st i . acc))
+                                                      (g (i + 1) st acc))
+                                   (rev (snip s st #s . acc))))
    (dir? p)     (two? (readdir p))
    (fsize p)    (stat p @ (s . _) s)
    ; fsize answers () for missing and 0 for empty, and both are nil -- so it
@@ -138,7 +139,7 @@
                    (snip s 0 (0 < e && s (e - 1) = 13 ? (e - 1) e)))
    ; the first space-separated word of s, and everything after it
    (word1 s)    (: n #s
-                   (go i) (? ((i < n) && !(s i = 32)) (go (i + 1)) i)
+                   (go i) (i < n && s i != 32 ? (go (i + 1)) i)
                    (snip s 0 (go 0)))
    (after1 s)   (: n #s
                    (skipw i) (i < n && s i != 32 ? (skipw (i + 1)) i)
@@ -149,14 +150,15 @@
 (: ; percent-decoding, and `+` left alone: it means a space in a query string, never in a
    ; path, and the query is cut before we ever get here.
    (pdecode s) (: n #s
-                  ((: (g i acc)
-                      (? !(i < n) acc
+                  (:- (g 0 "")
+                      (g i acc)
+                      (!(i < n) ? acc
                          (: c (s i)
-                            (? (c = 37 && i + 2 < n)
-                               (: h (hexv (s (i + 1))) l (hexv (s (i + 2)))
+                            (c = 37 && i + 2 < n
+                             ? (: h (hexv (s (i + 1))) l (hexv (s (i + 2)))
                                   (-1 < h && -1 < l ? (g (i + 3) (acc + string (16 * h + l)))
                                                       (g (i + 1) (acc + string c))))
-                               (g (i + 1) (acc + string c)))))) 0 ""))
+                               (g (i + 1) (acc + string c)))))))
    (cutq s)    (: n #s (g i) (? (i >= n) s
                                 (s i = 63 || s i = 35) (snip s 0 i)
                                 (g (i + 1)))
@@ -169,9 +171,9 @@
    ; the climb is read off the answer rather than asked for as 0, because pclean
    ; spells a refusal and an empty path the same way -- and "/a/.." IS the root, not
    ; an escape. cleaned unbounded, a leading ".." is exactly the escape.
-   (rooted p)  (? !(0 < #p && p 0 = 47) ()
+   (rooted p)  (!(0 < #p && p 0 = 47) ? ()
                   (: cl (pclean (segs p) ())
-                     (? (two? cl && <cl = "..") ()
+                     (two? cl && <cl = ".." ? ()
                         ("/" + join "/" cl + (ends? p "/" && two? cl ? "/" ""))))))
 
 ; --- what a file is ------------------------------------------------------------------
@@ -187,7 +189,7 @@
            ("ico" "image/x-icon")              ("pdf" "application/pdf")
            ("woff2" "font/woff2")              ("woff" "font/woff")
            ("wasm" "application/wasm"))
-   (extof p) (: ps (splits p 46) (? !(two? >ps) "" (: (last l) (? (two? >l) (last >l) <l) (last ps))))
+   (extof p) (: ps (splits p 46) (atom? >ps ? "" (: (last l) (two? >l ? (last >l) <l) (last ps))))
    (mime p)  (: e (extof p) (g l) (? (atom? l) "application/octet-stream"
                                      (<<l = e) <><l
                                      (g >l))
@@ -198,7 +200,7 @@
 ; headers a get would have sent and stops -- the Content-Length still describes the body
 ; that was not sent, which is what makes head useful.
 (: (reply c code why ctype body head?)
-   (: _ (say c ("HTTP/1.1 " + show code + " " + why + "\r\n"
+   (say c ("HTTP/1.1 " + show code + " " + why + "\r\n"
                 + "Content-Type: " + ctype + "\r\n"
                 + "Content-Length: " + show #body + "\r\n"
                 + "Cache-Control: no-cache\r\n"
@@ -207,10 +209,10 @@
                 ; cross-origin that they would refuse
                 + "Cross-Origin-Opener-Policy: same-origin\r\n"
                 + "Cross-Origin-Embedder-Policy: require-corp\r\n"
-                + "Connection: close\r\n\r\n"))
-      _ (!head? ? (say c body))
-      _ (flush c)
-      code)
+                + "Connection: close\r\n\r\n"),
+    (!head? ? (say c body)),
+    flush c,
+    code)
    ; an error is a page too -- small, and readable when a browser shows it
    (oops c code why head?)
    (reply c code why "text/html; charset=utf-8"
@@ -261,18 +263,17 @@
                            ; relative links inside its index resolve against the right
                            ; base; then index.html; then a listing.
                            (? !(ends? p "/")
-                              (: _ (say c ("HTTP/1.1 301 Moved Permanently\r\nLocation: " + p
-                                           + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
-                                 _ (flush c) [301 meth raw])
+                              (say c ("HTTP/1.1 301 Moved Permanently\r\nLocation: " + p
+                                      + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
+                               flush c, [301 meth raw])
                               (fhere? (full + "index.html"))
                               (: b (gulp (full + "index.html"))
-                                 _ (reply c 200 "OK" "text/html; charset=utf-8" b head?)
-                                 [200 meth raw])
-                              (: _ (listing c root p head?) [200 meth raw]))
-                           !(fhere? full) (: _ (oops c 404 "Not Found" head?) [404 meth raw])
+                                 (reply c 200 "OK" "text/html; charset=utf-8" b head?, [200 meth raw]))
+                              (listing c root p head?, [200 meth raw]))
+                           !(fhere? full) (oops c 404 "Not Found" head?, [404 meth raw])
                            (: b (gulp full)
-                              (? (got? b) (: _ (reply c 200 "OK" (mime full) b head?) [200 meth raw])
-                                 (: _ (oops c 403 "Forbidden" head?) [403 meth raw]))))))))))))))
+                              (got? b ? (reply c 200 "OK" (mime full) b head?, [200 meth raw])
+                                 (oops c 403 "Forbidden" head?, [403 meth raw]))))))))))))))
 
 ; --- the loop ---------------------------------------------------------------------------
 (: (note quiet l) (!quiet ? (say err $ "kiosko: " + show <l + " " + <>l + " " + <>>l + "\n"))
@@ -298,8 +299,8 @@
    (accept-loop root l quiet before make)
    (: _ (await l)
       c (accept l)
-      _ (drain ())
-      _ (? (hot? c) (: _ (before ? (before ()))
+      (drain (),
+       (hot? c ? ((before ? (before ())),
                 ; the session's raise is the session's: uncaught, a scare anywhere under
                 ; serve1 -- a file that vanished between the stat and the gulp, a peer that
                 ; hung up mid-write -- takes the whole server down with it, every other
@@ -307,11 +308,10 @@
                 ; unwinds, so the cleanup has to be at the landing site), and the client
                 ; gets a 500 instead of a reset. the help rides the task, so five sessions
                 ; hold five of these at once without seeing each other's.
-                (twirl (\ _ (: r (trap (serve1 root make) c
-                                       (\ a b (: _ (oops c 500 "Internal Server Error" 0)
-                                                 [500 "-" (show a)])))
-                               _ (r ? (note quiet r)) _ (seal c 1) (close c))) ())))
-      (accept-loop root l quiet before make))
+                twirl (_ \ (: r (trap (serve1 root make) c
+                                       (\ a b (oops c 500 "Internal Server Error" 0, [500 "-" (show a)])))
+                                  ((r ? (note quiet r)), seal c 1, close c))) ())),
+       accept-loop root l quiet before make))
    ; the entry. `root` is a directory (no trailing slash), `port` a fixnum, `before` a thunk
    ; or (). answers the failure's nom when the port cannot be taken, so a caller can say
    ; WHY ('eacces is not 'eaddrinuse). all four operands, always -- three would hand back

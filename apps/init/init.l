@@ -61,7 +61,7 @@
               (? (policy = 'no ? 0 (n < tries-cap))
                  (note ("    " + show name + " crashed -> restart #" + show n),
                   supervise name thunk policy cnt)
-                 (: _ (note ("    " + show name + " gave up")) ())))))
+                 (note ("    " + show name + " gave up"), ())))))
 
    ; --- act: bring one unit up --- a oneshot really forks/execs/waits a child (the wire
    ; out to a real process: `hark` returns (exit-code . captured-stdout), so the real exit

@@ -28,7 +28,7 @@
 ; load the table first, in its own top-level form: the next form's bare mx-kinds /
 ; mx-add / mx-mul references resolve at its compile, which must follow this run.
 (borrow 'posix)
-(: _ (reads (open "love/mx.l" "r")) ())
+(reads (open "love/mx.l" "r"), ())
 
 (:
    (join l) (foldl (+) "" l)
@@ -44,7 +44,7 @@
    (rcol m j) (map (i \ cell m i j) ridx)
    ; a kind's dispatch signature: its row and column in both matrices -- equal
    ; signature = same band. mx2coq derives the partition from this same datum.
-   (sig i) (list (rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i))
+   (sig i) [(rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i)]
    (idxin x l k) (? (atom? l) -1 (<l = x) k (idxin x >l (k + 1)))
    sigs ((: (go is acc) (? (atom? is) (rev acc)
                            (: s (sig <is)

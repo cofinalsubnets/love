@@ -34,13 +34,13 @@
    (kof t) <t
    (vof t) <>t
    (lof t) <>>t
-   (hof t) (? (3 < tally t) <>>>t ())
+   (hof t) (? (3 < #t) <>>>t ())
    ; a numeric token's source spelling, which its value cannot answer: 0777 and 511
    ; are one value, 1u and 1 are one value, and a float's value is not text at all.
    ; # owes the spelling (C11 6.10.3.2), so the lexer carries it and every rebuild
    ; below hands it on. () on a token the cpp minted itself (__LINE__, defined ..),
    ; where the value is the spelling. parse reuses this slot once cpp is done.
-   (sof t) (? (4 < tally t) <>>>>t ())
+   (sof t) (? (4 < #t) <>>>>t ())
    (tok k v l) [k v l]
    ; -- #line (C11 6.10.4) -- the delta rides `macs`, the one state already threaded
    ; through every arm of cppgo, so no signature moves. applied where active tokens
@@ -51,7 +51,7 @@
    (lnbump d (p . q . r . s)) (p . q . r + d . s)
    (lnshift macs l)
     (: d (lndel macs)
-       (? (d = 0) l (: (go k) (? !(two? k) () (lnbump d <k . go >k)) (go l))))
+       (? (d = 0) l (: (go k) (? (atom? k) () (lnbump d <k . go >k)) (go l))))
    ; -- include markers -- an #include splices the
    ; header's own line numbering into the one flat output stream, so a line
    ; number alone can't say which file it is (and isn't monotone across the
@@ -68,7 +68,7 @@
    (kwv? ('kw . v . _) s) ?(v = s)
    (addhide t hs)                                   ; union hs into t's hideset
     [(kof t) (vof t) (lof t) (dedup (hof t + hs)) (sof t)]
-   (dedup l) (: (go l seen) (? !(two? l) ()
+   (dedup l) (: (go l seen) (? (atom? l) ()
                               (elem <l seen) (go >l seen)
                               (<l . go >l (<l . seen)))
                 (go l ()))
@@ -76,7 +76,7 @@
    ; -- the spelling of a token, for ## paste and # stringize --
    numks '(num unum ulnum llnum ullnum flo flof iflo)
    (spell t) (: k (kof t) s (sof t)
-                (? (0 < tally s) s                            ; the spelling the lexer kept
+                (? (0 < #s) s                            ; the spelling the lexer kept
                    (elem k numks) (show (vof t))           ; ..or a cpp-minted decimal
                    (k = 'kw) (show (vof t))
                    (k = 'str) ("\"" + vof t + "\"")
@@ -88,18 +88,18 @@
    ; this; we hand the value straight to codegen and never re-lex it, so the
    ; spelling is the answer. whitespace: one space between every pair of tokens,
    ; where C keeps `a+1` tight -- the lexer would have to record what it dropped.
-   (spellcat ts) (: (go l acc) (? !(two? l) acc
+   (spellcat ts) (: (go l acc) (? (atom? l) acc
                                   (go >l (acc + (? (acc = "") "" " ") + spell <l)))
                     (go ts ""))
 
    ; -- macro table entries: (obj body) | (fun params body variadic?) --
-   (mdef macs name) (peep macs name ())
+   (mdef macs name) (macs name)
    ; phase 4 knows no keywords: `#define auto __auto_type` (the linux kernel's) names a
    ; macro like any other, and the lexer's early `auto` token must still find it. the
    ; table is keyed by TEXT either way, and 'kwmac says whether any keyword was ever
    ; defined -- so an ordinary keyword token pays one lookup only in a TU that did
    (macnm t) (? (kof t = 'kw) (show (vof t)) (vof t))
-   (macat? t macs) (? (idt? t) 1 ((kof t = 'kw) && peep macs 'kwmac ()))
+   (macat? t macs) (? (idt? t) 1 ((kof t = 'kw) && macs 'kwmac))
    (mobj? ('obj . _)) 1
    (mfun? ('fun . _)) 1
 
@@ -111,7 +111,7 @@
 
    ; -- split off the first logical line (tokens sharing the head's line no.) --
    (linesplit toks) (: ln (lof <toks)
-                       (go ts acc) (? !(two? ts) [(rev acc) ()]
+                       (go ts acc) (? (atom? ts) [(rev acc) ()]
                                       (lof <ts = ln) (go >ts (<ts . acc))
                                       [(rev acc) ts])
                        (go toks ()))
@@ -121,7 +121,7 @@
    ; split; nested parens preserved), rest past the closing ')'. () on error. --
    (collargs ts)
     (: (go ts depth cur args)
-        (? !(two? ts) ()
+        (? (atom? ts) ()
            (: t <ts
               (? (depth = 1 && pv? t ")") [(rev (rev cur . args)) >ts]
                  (depth = 1 && pv? t ",") (go >ts depth () (rev cur . args))
@@ -129,7 +129,7 @@
                  (pv? t ")") (go >ts (depth - 1) (t . cur) args)
                  (go >ts depth (t . cur) args))))
        (go ts 1 () ()))
-   (paramidx params name) (: (go l i) (? !(two? l) -1 (<l = name) i (go >l (i + 1)))
+   (paramidx params name) (: (go l i) (? (atom? l) -1 (<l = name) i (go >l (i + 1)))
                              (go params 0))
 
    ; -- ## paste: fold a token list, pasting across every (p "##") by joining
@@ -141,8 +141,8 @@
    ; and `A ## B ; bob` pasted a with the `;` and ate it when the join failed to relex. --
    (pmk? ('pmark . _)) 1
    (paste toks line)
-    (: (nopm l) (? !(two? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
-       (go l acc) (? !(two? l) (nopm (rev acc))
+    (: (nopm l) (? (atom? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
+       (go l acc) (? (atom? l) (nopm (rev acc))
                      (pv? <l "##" && two? acc && two? >l)
                       (: a <acc b <>l
                          (? (pmk? a) (go >>l (b . >acc))     ; placemarker ## x -> x
@@ -160,11 +160,11 @@
    ; array rides as `mb`, a nom bound nowhere else, and its ## check is inlined.)
    (subst mb params args var? line macs)
     (: (adjh i) ((0 < i && pv? (mb (i - 1)) "##") ||
-                 (i + 1 < tally mb && pv? (mb (i + 1)) "##"))
+                 (i + 1 < #mb && pv? (mb (i + 1)) "##"))
        (go i acc)
-        (? (tally mb <= i) (rev acc)
+        (? (#mb <= i) (rev acc)
            (: t (mb i)
-              (? (pv? t "#" && i + 1 < tally mb)        ; # param -> stringize
+              (? (pv? t "#" && i + 1 < #mb)        ; # param -> stringize
                   (: p (mb (i + 1))
                      pi (? (idt? p) (paramidx params (vof p)) -1)
                      va (var? && idv? p "__VA_ARGS__")
@@ -194,17 +194,17 @@
                  (go (i + 1) (t . acc)))))
        (paste (go 0 ()) line))
    (vaargs args params)                             ; the arg token-lists past the named params, comma-joined
-    (: np (tally params)
+    (: np #params
        (skip l k) (? (k < 1 || atom? l) l (skip >l (k - 1)))
-       (join l) (? !(two? l) ()
-                   !(two? >l) <l
+       (join l) (? (atom? l) ()
+                   (atom? >l) <l
                    (<l + (tok 'p "," 0 . join >l)))
        (join (skip args np)))
 
    ; -- the expander: rescan toks, replacing macro invocations (honoring
    ; hidesets), fully. mutually recursive with subst via expand-of-arg. --
    (expand toks macs)
-    (? !(two? toks) ()
+    (? (atom? toks) ()
        (: t <toks rest >toks
           (? !(macat? t macs) (t . expand rest macs)
              (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
@@ -217,7 +217,7 @@
                              (expand (body + rest) macs))
                          (mfun? m && two? rest && pv? <rest "(")
                           (: ca (collargs >rest)
-                             (? !(two? ca) (t . expand rest macs)
+                             (? (atom? ca) (t . expand rest macs)
                                 (: args <ca after <>ca
                                    params <>m mbody <>>m mvar <>>>m
                                    hs (nm . hof t)
@@ -225,7 +225,7 @@
                                    (expand (mapadd body hs (lof t) + after) macs))))
                          (t . expand rest macs))))))))
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
-    (? !(two? toks) ()
+    (? (atom? toks) ()
        (: t <toks ([(kof t) (vof t) line (dedup (hof t + hs)) (sof t)] . mapadd >toks hs line)))
    ; -- #line's operand: a digit sequence, or what one macro-expands to (C11 6.10.4p3).
    ; () when it is neither, which is the directive doing nothing. --
@@ -236,18 +236,17 @@
    ; -- #if / #elif integer constant-expression evaluation (undefined ids -> 0,
    ; defined X / defined(X) resolved first, then macro-expanded). --
    (resolve-defined ts macs)                        ; replace `defined X` / `defined ( X )` with 0/1
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (idv? <ts "defined")
         (: r >ts
            (? (two? r && pv? <r "(")
                (: nm <>r
-                  (. (tok 'num (? (two? (mdef macs (macnm nm))) 1 0) 0)
-                        (resolve-defined >>>r macs)))    ; skip ( name )
+                  (tok 'num (? (two? (mdef macs (macnm nm))) 1 0) 0 . resolve-defined >>>r macs))    ; skip ( name )
               (two? r && (idt? <r || kof <r = 'kw))
                (tok 'num (? (two? (mdef macs (macnm <r))) 1 0) 0 . resolve-defined >r macs)
               (resolve-defined r macs)))
        (<ts . resolve-defined >ts macs))
-   (zero-ids ts) (? !(two? ts) ()                  ; any surviving identifier is 0
+   (zero-ids ts) (? (atom? ts) ()                  ; any surviving identifier is 0
                     (: t <ts ((? (idt? t || kof t = 'kw) (tok 'num 0 0) t) . zero-ids >ts)))
    (ifval ts macs) (: r0 (resolve-defined ts macs)
                       r1 (expand r0 macs)
@@ -293,7 +292,7 @@
 
    ; a tiny precedence-climbing evaluator over cpp number tokens -> a (v u) value.
    (cprim ts)
-    (? !(two? ts) [(cv 0 0) ()]
+    (? (atom? ts) [(cv 0 0) ()]
        (: t <ts
           (? (elem (kof t) '(num unum ulnum llnum ullnum))
               ; a U suffix says unsigned, and so does a value past intmax's top --
@@ -312,9 +311,9 @@
                       (? !hit [v rest]
                          (: r2 (sub >rest) (go (hit v <r2) <>r2))))
        (go <r <>r))
-   (cassoc k v ops) (: (go l) (? !(two? l) () ((<<l = k) && (<><l = v)) <>><l (go >l))
+   (cassoc k v ops) (: (go l) (? (atom? l) () ((<<l = k) && (<><l = v)) <>><l (go >l))
                        (go ops))
-   (cmul ts) (clevel cprim [['p "*" (\ a b (cbin (\ x y (* x y)) a b))]
+   (cmul ts) (clevel cprim [['p "*" (\ a b (cbin (\ x y (x * y)) a b))]
                              ['p "/" cdiv] ['p "%" cmod]] ts)
    (cadd ts) (clevel cmul [['p "+" (\ a b (cbin (\ x y (x + y)) a b))]
                             ['p "-" (\ a b (cbin (\ x y (x - y)) a b))]] ts)
@@ -324,7 +323,7 @@
                             ['p ">" (\ a b (ccmp (\ x y (y < x)) a b))]
                             ['p ">=" (\ a b (ccmp (\ x y (y <= x)) a b))]] ts)
    (ceq ts) (clevel crel [['p "==" (\ a b (ccmp (\ x y (x = y)) a b))]
-                           ['p "!=" (\ a b (ccmp (\ x y (? (x = y) 0 1)) a b))]] ts)
+                           ['p "!=" (\ a b (ccmp (\ x y (x != y)) a b))]] ts)
    (cband ts) (clevel ceq [['p "&" (\ a b (cbin (\ x y (cbit (\ p q (p & q)) x y)) a b))]] ts)
    (cbxor ts) (clevel cband [['p "^" (\ a b (cbin (\ x y (cbit (\ p q (p ^ q)) x y)) a b))]] ts)
    (cbor ts) (clevel cbxor [['p "|" (\ a b (cbin (\ x y (cbit (\ p q (p | q)) x y)) a b))]] ts)
@@ -349,7 +348,7 @@
 
    ; -- parse a #define body into a macro entry --
    (defmacro macs line-toks)                        ; line-toks: after the leading (# define)
-    (? !(two? line-toks) ()
+    (? (atom? line-toks) ()
        (: name (macnm <line-toks)
           _ (? (kof <line-toks = 'kw) (pin macs 'kwmac 1) ())
           r >line-toks
@@ -358,12 +357,12 @@
           ; object macro `#define EOF (-1)`, whose '(' is spaced and begins the body).
           (? (two? r && pv? <r "(" && <>>><r)
               (: pr (defparams >r () ())
-                 (? !(two? pr) ()
+                 (? (atom? pr) ()
                     (: params <pr var? <>pr body <>>pr
                        _ (pin macs name ['fun params body var?]) 1)))
-             (: _ (pin macs name ['obj r]) 1))))
+             (pin macs name ['obj r], 1))))
    (defparams ts params var?)                        ; -> (params variadic? body) | () ; ts after '('
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (pv? <ts ")") [(rev params) var? >ts]    ; F() -- empty params; body follows the )
        (pv? <ts "...") (: r >ts (? (two? r && pv? <r ")") [(rev params) 1 >r] ()))
        (idt? <ts)
@@ -383,9 +382,9 @@
     (: r >body
        (? !(two? r && pv? <r "(" && two? >r && (kof <>r = 'str) &&
            two? >>r && pv? <>>r ")") ()
-          (: nm (vof <>r) key ("#save:" + nm) stk (peep macs key ())
+          (: nm (vof <>r) key ("#save:" + nm) stk (macs key)
              (? (vof <body = "push_macro") (pin macs key ((mdef macs nm) . stk))
-                (two? stk) (: _ (pin macs nm <stk) (pin macs key >stk))
+                (two? stk) (pin macs nm <stk, pin macs key >stk)
                 ()))))
 
    ; -- adjacent string literal concatenation (phase 6) --
@@ -411,12 +410,12 @@
    (fmpush t files) (? (vof t = 'in) (lof t . files) >files)
    (fmtop files) (two? files ? <files)
    spanacc {}                               ; the spans, reversed, of the strcat-pass now running
-   (spanat n files) (pin spanacc 'l ([n (fmtop files)] . peep spanacc 'l ()))
+   (spanat n files) (pin spanacc 'l ([n (fmtop files)] . spanacc 'l))
    ; -> the rest after a run of marks, the file stack they leave, and whether
    ; the next real token is a string (so the caller knows to join)
    (skipfm ts files) (? (two? ts && fmark? <ts) (skipfm >ts (fmpush <ts files)) [ts files])
    (strcat-pass ts n files)
-    (? !(two? ts) ()
+    (? (atom? ts) ()
        (: t <ts
           (? (fmark? t)
               (: fs (fmpush t files) _ (spanat n fs) (strcat-pass >ts n fs))
@@ -424,8 +423,8 @@
              (: sr (skipfm >ts files) nxt <sr fs <>sr
                 (? !(two? nxt && strk? (kof <nxt)) (t . strcat-pass >ts (n + 1) files)
                    ; the marks we just consumed take effect after the merged token
-                   (: _ (? (fmtop fs = fmtop files) () (spanat (n + 1) fs))
-                      (strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) . >nxt) n fs)))))))
+                   (? (fmtop fs = fmtop files) () (spanat (n + 1) fs),
+                    strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) . >nxt) n fs))))))
 
    ; -- the driver: walk logical lines, run directives, expand active code.
    ; macs is a mutable tablet (so #define/#undef persist and includes share it);
@@ -437,8 +436,8 @@
    ; the way out of an #include, which lexed from its own line 1.
    (gripeat line msg) (gripe () (two? line ? (lof <line) ()) () msg)
    (gripein g f) (? <>g g (gripe f <>>g <>>>g <>>>>g))   ; moon.l's `el` is catted after this file
-   (condactive cond) (? !(two? cond) 1 <<cond)
-   (parentactive cond) (? !(two? cond) 1 <<cond)
+   (condactive cond) (? (atom? cond) 1 <<cond)
+   (parentactive cond) (? (atom? cond) 1 <<cond)
    ; buf accumulates reversed (a cat per line re-copies the whole run -- love.c's
    ; longest directive-free run is ~50k tokens); tokflush restores source order (its name must not shadow the core port flush -- the crew shares the default book now).
    (tokflush buf macs out) (revcat (expand (rev buf) macs) out)
@@ -456,7 +455,7 @@
    (mkey? k) ((string? k) && !(k = "__FILE__"))
    (msnap macs)                                  ; the table as a value `=` can compare
     (sortby (\ a b (<a <= <b))
-            (foldl (\ acc k (? (mkey? k) (acc + [[k (peep macs k ())]]) acc)) () (keys macs)))
+            (foldl (\ acc k (? (mkey? k) (acc + [[k (macs k)]]) acc)) () (keys macs)))
    ; the pre-state is a subset of the post-state's keys -- a header only adds
    ; names or blanks them (#undef pins ()) -- so pinning the recorded pairs
    ; over a matching table reproduces it exactly.
@@ -470,16 +469,16 @@
    ; `is` once (moon.l's cc-parse), and the two rtmems lanes differ in their first
    ; header, so nothing in the tree leans on it.
    (mfind ip txt pre)
-    (: (go l) (? !(two? l) ()
+    (: (go l) (? (atom? l) ()
                  (: e <l (? ((ip = <e) && (txt = <>e) && (pre = <>>e)) e (go >l))))
-       (go (peep memo 'l ())))
+       (go (memo 'l)))
    ; bounded, oldest dropped: an entry is one header under one -D set, so a
    ; handful covers a build and nothing here knows which of them are dead.
-   (mput e) (pin memo 'l (e . mfew (peep memo 'l ()) 3))
-   (mfew l n) (? ((n < 1) || !(two? l)) () (<l . mfew >l (n - 1)))
+   (mput e) (pin memo 'l (e . mfew (memo 'l) 3))
+   (mfew l n) (? (n < 1 || atom? l) () (<l . mfew >l (n - 1)))
 
    (cppgo toks macs cond buf out incf)
-    (? !(two? toks) (? (two? cond) (gripe () <>><cond () "unterminated #if -- no #endif")
+    (? (atom? toks) (? (two? cond) (gripe () <>><cond () "unterminated #if -- no #endif")
                           (rev (tokflush buf macs out)))
        (: ls (linesplit toks) line <ls rest <>ls
           (? (pv? <line "#")
@@ -494,7 +493,7 @@
                  sbody (? (two? sline) >>sline ())
                  (? (elem dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
                      (: cond2 (docond dir sbody sline macs cond)
-                        (? (= cond2 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
+                        (? (cond2 = 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
                            (cppgo rest macs cond2 () out1 incf)))
                     !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
                     (dir = "define") (defmacro macs body, cppgo rest macs cond () out1 incf)
@@ -528,7 +527,7 @@
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.
                     (elem dir '("pragma" "ident" "sccs" "assert" "unassert") ||
-                        !(two? >line) || (= dirk 'num))
+                        atom? >line || (dirk = 'num))
                      (cppgo rest macs cond () out1 incf)
                     ; ..and anything else is a directive we do not implement, where
                     ; ignoring it drops whatever it would have done in silence --
@@ -549,16 +548,16 @@
         (: pa (condactive cond)                        ; parent active?
            v (? !pa 0
                 (dir = "ifdef") !!(two? (mdef macs (macnm <body)))
-                (dir = "ifndef") !(two? (mdef macs (macnm <body)))
+                (dir = "ifndef") (atom? (mdef macs (macnm <body)))
                 !!(0 < ifval body macs))
            ([(pa && 0 < v) (pa && 0 < v) (lof <line)] . cond))
        (dir = "elif")
-        (? !(two? cond) 'err
+        (? (atom? cond) 'err
            (: fr <cond pa (parentactive >cond) taken <>fr
               v (!taken && pa && 0 < ifval body macs)
               ([(!taken && pa && 0 < v) (taken || 0 < v) <>>fr] . >cond)))
        (dir = "else")
-        (? !(two? cond) 'err
+        (? (atom? cond) 'err
            (: fr <cond pa (parentactive >cond) taken <>fr
               ([(!taken && pa) 1 <>>fr] . >cond)))
        (dir = "endif") (? (two? cond) >cond 'err)
@@ -584,8 +583,8 @@
           ; is its includer's business and the compare would never hit.
           nth (peep macs 'ninc 0)
           _ (pin macs 'ninc (nth + 1))
-          (? !(two? txt) (gripeat body ("cannot resolve #include " + spelt))      ; unresolved -> fatal
-             (: ipath (? (3 < tally txt) <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
+          (? (atom? txt) (gripeat body ("cannot resolve #include " + spelt))      ; unresolved -> fatal
+             (: ipath (? (3 < #txt) <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
                 pre (? (nth = 0) (msnap macs) ())
                 got (? (nth = 0) (mfind ipath <>txt pre) ())
                 ; the marks bracket the header's run. `out` is the reversed
@@ -595,7 +594,7 @@
                 ; carry the spelling this #include used.
                 (rejoin toks)
                  (cppgo rest macs cond () (fmout . ((rev toks) + (fmin name . out))) incf)
-                (? (two? got) (: _ (mrestore macs <>>>>got) (rejoin <>>>got))
+                (? (two? got) (mrestore macs <>>>>got, rejoin <>>>got)
                    (: lr (clex <>txt)
                       ; okv?, not two? -- a gripe is a pair, and a two? here would read
                       ; a refusal as a token list and walk it. a located refusal is the
@@ -615,13 +614,13 @@
                             ; answer masks as an empty include, and the ancestor doinc then
                             ; drops its accumulated `out` and reorders the stream).
                             (? (gripe? raw) (gripein raw name)
-                               (: _ (? ((nth = 0) && !(mleak? raw (peep macs 'fname "")))
-                                       (mput [ipath <>txt pre raw (msnap macs)]) 0)
-                                  (rejoin raw)))))))))))
+                               (? ((nth = 0) && !(mleak? raw (peep macs 'fname "")))
+                                  (mput [ipath <>txt pre raw (msnap macs)]) 0,
+                                rejoin raw))))))))))
    (incname body)                                     ; the header name from #include tokens
-    (? !(two? body) ()
+    (? (atom? body) ()
        (kof <body = 'str) (vof <body)         ; "file"
-       (pv? <body "<") (: (go l acc) (? !(two? l) () (pv? <l ">") acc (go >l (acc + spell <l))) (go >body ""))
+       (pv? <body "<") (: (go l acc) (? (atom? l) () (pv? <l ">") acc (go >l (acc + spell <l))) (go >body ""))
        ())
 
    (cpp toks incf fname)                              ; -> (1 out) | a gripe (test with okv?, never two?)
@@ -670,10 +669,10 @@
                _ (pin t "__INT_MAX__" ['obj [(tok 'num 2147483647 0)]])
                ; flt_max exactly: (2 - 2^-23) * 2^127 = 2^128 - 2^104, double-exact
                ; (love.c's 32-bit dtoa branch reads it; gcc predefines it everywhere)
-               _ (pin t "__FLT_MAX__" ['obj [(tok 'flo ((2.0 - (/ 1.0 8388608.0)) * 127 2.0) 0)]])
+               _ (pin t "__FLT_MAX__" ['obj [(tok 'flo ((2.0 - (1.0 / 8388608.0)) * 127 2.0) 0)]])
                ; ..and the double twin, (2 - 2^-52) * 2^1023, built the same exact way
                ; (love.c's dtoa reads it as its finite ceiling)
-               _ (pin t "__DBL_MAX__" ['obj [(tok 'flo ((2.0 - (/ 1.0 4503599627370496.0)) * 1023 2.0) 0)]])
+               _ (pin t "__DBL_MAX__" ['obj [(tok 'flo ((2.0 - (1.0 / 4503599627370496.0)) * 1023 2.0) 0)]])
                ; bool/true/false builtin (C23-style, no <stdbool.h> needed): modern C
                ; (gnulib, gzip) uses them bare. bool is _Bool -- one byte, stores
                ; normalize to 0/1; true/false the 1/0 constants.
@@ -685,11 +684,8 @@
        ; the spans ride the stream's head as one marker token, so cpp keeps its
        ; single (1 out) channel and parse peels them in O(1). a caller that
        ; feeds parse raw lexer output simply has none, and parse reads ().
-       ; the spans ride the stream's head as one marker token, so cpp keeps its
-       ; single (1 out) channel and parse peels them in O(1). a caller that
-       ; feeds parse raw lexer output simply has none, and parse reads ().
        (? (gripe? r) r
           (: _ (pin spanacc 'l ())
              out (strcat-pass r 0 ())
-             [1 (tok 'fspans (rev (peep spanacc 'l ())) 0 . out)]))))       ; an empty token list is a valid empty TU, not a failure -- only a gripe fails
+             [1 (tok 'fspans (rev (spanacc 'l)) 0 . out)]))))       ; an empty token list is a valid empty TU, not a failure -- only a gripe fails
 ) ; module 'moon

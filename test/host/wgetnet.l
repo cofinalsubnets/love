@@ -4,9 +4,11 @@
 ; this suite and answers a plain page.
 ;   make test_wgetnet
 (: wget (cite 'kore 'wget-main)
-   out1 "out/.wget-net.html"
+   ; every path this lays is the pid's own, so two runs over one out/ keep apart
+   out1 ("out/.wget-net-" + show (getpid 0) + ".html")
    rc (wget ["-q" "-O" out1 "https://github.com/"])
    got (: p (open out1 "r") (hot? p ? (: s (slurp p) _ (close p) s) ""))
+   _ (unlink out1)
    ; the page opens with a few blank lines before its doctype
    (test (0 = rc) (10000 < #got) (0 <= (cite 'kore 'wg-find) (snip got 0 200) "<!DOCTYPE html>" 0)))
 

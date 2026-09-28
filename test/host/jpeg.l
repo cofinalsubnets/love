@@ -42,7 +42,7 @@
            (2000 < #jn) (two? (jpeg-decode (snip jn 0 (#jn // 2)))))
 
    ; -- against magick ------------------------------------------------------------------
-   magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (: _ (close q) 1) 0))
+   magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (close q, 1) 0))
    src (dir + "/src.rgba")
    _ (put src (grad 2))
    ; grad written with magick's flags -> [ours magick's] | ()

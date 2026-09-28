@@ -17,6 +17,6 @@
       ("black" = x11-near 16) ("white" = x11-near 231)
       (all (c \ string? (x11-near c)) (map (+ 16) ^240))       ; every pen has a nearest name
       (16 = x11-256 "black") (231 = x11-256 "white") (196 = x11-256 "red")
-      (140 < tally (x11-names 0))
+      (140 < #(x11-names 0))
       (string? (peep (x11-names 0) 0 ())))
 (puts "x11: ok\n")

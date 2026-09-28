@@ -180,18 +180,18 @@
    extra (filter (e \ !(seen? rkeys (key e))) found)
    stale (filter (r \ !(seen? fkeys (key r))) roster)
    (? (two? extra || two? stale)
-      (: _ (? (two? extra)
-              (say out "waits: ", putbn out (llen extra) 10,
-               say out " call site(s) reach a wait hook and are NOT on the roster:\n",
-               each extra showx,
-               say out "  -- if this wait is right, put it on the roster in tools/waits.l with its reason.\n")
-              0)
-         _ (? (two? stale)
-              (say out "waits: ", putbn out (llen stale) 10,
-               say out " roster entry(s) have no call site (stale -- delete them):\n",
-               each stale show3)
-              0)
-         (quit 1))
+      ((? (two? extra)
+          (say out "waits: ", putbn out (llen extra) 10,
+           say out " call site(s) reach a wait hook and are NOT on the roster:\n",
+           each extra showx,
+           say out "  -- if this wait is right, put it on the roster in tools/waits.l with its reason.\n")
+          0),
+       (? (two? stale)
+            (say out "waits: ", putbn out (llen stale) 10,
+             say out " roster entry(s) have no call site (stale -- delete them):\n",
+             each stale show3)
+            0),
+       quit 1)
       (say out "waits: all ", putbn out (llen found) 10,
        say out " waits in ", putbn out (llen paths) 10,
        say out " files are the roster\n",

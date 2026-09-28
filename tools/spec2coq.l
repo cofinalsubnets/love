@@ -497,7 +497,7 @@
    (bump b) (pin b 0 (1 + peep b 0 0))
    (walkops ops) (? !ops 0
                  (: f <ops _ (bump ns) s (tp (fix1 f))
-                    _ (? s (: _ (bump nt) (dot (thm (peep nt 0 0) f s)))
+                    _ (? s (bump nt, dot (thm (peep nt 0 0) f s))
                            (say err ("  UNMODELED: " + show f + "\n")))   ; loud: an assert the generator can't translate -> never proved
                     (walkops >ops)))
    (walk fs) (? !fs 0

@@ -125,7 +125,7 @@
            (has lp "[gone] and [w]"))
 
    ; -- against magick: every disposal, frame by frame -----------------------------------
-   magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (: _ (close q) 1) 0))
+   magick? (: q (open "/usr/bin/magick" "r") (? (hot? q) (close q, 1) 0))
    (coalesced f) (: r (hark ["magick" f "-coalesce" "-depth" "8" "rgba:-"]) (? ((two? r) && (<r = 0)) >r ()))
    ; pixels that differ in whether they are seen, or in colour where both are
    (off a b) (: n (#a // 4)
