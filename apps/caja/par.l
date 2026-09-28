@@ -30,6 +30,7 @@
    awful 1073741823                           ; awful_bad
    maxhw 268435455                            ; TeX Live's max_halfword
    ignore-depth -65536000
+   z7 (0 * iota 7)                            ; tex.web's six-word width arrays, as trays
 
    ; --- the job's codes and parameters ------------------------------------------------
    (cp-spec w st sto sh sho) {'width w 'stretch st 'sto sto 'shrink sh 'sho sho}
@@ -103,6 +104,23 @@
    (ctok? t) (two? t && t 0 = 'c)
    ; the run starts at the character token first in toks; answers the tokens left
    (main-loop J M toks)
+    (? (tf J (M 'font) 'nl = 0) (plain-run J M toks) (lig-run J M toks))
+   ; a font with no lig/kern program has no boundary either, and the loop comes down to
+   ; this: each character its node, a hyphen character a discretionary after it
+   (plain-run J M toks)
+    (: f (M 'font) t (tf J f) ci (t 'ci) hc (hychar J f)
+       _ (pin J 'cbd 0)
+       (go ts)
+        (? (!(two? ts && ctok? <ts)) ts
+           (: c (<ts 1)
+              _ (adjust-sf J M c)
+              (? (t 'bc <= c && c <= t 'ec && 0 < <(ci c))
+                 (: _ (tail-append M (charnode J f c))
+                    _ (? (c = hc && !(M 'restricted)) (tail-append M (discnode J)))
+                    (go >ts))
+                 (: _ (warn J f c) >ts))))
+       (go toks))
+   (lig-run J M toks)
     (: f (M 'font) t (tf J f)
        S {'in >toks 'c0 (<toks 1) 'bchar (t 'bchar) 'fb (t 'fbchar) 'cl non 'cr non 'cq ()
           'ls () 'k 0 'j ()}
@@ -418,9 +436,12 @@
 
    ; --- line_break (tex.web 813-890) --------------------------------------------------------------
    ; the active list: A is both active and last_active; an active node has 'type 0 or 1
-   ; (unhyphenated, hyphenated), a delta node 'type 2 and its six in 'd
-   (six src) (: t {} _ (map (k \ pin t k (src k)) [1 2 3 4 5 6]) t)
-   (zero6 _) {1 0 2 0 3 0 4 0 5 0 6 0}
+   ; (unhyphenated, hyphenated), a delta node 'type 2 and its widths in 'd. tex.web's six-word
+   ; width arrays are trays of seven, slot 0 unused, so a delta is one add
+   (at t k) (peep t k 0)
+   (bump t k v) (pin t k (peep t k 0 + v))
+   (spec-add t g) (bump (bump (bump t 1 (g 'width)) (2 + g 'sto) (g 'stretch)) 6 (g 'shrink))
+   (spec-sub t g) (bump (bump (bump t 1 (0 - g 'width)) (2 + g 'sto) (0 - g 'stretch)) 6 (0 - g 'shrink))
    (line-break J M fwp)
     (: tl (M 'tail)
        _ (? (char? tl || tl 'type != 10) (tail-append M (pennode J 10000))
@@ -430,7 +451,7 @@
        L {'lang0 (hpg % 65536) 'lhyf0 (hpg // 4194304) 'rhyf0 (hpg // 65536 % 64)
           'head (M 'hhead) 'pg (M 'vpg) 'nse 1 'passive () 'dw 0 'cp ()
           'mind awful 'minimal {0 awful 1 awful 2 awful 3 awful} 'bp {} 'bpl {}
-          'aw (zero6 0) 'bg (zero6 0) 'bw (zero6 0) 'caw (zero6 0)}
+          'aw z7 'bg z7 'bw z7 'caw z7}
        _ (pin M 'mode 'v)
        ; check_shrinkage: infinite shrink is made finite
        (finite g) (? (g != () && g 'sho != 0 && g 'shrink != 0)
@@ -438,11 +459,7 @@
        _ (pin (J 'params) 'leftskip (finite (P J 'leftskip)))
        _ (pin (J 'params) 'rightskip (finite (P J 'rightskip)))
        ls (spec-of (P J 'leftskip)) rs (spec-of (P J 'rightskip))
-       bg (L 'bg)
-       _ (pin bg 1 (ls 'width + rs 'width))
-       _ (pin bg (2 + ls 'sto) (ls 'stretch))
-       _ (pin bg (2 + rs 'sto) (bg (2 + rs 'sto) + rs 'stretch))
-       _ (pin bg 6 (ls 'shrink + rs 'shrink))
+       _ (pin L 'bg (spec-add (spec-add z7 ls) rs))
        ps (P J 'parshape) hi (P J 'hangindent) ha (P J 'hangafter) hs (P J 'hsize)
        _ (? (ps = ())
             (? (hi = 0) (: _ (pin L 'lsl 0) _ (pin L 'sw hs) (pin L 'si 0))
@@ -458,46 +475,41 @@
        A {'head 1 'type 1 'line maxhw 'link ()}
        _ (pin A 'link A)
        (lastp r) (r 'head = 1)
-       (addw t k v) (pin t k (t k + v))
-       (sub-spec t g) (: _ (addw t 1 (0 - g 'width)) _ (addw t (2 + g 'sto) (0 - g 'stretch))
-                         (addw t 6 (0 - g 'shrink)))
-       (add-spec t g) (: _ (addw t 1 (g 'width)) _ (addw t (2 + g 'sto) (g 'stretch))
-                         (addw t 6 (g 'shrink)))
+       (aw-add v) (pin L 'aw (bump (L 'aw) 1 v))
+       (bw-add v) (pin L 'bw (bump (L 'bw) 1 v))
 
        ; try_break (829-860)
        (try-break pi0 bt)
         (? (abs pi0 >= 10000 && pi0 > 0) ()
            (: pi (? (abs pi0 >= 10000) -10000 pi0)
               T {'nby 1 'pr A 'ppr () 'oldl 0 'lw 0}
-              _ (pin L 'caw (six (L 'aw)))
-              caw (L 'caw)
+              _ (pin L 'caw (L 'aw))
               cp (L 'cp)
               (break-width _)
-               (: bw (six bg) _ (pin L 'bw bw)
+               (: _ (pin L 'bw (L 'bg))
                   s0 (? (bt > 0 && cp != ())
-                        (: (drop t v) (? (t > 0) (: v2 (v 'link) _ (addw bw 1 (0 - wd J v2)) (drop (t - 1) v2)) v)
+                        (: (drop t v) (? (t > 0) (: v2 (v 'link) _ (bw-add (0 - wd J v2)) (drop (t - 1) v2)) v)
                            v (drop (cp 'sub) cp)
-                           (post s) (? (s != ()) (: _ (addw bw 1 (wd J s)) (post (s 'link))))
+                           (post s) (? (s != ()) (: _ (bw-add (wd J s)) (post (s 'link))))
                            _ (post (cp 'post))
-                           _ (addw bw 1 (L 'dw))
+                           _ (bw-add (L 'dw))
                            (? (cp 'post = ()) (v 'link) ()))
                         cp)
                   (strip s)
                    (? (s = () || char? s) ()
                       (: y (s 'type)
-                         (? (y = 10) (: _ (sub-spec bw (s 'glue)) (strip (s 'link)))
+                         (? (y = 10) (: _ (pin L 'bw (spec-sub (L 'bw) (s 'glue))) (strip (s 'link)))
                             (y = 12) (strip (s 'link))
-                            (y = 9) (: _ (addw bw 1 (0 - s 'width)) (strip (s 'link)))
-                            (y = 11 && s 'sub = 1) (: _ (addw bw 1 (0 - s 'width)) (strip (s 'link)))
+                            (y = 9) (: _ (bw-add (0 - s 'width)) (strip (s 'link)))
+                            (y = 11 && s 'sub = 1) (: _ (bw-add (0 - s 'width)) (strip (s 'link)))
                             ())))
                   (strip s0))
               (create r)
                (: _ (? (T 'nby) (: _ (pin T 'nby 0) (break-width 0)))
-                  bw (L 'bw) pr (T 'pr)
-                  _ (? (pr 'type = 2) (map (k \ pin (pr 'd) k (pr 'd k - caw k + bw k)) [1 2 3 4 5 6])
-                       (lastp pr) (pin L 'aw (six bw))
-                       (: q {'type 2 'd {} 'link r}
-                          _ (map (k \ pin (q 'd) k (bw k - caw k)) [1 2 3 4 5 6])
+                  bw (L 'bw) caw (L 'caw) pr (T 'pr)
+                  _ (? (pr 'type = 2) (pin pr 'd (pr 'd - caw + bw))
+                       (lastp pr) (pin L 'aw bw)
+                       (: q {'type 2 'd (bw - caw) 'link r}
                           _ (pin pr 'link q) _ (pin T 'ppr pr) (pin T 'pr q)))
                   adj (P J 'adjdemerits)
                   _ (pin L 'mind (? (abs adj >= awful - L 'mind) (awful - 1) (L 'mind + abs adj)))
@@ -511,8 +523,7 @@
                          [0 1 2 3])
                   _ (pin L 'mind awful)
                   (? (!(lastp r))
-                     (: q {'type 2 'd {} 'link r}
-                        _ (map (k \ pin (q 'd) k (caw k - L 'bw k)) [1 2 3 4 5 6])
+                     (: q {'type 2 'd (caw - bw) 'link r}
                         _ (pin (T 'pr) 'link q) _ (pin T 'ppr (T 'pr)) (pin T 'pr q))))
               (record r b fit art l)
                (: d (? art 0
@@ -533,27 +544,28 @@
                   (? (lastp pr)
                      (: r2 (A 'link)
                         (? (r2 'type = 2)
-                           (: _ (map (k \ addw (L 'aw) k (r2 'd k)) [1 2 3 4 5 6])
-                              _ (map (k \ pin (L 'caw) k (L 'aw k)) [1 2 3 4 5 6])
+                           (: _ (pin L 'aw (L 'aw + r2 'd))
+                              _ (pin L 'caw (L 'aw))
                               (pin A 'link (r2 'link)))))
                      (pr 'type = 2)
                      (: r2 (pr 'link)
                         (? (lastp r2)
-                           (: _ (map (k \ addw (L 'caw) k (0 - pr 'd k)) [1 2 3 4 5 6])
+                           (: _ (pin L 'caw (L 'caw - pr 'd))
                               _ (pin (T 'ppr) 'link A) (pin T 'pr (T 'ppr)))
                            (r2 'type = 2)
-                           (: _ (map (k \ addw (L 'caw) k (r2 'd k)) [1 2 3 4 5 6])
-                              _ (map (k \ addw (pr 'd) k (r2 'd k)) [1 2 3 4 5 6])
+                           (: _ (pin L 'caw (L 'caw + r2 'd))
+                              _ (pin pr 'd (pr 'd + r2 'd))
                               (pin pr 'link (r2 'link)))))))
               (consider r l)
                (: caw (L 'caw)
-                  sf (T 'lw - caw 1)
-                  bf (? (sf > 0)
-                        (? (caw 3 != 0 || caw 4 != 0 || caw 5 != 0) [0 2]
-                           (sf > 7230584 && caw 2 < 1663497) [10000 0]
-                           (: b (cb-badness sf (caw 2)) [b (? (b > 12) (? (b > 99) 0 1) 2)]))
-                        (: b (? (0 - sf > caw 6) 10001 (cb-badness (0 - sf) (caw 6))) [b (? (b > 12) 3 2)]))
-                  b <bf fit <>bf
+                  sf (T 'lw - at caw 1)
+                  b (? (sf > 0)
+                       (? (at caw 3 != 0 || at caw 4 != 0 || at caw 5 != 0) 0
+                          (sf > 7230584 && at caw 2 < 1663497) 10000
+                          (cb-badness sf (at caw 2)))
+                       (? (0 - sf > at caw 6) 10001 (cb-badness (0 - sf) (at caw 6))))
+                  ; the fitness class: very loose 0, loose 1, decent 2, tight 3
+                  fit (? (sf > 0) (? (b > 12) (? (b > 99) 0 1) 2) (? (b > 12) 3 2))
                   (? (b > 10000 || pi = -10000)
                      (? (L 'final && L 'mind = awful && lastp (r 'link) && lastp (T 'pr))
                         (: _ (record r b fit 1 l) _ (deactivate r) (loop 0))
@@ -564,7 +576,7 @@
               (loop _)
                (: r ((T 'pr) 'link)
                   (? (r 'type = 2)
-                     (: _ (map (k \ addw (L 'caw) k (r 'd k)) [1 2 3 4 5 6])
+                     (: _ (pin L 'caw (L 'caw + r 'd))
                         _ (pin T 'ppr (T 'pr)) _ (pin T 'pr r) (loop 0))
                      (: l (r 'line)
                         (? (l > T 'oldl)
@@ -582,12 +594,12 @@
        (kern-break cp)
         (: nx (cp 'link)
            _ (? (!(char? nx) && L 'auto && nx 'type = 10) (try-break 0 0))
-           (addw (L 'aw) 1 (cp 'width)))
+           (aw-add (cp 'width)))
        (walk prev cp)
         (? (cp = () || lastp (A 'link)) cp
            (char? cp)
-            (: (chars p) (? (char? p) (: _ (addw (L 'aw) 1 (wd J p)) (chars (p 'link))) p)
-               nx (chars cp)
+            (: (chars p n) (? (char? p) (chars (p 'link) (n + wd J p)) (: _ (aw-add n) p))
+               nx (chars cp 0)
                _ (pin L 'cp nx)
                (walk cp nx))
            (: y (cp 'type) _ (pin L 'cp cp)
@@ -596,20 +608,20 @@
                     (dsum s) (? (s = ()) 0 (wd J s + dsum (s 'link)))
                     _ (? (pre = ()) (: _ (pin L 'dw 0) (try-break (P J 'exhyphenpenalty) 1))
                          (: dw (dsum pre) _ (pin L 'dw dw)
-                            _ (addw (L 'aw) 1 dw) _ (try-break (P J 'hyphenpenalty) 1)
-                            (addw (L 'aw) 1 (0 - dw))))
-                    (skip n s) (? (n > 0) (: _ (addw (L 'aw) 1 (wd J s)) (skip (n - 1) (s 'link))) s)
+                            _ (aw-add dw) _ (try-break (P J 'hyphenpenalty) 1)
+                            (aw-add (0 - dw))))
+                    (skip n s) (? (n > 0) (: _ (aw-add (wd J s)) (skip (n - 1) (s 'link))) s)
                     nx (skip (cp 'sub) (cp 'link))
                     _ (pin L 'cp nx)
                     (walk cp nx))
-                 (: _ (? (y <= 2) (addw (L 'aw) 1 (cp 'width))
+                 (: _ (? (y <= 2) (aw-add (cp 'width))
                          (y = 10)
                           (: _ (? (L 'auto && legal-glue prev) (try-break 0 0))
                              g (finite (cp 'glue)) _ (pin cp 'glue g)
-                             _ (add-spec (L 'aw) g)
+                             _ (pin L 'aw (spec-add (L 'aw) g))
                              (? (L 'second && L 'auto) (try-hyphenate cp)))
-                         (y = 11) (? (cp 'sub = 1) (kern-break cp) (addw (L 'aw) 1 (cp 'width)))
-                         (y = 6) (addw (L 'aw) 1 (wd J cp))
+                         (y = 11) (? (cp 'sub = 1) (kern-break cp) (aw-add (cp 'width)))
+                         (y = 6) (aw-add (wd J cp))
                          (y = 9) (: _ (pin L 'auto (cp 'sub = 1)) (kern-break cp))
                          (y = 12) (try-break (cp 'penalty) 0))
                     nx (cp 'link)
@@ -641,7 +653,7 @@
                 (: _ (pin L 'lang (L 'lang0)) _ (pin L 'lhyf (L 'lhyf0)) (pin L 'rhyf (L 'rhyf0))))
            a {'type 0 'fit 2 'link A 'brk () 'line (L 'pg + 1) 'td 0}
            _ (pin A 'link a)
-           _ (pin L 'aw (six bg))
+           _ (pin L 'aw (L 'bg))
            _ (pin L 'passive ())
            first ((L 'head) 'link)
            _ (pin L 'auto 1)
@@ -658,7 +670,7 @@
               (: _ (? (!(L 'second))
                       (: _ (pin L 'thr (P J 'tolerance)) _ (pin L 'second 1)
                          (pin L 'final (P J 'emergencystretch <= 0)))
-                      (: _ (addw bg 2 (P J 'emergencystretch)) (pin L 'final 1)))
+                      (: _ (pin L 'bg (bump (L 'bg) 2 (P J 'emergencystretch))) (pin L 'final 1)))
                  (pass 0))))
        _ (pin L 'thr (P J 'pretolerance))
        _ (? (L 'thr >= 0) (: _ (pin L 'second 0) (pin L 'final 0))
