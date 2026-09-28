@@ -1727,11 +1727,11 @@ static bool k_cb_remake(void) {
   struct cb *const old = kcb;
   uint16_t const orows = old->rows, ocols = old->cols;
   if (rows == orows && cols == ocols) return fbwash(), true;  // same grid, new pixels
-  uint32_t sn = k_sn(rows, cols), hl = k_hl(cols);
-  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols)));
-  if (!c) c = kmallocw(b2w(cb_size(rows, cols, sn = 0) + cb_hsize(hl = 0, cols)));   // no room: text alone
+  uint32_t sn = k_sn(rows, cols), hl = k_hl(cols), tw = 1;
+  struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols)));
+  if (!c) sn = hl = tw = 0, c = kmallocw(b2w(cb_size(rows, cols, 0)));   // no room: the grid alone
   if (!c) return false;
-  cb_regrid(c, old, (uint16_t) rows, (uint16_t) cols, sn, hl);
+  cb_regrid(c, old, (uint16_t) rows, (uint16_t) cols, sn, hl, tw);
   kcb = c;
   kfree(old);
   fbwash();
@@ -1905,11 +1905,12 @@ static bool cbinit(void) {
   const uintptr_t rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
   // kmallocw, not ai_alloc: cbinit runs before ai_ini, so no g exists yet
-  uint32_t sn = k_sn(rows, cols), hl = k_hl(cols);
-  if (!(kcb = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols))))
-      && !(kcb = kmallocw(b2w(cb_size(rows, cols, sn = 0) + cb_hsize(hl = 0, cols))))) return false;
+  uint32_t sn = k_sn(rows, cols), hl = k_hl(cols), tw = 1;
+  if (!(kcb = kmallocw(b2w(cb_size(rows, cols, sn) + cb_hsize(hl, cols) + cb_tsize(rows, cols)))))
+    sn = hl = tw = 0, kcb = kmallocw(b2w(cb_size(rows, cols, 0)));   // no room: the grid alone
+  if (!kcb) return false;
   cb_open(kcb, rows, cols, sn);
-  cb_hist(kcb, hl);
+  cb_hist(kcb, hl), cb_twin(kcb, tw);
   kcb->flag |= cb_lnm;  // the kernel console's discipline: a bare \n is a newline
   cb_attr(kcb, cb_ink(cb_idx, 15), cb_ink(cb_idx, 0));   // white on black: xterm-256's 15 and 0, what a terminal is
   cb_fill(kcb, 0);

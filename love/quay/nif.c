@@ -10,7 +10,8 @@
 //                         | n    b not a cask: the byte count a (cask n) needs,
 //                                so the ctor is (screen (cask (screen () r c)) r c);
 //                                the count carries a store a screenful of pictures deep
-//                                and a thousand lines of history
+//                                and a thousand lines of history, and a twin grid
+//                                for the main one to wait out the alternate screen in
 //                         | ()   misuse: cask too small, or silly geometry
 //   (scribe scr x)       -> scr  feed x through the VT parser: a byte charm,
 //                                or every byte of a string/cask; () misuse
@@ -60,6 +61,8 @@ static struct cb *scr_ok(word x) {
  if (!c->rows || !c->cols || cb_size(c->rows, c->cols, 0) > s->len) return 0;
  if (cb_size(c->rows, c->cols, c->sn) > s->len || (c->sn && c->sn < cb_shead)) c->sn = 0, c->sslot = 0;
  if (cb_size(c->rows, c->cols, c->sn) + cb_hsize(c->hl, c->cols) > s->len) c->hl = 0;
+ if (c->twin && cb_size(c->rows, c->cols, c->sn) + cb_hsize(c->hl, c->cols) + cb_tsize(c->rows, c->cols) > s->len)
+  c->twin = 0;
  if (c->hn > c->hl) c->hn = c->hl;
  if (c->hh >= c->hl) c->hh = 0;
  if (c->view > c->hn) c->view = c->hn;
@@ -98,13 +101,13 @@ static lvm(lvm_screen) {
  if (sn != ~0u) {
   uint16_t const r = (uint16_t) getcharm(Sp[1]), k = (uint16_t) getcharm(Sp[2]);
   uint32_t const hl = scr_hl(k);
-  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k);
+  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need) {
     cb_open((struct cb*) s->bytes, r, k, sn);
-    cb_hist((struct cb*) s->bytes, hl);
+    cb_hist((struct cb*) s->bytes, hl), cb_twin((struct cb*) s->bytes, 1);
     out = b; } } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
@@ -118,12 +121,12 @@ static lvm(lvm_regrid) {
  if (c && sn != ~0u) {
   uint16_t const r = (uint16_t) getcharm(Sp[2]), k = (uint16_t) getcharm(Sp[3]);
   uint32_t const hl = scr_hl(k);
-  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k);
+  uintptr_t need = cb_size(r, k, sn) + cb_hsize(hl, k) + cb_tsize(r, k);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need && (uint8_t*) s->bytes != (uint8_t*) c) {
-    cb_regrid((struct cb*) s->bytes, c, r, k, sn, hl);
+    cb_regrid((struct cb*) s->bytes, c, r, k, sn, hl, 1);
     out = b; } } }
  Sp[3] = out;
  Sp += 3; Ip += 1; ai_musttail return Continue(); }

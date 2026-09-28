@@ -53,7 +53,7 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   c->wpos = c->spos = 0;
   c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16;
   cb_store(c, sn);
-  cb_hist(c, 0);
+  cb_hist(c, 0), c->twin = 0;
   c->flag = cb_show | cb_wrap;
   c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0;
   c->ucp = 0, c->un = 0, c->ol = 0;
@@ -75,6 +75,7 @@ static void cb_ride(struct cb *c, uint32_t *p, uint32_t t, uint32_t b, int dn, u
   else        { if (r + n <= b) *p += k; } }
 
 static void cb_keep(struct cb *c, uint32_t r);
+static struct cb_cell *cb_twins(struct cb const *c);
 static uint32_t cb_ncells(struct cb const *c);
 static struct cb_cell *cb_nth(struct cb *c, uint32_t i);
 
@@ -287,6 +288,12 @@ struct cb_cell const *cb_hline(struct cb const *c, uint32_t k) {
 
 void cb_hist(struct cb *c, uint32_t hl) { c->hl = hl, c->hh = c->hn = c->view = 0; }
 
+void cb_twin(struct cb *c, uint32_t on) { c->twin = on ? 1u : 0u; }
+
+// the twin grid, or 0 for a screen laid without one
+static struct cb_cell *cb_twins(struct cb const *c) {
+  return c->twin ? cb_ring(c) + (uintptr_t) c->hl * c->cols : 0; }
+
 // grid row r, a history line in its place for as many rows as the view looks back
 struct cb_cell const *cb_seen(struct cb const *c, uint32_t r) {
   return r < c->view ? cb_hline(c, c->hn - c->view + r) : c->cb + (uintptr_t) (r - c->view) * c->cols; }
@@ -308,11 +315,17 @@ static void cb_line(struct cb *c, struct cb_cell const *row, uint32_t w) {
 
 static void cb_keep(struct cb *c, uint32_t r) { cb_line(c, c->cb + (uintptr_t) r * c->cols, c->cols); }
 
-// every cell that can name a cluster or a picture: the grid's, then the history's
-static uint32_t cb_ncells(struct cb const *c) { return (uint32_t) c->rows * c->cols + c->hn * c->cols; }
+// every cell that can name a cluster or a picture: the grid's, the main grid's while it waits
+// in the twin, then the history's
+static uint32_t cb_ntwin(struct cb const *c) {
+  return c->twin && c->flag & cb_alt ? (uint32_t) c->rows * c->cols : 0; }
+static uint32_t cb_ncells(struct cb const *c) {
+  return (uint32_t) c->rows * c->cols + cb_ntwin(c) + c->hn * c->cols; }
 static struct cb_cell *cb_nth(struct cb *c, uint32_t i) {
-  uint32_t const n = (uint32_t) c->rows * c->cols;
-  return i < n ? c->cb + i : cb_ring(c) + (uintptr_t) ((c->hh + (i - n) / c->cols) % c->hl) * c->cols + (i - n) % c->cols; }
+  uint32_t const n = (uint32_t) c->rows * c->cols, t = n + cb_ntwin(c);
+  if (i < n) return c->cb + i;
+  if (i < t) return cb_twins(c) + (i - n);
+  return cb_ring(c) + (uintptr_t) ((c->hh + (i - t) / c->cols) % c->hl) * c->cols + (i - t) % c->cols; }
 
 // a live picture that fits its arena, or 0: a painter may trust what this answers
 struct cb_img const *cb_img(struct cb const *c, uint32_t slot) {
@@ -385,8 +398,11 @@ static void cb_restock(struct cb *c, struct cb const *old) {
 // spends the blank tail under a prompt before it touches a line; the pictures they name as
 // far as the store holds them. nothing reflows -- a line wrapped at the old width stays
 // broken where it was. the history comes too, hl lines of it, its lines clipped or widened
-// like the rows, and the rows the shrink scrolled away join it. c and old may not overlap
-void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl) {
+// like the rows, and the rows the shrink scrolled away join it; and a main grid waiting out
+// the alternate screen, from its top, into c's twin when tw (else it is lost, and the way
+// out clears). c and old may not overlap
+void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl,
+               uint32_t tw) {
   uint32_t const orows = old->rows, ocols = old->cols, cr = old->wpos / ocols,
                  from = cr >= rows ? cr - rows + 1u : 0, w = cols < ocols ? cols : ocols;
   *c = *old;
@@ -399,7 +415,13 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
   for (uint32_t r = from, dr = 0; r < orows && dr < rows; r++, dr++) {
     for (uint32_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
     cb_mend(c, dr); }
-  cb_hist(c, hl);
+  cb_hist(c, hl), cb_twin(c, tw);
+  struct cb_cell *nt = cb_twins(c);
+  struct cb_cell const *ot = old->flag & cb_alt ? cb_twins(old) : 0;
+  if (nt) for (uint32_t i = 0, n = (uint32_t) rows * cols; i < n; i++) nt[i] = blank;
+  if (nt && ot)
+    for (uint32_t r = 0; r < orows && r < rows; r++)
+      for (uint32_t k = 0; k < w; k++) nt[r * cols + k] = ot[r * ocols + k];
   for (uint32_t k = 0; k < old->hn; k++) cb_line(c, cb_hline(old, k), w);
   if (!(old->flag & cb_alt)) for (uint32_t r = 0; r < from; r++) cb_line(c, old->cb + r * ocols, w);
   cb_restock(c, old);
@@ -736,10 +758,9 @@ static void cb_sgr(struct cb *c) {
       if (p == 38) c->cur_fg = v; else c->cur_bg = v;
       k += 4; } } }
 
-// DEC private / ANSI modes (CSI ? .. h/l and CSI .. h/l). the alternate
-// screen (47/1047/1049) is save-and-clear / clear-and-restore over the
-// ONE grid cb carries -- a full-screen program looks right; the ground
-// it painted over is gone, the honest price of one buffer.
+// DEC private / ANSI modes (CSI ? .. h/l and CSI .. h/l). the alternate screen
+// (47/1047/1049): the main grid waits in the twin and a cleared grid takes its place,
+// then comes back whole on the way out. a screen laid with no twin clears instead.
 static void cb_mode(struct cb *c, int priv, int on) {
   for (uint8_t k = 0; k < c->pn; k++) {
     uint16_t p = c->pv[k];
@@ -751,8 +772,15 @@ static void cb_mode(struct cb *c, int priv, int on) {
       c->flag = on ? c->flag | cb_origin : c->flag & (uint16_t) ~cb_origin;
       cb_goto(c, 0, 0); }
     else if (p == 47 || p == 1047 || p == 1049) {
-      if (on) cb_save(c), cb_clear(c), c->wpos = 0, c->flag = (uint16_t) ((c->flag & ~cb_pend) | cb_alt);
-      else cb_clear(c), cb_restore(c), c->flag &= (uint16_t) ~cb_alt; } } }
+      struct cb_cell *tw = cb_twins(c);
+      uint32_t const n = (uint32_t) c->rows * c->cols;
+      if (on) {
+        if (tw && !(c->flag & cb_alt)) for (uint32_t i = 0; i < n; i++) tw[i] = c->cb[i];
+        cb_save(c), cb_clear(c), c->wpos = 0, c->flag = (uint16_t) ((c->flag & ~cb_pend) | cb_alt); }
+      else {
+        if (tw && c->flag & cb_alt) for (uint32_t i = 0; i < n; i++) c->cb[i] = tw[i];
+        else cb_clear(c);
+        cb_dirt(c, 0, c->rows - 1u), cb_restore(c), c->flag &= (uint16_t) ~cb_alt; } } } }
 
 // the CSI dispatch, one final byte at a time. n/m: the first two
 // parameters with their traditional default of 1.
@@ -849,9 +877,9 @@ static void cb_csi(struct cb *c, uint8_t i) {
 
 // cb_put1 interprets a working VT subset, one folded byte at a time: C0
 // controls (with LNM ruling \n), ESC 7/8/D/E/M/c/#8, CSI cursor addressing
-// (A-H, f, G, d, E, F), erase (J/K 0-2, X), edit (@ P L M), scroll (S T,
+// (A-H, f, G, d, E, F), erase (J 0-3, K 0-2, X), edit (@ P L M), scroll (S T,
 // DECSTBM r), SGR colours + faces, DEC modes (autowrap, cursor, origin,
-// the one-grid alternate screen), and DSR/DA replies via the reply queue.
+// the alternate screen), and DSR/DA replies via the reply queue.
 // OSC/DCS bodies are swallowed whole; charset designators too. anything
 // printable is stamped as a glyph with the current pen.
 static void cb_put1(struct cb *c, uint8_t i) {

@@ -82,8 +82,9 @@ struct cb {
   uint8_t ka, kf, km, kq, kcur, kd, kt, ko, kkey, kvc, kn, kbyte, kpad, kopen;
   uint32_t clu[cb_nclu][cb_clun];  // the clusters, their unused words 0
   // history: a ring of hl lines, cols wide, after the store -- rows a scroll pushed off the
-  // top, hn of them held, the oldest at line hh. view is how many a reader looks back
-  uint32_t hl, hh, hn, view;
+  // top, hn of them held, the oldest at line hh. view is how many a reader looks back.
+  // twin: a grid's room after the history, where the main grid waits out the alternate screen
+  uint32_t hl, hh, hn, view, twin;
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
@@ -93,8 +94,9 @@ enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
 // the bytes a screen of rows x cols needs, header, cells and a store of sn bytes
 #define cb_size(rows, cols, sn) \
   (sizeof(struct cb) + (uintptr_t) (rows) * (uintptr_t) (cols) * sizeof(struct cb_cell) + (uintptr_t) (sn))
-// the bytes a history of hl lines takes, after the store
+// the bytes a history of hl lines takes, after the store, and a twin grid's after that
 #define cb_hsize(hl, cols) ((uintptr_t) (hl) * (uintptr_t) (cols) * sizeof(struct cb_cell))
+#define cb_tsize(rows, cols) ((uintptr_t) (rows) * (uintptr_t) (cols) * sizeof(struct cb_cell))
 // a store a screenful of pictures deep, at 8x16 cells
 #define cb_sdefault(rows, cols) ((uint32_t) cb_shead + (uint32_t) (rows) * (uint32_t) (cols) * 512u)
 
@@ -102,8 +104,11 @@ void
   cb_open(struct cb*, uint16_t rows, uint16_t cols, uint32_t sn),
   cb_store(struct cb*, uint32_t sn),   // lay an empty store of sn bytes after the cells
   cb_hist(struct cb*, uint32_t hl),    // lay an empty history of hl lines after the store
-  // old laid across into a fresh rows x cols screen, a store of sn bytes, hl lines of history
-  cb_regrid(struct cb*, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl),
+  cb_twin(struct cb*, uint32_t on),    // lay (1) or take away (0) the twin grid after the history
+  // old laid across into a fresh rows x cols screen: a store of sn bytes, hl lines of
+  // history, and a twin grid when tw
+  cb_regrid(struct cb*, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl,
+            uint32_t tw),
   cb_peer(struct cb*, uint32_t n),     // look n lines back into the history, 0 the live grid
   cb_clear(struct cb*),
   cb_putc(struct cb*, char),

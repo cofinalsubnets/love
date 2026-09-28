@@ -254,7 +254,7 @@
  _ (test (40 = cur s))                    ; clamped at the region's bottom
  _ (scribe s "\e[?6l\e[r"))
 
-; --- 14. the one-grid alternate screen ---
+; --- 14. the alternate screen ---
 (: s (mkscr 3 10)
  _ (scribe s "ground\e[35m")
  _ (scribe s "\e[?1049h")
@@ -263,10 +263,11 @@
     (0 = cur s))
  _ (scribe s "guest")
  _ (scribe s "\e[?1049l")
+ _ (scribe s "x")
  _ (test
-    (0 = chat s 0)                          ; the ground is not repainted (one grid,
-    (6 = cur s)                             ;  the honest price) -- but the cursor
-    (5 = cfg s 8)))                         ;  and pen come back as saved
+    (103 = chat s 0)                        ; the ground back as it was
+    (120 = chat s 6)                        ; ..the cursor where it was saved
+    (5 = cfg s 6)))                         ; ..and the pen
 
 ; --- 15. replies: dsr, da, and the drain-once law ---
 (: s (mkscr 4 10)
@@ -579,6 +580,29 @@
    _ (test (pix p 0 = pix q 0) (pix p 1 = pix (scribe (mkscr 3 4) "\nbb") 1))
    _ (peer p 0)
    _ (test !(pix p 0 = pix q 0)))
+
+; --- 24. the alternate screen: the main grid waits in the twin and comes back whole, the
+;     cursor with it; its clusters stay named while it waits, and a resize carries it ---
+(: (arow s k c) (cats (map (\ q (: ch (2097151 & glass s (k + q) 0) (0 = ch ? " " (string ch)))) (jot c)))
+   s (mkscr 3 5)
+   _ (scribe s "abc\e[2;2Hd")
+   _ (scribe s "\e[?1049hxyz")
+   _ (test ("xyz  " = arow s 0 5) ("     " = arow s 5 5))   ; a cleared grid of its own
+   _ (scribe s "\e[?1049l")
+   _ (test ("abc  " = arow s 0 5) (" d   " = arow s 5 5) (7 = cur s))   ; ..and the main one back
+   _ (scribe s "\e[?47hq\e[?47l")                     ; 47 and 1047 the same way
+   _ (test ("abc  " = arow s 0 5))
+   w (mkscr 2 100)
+   (clus i) (utf8 (65 + (i // 100)) + utf8 (768 + (i % 100)))
+   _ (scribe w "e\u{301}\e[?1049h")
+   _ (scribe w (cats (map clus (jot 200))))           ; the pool full twice over in the alternate
+   _ (scribe w "\e[?1049l")
+   _ (test (101 = chat w 0) ([769] = filter (< 0) (map (glass w 0) [3 4 5])))
+   r (mkscr 3 5)
+   _ (scribe r "abcde\e[?1049hzz")
+   t (regrid r (cask (screen () 3 3)) 3 3)           ; a resize while the alternate is up
+   _ (scribe t "\e[?1049l")
+   _ (test ("abc" = arow t 0 3)))
 
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
