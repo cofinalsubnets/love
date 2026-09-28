@@ -128,6 +128,10 @@
              'inb 0 'inw 0 'inl 0 'outb 0 'outw 0 'outl 0
              'cld 0
              'str 2 'rep 0 'repne 0
+              ; the fpu's state: mdig lays opcode bytes over [base+off] with a /digit, w 8 for REX.W
+             'mdig 5 'fninit 0 'fnclex 0 'fwait 0 'emms 0
+              ; rdig: prefix bytes, opcode bytes, a /digit, a width, and a register; movntim m <- r
+             'rdig 5 'movntim 4 'rdpmc 0 'invpcid 3
               ; the system lane -- privileged instructions, arch-specific like the port i/o above.
               ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
               ; a64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
@@ -146,10 +150,10 @@
              'vmxon 2 'vmclear 2 'vmptrld 2 'sgdt 2 'sidt 2
              'vmread 2 'vmwrite 2
              'isb 0 'wfi 0 'wfe 0 'eret 0
-             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0 'stac 0 'clac 0
+             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0 'stac 0 'clac 0 'rdpkru 0 'wrpkru 0 'xgetbv 0 'xsetbv 0 'wbinvd 0 'invd 0 'monitor 0 'mwait 0
              'carry 4 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
              'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
-             'ldcr 2 'stcr 2 'lgdt 2 'lidt 2 'invlpg 2
+             'ldcr 2 'stcr 2 'lddr 2 'stdr 2 'lgdt 2 'lidt 2 'invlpg 2
              'mrs 2 'msr 2 'msri 2
              'tlbi 2 'ic 2 'dc 2 'at 2
              'sret 0 'mret 0 'fence 0 'fencei 0

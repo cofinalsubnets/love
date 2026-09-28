@@ -12,7 +12,7 @@
 ;                         the operands DESTINATION FIRST -- Intel's order, the manual's, and holo's
 ;   ('label sym)  ('globl sym)  ('dir name rest)     -- rest is the directive's tail, verbatim
 ; an operand:
-;   ('rg enc w)   a register, w in 1/2/4/8 (16 = an xmm register; ah..bh sit at 20..23)   ('cr n)
+;   ('rg enc w)   a register, w in 1/2/4/8 (16 = an xmm register; ah..bh sit at 20..23)   ('cr n) ('dr n)
 ;   ('im n)  ('ims sym)  ('lbl sym)  ('rip sym off)  ('ind o)  ('mem base index scale disp)
 ; a statement ends at a newline or a `;`, a comment starts at `#` or `//`, and an immediate may
 ; be a C expression over numbers (`$~(1 << 2)`) -- the GNU rules, so an inline-asm template
@@ -38,7 +38,8 @@
    xa-regs  (tablet 0)
    xa-names (tablet 0)
    ;; the prefix words a line may open with, each its own item ahead of the instruction
-   xa-prefix {'lock 'lock 'rep 'rep 'repe 'rep 'repz 'rep 'repne 'repne 'repnz 'repne}
+   xa-prefix {'lock 'lock 'rep 'rep 'repe 'rep 'repz 'rep 'repne 'repne 'repnz 'repne
+              'cs 'cs 'ds 'ds 'es 'es 'ss 'ss}
    (xa-reg! nm e w) (pin xa-regs (name nm) [e w], pin xa-names (e * 32 + w) nm)
    _ (foldl (\ _ row
                (: e (row 0)
@@ -61,6 +62,7 @@
    (xa-regname o) (xa-names (<>o * 32 + <>>o))
    (xa-gpr? o) (<o = 'rg && <>>o < 16)
    (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && digit? (s 2) ? ['cr (s 2 - 48)] ())   ; a control register
+   (xa-dr s) (#s = 3 && s 0 = 100 && (s 1 = 98 || s 1 = 114) && 48 <= s 2 <= 55 ? ['dr (s 2 - 48)] ())   ; a debug register, db or dr
    (xa-sr s) (: (go l i) (? !(two? l) () (<l = s) ['sr i] (go >l (i + 1)))   ; a segment register, es..gs = 0..5
               (go '("es" "cs" "ss" "ds" "fs" "gs") 0))
    ;; an immediate written as a C expression, `~(1 << 2)` -- the lexer and gimm below evaluate it
@@ -209,7 +211,7 @@
    ;; the stems that take an at&T size suffix
    xa-sfxable '(mov add or and sub xor cmp test neg not inc dec push pop lea
                 imul mul div idiv adc sbb sal shl shr sar rol ror shld shrd xchg bswap bsr bsf
-                xadd cmpxchg bt bts btr btc tzcnt lzcnt popcnt
+                xadd cmpxchg bt bts btr btc tzcnt lzcnt popcnt movnti
                 movabs cvttsd2si cvttss2si cvtsd2si cvtss2si cvtsi2sd cvtsi2ss)
    ;; the nullaries at&T spells c<from>t<to>, and Intel c<from><to>; the middle keeps Intel's
    xa-att-nil {'cltq 'cdqe  'cltd 'cdq  'cqto 'cqo  'cwtl 'cwde  'cbtw 'cbw  'cwtd 'cwd
@@ -272,8 +274,8 @@
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (: c (xa-idx t 58) o (at-operand (snip t (c + 1) #t))
                                        ['seg (name (snip t 1 c)) (<o = 'abs ? ['mem -1 -1 1 <>o] o)])
-         (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) sr (xa-sr nm)
-                       (? (two? cr) cr (two? sr) sr (at-reglook nm)))
+         (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) dr (xa-dr nm) sr (xa-sr nm)
+                       (? (two? cr) cr (two? dr) dr (two? sr) sr (at-reglook nm)))
          (t 0 = 36) (: v (snip t 1 #t)
                       (? (xa-num? v) ['im (xa-num v)]
                          (xa-expr? v) ['im (gimm (gtoks v))]
@@ -325,6 +327,7 @@
    (at-op o)
       (<o @ 'rg ("%" + xa-regname o)
             'cr ("%cr" + show <>o)
+            'dr ("%db" + show <>o)
             'sr ("%" + snip "escsssdsfsgs" (2 * <>o) (2 * <>o + 2))
             'im ("$" + show <>o)
             'ims ("$" + show <>o)
@@ -410,8 +413,8 @@
             (sz > 0) (scare 'as-segment t)
             (xa-num? t) (0 . [(xa-branch? mn0 || xa-cc? mn0 ? 'lbl 'im) (xa-num t)])
             (xa-expr? t) (0 . ['im (gimm (gtoks t))])
-            (: r (xa-reg t) cr (xa-cr t)
-               (? (two? r) (0 . r) (two? cr) (0 . cr) (0 . ['lbl (name (xa-unquote t))])))))
+            (: r (xa-reg t) cr (xa-cr t) dr (xa-dr t)
+               (? (two? r) (0 . r) (two? cr) (0 . cr) (two? dr) (0 . dr) (0 . ['lbl (name (xa-unquote t))])))))
    (in-insn mn rest)
       (: l (name (lower mn)) prs (map (t \ in-operand l t) (xa-ops rest))
          ops (map (p \ >p) prs)
@@ -446,6 +449,7 @@
    (in-op mn w o k)
       (<o @ 'rg (xa-regname o)
             'cr ("cr" + show <>o)
+            'dr ("dr" + show <>o)
             'sr (snip "escsssdsfsgs" (2 * <>o) (2 * <>o + 2))
             'im (show <>o)
             'ims ("OFFSET FLAT:" + show <>o)

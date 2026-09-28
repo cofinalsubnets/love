@@ -6391,6 +6391,8 @@
                                                        (rtext a9 <>>>e2)) . acc))))
                          txt (asmsub tmpl (optext ops9 asgn () + map ltext labs))
                          (? (bad? txt) (asmno g "an asm operand the template spells with a modifier it has no lane for")
+                            (!neutral? && nom? (gas-nolong tgt txt))
+                             (asmno g ("an asm \"" + show (gas-nolong tgt txt) + "\", which 64-bit mode has no encoding for"))
                             (: ; inputs (and in-out outputs) evaluate and push..
                                (loads l acc)
                                 (? !(two? l) acc

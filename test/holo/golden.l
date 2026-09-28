@@ -84,8 +84,21 @@
       ;; the interrupt return, the vectored int (int3 is `trap`, CC, already above)
       ("sys.flags"   "fafbf4"                ((cli) (sti) (hlt)))
       ("sys.smap"    "0f01cb0f01ca"          ((stac) (clac)))
+      ("sys.pkru"    "0f01ee0f01ef"          ((rdpkru) (wrpkru)))
+      ("sys.xcr"     "0f01d00f01d1"          ((xgetbv) (xsetbv)))
+      ("sys.cache"   "0f090f08"              ((wbinvd) (invd)))
+      ("sys.mwait"   "0f01c80f01c9"          ((monitor) (mwait)))
+      ("sys.rdig"    "0f00c8660f00c8f3480faed00f00d1"  ((rdig () (15 0) 1 4 r0) (rdig () (15 0) 1 2 r0) (rdig (243) (15 174) 2 8 r0) (rdig () (15 0) 2 4 r1)))   ; str eax ; str ax ; wrfsbase rax ; lldt cx
+      ("mem.ind"     "ff10ff6308"            ((mdig (255) 2 4 r0 0) (mdig (255) 4 4 r3 8)))   ; call [rax] ; jmp [rbx+8]
+      ("mem.pushpop" "ff30ff73088f00"        ((mdig (255) 6 4 r0 0) (mdig (255) 6 4 r3 8) (mdig (143) 0 4 r0 0)))   ; push [rax] ; push [rbx+8] ; pop [rax]
+      ("movnti"      "480fc3030f33"          ((movntim 8 r3 0 r0) (rdpmc)))
+      ("fpu.nil"     "dbe3dbe29b0f77"        ((fninit) (fnclex) (fwait) (emms)))
+      ("fpu.mdig"    "dd30480fae4308"        ((mdig (221) 6 4 r0 0) (mdig (15 174) 0 8 r3 8)))   ; fnsave [rax] ; fxsave64 [rbx+8]
+      ("fpu.flush"   "0fae38660fae38660fae30" ((mdig (15 174) 7 4 r0 0) (mdig (15 174) 7 2 r0 0) (mdig (15 174) 6 2 r0 0)))   ; clflush clflushopt clwb [rax]
+      ("sys.verw"    "0f00280f0020"          ((mdig (15 0) 5 4 r0 0) (mdig (15 0) 4 4 r0 0)))   ; verw verr [rax]
       ("sys.pushf"   "9c9d"                  ((pushf) (popf)))
       ("sys.seg"     "65488b0064488b00"      ((seg gs) (ld r0 r0 0) (seg fs) (ld r0 r0 0)))
+      ("sys.segnull" "3e262e36"              ((seg ds) (seg es) (seg cs) (seg ss)))
       ("sys.rmw"     "0fc102480fb14f088606ff0048830001660908480fba2803fe4b04"
                      ((xaddm 4 r2 0 r0) (cmpxchgm 8 r6 8 r1) (xchgm 1 r5 0 r0) (unm inc 4 r0 0)
                       (alum add 8 r0 0 1) (alum or 2 r0 0 r1) (btm bts 8 r0 0 3) (unm dec 1 r3 4)))
@@ -114,6 +127,8 @@
       ("sys.ldcr.hi" "410f20d8440f20c0"      ((ldcr r7 3) (ldcr r0 8)))      ; mov r8,cr3 ; mov rax,cr8
       ("sys.stcr"    "0f22c00f22db"          ((stcr 0 r0) (stcr 3 r3)))      ; mov cr0,rax ; mov cr3,rbx
       ("sys.stcr.hi" "410f22e0440f22c0"      ((stcr 4 r7) (stcr 8 r0)))      ; mov cr4,r8 ; mov cr8,rax
+      ("sys.dr"      "0f21f80f23f3410f21c0"  ((lddr r0 7) (stdr 6 r3) (lddr r7 0)))   ; mov rax,dr7 ; mov dr6,rbx ; mov r8,dr0
+      ("invpcid"     "660f388208660f38820b"  ((invpcid r1 r0 0) (invpcid r1 r3 0)))   ; invpcid rcx,[rax] ; invpcid rcx,[rbx]
       ;; the descriptor tables and invlpg: one opcode, 0F 01, told apart by the Modrm digit.
       ("sys.lgdt"    "0f01170f015710"        ((lgdt r6 0) (lgdt r6 16)))     ; lgdt [rdi] ; lgdt [rdi+16]
       ("sys.lidt"    "0f015e08"              ((lidt r5 8)))                  ; lidt [rsi+8]
