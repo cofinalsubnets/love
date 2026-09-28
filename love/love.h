@@ -1034,7 +1034,7 @@ static ai_inline bool tagp(word x, word const *lo, word const *hi) {
 static ai_inline bool in_live_pool(struct ai *g, word const *p) {
  if (p >= ptr(g) && p < ptr(g) + g->len) return true;             // minor / main pool
  return (p >= g->major_base && p < g->major_base + g->major_len)                    // both major halves
-     || (p >= g->major_spare && p < g->major_spare + g->major_len); }
+     || (g->major_spare && p >= g->major_spare && p < g->major_spare + g->major_len); }   // a missing spare holds nothing
 static ai_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | ai_thread_tag, h; }
 #define topof(g) ((word*)g+g->len)
@@ -1047,8 +1047,11 @@ static ai_inline struct ai_tag { union u *head; union u end[]; } *ttag(struct ai
  return (struct ai_tag*) k; }
 static ai_inline union u *tag_head(struct ai_tag *t) {
  return cell(word(t->head) & ~(word) 3); }
-// scratch for a walk that may not allocate: the major's spare half, dead outside a collection
+// scratch for a walk that may not allocate: the major's spare half, dead outside a collection.
+// a major that gave the spare's room to its to-space has none, and the nursery's free gap
+// stands in -- nothing allocates there while a collection runs
 static ai_inline word *ai_gap(struct ai *g, word **top) {
+ if (!g->major_spare) return *top = g->sp, g->hp;
  return *top = g->major_spare + g->major_len, g->major_spare; }
 
 // --- stack and op helpers ---
