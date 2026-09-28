@@ -424,12 +424,15 @@ t \\- a thing
       ; what a page carries that is not prose, read anyway: a get form's text field is a
       ; link to form:ACTION?PAIRS -- every other control as it stands, the first submit
       ; button, then its own name=value last -- and a post form, a <select>, a hidden or
-      ; unchecked control lay nothing. an image is its alt; a bare & is itself; an
+      ; unchecked control lay nothing. an image is its alt, a mark " img SRC" ahead of it
+      ; where it has a src; a bare & is itself; an
       ; attribute may go unquoted, and a > inside a quoted one ends no tag
       _ (: f (htread "<form action=\"/w/i.php?old=1#f\"><input type=hidden name=t value=\"Special:S &amp; b\"><input name=q placeholder=\"Find\"><select name=k><option value=a>A<option selected>B b</select><input type=checkbox name=c checked><input type=checkbox name=d><input type=submit name=go value=Go><input type=submit name=no value=No><textarea name=n>x &lt; y</textarea></form><form method=POST><input name=p></form>")
            (test (f = '((para ((link ((text "[Find________]")) "form:/w/i.php?t=Special%3AS+%26+b&k=B+b&c=on&n=x+%3C+y&go=Go&q=")
                                 (link ((text "[x < y_______]")) "form:/w/i.php?t=Special%3AS+%26+b&q=&k=B+b&c=on&go=Go&n=x+%3C+y")))))
-                 (htread "<p>a <img src=x alt=\"the logo\"> b <img alt=\"\" src=y> c</p>" = '((para ((text "a [the logo] b  c")))))
+                 (htread "<p>a <img src=x alt=\"the logo\"> b <img alt=\"\" src=y> c</p>"
+                  = '((para ((text "a ") (mark " img x") (text "[the logo] b ") (mark " img y") (text " c")))))
+                 (htread "<p>a <img alt=\"no src\"> b</p>" = '((para ((text "a [no src] b")))))
                  (htread "<p>fish & chips, <a href=\"q?a=1&b=2&amp;c=3\">q</a></p>"
                   = '((para ((text "fish & chips, ") (link ((text "q")) "q?a=1&b=2&c=3")))))
                  (htread "<p><a href=/u/v title=\"a > b\">u</a> <span id=s>s</span></p>"

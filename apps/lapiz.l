@@ -543,6 +543,8 @@
    (halt s k e)
     (: v (hattr s k e "alt")
        (? (string? v && 0 < #v) ("[" + hesc [[60 "&lt;"]] v + "]") ""))
+   ; ..and a mark " img SRC" ahead of it, on the line a viewer can draw it under
+   (himg s k e) (: v (hval s k e "src") ((? (0 < #v) (hmk (" img " + v)) "") + halt s k e))
    ; s with each byte the table names spelled its way
    (hesc tb s)
     (: o (jug 0)
@@ -571,7 +573,7 @@
                   (? (t = "form") (: _ (pin fs 'f (? op? (hform s k (e - 1) e) (tablet 0))) (say o mk, go e ba))
                      (t = "input") (say o (mk + field i), go e ba)
                      (t = "textarea") (say o (mk + field i), go (? op? (hpast s e t) e) ba)
-                     (t = "img") (say o (mk + (? op? (halt s k (e - 1)) "")), go e ba)
+                     (t = "img") (say o (mk + (? op? (himg s k (e - 1)) "")), go e ba)
                      (elem t hkill) (go (? op? (hpast s e t) e) ba)
                      (elem t hbare) (say o mk, go e ba)
                      (t = "br") (say o "</p><p>", go e ba)

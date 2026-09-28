@@ -172,6 +172,41 @@
               (lay (get (at + "/b.html") 8) 60 1 = [(at + "/sub/t.txt")])))
    ; a page fetched with a fragment opens at its place
    _ (: s2 (wnew 60 20) _ (wland s2 (get (at + "/a.html#here") 8)) (test (0 < s2 'top)))
+   ; a png drawn under its mark, two pixels a cell: its rows spliced in after the alt text's
+   ; line, the link below moved down by them, a missing picture drawn as nothing, and the
+   ; rows kept through a re-lay at a narrower width
+   _ (: (be4 v) (foldl (\ a k (a + string ((v >> k) & 255))) "" [24 16 8 0])
+        (chunk ty d) (be4 #d + ty + d + be4 ((cite 'gz 'gz-crc32) (ty + d)))
+        (adler s) (: (go i a b) (? (#s <= i) ((b << 16) | a)
+                                   (: a2 ((a + s i) % 65521) (go (i + 1) a2 ((b + a2) % 65521))))
+                     (go 0 1 0))
+        (colour x y) [(x * 30) (y * 40) 200 255]
+        raw (foldl (\ acc y (acc + string 0
+                              + foldl (\ a x (a + foldl (\ a c (a + string c)) "" (colour x y))) "" ^8))
+                   "" ^6)
+        png (string 137 + "PNG\r\n" + string 26 + "\n"
+             + chunk "IHDR" (be4 8 + be4 6 + string 8 + string 6 + string 0 + string 0 + string 0)
+             + chunk "IDAT" (string 120 + string 1 + (cite 'gz 'gz-deflate) raw + be4 (adler raw))
+             + chunk "IEND" "")
+        _ (wput "/dot.png" png)
+        _ (wput "/p.html" ("<h1>Pic</h1><p>see <img src=\"dot.png\" alt=\"dot\"> and "
+                           + "<img src=\"nope.png\" alt=\"gone\"></p><p><a href=\"a.html\">after</a></p>"))
+        _ (setenv "COLORTERM" "truecolor")
+        s7 (wnew 60 20)
+        _ (wland s7 (get ("file://" + sroot + "/p.html") 8))
+        l0 (s7 'links 0) n0 (s7 'nl)
+        (cells? l) (0 <= (K 'wg-find) l "\xe2\x96\x80" 0)
+        m (<>(<(filter (a \ (K 'wg-find) <a " img " 0 = 0) (s7 'anchors))))
+        _ ((K 'ww-pictures) s7)
+        ls (s7 'ls)
+        _ (test (s7 'links 0 = l0 + 3) (s7 'nl = n0 + 3)
+                (0 <= (K 'wg-find) (ls m) "[dot]" 0) !(cells? (ls m))
+                (cells? (ls (m + 1))) (cells? (ls (m + 3))) !(cells? (ls (m + 4)))
+                (0 <= (K 'wg-find) (ls (m + 1)) "\e[38;2;0;0;200m\e[48;2;0;40;200m" 0)
+                (0 <= (K 'wg-find) (ls (s7 'links 0)) "after" 0)
+                ((s7 'imgs) ("file://" + sroot + "/nope.png") = 'none))
+        _ (pin s7 'w 30) _ ((K 'ww-fit) s7)
+        (test (#(filter cells? (s7 'ls)) = 3)))
    ; less's keys still reach less
    _ (wkeys st "G")
    _ (test (0 <= st 'top))
