@@ -6,7 +6,7 @@
 ;
 ;   hjkl / arrows  the cursor (a byte, or an instruction)      ^f ^b  a page   ^d ^u  the same
 ;   g G   the start and the end     d / tab  hex <-> asm     s  at&T <-> Intel     n  next match
-;   0-9 a-f  (hex view) overwrite the nibble at the cursor    q  leave (when clean)
+;   0-9 a-f  (hex view, either case) overwrite the nibble at the cursor    q  leave (when clean)
 ;   :w save   :q leave   :q! leave anyway   :wq   :g ADDR|SYM  go   :/ HEX|"text"  find
 ;
 ; every key is a pure step on the state and every frame a pure lay into a port, so the tool
@@ -20,6 +20,7 @@
 (borrow 'holo)
 (borrow 'tui)
 (borrow 'posix)
+(borrow 'bytes)
 (:
  ;; --- the file, and an ELF's .text and symbols over it ------------------------------------
  ;; elf: () or {'toff 'taddr 'tsize 'syms 'names}: .text's file offset, address and size; syms
@@ -108,7 +109,6 @@
      (goto d (go rows (d 'cur))))))
 
  ;; --- editing: a hex digit at the cursor, the high nibble first --------------------------
- (hexval c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) -1)
  (poke d i v) (pins d 'dirty 1 'edits (pin (d 'edits) i v))
  (nibble d v)
   (: i (d 'cur) old (lupa-byte d i)
@@ -120,8 +120,8 @@
 
  ;; --- find: a hex string or a "quoted text", from just past the cursor, wrapping --------
  (unhex h) (: t (string (filter (c \ !(c = 32)) (chars h)))
-              (? (0 = #t || #t % 2 = 1 || !(foldl (a \ c \ a && hexval c >= 0) 1 (chars t))) ""
-                 (string (map (\ i (hexval (t (2 * i)) * 16 + hexval (t (2 * i + 1)))) ^(#t // 2)))))
+              (? (0 = #t || #t % 2 = 1 || !(foldl (a \ c \ a && hexv c >= 0) 1 (chars t))) ""
+                 (hex2b t)))
  (needle s) (? (#s >= 2 && s 0 = 34 && s (#s - 1) = 34) (snip s 1 (#s - 1)) (unhex s))
  (find d s)
   (: nd (needle s) n #nd
@@ -133,7 +133,7 @@
            (hit < 0 ? (tell d "not found") (pins d 'find s 'cur hit 'msg ("found at " + hexn (addr d hit)))))))
 
  ;; --- the command line: w q q! wq g / -----------------------------------------------------
- (hexnum s) (foldl (a \ c \ a < 0 || hexval c < 0 ? -1 (a * 16 + hexval c)) 0 (chars s))
+ (hexnum s) (foldl (a \ c \ a < 0 || hexv c < 0 ? -1 (a * 16 + hexv c)) 0 (chars s))
  (parse-addr d s)
   (: sym (elfed? d ? (peep ((d 'elf) 'names) s -1) -1)
      (? (sym >= 0) (offset d sym)
@@ -168,7 +168,7 @@
               58 (pins d 'in 'cmd 'cmd (ednew ()) 'msg "")
               113 (d 'dirty ? (tell d "unsaved edits: :w or :q!") (pin d 'over 1))
               27 (pins d 'nib -1 'msg "")
-              (? (hexmode && hexval c >= 0) (nibble d (hexval c)) d)))))
+              (? (hexmode && hexv c >= 0) (nibble d (hexv c)) d)))))
 
  ;; --- the frame ---------------------------------------------------------------------------
  (printable c) (32 <= c < 127 ? (string c) ".")
