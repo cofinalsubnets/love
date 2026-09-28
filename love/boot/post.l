@@ -224,15 +224,14 @@
    (lift z f) (\ a b (z (f (load a) (load b)))))
 
 ;;; FIXME help/io setters below here. redesign the API with more structure
-; binary?: does f take exactly two operands? the arity off the n-ary closure marker, else the
-; param count off a compiled lambda's stashed source. one-sided on purpose: a shape neither
-; reads (a nif, a partial) passes. the marker is read off a known binary rather than named,
-; and must be lvm_cur -- binding lvm_ret0 the same way segfaults the image bake, so a
-; one-armed nif goes uncaught.
-(: hcur (pick 0 (\ a b a))
+; binary?: does f take exactly two operands? the arity off the n-ary closure marker; any other
+; compiled lambda takes one. one-sided on purpose: a nif or a partial passes. the markers are
+; read off known values rather than named.
+(: hcur (pick 0 (\ a b a)) hunc (pick 0 (+ 1))
    (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
                   (== hcur (pick 0 f)) (2 = peek 1 f)
-                  (: s (lamsrc f) (? (two? s) (4 = #s) 1)))
+                  (== hunc (pick 0 f) || string? (nifnom f)) 1
+                  !(lit? f && !(tablet? f) && !(hot? f)))
    (hear f) (? !f (seal-hook 5 ())                  ; every nothing uninstalls
                (binary? f) (seal-hook 5 f)
                (scare 'help-arity f)))
@@ -306,6 +305,235 @@
    ; `elem`/`assoc` above stay love's, a bit and a pair by `=`.
    (memq x l)   (? (two? l) (? (== x (cap l)) l (memq x (cup l))))
    (member x l) (? (two? l) (? (= x (cap l)) l (member x (cup l)))))
+
+; lamform -- a function read back off its thread into a source form that evaluates to an `=`
+; function, or 0 when the thread is not one ev writes (a nif's body, a continuation). a
+; symbolic run of the stack machine: every value pushed is a slot, a fresh mint whose node
+; says how it was made, and the nodes render as source once the run is done.
+(: lamform (:
+   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) gcache {}
+   ; the load runs, a spec per load: a an arg operand, q a quote operand, a number an
+   ; immediate arg, (q v) an immediate quote. the flag says the last load carries the apply
+   lds (foldl (\ t r (pin t <r >r)) {}
+        [[lvm_arg '(a) 0] [lvm_quote '(q) 0] [lvm_argap '(a) 1] [lvm_quoteap '(q) 1]
+         [lvm_aa '(a a) 0] [lvm_aq '(a q) 0] [lvm_qa '(q a) 0] [lvm_qq '(q q) 0]
+         [lvm_aap '(a a) 1] [lvm_aqp '(a q) 1] [lvm_qap '(q a) 1] [lvm_qqp '(q q) 1]
+         [lvm_arg0 '(0) 0] [lvm_arg1 '(1) 0] [lvm_arg2 '(2) 0] [lvm_arg3 '(3) 0]
+         [lvm_quo0 '((q 0)) 0] [lvm_quo1 '((q 1)) 0] [lvm_quo2 '((q 2)) 0]
+         [lvm_quo3 '((q 3)) 0] [lvm_quom1 '((q -1)) 0] [lvm_quom2 '((q -2)) 0]])
+   ; an arg load fused with the nif that consumes it
+   fus (pins {} lvm_argcap 'cap lvm_argcup 'cup lvm_argtwo 'two?)
+   ; a nif's body op -> (name . arity), the shape ev's opof reads
+   nops (foldl (\ t v (: nm (nifnom v)
+                         b (? (string? nm) (? (ret0 == pick 1 v) (pick 0 v)
+                                              (cur == pick 0 v && ret0 == pick 3 v) (pick 2 v)))
+                         (? (? b (nil? (peep t b ()))) (pin t b ((name nm) . (? (ret0 == pick 1 v) 1 (peek 1 v)))) t)))
+               {} (catmap (\ l (map l (keys l))) (stack ())))
+   (tk n l) (? (0 < n) (<l . tk (n - 1) >l) ())
+   (dp n l) (? (0 < n) (dp (n - 1) >l) l)
+   (unw v) (? (nat? v) (unw (? (== cur (pick 0 v)) (peek 3 v) (peek 1 v))) v)   ; a native is its twin
+   (fn? v) (lit? v && !(tablet? v) && !(hot? v))
+   (arity e) (? (== cur (pick 0 e)) (peek 1 e) 1)
+   (entry e) (? (== cur (pick 0 e)) (seek 2 e) e)
+   (partp v) (== unc (pick 0 v) || == cur (pick 0 v) && == unc (pick 2 v))
+   (unc0 v) (? (== cur (pick 0 v)) (seek 2 v) v)
+   (pargs v) (: (go u a) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l (peek 1 u . a)) (peek 1 u . a))) (go (unc0 v) ()))
+   (fbase v) (: (go u) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
+   ; a row's value is a binding power, negative as often as not: ask for presence
+   (infix? x) (? (name? x) (any (\ k (k != 0 && peep (operators k) x () !== ())) (keys operators)))
+
+   ; C is one reading's state: D a slot's node, B the let names in scope, R a let-bound
+   ; closure's (name captures), memo a lambda already read, want a name recursion asked for
+   (lamform v) (: r (call-cc (\ k (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'want {} 'pre {}}
+                                    (rename (? (partp v) (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v)))))))
+                 (? (== r 0) (: g (glob v) (? g g 0)) r))
+   (fail C) ((C 'k) 0)
+   (push C n S) (: s (mint 0) _ (pin (C 'D) s n) (s . S))
+
+   ; --- the run: S is the stack, a slot per value. it answers (r node), a return, or
+   ; (j at S), a jump to a join, and st is the join this stretch ends at
+   (run C p S st) (? (== p st) ['j p S] (step C p S st (pick 0 p)))
+   (step C p S st op) (: l (peep lds op ())
+    (? (two? l) (: (go S sp i) (? (two? sp)
+                                (: s <sp (go (push C (? (charm? s) (S s) (s = 'a) (S (peek i p))
+                                                        (s = 'q) ['k (peek i p)] ['k <>s]) S)
+                                             >sp (? (charm? s) i (two? s) i (1 + i))))
+                                (? <>l (run C (seek i p) (push C ['a (S 1) [<S]] >>S) st)
+                                      (run C (seek i p) S st)))
+                    (go S <l 1))
+       (== op lvm_ret) ['r <S]
+       (== op lvm_tap) ['r ['a (S 1) [<S]]]
+       (== op lvm_argtap) (: S2 (push C (S (peek 1 p)) S) ['r ['a (S2 1) [<S2]]])
+       (== op lvm_tapn) (: n (peek 1 p) ['r ['a (S n) (tk n S)]])
+       (== op lvm_ap) (run C (seek 1 p) (push C ['a (S 1) [<S]] >>S) st)
+       (== op lvm_apn) (: n (peek 1 p) (run C (seek 2 p) (push C ['a (S n) (tk n S)] (dp (1 + n) S)) st))
+       (== op lvm_jump) ['j (peek 1 p) S]
+       (== op lvm_cond) (branch C <S (seek 2 p) (peek 1 p) >S st)
+       (== op lvm_argcond) (branch C (S (peek 1 p)) (seek 3 p) (peek 2 p) S st)
+       (== op lvm_argtwocond) (branch C ['o 'two? [(S (peek 1 p))]] (seek 3 p) (peek 2 p) S st)
+       (== op lvm_index) (run C (seek 2 p) (push C ['g (peek 1 p)] S) st)
+       (: f (peep fus op ())
+        (? f (run C (seek 2 p) (push C ['o f [(S (peek 1 p))]] S) st)
+           (: n (peep nops op ())
+            (? (two? n) (run C (seek 1 p) (push C ['o <n (tk >n S)] (dp >n S)) st)
+               (fail C)))))))
+   ; a cond: the then arm first, which finds the join if there is one; the else arm runs to it
+   (branch C t a e S st) (: r1 (run C a S st)
+    (? (<r1 = 'j) (: J (r1 1) r2 (run C e S J)
+                   (? (<r2 = 'j) (run C J (push C ['c J t <(r1 2) <(r2 2)] S) st) (fail C)))
+       (: r2 (run C e S st)
+        (? (<r2 = 'r) ['r ['c 0 t (r1 1) (r2 1)]] (fail C)))))
+
+   ; --- rendering: a node to a source form, the binders still mints
+   (res C x) (? (mint? x) (: b (peep (C 'B) x 0) d (peep (C 'D) x C)
+                           (? (b || == d C) x (res C d)))
+                x)
+   (var? C x) (mint? (res C x))
+   (rv C x) (: y (res C x)
+    (? (mint? y) y
+       (y @ ('k v) (rk C v)
+            ('g n) n
+            ('o n as) (n . map (ra C) as)
+            ('c . J . cl) ('? . rcl C J cl)
+            ('a . _) (rapp C y)
+            (fail C))))
+   (alleq C xs ys) (? (two? ys) (== (res C <xs) <ys && alleq C >xs >ys) 1)
+   ; an operator away from the head is parenthesised, or it reads as infix
+   (ra C x) (: r (rv C x) (? (infix? r) [r] r))
+   ; a cond whose else is a cond of the same join is one cond of more clauses
+   (rcl C J cl) (: t <cl a <>cl e <>>cl y (res C e)
+    (rv C t . rv C a . (? (two? y && <y = 'c && y 1 == J) (rcl C J >>y) [(rv C e)])))
+   ; the application spine: the head, then each apply's group, outermost last
+   (spine C x gs) (: y (res C x) (? (two? y && <y = 'a) (spine C (y 1) ((y 2) . gs)) (y . gs)))
+   ; a lambda to read back: no name of its own, not a partial, not being read already
+   (lam C h) (? (two? h && <h = 'k)
+               (: v (unw (h 1)) (? (fn? v && !(partp v) && fname C v == 0 && !(busy? C v)) v)))
+   (nlet C h) (? (two? h && <h = 'k) (named C (unw (h 1))))
+   ; a lambda head: fewer args than params are its captures, a closure; the group that
+   ; saturates it is a let's inits, the groups before it its captures
+   (rapp C x) (: sp (spine C x ()) h <sp gs >sp E (lam C h) as (catmap id gs) nl (nlet C h)
+    (? (two? nl) (: ic <>nl ni #ic
+                  (? (ni <= #as && alleq C as ic)
+                     (? (ni < #as) (<nl . map (ra C) (dp ni as)) <nl)
+                     (flat C h as)))
+       E (: n (arity E) m #as
+          (? (m < n) (? (all (var? C) as) (rclo C E (map (res C) as)) (flat C h as))
+             (: (cut gs acc k) (? (two? gs) (: a (acc + #<gs) (? (a = n) k (a < n) (cut >gs a (1 + k)) -1)) -1)
+                k (cut gs 0 0) imps (catmap id (tk k gs)) la (? (0 <= k) (gs k)) rest (catmap id (dp (1 + k) gs))
+              (? (0 <= k && all (var? C) imps)
+                 (: lt (rlet C E (map (res C) imps) la) (? (two? rest) (lt . map (ra C) rest) lt))
+                 (flat C h as)))))
+       (: s (self C h as) (? (two? s) <s (flat C h as)))))
+   ; a closure calling itself from inside its own reading passes its captures along first:
+   ; its name stands for the closure, captures and all
+   (self C h as) (? (two? h && <h = 'k)
+                   (: u (unw (h 1)) p (peep (C 'pre) u ())
+                    (? (two? p && busy? C u && #p <= #as && alleq C as p)
+                       (: n (want C u) (? (#p < #as) [(n . map (ra C) (dp #p as))] [n])))))
+   (flat C h as) (rv C h . map (ra C) as)
+   ; a let's names are the slots its inits sit in. an init that is a closure names its
+   ; thread, so a reference back to it from its own body or a sibling's reads as the name
+   (rlet C E imps la) (: B (C 'B)
+    _ (each la (\ s (: cl (clo C (res C (peep (C 'D) s ()))) (? cl (pin (C 'R) <cl [s >cl]) 0))))
+    _ (each la (\ s (pin B s 1)))
+    body <>(rbody C E (imps + la))
+    (': . catmap (\ s [s (rinit C s)]) (rev la) + [body]))
+   (rinit C s) (: d (res C (peep (C 'D) s ())) cl (clo C d)
+    (? cl (rclo C <cl >cl) (rv C d)))
+   ; a closure node: (lambda . capture vars), or ()
+   (clo C d) (? (two? d && <d = 'k) (: v (unw (d 1)) (? (fn? v && !(partp v) && !(nifnom v)) [v]))
+                (two? d && <d = 'a)
+                (: sp (spine C d ()) h <sp as (catmap id >sp) E (? (two? h && <h = 'k) (unw (h 1)))
+                 (? (E && fn? E && !(partp E) && !(nifnom E) && #as < arity E && all (var? C) as)
+                    (E . map (res C) as))))
+   (named C v) (peep (C 'R) v ())
+   (rbody C E pre) (: bz (C 'busy)
+    (inq l) (? (two? l) (== E <l || inq >l))
+    _ (? (inq bz) (fail C))
+    _ (pin C 'busy (E . bz))
+    _ (pin (C 'pre) E pre)
+    S0 (: (ps i) (? (i < arity E) (? (i < #pre) (pre i . ps (1 + i)) (mint 0 . ps (1 + i))) ()) (ps 0))
+    r (run C (entry E) S0 ())
+    b (? (<r = 'r) [(dp #pre S0) (rv C (r 1))] (fail C))
+    _ (pin C 'busy bz)
+    b)
+   ; a body that is itself a lambda sits in a singleton, which reads as the lambda: bare,
+   ; the reader would merge its params into ours, one closure where the thread has two
+   ; one reached again from inside its own reading is recursion with no name to say it by: it
+   ; takes one, and its form binds it, (: n (\ ..) n)
+   (rclo C E pre) (: b (rbody C E pre) y <>b
+                   f ('\ . <b + [(? (two? y && == <y '\ && two? >>y) [y] y)])
+                   n (peep (C 'want) E 0)
+                   (? (mint? n) [': n f n] f))
+   (want C u) (: W (C 'want) n (peep W u 0) (? (mint? n) n (: n (mint 0) (pin W u n, n))))
+   (rk C v) (? (charm? v) v
+               (== v ()) ()
+               (nom? v || two? v) ['\ v]
+               (fn? v) (rfn C v)
+               (tablet? v || hot? v) (: g (glob v) (? g g v))
+               v)
+   ; a function's own name: a nif's, a glued sigil's, a let's, a global's. 0 for none, a
+   ; let's name being a mint, and a mint falsy
+   (fname C v) (: nm (nifnom v)
+    (? (string? nm) (name nm)
+       (: gn (opnom v) u (unw v) r (named C u)
+        (? gn gn
+           (? (two? r) (nil? <>r)) <r
+           (glob v) (glob v)
+           (glob u) (glob u)
+           0))))
+   (rfn C v) (: nm (fname C v)
+    (? (!== nm 0) nm
+       (partp v) (rfn C (fbase v) . map (rk C) (pargs v))
+       (rlam C (unw v))))
+   ; a lambda constant is read once, a helper reached from many places being one form
+   (rlam C u) (: M (C 'memo) f (peep M u ())
+    (? f f (busy? C u) (want C u) (: f (rclo C u ()) (pin M u f, f))))
+   ; by `=`: an older compile of the same function is the same function
+   (busy? C u) (: (go l) (? (two? l) (u = <l || go >l)) (go (C 'busy)))
+   ; the globals and module names by value, the shortest spelling first, then the least. the
+   ; table outlives a reading and is rebuilt when a layer or a module gains or loses a name;
+   ; a hit is held to the binding it came from, so a name since rebound rebuilds too
+   (glob v) (: e (peep (gtab 0) v ())
+    (? (nil? e) ()
+       (== (unw (<>e <e)) (unw v)) <e
+       (: e (peep (gtab 1) v ()) (? (two? e) <e ()))))
+   (gsig L) (+ (foldl (\ n l (n + #l)) 0 (stack ()))
+               (foldl (\ n k (: l (L k) (n + 1 + (? (tablet? l) #l 0)))) 0 (keys L)))
+   (gtab force) (: L (lib ()) s (gsig L)
+    (? (? force 0 (s = peep gcache 's -1)) (gcache 't)
+       (: t {} m {} seen {}
+          (better a b) (: x (string a) y (string b) (? (#x < #y) 1 (#x = #y) (x < y) 0))
+          (put t v k l) (: old (peep t v ()) (? (? (nil? old) 1 (better k <old)) (pin t v [k l]) 0))
+          ; a native is keyed by its bytecode too: a thread quotes whichever the compiler held
+          (add t l k) (: v (l k)
+                       (? (? (name? k) (fn? v || tablet? v || hot? v))
+                          (: _ (put t v k l) (? (fn? v) (put t (unw v) k l) 0)) 0))
+          _ (each (stack ()) (\ l (each (keys l) (\ k (? (peep seen k 0) 0 (: _ (pin seen k 1) (add t l k)))))))
+          ; a module's names fill in where the book has none
+          _ (each (keys L) (\ n (: l (L n) (? (tablet? l) (each (keys l) (add m l)) 0))))
+          _ (each (keys m) (\ v (? (nil? (peep t v ())) (pin t v (m v)) 0)))
+          _ (pins gcache 's s 't t)
+          t)))
+   ; --- naming: a binder is a letter by its depth, a b .. z aa ab .., skipping any name the
+   ; form spells free, which a binder of that spelling would capture
+   (sxch n a) (: q ((n - 1) // 26) c (97 + ((n - 1) % 26))
+               (? (0 < q) (sxch q (c . a)) (c . a)))
+   (lnom i) (name (string (sxch (1 + i) ())))
+   (nxt i fv) (? (peep fv (lnom i) 0) (nxt (1 + i) fv) i)
+   (qot? x) (two? x && == <x '\ && two? >x && !(two? >>x))
+   (fvn x t) (? (name? x) (pin t x 1) (atom? x || qot? x) t (foldl (\ t e (fvn e t)) t x))
+   (asg bs i m fv) (? (two? bs) (: j (nxt i fv) (asg >bs (1 + j) ((<bs . lnom j) . m) fv)) (i . m))
+   (lets l) (? (two? >l) (<l . lets >>l) ())
+   (ren x i m fv) (? (mint? x) (: p (assq x m) (? (two? p) >p x))
+                     (atom? x || qot? x) x
+                     (== <x '\) (: a (asg (init >x) i m fv)
+                                 ('\ . map (\ e (ren e <a >a fv)) >x))
+                     (== <x ':) (: a (asg (lets >x) i m fv)
+                                 (': . map (\ e (ren e <a >a fv)) >x))
+                     (map (\ e (ren e i m fv)) x))
+   (rename f) (ren f 0 () (fvn f {}))
+   lamform))
 
 (: px (:
   ; every eager binding sits in this outer `:`. where boxfix engages (any forward
@@ -452,35 +680,6 @@
   (nargs v) (: (go u n) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
   (fbase v) (: (go u) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
   (farg v i n) (: (go u w) (? (0 < w) (go (peek 2 u) (w - 1)) (peek 1 u)) (go (unc0 v) ((n - 1) - i)))
-  ; --- a lambda's source, de Bruijn renamed: a \-bound variable prints as its level's
-  ; letter, so a-equivalent lambdas print alike and inspect agrees with `=`. free, global
-  ; and :-bound names keep their spelling; quoted data is shared verbatim.
-  (inq x l) (? !(two? l) 0 (== x <l) 1 (inq x >l))
-  ; the shortlex letters: a b .. z aa ab .. , one-based so the digits carry no zero
-  (sxch n a) (: q ((n - 1) // 26) c (97 + ((n - 1) % 26))
-              (? (0 < q) (sxch q (c . a)) (c . a)))
-  (lnom i) (name (string (sxch (1 + i) ())))
-  ; a binder takes the next letter not spelled free anywhere in the source: a name kept as
-  ; written is one a rename would capture. the candidate index threads, so the letters are
-  ; walked once across the whole term.
-  (nxt i fv) (? (peep fv (lnom i) 0) (nxt (1 + i) fv) i)
-  (lam? x) (two? x && == <x '\ && two? >x && two? >>x)
-  (qot? x) (two? x && == <x '\ && two? >x && !(two? >>x))
-  ; the noms canon leaves spelled as written: free, global and :-bound. quoted data is data,
-  ; never a reference, so a binder cannot capture into it; bd is the binders in scope, a stack.
-  (fvs x bd t) (? (one? x) (? (nom? x) (? (inq x bd) t (pin t x 1)) t)
-                  (qot? x) t
-                  (lam? x) (fvl >x bd t)
-                  (fvs >x bd (fvs <x bd t)))
-  (fvl l bd t) (? (one? >l) (fvs <l bd t)
-                  (fvl >l (<l . bd) t))
-  (canon x sc i fv) (? (one? x) (? (nom? x) (: r (assoc x sc) (? r >r x)) x)
-                       (qot? x) x
-                       (lam? x) ('\ . cops >x sc i fv)
-                       (canon <x sc i fv . canon >x sc i fv))
-  (cops l sc i fv) (? !(two? >l) [(canon <l sc i fv)]          ; the last operand is the body
-                      (: j (nxt i fv) nm (lnom j)
-                       (nm . cops >l ((<l . nm) . sc) (1 + j) fv)))
 
   (pfn o v sn) (? (partp v)
     (: n (nargs v)
@@ -492,9 +691,9 @@
           ; say that instead of inlining its whole body wherever `<x` was written.
           (: gn (opnom v)
              (? gn (say o (string gn))
-                (: s (lamsrc v)
-                   (? (two? s) (px o (canon s 0 0 (fvs s () {})) sn)
-                      (: _ (put o 92) (pnum o (abs (dig v)))))))))))   ; opaque: a distinguisher, nothing more -- C spelled the address here, this is the digest, which at least survives a collection
+                (: s (lamform v)
+                   (? (== s 0) (: _ (put o 92) (pnum o (abs (dig v))))   ; opaque: the digest, a distinguisher and nothing more
+                      (px o s sn))))))))
 
   (px o x sn) (? (charm? x) (pnum o x)
                 (coin? x) (pcoin o x sn)

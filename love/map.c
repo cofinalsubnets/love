@@ -347,6 +347,7 @@ static uintptr_t fn_hash(struct ai *g, word x) {
  word hd = (word) tag_head(tg), e = (word) tg;
  for (union u *y = k; y < (union u*) tg; y++) {
   word v = y->x;
+  if (!(v & 1) && !(v >= hd && v <= e)) { word m = fn_meaning(g, v); if (m >= hd && m <= e) v = m; }
   uintptr_t t = (v & 1) ? (uintptr_t) v
               : v >= hd && v <= e ? (uintptr_t) (v - x)
               : in_heap(g, v) ? 2 : (uintptr_t) (v - (intptr_t) hash_base);

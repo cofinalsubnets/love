@@ -1,34 +1,47 @@
-; functions print as value forms that reconstruct under eval: builtins -> the bare
-; name; lambdas -> (\ …) source with \-bound vars as interned shortlex letters by de Bruijn
-; level -- a b .. z aa ab .. -- skipping any letter spelled free in the source, since a name
-; kept as written is one a rename would capture. Interned names -> the print form round-trips
-; (see roundtrip.l). a-equivalent lambdas print identically. a captured value renders as a
-; leading binder -- but that rendering is intensional and free to vary (cprop may inline a
-; constant capture), so show of a capture is asserted extensionally: show -> read -> eval rebuilds
-; a function of the same behavior (rt below; the dedicated suite is roundtrip.l).
+; functions print as value forms that reconstruct under eval: builtins -> the bare name;
+; lambdas -> a (\ …) form read back off the compiled thread (post.l's lamform), each binder a
+; shortlex letter by its depth -- a b .. z aa ab .. -- skipping any letter the form spells free,
+; which a binder of that spelling would capture. a global or a module's function prints as its
+; name, a let as (: ..), a closure as a lambda over the names it captured. show -> read -> eval
+; gives back an `=` function (rt below; the dedicated suite is roundtrip.l).
 ; `=` compares functions by what they compiled to: two lambdas are equal when their threads are,
 ; and a param is a stack slot there, so lambdas that differ only in their names are equal. a
 ; partial-app is its base and its captures: equal to another partial of an equal base holding equal
 ; captures, never to a lambda it would reduce to (`=` reduces nothing).
 (: (rt x) (ev <(sound (show x)))
+   (rt= f) (f = rt f)
+   (fnfree s x) (: f (trap (\ _ (ev x)) () (\ a b 0)) (? f (s = show f) 1))
  (test
   ("\+" = show (+))
   ("." = show (.))
   ("(\\ a a)" = show (\ x x))
-  ("(\\ a b (+ a b))" = show (\ a b (a + b))) ; already canonical: prints as written
+  ("(\\ a b (+ a b))" = show (\ a b (a + b)))
   (show (\ x x) = show (\ y y))               ; a-equivalent -> identical print
-  ("(\\ a (\\ b b))" = show (\ x (\ x x)))    ; shadow: inner binder = b
+  ("(\\ a ((\\ b b)))" = show (\ x (\ x x)))  ; a lambda body sits in a singleton: bare, the reader would merge the params
   ("(\\ a 'y)" = show (\ x 'y))               ; quoted datum not renamed
-  ; a letter spelled free in the source is skipped, or the rename would capture it
-  ("(\\ a b c d f (+ e a))" = show (\ p q r s t (e + p)))     ; e free -> binder 4 is f
-  (= "(\\ a b c d f g h j k (+ e (+ i k)))"
-     (show (\ p q r s t u v w x (e + (i + x)))))                ; e and i both skipped
+  ; a letter spelled free in the form is skipped, or the rename would capture it. c0 refuses
+  ; a missing name outright, so these are ev's
+  (fnfree "(\\ a b d e f (+ c a))" '(\ p q r s t (c + p)))           ; c free -> binder 2 is d
+  (fnfree "(\\ a b d e f h i j k (+ c (+ g k)))"
+          '(\ p q r s t u v w x (c + (g + x))))                       ; c and g both skipped
   (= "(\\ a b c d e f g h i j k l m n o p q r s t u v w x y z aa ab (+ aa ab))"
      (show (\ q1 q2 q3 q4 q5 q6 q7 q8 q9 q10 q11 q12 q13 q14 q15 q16 q17 q18 q19 q20
               q21 q22 q23 q24 q25 q26 q27 q28 (q27 + q28)))) ; past z, shortlex rolls to aa
   ("(+ 1)" = show (+ 1))                                     ; partial app of a builtin: stable form
   (3 = ((rt ((\ a b (a + b)) 1)) 2))                         ; partial-applied lambda round-trips (capture rendering free to vary)
   (9 = (: y (2 + 3) ((rt (\ x (x + y))) 4)))                 ; closure with a captured var round-trips to a working fn
+  ; --- the read-back is the thread: show -> read -> eval compiles to the same words ---
+  (rt= (\ x (? x 1 2)))
+  (rt= (\ x (+ 1 (? (two? x) (cap x) 7))))                     ; a cond joined in the middle of a call
+  (rt= (\ x (? x 1 (two? x) 2 3)))                             ; clauses
+  (rt= (\ x (: y (x + 1) (y * x))))                            ; a let over a capture
+  (rt= (\ x (: y (x + 1) z (y * 2) (y * z * x))))              ; a sibling reads an earlier one
+  (rt= (\ x (: (f n) (? n (f (n - 1)) x) (f (x + 3)))))        ; letrec, a capture
+  (rt= (\ x (: (f n) (? n (g (n - 1)) x) (g n) (f n) (f 3))))  ; mutual letrec
+  (rt= (\ x (map (\ y (x + y)) x)))                            ; a closure over x
+  (rt= (\ a b c (foldl a b c 4)))                              ; an n-ary apply and its surplus
+  (rt= (\ l (foldl (+) 0 l)))                                  ; an operator as a value  (rt= (\ x (\ x x)))
+  (rt= ((\ a b (a + b)) 1))
   ; --- functions compare by their threads ---
   ((\ p q (p + q)) = (\ a b (a + b)))                   ; names never reach the thread
   (! ((\ a b (a + b)) = (\ a b (a - b))))              ; a different body is different code

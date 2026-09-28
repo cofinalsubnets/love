@@ -518,6 +518,9 @@ static int fn_eq(struct ai *c, word a, word b, word **wp, word *hi) {
    continue; }
   if ((x | y) & 1) return 0;                             // a charm, or a charm against a pointer
   bool sa = x >= ha && x <= ea, sb = y >= hb && y <= eb;
+  // a native whose twin is this thread is a pointer back into it too
+  if (!sa) { word m = fn_meaning(c, x); if (m >= ha && m <= ea) x = m, sa = 1; }
+  if (!sb) { word m = fn_meaning(c, y); if (m >= hb && m <= eb) y = m, sb = 1; }
   if (sa || sb) {                                        // back into its own thread: the same place?
    if (!sa || !sb || x - a != y - b) return 0;
    continue; }
