@@ -69,6 +69,10 @@
           (two? bot) ("\e[0;38;2;" + rgb bot + ";" + bg + "m" + utf8 9604)
           ("\e[0;" + bg + "m ")))
 
+   ; a cluster's marks, after its base
+   (limn-marks j s k m) (: v (glass s k m)
+                           (? (m < 6 && 0 < v) (: _ (say j (utf8 v)) (limn-marks j s k (m + 1))) 0))
+
    ; paint row i cell by cell, threading the pen. a wide char's tail says nothing: the
    ; outer terminal steps two columns for its lead
    (limn-row j s c i q p) (? (q < c)
@@ -79,6 +83,7 @@
                                  (: p2 (limn-pen g (glass s k 1) (glass s k 2))
                                     _ (p = p2 ? 0 (say j (limn-sgr p2)))
                                     _ (say j (limn-glyph (g & 2097151)))
+                                    _ (limn-marks j s k 3)
                                     (limn-row j s c i (q + 1) p2))))
                            p)
 
