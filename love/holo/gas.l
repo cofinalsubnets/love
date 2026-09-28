@@ -139,12 +139,30 @@
                    (inb inb) (inw inw) (inl inl) (outb outb) (outw outw) (outl outl)
                    (nop nop) (ret ret) (syscall sys) (int3 trap)
                    (pause pause) (mfence mfence) (lfence lfence) (sfence sfencex)
-                   (stc stc) (clc clc) (cmc cmc) (stac stac) (clac clac)))   ; sfencex: rv64's sfence is sfence.vma
+                   (stc stc) (clc clc) (cmc cmc) (stac stac) (clac clac) (rdpkru rdpkru) (wrpkru wrpkru) (xgetbv xgetbv) (xsetbv xsetbv) (wbinvd wbinvd) (invd invd) (monitor monitor) (mwait mwait) (rdpmc rdpmc)
+                   (fninit fninit) (fnclex fnclex) (fwait fwait) (wait fwait) (emms emms)))   ; sfencex: rv64's sfence is sfence.vma
    ;; the string ops by Intel's names -> (stem width); the port pair has no q
    gx-str (gtab (catmap (\ s (map (\ p [(name (show s + <p)) [s <>p]])
                                   ((elem s '(ins outs)) ? '(("b" 1) ("w" 2) ("d" 4))
                                      '(("b" 1) ("w" 2) ("d" 4) ("q" 8)))))
                   '(movs cmps stos lods scas ins outs)))
+   ;; the fpu's state over memory -> (opcode digit width); the whole-state saves take a q or 64
+   ;; for REX.W, the 64-bit pointer layout
+   gx-mdig (gtab '((fnsave ((221) 6 4)) (frstor ((221) 4 4)) (fldcw ((217) 5 4)) (fnstcw ((217) 7 4))
+                   (fnstsw ((221) 7 4)) (fildl ((219) 0 4)) (filds ((223) 0 4)) (fildll ((223) 5 4))
+                   (fildq ((223) 5 4)) (ldmxcsr ((15 174) 2 4)) (stmxcsr ((15 174) 3 4))
+                   (clflush ((15 174) 7 4)) (clflushopt ((15 174) 7 2)) (clwb ((15 174) 6 2))   ; w 2: the 66 they take
+                   (verr ((15 0) 4 4)) (verw ((15 0) 5 4)) (sldt ((15 0) 0 4)) (str ((15 0) 1 4))
+                   (lldt ((15 0) 2 4)) (push ((255) 6 4)) (pop ((143) 0 4))))
+   ;; ..and over a register -> (prefix opcode digit width), width 0 the register's own
+   gx-rdig (gtab '((sldt (() (15 0) 0 0)) (str (() (15 0) 1 0)) (lldt (() (15 0) 2 4))
+                   (verr (() (15 0) 4 4)) (verw (() (15 0) 5 4))
+                   (rdfsbase ((243) (15 174) 0 0)) (rdgsbase ((243) (15 174) 1 0))
+                   (wrfsbase ((243) (15 174) 2 0)) (wrgsbase ((243) (15 174) 3 0))))
+   _ (each '((fxsave (15 174) 0) (fxrstor (15 174) 1) (xsave (15 174) 4) (xrstor (15 174) 5)
+             (xsaveopt (15 174) 6) (xsavec (15 199) 4) (xsaves (15 199) 5) (xrstors (15 199) 3))
+        (\ r (: t (show <r) e (\ w [<>r <>>r w])
+                (pin gx-mdig <r (e 4), pin gx-mdig (name (t + "q")) (e 8), pin gx-mdig (name (t + "64")) (e 8)))))
    gx-alu '(add sub and or xor imul)
    gx-cc (gtab '((je eq) (jz eq) (jne ne) (jnz ne) (jl lt) (jle le) (jg gt) (jge ge)
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
@@ -178,6 +196,12 @@
        d (k > 0 ? (ops 0) ()) s (k > 1 ? (ops 1) ())
        (? (ghas? gx-nils m) [[(gx-nils m)]]
           (k = 0 && two? (peep gx-str m ())) (: e (gx-str m) [['str <e <>e]])
+          (k = 0 && elem m '(cs ds es ss)) [['seg m]]                   ; a null override, the padding alternatives lay
+          (k = 1 && elem <d '(mem rip lbl) && two? (peep gx-mdig m ()))
+           (: e (gx-mdig m) bm (gx-mref d) [['mdig <e <>e <>>e <bm <>bm]])
+          (k = 1 && <d = 'rg && two? (peep gx-rdig m ()))
+           (: e (gx-rdig m) [['rdig (e 0) (e 1) (e 2) (e 3 = 0 ? (d 2) (e 3)) (gx-r d)]])
+          (m = 'movnti) (: bm (gx-mref d) [['movntim (w0 > 0 ? w0 (s 2)) <bm <>bm (gx-r s)]])
           (two? (peep gx-ext m ()))
            (: e (gx-ext m) x (gx-r d)
               (? (<s = 'rg) [['mov x (gx-r s)] [<e x]]
@@ -185,8 +209,12 @@
                  (scare 'gas-x64-operand s)))
           (ghas? gx-cc m) [['br (gx-cc m) <>d]]
           (k = 1 && nom? (gx-setcc m)) [['set1 (gx-setcc m) (gx-r d)]]
-          (m = 'jmp) (? (<d = 'lbl) [['jmp <>d]] (<d = 'ind) [['jmpr (gx-r <>d)]] (scare 'gas-x64-operand ops))
-          (m = 'call) (? (<d = 'lbl) [['call <>d]] (<d = 'ind) [['callr (gx-r <>d)]] (scare 'gas-x64-operand ops))
+          ; an indirect branch through a register, or through memory (FF /4, FF /2)
+          (elem m '(jmp call))
+           (? (<d = 'lbl) [[m <>d]]
+              (<d = 'ind && <(<>d) = 'rg) [[(m = 'jmp ? 'jmpr 'callr) (gx-r <>d)]]
+              (<d = 'ind) (: bm (gx-mref <>d) [['mdig [255] (m = 'jmp ? 4 2) 4 <bm <>bm]])
+              (scare 'gas-x64-operand ops))
           (m = 'int) [['int (gx-imm d)]]
           (elem m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
           ; a read-modify-write on memory: atomics and counters. no suffix takes the register's width

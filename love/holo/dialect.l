@@ -38,7 +38,8 @@
    xa-regs  (tablet 0)
    xa-names (tablet 0)
    ;; the prefix words a line may open with, each its own item ahead of the instruction
-   xa-prefix {'lock 'lock 'rep 'rep 'repe 'rep 'repz 'rep 'repne 'repne 'repnz 'repne}
+   xa-prefix {'lock 'lock 'rep 'rep 'repe 'rep 'repz 'rep 'repne 'repne 'repnz 'repne
+              'cs 'cs 'ds 'ds 'es 'es 'ss 'ss}
    (xa-reg! nm e w) (pin xa-regs (name nm) [e w], pin xa-names (e * 32 + w) nm)
    _ (foldl (\ _ row
                (: e (row 0)
@@ -209,7 +210,7 @@
    ;; the stems that take an at&T size suffix
    xa-sfxable '(mov add or and sub xor cmp test neg not inc dec push pop lea
                 imul mul div idiv adc sbb sal shl shr sar rol ror shld shrd xchg bswap bsr bsf
-                xadd cmpxchg bt bts btr btc tzcnt lzcnt popcnt
+                xadd cmpxchg bt bts btr btc tzcnt lzcnt popcnt movnti
                 movabs cvttsd2si cvttss2si cvtsd2si cvtss2si cvtsi2sd cvtsi2ss)
    ;; the nullaries at&T spells c<from>t<to>, and Intel c<from><to>; the middle keeps Intel's
    xa-att-nil {'cltq 'cdqe  'cltd 'cdq  'cqto 'cqo  'cwtl 'cwde  'cbtw 'cbw  'cwtd 'cwd
