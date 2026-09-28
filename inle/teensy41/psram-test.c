@@ -6,17 +6,14 @@
 // psramtest` (mooncc, same objects as the love build minus main.o).
 #include <stdint.h>
 #include "teensy41.h"
+#include "../bput.h"
 #include "psram.h"
 
 #define PSRAM ((volatile uint32_t *) 0x70000000u)
 
-static void puts_(const char *s) { while (*s) serial_putc(*s++); }
-static void puthex(uint32_t v) {
-  for (int i = 28; i >= 0; i -= 4) serial_putc("0123456789abcdef"[(v >> i) & 15]); }
-static void putdec(uint32_t v) {
-  char b[12]; int n = 0;
-  do { b[n++] = '0' + v % 10; v /= 10; } while (v);
-  while (n) serial_putc(b[--n]); }
+static void puts_(const char *s) { bput_s(serial_putc, s); }
+static void puthex(uint32_t v) { bput_x(serial_putc, v, 8); }
+static void putdec(uint32_t v) { bput_n(serial_putc, v, 10); }
 
 // main.c is absent from this build; ai_clock lives in teensy41.c
 uintptr_t ai_clock(void);

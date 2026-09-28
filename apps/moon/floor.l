@@ -27,7 +27,7 @@
        (arr? ty) (<>>ty * tysz w stag <>ty)
        (stru? ty) <>(stag <>ty)
        (bitf? ty) (tysz w stag <>ty)       ; the unit's size (a bitfield rides its declared type)
-       (ty @ ('char || 'uchar || 'bool) 1
+       (ty @ ('char || 'uchar || 'bool || 'void) 1   ; void is gcc's: void * steps by bytes
              ('short || 'ushort) 2
              ('int || 'uint || 'float) 4
              ('llong || 'ullong || 'double) 8  ; 8-byte on every target (t32's word is 4)

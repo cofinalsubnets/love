@@ -3,6 +3,7 @@
 #include "cats.h"
 #include "quay.h"
 #include "asmops.h"                    // the privileged instructions, both spellings
+#include "bput.h"
 #include <stdarg.h>
 #include <limits.h>
 #include <string.h>
@@ -20,11 +21,8 @@ uintptr_t khhdm;
 // so the identity map is the same pages without the bit, which is what code needs.
 char *ai_code_window(char *p) { return (char*)((uintptr_t) p - khhdm); }
 
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *kmem;
+#include "ffalloc.h"
+static struct mem *kmem;
 
 // total free RAM in kmem, in words -- meminit sums it; it bounds the collector (g->budget).
 static uintptr_t kram_words;
@@ -67,12 +65,8 @@ bool k_ready(int fd, int events);
 // the panic-time console: the ring buffer (kcb) when there is one, mirrored to serial.
 // takes no l state, so it runs from a fault handler with no live `struct g`.
 void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
-void kputs(char const *s) { while (*s) kputc(*s++); }
-void kputn(uintptr_t n, int base) {
- static char const d[] = "0123456789abcdef";
- char buf[24]; int i = 0;
- do buf[i++] = d[n % base], n /= base; while (n);
- while (i) kputc(buf[--i]); }
+void kputs(char const *s) { bput_s(kputc, s); }
+void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
 extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 // the bracket, for the image codec's nif slice (love/snap.c's weak default answers none)
@@ -401,44 +395,9 @@ void kb_int(const uint8_t code) {
       return; } }
 
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
+void *kmallocw(uintptr_t n) { return ff_alloc(&kmem, n); }
 
-void *kmallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (kmem && kmem->len < n + 2 * Width(struct mem))
-    t = kmem,
-    kmem = t->next,
-    t->next = r,
-    r = t;
-  if (kmem)
-    kmem->len -= n + Width(struct mem),
-    t = after(kmem),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = kmem,
-    kmem = t;
-  return p; }
-
-void kfree(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (kmem && kmem < m)
-    t = kmem,
-    kmem = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (kmem != after(m)) m->next = kmem;
-    else m->len += kmem->len,
-         m->next = kmem->next;
-    kmem = m;
-    if (!r) return; } }
+void kfree(void *p) { ff_free(&kmem, p); }
 
 
 // --- the ramfs: the baked tree, and the copies writes make -----------------

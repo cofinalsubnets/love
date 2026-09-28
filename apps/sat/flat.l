@@ -681,7 +681,7 @@
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
     (: bs (peep ((cite 'holo 'assemble) 'x64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
        c (cask bs)                                           ; the charlist lane fills in C
-       (nifseam c fb '(\ q (q)) ar))
+       (nifseam c fb ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
     (? !(= love-arch 'x64) ()
        (: hit (peep fkers nv ())

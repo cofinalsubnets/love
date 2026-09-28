@@ -96,17 +96,16 @@
             q))))
 
 ; --- tenured closures (generational): a major promotes fa/ga into the major pool, so the
-;     print/introspect paths -- show, = (alpha-equivalence), and the alpha-hash a map keys
-;     by -- must read the source at value[-1] there, not just the main pool (fn_src/ttag/hash/
-;     lam_src1 via in_heap). before the gen graduation `=` said equal while the address-hash
-;     split, so a map keyed on fa could not find the alpha-equal ga. (a no-op on the single-pool
-;     gcg build, where nothing tenures elsewhere.)
+;     print/introspect paths -- show, = over the threads, and the thread hash a map keys by --
+;     must read them there, not just the main pool (in_heap). `=` and the hash have to agree,
+;     or a map keyed on fa cannot find the equal ga. (a no-op on the single-pool gcg build,
+;     where nothing tenures elsewhere.)
 (: (lots n) ((: (go i a) (i >= n ? #a (go (i + 1) (i . a)))) 0 ())
    (fa a b) (a + b) (ga a b) (a + b)
    _ (lots 200000)                                       ; force a major -> fa/ga tenured
    (test
-     (fa = ga)               ; alpha-equal across the major pool
-     (9 = peep {fa 9} ga 0)  ; map keyed on fa, found by alpha-equal ga (eq/hash consistent)
+     (fa = ga)               ; the same code across the major pool
+     (9 = peep {fa 9} ga 0)  ; map keyed on fa, found by the equal ga (eq/hash consistent)
      (8 < #(show fa)))) ; show finds the tenured source
 
 ; --- a nested loop nom shadows an enclosing letrec sibling --- a lambda (zap)

@@ -305,7 +305,7 @@ kore_arc = apps/gz.l apps/xz.l apps/bz2.l apps/tar.l apps/cpio.l
 kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/client.l \
   apps/ssh/sha512.l apps/ssh/ed25519.l apps/ssh/aes.l apps/ssh/bcrypt.l apps/ssh/client.l \
   apps/ssh/server.l apps/ssh/cli.l \
-  apps/kore/wget.l apps/kore/www.l apps/kore/net.l apps/kore/kore.l
+  apps/png.l apps/jpeg.l apps/gif.l apps/kore/wget.l apps/kore/pic.l apps/kore/www.l apps/kore/net.l apps/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/fat.l \
@@ -572,7 +572,7 @@ k_libc_c = $(c_c)
 k_c = $(love_c) \
   $R/love/quay/cga_8x8.c $R/love/quay/cleat_8x16.c $R/love/quay/paint.c \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
-k_h = $(love_h) $(R)/inle/k.h $(R)/love/lib/ustar.h $(R)/inle/asmops.h $(wildcard $(R)/inle/$a/*.h)
+k_h = $(love_h) $(R)/love/lib/ustar.h $(wildcard $(R)/inle/*.h) $(wildcard $(R)/inle/$a/*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf

@@ -111,7 +111,7 @@
    _ (keys! g3 "look\r")
    _ (test (has? (last (g3 'win 'lines)) "story"))   ; the shelf's books, the newest line
    _ (keys! g3 "read story\r")
-   _ (test (has? (joins (g3 'win 'lines) " ") "fiction engine"))   ; libra's lift of this file's header
+   _ (test (has? (join " " (g3 'win 'lines)) "fiction engine"))   ; libra's lift of this file's header
    _ (keys! g3 "(+ 1 2)\r")
    _ (test ("3" = last (g3 'win 'lines)))             ; a love form, evaluated into the window
    _ (keys! g3 "dance\r")

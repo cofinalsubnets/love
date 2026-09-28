@@ -11,6 +11,7 @@
 // exactly as it drives the kernel's.
 #include "../../love/love.h"
 #include "teensy41.h"
+#include "../bput.h"
 #include "psram.h"
 
 #ifndef EOF
@@ -65,12 +66,9 @@ static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n)
 static struct ai *fd_flush(struct ai *g) {
   uint32_t lost = serial_rx_lost();
   if (lost) {
-    char d[10];
-    int i = 0;
-    for (char const *s = "\r\n; input lost: "; *s; s++) serial_putc(*s);
-    do d[i++] = (char) ('0' + lost % 10); while ((lost /= 10));
-    while (i) serial_putc(d[--i]);
-    for (char const *s = " bytes\r\n"; *s; s++) serial_putc(*s); }
+    bput_s(serial_putc, "\r\n; input lost: ");
+    bput_n(serial_putc, lost, 10);
+    bput_s(serial_putc, " bytes\r\n"); }
   return g; }
 
 struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
@@ -137,55 +135,16 @@ static struct ai_def defs[] = {
 // --- the arena ------------------------------------------------------------
 // The generational collector is the ONLY collector, and it draws its pools
 // through ai_alloc, whose default rides malloc/free (love/love.c). So the frontend
-// supplies those: a first-fit free list over a static arena in OCRAM2 (the inle
-// kernel's kmallocw/kfree, shrunk to one region), with the C stack above it
-// under __stack_top__. Lengths are in words, header included.
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *freelist;
+// supplies those: a first-fit free list (ffalloc.h) over a static arena in OCRAM2,
+// with the C stack above it under __stack_top__.
+#include "../ffalloc.h"
+static struct mem *freelist;
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
-
-static void *mallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (freelist && freelist->len < n + 2 * Width(struct mem))
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  if (freelist)
-    freelist->len -= n + Width(struct mem),
-    t = after(freelist),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = freelist,
-    freelist = t;
-  return p; }
+static void *mallocw(uintptr_t n) { return ff_alloc(&freelist, n); }
 
 void *malloc(size_t n) { return mallocw(b2w(n)); }
 
-void free(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (freelist && freelist < m)
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (freelist != after(m)) m->next = freelist;
-    else m->len += freelist->len,
-         m->next = freelist->next;
-    freelist = m;
-    if (!r) return; } }
+void free(void *p) { ff_free(&freelist, p); }
 
 // --- entry ----------------------------------------------------------------
 // cstartup (teensy41.c) has set up the FPU, .data/.bss, VTOR, clocks, and the
@@ -220,12 +179,10 @@ int main(void) {
       mhz = 24u * (REG(CCM_ANALOG_PLL_ARM) & 0x7Fu) / 2u
           / ((REG(CCM_CACRR) & 7u) + 1u)
           / (((REG(CCM_CBCDR) >> 10) & 7u) + 1u);
-    for (char const *s = "; core "; *s; s++) serial_putc(*s);
-    if (mhz) { char b[8]; int n = 0;
-      do { b[n++] = '0' + mhz % 10u; mhz /= 10u; } while (mhz);
-      while (n) serial_putc(b[--n]);
-      for (char const *s = " MHz\r\n"; *s; s++) serial_putc(*s); }
-    else for (char const *s = "on the ROM path\r\n"; *s; s++) serial_putc(*s); }
+    bput_s(serial_putc, "; core ");
+    if (mhz) { bput_n(serial_putc, mhz, 10);
+      bput_s(serial_putc, " MHz\r\n"); }
+    else bput_s(serial_putc, "on the ROM path\r\n"); }
   uint32_t psram_mb = psram_init();
   { char const *s = psram_mb ? "; psram arena up\r\n" : "; NO psram -- ocram fallback\r\n";
     for (; *s; s++) serial_putc(*s); }

@@ -11,6 +11,7 @@
 // laws and exits through vexit, so `make test_virt` sees 42 (98 = a trap,
 // reported by start.o's mtvec tail through fault_report below).
 #include "../../love/love.h"
+#include "../bput.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -19,7 +20,7 @@
 // --- the metal ------------------------------------------------------------
 // ns16550: THR/RBR at +0, LSR at +5 (bit 5 = THR empty, bit 0 = data ready).
 #define UART ((volatile uint8_t *) 0x10000000u)
-static void v_putc(char c) {
+static void v_putc(int c) {
   while (!(UART[5] & 0x20)) ;
   UART[0] = (uint8_t) c; }
 static int uart_rx_ready(void) { return UART[5] & 1; }
@@ -35,10 +36,8 @@ static void v_exit(uintptr_t code) {
   TESTDEV = ((uint32_t) code << 16) | 0x3333u;
   for (;;) ; }
 
-static void v_puts(char const *s) { while (*s) v_putc(*s++); }
-static void v_hex(uintptr_t v) {
-  int i;
-  for (i = 60; i >= 0; i -= 4) v_putc("0123456789abcdef"[(v >> i) & 15]); }
+static void v_puts(char const *s) { bput_s(v_putc, s); }
+static void v_hex(uintptr_t v) { bput_x(v_putc, v, 16); }
 
 // any machine trap vectors here (start.o's mtvec tail hands over mcause/mepc):
 // name the cause, then exit 98 -- loud and greppable where the bare hart would
@@ -105,60 +104,22 @@ static union u const nif_vexit[] = {{ai_vexit}, {lvm_ret0}};
 static struct ai_def defs[] = { {"vexit", {.k = nif_vexit}} };
 
 // --- the arena ------------------------------------------------------------
-// The teensy first-fit free list, fed 64 MB of virt's DRAM by address -- the
+// The first-fit free list (ffalloc.h), fed 64 MB of virt's DRAM by address -- the
 // ox64's PSRAM budget, so what fits here fits the board. The image sits at
 // the bottom of DRAM (0x80000000); the C stack tops out at the pool's base
 // and grows away from it.
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *freelist;
+#include "../ffalloc.h"
+static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x82000000u)
 #define POOL_BYTES ((64u << 20) - 64)   // 64B short: a one-past read at a block
                                         // boundary stays inside the region
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
-
-static void *mallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (freelist && freelist->len < n + 2 * Width(struct mem))
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  if (freelist)
-    freelist->len -= n + Width(struct mem),
-    t = after(freelist),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = freelist,
-    freelist = t;
-  return p; }
+static void *mallocw(uintptr_t n) { return ff_alloc(&freelist, n); }
 
 void *malloc(size_t n) { return mallocw(b2w(n)); }
 
-void free(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (freelist && freelist < m)
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (freelist != after(m)) m->next = freelist;
-    else m->len += freelist->len,
-         m->next = freelist->next;
-    freelist = m;
-    if (!r) return; } }
+void free(void *p) { ff_free(&freelist, p); }
 
 // --- entry ----------------------------------------------------------------
 // start.o set sp, opened the FPU (mstatus.FS) and pointed mtvec at the fault

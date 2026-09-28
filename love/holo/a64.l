@@ -44,14 +44,6 @@
             'and [0x8A000000 0] 'or [0xAA000000 0] 'xor [0xCA000000 0]
             'adds [0xAB000000 0xB1000000] 'subs [0xEB000000 0xF1000000]}      ; the S-variant: set nzcv
 
-   ;; -- condition codes: IR name -> the a64 cond field (B.cond bits[3:0]). --
-   a64-cc {'eq 0 'ne 1 'ae 2 'below 3 's 4 'ns 5
-           'vs 6 'vc 7
-            ; p/np (x86 parity: ucomisd's unordered bit) alias vs/vc -- FCMP
-            ; parks unordered in V, and nothing else here reads p/np
-           'p 6 'np 7
-           'above 8 'be 9 'ge 10 'lt 11 'gt 12 'le 13}
-
    (rn r) (look a64-regs r 'badreg)
    (reg-eq a b) (rn a = rn b)       ; own the name: a free read here would leak onto x64's register file
 
@@ -67,7 +59,7 @@
    ;; the whole class into a scare at the instruction that has it.
    (a64-li d imm)
       (: _ (? (constellation? imm) 0 (scare 'badimm imm))
-         dn (rn d) u (? (imm < 0) (imm + 18446744073709551616) imm)
+         dn (rn d) u (u64 imm)
          l0 (a64-lane u 0) l1 (a64-lane u 1) l2 (a64-lane u 2) l3 (a64-lane u 3)
          (catall [
            (le32 (0xD2800000 | ((l0 << 5) | dn)))                               ; movz d, l0
@@ -256,7 +248,7 @@
                             (le32 (0x58000040 | dn)         ; ldr xd, .+8
                              + le32 0x14000003              ; b .+12
                              + [(fix 8 'abs64 label 0)]))
-   (a64-br cond label) (: cc (look a64-cc cond 'badcc)
+   (a64-br cond label) (: cc (look arm-cc cond 'badcc)
                             [(fix 4 'b19 label (0x54000000 | cc))])
    ;; jmpr: BR Xn -- branch to the address held in a register (the glaze's Continue / deopt tail).
    (a64-jmpr d) (: dn (rn d) (le32 (0xD61F0000 | (dn << 5))))
@@ -280,7 +272,7 @@
    ;; set: d <- (cond) ? 1 : 0  --  cset Xd, cond = csinc Xd, xzr, xzr, invert(cond); inverting a
    ;; cond is XOR 1 (the A64 cond encoding pairs eq/ne, vs/vc, lt/ge, gt/le on bit 0).
    (a64-set cond d)
-      (: cc (look a64-cc cond 'badcc) dn (rn d)
+      (: cc (look arm-cc cond 'badcc) dn (rn d)
          (le32 (0x9A9F07E0 | (((cc ^ 1) << 12) | dn))))
    ;; shifts/rotates by an immediate (the tag math -- sar/shr by 1; the map hash's rol by 32). LSL/lsr
    ;; are ubfm, asr is sbfm, ror is extr Xd,Xn,Xn,#c; rol #c = ror #(64-c) (a64 has no ROL).
@@ -320,7 +312,7 @@
    a64-wldp (le32 0xA94047F0)                                                 ; ldp x16, x17, [sp]: x16 = left lo, x17 = left hi
    (a64-w3 base d n m)    (le32 (base | ((m << 16) | ((n << 5) | d))))        ; op Xd, Xn, Xm
    (a64-w4 base d n m a)  (le32 (base | ((m << 16) | ((a << 10) | ((n << 5) | d)))))    ; madd/msub Xd,Xn,Xm,Xa -- extr's imms shares the Ra field
-   (a64-wsel d n m cond)  (: cc (look a64-cc cond 'badcc)                   ; csel Xd, Xn, Xm, cond
+   (a64-wsel d n m cond)  (: cc (look arm-cc cond 'badcc)                   ; csel Xd, Xn, Xm, cond
                                (le32 (0x9A800000 | ((m << 16) | ((cc << 12) | ((n << 5) | d))))))
    (a64-wmov d m)         (a64-w3 0xAA000000 d 31 m)                        ; mov Xd, Xm (orr from xzr)
    (a64-wshi op d n c)                                                        ; lsl/lsr/asr Xd, Xn, #c -- a64-shift's three-address twin

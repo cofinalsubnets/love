@@ -63,7 +63,7 @@
    ;; sign-extend, same flags), else 0x81 /ext id.
    (alu-ri ext d imm)
       (: dn (rn d)
-         (? (-128 <= imm <= 127)
+         (? (fits8 imm)
             [(rex 1 0 0 (hi dn)) 131 (modrm 3 ext dn) (byte imm)]
             ([(rex 1 0 0 (hi dn)) 129 (modrm 3 ext dn)] + le32 imm)))
    (alu-step rr ext d y) (reg? y ? (alu-rr rr d y) (alu-ri ext d y))
@@ -190,7 +190,7 @@
    ;; spells the 7 field, rn r6 = rdi = 7); (cmprm s base off) the flags of s - [base+off].
    (emit-cmpm base off y)
     (? (reg? y) (x64-mem () 1 '(57) y base off)                              ; 39 /r  cmp QWORD, r64
-       (-128 <= y <= 127)
+       (fits8 y)
         (x64-mem () 1 '(131) 'r6 base off + [(byte y)])                      ; 83 /7 ib
        (x64-mem () 1 '(129) 'r6 base off + le32 y))                          ; 81 /7 id
    (emit-cmprm s base off) (x64-mem () 1 '(59) s base off)                     ; 3B /r  cmp r64, QWORD
@@ -217,7 +217,7 @@
     (: k (op @ 'add 0 'or 1 'and 4 'sub 5 'xor 6 'cmp 7 (scare 'x64-alum op))
        (? (reg? y) (x64-mw w [(8 * k)] [(8 * k + 1)] y base off 0)
           (w = 1) (x64-mw 1 '(128) () (x64-digit k) base off 1 + [(byte y)])
-          (-128 <= y <= 127) (x64-mw w () '(131) (x64-digit k) base off 1 + [(byte y)])
+          (fits8 y) (x64-mw w () '(131) (x64-digit k) base off 1 + [(byte y)])
           (: iy (imw (w = 8 ? 4 w) y) (x64-mw w () '(129) (x64-digit k) base off #iy + iy))))
    ;; test m, y: 84/85 /r by a register, F6/F7 /0 by an immediate
    (emit-testm w base off y)
