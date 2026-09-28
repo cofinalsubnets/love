@@ -2769,8 +2769,10 @@
              setal (va? && !(arm? g) ? [['li 'r0 nxmm]])
              ; caller-saved homes spill before the pops and reload after the clean, filtered to this statement's
              ; wrapset (g 'stwrap; 'all wraps every home). a ret-position call's reloads are dead: skiprel peels them
+             ; ..but a wasm call writes only its answers, so there a home off the argument registers keeps its seat
              hs (: h9 (g 'homes) w9 (peep g 'stwrap 'all)
-                   (w9 @ 'all h9 (filter (h2 \ elem <>>h2 w9) h9)))
+                   h8 (w9 @ 'all h9 (filter (h2 \ elem <>>h2 w9) h9))
+                   (? (wasm? g) (filter (h2 \ elem <h2 '(r0 r1 r2 r3 r4 r5 r6 r7)) h8) h8))
              spills (foldl (\ a2 p2 (a2 + [['st 'r4 <>p2 <p2]])) () hs)
              relods (foldl (\ a2 p2 (a2 + [['ld <p2 'r4 <>p2]])) () hs)
              ; the targeted emissions, after the spills and before the pops: an 'ezm home mov
@@ -3559,6 +3561,21 @@
                 (rvslots >fs fr))))
    ; the x64 frame prologue at fs's head (unframe strips it; repack requires it)
    (pro4? fs) (epim? >fs pro4)
+   ; riscv's frame: a body that names no sp, fp or lr and makes no call (wasm: may call) keeps nothing in it, so the
+   ; prologue and every exit's teardown go whole. the wasm seat lays each push, pop and sp move as shadow-stack traffic
+   (rvunframe g fs)
+    (? !(rv64? g && !(g 'fpin) && 5 < #fs && fs 1 = '(push lr) && fs 2 = '(push fp) && fs 4 = '(lea fp sp 0)) fs
+       (: sf (fs 3) K (sf 3)
+          tear [['lea 'sp 'fp K] '(pop fp) '(pop lr)]
+          (deep? x) (? (two? x) (vany deep? x) (elem x '(sp fp lr)))
+          ; a riscv call clobbers lr; a wasm call leaves every local but the answers
+          (bare? f) (!(two? f) || (!(elem <f (? (wasm? g) '(push pop raw) '(call callr push pop raw))) && !(vany deep? >f)))
+          (strip l) (? !(two? l) ()
+                       (= (take 3 l) tear) (strip (drop 3 l))
+                       !(bare? <l) 'no
+                       (: r (strip >l) (? (r = 'no) 'no (<l . r))))
+          (? !(two? sf && <sf = 'sub && sf 1 = 'sp && sf 2 = 'sp && charm? K) fs
+             (: r (strip (drop 5 fs)) (? (r = 'no) fs (<fs . r))))))
    (unframe g fs)
     (: a64 (a64? g)
        fb (? a64 'fp 'r4)
@@ -5068,7 +5085,7 @@
    (cskeep g fs)                                    ; answers fs; a breach scares, naming fn + reg
     (: (rawy? (f . l)) (two? f && (<f = 'raw) ? 1 (rawy? l))
        ; every target with a cs file; a8 has none and bails
-       (? (!(two? (cspool g)) || !(two? fs) || g 'hasasm || rawy? fs) fs
+       (? (!(two? (cspool g)) || wasm? g || !(two? fs) || g 'hasasm || rawy? fs) fs
           (: fn (<fs 1)
              labs {} saves {} defs {}
              (note l i)
@@ -5610,6 +5627,12 @@
    (fidx fields name) (: (go l i) (? (atom? l) 0 (<<l = name) i (go >l (i + 1)))
                           (go fields 0))
    (nthfield fields i) (0 <= i && i < #fields ? (fields i) 'bad)
+   ; the member a positional initializer reaches after field ci: a union's later members start inside
+   ; ci's storage (an anonymous union's are spliced flat), and brace elision passes them by
+   (fnext g fields ci)
+    (: fe (fields ci) end (<>fe + tsz g <>>fe)
+       (go i) (? (i < #fields && !(bitf? <>>(fields i)) && <>(fields i) < end) (go (i + 1)) i)
+       (? (bitf? <>>fe) (ci + 1) (go (ci + 1))))
 
    ; brace elision (C 6.7.9): the init tree normalizes up front, each elided run wrapped in an
    ; explicit ('init ..), so layout only sees fully-braced inits. idempotent
@@ -5677,7 +5700,7 @@
                   (? (bad? fe) [(rev acc) l]          ; unknown field / past the end -> leave the rest
                      (!desig && anonbr? g fields fe it) (go (<>it + >l) cur acc)
                      (: pr (normelt g <>>fe desig 'dfield <>it (elval it) l)
-                        (go <>pr (ci + 1) (<pr . acc))))))
+                        (go <>pr (fnext g fields ci) (<pr . acc))))))
            (go items 0 ()))
        [items ()])
 
@@ -5731,7 +5754,7 @@
                           (stru? fty && !(<val = 'str)) (cgsfill g env foff fty val)
                           (bitf? fty) (cgbffill g env foff fty val)
                           (cgstore g env foff fty val))
-                     (bad? r ? 'bad (fill >l (ci + 1) (acc + r))))))))))
+                     (bad? r ? 'bad (fill >l (fnext g fields ci) (acc + r))))))))))
    ; a bitfield member: read-modify-write its unit at [r4+off] (cgstore would flatten the unit)
    (cgbffill g env off bt val)
     (: r (cgexpr g env val ())
@@ -5946,7 +5969,7 @@
                        (v = 'no ? 'bad
                         (place >l (ci + 1) acc (bfmerge g <>fe <>>fe v bfs))))
                    (: fb (imgpad g <>>fe (tsz g <>>fe) (elval it))
-                    (bad? fb ? 'bad (place >l (ci + 1) ([<>fe fb] . acc) bfs))))))
+                    (bad? fb ? 'bad (place >l (fnext g fields ci) ([<>fe fb] . acc) bfs))))))
              pr (place <>nini 0 () ())
              (bad? pr ? 'bad (bfover g <>pr (imflat (imsort <pr) size)))))))
    ; bitfield units, ((uoff uty value)..): arithmetic only, a 64-bit unit's mask is a big (% takes low bits, * shifts)
@@ -7975,7 +7998,8 @@
                                       pok (? (d1 || fl || !u9) ()
                                              lf9 (2 <= tc)
                                              (peep crs9 nm 0 = 0 && 2 <= tc))
-                                      cok (!fl && 2 < tc && 1 + nx9 < tc)
+                                      ; a cs seat pays its save and a reload per exit -- except on wasm, where it has none
+                                      cok (!fl && (? (wasm? g) (2 <= tc) (2 < tc && 1 + nx9 < tc)))
                                       ; a double: an xmm seat, unwrapped, so only a zero-crossing name
                                       fok (fl && u9 && two? (ffile g) && peep crs9 nm 0 = 0 && 2 <= tc)
                                       (? !(pok || cok || fok) (go (i + 1) acc)
@@ -8149,7 +8173,9 @@
                _ (pins g 'pool0 lp9 'pool lp9)
                _ (rgset g lh9 av9)
                _ (pin g 'fpar fgr)
-               _ (? (two? cu0)
+               ; wasm keeps every register but the answers across a call (a callee's locals are its own), so
+               ; its cs seats need no save
+               _ (? (two? cu0 && !(wasm? g))
                     (: sv (map (r9 \ ['st 'r4 (nslot g 8) r9]) cu0)
                        _ (pin g 'cssv sv)
                        (pin g 'epi (map (f9 \ ['ld (f9 3) 'r4 (f9 2)]) sv + e0)))
@@ -8214,7 +8240,7 @@
                      (cfoldir g irx)))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (unframe g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf))))))))))))))))))))
+       (? (bad? irf) irf (dp 'final (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlab (swp irf)))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
