@@ -97,8 +97,8 @@
   ; ana emits through curried emitters (\ k n ..): k = the continuation emitter, n = the current
   ; cell index; the thread builds backward, poke -1 prepending. `compose` sequences them. the
   ; leaves: kim x a quote, karg i an arg ref at frame index i, em1/em2 a 1- or 2-word vm op,
-  ; kap n an n-ary apply (peeps the continuation for lvm_ret -> a tail call), aco a cond, k0/k0s
-  ; thread terminators. fuse/spa/spq are the peepholes; ava (avw, the scope walker) resolves a
+  ; kap n an n-ary apply (peeps the continuation for lvm_ret -> a tail call), aco a cond, k0 the
+  ; thread terminator. fuse/spa/spq are the peepholes; ava (avw, the scope walker) resolves a
   ; variable to karg (a local, at its [imps args] frame slot), kim (a global constant) or
   ; em2 lvm_index. love/boot/glaze.l implements the same leaf interface natively, over a byte
   ; buffer, via the ala creation hook (book['natjit]).
@@ -180,9 +180,6 @@
   (karg x k n) (fuse lvm_argap   lvm_argtap lvm_arg   spa 3 1 1 x k n)
   (kim  x k n) (fuse lvm_quoteap 0           lvm_quote spq 4 2 2 x k n)
   (k0 c n) (place -1 lvm_ret (poke (1 + n) (ary c) (spin (2 + n))))
-  ; k0s: like k0 but reserves one extra leading cell for ala to stash the lambda's source \-expr at
-  ; value[-1], where the printer (gzput_fn) finds it. entry = cell 1, src = cell 0.
-  (k0s c n) (place -1 lvm_ret (poke (2 + n) (ary c) (spin (3 + n))))
   (ary c) (#(c 'arg) + #(c 'imp))
   (pro f) (charm? f ? f (: a (pick 0 f) (?- f
    (a == lvm_unc) (pro (seek -2 (peek 2 f)))
@@ -677,16 +674,14 @@
    d (sco c (init exp) imp)
    ic (pin (tablet 0) 'l ())                       ; this lambda's inner-closure record, filled by the alas under it
    _ (pin d 'inl ic)
-   k (ana d (last exp) (k0s d))
+   k (ana d (last exp) (k0 d))
    a (ary d)
-   e ((a = 1 ? k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
+   e ((a = 1 ? k (em2 lvm_cur a k)) 0)
    os (assq exp (rootc c 'src))
+   ; the surface (\ imps.. params.. body), for the hook to compile from. the thread keeps no
+   ; copy: show reads a function back off its words (post.l's lamform)
    s ('\ . (d 'imp + (? (two? os) >>os exp)))
-   ; value[-1] = source \-expr, for a lambda the text spelled. one an expansion made has no
-   ; surface entry and keeps none -- a third of an image. the hook still reads s either way
-   hk (poke -1 (two? os ? s 0) e,
-       trim (seek -1 e),                             ; tag head spans [src .. body]; value stays e
-       gv 'natjit 0)
+   hk (gv 'natjit 0)
    r ((!hk ? e (hq ? (hk e s a gv (farq c) (c 'lam) nm iop apx (ic 'l)) e)) . d 'imp)
    ; the record -- (exp src-tail (entry . imports)), keyed by the node itself -- rides up to the
    ; nearest enclosing lambda's, this closure's entry ahead of its subtree's, so a hook finds an
