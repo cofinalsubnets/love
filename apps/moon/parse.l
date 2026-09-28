@@ -1809,7 +1809,7 @@
                              ; pass reads them, and the block keeps none of them
                              _ (? (ext && two? es)
                                   (: (gox l) (? (atom? l) 1
-                                                (: _ (pin (ps 'globals) <<l <><l (gox >l))))
+                                                (pin (ps 'globals) <<l <><l, gox >l))
                                      _ (pin ps 'hoist (['xdecl es] . ps 'hoist))
                                      (gox es))
                                   ())
