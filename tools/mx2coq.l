@@ -39,7 +39,7 @@
    (rcol m j) (map (i \ cell m i j) ridx)
    ; a kind's dispatch signature: its row and column in both matrices --
    ; equal signature = same band
-   (sig i) (list (rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i))
+   (sig i) [(rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i)]
    (idxin x l k) (? (one? l) -1 (<l = x) k (idxin x >l (k + 1)))
    sigs ((: (go is acc) (? (one? is) (rev acc)
                            (: s (sig <is)
@@ -59,8 +59,8 @@
           (addm + mulm) ())
 
    ; ==, not =: the test is "is this the head cell", not "does it look like it"
-   (commas f l) (join (map (x \ (= x <l ? (f x) ("; " + f x))) l))
-   (bars f l)   (join (map (x \ (= x <l ? (f x) (" | " + f x))) l))
+   (commas f l) (join (map (x \ (x = <l ? (f x) ("; " + f x))) l))
+   (bars f l)   (join (map (x \ (x = <l ? (f x) (" | " + f x))) l))
 
    ; one dispatch table as nested matches: one row per kind, each an inner match on b
    (mxdef nm m)
@@ -104,13 +104,13 @@
    _ (dot ("Inductive kind := " + (bars (i \ kn i) ^nk) + "." + nl))
    _ (dot ("Inductive lane := " + (bars ln lanes) + "." + nl))
    _ (dot ("Definition lane_eqb (x y : lane) : bool := match x, y with "
-         + (join (map (x \ (= x <lanes ? "" " | ") + ln x + ", " + ln x + " => true") lanes))
+         + (join (map (x \ (x = <lanes ? "" " | ") + ln x + ", " + ln x + " => true") lanes))
          + " | _, _ => false end." + nl))
    ; mirror: the argument swap's action on lanes. the positional degenerate pair
    ; trades places (bin_a answers Sp[0], bin_b Sp[1]); every symmetric lane is fixed.
    (mir x) (: t (show x) (t @ "lvm_bin_a" "Lbin_b" "lvm_bin_b" "Lbin_a" (ln x)))
    _ (dot ("Definition mirror (l : lane) : lane := match l with "
-         + (join (map (x \ (= x <lanes ? "" " | ") + ln x + " => " + mir x) lanes))
+         + (join (map (x \ (x = <lanes ? "" " | ") + ln x + " => " + mir x) lanes))
          + " end." + nl + nl))
    _ (dot (mxdef "addmx" addm))
    _ (dot (mxdef "mulmx" mulm))

@@ -21,11 +21,11 @@
                      (map (hexv * cap * words) (split "," <(split "}" (ps 1))))))
    (cells src) (filter two? (map cell (lines src)))
    ; --- the ink: the palette's red, "#rrggbb" -> (r g b) ----------------------------
-   (row nm l) (? (atom? l) () (= <<l nm) <l (row nm >l))
+   (row nm l) (? (atom? l) () (<<l = nm) <l (row nm >l))
    ink (: pal (row 'tokyo-night (cite 'vi 'hue-page))
           hex (? (two? pal) (<>(row 'red (pal 1))) "")
-          (? (= #hex 7) (map (i \ hexv ("0x" + snip hex (1 + 2 * i) (3 + 2 * i))) ^3)
-             (: _ (say err "mkicon: no tokyo-night red in config.l\n") (quit 1))))
+          (? (#hex = 7) (map (i \ hexv ("0x" + snip hex (1 + 2 * i) (3 + 2 * i))) ^3)
+             (say err "mkicon: no tokyo-night red in config.l\n", quit 1)))
    ; --- the raster: lit? asks the glyph, the canvas asks lit? through scale and margin
    (lit? rows y x) (0 <= y < 8 && 0 <= x < 8 && (rows y >> (7 - x)) & 1)
    (bbox rows) (: ps (filter (p \ lit? rows <p <>p) (cat (map (y \ map (x \ [y x]) ^8) ^8)))
@@ -56,6 +56,6 @@
                   sz (num (args 2))
                   out (png sz (raster rows sz))
                   q (open (args 3) "w")
-                  (? (hot? q) (: _ (say q (cask out)) (close q))
-                     (: _ (say err ("mkicon: cannot open " + args 3 + "\n")) (quit 1))))
+                  (? (hot? q) (say q (cask out), close q)
+                     (say err ("mkicon: cannot open " + args 3 + "\n"), quit 1)))
    (main >argv))

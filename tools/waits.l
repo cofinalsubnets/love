@@ -174,7 +174,7 @@
 
    paths >argv
    _ (one? paths ? (die "usage: waits.l FILE .."))
-   found (foldl (\ a p (+ a (scan p))) () paths)
+   found (foldl (\ a p (a + scan p)) () paths)
    fkeys (map key found)
    rkeys (map key roster)
    extra (filter (e \ !(seen? rkeys (key e))) found)
