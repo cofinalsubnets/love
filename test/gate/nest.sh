@@ -33,10 +33,16 @@ for t in lush kore sb cook libra mooncc ain; do
 done
 [ "$(readlink "$H/.local/bin/lush")" = "$H/.love/bin/lush" ] || fail "no ~/.local/bin compat link"
 [ "$("$H/.love/bin/lush" -c 'echo ok')" = ok ] || fail "the linked lush does not run"
+{ echo '#!/usr/bin/env -S love -l'; for m in core layout wire ewmh manage keys config lux; do cat apps/lux/$m.l; done; } > "$H/lux.want"
+cmp -s "$H/lux.want" "$H/.love/bin/lux" || fail "a fresh nest did not write lux as the Makefile cats it"
+[ -x "$H/.love/bin/lux" ] || fail "lux is not executable"
+[ "$(readlink "$H/.local/bin/lux")" = "$H/.love/bin/lux" ] || fail "no ~/.local/bin compat link for lux"
 
+echo '; a stale lux' > "$H/.love/bin/lux"
 out=$(nest); st=$?
 [ $st = 0 ] || fail "the same build again exits $st"
 case $out in *"this build already"*) ;; *) fail "the same build again said: $out";; esac
+cmp -s "$H/lux.want" "$H/.love/bin/lux" || fail "the same build again left a stale lux"
 
 printf '#!/bin/sh\nexit 1\n' > "$H/.love/bin/love"     # older than nest: no verbs to ask
 out=$(nest); st=$?
