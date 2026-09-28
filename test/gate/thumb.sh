@@ -207,7 +207,9 @@ thumb2)
     " = AAPCS-VFP placement vs gcc -mfloat-abi=hard: s0..s15 with back-fill around the doubles, the stack past them, s0 for the return; 100+n names the first miss -- see test/thumb2/harnessf.c"
   lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Iapps/moon/include" 18 30 "thumb2 composites+varargs" \
     " = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessz.c"
-  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + aligned(N) section grain + AAPCS-VFP floats + composites/varargs: 48+45+9+16+6+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
+  lane r  test/thumb2/libr.c  test/thumb2/harnessr.c "" 13 30 "thumb2 memory returns" \
+    " = every composite past 4 bytes that is no HFA returns through the hidden pointer in r0, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessr.c"
+  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + aligned(N) section grain + AAPCS-VFP floats + composites/varargs + memory returns: 48+45+9+16+6+18+13 differential checks), ld binds, runs on qemu Cortex-M7" ;;
 thumb2sp)
   lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 48 30 "thumb2sp 64-bit pairs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c"
@@ -219,5 +221,7 @@ thumb2sp)
     " = AAPCS-VFP placement vs gcc -mfloat-abi=hard: s0..s15 with back-fill around the doubles, the stack past them, s0 for the return; 100+n names the first miss -- see test/thumb2/harnessf.c"
   lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Iapps/moon/include" 18 30 "thumb2sp composites+varargs" \
     ""
-  echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi, AAPCS-VFP floats) -> 48+45+9+16+18 differential checks vs gcc on qemu Cortex-M4" ;;
+  lane r  test/thumb2/libr.c  test/thumb2/harnessr.c "" 13 30 "thumb2sp memory returns" \
+    " = every composite past 4 bytes that is no HFA returns through the hidden pointer in r0; 100+n names the first miss -- see test/thumb2/harnessr.c"
+  echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi, AAPCS-VFP floats) -> 48+45+9+16+18+13 differential checks vs gcc on qemu Cortex-M4" ;;
 esac

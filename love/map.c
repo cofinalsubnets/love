@@ -328,8 +328,19 @@ uintptr_t hash(struct ai *g, intptr_t x) {
 // terminator, a pointer back into its own thread by its offset, any other heap word by being
 // one -- the worklist compares those, and a hash owes `=` only that what it joins hashes alike.
 // a partial folds its base and its captures, a native is its twin, a carrier its length (it
-// is equal to itself alone). out of the pool, an offset from hash_base. all GC-stable
-static uintptr_t fn_hash(struct ai *g, word x) {
+// is equal to itself alone). out of the pool, an offset from hash_base. all GC-stable.
+// d levels of those heap words fold their own leaf hash, the rest a 2: threads alike in
+// shape but not in what they call part here, where the worklist would walk them deep.
+// the length and a prefix are read, which bounds a probe on a big thread
+static uintptr_t fn_hash_d(struct ai *g, word x, int d);
+static uintptr_t fn_word(struct ai *g, word v, int d) {
+ uintptr_t t; word src;
+ if (!d || (datp(v) && typ(v) == DChain)) return 2;
+ if (!datp(v)) return fn_hash_d(g, v, d - 1);
+ return hash_leaf(g, v, &t, &src), t; }
+
+static uintptr_t fn_hash(struct ai *g, word x) { return fn_hash_d(g, x, 1); }
+static uintptr_t fn_hash_d(struct ai *g, word x, int d) {
  x = fn_meaning(g, x);
  if (!in_heap(g, x)) return rot(((intptr_t) x - (intptr_t) hash_base) * mix);
  union u *k = cell(x);
@@ -341,16 +352,19 @@ static uintptr_t fn_hash(struct ai *g, word x) {
  if (fn_partialp(k)) {
   int n;
   union u *b = fn_base(k, &n);
-  h = (fn_hash(g, (word) b) ^ (uintptr_t) n) * mix;
+  h = (fn_hash_d(g, (word) b, d) ^ (uintptr_t) n) * mix;
   for (int i = 0; i < n; i++) { word v = fn_arg(k, i, n); h = (h ^ (uintptr_t) (charmp(v) ? v : 2)) * mix; }
   return h; }
  word hd = (word) tag_head(tg), e = (word) tg;
- for (union u *y = k; y < (union u*) tg; y++) {
+ union u *z = (union u*) tg;
+ h = (h ^ (uintptr_t) (z - k)) * mix;
+ if (z - k > (d ? 32 : 8)) z = k + (d ? 32 : 8);
+ for (union u *y = k; y < z; y++) {
   word v = y->x;
   if (!(v & 1) && !(v >= hd && v <= e)) { word m = fn_meaning(g, v); if (m >= hd && m <= e) v = m; }
   uintptr_t t = (v & 1) ? (uintptr_t) v
               : v >= hd && v <= e ? (uintptr_t) (v - x)
-              : in_heap(g, v) ? 2 : (uintptr_t) (v - (intptr_t) hash_base);
+              : in_heap(g, v) ? fn_word(g, v, d) : (uintptr_t) (v - (intptr_t) hash_base);
   h = (h ^ t) * mix; }
  return h; }
 

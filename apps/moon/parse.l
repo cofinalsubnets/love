@@ -344,6 +344,10 @@
                 _ (pin (t 'sigs) "__builtin_popcount" '(int (uint) ()))
                 _ (pin (t 'sigs) "__builtin_popcountl" '(int (ulong) ()))
                 _ (pin (t 'sigs) "__builtin_popcountll" '(int (ulong) ()))
+                ; ffs: gcc's signed operands, a plain int answer (0 for 0, else the lowest set bit's 1-based index)
+                _ (pin (t 'sigs) "__builtin_ffs" '(int (int) ()))
+                _ (pin (t 'sigs) "__builtin_ffsl" '(int (long) ()))
+                _ (pin (t 'sigs) "__builtin_ffsll" '(int (llong) ()))
                 ; C99 _Complex, seeded as two-member structs (canon maps the specifier run onto
                 ; these tags), so layout, copy, union membership and the ABI ride the struct lanes
                 _ (pin (t 'stag) "__cplx_double" '((("re" 0 double) ("im" 8 double)) 16 8))
@@ -1233,11 +1237,17 @@
                 (? (two? rest) [(rev (<r . acc)) rest] ())))))
    ; the suffix run from a given seed -- ppost seeds with a primary, punary's compound
    ; literal with the clit ((struct kstat){0}.st_atime_sec, (size_t [3]){..}[i])
+   ; a call, or a builtin gcc lowers to plain C: isdigit(c) is (unsigned)(c - '0') < 10,
+   ; which folds over a constant like any comparison
+   (bicall e as)
+    (? (e = ['var "__builtin_isdigit"] && two? as && !(two? >as))
+        ['bin 'lt ['cast 'uint ['bin '- <as '(num 48)]] '(num 10)]
+       ['call e as])
    (ppostfrom ps e0 ts0)
     (: (more e ts2)
               (? (peekp ts2 "(")                     ; a call: the head is any postfix expr (fn pointers)
                   (: ra (pargs ps >ts2 ())
-                     (? (two? ra) (more ['call e <ra] <>ra) [() ()]))
+                     (? (two? ra) (more (bicall e <ra) <>ra) [() ()]))
                  (peekp ts2 "[")
                   (: ri (thenw (pexpr ps >ts2) "]")
                      (? (two? ri) (more ['deref ['bin '+ e <ri]] <>ri) [() ()]))
