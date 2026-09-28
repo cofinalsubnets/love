@@ -131,6 +131,19 @@
    (test ("l\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c" "p=a/b.l; echo ${p%.l} ${p#a/} ${U:-dflt} ${#p}"])
    (test ("a/b b.l dflt 5\n" = >r)))
+; IFS: unset is white space, "" splits nothing, its white space runs together, any other
+; byte of it ends a field even an empty one; bare $@ / $* and a bare `for` field per
+; positional; read splits on IFS too
+(: r (hark ["out/love" "out/lush" "-c" "IFS=:; x='a::b:'; for f in $x; do echo \"[$f]\"; done"])
+   (test ("[a]\n[]\n[b]\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "IFS='|'; s='a b|c'; for f in $s; do echo \"[$f]\"; done; IFS=; for f in $s; do echo \"<$f>\"; done"])
+   (test ("[a b]\n[c]\n<a b|c>\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "IFS=' :'; x='a : b'; for f in $x; do echo \"[$f]\"; done"])
+   (test ("[a]\n[b]\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "set -- 'x y' z; IFS=:; for f in $@; do echo \"[$f]\"; done; g() { for w; do echo \"<$w>\"; done; }; g 'p q' r"])
+   (test ("[x y]\n[z]\n<p q>\n<r>\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "IFS=,; echo 'u,v,w rest' | { read a b c; echo \"$a|$b|$c\"; }"])
+   (test ("u|v|w rest\n" = >r)))
 (: _ (setenv "LUSH_HD" "quay")
    r (hark ["out/love" "out/lush" "-c" "cat <<EOF | tr a-z A-Z\nhd $LUSH_HD\nEOF"])
    (test ("HD QUAY\n" = >r)))
