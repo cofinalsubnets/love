@@ -1,4 +1,4 @@
-; apps/bz2.l -- bzip2 over inle/bz2.c, which holds the whole stream: its blocks lie on bit
+; apps/bz2.l -- bzip2 over love/lib/bz2.c, which holds the whole stream: its blocks lie on bit
 ; boundaries, so there is no container to read here. `(borrow 'bz2)`, then:
 ;   (bz2-pack s level)  -> the .bz2 bytes of s, level 1..9 the block in 100k
 ;   (bz2-unpack s)      -> (1 bytes) | a word saying why not ('format 'corrupt 'end 'check):
@@ -21,7 +21,7 @@
 (borrow 'bz2)
 (borrow 'path)
 (borrow 'posix)
-(: bzc-help "bzip2 -- the block-sorting compressor in love (inle/bz2.c is the codec)
+(: bzc-help "bzip2 -- the block-sorting compressor in love (love/lib/bz2.c is the codec)
 usage: bzip2 [-cdfkqstvz] [-1..-9] [FILE..]
   -z  compress (the default)            -d  decompress (bunzip2)
   -c  write on stdout, keep the files   -k  keep the input file
@@ -34,8 +34,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
 
    (bzc-say t m) (: _ (say err (peep t 'nm "bzip2" + ": " + m + "\n")) (flush err))
    (bzc-moan t m) (? (peep t 'q 0) 0 (bzc-say t m))
-   (bzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
-   (bzc-suf p) (: (go l) (? !(two? l) () (bzc-ends? p <<l) <l (go >l)) (go bzc-sufs))
+   (bzc-suf p) (: (go l) (? !(two? l) () (ends? p <<l) <l (go >l)) (go bzc-sufs))
    (bzc-lpad w c s) (? (w <= #s) s (bzc-lpad w c (c + s)))
    (bzc-fix x m w)                     ; x at m's decimals (1000: three), right in w, printf's %w.nf
     (: v (floor (abs x * m + 0.5))

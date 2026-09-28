@@ -155,7 +155,7 @@ printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an integer reaches a pointer only as a NULL POINTER CONSTANT, so
-# `return 1` from a T* is a constraint violation -- inle/main.c carried one for years,
+# `return 1` from a T* is a constraint violation -- love/main.c carried one for years,
 # clang named it, and we took it in silence and handed back address 1
 printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
@@ -206,6 +206,8 @@ taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file
 taref 'int f(int b){asm("# %%0" : : "i"(b)); return 0;}\n' x64 "not a constant" "a local as an \"i\" operand was not refused"
 taref 'int g;\nint f(void){int g = 1; g++; asm("# %%c0" : : "i"(&g)); return g;}\n' x64 "not a constant" "a shadowed global as an \"i\" operand was not refused"
 taref 'asm(".data\\n2: .quad 0\\n.org 2b + 4");\n' x64 "gas-org" "an .org behind its section was not refused"
+# gas's .error, reached through the macro language's .if, refuses by name (test/cc/191 holds the rest)
+taref 'asm(".set .Lx, 2\\n.if (.Lx != 1)\\n.error \\"bad\\"\\n.endif");\n' x64 "gas-error" "a reached .error was not refused"
 # a flag output has an x64 lane only (test/cc/184); elsewhere it names its cause
 taref 'int f(long x){int z; asm("cmp %%1, #0" : "=@cceq"(z) : "r"(x)); return z;}\n' a64 "an asm flag output" "an a64 flag output was not refused by name"
 # a %gs: store to an absolute address has no register to reach it through (test/cc/182)
@@ -720,7 +722,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
 # member-compile lane fast too, so a warm cache passes this leg whether the archive was
 # read or refused, and a refusal can sit here green for as long as the cache lives. So ask
-# the BINARY what it carries -- inle/src.c matches the arch word and its width, and a
+# the BINARY what it carries -- love/src.c matches the arch word and its width, and a
 # miss there is silent -- then take the cache away and let the clock mean something.
 for a in x64 a64 rv64; do
   n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + runtime-gz \"$a\")))) 0)" | head -1)

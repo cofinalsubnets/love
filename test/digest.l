@@ -1,4 +1,4 @@
-; --- test/digest.l: the digests in inle/hash.c, held to what publishes them ---
+; --- test/digest.l: the digests in love/lib/hash.c, held to what publishes them ---
 ; named digest, not hash, because test/hash.l is the tablet's.
 ; apps/kore's checksum tools are these plus a line of output, and test/kore/sum.sh holds those to GNU coreutils -- so this file is
 ; the half of the rope that does not need another implementation on the box.

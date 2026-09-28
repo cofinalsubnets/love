@@ -1,4 +1,4 @@
-; apps/xz.l -- the .xz container (and the old .lzma one, read) over inle/xz.c's LZMA2
+; apps/xz.l -- the .xz container (and the old .lzma one, read) over love/lib/xz.c's LZMA2
 ; codec. `(borrow 'xz)`, then:
 ;   (xz-pack s dict check)  -> the .xz bytes of s: one block, one LZMA2 filter, the check
 ;                              one of 'none 'crc32 'crc64 'sha256
@@ -155,7 +155,7 @@
 (borrow 'xz)
 (borrow 'path)
 (borrow 'posix)
-(: xzc-help "xz -- the .xz container in love (inle/xz.c is the LZMA2 codec)
+(: xzc-help "xz -- the .xz container in love (love/lib/xz.c is the LZMA2 codec)
 usage: xz [-cdfkqtvz] [-0..-9] [-e] [-T N] [-C CHECK] [-S SUF] [FILE..]
   -z  compress (the default)            -d  decompress (unxz; .xz and .lzma)
   -c  write on stdout, keep the files   -k  keep the input file
@@ -168,7 +168,6 @@ no file, or a bare -, is the filter: stdin -> stdout"
    xzc-dicts [262144 1048576 2097152 4194304 4194304 8388608 8388608 16777216 33554432 67108864]
 
    (xzc-moan t m) (? (peep t 'q 0) 0 (: _ (say err ("xz: " + m + "\n")) (flush err)))
-   (xzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
    (xzc-worse a b) (max a b)
    (xzc-dict t n)                      ; the level's dictionary, cut to what n bytes need
     (: d (xzc-dicts (peep t 'lvl 6)) (go v) (? (d <= v || n <= v) v (go (v * 2))) (go 4096))
@@ -179,10 +178,10 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; .xz and .lzma come off; .txz and .tlz answer .tar
    (xzc-stem t p)
     (: suf (peep t 'suf ())
-       (? (suf && xzc-ends? p suf) [1 (snip p 0 (#p - #suf))]
-          (xzc-ends? p ".xz") [1 (snip p 0 (#p - 3))]
-          (xzc-ends? p ".lzma") [1 (snip p 0 (#p - 5))]
-          (xzc-ends? p ".txz" || xzc-ends? p ".tlz") [1 (snip p 0 (#p - 4) + ".tar")]
+       (? (suf && ends? p suf) [1 (snip p 0 (#p - #suf))]
+          (ends? p ".xz") [1 (snip p 0 (#p - 3))]
+          (ends? p ".lzma") [1 (snip p 0 (#p - 5))]
+          (ends? p ".txz" || ends? p ".tlz") [1 (snip p 0 (#p - 4) + ".tar")]
           ()))
    (xzc-put t p dst bytes st)           ; the output laid, the input's mode and time carried
     (? (two? (lstat dst) && !(peep t 'f 0)) (: _ (xzc-moan t (dst + ": File exists")) 1)
@@ -204,7 +203,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                  !stem (: _ (xzc-moan t (p + ": Filename has an unknown suffix, skipping")) 2)
                  (xzc-put t p <>stem <>u st)))
           (: suf (peep t 'suf ".xz")
-             (? (!(peep t 'c 0) && (xzc-ends? p suf || xzc-ends? p ".xz" || xzc-ends? p ".txz"))
+             (? (!(peep t 'c 0) && (ends? p suf || ends? p ".xz" || ends? p ".txz"))
                 (: _ (xzc-moan t (p + ": File already has '" + suf + "' suffix, skipping")) 2)
                 (: z (xz-pack <>r (xzc-dict t #<>r) (peep t 'ck 'crc64))
                    (? (peep t 'c 0) (: _ (say out z) 0) (xzc-put t p (p + suf) z st)))))))

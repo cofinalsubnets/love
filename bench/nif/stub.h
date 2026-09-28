@@ -19,7 +19,7 @@
 
 const struct ai_mint ai_mint_zero = {0, 0};
 
-#include "../../inle/alloc.c"               // a real allocator: deflate's arena asks it at run time
+#include "../../love/alloc.c"               // a real allocator: deflate's arena asks it at run time
 
 struct ai *ai_strof(struct ai *g, const char *s) { return g; }
 struct ai *str0(struct ai *g, uintptr_t n) { return g; }

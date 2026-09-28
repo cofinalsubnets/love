@@ -9,7 +9,7 @@
 ; the shimmer core is pure love -- ink-field builds the skin(t) tray and ink-pal
 ; pre-renders a ramp, so another caller brings its own colours and its own frame
 ; (apps/rove/slop.l does); only the tty runner (ink) ties raw / tty / cue?, which
-; ride inle/posix.c, so ink never joins the test corpus (love0 links no host nifs)
+; ride love/posix.c, so ink never joins the test corpus (love0 links no host nifs)
 ; -- test/host/tty.l gives it a pty instead.
 (module (ink ink-main ink-scene ink-field ink-drift ink-pal)
 ; posix is OPTIONAL: the page's seat (inle/wasm) links none of it, and this file runs

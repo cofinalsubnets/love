@@ -39,7 +39,7 @@ $(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,
   $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2_cc) -Iapps/moon/include)))
 
 # main.c, once per face -- the -D is the whole difference.
-mainc = main.c $(R)/love/love.h $(lib_hR) $(mc)
+mainc = main.c $(R)/love/love.h $(R)/inle/bput.h $(R)/inle/ffalloc.h $(lib_hR) $(mc)
 $(eval $(call p_obj,main,inle/mps2/main.c,$(mainc),$(mps2_cc)))
 $(eval $(call p_obj,main-baker,inle/mps2/main.c,$(mainc),$(mps2_cc) -D BAKER))
 $(eval $(call p_obj,main-waker,inle/mps2/main.c,$(mainc),$(mps2_cc) -D WAKER))
@@ -75,9 +75,9 @@ $(R)/$(o)/love.img: $(R)/$(o)/baker.elf
 # (-D BAKER_RUNE), and a qemu wake-check (waker-pd) BEFORE the pdx ships it.
 imgpd: $(R)/$(o)/love-pd.img
 $(R)/out/playdate/cas.h:
-	@$(MAKE) -C $(R)/inle/playdate ../../out/playdate/cas.h
+	@$(MAKE) -C $(R)/love/user/playdate ../../../out/playdate/cas.h
 
-pdmainc = main.c $(R)/love/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
+pdmainc = main.c $(R)/love/love.h $(R)/inle/bput.h $(R)/inle/ffalloc.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
 $(eval $(call p_obj,main-baker-pd,inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D BAKER -D BAKER_RUNE -Iout/playdate))
 $(eval $(call p_obj,main-waker-pd,inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate))
 

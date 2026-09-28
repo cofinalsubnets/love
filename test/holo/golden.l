@@ -87,6 +87,9 @@
                      ((xaddm 4 r2 0 r0) (cmpxchgm 8 r6 8 r1) (xchgm 1 r5 0 r0) (unm inc 4 r0 0)
                       (alum add 8 r0 0 1) (alum or 2 r0 0 r1) (btm bts 8 r0 0 3) (unm dec 1 r3 4)))
       ("sys.testm"   "f60020854b08"          ((testm 1 r0 0 32) (testm 4 r3 8 r1)))
+      ("sys.bscan"   "480fbdc10fbcc1f3480fbdc1f30fbcc1f3490fb8c0f3900faef00faee80faef8"
+                     ((bscan bsr 8 r0 r1) (bscan bsf 4 r0 r1) (bscan lzcnt 8 r0 r1) (bscan tzcnt 4 r0 r1)
+                      (bscan popcnt 8 r0 r7) (pause) (mfence) (lfence) (sfencex)))
       ("sys.ud2"     "0f0b"                  ((ud2)))
       ("sys.iretq"   "48cf"                  ((iretq)))
       ("sys.swapgs"  "0f01f8"                ((swapgs)))
@@ -357,9 +360,17 @@
    _ (chk-eq "gas.x64.rip"                         ; an absolute or rip-relative memory operand rides rip: cpu features' `testb $m, caps+1`
         '((testm 1 rip (caps 1) 32) (alum add 4 rip (cnt 0) 1))
         (gas-text 'x64 "testb $32, caps+1\naddl $1, cnt(%rip)"))
+   _ (chk-eq "gas.x64.bscan"                       ; the kernel's fls/ffs/hweight, pause and the fences
+        '((bscan bsr 8 r0 r1) (bscan bsr 4 r2 r0) (bscan tzcnt 8 r0 r1) (bscan popcnt 4 r0 r1) (pause) (mfence))
+        (gas-text 'x64 "bsr %rcx, %rax\nbsrl %eax, %edx\ntzcnt %rcx, %rax\npopcntl %ecx, %eax\npause\nmfence"))
    ; gas's comparisons answer -1 for true: the alternatives' `-(d > 0) * d` is d when d > 0, else 0
    _ (chk-eq "gimm.cmp" [3 0 -1 0] [(gimm (gtoks "-((5-2) > 0) * (5-2)")) (gimm (gtoks "-((2-5) > 0) * (2-5)"))
                                     (gimm (gtoks "1 < 2")) (gimm (gtoks "2 < 1"))])
+   _ (chk-eq "gimm.eq" [-1 0 -1 -1] [(gimm (gtoks "(1 != 2)")) (gimm (gtoks "3 == 4")) (gimm (gtoks "2 >= 2")) (gimm (gtoks "1 <= 2"))])
+   ; gas's macro language unrolls before gas-top reads: a keyword call, .irp, .ifc, .set values
+   _ (chk-eq "gas.expand"
+        '(".long 11 + (1 << 8)")
+        (gf-expand (gf-lines 'x64 ".macro m t:req r:req\n.set .Ln, 0\n.irp s,rax,rcx\n.ifc \\r, %\\s\n.long \\t + (.Ln << 8)\n.endif\n.set .Ln, .Ln+1\n.endr\n.endm\nm r=%rcx, t=11\n.purgem m")))
    ; a symbol-less rip displacement is the address past the lea (_THIS_IP_): its own bytes
    _ (chk-eq "gas.x64.thisip"
         '((raw (76 141 29 0 0 0 0)) (raw (72 141 5 8 0 0 0)))

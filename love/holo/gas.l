@@ -110,8 +110,8 @@
    (gas-mem tgt r) (? (= tgt 'x64) ("(" + gas-reg tgt r 8 0 + ")")
                       (= tgt 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
-   (gas-regname tgt s)
-    (: k (name s)
+   (gas-regname tgt s)                              ; gas's own `%rdx` names the register too (the kernel's __get_user)
+    (: k (name (? (starts? s "%") (snip s 1 #s) s))
        (? (= tgt 'x64) (: e (peep gx-regs k ()) (? (two? e) <e ()))
           (= tgt 'a64) (peep a64-names k ())
           (= tgt 'rv64) (peep rv-names k ())
@@ -138,7 +138,8 @@
                    (vmlaunch vmlaunch) (vmxoff vmxoff) (cld cld)
                    (inb inb) (inw inw) (inl inl) (outb outb) (outw outw) (outl outl)
                    (insb insb) (insw insw) (insl insl) (outsb outsb) (outsw outsw) (outsl outsl)
-                   (nop nop) (ret ret) (syscall sys) (int3 trap)))
+                   (nop nop) (ret ret) (syscall sys) (int3 trap)
+                   (pause pause) (mfence mfence) (lfence lfence) (sfence sfencex)))   ; sfencex: rv64's sfence is sfence.vma
    gx-alu '(add sub and or xor imul)
    gx-cc (gtab '((je eq) (jz eq) (jne ne) (jnz ne) (jl lt) (jle le) (jg gt) (jge ge)
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
@@ -188,6 +189,10 @@
                  (m = 'test) [['testm wm <bm <>bm (gx-rv s)]]
                  [['alum m wm <bm <>bm (gx-rv s)]]))
           (= m 'xchg && <s = 'mem && <d = 'rg) (gx-ins m w0 [s d])
+          ; the bit scans and counts, at the suffix's width or the destination's
+          (elem m '(bsr bsf tzcnt lzcnt popcnt))
+           (? (<d = 'rg && <s = 'rg) [['bscan m (w0 > 0 ? w0 (d 2)) (gx-r d) (gx-r s)]]
+              (scare 'gas-x64-operand ops))
           (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
           (= m 'vmwrite) [['vmwrite (gx-r d) (gx-r s)]]
           (= m 'mov)
@@ -422,7 +427,7 @@
    ;; labels the object exports. the directives read are the ones C headers write there (the
    ;; kernel's export, initcall, tracepoint and static-call rows); a run of instructions goes to
    ;; gas-text, and any other directive scares. --
-   (gf-kin? nm b) (nm = b || xa-starts? nm (b + "."))
+   (gf-kin? nm b) (nm = b || starts? nm (b + "."))
    ; gas's own defaults for a section named without flags: the standard four and their dotted
    ; kin, .init/.fini, and otherwise none -- not even allocated
    (gf-dflt nm) (? (gf-kin? nm ".text" || elem nm '(".init" ".fini")) [1 6]
@@ -539,6 +544,94 @@
    (gf-lines tgt src)
     (: hash? (elem tgt '(x64 rv64))
        (catmap (ln \ xa-lines (? hash? (xa-decomment ln) (gcut2 ln 47))) (gsplit src 10)))
+   ;; gas's macro language, over a text's lines before anything reads them: .macro/.endm and a
+   ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne with
+   ;; .else, .set/.equ (the symbol reads as its value on the lines after), .error, .purgem --
+   ;; the kernel's exception-table macro, which finds a register's number by name
+   gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne")
+   (gf-expand ls)
+    (: mac {} sv {}
+       (dname s) (: t (xa-trim s) (? (0 < #t && t 0 = 46) (xa-mnem t) ""))
+       (word s i) ((: (g j) (? (j < #s && gidc? (s j)) (g (j + 1)) j)) i)
+       ; a block's body up to its closer, nested openers counted -> (body rest)
+       (grab l opens close)
+        (: (go l d acc) (? !(two? l) (scare 'gas-block close)
+                           (: w (dname <l)
+                              (? (w = close && d = 0) [(rev acc) >l]
+                                 (go >l (? (elem w opens) (d + 1) (w = close) (d - 1) d) (<l . acc)))))
+           (go l 0 ()))
+       ; an .if body split at its own .else
+       (split l) (: (go l d acc) (? !(two? l) [(rev acc) ()]
+                                    (: w (dname <l)
+                                       (? (w = ".else" && d = 0) [(rev acc) >l]
+                                          (go >l (? (elem w gf-ifs) (d + 1) (w = ".endif") (d - 1) d) (<l . acc)))))
+                    (go l 0 ()))
+       ; a .set symbol reads as its value
+       (ssub s) (: n #s
+                   (go i acc) (? (i >= n) acc
+                                 (: c (s i)
+                                    (? (gidc? c && (i = 0 || !(gidc? (s (i - 1)))))
+                                        (: j (word s i) v (peep sv (snip s i j) ())
+                                           (go j (acc + (? (charm? v) (show v) (snip s i j)))))
+                                       (go (i + 1) (acc + string c)))))
+                   (go 0 ""))
+       (val e) (gimm (gtoks (ssub e)))
+       ; \name -> its argument, \() -> nothing; an unknown \name stays for an enclosing reading
+       (psub s args)
+        (: n #s
+           (go i acc) (? (i >= n) acc
+                         (: c (s i)
+                            (? (c = 92 && i + 2 < n && s (i + 1) = 40 && s (i + 2) = 41) (go (i + 3) acc)
+                               (c = 92 && i + 1 < n && gidc? (s (i + 1)))
+                                (: j (word s (i + 1)) a (assoc (snip s (i + 1) j) args)
+                                   (? (two? a) (go j (acc + <>a)) (go (i + 1) (acc + string c))))
+                               (go (i + 1) (acc + string c)))))
+           (go 0 ""))
+       ; a call's lines: keyword arguments by name, the rest in order, a default else
+       (call m rest)
+        (: ps <m
+           as (0 = #(xa-trim rest) ? () (xa-oplist rest))
+           kw (filter (a \ xa-has? a 61) as) po (filter (a \ !(xa-has? a 61)) as)
+           (kv nm) (filter (a \ xa-trim (snip a 0 (xa-idx a 61)) = nm) kw)
+           (bind ps po acc)
+            (? !(two? ps) acc
+               (: p <ps k (kv <p)
+                  (? (two? k) (bind >ps po ([<p (xa-trim (snip <k (1 + xa-idx <k 61) #<k))] . acc))
+                     (bind >ps >po ([<p (? (two? po) <po <>p)] . acc)))))
+           args (bind ps po ())
+           (map (l \ psub l args) <>m))
+       (go l acc)
+        (? !(two? l) acc
+           (: s <l t (xa-trim s) w (dname s) r (xa-rest t)
+              (? (w = ".macro")
+                  (: b (grab >l '(".macro") ".endm")
+                     ws (filter (x \ 0 < #x) (xa-split (string (map (c \ (c = 44 ? 32 c)) (chars r))) 32))
+                     specs (map (x \ (: k (xa-idx x 58) q (xa-idx x 61)
+                                       (? (0 <= k) [(snip x 0 k) ""] (0 <= q) [(snip x 0 q) (snip x (q + 1) #x)] [x ""])))
+                                >ws)
+                     _ (pin mac <ws [specs <b])
+                     (go <>b acc))
+                 (w = ".purgem") (go >l acc)
+                 (elem w '(".set" ".equ"))
+                  (: xs (xa-oplist r) _ (pin sv <xs (val <>xs)) (go >l acc))
+                 (w = ".irp")
+                  (: b (grab >l '(".irp" ".rept") ".endr") xs (xa-oplist r)
+                     (go <>b (foldl (\ a v (go (map (x \ psub x [[<xs v]]) <b) a)) acc >xs)))
+                 (w = ".rept")
+                  (: b (grab >l '(".irp" ".rept") ".endr")
+                     (go <>b (foldl (\ a i (go <b a)) acc ^(val r))))
+                 (elem w gf-ifs)
+                  (: b (grab >l gf-ifs ".endif") ab (split <b)
+                     yes (? (elem w '(".ifc" ".ifnc"))
+                             (: xs (xa-oplist r) eq (xa-trim <xs = xa-trim (? (two? >xs) <>xs ""))
+                                (w = ".ifc" ? eq !eq))
+                             (w = ".ifeq") (val r = 0)
+                             (val r != 0))
+                     (go <>b (go (yes ? <ab <>ab) acc)))
+                 (w = ".error") (scare 'gas-error r)
+                 (two? (mac (xa-mnem t))) (go >l (go (call (mac (xa-mnem t)) r) acc))
+                 (go >l (ssub s . acc)))))
+       (rev (go ls ())))
    ; does gas-text read it whole: instructions, and labels on lines of their own
    (gas-plain? tgt src)
     (all (l \ (: s (xa-trim l) c (gf-labat s)
@@ -614,7 +707,7 @@
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
               ; what a static link never reads: symbol types and sizes, visibility, unwind rows
-              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal") || xa-starts? mn ".cfi_") 0
+              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal") || starts? mn ".cfi_") 0
               (scare 'gas-directive mn)))
        (line s0)
         (: s (xa-trim s0)
@@ -630,7 +723,7 @@
                        (line (snip s (c + 1) #s)))
                     (s 0 = 46) (: _ (flush 0) (dir (xa-mnem s) (xa-rest s)))
                     (pin st 'run ((gf-lsub s rl) . (st 'run)))))))
-       _ (foldl (\ _ x (line x)) 0 (gf-lines tgt src))
+       _ (foldl (\ _ x (line x)) 0 (gf-expand (gf-lines tgt src)))
        _ (flush 0)
        ; a .skip over label arithmetic (the alternatives' padding): each section's forms are
        ; sized -- an instruction assembled alone -- and the count read with the labels' section

@@ -27,7 +27,6 @@
    (skip-nonws s i) (i >= #s ||   ws? (peep s i 0)  ? i (skip-nonws s (+ i 1)))
    ; one past the last non-ws char (0 if the line is all whitespace).
    (trim-end s) ((: (f i e) (i < #s ? (f (i + 1) (? (ws? (peep s i 0)) e (i + 1))) e)) 0 0)
-   (prefix? p s) (p = snip s 0 #p)
    (dash? a) (0 < #a && 45 = peep a 0 0))
 
 ; --- line classifiers ---------------------------------------------
@@ -70,7 +69,7 @@
 ; x86: ^l?ret[a-z]*$ (ret/retq/lret/...; not iret). arm: ^ret(aa|ab)?$
 ; (iret/eret never match).
 (: (lower? s i) (? (< i (tally s)) (: c (peep s i 0) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) 1)
-   (ret-tail? r) (&& (prefix? "ret" r) (lower? r 3))
+   (ret-tail? r) (&& (starts? r "ret") (lower? r 3))
    (retx?  m) (|| (ret-tail? m) (&& (= 108 (peep m 0 0)) (ret-tail? (snip m 1 (tally m)))))
    (reta?  m) (|| (= m "ret") (|| (= m "retaa") (= m "retab"))))
 
@@ -136,10 +135,10 @@
        (ls @ (line . rest)
           (: h (parse-header line)
              (? h
-                (? (prefix? "." h)                              ; local label: stay inside
+                (? (starts? h ".")                              ; local label: stay inside
                    (loop rest name watching lim rets flagged total)
                    (: fl2  (close name watching rets flagged)   ; real header: close, open new
-                      w2   (prefix? prefix h)
+                      w2   (starts? h prefix)
                       ha   (parse-header-addr line)
                       sz   (peep sizes ha 0)                     ; symtab size, 0 if absent
                       lim2 (0 < sz ? (ha + sz) BIG)           ; extent end, or unbounded

@@ -25,8 +25,10 @@
 ;
 ; a page asks for gzip and is unzipped (apps/gz.l); one in latin-1 or windows-1252, by its
 ; header or its own <meta>, is re-spelled as utf-8, and any other charset is taken as utf-8.
-; a <base href> is what the links resolve against. an image is its alt text. the window
-; changing width lays the page again, the same link at the top.
+; a <base href> is what the links resolve against. an image is its alt text, and on a
+; terminal a png is drawn under it as it comes near the screen, two pixels a cell (24-bit
+; colour where COLORTERM says so, else the 256-colour cube). the window changing width
+; lays the page again, the same link at the top.
 ;
 ; gopher:// and gemini:// open too. a gopher menu lays its text lines as they are and its
 ; items as links with their kind, (DIR) (TXT) (?) ..; a search item is a field, sent after a
@@ -36,7 +38,7 @@
 ; on first use -- in ~/.love/gemini_hosts; a changed one is refused, and says which line
 ; to delete to take it.
 ;
-; out of scope, and said: forms that POST, scripts, cookies, and the pictures themselves.
+; out of scope, and said: forms that POST, scripts, cookies, and pictures other than png.
 ; an https peer is not verified (wget's client).
 (module 'kore
 (borrow 'cli)
@@ -154,7 +156,7 @@
     (: a (ww-split u) au (snip (a 1) 2 #(a 1)) hp (ww-cut au ":")
        [<hp (? (1 < #(hp 1)) (: n (unum (snip (hp 1) 1 #(hp 1))) (? (charm? n) n dflt)) dflt)])
    ; the answer to a field, off a query this page's form made (?NAME=v), else ()
-   (ww-answer q nm) (? (ww-pre? ("?" + nm + "=") q) (ww-dec q (2 + #nm) #q 1) ())
+   (ww-answer q nm) (? (starts? q ("?" + nm + "=")) (ww-dec q (2 + #nm) #q 1) ())
 
    ; gopher (RFC 1436; its urls, RFC 4266: gopher://host[:port]/Tselector). a menu's lines
    ; are Tdisplay TAB selector TAB host TAB port, a lone "." after the last. i and 3 lines
@@ -177,7 +179,7 @@
               port (: n (? (3 < #f) (unum (f 3)) ()) (? (charm? n) n 70))
               (? ((t = 105) || (t = 51)) (pin run 's (run 's + disp + "\n"))
                  (: _ (flush-run 0)
-                    href (? ((t = 104) && (ww-pre? "URL:" sel)) (snip sel 4 #sel)
+                    href (? ((t = 104) && (starts? sel "URL:")) (snip sel 4 #sel)
                             (t = 55) ("form:" + ww-gurl host port t sel + "?search=")
                             (ww-gurl host port t sel))
                     (say o ("<p>" + ww-gkind t + " " + ww-link href disp + "</p>\n"))))))
@@ -187,7 +189,7 @@
        (slurp o))
    ; a text item's lines, its ".." back to "." and its closing "." gone
    (ww-gtxt s) (: ls (ww-lns s)
-                  (go l) (? !(two? l) () (<l = ".") () ((? (ww-pre? ".." <l) (snip <l 1 #<l) <l) . go >l))
+                  (go l) (? !(two? l) () (<l = ".") () ((? (starts? <l "..") (snip <l 1 #<l) <l) . go >l))
                   (unlines (go ls)))
    (ww-gopher url)
     (: p (ww-split url) hp (ww-hostport url 70) path (p 2) q (p 3)
@@ -229,20 +231,20 @@
        (trim s) (: (a i) (? ((i < #s) && ((s i = 32) || (s i = 9))) (a (i + 1)) i) (snip s (a 0) #s))
        (line l)
         (? ((st 'pre) = 1)
-            (? (ww-pre? "```" l) (: _ (block 0) (pin st 'pre 0))
+            (? (starts? l "```") (: _ (block 0) (pin st 'pre 0))
                (pin st 'buf (st 'buf + l + "\n")))
-           (ww-pre? "```" l) (: _ (ul 0) (pin st 'pre 1))
-           (ww-pre? "* " l) (: _ (ul 1) (say o ("<li>" + ww-esc (trim (snip l 2 #l)) + "</li>\n")))
+           (starts? l "```") (: _ (ul 0) (pin st 'pre 1))
+           (starts? l "* ") (: _ (ul 1) (say o ("<li>" + ww-esc (trim (snip l 2 #l)) + "</li>\n")))
            (: _ (ul 0)
-              (? (ww-pre? "=>" l)
+              (? (starts? l "=>")
                   (: r (trim (snip l 2 #l))
                      k ((: (g i) (? ((#r <= i) || (r i = 32) || (r i = 9)) i (g (i + 1)))) 0)
                      href (snip r 0 k) lab (trim (snip r k #r))
                      (? (0 < #href) (say o ("<p>" + ww-link href (? (0 < #lab) lab href) + "</p>\n")) 0))
-                 (ww-pre? "###" l) (say o ("<h3>" + ww-esc (trim (snip l 3 #l)) + "</h3>\n"))
-                 (ww-pre? "##" l) (say o ("<h2>" + ww-esc (trim (snip l 2 #l)) + "</h2>\n"))
-                 (ww-pre? "#" l) (say o ("<h1>" + ww-esc (trim (snip l 1 #l)) + "</h1>\n"))
-                 (ww-pre? ">" l)
+                 (starts? l "###") (say o ("<h3>" + ww-esc (trim (snip l 3 #l)) + "</h3>\n"))
+                 (starts? l "##") (say o ("<h2>" + ww-esc (trim (snip l 2 #l)) + "</h2>\n"))
+                 (starts? l "#") (say o ("<h1>" + ww-esc (trim (snip l 1 #l)) + "</h1>\n"))
+                 (starts? l ">")
                   (say o ("<blockquote>\n<p>" + ww-esc (trim (snip l 1 #l)) + "</p>\n</blockquote>\n"))
                  (0 < #(trim l)) (say o ("<p>" + ww-esc l + "</p>\n"))
                  0)))
@@ -269,8 +271,8 @@
                           lab (? (code = 11) "[answer, unshown]" "[answer]")
                           [0 u 'html ("<p>" + ww-esc meta + "</p>\n<p>" + ww-link form lab + "</p>\n") 200])
                       (code < 30) (: mime (? (0 < #meta) (wg-lower meta) "text/gemini")
-                                     (? (ww-pre? "text/gemini" mime) [0 u 'html (ww-gtext body) 200]
-                                        (ww-pre? "text/" mime) [0 u 'text body 200]
+                                     (? (starts? mime "text/gemini") [0 u 'html (ww-gtext body) 200]
+                                        (starts? mime "text/") [0 u 'text body 200]
                                         [1 ("www: " + url + " is " + meta + ", not a page")]))
                       (code < 40) (? (hops < 1) [1 "www: too many redirects"]
                                      (ww-get (ww-resolve url meta) (hops - 1)))
@@ -314,10 +316,9 @@
    ; a link off the page made absolute. a form field's (form:ACTION?PAIRS) resolves its
    ; action and keeps its pairs, which are the query the form sends
    (ww-abs base u)
-    (? !(ww-pre? "form:" u) (ww-resolve base u)
+    (? !(starts? u "form:") (ww-resolve base u)
        (: t (snip u 5 #u) q (ww-cut t "?") p (ww-split (ww-resolve base <q))
           ("form:" + ww-join [(p 0) (p 1) (p 2) <>q ""])))
-   (ww-pre? p s) (#p <= #s && p = snip s 0 #p)
    ; a fetched page -> [lines urls anchors lines-of-links], the urls absolute, an anchor
    ; [name line], and the line each link n was laid on at (n - 1)
    (ww-lay g w)
@@ -356,6 +357,106 @@
     (: n #urls
        (ref i) ((upad (#(show n) + 4) (show (i + 1) + ". ")) + urls i + "\n")
        (usgr (unlines ls) + (? n ("\nReferences\n\n" + foldl (\ a i (a + ref i)) "" ^n) "")))
+
+   ; -- pictures -----------------------------------------------------------------
+   ; on a terminal a picture is drawn under the line lapiz laid its mark on (" img SRC"),
+   ; two pixels a cell: the upper the colour of a ▀, the lower its background. one is
+   ; fetched when it comes near the screen, and kept by url for the session
+   (ww-marks p)
+    (foldl (\ acc a (? (starts? <a " img ") ([(a 1) (snip <a 5 #<a)] . acc) acc)) () (rev (p 2)))
+   ; an image's bytes, redirects followed, or ()
+   (ww-fetch url hops)
+    (: p (ww-split url) sc <p
+       (? (sc = "file:") (: r (uread (p 2)) (? (two? r) <>r ()))
+          !(sc = "http:" || sc = "https:") ()
+          (: w (wg-url (ww-nofrag url))
+             r (? (two? w) (wg-ask <w (w 1) (w 2) (w 3) "") ())
+             (? !(two? r) ()
+                (: code <r loc (wg-header (r 1) "location")
+                   (? ((300 <= code < 400) && string? loc && (0 < hops))
+                       (ww-fetch (ww-resolve url loc) (hops - 1))
+                      (200 <= code < 300) (r 2)
+                      ()))))))
+   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png of up to 4 megapixels
+   (ww-be4 b i) ((((b i * 256) + b (i + 1)) * 256 + b (i + 2)) * 256 + b (i + 3))
+   (ww-picture b)
+    (? !(string? b && 24 <= #b && snip b 1 4 = "PNG") 'none
+       (4194304 < ww-be4 b 16 * ww-be4 b 20) 'none
+       (: r ((cite 'png 'png-decode) b) (? (two? r) r 'none)))
+   ; a colour as sgr: 24-bit where the terminal says it takes it, else the 256-colour cube
+   (ww-sgr deep fg c)
+    (? deep ((? fg "38;2;" "48;2;") + show (c 0) + ";" + show (c 1) + ";" + show (c 2))
+       (: (q v) ((v * 5 + 127) // 255)
+          ((? fg "38;5;" "48;5;") + show (16 + 36 * q (c 0) + 6 * q (c 1) + q (c 2)))))
+   ; a picture as rows of cells at most cols wide and rows tall, never enlarged, set in
+   ; at the text's own margin where there is room for it
+   (ww-art im cols0 rows deep)
+    (: w (im 0) h (im 1) px (im 2) e (string 27)
+       pad (? (20 < cols0) "     " "") cols (cols0 - #pad)
+       s (max 1.0 (max (w / cols) (h / (2 * rows))))
+       ow (max 1 (int (w / s))) oh (max 1 (int (h / s)))
+       ; the pixel at output x y: its box's mean over four samples, or () when see-through
+       ; (alpha under half)
+       (at x y) (: i (4 * ((y * w) + x)) [(peep px i 0) (peep px (i + 1) 0) (peep px (i + 2) 0) (peep px (i + 3) 0)])
+       (pix x y)
+        (? (oh <= y) ()
+           (: xs (map (f \ min (w - 1) (int ((x + f) * s))) [0.25 0.75])
+              ys (map (f \ min (h - 1) (int ((y + f) * s))) [0.25 0.75])
+              ss (foldl (\ acc a (foldl (\ acc b ((at a b) . acc)) acc ys)) () xs)
+              ; colour weighted by alpha, so a see-through sample does not darken
+              a +(map (p \ p 3) ss)
+              (? (a < 512) () (map (k \ (+(map (p \ p k * p 3) ss)) // a) ^3))))
+       (sg fg c) (e + "[" + ww-sgr deep fg c + "m")
+       (cell t b) (? (!t && !b) (e + "[0m ")
+                     !b (e + "[0m" + sg 1 t + "▀")
+                     !t (e + "[0m" + sg 1 b + "▄")
+                     (sg 1 t + sg 0 b + "▀"))
+       (row r) (: o (jug 0)
+                  _ (map (x \ say o (cell (pix x (2 * r)) (pix x (2 * r + 1)))) ^ow)
+                  (pad + slurp o + e + "[0m"))
+       (map row ^((oh + 1) // 2)))
+   ; each drawn picture as [line rows], off the marks of the raw layout
+   (ww-arts st p)
+    (: g (st 'page) base (ww-base (g 1) (g 3)) c (st 'imgs)
+       ct (getenv "COLORTERM") deep (string? ct && (ct = "truecolor" || ct = "24bit"))
+       rows (max 2 (pgbody st - 1))
+       (foldl (\ acc m (: im (peep c (ww-resolve base (m 1)) 'none)
+                          (? (im = 'none) acc (acc + [[<m (ww-art im (pgwidth st) rows deep)]]))))
+              () (ww-marks p)))
+   ; a line of the raw layout -> where it lands with the pictures in
+   (ww-shift ins l) (foldl (\ n a (? (<a < l) (n + #(a 1)) n)) l ins)
+   ; the pictures' rows spliced in under their lines, the links and anchors moved with them
+   (ww-splice p ins)
+    (: t (foldl (\ t a (pin t <a (peep t <a () + a 1))) (tablet 0) ins)
+       ls (: (go l i acc) (? (one? l) (rev acc)
+                              (go >l (i + 1) (foldl (\ acc r (r . acc)) (<l . acc) (peep t i ()))))
+             (go <p 0 ()))
+       [ls (p 1) (map (a \ [<a (ww-shift ins (a 1))]) (p 2))
+        (map (l \ ? (l < 0) l (ww-shift ins l)) (p 3))])
+   ; a raw layout into the pager with the pictures fetched so far, the view where it was
+   (ww-load st p)
+    (: ins (ww-arts st p) q (ww-splice p ins) top (st 'top)
+       _ (pins st 'raw p 'ins ins 'urls (q 1) 'anchors (q 2) 'links (q 3))
+       _ (pgload st <q (st 'url))
+       (pggo st top))
+   ; fetch the pictures whose marks are on the screen or the one after, then lay them in
+   (ww-pictures st)
+    (: p (st 'raw) g (st 'page)
+       (? (!(two? p) || two? (st 'sav)) 0
+          (: base (ww-base (g 1) (g 3)) c (st 'imgs) ins (st 'ins)
+             top (pgtopline st) end (pglast st) reach (end + (end - top))
+             due (filter (m \ (: l (ww-shift ins <m) u (ww-resolve base (m 1))
+                               (top <= l <= reach && nil? (peep c u ()))))
+                         (ww-marks p))
+             (? !(two? due) 0
+                (: n #due
+                   _ (map (i \ (: u (ww-resolve base ((due i) 1))
+                                  _ (pgmsg st ("fetching picture " + show (i + 1) + " of " + show n + " ..."))
+                                  _ (puts (pgframe st)) _ (flush out)
+                                  (pin c u (ww-picture (ww-fetch u 4)))))
+                          ^n)
+                   _ (pgmsg st "")
+                   (ww-load st p))))))
 
    ; -- the keys over less's ----------------------------------------------------
    ; a browser key leaves 'go -- [url push? top] -- for the face to fetch; the rest is less
@@ -441,9 +542,8 @@
    ; (top -1) at its fragment's place, else where its content starts, else at the top
    (ww-show st g push top)
     (: _ (? (push && #(st 'url)) (pin st 'hist ([(st 'url) (st 'top)] . st 'hist)) 0)
-       p (ww-lay g (pgwidth st))
-       _ (pgload st <p (g 1))
-       _ (pins st 'url (g 1) 'urls (p 1) 'anchors (p 2) 'links (p 3) 'page g 'lw (pgwidth st))
+       _ (pins st 'url (g 1) 'page g 'lw (pgwidth st))
+       _ (ww-load st (ww-lay g (pgwidth st)))
        _ (pins st 'cur 0 'hi "")
        fr ((ww-split (g 1)) 4)
        ln (? (0 <= top) -1 (0 < #fr) (ww-anchor st fr) (ww-main st))
@@ -452,6 +552,7 @@
    (ww-new w h)
     (: st (pgnew (tablet 0) w h)
        _ (pins st 'url "" 'urls () 'anchors () 'links () 'hist () 'go () 'page () 'lw 0 'cur 0 'field "")
+       _ (pins st 'raw () 'ins () 'imgs (tablet 0))
        st)
    ; the window changed width: the page laid again at the new one, with the link that was
    ; first on the screen as far down it as before (the help, laid by less, just rewraps)
@@ -461,10 +562,9 @@
           (: ls (st 'links) top (pgtopline st) nl (st 'nl)
              k ((: (f k l) (? (one? l) 0 (top <= <l) k (f (k + 1) >l))) 1 ls)
              off (? (0 < k) (ls (k - 1) - top) 0)
-             p (ww-lay g w)
-             _ (pgload st <p (g 1))
-             _ (pins st 'urls (p 1) 'anchors (p 2) 'links (p 3) 'lw w)
-             (pgline! st (? (0 < k) ((p 3) (k - 1) - off) (0 < nl) ((top * st 'nl) // nl) 0)))))
+             _ (ww-load st (ww-lay g w))
+             _ (pin st 'lw w)
+             (pgline! st (? (0 < k) ((st 'links) (k - 1) - off) (0 < nl) ((top * st 'nl) // nl) 0)))))
 
    ; -- the face -----------------------------------------------------------------
    (ww-do st)
@@ -484,6 +584,7 @@
         (: _ (ww-do st)
            _ (pgresize st)
            _ (ww-fit st)
+           _ (ww-pictures st)
            _ (puts (pgframe st)) _ (flush out)
            kr (pgkey kq pend)
            c <kr

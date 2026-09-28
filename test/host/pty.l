@@ -1,4 +1,4 @@
-; --- test/host/pty.l: a runnable smoke test for bao's pty nifs (inle/posix.c) ---
+; --- test/host/pty.l: a runnable smoke test for bao's pty nifs (love/posix.c) ---
 ; held out of the corpus, and not for its nifs: love0 links tether/gather/still/tty
 ; as surely as the final `love` does. love0 evaluates the corpus twice, and this file
 ; does not survive its own second run -- one marker where a corpus file gives two.

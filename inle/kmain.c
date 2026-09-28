@@ -3,6 +3,7 @@
 #include "cats.h"
 #include "quay.h"
 #include "asmops.h"                    // the privileged instructions, both spellings
+#include "bput.h"
 #include <stdarg.h>
 #include <limits.h>
 #include <string.h>
@@ -20,11 +21,8 @@ uintptr_t khhdm;
 // so the identity map is the same pages without the bit, which is what code needs.
 char *ai_code_window(char *p) { return (char*)((uintptr_t) p - khhdm); }
 
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *kmem;
+#include "ffalloc.h"
+static struct mem *kmem;
 
 // total free RAM in kmem, in words -- meminit sums it; it bounds the collector (g->budget).
 static uintptr_t kram_words;
@@ -59,7 +57,7 @@ static struct font const kface = { (uint8_t const*) cleat_8x16, 8, 16 };
 
 
 
-// the seat hooks inle/fd.c branches to on a negative osv (weak no-ops there)
+// the seat hooks love/fd.c branches to on a negative osv (weak no-ops there)
 void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t),
      k_seat_init(void);                // inle/sys.c: arm environ + the std streams
 bool k_ready(int fd, int events);
@@ -67,12 +65,8 @@ bool k_ready(int fd, int events);
 // the panic-time console: the ring buffer (kcb) when there is one, mirrored to serial.
 // takes no l state, so it runs from a fault handler with no live `struct g`.
 void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
-void kputs(char const *s) { while (*s) kputc(*s++); }
-void kputn(uintptr_t n, int base) {
- static char const d[] = "0123456789abcdef";
- char buf[24]; int i = 0;
- do buf[i++] = d[n % base], n /= base; while (n);
- while (i) kputc(buf[--i]); }
+void kputs(char const *s) { bput_s(kputc, s); }
+void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
 extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 // the bracket, for the image codec's nif slice (love/snap.c's weak default answers none)
@@ -218,7 +212,7 @@ intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
  for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
  return (intptr_t) n; }
 
-// the port lanes ai_fd_port_vt (inle/fd.c) takes on a negative osv: the seat translation,
+// the port lanes ai_fd_port_vt (love/fd.c) takes on a negative osv: the seat translation,
 // then the rows. busy and end are distinct here, which read(2) cannot carry.
 intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  return k_row_read((int) ai_io_fd(g->io), dst, n); }
@@ -251,7 +245,7 @@ struct ai *k_port_flush(struct ai *g) {
  if (s && s->flush) s->flush(fd);
  return g; }
 
-// ai_fd_close's inle lane (inle/fd.c). statics have NULL close -- nothing to release.
+// ai_fd_close's inle lane (love/fd.c). statics have NULL close -- nothing to release.
 void k_row_close(int fd) {
  struct k_source *s = k_source(fd);
  if (s && s->close) s->close(fd); }
@@ -401,44 +395,9 @@ void kb_int(const uint8_t code) {
       return; } }
 
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
+void *kmallocw(uintptr_t n) { return ff_alloc(&kmem, n); }
 
-void *kmallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (kmem && kmem->len < n + 2 * Width(struct mem))
-    t = kmem,
-    kmem = t->next,
-    t->next = r,
-    r = t;
-  if (kmem)
-    kmem->len -= n + Width(struct mem),
-    t = after(kmem),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = kmem,
-    kmem = t;
-  return p; }
-
-void kfree(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (kmem && kmem < m)
-    t = kmem,
-    kmem = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (kmem != after(m)) m->next = kmem;
-    else m->len += kmem->len,
-         m->next = kmem->next;
-    kmem = m;
-    if (!r) return; } }
+void kfree(void *p) { ff_free(&kmem, p); }
 
 
 // --- the ramfs: the baked tree, and the copies writes make -----------------
@@ -451,7 +410,7 @@ struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 // kernel inflates that and walks the tar; rows point into the inflated block.
 static struct k_file const *k_bakes;
 static int k_bakes_n;
-#include "ustar.h"
+#include "lib/ustar.h"
 // the tree's rows live under /proc/src, read-only, so a module loads from bytes the shell
 // cannot have edited. the root holds inle/rootfs/, a second tar walked with no prefix.
 static char const k_home[] = "home";
@@ -1080,7 +1039,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
-// the open/close nifs are inle/posix.c's: its open(2)/close(2) land in inle/sys.c's arms,
+// the open/close nifs are love/posix.c's: its open(2)/close(2) land in inle/sys.c's arms,
 // so the ramfs answers the same door and a directory opens as a dents row.
 
 // --- the file nifs: stat, readdir, lseek, openfd ---------------------------
@@ -1341,7 +1300,7 @@ long k_fd_stat(int fd, struct k_st *st) {
   st->mode = 0020000 | 0620;                    // the console twins: a character device
   return 0; }
 
-// (getpid _) -> the running task's pid, a charm; the main task reads 0. inle/main.c's
+// (getpid _) -> the running task's pid, a charm; the main task reads 0. love/main.c's
 // getpid nif branches here on a negative osv, its own answer being the constant 1.
 lvm(k_lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
@@ -1858,7 +1817,7 @@ ai_noinline static int k_task_exit(struct ai *g) {
   g->next_wait_fd = -1;
   return 1; }
 
-// inle/main.c's quit nif branches here on a negative osv: the task/machine door.
+// love/main.c's quit nif branches here on a negative osv: the task/machine door.
 lvm(k_lvm_quit) {
   if (k_task_exit(g)) {
     // the love-machine _exit: the stack becomes just [code] and Ip a task-exit cell, the
@@ -1942,7 +1901,7 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"draw", {.k = nif_draw}},
   {"key", {.k = nif_key}},
   {"fault", {.k = nif_fault}},
-  // the posix surface is inle/posix.c's and inle/main.c's, linked whole: their nifs land in
+  // the posix surface is love/posix.c's and love/main.c's, linked whole: their nifs land in
   // this section and quit/getpid branch to k_lvm_quit / k_lvm_getpid on a negative osv.
   // rung 5: the raw block door. no host twin (the host has no raw disk), so the shapes are
   // love's: absence and refusal answer (), presence is the green sector count.
@@ -2224,7 +2183,7 @@ void kmain(void) {
  "   (hark argv) (hark1 argv 0)"
  "   (herald argv) (hark1 argv 1))"
   );
-  // a woken image's crew captured the seat-doors wrappers (inle/main.c), which read the live
+  // a woken image's crew captured the seat-doors wrappers (love/main.c), which read the live
   // door off the tablet -- aim them at this seat's shim. the egg book has no tablet.
   r = ai_evals_(r,
    "(? (elem 'seat-doors (names ()))"

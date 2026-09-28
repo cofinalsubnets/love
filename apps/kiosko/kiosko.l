@@ -33,9 +33,7 @@
 (borrow 'posix)
 ; the path clips (love/boot/post.l): segs and pclean under the request guard below.
 (borrow 'path)
-(: (joins l sp) (? (one? l) "" (one? >l) <l (<l + sp + joins >l sp))
-   (ends? s t)  (: n #s m #t (m <= n && snip s (n - m) n = t))
-   (splits s c) ((: (g i st acc) (? (i < #s) (s i = c ? (g (i + 1) (i + 1) (snip s st i . acc))
+(: (splits s c) ((: (g i st acc) (? (i < #s) (s i = c ? (g (i + 1) (i + 1) (snip s st i . acc))
                                                         (g (i + 1) st acc))
                                     (rev (snip s st #s . acc)))) 0 0 ())
    (dir? p)     (two? (readdir p))
@@ -114,7 +112,6 @@
    ; (lit? line) reads every request as a dead peer. and it cannot be a net test either --
    ; "" and () are both nothing. `=` is the one thing that tells them apart.
    (got? x)     !(x = ())
-   (sub? s t)   (: n #s m #t (g i) (i + m <= n ? (snip s i (i + m) = t ? 1 (g (i + 1)))) (g 0))
    ; the whole request head in one gulp, the same way a body is read. reading it a
    ; character at a time was the single biggest thing left between kiosko and darkhttpd:
    ; ~51us a request, because `(acc + ch)` reallocates the string on every byte, so a
@@ -128,7 +125,7 @@
    reqcap       32768
    (reqblk c)   (: buf (cask 2048)
                    (go acc)
-                   (? (sub? acc "\r\n\r\n" || sub? acc "\n\n") acc
+                   (? (has? acc "\r\n\r\n" || has? acc "\n\n") acc
                       (reqcap < #acc) acc
                       (: k (swig c buf)
                        (charm? k && 0 < k ? (go (acc + snip buf 0 k))

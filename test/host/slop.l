@@ -10,10 +10,8 @@
 
 (borrow 'slop)   ; the artifact's module, warm from the tree
 
-(: (find h n i) (i + tally n < 1 + tally h ? (n = snip h i (i + tally n) ? 1 (find h n (i + 1))) 0)
-   (has? h n) (find h n 0)
-   ; press k until the game says otherwise; answers the presses spent
-   (drive g p) (: (go n) (? (g 'over) n (p g) n (slop-key g 107, go (n + 1))) (go 0))
+; press k until the game says otherwise; answers the presses spent
+(: (drive g p) (: (go n) (? (g 'over) n (p g) n (slop-key g 107, go (n + 1))) (go 0))
    at-line (h \ (slop-sy h) <= (h 'climb))
    ; the pens tell the three grounds apart: grass below 94, road within, sand above
    (brown? c) (93 < <>c < 138)

@@ -116,6 +116,8 @@
                  (: j (span (i + 1) gidc?) (go j (['pct (snip s (i + 1) j)] . acc)))
                 ((c = 60 || c = 62) && i + 1 < n && s (i + 1) = c)
                  (go (i + 2) (['op (snip s i (i + 2))] . acc))
+                ((c = 33 || c = 61 || c = 60 || c = 62) && i + 1 < n && s (i + 1) = 61)   ; != == <= >=
+                 (go (i + 2) (['op (snip s i (i + 2))] . acc))
                 (go (i + 1) (['ch c] . acc)))))
       (go 0 ()))
 
@@ -133,12 +135,14 @@
                'bad)))
    ; a comparison answers gas's -1 for true, 0 for false, and binds loosest (the kernel's
    ; alternatives write `-(d > 0) * d`)
-   (gbinop t) (t @ ('ch 62) '(1 gt) ('ch 60) '(1 lt)
+   (gbinop t) (t @ ('ch 62) '(1 gt) ('ch 60) '(1 lt) ('op ">=") '(1 ge) ('op "<=") '(1 le)
+                   ('op "==") '(1 eq) ('op "!=") '(1 ne)
                    ('ch 124) '(2 or) ('ch 94) '(3 xor) ('ch 38) '(4 and)
                    ('op "<<") '(5 shl) ('op ">>") '(5 shr)
                    ('ch 43) '(6 add) ('ch 45) '(6 sub)
                    ('ch 42) '(7 mul) ('ch 47) '(7 div) ('ch 37) '(7 mod) ())
-   (gapply op a b) (op @ 'gt (a > b ? -1 0) 'lt (a < b ? -1 0)
+   (gapply op a b) (op @ 'gt (a > b ? -1 0) 'lt (a < b ? -1 0) 'ge (a >= b ? -1 0) 'le (a <= b ? -1 0)
+                        'eq (a = b ? -1 0) 'ne (a = b ? 0 -1)
                         'or (a | b) 'xor (a ^ b) 'and (a & b) 'shl (a << b) 'shr (a >> b)
                         'add (a + b) 'sub (a - b) 'mul (a * b) 'div (a // b) (a % b))
    (gclimb lhs ts minp)
@@ -164,7 +168,6 @@
    ;; gcc quotes a symbol in its Intel output: "main", and "printf"@PLT -- splice the quotes out
    (xa-unquote s) (: j (#s >= 2 && s 0 = 34 ? (xa-idx (snip s 1 #s) 34) -1)
                      (j < 0 ? s (snip s 1 (j + 1) + snip s (j + 2) #s)))
-   (xa-starts? s p) (#s >= #p && (snip s 0 #p) = p)
    ;; '#' or '//' starts a comment to end of line -- outside a quoted string
    (xa-decomment s) ((: (g i q) (? (i >= #s) s
                                     (s i = 34) (g (i + 1) !q)
@@ -212,7 +215,7 @@
    ;; the stems that take an at&T size suffix
    xa-sfxable '(mov add or and sub xor cmp test neg not inc dec push pop lea
                 imul mul div idiv adc sbb sal shl shr sar rol ror shld shrd xchg bswap bsr bsf
-                xadd cmpxchg bt bts btr btc
+                xadd cmpxchg bt bts btr btc tzcnt lzcnt popcnt
                 movabs cvttsd2si cvttss2si cvtsd2si cvtss2si cvtsi2sd cvtsi2ss)
    ;; the nullaries at&T spells c<from>t<to>, and Intel c<from><to>; the middle keeps Intel's
    xa-att-nil {'cltq 'cdqe  'cltd 'cdq  'cqto 'cqo  'cwtl 'cwde  'cbtw 'cbw  'cwtd 'cwd
@@ -305,7 +308,7 @@
    ;; --- the mnemonic: a size suffix off a suffixable stem, the extend family, the nullaries ---
    (at-mnw s) (: n #s l (name s)
       (? (xa-att-nil l) [(xa-att-nil l) 0]
-         (n = 6 && (xa-starts? s "movs" || xa-starts? s "movz")
+         (n = 6 && (starts? s "movs" || starts? s "movz")
             && (xa-sfxw (s 4) @ 0 0 8 0 1) && xa-sfxw (s 5) > 0)
          [(name (snip s 0 5)) (xa-sfxw (s 5))]
          (: w (n < 2 ? 0 (xa-sfxw (s (n - 1)))) st (w = 0 ? 'x (name (snip s 0 (n - 1))))
@@ -354,7 +357,7 @@
       (: k (xa-cut l)
          sz (k < 0 ? 0 (xa-ptrsz (snip l 0 k)))
          r  (sz = 0 ? "" (xa-trim (snip l k #l)))
-         (? (sz > 0 && xa-starts? r "ptr") (sz . (xa-trim (snip r 3 #r)))
+         (? (sz > 0 && starts? r "ptr") (sz . (xa-trim (snip r 3 #r)))
             (0 . l)))
    (in-term t) (: i (xa-idx t 42)                ; one bracket term -> (ix enc sc) (rg enc) (n v) (sym s) (rip)
       (? (t = "rip") ['rip]
@@ -398,9 +401,9 @@
             (wrap ['mem (peep st 'b -1) (peep st 'ix -1) (peep st 'sc 1) (peep st 'd 0)])))
    (in-operand mn0 t)                           ; -> (ptr-size . operand); mn0 settles a bare number
       (: l (lower t) p (in-ptr l) sz <p tail >p
-         (? (xa-starts? l "offset ")
+         (? (starts? l "offset ")
             (: v (xa-trim (snip t 7 #t))
-               v (xa-starts? (lower v) "flat:" ? (xa-trim (snip v 5 #v)) v)
+               v (starts? (lower v) "flat:" ? (xa-trim (snip v 5 #v)) v)
                (0 . ['ims (name (xa-unquote v))]))
             (xa-has? t 91) (sz . (in-mem (snip t (#t - #tail) #t)))
             (xa-has? tail 58)                                     ; QWORD PTR fs:40 -- a segment, an address
@@ -453,7 +456,7 @@
             (: sz (in-ptrsz mn w k)
                ((sz > 0 ? (xa-ptrword sz + " PTR ") "") + in-mem-op o)))
    (in-mn mn ops)
-      (? (xa-ext? mn && two? ops) (mn @ 'movsl "movsxd" (xa-starts? (show mn) "movz" ? "movzx" "movsx"))
+      (? (xa-ext? mn && two? ops) (mn @ 'movsl "movsxd" (starts? (show mn) "movz" ? "movzx" "movsx"))
          (show mn))
    (intel-show items)
       ("\t.intel_syntax noprefix\n"

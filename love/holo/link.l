@@ -144,11 +144,10 @@
    ; a section name -> its lane, by prefix: gcc splits a lane across many sections
    ; (.text.unlikely, .rodata.str1.1) and every piece lands in the same run of the image.
    ; love_nifs is ours and exact -- a packed array with a bracket, not a lane.
-   (ld-pre nm p) (: n #p (#nm >= n && snip nm 0 n = p))
    ; the unwinder's tables: .eh_frame at 64 bits, .ARM.exidx plus the .ARM.extab it points
    ; into on arm -- gcc splits each into one section per function, so both are prefix tests.
    (ld-unwind? nm)
-    (ld-pre nm ".eh_frame" || ld-pre nm ".ARM.exidx" || ld-pre nm ".ARM.extab")
+    (starts? nm ".eh_frame" || starts? nm ".ARM.exidx" || starts? nm ".ARM.extab")
    ; the lanes the linker knows by name; anything else allocated is a named lane
    ld-lanes '(text rodata data nifs bss image note boot)
    ; a compiler-named section becomes its own lane, keyed by the name, and lays as one
@@ -161,10 +160,10 @@
     (? (elem lane ld-lanes) lane
      (ty = 8) 'bss (0 < fl & 4) 'text (0 < fl & 1) 'data 'rodata)
    (ld-lane nm ty fl)
-    (? (ty = 8) (nm = ".bss" || ld-pre nm ".bss." ? 'bss (ld-any nm ty fl))
-       (nm = ".text" || ld-pre nm ".text.") 'text
-       (nm = ".rodata" || ld-pre nm ".rodata.") 'rodata
-       (nm = ".data" || ld-pre nm ".data.") 'data
+    (? (ty = 8) (nm = ".bss" || starts? nm ".bss." ? 'bss (ld-any nm ty fl))
+       (nm = ".text" || starts? nm ".text.") 'text
+       (nm = ".rodata" || starts? nm ".rodata.") 'rodata
+       (nm = ".data" || starts? nm ".data.") 'data
        (nm = "love_nifs") 'nifs
        (nm = ".love.image") 'image
        ; the kernel lanes (ldkern's names): the boot stub's page tables and
@@ -789,7 +788,7 @@
        ; hands over the difference already zeroed.
        bend (ldlayn 'bss (ldlay1 'bss dend objs) objs)
        ; .image last of all -- past .bss, so `love bake` can grow it at the tail of the file
-       ; (inle/image.c: the section that ends the segment is the one that can grow without
+       ; (love/image.c: the section that ends the segment is the one that can grow without
        ; moving anything). it takes a segment of its own, because .bss sits between it and
        ; everything written and one segment would carry that gap as file zeros. no .image
        ; section in the set and the lane costs nothing: one segment, as before.

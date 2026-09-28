@@ -22,7 +22,7 @@
 ; apps/forge.l on an input big enough to pay for loading it and answers byte for byte what
 ; the twin answers; it is in love rather than C because `(s i)` is a VM apply and the
 ; compare wants an instruction (test/gate/gzfind.l is the differential). gz-inflate is a door
-; onto love/gz.c's nif, falling back to gz-puff -- and that one is NOT a holo kernel: the C
+; onto love/lib/gz.c's nif, falling back to gz-puff -- and that one is NOT a holo kernel: the C
 ; indexes a table where puff walks a canonical code a bit at a time, and building the same
 ; table in love costs more than the whole C decode. test/host/gzc.l fuzzes that differential,
 ; because a corrupt block is where two decoders part.
@@ -67,7 +67,7 @@
        (? (charm? v) v
           (: w (trap (\ _ (: _ (f 0) 1)) () (\ a b 0)) _ (pin gz-door k w) w)))
 
-   ; inle/hash.c where the artifact carries it, the walk above where it does not.
+   ; love/lib/hash.c where the artifact carries it, the walk above where it does not.
    ; the walk is here as the statement of the polynomial and the oracle test/host/gzc.l holds
    ; the C to, not as the fallback.
    ; `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
@@ -519,7 +519,7 @@
        _ (gz-blocks (gz-finder n) s n j t head prev 0)
        _ (gz-align j t)
        ((slurp j) + ""))
-   ; love/gz.c where the artifact carries it, the coder above where it does not --
+   ; love/lib/gz.c where the artifact carries it, the coder above where it does not --
    ; and the C is a twin held to the bytes, so the door changes cost and never content.
    ; the love lane is the oracle test/host/gzc.l holds it to.
    (gz-deflate s)
@@ -712,7 +712,7 @@
                (? (!r || peep t 1 0) ()
                   <>r [1 (gz-take b)]
                   (go ()))))
-   ; the door. love/gz.c where the artifact carries it, gz-puff where it does not
+   ; the door. love/lib/gz.c where the artifact carries it, gz-puff where it does not
    ; and wherever it declines -- and a torn stream declines, so a torn one is read twice
    ; and answers () both times. `string?`, never `?`: a string of NULs sums to zero and
    ; would read as absent. The presence probe is gz-nif's, and why is written there.
@@ -815,7 +815,6 @@ no file, or a bare -, is the filter: stdin -> stdout"
                      (: _ (say err ("gzip: " + m)) _ (put err 10) (flush err)))
    (gzc-tell t m) (peep t 'v 0 && (: _ (say err m) _ (put err 10) (flush err)))
    (gzc-pad w s) (#s < w ? (gzc-pad w (" " + s)) s)
-   (gzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
    ; the raw clips, not posix's: no trailing slash is stripped first, so "a/b/" is
    ; a base of "" and a dir of "a/b/". a tar member wants the text it was handed
    (gzc-base p) (snip p (lastslash p) #p)
@@ -884,8 +883,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; .gz (or -S's) comes off; .tgz answers .tar, which is the one rename gzip does.
    (gzc-stem p suf)                    ; -> (1 stem) | ()
     (: n #p
-       (? (gzc-ends? p suf) [1 (snip p 0 (n - #suf))]
-          (gzc-ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]
+       (? (ends? p suf) [1 (snip p 0 (n - #suf))]
+          (ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]
           ()))
 
    ; --- one file, compressed -------------------------------------------------
@@ -893,7 +892,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: suf (peep t 'suf ".gz")
        r (uread p)
        (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
-          (gzc-ends? p suf && !(peep t 'c 0))
+          (ends? p suf && !(peep t 'c 0))
            (: _ (gzc-moan t (p + " already has " + suf + " suffix -- unchanged")) 0)
           (: s <>r
              st (stat p)

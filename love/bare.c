@@ -1,6 +1,6 @@
-// love/bare.c -- the null seat: what the runtime's doors answer with no inle/fd.c beside them.
+// love/bare.c -- the null seat: what the runtime's doors answer with no love/fd.c beside them.
 // the boards link it (inle/port.mk's love_m) and so does out/front -- a hosted love, love0 and
-// every kernel all carry inle/fd.c, whose bodies are the real ones.
+// every kernel all carry love/fd.c, whose bodies are the real ones.
 //
 // these six and no more, and every one of them is about the ABSENCE OF fd.c. a seat can
 // lack fd.c and still have hardware, so the horn's refusal is love/nohorn.c's and the OS

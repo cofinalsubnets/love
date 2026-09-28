@@ -195,7 +195,7 @@
        (: s (tkv <>>ts)
           ; only the stack pointer: gcc reserves the register for the whole TU and we
           ; cannot, so any register the allocator uses would answer whatever it last held
-          (? !(elem s '("rsp" "sp" "esp"))
+          (? !(elem s '("rsp" "sp" "esp" "%rsp" "%esp"))
              (blame >>>>ts ("a global register variable is taken on the stack pointer only, not '" + s + "'"))
              (: _ (pin (ps 'gregs) nm [s 'long]) >>>>ts))))
    ; `const` in the specifier run; it names the object only when the declarator adds no
@@ -1791,7 +1791,6 @@
     (: n (tally tmpl)
        (idx nm l k) (? !(two? l) () (= <l nm) k (idx nm >l (k + 1)))
        (rbr j) (? (n <= j) -1 ((tmpl j) = 93) j (rbr (j + 1)))
-       (alpha? c) (65 <= c <= 90 || 97 <= c <= 122)
        (go i acc)
         (: md ((i + 2) < n && alpha? (tmpl (i + 1)))     ; %c[ reads past the letter
            b (? md (i + 2) (i + 1))

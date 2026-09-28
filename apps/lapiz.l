@@ -94,8 +94,7 @@
 (borrow 'peg)
 
 ; --- little utils ---
-(: (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
-   (rep s n)    (? (n < 1) "" (s + rep s (n - 1)))
+(: (rep s n)    (? (n < 1) "" (s + rep s (n - 1)))
    (splitnl s)  ((: (g i st acc) (? (i < #s) (? (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
                                                       (g (i + 1) st acc))
                                     (st < i) (rev (snip s st i . acc))
@@ -240,7 +239,7 @@
    ; continues a block" cannot drift. law 1 is untouched -- a shower writes an item on one
    ; line and a blank line between blocks, so nothing it emits reads as a continuation.
    (litrim s) ((: (g i) (i < #s && sp? (s i) ? (g (i + 1)) (snip s i #s))) 0)
-   (lazyj p)  (joins (map litrim p) " ")
+   (lazyj p)  (join " " (map litrim p))
    ; a paragraph line must be neither blank nor a block opener -- and must eat a character
    ; (`one nonl?` before the span), else `many` spins forever on the empty tail.
    (p-line s y n)  ((tag cats                      ; ..`tag` does the wrapping; f yields the element
@@ -258,7 +257,7 @@
    d-body    (seqs [(skip defmark) (span nonl?) eol])
    d-item    (tag (\ p [(mdinl <p) (mdinl <>p)]) (seq d-term d-body))
    b-deflist (tag (\ p ['deflist p]) (many1 d-item))
-   (b-para s y n)  ((tag (\ p ['para (mdinl (joins p " "))]) (many1 p-line)) s y n)
+   (b-para s y n)  ((tag (\ p ['para (mdinl (join " " p))]) (many1 p-line)) s y n)
    ; the last resort, and what makes mdread TOTAL: `starter` claims more lines than the
    ; blocks it names can parse (a `--- text ---` that is not a rule, a `:   ` body with no
    ; term over it) and `p-line` refuses them too, so without this the block loop stops and
@@ -302,7 +301,7 @@
    (mfront kvs) ("---\n" + cats (map (p \ string <p + ": " + <>p + "\n") (mfilled kvs)) + "---\n")
    (mdefs l)    (catmap (it \ mdi <it + "\n:   " + mdi <>it + "\n") l)
    ; a table row, a cell's bars escaped so the row splits where it should
-   (tbar l)     ("| " + joins l " | " + " |")
+   (tbar l)     ("| " + join " | " l + " |")
    (tmcell i)   (: s (mdi i) (cats (map (k \ (? (s k = 124) "\\|" (string (s k)))) ^#s)))
    (tmal a)     (a @ 'l ":--" 'c ":-:" 'r "--:" "---")
    (mtable x)   (tbar (map tmcell (x 2)) + "\n" + tbar (map tmal (x 1)) + "\n"
@@ -318,7 +317,7 @@
                  'meta    (mfront <>x)
                  'rule    "---\n"
                  "")
-   (mdshow d) (joins (map mdb d) "\n"))                        ; each block ends in \n, so \n between = a blank line
+   (mdshow d) (join "\n" (map mdb d)))                        ; each block ends in \n, so \n between = a blank line
 
 ; ---------------------------------------------------------------- html, show
 (: (hq s) (:- (g 0 "") (g i acc) (i >= #s ? acc (: c (s i) (g (i + 1)
@@ -331,9 +330,9 @@
                   'link   ("<a href=\"" + hq <>>x + "\">" + hti <>x + "</a>")
                   'mark   ("<a id=\"" + hq <>x + "\"></a>")
                   "")
-   (hitems l t) (joins (map (i \ "<li>" + hti i + "</li>") l) "\n" + "\n</" + t + ">")
-   (hmeta kvs)  (joins (map (p \ "<meta name=\"" + string <p + "\" content=\"" + hq <>p + "\">") (mfilled kvs)) "\n")
-   (hdefs l)    ("<dl>\n" + joins (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l) "\n" + "\n</dl>")
+   (hitems l t) (join "\n" (map (i \ "<li>" + hti i + "</li>") l) + "\n</" + t + ">")
+   (hmeta kvs)  (join "\n" (map (p \ "<meta name=\"" + string <p + "\" content=\"" + hq <>p + "\">") (mfilled kvs)))
+   (hdefs l)    ("<dl>\n" + join "\n" (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l) + "\n</dl>")
    (hal a)      (a @ 'l " align=\"left\"" 'c " align=\"center\"" 'r " align=\"right\"" "")
    (hcells t al cs) (? (two? cs) ("<" + t + hal <al + ">" + hti <cs + "</" + t + ">" + hcells t >al >cs) "")
    (hrow t al cs) ("<tr>" + hcells t al cs + "</tr>")
@@ -351,7 +350,7 @@
                  'meta    (hmeta <>x)
                  'rule    "<hr>"
                  "")
-   (htshow d) (joins (map htb d) "\n"))
+   (htshow d) (join "\n" (map htb d)))
 
 ; ---------------------------------------------------------------- html entities
 ; the named entities a document actually spells, and the numeric forms. an unknown name
@@ -544,6 +543,8 @@
    (halt s k e)
     (: v (hattr s k e "alt")
        (? (string? v && 0 < #v) ("[" + hesc [[60 "&lt;"]] v + "]") ""))
+   ; ..and a mark " img SRC" ahead of it, on the line a viewer can draw it under
+   (himg s k e) (: v (hval s k e "src") ((? (0 < #v) (hmk (" img " + v)) "") + halt s k e))
    ; s with each byte the table names spelled its way
    (hesc tb s)
     (: o (jug 0)
@@ -572,7 +573,7 @@
                   (? (t = "form") (: _ (pin fs 'f (? op? (hform s k (e - 1) e) (tablet 0))) (say o mk, go e ba))
                      (t = "input") (say o (mk + field i), go e ba)
                      (t = "textarea") (say o (mk + field i), go (? op? (hpast s e t) e) ba)
-                     (t = "img") (say o (mk + (? op? (halt s k (e - 1)) "")), go e ba)
+                     (t = "img") (say o (mk + (? op? (himg s k (e - 1)) "")), go e ba)
                      (elem t hkill) (go (? op? (hpast s e t) e) ba)
                      (elem t hbare) (say o mk, go e ba)
                      (t = "br") (say o "</p><p>", go e ba)
@@ -690,7 +691,7 @@
                                                    (? (one? >cs) c (c + "  " + g >as >wz >cs))))
                    (g al ws r))
        (strip s) (: (b j) (? (0 < j && s (j - 1) = 32) (b (j - 1)) j) (snip s 0 (b #s)))
-       ([(strip (line <rows)) (joins (map (n \ rep "-" n) ws) "  ")] + map (r \ strip (line r)) >rows)))
+       ([(strip (line <rows)) (join "  " (map (n \ rep "-" n) ws))] + map (r \ strip (line r)) >rows)))
 
 ; ---------------------------------------------------------------- roff (man), show
 ; man macros carry sections two deep, literal blocks with no language, and no rule or
@@ -724,7 +725,7 @@
    ; roff has no cells here: a table that fits a page is its laid columns as a display,
    ; and a wider one each row a paragraph of head: cell lines, which the page can fill
    (rcell hc) (? (0 < #<hc) (<hc + ": " + tplain <>hc) (tplain <>hc))
-   (rrow hd r) (".PP\n" + joins (map (hc \ rline (rq (rcell hc))) (zipm hd r)) "\n.br\n" + "\n")
+   (rrow hd r) (".PP\n" + join "\n.br\n" (map (hc \ rline (rq (rcell hc))) (zipm hd r)) + "\n")
    (rtable x)
     (: ls (tblines x)
        (? (foldl (\ a l (a && tvw l <= 78)) 1 ls) (rfb ['fence "" (catmap (ln \ ln + "\n") ls)])
@@ -968,8 +969,8 @@
    r-filled (tag (mrg * joinfr) (many1 r-fline))
 
    r-th   (tag (\ p ['meta (mnorm (zipm metakeys (rargs <p)))]) (rmacl ".TH"))
-   r-sh   (tag (\ p ['head 1 (rfinl (joins (rargs <p) " "))]) (rmacl ".SH"))
-   r-ss   (tag (\ p ['head 2 (rfinl (joins (rargs <p) " "))]) (rmacl ".SS"))
+   r-sh   (tag (\ p ['head 1 (rfinl (join " " (rargs <p)))]) (rmacl ".SH"))
+   r-ss   (tag (\ p ['head 2 (rfinl (join " " (rargs <p)))]) (rmacl ".SS"))
    ; a .pp with no filled run behind it spaces a display; `opt` gives it an empty payload,
    ; so it contributes no block.
    r-pp   (seqs [(skip (alts [(lit ".PP") (lit ".LP")])) (skip (span nonl?)) (skip (lit "\n"))

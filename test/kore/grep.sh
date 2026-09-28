@@ -100,4 +100,22 @@ for c in "egrep a+b" "fgrep a+b" "egrep -c x|a" "fgrep -v x.y"; do
   set -- $c
   "$@" "$ho/.gr-eg" > "$g" 2>/dev/null; korerun "$@" "$ho/.gr-eg" > "$o" 2>/dev/null; same "$c"
 done
+# a pattern reads utf-8 by character: GNU's answers under a utf-8 locale, spelled out so
+# the gate's own locale cannot move them
+gc() { want=$1; shift; got=$(printf '日本語 éé\na\377b\n' | korerun grep -ao "$@" | tr '\n' '|')
+       [ "$got" = "$want" ] || fail "kore grep -o $* by character: got [$got] want [$want]"; }
+gc '本語|' '本.'
+gc 'éé|' 'é*'
+gc '日本|éé|a|b|' -E '[^ 語]+'
+gc '語 é|' '[à-語][^a]é'
+gc '' 'a.b'
+gc '' 'a[^x]b'
+# the POSIX classes past ascii, and -i by gnulib's fold (ſ takes s, İ does not take i)
+gi() { want=$1; shift; got=$(printf 'naïve ٣—x\nSTRAßE ſ İ\n' | korerun grep -o "$@" | tr '\n' '|')
+       [ "$got" = "$want" ] || fail "kore grep -o $* by class: got [$got] want [$want]"; }
+gi 'naïve|٣|x|STRAßE|ſ|İ|' '[[:alpha:]]*'
+gi '—|' '[[:punct:]]'
+gi 'STRAßE|' -i 'straße'
+gi 'S|ſ|' -i 's'
+gi '' -i 'i'
 echo "kore: grep (BRE + ERE batteries + the clustered flag matrix GNU-identical, the exit triple, egrep/fgrep) ok"

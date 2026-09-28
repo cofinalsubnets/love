@@ -13,7 +13,7 @@
 # file. the lanes arrive in the environment because the object list already has the
 # variadic tail -- gate_love_c / gate_host_c / gate_arch_c / gate_kern_c, the Makefile's own.
 #
-# gate_seat_c is inle/noblob.c: this pair links the kernel but lays no out/src.o and no
+# gate_seat_c is love/noblob.c: this pair links the kernel but lays no out/src.o and no
 # out/moonlibc.o -- it rebuilds every TU itself and carries no archives -- so it answers
 # the carried-archive symbols itself. it rides the OBJ list too, or love1 has a body
 # love2's link cannot find.

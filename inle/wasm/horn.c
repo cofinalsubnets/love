@@ -19,7 +19,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 int k_horn_open(int rate) { return (int) __ai_sys(hc_horn_open, rate, 0, 0, 0, 0, 0); }
 
 // 16-bit stereo bytes, as many as fit behind what has played. a short answer is the ring
-// full, which inle/horn.c's port turns into backpressure and never a dropped frame.
+// full, which love/horn.c's port turns into backpressure and never a dropped frame.
 intptr_t k_horn_write(unsigned char const *src, uintptr_t n) {
   return (intptr_t) __ai_sys(hc_horn_write, (long) src, (long) n, 0, 0, 0, 0); }
 

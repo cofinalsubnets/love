@@ -9,6 +9,7 @@
 // double-bake runs under emulation -- then the driver tail asserts a few
 // spec laws and exits through m7exit, so `make test_mps2` sees 42.
 #include "../../love/love.h"
+#include "../bput.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -27,21 +28,18 @@ static void m7_exit(uintptr_t code) {
   sh_call(SH_EXIT_X, (uintptr_t) blk);
   for (;;) ; }
 
-static void sh_putc(char c) { sh_call(SH_WRITEC, (uintptr_t) &c); }
+static void sh_putc(int c) { char b = (char) c; sh_call(SH_WRITEC, (uintptr_t) &b); }
 
 uintptr_t ai_clock(void) { return sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
 
 // any fault vectors here (start.S): name the stacked pc/lr, then exit 98 --
 // loud and greppable where the bare M7 would sit in a lockup.
-static void sh_hex(uintptr_t v) {
-  int i;
-  for (i = 28; i >= 0; i -= 4) sh_putc("0123456789abcdef"[(v >> i) & 15]); }
+static void sh_hex(uintptr_t v) { bput_x(sh_putc, v, 8); }
 
 void fault_report(uintptr_t *frame) {    // frame: r0 r1 r2 r3 r12 lr pc xPSR
-  char const *s;
-  for (s = "\n; fault pc="; *s; s++) sh_putc(*s);
+  bput_s(sh_putc, "\n; fault pc=");
   sh_hex(frame[6]);
-  for (s = " lr="; *s; s++) sh_putc(*s);
+  bput_s(sh_putc, " lr=");
   sh_hex(frame[5]);
   sh_putc('\n');
   m7_exit(98); }
@@ -65,7 +63,7 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-// the readiness law (inle/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// the readiness law (love/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy (lvm_sound's park law
 // spins sound -> yield -> sound forever: the Enter-key freeze, walled here
@@ -99,7 +97,7 @@ struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_b
 struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-#include "../fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+#include "../../love/fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
 
 // --- the exit builtin -----------------------------------------------------
 // (m7exit code) -- leave the machine through semihosting with `code` as the
@@ -112,60 +110,21 @@ static union u const nif_m7exit[] = {{ai_m7exit}, {lvm_ret0}};
 static struct ai_def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 
 // --- the arena ------------------------------------------------------------
-// The teensy first-fit free list, fed the AN500's 16 MB PSRAM (mps.ram at
+// The first-fit free list (ffalloc.h), fed the AN500's 16 MB PSRAM (mps.ram at
 // 0x60000000) by address -- no linker section, the region is just there.
-// Lengths in words, header included.
-static struct mem {
-  struct mem *next;
-  uintptr_t len;
-  uintptr_t _[];
-} *freelist;
+#include "../ffalloc.h"
+static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x60000000u)
 #define POOL_BYTES ((16u << 20) - 64)   // 64B short of the region edge: a one-past
                                         // read at a block boundary stays inside PSRAM
                                         // (a bus fault at 0x61000000 otherwise)
 
-static ai_inline struct mem *after(struct mem *r) {
-  return (struct mem*) ((uintptr_t*) r + r->len); }
-
-static void *mallocw(uintptr_t n) {
-  if (!n) return NULL;
-  void *p = NULL;
-  struct mem *r = NULL, *t;
-  while (freelist && freelist->len < n + 2 * Width(struct mem))
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  if (freelist)
-    freelist->len -= n + Width(struct mem),
-    t = after(freelist),
-    t->len = Width(struct mem) + n,
-    p = t->_;
-  while (r)
-    t = r,
-    r = t->next,
-    t->next = freelist,
-    freelist = t;
-  return p; }
+static void *mallocw(uintptr_t n) { return ff_alloc(&freelist, n); }
 
 void *malloc(size_t n) { return mallocw(b2w(n)); }
 
-void free(void *p) {
-  if (!p) return;
-  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (freelist && freelist < m)
-    t = freelist,
-    freelist = t->next,
-    t->next = r,
-    r = t;
-  for (;; m = r, r = r->next) {
-    if (freelist != after(m)) m->next = freelist;
-    else m->len += freelist->len,
-         m->next = freelist->next;
-    freelist = m;
-    if (!r) return; } }
+void free(void *p) { ff_free(&freelist, p); }
 
 #ifdef WAKER
 // --- the waker (-D WAKER): the CROSS-BINARY wake proof ----------------------
@@ -205,9 +164,13 @@ int main(void) {
   if (sh_call(SH_READ, (uintptr_t) rd)) { sh_puts("; short read\n"); m7_exit(4); }
   uintptr_t cl[1] = { (uintptr_t) fd };
   sh_call(SH_CLOSE, (uintptr_t) cl);
+  uintptr_t t0 = ai_clock();
   struct ai *g = ai_image_load(buf, len);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
   g = ai_defn(g, defs, countof(defs));
+  if (ai_ok(g = ai_push(g, 1, putcharm((intptr_t) (ai_clock() - t0))))) {   // born: this wake's cost
+    g = ai_defv(g, "born");
+    if (ai_ok(g)) g->sp++; }
   if (ai_ok(g)) g->budget = freelist->len / 4;
   struct ai *r = ai_evals_(g,
     "(: ok (&& "
@@ -282,7 +245,8 @@ int main(void) {
 #else
     "(borrow 'cli)"
 #endif
-    "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
+    "(: _ (pull book 'born 0)"            // this boot's cost, not the image's: off before the dump
+    "   _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {
     if (ai_code_of(r) == ai_status_scare) ai_scare_face(r);
     m7_exit(3); }

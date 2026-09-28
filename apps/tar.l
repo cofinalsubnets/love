@@ -83,7 +83,7 @@
         (pour q 0 m (k + 1) (n - k - 1),
          [(string p) (string q)]))))))
 
-   ; inle/hash.c's streaming state: 105 bytes, opaque, allocated here because the
+   ; love/lib/hash.c's streaming state: 105 bytes, opaque, allocated here because the
    ; nifs do not allocate -- they fold into a cask the caller owns.
    tar-shast 105
 
@@ -122,7 +122,7 @@
    ; --- the archive as a stream ----------------------------------------------
    ; tar-pack's answer exists to be looked at once and dropped, and for a source tree
    ; that is megabytes held to be hashed. tar-hash is the same archive fed through a
-   ; resumable sha-256 (inle/hash.c) a bufferful at a time: the header, then the file's
+   ; resumable sha-256 (love/lib/hash.c) a bufferful at a time: the header, then the file's
    ; bytes read straight off 'path, then the pad -- so the peak is one cask and not one
    ; archive. It answers what (sha256 (tar-pack es)) answers, and test/gate/targz.sh
    ; holds the two together over a tree with the awkward shapes in it.
@@ -134,6 +134,12 @@
    ; buffer to take the corner a read filled -- 64K for a 12-byte file, and over a
    ; source tree more copying than the archive it is hashing.
    (tar-feed h buf e)                       ; feed one file's body + pad; 1 | ()
+    (? !(string? (tar-get e 'path ()))      ; a fat entry, no file behind it
+       (: b (tar-get e 'body "")
+          _ (sha256-feed h b)
+          r (#b % tar-blk)
+          (? r (sha256-feed h * string * cask $ tar-blk - r) 0)
+          1)
     (: n (tar-get e 'size 0)
        q (? (0 < n) (open (tar-get e 'path "") "r") 0)
        (? (0 = n) 1
@@ -146,7 +152,7 @@
                            (go (left - k2))))))
              ok (go n)
              _ (close q)
-             (ok && (: r (n % tar-blk) (r && sha256-feed h * string * cask $ tar-blk - r, 1))))))
+             (ok && (: r (n % tar-blk) (r && sha256-feed h * string * cask $ tar-blk - r, 1)))))))
    (tar-hash es)                            ; -> the 64-char digest | ()
     (: h (cask tar-shast)
        _ (sha256-init h)
@@ -348,7 +354,6 @@
 (borrow 'posix)
 (: (tarc-die m) (udie 2 ("tar: " + m))
    (tarc-warn m) (say err ("tar: " + m + "\n"), flush err)
-   (tarc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
    (tarc-lazy m f what) (: b (cite m f) (lit? b ? b (tarc-die ("no " + what + " aboard"))))
 
    ; --- the codecs: 'z 'j 'J, and () for a bare tar ---------------------------------
@@ -367,9 +372,9 @@
        (6 <= #b && b 0 = 253 && snip b 1 5 = "7zXZ" && b 5 = 0) 'J
        ())
    (tarc-bysuf p)
-    (? (tarc-ends? p ".gz" || tarc-ends? p ".tgz" || tarc-ends? p ".taz") 'z
-       (tarc-ends? p ".bz2" || tarc-ends? p ".tbz" || tarc-ends? p ".tbz2" || tarc-ends? p ".tb2") 'j
-       (tarc-ends? p ".xz" || tarc-ends? p ".txz") 'J
+    (? (ends? p ".gz" || ends? p ".tgz" || ends? p ".taz") 'z
+       (ends? p ".bz2" || ends? p ".tbz" || ends? p ".tbz2" || ends? p ".tb2") 'j
+       (ends? p ".xz" || ends? p ".txz") 'J
        ())
    (tarc-zname z) (z @ 'z "gzip" 'j "bzip2" "xz")
 

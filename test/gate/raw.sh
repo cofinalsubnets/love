@@ -18,7 +18,7 @@
 # tail -- gate_love_c / gate_host_c, common.mk's own. one folder, named lanes: a
 # gate that globs a directory instead is a second authority on what the binary is.
 #
-# gate_seat_c is inle/nokern.c + inle/noblob.c: this link has no kmain.c under it and takes
+# gate_seat_c is love/user/nokern.c + love/noblob.c: this link has no kmain.c under it and takes
 # neither out/src.o nor out/moonlibc.o, so it answers the kernel's doors and the carried
 # archives itself. Without them the bind fails on symbols nothing defines -- which is
 # the failure the weak defaults used to hide.

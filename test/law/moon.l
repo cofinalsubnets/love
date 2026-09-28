@@ -822,7 +822,7 @@
       ; form's first: a body that dies on line 5 must not point at line 2
       (: g (cparse <>(clex "int ok(void) { return 1; }\nint bad(void)\n{\n  int x = 1;\n  x = x + ;\n  return x;\n}\n"))
          (gripe? g && (gline g = 5)))
-      ; adjacent string literals join across an include boundary -- inle/main.c
+      ; adjacent string literals join across an include boundary -- love/main.c
       ; splices the egg exactly so, and the file marks stay invisible to phase 6
       (= <>(pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n")
          '(prog ((gdecl (("s" (ptr char) (str "abc")))))))
@@ -1326,6 +1326,33 @@
       (elem '(ld4 r0 sp 0) cvf)                   ; ...and re-extends from its slot
       (elem '(sx4 r4) r4f)                        ; f9: nb rides r4 on a64
       (elem '(cmp r6 r4) r4f))                    ; ...the inner bound register-register
+   ; -- the riscv frame: a body naming no sp, fp or lr and making no call lays no frame; on wasm a call
+   ; leaves every local but its answers, so there a call keeps no frame either, a home off the argument
+   ; registers rides it unspilled, and a cs seat is unsaved and priced as a pool seat
+   ufs "typedef long word; struct ai; union u { struct ai *(*ap)(struct ai *, union u *, word *, word *); word x; union u *m; }; struct ai { union u *ip; word *hp, *sp; word pad[4]; word b; }; struct ai *lvm_gc(struct ai *g, union u *Ip, word *Hp, word *Sp); struct ai *uf(struct ai *g, union u *Ip, word *Hp, word *Sp) { if (Sp < Hp + 1) { g->b = 1; return lvm_gc(g, Ip, Hp, Sp); } *--Sp = Ip[1].x; Ip = Ip[2].m; return Ip->ap(g, Ip, Hp, Sp); } int main() { return 0; }"
+   ufr (fnf 'uf <>(cgt ufs 'rv64))
+   ufw (fnf 'uf <>(cgt ufs 'wasm))
+   hks "long k(long); long h(long a) { long b = a * 3; k(a); k(b); return b + a; } int main() { return 0; }"
+   hkr (fnf 'h <>(cgt hks 'rv64))
+   hkw (fnf 'h <>(cgt hks 'wasm))
+   hcs "long k(long); long h(long a) { long b = a * 3; k(b); k(b); k(b); return b; } int main() { return 0; }"
+   hcr (fnf 'h <>(cgt hcs 'rv64))
+   hcw (fnf 'h <>(cgt hcs 'wasm))
+   pcs "long k(long *g); long p(long *g, long *ip, long *hp, long *sp) { if (sp < hp + 8) return k(g); long *c = hp; long *j = hp; hp += 4; long n = ip[1] >> 1; if (n > 2) { hp += 2; j += 2; c[0] = 1; c[1] = n - 1; } j[0] = 2; j[1] = *sp++; j[2] = (long) (ip + 2); ip = (long *) *sp; sp[0] = (long) c + (j + 3 - c); g[0] = (long) hp; return k((long *) ip[0]); } int main() { return 0; }"
+   pcr (fnf 'p <>(cgt pcs 'rv64))
+   pcw (fnf 'p <>(cgt pcs 'wasm))
+   (fpless? l) !(filter (f \ elem 'fp f) l)
+   _ (test
+      (two? ufr) (two? ufw) (two? hkr) (two? hkw) (two? hcr) (two? hcw) (two? pcr) (two? pcw)
+      !(elem '(push lr) ufr) (elem '(jmpr r12) ufr) (fpless? ufr)   ; uf: no frame on riscv...
+      !(elem '(push lr) ufw) (fpless? ufw)                          ; ...nor on wasm
+      (elem '(push lr) hkr) (elem '(st fp 8 r9) hkr)                ; h calls: riscv keeps its link, spills b around each call
+      !(elem '(push lr) hkw) (fpless? hkw)                          ; wasm: neither
+      (2 = #(filter (f \ f = '(call k)) hkw))
+      (elem '(st fp 16 r15) hcr) (elem '(ld r15 fp 16) hcr)         ; a cs seat saves on riscv...
+      (elem '(imul r15 r0 3) hcw) (fpless? hcw)                     ; ...not on wasm
+      (elem '(st fp 8 r0) pcr)                                      ; p's n (3 touches, 2 exits) spills on riscv...
+      (elem '(mov r13 r0) pcw) (fpless? pcw))                       ; ...takes a cs seat on wasm, and p lays no frame
    ; -- narrow homes: a bool/char/short local homes like an int, canonically -- a bool's cvt
    ; converts, so the seat holds 0/1 and a read is one register compare; over a set the cvt is
    ; the identity and rezx drops it. a name declared twice (sibling blocks) is respelled ahead

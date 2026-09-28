@@ -100,7 +100,7 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
 | apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
-| apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (inle/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (inle/bz2.c), tar, cpio |
+| apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (love/lib/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (love/lib/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
@@ -135,9 +135,9 @@ doc/misc/moon.md), `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
   quits with what it answers (doc/misc/moon.md). nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
   test/kore/prop-status.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
-* **the nif lane.** fs effects ride inle/posix.c (app-glob LvNif, no core edit) and its
+* **the nif lane.** fs effects ride love/posix.c (app-glob LvNif, no core edit) and its
   `posix_` conventions: an effect op answers () ok | an errno nom | 'badarg misuse; a
-  value op answers the value | () absence | a nom. inle/posix.c holds rename symlink readlink chmod chown utime
+  value op answers the value | () absence | a nom. love/posix.c holds rename symlink readlink chmod chown utime
   umask rmdir hardlink (`link` the word belongs to the chain ctor). test/fs.l smokes them
   under test_hostnif. `!e` is the success test, `nom? e` the failure test, and a
   specific errno matches by name (mv's `(= e 'exdev)` lane). test/kore/fs.sh
@@ -227,7 +227,7 @@ space.
 
 ## the process tools (apps/kore/proc.l)
 
-One nif of their own — `rusage` (inle/posix.c: `(rusage who)` -> the user and sys microseconds
+One nif of their own — `rusage` (love/posix.c: `(rusage who)` -> the user and sys microseconds
 of this process or of the children it has reaped) — and otherwise environ/getenv/setenv,
 spawn (pid | the failure's nom; a child that cannot exec
 _exit(127)s) + wait, still (posix.c's kill), rest (core sleep, ms). env prints the world or
@@ -251,7 +251,7 @@ and dashes the other two rather than call two zeroes a measurement.
 
 ## the niceness, the terminal, the utmp (apps/kore/proc.l)
 
-Four nifs in inle/posix.c: `(prio which who)` and `(setprio which who n)` over get/setpriority
+Four nifs in love/posix.c: `(prio which who)` and `(setprio which who n)` over get/setpriority
 (moonlibc answers linux's `20 - nice` and a BSD's raw nice as one face), and `(termios fd)` /
 `(settermios fd l)`, the line discipline as a flat list in linux's canonical bits, which
 moonlibc respells for a BSD (a BSD's 0xff "disabled" reads as 0, and the characters linux has
@@ -357,13 +357,13 @@ toybox's (`-a` any length 128..512, 224 by default, `-S` shake's pad) with busyb
 of any length it could have written); the gate holds both directions, GNU reading ours and
 ours reading GNU's.
 
-The digests themselves are **inle/hash.c** (`md5`, `sha1`, the four sha-2s, `sha3`,
+The digests themselves are **love/lib/hash.c** (`md5`, `sha1`, the four sha-2s, `sha3`,
 `blake2b`, `bsdsum`, `crc32` and `cksum` — the last being POSIX's own crc, a different polynomial from `crc32`'s
 and with the byte count folded in, which is why an empty file is `4294967295 0`). md5, sha-1
 and the sha-2s share one buffering and one state layout; sha-512 keeps its 64-bit words as
 32-bit halves to ride it, and blake2b, which pads nothing and flags its last block, has its
 own. There is no love statement of the digests, so an image
-that carries no host nif — the kernel's, which compiles no `inle/*.c` — answers 2 and names the
+that carries no host nif — the kernel's, which compiles no `love/*.c` — answers 2 and names the
 digest it is missing rather than saying a wrong number. The probe is asked at first call and
 kept, never at load: this file is baked by a love that HAS the nifs.
 
@@ -377,7 +377,7 @@ STRICTER than GNU's (it wants the path to exist), which is GNU's `readlink -e`; 
 the GNU-shaped door. `link` and `unlink` are the two syscalls said plainly, no face on them.
 
 `stat` (bare, or `-c FORMAT` / `--printf=`, which reads the escapes and adds no newline where
-`-c` does neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: inle/posix.c's `stat`
+`-c` does neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: love/posix.c's `stat`
 answers `(size mtime mode ns uid gid nlink blocks ino atime ctime dev rdev blksize)` and `lstat`
 the same of the link itself. The tail
 is append-only and the KERNEL's own stat (inle/kmain.c) answers the first four alone — an image
@@ -597,6 +597,12 @@ keys over less's:
   page in latin-1 or windows-1252, by its header or else its own `<meta>`, is converted to
   utf-8. A `<base href>` is what the page's links resolve against, and an image shows as its
   alt text.
+* **A PNG is drawn under its alt text** on a terminal, two pixels to a cell: the upper
+  pixel is the colour of a `▀`, the lower its background, 24-bit where `COLORTERM` says the
+  terminal takes it and the 256-colour cube otherwise. A picture is fetched when it comes
+  within a screen of the view, shrunk to the page's width and the screen's height (never
+  enlarged), and kept by URL for the session. The rows are text, so they scroll, page and
+  re-lay with the rest.
 * **Resizing the window lays the page out again at the new width**, keeping the first link
   that was on the screen at the same place.
 * **`gopher://` opens gopher** (RFC 1436, its URLs RFC 4266's). A menu's text lines keep
@@ -613,7 +619,7 @@ keys over less's:
   is refused with the line to delete to accept it. When a server asks for a client
   certificate, an empty one goes back.
 
-Absent: forms that POST, scripts, cookies, the images themselves, charsets other than
+Absent: forms that POST, scripts, cookies, pictures other than PNG, charsets other than
 utf-8, latin-1 and windows-1252, and gemini's client certificates. An https peer is not
 verified (wget's client). The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.

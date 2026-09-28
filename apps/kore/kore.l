@@ -43,8 +43,8 @@
 ;                                    httpd, kiosko under busybox's flags, nslookup, ping, ping6
 ;   kore ssh|sshd|scp ..             the ssh client and server, and scp over them (apps/ssh/cli.l)
 ;   kore gzip|gunzip|zcat [-cdfkl..]  the RFC 1952 container (apps/gz.l), xz|unxz|xzcat the .xz
-;                                    one (apps/xz.l, inle/xz.c's LZMA2), bzip2|bunzip2|bzcat
-;                                    (apps/bz2.l, inle/bz2.c); tar and cpio the
+;                                    one (apps/xz.l, love/lib/xz.c's LZMA2), bzip2|bunzip2|bzcat
+;                                    (apps/bz2.l, love/lib/bz2.c); tar and cpio the
 ;   kore tar {c|x|t}[vzjJ] -f A      two containers over it (apps/tar.l, apps/cpio.l). these
 ;   kore cpio {-o|-i|-t} [-H newc]    ride love's own verb rail too -- one main, two doors
 ;   kore dd [if= of= bs= count= skip=]   blocks in, blocks out; no seek=, see core.l
@@ -65,6 +65,7 @@
 ; leaves deep through `udie`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
+        ww-art ww-splice ww-marks ww-pictures
         telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main

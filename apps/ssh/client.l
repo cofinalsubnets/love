@@ -25,7 +25,6 @@
    ; --- the wire's encodings (RFC 4251 §5) ---
    (be32 s i) ((rd16 s i << 16) + rd16 s (i + 2))
    (sstr s) (u32 #s + s)
-   (join sep l) (? (two? l) (foldl (a \ x \ a + sep + x) <l >l) "")
    (names l) (sstr (join "," l))
    (split s ch)
     (: (go i j a) (? (#s <= i) (rev (snip s j i . a))

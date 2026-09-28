@@ -46,7 +46,6 @@
                            (two? (uread (<rs + "lib/moonlibc/core.c"))) <rs
                            (go >rs))
                 (go (mroots ())))
-   (pfx? s p) (: n #p (n <= #s && snip s 0 n = p))
    ; a path with its . and .. components folded away, for the table lookups
    ; below -- "lib/moonlibc/sys/../impl.h" and "lib/moonlibc/impl.h" are one key.
    (pnorm p)
@@ -91,7 +90,7 @@
                    (m ? (: c (cask m) _ (pour c 0 s o m) (string c)) ""))
    ; noms are "[./]<top>/apps/moon/.."; the top strips per-entry (the archive
    ; leads with "./")
-   (strip1 nom) (: s (pfx? nom "./" ? (snip nom 2 #nom) nom)
+   (strip1 nom) (: s (starts? nom "./" ? (snip nom 2 #nom) nom)
                    m #s
                    (go i) (? (m <= i) ""
                              (s i = 47) (snip s (i + 1) m)
@@ -121,9 +120,9 @@
        (? !(string? u) ()
           (foldl (\ a e
                    (: rel (strip1 <e)
-                      (? !(pfx? rel mtree) a
+                      (? !(starts? rel mtree) a
                          (: sub (snip rel #mtree #rel)
-                            (? (!(pfx? sub "include/") && !(pfx? sub "lib/")) a
+                            (? (!(starts? sub "include/") && !(starts? sub "lib/")) a
                                (pin a sub <>e))))))
                  {} (tarfiles u))))
    ; the first three of a name list, comma-joined, with a count of the rest --
@@ -696,7 +695,7 @@
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
             (\ _ (sha256 ("moon-rtc 1\n" + (mcsrctext home)))))
    ; the carried runtime: the build lays each ISA's compiled archive beside the source blob
-   ; (tools/mkrt.l; inle/src.c answers runtime-gz), so a link owes no member compiles -- the
+   ; (tools/mkrt.l; love/src.c answers runtime-gz), so a link owes no member compiles -- the
    ; bare door's ~28 s becomes a read. only when the identity matches: the blob lane's
    ; identity is the carried source, and a disk home serves iff its slice hashes to the
    ; stamped id (a laid seed tree does; an edited dev tree does not, and falls through to the
@@ -769,7 +768,7 @@
            ; member's "path" is its key; cc-parse reads it back from vb)
            (foldl (\ a k (: sub (snip k #d #k)
                             (dotc? sub ? (a + [[(dotobj (swap47 sub)) k]]) a)))
-                  () (sort (filter (k \ pfx? k d) (keys vb)))))
+                  () (sort (filter (k \ starts? k d) (keys vb)))))
        ((map ((a b) \ [a b [inc]]) (nlmems ndir))
         + (elem tgt '(x64 a64 rv64) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it), and the sys
@@ -974,7 +973,6 @@
    ; -f codegen-hygiene family -- so `CC=mooncc` drives a make recipe written for gcc/clang
    ; unchanged. what would change the artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp,,
    ; whose payload is real arguments.
-   (pfx? a p) (: n #p (n <= #a && snip a 0 n = p))
    ; -lm and its family ride through too: the driver pulls its runtime by need, so the
    ; libc/libm/libdl a recipe asks for is already in the artifact before it asks. a name we
    ; cannot satisfy lands at the link as a named undefined reference, and a real third-party
@@ -1005,7 +1003,7 @@
     (: (go l dia acc)
         (? !(two? l) [dia (rev acc)]
            (: a <l
-              (? (pfx? a "-std=")
+              (? (starts? a "-std=")
                  (: w (snip a 5 #a)
                     d (stdof w)
                     _ (d || udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + (stdnames ())))
@@ -1016,10 +1014,10 @@
    (xlang? w) (w = "c" || w = "none")
    (xdie w) ("cc: -x " + w + " -- mooncc reads: c none")
    (tol? a) (a = "-pipe" || a = "-static" ||
-             pfx? a "-g" || pfx? a "-O" ||
-             pfx? a "-f" || glu? a 108 || glu? a 76 ||
-             (pfx? a "-W" &&
-              !(pfx? a "-Wl," || pfx? a "-Wa," || pfx? a "-Wp,")))
+             starts? a "-g" || starts? a "-O" ||
+             starts? a "-f" || glu? a 108 || glu? a 76 ||
+             (starts? a "-W" &&
+              !(starts? a "-Wl," || starts? a "-Wa," || starts? a "-Wp,")))
    ; the -nostdlib family: freestanding on any cc's surface -- the driver supplies no
    ; runtime, and an owed symbol is an undefined reference, so rtpull says so rather than
    ; pulling.
@@ -1083,7 +1081,7 @@
              ; nothing, for whoever opens the binary. a link flag: with -c there is no output
              ; ELF to carry it and it is ignored. ahead of tol?, which swallows every other
              ; -f.
-             (pfx? a "-freadme=")
+             (starts? a "-freadme=")
               (: f (snip a 9 #a) rt (uread f)
                  (two? rt ? (flags r (pin t 'rdme <>rt))
                             (udie 1 ("cc: cannot open " + f))))
