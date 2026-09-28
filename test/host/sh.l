@@ -8,6 +8,7 @@
 ; run: cat test/00-init.l test/host/sh.l | out/love
 (reads (open "apps/lush.l" "r"))
 (borrow 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
+(pin sh-mflag () 0) ; the in-image laws read autonomous; the default is asked of sh-envflag
 
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
 ; quotes as segments, # comments, the 'more protocol on an unfinished shape.
@@ -587,8 +588,8 @@
 ; under the word (tr with no operands: its own usage, status 2). -p is PATH's rule
 ; alone, and an empty PATH finds nothing (127); -g is PATH first, ours in its gaps.
 ; lushflags carries the choice into a child shell, and a flag word on its own line
-; overrides it.
-(test (0 = sh-mode 0))
+; overrides it. gregarious is the default.
+(test (1 = sh-envflag 0))
 (: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; printf abc | tr a-c A-C; echo; tr 2>/dev/null; echo st=$?"])
    (test ("ABC\nst=2\n" = >r)))
 ; (under -p even echo is PATH's, so the status crosses a variable and PATH comes back)
@@ -601,11 +602,17 @@
    (test ("st=127\nst=2\nst=2\n" = >r)))
 ; -g: an empty PATH leaves the verb ours, and a PATH that names the word wins it -- a
 ; script called tr on PATH answers where our tr would have. autonomous passes it by
-(: r (hark ["out/love" "out/lush" "-c"
+(: r (hark ["out/love" "out/lush" "-a" "-c"
             "export d=/tmp/lush-t-greg; mkdir -p $d; printf '#!/bin/sh\\necho theirs\\n' > $d/tr; chmod 755 $d/tr
              LUSHFLAGS=-g sh -c 'p=$PATH; PATH=/nonexistent; tr 2>/dev/null; echo st=$?; PATH=$d:$p; tr'
              PATH=$d:$PATH; tr 2>/dev/null; echo st=$?; rm -r $d"])
    (test ("st=2\ntheirs\nst=2\n" = >r)))
+; `set --autonomous` and its kin move a running shell, and the word verdicts move with it
+(: r (hark ["out/love" "out/lush" "-c"
+            "export d=/tmp/lush-t-setm; mkdir -p $d; printf '#!/bin/sh\\necho theirs\\n' > $d/tr; chmod 755 $d/tr
+             PATH=$d:$PATH; tr; set --autonomous; tr 2>/dev/null; echo st=$?; set --gregarious; tr
+             set --precarious; p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s; rm -r $d"])
+   (test ("theirs\nst=2\ntheirs\nst=127\n" = >r)))
 
 ; `which` and `type` -- one verdict (sh-verdict) walks sh-simple2's own ladder, so
 ; what they name is what would run, and `command -v` reads the same answer. the
@@ -664,7 +671,7 @@
 ; the door is what makes that safe. a tool that used to `quit` on its error path
 ; would have taken the shell with it; now every failure is one command's status and
 ; the line after it still runs.
-(: r (hark ["out/love" "out/lush" "-c"
+(: r (hark ["out/love" "out/lush" "-a" "-c"
             "tar xzf /nonexistent.tgz . 2>/dev/null; echo t=$?
              libra /nonexistent-xyz.l 2>/dev/null; echo l=$?
              mkfs.vfat 2>/dev/null; echo m=$?

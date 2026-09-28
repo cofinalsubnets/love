@@ -18,7 +18,7 @@ ln -sf .koreshim "$ho/sh"
 printf 'one\ntwo\nthree\n' > "$ho/.kore-sh-lines"
 for body in '(true)' 'true | true' 'echo x | cat' '/usr/bin/env true'; do
   printf 'while read -r x; do echo "[$x]"; %s > /dev/null; done < %s\necho end\n' "$body" "$ho/.kore-sh-lines" > "$ho/.kore-sh-loop"
-  [ "$(korerun sh "$ho/.kore-sh-loop" | tr '\n' ' ')" = "[one] [two] [three] end " ] \
+  [ "$(korerun sh -a "$ho/.kore-sh-loop" | tr '\n' ' ')" = "[one] [two] [three] end " ] \
     || fail "kore sh: a while-read loop around '$body' read a line twice"
 done
 if [ -x /usr/bin/head ]; then
@@ -29,9 +29,9 @@ fi
 # kore's own head, in the image: it hands what it read ahead back to the port, so the
 # shell's next read starts at the next line -- the line face and the byte face
 printf 'read -r a; head -n 1; read -r b; echo "$a $b"\n' > "$ho/.kore-sh-rk"
-[ "$(korerun sh "$ho/.kore-sh-rk" < "$ho/.kore-sh-lines" | tr '\n' ' ')" = "two one three " ] \
+[ "$(korerun sh -a "$ho/.kore-sh-rk" < "$ho/.kore-sh-lines" | tr '\n' ' ')" = "two one three " ] \
   || fail "kore sh: the in-image head after a read kept what it read ahead"
 printf 'read -r a; head -c 4; read -r b; echo "$a $b"\n' > "$ho/.kore-sh-rk"
-[ "$(korerun sh "$ho/.kore-sh-rk" < "$ho/.kore-sh-lines" | tr '\n' ' ')" = "two one three " ] \
+[ "$(korerun sh -a "$ho/.kore-sh-rk" < "$ho/.kore-sh-lines" | tr '\n' ' ')" = "two one three " ] \
   || fail "kore sh: the in-image head -c after a read kept what it read ahead"
 echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"

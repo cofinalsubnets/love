@@ -1405,16 +1405,19 @@
    ; does this binary carry the word as a verb? the registry's own answer, PATH aside
    (sh-verbw? w) (cite 'verbs 'word @ f (lit? f ? !!(f w) 0))
    ; --- the mode: autonomous, gregarious or precarious ----------------------
-   ; where this binary's verbs stand to PATH. autonomous (-a, the default): before it,
-   ; a verb word is ours whatever PATH holds. gregarious (-g): after it, ours where PATH
+   ; where this binary's verbs stand to PATH. autonomous (-a): before it, a verb word
+   ; is ours whatever PATH holds. gregarious (-g, the default): after it, ours where PATH
    ; finds nothing. precarious (-p): not at all, ours only when PATH's winner stats as
-   ; this binary. the flag word wins, else LUSHFLAGS' last a, g or p. the entry pins the
-   ; box once; an unseated caller (cook, a -e) reads the environment at the ask and pins
-   ; nothing, which would bake in its answer.
+   ; this binary. `set --autonomous` and its kin, else the flag word, else LUSHFLAGS'
+   ; last a, g or p. the entry pins the box once; an unseated caller (cook, a -e) reads
+   ; the environment at the ask and pins nothing, which would bake in its answer.
    (sh-envflag _) (: s ("" + (getenv "LUSHFLAGS")) n #s
                      (go k v) (n <= k ? v (go (k + 1) (s k @ 97 0 103 1 112 2 _ v)))
-                     (go 0 0))
+                     (go 0 1))
    (sh-mode _) (peep sh-mflag () 'no @ 'no (sh-envflag 0) v v) ; peep: a pinned 0 is a verdict, not an absence
+   sh-modes {"--autonomous" 0 "--gregarious" 1 "--precarious" 2}
+   ; a new mode asks each word again: the in-image and fork verdicts were the old one's
+   (sh-setmode m) (pin sh-mflag () m, sh-tclear sh-imgc, sh-tclear sh-forkc, 0)
    ; is the verb word ours by the mode alone, PATH's winner aside
    (sh-verbours? w) (? !(sh-verbw? w) 0
                        (sh-mode 0 @ 0 1 1 (one? (sh-whichp w)) 0))
@@ -1615,6 +1618,7 @@
      (one? args ? 0
       (: a <args
          (? (a = "--") (pin sh-pos () >args, 0)
+            (charm? (sh-modes a)) (sh-setmode (sh-modes a), sh-setb >args)
             (1 < #a && (a 0 = 45 || a 0 = 43))
               (:- (go 1) on (a 0 = 45 ? 1 0) (go i)
                (i = #a ? (sh-setb >args)
@@ -2433,19 +2437,31 @@
    ; next) -- the forkless capture's contract with the capture taken off, so sh-capsub's
    ; roster and its holes both stand. `exit` ends the line. answers (1 status) when it
    ; ran here, () when the flags ask for something this door does not serve.
-   (sh-oneflags fl)                            ; ("-ec") -> (1 e u x) | () not ours
-     (:- (go fl 0 0 0)
-     (go l e u x)
-       (one? l ? [1 e u x]
+   (sh-oneflags fl)                            ; ("-ec") -> (1 e u x m) | () not ours; m () with no a g p
+     (:- (go fl 0 0 0 ())
+     (go l e u x m)
+       (one? l ? [1 e u x m]
         (: w <l n #w
          (n >= 2 && w 0 = 45 ?
-          (:- (ch 1 e u x)
-           (ch k e2 u2 x2)
-            (n <= k ? (go >l e2 u2 x2)
-             (w k @ 99 (ch (k + 1) e2 u2 x2)      ; c, the command marker
-                   101 (ch (k + 1) 1 u2 x2)
-                   117 (ch (k + 1) e2 1 x2)
-                   120 (ch (k + 1) e2 u2 1))))))))
+          (:- (ch 1 e u x m)
+           (ch k e2 u2 x2 m2)
+            (n <= k ? (go >l e2 u2 x2 m2)
+             (w k @ 99 (ch (k + 1) e2 u2 x2 m2)      ; c, the command marker
+                   101 (ch (k + 1) 1 u2 x2 m2)
+                   117 (ch (k + 1) e2 1 x2 m2)
+                   120 (ch (k + 1) e2 u2 1 m2)
+                   97 (ch (k + 1) e2 u2 x2 0)         ; a g p, the mode
+                   103 (ch (k + 1) e2 u2 x2 1)
+                   112 (ch (k + 1) e2 u2 x2 2))))))))
+   ; f under mode m, the box and the word verdicts put back after; a () m or the
+   ; mode already standing calls f as it is
+   (sh-inmode m f)
+     (? (!(charm? m) || m = sh-mode 0) (f 0)
+        (: was (peep sh-mflag () 'no)
+           _ (sh-setmode m)
+           (mind (_ \ f 0) ()
+                 (\ _ (? (was = 'no) (sh-tclear sh-mflag) (pin sh-mflag () was),
+                       sh-tclear sh-imgc, sh-tclear sh-forkc)))))
    (sh-oneline fl src)
      (: fs (sh-oneflags fl)
         (? (one? fs) ()
@@ -2454,7 +2470,7 @@
                  pin sh-uflag () (fs 2), pin sh-xflag () (fs 3))
               ; mind puts the shell back either way, trap turns sh-leave's scare into
               ; the line's status; any other condition is a real fault, said and failed
-              r (trap (\ _ (mind (_ \ sh-line src) ()
+              r (trap (\ _ (mind (_ \ sh-inmode (fs 4) (_ \ sh-line src)) ()
                                  (\ _ (pin sh-online () (sh-online () - 1),
                                         flush out, flush err,
                                         sh-subback sv))))
@@ -2731,8 +2747,8 @@
 ; run it:
 ;   out/lush                    ; interactive (or cooked when stdin is a pipe)
 ;   out/lush -c "echo hi"       ; one command (multi-line strings fine)
-;   out/lush -a ..              ; autonomous, the default: our verbs run here whatever PATH holds
-;   out/lush -g ..              ; gregarious: our verbs where PATH finds nothing
+;   out/lush -a ..              ; autonomous: our verbs run here whatever PATH holds
+;   out/lush -g ..              ; gregarious, the default: our verbs where PATH finds nothing
 ;   out/lush -p ..              ; precarious: a verb word is ours only when PATH says so
 ;   out/lush script.sh          ; a script file, continuations gathered
 ;   out/lush --login ..         ; a login shell: /etc/profile + ~/.profile first
@@ -2788,11 +2804,12 @@
   -e                leave on a failing command
   -u                an unset name is an error
   -x                trace what runs
-  -a, --autonomous  our verbs before PATH (the default)
-  -g, --gregarious  our verbs after PATH
+  -a, --autonomous  our verbs before PATH
+  -g, --gregarious  our verbs after PATH (the default)
   -p, --precarious  PATH alone, ours never inserted
   --login           a login shell: the profiles are read
-with no mode flag, LUSHFLAGS' last a, g or p sets the mode
+with no mode flag, LUSHFLAGS' last a, g or p sets the mode; `set --autonomous` (and
+--gregarious, --precarious) changes it in a running shell
 no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise"
    (sh-main args)
      (sh-snapign 0,                             ; first: what our caller had turned off
@@ -2807,9 +2824,7 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
         (: a <args
            (a @- (sh-file a >args)
             "--login" (pin sh-login () 1, sh-args >args)
-              "--autonomous" (pin sh-mflag () 0, sh-args >args)
-              "--gregarious" (pin sh-mflag () 1, sh-args >args)
-              "--precarious" (pin sh-mflag () 2, sh-args >args)
+              (a && charm? (sh-modes a)) (pin sh-mflag () (sh-modes a), sh-args >args)
               ; the long forms only: -h is `set -h` in every shell, and -v is `set -v`
               "--help" (puts (sh-usage + "\n"), flush out, quit 0)
               "--version"
