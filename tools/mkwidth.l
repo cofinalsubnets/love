@@ -7,8 +7,8 @@
 ; U+4DC0..U+4DFF are 2; the rest is 1. prints the tray, each entry cp * 4 + w opening a
 ; run of width w that lasts to the next entry.
 (borrow 'posix)
-(: (rd p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, (s + ""))) (die ("cannot read " + p))))
-   (die m) (: _ (say err $ "mkwidth: " + m + "\n") (quit 1))
+(: (rd p) (uread p @ [1 s] (s + "") (die ("cannot read " + p)))
+   (die m) (udie 1 ("mkwidth: " + m))
    (hex s) (foldl (a \ c \ a * 16 + hexv c) 0 (chars s))
    ; a data line as its fields, the comment gone and each field cut to its first word
    (fields ln) (map (f \ (: w (words f) (two? w ? <w ""))) (split ";" <(split "#" ln)))

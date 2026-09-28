@@ -34,7 +34,7 @@
  (:
     ; parse a decimal port string -> a fixnum (a string indexes its bytes; '0' = 48).
     (atoi s) (:- (go 0 0) (go i acc) (i < #s ? (go (1 + i) (10 * acc + s i - 48)) acc))
-    (die m) (say err $ "ain: " + m + "\n", quit 1)
+    (die m) (udie 1 ("ain: " + m))
 
     ; pump bytes from port `src` to port `dst`, one byte at a time, until src
     ; hits EOF (get -> -1). flush after each byte makes stdout prompt (it is a

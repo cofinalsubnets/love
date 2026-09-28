@@ -44,23 +44,19 @@
 ; installed script pointing at the source tree finds its siblings wherever that tree is --
 ; `want` hands the loader that PATH ((borrow "apps/lapiz.l")), which loads it as a
 ; module and splices it. a module already registered (the gate, a host embedding) is
-; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
-; they stay wherever this file's layer is -- never orth.
+; left alone. `root` is exactly the kind of name a leak makes dangerous, and
+; it stays wherever this file's layer is -- never orth.
 (borrow 'path)
 (borrow 'posix)
-(: ; the raw clips, not posix's: what is after the last slash, and what is before
-   ; it with the slash kept. a url path and a file path are both handed on whole
-   (bn p)    (snip p (lastslash p) #p)
-   (dirof p) (snip p 0 (lastslash p))
-   (findme (a . u)) ; the word that named this file, if any
-    (bn a @ ("papel" || "papel.l") a (findme u))
-   (up p) (: n #p (0 < n ? (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
+(: (findme (a . u)) ; the word that named this file, if any
+    (pbase a @ ("papel" || "papel.l") a (findme u))
+   (up p) (: n #p (0 < n ? (phead (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
    ; ..and follow a symlink to it. `papel` installs the way cook does, as a link on PATH
    ; pointing at this source file, so the name we were invoked by lives in ~/.local/bin
    ; and the siblings do not. readlink is what turns the link back into the source tree.
    root (: me (findme >cmdline)
            tgt (me ? (readlink me || me))
-         (tgt ? (up (dirof tgt)) "apps/"))                           ; apps/papel.l -> apps/
+         (tgt ? (up (phead tgt)) "apps/"))                           ; apps/papel.l -> apps/
    ; want: the sibling module, wherever this papel lives -- beside this file in
    ; the source tree (root came off our own seat), else by NAME off the registry
    ; an installed love baked. the tree lane probes first, so a tree papel running
@@ -85,8 +81,7 @@
 
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
 (: (strcat l)    (foldl (+) "" l)
-   (base p)      (snip p (lastslash p) #p)
-   (slurpf f)    (: q (open f "r") (? (hot? q) (slurp q) ""))
+   (slurpf f)    (uread f @ [1 s] s "")
    (spitf f s)   (: q (open f "w") _ (? (hot? q) (: _ (say q s) (close q)) 0) (? (hot? q) 1 0))
    ; a directory answers a list from readdir, a file answers nothing -- that is the test,
    ; and it needs no mode bits (love has no bitwise and to pick S_IFDIR out of stat's mode).
@@ -173,7 +168,7 @@
 (: (mdurl known u)
    (? (has? u "://") u
       !(ends? u ".md") u
-      (: b (base u)
+      (: b (pbase u)
          (peep known b 0 ? (snip u 0 (tally u - 3) + ".html") u)))
    (rli f l)  (map (\ x (<x @ 'link ['link (rli f <>x) (f <>>x)]
                               ('strong || 'em) [<x (rli f <>x)]
@@ -274,13 +269,13 @@ table{border-collapse:collapse}
 "))
 
 ; --- one page, and the index ------------------------------------------------------------
-(: (outname s) (: b (base s) (snip b 0 (tally b - 3) + ".html"))
+(: (outname s) (: b (pbase s) (snip b 0 (tally b - 3) + ".html"))
    (render conf known src dst)
    (: d0 (mdread (slurpf src))
       d  (relink (u \ mdurl known u) d0)
       body (pbody d)
       hs (pheads body)
-      ttl (ptitle body (base src))
+      ttl (ptitle body (pbase src))
       _ (spitf dst (wrap conf ttl (pmetah (pmeta d)) (ptoc body hs)
                          (pshow body hs (pterms body hs))))
       dst)
@@ -289,7 +284,7 @@ table{border-collapse:collapse}
    (index-doc conf srcs)
    (: site (peep conf 'title "papel")
       rows (map (\ s (: d (mdread (slurpf s))
-                      [[['link [['text (ptitle d (base s))]] (outname s)]] (blurb d)])) srcs)
+                      [[['link [['text (ptitle d (pbase s))]] (outname s)]] (blurb d)])) srcs)
     [['head 1 [['text site]]] ['deflist rows]])
    (windex conf srcs dst)
    (: d (index-doc conf srcs)
@@ -330,7 +325,7 @@ table{border-collapse:collapse}
       srcs (sources conf)
       _ (atom? srcs ? (scare 'papel "papel: no markdown sources"))
       _ (mkdirp out)
-      known (foldl (\ t s (pin t (base s) 1)) {} srcs)
+      known (foldl (\ t s (pin t (pbase s) 1)) {} srcs)
       self (peep conf 'self "")
       dep (two? (stat self) ? [self])
       dsts (map (s \ out + "/" + outname s) srcs)

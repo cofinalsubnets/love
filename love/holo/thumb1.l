@@ -35,11 +35,7 @@
    (lo? r) (rn r <= 7)                   ; a "low" register -- the only ones most 16-bit ops reach
    (need-lo r why) (lo? r ? 0 (scare why r))   ; guard: v6-M op wants r0..r7
 
-   ;; -- condition codes: IR name -> the 4-bit aarch32 cond field (same encoding a64/thumb2 use). --
-   t1-cc {'eq 0 'ne 1 'ae 2 'below 3 's 4 'ns 5
-          'vs 6 'vc 7 'p 6 'np 7
-          'above 8 'be 9 'ge 10 'lt 11 'gt 12 'le 13}
-   (ccn c) (look t1-cc c 'badcc)
+   (ccn c) (look arm-cc c 'badcc)
 
    ;; -- emit. one narrow halfword; t32 is the BL pair (hi halfword first, each little-endian). --
    (t16 w) (le16 (w & 65535))

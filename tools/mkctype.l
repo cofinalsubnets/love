@@ -10,7 +10,7 @@
 ; or Zl Zp. prints each class as a tray whose entries open and close runs in turn, and each
 ; case map as runs of start count stride delta.
 (borrow 'posix)
-(: (rd p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, (s + ""))) (die ("cannot read " + p))))
+(: (rd p) (uread p @ [1 s] (s + "") (die ("cannot read " + p)))
    (die m) (: _ (say err $ "mkctype: " + m + "\n") (quit 1))
    (hex s) (foldl (a \ c \ a * 16 + hexv c) 0 (chars s))
    (data ln) <(split "#" ln)

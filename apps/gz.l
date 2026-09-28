@@ -817,8 +817,6 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-pad w s) (#s < w ? (gzc-pad w (" " + s)) s)
    ; the raw clips, not posix's: no trailing slash is stripped first, so "a/b/" is
    ; a base of "" and a dir of "a/b/". a tar member wants the text it was handed
-   (gzc-base p) (snip p (lastslash p) #p)
-   (gzc-dir p)  (snip p 0 (lastslash p))             ; the head with its slash, "" for none
    (gzc-dirp? q) (: st (stat q) (two? st && <>>st & 61440 = 16384))
    (gzc-worse a b) (? (a = 1 || b = 1) 1 (a = 2 || b = 2) 2 0)
 
@@ -870,7 +868,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                     (: fs2 #s un (gzc-isize s) pay (fs2 - <>>>h - 8)
                        ; the name column is the path as it was typed, stem and all --
                        ; only -N's stored name arrives without a directory to keep
-                       nom (? (peep t 'N 0 && 0 < #<>>h) (gzc-base <>>h)
+                       nom (? (peep t 'N 0 && 0 < #<>>h) (pbase <>>h)
                               (: st (gzc-stem p suf) (st ? <>st p)))
                        _ (say out ((gzc-lrow fs2 un pay nom) + "\n"))
                        [<acc (<>acc + fs2) (<>>acc + un) (<>>>acc + pay)])))))
@@ -898,7 +896,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
              st (stat p)
              ms (two? st ? <>st 0)
              n? (peep t 'n 0)
-             z (gz-zip s (n? ? "" (gzc-base p)) (n? ? 0 (ms // 1000)))
+             z (gz-zip s (n? ? "" (pbase p)) (n? ? 0 (ms // 1000)))
              (? (peep t 'c 0) (: _ (say out z) _ (flush out) 0)
                 (: dst (p + suf)
                    (? (two? (lstat dst) && !(peep t 'f 0))
@@ -934,7 +932,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                    N? (peep t 'N 0 && 0 < #<>>h)
                    (? (!stem && !N?)
                       (: _ (gzc-moan t (p + ": unknown suffix -- ignored")) 2)
-                      (: dst (N? ? (gzc-dir p + gzc-base <>>h) <>stem)
+                      (: dst (N? ? (phead p + pbase <>>h) <>stem)
                          st (stat p)
                          (? (two? (lstat dst) && !(peep t 'f 0))
                             (: _ (gzc-moan t (dst + " already exists;\tnot overwritten")) 2)
@@ -973,57 +971,24 @@ no file, or a bare -, is the filter: stdin -> stdout"
           (: _ (say out (gz-zip (s + "") "" 0)) _ (flush out) 0)))
 
    ; --- the options ----------------------------------------------------------
-   ; clustered shorts, the long spellings beside them, and -S's value glued or next.
-   ; a digit is a level and not a flag: it is taken and dropped, because a script that
-   ; says -9 is asking for the best this coder has and that is what it gets.
-   (gzc-long t w)                      ; -> 1 taken | 'val -S wants a word | ()
-    (: n #w
-       (eq k) (: m #k (m + 1 <= n && snip w 0 (m + 1) = k + "="))
-       (? (w = "stdout" || w = "to-stdout") (pin t 'c 1)
-          (w = "decompress" || w = "uncompress") (pin t 'd 1)
-          (w = "force") (pin t 'f 1)
-          (w = "keep") (pin t 'k 1)
-          (w = "list") (pin t 'l 1)
-          (w = "no-name") (pin t 'n 1)
-          (w = "name") (pin t 'N 1)
-          (w = "quiet") (pin t 'q 1)
-          (w = "recursive") (pin t 'r 1)
-          (w = "test") (pin t 't 1)
-          (w = "verbose") (pin t 'v 1)
-          (w = "fast" || w = "best") 1
-          (w = "help") (pin t 'h 1)
-          (w = "version") (pin t 'V 1)
-          (eq "suffix") (: _ (pin t 'suf (snip w 7 n)) 1)
-          (w = "suffix") 'val
-          ()))
+   ; the cli walker in gnu order: clustered shorts, the long names beside them, and -S's
+   ; suffix glued or next. a digit is a level and not a flag: it is taken and dropped,
+   ; because a script that says -9 is asking for the best this coder has and that is what it gets.
+   gzc-longs {"stdout" 99 "to-stdout" 99 "decompress" 100 "uncompress" 100 "force" 102
+              "keep" 107 "list" 108 "no-name" 110 "name" 78 "quiet" 113 "recursive" 114
+              "test" 116 "verbose" 118 "fast" 49 "best" 57 "help" 104 "version" 86 "suffix" 83}
+   gzc-flags "cdfklnNqrtvhV"
    (gzc-opts as t)                     ; -> (1 files) | ()  -- () is a bad option
-    (: (go a fs)
-        (? !(two? a) [1 (rev fs)]
-           (: w <a n #w
-              (? (w = "--") [1 (rev fs + >a)]
-                 (n < 2 || !(w 0 = 45)) (go >a (w . fs))        ; a name, and "-" is one
-                 (w 1 = 45)
-                  (: r (gzc-long t (snip w 2 n))
-                     (? !r (: _ (gzc-moan t ("unknown option " + w)) ())
-                        (= r 'val) (two? >a ? (: _ (pin t 'suf <>a) (go >>a fs))
-                                                 (: _ (gzc-moan t "--suffix wants a suffix") ()))
-                        (go >a fs)))
-                 (: (cl k rest)
-                     (? (n <= k) (go rest fs)
-                        (: c (w k)
-                           (? (48 <= c <= 57) (cl (k + 1) rest)            ; a level: taken, dropped
-                              (c = 83)                                    ; -S, glued or next
-                               (: glue (snip w (k + 1) n)
-                                  (? (0 < #glue) (: _ (pin t 'suf glue) (go rest fs))
-                                     (two? rest) (: _ (pin t 'suf <rest) (go >rest fs))
-                                     (: _ (gzc-moan t "-S wants a suffix") ())))
-                              (elem c '(99 100 102 104 107 108 110 113 114 116 118))
-                               (: _ (pin t (intern (string c)) 1) (cl (k + 1) rest))
-                              (c = 78) (: _ (pin t 'N 1) (cl (k + 1) rest))
-                              (c = 86) (: _ (pin t 'V 1) (cl (k + 1) rest))
-                              (: _ (gzc-moan t ("unknown option -" + string c)) ()))))
-                    (cl 1 >a)))))
-       (go as ()))
+    (: u (tablet 0)
+       r ((cite 'cli 'uoptp) as u [83] () gzc-longs)
+       bad (? (two? r) ((cite 'cli 'uoptun) u (gzc-flags + "S0123456789")) ())
+       (? !(two? r) (: w <(rev as) (: _ (gzc-moan t ((w 1 = 45 ? "--suffix" "-S") + " wants a suffix")) ()))
+          (r 3) (: _ (gzc-moan t ("unknown option " + r 3)) ())
+          bad (: _ (gzc-moan t ("unknown option -" + string bad)) ())
+          (: _ (each (chars gzc-flags) (c \ peep u c 0 && pin t (intern (string c)) 1))
+             v (peep u 83 ())
+             _ (? (two? v) (pin t 'suf <>v))
+             [1 (r 2)])))
 
    (gzc-run as t0)
     (: t t0

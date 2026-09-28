@@ -13,7 +13,7 @@ struct ai_gcx {
  word *cp; };                // the cheney scan cursor
 // GC scans run with different [lo,hi), so a terminator is recognized by which live pool its head
 // lands in, not the caller's range -- else a young-pointing terminator under the major range is
-// gcp'd as a field. mid-pass the to-space is a third: gen_major's unflipped pair, or gen_grow's.
+// gcp'd as a field. mid-pass the to-space is a third: gen_major's unflipped block, or gen_grow's.
 static ai_inline bool tagl(struct ai *g, struct ai_gcx *X, word x) {   // range-independent terminator test
  if ((x & 3) != ai_thread_tag) return false;
  word const *p = (word const*) (x & ~(word) 3);
@@ -239,12 +239,29 @@ word *ai_major_pair(uintptr_t n, word **spare) {
  if (a && !b) ai_alloc(a, 0), a = NULL;
  return *spare = b, a; }
 
+// the new spare, once a resizing copy is done: both old halves are dead, so it is taken in the
+// room they leave. short of a block that size, the old size, and then the least that holds
+// the survivors and a nursery's promotion (ai_please's forcing test) -- the major shrinks to
+// the spare it could get, and the active block's tail waits for the next resize. NULL only
+// when not even that fits
+static word *major_spare_after(struct ai *g, word *to, uintptr_t to_len, uintptr_t req0) {
+ uintptr_t room = (uintptr_t) (g->major_hp - to) + (uintptr_t) g->len + req0 + 16,
+           olen = g->major_len;
+ ai_alloc(g->major_base, 0), ai_alloc(g->major_spare, 0);
+ word *s = ai_alloc(NULL, to_len * sizeof(word));
+ if (s) return g->major_len = to_len, s;
+ if (room <= olen && (s = ai_alloc(NULL, olen * sizeof(word)))) return s;
+ if (room < to_len && (s = ai_alloc(NULL, room * sizeof(word)))) return g->major_len = room, s;
+ return g->major_len = to_len, NULL; }
+
 // the major: one cheney pass from the real roots over both from-spaces into the
 // spare half -- reachability, never a linear sweep, which is why a rem-set overflow
 // forces one. then rebuild the intern map, run finalizers, flip, reset the minor.
 // req0 is the allocation that could not be served; *tight answers whether the pool got the
 // size it asked for, which only ai_please can act on.
 struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
+ if (!g->major_spare && !(g->major_spare = ai_alloc(NULL, g->major_len * sizeof(word))))
+  return encode(g, ai_status_scare);                          // an earlier major left no spare
  struct ai_gcx X = { .p0 = g->major_base, .t0 = g->major_hp };   // from-range 1: major active
  // size the to-space for the worst case: all of major-active and all of the minor survive
  uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end),
@@ -266,26 +283,27 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  if (g->budget) {
   uintptr_t cap = g->budget > (uintptr_t) g->len ? (g->budget - (uintptr_t) g->len) / 2 : 0;
   if (to_len > cap) to_len = cap > need_step ? (cap / step) * step : need_step; }
- word *to = g->major_spare, *resized = 0, *rspare = 0;
- if (to_len != g->major_len) {                                 // a different-size pair: alloc it, free the old
+ word *to = g->major_spare, *resized = 0;
+ if (to_len != g->major_len) {                                 // a different size: a new to-space now, the new spare after
   uintptr_t ask = to_len;
-  // the copy never reads the spare half: when the live set has outgrown it, so it cannot be
-  // the to-space, it gives its room to the pair and the ladder runs again. peak is then the
-  // active half and the new pair, not both pairs -- on a fixed region, a heap or a dead board
+  // the copy needs only the to-space. the new spare is taken once the copy has freed both old
+  // halves, so the peak is the active half and one new block, never a whole new pair beside
+  // it. the spare is dead during a collection: when the live set has outgrown it, so it
+  // cannot be the to-space, it gives its room up and the ladder runs again
   for (int pass = 0; pass < 2 && !resized; pass++) {
    if (pass) {
     if (need <= g->major_len) break;
     ai_alloc(g->major_spare, 0), g->major_spare = 0; }
-   to_len = ask, resized = ai_major_pair(to_len, &rspare);
+   to_len = ask, resized = ai_alloc(NULL, to_len * sizeof(word));
    if (!resized && to_len > need_step)                          // the headroom alloc failed: retry at the tight size
-    to_len = need_step, resized = (need_step == g->major_len) ? 0 : ai_major_pair(need_step, &rspare);
+    to_len = need_step, resized = (need_step == g->major_len) ? 0 : ai_alloc(NULL, need_step * sizeof(word));
    // last chance: drop the STEP granularity too. need_step is need rounded UP to a whole
    // step, so it can overshoot the largest free block by most of a step. need itself is the
-   // worst case the to-space has to hold, by the arithmetic above; a pair sized there has
+   // worst case the to-space has to hold, by the arithmetic above; a to-space sized there has
    // no headroom and the next collection will be a major too, which is the trade this rung
    // exists to make.
    if (!resized && need < to_len)
-    to_len = need, resized = (need == g->major_len) ? 0 : ai_major_pair(need, &rspare); }
+    to_len = need, resized = (need == g->major_len) ? 0 : ai_alloc(NULL, need * sizeof(word)); }
   if (resized) to = resized;
   else if (need <= g->major_len) to_len = g->major_len;             // alloc failed, but the existing spare half holds the live set
   else {                                                            // true oom: compacting would overflow the spare -> clean scare, no corruption
@@ -306,7 +324,9 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
  g->symbols = major_symbols_rebuild(g, &X, om);
  major_run_finalizers(g, &X);
- if (resized) ai_alloc(g->major_base, 0), ai_alloc(g->major_spare, 0), g->major_spare = rspare, g->major_len = to_len;
+ if (resized) {
+  g->major_spare = major_spare_after(g, to, to_len, req0);
+  if (tight && g->major_len < to_len) *tight = true; }         // denied: the spare it got is smaller
  else g->major_spare = g->major_base;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
@@ -321,7 +341,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  // to be reused. cleared here rather than in ai_please alone, because a major can be
  // called directly -- the image dump compacts before it serializes.
  g->rem_n = 0, g->rem_miss = 0;
- return g; }
+ return g->major_spare ? g : encode(g, ai_status_scare); }   // the copy held; no room for a spare
 
 // resize the minor pool, decoupled from the major. every caller has emptied the nursery,
 // and no value points at the core or into the stack, so the core and the stack move by

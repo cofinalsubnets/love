@@ -119,7 +119,7 @@
  ; look, a help, or a love form evaluated and shown -- every answer lands in the window
  (interp g ln) (: w (g 'win) t (w 'thing)
    ws (words ln) v (? (two? ws) <ws "") n (? (two? >ws) <>ws "")
-   (book f) (: q (open f "r") (? (hot? q) (: s (slurp q) (close q, s)) ()))
+   (book f) (uread f @ [1 s] s ())
    (with f) (: p (t 'books (nom n))
                (? (0 >= #n) (window-say g (v + " what?"))
                   !p (window-say g ("there is no " + n + " here."))
@@ -227,7 +227,6 @@
                  (go (i + 1) (k + 1) (acc + string (r i))))))
 
  ; --- the library: a hall of shelves, one per crew module under root ------------------
- (base p) (: n #p (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n)) (go 0 0))
  (first-para md) (:- (go ls "")
   ls (split "\n" md)
   (go l acc) (? (one? l) acc

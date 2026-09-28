@@ -23,8 +23,8 @@
 (borrow 'posix)
 (? (lit? (cite 'holo 'objelf)) (borrow 'holo) 0) ; splice the assembler when this love is baked; the guard below says so when not
 
-(: (mksrc-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
-   (mksrc-die m) (say err ("mksrc: " + m + "\n"), quit 1)
+(: (mksrc-slurp p) (uread p @ [1 s] [1 (s + "")] ())
+   (mksrc-die m) (udie 1 ("mksrc: " + m))
 
    ; a little-endian 8-byte word, the width love/src.c reads it at
    (mksrc-le8 v i acc) (i = 8 ? acc (mksrc-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))

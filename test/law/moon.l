@@ -1353,6 +1353,13 @@
       (elem '(imul r15 r0 3) hcw) (fpless? hcw)                     ; ...not on wasm
       (elem '(st fp 8 r0) pcr)                                      ; p's n (3 touches, 2 exits) spills on riscv...
       (elem '(mov r13 r0) pcw) (fpless? pcw))                       ; ...takes a cs seat on wasm, and p lays no frame
+   ; -- the post-choice sweeps ride riscv and wasm too: constants fold, and a constant-index lea
+   ; takes the add behind it (Have's hp + n + floor is one lea everywhere)
+   kfs "long d(void) { unsigned long const S = 4; return S + 2; } long *e(long *h, long *sp) { unsigned long const S = 4; if (sp < h + (S + 2) + 8) return 0; return h; } int main() { return 0; }"
+   (lea1? l) (1 = #(filter (f \ two? f && two? >>>f && f 3 = 112) l) && !(filter (f \ two? f && two? >>>f && f 3 = 64) l))
+   _ (test
+      (elem '(li r0 6) (fnf 'd <>(cgt kfs 'rv64))) (elem '(li r0 6) (fnf 'd <>(cgt kfs 'wasm)))
+      (lea1? (fnf 'e <>(cgt kfs 'rv64))) (lea1? (fnf 'e <>(cgt kfs 'wasm))) (lea1? (fnf 'e <>(cgt kfs 'x64))))
    ; -- narrow homes: a bool/char/short local homes like an int, canonically -- a bool's cvt
    ; converts, so the seat holds 0/1 and a read is one register compare; over a set the cvt is
    ; the identity and rezx drops it. a name declared twice (sibling blocks) is respelled ahead

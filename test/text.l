@@ -55,6 +55,7 @@
 ; gnulib's rule, which is not symmetric: U+1C80 takes U+0412, and U+0412 does not take it
 (: cpupper (cite 'text 'cpupper) cplower (cite 'text 'cplower) cpis (cite 'text 'cpis)
    cpclass? (cite 'text 'cpclass?) cpfold (cite 'text 'cpfold) cpfolds (cite 'text 'cpfolds)
+   cpback (cite 'text 'cpback) cpword? (cite 'text 'cpword?)
    (test
       (cpupper 97 = 65) (cpupper 65 = 65) (cpupper 233 = 201) (cpupper 255 = 376)
       (cpupper 383 = 83) (cpupper 305 = 73) (cpupper 962 = 931) (cpupper 26085 = 26085)
@@ -70,4 +71,7 @@
       (sort (cpfold 115) = [83 383]) (sort (cpfold 105) = [73 305]) (cpfold 304 = ())
       (cpfold 107 = [75]) (cpfold 8490 = ()) (sort (cpfold 963) = [931 962])
       (sort (cpfold 7296) = [1042 1074]) !(elem 7296 (cpfold 1042))
-      (cpfold 49 = ()) (sort (cpfolds 97 99) = [65 66 67])))
+      (cpfold 49 = ()) (sort (cpfolds 97 99) = [65 66 67])
+      (cpback "a日" 4 = 1) (cpback "a日" 1 = 0) (cpback "é" 2 = 0)
+      (cpback "a\xe2\x82" 3 = 2) (cpback "\x80\x80\x80\x80" 4 = 3)   ; a torn tail stands alone
+      (cpword? 95) (cpword? 233) (cpword? 1635) !(cpword? 45) !(cpword? 8212)))

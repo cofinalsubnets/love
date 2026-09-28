@@ -967,8 +967,11 @@
 ;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 ;   (pprefixes p) -> the directory prefixes of p, outermost first
 
-(module '(path lastslash lastdot segs pclean pprefixes)
+(module '(path lastslash lastdot pbase phead segs pclean pprefixes)
 (: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
+   ; the leaf after the last '/', and the head before it with the slash kept ("" for none)
+   (pbase p) (snip p (lastslash p) #p)
+   (phead p) (snip p 0 (lastslash p))
    (lastdot p) (: sl (lastslash p)
                   ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
    ; "/a/b/c" -> ("/a" "/a/b"): neither the leading '/' nor the leaf is a prefix, so `mkdir -p`
@@ -1080,9 +1083,11 @@
 ;   (cpis nm c)             -> is c in the POSIX class named nm ("alpha" .. "xdigit"), glibc's
 ;   (cpfold c)              -> the characters grep -i takes for c, c not among them
 ;   (cpfolds lo hi)         -> cpfold of every character lo..hi, together
+;   (cpback s i)            -> the byte where the character ending at i opens
+;   (cpword? c)             -> is c a word character: _ or alnum, grep's \w
 
 (module '(text cpat cpnext cpn cps cplen cpsnip cprev wcwidth swidth scut
-          cpupper cplower cpis cpclass? cpfold cpfolds)
+          cpupper cplower cpis cpclass? cpfold cpfolds cpback cpword?)
    ; tools/mkwidth.l's runs, unicode 17: each entry cp * 4 + w opens a run of width w
 (: cpw
    @(1 3072 3521 4620 4649 5700 5881 5884 5889 5892 5901 5904 5913 5916 5921 6208 6253 6256
@@ -1642,6 +1647,12 @@
                         (: m ((lo + hi) // 2) ((peep cpw m 0 >> 2) <= c ? (go m hi) (go lo m))))
           (go 0 #cpw)))
    (cpcols s i) (max 0 (wcwidth (cpat s i)))
+   ; back over at most three tails; a byte that ends no whole character stands alone
+   (cpback s i)
+    (: (go j) (? (j < 1 || i - j > 2 || !(tl s j)) j (go (j - 1)))
+       j (go (i - 1))
+       (? (cpnext s j = i) j (i - 1)))
+   (cpword? c) (c = 95 || cpis "alnum" c)
    ; is c inside one of a class tray's runs: an odd count of entries at or below it
    (cpin t c)
     (: (go lo hi) (? (hi <= lo) lo (: m ((lo + hi) // 2) (peep t m 0 <= c ? (go (m + 1) hi) (go lo m))))
@@ -2473,7 +2484,13 @@
                  (c = 92)
                   (n <= i + 1 ? ()
                      (: d (p (i + 1))
-                        (49 <= d <= 57 ? () ; backrefs: refused, both dialects
+                        wd (d = 119 || d = 87) sd (d = 115 || d = 83)
+                        (? (49 <= d <= 57) ()                 ; backrefs: refused, both dialects
+                           ; GNU's \w \W \s \S: a class of _ and alnum, or of space, the
+                           ; capital negated
+                           (wd || sd)
+                            (pseq (i + 2) (['cls (? (d < 97) 1 0) (? wd ["alnum" [95 95]] ["space"])]
+                                           . acc) lvl gi)
                            (lit (i + 1) @ [nd w] (pseq (i + 1 + w) (nd . acc) lvl gi)))))
                  (lit i @ [nd w] (pseq (i + w) (nd . acc) lvl gi)))))
        ; the alternation above the sequence: branches joined by the bar, kept flat
@@ -2792,9 +2809,7 @@
    ; the verb run in the caller as a builtin: urun is the driver, so a leave from deep in
    ; answers a status and never ends the caller. () when no verb has the name
    (call k as) (: f (get k) (? (lit? f) (urun f as) ()))
-   (bn p)    (: n #p
-                (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n))
-                (go 0 0))
+   bn (cite 'path 'pbase)
    (dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sl? w)   (: n #w (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
    (word w)  (sl? w || dotl? w ? () (get (name w)))
@@ -2852,7 +2867,7 @@
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
 (module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap
-          uopt uopt1 uoptv uoptun uoptstray uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptstray uoptp uoptlast uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -3276,6 +3291,40 @@
    ; not one, so an applet with positional operands would take `-x` for a filename. () once
    ; `--` has been spelled: the words behind it are literal by request.
    (uoptstray as rest) (? (elem "--" as) () (<(filter (w \ 1 < #w && w 0 = 45) rest)))
+   ; (uoptp as t vals reps longs) -> [t stacked operands stray] | (): uopt in gnu order, a flag
+   ; free to follow an operand and every word behind `--` an operand. stray is the first long
+   ; word that was not ours (uopt reads it as an operand), or ()
+   (uoptp as t vals reps longs)
+    (: (go as es ops stray)
+        (: r (uopt as t vals reps longs)
+           (? !(two? r) ()
+              (: es2 (es + r 1) rest (r 2) k (#as - #rest)
+                 (? !(two? rest) [t es2 (rev ops) stray]
+                    (0 < k && as (k - 1) = "--") [t es2 (rev ops + rest) stray]
+                    (: w <rest
+                       (go >rest es2 (w . ops)
+                           (stray || (2 < #w && w 0 = 45 && w 1 = 45 ? w ()))))))))
+       (go as () () ()))
+   ; the last of `keys` spelled in the flag words before `--`, short or long, or (): the order
+   ; uopt's tablet drops, for the flags where the later one wins (a level, a mode)
+   (uoptlast as keys vals longs)
+    (: (lkey w) (: e ((: (go i) (? (#w <= i || w i = 61) i (go (i + 1)))) 2)
+                   (? (tablet? longs) (peep longs (snip w 2 e) ()) ()))
+       (short w k got)                                   ; -> [got skip-the-next-word]
+        (? (#w <= k) [got 0]
+           (: c (w k)
+              (? (elem c vals) [got (k + 1 = #w ? 1 0)]
+                 (short w (k + 1) (elem c keys ? c got)))))
+       (go as got)
+        (? !(two? as) got
+           (: w <as
+              (? (w = "--") got
+                 (2 < #w && w 0 = 45 && w 1 = 45)
+                  (: c (lkey w) (go >as (elem c keys ? c got)))
+                 (2 <= #w && w 0 = 45)
+                  (: r (short w 1 got) (go (r 1 ? >>as >as) <r))
+                 (go >as got))))
+       (go as ()))
 
    ; --- the two flags every applet answers, and the one place that answers them ------
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a file
@@ -3415,6 +3464,8 @@
 ; defglob has to sit between them.
 (: (cli-rail ln)
  (: (charm0 x) (charm? x ? x 0)
+    ; a program's own uleave ('leave, udie's) goes out the same door
+    (door a b) (? (a == 'cli-leave || a == 'leave) (charm0 b) (scare a b))
     cli2
  (trap (\ x
  (: (cli-leave c) (scare 'cli-leave c)
@@ -3490,18 +3541,18 @@
            'none  0                   ; the flags did their printing; leaving is the answer
            (reads in, 0)))
     [av run]))
-       () (a \ b \ a == 'cli-leave ? (charm0 b) (scare a b)))
+       () door)
  (? (charm? cli2) cli2                  ; a leave in pre: the status is the answer
     (ev [': 'argv ['\ <cli2]], ; the program's view, before the run
      trap (x \ <>cli2 ())    ; (run ()): dispatch, argv now the program's view
-      () (a \ b \ a == 'cli-leave ? (charm0 b) (scare a b)))))
+      () door)))
 
  (cli-line ln tty)
    (: (charm0 x) (charm? x ? x 0)
       V  (cite 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
       f  (V 'seat <ln)
-      (charm0 (? f          (f >ln)
+      (charm0 (? f          (trap (\ _ (f >ln)) () (\ a b (a == 'leave ? (charm0 b) (scare a b))))
                  (two? >ln) (cli-rail ln)
                  tty        (shell 0)
                  (reads in, 0)))))         ; non-tty stdin: the stream face drinks the in port

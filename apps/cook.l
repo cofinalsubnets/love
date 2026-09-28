@@ -884,7 +884,7 @@
      (lines (uncont src)) ())
 
    ; read a file whole (for `include`), then split it into classified lines.
-   (slurp-of path) (: q (open path "r") (? (hot? q) (slurp q) (udie 1 ("cook: cannot read " + path))))
+   (slurp-of path) (uread path @ [1 s] s (udie 1 ("cook: cannot read " + path)))
    (file-lines ip) (text-lines (slurp-of ip))
 
    ; seed the variable table as make does: the environment first (every NAME=value, origin
@@ -1108,12 +1108,11 @@
        (say o "\n(cook-all 0)\ "))
 
    ; is a recipe-file path named like a Makefile? then cook reads it as one.
-   (mk-base p) (snip p (lastslash p) #p)
    (mk-ends p suf) (: ls #suf lp #p ((ls <= lp) && (suf = snip p (lp - ls) lp)))
-   (makefilep p) (: b (mk-base p)
+   (makefilep p) (: b (pbase p)
       ((b = "Makefile") || b = "makefile" || b = "GNUmakefile" || mk-ends p ".mk"))
    ; the love-recipe names, and there are only these: Cards.l, Cookfile, or anything else .l
-   (lovefilep p) (: b (mk-base p) (mk-ends p ".l" || (b = "Cookfile")))
+   (lovefilep p) (: b (pbase p) (mk-ends p ".l" || (b = "Cookfile")))
    ; -f names the makefile whatever it is called, as make's does, so only a love-recipe name
    ; argues back; discovery still needs the name to tell it what it found.
    (asmake? p explicit?) (? explicit? !(lovefilep p) (makefilep p))

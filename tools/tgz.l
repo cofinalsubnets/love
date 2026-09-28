@@ -9,8 +9,8 @@
 (borrow 'gz)
 
 (borrow 'posix)
-(: (tgz-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
-   (tgz-die m) (say err ("tgz: " + m + "\n"), quit 1)
+(: (tgz-slurp p) (uread p @ [1 s] [1 (s + "")] ())
+   (tgz-die m) (udie 1 ("tgz: " + m))
 
    ; every read here is guarded separately so the message names which step failed:
    ; "not a gzip" and "not a tar" are different repairs, and one "cannot read" for

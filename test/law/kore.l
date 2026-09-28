@@ -455,6 +455,11 @@
          (test (iok "é" "É") (iok "s" "ſ") (iok "ſ" "S") (ino "k" "\xe2\x84\xaa") (ino "i" "İ")
                (iok "σ" "ς") (iok "[à-é]" "É") (ino "[^é]" "É") (iok "[[:upper:]]" "a")
                (iok "[[:upper:]]" "日") (iok "ᲀ" "В") (ino "В" "ᲀ") (iok "[a-z]" "ſ")))
+      ; GNU's \w \W \s \S, a class in both dialects; inside a bracket the backslash is ink
+      (ok "^\\w*$" "héllo_1") (no "\\w" "—") (ok "\\W" "a b") (no "\\W" "ab")
+      (ok "\\s" " ") (no "\\s" "\xc2\xa0") (ok "^\\S*$" "a_é")
+      (ok "[\\w]" "\\") (no "[\\w]" "a")
+      (reere "\\w+" = (rebre "\\w\\+"))
       (refind <>(rebre "b*") "abbc" 0 = '(1 0 0 ()))           ; leftmost, before longest
       (refind <>(rebre "bb") "abbc" 0 = '(1 1 3 ()))
       (refind <>(rebre "b*") "abbc" 1 = '(1 1 3 ()))           ; greedy at its own start
@@ -946,18 +951,18 @@
 ; --- markdown: which face a -t names, and what the other flags are not for ---
 ; the layouts are lapiz's and lawed in test/host/lapiz.l; this tool's own part is the dispatch
 (: md "# Title\n\nsome *text*.\n"
-   h (md-lay md "html" 80 0)
-   r (md-lay md "roff" 80 0)
-   t (md-lay md "text" 80 0)
+   h (md-lay md "html" 80 0 "")
+   r (md-lay md "roff" 80 0 "")
+   t (md-lay md "text" 80 0 "")
    (test
       (h = "<h1>Title</h1>\n<p>some <em>text</em>.</p>")
       (r = ".SH Title\n.PP\nsome \\fItext\\fR.\n")
       ; the width and the terminal belong to the text lane alone
-      (h = (md-lay md "html" 40 1)) (r = (md-lay md "roff" 40 1))
+      (h = (md-lay md "html" 40 1 "")) (r = (md-lay md "roff" 40 1 ""))
       ; ..where the attributes come off when the output is not one
-      (t = (usgr t)) (! (t = (md-lay md "text" 80 1)))
+      (t = (usgr t)) (! (t = (md-lay md "text" 80 1 "")))
       ; an unnamed face is html: that is what a bare `markdown` means
-      (h = (md-lay md "" 80 0))
+      (h = (md-lay md "" 80 0 ""))
       (md-tos = ["html" "roff" "text"])
       ; one trailing newline on the way out, whether the shower left one or not
       (lensnl h = (h + "\n")) (lensnl r = r) (lensnl "" = "\n")))

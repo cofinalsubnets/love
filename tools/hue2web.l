@@ -16,14 +16,14 @@
 (borrow 'hueweb)
 
 (borrow 'posix)
-(: (h2w-rdf p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, (string? s ? [1 s])))))
-   (h2w-usage _) (say err "usage: love tools/hue2web.l css | src FILE\n", quit 2)
+(: (h2w-rdf p) (uread p @ [1 s] (string? s ? [1 s]) ())
+   (h2w-usage _) (udie 2 "usage: love tools/hue2web.l css | src FILE")
 
    ; the site's own chrome: papel.css first, so a painted page and a doc page are
    ; one design, then hue.css over it for the syntax.
    (h2w-src path)
    (: r (h2w-rdf path)
-      (one? r ? (say err ("hue2web: cannot open " + path + "\n"), quit 1)
+      (one? r ? (udie 1 ("hue2web: cannot open " + path))
        (say out (hw-page path '("papel.css" "hue.css") "index.html"
                          ("<p class=\"srcnav\">the source of <code>" + path + "</code></p>\n"
                           + hw-body path <>r)),

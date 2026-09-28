@@ -18,8 +18,8 @@
 (borrow 'posix)
 (? (lit? (cite 'holo 'objelf)) (borrow 'holo) 0) ; splice the assembler when this love is baked
 
-(: (mkblob-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
-   (mkblob-die m) (say err $ "mkblob: " + m + "\n", quit 1)
+(: (mkblob-slurp p) (uread p @ [1 s] [1 (s + "")] ())
+   (mkblob-die m) (udie 1 ("mkblob: " + m))
 
    ; text -> the byte list `raw` takes, built from the tail so the walk is a tail call
    (mkblob-bytes s i acc) (i < 0 ? acc (mkblob-bytes s (i - 1) (s i . acc)))

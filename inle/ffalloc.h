@@ -12,17 +12,23 @@ struct mem {
 static ai_inline struct mem *after(struct mem *r) {
   return (struct mem*) ((uintptr_t*) r + r->len); }
 
-// n words off the top of the first block with room to spare, NULL when none has
+// n words off the top of the first block that holds them, NULL when none does. a block with
+// no room left for a header of its own after the carve goes whole, so a freed block is taken
+// back at its own size
 static ai_inline void *ff_alloc(struct mem **fl, uintptr_t n) {
   if (!n) return NULL;
   void *p = NULL;
   struct mem *r = NULL, *t;
-  while (*fl && (*fl)->len < n + 2 * Width(struct mem))
+  while (*fl && (*fl)->len < n + Width(struct mem))
     t = *fl,
     *fl = t->next,
     t->next = r,
     r = t;
-  if (*fl)
+  if (*fl && (*fl)->len < n + 2 * Width(struct mem))
+    t = *fl,
+    *fl = t->next,
+    p = t->_;
+  else if (*fl)
     (*fl)->len -= n + Width(struct mem),
     t = after(*fl),
     t->len = Width(struct mem) + n,

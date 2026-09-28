@@ -6,8 +6,8 @@
 ; PSF1 and PSF2 both, 8 pixels wide (a row is one byte, as the C type says).
 ; a .psf.gz is not read: gunzip it first.
 (borrow 'posix)
-(: (rd p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, (s + ""))) ()))
-   (die m) (: _ (say err $ "mkpsf: " + m + "\n") (quit 1))
+(: (rd p) (uread p @ [1 s] (s + "") ())
+   (die m) (udie 1 ("mkpsf: " + m))
    (hd d) (string (d < 10 ? (48 + d) (87 + d)))
    (hx2 v) ("0x" + hd ((v >> 4) & 15) + hd (v & 15))
    (hx v) (v < 16 ? (hd v) ((hx (v >> 4)) + hd (v & 15)))

@@ -8,7 +8,7 @@
 (borrow 'posix)
 ; civil, for a stamp's date (love/boot/post.l)
 (borrow 'cal)
-(: (src-die m) (say err (";; " + m + "\n"), quit 1)
+(: (src-die m) (udie 1 (";; " + m))
 
    ; the directory is positional, so a mistyped flag would be taken as one and a whole
    ; tree laid under it. a leading dash is never a directory here: name the flags, ask
@@ -466,7 +466,7 @@
        r (? has (hark [p "nest" "--stamp"]) [1 ""])
        v (? (<r = 0) <(sound >r) 0)
        (? (charm? v) v 0))
-   (nest-read p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) (s + "")) ()))
+   (nest-read p) (uread p @ [1 s] (s + "") ())
    ; the tools a symlink to love serves by its own name, the argv[0] door
    nest-tools ["lush" "kore" "sb" "cook" "libra" "mooncc" "ain"]
    ; lux is a script over love, so it is written beside it, not linked: the modules the

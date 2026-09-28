@@ -242,11 +242,14 @@ printf 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return (
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   || fail "a register variable pinned by asm() to a nameable register refused"
 # C11 6.8.1p3: a label is unique to its FUNCTION. two of a name laid one mangled label
-# twice and every goto took the first. gcc COMPILES this one, __label__ making the two
-# distinct -- a refusal, so it costs no right answer.
-printf 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' > "$ho/.feat.c"
+# twice and every goto took the first -- so they refuse. gcc's __label__ makes two blocks'
+# L two labels, and those compile.
+printf 'int m(void){ { L: ; } { L: ; } return 0; }\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   && fail "a duplicate label was accepted"
+printf 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+  || fail "two blocks' __label__ L refused"
 
 # a UCN takes EXACTLY 4 (or 8) hex digits -- a short run must REFUSE, not take what
 # it found. test/cc/138 holds the well-formed side; only the refusals live here.

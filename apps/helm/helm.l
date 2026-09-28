@@ -163,7 +163,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
        _   (each <>r (\ g (hnote ("config: " + g))))
        _   (helm-reset us)
        sig (sigfd [sig-chld sig-term sig-int sig-hup])
-       _   (!(lit? sig) ? (say err "helm: no signal source -- cannot supervise\n", quit 1))
+       _   (!(lit? sig) ? (udie 1 "helm: no signal source -- cannot supervise"))
        _   (hput 'sig sig)
        _   ((string? sock) ? (twirl (\ _ (helm-moor sock)) 0) 0)
        _   (hnote ("up with " + show (tally us) + " units"))

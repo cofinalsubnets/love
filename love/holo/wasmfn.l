@@ -191,6 +191,8 @@
      ('st || 'st1 || 'st2 || 'st4) (w-store <f (w-mem (f 1) (f 2)) (f 3))
      'ldx  (w-load 'ld (w-memx (f 2) (f 3) (f 4) (f 5)) (f 1))
      'stx  (w-store 'st (w-memx (f 1) (f 2) (f 3) (f 4)) (f 5))
+     'ldxb (w-load 'ldu1 (w-memx (f 2) (f 3) (f 4) (f 5)) (f 1))
+     'stxb (w-store 'st1 (w-memx (f 1) (f 2) (f 3) (f 4)) (f 5))
      ('lea || 'lean) (w-val (f 2) + [['i64.const (f 3)] '(i64.add)] + w-set (f 1))
      'leax (: m (w-memx (f 2) (f 3) (f 4) (f 5)) (<m + [['i64.const >m] '(i64.add)] + w-set (f 1)))
      ('la || 'lar) (w-la (f 1) (f 2))
