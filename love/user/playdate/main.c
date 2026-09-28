@@ -156,7 +156,7 @@ static char const src_mods[] =
 
 void love_init(void) {
   pdg_log("love: init");
-  cb_open(kcb, NROWS, NCOLS);
+  cb_open(kcb, NROWS, NCOLS, 0);
   kcb->flag |= cb_lnm | cb_wrap;   // console discipline + autowrap the long forms
   // WAKE-FIRST: the pdx bundles the qemu-baked heap image (love-pd.img --
   // egg + rune + cas, wake-checked at build time). A good wake skips the

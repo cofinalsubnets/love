@@ -7392,8 +7392,11 @@
                                         (map lren x)))
                        jend ("`e" + show k)
                        jrv (? (jl && rt != 'void) ("`r" + show k) ())
+                       ; a void body's `return h();` still calls h: only the value has nowhere to go
                        (jr x) (? !(two? x) x
-                                 (<x = 'ret) ['blk (? (jrv && two? >x) [['expr ['asn ['var jrv] (cv <>x rt)]] ['goto jend]] [['goto jend]])]
+                                 (<x = 'ret) ['blk (? (jrv && two? >x) [['expr ['asn ['var jrv] (cv <>x rt)]] ['goto jend]]
+                                                     (two? >x && two? <>x) [['expr <>x] ['goto jend]]
+                                                     [['goto jend]])]
                                  (map jr x))
                        jst (? jl ((? jrv [['decl [[jrv rt]]]] ()) + [['blk (jr (lren rb))] ['lbl jend]]) ())
                        _ (? jrv (pin tys jrv rt) 0)
@@ -7403,7 +7406,10 @@
                                    pm (jst + pt ['var jrv])
                                    xi (jst + into ['var jrv])
                                    jst)
-                             (mode = 'ret) (rc rb)
+                             ; the caller's `return f();`: f's returns are the caller's, and a void f
+                             ; that runs off its end owes the caller's return there too
+                             (mode = 'ret) (rc rb + (? (rt = 'void && !(: rl (rev rb) (two? rl && two? <rl && <<rl = 'ret)))
+                                                      [['ret]] ()))
                              xi (aelim rb (e \ (two? e ? (into e))) 1)
                              (xo || (val? && one)) rb
                              tr1 (: rl (rev rb) r (hx <>(<rl) (nm . d))       ; the trailing return is the test
