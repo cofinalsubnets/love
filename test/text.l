@@ -50,3 +50,24 @@
       (edcut "\e[31mab\e[0mcd" 2 = "\e[31mab\e[0m")        ; a cut coloured run ends in a reset
       (edcut "e\xcc\x81x" 1 = "e\xcc\x81")                  ; the combining mark rides its base
       (edfit "日本語" 3 "." = "日.") (edfit "日" 4 " " = "日  ")))
+
+; 'text's classes and case maps: glibc 2.44's, off tools/mkctype.l. grep -i folds by cpfold,
+; gnulib's rule, which is not symmetric: U+1C80 takes U+0412, and U+0412 does not take it
+(: cpupper (cite 'text 'cpupper) cplower (cite 'text 'cplower) cpis (cite 'text 'cpis)
+   cpclass? (cite 'text 'cpclass?) cpfold (cite 'text 'cpfold) cpfolds (cite 'text 'cpfolds)
+   (test
+      (cpupper 97 = 65) (cpupper 65 = 65) (cpupper 233 = 201) (cpupper 255 = 376)
+      (cpupper 383 = 83) (cpupper 305 = 73) (cpupper 962 = 931) (cpupper 26085 = 26085)
+      (cplower 201 = 233) (cplower 304 = 105) (cplower 8490 = 107) (cplower 7838 = 223)
+      (cplower 256 = 257) (cplower 257 = 257) (cpupper 257 = 256)   ; latin extended, stride 2
+      (cpis "alpha" 233) (cpis "alpha" 26085) (cpis "alpha" 1635) !(cpis "digit" 1635)
+      (cpis "alnum" 1635) !(cpis "alpha" 48) (cpis "alnum" 48)       ; a digit past 0-9 is alpha
+      (cpis "upper" 201) !(cpis "upper" 233) (cpis "lower" 223) (cpis "lower" 42799)
+      (cpis "punct" 8212) (cpis "punct" 160) (cpis "graph" 160) !(cpis "space" 160)
+      (cpis "space" 8195) (cpis "blank" 8195) (cpis "space" 8232) !(cpis "blank" 8232)
+      (cpis "cntrl" 133) (cpis "cntrl" 8232) !(cpis "print" 8232) !(cpis "print" 55296)
+      (cpis "xdigit" 70) !(cpis "xdigit" 71) (cpclass? "punct") !(cpclass? "foo")
+      (sort (cpfold 115) = [83 383]) (sort (cpfold 105) = [73 305]) (cpfold 304 = ())
+      (cpfold 107 = [75]) (cpfold 8490 = ()) (sort (cpfold 963) = [931 962])
+      (sort (cpfold 7296) = [1042 1074]) !(elem 7296 (cpfold 1042))
+      (cpfold 49 = ()) (sort (cpfolds 97 99) = [65 66 67])))
