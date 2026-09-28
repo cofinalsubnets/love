@@ -217,21 +217,21 @@
                   ; sht_nobits (8) is the bss lane: no file bytes (sh_offset is a
                   ; placeholder), only size and alignment, address space past the last write.
                   (: lane (ld-lane nm ty fl)
-                     (? lane (: _ (pin secs i [lane (? (ty = 8) 0 off) sz
-                                               (ld-f fs s h 'sh-align) (ld-home lane fl ty)])
-                                _ (pin lanes lane (i . lanes lane))
-                                (class (i + 1) symt rls))
+                     (? lane (pin secs i [lane (? (ty = 8) 0 off) sz
+                                          (ld-f fs s h 'sh-align) (ld-home lane fl ty)],
+                              pin lanes lane (i . lanes lane),
+                              class (i + 1) symt rls)
                         ; .comment is dropped like any non-alloc section and kept anyway: the
                         ; output's producer record is the union of its inputs'.
                         (drop? i ty fl nm sz)
-                         (: _ (? (nm = ".comment") (pin ob 'comment (snip s off (off + sz))) 0)
-                            (class (i + 1) symt rls))
+                         (nm = ".comment" ? (pin ob 'comment (snip s off (off + sz))) 0,
+                          class (i + 1) symt rls)
                         (scare 'link-section nm)))
-                 (ty = 2) (: _ (ld-esz fs s h 'sy-ent nm)
-                             (class (i + 1) [off sz (ld-f fs s h 'sh-link)] rls))
+                 (ty = 2) (ld-esz fs s h 'sy-ent nm,
+                           class (i + 1) [off sz (ld-f fs s h 'sh-link)] rls)
                  (ty = ld-n fs 'rl-ty)
-                  (: _ (ld-esz fs s h 'rl-ent nm)
-                     (class (i + 1) symt ([(ld-f fs s h 'sh-info) off sz] . rls)))
+                  (ld-esz fs s h 'rl-ent nm,
+                   class (i + 1) symt ([(ld-f fs s h 'sh-info) off sz] . rls))
                  (elem ty '(0 3)) (class (i + 1) symt rls)
                  (drop? i ty fl nm sz) (class (i + 1) symt rls)
                  (scare 'link-section nm))))
@@ -567,16 +567,16 @@
               _ (pos - off0 <= ro ? 0 (scare 'link-unsorted (peep ob 'id 0)))
               sy (peep (peep ob 'syms 0) (e 2) ())
               sv (? (sy 2 = 3)                   ; stt_section: the section's base
-                    (: _ (? (two? (peep (peep ob 'secs 0) (sy 3) ())) 0
-                            (scare 'link-sym-section (peep ob 'id 0)))
-                       (peep (peep ob 'base 0) (sy 3) 0))
+                    (two? (peep (peep ob 'secs 0) (sy 3) ()) ? 0
+                        (scare 'link-sym-section (peep ob 'id 0)),
+                     peep (peep ob 'base 0) (sy 3) 0)
                     ; a local defined symbol is its own object's business: base + value off
                     ; the object that carried it (clang relocates against .L labels). never
                     ; the global book -- a namesake from another object would answer wrong.
                     (sy 1 = 0 && 0 < sy 3 < 65280)
-                     (: _ (? (two? (peep (peep ob 'secs 0) (sy 3) ())) 0
-                             (scare 'link-sym-section <sy))
-                        (peep (peep ob 'base 0) (sy 3) 0 + sy 4))
+                     (two? (peep (peep ob 'secs 0) (sy 3) ()) ? 0
+                         (scare 'link-sym-section <sy),
+                      peep (peep ob 'base 0) (sy 3) 0 + sy 4)
                     ; a weak undefined symbol resolves to zero (ELF's law, and musl's
                     ; __init_tls leans on it); only a strong one unresolved is an error.
                     (sy 1 = 2 && sy 3 = 0 && atom? (glo <sy)) 0
@@ -584,17 +584,17 @@
               ; the two classes part here and nowhere else: an ARM field is 4 bytes wide
               ; whatever the kind, its addend already in it, and `ad` arrives ().
               (? arm?
-                 (: _ (ro + 4 <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
-                    ; the emit-relocs half: an abs32 site holds an address this link wrote,
-                    ; so a loader adds its delta here. pc-relative kinds travel with the code.
-                    _ (relbox && kind = 2 ? (pin relbox 0 ((base + ro) . relbox 0)))
-                    ; ..and a movw/movt pair is absolute too, but carries the address as two
-                    ; split immediates no loader can slide. the seats asked for a relocatable
-                    ; image route `la` through a pooled abs32 word; scare rather than be short.
-                    _ (relbox && elem kind '(47 48) ? (scare 'link-abs-imm <sy))
-                    (go (off0 + ro + 4) >es
-                        (ldarm be s (off0 + ro) sv kind (base + ro)
-                         . (snip s pos (off0 + ro) . acc))))
+                 (ro + 4 <= sz ? 0 (scare 'link-oob (peep ob 'id 0)),
+                  ; the emit-relocs half: an abs32 site holds an address this link wrote,
+                  ; so a loader adds its delta here. pc-relative kinds travel with the code.
+                  relbox && kind = 2 ? (pin relbox 0 ((base + ro) . relbox 0)),
+                  ; ..and a movw/movt pair is absolute too, but carries the address as two
+                  ; split immediates no loader can slide. the seats asked for a relocatable
+                  ; image route `la` through a pooled abs32 word; scare rather than be short.
+                  relbox && elem kind '(47 48) ? (scare 'link-abs-imm <sy),
+                  go (off0 + ro + 4) >es
+                     (ldarm be s (off0 + ro) sv kind (base + ro)
+                      . (snip s pos (off0 + ro) . acc)))
                  (: sa (ld-u64 (sv + ad))              ; S + A, wrapped as a linker wraps it
                     prel (s64 (ld-u64 (sa - (base + ro))))            ; ..and S + A - P, signed
                     abs64? (? rv (kind = 2) (elem kind '(1 257)))   ; R_RISCV_64 / R_X86_64_64 / R_AARCH64_ABS64

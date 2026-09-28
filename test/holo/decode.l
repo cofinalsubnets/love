@@ -30,7 +30,8 @@
        (? (ours = theirs) 1
           (n > 2 && ours = (snip theirs 0 (n - 1)) && elem (theirs (n - 1)) '(98 119 108 113)) 1
           (: k (xa-att-nil (name theirs)) (nom? k && ours = show k)) 1
-          (theirs = "movsl" && ours = "movsd") 1
+          (: k (xa-strl (name theirs)) (nom? k && ours = show k)) 1       ; movsl, insl
+          (elem theirs '("stos" "lods" "scas") && starts? ours theirs) 1   ; the width in the operand
           (theirs = "movabs" && ours = "mov") 1
           0))
    misses {}                                        ; objdump's mnemonic -> how often we missed it
@@ -40,8 +41,8 @@
        rows (x64-disasm s 0)
        n {0 0} bmiss {0 0} mmiss {0 0} shown {0 0}
        (tell why r) (? (peep shown 0 0 < 4)
-                      (: _ (pin shown 0 (peep shown 0 0 + 1))
-                         (puts ("  " + why + " at " + show <r + " in " + bin + ": " + show (r 2) + " objdump: " + show (peep od <r ()) + "\n")))
+                      (pin shown 0 (peep shown 0 0 + 1),
+                         puts ("  " + why + " at " + show <r + " in " + bin + ": " + show (r 2) + " objdump: " + show (peep od <r ()) + "\n"))
                       0)
        _ (each rows (\ r (: their (peep od <r "") ours (ourmn (r 2))
                             _ (pin n 0 (peep n 0 0 + 1))

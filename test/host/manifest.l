@@ -44,7 +44,7 @@
  _ (test
     (6 = worth sh (\ j1))
     (9 = worth sh (\ n1))
-    (= [4 5] (worth sh (\ o1)))))
+    ([4 5] = worth sh (\ o1))))
 
 ; --- cycles: flagged at every cell on the loop, and taint what reads them
 ; (a bare whirl is the unit and would otherwise ride quietly through) ---

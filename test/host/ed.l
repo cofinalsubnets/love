@@ -5,8 +5,9 @@
 ;   cat test/00-init.l test/host/ed.l | out/love
 (borrow 'posix)
 (: love <cmdline
-   dir "out/.edtest"
-   _ (hark ["rm" "-rf" dir]) _ (mkdir dir 493)
+   ; every path this lays is the pid's own, so two runs over one out/ keep apart
+   dir ("out/.edtest-" + show (getpid 0))
+   _ (mkdir dir 493)
    f (dir + "/t")
    _ (: q (open f "w") _ (say q "alpha\nbeta\ngamma\n") (close q))
    (sub? h n) (: (go i) (? (#h < i + #n) 0 (n = snip h i (i + #n)) 1 (go (i + 1))) (go 0))
@@ -42,5 +43,6 @@
    s2 (waitfor <r2)
    got (: q (open f "r") (? (hot? q) (: g (slurp q) _ (close q) g) ""))
    _ (test (sub? b0 "3L, 17B") (sub? b1 "beta") (sub? b2 "\e[?1049h") (sub? b3 "\e[?1049l")
-           (<s2 = 0) (got = "beta\ngamma\n")))
+           (<s2 = 0) (got = "beta\ngamma\n"))
+   _ (hark ["rm" "-rf" dir]))
 (test_fin (), puts "ed: ok", putc 10, 0)

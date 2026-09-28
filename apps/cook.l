@@ -125,7 +125,7 @@
                ; phony's whole subtree in front of the sibling beside it. park the land under
                ; the item instead: the parent calls jobland on the way past, so every job comes home.
                (? (atom? steps)
-                  (: _ (pin pending item (. 'agg (. (ingredients + orderonly) ()))) ())
+                  (pin pending item (. 'agg (. (ingredients + orderonly) ())), ())
                   (: _ (each ingredients (\ d (jobland d done shipped pending)))
                      _ (each orderonly (\ d (jobland d done shipped pending)))
                      ta0 (date item)
@@ -137,7 +137,7 @@
                      ; one, else right here. a job's item settles when it lands;
                      ; everything else settles now.
                      j (? stale (jobstart item steps) 0)
-                     (? j (: _ (pin pending item (j . ta0 . steps)) ta0)
+                     (? j (pin pending item (j . ta0 . steps), ta0)
                           (settle item ta0 (stale ? steps) done shipped)))))
             ; no card: a source leaf. it must already exist on disk.
             (: ta (date item)
@@ -160,9 +160,9 @@
    (jobland item done shipped pending)
    (: v (peep pending item 0)
       (? (atom? v) ()
-         (= <v 'agg) (: _ (pull pending item 0)
-                        _ (each <>v (d \ jobland d done shipped pending))
-                        (settle item () () done shipped))
+         (<v = 'agg) (pull pending item 0,
+                      each <>v (d \ jobland d done shipped pending),
+                      settle item () () done shipped)
          (: st (jobwait <v)
             _ (pull pending item 0)
             _ (0 != st && jobdie item st)
@@ -196,31 +196,31 @@
    ; its own child, and `glean` reaps any child, so the two must never be in the air at once.
    (jobstart item steps)
    (? (!(two? steps)) 0                                     ; a pure aggregate runs nothing: no job, and no drain either
-      (!((1 < jobw ()) && (jobforkable? steps))) (: _ (jobdrain 0) _ (recur item steps) 0)
+      (!((1 < jobw ()) && (jobforkable? steps))) (jobdrain 0, recur item steps, 0)
       (: _ (? (jobw () <= #running) (jobreap 0) 0)          ; wait for a slot
          _ (flush out) _ (flush err)
          p (fork 0)
-         (? (0 = p) (quit (urun (\ _ (: _ (recur item steps) 0)) ()))   ; the child: run it and go, a leave its status
-            (0 < p) (: _ (pin running p item) p)
-            (: _ (recur item steps) 0))))
+         (? (0 = p) (quit (urun (\ _ (recur item steps, 0)) ()))   ; the child: run it and go, a leave its status
+            (0 < p) (pin running p item, p)
+            (recur item steps, 0))))
 
    ; reap one job and file its verdict under its pid, so whichever land wants it finds it however
    ; the reaps fall. `glean` is waitpid(-1, WNOHANG), so the wait is a poll and `rest` parks it.
    (jobreap _)
    (: r (glean 0)
-      (? (two? r) (: _ (pin verdicts <r >r) _ (pull running <r 0) <r)
+      (? (two? r) (pin verdicts <r >r, pull running <r 0, <r)
          (charm? r) ()                                      ; -errno: no children left
-         (: _ (rest 1) (jobreap 0))))
+         (rest 1, jobreap 0)))
 
    ; this pid's status, reaping as needed. a pid neither filed nor running was reaped by
    ; something that is not this pool and its verdict is gone, which is not a green one.
    (jobwait p)
    (: v (peep verdicts p 'no)
-      (? !(= v 'no) (: _ (pull verdicts p 0) v)
+      (? (v != 'no) (pull verdicts p 0, v)
          (0 = #running) (udie 1 ("cook: lost the job for pid " + show p))
-         (: _ (jobreap 0) (jobwait p))))
+         (jobreap 0, jobwait p)))
 
-   (jobdrain _) (? (0 < #running) (: _ (jobreap 0) (jobdrain 0)) 0)
+   (jobdrain _) (? (0 < #running) (jobreap 0, jobdrain 0) 0)
 
    ; the child already said which command failed and with what status; this adds the item.
    ; outstanding jobs are let finish, as make does: a half-written file left behind by a kill
@@ -265,7 +265,7 @@
    ; a mode letter in .SHELLFLAGS (-ac, -gc, -pc) is the mode the shell is asked under.
    (inimg sh fl)
    (: k (join " " (sh . fl)) v (peep cookbox k 'no)
-       (? !(= v 'no) v
+       (? (v != 'no) v
           (: ours (cite 'lush 'sh-ours?) one (cite 'lush 'sh-oneline)
              fs (cite 'lush 'sh-oneflags) in (cite 'lush 'sh-inmode)
              f (? ((lit? ours) && (lit? one) && (lit? fs) && (lit? in)
@@ -757,7 +757,7 @@
              two? raws && !(any execp cmds))
        (? atom?
           (: r0 <raws
-             (? (peep dryrun 0 0) [(\ _ (: _ (puts (join "\n" cmds)) (putc 10)))]
+             (? (peep dryrun 0 0) [(\ _ (puts (join "\n" cmds), putc 10))]
                 (peep emitp 0 0) [(([sn] + fl) + [(join "\n" cmds)])]
                 [(_ \ sh-line <r0 <>r0 sn fl (join "\n" cmds))]))
           (: (g rs es acc)
@@ -795,10 +795,10 @@
       (: v (trim val)
          ; the flavor rides beside the origin: an expanded `:=` and a stored `=` are the
          ; same text afterwards, so nothing in the value itself can answer $(flavor).
-         (org f) (: _ (pin origins nm (? ov "override" "file")) (pin flavors nm f))
-         (op @ "!="  (: _ (pin as nm (fn-shell as (expand v as 0))) (org "simple"))
-               ":="  (: _ (pin as nm (expand v as 0)) (org "simple"))
-               "::=" (: _ (pin as nm (expand v as 0)) (org "simple"))
+         (org f) (pin origins nm (? ov "override" "file"), pin flavors nm f)
+         (op @ "!="  (pin as nm (fn-shell as (expand v as 0)), org "simple")
+               ":="  (pin as nm (expand v as 0), org "simple")
+               "::=" (pin as nm (expand v as 0), org "simple")
                "?="  (: cur (peep as nm 'cook.undef)
                       (nom? cur ? (pin as nm v, org "recursive") 0))
                "+="  (: o (peep as nm "")
@@ -831,29 +831,29 @@
              (k @ 'recipe (loop rest rules (? (on && cur) (addstep cur (r1 c)) cur) cond)
                   'rule   (? on (loop rest (flushr cur rules) (mkrule c) cond)
                                       (loop rest (flushr cur rules) 0 cond))
-                  'assign (: _ (? on (do-assign as (r1 c) (r2 c) (r3 c)) 0) (loop rest (flushr cur rules) 0 cond))
-                  'oassign (: _ (? on (assign1 as (r1 c) (r2 c) (r3 c) 1) 0) (loop rest (flushr cur rules) 0 cond))
-                  'xassign (: _ (? on (: _ (assign1 as (r1 c) (r2 c) (r3 c) 0)
-                                               (setenv (r1 c) (expand (peep as (r1 c) "") as 0))) 0)
-                                    (loop rest (flushr cur rules) 0 cond))
-                  'xname   (: _ (? on (setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0)
-                                    (loop rest (flushr cur rules) 0 cond))
+                  'assign ((? on (do-assign as (r1 c) (r2 c) (r3 c)) 0), loop rest (flushr cur rules) 0 cond)
+                  'oassign ((? on (assign1 as (r1 c) (r2 c) (r3 c) 1) 0), loop rest (flushr cur rules) 0 cond)
+                  'xassign ((? on (assign1 as (r1 c) (r2 c) (r3 c) 0,
+                                   setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0),
+                            loop rest (flushr cur rules) 0 cond)
+                  'xname   ((? on (setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0),
+                            loop rest (flushr cur rules) 0 cond)
                   'inc    (? on (: more (catmap file-lines (split-ws (expand (r1 c) as 0)))
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
                   ; conditionals thread `cur` rather than flushing it: a top-level rule is
                   ; already flushed by the blank line before one, and a conditional inside a
                   ; recipe block gates its lines via `on` above.
-                  'defassign (: _ (? on (do-assign as (r1 c) "=" (r2 c)) 0)
-                                      (loop rest (flushr cur rules) 0 cond))
+                  'defassign ((? on (do-assign as (r1 c) "=" (r2 c)) 0),
+                              loop rest (flushr cur rules) 0 cond)
                   ; remember which targets carry one, so recur can refuse if one is remade
-                  'tvar (: _ (? on (each (split-ws (expand (r1 c) as 0))
-                                               (\ w (pin tvarbox (unseat w) "1"))) 0)
-                                 (loop rest (flushr cur rules) 0 cond))
+                  'tvar ((? on (each (split-ws (expand (r1 c) as 0))
+                                           (\ w (pin tvarbox (unseat w) "1"))) 0),
+                         loop rest (flushr cur rules) 0 cond)
                   'expand (? (on && evalp (r1 c))
                                    (: more (text-lines (expand (eval-args (r1 c)) as 0))
                                       (loop (more + rest) (flushr cur rules) 0 cond))
-                                   (: _ (? on (expand (r1 c) as 0) 0) (loop rest rules cur cond)))
+                                   ((? on (expand (r1 c) as 0) 0), loop rest rules cur cond))
                   'ifeq   (loop rest rules cur (push-cond cond on (on && eval-ifeq (r1 c) as)))
                   'ifneq  (loop rest rules cur (push-cond cond on (on && !(eval-ifeq (r1 c) as))))
                   'ifdef  (loop rest rules cur (push-cond cond on (on && eval-ifdef (r1 c) as)))
@@ -909,11 +909,11 @@
                       (? (i < #e)
                          (: nm (snip e 0 i)
                             (? (nm = "SHELL") 0
-                               (: _ (pin as nm (sub e (1 + i) #e))
-                                  (pin origins nm "environment"))))
+                               (pin as nm (sub e (1 + i) #e),
+                                pin origins nm "environment")))
                          0))))
       (dflt nm v) (? (nom? (peep as nm 'cook.undef))
-                     (: _ (pin as nm v) (pin origins nm "default")) 0)
+                     (pin as nm v, pin origins nm "default") 0)
       _ (dflt "CC" (? px "c99" "cc")) _ (? px (dflt "CFLAGS" "-O1") 0)
       _ (dflt "MAKE" "make") _ (dflt "AR" "ar") _ (dflt "RM" "rm -f")
       ; CURDIR is make's own and is read after -C: a makefile that names itself with
@@ -921,7 +921,7 @@
       _ (dflt "CURDIR" (: p (cwd 0) (? (string? p) p "")))
       _ (dflt "AS" "as") _ (dflt "ARFLAGS" "rv")      ; the builtin rules below read these
       _ (each (clivars 0)
-              (\ pr (: _ (pin as <pr >pr) (pin origins <pr "command line"))))
+              (\ pr (pin as <pr >pr, pin origins <pr "command line")))
       as)
 
    ; make's old-style suffix rules: `.c.o:` is `%.o: %.c`, and a single `.c:` is `%: %.c`.
@@ -936,13 +936,13 @@
    (sufknown x) (any (= x) (sufnow 0))
    (sufpat t)
    (: n #t
-      (? (|| (n < 2) !(t 0 = 46)) 0
+      (? (n < 2 || t 0 != 46) 0
          (: (lastdot k r) (? (n <= k) r (? (t k = 46) (lastdot (1 + k) k) (lastdot (1 + k) r)))
             d (lastdot 1 0)
             (? (d = 0)                                        ; .c -> % : %.c
                (? (sufknown (snip t 1 n)) ["%" ("%" + t)] 0)
                (: sr (snip t 1 d) tg (snip t (1 + d) n)       ; .c.o -> %.o : %.c
-                  (? (&& (sufknown sr) (sufknown tg))
+                  (? (sufknown sr && sufknown tg)
                      [("%." + tg) ("%." + sr)] 0))))))
 
    ; split a prereq word list at a `|` into (normal . order-only).
@@ -1234,27 +1234,27 @@
    (parse-args ws)             ; -> a tablet: 'file, 'emit, 'help, 'ver, 'var, 'pos (the recipe words, in order)
    ((: (loop ws opt) (? !(two? ws) opt
        (: w <ws r >ws
-          (? (w = "-f" || w = "--file") (: _ (need-arg w r) _ (pin opt 'file <r) (loop >r opt))
-             (w = "-C" || w = "--directory") (: _ (need-arg w r) _ (pin opt 'dir <r) (loop >r opt))
+          (? (w = "-f" || w = "--file") (need-arg w r, pin opt 'file <r, loop >r opt)
+             (w = "-C" || w = "--directory") (need-arg w r, pin opt 'dir <r, loop >r opt)
              (w = "-j" || w = "--jobs")
-                (? ((two? r) && (jobword? <r)) (: _ (pin opt 'jobs (jobn <r)) (loop >r opt))
-                   (: _ (pin opt 'jobs (jobauto 0)) (loop r opt)))
+                (? ((two? r) && (jobword? <r)) (pin opt 'jobs (jobn <r), loop >r opt)
+                   (pin opt 'jobs (jobauto 0), loop r opt))
              ((2 < tally w) && ("-j" = snip w 0 2))          ; glued: -j8
-                                             (: _ (pin opt 'jobs (jobn (snip w 2 #w))) (loop r opt))
+                                             (pin opt 'jobs (jobn (snip w 2 #w)), loop r opt)
              ((w = "-n") || (w = "--dry-run") || (w = "--just-print"))
-                                                  (: _ (pin opt 'dry 1) (loop r opt))
-             (w = "--emit")                                       (: _ (pin opt 'emit 1) (loop r opt))
-             ((w = "-h") || (w = "--help") || (w = "help"))      (: _ (pin opt 'help 1) (loop r opt))
-             ((w = "-v") || (w = "--version") || (w = "version")) (: _ (pin opt 'ver 1) (loop r opt))
+                                                  (pin opt 'dry 1, loop r opt)
+             (w = "--emit")                                       (pin opt 'emit 1, loop r opt)
+             ((w = "-h") || (w = "--help") || (w = "help"))      (pin opt 'help 1, loop r opt)
+             ((w = "-v") || (w = "--version") || (w = "version")) (pin opt 'ver 1, loop r opt)
              ; make's -s is .SILENT for the run; the directory chatter flags have nothing to do
              ((w = "-s") || (w = "--silent") || (w = "--quiet"))
-                                                  (: _ (pin opt 'var (peep opt 'var () + [(".SILENT" . "1")])) (loop r opt))
+                                                  (pin opt 'var (peep opt 'var () + [(".SILENT" . "1")]), loop r opt)
              ((w = "--no-print-directory") || (w = "-w") || (w = "--print-directory")) (loop r opt)
              ((0 < tally w) && (w 0 = 45))                     ; any other dash word is a flag, never a recipe
                                                   (say err ("cook: unknown option " + w), put err 10, quit 2)
              (: vw (varw w)
-                (? (two? vw) (: _ (pin opt 'var (peep opt 'var () + [vw])) (loop r opt))
-                   (: _ (pin opt 'pos (peep opt 'pos () + [w])) (loop r opt))))))))
+                (? (two? vw) (pin opt 'var (peep opt 'var () + [vw]), loop r opt)
+                   (pin opt 'pos (peep opt 'pos () + [w]), loop r opt)))))))
     ws (tablet 0))
 
    ; -- cook-main (this form's body answers it) --
@@ -1266,7 +1266,7 @@
    ; it splices its own layer first, and owns that for every caller: a Cookfile is love source
    ; read at runtime, so its bare (recipe ..) (cook-all 0) (ticket 0) only resolve on the walk.
    (cook-main as)
-   (: _ (? !(nil? (cite 'cook)) (borrow 'cook) 0)  ; splice my registered self if I am one; riding
+   (: _ (? (cite 'cook) (borrow 'cook) 0)  ; splice my registered self if I am one; riding
                                                 ; a cat my names walk already, and the guard keeps the loader out
       ; ..and posix beside it: a global name reads the live book (love/ev.c's lvm_index), and this
       ; is called on a chain that carries neither -- nothing else puts back its loading doors.
@@ -1292,7 +1292,7 @@
       ; form is kept for the case it was written for, a build file discovery cannot find.
       disc0 (? xf 0 (discover 0))                                    ; what discovery would name, if anything
       posfile (? (!xf && two? pos && exists? <pos && (? disc0 (disc0 = <pos) 1)) <pos 0)
-      file (? xf xf (? posfile posfile (: _ (autoregen 0) (discover 0))))     ; discovery may auto-regen a stale Cookfile from a newer Makefile
+      file (? xf xf (? posfile posfile (autoregen 0, discover 0)))     ; discovery may auto-regen a stale Cookfile from a newer Makefile
       _ (pin tickets 0 (? posfile >pos pos))                 ; the recipe words; the positional file is not a recipe
       (? emit?
          (: _ (? file 0 (udie 1 "cook: --emit needs a Makefile"))
@@ -1304,10 +1304,10 @@
          file
          (: q (open file "r")
             _ (? (asmake? file xf)
-                 (: _ (register-makefile (slurp q)) (cook-all 0))
+                 (register-makefile (slurp q), cook-all 0)
                  ((: (g x) (: r (sound x)
-                                  (? (two? r) (: _ (ev 'ev <r) (g >r))
-                                     (= r 'torn) (udie 1 ("cook: unfinished form in " + file))
+                                  (? (two? r) (ev 'ev <r, g >r)
+                                     (r = 'torn) (udie 1 ("cook: unfinished form in " + file))
                                      0)))
                    (slurp q)))
             0)

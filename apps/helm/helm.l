@@ -48,20 +48,16 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    ; a PIPE, not a protocol: the words go up as one line and whatever comes back
    ; is written out. a session is the same pipe with two tasks on it, the reader
    ; parked on the socket while the writer is parked on the terminal.
-   (hdown c)  (: ch (see c)  (? (ch == -1) 0 (putc ch, flush out, hdown c)))
-   (hup c)    (: ch (see in) (? (ch == -1) (seal c 1)
+   (hdown c)  (: ch (see c)  (ch == -1 ? 0 (putc ch, flush out, hdown c)))
+   (hup c)    (: ch (see in) (ch == -1 ? (seal c 1)
                                 (put c ch, (ch == 10 ? (flush c) 0), hup c)))
    (helm-ctl sock as)
     (: c (connect ['unix sock])
        (? !(lit? c) (say err ("helm: no moor at " + sock + "\n"), 1)
           (two? as)
-            (: _ (say c (hargv-line as + "\n")) _ (flush c) _ (seal c 1)
-               _ (hdown c) _ (close c) 0)
+            (say c (hargv-line as + "\n"), flush c, seal c 1, hdown c, close c, 0)
           (: t (twirl (\ _ (hdown c)) 0)
-             _ (hup c)
-             _ (catch t)
-             _ (close c)
-             0)))
+             (hup c, catch t, close c, 0))))
 
    ; --- helm check ------------------------------------------------------------
    (helm-check conf)
@@ -71,15 +67,15 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
        gs <>r
        _  (each gs (\ g (say err ("helm: " + g + "\n"))))
        _  (flush err)
-       ((two? gs) ? 1 0))
+       (two? gs ? 1 0))
 
    ; --- pid 1's own bringup ---------------------------------------------------
    ; only as pid 1, where we are root in our own namespace and these mounts are
    ; ours to make. anywhere else helm is a plain supervisor and touches nothing.
    (hmount1 src tgt typ)
-    (: _ (mkdir tgt 493)
-       r (mount src tgt typ)
-       (hnote ("mount " + typ + " on " + tgt + (r ? (" -> errno " + show r) " -> ok"))))
+    (mkdir tgt 493,
+     (: r (mount src tgt typ)
+        (hnote ("mount " + typ + " on " + tgt + (r ? (" -> errno " + show r) " -> ok")))))
    ; --- the underlay: /usr/bin, laid from the verb table ----------------------
    ; this binary answers to every name in (cite 'verbs 'tab) through argv[0] --
    ; post.l's `seat` reads the basename -- so a directory of links onto selfpath
@@ -94,13 +90,12 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    ; would meet its own last pass, and eexist is not a reason to have no `ls`.
    (hlink1 exe dir nm)
     (: p (dir + "/" + string nm)
-       _ (unlink p)
-       (nom? (symlink exe p) ? 0 1))
+       (unlink p, nom? (symlink exe p) ? 0 1))
    (hunderlay dir)
     (: exe (selfpath 0)
        (? !(string? exe) (hnote "underlay: this seat cannot say where it lives", 0)
-          (: _  (hmkdirs dir)
-             r  (mount "tmpfs" dir "tmpfs")
+          (hmkdirs dir,
+           (: r  (mount "tmpfs" dir "tmpfs")
              _  (hnote ("underlay " + dir + (nom? r ? (" -> " + string r + ", laid in place")
                                                       " -> tmpfs")))
              ; `love` is not a verb -- it is the seat every other name wears -- so
@@ -108,7 +103,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
              ws (sort ("love" . map string (keys (cite 'verbs 'tab))))
              n  (net (map (\ w (hlink1 exe dir w)) ws))
              _  (hnote ("underlay " + show n + " names on " + exe))
-             n)))
+             n))))
    ; --- the scatter: the carried tree, inflated into RAM -----------------------
    ; inle's ramfs IS this archive (k_untar in inle/kmain.c): the artifact carries
    ; its own source and the machine inflates it at boot, so a disk was never what the
@@ -128,48 +123,45 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
     (: gz (source-gz "x")
        (? !(string? gz) (hnote "scatter: this love carries no source", 0)
           (: u (gz-unzip gz)
-             (? !(two? u) (hnote "scatter: the carried archive did not inflate", 0)
+             (? (atom? u) (hnote "scatter: the carried archive did not inflate", 0)
                 (: t (tar-unpack <>u)
-                   (? !(two? t) (hnote "scatter: the carried archive is torn", 0)
+                   (? (atom? t) (hnote "scatter: the carried archive is torn", 0)
                       (: es (filter (\ e (0 < #(tar-get e 'nom "")))
                                     (map (\ e (pin e 'nom (hbelow (tar-get e 'nom "")))) <>t))
                          _  (hmkdirs root)
                          w  (tar-scatter root es)
-                         (? !(two? w) (hnote ("scatter: can't write " + root), 0)
+                         (? (atom? w) (hnote ("scatter: can't write " + root), 0)
                             (hnote ("scatter " + show <>w + " files under " + root),
                              <>w)))))))))
    (helm-pid1 _)
     (: me (getpid 0)
        (? (me != 1) 0
-          (: _ (hnote "pid 1 -- the early filesystems")
-             _ (hmount1 "proc"     "/proc" "proc")
-             _ (hmount1 "sysfs"    "/sys"  "sysfs")
-             _ (hmount1 "devtmpfs" "/dev"  "devtmpfs")
-             _ (hmount1 "tmpfs"    "/tmp"  "tmpfs")
-             _ (hunderlay "/usr/bin")
-             _ (hscatter "/")
-             1)))
+          (hnote "pid 1 -- the early filesystems",
+           hmount1 "proc"     "/proc" "proc",
+           hmount1 "sysfs"    "/sys"  "sysfs",
+           hmount1 "devtmpfs" "/dev"  "devtmpfs",
+           hmount1 "tmpfs"    "/tmp"  "tmpfs",
+           hunderlay "/usr/bin",
+           hscatter "/",
+           1)))
 
    ; --- helm run --------------------------------------------------------------
    ; the splice first: the moor evaluates in the session's book, so helm's own
    ; vocabulary has to BE that book for (status 0) to mean anything at a prompt.
    (helm-run conf sock quiet)
-    (: _   (!(nil? (cite 'helm)) ? (borrow 'helm))
-       _   (hput 'conf conf)
-       _   (hput 'quiet quiet)
-       _   (helm-pid1 0)
-       r   (hconf conf)
+    (cite 'helm ? (borrow 'helm), hput 'conf conf, hput 'quiet quiet, helm-pid1 0,
+     (: r  (hconf conf)
        us  <r
        _   (each <>r (\ g (hnote ("config: " + g))))
        _   (helm-reset us)
        sig (sigfd [sig-chld sig-term sig-int sig-hup])
        _   (!(lit? sig) ? (udie 1 "helm: no signal source -- cannot supervise"))
        _   (hput 'sig sig)
-       _   ((string? sock) ? (twirl (\ _ (helm-moor sock)) 0) 0)
-       _   (hnote ("up with " + show (tally us) + " units"))
+       _   (string? sock ? (twirl (\ _ (helm-moor sock)) 0) 0)
+       _   (hnote ("up with " + show #us + " units"))
        _   (hboot-all 0)
        _   (hloop sig)
-       0)
+       0))
 
    ; --- the command line ------------------------------------------------------
    ; the flags in `ws` into `t`, answering the words behind them. walked twice, once
@@ -182,23 +174,23 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
     (: o (uopt ws t '(99 115) () {"config" 99 "socket" 115 "quiet" 113})
        _ (two? o ? 0 (hdie 2 (last ws + " needs an argument")))
        un (uoptun t '(99 115 113))
-       _ (nil? un ? 0 (hdie 2 ("unknown option -" + string un)))
+       _ (!un ? 0 (hdie 2 ("unknown option -" + string un)))
        <>>o)
    (helm-main as)
-    (: _ (!(nil? (cite 'helm)) ? (borrow 'helm))
-       t (tablet 0)
+    (cite 'helm ? (borrow 'helm),
+     (: t (tablet 0)
        r (hopts t as)
        w (two? r ? <r "")
        _ (? (w = "" || w = "run" || w = "check" || w = "ctl") 0 (hbad w))
        verb (? (w = "check") 'check (w = "ctl") 'ctl 'run)
        ; ctl is where our flags end -- the words behind it are the remote command's own
-       words (? (verb = 'ctl) >r (hopts t >r))
+       words (verb = 'ctl ? >r (hopts t >r))
        _ (? (verb = 'ctl) 0 (two? words) (hbad <words) 0)
-       conf (: v (uoptv t 99) (nil? v ? "/etc/helm.l" v))
-       sock (: v (uoptv t 115) (nil? v ? (helm-sock 0) v))
+       conf (: v (uoptv t 99) (!v ? "/etc/helm.l" v))
+       sock (: v (uoptv t 115) (!v ? (helm-sock 0) v))
        (? (verb == 'check) (helm-check conf)
           (verb == 'ctl)   (helm-ctl sock words)
-          (helm-run conf sock (peep t 113 0)))))
+          (helm-run conf sock (peep t 113 0))))))
 
 ; the seat, its own form so the binder above stays body-less and defglobs: fire
 ; helm-main iff the installed `helm` script sits in the program seat of the real
@@ -208,4 +200,4 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
 (: door (udoor 'helm (urun helm-main) helm-usage 1 1)
    _ ((cite 'verbs 'enlist) 'helm door ())
    s (cite 'verbs 'fire ["helm"])
-   ((two? s) ? (quit (door >s)))))
+   (two? s ? (quit (door >s)))))

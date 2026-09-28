@@ -28,57 +28,57 @@
 (:
    ; a path and one entry -> the child's path (a trailing / on the parent stays one /)
    (fi-join p b)
-    (: n (tally p) (? ((0 < n) && (p (n - 1) = 47)) (p + b) (p + "/" + b)))
+    (: n #p (? ((0 < n) && (p (n - 1) = 47)) (p + b) (p + "/" + b)))
    ; a path -> its type charm: f, d, l, or 0 for a thing that is none of the three
    (fi-type p)
     (? (string? (readlink p)) 108
        (: st (stat p)
-          (? !(two? st) 0
-             (: m (& 61440 <>>st) (? (m = 16384) 100 (m = 32768) 102 0)))))
+          (? (atom? st) 0
+             (: m (61440 & <>>st) (? (m = 16384) 100 (m = 32768) 102 0)))))
 
    ; -- the expression: words in, a tree out --
    ; every parse door answers (node rest) or () -- a node is never (), so presence
    ; carries in the shape and nothing needs a wrapper
    (fi-exec m acc)                              ; -exec's words, up to the closing ;
-    (? !(two? m) ()
+    (? (atom? m) ()
        (<m = ";") (? (two? acc) [['exec (rev acc)] >m] ())
        (fi-exec >m (<m . acc)))
    (fi-prim ws)
-    (? !(two? ws) ()
+    (? (atom? ws) ()
        (: a <ws m >ws
           (? (a = "-print") [['print] m]
              (a = "-prune") [['prune] m]
              (a = "-true")  [['true] m]
              (a = "-false") [['false] m]
              (a = "-exec")  (fi-exec m ())
-             !(two? m) ()
+             (atom? m) ()
              (a = "-name") [['name <m] >m]
              (a = "-path") [['path <m] >m]
              (a = "-type") [['type <m] >m]
              ())))
    (fi-not ws)
-    (? !(two? ws) ()
+    (? (atom? ws) ()
        ((<ws = "!") || (<ws = "-not"))
         (: r (fi-not >ws) (? (two? r) [['not <r] <>r] ()))
        (<ws = "(")
         (: r (fi-or >ws)
-           (? !(two? r) ()
+           (? (atom? r) ()
               (: m <>r (? ((two? m) && (<m = ")")) [<r >m] ()))))
        (fi-prim ws))
    ; -a is implicit: any word that is not a closing sigil opens another and-arm
    (fi-and ws)
     (: r (fi-not ws)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (: (go n m)
-              (? !(two? m) [n m]
+              (? (atom? m) [n m]
                  (: m2 (? ((<m = "-a") || (<m = "-and")) >m m)
-                    (? (!(two? m2) || (<m2 = "-o") || (<m2 = "-or") || (<m2 = ")")) [n m]
+                    (? ((atom? m2) || (<m2 = "-o") || (<m2 = "-or") || (<m2 = ")")) [n m]
                        (: r2 (fi-not m2)
                           (? (two? r2) (go ['and n <r2] <>r2) ())))))
              (go <r <>r))))
    (fi-or ws)
     (: r (fi-and ws)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (: (go n m)
               (? ((two? m) && ((<m = "-o") || (<m = "-or")))
                  (: r2 (fi-and >m)
@@ -88,14 +88,14 @@
    ; -maxdepth/-mindepth are global wherever they sit (GNU's reading too), so they
    ; come out of the word list before the grammar ever sees them
    (fi-depths ws maxd mind acc)
-    (? !(two? ws) [(rev acc) maxd mind]
+    (? (atom? ws) [(rev acc) maxd mind]
        (: a <ws
           (? ((a = "-maxdepth") && (two? >ws)) (fi-depths >>ws (uatoi <>ws) mind acc)
              ((a = "-mindepth") && (two? >ws)) (fi-depths >>ws maxd (uatoi <>ws) acc)
              (fi-depths >ws maxd mind (a . acc)))))
    ; the leading words that are neither a flag nor an open bracket are the paths
    (fi-paths as acc)
-    (? !(two? as) [(rev acc) ()]
+    (? (atom? as) [(rev acc) ()]
        (: a <as
           (? (((0 < tally a) && (a 0 = 45)) || (a = "(") || (a = "!"))
              [(rev acc) as]
@@ -113,11 +113,11 @@
    ; every name, set by -prune), 101 the trouble mark (an -exec that would not run)
    (fi-eval e p base ty st)
     (: k <e
-       (? (k = 'print) (: _ (say out p) _ (put out 10) 1)
+       (? (k = 'print) (say out p, put out 10, 1)
           (k = 'name)  (? (sh-match <>e base) 1 0)
           (k = 'path)  (? (sh-match <>e p) 1 0)
           (k = 'type)  (: c <>e (? ((0 < tally c) && (ty = (c 0))) 1 0))
-          (k = 'prune) (: _ (pin st 112 1) 1)
+          (k = 'prune) (pin st 112 1, 1)
           (k = 'true)  1
           (k = 'false) 0
           (k = 'not)   (? (fi-eval <>e p base ty st) 0 1)
@@ -127,8 +127,7 @@
            (: ws (map (\ w (? (w = "{}") p w)) <>e)
               _ (flush out)                     ; the child shares the port: say what we said
               pid (spawn ws)
-              (? (nom? pid) (: _ (say err ("find: cannot run " + <ws)) _ (put err 10)
-                              _ (pin st 101 1) 0)
+              (? (nom? pid) (say err ("find: cannot run " + <ws), put err 10, pin st 101 1, 0)
                  (? (wait pid) 0 1)))
           0))
    (fi-walk p depth e st maxd mind)
@@ -137,7 +136,7 @@
        _ (? (mind <= depth) (fi-eval e p (ubase p "") ty st) 0)
        (? ((ty = 100) && (depth < maxd) && !(peep st 112 0))
           (: (go m) (? (two? m)
-                       (: _ (fi-walk (fi-join p <m) (depth + 1) e st maxd mind) (go >m))
+                       (fi-walk (fi-join p <m) (depth + 1) e st maxd mind, go >m)
                        0)
              (go (sort (readdir p))))
           0))
@@ -147,17 +146,15 @@
        d (fi-depths <>sp 536870911 0 ())
        ws <d maxd <>d mind <>>d
        pr (? (two? ws) (fi-or ws) [['true] ()])
-       _ (? ((two? pr) && !(two? <>pr)) ()
+       _ (? ((two? pr) && (atom? <>pr)) ()
             (udie 1 "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"))
        e (? (fi-acts? <pr) <pr ['and <pr ['print]])
        st (tablet 0)
        ; a named path that is not there is find's one loud failure: it complains,
        ; the walk skips it, and the exit code remembers -- the rest still walk
        (there? p) ((string? (readlink p)) || (two? (stat p)))
-       (go m) (? !(two? m) (: _ (flush out) (? (peep st 101 0) 1 0))
-                 (: _ (? (there? <m) (fi-walk <m 0 e st maxd mind)
-                         (: _ (say err ("find: '" + <m + "': No such file or directory"))
-                            _ (put err 10) (pin st 101 1)))
-                    (go >m)))
+       (go m) (? (atom? m) (flush out, (? (peep st 101 0) 1 0))
+                 ((? (there? <m) (fi-walk <m 0 e st maxd mind)
+                         (say err ("find: '" + <m + "': No such file or directory"), put err 10, pin st 101 1)), go >m))
        (go (? (two? <sp) <sp '(".")))))
 ) ; module 'kore

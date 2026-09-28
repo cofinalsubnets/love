@@ -165,9 +165,9 @@
    (x-replay s) (x-w8 s 35, x-w8 s 2, x-w16 s 2, x-w32 s 0)                      ; AllowEvents ReplayPointer, CurrentTime
    (x-allow-async s) (x-w8 s 35, x-w8 s 1, x-w16 s 2, x-w32 s 0)                 ; AllowEvents AsyncPointer: thaw a sync grab without replaying
    (x-grabptr s win)                                                             ; GrabPointer, async, ButtonRelease(8)|PointerMotion(64) -- the drag catch
-    (: _ (x-w8 s 26, x-w8 s 0, x-w16 s 6, x-w32 s win,
-          x-w16 s 72, x-w8 s 1, x-w8 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s)
-       (x-reply s))                                                              ; a reply (the grab status) -- read it to keep the demux synced
+    (x-w8 s 26, x-w8 s 0, x-w16 s 6, x-w32 s win,
+     x-w16 s 72, x-w8 s 1, x-w8 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s,
+     x-reply s)                                                                  ; a reply (the grab status) -- read it to keep the demux synced
    (x-ungrabptr s) (x-w8 s 27, x-w8 s 0, x-w16 s 2, x-w32 s 0)                   ; UngrabPointer, CurrentTime
    (x-warp s win x y) (x-w8 s 41, x-w8 s 0, x-w16 s 6, x-w32 s 0, x-w32 s win,   ; WarpPointer to (x y) in win, from anywhere
                        x-w16 s 0, x-w16 s 0, x-w16 s 0, x-w16 s 0, x-w16 s x, x-w16 s y)
@@ -198,8 +198,8 @@
     (: _ (x-w8 s 3, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s)
        hdr (x-reply s)
        (? !(<hdr = 1) '(0 1)                                                    ; the window died: reads as unmanageable
-          (: _ (x-rbytes s (u32 hdr 4 * 4))                                     ; drain the trailing reply data
-             [(hdr 26) (hdr 27)])))
+          (x-rbytes s (u32 hdr 4 * 4),                                          ; drain the trailing reply data
+           [(hdr 26) (hdr 27)])))
    (x-manageable? s win) (: a (x-attrs s win) (<a = 2 && <>a = 0))               ; viewable and not override-redirect
 
    ; --- become the wm: SubstructureRedirect|Notify on the root, synced by an
@@ -207,8 +207,8 @@
    ;     arrives before the intern reply, so x-reply answers the intern wait
    ;     with the error packet: refusal reads as the intern's () ---
    (x-redirect s root)                                                           ; substructure redirect+notify, and the root's own
-    (: _ (x-cwa-events s root 1703936)                                           ; StructureNotify: randr reshapes it under us
-       (x-intern s "WM_STATE" ? 1 0))
+    (x-cwa-events s root 1703936,                                                ; StructureNotify: randr reshapes it under us
+     x-intern s "WM_STATE" ? 1 0)
 
    ; --- RandR 1.5: the monitors are the screens. QueryExtension (opcode 98) finds
    ;     the major opcode + event base; RRQueryVersion, RRSelectInput on the root

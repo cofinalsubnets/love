@@ -423,6 +423,18 @@
    (emit-segld n base off) (rn base @ bn ((hi bn != 0 ? [(rex 0 0 0 1)]) + ([142] + mem n base off)))
    ;; pushl: a label's address as the sign-extended dword push takes (68 id), which the link fills
    (emit-pushl label) [104 (fix 4 'abs32 label 0)]
+   ;; mdig: opcode bytes over memory, the /digit as the register field (the fpu's state doors)
+   (emit-mdig opc dig w base off) (x64-mw w opc opc (x64-digit dig) base off 0)
+   ;; rdig: the same over a register (mod 3), a legacy prefix ahead of the REX
+   (emit-rdig pfx opc dig w r)
+    (: n (rn r)
+     (pfx + (w = 2 ? [102] ()) + ((w = 8 || n >= 8) ? [(rex (w = 8 ? 1 0) 0 0 (hi n))] ()) + opc + [(modrm 3 dig (lo n))]))
+   (emit-invpcid r base off) (x64-mw 2 '(15 56 130) '(15 56 130) r base off 0)   ; 66 0F 38 82 /r  invpcid r, m128
+   (emit-movntim w base off s) (x64-mw w '(15 195) '(15 195) s base off 0)   ; 0F C3 /r  movnti m, r
+   ;; str: a string op by its stem at width w (A4..AF, 6C..6F); 66 or REX.W widens the odd byte
+   (emit-str op w)
+    (: b (op @ 'movs 164 'cmps 166 'stos 170 'lods 172 'scas 174 'ins 108 'outs 110 (scare 'x64-str op))
+     ((w = 2 ? [102] ()) + (w = 8 ? [72] ()) + [(w = 1 ? b (b + 1))]))
    (emit-jmp  label)     [233 (fix 4 'rel32 label 0)]
    ;; the table jump: jmpr, with the table's label and its target list riding along --
    ;; operands the machine has no use for and the analyses cannot do without.
@@ -469,10 +481,12 @@
       (: dn (rn d) sn (rn s)
          (? (= dn sn) (scare 'cmov-alias d)
             [(rex 1 (hi dn) 0 (hi sn)) 15 (jcc-op cond - 64) (modrm 3 dn sn)]))
-   (emit-set cond d)
+   (emit-set cond d) (: dn (rn d) (emit-set1 cond d + [(rex 1 (hi dn) 0 (hi dn)) 15 182 (modrm 3 dn dn)]))
+   ;; set1: the setcc alone, the register's upper bytes kept
+   (emit-set1 cond d)
       (: o (jcc-op cond) dn (rn d)
          rb (? (dn >= 8) '(65) (dn >= 4) '(64))
-         (rb + ([15 (o + 16) (modrm 3 0 dn)] + [(rex 1 (hi dn) 0 (hi dn)) 15 182 (modrm 3 dn dn)])))
+         (rb + [15 (o + 16) (modrm 3 0 dn)]))
    ;; div/rem: x86 idiv is fixed-register (RDX:RAX / r/m -> RAX quotient, RDX remainder), and rdx is
    ;; commonly live (an argument sits there), so the sequence saves rdx itself: push rdx; mov rax,a;
    ;; cqo (sign-extend); idiv b; result -> rax (rem: from rdx); pop rdx; mov d,rax. F7 /7 /6 take an
@@ -580,6 +594,8 @@
    (emit-vmwrite f s) (emit-vmrw 121 f s)  ; (vmwrite f s) vmcs[f] <- s
    (emit-ldcr d n) (emit-cr 32 n d)        ; (ldcr d n)  d <- crn
    (emit-stcr n s) (emit-cr 34 n s)        ; (stcr n s)  crn <- s
+   (emit-lddr d n) (emit-cr 33 n d)        ; (lddr d n)  d <- drn
+   (emit-stdr n s) (emit-cr 35 n s)        ; (stdr n s)  drn <- s
    (emit-ltr s) (rn s @ sn                 ; 0F 00 /3 -- the operand is r/m16
     ((hi sn @ 0 () [(rex 0 0 0 1)]) + [15 0 (modrm 3 3 sn)]))
    ;; INT n, cd ib -- the long form for every vector, vector 3 included. an assembler usually
@@ -587,7 +603,7 @@
    ;; here means the form you wrote is the form you get (they part company under vm86, where CD
    ;; 03 faults at iopl < 3 and CC does not). so: `trap` for a breakpoint, `int` for a vector.
    (emit-int n) (0 <= n <= 255 ? 0 (scare 'x64-int-vector n), [205 n])
-   (emit-seg s) (s @ 'fs [100] 'gs [101] (scare 'x64-seg s))      ; the override prefix; the next form is its instruction
+   (emit-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'x64-seg s))      ; the override prefix; the next form is its instruction
    ;; the bit scans and counts, sized: bsr bsf 0F BD/BC, lzcnt tzcnt popcnt F3 0F BD/BC/B8 --
    ;; a 32-bit scan reads only the low half, so the width is the op's own (66 a word, REX.W a quad)
    (emit-bscan op w d s)
@@ -645,7 +661,7 @@
          ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
          ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
          ('jmpr . emit-jmpr) ('jmpm . emit-jmpm) ('jmpt . emit-jmpt) ('callr . emit-callr)
-         ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set) ('cmov . emit-cmov)
+         ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set) ('set1 . emit-set1) ('cmov . emit-cmov)
          ('div . emit-div 0 1) ('udiv . emit-div 0 0)
          ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
          ('urem . (\ d a b t (emit-div 1 0 d a b)))
@@ -660,13 +676,12 @@
          ('ret . '(195)) ('sys . '(15 5)) ('nop . '(144)) ('trap . '(204))
           ; port i/o: the port always rides dx (the immediate-port forms E4..E7
           ; reach only ports 0..255, so the dx forms are the whole surface), the
-          ; datum al/ax/eax. the string forms take the rep prefix and walk
-          ; rsi (out) / rdi (in) by rcx -- `cld` sets the direction first.
+          ; datum al/ax/eax. the string forms are `str`, rep a prefix of its own.
          ('inb . '(236)) ('inw . '(102 237)) ('inl . '(237))
          ('outb . '(238)) ('outw . '(102 239)) ('outl . '(239))
          ('cld . '(252))
-         ('insb . '(243 108)) ('insw . '(102 243 109)) ('insl . '(243 109))
-         ('outsb . '(243 110)) ('outsw . '(102 243 111)) ('outsl . '(243 111))
+         ('str . emit-str) ('rep . '(243)) ('repne . '(242))
+         ('mdig . emit-mdig) ('rdig . emit-rdig) ('movntim . emit-movntim) ('invpcid . emit-invpcid) ('rdpmc . '(15 51)) ('fninit . '(219 227)) ('fnclex . '(219 226)) ('fwait . '(155)) ('emms . '(15 119))
           ; the system lane. `trap` is already int3 (CC), so `int` covers only the
           ; vectored form; `iretq` is the 64-bit return (the REX.W is what widens it).
          ('cli . '(250)) ('sti . '(251)) ('hlt . '(244)) ('pushf . '(156)) ('popf . '(157))
@@ -687,9 +702,14 @@
          ('int . emit-int) ('ltr . emit-ltr) ('seg . emit-seg) ('bscan . emit-bscan)
          ('pause . '(243 144)) ('mfence . '(15 174 240)) ('lfence . '(15 174 232)) ('sfencex . '(15 174 248))
          ('stc . '(249)) ('clc . '(248)) ('cmc . '(245))
+         ('stac . '(15 1 203)) ('clac . '(15 1 202))    ; SMAP's AC flag
+         ('rdpkru . '(15 1 238)) ('wrpkru . '(15 1 239))   ; the protection-key register, through eax (ecx, edx 0)
+         ('xgetbv . '(15 1 208)) ('xsetbv . '(15 1 209))   ; XCR[ecx] <-> edx:eax
+         ('wbinvd . '(15 9)) ('invd . '(15 8))              ; the caches, written back or not
+         ('monitor . '(15 1 200)) ('mwait . '(15 1 201))    ; rax the line, ecx/edx the hints: the operands spell them
          ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
          ('alum . emit-alum) ('carry . emit-carry) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
-         ('ldcr . emit-ldcr) ('stcr . emit-stcr)
+         ('ldcr . emit-ldcr) ('stcr . emit-stcr) ('lddr . emit-lddr) ('stdr . emit-stdr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])
    _ (map (k \ emrow x64-emitters k (emit-alu k)) (keys x64-alu))

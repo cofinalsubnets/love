@@ -31,7 +31,7 @@
    (gfz2 i) (i < 2 ? " " i)
    (gfz3 i) (i < 2 ? '(1 2) i)
    FZL (tablet 0)                                  ; gfz4's ledger: an effect, so a lane whose deopt
-   (gfz4 i) (: _ (pin FZL 'n (1 + peep FZL 'n 0)) (i + 1))   ; restarts over one diverges on the count, not the answer
+   (gfz4 i) (pin FZL 'n (1 + peep FZL 'n 0), (i + 1))        ; restarts over one diverges on the count, not the answer
    _ (rng-set (wheel 20260729))                    ; fixed seed: the two runs must generate the same forms
    (pick l) (l (rand #l))
    ; the leaf pools. bleaf is the hostile one: k/acc are frame params where they are bound and free

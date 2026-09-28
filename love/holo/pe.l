@@ -77,10 +77,10 @@
        ;; so the gap the alignment opened is written out as zeros, and each named
        ;; lane follows the one it travels with -- ldlay laid them in that order.
        et (ldemitn cx 'text objs (ldemit cx 'text base objs ()))
-       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (- o0 <et))])))
+       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (o0 - <et))])))
        ;; ..and the writable half, its own run of bytes from d0.
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs ()))
-       en (ldemit cx 'nifs n0 objs (>ed + [(ld-zeros (- n0 <ed))]))
+       en (ldemit cx 'nifs n0 objs (>ed + [(ld-zeros (n0 - <ed))]))
        tfsz (<eo - base)                  ; .text: text + rodata
        traw (aup tfsz pe-falign)
        dfsz (<en - d0)                    ; .data: data + nifs, and bss past it

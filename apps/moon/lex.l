@@ -71,7 +71,7 @@
 
    (clex src) (clexat src 1)
    (clexat src ln0)
-    (: n (tally src)
+    (: n #src
        kws '(auto break case char const continue default do double else enum
              extern float for goto if inline int long register restrict return
              short signed sizeof static struct switch typedef union unsigned
@@ -173,7 +173,7 @@
                         (d = 120)                                                         ; \xhh -- 1+ hex digits
                          (? (k + 1 < n && hexd? (src (k + 1)))
                             (: (hx m v) (m < n && hexd? (src m) ?
-                                         (hx (m + 1) (+ (* v 16) (hexv (src m))))
+                                         (hx (m + 1) (v * 16 + hexv (src m)))
                                          [v m])
                                (hx (k + 1) 0)))
                         ; \uxxxx / \uxxxxxxxx (C99 6.4.3): exactly 4 or 8 hex digits, a short
@@ -184,7 +184,7 @@
                          (: w (? (d = 117) 4 8)
                             (uc m v cnt) (? (cnt = w) (? (ucnok? v) [v m 1] ())
                                             (m < n && hexd? (src m))
-                                             (uc (m + 1) (+ (* v 16) (hexv (src m))) (cnt + 1)))
+                                             (uc (m + 1) (v * 16 + hexv (src m)) (cnt + 1)))
                             (uc (k + 1) 0 0))
                         (: v (escv d) (charm? v ? [v (k + 1)]))))
        ; the body of a string-shaped literal, from qi (after the opening quote) to the
@@ -211,7 +211,7 @@
                          (: r (escseq (e + 1))
                             ; a ucn (two? >>r) encodes even in a narrow string: gcc lays
                             ; "ä" as two utf-8 bytes, where "\xe4" is the one byte e4
-                            (? (two? r) (: _ (? (wide || two? >>r) (utf8put sink <r) (put sink <r)) (eat <>r)) ()))
+                            (? (two? r) ((? (wide || two? >>r) (utf8put sink <r) (put sink <r)), eat <>r) ()))
                         ; a stop `run` made that none of the above claims: one byte,
                         ; then on. the trailing \ lands here, and so would any future
                         ; stop -- which is what keeps a widened `run` from looping.
@@ -346,7 +346,7 @@
                                 (mc (k + 1) ((v << 8) | (src k & 255)) (cnt + 1)))
                              r (mc (i + 1) 0 0)
                              (two? r ?
-                              (: j (+ <r 1)
+                              (: j (<r + 1)
                                  ; one char keeps the raw byte it always had; a wider one
                                  ; is int-wide and signed, so '\xff\xff\xff\xff' is -1.
                                  v (? (<>>r = 1) <>r
@@ -379,7 +379,7 @@
                  ; spelling keeps the prefix. a wide char constant decodes to its last
                  ; code point (L'ä' is 0xE4, not the packed bytes; L'ab' is 'b' --
                  ; implementation-defined, gcc's reading) and stays 'num.
-                 (< 0 (wpfx i))
+                 (0 < wpfx i)
                   (: pl (wpfx i)
                      c2 (src (i + pl))
                      k (? (c = 117 && pl = 1) 'str16 (c = 85) 'str32 (c = 76) 'wstr 'str)
@@ -407,7 +407,7 @@
                                               (ucn? k) (: r (escseq (k + 1))
                                                           _ (utf8put sink <r)
                                                           (bld <>r))
-                                              (: _ (put sink (src k)) (bld (k + 1))))
+                                              (put sink (src k), bld (k + 1)))
                                    (bld i))
                                 (snip src i j0))
                            s (intern t)

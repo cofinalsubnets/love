@@ -404,9 +404,9 @@
  (grass-song-feed s wind)
   (: spc (int (song-rate / song-cps))
      (sched _) (? (s 'mode = 'song && s 'next <= s 'fpos + song-chunk && s 'cyc < s 'bars)
-                  (: _ (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc)))
-                     _ (pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc))
-                   (sched ())))
+                  (pin s 'vs (cat (s 'vs) (song-voices s (s 'cyc) (s 'next) spc)),
+                   pins s 'cyc (s 'cyc + 1) 'next (s 'next + spc),
+                 sched ()))
      _ (sched ())
      _ (s 'mode = 'song && s 'bars <= s 'cyc ? (pin s 'mode 'chimes))
      base (s 'fpos)
@@ -467,13 +467,13 @@
         due (g 't0 + n * tick-ms)
         late (clock 0 - due)
         (? (late < 0.0) (rest 2, swim n)
-           (: _ (? (10.0 * tick-ms < late) (pin g 't0 (g 't0 + late)))
-              _ (key-drain g repeat-gap (k \ (k = -12 ? (grass-tap g (edtap ()) (clock 0))
-                                                          (grass-key g k (clock 0)))))
-              _ (grass-tick g)
-              _ (cue ())
-              _ (? (late < tick-ms) (say out (grass-paint g), flush out) ())
-              (swim (n + 1))))))
+           ((? (10.0 * tick-ms < late) (pin g 't0 (g 't0 + late))),
+            key-drain g repeat-gap (k \ (k = -12 ? (grass-tap g (edtap ()) (clock 0))
+                                                       (grass-key g k (clock 0)))),
+            grass-tick g,
+            cue (),
+            (? (late < tick-ms) (say out (grass-paint g), flush out) ()),
+            swim (n + 1)))))
    _ (say out (esc + "[?25l"))
    _ (sign g open-ttl open-rows beat)
    _ (pin g 't0 (clock 0))
@@ -483,7 +483,7 @@
          sign g end-ttl ["" ("final score   " + show (g 'pts))
                          ("final height  " + fx1 (g 'me 'ht) + " in") "" "-- any key --"] beat)
         ())
-   _ (? hn (: _ (flush hn) (close hn)) ())
+   _ (? hn (flush hn, close hn) ())
    g)
  ; the screen raised and put back here; a terminal is asked for its taps too (xterm's
  ; SGR mouse reports, which cli's edkey reads as the key -12)

@@ -76,13 +76,29 @@
       ;; port i/o: the dx-port forms, and the rep-prefixed string walks
       ("io.in"       "ec66eded"              ((inb) (inw) (inl)))
       ("io.out"      "ee66efef"              ((outb) (outw) (outl)))
-      ("io.str"      "fcf36c66f36df36d"      ((cld) (insb) (insw) (insl)))
-      ("io.strout"   "f36e66f36ff36f"        ((outsb) (outsw) (outsl)))
+      ("io.str"      "fcf36cf3666d6d"        ((cld) (rep) (str ins 1) (rep) (str ins 2) (str ins 4)))
+      ("io.strout"   "6e666ff26f"            ((str outs 1) (str outs 2) (repne) (str outs 4)))
+      ("str.movs"    "a466a5a548a5"          ((str movs 1) (str movs 2) (str movs 4) (str movs 8)))
+      ("str.rest"    "a6ab48adae"            ((str cmps 1) (str stos 4) (str lods 8) (str scas 1)))
       ;; the system lane -- the kernel's own vocabulary: the flag/halt nullaries, the MSR pair,
       ;; the interrupt return, the vectored int (int3 is `trap`, CC, already above)
       ("sys.flags"   "fafbf4"                ((cli) (sti) (hlt)))
+      ("sys.smap"    "0f01cb0f01ca"          ((stac) (clac)))
+      ("sys.pkru"    "0f01ee0f01ef"          ((rdpkru) (wrpkru)))
+      ("sys.xcr"     "0f01d00f01d1"          ((xgetbv) (xsetbv)))
+      ("sys.cache"   "0f090f08"              ((wbinvd) (invd)))
+      ("sys.mwait"   "0f01c80f01c9"          ((monitor) (mwait)))
+      ("sys.rdig"    "0f00c8660f00c8f3480faed00f00d1"  ((rdig () (15 0) 1 4 r0) (rdig () (15 0) 1 2 r0) (rdig (243) (15 174) 2 8 r0) (rdig () (15 0) 2 4 r1)))   ; str eax ; str ax ; wrfsbase rax ; lldt cx
+      ("mem.ind"     "ff10ff6308"            ((mdig (255) 2 4 r0 0) (mdig (255) 4 4 r3 8)))   ; call [rax] ; jmp [rbx+8]
+      ("mem.pushpop" "ff30ff73088f00"        ((mdig (255) 6 4 r0 0) (mdig (255) 6 4 r3 8) (mdig (143) 0 4 r0 0)))   ; push [rax] ; push [rbx+8] ; pop [rax]
+      ("movnti"      "480fc3030f33"          ((movntim 8 r3 0 r0) (rdpmc)))
+      ("fpu.nil"     "dbe3dbe29b0f77"        ((fninit) (fnclex) (fwait) (emms)))
+      ("fpu.mdig"    "dd30480fae4308"        ((mdig (221) 6 4 r0 0) (mdig (15 174) 0 8 r3 8)))   ; fnsave [rax] ; fxsave64 [rbx+8]
+      ("fpu.flush"   "0fae38660fae38660fae30" ((mdig (15 174) 7 4 r0 0) (mdig (15 174) 7 2 r0 0) (mdig (15 174) 6 2 r0 0)))   ; clflush clflushopt clwb [rax]
+      ("sys.verw"    "0f00280f0020"          ((mdig (15 0) 5 4 r0 0) (mdig (15 0) 4 4 r0 0)))   ; verw verr [rax]
       ("sys.pushf"   "9c9d"                  ((pushf) (popf)))
       ("sys.seg"     "65488b0064488b00"      ((seg gs) (ld r0 r0 0) (seg fs) (ld r0 r0 0)))
+      ("sys.segnull" "3e262e36"              ((seg ds) (seg es) (seg cs) (seg ss)))
       ("sys.rmw"     "0fc102480fb14f088606ff0048830001660908480fba2803fe4b04"
                      ((xaddm 4 r2 0 r0) (cmpxchgm 8 r6 8 r1) (xchgm 1 r5 0 r0) (unm inc 4 r0 0)
                       (alum add 8 r0 0 1) (alum or 2 r0 0 r1) (btm bts 8 r0 0 3) (unm dec 1 r3 4)))
@@ -111,6 +127,8 @@
       ("sys.ldcr.hi" "410f20d8440f20c0"      ((ldcr r7 3) (ldcr r0 8)))      ; mov r8,cr3 ; mov rax,cr8
       ("sys.stcr"    "0f22c00f22db"          ((stcr 0 r0) (stcr 3 r3)))      ; mov cr0,rax ; mov cr3,rbx
       ("sys.stcr.hi" "410f22e0440f22c0"      ((stcr 4 r7) (stcr 8 r0)))      ; mov cr4,r8 ; mov cr8,rax
+      ("sys.dr"      "0f21f80f23f3410f21c0"  ((lddr r0 7) (stdr 6 r3) (lddr r7 0)))   ; mov rax,dr7 ; mov dr6,rbx ; mov r8,dr0
+      ("invpcid"     "660f388208660f38820b"  ((invpcid r1 r0 0) (invpcid r1 r3 0)))   ; invpcid rcx,[rax] ; invpcid rcx,[rbx]
       ;; the descriptor tables and invlpg: one opcode, 0F 01, told apart by the Modrm digit.
       ("sys.lgdt"    "0f01170f015710"        ((lgdt r6 0) (lgdt r6 16)))     ; lgdt [rdi] ; lgdt [rdi+16]
       ("sys.lidt"    "0f015e08"              ((lidt r5 8)))                  ; lidt [rsi+8]
@@ -296,7 +314,7 @@
    ;; non-commutative), raising 'alias-dst rather than emitting subtly wrong bytes. the help traps
    ;; that scare and delegates everything else back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
-   _ (hear (\ a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp a b))))
+   _ (hear (\ a b (? (a = 'alias-dst) (pin caught 0 1, ()) (welp a b))))
    _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
@@ -304,7 +322,7 @@
    ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
    ;; (`neg xzr, x0`) that leave sp alone. it raises instead; moving sp is `lea`'s job. --
    spcaught (tablet 0) _ (pin spcaught 0 0)
-   _ (hear (\ a b (? (a = 'a64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp a b))))
+   _ (hear (\ a b (? (a = 'a64-alu-sp) (pin spcaught 0 1, ()) (welp a b))))
    _ (holo-bytes 'a64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
@@ -420,7 +438,7 @@
    _ (chk-eq "elf.magic"   127     (elfimg 0))        ; \x7f E L F
    _ (chk-eq "elf.machine" 62      (elfimg 18))       ; e_machine = x86-64
    _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
-   _ (chk-eq "elf.size"    (120 + (tally (holo-bytes 'x64 elfprog) + 3)) (tally elfimg))
+   _ (chk-eq "elf.size"    (120 + (#(holo-bytes 'x64 elfprog) + 3)) #elfimg)
    _ (chk-eq "elf.a64-machine" 183 ((peep (elf64 'a64 (\ a elfprog) ()) 'bytes 0) 18))
 
    ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
@@ -438,7 +456,7 @@
    _ (chk-eq "elf32.phentsize"  32 (e32img 42))
    _ (chk-eq "elf32.p-offset"   0  (e32img 56))         ; the 64-bit order would put p_flags here
    _ (chk-eq "elf32.p-flags"    7  (e32img 76))         ; ..and it sits here instead
-   _ (chk-eq "elf32.size" (84 + tally (holo-bytes 'thumb2 t32prog)) (tally e32img))
+   _ (chk-eq "elf32.size" (84 + #(holo-bytes 'thumb2 t32prog)) #e32img)
 
    ;; -- `refix`, the linker's door onto the same encoders (link.l's ldarm goes through it and
    ;; knows no instruction format). arm is rel: the field it hands back carries both the addend
@@ -464,7 +482,7 @@
    ;; linking somewhere plausible: the base encoding is rebuilt and compared, so no inverse
    ;; scatter has to exist for the check to be honest.
    rfcaught (tablet 0) _ (pin rfcaught 0 0)
-   _ (hear (\ a b (? (a = 'thumb-refix-addend) (: _ (pin rfcaught 0 1) ()) (welp a b))))
+   _ (hear (\ a b (? (a = 'thumb-refix-addend) (pin rfcaught 0 1, ()) (welp a b))))
    _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same bl two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
 

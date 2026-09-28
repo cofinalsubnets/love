@@ -49,12 +49,12 @@
 
    ; --- x25519 ---
    p25519 ((255 2) - 19)
-   (fmod a) (% (+ (% a p25519) p25519) p25519)                        ; % truncates: fold a negative back in
+   (fmod a) ((a % p25519 + p25519) % p25519)                        ; % truncates: fold a negative back in
    (fmul a b) (fmod (a * b))
    (finv a) (modpow a (p25519 - 2) p25519)
-   (le-num s) (: (go i a) (? (i < 0) a (go (i - 1) ((a * 256) + s i))) (go (#s - 1) 0))
-   (le-bytes n) (bytes 32 (i \ (% (// n ((8 * i) 2)) 256)))
-   (kbit k t) (% (// k (t 2)) 2)                                       ; bit t of the scalar
+   (le-num s) (: (go i a) (i < 0 ? a (go (i - 1) (a * 256 + s i))) (go (#s - 1) 0))
+   (le-bytes n) (bytes 32 (i \ n // (8 * i) 2 % 256))
+   (kbit k t) (k // t 2 % 2)                                       ; bit t of the scalar
    ; the ladder, RFC 7748 section 5: the state is (x2 z2 x3 z3), swapped by the scalar's bits
    (ladder k u)
     (: a24 121665
@@ -68,20 +68,19 @@
        (go t st sw)
         (? (t < 0) (sw ? (swap st) st)
            (: kt (kbit k t)
-              st2 (? (= 1 (sw ^ kt)) (swap st) st)
+              st2 (sw ^ kt = 1 ? (swap st) st)
               (go (t - 1) (step st2 t) kt)))
        r (go 254 [1 0 u 1] 0)
        (fmul <r (finv <>r)))
    (x25519 k u)
     (: kk (bytes 32 (i \ (? (i = 0) (k 0 & 248) (i = 31) ((k 31 & 127) | 64) (k i))))
-       uu (% (le-num u) (255 2))
+       uu (le-num u % (255 2))
        (le-bytes (ladder (le-num kk) uu)))
    (x25519-pub k) (x25519 k (bytes 32 (i \ (i = 0 ? 9 0))))
 
    (rnd n) (: q (open "/dev/urandom" "r")
-              b (bytes n (i \ (see q)))
-              _ (close q)
-              b)
+              b (bytes n (i \ see q))
+              (close q, b))
 
    ; --- the aead: RFC 8439's, the poly key block zero of the stream; or aes-gcm's nifs ---
    (nonce iv seq) (xors iv (zeros 4 + u64be seq))
@@ -92,16 +91,15 @@
        ct (cc-xor key nn 1 pt)
        (ct + po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct))))
    (aead-open key iv seq aad ctag)
-    (? (#key = 16) (: p (aes-gcm-open key (nonce iv seq) aad ctag) (? (string? p) [1 p] ()))
+    (? (#key = 16) (: p (aes-gcm-open key (nonce iv seq) aad ctag) (string? p ? [1 p] ()))
     (: n (#ctag - 16)
        (? (n < 0) ()
           (: nn (nonce iv seq)
              pk (snip (cc-stream key nn 0 1) 0 32)
              ct (snip ctag 0 n)
              tag (snip ctag n #ctag)
-             (? (= tag (po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct)))
-                [1 (cc-xor key nn 1 ct)]
-                ())))))
+             (tag = po-mac pk (aad + pad16 aad + ct + pad16 ct + u64le #aad + u64le #ct)
+               ? [1 (cc-xor key nn 1 ct)] ())))))
 
    ; --- the wire: exact reads over the socket, a run kept between records ---
    (rd t n)
@@ -111,14 +109,13 @@
                           (go (pend + string c + chug (t 's))))))
        pend (go (t 'pend))
        (? !(string? pend) ()
-          (: _ (pin t 'pend (snip pend n #pend))
-             [1 (snip pend 0 n)])))
+          (pin t 'pend (snip pend n #pend), [1 (snip pend 0 n)])))
    (rdrec t)                                                           ; -> (type body) | ()
     (: h (rd t 5)
-       (? !(two? h) ()
+       (? (atom? h) ()
           (: hdr <>h
              b (rd t (rd16 hdr 3))
-             (? !(two? b) () [(hdr 0) <>b]))))
+             (? (atom? b) () [(hdr 0) <>b]))))
    (wr t s) (say (t 's) s, flush (t 's))
    ; one encrypted record out under the client's current key; type rides the inner tail
    (seal t type pt)
@@ -131,29 +128,29 @@
    ; key -> (inner-type body) | () at the end or on a bad tag
    (open-rec t)
     (: r (rdrec t)
-       (? !(two? r) ()
+       (? (atom? r) ()
           (<r = 20) (open-rec t)
-          !(<r = 23) ()
+          (<r != 23) ()
           (: body <>r
              aad (u8 23 + u16 771 + u16 #body)
              pt (aead-open (t 'skey) (t 'siv) (t 'sseq) aad body)
              _ (pin t 'sseq (t 'sseq + 1))
-             (? !(two? pt) ()
+             (? (atom? pt) ()
                 (: s <>pt
-                   (strip i) (? ((i > 0) && (s (i - 1) = 0)) (strip (i - 1)) i)
+                   (strip i) (i > 0 && s (i - 1) = 0 ? (strip (i - 1)) i)
                    e (strip #s)
-                   (? (e < 1) () [(s (e - 1)) (snip s 0 (e - 1))]))))))
+                   (e < 1 ? () [(s (e - 1)) (snip s 0 (e - 1))]))))))
 
    ; --- handshake messages off the decrypted stream, each added to the transcript ---
    (hs-next t)
-    (: (go buf) (? ((4 <= #buf) && ((4 + rd24 buf 1) <= #buf))
+    (: (go buf) (? (4 <= #buf && 4 + rd24 buf 1 <= #buf)
                    (: n (4 + rd24 buf 1)
                       msg (snip buf 0 n)
                       _ (pin t 'hbuf (snip buf n #buf))
                       _ (pin t 'tr (t 'tr + msg))
                       [(buf 0) (snip msg 4 n)])
                    (: r (open-rec t)
-                      (? !(two? r) ()
+                      (? (atom? r) ()
                          (<r = 22) (go (buf + <>r))
                          (go buf))))
        (go (t 'hbuf)))
@@ -178,12 +175,12 @@
        suite (rd16 body i)
        extn (rd16 body (i + 3))
        (go j end share ok)
-        (? (j + 4 > end) (? (ok && (string? share)) [share (? (suite = 4865) 16 32)] ())
+        (? (j + 4 > end) (ok && string? share ? [share (suite = 4865 ? 16 32)] ())
            (: ty (rd16 body j) ln (rd16 body (j + 2)) d (snip body (j + 4) (j + 4 + ln))
               (go (j + 4 + ln) end
-                  (? ((ty = 51) && (rd16 d 0 = 29) && (rd16 d 2 = 32)) (snip d 4 36) share)
-                  (? ((ty = 43) && (rd16 d 0 = 772)) 1 ok))))
-       (? !((suite = 4867) || (suite = 4865)) ()
+                  (ty = 51 && rd16 d 0 = 29 && rd16 d 2 = 32 ? (snip d 4 36) share)
+                  (ty = 43 && rd16 d 0 = 772 ? 1 ok))))
+       (? !(suite = 4867 || suite = 4865) ()
           (go (i + 5) (i + 5 + extn) () 0)))
 
    ; --- the handshake, whole ---
@@ -198,11 +195,11 @@
              _ (pin t 'tr ch)
              _ (wr t (u8 22 + u16 769 + u16 #ch + ch))
              r (rdrec t)
-             (? (!(two? r) || !(<r = 22) || !((<>r) 0 = 2)) (close s, ())
+             (? (atom? r || <r != 22 || <>r 0 != 2) (close s, ())
                 (: sh <>r
                    _ (pin t 'tr (t 'tr + sh))
                    ss (server-share (snip sh 4 #sh))
-                   (? !(two? ss) (close s, ())
+                   (? (atom? ss) (close s, ())
                       (: share <ss kl <>ss
                          shared (x25519 priv share)
                          early (hkdf-extract (zeros 32) (zeros 32))
@@ -215,17 +212,17 @@
                          ; the leaf certificate kept as 'cert, its der: unverified, but a
                          ; caller may pin it (gemini's trust on first use)
                          (flight _) (: m (hs-next t)
-                                      (? !(two? m) ()
+                                      (? (atom? m) ()
                                          (<m = 20) m
-                                         (: _ (? ((<m = 11) && (8 <= #<>m))
+                                         ((? (<m = 11 && 8 <= #<>m)
                                                  (: b <>m i (1 + b 0)
                                                     (pin t 'cert (snip b (i + 6) (i + 6 + rd24 b (i + 3)))))
                                                  ; a request for our certificate: its context kept
-                                                 (<m = 13) (pin t 'creq (snip <>m 1 (1 + (<>m) 0)))
-                                                 0)
-                                            (flight 0))))
+                                                 (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)))
+                                                 0),
+                                          flight 0)))
                          fin (flight 0)
-                         (? !(two? fin) (close s, ())
+                         (? (atom? fin) (close s, ())
                             (: ; the client finished is over the transcript through the server's
                                ; asked for one, we send an empty certificate (we have none),
                                ; and our finished covers it; the traffic keys stop at the server's
@@ -236,13 +233,13 @@
                                vd (hmac fkey (sha (tr0 + ccert)))
                                cfin (u8 20 + u24 32 + vd)
                                _ (wr t (u8 20 + u16 771 + u16 1 + u8 1))          ; a CCS for the middleboxes
-                               _ (? (0 < #ccert) (seal t 22 ccert) 0)
+                               _ (0 < #ccert ? (seal t 22 ccert) 0)
                                _ (seal t 22 cfin)
                                master (hkdf-extract (derive hs "derived" "") (zeros 32))
-                               cap (derive master "c ap traffic" tr0)
-                               sap (derive master "s ap traffic" tr0)
-                               _ (pin t 'ckey (hkdf-label cap "key" "" kl)) _ (pin t 'civ (hkdf-label cap "iv" "" 12))
-                               _ (pin t 'skey (hkdf-label sap "key" "" kl)) _ (pin t 'siv (hkdf-label sap "iv" "" 12))
+                               cats (derive master "c ap traffic" tr0)
+                               sats (derive master "s ap traffic" tr0)
+                               _ (pin t 'ckey (hkdf-label cats "key" "" kl)) _ (pin t 'civ (hkdf-label cats "iv" "" 12))
+                               _ (pin t 'skey (hkdf-label sats "key" "" kl)) _ (pin t 'siv (hkdf-label sats "iv" "" 12))
                                _ (pin t 'cseq 0) _ (pin t 'sseq 0)
                                t)))))))))
 
@@ -250,18 +247,18 @@
    (tls-say t s)
     (: n #s
        (go i) (? (n <= i) 0
-                 (: k (? ((n - i) < 16384) (n - i) 16384)
+                 (: k (n - i < 16384 ? (n - i) 16384)
                     _ (seal t 23 (snip s i (i + k)))
                     (go (i + k))))
        (go 0))
    (tls-slurp t)
     (: j (jug 0)
        (go _) (: r (open-rec t)
-                 (? !(two? r) 0
+                 (? (atom? r) 0
                     (<r = 23) (say j <>r, go 0)
                     (<r = 21) 0                                        ; an alert: close_notify or worse, the end either way
                     (go 0)))                                            ; a ticket, a key update: not ours
        _ (go 0)
        (slurp j))
-   (tls-close t) (: _ (seal t 21 (u8 1 + u8 0)) (close (t 's))))
+   (tls-close t) (seal t 21 (u8 1 + u8 0), close (t 's)))
 ) ; module tls
