@@ -524,13 +524,14 @@ word fn_arg(union u *k, int i, int nargs) { // i-th arg in application order
  return u[1].x; }
 // what `=` and the hash read a function value as: a native is its bytecode twin (the code
 // is a copy of it, at an address of its own), anything else itself. a native is the one
-// cell whose header repeats its code word, one word ahead of the value (map.c's nifx), and
-// a twin may be a native again -- a lane that wraps another's answer -- so this unwraps to
-// the bytecode
+// cell whose code word is the arena's and repeats in the header one word ahead of the value
+// (map.c's nifx), and a twin may be a native again -- a lane that wraps another's answer --
+// so this unwraps to the bytecode. x may be any word a thread holds, a return address into
+// the middle of another included, so it is read at the value and never walked
 word fn_meaning(struct ai *c, word x) {
- while (evenp(x) && !datp(x) && in_heap(c, x)) {
-  union u *k = cell(x), *h = tag_head(ttag(c, k)), *cd = k[0].ap == lvm_cur ? k + 2 : k;
-  if (!(h == k - 1 && h[0].ap == cd[0].ap && cd[2].ap == lvm_ret)) break;
+ while (evenp(x) && in_heap(c, x)) {
+  union u *k = cell(x), *cd = k[0].ap == lvm_cur ? k + 2 : k;
+  if (!code_in(c, (uintptr_t) cd[0].ap) || k[-1].ap != cd[0].ap) break;
   x = cd[1].x; }
  return x; }
 // the threads that are carriers, not code: a tablet's two halves, a cask, a coin, a port.
