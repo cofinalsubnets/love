@@ -202,7 +202,7 @@
 ; nif -- mkdir the group, then write the pid to cgroup.procs (a plain file write via the
 ; `open` port), shown against the real tree (works under root / a delegated subtree).
 (: (cg-write path s)                                     ; write s to a cgroup control file
-     (: p (open path "w") (? (hot? p) (: _ (say p s) _ (flush p) (close p) 'ok) 'denied))
+     (: p (open path "w") (? (hot? p) (say p s, flush p, close p, 'ok) 'denied))
    (try-mount src tgt typ)
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)                            ; 0 success, -errno failure
