@@ -138,21 +138,21 @@ hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-decls
 # `unsigned long` by 32 or more, which is undefined once long is 32 bits; 105 unions a
 # double with one and reads bit 63; 120 asks for a `:40` bit-field (gcc REFUSES it here,
 # rightly); 125 wants char32_t to be the type of a U"" literal, which it is not on this
-# ABI. gcc is the witness for each -- it either refuses the source or answers differently
+# ABI; 144 counts a `long`'s leading zeros as 64. gcc is the witness for each -- it either refuses the source or answers differently
 # for the program's reason.
-narrow="81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit"
+narrow="81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins"
 
 case $tgt in
   thumb2) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 85-aggval
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  144-gnubuiltins 151-w128fuzz 161-enumwide 165-constcond 166-condconv" ;;
+                  151-w128fuzz 161-enumwide 165-constcond 166-condconv" ;;
   # the two lists are NOT the same list: v6-M refuses 82-znvalue where thumb2 takes it.
   # the composite rows do not move together (doc/misc/moon-c-gaps), so neither do these.
   thumb1) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 82-znvalue 85-aggval
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  144-gnubuiltins 151-w128fuzz 161-enumwide 165-constcond 166-condconv" ;;
+                  151-w128fuzz 161-enumwide 165-constcond 166-condconv" ;;
 esac
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }
