@@ -26,20 +26,20 @@
    (zrow z) (two? z ? (rev <>z + (<z . <>>z)))               ; the stack as an ordered row, master first
    (zfrom l) (two? l ? (zmk <l () >l))                        ; a row -> a zipper, head focused
    (zrev z) (two? z ? (zmk <z <>>z <>z))                      ; mirror: up <-> down
-   (zfocup z) (? !(two? z) ()                                      ; focus up, wrapping to the bottom
+   (zfocup z) (? (atom? z) ()                                      ; focus up, wrapping to the bottom
                  (: up <>z
                     (? (two? up) (zmk <up >up (<z . <>>z))
                        (: all (rev (<z . <>>z)) (zmk <all >all ())))))
    (zfocdn z) (zrev (zfocup (zrev z)))                             ; focus down = mirrored focus up
-   (zswapup z) (? !(two? z) ()                                     ; swap the focused window upward
+   (zswapup z) (? (atom? z) ()                                     ; swap the focused window upward
                   (: up <>z
                      (? (two? up) (zmk <z >up (<up . <>>z))
                         (zmk <z (rev <>>z) ()))))                  ; at the top: rotate to the bottom
    (zswapdn z) (zrev (zswapup (zrev z)))
-   (zmaster z) (!(two? z) ? () (zmk <z () (rev <>z + <>>z)))       ; focused becomes master
+   (zmaster z) (atom? z ? () (zmk <z () (rev <>z + <>>z)))       ; focused becomes master
    (zins w z) (two? z ? (zmk w <>z (<z . <>>z)) (zmk w () ()))  ; insert above the focus, focused
    (znub w l) (filter (x \ x != w) l)
-   (zdel w z) (? !(two? z) ()                                      ; delete w; focus falls down, then up
+   (zdel w z) (? (atom? z) ()                                      ; delete w; focus falls down, then up
                  (: f <z up (znub w <>z) dn (znub w <>>z)
                     (? (f != w) (zmk f up dn)
                        (two? dn) (zmk <dn up >dn)
