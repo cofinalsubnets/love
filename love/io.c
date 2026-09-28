@@ -531,7 +531,8 @@ word fn_arg(union u *k, int i, int nargs) { // i-th arg in application order
 word fn_meaning(struct ai *c, word x) {
  while (evenp(x) && in_heap(c, x)) {
   union u *k = cell(x), *cd = k[0].ap == lvm_cur ? k + 2 : k;
-  if (!code_in(c, (uintptr_t) cd[0].ap) || k[-1].ap != cd[0].ap) break;
+  lvm_t *e = cd[0].ap == lvm_lazy ? k[-1].ap : cd[0].ap;      // a woken entry, its chunk unseated
+  if (!code_in(c, (uintptr_t) e) || k[-1].ap != e) break;
   x = cd[1].x; }
  return x; }
 // the threads that are carriers, not code: a tablet's two halves, a cask, a coin, a port.

@@ -61,6 +61,11 @@
    r3 (hark ["out/love" "wake" img drv])
    _ (test (two? r3) (<r3 = 0) (>r3 = "4999950000"))
 
+   ; a baked binary wakes its natives unseated, the code inflated at first call: foldl is
+   ; native before it runs, and keys a tablet the same before and after
+   r4 (hark ["out/love" "-e" "(: t {foldl 1} n (nat? foldl) s (foldl (+) 0 [1 2 3]) _ (putx [n s (t foldl) (nat? foldl)]) (quit 0))"])
+   _ (test (two? r4) (<r4 = 0) (>r4 = "(1 6 1 1)"))
+
    _ (unlink img) _ (unlink drv)
    _ (test_fin ())
    (puts "bake: ok\n"))
