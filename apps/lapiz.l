@@ -126,7 +126,7 @@
 ; rest back with "".
 (: metakeys '(title section date source manual)
    (mget kvs k) (atom? kvs ? "" (<kvs @ [^k v] v (mget >kvs k)))
-   (mnorm kvs)  (map (\ k [k (mget kvs k)]) metakeys)
+   (mnorm kvs)  (map (k \ [k (mget kvs k)]) metakeys)
    mfilled (filter (tally * caup)))
 
 ; --- the roff glyph table, read both ways, so it must be a BIJECTION: no two names may
@@ -178,18 +178,18 @@
 ; ---------------------------------------------------------------- markdown, read
 ; inline. the text leaf stops at every sigil, so a construct is never swallowed; a sigil
 ; starting nothing falls through to `mdchar` as one-char text and `mrg` glues it back on.
-(: mdesc    (tag (\ p ['text (string <>p)]) (seq (lit "\\") (one chr?)))
-   mdcode   (tag (\ p ['code <>p]) (seqs [(lit "`") (span (!= 96)) (lit "`")]))
+(: mdesc    (tag (p \ ['text (string <>p)]) (seq (lit "\\") (one chr?)))
+   mdcode   (tag (p \ ['code <>p]) (seqs [(lit "`") (span (!= 96)) (lit "`")]))
    ; a text run stops short of a `!`, so a `![` can start an image
-   mdtext   (tag (\ p ['text (cats p)]) (seq (one ord?) (span (c \ ord? c && c != 33))))
-   mdimg    (tag (\ p ['img <p <>p])
+   mdtext   (tag (p \ ['text (cats p)]) (seq (one ord?) (span (c \ ord? c && c != 33))))
+   mdimg    (tag (p \ ['img <p <>p])
                  (seqs [(skip (lit "![")) (span (!= 93)) (skip (lit "](")) (span (!= 41)) (skip (lit ")"))]))
-   mdchar   (tag (\ p ['text (string <p)]) (one chr?))
+   mdchar   (tag (p \ ['text (string <p)]) (one chr?))
    ; the leaves are values; the cycle (span -> strong/em/link -> inls -> span) rides
    ; eta-expanded parsers, so a member is reached at call time and not while the layer builds.
-   (mdstrong s y n) ((tag (\ p ['strong <p]) (seqs [(skip (lit "**")) (pack (mdinls "**")) (skip (lit "**"))])) s y n)
-   (mdem s y n)     ((tag (\ p ['em <p]) (seqs [(skip (lit "*")) (pack (mdinls "*")) (skip (lit "*"))])) s y n)
-   (mdlink s y n)   ((tag (\ p ['link <p <>p])
+   (mdstrong s y n) ((tag (p \ ['strong <p]) (seqs [(skip (lit "**")) (pack (mdinls "**")) (skip (lit "**"))])) s y n)
+   (mdem s y n)     ((tag (p \ ['em <p]) (seqs [(skip (lit "*")) (pack (mdinls "*")) (skip (lit "*"))])) s y n)
+   (mdlink s y n)   ((tag (p \ ['link <p <>p])
                           (seqs [(skip (lit "[")) (pack (mdinls "]")) (skip (lit "]"))
                                  (skip (lit "(")) (span (!= 41)) (skip (lit ")"))])) s y n)
    (mdspan s y n)   ((alts [mdesc mdcode mdstrong mdem mdimg mdlink mdtext mdchar]) s y n)
@@ -229,13 +229,13 @@
    t-row   (tag (p \ tcells (cats p)) (seqs [(skip (lit "|")) (span nonl?) eol]))
    t-del   (pwhen (p \ two? <p && tdels? <p) t-row)
    t-start (pwhen (p \ #<p = #<>p) (seq t-row t-del))
-   b-table (tag (\ p (: w #<p ['table (map tdel <>p) (map mdinl <p) (map (r \ tfit w (map mdinl r)) >>p)]))
+   b-table (tag (p \ (: w #<p ['table (map tdel <>p) (map mdinl <p) (map (r \ tfit w (map mdinl r)) >>p)]))
                 (pwhen (p \ #<p = #<>p) (seqs [t-row t-del (many t-row)])))
-   b-rule  (tag (\ _ '(rule)) (seqs [(lit "---") (skip (span sp?)) (lit "\n")]))
-   b-head  (tag (\ p ['head (1 + #<>p) (mdinl <>>>p)])
+   b-rule  (tag (_ \ '(rule)) (seqs [(lit "---") (skip (span sp?)) (lit "\n")]))
+   b-head  (tag (p \ ['head (1 + #<>p) (mdinl <>>>p)])
                      (seqs [(lit "#") (span hash?) (lit " ") (span nonl?) eol]))
    f-line  (seqs [(notp (lit "```")) (span nonl?) (lit "\n")])       ; ..a fenced line keeps its newline
-   b-fence (tag (\ p ['fence <p (cats <>p)])
+   b-fence (tag (p \ ['fence <p (cats <>p)])
                      (seqs [(skip (lit "```")) (span nonl?) eol (pack (many f-line))
                             (skip (lit "```")) (skip (span nonl?)) eol]))
    q-line  (seqs [(skip (lit ">")) (skip (opt (lit " "))) (span nonl?) (lit "\n")])
@@ -252,28 +252,28 @@
    u-item  (tag lazyj (seqs [(skip (alts [(lit "- ") (lit "* ")])) (span nonl?) eol (many p-line)]))
    o-item  (tag lazyj (seqs [(skip (one dig?)) (skip (span dig?)) (skip (lit ". "))
                              (span nonl?) eol (many p-line)]))
-   b-bullets (tag (\ p ['bullets (map mdinl p)]) (many1 u-item))
-   b-numbers (tag (\ p ['numbers (map mdinl p)]) (many1 o-item))
+   b-bullets (tag (p \ ['bullets (map mdinl p)]) (many1 u-item))
+   b-numbers (tag (p \ ['numbers (map mdinl p)]) (many1 o-item))
    ; a definition-list item: a TERM line (itself no block opener), then its `:   ` body line.
    ; tried before b-para -- a term line reads as a paragraph line until the body line proves
    ; otherwise, and the failure backtracks, so b-para picks up an ordinary paragraph. blocks
    ; are always blank-line separated by every shower, so a paragraph never swallows a term.
    d-term    (tag cats (seqs [(notp blankline) (notp starter) (one nonl?) (span nonl?) eol]))
    d-body    (seqs [(skip defmark) (span nonl?) eol])
-   d-item    (tag (\ p [(mdinl <p) (mdinl <>p)]) (seq d-term d-body))
-   b-deflist (tag (\ p ['deflist p]) (many1 d-item))
-   (b-para s y n)  ((tag (\ p ['para (mdinl (join " " p))]) (many1 p-line)) s y n)
+   d-item    (tag (p \ [(mdinl <p) (mdinl <>p)]) (seq d-term d-body))
+   b-deflist (tag (p \ ['deflist p]) (many1 d-item))
+   (b-para s y n)  ((tag (p \ ['para (mdinl (join " " p))]) (many1 p-line)) s y n)
    ; the last resort, and what makes mdread TOTAL: `starter` claims more lines than the
    ; blocks it names can parse (a `--- text ---` that is not a rule, a `:   ` body with no
    ; term over it) and `p-line` refuses them too, so without this the block loop stops and
    ; the rest of the document vanishes in silence. taking one line as a paragraph lets the
    ; loop go on. it cannot fire on what a shower writes, so law 1 does not feel it.
-   b-line  (tag (\ p ['para (mdinl (cats p))]) (seqs [(one nonl?) (span nonl?) eol]))
+   b-line  (tag (p \ ['para (mdinl (cats p))]) (seqs [(one nonl?) (span nonl?) eol]))
    ; yaml-ish front matter, the markdown face of the meta block: head-only (a `---` fence
    ; anywhere else is a rule), so it is read before the block loop and shown before it.
-   kvline (tag (\ p [(name <p) <>p])
+   kvline (tag (p \ [(name <p) <>p])
                (seqs [(span (c \ nonl? c && c != 58)) (skip (lit ": ")) (span nonl?) eol]))
-   b-meta (tag (\ p ['meta (mnorm p)])
+   b-meta (tag (p \ ['meta (mnorm p)])
                     (seqs [(skip (lit "---")) (skip (span sp?)) (skip (lit "\n"))
                            (many kvline) (skip (lit "---")) (skip (span sp?)) (skip (lit "\n"))]))
    ; quote recurses into the block loop, so it sits with it and stays eta-expanded -- and
@@ -282,7 +282,7 @@
    ; quote recurses in place, the `> ` having to come off first; what it re-reads with is
    ; the BLOCK LOOP and not mdread, which is the difference between a quote that reads and
    ; a quote that comes back empty.
-   (b-quote s y n) ((tag (\ p ['quote (bmrg (runp (many mdblock) (cats <p)))])
+   (b-quote s y n) ((tag (p \ ['quote (bmrg (runp (many mdblock) (cats <p)))])
                          (pack (many1 q-line))) s y n)
    (mdblock s y n)
     ((seqs [(skip (many blankline))
@@ -615,43 +615,43 @@
 
    (hname? c)  ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || c = 35)
    ; an & that starts no entity is itself -- a query's a=1&b=2, or "fish & chips"
-   hent    (alts [(tag (\ p ['text (entof <p)]) (seqs [(skip (lit "&")) (span hname?) (skip (lit ";"))]))
+   hent    (alts [(tag (p \ ['text (entof <p)]) (seqs [(skip (lit "&")) (span hname?) (skip (lit ";"))]))
                   (tag (const '(text "&")) (lit "&"))])
-   htext   (tag (\ p ['text (cats p)]) (seq (one hraw?) (span hraw?)))
-   hcode   (tag (\ p ['code (plain <p)]) (wrapt "code" (pack (many (alts [hent htext])))))
-   hmark   (tag (\ p ['mark (plain (runp (many (alts [hent htext])) <p))])
+   htext   (tag (p \ ['text (cats p)]) (seq (one hraw?) (span hraw?)))
+   hcode   (tag (p \ ['code (plain <p)]) (wrapt "code" (pack (many (alts [hent htext])))))
+   hmark   (tag (p \ ['mark (plain (runp (many (alts [hent htext])) <p))])
                 (seqs [(skip (lit "<a id=\"")) (span (!= 34)) (skip (lit "\"></a>"))]))
    ; an image, src then alt as the scrub lays it, each entity-decoded as an href is
-   himgp   (tag (\ p (: (dec s) (: r (plain (runp (many (alts [hent htext])) s)) (? (string? r) r ""))
+   himgp   (tag (p \ (: (dec s) (: r (plain (runp (many (alts [hent htext])) s)) (? (string? r) r ""))
                         ['img (dec <>p) (dec <p)]))
                 (seqs [(skip (lit "<img src=\"")) (span (!= 34)) (skip (lit "\" alt=\""))
                        (span (!= 34)) (skip (lit "\">"))]))
    ; the inline cycle (htinl -> strong/em/link -> htinl) rides eta-expanded parsers
-   (hstrong s y n) ((tag (\ p ['strong <p]) (wrapt "strong" (pack htinl))) s y n)
-   (hem s y n)     ((tag (\ p ['em <p]) (wrapt "em" (pack htinl))) s y n)
+   (hstrong s y n) ((tag (p \ ['strong <p]) (wrapt "strong" (pack htinl))) s y n)
+   (hem s y n)     ((tag (p \ ['em <p]) (wrapt "em" (pack htinl))) s y n)
    ; ..the href is entity-decoded by running the same two text leaves over it
-   (hlink s y n)   ((tag (\ p ['link <>p (plain (runp (many (alts [hent htext])) <p))])
+   (hlink s y n)   ((tag (p \ ['link <>p (plain (runp (many (alts [hent htext])) <p))])
                          (seqs [(skip (lit "<a href=\"")) (span (!= 34)) (skip (lit "\">"))
                                 (pack htinl) (skip (lit "</a>"))])) s y n)
    (htinl s y n)   ((pmap mrg (many (alts [hent hcode hstrong hem hmark himgp hlink htext]))) s y n)
 
-   (hlev n)  (tag (\ p ['head n <p]) (wrapt ("h" + show n) (pack htinl)))
+   (hlev n)  (tag (p \ ['head n <p]) (wrapt ("h" + show n) (pack htinl)))
    hlang     (seqs [(skip (lit " class=\"language-")) (span (!= 34)) (skip (lit "\""))])
    h-rule  (tag (const '(rule)) (lit "<hr>"))
    h-head  (alts (map hlev '(1 2 3 4 5 6)))
-   h-para  (tag (\ p ['para <p]) (wrapt "p" (pack htinl)))
-   h-fence (tag (\ p ['fence <p (plain <>p)])
+   h-para  (tag (p \ ['para <p]) (wrapt "p" (pack htinl)))
+   h-fence (tag (p \ ['fence <p (plain <>p)])
                 (seqs [(skip (lit "<pre><code")) (dflt hlang "") (skip (lit ">"))
                        (pack (many (alts [hent htext]))) (skip (lit "</code></pre>"))]))
    h-li    (seqs [hws (wrapt "li" (pack htinl))])
-   h-ul    (tag (\ p ['bullets p]) (wrapt "ul" (many h-li)))
-   h-ol    (tag (\ p ['numbers p]) (wrapt "ol" (many h-li)))
-   h-meta1 (tag (\ p [(name <p) (plain (runp (many (alts [hent htext])) <>p))])
+   h-ul    (tag (p \ ['bullets p]) (wrapt "ul" (many h-li)))
+   h-ol    (tag (p \ ['numbers p]) (wrapt "ol" (many h-li)))
+   h-meta1 (tag (p \ [(name <p) (plain (runp (many (alts [hent htext])) <>p))])
                 (seqs [hws (skip (lit "<meta name=\"")) (span (!= 34))
                        (skip (lit "\" content=\"")) (span (!= 34)) (skip (lit "\">"))]))
-   h-meta  (tag (\ p ['meta (mnorm p)]) (many1 h-meta1))
+   h-meta  (tag (p \ ['meta (mnorm p)]) (many1 h-meta1))
    h-dt    (seqs [hws (wrapt "dt" (pack htinl)) hws (wrapt "dd" (pack htinl))])
-   h-dl    (tag (\ p ['deflist (dpair p)]) (wrapt "dl" (many h-dt)))
+   h-dl    (tag (p \ ['deflist (dpair p)]) (wrapt "dl" (many h-dt)))
    ; a table: the cells inline, th or td alike, an alignment off htshow's own attribute
    ; and none off any other; the head is the first row, whichever section held it
    (hcellp t) (alts ((map (a \ tag (c \ [a <c]) (seqs [hws (skip (lit ("<" + t + hal a + ">"))) (pack htinl) (skip (ctag t))]))
@@ -659,7 +659,7 @@
                      + [(tag (c \ ['n <c]) (seqs [hws (skip (otag t)) (pack htinl) (skip (ctag t))]))]))
    h-tr    (pack (seqs [hws (skip (otag "tr")) (many (alts [(hcellp "th") (hcellp "td")])) hws (skip (ctag "tr"))]))
    (h-tsec t) (seqs [hws (skip (otag t)) (many h-tr) hws (skip (ctag t))])
-   h-table (tag (\ p (: hd <p w #hd
+   h-table (tag (p \ (: hd <p w #hd
                          ['table (map cap hd) (map (c \ <>c) hd) (map (r \ tfit w (map (c \ <>c) r)) >p)]))
                 (pwhen (p \ two? p && two? <p)
                        (wrapt "table" (many (alts [(h-tsec "thead") (h-tsec "tbody") (h-tsec "tfoot") h-tr])))))
@@ -680,10 +680,10 @@
    ; ..and text with no <p> around it is still a paragraph. unwrapping a container leaves
    ; its inline content bare at block level, which is where most of a real page's prose
    ; turns out to live; `many1` is what keeps it from matching nothing and looping.
-   h-loose (tag (\ p ['para <p])
+   h-loose (tag (p \ ['para <p])
                 (pack (pmap mrg (many1 (alts [hent hcode hstrong hem hmark himgp hlink htext])))))
    ; quote recurses into the block loop, so it sits with it and stays eta-expanded
-   (h-quote s y n) ((tag (\ p ['quote <p]) (wrapt "blockquote" (pack (many h-block)))) s y n)
+   (h-quote s y n) ((tag (p \ ['quote <p]) (wrapt "blockquote" (pack (many h-block)))) s y n)
    (h-block s y n)
     ((seqs [hws (alts [h-rule h-head h-fence h-quote h-ul h-ol h-dl h-table h-meta h-para h-loose h-lone])]) s y n)
    (htread t) (bmrg (runp (seqs [(many h-block) hws]) (htscrub t))))
@@ -886,7 +886,7 @@
 ; macros a hand-written page uses are read, not just the escapes rfshow emits.
 (: rfesc? (!= 92)                                       ; ordinary inline text runs to the next \
    rclose    (alts [(lit "\\fR") (lit "\\fP")])                ; \fP is "previous font" -- same thing here
-   rgl     (tag (\ p ['text (glyph (string <p + string <>p))])
+   rgl     (tag (p \ ['text (glyph (string <p + string <>p))])
                 (seqs [(skip (lit "\\(")) (one chr?) (one chr?)]))
    ; the escapes that carry an argument in quotes -- a device call, a motion, a rule. none
    ; of them has a terminal form, so each contributes nothing and takes its argument with
@@ -906,11 +906,11 @@
                        (seqs [(lit "\\s") (opt rpm) (one dig?)])]))
    ; \*(XX and \*[name]: a string the page set for itself -- see rstrs. \[name] is the long
    ; spelling of \(xx and reaches the same table.
-   rstrg   (tag (\ p ['text (rstr (string <p + string <>p))])
+   rstrg   (tag (p \ ['text (rstr (string <p + string <>p))])
                 (seqs [(skip (lit "\\*(")) (one chr?) (one chr?)]))
-   rstrb   (tag (\ p ['text (rstr <p)]) (seqs [(skip (lit "\\*[")) (span (!= 93)) (skip (lit "]"))]))
-   rstr1   (tag (\ p ['text (rstr (string <p))]) (seqs [(skip (lit "\\*")) (one chr?)]))
-   rglb    (tag (\ p ['text (glyph <p)]) (seqs [(skip (lit "\\[")) (span (!= 93)) (skip (lit "]"))]))
+   rstrb   (tag (p \ ['text (rstr <p)]) (seqs [(skip (lit "\\*[")) (span (!= 93)) (skip (lit "]"))]))
+   rstr1   (tag (p \ ['text (rstr (string <p))]) (seqs [(skip (lit "\\*")) (one chr?)]))
+   rglb    (tag (p \ ['text (glyph <p)]) (seqs [(skip (lit "\\[")) (span (!= 93)) (skip (lit "]"))]))
    ; and the bare ones: a mark, a hyphenation point, a thin space -- all of them nothing here
    rnone   (tag (const '(text ""))
                 (alts (map (c \ lit ("\\" + c)) '("%" ":" "," "/" "|" "^" "{" "}" "c" "d" "u" "z" "p"))))
@@ -928,17 +928,17 @@
                   ; font body `rinls` tests rclose before it gets here, so this cannot steal one
                   (tag (const '(text "")) rclose)
                   rdropq rreg rsize rstrg rstrb rglb rstr1 rnone rgl])
-   rtext  (tag (\ p ['text (cats p)]) (seq (one rfesc?) (span rfesc?)))
+   rtext  (tag (p \ ['text (cats p)]) (seq (one rfesc?) (span rfesc?)))
    ; ..a \ starting none of the above reads as literal text one char at a time, `mrg` gluing
    ; it back on. without it the reader stops dead at the first escape it does not model.
-   rchar   (tag (\ p ['text (string <p)]) (one chr?))
-   rcode   (tag (\ p ['code (plain <p)])
+   rchar   (tag (p \ ['text (string <p)]) (one chr?))
+   rcode   (tag (p \ ['code (plain <p)])
            (seqs [(skip (alts [(lit "\\f(CR") (lit "\\f(CW")]))   ; cw is groff-deprecated, still read
                   (pack (many (seq (notp rclose) (alts [resc rtext rchar])))) (skip rclose)]))
    ; the font cycle (span -> strong/em -> rfont -> rinls -> span) rides eta-expanded parsers.
    ; the closer is optional because a font runs to one in roff and a page may leave it to the
    ; end of the line; `rinls` stops at either, so `opt` is the whole of the difference.
-   (rfont o t) (tag (\ p [t <p]) (seqs [(skip (lit o)) (pack rinls) (skip (opt rclose))]))
+   (rfont o t) (tag (p \ [t <p]) (seqs [(skip (lit o)) (pack rinls) (skip (opt rclose))]))
    (rstrong s y n) ((rfont "\\fB" 'strong) s y n)
    (rem s y n)     ((rfont "\\fI" 'em) s y n)
    (rspan s y n)   ((alts [resc rcode rstrong rem rtext rchar]) s y n)
@@ -987,22 +987,22 @@
    (joinfr (a . u)) (atom? u ? a (a + '((text " ")) + (joinfr u)))
    r-filled (tag (mrg * joinfr) (many1 r-fline))
 
-   r-th   (tag (\ p ['meta (mnorm (zipm metakeys (rargs <p)))]) (rmacl ".TH"))
-   r-sh   (tag (\ p ['head 1 (rfinl (join " " (rargs <p)))]) (rmacl ".SH"))
-   r-ss   (tag (\ p ['head 2 (rfinl (join " " (rargs <p)))]) (rmacl ".SS"))
+   r-th   (tag (p \ ['meta (mnorm (zipm metakeys (rargs <p)))]) (rmacl ".TH"))
+   r-sh   (tag (p \ ['head 1 (rfinl (join " " (rargs <p)))]) (rmacl ".SH"))
+   r-ss   (tag (p \ ['head 2 (rfinl (join " " (rargs <p)))]) (rmacl ".SS"))
    ; a .pp with no filled run behind it spaces a display; `opt` gives it an empty payload,
    ; so it contributes no block.
    r-pp   (seqs [(skip (alts [(lit ".PP") (lit ".LP")])) (skip (span nonl?)) (skip (lit "\n"))
-                 (opt (tag (\ p ['para <p]) r-filled))])
-   r-para (tag (\ p ['para <p]) r-filled)      ; text with no .pp -- after a .SH
-   r-tp   (tag (\ p [<p <>p])
+                 (opt (tag (p \ ['para <p]) r-filled))])
+   r-para (tag (p \ ['para <p]) r-filled)      ; text with no .pp -- after a .SH
+   r-tp   (tag (p \ [<p <>p])
                (seqs [(skip (lit ".TP")) (skip (span nonl?)) (skip (lit "\n")) r-fline r-filled]))
-   r-dl   (tag (\ p ['deflist p]) (many1 r-tp))
+   r-dl   (tag (p \ ['deflist p]) (many1 r-tp))
    r-bu   (seqs [(skip (lit ".IP \\(bu")) (skip (span nonl?)) (skip (lit "\n")) r-filled])
-   r-ul   (tag (\ p ['bullets p]) (many1 r-bu))
+   r-ul   (tag (p \ ['bullets p]) (many1 r-bu))
    r-no   (seqs [(skip (lit ".IP")) (skip (span nonl?)) (skip (lit "\n")) r-filled])
-   r-ol   (tag (\ p ['numbers p]) (many1 r-no))
-   r-ex   (tag (\ p ['fence "" (catmap (ln \ rplain ln + "\n") p)])
+   r-ol   (tag (p \ ['numbers p]) (many1 r-no))
+   r-ex   (tag (p \ ['fence "" (catmap (ln \ rplain ln + "\n") p)])
                (seqs [(skip (alts [(lit ".EX") (lit ".nf")])) (skip (span nonl?)) (skip (lit "\n"))
                       (many (seq (notp (alts [(lit ".EE") (lit ".fi")])) rfline))
                       (skip (alts [(lit ".EE") (lit ".fi")])) (skip (span nonl?)) (skip (lit "\n"))]))
@@ -1018,7 +1018,7 @@
    r-close (alts [(lit ".RE") (lit ".EE") (lit ".fi")])
    r-lone  (skip (seqs [(notp r-close) (lit ".") (span nonl?) (lit "\n")]))
    ; .rs recurses into the block loop, so it sits with it and stays eta-expanded
-   (r-rs s y n) ((tag (\ p ['quote p])
+   (r-rs s y n) ((tag (p \ ['quote p])
                       (seqs [(skip (lit ".RS")) (skip (span nonl?)) (skip (lit "\n"))
                              (many r-block) (skip (lit ".RE")) (skip (span nonl?)) (skip (lit "\n"))])) s y n)
    (r-block s y n) ((alts [r-blank r-br r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl r-para r-lone]) s y n)
