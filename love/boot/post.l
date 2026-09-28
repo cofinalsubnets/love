@@ -1,7 +1,7 @@
 
 ; post -- the third egg stage, sat once on the hatchling, after prel and ev and before
 ; the mop. the one seat that sees both the finished compiler and the runtime-internal
-; noms (peek seek atype, lamsrc, nifnom) the mop is about to take off the book: a
+; noms (peek seek atype, nifnom) the mop is about to take off the book: a
 ; reference compiled here folds to a value and survives, so love that needs to read the
 ; heap raw belongs here.
 ; the printer is the bulk of it, the reader's mirror image -- love.c's facex is the

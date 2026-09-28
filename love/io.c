@@ -524,13 +524,13 @@ word fn_arg(union u *k, int i, int nargs) { // i-th arg in application order
  return u[1].x; }
 // what `=` and the hash read a function value as: a native is its bytecode twin (the code
 // is a copy of it, at an address of its own), anything else itself. a native is the one
-// cell whose header repeats its code word, two words ahead of the value (map.c's nifx), and
+// cell whose header repeats its code word, one word ahead of the value (map.c's nifx), and
 // a twin may be a native again -- a lane that wraps another's answer -- so this unwraps to
 // the bytecode
 word fn_meaning(struct ai *c, word x) {
  while (evenp(x) && !datp(x) && in_heap(c, x)) {
   union u *k = cell(x), *h = tag_head(ttag(c, k)), *cd = k[0].ap == lvm_cur ? k + 2 : k;
-  if (!(h == k - 2 && h[0].ap == cd[0].ap && cd[2].ap == lvm_ret)) break;
+  if (!(h == k - 1 && h[0].ap == cd[0].ap && cd[2].ap == lvm_ret)) break;
   x = cd[1].x; }
  return x; }
 // the threads that are carriers, not code: a tablet's two halves, a cask, a coin, a port.
@@ -539,25 +539,10 @@ bool fn_carrier(union u *k) {
  return k[0].ap == lvm_map_lookup || k[0].ap == lvm_map_data || k[0].ap == lvm_cask
      || k[0].ap == lvm_coin || k[0].ap == lvm_port_io; }
 
-// the source \-expr stashed at value[-1] by a compiled lambda, or 0. only an ala/k0s
-// lambda reserves that leading cell, so probe the tag rather than read value[-1] -- a
-// wrap/partial/continuation puts its value at the start, and value[-1] is a neighbour.
-// in_heap: the main pool or the major pool (tenured objects live there).
+// in_heap: the main pool or the major pool (tenured objects live there). the two are
+// independent mallocs, the major above or below, so each range is tested
 bool in_heap(struct ai *c, word x) {
  return (ptr(x) >= ptr(c) && ptr(x) < ptr(c) + c->len) || (ptr(x) >= c->major_base && ptr(x) < c->major_hp); }
-word fn_src(struct ai *c, union u *k, word x) {
- // the two pools are independent mallocs (major may sit above or below): test each range
- bool xin = (ptr(x) > ptr(c) && ptr(x) < ptr(c) + c->len) || (ptr(x) >= c->major_base && ptr(x) < c->major_hp);
- if (!xin || fn_partialp(k)) return 0;
- if (k == tag_head(ttag(c, k))) return 0;       // value at allocation start: no leading src cell
- word s = k[-1].x;
- return evenp(s) && in_heap(c, s) && chainp(s) ? s : 0; }
-// (lamsrc f): that source, or () -- the one heap-layout question the printer in
-// love cannot ask for itself (reading value[-1] unguarded walks a neighbour).
-lvm(lvm_lamsrc) {
- word x = Sp[0], s = evenp(x) && !datp(x) ? fn_src(g, cell(x), x) : 0;
- Sp[0] = s ? s : ZeroPoint;
- ai_musttail return Next(1); }
 
 // (nifnom f): a nif's roster spelling, or (). the book cannot answer this: two
 // names can share one nif value (. and ><, peep and ->), and def1 is which of

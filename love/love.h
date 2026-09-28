@@ -667,7 +667,7 @@ char const *ai_nif_name(intptr_t);
 lvm_t lvm_kcall,
  lvm_putn, lvm_seal, lvm_heard, lvm_worn, lvm_myself,
  lvm_nilp, lvm_putc, lvm_intern,
- lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy, lvm_xlat,
+ lvm_saturate, lvm_ceil, lvm_peep, lvm_nifnom, lvm_cask, lvm_bcopy, lvm_xlat,
  lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_kind, lvm_sub_coin, lvm_quot_coin,   // coins: a kind's values, typed hots on the KHot row
  lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
  lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,
@@ -1126,8 +1126,7 @@ intptr_t
  vcmp_flo(int op, ai_flo_t a, ai_flo_t b),
  vcmp_int(int op, intptr_t a, intptr_t b),
  io_route(struct ai *g, word x),
- hot_hook(word h),
- fn_src(struct ai *c, union u *k, word x);
+ hot_hook(word h);
 void
  gen_wb(struct ai *g, word src, word p),
  gen_wb_cell(struct ai *g, void *cl, word v);

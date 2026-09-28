@@ -17,8 +17,8 @@
 ; the boundary contract: a value crosses into native as its raw tagged word (putfix A) and
 ; the result is re-tagged, so a codegen untags at the boundary; nothing allocates or holds a
 ; heap pointer inside, which keeps it GC-safe. `nat` (love/love.c) installs the cell
-; [code src code interp lvm_ret 0] with the value at the 3rd word, so value[-1] is src and
-; value[1] the deopt fallback, in a W^X arena. a64 wants __builtin___clear_cache where the
+; [code code interp lvm_ret 0] with the value at the 2nd word and value[1] the deopt
+; fallback, in a W^X arena. a64 wants __builtin___clear_cache where the
 ; bytes are written.
 ;
 ; a glaze wins only when it owns the loop: a native called from an interpreted loop pays a
@@ -121,7 +121,7 @@
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop (x86 self-test helper).
    (jitsum body)
     (: src ['\ 'n [[': ['go 'i 'a] ['? ['< 'i 'n] ['go ['+ 'i 1] ['+ 'a body]] 'a]] 0 0]]
-       (nif (emit (loopcode body 'i '+ '< 'x64)) (ev src) src 1))
+       (nif (emit (loopcode body 'i '+ '< 'x64)) (ev src) 1))
    ; --- the stackless call-out drive ---------------------------------------------------------
    ; a counted loop over (clos i) with no C frame: the blob lays the frame on Sp, tail-jumps into
    ; callout_drive (love.c), and resumes at bb -- laid by `lar`, since la's adrp mis-pages a mmap blob.
@@ -201,7 +201,7 @@
        argfn (nom? arg ? 0 (ev ['\ iv arg]))                               ; a computed arg -> a closure (\ counter ARG); a bare one needs none
        twin (nom? arg ? (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos i))) a)) 0 a0)            ; bare: clos applied to the counter
                          (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos (argfn i)))) a)) 0 a0))   ; computed: clos applied to arg(counter)
-       (nifx (emit (asmt tgt (calloutir tgt op arg))) twin src 1 clos))   ; value[1] = the twin (image-revert-clean); clos = the extras slot; value[-1]=src
+       (nifx (emit (asmt tgt (calloutir tgt op arg))) twin 1 clos))   ; value[1] = the twin (image-revert-clean); clos = the extras slot
    ; --- the captured / multi-arg call-out ------------------------------------------------------
    ; the same sum over (F i), F and N read from the frame at Sp[8*idx]. a is the whole frame size
    ; (cont at Sp[a]), the ret hand-rolled since the call-out clobbers Ip; a>=2, so the twin e is a cur cell
@@ -242,7 +242,7 @@
            ['lea IP T 16] ['ld T IP 0] ['jmpr T]]            ; enter e's body (a>=2: e+16), saturated frame on Sp
         + (nom? arg ? () (caargdeopt tgt))))                 ; the computed-arg `deopt` label, only when arg is an expr
    (njit-calloutframe src Fidx Nidx a e op arg tgt)
-    (nif (emit (asmt tgt (calloutframeir tgt Fidx Nidx a op arg))) e src a)   ; value[1] = e (the bytecode twin, deopt target -- source-shaped, so op- and arg-correct); arity a ; src for =/show
+    (nif (emit (asmt tgt (calloutframeir tgt Fidx Nidx a op arg))) e a)   ; value[1] = e (the bytecode twin, deopt target -- source-shaped, so op- and arg-correct); arity a
    ; --- amble: the boring-tier translator ------------------------------------------------------
    ; a per-op translation of what every other lane declined: values stay tagged, temporaries ride
    ; reserved vm-sp slots (GC roots), never the machine stack; a surprise deopts by restart (asafe)
@@ -787,7 +787,7 @@
                       ['sub SP SP fro]]                                                                   ; straight to the twin, and a perma-deopting native heals to bytecode
                    + initR + unpk + bodyir + epi + dpt
                    + ['(label d0) ['ld T IP 8]] + (a = 1 ? [['mov IP T]] [['lea IP T 16]]) + [['ld T IP 0] ['jmpr T]])
-             (nifx (emit (asmt tgt prog)) e s a (8 . (amble-nil . gvals + cvals + (map (q \ <>q) qs) + (lit? eqv ? [eqv] ()) + ins + ovals))))
+             (nifx (emit (asmt tgt prog)) e a (8 . (amble-nil . gvals + cvals + (map (q \ <>q) qs) + (lit? eqv ? [eqv] ()) + ins + ovals))))
           0))
    ; --- the general tail-recursive counted loop, n loop vars ------------------------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars raw in the loopregs
@@ -809,7 +809,7 @@
               + rb + loopepi tgt)))                      ; result -> acc ; putfix + Continue
    ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native (x86 self-test helper).
    (jitloop-n lam vars updates test result inits)
-    (nif (emit (loopcode-n <>lam vars updates test result inits 'x64)) (ev lam) lam 1)
+    (nif (emit (loopcode-n <>lam vars updates test result inits 'x64)) (ev lam) 1)
    ; --- the float lane: unboxed doubles in xmm/d --------------------------------------------------
    ; f0 is the accumulator, a nested operand spills to the machine stack, and a constant is built
    ; arithmetically (fbits) since peek is mopped. no overflow guard: doubles saturate, never promote
@@ -838,7 +838,7 @@
       cc (op @ '< 'below  '<= 'be  '> 'above  '>= 'ae  'eq)
       (cgf tgt v a d + xpushir tgt + cgf tgt v b (d + 1) + xpop1ir tgt + '((ucomisd f1 f0)) + [['set cc (greg tgt 'acc)]]))   ; ucomisd xmm1,xmm0 ; acc = (cc) ? 1 : 0
    ; (jitf '(\ x (cmp <fexpr> <fexpr>))) -- a float predicate over a fixnum arg -> native 0/1 (x86 helper).
-   (jitf lam) (: v <>lam (nif (emit (asmx (cgfp 'x64 v <>>lam 0 + loopepi 'x64))) (ev lam) lam 1))
+   (jitf lam) (: v <>lam (nif (emit (asmx (cgfp 'x64 v <>>lam 0 + loopepi 'x64))) (ev lam) 1))
    ; --- heap result: (jitfr '(\ x <fexpr>)) returns a gem, not 0/1 ------------------------------
    ; the lane cannot GC (raw regs are not roots), so a room guard deopts when the box will not fit,
    ; as the overflow guard does for a fixnum; the box is [Hp]=lvm_gembox, [Hp+8]=the double, NaN -> 0 (mk_gem's law)
@@ -859,7 +859,7 @@
               ['stsd HP 8 'f0]                                           ; [Hp+8] = the double
               ['mov A HP] ['add HP HP 16]                               ; acc = Hp (the gem ptr) ; Hp += 16
               ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]])))   ; [Sp] = gem ; Continue (no putfix: acc is the gem)
-        interp lam 1))
+        interp 1))
    (clook k ce) (? (atom? ce) () (k = <<ce) <ce (clook k >ce))   ; counter env: name -> (name regbytes); cgFd/rgof read it
    ; constant hoisting: the kernel's distinct float constants preload into f2..f7 once (f0/f1 scratch,
    ; f8.. locals) and the body reads the register; past six, the rest stay inline fconst
@@ -999,7 +999,7 @@
     (: pk (= tgt 'x64 && grid2-ok? dims invs fvars updates testexpr cmpop bound
              ? (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim) ())
        prog (atom? pk ? (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt) pk)
-       (nif (emit (asmt tgt (prog + (loopepi tgt)))) (ev lam) lam 1))
+       (nif (emit (asmt tgt (prog + (loopepi tgt)))) (ev lam) 1))
    ; jitfgrid: the 2D mandelbrot-class signature onto the general kernel, D=2 over (px py), M=2 (cx cy)
    (jitfgrid lam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim tgt)
     (jitfgridn lam '(px py) [pxn pyn] '(cx cy) [cxd cyd] fvars updates testexpr cmpop bound lim tgt)
@@ -1097,7 +1097,7 @@
        ([['lea AN 'sp 0]] + (cgir tgt ps body) + [['adds A A A] '(br vs deopt) ['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]] + deoptblk))
    ; jitcore: assemble coreir for tgt and install as a nat of the given arity (deopt -> interp).
    (jitcore tgt ps body deoptblk arity lam)
-    (nif (emit (asmt tgt (coreir tgt ps body deoptblk))) (ev lam) lam arity)
+    (nif (emit (asmt tgt (coreir tgt ps body deoptblk))) (ev lam) arity)
    ; (jitir '(\ x E) tgt) -- an arity-1 leaf. (jitnir '(\ p0 .. E) tgt) -- arity>=2 (natn curries to saturation).
    (jitir lam tgt)  (jitcore tgt [<>lam] <>>lam (deoptir tgt 0) 1 lam)
    (jitnir lam tgt) (: ps (init >lam) body (last >lam) (jitcore tgt ps body (deoptir tgt 1) #ps lam))
@@ -1301,10 +1301,10 @@
    ; jitgroupir: defs are ((nameform . body) ..), the entry is the group's value. the deopt fallback is (ev <group>), so the
    ; mpeep/mpin -> peep/pin aliases must assemble on every target; by the sequence law they read the previous global binding, not themselves
    (jitgroupir defs entry tgt)
-    (jitgroupirx defs entry tgt (ev (': . ('(mpeep mc mk md) . ('(peep mc mk md) . ('(mpin mc mk mv) . ('(pin mc mk mv) . jgir-lrf entry defs)))))) ())
+    (jitgroupirx defs entry tgt (ev (': . ('(mpeep mc mk md) . ('(peep mc mk md) . ('(mpin mc mk mv) . ('(pin mc mk mv) . jgir-lrf entry defs)))))))
    ; jitgroupirx takes the deopt target directly: the natjit hook passes the bytecode twin `e`, so a group-bearing
    ; closure native-backs without re-entering the evaluator mid-ala. no ev
-   (jitgroupirx defs entry tgt deopt src)
+   (jitgroupirx defs entry tgt deopt)
     (: parse (map (d \ (: nf <d [<nf >nf >d])) defs)            ; (name params body) per fn
        syms (map cap parse)                                                            ; the fn names, which are the call targets
        efn (gfind (f \ (<f = entry)) parse)  eps (efn 1)  eb (efn 2)  k #eps
@@ -1319,8 +1319,7 @@
        pmask (filter (j \ nuse? eb (eps j) && !(elem j cmask)) (rangeL 0 k))   ; entry point keys -> raw, nom|mint-guarded; a chain-used param is never a point
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
-       elam ('\ . eps + [eb])                                        ; the entry's source lambda, the =/show src fallback
-       (nif (emit ((assemble tgt (bcat [outer Hs])) 'bytes)) deopt (two? src ? src elam) k))   ; the outer surface if the caller gave one, else elam
+       (nif (emit ((assemble tgt (bcat [outer Hs])) 'bytes)) deopt k))
 )
 ; auto -- rebind `ev` so a qualifying closure compiles to native with no verb and no annotation, =/show-identical to
 ; its source; anything else falls through to the base interpreter. every recognizer is exact-arity: (+ x 1 2) is a tower.
@@ -1382,7 +1381,7 @@
            && exprp ARG I
            ? [(posof F ps 0) (posof N ps 0) op ARG] 0)
           0))
-   (njit-loop lam B cv op cmp interp) (nif (emit (loopcode B cv op cmp arch)) interp lam 1)
+   (njit-loop lam B cv op cmp interp) (nif (emit (loopcode B cv op cmp arch)) interp 1)
    ; --- general n-variable loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)), up to 3 loop vars, arbitrary update exprs
    (loopinfo-n lam)
     (lam @ ['\ N ([': (GO . vars) ['? T (GO . updates) R]] . inits)]
@@ -1442,7 +1441,7 @@
           (n \ cf-dot rrow (cf-mv (cf-mpow M n) (cf-aug inits)))            ; bytecode under the hook: not leaf/loop grammar, so no re-entry
           interp))
    (njit-loop-n lam vars updates test result inits interp)
-    (nif (emit (loopcode-n <>lam vars updates test result inits arch)) (cf-deopt lam vars updates test result inits interp) lam 1)
+    (nif (emit (loopcode-n <>lam vars updates test result inits arch)) (cf-deopt lam vars updates test result inits interp) 1)
    ; --- captured-closure constructor (\ p (\ q E)): the flat 2-param native, whose partial at p is =/show-identical to the interpreter's
    (qualc ['\ p ['\ q E]]) (nom? p && nom? q && p !== q && exprn [p q] E)
    (flatc ['\ p ['\ q E]]) ['\ p q E]                          ; (\ p (\ q E)) -> (\ p q E)
@@ -2362,8 +2361,8 @@
 )
 (: ev (cite 'glaze 'ev))
 ; hook -- the native-creation hook. ev.l's `ala` reads book['natjit] on every closure built: a qualifying body is native-backed
-; at creation and deopts into the closure's own bytecode `e`, so native is never wrong, only faster. the cell keeps value[-1]=s,
-; the surface src, so =/show see the source; a fresh cell per ala call keeps == honest. outside the `glaze` module on purpose:
+; at creation and deopts into the closure's own bytecode `e`, so native is never wrong, only faster. a fresh cell per ala call
+; keeps == honest. outside the `glaze` module on purpose:
 ; ala reads (gv 'natjit) and fires/fired? are its probe, so all three must be on the book, which a post-egg stream reaches only by a body-less `:`
 (: fires {0}                                                              ; probe counter: closures the hook native-backed
    natjit
@@ -2399,7 +2398,7 @@
            ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
            (? !(all nom? ps) e                                                       ; a frame that is not all points (a pattern binder) declines every lane
               (two? s && two? >>s && exprn ps body)                                   ; the leaf: >=1 param, a body in the grammar
-              (hit (nif (emit (peep (asm arch (coreir arch ps body (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e s a))
+              (hit (nif (emit (peep (asm arch (coreir arch ps body (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
               (qualfr s) (hit (jitfrx s arch e))                                      ; the float-result leaf boxes a gem; deopt to e, never (ev s), which re-enters ala
               (loopinfo s @ [B I op cmp] (hit (njit-loop s B I op cmp e))             ; the counted loop, then the n-var one: the back-edge is the win
                (loopinfo-n s @ [vars ups T R inits] (hit (njit-loop-n s vars ups T R inits e))
@@ -2417,9 +2416,9 @@
                           flat? (okshape && elem <tail gnames && >tail = ps)                     ; the tail is (entry frame..)
                           osym '__outer  agdefs (? okshape (gdefs + [((osym . ps) . tail)]) ())
                           (? (flat? && grp-ok? gdefs && jgir-ok? gdefs && gdefs-ok? gdefs)
-                             (hit (jitgroupirx gdefs <tail arch e s))                               ; stamps the outer s: =/show transparent
+                             (hit (jitgroupirx gdefs <tail arch e))
                              (okshape && !(elem osym gnames) && opnd-ok? ps tail && grp-ok? agdefs && jgir-ok? agdefs && gdefs-ok? gdefs)
-                             (hit (jitgroupirx agdefs osym arch e s))
+                             (hit (jitgroupirx agdefs osym arch e))
                              (: aj (njit-amble s a e gv farq lams nm ti ta inl arch)                 ; amble, the last lane: 0 on decline
                                 (? aj (hit aj)
                                    (getenv "LOVE_AMBLE_TRACE2" && puts ("amble-DECLINE: " + show s + "\n"), e))))))))))))
