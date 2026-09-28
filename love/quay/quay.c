@@ -302,6 +302,64 @@ static void cb_sweep(struct cb *c, int ids) {
   for (uint32_t k = 0; k < cb_nimg; k++) im[k].live = im[k].live == 3;
   c->stop = top; }
 
+// a cell index carried from a grid `ocols` wide, its rows shifted up by `from` -- the
+// cursor's and DECSC's. what falls outside the new grid lands on its edge.
+static uint32_t cb_carry(uint32_t pos, uint32_t ocols, uint32_t from,
+                         uint32_t rows, uint32_t cols) {
+  uint32_t r = pos / ocols, k = pos % ocols;
+  r = r > from ? r - from : 0;
+  if (r >= rows) r = rows - 1u;
+  if (k >= cols) k = cols - 1u;
+  return r * cols + k; }
+
+// old's pictures into c's empty store, packed in slot order while they fit: the ones a
+// carried cell names first, then the ones kitty holds by id. a tile of one left behind blanks
+static void cb_restock(struct cb *c, struct cb const *old) {
+  uint32_t const n = (uint32_t) c->rows * c->cols, room = cb_words(c);
+  struct cb_img const *oi = cb_imgs(old);
+  struct cb_img *ni = cb_imgs(c);
+  uint32_t *px = cb_spx(c), *pal = cb_pal(c), named[cb_nimg / 32] = { 0 }, top = 0;
+  for (uint32_t i = 0; i < n; i++) {
+    uint32_t const t = cb_tslot(c->cb[i].g);
+    if (c->cb[i].g & cb_pic) named[t >> 5] |= (uint32_t) 1 << (t & 31); }
+  for (uint32_t k = 0; room && k < 256; k++) pal[k] = cb_pal(old)[k];
+  for (uint32_t pass = 0; room && pass < 2; pass++)
+    for (uint32_t k = 1; k < cb_nimg; k++) {
+      uint32_t const on = named[k >> 5] >> (k & 31) & 1;
+      struct cb_img const *im = (pass ? !on && oi[k].id : on) ? cb_img(old, k) : 0;
+      uint32_t const m = im ? im->w * im->h : 0;
+      if (!im || m > room - top) continue;
+      for (uint32_t j = 0; j < m; j++) px[top + j] = cb_ipx(old)[im->off + j];
+      ni[k] = *im, ni[k].off = top, ni[k].live = 1, top += m; }
+  c->stop = top;
+  for (uint32_t i = 0; i < n; i++) {
+    uint32_t const g = c->cb[i].g;
+    if (g & cb_pic && !(room && ni[cb_tslot(g)].live)) c->cb[i].g = g & 0xff000000u; } }
+
+// old laid across into c, a fresh rows x cols screen with a store of sn bytes: the pen, the
+// modes, the clusters and a parser mid-sequence come whole; the cells row for row, clipped
+// where c is narrower, scrolled up only as far as the cursor's row needs, so shrinking
+// spends the blank tail under a prompt before it touches a line; the pictures they name as
+// far as the store holds them. nothing reflows -- a line wrapped at the old width stays
+// broken where it was. c and old may not overlap
+void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn) {
+  uint32_t const orows = old->rows, ocols = old->cols, cr = old->wpos / ocols,
+                 from = cr >= rows ? cr - rows + 1u : 0, w = cols < ocols ? cols : ocols;
+  *c = *old;
+  c->rows = rows, c->cols = cols;
+  cb_store(c, sn);
+  c->top = 0, c->bot = (uint16_t) (rows - 1u);   // the old region addressed the old rows
+  c->flag &= (uint16_t) ~cb_pend;                 // a pending wrap named the old last column
+  struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };   // the default pen
+  for (uint32_t i = 0, n = (uint32_t) rows * cols; i < n; i++) c->cb[i] = blank;
+  for (uint32_t r = from, dr = 0; r < orows && dr < rows; r++, dr++) {
+    for (uint32_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
+    cb_mend(c, dr); }
+  cb_restock(c, old);
+  c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
+  c->spos = cb_carry(old->spos, ocols, from, rows, cols);
+  cb_dirt(c, 0, rows - 1u); }
+
 // --- sixel: DECSIXEL into a canvas at the store's top, tiles at the cursor at the end ---
 // the canvas is a screen's width of pixels wide and as deep as the arena leaves (at most
 // 256 cells); rows are cleared as bands first reach them. a pixel set is 0xff over its rgb.

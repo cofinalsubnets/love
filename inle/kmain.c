@@ -1698,21 +1698,8 @@ static void fbwash(void) {
     for (uintptr_t x = 0; x < kfb.width; x++) kfb._[y * kfb.pitch + x] = 0;
   fbdraw(); }
 
-// a cell index carried from a grid `ocols` wide, its rows shifted up by `from` -- the
-// cursor's and DECSC's. what falls outside the new grid lands on its edge.
-static uint32_t cb_carry(uint32_t pos, uint16_t ocols, uintptr_t from,
-                         uintptr_t rows, uintptr_t cols) {
-  uintptr_t r = pos / ocols, k = pos % ocols;
-  r = r > from ? r - from : 0;
-  if (r >= rows) r = rows - 1u;
-  if (k >= cols) k = cols - 1u;
-  return (uint32_t) (r * cols + k); }
-
 // the console re-made for whatever kfb now says -- both doors below want exactly this. the
-// text comes ACROSS: cells row for row, clipped where the new grid is narrower, scrolled up
-// only as far as the cursor's row needs, so shrinking spends the blank tail under a prompt
-// before it touches a line. nothing reflows -- a line wrapped at the old width stays broken
-// where it was, which is the one-buffer bargain.
+// screen comes across by cb_regrid, text and the pictures the new store holds.
 // kcb is published only once the new grid is whole, and the old buffer freed after, fbdraw
 // being able to run from a fault handler; a refusal leaves the console standing, so the
 // allocation comes first.
@@ -1727,21 +1714,7 @@ static bool k_cb_remake(void) {
   struct cb *c = kmallocw(b2w(cb_size(rows, cols, sn)));
   if (!c) c = kmallocw(b2w(cb_size(rows, cols, sn = 0)));   // no room for pictures: text alone
   if (!c) return false;
-  *c = *old;                           // the pen, the modes, a parser mid-sequence
-  cb_store(c, sn);                     // the pictures stay with the old grid
-  c->rows = (uint16_t) rows, c->cols = (uint16_t) cols;
-  c->top = 0, c->bot = (uint16_t) (rows - 1u);   // the old region addressed the old rows
-  c->flag &= (uint16_t) ~cb_pend;      // a pending wrap named the old last column
-  uintptr_t const cr = old->wpos / ocols, from = cr >= rows ? cr - rows + 1u : 0,
-                  w = cols < ocols ? cols : ocols;
-  struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };   // new ground in the DEFAULT pen
-  for (uintptr_t i = 0, n = rows * cols; i < n; i++) c->cb[i] = blank;
-  for (uintptr_t r = from, dr = 0; r < orows && dr < rows; r++, dr++)
-    for (uintptr_t k = 0; k < w; k++) {
-      c->cb[dr * cols + k] = old->cb[r * ocols + k];
-      if (c->cb[dr * cols + k].g & cb_pic) c->cb[dr * cols + k].g = 0; }
-  c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
-  c->spos = cb_carry(old->spos, ocols, from, rows, cols);
+  cb_regrid(c, old, (uint16_t) rows, (uint16_t) cols, sn);
   kcb = c;
   kfree(old);
   fbwash();

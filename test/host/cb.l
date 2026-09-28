@@ -508,6 +508,39 @@
    _ (scribe s "\e_Ga=d\e\\")
    _ (test !(pic? s 0) !(pic? s 20)))
 
+; --- 22. regrid: a screen laid across into a new geometry -- rows kept as far as the cursor
+;     needs, clipped where narrower, a wide char cut in two blanked, clusters whole, and the
+;     pictures the new store holds. the old screen is left as it was ---
+(: (rmarks s i) (filter (< 0) (map (glass s i) [3 4 5]))
+   (rpic? s i) (1 = (glass s i 0 >> 23 & 1))
+   (rwide s i) (glass s i 0 >> 21 & 3)
+   (re s r c) (regrid s (cask (screen () r c)) r c)
+   s (mkscr 4 10)
+   _ (scribe s "\e[1;1Habcdefgh\e[2;1Hx\u{301}\e[2;5H\u{4e16}\e[3;3H")
+   t (re s 4 5)                                    ; narrower: the rows all fit
+   _ (test (4 = gaze t 1) (5 = gaze t 2)
+           (101 = chat t 4) (120 = chat t 5) ([769] = rmarks t 5)
+           (0 = chat t 9) (0 = rwide t 9)          ; 世's lead, its tail cut away
+           (12 = cur t)
+           (104 = chat s 7) (19990 = chat s 14) (22 = cur s))   ; the old screen untouched
+   u (re s 2 10)                                   ; shorter: up only as far as the cursor's row
+   _ (test (120 = chat u 0) ([769] = rmarks u 0) (19990 = chat u 4) (1 = rwide u 4)
+           (12 = cur u))
+   v (re s 6 12)                                   ; larger: new ground past the old edge
+   _ (test (97 = chat v 0) (104 = chat v 7) (0 = chat v 8) (120 = chat v 12) (26 = cur v))
+   p (mkscr 4 10)
+   _ (scribe p "\eP0;1;0q#0;2;100;0;0#1;2;0;0;100#0!10~$#1!5~-#0!10~\e\\\e[1;1H")
+   q (re p 3 8)                                    ; a picture comes along in its tiles
+   _ (test (rpic? q 0) (rpic? q 1) !(rpic? q 2)
+           (4278190335 = tilepx q 0 0 0) (4294901760 = tilepx q 1 1 0))
+   w (re p 1 1)                                    ; a 1x1 store still holds a 10x12 one
+   _ (test (rpic? w 0) (4278190335 = tilepx w 0 0 0))
+   b (mkscr 4 10)
+   _ (scribe b "\eP0;1;0q#0;2;100;0;0#0!20~-#0!20~\e\\\e[1;1H")   ; 20x12: past a 1x1 store
+   x (re b 1 1)
+   _ (test (rpic? b 0) !(rpic? x 0) (0 = chat x 0))
+   _ (test !(regrid s s 4 5) (0 < regrid s () 4 5) !(regrid s (cask 10) 4 5)))
+
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")

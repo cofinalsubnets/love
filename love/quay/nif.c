@@ -13,6 +13,10 @@
 //                         | ()   misuse: cask too small, or silly geometry
 //   (scribe scr x)       -> scr  feed x through the VT parser: a byte charm,
 //                                or every byte of a string/cask; () misuse
+//   (regrid scr b rows cols) -> b  scr laid across into cask b as a rows x cols
+//                                screen (cb_regrid): text, clusters, and pictures
+//                                while the store holds them; b not a cask answers
+//                                the byte count, as screen's does; () misuse
 //   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
 //                                width, picture, face), 1 the fg, 2 the bg
 //                                (the layout is quay.h's struct cb_cell); a
@@ -67,23 +71,44 @@ static struct cb *scr_ok(word x) {
 // (screen b rows cols): open a screen over cask b. A non-cask b answers the
 // byte count the cask needs -- the size protocol that keeps sizeof(struct cb)
 // out of the surface. Geometry is capped well under the u32 cell indices.
+// the store a rows x cols screen gets, or ~0u for a geometry refused
+static uint32_t scr_sn(word rw, word kw) {
+ intptr_t const r = (rw & 1) ? getcharm(rw) : 0, k = (kw & 1) ? getcharm(kw) : 0;
+ if (r < 1 || k < 1 || r > 65535 || k > 65535 || (uintptr_t) r * (uintptr_t) k > (uintptr_t) 1 << 22) return ~0u;
+ return r * k <= 131072 ? cb_sdefault(r, k) : 0; }   // no store past 64 MB of one
+
 static lvm(lvm_screen) {
- word b = Sp[0];
- intptr_t r = (Sp[1] & 1) ? getcharm(Sp[1]) : 0,
-           k = (Sp[2] & 1) ? getcharm(Sp[2]) : 0;
- word out = ZeroPoint;
- if (r >= 1 && k >= 1 && r <= 65535 && k <= 65535
-      && (uintptr_t) r * (uintptr_t) k <= (uintptr_t) 1 << 22) {
-  uint32_t const sn = r * k <= 131072 ? cb_sdefault(r, k) : 0;   // no store past 64 MB of one
+ word b = Sp[0], out = ZeroPoint;
+ uint32_t const sn = scr_sn(Sp[1], Sp[2]);
+ if (sn != ~0u) {
+  uint16_t const r = (uint16_t) getcharm(Sp[1]), k = (uint16_t) getcharm(Sp[2]);
   uintptr_t need = cb_size(r, k, sn);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need) {
-    cb_open((struct cb*) s->bytes, (uint16_t) r, (uint16_t) k, sn);
+    cb_open((struct cb*) s->bytes, r, k, sn);
     out = b; } } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
+
+// (regrid scr b rows cols): as screen, but the new grid starts from scr's. b must be a
+// cask of its own -- the two may not overlap
+static lvm(lvm_regrid) {
+ struct cb *c = scr_ok(Sp[0]);
+ word b = Sp[1], out = ZeroPoint;
+ uint32_t const sn = scr_sn(Sp[2], Sp[3]);
+ if (c && sn != ~0u) {
+  uint16_t const r = (uint16_t) getcharm(Sp[2]), k = (uint16_t) getcharm(Sp[3]);
+  uintptr_t need = cb_size(r, k, sn);
+  if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
+  else {
+   struct ai_str *s = ((struct ai_cask*) b)->str;
+   if (s->len >= need && (uint8_t*) s->bytes != (uint8_t*) c) {
+    cb_regrid((struct cb*) s->bytes, c, r, k, sn);
+    out = b; } } }
+ Sp[3] = out;
+ Sp += 3; Ip += 1; ai_musttail return Continue(); }
 
 // (scribe scr x): the feed. A charm is one byte; a string or cask pours every
 // byte through cb_putc (the hot path: one nif call per pty read). Returns the
@@ -241,4 +266,5 @@ static union u const
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
   nif_facerow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_facerow}, {lvm_ret0}},
   nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}},
-  nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}};
+  nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}},
+  nif_regrid[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_regrid},  {lvm_ret0}};

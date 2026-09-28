@@ -119,13 +119,13 @@
        _ (rest 8)                                    ; a keystroke's echo within ~10 ms
        (pier-paints s win gc depth bx fx face dirty l2))
 
-   ; --- a resize: the window manager retiled us. a fresh grid and frame to fit, and the
-   ;     pty learns its size (the kernel raises SIGWINCH) ---
+   ; --- a resize: the window manager retiled us. the grid laid across to fit, a fresh
+   ;     frame, and the pty learns its size (the kernel raises SIGWINCH) ---
    (pier-resize bx fx m dirty wp hp)
     (: r (max 1 (hp // 16)) c (max 2 (wp // 8))
        sc (peep bx () 0)
        (? ((r = gaze sc 1) && (c = gaze sc 2)) 0
-          (: _ (pin bx () (screen (cask (screen () r c)) r c))
+          (: _ (pin bx () (regrid sc (cask (screen () r c)) r c))
              _ (pin fx () (cask (((c * 8) * (r * 16)) * 4)))
              _ (settty m r c)
              (pin dirty () 2))))

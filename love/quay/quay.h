@@ -95,6 +95,8 @@ enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
 void
   cb_open(struct cb*, uint16_t rows, uint16_t cols, uint32_t sn),
   cb_store(struct cb*, uint32_t sn),   // lay an empty store of sn bytes after the cells
+  // old laid across into a fresh rows x cols screen with a store of sn bytes (no overlap)
+  cb_regrid(struct cb*, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn),
   cb_clear(struct cb*),
   cb_putc(struct cb*, char),
   cb_stamp(struct cb*, uint8_t),
