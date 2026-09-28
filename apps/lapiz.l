@@ -102,7 +102,7 @@
                                     (st < i) (rev (snip s st i . acc))
                                     (rev acc)))
                  0 0 ())
-   (endnl s)    (tally s && s (tally s - 1) = 10 ? s (s + "\n"))     ; one trailing newline, always
+   (endnl s)    (#s && s (#s - 1) = 10 ? s (s + "\n"))               ; one trailing newline, always
    ; a parser whose payload must also pass ok, or it fails where it began
    (pwhen ok a s y n) (a s (\ s1 x (? (ok x) (y s1 x) (n s))) n)
    ; a row laid to n cells: the cells past its end empty, the ones past n gone
@@ -157,10 +157,10 @@
    (rstr n) ((: (g l) (? (atom? l) "" (<<l = n) <><l (g >l))) rstrs))
 
 ; --- normalizing an inl: adjacent texts are one text (the AST is the fixed point, so this matters) ---
-(: (mrg l) (? (atom? l) () (: h <l (= <h 'text && 0 = #<>h)) (mrg >l)     ; a \& contributes an empty text: drop it
+(: (mrg l) (? (atom? l) () (: h <l (<h = 'text && 0 = #<>h)) (mrg >l)     ; a \& contributes an empty text: drop it
               (atom? >l) (<l . ())
               (: a <l b <>l
-               (= <a 'text && (= <b 'text) ? (mrg (['text (<>a + <>b)] . >>l))
+               (<a = 'text && <b = 'text ? (mrg (['text (<>a + <>b)] . >>l))
                 (a . mrg >l))))
    ; ..and the same at block level: two adjacent lists of one kind are one list. roff cannot
    ; separate two `.TP` runs at all, so without this it merges a pair markdown kept apart and
@@ -168,7 +168,7 @@
    (bmrg l) (? (atom? l) ()
                (atom? >l) (<l . ())
                (: a <l b <>l
-                  (? (= <a <b && elem <a '(bullets numbers deflist))
+                  (? (<a = <b && elem <a '(bullets numbers deflist))
                      (bmrg ([<a (<>a + <>b)] . >>l))
                      (a . bmrg >l))))
    plain (cats * map caup)                        ; an inl of pure texts back to a string
@@ -225,7 +225,7 @@
        mid (snip c (? lc 1 0) (? rc (n - 1) n))
        dash ((: (g i) (? (#mid <= i) 1 (mid i = 45) (g (i + 1)) 0)) 0)
        (? (0 < #mid && dash) (? (lc && rc) 'c rc 'r lc 'l 'n) ()))
-   (tdels? l) (? (atom? l) 1 (nil? (tdel <l)) 0 (tdels? >l))
+   (tdels? l) (? (atom? l) 1 !(tdel <l) 0 (tdels? >l))
    t-row   (tag (p \ tcells (cats p)) (seqs [(skip (lit "|")) (span nonl?) eol]))
    t-del   (pwhen (p \ two? <p && tdels? <p) t-row)
    t-start (pwhen (p \ #<p = #<>p) (seq t-row t-del))
@@ -391,9 +391,9 @@
        (semi i) ((: (g k) (? (n <= k || i + 12 < k) -1 (s k = 59) k (g (k + 1)))) (i + 1))
        (go i) (? (n <= i) (slurp o)
                  (s i = 38) (: e (semi i)
-                               (? (e < 0) (: _ (put o 38) (go (i + 1)))
-                                  (: _ (say o (entof (snip s (i + 1) e))) (go (e + 1)))))
-                 (: _ (put o (s i)) (go (i + 1))))
+                               (? (e < 0) (put o 38, go (i + 1))
+                                  (say o (entof (snip s (i + 1) e)), go (e + 1))))
+                 (put o (s i), go (i + 1)))
        (go 0)))
 
 ; ---------------------------------------------------------------- html, scrubbed
@@ -487,7 +487,7 @@
                  (: c (s i)
                     _ (? ((96 < c < 123) || (64 < c < 91) || (47 < c < 58) || elem c '(45 46 95 126)) (put o c)
                          (c = 32) (put o 43)
-                         (: _ (put o 37) _ (put o (hx (c // 16))) (put o (hx (c % 16)))))
+                         (put o 37, put o (hx (c // 16)), put o (hx (c % 16))))
                     (go (i + 1))))
        (go 0))
    ; an attribute's value decoded, or "" where there is none
@@ -582,7 +582,7 @@
                (: t <h e <>h op? <>>h
                   k (i + 1 + #t)
                   mk (? op? (hmk (hattr s k (e - 1) "id") + hmain s t k (e - 1)) "")
-                  (? (t = "form") (: _ (pin fs 'f (? op? (hform s k (e - 1) e) (tablet 0))) (say o mk, go e ba))
+                  (? (t = "form") (pin fs 'f (? op? (hform s k (e - 1) e) (tablet 0)), say o mk, go e ba)
                      (t = "input") (say o (mk + field i), go e ba)
                      (t = "textarea") (say o (mk + field i), go (? op? (hpast s e t) e) ba)
                      (t = "img") (say o (mk + (? op? (himg s k (e - 1)) "")), go e ba)
@@ -859,7 +859,7 @@
                  ; there is still a macro and the text is still text
                  (elem m rfcond)
                   (: k (rfnro ln)
-                     (? (= k 'no) (go >l de nf (rfdepth ln 0) rs defs acc)
+                     (? (k = 'no) (go >l de nf (rfdepth ln 0) rs defs acc)
                         !#k       (go >l de nf d rs defs acc)
                         (go (k . >l) de nf d rs defs acc)))
                  (m = "." || elem m rfskip) (go >l de nf d rs defs acc)
@@ -1161,7 +1161,7 @@
     (? (atom? d) ()
        (: h (ttblk <d w ind) r (ttdoc >d w ind)
           (? (atom? h) r (atom? r) h
-             (= <(<d) 'head) (h + r)
+             (<<d = 'head) (h + r)
              (h + [""] + r))))
    ; a stateful map: f answers [y acc], threaded left to right
    (tlmap f l acc)

@@ -52,7 +52,7 @@
    (fat-sec f cl) (f 3 + cl * 4 // 512)
    (fat@ f cl)                                        ; the entry, 28 bits
     (: lba (fat-sec f cl)
-       s (= lba (f 9) ? (f 10)
+       s (lba = f 9 ? (f 10)
           (: t (rd1 f lba) (pin f 9 lba, pin f 10 t, t)))
        (rdle s (cl * 4 % 512) 4 & 0x0FFFFFFF))
    (fat! f cl v)                                      ; write, both copies, top nibble kept
@@ -167,7 +167,7 @@
                           acc))
                       0 "")
        b (part 0 8 (flags & 8)) e (part 8 3 (flags & 16))
-       (tally e ? (b + "." + e) b))
+       (#e ? (b + "." + e) b))
    ; raw dir bytes -> groups. an LFN run rides `start` until its short entry
    ; claims it; a freed slot or the end orphans (drops) a half-run, honestly.
    (dir-scan s)
@@ -176,13 +176,13 @@
         (? (n <= o) (rev acc)
            (: c0 (s o)
               (? !c0 (rev acc)                     ; 0x00: end of directory
-                 (= c0 0xE5) (go (o + 32) "" () acc)
+                 (c0 = 0xE5) (go (o + 32) "" () acc)
                  (: at (s (o + 11))
                     (? ((at & 15) = 15)
                        (go (o + 32) ((lfn-part s o) + lfn) (charm? start ? start o) acc)
                        (: cl ((rdle s (o + 26) 2) + ((rdle s (o + 20) 2) << 16))
                           label (at & 8 = 8)
-                          nm (tally lfn ? lfn (short-name s o (s (o + 12))))
+                          nm (#lfn ? lfn (short-name s o (s (o + 12))))
                           dot (name=? nm "." || name=? nm "..")
                           raw (snip s (charm? start && !label ? start o) (o + 32))
                           g (group (label || dot ? () nm) at cl (rdle s (o + 28) 4)
@@ -246,7 +246,7 @@
        _ (w16 b 26 (cl & 0xFFFF), w32 b 28 sz)
        (string b))
    (mk-lfn nm ck)                                     ; the run, highest seq first
-    (: k ((tally nm + 12) // 13)
+    (: k ((#nm + 12) // 13)
        (chr i) (? (i < #nm) (nm i) (i = #nm) 0 0xFFFF)
        (one seq first)
         (: b (cask 32) o ((seq - 1) * 13)
@@ -312,7 +312,7 @@
    ; --- the verbs ---
    (fat-ls f path)
     (fat-walk f path @ [dcl nm g]
-     (: cl (tally nm ? (tablet? g && (peep g 1 () & 16) ? (peep g 2 ())) dcl)
+     (: cl (#nm ? (tablet? g && (peep g 1 () & 16) ? (peep g 2 ())) dcl)
       (charm? cl ? [1 (dir-names (dir-load f cl))])))
    (fat-stat f path)
     (fat-walk f path @ [_ _ g]
