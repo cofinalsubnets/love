@@ -98,11 +98,11 @@
           (tag = 'num)
            ; hex first: `0x1f` would otherwise take the plain-integer match on its
            ; leading 0 and leave the rest bare, which is a worse lie than no colour
-           (: _ (line ("syn match " + g + " \"\\<-\\?0[xX]\\x\\+\\>\""))
-              _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\>\""))
-              _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
-              _ (line ("syn match " + g + " \"\\<-\\?\\.\\d\\+\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
-              (line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\"")))
+           (line ("syn match " + g + " \"\\<-\\?0[xX]\\x\\+\\>\""),
+            line ("syn match " + g + " \"\\<-\\?\\d\\+\\>\""),
+            line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""),
+            line ("syn match " + g + " \"\\<-\\?\\.\\d\\+\\([eE][-+]\\?\\d\\+\\)\\?\\>\""),
+            line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\""))
           (tag = 'word) (kwlines g (wtab (hue-cls r)))
           (tag = 'punct)
            ; the valence law as vim reads it: a punct run leads a token (the

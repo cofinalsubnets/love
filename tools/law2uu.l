@@ -209,7 +209,7 @@
    ; --- the rows ---
    fs (forms (open "test/law.l" "r"))
    (findb l) (? !(two? l) () (<l = 'law-rows) (l 1) (findb >l))
-   rows >(findb >(cap fs))
+   rows >(findb >(<fs))
    (qstrip s) (: (go i) (? (i = #s) ""
                             ((? (s i = 63) "q" (s i = 61) "eq" (string (s i))) + go (i + 1)))
                  (go 0))                                 ; ? is no name character downstream
