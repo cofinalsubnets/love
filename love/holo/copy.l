@@ -25,7 +25,7 @@
    (oc-segs fs s)
     (: n (ld-f fs s 0 'e-phnum) po (ld-f fs s 0 'e-phoff) e (ld-n fs 'ph-ent)
        (go i acc)
-        (? (<= n i) (rev acc)
+        (? (n <= i) (rev acc)
            (: h (po + (i * e))
               (go (i + 1) (? (ld-f fs s h 'ph-type = 1)
                              ([(ld-f fs s h 'ph-off) (ld-f fs s h 'ph-fsz)
@@ -33,7 +33,7 @@
                              acc))))
        (go 0 ()))
    (oc-lma id segs off)
-    (: (go ps) (? !(two? ps) (scare 'copy-unmapped-section off)
+    (: (go ps) (? (atom? ps) (scare 'copy-unmapped-section off)
                   (: p <ps
                      (? ((<p <= off) && (off < (<p + p 1))) (p 2 + (off - <p))
                         (go >ps))))
@@ -64,7 +64,7 @@
        _ (? (two? segs) 0 (scare 'copy-no-load id))
        shoff (ld-f fs s 0 'e-shoff)
        (go i acc)
-        (? (<= shnum i) acc
+        (? (shnum <= i) acc
            (: h (shoff + (i * ld-n fs 'sh-ent))
               ty (ld-f fs s h 'sh-type) fl (ld-f fs s h 'sh-flags)
               off (ld-f fs s h 'sh-off) sz (ld-f fs s h 'sh-size)
@@ -79,7 +79,7 @@
    ;; section is what the part comes up holding there.
    (oc-bin s secs)
     (: (go l pos acc)
-        (? !(two? l) (rev acc)
+        (? (atom? l) (rev acc)
            (: c <l a <c o (c 1) n (c 2)
               _ (? (a < pos) (scare 'copy-overlap a) 0)
               (go >l (a + n)
@@ -100,11 +100,11 @@
    oc-digits "0123456789ABCDEF"
    oc-pairs (foldl (\ a b (a + snip oc-digits (b >> 4) ((b >> 4) + 1)
                              + snip oc-digits (b & 15) ((b & 15) + 1)))
-                   "" (jot 256))                  ; every byte's two digits, once
+                   "" ^256)                       ; every byte's two digits, once
    (oc-x2 b) (snip oc-pairs (b + b) (b + b + 2))
    (oc-cat ls) (foldl (+) "" ls)
    (oc-rec ty addr bs)
-    (: all ([(tally bs) ((addr >> 8) & 255) (addr & 255) ty] + bs)
+    (: all ([#bs (addr >> 8 & 255) (addr & 255) ty] + bs)
        ck ((256 - (foldl (+) 0 all % 256)) % 256)
        (oc-cat (":" . (map oc-x2 (all + [ck]) + '("\r\n")))))
    (oc-be4 v) [((v >> 24) & 255) ((v >> 16) & 255) ((v >> 8) & 255) (v & 255)]
@@ -126,7 +126,7 @@
    ;; base is the 64K window in force, sg whether a segment base is standing in it
    (oc-ihex s secs entry)
     (: (go l base sg acc)
-        (? !(two? l)
+        (? (atom? l)
            (rev (. ":00000001FF\r\n"
                       (? (0 < entry) (oc-start entry . acc) acc)))
            (: c <l a <c
@@ -140,15 +140,15 @@
               b2 (? new? nb base)
               (go >l b2 (? new? !lin? sg)
                   (oc-rec 0 (a - b2)
-                          (map (\ k (s (c 1 + k))) (jot (c 2))) . acc2))))
+                          (map (k \ s (c 1 + k)) (jot (c 2))) . acc2))))
        (go (oc-chunks secs) 0 () ()))
 
    ;; -- the applet. GNU's objcopy names itself when it complains and exits 1, and a
    ;; makefile's error belongs where the binutils one went; `kore objcopy` dispatches
    ;; here, and so does the one-line cat a port build runs.
-   (oc-die m) (: _ (say err ("objcopy: " + m)) _ (put err 10) (quit 1))
+   (oc-die m) (say err ("objcopy: " + m), put err 10, quit 1)
    (objcopy as)
-    (? !(tally as = 4) (oc-die "usage: objcopy -O binary|ihex IN OUT")
+    (? (#as != 4) (oc-die "usage: objcopy -O binary|ihex IN OUT")
        (: fmt (? (<as = "-O") <>as (oc-die ("unrecognized option " + <as)))
           src (as 2) dst (as 3)
           _ (? (elem fmt '("binary" "ihex")) 0 (oc-die ("unknown output format " + fmt)))
