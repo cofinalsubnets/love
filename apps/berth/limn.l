@@ -14,8 +14,8 @@
 ;
 ; host-only: `glass` is cb's nif (love/quay/nif.c), so this never joins the corpus --
 ; test/limn.l is its gate.
-(module '(limn limn-across limn-bars limn-down limn-glyph limn-glyphs limn-go limn-ink limn-pen
-          limn-row limn-rows limn-run limn-sgr)
+(module '(limn limn-across limn-bars limn-down limn-glyph limn-glyphs limn-go limn-half limn-ink
+          limn-pen limn-row limn-rows limn-run limn-sgr limn-tile)
 (:
    ; --- the pen: a cell's face byte and its two colour words (love/quay/quay.h), as one
    ; number -- face | fg << 8 | bg << 34, a colour word being 26 bits. one SGR per pen
@@ -47,12 +47,35 @@
    limn-down (utf8 9474)                      ; │
    limn-across (utf8 9472)                    ; ─
 
+   ; a picture's tile as one ▀: its top half's colour over its bottom half's, each the mean
+   ; of the pixels the picture set there; a half with none is the cell's own bg. its SGR is
+   ; its own, so the pen after it is none (-1) and the next cell says its own
+   (limn-half s k y0 y1 w)
+    (: (px x y) (tilepx s k x y)
+       (sum x y a) (? (y1 <= y) a (w <= x) (sum 0 (y + 1) a)
+                      (: v (px x y) (sum (x + 1) y (? (v >> 24) [(<a + (v >> 16 & 255)) (<>a + (v >> 8 & 255))
+                                                               (<>>a + (v & 255)) ((a 3) + 1)] a))))
+       t (sum 0 y0 [0 0 0 0])
+       n (t 3)
+       (? (n < 1) () [(<t // n) (<>t // n) (<>>t // n)]))
+   (limn-tile s k)
+    (: w (gaze s 6) h (gaze s 7)
+       top (limn-half s k 0 (h // 2) w)
+       bot (limn-half s k (h // 2) h w)
+       (rgb c) (show <c + ";" + show <>c + ";" + show <>>c)
+       bg (limn-ink 48 (glass s k 2))
+       ; ▀ a top over what is under it, ▄ a bottom alone, a space for a tile the picture left bare
+       (? (two? top) ("\e[0;38;2;" + rgb top + ";" + (? (two? bot) ("48;2;" + rgb bot) bg) + "m" + utf8 9600)
+          (two? bot) ("\e[0;38;2;" + rgb bot + ";" + bg + "m" + utf8 9604)
+          ("\e[0;" + bg + "m ")))
+
    ; paint row i cell by cell, threading the pen. a wide char's tail says nothing: the
    ; outer terminal steps two columns for its lead
    (limn-row j s c i q p) (? (q < c)
                            (: k (i * c + q)
                               g (glass s k 0)
                               (? ((g >> 21 & 3) = 2) (limn-row j s c i (q + 1) p)
+                                 ((g >> 23 & 1) = 1) (: _ (say j (limn-tile s k)) (limn-row j s c i (q + 1) -1))
                                  (: p2 (limn-pen g (glass s k 1) (glass s k 2))
                                     _ (p = p2 ? 0 (say j (limn-sgr p2)))
                                     _ (say j (limn-glyph (g & 2097151)))

@@ -74,7 +74,17 @@ face() {
 }
 face full "$out/face-full.ppm"
 face empty "$out/face-empty.ppm"
-"$love" test/gate/face.l "$out/face-full.ppm" "$out/face-empty.ppm" || bad=1
+"$love" test/gate/lit.l face 384 "$out/face-full.ppm" "$out/face-empty.ppm" || bad=1   # 16x16 + 8x16
+
+# A SIXEL PICTURE PAINTS OFF THE STORE, A PIXEL A PIXEL. a 16x16 square, white then black
+# (the console's ground): the pictures differ by exactly its 256 pixels, two tiles wide.
+six() {
+  INLE_RAM=256 "$node" inle/wasm/inle.mjs --fb 640x400 --scale 1 --dump "$2" \
+    --image "$image" "$wasm" test/kernel/six.l $1 < /dev/null > "$log" 2>&1
+}
+six full "$out/six-full.ppm"
+six empty "$out/six-empty.ppm"
+"$love" test/gate/lit.l sixel 256 "$out/six-full.ppm" "$out/six-empty.ppm" || bad=1
 
 [ $bad = 0 ] || exit 1
-echo "  glass: ok -- real pixels in, rows and columns out, the text across a new grid, and a loaded face"
+echo "  glass: ok -- real pixels in, rows and columns out, the text across a new grid, a loaded face, and a sixel picture"

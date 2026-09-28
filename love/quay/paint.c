@@ -15,6 +15,26 @@ static uint32_t cb_rgbof(struct cb const *c, uint32_t k, uint32_t d, int bright)
 static uint32_t cb_mid(uint32_t a, uint32_t b) {
   return (a >> 1 & 0x7f7f7f) + (b >> 1 & 0x7f7f7f); }
 
+// one TILE onto the paper at pixel (x,y): its piece of the picture, a pixel a glyph pixel
+// (so a scale square each), the cell's bg where the picture set nothing. a picture is laid
+// in the screen's cell grain, so a face of another size paints the tile as bare ground
+static void cb_tpx(struct cb_paper const *p, struct cb const *c, struct font const *f,
+                   struct cb_cell const *cell, uintptr_t x, uintptr_t y) {
+  uintptr_t const s = p->scale;
+  if (x + f->w * s > p->w || y + f->h * s > p->h) return;
+  uint32_t const bg = cb_rgbof(c, cell->bg, c->def_bg, 0);
+  struct cb_img const *im = f->w == c->cw && f->h == c->ch ? cb_img(c, cb_tslot(cell->g)) : 0;
+  uint32_t const *ipx = cb_ipx(c);
+  for (uint8_t r = 0; r < f->h; r++) {
+    uint32_t const Y = cb_tty(cell->g) * f->h + r;
+    for (uintptr_t d = 0; d < s; d++) {
+      volatile uint32_t *px = p->px + (y + r * s + d) * p->pitch + x;
+      for (uint8_t k = 0; k < f->w; k++) {
+        uint32_t const X = cb_ttx(cell->g) * f->w + k,
+                       v = im && X < im->w && Y < im->h ? ipx[im->off + Y * im->w + X] : 0;
+        uint32_t const o = v >> 24 ? v & 0xffffffu : bg;
+        for (uintptr_t e = 0; e < s; e++) px[k * s + e] = o; } } } }
+
 // one CELL onto the paper at pixel (x,y), wide when it is a wide char's lead -- two cells'
 // width, the tail beside it painted here too. the glyph is the built-in face's where the
 // cp437 page has cp, else a loaded face's (qf, the 8x16 cell only), else the ■. a cell that
@@ -64,6 +84,8 @@ void cb_paint(struct cb_paper const *p, struct cb const *c, struct font const *f
                      && cb_wide(c->cb[pos + 1].g) == cb_tail;
     if (j && cb_wide(cell.g) == cb_tail && cb_wide(c->cb[pos - 1].g) == cb_lead) continue;
     if (!lead) cell.g &= ~((uint32_t) 3 << 21);             // a lone half paints single
+    uintptr_t const px0 = x0 + (uintptr_t) j * f->w * p->scale, py0 = y0 + (uintptr_t) row * f->h * p->scale;
+    if (cell.g & cb_pic) { cb_tpx(p, c, f, &cell, px0, py0); continue; }
     if (pos == cur || (lead && pos + 1 == cur)) cell.g ^= (uint32_t) cb_rev << 24;
     cb_px(p, c, f, qf, &cell, x0 + (uintptr_t) j * f->w * p->scale,
           y0 + (uintptr_t) row * f->h * p->scale); } }

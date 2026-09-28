@@ -29,7 +29,7 @@ void cb_clear(struct cb *c) { cb_fill(c, 0); }
 void cb_recolor(struct cb *c, uint32_t fg, uint32_t bg) {
   cb_attr(c, fg, bg);
   for (uint32_t i = 0, j = (uint32_t) c->rows * c->cols; i < j; i++)
-    c->cb[i].g &= 0x7fffffu, c->cb[i].fg = c->cb[i].bg = cb_ink(cb_def, 0);
+    c->cb[i].g &= 0xffffffu, c->cb[i].fg = c->cb[i].bg = cb_ink(cb_def, 0);
   cb_dirt(c, 0, c->rows - 1u); }
 
 void cb_cur(struct cb *c, uint32_t row, uint32_t col) {
@@ -49,9 +49,10 @@ void cb_stamp(struct cb *c, uint8_t i) {
   cb_dirt(c, r, r);
   if (++c->wpos == (uint32_t) c->rows * c->cols) c->wpos = 0; }
 
-void cb_open(struct cb *c, uint16_t rows, uint16_t cols) {
+void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   c->wpos = c->spos = 0;
-  c->rows = rows, c->cols = cols;
+  c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16;
+  cb_store(c, sn);
   c->flag = cb_show | cb_wrap;
   c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0;
   c->ucp = 0, c->un = 0, c->ol = 0;
@@ -202,6 +203,164 @@ static void cb_mend(struct cb *c, uint32_t r) {
     if (w == cb_tail && (!j || cb_wide(c->cb[rb + j - 1u].g) != cb_lead))
       c->cb[rb + j].g &= 0xff000000u; } }
 
+// --- the store: pictures, after the cells ---------------------------------------------
+static uint8_t *cb_sbase(struct cb const *c) {
+  return (uint8_t*) (c->cb + (uintptr_t) c->rows * c->cols); }
+static struct cb_img *cb_imgs(struct cb const *c) { return (struct cb_img*) cb_sbase(c); }
+static uint32_t *cb_pal(struct cb const *c) { return (uint32_t*) (cb_sbase(c) + cb_nimg * sizeof(struct cb_img)); }
+uint32_t const *cb_ipx(struct cb const *c) { return (uint32_t const*) (cb_sbase(c) + cb_shead); }
+static uint32_t *cb_px(struct cb *c) { return (uint32_t*) (cb_sbase(c) + cb_shead); }
+// the arena's words, 0 for a screen with no store
+static uint32_t cb_words(struct cb const *c) { return c->sn > cb_shead ? (c->sn - cb_shead) / 4u : 0; }
+
+// an empty store of sn bytes: no pictures, the registers black, nothing decoding
+void cb_store(struct cb *c, uint32_t sn) {
+  c->sn = sn >= cb_shead ? sn : 0, c->stop = 0, c->sslot = 0, c->sm = 0;
+  if (!c->sn) return;
+  struct cb_img *im = cb_imgs(c);
+  uint32_t *pal = cb_pal(c);
+  for (uint32_t k = 0; k < cb_nimg; k++) im[k] = (struct cb_img) { 0, 0, 0, 0 };
+  for (uint32_t k = 0; k < 256; k++) pal[k] = 0; }
+
+// a live picture that fits its arena, or 0: a painter may trust what this answers
+struct cb_img const *cb_img(struct cb const *c, uint32_t slot) {
+  if (!slot || slot >= cb_nimg || !cb_words(c)) return 0;
+  struct cb_img const *im = cb_imgs(c) + slot;
+  if (!im->live || !im->w || !im->h || im->w > 65536u || im->h > 65536u) return 0;
+  uint64_t const end = (uint64_t) im->off + (uint64_t) im->w * im->h;
+  return end <= cb_words(c) ? im : 0; }
+
+// the sweep: a picture no cell names is dropped, the rest packed down in the order they
+// were laid, which is the order of their offsets
+static void cb_sweep(struct cb *c) {
+  struct cb_img *im = cb_imgs(c);
+  uint32_t *px = cb_px(c), seen[cb_nimg / 32] = { 0 }, top = 0;
+  for (uint32_t k = 0; k < cb_nimg; k++) im[k].live = im[k].live && cb_img(c, k) ? 2u : 0u;
+  for (uint32_t i = 0, n = (uint32_t) c->rows * c->cols; i < n; i++) {
+    uint32_t const g = c->cb[i].g;
+    if (g & cb_pic && im[cb_tslot(g)].live == 2) im[cb_tslot(g)].live = 3; }
+  for (;;) {
+    uint32_t best = 0;
+    for (uint32_t k = 1; k < cb_nimg; k++)
+      if (im[k].live == 3 && !(seen[k >> 5] >> (k & 31) & 1) && (!best || im[k].off < im[best].off)) best = k;
+    if (!best) break;
+    seen[best >> 5] |= (uint32_t) 1 << (best & 31);
+    uint32_t const n = im[best].w * im[best].h;
+    if (im[best].off != top) for (uint32_t j = 0; j < n; j++) px[top + j] = px[im[best].off + j];
+    im[best].off = top, top += n; }
+  for (uint32_t k = 0; k < cb_nimg; k++) im[k].live = im[k].live == 3;
+  c->stop = top; }
+
+// --- sixel: DECSIXEL into a canvas at the store's top, tiles at the cursor at the end ---
+// the canvas is a screen's width of pixels wide and as deep as the arena leaves (at most
+// 256 cells); rows are cleared as bands first reach them. a pixel set is 0xff over its rgb.
+static void cb_six_open(struct cb *c) {
+  c->sslot = 0;
+  if (!cb_words(c)) return;
+  cb_sweep(c);
+  uint32_t k = 1;
+  while (k < cb_nimg && cb_imgs(c)[k].live) k++;
+  uint32_t const stride = (uint32_t) c->cols * c->cw, room = cb_words(c) - c->stop;
+  uint32_t h = stride ? room / stride : 0;
+  if (h > 256u * c->ch) h = 256u * c->ch;
+  if (k == cb_nimg || h < 6) return;
+  cb_imgs(c)[k] = (struct cb_img) { c->stop, stride, h, 0 };
+  c->sslot = (uint16_t) k, c->sx = c->sy = c->sw = c->sh = 0, c->sreg = 0, c->srep = 1, c->sm = 0; }
+
+// a colour off HLS, sixel's hue wheel putting blue at 0, red at 120 and green at 240;
+// l and s in percent, the arithmetic in ten-thousandths
+static uint32_t cb_hls1(uint32_t m1, uint32_t m2, uint32_t hh) {
+  hh %= 360u;
+  if (hh < 60) return m1 + (m2 - m1) * hh / 60u;
+  if (hh < 180) return m2;
+  if (hh < 240) return m1 + (m2 - m1) * (240u - hh) / 60u;
+  return m1; }
+static uint32_t cb_hls(uint32_t h, uint32_t l, uint32_t s) {
+  l = (l > 100 ? 100 : l) * 100u, s = (s > 100 ? 100 : s) * 100u;
+  uint32_t const std = (h + 240u) % 360u;           // the usual wheel: red at 0
+  uint32_t const m2 = l <= 5000 ? l * (10000u + s) / 10000u : l + s - l * s / 10000u,
+                 m1 = 2u * l - m2;
+  uint32_t const r = cb_hls1(m1, m2, std + 120u), g = cb_hls1(m1, m2, std),
+                 b = cb_hls1(m1, m2, std + 240u);
+  return (r * 255u / 10000u) << 16 | (g * 255u / 10000u) << 8 | b * 255u / 10000u; }
+
+static uint32_t cb_pct(uint16_t v) { return (v > 100 ? 100u : v) * 255u / 100u; }
+
+// the parameter command in flight, now its numbers are in
+static void cb_six_cmd(struct cb *c) {
+  if (c->sm == '!') c->srep = c->pn && c->pv[0] ? c->pv[0] : 1u;
+  else if (c->sm == '#' && c->pn) {
+    uint32_t const r = c->pv[0] & 255u;
+    if (c->pn >= 5 && c->pv[1] == 2)
+      cb_pal(c)[r] = cb_pct(c->pv[2]) << 16 | cb_pct(c->pv[3]) << 8 | cb_pct(c->pv[4]);
+    else if (c->pn >= 5 && c->pv[1] == 1)
+      cb_pal(c)[r] = cb_hls(c->pv[2] % 360u, c->pv[3], c->pv[4]);
+    c->sreg = r; }
+  c->sm = 0, c->pn = 0, c->arg = 0; }
+
+// one sixel byte
+static void cb_six(struct cb *c, uint8_t i) {
+  if (c->sm) {
+    if (i >= '0' && i <= '9') { if (c->arg < 6553) c->arg = (uint16_t) (c->arg * 10 + (i - '0')); return; }
+    if (c->pn < 8) c->pv[c->pn++] = c->arg;
+    c->arg = 0;
+    if (i == ';') return;
+    cb_six_cmd(c); }
+  if (!c->sslot) return;
+  struct cb_img const *cv = cb_imgs(c) + c->sslot;
+  if (i == '#' || i == '!' || i == '"') { c->sm = i, c->pn = 0, c->arg = 0; return; }
+  if (i == '$') { c->sx = 0; return; }
+  if (i == '-') { c->sx = 0, c->sy += 6; return; }
+  if (i < '?' || i > '~') return;
+  uint32_t const bits = i - '?', stride = cv->w;
+  if (c->sy + 6 > c->sh) {                          // a band's first touch clears its rows
+    uint32_t const to = c->sy + 6 < cv->h ? c->sy + 6 : cv->h;
+    for (uint32_t y = c->sh; y < to; y++)
+      for (uint32_t x = 0; x < stride; x++) cb_px(c)[cv->off + y * stride + x] = 0;
+    if (to > c->sh) c->sh = to; }
+  uint32_t const ink = 0xff000000u | cb_pal(c)[c->sreg];
+  for (uint32_t n = 0; n < c->srep && c->sx + n < stride; n++) {
+    uint32_t const x = c->sx + n;
+    for (uint32_t b = 0; b < 6; b++)
+      if (bits >> b & 1 && c->sy + b < cv->h) cb_px(c)[cv->off + (c->sy + b) * stride + x] = ink;
+    if (bits && x + 1 > c->sw) c->sw = x + 1; }
+  c->sx += c->srep, c->srep = 1; }
+
+static void cb_ind(struct cb *c);
+
+// the string's end: the canvas packed to its own width becomes the slot's picture, and its
+// tiles land at the cursor, a text row a cell row, scrolling as text would. the cursor
+// ends under the picture, at the column it started in
+static void cb_six_close(struct cb *c) {
+  if (c->sm) cb_six(c, 0);
+  uint32_t const k = c->sslot;
+  c->sslot = 0;
+  if (!k) return;
+  struct cb_img *im = cb_imgs(c) + k;
+  uint32_t const w = c->sw, h = c->sh < im->h ? c->sh : im->h, stride = im->w;
+  if (!w || !h) return;
+  uint32_t *px = cb_px(c);
+  for (uint32_t y = 1; y < h; y++)
+    for (uint32_t x = 0; x < w; x++) px[im->off + y * w + x] = px[im->off + y * stride + x];
+  im->w = w, im->h = h, im->live = 1;
+  c->stop = im->off + w * h;
+  uint32_t const cs = c->cols, col0 = c->wpos % cs;
+  uint32_t tw = (w + c->cw - 1u) / c->cw, th = (h + c->ch - 1u) / c->ch;
+  if (tw > 256) tw = 256;
+  if (col0 + tw > cs) tw = cs - col0;
+  c->flag &= (uint16_t) ~cb_pend;
+  for (uint32_t ty = 0; ty < th; ty++) {
+    if (ty) cb_ind(c);
+    uint32_t const rb = c->wpos - c->wpos % cs;
+    for (uint32_t tx = 0; tx < tw; tx++) {
+      uint32_t const p = rb + col0 + tx;
+      cb_unpair(c, p);
+      cb_pen(c, 0, &c->cb[p]);
+      c->cb[p].g = cb_tile(k, tx, ty); }
+    cb_mend(c, rb / cs), cb_dirt(c, rb / cs, rb / cs); }
+  cb_ind(c);
+  c->wpos = c->wpos - c->wpos % cs + col0; }
+
 // RIS: everything back to the floor -- pens, faces, region, modes,
 // cursor, ground. LNM survives: the newline discipline belongs to the
 // console (the kernel set it at boot), not to the program resetting.
@@ -211,7 +370,7 @@ static void cb_ris(struct cb *c) {
   c->top = 0, c->bot = c->rows - 1u;
   c->flag = (uint16_t) (cb_show | cb_wrap | lnm);
   c->wpos = c->spos = 0;
-  c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0;
+  c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0, c->sslot = 0, c->sm = 0;
   cb_clear(c); }
 
 static void cb_save(struct cb *c) {  // DECSC: cursor + pen
@@ -323,7 +482,15 @@ static void cb_csi(struct cb *c, uint8_t i) {
     for (uint32_t p = c->wpos, j = c->wpos + n; p < j; p++) c->cb[p] = e;
     cb_mend(c, r), cb_dirt(c, r, r);
     return; }
-   case 'S': return cb_scup(c, c->top, c->bot, n);
+   case 'S':
+    if (!priv) return cb_scup(c, c->top, c->bot, n);
+    // XTSMGRAPHICS: read (1) or read the most (4) of the registers (1) or the geometry (2)
+    if (c->pn >= 2 && (c->pv[1] == 1 || c->pv[1] == 4) && cb_words(c)) {
+      if (c->pv[0] == 1) return cb_say(c, "\033[?1;0;256S");
+      if (c->pv[0] == 2) return cb_say(c, "\033[?2;0;"), cb_sayn(c, (uint32_t) c->cols * c->cw),
+                              cb_say(c, ";"), cb_sayn(c, (uint32_t) c->rows * c->ch), cb_say(c, "S"); }
+    cb_say(c, "\033[?"), cb_sayn(c, c->pv[0]), cb_say(c, ";3;0S");   // 3: a failure
+    return;
    case 'T': return cb_scdn(c, c->top, c->bot, n);
    case 'r': if (!priv) {
      uint32_t t = c->pv[0] ? c->pv[0] : 1, b = c->pn > 1 && c->pv[1] ? c->pv[1] : c->rows;
@@ -337,8 +504,16 @@ static void cb_csi(struct cb *c, uint8_t i) {
                        cb_sayn(c, col + 1u), cb_say(c, "R");
     else if (c->pv[0] == 5) cb_say(c, "\033[0n");
     return;
-   case 'c':                                // DA: a VT102, honestly; >c the secondary ask
-    return cb_say(c, gt ? "\033[>0;0;0c" : "\033[?6c");
+   case 'c':                                // DA: a VT220 with ansi colour, sixel where a store is
+    return cb_say(c, gt ? "\033[>0;0;0c" : cb_words(c) ? "\033[?62;4;22c" : "\033[?62;22c");
+   case 't':                                // the sizes a picture is fitted to
+    if (c->pv[0] == 14) cb_say(c, "\033[4;"), cb_sayn(c, (uint32_t) c->rows * c->ch), cb_say(c, ";"),
+                        cb_sayn(c, (uint32_t) c->cols * c->cw), cb_say(c, "t");
+    else if (c->pv[0] == 16) cb_say(c, "\033[6;"), cb_sayn(c, c->ch), cb_say(c, ";"),
+                             cb_sayn(c, c->cw), cb_say(c, "t");
+    else if (c->pv[0] == 18) cb_say(c, "\033[8;"), cb_sayn(c, c->rows), cb_say(c, ";"),
+                             cb_sayn(c, c->cols), cb_say(c, "t");
+    return;
    case 's': return cb_save(c);
    case 'u': return cb_restore(c);
    default: return; } }  // anything else: politely nothing
@@ -358,7 +533,8 @@ static void cb_put1(struct cb *c, uint8_t i) {
      case '[': c->esc = 2, c->arg = 0, c->pn = 0;
       c->flag &= (uint16_t) ~(cb_priv | cb_junk | cb_gt); return;
      case ']': c->esc = 7, c->ol = 0; return;       // OSC: capture the head (colour asks answer)
-     case 'P': case '^': case '_': c->esc = 3; return;  // DCS/PM/APC: swallow
+     case 'P': c->esc = 9, c->pn = 0, c->arg = 0; return;  // DCS: its parameters, then its final
+     case '^': case '_': c->esc = 3; return;               // PM/APC: swallow
      case '(': case ')': case '*': case '+': c->esc = 4; return;  // charset designator
      case '#': c->esc = 6; return;
      case '7': return cb_save(c);           // DECSC
@@ -402,6 +578,25 @@ static void cb_put1(struct cb *c, uint8_t i) {
     if (i == '\\') return cb_oscq(c);
     return;
    case 4: c->esc = 0; return;              // the designated charset: discarded
+   case 9:                                  // a DCS's parameters: 'q' is sixel, anything else swallowed
+    if (i == 27) { c->esc = 5; return; }
+    if (i >= '0' && i <= '9') { if (c->arg < 6553) c->arg = (uint16_t) (c->arg * 10 + (i - '0')); return; }
+    if (i == ';') { if (c->pn < 8) c->pv[c->pn++] = c->arg; c->arg = 0; return; }
+    if (i < 0x40) { if (i >= 0x20) c->esc = 3; return; }   // an intermediate: none of ours
+    if (c->pn < 8) c->pv[c->pn++] = c->arg;
+    if (i != 'q') { c->esc = 3; return; }
+    c->sp2 = (uint8_t) (c->pn > 1 ? c->pv[1] : 0), c->pn = 0, c->arg = 0;
+    c->esc = 10;
+    return cb_six_open(c);
+   case 10:                                 // a sixel body, to ST
+    if (i == 27) { c->esc = 11; return; }
+    if (i == 0x18 || i == 0x1a) { c->esc = 0, c->sslot = 0, c->sm = 0; return; }   // CAN, SUB: dropped
+    return cb_six(c, i);
+   case 11:                                 // ESC inside sixel: \ ends it; anything else ends it too, and begins
+    cb_six_close(c), c->esc = 0;
+    if (i == '\\') return;
+    c->esc = 1;
+    return cb_put1(c, i);
    case 6:                                  // ESC # ...
     if (i == '8') {                         // DECALN: the E screen, region home
       c->top = 0, c->bot = c->rows - 1u, c->wpos = 0, c->flag &= (uint16_t) ~cb_pend;

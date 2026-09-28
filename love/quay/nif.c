@@ -8,7 +8,8 @@
 //
 //   (screen b rows cols) -> b    open a cb over cask b (cb_open)
 //                         | n    b not a cask: the byte count a (cask n) needs,
-//                                so the ctor is (screen (cask (screen () r c)) r c)
+//                                so the ctor is (screen (cask (screen () r c)) r c);
+//                                the count carries a store a screenful of pictures deep
 //                         | ()   misuse: cask too small, or silly geometry
 //   (scribe scr x)       -> scr  feed x through the VT parser: a byte charm,
 //                                or every byte of a string/cask; () misuse
@@ -16,10 +17,13 @@
 //                                width, picture, face), 1 the fg, 2 the bg
 //                                (the layout is quay.h's struct cb_cell)
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
-//                                3 flag, 4 top, 5 bot; () misuse
+//                                3 flag, 4 top, 5 bot, 6 and 7 a cell's width and
+//                                height in pixels; () misuse
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
+//   (tilepx scr i x y)   -> n    pixel (x,y) of cell i's tile: 0xff over its rgb where
+//                                the picture set it, 0 where not; () for no tile
 //   (facerow f cp r)     -> n    row r of cp's glyph in face f (a string or cask as
 //                                apps/face.l lays it), the leftmost pixel bit 15;
 //                                () when f is no face (cb_face_ok) or lacks cp
@@ -36,12 +40,15 @@ static struct cb *scr_ok(word x) {
  if (s->len < sizeof(struct cb)) return 0;
  struct cb *c = (struct cb*) s->bytes;
  uintptr_t n = (uintptr_t) c->rows * c->cols;
- if (!c->rows || !c->cols || cb_size(c->rows, c->cols) > s->len) return 0;
+ if (!c->rows || !c->cols || cb_size(c->rows, c->cols, 0) > s->len) return 0;
+ if (cb_size(c->rows, c->cols, c->sn) > s->len || (c->sn && c->sn < cb_shead)) c->sn = 0, c->sslot = 0;
+ if (!c->cw || !c->ch) c->cw = 8, c->ch = 16;
+ if (c->sslot >= cb_nimg) c->sslot = 0;
  if (c->wpos >= n) c->wpos = 0;
  if (c->spos >= n) c->spos = 0;
  if (c->bot >= c->rows) c->bot = (uint16_t) (c->rows - 1u);
  if (c->top > c->bot) c->top = 0;
- if (c->esc > 8) c->esc = 0;
+ if (c->esc > 11) c->esc = 0;
  if (c->pn > 8) c->pn = 8;
  if (c->on > cb_outn) c->on = 0;
  if (c->un > 3) c->un = 0;
@@ -58,12 +65,13 @@ static lvm(lvm_screen) {
  word out = ZeroPoint;
  if (r >= 1 && k >= 1 && r <= 65535 && k <= 65535
       && (uintptr_t) r * (uintptr_t) k <= (uintptr_t) 1 << 22) {
-  uintptr_t need = cb_size(r, k);
+  uint32_t const sn = r * k <= 131072 ? cb_sdefault(r, k) : 0;   // no store past 64 MB of one
+  uintptr_t need = cb_size(r, k, sn);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need) {
-    cb_open((struct cb*) s->bytes, (uint16_t) r, (uint16_t) k);
+    cb_open((struct cb*) s->bytes, (uint16_t) r, (uint16_t) k, sn);
     out = b; } } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
@@ -112,6 +120,8 @@ static lvm(lvm_gaze) {
   case 3: out = putcharm(c->flag); break;
   case 4: out = putcharm(c->top);  break;
   case 5: out = putcharm(c->bot);  break;
+  case 6: out = putcharm(c->cw);   break;
+  case 7: out = putcharm(c->ch);   break;
   default: break; }
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
@@ -128,6 +138,22 @@ static lvm(lvm_damage) {
    c->dmg[k] = 0; } }
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
+
+// (tilepx scr i x y): one pixel of cell i's tile, as the painter reads it
+static lvm(lvm_tilepx) {
+ struct cb *c = scr_ok(Sp[0]);
+ word out = ZeroPoint;
+ if (c && (Sp[1] & 1) && (Sp[2] & 1) && (Sp[3] & 1)) {
+  uintptr_t const i = (uintptr_t) getcharm(Sp[1]);
+  intptr_t const x = getcharm(Sp[2]), y = getcharm(Sp[3]);
+  if (i < (uintptr_t) c->rows * c->cols && x >= 0 && y >= 0 && x < c->cw && y < c->ch) {
+   uint32_t const g = c->cb[i].g;
+   struct cb_img const *im = g & cb_pic ? cb_img(c, cb_tslot(g)) : 0;
+   if (im) {
+    uint32_t const X = cb_ttx(g) * c->cw + (uint32_t) x, Y = cb_tty(g) * c->ch + (uint32_t) y;
+    out = putcharm(X < im->w && Y < im->h ? cb_ipx(c)[im->off + Y * im->w + X] : 0u); } } }
+ Sp[3] = out;
+ Sp += 3; Ip += 1; ai_musttail return Continue(); }
 
 // (facerow f cp r): the painter's own reading of a face, vetting and all
 static lvm(lvm_facerow) {
@@ -176,4 +202,5 @@ static union u const
   nif_gaze[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gaze},   {lvm_ret0}},
   nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
-  nif_facerow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_facerow}, {lvm_ret0}};
+  nif_facerow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_facerow}, {lvm_ret0}},
+  nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}};
