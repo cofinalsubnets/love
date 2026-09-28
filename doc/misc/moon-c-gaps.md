@@ -50,8 +50,8 @@ What genuinely stands between here and freestanding C11, each row live above:
 
 **A duplicate label now refuses and names itself** (2026-08-18). C11 6.8.1p3 scopes a label to
 its whole function; two of a name emitted one mangled label twice and every `goto` to it took
-the first, in silence. the deviation it buys: gcc's `__label__` makes two blocks' `L` two
-labels, and that program refuses here.
+the first, in silence. gcc's `__label__` scopes a label to its block, and does here too: each
+declared name takes a fresh spelling for the rest of the block (196-locallabel.c).
 
 **Landed 2026-08-16** (test/cc/142-syntax.c and 138-ucn.c hold them to gcc; the refusals sit in
 test/gate/moon.sh), and the deliberate readings in them:
@@ -176,8 +176,8 @@ and 145-attrpos.c hold both to gcc):
   `aligned` or `packed` ask on one MEMBER lays the member where its type says — the same
   silence the leading spelling has always kept (the alignment row below), and an ABI question
   rather than a missed optimization. A `packed` on the struct BODY is read, and stays read.
-- `__label__ a, b;` at a block head parses and drops — a label already mangles to `fn.NAME`.
-  so a name DECLARED in two blocks of one function refuses (above) where gcc compiles it.
+- `__label__ a, b;` at a block head gives each name its block's own label (above); gcc's short
+  `__attribute` reads as `__attribute__`.
 
 The whole set costs **+0.081% of the instructions** compiling love/love.c (perf, 136.115G vs
 136.005G, the same tree built twice and stable to eight figures). `pprim` sees every identifier
@@ -825,16 +825,14 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 **measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
 with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
-every ninth by path: **124 compile**, and the rest stop at
+every ninth by path: **126 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 8 | a function's inline asm: `sbb`, `lcallw`, `mov %fs, r`, a debug register (`%db0`), a register pinned twice, an `"i"` input no fold makes constant |
+| 15 | a function's inline asm: `sbb`, `rep`, `lcallw`, `fnsave`, `clflush`, `mov %fs, r`, a debug register (`%db0`), a register pinned twice, an `"i"` input no fold makes constant |
 | 8 | `cause unnamed` (`page_ref_dec_and_test`, `notify_uffd`, `dma_direct_sync_sg_for_device`, `acpi_pci_probe_root_resources`, `nf_conntrack_tcp_packet`) |
 | 1 | a `?:` over a function in a static initializer (`serial_port_pm`'s `.suspend`) |
-| 7 | `__label__`, a block's local label (`unsafe_get_user`, rseq, a security hook's `OUT`) |
 | 7 | `__builtin_isdigit`, `__builtin_ffsll`, `__builtin_ffs` over a runtime value |
-| 2 | gcc's `__attribute` spelling |
 | 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label` |
 
 each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
@@ -842,9 +840,9 @@ runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm
 `pushf` 102, an address as an `"i"` operand 22, a `%gs:` operand 20, a `"+m"` output 17 and a
 flag output 10, an `"i"` only a splice makes constant 17, a lock's or tracepoint's static
 initializer 20, `.skip` over label arithmetic 4, the bit scans and `pause` 9 and a register
-spelled `%rdx` 4, gas's macro language 3 and a bit builtin over a constant 9 and `typeof` of the object in its own initializer 31 before they read (142-syntax.c, 174-elvis.c,
+spelled `%rdx` 4, gas's macro language 3 and a bit builtin over a constant 9 `typeof` of the object in its own initializer 31 and `__label__` 7 before they read (142-syntax.c, 174-elvis.c,
 175-offsetof.c, 176-cleanup.c, 178-toplevelasm.c, 179-pushf.c, 181..185-asm*.c, 186-staticinit.c
-188..191-asm*.c, 193-bswapcase.c and 195-typeofself.c hold them). a file-scope asm is gas's whole language, and
+188..191-asm*.c, 193-bswapcase.c, 195-typeofself.c and 196-locallabel.c hold them). a file-scope asm is gas's whole language, and
 holo's gas-top reads what C headers write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
 `.byte`..`.quad` over a symbol plus a constant or less `.`, `.ascii`/`.asciz`, `.balign`,
 `.zero`, `.org`, and `.skip` or a word over label arithmetic (read once the whole text has,
