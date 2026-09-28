@@ -47,7 +47,7 @@
   (has? (show (: t (foldl (\ t i (pin t i i)) {} (jot 40)) (\ x (peep t (x + 1) 0)))) "{..40}")
   (tally (show ev) < 200000)
   (! (has? (show ev) "((mint "))                     ; every name it calls is bound
-  ; --- functions compare by their threads ---
+  (3 = (ev <(sound (show ev))) '(+ 1 2))           ; ..and ev read back off its own show is an ev  ; --- functions compare by their threads ---
   ((\ p q (p + q)) = (\ a b (a + b)))                   ; names never reach the thread
   (! ((\ a b (a + b)) = (\ a b (a - b))))              ; a different body is different code
   (((\ a b (a + b)) 1) = ((\ x y (x + y)) 1))           ; partials: equal bases, equal captures
