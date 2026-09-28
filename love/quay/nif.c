@@ -35,6 +35,9 @@
 //   (mouse scr b row col how) -> s  the report a pointer event makes as the program asked
 //                                (cb_mouse): b the button with its modifier bits, how
 //                                0 a press, 1 a release, 2 a move; "" when not asked
+//   (pasted scr s)       -> s    string s as a seat pastes it into this screen (cb_pasted):
+//                                newlines as returns, controls gone, bracketed when
+//                                the program asked (?2004); () misuse
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
@@ -153,16 +156,22 @@ static lvm(lvm_scribe) {
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
+// cell i of the grid, or of the history at a negative i (-cols the newest line's first); 0 past either
+static struct cb_cell const *scr_cell(struct cb const *c, intptr_t i) {
+ intptr_t const back = (intptr_t) c->hn * c->cols;
+ return i >= (intptr_t) c->rows * c->cols || i < -back ? 0
+      : i >= 0 ? &c->cb[i] : &cb_hline(c, (uint32_t) ((i + back) / c->cols))[(i + back) % c->cols]; }
+
 // (glass scr i k): look through to one word of one cell.
 static lvm(lvm_glass) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
-  intptr_t const i = getcharm(Sp[1]), k = getcharm(Sp[2]), back = (intptr_t) c->hn * c->cols;
-  if (i >= -back && i < (intptr_t) c->rows * c->cols && k >= 0 && k < 6) {
-   struct cb_cell const e = i >= 0 ? c->cb[i] : cb_hline(c, (uint32_t) ((i + back) / c->cols))[(i + back) % c->cols];
-   uint32_t const *v = cb_clu(c, e.g);
-   out = putcharm(k == 0 ? (v ? (e.g & 0xffe00000u) | cb_cp(v[0]) : e.g) : k == 1 ? e.fg : k == 2 ? e.bg
+  intptr_t const k = getcharm(Sp[2]);
+  struct cb_cell const *e = scr_cell(c, getcharm(Sp[1]));
+  if (e && k >= 0 && k < 6) {
+   uint32_t const *v = cb_clu(c, e->g);
+   out = putcharm(k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg : k == 2 ? e->bg
                   : v ? cb_cp(v[k - 2]) : 0u); } }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
@@ -216,10 +225,10 @@ static lvm(lvm_tilepx) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1) && (Sp[3] & 1)) {
-  uintptr_t const i = (uintptr_t) getcharm(Sp[1]);
+  struct cb_cell const *e = scr_cell(c, getcharm(Sp[1]));
   intptr_t const x = getcharm(Sp[2]), y = getcharm(Sp[3]);
-  if (i < (uintptr_t) c->rows * c->cols && x >= 0 && y >= 0 && x < c->cw && y < c->ch) {
-   uint32_t const g = c->cb[i].g;
+  if (e && x >= 0 && y >= 0 && x < c->cw && y < c->ch) {
+   uint32_t const g = e->g;
    struct cb_img const *im = g & cb_pic ? cb_img(c, cb_tslot(g)) : 0;
    if (im) {
     uint32_t const X = cb_ttx(g) * c->cw + (uint32_t) x, Y = cb_tty(g) * c->ch + (uint32_t) y;
@@ -310,6 +319,18 @@ static lvm(lvm_mouse) {
   Sp[4] = word(s); }
  Sp += 4; Ip += 1; ai_musttail return Continue(); }
 
+// (pasted scr s): counted first, so Have's restart repeats nothing but the count
+static lvm(lvm_pasted) {
+ struct cb *c = scr_ok(Sp[0]);
+ if (!c || !strp(Sp[1])) { Sp[1] = ZeroPoint; Sp += 1; Ip += 1; ai_musttail return Continue(); }
+ struct ai_str *in = str(Sp[1]);
+ uintptr_t const n = cb_pasted(c, 0, (uint8_t const*) txt(in), len(in));
+ Have(str_width(n));
+ struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+ cb_pasted(c, (uint8_t*) txt(s), (uint8_t const*) txt(in), len(in));
+ Sp[1] = word(s);
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
+
 static union u const
   nif_screen[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_screen}, {lvm_ret0}},
   nif_scribe[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_scribe}, {lvm_ret0}},
@@ -322,4 +343,5 @@ static union u const
   nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}},
   nif_regrid[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_regrid},  {lvm_ret0}},
   nif_peer[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peer},    {lvm_ret0}},
-  nif_mouse[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mouse},   {lvm_ret0}};
+  nif_mouse[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mouse},   {lvm_ret0}},
+  nif_pasted[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_pasted},  {lvm_ret0}};

@@ -642,6 +642,23 @@
    _ (scribe s "\e[?2004h\ec")
    _ (test !(pasting s)))
 
+; --- 26. a paste as a seat sends it, and a picture's tile read back from the history ---
+(: s (mkscr 3 10)
+   _ (test ("p\rq\tr" = pasted s "p\nq\tr")          ; newlines as returns, a tab kept
+           ("a\rb" = pasted s "a\r\nb")                ; a crlf is one return
+           ("a[201~b" = pasted s "a\e[201~b")          ; no escape: the bracket can't close early
+           ("xy" = pasted s "x\x7fy\x01")             ; nor any other control
+           ("" = pasted s "")
+           !(pasted s 5))
+   _ (scribe s "\e[?2004h")
+   _ (test ("\e[200~p\rq\e[201~" = pasted s "p\nq") ("\e[200~\e[201~" = pasted s ""))
+   red 4294901760 blue 4278190335
+   t (mkscr 2 10)
+   _ (scribe t "\eP0;1;0q#0;2;100;0;0#1;2;0;0;100#0!10~$#1!5~-#0!10~\e\\")
+   _ (scribe t "\r\n")                                 ; the tiles' row scrolls into the history
+   _ (test (1 = (glass t -10 0 >> 23 & 1)) (blue = tilepx t -10 0 0) (red = tilepx t -9 1 0)
+           !(tilepx t -11 0 0)))                        ; past what is held
+
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")

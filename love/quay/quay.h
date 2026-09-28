@@ -130,6 +130,9 @@ int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 // length, 0 for none. b the button (0 1 2, 64 65 the wheel up and down, 3 none held) with
 // modifiers 4 shift 8 meta 16 ctrl; how 0 a press, 1 a release, 2 a move
 uint32_t cb_mouse(struct cb const*, uint8_t *buf, uint32_t b, uint32_t row, uint32_t col, uint32_t how);
+// n bytes of paste as a seat sends them into buf (0 to count): newlines as returns, a crlf one,
+// no controls but tab, in CSI 200~ .. 201~ when the program asked. answers the length
+uintptr_t cb_pasted(struct cb const*, uint8_t *buf, uint8_t const *s, uintptr_t n);
 struct cb_img const *cb_img(struct cb const*, uint32_t slot);   // a live picture, or 0
 uint32_t const *cb_ipx(struct cb const*);                       // the store's pixels
 // a PNG of n bytes at the head of a cap-byte region -> 0 and w x h pixels there, or -1

@@ -89,11 +89,12 @@
 
    ; one pane: every grid row addressed at its own origin, which is the whole
    ; difference between painting a rectangle and painting a run of full lines.
-   ; p is the pen carried in and answered back, so a caller threads it across panes
+   ; p is the pen carried in and answered back, so a caller threads it across panes.
+   ; a view looking v lines back shows the history first: row i is grid row i - v
    (limn-rows j s r c row0 col0 i p)
     (? (i < r)
        (: _ (say j (limn-go (row0 + i) col0))
-          p2 (limn-row j s c i 0 p)
+          p2 (limn-row j s c (i - gaze s 8) 0 p)
           (limn-rows j s r c row0 col0 (i + 1) p2))
        p)
 

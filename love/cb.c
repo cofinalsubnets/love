@@ -26,3 +26,4 @@ LvNif("dye", nif_dye, NULL);
 LvNif("regrid", nif_regrid, NULL);
 LvNif("peer", nif_peer, NULL);
 LvNif("mouse", nif_mouse, NULL);
+LvNif("pasted", nif_pasted, NULL);

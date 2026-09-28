@@ -167,6 +167,21 @@ uint32_t cb_mouse(struct cb const *c, uint8_t *o, uint32_t b, uint32_t row, uint
   o[4] = (uint8_t) (col < 222u ? 33u + col : 255u), o[5] = (uint8_t) (row < 222u ? 33u + row : 255u);  // a byte's reach
   return 6; }
 
+// a paste can't close its bracket early or carry a sequence in: its controls go
+uintptr_t cb_pasted(struct cb const *c, uint8_t *o, uint8_t const *s, uintptr_t n) {
+  static char const open[] = "\033[200~", shut[] = "\033[201~";
+  int const br = c->flag & cb_paste;
+  uintptr_t k = 0;
+  if (br) for (int j = 0; open[j]; j++, k++) if (o) o[k] = (uint8_t) open[j];
+  for (uintptr_t i = 0; i < n; i++) {
+    uint8_t b = s[i];
+    if (b == '\n') { if (i && s[i - 1] == '\r') continue; b = '\r'; }
+    if ((b < 32 && b != '\t' && b != '\r') || b == 127) continue;
+    if (o) o[k] = b;
+    k++; }
+  if (br) for (int j = 0; shut[j]; j++, k++) if (o) o[k] = (uint8_t) shut[j];
+  return k; }
+
 // the OSC asks worth answering: colour queries (ESC]10;? fg, ESC]11;? bg)
 // -- zsh and friends probe the background at line-editor startup and WAIT;
 // silence costs the user a second of buffered keystrokes. the answers are

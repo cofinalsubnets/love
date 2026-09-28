@@ -123,6 +123,15 @@
            (sub? f "\e[1;8H" 0)                       ; the down bar, row by row
            (sub? f "\e[2;8H" 0)))
 
+; --- a view looking back paints the history first, the grid below it ---
+   _ (: s (mkscr 2 4)
+        _ (scribe s "ab\r\ncd\r\nef")                 ; ab scrolls into the history
+        home (paint s 2 4 0 0)
+        _ (peer s 1)
+        back (paint s 2 4 0 0)
+        _ (test (sub? home "cd" 0) (sub? home "ef" 0) !(sub? home "ab" 0)
+                (sub? back "ab" 0) (sub? back "cd" 0) !(sub? back "ef" 0)))
+
 ; --- an empty bar list paints nothing, and a zero-row pane paints nothing ---
    _ (: j (jug 0) _ (limn-bars j ()) (test ("" = slurp j)))
    _ (: s (mkscr 1 4) (test ("" = paint s 0 4 0 0)))

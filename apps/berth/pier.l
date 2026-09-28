@@ -188,19 +188,17 @@
    (pier-let dirty) (pin dirty 'x 0)
 
    ; --- paste: the selection is asked for as utf-8 onto a property of ours (latin-1 when
-   ;     the owner has no utf-8), and its SelectionNotify says where it landed. what goes
-   ;     to the child has newlines as returns and no other controls, so a paste can't close
-   ;     its bracket early or carry a sequence in; it brings the view home as a key does ---
+   ;     the owner has no utf-8), and its SelectionNotify says where it landed. it goes to
+   ;     the child as `pasted` lays it, and brings the view home as a key does ---
    (pier-ask s dirty sel ty)
     (: _ (pier-hold dirty)
        _ (x-w8 s 24, x-w8 s 0, x-w16 s 6, x-w32 s (peep dirty 'win 0), x-w32 s sel, x-w32 s ty,
           x-w32 s (peep dirty 'prop 0), x-w32 s 0, x-flush s)
        (pier-let dirty))
-   (pier-clean bs) (filter (\ b ((b = 9) || (b = 13) || (31 < b))) (map (\ b (? (b = 10) 13 b)) bs))
    (pier-send m bx dirty t)
     (: sc (peep bx () 0)
        _ (? (0 < gaze sc 8) (pier-peer bx dirty (0 - gaze sc 8)) 0)
-       (say m (? ((gaze sc 3) & 16384) ("\e[200~" + t + "\e[201~") t), flush m))
+       (say m (pasted sc t), flush m))
    (pier-got s m bx dirty raw)
     (: sel (u32 raw 12) ty (u32 raw 16) pr (u32 raw 20)
        (? (pr = 0) (? (ty = peep dirty 'utf8 0) (pier-ask s dirty sel 31) 0)
@@ -210,10 +208,9 @@
              _ (pier-let dirty)
              hdr (x-reply s)
              (? !(<hdr = 1) 0
-                (: bs (x-rbytes s (4 * u32 hdr 4))
-                   cs (pier-clean (take (u32 hdr 16) bs))
-                   (? (((hdr 1) != 8) || !(two? cs)) 0
-                      (pier-send m bx dirty (? (ty = 31) (cats (map utf8 cs)) (string cs)))))))))
+                (: bs (take (u32 hdr 16) (x-rbytes s (4 * u32 hdr 4)))
+                   (? (((hdr 1) != 8) || !(two? bs)) 0
+                      (pier-send m bx dirty (? (ty = 31) (cats (map utf8 bs)) (string bs)))))))))
 
    ; --- the watch: X events in the main task. the moor pumps the child in another and
    ;     seals the socket when the child hangs up, so x-next wakes with () and we leave ---

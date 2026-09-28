@@ -321,5 +321,30 @@
  _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (close m))
 
+; --- the outer terminal's sequences, on a real berth over a real pty: the child scrolls
+; TOPMARK away and shift+PgUp brings it back; the child asks for the mouse and a
+; bracketed paste, berth asks the outer terminal for the mouse in turn, and a click and
+; a paste sent as the outer terminal sends them reach the child as it asked -- it says
+; them back through cat -v. the child's script rides BK, past three layers of quoting ---
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+ _ (setenv "BK" ("printf 'TOPMARK" + cats (map (\ _ "\\n") (jot 30)) + "'; stty raw -echo; "
+                 + "printf '\\033[?1000h\\033[?1006h\\033[?2004h'; r=$(dd bs=1 count=33 2>/dev/null); "
+                 + "printf '%s' \"$r\" | cat -v; sleep 1"))
+ md (tether ["out/love" "-l" "apps/berth/berth.l"
+             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
+ _ (test (two? md))
+ m >md
+ _ (rest 1200)
+ _ (say m "\e[5;2~") _ (flush m)                  ; shift+PgUp
+ _ (rest 400)
+ _ (say m "\e[<0;3;2M\e[<0;3;2m\e[200~p\nq\e[201~") _ (flush m)   ; a click at row 2 col 3, a paste
+ outb (slurp m)
+ _ (test
+    (sub? outb "TOPMARK" 0)                        ; the history, in view
+    (sub? outb "\e[?1000h" 0)                      ; the child's mouse wish, passed out
+    (sub? outb "^[[<0;3;2M^[[<0;3;2m^[[200~p^Mq^[[201~" 0))   ; ... and the click and paste, passed in
+ _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
+ (close m))
+
 (test_fin ())
 (puts "berth: ok")
