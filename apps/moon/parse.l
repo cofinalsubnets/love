@@ -1771,7 +1771,12 @@
                              _ (pin (ps 'declaring) name 1)
                              (? (varr? ty && (stat || peekp ts3 "=")) ()
                                 (peekp ts3 "=")
-                                (: r (pinit ps >ts3)
+                                ; the name types in its own initializer (typeof(p), sizeof *p),
+                                ; bound for the initializer's parse and put back after
+                                (: old (peep (ps 'locals) name 'none)
+                                   _ (pin (ps 'locals) name ty)
+                                   r (pinit ps >ts3)
+                                   _ (? (= old 'none) (pull (ps 'locals) name 0) (pin (ps 'locals) name old))
                                    (? !(two? r) ()
                                       (: ini <r
                                          [([name (fillarr ps ty ini) ini] + pinl) <>r])))   ; [] local: infer size
