@@ -2296,7 +2296,7 @@
                          (say out (string (cask (rev acc))), put out 10) 0),
                       walk (k + 1) ()))))
            (? !n (? (lo <= #run)
-                    (: _ (say out (string (cask (rev run)))) (put out 10) 0) 0)
+                    (say out (string (cask (rev run))), put out 10, 0) 0)
               (go (walk 0 run))))
        _ (go ())
        _ (flush out) 0)
