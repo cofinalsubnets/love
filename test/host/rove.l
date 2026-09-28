@@ -584,7 +584,7 @@
 ; says the same thing every time you cross it
 (: g (hand-g ())
    _ (pin (g 'd) 'th (themes 0))
-   (salt n) (99 < n ? 0 (: _ (pin (g 'd) 'sd n) (0 < #(underfoot g 2 1)) n (salt (n + 1))))
+   (salt n) (99 < n ? 0 (pin (g 'd) 'sd n, 0 < #(underfoot g 2 1) ? n (salt (n + 1))))
    _ (pin (g 'd) 'sd (salt 0))
    s (underfoot g 2 1)
    _ (crawl-turn g [1 0])
