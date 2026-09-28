@@ -17,32 +17,39 @@
 //        { reset }                        the kernel reset: the worker boots it again
 //        { fault }                        the module trapped: the message, and the worker stops
 //        { lift, bytes | error }          a ramfs file the terminal asked for (see lift below)
+//        { copy }                         a selection the console made, as text: the page's clipboard
 
 // the five wear linux's numbers; the horn's four are ours -- sound has no call to borrow
 // one from, so the block sits well clear of any syscall table (inle/wasm/horn.c).
 const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003,
              lift: 0x4010, scan: 0x4011, drew: 0x4012, kexec: 0x4013,
+             point: 0x4014, paste: 0x4015, copy: 0x4016,
              fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022 };
 const ENOENT = 2, EBADF = 9, ENOSYS = 38, ENAMETOOLONG = 36;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
 // asks for, [8] the horn's rate (0 closed) with [9] frames written and [10] played, and
-// [11] whether something real is playing them, [12] [13] the scan ring's head and tail;
-// then ring_n bytes of keys from ring_at, scan_n bytes of scancodes (PS/2 set 1, make and
-// break, what the kernel's tap reads and a game wants: a key's release is not a byte),
-// lift_n bytes holding the path of the file asked for, and the horn's own samples.
+// [11] whether something real is playing them, [12] [13] the scan ring's head and tail,
+// [14] [15] the pointer ring's and [16] [17] the paste ring's; then ring_n bytes of keys
+// from ring_at, scan_n bytes of scancodes (PS/2 set 1, make and break, what the kernel's
+// tap reads and a game wants: a key's release is not a byte), lift_n bytes holding the
+// path of the file asked for, point_n of pointer records (8 bytes: how, the button with its
+// modifiers, a pad, the row and the column little-endian -- inle/wasm/arch.c reads them),
+// paste_n of a paste's text, and the horn's own samples.
 // inle.mjs and machine.js write it, this file reads it.
 // the ring is the only door into the worker: it blocks inside k_start and idles in an
 // Atomics.wait, so it never returns to an event loop and a postMessage cannot reach it.
-export const ctl_n = 14, ring_n = 4096, ring_at = ctl_n * 4;
+export const ctl_n = 18, ring_n = 4096, ring_at = ctl_n * 4;
 export const scan_n = 256, scan_at = ring_at + ring_n, c_sh = 12, c_st = 13;
 export const lift_n = 256, lift_at = scan_at + scan_n;
+export const point_n = 512, point_at = lift_at + lift_n, c_ph = 14, c_pt = 15;
+export const paste_n = 65536, paste_at = point_at + point_n, c_xh = 16, c_xt = 17;
 export const c_rate = 8, c_wrote = 9, c_played = 10, c_live = 11;
 // the horn's ring: 16-bit stereo frames, a third of a second at 48k, which is about what
 // a small card holds. a power of two, so `& horn_mask` indexes it even once the written
 // count has wrapped past 2^31 -- the counts are int32 and their DIFFERENCE is the lag.
-export const horn_n = 16384, horn_mask = horn_n - 1, horn_at = lift_at + lift_n;
+export const horn_n = 16384, horn_mask = horn_n - 1, horn_at = paste_at + paste_n;
 export const shared_n = horn_at + horn_n * 4;
 
 // the way out of the machine: a ramfs file, read through the kernel's own fs faces --
@@ -130,7 +137,7 @@ const post = (m, t) => port.postMessage(m, t);
 
 class Reboot extends Error { }
 
-let memory, ctl, kb, sc, pcm, seen = 0, sawScan = 0;
+let memory, ctl, kb, sc, pt, px, pcm, seen = 0, sawScan = 0;
 let fb = null, fbAt = 0, fbImg = null, fbCtx = null, blitAt = 0;
 const mono0 = (typeof performance !== 'undefined' ? performance : Date).now();
 const dec = new TextDecoder('utf-8', { fatal: false });
@@ -245,7 +252,9 @@ const sys1 = (n, a, b, c) => {
       // page. so that lane only skips the sleep while it is still GROWING: codes that
       // arrived get their quick drain, codes nobody came for are left to sit.
       const st = Atomics.load(ctl, c_st);
-      const keys = Atomics.load(ctl, 0) !== Atomics.load(ctl, 1),
+      const keys = Atomics.load(ctl, 0) !== Atomics.load(ctl, 1)
+                || Atomics.load(ctl, c_ph) !== Atomics.load(ctl, c_pt)
+                || Atomics.load(ctl, c_xh) !== Atomics.load(ctl, c_xt),
             codes = Atomics.load(ctl, c_sh) !== st && st !== sawScan;
       sawScan = st;
       if (!keys && !codes) Atomics.wait(ctl, 2, seen, ms);
@@ -263,6 +272,22 @@ const sys1 = (n, a, b, c) => {
       while (k < max && head !== tail) { h[p + k++] = sc[head]; head = (head + 1) % scan_n; }
       Atomics.store(ctl, c_sh, head);
       return BigInt(k); }
+    case NR.point: {                                    // whole pointer records, as many as fit
+      const p = Number(a), max = Number(b) - (Number(b) % 8), h = u8(), tail = Atomics.load(ctl, c_pt);
+      let head = Atomics.load(ctl, c_ph), k = 0;
+      while (k < max && head !== tail) { h[p + k++] = pt[head]; head = (head + 1) % point_n; }
+      Atomics.store(ctl, c_ph, head);
+      return BigInt(k); }
+    case NR.paste: {                                    // a paste's bytes; asked for none, how many wait
+      const tail = Atomics.load(ctl, c_xt);
+      let head = Atomics.load(ctl, c_xh);
+      if (!Number(b)) return BigInt((tail - head + paste_n) % paste_n);
+      const p = Number(a), max = Number(b), h = u8();
+      let k = 0;
+      while (k < max && head !== tail) { h[p + k++] = px[head]; head = (head + 1) % paste_n; }
+      Atomics.store(ctl, c_xh, head);
+      return BigInt(k); }
+    case NR.copy: post({ copy: dec.decode(u8().slice(Number(a), Number(a) + Number(b))) }); return 0n;
     case NR.drew: drew = true; blit(false); return 0n;  // the paper changed under a program's own hand
     case NR.fetch_open: return BigInt(fetchOpen(dec.decode(u8().subarray(Number(a), Number(a) + Number(b)))));
     case NR.fetch_read: {
@@ -378,6 +403,8 @@ async function run(msg) {
   ctl = new Int32Array(msg.ring, 0, ctl_n);
   kb = new Uint8Array(msg.ring, ring_at, ring_n);
   sc = new Uint8Array(msg.ring, scan_at, scan_n);
+  pt = new Uint8Array(msg.ring, point_at, point_n);
+  px = new Uint8Array(msg.ring, paste_at, paste_n);
   pcm = new Uint8Array(msg.ring, horn_at, horn_n * 4);
   for (;;) {
     try { await boot(msg); return; }

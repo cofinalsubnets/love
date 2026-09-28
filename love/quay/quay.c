@@ -180,16 +180,19 @@ uint32_t cb_mouse(struct cb const *c, uint8_t *o, uint32_t b, uint32_t row, uint
   return 6; }
 
 // a paste can't close its bracket early or carry a sequence in: its controls go
+int cb_paste1(uint8_t prev, uint8_t b) {
+  if (b == '\n') return prev == '\r' ? -1 : '\r';
+  return (b < 32 && b != '\t' && b != '\r') || b == 127 ? -1 : b; }
+
 uintptr_t cb_pasted(struct cb const *c, uint8_t *o, uint8_t const *s, uintptr_t n) {
-  static char const open[] = "\033[200~", shut[] = "\033[201~";
+  static char const open[] = cb_popen, shut[] = cb_pshut;
   int const br = c->flag & cb_paste;
   uintptr_t k = 0;
   if (br) for (int j = 0; open[j]; j++, k++) if (o) o[k] = (uint8_t) open[j];
   for (uintptr_t i = 0; i < n; i++) {
-    uint8_t b = s[i];
-    if (b == '\n') { if (i && s[i - 1] == '\r') continue; b = '\r'; }
-    if ((b < 32 && b != '\t' && b != '\r') || b == 127) continue;
-    if (o) o[k] = b;
+    int const b = cb_paste1(i ? s[i - 1] : 0, s[i]);
+    if (b < 0) continue;
+    if (o) o[k] = (uint8_t) b;
     k++; }
   if (br) for (int j = 0; shut[j]; j++, k++) if (o) o[k] = (uint8_t) shut[j];
   return k; }

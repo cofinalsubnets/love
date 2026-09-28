@@ -135,6 +135,11 @@ uint32_t cb_mouse(struct cb const*, uint8_t *buf, uint32_t b, uint32_t row, uint
 // n bytes of paste as a seat sends them into buf (0 to count): newlines as returns, a crlf one,
 // no controls but tab, in CSI 200~ .. 201~ when the program asked. answers the length
 uintptr_t cb_pasted(struct cb const*, uint8_t *buf, uint8_t const *s, uintptr_t n);
+// ..and for a seat that streams one: byte b after prev as it goes, or -1 for none, and the
+// brackets it wears when the screen has cb_paste
+int cb_paste1(uint8_t prev, uint8_t b);
+#define cb_popen "\033[200~"
+#define cb_pshut "\033[201~"
 // cell i: the grid's, or the history's at a negative i (-cols the newest line's first); 0 past
 struct cb_cell const *cb_at(struct cb const*, intptr_t i);
 // select cells a..b, either order, clamped, by cell (unit 0), word (1) or line (2, across soft
