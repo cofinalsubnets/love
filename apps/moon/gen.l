@@ -6271,7 +6271,9 @@
    ; 'fasecs out to the object, beside the file-scope asm's. a name the template does not
    ; define (a goto label, a global) stays a fix
    (asmbody g tgt neutral? txt)
-    (? (neutral? || gas-plain? tgt txt)
+    ; one blob resolves its labels inside it; an absolute label (pushl's) wants the link, so a
+    ; template carrying one takes the runs path, its labels the function's own
+    (? (neutral? || (gas-plain? tgt txt && !(any (f \ two? f && <f = 'pushl) (gas-text tgt txt))))
        [['raw (: prog (? neutral? (asm-text txt) (gas-text tgt txt))                 (asmho tgt prog (cg-refs prog {})))]]
        (: r (gas-top-in tgt txt "" [1 6] (show (nlab g (g 'fn + ".asm")) + "."))
           home (foldl (\ a x (? (<x = "") (x 3) a)) () <r)

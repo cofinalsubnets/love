@@ -411,6 +411,8 @@
      ((hi sn @ 0 () [(rex 0 0 0 1)]) + [142 (modrm 3 n sn)]))
    (emit-segst n base off) (rn base @ bn ((hi bn != 0 ? [(rex 0 0 0 1)]) + ([140] + mem n base off)))
    (emit-segld n base off) (rn base @ bn ((hi bn != 0 ? [(rex 0 0 0 1)]) + ([142] + mem n base off)))
+   ;; pushl: a label's address as the sign-extended dword push takes (68 id), which the link fills
+   (emit-pushl label) [104 (fix 4 'abs32 label 0)]
    (emit-jmp  label)     [233 (fix 4 'rel32 label 0)]
    ;; the table jump: jmpr, with the table's label and its target list riding along --
    ;; operands the machine has no use for and the analyses cannot do without.
@@ -639,7 +641,7 @@
          ('urem . (\ d a b t (emit-div 1 0 d a b)))
          ('call . emit-call)
          ('la . emit-la) ('lar . emit-la)                 ; lar == la on x86 (rip-rel lea, already translation-invariant); a64 differs (ADR vs ADRP)
-         ('lia . emit-lia) ('ldseg . emit-ldseg) ('stseg . emit-stseg) ('segst . emit-segst) ('segld . emit-segld)
+         ('lia . emit-lia) ('ldseg . emit-ldseg) ('stseg . emit-stseg) ('pushl . emit-pushl) ('segst . emit-segst) ('segld . emit-segld)
          ('cmppd . emit-cmppd) ('movmskpd . emit-movmskpd)
          ('cvtsi2sd . emit-cvtsi2sd) ('cvttsd2si . emit-cvttsd2si)
          ('movqxr . emit-movqxr) ('movqrx . emit-movqrx)
