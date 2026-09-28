@@ -384,9 +384,9 @@ static void cb_six_close(struct cb *c) {
 
 // --- kitty graphics, a subset: APC G key=value,..;base64 ST -----------------------------
 // a=t stores an image by id, a=T stores and places it, a=p places one stored, a=q asks
-// whether it would take one, a=d deletes (all, or by id). f=24 and f=32 raw pixels, direct
-// (t=d), sent whole or in m=1 chunks; c and r size the placement in cells, nearest pixel.
-// png, compression and the other media answer an error. an image a kitty id holds outlives
+// whether it would take one, a=d deletes (all, or by id). f=24 and f=32 raw pixels, or
+// f=100 a PNG (png.c), direct (t=d), sent whole or in m=1 chunks; c and r size the
+// placement in cells, nearest pixel. compression and the other media answer an error. an image a kitty id holds outlives
 // its placements until a delete or a store too full to keep it.
 static void cb_kit_reply(struct cb *c, int ok, char const *err) {
   if (!c->ki || c->kq >= 2 || (ok && c->kq == 1)) return;
@@ -471,14 +471,22 @@ static void cb_kit_begin(struct cb *c) {
     return cb_kit_reply(c, 0, "ENOENT:no such image"); }
   if (c->ka != 't' && c->ka != 'T' && c->ka != 'q') return cb_kit_reply(c, 0, "EINVAL:action");
   if (c->kt != 'd' || c->ko) return cb_kit_reply(c, 0, "EINVAL:medium");
-  if (c->kf != 24 && c->kf != 32) return cb_kit_reply(c, 0, "EINVAL:format");
-  if (!c->ks || !c->kv || c->ks > 65536u || c->kv > 65536u) return cb_kit_reply(c, 0, "EINVAL:size");
-  uint32_t const k = cb_kit_slot(c, c->ks * c->kv);
+  if (c->kf != 24 && c->kf != 32 && c->kf != 100) return cb_kit_reply(c, 0, "EINVAL:format");
+  // a PNG's size is its own: it takes the store's whole top to land in, pixels and all
+  int const png = c->kf == 100;
+  if (!png && (!c->ks || !c->kv || c->ks > 65536u || c->kv > 65536u)) return cb_kit_reply(c, 0, "EINVAL:size");
+  uint32_t const k = cb_kit_slot(c, png ? 1u : c->ks * c->kv);
   if (!k) return cb_kit_reply(c, 0, "ENOSPC:store full");
-  cb_imgs(c)[k] = (struct cb_img) { c->stop, c->ks, c->kv, 0, c->ki };
+  cb_imgs(c)[k] = (struct cb_img) { c->stop, png ? 0u : c->ks, png ? 0u : c->kv, 0, c->ki };
   c->kslot = k, c->kpix = 0, c->kpx = 0, c->kbyte = 0, c->kopen = 1; }
 
 static void cb_kit_byte(struct cb *c, uint32_t b) {
+  if (c->kf == 100) {                        // a PNG's bytes, raw, at the store's top
+    uint32_t const off = cb_imgs(c)[c->kslot].off;
+    if (off < cb_words(c) && c->kpix < (cb_words(c) - off) * 4u)
+      ((uint8_t*) (cb_spx(c) + off))[c->kpix] = (uint8_t) b;
+    c->kpix++;
+    return; }
   uint32_t const bpp = c->kf / 8u;
   c->kpx = c->kpx << 8 | b;
   if (++c->kbyte < bpp) return;
@@ -515,7 +523,13 @@ static void cb_kit_end(struct cb *c) {
   c->kopen = 0;
   uint32_t const k = c->kslot;
   struct cb_img *im = cb_imgs(c) + k;
-  if (c->kpix < im->w * im->h) return cb_kit_reply(c, 0, "EINVAL:short");
+  if (c->kf == 100) {                        // the PNG laid out as pixels where its bytes were
+    uintptr_t const cap = im->off < cb_words(c) ? (uintptr_t) (cb_words(c) - im->off) * 4u : 0;
+    uint32_t w = 0, h = 0;
+    if (c->kpix > cap) return cb_kit_reply(c, 0, "ENOSPC:store full");
+    if (cb_png((uint8_t*) (cb_spx(c) + im->off), c->kpix, cap, &w, &h)) return cb_kit_reply(c, 0, "EBADPNG:png");
+    im->w = w, im->h = h; }
+  else if (c->kpix < im->w * im->h) return cb_kit_reply(c, 0, "EINVAL:short");
   if (c->ka == 'q') return cb_kit_reply(c, 1, 0);          // asked, not kept
   if (c->ki) for (uint32_t j = 1; j < cb_nimg; j++) if (j != k && cb_imgs(c)[j].id == c->ki) cb_imgs(c)[j].id = 0;
   im->live = 1, c->stop = im->off + im->w * im->h;

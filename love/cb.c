@@ -8,6 +8,7 @@
 // (the host, and each kernel through $(host_c)) has them once.
 #include "love.h"
 #include "quay/quay.c"
+#include "quay/png.c"
 #include "quay/paint.c"
 #include "quay/cga_8x8.c"
 #include "quay/cleat_8x16.c"
