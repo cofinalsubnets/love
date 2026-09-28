@@ -146,7 +146,7 @@ MK
   ( LUSHFLAGS=-g PATH=$sabs/cbin:/usr/bin:/bin && export PATH LUSHFLAGS \
     && run "$dabs" -e "(: _ (borrow 'lush) (quit (? (two? (sh-imgfn \"mooncc\")) 1 0)))" ) \
     || fail "the in-image lane engaged under -g for a mooncc that is a DIFFERENT file"
-  ( PATH=$sabs/cbin:/usr/bin:/bin && export PATH \
+  ( LUSHFLAGS=-a PATH=$sabs/cbin:/usr/bin:/bin && export PATH LUSHFLAGS \
     && run "$dabs" -e "(: _ (borrow 'lush) (quit (? (two? (sh-imgfn \"mooncc\")) 0 1)))" ) \
     || fail "autonomous mode consulted PATH for a verb this binary carries"
 
