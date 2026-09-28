@@ -45,7 +45,7 @@
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
    tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them
    pgen (tablet 0)         ; a 1-cell box: a pattern-rule resolver (item -> a card | 0), installed by the Makefile importer (() until then)
-   cookbox (tablet 0)      ; a 1-cell box: the in-image shell verdict (sh-line's `inimg`), decided once a run
+   cookbox (tablet 0)      ; the in-image shell verdicts (sh-line's `inimg`), one per SHELL and .SHELLFLAGS a run
    jobs (tablet 0)         ; a 1-cell box: the -j width (1 = serial, and nothing forks)
    dryrun (tablet 0)       ; ..and one for -n: set, every step is said and none is run
    running (tablet 0)      ; pid -> the item whose recipe that job is running
@@ -262,12 +262,15 @@
    ; one per line. asked through the module, never by a bare reference: cook runs standalone
    ; too (`love -l apps/cook.l`), where lush's engine is not aboard and the from-reads answer
    ; () -- the spawn lane, unchanged. the policy is lush's, not ours.
-   (inimg sh)
-   (: v (peep cookbox 'inimg 'no)
+   ; a mode letter in .SHELLFLAGS (-ac, -gc, -pc) is the mode the shell is asked under.
+   (inimg sh fl)
+   (: k (join " " (sh . fl)) v (peep cookbox k 'no)
        (? !(= v 'no) v
           (: ours (cite 'lush 'sh-ours?) one (cite 'lush 'sh-oneline)
-             f (? ((lit? ours) && (lit? one) && (ours sh)) one 0)
-             _ (pin cookbox 'inimg f)
+             fs (cite 'lush 'sh-oneflags) in (cite 'lush 'sh-inmode)
+             f (? ((lit? ours) && (lit? one) && (lit? fs) && (lit? in)
+                   && (in (: r (fs fl) (two? r ? (r 4) ())) (_ \ ours sh))) one 0)
+             _ (pin cookbox k f)
              f)))
 
    ; one make recipe line via SHELL -c: echo the raw command (the expanded line, not the shell
@@ -277,7 +280,7 @@
    (sh-line silent ignore sh flags cmd)
    (: _ (? silent 0 (puts cmd, putc 10))
        _ (flush out)
-       f (inimg sh)
+       f (inimg sh flags)
        o (? f (f flags cmd) ())
        r (? (two? o) [<>o] (herald (([sh] + flags) + [cmd])))
        ec (? (two? r) <r -1)
@@ -547,7 +550,8 @@
    ; -- function helpers --
    (chomp s) ((: (g i) (? (0 < i && s (i - 1) = 10) (g (i - 1)) (snip s 0 i))) #s)
    (nl->sp s) ((: (g i acc) (i >= #s ? acc (g (1 + i) (acc + string (s i @ 10 32 (s i)))))) 0 "")
-   (fn-shell sh cmd) (: r (hark [sh "-c" cmd]) (? (two? r) (nl->sp (chomp >r)) ""))
+   ; $(shell) and != ride SHELL and .SHELLFLAGS as a recipe line does, captured
+   (fn-shell as cmd) (: r (hark (([(shname as)] + shflags as) + [cmd])) (? (two? r) (nl->sp (chomp >r)) ""))
    ; $(wildcard): lush's glob (cook-glob -- classes, multi-segment patterns, the mask law) when
    ; aboard, else glob1 -- a word with no glob char is an existence test, otherwise the last
    ; path segment is the pattern, matched over readdir by 'glob's `match` (a leading . only by
@@ -630,7 +634,7 @@
    (: ex1 (\ x (expand x as (1 + d)))
       argl (\ _ (map ex1 (splittop at 44)))     ; comma-split + expand (most funcs); 44 = ,
       rawl (\ _ (splittop at 44))               ; comma-split, not expanded (if/or/and)
-      (nm @ "shell"     (fn-shell (shname as) (ex1 at))
+      (nm @ "shell"     (fn-shell as (ex1 at))
           "wildcard"  (join " " (catmap globw (split-ws (ex1 at))))
           "dir"       (join " " (map fdir (split-ws (ex1 at))))
           "notdir"    (join " " (map fnotdir (split-ws (ex1 at))))
@@ -792,7 +796,7 @@
          ; the flavor rides beside the origin: an expanded `:=` and a stored `=` are the
          ; same text afterwards, so nothing in the value itself can answer $(flavor).
          (org f) (: _ (pin origins nm (? ov "override" "file")) (pin flavors nm f))
-         (op @ "!="  (: _ (pin as nm (fn-shell (shname as) (expand v as 0))) (org "simple"))
+         (op @ "!="  (: _ (pin as nm (fn-shell as (expand v as 0))) (org "simple"))
                ":="  (: _ (pin as nm (expand v as 0)) (org "simple"))
                "::=" (: _ (pin as nm (expand v as 0)) (org "simple"))
                "?="  (: cur (peep as nm 'cook.undef)

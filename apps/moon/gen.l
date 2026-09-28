@@ -6334,8 +6334,12 @@
                    (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
        is9 (iconv <>>>s ())
+       ; an input pinned where an output is ("=a"(n) : "a"(0), cpuid's) is that output's tie
+       (oix l k j) (? !(two? l) () (elem <<l '(o x) && <><l = k) j (oix >l k (j + 1)))
+       (tieup e) (: j (? (<e = 'i && !(two? <>e) && <>e != 'pick) (oix os <>e 0) ())
+                    (? (charm? j) ['i ['tie j] <>>e <>>>e] e))
        (? (bad? os || bad? is9) 'bad
-          (: ops9 (os + is9)
+          (: ops9 (os + map tieup is9)
              ; pinned registers: validated, a duplicate refuses; a tie takes its output's
              (pinset l acc)
               (? !(two? l) acc
@@ -7535,7 +7539,8 @@
        (hxl l d) (? !(two? l) [() ()]
                     (: r (hx <l d) rs (hxl >l d) [(<r + <rs) (<>r . <>rs)]))
        ; a statement -> the statements it becomes
-       (hb s d) (: l (hs s d) (? (two? l && !(two? >l)) <l ['blk l]))
+       ; an arm of one statement unwraps, unless it is a decl (an empty callee's params): an arm takes no decl
+       (hb s d) (: l (hs s d) (? (two? l && !(two? >l) && !(elem <<l '(decl sdecl))) <l ['blk l]))
        (hs s d) (: s0 (st9 's) _ (pin st9 's s) r (hs1 s d) _ (pin st9 's s0) r)
        (hs1 s d)
         (? !(two? s) [s]
@@ -7718,10 +7723,12 @@
         (atom? x ? x
          (x @ ('var nm) (: k (sbs nm) (? (two? k) k x))
               ; not &&/||: dp answering () is a legitimate tail
-              ('decl ps) ['decl (: (dp l) (? (atom? l) ()
-                                             (two? (sbs <<l)) (dp >l)
-                                             (sub <l . dp >l))
-                                (dp ps))]
+              ; a decl every entry of which propagated is a nop, not an empty decl (an if arm takes no decl)
+              ('decl ps) (: ds (: (dp l) (? (atom? l) ()
+                                              (two? (sbs <<l)) (dp >l)
+                                              (sub <l . dp >l))
+                                  (dp ps))
+                            (? (two? ds) ['decl ds] '(nop)))
              (sub <x . sub >x)))
        (atom? (keys sbs) ? f
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))

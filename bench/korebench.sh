@@ -104,7 +104,7 @@ carries() {                      # does LANE carry TOOL?
 # GNU's is bash.
 pfx() {
   case "$1:$2" in
-    kore:sh)    echo "$m sh" ;;
+    kore:sh)    echo "$m sh -a" ;;
     busybox:sh) echo "busybox ash" ;;
     gnu:sh)     echo "bash" ;;
     kore:*)     echo "$m $2" ;;
@@ -470,7 +470,7 @@ printf '%-16s' "sh"
 base=
 for l in $have; do
   case $l in
-    kore)    v=$(med "$m" sh "$W/loop.sh") ;;
+    kore)    v=$(med "$m" sh -a "$W/loop.sh") ;;
     busybox) v=$(med busybox ash "$W/loop.sh") ;;
     gnu)     command -v bash > /dev/null 2>&1 && v=$(med bash "$W/loop.sh") || v=- ;;
     *)       printf '%14s' "-"; continue ;;
@@ -486,7 +486,7 @@ printf '%-16s' "sh +cat"
 base=
 for l in $have; do
   case $l in
-    kore)    v=$(med "$m" sh "$W/spawn.sh") ;;
+    kore)    v=$(med "$m" sh -a "$W/spawn.sh") ;;
     busybox) v=$(PATH=$W/bb:$PATH med busybox ash "$W/spawn.sh") ;;
     gnu)     command -v bash > /dev/null 2>&1 && v=$(med bash "$W/spawn.sh") || v=- ;;
     *)       printf '%14s' "-"; continue ;;
@@ -622,7 +622,7 @@ scale uniq      uniq -c
 # its program on stdin, sh takes it as a file. the sizes are turns, not bytes.
 IN=$W/bc1; a=$(medin "$m" bc); IN=$W/bc2; b=$(medin "$m" bc); IN=$W/bc4; c=$(medin "$m" bc)
 slope "bc (turns)" "$a" "$b" "$c"
-a=$(med "$m" sh "$W/sh1"); b=$(med "$m" sh "$W/sh2"); c=$(med "$m" sh "$W/sh4")
+a=$(med "$m" sh -a "$W/sh1"); b=$(med "$m" sh -a "$W/sh2"); c=$(med "$m" sh -a "$W/sh4")
 slope "sh (turns)" "$a" "$b" "$c"
 echo
 
