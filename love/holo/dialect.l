@@ -116,6 +116,8 @@
                  (: j (span (i + 1) gidc?) (go j (['pct (snip s (i + 1) j)] . acc)))
                 ((c = 60 || c = 62) && i + 1 < n && s (i + 1) = c)
                  (go (i + 2) (['op (snip s i (i + 2))] . acc))
+                ((c = 33 || c = 61 || c = 60 || c = 62) && i + 1 < n && s (i + 1) = 61)   ; != == <= >=
+                 (go (i + 2) (['op (snip s i (i + 2))] . acc))
                 (go (i + 1) (['ch c] . acc)))))
       (go 0 ()))
 
@@ -133,12 +135,14 @@
                'bad)))
    ; a comparison answers gas's -1 for true, 0 for false, and binds loosest (the kernel's
    ; alternatives write `-(d > 0) * d`)
-   (gbinop t) (t @ ('ch 62) '(1 gt) ('ch 60) '(1 lt)
+   (gbinop t) (t @ ('ch 62) '(1 gt) ('ch 60) '(1 lt) ('op ">=") '(1 ge) ('op "<=") '(1 le)
+                   ('op "==") '(1 eq) ('op "!=") '(1 ne)
                    ('ch 124) '(2 or) ('ch 94) '(3 xor) ('ch 38) '(4 and)
                    ('op "<<") '(5 shl) ('op ">>") '(5 shr)
                    ('ch 43) '(6 add) ('ch 45) '(6 sub)
                    ('ch 42) '(7 mul) ('ch 47) '(7 div) ('ch 37) '(7 mod) ())
-   (gapply op a b) (op @ 'gt (a > b ? -1 0) 'lt (a < b ? -1 0)
+   (gapply op a b) (op @ 'gt (a > b ? -1 0) 'lt (a < b ? -1 0) 'ge (a >= b ? -1 0) 'le (a <= b ? -1 0)
+                        'eq (a = b ? -1 0) 'ne (a = b ? 0 -1)
                         'or (a | b) 'xor (a ^ b) 'and (a & b) 'shl (a << b) 'shr (a >> b)
                         'add (a + b) 'sub (a - b) 'mul (a * b) 'div (a // b) (a % b))
    (gclimb lhs ts minp)
