@@ -7528,7 +7528,8 @@
        (hxl l d) (? !(two? l) [() ()]
                     (: r (hx <l d) rs (hxl >l d) [(<r + <rs) (<>r . <>rs)]))
        ; a statement -> the statements it becomes
-       (hb s d) (: l (hs s d) (? (two? l && !(two? >l)) <l ['blk l]))
+       ; an arm of one statement unwraps, unless it is a decl (an empty callee's params): an arm takes no decl
+       (hb s d) (: l (hs s d) (? (two? l && !(two? >l) && !(elem <<l '(decl sdecl))) <l ['blk l]))
        (hs s d) (: s0 (st9 's) _ (pin st9 's s) r (hs1 s d) _ (pin st9 's s0) r)
        (hs1 s d)
         (? !(two? s) [s]
@@ -7711,10 +7712,12 @@
         (atom? x ? x
          (x @ ('var nm) (: k (sbs nm) (? (two? k) k x))
               ; not &&/||: dp answering () is a legitimate tail
-              ('decl ps) ['decl (: (dp l) (? (atom? l) ()
-                                             (two? (sbs <<l)) (dp >l)
-                                             (sub <l . dp >l))
-                                (dp ps))]
+              ; a decl every entry of which propagated is a nop, not an empty decl (an if arm takes no decl)
+              ('decl ps) (: ds (: (dp l) (? (atom? l) ()
+                                              (two? (sbs <<l)) (dp >l)
+                                              (sub <l . dp >l))
+                                  (dp ps))
+                            (? (two? ds) ['decl ds] '(nop)))
              (sub <x . sub >x)))
        (atom? (keys sbs) ? f
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
