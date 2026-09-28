@@ -19,11 +19,10 @@
 
 (:
    ; little-endian reads off a byte-indexable text; a u64 field can carry a
-   ; signed value (a RELA addend), so sg64 folds the high half back down
+   ; signed value (a RELA addend), so s64 folds the high half back down
    (rle16 s i) (s i + 256 * s (i + 1))
    (rle32 s i) (rle16 s i + 65536 * rle16 s (i + 2))
    (rle64 s i) (rle32 s i + 4294967296 * rle32 s (i + 4))
-   (sg64 v) (v < 9223372036854775808 ? v (v - 18446744073709551616))
    ; a field of any width, little-endian -- the table below asks for 1, 2, 3, 4 and 8
    (rlew s i n) (n < 1 ? 0 (s i + (256 * rlew s (i + 1) (n - 1))))
 
@@ -68,7 +67,6 @@
    ; after v, plus f's own place in a page -- the least address that begins a fresh page
    ; and still answers p_vaddr = p_offset (mod a). a < 2 packs tight, sharing no segments.
    (ld-lift a v f) (a < 2 ? v ((ld-align a v) + (f % a)))
-   (ld-fits32 v) (-2147483648 <= v <= 2147483647)
    ; relocation field arithmetic is 64-bit modular, and % is truncated in this dialect --
    ; a negative sum comes back negative, so fold it up.
    (ld-u64 v) (: r (v % 18446744073709551616)
@@ -275,7 +273,7 @@
                                            (es (i - 1)
                                                ([(ld-f fs s e 'rl-off) (ld-f fs s e 'rl-kind)
                                                  (ld-f fs s e 'rl-sym)
-                                                 (two? ad ? (sg64 (ld-f fs s e 'rl-add)))] . acc))))
+                                                 (two? ad ? (s64 (ld-f fs s e 'rl-add)))] . acc))))
                           (<r . es (n - 1) ())))
                   (filter (\ r (? (two? (secs <r)) 1
                                   (drops <r) ()
@@ -597,7 +595,7 @@
                         (ldarm be s (off0 + ro) sv kind (base + ro)
                          . (snip s pos (off0 + ro) . acc))))
                  (: sa (ld-u64 (sv + ad))              ; S + A, wrapped as a linker wraps it
-                    prel (sg64 (ld-u64 (sa - (base + ro))))            ; ..and S + A - P, signed
+                    prel (s64 (ld-u64 (sa - (base + ro))))            ; ..and S + A - P, signed
                     abs64? (? rv (kind = 2) (elem kind '(1 257)))   ; R_RISCV_64 / R_X86_64_64 / R_AARCH64_ABS64
                     ; R_X86_64_32 / _32S: S + a absolute into a 4-byte field. always a
                     ; foreign object's -- we emit the 64-bit or pc-relative form.
@@ -619,12 +617,12 @@
                           abs32?                                       ; ..and the two abs32, range-checked
                            ; _32 is unsigned and _32S signed, so each reads the wrapped sum
                            ; its own way and checks its own range.
-                           (: v (kind = 10 ? sa (sg64 sa))
-                              _ (kind = 10 && v <= 4294967295 || ld-fits32 v ? 0 (scare 'link-range <sy))
+                           (: v (kind = 10 ? sa (s64 sa))
+                              _ (kind = 10 && v <= 4294967295 || fits32 v ? 0 (scare 'link-range <sy))
                               (le32 v))
                           (elem kind '(2 4 261) || (rv && kind = 57))
                            (: v prel                          ; pc32/plt32/32_pcrel: S + A - P
-                              _ (ld-fits32 v ? 0 (scare 'link-range <sy))
+                              _ (fits32 v ? 0 (scare 'link-range <sy))
                               (le32 v))
                           ; an instruction field: the encoding is the backend's, and () says
                           ; the target is past the field's reach
@@ -649,22 +647,6 @@
                  (go (b + se 2) (ac + pad + ldpatch ob <is b cx) >is)))
           r (go cur acc (peep (peep ob 'lanes 0) lane ()))
           (ldemit cx lane <r >os >r)))
-
-   ; a 24-byte Elf64_Sym and a 64-byte Elf64_Shdr. the symbol is obj.l's o-sym with
-   ; st_size carried instead of zeroed: a foreign object reports real function extents.
-   (ld-sym nameoff bind typ shndx value size)
-    (catall [(le32 nameoff) [((bind << 4) | typ) 0] (le16 shndx) (le64 value) (le64 size)])
-   (ld-shdr nm ty fl ad off sz lk inf al es)
-    (catall [(le32 nm) (le32 ty) (le64 fl) (le64 ad) (le64 off) (le64 sz)
-             (le32 lk) (le32 inf) (le64 al) (le64 es)])
-   ; the elf32 twins -- 16 bytes and 40. Elf32_Sym reorders (st_value and st_size ahead of
-   ; st_info/st_other/st_shndx), the same fact the field table up top records at the reading
-   ; end, so it is its own door; the section header holds its order and is a twin.
-   (ld-sym32 nameoff bind typ shndx value size)
-    (catall [(le32 nameoff) (le32 value) (le32 size) [((bind << 4) | typ) 0] (le16 shndx)])
-   (ld-shdr32 nm ty fl ad off sz lk inf al es)
-    (catall [(le32 nm) (le32 ty) (le32 fl) (le32 ad) (le32 off) (le32 sz)
-             (le32 lk) (le32 inf) (le32 al) (le32 es)])
 
    ; the executable's symbol table -- what makes `nm`, a labeled `objdump -d` and a gdb
    ; `break main` work on a binary of ours. every defined symbol across the set: locals
@@ -826,7 +808,7 @@
        ; this. every loaded byte gets a covering header (love_rela names the -pie table):
        ; strip rebuilds a file from its sections, and an orphan gap comes back as zeros.
        lanesx {'text 1 'rodata 2 'data 3 'nifs 4 'bss 6 'image 7}
-       st (ldstab objs glo lanesx ld-sym 24)
+       st (ldstab objs glo lanesx elf-sym 24)
        ; .comment goes last so no index moves: e_shstrndx and .symtab's sh_link are written
        ; down as 10 and 9, and a section spliced in ahead points both at the wrong table.
        ; the object says love_nifs and the binary says .love.nifs -- the split is the rule.
@@ -844,22 +826,22 @@
        rdmo (cmto + cmtz) rdmz #rdm
        nsh ((0 < rdmz ? 13 12) + ?nb?)
        shto (ld-align 8 (rdmo + rdmz))
-       sht (catall [(ld-shdr 0 0 0 0 0 0 0 0 0 0)                                    ; the reserved null header
+       sht (catall [(elf-shdr 0 0 0 0 0 0 0 0 0 0)                                    ; the reserved null header
                      ; a lane stops where its bytes stop -- the next one's address may sit a
                      ; page on, but its offset is the very next byte, so no gap is left unowned
-                    (ld-shdr (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
-                    (ld-shdr (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
-                    (ld-shdr (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
-                    (ld-shdr (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
-                    (ld-shdr (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; love_rela, the -pie table (empty non-pie)
-                    (ld-shdr (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)   ; NOBITS: an offset, no bytes
-                    (ld-shdr (snm 6) 1 3 ist isho iszr 0 0 16 0)                     ; .image, the grow slot -- its own segment
-                    (ld-shdr (snm 7) 2 0 0 symo symz 9 (st 2) 8 24)               ; link=.strtab info=first global
-                    (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
-                    (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
-                    (ld-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                     ; .comment: merge|strings, no alloc
-                    (? (0 < rdmz) (ld-shdr (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())    ; .love.readme: strings, no alloc
-                    (? nb? (ld-shdr (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0) ())])   ; sht_note, alloc: strip keeps it
+                    (elf-shdr (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
+                    (elf-shdr (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
+                    (elf-shdr (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
+                    (elf-shdr (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
+                    (elf-shdr (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; love_rela, the -pie table (empty non-pie)
+                    (elf-shdr (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)   ; NOBITS: an offset, no bytes
+                    (elf-shdr (snm 6) 1 3 ist isho iszr 0 0 16 0)                     ; .image, the grow slot -- its own segment
+                    (elf-shdr (snm 7) 2 0 0 symo symz 9 (st 2) 8 24)               ; link=.strtab info=first global
+                    (elf-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
+                    (elf-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
+                    (elf-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                     ; .comment: merge|strings, no alloc
+                    (? (0 < rdmz) (elf-shdr (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())    ; .love.readme: strings, no alloc
+                    (? nb? (elf-shdr (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0) ())])   ; sht_note, alloc: strip keeps it
        ; w^x: segment one the header and the code, read+execute; two the literals, read;
        ; three .data through love_rela, running out to bss in memsz alone, read+write; a
        ; fourth carries the image, rw (a heap snapshot is read and rebased, never entered).
@@ -938,7 +920,7 @@
        ; the section headers and symbol table ride past p_filesz, mapped by nothing
        lanesx {'note 1 'boot 2 'text 3
                'rodata 4 'data 5 'nifs 5 'image 5 'bss 6}
-       st (ldstab objs glo lanesx ld-sym 24)
+       st (ldstab objs glo lanesx elf-sym 24)
        shstr (o-strtab '(".note.pvh" ".boot" ".text" ".rodata"
                          ".data" ".bss" ".symtab" ".strtab" ".shstrtab"))
        (snm k) (<>shstr k)
@@ -946,16 +928,16 @@
        stro (symo + symz) strz (tally <>st)
        ssto (stro + strz) sstz (tally <shstr)
        shto (ld-align 8 (ssto + sstz))
-       sht (catall [(ld-shdr 0 0 0 0 0 0 0 0 0 0)                                 ; the reserved null header
-                    (ld-shdr (snm 0) 7 2 vbase hdrsz nsz 0 0 4 0)                 ; .note.pvh, in the header page
-                    (ld-shdr (snm 1) 1 7 b0 (fo b0) (b1 - b0) 0 0 4096 0)
-                    (ld-shdr (snm 2) 1 6 t0 (fo t0) (t1 - t0) 0 0 4096 0)
-                    (ld-shdr (snm 3) 1 2 o0 (fo o0) (o1 - o0) 0 0 4096 0)
-                    (ld-shdr (snm 4) 1 3 d0 (fo d0) (i1 - d0) 0 0 4096 0)         ; .data, the nifs and image runs with it
-                    (ld-shdr (snm 5) 8 3 i1 (fo i1) (kend - i1) 0 0 16 0)         ; NOBITS: an offset, no bytes
-                    (ld-shdr (snm 6) 2 0 0 symo symz 8 (st 2) 8 24)            ; link=.strtab info=first global
-                    (ld-shdr (snm 7) 3 0 0 stro strz 0 0 1 0)
-                    (ld-shdr (snm 8) 3 0 0 ssto sstz 0 0 1 0)])
+       sht (catall [(elf-shdr 0 0 0 0 0 0 0 0 0 0)                                 ; the reserved null header
+                    (elf-shdr (snm 0) 7 2 vbase hdrsz nsz 0 0 4 0)                 ; .note.pvh, in the header page
+                    (elf-shdr (snm 1) 1 7 b0 (fo b0) (b1 - b0) 0 0 4096 0)
+                    (elf-shdr (snm 2) 1 6 t0 (fo t0) (t1 - t0) 0 0 4096 0)
+                    (elf-shdr (snm 3) 1 2 o0 (fo o0) (o1 - o0) 0 0 4096 0)
+                    (elf-shdr (snm 4) 1 3 d0 (fo d0) (i1 - d0) 0 0 4096 0)         ; .data, the nifs and image runs with it
+                    (elf-shdr (snm 5) 8 3 i1 (fo i1) (kend - i1) 0 0 16 0)         ; NOBITS: an offset, no bytes
+                    (elf-shdr (snm 6) 2 0 0 symo symz 8 (st 2) 8 24)            ; link=.strtab info=first global
+                    (elf-shdr (snm 7) 3 0 0 stro strz 0 0 1 0)
+                    (elf-shdr (snm 8) 3 0 0 ssto sstz 0 0 1 0)])
        hdr (elf64-hdrn 2 <e mach [shto 10 9] (map (foldl id elf64-phdr) phs))
        (hdr . (>en + [(ld-zeros (4096 - (hdrsz + nsz)))] + >eg
                 + [(ld-zeros (symo - fsz)) <st <>st <shstr
@@ -1152,7 +1134,7 @@
                (go shl0 ()))
        shl (map (e \ <e) secs)
        lanesx (: t {} (foldl (\ i l (pin t l i, i + 1)) 1 shl, t))
-       st (ldstab objs glo lanesx ld-sym32 16)
+       st (ldstab objs glo lanesx elf-sym32 16)
        ; -- the recorded abs32 sites, grouped by the lane whose extent holds each. every
        ; entry is an Elf32_Rel naming symbol 0, whose st_value is 0 by ELF's rule, so a
        ; loader recomputing S + A lands where one adding its load delta does. no shf_alloc:
@@ -1178,14 +1160,14 @@
                   (go relbs relo ()))
        relsz (foldl (\ a b (a + #b)) 0 relbs)
        shto (ld-align 4 (relo + relsz))
-       sht (catall ([(ld-shdr32 0 0 0 0 0 0 0 0 0 0)]                        ; the reserved null header
-                    + o-mapi (\ i e (ld-shdr32 (snm i) (<e == 'bss ? 8 1) (e 3)
+       sht (catall ([(elf-shdr32 0 0 0 0 0 0 0 0 0 0)]                        ; the reserved null header
+                    + o-mapi (\ i e (elf-shdr32 (snm i) (<e == 'bss ? 8 1) (e 3)
                                                 (e 1) (e 2) (e 4) 0 0 4 0))
                              secs
-                    + [(ld-shdr32 (snm nl) 2 0 0 symo symz (nl + 2) (st 2) 4 16)    ; link=.strtab
-                       (ld-shdr32 (snm (nl + 1)) 3 0 0 stro strz 0 0 1 0)
-                       (ld-shdr32 (snm (nl + 2)) 3 0 0 ssto sstz 0 0 1 0)]
-                    + o-mapi (\ i l (ld-shdr32 (snm (nl + 3 + i)) 9 64 0           ; sht_rel, shf_info_link
+                    + [(elf-shdr32 (snm nl) 2 0 0 symo symz (nl + 2) (st 2) 4 16)    ; link=.strtab
+                       (elf-shdr32 (snm (nl + 1)) 3 0 0 stro strz 0 0 1 0)
+                       (elf-shdr32 (snm (nl + 2)) 3 0 0 ssto sstz 0 0 1 0)]
+                    + o-mapi (\ i l (elf-shdr32 (snm (nl + 3 + i)) 9 64 0           ; sht_rel, shf_info_link
                                                 (reloffs i) #(relbs i)
                                                 (nl + 1) (peep lanesx l 0) 4 8))
                              rlanes))
