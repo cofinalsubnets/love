@@ -659,6 +659,19 @@
     (all (l \ (: s (xa-trim l) c (gf-labat s)
                  (? (0 = #s) 1 (0 <= c) (0 = #(xa-trim (snip s (c + 1) #s))) (s 0 != 46))))
          (gf-lines tgt src))
+   ; an x64 instruction the 64-bit opcode map dropped -> its mnemonic, else (): the BCD adjusts,
+   ; pusha/popa and the rest, and a far call or jump to an immediate segment:offset
+   gx-gone '("pusha" "pushaw" "pushal" "pushad" "popa" "popaw" "popal" "popad" "aaa" "aad" "aam"
+             "aas" "daa" "das" "into" "bound" "boundw" "boundl" "salc" "arpl" "les" "lds")
+   gx-farimm '("lcall" "lcallw" "lcalll" "ljmp" "ljmpw" "ljmpl")
+   (gas-nolong tgt src)
+    (? (tgt != 'x64) ()
+       (foldl (\ a l (? (nom? a) a
+                       (: s (xa-trim l) c (gf-labat s) t (0 <= c ? (xa-trim (snip s (c + 1) #s)) s)
+                          mn (xa-mnem t)
+                          (elem mn gx-gone || (elem mn gx-farimm && starts? (xa-trim (xa-rest t)) "$")
+                           ? (name mn) ()))))
+              () (gf-lines tgt src)))
    ; -> [secs fns objs]: secs ((name type flags forms)..) first-seen, fns and objs the .globl
    ; names a label here defines, split by whether its section executes
    (gas-top tgt src) (gas-top-in tgt src ".text" [1 6] "")

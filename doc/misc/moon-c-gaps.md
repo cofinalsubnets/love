@@ -830,8 +830,8 @@ every ninth by path: **151 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 5 | a function's inline asm: `lcallw`, `fnsave`, `clflush`, a debug register (`%db0`) |
-| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label`, an asm goto with outputs (refused, above) |
+| 4 | a function's inline asm: `fnsave`, `clflush`, a debug register (`%db0`) |
+| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label` (an `-m32` unit, vdso32's), an asm goto with outputs (refused, above), and realmode's `-m16` wakemain, whose `lcallw $0xc000,$3` long mode has no encoding for: refused by name, as gcc's own x64 as refuses it |
 
 each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
 runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm 76 and
