@@ -84,7 +84,7 @@
    (find h n i) !!(1 + findi h n i)
    (mkscr r c) (screen (cask (screen () r c)) r c)
    (rowtx s r) (: c (gaze s 2)
-                (foldl (\ a i (a + string (: ch (255 & glass s ((r * c) + i)) (0 = ch ? 32 ch))))
+                (foldl (\ a i (a + (: ch (2097151 & glass s ((r * c) + i) 0) (0 = ch ? " " (utf8 ch)))))
                        "" (jot c)))
  md (tether ["out/love" "manifest"])        ; the verb, as a hand types it
  m >md

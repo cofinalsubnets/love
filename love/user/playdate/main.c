@@ -30,7 +30,7 @@ static struct k {
   int dead;                    // a scare froze the session; keep blitting it
   union {
     struct cb cb;
-    uint8_t cb_bytes[sizeof(struct cb) + sizeof(uint32_t) * NROWS * NCOLS]; };
+    uint8_t cb_bytes[sizeof(struct cb) + sizeof(struct cb_cell) * NROWS * NCOLS]; };
 } K;
 
 // --- clock + cooperative waits ---------------------------------------------
@@ -110,8 +110,8 @@ static void blit(void) {
   uint8_t *frame = pdg_frame();
   for (uint32_t i = 0; i < NROWS; i++)
     for (uint32_t j = 0; j < NCOLS; j++) {
-      uint8_t ch = cb_ch(K.cb.cb[i * NCOLS + j]);
-      uint8_t const *bmp = cga_8x8[ch == '\n' ? 0 : ch];
+      uint8_t ch = cb_437(cb_cp(K.cb.cb[i * NCOLS + j].g));
+      uint8_t const *bmp = cga_8x8[ch];
       for (uint32_t b = 0; b < 8; b++)
         frame[PDG_ROWSIZE * (8 * i + b) + j] = bmp[b]; }
   pdg_mark_updated(); }

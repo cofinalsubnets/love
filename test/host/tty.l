@@ -63,10 +63,10 @@
                             (go (i + 1) best))
                (: b (go 0 -1) (b < 0 ? h (snip h 0 b))))
    (mkscr r c) (screen (cask (screen () r c)) r c)
-   (chat s i) (255 & glass s i)
-   (cbg s i) (255 & (glass s i >> 16))
+   (chat s i) (2097151 & glass s i 0)
+   (cbg s i) (: k (glass s i 2) (k >> 24 = 1 ? (k & 255) 0))   ; a bg index, 0 for the default
    (rowtx s r) (: c (gaze s 2)
-                  (foldl (\ a i (a + string (: ch (chat s ((r * c) + i)) (0 = ch ? 32 ch))))
+                  (foldl (\ a i (a + (: ch (chat s ((r * c) + i)) (0 = ch ? " " (utf8 ch)))))
                          "" (jot c)))
    ; the climb's floor is seeded off the clock, so where @ stands is nobody's law --
    ; that it stands somewhere is

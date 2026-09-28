@@ -12,41 +12,48 @@
 ; wharf (apps/berth/wharf.l's standing law) writes every cell every frame, so no stale glyph
 ; can survive a layout change. a caller that leaves gaps owns them.
 ;
-; host-only: `glass` and `unfold` are cb's nifs (love/quay/nif.c), so this never joins
-; the corpus -- test/limn.l is its gate.
-(module '(limn limn-across limn-bars limn-down limn-glyph limn-glyphs limn-go limn-row limn-rows
-          limn-run limn-sgr limn-utf8)
+; host-only: `glass` is cb's nif (love/quay/nif.c), so this never joins the corpus --
+; test/limn.l is its gate.
+(module '(limn limn-across limn-bars limn-down limn-glyph limn-glyphs limn-go limn-ink limn-pen
+          limn-row limn-rows limn-run limn-sgr)
 (:
-   ; --- the pen: a cell's high bytes ((>> cell 8): fg, bg, font+faces). one SGR per
-   ; pen change, respecified from zero each time -- cheap, and never stale ----------
-   (limn-sgr p) (: fg (p & 255) bg (p >> 8 & 255) fa (p >> 20 & 15)
-                 ("\e[0" + (fa & 1 ? ";1" "") + (fa & 2 ? ";4" "") + (fa & 4 ? ";7" "")
-                  + ";38;5;" + show fg + ";48;5;" + show bg + "m"))
+   ; --- the pen: a cell's face byte and its two colour words (love/quay/quay.h), as one
+   ; number -- face | fg << 8 | bg << 34, a colour word being 26 bits. one SGR per pen
+   ; change, respecified from zero each time -- cheap, and never stale ----------
+   (limn-pen g fg bg) ((g >> 24) | (fg << 8) | (bg << 34))
+   ; a colour word's SGR, base 38 for the fg and 48 for the bg: the outer terminal's own
+   ; default, an xterm-256 index, or rgb
+   (limn-ink base k) (: v (k & 16777215)
+                        ((k >> 24) @- (show (base + 1))
+                         1 (show base + ";5;" + show v)
+                         2 (show base + ";2;" + show (v >> 16) + ";" + show (v >> 8 & 255)
+                            + ";" + show (v & 255))))
+   (limn-sgr p) (: fa (p & 255)
+                 ("\e[0" + (fa & 1 ? ";1" "") + (fa & 8 ? ";2" "") + (fa & 16 ? ";3" "")
+                  + (fa & 2 ? ";4" "") + (fa & 64 ? ";5" "") + (fa & 4 ? ";7" "")
+                  + (fa & 128 ? ";8" "") + (fa & 32 ? ";9" "")
+                  + ";" + limn-ink 38 (p >> 8 & 67108863) + ";" + limn-ink 48 (p >> 34) + "m"))
 
-   ; glyph bytes go out as utf-8: the grid holds cp437 (the fold), the outer terminal
-   ; speaks unicode (the unfold), each face rendered once and cached
+   ; the grid holds codepoints and the outer terminal speaks utf-8: each rendered once
+   ; and cached. the blank is a space
    limn-glyphs {}
-   (limn-utf8 cp) (? (cp < 128) (string cp)
-                     (cp < 2048) (string (192 | cp >> 6) + string (128 | cp & 63))
-                     (string (224 | cp >> 12) + string (128 | cp >> 6 & 63)
-                      + string (128 | cp & 63)))
-   (limn-glyph b) (: g (limn-glyphs b)
-                     (? (string? g) g
-                      (: cp (32 <= b < 127 ? b (unfold b))
-                         s (limn-utf8 (charm? cp && 0 < cp ? cp 63))
-                         _ (pin limn-glyphs b s)
-                         s)))
+   (limn-glyph cp) (: g (limn-glyphs cp)
+                      (? (string? g) g
+                       (: s (cp = 0 ? " " (utf8 cp))
+                          _ (pin limn-glyphs cp s)
+                          s)))
 
    (limn-go row col) ("\e[" + show (row + 1) + ";" + show (col + 1) + "H")
-   limn-down (limn-utf8 9474)                 ; │
-   limn-across (limn-utf8 9472)               ; ─
+   limn-down (utf8 9474)                      ; │
+   limn-across (utf8 9472)                    ; ─
 
-   ; paint row i cell by cell, threading the pen; a blank cell is a space
+   ; paint row i cell by cell, threading the pen
    (limn-row j s c i q p) (? (q < c)
-                           (: g (glass s (i * c + q))
-                              p2 (g >> 8)
+                           (: k (i * c + q)
+                              g (glass s k 0)
+                              p2 (limn-pen g (glass s k 1) (glass s k 2))
                               _ (p = p2 ? 0 (say j (limn-sgr p2)))
-                              _ (say j (limn-glyph (: ch (g & 255) (ch = 0 ? 32 ch))))
+                              _ (say j (limn-glyph (g & 2097151)))
                               (limn-row j s c i (q + 1) p2))
                            p)
 

@@ -12,14 +12,14 @@
 //                         | ()   misuse: cask too small, or silly geometry
 //   (scribe scr x)       -> scr  feed x through the VT parser: a byte charm,
 //                                or every byte of a string/cask; () misuse
-//   (glass scr i)        -> cell the packed 32-bit cell at index i, or ()
-//                                (cb_ch/fg/bg/font/face live in the packing)
+//   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
+//                                width, picture, face), 1 the fg, 2 the bg
+//                                (the layout is quay.h's struct cb_cell)
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
 //                                3 flag, 4 top, 5 bot; () misuse
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
-//   (unfold g)           -> n    a cp437 glyph's codepoint (0 = none)
 #include "love.h"
 #include "quay.h"
 
@@ -33,7 +33,7 @@ static struct cb *scr_ok(word x) {
  if (s->len < sizeof(struct cb)) return 0;
  struct cb *c = (struct cb*) s->bytes;
  uintptr_t n = (uintptr_t) c->rows * c->cols;
- if (!c->rows || !c->cols || sizeof(struct cb) + n * 4 > s->len) return 0;
+ if (!c->rows || !c->cols || cb_size(c->rows, c->cols) > s->len) return 0;
  if (c->wpos >= n) c->wpos = 0;
  if (c->spos >= n) c->spos = 0;
  if (c->bot >= c->rows) c->bot = (uint16_t) (c->rows - 1u);
@@ -55,7 +55,7 @@ static lvm(lvm_screen) {
  word out = ZeroPoint;
  if (r >= 1 && k >= 1 && r <= 65535 && k <= 65535
       && (uintptr_t) r * (uintptr_t) k <= (uintptr_t) 1 << 22) {
-  uintptr_t need = sizeof(struct cb) + (uintptr_t) r * (uintptr_t) k * 4;
+  uintptr_t need = cb_size(r, k);
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
@@ -84,15 +84,18 @@ static lvm(lvm_scribe) {
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
-// (glass scr i): look through to one packed cell.
+// (glass scr i k): look through to one word of one cell.
 static lvm(lvm_glass) {
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
- if (c && (Sp[1] & 1)) {
+ if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
   uintptr_t i = (uintptr_t) getcharm(Sp[1]);
-  if (i < (uintptr_t) c->rows * c->cols) out = putcharm(c->cb[i]); }
- Sp[1] = out;
- Sp += 1; Ip += 1; ai_musttail return Continue(); }
+  intptr_t k = getcharm(Sp[2]);
+  if (i < (uintptr_t) c->rows * c->cols && k >= 0 && k < 3) {
+   struct cb_cell const e = c->cb[i];
+   out = putcharm(k == 0 ? e.g : k == 1 ? e.fg : e.bg); } }
+ Sp[2] = out;
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
 
 // (gaze scr k): one header field by key -- no allocation, so a render loop
 // polls the cursor for free. 0 cursor, 1 rows, 2 cols, 3 flag, 4 top, 5 bot.
@@ -123,14 +126,6 @@ static lvm(lvm_damage) {
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
-// (unfold g): a cp437 glyph byte's unicode codepoint, 0 when it has none --
-// the outward half of the utf-8 fold, for a painter re-emitting the grid
-// to a utf-8 terminal (berth caches these per glyph).
-static lvm(lvm_unfold) {
- intptr_t g_ = (Sp[0] & 1) ? getcharm(Sp[0]) : -1;
- Sp[0] = (g_ >= 0 && g_ < 256) ? putcharm(cb_unfold((uint8_t) g_)) : ZeroPoint;
- Ip += 1; ai_musttail return Continue(); }
-
 // Workhorse for (reply scr), called with g Packed and the screen at sp[0].
 // Drains the queue into a stack buffer FIRST (ai_have may move the cask),
 // then builds the byte list tail-first. Returns a not-ok g only on OOM.
@@ -160,8 +155,7 @@ static lvm(lvm_reply) {
 static union u const
   nif_screen[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_screen}, {lvm_ret0}},
   nif_scribe[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_scribe}, {lvm_ret0}},
-  nif_glass[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_glass},  {lvm_ret0}},
+  nif_glass[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_glass},  {lvm_ret0}},
   nif_gaze[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gaze},   {lvm_ret0}},
   nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
-  nif_unfold[] = {{lvm_unfold}, {lvm_ret0}},
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}};

@@ -103,9 +103,9 @@
  ; a pane's screen as rows of text, each with its trailing blanks off; the glyphs
  ; come out as limn paints them
  (hscreen-text p) (: s (peep (hbox p) () 0) r (gaze s 1) c (gaze s 2)
-                     (cell i) (: ch (glass s i & 255) (ch = 0 ? " " (limn-glyph ch)))
-                     (row i) (: (go q acc) (? (q < 0) acc (go (q - 1) ((cell (i * c + q)) + acc)))
-                                (last q) (? (q < 0) -1 (32 = glass s (i * c + q) & 255 || 0 = glass s (i * c + q) & 255) (last (q - 1)) q)
+                     (cp i) (glass s i 0 & 2097151)
+                     (row i) (: (go q acc) (? (q < 0) acc (go (q - 1) ((limn-glyph (cp (i * c + q))) + acc)))
+                                (last q) (? (q < 0) -1 (32 = cp (i * c + q) || 0 = cp (i * c + q)) (last (q - 1)) q)
                                 (go (last (c - 1)) ""))
                      (map row (jot r)))
  (hpane hb id) (peep (hb 'panes) id ())
