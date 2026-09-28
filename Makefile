@@ -309,7 +309,7 @@ kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/clien
 # the crew the artifact carries past kore and mooncc
 crewfiles = apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/fat.l \
-  apps/source.l apps/lapiz.l \
+  apps/source.l apps/lapiz.l apps/tfm.l apps/caja/box.l apps/caja/par.l apps/caja/page.l apps/caja/doc.l \
   apps/libra/salt.l apps/libra/libra.l apps/vi/hueweb.l apps/kiosko/web.l \
   apps/harp/harp.l apps/harp/play.l apps/harp/score.l \
   apps/x11.l apps/ink.l apps/manifest/manifest.l apps/rove/rove.l apps/rove/view.l apps/rove/tower.l apps/rove/story.l apps/rove/design.l apps/rove/slop.l apps/rove/grass.l apps/rove/wade.l apps/rove/apartment.l apps/rove/dusk.l apps/rove/garage.l apps/rove/shaft.l apps/rove/roost.l apps/harp/synth.l \
