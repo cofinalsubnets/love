@@ -950,14 +950,17 @@
 ; list. & and >> are exact on a big and on a negative, so a 64-bit word needs no care.
 ;   (rdle s i n) (rdbe s i n) -> the n-byte word at i, little- and big-endian
 ;   (wrle v n) (wrbe v n)     -> v as n bytes, the low n kept (two's complement for v < 0)
+;   (rdoct s i n) -> the octal text in the n bytes at i, to its first non-digit (tar's fields)
 ;   (padk n k)   -> the bytes from n to the next multiple of k
 ;   (zbytes n)   -> n NULs
 ;   (b2hex s) (hex2b h) -> bytes as lowercase hex, and hex (either case) back
 ;   (xorb a b)   -> a with b xored in, byte by byte, #a long
 
-(module '(bytes rdle rdbe wrle wrbe padk zbytes b2hex hex2b xorb)
+(module '(bytes rdle rdbe rdoct wrle wrbe padk zbytes b2hex hex2b xorb)
 (: (rdle s i n) (? (n < 1) 0 (s i + (rdle s (i + 1) (n - 1) << 8)))
    (rdbe s i n) (: (go k a) (? (n <= k) a (go (k + 1) ((a << 8) + s (i + k)))) (go 0 0))
+   (rdoct s i n) (: (go k a) (? (n <= k) a (: c (s (i + k)) (48 <= c < 56 ? (go (k + 1) (a * 8 + c - 48)) a)))
+                    (go 0 0))
    (wrle v n) (? (n < 1) "" (string (v & 255) + wrle (v >> 8) (n - 1)))
    (wrbe v n) (? (n < 1) "" (wrbe (v >> 8) (n - 1) + string (v & 255)))
    (padk n k) ((k - n % k) % k)

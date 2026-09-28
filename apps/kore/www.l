@@ -292,12 +292,10 @@
        (? (k < 0) ""
           (: i (k + 8) i2 (? (i < #t && elem (t i) '(34 39)) (i + 1) i)
              (snip t i2 ((: (g j) (? (#t <= j || elem (t j) '(34 39 59 32 62 47 9 10 13)) j (g (j + 1)))) i2)))))
-   (ww-u8 v) (? (v < 2048) (string (192 + v // 64) + string (128 + v % 64))
-                (string (224 + v // 4096) + string (128 + v // 64 % 64) + string (128 + v % 64)))
    ; latin-1 -> utf-8, windows-1252's printing characters where latin-1 has controls
    (ww-latin s)
     (: n #s o (jug 0) tb (tablet 0)
-       _ (map (i \ pin tb (128 + i) (ww-u8 (? (i < 32) (ww-1252 i) (128 + i)))) ^128)
+       _ (map (i \ pin tb (128 + i) (utf8 (? (i < 32) (ww-1252 i) (128 + i)))) ^128)
        (go i st) (? (n <= i) (: _ (say o (snip s st n)) (slurp o))
                     (s i < 128) (go (i + 1) st)
                     (: _ (say o (snip s st i)) _ (say o (tb (s i))) (go (i + 1) (i + 1))))

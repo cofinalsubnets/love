@@ -24,6 +24,7 @@
 (borrow 'posix)
 (borrow 'glob) ; match and ones, under the wildcard
 (borrow 'path) ; lastslash, under cdir
+(borrow 'bytes)
 
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
@@ -81,10 +82,6 @@
                              + (s (n - 2) << 16) + (s (n - 1) << 24))))))))
    ; ..and a read-only ustar walk: nom (prefix + name), size, body -- all this
    ; needs. apps/tar.l stays the whole law; this reads the slice and nothing else.
-   (toct s o k) (: (go i a) (? (k <= i) a
-                               (: c (s (o + i))
-                                  (48 <= c < 56 ? (go (i + 1) (a * 8 + (c - 48))) a)))
-                   (go 0 0))
    (ttxt s o k) (: (go i) (? (k <= i || s (o + i) = 0) i (go (i + 1)))
                    m (go 0)
                    (m ? (: c (cask m) _ (pour c 0 s o m) (string c)) ""))
@@ -102,7 +99,7 @@
                      (: nm (ttxt s o 100)
                         pf (ttxt s (o + 345) 155)
                         nom (#pf ? (pf + "/" + nm) nm)
-                        sz (toct s (o + 124) 12)
+                        sz (rdoct s (o + 124) 12)
                         k (s (o + 156))
                         acc2 (k = 48 || k = 0
                                 ? (: c (cask sz) _ (pour c 0 s (o + 512) sz)
