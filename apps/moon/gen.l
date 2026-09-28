@@ -485,8 +485,11 @@
    (asalign g ty) (: e (peep (g 'stag) <>ty 0) (two? e ? <>>e 8))        ; a struct tag's alignment
    (aslots g ty) (aup (tsz g ty) 8 >> 3)                              ; its eightbyte count
    ; a memory-class return: a hidden pointer as the first gp argument, filled and answered by
-   ; the callee. v6-M past 4 bytes, SysV past 16
-   (sretm? g ty) (stru? ty && (v6m? g && 4 < tsz g ty || amem? g ty))
+   ; the callee. AAPCS32 past 4 bytes -- save, on a VFP seat, an HFA, which the s/d file carries --
+   ; and SysV past 16
+   (sretm? g ty) (stru? ty && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty))
+   ; an AAPCS-VFP homogeneous aggregate: one float base, at most four of it
+   (t32hfa? g ty) (: b (hfab g ty) (flo? b && tsz g ty <= 4 * tsz g b))
    (fnret ty) (? !(two? ty && <ty = 'ptr) 'long        ; an indirect callee's result type: ('ptr ('fn ret ptys)) | 'long
                  (: ft <>ty (fn? ft && two? >ft ? <>ft 'long)))
    (fnpts ty) (? !(two? ty && <ty = 'ptr) ()           ; ..and its parameter types, () where the declarator had no prototype
@@ -2838,8 +2841,8 @@
                            (fnret (vty hr) = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                            '((movqxr f0 r0)))
                    (? (bad? hr) 'bad
-                      (v6m? g && stru? (fnret (vty hr)) &&   ; a memory-returning callee behind a pointer: the
-                          4 < tsz g (fnret (vty hr)))        ; implicit-arg shift wasn't staged
+                      (t32? g && sretm? g (fnret (vty hr)))  ; a memory-returning callee behind a pointer: the
+                                                             ; implicit-arg shift wasn't staged
                        (nolane g ("no lane for an indirect call to a MEMORY-returning function" + ontgt g))
                       ; t32: r12 doubles as the far-mem scratch, so the park rides a frame slot and reloads r12 last before the call
                       (t32? g)
@@ -6883,6 +6886,10 @@
                            + [['ld 'r1 'r4 (peep g 'sret 0)]]
                            + bcopy g 0 (tsz g rt) () + epj)
                           (tor0 g r + '((ld r0 r0 0)) + epj))
+                      (t32? g && sretm? g rt)              ; AAPCS-VFP: a non-HFA past 4B, the same memory lane
+                       (tor0 g r
+                        + [['ld 'r1 'r4 (peep g 'sret 0)]]
+                        + bcopy g 0 (tsz g rt) () + epj)
                       (t32nolane? g rt) 'bad
                       (sse2? g rt)                                       ; a two-double struct returns as the xmm pair
                        (tor0 g r + fldf 'double (xmmreg 0) 'r0 0 +
