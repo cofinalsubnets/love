@@ -1110,7 +1110,7 @@ intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i);
 int ai_nif_cell(union u const *k);
 size_t code_len(char *code);
 // the reach (g->reach): what a native reaches through g instead of carrying -- the emitter's `reach` law names them the same
-enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc };
+enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap };
 union u *fn_base(union u *k, int *nargs);
 struct ai
  *ai_eval(struct ai *g),

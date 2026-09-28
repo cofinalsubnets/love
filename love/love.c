@@ -182,7 +182,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
  g->reach[ReachChain] = (word) lvm_chain, g->reach[ReachStr] = (word) lvm_str, g->reach[ReachMap] = (word) lvm_map_lookup;
  g->reach[ReachNom] = (word) lvm_nom, g->reach[ReachMint] = (word) lvm_sym, g->reach[ReachGem] = (word) lvm_gembox;
  g->reach[ReachCask] = (word) lvm_cask, g->reach[ReachDrive] = (word) callout_drive, g->reach[ReachResume] = (word) callout_resume;
- g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc;
+ g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
  // book + macro maps (lookup-lambdas) then the main task thread.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 9))) {
   union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
