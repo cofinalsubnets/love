@@ -158,7 +158,7 @@
        (? !(string? b) [2 "lost connection"]
           (b 0 = 0) 1
           (: l ((io 'line) 0) [(b 0) (string? l ? (snip l 0 (#l - 1)) "")])))
-   (sc-bad r) (: _ (say err ("scp: " + r 1 + "\n")) (flush err) 1)
+   (sc-bad r) (say err ("scp: " + r 1 + "\n"), flush err, 1)
 
    ; --- the source: files, and with rec directories, as C/D/E lines -> errors ---
    (sc-times io st pres) (pres ? ((io 'wr) ("T" + show (st 1 // 1000) + " 0 " + show (st 9 // 1000) + " 0\n"), sc-ack io) 1)

@@ -63,7 +63,7 @@
              t (slurp >r) st <(waitfor <r)
              (test (has? t "openssh-42") (st = 5)))
         0)
-   ; scp: a file up keeping its mtime, a tree down, a missing file said
+   ; scp: a file up keeping its mtime, a tree down, a missing file said, a refused target said
    (put p s) (: q (open p "w") _ (say q s) (close q))
    (got p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) s) ()))
    blob (bytes 70000 (i \ (i * 7 + i // 256) & 255))
@@ -77,9 +77,11 @@
    s1 (scp ["-p" (dir + "/src/f1") (far + dir + "/up/")])
    s2 (scp ["-r" (far + dir + "/src") (dir + "/down/")])
    s3 (scp [(far + dir + "/src/nope") (dir + "/down/")])
+   _ (mkdir (dir + "/up2") 448) _ (mkdir (dir + "/up2/f1") 448)
+   s4 (scp [(dir + "/src/f1") (dir + "/src/sub/blob") (far + dir + "/up2/")])
    _ (test (s1 1 = 0) ((got (dir + "/up/f1")) = "hello\n") (((stat (dir + "/up/f1")) 1) = 981158400000)
            (s2 1 = 0) ((got (dir + "/down/src/f1")) = "hello\n") ((got (dir + "/down/src/sub/blob")) = blob)
-           (s3 1 = 1) (has? <s3 "nope"))
+           (s3 1 = 1) (has? <s3 "nope") (s4 1 = 1) (has? <s4 "scp: ") ((got (dir + "/up2/blob")) = blob))
    _ (? o (: r (tether ["scp" "-O" "-F" "/dev/null" "-o" "StrictHostKeyChecking=no" "-o" "UserKnownHostsFile=/dev/null"
                         "-o" "IdentitiesOnly=yes" "-o" "BatchMode=yes" "-o" "LogLevel=ERROR"
                         "-i" (dir + "/id") "-P" (show port) "-r" (dir + "/src") (far + dir + "/o/")])
