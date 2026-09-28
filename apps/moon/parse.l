@@ -1569,6 +1569,28 @@
     (? (ty = 'bool) (v = 0 ? 0 1)
        (: n (tbits w64 ty) m (v & ((2 ** n) - 1))
           (? (tusg? ty || m < (2 ** (n - 1))) m (m - (2 ** n)))))
+   ; a bit builtin's name -> (op operand-type) | ()
+   (bltab w64 nm)
+    (nm @ "__builtin_bswap16" '(bswap ushort) "__builtin_bswap32" '(bswap uint)
+          "__builtin_bswap64" ['bswap (w64 ? 'ulong 'ullong)]
+          "__builtin_clz" '(clz uint) "__builtin_clzl" '(clz ulong) "__builtin_clzll" '(clz ullong)
+          "__builtin_ctz" '(ctz uint) "__builtin_ctzl" '(ctz ulong) "__builtin_ctzll" '(ctz ullong)
+          "__builtin_popcount" '(pop uint) "__builtin_popcountl" '(pop ulong)
+          "__builtin_popcountll" '(pop ullong)
+          "__builtin_ffs" '(ffs uint) "__builtin_ffsl" '(ffs ulong) "__builtin_ffsll" '(ffs ullong)
+          ())
+   (blen v) (? (v = 0) 0 (1 + (blen (v >> 1))))
+   (bctz v) (? ((v & 1) = 1) 0 (1 + (bctz (v >> 1))))
+   (bpop v) (? (v = 0) 0 ((v & 1) + (bpop (v >> 1))))
+   (bswp v n) (? (n = 0) 0 (((v & 255) * (2 ** (8 * (n - 1)))) + (bswp (v >> 8) (n - 1))))
+   ; v already in ty, unsigned -> (value type) | (); clz and ctz of 0 are undefined, no fold
+   (bfold w64 op ty v)
+    (op @ 'bswap [(bswp v ((tbits w64 ty) // 8)) ty]
+          'clz (? (v = 0) () [((tbits w64 ty) - (blen v)) 'int])
+          'ctz (? (v = 0) () [(bctz v) 'int])
+          'pop [(bpop v) 'int]
+          'ffs [(v = 0 ? 0 ((bctz v) + 1)) 'int]
+          ())
    ; a literal is an int where it fits, else the long that holds it (ilp32 spells one past int llong)
    (numt w64 n) (? (-2147483648 <= n && n <= 2147483647) 'int
                    w64 (n < (2 ** 63) ? 'long 'ulong)
@@ -1633,6 +1655,12 @@
                     (? (= f 'bad) ()
                        (ty = 'bool) [(f = 0.0 ? 0 1) 'bool]   ; to _Bool is a compare, never a truncation
                        (wr ty (ceil (f // 1)))))))           ; and every other one truncates toward zero
+          ; the bit builtins over a constant fold, so one can label a case or size a bit-field
+          (<e = 'call)
+           (: h <>e as <>>e
+              k (? (two? h && (<h = 'var)) (bltab w64 <>h) ())
+              r (? (two? k && two? as && !(two? >as)) (cfty w64 <as) ())
+              (? !(two? r) () (bfold w64 <k <>k (wrapt w64 <>k <r))))
           ; land/lor are 3-element ('land l r); truthiness is != 0 (-1 && 1 == 1)
           (elem <e '(land lor))
            (: a (cfty w64 <>e) b (cfty w64 <>>e)

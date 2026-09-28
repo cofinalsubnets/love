@@ -2186,7 +2186,21 @@
               (: ty (vty lv0)
                  stp (? (ptr? ty) (tsz g <>ty) 1)
                  (? (arr? ty) 'bad
-                    (bitf? ty) 'bad             ; bitfield ++/-- -- refuse (rare; use `f = f + 1`)
+                    ; unit read-modify-write: the old field answers in r0, and the unit takes
+                    ; ((old ^ new) & mask) << bitoff by xor, the mask two shifts
+                    (bitf? ty)
+                     (: uty <>ty bitoff <>>ty width <>>>ty usz (tsz g uty)
+                        hi (64 - (bitoff + width)) lo (64 - width)
+                        (? (uty = 'bool || usz > (wsize g)) 'bad   ; a pair unit refuses
+                           (: lv (matv g lv0)
+                              (mkv 'long 'r0
+                                 (vfs lv + [['mov 'r1 'r0] [(uldop usz) 'r2 'r1 0] '(mov r0 r2)]
+                                  + (? (hi > 0) [['shl 'r0 hi]] ())
+                                  + (? (lo > 0) [[(? (usg? uty) 'shr 'sar) 'r0 lo]] ())
+                                  + [['add 'r3 'r0 step] '(xor r3 r3 r0)]
+                                  + (? (lo > 0) [['shl 'r3 lo] ['shr 'r3 lo]] ())
+                                  + (? (bitoff > 0) [['shl 'r3 bitoff]] ())
+                                  + ['(xor r2 r2 r3) [(stop uty) 'r1 0 'r2]])))))
                     (d128? ty) (nolane g "++/-- is not carried on a wide value (use `x = x + 1`)")
                     (pair? g ty)
                      (: lv (matv g lv0)
