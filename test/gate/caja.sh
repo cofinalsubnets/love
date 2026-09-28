@@ -16,6 +16,10 @@
 # and font changes. cajalig (test/caja/cajalig.pl, through pltotf) has every ligature op,
 # kerns and both boundary characters.
 #
+# documents (apps/caja/doc.l, with page.l's \vsplit): test/caja/docs.l lays a whole document
+# out -- every markdown file in the tree, and a few man pages where the host has them --
+# and says the shower's tokens both ways, paged by \vsplit with a number under each page.
+#
 # skips where TeX Live is missing; takes the love binary as $1.
 set -e
 
@@ -61,4 +65,25 @@ echo "  caja: boxes -- the fixed pages and 600 random ones, DVI identical to TeX
 run pars 1 0 "$hy" $fonts "$w/cajalig.tfm"
 run pars 20260928 400 "$hy" $fonts "$w/cajalig.tfm"
 echo "  caja: paragraphs -- the fixed pages and 400 random ones, DVI identical to TeX's"
+
+dfonts=""
+for f in cmr10 cmbx10 cmti10 cmtt10 cmbx12 cmbx12 cmsy10; do
+  p=$(kpsewhich $f.tfm) || true
+  [ -n "$p" ] || { echo "caja: no $f.tfm, documents skipped"; echo "  caja: ok"; exit 0; }
+  dfonts="$dfonts $p"
+done
+# doc FILE: one document through the shower and through TeX
+doc() {
+  "$L" test/caja/docs.l "$w/doc" "$hy" $dfonts "$1" || fail "docs.l died on $1"
+  ( cd "$w" && cp doc.tex d.tex && rm -f d.dvi && tex -ini -interaction=batchmode d.tex >/dev/null 2>&1 ) || true
+  [ -s "$w/d.dvi" ] || fail "TeX wrote no DVI for $1"
+  cmp -s "$w/d.dvi" "$w/doc.dvi" || { cmp "$w/d.dvi" "$w/doc.dvi" || true; fail "caja's DVI differs from TeX's on $1"; }
+}
+nd=0
+for f in $(git ls-files '*.md' 2>/dev/null); do doc "$f"; nd=$((nd + 1)); done
+for m in ls grep tar sed gzip make; do
+  [ -f /usr/share/man/man1/$m.1.gz ] || continue
+  gzip -dc /usr/share/man/man1/$m.1.gz > "$w/$m.1" && doc "$w/$m.1" && nd=$((nd + 1))
+done
+echo "  caja: documents -- $nd markdown files and man pages, laid out and paged, DVI identical to TeX's"
 echo "  caja: ok"

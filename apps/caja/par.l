@@ -10,14 +10,19 @@
 ;   (cp-mode J)               an empty internal vertical list, as \vbox{ opens one
 ;   (cp-run J M toks)         the tokens, in order (below); answers M
 ;   (cp-vlist J M)            ends a paragraph still open; the vlist's first node
+;   (cp-hbox J f w toks)      \hbox{..} in font f, to w or natural (w ()); the box
+;   (cp-tex toks)             the tokens as -ini TeX says them, the font k as \f and a letter
+;   (cp-node J n)             n with an 'id, for a node made outside
 ;
 ; a token: ['c code] a character in the current font, 'sp a space, 'xsp a control space,
-; ['f k] a font, ['pen n], ['kern w] an explicit kern, ['skip w st sto sh sho], 'dash for
-; \-, ['rule w h d] a \vrule, ['box b] a box node, 'nb \noboundary, 'indent, 'noindent,
-; 'par, ['set k v] a parameter (a glue one takes a spec from cp-spec, () for zero).
+; ['f k] a font, ['pen n] (either mode), ['kern w] an explicit kern, ['skip glue] and
+; ['vskip glue], 'dash for \-, ['rule w h d] a \vrule, ['hrule w h d] (a running width ()),
+; ['hbox w toks], ['box b] a box node made already (from cp-node; cp-tex cannot say it), 'nb
+; \noboundary, 'indent, 'noindent, 'par, ['set k v] a parameter. a glue is w st sto sh sho,
+; flat after the head or as a list in 'set.
 ; nodes are box.l's; each carries an 'id, for where tex.web compares pointers.
 (module (caja-par cp-setup cp-patterns cp-hyphenation cp-hyphen-file cp-mode cp-run cp-vlist
-         cp-spec)
+         cp-hbox cp-tex cp-node cp-spec)
 (borrow 'tfm)
 (borrow 'caja-box)
 (:
@@ -53,6 +58,7 @@
 
    ; --- nodes ---------------------------------------------------------------------------
    (nd J n) (: _ (pin J 'nid (J 'nid + 1)) _ (pin n 'id (J 'nid)) n)
+   (cp-node J n) (nd J n)
    (same? a b) (a != () && b != () && a 'id = b 'id)
    (char? n) (n != () && n 'type = 'char)
    (charnode J f c) (nd J {'type 'char 'font f 'char c 'link ()})
@@ -83,7 +89,7 @@
    (cp-mode J)
     (: v (nd J {'type 'head 'link ()})
        {'mode 'v 'vhead v 'vtail v 'pd ignore-depth 'vpg 0 'font 0 'hhead () 'tail () 'sf 1000
-        'hpg 0})
+        'hpg 0 'restricted 0})
    (tail-append M n) (: _ (pin (M 'tail) 'link n) (pin M 'tail n))
    (vappend M n) (: _ (pin (M 'vtail) 'link n) (pin M 'vtail n))
 
@@ -111,7 +117,7 @@
         (? (S 'cl < non)
            (: _ (? ((S 'cq) 'link != () && charfield (M 'tail) = hychar J f) (pin J 'insd 1))
               _ (? (J 'lp) (pack x))
-              (? (J 'insd) (: _ (pin J 'insd 0) (tail-append M (discnode J))))))
+              (? (J 'insd) (: _ (pin J 'insd 0) (? (!(M 'restricted)) (tail-append M (discnode J)))))))
        (step l)
         (l @
          'append
@@ -213,7 +219,7 @@
        _ (pin pr 'looseness 0) _ (pin pr 'hangindent 0) _ (pin pr 'hangafter 1)
        (pin pr 'parshape ()))
    (end-graf J M)
-    (? (M 'mode = 'h)
+    (? (M 'mode = 'h && !(M 'restricted))
        (: _ (? ((M 'hhead) 'link != ()) (line-break J M (P J 'widowpenalty)))
           _ (pin M 'mode 'v)
           (normal-paragraph J)))
@@ -227,6 +233,20 @@
        (pin M 'pd (b 'depth)))
 
    ; --- the tokens -----------------------------------------------------------------------------
+   ; a glue in a token is [w st sto sh sho]; the parameters that take one
+   glue-params ['leftskip 'rightskip 'parfillskip 'baselineskip 'lineskip 'parskip 'spaceskip
+                'xspaceskip 'splittopskip]
+   dimen-params ['hsize 'parindent 'emergencystretch 'hangindent 'lineskiplimit 'overfullrule
+                 'vsize 'splitmaxdepth 'hfuzz 'vfuzz]
+   (glue-of v) (cp-spec (v 0) (v 1) (v 2) (v 3) (v 4))
+   (set-param J k v) (pin (J 'params) k (? (elem k glue-params) (glue-of v) v))
+   (vtok? t k) (two? t && t 0 = k)
+   ; the contents of \hbox{..} or \hbox to w{..}, in restricted horizontal mode (tex.web 1083-1086)
+   (cp-hbox J font w toks)
+    (: h (nd J {'type 'head 'link ()})
+       M {'mode 'h 'restricted 1 'font font 'hhead h 'tail h 'sf 1000 'hpg 0}
+       _ (cp-run J M toks)
+       (nd J (cb-hpack J (h 'link) (? (w = ()) 0 w) (? (w = ()) 'additional 'exactly))))
    (cp-run J M toks)
     (: (go ts)
         (? (!(two? ts)) M
@@ -235,10 +255,19 @@
                  (? (ctok? t) (: _ (new-graf J M 1) (go ts))
                     (t = 'indent) (: _ (new-graf J M 1) (go >ts))
                     (t = 'noindent) (: _ (new-graf J M 0) (go >ts))
-                    (two? t && t 0 = 'set) (: _ (pin (J 'params) (t 1) (t 2)) (go >ts))
-                    (two? t && t 0 = 'f) (: _ (pin M 'font (t 1)) (go >ts))
+                    (vtok? t 'set) (: _ (set-param J (t 1) (t 2)) (go >ts))
+                    (vtok? t 'f) (: _ (pin M 'font (t 1)) (go >ts))
+                    (vtok? t 'vskip) (: _ (vappend M (gluenode J (glue-of >t) 0)) (go >ts))
+                    (vtok? t 'pen) (: _ (vappend M (pennode J (t 1))) (go >ts))
+                    (vtok? t 'hrule)
+                     (: _ (vappend M (nd J (cb-rule (? (t 1 = ()) -1073741824 (t 1)) (t 2) (t 3))))
+                        _ (pin M 'pd ignore-depth) (go >ts))
+                    (vtok? t 'hbox) (: _ (append-to-vlist J M (cp-hbox J (M 'font) (t 1) (t 2))) (go >ts))
+                    (vtok? t 'box) (: _ (append-to-vlist J M (t 1)) (go >ts))
                     (go >ts))
-                 (? (ctok? t) (go (main-loop J M ts))
+                 ; a vertical command ends an open paragraph, then runs in vertical mode
+                 (? (!(M 'restricted) && (vtok? t 'vskip || vtok? t 'hrule)) (: _ (end-graf J M) (go ts))
+                    (ctok? t) (go (main-loop J M ts))
                     (t = 'nb) (: _ (? (two? >ts && ctok? <>ts) (pin J 'cbd 1)) (go >ts))
                     (t = 'sp) (: _ (? (M 'sf = 1000) (normal-space J M) (app-space J M)) (go >ts))
                     (t = 'xsp) (: _ (normal-space J M) (go >ts))
@@ -255,15 +284,70 @@
                         (go >ts))
                     (t 0 @
                      'f (: _ (pin M 'font (t 1)) (go >ts))
-                     'set (: _ (pin (J 'params) (t 1) (t 2)) (go >ts))
+                     'set (: _ (set-param J (t 1) (t 2)) (go >ts))
                      'pen (: _ (tail-append M (pennode J (t 1))) (go >ts))
                      'kern (: _ (tail-append M (kernnode J (t 1) 1)) (go >ts))
-                     'skip (: _ (tail-append M (gluenode J (cp-spec (t 1) (t 2) (t 3) (t 4) (t 5)) 0)) (go >ts))
+                     'skip (: _ (tail-append M (gluenode J (glue-of >t) 0)) (go >ts))
                      'rule (: _ (tail-append M (nd J (cb-rule (t 1) (t 2) (t 3)))) _ (pin M 'sf 1000) (go >ts))
-                     'box (: _ (tail-append M (nd J (t 1))) _ (pin M 'sf 1000) (go >ts))
+                     'hbox (: _ (tail-append M (cp-hbox J (M 'font) (t 1) (t 2))) _ (pin M 'sf 1000) (go >ts))
+                     'box (: _ (tail-append M (t 1)) _ (pin M 'sf 1000) (go >ts))
                      (go >ts))))))
        (go toks))
    (cp-vlist J M) (: _ (end-graf J M) ((M 'vhead) 'link))
+
+   ; --- the tokens as TeX says them --------------------------------------------------------------
+   ; the TeX side must \def\sp{ } (a space after a control word) and name font k \f and the k-th
+   ; letter; a fil amount is said in halves, so a token's must be one
+   (fname k) ("\\f" + string (96 + k))
+   (units o) (["sp" "fil" "fill" "filll"] o)
+   (amt v o) (? (o = 0) (show v + "sp")
+                (: whole (v // 65536) frac (v % 65536)
+                   (? (frac = 0) (show whole + units o) (show whole + ".5" + units o))))
+   (glue-tex g) (show (g 0) + "sp plus " + amt (g 1) (g 2) + " minus " + amt (g 3) (g 4))
+   (dim-tex nm v) (? (v = ()) "" (" " + nm + " " + show v + "sp"))
+   (plain? b) (32 < b && b < 127 && !(elem b [92 123 125 37]))
+   ; each token said, and whether it ended in a plain character (a space may follow it bare)
+   (tok-tex t)
+    (? (two? t)
+       (t 0 @
+        'c (? (plain? (t 1)) [(string (t 1)) 1] [("\\char" + show (t 1) + " ") 0])
+        'f [(fname (t 1) + " ") 0]
+        'pen [("\\penalty" + show (t 1) + " ") 0]
+        'kern [("\\kern" + show (t 1) + "sp ") 0]
+        'skip [("\\hskip" + glue-tex >t + "\\relax ") 0]
+        'vskip [("\\vskip" + glue-tex >t + "\\relax ") 0]
+        'rule [("\\vrule" + dim-tex "width" (t 1) + dim-tex "height" (t 2) + dim-tex "depth" (t 3) + "\\relax ") 0]
+        'hrule [("\\hrule" + dim-tex "width" (t 1) + dim-tex "height" (t 2) + dim-tex "depth" (t 3) + "\\relax ") 0]
+        'hbox [("\\hbox" + (? (t 1 = ()) "" (" to" + show (t 1) + "sp")) + "{" + cp-tex (t 2) + "}") 0]
+        'set (: k (t 1) v (t 2) nm ("\\" + show k)
+                [(? (k = 'parshape) (nm + " " + show #v + cats (map (e \ " " + show (e 0) + "sp " + show (e 1) + "sp") v) + "\\relax ")
+                    (elem k glue-params) (nm + "=" + glue-tex v + "\\relax ")
+                    (elem k dimen-params) (nm + "=" + show v + "sp\\relax ")
+                    (nm + "=" + show v + "\\relax "))
+                 0])
+        ["" 0])
+       (t @
+        'sp ["\\sp " 0]
+        'xsp ["\\ " 0]
+        'nb ["\\noboundary " 0]
+        'dash ["\\-" 0]
+        'par ["\\par " 0]
+        'indent ["\\indent " 0]
+        'noindent ["\\noindent " 0]
+        ["" 0]))
+   ; a line ends where a space would: TeX reads the end of a line as that space
+   (cp-tex ts)
+    (: (put s col acc)
+        (: n #s
+           (? (col + n > 72 && 1 < n && s (n - 1) = 32 && s (n - 2) != 92) [0 (snip s 0 (n - 1) + "\n" . acc)]
+              [(col + n) (s . acc)]))
+       (go ts bare col acc)
+        (? (!(two? ts)) (cats (rev acc))
+           (: t <ts
+              r (? (t = 'sp && bare) [" " 0] (tok-tex t))
+              p (put (r 0) col acc)
+              (go >ts (r 1) (p 0) (p 1))))
+       (go ts 0 0 ()))
 
    ; --- \patterns and \hyphenation (tex.web 934-939, 960-965) ------------------------------
    ; a pattern is kept under its letters, the language's byte first, with its n0..nk; every
