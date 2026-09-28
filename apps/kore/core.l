@@ -743,13 +743,14 @@
    t-uops (["-z" "-n" "-t" "-O" "-G"] + t-fops)
    t-bops (["=" "!=" "==" "<" ">" "-a" "-o" "-ef" "-nt" "-ot"] + t-nops)
    (t-un op p)                                 ; a unary primary: a bit, or 'no
-    (t-file op p @- r 'no (op @- 'no
+    (t-file op p @ 'no (op @- 'no
      "-z" (0 = #p)
      "-n" (0 < #p)
      "-t" (t-int p @ k (two? k ? (two? (tty <>k)) 'no))
      ("-O" || "-G") (stat p @ s (? (atom? s) 0
                                    (op = "-O") (s 4 = getuid 0)
-                                   (s 5 = getgid 0)))))
+                                   (s 5 = getgid 0))))
+     r r)
    (t-bin a op b) (op @ ; a binary primary: a bit, or 'no
     ("=" || "==") (a = b)
     "!=" (a != b)
