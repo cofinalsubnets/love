@@ -127,6 +127,8 @@
       ("sys.ldcr.hi" "410f20d8440f20c0"      ((ldcr r7 3) (ldcr r0 8)))      ; mov r8,cr3 ; mov rax,cr8
       ("sys.stcr"    "0f22c00f22db"          ((stcr 0 r0) (stcr 3 r3)))      ; mov cr0,rax ; mov cr3,rbx
       ("sys.stcr.hi" "410f22e0440f22c0"      ((stcr 4 r7) (stcr 8 r0)))      ; mov cr4,r8 ; mov cr8,rax
+      ("sys.dr"      "0f21f80f23f3410f21c0"  ((lddr r0 7) (stdr 6 r3) (lddr r7 0)))   ; mov rax,dr7 ; mov dr6,rbx ; mov r8,dr0
+      ("invpcid"     "660f388208660f38820b"  ((invpcid r1 r0 0) (invpcid r1 r3 0)))   ; invpcid rcx,[rax] ; invpcid rcx,[rbx]
       ;; the descriptor tables and invlpg: one opcode, 0F 01, told apart by the Modrm digit.
       ("sys.lgdt"    "0f01170f015710"        ((lgdt r6 0) (lgdt r6 16)))     ; lgdt [rdi] ; lgdt [rdi+16]
       ("sys.lidt"    "0f015e08"              ((lidt r5 8)))                  ; lidt [rsi+8]

@@ -429,6 +429,7 @@
    (emit-rdig pfx opc dig w r)
     (: n (rn r)
      (pfx + (w = 2 ? [102] ()) + ((w = 8 || n >= 8) ? [(rex (w = 8 ? 1 0) 0 0 (hi n))] ()) + opc + [(modrm 3 dig (lo n))]))
+   (emit-invpcid r base off) (x64-mw 2 '(15 56 130) '(15 56 130) r base off 0)   ; 66 0F 38 82 /r  invpcid r, m128
    (emit-movntim w base off s) (x64-mw w '(15 195) '(15 195) s base off 0)   ; 0F C3 /r  movnti m, r
    ;; str: a string op by its stem at width w (A4..AF, 6C..6F); 66 or REX.W widens the odd byte
    (emit-str op w)
@@ -593,6 +594,8 @@
    (emit-vmwrite f s) (emit-vmrw 121 f s)  ; (vmwrite f s) vmcs[f] <- s
    (emit-ldcr d n) (emit-cr 32 n d)        ; (ldcr d n)  d <- crn
    (emit-stcr n s) (emit-cr 34 n s)        ; (stcr n s)  crn <- s
+   (emit-lddr d n) (emit-cr 33 n d)        ; (lddr d n)  d <- drn
+   (emit-stdr n s) (emit-cr 35 n s)        ; (stdr n s)  drn <- s
    (emit-ltr s) (rn s @ sn                 ; 0F 00 /3 -- the operand is r/m16
     ((hi sn @ 0 () [(rex 0 0 0 1)]) + [15 0 (modrm 3 3 sn)]))
    ;; INT n, cd ib -- the long form for every vector, vector 3 included. an assembler usually
@@ -678,7 +681,7 @@
          ('outb . '(238)) ('outw . '(102 239)) ('outl . '(239))
          ('cld . '(252))
          ('str . emit-str) ('rep . '(243)) ('repne . '(242))
-         ('mdig . emit-mdig) ('rdig . emit-rdig) ('movntim . emit-movntim) ('rdpmc . '(15 51)) ('fninit . '(219 227)) ('fnclex . '(219 226)) ('fwait . '(155)) ('emms . '(15 119))
+         ('mdig . emit-mdig) ('rdig . emit-rdig) ('movntim . emit-movntim) ('invpcid . emit-invpcid) ('rdpmc . '(15 51)) ('fninit . '(219 227)) ('fnclex . '(219 226)) ('fwait . '(155)) ('emms . '(15 119))
           ; the system lane. `trap` is already int3 (CC), so `int` covers only the
           ; vectored form; `iretq` is the 64-bit return (the REX.W is what widens it).
          ('cli . '(250)) ('sti . '(251)) ('hlt . '(244)) ('pushf . '(156)) ('popf . '(157))
@@ -706,7 +709,7 @@
          ('monitor . '(15 1 200)) ('mwait . '(15 1 201))    ; rax the line, ecx/edx the hints: the operands spell them
          ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
          ('alum . emit-alum) ('carry . emit-carry) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
-         ('ldcr . emit-ldcr) ('stcr . emit-stcr)
+         ('ldcr . emit-ldcr) ('stcr . emit-stcr) ('lddr . emit-lddr) ('stdr . emit-stdr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])
    _ (map (k \ emrow x64-emitters k (emit-alu k)) (keys x64-alu))

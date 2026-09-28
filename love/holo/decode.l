@@ -249,6 +249,8 @@
                       (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0)))))
           32 (dc-modrm s k2 p 8 8 @ r (fin (r 0) [(op1 'mov 8 [(r 2) ['cr <>(r 1)]])]))    ; mov r64, crN
           34 (dc-modrm s k2 p 8 8 @ r (fin (r 0) [(op1 'mov 8 [['cr <>(r 1)] (r 2)])]))    ; mov crN, r64
+          33 (dc-modrm s k2 p 8 8 @ r (fin (r 0) [(op1 'mov 8 [(r 2) ['dr <>(r 1)]])]))    ; mov r64, drN
+          35 (dc-modrm s k2 p 8 8 @ r (fin (r 0) [(op1 'mov 8 [['dr <>(r 1)] (r 2)])]))    ; mov drN, r64
           120 (eg 'vmread 8 8)  121 (ge 'vmwrite 8 8)
           199 (: r (dc-modrm s k2 p 8 8)
                (r 3 @- (bad 0)
@@ -273,6 +275,8 @@
           188 (? (px = 'f3) (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'tzcnt w [(r 1) (r 2)])])) (ge 'bsf w w))
           189 (? (px = 'f3) (dc-modrm s k2 p w w @ r (finx (r 0) [(op1 'lzcnt w [(r 1) (r 2)])])) (ge 'bsr w w))
           195 (eg 'movnti w w)
+          (c && c = 56 && px = '66 && dc-at s k2 = 130)
+           (: r (dc-modrm s (k2 + 1) p 8 8) (finx (r 0) [(op1 'invpcid 0 [(r 1) (r 2)])]))
           (c && c = 174 && px = 'f3 && dc-at s k2 >> 6 = 3)
            (: r (dc-modrm s k2 p w w)
               (fin (r 0) [(op1 (r 3 @ 0 'rdfsbase 1 'rdgsbase 2 'wrfsbase 'wrgsbase) 0 [(r 2)])]))

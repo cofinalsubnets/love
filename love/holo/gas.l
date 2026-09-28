@@ -201,6 +201,7 @@
            (: e (gx-mdig m) bm (gx-mref d) [['mdig <e <>e <>>e <bm <>bm]])
           (k = 1 && <d = 'rg && two? (peep gx-rdig m ()))
            (: e (gx-rdig m) [['rdig (e 0) (e 1) (e 2) (e 3 = 0 ? (d 2) (e 3)) (gx-r d)]])
+          (m = 'invpcid) (: bm (gx-mref s) [['invpcid (gx-r d) <bm <>bm]])   ; the type register, the descriptor
           (m = 'movnti) (: bm (gx-mref d) [['movntim (w0 > 0 ? w0 (s 2)) <bm <>bm (gx-r s)]])
           (two? (peep gx-ext m ()))
            (: e (gx-ext m) x (gx-r d)
@@ -235,6 +236,8 @@
           (m = 'mov)
            (? (<d = 'cr) [['stcr <>d (gx-r s)]]
               (<s = 'cr) [['ldcr (gx-r d) <>s]]
+              (<d = 'dr) [['stdr <>d (gx-r s)]]
+              (<s = 'dr) [['lddr (gx-r d) <>s]]
               ; a segment register: 8C reads it into a register or memory, 8E writes it
               (<s = 'sr) (? (<d = 'rg) [['ldseg (gx-r d) <>s]]
                             (<d = 'mem) (: bm (gx-mem d) [['segst <>s <bm <>bm]])
