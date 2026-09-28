@@ -118,6 +118,9 @@
    _ (test (has? (last (g3 'win 'lines)) "cannot dance"))
    _ (keys! g3 "\e")
    _ (test !(g3 'win))
+   ; the wrap counts cells, and cuts a word too long for a line at a character
+   _ (test (["日本語 日本語" "日本語"] = wrap "日本語 日本語 日本語" 13)
+           ("日本" = <(wrap "日本語日本語" 5)))
    _ (test_fin ())
    _ (puts "story: ok -- the level, the map, the window and its interpreter, the library\n")
    0)

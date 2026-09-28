@@ -13,6 +13,7 @@
 ;   cat test/00-init.l test/host/lapiz.l | out/love
 
 (borrow 'lapiz)                                ; the baked module, spliced
+(borrow 'text)                                 ; swidth, a line's cells
 
 ; --- the module seam: lapiz registered, the splice + accessor both reach -------
 (test
@@ -351,7 +352,7 @@ some literal
                         ; a .SH does -- so a missing one is a missing section, not a wrap
                         (foldl (\ a h (a && elem h ls)) 1 (heads d))
                         ; nothing overruns the width it was given
-                        (foldl (\ a l (a && #l <= 80)) 1 ls)
+                        (foldl (\ a l (a && swidth l <= 80)) 1 ls)
                         ; the .th became the header line, with the page either side of it
                         (: h0 <ls (0 < #h0 && (h0 0) != 32)))))
              ["doc/love.md" "doc/cook.md"])
@@ -486,6 +487,11 @@ t \\- a thing
                  (ttpics d 60 = ["     a [logo] b\n\n     next x <u>\n" [[" img l.png" 0] [" img bare.png" 2]]])
                  (md->tty "![a](b)" 60 = "     [a]\n")
                  (md->rf "![a](b) c" = ".PP\n[a] c\n")))
+      ; the fill counts cells: a wide character is two, and a bullet's text keeps one
+      ; column on every line though the bullet is three bytes
+      _ (: d (mdread "- one two three four five six seven eight nine\n\n日本語 日本語 日本語 日本語\n")
+           (test (lines (flush (ttyshow d 30)) = ["     • one two three four five" "       six seven eight nine" ""
+                                                  "     日本語 日本語 日本語" "     日本語"])))
       0)
 
  _ (test_fin ())
