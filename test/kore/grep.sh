@@ -122,4 +122,7 @@ gi 'naïve|٣|x|STRAßE|ſ|İ|' '\w\+'
 gi '' -w 'na.'
 gi '' -w 'naï'
 gi 'x|' -w 'x'
+gi 'naï|' '\<na.'
+gi 'S|' '\bS'
+gi '' 'T\>'
 echo "kore: grep (BRE + ERE batteries + the clustered flag matrix GNU-identical, the exit triple, egrep/fgrep) ok"
