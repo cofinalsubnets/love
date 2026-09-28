@@ -126,7 +126,7 @@
 ; ---- print -> read round trip on random s-expressions ----
 ; serialize via show, re-read the bytes, expect equality -- through rd-test, the
 ; reader-under-test socket.
-(: (fz-s2cl s) ((: (g i) (? (i < tally s) (peep s i 0 . g (1 + i)))) 0)
+(: (fz-s2cl s) ((: (g i) (? (i < #s) (peep s i 0 . g (1 + i)))) 0)
    (fz-rd x) (: r (rd-test (fz-s2cl (show x))) (? (two? r) <r r))   ; the reader-under-test socket (test/00-init.l)
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof [(fz-elt fz-syms) (fz-int -500 500)])
@@ -166,10 +166,10 @@
    fz-s3   (fz-trip fz-s fz-s fz-s)
    fz-cl1  (fz-bind (fz-int 1 12) (\ n (fz-rep n fz-byte))) ; nonempty charlist
    ; a string paired with a split point i in [0, pin]
-   fz-s-i  (fz-bind fz-s (\ s (fz-map (. s) (fz-int 0 (1 + tally s)))))
+   fz-s-i  (fz-bind fz-s (\ s (fz-map (. s) (fz-int 0 (1 + #s)))))
    ; a string with 0 <= i <= j <= pin, as `(s i j)
-   fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (1 + tally s))
-              (\ i (fz-map (\ j [s i j]) (fz-int i (1 + tally s))))))))
+   fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (1 + #s))
+              (\ i (fz-map (\ j [s i j]) (fz-int i (1 + #s))))))))
 (test
  ; +: length adds, is associative, and "" is a two-sided identity
  (fz-ok 300 50 fz-s2 (\ v ($(<v + <>v) = $<v + $<>v)))
@@ -180,18 +180,18 @@
  ; gated: on 32-bit the RNG stream diverges (turn truncates the 64-bit word,
  ; filed), so these draw inputs that trip a real failure -- skip on the wasm shim.
  (? word (fz-ok 300 54 fz-s-i (\ v (<v = fz-norm (fz-norm (snip <v 0 >v) +
-                                                  fz-norm (snip <v >v (tally <v)))))) 1)
+                                                  fz-norm (snip <v >v #<v))))) 1)
  (? word (fz-ok 300 55 fz-s (\ s (s = fz-norm (snip s 0 #s)))) 1)
  ; the snip length is j-i, and out-of-range indices clamp to [0, pin]
- (fz-ok 300 56 fz-s-ij (\ v (<>>v - <>v = tally (snip <v <>v <>>v))))
- (fz-ok 300 57 fz-s (\ s (fz-norm (snip s 0 #s) = fz-norm (snip s -9 (99 + tally s)))))
+ (fz-ok 300 56 fz-s-ij (\ v (<>>v - <>v = #(snip <v <>v <>>v))))
+ (fz-ok 300 57 fz-s (\ s (fz-norm (snip s 0 #s) = fz-norm (snip s -9 (99 + #s)))))
  ; snip recovers the two operands of a scat
- (fz-ok 250 58 fz-s2 (\ v (<v = fz-norm (snip (<v + <>v) 0 (tally <v)))))
- (fz-ok 250 59 fz-s2 (\ v (<>v = (fz-norm (snip (<v + <>v) (tally <v) (tally <v + tally <>v))))))
+ (fz-ok 250 58 fz-s2 (\ v (<v = fz-norm (snip (<v + <>v) 0 #<v))))
+ (fz-ok 250 59 fz-s2 (\ v (<>v = fz-norm (snip (<v + <>v) #<v (#<v + #<>v)))))
  ; string is identity on strings; charlist->string round-trips by bytes and length
  (fz-ok 300 60 fz-s (\ s (s = string s)))
  (fz-ok 250 61 fz-cl1 (\ cl (cl = fz-s2cl (string cl))))
- (fz-ok 250 62 fz-cl1 (\ cl (: (ln x) (foldl (\ n _ (1 + n)) 0 x) (ln cl = tally (string cl)))))
+ (fz-ok 250 62 fz-cl1 (\ cl (: (ln x) (foldl (\ n _ (1 + n)) 0 x) (ln cl = #(string cl)))))
  ; get yields the default outside [0, pin)
  (fz-ok 300 63 fz-s (\ s ('oob = peep s #s 'oob && 'oob = peep s -1 'oob)))
  ; print -> read round trip over arbitrary byte strings
@@ -218,16 +218,15 @@
    (fz-ch? v)  (two? v ? 1 0)
    (fz-mul-skip a b c) (fz-ch? a && (fz-ch? b || fz-ch? c) && !(fz-txt? b) && !(fz-txt? c))
    (fz-add-assoc v)
-    (v @ (a b c) (((a + b) + c) = (a + (b + c))))
+    (v @ (a b c) (a + b + c = a + (b + c)))
    (fz-mul-assoc v)
-    (v @ (a b c) (? (fz-mul-skip a b c) 1 (((a * b) * c) = (a * (b * c)))))
+    (v @ (a b c) (fz-mul-skip a b c ? 1 (a * b * c = a * (b * c))))
    fz-rows
-    (list ['add-assoc-mixed 400 70 fz-mix3 fz-add-assoc]
-          ['mul-assoc-mixed 400 71 fz-mix3 fz-mul-assoc])
+    [['add-assoc-mixed 400 70 fz-mix3 fz-add-assoc]
+     ['mul-assoc-mixed 400 71 fz-mix3 fz-mul-assoc]]
    (fz-row r)
     (r @ (nom n sd g p)
        (: res (fz-find n sd g p)
-          (? <res 1
-             (: _ (puts ("fuzz FAILED: " + string nom + "   at " + show >res + "\n")) 0))))
+          (<res ? 1 (puts ("fuzz FAILED: " + string nom + "   at " + show >res + "\n"), 0))))
    (fz-all rs) (? (atom? rs) 1 ((fz-row <rs) && fz-all >rs)))
 (test (fz-all fz-rows))

@@ -5,8 +5,8 @@
 ; and the grids repaint the outer terminal as painted cells. keys pour down the
 ; other way; dsr/da answers ride home off each screen's reply queue; the outer
 ; size is polled each second-ish and mirrored onto every pty (the kernel raises
-; sigwinch on the children for us). a resize opens fresh grids -- the full-screen
-; guests repaint on their sigwinch, which is the one-buffer bargain throughout.
+; sigwinch on the children for us). a resize lays each grid across (regrid), and a
+; full-screen guest repaints on its sigwinch.
 ;
 ; where the panes come from: apps/berth/wharf.l, and nothing about it is berth's. it is
 ; a plan tree in and rectangles in cells out -- no nif, no pty, no framebuffer --
@@ -23,7 +23,13 @@
 ;   C-a [           copy mode: the focused pane's screen in a vi buffer above it
 ;   C-a ]           paste the clip into the focused pane
 ;   C-a C-a         send a literal C-a through
-; a guest never sees the prefix and never has to cooperate.
+; a guest never sees the prefix and never has to cooperate. below the prefix, what the
+; outer terminal sends as a sequence is read whole: shift+PgUp/PgDn look back through the
+; focused pane's history half a pane at a time (any key brings it home), a paste arrives
+; bracketed and goes to the pane as `pasted` lays it, and while the focused pane asks for
+; the mouse the outer terminal is asked too -- a press on another pane moves the focus
+; there, the rest is laid into the pane's own report, and the wheel it leaves unasked
+; scrolls its history.
 ;
 ; the clip is the harbour's: one register, vi's shape, that every vi buffer on the
 ; wharf yanks into and puts from, so a yank in one pane is a put in another. copy
@@ -52,7 +58,8 @@
 ; ties a pane up on it, and hsail runs it on the tty until the last pane leaves.
 (module '(berth berth berth-stage harbour hberth hsail hopen hopen-stage moor waitfor
           hbox hmas hpid hstage hpty? hpane hsoil hrelay hframe hmoor hsplit hsteer hshut
-          hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text)
+          hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
+          hseq hmouse hpeer hpasted)
 (borrow (: m (cite 'wharf) (? m m "apps/berth/wharf.l")))   ; the baked module, else the tree's file
 (borrow (: m (cite 'limn) (? m m "apps/berth/limn.l")))
 (borrow 'posix)
@@ -95,16 +102,16 @@
                     (? (atom? v) ""
                        (<v = 'lin) (foldl (\ a l (a + l + "\n")) "" <>v)
                        <>v))
- ; a pane's screen as rows of text, each with its trailing blanks off; the glyphs
- ; come out as limn paints them
- (hscreen-text p) (: s (peep (hbox p) () 0) r (gaze s 1) c (gaze s 2)
+ ; a pane's history and screen as rows of text, each with its trailing blanks off; the
+ ; glyphs come out as limn paints them
+ (hscreen-text p) (: s (peep (hbox p) () 0) r (gaze s 1) c (gaze s 2) hn (gaze s 9)
                      (cp i) (glass s i 0 & 2097151)
                      (tail? i) ((glass s i 0 >> 21 & 3) = 2)      ; a wide char's right half: its lead says both
                      (glyph i) (tail? i ? "" (limn-glyph (cp i)))
                      (row i) (: (go q acc) (? (q < 0) acc (go (q - 1) ((glyph (i * c + q)) + acc)))
                                 (last q) (? (q < 0) -1 (32 = cp (i * c + q) || 0 = cp (i * c + q)) (last (q - 1)) q)
                                 (go (last (c - 1)) ""))
-                     (map row (jot r)))
+                     (map (\ i (row (i - hn))) (jot (hn + r))))
  (hpane hb id) (peep (hb 'panes) id ())
  (hfind bs id) (two? bs ? (wharf-id <bs = id ? <bs (hfind >bs id)) ())
  (hsoil hb) (: b (hb 'dirt) (pin b () 1))
@@ -130,9 +137,9 @@
                          _ (hshow p)
                          p)
 
- ; --- the relay: the plan says where every berth is, so every screen is opened
- ; to its rectangle and every pty told its new size. content is the guest's to
- ; repaint on its own sigwinch -- the one-buffer bargain, now once per pane.
+ ; --- the relay: the plan says where every berth is, so every screen is laid
+ ; across to its rectangle and every pty told its new size. what the old grid
+ ; held comes along; the rest is the guest's to repaint on its own sigwinch.
  ; a berth with no room still needs a valid screen (the nifs refuse a zero
  ; axis), so its grid is 1x1 and wharf-show? is what keeps it off the glass.
  (hrelay hb) (: bs (wharf-lay (hb 'plan) (hb 'rows) (hb 'cols))
@@ -142,7 +149,7 @@
                                    bx (hbox p)
                                    s (peep bx () 0)
                                    (? (nr = gaze s 1 && nc = gaze s 2) 0
-                                    (: s2 (screen (cask (screen () nr nc)) nr nc)
+                                    (: s2 (regrid s (cask (screen () nr nc)) nr nc)
                                        _ (pin bx () s2)
                                        (? (hpty? p) (settty (hmas p) nr nc) (hshow p))))))))
                        bs)
@@ -153,6 +160,11 @@
  ; the painting is apps/berth/limn.l's: cells at an origin, and the bars off wharf-bars.
  ; what stays here is which grid goes where, which is the only half berth owns
  (hbars j hb) (limn-bars j (wharf-bars (hb 'plan) (hb 'rows) (hb 'cols)))
+
+ ; the outer terminal's mouse follows the focused pane's wish (quay.h's flag bits); the
+ ; reports always come as ?1006's, and `mouse` lays them into what the pane asked for
+ (hmice f) (? (f & 4096) "\e[?1003h" (f & 2048) "\e[?1002h" (f & 1536) "\e[?1000h"
+              "\e[?1003l\e[?1002l\e[?1000l")
 
  ; nothing is erased between frames, and nothing needs to be: panes and bars
  ; tile the wharf exactly (apps/berth/wharf.l's standing law), so every cell is written
@@ -170,8 +182,11 @@
      _ (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
           (? (two? p && two? b)
              (: s (peep (hbox p) () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)
-                _ (say j (limn-go (wharf-row b + w // c) (wharf-col b + w % c)))
-                (? (1 & f) (say j "\e[?25h") 0))          ; the guest's cursor wish
+                cr ((w // c) + gaze s 8)                   ; the cursor's row, under the view
+                _ (say j (limn-go (wharf-row b + min cr (wharf-rows b - 1)) (wharf-col b + w % c)))
+                _ (? ((1 & f) && (cr < wharf-rows b)) (say j "\e[?25h") 0)   ; the guest's cursor wish
+                m (hmice f)
+                (? (m = peep hb 'mice "") 0 (: _ (pin hb 'mice m) (say j m))))
              0))
      (slurp j))
 
@@ -225,15 +240,76 @@
                      st)))
  (hpaste hb) (: p (hpane hb (hb 'focus)) v (peep (hb 'clip) () ())
                 (? (atom? p || atom? v) 0
-                   (hpty? p) (say (hmas p) (hclip-text hb), flush (hmas p))
+                   (hpty? p) (hpasted hb (hclip-text hb))
                    (: sg (hstage p)
                       (? (sg 'paste) (sg 'paste v, hshow p, hsoil hb) 0))))
+
+ ; --- the history: the focused pane's view moves n lines back; a key brings it home ---
+ (hpeer hb n) (: p (hpane hb (hb 'focus))
+                 (? (atom? p) 0
+                    (: s (peep (hbox p) () 0) _ (peer s (max 0 ((gaze s 8) + n))) (hsoil hb))))
+ (hhome hb p) (: s (peep (hbox p) () 0) (? (0 < gaze s 8) (: _ (peer s 0) (hsoil hb)) 0))
+ (hhalf hb) (: b (hfind (hb 'lay) (hb 'focus)) (? (two? b) (max 1 (wharf-rows b // 2)) 1))
+
+ ; a paste into the focused child, as `pasted` lays it for that pane's screen
+ (hpasted hb t) (: p (hpane hb (hb 'focus))
+                   (? (atom? p || !(hpty? p)) 0
+                      (: _ (hhome hb p) (say (hmas p) (pasted (peep (hbox p) () 0) t), flush (hmas p)))))
+
+ ; --- the mouse: an outer ?1006 report at x y (1-based). a press on another berth moves
+ ; the focus; else the focused pane gets it at its own origin, clamped inside, as its
+ ; screen asked -- and a wheel it did not ask for scrolls its history ---
+ (hat bs r c) (? (two? bs)
+                 (: b <bs
+                    (? ((wharf-row b <= r) && (r < (wharf-row b + wharf-rows b))
+                        && (wharf-col b <= c) && (c < (wharf-col b + wharf-cols b))) b (hat >bs r c)))
+                 ())
+ (hmouse hb b x y up)
+  (: r (y - 1) c (x - 1)
+     how (? up 1 (b & 32) 2 0)
+     bb (b - (b & 32)) btn (bb - (bb & 28))
+     at (hat (hb 'lay) r c)
+     (? ((how = 0) && (btn < 64) && (two? at) && !(wharf-id at = hb 'focus))
+        (: _ (pin hb 'focus (wharf-id at)) (hsoil hb))
+        (: p (hpane hb (hb 'focus)) bf (hfind (hb 'lay) (hb 'focus))
+           (? (atom? p || atom? bf || !(hpty? p)) 0
+              (: s (peep (hbox p) () 0)
+                 t (mouse s bb (max 0 (min (wharf-rows bf - 1) (r - wharf-row bf)))
+                               (max 0 (min (wharf-cols bf - 1) (c - wharf-col bf))) how)
+                 (? (0 < #t) (: _ (say (hmas p) t) (flush (hmas p)))
+                    ((how = 0) && (64 <= btn <= 65)) (hpeer hb (? (btn = 64) 3 -3))
+                    0))))))
+
+ ; --- a sequence from the outer terminal, its ESC read: CSI's parameters to the final
+ ; byte, then a mouse report, shift+PgUp/PgDn, or a bracketed paste (read to its end);
+ ; anything else goes on to the pane whole ---
+ (hnums t) (: (go i n acc) (? (i = #t) (rev (n . acc))
+                              ((t i) = 59) (go (i + 1) 0 (n . acc))
+                              (go (i + 1) ((n * 10) + ((t i) - 48)) acc))
+              (go 1 0 ()))                               ; past the <
+ (hbracket u) (: (go acc) (: b (see in)
+                             (? (b < 0) acc
+                                (: a2 (b . acc)
+                                   (? ((b = 126) && ([126 49 48 50 91 27] = take 6 a2)) (drop 6 a2) (go a2)))))
+                 (string (rev (go ()))))
+ (hsend hb t) (: (go i) (? (i < #t) (: _ (hfeed hb (t i)) (go (i + 1))) 0) (go 0))
+ (hseq hb) (: b1 (see in)
+              (? !(b1 = 91) (: _ (hfeed hb 27) (? (-1 < b1) (hfeed hb b1) 0))
+                 (: (csi acc) (: b (see in) (? ((b < 0) || ((63 < b) && (b < 127))) [acc b] (csi (acc + string b))))
+                    q (csi "") a <q f <>q
+                    (? (f < 0) (hsend hb ("\e[" + a))
+                       (((f = 77) || (f = 109)) && (0 < #a) && ((a 0) = 60))
+                        (: ns (hnums a) (? (#ns = 3) (hmouse hb <ns <>ns <>>ns (f = 109)) 0))
+                       ((f = 126) && (a = "5;2")) (hpeer hb (hhalf hb))
+                       ((f = 126) && (a = "6;2")) (hpeer hb (0 - hhalf hb))
+                       ((f = 126) && (a = "200")) (hpasted hb (hbracket 0))
+                       (hsend hb ("\e[" + a + string f))))))
 
  ; --- keys: raw stdin pours onto the focused pane, C-a first. a stage takes the
  ; key as a step and is painted again, or shut when the step was its last ---
  (hfeed hb ch) (: p (hpane hb (hb 'focus))
                   (? (atom? p) 0
-                     (hpty? p) (put (hmas p) ch, flush (hmas p))
+                     (hpty? p) (: _ (hhome hb p) (put (hmas p) ch, flush (hmas p)))
                      (: sg (hstage p)
                         _ (sg 'step ch)
                         (? (sg 'over? ()) (hshut hb (hb 'focus))
@@ -251,13 +327,17 @@
                       91  (hcopy hb)                    ; [
                       93  (hpaste hb)                   ; ]
                       0)))
- ; a child gets the bytes as typed; a stage gets edkey's keys, as on cli's stage, or
- ; its own reader's; and the user's eof leaves it
+ ; a child gets the bytes as typed, a sequence read whole when its ESC has company
+ ; (a lone ESC is a key); a stage gets edkey's keys, as on cli's stage, or its own
+ ; reader's; and the user's eof leaves it
  (oars hb) (: p (hpane hb (hb 'focus))
               ch (? (two? p && !(hpty? p)) ((peep (hstage p) 'key edkey) in) (see in))
               (? (ch = -1) (hfeed hb 4)                 ; veof follows the user's own eof
                  (ch = -7) (hshut hb (hb 'focus))
-               (ch = 1 ? (hkey hb) (hfeed hb ch), oars hb)))
+                 (: _ (? (ch = 1) (hkey hb)
+                         ((ch = 27) && (hpty? p) && (cue? in)) (hseq hb)
+                         (hfeed hb ch))
+                    (oars hb))))
 
  ; --- the tide: mirror the outer terminal's size onto the whole wharf -------
  ; the floor is not decoration, and it lives here so both callers share it: a
@@ -305,13 +385,13 @@
  ; --- sail: the harbour on the tty, raw and on the alternate screen, keys pumped
  ; and frames painted until the last berth empties; the tty as it was after ---
  (hsail hb) (: _ (raw 1)
-               _ (say out "\e[?1049h\e[2J")
+               _ (say out "\e[?1049h\e[2J\e[?1006h\e[?2004h")   ; the mouse's reports as ?1006's, pastes bracketed
                _ (flush out)
                up (twirl (_ \ oars hb) 0)
                (hswim hb 1,                 ; ... until the last berth empties
                 map (t \ landed? t ? (catch t) (freeze t)) (hb 'jobs),
                 landed? up ? (catch up) (freeze up),
-                say out "\e[0m\e[?25h\e[?1049l",
+                say out "\e[0m\e[?25h\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[?2004l\e[?1049l",
                 flush out,
                 raw 0,
                 0))

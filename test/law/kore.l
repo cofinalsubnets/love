@@ -33,7 +33,7 @@
                             (: u (get (i - 1) j) w (get i (j - 1)) (u < w ? w u)))
                        _ (pin t (i * 4096 + j) v)
                        (goj i (j + 1))))
-       (goi i) (? (n < i) (get n m) (: _ (goj i 1) (goi (i + 1))))
+       (goi i) (? (n < i) (get n m) (goj i 1, goi (i + 1)))
        (goi 1))
    (rlist i st acc) (? (i < 1) [acc st]                     ; a random list over the alphabet 1..4; answers (list state)
                        (: r (random st 4) (rlist (i - 1) >r ((1 + <r) . acc))))
@@ -153,7 +153,7 @@
       (usplit 58 "a:" = '("a" ""))                                 ; the kept empty tail
       (usplit 58 "" = '(""))
       (ujoinc 58 '("a" "" "c") = "a::c")
-      (ujoinc 58 '("a" "b") = (+ "a" (+ ":" "b")))
+      (ujoinc 58 '("a" "b") = ("a" + (":" + "b")))
       (uspec "1,3-5,7-,-2" = '((1 1) (3 5) (7 536870911) (1 2)))
       (upick '((2 4)) 3) (upick '((2 4)) 2) (upick '((2 4)) 4)
       !(upick '((2 4)) 5) !(upick '((2 4)) 1) !(upick () 1)
@@ -348,7 +348,7 @@
 ; loudly rather than corrupting a line split somewhere quiet.
 (: sc ((cite 'scan 'scanner) ())
    tw (cite 'scan 'walk)
-   (mk o n k) (? (n <= 0) (slurp o) (: _ (put o (97 + (k % 5))) (mk o (n - 1) (k * 7 + 3))))
+   (mk o n k) (? (n <= 0) (slurp o) (put o (97 + (k % 5)), mk o (n - 1) (k * 7 + 3)))
    (agree s c i) (sc s c i = (tw s c i))
    (sweep n)                                     ; every length past the word step ...
     (? (n > 24) 1
@@ -371,7 +371,7 @@
 ; once. kb64 is hand-written machine code, so this is its a64 gate too -- the register
 ; roles differ there.
 (: kx xlat kb (kb64 0)
-   (mk o n k) (? (n <= 0) (slurp o) (: _ (put o (k % 256)) (mk o (n - 1) (k * 7 + 3))))
+   (mk o n k) (? (n <= 0) (slurp o) (put o (k % 256), mk o (n - 1) (k * 7 + 3)))
    ; a-z up, digits dropped, 32 and 128..255 squeezed, the rest through
    tbl (ktable (\ c (? (97 <= c <= 122) [(c - 32) 1]
                        (48 <= c <= 57) [c 0]
@@ -666,8 +666,8 @@
       (aw-gen 1000000 6 = "1e+06") (aw-gen 0.0001 6 = "0.0001")
       (aw-gen 0.00001 6 = "1e-05") (aw-gen 0 6 = "0")
       (aw-numstr 42 "%.6g" = "42") (aw-numstr 3.5 "%.6g" = "3.5")
-      (aw-sprintf "%d|%5.2f|%-4s|%x" (list 42 3.14159 "ab" 255) "%.6g" = "42| 3.14|ab  |ff")
-      (aw-sprintf "%05d|%+d|%c" (list 42 7 65) "%.6g" = "00042|+7|A")
+      (aw-sprintf "%d|%5.2f|%-4s|%x" [42 3.14159 "ab" 255] "%.6g" = "42| 3.14|ab  |ff")
+      (aw-sprintf "%05d|%+d|%c" [42 7 65] "%.6g" = "00042|+7|A")
       ; the strnum question is asked of the whole text, blanks aside
       (aw-looks-num? " 12.5 ") (aw-looks-num? "-3") (aw-looks-num? "1e3")
       !(aw-looks-num? "12a") !(aw-looks-num? "") !(aw-looks-num? "e3") !(aw-looks-num? "1e")
@@ -794,10 +794,10 @@
 ; the base writer, the numeral reader, the grammar's shapes, and a seeded fuzz over
 ; the algebra. the language itself is smoked against GNU bc ---
 (: st (bc-state 0)
-   (sho b n) (: _ (pin st 'obase b) (bc-show st n))
+   (sho b n) (pin st 'obase b, bc-show st n)
    (nod s) <(bc-expr (bc-lex s))
    (stm s) <(bc-stmt (bc-lex s))
-   (refuses? th) (trap (\ _ (: _ (th 0) 0)) () (\ a b 1))
+   (refuses? th) (trap (\ _ (th 0, 0)) () (\ a b 1))
    (test
       ; the scale rules, one line each -- the table at the head of bc.l
       (bn-add [15 1] [15 1] = [30 1])                        ; + and - keep the wider
@@ -919,7 +919,7 @@
       (ucrlf "a\rb\n" = "a\rb\n")
       (ucrlf "" = "") (ulfcr "" = "") (ucrlf "\r" = "\r")         ; a trailing bare cr stays
       ; the NUL that says binary, and the text that does not
-      (ubin? "a\000b") (ubin? "\000") (! (ubin? unx)) (! (ubin? "")) (! (ubin? "\r\n"))))
+      (ubin? "a\000b") (ubin? "\000") !(ubin? unx) !(ubin? "") !(ubin? "\r\n")))
 
 ; --- man: the search and the four readings, with no filesystem in any of them ---
 ; man's own work is naming a file and deciding what it holds; the rendering is lapiz's
@@ -937,22 +937,22 @@
    (man-base "/usr/share/man/man1/ls.1.gz" = "ls.1.gz") (man-base "ls.1" = "ls.1")
    (man-head "man1/gzip.1" = "man1") (man-head "gzip.1" = "gzip.1")
    ; the magic decides, not the suffix -- a page named without .gz still reads
-   (man-gz? "\x1f\x8b\x08\x00rest") (! (man-gz? ".TH LS 1")) (! (man-gz? "")) (! (man-gz? "\x1f"))
+   (man-gz? "\x1f\x8b\x08\x00rest") !(man-gz? ".TH LS 1") !(man-gz? "") !(man-gz? "\x1f")
    ; a redirect page is a .so and nothing else; a comment ahead of it does not count
    (man-so ".so man1/gzip.1\n" = "man1/gzip.1")
    (man-so ".\\\" a comment\n.so man7/x.7\n" = "man7/x.7")
-   (! (man-so ".TH LS 1\n.SH NAME\n")) (! (man-so ""))
+   !(man-so ".TH LS 1\n.SH NAME\n") !(man-so "")
    ; the root is up past the file and its section directory, in one step
    (man-root "/usr/share/man/man1/ls.1.gz" = "/usr/share/man")
    (man-root "/usr/share/man/man3/printf.3.gz" = "/usr/share/man")
    ; mdoc is the macro set this reader does not read, and .th ahead of .Sh settles it
    (man-mdoc? ".Dd July 1 2026\n.Sh NAME\n") (man-mdoc? ".Sh NAME\n")
-   (! (man-mdoc? ".TH LS 1\n.SH NAME\n")) (! (man-mdoc? ".TH X 1\n.Sh odd\n")) (! (man-mdoc? ""))
+   !(man-mdoc? ".TH LS 1\n.SH NAME\n") !(man-mdoc? ".TH X 1\n.Sh odd\n") !(man-mdoc? "")
    ; a section operand is a digit and up to three more, with a name behind it -- so a page
    ; whose name merely begins with a digit is a name, not a section with nothing after it
    (man-sec? ["3" "printf"]) (man-sec? ["3p" "x"]) (man-sec? ["3ssl" "x"])
-   (! (man-sec? ["411toppm"])) (! (man-sec? ["411toppm" "x"]))
-   (! (man-sec? ["3"])) (! (man-sec? ["ls"])) (! (man-sec? ["ls" "x"])) (! (man-sec? []))
+   !(man-sec? ["411toppm"]) !(man-sec? ["411toppm" "x"])
+   !(man-sec? ["3"]) !(man-sec? ["ls"]) !(man-sec? ["ls" "x"]) !(man-sec? [])
    ; the strip takes sgr runs and leaves every other byte where it was (the u-floor's,
    ; since html2text wants the same thing for the same reason)
    (usgr "\x1b[1mbold\x1b[0m and \x1b[4mit\x1b[0m" = "bold and it")
@@ -971,7 +971,7 @@
       ; the width and the terminal belong to the text lane alone
       (h = (md-lay md "html" 40 1 "")) (r = (md-lay md "roff" 40 1 ""))
       ; ..where the attributes come off when the output is not one
-      (t = (usgr t)) (! (t = (md-lay md "text" 80 1 "")))
+      (t = (usgr t)) !(t = (md-lay md "text" 80 1 ""))
       ; an unnamed face is html: that is what a bare `markdown` means
       (h = (md-lay md "" 80 0 ""))
       (md-tos = ["html" "roff" "text" "cells" "dvi"])

@@ -39,15 +39,17 @@
                            (n = snip h i (i + nn)) 1
                            (go (i + 1)))
                  (go 0))
-   good "out/.helm-test.l"
-   bad  "out/.helm-bad.l"
-   stamp "out/.helm-test-stamp"
+   ; every path this lays is the pid's own, so two runs over one out/ keep apart
+   me (show (getpid 0))
+   good ("out/.helm-test-" + me + ".l")
+   bad  ("out/.helm-bad-" + me + ".l")
+   stamp ("out/.helm-stamp-" + me)
    _ (unlink stamp)
-   _ (spill good "(oneshot once (exec \"/bin/sh\" \"-c\" \"echo hi > out/.helm-test-stamp\"))
+   _ (spill good ("(oneshot once (exec \"/bin/sh\" \"-c\" \"echo hi > " + stamp + "\"))
 (service fails (after once) (exec \"/bin/sh\" \"-c\" \"exit 3\") (restart on-fail) (tries 1))
 (service settles (exec \"/bin/sh\" \"-c\" \"exit 0\"))
 (target default (wants fails settles))
-")
+"))
    _ (spill bad "(service a (after b) (exec \"/bin/true\") (restart sometimes))
 (service b (after a) (exec \"/bin/true\"))
 (service a (exec \"/bin/true\"))
@@ -111,7 +113,7 @@
    ; --- moor ----------------------------------------------------------------------
    ; the socket is an eval server: a form in, its value out. one process, two tasks --
    ; the moor twirled, the client here -- interleaving through the scheduler.
-   sock "out/.helm-test.sock"
+   sock ("out/.helm-" + me + ".sock")
    _ (twirl (\ _ (helm-moor sock)) 0)
    _ (rest 50)
    c (connect ['unix sock])
@@ -139,7 +141,7 @@
    ; --- underlay -------------------------------------------------------------------
    ; every registered verb becomes a link onto this binary, and the count is the
    ; registry's own -- a roster spelled out here would drift from what love can do.
-   ubd "out/.helm-underlay"
+   ubd ("out/.helm-underlay-" + me)
    n   (hunderlay ubd)
    ws  (keys (cite 'verbs 'tab))
    _   (test (n = (1 + tally ws)))                  ; every verb, and `love` itself
@@ -155,7 +157,7 @@
    ; --- scatter --------------------------------------------------------------------
    ; the same blob inle boots on. re-homed: the tree reads from inside as a checkout,
    ; so its own files are where this file says they are.
-   scd "out/.helm-scatter"
+   scd ("out/.helm-scatter-" + me)
    k   (hscatter scd)
    _   (test (0 < k))
    _   (test (two? (stat (scd + "/apps/helm/helm.l"))))

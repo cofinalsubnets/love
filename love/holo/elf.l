@@ -149,7 +149,7 @@
        ;; the runs between blobs: short by construction (a header, a length word), so the
        ;; copy `rev` makes is bounded by them and not by the object
        (go l acc) (? !(two? l) (say q (cask (rev acc)))
-                     (string? <l) (: _ (say q (cask (rev acc))) _ (say q <l) (go >l ()))
+                     (string? <l) (say q (cask (rev acc)), say q <l, go >l ())
                      (go >l (<l . acc)))
        ;; ..and an object with no blob in it goes out in one cask, untouched. the walk
        ;; that asks costs no cell, where running it through `go` would copy the lot twice.

@@ -79,7 +79,9 @@
 ; --- law 4: /etc/hosts answers with no packet at all ---------------------------
 ; and a fixture is the only way to say that: pointing at the machine's own file
 ; would make the gate depend on the machine.
-(: dir "out/.dns-t"
+; every path this lays is the pid's own, so two runs over one out/ keep apart
+(: dns-dir ("out/.dns-t-" + show (getpid 0)))
+(: dir dns-dir
    _ <(hark ["mkdir" "-p" dir])
    hp (dir + "/hosts")
    cp (dir + "/conf")
@@ -102,7 +104,7 @@
 ; --- law 5: an empty resolv.conf still names a server --------------------------
 ; musl's fallback and moonlibc's: 127.0.0.1, so a machine with no config reaches a
 ; local stub instead of answering "no such host".
-(: ns (dns-servers "out/.dns-t/nope")
+(: ns (dns-servers (dns-dir + "/nope"))
    _ (assert (two? ns) (<<ns = 2130706433)))
 
 ; --- law 6: a whole answer read back, every record type nslookup shows ----------
@@ -147,7 +149,8 @@
    a (dns-walk6 [(2130706433 . port)] "ab.cd")
    _ (catch s)
    _ (assert (a = ["2001:db8::1"])
-             ((resolve6-in "out/.dns-t/conf" "out/.dns-t/hosts" "v6.only") = ["::1"])
+             ((resolve6-in (dns-dir + "/conf") (dns-dir + "/hosts") "v6.only") = ["::1"])
              ((resolve6 "fe80::1") = ["fe80::1"])))
 
+(hark ["rm" "-rf" dns-dir])
 (say out "dns: ok", putc 10)

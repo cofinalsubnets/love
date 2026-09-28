@@ -27,16 +27,16 @@
  ; the two disjunctions differ at a delay, which is the only place fairness can be
  ; spent or kept: s_plus swaps there (so the other side runs while this one thinks),
  ; s_app just waits for the left to finish.
- (: d (\ _ '(1 2))
-  (&& ('(3 4 1 2) = slist (s_plus d '(3 4)))
-      ('(1 2 3 4) = slist (s_app d '(3 4)))))
+ (: d (_ \ '(1 2))
+  ('(3 4 1 2) = slist (s_plus d '(3 4))
+   && '(1 2 3 4) = slist (s_app d '(3 4))))
  ; --- unification + reification through `query` ---
  ('((a 1)) = query 0 '(a) (\\\ a (est a 1)))
  (() = (query 0 '(a) (\\\ a (&&& (est a 1) (est a 2)))))              ; 1 and 2 don't unify -> no answer
- (= '((a (1 2 (3 (4))) b (3 (4)) c 4))
-    (query 0 '(a b c) (\\\ a b c (&&& (est a [1 2 b])
+ ('((a (1 2 (3 (4))) b (3 (4)) c 4))
+    = query 0 '(a b c) (\\\ a b c (&&& (est a [1 2 b])
                                       (est b [3 [c]])
-                                      (est c 4)))))
+                                      (est c 4))))
  (unord_eq '((a 7 b 8 c 9) (a 4 b 5 c 6) (a 1 b 2 c 3))
   (query 0 '(a b c) (\\\ a b c (||| (&&& (est a 1) (est b 2) (est c 3))
                                     (&&& (est a 4) (est b 5) (est c 6))
@@ -52,7 +52,7 @@
  ;     binder, one a relation minted -- is an ordinary term and unifies as itself.
  (: n (nom 0) v (var 'v)
     r (unify empty_dict ['app n v] ['app n 'y])
-  (nil? (ufail? r) && ('y = walk r v)))
+  (!(ufail? r) && 'y = walk r v))
  ; --- disequality: the constraint store rides beside `unify`, order-free ---
  ('((a 2)) = query 0 '(a) (\\\ a (&&& (dif a 1) (est a 2))))
  (() = (query 0 '(a) (\\\ a (&&& (dif a 1) (est a 1)))))     ; the constraint fires later
@@ -60,9 +60,9 @@
  ('((a 1)) = query 0 '(a) (\\\ a (&&& (est a 1) (dif a 2)))) ; can never be equal -> nothing to watch
  (() = (query 0 '(a b) (\\\ a b (&&& (dif a b) (est a b))))) ; two holes told apart, then joined
  ; a disequality over a pair is one constraint, not two: it fails only when both halves land
- (: g (\ a b (&&& (dif [a b] [1 2]) (est a 1)))
-  (&& ('((a 1 b 3)) = query 0 '(a b) (\\\ a b (&&& (g a b) (est b 3))))
-      (() = (query 0 '(a b) (\\\ a b (&&& (g a b) (est b 2)))))))
+ (: g (a \ b \ (&&& (dif [a b] [1 2]) (est a 1)))
+  ('((a 1 b 3)) = query 0 '(a b) (\\\ a b (&&& (g a b) (est b 3)))
+   && () = query 0 '(a b) (\\\ a b (&&& (g a b) (est b 2)))))
  ; --- absento: x occurs nowhere in t, now or ever ---
  ('((t (1 2))) = query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 2)))))
  (() = (query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 x))))))
@@ -83,11 +83,11 @@
  (() = (query 0 '(b) (\\\ b (&&& (est (tie (\ x [x b])) (tie (\ x [x 'y])))   ; ..and the store still holds
                                    (dif b 'y)))))
  ; the bound atom reifies as a1, a2, .. in first-sight order -- the answer reads
- ('((b (tie a1 (a1 a1)))) = query 0 '(b) (\\\ b (est b (tie (\ x [x x])))))
+ ('((b (tie a1 (a1 a1)))) = query 0 '(b) (\\\ b (est b (tie (x \ [x x])))))
  ; --- coinductive: no occurs check, so a self-referential binding is a rational
  ;     tree, and walk* reifies it as a mu-type without looping (A = (prod elem A)) ---
- (= '(prod elem (mu A))
-    (caup <(query 0 '(A) (\\\ A (est A ['prod 'elem A]))))))
+ ('(prod elem (mu A))
+    = <>(<(query 0 '(A) (\\\ A (est A ['prod 'elem A]))))))
 
  ; --- demo: relations read as algebra. `===` unifies, `=/=` separates; + is or, *
  ; is and. so a relation is a polynomial in unifications -- facts sum,

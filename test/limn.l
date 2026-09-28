@@ -11,8 +11,8 @@
 
 ; `sub?` is each gate's own here (test/host/berth.l carries the same three lines) --
 ; it searches from i; `at?` is the exact-position twin, which is what counting wants
-(: (at? h n i) (((i + tally n) <= tally h) && n = snip h i (i + tally n))
-   (sub? h n i) (? ((i + tally n) < (tally h + 1))
+(: (at? h n i) (((i + #n) <= #h) && n = snip h i (i + #n))
+   (sub? h n i) (? ((i + #n) < (#h + 1))
                    (? (at? h n i) 1 (sub? h n (i + 1)))
                    0)
    (mkscr r c) (screen (cask (screen () r c)) r c)
@@ -30,9 +30,9 @@
    _ (test
       ("x" = limn-glyph 120)
       (" " = limn-glyph 0)
-      (2 = tally (limn-glyph 233))                   ; é
-      (3 = tally (limn-glyph 9474))                  ; │ the box glyph
-      (4 = tally (limn-glyph 128512))                ; past the bmp: the cell holds it whole
+      (2 = #(limn-glyph 233))                        ; é
+      (3 = #(limn-glyph 9474))                       ; │ the box glyph
+      (4 = #(limn-glyph 128512))                     ; past the bmp: the cell holds it whole
       (limn-down = limn-glyph 9474)                  ; the two spellings of one line
       (limn-across = utf8 9472)
       (limn-glyph 201 = limn-glyph 201))              ; cached, and equal to itself
@@ -122,6 +122,23 @@
            (sub? f (limn-across + limn-across + limn-across) 0)
            (sub? f "\e[1;8H" 0)                       ; the down bar, row by row
            (sub? f "\e[2;8H" 0)))
+
+; --- a view looking back paints the history first, the grid below it ---
+   _ (: s (mkscr 2 4)
+        _ (scribe s "ab\r\ncd\r\nef")                 ; ab scrolls into the history
+        home (paint s 2 4 0 0)
+        _ (peer s 1)
+        back (paint s 2 4 0 0)
+        _ (test (sub? home "cd" 0) (sub? home "ef" 0) !(sub? home "ab" 0)
+                (sub? back "ab" 0) (sub? back "cd" 0) !(sub? back "ef" 0)))
+
+; --- a selected cell wears the reverse face ---
+   _ (: s (mkscr 1 4)
+        _ (scribe s "abcd")
+        plain (paint s 1 4 0 0)
+        _ (select s 1 2 0)
+        chosen (paint s 1 4 0 0)
+        _ (test !(sub? plain ";7;" 0) (sub? chosen ";7;" 0)))
 
 ; --- an empty bar list paints nothing, and a zero-row pane paints nothing ---
    _ (: j (jug 0) _ (limn-bars j ()) (test ("" = slurp j)))

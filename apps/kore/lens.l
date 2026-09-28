@@ -39,15 +39,15 @@
                        80))
    ; one trailing newline, always: a shower ends where the document does, and a tool that
    ; writes to a terminal owes the prompt its own line
-   (lensnl s) (? (tally s && s (tally s - 1) = 10) s (s + "\n"))
+   (lensnl s) (? (#s && s (#s - 1) = 10) s (s + "\n"))
    ; one lay over the operands, or over stdin when there are none. the status is the worst
    ; of the files, and a charm: the seat quits with it
    (lensrun lay nm fs)
     (: (one p) (: r (uread p)
-                  (? (two? r) (: _ (puts (lensnl (lay <>r p))) 0)
-                     (: _ (say err (nm + ": cannot open " + p)) _ (put err 10) 1)))
+                  (? (two? r) (puts (lensnl (lay <>r p)), 0)
+                     (say err (nm + ": cannot open " + p), put err 10, 1)))
        (? (two? fs) (foldl (\ a p (: r (one p) (? (a || r) 1 0))) 0 fs)
-          (: _ (puts (lensnl (lay (slurp in) ""))) 0)))
+          (puts (lensnl (lay (slurp in) "")), 0)))
    ; the directory a path is in, with its slash; "" for a bare name
    (lens-dir p) (: (g i) (? (i < 0) "" (p i = 47) (snip p 0 (i + 1)) (g (i - 1))) (g (#p - 1)))
    (lens-has s p) (: n #p (g i) (? (#s < (i + n)) 0 (snip s i (i + n) = p) 1 (g (i + 1))) (g 0))
@@ -80,7 +80,7 @@
        o (uopt as t '(119) '(101) ())                       ; -w takes a value
        _ (? (two? o) () (udie 2 h2t-usage))
        _ (: c (uoptun t '(119))
-            (? (nil? c) () (udie 2 ("html2text: unknown option -" + string c))))
+            (? !c () (udie 2 ("html2text: unknown option -" + string c))))
        ws (tty 1)                                     ; the width is the OUTPUT's
        w (lens-w t ws)
        tty? (two? ws)
@@ -126,7 +126,7 @@
        o (uopt as t '(116 119) '(101) ())                   ; -t and -w take values
        _ (? (two? o) () (udie 2 md-usage))
        _ (: c (uoptun t '(116 119))
-            (? (nil? c) () (udie 2 ("markdown: unknown option -" + string c))))
+            (? !c () (udie 2 ("markdown: unknown option -" + string c))))
        v (uoptv t 116)
        to (? (string? v) v "html")
        _ (? (elem to md-tos) () (udie 2 md-usage))

@@ -24,9 +24,10 @@
 ; so the child runs it without a compile
 (: bake-native (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a i)) a)) 0 0))))
 
-(: img "out/.bake-nif-smoke.image"
-   drv "out/.bake-nif-drive.l"
-   _ (unlink img) _ (unlink drv)                    ; a clean slate, tolerated if absent
+; every path this lays is the pid's own, so two runs over one out/ keep apart
+(: me (show (getpid 0))
+   img ("out/.bake-nif-smoke-" + me + ".image")
+   drv ("out/.bake-nif-drive-" + me + ".l")
 
    ; this binary woke from its own .image. every assertion below rides `love wake FILE`,
    ; a door ai_baked_pick does not use -- a blob laid where the section opens instead of

@@ -8,10 +8,11 @@
 (: (hexrow v d) (: h (radix v 16) (zpad d h))           ; v as d hex digits
    (glyph cp d f) ((zpad 4 (radix cp 16)) + ":" + cats (map (\ r (hexrow (f r) d)) (jot 16)))
    ; A: narrow, row r holds r; 世 wide and solid; 丗 wide, row r holds r in both bytes;
-   ; Ā narrow and solid. a comment, a blank and a short line are no glyphs
+   ; Ā narrow and solid; ā narrow, its leftmost pixel; U+0301 narrow, its rightmost. a comment, a blank and a short line are no glyphs
    hex (cats (map (\ l (l + "\n"))
          [(glyph 65 2 (\ r r)) (glyph 19990 4 (\ r 65535)) (glyph 19991 4 (\ r (r * 257)))
-          (glyph 256 2 (\ r 255)) "# not a glyph" "" "0042:00FF"]))
+          (glyph 256 2 (\ r 255)) (glyph 257 2 (\ r 128)) (glyph 769 2 (\ r 1))
+          "# not a glyph" "" "0042:00FF"]))
    f (face-hex hex)
    rows (\ cp (face-rows f cp))
 
@@ -44,5 +45,18 @@
       !(facerow (poke f 5 8) 65 0)                ; an 8x8 cell
       !(facerow (poke f (12 + 2) 200) 65 0)       ; page 0's directory word names page 200
       !(facerow (poke f (8716 + (2 * 65)) 250) 65 0))   ; A's glyph index past the glyphs
+
+; --- the painter lays a cluster's marks over its base: ā then 丗, each with U+0301. the
+;     mark keeps its place over a narrow base and moves half a cell right over a wide one ---
+   sc (screen (cask (screen () 1 4)) 1 4)
+   _ (scribe sc "\u{101}\u{301}\u{4e17}\u{301}")
+   px (cask (4 * 32 * 16))
+   _ (dye sc px 32 0 -1 f)
+   pb (snip px 0 (tally px))                   ; the pixels, as a string
+   (lit y x) (: i (4 * (y * 32 + x)) (0 < (pb i + pb (i + 1) + pb (i + 2))))
+   (lits y) (filter (lit y) (jot 32))
+   _ (test
+      ([0 7 19] = lits 0)                         ; ā, the mark, 丗's row 0 empty but for it
+      ([0 7 15 19 23] = lits 1))                  ; 丗's row 1 is 0101
    _ (test_fin ())
    (puts "face: ok\n"))

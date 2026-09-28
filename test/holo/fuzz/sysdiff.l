@@ -47,28 +47,24 @@
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
  tmpd "out"
 
- ; --- the ('key . ..) rows of a `name (tabof ...)` form in a64.l, source order ---
+ ; --- the 'key names of a `name {..}` tablet literal in a64.l, source order ---
  a64src (rdf "love/holo/a64.l")
  rv64src (rdf "love/holo/rv64.l")
  (table-in src nm)
-  (: i (idx-of src ("\n   " + nm + " (tabof"))
+  (: i (idx-of src ("\n   " + nm + " {"))
      _ (? (charm? i) 0 (puts ("sysdiff: no table " + nm + "\n"), quit 1))
-     j0 (idx-from src "(tabof" i)
-     ; walk to the (tabof ..) close, then harvest ('name . inside [i, j)
-     (close j d) (? ((src j) = 40) (close (j + 1) (d + 1))
-                    ((src j) = 41) (? (d = 1) j (close (j + 1) (d - 1)))
-                    (close (j + 1) d))
-     j (close j0 0)
      (namec? c) ((digit? c) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)) || (c = 95))
-     (harvest k acc)
-      (: h (idx-from src "('" k)
-         (? (!(charm? h) || (j < h)) (rev acc)
-            (: (e m) (? (namec? (src m)) (e (m + 1)) m)
-               b (e (h + 2))
-               (? (has? (snip src b (b + 3)) "><")
-                  (harvest b ((snip src (h + 2) b) . acc))
-                  (harvest b acc)))))
-     (harvest i ()))
+     ; a key is a 'name at the literal's own depth; a value such as '(0 5) is not
+     (harvest k d acc)
+      (: c (src k)
+         (? ((c = 40) || (c = 123)) (harvest (k + 1) (d + 1) acc)
+            ((c = 41) || (c = 125)) (? (d = 1) (rev acc) (harvest (k + 1) (d - 1) acc))
+            ((c = 39) && ((d = 1) && (namec? (src (k + 1)))))
+             (: (e m) (? (namec? (src m)) (e (m + 1)) m)
+                b (e (k + 1))
+                (harvest b d ((snip src (k + 1) b) . acc)))
+            (harvest (k + 1) d acc)))
+     (harvest (idx-from src "{" i) 0 ()))
  (table nm) (table-in a64src nm)
 
  ; --- the cases: [ir-form asm-text pair-key] (pair-key () when unpaired) ---

@@ -517,7 +517,7 @@
    (pmeth z f) (\ a b (: x (load a) y (load b)
                        (? (pok? x y && pok? y x) (z (f (plift x y) (plift y x))))))
    (zface v w) (? (star? v) (? (polyish? w) (0 = #w) 0) 0)   ; c times the zero poly is the zero poly: * needs no lift
-   mk (coin 'poly (z \ {'net (\ c (tally (load c))) 'star 1
+   mk (coin 'poly (z \ {'net (c \ #(load c)) 'star 1
                           '+ (pmeth z padd)
                           '* (: mulm (pmeth z pmul)
                                (\ a b (: x (load a) y (load b)

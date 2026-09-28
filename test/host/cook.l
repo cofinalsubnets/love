@@ -49,7 +49,7 @@
        r (hark [love "-l" "apps/cook.l" "--emit" "-f" (dir + "/Makefile")])
        (two? r ? >r ""))
 
-   _ (sh ("rm -rf " + (+ dir "; mkdir -p " dir)))
+   _ (sh ("rm -rf " + dir + "; mkdir -p " + dir))
 
    ; ---------------------------------------------------------------- expansion
    ev (run-cook (mk '("R := ."
@@ -133,14 +133,14 @@
    _ (sh ("mkdir -p " + ((dir + "/p; echo SRC > ") + (dir + "/p/x.c"))))
    _ (run-cook (mk [("all: " + (dir + "/p/x.o"))
                      ((dir + "/p/%.o: ") + (dir + "/p/%.c")) "\tcp $< $@"]) (dir + "/p/x.o"))
-   _ (ok "pattern rule builds target" (= 0 <(sh ("test -f " + (dir + "/p/x.o")))))
+   _ (ok "pattern rule builds target" (0 = <(sh ("test -f " + (dir + "/p/x.o")))))
 
    ; static pattern rule: targets: tgtpat: prereqpats
    _ (sh ("echo S > " + (dir + "/p/y.in")))
    _ (run-cook (mk [("outs = " + (dir + "/p/y.out"))
                      "all: $(outs)"
                      ("$(outs): " + (dir + ("/p/%.out: " + (dir + "/p/%.in")))) "\tcp $< $@"]) "all")
-   _ (ok "static pattern rule builds target" (= 0 <(sh ("test -f " + (dir + "/p/y.out")))))
+   _ (ok "static pattern rule builds target" (0 = <(sh ("test -f " + (dir + "/p/y.out")))))
 
    ; the cancellation idiom: an empty recipe unmakes a pattern rule ("an empty
    ; recipe unmakes the rule" -- mk/common.mk cancels make's lex builtin exactly
@@ -156,10 +156,10 @@
    ; the test never depends on a host compiler.
    ; the assertion is on the command cook issues, not on an object -- so the gate
    ; needs no host compiler, and it reads the rule's shape (-c -o $@ $<) directly.
-   _ (sh ("mkdir -p " + (+ dir "/b; echo SRCB > " (dir + "/b/z.c"))))
+   _ (sh ("mkdir -p " + dir + "/b; echo SRCB > " + dir + "/b/z.c"))
    bi (run-cook (mk ["CC = echo-cc"
                      ("all: " + (dir + "/b/z.o")) "\t@echo BUILTIN-DONE"]) "all")
-   _ (ok "builtin %.o: %.c fires" (&& (has bi "echo-cc") (has bi "-c -o") (has bi "z.c")))
+   _ (ok "builtin %.o: %.c fires" (has bi "echo-cc" && has bi "-c -o" && has bi "z.c"))
    ; ..and the match-anything builtins (`%: %.c`, `%: %.o`) must stay out: they match
    ; every target there is, and this resolver does not model the conditions GNU only
    ; dares them under. with `x.o` on disk, a link target `x` must still be the
@@ -177,7 +177,7 @@
    _ (run-cook (mk [".SUFFIXES: .c .o"
                     ".c.o:" "\tcp $< $@"
                     ("all: " + (dir + "/b/s.o"))]) "all")
-   _ (ok "suffix rule .c.o builds the target" (= 0 <(sh ("test -f " + (dir + "/b/s.o")))))
+   _ (ok "suffix rule .c.o builds the target" (0 = <(sh ("test -f " + (dir + "/b/s.o")))))
 
    ; ------------------------------------------------------------------ .POSIX
    ; not decoration: it moves make's defaults to c99 and -O1, which is where st's
@@ -262,8 +262,8 @@
    ; whether the target exists or not (asked, both ways) -- and emit resolves against
    ; the disk it is run on. a fixture with no .c proves nothing about resolution; this
    ; one passed only on the last-resort fallback 4bfac33b removed.
-   _ (sh ("mkdir -p " + (+ dir "/e; touch " (+ dir "/e/a.c " (dir + "/e/b.c")))))
-   eo (+ dir "/e/a.o " (dir + "/e/b.o"))
+   _ (sh ("mkdir -p " + dir + "/e; touch " + dir + "/e/a.c " + dir + "/e/b.c"))
+   eo (dir + "/e/a.o " + dir + "/e/b.o")
    em (run-emit (mk ["CC := cc"  ("OBJ := " + eo)  ".PHONY: all clean"
                       "all: prog"
                       "prog: $(OBJ)"  "\t$(CC) -o $@ $(OBJ)"
@@ -285,7 +285,7 @@
    _ (write-file (dir + "/e/Cookfile") emc)
    _ (sh ("rm -f " + (dir + "/e/out.txt")))
    _ (hark [love "-l" "apps/cook.l" "-f" (dir + "/e/Cookfile") "all"])
-   _ (ok "emit: round-trip cooks the emitted Cookfile" (= 0 <(sh ("test -f " + (dir + "/e/out.txt")))))
+   _ (ok "emit: round-trip cooks the emitted Cookfile" (0 = <(sh ("test -f " + (dir + "/e/out.txt")))))
 
    ; .DEFAULT_GOAL overrides "the first rule declared" as the default ticket --
    ; both when cooking the Makefile directly and through the emitted Cookfile
@@ -439,7 +439,7 @@
    j4 (run-cookj jsrc "all" "4")
    _ (ok "-j4 answers what -j1 answered" (j1 = j4))
    _ (ok "-j4 ran every independent recipe"
-         (= 0 <(sh ("test -f " + (D "/j/a" + (" && test -f " + (D "/j/b" + (" && test -f " + (D "/j/c" + (" && test -f " + D "/j/d"))))))))))
+         (0 = <(sh ("test -f " + (D "/j/a" + (" && test -f " + (D "/j/b" + (" && test -f " + (D "/j/c" + (" && test -f " + D "/j/d"))))))))))
    ; a glued -jN is the same flag
    _ (sh ("rm -f " + D "/j/[abcd]"))
    jg (: r (hark [love "-l" "apps/cook.l" "-j4" "-f" (dir + "/Makefile") "all"]) (two? r ? >r ""))
@@ -465,7 +465,7 @@
    _ (write-file (dir + "/Makefile") jred)
    jrst (: r (hark [love "-l" "apps/cook.l" "-j" "4" "-f" (dir + "/Makefile") "all"]) (two? r ? <r 0))
    _ (ok "-j4: a failed recipe fails the run" !(0 = jrst))
-   _ (ok "-j4: outstanding jobs finish first" (= 0 <(sh ("test -f " + D "/j/ok"))))
+   _ (ok "-j4: outstanding jobs finish first" (0 = <(sh ("test -f " + D "/j/ok"))))
 
    ; the width is the caller's to say: a bare -j is make's "unlimited", and one
    ; translation unit here peaks at 2.3 GB, so cook asks for the number instead.

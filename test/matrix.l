@@ -21,7 +21,7 @@
 (: mx-fix 5                              ; kcharm
    mx-real 2.5                            ; kgem, the gem (float box)
    mx-cpx (2 ~ 3)                       ; ktwin, complex scalar (Cp)
-   mx-box (<< 1 62)                      ; ksun, a boxed int one word wide
+   mx-box (1 << 62)                      ; ksun, a boxed int one word wide
    mx-big (100 2)                     ; ksun again, past the word
    mx-az  @(10 20)                       ; ktrayZ (int tray)
    mx-ar  @(1.5 2.5)                     ; ktrayR (float tray)
@@ -31,7 +31,7 @@
    mx-sym 'ef                            ; kmint (interned)
    mx-lst '(1 2)                         ; kchain (chain / list)
    mx-fn  (+ 1)                          ; khot (nif partial application)
-   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; ktablet (a tablet is a lookup-lambda)
+   mx-map {1 10 2 20})                    ; ktablet (a tablet is a lookup-lambda)
 
 ; ============================================================================
 ; apply matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
@@ -47,7 +47,7 @@
  ;     at all applied a chain to a function -- so a lambda takes the default action, and
  ;     that is the cell worth pinning. the index/append rows are spec.l's chains section. ---
  !((. 1 2) 1)            ; improper chain: the spine is one cell, so 1 is oob
- !('(1 2) (\ a b [a b])) ; arg = a lambda: the default action, not an eliminator
+ !('(1 2) (a \ b \ [a b])) ; arg = a lambda: the default action, not an eliminator
  !('(1 2) "ab")          ; ... as for every other kind
 
  ; --- row kstring: the byte index is spec.l's; the width and the empty row are here ---
@@ -78,47 +78,47 @@
  (7 = (5 + 2))                                 ; fix + fix (overflow-free fast path)
  (7.5 = (5 + 2.5))   (7.5 = (2.5 + 5))         ; fix + float (both orders)
  (5.0 = (2.5 + 2.5))                           ; float + float
- (? word ((63 2) = ((<< 1 62) + (<< 1 62))) 1) ; box + box -> 2^63 (64-bit word only)
- (? word (sun? ((<< 1 62) + (<< 1 62))) 1)
- (? word (sun? ((<< 1 62) + 1)) 1)              ; box + fix stays a box
- (? word (((<< 1 62) + 1) = (1 + (<< 1 62))) 1) ; ...and commutes
+ (word ? ((63 2) = (1 << 62) + (1 << 62)) 1) ; box + box -> 2^63 (64-bit word only)
+ (word ? (sun? ((1 << 62) + (1 << 62))) 1)
+ (word ? (sun? ((1 << 62) + 1)) 1)              ; box + fix stays a box
+ (word ? ((1 << 62) + 1 = 1 + (1 << 62)) 1) ; ...and commutes
  ((1 + (100 2)) = ((100 2) + 1))                ; big + fix == fix + big (commutes)
  ((2 * (100 2)) = ((100 2) + (100 2)))          ; big + big
  (gem? ((100 2) + 0.5))                         ; big + float -> float (widens)
  ((4 ~ 6) = ((1 ~ 2) + (3 ~ 4)))                ; complex + complex
  ((7 ~ 3) = (5 + (2 ~ 3)))                      ; fix + complex (real -> (5,0))
  ((4.0 ~ 3.0) = (1.5 + (2.5 ~ 3)))              ; float + complex
- (? word (twin? ((<< 1 62) + (0 ~ 1))) 1)       ; box + complex -> complex (64-bit word only)
+ (word ? (twin? ((1 << 62) + (0 ~ 1))) 1)       ; box + complex -> complex (64-bit word only)
  (twin? ((100 2) + (0 ~ 1)))                    ; big + complex -> complex (widens)
 
  ; --- array tower: each tier with a matching array and with a scalar broadcast ---
- (gem-tray = tier (+ @(10 20) @(1.5 2.5)))      ; Z + R -> widens to R
- (aall (= @(11.5 22.5) (+ @(10 20) @(1.5 2.5))))
- (aall (= @(3.0 5.0) (+ @(1.5 2.5) @(1.5 2.5)))) ; R + R
+ (gem-tray = tier (@(10 20) + @(1.5 2.5)))      ; Z + R -> widens to R
+ (aall (@(11.5 22.5) = @(10 20) + @(1.5 2.5)))
+ (aall (@(3.0 5.0) = @(1.5 2.5) + @(1.5 2.5))) ; R + R
  ((2 ~ 4) = peep (mx-ac + mx-ac) 0 0)            ; C + C (packed complex)
  (top-tray = tier (mx-ao + mx-ao))               ; O + O stays exact/object
  ((2 * (100 2)) = peep (mx-ao + mx-ao) 0 0)
- (aall (= @(12 22) (+ @(10 20) 2)))       ; Z + scalar (broadcast, no widen)
+ (aall (@(12 22) = @(10 20) + 2))       ; Z + scalar (broadcast, no widen)
  ((11 ~ 2) = peep ((10 ~ 0) + mx-ac) 0 0) ; C array + complex scalar
- ((11 ~ 2) = peep (+ @(10 20) mx-ac) 0 0) ; R/Z array + C array (real promotes)
+ ((11 ~ 2) = peep (@(10 20) + mx-ac) 0 0) ; R/Z array + C array (real promotes)
 
  ; --- add_string lane: text x text; a number (tray included) arrives as the unit
  ;     and the text answers whole. the crossings the spec states once, the orders
  ;     it does not, and the reps it has no room for: ---
  ("ab" = ('ef + "ab"))                               ; a name is a point: the identity against text
- ("ab" = (+ @(1 2) "ab"))   ("ab" = (+ "ab" @(1 2))) ; a tray is number-band against text, either side
- ("@(1 2)" = show (+ @(1 2) 'ef))                    ; ..and against a tray
+ ("ab" = (@(1 2) + "ab"))   ("ab" = ("ab" + @(1 2))) ; a tray is number-band against text, either side
+ ("@(1 2)" = show (@(1 2) + 'ef))                    ; ..and against a tray
  ("ab" = (mx-big + "ab"))                            ; a bignum is a number like any other
 
  ; --- add_seq lane: a list against text (chain wins); a number degenerates ---
  ('(1 2) = ('(1 2) + 5))            ; list <-> num, the order the spec leaves open
  ('(97 98 1 2) = ("ab" + '(1 2)))   ; str <-> list: the bytes splice (the charlist hom)
- ("(7 8)" = show (+ @(1 2) '(7 8))) ; array <-> list: the tray is number-band, it degenerates
+ ("(7 8)" = show (@(1 2) + '(7 8))) ; array <-> list: the tray is number-band, it degenerates
 
  ; --- addl lane: a lambda operand anywhere -> church-numeral add (not pointwise):
  ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).
  ;     "1" + "1" == "2": apply (+ 1) twice to 0. ---
- (2 = ((((\ f x (f x)) + (\ f x (f x))) (+ 1)) 0))
+ (2 = ((((f \ x \ f x) + (f \ x \ f x)) (+ 1)) 0))
  (lit? ((+ 1) + 2))   (lit? (2 + (+ 1))) ; num + fn (either order) -> a function
  (lit? ((+ 1) + (+ 1))))                 ; fn + fn -> a function
 
@@ -130,30 +130,29 @@
  ; --- muln: scalar tower + arrays ---
  (6 = (2 * 3))                                  ; fix * fix
  (7.5 = (3 * 2.5))                              ; fix * float
- (? word ((124 2) = ((<< 1 62) * (<< 1 62))) 1) ; box * box -> bignum (64-bit word only)
+ (word ? ((124 2) = (1 << 62) * (1 << 62)) 1) ; box * box -> bignum (64-bit word only)
  ((200 2) = ((100 2) * (100 2)))                ; big * big
  (-1 = (i * i))                                 ; complex * complex (i^2, bridges to real)
  ((-5 ~ 10) = ((1 ~ 2) * (3 ~ 4)))              ; Gaussian product
  ((4 ~ 6) = (2 * (2 ~ 3)))                      ; fix * complex
- (aall (= @(20 60) (* @(10 30) 2)))             ; Z array * scalar
+ (aall (@(20 60) = @(10 30) * 2))             ; Z array * scalar
  ((2 ~ 4) = peep ((2 ~ 0) * mx-ac) 0 0)         ; complex scalar * C array
  (top-tray = tier (mx-ao * mx-ao))              ; O * O exact
- (= (80 2)                                      ; 2^40 * 2^40, exact (an z array would wrap)
-    (peep (top-tray '(2) [(40 2) (40 2)] * top-tray '(2) [(40 2) (40 2)]) 0 0))
+ ((80 2) = peep (top-tray '(2) [(40 2) (40 2)] * top-tray '(2) [(40 2) (40 2)]) 0 0)   ; 2^40 * 2^40, exact (an z array would wrap)
 
  ; --- mul_rep: the repeat law and its |count| are the spec's; the cells here are the
  ;     ones no band law reaches -- the reversed order, and a non-number count ---
  ("ababab" = (3 * "ab"))             ; str * count commutes
- !(* "ab" @(1 2))   !(* @(1 2) "ab") ; an array is no count -> nil
+ !("ab" * @(1 2))   !(@(1 2) * "ab") ; an array is no count -> nil
 
  ; --- seq * seq: chain x chain is the cartesian product (spec.l); string stays nil,
  ;     and so does symbol, which the string lane might have been read to cover ---
  !('a * 'b)
 
  ; --- mull: a lambda operand anywhere -> composition (Church mul) ---
- (36 = (((\ x (x * x)) * (\ x (x + 1))) 5)) ; sq(inc 5) = sq 6 = 36
- (26 = (((\ x (x + 1)) * 2) 5))             ; (inc (2 5)) = inc 25 = 26 (numeral then inc)
- (10 = ((mx-map * (\ x (x - 1))) 2)))       ; a map composes too: m(2-1) = m 1 = 10
+ (36 = (((x \ x * x) * (x \ x + 1)) 5)) ; sq(inc 5) = sq 6 = 36
+ (26 = (((x \ x + 1) * 2) 5))             ; (inc (2 5)) = inc 25 = 26 (numeral then inc)
+ (10 = ((mx-map * (x \ x - 1)) 2)))       ; a map composes too: m(2-1) = m 1 = 10
 
 ; ============================================================================
 ; the other dyadic generic ops (lane aps, not explicit tables): -, /, %,
@@ -164,14 +163,14 @@
  (3 = (5 - 2))   (2.5 = (5 - 2.5))      ; fix/float tower
  ((100 2) = (((100 2) + 5) - 5))        ; bignum
  ((-2 ~ -2) = ((1 ~ 2) - (3 ~ 4)))      ; complex
- (aall (= @(9 18) (- @(10 20) @(1 2)))) ; array elementwise
+ (aall (@(9 18) = @(10 20) - @(1 2))) ; array elementwise
  !('(1) - '(2))                         ; non-numeric -> nil
 
  ; --- division: `/` true (float on inexact), `//` truncating; array broadcast; complex defined ---
  (2.5 = (5 / 2))   (2 = (5 // 2))   (2.5 = (5 / 2.0)) ; / promotes, // truncates
  (32 = ((100 2) / (95 2)))                            ; bignum exact (2^5) stays integer
  (gem? (1 / 0))                                       ; /0 -> IEEE inf (float)
- (aall (= @(5 10) (/ @(10 20) 2)))                    ; array / scalar
+ (aall (@(5 10) = @(10 20) / 2))                    ; array / scalar
  !("a" / 2)                                           ; non-numeric -> nil
 
  ; --- modulo `mod` (fmod on floats); undefined on complex (-> nil) ---
@@ -187,8 +186,8 @@
  ; `> >=` are `< <=` with operands reversed (a > b == b < a).
  ; --- within number: the whole tower orders by value (reps interleave) ---
  (1 < 2)   (1.5 < 2)                              ; fix / float
- (? word ((<< 1 62) < (3 * (<< 1 62))) 1)         ; box < box (64-bit word only)
- (5 < (100 2))   (? word ((<< 1 62) < (100 2)) 1) ; fix/box < bignum (magnitude-exact)
+ (word ? ((1 << 62) < 3 * (1 << 62)) 1)         ; box < box (64-bit word only)
+ (5 < (100 2))   (word ? ((1 << 62) < (100 2)) 1) ; fix/box < bignum (magnitude-exact)
  ((100 2) < (101 2))                              ; bignum < bignum
  ; --- complex: lexicographic (re, im); a real r is (r, 0) ---
  (i < 1)   ((1 ~ 9) < (2 ~ 0))   ((2 ~ 1) < (2 ~ 2)) ; re decides, then im
@@ -199,23 +198,23 @@
  ; --- lambda is the top class; within it, ordered by representation hash ---
  (5 < (+ 1))   ((+ 1) > '(0))   ("z" < (+ 1))           ; everything sorts below a lambda
  !((+ 1) < (+ 1))   ((+ 1) <= (+ 1))   ((+ 1) >= (+ 1)) ; reflexive: a lambda equals itself
- ((? ((+ 1) < (+ -1)) 1 0) = (? ((+ -1) > (+ 1)) 1 0))  ; antisymmetric: a < b iff b > a
- (((+ 1) <= (+ -1)) || ((+ 1) >= (+ -1)))               ; total: some order holds between distinct fns
+ (((+ 1) < (+ -1) ? 1 0) = ((+ -1) > (+ 1) ? 1 0))  ; antisymmetric: a < b iff b > a
+ ((+ 1) <= (+ -1) || (+ 1) >= (+ -1))               ; total: some order holds between distinct fns
  ; --- all four orderings agree (<= >= include equality; > is the strict reverse) ---
  (3 <= 3)   (3 >= 3)   !(3 < 3)   !(3 > 3)   (5 > 3)   (5 >= 3)
  ("ab" <= "ab")   ('b > 'a)   ('(1) >= '(1))
  ; --- array operand: comparison is elementwise (a 0/1 mask), not the scalar order ---
- (aall (< @(1 2) 10))   (star-tray = tier (< @(1 2) 10))   ; the mask is an z array
- (1 = peep (< @(1 5) @(3 2)) 0 0)   (0 = peep (< @(1 5) @(3 2)) 1 0)
- (aall (<= @(1 2) @(1 2)))   (aall (>= @(2 2) @(1 2)))
- !(< @(1 2) "x")  ; array vs non-number -> nil
+ (aall (@(1 2) < 10))   (star-tray = tier (@(1 2) < 10))   ; the mask is an z array
+ (1 = peep (@(1 5) < @(3 2)) 0 0)   (0 = peep (@(1 5) < @(3 2)) 1 0)
+ (aall (@(1 2) <= @(1 2)))   (aall (@(2 2) >= @(1 2)))
+ !(@(1 2) < "x")  ; array vs non-number -> nil
  !(mx-ac < mx-ac) ; a complex array is unordered -> nil
  ; --- 0/0 collapses to 0, so it is ordered like any zero (no NaN to be unordered) ---
  !((0 / 0) < (0 / 0))   ((0 / 0) <= (0 / 0))   !((0 / 0) > 1)
 
  ; --- equality `=`: bridges the numeric tower, else eql. the array rows are spec.l's ---
- (? word ((<< 1 62) = (<< 1 62)) 1) ; box = box (64-bit word only)
- (? word !((<< 1 62) = 0) 1)        ; ...never = a fixnum
+ (word ? ((1 << 62) = (1 << 62)) 1) ; box = box (64-bit word only)
+ (word ? !((1 << 62) = 0) 1)        ; ...never = a fixnum
  ((100 2) = (100 2))                ; bignum = bignum
  ((2 ~ 0) = 2)                      ; complex bridges a real (im 0)
  !((2 ~ 1) = 2)                     ; ...but not when im != 0
@@ -229,10 +228,10 @@
  (11.0 = (inner @(1.0 2.0) @(3.0 4.0)))            ; float dot
  (11.0 = (inner @(1 2) @(3.0 4.0))) (gem? (inner @(1 2) @(3.0 4.0)))  ; mixed z.r widens to r
  (: A (star-tray '(2 3) '(1 2 3 4 5 6)) B (star-tray '(3 2) '(7 8 9 10 11 12)) C (inner A B)
-    (&& ('(2 2) = (shape C)) (58 = (peep C '(0 0) 0)) (64 = (peep C '(0 1) 0))
-        (139 = (peep C '(1 0) 0)) (154 = (peep C '(1 1) 0))))   ; 2x2 matmul, every cell
+    ('(2 2) = shape C && 58 = peep C '(0 0) 0 && 64 = peep C '(0 1) 0
+        && 139 = peep C '(1 0) 0 && 154 = peep C '(1 1) 0))   ; 2x2 matmul, every cell
  (aall (@(6 15) = (inner (star-tray '(2 3) '(1 2 3 4 5 6)) @(1 1 1))))   ; matrix . vector
  (: O (outer @(1 2 3) @(10 20))
-    (&& ('(3 2) = (shape O)) (10 = (peep O '(0 0) 0)) (60 = (peep O '(2 1) 0))))  ; outer
- (gem-tray = (tier (outer @(1 2) @(3.0 4.0))))     ; outer widens on an inexact operand
+    ('(3 2) = shape O && 10 = peep O '(0 0) 0 && 60 = peep O '(2 1) 0))  ; outer
+ (gem-tray = tier (outer @(1 2) @(3.0 4.0)))     ; outer widens on an inexact operand
  !(inner @(1 2) 5) !(outer @(1 2) 5))              ; non-array operand -> nil

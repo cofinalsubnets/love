@@ -21,7 +21,7 @@
     ; the parser's shape is (1 nodes ngroups), so -F answers the same three.
     ; and -F walks by index: `two?` is false for a string, so (map f s) is () --
     ; which reads as the empty pattern and matches every line
-    (: (one s) (? (gflag t 70) [1 (map (\ i ['chr (s i)]) (jot (tally s))) 0]
+    (: (one s) (? (gflag t 70) [1 (map (\ i ['chr (s i)]) (jot #s)) 0]
                   ((? (gflag t 69) reere rebre) s))
        (wrap nds) (: a (? (gflag t 120) (cat ('(bol) . nds) '((eol))) nds)
                      (? (gflag t 105) (refold a) a))
@@ -42,12 +42,12 @@
    (gwbefore ln j) (: b (ln (j - 1)) (? (b < 128) (gword? b) (cpword? (cpat ln (cpback ln j)))))
    ; the leftmost match of any of ms (compiled) in ln, word-bounded if w? -> (1 st en) | ()
    (gfind ms ln w? i)
-    (: n (tally ln)
+    (: n #ln
        (bnd st en) (? !w? 1
                       ((st = 0 || !(gwbefore ln st)) && (en = n || !(gwat ln en))))
        (best acc m)
         (refindpm m ln i bnd @ [_ st en _]
-          (? !(two? acc) [1 st en] (st < <>acc) [1 st en] acc)
+          (? (atom? acc) [1 st en] (st < <>acc) [1 st en] acc)
           acc)
        (foldl best () ms))
    (grep-opt as t) (uopt as t '(101 109) '(101) ())     ; -e pattern (stacks), -m count
@@ -60,7 +60,7 @@
        ; -a is in the usage and read nowhere: everything here is text, so it is a
        ; no-op and not an unknown
        _ (: c (uoptun t "nvclqhaixwFEoem")
-            (? (nil? c) () (udie 2 ("grep: unknown option -" + string c))))
+            (? !c () (udie 2 ("grep: unknown option -" + string c))))
        eps <>o rest <>>o
        ; with -e the whole tail is files; without it the first word is the pattern
        _ (? (two? eps || two? rest) ()
@@ -75,19 +75,16 @@
        mx (: v (uoptv t 109) (? v (uatoi v) ()))
        many (!h? && (two? fs && two? >fs))
        (sel ln) (: m (? (two? (gfind ast ln w? 0)) 1 0) (? v? (? m 0 1) m))
-       (pfx label) (? many (: _ (say out label) (put out 58)) ())
+       (pfx label) (? many (say out label, put out 58) ())
        ; -o: every match on the line, each on its own row. -v has nothing to show
        (emit1 label no ln)
         (: (go i)
             (gfind ast ln w? i @ [_ st en]
               ; a zero-length match prints nothing (GNU's rule, and `-o '[a-z]*'`
               ; is how you meet it) -- but it still advances, or the walk sits still
-              (: _ (? (st < en)
-                      (: _ (pfx label)
-                         _ (? n? (: _ (say out (show no)) (put out 58)) ())
-                         _ (say out (snip ln st en)) (put out 10))
-                      ())
-                 (? (en < tally ln) (go (? (en = st) (en + 1) en)) ()))
+              ((? (st < en)
+                      (pfx label, (? n? (say out (show no), put out 58) ()), say out (snip ln st en), put out 10)
+                      ()), (? (en < tally ln) (go (? (en = st) (en + 1) en)) ()))
               ())
            (go 0))
        ; one input through the chosen face; answers the hit flag onward. it reads a
@@ -95,12 +92,12 @@
        ; string and a cell for every line before the first one was matched. -q and -l
        ; stop at the first hit, which is now a stop and not just a shortcut.
        (dof label rd hit)
-        (: (anym _) (: l (urd-line rd) (? !(two? l) 0 (? (sel <l) 1 (anym 0))))
+        (: (anym _) (: l (urd-line rd) (? (atom? l) 0 (? (sel <l) 1 (anym 0))))
            (? q? (? (anym 0) 1 hit)
-              l? (? (anym 0) (: _ (say out label) _ (put out 10) 1) hit)
+              l? (? (anym 0) (say out label, put out 10, 1) hit)
               c? (: (cnt k) (? (mx && (mx <= k)) k
                                (: l (urd-line rd)
-                                  (? !(two? l) k (cnt (? (sel <l) (k + 1) k)))))
+                                  (? (atom? l) k (cnt (? (sel <l) (k + 1) k)))))
                     k (cnt 0)
                     _ (pfx label)
                     _ (say out (show k)) _ (put out 10)
@@ -108,13 +105,11 @@
               (: (lp no h seen)
                   (? (mx && (mx <= seen)) h
                      (: l (urd-line rd)
-                        (? !(two? l) h
+                        (? (atom? l) h
                            (: x <l
                               m (sel x)
                               _ (? (m && o? && !v?) (emit1 label no x)
-                                   m (: _ (pfx label)
-                                         _ (? n? (: _ (say out (show no)) (put out 58)) ())
-                                         _ (say out x) (put out 10))
+                                   m (pfx label, (? n? (say out (show no), put out 58) ()), say out x, put out 10)
                                    ())
                               (lp (no + 1) (? m 1 h) (? m (seen + 1) seen))))))
                  (lp 1 hit 0))))
@@ -126,22 +121,16 @@
        ; step budget on exactly those and scares when it runs out. this is where the
        ; scare becomes a sentence and a status instead of a stack. any other scare is
        ; re-raised: swallowing it here would turn a real fault into "too costly".
-       _ (trap (\ _ (ureachm (\ f (: _ (say err ("grep: " + f + (udirp f ? ": Is a directory"
-                                                                ": No such file or directory")))
-                                     _ (put err 10) _ (pin st 'bad 1) 0))
+       _ (trap (\ _ (ureachm (\ f (say err ("grep: " + f + (udirp f ? ": Is a directory"
+                                                                ": No such file or directory")), put err 10, pin st 'bad 1, 0))
                              (\ f first rd
-                                (: _ (pin st 'hit (dof (? (f = "-") "(standard input)" f) rd
-                                                       (peep st 'hit 0)))
-                                   1))
+                                (pin st 'hit (dof (? (f = "-") "(standard input)" f) rd
+                                                       (peep st 'hit 0)), 1))
                              fs))
                ()
-               (\ a b (? (== a 'regex-too-costly)
-                         (: _ (flush out)
-                            _ (say err ("grep: the pattern needs more than " + (show b)
-                                        + " backtracking steps on one line -- it is the"))
-                            _ (put err 10)
-                            _ (say err "grep: kind an automaton walks in one pass and this engine does not (a repeat over an alternation)")
-                            _ (put err 10) _ (flush err) (uleave 2))
+               (\ a b (? (a == 'regex-too-costly)
+                         (flush out, say err ("grep: the pattern needs more than " + (show b)
+                                        + " backtracking steps on one line -- it is the"), put err 10, say err "grep: kind an automaton walks in one pass and this engine does not (a repeat over an alternation)", put err 10, flush err, uleave 2)
                          (scare a b))))
        _ (flush out) _ (flush err)
        (? (peep st 'bad 0) 2 (peep st 'hit 0) 0 1)))

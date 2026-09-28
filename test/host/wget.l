@@ -11,8 +11,8 @@
 (: T (cite 'tls)
    unhex (T 'unhex) hex (T 'hex)
    wget (cite 'kore 'wget-main)
-   root "out/.wget"
-   _ (hark ["rm" "-rf" root])
+   ; every path this lays is the pid's own, so two runs over one out/ keep apart
+   root ("out/.wget-" + show (getpid 0))
    _ (mkdir root 493) _ (mkdir (root + "/site") 493)
    home (cwd 0)
    sroot (home + "/" + root + "/site")
@@ -32,6 +32,7 @@
    got (: p (open out1 "r") (hot? p ? (: s (slurp p) _ (close p) s) ()))
    rc404 (wget ["-q" "-O" (root + "/none") ("http://127.0.0.1:" + show port + "/absent.bin")])
    rcbad (wget ["-q" "-O" (root + "/none") "ftp://nowhere/x"])
+   _ (hark ["rm" "-rf" root])
    (test
     (0 = rc) (got = blob)                                              ; the bytes came back whole
     (8 = rc404)                                                        ; a server's no is wget's 8

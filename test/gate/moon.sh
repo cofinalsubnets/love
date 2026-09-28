@@ -212,6 +212,9 @@ taref 'asm(".set .Lx, 2\\n.if (.Lx != 1)\\n.error \\"bad\\"\\n.endif");\n' x64 "
 taref 'int f(long x){int z; asm("cmp %%1, #0" : "=@cceq"(z) : "r"(x)); return z;}\n' a64 "an asm flag output" "an a64 flag output was not refused by name"
 # a %gs: store to an absolute address has no register to reach it through (test/cc/182)
 taref 'void f(long x){asm volatile("movq %%0, %%%%gs:40" : : "r"(x));}\n' x64 "gas-x64-seg" "a gs store to an absolute address was not refused"
+# what the 64-bit opcode map dropped refuses by name: a far call to an immediate, pusha
+taref 'void f(void){asm volatile("lcallw $0xc000,$3");}\n' x64 "\"lcallw\", which 64-bit mode has no encoding for" "a direct far call was not refused by name"
+taref 'void f(void){asm volatile("pusha");}\n' x64 "\"pusha\", which 64-bit mode" "pusha was not refused by name"
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the

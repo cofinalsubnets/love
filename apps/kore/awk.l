@@ -197,7 +197,7 @@
    (aw-sp-int x) (aw-intstr x)
    (aw-base n b caps)
     (: dg (caps ? "0123456789ABCDEF" "0123456789abcdef")
-       (go v acc) (v = 0 ? acc (go (// v b) (string (dg (% v b)) + acc)))
+       (go v acc) (v = 0 ? acc (go (v // b) (string (dg (v % b)) + acc)))
        (n = 0 ? "0" (go n "")))
    ; a conversion's flags, width and precision -> (minus zero plus space w prec k)
    (aw-spec f n k0)
@@ -291,7 +291,7 @@
    ; so a word that is not wholly a number is said on err, printed as far as it went,
    ; and the status left 1. the format is reused while arguments remain. \c ends it all.
    ; no %a: a hex float is the one conversion nothing here spells.
-   (pf-die m) (: _ (flush out) (udie 1 ("printf: " + m)))
+   (pf-die m) (flush out, udie 1 ("printf: " + m))
    ; the escape whose letter is at s k -> (text next) | 'stop for \c. %b's octal may lead
    ; with a 0 (\0NNN); the format's is \NNN alone
    (pf-esc s k b?)
@@ -320,7 +320,7 @@
            (: e (pf-esc s (k + 1) 1)
               (? (e = 'stop) [acc 1] (go <>e (acc + <e)))))
        (go 0 ""))
-   (pf-bad st w m) (: _ (say err ("printf: '" + w + "': " + m + "\n")) (pin st 'bad 1))
+   (pf-bad st w m) (say err ("printf: '" + w + "': " + m + "\n"), pin st 'bad 1)
    (pf-cchar st w)                     ; 'c and "c: the character's code
     (: n #w
        _ (? (2 < n) (say err ("printf: warning: " + snip w 2 n
@@ -342,7 +342,7 @@
              r (go s0 0)
              v0 <r e <>r
              lim (? (u? || !neg) (? u? 18446744073709551615 9223372036854775807) 9223372036854775808)
-             v1 (? (lim < v0) (: _ (pf-bad st w "Numerical result out of range") lim) v0)
+             v1 (? (lim < v0) (pf-bad st w "Numerical result out of range", lim) v0)
              v (? neg (0 - v1) v1)
              _ (? (e = s0) (pf-bad st w "expected a numeric value")
                   (e < n && !(lim < v0)) (pf-bad st w "value not completely converted")
@@ -361,7 +361,7 @@
                 (lw = "nan") 'nan
                 (b + 1 < n && w b = 48 && (w (b + 1) = 120 || w (b + 1) = 88)) (pf-hexflt st w b neg)
                 (: e (aw-nspan w a n)
-                   (? (e = a) (: _ (pf-bad st w "expected a numeric value") 0)
+                   (? (e = a) (pf-bad st w "expected a numeric value", 0)
                       (: v (aw-parse w a e)
                          _ (? (e < n) (pf-bad st w "value not completely converted") 0)
                          v)))))))
@@ -440,7 +440,7 @@
         (: c (? (j < n) (f j) 0)
            (c @ 45 (flags (j + 1) 1 z pl sp alt)  48 (flags (j + 1) m 1 pl sp alt)
                 43 (flags (j + 1) m z 1 sp alt)   32 (flags (j + 1) m z pl 1 alt)
-                35 (flags (j + 1) m z pl sp 1)    39 (: _ (pin st 'grp 1) (flags (j + 1) m z pl sp alt))
+                35 (flags (j + 1) m z pl sp 1)    39 (pin st 'grp 1, flags (j + 1) m z pl sp alt)
                 [j m z pl sp alt]))
        _ (pin st 'grp 0)
        fr (flags (k + 1) 0 0 0 0 0)
@@ -475,17 +475,17 @@
              || (alt && elem d [99 100 105 115 117]) || (z && elem d [99 115])
              || (d = 99 && !(<pr < 0 && j2 = j1)) || (st 'grp && elem d [99 101 69 111 115 120 88]))
             (pf-die (spec + ": invalid conversion specification")) 0)
-       (? (d = 37 && j3 = k + 1) (: _ (put out 37) [(j3 + 1) l])
+       (? (d = 37 && j3 = k + 1) (put out 37, [(j3 + 1) l])
           (d = 115)
            (: s (? (p < 0 || #a <= p) a (snip a 0 p)) _ (say out (pf-lay m 0 w "" s)) [(j3 + 1) rest])
           (d = 99)
-           (: _ (say out (pf-lay m 0 w "" (string (? (0 < #a) (a 0) 0)))) [(j3 + 1) rest])
+           (say out (pf-lay m 0 w "" (string (? (0 < #a) (a 0) 0))), [(j3 + 1) rest])
           (d = 98)
            (: r (pf-bexp a)
               s (? (p < 0 || #<r <= p) <r (snip <r 0 p))
               _ (say out (pf-lay m 0 w "" s))
               (? <>r 'stop [(j3 + 1) rest]))
-          (d = 113) (: _ (say out (pf-lay m 0 w "" (pf-q a))) [(j3 + 1) rest])
+          (d = 113) (say out (pf-lay m 0 w "" (pf-q a)), [(j3 + 1) rest])
           (d = 100 || d = 105)
            (: v (int l2 0)
               ds (show (abs v))
@@ -518,13 +518,13 @@
            (: c (f k)
               (? (c = 92 && k + 1 < n)
                  (: e (pf-esc f (k + 1) 0)
-                    (? (e = 'stop) 'stop (: _ (say out <e) (go <>e l u))))
+                    (? (e = 'stop) 'stop (say out <e, go <>e l u)))
                  (c = 37)
                   (? (k + 1 < n)
                      (: r (pf-conv st f k l)
                         (? (r = 'stop) 'stop (go <r <>r (u || !(<>r = l)))))
                      (pf-die "%: invalid conversion specification"))
-                 (: _ (put out c) (go (k + 1) l u)))))
+                 (put out c, go (k + 1) l u))))
        (go 0 l 0))
    (printf-main as0)
     (: as (? (two? as0 && <as0 = "--") >as0 as0)          ; -- ends the options, as POSIX's
@@ -969,9 +969,9 @@
        (go k) (? (n <= k) (slurp o)
                  (pat k = 92 && k + 1 < n)
                   (: d (pat (k + 1))
-                     _ (? (d = 121) (say o "\\b") (d = 98) (put o 8) (: _ (put o 92) (put o d)))
+                     _ (? (d = 121) (say o "\\b") (d = 98) (put o 8) (put o 92, put o d))
                      (go (k + 2)))
-                 (: _ (put o (pat k)) (go (k + 1))))
+                 (put o (pat k), go (k + 1)))
        (go 0))
    (aw-re pat)
     (: p (reere (aw-gnu pat))

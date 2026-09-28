@@ -35,21 +35,39 @@ static void cb_tpx(struct cb_paper const *p, struct cb const *c, struct font con
         uint32_t const o = v >> 24 ? v & 0xffffffu : bg;
         for (uintptr_t e = 0; e < s; e++) px[k * s + e] = o; } } } }
 
+// cp's glyph in the chain: the built-in face's where the cp437 page has cp, else a loaded
+// face's (qf, the 8x16 cell only). cb_row reads row r of it left-aligned in 32 bits, bit 31
+// the leftmost pixel, and 0 for a glyph neither face has
+struct cb_look { uint8_t const *bmp, *rows; };
+static struct cb_look cb_look(struct font const *f, uint8_t const *qf, uint32_t cp) {
+  uintptr_t const bpr = ((uintptr_t) f->w + 7) / 8;
+  int const g = cb_437x(cp);
+  return (struct cb_look) { g < 0 ? 0 : f->glyphs + bpr * f->h * (uint32_t) g,
+                            g < 0 && qf && f->w == 8 && f->h == 16 ? cb_face_rows(qf, cp) : 0 }; }
+
+static uint32_t cb_row(struct font const *f, struct cb_look l, uint8_t r) {
+  uintptr_t const bpr = ((uintptr_t) f->w + 7) / 8;
+  if (l.rows) return ((uint32_t) l.rows[2 * r] | (uint32_t) l.rows[2 * r + 1] << 8) << 16;
+  if (l.bmp) return (uint32_t) l.bmp[r * bpr] << 24 | (bpr > 1 ? (uint32_t) l.bmp[r * bpr + 1] << 16 : 0u);
+  return 0; }
+
 // one CELL onto the paper at pixel (x,y), wide when it is a wide char's lead -- two cells'
-// width, the tail beside it painted here too. the glyph is the built-in face's where the
-// cp437 page has cp, else a loaded face's (qf, the 8x16 cell only), else the ■. a cell that
-// would fall off is dropped, so a caller cannot be made to write outside the target it
-// named. a glyph pixel is a paper->scale square, which is the whole of "sharp": whole
-// pixels, no resampling, and the same table serving a 640x400 screen and a dense one.
+// width, the tail beside it painted here too. the base draws through the chain, the ■ where
+// it has nothing; a cluster's marks lie over it, centred on a wide one, and a mark the chain
+// lacks draws nothing. a cell that would fall off is dropped, so a caller cannot be made to
+// write outside the target it named. a glyph pixel is a paper->scale square, which is the
+// whole of "sharp": whole pixels, no resampling, and the same table serving a 640x400 screen
+// and a dense one.
 static void cb_px(struct cb_paper const *p, struct cb const *c, struct font const *f,
                   uint8_t const *qf, struct cb_cell const *cell, uintptr_t x, uintptr_t y) {
   uintptr_t const bpr = ((uintptr_t) f->w + 7) / 8, s = p->scale;
-  uintptr_t const pw = cb_wide(cell->g) == cb_lead ? 2u * f->w : f->w;   // pixels across
+  int const wide = cb_wide(cell->g) == cb_lead;
+  uintptr_t const pw = wide ? 2u * f->w : f->w;   // pixels across
   if (x + pw * s > p->w || y + f->h * s > p->h) return;
-  uint32_t const cp = cb_cp(cell->g);
-  int const g = cb_437x(cp);
-  uint8_t const *rows = g < 0 && qf && f->w == 8 && f->h == 16 ? cb_face_rows(qf, cp) : 0;
-  uint8_t const *bmp = f->glyphs + bpr * f->h * (g < 0 ? 0xfeu : (uint32_t) g);
+  struct cb_look l[cb_clun] = { cb_look(f, qf, cb_base(c, cell->g)) };
+  if (!l[0].bmp && !l[0].rows) l[0].bmp = f->glyphs + bpr * f->h * 0xfeu;
+  uint32_t const *v = cb_clu(c, cell->g), n = v ? cb_clun : 1u;
+  for (uint32_t k = 1; k < n; k++) l[k] = cb_look(f, qf, v[k]);
   uint8_t const face = cb_face(cell->g);
   uint32_t fg = cb_rgbof(c, cell->fg, c->def_fg, face & cb_bold),
            bg = cb_rgbof(c, cell->bg, c->def_bg, 0);
@@ -59,9 +77,8 @@ static void cb_px(struct cb_paper const *p, struct cb const *c, struct font cons
   for (uint8_t r = 0; r < f->h; r++) {
     int const ul = ((face & cb_under) && r == f->h - 1u)    // underline: the last scanline
                 || ((face & cb_strike) && r == f->h / 2u);  // strike: the middle one
-    // the row, left-aligned in 32 bits: bit 31 the leftmost pixel
-    uint32_t o = rows ? ((uint32_t) rows[2 * r] | (uint32_t) rows[2 * r + 1] << 8) << 16
-                      : (uint32_t) bmp[r * bpr] << 24 | (bpr > 1 ? (uint32_t) bmp[r * bpr + 1] << 16 : 0u);
+    uint32_t o = cb_row(f, l[0], r);
+    for (uint32_t k = 1; k < n; k++) o |= cb_row(f, l[k], r) >> (wide ? f->w / 2u : 0u);
     if ((face & cb_ital) && r < f->h / 2u) o >>= 1;        // italic: the top half leans right
     for (uintptr_t d = 0; d < s; d++) {
       volatile uint32_t *px = p->px + (y + r * s + d) * p->pitch + x;
@@ -69,23 +86,28 @@ static void cb_px(struct cb_paper const *p, struct cb const *c, struct font cons
         uint32_t const v = ul || (o >> (31 - k) & 1) ? fg : bg;
         for (uintptr_t e = 0; e < s; e++) px[k * s + e] = v; } } } }
 
-// one grid ROW of `c` onto the paper at (x0,y0) -- the origin is what lets a screen
-// hold a RECTANGLE of the target rather than all of it. `cur` names the cell wearing
-// the cursor (~0u for none), worn as the reverse face so a cell already reversed
-// reads normally under it, which is the only way a block stays visible on one. a tail
-// is its lead's to paint, and the cursor on one is worn by the lead.
+// one ROW of `c` as a reader sees it (cb_seen: a history line while the view looks back)
+// onto the paper at (x0,y0) -- the origin is what lets a screen hold a RECTANGLE of the
+// target rather than all of it. `cur` names the grid cell wearing the cursor (~0u for
+// none), worn as the reverse face so a cell already reversed reads normally under it,
+// which is the only way a block stays visible on one; it rides down with its row as the
+// view looks back. a tail is its lead's to paint, and the cursor on one is worn by the lead.
 void cb_paint(struct cb_paper const *p, struct cb const *c, struct font const *f,
               uint8_t const *qf, uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur) {
-  if (row >= c->rows) return;
+  struct cb_cell const *line = row < c->rows ? cb_seen(c, row) : 0;
+  if (!line) return;
+  uint32_t const at = row < c->view ? ~0u : (uint32_t) (row - c->view) * c->cols;
   for (uint16_t j = 0; j < c->cols; j++) {
-    uint32_t const pos = (uint32_t) row * c->cols + j;
-    struct cb_cell cell = c->cb[pos];
+    uint32_t const pos = at == ~0u ? ~0u : at + j;
+    struct cb_cell cell = line[j];
     int const lead = cb_wide(cell.g) == cb_lead && j + 1u < c->cols
-                     && cb_wide(c->cb[pos + 1].g) == cb_tail;
-    if (j && cb_wide(cell.g) == cb_tail && cb_wide(c->cb[pos - 1].g) == cb_lead) continue;
+                     && cb_wide(line[j + 1].g) == cb_tail;
+    if (j && cb_wide(cell.g) == cb_tail && cb_wide(line[j - 1].g) == cb_lead) continue;
     if (!lead) cell.g &= ~((uint32_t) 3 << 21);             // a lone half paints single
     uintptr_t const px0 = x0 + (uintptr_t) j * f->w * p->scale, py0 = y0 + (uintptr_t) row * f->h * p->scale;
     if (cell.g & cb_pic) { cb_tpx(p, c, f, &cell, px0, py0); continue; }
-    if (pos == cur || (lead && pos + 1 == cur)) cell.g ^= (uint32_t) cb_rev << 24;
+    if (pos != ~0u && (pos == cur || (lead && pos + 1 == cur))) cell.g ^= (uint32_t) cb_rev << 24;
+    int32_t const gi = ((int32_t) row - (int32_t) c->view) * c->cols + j;   // glass's count: history below 0
+    if (c->sel0 <= gi && gi < c->sel1) cell.g ^= (uint32_t) cb_rev << 24;
     cb_px(p, c, f, qf, &cell, x0 + (uintptr_t) j * f->w * p->scale,
           y0 + (uintptr_t) row * f->h * p->scale); } }

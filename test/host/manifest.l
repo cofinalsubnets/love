@@ -44,7 +44,7 @@
  _ (test
     (6 = worth sh (\ j1))
     (9 = worth sh (\ n1))
-    (= [4 5] (worth sh (\ o1)))))
+    ([4 5] = worth sh (\ o1))))
 
 ; --- cycles: flagged at every cell on the loop, and taint what reads them
 ; (a bare whirl is the unit and would otherwise ride quietly through) ---
@@ -112,8 +112,8 @@
  _ (catch rd)                             ; the reader drains to EOF and rests
  outb (peep buf () "")
  scr (mkscr 24 80)
- ; the tail "\e[?1049l" would clear the one-grid witness (alt-screen leave
- ; is clear-and-restore) -- scribe only the voyage, not the stepping-ashore
+ ; the tail "\e[?1049l" would bring the main grid back over the witness (the
+ ; alternate screen's leave) -- scribe only the voyage, not the stepping-ashore
  shore (findi outb "\e[?1049l" 0)
  _ (scribe scr (-1 < shore ? (snip outb 0 shore) outb))
  row1 (rowtx scr 2)                       ; screen line 2 = sheet row 1

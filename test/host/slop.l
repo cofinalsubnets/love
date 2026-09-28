@@ -51,8 +51,8 @@
    (last l) <(rev l)
  (test
   (all (s \ (s <= 1)) steps)                     ; never a two-row drop
-  (0 < tally (filter (s \ (s = 1)) steps))       ; but it does move
-  (2 < ((last srt) - cap srt))                   ; bays and headlands, not a straight line
+  (0 < #(filter (s \ (s = 1)) steps))            ; but it does move
+  (2 < ((last srt) - <srt))                      ; bays and headlands, not a straight line
   (all (x \ (0 < slop-sand g x)) ^80)))          ; and a beach behind it
 
 ; --- the ground in three bands: sand behind the line, grass in front, road through ---
@@ -276,8 +276,8 @@
    c0 (notes 0) c2 (notes 2)
    one (take 38 c0)                              ; one channel of it; jux rev is the other
  (test
-  (76 = tally c0)                                ; 12 + 12 + 7 + 7, twice over
-  (76 = tally c2)
+  (76 = #c0)                                     ; 12 + 12 + 7 + 7, twice over
+  (76 = #c2)
   ; cycle 0 drops its first quarter five semitones -- that is chunk 4 (|- n 5)
   ('(-1 23 2 23 6 23 11 23 14 23 18 23) = take 12 one)
   ; the second quarter is e major, pinkyup, untouched
@@ -355,8 +355,8 @@
    (falling? l) (l @- 1 (a . b . r) (a < b ? 0 (falling? (b . r))))
  (test
   (all (v \ (0.0 < v <= 1.0)) vs)                ; nothing silent, nothing over full
-  (0 < tally (filter (v \ (v < 0.5)) vs))        ; there is a quiet stretch
-  (0 < tally (filter (v \ (0.9 <= v)) vs))       ; and a loud one
+  (0 < #(filter (v \ (v < 0.5)) vs))             ; there is a quiet stretch
+  (0 < #(filter (v \ (0.9 <= v)) vs))            ; and a loud one
   (falling? (take 20 vs))                        ; it only falls at the start
   (rising? (rev (take 20 (rev vs))))))         ; and only rises at the end
 
@@ -412,7 +412,7 @@
   ((40 * ((love-arch = 'wasm ? 16000 48000) // 30)) = #pcm)   ; ten chunks, a thirtieth of a second at the seat's rate
   (0 < peak)                                     ; something sounded
   (peak < 32768)                                 ; and it did not clip
-  (0 < tally (s 'vs))                            ; voices are live
+  (0 < #(s 'vs))                                 ; voices are live
   (0 < s 'cyc)))                                 ; and a cycle has been scheduled
 
 ; --- the clock slows with the walk: the same beat buys less phase further in ---

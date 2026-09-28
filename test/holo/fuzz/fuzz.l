@@ -41,13 +41,13 @@
                                  ((s j) = c) (go (j + 1) (j + 1) ((snip s i j) . acc))
                                  (go i (j + 1) acc))
                  (go 0 0 ()))
- (toks s) (filter (\ t (0 < tally t)) (foldl (\ a t (a + (fields t 9))) () (fields s 32)))
+ (toks s) (filter (\ t (0 < #t)) (foldl (\ a t (a + (fields t 9))) () (fields s 32)))
  (idx-of s sub) (: n #s k #sub
                    (at? i j) (? (k <= j) 1 ((s (i + j)) = (sub j)) (at? i (j + 1)) 0)
                    (go i) (? (n < (i + k)) () (at? i 0) i (go (i + 1)))
                    (go 0))
  (has? s sub) (charm? (idx-of s sub))
- (pfx? s p) (: k #p ((k <= tally s) && ((snip s 0 k) = p)))
+ (pfx? s p) (: k #p ((k <= #s) && ((snip s 0 k) = p)))
  (sfx? s p) (: n #s k #p ((k <= n) && ((snip s (n - k) n) = p)))
  (digit? c) ((48 <= c) && (c <= 57))
  (hexd? c) ((digit? c) || ((97 <= c) && (c <= 102)))
@@ -195,7 +195,7 @@
                     [(? ((in2 (de - 1)) = 45) (0 - v) v) (snip in2 0 (de - 1))])
                  [0 in2])
            dsp <r2 in3 (r2 1)
-           bts (filter (\ t (0 < tally t)) (map trim (fields in3 43)))
+           bts (filter (\ t (0 < #t)) (map trim (fields in3 43)))
            [(? (two? bts) (trim <bts) ()) ix sc dsp])))
 
  ; arm memory: '[x6, #8]' / '[sp, #-16]!' / '[x0, x1, lsl #3]'
@@ -240,8 +240,8 @@
                           (intern ("r" + snip nm 1 n)) ()))))
  (arm-width n0) (: nm (trim n0)
                    (? ((nm = "sp") || (nm = "wsp")) 'sp
-                      ((0 < tally nm) && ((nm 0) = 120)) 'x
-                      ((0 < tally nm) && ((nm 0) = 119)) 'w
+                      ((0 < #nm) && ((nm 0) = 120)) 'x
+                      ((0 < #nm) && ((nm 0) = 119)) 'w
                       '?))
  rv-abs ('(("a0" r0) ("a1" r1) ("a2" r2) ("a3" r3) ("a4" r4) ("a5" r5) ("a6" r6) ("a7" r7)
            ("t0" r8) ("t1" r9) ("t2" r10) ("t3" r11) ("t4" r12) ("s2" r13) ("s3" r14) ("s1" r15)
@@ -265,8 +265,8 @@
  (chk1 got w)
   (: k <w
      (? (k = 'r) (? ((a-abs got) = (w 1)) () ("reg " + got + " != " + string (w 1)))
-        (k = 'rw) (? !(= (a-abs got) (w 1)) ("reg " + got + " != " + string (w 1))
-                       !(= (arm-width got) (w 2)) ("width " + got + " != " + string (w 2))
+        (k = 'rw) (? !(a-abs got = w 1) ("reg " + got + " != " + string (w 1))
+                       !(arm-width got = w 2) ("width " + got + " != " + string (w 2))
                        ())
         (k = 'i) (: v (a-imm got)
                       (? (v = (w 1)) () ("imm " + got + " != " + show0x (mask64 (w 1)))))
@@ -276,11 +276,11 @@
         (k = 'lit) (? ((trim got) = (w 1)) () ("op " + got + " != " + (w 1)))
         (: m (a-mem got)
            (? (atom? m) ("not a mem operand: " + got)
-              !(= (a-abs <m) (w 1)) ("mem base " + <m + " != " + string (w 1))
+              !(a-abs <m = w 1) ("mem base " + <m + " != " + string (w 1))
               !((m 3) = (w 2)) ("mem disp " + show0x (mask64 (m 3)) + " != " + show0x (mask64 (w 2)))
               (k = 'm) ()
               (: ix (m 1)
-                 (? (!(string? ix) || !(= (a-abs ix) (w 3))) ("mem index != " + string (w 3))
+                 (? (!(string? ix) || !(a-abs ix = w 3)) ("mem index != " + string (w 3))
                     !((m 2) = (w 4)) ("mem scale " + show (m 2) + " != " + show (w 4))
                     ()))))))
  (run-spec ins spec strict)
@@ -400,10 +400,10 @@
          (: i <m
             (? (i-bad i) ()
                (: o (ops-arm (i-ops i))
-                  (? !(= (abs-arm <o) d) ()
+                  (? !(abs-arm <o = d) ()
                      (: hi (idx-of (i-ops i) "lsl #")
                         sh (? (charm? hi) (s2i (snip (i-ops i) (hi + 5) #(i-ops i))) 0)
-                        imm (? (1 < tally o) (: v (imm-arm (o 1)) (? !v 0 v)) 0)
+                        imm (? (1 < #o) (: v (imm-arm (o 1)) (? !v 0 v)) 0)
                         mn (i-mnem i)
                         (? ((mn = "mov") || (mn = "movz")) (go >m (mask64 (imm * pow2 sh)))
                            (mn = "movk") (go >m (mask64 ((mask64 (val - ((divp val (pow2 sh)) % 65536) * pow2 sh)) + (imm % 65536) * pow2 sh)))
@@ -495,7 +495,7 @@
                             (? (atom? m) (? ((mask64 val) = (mask64 imm)) ()
                                             ("li value " + show0x (mask64 val) + " != " + show0x (mask64 imm)))
                                (: i <m o (ops-comma (i-ops i)) mn (i-mnem i)
-                                  (? !(= (abs-rv <o) d) ("li dest " + <o + " != " + string d)
+                                  (? !(abs-rv <o = d) ("li dest " + <o + " != " + string d)
                                      (: v2 (? (mn = "li") (imm-rv (o 1))
                                               (mn = "lui") (: v ((imm-rv (o 1)) * 4096)
                                                               (? (2147483648 <= v) (v - 4294967296) v))
@@ -651,8 +651,8 @@
    ["rv64" 'rv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d,+c" "#" 1)) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
  (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
- fz-n (: v ("" + getenv "FUZZ_N") (? (0 < tally v) (s2i v) 8))
- fz-seed (: v ("" + getenv "FUZZ_SEED") (? (0 < tally v) (s2i v) 20250717))
+ fz-n (: v ("" + getenv "FUZZ_N") (? (0 < #v) (s2i v) 8))
+ fz-seed (: v ("" + getenv "FUZZ_SEED") (? (0 < #v) (s2i v) 20250717))
  fz-arch ("" + getenv "FUZZ_ARCH")
 
  (run-lane row)
@@ -685,7 +685,7 @@
 
  ; a fuzz_arch no lane answers to refuses: filtering to nothing would run zero
  ; classes, print "all classes green" and exit 0 -- a spelling mistake reading as a pass.
- lanes (? (0 < tally fz-arch)
+ lanes (? (0 < #fz-arch)
            (: ls (filter (\ r (<r = fz-arch)) arches)
               (? (two? ls) ls (scare 'fuzz-arch fz-arch)))
            arches)

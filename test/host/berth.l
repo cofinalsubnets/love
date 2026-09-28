@@ -178,7 +178,7 @@
    keys {} ticks {}
    sg (berth-stage (\ w h ("\e[H\e[2J" + show w + "x" + show h + " k" + show (peep keys () 0) + " t" + show (peep ticks () 0)))
                    (\ c (pin keys () c))
-                   (\ _ (= 113 (peep keys () 0))))
+                   (\ _ (113 = peep keys () 0)))
    ; the harbour's opening with a stage as its first berth, the tty parts left out
    (mkhb r c sg argv)
     (: p0 (hopen-stage sg r c)
@@ -214,7 +214,7 @@
    _ (waitfor p2)
    _ (test (sub? (rowtx (scrof hb 1) 0) "21x10 k97" 0))   ; the bar's column back too
    ; the tick door: no on a no, a repaint on a yes
-   _ (pin sg 'tick (\ _ (: n (1 + peep ticks () 0) _ (pin ticks () n) (= 0 (n % 2)))))
+   _ (pin sg 'tick (\ _ (: n (1 + peep ticks () 0) _ (pin ticks () n) (0 = n % 2))))
    _ (pin (hb 'dirt) () 0)
    _ (htick hb)
    _ (test (1 = (peep ticks () 0)) (0 = (peep (hb 'dirt) () 0)) (sub? (rowtx (scrof hb 1) 0) " t0" 0))
@@ -318,6 +318,31 @@
     (sub? outb "\e[1;40H" 0)              ; the bar's column, 39 zero-based
     (sub? outb limn-down 0)                   ; ... drawn with the box glyph
     (sub? outb "\e[2;41H" 0))             ; the new pane's second row, past the bar
+ _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
+ (close m))
+
+; --- the outer terminal's sequences, on a real berth over a real pty: the child scrolls
+; TOPMARK away and shift+PgUp brings it back; the child asks for the mouse and a
+; bracketed paste, berth asks the outer terminal for the mouse in turn, and a click and
+; a paste sent as the outer terminal sends them reach the child as it asked -- it says
+; them back through cat -v. the child's script rides BK, past three layers of quoting ---
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+ _ (setenv "BK" ("printf 'TOPMARK" + cats (map (\ _ "\\n") (jot 30)) + "'; stty raw -echo; "
+                 + "printf '\\033[?1000h\\033[?1006h\\033[?2004h'; r=$(dd bs=1 count=33 2>/dev/null); "
+                 + "printf '%s' \"$r\" | cat -v; sleep 1"))
+ md (tether ["out/love" "-l" "apps/berth/berth.l"
+             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
+ _ (test (two? md))
+ m >md
+ _ (rest 1200)
+ _ (say m "\e[5;2~") _ (flush m)                  ; shift+PgUp
+ _ (rest 400)
+ _ (say m "\e[<0;3;2M\e[<0;3;2m\e[200~p\nq\e[201~") _ (flush m)   ; a click at row 2 col 3, a paste
+ outb (slurp m)
+ _ (test
+    (sub? outb "TOPMARK" 0)                        ; the history, in view
+    (sub? outb "\e[?1000h" 0)                      ; the child's mouse wish, passed out
+    (sub? outb "^[[<0;3;2M^[[<0;3;2m^[[200~p^Mq^[[201~" 0))   ; ... and the click and paste, passed in
  _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (close m))
 
