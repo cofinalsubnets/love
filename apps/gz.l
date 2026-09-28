@@ -7,6 +7,7 @@
 ;   (gz-puff s n)          -> the same, in love, and the oracle the C twin answers to
 ;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
 ;   (gz-unzip s)           -> (1 bytes) | ()
+;   (gz-head s)            -> (1 stamp name body-seat) | (), the header walked
 ;
 ; presence rides the (1 _) wrapper on every decode, and it has to: the empty string is a
 ; legitimate member and a torn one answers nothing too, so a bare value could never say
@@ -736,34 +737,35 @@
    ; the header's optional fields are four flags, and every one of them must be
    ; stepped over even though we write none of them -- the far side is gzip, and
    ; `gzip -N` writes a name. ftext (bit 0) carries no bytes.
-   (gz-skip s n i)                            ; step a NUL-ended field
-    (? (n <= i) () (s i = 0) (i + 1) (gz-skip s n (i + 1)))
-   (gz-unzip s)
+   (gz-head s)                                ; -> (1 stamp name body-seat) | ()
     (: n #s
-       (? (n < 18 || s 0 != 31 || s 1 != 139 || s 2 != 8)  ()
+       (skip i) (? (n <= i) () (s i = 0) (i + 1) (skip (i + 1)))       ; a NUL-ended field
+       (? (n < 18 || !(s 0 = 31 && s 1 = 139 && s 2 = 8)) ()
           (: flg (s 3)
-             i0 10
-             i1 (? (flg & 4) (: x (s i0 + (s (i0 + 1) << 8)) (i0 + 2 + x)) i0)   ; fextra
-             i2 (? (flg & 8) (gz-skip s n i1) i1)                                  ; fname
-             i3 (? !i2 () (flg & 16) (gz-skip s n i2) i2)                        ; fcomment
-             i4 (? !i3 () (flg & 2) (i3 + 2) i3)                                   ; fhcrc
-             (? !i4 ()
-                (n < (i4 + 8)) ()
-                (: isize (s (n - 4) + (s (n - 3) << 8)
-                          + (s (n - 2) << 16) + (s (n - 1) << 24))
-                   crc (s (n - 8) + (s (n - 7) << 8)
-                        + (s (n - 6) << 16) + (s (n - 5) << 24))
-                   ; `pour`'s last argument is a count, not an end offset, and the nif
-                   ; clamps it to the shorter of the two arrays -- so an end offset can
-                   ; answer right off the destination's size alone, silently, and move
-                   ; the whole tail to do it. spell the count.
-                   body (: c (cask (n - i4 - 8)) (pour c 0 s i4 (n - i4 - 8), string c))
-                   r (gz-inflate body isize)
-                   out <>r
-                   ; the trailer is the whole point of the container: a stream
-                   ; that inflated cleanly and hashes wrong is a corrupt one,
-                   ; and saying so is the only thing the crc is for.
-                   (? r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out]))))))))
+             i1 (flg & 4 ? (12 + rdle s 10 2) 10)                                  ; fextra
+             r2 (flg & 8 ? (: e (skip i1) (e && [1 (snip s i1 (e - 1)) e])) [1 "" i1])   ; fname
+             (? !r2 ()
+                (: i3 (flg & 16 ? (skip <>>r2) <>>r2)                             ; fcomment
+                   (? !i3 ()
+                      (: i4 (flg & 2 ? (i3 + 2) i3)                               ; fhcrc
+                         (? (n < i4 + 8) () [1 (rdle s 4 4) <>r2 i4]))))))))
+   (gz-unzip s)
+    (: n #s h (gz-head s)
+       (? !h ()
+          (: i4 <>>>h
+             isize (rdle s (n - 4) 4)
+             crc (rdle s (n - 8) 4)
+             ; `pour`'s last argument is a count, not an end offset, and the nif
+             ; clamps it to the shorter of the two arrays -- so an end offset can
+             ; answer right off the destination's size alone, silently, and move
+             ; the whole tail to do it. spell the count.
+             body (: c (cask (n - i4 - 8)) (pour c 0 s i4 (n - i4 - 8), string c))
+             r (gz-inflate body isize)
+             out <>r
+             ; the trailer is the whole point of the container: a stream
+             ; that inflated cleanly and hashes wrong is a corrupt one,
+             ; and saying so is the only thing the crc is for.
+             (? r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out]))))))
 
 ) ; module 'gz
 
@@ -795,6 +797,7 @@
 ; of our own rather than on the dist cat's shared one.
 (module 'gzcmd
 (borrow 'gz)
+(borrow 'bytes)
 
 (borrow 'path)
 (borrow 'posix)
@@ -815,30 +818,12 @@ no file, or a bare -, is the filter: stdin -> stdout"
                      (: _ (say err ("gzip: " + m)) _ (put err 10) (flush err)))
    (gzc-tell t m) (peep t 'v 0 && (: _ (say err m) _ (put err 10) (flush err)))
    (gzc-pad w s) (#s < w ? (gzc-pad w (" " + s)) s)
-   ; the raw clips, not posix's: no trailing slash is stripped first, so "a/b/" is
-   ; a base of "" and a dir of "a/b/". a tar member wants the text it was handed
    (gzc-dirp? q) (: st (stat q) (two? st && <>>st & 61440 = 16384))
    (gzc-worse a b) (? (a = 1 || b = 1) 1 (a = 2 || b = 2) 2 0)
 
-   ; --- the member's own header, which -l and -N read and gz-unzip does not tell --
-   ; every optional field must be stepped over even though only fname is wanted.
-   (gzc-hdr s)                         ; -> (1 stamp name body-seat) | ()
-    (: n #s
-       (skip i) (? (n <= i) () (s i = 0) (i + 1) (skip (i + 1)))
-       (? (n < 18 || !(s 0 = 31 && s 1 = 139 && s 2 = 8)) ()
-          (: flg (s 3)
-             stamp (s 4 + (s 5 << 8) + (s 6 << 16) + (s 7 << 24))
-             i1 (flg & 4 ? (10 + 2 + s 10 + (s 11 << 8)) 10)
-             r2 (flg & 8 ? (: e (skip i1) (e && [1 (snip s i1 (e - 1)) e])) [1 "" i1])
-             (? !r2 ()
-                (: nom <>r2
-                   i3 (flg & 16 ? (skip <>>r2) <>>r2)
-                   (? !i3 ()
-                      (: i4 (flg & 2 ? (i3 + 2) i3)
-                         (? (n < i4 + 8) () [1 stamp nom i4]))))))))
-   (gzc-isize s) (: n #s
-                    (s (n - 4) + (s (n - 3) << 8) + (s (n - 2) << 16) + (s (n - 1) << 24)))
-   (gzc-pay z) (: h (gzc-hdr z) (h ? (#z - <>>>h - 8) 0))          ; the deflate bytes alone
+   ; --- a member's sizes, for -l --
+   (gzc-isize s) (rdle s (#s - 4) 4)
+   (gzc-pay z) (: h (gz-head z) (h ? (#z - <>>>h - 8) 0))          ; the deflate bytes alone
 
    ; --- the ratio, GNU's `%5.1f%%` ------------------------------------------
    ; the tenth is rounded, not truncated, and a tie lands half away from zero where C
@@ -862,7 +847,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
         (: r (uread p)
            (? !r (: _ (gzc-moan t (p + ": No such file or directory"))
                     [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
-              (: s <>r h (gzc-hdr s)
+              (: s <>r h (gz-head s)
                  (? !h (: _ (gzc-moan t (p + ": not in gzip format"))
                           [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
                     (: fs2 #s un (gzc-isize s) pay (fs2 - <>>>h - 8)
@@ -922,7 +907,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (: r (uread p)
        (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
           (: s <>r
-             h (gzc-hdr s)
+             h (gz-head s)
              u (h && gz-unzip s)
              (? !h (: _ (gzc-moan t (p + ": not in gzip format")) 1)
                 !u (: _ (gzc-moan t (p + ": invalid compressed data--crc error")) 1)

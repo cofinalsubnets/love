@@ -13,9 +13,9 @@
 (borrow "apps/berth/limn.l")
 
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
-   (chat s i) (255 & glass s i)
+   (chat s i) (2097151 & glass s i 0)             ; a cell's codepoint
    (rowtx s r) (: c (gaze s 2)
-                (foldl (\ a i (a + string (: ch (chat s ((r * c) + i)) (0 = ch ? 32 ch))))
+                (foldl (\ a i (a + (: ch (chat s ((r * c) + i)) (0 = ch ? " " (utf8 ch)))))
                        "" (jot c))))
 
 ; --- a child's plain output lands on the grid, colours and all ---
@@ -26,8 +26,8 @@
  _ (moor bx >md ())
  _ (test
     ("hired" = snip (rowtx s 0) 0 5)
-    (7 = (255 & (glass s 1 >> 8)))     ; the h: default pen
-    (1 = (255 & (glass s 2 >> 8))))    ; the r: red
+    (0 = glass s 1 1)                  ; the h: the default pen
+    ((1 << 24 | 1) = glass s 2 1))     ; the r: red, index 1
  st (waitfor <md)
  _ (test (two? st) (3 = <st))     ; the status pair came home
  (close >md))
@@ -68,12 +68,12 @@
  _ (moor bx >md ())
  _ (test
     ("    deepsea" = snip (rowtx s 2) 0 11)
-    (4 = (glass s ((2 * 20) + 8) >> 28)))   ; the s of sea: reverse video
+    (4 = (glass s ((2 * 20) + 8) 0 >> 24)))   ; the s of sea: reverse video
  _ (waitfor <md)
  (close >md))
 
 ; --- the utf-8 round trip, all the way through the painter: a guest says
-; ─ and é; the grid folds them to cp437; full berth (painter and all, on
+; ─ and é; the grid holds their codepoints; full berth (painter and all, on
 ; its own pty) says them back out as the same utf-8 ---
 (: (find h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (find h n (i + 1))) 0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)

@@ -1,22 +1,17 @@
 /* apps/moon/lib/moonlibc/dns.c -- getaddrinfo: the numeric slice, then the NAME
  * half over /etc/hosts and a UDP A query to /etc/resolv.conf's server. */
 #include "impl.h"
+#include <arpa/inet.h>
 
 /* ---- getaddrinfo, the numeric slice: dotted-quad IPv4 + localhost + a decimal
  * port -- exactly what the host seam speaks (love/sock.c resolves numbers; DNS
  * stays a post-rung nicety). one malloc'd block carries result + address. ---- */
 struct __sain { unsigned short fam; unsigned short port; unsigned int addr; char pad[8]; };   /* sockaddr_in, 16 bytes */
 struct __gai { struct addrinfo ai; struct __sain sa; };
-static int __quad(char const *s, unsigned int *out) {
-  unsigned int a = 0;
-  for (int i = 0; i < 4; i++) {
-    unsigned int b = 0, any = 0;
-    while (*s >= 48 && *s <= 57) { b = b * 10 + (unsigned) (*s++ - 48); any = 1; if (b > 255) return -1; }
-    if (!any) return -1;
-    a = (a << 8) | b;
-    if (i < 3 && *s++ != 46) return -1; }
-  if (*s) return -1;
-  *out = a;
+static int __quad(char const *s, unsigned int *out) {   /* host order */
+  unsigned char b[4];
+  if (inet_pton(AF_INET, s, b) != 1) return -1;
+  *out = (unsigned) b[0] << 24 | (unsigned) b[1] << 16 | (unsigned) b[2] << 8 | b[3];
   return 0; }
 /* ---- the NAME half: /etc/hosts, then a UDP A query to /etc/resolv.conf's
  * nameservers -- the smallest resolver that keeps `connect host port` (ain)

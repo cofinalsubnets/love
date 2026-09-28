@@ -1,5 +1,5 @@
 ; --- test/limn.l: the laws of apps/berth/limn.l, the cell painter ---
-; `glass` and `unfold` are cb's nifs (love/quay/nif.c) and love0 links them too, so these
+; `glass` is cb's nif (love/quay/nif.c) and love0 links it too, so these
 ; are corpus laws. `borrow` finds apps/berth/limn.l by the filesystem walk, which the
 ; hosted seats have; a seat without one will want a guard here.
 ;
@@ -25,40 +25,42 @@
       ("\e[3;12H" = limn-go 2 11)
       ("\e[25;80H" = limn-go 24 79))
 
-; --- utf-8 out, by range: the grid holds cp437, the terminal speaks unicode ---
-   _ (test
-      ("A" = limn-utf8 65)
-      (1 = tally (limn-utf8 127))                    ; one byte to the ascii edge
-      (2 = tally (limn-utf8 233))                    ; é
-      (3 = tally (limn-utf8 9474))                   ; │ the box glyph
-      (limn-down = limn-utf8 9474)
-      (limn-across = limn-utf8 9472))
-
-; --- the unfold itself: a cp437 byte's codepoint, quay's own table (cb_umap).
-;     0 is "no meaning" and the ascii range never asks -- limn reads a byte as
-;     itself there, so a nonzero answer for one would be a second opinion ---
-   _ (test
-      (9829 = unfold 3)                               ; the heart
-      (9474 = unfold 179)                             ; the box glyph limn draws down with
-      (233 = unfold 130)                              ; e-acute
-      (0 = unfold 0) (0 = unfold 65) (0 = unfold 126)
-      (limn-down = limn-glyph 179))                   ; the two spellings of one line
-
-; --- a glyph byte: ascii through, a high byte unfolded, and the cache is
-;     transparent -- asking twice answers the same text ---
+; --- a codepoint out as utf-8, each spelled once and cached, so asking twice answers
+;     the same text; the blank is a space ---
    _ (test
       ("x" = limn-glyph 120)
-      (limn-glyph 201 = limn-glyph 201)               ; cached, and equal to itself
-      (0 < tally (limn-glyph 201)))
+      (" " = limn-glyph 0)
+      (2 = tally (limn-glyph 233))                   ; é
+      (3 = tally (limn-glyph 9474))                  ; │ the box glyph
+      (4 = tally (limn-glyph 128512))                ; past the bmp: the cell holds it whole
+      (limn-down = limn-glyph 9474)                  ; the two spellings of one line
+      (limn-across = utf8 9472)
+      (limn-glyph 201 = limn-glyph 201))              ; cached, and equal to itself
 
-; --- the pen: one SGR per change, respecified from zero so it is never stale ---
-   _ (test
-      ("\e[0;38;5;7;48;5;0m" = limn-sgr (| 7 (<< 0 8)))
-      ("\e[0;38;5;1;48;5;4m" = limn-sgr (| 1 (<< 4 8)))
-      ; the faces ride the pen's high nibble: bold 1, under 2, reverse 4
-      (sub? (limn-sgr (| 7 (<< 1 20))) ";1" 0)
-      (sub? (limn-sgr (| 7 (<< 2 20))) ";4" 0)
-      (sub? (limn-sgr (| 7 (<< 4 20))) ";7" 0))
+; --- the pen: a face byte and two colour words (love/quay/quay.h) as one number, and
+;     one SGR per change, respecified from zero so it is never stale. a colour word's
+;     top byte is its kind: 0 the outer terminal's default, 1 an index, 2 rgb ---
+   _ (: (idx v) ((1 << 24) | v) (rgb v) ((2 << 24) | v)
+        _ (test
+           ("\e[0;39;49m" = limn-sgr (limn-pen 0 0 0))
+           ("\e[0;38;5;1;48;5;4m" = limn-sgr (limn-pen 0 (idx 1) (idx 4)))
+           ("\e[0;38;2;255;128;0;49m" = limn-sgr (limn-pen 0 (rgb 16744448) 0))
+           ; the faces ride the glyph word's top byte: bold 1, under 2, reverse 4, dim 8,
+           ; italic 16, strike 32, blink 64, hidden 128
+           (sub? (limn-sgr (limn-pen (1 << 24) 0 0)) ";1" 0)
+           (sub? (limn-sgr (limn-pen (2 << 24) 0 0)) ";4" 0)
+           (sub? (limn-sgr (limn-pen (4 << 24) 0 0)) ";7" 0)
+           (sub? (limn-sgr (limn-pen (16 << 24) 0 0)) ";3" 0)
+           (sub? (limn-sgr (limn-pen (32 << 24) 0 0)) ";9" 0)))
+
+; --- through a screen: truecolour and a codepoint the cp437 page lacks both come
+;     back out as they went in ---
+   _ (: s (mkscr 1 4)
+        _ (scribe s "\e[1;38;2;1;2;3m\u{4e16}")   ; bold, rgb 1 2 3, and 世
+        f (paint s 1 4 0 0)
+        _ (test
+           (sub? f "\e[0;1;38;2;1;2;3;49m" 0)
+           (sub? f "\u{4e16}" 0)))
 
 ; --- the law that matters: every row is addressed at its own origin, which is
 ;     the whole difference between painting a rectangle and painting full lines ---
@@ -91,7 +93,7 @@
                           (cnt t sb (i + 1) n))
         _ (test
            (0 <= p)                                   ; a pen came back out
-           (1 = cnt f "\e[0;38;5;" 0 0)))             ; and exactly one SGR was said
+           (1 = cnt f "\e[0;" 0 0)))                  ; and exactly one SGR was said
 
 ; --- the bars, straight off wharf-bars' list: (dir row col len) ---
    _ (: j (jug 0)

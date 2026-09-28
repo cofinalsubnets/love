@@ -6,6 +6,7 @@
 // adobe's word), any sampling | why not: 1 not a jpeg, 2 cut short, 3 a kind it can't
 // read (arithmetic, lossless, 12-bit, cmyk), 4 a bad table or scan, 5 past 2^24 pixels
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -232,7 +233,6 @@ struct jd {
  uintptr_t mcux, mcuy;
  int ns, sc[3], ss, se, ah, al; };
 
-static int jd_be16(const uint8_t *p) { return p[0] << 8 | p[1]; }
 
 // entropy bytes, msb first into acc; a marker (or the end) feeds zeros
 static void jd_fill(struct jd *d) {
@@ -372,7 +372,7 @@ static void jd_scan(struct jd *d) {
 static int jd_sof(struct jd *d, const uint8_t *p, int n, int m) {
  if (m != 0xc0 && m != 0xc1 && m != 0xc2) return 3;
  if (n < 6 || p[0] != 8) return 3;
- d->h = jd_be16(p + 1), d->w = jd_be16(p + 3), d->nc = p[5], d->prog = m == 0xc2;
+ d->h = (int) ld16be(p + 1), d->w = (int) ld16be(p + 3), d->nc = p[5], d->prog = m == 0xc2;
  if (!d->h || !d->w || (d->nc != 1 && d->nc != 3)) return 3;
  if (n < 6 + 3 * d->nc) return 4;
  if ((uintptr_t) d->w * (uintptr_t) d->h > (uintptr_t) 1 << 24) return 5;
@@ -421,7 +421,7 @@ static int jd_dqt(struct jd *d, const uint8_t *p, int n) {
   int wide = p[0] >> 4, t = p[0] & 3, need = 1 + 64 * (wide ? 2 : 1);
   if (wide > 1 || n < need) return 4;
   for (int k = 0; k < 64; k++)
-   d->q[t][jp_zigzag[k]] = (uint16_t) (wide ? jd_be16(p + 1 + 2 * k) : p[1 + k]);
+   d->q[t][jp_zigzag[k]] = (uint16_t) (wide ? (int) ld16be(p + 1 + 2 * k) : p[1 + k]);
   p += need, n -= need; }
  return 0; }
 
@@ -448,7 +448,7 @@ static int jd_walk(struct jd *d, int head) {
   if (m == 0xd9) return d->scans ? 0 : 2;
   if (m == 0x01 || (m >= 0xd0 && m <= 0xd7)) continue;
   if (d->pos + 2 > d->n) return d->scans ? 0 : 2;
-  int len = jd_be16(d->s + d->pos);
+  int len = (int) ld16be(d->s + d->pos);
   if (len < 2 || d->pos + (uintptr_t) len > d->n) return d->scans ? 0 : 2;
   const uint8_t *p = d->s + d->pos + 2; int n = len - 2, why = 0;
   d->pos += (uintptr_t) len;
@@ -457,7 +457,7 @@ static int jd_walk(struct jd *d, int head) {
    if ((why = jd_sof(d, p, n, m)) || head) return why; }
   else if (m == 0xc4) why = jd_dht(d, p, n);
   else if (m == 0xdb) why = jd_dqt(d, p, n);
-  else if (m == 0xdd) d->ri = n >= 2 ? jd_be16(p) : 0;
+  else if (m == 0xdd) d->ri = n >= 2 ? (int) ld16be(p) : 0;
   else if (m == 0xee) { if (n >= 12 && !memcmp(p, "Adobe", 5)) d->adobe = 1, d->transform = p[11]; }
   else if (m == 0xdc) return 3;
   else if (m == 0xda) {

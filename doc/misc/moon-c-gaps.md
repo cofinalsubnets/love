@@ -109,6 +109,8 @@ definitions, bitfields including compound assignment and postfix `++`/`--` (194-
 `_Generic` and `_Alignof`, `__builtin_choose_expr`/`object_size`/`prefetch`/`return_address`/
 `frame_address`, the bit builtins (`bswap`, `clz`, `ctz`, `popcount`, `ffs`) folded over a constant
 where one is owed -- a case label, a bit-field width, an array dimension (193-bswapcase.c),
+a static initializer's `?:` whose condition is known (a folded integer, comparisons and `&&`/`||`
+included, or a string or static address, never null -- 198-staticcond.c),
 `__builtin_ffs`/`ffsl`/`ffsll` over a runtime value (a popcount of `x ^ (x - 1)`; `ffsll` refuses
 on t32) and `__builtin_isdigit` (parse writes it as `(unsigned)(c - '0') < 10`; 197-ffsdigit.c),
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
@@ -646,11 +648,11 @@ never silent**.
 | by-value composite arg, MEMORY class | ✓ | — | — | — | — | — |
 | composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
 | composite NAMED in a variadic parameter list | ✓ | ✓ | — | — | — | — |
-| composite return, 16B all-int | ✓ | ✓ | ✓ | — | — | ✓ |
-| composite return, MEMORY class | ✓ | — | — | — | — | ✓ |
+| composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| composite return, MEMORY class | ✓ | — | — | ✓ | ✓ | ✓ |
 | `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
 | `__sync` spin-lock pair | ✓ | ✓ | ✓ | — | — | — |
-| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | — | — | rt.c |
+| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | rt.c | rt.c | rt.c |
 | 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | rt.c |
 | `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c |
 
@@ -674,11 +676,12 @@ gcc's libgcc.a answered them until 2026-09-10 and rides no board link now. A cal
 LINK-time dependency, invisible to a compile: it shows up as an undefined `__aeabi_*` in the
 object, which is how the table finds it. Everywhere else the lane is ours or there is no lane.
 
-**The two struct rows do not move together, and thumb1 inverts them.** v6-M returns *any*
-struct over 4 bytes through memory (`sretm?`), so thumb1 takes both composite returns while
-refusing every composite *argument*; a64 and rv64 are the mirror image, taking arguments
-and the 16B return but refusing the MEMORY-class return — which is what stops PDCLib's dlmalloc
-on the cross targets.
+**The two struct rows do not move together, and t32 inverts them.** AAPCS32 returns a
+struct over 4 bytes through memory (`sretm?`) -- every one on v6-M, and on thumb2/thumb2sp
+every one that is no VFP HFA (at most four of one float type, which the s/d file carries) --
+so t32 takes both composite returns while refusing the int composite *argument*; a64 and rv64
+are the mirror image, taking arguments and the 16B return but refusing the MEMORY-class
+return — which is what stops PDCLib's dlmalloc on the cross targets.
 
 **The register-exhausted by-value composite is x64-only, and even there only the gp half.**
 A 9..16B aggregate argument with too few *integer* registers left now goes wholly to the
@@ -699,19 +702,14 @@ also takes — probe the one you mean.
 - **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
   not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
   doubles/pairs/structs across a t32 VARIADIC seam. love.c reaches none of them.
-- **a 16B all-int composite RETURN on t32** refuses on thumb2 and thumb2sp; a64, rv64 and
-  x64 all take it. the probe must DEFINE one, not declare it —
-  `typedef struct {int a,b,c,d;} R; static R mk(int x){ R r = {x,x,x,x}; return r; }` plus a
-  caller; a bare prototype compiles everywhere. AAPCS32 wants the hidden-pointer memory
-  return the v6-M lane already implements (`sretm?`); thumb2 has no such lane. It is NOT what
-  stops the Playdate SDK header — `mooncc -t thumb2sp -c` compiles `pd_api.h` clean, and the
-  `LCDMakeRect` this note used to cite is in no shipped SDK.
+- **a memory-returning call through a POINTER on t32** — `no lane for an indirect call to a
+  MEMORY-returning function`: the direct call stages the hidden pointer, the indirect one
+  does not yet. test/thumb2/libr.c is the direct lane's differential against gcc.
 - **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this
   80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
   definition that returns one; a bare prototype compiles everywhere.
-- **signed 64-bit `/` and `%` on thumb2 and thumb2sp** refuse (`cgfn refuses`) — love.c's lane
-  is unsigned; wrap the unsigned expansion in an abs/refix sleeve when needed. thumb1 answers
-  it, through the runtime's own `__divdi3`/`__moddi3` (apps/moon/lib/rt.c).
+- **signed 64-bit `/` and `%` on t32** call out to the runtime's own `__divdi3`/`__moddi3`
+  (apps/moon/lib/rt.c) on all three targets.
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
@@ -827,13 +825,11 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 **measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
 with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
-every ninth by path: **130 compile**, and the rest stop at
+every ninth by path: **144 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 15 | a function's inline asm: `sbb`, `rep`, `lcallw`, `fnsave`, `clflush`, `mov %fs, r`, a debug register (`%db0`), a register pinned twice, an `"i"` input no fold makes constant |
-| 9 | `cause unnamed` (`page_ref_dec_and_test`, `notify_uffd`, `dma_direct_sync_sg_for_device`, `acpi_pci_probe_root_resources`, `nf_conntrack_tcp_packet`, `tcp_send_syn_data`) |
-| 3 | a static initializer: a `?:` over a function (`serial_port_pm`'s and `exar_pci_pm`'s `.suspend`), `ct_sip_hdrs` |
+| 13 | a function's inline asm: `sbb`, `rep`, `lcallw`, `fnsave`, `clflush`, `mov %fs, r`, a debug register (`%db0`), an `"i"` input no fold makes constant |
 | 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label` |
 
 each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
@@ -841,9 +837,9 @@ runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm
 `pushf` 102, an address as an `"i"` operand 22, a `%gs:` operand 20, a `"+m"` output 17 and a
 flag output 10, an `"i"` only a splice makes constant 17, a lock's or tracepoint's static
 initializer 20, `.skip` over label arithmetic 4, the bit scans and `pause` 9 and a register
-spelled `%rdx` 4, gas's macro language 3 and a bit builtin over a constant 9 `typeof` of the object in its own initializer 31, `__label__` 7 and `ffs`/`isdigit` over a runtime value 7 before they read (142-syntax.c, 174-elvis.c,
+spelled `%rdx` 4, gas's macro language 3 and a bit builtin over a constant 9, `typeof` of the object in its own initializer 31, `__label__` 7, `ffs`/`isdigit` over a runtime value 7, a static initializer's `?:` 3 an inlined empty callee alone in an if's arm 8 and an asm input pinned where an output is 3 before they read (142-syntax.c, 174-elvis.c,
 175-offsetof.c, 176-cleanup.c, 178-toplevelasm.c, 179-pushf.c, 181..185-asm*.c, 186-staticinit.c
-188..191-asm*.c, 193-bswapcase.c, 195-typeofself.c, 196-locallabel.c and 197-ffsdigit.c hold them). a file-scope asm is gas's whole language, and
+188..191-asm*.c, 193-bswapcase.c, 195-typeofself.c, 196-locallabel.c, 197-ffsdigit.c, 198-staticcond.c, 199-emptyinl.c and 200-asmsamereg.c hold them). a file-scope asm is gas's whole language, and
 holo's gas-top reads what C headers write there -- `.section`/`.pushsection` and their undo, labels local and numeric, `.globl`,
 `.byte`..`.quad` over a symbol plus a constant or less `.`, `.ascii`/`.asciz`, `.balign`,
 `.zero`, `.org`, and `.skip` or a word over label arithmetic (read once the whole text has,

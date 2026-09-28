@@ -485,8 +485,11 @@
    (asalign g ty) (: e (peep (g 'stag) <>ty 0) (two? e ? <>>e 8))        ; a struct tag's alignment
    (aslots g ty) (aup (tsz g ty) 8 >> 3)                              ; its eightbyte count
    ; a memory-class return: a hidden pointer as the first gp argument, filled and answered by
-   ; the callee. v6-M past 4 bytes, SysV past 16
-   (sretm? g ty) (stru? ty && (v6m? g && 4 < tsz g ty || amem? g ty))
+   ; the callee. AAPCS32 past 4 bytes -- save, on a VFP seat, an HFA, which the s/d file carries --
+   ; and SysV past 16
+   (sretm? g ty) (stru? ty && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty))
+   ; an AAPCS-VFP homogeneous aggregate: one float base, at most four of it
+   (t32hfa? g ty) (: b (hfab g ty) (flo? b && tsz g ty <= 4 * tsz g b))
    (fnret ty) (? !(two? ty && <ty = 'ptr) 'long        ; an indirect callee's result type: ('ptr ('fn ret ptys)) | 'long
                  (: ft <>ty (fn? ft && two? >ft ? <>ft 'long)))
    (fnpts ty) (? !(two? ty && <ty = 'ptr) ()           ; ..and its parameter types, () where the declarator had no prototype
@@ -2838,8 +2841,8 @@
                            (fnret (vty hr) = 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                            '((movqxr f0 r0)))
                    (? (bad? hr) 'bad
-                      (v6m? g && stru? (fnret (vty hr)) &&   ; a memory-returning callee behind a pointer: the
-                          4 < tsz g (fnret (vty hr)))        ; implicit-arg shift wasn't staged
+                      (t32? g && sretm? g (fnret (vty hr)))  ; a memory-returning callee behind a pointer: the
+                                                             ; implicit-arg shift wasn't staged
                        (nolane g ("no lane for an indirect call to a MEMORY-returning function" + ontgt g))
                       ; t32: r12 doubles as the far-mem scratch, so the park rides a frame slot and reloads r12 last before the call
                       (t32? g)
@@ -5875,13 +5878,22 @@
        'un
         (: v (icfold <>>e)
            (? (v = 'no) 'no (<>e = 'neg) -v (<>e = 'bnot) (-v - 1) 'no))
+       'cond
+        (: c (icfold <>e) (? (c = 'no) 'no (c != 0) (icfold <>>e) (icfold <>>>e)))
        'bin (: op <>e a (icfold <>>e) b (icfold <>>>e)
              (? (a = 'no || b = 'no) 'no
               (op @ '+ (a + b) '- (a - b) '* (a * b)
                     '/ (? (b = 0) 'no (a // b)) '% (b = 0 ? 'no (a - (a // b) * b))
                     'shl (a << b) 'shr (a >> b)
                     '& (a & b) '| (a | b) '^ (a ^ b)
+                    'eq (a = b ? 1 0) 'ne (a = b ? 0 1)
+                    'lt (a < b ? 1 0) 'le (a <= b ? 1 0) 'gt (b < a ? 1 0) 'ge (b <= a ? 1 0)
                     'no)))
+       ('land || 'lor)
+        (: a (icfold <>e) b (icfold <>>e)
+           (? (a = 'no || b = 'no) 'no
+              (<e = 'land) (a != 0 && b != 0 ? 1 0)
+              (a != 0 || b != 0 ? 1 0)))
        'no))
    ; a constant lvalue at image time -> (label byteoffset type) | 'no: a global, *(const ptr),
    ; or a .member off either; the type threads so the next .member scales
@@ -5896,10 +5908,21 @@
             (imlval g <>e @ 'no 'no b
              (: fm (fmem g <>>b <>>e) (bad? fm ? 'no [<b (<>b + <fm) <>fm])))
            'no)
+   ; a ?: whose condition is known at image time -> the arm it takes | 'no: an integer that
+   ; folds, or a string or static address, which is never null (the kernel's `"f" ? .. : 0`)
+   (imsel g e)
+    (: c <>e
+       v (icfold c)
+       t (? (v != 'no) (v != 0)
+            (two? c && <c = 'str) 1
+            (: a (imaddr g c) (? (a = 'no) 'no 1)))
+       (? (t = 'no) 'no t <>>e <>>>e))
    ; a constant address at image time -> (label byteoffset ptrtype) | 'no; a cast retypes, so
    ; a later + scales by the new pointee
    (imaddr g e)
-    (<e @ 'cast
+    (<e @ 'cond
+        (: a (imsel g e) (? (a = 'no) 'no (imaddr g a)))
+       'cast
         (: r (imaddr g <>>e)
            (r @ 'no 'no [<r <>r <>e]))
        'str
@@ -5948,6 +5971,7 @@
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (?- 'bad
      (atom? ini) (zeros (tsz g ty))
+     (<ini = 'cond) (: a (imsel g ini) (? (a = 'no) 'bad (imgbytes g ty a)))
      (<ini = 'flo) (? (flo? ty) (fim ty <>ini) 'bad)
      (<ini = 'num) (? (aggish? ty) 'bad
                            (flo? ty) (fim ty (0.0 + <>ini))
@@ -6310,8 +6334,12 @@
                    (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
        is9 (iconv <>>>s ())
+       ; an input pinned where an output is ("=a"(n) : "a"(0), cpuid's) is that output's tie
+       (oix l k j) (? !(two? l) () (elem <<l '(o x) && <><l = k) j (oix >l k (j + 1)))
+       (tieup e) (: j (? (<e = 'i && !(two? <>e) && <>e != 'pick) (oix os <>e 0) ())
+                    (? (charm? j) ['i ['tie j] <>>e <>>>e] e))
        (? (bad? os || bad? is9) 'bad
-          (: ops9 (os + is9)
+          (: ops9 (os + map tieup is9)
              ; pinned registers: validated, a duplicate refuses; a tie takes its output's
              (pinset l acc)
               (? !(two? l) acc
@@ -6862,6 +6890,10 @@
                            + [['ld 'r1 'r4 (peep g 'sret 0)]]
                            + bcopy g 0 (tsz g rt) () + epj)
                           (tor0 g r + '((ld r0 r0 0)) + epj))
+                      (t32? g && sretm? g rt)              ; AAPCS-VFP: a non-HFA past 4B, the same memory lane
+                       (tor0 g r
+                        + [['ld 'r1 'r4 (peep g 'sret 0)]]
+                        + bcopy g 0 (tsz g rt) () + epj)
                       (t32nolane? g rt) 'bad
                       (sse2? g rt)                                       ; a two-double struct returns as the xmm pair
                        (tor0 g r + fldf 'double (xmmreg 0) 'r0 0 +
@@ -7507,7 +7539,8 @@
        (hxl l d) (? !(two? l) [() ()]
                     (: r (hx <l d) rs (hxl >l d) [(<r + <rs) (<>r . <>rs)]))
        ; a statement -> the statements it becomes
-       (hb s d) (: l (hs s d) (? (two? l && !(two? >l)) <l ['blk l]))
+       ; an arm of one statement unwraps, unless it is a decl (an empty callee's params): an arm takes no decl
+       (hb s d) (: l (hs s d) (? (two? l && !(two? >l) && !(elem <<l '(decl sdecl))) <l ['blk l]))
        (hs s d) (: s0 (st9 's) _ (pin st9 's s) r (hs1 s d) _ (pin st9 's s0) r)
        (hs1 s d)
         (? !(two? s) [s]
@@ -7690,10 +7723,12 @@
         (atom? x ? x
          (x @ ('var nm) (: k (sbs nm) (? (two? k) k x))
               ; not &&/||: dp answering () is a legitimate tail
-              ('decl ps) ['decl (: (dp l) (? (atom? l) ()
-                                             (two? (sbs <<l)) (dp >l)
-                                             (sub <l . dp >l))
-                                (dp ps))]
+              ; a decl every entry of which propagated is a nop, not an empty decl (an if arm takes no decl)
+              ('decl ps) (: ds (: (dp l) (? (atom? l) ()
+                                              (two? (sbs <<l)) (dp >l)
+                                              (sub <l . dp >l))
+                                  (dp ps))
+                            (? (two? ds) ['decl ds] '(nop)))
              (sub <x . sub >x)))
        (atom? (keys sbs) ? f
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))

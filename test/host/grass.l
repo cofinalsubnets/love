@@ -143,7 +143,7 @@
 ;     erase after a full row takes the glyph that raised the pending wrap, so the score
 ;     lost its last digit and the field its last stalk
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
-   (chat s i) (255 & glass s i)
+   (chat s i) (2097151 & glass s i 0)
    g (fresh ()) _ (pin g 'h 12.0)
    s (mkscr 24 80)
    _ (scribe s (grass-frame g))
@@ -169,7 +169,7 @@
 ; --- a paint: the first is the whole frame; after ticks it is the rows that changed,
 ;     under their cursor moves, and a screen taking the paints shows the frame
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
-   (cells s n) (map (i \ glass s i) (jot n))
+   (cells s n) (map (i \ [(glass s i 0) (glass s i 1) (glass s i 2)]) (jot n))
    g (fresh ()) _ (pin g 'h 12.0)
    a (mkscr 24 80) b (mkscr 24 80)
    p0 (grass-paint g) _ (scribe a p0)
