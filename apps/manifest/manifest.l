@@ -79,7 +79,7 @@
  ; its deps and is applied to their worths (cells recurse; labels are their
  ; spelling), so nothing global is touched and no missing ever fires ---
  (worth1 sh s) (: f (glean s)
-                  (? (one? f) s                        ; unreadable: the text itself
+                  (? (atom? f) s                        ; unreadable: the text itself
                    (: ds (deps f)
                       lam (ev $ !ds ? f (['\] + ds + [f]))
                       vs (map (d \ cell? d ? (worth sh d) (string d)) ds)
@@ -225,8 +225,8 @@
                     (stage (manifest-frame d) (manifest-key d) (_ \ d 'over)))
 
  manifest-usage "usage: love manifest [FILE]   (arrows move . enter edits . w stows . q quits)"
- (manifest-main as) (? (one? as) (manifest "", 0)
-                       (one? >as) (manifest <as, 0)
+ (manifest-main as) (? (atom? as) (manifest "", 0)
+                       (atom? >as) (manifest <as, 0)
                        (say err "manifest: one sheet at a time\n", flush err, 2))
  _ (pins (cite 'verbs 'tab) 'manifest
          (udoor 'manifest manifest-main manifest-usage 1 1)))

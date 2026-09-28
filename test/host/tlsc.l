@@ -116,13 +116,13 @@
           = unhex "522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b08b1056828838c5f61e6393ba7a0abcc9f662"
             + unhex "76fc6ece0f4e1768cddf8853bb2d551b")
          ((aes-gcm-open k3 iv3 a4 (snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a47")) = snip p3 0 60)
-         (nil? (aes-gcm-open k3 iv3 a4 (snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a46")))
-         (nil? (aes-gcm-open k3 iv3 "" (snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a47")))
-         (nil? (aes-gcm-seal (snip k3 0 15) iv3 "" "x")) (nil? (aes-gcm-seal k3 (snip iv3 0 11) "" "x"))
-         (nil? (aes-gcm-open k3 iv3 "" (zeros 15))))
+         !(aes-gcm-open k3 iv3 a4 (snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a46"))
+         !(aes-gcm-open k3 iv3 "" (snip c3 0 60 + unhex "5bc94fbc3221a5db94fae95ae7121a47"))
+         !(aes-gcm-seal (snip k3 0 15) iv3 "" "x") !(aes-gcm-seal k3 (snip iv3 0 11) "" "x")
+         !(aes-gcm-open k3 iv3 "" (zeros 15)))
    (rt n) (: m (bytes n (i \ (i * 13 + 7) & 255)) s (aes-gcm-seal k3 iv3 a4 m)
              flip (? (0 < n) (string ((s 0) ^ 1) + snip s 1 #s) ())
-             ((#s = n + 16) && ((aes-gcm-open k3 iv3 a4 s) = m) && ((0 = n) || (nil? (aes-gcm-open k3 iv3 a4 flip)))))
+             ((#s = n + 16) && ((aes-gcm-open k3 iv3 a4 s) = m) && ((0 = n) || !(aes-gcm-open k3 iv3 a4 flip))))
    (test (0 = #(filter (n \ !(rt n)) (jot 71)))))
 
 (test_fin (),

@@ -145,8 +145,8 @@
              'vmxon 2 'vmclear 2 'vmptrld 2 'sgdt 2 'sidt 2
              'vmread 2 'vmwrite 2
              'isb 0 'wfi 0 'wfe 0 'eret 0
-             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0
-             'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
+             'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0
+             'carry 4 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
              'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
              'ldcr 2 'stcr 2 'lgdt 2 'lidt 2 'invlpg 2
              'mrs 2 'msr 2 'msri 2
@@ -249,7 +249,7 @@
    ;; though: only the fall-through carries what this instruction wrote, and a reader past the
    ;; label is still a reader here. the bound holds this linear.
    (flagfree be l k)
-      (? (k < 1 || one? l) 0
+      (? (k < 1 || atom? l) 0
          (: o <(<l)
             (? (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
@@ -272,7 +272,7 @@
    ;; into to resolve (an inline asm's jump to a label of the function around it)
    (resolve items labels be addr) (resolve-open items labels be addr {})
    (resolve-open items labels be addr open)
-      (? (one? items) ()
+      (? (atom? items) ()
          (: x <items
             (? (fix? x)
                (: tgt (labels (fix-l x))
@@ -309,7 +309,7 @@
             ;; along so pass two never re-walks a chunk, and the reversal is already paid since
             ;; pass two splices onto a reversed stream. labels ride (0 . ()).
             (plumb p addr era acc)
-               (? (one? p) (rev acc)
+               (? (atom? p) (rev acc)
                   (: ins <p
                      (? (<ins = 'label)
                         (pin spots (ins 1) addr, pin eras (ins 1) era,
@@ -334,7 +334,7 @@
             ;; pass two: splice the cached chunks -- pessimistic addresses (pa) drive the
             ;; shortening decisions, final addresses (fa) pin the labels and re-lay the pads.
             (stitch p cs pa fa era items)
-               (? (one? p) (rev items . labels)
+               (? (atom? p) (rev items . labels)
                   (: ins <p  k <<cs  c ><cs
                      (? (<ins = 'label)
                         (: _ (pin labels (ins 1) fa) (stitch >p >cs pa fa era items))

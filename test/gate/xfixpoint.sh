@@ -91,8 +91,7 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # empty there -- the makefile draws that line with its own wildcard.
 if [ -n "$gate_arch_c" ]; then
   kinc="-I$ho -I. -Ilove -Iinle -Iout/lib -Ilove/quay -Iapps/moon/include"
-  for f in $gate_kern_c $gate_arch_c love/quay/paint.c \
-           love/quay/cga_8x8.c love/quay/cleat_8x16.c; do
+  for f in $gate_kern_c $gate_arch_c; do
     mkobj "$f"
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done

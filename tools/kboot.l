@@ -23,9 +23,9 @@
                + ["-kernel" elf "-append" app
                   "-serial" "stdio" "-display" "none" "-no-reboot"]))
    out  >r
-   miss ((: (g w acc) (one? w ? (rev acc)
+   miss ((: (g w acc) (atom? w ? (rev acc)
                        (g >w (has? out <w ? acc (<w . acc))))) want ())
-   (one? miss
+   (atom? miss
     ? (puts ("kboot ok: " + app), putc 10)
       (say err ("test_kboot FAILED: " + app), put err 10,
        each miss (m \ (say err ("  missing: " + m), put err 10)),

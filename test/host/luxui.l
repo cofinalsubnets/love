@@ -24,14 +24,14 @@
    (must tag v) (v ? v (strike (),
                         puts "luxui: FAIL ", putx tag, putc 10,
                         quit 1))
- _ (!(two? xv) ? (puts "luxui: ok (no Xvfb, skipped)", quit 0))
+ _ ((atom? xv) ? (puts "luxui: ok (no Xvfb, skipped)", quit 0))
  _ (enlist 'xv <xv)
  (rdnum p) (:- (go 0 0) (go n st)
             (see p @ -1 () 13 (go n st) 10 (st @ 1 n (go 0 0))
                      c (48 <= c < 58 ? (st @ 2 (go 0 2) (go (10 * n + c - 48) 1))
                                        (go 0 2))))
  dn (rdnum >xv)
- _ (must 'display (charm? dn && !(two? (gather <xv))))
+ _ (must 'display (charm? dn && (atom? (gather <xv))))
  dpy ("/tmp/.X11-unix/X" + show dn)
 
  ; a dead moor socket -- what an exec'd restart or a dead Xephyr session leaves,

@@ -294,7 +294,7 @@
     _ (map (c \ ? (elem c [114 112 113 79 116 102 100 118]) 0 (die ("unknown option -" + string c + "\n" + usage))) (keys fl))
     ; the remote ends over stdin and stdout, else the client
     (st e) (? (0 < e) 1 0)
-    (? (peep fl 116 0) (? ((two? ops) && (one? >ops)) (st (sc-sink (sc-stdio 0) <ops rec pres)) (die usage))
+    (? (peep fl 116 0) (? ((two? ops) && (atom? >ops)) (st (sc-sink (sc-stdio 0) <ops rec pres)) (die usage))
        (peep fl 102 0) (st (sc-source (sc-stdio 0) ops rec pres))
        ((two? ops) && (two? >ops)) (scp-client o ops rec pres)
        (die usage))))

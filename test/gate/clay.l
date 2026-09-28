@@ -27,25 +27,25 @@
    cok? (cite 'clay 'clay-ok?)
    nl (string 10)
    (say1 s) (puts (s + nl))
-   (dotc? s) (: n (tally s) (&& (2 < n) (&& ((s (n - 2)) = 46) ((s (n - 1)) = 99))))
+   (dotc? s) (: n #s ((2 < n) && (((s (n - 2)) = 46) && ((s (n - 1)) = 99))))
 
    ; the front end, without cc-parse's udie -- a refusal has to come back as a value
    ; here, since a third of the point is counting the refusals.
    (front src)
     (: r (uread src)
-       (? (! (two? r)) ()
+       (? (atom? r) ()
           (: lx (clex ((deftext (archdefs 'x64)) + <>r))
-             (? (! (okv? lx)) ()
+             (? !(okv? lx) ()
                 (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
-                   (? (! (okv? pp)) ()
+                   (? !(okv? pp) ()
                       (: ps (cparse-t <>pp 'x64)
                          (? (okv? ps) [1 (caup ps)] ()))))))))
    ; the same, off TEXT rather than a path: the reparse leg
    (front2 txt)
     (: lx (clex txt)
-       (? (! (okv? lx)) ()
+       (? !(okv? lx) ()
           (: pp (cpp <>lx (\ n s ()) "<clay>")
-             (? (! (okv? pp)) ()
+             (? !(okv? pp) ()
                 (: ps (cparse-t <>pp 'x64)
                    (? (okv? ps) [1 (caup ps)] ()))))))
 
@@ -54,21 +54,21 @@
    ; one file -> 'ok | 'diff | 'inexpr | 'noparse | 'reparse
    (one f)
     (: p (front ("test/cc/" + f))
-       (? (! (two? p)) 'noparse
+       (? (atom? p) 'noparse
           (: a <>p
              v (cok? a)
-             (? (! (= v 1)) 'badshape
+             (? !(v = 1) 'badshape
                 (: t (cshow a)
                    (? (gripe? t) 'inexpr
                       (: b (front2 t)
-                         (? (! (two? b)) 'reparse
+                         (? (atom? b) 'reparse
                             (<>b = a) 'ok
                             'diff))))))))
 
    ; the tally, and the names of everything that is not plain ok -- a count alone
    ; would let a regression hide inside a category.
    (go l ok df ix np rp bs bad)
-    (? (! (two? l)) [ok df ix np rp bs (rev bad)]
+    (? (atom? l) [ok df ix np rp bs (rev bad)]
        (: f <l v (one f)
           (? (v = 'ok) (go >l (ok + 1) df ix np rp bs bad)
              (v = 'diff) (go >l ok (df + 1) ix np rp bs (. ['diff f] bad))
@@ -82,7 +82,7 @@
 
    _ (each bad (\ b (say1 ("clay-g1: " + (string <b) + " " + (b 1)))))
    _ (say1 ("clay-g1: " + (show ok) + " round-trip, " + (show ix) + " inexpressible, "
-            + (show np) + " unparsed, " + (show (tally files)) + " files"))
+            + (show np) + " unparsed, " + (show #files) + " files"))
    ; a vacuous pass is a fail. this file lived under test/ for one commit's worth
    ; of minutes, where the corpus glob swept it into a run with no compiler in scope:
    ; every file "unparsed", nothing checked, and it printed pass. so the floor is
@@ -90,11 +90,10 @@
    ; there and the gate is measuring nothing.
    floor 50
    _ (? (ok < floor)
-        (: _ (say1 ("clay-g1: FAIL -- only " + (show ok) + " files round-tripped, under the "
-                    + (show floor) + " floor: the front end is not in scope"))
-           (quit 1)) 0)
+        (say1 ("clay-g1: FAIL -- only " + (show ok) + " files round-tripped, under the "
+                    + (show floor) + " floor: the front end is not in scope"), quit 1) 0)
    ; the failures: a tree that came back different, C the parser could not read back,
    ; or a tree clay-ok? rejected. an inexpressible file is a measured gap, not a red.
-   (? (! (df + rp + bs)) (: _ (say1 "clay-g1: pass") (quit 0))
-      (: _ (say1 ("clay-g1: FAIL -- " + (show df) + " diff, " + (show rp)
-                  + " unreadable, " + (show bs) + " malformed")) (quit 1))))
+   (? !(df + rp + bs) (say1 "clay-g1: pass", quit 0)
+      (say1 ("clay-g1: FAIL -- " + (show df) + " diff, " + (show rp)
+                  + " unreadable, " + (show bs) + " malformed"), quit 1)))

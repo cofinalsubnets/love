@@ -46,7 +46,7 @@
                     (go i) (? (i < 0) f (f i = 46) (snip f 0 i) (go (i - 1)))
                     (go (n - 1)))
    (man-stem f)
-    (man-nodot ((: (go l) (? (one? l) f (man-suf? f <l) (snip f 0 (#f - #(<l))) (go >l))) manzs))
+    (man-nodot ((: (go l) (? (atom? l) f (man-suf? f <l) (snip f 0 (#f - #(<l))) (go >l))) manzs))
    ; a path's last component, and the first component of a relative one
    (man-base p) (: n #p
                    (go i) (? (i < 0) p (p i = 47) (snip p (i + 1) n) (go (i - 1)))

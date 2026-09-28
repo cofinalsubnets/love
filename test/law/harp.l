@@ -35,7 +35,7 @@
              ((qi 1) = (1 /// 1))  ((qi 2) = (4 /// 2))  !((qi 1) = (qi 2))
              ; and a rational does not meet a tray: it answers (), silently, so
              ; apps/harp/play.l crosses to frames through qnum and never after
-             (nil? ((iota 4) + (1 /// 3)))
+             !((iota 4) + (1 /// 3))
              ; // truncates toward zero; a floor that did not step down would
              ; put cycle -1/2 in cycle 0 and every negative span would be wrong
              (0  = qfl (1 /// 2))   (-1 = qfl (-1 /// 2))
@@ -117,16 +117,16 @@
    ; nothing at all. an inverted test here silences the whole family in silence.
    _ (test
       (: r (sine (qi 0) (qi 1))
-         (&& (1 = #r) (&& (0 = qnum (evwb (r 0))) (1 = qnum (evwe (r 0))))))
+         ((1 = #r) && ((0 = qnum (evwb (r 0))) && (1 = qnum (evwe (r 0))))))
       ; every member of the family, over a real span and an empty one
-      (foldl (\ a p (&& a (&& (1 = #(p (qi 0) (qi 1))) !(p (qi 1) (qi 1)))))
+      (foldl (\ a p (a && ((1 = #(p (qi 0) (qi 1))) && !(p (qi 1) (qi 1)))))
              1 [sine cosine saw isaw tri square rand])
       ; ..and the sampled values keep to their rails
       (: (v1 p) (evv ((p (qi 0) (qi 1)) 0))
-         (foldl (\ a p (&& a (: x (v1 p) (&& (0.0 <= x) (x <= 1.0)))))
+         (foldl (\ a p (a && (: x (v1 p) ((0.0 <= x) && (x <= 1.0)))))
                 1 [sine cosine saw isaw tri square rand]))
       ; range maps those rails onto its own
-      (: x (evv (((range 2.0 3.0 saw) (qi 0) (qi 1)) 0)) (&& (2.0 <= x) (x <= 3.0)))
+      (: x (evv (((range 2.0 3.0 saw) (qi 0) (qi 1)) 0)) ((2.0 <= x) && (x <= 3.0)))
       ; the same span asked twice answers the same: rand is a place, not a moment
       ((evv ((rand (qi 3) (qi 4)) 0)) = (evv ((rand (qi 3) (qi 4)) 0))))
 
@@ -189,7 +189,7 @@
              (: ix (iota 200 + 10)
                 (amp v) ((mkvoice 10 v 1000) 1 ix)
                 a (amp {'s "sin" 'note 0})  b (amp {'s "sin" 'note 0 'slide 0})  c (amp {'s "sin" 'note 0 'slide 12})
-                (&& (aall (a = b)) !(aall (a = c)))))
+                ((aall (a = b)) && !(aall (a = c)))))
 
    ; --- mini-notation --------------------------------------------------------
    (m s) (map (\ x [(qnum (evwb x)) (qnum (evwe x)) (evv x)])

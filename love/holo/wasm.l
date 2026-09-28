@@ -107,7 +107,7 @@
    (wins f)
     (: r (wasm-ops <f)
        g <>f
-       _ (? (one? r) (scare 'bad-wasm-op <f) 0)
+       _ (? (atom? r) (scare 'bad-wasm-op <f) 0)
        code (two? <r ? <r [<r])
        (r 1 @
         'n    code

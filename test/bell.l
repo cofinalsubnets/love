@@ -28,7 +28,7 @@
    (showloop acc n) (? (n < 1) acc (showloop (digit (n % tally digits) + acc)(n // tally digits) ))
    show (showloop "")
    (gen i limit) (: b (show (bell i)) (#b <= limit ? (b . gen (i + 1) limit)))
-   (leq a b) (two? a ? (two? b && <a = <b && leq >a >b) (one? b))
+   (leq a b) (two? a ? (two? b && <a = <b && leq >a >b) (atom? b))
    (ln x) (foldl (\ n _ (1 + n)) 0 x)            ; line count ($ on a list is the net sum)
    out (gen 0 280)
    ; expected: byte-exact stdout of `ruby test/bell.rb` (n defaults to 280),

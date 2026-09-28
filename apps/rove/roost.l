@@ -73,7 +73,7 @@
    (pins d 'shelves shelves 'perch [cx (y0 + room-h // 2)] 'door [cx y1]))
  ; a shelf wears the first letter of its tool that no shelf before it wears
  (shelf-glyphs nms) (:- (go nms "" ()) (go l used acc)
-   (? (one? l) (rev acc)
+   (? (atom? l) (rev acc)
       (: nm <l
          (pick i) (? (#nm <= i) "?" (elem (nm i) used) (pick (i + 1)) (string (nm i)))
          g (pick 0)

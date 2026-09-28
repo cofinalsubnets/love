@@ -55,7 +55,7 @@
    (mkblob arch src dst sym)
     (: _ (arch = 'wasm ? 0 (mkblob-be arch))
        g (mkblob-slurp src)
-       _ (one? g ? (mkblob-die $ "cannot read " + src))
+       _ (atom? g ? (mkblob-die $ "cannot read " + src))
        s <>g
        n #s
        _ (? (0 < n) 0 (mkblob-die (src + " is empty")))

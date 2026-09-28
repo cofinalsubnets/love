@@ -768,7 +768,7 @@
 ;; tables: a jobspec reads the job table, the mask is the shell's own, and getopts
 ;; writes OPTIND, OPTARG and the name it is given. %N, %% and %+ name jobs for fg too
 (test (1 = sh-jobspec "1") (1 = sh-jobspec "%1") (0 = sh-jobspec "%%") (0 = sh-jobspec "%+")
-      (15 = sh-sigof "TERM") (15 = sh-sigof "SIGTERM") (9 = sh-sigof "9") (one? (sh-sigof "BOGUS")))
+      (15 = sh-sigof "TERM") (15 = sh-sigof "SIGTERM") (9 = sh-sigof "9") (atom? (sh-sigof "BOGUS")))
 (: r (hark ["out/love" "out/lush" "-c"
             "sleep 5 & kill %1; wait $!; echo st=$?; sleep 5 & kill -9 %%; wait $!; echo st=$?; sleep 5 & kill -s TERM -- $!; wait $!; echo st=$?; kill %7; echo st=$?"])
    (test ("st=143\nst=137\nst=143\nst=1\n" = >r)))

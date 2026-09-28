@@ -1387,10 +1387,10 @@ lvm(lvm_trim) {
  return Ip++, Continue(); }
 
 // (seek i v): the cell i steps away, or () if the step leaves the object. an object ends at
-// its own terminator and the object below it ends one word under this head, so a step
-// crosses out exactly when one of the cells it steps over is a terminator -- O(|i|), and i
-// is 1 or 2 at every call site. reading the head off the terminator instead would rescan
-// the whole thread per emit, and the emitter walks a thread backwards cell by cell.
+// its own terminator, so a step up crosses out exactly when a cell it steps over is one --
+// O(|i|), and i is 1 or 2 at every call site. a step down meets the object below only when
+// that object is a thread; any other ends in no terminator, so a step down no terminator
+// stopped is held to the object's own head, read off its terminator
 lvm(lvm_seek) {
  intptr_t i = getcharm(Sp[0]);
  word v = Sp[1], r = ZeroPoint;
@@ -1400,7 +1400,7 @@ lvm(lvm_seek) {
   else if (in_live_pool(g, ptr(e))) {
    union u *p = i < 0 ? e : b + 1, *q = i < 0 ? b : e + 1;
    while (p < q && !ai_termp(g, p->x)) p++;
-   if (p == q) r = word(e); } }
+   if (p == q && (i >= 0 || e >= tag_head(ttag(g, b)))) r = word(e); } }
  return Sp[1] = r, Sp++, Ip++, Continue(); }
 
 // (stem v): the head of the object v points into -- what a lambda's value hides when it

@@ -10,7 +10,7 @@
   (0 < sat (show out))
 
   ; unget + get roundtrip on stdin -- one top-level form, or the repl eats the pushback
-  (: (rt c) (: _ (unsee in c) (see in))
+  (: (rt c) (unsee in c, see in)
    (&& (65 = rt 65)                           ; `&&`, not `do`: do answers its last
        (32 = rt 32)                           ; operand and the rest go unchecked
        (255 = rt 255)))
@@ -37,11 +37,11 @@
   (port? out)
   (port? (tap "x"))
   (port? (jug 0))
-  (! (port? 42))
-  (! (port? "notaport"))
-  (! (port? ()))
-  (! (port? (\ x x)))
-  (! (port? (cask 4)))
+  !(port? 42)
+  !(port? "notaport")
+  !(port? ())
+  !(port? (\ x x))
+  !(port? (cask 4))
   ; slurp is bounded like see: a non-port drains as the empty stream rather than reading
   ; the raw words of whatever it was handed. every drain lands text.
   ("" = slurp 42)   (string? (slurp 42))
@@ -121,7 +121,7 @@
   ; presence-as-the-net fails here: a bare pin of () leaves the slot reading exactly like
   ; an unforced one, so f re-runs forever, silently.
   (: c (tablet 0)
-     th (once (\ u (: _ (pin c 0 ((peep c 0 0) + 1)) ())))
+     th (once (\ u (pin c 0 ((peep c 0 0) + 1), ())))
      _ (th ()) _ (th ())
      (nil? (th ()) && (1 = peep c 0 0)))
 
@@ -195,7 +195,7 @@
 
   ; mixed sequence, residue threaded: "() 1"
   (: a (sound '(40 41 32 49)) b (sound >a)
-     (&& (nil? <a) (1 = <b) !(sound >b)))
+     (&& !<a (1 = <b) !(sound >b)))
 
   ; an unforced tail is a charlist not yet drunk, so sound fires it and reads on. without
   ; this arm a residue arriving unforced would read as a clean end -- a short read,

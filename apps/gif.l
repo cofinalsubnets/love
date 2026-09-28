@@ -39,7 +39,7 @@
        cs (map cup (sort (map (e \ ((<e >> sh) & 31) . e) (bx 2))))
        total +(map (e \ e 1) cs)
        ; the first k whose running weight reaches half, both halves kept
-       (cut l acc k) (? ((one? >l) || ((acc + (<l 1)) * 2 >= total)) (k + 1)
+       (cut l acc k) (? ((atom? >l) || ((acc + (<l 1)) * 2 >= total)) (k + 1)
                         (cut >l (acc + (<l 1)) (k + 1)))
        m (: k (cut cs 0 0) (? (k >= #cs) (#cs - 1) k))
        [(gif-box (take m cs)) (gif-box (drop m cs))])

@@ -98,6 +98,8 @@ void
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 struct cb_img const *cb_img(struct cb const*, uint32_t slot);   // a live picture, or 0
 uint32_t const *cb_ipx(struct cb const*);                       // the store's pixels
+// a PNG of n bytes at the head of a cap-byte region -> 0 and w x h pixels there, or -1
+int cb_png(uint8_t *buf, uintptr_t n, uintptr_t cap, uint32_t *w, uint32_t *h);
 uint32_t cb_unfold(uint8_t);       // a cp437 glyph byte's codepoint
 uint8_t cb_437(uint32_t cp);       // the cp437 glyph that draws cp: 0xfe, the ■, for none
 uint8_t cb_width(uint32_t cp);     // the columns cp takes: 0 1 or 2, 'text's wcwidth

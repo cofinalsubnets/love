@@ -517,7 +517,7 @@
    ; root (x-querytree's wrapper). the two reads below used to be two separate
    ; QueryTrees, which could disagree; one answer serves both.
    tree (x-querytree s root)
-   _ (one? tree ?  (line "lux: QueryTree FAILED at startup -- the stream is garbled, adopting nothing"))
+   _ (atom? tree ?  (line "lux: QueryTree FAILED at startup -- the stream is garbled, adopting nothing"))
    ; and the fault injector, the knob that actually makes a fix testable.
    ; lux_sweep_miss=1 forces the sweep to see an empty tree -- exactly what a lost
    ; race leaves behind. it is the deterministic form of the defect: the delay

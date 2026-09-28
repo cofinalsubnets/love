@@ -7,12 +7,12 @@
 ; that is the point: tools/ktest.l boots this corpus twice on one image and
 ; greps the second log for "disk: fat kept" -- the reset-persistence gate.
 (: dn (disk ())
-   (? (! dn) (: _ (puts "disk: none here, laws skipped") _ (putc 10) ())
-      (: pat ((: (go b i) (? (< i 512) (: _ (pin b i (% (i * 7) 256)) (go b (i + 1)))
+   (? !dn (puts "disk: none here, laws skipped", putc 10, ())
+      (: pat ((: (go b i) (? (i < 512) (pin b i (i * 7 % 256), go b (i + 1))
                              (string b)))
               (cask 512) 0)
          _ (test
-            (< 65536 dn)                        ; the gate attaches ~70000 sectors
+            (65536 < dn)                        ; the gate attaches ~70000 sectors
             (1 = disk-write 16 pat)
             (pat = disk-read 16 1)
             (1024 = #(disk-read 16 2))
@@ -22,19 +22,19 @@
          ())))
 (borrow "apps/fat.l")
 (: dev (fat-disk ())
-   (? (one? dev) ()
+   (? (atom? dev) ()
       (: f0 (fat-mount dev)
          seen (tablet? f0 ? (fat-read f0 "boot.txt"))
          f (? (tablet? f0) f0 (fat-mkfs dev, fat-mount dev))
          _ (? (two? seen)
-              (: _ (test ("the machine remembers" = <>seen))
-                 _ (puts "disk: fat kept across the reset") (putc 10))
-              (: _ (puts "disk: fat born") _ (putc 10) ()))
+              (test ("the machine remembers" = <>seen),
+               puts "disk: fat kept across the reset", putc 10)
+              (puts "disk: fat born", putc 10, ()))
          _ (test (tablet? f))
-         _ (test (1 = (fat-write f "boot.txt" "the machine remembers")))
-         _ (test (1 = (fat-write f "scratch.txt" "abc"))
+         _ (test (1 = fat-write f "boot.txt" "the machine remembers"))
+         _ (test (1 = fat-write f "scratch.txt" "abc")
                    ("abc" = <>(fat-read f "scratch.txt"))
                    (two? <>(fat-ls f ""))
-                   (1 = (fat-rm f "scratch.txt"))
+                   (1 = fat-rm f "scratch.txt")
                    !(fat-stat f "scratch.txt"))
          ())))

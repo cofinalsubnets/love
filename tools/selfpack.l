@@ -47,7 +47,7 @@
    (sp-keep? rules nom) ((nom = ".sbignore") || !(sp-ign? nom rules))
    ; re-home the kept entries under top; the walk is sorted, so order holds.
    (sp-take es top acc)
-    (? (one? es) (rev acc)
+    (? (atom? es) (rev acc)
        (: e <es
           _ (pin e 'nom (top + "/" + tar-get e 'nom ""))
           (sp-take >es top (e . acc))))
@@ -74,7 +74,7 @@
        fresh (two? old && two? have && <>old = h)
        ; an archive with no sidecar (a seed-laid tree) is adopted when its content is
        ; this content -- no rewrite, so its mtime holds and nothing downstream re-links.
-       adopt (? (fresh || one? have) 0
+       adopt (? (fresh || atom? have) 0
                 (: u (gz-unzip <>have) (two? u && <>u = a)))
        (? fresh 0
           adopt (sp-write side h)

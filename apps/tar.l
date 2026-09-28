@@ -255,14 +255,14 @@
              ; the inner ` is load-bearing: `(1 (e)) would apply e to nothing, and
              ; (f) == f, so the caller would take a bare entry for a list of them.
              [1 [e]])
-          (one? st) ()
+          (atom? st) ()
           (tar-dir? st)
           (: e (tar-entry (? (tally rel) rel ".") 'dir "")
              _ (pins e 'mode (tar-mode st) 'mtime (tar-secs st))
              ; sorted, so an archive of the same tree is the same bytes -- readdir's
              ; order is the filesystem's and varies between two boxes holding one tree.
              kids (sort (readdir full))
-             (go ks acc) (one? ks ? [1 (rev acc)]
+             (go ks acc) (atom? ks ? [1 (rev acc)]
                           (: k2 (tar-join rel <ks)
                            (!(keep k2) ? (go >ks acc)
                             (: r (tar-walk? keep root k2 fat)
@@ -308,7 +308,7 @@
          es)
    (tar-scatter root es)                    ; -> (1 count) | ()
     (:- (go es 0) (go xs k)
-     (one? xs ? [1 k]
+     (atom? xs ? [1 k]
       (: e <xs
          nom (tar-strip (tar-get e 'nom ""))
          p (? #nom (? #root (root + "/" + nom) nom) root)

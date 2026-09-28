@@ -139,13 +139,14 @@
                    (inb inb) (inw inw) (inl inl) (outb outb) (outw outw) (outl outl)
                    (insb insb) (insw insw) (insl insl) (outsb outsb) (outsw outsw) (outsl outsl)
                    (nop nop) (ret ret) (syscall sys) (int3 trap)
-                   (pause pause) (mfence mfence) (lfence lfence) (sfence sfencex)))   ; sfencex: rv64's sfence is sfence.vma
+                   (pause pause) (mfence mfence) (lfence lfence) (sfence sfencex)
+                   (stc stc) (clc clc) (cmc cmc)))   ; sfencex: rv64's sfence is sfence.vma
    gx-alu '(add sub and or xor imul)
    gx-cc (gtab '((je eq) (jz eq) (jne ne) (jnz ne) (jl lt) (jle le) (jg gt) (jge ge)
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
-   gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp test inc dec not neg bt bts btr btc)
+   gx-rmw '(xadd cmpxchg xchg add or and sub xor cmp test inc dec not neg bt bts btr btc adc sbb)
    ; a memory operand -> (base off): a register base, or 'rip and (sym k) for `sym+k(%rip)` and
    ; the absolute `sym+k`, the same address wherever the image sits
    (gx-mref o) (<o @ 'mem (gx-mem o)
@@ -226,6 +227,10 @@
               (<s = 'rip && nom? <>s) [['la (gx-r d) <>s] ['lea (gx-r d) (gx-r d) <>>s]]   ; sym+k: lea keeps the flags too
               (<s = 'mem) (: bm (gx-mem s) [['lea (gx-r d) <bm <>bm]])
               (scare 'gas-x64-operand ops))
+          ; add and subtract with the carry, a register at the far end: the kernel's
+          ; array_index_mask_nospec (`cmp; sbb %0,%0`, the borrow spread to a mask)
+          (elem m '(adc sbb))
+           (? (<d = 'rg) [['carry m (w0 > 0 ? w0 (d 2)) (gx-r d) (gx-rv s)]] (scare 'gas-x64-operand ops))
           (elem m gx-alu)
            (? (k = 3) [['imul (gx-r d) (gx-r s) (gx-imm (ops 2))]]
               (: x (gx-r d) v (gx-rv s)

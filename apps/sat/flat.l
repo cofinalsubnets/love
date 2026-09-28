@@ -90,8 +90,8 @@
    (fload s c0)                                             ; a source clause (signed lits) into the db + watches
     (? (1 = taut? c0) 0
        (: c (dedup-lits c0)
-          (? (one? c) (pin s 'bad 1)
-             (one? >c) (: cid (fadd s (enc <c . ())) (fenq s (enc <c) (cid + 1)))
+          (? (atom? c) (pin s 'bad 1)
+             (atom? >c) (: cid (fadd s (enc <c . ())) (fenq s (enc <c) (cid + 1)))
              (: cid (fadd s (map enc c))
                 _ (fwatch s cid (enc <c)) (fwatch s cid (enc <>c))))))
    ; --- the interpreted bcp twin: (fbcp3 fx ar wn) -> conflict cid or -1 ----------
@@ -830,8 +830,8 @@
                                  ; falsified before bcp ever sees it -- that is a
                                  ; level-0 conflict: the formula is UNSAT (s 'bad, read
                                  ; by the driver after the compaction).
-                                 (? (one? nf) (: _ (pin s 'bad 1) (walk nxt nu nls))
-                                    (one? >nf) (: _ (fenq s <nf 0) (walk nxt nu nls))
+                                 (? (atom? nf) (: _ (pin s 'bad 1) (walk nxt nu nls))
+                                    (atom? >nf) (: _ (fenq s <nf 0) (walk nxt nu nls))
                                     (: _ (pour na (8 * nu) ar (8 * cid) (8 * (n + 1)))
                                        l1 <nf l2 <>nf
                                        p1 ((: (fnd j) (? (getw na j = l1) j (fnd (j + 1)))) (nu + 1))
@@ -1048,7 +1048,7 @@
        (feq e n)                                            ; the live cid holding exactly keys e (size n), or ()
         (: ar (b 'ba) bo (b 'bo)
            k (foldl (\ a el (? (getw bx (OCO + el) < getw bx (OCO + a)) el a)) <e >e)
-           (eqr j e2) (? (one? e2) 1 (getw ar j != <e2) 0 (eqr (j + 1) >e2))
+           (eqr j e2) (? (atom? e2) 1 (getw ar j != <e2) 0 (eqr (j + 1) >e2))
            ((: (go p) (p @ 0 ()
                        (: cid (getw bo p)
                           (n = getw ar cid && 1 = eqr (cid + 1) e ? cid (go (getw bo (p + 1)))))))
@@ -1056,7 +1056,7 @@
        (addc c0)                                            ; canon + dedupe + lay + index; drops tautologies
         (: c (sort (dedup-lits c0))
            (? (1 = taut? c) 0
-              (one? c) (getw bx 4 @ 0 (: _ (putw bx 4 1) 1) 0)     ; the empty clause rides a flag
+              (atom? c) (getw bx 4 @ 0 (: _ (putw bx 4 1) 1) 0)     ; the empty clause rides a flag
               (: e (map (+ NB) c) n #e
                  (? (whole? (feq e n)) 0
                     (: _ (fens b 'ba (8 * (getw bx 0 + (n + 1))))
@@ -1215,9 +1215,9 @@
         0 0 0 0 () ()))
    (fd-up db asg)                                           ; propagate units over asg; -> 1 conflict / 0 fixpoint
     ((: (pass rest ch)
-        (? (one? rest) (ch @ 1 (pass db 0) 0)
+        (? (atom? rest) (ch @ 1 (pass db 0) 0)
            (: r ((: (scan c sat un)
-                    (? (one? c) (sat @ 1 'sat (one? un ? 'conf un))
+                    (? (atom? c) (sat @ 1 'sat (atom? un ? 'conf un))
                        (: l <c
                           (? (1 = peep asg l 0) (scan >c 1 un)
                              (1 = peep asg (neg l) 0) (scan >c sat un)
@@ -1225,13 +1225,13 @@
                  <rest 0 ())
               (? (r = 'conf) 1
                  (r = 'sat) (pass >rest ch)
-                 (one? >r) (pin asg <r 1, pass >rest 1)
+                 (atom? >r) (pin asg <r 1, pass >rest 1)
                  (pass >rest ch)))))
      db 0)
    (fd-rup? db c)                                           ; does the negation propagate to a conflict?
     (fd-up db (foldl (a \ l \ pin a (neg l) 1) {} c))
    (fd-rat? db c)                                           ; rat on <c: every resolvent taut or rup
-    (? (one? c) 0
+    (? (atom? c) 0
        (: p <c
           (all (d \ (? (elem (neg p) d)
                        (: rv (>c + rem-lit (neg p) d)
@@ -1240,17 +1240,17 @@
                db)))
    (fd-del db c)                                            ; drop one clause equal as a set
     (: k (sort c)
-       ((: (go d) (? (one? d) ()
+       ((: (go d) (? (atom? d) ()
                      (sort <d = k) >d
                      (<d . go >d))) db))
    (fd-check f proof)                                       ; 1 iff every step checks and one derives ()
     ((: (go db ps)
-        (? (one? ps) 0
+        (? (atom? ps) 0
            (: st <ps c >st
               (? (1 = <st) (go (fd-del db c) >ps)
                  (: ok (1 = fd-rup? db c || fd-rat? db c)
                     (? !ok 0
-                       (one? c) 1
+                       (atom? c) 1
                        (go (c . db) >ps)))))))
      (map dedup-lits f) proof)
 

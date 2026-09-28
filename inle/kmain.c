@@ -2172,7 +2172,7 @@ void kmain(void) {
  "   (spawnio argv i o e cl pg fg) (k-spawn1 argv (k-fdw i) (k-fdw o) (k-fdw e))"
  "   (spawnmap argv fdm cl pg fg)"
  "     ((: (go m a b c)"
- "          (? (one? m) (k-spawn1 argv a b c)"
+ "          (? (atom? m) (k-spawn1 argv a b c)"
  "             (: e (cap m) cf (cap e) sf (cup e)"
  "                v (? (charm? sf)"
  "                     (? (&& (<= 0 sf) (< sf 3))"

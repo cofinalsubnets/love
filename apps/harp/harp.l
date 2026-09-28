@@ -249,7 +249,7 @@
          here (filter (x \ evwb x <= m && m < evwe x) (p c (c + qone)))
          (two? here ?
           (: x0 (here 0)  v0 (evv x0)  wb0 (evwb x0)
-             nx (foldl (\ a x (? (wb0 < evwb x && (one? a || evwb x < evwb a)) x a))
+             nx (foldl (\ a x (? (wb0 < evwb x && (atom? a || evwb x < evwb a)) x a))
                        () (p c (c + qi 2)))
              v (? (charm? v0 && two? nx && charm? (evv nx))
                   (v0 + (evv nx - v0) * qnum (qdiv (m - wb0) (evwb nx - wb0)))
@@ -391,7 +391,7 @@
                  (grp (>r + 1) @ t ([(mfold <r)] + <t . >t))
                  ([(mfold <r)] . >r)))
        g  (grp i)
-       ps (map (st \ one? st ? hush (? alt (slowcat (map cup st)) (timecat st)))
+       ps (map (st \ atom? st ? hush (? alt (slowcat (map cup st)) (timecat st)))
                <g)
        ((#ps @ 1 (ps 0) (stack ps)) . >g))
    (mini s) (<(mseq s 0 0 0))))

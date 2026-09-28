@@ -56,11 +56,11 @@
    ; every cell, slurp it back as one write (home first; reset + newline per row)
    (ink-scene r c) (:
      field (ink-field r c)
-     (row j k i q) (? (q < c) (: _ (say j (pal (int (peep k [i q] 0))), say j " ") (row j k i (+ q 1))) ())
-     (rows j k i) (? (i < r) (: _ (row j k i 0) _ (say j (+ esc "[0m\n")) (rows j k (+ i 1))) ())
+     (row j k i q) (? (q < c) (say j (pal (int (peep k [i q] 0))), say j " ", row j k i (q + 1)) ())
+     (rows j k i) (? (i < r) (row j k i 0, say j (esc + "[0m\n"), rows j k (i + 1)) ())
      (frame t) (: k (((field t + 4.001) * 2.9) // 1)
                   j (jug 0)
-                (say j (+ esc "[H"),
+                (say j (esc + "[H"),
                  rows j k 0,
                  slurp j))
      frame)
@@ -74,19 +74,19 @@
               c (1 < cv ? cv 80)
               frame (ink-scene r c)
               (swim tick) (? (cue? 0) ()
-                             (: f (frame (* tick 0.06))
+                             (: f (frame (tick * 0.06))
                               (say out f,
                                rest 33,
                                swim (tick + 1))))
-              _ (raw 1)
-              _ (say out (+ esc (+ "[?1049h" (+ esc (+ "[?25l" (+ esc "[2J"))))))   ; alt screen, no cursor
-              _ (swim 0)
-              _ (see in)                                                            ; drink the cue
-              _ (say out (+ esc (+ "[0m" (+ esc (+ "[?25h" (+ esc "[?1049l"))))))    ; shore
-              _ (flush out)
-              (raw 0))
+              (raw 1,
+               say out (esc + "[?1049h" + esc + "[?25l" + esc + "[2J"),   ; alt screen, no cursor
+               swim 0,
+               see in,                                                    ; drink the cue
+               say out (esc + "[0m" + esc + "[?25h" + esc + "[?1049l"),   ; shore
+               flush out,
+               raw 0))
    ink-usage "usage: love ink   (no options; any key returns you to shore)"
-   (ink-main as) (? !(two? as) (ink ())
+   (ink-main as) (? (atom? as) (ink ())
                      (say err ("ink: takes no arguments, not " + <as + "\n"), flush err, 2))
    _ (pins (cite 'verbs 'tab) 'ink (udoor 'ink ink-main ink-usage 1 1)))
 ) ; module ink
