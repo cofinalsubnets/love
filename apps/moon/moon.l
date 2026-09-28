@@ -24,6 +24,7 @@
 (borrow 'posix)
 (borrow 'glob) ; match and ones, under the wildcard
 (borrow 'path) ; lastslash, under cdir
+(borrow 'bytes)
 
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
@@ -60,31 +61,11 @@
                        (go (i + 1) st ps))
        (jn l a) (!(two? l) ? a (jn >l (<l + (#a ? ("/" + a) a))))
        (jn (go 0 0 ()) ""))
-   ; the carried archive is a .gz: the 10-byte header, the flagged optional fields stepped
-   ; over, the deflate stream to the C nif, the isize from the trailer as its hint.
-   ; apps/gz.l's walk, copied rather than borrowed -- a `borrow` here would tie moon to the
-   ; bake order.
-   (gzskip s n i) (? (n <= i) () (s i = 0) (i + 1) (gzskip s n (i + 1)))
-   (gzbody s)
-    (: n #s
-       (? (n < 18 || !(s 0 = 31 && s 1 = 139 && s 2 = 8)) ()
-          (: flg (s 3)
-             i1 (flg & 4 ? (: x (s 10 + (s 11 << 8)) (12 + x)) 10)
-             i2 (flg & 8 ? (gzskip s n i1) i1)
-             i3 (? !i2 () (flg & 16) (gzskip s n i2) i2)
-             i4 (? !i3 () (flg & 2) (i3 + 2) i3)
-             (? (!i4 || n < i4 + 8) ()
-                (: c (cask (n - i4 - 8))
-                   _ (pour c 0 s i4 (n - i4 - 8))
-                   (inflate (string c)
-                            (s (n - 4) + (s (n - 3) << 8)
-                             + (s (n - 2) << 16) + (s (n - 1) << 24))))))))
+   ; the carried archive is a .gz, opened by apps/gz.l's gz-unzip -- cited at the call, as a
+   ; `borrow` here would tie moon to the bake order. a love without 'gz carries no archive.
+   (gzbody s) (: f (cite 'gz 'gz-unzip) r (? (lit? f) (f s) ()) (two? r ? <>r ()))
    ; ..and a read-only ustar walk: nom (prefix + name), size, body -- all this
    ; needs. apps/tar.l stays the whole law; this reads the slice and nothing else.
-   (toct s o k) (: (go i a) (? (k <= i) a
-                               (: c (s (o + i))
-                                  (48 <= c < 56 ? (go (i + 1) (a * 8 + (c - 48))) a)))
-                   (go 0 0))
    (ttxt s o k) (: (go i) (? (k <= i || s (o + i) = 0) i (go (i + 1)))
                    m (go 0)
                    (m ? (: c (cask m) _ (pour c 0 s o m) (string c)) ""))
@@ -102,7 +83,7 @@
                      (: nm (ttxt s o 100)
                         pf (ttxt s (o + 345) 155)
                         nom (#pf ? (pf + "/" + nm) nm)
-                        sz (toct s (o + 124) 12)
+                        sz (rdoct s (o + 124) 12)
                         k (s (o + 156))
                         acc2 (k = 48 || k = 0
                                 ? (: c (cask sz) _ (pour c 0 s (o + 512) sz)

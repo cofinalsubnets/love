@@ -19,11 +19,12 @@
 (borrow 'tls)
 (borrow 'dns)
 (borrow 'posix)
+(borrow 'bytes)
 
 (:
    m32 ((1 << 32) - 1)
    ; --- the wire's encodings (RFC 4251 §5) ---
-   (be32 s i) ((rd16 s i << 16) + rd16 s (i + 2))
+   (be32 s i) (rdbe s i 4)
    (sstr s) (u32 #s + s)
    (names l) (sstr (join "," l))
    (split s ch)

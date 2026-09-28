@@ -54,8 +54,7 @@
     (: (go i a) (tar-blk <= i ? a (go (i + 1) (a + (148 <= i < 156 ? 32 (peep b i 0))))) (go 0 0))
 
    ; --- the field peeks ------------------------------------------------------
-   (tar-oct s o n)                          ; octal digits until a non-digit
-    (: (go i a) (n <= i ? a (s (o + i) @ c (48 <= c < 56 ? (go (i + 1) (a * 8 + c - 48)) a))) (go 0 0))
+   (tar-oct s o n) (rdoct s o n)            ; octal digits until a non-digit
    (tar-txt s o n)                          ; a NUL-ended text field
     (: (go i) (? (n <= i) i (s (o + i) = 0) i (go (i + 1))) k (go 0)
      (!k ? "" (cask k @ c (pour c 0 s o k, string c))))
