@@ -149,7 +149,10 @@
           (c && 145 <= c <= 151) (fin k [(op1 'xchg w [['rg (rl c) w] ['rg 0 w]])])
           152 (nil (w @ 2 'cbw 8 'cdqe 'cwde))
           153 (nil (w @ 2 'cwd 8 'cqo 'cdq))
-          158 (nil 'sahf)  159 (nil 'lahf)  155 (nil 'fwait)
+          158 (nil 'sahf)  159 (nil 'lahf)
+          ;; fwait ahead of an x87 escape rides it, one instruction as objdump reads it
+          155 (? (k < n && 216 <= dc-at s k <= 223) (: r (dc-op s i k p) (<r . ([(op1 'fwait 0 ())] + >r)))
+                 (nil 'fwait))
           ;; the x87 escapes: the state doors over memory, fninit and fnclex
           (c && elem c '(217 219 221 223))
            (? (dc-at s k >> 6 = 3)
@@ -217,7 +220,7 @@
        (lane base) (name $ base + (px @ 'none "ps" '66 "pd" 'f3 "ss" "sd"))
        (xx mn) (: r (dc-modrm s k2 p 16 16) (finx (r 0) [(op1 mn 0 [(r 1) (r 2)])]))
        (xxs mn) (: r (dc-modrm s k2 p 16 16) (finx (r 0) [(op1 mn 0 [(r 2) (r 1)])]))
-       (c @ 5 (nil 'syscall)  7 (nil (w @ 8 'sysretq 'sysretl))  11 (nil 'ud2)  8 (nil 'invd)  9 (nil 'wbinvd)  51 (nil 'rdpmc)
+       (c @ 5 (nil 'syscall)  7 (nil (w @ 8 'sysretq 'sysretl))  11 (nil 'ud2)  119 (nil 'emms)  8 (nil 'invd)  9 (nil 'wbinvd)  51 (nil 'rdpmc)
           48 (nil 'wrmsr)  49 (nil 'rdtsc)  50 (nil 'rdmsr)  162 (nil 'cpuid)
           (c && c = 0) (: r (dc-modrm s k2 p 2 2) (r 3 @ 3 (fin (r 0) [(op1 'ltr 2 [(r 2)])])
                                                          0 (fin (r 0) [(op1 'sldt 0 [(r 2)])]) 1 (fin (r 0) [(op1 'str 0 [(r 2)])])
