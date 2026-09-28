@@ -1646,6 +1646,19 @@
                                [(vmo lv) ty] ())))))))))
 
    ; the gcc builtins love.c reaches: x64 as short raw splices, a64 as neutral IR or one raw word
+   ; popcount of r0 by the swar fold (masks and adds only, so every target), clobbering r1 r2.
+   ; the 32-bit form masks first: the word above bit 31 is not ours to count
+   (popops g w32)
+    (: fold (k \ ['(mov r1 r0) ['shr 'r1 k] '(add r0 r0 r1)])
+       (? w32 ((? (t32? g) () '((li r2 4294967295) (and r0 r0 r2)))
+               + '((li r2 1431655765) (mov r1 r0) (shr r1 1) (and r1 r1 r2) (sub r0 r0 r1)
+                   (li r2 858993459) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
+                   (li r2 252645135) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
+               + (fold 8) + (fold 16) + '((li r2 63) (and r0 r0 r2)))
+          ('((li r2 6148914691236517205) (mov r1 r0) (shr r1 1) (and r1 r1 r2) (sub r0 r0 r1)
+             (li r2 3689348814741910323) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
+             (li r2 1085102592571150095) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
+           + (fold 8) + (fold 16) + (fold 32) + '((li r2 127) (and r0 r0 r2)))))
    (cgbuiltin g env bi args)                       ; a builtin call -> its value | 'bad; not one -> 'no
     (?- 'no                                        ; "not a builtin" first: its clauses run 250 lines
        (elem bi '("__builtin_trap" "__builtin_unreachable"))
@@ -1802,20 +1815,21 @@
         (? (bi != "__builtin_popcount" && t32? g)
             (nolane g ("no lane for " + bi + ontgt g))
            (: e1 (cgexpr g env <args ())
-              w32 (bi = "__builtin_popcount" || t32? g)
-              fold (k \ ['(mov r1 r0) ['shr 'r1 k] '(add r0 r0 r1)])
-              ; each arm parenthesized: a bare `+` inside a clause arm would capture the rest of the clause
-              w32ops ((? (t32? g) () '((li r2 4294967295) (and r0 r0 r2)))   ; the word above bit 31 is not ours to count
-                      + '((li r2 1431655765) (mov r1 r0) (shr r1 1) (and r1 r1 r2) (sub r0 r0 r1)
-                          (li r2 858993459) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
-                          (li r2 252645135) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
-                      + (fold 8) + (fold 16) + '((li r2 63) (and r0 r0 r2)))
-              w64ops ('((li r2 6148914691236517205) (mov r1 r0) (shr r1 1) (and r1 r1 r2) (sub r0 r0 r1)
-                        (li r2 3689348814741910323) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
-                        (li r2 1085102592571150095) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
-                      + (fold 8) + (fold 16) + (fold 32) + '((li r2 127) (and r0 r0 r2)))
               (? (bad? e1) 'bad
-                 (mkv 'long 'r0 (asint g e1 + (w32 ? w32ops w64ops))))))
+                 (mkv 'long 'r0 (asint g e1 + popops g (bi = "__builtin_popcount" || t32? g))))))
+       ; ffs: 0 for 0, else popcount(x ^ (x - 1)) -- the lowest set bit and every zero under it.
+       ; ffsll refuses on t32, a pair with no lane
+       (elem bi '("__builtin_ffs" "__builtin_ffsl" "__builtin_ffsll"))
+        (? (bi = "__builtin_ffsll" && t32? g)
+            (nolane g ("no lane for " + bi + ontgt g))
+           (: e1 (cgexpr g env <args ())
+              w32 (bi = "__builtin_ffs" || t32? g)
+              lz (nlab g ".ffs")
+              (? (bad? e1) 'bad
+                 (mkv 'long 'r0 (asint g e1
+                    + (? (w32 && !(t32? g)) '((li r2 4294967295) (and r0 r0 r2)) ())
+                    + ['(cmp r0 0) ['br 'eq lz] '(mov r1 r0) '(sub r1 r1 1) '(xor r0 r0 r1)]
+                    + popops g w32 + [['label lz]])))))
        ; the __sync spin-lock pair: test_and_set is the acquire exchange (xchg / ldaxr+stxr / amoswap.aq),
        ; release a release-ordered store of 0. the pointee sizes the exchange (4/8); an unsized one refuses
        (elem bi '("__sync_lock_test_and_set" "__sync_lock_release"))
