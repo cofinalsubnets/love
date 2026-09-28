@@ -5875,13 +5875,22 @@
        'un
         (: v (icfold <>>e)
            (? (v = 'no) 'no (<>e = 'neg) -v (<>e = 'bnot) (-v - 1) 'no))
+       'cond
+        (: c (icfold <>e) (? (c = 'no) 'no (c != 0) (icfold <>>e) (icfold <>>>e)))
        'bin (: op <>e a (icfold <>>e) b (icfold <>>>e)
              (? (a = 'no || b = 'no) 'no
               (op @ '+ (a + b) '- (a - b) '* (a * b)
                     '/ (? (b = 0) 'no (a // b)) '% (b = 0 ? 'no (a - (a // b) * b))
                     'shl (a << b) 'shr (a >> b)
                     '& (a & b) '| (a | b) '^ (a ^ b)
+                    'eq (a = b ? 1 0) 'ne (a = b ? 0 1)
+                    'lt (a < b ? 1 0) 'le (a <= b ? 1 0) 'gt (b < a ? 1 0) 'ge (b <= a ? 1 0)
                     'no)))
+       ('land || 'lor)
+        (: a (icfold <>e) b (icfold <>>e)
+           (? (a = 'no || b = 'no) 'no
+              (<e = 'land) (a != 0 && b != 0 ? 1 0)
+              (a != 0 || b != 0 ? 1 0)))
        'no))
    ; a constant lvalue at image time -> (label byteoffset type) | 'no: a global, *(const ptr),
    ; or a .member off either; the type threads so the next .member scales
@@ -5896,10 +5905,21 @@
             (imlval g <>e @ 'no 'no b
              (: fm (fmem g <>>b <>>e) (bad? fm ? 'no [<b (<>b + <fm) <>fm])))
            'no)
+   ; a ?: whose condition is known at image time -> the arm it takes | 'no: an integer that
+   ; folds, or a string or static address, which is never null (the kernel's `"f" ? .. : 0`)
+   (imsel g e)
+    (: c <>e
+       v (icfold c)
+       t (? (v != 'no) (v != 0)
+            (two? c && <c = 'str) 1
+            (: a (imaddr g c) (? (a = 'no) 'no 1)))
+       (? (t = 'no) 'no t <>>e <>>>e))
    ; a constant address at image time -> (label byteoffset ptrtype) | 'no; a cast retypes, so
    ; a later + scales by the new pointee
    (imaddr g e)
-    (<e @ 'cast
+    (<e @ 'cond
+        (: a (imsel g e) (? (a = 'no) 'no (imaddr g a)))
+       'cast
         (: r (imaddr g <>>e)
            (r @ 'no 'no [<r <>r <>e]))
        'str
@@ -5948,6 +5968,7 @@
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (?- 'bad
      (atom? ini) (zeros (tsz g ty))
+     (<ini = 'cond) (: a (imsel g ini) (? (a = 'no) 'bad (imgbytes g ty a)))
      (<ini = 'flo) (? (flo? ty) (fim ty <>ini) 'bad)
      (<ini = 'num) (? (aggish? ty) 'bad
                            (flo? ty) (fim ty (0.0 + <>ini))

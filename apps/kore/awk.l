@@ -953,8 +953,18 @@
        r (peep c pat 'none)
        (r !== 'none ? r
         (: nds (aw-re pat) (pin c pat nds, nds))))
+   ; gawk's word boundary is \y, and its \b a backspace; the engine speaks grep's \b
+   (aw-gnu pat)
+    (: o (jug 0) n #pat
+       (go k) (? (n <= k) (slurp o)
+                 (pat k = 92 && k + 1 < n)
+                  (: d (pat (k + 1))
+                     _ (? (d = 121) (say o "\\b") (d = 98) (put o 8) (: _ (put o 92) (put o d)))
+                     (go (k + 2)))
+                 (: _ (put o (pat k)) (go (k + 1))))
+       (go 0))
    (aw-re pat)
-    (: p (reere pat)
+    (: p (reere (aw-gnu pat))
        (two? p ? (recomp <>p) (aw-err ("bad regular expression: /" + pat + "/"))))
 
    ; -- fields ---------------------------------------------------------------
