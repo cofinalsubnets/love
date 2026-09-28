@@ -85,7 +85,7 @@
    ; --- nm: the defined text symbols ------------------------------------------
    (tsyms-of txt)                                  ; -> ((addr . name) ..), nm order
     (: rows (map fields (lines txt))
-       ok (filter (\ p (: f p (3 = tally f) && ((f 1) = "T" || (f 1) = "t"))) rows)
+       ok (filter (f \ 3 = #f && (f 1 = "T" || f 1 = "t")) rows)
        (map (f \ ((hex <f) . (canon (f 2)))) ok))
 
    ; sizes by ADDRESS GAP -- mooncc's ELF carries no st_size, so the next symbol
