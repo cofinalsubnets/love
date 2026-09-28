@@ -53,9 +53,16 @@ enum {              // flag bits: the console's modes
   cb_priv   = 32,   // parser transient: the CSI had a DEC '?'/'='/'<' marker
   cb_junk   = 64,   // parser transient: the CSI had intermediates we don't speak
   cb_gt     = 128,  // parser transient: the CSI had the '>' marker (secondary DA)
-  cb_alt    = 256 };// the alternate screen (?1049 and kin): scrolls keep no history
+  cb_alt    = 256,  // the alternate screen (?1049 and kin): scrolls keep no history
+  cb_mx10   = 512,  // mouse (?9): presses alone
+  cb_mbtn   = 1024, // mouse (?1000): presses and releases
+  cb_mdrag  = 2048, // mouse (?1002): and moves while a button is held
+  cb_many   = 4096, // mouse (?1003): and every move
+  cb_msgr   = 8192 };// mouse reports as CSI < b ; x ; y M/m (?1006), else CSI M and three bytes
+enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
+enum { cb_mousen = 24 };  // a mouse report's longest (cb_mouse's buffer size)
 
 struct cb {
   uint32_t wpos, spos;        // the write cursor, and DECSC's saved one
@@ -118,6 +125,10 @@ void
   cb_recolor(struct cb*, uint32_t fg, uint32_t bg),
   cb_cur(struct cb*, uint32_t row, uint32_t col);
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
+// a pointer event at row, col -> the report the program asked for into buf (cb_mousen), its
+// length, 0 for none. b the button (0 1 2, 64 65 the wheel up and down, 3 none held) with
+// modifiers 4 shift 8 meta 16 ctrl; how 0 a press, 1 a release, 2 a move
+uint32_t cb_mouse(struct cb const*, uint8_t *buf, uint32_t b, uint32_t row, uint32_t col, uint32_t how);
 struct cb_img const *cb_img(struct cb const*, uint32_t slot);   // a live picture, or 0
 uint32_t const *cb_ipx(struct cb const*);                       // the store's pixels
 // a PNG of n bytes at the head of a cap-byte region -> 0 and w x h pixels there, or -1

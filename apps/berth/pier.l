@@ -7,7 +7,8 @@
 ; painter (love/quay/paint.c, the one inle's framebuffer takes), so pier draws what the
 ; console draws -- truecolour, the faces, wide chars, sixel and kitty pictures, and a face
 ; off FONT.hex (apps/face.l) for what cp437 lacks. the rows the screen names dirty go out
-; in PutImage bands over lux's wire. keys come back as KeyPress, keysym to terminal bytes;
+; in PutImage bands over lux's wire. keys come back as KeyPress, keysym to terminal bytes,
+; and the pointer as the reports a program turns on (?1000 and kin, the `mouse` nif);
 ; a ConfigureNotify opens a fresh grid and tells the pty; WM_DELETE or the child's exit
 ; steps away.
 (module '(pier pier pier-keybytes pier-keysyms pier-main)
@@ -18,10 +19,10 @@
 (:
    ; --- the requests the wire does not carry: a window of ours, a GC, a title, the delete
    ;     protocol, and PutImage ---
-   (pier-mkwin s win parent w h)                      ; CreateWindow: back pixel, and keys + buttons + expose + structure
+   (pier-mkwin s win parent w h)                      ; CreateWindow: back pixel, and keys + buttons + moves + expose + structure
     (x-w8 s 1, x-w8 s 0, x-w16 s 10, x-w32 s win, x-w32 s parent,
      x-w16 s 0, x-w16 s 0, x-w16 s w, x-w16 s h, x-w16 s 0, x-w16 s 1, x-w32 s 0,
-     x-w32 s 2050, x-w32 s 0, x-w32 s 163845)
+     x-w32 s 2050, x-w32 s 0, x-w32 s 163917)
    (pier-gc s gc win) (x-w8 s 55, x-w8 s 0, x-w16 s 4, x-w32 s gc, x-w32 s win, x-w32 s 0)
    (pier-title s win t)
     (: n #t
@@ -150,6 +151,28 @@
                    (say m b, flush m))
                 0))))
 
+   ; --- the pointer: a press, a release or a move goes to the program when it asked for
+   ;     them. unasked, the wheel scrolls the history, or on the alternate screen sends
+   ;     three arrows, which a pager or an editor takes as scrolling. a move is sent once
+   ;     per cell ---
+   pier-xbtn {1 0 2 1 3 2 4 64 5 65 6 66 7 67}         ; X's button -> the report's
+   (pier-mods st) ((? (st & 1) 4 0) + (? (st & 8) 8 0) + (? (st & 4) 16 0))
+   (pier-held st) (? (st & 256) 0 (st & 512) 1 (st & 1024) 2 3)
+   (pier-at raw k d n) (: v (u16 raw k) (? (32767 < v) 0 (min (n - 1) (v // d))))   ; a signed pixel -> a cell
+   (pier-mouse m bx dirty code raw)
+    (: sc (peep bx () 0) st (u16 raw 28)
+       row (pier-at raw 26 16 (gaze sc 1)) col (pier-at raw 24 8 (gaze sc 2))
+       b (? (code = 6) (pier-held st) (peep pier-xbtn (raw 1) 3))
+       at ((row * 65536) + col)
+       (? ((code = 6) && (at = peep dirty 'at -1)) 0
+          (: _ (? (code = 6) (pin dirty 'at at) 0)
+             r (mouse sc (b + pier-mods st) row col (code - 4))
+             (? (0 < #r) (say m r, flush m)
+                ((code = 4) && (64 <= b <= 65))
+                 (? ((gaze sc 3) & 256) (say m (cats (map (\ _ (? (b = 64) "\e[A" "\e[B")) (jot 3))), flush m)
+                    (pier-peer bx dirty (? (b = 64) 3 -3)))
+                0))))
+
    ; --- the watch: X events in the main task. the moor pumps the child in another and
    ;     seals the socket when the child hangs up, so x-next wakes with () and we leave ---
    (pier-watch s m km dl bx fx dirty)
@@ -157,8 +180,7 @@
        (? !(two? e) ()
           (: code (ev-code e)
              _ (? (code = 2) (pier-key m km bx dirty (ev-detail e) (ev-state e))
-                  ((code = 4) && (ev-detail e = 4)) (pier-peer bx dirty 3)
-                  ((code = 4) && (ev-detail e = 5)) (pier-peer bx dirty -3)
+                  (4 <= code <= 6) (pier-mouse m bx dirty code (ev-raw e))
                   (code = 12) (pin dirty () 2)
                   (code = 22) (: raw (ev-raw e) (pier-resize bx fx m dirty (u16 raw 20) (u16 raw 22)))
                   0)

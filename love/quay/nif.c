@@ -32,6 +32,9 @@
 //                                9 the history's lines held; () misuse
 //   (peer scr n)         -> n    look n lines back into the history (0 the live
 //                                grid), clamped to what is held; answers the view
+//   (mouse scr b row col how) -> s  the report a pointer event makes as the program asked
+//                                (cb_mouse): b the button with its modifier bits, how
+//                                0 a press, 1 a release, 2 a move; "" when not asked
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
@@ -290,6 +293,23 @@ static lvm(lvm_reply) {
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 
+// (mouse scr b row col how): the bytes are laid before Have, which may move the cask
+static lvm(lvm_mouse) {
+ struct cb *c = scr_ok(Sp[0]);
+ uint8_t buf[cb_mousen];
+ uint32_t n = 0;
+ if (c && (Sp[1] & Sp[2] & Sp[3] & Sp[4] & 1) && getcharm(Sp[1]) >= 0 && getcharm(Sp[2]) >= 0
+     && getcharm(Sp[3]) >= 0 && getcharm(Sp[4]) >= 0)
+  n = cb_mouse(c, buf, (uint32_t) getcharm(Sp[1]), (uint32_t) getcharm(Sp[2]),
+               (uint32_t) getcharm(Sp[3]), (uint32_t) getcharm(Sp[4]));
+ if (!n) Sp[4] = word(EmptyString);
+ else {
+  Have(str_width(n));
+  struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+  memcpy(txt(s), buf, n);
+  Sp[4] = word(s); }
+ Sp += 4; Ip += 1; ai_musttail return Continue(); }
+
 static union u const
   nif_screen[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_screen}, {lvm_ret0}},
   nif_scribe[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_scribe}, {lvm_ret0}},
@@ -301,4 +321,5 @@ static union u const
   nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}},
   nif_dye[]     = {{lvm_cur}, {.x = putcharm(6)}, {lvm_dye},     {lvm_ret0}},
   nif_regrid[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_regrid},  {lvm_ret0}},
-  nif_peer[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peer},    {lvm_ret0}};
+  nif_peer[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peer},    {lvm_ret0}},
+  nif_mouse[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mouse},   {lvm_ret0}};

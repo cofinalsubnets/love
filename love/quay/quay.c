@@ -140,6 +140,33 @@ int cb_reply(struct cb *c, uint8_t *buf) {
   for (int i = 0; i < n; i++) buf[i] = c->out[i];
   return c->on = 0, n; }
 
+static uint32_t cb_decn(uint8_t *o, uint32_t k, uint32_t n) {
+  uint8_t b[10]; uint32_t i = 10;
+  do b[--i] = (uint8_t) ('0' + n % 10u), n /= 10u; while (n);
+  while (i < 10) o[k++] = b[i++];
+  return k; }
+
+uint32_t cb_mouse(struct cb const *c, uint8_t *o, uint32_t b, uint32_t row, uint32_t col, uint32_t how) {
+  uint16_t const f = c->flag;
+  uint32_t const btn = b & ~28u, k = 3;
+  if (!(f & cb_mice) || how > 2 || (how == 1 && btn >= 64)) return 0;   // a wheel has no release
+  if (f & cb_mx10) { if (how) return 0; b = btn; }                     // no modifiers either
+  if (how == 2) {
+    if (!(f & cb_many) && !((f & cb_mdrag) && btn != 3)) return 0;
+    b += 32; }
+  else if (btn == 3) return 0;
+  o[0] = 033, o[1] = '[';
+  if (f & cb_msgr) {
+    o[2] = '<';
+    uint32_t n = cb_decn(o, k, b);
+    o[n++] = ';', n = cb_decn(o, n, col + 1u);
+    o[n++] = ';', n = cb_decn(o, n, row + 1u);
+    return o[n++] = how == 1 ? 'm' : 'M', n; }
+  if (how == 1) b = (b & 28u) | 3u;                                   // a release names no button
+  o[2] = 'M', o[3] = (uint8_t) (32u + b);
+  o[4] = (uint8_t) (col < 222u ? 33u + col : 255u), o[5] = (uint8_t) (row < 222u ? 33u + row : 255u);  // a byte's reach
+  return 6; }
+
 // the OSC asks worth answering: colour queries (ESC]10;? fg, ESC]11;? bg)
 // -- zsh and friends probe the background at line-editor startup and WAIT;
 // silence costs the user a second of buffered keystrokes. the answers are
@@ -768,6 +795,10 @@ static void cb_mode(struct cb *c, int priv, int on) {
       if (p == 20) c->flag = on ? c->flag | cb_lnm : c->flag & (uint16_t) ~cb_lnm; }
     else if (p == 7) c->flag = on ? c->flag | cb_wrap : c->flag & (uint16_t) ~cb_wrap;
     else if (p == 25) c->flag = on ? c->flag | cb_show : c->flag & (uint16_t) ~cb_show;
+    else if (p == 9 || p == 1000 || p == 1002 || p == 1003) {       // one tracking at a time
+      uint16_t const m = p == 9 ? cb_mx10 : p == 1000 ? cb_mbtn : p == 1002 ? cb_mdrag : cb_many;
+      c->flag = (uint16_t) ((c->flag & ~cb_mice) | (on ? m : 0)); }
+    else if (p == 1006) c->flag = on ? c->flag | cb_msgr : c->flag & (uint16_t) ~cb_msgr;
     else if (p == 6) {
       c->flag = on ? c->flag | cb_origin : c->flag & (uint16_t) ~cb_origin;
       cb_goto(c, 0, 0); }

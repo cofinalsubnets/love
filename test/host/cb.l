@@ -604,6 +604,36 @@
    _ (scribe t "\e[?1049l")
    _ (test ("abc" = arow t 0 3)))
 
+; --- 25. the mouse: the report a pointer event makes, as the program asked for it ---
+(: (ml b x y) ("\e[M" + string b + string x + string y)   ; the classic report, each byte +32
+   s (mkscr 5 10)
+   _ (test ("" = mouse s 0 2 3 0))                        ; nothing asked, nothing said
+   _ (scribe s "\e[?1000h")
+   _ (test ((ml 32 36 35) = mouse s 0 2 3 0)             ; left pressed at row 2, col 3
+           ((ml 35 36 35) = mouse s 0 2 3 1)             ; a release names no button
+           ((ml 51 36 35) = mouse s 16 2 3 1)            ; ..but keeps ctrl
+           ((ml 36 36 35) = mouse s 4 2 3 0)             ; shift
+           ("" = mouse s 0 2 3 2)                        ; moves not asked
+           ((ml 96 33 33) = mouse s 64 0 0 0)            ; the wheel up
+           ("" = mouse s 64 0 0 1)                       ; and no release of it
+           ("" = mouse s 3 2 3 0))                       ; no button, no press
+   _ (scribe s "\e[?1002h")
+   _ (test ((ml 64 36 35) = mouse s 0 2 3 2) ("" = mouse s 3 2 3 2))   ; a drag, not a hover
+   _ (scribe s "\e[?1003h")
+   _ (test ((ml 67 36 35) = mouse s 3 2 3 2))            ; every move
+   _ (scribe s "\e[?1006h")
+   _ (test ("\e[<0;4;3M" = mouse s 0 2 3 0) ("\e[<2;4;3m" = mouse s 2 2 3 1)
+           ("\e[<35;10;5M" = mouse s 3 4 9 2) ("\e[<80;1;1M" = mouse s 80 0 0 0))
+   _ (scribe s "\e[?1000l")
+   _ (test ("" = mouse s 0 2 3 0))                        ; one tracking off is all of it
+   _ (scribe s "\e[?1006l\e[?9h")
+   _ (test ((ml 32 36 35) = mouse s 4 2 3 0) ("" = mouse s 0 2 3 1))   ; x10: no modifiers, no releases
+   w (mkscr 2 250)
+   _ (scribe w "\e[?1000h")
+   _ (test ((ml 32 255 34) = mouse w 0 1 240 0))         ; a column past a byte's reach
+   _ (scribe s "\e[?1000h\ec")
+   _ (test ("" = mouse s 0 2 3 0)))                       ; ris turns it off
+
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")

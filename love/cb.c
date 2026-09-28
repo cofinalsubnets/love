@@ -25,3 +25,4 @@ LvNif("tilepx", nif_tilepx, NULL);
 LvNif("dye", nif_dye, NULL);
 LvNif("regrid", nif_regrid, NULL);
 LvNif("peer", nif_peer, NULL);
+LvNif("mouse", nif_mouse, NULL);
