@@ -42,6 +42,10 @@
   (rt= (\ a b c (foldl a b c 4)))                              ; an n-ary apply and its surplus
   (rt= (\ l (foldl (+) 0 l)))                                  ; an operator as a value  (rt= (\ x (\ x x)))
   (rt= ((\ a b (a + b)) 1))
+  (rt= (\ x (: h (\ y (y + 1)) g (\ z (map h z)) [(g x) (map h x) (g (cup x))])))   ; a helper read once
+  ; a big carrier a closure keeps reads as its size; ev keeps its caches so, and prints short
+  (has? (show (: t (foldl (\ t i (pin t i i)) {} (jot 40)) (\ x (peep t (x + 1) 0)))) "{..40}")
+  (tally (show ev) < 200000)
   ; --- functions compare by their threads ---
   ((\ p q (p + q)) = (\ a b (a + b)))                   ; names never reach the thread
   (! ((\ a b (a + b)) = (\ a b (a - b))))              ; a different body is different code
