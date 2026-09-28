@@ -127,7 +127,7 @@
           'empty "Empty" 'true "true" 'false "false" 'tt "PUnit.unit"}
    (atom-l t) (peep bases t (? (corpus? t) (leann t) (string t)))   ; base type / global / bound var
 
-   (spine-l l) (one? l ? "" (u2l <l + (? (two? >l) " " "") + spine-l >l))
+   (spine-l l) (atom? l ? "" (u2l <l + (? (two? >l) " " "") + spine-l >l))
    (u2l t)
    (?- (show t)
     (charm? t) (show t)

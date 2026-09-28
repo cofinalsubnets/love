@@ -17,7 +17,7 @@
    (min a b) (a < b ? a b) (max a b) (a < b ? b a)
    ; --- the source: one row list per cell, in cell order ---------------------------
    (cell line) (: ps (split "{" line)
-                  (? (one? >ps || one? >(split "// [" line)) ()
+                  (? (atom? >ps || atom? >(split "// [" line)) ()
                      (map (hexv * cap * words) (split "," <(split "}" (ps 1))))))
    (cells src) (filter two? (map cell (lines src)))
    ; --- the ink: the palette's red, "#rrggbb" -> (r g b) ----------------------------
@@ -29,7 +29,7 @@
    ; --- the raster: lit? asks the glyph, the canvas asks lit? through scale and margin
    (lit? rows y x) (0 <= y < 8 && 0 <= x < 8 && (rows y >> (7 - x)) & 1)
    (bbox rows) (: ps (filter (p \ lit? rows <p <>p) (cat (map (y \ map (x \ [y x]) ^8) ^8)))
-                  (? (one? ps) (say err "mkicon: an empty glyph\n", quit 1)
+                  (? (atom? ps) (say err "mkicon: an empty glyph\n", quit 1)
                      (: ys (map cap ps) xs (map caup ps)
                         (lo l) (foldl min <l l) (hi l) (foldl max <l l)
                         [(lo ys) (lo xs) (1 + hi ys) (1 + hi xs)])))            ; [y0 x0 y1 x1)

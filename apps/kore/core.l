@@ -2207,7 +2207,7 @@
        (lmatch body)                         ; -> (name kind) | 'none | ('many names)
         (: ex (filter (l \ <l = body) lo)
            pre (filter (l \ #body <= #<l && snip <l 0 #body = body) lo)
-           (? (two? ex) <ex (one? pre) 'none !(two? >pre) <pre ['many (map cap pre)]))
+           (? (two? ex) <ex (atom? pre) 'none !(two? >pre) <pre ['many (map cap pre)]))
        (long w dash rest opts)               ; -> (rest opts)
         (: body (snip w #dash #w)
            e ((: (go i) (? (#body <= i) -1 (body i = 61) i (go (i + 1)))) 0)

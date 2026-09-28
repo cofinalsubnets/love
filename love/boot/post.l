@@ -193,7 +193,7 @@
    (padl s n) (#s >= n ? s (padl (" " + s) n))
    (padr s n) (#s >= n ? s (padr (s + " ") n))
    (cats ls) (foldr (+) () ls)                          ; the band-general fold: net is its number case
-   (uniq l)  (: (go seen l) (? (one? l) () (peep seen <l 0) (go seen >l)
+   (uniq l)  (: (go seen l) (? (atom? l) () (peep seen <l 0) (go seen >l)
                               (<l . go (pin seen <l 1) >l))
                 (go (tablet 0) l))
    (count p l) (foldl (\ a x (p x ? (a + 1) a)) 0 l))
@@ -952,7 +952,7 @@
                  (act? i && b = 63) (j < ns && fm (i + 1) (j + 1))
                  (act? i && b = 91 && j < ns)
                    (: c (cls i j)
-                      (? (one? c) ((s j) = 91 && fm (i + 1) (j + 1))  ; lone [ is itself
+                      (? (atom? c) ((s j) = 91 && fm (i + 1) (j + 1))  ; lone [ is itself
                          (<c && fm >c (j + 1))))
                  (j < ns && s j = b) (fm (i + 1) (j + 1)))))
       (bit (fm 0 0))))
@@ -996,7 +996,7 @@
    ; () answers both a refusal and an empty path.
    (pclean l lim)
    ((: (go l acc up)
-       (? (one? l) (rev acc)
+       (? (atom? l) (rev acc)
           (<l = ".") (go >l acc up)
           (<l = "..") (? (two? acc && <acc != "..") (go >l >acc up)
                          (charm? lim && up >= lim) ()      ; the climb runs out: refused
@@ -1640,7 +1640,7 @@
    (cprev s)
     (: n #s o (jug 0)
        (go i acc) (? (n <= i) acc (go (cpnext s i) (i . acc)))
-       (out j l) (? (one? l) (slurp o) (say o (snip s <l j), out <l >l))
+       (out j l) (? (atom? l) (slurp o) (say o (snip s <l j), out <l >l))
        (out n (go 0 ())))
    (wcwidth c)
     (? (c = 0) 0
@@ -1879,7 +1879,7 @@
    (query n ks g) (:
     (walk_star s u path) (?                          ; cycle-safe: (mu label) on a back-edge
      (var? u) (: t (has_s s u)
-                 (? (one? t) u
+                 (? (atom? t) u
                     (elem u path) ['mu <u]
                     (walk_star s <t (u . path))))
      (tie? u) (: a (nom 0) ['tie a (walk_star s (untie u a) path)])
@@ -1929,14 +1929,14 @@
     (: (ov-sigof sigs nm) (sigs @ (((aa . ua) @ a) . u) (nm @ ^aa a (ov-sigof u nm)))
        (ov-look env x) (env @ ((ap . up) . env') (x @ ^ap up (ov-look env' x)) 'bot)
        (ov2-var? dom d) (nom? d && nelem d (dom 'dice) && nelem d (dom 'ctors))   ; a sig variable: not concrete, not a constructor
-       (ov2-vars dom d acc) (one? d ?
+       (ov2-vars dom d acc) (atom? d ?
         (ov2-var? dom d && (nelem d acc) ? (d . acc) acc)
         (foldl (flip $ ov2-vars dom) acc d))
-       (ov2-lk vm d) (? (one? vm) d
+       (ov2-lk vm d) (? (atom? vm) d
                         (d = <<vm) ><vm
                         (ov2-lk >vm d))   ; ><vm is glued: cuap, not the cons
-       (ov2-term vm d)    (one? d ? (ov2-lk vm d) (map (ov2-term vm) d))
-       (ov2-uall ps as s) (? (one? ps || one? as) s
+       (ov2-term vm d)    (atom? d ? (ov2-lk vm d) (map (ov2-term vm) d))
+       (ov2-uall ps as s) (? (atom? ps || atom? as) s
                              (elem <as '(top bot)) (ov2-uall >ps >as s)   ; an unknown arg is gradual: consistent with any param, binds nothing
                              (: s1 (unify s <ps <as) (ufail? s1 ? ufail (ov2-uall >ps >as s1))))
        (ov2-inst dom sg args)                                          ; sg = (name (param-dies) result): structured caller instantiation
@@ -1948,11 +1948,11 @@
               (: r (subst s (ov2-term vm result)) nf (dom 'norm) (lit? nf ? (nf r) r))))   ; reify + normalize (dependent index)
        (ov-kindof dom sigs env e)
           (? (nom? e) (ov-look env e)
-             (one? e) (dom 'litdie e)
+             (atom? e) (dom 'litdie e)
              (: h <e as (map (ov-kindof dom sigs env) >e)
                 (? (elem h '(+ *)) (dom 'tr h <as <>as)
                    (h = '? && #e = 4) (dom 'join <>as <>>as)
-                   (: sg (ov-sigof sigs h) (one? sg ? 'top (ov2-inst dom sg as))))))
+                   (: sg (ov-sigof sigs h) (atom? sg ? 'top (ov2-inst dom sg as))))))
        (ov-zip (ap . up)  (ad . ud))     ((ap . ad) . ov-zip up ud)
        (ov-clash dom sigs env e) (two? e ? (: d (ov-kindof dom sigs env e) sub (catmap (ov-clash dom sigs env) >e)
                                             (d @- sub 'clash ((e . map (ov-kindof dom sigs env) >e) . sub))))   ; a clash site = (expr . operand-dies)
@@ -1966,9 +1966,9 @@
                         (two? sg ?                                  ; eats `two? sg` as a second pair
                          (: env (ov-zip ps <>sg) cl (ov-clash dom sigs env body)
                             bd (ov-kindof dom sigs env body) decl <>>sg
-                          (two? cl || !(ov2-okr dom bd decl) ? [(nm . (one? cl ? ['result bd decl] cl))])))))
+                          (two? cl || !(ov2-okr dom bd decl) ? [(nm . (atom? cl ? ['result bd decl] cl))])))))
                   (filter (two? * cap) (ov-pairs >prog)))
-       (ov-djoin dies) (? (one? dies) "?" (one? >dies) (show <dies) (show <dies + " vs " + ov-djoin >dies))
+       (ov-djoin dies) (? (atom? dies) "?" (atom? >dies) (show <dies) (show <dies + " vs " + ov-djoin >dies))
        (ov-report nm detail) (detail @ ; detail = (result BD DECL) | ((expr . opdies) ..)
         ['result bd decl]
          (puts $ ";; overlay: " + string nm + " -- returns " + show bd + ", declared " + show decl + "\n")
@@ -2868,7 +2868,7 @@
    (any? w (a . u)) (a = w || any? w u)
    (mine? ws w) (any? (dash (bn w)) ws)
    ; no arm answers () -- seats someone else, not me
-   (seatof ws a) (? (one? a) ()
+   (seatof ws a) (? (atom? a) ()
                     (<a = "-l") (two? >a ?                     ; a preload named for me seats
                                  (mine? ws <>a ? (<>a . >>a) (seatof ws >>a)))  ; me -- the shebang's lane
                     (mine? ws <a) (<a . >a))
@@ -3048,7 +3048,7 @@
    ; 'hu the older frames, 'hd the newer, 'cur a pristine recall: an edit gives it back to 'hu
    ; first, so the original survives. on a pop the buffer goes to the other side (skipped when
    ; empty); on a real recall with no further side it is pushed and a fresh line opens.
-   (eddetach t) (one? (t 'cur) ? t (pins t 'hu (t 'cur . t 'hu) 'cur ()))
+   (eddetach t) (atom? (t 'cur) ? t (pins t 'hu (t 'cur . t 'hu) 'cur ()))
    (uphist t) (: hu (t 'hu)
      (? (two? hu) (edempty? t ? () (pin t 'hd (edframe t . t 'hd)),
                    pins (edload t <hu) 'hu >hu 'cur <hu)
@@ -3154,7 +3154,7 @@
    ; cursor pending there, so a line of n from column s covers (s + n - 1) // w + 1 rows
    (edlay w pl u l r d)
      (: (rows s n) (0 < n ? (((s + n - 1) // w) + 1) 1)
-        (span top s) (? (one? top) 0 ((rows s (edw <top)) + (span >top 0)))
+        (span top s) (? (atom? top) 0 ((rows s (edw <top)) + (span >top 0)))
         above (span (rev u) pl)
         s0 (two? u ? 0 pl)
         k (s0 + edw (rev l))
@@ -3460,7 +3460,7 @@
               3 (puts "^C\n", () . hist)   ; ^C: abandon the line, hist untouched
               9 (? !comp (loop i draft)
                    (: cl (comp (revcat (t 'l) ()))
-                      (? (one? cl) (loop i draft)
+                      (? (atom? cl) (loop i draft)
                          (: _ (pin t 'l (foldl (a \ ch \ ch . a) (t 'l) <cl))
                             cs >cl
                           (two? cs && two? >cs ?

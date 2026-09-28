@@ -249,7 +249,7 @@
    ;; though: only the fall-through carries what this instruction wrote, and a reader past the
    ;; label is still a reader here. the bound holds this linear.
    (flagfree be l k)
-      (? (k < 1 || one? l) 0
+      (? (k < 1 || atom? l) 0
          (: o <(<l)
             (? (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
@@ -272,7 +272,7 @@
    ;; into to resolve (an inline asm's jump to a label of the function around it)
    (resolve items labels be addr) (resolve-open items labels be addr {})
    (resolve-open items labels be addr open)
-      (? (one? items) ()
+      (? (atom? items) ()
          (: x <items
             (? (fix? x)
                (: tgt (labels (fix-l x))
@@ -309,7 +309,7 @@
             ;; along so pass two never re-walks a chunk, and the reversal is already paid since
             ;; pass two splices onto a reversed stream. labels ride (0 . ()).
             (plumb p addr era acc)
-               (? (one? p) (rev acc)
+               (? (atom? p) (rev acc)
                   (: ins <p
                      (? (<ins = 'label)
                         (pin spots (ins 1) addr, pin eras (ins 1) era,
@@ -334,7 +334,7 @@
             ;; pass two: splice the cached chunks -- pessimistic addresses (pa) drive the
             ;; shortening decisions, final addresses (fa) pin the labels and re-lay the pads.
             (stitch p cs pa fa era items)
-               (? (one? p) (rev items . labels)
+               (? (atom? p) (rev items . labels)
                   (: ins <p  k <<cs  c ><cs
                      (? (<ins = 'label)
                         (: _ (pin labels (ins 1) fa) (stitch >p >cs pa fa era items))

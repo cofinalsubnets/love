@@ -40,8 +40,8 @@
    ; a kind's dispatch signature: its row and column in both matrices --
    ; equal signature = same band
    (sig i) [(rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i)]
-   (idxin x l k) (? (one? l) -1 (<l = x) k (idxin x >l (k + 1)))
-   sigs ((: (go is acc) (? (one? is) (rev acc)
+   (idxin x l k) (? (atom? l) -1 (<l = x) k (idxin x >l (k + 1)))
+   sigs ((: (go is acc) (? (atom? is) (rev acc)
                            (: s (sig <is)
                               (go >is (-1 < idxin s acc 0 ? acc (s . acc)))))) ridx ())
    (band i) (idxin (sig i) sigs 0)                      ; class id, enum-appearance order
@@ -54,7 +54,7 @@
    ; the prefix says nothing here, so it comes off: Laddn, not Llvm_addn.
    (ln x) (: t (show x) ("L" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
    lanes ((: (go rows acc)                              ; distinct lanes, appearance order
-            (? (one? rows) (rev acc)
+            (? (atom? rows) (rev acc)
                (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
 

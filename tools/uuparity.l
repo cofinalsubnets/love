@@ -15,7 +15,7 @@
    uul "test/uu.l"
 
    (rdf p) (uread p @ [1 t] t ())
-   (dir? p) (: st (stat p) (one? st ? 0 (61440 & <>>st = 16384)))
+   (dir? p) (: st (stat p) (atom? st ? 0 (61440 & <>>st = 16384)))
    (sfx-v? s) (: n #s (2 < n && s (n - 2) = 46 && s (n - 1) = 118))
    (vnamec? c) (alnum? c || c = 95 || c = 39)            ; [a-za-z0-9_']
    (unamec? c) (alnum? c || c = 95 || c = 45)            ; [a-za-z0-9_-]
@@ -23,7 +23,7 @@
 
    ; every *.v under p, then one flat sort so the visit order is the path order
    (vfiles p acc)
-    (: (go m acc) (? (one? m) acc
+    (: (go m acc) (? (atom? m) acc
                      (: e (p + "/" + <m)
                         (go >m (? (dir? e) (vfiles e acc) (sfx-v? e) (e . acc) acc))))
        (go (readdir p) acc))
@@ -34,7 +34,7 @@
                                 (i + j < n) (s (i + j) = kw j ? (go (j + 1)) ())
                                 ())
                       (go 0))
-   (kw-end s n i) (: (try m) (? (one? m) ()
+   (kw-end s n i) (: (try m) (? (atom? m) ()
                                 (: e (pfx? s n i <m) (charm? e ? e (try >m))))
                      (try kws))
 
@@ -83,7 +83,7 @@
 
    ; stable insertion by count, descending -- ties keep first-seen order
    ; <><l and <>p are accessor chains, not the link operator
-   (ins p l) (? (one? l) [p] (<><l < <>p) (p . l) (<l . ins p >l))
+   (ins p l) (? (atom? l) [p] (<><l < <>p) (p . l) (<l . ins p >l))
 
    _ (? (dir? unimath) 0
         (puts "uuparity: UniMath not installed, audit skipped\n", quit 0))
@@ -91,7 +91,7 @@
    pubT {}
    ; (file . distinct) per file, walked in flat path order; file = the short name
    tot (: (go m acc)
-           (? (one? m) (rev acc)
+           (? (atom? m) (rev acc)
               (: full <m
                  short (snip full (#unimath + 1) #full)
                  (go >m ([short (scan-v (rdf full) pubT short)] . acc))))
@@ -112,7 +112,7 @@
              + show #impostors + " impostors\n")
    ; coverage per file: counts over matched (dups counted), first-seen order, then sorted
    cov (: (go m acc)
-           (? (one? m) acc
+           (? (atom? m) acc
               (: f (peep pubT (nom <m) 0)
                  hit (assoc f acc)
                  (go >m (? (two? hit) (map (p \ (<p = f ? [f (<>p + 1)] p)) acc)

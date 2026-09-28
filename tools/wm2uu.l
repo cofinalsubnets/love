@@ -16,7 +16,7 @@
 ;
 ; a body-less `:` -- the w2-* vocabulary leaks; none shadows a nif.
 (:
-   (w2-sigof sigs nm) (? (one? sigs) ()
+   (w2-sigof sigs nm) (? (atom? sigs) ()
                          (nm = <<sigs) <sigs
                          (w2-sigof >sigs nm))
    (w2-zip ps ks) (two? ps ? ([<ps <ks] . w2-zip >ps >ks))
@@ -32,8 +32,8 @@
    ; --- kinds -> the model's types; zdel is the one Maybe op ---
    (w2-ty k) (k @ 'window 'nat 'zipper 'stk 'wrow 'nlist 'nat)
    (w2-mty rk) (rk @ 'mstk 'mstk 'zipper 'stk 'wrow 'nlist 'window 'nat rk)
-   (w2-pi ps ks res) (one? ps ? res ['pi <ps (w2-ty <ks) (w2-pi >ps >ks res)])
-   (w2-lams ps b) (one? ps ? b ['lam <ps (w2-lams >ps b)])
+   (w2-pi ps ks res) (atom? ps ? res ['pi <ps (w2-ty <ks) (w2-pi >ps >ks res)])
+   (w2-lams ps b) (atom? ps ? b ['lam <ps (w2-lams >ps b)])
 
    ; --- the wanted ops and their emitted names. zmk/zfoc are not wanted:
    ;     they are the representation vocabulary the rules target (a generated
@@ -58,7 +58,7 @@
    (w2-kof e env sigs)
     (? (nom? e) (: p (assoc e env) (two? p ? <>p 'top))
        (charm? e) 'window
-       (one? e) 'top
+       (atom? e) 'top
        (: h <e
           (? (h = 'cap)
               (: a <>e
@@ -75,7 +75,7 @@
    (w2-tx e env sigs rk)
     (? (nom? e) e
        (charm? e) e
-       (one? e) (w2-nil rk)
+       (atom? e) (w2-nil rk)
        (: h <e
           (? (h = '?) (w2-cond >e env sigs rk)
              (h = ':) (w2-lets >e env sigs rk)
@@ -112,7 +112,7 @@
    (w2-args as ks env sigs)
     (two? as ? (w2-tx <as env sigs <ks . (w2-args >as >ks env sigs)))
    (w2-cond cs env sigs rk)
-    (one? >cs ? (w2-tx <cs env sigs rk)
+    (atom? >cs ? (w2-tx <cs env sigs rk)
      (: t <cs r <>cs rest >>cs
         els (two? >rest ? ('? . rest) <rest)
       (w2-if t r els env sigs rk)))
@@ -140,7 +140,7 @@
                      (w2-tx <>>t env sigs 'window)]]
        'w2-untranslatable)
    (w2-lets bs env sigs rk)
-    (one? >bs ? (w2-tx <bs env sigs rk)
+    (atom? >bs ? (w2-tx <bs env sigs rk)
        (: x <bs v <>bs k (w2-kof v env sigs)
           ['let x (w2-tx v env sigs k)
              (w2-lets >>bs ([x k] . env) sigs rk)]))

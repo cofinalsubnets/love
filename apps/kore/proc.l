@@ -762,7 +762,7 @@
        _ (? (two? o) 0 (udie 1 usage))
        _ (: u (uoptun t '(115 116 88)) (? (nil? u) 0 (udie 1 ("microcom: -" + string u + " is not supported\n" + usage))))
        ops (o 2)
-       _ (? ((two? ops) && (one? >ops)) 0 (udie 1 usage))
+       _ (? ((two? ops) && (atom? >ops)) 0 (udie 1 usage))
        dev <ops
        sp (: v (uoptv t 115) (? (nil? v) -1 (: n (ustty-int v) (? (elem n ustty-bauds) n (udie 1 ("microcom: bad speed " + v))))))
        tmo (: v (uoptv t 116) (? (nil? v) () (: n (ustty-int v) (? (charm? n) n (udie 1 ("microcom: bad timeout " + v))))))

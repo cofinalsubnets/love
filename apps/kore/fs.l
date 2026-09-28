@@ -408,7 +408,7 @@
    ; the node runner's directory -- by way of /proc/lift. a seat with no outside has
    ; no such file, and says so.
    (lift-main as)
-    (: f (two? as && one? >as ? <as (udie 2 "usage: lift FILE"))
+    (: f (two? as && atom? >as ? <as (udie 2 "usage: lift FILE"))
        _ (two? (stat f) ? () (udie 1 ("lift: no such file: " + f)))
        p (open "/proc/lift" "w")
        (hot? p ? (say p f, close p, 0) (udie 1 "lift: nothing outside this seat to lift to")))
@@ -549,8 +549,8 @@
    ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam)
    (uidname path id)                   ; a numeric id -> its name, or the number back
     (: r (uread path)
-       (one? r ? (show id)
-        (: (go ls) (one? ls ? (show id)
+       (atom? r ? (show id)
+        (: (go ls) (atom? ls ? (show id)
                     (: f (usplit 58 <ls)
                        (3 <= #f && uatoi (f 2) = id ? (f 0) (go >ls))))
            (go (lines <>r)))))
@@ -737,7 +737,7 @@
    (stat-main as)
     (: (long? w n s) ((n < tally w) && (snip w 0 n = s))
        (fl a fmt L pf fs)
-        (? (one? a) [fmt L pf (rev fs)]
+        (? (atom? a) [fmt L pf (rev fs)]
            (<a = "-L") (fl >a fmt 1 pf fs)
            (<a = "-c") (? (two? >a) (fl >>a <>a L 0 fs) (udie 2 "stat: -c wants a format"))
            (2 < #<a && snip <a 0 2 = "-c") (fl >a (snip <a 2 #<a) L 0 fs)
@@ -749,7 +749,7 @@
        _ (? (two? fs) () (udie 2 "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."))
        (one q ok)
         (: st (? L? (stat q) (lstat q))
-           (? (one? st)
+           (? (atom? st)
               (say err ("stat: cannot stat '" + q + "': No such file or directory\n"), 0)
               (string? fmt) (say out (ust-expand fmt q st pf? L?), pf? || put out 10, ok)
               (ust-block q st L?, ok)))
@@ -775,7 +775,7 @@
              u (units (k - 1))
            (tenths < 100 ? (show (tenths // 10) + "." + show (tenths % 10) + u) (show whole + u)))))
    (du-main as)
-    (: (fl a t fs) (? (one? a) [t (rev fs)]
+    (: (fl a t fs) (? (atom? a) [t (rev fs)]
         (<a = "-d") (two? >a ? (pin t 'd (uatoi <>a), fl >>a t fs)
                      (udie 2 "du: -d wants a depth"))
         (#<a < 2 || <a 0 != 45) (fl >a t (<a . fs))
@@ -806,7 +806,7 @@
               ct))
        (walk q depth top?)
         (: st (lstat q)
-           (one? st ?  (say err ("du: cannot access '" + q + "'\n"), pin t 'bad 1, 0)
+           (atom? st ?  (say err ("du: cannot access '" + q + "'\n"), pin t 'bad 1, 0)
             (: dir? (16384 = (& 61440 <>>st))
                kids (?- 0 dir?
                      (foldl (acc \ c \ acc + walk (q + "/" + c) (depth + 1) 0) 0 (sort (readdir q))))
@@ -814,7 +814,7 @@
                deep? (charm? maxd && maxd < depth)
                _ ((dir? || a? || top?) && !s? && !deep? && emit tot q)
                tot)))
-       (go a acc) (one? a ? acc (walk <a 0 1 @ n (s? && emit n <a, go >a (acc + n))))
+       (go a acc) (atom? a ? acc (walk <a 0 1 @ n (s? && emit n <a, go >a (acc + n))))
        total (go fs 0)
        (c? && emit total "total",
         flush out,
@@ -882,7 +882,7 @@
        (go rows))
    (df-main as)
     (: t {}
-       (fl a fs) (? (one? a) (rev fs)
+       (fl a fs) (? (atom? a) (rev fs)
                     (#<a < 2 || <a 0 != 45) (fl >a (<a . fs))
                     (:- (cl 1) w <a (cl k) (#w <= k ? (fl >a fs) (w k @
                      104 (pin t 'h 1, cl (k + 1))
@@ -927,13 +927,13 @@
                            (uidof path w @ r
                             (two? r ? <>r (w 0 @ c (48 <= c <= 57 ? (uatoi w)
                                            (udie 1 (who + ": invalid " + kind + ": '" + shown + "'")))))))
-       [(side <ps "/etc/passwd" "user") (one? >ps ? -1 (side <>ps "/etc/group" "group"))])
+       [(side <ps "/etc/passwd" "user") (atom? >ps ? -1 (side <>ps "/etc/group" "group"))])
    ; chown and chgrp are one walk: chgrp's GROUP is chown's :GROUP
    (uchown who as)
     (: r? (two? as && <as = "-R")
        rest (r? ? >as as)
        grp? (who = "chgrp")
-       _ (one? >rest && udie 2 ("usage: " + who + (grp? ? " [-R] GROUP FILE.." " [-R] OWNER[:GROUP] FILE..")))
+       _ (atom? >rest && udie 2 ("usage: " + who + (grp? ? " [-R] GROUP FILE.." " [-R] OWNER[:GROUP] FILE..")))
        ug (grp? ? (uowner who (":" + <rest) <rest) (uowner who <rest <rest))
        uid <ug gid <>ug
        (one q ok)
@@ -1635,7 +1635,7 @@ EXEC 01;32
        (slurp o))
    (mktemp-main as)
     (: (fl a d u q dir fs)
-        (? (one? a) [d u q dir (rev fs)]
+        (? (atom? a) [d u q dir (rev fs)]
            (<a = "-d") (fl >a 1 u q dir fs)
            (<a = "-u") (fl >a d 1 q dir fs)
            (<a = "-q") (fl >a d u 1 dir fs)
@@ -1667,9 +1667,9 @@ EXEC 01;32
    (cmp-main as)
     (: s? (two? as && (<as = "-s"))
        fs (? s? >as as)
-       _ (one? >fs ? (udie 2 "usage: cmp [-s] A B"))
+       _ (atom? >fs ? (udie 2 "usage: cmp [-s] A B"))
        ra (uread <fs) rb (uread <>fs)
-       (? (one? ra || one? rb)
+       (? (atom? ra || atom? rb)
           (!s? ? (say err ("cmp: cannot read " + (two? ra ? <>fs <fs)), put err 10),
              2)
           (<>ra = <>rb) 0

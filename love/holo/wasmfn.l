@@ -255,7 +255,7 @@
        labs {}
        (mk code kind tg cond) [(rev code) kind tg cond]
        (go l cur acc)
-        (? (one? l) (rev (mk cur 'fall () () . acc))
+        (? (atom? l) (rev (mk cur 'fall () () . acc))
            (: f <l op <f
               (? (op = 'label) (: bs (mk cur 'fall () () . acc) _ (pin labs (f 1) #bs) (go >l () bs))
                  ((op = 'jmp || op = 'jmp8) && labset (f 1)) (go >l () (mk cur 'jmp (f 1) () . acc))
@@ -304,7 +304,7 @@
        (merge-kids x) (filter (v \ v != 0 && mg? v && idom v = x) (rev rpo))   ; last in order outermost
        ;; the emission. ctx: the labels open around the point, innermost first --
        ;; (loop . h), (block . y), if
-       (depth e c k) (? (one? c) (scare 'wasm-reloop e) (<c = e) k (depth e >c (k + 1)))
+       (depth e c k) (? (atom? c) (scare 'wasm-reloop e) (<c = e) k (depth e >c (k + 1)))
        (needs-br? x y) (y < n && (dom? y x || mg? y))
        (br-to x y ctx) [['br (depth (dom? y x ? ('loop . y) ('block . y)) ctx 0)]]
        (tree x ctx)
@@ -405,10 +405,10 @@
    (w-split forms fnset)
     (: als {}
        (go l cur name acc)
-        (? (one? l) (rev (name = () ? acc ([name (rev cur)] . acc)))
+        (? (atom? l) (rev (name = () ? acc ([name (rev cur)] . acc)))
            (: f <l
               (? (two? f && <f = 'label && fnset <>f)
-                 (? (name != () && one? cur) (pin als <>f name, go >l cur name acc)
+                 (? (name != () && atom? cur) (pin als <>f name, go >l cur name acc)
                     (go >l () <>f (name = () ? acc ([name (rev cur)] . acc))))
                  (two? f && <f = 'align) (go >l cur name acc)
                  (go >l (f . cur) name acc))))

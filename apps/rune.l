@@ -698,7 +698,7 @@
    ; rational coins and poly coins alike. a zero divisor or base, or a slot-less die, keeps
    ; its term
    (fold1 t) (? (nom? t) t
-                (one? t) t
+                (atom? t) t
                 (3 != #t) t
                 !(elem <t '(+ - * ** /)) t
                 (: a <>t b <>(>t)
@@ -803,7 +803,7 @@
                    (c < 0) ['- 0 (femit (cnorm -c))]
                    (femit c)))
    (collect t) (? (nom? t) t
-                  (one? t) t
+                  (atom? t) t
                   (map collect t @ u
                    (3 != #u ? u (<u @ ('+ || '-) (tsum u) '* (tprod u) u))))
    (expandc c t) (simpc c (collect (simpw (xlawsc c) t)))
@@ -858,12 +858,12 @@
    ; its parent's band, the fold already nesting that way, and the other wraps at the band
    ; and below. so (- (- 10 4) 3) renders 10 - 4 - 3 while (- 10 (- 4 3)) keeps its parens
    (uxs x g) (? (nom? x) [x]
-                (one? x) [x]
+                (atom? x) [x]
                 (infix3? x) (? (glook <x uband < g) [(unfix x)] (unfix x))
                 (ophead? x) [(unfix x)]
                 (unfix x))
    (unfix t) (? (nom? t) t
-                (one? t) t
+                (atom? t) t
                 (infix3? t) (: g (glook <t uband) h (hlook <t uband)
                              (uxs <>t (? h g (g + 1)) + [<t] + uxs <>(>t) (? h (g + 1) g)))
                 (uxw <t . map uxw >t)))

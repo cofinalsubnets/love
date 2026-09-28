@@ -226,7 +226,7 @@
        (td-loop l [login] issue))
 
    ; -- nslookup -----------------------------------------------------------------------
-   (ns-assoc k l) ((: (g l) (? (one? l) () (<<l = k) <><l (g >l))) l)
+   (ns-assoc k l) ((: (g l) (? (atom? l) () (<<l = k) <><l (g >l))) l)
    ; a record as busybox's nslookup lays it
    (ns-line x)
     (: nm <x t (x 1) v (x 2)
@@ -254,7 +254,7 @@
        tys (map (x \ (: t (ns-assoc (wg-lower (x 1)) ns-types) (? (nil? t) (bad (x 2)) t)))
                 (filter (x \ <x = "type" || <x = "query") kvs))
        port (: ps (filter (x \ <x = "port") kvs)
-               (? (one? ps) 53 (: n (unum ((last ps) 1)) (? (charm? n && 0 < n < 65536) n (bad ((last ps) 2))))))
+               (? (atom? ps) 53 (: n (unum ((last ps) 1)) (? (charm? n && 0 < n < 65536) n (bad ((last ps) 2))))))
        _ (map (x \ ? (elem <x '("type" "query" "port")) 0 (bad (x 2))) kvs)
        host <ops
        quad? (two? ((D 'dns-quad) host))
@@ -267,23 +267,23 @@
                  (? (two? a) [(<a . port)] (udie 1 ("nslookup: can't resolve server " + <>ops))))
               (map (s \ <s . port) ((D 'dns-servers) "/etc/resolv.conf")))
        ; one type asked of the servers in turn -> [server records-answer], or () from none
-       (one t l) (? (one? l) ()
+       (one t l) (? (atom? l) ()
                     (: id (clock 0 & 65535) s <l
                        r ((D 'dns-raw) <s >s ((D 'dns-qedns) id qname t) 2500)
                        (? (string? r) [s ((D 'dns-records) r id)] (one t >l))))
        rs (map (t \ one t sv) ask)
        got (filter two? rs)
-       _ (? (one? got) (udie 1 ";; connection timed out; no servers could be reached") 0)
+       _ (? (atom? got) (udie 1 ";; connection timed out; no servers could be reached") 0)
        s <(<got)
        _ (say out ("Server:\t\t" + (D 'dns-show) <s + "\nAddress:\t" + (D 'dns-show) <s + ":" + show >s + "\n\n"))
        ; each type's answer: its records under the heading, or the server's no
        (show1 a)
         (? (a = 'torn) (: _ (say out ("*** the answer for " + qname + " did not fit and was cut\n\n")) 0)
-           (one? a) 0
+           (atom? a) 0
            (: rc <a
               (? (0 < rc) (: _ (say out ("** server can't find " + qname + ": "
                                           + (: m (ns-assoc rc ns-rcodes) (? (string? m) m ("rcode " + show rc))) + "\n\n")) 1)
-                 (one? (a 2)) 0
+                 (atom? (a 2)) 0
                  (: _ (? (a 1) 0 (say out "Non-authoritative answer:\n"))
                     _ (map (x \ say out (ns-line x + "\n")) (a 2))
                     _ (say out "\n")
@@ -316,7 +316,7 @@
        _ (? (two? o) 0 (udie 2 use))
        _ (: u (uoptun t (? six? '(99 105 87 115 113) '(99 105 87 115 113 52 54))) (? (nil? u) 0 (udie 2 (nm + ": unknown option -" + string u + "\n" + use))))
        ops (o 2)
-       _ (? (two? ops && one? >ops) 0 (udie 2 use))
+       _ (? (two? ops && atom? >ops) 0 (udie 2 use))
        (num c d lo) (: v (uoptv t c)
                        (? (nil? v) d (: n (unum v) (? (charm? n && lo <= n) n (udie 2 (nm + ": bad -" + string c + " " + v))))))
        host <ops
@@ -412,7 +412,7 @@
        _ (: u (uoptun t (? six? '(102 109 113 119 110 73) '(102 109 113 119 110 73 52 54)))
             (? (nil? u) 0 (udie 2 (nm + ": unknown option -" + string u + "\n" + use))))
        ops (o 2)
-       _ (? ((two? ops) && (one? >ops)) 0 (udie 2 use))
+       _ (? ((two? ops) && (atom? >ops)) 0 (udie 2 use))
        (num c d lo) (: v (uoptv t c)
                        (? (nil? v) d (: n (unum v) (? (charm? n && lo <= n && n <= 255) n (udie 2 (nm + ": bad -" + string c + " " + v))))))
        first (num 102 1 1) most (num 109 30 1) nq (num 113 3 1)

@@ -126,7 +126,7 @@
  (grass-key g k now) (: mv (steer k) me (g 'me)
    (? (g 'over) g
       (k @ (113 || 27) 1 0) (pins g 'over 'fled 'msg "")
-      (one? mv) g
+      (atom? mv) g
       (: dx <mv dy <>mv
          combo (? (k != g 'dk && (now - g 'dms) < dance-gap) (1 + g 'combo) 1)
          ; a diagonal does both: the lean from its dx, the stretch from its dy

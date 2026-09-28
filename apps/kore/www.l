@@ -337,7 +337,7 @@
    (ww-unpct s) (ww-dec s 1 #s 0)
    (ww-qenc s) ((cite 'lapiz 'hpe) s)      ; typed text as a form sends it
    ; the line a named place was laid on, or -1
-   (ww-place st nm) ((: (g l) (? (one? l) -1 (<(<l) = nm) <>(<l) (g >l))) (st 'anchors))
+   (ww-place st nm) ((: (g l) (? (atom? l) -1 (<(<l) = nm) <>(<l) (g >l))) (st 'anchors))
    (ww-anchor st fr) (ww-place st (ww-unpct fr))
    ; where the page's content starts past its menus -- lapiz's " main", else " article"
    (ww-main st) (: l (ww-place st " main") (? (0 <= l) l (ww-place st " article")))
@@ -390,7 +390,7 @@
    ; the pictures' rows spliced in under their lines, the links and anchors moved with them
    (ww-splice p ins)
     (: t (foldl (\ t a (pin t <a (peep t <a () + a 1))) (tablet 0) ins)
-       ls (: (go l i acc) (? (one? l) (rev acc)
+       ls (: (go l i acc) (? (atom? l) (rev acc)
                               (go >l (i + 1) (foldl (\ acc r (r . acc)) (<l . acc) (peep t i ()))))
              (go <p 0 ()))
        [ls (p 1) (map (a \ [<a (ww-shift ins (a 1))]) (p 2))
@@ -452,8 +452,8 @@
    (ww-tab st d)
     (: ls (st 'links) n #ls top (pgtopline st) end (pglast st) cur (st 'cur)
        k (? (0 < cur && 0 <= ww-seen st cur) (cur + d)
-            (0 < d) ((: (g k l) (? (one? l) k (top <= <l) k (g (k + 1) >l))) 1 ls)
-            ((: (g k l acc) (? (one? l || end <= <l) acc (g (k + 1) >l (? (0 <= <l) k acc)))) 1 ls 0))
+            (0 < d) ((: (g k l) (? (atom? l) k (top <= <l) k (g (k + 1) >l))) 1 ls)
+            ((: (g k l acc) (? (atom? l || end <= <l) acc (g (k + 1) >l (? (0 <= <l) k acc)))) 1 ls 0))
        (? !(0 < k <= n) (pgmsg st (? (0 < n) "no more links this way" "no links on this page"))
           (: l (ls (k - 1))
              _ (? (l < 0 || 0 <= ww-seen st k) 0 (pgline! st l))
@@ -522,7 +522,7 @@
     (: g (st 'page) w (pgwidth st)
        (? (!(two? g) || st 'lw = w || two? (st 'sav)) 0
           (: ls (st 'links) top (pgtopline st) nl (st 'nl)
-             k ((: (f k l) (? (one? l) 0 (top <= <l) k (f (k + 1) >l))) 1 ls)
+             k ((: (f k l) (? (atom? l) 0 (top <= <l) k (f (k + 1) >l))) 1 ls)
              off (? (0 < k) (ls (k - 1) - top) 0)
              _ (ww-load st (ww-lay g w))
              _ (pin st 'lw w)
@@ -559,7 +559,7 @@
        _ (? (two? o) () (udie 2 ww-usage))
        _ (: c (uoptun t '(119)) (? (nil? c) () (udie 2 ("www: unknown option -" + string c))))
        us <>>o
-       _ (? (two? us && one? >us) () (udie 2 ww-usage))
+       _ (? (two? us && atom? >us) () (udie 2 ww-usage))
        ws (tty 1)
        hw (? (two? ws) (pgwin ws) [24 80])
        v (uoptv t 119)

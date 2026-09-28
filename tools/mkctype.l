@@ -64,7 +64,7 @@
                  (go >l [[c 1 1 d]]))))
        (catmap 1 (go ps ())))
    ; a line of entries at a time, ninety-odd columns wide
-   (lay l ln) (? (one? l) (puts (ln + ")\n"))
+   (lay l ln) (? (atom? l) (puts (ln + ")\n"))
                  (: s (show <l)
                     (#ln + #s > 92 ? (puts (ln + "\n"), lay l "     ")
                        (lay >l (ln + (ln (#ln - 1) = 32 || ln (#ln - 1) = 40 ? "" " ") + s)))))

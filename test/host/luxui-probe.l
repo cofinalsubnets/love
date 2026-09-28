@@ -179,7 +179,7 @@
                     x-w32 s 0, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-w32 s 0,
                     x-flush s)
       _ (withdraw ())
-      _ (waitp "wv-withdraw-unstamped" (u \ one? (x-getprop-atoms s wv (x-intern s "WM_STATE"))) 50)
+      _ (waitp "wv-withdraw-unstamped" (u \ atom? (x-getprop-atoms s wv (x-intern s "WM_STATE"))) 50)
       _ (rest 300)                                                               ; let any resurrecting render land before the read
       _ (waitp "wv-withdraw-unmapped" (u \ 0 = mstv ()) 50)
       _ (mapv ())

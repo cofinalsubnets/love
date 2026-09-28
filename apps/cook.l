@@ -70,7 +70,7 @@
       (? (string? val && #w >= n && tok = snip w 0 n)
          (val + snip w n #w) w))
    (unseat w) (!(string? w) ? w (unpre (unpre w "$HOME" (getenv "HOME")) "$PWD" (cwd 0)))
-   (unseatl l) (one? l ? l (map unseat l))
+   (unseatl l) (atom? l ? l (map unseat l))
    (reg item ing oo steps)
    (: at (unseat item) ins (unseatl ing) ors (unseatl oo)
       prev (cards at)
@@ -124,7 +124,7 @@
                ; a pure aggregate owes no age, so it need not wait here -- and waiting puts a
                ; phony's whole subtree in front of the sibling beside it. park the land under
                ; the item instead: the parent calls jobland on the way past, so every job comes home.
-               (? (one? steps)
+               (? (atom? steps)
                   (: _ (pin pending item (. 'agg (. (ingredients + orderonly) ()))) ())
                   (: _ (each ingredients (\ d (jobland d done shipped pending)))
                      _ (each orderonly (\ d (jobland d done shipped pending)))
@@ -159,7 +159,7 @@
    ; and the pull leads, so a card that reaches itself cannot circle.
    (jobland item done shipped pending)
    (: v (peep pending item 0)
-      (? (one? v) ()
+      (? (atom? v) ()
          (= <v 'agg) (: _ (pull pending item 0)
                         _ (each <>v (d \ jobland d done shipped pending))
                         (settle item () () done shipped))
@@ -599,7 +599,7 @@
                       (join " " (rev acc)))
        (g a b ()))
    (fn-slice ws n1 n2)                    ; $(wordlist): 1-based, inclusive, clamped both ends
-    (: (g l i acc) (? (one? l || i > n2) (rev acc)
+    (: (g l i acc) (? (atom? l || i > n2) (rev acc)
                       (i < n1) (g >l (1 + i) acc)
                       (g >l (1 + i) (<l . acc)))
        (g ws 1 ()))
@@ -753,9 +753,9 @@
        ; @/- modifiers govern the lot. with plain -c only the last line's status is checked, so a
        ; oneshell Makefile wants .SHELLFLAGS := -ec. an `exec` line still wants a process of its
        ; own (it replaces cook to inherit the tty), so a recipe carrying one stays per-line.
-       one? (0 < #(peep as ".ONESHELL" "") &&
+       atom? (0 < #(peep as ".ONESHELL" "") &&
              two? raws && !(any execp cmds))
-       (? one?
+       (? atom?
           (: r0 <raws
              (? (peep dryrun 0 0) [(\ _ (: _ (puts (join "\n" cmds)) (putc 10)))]
                 (peep emitp 0 0) [(([sn] + fl) + [(join "\n" cmds)])]
@@ -875,11 +875,11 @@
    ; tab-led line as a recipe -- so the walk takes those lines itself and hands over the rest.
    (text-lines src)
     ((: (g l acc)
-        (? (one? l) (rev acc)
+        (? (atom? l) (rev acc)
            (: t (trim (strip-comment <l))
               (? (first-word t = "define")
                  (: nm (trim (after-word t))
-                    (body r bs) (? (one? r) (udie 2 "cook: define with no endef.  Stop.")
+                    (body r bs) (? (atom? r) (udie 2 "cook: define with no endef.  Stop.")
                                     (trim (strip-comment <r) = "endef") [>r bs]
                                     (body >r (bs + <r + "\n")))
                     p (body >l "")
@@ -946,7 +946,7 @@
                      [("%." + tg) ("%." + sr)] 0))))))
 
    ; split a prereq word list at a `|` into (normal . order-only).
-   (splitbar ws) ((: (g l acc) (? (one? l) (rev acc . 0)
+   (splitbar ws) ((: (g l acc) (? (atom? l) (rev acc . 0)
                        (? (<l = "|") (rev acc . >l) (g >l (<l . acc))))) ws 0)
 
    ; parse a Makefile and register its rules: .PHONY members become phony symbols, every other
@@ -1043,7 +1043,7 @@
       (phave? p item) (: s (psrc p item) (exists? s || two? (cards s)))
       (best-of ms item)        ; the shortest stem among the patterns that apply
       (: ok (filter (p \ phave? p item) ms)
-         (? (one? ok) 0
+         (? (atom? ok) 0
             (foldl (\ b p (? !b p (? (#<(pmatch <p item) < #<(pmatch <b item)) p b))) 0 ok)))
       (builtin-of item)        ; the builtin lane: a match whose source is really there
       (: ms (filter (p \ two? (pmatch <p item) && exists? (psrc p item)) builtpats)

@@ -171,7 +171,7 @@
 
 ; --- argument parsing ------------------------------------------------
 (: (parse-args args path prefix od)
- (one? args ? [path prefix od]
+ (atom? args ? [path prefix od]
   (: a <args
    (? (a = "--prefix")
        (two? >args ? (parse-args >>args path <>args od) (die "missing argument for --prefix"))

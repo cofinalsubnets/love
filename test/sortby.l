@@ -2,10 +2,10 @@
 ; the VM. the left is taken when (le x y), so a comparator that answers 1 on ties is stable.
 (: (lcg x) ((16807 * x) % 2147483647)
    (genl x n) (? (n < 1) () (: nx (lcg x) (nx . genl nx (n - 1))))
-   (ins x l) (? (one? l) [x] (x <= <l) (x . l) (<l . ins x >l))
+   (ins x l) (? (atom? l) [x] (x <= <l) (x . l) (<l . ins x >l))
    (isort l) (foldl (\ acc x (ins x acc)) () l)
    l (genl 1 3000)
-   (recs ks i) (? (one? ks) () (((<ks % 7) . i) . recs >ks (i + 1)))   ; (key . position)
+   (recs ks i) (? (atom? ks) () (((<ks % 7) . i) . recs >ks (i + 1)))   ; (key . position)
    rs (recs (genl 3 400) 0)
    ; the spine is reserved after the merge, and that reservation collects like any other --
    ; which re-enters the step at its top, where the last compare's answer is still pending.
@@ -28,7 +28,7 @@
   ; stable: ties keep their order under a <= comparator, first by key then by original index
   ('((0 . b) (0 . d) (1 . a) (1 . c)) = (sortby (\ a b (<a <= <b)) '((1 . a) (0 . b) (1 . c) (0 . d))))
   ((: byk (sortby (\ a b (<a <= <b)) rs)
-      (ok l) (? (one? >l) 1
+      (ok l) (? (atom? >l) 1
                 (<<l < <<>l
                  || <<l = <<>l && ><l < ><>l)
                 (ok >l) 0)

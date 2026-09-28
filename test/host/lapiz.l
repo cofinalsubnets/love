@@ -329,7 +329,7 @@ some literal
  ; which is why 'tty is no row in `surfaces`: a row owes law 1 and this cannot pay it.
  _ (: (slurpf f) (: q (open f "r") (slurp q))
       ; an inl down to its text -- lapiz keeps its own `plain` off the export list
-      (flat l) (one? l ? "" (: x <l
+      (flat l) (atom? l ? "" (: x <l
                      ((<x @ 'text <>x 'code <>x 'strong (flat <>x) 'em (flat <>x)
                              'link (flat <>x) "") + flat >l)))
       ; the line a heading should have become: a .SH flush left, a .SS indented three

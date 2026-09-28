@@ -136,7 +136,7 @@
    ; and in chunks that divide the block, straddle it, and outrun it
    (dig-agree? n)
     (: s (hash-bytes n)
-       (go ks) (? (one? ks) 1
+       (go ks) (? (atom? ks) 1
                   (? (sha256 s = sha-stream s <ks &&
                       md5 s = md5-stream s <ks &&
                       cksum s = ck-stream s <ks)
@@ -211,7 +211,7 @@
    (dig-b2 n) [210 (\ b (blake2b-init b n)) blake2b-feed blake2b-done]
    (dig-agree2? n)
     (: s (hash-bytes n)
-       (go ks) (? (one? ks) 1
+       (go ks) (? (atom? ks) 1
                   (? (sha1 s = dig-stream (dig-sha1 0) s <ks &&
                       sha224 s = dig-stream (dig-sha224 0) s <ks &&
                       sha384 s = dig-stream (dig-sha384 0) s <ks &&

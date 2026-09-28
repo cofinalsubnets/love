@@ -24,7 +24,7 @@
    ; that "the file did not parse" reads differently from "the trees differ".
    (g2-front src)
     (: r (uread src)
-       (? (one? r) 'noread
+       (? (atom? r) 'noread
           (: lx (clex ((deftext [(archdef 'x64)]) + <>r))
              (? !(okv? lx) 'lexfail
                 (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
@@ -35,7 +35,7 @@
    ; the definition, never the prototype that announces it: the two wear one name, and
    ; comparing the wrong one would pass on a signature while the body drifted.
    (g2-find tops nm)
-    (: (go l) (? (one? l) ()
+    (: (go l) (? (atom? l) ()
                  (: e <l (<e = 'fn && (: w (e 1) (string? w && w = nm))
                           ? [1 e] (go >l))))
        (go tops))
@@ -43,12 +43,12 @@
    (clay-g2 old new names)
     (: a (g2-front old)
        b (g2-front new)
-       _ (one? a ? (g2-say ("g2: " + old + ": " + show a), quit 1))
-       _ (one? b ? (g2-say ("g2: " + new + ": " + show b), quit 1))
+       _ (atom? a ? (g2-say ("g2: " + old + ": " + show a), quit 1))
+       _ (atom? b ? (g2-say ("g2: " + new + ": " + show b), quit 1))
        (one nm)
         (: fa (g2-find a nm) fb (g2-find b nm)
-           (? (one? fa) (g2-say ("g2: MISSING from " + old + ": " + nm), 0)
-              (one? fb) (g2-say ("g2: MISSING from " + new + ": " + nm), 0)
+           (? (atom? fa) (g2-say ("g2: MISSING from " + old + ": " + nm), 0)
+              (atom? fb) (g2-say ("g2: MISSING from " + new + ": " + nm), 0)
               (fa 1 = fb 1) 1
               (g2-say ("g2: DIFFERS: " + nm), 0)))
        oks (foldl (+) 0 (map one names))

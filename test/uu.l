@@ -1793,7 +1793,7 @@
       (umk (umax i j)))
 
    (pinf-spine cx en d f as)
-   (? (one? as) f
+   (? (atom? as) f
       (<f = 'pi) (: a <as _ (pchk cx en d a <>f) (pinf-spine cx en d (capp <>>f (vof en a)) >as))
       (scare 'uu-not-a-pi as))
 

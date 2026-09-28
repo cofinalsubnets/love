@@ -60,7 +60,7 @@
  (mc-parent d) (: k (mc-rfind d 47) (? (d = "/") "/" (k < 1) "/" (snip d 0 k)))
  (mc-enter p)
   (: e (mc-at p)
-     (? (one? e) p
+     (? (atom? e) p
         (<e = "..") (mc-cd p (mc-parent (p 'dir)))
         (: q (mc-join (p 'dir) <e) (? (mc-dirat? q) (mc-cd p q) p))))
 

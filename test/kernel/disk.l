@@ -22,7 +22,7 @@
          ())))
 (borrow "apps/fat.l")
 (: dev (fat-disk ())
-   (? (one? dev) ()
+   (? (atom? dev) ()
       (: f0 (fat-mount dev)
          seen (tablet? f0 ? (fat-read f0 "boot.txt"))
          f (? (tablet? f0) f0 (fat-mkfs dev, fat-mount dev))
