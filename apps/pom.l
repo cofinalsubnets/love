@@ -91,12 +91,11 @@
  pom-usage "usage: love pom [-d] [-e] [[[[[[cc]yy]mm]dd]HH]]"
  (dig? c) (48 <= c < 58)
  (digits? s) (? #s (all dig? (map s ^#s)) 0)
- (num s) (foldl (n \ c \ n * 10 + c - 48) 0 (map s ^#s))
  (env k) (: v (getenv k) (? (string? v) v ""))
  ; a leading run of digits, perl's reading of a number, and d for none or zero
  (envnum k d) (: v (env k)
                  (go i) (? (i < #v && dig? (v i)) (go (i + 1)) i)
-                 n (num (snip v 0 (go 0)))
+                 n (unum (snip v 0 (go 0)))
                  (? n n d))
  (fail s) (say err ("pom: " + s + "\n"), flush err, 1)
  ; getopts 'de': [d e operands], or () for a letter it does not know
@@ -126,10 +125,10 @@
            hs (at 0 (show (s % 86400 // 3600)))
            ds (at 1 ()) ms (at 2 ()) ys (at 3 ())
            yd (? ys (at 4 (snip (show gy) 0 2) + ys) (show gy))
-           hh (num hs)
-           dd (? ds (num ds) gd)
-           mo (? ms (num ms) gm)
-           y (num yd)
+           hh (unum hs)
+           dd (? ds (unum ds) gd)
+           mo (? ms (unum ms) gm)
+           y (unum yd)
            w (envnum "COLS" (envnum "COLUMNS" 80) - 2)
            h (envnum "LINES" (envnum "ROWS" 25) - 3)
            tm (env "TERM" + " " + env "TERMCAP")
