@@ -9,8 +9,8 @@
 // usage: node test/gate/point.mjs MODULE IMAGE [LOG]
 import { Worker } from 'node:worker_threads';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { ctl_n, ring_n, ring_at, shared_n } from '../../inle/wasm/cpu.mjs';
-import { pointlane, pastelane } from '../../inle/wasm/machine.js';
+import { ctl_n, ring_n, ring_at, shared_n } from '../../src/inle/wasm/cpu.mjs';
+import { pointlane, pastelane } from '../../src/inle/wasm/machine.js';
 
 const [wasm, image, log] = process.argv.slice(2);
 const nap = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -25,7 +25,7 @@ const point = pointlane(ring, ctl), paste = pastelane(ring, ctl);
 
 let said = '';
 const copies = [];
-const cpu = new Worker(new URL('../../inle/wasm/cpu.mjs', import.meta.url));
+const cpu = new Worker(new URL('../../src/inle/wasm/cpu.mjs', import.meta.url));
 cpu.on('message', (m) => {
   if (m.serial !== undefined) said += m.serial;
   else if (m.copy !== undefined) copies.push(m.copy);

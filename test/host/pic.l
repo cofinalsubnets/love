@@ -1,4 +1,4 @@
-; --- test/host/pic.l: kore's pictures (apps/kore/pic.l) and the gif decoder under them -----
+; --- test/host/pic.l: kore's pictures (src/apps/kore/pic.l) and the gif decoder under them -----
 ; a two-frame gif assembled by hand read back frame by frame; each kind sniffed, sized and
 ; drawn; sixel and kitty's graphics read back off a quay screen, and quay's answers to the
 ; probe; pic and its verbs run as commands; picless stepped through its keys, the screen
@@ -107,7 +107,7 @@
            (<r3 = 1))
    (pic as) (hark ([love "kore" "pic"] + as))
    ; a bare pic sniffs: a picture is drawn, anything else is a document for classic pic
-   ; (apps/kore/gpic.l), and a flag says which outright
+   ; (src/apps/kore/gpic.l), and a flag says which outright
    _ (put (dir + "/d.ms") ".PS\nbox\n.PE\ntext\n")
    _ (test (: r (pic [(dir + "/a.gif")]) ((<r = 0) && (has >r "▀")))
            (: r (pic [(dir + "/n.txt")]) ((<r = 0) && (has >r ".do if !dPS") && (has >r "\nhello\n")))

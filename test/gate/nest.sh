@@ -2,7 +2,7 @@
 # test/gate/nest.sh -- `love nest`, the binary laying itself as the user's love, in a
 # HOME of its own: the plan said (-n) and done (-y), the same build again, an older love,
 # a newer one, one of the same stamp with other bytes, and -f. off a terminal a bare
-# `love nest` is -y's; the floor (apps/rove/roost.l) is test/host/roost.l's. the installed love is a script where the
+# `love nest` is -y's; the floor (src/apps/rove/roost.l) is test/host/roost.l's. the installed love is a script where the
 # case wants a stamp no build here carries; it answers `verbs` and `nest --stamp`.
 #
 # usage: sh test/gate/nest.sh LOVE
@@ -33,7 +33,7 @@ for t in lush kore sb cook libra mooncc; do
 done
 [ "$(readlink "$H/.local/bin/lush")" = "$H/.love/bin/lush" ] || fail "no ~/.local/bin compat link"
 [ "$("$H/.love/bin/lush" -c 'echo ok')" = ok ] || fail "the linked lush does not run"
-{ echo '#!/usr/bin/env -S love -l'; for m in core layout wire ewmh manage keys config lux; do cat apps/lux/$m.l; done; } > "$H/lux.want"
+{ echo '#!/usr/bin/env -S love -l'; for m in core layout wire ewmh manage keys config lux; do cat src/apps/lux/$m.l; done; } > "$H/lux.want"
 cmp -s "$H/lux.want" "$H/.love/bin/lux" || fail "a fresh nest did not write lux as the Makefile cats it"
 [ -x "$H/.love/bin/lux" ] || fail "lux is not executable"
 [ "$(readlink "$H/.local/bin/lux")" = "$H/.love/bin/lux" ] || fail "no ~/.local/bin compat link for lux"

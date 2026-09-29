@@ -17,7 +17,7 @@ set -u
 
 AI="${1:?usage: loopback.sh <love-binary> [port]}"
 PORT="${2:-7390}"
-AK="apps/nc.l"   # prel is baked into the egg -- no -l love/boot/prel.l preload
+AK="src/apps/nc.l"   # prel is baked into the egg -- no -l src/love/boot/prel.l preload
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/nc.XXXXXX")"
 cli= feed=

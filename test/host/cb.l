@@ -1,4 +1,4 @@
-; --- test/host/cb.l: a vttest-lite for quay's console screen (love/cb.c + love/quay/quay.c) ---
+; --- test/host/cb.l: a vttest-lite for quay's console screen (src/love/cb.c + src/love/quay/quay.c) ---
 ; held out of the corpus, and not for its nifs: love0 links screen/scribe/glass/gaze/reply
 ; as surely as the final `love` does, and these laws pass twice on their own and beside
 ; the other movers. inside the whole corpus love0's second evaluation stops. which
@@ -11,7 +11,7 @@
 ; here holds under inle too -- this file is the emulator's executable spec.
 
 ; --- the little vocabulary ---
-; a cell is three words (love/quay/quay.h): the glyph -- codepoint, width, picture,
+; a cell is three words (src/love/quay/quay.h): the glyph -- codepoint, width, picture,
 ; face -- then the fg and bg, each a kind in its top byte over a 24-bit value
 (: (mkscr r c) (screen (cask (screen () r c)) r c)   ; the ctor: size protocol + open
    (chat s i) (2097151 & glass s i 0)              ; the codepoint of cell i

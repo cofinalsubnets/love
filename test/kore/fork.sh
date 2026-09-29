@@ -3,7 +3,7 @@
 . "$(dirname "$0")/common.sh"
 
 # an external word whose PATH winner IS this binary FORKS instead of exec'ing
-# (apps/lush.l sh-forkfn): the child rides the warm heap and no stage pays
+# (src/apps/lush.l sh-forkfn): the child rides the warm heap and no stage pays
 # a second wake. fork-vs-spawn is not portably observable from out here (landed
 # against an execve trace: one exec for the shell, none for the stages) -- so
 # these assert the lane's PLUMBING with the winner self-symlinked, the distro's
@@ -31,7 +31,7 @@ fsh 'kore sh -c "kore echo deep"' | grep -qx deep || fail "fork lane nested sh"
 [ "$(fsh 'echo n=$(kore echo abc | kore wc -c)')" = "n=4" ] || fail "fork lane cmdsub"
 fsh 'kore seq 3 > '"$HO"'/.fork-r' ; [ "$(wc -l < "$HO/.fork-r")" = "3" ] || fail "fork lane redirect"
 # ..and the lane's reach is the BINARY, never a verb list: the child hands its whole
-# line to cli-line (love/boot/post.l), the very door an exec would have reached, so a word
+# line to cli-line (src/love/boot/post.l), the very door an exec would have reached, so a word
 # that dispatches through argv[1] rides it too -- `love -e`, `love VERB`, and the
 # status either answers with.
 ln -sf "$K" "$fb/love"

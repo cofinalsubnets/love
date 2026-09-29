@@ -1,14 +1,14 @@
 #!/bin/sh
 # test/gate/caja.sh -- caja, TeX's engine in love, held to TeX itself: its DVI byte for byte.
 #
-# boxes (apps/caja/box.l, tex.web parts 10, 32, 33): test/caja/boxes.l writes the same
+# boxes (src/apps/caja/box.l, tex.web parts 10, 32, 33): test/caja/boxes.l writes the same
 # pages twice, as -ini TeX input and as caja's nodes; TeX's DVI and caja's must be the same
 # file. the fixed pages each pin a case (glue set both ways and at every order, leaders of
 # every kind in both directions, shifted and nested boxes, rules, fonts at sizes, codes past
 # 127), then seeded random pages from a small grammar, enough of them that the file passes
 # TeX Live's 16384-byte DVI buffer and the w/x/y/z reuse meets its flushed half.
 #
-# paragraphs (apps/caja/par.l, tex.web parts 38-43 and the main loop): test/caja/pars.l says
+# paragraphs (src/apps/caja/par.l, tex.web parts 38-43 and the main loop): test/caja/pars.l says
 # its pages as -ini TeX with hyphen.tex's patterns and as caja's tokens, the same way. fixed
 # pages pin plain TeX's settings, raggedright, looseness, hanging indentation, \parshape and
 # the emergency pass; seeded random pages draw the parameters and the text, which mixes
@@ -16,7 +16,7 @@
 # and font changes. cajalig (test/caja/cajalig.pl, through pltotf) has every ligature op,
 # kerns and both boundary characters.
 #
-# documents (apps/caja/doc.l, with page.l's \vsplit): test/caja/docs.l lays a whole document
+# documents (src/apps/caja/doc.l, with page.l's \vsplit): test/caja/docs.l lays a whole document
 # out -- every markdown file in the tree, and a few man pages where the host has them --
 # and says the shower's tokens both ways, paged by \vsplit with a number under each page.
 #

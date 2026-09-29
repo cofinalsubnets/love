@@ -1,10 +1,10 @@
-; --- test/law/harp.l: harp, tidal's cycle algebra in love (apps/harp/harp.l) ---
+; --- test/law/harp.l: harp, tidal's cycle algebra in love (src/apps/harp/harp.l) ---
 ; the laws are queries: a pattern is a function from a span to events, so every
 ; combinator can be checked by asking it for a span and reading the answer. the
 ; shape under test is [wb we v] per event, with the times as plain numbers -- the
 ; part is checked separately, where it is the point (onsets, tails, `appl`).
 ;
-; the voices (apps/harp/play.l) are checked at the far end only: one cycle out the
+; the voices (src/apps/harp/play.l) are checked at the far end only: one cycle out the
 ; timed sink keeps time, and one cycle into a .wav has the right header and puts
 ; its energy where the pattern said. no gate can listen.
 (borrow 'harp)
@@ -22,7 +22,7 @@
                              (filter onset? (p (qi a) (qi b)))))
 
    ; --- cycle time: what harp leans on the tree's rationals for --------------
-   ; not a re-test of `///` (love/boot/post.l owns that) -- these are the four
+   ; not a re-test of `///` (src/love/boot/post.l owns that) -- these are the four
    ; properties the algebra would break without, stated where they can be read.
    _ (test ; exact, so a third of a cycle survives being multiplied back
              (((1 /// 3) * 3) = (1 /// 1))
@@ -34,7 +34,7 @@
              ; equality by value, which is the whole of what onset? rests on
              ((qi 1) = (1 /// 1))  ((qi 2) = (4 /// 2))  !((qi 1) = (qi 2))
              ; and a rational does not meet a tray: it answers (), silently, so
-             ; apps/harp/play.l crosses to frames through qnum and never after
+             ; src/apps/harp/play.l crosses to frames through qnum and never after
              !((iota 4) + (1 /// 3))
              ; // truncates toward zero; a floor that did not step down would
              ; put cycle -1/2 in cycle 0 and every negative span would be wrong

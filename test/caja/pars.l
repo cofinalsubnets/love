@@ -1,4 +1,4 @@
-; test/caja/pars.l -- apps/caja/par.l held to TeX, a paragraph at a time. a page's paragraphs
+; test/caja/pars.l -- src/apps/caja/par.l held to TeX, a paragraph at a time. a page's paragraphs
 ; are tokens, said twice: as -ini TeX input (with hyphen.tex's patterns and plain's space
 ; factors), and through caja's main loop and line breaker. test/gate/caja.sh compares the DVI.
 ;
@@ -10,12 +10,12 @@
 ;
 ; the tokens are par.l's, and so is their TeX spelling (cp-tex)
 (: _ (borrow 'posix)
-   _ (borrow "apps/tfm.l")
-   _ (borrow "apps/caja/box.l")
+   _ (borrow "src/apps/tfm.l")
+   _ (borrow "src/apps/caja/box.l")
    _ (borrow 'caja-box)
-   _ (borrow "apps/caja/par.l")
+   _ (borrow "src/apps/caja/par.l")
    _ (borrow 'caja-par)
-   _ (borrow "apps/caja/page.l")
+   _ (borrow "src/apps/caja/page.l")
    _ (borrow 'caja-page)
    (die m) (: _ (say err ("pars: " + m + "\n")) _ (flush err) (quit 1))
    (slurpf p) (uread p @ [1 x] (x + "") (die ("cannot read " + p)))

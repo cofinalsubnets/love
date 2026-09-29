@@ -21,7 +21,7 @@
 ;
 ; run:  cat test/00-init.l test/host/tls.l | out/love
 
-(borrow "apps/tls/tls.l")
+(borrow "src/apps/tls/tls.l")
 
 (test
  (elem 'tls (cite ()))
@@ -428,6 +428,6 @@
 ; the harness greps for this line, and that is the point: a reader stop exits 0
 ; with the asserts above never read, so only reaching here proves the file ran.
 (test_fin (),
- puts "apps/tls: ok -- chacha20 + poly1305 (rfc 8439 block, stream, counter, cipher, mac); the handshake's verify
+ puts "src/apps/tls: ok -- chacha20 + poly1305 (rfc 8439 block, stream, counter, cipher, mac); the handshake's verify
 ",
  0)

@@ -1,10 +1,10 @@
-; --- test/host/face.l: apps/face.l's faces, and quay's own reading of them ---
-; love lays a face off .hex text; the painter reads it in C (love/quay/quay.c's cb_face_ok
+; --- test/host/face.l: src/apps/face.l's faces, and quay's own reading of them ---
+; love lays a face off .hex text; the painter reads it in C (src/love/quay/quay.c's cb_face_ok
 ; and cb_face_rows, through the `facerow` nif). the two must read every row the same, and
 ; C must refuse a face that is not one rather than index past it.
 ;
 ;   cat test/00-init.l test/host/face.l | out/love      ; exits 1 on fail, prints face: ok
-(borrow "apps/face.l")
+(borrow "src/apps/face.l")
 (: (hexrow v d) (: h (radix v 16) (zpad d h))           ; v as d hex digits
    (glyph cp d f) ((zpad 4 (radix cp 16)) + ":" + cats (map (\ r (hexrow (f r) d)) (jot 16)))
    ; A: narrow, row r holds r; 世 wide and solid; 丗 wide, row r holds r in both bytes;

@@ -1,4 +1,4 @@
-; --- test/host/locks.l: the machine's locks (apps/locks.l) ---------------------------
+; --- test/host/locks.l: the machine's locks (src/apps/locks.l) ---------------------------
 ; a root of its own under out/, so a run never meets the box's real locks. pid 1 stands in
 ; for a second live holder (always alive, its stat readable); a child spawned and reaped
 ; stands in for a dead one. run standalone from the repo root:

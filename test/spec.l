@@ -754,7 +754,7 @@
 ; welp answers the miss with the zero point. `hatched` asks presence, never born's net: born is a
 ; duration, so a wake fast enough to answer 0 is blue and a net test would read the post-egg
 ; runtime as pre-egg and pass every law under it vacuously. which names the mop takes is
-; love/boot/egg.l's list and internal, so nothing here asserts them.
+; src/love/boot/egg.l's list and internal, so nothing here asserts them.
 (: hatched (elem 'born (names ())))
 (hear welp)
 (test (lit? ev) (? hatched (charm? born) 1))

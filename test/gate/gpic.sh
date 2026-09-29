@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/gpic.sh -- classic pic (apps/kore/gpic.l) against groff's own, byte for byte.
+# test/gate/gpic.sh -- classic pic (src/apps/kore/gpic.l) against groff's own, byte for byte.
 #
 # each test/gpic/*.pic runs through /usr/bin/pic and through `love pic` in five modes --
 # troff, -n, -t, -c and -tz -- and stdout and the exit status must agree. test/gpic/open

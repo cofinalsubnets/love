@@ -1,4 +1,4 @@
-; test/law/tui.l -- apps/tui.l's laws: the window follow and the diff repaint, held by
+; test/law/tui.l -- src/apps/tui.l's laws: the window follow and the diff repaint, held by
 ; assertion. both are pure (tui-fresh but for its one pin on the box it is handed), so
 ; there is no tty and no port here. rides the vi cat (`make test_vi`), so every helper
 ; is prefixed -- the lane is one scope.

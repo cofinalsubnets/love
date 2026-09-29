@@ -13,7 +13,7 @@
 # file. the lanes arrive in the environment because the object list already has the
 # variadic tail -- gate_love_c / gate_host_c / gate_arch_c / gate_kern_c, the Makefile's own.
 #
-# gate_seat_c is love/noblob.c: this pair links the kernel but lays no out/src.o and no
+# gate_seat_c is src/love/noblob.c: this pair links the kernel but lays no out/src.o and no
 # out/moonlibc.o -- it rebuilds every TU itself and carries no archives -- so it answers
 # the carried-archive symbols itself. it rides the OBJ list too, or love1 has a body
 # love2's link cannot find.
@@ -49,9 +49,9 @@ mkdir -p "$d"
 
 # the object of a source is its PATH under $d, exactly as make lays it under the odir --
 # derived, never spelled, so a renamed, moved or newly-added TU cannot leave a stale name
-# here. moonlibc drops its apps/moon/lib/ stem, the one place make does too.
+# here. make drops the src/ stem, and moonlibc its apps/moon/lib/ one too.
 mkobj() {                    # $1 = source -> $o
-  o=${1#./}
+  o=${1#./}; o=${o#src/}
   case $o in apps/moon/lib/*) o=${o#apps/moon/lib/} ;; esac
   o=$d/${o%.c}.o
   mkdir -p "${o%/*}"
@@ -72,23 +72,23 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (q
 
 # ...and rebuilds every TU with it, in the exact order make links them
 moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
-# love/love.c's flags must MIRROR make's ($(moon_d)/love.o in the Makefile), not just its
+# src/love/love.c's flags must MIRROR make's ($(moon_d)/love.o in the Makefile), not just its
 # order: -D LvHaveVersionH is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
 # string, naming a broken fixpoint where the only difference is a build flag.
 for f in $gate_love_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -D LvHaveVersionH -I"$ho" -I. -Ilove -Iinle -Iout/lib -c "$f" "$o" \
+  moon1 -D ai_tco=1 -D LvHaveVersionH -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c $gate_seat_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -I"$ho" -I. -Ilove -Iinle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco=1 -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 # moonlibc rides the implicit runtime, as in raw.sh -- pulled member by need.
-for f in apps/moon/lib/moonlibc/math/*.c; do
+for f in src/apps/moon/lib/moonlibc/math/*.c; do
   mkobj "$f"
-  moon1 -Iapps/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -Isrc/apps/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "((cite 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
@@ -98,7 +98,7 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # still answers love1 == love2 -- it just answers it about a shorter binary than
 # anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Ilove -Iinle -Iout/lib -Ilove/quay -Iapps/moon/include"
+  kinc="-I$ho -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include"
   for f in $gate_kern_c $gate_arch_c; do
     mkobj "$f"
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"

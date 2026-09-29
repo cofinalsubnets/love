@@ -6,7 +6,7 @@
 ; beneath it gates headless here. the one file reads bare; its seat stays
 ; quiet under the corpus (no lush on cmdline).
 ; run: cat test/00-init.l test/host/sh.l | out/love
-(reads (open "apps/lush.l" "r"))
+(reads (open "src/apps/lush.l" "r"))
 (borrow 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
 (pin sh-mflag () 0) ; the in-image laws read autonomous; the default is asked of sh-envflag
 
@@ -61,7 +61,7 @@
    buried (map (c \ "a" + c + "b") bytes)
    ; ..and the shapes whose bytes are all tame and whose reading is not
    shapes ["" "a=b" "x=" "A_1=v" "=x" "9x=1" "--port=8080" "-" "--" "%1"
-           "a'b" "'" "''" "x  y" "  " "caf\xc3\xa9" "$(echo hi)" "apps/lus*.l"
+           "a'b" "'" "''" "x  y" "  " "caf\xc3\xa9" "$(echo hi)" "src/apps/lus*.l"
            "/usr/local/bin:1,2.3@x+y%z_-"]
    corpus (bytes + buried + shapes)
    (test
@@ -305,9 +305,9 @@
     (() = sh-fields [(v "LUSH_NIL_ZZ")])
     ('("") = sh-fields [('sq . "")])
     ('("quay") = sh-fields [('sub . "echo quay")])
-    ('("apps/lush.l") = sh-fields [('lit . "apps/lus*.l")])
+    ('("src/apps/lush.l") = sh-fields [('lit . "src/apps/lus*.l")])
     ('("a/zz*qq") = sh-fields [('lit . "a/zz*qq")])
-    ('("apps/lush/j*.l") = sh-fields [('sq . "apps/lush/j*.l")])))
+    ('("src/apps/lush/j*.l") = sh-fields [('sq . "src/apps/lush/j*.l")])))
 (pin sh-status () 7,
  test ('("7") = sh-fields [('var . "?")]))
 
@@ -318,16 +318,16 @@
         (sh-match "[!a]bc" "zbc") !(sh-match "[!a]bc" "abc")     ; negation, both ways
         (sh-match "[^a]bc" "zbc") !(sh-match "[abz]bc" "qbc")    ; ^ is the same word
         (sh-match "a[bc" "a[bc")                                    ; unterminated [ is itself
-        ('("apps/lush.l") = sh-glob "apps/l[t-v]sh.l" (sh-ones 19)))
+        ('("src/apps/lush.l") = sh-glob "src/apps/l[t-v]sh.l" (sh-ones 19)))
 
 ; completion (rung 2): (insert . candidates) -- one path candidate lands its
 ; tail (+ " ", a directory its "/"), the common prefix otherwise; the helpers
-(: r (sh-complete (sh-expl "cat apps/lus"))
-   (test (two? r) ("h.l " = slurp (tap <r)) ('("apps/lush.l") = >r)))
-(: r (sh-complete (sh-expl "cat apps/ko"))
+(: r (sh-complete (sh-expl "cat src/apps/lus"))
+   (test (two? r) ("h.l " = slurp (tap <r)) ('("src/apps/lush.l") = >r)))
+(: r (sh-complete (sh-expl "cat src/apps/ko"))
    (test ("re/" = slurp (tap <r))))              ; one DIR candidate: its /
-(: r (sh-complete (sh-expl "cat apps/lu"))
-   (test ('("apps/lupa.l" "apps/lush.l" "apps/lux") = >r)))   ; three ways forward, listed
+(: r (sh-complete (sh-expl "cat src/apps/lu"))
+   (test ('("src/apps/lupa.l" "src/apps/lush.l" "src/apps/lux") = >r)))   ; three ways forward, listed
 (test ("ab" = sh-common '("abc" "abd" "ab"))
         ("~" = sh-homely ("" + getenv "HOME")))
 
@@ -377,8 +377,8 @@
    (test (0 = <r) ("A B\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c" "false && echo no || echo yes"])
    (test ("yes\n" = >r)))
-(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) apps/lus*.l"])
-   (test ("Hi apps/lush.l\n" = >r)))
+(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) src/apps/lus*.l"])
+   (test ("Hi src/apps/lush.l\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c" "sh -c 'echo e >&2' 2>&1 | tr e E"])
    (test ("E\n" = >r)))
 (: r (hark ["out/love" "out/lush" "-c" "exit 9"])
@@ -488,7 +488,7 @@
 ; the body cats the whole glob, not a named file: a source file's size is a moving
 ; target -- cutting one in half used to halve this body and quietly drop the volume
 ; this is here to carry.
-(: r (hark ["out/love" "out/lush" "-c" "f() { pwd; cat love/*.c; cat love/*.c; }; x=$(f); echo ${#x}"])
+(: r (hark ["out/love" "out/lush" "-c" "f() { pwd; cat src/love/*.c; cat src/love/*.c; }; x=$(f); echo ${#x}"])
    t >r
    (test (800000 < sh-int (snip t 0 (#t - 1)))))
 
@@ -834,7 +834,7 @@
          (1 = sh-selfcall? ["ls" "-l"]) (0 = sh-selfplain? "wc") (1 = sh-selfplain? "ls")))
 ;; ..and a capture of a big in-image reader lives: the body writes a port that parks
 ;; on a full pipe, so the drain gets its turn -- the static stdout would block on it
-(: r (hark ["out/love" "out/lush" "-a" "-c" "f() { cat love/*.c; cat love/*.c; }; x=$(f); echo ${#x}"])
+(: r (hark ["out/love" "out/lush" "-a" "-c" "f() { cat src/love/*.c; cat src/love/*.c; }; x=$(f); echo ${#x}"])
    (test (0 < #(>r))))
 ;; exec rides the same (path . word) spawn: PATH's file, the child named as spelled --
 ;; GNU's cat says `cat:`, never its path -- and a word nothing answers is 127

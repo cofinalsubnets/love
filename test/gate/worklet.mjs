@@ -1,17 +1,17 @@
-// test/gate/worklet.mjs -- the page's speaker, asked without a page. inle/wasm/horn.js is an
+// test/gate/worklet.mjs -- the page's speaker, asked without a page. src/inle/wasm/horn.js is an
 // AudioWorklet processor and no lane in this tree has a browser, so its laws would
 // otherwise be read by nobody: the three globals a worklet runs under are stubbed here,
 // the ring is filled the way cpu.mjs's horn_write fills it, and the blocks are read back.
 // what is asked is what a speaker can get wrong in silence -- the order, the two channels,
 // the seam where the ring wraps, an empty ring, and the consumed count that IS k_horn_lag.
 // usage: node test/gate/worklet.mjs
-import { ctl_n, horn_at, horn_n, c_rate, c_wrote, c_played, shared_n } from '../../inle/wasm/cpu.mjs';
+import { ctl_n, horn_at, horn_n, c_rate, c_wrote, c_played, shared_n } from '../../src/inle/wasm/cpu.mjs';
 
 let made = null;
 globalThis.AudioWorkletProcessor = class { constructor() { } };
 globalThis.registerProcessor = (_name, k) => { made = k; };
 globalThis.sampleRate = 48000;
-await import('../../inle/wasm/horn.js');
+await import('../../src/inle/wasm/horn.js');
 
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, ctl_n);
@@ -78,5 +78,5 @@ law(s16(L[0]) === 7000 && s16(L[1]) === 7000 && s16(L[2]) === 7001 && s16(L[3]) 
     'a third of the rate walks the line between samples');
 law(Atomics.load(ctl, c_played) === 42, '..and takes a third of them, remainder carried');
 
-console.log(bad ? `FAIL worklet: ${bad} of the speaker's laws` : '  worklet: ok -- inle/wasm/horn.js without a page');
+console.log(bad ? `FAIL worklet: ${bad} of the speaker's laws` : '  worklet: ok -- src/inle/wasm/horn.js without a page');
 process.exitCode = bad ? 1 : 0;

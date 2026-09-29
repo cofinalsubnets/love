@@ -42,7 +42,7 @@ if [ "$(uname -m)" = x86_64 ]; then
   # and the archive as a LINK INPUT: `mooncc main.o libf.a` must bind the exe the
   # .o link binds, byte for byte -- which is the proof that members come in BY NEED
   # through the ranlib index, since the library also carries one nothing calls. our
-  # ar writes it, our linker reads it (love/holo/link.l's ld-arsyms).
+  # ar writes it, our linker reads it (src/love/holo/link.l's ld-arsyms).
   printf 'int unused(void){return 99;}\n' > "$ho/.kore-arz.c"
   moonc -c "$ho/.kore-arz.c" "$ho/.kore-arz.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c unused.c"
   rm -f "$ho/.kore-arl.a"
@@ -125,7 +125,7 @@ if command -v readelf >/dev/null 2>&1; then
   korerun readelf -h "$ho/.kore-re-x64.o" "$ho/.kore-re-a64.o" > "$o" 2>&1; same "readelf over two files"
 fi
 # a compile with no nest and no tree takes moon's toolchain off the source the binary carries:
-# the slice leads that archive (tools/selfpack.l), so the read stops past it. from a scratch
+# the slice leads that archive (src/tools/selfpack.l), so the read stops past it. from a scratch
 # dir outside the tree, a stdio hello compiles, links and runs; and the slice is what leads
 if [ "$(uname -m)" = x86_64 ]; then
   N=$ho/.kore-nonest; rm -rf "$N"; mkdir -p "$N"

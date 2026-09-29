@@ -1,5 +1,5 @@
 ; test/kernel/kexec.l -- the machine boots a module it fetched: what a page does with a
-; module the machine built (apps/doom.l's nest on inle), off the page's own origin. under
+; module the machine built (src/apps/doom.l's nest on inle), off the page's own origin. under
 ; node the origin is a directory (inle.mjs --origin) holding the doom module
 (: r (fetch "/doom.wasm" "/d.wasm")
    _ (? (charm? r && r = 0) 0 (scare 'no-fetch r))

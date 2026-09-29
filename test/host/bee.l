@@ -8,7 +8,7 @@
 
 (: cr-home (cwd 0)
    cr-love (: l <cmdline (l 0 = 47 ? l (cr-home + "/" + l)))
-   cr-app (cr-home + "/apps/bee.l")
+   cr-app (cr-home + "/src/apps/bee.l")
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
    cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
@@ -388,7 +388,7 @@
       (cr-in (r2 1) "behavior") (cr-in (r2 1) "deny") (cr-in (r2 1) "no answer came"))  ; raw, so escaped
    0)
 
-; --- locks through bee, on apps/locks.l ------------------------------------------------------
+; --- locks through bee, on src/apps/locks.l ------------------------------------------------------
 ; the test holds the one heavy ticket (heavy-max 1) under its own pid, so bee's ask queues behind
 ; a live holder; an exclusive lock is granted, listed and released; releasing what it does not
 ; hold is refused; --lock runs a command once the ticket is free and answers its status. the

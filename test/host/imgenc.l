@@ -1,4 +1,4 @@
-; --- test/host/imgenc.l: apps/gif.l, apps/png.l's png-encode and love/lib/jpeg.c's jpeg-encode
+; --- test/host/imgenc.l: src/apps/gif.l, src/apps/png.l's png-encode and src/love/lib/jpeg.c's jpeg-encode
 ; images made here: a two-colour checker, a keyed one with a transparent run, one pixel,
 ; 256 colours of noise long enough to fill lzw's table past 4095 again and again, and a
 ; gradient of thousands that the median cut has to choose among. each png reads back exact
@@ -7,8 +7,8 @@
 ; size and near the source. without magick, the markers alone.
 ;   cat test/00-init.l test/host/imgenc.l | out/love
 (borrow 'posix)
-(borrow "apps/gif.l")
-(borrow "apps/png.l")
+(borrow "src/apps/gif.l")
+(borrow "src/apps/png.l")
 (: dir ((cwd 0) + "/out/.imgenc")
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
    (put p s) (: q (open p "w") _ (say q s) (close q))

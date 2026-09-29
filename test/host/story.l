@@ -19,7 +19,7 @@
    (keys! g s) (each (map (i \ s i) ^#s) (c \ story-key g c))
 
    ; --- the level file, and its round trip ---
-   L (load-level "apps/rove/levels/lighthouse.l")
+   L (load-level "src/apps/rove/levels/lighthouse.l")
    _ (test L (13 = (L 'w)) (14 = (L 'h)) (6 = (L 'sx)) (8 = (L 'sy))
              ('(lamp sign) = sort (keys (L 'things)))
              ("*" = (L 'things 'lamp 'gl)) (220 = (L 'things 'lamp 'fg))
@@ -99,7 +99,7 @@
    _ (test (58 = (g4 'x)) (40 = (g4 'vx)))
 
    ; --- the library: a shelf per wing, its books through libra, the interpreter ---
-   LB (library "apps")
+   LB (library "src/apps")
    _ (test (10 < #(keys (LB 'things))) (LB 'things 'rove) (LB 'things 'lapiz) (LB 'things 'hatch)
              ("|" = (LB 'things 'rove 'gl)) (LB 'things 'rove 'books 'story))
    g3 (story-new LB)

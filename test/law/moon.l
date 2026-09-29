@@ -675,7 +675,7 @@
 
 ; --- the object view (stage 7a): cgen-obj splits the program into text (functions, no
 ; _start) and data (globals + strings), and names the defined functions and globals for
-; the symbol table. love/holo/obj.l turns that into a relocatable .o, whose ELF bytes are
+; the symbol table. src/love/holo/obj.l turns that into a relocatable .o, whose ELF bytes are
 ; gated end-to-end by the make .o link/interop smoke. ---
 (: (cob src) (: r (cparse <>(clex src))
                 (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () 'x64) ()))
@@ -693,7 +693,7 @@
 ; --- __attribute__((section(NAME))): a named section is a stream of its own. three names
 ; have a meaning the object writer knows -- love_nifs (bracketed by the linker for main()'s
 ; boot drain), .love.image (laid last, for the bake) and .data. every other name rides out
-; as its own section, because where those bytes land is the point: inle/rp2040's .vectors
+; as its own section, because where those bytes land is the point: src/inle/rp2040's .vectors
 ; is read by the core before an instruction runs. cob passes no xtra, so this needs the
 ; variant that carries the parser's section table. ---
 (: (cobx src)
@@ -819,7 +819,7 @@
       ; form's first: a body that dies on line 5 must not point at line 2
       (: g (cparse <>(clex "int ok(void) { return 1; }\nint bad(void)\n{\n  int x = 1;\n  x = x + ;\n  return x;\n}\n"))
          (gripe? g && (gline g = 5)))
-      ; adjacent string literals join across an include boundary -- love/main.c
+      ; adjacent string literals join across an include boundary -- src/love/main.c
       ; splices the egg exactly so, and the file marks stay invisible to phase 6
       (<>(pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n") =
          '(prog ((gdecl (("s" (ptr char) (str "abc")))))))
@@ -1037,7 +1037,7 @@
       (two? (cgn "int f(int x){return x;} typedef int (*fp)(int); fp t[1] = { &f }; int main(){ return t[0](1); }"))
       (refused? (cgn "int main(){ return (long)&nope; }"))))
 
-; -- inline asm (the statement): the template is the target's GNU dialect (love/holo/gas.l
+; -- inline asm (the statement): the template is the target's GNU dialect (src/love/holo/gas.l
 ; lowers it; AT&T here on x64), %N the operands (outputs first), adjacent template strings
 ; concatenate, and the body assembles at cg time into one opaque ('raw ..) between the staging
 ; forms. the picks come off asmpick front-first (r10 the first), so the one-output golden's
@@ -2071,7 +2071,7 @@
          ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret)) ||
           ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret)))))))
 
-; --- the value layer (apps/moon/val.l, moon-ssa rung 0): cfg, escape census, cells, dead
+; --- the value layer (src/apps/moon/val.l, moon-ssa rung 0): cfg, escape census, cells, dead
 ; stores, per-def chains, pinned on hand shapes. the goldens pin determinism: every v-list is
 ; sorted and the fixpoints are monotone unions, so no tablet order can reach an answer.
 (: fsA '((align 2) (label g) (li r5 0) (li r9 0) (label .c.0) (cmp r9 r6) (br ge .d.2)

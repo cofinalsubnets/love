@@ -21,7 +21,7 @@
 # (mkobj below) and the rosters arrive in the environment -- gate_love_c / gate_host_c /
 # gate_arch_c / gate_kern_c -- so a rename in the Makefile cannot leave this behind.
 #
-# gate_seat_c is love/noblob.c: this pair lays no out/src.o, so it answers the carried
+# gate_seat_c is src/love/noblob.c: this pair lays no out/src.o, so it answers the carried
 # archives itself -- and rides the OBJ list, or the twin link cannot find the body.
 # usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
 #        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XOD XA OBJ...
@@ -49,9 +49,9 @@ mkdir -p "$d"
 
 # the object of a source is its PATH under $d, exactly as make lays it under the odir --
 # derived, never spelled, so a renamed, moved or newly-added TU cannot leave a stale name
-# here. moonlibc drops its apps/moon/lib/ stem, the one place make does too.
+# here. moonlibc drops its src/apps/moon/lib/ stem, the one place make does too.
 mkobj() {                    # $1 = source -> $o
-  o=${1#./}
+  o=${1#./}; o=${o#src/}
   case $o in apps/moon/lib/*) o=${o#apps/moon/lib/} ;; esac
   o=$d/${o%.c}.o
   mkdir -p "${o%/*}"
@@ -72,16 +72,16 @@ LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\")
 moon1() { "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 for f in $gate_love_c; do
   mkobj "$f"
-  moon1 -D ai_tco="$tco" -D LvHaveVersionH -I"$ho" -I. -Ilove -Iinle -Iout/lib -c "$f" "$o" \
+  moon1 -D ai_tco="$tco" -D LvHaveVersionH -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c $gate_seat_c; do
   mkobj "$f"
-  moon1 -D ai_tco="$tco" -I"$ho" -I. -Ilove -Iinle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco="$tco" -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
-for f in apps/moon/lib/moonlibc/math/*.c; do
+for f in src/apps/moon/lib/moonlibc/math/*.c; do
   mkobj "$f"
-  moon1 -Iapps/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -Isrc/apps/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((cite 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
@@ -90,7 +90,7 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # and laid the same way. an arch with no seat carries none, and $gate_arch_c is
 # empty there -- the makefile draws that line with its own wildcard.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Ilove -Iinle -Iout/lib -Ilove/quay -Iapps/moon/include"
+  kinc="-I$ho -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include"
   for f in $gate_kern_c $gate_arch_c; do
     mkobj "$f"
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"

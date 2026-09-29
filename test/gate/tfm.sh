@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/tfm.sh -- apps/tfm.l against TeX Live's own programs, over every TFM installed.
+# test/gate/tfm.sh -- src/apps/tfm.l against TeX Live's own programs, over every TFM installed.
 #
 # tfm-pl is Knuth's TFtoPL ported section for section, so tftopl is its oracle: the property
 # list and the terminal lines, byte for byte. tfm-read is TeX's own font loading (tex.web

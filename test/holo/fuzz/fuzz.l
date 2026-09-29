@@ -16,10 +16,10 @@
 ; exit 1 on any failure; each failure names its class, IR, hex and reason.
 
 (borrow 'posix)
-(reads (open "love/holo/holo.l" "r"))
-(reads (open "love/holo/x64.l" "r"))
-(reads (open "love/holo/a64.l" "r"))
-(reads (open "love/holo/rv64.l" "r"))
+(reads (open "src/love/holo/holo.l" "r"))
+(reads (open "src/love/holo/x64.l" "r"))
+(reads (open "src/love/holo/a64.l" "r"))
+(reads (open "src/love/holo/rv64.l" "r"))
 ; holo rides module 'holo: reading the source registers it, and the names come
 ; through the door rather than off this file's layer.
 (borrow 'holo)

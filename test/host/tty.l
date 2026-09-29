@@ -10,7 +10,7 @@
 ;
 ;   cat test/00-init.l test/host/tty.l | out/love
 ;
-; not in the test/*.l corpus: tether and the screen nifs live in love/*.c, which love0 does
+; not in the test/*.l corpus: tether and the screen nifs live in src/love/*.c, which love0 does
 ; not link.
 ;
 ; two rules, both learned here:
