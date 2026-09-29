@@ -842,7 +842,7 @@
     'yes "usage: yes [WORD..]"
     'true "usage: true   (the 0 exit, and nothing else)"
     'false "usage: false   (the 1 exit, and nothing else)"
-    'uname "usage: uname [-snrma]"
+    'uname "usage: uname [-amnrsv] (the letters combine: -srm)"
     'arch "usage: arch   (uname -m, and nothing else)"
     'nproc "usage: nproc"
     'printf "usage: printf FORMAT [ARG..]"

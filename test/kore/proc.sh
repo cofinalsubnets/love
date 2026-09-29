@@ -57,6 +57,14 @@ korerun printenv | grep -v '^_=' | LC_ALL=C sort > "$o"; same "printenv print"
 # sysctl and the other three kernels have none, so a file read answered "Linux"
 # everywhere. This box is the linux arm of that; the inle arm is test/kernel/wfs.l.
 [ "$(korerun uname -s)" = "$(uname -s)" ] || fail "kore uname -s"
+# the letters combine, -a is posix's five in posix's order, a stranger refuses with 2.
+# -n -r -v read /proc, which is linux's
+if [ "$(uname -s)" = Linux ]; then
+  [ "$(korerun uname -srm)" = "$(uname -s -r -m)" ] || fail "kore uname -srm"
+  [ "$(korerun uname -a)" = "$(uname -snrvm)" ] || fail "kore uname -a"
+fi
+korerun uname -x 2>/dev/null; r=$?
+[ $r -eq 2 ] || fail "kore uname -x (exit $r)"
 [ "$(korerun nproc)" = "$(nproc --all)" ] || fail "kore nproc"
 # nohup: HUP ignored across the exec, the command's own status back, 125/126/127 for its
 # own trouble; under a terminal (script(1) makes one) output lands in nohup.out, 0600
