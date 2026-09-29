@@ -2,15 +2,26 @@
 ; share, HKDF-SHA256 for the schedule, and the records under chacha20-poly1305 or, when the
 ; server picks it, aes-128-gcm (love/lib/tls.c's nifs) -- the one suite RFC 8446 makes every
 ; server speak. one group, one version, the two suites; a key's length says which cipher
-; it is for (32 bytes chacha, 16 aes). the peer is NOT verified: the certificate is read into the transcript and
-; believed. that is an integrity-and-privacy channel against a passive wire, not an
-; identity, and a caller that needs identity should say so before trusting a byte.
+; it is for (32 bytes chacha, 16 aes).
 ;
-;   (tls-dial host port)   resolve, connect, shake hands -> a session | ()
-;   (tls-say t s)          send s as application data
-;   (tls-slurp t)          every byte of application data the peer sends, to its close
-;   (tls-close t)          a close_notify, and the socket shut
-;   (t 'cert)              the server's leaf certificate, its der, as it came -- unverified
+; what is verified, by default: the handshake -- the server's CertificateVerify under its
+; leaf key (ed25519, ecdsa p-256/sha-256 or p-384/sha-384, rsa-pss/sha-256 or sha-384) and
+; its Finished under the handshake secret -- and the certificate, before a byte goes out: a
+; path from the leaf to a root in the host's bundle (verify.l's chain-ok?: every signature,
+; every date, the issuers' roles, the host's name in subjectAltName). no revocation is
+; checked. a line in ~/.love/tls_pins, "host:port spki:<sha-256>", answers for that
+; host:port instead of the roots -- a self-signed or private server -- and a key other than
+; the pinned one is refused. a refusal says which check, and which certificate.
+;
+;   (tls-dial host port)       resolve, connect, shake hands, verify -> a session | ()
+;   (tls-open host port how)   the same -> a session | why not, a string. how: 'verify, or
+;                              'pin-only (the caller holds the pin: gemini), or 'none
+;   (tls-say t s)              send s as application data
+;   (tls-hear t)               the next run of application data as it arrives, () at the close
+;   (tls-slurp t)              every byte of application data the peer sends, to its close
+;   (tls-close t)              a close_notify, and the socket shut
+;   (t 'chain)                 the server's certificates, ders, leaf first, as they came
+;   (t 'cert) (t 'spki)        the leaf's der, and its SubjectPublicKeyInfo's
 ;
 ; the session is a tablet: the socket, a pending-bytes run, the two traffic keys and their
 ; sequence numbers, the transcript. x25519 rides the bignums (RFC 7748's ladder, the field
@@ -78,8 +89,10 @@
        (le-bytes (ladder (le-num kk) uu)))
    (x25519-pub k) (x25519 k (bytes 32 (i \ (i = 0 ? 9 0))))
 
-   (rnd n) (: q (open "/dev/urandom" "r")
-              b (bytes n (i \ see q))
+   (rnd n) (: q (open "/dev/urandom" "r")                ; no entropy is a scare, never a constant
+              _ (? (nom? q) (scare 'no-entropy q) 0)
+              (byte i) (: c (see q) (? (c < 0) (close q, scare 'no-entropy "/dev/urandom") c))
+              b (bytes n byte)
               (close q, b))
 
    ; --- the aead: RFC 8439's, the poly key block zero of the stream; or aes-gcm's nifs ---
@@ -103,13 +116,14 @@
 
    ; --- the wire: exact reads over the socket, a run kept between records ---
    (rd t n)
-    (: (go pend) (? (n <= #pend) pend
-                    (: c (see (t 's))
-                       (? (c = -1) ()
-                          (go (pend + string c + chug (t 's))))))
-       pend (go (t 'pend))
-       (? !(string? pend) ()
-          (pin t 'pend (snip pend n #pend), [1 (snip pend 0 n)])))
+    (: (go acc have) (? (n <= have) (join "" (rev acc))       ; chunks kept in a list, joined once -- no per-read recopy
+                        (: c (see (t 's))
+                           (? (c = -1) ()
+                              (: piece (string c + chug (t 's)) (go (piece . acc) (have + #piece))))))
+       p (t 'pend)
+       got (go (0 < #p ? [p] ()) #p)
+       (? !(string? got) ()
+          (pin t 'pend (snip got n #got), [1 (snip got 0 n)])))
    (rdrec t)                                                           ; -> (type body) | ()
     (: h (rd t 5)
        (? (atom? h) ()
@@ -124,6 +138,8 @@
        ct (aead-seal (t 'ckey) (t 'civ) (t 'cseq) aad inner)
        _ (pin t 'cseq (t 'cseq + 1))
        (wr t (aad + ct)))
+   ; a fatal alert under the client's current key, and no session
+   (alert t d why) (pin t 'why why, seal t 21 (u8 2 + u8 d), ())
    ; one record in: a plaintext CCS is skipped, an encrypted one opened under the server's
    ; key -> (inner-type body) | () at the end or on a bad tag
    (open-rec t)
@@ -160,11 +176,14 @@
    (client-hello host pub sid)
     (: sni (ext 0 (u16 (#host + 3) + u8 0 + u16 #host + host))
        groups (ext 10 (u16 2 + u16 29))
-       sigs (ext 13 (u16 12 + u16 1027 + u16 2052 + u16 1025 + u16 2055 + u16 2053 + u16 1281))
+       ; what a CertificateVerify may use is what verify.l checks: ecdsa p-256 and p-384, rsa-pss, ed25519.
+       ; the chain's own signatures are named apart (50), so the server's pick of a leaf is not narrowed
+       sigs (ext 13 (u16 10 + u16 1027 + u16 1283 + u16 2052 + u16 2053 + u16 2055))
+       csigs (ext 50 (u16 12 + u16 1027 + u16 2052 + u16 1025 + u16 2055 + u16 2053 + u16 1281))
        vers (ext 43 (u8 2 + u16 772))
        modes (ext 45 (u8 1 + u8 1))
        share (ext 51 (u16 36 + u16 29 + u16 32 + pub))
-       exts (sni + groups + sigs + vers + modes + share)
+       exts (sni + groups + sigs + csigs + vers + modes + share)
        body (u16 771 + rnd 32 + u8 32 + sid + u16 4 + u16 4867 + u16 4865 + u8 1 + u8 0 + u16 #exts + exts)
        (u8 1 + u24 #body + body))
    ; the server hello's key share and the key length of its suite (32 chacha20, 16 aes-128),
@@ -183,10 +202,48 @@
        (? !(suite = 4867 || suite = 4865) ()
           (go (i + 5) (i + 5 + extn) () 0)))
 
+   ; the Certificate message's list -> its ders, leaf first, or () for one that does not tile
+   (cert-list b)
+    (: cx (? (0 < #b) (b 0) -1) i (1 + cx)
+       (go j acc k)
+        (? (j = #b) (rev acc)
+           (16 < k || #b < j + 5) ()
+           (: n (rd24 b j) e (j + 3 + n) xl (? (e + 2 <= #b) (rd16 b e) -1)
+              (? (xl < 0 || #b < e + 2 + xl) () (go (e + 2 + xl) (snip b (j + 3) e . acc) (k + 1)))))
+       (? (cx < 0 || #b < i + 3 || rd24 b i != #b - i - 3) () (go (i + 3) () 0)))
+   ; a failed dial: the socket shut, and the reason, the first one said
+   (quit-why t d) (close (t 's), (? (string? (t 'why)) (t 'why) d))
+
+   ; --- the pins: a line "host:port spki:<sha-256 of the key's SubjectPublicKeyInfo>" a key.
+   ; ~/.love/tls_pins is the override for a server no root vouches for; www's gemini trust on
+   ; first use writes the same lines to ~/.love/gemini_hosts ---
+   (pin-path nm) (: h (getenv "HOME") ((? (string? h) h ".") + "/.love/" + nm))
+   (pin-of path key)
+    (: txt (uread path @ [1 s] s "")
+       (find l) (? (atom? l) () (: f (split " " <l) (? (1 < #f && <f = key) (f 1) (find >l))))
+       (find (split "\n" txt)))
+   (spki-pin spki) ("spki:" + sha256 spki)
+   ; () when the peer is to be believed, else why not, with the line that would pin it
+   (trust-why host port chain spki how)
+    (: key (host + ":" + show port) fp (spki-pin spki)
+       file (pin-path "tls_pins") pin (pin-of file key)
+       (? (how != 'verify) ()
+          (string? pin) (? (pin = fp) () ("the key of " + key + " is not the one pinned in " + file
+                                          + " (pinned " + pin + ", offered " + fp + ")"))
+          (: rs (tls-roots 0) r (chain-ok? chain (rs 1) host (clock 0 // 1000))
+             (? (r = 1) ()
+                ((? (atom? (rs 1))
+                     ("no root certificates to check " + key + " against"
+                      + (? (string? <rs) (" (" + <rs + " has none that read)") " (no bundle here; SSL_CERT_FILE names one)"))
+                     ("the certificate of " + key + " is not trusted: " + r))
+                 + "; to trust this key for " + key + " anyway, add the line \"" + key + " " + fp + "\" to " + file)))))
+
    ; --- the handshake, whole ---
-   (tls-dial host port)
+   (tls-dial host port) (: r (tls-open host port 'verify) (? (tablet? r) r ()))
+   ; how: 'verify (the chain to a root, or a pin), 'pin-only (the caller pins: gemini), 'none
+   (tls-open host port how)
     (: s (dial host port)
-       (? !(hot? s) ()
+       (? !(hot? s) ("cannot connect to " + host + ":" + show port)
           (: t (tablet 16)
              _ (pin t 's s) _ (pin t 'pend "") _ (pin t 'hbuf "") _ (pin t 'tr "")
              _ (pin t 'cseq 0) _ (pin t 'sseq 0)
@@ -195,11 +252,11 @@
              _ (pin t 'tr ch)
              _ (wr t (u8 22 + u16 769 + u16 #ch + ch))
              r (rdrec t)
-             (? (atom? r || <r != 22 || <>r 0 != 2) (close s, ())
+             (? (atom? r || <r != 22 || <>r 0 != 2) (quit-why t "the server did not answer with a tls 1.3 hello")
                 (: sh <>r
                    _ (pin t 'tr (t 'tr + sh))
                    ss (server-share (snip sh 4 #sh))
-                   (? (atom? ss) (close s, ())
+                   (? (atom? ss) (quit-why t "the server chose nothing this client speaks")
                       (: share <ss kl <>ss
                          shared (x25519 priv share)
                          early (hkdf-extract (zeros 32) (zeros 32))
@@ -208,21 +265,36 @@
                          shs (derive hs "s hs traffic" (t 'tr))
                          _ (pin t 'ckey (hkdf-label chs "key" "" kl)) _ (pin t 'civ (hkdf-label chs "iv" "" 12))
                          _ (pin t 'skey (hkdf-label shs "key" "" kl)) _ (pin t 'siv (hkdf-label shs "iv" "" 12))
-                         ; the server's flight: extensions, the certificate, its verify, finished
-                         ; the leaf certificate kept as 'cert, its der: unverified, but a
-                         ; caller may pin it (gemini's trust on first use)
-                         (flight _) (: m (hs-next t)
-                                      (? (atom? m) ()
-                                         (<m = 20) m
-                                         ((? (<m = 11 && 8 <= #<>m)
-                                                 (: b <>m i (1 + b 0)
-                                                    (pin t 'cert (snip b (i + 6) (i + 6 + rd24 b (i + 3)))))
-                                                 ; a request for our certificate: its context kept
-                                                 (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)))
-                                                 0),
-                                          flight 0)))
+                         ; the server's flight: extensions, the certificate, its verify, finished.
+                         ; the leaf is kept as 'cert (its der) and its key as 'spki; the verify
+                         ; must be the leaf key's signature of the transcript through the
+                         ; certificate, and the finished the hmac of the transcript through the
+                         ; verify under the server's finished key. anything else ends the dial
+                         (flight _)
+                          (: tb (t 'tr) m (hs-next t)
+                             (? (atom? m) ()
+                                (<m = 20)
+                                 (? (t 'cv = 1 && <>m = hmac (hkdf-label shs "finished" "" 32) (sha tb)) m
+                                    (alert t 51 "the server's Finished does not verify"))
+                                (<m = 11)
+                                 (: ds (cert-list <>m)
+                                    k (? (two? ds) (leaf-key <ds) ())
+                                    (? (two? k && !(t 'key))
+                                       (pins t 'chain ds 'cert <ds 'key k 'spki (k 2), flight 0)
+                                       (alert t 42 "the server's certificate does not read")))
+                                (<m = 15)
+                                 (: b <>m n (? (4 <= #b) (rd16 b 2) -1) k (t 'key)
+                                    (? (two? k && #b = 4 + n && !(t 'cv)
+                                        && cv-ok? k (rd16 b 0) (snip b 4 #b) (cv-msg (sha tb)) = 1)
+                                       (pin t 'cv 1, flight 0)
+                                       (alert t 51 "the server's CertificateVerify does not verify under its certificate's key")))
+                                ; a request for our certificate: its context kept
+                                (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)), flight 0)
+                                (flight 0)))
                          fin (flight 0)
-                         (? (atom? fin) (close s, ())
+                         why (? (atom? fin) () (trust-why host port (t 'chain) (t 'spki) how))
+                         (? (atom? fin) (quit-why t "the handshake failed")
+                            (string? why) (: _ (alert t (? (0 <= str-at why "pinned" 0) 42 48) why) (quit-why t why))
                             (: ; the client finished is over the transcript through the server's
                                ; asked for one, we send an empty certificate (we have none),
                                ; and our finished covers it; the traffic keys stop at the server's
@@ -251,13 +323,15 @@
                     _ (seal t 23 (snip s i (i + k)))
                     (go (i + k))))
        (go 0))
+   (tls-hear t)
+    (: r (open-rec t)
+       (? (atom? r) ()
+          (<r = 23) <>r
+          (<r = 21) ()                                                 ; an alert: close_notify or worse, the end either way
+          (tls-hear t)))                                               ; a ticket, a key update: not ours
    (tls-slurp t)
     (: j (jug 0)
-       (go _) (: r (open-rec t)
-                 (? (atom? r) 0
-                    (<r = 23) (say j <>r, go 0)
-                    (<r = 21) 0                                        ; an alert: close_notify or worse, the end either way
-                    (go 0)))                                            ; a ticket, a key update: not ours
+       (go _) (: s (tls-hear t) (? (string? s) (say j s, go 0) 0))
        _ (go 0)
        (slurp j))
    (tls-close t) (seal t 21 (u8 1 + u8 0), close (t 's)))

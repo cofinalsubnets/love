@@ -11,12 +11,18 @@
 ;   locked   a key ssh-keygen locked (aes256-ctr, bcrypt 4 rounds, "hunter2 pass"):
 ;            the seed and public key come out as the bare key's, a wrong passphrase
 ;            and none are told apart, and bcrypt-hash refuses a short state.
+;   known_hosts  hashed names (ssh-keygen -H's lines), [host]:port, name lists and case,
+;            @revoked, another key type, @cert-authority skipped.
+;   clean    banner and disconnect text: controls, c1 and malformed utf-8 dropped.
+;   verdict  the host key under each StrictHostKeyChecking: ask, accept-new, yes, no.
+;   strict   strict kex ends on an ignore before newkeys; sequence numbers never wrap.
 ;
 ; the transport runs against a live sshd, which no gate stands up; see apps/ssh/ssh.l.
 ;
 ; run:  cat test/00-init.l test/host/ssh.l | out/love
 
 (borrow "apps/ssh/ssh.l")
+(borrow 'posix)
 (borrow 'tls)
 (borrow 'ssh)
 
@@ -101,8 +107,104 @@ fW2MNFrwA/N0XZFA==
  ((ssht-open ()) = "k: no passphrase")
  (nil? (bcrypt-hash (zeros 4167) (zeros 64) (zeros 64))))
 
+; --- known_hosts --------------------------------------------------------------------
+; A and B are ed25519 host keys, E an ecdsa one. the two |1| lines are ssh-keygen -H's
+; hashing of host.example -> A and [host.example]:2222 -> B
+(: ssht-A "AAAAC3NzaC1lZDI1NTE5AAAAIO0TSO+AKyQIW+nLyBH5ShJuGY9aA5HGVvldHbw3RevU"
+   ssht-B "AAAAC3NzaC1lZDI1NTE5AAAAIIjzN8j24WQCC+Qs/RdwB9LO3iYAyiLrElD/19WgjBxv"
+   ssht-E "AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBNcFYQ2uU1waR/grVojE4yexgKia8zmbjtoLtjWz2EPYJmuAMEJ/K1acW7Lwr6TcxtrksKjMzZ5H8I7oE4IVM1I="
+   ssht-hashed ("|1|k3f2BYy9Tf8jpd50gASQsBOGpmQ=|ZsaR5CrYMkv8zDTu7+X0HCZqC1I= ssh-ed25519 " + ssht-A
+                + "\n|1|3gz7dhtAQvhPlrIsr4PaXQad3V4=|usRtgYWKuw2f+Zia85QPi2VWOv8= ssh-ed25519 " + ssht-B + "\n")
+   ssht-khp ((cwd 0) + "/out/.ssht-kh")
+   ssht-nm (cite 'ssh-cli 'kh-name)
+   ssht-kh (\ txt nm key (: q (open ssht-khp "w") _ (say q txt) _ (close q)
+                            ((cite 'ssh-cli 'kh-check) ssht-khp nm (b64d key)))))
+(test
+ ((ssht-nm "Host.Example" 22) = "host.example")
+ ((ssht-nm "Host.Example" 2222) = "[host.example]:2222")
+ ((ssht-kh ssht-hashed "host.example" ssht-A) = ['ok 1 "ssh-ed25519" 0])
+ ((ssht-kh ssht-hashed "host.example" ssht-B) = ['bad 1 "ssh-ed25519" 0])
+ ((ssht-kh ssht-hashed (ssht-nm "host.example" 2222) ssht-B) = ['ok 2 "ssh-ed25519" 0])
+ ((ssht-kh ssht-hashed (ssht-nm "host.example" 2222) ssht-A) = ['bad 2 "ssh-ed25519" 0])
+ ((ssht-kh ssht-hashed "other.example" ssht-A) = ['new 0 "" 0])
+ ((ssht-kh ("host.example ecdsa-sha2-nistp256 " + ssht-E + "\n") "host.example" ssht-A)
+  = ['other 1 "ecdsa-sha2-nistp256" 0])
+ ((ssht-kh ("@revoked * ssh-ed25519 " + ssht-A + "\nhost.example ssh-ed25519 " + ssht-A + "\n") "host.example" ssht-A)
+  = ['revoked 1 "ssh-ed25519" 0])
+ ((ssht-kh ("[host.example]:2222 ssh-ed25519 " + ssht-A + "\n") "host.example" ssht-A) = ['new 0 "" 0])
+ ((ssht-kh ("# a comment\n\nalias,Host.Example\tssh-ed25519 " + ssht-A + " note\n") "host.example" ssht-A)
+  = ['ok 3 "ssh-ed25519" 0])
+ ((ssht-kh ("@cert-authority host.example ecdsa-sha2-nistp256 " + ssht-E + "\n") "host.example" ssht-A)
+  = ['new 0 "" 1])
+ ((ssht-kh ("host.example ssh-ed25519 " + ssht-B + "\nhost.example ssh-ed25519 " + ssht-A + "\n") "host.example" ssht-A)
+  = ['ok 2 "ssh-ed25519" 0]))
+
+; --- clean -------------------------------------------------------------------------
+; a peer's banner and disconnect text: c0 but tab and newline, del, c1 and malformed utf-8 go
+(test
+ ((ssh-clean "d\xe2\x80\x94e") = "d\xe2\x80\x94e")
+ ((ssh-clean "a\x1b[31mb\tc\r\nz") = "a[31mb\tc\nz")
+ ((ssh-clean "x\xc2\x9by\xc2\xa0z") = "xy\xc2\xa0z")
+ ((ssh-clean "p\x80q\x9br\x7fs\xffu\xe0\x80\x80v\xed\xa0\x80w\xf0\x9f\x98\x80") = "pqrsuvw\xf0\x9f\x98\x80")
+ ((ssh-clean "\xe2\x80") = ""))
+
+; --- verdict ------------------------------------------------------------------------
+; the host key's verdict under each StrictHostKeyChecking. ask (the default) asks about an
+; unknown host and one known under another type: yes adds, no or no terminal refuses.
+; accept-new adds an unknown host unasked, yes refuses it unasked, no skips the check
+(: ssht-kv (cite 'ssh-cli 'kh-verdict)
+   ssht-opts (\ k (: o (tablet 4) (pin o 'shk k, o)))
+   ssht-asked (tablet 2)
+   ssht-ask (\ ans m (pin ssht-asked 'n (peep ssht-asked 'n 0 + 1), pin ssht-asked 'm m, ans))
+   ssht-v (\ k nm ask (: q (open ssht-khp "w") _ (say q ("host.example ecdsa-sha2-nistp256 " + ssht-E + "\n")) _ (close q)
+                         (ssht-kv "ssh" (ssht-opts k) ssht-khp nm (b64d ssht-A) "SHA256:x" ask)))
+   ssht-n (\ _ (peep ssht-asked 'n 0))
+   ssht-pre (\ p r (string? r && snip r 0 #p = p))
+   ssht-other "WARNING: the host key for host.example is known as ecdsa-sha2-nistp256 in "
+   ssht-q "The authenticity of host 'new.example' can't be established.\nED25519 key fingerprint is SHA256:x.\n")
+(test
+ ; another key type: asked under ask and accept-new, refused unasked under yes
+ (ssht-pre ssht-other (ssht-v "ask" "host.example" (ssht-ask ())))
+ ((ssht-v "ask" "host.example" (ssht-ask "yes")) = 'add)
+ (ssht-pre ssht-other (ssht-v "ask" "host.example" (ssht-ask "no")))
+ ((ssht-v "accept-new" "host.example" (ssht-ask "yes")) = 'add)
+ ((ssht-n 0) = 4)
+ (ssht-pre ssht-other (ssht-v "yes" "host.example" (ssht-ask "yes")))
+ ((ssht-n 0) = 4)
+ ; an unknown host: asked under ask, added unasked under accept-new, refused unasked under yes
+ ((ssht-v "ask" "new.example" (ssht-ask "yes")) = 'add)
+ (ssht-pre ssht-q (ssht-asked 'm))
+ ((ssht-v "ask" "new.example" (ssht-ask "no")) = "Host key verification failed.")
+ ((ssht-v "ask" "new.example" (ssht-ask ())) = "Host key verification failed.")
+ ((ssht-n 0) = 7)
+ ((ssht-v "accept-new" "new.example" (ssht-ask "no")) = 'add)
+ (ssht-pre "No ssh-ed25519 host key is known for new.example" (ssht-v "yes" "new.example" (ssht-ask "yes")))
+ ((ssht-n 0) = 7)
+ ; no check at all
+ ((ssht-v "no" "host.example" (ssht-ask "no")) = 'go)
+ ((ssht-v "no" "new.example" (ssht-ask "no")) = 'go)
+ ((ssht-n 0) = 7))
+
+; --- strict ---------------------------------------------------------------------------
+; a pipe as the transport, framed by ssh-send and read by ssh-next: under strict kex an
+; ignore ends the read, otherwise it is passed over; a sequence number never wraps
+(: ssht-m32 ((1 << 32) - 1)
+   ssht-ends (\ _ (: p (pipe 0) r (tablet 8) w (tablet 8)
+                      (pins r 's (fdopen <p) 'pend "" 'rseq 0 'sseq 0 'busy 0,
+                       pins w 's (fdopen >p) 'pend "" 'rseq 0 'sseq 0 'busy 0,
+                       [r w])))
+   ssht-fed (\ ps (: e (ssht-ends 0) _ (each ps (p \ ssh-send (e 1) p)) _ (close ((e 1) 's)) e)))
+(test
+ (: e (ssht-fed [(u8 2 + sstr "") (u8 20 + "x")]) _ (pin (e 0) 'strict 1) (nil? (ssh-next (e 0))))
+ (: e (ssht-fed [(u8 2 + sstr "") (u8 20 + "x")]) ((ssh-next (e 0)) = u8 20 + "x"))
+ (: e (ssht-fed [(u8 20 + "y")]) _ (pin (e 0) 'rseq ssht-m32) a (ssh-recv (e 0))
+    _ (pin (e 0) 'rseq 0) (nil? a && ssh-recv (e 0) = u8 20 + "y"))
+ (: e (ssht-ends 0) _ (pin (e 1) 'sseq ssht-m32) a (ssh-send (e 1) (u8 20 + "z"))
+    (nil? a && nil? (ssh-recv (e 0)))))
+
 (test_fin (),
  puts "apps/ssh: ok -- sha512 (fips 180-4), ed25519 (rfc 8032 7.1), mpint + base64,
-aes (fips 197, sp 800-38a), a locked key (bcrypt_pbkdf + aes256-ctr)
+aes (fips 197, sp 800-38a), a locked key (bcrypt_pbkdf + aes256-ctr),
+known_hosts, banner text, the host key prompts, strict kex and sequence wrap
 ",
  0)

@@ -85,24 +85,34 @@ ai_noinline uintptr_t ai_clock(void) {
 // reads must live here and not in the strings. consumed before any further allocation.
 // *cavp is the vector or NULL; a misuse (non-string or empty argv) leaves g ok and a
 // failed reserve leaves it not ok, and each caller says what a misuse answers.
-struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
+// with envat >= 0 the list at g->sp[envat] ("K=V" strings, () for none) is laid after argv
+// by the same reserve, *cevp its NULL-ended vector (NULL for none); anything else there,
+// or an entry that is not K=V, is argv's misuse
+static struct ai *argv_env_marshal(struct ai *g, char ***cavp, int envat, char ***cevp) {
  *cavp = NULL;
- word argv = g->sp[0];
- uintptr_t argc = 0, total = 0;
+ if (cevp) *cevp = NULL;
+ word argv = g->sp[0], env = envat >= 0 ? g->sp[envat] : ZeroPoint;
+ uintptr_t argc = 0, total = 0, envc = 0, etotal = 0;
  // the head may be (path . name): the child is named name and the file is path, laid
  // past argv's NULL where ai_argv_file finds it -- a shell that searched PATH once
  // says where it landed, and the exec does not walk PATH a second time
  word h = chainp(argv) ? A(argv) : ZeroPoint;
- int alt = chainp(h) && strp(A(h)) && strp(B(h));
+ int alt = chainp(h) && cstrp(A(h)) && strp(B(h));
  for (word p = argv; chainp(p); p = B(p)) {
   word e = !argc && alt ? B(h) : A(p);
-  if (!strp(e)) return g;                                 // misuse: non-string argv
+  if (!cstrp(e)) return g;                                // misuse: non-string, or a NUL inside
   argc++, total += len(e) + 1; }                             // +1 for the NUL
  if (!argc) return g;                                        // empty argv
  if (alt) total += len(A(h)) + 1;
- if (!ai_ok(g = ai_have(g, argc + 2 + b2w(total)))) return g;
- argv = g->sp[0];                            // ai_have may have GC'd; argv is the only
-                                             // root, at sp[0], so it is forwarded there
+ if (env != ZeroPoint && !chainp(env)) return g;             // misuse: env not a list
+ for (word p = env; chainp(p); p = B(p)) {
+  word e = A(p);
+  if (!cstrp(e) || !len(e) || txt(e)[0] == '=' || !memchr(txt(e), '=', len(e))) return g;   // K=V, no NUL inside
+  envc++, etotal += len(e) + 1; }
+ uintptr_t aw = argc + 2 + b2w(total), ew = envc ? envc + 1 + b2w(etotal) : 0;
+ if (!ai_ok(g = ai_have(g, aw + ew))) return g;
+ argv = g->sp[0];                            // ai_have may have GC'd; argv and env are
+ env = envat >= 0 ? g->sp[envat] : ZeroPoint; // rooted on the stack, forwarded there
  h = A(argv);
  char **cav = (char**) g->hp,                                // at Hp: aligned
       *blob = (char*) (g->hp + (argc + 2));                  // whole words after
@@ -120,8 +130,20 @@ struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
   memcpy(blob + off, txt(s), len(s));
   blob[off + len(s)] = 0;
   cav[argc + 1] = blob + off; }
+ if (envc) {                                 // the env's vector and bytes, past argv's words
+  char **cev = (char**) (g->hp + aw), *eb = (char*) (g->hp + aw + envc + 1);
+  uintptr_t eo = 0, j = 0;
+  for (word p = env; chainp(p); p = B(p), j++) {
+   struct ai_str *s = str(A(p));
+   memcpy(eb + eo, txt(s), len(s));
+   eb[eo + len(s)] = 0;
+   cev[j] = eb + eo;
+   eo += len(s) + 1; }
+  cev[envc] = NULL;
+  *cevp = cev; }
  *cavp = cav;
  return g; }
+struct ai *ai_argv_marshal(struct ai *g, char ***cavp) { return argv_env_marshal(g, cavp, -1, NULL); }
 
 // a wait(2) status word -> the exit code, 128+signal for a signalled death (the shell
 // convention), or -1 for neither. the one copy every reaper here and hark (main.c) share.
@@ -132,9 +154,9 @@ static ai_inline int proc_status(int st) {
 // ai_port_fd: the live fd of a port arg, or -1 for a non-port. a closed port carries the
 // -3 sentinel, handed straight to the syscall, which fails with EBADF.
 
-// a love string as a C string, NULL for a non-string: bytes[len] is always a NUL
-// (love/love.h), so the bytes go to the syscall where they lie; no length cap of ours.
-static ai_inline char const *str_c(word x) { return strp(x) ? txt(x) : NULL; }
+// a love string as a C string, NULL for a non-string or one with a NUL inside: bytes[len]
+// is always a NUL (love/love.h), so the bytes go to the syscall where they lie.
+static ai_inline char const *str_c(word x) { return cstrp(x) ? txt(x) : NULL; }
 
 // ai_argv_marshal with the misuse answer added: called with g Packed, a misuse pushes
 // 'badarg and leaves *cavp NULL, oom returns !ok g with *cavp NULL too, so
@@ -870,7 +892,7 @@ static lvm(lvm_posix_unlink) {
 //                      shape -- split at the first '=' in love; no order promised).
 static ai_inline word host_posix_setenv(struct ai *g, word nw, word vw) {
  char const *n = str_c(nw), *v = str_c(vw);
- if (!n) return ai_badarg(g);
+ if (!n || (!v && strp(vw))) return ai_badarg(g);
  if (!v) return unsetenv(n) ? ai_err(g, errno) : ZeroPoint;
  return setenv(n, v, 1) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_setenv) {
@@ -1244,6 +1266,7 @@ LvNif("copyfile", nif_posix_copyfile, "posix");
 // child's 0/1/2 become the pty slave and the parent keeps the master as a heap port.
 //
 //   (tether argv)      -> (pid . master-port) | a nom ('badarg misuse)
+//   (tetherenv argv env) the same, each "K=V" of env set in the child over what it inherits
 //   (reap pid)         -> (status)   exited (a pair, truthy even at status 0)
 //                       | ()         still running
 //                       | a nom      waitpid error (e.g. 'echild)
@@ -1257,11 +1280,11 @@ LvNif("copyfile", nif_posix_copyfile, "posix");
 
 // called with g Packed; argv is the sole GC root at g->sp[0]. leaves exactly one net value
 // above argv on every non-oom path; a not-ok g only on oom, which lvm_tether ghelps.
-ai_noinline static struct ai *host_tether(struct ai *g) {
+ai_noinline static struct ai *host_tether(struct ai *g, int envat) {
   // no l allocation between the marshal and the fork, or the uncommitted gap moves
- char **cav;
- g = argv_marshal(g, &cav);
- if (!cav) return g;                               // misuse pushed -1, or oom
+ char **cav, **cev;
+ g = argv_env_marshal(g, &cav, envat, &cev);
+ if (!cav) return ai_ok(g) ? ai_push(g, 1, ai_badarg(g)) : g;   // misuse, or oom
 
   // open the master, unlock the slave, copy the slave path (ptsname's buffer is
   // static -- snapshot it for the child, which inherits the snapshot across fork).
@@ -1291,6 +1314,10 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
   ioctl(sfd, TIOCSCTTY, 0);                       // belt-and-braces; harmless if already ctty
   dup2(sfd, 0); dup2(sfd, 1); dup2(sfd, 2);
   if (sfd > 2) close(sfd);
+  for (char **v = cev; v && *v; v++) {           // the gap is this child's own copy: split K=V there
+   char *eq = strchr(*v, '=');
+   *eq = 0;
+   if (setenv(*v, eq + 1, 1)) { e = errno; goto childfail; } }
   execvp(ai_argv_file(cav), cav);
   e = errno;
   childfail:
@@ -1321,7 +1348,9 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
  return g; }
 
 static lvm(lvm_tether) {
- LvmCallp(g, 1, host_tether) }   // result over argv
+ LvmCallp(g, 1, host_tether, -1) }   // result over argv
+static lvm(lvm_tetherenv) {
+ LvmCallp(g, 2, host_tether, 1) }    // argv at sp[0], env at sp[1]; result over both
 
 // (reap pid): non-blocking wait. a reaped child's decoded status comes back as a
 // one-element list, so "exited 0" (a pair) and "still running" (()) do not collapse.
@@ -1529,7 +1558,7 @@ ai_noinline static struct ai *host_open(struct ai *g) {
   struct ai *r = ai_io_alloc(g, fd);
   return ai_ok(r) ? r : (close(fd), ai_push(g, 1, ai_err(g, ENOMEM))); }
 static lvm(lvm_open) {
-  if (!strp(Sp[0]) || !strp(Sp[1])) { Sp[1] = ai_badarg(g); ai_musttail return Nextp(1, 1); }
+  if (!cstrp(Sp[0]) || !strp(Sp[1])) { Sp[1] = ai_badarg(g); ai_musttail return Nextp(1, 1); }
   LvmCallp(g, 2, host_open) }                   // [path, mode] -> [port]
 
 // (close x) -- a port, or a raw fd from openfd/pipe/dup. on a port: flush, close, and hand
@@ -1568,6 +1597,7 @@ static union u const
   nif_raw[]        = {{lvm_raw}, {lvm_ret0}},
   nif_swig[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_swig}, {lvm_ret0}},
   nif_tether[]     = {{lvm_tether}, {lvm_ret0}},
+  nif_tetherenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_tetherenv}, {lvm_ret0}},
   nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
   nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
   nif_tty[]        = {{lvm_tty}, {lvm_ret0}},
@@ -1576,6 +1606,7 @@ static union u const
   nif_termios[]    = {{lvm_termios}, {lvm_ret0}},
   nif_settermios[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_settermios}, {lvm_ret0}};
 LvNif("tether", nif_tether, "posix");
+LvNif("tetherenv", nif_tetherenv, "posix");
 LvNif("gather", nif_reap, "posix");
 LvNif("still", nif_kill, NULL);
 LvNif("tty", nif_tty, NULL);

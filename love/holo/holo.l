@@ -269,6 +269,10 @@
                (<ins = 'align)
                (: r (revonto (pad-to be addr (ins 1)) items 0)
                   (lay >prog be (addr + <r) >r labels))
+               ; ..and in a section nothing executes, zeros: the pad is data a reader sees
+               (<ins = 'dalign)
+               (: r (revonto (map (i \ 0) ^((ins 1 - (addr % ins 1)) % ins 1)) items 0)
+                  (lay >prog be (addr + <r) >r labels))
                (: r (revonto (lower-with be (zeroidiom be ins >prog)) items 0)
                   (lay >prog be (addr + <r) >r labels)))))
 

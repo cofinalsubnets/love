@@ -303,12 +303,15 @@
    ; one `decl` is one C declaration and may carry several declarators (`int a, *b;`),
    ; sharing a base and each growing its own; split, they would come back two nodes
    (cstor st) (atom? st ? "" (sepby " " (map string st) + " "))
-   ; a fourth element is a register variable's asm("reg") pin, and `register` leads its run
+   ; a fourth element is a register variable's asm("reg") pin, and `register` leads its run;
+   ; a fifth is the declarator's own alignment ask (the fourth () when unpinned)
+   (pin? d) (two? >>>d && <>>>d)
    (cdtor1 d) (: nm <d t <>d v <>>d
-                 (cty-dtor t nm 0 + (? (two? >>>d) (" asm(" + cstrlit <>>>d + ")") "")
+                 (cty-dtor t nm 0 + (? (pin? d) (" asm(" + cstrlit <>>>d + ")") "")
+                  + (? (4 < #d) (" __attribute__((aligned(" + show (d 4) + ")))") "")
                   + (? (atom? v) "" (" = " + cinit v 0))))
    (cdecls ds) (: b (cty-base <><ds)
-                  ((? (foldl (\ a d (a || two? >>>d)) () ds) "register " "") + b + " " + sepby ", " (map cdtor1 ds)))
+                  ((? (foldl (\ a d (a || pin? d)) () ds) "register " "") + b + " " + sepby ", " (map cdtor1 ds)))
 
    ; --- statements ---------------------------------------------------------------
    ; one space per level, love.c's own indent

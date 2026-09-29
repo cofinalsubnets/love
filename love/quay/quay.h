@@ -30,7 +30,7 @@ enum { cb_lead = 1, cb_tail = 2 };  // the width field: a wide char's two halves
 // a grapheme cluster: a base and up to three combining marks, in a pool the header holds.
 // a mark joins the cell before the cursor; a slot is free while its base is 0, and one no
 // cell names is taken back when the pool is full
-enum { cb_nclu = 128, cb_clun = 4 };
+enum { cb_nclu = 128, cb_clun = 10 };
 #define cb_clu0 0x110000u
 
 enum {              // face bits, the glyph word's top byte
@@ -60,11 +60,12 @@ enum {              // flag bits: the console's modes
   cb_mdrag  = 2048, // mouse (?1002): and moves while a button is held
   cb_many   = 4096, // mouse (?1003): and every move
   cb_msgr   = 8192, // mouse reports as CSI < b ; x ; y M/m (?1006), else CSI M and three bytes
-  cb_paste  = 16384 };// bracketed paste (?2004): a seat wraps what it pastes in CSI 200~ .. 201~
+  cb_paste  = 16384, // bracketed paste (?2004): a seat wraps what it pastes in CSI 200~ .. 201~
+  cb_gc     = 32768 };// grapheme clusters (?2027): VS16 gives an emoji style two cells
 enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
-enum { cb_mousen = 24 };  // a mouse report's longest (cb_mouse's buffer size)
+enum { cb_mousen = 36 };  // a mouse report's longest: ESC [ < and three 10-digit fields, 2 ; and M
 
 struct cb {
   uint32_t wpos, spos;        // the write cursor, and DECSC's saved one
@@ -72,7 +73,7 @@ struct cb {
   uint32_t cur_fg, cur_bg, def_fg, def_bg;  // the pen, and what a default colour means
   uint32_t sfg, sbg;  // the saved pen (DECSC), with sface
   uint8_t cur_face, sface, esc;  // esc: escape-parser state
-  uint16_t pv[8]; uint8_t pn;  // pv/pn: collected CSI parameters
+  uint16_t pv[8]; uint8_t pn, ci;  // pv/pn: collected CSI parameters, ci its intermediate
   uint16_t top, bot;  // the scroll region, inclusive rows
   uint8_t out[cb_outn], on;  // the reply queue (DSR/DA answers ride home here)
   uint32_t ucp; uint8_t un;  // utf-8 in flight: the codepoint, continuations to come
@@ -95,11 +96,14 @@ struct cb {
   // twin: a grid's room after the history, where the main grid waits out the alternate screen
   uint32_t hl, hh, hn, view, twin;
   int32_t sel0, sel1;  // the selection: cells [sel0, sel1) as glass counts them, none when equal
+  uint32_t pgen;       // the last picture's gen
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), the 256 sixel registers, then the
 // pixels, xrgb with the top byte 0xff where a pixel was set -- the rest is the cell's bg
-struct cb_img { uint32_t off, w, h, live, id; };   // id: a kitty image's, 0 for none
+// id: a kitty image's, 0 for none. gen: a serial new with every picture, kept across a regrid,
+// which is what lets a reader (limn passing a picture on) tell one it has already sent
+struct cb_img { uint32_t off, w, h, live, id, gen; };
 enum { cb_nimg = 128, cb_shead = cb_nimg * sizeof(struct cb_img) + 256 * 4 };
 // the bytes a screen of rows x cols needs, header, cells and a store of sn bytes
 #define cb_size(rows, cols, sn) \

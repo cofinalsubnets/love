@@ -346,5 +346,50 @@
  _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (close m))
 
+; --- the pictures themselves: the test answers berth's kitty query as a kitty terminal
+; would, and a sixel the child draws goes out as kitty's own a=t and a=p; cleared away and
+; swept by the next, it is freed there ---
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   (count h n i k) (? ((i + #n) < (#h + 1)) (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
+ _ (setenv "BK" ("sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; "
+                 + "printf '\\033[5;1Hzz'; sleep 1; printf '\\033[2J\\033[H\\033P0;1;0q#0;2;0;100;0#0!7~\\033\\\\'; sleep 2"))
+ md (tether ["out/love" "-l" "apps/berth/berth.l"
+             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
+ _ (test (two? md))
+ m >md
+ _ (rest 500)
+ _ (say m "\e_Gi=31;OK\e\\") _ (flush m)             ; yes, kitty
+ outb (slurp m)
+ _ (test
+    (sub? outb "\e_Gi=31,s=1,v=1,a=q" 0)                ; berth asked
+    (1 = count outb "\e_Ga=t,f=32,s=10,v=12," 0 0)      ; the picture, sent once while shown
+    (sub? outb "\e_Ga=p,i=" 0)                          ; and placed
+    (sub? outb "\e_Ga=t,f=32,s=7,v=6," 0)               ; the next, sent
+    (sub? outb "\e_Ga=d,d=I,i=" 0)                      ; the first, freed once swept
+    (sub? outb "\e_Ga=d,d=A" 0))                        ; and freed on the way out
+ _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
+ (close m))
+
+; --- ..and as sixels, to a terminal whose DA says 4 and whose cell is 12x24: laid once,
+; and not again when the child writes elsewhere ---
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+   (count h n i k) (? ((i + #n) < (#h + 1)) (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
+ _ (setenv "BS" "sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; printf '\\033[5;1Hzz'; sleep 1")
+ md (tether ["out/love" "-l" "apps/berth/berth.l"
+             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BS\\\"\"]))"])
+ _ (test (two? md))
+ m >md
+ _ (rest 500)
+ _ (say m "\e[6;24;12t\e[?62;4;22c") _ (flush m)       ; no kitty: a cell 12x24, and sixels
+ outb (slurp m)
+ _ (test
+    (sub? outb "\e[16t\e[c" 0)                         ; berth asked
+    (1 = count outb "\eP0;0;0q\"1;1;" 0 0)             ; the picture, laid once
+    (sub? outb "#180;2;100;0;0" 0)
+    (sub? outb "zz" 0)                                  ; though the frames went on
+    !(sub? outb "\e_Ga=" 0))
+ _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
+ (close m))
+
 (test_fin ())
 (puts "berth: ok")

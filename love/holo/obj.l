@@ -157,7 +157,7 @@
                         (: r laylax
                            (lit? laylax ? (r fm be 0 {} wkset)
                             (scare 'holo-bake-stale 'laylax)))
-                        (lay fm be 0 () {}))
+                        (lay (o-dal fm) be 0 () {}))
                    w (o-walk be <p >p wkset (exec? s ? 1) rset)
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
@@ -366,6 +366,8 @@
    (objsec-code nm forms al) [nm 1 6 al forms]
    ; a file-scope asm's sections, (name type flags forms) each: a name already laid takes the
    ; forms at its tail and keeps its own flags, a new one rides after the rest
+   ; a data section's alignment pads with zeros, not the backend's nop
+   (o-dal fm) (map (f \ (? (two? f && <f == 'align) ['dalign (f 1)] f)) fm)
    (objsec-merge secs xs)
     (foldl (\ a x (: nm <x fs (x 3)
                      (? (any (s \ <s = nm) a)
@@ -455,7 +457,7 @@
                         (: r laylax
                            (? (lit? r) (r fm be 0 {} wkset)
                               (scare 'holo-bake-stale 'laylax)))   ; assemble each section at org 0
-                        (lay fm be 0 () {}))
+                        (lay (o-dal fm) be 0 () {}))
                    w (o-walk be <p >p wkset (? (exec? s) 1 ()) rset)
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)

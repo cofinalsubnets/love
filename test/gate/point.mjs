@@ -3,7 +3,7 @@
 // would: its pointer events go down the pointer lane as machine.js's pointlane lays them,
 // its pastes down the paste lane, and what the console copies comes back as { copy }.
 // a drag selects a word, a double click another, a triple the line; a paste reaches the
-// shell with its control byte gone; the wheel moves the view a line-count the copy of
+// shell with its control byte gone, and runs at the enter after it; the wheel moves the view a line-count the copy of
 // row 0 then says; a program that asks for the mouse gets its report instead, and one
 // that asks for bracketed paste gets the paste bracketed -- both read back through od.
 // usage: node test/gate/point.mjs MODULE IMAGE [LOG]
@@ -51,9 +51,14 @@ check((await copy([[0, 0, 2, 0], [2, 0, 2, 4], [1, 0, 2, 4]])) === 'hello', 'a d
 check((await copy(click(2, 7, 2))) === 'world', 'a double click on world');
 check((await copy(click(2, 3, 3))) === 'hello world', 'a triple click on the line');
 
-// a paste reaches the shell as typed, less its control byte
+// a paste reaches the shell as typed, less its control byte, and its newline runs nothing:
+// the shell brackets pastes, so the line waits for the enter typed after it
+const ran = () => said.split(/\r?\n/).some((l) => l.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').trim() === 'pasted');
 paste('echo pas\u0007ted\n');
-check(await until(() => said.split(/\r?\n/).some((l) => l.trim() === 'pasted'), 5000), 'a paste into the shell');
+await nap(1500);
+check(!ran(), 'a pasted newline runs nothing');
+type('\r');
+check(await until(ran, 5000), 'a paste into the shell');
 
 // the wheel: forty numbered lines, and row 0's copy before and after one notch up
 type('i=0; while [ $i -lt 40 ]; do echo L$i; i=$((i+1)); done\r');

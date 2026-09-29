@@ -62,6 +62,29 @@
    ; the live draft survives an up/down round-trip:
    ([120] = <(edln (ed-keys [120 27 91 65 27 91 66 13]) "" [abc]))))      ; x, up, down -> "x"
 
+; a bracketed paste is text: a line break in it breaks the buffer's line and submits nothing,
+; a crlf is one break, a tab stays and every other control goes; the whole buffer is the line
+(: _ (test
+   ("ab\nc" = string (edraw (ed-keys [97 27 91 50 48 48 126 98 10 99 27 91 50 48 49 126 13]) ""))
+   ("x\ny\n\tz" = string (edraw (ed-keys [27 91 50 48 48 126 120 13 10 121 10 27 1 9 122 27 91 50 48 49 126 13]) ""))
+   ("ls" = string <(edln (ed-keys [27 91 50 48 48 126 108 115 27 91 50 48 49 126 13]) "" ()))
+   (0 = ((cite 'cli 'edkey) (ed-keys [27 91 50 48 49 126])))))   ; a stray close is a miss
+
+; a terminal that answers DECRQM with ?2027 set measures by grapheme cluster, and the editor
+; then measures, steps and deletes by cluster too; reset, or unknown, it stays off
+(: edkey (cite 'cli 'edkey) edgc (cite 'cli 'edgc)
+   (bs s) (map (i \ s i) (jot #s))
+   fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"         ; 👨‍👩‍👧: 18 bytes, three wide chars
+   _ (test (0 = edkey (ed-keys (bs "\e[?2027;2$y"))) (0 = edgc 'on)
+           (0 = edkey (ed-keys (bs "\e[?2027;1$y"))) (1 = edgc 'on))
+   _ (test ([0 4 0] = edlay 80 2 () (rev (bs fam)) () ())                      ; "> " then two columns
+           (("x" + fam) = string (edraw (ed-keys (bs (fam + "\e[Dx\r"))) ""))   ; left over the whole of it
+           ("a" = string (edraw (ed-keys (bs ("a" + fam + "\x7f\r"))) ""))     ; backspace takes it all
+           ((fam + "y") = string (edraw (ed-keys (bs (fam + "\e[H\e[Cy\r"))) ""))
+           ("" = string (edraw (ed-keys (bs (fam + "\e[H\e[3~\r"))) "")))
+   _ (pin edgc 'on 0)
+   (test ([0 8 0] = edlay 80 2 () (rev (bs fam)) () ())))                     ; off: wcwidth's six
+
 (test_fin ())
 (puts "baoedit: ok") (putc 10)
 

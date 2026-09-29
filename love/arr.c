@@ -91,7 +91,8 @@ static lvm(lvm_mul_rep) {
  if (n > ((uintptr_t) 1 << 40)) ai_musttail return Push(ZeroPoint);
  if (chainp(seq)) {                                   // list -> n copies of the spine
   if (!n) ai_musttail return Push(ZeroPoint);   // 0 copies -> the empty list () (zero-ontology)
-  uintptr_t m = llen(seq), total = m * n;
+  uintptr_t m = llen(seq), total = ai_mulsat(m, n);
+  if (total > ai_words_max / Width(struct ai_chain)) ai_musttail return Push(ZeroPoint);
   Have(total * Width(struct ai_chain));
   seq = chainp(Sp[0]) ? Sp[0] : Sp[1];                // re-read post-GC
   struct ai_chain *base = two(Hp), *w = base;
@@ -102,8 +103,9 @@ static lvm(lvm_mul_rep) {
   ai_musttail return Push(word(base)); }
  // string -> repeat the bytes
  struct ai_str *src = str(seq);
- uintptr_t sl = src->len, total = sl * n;
+ uintptr_t sl = src->len, total = ai_mulsat(sl, n);
  if (!total) ai_musttail return Push(EmptyString);   // 0 copies: ""
+ if (total > ai_words_max) ai_musttail return Push(ZeroPoint);   // no heap holds it
  uintptr_t req = str_width(total);
  Have(req);
  src = str(strp(Sp[0]) ? Sp[0] : Sp[1]);             // re-read post-GC
@@ -119,8 +121,9 @@ static lvm(lvm_mul_rep) {
 static lvm(lvm_mul_cart) {
  word a = Sp[0], b = Sp[1];
  if (!chainp(a) || !chainp(b)) ai_musttail return Push(ZeroPoint);   // chain*chain only
- uintptr_t m = llen(a), n = llen(b), pairs = m * n;
+ uintptr_t m = llen(a), n = llen(b), pairs = ai_mulsat(m, n);
  if (!pairs) ai_musttail return Push(ZeroPoint);             // empty operand annihilates
+ if (pairs > ai_words_max / (3 * Width(struct ai_chain))) ai_musttail return Push(ZeroPoint);
  Have(3 * pairs * Width(struct ai_chain));
  a = Sp[0], b = Sp[1];                                               // re-read post-GC
  struct ai_chain *spine = (struct ai_chain*) Hp, *pc = spine + pairs;
@@ -870,8 +873,7 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
 // allocates per element, everything re-fetched after every box
 static struct ai *tray_to_obj(struct ai *g, int slot) {
  struct ai_tray *src = tray(g->sp[slot]);
- uintptr_t R = src->rank, n = 1;
- for (uintptr_t i = 0; i < R; i++) n *= src->shape[i];
+ uintptr_t R = src->rank, n = tray_nelem(src);
  uintptr_t bytes = tray_bytes(ai_O, R, n);
  if (!ai_ok(g = ai_have(g, b2w(bytes)))) return g;
  src = tray(g->sp[slot]);
@@ -1327,8 +1329,7 @@ lvm(lvm_carg) {
  if (trayp(a)) {
   struct ai_tray *v = tray(a);
   if (v->type == ai_O) ai_musttail return Answer(ZeroPoint);   // object array -> zero
-  uintptr_t R = v->rank, n = 1;
-  for (uintptr_t i = 0; i < R; i++) n *= v->shape[i];
+  uintptr_t R = v->rank, n = tray_nelem(v);
   uintptr_t bytes = tray_bytes(ai_R, R, n);
   Have(b2w(bytes));
   v = tray(Sp[0]);                                           // re-read post-Have

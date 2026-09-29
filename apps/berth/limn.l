@@ -15,7 +15,8 @@
 ; host-only: `glass` is cb's nif (love/quay/nif.c), so this never joins the corpus --
 ; test/limn.l is its gate.
 (module '(limn limn-across limn-bars limn-down limn-glyph limn-glyphs limn-go limn-half limn-ink
-          limn-pen limn-row limn-rows limn-run limn-sgr limn-tile)
+          limn-pen limn-pics limn-placed limn-row limn-rows limn-run limn-sgr limn-sixel limn-sixes
+          limn-spans limn-tile limn-unsix)
 (:
    ; --- the pen: a cell's face byte and its two colour words (love/quay/quay.h), as one
    ; number -- face | fg << 8 | bg << 34, a colour word being 26 bits. one SGR per pen
@@ -68,33 +69,152 @@
           (two? bot) ("\e[0;38;2;" + rgb bot + ";" + bg + "m" + utf8 9604)
           ("\e[0;" + bg + "m ")))
 
-   ; a cluster's marks, after its base
+   ; ..or, where the outer terminal takes the pictures themselves (limn-pics), the cell's
+   ; ground for one to lie over
+   (limn-bare s k) ("\e[0;" + limn-ink 48 (glass s k 2) + "m ")
+
+   ; the rest of a cluster, after its base
    (limn-marks j s k m) (: v (glass s k m)
-                           (m < 6 && 0 < v ? (say j (utf8 v), limn-marks j s k (m + 1)) 0))
+                           (m < 12 && 0 < v ? (say j (utf8 v), limn-marks j s k (m + 1)) 0))
+   ; a wide lead with more to it -- VS16 or a ZWJ sequence widened it (?2027), or a mark
+   ; rides it: an outer terminal may draw it one column or several, so its two cells are
+   ; erased first and the cursor comes back and steps two past it after
+   (limn-gc? s g k) (((g >> 21 & 3) = 1) && 0 < glass s k 3)
 
    ; paint row i cell by cell, threading the pen. a wide char's tail says nothing: the
-   ; outer terminal steps two columns for its lead. a selected cell wears the reverse face
-   (limn-row j s c i q p) (q < c ?
+   ; outer terminal steps two columns for its lead. a selected cell wears the reverse face,
+   ; and a tile is a ▀ (pk 0), bare ground for kitty's picture (1), or stepped over, a
+   ; sixel's pixels being in the text layer (2)
+   (limn-row j s c i q p pk) (q < c ?
                            (: k (i * c + q)
                               g (: g0 (glass s k 0) ((gaze s 10) <= k < (gaze s 11) ? (g0 ^ 67108864) g0))
-                              (? ((g >> 21 & 3) = 2) (limn-row j s c i (q + 1) p)
-                                 ((g >> 23 & 1) = 1) (say j (limn-tile s k), limn-row j s c i (q + 1) -1)
-                                 (: p2 (limn-pen g (glass s k 1) (glass s k 2))
+                              (? ((g >> 21 & 3) = 2) (limn-row j s c i (q + 1) p pk)
+                                 ((g >> 23 & 1) = 1) (say j (pk @- (limn-tile s k) 1 (limn-bare s k) 2 "\e[C"),
+                                                      limn-row j s c i (q + 1) -1 pk)
+                                 (: p2 (limn-pen g (glass s k 1) (glass s k 2)) vs (limn-gc? s g k)
                                     ((p = p2 ? 0 (say j (limn-sgr p2))),
+                                     (vs ? (say j "\e[2X\e7") 0),
                                      say j (limn-glyph (g & 2097151)),
                                      limn-marks j s k 3,
-                                     limn-row j s c i (q + 1) p2))))
+                                     (vs ? (say j "\e8\e[2C") 0),
+                                     limn-row j s c i (q + 1) p2 pk))))
                            p)
 
    ; one pane: every grid row addressed at its own origin, which is the whole
    ; difference between painting a rectangle and painting a run of full lines.
    ; p is the pen carried in and answered back, so a caller threads it across panes.
    ; a view looking v lines back shows the history first: row i is grid row i - v
-   (limn-rows j s r c row0 col0 i p)
+   (limn-rows j s r c row0 col0 i p pk)
     (i < r ?
        (say j (limn-go (row0 + i) col0),
-        limn-rows j s r c row0 col0 (i + 1) (limn-row j s c (i - gaze s 8) 0 p))
+        limn-rows j s r c row0 col0 (i + 1) (limn-row j s c (i - gaze s 8) 0 p pk) pk)
        p)
+
+   ; --- the pictures themselves, to an outer terminal that speaks kitty's graphics: each
+   ;     sent once, by an id made of the pane's number ib and the picture's gen (sent keeps
+   ;     which went), then placed over its tiles -- the part of it they show, clipped to the
+   ;     pane, stretched over the cells they fill. the caller clears the old placements
+   ;     first (a=d), so a picture that scrolled away is simply not placed again ---
+   ; slot -> [row col tx ty last-row last-col]: its top-left visible tile, where in the
+   ; picture that is, and how far its tiles run
+   (limn-spans s r c)
+    (: t {} v (gaze s 8)
+       (cell i q) (: g (glass s (((i - v) * c) + q) 0)
+                     ((g >> 23 & 1) = 1 ?
+                        (: sl (g >> 16 & 127) e (peep t sl ())
+                           (pin t sl (two? e ? [<e <>e (e 2) (e 3) (max (e 4) i) (max (e 5) q)]
+                                        [i q (g >> 8 & 255) (g & 255) i q])))
+                        0))
+       (row i) (i < r ? (: _ (map (\ q (cell i q)) (jot c)) (row (i + 1))) 0)
+       _ (row 0)
+       t)
+   ; what each picture's tiles show: [slot gen row col x y pw ph nc nr], its top-left tile
+   ; at row col of the pane, the part of it x y pw ph in its own pixels, over nc x nr cells
+   (limn-placed s r c)
+    (: cw (gaze s 6) ch (gaze s 7) t (limn-spans s r c)
+       (one sl) (: e (t sl) w (picture s sl 0) h (picture s sl 1)
+                   (? !(charm? w) ()
+                      (: x ((e 2) * cw) y ((e 3) * ch)
+                         nc (((e 5) - (e 1)) + 1) nr (((e 4) - <e) + 1)
+                         pw (min (nc * cw) (w - x)) ph (min (nr * ch) (h - y))
+                         (0 < pw && 0 < ph ? [sl (picture s sl 2) <e (e 1) x y pw ph nc nr] ()))))
+       (filter two? (map one (sort (keys t)))))
+   (limn-send j id w h b)                           ; a=t in 4096-byte pieces, m=1 until the last
+    (: n #b
+       (go i) (i < n ?
+                 (: e (min n (i + 4096))
+                    _ (say j ((i = 0 ? ("\e_Ga=t,f=32,s=" + show w + ",v=" + show h + ",i=" + show id + ",q=2,") "\e_G")
+                              + "m=" + (e < n ? "1" "0") + ";" + snip b i e + "\e\\"))
+                    (go e))
+                 0)
+       (go 0))
+   (limn-pics j s r c row0 col0 ib sent)
+    (map ([sl g row col x y pw ph nc nr] \
+          (: id ((ib * 1048576) + (g & 1048575))
+             _ (? (peep sent id 0) 0
+                  (: _ (limn-send j id (picture s sl 0) (picture s sl 1) (picture s sl 3)) (pin sent id 1)))
+             (say j (limn-go (row0 + row) (col0 + col) + "\e_Ga=p,i=" + show id + ",p=1,q=2,C=1,x=" + show x
+                     + ",y=" + show y + ",w=" + show pw + ",h=" + show ph + ",c=" + show nc
+                     + ",r=" + show nr + "\e\\"))))
+         (limn-placed s r c))
+
+   ; --- the pictures as sixels, for an outer terminal that draws those and not kitty's:
+   ;     the text layer holds them, so a tile is stepped over (pk 2) and a picture goes out
+   ;     again only when what its pane shows of it moves; the caller erases the cells the old
+   ;     ones sat on (limn-unsix) first. a sixel draws at the outer terminal's pixels, so the
+   ;     part shown is scaled to ow x oh a cell ---
+   ; a colour's register: the 6x6x6 cube's 216, then 24 greys past them
+   (limn-reg r g b) (: hi (max r (max g b)) lo (min r (min g b))
+                       (? ((hi - lo) < 12) (216 + (((((r + g) + b) * 23) + 382) // 765))
+                          (((((r * 5) + 127) // 255) * 36) + (((((g * 5) + 127) // 255) * 6) + (((b * 5) + 127) // 255)))))
+   (limn-rgb n) (? (n < 216) (show ((n // 36) * 20) + ";" + show (((n // 6) % 6) * 20) + ";" + show ((n % 6) * 20))
+                   (: v (((n - 216) * 100) // 23) (show v + ";" + show v + ";" + show v)))
+   (limn-sixrun j ch n) (? (n < 1) 0 (n < 4) (say j (cats (map (\ _ ch) (jot n)))) (say j ("!" + show n + ch)))
+   ; one register's row of a band, off its [x bits] ascending: runs of one char, a gap '?'
+   (limn-sixrow j l pos ch n)
+    (? (two? l)
+       (: e <l x <e c (string (63 + <>e))
+          (? ((x = pos) && (c = ch)) (limn-sixrow j >l (pos + 1) ch (n + 1))
+             (: _ (limn-sixrun j ch n) _ (limn-sixrun j "?" (x - pos)) (limn-sixrow j >l (x + 1) c 1))))
+       (limn-sixrun j ch n))
+   ; the part x y pw ph of a picture w wide (b its rgba bytes) as a sixel tw x th, nearest
+   ; pixel, a register defined where it is first used; a pixel the picture left is the ground
+   (limn-sixel b w x y pw ph tw th)
+    (: j (jug 0) def {}
+       (reg tx ty) (: i ((((y + ((ty * ph) // th)) * w) + (x + ((tx * pw) // tw))) * 4)
+                     (? ((b (i + 3)) = 0) -1 (limn-reg (b i) (b (i + 1)) (b (i + 2)))))
+       (col tx y0 k acc) (? ((k = 6) || (th <= (y0 + k))) acc
+                            (: n (reg tx (y0 + k))
+                               (col tx y0 (k + 1) (? (n < 0) acc (pin acc n ((peep acc n 0) | (1 << k)))))))
+       (band y0) (: t {}
+                    _ (map (\ tx (: cs (col tx y0 0 {}) (map (\ n (pin t n ([tx (cs n)] . peep t n ()))) (keys cs))))
+                           (jot tw))
+                    _ (map (\ n (: _ (say j (? (peep def n 0) ("#" + show n) (: _ (pin def n 1) ("#" + show n + ";2;" + limn-rgb n))))
+                                   _ (limn-sixrow j (rev (t n)) 0 "" 0)
+                                   (say j "$")))
+                           (sort (keys t)))
+                    (say j "-"))
+       (bands y0) (? (y0 < th) (: _ (band y0) (bands (y0 + 6))) 0)
+       _ (say j ("\eP0;0;0q\"1;1;" + show tw + ";" + show th))
+       _ (bands 0)
+       _ (say j "\e\\")
+       (slurp j))
+   ; the placements ps of a pane at row0 col0 as sixels, each at ow x oh a cell; old holds
+   ; the ones already laid, by what they show, and new gets the ones used
+   (limn-sixes j s ps row0 col0 ow oh old new)
+    (: cw (gaze s 6) ch (gaze s 7)
+       (map ([sl g row col x y pw ph nc nr] \
+             (: tw (max 1 ((pw * ow) // cw)) th (max 1 ((ph * oh) // ch))
+                key (show [g x y pw ph tw th])
+                six (: o (peep old key ()) (? (string? o) o (limn-sixel (picture s sl 4) (picture s sl 0) x y pw ph tw th)))
+                _ (pin new key six)
+                (say j (limn-go (row0 + row) (col0 + col) + six))))
+            ps))
+   ; the cells placements ps covered, erased: a sixel goes with the text under it
+   (limn-unsix j ps row0 col0)
+    (map ([sl g row col x y pw ph nc nr] \
+          (map (\ i (say j (limn-go (row0 + (row + i)) (col0 + col) + "\e[" + show nc + "X"))) (jot nr)))
+         ps)
 
    (limn-run j n s) (0 < n ? (say j s, limn-run j (n - 1) s) 0)
 

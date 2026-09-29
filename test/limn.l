@@ -17,7 +17,7 @@
                    0)
    (mkscr r c) (screen (cask (screen () r c)) r c)
    (paint s r c row0 col0)                     ; limn one whole grid into a jug
-    (: j (jug 0) _ (limn-rows j s r c row0 col0 0 -1) (slurp j))
+    (: j (jug 0) _ (limn-rows j s r c row0 col0 0 -1 0) (slurp j))
 
 ; --- the address: 0-based in, 1-based out, row then col ---
    _ (test
@@ -104,7 +104,7 @@
    _ (: s (mkscr 1 6)
         _ (scribe s "aaaaaa")
         j (jug 0)
-        p (limn-rows j s 1 6 0 0 0 -1)
+        p (limn-rows j s 1 6 0 0 0 -1 0)
         f (slurp j)
         (cnt t sb i n) (? (#t <= i) n
                           (at? t sb i) (cnt t sb (i + 1) (n + 1))
@@ -131,6 +131,60 @@
         back (paint s 2 4 0 0)
         _ (test (sub? home "cd" 0) (sub? home "ef" 0) !(sub? home "ab" 0)
                 (sub? back "ab" 0) (sub? back "cd" 0) !(sub? back "ef" 0)))
+
+; --- a picture: a ▀ block to a plain outer terminal, bare ground under kitty's own
+;     picture (limn-pics) to one that takes them -- sent once, placed each time ---
+   _ (: s (mkscr 2 6)
+        _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (\ _ "/wAA") (jot 120)) + "\e\\"))
+        blocks (paint s 2 6 0 0)
+        j (jug 0)
+        _ (limn-rows j s 2 6 0 0 0 -1 1)
+        bare (slurp j)
+        sent {}
+        k (jug 0) _ (limn-pics k s 2 6 3 4 1 sent) one (slurp k)
+        k2 (jug 0) _ (limn-pics k2 s 2 6 3 4 1 sent) two (slurp k2)
+        _ (test (sub? blocks (utf8 9600) 0) !(sub? bare (utf8 9600) 0)
+                (sub? one "\e_Ga=t,f=32,s=10,v=12,i=1048577,q=2,m=0;" 0)   ; pane 1, gen 1
+                (sub? one "\e[4;5H\e_Ga=p,i=1048577,p=1,q=2,C=1,x=0,y=0,w=10,h=12,c=2,r=1\e\\" 0)
+                !(sub? two "a=t" 0) (sub? two "a=p,i=1048577" 0)))
+
+; --- sixels: a picture's part in the cube's registers (greys past them), a band six
+;     pixels high, a run as !n, a pixel the picture left as '?', scaled nearest ---
+   _ (: (px r g b a) (cats [(string r) (string g) (string b) (string a)])
+        red (px 255 0 0 255) blue (px 0 0 255 255) clear (px 0 0 0 0)
+        six "\eP0;0;0q\"1;1;"
+        _ (test ((six + "2;2#180;2;100;0;0BB$-\e\\") = limn-sixel (cats [red red red red]) 2 0 0 2 2 2 2)
+                ((six + "4;4#180;2;100;0;0!4N$-\e\\") = limn-sixel (cats [red red red red]) 2 0 0 2 2 4 4)
+                ((six + "2;1#180;2;100;0;0?@$-\e\\") = limn-sixel (cats [clear red]) 2 0 0 2 1 2 1)
+                ((six + "1;2#5;2;0;0;100A$#180;2;100;0;0@$-\e\\") = limn-sixel (cats [red blue]) 1 0 0 1 2 1 2)
+                ((six + "1;7#180;2;100;0;0~$-#180@$-\e\\") = limn-sixel (cats (map (\ _ red) (jot 7))) 1 0 0 1 7 1 7)
+                ((six + "1;1#228;2;52;52;52@$-\e\\") = limn-sixel (px 128 128 128 255) 1 0 0 1 1 1 1)
+                ((six + "1;1#216;2;0;0;0@$-\e\\") = limn-sixel (cats [red (px 0 0 0 255)]) 2 1 0 1 1 1 1)))
+
+; --- ..and in a pane: its tiles stepped over, each picture's part laid at its top-left
+;     tile, the same part laid again from what was laid, and the cells it took erased ---
+   _ (: s (mkscr 2 6)
+        _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (\ _ "/wAA") (jot 120)) + "\e\\"))
+        ps (limn-placed s 2 6)
+        j (jug 0) _ (limn-rows j s 2 6 0 0 0 -1 2) stepped (slurp j)
+        laid {} k (jug 0) _ (limn-sixes k s ps 3 4 (gaze s 6) (gaze s 7) {} laid) one (slurp k)
+        laid2 {} k2 (jug 0) _ (limn-sixes k2 s ps 3 4 (gaze s 6) (gaze s 7) laid laid2) two (slurp k2)
+        u (jug 0) _ (limn-unsix u ps 3 4) gone (slurp u)
+        _ (test (1 = tally ps) ([0 0 0 0 10 12 2 1] = drop 2 <ps)
+                (sub? stepped "\e[C\e[C" 0) !(sub? stepped (utf8 9600) 0)
+                (sub? one "\e[4;5H\eP0;0;0q\"1;1;10;12#180;2;100;0;0" 0)
+                (one = two) (1 = tally (keys laid2))
+                (gone = "\e[4;5H\e[2X")))
+
+; --- a lead VS16 or a ZWJ sequence widened (?2027): its two cells erased, and the cursor
+;     stepped two past it whatever width the outer terminal draws it ---
+   _ (: s (mkscr 1 10)
+        fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"
+        _ (scribe s ("\e[?2027h\u{2764}\u{fe0f}x\u{4e16}" + fam + "y"))
+        f (paint s 1 10 0 0)
+        _ (test (sub? f "\e[2X\e7\u{2764}\u{fe0f}\e8\e[2Cx" 0)
+                (sub? f "x\u{4e16}" 0)                    ; a plain wide char as before
+                (sub? f ("\e[2X\e7" + fam + "\e8\e[2Cy") 0)))
 
 ; --- a selected cell wears the reverse face ---
    _ (: s (mkscr 1 4)

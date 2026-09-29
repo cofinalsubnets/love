@@ -436,10 +436,11 @@ static lvm(lvm_tune) {
   struct ai_tray *w = tray(x);
   intptr_t b = tray_get_int(w, 0), mi = tray_get_int(w, 1),
            ma = tray_get_int(w, 2), ra = tray_get_int(w, 3);
+  // a pool knob no heap could hold is refused, as a 0 is: the sizers scale them
   g->budget = b > 0 ? (uintptr_t) b : 0;     // <= 0 is the unbounded spelling, not a refusal
-  if (mi > 0) g->minor0 = (uintptr_t) mi;    // a 0 floor would let the nursery vanish
-  if (ma > 0) g->major0 = (uintptr_t) ma;    // the step divides
-  if (ra > 0) g->ratio = (uintptr_t) ra; }   // 0 would never grow
+  if (mi > 0 && (uintptr_t) mi <= ai_words_max / 4) g->minor0 = (uintptr_t) mi;   // a 0 floor would let the nursery vanish
+  if (ma > 0 && (uintptr_t) ma <= ai_words_max / 4) g->major0 = (uintptr_t) ma;   // the step divides
+  if (ra > 0 && ra <= 1024) g->ratio = (uintptr_t) ra; }   // 0 would never grow, a vast one overflows the grow test
  ai_musttail return Answer(word(v)); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. the string-lane glaze

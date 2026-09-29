@@ -162,6 +162,30 @@
    (unum s) (: n #s
                (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
                (? (string? s && n) (go 0 0) ()))
+   ; a port's text as its number, () for anything outside 1..65535
+   (uport s) (: n (unum s) (? (charm? n && 0 < n < 65536) n ()))
+   ; a duration text -> milliseconds | (): N or N.N, an optional s/m/h/d suffix
+   ; (seconds the default). 0 is a real duration -- callers test charm?, not truth
+   (udur s0)
+    (: n0 #s0
+       lc (? (0 < n0) (s0 (n0 - 1)) ())
+       sfx (lc = 115 || lc = 109 || lc = 104 || lc = 100)
+       mul (? (lc = 109) 60000 (lc = 104) 3600000 (lc = 100) 86400000 1000)
+       s (? sfx (snip s0 0 (n0 - 1)) s0)
+       n #s
+       (ip i acc) (? (i < n && digit? (s i)) (ip (i + 1) ((10 * acc) + (s i - 48))) [acc i])
+       r (ip 0 0)
+       whole <r i <>r
+       (? (i = n && 0 < n) (whole * mul)
+          (i < n && (s i = 46))
+           (: (fp j acc sc) (? (j < n && digit? (s j))
+                               (fp (j + 1) ((10 * acc) + (s j - 48)) (sc * 10))
+                               [acc sc j])
+              fr (fp (i + 1) 0 1)
+              (? (<>>fr = n && (0 < i || (i + 1) < n))
+                 ((whole * mul) + ((<fr * mul) // <>fr))
+                 ()))
+          ()))
    ; lowercase digits past 9. putbn reads a charm only, so a big is split down to one
    (radix n b)
     (? (charm? n) (: o (jug 0) _ (putbn o n b) (slurp o))
@@ -872,6 +896,19 @@
                      (a @ 'leave b
                         (say err ";; ", print err a, say err " ",
                          print err b, put err 10, flush err, 1))))))
+   ; a nom -> strerror's sentence, for the few a tool meets; another says its name
+   (uerrno e)
+    (e @ 'enoent "No such file or directory" 'eacces "Permission denied"
+         'eperm "Operation not permitted" 'esrch "No such process"
+         'enotty "Inappropriate ioctl for device" 'eisdir "Is a directory"
+         'enotdir "Not a directory" 'enametoolong "File name too long"
+         'eloop "Too many levels of symbolic links" 'einval "Invalid argument" 'erofs "Read-only file system"
+         'efbig "File too large" 'ebadf "Bad file descriptor" 'enxio "No such device or address"
+         'econnrefused "Connection refused" 'etimedout "Connection timed out"
+         'ehostunreach "No route to host" 'enetunreach "Network is unreachable"
+         'econnreset "Connection reset by peer" 'eaddrinuse "Address already in use"
+         'eaddrnotavail "Cannot assign requested address"
+         (show e))
    ; say m on err and leave with code c
    (udie c m) (say err m, put err 10, uleave c))
 
@@ -1155,6 +1192,10 @@
 ;   (wcwidth c)             -> the columns c takes: 0 1 or 2, -1 for a control, 0 for NUL
 ;   (swidth s)              -> the columns s takes, a control none
 ;   (scut s n)              -> the longest head of s at most n columns wide
+;   (gcnext s i) (gcwidth s i) -> the byte after the grapheme cluster at i, and its columns, as
+;                              quay measures under ?2027
+;   (sgwidth s)             -> the columns s takes by cluster
+;   (cpxp? c) (cpvs? c)     -> is c Extended_Pictographic; does VS16 give c an emoji style
 ;   (cpupper c) (cplower c) -> c's simple case mapping, c where it has none
 ;   (cpis nm c)             -> is c in the POSIX class named nm ("alpha" .. "xdigit"), glibc's
 ;   (cpfold c)              -> the characters grep -i takes for c, c not among them
@@ -1162,7 +1203,7 @@
 ;   (cpback s i)            -> the byte where the character ending at i opens
 ;   (cpword? c)             -> is c a word character: _ or alnum, grep's \w
 
-(module '(text cpat cpnext cpn cps cplen cpsnip cprev wcwidth swidth scut
+(module '(text cpat cpnext cpn cps cplen cpsnip cprev wcwidth swidth scut gcnext gcwidth sgwidth cpxp? cpvs?
           cpupper cplower cpis cpclass? cpfold cpfolds cpback cpword?)
    ; tools/mkwidth.l's runs, unicode 17: each entry cp * 4 + w opens a run of width w
 (: cpw
@@ -1689,6 +1730,60 @@
      2 1 42955 1 1 -42343 42956 8 2 1 42972 1 1 -42561 42997 1 1 1 65313 26 1 32 66560 40 1
      40 66736 36 1 40 66928 11 1 39 66940 15 1 39 66956 7 1 39 66964 2 1 39 68736 51 1 64
      68944 22 1 32 71840 32 1 32 93760 32 1 32 93856 25 1 27 125184 34 1 34)
+   ; tools/mkemoji.l's, unicode 17, runs as the classes': the characters VS16 gives an emoji
+   ; style, and the Extended_Pictographic ones
+   cpvs
+   @(35 36 42 43 48 58 169 170 174 175 8252 8253 8265 8266 8482 8483 8505 8506 8596 8602 8617
+     8619 8986 8988 9000 9001 9167 9168 9193 9204 9208 9211 9410 9411 9642 9644 9654 9655
+     9664 9665 9723 9727 9728 9733 9742 9743 9745 9746 9748 9750 9752 9753 9757 9758 9760
+     9761 9762 9764 9766 9767 9770 9771 9774 9776 9784 9787 9792 9793 9794 9795 9800 9812
+     9823 9825 9827 9828 9829 9831 9832 9833 9851 9852 9854 9856 9874 9880 9881 9882 9883
+     9885 9888 9890 9895 9896 9898 9900 9904 9906 9917 9919 9924 9926 9928 9929 9934 9936
+     9937 9938 9939 9941 9961 9963 9968 9974 9975 9979 9981 9982 9986 9987 9989 9990 9992
+     9998 9999 10000 10002 10003 10004 10005 10006 10007 10013 10014 10017 10018 10024 10025
+     10035 10037 10052 10053 10055 10056 10060 10061 10062 10063 10067 10070 10071 10072
+     10083 10085 10133 10136 10145 10146 10160 10161 10175 10176 10548 10550 11013 11016
+     11035 11037 11088 11089 11093 11094 12336 12337 12349 12350 12951 12952 12953 12954
+     126980 126981 127344 127346 127358 127360 127490 127491 127514 127515 127535 127536
+     127543 127544 127757 127760 127765 127766 127772 127773 127777 127778 127780 127789
+     127798 127799 127864 127865 127869 127870 127891 127892 127894 127896 127897 127900
+     127902 127904 127911 127912 127916 127919 127938 127939 127940 127941 127942 127943
+     127946 127951 127956 127969 127981 127982 127987 127988 127989 127990 127991 127992
+     128008 128009 128021 128022 128031 128032 128038 128039 128063 128064 128065 128067
+     128070 128074 128077 128079 128083 128084 128106 128107 128125 128126 128163 128164
+     128176 128177 128179 128180 128187 128188 128191 128192 128203 128204 128218 128219
+     128223 128224 128228 128231 128234 128238 128247 128248 128249 128252 128253 128254
+     128264 128265 128269 128270 128274 128276 128329 128331 128336 128360 128367 128369
+     128371 128378 128391 128392 128394 128398 128400 128401 128421 128422 128424 128425
+     128433 128435 128444 128445 128450 128453 128465 128468 128476 128479 128481 128482
+     128483 128484 128488 128489 128495 128496 128499 128500 128506 128507 128528 128529
+     128647 128648 128653 128654 128657 128658 128660 128661 128664 128665 128685 128686
+     128690 128691 128697 128699 128700 128701 128715 128716 128717 128720 128736 128742
+     128745 128746 128752 128753 128755 128756)
+   cpxp
+   @(169 170 174 175 8252 8253 8265 8266 8482 8483 8505 8506 8596 8602 8617 8619 8986 8988
+     9000 9001 9167 9168 9193 9204 9208 9211 9410 9411 9642 9644 9654 9655 9664 9665 9723
+     9727 9728 9733 9742 9743 9745 9746 9748 9750 9752 9753 9757 9758 9760 9761 9762 9764
+     9766 9767 9770 9771 9774 9776 9784 9787 9792 9793 9794 9795 9800 9812 9823 9825 9827
+     9828 9829 9831 9832 9833 9851 9852 9854 9856 9874 9880 9881 9882 9883 9885 9888 9890
+     9895 9896 9898 9900 9904 9906 9917 9919 9924 9926 9928 9929 9934 9936 9937 9938 9939
+     9941 9961 9963 9968 9974 9975 9979 9981 9982 9986 9987 9989 9990 9992 9998 9999 10000
+     10002 10003 10004 10005 10006 10007 10013 10014 10017 10018 10024 10025 10035 10037
+     10052 10053 10055 10056 10060 10061 10062 10063 10067 10070 10071 10072 10083 10085
+     10133 10136 10145 10146 10160 10161 10175 10176 10548 10550 11013 11016 11035 11037
+     11088 11089 11093 11094 12336 12337 12349 12350 12951 12952 12953 12954 126980 126981
+     127020 127024 127124 127136 127151 127153 127168 127169 127183 127185 127222 127232
+     127344 127346 127358 127360 127374 127375 127377 127387 127406 127462 127489 127504
+     127514 127515 127535 127536 127538 127547 127548 127552 127561 127584 127590 127778
+     127780 127892 127894 127896 127897 127900 127902 127985 127987 127990 127991 127995
+     128000 128254 128255 128318 128329 128335 128336 128360 128367 128369 128371 128379
+     128391 128392 128394 128398 128400 128401 128405 128407 128420 128422 128424 128425
+     128433 128435 128444 128445 128450 128453 128465 128468 128476 128479 128481 128482
+     128483 128484 128488 128489 128495 128496 128499 128500 128506 128592 128640 128710
+     128715 128723 128725 128742 128745 128746 128747 128753 128755 128768 128986 129024
+     129036 129040 129096 129104 129114 129120 129160 129168 129198 129200 129212 129216
+     129218 129232 129241 129280 129292 129339 129340 129350 129351 129536 129624 129632
+     129646 129792 130048 131070)
    (tl s k) (k < #s && (s k & 192) = 128)
    ; the bytes the character at i wears, 0 when it is none: an overlong, a surrogate or a torn tail
    (cpn s i)
@@ -1723,6 +1818,30 @@
                         (: m ((lo + hi) // 2) ((peep cpw m 0 >> 2) <= c ? (go m hi) (go lo m))))
           (go 0 #cpw)))
    (cpcols s i) (max 0 (wcwidth (cpat s i)))
+   ; grapheme clusters as quay keeps them under ?2027: a character and what joins it -- a
+   ; zero-width one, an emoji modifier after a pictograph, a pictograph after a ZWJ that ends
+   ; one, a regional indicator after a lone one -- ten characters at most, zero-width ones past
+   ; that dropped. a pictograph that took a join, or a narrow one VS16 gives an emoji style, is
+   ; wide. [the byte after the cluster at i, its columns]
+   (cpxp? c) (cpin cpxp c)
+   (cpvs? c) (cpin cpvs c)
+   (cpri? c) (127462 <= c <= 127487)
+   (gcat s i)
+    (: n #s b (cpat s i) xp (cpxp? b)
+       (go j last k w)
+        (: c (? (j < n) (cpat s j) 0) cw (wcwidth c)
+           (on w) (go (cpnext s j) c (k + 1) w)
+           (? (c = 0 || cw < 0) [j w]
+              (cw = 0) (on (? (c = 65039 && w = 1 && cpvs? b) 2 w))
+              (9 < k) [j w]
+              (xp && 127995 <= c <= 127999) (on 2)
+              (xp && last = 8205 && cpxp? c) (on 2)
+              (k = 1 && cpri? b && cpri? c) (on 2)
+              [j w]))
+       (? (wcwidth b < 0) [(cpnext s i) 0] (go (cpnext s i) b 1 (wcwidth b))))
+   (gcnext s i) <(gcat s i)
+   (gcwidth s i) <>(gcat s i)
+   (sgwidth s) (: n #s (go i a) (? (n <= i) a (: g (gcat s i) (go <g (a + <>g)))) (go 0 0))
    ; back over at most three tails; a byte that ends no whole character stands alone
    (cpback s i)
     (: (go j) (? (j < 1 || i - j > 2 || !(tl s j)) j (go (j - 1)))
@@ -2959,7 +3078,7 @@
 ; this binary need not exec, and what it would have exec'd is (cli-line its-line) on a warm
 ; heap. the shadow rule lives in one place, verbs' `word`.
 
-(module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap
+(module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage edkey edtap edgc
           uopt uopt1 uoptv uoptun uoptstray uoptp uoptlast uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
@@ -3023,7 +3142,10 @@
                               (rev acc)))
     (flow p) ()))
 
-(: no (nom 0) eofsym (nom 0)
+(: no (nom 0) eofsym (nom 0) edpasted {}   ; edpasted: a bracketed paste's bytes (edpaste)
+   ; the terminal measures by grapheme cluster: it took ?2027, and said so (edrqm). the
+   ; cursor then steps and deletes by cluster too, over the bytes edlast and edfirst count
+   edgc {'on 0 'asked 0}
 
    ; a seat door, or (): the freestanding seats carry none of these
    (want n) (elem n (names ()) ? (ev n) ())
@@ -3065,7 +3187,8 @@
    ; the buffer holds bytes and the cursor moves by character
    (edtail? c) (128 <= c < 192)
    ; the columns a charlist of bytes takes: a control shows as a space (prc), a character
-   ; its wcwidth, and a sequence still arriving at the end none yet
+   ; its wcwidth -- a cluster its columns, while the terminal says it measures so (edgc) --
+   ; and a sequence still arriving at the end none yet
    (edpend? s i)
     (: n #s need (? (s i < 224) 2 (s i < 240) 3 4)
        (go k) (? (n <= k) 1 (edtail? (s k)) (go (k + 1)) ())
@@ -3074,26 +3197,35 @@
     (: s (string cs) n #s
        (go i a) (? (n <= i) a
                    (: b (s i)
-                      (? (b < 128) (go (i + 1) (a + 1))
+                      (? (b < 32 || b = 127) (go (i + 1) (a + 1))
                          (192 <= b && cpnext s i = i + 1 && edpend? s i) a
+                         (edgc 'on) (go (gcnext s i) (a + gcwidth s i))
+                         (b < 128) (go (i + 1) (a + 1))
                          (go (cpnext s i) (a + max 0 (wcwidth (cpat s i)))))))
        (go 0 0))
+   ; the bytes the last cluster of l (backwards) and the first of r take, under edgc
+   (edlast l) (: s (string (rev l)) n #s (go i) (: j (gcnext s i) (? (n <= j) (n - i) (go j))) (go 0))
+   (edfirst r) (gcnext (string r) 0)
 
    (ednew _) {'u () 'l () 'r () 'd () 'ev 0}
    (edleft t) (: l (t 'l) u (t 'u) (?- t
+    (two? l && edgc 'on) (: k (edlast l) (pins t 'l (drop k l) 'r (revcat (take k l) (t 'r))))
     (two? l) (: (go l r) (: c <l (? (edtail? c && two? >l) (go >l (c . r)) [>l (c . r)]))
                 p (go l (t 'r))
                 (pins t 'l <p 'r <>p))
     (two? u) (pins t 'u >u 'l (rev <u) 'r () 'd (revcat l (t 'r) . t 'd))))
    (edright t) (: r (t 'r) d (t 'd) (?- t
+    (two? r && edgc 'on) (: k (edfirst r) (pins t 'l (revcat (take k r) (t 'l)) 'r (drop k r)))
     (two? r) (: (go l r) (? (two? r && edtail? <r) (go (<r . l) >r) [l r])
                 p (go (<r . t 'l) >r)
                 (pins t 'l <p 'r <>p))
     (two? d) (pins t 'u (revcat (t 'l) r . t 'u) 'l () 'r <d 'd >d)))
    (edbsp t) (: l (t 'l) u (t 'u) (?- t
+    (two? l && edgc 'on) (pin t 'l (drop (edlast l) l))
     (two? l) (: (go l) (? (two? >l && edtail? <l) (go >l) >l) (pin t 'l (go l)))
     (two? u) (pins t 'u >u 'l (rev <u))))
    (eddel t) (: r (t 'r) d (t 'd) (?- t
+    (two? r && edgc 'on) (pin t 'r (drop (edfirst r) r))
     (two? r) (: (go r) (? (two? r && edtail? <r) (go >r) r) (pin t 'r (go >r)))
     (two? d) (pins t 'r <d 'd >d)))
    (edhome t) (pins t 'l () 'r (revcat (t 'l) (t 'r)))
@@ -3108,6 +3240,17 @@
    (eddown t) (t 'd @- t (ad . ud) (splitc (\ lz rr (pins t 'u (revcat (t 'l) (t 'r) . t 'u) 'l lz 'r rr 'd ud)) () (edn (t 'l)) ad))
    (edput t c) (pin t 'l (c . t 'l))                       ; insert at the cursor
    (ednl t) (pins t 'u (rev (t 'l) . t 'u) 'l ())           ; break the line at the cursor
+   ; pasted bytes in at the cursor: a line break breaks the line (a crlf once), a tab
+   ; stays, and every other control goes
+   (edpin t l)
+    (: (go l prev) (? (atom? l) t
+                      (: c <l
+                         _ (? (c = 10 && prev = 13) 0
+                              (c = 10 || c = 13) (ednl t)
+                              (c = 9 || (32 <= c && c != 127)) (edput t c)
+                              0)
+                         (go >l c)))
+       (go l 0))
    (edclear t) (pins t 'u () 'l () 'r () 'd ())
    (edchars t) (joinln (revcat (t 'u) (revcat (t 'l) (t 'r) . t 'd)))   ; the whole buffer, one charlist
    edempty? (nil? * edchars)
@@ -3149,6 +3292,7 @@
            (5 || -6) (took edend)
            -10 (took edtop)
            -11 (took edbot)
+           -13 (edit (b \ edpin b (peep edpasted () ())))
            (-8 && two? (t 'u)) (took edup)
            (-9 && two? (t 'd)) (took eddown)
            (pin t 'ev (c @ 13 10 c)))))
@@ -3184,6 +3328,22 @@
                   y (ednum p 0)
                   _ (pins edtap-at 'x (<x - 1) 'y (<y - 1))
                   (<>y = 77 ? -12 0))               ; M is the press, m the release
+   ; a bracketed paste (ESC [ 200 ~ .. ESC [ 201 ~) is the key -13, its bytes waiting in
+   ; edpasted; any other ESC [ 2 is a miss
+   (edpaste p) (: a (see p) b (see p) f (see p)
+                  (? !(a = 48 && b = 48 && f = 126) 0
+                     (: (go acc) (: c (see p)
+                                    (? (c < 0) acc
+                                       (: q (c . acc)
+                                          (? (c = 126 && [126 49 48 50 91 27] = take 6 q) (drop 6 q) (go q)))))
+                        _ (pin edpasted () (rev (go ())))
+                        -13)))
+   ; a DECRQM answer (ESC [ ? Ps ; Pm $ y) is a miss too, ?2027 set or permanently set
+   ; turning edgc on
+   (edrqm p) (: m (ednum p 0) v (? (<>m = 59) (ednum p 0) [0 0])
+                _ (? (<>v = 36) (see p) 0)
+                _ (? (<m = 2027 && <>v = 36) (pin edgc 'on (? (<v = 1 || <v = 3) 1 0)) 0)
+                0)
    (edcsi p) (: c (see p) e (peep arrow c 0)
                (? (e != 0) e
                   (c @ 49 (see p @ 126 -5  59 (see p, peep modarrow (see p) 0)  0)
@@ -3191,6 +3351,8 @@
                        (52 || 56) (see p, -6)
                        51 (see p, -4)
                        60 (edmouse p)
+                       50 (edpaste p)
+                       63 (edrqm p)
                        0)))
    (edkey p) (: c (see p)
                (? (c = -1) -7
@@ -3222,6 +3384,7 @@
    ; buffer ('row) -- move up that many first, and all motion is relative, so terminal
    ; scrolling never desyncs us. pl is the prompt's column, shared by the topmost line only.
    (csi n f) (putc 27, putc 91, putn n, putc f)   ; ESC [ n f -- the one cursor verb
+   (edbelow t) (: n (peep t 'below 0) (0 < n ? (csi n 66) ()))   ; down past the buffer's rows
    ; the buffer on a screen w wide: the cursor's row and column and the row the last character
    ; sits on, rows counted from the buffer's first. a line that ends on the margin leaves the
    ; cursor pending there, so a line of n from column s covers (s + n - 1) // w + 1 rows
@@ -3472,7 +3635,7 @@
               -9 (downhist t, loop ())
               3 (puts "^C\n", edempty? t ? eofsym (edline (t 'hu) (t 'hd)))
               (loop ())))
-        (loop ()))
+        (edbr loop))
    ; evaluate a single parsed datum cooperatively.
    (do_eval v)
      (: pid (twirl ev v)
@@ -3507,12 +3670,19 @@
        _ (hear prev)
      r)
 
+   ; the terminal brackets pastes and measures by grapheme cluster (?2027) only while a line
+   ; is edited, so a program run after it sees neither; the first line asks whether it
+   ; measures so (DECRQM, edrqm)
+   (edbr f) (: _ (puts (? (edgc 'asked) "\e[?2004h\e[?2027h" "\e[?2004h\e[?2027h\e[?2027$p"), pin edgc 'asked 1)
+               r (f ())
+               _ (puts "\e[?2004l\e[?2027l", flush out)
+               r)
    ; (edraw ip pr) -- read one line off port `ip`, with in-line editing: the charlist, or eofsym
-   (edraw ip pr) (:- (loop ())
+   (edraw ip pr) (:- (edbr loop)
     pl (puts pr, edwide pr) t (ednew ())
     (loop _) (edrender pl t,
               edstep t (edkey ip),
-              t 'ev @- (loop ()) (-7 || 4) eofsym 10 (putc 10, revcat (t 'l) (t 'r))))
+              t 'ev @- (loop ()) (-7 || 4) eofsym 10 (edbelow t, putc 10, edchars t)))
 
    ; the shell line reader: edraw + command history + tab completion
    (edlnc ip pr hist comp)
@@ -3527,7 +3697,7 @@
            edstep t (edkey ip),
            (t 'ev @ 0 (loop i draft)
               (-7 || 4) 'eof
-              10 (: ln (putc 10, revcat (t 'l) (t 'r))
+              10 (: ln (edbelow t, putc 10, edchars t)
                     nh (!ln ? hist (take 100 (ln . hist)))
                   (ln . nh))
               3 (puts "^C\n", () . hist)   ; ^C: abandon the line, hist untouched
@@ -3542,7 +3712,7 @@
               -8 (recall i (i >= hn ? i (i + 1)) draft)   ; up: older
               -9 (recall i (0 >= i  ? i (i - 1)) draft)    ; down: newer
               (loop i draft)))
-        (loop 0 ()))
+        (edbr (_ \ loop 0 ())))
    (edln ip pr hist) (edlnc ip pr hist ())
 )
 

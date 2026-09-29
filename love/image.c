@@ -236,7 +236,7 @@ int image_bake(struct ai *g, char const *out, int bare) {
 // FIXME extend LvmCall macro to handle this.
 static lvm(lvm_bake) {
  Pack(g);
- word r = strp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
+ word r = cstrp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
  Unpack(g);
  Sp[0] = r;
  ai_musttail return Next(1); }
@@ -251,7 +251,7 @@ struct ai *image_load(char const *path) {
   struct ai *g = NULL;
   if (!fstat(fd, &st) && st.st_size > 0) {        // map, don't read: the core copies the blob straight
     size_t n = (size_t) st.st_size;               // out of the page cache -- one pass, no file buffer
-    void *buf = mmap(NULL, n, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
+    void *buf = mmap(NULL, n, PROT_READ, MAP_PRIVATE, fd, 0);
     if (buf != MAP_FAILED) {
       // step over a shebang if the image wears one -- images written before the line was
       // dropped carry one, padded to a word. a plain image starts at the magic.
@@ -259,7 +259,8 @@ struct ai *image_load(char const *path) {
       if (n > 2 && ((char*) buf)[0] == '#' && ((char*) buf)[1] == '!') {
         char *nl = memchr(buf, '\n', n);
         if (nl) off = (size_t)(nl - (char*) buf) + 1; }
-      if (off < n) g = ai_image_load((char*) buf + off, (uintptr_t)(n - off), 0);
-      munmap(buf, n); } }
+      // kept: a woken session keeps the map, so its code chunks seat as they first run
+      if (off < n) g = ai_image_load((char*) buf + off, (uintptr_t)(n - off), 1);
+      if (!g) munmap(buf, n); } }
   close(fd);
   return g; }

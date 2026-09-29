@@ -22,8 +22,8 @@
 //   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
 //                                width, picture, face), 1 the fg, 2 the bg
 //                                (the layout is quay.h's struct cb_cell); a
-//                                cluster's glyph holds its base, and 3 4 5 are
-//                                its marks, 0 past the last. a negative i reads
+//                                cluster's glyph holds its base, and 3 to 11 are
+//                                the rest of it, 0 past the last. a negative i reads
 //                                the history: -cols is the newest line's first
 //                                cell, back to -(held * cols)
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
@@ -43,6 +43,8 @@
 //   (pasted scr s)       -> s    string s as a seat pastes it into this screen (cb_pasted):
 //                                newlines as returns, controls gone, bracketed when
 //                                the program asked (?2004); () misuse
+//   (picture scr slot k) -> n|s  a live picture's width (k 0), height (1), gen (2), or its
+//                                pixels as base64 rgba (3) or raw (4), unset ones clear; () for none
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
@@ -169,7 +171,7 @@ static lvm(lvm_glass) {
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
   intptr_t const k = getcharm(Sp[2]);
   struct cb_cell const *e = cb_at(c, getcharm(Sp[1]));
-  if (e && k >= 0 && k < 6) {
+  if (e && k >= 0 && k < cb_clun + 2) {
    uint32_t const *v = cb_clu(c, e->g);
    out = putcharm(k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg & ~cb_soft : k == 2 ? e->bg
                   : v ? cb_cp(v[k - 2]) : 0u); } }
@@ -321,6 +323,46 @@ static lvm(lvm_mouse) {
   Sp[4] = word(s); }
  Sp += 4; Ip += 1; ai_musttail return Continue(); }
 
+// (picture scr slot k): the base64 (k 3) or the raw rgba (k 4) is laid straight from the
+// store, counted first for Have
+static lvm(lvm_picture) {
+ struct cb *c = scr_ok(Sp[0]);
+ struct cb_img const *im = c && (Sp[1] & Sp[2] & 1) && getcharm(Sp[1]) > 0 && getcharm(Sp[1]) < cb_nimg
+                           ? cb_img(c, (uint32_t) getcharm(Sp[1])) : 0;
+ intptr_t const k = (Sp[2] & 1) ? getcharm(Sp[2]) : -1;
+ word out = ZeroPoint;
+ if (im && k >= 0 && k < 3) out = putcharm(k == 0 ? im->w : k == 1 ? im->h : im->gen);
+ else if (im && k == 3 && (uint64_t) im->off + (uint64_t) im->w * im->h <= (c->sn - cb_shead) / 4u) {
+  static char const abc[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  uintptr_t const nb = (uintptr_t) im->w * im->h * 4u, n = (nb + 2) / 3 * 4;
+  Have(str_width(n));
+  struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
+  uint32_t const *px = cb_ipx(c) + im->off;
+  uint8_t *o = (uint8_t*) txt(s);
+  uint32_t acc = 0, got = 0;
+  for (uintptr_t i = 0; i < nb; i++) {
+   uint32_t const v = px[i / 4], j = i % 4;
+   acc = acc << 8 | (j == 0 ? v >> 16 & 255u : j == 1 ? v >> 8 & 255u : j == 2 ? v & 255u : v >> 24 ? 255u : 0u);
+   if (++got == 3) {
+    *o++ = (uint8_t) abc[acc >> 18 & 63], *o++ = (uint8_t) abc[acc >> 12 & 63];
+    *o++ = (uint8_t) abc[acc >> 6 & 63], *o++ = (uint8_t) abc[acc & 63], acc = got = 0; } }
+  if (got) {
+   acc <<= 8 * (3 - got);
+   *o++ = (uint8_t) abc[acc >> 18 & 63], *o++ = (uint8_t) abc[acc >> 12 & 63];
+   *o++ = got == 2 ? (uint8_t) abc[acc >> 6 & 63] : '=', *o++ = '='; }
+  out = word(s); }
+ else if (im && k == 4 && (uint64_t) im->off + (uint64_t) im->w * im->h <= (c->sn - cb_shead) / 4u) {
+  uintptr_t const n = (uintptr_t) im->w * im->h;
+  Have(str_width(n * 4));
+  struct ai_str *s = ini_str(str(Hp), n * 4); Hp += str_width(n * 4);
+  uint32_t const *px = cb_ipx(c) + im->off;
+  uint8_t *o = (uint8_t*) txt(s);
+  for (uintptr_t i = 0; i < n; i++, o += 4)
+   o[0] = (uint8_t) (px[i] >> 16), o[1] = (uint8_t) (px[i] >> 8), o[2] = (uint8_t) px[i], o[3] = px[i] >> 24 ? 255u : 0u;
+  out = word(s); }
+ Sp[2] = out;
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
+
 // (select scr a b u)
 static lvm(lvm_select) {
  struct cb *c = scr_ok(Sp[0]);
@@ -371,4 +413,5 @@ static union u const
   nif_mouse[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mouse},   {lvm_ret0}},
   nif_pasted[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_pasted},  {lvm_ret0}},
   nif_select[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_select},  {lvm_ret0}},
-  nif_copied[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_copied},  {lvm_ret0}};
+  nif_copied[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_copied},  {lvm_ret0}},
+  nif_picture[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_picture}, {lvm_ret0}};

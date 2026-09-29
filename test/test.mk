@@ -206,13 +206,17 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/gcpause.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/berth.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/pic.l test/host/face.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/synth.l test/host/lupa.l test/host/mc.l test/host/pom.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l
+hostnif_tests = test/host/gcpause.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/berth.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/pic.l test/host/face.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/wade.l test/host/apartment.l test/host/garage.l test/host/roost.l test/host/shaft.l test/host/synth.l test/host/lupa.l test/host/mc.l test/host/pom.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/pier.l test/host/kitpng.l test/host/crow.l
 # out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
+hostnif_tests += test/host/xz.l test/host/bz2.l   # the xz and bzip2 pulls against their whole-string reads
+# ev read back off its show names the doors ev closes over, which a mopped image has dropped
+hostnif_nomop = test/host/evback.l
 test_hostnif: host out$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "TEST $$s"; \
 	  case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
+	  case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; esac; \
 	  cat test/00-init.l $$s | $(gsh) test/gate/run.sh hostnif "$$L" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
@@ -920,9 +924,9 @@ test_elf32: host
 # gate skips where no objcopy exists -- see the script for what the fixtures are for.
 test_objcopy: host
 	@$(gsh) test/gate/objcopy.sh $(ho)
-# ain's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
+# nc's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
 # full-duplex, each asserting it got what the other sent. The only net gate driving the real
-# `love apps/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
+# `love apps/nc.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
 PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"
@@ -1275,6 +1279,8 @@ test_kernel_wasm: host
 	@$(gsh) $(R)/test/gate/glass.sh $(NODE) $(R)/out/love.wasm out/wasm/love.image out/wasm/glass.log $m
 	@echo TEST test/gate/glass.mjs "(the page's half of the grid, asked without a page)"
 	@$(NODE) $(R)/test/gate/glass.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST test/gate/wall.mjs "(what a link and a guest may ask of the page, asked without a page)"
+	@$(NODE) $(R)/test/gate/wall.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/gate/worklet.mjs "(the page's speaker, asked without a page)"
 	@$(NODE) $(R)/test/gate/worklet.mjs || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/gate/echo.mjs "(a keystroke reaches the glass, not just the guest)"
@@ -1305,12 +1311,14 @@ test_kernel_wasm: host
 	   || { tail -5 out/wasm/deaf.log; echo "FAIL test_kernel_wasm (a dead speaker stopped the machine)"; exit 1; }
 	@echo "  deaf: ok -- the ring fills, nobody empties it, and the walk goes on"
 	@echo TEST test/kernel/lift.l "(the lift: a path written to /proc/lift, and the file lands outside)"
-	@rm -f lifted.txt out/wasm/lifted.txt; INLE_RAM=256 $(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love.image \
-	   $(R)/out/love.wasm test/kernel/lift.l < /dev/null > out/wasm/lift.log 2>&1; \
-	 mv -f lifted.txt out/wasm/lifted.txt 2>/dev/null; \
+	@rm -f out/wasm/lifted.txt; INLE_RAM=256 $(NODE) $(R)/inle/wasm/inle.mjs --lifts out/wasm \
+	   --image out/wasm/love.image $(R)/out/love.wasm test/kernel/lift.l < /dev/null > out/wasm/lift.log 2>&1; \
 	 grep -q "lift asked" out/wasm/lift.log && grep -q "carried out of the machine, whole" out/wasm/lifted.txt \
 	   || { tail -5 out/wasm/lift.log; echo "FAIL test_kernel_wasm (the lift did not land)"; exit 1; }
 	@echo "  lift: ok -- the file came out under its own name"
+	@echo TEST test/gate/seatwall.sh "(what the seat refuses a guest: host files past --origin, lifts nobody asked for)"
+	@$(gsh) $(R)/test/gate/seatwall.sh $(NODE) $(R)/out/love.wasm out/wasm/love.image out/wasm/seatwall \
+	   || { echo "FAIL test_kernel_wasm (the seat's wall)"; exit 1; }
 	@echo TEST test/kernel/pkcheck.l "(harp's pack: the two arms answer the same bytes HERE)"
 	@$(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love.image $(R)/out/love.wasm \
 	   test/kernel/pkcheck.l < /dev/null > out/wasm/pack.log 2>&1; \
@@ -1376,11 +1384,10 @@ else
 test_seedwasm: host
 	@$(MAKE) -s wasm
 	@echo TEST "love seed x64 (the wasm seat, nothing under it)"
-	@rm -f love-x64 out/wasm/love-x64
-	@INLE_RAM=1024 $(NODE) $(R)/inle/wasm/inle.mjs \
+	@rm -f out/wasm/love-x64
+	@INLE_RAM=1024 $(NODE) $(R)/inle/wasm/inle.mjs --lifts out/wasm \
 	   --image out/wasm/love.image $(R)/out/love.wasm seed x64 /s \
 	   < /dev/null > out/wasm/seed.log 2>&1; \
-	 mv -f love-x64 out/wasm/love-x64 2>/dev/null; \
 	 grep -q "a raw egg for x64" out/wasm/seed.log \
 	   && grep -q "carried out of the machine" out/wasm/seed.log && test -s out/wasm/love-x64 \
 	   || { tail -20 out/wasm/seed.log; echo "FAIL test_seedwasm"; exit 1; }

@@ -34,12 +34,13 @@
 ; items as links with their kind, (DIR) (TXT) (?) ..; a search item is a field, sent after a
 ; tab. gemini's text/gemini is laid as a page, headings, lists, quotes and preformatted
 ; blocks; its ask for input is a field, the answer sent back as the query. a gemini
-; server's certificate is pinned the first time and held to after -- the protocol's trust
+; server's key is pinned the first time and held to after -- the protocol's trust
 ; on first use -- in ~/.love/gemini_hosts; a changed one is refused, and says which line
 ; to delete to take it.
 ;
 ; out of scope, and said: forms that POST, scripts, cookies, pictures other than png, jpeg
-; and gif, and a gif's motion. an https peer is not verified (wget's client).
+; and gif, and a gif's motion. an https server is verified as wget's is (its
+; client: a root in the host's bundle, or a pin in ~/.love/tls_pins), and a refusal says why.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -103,6 +104,15 @@
                      (: (g i) (? (i < 0) "" (bp i = 47) (snip bp 0 (i + 1)) (g (i - 1))) (g (#bp - 1))))
               [(b 0) (b 1) (ww-dots (dir + pa)) qu fr]))))
    (ww-nofrag u) (: p (ww-split u) (ww-join [(p 0) (p 1) (p 2) (p 3) ""]))
+   ; where a server may send us: http or https to https, http to http, gemini to gemini.
+   ; never file: or gopher:, never down from https. a url typed or clicked is not asked
+   (ww-hop? from to)
+    (: a <(ww-split from) b <(ww-split to)
+       (? (a = "gemini:") (b = "gemini:")
+          !(a = "http:" || a = "https:") 0
+          (b = "https:") 1
+          (b = "http:" && a = "http:")))
+   (ww-nohop url to) [1 ("www: " + wg-plain url + " sends us to " + wg-plain to + ", which is not followed")]
    ; what a person typed -> a url: a scheme stays, a file here opens as file:, the rest is https
    (ww-arg s)
     (? (0 <= wg-find s "://" 0) s
@@ -127,11 +137,15 @@
           !(sc = "http:" || sc = "https:") [1 ("www: no door for " + sc + " urls")]
           (: w (wg-url u0)
              r (? (two? w) (wg-ask <w (w 1) (w 2) (w 3) "Accept-Encoding: gzip\r\n") ())
-             (? (atom? r) [1 ("www: no answer from " + url)]
+             (? (string? r) [1 ("www: " + r)]                      ; the certificate refused, and why
+                (atom? r) [1 ("www: no answer from " + url)]
                 (: code <r hd (r 1)
                    loc (wg-header hd "location")
                    (? (300 <= code < 400 && string? loc)
-                       (? (hops < 1) [1 "www: too many redirects"] (ww-get (ww-resolve url loc) (hops - 1)))
+                       (: to (ww-resolve url loc)
+                          (? (hops < 1) [1 "www: too many redirects"]
+                             !(ww-hop? url to) (ww-nohop url to)
+                             (ww-get to (hops - 1))))
                       (: ct (wg-header hd "content-type")
                          k (ww-kind (? (string? ct) ct ""))
                          b (? k (ww-body (? (string? ct) ct "") (wg-header hd "content-encoding") (r 2)) ())
@@ -208,17 +222,17 @@
    ; gemini: the url alone on a line, over tls on 1965; the answer's first line a status and
    ; a meta, then the body. 1x asks for input, a field that sends it back as the query; 2x
    ; is the page, text/gemini laid as html and other text as it is; 3x goes elsewhere; the
-   ; rest are the server's refusals, said. the certificate is pinned the first time and held
-   ; to after (trust on first use, the protocol's own), host:port and its sha-256 a line in
-   ; ~/.love/gemini_hosts; a changed one is refused and says how to take it
-   (ww-pinfile _) (: h (getenv "HOME") ((? (string? h) h ".") + "/.love/gemini_hosts"))
-   (ww-pin key fp)
+   ; rest are the server's refusals, said. the server's key is pinned the first time and held
+   ; to after (trust on first use, the protocol's own), host:port and "spki:" and the sha-256
+   ; of its SubjectPublicKeyInfo a line in ~/.love/gemini_hosts -- the key, so a renewed
+   ; certificate over it still holds; an older line without the prefix is a whole
+   ; certificate's hash, and holds as that. a changed one is refused and says how to take it
+   (ww-pinfile _) ((cite 'tls 'pin-path) "gemini_hosts")
+   (ww-pin key fp cfp)
     (: path (ww-pinfile 0)
-       txt (uread path @ [1 s] s "")
-       (find l) (? (atom? l) () (: f (usplit 32 <l) (? (1 < #f && <f = key) (f 1) (find >l))))
-       old (find (ww-lns txt))
-       (? (string? old) (? (old = fp) ()
-                           ("the certificate of " + key + " has changed: it was " + old + ", now " + fp
+       old ((cite 'tls 'pin-of) path key)
+       (? (string? old) (? (old = fp || old = cfp) ()
+                           ("the key of " + key + " has changed: it was " + old + ", now " + fp
                             + "; delete its line in " + path + " to take the new one"))
           (: _ (mkdir (snip path 0 (#path - 13)) 448)
              a (open path "a")
@@ -254,9 +268,9 @@
     (: p (ww-split url) hp (ww-hostport url 1965) q (p 3)
        a (ww-answer q "input")
        u (? (string? a) (ww-join [(p 0) (p 1) (p 2) ("?" + ww-penc a '(45 46 95 126)) ""]) (ww-nofrag url))
-       t ((cite 'tls 'tls-dial) <hp (hp 1))
-       (? !t [1 ("www: no answer from " + url)]
-          (: bad (ww-pin (<hp + ":" + show (hp 1)) (: c (t 'cert) (sha256 (? (string? c) c ""))))
+       t ((cite 'tls 'tls-open) <hp (hp 1) 'pin-only)
+       (? (string? t) [1 ("www: " + t)]
+          (: bad (ww-pin (<hp + ":" + show (hp 1)) ("spki:" + sha256 (t 'spki)) (sha256 (t 'cert)))
              (? (string? bad) (((cite 'tls 'tls-close) t), [1 ("www: " + bad)])
                 (: _ ((cite 'tls 'tls-say) t (u + "\r\n"))
                    b ((cite 'tls 'tls-slurp) t) _ (close (t 's))
@@ -273,8 +287,10 @@
                                      (? (starts? mime "text/gemini") [0 u 'html (ww-gtext body) 200]
                                         (starts? mime "text/") [0 u 'text body 200]
                                         [1 ("www: " + url + " is " + meta + ", not a page")]))
-                      (code < 40) (? (hops < 1) [1 "www: too many redirects"]
-                                     (ww-get (ww-resolve url meta) (hops - 1)))
+                      (code < 40) (: to (ww-resolve url meta)
+                                     (? (hops < 1) [1 "www: too many redirects"]
+                                        !(ww-hop? url to) (ww-nohop url to)
+                                        (ww-get to (hops - 1))))
                       (code < 60) [1 ("www: " + url + " -- " + hd)]
                       [1 ("www: " + url + " wants a client certificate (" + hd + ")")]))))))
 
@@ -344,7 +360,7 @@
    (ww-dump ls urls)
     (: n #urls
        (ref i) ((upad (#(show n) + 4) (show (i + 1) + ". ")) + urls i + "\n")
-       (usgr (unlines ls) + (? n ("\nReferences\n\n" + foldl (\ a i (a + ref i)) "" ^n) "")))
+       (wg-plain (usgr (unlines ls) + (? n ("\nReferences\n\n" + foldl (\ a i (a + ref i)) "" ^n) ""))))
 
    ; -- pictures -----------------------------------------------------------------
    ; on a terminal a picture is drawn under the line lapiz laid its mark on (" img SRC"),
@@ -352,17 +368,17 @@
    ; fetched when it comes near the screen, and kept by url for the session
    (ww-marks p)
     (foldl (\ acc a (? (starts? <a " img ") ([(a 1) (snip <a 5 #<a)] . acc) acc)) () (rev (p 2)))
-   ; an image's bytes, redirects followed, or ()
-   (ww-fetch url hops)
+   ; an image's bytes, redirects followed, or (). a file: picture only on a file: page
+   (ww-fetch from url hops)
     (: p (ww-split url) sc <p
-       (? (sc = "file:") (: r (uread (p 2)) (? (two? r) <>r ()))
+       (? (sc = "file:") (? (<(ww-split from) = "file:") (: r (uread (p 2)) (? (two? r) <>r ())) ())
           !(sc = "http:" || sc = "https:") ()
           (: w (wg-url (ww-nofrag url))
              r (? (two? w) (wg-ask <w (w 1) (w 2) (w 3) "") ())
              (? (atom? r) ()
                 (: code <r loc (wg-header (r 1) "location")
                    (? ((300 <= code < 400) && string? loc && 0 < hops)
-                       (ww-fetch (ww-resolve url loc) (hops - 1))
+                       (: to (ww-resolve url loc) (? (ww-hop? url to) (ww-fetch url to (hops - 1)) ()))
                       (200 <= code < 300) (r 2)
                       ()))))))
    ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png, jpeg or gif (its first
@@ -414,7 +430,7 @@
                    _ (map (i \ (: u (ww-resolve base ((due i) 1))
                                   _ (pgmsg st ("fetching picture " + show (i + 1) + " of " + show n + " ..."))
                                   _ (puts (pgframe st)) _ (flush out)
-                                  (pin c u (ww-picture (ww-fetch u 4)))))
+                                  (pin c u (ww-picture (ww-fetch (g 1) u 4)))))
                           ^n)
                    _ (pgmsg st "")
                    (ww-load st p))))))

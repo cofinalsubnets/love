@@ -20,7 +20,7 @@ compares to busybox, toybox, GNU and uutils, name by name, is the census at the 
 ## the shape
 
 ONE roster — `$(korefiles)` in the Makefile: kore_head (kore's own toolboxes, apps/libra/lint.l,
-apps/vi/, apps/tui.l, apps/dns.l, apps/ain.l, the lush files, apps/cook.l), the holo linker
+apps/vi/, apps/tui.l, apps/dns.l, apps/nc.l, the lush files, apps/cook.l), the holo linker
 files, kore_arc (gz.l tar.l cpio.l) and kore_net (the tls stack, wget.l, www.l and net.l). The
 crew rides IN the default binary's own image, so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a four-line sh
@@ -33,7 +33,7 @@ will). The registry is a tablet, so tool names never collide with the globals th
 
 The file discipline, two shapes:
 
-* **a tool with a seat** (apps/ain.l, apps/cook.l): define-only, leaking
+* **a tool with a seat** (apps/nc.l, apps/cook.l): define-only, leaking
   one `<tool>-main`; a body-having tail fires it iff the file's own basename
   sits in the program seat — so the same file is a standalone tool AND a quiet
   cat member.
@@ -55,7 +55,7 @@ the door; cook and lush answer both flags themselves, each with more to say than
 
 ## the inventory (196 tools, 210 names)
 
-The `applets` tablet in kore.l; the aliases are nc/ain, make/cook, sh/lush, ls/dir/vdir,
+The `applets` tablet in kore.l; the aliases are make/cook, sh/lush, ls/dir/vdir,
 less/more, pic/pngcat/jpegcat/gifcat and picless/pngless/jpegless/gifless. love's own verbs
 carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md),
 `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
@@ -63,7 +63,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | where | tools |
 | --- | --- |
 | kore.l (thin mains) | readelf (binutils' -h -l -S -s -e, at 80 columns or -W, the dynamic symbols' versions with them), diff (diff-main; the patience/myers engines are diff.l), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both), nm, size (binutils' berkeley sums), strip (the symbol table and debugging out of an exe or shared object; `-g` the debugging alone, which is all an object may lose), ranlib (an archive rewritten with its index) |
-| apps/ain.l | nc / ain |
+| apps/nc.l | nc |
 | apps/cook.l | make / cook |
 | core.l, the line tools | cat tac shuf echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
@@ -622,14 +622,16 @@ keys over less's:
   preformatted blocks kept as written, and each `=>` line a link resolved against the page;
   other text shows as it is. A request for input (1x) is a field whose answer goes back as
   the query, a redirect (3x) is followed, and the rest of the statuses are said. The server's
-  certificate is pinned the first time it is seen, host:port and its SHA-256 a line in
-  `~/.love/gemini_hosts`, and held to after: gemini's own trust on first use. A changed one
+  key is pinned the first time it is seen, host:port and the SHA-256 of its
+  SubjectPublicKeyInfo a line in `~/.love/gemini_hosts`, and held to after: gemini's own trust
+  on first use. A changed one
   is refused with the line to delete to accept it. When a server asks for a client
   certificate, an empty one goes back.
 
 Absent: forms that POST, scripts, cookies, pictures other than PNG, JPEG and GIF, charsets other than
-utf-8, latin-1 and windows-1252, and gemini's client certificates. An https peer is not
-verified (wget's client). The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
+utf-8, latin-1 and windows-1252, and gemini's client certificates. An https server is
+verified as wget's is: its certificate to a root in the host's bundle, or its key to a pin in
+`~/.love/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.
 
 ## pic and picless (apps/kore/pic.l)
@@ -654,7 +656,7 @@ disposals across frames). A GIF keeps at most 1000 frames and 128 MB of them.
 
 ## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (apps/kore/net.l)
 
-`telnet HOST [PORT]` is nc (apps/ain.l) with the telnet protocol's options answered
+`telnet HOST [PORT]` is nc (apps/nc.l) with the telnet protocol's options answered
 (RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
 go-ahead itself, and refuses every other option either way. On a terminal it follows the
 server's echo. While the server echoes, the terminal is raw and each key is sent as typed
@@ -680,12 +682,11 @@ and without waiting on its carrier, then set raw 8N1 with no flow control at `-s
 its own. Bytes pass as they are both ways; ^X leaves unless `-X`, `-t` milliseconds of quiet
 leave too, and the line's settings go back as they were. `-d` is refused by name.
 
-`httpd [-fv] [-p PORT] [-h DIR]` is kiosko under busybox's name and flags: the port
+`httpd [-fv] [-p [IP:]PORT] [-h DIR]` is kiosko under busybox's name and flags: the port
 defaults to 80 and the directory to `.`, and `-v` logs each request. `-f` is accepted and
-always in force, because it never runs in the background. kiosko listens on every address,
-so `-p IP:PORT` with a specific address is refused rather than silently served more widely;
-`0.0.0.0:PORT` and `:PORT` are taken. Busybox's other flags (`-c -u -r -m -e -d -i`) are
-refused by name.
+always in force, because it never runs in the background. A bare `PORT` (or `:PORT`)
+listens on 127.0.0.1 only; `IP:PORT` names the address, and `0.0.0.0:PORT` or `*:PORT`
+serves every one. Busybox's other flags (`-c -u -r -m -e -d -i`) are refused by name.
 
 `nslookup [-type=T] [-port=N] HOST [SERVER]` asks a nameserver directly and prints what it
 says, laid out as busybox's nslookup lays it. The server is SERVER (a dotted quad or a name)
@@ -723,8 +724,13 @@ apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` i
 
 One of everything, OpenSSH's first choices: curve25519-sha256 for the exchange, ssh-ed25519
 keys, chacha20-poly1305@openssh.com both ways, public-key authentication. The client came first
-(`ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]`,
-known_hosts held as OpenSSH's accept-new holds it); the server is its other half.
+(`ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]`);
+the server is its other half. The host key is held to known_hosts as OpenSSH holds it, plain
+and hashed names alike: a match goes on, a changed or revoked key stops, and an unknown host,
+or one known only under another key type, is asked about on the terminal, where `yes` adds the
+key and anything else, or no terminal, stops. `-o StrictHostKeyChecking=` takes `ask` (the
+default), `accept-new` (an unknown host is added unasked, for scripts), `yes` (never ask:
+unknown hosts are refused) and `no` (no check at all); `-o UserKnownHostsFile=` names the file.
 
 `sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]` serves the user it runs
 as and only that user: there is no setuid here, so a login naming anyone else is refused. It
@@ -815,7 +821,7 @@ one other carries is listed after the table instead, since those are mostly one 
 file servers, util-linux's disk and login tools). `mc` is a name and not a tool shared:
 kore's is a file browser, plan9port's lays its input in columns, which kore's `column` does.
 Not counted in any column: one implementation's spelling of a general tool (kore's `lush`
-`cook` `ain`, busybox's `ash` `linuxrc`, GNU's `bash` `rbash` `gawk` `gcc` `gcc-ar` `gcc-nm`
+`cook`, busybox's `ash` `linuxrc`, GNU's `bash` `rbash` `gawk` `gcc` `gcc-ar` `gcc-nm`
 `gcc-ranlib` `g++` `ld.bfd` `ld.gold`) and a userland's name for itself (`coreutils`,
 plan9port's `9`).
 

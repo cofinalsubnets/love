@@ -100,6 +100,14 @@ enum ai_status { ai_status_ok = 0, ai_status_scare = 1, ai_status_more = 2, ai_s
 #define ai_ok(g) (ai_code_of(g) == ai_status_ok)
 static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
   (struct ai*) ((uintptr_t) g | s); }
+// the largest ask any heap could grant, in words: a size past it is refused, never
+// wrapped. Have adds it to Hp, and a kernel's heap sits in the top half of the address
+// space, so it stays under 2^40 words (2^26 on 32-bit) -- far from any wrap
+#define ai_words_max ((uintptr_t) -1 >> (sizeof(uintptr_t) > 4 ? 24 : 6))
+// a * b, saturating at half the word -- still past ai_words_max, so still a refusal
+static ai_inline uintptr_t ai_mulsat(uintptr_t a, uintptr_t b) {
+ uintptr_t const h = (uintptr_t) 1 << (4 * sizeof(uintptr_t)), top = (uintptr_t) -1 >> 1;
+ return (a < h && b < h) || !a || b <= top / a ? a * b : top; }
 
 // --- the vm calling convention ---
 #if ai_tco
@@ -163,8 +171,15 @@ union u {
 #define LvmWrap(n, f) lvm(n) LvmCall(g, f)
 // the GC tail is ai_musttail like every other, which is why lvm_gc takes its word count in
 // g->b and not a fifth parameter: musttail wants matching prototypes.
-#define Have(n) do { if (Sp < Hp + (n) + ai_avail_floor) { \
-   g->b = (n) + ai_avail_floor; ai_musttail return Ap(lvm_gc, g); } } while (0)
+// a variable ask is held to the room, the distance Sp - Hp in words, which no n can
+// wrap: a heap in the address space's top half sits within an ask of wrapping Hp + n.
+// a small constant ask keeps the one-instruction Hp + n form, which wraps only on a pool
+// within 32 KB of the top of the address space -- where no allocator lays one
+#define ai_room(Hp, Sp) (((uintptr_t) (Sp) - (uintptr_t) (Hp)) / sizeof(word))
+#define ai_have_gc(n) { g->b = (n) + ai_avail_floor; ai_musttail return Ap(lvm_gc, g); }
+#define Have(n) do { \
+  if (__builtin_constant_p(n) && (n) <= 4096) { if (Sp < Hp + (n) + ai_avail_floor) ai_have_gc(n) } \
+  else if (ai_room(Hp, Sp) < (uintptr_t) (n) + ai_avail_floor) ai_have_gc(n) } while (0)
 #define Have1() Have(1)
 #define ai_pop1(g) (*(g)->sp++)
 #define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; ai_musttail return Continue(); }
@@ -657,6 +672,9 @@ static ai_inline enum d ai_typ(union u *o) {
 #define zerop(_) (word(_)==zero)
 static ai_inline bool chainp(word _) { return evenp(_) && cell(_)->ap == lvm_chain; }
 static ai_inline bool strp(word _) { return evenp(_) && cell(_)->ap == lvm_str; }
+// a string the kernel reads whole: no NUL inside, or it would stop short of what love
+// checked. bytes[len] is always a NUL, so strlen reaches len exactly when none comes first
+static ai_inline bool cstrp(word _) { return strp(_) && strlen(txt(_)) == len(_); }
 static ai_inline bool mintp(word _) { return evenp(_) && cell(_)->ap == lvm_sym; }
 static ai_inline bool namep(word _) { return evenp(_) && cell(_)->ap == lvm_nom; }
 static ai_inline bool packp(word _) { return evenp(_) && cell(_)->ap == lvm_tray; }
@@ -886,12 +904,14 @@ static ai_inline void *tray_data(struct ai_tray *v) { return (void*) (v->shape +
 // total element count = product of the dimensions (1 for a rank-0 scalar box).
 static ai_inline uintptr_t tray_nelem(struct ai_tray *v) {
  uintptr_t n = 1;
- for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ for (uintptr_t i = 0; i < v->rank; i++) n = ai_mulsat(n, v->shape[i]);
  return n; }
 static ai_inline struct ai_tray *ini_tray(struct ai_tray *v, enum ai_tray_type t, uintptr_t rank) {
  return v->ap = lvm_tray, v->type = t, v->rank = rank, v; }
-// the footprint of a rank-R array of n elements of type t
+// the footprint of a rank-R array of n elements of type t; a count no heap holds
+// answers a size past ai_words_max, which the allocator refuses
 static ai_inline uintptr_t tray_bytes(enum ai_tray_type t, uintptr_t R, uintptr_t n) {
+ if (n >= ai_words_max) return (ai_words_max + 1) * sizeof(word);
  return sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[t]; }
 // read element i of v as a double / as an integer (sign-extending the narrow integer types,
 // truncating a float toward zero for the int reader)

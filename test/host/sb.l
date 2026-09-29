@@ -352,6 +352,38 @@
  (show lkept = show lrel)                                ; each side kept its own -- no silent loss
  (show dkept = show drel))
 
+; --- a hostile peer: its patch hashes honestly but names a path out of the tree and
+;     a blob id that is a path. the patch is refused whole -- not copied, not laid,
+;     and refused again when planted in the store by hand ---
+(: _ (mkdir "mrg/h" 493) _ (mkdir "mrg/h/a" 493) _ (lay "mrg/h/secret" "the key\n")
+   _ (chdir "mrg/h/a") _ (mk ())
+   bh (keep "pwned\n")
+   ptext ("(patch (note \"evil\") (time 0) (deps) (hunks (\"stolen\" () \"../../../secret\")"
+          + " (\"../escaped\" () \"" + bh + "\")))")
+   pid (sha256 ptext)
+   _ (lay (".sb/patch/" + pid) ptext)
+   _ (lay ".sb/tips" ("(\"" + pid + "\")"))
+   _ (mkdir "../b" 493) _ (chdir "../b") _ (mk ())
+   _ (sb-sync "../a")
+   hcopied (look (".sb/patch/" + pid))
+   hstolen (look "stolen")
+   hesc (look "../escaped")
+   _ (lay (".sb/patch/" + pid) ptext)                   ; planted by hand
+   hform (patch pid)
+   _ (sb-apply ())
+   hstolen2 (look "stolen")
+   hesc2 (look "../escaped")
+   _ (chdir "../../.."))
+
+(test
+ !(two? hcopied)                                         ; the peer's patch was not taken
+ !(two? hstolen) !(two? hesc)                            ; ...and nothing was read or written by it
+ !hform                                                  ; planted, it reads as no patch
+ !(two? hstolen2) !(two? hesc2)                          ; ...and apply lays none of it
+ (sb-hex? pid) !(sb-hex? "../../x") !(sb-hex? (snip pid 0 63)) !(sb-hex? ("A" + snip pid 1 64))
+ (sb-rel? "a/b.txt") !(sb-rel? "/etc/passwd") !(sb-rel? "a/../b")
+ !(sb-rel? "a//b") !(sb-rel? "./a") !(sb-rel? "") !(sb-rel? 'a))
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)

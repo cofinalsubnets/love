@@ -177,10 +177,9 @@ and 145-attrpos.c hold both to gcc):
   the leading position was always skipped, and the kernel writes `__maybe_unused`/`__packed` in
   all four. The skip takes `__attribute__` alone: `int x __asm__("y")` still refuses, because
   dropping an asm name renames an object in silence (`register long v asm("rdx")` is the other
-  thing an asm name means, and that one is READ: the pin inline asm's operands honor). what is skipped is DROPPED, so an
-  `aligned` or `packed` ask on one MEMBER lays the member where its type says — the same
-  silence the leading spelling has always kept (the alignment row below), and an ABI question
-  rather than a missed optimization. A `packed` on the struct BODY is read, and stays read.
+  thing an asm name means, and that one is READ: the pin inline asm's operands honor). an
+  `aligned` ask in the run is read (the alignment row below); a `packed` on one MEMBER is
+  still dropped. A `packed` on the struct BODY is read, and stays read.
 - `__label__ a, b;` at a block head gives each name its block's own label (above); gcc's short
   `__attribute` reads as `__attribute__`.
 
@@ -199,11 +198,10 @@ its expression operand. Association matching is structural over the type, and as
 
 Four of them carry an edge worth knowing:
 
-- **`_Alignas`** is honored at **file scope only**, on the one door gcc's
-  `__attribute__((aligned(N)))` already used (`alignat?` → `ps 'aligns` → `cgdata`); both the
-  constant and the type-name operand (`_Alignas(double)`) work, and the `.o`'s section header
-  asks the linker for the same boundary. on a **local or a struct member it is still
-  skipped in silence** — the row below.
+- **`_Alignas`** is honored everywhere gcc's `__attribute__((aligned(N)))` is — a global, a
+  local, a block `static`, a struct member — both spellings through one reader (`palask`: a
+  constant expression folds, so `aligned(2 * sizeof(long))` counts); the `.o`'s section header
+  asks the linker for a global's boundary. The row below.
 
 - **variable-length arrays** ride x64, a64 and rv64; the thumb family says `no lane
   for a variable-length array on <tgt>`. a VLA with an *initializer* refuses everywhere
@@ -502,26 +500,26 @@ rather than in a commit.
   side), and **`offsetof` still folds signed** where every other `sizeof` wears the unsigned
   coat.
 
-### an alignment ask on a LOCAL or a MEMBER is dropped in silence
+### an alignment ask, wherever it is written
 
-`_Alignas(64) char buf[8];` inside a function, and `__attribute__((aligned(N)))` on a local or
-a struct member, compile clean and align nothing — `alignat?` runs from `ptop` only, so it
-never sees a block-scope or member declaration, and `pquals` balance-skips the tokens on the
-way past. The classic use is the one that breaks: a 16-byte-aligned buffer for an SSE load.
+**Landed 2026-09-28** (test/cc/211-structalign.c, held to gcc). Before it, an ask was honored on a
+global and dropped everywhere else — after a struct body too, so the kernel's `struct page`
+(56 bytes of members, `__aligned__(2 * sizeof(unsigned long))`) laid 56 against gcc's 64, and a
+16-aligned struct or `__int128` global sat on the data stream's word.
 
-Costing the fix: the frame side is small — `nslot` is the one cell allocator and the offsets
-are its own arithmetic, so an aligned variant is a `aup` on the running high-water, and x64/
-AAPCS64 hand every frame a 16-aligned base, which covers every ask up to 16. What is not small
-is **threading the ask from parse to that allocator**: the align would ride the `('decl ..)`
-entry, and every positional consumer of a decl entry in `gen.l` moves with it. Past 16 the frame must be realigned at run time, and
-that should refuse rather than land wrong.
-
-Until it lands the tree cannot use either spelling on a local, and neither can a header it
-compiles — and since 2026-08-18 that covers the TRAILING spellings on a local, a parameter and a
-member too, which skip alongside the leading one rather than refusing. A struct **member** is a
-second rung: `playout` computes a member's alignment from its type alone, and an over-aligned
-member also moves the tag's own alignment (`asalign`'s 16+-guard, gen.l, is written for exactly
-that day).
+- **a struct's own ask**, before the tag or after the body, raises its alignment and rounds its
+  size up (`pattpk` reads it beside `packed`, `alask` applies it).
+- **a member's ask** — trailing its declarator, or `_Alignas`/`aligned` among its specifiers
+  (`specask`, walked as `qrun` walks the run) — rides the member record as `(name ty () N)`;
+  `playout` lays it at the larger of that and its type's, and outranks `packed` as gcc does.
+- **a global or static** pads to its type's alignment past the stream's word, as it does to
+  its own ask.
+- **a local** takes a slot aligned to its type or its own ask (the record's fifth slot) up
+  to the frame base's 16 (8 under AAPCS32). Past that no fixed offset can: `oalign` (gen.l,
+  after the inliner) rewrites it as a char block of its size plus the ask and a pointer rounded
+  up into it, every later use `(*p)` until a declaration shadows the name, an initializer built
+  as a compound literal and assigned in — an array's as a one-member struct of its bytes.
+- **a by-value struct aligned past 8** as an argument still refuses by name (`asalign`'s guard).
 
 ### what the %f hunt actually found — and the trap in it
 
@@ -826,11 +824,11 @@ rv64; test/cc/173-asmgoto.c holds it to gcc and test/law/moon.l holds the node a
 
 **measured 2026-09-27** against 6.19.14, x86_64 defconfig: each translation unit gcc `-E`
 with its own kbuild flags, then `mooncc -U true -U false -U bool -c` on the `.i`. 160 C units,
-every ninth by path: **155 compile**, and the rest stop at
+every ninth by path: **156 compile**, and the rest stop at
 
 | units | first stop |
 |---|---|
-| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `_Static_assert(sizeof(struct slab) <= sizeof(struct page))`, `&&label` (an `-m32` unit, vdso32's), an asm goto with outputs (refused, above), and realmode's `-m16` wakemain, whose `lcallw $0xc000,$3` long mode has no encoding for: refused by name, as gcc's own x64 as refuses it |
+| 1 each | a case range past parse's 1024 (`0x70000000 ... 0x7fffffff`; its refusal reads as `near :`), a `&&label` (an `-m32` unit, vdso32's), an asm goto with outputs (refused, above), and realmode's `-m16` wakemain, whose `lcallw $0xc000,$3` long mode has no encoding for: refused by name, as gcc's own x64 as refuses it |
 
 each row that lands moves the next up: `typeof(const T)` stopped 80 units, `x ?: y` 134, a
 runtime `__builtin_offsetof` 122, `__attribute__((cleanup))` 143, file-scope asm 76 and
@@ -852,6 +850,28 @@ alternatives, the exception table) is written in the same directives inside a fu
 with a directive reads through gas-top too (180-asmsections.c), so what stops the kernel now
 is operands and instructions: the rows above, then a
 linker-script reader, and a 32/16-bit x86 backend for arch/x86/boot and the 32-bit vDSO.
+
+---
+
+## assembly sources
+
+**Landed 2026-09-28.** `mooncc x.s` and `mooncc x.S` lay an object, and link beside C. A `.s` is
+its text as one file-scope asm (`asmwrap`, moon.l); a `.S` is lexed on assembly's terms first
+(`clexasm`: `1b`/`2f` one word, `$ @ \` punctuators, `#` past a line's first token or opening a
+non-directive line is gas's comment, and each line opens with a mark cpp carries through), run
+through the C preprocessor as a C file is -- includes, macros, `#if`, `__ASSEMBLER__` defined --
+and spelled back into lines (`asmspell`). gas-top then reads it, and a file-scope run on x64 is
+encoded by **as.l, exactly**: the width the text says (a 32-bit op sets 32-bit flags), any
+addressing, `%fs:`/`%gs:`, a symbol as an immediate or a displacement, SSE by table, cmov/set,
+shifts, extends. What as.l has no row for lowers as a function's template does. gas-top reads
+`.local`/`.comm`/`.lcomm`, `.weak`, `.base64`, and a symbol `.set` as an alias; a data section
+pads its alignment with zeros.
+
+**Measured**: gcc `-S -O2` of every test/cc file, assembled by GNU as and by mooncc, both linked
+by mooncc -- **208 of 208** run alike. The linux sample's seven `.S` units each get further and
+stop at gas's tail: `.uleb128`, `.octa`, `.code32`/`.code64`, `lretq`, `\@` in a macro's label,
+a register named through `.set`. Three of them are not 64-bit code (the 32-bit vDSO, realmode,
+la57toggle's mode switch).
 
 ---
 

@@ -3,7 +3,7 @@
 ; argv[0] through a tool-named symlink, which is how the distro will shadow at will.
 ;
 ;   kore diff old new    unified diff (patience hunks); exit 0 same / 1 differ / 2 trouble
-;   kore nc host port    the netcat (apps/ain.l); nc -l port listens
+;   kore nc host port    the netcat (apps/nc.l); nc -l port listens
 ;   kore make [F] [T..]  the build tool (apps/cook.l)
 ;   kore as tgt in out   assemble IR forms from in (x64|a64) into an ELF at out
 ;   kore objcopy -O binary|ihex in out   a linked ELF flattened (love/holo/copy.l)
@@ -67,7 +67,7 @@
 ; leaves deep through `udie`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
-        ww-art ww-splice ww-marks ww-pictures
+        ww-art ww-splice ww-marks ww-pictures ww-hop? wg-plain
         pic-main picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep lens-pics
         pv-new pv-step pv-frame pv-tick pv-keys pv-view
         telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
@@ -701,7 +701,7 @@
    ; the registry: name -> main (aliases share)
    applets {'diff diff-main
             'nm nm-main
-            'nc (cite 'ain 'ain-main) 'ain (cite 'ain 'ain-main)   ; ain's wrap registered ahead in the cat
+            'nc (cite 'nc 'nc-main)   ; nc's wrap registered ahead in the cat
             'ssh (cite 'ssh-cli 'ssh-main) 'sshd (cite 'ssh-cli 'sshd-main)   ; apps/ssh, ahead in the cat
             'scp (cite 'ssh-cli 'scp-main)
             'make (cite 'cook 'cook-main) 'cook (cite 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
@@ -817,11 +817,10 @@
    korehelp
    {'diff "usage: diff OLD NEW   (0 same / 1 differ / 2 trouble)"
     'nm "usage: nm [-g] [-u] [-p] FILE.."
-    'nc "usage: nc HOST PORT  |  nc -l PORT"
+    'nc "usage: nc [-CdkNnUuvz] [-i SECS] [-o FILE] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT | -U [-l] PATH}"
     'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
     'sshd "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
     'scp "usage: scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target"
-    'ain "usage: ain HOST PORT  |  ain -l PORT"
     'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
@@ -931,7 +930,7 @@
     'find "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
     'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
     'more "usage: more [-Nise] [+N|+/PAT] [FILE..]"
-    'wget "usage: wget [-q] [-O FILE] URL"
+    'wget "usage: wget [-q] [--no-check-certificate] [-O FILE] URL"
     'bc "usage: bc [-l] [-q] [FILE..]
   -l  the math library (e l a s c j), and scale = 20
   -q  accepted: nothing is printed at start with or without it"
@@ -1050,7 +1049,7 @@
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
 every tool answers --help and --version, and -h where the letter is free
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
-  nc HOST PORT       netcat; nc -l PORT listens
+  nc HOST PORT       netcat; nc -l PORT listens, nc -z scans
   ssh [user@]HOST    the ssh client; sshd [-p PORT] serves this user (apps/ssh)
   scp SRC.. DEST     copies over ssh, [user@]host:path on one side (rcp's protocol)
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)

@@ -1,6 +1,7 @@
 #include "quay.h"
 #include "cp437.h"
 #include "cpwidth.h"
+#include "cpemoji.h"
 
 // *e <- a cell of codepoint cp in the current pen. the blank a clear or scroll
 // leaves behind is cp 0 in the current pen,
@@ -59,7 +60,7 @@ void cb_stamp(struct cb *c, uint8_t i) {
 
 void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   c->wpos = c->spos = 0;
-  c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16;
+  c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16, c->pgen = 0;
   cb_store(c, sn);
   cb_hist(c, 0), c->twin = 0;
   c->flag = cb_show | cb_wrap;
@@ -334,28 +335,82 @@ static uint32_t cb_slot(struct cb *c, uint32_t const *v, uint32_t skip) {
   if (k < cb_nclu) for (j = 0; j < cb_clun; j++) c->clu[k][j] = v[j];
   return k; }
 
-// a mark joins the cell before the cursor -- the one a pending wrap sits on, a wide
-// char's lead for its tail -- keeping its pen. none there, a picture, or a full
-// cluster: the mark is dropped
-static void cb_mark(struct cb *c, uint32_t m) {
+// is cp in a table of runs (cpemoji.h), each entry opening or closing one in turn: an odd
+// count of entries at or below it
+static int cb_in(uint32_t const *t, uintptr_t n, uint32_t cp) {
+  uintptr_t lo = 0, hi = n;
+  while (lo < hi) {
+    uintptr_t const m = (lo + hi) / 2;
+    if (t[m] <= cp) lo = m + 1; else hi = m; }
+  return lo & 1; }
+static int cb_vs16(uint32_t cp) { return cb_in(cpvs, sizeof cpvs / sizeof *cpvs, cp); }
+static int cb_xp(uint32_t cp) { return cb_in(cpxp, sizeof cpxp / sizeof *cpxp, cp); }
+static int cb_regional(uint32_t cp) { return cp >= 0x1f1e6u && cp <= 0x1f1ffu; }
+
+// under ?2027, VS16 after a narrow character with an emoji style, or any join (any),
+// makes its cell a wide char's lead and the next its tail. on the last column, the pair
+// wraps to the next line as a wide char would there; with autowrap off it stays narrow
+static void cb_emoji(struct cb *c, uint32_t p, int any) {
+  uint32_t const cs = c->cols;
+  struct cb_cell e = c->cb[p];
+  if (cs < 2 || e.g & cb_pic || cb_wide(e.g) || !(any || cb_vs16(cb_base(c, e.g)))) return;
+  e.fg &= ~cb_soft;
+  if (p % cs == cs - 1u) {
+    if (!(c->flag & cb_pend)) return;
+    c->cb[p].g &= 0xff000000u, c->cb[p].fg |= cb_soft, cb_dirt(c, p / cs, p / cs);
+    c->flag &= (uint16_t) ~cb_pend, c->wpos -= c->wpos % cs, cb_ind(c);
+    p = c->wpos;
+    cb_unpair(c, p); }
+  cb_unpair(c, p + 1u);
+  c->cb[p] = e, c->cb[p].g |= (uint32_t) cb_lead << 21;
+  c->cb[p + 1u] = e, c->cb[p + 1u].g = (e.g & 0xff000000u) | (uint32_t) cb_tail << 21;
+  cb_dirt(c, p / cs, p / cs);
+  c->flag &= (uint16_t) ~cb_pend;
+  if ((p + 1u) % cs == cs - 1u) { c->wpos = p + 1u; if (c->flag & cb_wrap) c->flag |= cb_pend; }
+  else c->wpos = p + 2u; }
+
+// the cell before the cursor -- the one a pending wrap sits on, a wide char's lead for
+// its tail -- or ~0u for none
+static uint32_t cb_prev(struct cb const *c) {
   uint32_t const cs = c->cols;
   uint32_t p = c->wpos;
-  if (!(c->flag & cb_pend)) { if (!(p % cs)) return; p--; }
+  if (!(c->flag & cb_pend)) { if (!(p % cs)) return ~0u; p--; }
   if (cb_wide(c->cb[p].g) == cb_tail && p % cs) p--;
+  return p; }
+
+// under ?2027, does cp join the cluster before the cursor rather than take cells: an emoji
+// modifier after a pictograph, a pictograph after a ZWJ that ends one, a regional indicator
+// after a lone one -- while the cluster has room ('text's gcnext keeps the same rules)
+static int cb_joins(struct cb const *c, uint32_t cp) {
+  uint32_t const p = cb_prev(c);
+  if (!(c->flag & cb_gc) || p == ~0u) return 0;
+  uint32_t const g = c->cb[p].g, *v = cb_clu(c, g), b = cb_base(c, g);
+  uint32_t n = 1;
+  if (v) for (n = 0; n < cb_clun && v[n]; n++) ;
+  if (g & cb_pic || !cb_cp(g) || n == cb_clun) return 0;
+  if (cp >= 0x1f3fbu && cp <= 0x1f3ffu) return cb_xp(b);
+  if (cb_regional(cp)) return n == 1 && cb_regional(b);
+  return cb_xp(cp) && cb_xp(b) && v && v[n - 1] == 0x200du; }
+
+// a mark joins the cell before the cursor, keeping its pen, as does a character ?2027
+// joins there (cb_joins), which widens it. none there, a picture, or a full cluster: the
+// mark is dropped (though a VS16 still widens, cb_emoji)
+static void cb_mark(struct cb *c, uint32_t m) {
+  uint32_t const cs = c->cols, p = cb_prev(c);
+  if (p == ~0u) return;
   uint32_t const g = c->cb[p].g, *o = cb_clu(c, g);
   if (g & cb_pic || !cb_cp(g) || cb_wide(g) == cb_tail) return;
   uint32_t v[cb_clun] = { cb_cp(g) }, n = 1;
   if (o) for (n = 0; n < cb_clun && o[n]; n++) v[n] = o[n];
-  if (n == cb_clun) return;
-  v[n] = m;
-  uint32_t const k = cb_slot(c, v, p);
-  if (k == cb_nclu) return;
-  c->cb[p].g = (g & 0xffe00000u) | (cb_clu0 + k);
-  cb_dirt(c, p / cs, p / cs); }
+  if (n < cb_clun) {
+    v[n] = m;
+    uint32_t const k = cb_slot(c, v, p);
+    if (k < cb_nclu) c->cb[p].g = (g & 0xffe00000u) | (cb_clu0 + k), cb_dirt(c, p / cs, p / cs); }
+  if (c->flag & cb_gc && (m == 0xfe0fu || cb_width(m))) cb_emoji(c, p, m != 0xfe0fu); }
 
 static void cb_glyph(struct cb *c, uint32_t cp) {
   uint32_t cs = c->cols, w = cb_width(cp);
-  if (!w) return cb_mark(c, cp);
+  if (!w || cb_joins(c, cp)) return cb_mark(c, cp);
   if (w == 2 && cs < 2) w = 1;
   if (c->flag & cb_pend) {                          // the row wraps: its last cell says so
     c->flag &= (uint16_t) ~cb_pend, c->wpos -= c->wpos % cs;
@@ -396,6 +451,7 @@ uint32_t const *cb_ipx(struct cb const *c) { return (uint32_t const*) (cb_sbase(
 static uint32_t *cb_spx(struct cb *c) { return (uint32_t*) (cb_sbase(c) + cb_shead); }
 // the arena's words, 0 for a screen with no store
 static uint32_t cb_words(struct cb const *c) { return c->sn > cb_shead ? (c->sn - cb_shead) / 4u : 0; }
+static uint32_t cb_gen(struct cb *c) { return ++c->pgen ? c->pgen : ++c->pgen; }   // never 0
 
 // an empty store of sn bytes: no pictures, the registers black, nothing decoding
 void cb_store(struct cb *c, uint32_t sn) {
@@ -680,7 +736,7 @@ static void cb_six_close(struct cb *c) {
   uint32_t *px = cb_spx(c);
   for (uint32_t y = 1; y < h; y++)
     for (uint32_t x = 0; x < w; x++) px[im->off + y * w + x] = px[im->off + y * stride + x];
-  im->w = w, im->h = h, im->live = 1;
+  im->w = w, im->h = h, im->live = 1, im->gen = cb_gen(c);
   c->stop = im->off + w * h;
   cb_place(c, k, 0); }
 
@@ -744,7 +800,7 @@ static uint32_t cb_kit_scale(struct cb *c, uint32_t k) {
   for (uint32_t y = 0; y < H; y++)
     for (uint32_t x = 0; x < W; x++)
       px[off + y * W + x] = px[im->off + (uint64_t) y * im->h / H * im->w + (uint64_t) x * im->w / W];
-  cb_imgs(c)[k2] = (struct cb_img) { off, W, H, 1, 0 };
+  cb_imgs(c)[k2] = (struct cb_img) { off, W, H, 1, 0, cb_gen(c) };
   c->stop = off + W * H;
   return k2; }
 
@@ -834,7 +890,7 @@ static void cb_kit_end(struct cb *c) {
   else if (c->kpix < im->w * im->h) return cb_kit_reply(c, 0, "EINVAL:short");
   if (c->ka == 'q') return cb_kit_reply(c, 1, 0);          // asked, not kept
   if (c->ki) for (uint32_t j = 1; j < cb_nimg; j++) if (j != k && cb_imgs(c)[j].id == c->ki) cb_imgs(c)[j].id = 0;
-  im->live = 1, c->stop = im->off + im->w * im->h;
+  im->live = 1, im->gen = cb_gen(c), c->stop = im->off + im->w * im->h;
   if (c->ka == 'T') cb_kit_show(c, k);
   cb_kit_reply(c, 1, 0); }
 
@@ -885,6 +941,23 @@ static void cb_sgr(struct cb *c) {
       if (p == 38) c->cur_fg = v; else c->cur_bg = v;
       k += 4; } } }
 
+// DECRQM (CSI ? Ps $ p, CSI Ps $ p): a mode's state as CSI ? Ps ; s $ y -- 1 set, 2 reset,
+// 0 one quay does not know
+static void cb_rqm(struct cb *c, int priv) {
+  uint16_t const p = c->pv[0], f = c->flag;
+  int s = 0;
+  if (!priv) s = p == 20 ? (f & cb_lnm ? 1 : 2) : 0;
+  else if (p == 7) s = f & cb_wrap ? 1 : 2;
+  else if (p == 25) s = f & cb_show ? 1 : 2;
+  else if (p == 6) s = f & cb_origin ? 1 : 2;
+  else if (p == 9 || p == 1000 || p == 1002 || p == 1003)
+    s = (f & cb_mice) == (p == 9 ? cb_mx10 : p == 1000 ? cb_mbtn : p == 1002 ? cb_mdrag : cb_many) ? 1 : 2;
+  else if (p == 1006) s = f & cb_msgr ? 1 : 2;
+  else if (p == 2004) s = f & cb_paste ? 1 : 2;
+  else if (p == 2027) s = f & cb_gc ? 1 : 2;
+  else if (p == 47 || p == 1047 || p == 1049) s = f & cb_alt ? 1 : 2;
+  cb_say(c, priv ? "\033[?" : "\033["), cb_sayn(c, p), cb_say(c, ";"), cb_sayn(c, (uint32_t) s), cb_say(c, "$y"); }
+
 // DEC private / ANSI modes (CSI ? .. h/l and CSI .. h/l). the alternate screen
 // (47/1047/1049): the main grid waits in the twin and a cleared grid takes its place,
 // then comes back whole on the way out. a screen laid with no twin clears instead.
@@ -900,6 +973,7 @@ static void cb_mode(struct cb *c, int priv, int on) {
       c->flag = (uint16_t) ((c->flag & ~cb_mice) | (on ? m : 0)); }
     else if (p == 1006) c->flag = on ? c->flag | cb_msgr : c->flag & (uint16_t) ~cb_msgr;
     else if (p == 2004) c->flag = on ? c->flag | cb_paste : c->flag & (uint16_t) ~cb_paste;
+    else if (p == 2027) c->flag = on ? c->flag | cb_gc : c->flag & (uint16_t) ~cb_gc;
     else if (p == 6) {
       c->flag = on ? c->flag | cb_origin : c->flag & (uint16_t) ~cb_origin;
       cb_goto(c, 0, 0); }
@@ -1019,7 +1093,7 @@ static void cb_put1(struct cb *c, uint8_t i) {
    case 1:                                  // after ESC
     c->esc = 0;
     switch (i) {
-     case '[': c->esc = 2, c->arg = 0, c->pn = 0;
+     case '[': c->esc = 2, c->arg = 0, c->pn = 0, c->ci = 0;
       c->flag &= (uint16_t) ~(cb_priv | cb_junk | cb_gt); return;
      case ']': c->esc = 7, c->ol = 0; return;       // OSC: capture the head (colour asks answer)
      case 'P': c->esc = 9, c->pn = 0, c->arg = 0; return;  // DCS: its parameters, then its final
@@ -1048,10 +1122,14 @@ static void cb_put1(struct cb *c, uint8_t i) {
       return; }
     if (i == '>') { c->flag |= cb_gt; return; }     // the secondary-DA marker
     if (i == '?' || i == '=' || i == '<') { c->flag |= cb_priv; return; }
-    if (i <= '/') { c->flag |= cb_junk; return; }  // intermediates we don't speak
+    if (i <= '/') { c->flag |= cb_junk, c->ci = i; return; }  // an intermediate: kept for DECRQM
     if (c->pn < 8) c->pv[c->pn++] = c->arg;        // the final parameter
     c->esc = 0;
-    if (c->flag & cb_junk) { c->flag &= (uint16_t) ~(cb_junk | cb_priv | cb_gt); return; }
+    if (c->flag & cb_junk) {
+      int const priv = !!(c->flag & cb_priv);
+      c->flag &= (uint16_t) ~(cb_junk | cb_priv | cb_gt);
+      if (c->ci == '$' && i == 'p') cb_rqm(c, priv);
+      return; }
     return cb_csi(c, i);
    case 3:                                  // a DCS/PM/APC body on its way to ST
     if (i == 7) c->esc = 0;
@@ -1144,7 +1222,7 @@ int cb_face_ok(uint8_t const *b, uintptr_t n) {
   if (b[0] != 'q' || b[1] != 'f' || b[2] != '1' || b[3] || b[4] != 8 || b[5] != 16) return 0;
   uint32_t const np = cb_rd16(b, 6), ng = cb_rd16(b, 8) | cb_rd16(b, 10) << 16;
   uintptr_t const pg0 = cb_qf_head + 2u * cb_qf_dir, gl0 = pg0 + (uintptr_t) np * 512u;
-  if (np > cb_qf_dir || n != gl0 + (uintptr_t) ng * 32u) return 0;
+  if (np > cb_qf_dir || (uint64_t) n != gl0 + (uint64_t) ng * 32u) return 0;
   for (uint32_t d = 0; d < cb_qf_dir; d++) {
     uint32_t const p = cb_rd16(b, cb_qf_head + 2u * d);
     if (p != 0xffff && p >= np) return 0; }

@@ -27,6 +27,15 @@
            ["g#s/./x" "http://a/b/c/g#s/./x"] ["g#s/../x" "http://a/b/c/g#s/../x"] ["http:g" "http:g"]])
    ; a scheme is case-blind and comes back lower; a host with no path takes the root
    _ (test (res "HTTPS://h" "x" = "https://h/x") (res "http://h/a/b" "HTTP://k/../z" = "http://k/z"))
+   ; where a server may send us: up to https, http to http, gemini to gemini, never elsewhere
+   _ (: hop (K 'ww-hop?)
+        (test (hop "http://a/" "https://b/") (hop "http://a/" "http://b/") (hop "https://a/" "https://b/")
+              (hop "gemini://a/" "gemini://b/")
+              !(hop "https://a/" "http://b/") !(hop "http://a/" "file:///etc/passwd")
+              !(hop "https://a/" "gopher://b/") !(hop "gemini://a/" "https://b/")
+              !(hop "http://a/" "gemini://b/") !(hop "http://a/" "ftp://b/")))
+   ; ..and what a peer said is echoed without its controls
+   _ (test ((K 'wg-plain) ("a" + string 27 + "]0;x" + string 7 + "b\tc\n" + string 127 + string 0) = "a]0;xb\tc\n"))
    ; what a person types
    _ (test ((K 'ww-arg) "example.com/a" = "https://example.com/a")
            ((K 'ww-arg) "http://x" = "http://x"))
@@ -55,6 +64,18 @@
                                 (g k)))
                     0)) 0)
    at ("http://127.0.0.1:" + show port)
+   ; a server that sends every request to file: -- www does not follow it
+   p3 7446
+   l3 (listen p3)
+   (w3head c acc) (? (ends? acc "\r\n\r\n") acc (: ch (see c) (? (ch < 0) acc (w3head c (acc + string ch)))))
+   srv3 (twirl (\ _ ((: (g k) (: _ (await l3)
+                                 c (accept l3)
+                                 _ (hot? c ? ((: _ (w3head c "") (say c "HTTP/1.1 302 Found\r\nLocation: file:///etc/passwd\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
+                                              , flush c, close c) ())
+                                 (g k)))
+                     0)) 0)
+   gf (get ("http://127.0.0.1:" + show p3 + "/") 8)
+   _ (test (<gf = 1) (0 <= (K 'wg-find) <>gf "file:///etc/passwd, which is not followed" 0))
    ga (get (at + "/a.html") 8)
    ; the redirect is followed, and the page answers where it ended: its links resolve there
    gs (get (at + "/sub") 8)
@@ -217,14 +238,53 @@
         l8 (s8 'links 0)
         _ ((K 'ww-pictures) s8)
         pic ((s8 'imgs) ("file://" + sroot + "/dot.jpg"))
+        ; ..and a file: picture on an http page is not read
+        _ (wput "/r.html" ("<p>see <img src=\"file://" + sroot + "/dot.png\" alt=\"dot\"></p>"))
+        s9 (wnew 60 20)
+        _ (wland s9 (get (at + "/r.html") 8))
+        _ ((K 'ww-pictures) s9)
+        rp ((s9 'imgs) ("file://" + sroot + "/dot.png"))
         (test (two? pic) (pic 0 = 8) (pic 1 = 6) (#(pic 2) = 8 * 6 * 4)
-              (s8 'links 0 = l8 + 3) (#(filter cells? (s8 'ls)) = 3)))
+              (s8 'links 0 = l8 + 3) (#(filter cells? (s8 'ls)) = 3)
+              (rp = 'none)))
    ; less's keys still reach less
    _ (wkeys st "G")
    _ (test (0 <= st 'top))
    _ (wkeys st "q")
    _ (test (st 'quit))
    _ (hark ["rm" "-rf" root])
+   0)
+
+;; https, where openssl is here: a page off openssl's s_server, its leaf under a root laid
+; here -- taken with that root named by SSL_CERT_FILE, refused under the host's own bundle
+; with the reason said
+(: G (cite 'kore 'ww-get)
+   os? (two? (stat "/usr/bin/openssl"))
+   odir ((cwd 0) + "/out/.wwwt-" + show (getpid 0))
+   (osh c) (hark ["sh" "-c" ("exec 2>/dev/null; cd " + odir + " && " + c)])
+   (srv port) (: p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
+                            "-key" (odir + "/leaf.key") "-cert" (odir + "/leaf.pem")])
+                 _ (rest 500) p)
+   (reap p) (: _ (still <p 15) (: g (gather <p) (? (two? g || nom? g) g (rest 2, reap p))))
+   cf0 (getenv "SSL_CERT_FILE") home0 (getenv "HOME")
+   _ (? os? (: _ (hark ["mkdir" "-p" (odir + "/.love")])
+               _ (osh ("openssl req -x509 -newkey rsa:2048 -nodes -keyout root.key -out root.pem -days 2 -subj /CN=t-root"
+                       + " -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign"))
+               (osh ("printf 'basicConstraints=critical,CA:FALSE\\nsubjectAltName=IP:127.0.0.1\\n' > l.cnf"
+                     + " && openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout leaf.key -subj /CN=t-leaf -out leaf.csr"
+                     + " && openssl x509 -req -in leaf.csr -CA root.pem -CAkey root.key -days 2 -extfile l.cnf -out leaf.pem")))
+          0)
+   (page port) (: p (srv port) g (G ("https://127.0.0.1:" + show port + "/") 1) _ (reap p) g)
+   (has s x) (string? s && 0 <= (cite 'kore 'wg-find) s x 0)
+   _ (? os?
+        (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
+           a (page 7441)
+           _ (setenv "SSL_CERT_FILE" "/nonexistent/bundle.pem")
+           b (page 7442)
+           _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
+           _ (hark ["rm" "-rf" odir])
+           (test (<a = 0) (has (a 3) "TLSv1.3") (<b = 1) (has (b 1) "no root certificates") (has (b 1) "tls_pins")))
+        0)
    0)
 
 (test_fin (), puts "www: ok", putc 10, 0)

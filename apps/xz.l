@@ -3,13 +3,19 @@
 ;   (xz-pack s dict check)  -> the .xz bytes of s: one block, one LZMA2 filter, the check
 ;                              one of 'none 'crc32 'crc64 'sha256
 ;   (xz-unpack s)           -> (1 bytes) | a word saying why not ('format 'corrupt 'end
-;                              'filter 'check): every stream in s, the padding between them
+;                              'filter 'check 'big): every stream in s, the padding between them
 ;                              skipped, each block's check and each index held to its blocks
-; the codec is C (lzma2e lzma2d lzma2len lzmad crc64); the container is here, where
+;   (xz-pull rd)            -> g, a reader over the streams as they come: (xz-next g) the next
+;                              piece, "" once done, and g's 'ans then (1 n) | the word
+;   (xz-unf rd mk)          -> (1 n) | the word | 'no: .xz or .lzma off rd, out through the
+;                              writer mk answers (1 w), or () for 'no
+; the codec is C (lzma2e lzma2d lzma2len lzmad crc64, and lzma2-new lzma2-chunk crc64-on
+; for a stream a chunk at a time); the container is here, where
 ; its fields are plain to read. the xz spec is tukaani's .xz file format 1.2.
 (module 'xz
 (borrow 'posix)
 (borrow 'bytes)
+(borrow 'tar)
 
 (:
    (xz-bytes l) (foldl (\ a b (a + string b)) "" l)
@@ -50,30 +56,33 @@
        (head + block + ix + wrle (crc32 ft0) 4 + ft0 + "YZ"))
 
    ;; --- reading ---
+   (xz-bhead hd)                       ; a block header, its crc held -> (csize usize props) | a word
+    (: fl (hd 1)
+       nf ((fl & 3) + 1)
+       r1 (0 < fl & 64 ? (xz-rvli hd 2) [() 2])
+       r2 (r1 && 0 < fl & 128 ? (xz-rvli hd <>r1) (r1 && [() <>r1]))
+       (? (!r2 || 0 < fl & 60) 'corrupt
+          (nf != 1) 'filter
+          (: fi (xz-rvli hd <>r2)
+             pz (fi && xz-rvli hd <>fi)
+             (!pz || <fi != 33 || <pz != 1 || 40 < hd <>pz ? 'filter [<r1 <r2 (hd <>pz)]))))
    (xz-block s i cid)                  ; a block at i -> (bytes next unpadded) | a word
     (: hs ((s i + 1) * 4)
        (? (#s < i + hs) 'end
           !(rdle s (i + hs - 4) 4 = crc32 (snip s i (i + hs - 4))) 'corrupt
-          (: hd (snip s i (i + hs))
-             fl (hd 1)
-             nf ((fl & 3) + 1)
-             r1 (0 < fl & 64 ? (xz-rvli hd 2) [() 2])
-             r2 (r1 && 0 < fl & 128 ? (xz-rvli hd <>r1) (r1 && [() <>r1]))
-             (? (!r2 || 0 < fl & 60) 'corrupt
-                (nf != 1) 'filter
-                (: fi (xz-rvli hd <>r2)
-                   pz (fi && xz-rvli hd <>fi)
-                   (!pz || <fi != 33 || <pz != 1 || 40 < hd <>pz ? 'filter
-                      (: d0 (i + hs)
-                         cl (charm? <r1 ? <r1 (: n (lzma2len (snip s d0 #s)) (charm? n ? n -1)))
-                         u (0 <= cl && d0 + cl <= #s ? (lzma2d (snip s d0 (d0 + cl))) ())
-                         cz (xz-csize cid)
-                         e (d0 + cl + padk cl 4)
-                         (? (cl < 0 || #s < d0 + cl) 'end
-                            (!(string? u) || charm? <r2 && #u != <r2) 'corrupt
-                            (#s < e + cz) 'end
-                            (0 < cz && snip s e (e + cz) != xz-check cid u ? 'check
-                               [u (e + cz) (hs + cl + cz) #u])))))))))
+          (: bh (xz-bhead (snip s i (i + hs)))
+             (? (atom? bh) bh
+                (: d0 (i + hs)
+                   cl (charm? (bh 0) ? (bh 0) (: n (lzma2len (snip s d0 #s)) (charm? n ? n -1)))
+                   u (0 <= cl && d0 + cl <= #s ? (lzma2d (snip s d0 (d0 + cl))) ())
+                   cz (xz-csize cid)
+                   e (d0 + cl + padk cl 4)
+                   (? (cl < 0 || #s < d0 + cl) 'end
+                      (u = 1) 'big
+                      (!(string? u) || charm? (bh 1) && #u != bh 1) 'corrupt
+                      (#s < e + cz) 'end
+                      (0 < cz && snip s e (e + cz) != xz-check cid u ? 'check
+                         [u (e + cz) (hs + cl + cz) #u])))))))
    (xz-stream s i)                     ; a stream at i -> (bytes next) | a word
     (? (#s < i + 12) 'end
           !(snip s i (i + 6) = xz-magic) 'format
@@ -136,7 +145,113 @@
    (xz-unlzma s)
     (: us (rdle s 5 8)
        u (lzmad (snip s 13 #s) (s 0) (rdle s 1 4) (us = 18446744073709551615 ? -1 us))
-       (string? u ? [1 u] 'corrupt))
+       (? (string? u) [1 u] (u = 1) 'big 'corrupt))
+
+   ;; --- reading as it comes ---
+   ; xz-unpack's walk over a source (apps/tar.l's tar-src) instead of a string: a block's
+   ; LZMA2 is decoded a chunk at a time into a window its dictionary wide (its size where the
+   ; header says it, if less), the check carried on as the bytes go by, and each index held
+   ; to the blocks read. the words are xz-unpack's
+   (xz-pull rd) {'src (tar-src rd) 'mode 'stream 'n 0}
+   (xz-fin g a) (: _ (pins g 'mode 'end 'ans a) "")
+   (xz-ck0 cid) (? (cid = 1) 0 (cid = 4) (crc64 "") (cid = 10) (: c (cask 105) _ (sha256-init c) c) ())
+   (xz-ckon cid c u) (? (cid = 1) (crc32-on c u) (cid = 4) (crc64-on c u) (cid = 10) (: _ (sha256-feed c u) c) c)
+   (xz-ckend cid c) (? (cid = 1) (wrle c 4) (cid = 4) c (cid = 10) (hex2b (sha256-done c)) "")
+   (xz-tvli g)                         ; an index vli off the source, its bytes kept for the crc -> v | ()
+    (: (go v sh k)
+        (? (9 <= k) ()
+           (: b (tar-take (g 'src) 1)
+              (? (#b < 1) ()
+                 (: _ (pin g 'ib (g 'ib + b))
+                    v2 (v + ((b 0 & 127) << sh))
+                    (b 0 < 128 ? v2 (go v2 (sh + 7) (k + 1)))))))
+       (go 0 0 0))
+   (xz-next g)
+    (: m (peep g 'mode 'end)   src (g 'src)
+       (? (m = 'end) ""
+          (m = 'stream)
+           (: h (tar-take src 12)   fl (snip h 6 8)
+              (? (#h < 12) (xz-fin g 'end)
+                 !(snip h 0 6 = xz-magic) (xz-fin g 'format)
+                 !(rdle h 8 4 = crc32 fl) (xz-fin g 'corrupt)
+                 (0 < (fl 0) || 15 < (fl 1)) (xz-fin g 'corrupt)
+                 !(charm? (xz-csize (fl 1))) (xz-fin g 'check)
+                 (: _ (pins g 'fl fl 'cid (fl 1) 'recs () 'mode 'block) (xz-next g))))
+          (m = 'block)
+           (: b (tar-peek src 1)
+              (? (#b < 1) (xz-fin g 'end)
+                 (b 0 = 0) (: _ (pin g 'mode 'index) (xz-next g))
+                 (: hs ((b 0 + 1) * 4)   hd (tar-take src hs)
+                    (? (#hd < hs) (xz-fin g 'end)
+                       !(rdle hd (hs - 4) 4 = crc32 (snip hd 0 (hs - 4))) (xz-fin g 'corrupt)
+                       (: bh (xz-bhead hd)
+                          (? (atom? bh) (xz-fin g bh)
+                             (: d (xz-dsize (bh 2))
+                                st (lzma2-new (max 4096 (charm? (bh 1) ? (min d (bh 1)) d)))
+                                (? (st = ()) (xz-fin g 'big)
+                                   (: _ (pins g 'st st 'hs hs 'bh bh 'cl 0 'un 0 'ck (xz-ck0 (g 'cid)) 'mode 'chunk)
+                                      (xz-next g))))))))))
+          (m = 'chunk)                           ; a chunk whole: its control byte, header, data
+           (: cz (g 'bh 0)   (past? v) (charm? cz && cz < v)   ; no chunk runs past a size the header said
+              c (? (past? (g 'cl + 1)) "" (tar-take src 1))   k0 (#c ? (c 0) 0)
+              hn (? (k0 < 3) 2 (k0 < 128) -1 (192 <= k0) 5 4)
+              (? (past? (g 'cl + 1)) (xz-fin g 'corrupt)
+                 (#c < 1) (xz-fin g 'end)
+                 (k0 = 0) (: _ (pins g 'cl (g 'cl + 1) 'mode 'check) (xz-next g))
+                 (hn < 0) (xz-fin g 'corrupt)
+                 (: h (tar-take src hn)
+                    k (#h < hn ? 0 (1 + (? (k0 < 3) (h 0 << 8 | h 1) (h 2 << 8 | h 3))))
+                    body (? (past? (g 'cl + 1 + hn + k)) "" (tar-take src k))
+                    (? (#h < hn) (xz-fin g 'end)
+                       (past? (g 'cl + 1 + hn + k)) (xz-fin g 'corrupt)
+                       (#body < k) (xz-fin g 'end)
+                       (: u (lzma2-chunk (g 'st) (c + h + body))
+                          (? !(string? u) (xz-fin g 'corrupt)
+                             (: _ (pins g 'cl (g 'cl + 1 + hn + k) 'un (g 'un + #u) 'n (g 'n + #u)
+                                        'ck (xz-ckon (g 'cid) (g 'ck) u))
+                                (? (#u = 0) (xz-next g) u))))))))
+          (m = 'check)                           ; the sizes the header said, the padding, the check
+           (: bh (g 'bh)   cl (g 'cl)   cz (xz-csize (g 'cid))
+              (? ((charm? (bh 0) && bh 0 != cl) || (charm? (bh 1) && bh 1 != g 'un)) (xz-fin g 'corrupt)
+                 (: pd (tar-take src (padk cl 4))   ck (tar-take src cz)
+                    (? (#pd < padk cl 4 || #ck < cz) (xz-fin g 'end)
+                       (0 < cz && ck != xz-ckend (g 'cid) (g 'ck)) (xz-fin g 'check)
+                       (: _ (pins g 'recs ([(g 'hs + cl + cz) (g 'un)] . g 'recs) 'st () 'mode 'block)
+                          (xz-next g))))))
+          (m = 'index)                           ; each record as the blocks read it, then the footer
+           (: _ (pin g 'ib (tar-take src 1))
+              n (xz-tvli g)
+              recs (rev (g 'recs))
+              (same l) (? !(two? l) 1 (: a (xz-tvli g) b (xz-tvli g) (a = <l 0 && b = <l 1 ? (same >l) 0)))
+              (? (n = () || n != #recs || !(same recs)) (xz-fin g 'corrupt)
+                 (: ib (g 'ib + tar-take src (padk #(g 'ib) 4))   cr (tar-take src 4)   f (tar-take src 12)
+                    (? (#cr < 4 || #f < 12) (xz-fin g 'end)
+                       (rdle cr 0 4 != crc32 ib
+                        || rdle f 0 4 != crc32 (snip f 4 10)
+                        || rdle f 4 4 != (#ib + 4) // 4 - 1
+                        || snip f 8 10 != g 'fl
+                        || snip f 10 12 != "YZ") (xz-fin g 'corrupt)
+                       (: _ (pin g 'mode 'pad) (xz-next g))))))
+          (: p (tar-peek src 4)                  ; the zeros between streams, then one more or the end
+             (? (#p = 0) (xz-fin g [1 (g 'n)])
+                (p = zbytes 4) (: _ (tar-take src 4) (xz-next g))
+                (#p < 4) (xz-fin g 'corrupt)
+                (: _ (pin g 'mode 'stream) (xz-next g))))))
+   ; .xz streamed, or a .lzma read whole: mk is asked for the writer before the first byte out,
+   ; and a stream that fails before any is said without it
+   (xz-unf rd mk)
+    (: raw (tar-src rd)   h (tar-peek raw 13)
+       (all r a) (: p (r 0) (? (#p = 0) (cats (rev a)) (all r (p . a))))
+       (? (xz-lzma? h && snip h 0 6 != xz-magic)
+          (: u (xz-unlzma (all (tar-rd raw) ()))
+             (? (atom? u) u (: m (mk 0) (? !(two? m) 'no (: _ (<>m <>u) [1 #<>u])))))
+          (: g (xz-pull (tar-rd raw))   p (xz-next g)
+             (? (#p = 0 && atom? (g 'ans)) (g 'ans)
+                (: m (mk 0)
+                   (? !(two? m) 'no
+                      (: w <>m
+                         (go p) (? (#p = 0) (g 'ans) (: _ (w p) (go (xz-next g))))
+                         (go p))))))))
 )
 ) ; module 'xz
 
@@ -173,8 +288,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: d (xzc-dicts (peep t 'lvl 6)) (go v) (d <= v || n <= v ? v (go (v * 2))) (go 4096))
    (xzc-why w) (w @ 'format "File format not recognized" 'end "Unexpected end of input"
                     'filter "Unsupported filters" 'check "Compressed data is corrupt"
+                    'big "Memory usage limit reached (the output passes 1 GiB)"
                     "Compressed data is corrupt")
-   (xzc-un s) (xz-lzma? s && snip s 0 6 != xz-magic ? (xz-unlzma s) (xz-unpack s))
    ; .xz and .lzma come off; .txz and .tlz answer .tar
    (xzc-stem t p)
     (: suf (t 'suf)
@@ -190,33 +305,52 @@ no file, or a bare -, is the filter: stdin -> stdout"
         (peep t 'k 0 ? 0 (unlink p)),
         (peep t 'v 0 && (say err ("xz: " + p + " -> " + dst + "\n"), flush err)),
         0))
+   (xzc-rd q) (\ _ (: c (see q) (? (c < 0) "" (: _ (unsee q c) (chug q)))))
+   ; a file decompressed as it comes off the disk: the output opened before the first byte,
+   ; its mode and time laid after the last, and taken away again if the stream fails partway
+   (xzc-unone t p st)
+    (: stem (xzc-stem t p)
+       (? (!(peep t 't 0) && !(peep t 'c 0) && !stem) (xzc-moan t (p + ": Filename has an unknown suffix, skipping"), 2)
+          (: q (open p "r")
+             (? !(hot? q) (xzc-moan t (p + ": No such file or directory"), 1)
+                (: k (tablet 0)
+                   (no m) (: _ (xzc-moan t m) ())
+                   (mk _) (? (peep t 't 0) [1 (\ s 0)]
+                             (peep t 'c 0) [1 (\ s (say out s))]
+                             (: dst <>stem
+                                (? (two? (lstat dst) && !(peep t 'f 0)) (no (dst + ": File exists"))
+                                   (: o (open dst "w")
+                                      (? !(hot? o) (no (dst + ": Cannot write"))
+                                         (: _ (pins k 'o o 'dst dst) [1 (\ s (say o s))]))))))
+                   u (xz-unf (xzc-rd q) mk)
+                   _ (close q)
+                   o (peep k 'o ())   laid (hot? o)   dst (peep k 'dst "")
+                   _ (laid && close o)
+                   (? (u = 'no) 1
+                      (atom? u) (: _ (laid && unlink dst) (xzc-moan t (p + ": " + xzc-why u), 1))
+                      !laid 0
+                      ((two? st && (chmod dst (st 2 & 4095), utime dst (st 1))),
+                       (peep t 'k 0 ? 0 (unlink p)),
+                       (peep t 'v 0 && (say err ("xz: " + p + " -> " + dst + "\n"), flush err)),
+                       0)))))))
    (xzc-one t p)
-    (: r (uread p)
-       st (stat p)
-       (? !r (xzc-moan t (p + ": No such file or directory"), 1)
-          (two? st && st 2 & 61440 = 16384) (xzc-moan t (p + ": Is a directory, skipping"), 2)
-          (peep t 'd 0)
-           (: u (xzc-un <>r) stem (xzc-stem t p)
-              (? (atom? u) (xzc-moan t (p + ": " + xzc-why u), 1)
-                 (peep t 't 0) 0
-                 (peep t 'c 0) (say out <>u, 0)
-                 !stem (xzc-moan t (p + ": Filename has an unknown suffix, skipping"), 2)
-                 (xzc-put t p <>stem <>u st)))
-          (: suf (peep t 'suf ".xz")
-             (!(peep t 'c 0) && (ends? p suf || ends? p ".xz" || ends? p ".txz")
-              ? (xzc-moan t (p + ": File already has '" + suf + "' suffix, skipping"), 2)
-                (: z (xz-pack <>r (xzc-dict t #<>r) (peep t 'ck 'crc64))
-                   (peep t 'c 0 ? (say out z, 0) (xzc-put t p (p + suf) z st)))))))
+    (: st (stat p)
+       (? (two? st && st 2 & 61440 = 16384) (xzc-moan t (p + ": Is a directory, skipping"), 2)
+          (peep t 'd 0) (xzc-unone t p st)
+          (: r (uread p)
+             (? !r (xzc-moan t (p + ": No such file or directory"), 1)
+                (: suf (peep t 'suf ".xz")
+                   (!(peep t 'c 0) && (ends? p suf || ends? p ".xz" || ends? p ".txz")
+                    ? (xzc-moan t (p + ": File already has '" + suf + "' suffix, skipping"), 2)
+                      (: z (xz-pack <>r (xzc-dict t #<>r) (peep t 'ck 'crc64))
+                         (peep t 'c 0 ? (say out z, 0) (xzc-put t p (p + suf) z st)))))))))
    (xzc-filter t)
-    (: s (slurp in) s2 (s + "")
-       (? (peep t 'd 0)
-          (: u (xzc-un s2)
-             (? (atom? u) (xzc-moan t ("(stdin): " + xzc-why u), 1)
-                (peep t 't 0) 0
-                (say out <>u, 0)))
-          (two? (tty out) && !(peep t 'f 0))
-           (say err "xz: Compressed data cannot be written to a terminal\n", 1)
-          (say out (xz-pack s2 (xzc-dict t #s2) (peep t 'ck 'crc64)), 0)))
+    (? (peep t 'd 0)
+       (: u (xz-unf (xzc-rd in) (\ _ [1 (? (peep t 't 0) (\ s 0) (\ s (say out s)))]))
+          (? (atom? u) (xzc-moan t ("(stdin): " + xzc-why u), 1) 0))
+       (two? (tty out) && !(peep t 'f 0))
+        (say err "xz: Compressed data cannot be written to a terminal\n", 1)
+       (: s2 (slurp in + "") (say out (xz-pack s2 (xzc-dict t #s2) (peep t 'ck 'crc64)), 0)))
 
    ; the cli walker in gnu order. -d, -z and -t decide the direction by the last one said,
    ; and a level digit likewise; -C -S -T -F take a word, glued or next

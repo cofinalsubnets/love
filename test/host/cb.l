@@ -624,6 +624,7 @@
    _ (scribe s "\e[?1006h")
    _ (test ("\e[<0;4;3M" = mouse s 0 2 3 0) ("\e[<2;4;3m" = mouse s 2 2 3 1)
            ("\e[<35;10;5M" = mouse s 3 4 9 2) ("\e[<80;1;1M" = mouse s 80 0 0 0))
+   _ (test ("\e[<4294967232;4294967295;4294967295M" = mouse s 4294967232 4294967294 4294967294 0))   ; the widest
    _ (scribe s "\e[?1000l")
    _ (test ("" = mouse s 0 2 3 0))                        ; one tracking off is all of it
    _ (scribe s "\e[?1006l\e[?9h")
@@ -697,6 +698,64 @@
    _ (test ([-5 -3] = sel t) ("ab" = copied t -5 -3))
    _ (scribe t "\e[3J")                                 ; the history cleared, the selection too
    _ (test ([0 0] = sel t)))
+
+; --- 28. a picture read back out: its size, its gen, and its pixels as base64 rgba or raw ---
+(: (slot s i) (glass s i 0 >> 16 & 127)
+   s (mkscr 4 10)
+   _ (scribe s "\e_Ga=T,f=24,s=2,v=2,i=7,q=2;/wAA/wAA/wAA/wAA\e\\")   ; a 2x2 red
+   k (slot s 0)
+   _ (test (2 = picture s k 0) (2 = picture s k 1) (1 = picture s k 2)
+           ("/wAA//8AAP//AAD//wAA/w==" = picture s k 3)            ; ff 00 00 ff, four times
+           ((cats (map (\ _ "\xff\x00\x00\xff") (jot 4))) = picture s k 4)   ; ..and raw
+           !(picture s (k + 1) 0) !(picture s 0 0) !(picture s k 5))
+   _ (scribe s "\e[3;1H\e_Ga=T,f=32,s=1,v=1,q=2;AAD/AA==\e\\")      ; another: a new gen
+   _ (test (2 = picture s (slot s 20) 2))
+   t (regrid s (cask (screen () 4 12)) 4 12)             ; a regrid keeps the gen
+   _ (test (1 = picture t (slot t 0) 2)))
+
+; --- 29. ?2027: VS16 gives a character with an emoji style two cells; DECRQM says so ---
+(: (cwide s i) (glass s i 0 >> 21 & 3)
+   (rqm s m) (: _ (scribe s m) (string (reply s)))
+   s (mkscr 3 6)
+   _ (scribe s "\u{2764}\u{fe0f}x")                    ; off: ❤ keeps one cell
+   _ (test (10084 = chat s 0) (0 = cwide s 0) (120 = chat s 1)
+           ("\e[?2027;2$y" = rqm s "\e[?2027$p"))
+   _ (scribe s "\e[?2027h\e[2;1H\u{2764}\u{fe0f}x")    ; on: a lead and a tail
+   _ (test ("\e[?2027;1$y" = rqm s "\e[?2027$p")
+           (10084 = chat s 6) (1 = cwide s 6) (2 = cwide s 7) (120 = chat s 8)
+           ("\u{2764}\u{fe0f}x" = copied s 6 9))            ; the VS16 rides along
+   _ (scribe s "\e[3;1Ha\u{fe0f}y\u{231a}\u{fe0f}z")     ; a has no emoji style; ⌚ is wide already
+   _ (test (97 = chat s 12) (0 = cwide s 12) (121 = chat s 13)
+           (1 = cwide s 14) (2 = cwide s 15) (122 = chat s 16))
+   _ (scribe s "\e[1;6H\u{2764}\u{fe0f}")              ; on the last column: the pair wraps
+   _ (test (0 = chat s 5) (10084 = chat s 6) (1 = cwide s 6) (8 = cur s)
+           ("\u{2764}\u{fe0f}x    \u{2764}\u{fe0f}x" = copied s 0 12))   ; ..the row it left wrapped: no newline
+   t (mkscr 1 8)
+   _ (scribe t "\e[?2027h1\u{fe0f}\u{20e3}q")          ; a keycap
+   _ (test (49 = chat t 0) (1 = cwide t 0) (113 = chat t 2)
+           ("\e[?12345;0$y" = rqm t "\e[?12345$p")      ; a mode quay does not know
+           ("\e[?2004;2$y" = rqm t "\e[?2004$p") ("\e[?7;1$y" = rqm t "\e[?7$p")
+           ("\e[20;2$y" = rqm t "\e[20$p")              ; an ansi one
+           ("\e[?2027;2$y" = rqm t "\ec\e[?2027$p")))   ; ris resets it
+
+; --- 30. ?2027: a ZWJ sequence, a skin tone and a flag are one cluster, two cells ---
+(: (cwide s i) (glass s i 0 >> 21 & 3)
+   fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}\u{200d}\u{1f466}"   ; 👨‍👩‍👧‍👦, seven characters
+   s (mkscr 4 12)
+   _ (scribe s (fam + "x"))                            ; off: four wide chars, a ZWJ riding each
+   _ (test (128104 = chat s 0) (8205 = glass s 0 3) (128105 = chat s 2) (128102 = chat s 6) (120 = chat s 8))
+   _ (scribe s ("\e[?2027h\e[2;1H" + fam + "x"))       ; on: one lead, one tail
+   _ (test (128104 = chat s 12) (1 = cwide s 12) (2 = cwide s 13) (120 = chat s 14)
+           (128102 = glass s 12 8) (0 = glass s 12 9)
+           ((fam + "x") = copied s 12 15))
+   _ (scribe s "\e[3;1H\u{1f44d}\u{1f3fd}y\u{1f1eb}\u{1f1f7}\u{1f1e9}z")   ; 👍🏽, 🇫🇷, a lone 🇩
+   _ (test (1 = cwide s 24) (127997 = glass s 24 3) (121 = chat s 26)
+           (127467 = chat s 27) (1 = cwide s 27) (127479 = glass s 27 3) (127465 = chat s 29) (0 = cwide s 29)
+           (122 = chat s 30))
+   _ (scribe s "\e[4;1Ha\u{200d}b\u{1f468}\u{200d}c\u{2764}\u{200d}\u{1f525}q")   ; a ZWJ between letters joins
+   _ (test (97 = chat s 36) (98 = chat s 37)                                  ; nothing after it; after a
+           (128104 = chat s 38) (99 = chat s 40)                                 ; pictograph, only another;
+           (10084 = chat s 41) (1 = cwide s 41) (128293 = glass s 41 4) (113 = chat s 43)))   ; a narrow ❤ widens
 
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)

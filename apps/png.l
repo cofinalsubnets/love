@@ -118,9 +118,17 @@
        (? (#ih != 13) "bad IHDR"
           (!chs || !ok) "bad colour type or depth"
           (w < 1 || h < 1) "empty image"
+          (16777216 < w * h) "too big"
           (ih 10 != 0 || ih 11 != 0 || ih 12 > 1) "bad IHDR methods"
           {'w w 'h h 'dep dep 'ty ty 'chs chs 'lace (ih 12)
            'bpp (: b (chs * dep // 8) (b < 1 ? 1 b))}))
+
+   ; the filtered bytes the passes take, rows of a filter byte and their samples
+   (png-need hd)
+    (: w (hd 'w) h (hd 'h) bits (hd 'chs * hd 'dep)
+       (need ps) (: pw ((w - ps 0 + ps 2 - 1) // ps 2) ph ((h - ps 1 + ps 3 - 1) // ps 3)
+                    (pw < 1 || ph < 1 ? 0 (ph * (1 + (pw * bits + 7) // 8))))
+       +(map need (hd 'lace ? png-adam7 [[0 0 1 1]])))
 
    ; one pass: unfilter its rows, scatter its pixels -> the offset past it | why not
    (png-pass c o hd out ps)
@@ -153,8 +161,10 @@
                          (? (hd 'ty = 3 && #(hd 'plte) = 0) "no palette"
                             (#z < 2 || (z 0 * 256 + z 1) % 31 != 0 || z 0 & 15 != 8 || z 1 & 32)
                              "bad zlib header"
-                            (: r (gz-inflate (snip z 2 #z) 0)
-                               (atom? r ? "bad deflate stream"
+                            (: need (png-need hd)
+                               r (gz-inflate (snip z 2 #z) need)
+                               (? (atom? r) "bad deflate stream"
+                                  (#<>r < need) "short image data"
                                   (: raw <>r
                                      ; the nif reads the string, the walk writes a cask
                                      c (png-nif? 0 ? raw (: k (cask #raw) (pour k 0 raw 0 #raw, k)))

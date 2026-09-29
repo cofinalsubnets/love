@@ -70,6 +70,25 @@
               (near "q10" ["-quality" "10"] 1)
               (near "one" ["-resize" "1x1!"] 1))
         (puts "jpeg: no magick, decodes against it skipped\n"))
+   ; scans that carry no data stop at once, and past a thousand scans the rest are left:
+   ; 1100 empty dc scans over 2048x2048 once cost a whole frame walk each. then a dc scan
+   ; shifted by 13 whose predictor climbs past what an int holds after the shift
+   (by l) (: c (cask #l) _ (map (i \ pin c i (l i)) (jot #l)) (string c))
+   (seg m b) (by [255 m (#b + 2 >> 8) (#b + 2 & 255)] + b)
+   (frame w h dc) (by [255 216] + seg 219 (by (0 . map (\ _ 1) (jot 64)))
+                   + seg 194 (by [8 (h >> 8) (h & 255) (w >> 8) (w & 255) 1 1 17 0])
+                   + seg 196 (by (0 . 1 . map (\ _ 0) (jot 15)) + by [dc]))
+   (sos al) (seg 218 (by [1 1 0 0 0 al]))
+   empty (frame 2048 2048 0 + cats (map (\ _ (sos 0)) (jot 1100)) + by [255 217])
+   t0 (clock 0)
+   e (jpeg-decode empty)
+   ms (clock 0 - t0)
+   ; each block: the one code, then 11 one bits, a dc step of 2047
+   ones (cats (map (\ _ (by [127 247 255 0 127 247 255 0 127 247 255 0])) (jot 100)))
+   hi (jpeg-decode (frame 1600 8 11 + sos 13 + ones + by [255 217]))
+   _ (test (two? e) (e 0 = 2048) (e 2 0 = 128) (#(e 2) = 16777216)
+           (ms < 5000)
+           (two? hi) (hi 0 = 1600))
    _ (hark ["rm" "-rf" dir])
    0)
 
