@@ -190,4 +190,18 @@ done
 korerun env -Q > /dev/null 2>&1; r=$?; [ $r -eq 125 ] || fail "kore env -Q (rc $r)"
 korerun rev -ba "$ho/.rfq" 2>&1 | grep -q "unknown option -b" || fail "kore's refusal names the letter typed first"
 [ "$(korerun printenv -0 HOME | tr '\0' '|')" = "$HOME|" ] || fail "kore printenv -0"
+# dd's seek= (onto a file, zeros past its end), conv= ucase lcase swab sync notrunc,
+# oflag=append (cut first unless notrunc), ibs=/obs= records, iflag/oflag's byte counts,
+# status=none; the file left and the two record lines, against GNU
+printf 'Hello World abcdefghij\n' > "$ho/.ddi"; printf '0123456789ABCDEFGHIJ' > "$ho/.ddb"
+for c in "bs=4 count=2" "bs=4 skip=1 count=2" "conv=ucase" "conv=lcase" "conv=swab" "bs=5 conv=sync count=1" "bs=4 seek=2 count=1" \
+         "bs=4 seek=2 count=1 conv=notrunc" "oflag=append" "oflag=append conv=notrunc" "bs=1 seek=30 count=2 conv=notrunc" "ibs=3 obs=5" \
+         "iflag=skip_bytes,count_bytes skip=3 count=5" "oflag=seek_bytes seek=3 conv=notrunc bs=2 count=2" "status=none bs=4"; do
+  cp "$ho/.ddb" "$ho/.ddg"; cp "$ho/.ddb" "$ho/.ddk"
+  # shellcheck disable=SC2086
+  dd $c of="$ho/.ddg" < "$ho/.ddi" 2> "$g"; korerun dd $c of="$ho/.ddk" < "$ho/.ddi" 2> "$o"
+  sed -i '/copied/d' "$g" "$o"; same "dd $c (report)"; cmp -s "$ho/.ddg" "$ho/.ddk" || fail "kore dd $c (the file)"
+done
+korerun dd conv=block < /dev/null > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore dd conv=block must refuse ($r)"
+rm -f "$ho"/.dd?
 echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt ok"

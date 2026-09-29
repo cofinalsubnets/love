@@ -2493,60 +2493,100 @@
        _ (go ())
        _ (flush out) 0)
 
-   ; -- dd: blocks in, blocks out. if=/of= default to the streams, bs= sizes the
-   ; block (512 unsaid), count= stops, skip= reads past that many blocks first.
-   ; no seek=: lseek here takes a raw fd and a port's read buffer desyncs under one,
-   ; and every other operand is a stream walk that works on a pipe too. the record
-   ; report goes to err, GNU's shape, and status=none holds it --
+   ; -- dd: blocks in, blocks out. if=/of= default to the streams; bs= sizes both
+   ; blocks, ibs= and obs= each (512 unsaid); count= stops, skip= reads past that many
+   ; input blocks first, seek= puts the output that many blocks in; iflag=skip_bytes
+   ; count_bytes fullblock and oflag=seek_bytes append; conv= ucase lcase swab sync
+   ; notrunc excl nocreat fsync fdatasync noerror sparse -- one this dd does not do is
+   ; refused, never dropped. skip is read past, not sought, so it works on a pipe; a
+   ; seek, notrunc or append onto a file is laid by reading the file and writing it
+   ; back with the data in place (lseek here takes a raw fd, and a port's buffer
+   ; desyncs under one). the record report goes to err, GNU's shape; status=none
+   ; holds it, status=noxfer the byte line --
    (udd-eq w)                          ; "bs=512" -> ("bs" "512"), () for a bare word
     (: n #w
        (go k) (? (n <= k) () (w k = 61) [(snip w 0 k) (snip w (k + 1) n)] (go (k + 1)))
        (go 0))
    (dd-main as)
-    (: t {'bs 512 'count () 'skip 0 'if () 'of () 'quiet 0}
+    (: t {'ibs 512 'obs 512 'count () 'skip 0 'seek 0 'if () 'of () 'quiet 0 'conv () 'iflag () 'oflag ()}
+       (words1 v) (filter (w \ 0 < #w) (usplit 44 v))
+       (known k ok v) (: ws (words1 v) _ (each ws (w \ (? (elem w ok) 0 (udie 1 ("dd: invalid " + k + ": '" + w + "'"))))) ws)
        (fl a) (? (atom? a) 0
                  (: kv (udd-eq <a)
                     _ (? (atom? kv) (udie 1 ("dd: unknown operand " + <a))
                          (: k <kv v <>kv
-                            (k @ "bs" (pin t 'bs (usize v))
+                            (k @ "bs" (pins t 'ibs (usize v) 'obs (usize v))
+                                 "ibs" (pin t 'ibs (usize v))
+                                 "obs" (pin t 'obs (usize v))
                                  "count" (pin t 'count (usize v))
                                  "skip" (pin t 'skip (usize v))
+                                 "seek" (pin t 'seek (usize v))
                                  "if" (pin t 'if v)
                                  "of" (pin t 'of v)
-                                 "status" (v @ "none" (pin t 'quiet 1) 0)
-                                 "conv" 0          ; the conversions are not here
+                                 "status" (v @ "none" (pin t 'quiet 1) "noxfer" (pin t 'quiet 2) "progress" 0
+                                             (udie 1 ("dd: invalid status level: '" + v + "'")))
+                                 "conv" (pin t 'conv (t 'conv + known "conversion" '("ucase" "lcase" "swab" "sync" "notrunc" "excl" "nocreat" "fsync" "fdatasync" "noerror" "sparse") v))
+                                 "iflag" (pin t 'iflag (t 'iflag + known "input flag" '("skip_bytes" "count_bytes" "fullblock") v))
+                                 "oflag" (pin t 'oflag (t 'oflag + known "output flag" '("seek_bytes" "append") v))
                                  (udie 1 ("dd: unknown operand " + k)))))
                     (fl >a)))
        _ (fl as)
-       bs (: b (peep t 'bs 512) (0 < b ? b (udie 1 "dd: invalid block size")))
-       cnt (t 'count) skip (peep t 'skip 0)
+       (cv? w) (elem w (t 'conv)) (if? w) (elem w (t 'iflag)) (of? w) (elem w (t 'oflag))
+       ibs (: b (t 'ibs) (0 < b ? b (udie 1 "dd: invalid block size")))
+       obs (: b (t 'obs) (0 < b ? b (udie 1 "dd: invalid block size")))
+       cnt (t 'count) skip (t 'skip)
        inf (t 'if) outf (t 'of)
+       _ (? (cv? "ucase" && cv? "lcase") (udie 1 "dd: cannot combine lcase and ucase") 0)
+       _ (? (string? outf && cv? "excl" && two? (stat outf)) (udie 1 ("dd: failed to open '" + outf + "': File exists")) 0)
+       _ (? (string? outf && cv? "nocreat" && atom? (stat outf)) (udie 1 ("dd: failed to open '" + outf + "': No such file or directory")) 0)
        rd (urdb (f \ (udie 1 ("dd: cannot open " + f))) (? (string? inf) [inf] ()))
-       q (? (string? outf) (: h (open outf "w")
-                               (? (hot? h) h (udie 1 ("dd: cannot write " + outf))))
-            out)
        ; skip is READ past, not sought: it works the same on a pipe, which a seek
        ; would not. a short input mid-skip is GNU's own diagnostic
-       (drop k) (? (k <= 0) 1 (: g (urdj-take rd bs) (? #g (drop (k - 1)) 0)))
-       _ (? (drop skip) 0 (udie 1 "dd: cannot skip past end of input"))
+       sk (? (if? "skip_bytes") skip (skip * ibs))
+       (drop k) (? (k <= 0) 1 (: g (urdj-take rd (min k ibs)) (? #g (drop (k - #g)) 0)))
+       _ (? (drop sk) 0 (udie 1 "dd: cannot skip past end of input"))
+       ; one input block as it goes out: the case, the byte pairs, sync's pad to ibs
+       (conv b) (: b1 (? (cv? "ucase") (upper b) (cv? "lcase") (lower b) b)
+                   b2 (? (cv? "swab") (: n #b1 (cats (map (i \ (? (i + 1 < n) (string (b1 (i + 1)) + string (b1 i)) (string (b1 i)))) (filter (i \ i % 2 = 0) (jot n))))) b1)
+                   (? (cv? "sync" && #b2 < ibs) (b2 + cats (map (_ \ string 0) (jot (ibs - #b2)))) b2))
+       ; the sink: blocks stream out as they come, save where a file is spliced, when
+       ; they gather to be laid into it at the end
+       sd (? (of? "seek_bytes") (t 'seek) (t 'seek * obs))
+       splice? (string? outf && (0 < sd || cv? "notrunc" || of? "append"))
+       q (? splice? (jug 0)
+            (string? outf) (: h (open outf "w") (? (hot? h) h (udie 1 ("dd: cannot write " + outf))))
+            out)
        ; full and part are GNU's two record columns: a short block is a partial one
-       (go n full part got)
-        (? (charm? cnt && n >= cnt) [full part got]
-           (: blk (urdj-take rd bs)
+       limit (? (if? "count_bytes") cnt ())
+       (go n full part got put)
+        (? (!limit && charm? cnt && n >= cnt) [full part got put]
+           (limit && limit <= got) [full part got put]
+           (: blk (urdj-take rd (? limit (min ibs (limit - got)) ibs))
               c #blk
-              (? !c [full part got]
-                 (say q blk,
-                  go (n + 1) (? (c = bs) (full + 1) full) (? (c = bs) part (part + 1))
-                     (got + c)))))
-       r (go 0 0 0 0)
-       _ (flush q)
-       _ (? (string? outf) (close q) 0)
+              (? !c [full part got put]
+                 (: ob (conv blk) _ (say q ob)
+                    (go (n + 1) (? (c = ibs) (full + 1) full) (? (c = ibs) part (part + 1)) (got + c) (put + #ob))))))
+       r (go 0 0 0 0 0)
+       ; onto a file: at the seek, the old bytes before it kept (zeros past its end), the
+       ; old bytes after it kept only under notrunc; append after all of it -- and after
+       ; nothing without notrunc, the file cut first as GNU's cuts it
+       _ (? splice?
+            (: data (slurp q)
+               old (: r (uread outf) (? (two? r) <>r ""))
+               new (? (of? "append") ((? (cv? "notrunc") old "") + data)
+                      (: pre (? (sd <= #old) (snip old 0 sd) (old + cats (map (_ \ string 0) (jot (sd - #old)))))
+                         post (? (cv? "notrunc" && sd + #data < #old) (snip old (sd + #data) #old) "")
+                         (pre + data + post)))
+               (? (uwrite outf new) 0 (udie 1 ("dd: cannot write " + outf))))
+            (: _ (flush q) (? (string? outf) (close q) 0)))
+       _ (? (string? outf && (cv? "fsync" || cv? "fdatasync")) (fsync outf (cv? "fdatasync")) 0)
+       n (r 3)
        ; the two record lines and the byte count. GNU adds a duration and a rate; no
        ; two runs agree on those, so no gate could hold them and they are not spoken
-       _ (? (peep t 'quiet 0) 0
-            (: ln ((show <r) + "+" + (show <>r) + " records ")
-               _ (say err (ln + "in")) _ (put err 10)
-               _ (say err (ln + "out")) _ (put err 10)
-               _ (say err ((show <>>r) + " bytes copied")) _ (put err 10) (flush err)))
+       _ (? (t 'quiet = 1) 0
+            (: _ (say err (show <r + "+" + show (r 1) + " records in\n"))
+               _ (say err (show (n // obs) + "+" + show (? (0 < n % obs) 1 0) + " records out\n"))
+               _ (? (t 'quiet = 2) 0 (say err (show n + " bytes copied\n")))
+               (flush err)))
        0))
 ) ; module 'kore

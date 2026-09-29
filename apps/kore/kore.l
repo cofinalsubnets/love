@@ -1024,7 +1024,7 @@
     'ping6 "usage: ping6 [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
     'traceroute "usage: traceroute [-46nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
     'traceroute6 "usage: traceroute6 [-nI] [-f FIRST] [-m MAX] [-q N] [-w SECS] HOST"
-    'dd "usage: dd [if=F] [of=F] [bs=N] [count=N] [skip=N] [status=none]"
+    'dd "usage: dd [if=F] [of=F] [bs=N] [ibs=N] [obs=N] [count=N] [skip=N] [seek=N] [conv=..] [iflag=..] [oflag=..] [status=none|noxfer]"
     'xxd "usage: xxd [-r] [FILE..]"
     'hexdump "usage: hexdump [-Cv] [-n LEN] [-s SKIP] [FILE..]"
     'hd "usage: hd [-v] [-n LEN] [-s SKIP] [FILE..]   (hexdump -C)"
