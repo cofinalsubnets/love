@@ -876,7 +876,7 @@
     'dirname "usage: dirname [-z] NAME.."
     'cut "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST  [--complement] [--output-delimiter=S] [-z]"
     'tr "usage: tr [-cCdst] SET1 [SET2]"
-    'nl "usage: nl [FILE..]"
+    'nl "usage: nl [-b a|t|n] [-n ln|rn|rz] [-w N] [-s SEP] [-v N] [-i N] [FILE..]"
     'rev "usage: rev [FILE..]"
     'fold "usage: fold [-w N] [-s] [-b] [FILE..]"
     'column "usage: column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]"

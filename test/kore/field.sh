@@ -79,4 +79,12 @@ for c in "-t abc xy" "abc xy" "-t a-z A-C" "-ts ab xy"; do
   # shellcheck disable=SC2086
   printf 'aabbccdd\n' | tr $c > "$g"; printf 'aabbccdd\n' | korerun tr $c > "$o"; same "tr $c"
 done
+# nl's styles, formats, width, separator, start and step, against GNU over blank and
+# blank-looking lines
+printf 'one\n\ntwo\n  \nthree\n' > "$ho/.nli"
+for c in "-ba" "-bn" "-n ln" "-n rz -w 4" "-w 3 -s ::" "-v 5 -i 2" "-ba -v 0 -i 10 -n rz"; do
+  # shellcheck disable=SC2086
+  nl $c "$ho/.nli" > "$g"; korerun nl $c "$ho/.nli" > "$o"; same "nl $c"
+done
+rm -f "$ho/.nli"
 echo "kore: field tools (cut/tr/nl/rev GNU-identical) ok"

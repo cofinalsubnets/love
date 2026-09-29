@@ -1282,19 +1282,27 @@
             (walk out))
        _ (flush out) 0)
 
-   ; -- nl: number the lines that hold ink (pad 6, a tab after); a blank line wears
-   ; seven spaces and no number, and the count carries across inputs --
+   ; -- nl: number the lines -- -b t those with ink (the default), a all, n none; -n ln rn
+   ; rz the number left, right or zero-padded; -w its width (6), -s what follows it (a
+   ; tab), -v the first (1), -i the step (1). a line left unnumbered wears the width and
+   ; the separator's length in spaces, and the count carries across inputs --
    (nl-main as)
-    (: t {'i 1}
+    (: fo (uflags "nl" as '(98 110 119 115 118 105) "bnwsvi")
+       t <fo
+       (num c d) (: v (uoptv t c) (? !v d (: n (uint v) (? (charm? n) n (udie 1 ("nl: invalid number: '" + v + "'"))))))
+       sty (: v (uoptv t 98) (? (!v || v = "t") 't (v = "a") 'a (v = "n") 'n (udie 1 ("nl: invalid body numbering style: '" + v + "'"))))
+       fmt (: v (uoptv t 110) (? (!v || v = "rn") 'rn (v = "ln") 'ln (v = "rz") 'rz (udie 1 ("nl: invalid line numbering format: '" + v + "'"))))
+       w (num 119 6) sep (? (t 115) (uoptv t 115) "\t") inc (num 105 1)
+       st {'i (num 118 1)}
+       (numstr i) (: n (show i) (? (fmt = 'ln) (urpad w n) (fmt = 'rz) (zpad w n) (upad w n)))
+       (on? ln) (? (sty = 'a) 1 (sty = 'n) 0 (? ln 1 0))
        ; nl terminates every line it writes, so term? says nothing here either
        (dot ln term?)
-        ((? !ln (say out "       ", put out 10)
-            (: i (peep t 'i 1)
-               _ (say out (upad 6 (show i))) _ (put out 9)
-               _ (say out ln) _ (put out 10)
-               (pin t 'i (i + 1)))),
+        ((? (on? ln)
+            (: i (st 'i) _ (say out (numstr i + sep + ln + "\n")) (pin st 'i (i + inc)))
+            (say out (cats (map (_ \ " ") (jot (w + #sep))) + ln + "\n"))),
          1)
-       (ulines "nl" dot ((uflags "nl" as () "") 1)))
+       (ulines "nl" dot (fo 1)))
 
    ; -- rev: every line back to front --
    (rev-main as)

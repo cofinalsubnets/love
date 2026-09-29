@@ -188,6 +188,6 @@ for c in "stat -Q" "cmp -l" "install -v" "chown -v gwen" "chgrp -v gwen" "readli
   korerun $c "$ho/.rfq" < /dev/null > /dev/null 2>&1; r=$?; [ $r -eq 2 ] || fail "kore $c must refuse (rc $r)"
 done
 korerun env -Q > /dev/null 2>&1; r=$?; [ $r -eq 125 ] || fail "kore env -Q (rc $r)"
-korerun nl -ba "$ho/.rfq" 2>&1 | grep -q 'unknown option -b' || fail "kore's refusal names the letter typed first"
+korerun rev -ba "$ho/.rfq" 2>&1 | grep -q "unknown option -b" || fail "kore's refusal names the letter typed first"
 [ "$(korerun printenv -0 HOME | tr '\0' '|')" = "$HOME|" ] || fail "kore printenv -0"
 echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt ok"
