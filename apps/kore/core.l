@@ -24,11 +24,44 @@
    ; POSIX cat refuses one; this cat used to open it, read nothing, and exit 0, which is
    ; the one answer of the three worth nobody's while.
    (cat-dir? f) (: st (stat f) (two? st && 16384 = 61440 & <>>st))
+   ; -n numbers every line and -b those with ink, the count running across files; -s
+   ; squeezes blank runs to one; -E ends a line with $, -T shows a tab as ^I, -v a control
+   ; as ^X, del as ^? and a high byte as M-; -A is -vET, -e -vE, -t -vT; -u is taken. any
+   ; of them reads by the line, and without them the bytes pour through untouched
    (cat-main as)
-    (uwalk (\ f ok (? (f != "-" && cat-dir? f)
-                      (each (sort (readdir f)) (n \ (puts n, putc 10)), ok)
-                      (uchunks "cat" puts [f] @ 0 ok 0)))
-           as)
+    (: fo (uflags "cat" as () "AbeEnstTuv")
+       t <fo fs (fo 1)
+       v? (t 118 || t 65 || t 101 || t 116)
+       E? (t 69 || t 65 || t 101)
+       T? (t 84 || t 65 || t 116)
+       b? (t 98)
+       n? (t 110 || b?)
+       s? (t 115)
+       st {'i 1 'blank 0 'mid 0}   ; 'mid: a file ended inside a line, which the next goes on
+       (vc c) (? (c = 9) (? T? "^I" "\t")
+                 !v? (string c)
+                 (c < 32) ("^" + string (c + 64))
+                 (c = 127) "^?"
+                 (c < 128) (string c)
+                 (c - 128 = 9) "M-^I"
+                 ("M-" + vc (c - 128)))
+       (vis l) (? (v? || T?) (cats (map vc (chars l))) l)
+       (line l term?)
+        (: mid (st 'mid)
+           blank (#l = 0 && !mid)
+           again (blank && 0 < st 'blank)
+           _ (pin st 'blank (? blank 1 0))
+           _ (pin st 'mid (? term? 0 1))
+           (? (s? && again) 1
+              (: _ (? (n? && !mid && !(b? && blank && term?)) (: i (st 'i) (say out (upad 6 (show i) + "\t"), pin st 'i (i + 1))) 0)
+                 _ (say out (vis l))
+                 _ (? term? (say out (? E? "$\n" "\n")) 0)
+                 1)))
+       (? (v? || E? || T? || n? || s?) (ulines "cat" line fs)
+          (uwalk (\ f ok (? (f != "-" && cat-dir? f)
+                             (each (sort (readdir f)) (n \ (puts n, putc 10)), ok)
+                             (uchunks "cat" puts [f] @ 0 ok 0)))
+                 fs)))
 
    ; -- tac: the lines back to front, a file at a time. the newline rides the line it
    ; followed, so a last line arriving without one comes back first without one --
@@ -209,15 +242,19 @@
        (charm? v && charm? m ? [(v * m) sign]
         (udie 1 (who + ": invalid number of " + what + ": '" + w + "'"))))
    ; the leading words: -n N / -nN / --lines=N, -c N / -cN / --bytes=N (the last given
-   ; wins, as GNU's), the obsolescent -N, and -- to end them. any other word is a file
+   ; wins, as GNU's), the obsolescent -N, -q or -v for never or always a header, and --
+   ; to end them. a word after them that still looks like a flag refuses
    (uclip-args who as)                      ; -> (n files many? sign bytes?)
     (: (val w a k) (? (k < #w) [(snip w k #w) >a]
                       (two? >a) [<>a >>a]
                       (udie 1 (who + ": option requires an argument -- '" + string (w 1) + "'")))
+       hd (tablet 0)                        ; 'h: 1 for -v, 0 for -q, the later winning
        (go a n sign b?)
         (? (atom? a) [n a sign b?]
            (: w <a nw #w
               (? (w = "--") [n >a sign b?]
+                 (w = "-q" || w = "--quiet" || w = "--silent") (pin hd 'h 0, go >a n sign b?)
+                 (w = "-v" || w = "--verbose") (pin hd 'h 1, go >a n sign b?)
                  (2 <= nw && w 0 = 45 && (w 1 = 110 || w 1 = 99))
                   (: r (val w a 2) b (w 1 = 99) q (uclip-n who (? b "bytes" "lines") <r)
                      (go <>r <q <>q b))
@@ -228,8 +265,8 @@
                  (w 0 = 45 && digits? w) (go >a (unum (snip w 1 nw)) 0 0)
                  [n a sign b?])))
        r (go as 10 0 0)
-       fs <>r
-       [<r fs (? (two? fs && two? >fs) 1 0) <>>r <>>>r])
+       fs (ustray who as <>r)
+       [<r fs (peep hd 'h (? (two? fs && two? >fs) 1 0)) <>>r <>>>r])
    (uclip-hdr many first f)
     (? many (say out (uhdr first (f @ "-" "standard input" f))) 0)
    (uclip-say l) (say out <l, (? <>l (put out 10) 0))   ; a read line, its own ending
@@ -329,7 +366,7 @@
        p (fl as 0 0 0 0)
        none !(<p || <>p || <>>p || <>>>p)
        l? (? none 1 <p) w? (? none 1 <>p) m? <>>p c? (? none 1 <>>>p)
-       fs <>>>>p
+       fs (ustray "wc" as <>>>>p)
        (c3 x) <>>x (c4 x) <>>>x
        ; a row is (name (l w b m)), name () for stdin. counted a gulp at a time --
        ; nothing here needs the text, only the numbers off it
@@ -613,25 +650,43 @@
        _ (say out (unlines (? u? (map (p \ p 1) (ded (deco s1))) s1)))
        _ (flush out) 0)
 
-   ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7 --
+   ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7; -d says only
+   ; the runs of two or more, -u only the lone lines; -i, -f N and -s N compare past N
+   ; fields and then N characters, case aside. INPUT and OUTPUT --
    (uniq-main as)
-    (: c? (two? as && <as = "-c")
-       fs (? c? >as as)
-       (emit line cnt) ((? c? (say out (upad 7 (show cnt) + " ")) ()),
-                        say out line, put out 10)
-       ; adjacent runs, so one line of memory is the whole state -- the run's first
-       ; and how many have matched it
+    (: fo (uflags "uniq" as '(102 115) "cdfisu")
+       t <fo fs (fo 1)
+       c? (t 99) d? (t 100) u? (t 117) i? (t 105)
+       (count c) (: v (uoptv t c) n (? v (unum v) 0)
+                    (? (charm? n && 0 <= n) n (udie 1 ("uniq: invalid number: '" + v + "'"))))
+       nf (count 102) ns (count 115)
+       _ (? (atom? >>fs) () (udie 2 "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"))
+       o (? (two? >fs) (: q (open <>fs "w") (? (hot? q) q (udie 1 ("uniq: cannot write " + <>fs)))) out)
+       (blank? c) (c = 32 || c = 9)
+       (field l i) (: n #l
+                      (sp i) (? (i < n && blank? (l i)) (sp (i + 1)) i)
+                      (ink i) (? (i < n && !(blank? (l i))) (ink (i + 1)) i)
+                      (ink (sp i)))
+       (skipf l k i) (? (k = 0) i (skipf l (k - 1) (field l i)))
+       (key l) (: i (min #l (skipf l nf 0 + ns)) s (snip l i #l)
+                  (? i? (string (map (c \ (? (65 <= c <= 90) (c + 32) c)) (chars s))) s))
+       plain? !(i? || 0 < nf || 0 < ns)
+       (emit line cnt) (? ((d? && cnt < 2) || (u? && 1 < cnt)) ()
+                          ((? c? (say o (upad 7 (show cnt) + " ")) ()),
+                           say o line, put o 10))
+       ; adjacent runs, so one line of memory is the whole state -- the run's first,
+       ; its key, and how many have matched it
        _ (ureachm (f \ (udie 2 ("uniq: cannot open " + f)))
                   (\ f first rd
-                     (:- (go () 0) (go prev cnt)
+                     (:- (go () () 0) (go prev pk cnt)
                       (: l (urd-line rd)
                        (? (atom? l) (0 < cnt ? (emit prev cnt) (), 1)
-                        (: x <l
-                         (? (cnt = 0) (go x 1)
-                            (x = prev) (go prev (cnt + 1))
-                            (emit prev cnt, go x 1)))))))
+                        (: x <l k (? plain? x (key x))
+                         (? (cnt = 0) (go x k 1)
+                            (k = pk) (go prev pk (cnt + 1))
+                            (emit prev cnt, go x k 1)))))))
                   (two? fs ? [<fs]))
-       _ (flush out) 0)
+       _ (flush o) _ (? (two? >fs) (close o) 0) 0)
 
    ; -- tee: stdin onto out and every file (-a appends) --
    (tee-main as)
@@ -903,7 +958,7 @@
    (cut-main as)
     (: p (cut-args as)
        d <p fspec <>p cspec <>>p b? <>>>p s? <>>>>p
-       fs <>>>>>p
+       fs (ustray "cut" as <>>>>>p)
        _ (? (fspec || cspec) () (udie 2 "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST"))
        spec (uspec (? fspec fspec cspec))
        (fieldline ln)
@@ -1114,7 +1169,7 @@
                _ (say out ln) _ (put out 10)
                (pin t 'i (i + 1)))),
          1)
-       (ulines "nl" dot as))
+       (ulines "nl" dot ((uflags "nl" as () "") 1)))
 
    ; -- rev: every line back to front --
    (rev-main as)
@@ -1605,7 +1660,6 @@
        _ (go 0)
        _ (say out (? m? "====\n" "`\nend\n"))
        _ (flush out) 0)
-   (umask-now _) (: o (umask 18) _ (umask o) o)
    (uudecode-main as)
     (: (go a o) (? (atom? a) o
                    (<a = "-o") (? (two? >a) (pin o 'o <>a, go >>a o) (udie 1 "uudecode: option requires an argument -- 'o'"))
@@ -1750,7 +1804,7 @@
            [d s? a])
        p (fl as '("\t") 0)
        ds <p s? <>p
-       fs (? (two? <>>p) <>>p '("-"))
+       fs (: r (ustray "paste" as <>>p) (? (two? r) r '("-")))
        (jn cells)
         (: o (jug 0)
            ; the list advances with the separator it spends, never with the cell:
@@ -1832,7 +1886,7 @@
               (2 < #<a && snip <a 0 2 = "-a") (fl >a ln by (uatoi (val <a)) d? fs)
               (fl >a ln by sw d? (<a . fs))))
        p (fl as () () 2 0 ())
-       ln <p by <>p sw <>>p d? (p 3) fs (p 4)
+       ln <p by <>p sw <>>p d? (p 3) fs (ustray "split" as (p 4))
        nl (charm? ln ? ln 1000)
        src (two? fs ? <fs "-")
        pre (two? fs && two? >fs ? <>fs "x")
@@ -1897,7 +1951,7 @@
                      "a" (pin t (got @ "2" 'a2 'a1) 1)
                          (pin t (got @ "2" 'v2 'v1) 1),
                 fl rest fs))))
-       fs (fl as ())
+       fs (ustray "join" as (fl as ()))
        _ (atom? >fs ?
           (udie 2 "usage: join [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] FILE1 FILE2"))
        sep (t 'sep)

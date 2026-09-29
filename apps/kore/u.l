@@ -103,6 +103,22 @@
              m #sfx n #s
              (? (0 < m && m < n && (snip s (n - m) n = sfx))
                 (snip s 0 (n - m)) s))))
+   ; the process umask, read and put back
+   (umask-now _) (: o (umask 18) _ (umask o) o)
+   ; a tool's flags off the head of as: [t operands], every letter in `ok` and a value
+   ; letter in `vals`. a stranger letter, a flag after an operand or a value flag with
+   ; none refuses before anything is done; the file really called -x is `-- -x`
+   (uflags who as vals ok)
+    (: t (tablet 0)
+       o (uopt as t vals () ())
+       _ (? (two? o) () (udie 2 (who + ": an option wants a value")))
+       _ (: c (uoptun t ok) (? !c () (udie 2 (who + ": unknown option -" + string c))))
+       _ (: w (uoptstray as <>>o) (? !w () (udie 2 (who + ": unknown option " + w))))
+       [t <>>o])
+   ; a hand-walked tool's operands, refused with 2 when one still looks like a flag: its
+   ; walk stops at the first word it does not know, so that word is a stranger or a flag
+   ; after an operand
+   (ustray who as rest) (: w (uoptstray as rest) (? !w rest (udie 2 (who + ": unknown option " + w))))
    (udir p)
     (uchop p @
      0 (0 < #p ? "/" ".")
