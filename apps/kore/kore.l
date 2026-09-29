@@ -995,7 +995,7 @@
   -d  seconds between frames (3 by default)
   -p  one process, spelled again for each
   keys: q quit, space or r repaint, c the command line, P M T N the orders"
-    'free "usage: free [-h|-m|-g]"
+    'free "usage: free [-b|-k|-m|-g|-h] [-tw]"
     'uptime "usage: uptime"
     'pidof "usage: pidof [-s] NAME.."
     'pgrep "usage: pgrep [-acflnovx] [-d DELIM] [-u USER,..] [PATTERN]"
@@ -1058,8 +1058,8 @@
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
    ; is the leading words only, which leaves `ps aux` (no dash) exactly as it was.
-   korebare '(arch nproc whoami groups uptime pwd free tty clear hostname)
-   korebareok {'free '("-g" "-m" "-h") 'pwd '("-L" "-P")}
+   korebare '(arch nproc whoami groups uptime pwd tty clear hostname)
+   korebareok {'pwd '("-L" "-P")}
    (kobare nm as)
     (: ok (peep korebareok nm ())
        (<(filter (w \ 1 < #w && w 0 = 45 && (nelem w ok)) as)))

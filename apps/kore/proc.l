@@ -1143,26 +1143,28 @@
    ; -- free: /proc/meminfo, procps' six columns. used is total minus available and
    ; not total minus free: the kernel's own estimate of what a new program could have
    ; is the only honest reading of "used", and it is what procps prints --
+   ; -b bytes, -k KiB (unsaid), -m MiB, -g GiB, -h the unit each fits; -t a Total row
+   ; of the two; -w buffers and cache apart
    (free-main as)
-    (: m (umeminfo 0)
+    (: fo (uflags "free" as () "bghkmtw")
+       t <fo
+       m (umeminfo 0)
        (g k) (peep m k 0)
-       div (? (elem "-g" as) 1048576 (? (elem "-m" as) 1024 1))
        ; -h: the unit each number fits, procps' suffixes. the readings are KiB out of
        ; /proc/meminfo, so the ladder starts at Ki
        (hum k) (: (go v us) (? (v < 1024 || (atom? >us)) (show v + <us) (go (v // 1024) >us))
                   (go k '("Ki" "Mi" "Gi" "Ti" "Pi")))
-       h? (elem "-h" as)
-       (cell x) (upad 12 (? h? (hum x) (show (x // div))))
+       (cell x) (upad 12 (? (t 104) (hum x) (t 98) (show (x * 1024)) (t 103) (show (x // 1048576)) (t 109) (show (x // 1024)) (show x)))
        tot (g 'MemTotal) fre (g 'MemFree) av (g 'MemAvailable)
-       bc (((g 'Buffers) + (g 'Cached)) + (g 'SReclaimable))
+       bu (g 'Buffers) ca ((g 'Cached) + (g 'SReclaimable))
        st (g 'SwapTotal) sf (g 'SwapFree)
-       _ (say out "               total        used        free      shared  buff/cache   available")
-       _ (put out 10)
-       _ (say out ((urpad 8 "Mem:") + (cell tot) + (cell (tot - av)) + (cell fre)
-                   + (cell (g 'Shmem)) + (cell bc) + (cell av)))
-       _ (put out 10)
-       _ (say out ((urpad 8 "Swap:") + (cell st) + (cell (st - sf)) + (cell sf)))
-       _ (put out 10)
+       w? (t 119)
+       _ (say out (? w? "               total        used        free      shared     buffers       cache   available\n"
+                       "               total        used        free      shared  buff/cache   available\n"))
+       _ (say out ((urpad 8 "Mem:") + (cell tot) + (cell (tot - av)) + (cell fre) + (cell (g 'Shmem))
+                   + (? w? (cell bu + cell ca) (cell (bu + ca))) + (cell av) + "\n"))
+       _ (say out ((urpad 8 "Swap:") + (cell st) + (cell (st - sf)) + (cell sf) + "\n"))
+       _ (? (t 116) (say out ((urpad 8 "Total:") + (cell (tot + st)) + (cell (tot - av + st - sf)) + (cell (fre + sf)) + "\n")) 0)
        _ (flush out) 0)
 
    ; -- uptime: the clock, how long since boot, the users the host's utmp holds, and

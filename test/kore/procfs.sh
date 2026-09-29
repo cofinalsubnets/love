@@ -80,4 +80,9 @@ done
 [ "$(korerun pkill -e -n .kore-pgnap)" = ".kore-pgnap killed (pid $pb)" ] || fail "kore pkill -e -n"
 wait $pb; kill -0 $pa || fail "kore pkill -n took the oldest too"
 kill $pa; wait $pa 2> /dev/null; rm -f "$PN"
+# free's -b -k -m -t -w: the header, each row's name and its total, which hold still while
+# the used and free figures move
+for c in -b -k -m -t -w -tw; do
+  free $c | awk 'NR == 1 { print; next } { print $1, $2 }' > "$g"; korerun free $c | awk 'NR == 1 { print; next } { print $1, $2 }' > "$o"; same "free $c"
+done
 echo "kore: the /proc family (ps/free/uptime/pidof/pgrep/pkill/killall/pwdx vs procps) ok"
