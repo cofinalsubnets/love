@@ -640,7 +640,9 @@ second what RFC 8446 has every server speak.
 
 ## pic (apps/kore/pic.l)
 
-`pic` is one command with four verbs; with none it is `pic cat`.
+`pic` is one command with four verbs. With none, it is `pic cat` when its first input is a
+PNG, JPEG or GIF (or a flag is one of cat's, `-g`, `-w`, `-h`) and classic pic otherwise
+(below).
 
 `pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture, PNG, JPEG or GIF (a
 GIF's first frame), as wide as the terminal (or `COLS`, or 80 when there is none) and no
@@ -685,6 +687,19 @@ row's lower half is transparent as the cell's is, and `-c 256` takes each channe
 level the 256-colour cube shows (0, 95, 135, 175, 215, 255). OUT is a PNG unless its
 extension or `-t` says otherwise; to `.ans` it is the blocks' text itself, `-c 256` in the
 cube's codes.
+
+`pic [-nCSU] [FILE..]` and `pic -t [-cCSUz] [FILE..]` are classic pic (apps/kore/gpic.l),
+Kernighan's picture language as GNU pic speaks it: a troff preprocessor that copies a
+document through and turns each picture between `.PS` and `.PE` (or `.PF`, `.PY`) into
+troff's `\D` drawing commands, or with `-t` into tpic `\special`s in a TeX box `\graph`. A
+flag of GNU pic's (`-n -t -c -C -S -U -z`, `-D`, `-T dev`) always means classic pic. Its
+output is held byte for byte to groff's own `pic` (`make test_gpic`, the corpus in
+test/gpic): boxes, circles, ellipses, arcs, lines, arrows, splines, moves and text with
+their attributes, places and corners, expressions and variables, blocks, `define`, `for`,
+`if`, `copy` and `copy thru`, `sprintf`, `print` and `command`, colours, polygons, slanted
+boxes and `aligned` text; `-c` and `-z` for TeX. `sh` runs only under `-U`. Not yet: dashed
+or dotted ellipses and rounded boxes, `.PS <file`, groff's `rand`, and its error messages
+(the exit status and what is drawn before an error agree, the words on stderr do not).
 
 The decoders: apps/png.l (every colour type and depth, Adam7), love/lib/jpeg.c (baseline and
 progressive, any sampling), love/lib/gif.c (LZW, interlace, transparency, and the three

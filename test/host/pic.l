@@ -101,11 +101,21 @@
    _ (put (dir + "/anim.gif") anim)
    r1 (hark [love "kore" "pic" "-w" "8" (dir + "/a.gif")])
    r2 (hark [love "kore" "jpegcat" "-w" "8" (dir + "/a.gif") (dir + "/b.jpg")])
-   r3 (hark [love "kore" "pic" (dir + "/n.txt") (dir + "/none.png")])
+   r3 (hark [love "kore" "pic" "cat" (dir + "/n.txt") (dir + "/none.png")])
    _ (test (<r1 = 0) (has >r1 "▀") !(has >r1 "a.gif")
            (<r2 = 0) (has >r2 "a.gif:\n") (has >r2 "b.jpg:\n")
            (<r3 = 1))
    (pic as) (hark ([love "kore" "pic"] + as))
+   ; a bare pic sniffs: a picture is drawn, anything else is a document for classic pic
+   ; (apps/kore/gpic.l), and a flag says which outright
+   _ (put (dir + "/d.ms") ".PS\nbox\n.PE\ntext\n")
+   _ (test (: r (pic [(dir + "/a.gif")]) ((<r = 0) && (has >r "▀")))
+           (: r (pic [(dir + "/n.txt")]) ((<r = 0) && (has >r ".do if !dPS") && (has >r "\nhello\n")))
+           (: r (pic [(dir + "/d.ms")]) ((<r = 0) && (has >r "\\D'p 0.000i -0.500i -0.750i") && (has >r ".PE\n.lf 4\ntext\n")))
+           (: r (pic ["-t" (dir + "/d.ms")]) ((<r = 0) && (has >r "\\special{pa 750 500}%")))
+           (: r (pic ["-n" (dir + "/d.ms")]) ((<r = 0) && (has >r "\\D'l 0.750i 0.000i'")))
+           (: r (pic ["-w" "8" (dir + "/n.txt")]) (<r = 1))
+           (: r (pic [(dir + "/n.txt") (dir + "/none.png")]) (<r = 3)))
    (file p) (: r (uread p) (? (two? r) <>r ""))
    ; the verbs; cat is the default, and a mode is said, not probed, off a terminal
    _ (test (pic ["cat" "-w" "8" (dir + "/a.gif")] = r1)

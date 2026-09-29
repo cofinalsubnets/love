@@ -1,0 +1,10 @@
+.PS
+x = 0.1
+y = .3
+z = 1
+ellipse wid 0.75 sprintf("%+g", y)
+ellipse wid boxwid/2 thick 0.5
+for j = 0.5 to 2 do { x = 1.5; for j = 0.5 to 3 do { arrow "xy" above right x/2 dotted; line right y dotted 0.05 shaded "blue" } }
+box wid (y+0.1) dashed
+arc thick 2
+.PE
