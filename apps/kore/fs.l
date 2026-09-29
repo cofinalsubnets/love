@@ -46,8 +46,16 @@
                a (line ())
                (? (two? a && (<a = 121 || <a = 89)) 1 0))
 
-   ; -- pwd: where we stand --
-   (pwd-main _) (say out (cwd ()), put out 10, flush out, 0)
+   ; -- pwd: where we stand. -P the path with no link in it; -L $PWD, the way the shell
+   ; came, when it is absolute, holds no . or .., and is the same directory; the later
+   ; of the two wins, and -P unsaid --
+   (pwd-main as)
+    (: L? (: ws (filter (w \ w = "-L" || w = "-P") as) (? (two? ws) (<(rev ws) = "-L") 0))
+       e (getenv "PWD")
+       (same a b) (: x (stat a) y (stat b) (? (two? x && two? y) (x 8 = y 8 && ust-at x 11 = ust-at y 11) 0))
+       (clean? p) (: segs (usplit 47 p) (? (elem "." segs || elem ".." segs) 0 1))
+       w (? (L? && string? e && 0 < #e && e 0 = 47 && clean? e && same e ".") e (cwd ()))
+       (say out w, put out 10, flush out, 0))
 
    ; -- sync: the writeback, scheduled. sync(2) answers nothing and cannot fail.
    ; GNU's takes FILEs and fsyncs each; this one is the bare call only, since the

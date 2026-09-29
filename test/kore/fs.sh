@@ -236,4 +236,12 @@ korerun touch -c "$F/nothere"; [ ! -e "$F/nothere" ] || fail "kore touch -c"
 korerun touch -r "$F/s/f" "$F/tr" && [ "$(stat -c %Y "$F/tr")" = 1000000000 ] || fail "kore touch -r"
 korerun touch -d @1234567890 "$F/tr" && [ "$(stat -c %Y "$F/tr")" = 1234567890 ] || fail "kore touch -d @"
 rm -rf "$F"
+# pwd -L is $PWD, the way the shell came, when it names this directory; -P and a stale
+# $PWD are the path with no link in it
+P2=$PWD/$ho/.pwdl; rm -rf "$P2"; mkdir -p "$P2/real"; ln -s real "$P2/lnk"
+M=$PWD/$m
+(cd "$P2/lnk" && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" kore pwd -L)" = "$P2/lnk" ] \
+  && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" kore pwd -P)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ] \
+  && [ "$(PWD=/ LOVE_NO_IMAGE= "$M" kore pwd -L)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ]) || fail "kore pwd -L/-P"
+rm -rf "$P2"
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"
