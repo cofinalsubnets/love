@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -102,7 +103,7 @@ static int parse_addr(word x, int how, struct saddr *a) {
  if (how == HowListen && oddp(x)) return a->fam = FamTcp, (a->port = port_of(x)) < 0 ? -1 : 0;
  word f = nth_take(&x), v;
  if (nom_is(f, "unix")) {
-  if (how == HowBind || !(v = nth_take(&x)) || !strp(v)) return -1;
+  if (how == HowBind || !(v = nth_take(&x)) || !cstrp(v)) return -1;
   struct sockaddr_un un;
   a->fam = FamUnix, a->path = str(v);
   if (a->path->len == 0 || a->path->len >= sizeof un.sun_path) return -1; }
@@ -156,7 +157,8 @@ ai_noinline static int call_sock(struct saddr const *a, int how) {
   if (r == 0 || errno == EINPROGRESS) return fd; }
  else {
   int one = 1;
-  if (un) unlink(ua.sun_path);                   // a stale socket file from a dead listener
+  struct stat st;                                // a stale socket file from a dead listener
+  if (un) { if (!lstat(ua.sun_path, &st) && S_ISSOCK(st.st_mode)) unlink(ua.sun_path); }  // anything else stays
   else setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
   if (a->ttl && v6) setsockopt(fd, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &one, sizeof one);
   else if (a->ttl && !raw) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);   // linux's number
@@ -466,7 +468,7 @@ ai_noinline static int peer_of(struct ai_str *h, int port, struct peer *pe) {
  char t[INET6_ADDRSTRLEN];
  uint32_t ip;
  memset(pe, 0, sizeof *pe);
- if (port < 0 || h->len >= sizeof t) return -1;
+ if (port < 0 || h->len >= sizeof t || memchr(h->bytes, 0, h->len)) return -1;
  memcpy(t, h->bytes, h->len), t[h->len] = 0;
  if ((pe->v6 = memchr(t, ':', h->len) != 0)) {
   pe->a.in6.sin6_family = AF_INET6, pe->a.in6.sin6_port = htons((uint16_t) port);

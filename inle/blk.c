@@ -35,6 +35,7 @@ static struct {
   // pci notify door: address precomputed at init. mmio: base + 0x50.
   volatile uint16_t *notify16;       // pci writes the queue index here
   volatile uint32_t *notify32;       // mmio writes it here
+  volatile uint8_t *devst;           // device_status: pci's byte, mmio's word
 } kblk;
 
 // the hardware fence DMA needs around the avail publish and the used read.
@@ -66,6 +67,15 @@ static int vq_lay(void *dma) {
   w16(kblk.avail + 0, 1);
   return 1; }
 
+// a request the device never answered may still land: reset the device, which ends its
+// DMA, and take the disk away, so no later buffer is one it could still be writing
+static void vq_dead(void) {
+  if (kblk.notify16) w8(kblk.devst, 0); else w32(kblk.devst, 0);
+  for (uint32_t spin = 0; spin < (uint32_t) 1 << 20; spin++)
+    if (!(kblk.notify16 ? r8(kblk.devst) : r32(kblk.devst))) break;
+  kblk.sectors = 0;
+  bputs("disk: virtio-blk stopped answering, reset and dropped\r\n"); }
+
 // post one request and spin it home. type 0 = read (device fills data),
 // 1 = write (device drains it). -> 0 ok, -1 refused/failed/timed out.
 static int vq_go(uint32_t type, uint64_t lba, void *data, uint32_t bytes) {
@@ -88,7 +98,7 @@ static int vq_go(uint32_t type, uint64_t lba, void *data, uint32_t bytes) {
   if (kblk.notify16) w16((volatile uint8_t*) kblk.notify16, 0);
   else w32((volatile uint8_t*) kblk.notify32, 0);
   for (uint32_t spin = 0; r16(kblk.used + 2) != kblk.avail_idx; spin++)
-    if (spin == (uint32_t) 1 << 28) return -1;    // a dead device is a refusal, not a hang
+    if (spin == (uint32_t) 1 << 28) return vq_dead(), -1;   // a refusal, not a hang
   dma_fence();
   return r8(kblk.sts) == 0 ? 0 : -1; }
 
@@ -107,7 +117,9 @@ static int blk_pci(uint32_t bdf, void *dma) {
   // the vendor capability walk: cfg_type 1 = common, 2 = notify, 4 = device
   uint64_t common = 0, notify = 0, devcfg = 0;
   uint32_t nmult = 0;
-  for (uint32_t c = pci_r8(bdf, 0x34) & 0xfc; c; c = pci_r8(bdf, c + 1) & 0xfc) {
+  // bounded: a list that loops is the device's word, and 48 is all 256 bytes can hold
+  uint32_t hops = 0;
+  for (uint32_t c = pci_r8(bdf, 0x34) & 0xfc; c && hops < 48; c = pci_r8(bdf, c + 1) & 0xfc, hops++) {
     if (pci_r8(bdf, c) != 9) continue;         // 9 = vendor-specific (virtio's)
     uint32_t type = pci_r8(bdf, c + 3);
     uint64_t at = pci_bar(bdf, pci_r8(bdf, c + 4)) + pci_r32(bdf, c + 8);
@@ -124,6 +136,7 @@ static int blk_pci(uint32_t bdf, void *dma) {
   // memory decode + bus master on, INTx OFF (bit 10): this driver polls
   pci_w32(bdf, 4, pci_r32(bdf, 4) | 6 | 1 << 10);
   volatile uint8_t *cc = (volatile uint8_t*) (khhdm + common);
+  kblk.devst = cc + 20;
   w8(cc + 20, 0);                              // device_status: reset
   w8(cc + 20, 1); w8(cc + 20, 1 | 2);          // ACKNOWLEDGE, DRIVER
   w32(cc + 0, 1);                              // device_feature_select: high word
@@ -177,6 +190,7 @@ static void blk_scan(void *dma) {
 #endif
 
 static int blk_mmio(volatile uint8_t *m, void *dma) {
+  kblk.devst = m + 0x70;
   w32(m + 0x70, 0);                            // status: reset
   w32(m + 0x70, 1); w32(m + 0x70, 1 | 2);      // ACKNOWLEDGE, DRIVER
   w32(m + 0x14, 1);                            // device_features_sel: high word

@@ -253,7 +253,7 @@ static lvm(lvm_fexec) {
 // (getenv name) -> string, or zero if unset / misused. zero = absent, not an error.
 // the name goes to getenv where it lies: a love string's bytes[len] is always a NUL.
 static lvm(lvm_getenv) {
- char const *v = strp(Sp[0]) ? getenv(txt(Sp[0])) : NULL;
+ char const *v = cstrp(Sp[0]) ? getenv(txt(Sp[0])) : NULL;
  if (!v) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
  LvmCallp(g, 1, ai_strof, v) }
 

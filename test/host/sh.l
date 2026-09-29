@@ -904,5 +904,49 @@
    _ (landed? t ? (catch t) (freeze t))
    (test (has? s "a本b|") !(has? s "a日本b|") !(has? s "\xef\xbf\xbd")))
 
+;; PATH unset searches the default path, never the cwd: a word planted there is not found
+(: r (hark ["out/love" "out/lush" "-c" "d=out/.lush-t9; mkdir -p $d; printf '#!/bin/sh\\necho planted\\n' > $d/zz-qq-plant; chmod 755 $d/zz-qq-plant; cd $d; unset PATH; zz-qq-plant; echo st=$?"])
+   (test ("st=127\n" = >r)))
+;; the prompt shows a control byte in the cwd as ^X, so a directory's name cannot drive the terminal
+(test ("a^[^Gb^?" = sh-vis ("a" + string 27 + string 7 + "b" + string 127))
+      ("~/x" = sh-vis "~/x"))
+;; a fresh history is laid 0600: it holds what was typed
+(: home0 ("" + getenv "HOME")
+   d "out/.lush-t10"
+   _ (hark ["out/love" "out/lush" "-c" ("mkdir -p " + d + "; rm -f " + d + "/.lush_history")])
+   _ (setenv "HOME" d)
+   _ (sh-histput "echo zz")
+   _ (sh-histput "echo yy")
+   st (stat (d + "/.lush_history"))
+   _ (setenv "HOME" home0)
+   (test (two? st) (384 = (511 & (st 2)))))
+
+;; a bracketed paste is text on the line: its newlines run nothing until an enter
+(: (has? hay ned)
+    (: n #ned m #hay
+       (go i) (? (m < i + n) 0 (snip hay i (i + n) = ned) 1 (go (i + 1)))
+       (go 0))
+   (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
+   (type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   e (string 27)
+   f "out/.lush-t11"
+   _ (hark ["out/love" "out/lush" "-c" ("rm -f " + f)])
+   r (tether ["out/love" "lush"])
+   m >r
+   _ (settty m 24 80)
+   sink (jug 0)
+   t (twirl (_ \ pump m sink) 0)
+   _ (rest 600)
+   _ (type m (e + "[200~touch " + f + "\necho pasted-" + "ran\n" + e + "[201~"))
+   _ (rest 700)
+   early (two? (stat f))
+   _ (type m "\r")
+   _ (rest 700)
+   late (two? (stat f))
+   s (slurp sink)
+   _ (still <r 9)
+   _ (landed? t ? (catch t) (freeze t))
+   (test !early late (has? s "pasted-ran") (has? s (e + "[?2004h"))))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)

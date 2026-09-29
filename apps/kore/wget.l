@@ -23,6 +23,8 @@
        (go i) (? ((n - m) < i) -1 ((snip s i (i + m)) = sub) i (go (i + 1)))
        (go cite))
    (wg-lower s) (string (map (i \ (: c (s i) (? (64 < c && c < 91) (c + 32) c))) (jot #s)))
+   ; what a peer said, fit for a terminal: the C0 controls but tab and newline, and DEL, out
+   (wg-plain s) (string (filter (c \ !((c < 32 && c != 9 && c != 10) || c = 127)) (map (i \ s i) ^#s)))
    ; "https://host[:port]/path" -> (tls? host port path) | ()
    (wg-url u)
     (: tls? (8 <= #u && (snip u 0 8) = "https://")
@@ -101,7 +103,7 @@
                    loc (wg-header (r 1) "location")
                    (? (300 <= code && code < 400 && string? loc)
                       (? (hops < 1) [1 "wget: too many redirects"]
-                         ((? quiet 0 (say err ("wget: -> " + loc + "\n"))), wg-fetch (wg-resolve url loc) (hops - 1) quiet))
+                         ((? quiet 0 (say err ("wget: -> " + wg-plain loc + "\n"))), wg-fetch (wg-resolve url loc) (hops - 1) quiet))
                       (200 <= code && code < 300) [0 (r 2)]
                       [8 ("wget: " + (u 1) + " answered " + show code)]))))))
    (wg-name url)
@@ -118,20 +120,21 @@
                        (<a = "-h" || <a = "--help") [q o ()]
                        (go >a q o <a))
        r (go as () () ())
-       quiet <r out <>r url (r 2)
+       quiet <r dest <>r url (r 2)
        ; a seat with a page's network and no socket (inle under a browser, inle/wasm): the
        ; kernel's fetch door lays the file itself, whole, and -O - has no door there
        (? !(string? url) (say err "usage: wget [-q] [-O FILE] URL\n", 1)
           (elem 'fetch (names ()))
-           (: nm (? (string? out) out (wg-name url))
+           (: nm (? (string? dest) dest (wg-name url))
               (? (nm = "-") (say err "wget: -O - is not a door on this machine\n", 3)
                  (: c ((ev 'fetch) url nm)
                     (? (charm? c && c = 0) (? quiet 0 (say err ("wget: fetched -> " + nm + "\n")), 0)
                        (say err ("wget: cannot fetch " + url + (charm? c ? (" (errno " + show (0 - c) + ")") "") + "\n"), 4)))))
           (: f (wg-fetch url 8 quiet)
              (? !(<f = 0) (say err (<>f + "\n"), <f)
-                (: nm (? (string? out) out (wg-name url))
+                (: nm (? (string? dest) dest (wg-name url))
                    body <>f
+                   ; -O - is stdout, which carries the body and nothing else: every word is err's
                    p (? (nm = "-") out (open nm "w"))
                    (? !(hot? p) (say err ("wget: cannot write " + nm + "\n"), 3)
                       (say p body, (? (nm = "-") (flush p) (close p)), (? quiet 0 (say err ("wget: " + show #body + " bytes -> " + nm + "\n"))), 0))))))))

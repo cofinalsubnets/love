@@ -1374,9 +1374,11 @@
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
    sh-imgc {}                           ; word -> (1 fn whole?) | 0, decided once
+   ; PATH, or libc's default when it is unset -- never the cwd alone
+   (sh-path _) (: p (getenv "PATH") (? (string? p) p "/usr/local/bin:/usr/bin:/bin"))
    (sh-pathdirs _)
     (:- (go 0 0 ())
-     p ("" + (getenv "PATH")) n #p
+     p (sh-path ()) n #p
      (go from k acc) (? (n <= k) (rev (snip p from k . acc))
                         (p k = 58) (go (k + 1) (k + 1) (snip p from k . acc))
                         (go from (k + 1) acc)))
@@ -1387,8 +1389,8 @@
    (sh-self? p) (: a (stat p) ((two? a) && (a = (stat (sh-seat ())))))
    ; hash's memory: a win is kept under the PATH that gave it, and read back only
    ; while PATH is that string and the file is still there
-   (sh-hashget w) (peep sh-hashc w () @ (ps . p) (? (ps = ("" + (getenv "PATH")) && two? (stat p)) p ()) ())
-   (sh-hashput w p) (pin sh-hashc w (("" + (getenv "PATH")) . p))
+   (sh-hashget w) (peep sh-hashc w () @ (ps . p) (? (ps = (sh-path ()) && two? (stat p)) p ()) ())
+   (sh-hashput w p) (pin sh-hashc w ((sh-path ()) . p))
    (sh-whichp w)                                ; PATH's winner for w -> (1 path), or ()
      (? (sh-slashed? w) (two? (stat w) ? [1 w])
         (: c (sh-hashget w)
@@ -1516,7 +1518,7 @@
    ; mode may differ: sh-main drops them, and each word is asked again
    (sh-forget _) (sh-tclear sh-imgc, sh-tclear sh-forkc, sh-tclear sh-hashc)
    ; a verdict outside autonomous mode is PATH's, so a new PATH asks each word again
-   (sh-pathfresh _) (: p ("" + getenv "PATH")
+   (sh-pathfresh _) (: p (sh-path ())
                        (? (p = peep sh-verdpath () 0) 0
                           (sh-tclear sh-imgc, sh-tclear sh-forkc, pin sh-verdpath () p, 0)))
    (sh-fd0? fdmap) (? (atom? fdmap) 0 (<<fdmap = 0) 1 (sh-fd0? >fdmap))
@@ -2598,6 +2600,11 @@
    ; --- the prompt --------------------------------------------------------------
    (sh-rfind s b) (:- (go (#s - 1)) (go k)
     (? (k < 0) -1 (s k = b) k (go (k - 1))))
+   (sh-vis s)                                   ; control bytes as ^X, so a name cannot talk to the terminal
+     (: n #s
+        (go i acc) (? (n <= i) acc
+                      (: b (s i) (go (i + 1) (acc + (? (b = 127) "^?" (b < 32) ("^" + string (b + 64)) (string b))))))
+        (go 0 ""))
    (sh-homely d)                                ; /home/me/x -> ~/x
      (: h ("" + (getenv "HOME")) hn #h
         (hn && hn <= #d && h = snip d 0 hn ?
@@ -2624,7 +2631,7 @@
         br (sh-gitbr 0)
         pst (st @ 0 "" (sh-pen-st + show st + " " + sh-pen-off))
         pbr (#br ? (sh-pen-br + " (" + br + ")" + sh-pen-off) "")
-        (pst + sh-pen-cwd + sh-homely ("" + cwd 0) + sh-pen-off + pbr
+        (pst + sh-pen-cwd + sh-vis (sh-homely ("" + cwd 0)) + sh-pen-off + pbr
              + (getuid 0 @ 0 " # " " $ ")))
 
    ; --- history: ~/.lush_history, oldest first on disk, newest first in hand
@@ -2646,8 +2653,10 @@
               _ (close prt)
               (take 100 r))
            ()))
-   (sh-histput ln)
-     (: o (open (sh-histpath 0) "a")
+   (sh-histput ln)                              ; a new history is laid 0600: it holds secrets
+     (: hp (sh-histpath 0)
+        _ (? (atom? (stat hp)) (: fd (openfd hp 3) (? (charm? fd) (close fd) 0)) 0)
+        o (open hp "a")
         (? (hot? o) (say o (ln + "\n"), flush o, close o) 0))
 
    ; --- completion: (insert . candidates) off the text left of the cursor ------
@@ -2672,7 +2681,7 @@
    (sh-cmds w)                                  ; command candidates for prefix w
      (sh-uniq (sort (filter (sh-prefix? w) sh-builtins +
                      (? (2 = sh-mode 0) () (filter (sh-prefix? w) (sh-verbnames 0))) +
-                     (catmap (filter (sh-prefix? w) * readdir) (sh-pathdirs ("" + getenv "PATH"))))))
+                     (catmap (filter (sh-prefix? w) * readdir) (sh-pathdirs (sh-path ()))))))
    (sh-dirp q) (: st (stat q) (two? st && (16384 = (61440 & (st 2)))))
    (sh-unfold w)                                ; ~/x -> $HOME/x (stat wants the real path)
      (? (#w && w 0 = 126) ("" + getenv "HOME" + snip w 1 #w) w)

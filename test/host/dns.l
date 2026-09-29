@@ -152,5 +152,40 @@
              ((resolve6-in (dns-dir + "/conf") (dns-dir + "/hosts") "v6.only") = ["::1"])
              ((resolve6 "fe80::1") = ["fe80::1"])))
 
+; --- law 8: only the nameserver's own answer to our own question is taken ------
+; ahead of the true answer come four that must be dropped: one from another address
+; (127.0.0.2, where the host has it), one from another port, one with another id and one
+; to another question. the resolver keeps waiting and takes the fifth
+(: port 7404
+   (rep q addr) (dns-reply q addr ())
+   (other-name q) (snip q 0 13 + string (q 13 ^ 1) + snip q 14 #q)          ; ab.cd -> `b.cd
+   s (twirl (\ _ (: p (bind ['udp port])
+                    d (recv p) q <>d
+                    far (bind ['udp "127.0.0.2" 0])
+                    _ (? (hot? far) (send far <d (rep q 101058054)) 0)       ; 6.6.6.6
+                    near (bind ['udp 0])
+                    _ (send near <d (rep q 117901063))                          ; 7.7.7.7
+                    _ (send p <d (rep (wrbe ((rdbe q 0 2) ^ 1) 2 + snip q 2 #q) 134744072))   ; 8.8.8.8
+                    _ (send p <d (rep (other-name q) 151587081))                ; 9.9.9.9
+                    _ (send p <d (rep q 16909060))                              ; 1.2.3.4
+                    _ (rest 20)
+                    _ (? (hot? far) (close far) 0) _ (close near) _ (close p) 1)) ())
+   _ (rest 20)
+   a (dns-ask 2130706433 port "ab.cd" 2000)
+   _ (catch s)
+   _ (assert (a = [16909060])))
+
+; --- law 9: the matcher's own cases, and ids that are not the clock -------------
+(: q (dns-query 4663 "ab.cd")
+   r (dns-reply q 16909060 ())
+   qe (dns-qedns 4663 "ab.cd" 1)
+   ids (map (_ \ dns-id 0) ^8)
+   _ (assert (dns-match? q r)
+             (dns-match? qe r)                                     ; the edns record is not the question
+             !(dns-match? q q)                                     ; a query is no answer: qr clear
+             !(dns-match? q (snip r 0 14))                         ; torn short
+             (all (i \ charm? i && 0 <= i && i < 65536) ids)
+             (any (i \ i != <ids) ids)))                         ; eight equal would be 2^-112
+
 (hark ["rm" "-rf" dns-dir])
 (say out "dns: ok", putc 10)

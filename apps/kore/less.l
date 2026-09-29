@@ -87,8 +87,11 @@
                       (? e (: q (snip h i (i + e)) (go (i + e) (? (q = pgrst) "" q)))
                          (go (i + 1) a))))
        (go 0 a))
+   ; a byte as two hex digits
+   (pghex b) (: d "0123456789ABCDEF" (string (d (b >> 4)) + string (d (b & 15))))
    ; a source line -> what it looks like on a screen: tabs to the next 8th column,
-   ; a control byte as ^X, an sgr sequence itself, everything else its own bytes
+   ; a control byte as ^X, a byte that is no utf-8 as <9B>, a c1 control as <U+009B>,
+   ; an sgr sequence itself, everything else its own bytes
    (pgtabs ln)
     (: n #ln
        o (jug 0)
@@ -101,8 +104,11 @@
                        (b = 127) (say o "^?", go (k + 1) (c + 2))
                        (b < 32) (say o ("^" + string (b + 64)), go (k + 1) (c + 2))
                        (b < 128) (put o b, go (k + 1) (c + 1))
-                       (: j (cpnext ln k) _ (say o (snip ln k j))
-                          (go j (c + max 0 (wcwidth (cpat ln k))))))))))
+                       (: m (cpn ln k) u (cpat ln k)
+                          (? (m = 0) (say o ("<" + pghex b + ">"), go (k + 1) (c + 4))
+                             (u < 160) (say o ("<U+00" + pghex u + ">"), go (k + m) (c + 8))
+                             (: _ (say o (snip ln k (k + m)))
+                                (go (k + m) (c + max 0 (wcwidth u)))))))))))
        (go 0 0))
    ; the byte index where column k of s falls -- a character costs its wcwidth and an sgr
    ; sequence none. the stop is before the character that would overflow, so a wide one

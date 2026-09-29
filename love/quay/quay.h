@@ -64,7 +64,7 @@ enum {              // flag bits: the console's modes
 enum { cb_mice = cb_mx10 | cb_mbtn | cb_mdrag | cb_many };
 
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
-enum { cb_mousen = 24 };  // a mouse report's longest (cb_mouse's buffer size)
+enum { cb_mousen = 36 };  // a mouse report's longest: ESC [ < and three 10-digit fields, 2 ; and M
 
 struct cb {
   uint32_t wpos, spos;        // the write cursor, and DECSC's saved one

@@ -24,10 +24,33 @@
    ; the patch-set ID: the name of a head DAG state. the tips are a set -- sort
    ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (show (sort tp)))
-   (blob h) (: t (look (".sb/blob/" + h)) (two? t ? <>t))
+   (blob h) (: t (? (sb-hex? h) (look (".sb/blob/" + h))) (two? t ? <>t))
    (keep s) (: h (sha256 s) _ (lay (".sb/blob/" + h) s) h)
-   (patch id) (form (".sb/patch/" + id))
+   (patch id) (: f (? (sb-hex? id) (form (".sb/patch/" + id))) (sb-sound? f ? f))
    (fld f k) (:- (go >f) (go m) (? (atom? m) () (two? <m && <<m = k) ><m (go >m)))
+
+   ; --- what a patch may say: its ids and paths become paths here, so a peer's word
+   ;     is checked before any of it is used ---
+   ; a store name is a sha256 in lowercase hex and nothing else
+   (sb-hex? s)
+    (: (go i) (? (64 <= i) 1 (: c (s i) (? ((48 <= c <= 57) || (97 <= c <= 102)) (go (i + 1)) 0)))
+       (string? s && #s = 64 && go 0))
+   ; a hunk's path is relative and stays under the root: no leading /, no empty, . or .. segment
+   (sb-rel? p) (string? p && sb-rel1? p)
+   (sb-rel1? p)
+    (: n #p
+       (seg a b) (: s (snip p a b) !(#s = 0 || s = "." || s = ".."))
+       (go a i) (? (n <= i) (seg a i)
+                   (p i = 47) (seg a i && go (i + 1) (i + 1))
+                   (go a (i + 1)))
+       (0 < n && go 0 0))
+   (sb-all? f l) (? (atom? l) (l = ()) (f <l && sb-all? f >l))
+   (sb-oid? x) (x = () || sb-hex? x)                             ; a hunk side: absent or a blob
+   (sb-hunk? h) (two? h && #h = 3 && string? <h && sb-rel? <h && sb-oid? <>h && sb-oid? <>>h)
+   (sb-sound? f) (sb-all? sb-hunk? (fld f 'hunks) && sb-all? sb-hex? (fld f 'deps))
+   (sb-bad? id) (!(sb-hex? id) || (: f (form (".sb/patch/" + id)) (two? f && !(sb-sound? f))))
+   (sb-refuse id) (say err ("sb: patch " + (? (string? id) (sh id) (show id)) + " refused -- an id that is not a hash,"
+                            + " or a path that leaves the tree\n"))
 
    ; --- ignores: one rule a line in .sbignore, over the built-ins. a rule holding
    igsdir '(".sb" ".git" "out")
@@ -173,12 +196,14 @@
        (go m n bad)
         (? !(two? m) [n bad]
            (: h <m
-              (? (64 != #h) (go >m n bad)                   ; only the sha256-named files
+              (? !(sb-hex? h) (go >m n bad)                 ; only the sha256-named files
                  (two? (look (td + h))) (go >m n bad)         ; already there
                  (: t (look (fd + h))
                     (? (atom? t) (go >m n bad)
                        (sha256 <>t != h)
                         (say err ("sb: bad address " + h + "\n"), go >m n (bad + 1))
+                       (sub = "patch" && !(sb-sound? (readform <>t)))
+                        (sb-refuse h, go >m n (bad + 1))
                        (lay (td + h) <>t) (go >m (n + 1) bad)
                        (go >m n (bad + 1)))))))
        (go (readdir fd) 0 0))
@@ -190,8 +215,9 @@
                     ("sb: " + (k @ 0 "merged " "CONFLICT in ") + p + " -- " + <>>e + "\n"))
              (go >m (k @ 0 n (n + 1)))))
        (go cfs 0))
-   (settle ids)
-    (: oldsnap (snap ())
+   (settle ids0)
+    (: ids (filter (i \ (? (sb-bad? i) (sb-refuse i, 0) 1)) ids0)
+       oldsnap (snap ())
        _ (lay ".sb/tips" (show (derive-tips ids)))
        dr (derive-snap ids)
        newsnap <dr
@@ -229,7 +255,7 @@
    ; --- a diverged write: two patches wrote one path from a shared base
    (bin? s) (: n #s (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
-   (bl h) (? !h '(1 "") (look (".sb/blob/" + h)))        ; (1 text) | () -- presence, not net
+   (bl h) (? !h '(1 "") (sb-hex? h) (look (".sb/blob/" + h)))      ; (1 text) | () -- presence, not net
    (mend old curh nw curpid pid)
     (: bw (bl old) ow (bl curh) tw (bl nw)
        (? !nw [curh 1 ("kept the edit -- " + sh pid + " deletes what " + sh curpid + " wrote")]
@@ -272,14 +298,19 @@
     (: np {}
        _ (: (go m) (two? m ? (pin np <<m <><m, go >m)) (go newsnap))
        w (: (go m n) (? (atom? m) n
-              (: e <m p <e ch <>e bl (look (".sb/blob/" + ch))   ; presence, not net: an empty blob is real
-                 cur (look p) curh (? (two? cur) (sha256 <>cur) ())
-                 (? (atom? bl) (say err ("sb: missing blob " + ch + "\n"), go >m n)
+              (: e <m p <e ch <>e
+                 ok (sb-rel? p && sb-hex? ch)
+                 bl (? ok (look (".sb/blob/" + ch)))   ; presence, not net: an empty blob is real
+                 cur (? ok (look p)) curh (? (two? cur) (sha256 <>cur) ())
+                 (? !ok (say err ("sb: will not write " + show p + " from " + show ch + "\n"), go >m n)
+                    (atom? bl) (say err ("sb: missing blob " + ch + "\n"), go >m n)
                     (curh = ch) (go >m n)
                     (mkparents p, lay p <>bl, go >m (n + 1)))))
             (go newsnap 0))
        d (: (go m n) (? !(two? m) n
-              (: p <<m (? (peep np p 0) (go >m n) (unlink p, go >m (n + 1)))))
+              (: p <<m (? (peep np p 0) (go >m n)
+                          !(sb-rel? p) (say err ("sb: will not unlink " + show p + "\n"), go >m n)
+                          (unlink p, go >m (n + 1)))))
             (go oldsnap 0))
        (w + d))
    ; --- the http remote: pull only
@@ -289,18 +320,23 @@
        (bump k) (pin n k (1 + peep n k 0))
        (getblob h)                                     ; ensure a blob is local
         (? !h 1
+           !(sb-hex? h) 0
            (two? (look (".sb/blob/" + h))) 1
            (: b (http-fetch base ("/blob/" + h))
               (? (atom? b) (say err ("sb: cannot fetch blob " + sh h + "\n"), 0)
                  (sha256 <>b = h) (lay (".sb/blob/" + h) <>b, bump 'b, 1)
                  (say err ("sb: bad address on blob " + sh h + "\n"), 0))))
        (getpatch id)                                   ; ensure a patch is local; answer its form
-        (: local (look (".sb/patch/" + id))
-           (? (two? local) (readform <>local)
+        (: local (? (sb-hex? id) (look (".sb/patch/" + id)))
+           f (two? local ? (readform <>local))
+           (? !(sb-hex? id) (sb-refuse id, ())
+              (two? local) (? (sb-sound? f) f (sb-refuse id, ()))
               (: b (http-fetch base ("/patch/" + id))
+                 f2 (two? b ? (readform <>b))
                  (? (atom? b) (say err ("sb: cannot fetch patch " + sh id + "\n"), ())
-                    (sha256 <>b = id) (lay (".sb/patch/" + id) <>b, bump 'p, readform <>b)
-                    (say err ("sb: bad address on patch " + sh id + "\n"), ())))))
+                    (sha256 <>b != id) (say err ("sb: bad address on patch " + sh id + "\n"), ())
+                    !(sb-sound? f2) (sb-refuse id, ())
+                    (lay (".sb/patch/" + id) <>b, bump 'p, f2)))))
        (walk ids ok)                                   ; the transitive closure, by reading as we go
         (? (atom? ids) ok
            (: id <ids
