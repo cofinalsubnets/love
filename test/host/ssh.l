@@ -14,6 +14,8 @@
 ;   known_hosts  hashed names (ssh-keygen -H's lines), [host]:port, name lists and case,
 ;            @revoked, another key type, @cert-authority skipped.
 ;   clean    banner and disconnect text: controls, c1 and malformed utf-8 dropped.
+;   verdict  another key type asked about on the terminal: yes, no, none, and =yes.
+;   strict   strict kex ends on an ignore before newkeys; sequence numbers never wrap.
 ;
 ; the transport runs against a live sshd, which no gate stands up; see apps/ssh/ssh.l.
 ;
@@ -146,9 +148,46 @@ fW2MNFrwA/N0XZFA==
  ((ssh-clean "p\x80q\x9br\x7fs\xffu\xe0\x80\x80v\xed\xa0\x80w\xf0\x9f\x98\x80") = "pqrsuvw\xf0\x9f\x98\x80")
  ((ssh-clean "\xe2\x80") = ""))
 
+; --- verdict ------------------------------------------------------------------------
+; a host known only under another key type is asked about on the terminal: yes adds the
+; key, no or no terminal refuses, and StrictHostKeyChecking=yes refuses without asking
+(: ssht-kv (cite 'ssh-cli 'kh-verdict)
+   ssht-opts (\ s a (: o (tablet 4) (pins o 'strict s 'ask a, o)))
+   ssht-asked (tablet 2)
+   ssht-ask (\ ans m (pin ssht-asked 'n (peep ssht-asked 'n 0 + 1), ans))
+   ssht-v (\ o nm ask (: q (open ssht-khp "w") _ (say q ("host.example ecdsa-sha2-nistp256 " + ssht-E + "\n")) _ (close q)
+                         (ssht-kv "ssh" o ssht-khp nm (b64d ssht-A) "SHA256:x" ask)))
+   ssht-no "WARNING: the host key for host.example is known as ecdsa-sha2-nistp256 in ")
+(test
+ (: r (ssht-v (ssht-opts 1 1) "host.example" (ssht-ask ())) (string? r && snip r 0 #ssht-no = ssht-no))
+ ((ssht-v (ssht-opts 1 1) "host.example" (ssht-ask "yes")) = 'add)
+ (string? (ssht-v (ssht-opts 1 1) "host.example" (ssht-ask "no")))
+ ((ssht-asked 'n) = 3)
+ (string? (ssht-v (ssht-opts 1 0) "host.example" (ssht-ask "yes")))
+ ((ssht-asked 'n) = 3)
+ ((ssht-v (ssht-opts 0 1) "host.example" (ssht-ask "yes")) = 'go)
+ ((ssht-v (ssht-opts 1 1) "other.example" (ssht-ask "yes")) = 'add))
+
+; --- strict ---------------------------------------------------------------------------
+; a pipe as the transport, framed by ssh-send and read by ssh-next: under strict kex an
+; ignore ends the read, otherwise it is passed over; a sequence number never wraps
+(: ssht-m32 ((1 << 32) - 1)
+   ssht-ends (\ _ (: p (pipe 0) r (tablet 8) w (tablet 8)
+                      (pins r 's (fdopen <p) 'pend "" 'rseq 0 'sseq 0 'busy 0,
+                       pins w 's (fdopen >p) 'pend "" 'rseq 0 'sseq 0 'busy 0,
+                       [r w])))
+   ssht-fed (\ ps (: e (ssht-ends 0) _ (each ps (p \ ssh-send (e 1) p)) _ (close ((e 1) 's)) e)))
+(test
+ (: e (ssht-fed [(u8 2 + sstr "") (u8 20 + "x")]) _ (pin (e 0) 'strict 1) (nil? (ssh-next (e 0))))
+ (: e (ssht-fed [(u8 2 + sstr "") (u8 20 + "x")]) ((ssh-next (e 0)) = u8 20 + "x"))
+ (: e (ssht-fed [(u8 20 + "y")]) _ (pin (e 0) 'rseq ssht-m32) a (ssh-recv (e 0))
+    _ (pin (e 0) 'rseq 0) (nil? a && ssh-recv (e 0) = u8 20 + "y"))
+ (: e (ssht-ends 0) _ (pin (e 1) 'sseq ssht-m32) a (ssh-send (e 1) (u8 20 + "z"))
+    (nil? a && nil? (ssh-recv (e 0)))))
+
 (test_fin (),
  puts "apps/ssh: ok -- sha512 (fips 180-4), ed25519 (rfc 8032 7.1), mpint + base64,
 aes (fips 197, sp 800-38a), a locked key (bcrypt_pbkdf + aes256-ctr),
-known_hosts, banner text
+known_hosts, banner text, the other-type prompt, strict kex and sequence wrap
 ",
  0)

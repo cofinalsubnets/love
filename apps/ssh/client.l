@@ -104,11 +104,12 @@
        pad (pd < 4 ? (pd + 8) pd)
        body (u8 pad + p + zeros pad)
        len (u32 #body)
-       _ (pin t 'sseq (seq + 1 & m32))
-       (? enc
-          (: n (nonce seq) el (chacha20 <>k n 0 len) eb (chacha20 <k n 1 body)
-             (wr t (el + eb + poly1305 (polykey <k n) (el + eb))))
-          (wr t (len + body))))
+       (? (seq = m32) (: s (t 's) _ (? (hot? s) (close s) 0) ())   ; the next would wrap and reuse a nonce: hang up
+          (: _ (pin t 'sseq (seq + 1))
+             (? enc
+                (: n (nonce seq) el (chacha20 <>k n 0 len) eb (chacha20 <k n 1 body)
+                   (wr t (el + eb + poly1305 (polykey <k n) (el + eb))))
+                (wr t (len + body))))))
    ; tasks share the socket, and a write can park: one packet on the wire at a time
    (ssh-send t p) (? (t 'busy) (rest 1, ssh-send t p)
                      (: _ (pin t 'busy 1) r (send1 t p) _ (pin t 'busy 0) r))
@@ -116,7 +117,7 @@
    (ssh-recv t)
     (: k (t 'sk) seq (t 'rseq)
        _ (pin t 'rseq (seq + 1 & m32))
-       h (rd t 4)
+       h (seq = m32 ? () (rd t 4))                   ; a wrapped sequence number ends it, as sending does
        (? (atom? h) ()
           (atom? k) (: len (be32 <>h 0)                          ; pre-newkeys: rfc 4253 6.1 caps a packet at 35000
                        (35000 < len ? () (: r (rd t len) (two? r ? (unpad <>r) ()))))
@@ -129,12 +130,14 @@
                       (unpad (chacha20 <k n 1 eb))))))))
 
    ; the next payload that is not transport noise: ignore, debug and ext-info pass, a
-   ; banner goes to stderr, a global request is refused, a disconnect is the end
+   ; banner goes to stderr, a global request is refused, a disconnect is the end. under
+   ; strict kex ('strict, agreement to newkeys) any of that noise ends the connection
    (ssh-next t)
     (: p (ssh-recv t)
        (? !(string? p) ()
           (: ty (p 0) c (cur p) _ (g-skip c 1)
-             (? (ty = 2 || ty = 4 || ty = 7) (ssh-next t)
+             (? (t 'strict = 1 && elem ty [2 4 7 53 80]) ()
+                (ty = 2 || ty = 4 || ty = 7) (ssh-next t)
                 (ty = 53) (say err (ssh-clean (g-str c)), ssh-next t)
                 (ty = 80) (g-str c, g-u8 c ? (ssh-send t (u8 82)) 0, ssh-next t)
                 (ty = 1) (: code (g-u32 c) (say err ("ssh: disconnected: " + ssh-clean (g-str c) + "\n"), ()))
@@ -187,7 +190,8 @@
              is (expect t 20)
              ok (string? vs ? (string? is ? (agree is) "no kexinit") "no version line")
              (? (string? ok) (close s, ok)
-                (: priv (rnd 32) qc (x25519-pub priv)
+                (: _ (pin t 'strict ok)
+                   priv (rnd 32) qc (x25519-pub priv)
                    _ (ssh-send t (u8 30 + sstr qc))
                    r (expect t 31)
                    (? !(string? r) (close s, "no key exchange reply")
@@ -210,6 +214,7 @@
                                nk (expect t 21)
                                _ (pin t 'sk (pair (kd "D")))
                                _ (? ok (pin t 'rseq 0) 0)
+                               _ (pin t 'strict 0)
                                (? !(string? nk) (close s, "no newkeys")
                                   (ssh-send t (u8 5 + sstr "ssh-userauth"),
                                    string? (expect t 6) ? t (close s, "no userauth service"))))))))))))
