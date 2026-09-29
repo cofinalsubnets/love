@@ -179,3 +179,16 @@
    (gzo-v n) (: (h y acc) (? (y = 0) acc (h (y - 1) (acc + y + n))) h)
    _ (test (gzo-s 4 = 100) ((gzo-v 0) 4 0 = 10) ((gzo-v 2) 4 0 = 18))
    0)
+; a helper above the sibling it calls: its compile waits for the end of the form, where every
+; sibling is built, and lands in the cell its callers already hold -- the same answers, a deopt
+; (a float) through the cell's twin, and the same key in a tablet. glaze-hook.l claims the native
+(module (gzfm gzfm-sum gzfm-walk)
+ (:
+  (gzfm-sum l acc) (? (two? l) (gzfm-sum >l (acc + gzfm-sq <l)) acc)
+  (gzfm-walk l n) (? (two? l) (gzfm-walk >l (n + gzfm-len <l)) n)
+  (gzfm-sq x) (x * x)
+  (gzfm-len s) (? (string? s) (tally s) (gzfm-sum s 0))))
+(: gzfm-s (cite 'gzfm 'gzfm-sum)  gzfm-w (cite 'gzfm 'gzfm-walk)  gzfm-t {gzfm-s 1}
+   _ (test (gzfm-s [1 2 3] 0 = 14) (gzfm-s [1.5] 0 = 2.25) ((gzfm-t gzfm-s) = 1)
+           (gzfm-w ["ab" [1 2] "c"] 0 = 8))
+   0)

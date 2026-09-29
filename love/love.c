@@ -458,7 +458,8 @@ lvm(lvm_reach_offset) { ai_musttail return Answer(putcharm((intptr_t) offsetof(s
 lvm(lvm_natp) {
  word x = Sp[0];
  union u *k = evenp(x) ? cell(x) : NULL, *e = k && k->ap == lvm_cur ? k + 2 : k;
- int nat = e && code_in(g, (uintptr_t)(e->ap == lvm_lazy ? k[-1].ap : e->ap));
+ int nat = e && (code_in(g, (uintptr_t)(e->ap == lvm_lazy ? k[-1].ap : e->ap))
+                 || (e->ap == lvm_deferfwd && k[-1].ap == lvm_deferfwd));   // a deferred one that declined: its twin still at value[1]
  ai_musttail return Answer(putcharm(nat)); }
 // a woken native's entry until its chunk of the image's code is seated: seat it, write the
 // code into the cell, enter. the header already names the code, one word behind an arity-1

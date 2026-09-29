@@ -67,7 +67,8 @@ static lvm_t *const image_extra_aps[] = {
  // thumb, so they would otherwise escape as "fixnums" -- raw baker addresses
  lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc,
  lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit,
- _lvm_yieldk };   // the yield continuation: c0'd, so a task parked mid-yield carries it
+ _lvm_yieldk,     // the yield continuation: c0'd, so a task parked mid-yield carries it
+ lvm_deferfwd };  // a deferred native whose compile declined
 // size (words) of a data object, the same per-kind logic as the GC. d carries the
 // kind, s the raw length words -- two homes only during a fused image load, where
 // the decoded ap lands in the pool while the payload still sits in the source blob.
