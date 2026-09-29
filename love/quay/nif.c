@@ -22,8 +22,8 @@
 //   (glass scr i k)      -> w    word k of cell i, or (): 0 the glyph (codepoint,
 //                                width, picture, face), 1 the fg, 2 the bg
 //                                (the layout is quay.h's struct cb_cell); a
-//                                cluster's glyph holds its base, and 3 4 5 are
-//                                its marks, 0 past the last. a negative i reads
+//                                cluster's glyph holds its base, and 3 to 11 are
+//                                the rest of it, 0 past the last. a negative i reads
 //                                the history: -cols is the newest line's first
 //                                cell, back to -(held * cols)
 //   (gaze scr k)         -> n    a field by key: 0 cursor, 1 rows, 2 cols,
@@ -44,7 +44,7 @@
 //                                newlines as returns, controls gone, bracketed when
 //                                the program asked (?2004); () misuse
 //   (picture scr slot k) -> n|s  a live picture's width (k 0), height (1), gen (2), or its
-//                                pixels as base64 rgba (3), unset ones clear; () for none
+//                                pixels as base64 rgba (3) or raw (4), unset ones clear; () for none
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
@@ -171,7 +171,7 @@ static lvm(lvm_glass) {
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
   intptr_t const k = getcharm(Sp[2]);
   struct cb_cell const *e = cb_at(c, getcharm(Sp[1]));
-  if (e && k >= 0 && k < 6) {
+  if (e && k >= 0 && k < cb_clun + 2) {
    uint32_t const *v = cb_clu(c, e->g);
    out = putcharm(k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg & ~cb_soft : k == 2 ? e->bg
                   : v ? cb_cp(v[k - 2]) : 0u); } }

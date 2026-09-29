@@ -171,6 +171,17 @@
  ; nothing is erased between frames, and nothing needs to be: panes and bars
  ; tile the wharf exactly (apps/berth/wharf.l's standing law), so every cell is written
  ; every frame and no stale glyph can survive a layout change.
+ ; a picture kitty holds (pics 1) whose pane's screen keeps it no longer -- the pane gone, or
+ ; the store swept it -- is freed there, data and all, and forgotten, so it goes again if seen
+ (hfree j hb)
+  (: live {} seen {}
+     (look ib) (? (peep seen ib 0) 0
+                  (: _ (pin seen ib 1) p (hpane hb ib) s (? (two? p) (peep (hbox p) () 0) 0)
+                     (map (\ sl (: g (picture s sl 2) (? (charm? g) (pin live ((ib * 1048576) + (g & 1048575)) 1) 0)))
+                          (jot 128))))
+     (keep t id) (: _ (look (id // 1048576))
+                    (? (peep live id 0) (pin t id 1) (: _ (say j ("\e_Ga=d,d=I,i=" + show id + ",q=2\e\\")) t)))
+     (pin hb 'sent (foldl keep {} (sort (keys (hb 'sent))))))
  ; with kitty's pictures on (pics 1), every placement goes first and the ones still in view
  ; come back. sixels (pics 2) sit in the text layer: a pane's go out again only when what it
  ; shows of them moves, the cells the old ones covered erased before anything is painted,
@@ -205,6 +216,7 @@
                           (? (pk = 1) (limn-pics j s r c row0 col0 id (hb 'sent)) 0)))))
             shown)
      _ (? (pk = 2) (pin hb 'six now) 0)
+     _ (? (pk = 1) (hfree j hb) 0)
      _ (hbars j hb)
      _ (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
           (? (two? p && two? b)

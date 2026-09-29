@@ -738,6 +738,25 @@
            ("\e[20;2$y" = rqm t "\e[20$p")              ; an ansi one
            ("\e[?2027;2$y" = rqm t "\ec\e[?2027$p")))   ; ris resets it
 
+; --- 30. ?2027: a ZWJ sequence, a skin tone and a flag are one cluster, two cells ---
+(: (cwide s i) (glass s i 0 >> 21 & 3)
+   fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}\u{200d}\u{1f466}"   ; 👨‍👩‍👧‍👦, seven characters
+   s (mkscr 4 12)
+   _ (scribe s (fam + "x"))                            ; off: four wide chars, a ZWJ riding each
+   _ (test (128104 = chat s 0) (8205 = glass s 0 3) (128105 = chat s 2) (128102 = chat s 6) (120 = chat s 8))
+   _ (scribe s ("\e[?2027h\e[2;1H" + fam + "x"))       ; on: one lead, one tail
+   _ (test (128104 = chat s 12) (1 = cwide s 12) (2 = cwide s 13) (120 = chat s 14)
+           (128102 = glass s 12 8) (0 = glass s 12 9)
+           ((fam + "x") = copied s 12 15))
+   _ (scribe s "\e[3;1H\u{1f44d}\u{1f3fd}y\u{1f1eb}\u{1f1f7}\u{1f1e9}z")   ; 👍🏽, 🇫🇷, a lone 🇩
+   _ (test (1 = cwide s 24) (127997 = glass s 24 3) (121 = chat s 26)
+           (127467 = chat s 27) (1 = cwide s 27) (127479 = glass s 27 3) (127465 = chat s 29) (0 = cwide s 29)
+           (122 = chat s 30))
+   _ (scribe s "\e[4;1Ha\u{200d}b\u{1f468}\u{200d}c\u{2764}\u{200d}\u{1f525}q")   ; a ZWJ between letters joins
+   _ (test (97 = chat s 36) (98 = chat s 37)                                  ; nothing after it; after a
+           (128104 = chat s 38) (99 = chat s 40)                                 ; pictograph, only another;
+           (10084 = chat s 41) (1 = cwide s 41) (128293 = glass s 41 4) (113 = chat s 43)))   ; a narrow ❤ widens
+
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")

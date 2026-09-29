@@ -1,7 +1,7 @@
 #include "quay.h"
 #include "cp437.h"
 #include "cpwidth.h"
-#include "cpvs16.h"
+#include "cpemoji.h"
 
 // *e <- a cell of codepoint cp in the current pen. the blank a clear or scroll
 // leaves behind is cp 0 in the current pen,
@@ -335,21 +335,25 @@ static uint32_t cb_slot(struct cb *c, uint32_t const *v, uint32_t skip) {
   if (k < cb_nclu) for (j = 0; j < cb_clun; j++) c->clu[k][j] = v[j];
   return k; }
 
-// does VS16 give cp an emoji style? (cpvs16.h, ascending)
-static int cb_vs16(uint32_t cp) {
-  uintptr_t lo = 0, hi = sizeof cpvs16 / sizeof *cpvs16;
+// is cp in a table of runs (cpemoji.h), each entry opening or closing one in turn: an odd
+// count of entries at or below it
+static int cb_in(uint32_t const *t, uintptr_t n, uint32_t cp) {
+  uintptr_t lo = 0, hi = n;
   while (lo < hi) {
     uintptr_t const m = (lo + hi) / 2;
-    if (cpvs16[m] < cp) lo = m + 1; else hi = m; }
-  return lo < sizeof cpvs16 / sizeof *cpvs16 && cpvs16[lo] == cp; }
+    if (t[m] <= cp) lo = m + 1; else hi = m; }
+  return lo & 1; }
+static int cb_vs16(uint32_t cp) { return cb_in(cpvs, sizeof cpvs / sizeof *cpvs, cp); }
+static int cb_xp(uint32_t cp) { return cb_in(cpxp, sizeof cpxp / sizeof *cpxp, cp); }
+static int cb_regional(uint32_t cp) { return cp >= 0x1f1e6u && cp <= 0x1f1ffu; }
 
-// under ?2027, VS16 after a narrow character with an emoji style makes its cell a wide
-// char's lead and the next its tail. on the last column, the pair wraps to the next line
-// as a wide char would there; with autowrap off it stays narrow
-static void cb_emoji(struct cb *c, uint32_t p) {
+// under ?2027, VS16 after a narrow character with an emoji style, or any join (any),
+// makes its cell a wide char's lead and the next its tail. on the last column, the pair
+// wraps to the next line as a wide char would there; with autowrap off it stays narrow
+static void cb_emoji(struct cb *c, uint32_t p, int any) {
   uint32_t const cs = c->cols;
   struct cb_cell e = c->cb[p];
-  if (cs < 2 || e.g & cb_pic || cb_wide(e.g) || !cb_vs16(cb_base(c, e.g))) return;
+  if (cs < 2 || e.g & cb_pic || cb_wide(e.g) || !(any || cb_vs16(cb_base(c, e.g)))) return;
   e.fg &= ~cb_soft;
   if (p % cs == cs - 1u) {
     if (!(c->flag & cb_pend)) return;
@@ -365,14 +369,35 @@ static void cb_emoji(struct cb *c, uint32_t p) {
   if ((p + 1u) % cs == cs - 1u) { c->wpos = p + 1u; if (c->flag & cb_wrap) c->flag |= cb_pend; }
   else c->wpos = p + 2u; }
 
-// a mark joins the cell before the cursor -- the one a pending wrap sits on, a wide
-// char's lead for its tail -- keeping its pen. none there, a picture, or a full
-// cluster: the mark is dropped (though a VS16 still widens, cb_emoji)
-static void cb_mark(struct cb *c, uint32_t m) {
+// the cell before the cursor -- the one a pending wrap sits on, a wide char's lead for
+// its tail -- or ~0u for none
+static uint32_t cb_prev(struct cb const *c) {
   uint32_t const cs = c->cols;
   uint32_t p = c->wpos;
-  if (!(c->flag & cb_pend)) { if (!(p % cs)) return; p--; }
+  if (!(c->flag & cb_pend)) { if (!(p % cs)) return ~0u; p--; }
   if (cb_wide(c->cb[p].g) == cb_tail && p % cs) p--;
+  return p; }
+
+// under ?2027, does cp join the cluster before the cursor rather than take cells: an emoji
+// modifier after a pictograph, a pictograph after a ZWJ that ends one, a regional indicator
+// after a lone one -- while the cluster has room ('text's gcnext keeps the same rules)
+static int cb_joins(struct cb const *c, uint32_t cp) {
+  uint32_t const p = cb_prev(c);
+  if (!(c->flag & cb_gc) || p == ~0u) return 0;
+  uint32_t const g = c->cb[p].g, *v = cb_clu(c, g), b = cb_base(c, g);
+  uint32_t n = 1;
+  if (v) for (n = 0; n < cb_clun && v[n]; n++) ;
+  if (g & cb_pic || !cb_cp(g) || n == cb_clun) return 0;
+  if (cp >= 0x1f3fbu && cp <= 0x1f3ffu) return cb_xp(b);
+  if (cb_regional(cp)) return n == 1 && cb_regional(b);
+  return cb_xp(cp) && cb_xp(b) && v && v[n - 1] == 0x200du; }
+
+// a mark joins the cell before the cursor, keeping its pen, as does a character ?2027
+// joins there (cb_joins), which widens it. none there, a picture, or a full cluster: the
+// mark is dropped (though a VS16 still widens, cb_emoji)
+static void cb_mark(struct cb *c, uint32_t m) {
+  uint32_t const cs = c->cols, p = cb_prev(c);
+  if (p == ~0u) return;
   uint32_t const g = c->cb[p].g, *o = cb_clu(c, g);
   if (g & cb_pic || !cb_cp(g) || cb_wide(g) == cb_tail) return;
   uint32_t v[cb_clun] = { cb_cp(g) }, n = 1;
@@ -381,11 +406,11 @@ static void cb_mark(struct cb *c, uint32_t m) {
     v[n] = m;
     uint32_t const k = cb_slot(c, v, p);
     if (k < cb_nclu) c->cb[p].g = (g & 0xffe00000u) | (cb_clu0 + k), cb_dirt(c, p / cs, p / cs); }
-  if (m == 0xfe0fu && c->flag & cb_gc) cb_emoji(c, p); }
+  if (c->flag & cb_gc && (m == 0xfe0fu || cb_width(m))) cb_emoji(c, p, m != 0xfe0fu); }
 
 static void cb_glyph(struct cb *c, uint32_t cp) {
   uint32_t cs = c->cols, w = cb_width(cp);
-  if (!w) return cb_mark(c, cp);
+  if (!w || cb_joins(c, cp)) return cb_mark(c, cp);
   if (w == 2 && cs < 2) w = 1;
   if (c->flag & cb_pend) {                          // the row wraps: its last cell says so
     c->flag &= (uint16_t) ~cb_pend, c->wpos -= c->wpos % cs;

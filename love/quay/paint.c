@@ -54,7 +54,7 @@ static uint32_t cb_row(struct font const *f, struct cb_look l, uint8_t r) {
 // one CELL onto the paper at pixel (x,y), wide when it is a wide char's lead -- two cells'
 // width, the tail beside it painted here too. the base draws through the chain, the ■ where
 // it has nothing; a cluster's marks lie over it, centred on a wide one, and a mark the chain
-// lacks draws nothing. a cell that would fall off is dropped, so a caller cannot be made to
+// lacks draws nothing, as does a character ?2027 joined that takes columns of its own. a cell that would fall off is dropped, so a caller cannot be made to
 // write outside the target it named. a glyph pixel is a paper->scale square, which is the
 // whole of "sharp": whole pixels, no resampling, and the same table serving a 640x400 screen
 // and a dense one.
@@ -67,7 +67,7 @@ static void cb_px(struct cb_paper const *p, struct cb const *c, struct font cons
   struct cb_look l[cb_clun] = { cb_look(f, qf, cb_base(c, cell->g)) };
   if (!l[0].bmp && !l[0].rows) l[0].bmp = f->glyphs + bpr * f->h * 0xfeu;
   uint32_t const *v = cb_clu(c, cell->g), n = v ? cb_clun : 1u;
-  for (uint32_t k = 1; k < n; k++) l[k] = cb_look(f, qf, v[k]);
+  for (uint32_t k = 1; k < n; k++) l[k] = cb_width(v[k]) ? (struct cb_look) { 0, 0 } : cb_look(f, qf, v[k]);
   uint8_t const face = cb_face(cell->g);
   uint32_t fg = cb_rgbof(c, cell->fg, c->def_fg, face & cb_bold),
            bg = cb_rgbof(c, cell->bg, c->def_bg, 0);
