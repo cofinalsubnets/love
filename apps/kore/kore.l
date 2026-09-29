@@ -943,7 +943,7 @@
     'cmp "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"
     'stat "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."
     'du "usage: du [-abchLsx0] [-d N] [--max-depth=N] [--exclude=GLOB] [--apparent-size] [FILE..]"
-    'df "usage: df [-h|-k] [-i] [-a] [-P] [FILE..]"
+    'df "usage: df [-ahHikPT] [-t TYPE].. [-x TYPE].. [FILE..]"
     'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
     'chgrp "usage: chgrp [-R] GROUP FILE.."
     'mktemp "usage: mktemp [-dqtu] [-p DIR] [TEMPLATE]"

@@ -194,4 +194,10 @@ for c in "t" "--max-depth=1 t" "-d 0 t" "--exclude=*.log t" "-a --exclude=*.log 
 done
 (cd "$U" && du -0 t | tr '\0' '\n' | sort) > "$g"; (cd "$U" && LOVE_NO_IMAGE= "$PWD/../../$m" kore du -0 t | tr '\0' '\n' | sort) > "$o"; same "du -0"
 rm -rf "$U"
+# df's -T (a left-aligned Type column), -H in powers of 1000, -t and -x by type (glued,
+# repeated, long), against GNU on this machine's own mounts
+for c in "-T /" "-H /" "-hT /" "-t tmpfs" "-x tmpfs -x btrfs" "--print-type /" "--si /" "--type=tmpfs" "-ttmpfs"; do
+  # shellcheck disable=SC2086
+  df $c > "$g" 2>&1; korerun df $c > "$o" 2>&1; same "df $c"
+done
 echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"

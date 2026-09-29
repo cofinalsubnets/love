@@ -877,11 +877,14 @@
    ; per run, keyed by inode alone: this stat carries no device, so a walk crossing two
    ; filesystems could collide two inodes -- rare, and named here rather than hidden.
    ; the walk sorts each directory, like find's, so the same tree reports twice alike.
-   (uhuman n)                          ; GNU's -h: three significant figures, rounded up
-    (: units '("K" "M" "G" "T" "P")
-       (pick k) (? (4 < k || n < (10 * (k + 1)) 2) k (pick (k + 1)))
-       k (n < 1024 ? 0 (pick 1))
-       d ((10 * k) 2)
+   (uhuman n) (uhumanb n 0)             ; GNU's -h: three significant figures, rounded up
+   ; the same in powers of 1000 when si? (-H, --si), kilo spelled k as GNU's spells it
+   (uhumanb n si?)
+    (: units (? si? '("k" "M" "G" "T" "P") '("K" "M" "G" "T" "P"))
+       (pow k) (? si? ((3 * k) 10) ((10 * k) 2))      ; n x is x ** n
+       (pick k) (? (4 < k || n < pow (k + 1)) k (pick (k + 1)))
+       k (n < pow 1 ? 0 (pick 1))
+       d (pow k)
        (k @ 0 (show n)
           (: tenths ((n * 10 + d - 1) // d)
              whole ((n + d - 1) // d)
@@ -989,7 +992,7 @@
     (: r (uread "/proc/self/mounts")
        (go l acc) (? (atom? l) (rev acc)
                      (: w (words <l)
-                        (go >l (? (2 <= #w) ([(udf-esc (w 0)) (udf-esc (w 1))] . acc) acc))))
+                        (go >l (? (3 <= #w) ([(udf-esc (w 0)) (udf-esc (w 1)) (w 2)] . acc) acc))))
        (? (two? r) (go (filter (\ s #s) (lines <>r)) ()) ()))
    ; the mount a path sits on: the LONGEST point its resolved name starts with, so a
    ; bind mount names itself and not the twin it shares a device with. stat's %m asks
@@ -1004,7 +1007,7 @@
    (udf-cells dev pt fs h? i?)         ; a statfs tuple -> the six cells of its row
     (: bs (fs 0) blk (fs 1) fre (fs 2) av (fs 3) ino (fs 4) ifr (fs 5)
        frs (: f (fs 6) (? ((charm? f) && (0 < f)) f bs))
-       (sz n) (? h? (uhuman (n * frs)) (show (udf-up (n * frs) 1024)))
+       (sz n) (? h? (uhumanb (n * frs) (h? = 'si)) (show (udf-up (n * frs) 1024)))
        (? i? [dev (show ino) (show (ino - ifr)) (show ifr) (udf-pct (ino - ifr) ifr) pt]
           [dev (sz blk) (sz (blk - fre)) (sz av) (udf-pct (blk - fre) av) pt]))
    ; the table: every column as wide as its widest cell but never under the floor below,
@@ -1012,37 +1015,54 @@
    ; never padded at all. the floors are GNU's, and they are why a table of short names
    ; still lines up with one of long ones.
    udf-min '(14 5 5 5 4 0)
-   (udf-show rows)
+   (udf-show rows mins lefts)           ; lefts: the columns that read left
     (: n #<rows
-       ws (map (\ k (foldl (\ w r (: c #(r k) (? (w < c) c w))) (udf-min k) rows)) ^n)
+       ws (map (\ k (foldl (\ w r (: c #(r k) (? (w < c) c w))) (mins k) rows)) ^n)
        (line r) (: (go k acc) (? (n <= k) acc
                                  (: s (r k)
-                                    p (? (k + 1 = n) s (? k (upad (ws k) s) (urpad (ws k) s)))
+                                    p (? (k + 1 = n) s (elem k lefts) (urpad (ws k) s) (upad (ws k) s))
                                     (go (k + 1) (? k (acc + " " + p) p))))
                    (go 0 ""))
        (go rs) (? (two? rs) (say out (line <rs), put out 10, go >rs) 0)
        (go rows))
+   ; -T wears each mount's type after its name, -t TYPE takes only those types and -x
+   ; TYPE leaves those out, each as many times as said; -H is -h in powers of 1000
    (df-main as)
-    (: t {}
+    (: t {'t () 'x ()}
+       (val a k fs) (? (two? >a) (: _ (pin t k (<>a . t k)) (fl >>a fs)) (udie 2 "df: an option wants a type"))
        (fl a fs) (? (atom? a) (rev fs)
+                    (<a = "--") (rev fs + >a)
+                    (<a = "-t" || <a = "-x") (val a (? (<a = "-t") 't 'x) fs)
+                    (<a = "-T" || <a = "--print-type") (pin t 'T 1, fl >a fs)
+                    (<a = "-H" || <a = "--si") (pin t 'h 'si, fl >a fs)
+                    (2 < #<a && (snip <a 0 2 = "-t" || snip <a 0 2 = "-x")) (: k (? (<a 1 = 116) 't 'x) _ (pin t k ((snip <a 2 #<a) . t k)) (fl >a fs))
+                    (7 < #<a && snip <a 0 7 = "--type=") (pin t 't ((snip <a 7 #<a) . t 't), fl >a fs)
+                    (15 < #<a && snip <a 0 15 = "--exclude-type=") (pin t 'x ((snip <a 15 #<a) . t 'x), fl >a fs)
                     (#<a < 2 || <a 0 != 45) (fl >a (<a . fs))
                     (:- (cl 1) w <a (cl k) (#w <= k ? (fl >a fs) (w k @
-                     104 (pin t 'h 1, cl (k + 1))
+                     104 (pin t 'h (? (t 'h = 'si) 'si 1), cl (k + 1))
+                     84 (pin t 'T 1, cl (k + 1))
+                     72 (pin t 'h 'si, cl (k + 1))
                      105 (pin t 'i 1, cl (k + 1))
                      97 (pin t 'a 1, cl (k + 1))
                      107 (cl (k + 1))   ; -k is the default, and -P names this very face
                      80 (cl (k + 1))    ; (posix's, and the only one laid out here)
                      c (udie 2 $ "df: unknown option -" + string c)))))
        fs (fl as ())
-       h? (t 'h) i? (t 'i) a? (t 'a)
-       hdr (? i? '("Filesystem" "Inodes" "IUsed" "IFree" "IUse%" "Mounted on")
-              h? '("Filesystem" "Size" "Used" "Avail" "Use%" "Mounted on")
-              '("Filesystem" "1K-blocks" "Used" "Available" "Use%" "Mounted on"))
-       ms (udf-mounts ())
+       h? (t 'h) i? (t 'i) a? (t 'a) T? (t 'T)
+       hdr0 (? i? '("Filesystem" "Inodes" "IUsed" "IFree" "IUse%" "Mounted on")
+               h? '("Filesystem" "Size" "Used" "Avail" "Use%" "Mounted on")
+               '("Filesystem" "1K-blocks" "Used" "Available" "Use%" "Mounted on"))
+       ; -T's column rides second
+       (typed ty r) (? T? (<r . ty . >r) r)
+       hdr (typed "Type" hdr0)
+       mins (? T? '(14 4 5 5 5 4 0) udf-min)
+       (keep? ty) (? (two? (t 't)) (elem ty (t 't)) (two? (t 'x)) !(elem ty (t 'x)) 1)
+       ms (filter (m \ keep? (m 2)) (udf-mounts ()))
        _ (? ((two? fs) || (two? ms)) () (udie 1 "df: cannot read /proc/self/mounts"))
        (named p acc)
         (: r (statfs p)
-           (? (two? r) (: m (udf-holds ms p) ((udf-cells (? m <m "-") (? m <>m p) r h? i?) . acc))
+           (? (two? r) (: m (udf-holds ms p) (? (atom? m) acc ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc)))
               (say err ("df: " + p + ": "
                              + (? (r = 'eacces) "Permission denied" "No such file or directory")), put err 10, pin t 'bad 1, acc)))
        ; a filesystem the call refuses (a mount someone else owns) is dropped from the
@@ -1051,11 +1071,11 @@
        (scan mm acc)
         (? (atom? mm) acc
            (: m <mm r (statfs <>m)
-              (scan >mm (? (two? r) (? (a? || (r 1)) ((udf-cells <m <>m r h? i?) . acc) acc)
-                           a? ([<m "-" "-" "-" "-" <>m] . acc)
+              (scan >mm (? (two? r) (? (a? || (r 1)) ((typed (m 2) (udf-cells <m <>m r h? i?)) . acc) acc)
+                           a? ((typed (m 2) [<m "-" "-" "-" "-" <>m]) . acc)
                            acc))))
        rows (rev (? (two? fs) (foldl (\ a p (named p a)) () fs) (scan ms ())))
-       _ (? (two? rows) (udf-show (hdr . rows)) ())
+       _ (? (two? rows) (udf-show (hdr . rows) mins (? T? '(0 1) '(0))) ())
        _ (flush out)
        !!(peep t 'bad 0))
 
