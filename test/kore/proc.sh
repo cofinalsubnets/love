@@ -214,4 +214,11 @@ korerun usleep x 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore usleep x is 1 (go
 [ "$(korerun reset < /dev/null | od -An -c | tr -d ' ')" = '033c' ] || fail "kore reset's RIS"
 : > "$ho/.kore-fsync"; korerun fsync "$ho/.kore-fsync" || fail "kore fsync"
 korerun fsync -d "$ho/.kore-fsync" "$ho/.kore-nosuch" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore fsync of no file is 1 (got $r)"
+# kill -l's names both ways (a status past 128 its signal), -s SIG, -SIGNAME, a group by
+# -PGID, and a dash word that is no signal refused
+[ "$(korerun kill -l 9 15 137 KILL SIGTERM | tr '\n' ' ')" = "KILL TERM KILL 9 15 " ] || fail "kore kill -l"
+[ "$(korerun kill -l | wc -l)" -ge 31 ] || fail "kore kill -l lists the table"
+sleep 30 & kp=$!; korerun kill -s KILL $kp; wait $kp; r=$?; [ $r -eq 137 ] || fail "kore kill -s KILL ($r)"
+sleep 30 & kp=$!; korerun kill -SIGTERM $kp; wait $kp; r=$?; [ $r -eq 143 ] || fail "kore kill -SIGTERM ($r)"
+korerun kill -x 1 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore kill -x ($r)"
 echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc/nohup/nice/renice/stty/who/users/hostid/dnsdomainname/setsid/watch/pinky/ts/usleep/reset/fsync) ok"

@@ -61,9 +61,11 @@
    ; the one signal table: kill, pkill, killall and timeout spell by it, and lush's
    ; trap and kill builtins read it too. the numbers are Linux's; USR1 USR2 CHLD TSTP
    ; want an ISA/OS table on a BSD
-   usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("KILL" 9) ("USR1" 10) ("SEGV" 11)
-               ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18)
-               ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22))
+   usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ILL" 4) ("TRAP" 5) ("ABRT" 6) ("BUS" 7) ("FPE" 8)
+               ("KILL" 9) ("USR1" 10) ("SEGV" 11) ("USR2" 12) ("PIPE" 13) ("ALRM" 14) ("TERM" 15)
+               ("STKFLT" 16) ("CHLD" 17) ("CONT" 18) ("STOP" 19) ("TSTP" 20) ("TTIN" 21) ("TTOU" 22)
+               ("URG" 23) ("XCPU" 24) ("XFSZ" 25) ("VTALRM" 26) ("PROF" 27) ("WINCH" 28) ("IO" 29)
+               ("PWR" 30) ("SYS" 31))
    (usigdig? b k) (? (#b <= k) (0 < #b)
                      (48 <= (b k) && (b k) <= 57) (usigdig? b (k + 1))
                      0)
@@ -71,25 +73,40 @@
     (: n #w
        (snl l b) (? (atom? l) () (<<l = b) <><l (snl >l b))
        (? (n < 2 || !((w 0) = 45)) ()
-          (: b (snip w 1 n)
+          (: b0 (snip w 1 n) b (? (starts? b0 "SIG") (snip b0 3 #b0) b0)   ; -SIGTERM too
              (? (usigdig? b 0) (uatoi b) (snl usignames b)))))
 
-   ; -- kill: a signal (default TERM) onto every named pid --
+   ; -- kill: a signal (default TERM) onto every named pid, -PID a process group; -s SIG
+   ; the signal spelled apart; -l the names, -l N the name of N (a status past 128 the
+   ; signal that made it), -l NAME its number --
    (kill-main as)
     (: (alldig? s) (usigdig? s 0)
-       sig (? (two? as) (usignum <as) ())
-       pids (? (charm? sig) >as as)
-       sg (? (charm? sig) sig 15)
-       _ (? (two? pids) () (udie 1 "usage: kill [-SIG] PID.."))
-       (one p ok)
-        (? !(alldig? p)
-           (say err ("kill: invalid pid " + p), put err 10, 0)
-           (: r (still (uatoi p) sg)
-              (? !r ok
-                 (say err ("kill: cannot kill " + p), put err 10, 0))))
-       (go a ok) (? (two? a) (go >a (one <a ok))
-                    (flush err, (? ok 0 1)))
-       (go pids 1))
+       (die m) (udie 1 ("kill: " + m))
+       (named w) (: n (usignum ("-" + w)) (? (charm? n) n (die ("unknown signal " + w))))
+       (sname n) (: e (filter (x \ <>x = n) usignames) (? (two? e) <<e ()))
+       (lone w) (? (alldig? w) (: nm (sname (uatoi w % 128)) (? nm nm (die ("unknown signal " + w))))
+                   (show (named w)))
+       (? (two? as && <as = "-l")
+          (: _ (? (two? >as) (each >as (w \ say out (lone w + "\n"))) (each usignames (x \ say out (<x + "\n"))))
+             _ (flush out) 0)
+       (: sig (? (atom? as) ()
+                 (<as = "-s") (? (two? >as) (named <>as) (die "-s wants a signal"))
+                 (<as = "--") ()
+                 (usignum <as))
+          pids (? (atom? as) () (<as = "-s") >>as (<as = "--") >as (charm? sig) >as as)
+          sg (? (charm? sig) sig 15)
+          _ (? (two? pids) () (udie 1 "usage: kill [-s SIG | -SIG] PID.. | kill -l [SIG..]"))
+          (pid? p) (? (alldig? p) 1 (1 < #p && p 0 = 45 && alldig? (snip p 1 #p)))
+          _ (? (<pids 0 = 45 && !(pid? <pids)) (die ("unknown signal " + <pids)) 0)
+          (one p ok)
+           (? !(pid? p)
+              (say err ("kill: invalid pid " + p), put err 10, 0)
+              (: r (still (uatoi p) sg)
+                 (? !r ok
+                    (say err ("kill: cannot kill " + p), put err 10, 0))))
+          (go a ok) (? (two? a) (go >a (one <a ok))
+                       (flush err, (? ok 0 1)))
+          (go pids 1))))
 
    ; -- date: the wall clock. utc and only utc -- there is no tz database in this tree,
    ; so localtime is gmtime, the same call moonlibc made and for the same reason. -u is
