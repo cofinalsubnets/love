@@ -483,7 +483,9 @@ extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
 // ..l/gz.c, and love/src.c's own source (weak zero without a blob)
 intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
-         ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+         ai_inflate_dict(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, unsigned char const*, uintptr_t),
+         ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
+         ai_deflate_dict(struct ai*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 extern unsigned char const ai_srcgz[];
 extern uintptr_t const ai_srcgz_len;
 extern unsigned char const ai_rootfs[];          // inle/rootfs/ as a plain tar (tools/mkrootfs.l)
@@ -723,7 +725,8 @@ lvm_t lvm_kcall,
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reaches them through g->reach)
  lvm_reach_offset,       // (reach-offset x): g->reach' byte offset, what the emitter's `reach` law loads from
  lvm_natp,        // (nat? f): is f a native closure -- its code in the arena
- lvm_lazy;        // a woken native's entry, until its chunk of the image's code is seated
+ lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
+ lvm_deferfwd;    // a deferred native's code slot until its compile patches it (map.c)
 // the attributes are the declaration: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both.
 ai_noinline ai_noicf lvm_t
@@ -1122,7 +1125,8 @@ extern union u const callout_drive[], callout_resume[];
 extern union u const yield_c[];
 struct ai_bio *bio_of(struct ai *g, struct ai_io *i);
 char *code_install(struct ai *g, char const *src, size_t n), *code_adopt(struct ai *g, char const *src, size_t n),
-     *code_lazy(struct ai *g, size_t n, unsigned char const *z, size_t nz, unsigned char const *tab, uintptr_t nch, int kept);
+     *code_lazy(struct ai *g, size_t n, unsigned char const *z, size_t nz, unsigned char const *tab, uintptr_t nch,
+                unsigned char const *dz, size_t ndz, size_t nd, int kept);
 int code_seat(struct ai *g, char const *a);
 char *ai_code_window(char *p);
 void code_free(struct ai *g, char *code), code_fin(struct ai *g);

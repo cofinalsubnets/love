@@ -459,7 +459,8 @@ lvm(lvm_reach_offset) { ai_musttail return Answer(putcharm((intptr_t) offsetof(s
 lvm(lvm_natp) {
  word x = Sp[0];
  union u *k = evenp(x) ? cell(x) : NULL, *e = k && k->ap == lvm_cur ? k + 2 : k;
- int nat = e && code_in(g, (uintptr_t)(e->ap == lvm_lazy ? k[-1].ap : e->ap));
+ int nat = e && (code_in(g, (uintptr_t)(e->ap == lvm_lazy ? k[-1].ap : e->ap))
+                 || (e->ap == lvm_deferfwd && k[-1].ap == lvm_deferfwd));   // a deferred one that declined: its twin still at value[1]
  ai_musttail return Answer(putcharm(nat)); }
 // a woken native's entry until its chunk of the image's code is seated: seat it, write the
 // code into the cell, enter. the header already names the code, one word behind an arity-1
@@ -729,27 +730,31 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
  ai_code_sync(c->base, c->base + n);
  return c->base; }
 // a segment deflated a chunk at a time, each seated when a native in it first runs: tab
-// holds where each chunk starts in the segment and in z, two words apiece
-struct ai_lazy { unsigned char const *z; char *w; unsigned char *seated; uintptr_t n, nz, nch; uint64_t tab[]; };
+// holds where each chunk starts in the segment and in z, two words apiece. every chunk was
+// deflated against dic, nd bytes, a preset dictionary
+struct ai_lazy { unsigned char const *z, *dz; char *w; unsigned char *seated, *dic; uintptr_t n, nz, nch, nd, ndz; uint64_t tab[]; };
 static int code_seat1(struct ai_code *c, uintptr_t k) {
  struct ai_lazy *l = c->lz;
  if (l->seated[k]) return 0;
+ if (l->dz && ai_inflate_raw(l->dz, l->ndz, l->dic, l->nd) != (intptr_t) l->nd) return -1;   // the first seat's
+ l->dz = NULL;
  uintptr_t a = (uintptr_t) l->tab[2 * k], b = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 2] : l->n,
            za = (uintptr_t) l->tab[2 * k + 1], zb = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 3] : l->nz;
  if (code_wopen(c, c->base + a, b - a, 0)
-     || ai_inflate_raw(l->z + za, zb - za, (unsigned char*) l->w + a, b - a) != (intptr_t)(b - a)
+     || ai_inflate_dict(l->z + za, zb - za, (unsigned char*) l->w + a, b - a, l->dic, l->nd) != (intptr_t)(b - a)
      || code_wopen(c, c->base + a, b - a, 1)) return -1;
  ai_code_sync(c->base + a, c->base + b);
  return l->seated[k] = 1, 0; }
 // kept: z outlives the session, else every chunk is seated now. NULL on a table that does
 // not describe n bytes from nz
-char *code_lazy(struct ai *g, size_t n, unsigned char const *z, size_t nz,
-                unsigned char const *tab, uintptr_t nch, int kept) {
+char *code_lazy(struct ai *g, size_t n, unsigned char const *z, size_t nz, unsigned char const *tab, uintptr_t nch,
+                unsigned char const *dz, size_t ndz, size_t nd, int kept) {
  char *w;
  struct ai_code *c = code_region(g, n, &w);
- struct ai_lazy *l = c ? ai_alloc(NULL, sizeof *l + nch * (2 * sizeof(uint64_t) + 1)) : NULL;
+ struct ai_lazy *l = c ? ai_alloc(NULL, sizeof *l + nch * (2 * sizeof(uint64_t) + 1) + nd) : NULL;
  if (!l) return NULL;
  l->z = z, l->w = w, l->n = n, l->nz = nz, l->nch = nch, l->seated = (unsigned char*)(l->tab + 2 * nch);
+ l->dic = l->seated + nch, l->nd = nd, l->dz = nd ? dz : NULL, l->ndz = ndz;
  memcpy(l->tab, tab, 2 * nch * sizeof(uint64_t)), memset(l->seated, 0, nch);
  c->lz = l;
  for (uintptr_t k = 0; k < nch; k++) {
