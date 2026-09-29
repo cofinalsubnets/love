@@ -1,5 +1,5 @@
 ; apps/crow.l -- a coding agent: claude over the messages api, and four tools it may
-; call here -- read_file, write_file, edit_file, bash. all but a read ask y/n first.
+; call here -- read_file, write_file, edit_file, lush. all but a read ask y/n first.
 ;
 ;   out/love apps/crow.l [-y] [prompt ..]     one prompt, or a > loop on stdin
 ;
@@ -38,12 +38,21 @@
      (tool "edit_file" "Replace old_text, which must occur exactly once, with new_text."
            {"path" (prop "the file's path") "old_text" (prop "the text now there")
             "new_text" (prop "its replacement")} ["path" "old_text" "new_text"])
-     (tool "bash" "Run a shell command; answers its stdout and stderr, then its exit status."
-           {"command" (prop "the command")} ["command"])]
+     (tool "lush" ("Run a command line in lush, love's POSIX shell. The commands the system prompt "
+                   + "names are love's own userland (kore) and win over PATH; anything else comes "
+                   + "from PATH. Answers stdout and stderr, then the exit status.")
+           {"command" (prop "the command line")} ["command"])]
+
+   ; the shell is this binary's own, with its verbs ahead of PATH (lush -a)
+   crow-self ((cite 'posix 'selfpath) 0)
+   (lush-argv cmd) [crow-self "lush" "-a" "-c" cmd]
+   crow-verbs (foldl (\ a v (a + " " + v)) "" (sort (map show (keys (cite 'verbs 'tab)))))
 
    crow-system
-    ("You are crow, a coding agent in a terminal. The working directory is "
-     + getenv "PWD" + ". Use the tools to look before you change things, and keep replies short.")
+    ("You are crow, a coding agent in a terminal. The working directory is " + getenv "PWD"
+     + ". Use the tools to look before you change things, and keep replies short. Commands run "
+     + "in lush, a POSIX shell, not bash: write POSIX sh. These commands are love's own "
+     + "implementations, POSIX in their flags, so a GNU-only option may be refused:" + crow-verbs + ".")
 
    ; --- the wire ---
    ; a pull reader over the session: 'h holds bytes heard and not yet taken
@@ -106,7 +115,7 @@
    ;   'note s        something the user should know  'wire s     the socket, while it is open
    ;   'tool name in  a tool call begins -> a handle  'ask h      may it run? -> 1 | 0
    ;   'done h r      it ran, r [ok? text]            'yes        run without asking
-   ;   'bash h cmd    run cmd for tool h -> its output and exit status
+   ;   'shell h cmd   run cmd in lush for tool h -> its output and exit status
 
    ; a streamed answer -> [stop blocks]; [() err] on an error event. a tool's input arrives
    ; as json pieces in js, read whole at its block's stop
@@ -150,9 +159,9 @@
 
    ; the child's output read by see, which parks this task alone, and its exit by gather,
    ; which never blocks: the screen keeps painting while a command runs. stdin is /dev/null
-   (sh-out cmd)
+   (lush-out cmd)
     (: pp (pipe 0) nul (openfd "/dev/null" 0)
-       p (spawnio ["sh" "-c" cmd] nul >pp >pp [<pp] -1 0)
+       p (spawnio (lush-argv cmd) nul >pp >pp [<pp] -1 0)
        _ (close >pp) _ (? (0 <= nul) (close nul) 0)
        q (fdopen <pp)
        (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
@@ -180,18 +189,18 @@
     (: t (filter (\ x (x "name" = name)) crow-tools)
        (two? t && tablet? in && !(two? (filter (\ k !(string? (in k))) (<t "input_schema" "required")))))
 
-   ; a tool call -> [ok? text]. the face runs bash, so the screen can show it running
+   ; a tool call -> [ok? text]. the face runs lush, so the screen can show it running
    (run f h name in)
     (? !(valid? name in) [0 ("no such tool, or its input is missing a field: " + name)]
        (name @
         "read_file"  (: s (slurp-file (in "path")) (? (string? s) [1 (clip s)] [0 ("cannot read " + in "path")]))
         "write_file" (? (spit-file (in "path") (in "content")) [1 ("wrote " + in "path")] [0 ("cannot write " + in "path")])
         "edit_file"  (edit (in "path") (in "old_text") (in "new_text"))
-        "bash"       [1 (clip ((f 'bash) h (in "command")))]))
+        "lush"       [1 (clip ((f 'shell) h (in "command")))]))
 
    (brief name in)
     (? !(valid? name in) "(malformed input)"
-       (name @ "bash" (in "command")
+       (name @ "lush" (in "command")
                "edit_file" (in "path" + ": " + show #(in "old_text") + " bytes -> " + show #(in "new_text"))
                (in "path")))
 
@@ -246,7 +255,7 @@
      'tool (\ name in (puts ("  " + name + " " + brief name in + "\n")))
      'ask (\ h (? (ask "  run? [y/N] ") 1 0))
      'done (\ h r 0)
-     'bash (\ h cmd (sh-out cmd))}
+     'shell (\ h cmd (lush-out cmd))}
    (repl key f msgs)
     (: _ (puts "> ") _ (flush out) l (line 0)
        (? !(string? l) 0
@@ -337,7 +346,7 @@
               head (" " + (sgr "1" ("▸ " + b 'name)) + " " + (sgr "2" (b 'brief)) + "  " + mark)
               out (peep b 'out "")
               tail (b 'name @
-                    "bash" (? (peep b 'scr () != ())
+                    "lush" (? (peep b 'scr () != ())
                               (map (\ l ((sgr "2" "   ┆ ") + l)) (scr-rows (b 'scr) 12))
                               (: ls (filter (\ l (0 < #l)) (lines out)) n #ls
                                  (map (\ l (sgr "2" ("   ┆ " + l))) (8 < n ? (drop (n - 8) ls) ls))))
@@ -393,10 +402,10 @@
                   a))
      'done (\ b r (pins b 'st (<r ? 'ok 'err) 'out (r 1) 'v (b 'v + 1), soil c))
      ; on a pty of its own, its screen in the block as it runs; the pipe when no pty opens
-     'bash (\ b cmd (: w (max 20 (c 'cols - 8)) r crow-pty-rows
+     'shell (\ b cmd (: w (max 20 (c 'cols - 8)) r crow-pty-rows
                        _ (setenv "TERM" "xterm-256color")
-                       md (tether ["sh" "-c" cmd])
-                       (? (atom? md) (sh-out cmd)
+                       md (tether (lush-argv cmd))
+                       (? (atom? md) (lush-out cmd)
                           (: pid <md m >md
                              s (screen (cask (screen () r w)) r w)
                              _ (settty m r w)
