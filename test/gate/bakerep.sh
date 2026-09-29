@@ -53,14 +53,21 @@ done
 cmp -s "$w/b3" "$w/b4" \
   || fail "the GC budget is in the image -- a bake must not care when collections fire"
 
-# ..and the hot-first bake the build runs (tools/hotbake.sh): its layout comes of a profile,
-# the chunks a few short runs of the tree woke, so the profile must be the tree's too
-for i in 5 6; do
-  sh tools/hotbake.sh "$w/seed" "$w/b$i" "$ho/.dist-cat.l" > "$w/hot.log" 2>&1 \
-    || { cat "$w/hot.log"; fail "hot bake $i failed"; }
-done
-cmp -s "$w/b5" "$w/b6" \
-  || fail "the hot-first bake is not reproducible -- its profile carries something of the machine"
+# ..and the hot-first bake the build runs (tools/hotbake.sh): its layout comes of the tree's
+# profile, so a profile taken now must be the one the tree holds. an eager build (HCC) and a
+# page other than 4 KiB profile differently, and are not asked
+ps=$(getconf PAGESIZE 2>/dev/null || echo 4096)
+prof() { sh tools/hotbake.sh -p "$ho/love.raw" "$w/$1" "$ho/.dist-cat.l" > "$w/hot.log" 2>&1; }
+if [ "$ps" != 4096 ]; then
+  echo "  (hot profile not compared: the page is $ps bytes)"
+elif ! prof p1; then
+  grep -q "woke eagerly" "$w/hot.log" || { cat "$w/hot.log"; fail "the profile failed"; }
+  echo "  (hot profile not compared: this build wakes eagerly)"
+else
+  prof p2 || { cat "$w/hot.log"; fail "the second profile failed"; }
+  cmp -s "$w/p1" "$w/p2" || fail "the hot profile is not reproducible -- it carries something of the machine"
+  cmp -s "$w/p1" tools/hot.prof || fail "tools/hot.prof is stale for this tree: make hotprof"
+fi
 
 # ..and the thing still has to WAKE: a bake that is reproducible and dead passes everything
 # above. GREP, never a whole-output compare -- `-e` prints the form's value as well as
