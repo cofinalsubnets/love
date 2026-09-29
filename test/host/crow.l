@@ -84,6 +84,7 @@
           "[DONE]"]))
        (cr-ok (cr-sse [{"choices" [{"delta" {"content" "All done."}}]}
                        {"choices" [{"delta" {} "finish_reason" "stop"}]}
+                       {"choices" [] "usage" {"prompt_tokens" 900 "completion_tokens" 12}}
                        "[DONE]"]))])
    r (cr-run cr-a "OPENAI_API_KEY=sk-never-sent" "-y 'make the file'")
    o (r 1)
@@ -99,8 +100,12 @@
       ("hi" = cr-get (cr-a + "/made.txt"))
       ("mock-model" = b1 "model")
       (json-true = b1 "stream")
+      (json-true = b1 "stream_options" "include_usage")       ; the gauge's count
       ("system" = m1 0 "role")
       (cr-in (m1 0 "content") "the frog rule")               ; the directory's AGENTS.md
+      (cr-in (m1 0 "content") "platform: ")                  ; the environment, from love's own verbs
+      (cr-in (m1 0 "content") "date: 20")
+      (cr-in (m1 0 "content") " source DIR")                 ; the briefing: how to lay the source
       (elem "shell" (map (\ t (t "function" "name")) (b1 "tools")))
       ("c1" = tm "tool_call_id")
       (cr-in (tm "content") "made") (cr-in (tm "content") "[exit 0]")
@@ -116,7 +121,9 @@
    (ev t x) (pin x "type" t)
    _ (cr-serves
       [(cr-ok (cr-sse
-         [(ev "message_start" {"message" {"id" "m1" "content" []}})
+         [(ev "message_start" {"message" {"id" "m1" "content" []
+                                           "usage" {"input_tokens" 40 "cache_read_input_tokens" 800
+                                                    "cache_creation_input_tokens" json-null "output_tokens" 1}}})
           (ev "content_block_start" {"index" 0 "content_block" {"type" "thinking" "thinking" "" "signature" ""}})
           (ev "content_block_delta" {"index" 0 "delta" {"type" "thinking_delta" "thinking" "an edit will do"}})
           (ev "content_block_delta" {"index" 0 "delta" {"type" "signature_delta" "signature" "sig=="}})
@@ -125,7 +132,7 @@
           (ev "content_block_delta" {"index" 1 "delta" {"type" "input_json_delta" "partial_json" (snip ed 0 11)}})
           (ev "content_block_delta" {"index" 1 "delta" {"type" "input_json_delta" "partial_json" (snip ed 11 #ed)}})
           (ev "content_block_stop" {"index" 1})
-          (ev "message_delta" {"delta" {"stop_reason" "tool_use"}})
+          (ev "message_delta" {"delta" {"stop_reason" "tool_use"} "usage" {"output_tokens" 30}})
           (ev "message_stop" {})]))
        (cr-chunked (cr-sse
          [(ev "content_block_start" {"index" 0 "content_block" {"type" "text" "text" ""}})

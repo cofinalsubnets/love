@@ -931,15 +931,21 @@
        s (? (nom? n) (os-uname n) ())
        (? (string? s) s (u-1line "/proc/sys/kernel/ostype" "unknown")))
    (u-join ws) (? (atom? ws) "" (atom? >ws) <ws (<ws + " " + u-join >ws))
+   ; a proc file's whole first line, spaces and all, or the default
+   (u-line p d) (: r (uread p) (? (atom? r) d (: l (lines <>r) (two? l && 0 < #<l ? <l d))))
+   ; posix's letters, which cluster (-srm); -a is all five, in posix's order
    (uname-main as)
-    (: fl (? (two? as) as '("-s"))
-       (want f) (? (elem "-a" fl) 1 (elem f fl))
-       ws ((? (want "-s") [(u-os ())] ())
-           + (? (want "-n") [(u-1line "/proc/sys/kernel/hostname" "unknown")] ())
-           + (? (want "-r") [(u-1line "/proc/sys/kernel/osrelease" "unknown")] ())
-           + (? (want "-m") [(u-mach ())] ()))
-       (? (atom? ws) (udie 2 "usage: uname [-snrma]")
-          (say out (u-join ws), put out 10, flush out, 0)))
+    (: fo (uflags "uname" as () "amnrsv")
+       t <fo
+       _ (? (two? (fo 1)) (udie 2 ("uname: extra operand " + <(fo 1))) 0)
+       any (t 97 || t 109 || t 110 || t 114 || t 115 || t 118)
+       (want c) (t 97 || t c || (c = 115 && !any))
+       ws ((? (want 115) [(u-os ())] ())
+           + (? (want 110) [(u-1line "/proc/sys/kernel/hostname" "unknown")] ())
+           + (? (want 114) [(u-1line "/proc/sys/kernel/osrelease" "unknown")] ())
+           + (? (want 118) [(u-line "/proc/sys/kernel/version" "unknown")] ())
+           + (? (want 109) [(u-mach ())] ()))
+       (say out (u-join ws), put out 10, flush out, 0))
 
    ; -- arch: uname -m, and nothing else --
    (arch-main _) (say out (u-mach ()), put out 10, flush out, 0)

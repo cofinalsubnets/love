@@ -2548,6 +2548,27 @@
                                              (sh-capst (map wait pids)))
                                         o))))))))))))
    _ (pin sh-subeval () sh-cmdsub)
+   ; sh-oneline with its stdout captured -> (status . text), or () when the flags ask for
+   ; something that door does not serve. the seat is sh-capsub's; the line is sh-oneline's,
+   ; so -e -u -x hold as they would in a spawned sh. make's $(shell) rides it
+   (sh-onecap fl src)
+     (? (atom? (sh-oneflags fl)) ()
+        (: pp (pipe 0)
+           (? (nom? pp) ()
+              (: rfd <pp wfd >pp
+                 d (twirl (\ _ (: p (fdopen rfd) t (slurp p) (close p, t))) 0)
+                 _ (flush out)
+                 sv (dup 1)
+                 _ (dup2 wfd 1)
+                 po (fdopen (dup wfd))
+                 w0 (worn ())
+                 _ (sh-wearout po)
+                 caps (sh-subfds ())
+                 _ (pin sh-subfds () ((rfd . d) . caps))
+                 r (mind (_ \ sh-oneline fl src) ()
+                         (\ _ (flush out, wear w0, close po, pin sh-subfds () caps,
+                                dup2 sv 1, close sv, close wfd, 0)))
+                 (r 1 . catch d)))))
 
    ; --- the script lane + the line entries --------------------------------------
    (sh-lines port buf)
