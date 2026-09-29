@@ -4,20 +4,23 @@
 ; server speak. one group, one version, the two suites; a key's length says which cipher
 ; it is for (32 bytes chacha, 16 aes).
 ;
-; what is verified: the handshake. the server's CertificateVerify must be its leaf key's
-; signature of the transcript (ed25519, ecdsa p-256 with sha-256, or rsa-pss with sha-256;
-; apps/tls/verify.l), and its Finished the hmac of the transcript under the handshake
-; secret, so the peer holds the private key of the certificate it sent and saw the same
-; handshake we did. what is NOT verified: the certificate itself -- no chain to a trusted
-; root, no check of the name against the host, no expiry. any key signs for any name here,
-; so this proves "the same key as before" (a pin) and never "the host we asked for".
+; what is verified, by default: the handshake -- the server's CertificateVerify under its
+; leaf key (ed25519, ecdsa p-256/sha-256 or p-384/sha-384, rsa-pss/sha-256 or sha-384) and
+; its Finished under the handshake secret -- and the certificate, before a byte goes out: a
+; path from the leaf to a root in the host's bundle (verify.l's chain-ok?: every signature,
+; every date, the issuers' roles, the host's name in subjectAltName). no revocation is
+; checked. a line in ~/.love/tls_pins, "host:port spki:<sha-256>", answers for that
+; host:port instead of the roots -- a self-signed or private server -- and a key other than
+; the pinned one is refused. a refusal says which check, and which certificate.
 ;
-;   (tls-dial host port)   resolve, connect, shake hands -> a session | ()
-;   (tls-say t s)          send s as application data
-;   (tls-slurp t)          every byte of application data the peer sends, to its close
-;   (tls-close t)          a close_notify, and the socket shut
-;   (t 'cert)              the server's leaf certificate, its der, as it came
-;   (t 'spki)              its SubjectPublicKeyInfo, the der of the key that signed
+;   (tls-dial host port)       resolve, connect, shake hands, verify -> a session | ()
+;   (tls-open host port how)   the same -> a session | why not, a string. how: 'verify, or
+;                              'pin-only (the caller holds the pin: gemini), or 'none
+;   (tls-say t s)              send s as application data
+;   (tls-slurp t)              every byte of application data the peer sends, to its close
+;   (tls-close t)              a close_notify, and the socket shut
+;   (t 'chain)                 the server's certificates, ders, leaf first, as they came
+;   (t 'cert) (t 'spki)        the leaf's der, and its SubjectPublicKeyInfo's
 ;
 ; the session is a tablet: the socket, a pending-bytes run, the two traffic keys and their
 ; sequence numbers, the transcript. x25519 rides the bignums (RFC 7748's ladder, the field
@@ -135,7 +138,7 @@
        _ (pin t 'cseq (t 'cseq + 1))
        (wr t (aad + ct)))
    ; a fatal alert under the client's current key, and no session
-   (alert t d) (seal t 21 (u8 2 + u8 d), ())
+   (alert t d why) (pin t 'why why, seal t 21 (u8 2 + u8 d), ())
    ; one record in: a plaintext CCS is skipped, an encrypted one opened under the server's
    ; key -> (inner-type body) | () at the end or on a bad tag
    (open-rec t)
@@ -172,9 +175,9 @@
    (client-hello host pub sid)
     (: sni (ext 0 (u16 (#host + 3) + u8 0 + u16 #host + host))
        groups (ext 10 (u16 2 + u16 29))
-       ; what a CertificateVerify may use is what verify.l checks: ecdsa p-256, rsa-pss, ed25519.
+       ; what a CertificateVerify may use is what verify.l checks: ecdsa p-256 and p-384, rsa-pss, ed25519.
        ; the chain's own signatures are named apart (50), so the server's pick of a leaf is not narrowed
-       sigs (ext 13 (u16 6 + u16 1027 + u16 2052 + u16 2055))
+       sigs (ext 13 (u16 10 + u16 1027 + u16 1283 + u16 2052 + u16 2053 + u16 2055))
        csigs (ext 50 (u16 12 + u16 1027 + u16 2052 + u16 1025 + u16 2055 + u16 2053 + u16 1281))
        vers (ext 43 (u8 2 + u16 772))
        modes (ext 45 (u8 1 + u8 1))
@@ -198,10 +201,48 @@
        (? !(suite = 4867 || suite = 4865) ()
           (go (i + 5) (i + 5 + extn) () 0)))
 
+   ; the Certificate message's list -> its ders, leaf first, or () for one that does not tile
+   (cert-list b)
+    (: cx (? (0 < #b) (b 0) -1) i (1 + cx)
+       (go j acc k)
+        (? (j = #b) (rev acc)
+           (16 < k || #b < j + 5) ()
+           (: n (rd24 b j) e (j + 3 + n) xl (? (e + 2 <= #b) (rd16 b e) -1)
+              (? (xl < 0 || #b < e + 2 + xl) () (go (e + 2 + xl) (snip b (j + 3) e . acc) (k + 1)))))
+       (? (cx < 0 || #b < i + 3 || rd24 b i != #b - i - 3) () (go (i + 3) () 0)))
+   ; a failed dial: the socket shut, and the reason, the first one said
+   (quit-why t d) (close (t 's), (? (string? (t 'why)) (t 'why) d))
+
+   ; --- the pins: a line "host:port spki:<sha-256 of the key's SubjectPublicKeyInfo>" a key.
+   ; ~/.love/tls_pins is the override for a server no root vouches for; www's gemini trust on
+   ; first use writes the same lines to ~/.love/gemini_hosts ---
+   (pin-path nm) (: h (getenv "HOME") ((? (string? h) h ".") + "/.love/" + nm))
+   (pin-of path key)
+    (: txt (uread path @ [1 s] s "")
+       (find l) (? (atom? l) () (: f (split " " <l) (? (1 < #f && <f = key) (f 1) (find >l))))
+       (find (split "\n" txt)))
+   (spki-pin spki) ("spki:" + sha256 spki)
+   ; () when the peer is to be believed, else why not, with the line that would pin it
+   (trust-why host port chain spki how)
+    (: key (host + ":" + show port) fp (spki-pin spki)
+       file (pin-path "tls_pins") pin (pin-of file key)
+       (? (how != 'verify) ()
+          (string? pin) (? (pin = fp) () ("the key of " + key + " is not the one pinned in " + file
+                                          + " (pinned " + pin + ", offered " + fp + ")"))
+          (: rs (tls-roots 0) r (chain-ok? chain (rs 1) host (clock 0 // 1000))
+             (? (r = 1) ()
+                ((? (atom? (rs 1))
+                     ("no root certificates to check " + key + " against"
+                      + (? (string? <rs) (" (" + <rs + " has none that read)") " (no bundle here; SSL_CERT_FILE names one)"))
+                     ("the certificate of " + key + " is not trusted: " + r))
+                 + "; to trust this key for " + key + " anyway, add the line \"" + key + " " + fp + "\" to " + file)))))
+
    ; --- the handshake, whole ---
-   (tls-dial host port)
+   (tls-dial host port) (: r (tls-open host port 'verify) (? (tablet? r) r ()))
+   ; how: 'verify (the chain to a root, or a pin), 'pin-only (the caller pins: gemini), 'none
+   (tls-open host port how)
     (: s (dial host port)
-       (? !(hot? s) ()
+       (? !(hot? s) ("cannot connect to " + host + ":" + show port)
           (: t (tablet 16)
              _ (pin t 's s) _ (pin t 'pend "") _ (pin t 'hbuf "") _ (pin t 'tr "")
              _ (pin t 'cseq 0) _ (pin t 'sseq 0)
@@ -210,11 +251,11 @@
              _ (pin t 'tr ch)
              _ (wr t (u8 22 + u16 769 + u16 #ch + ch))
              r (rdrec t)
-             (? (atom? r || <r != 22 || <>r 0 != 2) (close s, ())
+             (? (atom? r || <r != 22 || <>r 0 != 2) (quit-why t "the server did not answer with a tls 1.3 hello")
                 (: sh <>r
                    _ (pin t 'tr (t 'tr + sh))
                    ss (server-share (snip sh 4 #sh))
-                   (? (atom? ss) (close s, ())
+                   (? (atom? ss) (quit-why t "the server chose nothing this client speaks")
                       (: share <ss kl <>ss
                          shared (x25519 priv share)
                          early (hkdf-extract (zeros 32) (zeros 32))
@@ -233,25 +274,26 @@
                              (? (atom? m) ()
                                 (<m = 20)
                                  (? (t 'cv = 1 && <>m = hmac (hkdf-label shs "finished" "" 32) (sha tb)) m
-                                    (alert t 51))
+                                    (alert t 51 "the server's Finished does not verify"))
                                 (<m = 11)
-                                 (: b <>m i (? (8 <= #b) (1 + b 0) #b)
-                                    n (? (i + 6 <= #b) (rd24 b (i + 3)) 0)
-                                    k (leaf-key (snip b (i + 6) (i + 6 + n)))
+                                 (: ds (cert-list <>m)
+                                    k (? (two? ds) (leaf-key <ds) ())
                                     (? (two? k && !(t 'key))
-                                       (pins t 'cert (snip b (i + 6) (i + 6 + n)) 'key k 'spki (k 2), flight 0)
-                                       (alert t 42)))
+                                       (pins t 'chain ds 'cert <ds 'key k 'spki (k 2), flight 0)
+                                       (alert t 42 "the server's certificate does not read")))
                                 (<m = 15)
                                  (: b <>m n (? (4 <= #b) (rd16 b 2) -1) k (t 'key)
                                     (? (two? k && #b = 4 + n && !(t 'cv)
                                         && cv-ok? k (rd16 b 0) (snip b 4 #b) (cv-msg (sha tb)) = 1)
                                        (pin t 'cv 1, flight 0)
-                                       (alert t 51)))
+                                       (alert t 51 "the server's CertificateVerify does not verify under its certificate's key")))
                                 ; a request for our certificate: its context kept
                                 (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)), flight 0)
                                 (flight 0)))
                          fin (flight 0)
-                         (? (atom? fin) (close s, ())
+                         why (? (atom? fin) () (trust-why host port (t 'chain) (t 'spki) how))
+                         (? (atom? fin) (quit-why t "the handshake failed")
+                            (string? why) (: _ (alert t (? (0 <= str-at why "pinned" 0) 42 48) why) (quit-why t why))
                             (: ; the client finished is over the transcript through the server's
                                ; asked for one, we send an empty certificate (we have none),
                                ; and our finished covers it; the traffic keys stop at the server's

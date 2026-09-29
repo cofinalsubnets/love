@@ -70,4 +70,47 @@
        bad ((T 'aead-open) k iv 3 "aad" ((T 'bytes) #ct (\ i (i = 0 ? (ct 0 ^ 1) (ct i)))))
        (&& (two? ok) ("the plaintext" = <>ok) (atom? bad)))))
 
+;; https, where openssl is here: a leaf for 127.0.0.1 under a root laid here. named by
+; SSL_CERT_FILE the root verifies it; the host's own bundle refuses it (exit 5, and the check
+; and the certificate said); --no-check-certificate takes it; a pin in ~/.love/tls_pins takes it
+(: W (cite 'kore 'wget-main)
+   os? (two? (stat "/usr/bin/openssl"))
+   odir ((cwd 0) + "/out/.wgett-" + show (getpid 0))
+   (osh c) (hark ["sh" "-c" ("exec 2>/dev/null; cd " + odir + " && " + c)])
+   (srv port) (: p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
+                            "-key" (odir + "/leaf.key") "-cert" (odir + "/leaf.pem")])
+                 _ (rest 500) p)
+   (reap p) (: _ (still <p 15) (: g (gather <p) (? (two? g || nom? g) g (rest 2, reap p))))
+   cf0 (getenv "SSL_CERT_FILE") home0 (getenv "HOME")
+   _ (? os? (: _ (hark ["mkdir" "-p" (odir + "/.love")])
+               _ (osh ("openssl req -x509 -newkey rsa:2048 -nodes -keyout root.key -out root.pem -days 2 -subj /CN=t-root"
+                       + " -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign"))
+               (osh ("printf 'basicConstraints=critical,CA:FALSE\\nsubjectAltName=IP:127.0.0.1\\n' > l.cnf"
+                     + " && openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout leaf.key -subj /CN=t-leaf -out leaf.csr"
+                     + " && openssl x509 -req -in leaf.csr -CA root.pem -CAkey root.key -days 2 -extfile l.cnf -out leaf.pem")))
+          0)
+   (fetch port as) (: p (srv port) o (odir + "/got" + show port)
+                      rc (W (as + ["-q" "-O" o ("https://127.0.0.1:" + show port + "/")]))
+                      _ (reap p)
+                      [rc (: r (uread o) (? (two? r) <>r ""))])
+   (has s x) (0 <= (cite 'kore 'wg-find) s x 0)
+   _ (? os?
+        (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
+           a (fetch 7437 [])
+           _ (setenv "SSL_CERT_FILE" "/nonexistent/bundle.pem")
+           b (fetch 7438 [])
+           c (fetch 7439 ["--no-check-certificate"])
+           spki (: r (hark ["sh" "-c" ("cd " + odir + " && openssl x509 -in leaf.pem -pubkey -noout | openssl pkey -pubin -outform DER | sha256sum")])
+                   (snip >r 0 64))
+           _ (setenv "HOME" odir)
+           _ (: q (open (odir + "/.love/tls_pins") "w") _ (say q ("127.0.0.1:7440 spki:" + spki + "\n")) (close q))
+           d (fetch 7440 [])
+           _ (setenv "HOME" (? (string? home0) home0 ""))
+           _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
+           _ (hark ["rm" "-rf" odir])
+           (test (<a = 0) (has (a 1) "TLSv1.3") (<b = 5) (<c = 0) (has (c 1) "TLSv1.3")
+                 (<d = 0) (has (d 1) "TLSv1.3")))
+        0)
+   0)
+
 (test_fin (), puts "wget: ok", putc 10, 0)

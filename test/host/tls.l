@@ -207,7 +207,10 @@
 ; the certificate above that carries it. honest, the dial holds and the data arrives; with
 ; the verify's signature flipped, made by another key, left out, or the certificate left
 ; out, or the finished flipped, the dial fails and the server reads the client's alert --
-; decrypt_error (51) -- under the client's handshake key
+; decrypt_error (51) -- under the client's handshake key. those dial with no trust check
+; ('none); then the trust: its self-signed certificate is refused against a root that did not
+; sign it (unknown_ca, 48), taken by a pin in ~/.love/tls_pins, and refused under another
+; pin (bad_certificate, 42)
 (: hs-seed (unhex "893a665eebf62b9c0caf1f1de33129ee339d748b1e5f38327c4ad24e2052683d")
    (hs-msg ty b) (u8 ty + u24 #b + b)
    (hs-share ch)
@@ -247,47 +250,151 @@
             0)
        _ (close c)
        got)
-   (hs-run port mode)
+   (hs-run port mode how)
     (: l (listen ['tcp "127.0.0.1" port])
        s (twirl (_ \ hs-serve l mode) ())
-       t (tls-dial "127.0.0.1" port)
+       t (tls-open "127.0.0.1" port how)
        body (? (tablet? t) (: b (tls-slurp t) _ (close (t 's)) b) ())
        got (catch s)
        _ (close l)
-       [body got (? (tablet? t) (t 'spki) ())])
-   ok (hs-run 7481 'honest)
+       [body got (? (tablet? t) (t 'spki) t)])
+   ok (hs-run 7481 'honest 'none)
    _ (test (<ok = "the stub says hi") (<(ok 1) = 22) ((ok 2) = (ked 2)))
-   _ (map (m \ (: r (hs-run (7482 + m 1) <m)
-                  (test !(<r) ((r 1) = [21 (u8 2 + u8 (m 2))]))))
+   _ (map (m \ (: r (hs-run (7482 + m 1) <m 'none)
+                  (test !(<r) ((r 1) = [21 (u8 2 + u8 (m 2))]) (string? (r 2)))))
           [['badsig 0 51] ['otherkey 1 51] ['nocv 2 51] ['badfin 3 51] ['nocert 4 51]])
+   ; the trust, with HOME and SSL_CERT_FILE the test's own
+   home0 (getenv "HOME") cf0 (getenv "SSL_CERT_FILE")
+   hdir ((cwd 0) + "/out/.tlsp-" + show (getpid 0))
+   _ (hark ["mkdir" "-p" (hdir + "/.love")])
+   _ (setenv "HOME" hdir)
+   _ (setenv "SSL_CERT_FILE" ((cwd 0) + "/test/host/tlschain/roote.pem"))
+   (pinfile l) (: q (open (hdir + "/.love/tls_pins") "w") _ (say q l) (close q))
+   un (hs-run 7487 'honest 'verify)
+   _ (pinfile ("# a comment\n127.0.0.1:7491 " + spki-pin (ked 2) + "\n"))
+   pn (hs-run 7491 'honest 'verify)
+   _ (pinfile ("127.0.0.1:7492 spki:" + sha256 "another key" + "\n"))
+   wp (hs-run 7492 'honest 'verify)
+   _ (setenv "HOME" (? (string? home0) home0 ""))
+   _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
+   _ (hark ["rm" "-rf" hdir])
+   _ (test !(<un) ((un 1) = [21 (u8 2 + u8 48)])
+           (0 <= str-at (un 2) "not trusted" 0) (0 <= str-at (un 2) "127.0.0.1:7487 spki:" 0)
+           (<pn = "the stub says hi")
+           !(<wp) ((wp 1) = [21 (u8 2 + u8 42)]) (0 <= str-at (wp 2) "not the one pinned" 0))
    0)
 
 ;; --- a real server: openssl's s_server over each kind of key, where openssl is here ----
+; a root laid here signs a leaf of each kind for 127.0.0.1, and SSL_CERT_FILE names the root:
+; each dial verifies. the same server is refused under the host's own bundle, and a leaf that
+; names another host is refused by name
 (: os? (two? (stat "/usr/bin/openssl"))
    odir ((cwd 0) + "/out/.tlsv-" + show (getpid 0))
-   (okey nm arg) (hark ["sh" "-c" ("openssl req -x509 -newkey " + arg + " -nodes -keyout " + odir + "/" + nm
-                                  + ".key -out " + odir + "/" + nm + ".pem -days 2 -subj /CN=127.0.0.1 2>/dev/null")])
+   (osh c) (hark ["sh" "-c" ("exec 2>/dev/null; cd " + odir + " && " + c)])
+   (oleaf nm arg san)
+    (osh ("printf 'basicConstraints=critical,CA:FALSE\\nsubjectAltName=" + san + "\\n' > " + nm + ".cnf"
+          + " && openssl req -new -newkey " + arg + " -nodes -keyout " + nm + ".key -subj /CN=" + nm + " -out " + nm + ".csr"
+          + " && openssl x509 -req -in " + nm + ".csr -CA root.pem -CAkey root.key -days 2 -extfile " + nm + ".cnf -out " + nm + ".pem"))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
-   (orun nm arg port)
-    (: _ (okey nm arg)
-       p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
+   (orun nm port)
+    (: p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
                   "-key" (odir + "/" + nm + ".key") "-cert" (odir + "/" + nm + ".pem")])
        _ (rest 500)
-       t (tls-dial "127.0.0.1" port)
-       b (? (tablet? t) (: _ (tls-say t "GET / HTTP/1.0\r\n\r\n") b (tls-slurp t) _ (close (t 's)) b) "")
+       t (tls-open "127.0.0.1" port 'verify)
+       b (? (tablet? t) (: _ (tls-say t "GET / HTTP/1.0\r\n\r\n") b (tls-slurp t) _ (close (t 's)) b) t)
        _ (? (tablet? t) 0 (still <p 15))
        _ (waitfor <p)
        b)
+   (has b s) (string? b && 0 <= str-at b s 0)
    _ (? os?
-        (: _ (hark ["mkdir" "-p" odir])
-           e (orun "ed" "ed25519" 7488)
-           p (orun "ec" "ec -pkeyopt ec_paramgen_curve:P-256" 7489)
-           r (orun "rsa" "rsa:2048" 7490)
+        (: cf0 (getenv "SSL_CERT_FILE")
+           _ (hark ["mkdir" "-p" odir])
+           _ (osh ("openssl req -x509 -newkey rsa:2048 -nodes -keyout root.key -out root.pem -days 2 -subj /CN=tlsv-root"
+                   + " -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign"))
+           _ (oleaf "ed" "ed25519" "IP:127.0.0.1")
+           _ (oleaf "ec" "ec -pkeyopt ec_paramgen_curve:P-256" "IP:127.0.0.1")
+           _ (oleaf "p384" "ec -pkeyopt ec_paramgen_curve:P-384" "IP:127.0.0.1")
+           _ (oleaf "rsa" "rsa:2048" "IP:127.0.0.1")
+           _ (oleaf "other" "ec -pkeyopt ec_paramgen_curve:P-256" "DNS:other.test")
+           _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
+           e (orun "ed" 7488) p (orun "ec" 7489) q (orun "p384" 7493) r (orun "rsa" 7490) o (orun "other" 7494)
+           _ (setenv "SSL_CERT_FILE" "/nonexistent/bundle.pem")
+           n (orun "rsa" 7495)
+           _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
            _ (hark ["rm" "-rf" odir])
-           (has b) (0 <= (cite 'kore 'wg-find) b "TLSv1.3" 0)
-           (test (has e) (has p) (has r)))
+           (test (has e "TLSv1.3") (has p "TLSv1.3") (has q "TLSv1.3") (has r "TLSv1.3")
+                 (has o "does not name 127.0.0.1") (has n "no root certificates")))
         0)
    0)
+
+;; --- the chain: x509 path building over openssl's fixtures (test/host/tlschain, gen.sh) ----
+; two roots (rsa, p-384) and one of p-521, intermediates and leaves over rsa pkcs#1 with
+; sha-256/384/512 and ecdsa over each curve, all valid 2025..2035 and read at mid-2026. the
+; good chains verify leaf-first, out of order and with their root sent along; each broken
+; rule is refused, and the refusal names the certificate and the check
+(borrow 'cal)
+(: (tc-ld nm) (: r (uread ("test/host/tlschain/" + nm + ".pem")) (? (two? r) <(pem-ders <>r) ""))
+   tc-now (epoch-days 2026 6 1 * 86400)
+   tc-roots (map (n \ x509 (tc-ld n)) ["rootr" "roote" "rootw"])
+   (tc host l) (chain-ok? (map tc-ld l) tc-roots host tc-now)
+   (tc-flip d i) (snip d 0 i + string ((d i) ^ 1) + snip d (i + 1) #d)
+   (tc-has r s) (string? r && (0 <= str-at r s 0))
+   _ (test ((tc "good.test" ["leafr" "interr"]) = 1)
+           ((tc "good.test" ["leafe" "intere"]) = 1)                ; p-256 under p-384
+           ((tc "good.test" ["leafw"]) = 1)                          ; p-384 under p-521, sha-512
+           ((tc "good.test" ["leaf512" "interr"]) = 1)               ; pkcs#1 over sha-512
+           ((tc "GOOD.test." ["leafr" "interr"]) = 1)                ; case and a trailing dot
+           ((tc "a.wild.test" ["leafr" "interr"]) = 1)
+           ((tc "127.0.0.1" ["leafr" "interr"]) = 1)                 ; an address against iPAddress
+           ((tc "good.test" ["leafr" "rootr" "interr"]) = 1)         ; out of order, its root sent
+           ((tc "good.test" ["deep" "inter1" "inter0"]) != 1)
+           (tc-has (tc "good.test" ["expired" "interr"]) "\"expired\": it has expired")
+           (tc-has (tc "good.test" ["notyet" "interr"]) "\"notyet\": it is not valid yet")
+           (tc-has (tc "bad.test" ["leafr" "interr"]) "\"leafr\": it does not name bad.test")
+           (tc-has (tc "127.0.0.2" ["leafr" "interr"]) "does not name")
+           (tc-has (tc "a.b.wild.test" ["leafr" "interr"]) "does not name")   ; one label only
+           (tc-has (tc "wild.test" ["leafr" "interr"]) "does not name")        ; not the bare name
+           (tc-has (tc "foo.wild.test" ["partial" "interr"]) "does not name")  ; no f*.wild.test
+           (tc-has (tc "x.test" ["partial" "interr"]) "does not name")         ; no *.test
+           (tc-has (tc "good.test" ["undernoca" "noca" "interr"]) "\"noca\": it is not a certificate authority")
+           (tc-has (tc "good.test" ["deep" "inter1" "inter0"]) "\"inter0\": its pathLen is exceeded")
+           (tc-has (tc "good.test" ["crit" "interr"]) "\"crit\": a critical extension it does not know")
+           (tc-has (tc "good.test" ["client" "interr"]) "\"client\": it is not for serving tls")
+           (tc-has (tc "good.test" ["undernosign" "nosign"]) "\"nosign\": its keyUsage does not allow")
+           (tc-has (tc "good.test" ["nosan" "interr"]) "\"nosan\": it does not name good.test")
+           (tc-has (tc "good.test" ["leafr"]) "\"leafr\": no issuer for it is known")
+           (tc-has (chain-ok? [(tc-ld "leafr") (tc-ld "interr")] () "good.test" tc-now) "no issuer")
+           (tc-has (chain-ok? [] tc-roots "good.test" tc-now) "no certificate"))
+   ; a byte of a signature, or of what it signs, at each depth
+   lr (tc-ld "leafr") ir (tc-ld "interr")
+   _ (test (tc-has (chain-ok? [(tc-flip lr (#lr - 1)) ir] tc-roots "good.test" tc-now) "\"leafr\": its signature does not verify")
+           (tc-has (chain-ok? [lr (tc-flip ir (#ir - 1))] tc-roots "good.test" tc-now) "\"interr\": its signature does not verify")
+           (1 != chain-ok? [(tc-flip lr 200) ir] tc-roots "good.test" tc-now)
+           (1 != chain-ok? [(tc-ld "leafe") (tc-flip (tc-ld "intere") (#(tc-ld "intere") - 2))] tc-roots "good.test" tc-now))
+   ; the times, both encodings; the name rules alone
+   _ (test ((x509-time (string 23 + string 13 + "500101000000Z") [23 2 15 0]) = [(0 - 631152000)])
+           ((x509-time (string 24 + string 15 + "20260601000000Z") [24 2 17 0]) = [tc-now])
+           !(x509-time (string 23 + string 13 + "260601000000+") [23 2 15 0])
+           (dns-match? "*.a.test" "x.a.test") !(dns-match? "*.a.test" "a.test")
+           !(dns-match? "x*.a.test" "xy.a.test") !(dns-match? "*.*.test" "a.b.test")
+           !(dns-match? "*.test" "a.test") (dns-match? "A.Test" "a.TEST"))
+   ; every prefix of a certificate, and every one-byte change, reads without dying
+   _ (test (all (n \ !(tablet? (x509 (snip ir 0 n)))) ^#ir)
+           (all (i \ (: x (x509 (tc-flip ir i)) (atom? x || tablet? x))) ^#ir)))
+
+;; --- the roots: SSL_CERT_FILE names the bundle, read once; the host's own reads whole ----
+(: e0 (getenv "SSL_CERT_FILE")
+   _ (setenv "SSL_CERT_FILE" "test/host/tlschain/roote.pem")
+   r1 (tls-roots 0) r2 (tls-roots 0)
+   _ (setenv "SSL_CERT_FILE" "test/host/tlschain/none.pem")
+   r3 (tls-roots 0)
+   _ (setenv "SSL_CERT_FILE" (? (string? e0) e0 ""))
+   hb (filter (p \ two? (stat p)) root-homes)
+   hn (? (two? hb) (: t (uread <hb) ds (pem-ders <>t) [#ds #(filter tablet? (map x509 ds))]) [1 1])
+   _ (test (<r1 = "test/host/tlschain/roote.pem") (#(r1 1) = 1) (((r1 1) 0) 'subject = (x509 (tc-ld "roote")) 'subject)
+           ((r2 1) = (r1 1))                                       ; the same list: read once
+           ((r3 1) = ())
+           (0 < <hn) (<hn = hn 1)))
 
 ; the harness greps for this line, and that is the point: a reader stop exits 0
 ; with the asserts above never read, so only reaching here proves the file ran.
