@@ -789,11 +789,14 @@ static lvm(lvm_posix_lstat) {
 static lvm(lvm_posix_stat) {
  LvmCall(g, host_posix_stat) }
 
-// (statfs path) -> (bsize blocks bfree bavail files ffree frsize) | a nom | 'badarg.
+// (statfs path) -> (bsize blocks bfree bavail files ffree frsize fsid0 fsid1 namelen type)
+//                  | a nom | 'badarg.
 //                  what the filesystem holding the path has, in blocks of frsize (bsize
 //                  where a kernel leaves frsize at 0). bavail is what an ordinary user may
 //                  take and sits under bfree by the reserve root keeps. files/ffree are
-//                  the inode counts, 0 where the filesystem has none. linux's shape alone:
+//                  the inode counts, 0 where the filesystem has none. the fsid's two words,
+//                  the longest name and the type's magic ride after, for stat -f; the
+//                  tail is append-only. linux's shape alone:
 //                  the BSDs spell the call over another struct, so a BSD hears 'enosys.
 #if defined(LvHaveStatfs)
 ai_noinline static struct ai *host_posix_statfs(struct ai *g) {
@@ -801,9 +804,15 @@ ai_noinline static struct ai *host_posix_statfs(struct ai *g) {
  if (!p) return g->sp[0] = ai_badarg(g), g;
  struct statfs fs;
  if (statfs(p, &fs)) return g->sp[0] = ai_err(g, errno), g;
- if (!ai_ok(g = ai_have(g, 7 * Width(struct ai_chain)))) return g;
+ if (!ai_ok(g = ai_have(g, 11 * Width(struct ai_chain)))) return g;
  size_t const C = Width(struct ai_chain);
- struct ai_chain *c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_frsize), ZeroPoint);
+ uint32_t id[2];                                  // glibc's fsid_t and moonlibc's int[2] alike
+ memcpy(id, &fs.f_fsid, sizeof id);
+ struct ai_chain *c = ini_chain(bump(g, C), putcharm((intptr_t) (unsigned long) fs.f_type), ZeroPoint);
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_namelen), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) id[1]), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) id[0]), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_frsize), word(c));
  c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_ffree), word(c));
  c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_files), word(c));
  c = ini_chain(bump(g, C), putcharm((intptr_t) fs.f_bavail), word(c));

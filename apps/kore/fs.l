@@ -879,11 +879,34 @@
        _ (line ("Change: " + (ustamp (ust-at st 10))))
        b (birth p L?)
        (line (" Birth: " + (charm? b ? (ustamp b) "-"))))
+   ; -f: the filesystem a path is on, statfs's tuple through a format of its own -- %n
+   ; the name, %i the id and %l the longest name, %t the type's magic in hex and %T its
+   ; name off the mount list, %s %S the block and fundamental block, %b %f %a the blocks,
+   ; free and available, %c %d the inodes and free ones; a - and a width pad a field
+   ufs-face "  File: \"%n\"\n    ID: %-8i Namelen: %-7l Type: %T\nBlock size: %-10s Fundamental block size: %S\nBlocks: Total: %-10b Free: %-10f Available: %a\nInodes: Total: %-10c Free: %d\n"
+   (ufs-expand fmt p r)
+    (: n #fmt o (jug 0)
+       ty (: m (udf-holds (udf-mounts ()) p) (? (two? m) (m 2) "?"))
+       (at k) (: v (? (k < #r) (r k) ()) (? (charm? v) v 0))
+       (cell c) (c @ 110 p 105 (radix (at 7) 16 + zpad 8 (radix (at 8) 16)) 108 (show (at 9)) 116 (radix (at 10) 16) 84 ty
+                    115 (show (at 0)) 83 (show (at 6)) 98 (show (at 1)) 102 (show (at 2)) 97 (show (at 3))
+                    99 (show (at 4)) 100 (show (at 5)) 37 "%" ("?"))
+       (go k) (? (n <= k) (slurp o)
+                 (!(fmt k = 37) || n <= k + 1) (: _ (put o (fmt k)) (go (k + 1)))
+                 (: left (fmt (k + 1) = 45) j0 (? left (k + 2) (k + 1))
+                    (dg j) (? (j < n && 48 <= fmt j <= 57) (dg (j + 1)) j)
+                    j (dg j0) w (? (j0 < j) (uatoi (snip fmt j0 j)) 0)
+                    v (? (j < n) (cell (fmt j)) "")
+                    _ (say o (? (w <= #v) v left (urpad w v) (upad w v)))
+                    (go (j + 1))))
+       (go 0))
    (stat-main as)
     (: (long? w n s) ((n < tally w) && (snip w 0 n = s))
+       fsm {'f 0}
        (fl a fmt L pf fs)
         (? (atom? a) [fmt L pf (rev fs)]
            (<a = "-L") (fl >a fmt 1 pf fs)
+           (<a = "-f" || <a = "--file-system") (: _ (pin fsm 'f 1) (fl >a fmt L pf fs))
            (<a = "-c") (? (two? >a) (fl >>a <>a L 0 fs) (udie 2 "stat: -c wants a format"))
            (2 < #<a && snip <a 0 2 = "-c") (fl >a (snip <a 2 #<a) L 0 fs)
            (long? <a 9 "--format=") (fl >a (snip <a 9 #<a) L 0 fs)
@@ -893,12 +916,17 @@
        fmt <p L? <>p pf? <>>p fs (ustray "stat" as (p 3))
        _ (? (two? fs) () (udie 2 "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."))
        (one q ok)
+        (: st (? (fsm 'f) (statfs q) L? (stat q) (lstat q))
+           (? (atom? st) (say err ("stat: cannot read file system information for '" + q + "': No such file or directory\n"), 0)
+              (fsm 'f) (: _ (say out (ufs-expand (? (string? fmt) (fmt + (? pf? "" "\n")) ufs-face) q st)) ok)
+              0))
+       (one0 q ok)
         (: st (? L? (stat q) (lstat q))
            (? (atom? st)
               (say err ("stat: cannot stat '" + q + "': No such file or directory\n"), 0)
               (string? fmt) (say out (ust-expand fmt q st pf? L?), pf? || put out 10, ok)
               (ust-block q st L?, ok)))
-       (go a ok) (two? a ? (go >a (one <a ok)) (flush out, !ok))
+       (go a ok) (two? a ? (go >a ((? (fsm 'f) one one0) <a ok)) (flush out, !ok))
        (go fs 1))
 
    ; -- du: what a tree costs on the disk. the count is st_blocks (512 each), which is

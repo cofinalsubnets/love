@@ -209,4 +209,10 @@ n1=$(korerun mktemp --tmpdir="$MT" --suffix=.txt); case "$n1" in "$MT"/tmp.?????
 n2=$(TMPDIR="$MT" korerun mktemp --tmpdir -u); case "$n2" in "$MT"/tmp.??????????) [ ! -e "$n2" ] || fail "kore mktemp --dry-run made one";; *) fail "kore mktemp --tmpdir: $n2";; esac
 n3=$(cd "$MT" && LOVE_NO_IMAGE= "$PWD/../../$m" kore mktemp --suffix .c fooXXXXXX); case "$n3" in foo??????.c) ;; *) fail "kore mktemp TEMPLATE --suffix: $n3";; esac
 rm -rf "$MT"
+# stat -f: GNU's face (its first three lines: the free counts move) and a -c of the fields
+# that hold still -- id, name length, the type's magic and name, block sizes, totals
+for d in / /tmp; do
+  stat -f "$d" | head -3 > "$g"; korerun stat -f "$d" | head -3 > "$o"; same "stat -f $d"
+  stat -f -c '%n %i %l %t %T %s %S %b %c' "$d" > "$g"; korerun stat -f -c '%n %i %l %t %T %s %S %b %c' "$d" > "$o"; same "stat -f -c $d"
+done
 echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"

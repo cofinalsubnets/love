@@ -941,7 +941,7 @@
     'link "usage: link FILE NEW"
     'unlink "usage: unlink FILE"
     'cmp "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"
-    'stat "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."
+    'stat "usage: stat [-fL] [-c FORMAT | --printf=FORMAT] FILE.."
     'du "usage: du [-abchLsx0] [-d N] [--max-depth=N] [--exclude=GLOB] [--apparent-size] [FILE..]"
     'df "usage: df [-ahHikPT] [-t TYPE].. [-x TYPE].. [FILE..]"
     'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
