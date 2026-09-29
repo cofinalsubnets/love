@@ -714,7 +714,7 @@
                       (ink (sp i)))
        (skipf l k i) (? (k = 0) i (skipf l (k - 1) (field l i)))
        (key l) (: i (min #l (skipf l nf 0 + ns)) s (snip l i #l)
-                  (? i? (string (map (c \ (? (65 <= c <= 90) (c + 32) c)) (chars s))) s))
+                  (? i? (lower s) s))
        plain? !(i? || 0 < nf || 0 < ns)
        (emit line cnt) (? ((d? && cnt < 2) || (u? && 1 < cnt)) ()
                           ((? c? (say o (upad 7 (show cnt) + " ")) ()),

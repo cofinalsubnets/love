@@ -957,7 +957,7 @@
     'fgrep "usage: fgrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -F)"
     'sed "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"
     'awk "usage: awk [-F FS] [-v var=val].. PROGRAM [FILE..]  |  awk .. -f PROGFILE.. [FILE..]"
-    'find "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
+    'find "usage: find [-L] [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
     'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
     'more "usage: more [-Nise] [+N|+/PAT] [FILE..]"
     'wget "usage: wget [-q] [--no-check-certificate] [-O FILE] URL"

@@ -119,6 +119,51 @@
    ; walk stops at the first word it does not know, so that word is a stranger or a flag
    ; after an operand
    (ustray who as rest) (: w (uoptstray as rest) (? !w rest (udie 2 (who + ": unknown option " + w))))
+   ; octal text -> a charm ("755" is 493), chmod's one argument shape
+   (uoct s) (:- (go 0 0) n #s (go i acc)
+    (i >= n ? acc (go (i + 1) ((8 * acc) + (s i - 48))))
+       )
+   ; a mode word onto the mode cur: octal whole, or chmod's symbolic clauses, `who` of
+   ; ugoa then +-= runs of rwxXst or one of ugo to copy (u+x,go-w,a=rX). no who is all
+   ; three less the umask um. a directory keeps its setuid and setgid bits through = and
+   ; octal, as GNU's does. () for a word that is neither
+   (umode m cur dir? um)
+    (: n #m
+       (oct? i) (? (n <= i) 1 (48 <= m i <= 55) (oct? (i + 1)) 0)
+       (base c) (? (c = 117) 64 (c = 103) 8 1)
+       (over ws f) (foldl (\ a w (a | f w)) 0 ws)
+       (perm ws cur c)
+        (? (c = 114) (over ws (w \ 4 * base w))
+           (c = 119) (over ws (w \ 2 * base w))
+           (c = 120) (over ws base)
+           (c = 88) (? (dir? || 0 < (cur & 73)) (over ws base) 0)
+           (c = 115) ((? (elem 117 ws) 2048 0) | (? (elem 103 ws) 1024 0))
+           (c = 116) (? (elem 111 ws) 512 0)
+           (: v ((cur // base c) & 7) (over ws (w \ v * base w))))
+       (class ws) ((over ws (w \ 7 * base w)) | (? dir? 0 (perm ws 0 115)) | perm ws 0 116)
+       (who i ws) (? (i < n && elem (m i) "ugoa")
+                     (who (i + 1) (m i = 97 ? (117 . 103 . 111 . ws) (m i . ws)))
+                     [i ws])
+       ; one clause's op runs from i to its comma or the end: [i cur], or () on a stranger
+       (ops i ws mask cur)
+        (? (n <= i || m i = 44) [i cur]
+           !(elem (m i) "+-=") ()
+           (: op (m i)
+              (run j p) (? (j < n && elem (m j) "rwxXst") (run (j + 1) (p | perm ws cur (m j)))
+                           (j < n && elem (m j) "ugo") [(j + 1) (p | perm ws cur (m j))]
+                           [j p])
+              r (run (i + 1) 0)
+              b ((r 1) & mask)
+              (ops (r 0) ws mask (? (op = 43) (cur | b) (op = 45) (cur - (cur & b)) ((cur - (cur & class ws)) | b)))))
+       (clauses i cur)
+        (: w (who i ())
+           ws (? (two? (w 1)) (w 1) '(117 103 111))
+           mask (? (two? (w 1)) 4095 (4095 - (4095 & um)))
+           r (? (w 0 < n && elem (m (w 0)) "+-=") (ops (w 0) ws mask cur) ())
+           (? !(two? r) ()
+              (n <= r 0) (r 1)
+              (clauses (r 0 + 1) (r 1))))
+       (? (0 < n && n <= 4 && oct? 0) (uoct m | (? dir? (cur & 3072) 0)) (0 < n) (clauses 0 cur) ()))
    (udir p)
     (uchop p @
      0 (0 < #p ? "/" ".")
