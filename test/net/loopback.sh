@@ -6,7 +6,7 @@
 # Stage-1 socket nif (connect/listen/accept/shutdown) plus the two .l pump loops
 # and their teardown. both sides pass -N; the rounds after check that without it neither
 # side half-closes, that -q quits anyway, that -w quits when idle,
-# what -z and -v say, and that -k serves client after client.
+# what -z and -v say, that -k serves client after client, and a -u round trip.
 #
 #   sh test/net/loopback.sh <love-binary> [port]
 #
@@ -189,6 +189,25 @@ printf 'one\ntwo\n' > "$tmp/k_want"
 cmp -s "$tmp/k_want" "$tmp/srv_got6" || { echo "nettest: FAIL (-k: server got $(tr '\n' ' ' < "$tmp/srv_got6"))"; fail=1; }
 grep -q "^Listening on 127.0.0.1 $PORT$" "$tmp/srv_err6" && [ "$(grep -c '^Connection received on ' "$tmp/srv_err6")" -eq 2 ] ||
   { echo "nettest: FAIL (-klv said:)"; cat "$tmp/srv_err6"; fail=1; }
+
+# -u: the first sender is the listener's peer and gets its reply; a stranger's datagram
+# in between is dropped; with no eof in udp, -w 1 ends both
+PORT=$((PORT + 1))
+{ sleep 0.6; echo pong; sleep 3; } 2> /dev/null | "$AI" "$AK" -ul -w 1 "$PORT" > "$tmp/srv_got7" 2> "$tmp/srv_err" &
+srv=$!
+i=0
+until { command -v ss > /dev/null && ss -lun 2>/dev/null | grep -q "[:.]$PORT "; } || [ "$i" -gt 20 ]; do
+  i=$((i + 1)); sleep 0.05 2>/dev/null || sleep 1
+done
+{ echo ping; sleep 3; } 2> /dev/null | "$AI" "$AK" -u -w 1 127.0.0.1 "$PORT" > "$tmp/cli_got7" 2> "$tmp/cli_err" &
+cli=$!
+sleep 0.3 2>/dev/null || sleep 1
+echo stranger | "$AI" "$AK" -u -w 1 127.0.0.1 "$PORT" > /dev/null 2>&1
+wait "$cli"; crc=$?
+wait "$srv"; src=$?
+[ "$crc" -eq 0 ] && [ "$src" -eq 0 ] || { echo "nettest: FAIL (-u: client exit $crc, server exit $src)"; cat "$tmp/cli_err" "$tmp/srv_err"; fail=1; }
+[ "$(cat "$tmp/srv_got7")" = ping ] || { echo "nettest: FAIL (-u: server got $(tr '\n' ' ' < "$tmp/srv_got7"))"; fail=1; }
+[ "$(cat "$tmp/cli_got7")" = pong ] || { echo "nettest: FAIL (-u: client got $(tr '\n' ' ' < "$tmp/cli_got7"))"; fail=1; }
 
 [ "$fail" -eq 0 ] && echo "nettest: PASS"
 exit "$fail"

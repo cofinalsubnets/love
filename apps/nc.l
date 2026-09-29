@@ -6,6 +6,7 @@
 ;   nc [-kNv] [-q secs] [-w secs] -l [-s addr] -p port
 ;                                              tcp server: listen, accept one client
 ;   -k        with -l, accept the next client when one leaves
+;   -u        udp: datagrams of at most 1472 bytes; -l answers the first sender alone
 ;   -s addr   with -l, listen on addr alone; -p port names the port
 ;   -N        shut down the write half at stdin's end
 ;   -q secs   quit secs after stdin's end; a negative wait is forever, the default
@@ -32,7 +33,7 @@
  (: (die m) (udie 1 ("nc: " + m))
     t (tablet 0)
     ops ((uopt as t '(112 113 115 119) () ()) 2)
-    usage "usage: nc [-kNvz] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT}"
+    usage "usage: nc [-kNuvz] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT}"
     (portof s) (: n (uport s) (? n n (die ("not a port: " + s))))
     ; a flag's duration in ms, -1 when absent or negative
     (dur c) (: v (uoptv t c)
@@ -60,19 +61,31 @@
                      _ (catch d)
                      (freeze g)))
 
-    ; the conversation: stdin -> socket in `up`, socket -> stdout in `down`. all of stdin
-    ; goes before teardown, then -N half-closes so the peer sees our eof; without it the
-    ; peer must close first, or -q runs out. with -w, `dog` ends both when idle
-    (talk s) (: _ (pin seen 0 (clock 0))
-                down (twirl (_ \ pump s out) 0)
-                up (twirl (_ \ (pump in s, (? (t 78) (seal s 1) 0))) 0)
-                dog (? (w < 0) () (twirl (_ \ (idle 0, freeze up, freeze down)) ()))
-              (catch up,
-               linger down,
-               (? (w < 0) 0 (freeze dog)),
-               flush out,
-               close s,
-               0))
+    ; a conversation: stdin outward in `up`, inward to stdout in `down`. all of stdin goes
+    ; before teardown; then the peer must end it, or -q runs out. with -w, `dog` ends both
+    ; when idle
+    (converse upf downf s) (: _ (pin seen 0 (clock 0))
+                              down (twirl downf 0)
+                              up (twirl upf 0)
+                              dog (? (w < 0) () (twirl (_ \ (idle 0, freeze up, freeze down)) ()))
+                            (catch up,
+                             linger down,
+                             (? (w < 0) 0 (freeze dog)),
+                             flush out,
+                             close s,
+                             0))
+    ; over tcp, -N half-closes at stdin's end so the peer sees our eof
+    (talk s) (converse (_ \ (pump in s, (? (t 78) (seal s 1) 0))) (_ \ pump s out) s)
+
+    ; over udp: stdin goes out cut to datagrams; only `to`'s come in
+    (dsend p to d) (? (#d <= 1472) (send p to d) (send p to (snip d 0 1472), dsend p to (snip d 1472 #d)))
+    (dup p to) (: c (see in)
+                  (? (c = -1) 0 (unsee in c, dsend p to (chug in), pin seen 0 (clock 0), dup p to)))
+    (ddown p to) (: d (recv p)
+                    (? (nom? d) 0
+                       (<d = to) (say out (d 1), flush out, pin seen 0 (clock 0), ddown p to)
+                       (ddown p to)))
+    (dtalk p to) (converse (_ \ dup p to) (_ \ ddown p to) p)
 
     ; server: listen on addr (every address when ()), accept a client and talk; with -k
     ; the next, until killed
@@ -86,14 +99,29 @@
                      (close l, die ("accept failed: " + uerrno c))))
         (? (hot? l) (note ("Listening on " + (? addr addr "0.0.0.0") + " " + show port), go 0)
            (die ("cannot listen on " + (? addr addr "port") + " " + show port + ": " + uerrno l))))
+    ; -u -l: bind, and the first datagram's sender is the peer
+    (userve addr port)
+     (: p (? addr (bind ['udp addr port]) (bind ['udp port]))
+        (? (hot? p) (: _ (note ("Bound on " + (? addr addr "0.0.0.0") + " " + show port))
+                       d (recv p)
+                       (? (nom? d) (die ("recv failed: " + uerrno d))
+                          (: _ (note ("Connection received on " + <<d + " " + show (<d 1)))
+                             _ (say out (d 1), flush out)
+                             (dtalk p <d))))
+           (die ("cannot bind " + (? addr addr "port") + " " + show port + ": " + uerrno p))))
+    (uclient host port) (: to [(quad host) port]
+                           p (bind ['udp 0])
+                           (? (hot? p) (note ("Connection to " + host + " " + show port + " port [udp/*] succeeded!"), dtalk p to)
+                              (die ("cannot bind: " + uerrno p))))
     ; a listen address as the dotted quad listen takes, names resolved
     (quad a) (: r (resolve a) (? (two? r) (dns-show <r) (die ("cannot resolve " + a))))
     ; -l's operands: [addr] port, or -s addr and -p port in their place
     (listener _)
      (: sv (uoptv t 115) pv (uoptv t 112) n #ops
-        (? (n = 2 && !sv && !pv) (serve (quad <ops) (portof <>ops))
-           (n = 1 && !pv) (serve (? sv (quad sv) ()) (portof <ops))
-           (n = 0 && pv) (serve (? sv (quad sv) ()) (portof pv))
+        (srv a p) (? (t 117) (userve a p) (serve a p))
+        (? (n = 2 && !sv && !pv) (srv (quad <ops) (portof <>ops))
+           (n = 1 && !pv) (srv (? sv (quad sv) ()) (portof <ops))
+           (n = 0 && pv) (srv (? sv (quad sv) ()) (portof pv))
            (die usage)))
 
     ; one connect, given up after w ms with -w: the port, or the refusal's nom. a frozen
@@ -124,11 +152,12 @@
                    (: lo (portof (snip a 0 k)) hi (portof (snip a (k + 1) #a))
                       (? (hi < lo) (die ("not a range: " + a)) (map (+ lo) (jot (hi - lo + 1)))))))
 
-    (? (uoptun t "klNpqswvz") (die usage)
+    (? (uoptun t "klNpqsuwvz") (die usage)
+       (t 117 && (t 107 || t 122)) (die "-u takes neither -k nor -z")
        (t 108) (!(t 122) ? (listener 0) (die usage))
        (t 107 || t 112 || t 115) (die "-k, -p and -s go with -l")
        (t 122) (two? >ops ? (scan <ops (foldl (\ l a (l + span a)) () >ops)) (die usage))
-       (#ops = 2) (client <ops (portof <>ops))
+       (#ops = 2) (? (t 117) (uclient <ops (portof <>ops)) (client <ops (portof <>ops)))
        (die usage))))
 
 ; the seat: fire nc-main iff this file sits in the program seat of the real command line --
