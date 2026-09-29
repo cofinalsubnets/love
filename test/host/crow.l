@@ -160,6 +160,46 @@
       !(cr-in (h 0) "sk-never-sent") !(cr-in (h 1) "sk-never-sent"))
    0)
 
+; --- sessions and messages -----------------------------------------------------------------
+; a session named by CROW_NAME perches in HOME's roost for its run. its shell sends it a
+; message through the verb, and list_sessions finds it; the message rides the next request
+; beside the tool results, and the perch is gone once the run ends
+(: cr-m (cr-dir "talk" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
+   (ev t x) (pin x "type" t)
+   (use i id nm in)
+    [(ev "content_block_start" {"index" i "content_block" {"type" "tool_use" "id" id "name" nm "input" {}}})
+     (ev "content_block_delta" {"index" i "delta" {"type" "input_json_delta" "partial_json" (json-show in)}})
+     (ev "content_block_stop" {"index" i})]
+   _ (cr-serves
+      [(cr-ok (cr-sse ([(ev "message_start" {"message" {"id" "m1" "content" []}})]
+                       + use 0 "s1" "shell" {"command" "love crow --send tester 'hello from a shell'"}
+                       + use 1 "s2" "list_sessions" {}
+                       + [(ev "message_delta" {"delta" {"stop_reason" "tool_use"}}) (ev "message_stop" {})])))
+       (cr-ok (cr-sse [(ev "content_block_start" {"index" 0 "content_block" {"type" "text" "text" ""}})
+                       (ev "content_block_delta" {"index" 0 "delta" {"type" "text_delta" "text" "Heard."}})
+                       (ev "content_block_stop" {"index" 0})
+                       (ev "message_delta" {"delta" {"stop_reason" "end_turn"}})
+                       (ev "message_stop" {})]))])
+   r (cr-run cr-m "CROW_NAME=tester" "-y 'talk to yourself'")
+   h (cr-heard 0)
+   b1 (cr-body (h 0))
+   u2 (: us (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h 1) "messages"))
+         (<us "content"))
+   (block ty) (filter (\ b (b "type" = ty)) u2)
+   res (map (\ b (b "content")) (block "tool_result"))
+   txt (foldl (\ a b (a + b "text")) "" (block "text"))
+   after (cr-run cr-m "" "--list")
+   _ (test
+      (0 = <r)
+      (2 = #h)
+      (cr-in (b1 "system") "session named tester")            ; the prompt names the session
+      (elem "send_message" (map (\ t (t "name")) (b1 "tools")))
+      (cr-in (res 0) "[exit 0]")
+      (cr-in (res 1) "tester (you)")
+      (cr-in txt "<message from=\"tester\">") (cr-in txt "hello from a shell")
+      (cr-in (after 1) "no crow sessions are running"))
+   0)
+
 ; --- what crow will not do ---------------------------------------------------------------
 ; plain http off this machine is refused before any dial; a model that says no is told;
 ; a remote endpoint wants its key before anything is sent
