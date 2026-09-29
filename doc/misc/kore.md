@@ -87,7 +87,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | re.l, the matcher | grep (-nvclqhaixwFEo, -e stacking, -m) over the lawed regex engine, BRE or ERE; egrep and fgrep, grep -E and -F by their old names (kore.l) |
 | sed.l, the editor | sed (-n -E -i -e; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
-| find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
+| find.l, the walk | find (names, types, times, sizes, modes; -print0 -delete -exec ; and +; ( ) ! -a -o; the depths) |
 | proc.l, the processes and the world | env nohup nice renice setsid printenv sleep usleep kill xargs time ts date id whoami groups |
 | proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them), microcom (a serial line and this terminal, byte for byte) |
 | proc.l, the host's utmp, read | who users pinky logname (glibc's, netbsd's utmpx and freebsd's utx.active; kore writes none) |
@@ -307,9 +307,11 @@ printf's `*` width and `#` flag.
 
 ## find (apps/kore/find.l)
 
-`find [PATH..] [EXPR]`, PATH defaulting to `.`. Primaries `-name` `-path` (fnmatch, via lush's
-`sh-match`) `-type f|d|l` `-print` `-prune` `-exec CMD.. ;` `-true` `-false`, the global
-`-maxdepth`/`-mindepth`, and the operators `( )` `!`/`-not` `-a`/`-and` (implicit between two
+`find [-L] [PATH..] [EXPR]`, PATH defaulting to `.`. Tests `-name` `-iname` `-path` `-ipath`
+(fnmatch, post.l's glob) `-type f|d|l` `-empty` `-newer FILE` `-mtime N` `-mmin N`
+`-size N[cwbkMG]` `-perm [-/]MODE` (octal or symbolic) `-true` `-false`, N as `+N` `-N` or `N`;
+actions `-print` `-print0` `-prune` `-delete` `-exec CMD.. ;` `-exec CMD.. {} +`; the global
+`-maxdepth`/`-mindepth` and `-depth` (which `-delete` implies), and the operators `( )` `!`/`-not` `-a`/`-and` (implicit between two
 primaries) `-o`/`-or`, both short-circuiting, `-a` binding tighter. An expression naming no
 action gets `-print`, exactly as GNU does.
 

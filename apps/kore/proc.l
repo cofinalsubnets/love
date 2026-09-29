@@ -90,14 +90,112 @@
                     (flush err, (? ok 0 1)))
        (go pids 1))
 
-   ; -- date: the wall clock. utc and only utc -- there is no tz database in this tree,
-   ; so localtime is gmtime, the same call moonlibc made and for the same reason. -u is
-   ; taken and changes nothing; -d @seconds and -r file name a moment other than now,
-   ; which is also the only thing that makes this tool gateable against GNU at all.
+   ; -- the time zone: TZ, else /etc/localtime. a zone is a function from utc seconds to
+   ; [offset-east-seconds abbreviation]. a TZif file is read for its transitions and its
+   ; footer rule past the last one; a TZ that names no file is read as a posix rule
+   ; (EST5EDT,M3.2.0,M11.1.0); an empty TZ, or nothing readable, is utc
+   ; the day a second falls in, floored: before the epoch // would round toward it
+   (tzday0 s) (: q (s // 86400) (? (s < q * 86400) (q - 1) q))
+   (tzs s k n) (: (go i a) (? (n <= i) a (go (i + 1) (a * 256 + s (k + i)))) (go 0 (s k >= 128 ? -1 0)))
+   (tzu s k n) (: (go i a) (? (n <= i) a (go (i + 1) (a * 256 + s (k + i)))) (go 0 0))
+   (tzp-to s i c) (? (#s <= i || s i = c) i (tzp-to s (i + 1) c))
+   (tzp-alpha s i) (? (i < #s && (65 <= s i <= 90 || 97 <= s i <= 122)) (tzp-alpha s (i + 1)) i)
+   (tzp-name s i)
+    (? (i < #s && s i = 60) (: e (tzp-to s (i + 1) 62) [(snip s (i + 1) e) (e + 1)])
+       (: e (tzp-alpha s i) [(snip s i e) e]))
+   (tzp-num s i) (: (go j a) (? (j < #s && 48 <= s j <= 57) (go (j + 1) (a * 10 + s j - 48)) [a j]) (go i 0))
+   ; [+-]h[:m[:s]] -> [seconds next]
+   (tzp-hms s i)
+    (: sg (? (i < #s && s i = 45) -1 1)
+       j (? (i < #s && (s i = 45 || s i = 43)) (i + 1) i)
+       h (tzp-num s j)
+       m (? (h 1 < #s && s (h 1) = 58) (tzp-num s (h 1 + 1)) [0 (h 1)])
+       z (? (m 1 < #s && s (m 1) = 58) (tzp-num s (m 1 + 1)) [0 (m 1)])
+       [(sg * (<h * 3600 + <m * 60 + <z)) (z 1)])
+   ; Mm.w.d, Jn or n, then /time (2:00 unsaid) -> [[kind a w d] seconds next]
+   (tzp-date s i)
+    (: k (? (i < #s && s i = 77) 'm (i < #s && s i = 74) 'j 'n)
+       a (tzp-num s (k = 'n ? i (i + 1)))
+       e (? (k = 'm) (: w (tzp-num s (a 1 + 1)) d (tzp-num s (w 1 + 1)) [[k <a <w <d] (d 1)])
+            [[k <a 0 0] (a 1)])
+       t (? (e 1 < #s && s (e 1) = 47) (tzp-hms s (e 1 + 1)) [7200 (e 1)])
+       [<e <t (t 1)])
+   ; a posix TZ rule -> {'std 'so 'dst 'do 'r}, offsets east of utc; () when unreadable
+   (tzrule s)
+    (: a (tzp-name s 0)
+       (? (#<a < 1 || #s <= a 1) ()
+          (: o (tzp-hms s (a 1)) so (0 - <o) k (o 1)
+             (? (#s <= k) {'std <a 'so so 'dst ()}
+                (: b (tzp-name s k)
+                   p (? (b 1 < #s && s (b 1) != 44) (: q (tzp-hms s (b 1)) [(0 - <q) (q 1)]) [(so + 3600) (b 1)])
+                   rs (? (p 1 < #s && s (p 1) = 44) (snip s (p 1 + 1) #s) "M3.2.0,M11.1.0")
+                   x (tzp-date rs 0) y (tzp-date rs (x 2 + 1))
+                   {'std <a 'so so 'dst <b 'do <p 'r [x y]})))))
+   ; a rule date in year Y -> days since the epoch
+   (tzday r Y)
+    (: k <r n (r 1) w (r 2) d (r 3) j1 (epoch-days Y 1 1)
+       (? (k = 'j) (j1 + n - 1 + (59 < n && mdays Y 2 = 29 ? 1 0))
+          (k = 'n) (j1 + n)
+          (: f (epoch-days Y n 1) d1 (f + (d - wday f + 7) % 7) dd (d1 + 7 * (w - 1))
+             (dd < f + mdays Y n ? dd (dd - 7)))))
+   (tzrule-at z t)
+    (? !(z 'dst) [(z 'so) (z 'std)]
+       (: Y <(civil (tzday0 (t + z 'so)))
+          x <(z 'r) y ((z 'r) 1)
+          t1 (tzday <x Y * 86400 + x 1 - z 'so)
+          t2 (tzday <y Y * 86400 + y 1 - z 'do)
+          in (? (t1 < t2) (t1 <= t && t < t2) !(t2 <= t && t < t1))
+          (in ? [(z 'do) (z 'dst)] [(z 'so) (z 'std)])))
+   ; TZif, the 64-bit block when there is one -> {'ts 'ix 'ty 'rp} or ()
+   (tzif s)
+    (? !(44 <= #s && snip s 0 4 = "TZif") ()
+       (: (cnts b) (map (\ i (tzu s (b + 20 + 4 * i) 4)) ^6)     ; isut isstd leap time type char
+          c1 (cnts 0)
+          v1 (c1 3 * 5 + c1 4 * 6 + c1 5 + c1 2 * 8 + c1 1 + c1 0)
+          two (50 <= s 4 && 44 + v1 + 44 <= #s)
+          b (two ? (44 + v1) 0)
+          c (two ? (cnts b) c1)
+          w (two ? 8 4)
+          tc (c 3) yc (c 4) cc (c 5)
+          p0 (b + 44) p1 (p0 + w * tc) p2 (p1 + tc) p3 (p2 + 6 * yc)
+          (nul j) (? (p3 + cc <= j || s j = 0) j (nul (j + 1)))
+          ty (map (\ i (: q (p2 + 6 * i) [(tzs s q 4) (snip s (p3 + s (q + 5)) (nul (p3 + s (q + 5))))])) ^yc)
+          pe (p3 + cc + c 2 * (w + 4) + c 1 + c 0)
+          (eol j) (? (#s <= j || s j = 10) j (eol (j + 1)))
+          ft (? (two && pe < #s && s pe = 10) (snip s (pe + 1) (eol (pe + 1))) "")
+          {'ts (map (\ i (tzs s (p0 + w * i) w)) ^tc)
+           'ix (map (\ i (s (p1 + i))) ^tc)
+           'ty ty
+           'rp (0 < #ft ? (tzrule ft) ())}))
+   (tzif-at z t)
+    (: ts (z 'ts) tc #ts ty (z 'ty)
+       (go l i k) (? (atom? l) k (<l <= t) (go >l (i + 1) i) k)
+       k (go ts 0 -1)
+       (? (k = tc - 1 && tablet? (z 'rp)) (tzrule-at (z 'rp) t)
+          (k < 0) (? (two? ty) <ty [0 "UTC"])
+          (ty ((z 'ix) k))))
+   tz-utc (\ t [0 "UTC"])
+   (tz-zone _)
+    (: e (getenv "TZ")
+       (? (string? e && #e = 0) tz-utc
+          (: nm (? (string? e && e 0 = 58) (snip e 1 #e) (string? e) e "")
+             p (? (#nm = 0) "/etc/localtime" (nm 0 = 47) nm ("/usr/share/zoneinfo/" + nm))
+             r (uread p)
+             z (? (two? r) (tzif <>r) ())
+             ru (? (tablet? z) () (0 < #nm) (tzrule nm) ())
+             (? (tablet? z) (\ t (tzif-at z t))
+                (tablet? ru) (\ t (tzrule-at ru t))
+                tz-utc))))
+
+   ; -- date: the wall clock, in the zone above; -u for utc. -d @seconds and -r file name
+   ; a moment other than now, which is also what makes this tool gateable against GNU.
    ; +format, or GNU's C-locale default when none is given.
-   (udatef fmt ms)
-    (: s (ms // 1000)
-       days (s // 86400) secs (s % 86400)
+   (udatef fmt ms) (udatez fmt ms [0 "UTC"])
+   ; zn is [offset abbreviation]: the fields are local, %s stays the epoch's
+   (udatez fmt ms zn)
+    (: s0 (ms // 1000) off <zn
+       s (s0 + off)
+       days (tzday0 s) secs (s - days * 86400)
        ymd (civil days)
        Y <ymd M <>ymd D <>>ymd
        hh (secs // 3600) mm ((secs % 3600) // 60) ss (secs % 60)
@@ -124,7 +222,7 @@
                          (d = 70) (say o ((zpad 4 (show Y)) + "-" + (p2 M) + "-" + (p2 D)))
                          (d = 84) (say o ((p2 hh) + ":" + (p2 mm) + ":" + (p2 ss)))
                          (d = 68) (say o ((p2 M) + "/" + (p2 D) + "/" + (p2 (Y % 100))))
-                         (d = 115) (say o (show s))
+                         (d = 115) (say o (show s0))
                          (d = 97) (say o (wd3 wd))
                          (d = 65) (say o (wdl wd))
                          (d = 98 || d = 104) (say o (mon3 (M - 1)))
@@ -133,8 +231,9 @@
                          (d = 73) (say o (p2 (: h (hh % 12) (? h h 12))))
                          (d = 117) (say o (show (? wd wd 7)))
                          (d = 119) (say o (show wd))
-                         (d = 90) (say o "UTC")
-                         (d = 122) (say o "+0000")
+                         (d = 90) (say o (zn 1))
+                         (d = 122) (: a (abs off)
+                                      (say o ((off < 0 ? "-" "+") + p2 (a // 3600) + p2 (a % 3600 // 60))))
                          (d = 110) (put o 10)
                          (d = 116) (put o 9)
                          (put o 37, put o d))
@@ -144,9 +243,10 @@
     (? ((0 < tally w) && (w 0 = 64)) (1000 * (uatoi (snip w 1 #w)))
        (udie 1 ("date: cannot read the date '" + w + "' (only @SECONDS here)")))
    (date-main as)
-    (: (fl a when fmt)
+    (: u {'u 0}
+       (fl a when fmt)
         (? (atom? a) [when fmt]
-           (<a = "-u" || <a = "--utc") (fl >a when fmt)
+           (<a = "-u" || <a = "--utc") (pin u 'u 1, fl >a when fmt)
            (<a = "-d") (? (two? >a) (fl >>a (udt-when <>a) fmt)
                           (udie 1 "date: -d wants a time"))
            (<a = "-r") (? (two? >a)
@@ -159,7 +259,8 @@
        p (fl as () ())
        ms (? (charm? <p) <p (clock 0))
        fmt (? (string? <>p) <>p "%a %b %e %H:%M:%S %Z %Y")
-       _ (say out (udatef fmt ms)) _ (put out 10) _ (flush out) 0)
+       zone (u 'u ? tz-utc (tz-zone 0))
+       _ (say out (udatez fmt ms (zone (ms // 1000)))) _ (put out 10) _ (flush out) 0)
 
    ; -- cal: a month, laid out on 'cal's rows. `cal` alone is this month, `cal M Y` a
    ; named one, `cal Y` the twelve. weeks open on Sunday, as cal's do.
@@ -1410,33 +1511,60 @@
        ok (foldl (\ a w (one w a)) 1 as)
        _ (flush out) (? ok 0 1))
 
-   ; -- xargs: stdin's words onto the command's tail (echo when none), -n N a
-   ; batch at a time. exits 0 clean, 123 when a run failed, 127 when one
-   ; could not exec. quote-blind: words split on whitespace alone --
-   ; -n takes its count spaced or glued (-n2 and -n 2 both); a glued one is how every
-   ; script writes it, and read as the command it used to spawn the word `-n2`
+   ; -- xargs: stdin's words onto the command's tail (echo when none). words split on
+   ; blanks and newlines, '..' "..." and \ quoting as GNU's; -0 and -d C split on a NUL or
+   ; C instead, quotes plain. -n N words a run, -L N lines a run, -I S one run a line
+   ; with S replaced in the command's words; -r runs nothing on no input, -t says each
+   ; run on stderr, -P N keeps N going at once (0 as many as there are). exits 0 clean,
+   ; 123 when a run failed, 127 when one could not exec. the command's own flags follow
+   ; it, so the walk stops at the command's name --
+   (xwords s)
+    (: n #s
+       (go i q w acc)
+        (? (n <= i) (rev (? (string? w) (w . acc) acc))
+           (: c (s i) w0 (? (string? w) w "")
+              (? (0 < q) (? (c = q) (go (i + 1) 0 w acc) (go (i + 1) q (w + string c) acc))
+                 (c = 39 || c = 34) (go (i + 1) c w0 acc)
+                 (c = 92 && i + 1 < n) (go (i + 2) 0 (w0 + string (s (i + 1))) acc)
+                 (c = 32 || c = 9 || c = 10) (go (i + 1) 0 () (? (string? w) (w . acc) acc))
+                 (go (i + 1) 0 (w0 + string c) acc))))
+       (go 0 0 () ()))
    (xargs-main as)
-    (: g1 (two? as && (2 < tally <as) && (snip <as 0 2 = "-n"))
-       nflag (g1 || (two? as && <as = "-n"))
-       _ (? ((nflag && !g1) && atom? >as) (udie 1 "usage: xargs [-n N] [CMD ARGS..]") ())
-       nn (? g1 (uatoi (snip <as 2 #<as)) nflag (uatoi <>as) ())
-       _ (? (nflag && nn < 1) (udie 1 "xargs: invalid -n") ())
-       rest (? g1 >as nflag >>as as)
-       cmd (? (two? rest) rest '("echo"))
-       ws (words (slurp in))
+    (: t (tablet 0)
+       o (uopt as t '(100 73 76 110 80) () ())
+       _ (? (two? o) () (udie 1 "xargs: an option wants a value"))
+       _ (: c (uoptun t "0dILnPrt") (? !c () (udie 1 ("xargs: unknown option -" + string c))))
+       (num c lo) (: v (uoptv t c) n (? v (unum v) ())
+                     (? (!v || (charm? n && lo <= n)) n (udie 1 ("xargs: invalid number for -" + string c + ": " + v))))
+       nn (num 110 1) ll (num 76 1) pp (: v (num 80 0) (? (charm? v) (? (v = 0) 1073741824 v) 1))
+       rs (uoptv t 73)
+       dl (: v (uoptv t 100)
+             (? !v () (v = "\\n") 10 (v = "\\t") 9 (v = "\\0") 0 (v = "\\\\") 92 (#v = 1) (v 0)
+                (udie 1 ("xargs: invalid delimiter: " + v))))
+       cmd (? (two? (o 2)) (o 2) '("echo"))
+       txt (slurp in)
+       (cut c) (: ps (usplit c txt) (? (two? ps && <(rev ps) = "") (rev >(rev ps)) ps))
+       (inked l) (filter (x \ 0 < #x) (map lstrip l))   ; -I and -L read lines, blanks led off
        (chunks k l) (? (atom? l) () (take k l . chunks k (drop k l)))
-       runs (? (atom? ws) [()]                       ; no input still runs once, like GNU
-               nn (chunks nn ws)
-               [ws])
-       (go rs bad)
-        (? (atom? rs)
-           (flush out, bad)
-           (: p (spawn (cmd + <rs))
-              w (? (nom? p) 127 (wait p))
-              (go >rs (? (w = 127) 127
-                              (w && !(bad = 127)) 123
-                              bad))))
-       (go runs 0))
+       (batch ws) (? (atom? ws) () (map (w \ cmd + w) (? nn (chunks nn ws) [ws])))
+       runs (? (t 48) (batch (cut 0))
+               dl (batch (cut dl))
+               rs (map (x \ map (a \ replace a rs x) cmd) (inked (lines txt)))
+               ll (map (ls \ cmd + cats (map xwords ls)) (chunks ll (inked (lines txt))))
+               (batch (xwords txt)))
+       ; no input still runs once, as GNU's, unless -r or -I
+       runs2 (? (two? runs) runs (t 114 || rs) () [cmd])
+       (upd bad w) (? (w = 127) 127 (w && !(bad = 127)) 123 bad)
+       (go rs live bad)
+        (? (atom? rs) (foldl (\ b p (upd b (wait p))) bad live)
+           (pp <= #live) (go rs >live (upd bad (wait <live)))
+           (: argv <rs
+              _ (? (t 116) (say err (ujoinc 32 argv + "\n"), flush err) 0)
+              _ (flush out)
+              p (spawn argv)
+              (? (nom? p) (: _ (say err ("xargs: failed to run command '" + <argv + "': No such file or directory\n")) (go >rs live 127))
+                 (go >rs (live + [p]) bad))))
+       (: r (go runs2 () 0) _ (flush out) r))
 
    ; -- time: what a command costs. real off the wall clock; user and sys out of the
    ; rusage the kernel keeps for reaped children, read on both sides of the spawn --

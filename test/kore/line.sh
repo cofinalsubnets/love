@@ -105,6 +105,19 @@ for c in "cat -x" "head -x" "tail -x" "wc -x" "uniq -x" "nl -x" "cut -f1 -x" "pa
   korerun $c "$L/i1" > /dev/null 2>&1; r=$?; [ $r -eq 2 ] || fail "kore $c must refuse (rc $r)"
 done
 rm -rf "$L"
+# tail -f: what is added after the tail comes out as it lands, a last line with no newline
+# too; -F follows the name through a replacement, a file that appears and a truncation
+T=$ho/.tailf; rm -rf "$T"; mkdir "$T"; printf '1\n2\n3\n' > "$T/f"
+# the binary itself, not korerun: a function backgrounds a subshell and the kill stops there
+LOVE_NO_IMAGE= "$m" kore tail -n 2 -f -s 0.1 "$T/f" > "$T/o1" 2>&1 & tp=$!
+sleep 0.5; echo 4 >> "$T/f"; sleep 0.4; printf 'five' >> "$T/f"; sleep 0.4; kill $tp; wait $tp 2> /dev/null
+[ "$(cat "$T/o1")" = "$(printf '2\n3\n4\nfive')" ] || fail "kore tail -f: $(tr '\n' '|' < "$T/o1")"
+printf 'a\n' > "$T/g"
+LOVE_NO_IMAGE= "$m" kore tail -F -s 0.1 -n 1 "$T/g" > "$T/o2" 2> /dev/null & tp=$!
+sleep 0.4; echo b >> "$T/g"; sleep 0.3; echo new > "$T/g2"; mv "$T/g2" "$T/g"; sleep 0.4
+: > "$T/g"; echo c >> "$T/g"; sleep 0.4; kill $tp; wait $tp 2> /dev/null
+[ "$(tr '\n' '|' < "$T/o2")" = "a|b|new|c|" ] || fail "kore tail -F: $(tr '\n' '|' < "$T/o2")"
+rm -rf "$T"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/shuf/seq/echo/basename/tee GNU-identical) ok"
 
 # sort's and ls's own flag matrices are subjects of their own (sort.sh, ls.sh): each

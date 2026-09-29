@@ -214,6 +214,20 @@
    (puts "gzc: deflate twin ok -- the C coder answers love's bytes, both inflates read it
 "))
 
+;; --- deflate-best, the image lane's coder: no twin to hold to the bytes, so the law is that
+; both inflates read it back, and that it never comes out longer than the twin's
+(: (gzb-trip s) (: c (deflate-best s)
+                   l (gz-puff c #s)   i (inflate c #s)
+                   ((two? l) & (string? i) & ((<(>l)) = s) & (i = s) ? 1 0))
+   (gzb-small s) (#(deflate-best s) <= #(deflate s))
+   _ (test
+      (lit? deflate-best)
+      (gzc-all gzb-trip gzc-shapes)
+      (gzc-all gzb-small gzc-shapes)
+      (#(deflate-best gzc-mixed) < #(deflate gzc-mixed))     ; the lazy parse pays on text
+      !(string? (deflate-best 7))
+      !(string? (deflate-best (cask 8)))))
+
 (test_fin (),
  puts "gzc: ok -- the C twins agree with love (shapes, hints, torn, fuzz, crc, misuse)
 ",

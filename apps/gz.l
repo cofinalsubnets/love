@@ -6,6 +6,8 @@
 ;   (gz-inflate s n)       -> (1 bytes) | () | 'big    n a size hint, 0 when unknown
 ;   (gz-puff s n)          -> the same, in love, and the oracle the C twin answers to
 ;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
+;   (gz-deflate-best s) (gz-zip9 s nom stamp)  the same, deflated harder: a lazy parse down a
+;                          long chain where the artifact carries it, gz-deflate's bytes where not
 ;   (gz-unzip s)           -> (1 bytes) | () | 'big
 ;   (gz-head s)            -> (1 stamp name body-seat) | (), the header walked
 ;   (gz-pull rd)           -> g, a reader: (gz-next g) the next piece inflated, "" at the end
@@ -68,6 +70,7 @@
    gz-infprobe (\ _ (inflate "" 0))
    gz-feedprobe (\ _ (inflate-feed 0 ""))
    gz-defprobe (\ _ (deflate ""))
+   gz-defbprobe (\ _ (deflate-best ""))
    (gz-nif k f)
     (: v (peep gz-door k ())
        (? (charm? v) v
@@ -532,6 +535,11 @@
     (? (gz-nif 2 gz-defprobe)
        (: r (deflate s) (? (string? r) r (gz-deflatel s)))
        (gz-deflatel s))
+   ; the harder coder has no love twin: it is the image lane's, and any deflate reads it
+   (gz-deflate-best s)
+    (? (gz-nif 4 gz-defbprobe)
+       (: r (deflate-best s) (? (string? r) r (gz-deflate s)))
+       (gz-deflate s))
 
    ; --- the growing byte buffer ---------------------------------------------
    ; inflate writes bytes and reads them back (a match copies out of what it has
@@ -728,7 +736,9 @@
        (gz-puff s hint))
 
    ; --- the container (RFC 1952) --------------------------------------------
-   (gz-zip s nom stamp)
+   (gz-zip s nom stamp) (gz-zipw s nom stamp gz-deflate)
+   (gz-zip9 s nom stamp) (gz-zipw s nom stamp gz-deflate-best)
+   (gz-zipw s nom stamp def)
     (: txt (s + "")
        named (? #nom 1 0)
        h (cask 10)
@@ -736,7 +746,7 @@
           4 (stamp & 255) 5 ((stamp >> 8) & 255)
           6 ((stamp >> 16) & 255) 7 ((stamp >> 24) & 255)
           8 0 9 3)               ; xfl none, os 3 = unix
-       (string h + (? named (nom + string 0) "") + gz-deflate txt
+       (string h + (? named (nom + string 0) "") + def txt
         + wrle (gz-crc32 txt) 4 + wrle (#txt & 4294967295) 4))
 
    ; the header's optional fields are four flags, and every one of them must be
@@ -855,8 +865,9 @@
 ; decompressing streams through gz-unzipf: a piece of the file at a time, out as it inflates,
 ; so no member is held whole. members that follow are read on (`cat a.gz b.gz`), a tail that
 ; is no member is GNU's warning and a 2, and a file whose crc fails loses its partial output.
-; compressing still reads the file whole. the levels are taken and change nothing -- the
-; coder costs every block three ways and writes the cheapest, which is one level.
+; compressing still reads the file whole. -9 (--best) deflates harder, a lazy parse down a
+; long chain; the other levels are taken and change nothing -- the coder costs every block
+; three ways and writes the cheapest, which is one level.
 ;
 ; -l's ratio is the deflate payload's and not the file's, GNU taking the header and the
 ; trailer out before it divides, which is why a small file lists a ratio its bytes on
@@ -881,7 +892,7 @@ usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]
   -N  take the name AND the time back      -q  say nothing on a warning
   -r  walk the named directories           -S  the suffix (.gz unsaid)
   -t  test the members, write nothing      -v  say what happened, on err
-  -1 .. -9  taken, and they change nothing: the coder has one level
+  -9  deflate harder (--best)             -1 .. -8  taken, and they change nothing
 no file, or a bare -, is the filter: stdin -> stdout"
 
    ; --- the small floor ------------------------------------------------------
@@ -941,6 +952,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
           (ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]
           ()))
 
+   (gzc-zip t s nom stamp) (? (peep t 'lvl 6 = 9) (gz-zip9 s nom stamp) (gz-zip s nom stamp))
+
    ; --- one file, compressed -------------------------------------------------
    (gzc-zip1 t p)
     (: suf (peep t 'suf ".gz")
@@ -952,7 +965,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
              st (stat p)
              ms (two? st ? <>st 0)
              n? (peep t 'n 0)
-             z (gz-zip s (n? ? "" (pbase p)) (n? ? 0 (ms // 1000)))
+             z (gzc-zip t s (n? ? "" (pbase p)) (n? ? 0 (ms // 1000)))
              (? (peep t 'c 0) (say out z, flush out, 0)
                 (: dst (p + suf)
                    (? (two? (lstat dst) && !(peep t 'f 0))
@@ -1039,12 +1052,12 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (: u (gz-unzipf (gzc-rd in) (\ a b [1 (? (peep t 't 0) (\ s 0) (\ s (say out s)))]))
           _ (flush out)
           (gzc-dstat t "stdin" u))
-       (: s (slurp in) (say out (gz-zip (s + "") "" 0), flush out, 0)))
+       (: s (slurp in) (say out (gzc-zip t (s + "") "" 0), flush out, 0)))
 
    ; --- the options ----------------------------------------------------------
    ; the cli walker in gnu order: clustered shorts, the long names beside them, and -S's
-   ; suffix glued or next. a digit is a level and not a flag: it is taken and dropped,
-   ; because a script that says -9 is asking for the best this coder has and that is what it gets.
+   ; suffix glued or next. a digit is a level and not a flag: the last one said is kept, and
+   ; only 9 (or --best) changes anything -- the harder coder
    gzc-longs {"stdout" 99 "to-stdout" 99 "decompress" 100 "uncompress" 100 "force" 102
               "keep" 107 "list" 108 "no-name" 110 "name" 78 "quiet" 113 "recursive" 114
               "test" 116 "verbose" 118 "fast" 49 "best" 57 "help" 104 "version" 86 "suffix" 83}
@@ -1057,6 +1070,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
           (r 3) (gzc-moan t ("unknown option " + r 3), ())
           bad (gzc-moan t ("unknown option -" + string bad), ())
           (: _ (each (chars gzc-flags) (c \ peep u c 0 && pin t (intern (string c)) 1))
+             lv ((cite 'cli 'uoptlast) as "123456789" [83] gzc-longs)
+             _ (? lv (pin t 'lvl (lv - 48)))
              v (peep u 83 ())
              _ (? (two? v) (pin t 'suf <>v))
              [1 (r 2)])))

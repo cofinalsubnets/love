@@ -182,4 +182,9 @@
  (gzf-bu = ())
  (peep gzf-n 0 0 = (1 + 258 * (1 + 8 * 558835))))
 
+; gz-zip9: the harder coder under the same container, read back by the same unzip
+(test
+ (: z (gz-zip9 gz-text "a.txt" 7) u (gz-unzip z) h (gz-head z)
+    ((two? u) & (<>u = gz-text) & (h 2 = "a.txt") & (#z <= #(gz-zip gz-text "a.txt" 7)) ? 1 0)))
+
 (puts "gz: ok") (putc 10)
