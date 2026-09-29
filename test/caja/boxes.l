@@ -66,7 +66,7 @@
    ; --- the caja side --------------------------------------------------------------------
    (item-node J it)
     (it 0 @
-     'c (cb-char J ((J 'fmap) (it 1)) (it 2))
+     'c (cb-char J (J 'fmap (it 1)) (it 2))
      'k (: k (cb-kern (it 1)) _ (pin k 'sub 1) k)
      'g (cb-glue (it 1) (it 2) (it 3) (it 4) (it 5))
      'r (cb-rule (? (it 1 = ()) -1073741824 (it 1)) (? (it 2 = ()) -1073741824 (it 2))

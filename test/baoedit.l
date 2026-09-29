@@ -68,7 +68,7 @@
    ("ab\nc" = string (edraw (ed-keys [97 27 91 50 48 48 126 98 10 99 27 91 50 48 49 126 13]) ""))
    ("x\ny\n\tz" = string (edraw (ed-keys [27 91 50 48 48 126 120 13 10 121 10 27 1 9 122 27 91 50 48 49 126 13]) ""))
    ("ls" = string <(edln (ed-keys [27 91 50 48 48 126 108 115 27 91 50 48 49 126 13]) "" ()))
-   (0 = ((cite 'cli 'edkey) (ed-keys [27 91 50 48 49 126])))))   ; a stray close is a miss
+   (0 = (cite 'cli 'edkey (ed-keys [27 91 50 48 49 126])))))     ; a stray close is a miss
 
 ; a terminal that answers DECRQM with ?2027 set measures by grapheme cluster, and the editor
 ; then measures, steps and deletes by cluster too; reset, or unknown, it stays off

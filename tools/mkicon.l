@@ -52,7 +52,7 @@
                  + chunk "IDAT" (zlib pix)
                  + chunk "IEND" ())
    (main args) (: src (: q (open (args 0) "r") s (slurp q) _ (close q) s)
-                  rows ((cells src) (num (args 1)))
+                  rows (cells src (num (args 1)))
                   sz (num (args 2))
                   out (png sz (raster rows sz))
                   q (open (args 3) "w")

@@ -60,7 +60,7 @@
  (test (same? l0 l1) (!(same? l0 l2)) (f0 != f1)
        (t0 'ht = t1 'ht) (t0 'wd = t1 'wd) (t1 'z - t0 'z = loop * sp)
        (t0 'ht != t2 'ht || t0 'wd != t2 'wd)
-       (rw < t0 'x) ((tree-of 3 -1 0) 'x < 0.0 - rw)))
+       (rw < t0 'x) (tree-of 3 -1 0 'x < 0.0 - rw)))
 
 ; --- a step: on down the river whichever way the player faces, never back, and a ring, but not two at once ---
 (: st (wade-new 80 48)
@@ -93,7 +93,7 @@
            && abs (a 0) < 0.001 && a 1 < 20
            && 0.0 < t5 < 0.5 && a 1 < h5 < 20
            && abs (s 'th - a 0) < 0.001 && s 'hz = a 1
-           && !((wade-new 80 48) 'done)))))
+           && !(wade-new 80 48 'done)))))
 
 ; --- the words: the first line over the frame between its two points and not at the
 ; --- end, each of its cells in place of a pixel pair, on the average of what it covers

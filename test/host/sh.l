@@ -93,7 +93,7 @@
    a >pr
    (test (<pr = 'ok) (<a = 'seq)
            (<(a 1) = 'and)
-           (<((a 1) 1) = 'pipe)
+           (<(a 1 1) = 'pipe)
            (<(a 2) = 'bg)))
 (: pr (sh-parse >(sh-lex "a | b"))
    a >pr
@@ -785,7 +785,7 @@
 ;; interpreter line names it; a foreign path or shebang still execs. the script rides
 ;; its interpreter line into cli-line, so it sees the same command line either way
 (: seat (sh-seat ())
-   (put p t) (: h (open p "w") _ (say h t) _ (close h) ((cite 'posix 'chmod) p 493))
+   (put p t) (: h (open p "w") _ (say h t) _ (close h) (cite 'posix 'chmod p 493))
    ours "/tmp/lush-t-ours.l" sh "/tmp/lush-t-sh.l"
    _ (put ours ("#!" + seat + "\n(puts (show (cup cmdline)), puts \"\\n\")\n"))
    _ (put sh "#!/bin/sh\necho sh\n")

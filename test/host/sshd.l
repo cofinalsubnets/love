@@ -22,12 +22,12 @@
    ; the files read back as they were written, the private one closed to all but its owner
    _ (test ((ssh-key (dir + "/id") (\ _ ())) = id)
            ((: q (open (dir + "/id.pub") "r") l (slurp q) _ (close q) l) = ssh-publine (id 1) "id")
-           ((((stat (dir + "/id")) 2) & 511) = 384))
+           (((stat (dir + "/id") 2) & 511) = 384))
    _ (: q (open (dir + "/ak") "w") _ (say q ("# a comment\nfrom=\"10.0.0.1\" " + ssh-publine (bad 1) "opt"
                                               + ssh-publine (id 1) "id")) (close q))
    _ (test ((ssh-authorized (dir + "/ak")) = [(id 1)]))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (: _ (rest 2) (waitfor pid))))
-   (has? t s) (0 <= ((cite 'kore 'wg-find) t s 0))
+   (has? t s) (0 <= (cite 'kore 'wg-find t s 0))
    ; the server's sessions find love as scp: a link at the head of the PATH it inherits
    _ (mkdir (dir + "/bin") 448) _ (symlink love (dir + "/bin/scp"))
    path0 (getenv "PATH")
@@ -95,7 +95,7 @@
    s3 (scp [(far + dir + "/src/nope") (dir + "/down/")])
    _ (mkdir (dir + "/up2") 448) _ (mkdir (dir + "/up2/f1") 448)
    s4 (scp [(dir + "/src/f1") (dir + "/src/sub/blob") (far + dir + "/up2/")])
-   _ (test (s1 1 = 0) ((got (dir + "/up/f1")) = "hello\n") (((stat (dir + "/up/f1")) 1) = 981158400000)
+   _ (test (s1 1 = 0) ((got (dir + "/up/f1")) = "hello\n") ((stat (dir + "/up/f1") 1) = 981158400000)
            (s2 1 = 0) ((got (dir + "/down/src/f1")) = "hello\n") ((got (dir + "/down/src/sub/blob")) = blob)
            (s3 1 = 1) (has? <s3 "nope") (s4 1 = 1) (has? <s4 "scp: ") ((got (dir + "/up2/blob")) = blob))
    _ (? o (: r (tether ["scp" "-O" "-F" "/dev/null" "-o" "StrictHostKeyChecking=no" "-o" "UserKnownHostsFile=/dev/null"

@@ -27,8 +27,8 @@
    ; a term crosses to the canonical ring through the eval bridge: close it
    ; over its variables, apply the closure to the poly coins, and the coin
    ; arithmetic (die + - * and DieStar power) lands the monomial list.
-   (tpoly t vs) (? (1 = tally vs) ((ev ['\ 'x t]) px1)
-                   ((ev ['\ 'x 'y t]) px2 py2))
+   (tpoly t vs) (? (1 = tally vs) (ev ['\ 'x t] px1)
+                   (ev ['\ 'x 'y t] px2 py2))
    (fshow p vs) (show (unfix (pemit p vs)))
    (joins l) (? (0 = tally l) "" (<l + (joins >l)))
    (count x l) (? (0 = tally l) 0
@@ -46,7 +46,7 @@
    ; the card's rest face -- the canonical monomial form back through the
    ; bridge for 'xp cards, collected simp otherwise
    (view c n dc) (: t0 (c 'tm)
-                    (? (0 < dc) ((dc (\ u (deriv u 'x))) t0)
+                    (? (0 < dc) (dc (\ u (deriv u 'x)) t0)
                        (c 'xp) (pemit (tpoly t0 (c 'vs)) (c 'vs))
                        (collect (simp t0))))
    (astxt _) ("f = sqrt (x ** 2)\n\n" +

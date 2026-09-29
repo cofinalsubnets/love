@@ -211,6 +211,6 @@
     !(lit? (1 /// 2))          ; a rational is data -- a value, not a reference (like a number)
     !(lit? a)                ; a mod-n residue too
     !(lit? (sm 5))
-    !(lit? ((coin 'd ()) 5))          ; a plain kind -> data
-    !(lit? ((coin 'h {'hot 1}) 5))    ; 'hot is no slot: a kind table's other keys are its own
+    !(lit? (coin 'd () 5))            ; a plain kind -> data
+    !(lit? (coin 'h {'hot 1} 5))      ; 'hot is no slot: a kind table's other keys are its own
     ))

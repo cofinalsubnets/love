@@ -439,7 +439,7 @@
    _ (chk-eq "elf.machine" 62      (elfimg 18))       ; e_machine = x86-64
    _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
    _ (chk-eq "elf.size"    (120 + (#(holo-bytes 'x64 elfprog) + 3)) #elfimg)
-   _ (chk-eq "elf.a64-machine" 183 ((peep (elf64 'a64 (\ a elfprog) ()) 'bytes 0) 18))
+   _ (chk-eq "elf.a64-machine" 183 (peep (elf64 'a64 (\ a elfprog) ()) 'bytes 0 18))
 
    ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
    ;; would have gotten wrong are pinned here -- p_flags sits seventh in an Elf32_Phdr (at 76,
