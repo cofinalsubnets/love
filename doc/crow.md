@@ -68,6 +68,16 @@ Sessions working in parallel often share one branch, and merge into it one at a 
 
 crow quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules, to read the queue fresh before acting on it, and to write only its own row. When a write fails, someone wrote first: re-read and redo. A row names its session. The model reaches a crow session with **send_message**, and asks the user to relay to any other.
 
+The model is also given the queue's operating checks, learned running one. Each is meant to be checked mechanically, not just stated:
+
+- **The landed tree is the gated tree.** Before a landing, **git merge-tree --write-tree** *branch* *head* must print the gated head's own tree, and afterwards *branch***^{tree}** must equal it. On sb, the patch set that lands is exactly the set that was gated.
+- **Stacked.** A row gates its branch merged with the gated head of the row above. When that head moves, every row above it re-merges and re-gates.
+- **The row says what is true.** It is written **gating** together with the head being gated before the gate starts, **green** only when every lane has passed, and **waiting** only when nothing runs. A waiting row takes folds; a gating one cannot.
+- **Lanes follow the files touched**, not the intent. A cross-cutting lane is where a union goes red, and the project's own instructions may map files to lanes. The slow lane runs last, on the exact tree that lands.
+- **A fold conflict** goes to both owners with the hunk, and neither side is picked. A red in a folded branch's files belongs to its owner, and a slow fix unfolds that branch so the rest can land.
+- **A session that cannot land** (a sandbox that refuses the main checkout) hands the user the exact commands, with the expected base sha and tree hash, so the landing can be checked without trusting it. It checks the checkout for someone else's uncommitted edits first.
+- **The leader hears every change of state**: join, gating, green, landed. It verifies from the store, not from the message. A restart may rename a session, which then fixes its row and says so.
+
 # EXAMPLES
 
 Ask one thing, and let it act without asking:

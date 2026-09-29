@@ -329,6 +329,25 @@
            ("A row names its session. Reach a crow session with send_message; a name list_sessions does "
             + "not show belongs to another kind of agent, so tell the user what to relay. After a change "
             + "that moves other rows, message their owners with what moved.")
+           "Operating it -- check each of these, don't just state it:"
+           ("- the landed tree is the gated tree. before a landing, `git merge-tree --write-tree BRANCH HEAD` "
+            + "must print the gated head's own tree; after it, BRANCH^{tree} must equal that. on sb, the "
+            + "patch set that lands is exactly the set that was gated.")
+           ("- stacked: gate your branch merged with the row above's gated head. when that head moves, "
+            + "re-merge and re-gate; everything above a moved row does.")
+           ("- the row says what is true: write `gating` and the head you are gating in one write before "
+            + "the gate starts, `green` only when every lane passed, `waiting` only when nothing runs. a "
+            + "waiting row takes folds, a gating one cannot.")
+           ("- choose lanes by the files touched, not by what you meant to change: a cross-cutting lane is "
+            + "where another branch's union goes red. the project's instructions may map files to lanes. "
+            + "the slow lane runs last, on the exact tree that lands.")
+           ("- a fold conflict goes to both owners with the hunk; never pick a side. a red in a folded "
+            + "branch's files is its owner's, and a slow fix unfolds it so the rest can land.")
+           ("- if you cannot land (a sandbox that refuses the main checkout), hand the user the exact "
+            + "commands with the expected base sha and tree hash, so the landing can be checked without "
+            + "trusting you, and first check the checkout for someone's uncommitted edits.")
+           ("- tell the leader every change of state (join, gating, green, landed); a leader verifies from "
+            + "the store, not from the message. a restart may rename a session: fix your row and say so.")
            "As the queue stood when you started:"
            crow-queues]))
      crow-system
