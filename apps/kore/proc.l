@@ -34,6 +34,7 @@
                   (<a = "-i") (unset-all (environ 0), opts >a)
                   (<a = "-u") (? (two? >a) (setenv <>a (), opts >>a) (udie 1 "env: -u needs a name"))
                   (<a = "--") >a
+                  (1 < #<a && <a 0 = 45) (udie 125 ("env: unknown option " + <a))
                   a)
        rest (setp (opts as))
        (? (two? rest)
@@ -329,15 +330,17 @@
 
    ; -- printenv: the world, or just the names asked for (a name with no value in it
    ; says nothing and the exit remembers, like GNU's) --
-   (printenv-main as)
-    (? (atom? as)
+   ; -0 ends each with a NUL where a newline was
+   (printenv-main as0)
+    (: fo (uflags "printenv" as0 () "0") as (fo 1) nl (? (<fo 48) 0 10)
+     (? (atom? as)
        (: (pr e) (? (atom? e) (flush out, 0)
-                    (say out <e, put out 10, pr >e))
+                    (say out <e, put out nl, pr >e))
           (pr (environ 0)))
        (: (one w ok) (: v (getenv w)
-                        (? (string? v) (say out v, put out 10, ok) 0))
+                        (? (string? v) (say out v, put out nl, ok) 0))
           (go a ok) (? (two? a) (go >a (one <a ok)) (flush out, (? ok 0 1)))
-          (go as 1)))
+          (go as 1))))
 
    ; -- whoami and groups: id's two thin faces (id -un and id -Gn) --
    (whoami-main _)
@@ -394,14 +397,16 @@
        r (uhw-hosts h)
        (? (two? r) r
           (: ls (uhw-local 0) [(? (two? ls) <ls 33554559) h])))
-   (hostid-main _)
-    (: r (uread "/etc/hostid")
+   (hostid-main as)
+    (: _ (uflags "hostid" as () "")
+       r (uread "/etc/hostid")
        v (? (two? r && 4 <= #<>r) (: b <>r (b 0 + (b 1 << 8) + (b 2 << 16) + (b 3 << 24)))
             (: a <(uhw-self 0) (((a << 16) + (a >> 16)) & 4294967295)))
        x (radix v 16)
        _ (say out ((zpad 8 x) + "\n")) _ (flush out) 0)
-   (dnsdomainname-main _)
-    (: c <>(uhw-self 0)
+   (dnsdomainname-main as)
+    (: _ (uflags "dnsdomainname" as () "")
+       c <>(uhw-self 0)
        k (findsub c ".")
        _ (? (0 <= k) (say out ((snip c (k + 1) #c) + "\n")) 0)
        _ (flush out) 0)
@@ -783,8 +788,8 @@
                               (rev (p . acc)))))
           (go ds ())))
    (which-main as)
-    (: a? (two? as && <as = "-a")
-       ns (? a? >as as)
+    (: fo (uflags "which" as () "a")
+       a? (<fo 97) ns (fo 1)
        _ (? (two? ns) () (udie 2 "usage: which [-a] NAME.."))
        (go l bad)
         (? (atom? l) (flush out, bad)
@@ -854,8 +859,9 @@
    ; which is exactly what fexecve is for: the fd is opened HERE, before the root moves,
    ; and names the image afterwards when no path does. a seat that cannot say where it
    ; is (no selfpath) has no self to exec and falls back to the path it was given.
-   (chroot-main as)
-    (: _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
+   (chroot-main as0)
+    (: as ((ucmdflags "chroot" as0 () "") 1)
+       _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
        d <as
        _ (? (lit? (cite 'posix 'chroot)) () (udie 1 "chroot: no chroot on this seat"))
        ; both of these are read BEFORE the root moves, and for the same reason:
@@ -916,8 +922,9 @@
           _ (? (lit? (cite 'posix 'mountf)) () (udie 1 "mount: no mount on this seat"))
           e (mountf src tgt ty ob)
           (? e (udie 1 ("mount: cannot mount " + src + " on " + tgt + ": " + (show e))) 0)))
-   (umount-main as)
-    (: _ (? (two? as) () (udie 1 "usage: umount TARGET.."))
+   (umount-main as0)
+    (: as ((uflags "umount" as0 () "") 1)
+       _ (? (two? as) () (udie 1 "usage: umount TARGET.."))
        _ (? (lit? (cite 'posix 'umount)) () (udie 1 "umount: no umount on this seat"))
        (go l ok) (? (atom? l) ok
                     (: e (umount <l)
@@ -1287,8 +1294,9 @@
 
    ; -- reset: the terminal put back -- the line discipline sane where stdin is one, and
    ; the full reset (RIS) sent, toybox's pair --
-   (reset-main _)
-    ((? (two? (tty 0)) (stty-main ["sane"]) 0), say out "\ec", flush out, 0)
+   (reset-main as)
+    (: _ (uflags "reset" as () "")
+       ((? (two? (tty 0)) (stty-main ["sane"]) 0), say out "\ec", flush out, 0))
 
    ; -- ts: each line of the input stamped as it arrives, toybox's: the date and time
    ; ("%b %d %H:%M:%S"), or with -s the time since the start and with -i since the line
@@ -1317,8 +1325,9 @@
        (loop t0))
 
    ; -- users: the names logged in, sorted, on one line --
-   (users-main as)
-    (: _ (? (1 < #as) (udie 1 ("users: extra operand '" + as 1 + "'")) 0)
+   (users-main as0)
+    (: as ((uflags "users" as0 () "") 1)
+       _ (? (1 < #as) (udie 1 ("users: extra operand '" + as 1 + "'")) 0)
        fl (? (two? as) <as (uut-file 0))
        r (uut-read fl)
        _ (? r 0 (udie 1 ("users: " + fl + ": No such file or directory")))
@@ -1351,8 +1360,9 @@
    (upfind f? x? pat)                  ; the pids answering, ours never among them
     (: me (: s (upself 0) (? s <s -1))
        (filter (p \ (? (p = me) 0 (upmatch f? x? pat p))) (uprocs 0)))
+   ; -s says one pid, the first
    (pidof-main as)
-    (: fs (filter (\ w !((0 < tally w) && (w 0) = 45)) as)
+    (: fo (uflags "pidof" as () "s") fs (fo 1) one? (<fo 115)
        _ (? (two? fs) () (udie 1 "usage: pidof NAME.."))
        me (: s (upself 0) (? s <s -1))
        (hit p) (: s (upstat p)
@@ -1361,7 +1371,7 @@
                   (? (p = me) 0
                      (foldl (\ acc w (? acc 1 (? (c = w || a = w) 1 0))) 0 fs)))
        ps (filter hit (rev (uprocs 0)))
-       _ (? (two? ps) (say out (ujoin (map show ps)), put out 10) 0)
+       _ (? (two? ps) (say out (ujoin (map show (? one? [<ps] ps))), put out 10) 0)
        _ (flush out)
        (? (two? ps) 0 1))
    (pgrep-main as)
@@ -1389,7 +1399,7 @@
        (? (two? ps) 0 1))
    (killall-main as)
     (: sig (? (two? as) (usignum <as) ())
-       ns (? (charm? sig) >as as)
+       ns (ustray "killall" as (? (charm? sig) >as as))
        _ (? (two? ns) () (udie 1 "usage: killall [-SIG] NAME.."))
        me (: s (upself 0) (? s <s -1))
        (one nm ok)
@@ -1478,7 +1488,7 @@
        ((show (cs // 100)) + "." + (zpad 2 (show (cs % 100)))))
    (utline nm v) (say err (nm + " " + v), put err 10)
    (time-main as)
-    (: cmd (? (two? as && <as = "-p") >as as)
+    (: cmd ((ucmdflags "time" as () "p") 1)
        _ (? (two? cmd) () (udie 2 "usage: time [-p] CMD [ARG..]"))
        r0 (rusage -1)
        t0 (clock 0)

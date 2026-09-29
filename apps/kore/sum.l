@@ -166,9 +166,10 @@
    ; --- the mains ------------------------------------------------------------
    ; the digest tools share a front: -c reads a list back, anything else digests operands
    (sum-front who nm k probe mk n as)
-    (sum-have who nm k probe, (? (two? as && (<as = "-c" || <as = "--check")) (sum-check who (_ \ mk) n >as)
-          (sum-say who sum-hexline mk "-" as)))
-   (cksum-main as) (sum-have "cksum" "cksum" 0 sum-ckp, sum-say "cksum" sum-ckline sum-ckd "" as)
+    (: fo (uflagsl who as () "c" {"check" 99})
+       (sum-have who nm k probe, (? (<fo 99) (sum-check who (_ \ mk) n (fo 1))
+             (sum-say who sum-hexline mk "-" (fo 1)))))
+   (cksum-main as) (sum-have "cksum" "cksum" 0 sum-ckp, sum-say "cksum" sum-ckline sum-ckd "" ((uflags "cksum" as () "") 1))
    (md5sum-main as) (sum-front "md5sum" "md5" 1 sum-md5p sum-md5d 32 as)
    (sha256sum-main as) (sum-front "sha256sum" "sha256" 2 sum-shap sum-shad 64 as)
    (sha1sum-main as) (sum-front "sha1sum" "sha1" 3 sum-sha1p sum-sha1d 40 as)

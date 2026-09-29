@@ -177,4 +177,17 @@ if env printf %q x > /dev/null 2>&1; then
   pf '%5b' x
   pf '%#d' 1
 fi
+# every tool refuses a flag it does not know with 2 (env with GNU's 125), before it does
+# anything -- these read one as a file, a user, a name to kill, or said nothing at all
+: > "$ho/.rfq"
+for c in "stat -Q" "cmp -l" "install -v" "chown -v gwen" "chgrp -v gwen" "readlink -Q" "md5sum -Q" "sha256sum -c --quiet" \
+         "cksum -Q" "killall -q" "which -Q" "time -v" "printenv -Q" "pidof -x" "basename -Q" "dirname -Q" "ls --color=auto" \
+         "realpath --foo" "users -Q" "fsync -Q" "umount -Q" "chroot -Q" "tsort -Q" "rev -Q" "link -Q" "unlink -Q" "yes -Q" \
+         "hostid -Q" "reset -Q" "dnsdomainname -Q" "du --foo" "comm --foo"; do
+  # shellcheck disable=SC2086
+  korerun $c "$ho/.rfq" < /dev/null > /dev/null 2>&1; r=$?; [ $r -eq 2 ] || fail "kore $c must refuse (rc $r)"
+done
+korerun env -Q > /dev/null 2>&1; r=$?; [ $r -eq 125 ] || fail "kore env -Q (rc $r)"
+korerun nl -ba "$ho/.rfq" 2>&1 | grep -q 'unknown option -b' || fail "kore's refusal names the letter typed first"
+[ "$(korerun printenv -0 HOME | tr '\0' '|')" = "$HOME|" ] || fail "kore printenv -0"
 echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt ok"

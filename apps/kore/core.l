@@ -781,8 +781,9 @@
        _ (go a) _ (flush out) 0)
 
    ; -- yes: the affirmative, forever (args override the y) --
-   (yes-main as)
-    (: w (two? as ? (ujoin as) "y")
+   (yes-main as0)
+    (: as ((uflags "yes" as0 () "") 1)
+       w (two? as ? (ujoin as) "y")
        (go _) (say out w, put out 10, flush out, go ())
        (go ()))
 
@@ -969,13 +970,13 @@
                      (each ns (n \ (say out (f n), put out end)),
                       flush out, 0))
    (basename-main as)
-    (: t (tablet 0) ops (ubn-opts as t) a? (peep t 'a 0)
+    (: t (tablet 0) ops (ustray "basename" as (ubn-opts as t)) a? (peep t 'a 0)
        (? (atom? ops) (udie 1 "usage: basename NAME [SUFFIX] | basename -a [-s SUF] NAME..")
           (!a? && two? >>ops) (udie 1 ("basename: extra operand '" + <>>ops + "'"))
           a? (ubn-say t ops (n \ ubase n (peep t 's "")))
           (ubn-say t [<ops] (n \ ubase n (? (two? >ops) <>ops "")))))
    (dirname-main as)
-    (: t (tablet 0) ops (ubn-opts as t)
+    (: t (tablet 0) ops (ustray "dirname" as (ubn-opts as t))
        (atom? ops ? (udie 1 "usage: dirname NAME..")
         (ubn-say t ops udir)))
 
@@ -1220,7 +1221,7 @@
    (rev-main as)
     ; the last line keeps the source's end, which is exactly what term? carries
     (: (dot ln term?) (say out (cprev ln), term? && put out 10, 1)
-       (ulines "rev" dot as))
+       (ulines "rev" dot ((uflags "rev" as () "") 1)))
 
    ; ---- the column tools: fold, expand, unexpand --------------------------------
    ; all three count columns and not bytes -- a tab steps to the next stop, \b steps
@@ -1757,8 +1758,9 @@
    ; order, not GNU's: where the input pins one they agree, and where it does not both
    ; are right -- so the gate asks only about inputs that pin one. a loop is named on
    ; err, broken at the first node still standing, and leaves 1, as GNU's does --
-   (tsort-main as)
-    (: _ (? (two? >as) (udie 1 "usage: tsort [FILE]") ())
+   (tsort-main as0)
+    (: as ((uflags "tsort" as0 () "") 1)
+       _ (? (two? >as) (udie 1 "usage: tsort [FILE]") ())
        t (? (two? as) (: r (<as @ "-" [1 (slurp in)] (uread <as))
                          (? (two? r) <>r (udie 1 ("tsort: cannot open " + <as))))
               (slurp in))
@@ -1877,6 +1879,8 @@
     (: (fl a s1 s2 s3)
         (? (atom? a) [s1 s2 s3 a]
            (#<a < 2 || <a 0 != 45) [s1 s2 s3 a]
+           (<a = "--") [s1 s2 s3 >a]
+           (<a 1 = 45) (udie 2 ("comm: unknown option " + <a))
            (: w <a
               (cl k b1 b2 b3)
                (#w <= k ? (fl >a b1 b2 b3)

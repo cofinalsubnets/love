@@ -201,7 +201,7 @@
     (: t (tablet 0)
        o (uopt as t '() '(101) ())
        _ (? (two? o) () (udie 2 "ls: an option wants a value"))
-       ops <>>o
+       ops (ustray "ls" as <>>o)
        _ (: k (uoptbad as t uls-opts) (? !k () (udie 2 ("ls: unknown option -- " + (string k)))))
        a? (peep t 97 0) aa? (peep t 65 0) l? (peep t 108 0) d? (peep t 100 0)
        r? (peep t 114 0) tm? (peep t 116 0)
@@ -504,7 +504,7 @@
                             (<a = "-s") (fl >a d D m 1 fs)
                             (fl >a d D m s (fs + [<a])))
        p (fl as 0 0 493 0 ())
-       d? <p D? <>p m <>>p s? <>>>p fs <>>>>p
+       d? <p D? <>p m <>>p s? <>>>p fs (ustray "install" as <>>>>p)
        _ (? s? (say err "install: -s noted, not stripped (no kore stripper yet)", put err 10) ())
        (? d? (: (go a ok)
                  (? (two? a)
@@ -542,8 +542,8 @@
           (0 = n) ()
           (rl-chase (? (t 0 = 47) t (rl-clean (rl-abs q + "/../" + t))) (n - 1))))
    (readlink-main as)
-    (: f? (two? as && (<as = "-f"))
-       fs (? f? >as as)
+    (: fo (uflags "readlink" as () "f")
+       f? (<fo 102) fs (fo 1)
        _ (? (two? fs) () (udie 2 "usage: readlink [-f] PATH"))
        q <fs
        r (? f? (: c (rl-chase (rl-clean (rl-abs q)) 40) (? (string? c) c ()))
@@ -571,7 +571,7 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (: c (uoptbad as t "ems") (? !c () (udie 1 ("realpath: unknown option -" + string c))))
-       fs <>>o
+       fs (ustray "realpath" as <>>o)
        _ (? (two? fs) () (udie 1 "usage: realpath [-e|-m|-s] PATH.."))
        e? (peep t 101 0) m? (peep t 109 0) s? (peep t 115 0)
        (one q ok)
@@ -588,14 +588,16 @@
 
    ; -- link and unlink: the two syscalls said plainly, no face on them (ln and rm
    ; are where the faces live) --
-   (link-main as)
-    (? (atom? >as) (udie 1 "usage: link FILE NEW")
+   (link-main as0)
+    (: as ((uflags "link" as0 () "") 1)
+     (? (atom? >as) (udie 1 "usage: link FILE NEW")
        (: e (hardlink <as <>as)
-          (? !e 0 (udie 1 ("link: cannot link " + <>as + " to " + <as)))))
-   (unlink-main as)
-    (? (atom? as) (udie 1 "usage: unlink FILE")
+          (? !e 0 (udie 1 ("link: cannot link " + <>as + " to " + <as))))))
+   (unlink-main as0)
+    (: as ((uflags "unlink" as0 () "") 1)
+     (? (atom? as) (udie 1 "usage: unlink FILE")
        (: e (unlink <as)
-          (? !e 0 (udie 1 ("unlink: cannot unlink " + <as)))))
+          (? !e 0 (udie 1 ("unlink: cannot unlink " + <as))))))
 
    ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
    ; these read the stat tail. love/posix.c's stat answers
@@ -803,7 +805,7 @@
            (long? <a 9 "--printf=") (fl >a (snip <a 9 #<a) L 1 fs)
            (fl >a fmt L pf (<a . fs)))
        p (fl as () 0 0 ())
-       fmt <p L? <>p pf? <>>p fs (p 3)
+       fmt <p L? <>p pf? <>>p fs (ustray "stat" as (p 3))
        _ (? (two? fs) () (udie 2 "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."))
        (one q ok)
         (: st (? L? (stat q) (lstat q))
@@ -837,6 +839,8 @@
         (<a = "-d") (two? >a ? (pin t 'd (uatoi <>a), fl >>a t fs)
                      (udie 2 "du: -d wants a depth"))
         (#<a < 2 || <a 0 != 45) (fl >a t (<a . fs))
+        (<a = "--") [t (rev fs + >a)]
+        (<a 1 = 45) (udie 2 ("du: unknown option " + <a))
         (:- (cl 1) w <a (cl k) (#w <= k ? (fl >a t fs) (w k @
          97 (pin t 'a 1, cl (k + 1))
          115 (pin t 's 1, cl (k + 1))
@@ -987,8 +991,8 @@
        [(side <ps "/etc/passwd" "user") (atom? >ps ? -1 (side <>ps "/etc/group" "group"))])
    ; chown and chgrp are one walk: chgrp's GROUP is chown's :GROUP
    (uchown who as)
-    (: r? (two? as && <as = "-R")
-       rest (r? ? >as as)
+    (: fo (uflags who as () "R")
+       r? (<fo 82) rest (fo 1)
        grp? (who = "chgrp")
        _ (atom? >rest && udie 2 ("usage: " + who + (grp? ? " [-R] GROUP FILE.." " [-R] OWNER[:GROUP] FILE..")))
        ug (grp? ? (uowner who (":" + <rest) <rest) (uowner who <rest <rest))
@@ -1074,8 +1078,8 @@
    ; -- fsync: what the kernel holds of each file written down (-d fdatasync's lesser
    ; promise, the file's data alone) --
    (fsync-main as)
-    (: d? (two? as && <as = "-d")
-       fs (? d? >as as)
+    (: fo (uflags "fsync" as () "d")
+       d? (<fo 100) fs (fo 1)
        ok (foldl (\ a f (: e (fsync f d?)
                            (? (nom? e) (say err ("fsync: " + f + ": " + uerrno e + "\n"), 0) a)))
                  1 fs)
@@ -1720,8 +1724,8 @@ EXEC 01;32
 
    ; -- cmp: are two files the same bytes (-s says nothing, the exit code answers) --
    (cmp-main as)
-    (: s? (two? as && (<as = "-s"))
-       fs (? s? >as as)
+    (: fo (uflags "cmp" as () "s")
+       s? (<fo 115) fs (fo 1)
        _ (atom? >fs ? (udie 2 "usage: cmp [-s] A B"))
        ra (uread <fs) rb (uread <>fs)
        (? (atom? ra || atom? rb)

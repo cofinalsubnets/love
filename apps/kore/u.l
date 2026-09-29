@@ -108,12 +108,22 @@
    ; a tool's flags off the head of as: [t operands], every letter in `ok` and a value
    ; letter in `vals`. a stranger letter, a flag after an operand or a value flag with
    ; none refuses before anything is done; the file really called -x is `-- -x`
-   (uflags who as vals ok)
+   (uflags who as vals ok) (uflagsl who as vals ok ())
+   ; the same with long words, `longs` uopt's map of a name to its key
+   (uflagsl who as vals ok longs)
+    (: t (tablet 0)
+       o (uopt as t vals () longs)
+       _ (? (two? o) () (udie 2 (who + ": an option wants a value")))
+       _ (: c (uoptbad as t ok) (? !c () (udie 2 (who + ": unknown option -" + string c))))
+       _ (: w (uoptstray as <>>o) (? !w () (udie 2 (who + ": unknown option " + w))))
+       [t <>>o])
+   ; a tool that runs a command: its flags, then the command and the command's own flags,
+   ; which are not its to judge -> [t cmd..]. a stranger before the command refuses with 2
+   (ucmdflags who as vals ok)
     (: t (tablet 0)
        o (uopt as t vals () ())
        _ (? (two? o) () (udie 2 (who + ": an option wants a value")))
        _ (: c (uoptbad as t ok) (? !c () (udie 2 (who + ": unknown option -" + string c))))
-       _ (: w (uoptstray as <>>o) (? !w () (udie 2 (who + ": unknown option " + w))))
        [t <>>o])
    ; a hand-walked tool's operands, refused with 2 when one still looks like a flag: its
    ; walk stops at the first word it does not know, so that word is a stranger or a flag
