@@ -266,7 +266,7 @@
               (map (s \ <s . port) ((D 'dns-servers) "/etc/resolv.conf")))
        ; one type asked of the servers in turn -> [server records-answer], or () from none
        (one t l) (? (atom? l) ()
-                    (: id (clock 0 & 65535) s <l
+                    (: id ((D 'dns-id) 0) s <l
                        r ((D 'dns-raw) <s >s ((D 'dns-qedns) id qname t) 2500)
                        (? (string? r) [s ((D 'dns-records) r id)] (one t >l))))
        rs (map (t \ one t sv) ask)
@@ -433,8 +433,9 @@
         (? (!names? || six || !ns) a
            (: c (names a)
               (? !!c c
-                 (: r ((D 'dns-raw) <ns >ns ((D 'dns-qedns) 7711 (ns-rev a) 12) 1000)
-                    rs (? (string? r) ((D 'dns-records) r 7711) ())
+                 (: id ((D 'dns-id) 0)
+                    r ((D 'dns-raw) <ns >ns ((D 'dns-qedns) id (ns-rev a) 12) 1000)
+                    rs (? (string? r) ((D 'dns-records) r id) ())
                     ptr (? (two? rs) (filter (x \ x 1 = 12) (rs 2)) ())
                     v (? (two? ptr) (<ptr 2) a)
                     _ (pin names a v)
