@@ -6473,6 +6473,9 @@
        items <><>>>f
        dcl {} tak {} n9 {} liv {} crs {} spa {}
        crh {} rdc {} rdt {} sqm {}
+       ; a label's live set, laid when the backward walk passes it: a goto that finds one is forward
+       ; and reads just that; a goto that finds none may loop, and marks its label for pmx
+       lab {} bwd {}
        ; a hard call: one no splice can erase. economics only -- a wrapped home survives any emitted call
        (nhcl l) (? !(two? l) 0 (nhc <l + nhcl >l))
        (soft? nm) (two? (g 'inl nm))                 ; an inline candidate; the armed shadow covers a declined splice
@@ -6510,7 +6513,7 @@
                      pmx body w8 tc9))
                 ('switch ce items2) ((nhc ce * w) + pmxl items2 w tc9)   ; fallthrough: arms sum (conservative)
                 (('case || 'dflt) . _) 0
-                ('goto . _) 99
+                ('goto nm) (? (peep bwd nm ()) 99 ((peep lab nm 'no) == 'no) 99 0)
                 ('asm . _) 99
                 0))
        (nhc e) (? !(two? e) 0
@@ -6683,7 +6686,8 @@
                  a3 (two? stp ? <(erd stp a2 0) a2)
                  (ust body a3))
              ('switch ce items) (ustl items <(erd ce acc 0))
-             (('goto || 'asm) . _) (sun acc univ)
+             ('goto nm) (: o (peep lab nm 'no) (sun acc (? (o == 'no) univ o)))
+             ('asm . _) (sun acc univ)
              acc)
        (ustl l acc) (? !(two? l) acc (ustl >l (ust <l acc)))
        (ustp ps acc) (? !(two? ps) acc (ustp >ps <(erd <>><ps acc 0)))
@@ -6796,8 +6800,10 @@
                   sq (tick ()) _ (spn sq out) out)
               ('brk . _) (: sq (tick ()) _ (spn sq brk) brk)
               ('cont . _) (: sq (tick ()) _ (spn sq cnt) cnt)
-              ('goto . _) (: sq (tick ()) _ (spn sq univ) univ)   ; any target: everything
-              ('lbl . _) (: sq (tick ()) _ (spn sq out) out)
+              ('goto nm) (: o (peep lab nm 'no)
+                            s9 (? (o !== 'no) o (: _ (pin bwd nm 1) univ))   ; a target not yet passed: everything
+                            sq (tick ()) _ (spn sq s9) s9)
+              ('lbl nm) (: sq (tick ()) _ (spn sq out) _ (? (abl? g 'glab) () (pin lab nm out)) out)
               ('asm . _) (: sq (tick ()) _ (rec sq univ w9 (? (1 < w9) w9 0) w9) univ)   ; homing is off anyway (hasasm)
               (: sq (tick ()) _ (spn sq out) out)))   ; nop tdef
        ; -- run: the counter descends from the prepass total; pre and lst disagreeing misses zero,
@@ -8235,12 +8241,28 @@
            wm9 (av9 17 && !(a64? g || t32? g || rv64? g))   ; d128 material on x64, whose mul/div pin rax:rdx
            wd9 (wm9 && 2 < av9 18)             ; a nested park would starve: the wide kit owns the file
            dp9 (? wm9 5 3)                     ; else a take leaves the file two deeper, one park's draw
+           ; a param holds its arrival only while it ranks among the seats: the locals that outrank it
+           ; by ulloc's own key, live at once, would otherwise want more seats than the file has
+           spa9 (av9 5) sqm9 (av9 9) tak9 (av9 14) nsq (av9 13)
+           ltc (: (go i acc)
+                  (? (nsq < i) acc
+                     (: e2 (sqm9 i) nm2 <e2
+                        (? (two? e2 && elem nm2 uv && !(tak9 nm2) && !(fhomable? <>e2 || d128? <>e2) &&
+                            2 <= peep rdc9 nm2 0 && two? (spa9 nm2))
+                           (go (i + 1) ([(peep rdc9 nm2 0) <(spa9 nm2) <>(spa9 nm2)] . acc))
+                           (go (i + 1) acc))))
+                  (go 1 ()))
+           nst9 (#tpool + #(cspool g))
+           ; the most of them live at any one start
+           (crowd l) (foldl (\ m s (: n #(filter (t \ t 1 <= s 1 && s 1 <= t 2) l) (? (m < n) n m))) 0 l)
+           (outrun? nm) (: tc (peep rdc9 nm 0)
+                           (!(abl? g 'prank) && nst9 <= crowd (filter (t \ tc < <t) ltc)))
            (homefold g params 0 [() () () #tpool]
             (\ a4 gpi p9
               (: nm <p9 pty <>p9
                  A (argr g gpi)
                  nv (a4 3)                       ; the file's running depth (homes and rides drain it)
-                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2 &&
+                 ok (lf9 && !wd9 && elem nm uv && peep crh9 nm 0 <= 2 && !(outrun? nm) &&
                      (!wm9 || 64 <= peep rdt9 nm 0))  ; beside the wide kit only a hot param takes a seat
                  ; a bool's entry cvt defs through set, which qclob? cannot tell from a clobber: a bool quad vacates
                  qb9 (pty = 'bool && elem A '(r0 r1 r2 r3))
