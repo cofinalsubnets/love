@@ -1,7 +1,7 @@
 // FIXME merge into posix.c?
 // love/sock.c -- every socket nif. three make a socket -- connect, listen, bind, POSIX's
 // three verbs -- and each takes its address as data, the family named at its head: tcp,
-// udp, icmp, unix (the section below). accept, seal, recv and send work the port one made.
+// udp, icmp, unix (the section below). accept, seal, recv, send and farend work the port one made.
 // auto-globbed and LvNif-registered. every nif mirrors main.c's lvm_open: produce an OS
 // fd, hand it to host_port -> a heap port carrying a close finalizer. once an fd is a
 // port, read and write come free through fgetc/fputc.
@@ -306,6 +306,26 @@ static int quad_show(char *q, uint32_t a) {
   if (i) q[k++] = '.'; }
  return k; }
 
+// (farend s) -> ("quad" port), the far end of a connected socket, v6 text in the quad's
+// place; the errno's nom when there is none (enotconn), 'badarg on a non-port
+ai_noinline static struct ai *host_farend(struct ai *g, int fd) {
+ union { struct sockaddr_in in; struct sockaddr_in6 in6; } a;
+ socklen_t n = sizeof a;
+ char q[INET6_ADDRSTRLEN];
+ memset(&a, 0, sizeof a);
+ if (getpeername(fd, (struct sockaddr*) &a, &n)) return ai_push(g, 1, ai_err(g, errno));
+ int v6 = a.in.sin_family == AF_INET6, port = ntohs(v6 ? a.in6.sin6_port : a.in.sin_port);
+ int k = v6 ? (int) strlen(inet_ntop(AF_INET6, &a.in6.sin6_addr, q, sizeof q))
+            : quad_show(q, ntohl(a.in.sin_addr.s_addr));
+ if (!ai_ok(g = str0(g, (uintptr_t) k))) return g;
+ memcpy(txt(g->sp[0]), q, (size_t) k), len(g->sp[0]) = (uintptr_t) k;
+ if (!ai_ok(g = ai_have(g, 2 * Width(struct ai_chain)))) return g;
+ struct ai_chain *c = bump(g, 2 * Width(struct ai_chain));
+ ini_chain(c + 1, putcharm(port), ZeroPoint);
+ ini_chain(c + 0, g->sp[0], word(c + 1));
+ g->sp[0] = word(c + 0);
+ return g; }
+
 // one datagram and who sent it. the sockaddr and the control buffer are &-taken here, so
 // the lvm wrapper stays TCO-clean; what it needs back rides in the caller's rbuf
 struct rmeta { uint32_t ip; int port, ttl, v6, err, etype, ecode; unsigned char ip6[16]; };
@@ -517,6 +537,11 @@ static lvm(lvm_send) {
  ssize_t w = is_raw(fd) ? call_send_raw(fd, &pe, txt(s), len(s)) : call_send(fd, &pe, txt(s), len(s));
  ai_musttail return Answerp(2, w < 0 ? ai_err(g, (int) -w) : Sp[0]); }   // [p, peer, bytes] -> [p]
 
+static lvm(lvm_farend) {
+ int fd = (int) ai_port_fd(Sp[0]);
+ if (fd < 0) ai_musttail return Answer(ai_badarg(g));
+ LvmCallp(g, 1, host_farend, fd) }                // [s] -> [peer]
+
 static union u const
  nif_connect[]  = {{lvm_connect}, {lvm_connectw}, {lvm_ret0}},
  nif_listen[]   = {{lvm_listen}, {lvm_ret0}},
@@ -524,7 +549,8 @@ static union u const
  nif_accept[]   = {{lvm_accept}, {lvm_ret0}},
  nif_shutdown[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_shutdown}, {lvm_ret0}},
  nif_recv[]     = {{lvm_recv}, {lvm_ret0}},
- nif_send[]     = {{lvm_cur}, {.x = putcharm(3)}, {lvm_send}, {lvm_ret0}};
+ nif_send[]     = {{lvm_cur}, {.x = putcharm(3)}, {lvm_send}, {lvm_ret0}},
+ nif_farend[]   = {{lvm_farend}, {lvm_ret0}};
 LvNif("connect", nif_connect, NULL);
 LvNif("listen", nif_listen, NULL);
 LvNif("bind", nif_bind, NULL);
@@ -532,3 +558,4 @@ LvNif("accept", nif_accept, NULL);
 LvNif("seal", nif_shutdown, NULL);
 LvNif("recv", nif_recv, NULL);
 LvNif("send", nif_send, NULL);
+LvNif("farend", nif_farend, NULL);

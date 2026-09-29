@@ -5,7 +5,8 @@
 # asserts each side received exactly what the other sent. This exercises every
 # Stage-1 socket nif (connect/listen/accept/shutdown) plus the two .l pump loops
 # and their teardown. both sides pass -N; the rounds after check that without it neither
-# side half-closes, that -q quits anyway, and that -w quits when idle.
+# side half-closes, that -q quits anyway, that -w quits when idle,
+# and what -z and -v say.
 #
 #   sh test/net/loopback.sh <love-binary> [port]
 #
@@ -143,6 +144,31 @@ wait "$cli"; crc=$?
 kill "$feed" 2>/dev/null
 printf 'a\nb\nc\n' > "$tmp/abc"
 cmp -s "$tmp/abc" "$tmp/srv_got4" || { echo "nettest: FAIL (-w: server got $(tr '\n' ' ' < "$tmp/srv_got4"))"; fail=1; }
+
+# -zv over a listener and the closed port past it: one taken, one refused, exit 0; the
+# listener -v names itself and its caller. -z on the closed one alone is quiet and 1
+PORT=$((PORT + 2))
+"$AI" "$AK" -lv "$PORT" < /dev/null > /dev/null 2> "$tmp/srv_err5" &
+srv=$!
+i=0
+while ! ready; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (server never listened on $PORT)"; cat "$tmp/srv_err5"; exit 1; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+"$AI" "$AK" -zv 127.0.0.1 "$PORT-$((PORT + 1))" > "$tmp/z_out" 2> "$tmp/z_err"; crc=$?
+wait "$srv"; src=$?
+[ "$crc" -eq 0 ] || { echo "nettest: FAIL (-zv: exit $crc)"; cat "$tmp/z_err"; fail=1; }
+[ "$src" -eq 0 ] || { echo "nettest: FAIL (-lv: server exit $src)"; cat "$tmp/srv_err5"; fail=1; }
+[ -s "$tmp/z_out" ] && { echo "nettest: FAIL (-z wrote to stdout)"; fail=1; }
+grep -q "^Connection to 127.0.0.1 $PORT port \[tcp/\*\] succeeded!$" "$tmp/z_err" &&
+  grep -q "^nc: connect to 127.0.0.1 port $((PORT + 1)) (tcp) failed: Connection refused$" "$tmp/z_err" ||
+  { echo "nettest: FAIL (-zv said:)"; cat "$tmp/z_err"; fail=1; }
+grep -q "^Listening on 0.0.0.0 $PORT$" "$tmp/srv_err5" &&
+  grep -q "^Connection received on 127.0.0.1 [0-9]*$" "$tmp/srv_err5" ||
+  { echo "nettest: FAIL (-lv said:)"; cat "$tmp/srv_err5"; fail=1; }
+"$AI" "$AK" -z 127.0.0.1 "$((PORT + 1))" > "$tmp/z_out" 2> "$tmp/z_err"; crc=$?
+[ "$crc" -eq 1 ] && ! [ -s "$tmp/z_err" ] || { echo "nettest: FAIL (-z on a closed port: exit $crc)"; cat "$tmp/z_err"; fail=1; }
 
 [ "$fail" -eq 0 ] && echo "nettest: PASS"
 exit "$fail"

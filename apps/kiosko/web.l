@@ -158,7 +158,7 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       _ (nil? sy ? 0 (sv-die 2 ("unknown option " + sy)))
       _ (two? >rest ? (sv-die 2 ("one tree at a time, not " + <>rest)) 0)
       pt (uoptv t 112)
-      port (: v (unum pt) (? !pt 8080 (charm? v) v (sv-die 2 ("not a port: " + pt))))
+      port (: v (uport pt) (? !pt 8080 v v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
       ; the tree: DIR itself, the nest laid under it before, or laid there now.

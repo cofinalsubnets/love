@@ -115,8 +115,8 @@
      (? (atom? as) 0
         (: a <as r >as
            (? (a = "-p" && two? r)
-               (: n (unum <r)
-                  (charm? n && 0 < n && n < 65536 ? (pin o 'port n) (die ("bad port " + <r)),
+               (: n (uport <r)
+                  (n ? (pin o 'port n) (die ("bad port " + <r)),
                    parse >r))
               (a = "-h" && two? r) (pin o 'hk <r, parse >r)
               (a = "-o" && two? r) (opt <r, parse >r)

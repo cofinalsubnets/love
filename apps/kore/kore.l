@@ -817,7 +817,7 @@
    korehelp
    {'diff "usage: diff OLD NEW   (0 same / 1 differ / 2 trouble)"
     'nm "usage: nm [-g] [-u] [-p] FILE.."
-    'nc "usage: nc [-N] [-q SECS] [-w SECS] {HOST PORT | -l PORT}"
+    'nc "usage: nc [-Nvz] [-q SECS] [-w SECS] {HOST PORT.. | -l PORT}"
     'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
     'sshd "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
     'scp "usage: scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target"
@@ -1049,7 +1049,7 @@
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
 every tool answers --help and --version, and -h where the letter is free
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
-  nc [-N] HOST PORT  netcat; nc -l PORT listens
+  nc HOST PORT       netcat; nc -l PORT listens, nc -z scans
   ssh [user@]HOST    the ssh client; sshd [-p PORT] serves this user (apps/ssh)
   scp SRC.. DEST     copies over ssh, [user@]host:path on one side (rcp's protocol)
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
