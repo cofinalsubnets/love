@@ -2963,16 +2963,22 @@
                 (mkv rt (vreg xv) (vfs xv + [[iop (vreg xv) c]]))
                 (: rd (wnt || rdst g (vreg xv))
                    (mkv rt rd (vfs xv + [['mov rd (vreg xv)] [iop rd c]])))))))
-   (cgrvar g env x w ce ng)                         ; the register-count rotate: mirror of the variable shift
+   (cgrvar g env x w ce ng wnt)                     ; the register-count rotate: mirror of the variable shift
     (: xv (cgexpr g env x ())
        (? (bad? xv) 'bad
           (: cv (cgexpr g env ce ())
+             ra (vreg xv)
              (? (bad? cv) 'bad
                 (: rt (w @ 32 'uint 'ulong)
                    vop (w @ 32 'rorv4 'rorv)
-                   af (tor0 g xv)
-                   bf (tor0 g cv)
-                   (mkv rt 'r0 (af + cshut g bf + (ng ? '((neg r1))) + [[vop 'r0 'r1]])))))))
+                   (? (!(elem ra '(r0 r1 r2 r3)) && !(callish? ce) && !(abl? g 'shv2))
+                      (: bf (tor0 g cv)
+                         rd (? (wr? g ra) ra (: w9 (wnt || rdst g ra) (? (w9 = 'r1) (rdst g ra) w9)))
+                         (mkv rt rd (vfs xv + bf + ['(mov r1 r0)] + (ng ? '((neg r1))) +
+                                     (? (rd = ra) () [['mov rd ra]]) + [[vop rd 'r1]])))
+                      (: af (tor0 g xv)
+                         bf (tor0 g cv)
+                         (mkv rt 'r0 (af + cshut g bf + (ng ? '((neg r1))) + [[vop 'r0 'r1]])))))))))
    (cgror g env L R wnt)                            ; -> tuple | 'bad | 'no (the general lane stands)
     (? !(rot4? g) 'no
        (: a (two? L && <L = 'bin && elem <>L '(shl shr) ? L)
@@ -2990,8 +2996,8 @@
                                 (? (ks + kl = w && 0 < ks && ks < w)
                                    (cgrimm g env x w ks wnt) 'no)
                                (charm? ks || charm? kl) 'no
-                               (rotc? g w cl cs) (cgrvar g env x w cs ())   ; rotr: ror by the shr count
-                               (rotc? g w cs cl) (cgrvar g env x w cl 1)    ; rotl: ror by the negated shl count
+                               (rotc? g w cl cs) (cgrvar g env x w cs () wnt)   ; rotr: ror by the shr count
+                               (rotc? g w cs cl) (cgrvar g env x w cl 1 wnt)    ; rotl: ror by the negated shl count
                                'no)))))))))
    (cgbin g env e wnt)
     (: op <>e
@@ -3047,7 +3053,15 @@
                      (: rd (wnt || rdst g (vreg a))    ; a borrowed home shifts a copy (no 3-address shift)
                         (mkv rt rd (vfs a + [['mov rd (vreg a)] [iop rd <kc]] + nar rd))))
                  (: b (cgexpr g env rhs ())
+                    ra (vreg a)
                     (? (bad? b) 'bad
+                       ; a left already in a register that a call-free count leaves alone shifts there,
+                       ; two-address, as the constant lane does: only the count takes the protocol
+                       (!(elem ra '(r0 r1 r2 r3)) && !(callish? rhs) && !(abl? g 'shv2))
+                        (: bf (tor0 g b)
+                           rd (? (wr? g ra) ra (: w9 (wnt || rdst g ra) (? (w9 = 'r1) (rdst g ra) w9)))
+                           (mkv rt rd (vfs a + bf + ['(mov r1 r0)] + (? (rd = ra) () [['mov rd ra]]) +
+                                       [[vop rd 'r1]] + nar rd)))
                        (: af (tor0 g a)
                           bf (tor0 g b)
                           (mkv rt 'r0 (af + cshut g bf + [[vop 'r0 'r1]] + nar 'r0)))))))
