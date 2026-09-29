@@ -26,7 +26,6 @@
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
 (borrow 'rove)
-(borrow 'ink)                           ; the shimmer, one frame of it held still, for the floor's stains
 (borrow 'play)                          ; the voices, the mix
 (:
  esc (string 27)
@@ -146,7 +145,7 @@
                               acc)))
                () (rev (bays ())))
    (pins d 'cars cars 'bed bed 'zone [zt zb] 'sd (roll sb 1000000)
-           'skin (ink-drift h w (roll sb 1000 / 10.0) 0.0)
+           'skin (cite 'slop 'slop-drift h w (roll sb 1000 / 10.0) 0.0)
            'in [(w - 1) (bed (w - 1))]))
  ; the cells a car takes: [i glyph hue] each, the dents crumpled
  (car-cells c w) (: x (c 'x) y (c 'y) hue (c 'hue) ds (c 'dents)

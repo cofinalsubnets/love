@@ -34,7 +34,6 @@
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
 (borrow 'rove)
-(borrow 'ink)                           ; the shimmer, one frame of it held still, for the ground's grain
 (borrow 'play)                          ; the voices, the mix; harp is cited, never borrowed
 (:
  esc (string 27)
@@ -47,7 +46,7 @@
  river-gap 1                            ; grass rows between a pair's pane and the river when it runs straight
  river-sway 2                           ; rows the river wanders either side of its middle
  ; the ground is solid blocks, each in a pen off its ramp by one still frame of the
- ; walk's shimmer (ink-drift), so the colour runs in smooth bands and not a mottle. the
+ ; walk's shimmer (slop-drift), so the colour runs in smooth bands and not a mottle. the
  ; river alone reads the shimmer at the clock, so it runs while everything else stands;
  ; dry, its bed reads the still frame with the rest. the ramps run pale to deep; span is
  ; the band of the field they cover, its four sines seldom leaving +-3
@@ -185,7 +184,7 @@
    ; the stone in the bed near the west edge, midstream, under the water until it is dry
    stone [2 (river-y 2 + river-h // 2)]
    _ (dput d <stone <>stone 8)
-   flow (ink-drift h w) phase (roll sb 1000 / 10.0)           ; where in the drift it stopped
+   flow (cite 'slop 'slop-drift h w) phase (roll sb 1000 / 10.0)           ; where in the drift it stopped
    (pins d 'cubes cubes 'cube c 'hub [cx cy] 'east east 'stone stone 'sd (roll sb 1000000)
            'flow flow 'phase phase 'skin (flow phase 0.0)
            'in [(c 0 + cube-w // 2) (c 1 + cube-h // 2)]))

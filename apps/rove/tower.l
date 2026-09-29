@@ -23,8 +23,6 @@
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
-; and ink, which the last floor paints with: the shader the walk runs, stopped
-(borrow 'ink)
 (borrow 'x11)
 (borrow 'rove)
 (:
@@ -1020,7 +1018,7 @@
  ; from -- one draw, so the same seed strews the same floor
  (dress d lvl sb) (: _ (pins d 'th (peep themes (lvl - 1) th-heaven) 'sd (roll sb 1000000))
                      ; the garden and the middle each wear one still frame of the shimmer
-                     (skin _) (pin d 'skin {'ground (ink-drift (d 'h) (d 'w) (roll sb 1000 / 10.0) 0.0)})
+                     (skin _) (pin d 'skin {'ground (cite 'slop 'slop-drift (d 'h) (d 'w) (roll sb 1000 / 10.0) 0.0)})
                      (lvl @- d 1 (wear-thin d sb, stream d sb, skin ())
                                2 (skin ())))
 
@@ -1420,7 +1418,7 @@
    d (vale w h rows)
    fx <(d 'fire) fy <>(d 'fire)
    ph (roll sb 1000 / 10.0)                            ; where in the drift it stopped
-   sk (ink-drift h w ph 0.0)
+   sk (cite 'slop 'slop-drift h w ph 0.0)
    _ (pin d 'skin {'ground sk})
    loot {}
    _ (pin loot (fx + w * fy) '(fire))

@@ -1,7 +1,7 @@
 ; slop -- rove's second game: the walk into a thing that will not let you arrive.
 ;
 ; a road through grass, and somewhere ahead of it a shore. the slop lies beyond that
-; shore -- ink's skin (ink-field) under a gold-pink-yellow ramp -- but at the first
+; shore -- the skin (slop-drift) under a gold-pink-yellow ramp -- but at the first
 ; frame it is well above the top and there is nothing to see but field. you
 ; stand on the road at the foot and the only steer that answers is forward.
 ;
@@ -29,14 +29,13 @@
 ; run: love slop
 ; the game is pure love -- slop-new, slop-key, slop-tick and slop-frame are state in
 ; and state out, gated headless by test/host/slop.l; only slop-run ties the tty (raw /
-; tty / cue?, over love/posix.c), so slop never joins the corpus. ink lends the skin and
-; the palette, rove the helm and the die.
+; tty / cue?, over love/posix.c), so slop never joins the corpus. rove lends the helm and
+; the die; the skin and its palette are slop's own, and the other floors borrow the skin.
 (module (slop slop-run slop-walk slop-main slop-new slop-sy slop-gap slop-cost slop-rate
          slop-step slop-push slop-key slop-tick slop-frame slop-flood slop-bar slop-bar-fit slop-road slop-turf slop-post
          slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave
          slop-song-new slop-song-feed song-wave-of frame-due?
-         slop-shore slop-sand slop-wet?)
-(borrow 'ink)
+         slop-shore slop-sand slop-wet? slop-drift slop-pal)
 (borrow 'rove)
 ; the song wants harp's cycle algebra and play's voices -- vnum, venv, mixdown and pack.
 ; borrowing harp shadows prel's rev and every with the pattern ones, so the list
@@ -48,11 +47,36 @@
 ; want a tty go missing on that seat exactly as they did before there was a module.
 (? (cite 'posix) (borrow 'posix) ())
 (:
+ ; the skin: four drifting sine waves (three linear, one radial ripple) sampled over a
+ ; grid of r by c by galaxy broadcasting, C doing every cell -- a cuttlefish's
+ ; chromatophores. (slop-drift r c) builds the grid once and answers field(t dy), a tray
+ ; of the whole grid dy rows down the pattern, so a caller can nail the skin to a world
+ ; that scrolls under it. (r 1) + (1 c) broadcasts to (r c); cy doubles y so the ripple is
+ ; round in cell aspect. the net of the four waves lands in [-4, 4]
+ (slop-drift r c) (:
+   ycol (star-tray [r 1] ^r)
+   xrow (star-tray [1 c] ^c)
+   y2 (ycol * 1.0 + xrow * 0.0)
+   x2 (ycol * 0.0 + xrow * 1.0)
+   cx (x2 - c / 2.0)
+   (field t dy) (: yy (y2 + (dy * 1.0))
+                   cy ((yy - r / 2.0) * 2.0)
+                   rr (1 / 2 $ cx * cx + cy * cy)
+                 (sin (x2 * 0.09 + t) +
+                  sin (yy * 0.16 - t * 0.7) +
+                  sin ((x2 + yy) * 0.06 + t * 0.4) +
+                  sin (rr * 0.11 - t)))
+   field)
+ ; a ramp pre-rendered as SGR background runs, so a frame is pure lookup; the cell is the
+ ; caller's, which lets it collapse a run of equal cells into a single pen
+ (slop-pal rs) (: (pen n) (string 27 + "[48;5;" + show n + "m")
+                  (dab t i l) (? !l t (pin t i (pen <l), dab t (i + 1) >l))
+                  (dab {0 (pen <rs)} 0 rs))
  ; the slop's 24: gold up through yellow and cream, over into pink, and back --
  ; the ends meet, so the shimmer never seams
  slop-ramp [220 226 227 228 229 230 224 218 217 211 212 206
             205 199 205 206 212 211 217 218 223 222 221 214]
- pal (ink-pal slop-ramp)
+ pal (slop-pal slop-ramp)
  esc (string 27)
  beat 0.06                              ; the phase one frame advances at full rate
 
@@ -148,7 +172,7 @@
      g {'r r 'c c 'wtop 0 'w (r - 1) 'shore0 sh0 'shores shores 'sands sands
         'wetto wetto 'climb climb 'drag (r - 3) 'bt bt 'gedge gedge
         'push 0 'spent 0 't 0.0 'msg "" 'over 0
-        'sb {st} 'rows {} 'field (ink-drift r c)}
+        'sb {st} 'rows {} 'field (slop-drift r c)}
      _ (pin g 'span (slop-gap g))
    ; the bottom of the dip, a screen and a third into the walk -- and the foot of the
    ; edge's ramp. a third nearer the start than the two screens the fall would take,
