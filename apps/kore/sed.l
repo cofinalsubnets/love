@@ -206,17 +206,42 @@
        (mline 1))
 
    ; -- sed: the flags, then one of the two stream models --
-   (sed-main as)
-    (: t (tablet 0)
+   ; before uopt reads the words, two of GNU's shapes it has no way to say: -i's suffix
+   ; rides glued or not at all (-i.bak, --in-place=.bak; -in is -i with suffix n, as
+   ; GNU's), and -f FILE is its script in place, so -e and -f keep their order. a
+   ; cluster ending in f (-nf FILE) keeps its other letters. -> [words suffix]
+   (sed-pre as)
+    (: box {'sfx ()}
+       (script f) (: r (uread f) (? (two? r) (chomp <>r) (udie 4 ("sed: couldn't open file " + f + ": No such file or directory"))))   ; 4, GNU's i/o status
+       (go a acc)
+        (? (atom? a) (rev acc)
+           (: w <a n #w
+              (? (w = "--") (rev acc + a)
+                 (w = "--in-place") (go >a ("-i" . acc))
+                 (starts? w "--in-place=") (: _ (pin box 'sfx (snip w 11 n)) (go >a ("-i" . acc)))
+                 (starts? w "--file=") (go >a ((script (snip w 7 n)) . "-e" . acc))
+                 (starts? w "-i" && 2 < n) (: _ (pin box 'sfx (snip w 2 n)) (go >a ("-i" . acc)))
+                 (1 < n && w 0 = 45 && !(w 1 = 45) && has? w "f")
+                  (: k (findsub w "f") pre (snip w 0 k) glued (snip w (k + 1) n)
+                     f (? (0 < #glued) glued (two? >a) <>a (udie 1 "sed: option requires an argument -- 'f'"))
+                     more (? (0 < #glued) >a >>a)
+                     (go more ((script f) . "-e" . (? (1 < #pre) (pre . acc) acc))))
+                 (go >a (w . acc)))))
+       ws (go as ())
+       [ws (box 'sfx)])
+   (sed-main as0)
+    (: pre (sed-pre as0) as <pre sfx <>pre
+       t (tablet 0)
        o (uopt as t '(101) '(101) ())                      ; -e script, stacking
        _ (? (two? o) () (udie 1 "sed: bad option"))
-       _ (: c (uoptun t "nEie") (? !c () (udie 1 ("sed: unknown option -" + string c))))
+       _ (: c (uoptun t "nEeirs") (? !c () (udie 1 ("sed: unknown option -" + string c))))
        eps <>o rest <>>o
        _ (? (two? eps || two? rest) ()
-            (udie 1 "usage: sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]"))
-       n? (peep t 110 0) i? (peep t 105 0)
+            (udie 1 "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"))
+       n? (peep t 110 0) i? (peep t 105 0) s? (peep t 115 0)
+       _ (? (peep t 114 0) (pin t 69 1) 0)                 ; -r is -E, as GNU's
        sc (? (two? eps) (ujoinc 10 eps) <rest)
-       fs (? (two? eps) rest >rest)
+       fs (ustray "sed" as (? (two? eps) rest >rest))
        pc (sparse sc (peep t 69 0))
        _ (? (two? pc) () (udie 1 ("sed: invalid script: " + sc)))
        cmds <>pc
@@ -225,17 +250,20 @@
        ; -i: each file its own stream, edited and written back. a file that will
        ; not open complains and the rest still flow, exactly as the joined lane.
        ; the answer is still held whole, and must be: it overwrites its own input.
+       ; with a suffix the file as it was is kept beside it first. -s is the same
+       ; walk with each file's stream said on out
        (inplace a bad)
         (a @ (f . more)
            (: rd (urdj sed-miss [f])
-              j (jug 0)
+              j (? i? (jug 0) out)
+              _ (? (i? && sfx) (: r (uread f) (? (two? r) (uwrite (f + sfx) <>r) 0)) 0)
               _ (srun cmds rd n? j)
               b (peep rd 'bad 0)
-              _ (? b () (? (uwrite f (slurp j)) ()
-                           (say err ("sed: couldn't open " + f), put err 10)))
+              _ (? (b || !i?) () (? (uwrite f (slurp j)) ()
+                                    (say err ("sed: couldn't open " + f), put err 10)))
               (inplace more (? b 1 bad)))
-           (flush err, (? bad 2 0)))
-       (? (i? && two? fs) (inplace fs ())
+           (flush out, flush err, (? bad 2 0)))
+       (? ((i? || s?) && two? fs) (inplace fs ())
           ; the joined lane: every file one stream, so the numbers and $ run through
           (: rd (urdj sed-miss fs)
              _ (srun cmds rd n? out)
