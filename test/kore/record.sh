@@ -93,4 +93,12 @@ for c in "-n 3" "-n 4" "-n l/3" "-n l/2" "-C 12" "-C 20" "-x -l 2" "-d -l 3" "--
   same "split $c"
 done
 rm -rf "$SP"
+# join's -o (0, S.N, comma or space apart, auto), -e, -a twice, -i, -v, against GNU
+JN=$PWD/$ho/.jn; printf 'a 1 x\nb 2 y\nd 4 z\n' > "$JN.1"; printf 'a A\nc C\nd D\n' > "$JN.2"; printf 'A 1\nb 2\n' > "$JN.3"; printf 'a x\nB y\n' > "$JN.4"
+for c in "-o 1.2,2.2 $JN.1 $JN.2" "-o 0,2.2,1.3 $JN.1 $JN.2" "-a 1 -e NA -o 0,1.2,2.2 $JN.1 $JN.2" "-a 1 -a 2 -e - -o 0,1.2,2.2 $JN.1 $JN.2" \
+         "-o auto -a 2 -e X $JN.1 $JN.2" "-i $JN.3 $JN.4" "-v 2 $JN.1 $JN.2" "-a 2 $JN.1 $JN.2"; do
+  # shellcheck disable=SC2086
+  join $c > "$g"; korerun join $c > "$o"; same "join $c"
+done
+rm -f "$JN".?
 echo "kore: od across the gulps (rows, -j, -N and the * run over 4096) ok"

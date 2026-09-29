@@ -2110,37 +2110,32 @@
               (go (i + 1) (? (st < 0) i st) acc))
           (go 0 -1 ())))
    (unth l k) (k < 1 ? () (l (k - 1)))
+   ; -o FORMAT lays each row as 0 (the key), 1.N or 2.N, comma or space apart, -o auto by
+   ; each file's first line; -e says a field that is not there; -i matches keys case aside,
+   ; each still said as its file spells it
    (join-main as)
-    (: t {'f1 1 'f2 1 'sep () 'a1 0 'a2 0 'v1 0 'v2 0}
-       (fl a fs)
-        (atom? a ? (rev fs)
-           (: w <a
-              o (uflag w)
-              takes (? o (elem <o '("1" "2" "t" "a" "v")) 0)
-              glue (? o <>o "")
-              got (? (0 < tally glue) glue (? (two? >a) <>a ()))
-              rest (? (0 < tally glue) >a (? (two? >a) >>a >a))
-              (? !takes (fl >a (w . fs))
-                 !(string? got) (udie 2 ("join: " + w + " wants a value"))
-               (<o @ "1" (pin t 'f1 (uatoi got))
-                     "2" (pin t 'f2 (uatoi got))
-                     "t" (pin t 'sep (got 0))
-                     "a" (pin t (got @ "2" 'a2 'a1) 1)
-                         (pin t (got @ "2" 'v2 'v1) 1),
-                fl rest fs))))
-       fs (ustray "join" as (fl as ()))
-       _ (atom? >fs ?
-          (udie 2 "usage: join [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] FILE1 FILE2"))
-       sep (t 'sep)
+    (: fo (uflags "join" as '(49 50 116 97 118 111 101) "12aeiotv")
+       tf <fo fs (fo 1)
+       ; -a may come twice, and the tablet keeps one, so its values are read off the words
+       av (: (go a acc) (? (atom? a) acc (<a = "--") acc
+                           (<a = "-a" && two? >a) (go >>a (<>a . acc))
+                           (2 < #<a && snip <a 0 2 = "-a") (go >a (snip <a 2 #<a . acc))
+                           (go >a acc))
+             (go as ()))
+       _ (? (atom? >fs) (udie 2 "usage: join [-i] [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] [-e S] [-o FORMAT] FILE1 FILE2"))
+       sep (: v (uoptv tf 116) (? v (v 0) ()))
        jsep (? (charm? sep) sep 32)
-       n1 (peep t 'f1 1) n2 (peep t 'f2 1)
-       pair? !(peep t 'v1 0 || peep t 'v2 0)
-       un1 (peep t 'a1 0 || peep t 'v1 0)
-       un2 (peep t 'a2 0 || peep t 'v2 0)
+       n1 (? (tf 49) (uatoi (uoptv tf 49)) 1) n2 (? (tf 50) (uatoi (uoptv tf 50)) 1)
+       vv (uoptv tf 118)
+       pair? !vv
+       un1 (vv = "1" || elem "1" av)
+       un2 (vv = "2" || elem "2" av)
+       ic (tf 105) empty (? (tf 101) (uoptv tf 101) "")
+       (ck k) (? ic (lower k) k)
        ; a side is its rows grouped by key: ((key (fields..)..)..), the run of one key
        (grp sel lns)
         (: rows (map (ln \ (: f (ujfs sep ln) k (unth f sel)
-                              [(? (string? k) k "") f]))
+                              [(ck (? (string? k) k "")) f]))
                      lns)
            (go rs) (two? rs ?
                       (: k <<rs
@@ -2152,20 +2147,34 @@
        (drop1 sel f) (: (go l i acc) (? (atom? l) (rev acc)
                                         (go >l (i + 1) (? (i = sel) acc (<l . acc))))
                         (go f 1 ()))
+       l1 (urows "join" <fs) l2 (urows "join" <>fs)
+       ; -o's spec: ('k) for 0, (s n) for S.N; auto takes each file's first line's count
+       spec (: v (uoptv tf 111)
+               (? !v ()
+                  (v = "auto") (: c1 (? (two? l1) #(ujfs sep <l1) 0) c2 (? (two? l2) #(ujfs sep <l2) 0)
+                                  ('k . map (i \ [1 i]) (filter (i \ !(i = n1)) (map (+ 1) (jot c1)))
+                                   + map (i \ [2 i]) (filter (i \ !(i = n2)) (map (+ 1) (jot c2)))))
+                  (map (w \ (? (w = "0") 'k (: d (findsub w ".") (? (d < 0) (udie 1 ("join: invalid field specifier: '" + w + "'"))
+                                                                  [(uatoi (snip w 0 d)) (uatoi (snip w (d + 1) #w))]))))
+                       (filter (w \ 0 < #w) (usplit 44 (replace v " " ","))))))
+       (cell f i) (: v (? (two? f) (unth f i) ()) (? (string? v) v empty))
        (row ps) (say out (ujoinc jsep ps), put out 10)
-       (one k sel g) (foldl (\ _ f (row (k . drop1 sel f))) 0 <>g)
+       ; one output row off f1 (or ()) and f2 (or ()): -o's cells, else the key and the rest.
+       ; not `out`, which is the port
+       (jrow k f1 f2)
+        (row (? spec (map (c \ (? (c = 'k) k (cell (? (<c = 1) f1 f2) (c 1)))) spec)
+                (k . (? f1 (drop1 n1 f1) ()) + (? f2 (drop1 n2 f2) ()))))
+       (one sel g side) (foldl (\ _ f (: k (unth f sel) (? (side = 1) (jrow k f ()) (jrow k () f)))) 0 <>g)
        (cross g1 g2)
-        (foldl (\ _ f1 (foldl (\ _ f2 (row ((<g1 . drop1 n1 f1) + drop1 n2 f2)))
-                              0 <>g2))
-               0 <>g1)
+        (foldl (\ _ f1 (foldl (\ _ f2 (jrow (unth f1 n1) f1 f2)) 0 <>g2)) 0 <>g1)
        (go g1 g2)
         (? ((atom? g1) && (atom? g2)) ()
-           (atom? g1) ((? un2 (one <<g2 n2 <g2) ()), go g1 >g2)
-           (atom? g2) ((? un1 (one <<g1 n1 <g1) ()), go >g1 g2)
+           (atom? g1) ((? un2 (one n2 <g2 2) ()), go g1 >g2)
+           (atom? g2) ((? un1 (one n1 <g1 1) ()), go >g1 g2)
            (<<g1 = <<g2) ((? pair? (cross <g1 <g2) ()), go >g1 >g2)
-           (<<g1 < <<g2) ((? un1 (one <<g1 n1 <g1) ()), go >g1 g2)
-           ((? un2 (one <<g2 n2 <g2) ()), go g1 >g2))
-       _ (go (grp n1 (urows "join" <fs)) (grp n2 (urows "join" <>fs)))
+           (<<g1 < <<g2) ((? un1 (one n1 <g1 1) ()), go >g1 g2)
+           ((? un2 (one n2 <g2 2) ()), go g1 >g2))
+       _ (go (grp n1 l1) (grp n2 l2))
        _ (flush out) 0)
 
    ; -- od: the byte dump, GNU's columns to the space. -A d|o|x|n picks the address
