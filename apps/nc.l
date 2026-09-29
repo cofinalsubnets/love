@@ -1,17 +1,19 @@
 #!/usr/bin/env -S love -l
 ; nc -- netcat in love.
 ;
-;   nc [-Nvz] [-q secs] [-w secs] host port..   tcp client: connect to host:port
-;   nc [-kNv] [-q secs] [-w secs] -l [addr] port
-;   nc [-kNv] [-q secs] [-w secs] -l [-s addr] -p port
-;                                              tcp server: listen, accept one client
+;   nc [flags] host port..            client: connect to host:port
+;   nc [flags] -l [addr] port         server: listen, accept one client
+;   nc [flags] -l [-s addr] -p port
+;   -i secs   send and write a line at a time, secs apart; with -z, wait between ports
 ;   -k        with -l, accept the next client when one leaves
-;   -u        udp: datagrams of at most 1472 bytes; -l answers the first sender alone
-;   -s addr   with -l, listen on addr alone; -p port names the port
 ;   -N        shut down the write half at stdin's end
+;   -n        taken and ignored: an address is numeric or resolved, never asked about
+;   -o file   write the traffic to file as hex: > sent, < received
 ;   -q secs   quit secs after stdin's end; a negative wait is forever, the default
-;   -w secs   give up a connect, or quit when neither way moves, after secs; not the accept
+;   -s addr   with -l, listen on addr alone; -p port names the port
+;   -u        udp: datagrams of at most 1472 bytes; -l answers the first sender alone
 ;   -v        say on stderr what was connected, refused, listened on, accepted
+;   -w secs   give up a connect, or quit when neither way moves, after secs; not the accept
 ;   -z        connect to each port, lo-hi a range, and close at once; 0 when any took
 ;
 ; secs are udur's: 3, 1.5, 2m. either way a bidirectional pump, stdin -> socket and
@@ -32,8 +34,8 @@
 (: (nc-main as)
  (: (die m) (udie 1 ("nc: " + m))
     t (tablet 0)
-    ops ((uopt as t '(112 113 115 119) () ()) 2)
-    usage "usage: nc [-kNuvz] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT}"
+    ops ((uopt as t '(105 111 112 113 115 119) () ()) 2)
+    usage "usage: nc [-kNnuvz] [-i SECS] [-o FILE] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT}"
     (portof s) (: n (uport s) (? n n (die ("not a port: " + s))))
     ; a flag's duration in ms, -1 when absent or negative
     (dur c) (: v (uoptv t c)
@@ -42,13 +44,38 @@
                (? !(charm? m) (die ("-" + string c + " takes a duration, not " + v)) neg -1 m))
     q (dur 113)
     w (dur 119)
+    i (dur 105)
     seen (tablet 0)   ; the clock at the last chunk either way, for -w
+    ov (uoptv t 111)
+    dumpf (? (string? ov) (: h (open ov "w") (? (hot? h) h (die ("cannot write " + ov + ": " + uerrno h)))) ())
+    offs (tablet 0)   ; each direction's offset, for -o
     (note m) (? (t 118) (say err (m + "\n"), flush err) 0)
+
+    ; -o: s as traditional netcat's hex lines -- dir (> or <), the offset, 16 bytes, their text
+    (dump dir s) (? !dumpf 0 (: o (peep offs dir 0) _ (pin offs dir (o + #s)) (dline dir s o 0)))
+    (dline dir s o k)
+     (? (#s <= k) (flush dumpf)
+        (: e (min #s (k + 16)) b (chars (snip s k e))
+           hx (cats (map (c \ " " + zpad 2 (radix c 16)) b))
+           pad (cats (map (_ \ "   ") (jot (16 - #b))))
+           tx (string (map (c \ 32 <= c < 127 ? c 46) b))
+           _ (say dumpf (string dir + " " + zpad 8 (radix (o + k) 16) + hx + pad + " # " + tx + "\n"))
+           (dline dir s o e)))
+    ; s cut after each newline
+    (pieces s) (: k (findsub s "\n")
+                  (? (k < 0 || #s <= k + 1) [s] (. (snip s 0 (k + 1)) (pieces (snip s (k + 1) #s)))))
+    ; s out through f: whole, or with -i a line at a time, i ms apart
+    (paced f s) (? (i < 0) (f s) (map (l \ (f l, pin seen 0 (clock 0), rest i)) (pieces s)))
 
     ; src to dst a chunk at a time until src's eof: see refills and parks, chug takes
     ; the rest of what is read. the flush keeps stdout prompt and is a no-op on a socket
-    (pump src dst) (: c (see src)
-                      (? (c = -1) 0 (unsee src c, say dst (chug src), flush dst, pin seen 0 (clock 0), pump src dst)))
+    (pump src dst dir) (: c (see src)
+                          (? (c = -1) 0
+                             (: b (unsee src c, chug src)
+                                _ (dump dir b)
+                                _ (paced (x \ (say dst x, flush dst)) b)
+                                _ (pin seen 0 (clock 0))
+                                (pump src dst dir))))
 
     ; with -w: answer once neither way has moved for w ms
     (idle _) (: gap (clock 0 - seen 0)
@@ -75,15 +102,21 @@
                              close s,
                              0))
     ; over tcp, -N half-closes at stdin's end so the peer sees our eof
-    (talk s) (converse (_ \ (pump in s, (? (t 78) (seal s 1) 0))) (_ \ pump s out) s)
+    (talk s) (converse (_ \ (pump in s 62, (? (t 78) (seal s 1) 0))) (_ \ pump s out 60) s)
 
     ; over udp: stdin goes out cut to datagrams; only `to`'s come in
     (dsend p to d) (? (#d <= 1472) (send p to d) (send p to (snip d 0 1472), dsend p to (snip d 1472 #d)))
     (dup p to) (: c (see in)
-                  (? (c = -1) 0 (unsee in c, dsend p to (chug in), pin seen 0 (clock 0), dup p to)))
+                  (? (c = -1) 0
+                     (: b (unsee in c, chug in)
+                        _ (dump 62 b)
+                        _ (paced (x \ dsend p to x) b)
+                        _ (pin seen 0 (clock 0))
+                        (dup p to))))
+    (dwrite d) (dump 60 d, paced (x \ (say out x, flush out)) d, pin seen 0 (clock 0))
     (ddown p to) (: d (recv p)
                     (? (nom? d) 0
-                       (<d = to) (say out (d 1), flush out, pin seen 0 (clock 0), ddown p to)
+                       (<d = to) (dwrite (d 1), ddown p to)
                        (ddown p to)))
     (dtalk p to) (converse (_ \ dup p to) (_ \ ddown p to) p)
 
@@ -106,7 +139,7 @@
                        d (recv p)
                        (? (nom? d) (die ("recv failed: " + uerrno d))
                           (: _ (note ("Connection received on " + <<d + " " + show (<d 1)))
-                             _ (say out (d 1), flush out)
+                             _ (dwrite (d 1))
                              (dtalk p <d))))
            (die ("cannot bind " + (? addr addr "port") + " " + show port + ": " + uerrno p))))
     (uclient host port) (: to [(quad host) port]
@@ -143,8 +176,10 @@
 
     ; -z: each port connected and closed, nothing sent; 0 when any took
     (scan host ports) (: (one n p) (: s (reach host p)
-                                      (? (hot? s) (close s, note (took host p), n + 1)
-                                         (note ("nc: " + refused host p s), n)))
+                                      m (? (hot? s) (close s, note (took host p), n + 1)
+                                           (note ("nc: " + refused host p s), n))
+                                      _ (? (i < 0) 0 (rest i))
+                                      m)
                          (? (0 < foldl one 0 ports) 0 (uleave 1)))
     ; a port or a lo-hi range -> its ports
     (span a) (: k (findsub a "-")
@@ -152,7 +187,7 @@
                    (: lo (portof (snip a 0 k)) hi (portof (snip a (k + 1) #a))
                       (? (hi < lo) (die ("not a range: " + a)) (map (+ lo) (jot (hi - lo + 1)))))))
 
-    (? (uoptun t "klNpqsuwvz") (die usage)
+    (? (uoptun t "iklNnopqsuwvz") (die usage)
        (t 117 && (t 107 || t 122)) (die "-u takes neither -k nor -z")
        (t 108) (!(t 122) ? (listener 0) (die usage))
        (t 107 || t 112 || t 115) (die "-k, -p and -s go with -l")

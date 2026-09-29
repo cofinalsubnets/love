@@ -6,7 +6,8 @@
 # Stage-1 socket nif (connect/listen/accept/shutdown) plus the two .l pump loops
 # and their teardown. both sides pass -N; the rounds after check that without it neither
 # side half-closes, that -q quits anyway, that -w quits when idle,
-# what -z and -v say, that -k serves client after client, and a -u round trip.
+# what -z and -v say, that -k serves client after client, a -u round trip, and what
+# -o writes and -i spaces.
 #
 #   sh test/net/loopback.sh <love-binary> [port]
 #
@@ -208,6 +209,43 @@ wait "$srv"; src=$?
 [ "$crc" -eq 0 ] && [ "$src" -eq 0 ] || { echo "nettest: FAIL (-u: client exit $crc, server exit $src)"; cat "$tmp/cli_err" "$tmp/srv_err"; fail=1; }
 [ "$(cat "$tmp/srv_got7")" = ping ] || { echo "nettest: FAIL (-u: server got $(tr '\n' ' ' < "$tmp/srv_got7"))"; fail=1; }
 [ "$(cat "$tmp/cli_got7")" = pong ] || { echo "nettest: FAIL (-u: client got $(tr '\n' ' ' < "$tmp/cli_got7"))"; fail=1; }
+
+# -o writes both directions as hex lines; -i 0.3 spaces three lines at least 0.9 s apart.
+# the clock is love's own, in ms, so no date(1) dialect is wanted
+printf '(say out (show (clock 0)))\n' > "$tmp/clock.l"
+ms() { "$AI" "$tmp/clock.l"; }
+PORT=$((PORT + 1))
+printf 'hi there\n' | "$AI" "$AK" -N -l "$PORT" > /dev/null 2> "$tmp/srv_err" &
+srv=$!
+i=0
+while ! ready; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (server never listened on $PORT)"; cat "$tmp/srv_err"; exit 1; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+printf 'GET / HTTP/1.0\r\nHost: x\r\n\r\n' | "$AI" "$AK" -N -o "$tmp/dump" 127.0.0.1 "$PORT" > /dev/null 2> "$tmp/cli_err"
+wait "$srv"
+cat > "$tmp/dump_want" <<'DUMP'
+> 00000000 47 45 54 20 2f 20 48 54 54 50 2f 31 2e 30 0d 0a # GET / HTTP/1.0..
+> 00000010 48 6f 73 74 3a 20 78 0d 0a 0d 0a                # Host: x....
+< 00000000 68 69 20 74 68 65 72 65 0a                      # hi there.
+DUMP
+cmp -s "$tmp/dump_want" "$tmp/dump" || { echo "nettest: FAIL (-o wrote:)"; cat "$tmp/dump"; fail=1; }
+PORT=$((PORT + 1))
+"$AI" "$AK" -N -l "$PORT" < /dev/null > "$tmp/srv_got8" 2> "$tmp/srv_err" &
+srv=$!
+i=0
+while ! ready; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (server never listened on $PORT)"; cat "$tmp/srv_err"; exit 1; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+t0=$(ms)
+printf 'a\nb\nc\n' | "$AI" "$AK" -N -i 0.3 127.0.0.1 "$PORT" > /dev/null 2> "$tmp/cli_err"
+t1=$(ms)
+wait "$srv"
+[ "$(tr '\n' ' ' < "$tmp/srv_got8")" = "a b c " ] || { echo "nettest: FAIL (-i: server got $(tr '\n' ' ' < "$tmp/srv_got8"))"; fail=1; }
+[ $((t1 - t0)) -ge 900 ] || { echo "nettest: FAIL (-i 0.3: three lines in $((t1 - t0)) ms)"; fail=1; }
 
 [ "$fail" -eq 0 ] && echo "nettest: PASS"
 exit "$fail"
