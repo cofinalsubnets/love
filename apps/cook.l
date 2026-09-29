@@ -550,8 +550,13 @@
    ; -- function helpers --
    (chomp s) ((: (g i) (? (0 < i && s (i - 1) = 10) (g (i - 1)) (snip s 0 i))) #s)
    (nl->sp s) ((: (g i acc) (i >= #s ? acc (g (1 + i) (acc + string (s i @ 10 32 (s i)))))) 0 "")
-   ; $(shell) and != ride SHELL and .SHELLFLAGS as a recipe line does, captured
-   (fn-shell as cmd) (: r (hark (([(shname as)] + shflags as) + [cmd])) (? (two? r) (nl->sp (chomp >r)) ""))
+   ; $(shell) and != ride SHELL and .SHELLFLAGS as a recipe line does, captured: in this
+   ; image where the line would (inimg), else spawned
+   (fn-shell as cmd)
+    (: sh (shname as) fl (shflags as) cap (cite 'lush 'sh-onecap)
+       o (? (inimg sh fl && lit? cap) (cap fl cmd) ())
+       r (? (two? o) o (hark (([sh] + fl) + [cmd])))
+       (? (two? r) (nl->sp (chomp >r)) ""))
    ; $(wildcard): lush's glob (cook-glob -- classes, multi-segment patterns, the mask law) when
    ; aboard, else glob1 -- a word with no glob char is an existence test, otherwise the last
    ; path segment is the pattern, matched over readdir by 'glob's `match` (a leading . only by
@@ -1123,7 +1128,9 @@
 
    ; the build file may be named explicitly (the first arg word) or discovered in
    ; the cwd; the seat at the bottom already stripped the program head + -l chain.
-   (exists? p) (: q (open p "r") (? (hot? q) 1 0))     ; a one-shot probe (the fd dies with the process)
+   (exists? p) (: q (open p "r") (? (hot? q) (close q, 1) 0))   ; readable, the probe closed
+   ; a build file's text, its fd closed before any recipe could inherit it
+   (slurp-close p) (: q (open p "r") s (slurp q) _ (close q) s)
    ; discovery precedence: Cards.l, then Cookfile, then Makefile. only a Makefile-named file
    ; (makefilep) is read as make; Cards.l and Cookfile are love source.
    ; (a dummy param: a nullary (f) would be \ with one operand = quote.)
@@ -1137,8 +1144,7 @@
    ; books so the regenerated Cookfile can be read back into a clean scope.
    (regen-cookfile mk ck)
    (: _ (pin emitp 0 1)
-       q (open mk "r")
-       _ (register-makefile (slurp q))
+       _ (register-makefile (slurp-close mk))
        o (open ck "w")
        _ (emit-cookfile o)
        _ (close o)
@@ -1296,20 +1302,19 @@
       _ (pin tickets 0 (? posfile >pos pos))                 ; the recipe words; the positional file is not a recipe
       (? emit?
          (: _ (? file 0 (udie 1 "cook: --emit needs a Makefile"))
-             q (open file "r")
              _ (pin emitp 0 1)
-             _ (register-makefile (slurp q))
+             _ (register-makefile (slurp-close file))
              _ (emit-cookfile out)
              0)
          file
-         (: q (open file "r")
+         (: s (slurp-close file)
             _ (? (asmake? file xf)
-                 (register-makefile (slurp q), cook-all 0)
+                 (register-makefile s, cook-all 0)
                  ((: (g x) (: r (sound x)
                                   (? (two? r) (ev 'ev <r, g >r)
                                      (r = 'torn) (udie 1 ("cook: unfinished form in " + file))
                                      0)))
-                   (slurp q)))
+                   s))
             0)
          (two? pos) (udie 1 "cook: no Cards.l, Cookfile or Makefile found")
          0))

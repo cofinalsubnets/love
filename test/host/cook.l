@@ -415,6 +415,16 @@
    ; $(shell) takes .SHELLFLAGS as a recipe line does: -e stops at the false
    se (run-cook (mk [".SHELLFLAGS := -ec" "X := $(shell false; echo no)" "all:" "\t@echo \"SE[$(X)]\""]) "all")
    _ (ok "$(shell) rides .SHELLFLAGS" (has se "SE[]"))
+   ; ..and runs in this image where a recipe line would: under -a with PATH emptied it
+   ; still has uname, and -e still stops at the false
+   ea (run-cook-in ["PATH=/nonexistent" "LUSHFLAGS=-a"]
+                   (mk ["U := $(shell uname -s)" ".SHELLFLAGS := -ec" "X := $(shell false; echo no)"
+                        "all:" "\t@echo \"SA[$(U)]\"" "\t@echo \"SB[$(X)]\""]) "all")
+   _ (ok "$(shell) in this image: no PATH wanted" (has ea "SA[" && !(has ea "SA[]")))
+   _ (ok "$(shell) in this image rides .SHELLFLAGS" (has ea "SB[]"))
+   ; the build file's fd is closed before any recipe runs
+   fdl (run-cook (mk ["all:" "\t@ls -l /proc/self/fd/ 2>/dev/null"]) "all")
+   _ (ok "the Makefile's fd is not a recipe's" !(has fdl (dir + "/Makefile")))
 
    ; ------------------------------------------------------------------ -j jobs
    ; the job pool: under -j N a stale recipe runs in a forked child. the claim is
