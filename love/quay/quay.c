@@ -1145,7 +1145,7 @@ int cb_face_ok(uint8_t const *b, uintptr_t n) {
   if (b[0] != 'q' || b[1] != 'f' || b[2] != '1' || b[3] || b[4] != 8 || b[5] != 16) return 0;
   uint32_t const np = cb_rd16(b, 6), ng = cb_rd16(b, 8) | cb_rd16(b, 10) << 16;
   uintptr_t const pg0 = cb_qf_head + 2u * cb_qf_dir, gl0 = pg0 + (uintptr_t) np * 512u;
-  if (np > cb_qf_dir || n != gl0 + (uintptr_t) ng * 32u) return 0;
+  if (np > cb_qf_dir || (uint64_t) n != gl0 + (uint64_t) ng * 32u) return 0;
   for (uint32_t d = 0; d < cb_qf_dir; d++) {
     uint32_t const p = cb_rd16(b, cb_qf_head + 2u * d);
     if (p != 0xffff && p >= np) return 0; }
