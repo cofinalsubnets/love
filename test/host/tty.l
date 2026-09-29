@@ -1,6 +1,6 @@
 ; --- test/host/tty.l: the tty app runners, on a real terminal ---
 ; the engines gate headless -- test/host/rove.l the climb, test/host/story.l the fiction,
-; apps/ink.l's shimmer into a jug -- and each of those files says the same thing about
+; test/host/slop.l the walk -- and each of those files says the same thing about
 ; what it leaves out: the runner, the loop that asks the terminal its size, puts the
 ; app on the alternate screen, reads keys and steps ashore. that lane wants a
 ; terminal, so it gets one. `tether` spawns the verb on a pty, we type at the master
@@ -114,30 +114,6 @@
 ;     row 0 -- so a spent note is exactly the law that the csi was decoded
  c (run "out/love tower" "\e[Chq" 20 70)
  _ (test (blank? (rowtx <>c 0)) (has? <c "you leave the tower"))
-
-; --- ink: the shimmer paints while no key waits ---
-; which is why its key cannot be typed up front -- ink asks `cue?` before its first
-; frame, so a waiting key ends it having drawn nothing. read until a painted cell is
-; on the wire, then type: the app says when, and no timer is involved.
- t (spawn "out/love ink" 12 40)
- m >t
- seen (wire m "\e[48;5;")
- _ (say m " ")
- itx (seen + slurp m)
- _ (waitfor <t)
- is (: s (mkscr 12 40) _ (scribe s (held itx)) s)
- _ (test
-    (has? itx "\e[?1049h") (has? itx "\e[?25l")              ; alt screen, cursor away
-    (has? itx "\e[?1049l") (has? itx "\e[?25h")              ; ..and both put back
-    ; the ocean is one SGR background per cell, so a frame is exactly r*c of them --
-    ; and r is the size it was told less the last row, which ink spares so that the
-    ; terminal never scrolls. 11*40, however many frames landed. the grid cannot say
-    ; this: a sizeless ink paints 23x80, which at 40 columns wraps two screen rows to
-    ; the ink row and leaves the same last row dry.
-    (0 < count itx "\e[48;5;")
-    (0 = (count itx "\e[48;5;") % 440)
-    (0 < cbg is 0)                                           ; ..and it really is painted
-    (0 = cbg is 440))                                        ; with the last row spared
 
 ; --- what was typed at the game is not typed at the shell ---
 ; raw mode does not echo, so keys the game never reads sit in the terminal's queue and

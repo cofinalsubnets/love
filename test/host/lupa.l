@@ -66,12 +66,12 @@
    (slurpf f) (: q (open f "r") (slurp q))
    love (slurpf "out/love")
    e (lupa-new love "out/love")
-   _ (test (e 'mode = 'asm) (tablet? (e 'elf)) (0 < ((e 'elf) 'tsize)) (e 'cur = ((e 'elf) 'toff)))
+   _ (test (e 'mode = 'asm) (tablet? (e 'elf)) (0 < (e 'elf 'tsize)) (e 'cur = (e 'elf 'toff)))
    f (frame e)
    _ (test (has? f "lupa: out/love") (has? f ".text 0x"))
    ;; :g by symbol lands on it, and the row names it
    _ (cmd! e "g main")
-   _ (test (e 'cur = ((e 'elf) 'toff) + (((e 'elf) 'names) "main") - ((e 'elf) 'taddr)) (has? (frame e) "main:"))
+   _ (test (e 'cur = (e 'elf 'toff) + (e 'elf 'names "main") - (e 'elf 'taddr)) (has? (frame e) "main:"))
    _ (keys! e "jjj")  _ (test (has? (frame e) "main+0x"))
    0)
 

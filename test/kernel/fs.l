@@ -105,3 +105,8 @@
    ; milliseconds since the epoch here exactly as it does on the host -- an uptime
    ; in ticks is what it used to be, and would fail this by a factor of a thousand.
    (1600000000000 < clock 0)))
+
+; the tree's tls roots ride the initrd: where no host bundle is, apps/tls/verify.l reads
+; them here, under /proc/src
+(: r (: q (open "apps/tls/roots.pem" "r") s (slurp q) _ (close q) s)
+ (test (100 < #(filter (l \ l = "-----BEGIN CERTIFICATE-----") (split "\n" r)))))

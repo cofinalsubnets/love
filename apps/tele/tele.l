@@ -193,5 +193,5 @@
    ;; newest-first (reverse-topo): each op's adjoint scatters to its parents, and
    ;; by the time we reach a node every later consumer has already added in.
    (tl-seed v) (tray? v ? (v * 0 + 1) 1)
-   (tl-walk ns) (two? ns ? (: n <ns _ ((peep n 'bwd 0) n) (tl-walk >ns)) 0)
+   (tl-walk ns) (two? ns ? (: n <ns _ (peep n 'bwd 0 n) (tl-walk >ns)) 0)
    (back loss) (pin loss 'grad (tl-seed (tl-val loss)), tl-walk (peep tl-tape 0 ()), loss))

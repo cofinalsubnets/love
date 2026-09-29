@@ -898,7 +898,7 @@ static union u const help_drive[] =
 // still too tight after a collect) hand the scare-encoded core back to C.
 // callers Pack first (ip stays at the raise site); a/b survive the collect in
 // the scare_a/b stash, so the raise buys its own frame and never allocates.
-static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
+ai_noinline static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
  c->scare_a = a, c->scare_b = b;  // for the exit face
  word h = *task_help(c);
  if (h != ZeroPoint && avail(c) < 4) {

@@ -114,9 +114,11 @@ love0: $(love0)
 # the two states of one binary, as two files: the link lays the raw one, and the bake
 # writes the artifact beside it. `bake -o` is what lets these be separate targets at all --
 # an in-place bake leaves make no file to name, which is what the old .baked stamp stood in for.
-$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l
+# the bake is hot-first: tools/hotbake.sh profiles a page-chunked bake and lays what short runs
+# touch ahead, so a lazy wake decodes little of the image.
+$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l tools/hotbake.sh
 	@echo 'BAKE	'$@
-	@$< bake -o $@ -l $(ho)/.dist-cat.l
+	@sh tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
 
 .PHONY: candidate
 candidate: $(ho)/love.cand
@@ -306,15 +308,15 @@ kore_arc = apps/gz.l apps/tar.l apps/xz.l apps/bz2.l apps/cpio.l
 kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/verify.l apps/tls/client.l \
   apps/ssh/sha512.l apps/ssh/ed25519.l apps/ssh/aes.l apps/ssh/bcrypt.l apps/ssh/client.l \
   apps/ssh/server.l apps/ssh/cli.l \
-  apps/png.l apps/jpeg.l apps/gif.l apps/kore/wget.l apps/kore/gpic.l apps/kore/pic.l apps/kore/www.l apps/kore/net.l apps/kore/kore.l
+  apps/png.l apps/jpeg.l apps/gif.l apps/kore/wget.l apps/kore/openssl.l apps/kore/gpic.l apps/kore/pic.l apps/kore/www.l apps/kore/net.l apps/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = apps/json.l apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/fat.l \
   apps/source.l apps/lapiz.l apps/tfm.l apps/caja/box.l apps/caja/par.l apps/caja/page.l apps/caja/doc.l apps/caja/cell.l \
   apps/libra/salt.l apps/libra/libra.l apps/vi/hueweb.l apps/kiosko/web.l \
   apps/harp/harp.l apps/harp/play.l apps/harp/score.l \
-  apps/x11.l apps/ink.l apps/manifest/manifest.l apps/rove/rove.l apps/rove/view.l apps/rove/tower.l apps/rove/story.l apps/rove/design.l apps/rove/slop.l apps/rove/grass.l apps/rove/wade.l apps/rove/apartment.l apps/rove/dusk.l apps/rove/garage.l apps/rove/shaft.l apps/rove/roost.l apps/harp/synth.l \
-  apps/berth/wharf.l apps/berth/limn.l apps/berth/berth.l apps/face.l apps/lux/wire.l apps/berth/pier.l apps/doom.l apps/lupa.l apps/mc.l apps/pom.l
+  apps/x11.l apps/manifest/manifest.l apps/rove/rove.l apps/rove/view.l apps/rove/tower.l apps/rove/story.l apps/rove/design.l apps/rove/slop.l apps/rove/grass.l apps/rove/wade.l apps/rove/apartment.l apps/rove/dusk.l apps/rove/garage.l apps/rove/shaft.l apps/rove/roost.l apps/harp/synth.l \
+  apps/berth/wharf.l apps/berth/limn.l apps/berth/berth.l apps/face.l apps/lux/wire.l apps/berth/pier.l apps/doom.l apps/lupa.l apps/mc.l apps/pom.l apps/bee.l
 korefiles = $(kore_head) $(holo_obj) love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and

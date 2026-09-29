@@ -15,7 +15,7 @@
  ; --- generator monad: pure / map / bind over the functional RNG ---
  fz-pure (.)                           ; ignores the stream
  (fz-map f g) (\ st (: r (g st) (f <r . >r)))
- (fz-bind g k) (\ st (: r (g st) ((k <r) >r))) ; feed value into next gen
+ (fz-bind g k) (\ st (: r (g st) (k <r >r)))   ; feed value into next gen
  ; --- primitive draws (every range below keeps hi > lo so random never mods by 0) ---
  (fz-nat n) (\ st (random st n))                   ; [0, n)
  (fz-int lo hi) (fz-map (+ lo) (fz-nat (hi - lo))) ; [lo, hi)
@@ -23,8 +23,8 @@
  (fz-oneof gs) (fz-bind (fz-nat #gs) (\ k <(drop k gs)))  ; pick a generator
  ; --- structured draws: fixed repetition, bounded-length list, tuples ---
  (fz-rep n g) (? (n < 1) (fz-pure ())
-    (\ st (: a (g st) b ((fz-rep (n - 1) g) >a) ((<a . <b) . >b))))
- (fz-list mx g) (\ st (: r (random st (1 + mx)) ((fz-rep <r g) >r)))  ; pin in [0,mx]
+    (\ st (: a (g st) b (fz-rep (n - 1) g >a) ((<a . <b) . >b))))
+ (fz-list mx g) (\ st (: r (random st (1 + mx)) (fz-rep <r g >r)))    ; pin in [0,mx]
  (fz-pair2 ga gb) (\ st (: a (ga st) b (gb >a) ([<a <b] . >b)))
  (fz-trip ga gb gc)
    (\ st (: a (ga st) b (gb >a) c (gc >b) ([<a <b <c] . >c)))
@@ -133,7 +133,7 @@
    (fz-sexp d) (? (d < 1) fz-leaf
       (\ st (: r (random st 3)            ; 1/3 leaf, 2/3 a bounded list of sub-exprs
           (? (<r = 0) (fz-leaf >r)
-             ((fz-list 4 (fz-sexp (d - 1))) >r))))))
+             (fz-list 4 (fz-sexp (d - 1)) >r))))))
 (test
  (fz-ok 200 30 fz-leaf (\ x (x = fz-rd x)))            ; leaves: ints + symbols
  (fz-ok 200 31 (fz-sexp 3) (\ x (x = fz-rd x)))        ; nested structure round-trips
@@ -142,7 +142,7 @@
 ; ---- array broadcasting / reduction laws (z elementwise) ----
 ; fz-arrpair draws two z vectors of the same random length so elementwise ops line up.
 (: fz-arrpair (fz-bind (fz-int 1 6) (\ n (\ st
-    (: a ((fz-rep n fz-elem) st) b ((fz-rep n fz-elem) >a)
+    (: a (fz-rep n fz-elem st) b (fz-rep n fz-elem >a)
        ([(star-tray [n] <a) (star-tray [n] <b)] . >b))))))
 (test
  (fz-ok 250 40 fz-arrpair (\ v (aall (<v + <>v = <>v + <v))))  ; + commutes

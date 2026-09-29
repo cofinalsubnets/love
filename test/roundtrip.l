@@ -47,13 +47,13 @@
  (100 = peep (rt {1 100 2 200}) 1 0)
  (200 = peep (rt {1 100 2 200}) 2 0)
  ; functions reconstruct a working function
- (3 = ((rt (+)) 1 2))               ; builtin
- (5 = ((rt (x \ x + 1)) 4))         ; lambda
- (7 = ((rt (+ 3)) 4))               ; partial application of a builtin
- (3 = ((rt ((a \ b \ a + b) 1)) 2))  ; partial app of a lambda (no capture)
+ (3 = (rt (+) 1 2))                 ; builtin
+ (5 = (rt (x \ x + 1) 4))           ; lambda
+ (7 = (rt (+ 3) 4))                 ; partial application of a builtin
+ (3 = (rt ((a \ b \ a + b) 1) 2))    ; partial app of a lambda (no capture)
  ; a closure (captures free var y) round-trips: the captured value is printed as a
  ; leading param, so re-applying the reconstructed base to it rebinds correctly.
- (9 = (: y 5 ((rt (x \ x + y)) 4)))                ; (rt closure) is base needing x; apply 4
- (30 = (: a 10 b 20 ((rt (z \ z + (a + b))) 0))) ; two captured vars
+ (9 = (: y 5 (rt (x \ x + y) 4)))                  ; (rt closure) is base needing x; apply 4
+ (30 = (: a 10 b 20 (rt (z \ z + (a + b)) 0)))   ; two captured vars
  ; the lambda's source survives the loop (idempotent show)
  (show (a \ b \ a + b) = show (rt (a \ b \ a + b))))

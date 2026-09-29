@@ -74,7 +74,7 @@
    _ (scribe s2 ("\e_Ga=T,f=100,i=4,m=1;" + snip e 0 k + "\e\\"))
    _ (scribe s2 ("\e_Gm=0;" + snip e k #e + "\e\\"))
    _ (test ("\e_Gi=4;OK\e\\" = string (reply s2))
-           ((want (dir + "/pal8.png")) 0 = tilepx s2 0 0 0))
+           (want (dir + "/pal8.png") 0 = tilepx s2 0 0 0))
    _ (hark ["rm" "-rf" dir])
    _ (test_fin ())
    (puts "kitpng: ok\n"))

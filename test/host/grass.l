@@ -42,7 +42,7 @@
  (test (50.0 < night) (day < 50.0) (ht0 < me 'ht)))
 
 ; --- every blade waters itself: its own meter, its own thirst, the sky the only hand ---
-(: g (fresh ()) me (g 'me) dry (<(g 'bs)) wet ((g 'bs) 1)
+(: g (fresh ()) me (g 'me) dry (<(g 'bs)) wet (g 'bs 1)
    _ (pins g 'h 12.0 'wind 10.0 'wt 10.0 'tdays '(80.0 80.0 80.0 80.0 80.0 80.0 80.0))
    _ (pins dry 'hy 14.0 'wf 1.0) _ (pins wet 'hy 14.0 'wf 0.0)
    hy0 (me 'hy)

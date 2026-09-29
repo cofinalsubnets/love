@@ -70,11 +70,11 @@
    ; keeps a player from re-triggering a long note every cycle.
    sl (slow (qi 2) (pure 'a))
    _ (test (1 = cnt sl 0 1)  (1 = cnt sl 1 2)
-             (onset? ((sl (qi 0) (qi 1)) 0))  !(onset? ((sl (qi 1) (qi 2)) 0))
+             (onset? (sl (qi 0) (qi 1) 0))  !(onset? (sl (qi 1) (qi 2) 0))
              ((ons sl 0 2) = [[0 2 'a]])
              (1 = cnt (pure 'a) 0 1))
    ; a query that starts mid-cycle cuts the part and never the whole
-   hev  ((pure 'a) (1 /// 2) (qi 1))
+   hev  (pure 'a (1 /// 2) (qi 1))
    _ (test (1 = #hev)  !(onset? (hev 0))
              ((qnum (evwb (hev 0))) = 0)  ((qnum (evpb (hev 0))) = 0.5))
 
@@ -122,19 +122,19 @@
       (foldl (\ a p (a && ((1 = #(p (qi 0) (qi 1))) && !(p (qi 1) (qi 1)))))
              1 [sine cosine saw isaw tri square rand])
       ; ..and the sampled values keep to their rails
-      (: (v1 p) (evv ((p (qi 0) (qi 1)) 0))
+      (: (v1 p) (evv (p (qi 0) (qi 1) 0))
          (foldl (\ a p (a && (: x (v1 p) ((0.0 <= x) && (x <= 1.0)))))
                 1 [sine cosine saw isaw tri square rand]))
       ; range maps those rails onto its own
-      (: x (evv (((range 2.0 3.0 saw) (qi 0) (qi 1)) 0)) ((2.0 <= x) && (x <= 3.0)))
+      (: x (evv (range 2.0 3.0 saw (qi 0) (qi 1) 0)) ((2.0 <= x) && (x <= 3.0)))
       ; the same span asked twice answers the same: rand is a place, not a moment
-      ((evv ((rand (qi 3) (qi 4)) 0)) = (evv ((rand (qi 3) (qi 4)) 0))))
+      ((evv (rand (qi 3) (qi 4) 0)) = (evv (rand (qi 3) (qi 4) 0))))
 
    ; --- controls: tablets that merge -----------------------------------------
-   hv ((hit (pure "bd")) (qi 0) (qi 1))
+   hv (hit (pure "bd") (qi 0) (qi 1))
    _ (test (tablet? (evv (hv 0)))  ("bd" = (peep (evv (hv 0)) 's ()))
              ; # takes structure from the left and the value from the right
-             ((: r ((pset (hit (pure "bd")) (note (pure 7))) (qi 0) (qi 1))
+             ((: r (pset (hit (pure "bd")) (note (pure 7)) (qi 0) (qi 1))
                  [(peep (evv (r 0)) 's ()) (peep (evv (r 0)) 'note ())])
               = ["bd" 7])
              ; psets is # over several controls in one form, folded from the left: the
@@ -143,20 +143,20 @@
                  v (evv (r 0))
                  [(peep v 's ()) (peep v 'note ()) (peep v 'gain ())])
               = ["bd" 9 0.5])
-             (: (flat q) (: v (evv ((q (qi 0) (qi 1)) 0)) [(peep v 's ()) (peep v 'note ())])
+             (: (flat q) (: v (evv (q (qi 0) (qi 1) 0)) [(peep v 's ()) (peep v 'note ())])
                 (flat (psets (hit (pure "bd")) (note (pure 7))) = flat (pset (hit (pure "bd")) (note (pure 7)))))
              (1 = #((psets (hit (pure "bd"))) (qi 0) (qi 1)))
              ; jux is the same shape: two copies, hard left and hard right
-             ((: r ((jux rev (hit (fastcat [(pure "bd") (pure "sn")]))) (qi 0) (qi 1))
+             ((: r (jux rev (hit (fastcat [(pure "bd") (pure "sn")])) (qi 0) (qi 1))
                  (sort (map (\ x (peep (evv x) 'pan ())) r)))
               = [0.0 0.0 1.0 1.0]))
 
    ; --- a scalar where a pattern is wanted is one by its type: a string is mini, a
    ; number is pure, and a time may be an int or a decimal, made exact
-   _ (test ((map (\ x (evv x)) ((stack ["bd sn"]) (qi 0) (qi 1))) = ["bd" "sn"])
-             ((map (\ x (peep (evv x) 's ())) ((hit "bd sn") (qi 0) (qi 1))) = ["bd" "sn"])
-             ((peep (evv (((note 7) (qi 0) (qi 1)) 0)) 'note ()) = 7)
-             ((peep (evv (((gain 0.5) (qi 0) (qi 1)) 0)) 'gain ()) = 0.5)
+   _ (test ((map (\ x (evv x)) (stack ["bd sn"] (qi 0) (qi 1))) = ["bd" "sn"])
+             ((map (\ x (peep (evv x) 's ())) (hit "bd sn" (qi 0) (qi 1))) = ["bd" "sn"])
+             ((peep (evv (note 7 (qi 0) (qi 1) 0)) 'note ()) = 7)
+             ((peep (evv (gain 0.5 (qi 0) (qi 1) 0)) 'gain ()) = 0.5)
              ((evs (fast 2 (pure 'a)) 0 1) = (evs (fast (qi 2) (pure 'a)) 0 1))
              ((evs (fast 1.5 (pure 'a)) 0 2) = (evs (fast (3 /// 2) (pure 'a)) 0 2))
              ((evs (late 0.25 (pure 'a)) 0 1) = (evs (late (1 /// 4) (pure 'a)) 0 1))
@@ -168,32 +168,32 @@
    ; --- smooth: a sequence of numbers drifts from each value to the next, the value
    ; at a time on the line between the two events' starts; a span answers one event
    ; sampled at its middle, as the signals do, and a bare word is left as it is
-   (sm p b e) (evv (((smooth p) b e) 0))
+   (sm p b e) (evv (smooth p b e 0))
    _ (test ((sm (mini "0 10") (qi 0) qhalf) = 5.0)           ; the middle of the first step
              ((sm (mini "0 10") qhalf (qi 1)) = 5.0)         ; ..and of the second, on the way back to 0
              ((sm (mini "0 10") (qi 0) (1 /// 4)) = 2.5)
              ((sm (mini "0 10") (qi 1) (3 /// 2)) = 5.0)     ; the next cycle alike
              ((sm (pure 4) (qi 0) (qi 1)) = 4)               ; one value: nowhere to drift to
              ((sm (mini "bd sn") (qi 0) qhalf) = "bd")
-             (1 = #((smooth (mini "0 10")) (qi 0) (qi 1)))
-             !((smooth (mini "0 10")) (qi 1) (qi 1)))
+             (1 = #(smooth (mini "0 10") (qi 0) (qi 1)))
+             !(smooth (mini "0 10") (qi 1) (qi 1)))
 
    ; --- slide: a control word like the rest, and at the voice a phase that bends: the
    ; integral of a frequency rising at the slide's rate, the plain product when it holds.
    ; a note that slides an octave over a second ends at 1/ln 2 times the cycles of one
    ; that holds; a slide of 0 is the held note bit for bit; a sliding one is another
-   _ (test ((peep (evv ((slide (pure 3)) (qi 0) (qi 1) 0)) 'slide ()) = 3)
+   _ (test ((peep (evv (slide (pure 3) (qi 0) (qi 1) 0)) 'slide ()) = 3)
              ((vphase 1.0 100.0 0.0) = 100.0)
              ((abs (vphase 1.0 100.0 0.6931471805599453 - 144.26950408889634)) < 0.0001)
              ((vphase 0.0 100.0 0.6931471805599453) = 0.0)
              (: ix (iota 200 + 10)
-                (amp v) ((mkvoice 10 v 1000) 1 ix)
+                (amp v) (mkvoice 10 v 1000 1 ix)
                 a (amp {'s "sin" 'note 0})  b (amp {'s "sin" 'note 0 'slide 0})  c (amp {'s "sin" 'note 0 'slide 12})
                 ((aall (a = b)) && !(aall (a = c)))))
 
    ; --- mini-notation --------------------------------------------------------
    (m s) (map (\ x [(qnum (evwb x)) (qnum (evwe x)) (evv x)])
-              (filter onset? ((mini s) (qi 0) (qi 1))))
+              (filter onset? (mini s (qi 0) (qi 1))))
    _ (test ((m "bd sn")     = [[0 0.5 "bd"] [0.5 1 "sn"]])
              ((m "bd*2 sn")   = [[0 0.25 "bd"] [0.25 0.5 "bd"] [0.5 1 "sn"]])
              ((m "[bd bd] sn") = [[0 0.25 "bd"] [0.25 0.5 "bd"] [0.5 1 "sn"]])
@@ -204,7 +204,7 @@
              ((m "bd(3,8)")   = [[0 0.125 "bd"] [0.375 0.5 "bd"] [0.75 0.875 "bd"]])
              ((m "0 .5 -2")   = [[0 (1 / 3) 0] [(1 / 3) (2 / 3) 0.5] [(2 / 3) 1 -2]])
              ; < > is one member per cycle, not one slot
-             ((map (\ x (evv x)) (filter onset? ((mini "<bd sn>") (qi 1) (qi 2)))) = ["sn"])
+             ((map (\ x (evv x)) (filter onset? (mini "<bd sn>" (qi 1) (qi 2)))) = ["sn"])
              ; a comma stacks, at the top level and inside a bracket alike
              (6 = #(m "bd*2, hh*4"))
              (6 = #(m "[bd*2, hh*4]"))

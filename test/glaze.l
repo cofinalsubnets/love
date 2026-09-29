@@ -177,7 +177,7 @@
 (: (gzo-f x) (x + 1)
    (gzo-s n) (: gzo-f (\ x (x * 10)) (h y acc) (? (y = 0) acc (h (y - 1) (acc + gzo-f y))) (h n 0))
    (gzo-v n) (: (h y acc) (? (y = 0) acc (h (y - 1) (acc + y + n))) h)
-   _ (test (gzo-s 4 = 100) ((gzo-v 0) 4 0 = 10) ((gzo-v 2) 4 0 = 18))
+   _ (test (gzo-s 4 = 100) (gzo-v 0 4 0 = 10) (gzo-v 2 4 0 = 18))
    0)
 ; a helper above the sibling it calls: its compile waits for the end of the form, where every
 ; sibling is built, and lands in the cell its callers already hold -- the same answers, a deopt

@@ -108,7 +108,7 @@
        ; through rtarch, so the runtime cache serves a repeat build (~instant)
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
-       cd ((cite 'moon 'mcdir) ())
+       cd (cite 'moon 'mcdir ())
        _ (rt-fan rtwarm cd '(x64 a64 rv64))
        ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
@@ -129,7 +129,7 @@
             "ai_rtgz_a64" "ai_rtgz_a64_len"
             "ai_rtgz_rv64" "ai_rtgz_rv64_len")
        ob (objelf arch () () () xs () () () () () forms)
-       ((cite 'holo 'write-bytes) dst ob))      ; ob is a byte list, not a string
+       (cite 'holo 'write-bytes dst ob))        ; ob is a byte list, not a string
 
    (mkrt-main av)
     (: n #av

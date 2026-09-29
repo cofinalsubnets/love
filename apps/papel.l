@@ -236,7 +236,7 @@
 ; (so editing this string rebuilds the site). the colours are config.l's paper palette
 ; through hueweb's hw-vars, so this sheet and the painted sources' agree by construction.
 (: css
-   (((cite 'hueweb 'hw-vars) 'paper) +
+   ((cite 'hueweb 'hw-vars 'paper) +
    "*{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-serif,Georgia,serif}
 header{border-bottom:1px solid var(--rule);padding:1rem 1.25rem;font-family:ui-sans-serif,system-ui,sans-serif}

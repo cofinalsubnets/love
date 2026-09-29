@@ -43,7 +43,7 @@ The file discipline, two shapes:
 kore.l wraps every applet on both dispatch lanes (the verb registry and the symlink), so
 one synopsis table — `korehelp` — is where a tool's shape is written down, and the two
 lanes cannot drift. The door itself is cli's, `udoor` in post.l, and the crew's own verbs
-(mc, lupa, pom, tower, story, design, slop, ink, libra, sb, tar, fat, doom) stand at the same one; what
+(mc, lupa, pom, tower, story, design, slop, libra, sb, tar, fat, doom) stand at the same one; what
 kore keeps is the policy below. The walk reads only the leading flag words and stops at
 the first operand and at `--`. It is NOT getopt: a value word that looks like a flag is walked
 over, so `grep -e --help f` answers the help rather than searching for `--help` — glue
@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (196 tools, 210 names)
+## the inventory (197 tools, 211 names)
 
 The `applets` tablet in kore.l; the aliases are make/cook, sh/lush, ls/dir/vdir,
 less/more, pic/pngcat/jpegcat/gifcat and picless/pngless/jpegless/gifless (`pic cat` and
@@ -87,7 +87,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | re.l, the matcher | grep (-nvclqhaixwFEo, -e stacking, -m) over the lawed regex engine, BRE or ERE; egrep and fgrep, grep -E and -F by their old names (kore.l) |
 | sed.l, the editor | sed (-n -E -i -e; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
-| find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
+| find.l, the walk | find (names, types, times, sizes, modes; -print0 -delete -exec ; and +; ( ) ! -a -o; the depths) |
 | proc.l, the processes and the world | env nohup nice renice setsid printenv sleep usleep kill xargs time ts date id whoami groups |
 | proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them), microcom (a serial line and this terminal, byte for byte) |
 | proc.l, the host's utmp, read | who users pinky logname (glibc's, netbsd's utmpx and freebsd's utx.active; kore writes none) |
@@ -101,6 +101,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
+| openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
 | apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
 | apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (love/lib/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (love/lib/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
@@ -307,9 +308,11 @@ printf's `*` width and `#` flag.
 
 ## find (apps/kore/find.l)
 
-`find [PATH..] [EXPR]`, PATH defaulting to `.`. Primaries `-name` `-path` (fnmatch, via lush's
-`sh-match`) `-type f|d|l` `-print` `-prune` `-exec CMD.. ;` `-true` `-false`, the global
-`-maxdepth`/`-mindepth`, and the operators `( )` `!`/`-not` `-a`/`-and` (implicit between two
+`find [-L] [PATH..] [EXPR]`, PATH defaulting to `.`. Tests `-name` `-iname` `-path` `-ipath`
+(fnmatch, post.l's glob) `-type f|d|l` `-empty` `-newer FILE` `-mtime N` `-mmin N`
+`-size N[cwbkMG]` `-perm [-/]MODE` (octal or symbolic) `-true` `-false`, N as `+N` `-N` or `N`;
+actions `-print` `-print0` `-prune` `-delete` `-exec CMD.. ;` `-exec CMD.. {} +`; the global
+`-maxdepth`/`-mindepth` and `-depth` (which `-delete` implies), and the operators `( )` `!`/`-not` `-a`/`-and` (implicit between two
 primaries) `-o`/`-or`, both short-circuiting, `-a` binding tighter. An expression naming no
 action gets `-print`, exactly as GNU does.
 

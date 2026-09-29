@@ -98,9 +98,9 @@
    ; one requirement that is not conditional is the last line of the file.
    _ (? (fitted = 0 || fitted2 = fitted + 2) 0
         (die ("the roster did not grow: fit " + show fitted + " -> " + show fitted2)))
-   _ (? ((want 'xt) 0 = xtval) 0
-        (die ("the extras slot answered " + show ((want 'xt) 0) + ", want " + show xtval)))
-   _ (? ((want 'xt) '(anything at all) = xtval) 0 (die "the extras kernel read its argument"))
+   _ (? (want 'xt 0 = xtval) 0
+        (die ("the extras slot answered " + show (want 'xt 0) + ", want " + show xtval)))
+   _ (? (want 'xt '(anything at all) = xtval) 0 (die "the extras kernel read its argument"))
    _ (say out ("  extras: the Ip+32 slot answers " + show xtval + "\n"))
    nat2 (want 'fx-and)
    pairs [[0 0] [1 1] [6 3] [255 15] [1023 992] [7 0] [65535 4096]
@@ -167,7 +167,7 @@
    _ (? (fitted4 = fitted3) 0
         (die ("a bogus kernel changed the fitted count: " + show fitted3 + " -> " + show fitted4)))
    _ (? (forge-why 0) 0 (die "the bogus kernel declined without naming a reason"))
-   _ (? ((forge-of 'bogus) (1 + iota 4) = 1) 0 (die "the bogus kernel did not fall back to its twin"))
+   _ (? (forge-of 'bogus (1 + iota 4) = 1) 0 (die "the bogus kernel did not fall back to its twin"))
    _ (chk1 "aall  after a decline" (want 'aall) aall zs)
    _ (say out ("  decline: named " + show (forge-why 0) + ", roster intact\n"))
 

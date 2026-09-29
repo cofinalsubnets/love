@@ -51,7 +51,7 @@
  !('(1 2) "ab")          ; ... as for every other kind
 
  ; --- row kstring: the byte index is spec.l's; the width and the empty row are here ---
- (255 = ((string 255) 0)) ; byte is unsigned 0..255
+ (255 = (string 255 0))   ; byte is unsigned 0..255
  !("" 5) !("" -1)         ; the empty string indexes to 1
 
  ; --- row kmint: a point applies as every unit does, const-1 -- spec.l's mints section

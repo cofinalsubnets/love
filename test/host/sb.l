@@ -384,6 +384,46 @@
  (sb-rel? "a/b.txt") !(sb-rel? "/etc/passwd") !(sb-rel? "a/../b")
  !(sb-rel? "a//b") !(sb-rel? "./a") !(sb-rel? "") !(sb-rel? 'a))
 
+; --- a ledger: the one value here that moves, and only by compare-and-swap. it moves
+; from what it stands at, every entry stays, a live holder's lock is waited on and a dead
+; one's taken, and sync carries patches, blobs and refs but never a ledger ---
+(: _ (mkdir "mrg/g" 493) _ (mkdir "mrg/g/a" 493) _ (mkdir "mrg/g/b" 493)
+   _ (chdir "mrg/g/a") _ (mk ())
+   _ (lay "v1" "row 1\n") _ (lay "v2" "row 1\nrow 2\n")
+   made (lg-swap "queue/main" "none" "v1")
+   h1 (lg-now "queue/main")
+   stale (lg-swap "queue/main" "none" "v2")                 ; it no longer stands at none
+   moved (lg-swap "queue/main" h1 "v2")
+   h2 (lg-now "queue/main")
+   holds (blob h2)                                          ; read here: the test runs from the root
+   held (: _ (mkdir ".sb/ledger/queue/main.lock" 448)
+           _ (lay ".sb/ledger/queue/main.lock/pid" (show (getpid 0)))    ; a live holder: us
+           r (lg-lock "queue/main" 2)
+           _ (lg-unlock "queue/main")
+           r)
+   taken (: _ (mkdir ".sb/ledger/queue/main.lock" 448)
+            _ (lay ".sb/ledger/queue/main.lock/pid" "999999")           ; a gone one
+            r (lg-lock "queue/main" 2)
+            _ (lg-unlock "queue/main")
+            r)
+   log (lg-lines "queue/main")
+   names (lg-names ".sb/ledger" "")
+   _ (lay "f.txt" "a patch to carry\n") _ (sb-record "the carried one")
+   _ (chdir "../b") _ (mk ())
+   _ (sb-sync "../a")
+   carried (look "f.txt")
+   theirs (lg-now "queue/main")
+   _ (chdir "../../.."))
+
+(test
+ made !stale moved (held = 0) taken
+ (sb-hex? h1) (sb-hex? h2) (h1 != h2)
+ (holds = "row 1\nrow 2\n")                              ; what it holds is a blob in the store
+ (2 = #log) (h1 = <(words <log)) (h2 = <(words (log 1)))  ; both entries, oldest first
+ (seq names ["queue/main"])                              ; the lock is not a ledger
+ !(lg-name? "../x") !(lg-name? "q.lock") (lg-name? "queue/main")
+ (two? carried) ("none" = theirs))                       ; the patch travelled, the ledger did not
+
 (chdir sb-home)
 (hark ["rm" "-rf" sb-dir])
 (puts "sb: ok", putc 10, 0)
