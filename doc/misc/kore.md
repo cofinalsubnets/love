@@ -53,7 +53,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (196 tools, 210 names)
+## the inventory (197 tools, 211 names)
 
 The `applets` tablet in kore.l; the aliases are make/cook, sh/lush, ls/dir/vdir,
 less/more, pic/pngcat/jpegcat/gifcat and picless/pngless/jpegless/gifless. love's own verbs
@@ -100,6 +100,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
+| openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
 | apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
 | apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (love/lib/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (love/lib/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
