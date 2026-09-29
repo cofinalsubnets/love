@@ -1221,7 +1221,7 @@ test_uefi_a64:
 else
 test_uefi_a64: host $(R)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/esp-a64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-a64/love.elf $(ko)/esp-a64/love.cmd
-	@echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 420s)"
+	@echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 900s)"
 	@$m $(R)/tools/ktest.l $(ko)/esp-a64 $(OVMF_A64) a64
 endif
 
@@ -1242,7 +1242,7 @@ test_kernel_a64:
 else
 test_kernel_a64: host $(R)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
-	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
+	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; TCG, ceiling 900s, or kvm on $$KTEST_A64_HOST)"
 	@$m $(R)/tools/ktest.l $(ko)/love-a64.elf - a64
 endif
 
@@ -1253,7 +1253,7 @@ test_kernel_rv64:
 else
 test_kernel_rv64: host $(R)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
-	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
+	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 900s)"
 	@$m $(R)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 endif
 
