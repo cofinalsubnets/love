@@ -935,7 +935,7 @@
     'lift "usage: lift FILE   -- carry FILE out of the machine: the page's downloads, the runner's directory"
     'pwd "usage: pwd [-L|-P]"
     'chmod "usage: chmod [-Rf] MODE FILE.."
-    'install "usage: install [-D] [-m OCTAL] [-s] SRC DST  |  install -d DIR.."
+    'install "usage: install [-CDpsTv] [-m MODE] [-o USER] [-g GROUP] [-t DIR] SRC.. DST | install -d [-m MODE] [-v] DIR.."
     'readlink "usage: readlink [-efmnz] PATH.."
     'realpath "usage: realpath [-e|-m|-s] PATH.."
     'link "usage: link FILE NEW"

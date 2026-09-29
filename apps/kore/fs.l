@@ -331,7 +331,7 @@
     (: fs (rev ops)
        dst (? td td <fs)
        srcs (? td ops (rev >fs))
-       (? (atom? srcs) (udie 2 ("usage: " + who + " [-" + (who = "cp" ? "afinpPLrRuv" "finuv") + "] [-t DIR] SRC.. DST"))
+       (? (atom? srcs) (udie 2 ("usage: " + who + " [-" + (? (who = "cp") "afinpPLrRuv" (who = "mv") "finuv" "CDgmopsv") + "] [-t DIR] SRC.. DST"))
           ((td || two? >srcs) && !(udirp dst))
            (udie 1 (who + ": target " + dst + " is not a directory"))
           (: ok (foldl (\ ok src (? (each1 src (udest src dst)) ok 0)) 1 srcs)
@@ -537,39 +537,51 @@
        (? (foldl (\ ok q (tree q ok)) 1 >rest) 0 1))
 
    ; -- install: copy with the mode set in the same breath (what the build's
-   ; place-a-file steps say). -d makes directories (with parents, like -p);
-   ; -D lays the destination's parents first; -m octal sets the mode (else 755);
-   ; -s (strip) is accepted and noted -- no stripper rides kore yet, so the copy
-   ; keeps its symbol table (a fatter install, never a wrong one) --
-   (imkp q)                        ; a tolerant mkdir at every slash (parents only)
+   ; place-a-file steps say). SRC DST, SRC.. DIR, or -t DIR SRC.., as cp's walk takes
+   ; them; -d makes directories (with parents, like -p); -D lays the destination's
+   ; parents first; -m MODE sets the mode (755 else), octal or symbolic; -o and -g the
+   ; owner and group; -p keeps the source's time; -C leaves a target already the same
+   ; bytes and mode alone; -v says each; -s (strip) is accepted and noted -- no
+   ; stripper rides kore yet, so the copy keeps its symbol table (a fatter install,
+   ; never a wrong one) --
+   (imkp q v?)                     ; a tolerant mkdir at every slash (parents only), -v saying each made
     (: n #q
-       (go k) (? (k < n) ((? ((0 < k) && (q k = 47)) (mkdir (snip q 0 k) 493) ()), go (k + 1))
+       (mk d) (? (!(mkdir d 493) && v?) (say out ("install: creating directory '" + d + "'\n")) 0)
+       (go k) (? (k < n) ((? ((0 < k) && (q k = 47)) (mk (snip q 0 k)) ()), go (k + 1))
                  ())
        (go 1))
    (install-main as)
-    (: (fl a d D m s fs) (? (atom? a) [d D m s fs]
-                            (<a = "-d") (fl >a 1 D m s fs)
-                            (<a = "-D") (fl >a d 1 m s fs)
-                            ((<a = "-m") && two? >a) (fl >>a d D (uoct <>a) s fs)
-                            (<a = "-s") (fl >a d D m 1 fs)
-                            (fl >a d D m s (fs + [<a])))
-       p (fl as 0 0 493 0 ())
-       d? <p D? <>p m <>>p s? <>>>p fs (ustray "install" as <>>>>p)
-       _ (? s? (say err "install: -s noted, not stripped (no kore stripper yet)", put err 10) ())
-       (? d? (: (go a ok)
-                 (? (two? a)
-                    (: _ (imkp <a) e (mkdir <a m)
-                       ok2 (? (udirp <a) ((? !e (chmod <a m) ()), ok)
-                              (say err ("install: cannot create " + <a), put err 10, 0))
-                       (go >a ok2))
-                    (? ok 0 1))
-                 (? (two? fs) (go fs 1) (udie 2 "usage: install -d DIR..")))
-          (atom? >fs) (udie 2 "usage: install [-D] [-m OCTAL] [-s] SRC DST")
-          (: src <fs dst (udest <fs <>fs)
-             _ (? D? (imkp dst) ())
-             _ (ucopy "install" src dst)
-             _ (chmod dst m)
-             0)))
+    (: fo (uflags "install" as '(109 116 111 103) "CdDgmopstTv")
+       t <fo fs (fo 1)
+       mw (uoptv t 109)
+       m (? mw (umode mw 0 0 0) 493)
+       _ (? (charm? m) () (udie 1 ("install: invalid mode '" + mw + "'")))
+       own (? (t 111 || t 103) (uowner "install" (? (t 111) (uoptv t 111) "") + (? (t 103) (":" + uoptv t 103) "") "") ())
+       _ (? (t 115) (say err "install: -s noted, not stripped (no kore stripper yet)", put err 10) ())
+       (owned q) (? own (chown q <own <>own) ())
+       (same? src dst) (: a (uread src) b (uread dst) sa (stat src) sb (stat dst)
+                          (? (two? a && two? b && two? sb) (<>a = <>b && (4095 & <>>sb) = m) 0))
+       (one src dst)
+        (? (t 67 && same? src dst) 1
+           (: _ (? (t 68) (imkp dst (t 118)) ())
+              k (ucopy1 "install" src dst)
+              _ (? k (: _ (chmod dst m) _ (owned dst)
+                        st (? (t 112) (stat src) ())
+                        _ (? (two? st) (utime dst <>st) 0)
+                        (? (t 118) (say out ("'" + src + "' -> '" + dst + "'\n")) 0)) 0)
+              k))
+       (? (t 100)
+          (: (go a ok)
+              (? (two? a)
+                 (: _ (imkp <a (t 118)) e (mkdir <a m)
+                    _ (? (!e && t 118) (say out ("install: creating directory '" + <a + "'\n")) 0)
+                    ok2 (? (udirp <a) ((? !e (: _ (chmod <a m) (owned <a)) ()), ok)
+                           (say err ("install: cannot create " + <a), put err 10, 0))
+                    (go >a ok2))
+                 (? ok 0 1))
+             (? (two? fs) (go fs 1) (udie 2 "usage: install -d DIR..")))
+          (t 84) (? (atom? >fs) (udie 2 "usage: install -T SRC DST") (? (one <fs <>fs) 0 1))
+          (: r (cp-srcs "install" fs (uoptv t 116) one) _ (flush out) r)))
 
    ; -- readlink: what a symbolic link says (-f chases to an absolute, clean path) --
    (rl-abs q) (? ((0 < tally q) && (q 0 = 47)) q (cwd () + "/" + q))

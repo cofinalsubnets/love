@@ -265,4 +265,20 @@ for c in "l2" "l1 l2" "d/f" "-f l2" "-f dang" "-e dang" "-m dang" "-f d/nope" "-
   same "readlink $c"
 done
 rm -rf "$R2"
+# install's -m (octal and symbolic) -v -p -d -D (-v saying each parent) -t -T and SRC..
+# DIR: what it says, its status, and the tree it leaves (modes and sizes; times under -p)
+I2=$PWD/$ho/.inst; rm -rf "$I2"; mkdir -p "$I2"; echo a > "$I2/s1"; echo b > "$I2/s2"; touch -d @1000000000 "$I2/s1"
+ilay() { (cd "$I2/G" && find . -printf '%p %m %s\n' | sort); }
+for c in "../s1 x" "-m 640 ../s1 x" "-m u=rw,go=r ../s1 x" "-v ../s1 x" "-d a/b c" "-dv a/b" "-D ../s1 p/q/x" "-Dv ../s1 p/q/x" \
+         "-t . ../s1 ../s2" "../s1 ../s2 ." "-T ../s1 y"; do
+  rm -rf "$I2/G"; mkdir "$I2/G"
+  # shellcheck disable=SC2086
+  { (cd "$I2/G" && install $c; echo "rc=$?"); ilay; } > "$g" 2>&1
+  rm -rf "$I2/G"; mkdir "$I2/G"
+  # shellcheck disable=SC2086
+  { (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore install $c; echo "rc=$?"); ilay; } > "$o" 2>&1
+  same "install $c"
+done
+rm -rf "$I2/G"; mkdir "$I2/G"; (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore install -p ../s1 x) && [ "$(stat -c %Y "$I2/G/x")" = 1000000000 ] || fail "kore install -p"
+rm -rf "$I2"
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"
