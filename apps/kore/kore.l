@@ -940,7 +940,7 @@
     'realpath "usage: realpath [-e|-m|-s] PATH.."
     'link "usage: link FILE NEW"
     'unlink "usage: unlink FILE"
-    'cmp "usage: cmp [-s] A B"
+    'cmp "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"
     'stat "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."
     'du "usage: du [-sabchk] [-d N] [FILE..]"
     'df "usage: df [-h|-k] [-i] [-a] [-P] [FILE..]"

@@ -1771,15 +1771,47 @@ EXEC 01;32
                   say out nm, put out 10, flush out, 0))))
        (try 100))
 
-   ; -- cmp: are two files the same bytes (-s says nothing, the exit code answers) --
+   ; -- cmp: are two files the same bytes. the first difference is said by its char (POSIX's word)
+   ; and line, as POSIX has it; -b adds the two bytes, -l lists every difference in
+   ; octal, -s says nothing and the status answers; -n N compares at most N, -i SKIP or
+   ; SKIP1:SKIP2 (and the operands after the files) skip a start. a file that ends
+   ; first is an EOF on stderr, status 1 --
    (cmp-main as)
-    (: fo (uflags "cmp" as () "s")
-       s? (<fo 115) fs (fo 1)
-       _ (atom? >fs ? (udie 2 "usage: cmp [-s] A B"))
-       ra (uread <fs) rb (uread <>fs)
+    (: fo (uflagsl "cmp" as '(110 105) "blsin" {"silent" 115 "quiet" 115 "verbose" 108 "print-bytes" 98 "bytes" 110 "ignore-initial" 105})
+       t <fo s? (t 115) l? (t 108) b? (t 98) fs (fo 1)
+       _ (? (two? >fs && atom? >>>>fs) () (udie 2 "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"))
+       (num w) (: v (unum w) (? (charm? v) v (udie 2 ("cmp: invalid number: '" + w + "'"))))
+       iv (uoptv t 105)
+       k (? iv (findsub iv ":") -1)
+       sk1 (? (two? >>fs) (num (fs 2)) iv (num (? (k < 0) iv (snip iv 0 k))) 0)
+       sk2 (? (two? >>>fs) (num (fs 3)) iv (num (? (k < 0) iv (snip iv (k + 1) #iv))) 0)
+       lim (? (t 110) (num (uoptv t 110)) ())
+       (rd f) (? (f = "-") [1 (slurp in)] (uread f))
+       ra (rd <fs) rb (rd <>fs)
        (? (atom? ra || atom? rb)
-          (!s? ? (say err ("cmp: cannot read " + (two? ra ? <>fs <fs)), put err 10),
-             2)
-          (<>ra = <>rb) 0
-          ((? s? () (say out ((<fs + " ") + (<>fs + " differ")), put out 10, flush out)), 1))))
+          (: _ (? s? () (say err ("cmp: " + (two? ra ? <>fs <fs) + ": No such file or directory\n"))) 2)
+          (: A (snip <>ra (min sk1 #<>ra) #<>ra) B (snip <>rb (min sk2 #<>rb) #<>rb)
+             n0 (min #A #B) n (? lim (min lim n0) n0)
+             short (? (lim && lim <= n0) () (#A < #B) <fs (#B < #A) <>fs ())
+             (oct c) (upad 3 (radix c 8))
+             (face c) (? (32 <= c < 127) (string c) (c < 32) ("^" + string (c + 64)) (c = 127) "^?" ("M-" + string (c - 128)))
+             (bc c) (oct c + " " + face c)
+             ; -l's byte number is as wide as the longer file's size
+             wn #(show (max #A #B))
+             ; the first difference, and its line: the newlines before it, plus one
+             (first i ln) (? (n <= i) () (A i = B i) (first (i + 1) (? (A i = 10) (ln + 1) ln)) [i ln])
+             (eof i ln) (? (s? || !short) 0 (say err ("cmp: EOF on '" + short + "'" + (? (i = 0) " which is empty" (" after byte " + show i + (? l? "" (", in line " + show ln)))) + "\n")))
+             (? l? (: (go i d) (? (n <= i) d
+                                 (A i = B i) (go (i + 1) d)
+                                 (: _ (? s? 0 (say out (upad wn (show (i + 1)) + " " + oct (A i) + (? b? (" " + urpad 4 (face (A i))) "")
+                                                        + " " + oct (B i) + (? b? (" " + face (B i)) "") + "\n"))) (go (i + 1) 1)))
+                      d (go 0 0)
+                      _ (flush out)
+                      _ (eof n 0)
+                      (? (d || short) 1 0))
+                (: f (first 0 1)
+                   (? f (: i <f _ (? s? 0 (say out (<fs + " " + <>fs + " differ: " + (? b? "byte " "char ") + show (i + 1) + ", line " + show <>f
+                                                   + (? b? (" is " + bc (A i) + " " + bc (B i)) "") + "\n"))) _ (flush out) 1)
+                      short (: ln (foldl (\ a c (? (c = 10) (a + 1) a)) 1 (chars (snip A 0 n))) _ (eof n ln) 1)
+                      0)))))))
 ) ; module 'kore

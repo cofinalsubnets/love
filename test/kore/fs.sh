@@ -244,4 +244,14 @@ M=$PWD/$m
   && [ "$(PWD="$P2/lnk" LOVE_NO_IMAGE= "$M" kore pwd -P)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ] \
   && [ "$(PWD=/ LOVE_NO_IMAGE= "$M" kore pwd -L)" = "$(PWD="$P2/lnk" /bin/pwd -P)" ]) || fail "kore pwd -L/-P"
 rm -rf "$P2"
+# cmp says where: the char and line (POSIX's words), -b the bytes, -l every one in
+# octal, an EOF on the shorter, -n -i and the SKIP operands; under LC_ALL=C, GNU's
+# single-byte face
+Q=$ho/.cmpq; printf 'abc\ndef\nghi\n' > "$Q.a"; printf 'abc\ndXf\nghZ\n' > "$Q.b"; printf 'abc\nd' > "$Q.c"; : > "$Q.e"; cp "$Q.a" "$Q.d"
+for c in "$Q.a $Q.b" "$Q.a $Q.d" "-s $Q.a $Q.b" "-l $Q.a $Q.b" "-b $Q.a $Q.b" "$Q.a $Q.c" "$Q.c $Q.a" "$Q.a $Q.e" "-l $Q.a $Q.c" \
+         "-n 4 $Q.a $Q.b" "-n 6 $Q.a $Q.b" "-i 5 $Q.a $Q.b" "-i 2:2 $Q.a $Q.b" "$Q.a $Q.b 5 5" "-bl $Q.a $Q.b"; do
+  # shellcheck disable=SC2086
+  (LC_ALL=C cmp $c > "$g" 2>&1; echo "rc=$?" >> "$g"); (korerun cmp $c > "$o" 2>&1; echo "rc=$?" >> "$o"); same "cmp $c"
+done
+rm -f "$Q".?
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"
