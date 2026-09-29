@@ -44,6 +44,54 @@
           !(ucopy-bytes src dst) (usay-err (who + ": cannot create " + dst))
           (chmod dst (4095 & <>>st), 1)))
    (ucopy who src dst) (? (ucopy1 who src dst) 1 (uleave 1))
+   ; a path's own kind, a link not followed: 'dir, 'link or 'file, () when there is none
+   (ukind q) (: st (lstat q) (? (atom? st) () (: m (61440 & <>>st) (? (m = 16384) 'dir (m = 40960) 'link 'file))))
+   ; m said on stderr and a line read back: 1 for a y or Y first, else 0 (eof too)
+   (uyes m) (: _ (say err m, flush err)
+               (line acc) (: c (see in) (? (c < 0 || c = 10) (rev acc) (line (c . acc))))
+               a (line ())
+               (? (two? a && (<a = 121 || <a = 89)) 1 0))
+   ; a mode word onto the mode cur: octal whole, or chmod's symbolic clauses, `who` of
+   ; ugoa then +-= runs of rwxXst or one of ugo to copy (u+x,go-w,a=rX). no who is all
+   ; three less the umask um. a directory keeps its setuid and setgid bits through = and
+   ; octal, as GNU's does. () for a word that is neither
+   (umode m cur dir? um)
+    (: n #m
+       (oct? i) (? (n <= i) 1 (48 <= m i <= 55) (oct? (i + 1)) 0)
+       (base c) (? (c = 117) 64 (c = 103) 8 1)
+       (over ws f) (foldl (\ a w (a | f w)) 0 ws)
+       (perm ws cur c)
+        (? (c = 114) (over ws (w \ 4 * base w))
+           (c = 119) (over ws (w \ 2 * base w))
+           (c = 120) (over ws base)
+           (c = 88) (? (dir? || 0 < (cur & 73)) (over ws base) 0)
+           (c = 115) ((? (elem 117 ws) 2048 0) | (? (elem 103 ws) 1024 0))
+           (c = 116) (? (elem 111 ws) 512 0)
+           (: v ((cur // base c) & 7) (over ws (w \ v * base w))))
+       (class ws) ((over ws (w \ 7 * base w)) | (? dir? 0 (perm ws 0 115)) | perm ws 0 116)
+       (who i ws) (? (i < n && elem (m i) "ugoa")
+                     (who (i + 1) (m i = 97 ? (117 . 103 . 111 . ws) (m i . ws)))
+                     [i ws])
+       ; one clause's op runs from i to its comma or the end: [i cur], or () on a stranger
+       (ops i ws mask cur)
+        (? (n <= i || m i = 44) [i cur]
+           !(elem (m i) "+-=") ()
+           (: op (m i)
+              (run j p) (? (j < n && elem (m j) "rwxXst") (run (j + 1) (p | perm ws cur (m j)))
+                           (j < n && elem (m j) "ugo") [(j + 1) (p | perm ws cur (m j))]
+                           [j p])
+              r (run (i + 1) 0)
+              b ((r 1) & mask)
+              (ops (r 0) ws mask (? (op = 43) (cur | b) (op = 45) (cur - (cur & b)) ((cur - (cur & class ws)) | b)))))
+       (clauses i cur)
+        (: w (who i ())
+           ws (? (two? (w 1)) (w 1) '(117 103 111))
+           mask (? (two? (w 1)) 4095 (4095 - (4095 & um)))
+           r (? (w 0 < n && elem (m (w 0)) "+-=") (ops (w 0) ws mask cur) ())
+           (? !(two? r) ()
+              (n <= r 0) (r 1)
+              (clauses (r 0 + 1) (r 1))))
+       (? (0 < n && n <= 4 && oct? 0) (uoct m | (? dir? (cur & 3072) 0)) (0 < n) (clauses 0 cur) ()))
 
    ; -- pwd: where we stand --
    (pwd-main _) (say out (cwd ()), put out 10, flush out, 0)
@@ -260,142 +308,196 @@
        _ (flush out) (? ok 0 2))
 
    ; -- cp and mv: a directory destination pulls the basename in beside --
-   ; -f is taken and ignored, and that is not a silent lie: -f means "do not prompt",
-   ; and nothing here ever prompts, so forced is the behaviour. -p is the other kind --
-   ; it changes what lands, so it is honoured. (ucopy already carries the mode; the
-   ; mtime is the half that was missing.) a recipe saying `mv -f` fails without this.
-   ; a leading cluster of f p r R, in any order and any number of words
-   (cp-flag? w) (1 < #w && w 0 = 45 && all (\ i (elem (w i) '(102 112 114 82))) >^#w)
-   (cp-has w c) (elem c (map (\ i (w i)) ^#w))
-   (cpf-split as)                              ; -> (p? r? rest) off the cluster
-    (: (fl a p r) (? (two? a && cp-flag? <a)
-                     (fl >a (cp-has <a 112 ? 1 p) (cp-has <a 114 || cp-has <a 82 ? 1 r))
-                     [p r a])
-       (fl as 0 0))
-   ; -r walks a tree top-down: a directory is laid at the far end and its entries follow
-   ; it, a file is one copy. a miss inside costs the answer, not the rest of the walk
-   (cp-tree src dst)
-    ((? (udirp dst) 0 (mkdir dst 493)), (? !(udirp dst) (usay-err ("cp: cannot create " + dst))
-          (foldl (\ ok nm (: s (src + "/" + nm) d (dst + "/" + nm)
-                             k (? (udirp s) (cp-tree s d) (ucopy1 "cp" s d))
-                             (? k ok 0)))
-                 1 (readdir src))))
-   ; SRC.. DST: the last operand is the target, and with more than one source it must be
-   ; a directory. each source lands under udest, a miss is said and the rest still go
-   (cp-srcs who as each1)
-    (: fs (rev as) dst <fs srcs (rev >fs)
-       (? (two? >srcs && !(udirp dst))
-          (udie 1 (who + ": target " + dst + " is not a directory"))
+   ; -f is taken and ignored: it means "do not prompt", and without -i nothing prompts.
+   ; -i asks before replacing, -n never replaces, the last of -f -i -n spelled wins; -u
+   ; replaces only an older file. cp -a is -rpP: under -r or -P a link is copied as a
+   ; link, and -L follows it as a plain cp does
+   ; whether src may land on dst, which may already be there
+   (uclob who how u? src dst)
+    (: a (stat src) b (stat dst)
+       (? !(ukind dst) 1
+          (how = 110) 0
+          (u? && two? a && two? b && <>>>a <= <>>>b) 0
+          (how = 105) (uyes (who + ": overwrite '" + dst + "'? "))
+          1))
+   ; SRC.. DST, or with -t DIR every operand a source. with more than one source the
+   ; target must be a directory; each source lands under udest, a miss is said and the
+   ; rest still go
+   (cp-srcs who ops td each1)
+    (: fs (rev ops)
+       dst (? td td <fs)
+       srcs (? td ops (rev >fs))
+       (? (atom? srcs) (udie 2 ("usage: " + who + " [-" + (who = "cp" ? "afinpPLrRuv" "finuv") + "] [-t DIR] SRC.. DST"))
+          ((td || two? >srcs) && !(udirp dst))
+           (udie 1 (who + ": target " + dst + " is not a directory"))
           (: ok (foldl (\ ok src (? (each1 src (udest src dst)) ok 0)) 1 srcs)
              (? ok 0 1))))
    (cp-main as)
-    (: q (cpf-split as) p? <q r? <>q rest <>>q
-       (one src dst)
-        (: k (? (udirp src)
-                (? r? (cp-tree src dst) (usay-err ("cp: -r not given; omitting directory " + src)))
-                (ucopy1 "cp" src dst))
-           s (? (k && p?) (stat src) ())
-           _ (? (two? s) (utime dst <>s) 0)
+    (: fo (uflags "cp" as '(116) "afinpPLrRtuv")
+       t <fo
+       a? (t 97)
+       r? (? (a? || t 114 || t 82) 1 0)
+       p? (? (a? || t 112) 1 0)
+       deref? (? (t 76) 1 (a? || r? || t 80) 0 1)
+       how (uoptlast as '(102 105 110) '(116) ())
+       (said s d) (? (t 118) (say out ("'" + s + "' -> '" + d + "'\n")) 0)
+       (kind q) (? deref? (? (udirp q) 'dir (ukind q) 'file ()) (ukind q))
+       ; one thing that is not a directory
+       (one1 s d)
+        (: k (? (kind s = 'link)
+                (: tg (readlink s)
+                   _ (? (ukind d) (unlink d) 0)
+                   (? (string? tg) (? (symlink tg d) (usay-err ("cp: cannot create " + d)) 1)
+                      (usay-err ("cp: cannot read " + s))))
+                (: k (ucopy1 "cp" s d)
+                   st (? (k && p?) (stat s) ())
+                   _ (? (two? st) (utime d <>st) 0)
+                   k))
+           _ (? k (said s d) 0)
            k)
-       (? (atom? >rest) (udie 2 "usage: cp [-f] [-p] [-r] SRC.. DST")
-          (cp-srcs "cp" rest one)))
-   (mv-main as)
-    (: rest (<>>(cpf-split as))
+       ; -r walks a tree top-down: a directory is laid at the far end and its entries
+       ; follow it, its mode after them. a miss inside costs the answer, not the rest
+       (tree s d)
+        (: _ (? (udirp d) 0 (mkdir d 493, said s d))
+           (? !(udirp d) (usay-err ("cp: cannot create " + d))
+              (: ok (foldl (\ ok nm (: sp (s + "/" + nm) dp (d + "/" + nm)
+                                       k (? (kind sp = 'dir) (tree sp dp)
+                                            (uclob "cp" how (t 117) sp dp) (one1 sp dp)
+                                            1)
+                                       (? k ok 0)))
+                           1 (readdir s))
+                 st (stat s)
+                 _ (? (two? st) (chmod d (4095 & <>>st)) 0)
+                 _ (? (p? && two? st) (utime d <>st) 0)
+                 ok)))
        (one src dst)
-        (: e (rename src dst)
-           (? !e 1
-              (e = 'exdev) (? (ucopy1 "mv" src dst) (unlink src, 1) 0)  ; the long way
-              (usay-err ("mv: cannot move " + src))))
-       (? (atom? >rest) (udie 2 "usage: mv [-f] SRC.. DST")
-          (cp-srcs "mv" rest one)))
+        (: k (kind src)
+           (? !k (usay-err ("cp: cannot stat " + src))
+              (k = 'dir) (? r? (tree src dst) (usay-err ("cp: -r not given; omitting directory " + src)))
+              (uclob "cp" how (t 117) src dst) (one1 src dst)
+              1))
+       (cp-srcs "cp" (fo 1) (uoptv t 116) one))
+   (mv-main as)
+    (: fo (uflags "mv" as '(116) "finuvt")
+       t <fo
+       how (uoptlast as '(102 105 110) '(116) ())
+       (one src dst)
+        (? !(ukind src) (usay-err ("mv: cannot stat " + src))
+           !(uclob "mv" how (t 117) src dst) 1
+           (: e (rename src dst)
+              k (? !e 1
+                   (e = 'exdev) (? (ucopy1 "mv" src dst) (unlink src, 1) 0)  ; the long way
+                   (usay-err ("mv: cannot move " + src)))
+              _ (? (k && t 118) (say out ("renamed '" + src + "' -> '" + dst + "'\n")) 0)
+              k))
+       (cp-srcs "mv" (fo 1) (uoptv t 116) one))
 
-   ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
+   ; -- rm: unlink; -r walks a tree bottom-up and never through a link; -d takes an empty
+   ; directory; -f keeps quiet about misses and answers no prompt; -i asks for each, the
+   ; later of -f and -i winning. . and .. are refused, as GNU's are --
    (rm-main as)
-    (: (fl a r f) (? (atom? a) [r f a]
-                     (<a = "-r") (fl >a 1 f)
-                     (<a = "-f") (fl >a r 1)
-                     ((<a = "-rf") || (<a = "-fr")) (fl >a 1 1)
-                     [r f a])
-       p (fl as 0 0)
-       r? <p f? <>p fs <>>p
+    (: fo (uflags "rm" as () "dfirRv")
+       t <fo fs (fo 1)
+       r? (t 114 || t 82)
+       f? (t 102)
+       i? (uoptlast as '(102 105) () () = 105)
+       (ask m) (? i? (uyes m) 1)
+       (gone q m) (? (t 118) (say out (m + " '" + q + "'\n"), 1) 1)
+       (rm1 q how e) (? !e (gone q how) (usay-err ("rm: cannot remove " + q)))
        (zap q)
-        (? (udirp q)
-           (: (go m ok) (? (atom? m) ok
-                           (: k (zap (q + "/" + <m))
-                              (go >m (? k ok 0))))
-              ok (go (readdir q) 1)
-              e (rmdir q)
-              (ok && !e))
-           !(unlink q))
+        (: k (ukind q)
+           (? !k (? f? 1 (usay-err ("rm: cannot remove " + q + ": no such file")))
+              (k = 'dir)
+               (? r? (: ok (foldl (\ ok nm (? (zap (q + "/" + nm)) ok 0)) 1 (readdir q))
+                        (? !(ask ("rm: remove directory '" + q + "'? ")) ok
+                           (rm1 q "removed directory" (rmdir q)) ok
+                           0))
+                  (t 100) (? (ask ("rm: remove directory '" + q + "'? ")) (rm1 q "removed directory" (rmdir q)) 1)
+                  (usay-err ("rm: cannot remove " + q + ": is a directory")))
+              (? (ask ("rm: remove '" + q + "'? ")) (rm1 q "removed" (unlink q)) 1)))
        (one q ok)
-        (: hit (? r? (zap q) !(unlink q))
-           (? hit ok
-              f? ok
-              (say err ("rm: cannot remove " + q), put err 10, 0)))
-       (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
-       (? (two? fs) (go fs 1)
+        (: b (ubase q "")
+           k (? (b = "." || b = "..") (usay-err ("rm: refusing to remove " + q))
+                (b = "/") (usay-err "rm: refusing to remove /")
+                (zap q))
+           (? k ok 0))
+       (? (two? fs) (? (foldl (\ ok q (one q ok)) 1 fs) 0 1)
           f? 0
-          (udie 2 "usage: rm [-r] [-f] FILE..")))
+          (udie 2 "usage: rm [-dfirRv] FILE..")))
 
-   ; -- mkdir and rmdir: -p lays every prefix on the way down --
+   ; -- mkdir and rmdir: -p lays every prefix on the way down, or takes it away on the
+   ; way up; -m sets the new directory's mode whole, the umask aside --
    (mkdir-main as)
-    (: t (tablet 0)
-       o (uopt as t () '(101) ())
-       _ (: c (uoptun t "p") (? !c () (udie 2 ("mkdir: unknown option -" + string c))))
-       p? (peep t 112 0)
-       fs <>>o
-       _ (: w (uoptstray as fs) (? !w () (udie 2 ("mkdir: unknown option " + w))))
+    (: fo (uflags "mkdir" as '(109) "mpv")
+       t <fo fs (fo 1)
+       p? (t 112)
+       mw (uoptv t 109)
+       m (? mw (umode mw 511 1 0) ())
+       _ (? (!mw || charm? m) () (udie 1 ("mkdir: invalid mode: '" + mw + "'")))
+       (made q) (? (t 118) (say out ("mkdir: created directory '" + q + "'\n")) 0)
+       (mk q) (: e (mkdir q 493) (? e e (made q, ())))
        (mkp q)                          ; a tolerant mkdir at every slash, then the whole
         (: n #q
-           (go k) (? (n <= k) (mkdir q 493)
-                     ((? ((0 < k) && (q k = 47)) (mkdir (snip q 0 k) 493) ()), go (k + 1)))
+           (go k) (? (n <= k) (mk q)
+                     ((? ((0 < k) && (q k = 47) && !(ukind (snip q 0 k))) (mk (snip q 0 k)) ()), go (k + 1)))
            (go 1))
        (one q ok)
-        (? p? (mkp q, (? (udirp q) ok
-                    (say err ("mkdir: cannot create " + q), put err 10, 0)))
-           (: e (mkdir q 493)
-              (? !e ok
-                 (say err ("mkdir: cannot create " + q), put err 10, 0))))
+        (: e (? p? (mkp q) (mk q))
+           _ (? (!e && charm? m) (chmod q m) 0)
+           (? (!e || (p? && udirp q)) ok
+              (say err ("mkdir: cannot create " + q), put err 10, 0)))
        (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
-       (? (two? fs) (go fs 1) (udie 2 "usage: mkdir [-p] DIR..")))
+       (? (two? fs) (go fs 1) (udie 2 "usage: mkdir [-pv] [-m MODE] DIR..")))
    (rmdir-main as)
-    (: (go a ok)
-        (? (two? a)
-           (: e (rmdir <a)
-              (go >a
-                  (? !e ok (say err ("rmdir: cannot remove " + <a), put err 10, 0))))
-           (? ok 0 1))
-       (? (two? as) (go as 1) (udie 2 "usage: rmdir DIR..")))
+    (: fo (uflags "rmdir" as () "pv")
+       t <fo
+       (rd q) (: e (rmdir q)
+                 (? e (usay-err ("rmdir: cannot remove " + q))
+                    (: _ (? (t 118) (say out ("rmdir: removing directory, '" + q + "'\n")) 0)
+                       u (udir q)
+                       (? (t 112 && !(u = "." || u = "/")) (rd u) 1))))
+       (? (two? (fo 1)) (? (foldl (\ ok q (? (rd q) ok 0)) 1 (fo 1)) 0 1)
+          (udie 2 "usage: rmdir [-pv] DIR..")))
 
-   ; -- ln: two names for one thing (-s the pointing kind, -f moves the old name aside) --
+   ; -- ln: two names for one thing (-s the pointing kind, -f moves the old name aside).
+   ; TARGET LINK, TARGET alone into here, or TARGET.. DIR; -T never reads the last as a
+   ; directory, -n not when it is a link to one --
    (ln-main as)
-    (: (fl a s f rest) (? (atom? a) [s f rest]
-                          (<a = "-s") (fl >a 1 f rest)
-                          (<a = "-f") (fl >a s 1 rest)
-                          ((<a = "-sf") || (<a = "-fs")) (fl >a 1 1 rest)
-                          [s f (rest + a)])
-       p (fl as 0 0 ())
-       s? <p f? <>p rest <>>p
-       _ (? (two? >rest) () (udie 2 "usage: ln [-s] [-f] TARGET LINKNAME"))
-       _ (? f? (unlink <>rest) ())
-       e (? s? (symlink <rest <>rest) (hardlink <rest <>rest))
-       (? !e 0 (udie 1 ("ln: cannot link " + <>rest))))
+    (: fo (uflags "ln" as () "fnsTv")
+       t <fo ops (fo 1) n #ops
+       (dir? d) (? (t 84) 0 (t 110 && ukind d = 'link) 0 (udirp d))
+       (mk tg nm)
+        (: _ (? (t 102 && ukind nm && !(ukind nm = 'dir)) (unlink nm) 0)
+           e (? (t 115) (symlink tg nm) (hardlink tg nm))
+           (? e (usay-err ("ln: cannot link " + nm))
+              (: _ (? (t 118) (say out ("'" + nm + "' -> '" + tg + "'\n")) 0) 1)))
+       last (? (0 < n) (ops (n - 1)) ())
+       (? (n = 0) (udie 2 "usage: ln [-fnsTv] TARGET [LINK] | ln [-fnsv] TARGET.. DIR")
+          (n = 1) (? (mk <ops (ubase <ops "")) 0 1)
+          (dir? last) (? (foldl (\ ok tg (? (mk tg (last + "/" + ubase tg "")) ok 0)) 1 (rev >(rev ops))) 0 1)
+          (2 < n) (udie 1 ("ln: target " + last + " is not a directory"))
+          (? (mk <ops last) 0 1)))
 
-   ; -- touch: be there, and be now --
+   ; -- touch: be there, and be now; -c makes nothing, -r takes a file's time, -d @SECONDS
+   ; a given one --
    (touch-main as)
-    (: t (tablet 0)
-       o (uopt as t () '(101) ())
-       ; touch reads no options: "" names an empty alphabet, so every letter the walk
-       ; pinned is unknown. the file really called -h is `touch -- -h`
-       _ (: c (uoptun t "") (? !c () (udie 2 ("touch: unknown option -" + string c))))
-       fs <>>o
-       _ (: w (uoptstray as fs) (? !w () (udie 2 ("touch: unknown option " + w))))
+    (: fo (uflags "touch" as '(100 114) "cdr")
+       t <fo fs (fo 1)
+       rf (uoptv t 114)
+       dw (uoptv t 100)
+       rs (? rf (stat rf) ())
+       _ (? (!rf || two? rs) () (udie 1 ("touch: cannot stat " + rf)))
+       ms (? rf <>rs
+             dw (? (1 < #dw && dw 0 = 64 && all digit? (chars (snip dw 1 #dw))) (1000 * unum (snip dw 1 #dw))
+                   (udie 1 ("touch: cannot read the date '" + dw + "' (only @SECONDS here)")))
+             ())
        (one q ok)
-        (: _ (? (two? (stat q)) () (: p (open q "a") (? (hot? p) (close p) ())))
-           e (utime q ())
+        (: there (two? (stat q))
+           _ (? (there || t 99) () (: p (open q "a") (? (hot? p) (close p) ())))
+           e (? (there || !(t 99)) (utime q ms) ())
            (? !e ok (say err ("touch: cannot touch " + q), put err 10, 0)))
        (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
-       (? (two? fs) (go fs 1) (udie 2 "usage: touch FILE..")))
+       (? (two? fs) (go fs 1) (udie 2 "usage: touch [-c] [-r FILE] [-d @SECONDS] FILE..")))
 
    ; -- lift: hand a file to whatever is outside the machine -- the page's downloads,
    ; the node runner's directory -- by way of /proc/lift. a seat with no outside has
@@ -406,17 +508,30 @@
        p (open "/proc/lift" "w")
        (hot? p ? (say p f, close p, 0) (udie 1 "lift: nothing outside this seat to lift to")))
 
-   ; -- chmod: the octal bits onto every named path --
+   ; -- chmod: a mode, octal or symbolic, onto every named path; -R down each directory,
+   ; never through a link found on the way; -f keeps quiet. a word that is no mode
+   ; refuses before anything changes --
    (chmod-main as)
-    (? (atom? >as) (udie 2 "usage: chmod OCTAL FILE..")
-       (: m (uoct <as)
-          (go a ok)
-           (? (two? a)
-              (: e (chmod <a m)
-                 (go >a
-                     (? !e ok (say err ("chmod: cannot chmod " + <a), put err 10, 0))))
-              (? ok 0 1))
-          (go >as 1)))
+    (: (cfl? w) (1 < #w && w 0 = 45 && all (i \ elem (w i) "Rf") >^#w)
+       (fl a r f) (? (atom? a) [r f a]
+                     (<a = "--") [r f >a]
+                     (cfl? <a) (fl >a (? (r || has? <a "R") 1 0) (? (f || has? <a "f") 1 0))
+                     [r f a])
+       p (fl as 0 0) r? <p f? <>p rest <>>p
+       _ (? (two? >rest) () (udie 2 "usage: chmod [-Rf] MODE FILE.."))
+       m <rest
+       um (umask-now 0)
+       _ (? (charm? (umode m 0 0 um)) () (udie 1 ("chmod: invalid mode: '" + m + "'")))
+       (set q) (: st (stat q)
+                  (? (atom? st) (? f? 0 (usay-err ("chmod: cannot access " + q)))
+                     (: e (chmod q (umode m (4095 & <>>st) (16384 = 61440 & <>>st) um))
+                        (? !e 1 f? 0 (usay-err ("chmod: cannot chmod " + q))))))
+       (tree q ok)
+        (: k (set q)
+           (? (r? && udirp q)
+              (foldl (\ o nm (: p (q + "/" + nm) (? (ukind p = 'link) o (tree p o)))) (? k ok 0) (readdir q))
+              (? k ok 0)))
+       (? (foldl (\ ok q (tree q ok)) 1 >rest) 0 1))
 
    ; -- install: copy with the mode set in the same breath (what the build's
    ; place-a-file steps say). -d makes directories (with parents, like -p);

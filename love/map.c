@@ -479,6 +479,46 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=a
  ai_musttail return Answerp(nsp, word(k + 1)); }
 lvm(lvm_nif) { ai_musttail return Ap(lvm_nifx, g); }   // the same build, no extras word
 
+// a deferred native: a cell of nifx's shape built before its compile can see every sibling,
+// patched once it can. until then, and for good if that compile declines, its code slot
+// forwards to the interp twin; a patch lays the native's code in the header and the code
+// slot, its extras beside them and the native itself past those, which keeps the code alive
+//   ar 1: [hdr code interp lvm_ret 0 E N]    ar>1: [hdr cur ar code interp lvm_ret ar-1 E N]
+lvm(lvm_deferfwd) {                           // entered at the code slot, as a native is
+ union u *e = cell(Ip[1].x);
+ Ip = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? e + 2 : e;
+ ai_musttail return Continue(); }
+// (defercell interp arity)
+static lvm(lvm_defercell) {
+ intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0;
+ if (ar < 1) ai_musttail return Answerp(1, Sp[0]);
+ Have(10);
+ union u *k = (union u*) Hp;
+ uintptr_t w = 0;
+ k[w++].ap = lvm_deferfwd;
+ if (ar > 1) k[w++].ap = lvm_cur, k[w++].x = putcharm(ar);
+ k[w++].ap = lvm_deferfwd, k[w++].x = Sp[0], k[w++].ap = lvm_ret, k[w++].x = putcharm(ar - 1);
+ k[w++].x = putcharm(0), k[w++].x = putcharm(0);
+ Hp += w + 1;
+ tagthread(k, w);
+ ai_musttail return Answerp(1, word(k + 1)); }
+static union u const nif_defercell[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_defercell}, {lvm_ret0}};
+LvNif("defercell", nif_defercell, NULL);
+// (deferpatch cell native): a native of nif's shape (its header its code) patches the cell; the
+// interp twin back, or anything else, leaves it forwarding. answers the cell
+static lvm(lvm_deferpatch) {
+ union u *v = cell(Sp[0]), *c = v->ap == lvm_cur ? v + 2 : v;
+ word n = Sp[1];
+ if (c->ap == lvm_deferfwd && evenp(n) && n != c[1].x && !in_data(cell(n)->ap)) {
+  union u *m = cell(n), *mc = m->ap == lvm_cur ? m + 2 : m;
+  if (mc[2].ap == lvm_ret && m[-1].ap == mc->ap) {
+   c->ap = v[-1].ap = mc->ap;
+   if ((mc[4].x & 3) != ai_thread_tag) c[4].x = mc[4].x, gen_wb_cell(g, &c[4], mc[4].x);
+   c[5].x = n, gen_wb_cell(g, &c[5], n); } }
+ ai_musttail return Answerp(1, Sp[0]); }
+static union u const nif_deferpatch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_deferpatch}, {lvm_ret0}};
+LvNif("deferpatch", nif_deferpatch, NULL);
+
 
 // (pour dst doff src soff n): copy n bytes of string-or-cask src into cask dst,
 // clamped to both backings (an out-of-range ask copies less, never tramples); answers dst

@@ -73,12 +73,13 @@
    ; ground for one to lie over
    (limn-bare s k) ("\e[0;" + limn-ink 48 (glass s k 2) + "m ")
 
-   ; a cluster's marks, after its base
+   ; the rest of a cluster, after its base
    (limn-marks j s k m) (: v (glass s k m)
-                           (m < 6 && 0 < v ? (say j (utf8 v), limn-marks j s k (m + 1)) 0))
-   ; a lead VS16 widened (?2027): an outer terminal may draw it one column or two, so its
-   ; two cells are erased first and the cursor comes back and steps two past it after
-   (limn-vs16? s g k) (((g >> 21 & 3) = 1) && elem 65039 [(glass s k 3) (glass s k 4) (glass s k 5)])
+                           (m < 12 && 0 < v ? (say j (utf8 v), limn-marks j s k (m + 1)) 0))
+   ; a wide lead with more to it -- VS16 or a ZWJ sequence widened it (?2027), or a mark
+   ; rides it: an outer terminal may draw it one column or several, so its two cells are
+   ; erased first and the cursor comes back and steps two past it after
+   (limn-gc? s g k) (((g >> 21 & 3) = 1) && 0 < glass s k 3)
 
    ; paint row i cell by cell, threading the pen. a wide char's tail says nothing: the
    ; outer terminal steps two columns for its lead. a selected cell wears the reverse face,
@@ -90,7 +91,7 @@
                               (? ((g >> 21 & 3) = 2) (limn-row j s c i (q + 1) p pk)
                                  ((g >> 23 & 1) = 1) (say j (pk @- (limn-tile s k) 1 (limn-bare s k) 2 "\e[C"),
                                                       limn-row j s c i (q + 1) -1 pk)
-                                 (: p2 (limn-pen g (glass s k 1) (glass s k 2)) vs (limn-vs16? s g k)
+                                 (: p2 (limn-pen g (glass s k 1) (glass s k 2)) vs (limn-gc? s g k)
                                     ((p = p2 ? 0 (say j (limn-sgr p2))),
                                      (vs ? (say j "\e[2X\e7") 0),
                                      say j (limn-glyph (g & 2097151)),

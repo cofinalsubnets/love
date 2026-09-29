@@ -86,7 +86,9 @@
 (:- (x \ (:
  c (sco 0 [()] ())
  y (feel c (two? x && <x == opfixed ? >x (opfix x)))
- (ana c y (k0 c) 0 0)))
+ k (ana c y (k0 c) 0 0)
+ _ (each (rev (peep c 'defer ())) (t \ t 0))   ; the glaze's compiles that waited on a sibling not yet built: all are now
+ k))
   lvm_cur (pick 0 (+))
   ; the nil? nif for cflip's head test: opfix's glued lane splices the value, never the name,
   ; so `!e` reaches the peephole unnamed. read once, like lvm_cur.
@@ -682,7 +684,7 @@
    ; copy: show reads a function back off its words (post.l's lamform)
    s ('\ . (d 'imp + (? (two? os) >>os exp)))
    hk (gv 'natjit 0)
-   r ((!hk ? e (hq ? (hk e s a gv (farq c) (lamsup c) nm iop apx (ic 'l)) e)) . d 'imp)
+   r ((!hk ? e (hq ? (hk e s a gv (farq c) (lamsup c) nm iop apx (ic 'l) (rootc c)) e)) . d 'imp)
    ; the record -- (exp src-tail (entry . imports)), keyed by the node itself -- rides up to the
    ; nearest enclosing lambda's, this closure's entry ahead of its subtree's, so a hook finds an
    ; inner lambda site under its body by identity.
