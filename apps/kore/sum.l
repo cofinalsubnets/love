@@ -130,19 +130,30 @@
    ; all, and lists that were no good. sour is its own count because it costs the
    ; status and says nothing: the two warnings below are each a claim about lines, and
    ; a list nobody could read has none to make a claim about.
-   (sum-check who mk n as)
+   ; o: --quiet drops the OK lines, --status every line and warning, --ignore-missing a
+   ; listed file that is not there, --strict fails on a line that is no checksum line
+   ; and -w says each such line, by its list and number
+   (sum-check who mk n as o)
     (: (row l st)
         (: p (sum-split l n)
            bad <st unread <>st seen <>>st sour <>>>st
-           (? (atom? p) st
-              (: said <p f <>p r (sum-run (mk #said) f)
-                 (? (atom? r) (sum-nope who f r, say out (f + ": FAILED open or read\n"), [bad (unread + 1) (seen + 1) sour])
-                    (<r = said) (say out (f + ": OK\n"), [bad unread (seen + 1) sour])
-                    (say out (f + ": FAILED\n"), [(bad + 1) unread (seen + 1) sour])))))
+           (? (atom? p) (: _ (pin o 'ln (peep o 'ln 0 + 1))
+                           _ (pin o 'ill (peep o 'ill 0 + 1))
+                           _ (? (o 'w && !(o 'status)) (say err (who + ": " + o 'nm + ": " + show (o 'ln) + ": improperly formatted "
+                                                                 + (upper (snip who 0 (#who - 3))) + " checksum line\n")) 0)
+                           st)
+              (: _ (pin o 'ln (peep o 'ln 0 + 1))
+                 said <p f <>p r (sum-run (mk #said) f)
+                 (say1 m) (? (o 'status) 0 (say out (f + m + "\n")))
+                 (? (atom? r) (? (o 'miss && r = 'enoent) [bad unread seen sour]
+                                 (: _ (? (o 'status) 0 (sum-nope who f r)) _ (say1 ": FAILED open or read") [bad (unread + 1) (seen + 1) sour]))
+                    (<r = said) (: _ (? (o 'quiet) 0 (say1 ": OK")) [bad unread (seen + 1) sour])
+                    (: _ (say1 ": FAILED") [(bad + 1) unread (seen + 1) sour])))))
        (over ls st) (? (two? ls) (over >ls (row <ls st)) st)
        ; one list, and GNU's complaint where nothing in it was a checksum line
        (list1 nm text st)
         (: was <>>st
+           _ (pins o 'nm nm 'ln 0)
            s2 (over (lines text) st)
            (? (was < <>>s2) s2
               (say err (who + ": " + nm + ": no properly formatted checksum lines found"), put err 10, [<s2 <>s2 <>>s2 (<>>>s2 + 1)])))
@@ -154,10 +165,14 @@
        st (? (two? as) (walk as [0 0 0 0]) (list1 "standard input" ((slurp in) + "") [0 0 0 0]))
        bad <st unread <>st sour <>>>st
        _ (flush out)
-       _ (? (0 < unread) (sum-warn who unread "listed file" " could not be read") 0)
-       _ (? (0 < bad) (sum-warn who bad "computed checksum" " did NOT match") 0)
+       ill (peep o 'ill 0)
+       _ (? (o 'status) 0
+            ; a list with no checksum line at all has said so, and says no count of them
+            (: _ (? (0 < ill && 0 < <>>st) (sum-warn who ill "line" (? (ill = 1) " is improperly formatted" " are improperly formatted")) 0)
+               _ (? (0 < unread) (sum-warn who unread "listed file" " could not be read") 0)
+               (? (0 < bad) (sum-warn who bad "computed checksum" " did NOT match") 0)))
        _ (flush err)
-       (? (0 < bad || 0 < unread || 0 < sour) 1 0))
+       (? (0 < bad || 0 < unread || 0 < sour || (o 'strict && 0 < ill)) 1 0))
    ; "1 listed file could not be read", "2 listed files could not be read" -- the noun
    ; takes the s and the verb does not, which holds for both warnings GNU says here
    (sum-warn who n what tail)
@@ -165,10 +180,16 @@
 
    ; --- the mains ------------------------------------------------------------
    ; the digest tools share a front: -c reads a list back, anything else digests operands
+   ; -b marks a digest binary (a * before the name), -t text (the default two spaces);
+   ; with -c, the flags sum-check reads
    (sum-front who nm k probe mk n as)
-    (: fo (uflagsl who as () "c" {"check" 99})
-       (sum-have who nm k probe, (? (<fo 99) (sum-check who (_ \ mk) n (fo 1))
-             (sum-say who sum-hexline mk "-" (fo 1)))))
+    (: fo (uflagsl who as () (chars "bctw" + [1001 1002 1003 1004]) {"check" 99 "binary" 98 "text" 116 "warn" 119 "quiet" 1001 "status" 1002
+                                     "ignore-missing" 1003 "strict" 1004})
+       t <fo
+       o {'quiet (t 1001) 'status (t 1002) 'miss (t 1003) 'strict (t 1004) 'w (t 119)}
+       line (? (t 98) (\ v n f (v + " *" + f + "\n")) sum-hexline)
+       (sum-have who nm k probe, (? (t 99) (sum-check who (_ \ mk) n (fo 1) o)
+             (sum-say who line mk "-" (fo 1)))))
    (cksum-main as) (sum-have "cksum" "cksum" 0 sum-ckp, sum-say "cksum" sum-ckline sum-ckd "" ((uflags "cksum" as () "") 1))
    (md5sum-main as) (sum-front "md5sum" "md5" 1 sum-md5p sum-md5d 32 as)
    (sha256sum-main as) (sum-front "sha256sum" "sha256" 2 sum-shap sum-shad 64 as)
@@ -187,22 +208,14 @@
                       (512 < v) (bad w "maximum digest length for 'BLAKE2b' is 512 bits")
                       (v % 8) (bad w "length is not a multiple of 8")
                       v))
-       (go a l chk ops)
-        (? (atom? a) [l chk (rev ops)]
-           (: w <a n #w
-              (? (w = "--") [l chk ((rev ops) + >a)]
-                 (w = "-c" || w = "--check") (go >a l 1 ops)
-                 (w = "-l" || w = "--length")
-                  (? (two? >a) (go >>a (bits <>a) chk ops)
-                     (udie 1 "b2sum: option requires an argument -- 'l'\nTry 'b2sum --help' for more information."))
-                 (2 < n && snip w 0 2 = "-l") (go >a (bits (snip w 2 n)) chk ops)
-                 (9 < n && snip w 0 9 = "--length=") (go >a (bits (snip w 9 n)) chk ops)
-                 (go >a l chk (w . ops)))))
-       r (go as 0 0 ())
-       l <r nn (? l (l // 8) 64)
-       (? <>r (sum-check "b2sum" (? l (_ \ (_ \ (sum-b2d nn))) (k \ (_ \ (sum-b2d (k // 2)))))
-                         (? l (2 * nn) 0) <>>r)
-          (sum-say "b2sum" sum-hexline (_ \ (sum-b2d nn)) "-" <>>r)))
+       fo (uflagsl "b2sum" as '(108) (chars "bctwl" + [1001 1002 1003 1004]) {"check" 99 "length" 108 "binary" 98 "text" 116 "warn" 119 "quiet" 1001
+                                              "status" 1002 "ignore-missing" 1003 "strict" 1004})
+       t <fo ops (fo 1)
+       o {'quiet (t 1001) 'status (t 1002) 'miss (t 1003) 'strict (t 1004) 'w (t 119)}
+       l (: v (uoptv t 108) (? v (bits v) 0)) nn (? l (l // 8) 64)
+       (? (t 99) (sum-check "b2sum" (? l (_ \ (_ \ (sum-b2d nn))) (k \ (_ \ (sum-b2d (k // 2)))))
+                            (? l (2 * nn) 0) ops o)
+          (sum-say "b2sum" (? (t 98) (\ v n f (v + " *" + f + "\n")) sum-hexline) (_ \ (sum-b2d nn)) "-" ops)))
 
    ; sha3sum: toybox's -a BITS (224 by default, 128..512), -b the digest alone, -S shake's
    ; pad; busybox's -c beside them, reading a list of the length -a says
@@ -225,7 +238,7 @@
                  (pin o 'fs (o 'fs + [w]), go >a o))))
        o (go as {'a 224 'fs ()})
        mk (_ \ (sum-sha3d (o 'a) (o 'S)))
-       (? (o 'c) (sum-check "sha3sum" (_ \ mk) (2 * (o 'a // 8)) (o 'fs))
+       (? (o 'c) (sum-check "sha3sum" (_ \ mk) (2 * (o 'a // 8)) (o 'fs) {})
           (sum-say "sha3sum" (? (o 'b) (\ v n f (v + "\n")) sum-hexline) mk "-" (o 'fs))))
 
    ; crc32: toybox's -- zlib's crc of each file, eight hex digits and the name

@@ -892,7 +892,7 @@
     'join "usage: join [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] FILE1 FILE2"
     'od "usage: od [-A C] [-t TYPE] [-N N] [-j N] [-v] [-abcdiosx] [FILE..]"
     'cksum "usage: cksum [FILE..]"
-    'md5sum "usage: md5sum [-c|--check] [FILE..]"
+    'md5sum "usage: md5sum [-bt] [FILE..] | md5sum -c [--quiet] [--status] [--ignore-missing] [--strict] [-w] [LIST..]"
     'sha256sum "usage: sha256sum [-c] [FILE..]"
     'sha1sum "usage: sha1sum [-c] [FILE..]"
     'sha224sum "usage: sha224sum [-c] [FILE..]"
