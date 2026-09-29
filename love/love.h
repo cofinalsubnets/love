@@ -101,8 +101,9 @@ enum ai_status { ai_status_ok = 0, ai_status_scare = 1, ai_status_more = 2, ai_s
 static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
   (struct ai*) ((uintptr_t) g | s); }
 // the largest ask any heap could grant, in words: a size past it is refused, never
-// wrapped, and every sum and scale of one stays well inside a word
-#define ai_words_max ((uintptr_t) -1 / sizeof(uintptr_t) / 16)
+// wrapped. Have adds it to Hp, and a kernel's heap sits in the top half of the address
+// space, so it stays under 2^40 words (2^26 on 32-bit) -- far from any wrap
+#define ai_words_max ((uintptr_t) -1 >> (sizeof(uintptr_t) > 4 ? 24 : 6))
 // a * b, saturating at half the word -- still past ai_words_max, so still a refusal
 static ai_inline uintptr_t ai_mulsat(uintptr_t a, uintptr_t b) {
  uintptr_t const h = (uintptr_t) 1 << (4 * sizeof(uintptr_t)), top = (uintptr_t) -1 >> 1;
