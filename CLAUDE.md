@@ -36,6 +36,14 @@
 ; - `make test` is the fast gate to check if something works (<1m)
 ; - `make test_slow` is the slow gate, before committing (<10m)
 ; - `make test_extra` is the really slow gate, before merging (qemu boots, cross-arch, boards)
+; - the lanes a change owes beyond `make test`, by the files it touches -- not by its intent:
+;   apps/kore/* -> test_kore test_hostnif;  apps/lush.l, apps/cook.l, apps/crow.l -> test_hostnif
+;   love/snap.c, love/image.c, Makefile, tools/hotbake.sh -> test_ccwarn test_hdiff test_inle
+;   a crewfiles member, or anything else baked -> test_fixpoint test_bakerep
+;   apps/moon/* -> test_moon test_clay test_cca64 test_ccrv64 test_ccwasm test_ccthumb1
+;     test_ccthumb2 test_fixpoint
+;   love/holo/* -> test_holo test_as;  apps/sb/* -> test_sb
+;   test_slow runs last, on the exact tree that lands
 ; - use libra `out/love apps/libra/libra.l <file>` to check paren balance
 ; - don't trust comments without reading the code they're talking about
 ; - just because something was done on purpose doesn't mean it was for a good reason
