@@ -115,6 +115,10 @@
        _ (: c (uoptun t ok) (? !c () (udie 2 (who + ": unknown option -" + string c))))
        _ (: w (uoptstray as <>>o) (? !w () (udie 2 (who + ": unknown option " + w))))
        [t <>>o])
+   ; a hand-walked tool's operands, refused with 2 when one still looks like a flag: its
+   ; walk stops at the first word it does not know, so that word is a stranger or a flag
+   ; after an operand
+   (ustray who as rest) (: w (uoptstray as rest) (? !w rest (udie 2 (who + ": unknown option " + w))))
    (udir p)
     (uchop p @
      0 (0 < #p ? "/" ".")

@@ -11,6 +11,11 @@ korerun diff "$ho/.au1" "$ho/.au2" > "$ho/.kore-diff.out" 2>&1; r=$?
 diff -u "$ho/.au1" "$ho/.au2" | tail -n +3 > "$g"
 tail -n +3 "$ho/.kore-diff.out" > "$o"
 same "diff"
+# -u is the face it already has; -q only says so; a stranger refuses with 2
+korerun diff -u "$ho/.au1" "$ho/.au2" | tail -n +3 > "$o"; same "diff -u"
+diff -q "$ho/.au1" "$ho/.au2" > "$g"; korerun diff -q "$ho/.au1" "$ho/.au2" > "$o"; r=$?
+[ $r -eq 1 ] || fail "kore diff -q (exit $r)"; same "diff -q"
+korerun diff -x "$ho/.au1" "$ho/.au2" > /dev/null 2>&1; r=$?; [ $r -eq 2 ] || fail "kore diff -x (exit $r)"
 # kore dispatches on argv[0], so a link named `diff` IS diff. the shim is the distro's
 # own shape (a script reading basename $0, tool names symlinked onto it) -- the build
 # tree carries no kore binary anymore, the crew riding love's own image.

@@ -84,6 +84,27 @@ printf 'q\nq\nr\n' | korerun tee "$ho/.cu-o2" > "$o"
 cmp -s "$g" "$o" && cmp -s "$ho/.cu-g2" "$ho/.cu-o2" || fail "kore tee vs GNU"
 [ "$(printf '日本語 かな\n\xff' | korerun wc -m)" = "7" ] \
   || fail "kore wc -m: valid characters, a stray byte none"
+# cat's line flags, uniq's comparisons and head/tail's headers against GNU; a file with no
+# final newline runs on into the next, as GNU's does
+L=$ho/.lineflags; rm -rf "$L"; mkdir "$L"
+printf 'a\tb\n\n\n\nc\001d\177\n\200\211x\377\n\nlast' > "$L/i1"; printf 'one\n\ntwo\n' > "$L/i2"
+for f in -n -b -s -E -T -v -A -e -t -ns -bs -nE -u; do
+  cat $f "$L/i1" "$L/i2" > "$g"; korerun cat $f "$L/i1" "$L/i2" > "$o"; same "cat $f"
+done
+printf 'a 1\nA 1\nb 2\nb 2\nc  x 3\nd  y 3\ne\ne\ne\n' > "$L/u"
+for f in -c -d -u -i -ic "-f 1" "-s 1" "-f 1 -s 1" -cd -cu "-f 2"; do
+  # shellcheck disable=SC2086
+  uniq $f "$L/u" > "$g"; korerun uniq $f "$L/u" > "$o"; same "uniq $f"
+done
+korerun uniq "$L/u" "$L/uo" && uniq "$L/u" > "$g" && cmp -s "$g" "$L/uo" || fail "kore uniq INPUT OUTPUT"
+head -v "$L/i2" > "$g"; korerun head -v "$L/i2" > "$o"; same "head -v"
+tail -q -n1 "$L/i1" "$L/i2" > "$g"; korerun tail -q -n1 "$L/i1" "$L/i2" > "$o"; same "tail -q"
+# a stranger or a trailing flag refuses with 2 -- they were opened as files
+for c in "cat -x" "head -x" "tail -x" "wc -x" "uniq -x" "nl -x" "cut -f1 -x" "paste -x" "split -x" "join -x $L/i2" "cat $L/i2 -n"; do
+  # shellcheck disable=SC2086
+  korerun $c "$L/i1" > /dev/null 2>&1; r=$?; [ $r -eq 2 ] || fail "kore $c must refuse (rc $r)"
+done
+rm -rf "$L"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/shuf/seq/echo/basename/tee GNU-identical) ok"
 
 # sort's and ls's own flag matrices are subjects of their own (sort.sh, ls.sh): each

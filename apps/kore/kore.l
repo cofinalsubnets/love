@@ -99,16 +99,20 @@
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (borrow 'posix)
 (:
-   ; diff: two files -> unified hunks on out; the classic exit triple
+   ; diff: two files -> unified hunks on out, -u taken as that; -q only says whether they
+   ; differ; the classic exit triple
    (diff-main as)
-    (? (atom? >as) (udie 2 "usage: kore diff OLD NEW")
-       (: fa <as fb <>as
-          ta (uread fa) tb (uread fb)
-          _ (? (two? ta) () (udie 2 ("diff: cannot open " + fa)))
-          _ (? (two? tb) () (udie 2 ("diff: cannot open " + fb)))
-          d (udiff fa fb <>ta <>tb)
-          (? !d 0
-             (puts d, flush out, 1))))
+    (: fo (uflags "diff" as () "qu")
+       ops (fo 1)
+       (? !(two? ops && two? >ops && atom? >>ops) (udie 2 "usage: diff [-qu] OLD NEW")
+          (: fa <ops fb <>ops
+             ta (uread fa) tb (uread fb)
+             _ (? (two? ta) () (udie 2 ("diff: cannot open " + fa)))
+             _ (? (two? tb) () (udie 2 ("diff: cannot open " + fb)))
+             d (udiff fa fb <>ta <>tb)
+             (? !d 0
+                (<fo 113) (say out ("Files " + fa + " and " + fb + " differ\n"), flush out, 1)
+                (puts d, flush out, 1)))))
 
    ; as: IR forms -> a runnable ELF (love/holo/elf.l over the baked holo book)
    (as-main as)
@@ -825,13 +829,13 @@
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
     'objcopy "usage: objcopy -O binary|ihex IN OUT"
-    'cat "usage: cat [FILE..]"
+    'cat "usage: cat [-AbeEnstTuv] [FILE..]"
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
-    'head "usage: head [-n N] [-c N] [-N] [FILE..]"
-    'tail "usage: tail [-n N] [-c N] [-N] [FILE..]"
+    'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
+    'tail "usage: tail [-qv] [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwmc] [FILE..]"
     'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
-    'uniq "usage: uniq [-c] [FILE]"
+    'uniq "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"
     'shuf "usage: shuf [-rz] [-n N] [-o F] [FILE]  |  shuf -e [ARG..]  |  shuf -i LO-HI"
     'tee "usage: tee [-a] [FILE..]"
     'seq "usage: seq [FIRST [INCR]] LAST"
