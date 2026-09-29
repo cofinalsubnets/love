@@ -817,7 +817,7 @@
    korehelp
    {'diff "usage: diff OLD NEW   (0 same / 1 differ / 2 trouble)"
     'nm "usage: nm [-g] [-u] [-p] FILE.."
-    'nc "usage: nc [-N] HOST PORT  |  nc [-N] -l PORT"
+    'nc "usage: nc [-N] [-q SECS] HOST PORT  |  nc [-N] [-q SECS] -l PORT"
     'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
     'sshd "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
     'scp "usage: scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target"

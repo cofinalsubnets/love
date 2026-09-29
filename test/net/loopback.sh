@@ -4,8 +4,8 @@
 # real binary: a server task and a client over TCP 127.0.0.1, full-duplex, and
 # asserts each side received exactly what the other sent. This exercises every
 # Stage-1 socket nif (connect/listen/accept/shutdown) plus the two .l pump loops
-# and their teardown. both sides pass -N; a second round checks that without it the
-# client does not half-close.
+# and their teardown. both sides pass -N; a second round checks that without it neither
+# side half-closes, and a third that -q quits anyway.
 #
 #   sh test/net/loopback.sh <love-binary> [port]
 #
@@ -84,6 +84,37 @@ done
 sleep 0.3 2>/dev/null || sleep 1
 kill -0 "$srv" 2>/dev/null && kill -0 "$cli" 2>/dev/null || { echo "nettest: FAIL (no -N: a side half-closed)"; fail=1; }
 kill "$cli" "$srv" 2>/dev/null
+
+# -q 1: the same open peer, but the client quits a second after its stdin's end, and the
+# server sees it go
+PORT=$((PORT + 1))
+"$AI" "$AK" -l "$PORT" < /dev/null > "$tmp/srv_got3" 2> "$tmp/srv_err" &
+srv=$!
+i=0
+while ! ready; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (server never listened on $PORT)"; cat "$tmp/srv_err"; exit 1; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+"$AI" "$AK" -q 1 127.0.0.1 "$PORT" < "$tmp/cli_in" > /dev/null 2> "$tmp/cli_err" &
+cli=$!
+i=0
+until cmp -s "$tmp/cli_in" "$tmp/srv_got3"; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (-q: server never got the client's bytes)"; fail=1; break; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+kill -0 "$cli" 2>/dev/null || { echo "nettest: FAIL (-q 1: the client did not wait)"; fail=1; }
+i=0
+while kill -0 "$cli" 2>/dev/null; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (-q 1: the client never quit)"; kill "$cli" "$srv" 2>/dev/null; fail=1; break; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+wait "$cli"; crc=$?
+[ "$crc" -eq 0 ] || { echo "nettest: FAIL (-q: client exit $crc)"; cat "$tmp/cli_err"; fail=1; }
+wait "$srv"; src=$?
+[ "$src" -eq 0 ] || { echo "nettest: FAIL (-q: server exit $src)"; cat "$tmp/srv_err"; fail=1; }
 
 [ "$fail" -eq 0 ] && echo "nettest: PASS"
 exit "$fail"

@@ -1,9 +1,10 @@
 #!/usr/bin/env -S love -l
 ; nc -- netcat in love.
 ;
-;   nc [-N] host port   tcp client: connect to host:port
-;   nc [-N] -l port     tcp server: listen on port, accept one client
-;   -N                  shut down the write half at stdin's end
+;   nc [-N] [-q secs] host port   tcp client: connect to host:port
+;   nc [-N] [-q secs] -l port     tcp server: listen on port, accept one client
+;   -N        shut down the write half at stdin's end
+;   -q secs   quit secs after stdin's end; a negative wait is forever, the default
 ;
 ; either way a bidirectional pump, stdin -> socket and socket -> stdout, two tasks each
 ; parked in a port read on its own fd; the scheduler polls the fds, so no select loop.
@@ -20,25 +21,36 @@
 (borrow 'posix)
 
 (: (nc-main as)
- (: t (tablet 0)
-    rest ((uopt as t () () ()) 2)
-    usage "usage: nc [-N] HOST PORT  |  nc [-N] -l PORT"
-    ; a decimal port string -> a fixnum (a string indexes its bytes; '0' = 48)
-    (atoi s) (:- (go 0 0) (go i acc) (i < #s ? (go (1 + i) (10 * acc + s i - 48)) acc))
-    (die m) (udie 1 ("nc: " + m))
+ (: (die m) (udie 1 ("nc: " + m))
+    t (tablet 0)
+    ops ((uopt as t '(113) () ()) 2)
+    usage "usage: nc [-N] [-q SECS] HOST PORT  |  nc [-N] [-q SECS] -l PORT"
+    (portof s) (: n (unum s) (? (charm? n && 0 < n < 65536) n (die ("not a port: " + s))))
+    ; -q as whole seconds, -1 when absent; any negative waits forever
+    q (: v (uoptv t 113)
+         neg (string? v && 0 < #v && v 0 = 45)
+         n (? (string? v) (unum (? neg (snip v 1 #v) v)) -1)
+         (? !(charm? n) (die ("-q takes whole seconds, not " + v)) neg -1 n))
 
     ; src to dst a chunk at a time until src's eof: see refills and parks, chug takes
     ; the rest of what is read. the flush keeps stdout prompt and is a no-op on a socket
     (pump src dst) (: c (see src)
                       (? (c = -1) 0 (unsee src c, say dst (chug src), flush dst, pump src dst)))
 
+    ; wait out the inbound pump: to the peer's eof, or with -q at most q seconds, when a
+    ; watchdog task freezes it
+    (linger d) (? (q < 0) (catch d)
+                  (: w (twirl (_ \ (rest (q * 1000), freeze d)) ())
+                     _ (catch d)
+                     (freeze w)))
+
     ; the conversation: stdin -> socket here, socket -> stdout in `down`. all of stdin goes
     ; before teardown, then -N half-closes so the peer sees our eof; without it the peer
-    ; must close first. either way wait for the peer's eof before the close
+    ; must close first, or -q runs out
     (talk s) (: down (twirl (_ \ pump s out) 0)
               (pump in s,
                (? (t 78) (seal s 1) 0),
-               catch down,
+               linger down,
                flush out,
                close s,
                1))
@@ -53,9 +65,9 @@
     (client host port) (: s (dial host port)
                           (? s (talk s) (die ("cannot connect to " + host + ":" + string port))))
 
-    (? (uoptun t "lN") (die usage)
-       (t 108) (#rest = 1 ? (serve (atoi <rest)) (die usage))
-       (#rest = 2) (client <rest (atoi <>rest))
+    (? (uoptun t "lNq") (die usage)
+       (t 108) (#ops = 1 ? (serve (portof <ops)) (die usage))
+       (#ops = 2) (client <ops (portof <>ops))
        (die usage))))
 
 ; the seat: fire nc-main iff this file sits in the program seat of the real command line --
