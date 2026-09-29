@@ -861,7 +861,7 @@
     'tail "usage: tail [-fFqv] [-s SECS] [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwmcL] [FILE..]"
     'sort "usage: sort [-bcCfhmnrsuVz] [-k KEY].. [-t C] [-o FILE] [FILE..]"
-    'uniq "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"
+    'uniq "usage: uniq [-cdDiuz] [-f N] [-s N] [-w N] [INPUT [OUTPUT]]"
     'shuf "usage: shuf [-rz] [-n N] [-o F] [FILE]  |  shuf -e [ARG..]  |  shuf -i LO-HI"
     'tee "usage: tee [-aip] [FILE..]"
     'seq "usage: seq [-w] [-s SEP] [-f FMT] [FIRST [INCR]] LAST"

@@ -739,16 +739,18 @@
              (emit (? u? (map (p \ p 1) (ded (deco s1))) s1)))))
 
    ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7; -d says only
-   ; the runs of two or more, -u only the lone lines; -i, -f N and -s N compare past N
-   ; fields and then N characters, case aside. INPUT and OUTPUT --
+   ; the runs of two or more, -u only the lone lines, -D every line of a run of two or
+   ; more; -i, -f N and -s N compare past N fields and then N characters, case aside, -w
+   ; N no more than N characters; -z lines end with a NUL. INPUT and OUTPUT --
    (uniq-main as)
-    (: fo (uflags "uniq" as '(102 115) "cdfisu")
+    (: fo (uflags "uniq" as '(102 115 119) "cdDfisuwz")
        t <fo fs (fo 1)
-       c? (t 99) d? (t 100) u? (t 117) i? (t 105)
+       c? (t 99) d? (t 100) u? (t 117) i? (t 105) D? (t 68) z? (t 122)
        (count c) (: v (uoptv t c) n (? v (unum v) 0)
                     (? (charm? n && 0 <= n) n (udie 1 ("uniq: invalid number: '" + v + "'"))))
-       nf (count 102) ns (count 115)
-       _ (? (atom? >>fs) () (udie 2 "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"))
+       nf (count 102) ns (count 115) nw (: v (uoptv t 119) (? v (count 119) ()))
+       end (? z? 0 10)
+       _ (? (atom? >>fs) () (udie 2 "usage: uniq [-cdDiuz] [-f N] [-s N] [-w N] [INPUT [OUTPUT]]"))
        o (? (two? >fs) (: q (open <>fs "w") (? (hot? q) q (udie 1 ("uniq: cannot write " + <>fs)))) out)
        (blank? c) (c = 32 || c = 9)
        (field l i) (: n #l
@@ -756,24 +758,33 @@
                       (ink i) (? (i < n && !(blank? (l i))) (ink (i + 1)) i)
                       (ink (sp i)))
        (skipf l k i) (? (k = 0) i (skipf l (k - 1) (field l i)))
-       (key l) (: i (min #l (skipf l nf 0 + ns)) s (snip l i #l)
+       (key l) (: i (min #l (skipf l nf 0 + ns)) s (snip l i (? nw (min #l (i + nw)) #l))
                   (? i? (lower s) s))
-       plain? !(i? || 0 < nf || 0 < ns)
+       plain? !(i? || 0 < nf || 0 < ns || nw)
        (emit line cnt) (? ((d? && cnt < 2) || (u? && 1 < cnt)) ()
                           ((? c? (say o (upad 7 (show cnt) + " ")) ()),
-                           say o line, put o 10))
+                           say o line, put o end))
        ; adjacent runs, so one line of memory is the whole state -- the run's first,
-       ; its key, and how many have matched it
-       _ (ureachm (f \ (udie 2 ("uniq: cannot open " + f)))
-                  (\ f first rd
-                     (:- (go () () 0) (go prev pk cnt)
-                      (: l (urd-line rd)
-                       (? (atom? l) (0 < cnt ? (emit prev cnt) (), 1)
-                        (: x <l k (? plain? x (key x))
-                         (? (cnt = 0) (go x k 1)
-                            (k = pk) (go prev pk (cnt + 1))
-                            (emit prev cnt, go x k 1)))))))
-                  (two? fs ? [<fs]))
+       ; its key, and how many have matched it; -D says each as it comes, a run's first
+       ; held back until a second shows it is a run
+       (step prev pk cnt x k)
+        (? (cnt = 0) [x k 1]
+           (k = pk) (: _ (? D? (: _ (? (cnt = 1) (: _ (say o prev) (put o end)) 0) _ (say o x) (put o end)) 0) [prev pk (cnt + 1)])
+           (: _ (? D? 0 (emit prev cnt)) [x k 1]))
+       (feed recs)
+        (: r (foldl (\ st x (step <st <>st (st 2) x (? plain? x (key x)))) [() () 0] recs)
+           (? (!D? && 0 < r 2) (emit <r (r 2)) 0))
+       _ (? z? (: src (? (two? fs) (: r (uread <fs) (? (two? r) <>r (udie 2 ("uniq: cannot open " + <fs)))) (slurp in))
+                  ps (usplit 0 src)
+                  (feed (? (two? ps && <(rev ps) = "") (rev >(rev ps)) ps)))
+            (ureachm (f \ (udie 2 ("uniq: cannot open " + f)))
+                     (\ f first rd
+                        (:- (go () () 0) (go prev pk cnt)
+                         (: l (urd-line rd)
+                          (? (atom? l) (? (!D? && 0 < cnt) (emit prev cnt) ()) 
+                           (: x <l k (? plain? x (key x)) s (step prev pk cnt x k)
+                              (go <s <>s (s 2)))))))
+                     (two? fs ? [<fs])))
        _ (flush o) _ (? (two? >fs) (close o) 0) 0)
 
    ; -- tee: stdin onto out and every file (-a appends) --

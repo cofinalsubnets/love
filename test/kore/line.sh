@@ -155,6 +155,14 @@ if [ -x /usr/bin/echo ]; then
     /usr/bin/echo $c > "$g"; korerun echo $c > "$o"; same "echo $c"
   done
 fi
+# uniq's -D (every line of a run), -w N, -z, with -i -c -s beside them
+printf 'a 1\nA 1\nb 2\nb 2\nc  x 3\nd  y 3\ne\ne\ne\nabcX\nabcY\n' > "$ho/.uqd"; printf 'a\0a\0b\0' > "$ho/.uqz"
+for c in "-D" "-D -i" "-w 3" "-w 3 -c" "-D -w 3" "-s 1 -w 1"; do
+  # shellcheck disable=SC2086
+  uniq $c "$ho/.uqd" > "$g"; korerun uniq $c "$ho/.uqd" > "$o"; same "uniq $c"
+done
+for c in -z -zc; do uniq $c "$ho/.uqz" > "$g"; korerun uniq $c "$ho/.uqz" > "$o"; same "uniq $c"; done
+rm -f "$ho/.uqd" "$ho/.uqz"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/shuf/seq/echo/basename/tee GNU-identical) ok"
 
 # sort's and ls's own flag matrices are subjects of their own (sort.sh, ls.sh): each
