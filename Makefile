@@ -114,9 +114,11 @@ love0: $(love0)
 # the two states of one binary, as two files: the link lays the raw one, and the bake
 # writes the artifact beside it. `bake -o` is what lets these be separate targets at all --
 # an in-place bake leaves make no file to name, which is what the old .baked stamp stood in for.
-$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l
+# the bake is hot-first: tools/hotbake.sh profiles a page-chunked bake and lays what short runs
+# touch ahead, so a lazy wake decodes little of the image.
+$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l tools/hotbake.sh
 	@echo 'BAKE	'$@
-	@$< bake -o $@ -l $(ho)/.dist-cat.l
+	@sh tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
 
 .PHONY: candidate
 candidate: $(ho)/love.cand

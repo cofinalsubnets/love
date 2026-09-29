@@ -7,6 +7,9 @@
 #if defined(__moonlibc__) && __STDC_HOSTED__ && !defined(__wasm__)
 #define ImageLazy 1
 #include <signal.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
 #else
 #define ImageLazy 0
 #endif
@@ -43,6 +46,7 @@ static uintptr_t
  img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt),
  img_hash(word v),
  img_rank_assign(word *rank, uintptr_t nser),
+ img_remap(struct img_ctx const *x, uintptr_t bo),
  img_stream(unsigned char *out, word const *blob, uintptr_t nw, word const *key,
             uint16_t const *tk);
 static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
@@ -57,7 +61,7 @@ static void
  img_ord_swap(struct img_ord const *o, uintptr_t i, uintptr_t j),
  img_sort(struct img_ord const *o, uintptr_t n);
 static word
- *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *bad,
+ *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *bad, struct ai_image_opt const *opt,
             uintptr_t *outnw, char **cseg, uintptr_t *ncode, uintptr_t **cbo, uintptr_t *ncbo),
  hc_can(struct hc *h, word x),
  hc_intern(struct hc *h, union u *p, uintptr_t hv),
@@ -221,7 +225,10 @@ struct img_ctx {
  // the code segment: the live natives' blobs packed in walk order, each [len, pad, code..]
  // rounded to 16 as the arena lays them, and the table of what landed where
  char *cseg; uintptr_t cn, ccap;
- struct img_code { uintptr_t a, off, h, n; } *ct; uintptr_t ctn, ctcap; };
+ struct img_code { uintptr_t a, off, h, n; } *ct; uintptr_t ctn, ctcap;
+ // a hot-first layout: the objects' heap word offsets (ob, nobj of them and nw after), each
+ // one's offset in the blob (nob), and the order they are laid in (ord). ob NULL: as they lie
+ uintptr_t *ob, *nob, *ord, nobj; };
 // refuse, noting where the offending word sat: the object's blob offset, the word, its ap
 static intptr_t img_refuse(struct img_ctx *x, intptr_t v) {
  if (x->nbad < (int) (countof(x->bad) / 3))
@@ -281,7 +288,7 @@ static void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *v
  intptr_t li = image_ap_index((intptr_t) v), ii;
  if (li >= 0) *tag = 2, *val = (uint64_t) li;  // ap table first: thumb aps are odd (see img_encode)
  else if (oddp(v)) *tag = 0, *val = (uint64_t) v;
- else if (ptr(v) >= x->base && ptr(v) < x->hp) *tag = 1, *val = (uint64_t)(ptr(v) - x->base);
+ else if (ptr(v) >= x->base && ptr(v) < x->hp) *tag = 1, *val = (uint64_t) (img_remap(x, (uintptr_t) (ptr(v) - x->base) * sizeof(word)) / sizeof(word));
  else if ((ii = image_imm_index(v)) >= 0) *tag = 3, *val = (uint64_t) ii;
  else *tag = 0, *val = (uint64_t) v; }            // out-of-pool non-immortal root (unexpected): keep absolute
 
@@ -347,6 +354,41 @@ intptr_t ai_op_resolve(intptr_t i) {
  if ((uintptr_t) i < ImageNLvm) return image_ap_resolve(i);
  i -= (intptr_t) ImageNLvm;
  return (uintptr_t) i < ImageNFn ? image_fn_resolve(i) : 0; }
+// a byte offset into the heap -> its place in the blob: the object's new seat, the same
+// distance in. the identity where the layout is the heap's own
+static uintptr_t img_remap(struct img_ctx const *x, uintptr_t bo) {
+ if (!x->ob) return bo;
+ uintptr_t w = bo / sizeof(word), lo = 0, hi = x->nobj;
+ while (hi - lo > 1) { uintptr_t m = (lo + hi) / 2; if (x->ob[m] <= w) lo = m; else hi = m; }
+ return x->nob[lo] * sizeof(word) + (bo - x->ob[lo] * sizeof(word)); }
+
+// the hot-first layout: an object whose first word falls in more of the profile's ranges goes
+// ahead, ties and the untouched as they lie. 0 when there is no room, and the heap's own stands
+static int img_perm(struct img_ctx *x, unsigned char const *fzm, uintptr_t nw,
+                    uint64_t const *hot, uintptr_t nhot) {
+ uintptr_t n = 0;
+ for (union u *p = cell(x->base); ptr(p) < x->hp; n++) { int fz; p = cell(ptr(p) + hc_stride(x->g, fzm, x->base, p, &fz)); }
+ uintptr_t *ob = ai_alloc(NULL, (3 * n + 1) * sizeof(uintptr_t));
+ unsigned char *wt = ob ? ai_alloc(NULL, n) : NULL;
+ if (!wt) { if (ob) ai_alloc(ob, 0); return 0; }
+ uintptr_t *nob = ob + n + 1, *ord = nob + n, i = 0;
+ for (union u *p = cell(x->base); ptr(p) < x->hp; i++) {
+  int fz; ob[i] = (uintptr_t) (ptr(p) - x->base); p = cell(ptr(p) + hc_stride(x->g, fzm, x->base, p, &fz)); }
+ ob[n] = nw;
+ memset(wt, 0, n);
+ for (uintptr_t r = 0; r < nhot; r++) {                // each range lifts the objects that start in it
+  uintptr_t a = (uintptr_t) hot[2 * r], b = (uintptr_t) hot[2 * r + 1], lo = 0, hi = n;
+  while (lo < hi) { uintptr_t m = (lo + hi) / 2; if (ob[m] < a) lo = m + 1; else hi = m; }
+  for (uintptr_t k = lo; k < n && ob[k] < b; k++) if (wt[k] < 255) wt[k]++; }
+ uintptr_t cnt[257] = {0}, at = 0;                    // a counting sort, the heaviest first
+ for (uintptr_t k = 0; k < n; k++) cnt[255 - wt[k] + 1]++;
+ for (int k = 1; k <= 256; k++) cnt[k] += cnt[k - 1];
+ for (uintptr_t k = 0; k < n; k++) ord[cnt[255 - wt[k]]++] = k;
+ for (uintptr_t j = 0; j < n; j++) { uintptr_t k = ord[j]; nob[k] = at, at += ob[k + 1] - ob[k]; }
+ ai_alloc(wt, 0);
+ x->ob = ob, x->nob = nob, x->ord = ord, x->nobj = n;
+ return 1; }
+
 static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  uintptr_t const hb = ImageIdxBase;
  // the ap table first, before parity: on thumb every fn address is odd and would ride raw
@@ -359,7 +401,7 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
                                     + 2 * ImageNLvm * ImageCellW
                                     + 2 * (uintptr_t) fj);
   return v; }                                                                    // fixnum
- if (v >= (intptr_t) x->base && v < (intptr_t) x->hp) return v - (intptr_t) x->base;   // in-pool heap pointer -> byte offset
+ if (v >= (intptr_t) x->base && v < (intptr_t) x->hp) return (intptr_t) img_remap(x, (uintptr_t) (v - (intptr_t) x->base));   // in-pool heap pointer -> byte offset
  if (x->g && code_in(x->g, (uintptr_t) v)) {                                     // a native's code -> its seat in the segment
   intptr_t off = img_code_off(x, (uintptr_t) v);
   if (off < 0 || (uintptr_t) off >= ImageCodeMax) return img_refuse(x, v);
@@ -797,7 +839,7 @@ static void img_hashcons(struct ai *g) {
 // failure. the blob is words, not the wire: img_wire tokenizes it for a file. it dumps
 // wherever it is called, a mid-eval dump's continuation riding as wake-unreachable ballast.
 #define Why(n) ((void) (bad ? bad->why = (n) : 0))   // the step a refusal stopped at
-static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *bad,
+static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *bad, struct ai_image_opt const *opt,
                        uintptr_t *outnw, char **cseg, uintptr_t *ncode, uintptr_t **cbo, uintptr_t *ncbo) {
  ai_core_of(g)->io = NULL;                               // clear the non-deterministic fd before the bake
  Why(2);
@@ -828,21 +870,26 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  // a serializer that runs past its own buffer corrupts the heap it is reading.
  uintptr_t nslot = 0, ncap = nw / 2 + 1, *slots = ai_alloc(NULL, ncap * sizeof(uintptr_t));
  if (!slots) { ai_alloc(blob, 0); return NULL; }
- // the stream's chunk starts: the first object on or past each multiple of StreamZWords
- uintptr_t ncb = 0, nextk = 0, *cb = ai_alloc(NULL, (nw / StreamZWords + 2) * sizeof(uintptr_t));
+ // the stream's chunk starts: the first object on or past each multiple of kw words
+ uintptr_t kw = opt && opt->chunk ? opt->chunk : StreamZWords,
+           ncb = 0, nextk = 0, *cb = ai_alloc(NULL, (nw / kw + 2) * sizeof(uintptr_t));
  if (!cb) { ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }
  bool slotover = false;
  // every field spelled: a designated initializer leans on the compiler to zero the rest
- struct img_ctx X = { g, base, hp, 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, 0 }, *x = &X;
+ struct img_ctx X = { g, base, hp, 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, 0 }, *x = &X;
  unsigned char *fzm = hc_fzmap(g, base, hp);
- for (union u *p = cell(base); ptr(p) < hp; ) {   // walk the live heap (ttag works on it), encode into blob
-  uintptr_t off = (uintptr_t)(ptr(p) - base);
+ if (opt && opt->nhot) img_perm(x, fzm, nw, opt->hot, opt->nhot);
+ uintptr_t j = 0;                                  // the object's index, for its seat in a hot-first blob
+ for (union u *p = cell(base); ptr(p) < hp; j++) {   // walk the live heap (ttag works on it), encode into blob
+  uintptr_t off = (uintptr_t)(ptr(p) - base), no = x->ob ? x->nob[j] : off;
   int fz;
-  if (off >= nextk) cb[ncb++] = off, nextk = (off / StreamZWords + 1) * StreamZWords;
+  if (!x->ob && off >= nextk) cb[ncb++] = off, nextk = (off / kw + 1) * kw;
   // a live finalizer node sits raw in the heap (three words, no header), so no
   // walk can stride it: forge its blob copy into a dead chain of the same width.
   // the fz head lives outside the root window, so a woken session has no finalizables.
   uintptr_t sz = hc_stride(g, fzm, base, p, &fz);
+  if (x->ob) memcpy(blob + no, ptr(p), sz * sizeof(word));   // its raw words to its seat: flat payloads ride
+  off = no;                                        // the blob's index from here on
   if (fz) {
    blob[off] = img_encode(x, (intptr_t) lvm_chain);
    blob[off + 1] = blob[off + 2] = img_encode(x, (intptr_t) ZeroPoint);
@@ -872,13 +919,15 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
          if (p->ap == lvm_map_lookup) {                                                // a tablet's serial, a charm
           if (nslot < ncap) slots[nslot++] = (off + 2) | SlotCharm; else slotover = true; } }
   p = cell(ptr(p) + sz); }
+ if (x->ob)                                        // chunk starts in the laid order
+  for (uintptr_t q = 0; q < x->nobj; q++) { uintptr_t no = x->nob[x->ord[q]]; if (no >= nextk) cb[ncb++] = no, nextk = (no / kw + 1) * kw; }
  ai_alloc(fzm, 0);
  if (x->ct) ai_alloc(x->ct, 0);
  *cseg = x->cseg, *ncode = x->cn;
  Why(4);
- if (x->fail) { img_bad_out(x, bad); ai_alloc(cb, 0); ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }   // an unencodable word -> refuse (caller boots normally)
+ if (x->fail) { img_bad_out(x, bad); ai_alloc(cb, 0); if (x->ob) ai_alloc(x->ob, 0); ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }   // an unencodable word -> refuse (caller boots normally)
  // the bound above did not hold: refuse rather than serialize off a truncated slot list
- if (slotover) { Why(12); ai_alloc(cb, 0); ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }
+ if (slotover) { Why(12); ai_alloc(cb, 0); if (x->ob) ai_alloc(x->ob, 0); ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }
  // the rename: mark live serials (the collected nom/mint slots read raw off the
  // blob -- scalars rode the memcpy -- plus the pids of both task rings), rank
  // them 1..k in img_rank_assign's canonical order, rewrite in place. rings walk
@@ -886,7 +935,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  uintptr_t nser = g->next_serial + 1, kser = 0;
  Why(10);
  word *rank = ai_alloc(NULL, nser * sizeof(word));
- if (!rank) { ai_alloc(cb, 0); ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }
+ if (!rank) { ai_alloc(cb, 0); if (x->ob) ai_alloc(x->ob, 0); ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }
  Why(11);
  memset(rank, 0, nser * sizeof(word));
  for (uintptr_t i = 0; i < nslot; i++)
@@ -903,11 +952,11 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  for (uintptr_t i = 0; i < nslot; i++)
   { uintptr_t v = slot_serial(blob, slots[i]); if (v < nser) slot_put(blob, slots[i], rank[v]); }
  for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
-  uintptr_t off = (uintptr_t)(ptr(n) - base), pid = getcharm(n[2].x);
+  uintptr_t off = img_remap(x, (uintptr_t)(ptr(n) - base) * sizeof(word)) / sizeof(word), pid = getcharm(n[2].x);
   if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
  if (g->parked)
   for (union u *n = g->parked, *st = n; n; n = n->m == st ? NULL : n->m) {
-   uintptr_t off = (uintptr_t)(ptr(n) - base), pid = getcharm(n[2].x);
+   uintptr_t off = img_remap(x, (uintptr_t)(ptr(n) - base) * sizeof(word)) / sizeof(word), pid = getcharm(n[2].x);
    if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
  ai_alloc(slots, 0);
  // rsv1 is reserved: it carried the kept-absolute count while absolutes were encodable.
@@ -926,8 +975,9 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
  for (uintptr_t i = 0; i < nv; i++) image_root_enc(x, ((word*) &g->v0)[i], &H.root_tag[2 + i], &H.root_val[2 + i]);
  Why(6);
- if (x->fail) { img_bad_out(x, bad); ai_alloc(cb, 0); ai_alloc(blob, 0); return NULL; }   // ..a root refused: the walk's own check is behind us
+ if (x->fail) { img_bad_out(x, bad); ai_alloc(cb, 0); if (x->ob) ai_alloc(x->ob, 0); ai_alloc(blob, 0); return NULL; }   // ..a root refused: the walk's own check is behind us
  H.nroot = nr;
+ if (x->ob) ai_alloc(x->ob, 0);
  return Why(0), *Ho = H, *outnw = nw, *cbo = cb, *ncbo = ncb, blob; }
 
 // the chunks' preset dictionary: the 256-byte spans whose 8-byte shapes the most chunks share,
@@ -1071,11 +1121,14 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  return *outlen = total, buf; }
 
 void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) {
+ return ai_image_save2(g, outlen, bad, NULL); }
+
+void *ai_image_save2(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad, struct ai_image_opt const *opt) {
  struct image_hdr H;
  uintptr_t nw = 0;
  char *cseg = NULL; uintptr_t ncode = 0;
  uintptr_t *cb = NULL, ncb = 0;
- word *blob = img_build(g, &H, bad, &nw, &cseg, &ncode, &cb, &ncb);
+ word *blob = img_build(g, &H, bad, opt, &nw, &cseg, &ncode, &cb, &ncb);
  if (!blob) { if (cseg) ai_alloc(cseg, 0); return NULL; }
  void *buf = img_wire(g, &H, blob, nw, cseg, cb, ncb, outlen);
  if (cseg) ai_alloc(cseg, 0);
@@ -1179,13 +1232,14 @@ static int img_chunk(struct img_lazy *L, uintptr_t k) {
  return L->st[k] = 1, L->left--, 1; }
 
 #if ImageLazy
+int mprotect(void*, size_t, int);
+unsigned long getauxval(unsigned long);
 // the chunk holding word w
 static uintptr_t img_chunk_of(struct img_lazy const *L, uintptr_t w) {
  uintptr_t lo = 0, hi = L->nch;
  while (hi - lo > 1) { uintptr_t m = (lo + hi) / 2; if (L->t[3 * m] <= w) lo = m; else hi = m; }
  return lo; }
-int mprotect(void*, size_t, int);
-unsigned long getauxval(unsigned long);
+
 // the one mutable static: a fault handler is handed no g. it names the lazy image of
 // this process's session, NULL when there is none
 static struct img_lazy *img_lazy_on;
@@ -1235,6 +1289,27 @@ int __ai_efault(void) {
  for (uintptr_t k = 0; k < L->nch; k++) if (!L->st[k] && !img_lazy_open(L, k)) return 0;
  return 1; }
 
+// the profile a hot-first bake reads: with LOVE_TOUCH_OUT set, the word ranges of the
+// chunks this session woke, "a b" a line, appended once -- when the image is dropped or
+// the process ends, whichever is first
+static void img_touch_out(struct img_lazy *L) {
+ char const *f = getenv("LOVE_TOUCH_OUT");
+ int fd = f && *f ? open(f, O_WRONLY | O_CREAT | O_APPEND, 0644) : -1;
+ if (fd < 0) return;
+ char b[48];
+ for (uintptr_t k = 0; k < L->nch; k++) {
+  if (!L->st[k]) continue;
+  uint64_t v[2] = { L->t[3 * k], L->t[3 * k + 3] };
+  int n = 0;
+  for (int h = 0; h < 2; h++) {                       // two numbers, no stdio in this file
+   char d[24]; int m = 0;
+   do d[m++] = (char) ('0' + v[h] % 10), v[h] /= 10; while (v[h]);
+   while (m) b[n++] = d[--m];
+   b[n++] = h ? '\n' : ' '; }
+  if (write(fd, b, (size_t) n) < 0) break; }
+ close(fd); }
+static void img_touch_atexit(void) { if (img_lazy_on) img_touch_out(img_lazy_on); }
+
 static void img_lazy_disarm(struct img_lazy *L) {
  if (L->pg0 < L->pg1) mprotect((void*) L->pg0, L->pg1 - L->pg0, 3);
  img_lazy_on = NULL; }
@@ -1244,6 +1319,7 @@ static void img_lazy_disarm(struct img_lazy *L) {
 void ai_image_drop(word const *pool) {
  struct img_lazy *L = img_lazy_on;
  if (!L || L->base != pool) return;
+ img_touch_out(L);
  img_lazy_disarm(L), ai_alloc(L, 0); }
 
 // arm: the whole pages inside the image shut, the chunks at its ragged edges decoded now.
@@ -1264,6 +1340,7 @@ static int img_lazy_arm(struct img_lazy *L) {
  img_lazy_on = L;
  if ((b < L->pg0 && !img_lazy_seat(L, b)) || (L->pg1 < e && !img_lazy_seat(L, L->pg1)))   // the ragged edges
   return img_lazy_disarm(L), 0;
+ if (getenv("LOVE_TOUCH_OUT")) atexit(img_touch_atexit);
  return 1; }
 #else
 void ai_image_drop(word const *pool) { (void) pool; }
