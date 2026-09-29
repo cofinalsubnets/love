@@ -18,10 +18,10 @@
 ; stdin not a terminal: its lines are sent, and its end half-closes the connection and waits
 ; for the server to close.
 ;
-; httpd is kiosko (apps/kiosko/kiosko.l) under busybox's name: -p PORT (80 by default),
-; -h DIR (. by default), -v logs each request, and -f is taken and always true -- it never
-; detaches. kiosko listens on every address, so -p IP:PORT is refused rather than half
-; obeyed, and so is the rest of busybox's set (-c -u -r -m -e -d -i), by name.
+; httpd is kiosko (apps/kiosko/kiosko.l) under busybox's name: -p [IP:]PORT (80 by default,
+; on 127.0.0.1 unless IP names another, 0.0.0.0 or * every one), -h DIR (. by default), -v
+; logs each request, and -f is taken and always true -- it never detaches. the rest of
+; busybox's set (-c -u -r -m -e -d -i) is refused by name.
 ;
 ; nslookup asks the first nameserver in /etc/resolv.conf that answers (or SERVER, a quad or
 ; a name, on -port or 53), with no hosts file and no search domains -- what it says, as busybox's
@@ -41,7 +41,7 @@
 
 (:
    tn-usage "usage: telnet HOST [PORT]"
-   httpd-usage "usage: httpd [-fv] [-p PORT] [-h DIR]"
+   httpd-usage "usage: httpd [-fv] [-p [IP:]PORT] [-h DIR]"
    ns-usage "usage: nslookup [-type=A|AAAA|CNAME|MX|NS|PTR|SOA|TXT] [-port=N] HOST [SERVER]"
    ping-usage "usage: ping [-46q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
    ping6-usage "usage: ping6 [-q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST"
@@ -490,17 +490,13 @@
             (? !u 0 (udie 2 ("httpd: -" + string u + " is not supported (kiosko serves files, no more)"))))
        _ (? (two? (o 2)) (udie 2 httpd-usage) 0)
        pv (uoptv t 112)
-       ; -p [IP:]PORT: an address other than every one is refused, not quietly widened
-       ps (? (string? pv)
-              (: k ((: (g i) (? (i < 0) -1 (pv i = 58) i (g (i - 1)))) (#pv - 1))
-                 ip (? (k < 0) "" (snip pv 0 k))
-                 (? (#ip && ip != "0.0.0.0" && ip != "*")
-                     (udie 2 ("httpd: kiosko listens on every address; -p takes a port, not " + pv))
-                    (snip pv (k + 1) #pv)))
-              ())
+       ; -p [IP:]PORT: a bare port is loopback's, an IP names the address, * or 0.0.0.0 every one
+       k (? (string? pv) ((: (g i) (? (i < 0) -1 (pv i = 58) i (g (i - 1)))) (#pv - 1)) -1)
+       ip (: h (? (k < 0) "" (snip pv 0 k)) (? (h = "") "127.0.0.1" (h = "*") "0.0.0.0" h))
+       ps (? (string? pv) (snip pv (k + 1) #pv) ())
        port (? !ps 80 (: n (unum ps) (? (charm? n && 0 < n < 65536) n (udie 2 ("httpd: not a port: " + ps)))))
        root (: h (uoptv t 104) (? (string? h) h "."))
        _ (? (two? (readdir root)) 0 (udie 1 ("httpd: not a directory: " + root)))
-       r ((cite 'kiosko 'serve) root port !(peep t 118 0) ())
-       (? (nom? r) (udie 1 ("httpd: cannot listen on :" + show port + " -- " + show r)) 0)))
+       r ((cite 'kiosko 'serve) root [ip port] !(peep t 118 0) ())
+       (? (nom? r) (udie 1 ("httpd: cannot listen on " + ip + ":" + show port + " -- " + show r)) 0)))
 ) ; module 'kore

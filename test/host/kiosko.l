@@ -145,6 +145,36 @@
       (sub? (get "/bare/") "one.txt")                  ; no index.html -> a listing
       ((code (get "/nope.html")) = "404"))
 
+   ; --- what a request may not carry, and what a page may not echo -------------------------
+   ; a control byte, raw or escaped, is 400 -- a NUL would cut the path short at open(2), a
+   ; CR LF would reach the Location header. a dot segment is 404, and a listing hides it.
+   ; a name is escaped for html in a listing, and percent-encoded in an href and a Location
+   _ (mkdir (dir + "/d\r\nX-Inj: 1") 493)
+   _ (put-file "d\r\nX-Inj: 1/f" "x")
+   _ (mkdir (dir + "/sp ace") 493)
+   _ (put-file "sp ace/f" "x")
+   _ (put-file ".env" "secret")
+   _ (mkdir (dir + "/.git") 493)
+   _ (put-file ".git/config" "secret")
+   _ (put-file "bare/.hid" "secret")
+   _ (put-file "bare/<b>\"'&.txt" "odd")
+   ls (get "/bare/")
+   _ (test
+      ((code (get "/index.html%00.css")) = "400")
+      ((code (get "/a%0d%0aSet-Cookie:%20x")) = "400")
+      ((code (get "/d%0D%0AX-Inj:%201")) = "400")
+      !(sub? (get "/d%0D%0AX-Inj:%201") "X-Inj")
+      ((code (get "/a%7fb")) = "400")
+      ((code (get "/.env")) = "404")
+      ((code (get "/%2eenv")) = "404")
+      ((code (get "/sub/../.env")) = "404")
+      ((code (get "/.git/config")) = "404")
+      (sub? (get "/sp%20ace") "Location: /sp%20ace/\r\n")
+      (sub? ls "one.txt")
+      !(sub? ls ".hid")
+      (sub? ls ">&lt;b&gt;&quot;&#39;&amp;.txt</a>")
+      (sub? ls "href=\"%3Cb%3E%22%27%26.txt\""))
+
    ; --- a body past the chunk boundary ----------------------------------------------------
    bigr (get "/big.txt")
    _ (: i ((: (g k) (k < #bigr && !((snip bigr k (k + 4)) = "\r\n\r\n") ? (g (k + 1)) k)) 0)
