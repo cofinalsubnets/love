@@ -1003,7 +1003,7 @@
     'killall "usage: killall [-SIG] NAME.."
     'pwdx "usage: pwdx PID.."
     'kill "usage: kill [-SIG] PID.."
-    'xargs "usage: xargs [-n N] [CMD ARGS..]"
+    'xargs "usage: xargs [-0rt] [-d C] [-n N] [-L N] [-I S] [-P N] [CMD ARGS..]"
     'time "usage: time [-p] CMD [ARG..]"
     'date "usage: date [-u] [-d TIME] [-r FILE] [+FORMAT]"
     'id "usage: id [-u|-g|-G] [-n] [-r]"
