@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -156,7 +157,8 @@ ai_noinline static int call_sock(struct saddr const *a, int how) {
   if (r == 0 || errno == EINPROGRESS) return fd; }
  else {
   int one = 1;
-  if (un) unlink(ua.sun_path);                   // a stale socket file from a dead listener
+  struct stat st;                                // a stale socket file from a dead listener
+  if (un) { if (!lstat(ua.sun_path, &st) && S_ISSOCK(st.st_mode)) unlink(ua.sun_path); }  // anything else stays
   else setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
   if (a->ttl && v6) setsockopt(fd, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &one, sizeof one);
   else if (a->ttl && !raw) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);   // linux's number

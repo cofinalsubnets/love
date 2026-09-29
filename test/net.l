@@ -145,6 +145,18 @@
    echo (rdline c)
    _ (close c) _ (catch srv) _ (close l)
    (test (hot? l) (echo = "neko!") ('enoent = connect ['unix (path + ".none")])))
+  ; a listen clears a stale socket at its path and nothing else: a file there stays whole
+  ; and the bind says the name is taken. short and under /tmp, clear of sun_path's 108
+  (: path ("/tmp/.love-net-" + show (getpid 0) + ".sock")
+   _ (unlink path)
+   q (open path "w") _ (say q "keep me") _ (close q)
+   f (listen ['unix path])
+   r (open path "r") kept (slurp r) _ (close r)
+   _ (unlink path)
+   a (listen ['unix path]) _ (close a)            ; leaves its socket file behind
+   b (listen ['unix path]) _ (close b)            ; a restarted server still binds over it
+   _ (unlink path)
+   (test ('eaddrinuse = f) (kept = "keep me") (hot? a) (hot? b)))
   ; a datagram comes with its peer as send takes one, so a reply is (send p (car d) ..)
   (: a (bind ['udp 7396]) b (bind ['udp 7397])
    _ (send b ["127.0.0.1" 7396] "ping")
