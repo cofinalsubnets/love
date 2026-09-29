@@ -1,20 +1,20 @@
-; --- test/host/crow.l: crow, the coding agent, against a model played here -----------
+; --- test/host/bee.l: bee, the coding agent, against a model played here -----------
 ; a twirled listener plays the model on loopback, each connection answered by the next
-; canned stream, and crow runs as a child of its own in a scratch directory with HOME
-; there too, so no one's ~/.love/etc/crow.l speaks. the wire is plain http to this
-; machine, which crow allows and carries no key over.
-;   cat test/00-init.l test/host/crow.l | out/love
+; canned stream, and bee runs as a child of its own in a scratch directory with HOME
+; there too, so no one's ~/.love/etc/bee.l speaks. the wire is plain http to this
+; machine, which bee allows and carries no key over.
+;   cat test/00-init.l test/host/bee.l | out/love
 (borrow 'json)
 
 (: cr-home (cwd 0)
    cr-love (: l <cmdline (l 0 = 47 ? l (cr-home + "/" + l)))
-   cr-app (cr-home + "/apps/crow.l")
+   cr-app (cr-home + "/apps/bee.l")
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
-   cr-root (cr-home + "/out/.crow-" + show (getpid 0))
+   cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
    (cr-put d nm s) (: p (open (d + "/" + nm) "w") _ (say p s) (close p))
    (cr-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
-   (cr-dir nm cfg) (: d (cr-root + "/" + nm) _ (mkdir d 493) _ (cr-put d ".crow.l" cfg) d)
+   (cr-dir nm cfg) (: d (cr-root + "/" + nm) _ (mkdir d 493) _ (cr-put d ".bee.l" cfg) d)
 
    ; --- the model: 'q the answers still to give, 'got the requests heard, newest first ---
    cr-box {'q () 'got ()}
@@ -49,7 +49,7 @@
                          (go (i + 29) (a + (cr-hex #d) + "\r\n" + d + "\r\n"))))
           (go 0 "")))
 
-   ; crow in its directory -> [exit output], its stdout and err one pipe. the model is
+   ; bee in its directory -> [exit output], its stdout and err one pipe. the model is
    ; served meanwhile: see parks only this task, gather never blocks
    (cr-reap p) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 5) (cr-reap p))))
    (cr-run d env args)
@@ -163,9 +163,9 @@
    0)
 
 ; --- sessions and messages -----------------------------------------------------------------
-; a session named by CROW_NAME perches in HOME's roost for its run. its shell sends it a
+; a session named by BEE_NAME settles in HOME's hive for its run. its shell sends it a
 ; message through the verb, and list_sessions finds it; the message rides the next request
-; beside the tool results, and the perch is gone once the run ends
+; beside the tool results, and the cell is gone once the run ends
 (: cr-m (cr-dir "talk" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
    (ev t x) (pin x "type" t)
    (use i id nm in)
@@ -174,7 +174,7 @@
      (ev "content_block_stop" {"index" i})]
    _ (cr-serves
       [(cr-ok (cr-sse ([(ev "message_start" {"message" {"id" "m1" "content" []}})]
-                       + use 0 "s1" "shell" {"command" "love crow --send tester 'hello from a shell'"}
+                       + use 0 "s1" "shell" {"command" "love bee --send tester 'hello from a shell'"}
                        + use 1 "s2" "list_sessions" {}
                        + [(ev "message_delta" {"delta" {"stop_reason" "tool_use"}}) (ev "message_stop" {})])))
        (cr-ok (cr-sse [(ev "content_block_start" {"index" 0 "content_block" {"type" "text" "text" ""}})
@@ -185,9 +185,9 @@
    ; an sb hub whose queue/ ledger the prompt should quote
    hub (cr-root + "/hub")
    _ (mkdir hub 493)
-   _ (cr-put hub "q" "leader tester\n66 tester crow green\n")
+   _ (cr-put hub "q" "leader tester\n66 tester bee green\n")
    _ (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--was" "none" (hub + "/q")])
-   r (cr-run cr-m ("CROW_NAME=tester SB_HUB='" + hub + "'") "-y 'talk to yourself'")
+   r (cr-run cr-m ("BEE_NAME=tester SB_HUB='" + hub + "'") "-y 'talk to yourself'")
    h (cr-heard 0)
    b1 (cr-body (h 0))
    u2 (: us (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h 1) "messages"))
@@ -201,15 +201,15 @@
       (2 = #h)
       (cr-in (b1 "system") "session named tester")            ; the prompt names the session
       (cr-in (b1 "system") "--- sb ledger queue/main")        ; and quotes the hub's queue
-      (cr-in (b1 "system") "66 tester crow green")
+      (cr-in (b1 "system") "66 tester bee green")
       (elem "send_message" (map (\ t (t "name")) (b1 "tools")))
       (cr-in (res 0) "[exit 0]")
       (cr-in (res 1) "tester (you)")
       (cr-in txt "<message from=\"tester\">") (cr-in txt "hello from a shell")
-      (cr-in (after 1) "no crow sessions are running"))
+      (cr-in (after 1) "no bee sessions are running"))
    0)
 
-; --- what crow will not do ---------------------------------------------------------------
+; --- what bee will not do ---------------------------------------------------------------
 ; plain http off this machine is refused before any dial; a model that says no is told;
 ; a remote endpoint wants its key before anything is sent
 (: cr-c (cr-dir "far" "(api openai)\n(url \"http://192.0.2.1:9/v1/chat/completions\")\n(model m)\n")
@@ -217,13 +217,13 @@
    cr-d (cr-dir "no" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model m)\n"))
    _ (cr-serves ["HTTP/1.1 400 Bad Request\r\ncontent-type: application/json\r\n\r\n{\"error\": {\"message\": \"no such model\"}}"])
    rn (cr-run cr-d "" "'hello'")
-   cr-e (cr-dir "key" "(key-env CROW_TEST_NO_KEY)\n")
+   cr-e (cr-dir "key" "(key-env BEE_TEST_NO_KEY)\n")
    rk (cr-run cr-e "" "'hello'")
    _ (test
       (cr-in (rf 1) "plain http reaches this machine alone")
       (cr-in (rn 1) "400") (cr-in (rn 1) "no such model")
-      (1 = <rk) (cr-in (rk 1) "set CROW_TEST_NO_KEY"))
+      (1 = <rk) (cr-in (rk 1) "set BEE_TEST_NO_KEY"))
    0)
 
 (hark ["rm" "-rf" cr-root])
-(test_fin (), puts "crow: ok", putc 10, 0)
+(test_fin (), puts "bee: ok", putc 10, 0)
