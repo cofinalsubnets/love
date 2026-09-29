@@ -23,6 +23,10 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --serve** \[**-y**\] \[*prompt* ...\]
 
+**love bee --mcp**
+
+**love bee --lock** \[**--heavy**\] \[**--out** *dir*\] **--** *command* ...
+
 # DESCRIPTION
 
 **bee** puts a model to work in the current directory. The model's tools:
@@ -68,6 +72,28 @@ A session is live while its card's **pid** is. Whoever lists the hive removes a 
 Messages are delivered at two points. While a turn runs, whatever has arrived joins the next request, beside that request's tool results. On the full screen, an idle session checks its inbox about once a second, and a message starts a turn of its own. The model reads each message as **\<message from="***name***"\>** ... **\</message\>** inside a user turn, and is told that it comes from another agent and not from the user.
 
 The model's **list_sessions** tool reads the cards, and **send_message** writes a message as described above. From a shell, **love bee --list** prints the same list and **love bee --send** *name* *text* sends; the sender is **BEE_NAME**, else **cli-***user*.
+
+# THE CLAUDE CODE BACKEND
+
+With **(backend claude-code)** in the settings, bee is the harness and Claude Code does the work. Each bee session keeps one long-lived child:
+
+> **claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-prompt-tool mcp__bee__approve --mcp-config** *cell***/mcp.json --append-system-prompt** ... **--session-id** *uuid*
+
+It uses Claude Code's own tools and its own login, so no key is set in bee. Each user turn goes to the child's stdin as one stream-json line. The child's lines come back and are drawn on the same screen:
+
+- its streamed text and thinking as they arrive;
+- its tool calls as tool blocks, each result under its block;
+- the usage for the gauge, and its **result** line's cost, summed beside the gauge.
+
+**(claude-model** *name***)** picks the child's model. The card records the model the child reports and its Claude session id. When the child ends or is interrupted with esc, the next turn starts it again with **--resume**.
+
+The child reaches the bee and the hive through **love bee --mcp**, which its **mcp.json** names as the MCP server **bee**. That is a stdio JSON-RPC 2.0 server, one message a line, speaking as the session **BEE_AS** names. Its tools are **list_sessions**, **send_message** and **queue_row**, which the model sees as **mcp__bee__***, and **approve**, the child's permission prompt. **approve** allows at once when the bee runs with **-y** (**BEE_YES**). Otherwise it writes **asks/***id***.ask** in the bee's cell, holding the tool's name, input and **tool_use_id**, and waits **BEE_ASK_WAIT** seconds (600) for **asks/***id***.answer**. It denies when no answer comes. The bee's screen turns each ask into the y/n of the tool's own block, and the key writes the answer.
+
+# LOCKS
+
+The machine is shared, and **apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)**. A lock is held by a pid, so it lives as long as its holder. A bee holds its locks under its own pid, the one on its card, even when its **--mcp** child asks for them. That way a lock outlives a Claude child that ends and dies with the bee.
+
+The model has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*), **lock_release** and **lock_list**; the last two run without asking. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **apps/locks.l** says so.
 
 # JOBS AND WORKERS
 
