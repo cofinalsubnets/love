@@ -864,7 +864,7 @@
     'uniq "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"
     'shuf "usage: shuf [-rz] [-n N] [-o F] [FILE]  |  shuf -e [ARG..]  |  shuf -i LO-HI"
     'tee "usage: tee [-a] [FILE..]"
-    'seq "usage: seq [FIRST [INCR]] LAST"
+    'seq "usage: seq [-w] [-s SEP] [-f FMT] [FIRST [INCR]] LAST"
     'yes "usage: yes [WORD..]"
     'true "usage: true   (the 0 exit, and nothing else)"
     'false "usage: false   (the 1 exit, and nothing else)"

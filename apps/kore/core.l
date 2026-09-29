@@ -773,28 +773,49 @@
        _ (clo qs)
        _ (flush out) (? ok 0 1))
 
-   ; -- seq: first incr last, one a line (one and two args fill in the 1s) --
-   ; a signed whole number, or (). the sign is read here rather than left to a flag
-   ; walk: `seq -5 5` counts up from -5, so a leading dash is a sign and not an option
-   (useqn s) (: n #s
-                neg (0 < n && s 0 = 45)
-                v (unum (neg ? (snip s 1 n) s))
-                (charm? v ? (neg ? -v v)))
+   ; -- seq: FIRST INCR LAST, exact: each is an integer and its decimals, the walk runs
+   ; scaled by the most decimals any has, and each line wears as many as FIRST and INCR
+   ; do (GNU's rule: seq 0 0.5 1 is 0.0 0.5 1.0). -w pads to the widest with zeros, -s
+   ; puts SEP between, -f formats each through printf. a leading word that reads as a
+   ; number (-5, -.5) ends the flags, so a negative FIRST is not one --
+   (useqd w)                                   ; -> [int scale] | ()
+    (: neg (0 < #w && w 0 = 45) b (? (0 < #w && (w 0 = 45 || w 0 = 43)) (snip w 1 #w) w)
+       k (findsub b ".") ip (? (k < 0) b (snip b 0 k)) fp (? (k < 0) "" (snip b (k + 1) #b))
+       ds (ip + fp)
+       (? (0 < #ds && all digit? (chars ds)) [(? neg (0 - unum ds) (unum ds)) #fp] ()))
    (seq-main as)
-    (: n #as
-       ns (map useqn as)
-       ; uatoi read "abc" as a number made of its bytes, so `seq --nosuch` counted to
-       ; a large negative and printed nothing, in silence and at 0
-       _ (? (all charm? ns) () (udie 2 "usage: seq [FIRST [INCR]] LAST"))
-       trip (n @ 1 [1 1 (ns 0)]
-                 2 [(ns 0) 1 (ns 1)]
-                 3 [(ns 0) (ns 1) (ns 2)]
-                 (udie 2 "usage: seq [FIRST [INCR]] LAST"))
-       a <trip d <>trip z <>>trip
+    (: (numw? w) (1 < #w && (w 0 = 45 || w 0 = 43) && (digit? (w 1) || w 1 = 46))
+       ; -s and -f with their value in the next word take it along
+       (val? w) (1 < #w && !(w 1 = 45) && (w (#w - 1) = 115 || w (#w - 1) = 102))
+       k ((: (g i) (? (#as <= i) i (: w (as i) (? (w = "--" || !(0 < #w && w 0 = 45) || numw? w) i (val? w) (g (i + 2)) (g (i + 1)))))) 0)
+       fo (uflagsl "seq" (take k as) '(115 102) "wsf" {"separator" 115 "format" 102 "equal-width" 119})
+       t <fo
+       ops (: r (drop k as) (? (two? r && <r = "--") >r r))
+       n #ops
+       ns (map useqd ops)
+       _ (? (0 < n && n <= 3 && all two? ns) () (udie 2 "usage: seq [-w] [-s SEP] [-f FMT] [FIRST [INCR]] LAST"))
+       trip (n @ 1 [[1 0] [1 0] (ns 0)]
+                 2 [(ns 0) [1 0] (ns 1)]
+                 [(ns 0) (ns 1) (ns 2)])
+       P (max (<>(trip 0)) (max (<>(trip 1)) (<>(trip 2))))
+       p (max (<>(trip 0)) (<>(trip 1)))
+       (up x) (<x * ((P - <>x) 10))                ; a reading at scale P (n x is x ** n)
+       a (up (trip 0)) d (up (trip 1)) z (up (trip 2))
        _ (d @ 0 (udie 2 "seq: increment must not be 0"))
-       (go i) (? (0 < d ? (i <= z) (z <= i))
-               (say out (show i), put out 10, go (i + d)))
-       _ (go a) _ (flush out) 0)
+       q ((P - p) 10)
+       (txt v) (: u (v // q) m (? (u < 0) (0 - u) u) b (p 10)
+                  ((? (u < 0) "-" "") + show (m // b) + (? (0 < p) ("." + zpad p (show (m % b))) "")))
+       last (? (0 < d) (? (z < a) a (a + ((z - a) // d) * d)) (? (a < z) a (a - ((a - z) // (0 - d)) * (0 - d))))
+       wd (max #(txt a) #(txt last))
+       (padw s) (? (#s < wd) (? (s 0 = 45) ("-" + zpad (wd - 1) (snip s 1 #s)) (zpad wd s)) s)
+       sep (? (t 115) (uoptv t 115) "\n")
+       ff (uoptv t 102)
+       pf (? ff (cite 'kore 'printf-main) ())
+       (one v) (: s (txt v) (? ff (pf [ff s]) (say out (? (t 119) (padw s) s))))
+       (go i first) (? (0 < d ? (i <= z) (z <= i))
+                       (: _ (? first 0 (say out sep)) _ (one i) (go (i + d) 0))
+                       (? first 0 (say out "\n")))
+       _ (go a 1) _ (flush out) 0)
 
    ; -- yes: the affirmative, forever (args override the y) --
    (yes-main as0)

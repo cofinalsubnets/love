@@ -118,6 +118,13 @@ sleep 0.4; echo b >> "$T/g"; sleep 0.3; echo new > "$T/g2"; mv "$T/g2" "$T/g"; s
 : > "$T/g"; echo c >> "$T/g"; sleep 0.4; kill $tp; wait $tp 2> /dev/null
 [ "$(tr '\n' '|' < "$T/o2")" = "a|b|new|c|" ] || fail "kore tail -F: $(tr '\n' '|' < "$T/o2")"
 rm -rf "$T"
+# seq's fractions, exact and with FIRST's and INCR's decimals, negatives that are not
+# flags, -w -s -f and the long names, a count that runs no lines
+for c in "5" "5 -1 1" "-5 -2" "0 0.5 2" "1 0.1 1.3" "0.5 3" "1 0.5 2.25" "-1.5 0.5 1" "-w 1 10" "-w -5 5" "-w 0 0.5 10" "-s , 1 5" \
+         "-f %.3f 1 3" "-f %05.1f 0 0.5 2" "-w -s: 8 11" "--separator=- 1 3" "--equal-width 9 11" "10 1"; do
+  # shellcheck disable=SC2086
+  seq $c > "$g" 2>&1; korerun seq $c > "$o" 2>&1; same "seq $c"
+done
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/shuf/seq/echo/basename/tee GNU-identical) ok"
 
 # sort's and ls's own flag matrices are subjects of their own (sort.sh, ls.sh): each
