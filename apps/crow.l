@@ -45,6 +45,12 @@
    ; claude's newest take the server-side fallback on a refusal
    crow-fallbacks? (!crow-oai? && (starts? crow-model "claude-opus-5" || starts? crow-model "claude-fable"
                                    || starts? crow-model "claude-mythos"))
+   ; the models whose thinking comes back empty unless a summary is asked for; (thinking off)
+   ; leaves the request as it is
+   crow-summarize? (!crow-oai? && setting 'thinking "on" != "off"
+                    && (starts? crow-model "claude-opus-5" || starts? crow-model "claude-fable"
+                        || starts? crow-model "claude-mythos" || starts? crow-model "claude-sonnet-5"
+                        || starts? crow-model "claude-opus-4-8" || starts? crow-model "claude-opus-4-7"))
    crow-cap 30000                                           ; a tool answer's bytes, at most
    ; the issuers whose signature on the host's certificate lets the key go: google trust
    ; services' WE1, by its spki's sha-256. CROW_PINS adds more, space-separated
@@ -201,12 +207,13 @@
                     "text_delta" (: x (d "text") _ ((f 'text) x)
                                     (pin b "text" (peep b "text" "" + x), go stop))
                     "input_json_delta" (pin js i (peep js i "" + d "partial_json"), go stop)
-                    "thinking_delta" (pin b "thinking" (peep b "thinking" "" + d "thinking"), go stop)
+                    "thinking_delta" (: x (d "thinking") _ ((f 'think) x)
+                                        (pin b "thinking" (peep b "thinking" "" + x), go stop))
                     "signature_delta" (pin b "signature" (peep b "signature" "" + d "signature"), go stop)
                     (go stop))
                   "content_block_stop"
                    (b "type" @
-                    "text" ((f 'break) 0, go stop)
+                    ("text" || "thinking") ((f 'break) 0, go stop)
                     "tool_use" (: j (json-read (peep js i "{}")) (pin b "input" (two? j ? (j 1) {}), go stop))
                     (go stop))
                   "message_delta" (go (e "delta" "stop_reason"))
@@ -239,9 +246,13 @@
                (filter (\ b (b "type" = "tool_result")) c))))
 
    ; its stream as the same [stop blocks]: the content pieces one text block, each tool
-   ; call a tool_use block gathered by its index, the finish said as claude says it
+   ; call a tool_use block gathered by its index, the finish said as claude says it. the
+   ; reasoning (ollama's reasoning, deepseek's and vllm's reasoning_content) is shown and
+   ; kept nowhere: chat completions takes no reasoning back. st 'in is what is open, a
+   ; reasoning run or a text one, and a turn from one to the other breaks it
    (stream-oai f r)
-    (: txt {"type" "text" "text" ""} calls (tablet 4) js (tablet 4) st {'open 0}
+    (: txt {"type" "text" "text" ""} calls (tablet 4) js (tablet 4) st {'in 0}
+       (into k) (? (st 'in = k) 0 (: _ (? (st 'in != 0) ((f 'break) 0) 0) (pin st 'in k)))
        (call i tc)
         (: b (: b0 (peep calls i ())
                 (? (tablet? b0) b0
@@ -253,19 +264,21 @@
        (go stop)
         (: e (event r)
            (? !(tablet? e)
-               (: _ (? (st 'open) ((f 'break) 0) 0)
+               (: _ (into 0)
                   uses (map (\ i (: b (calls i) j (json-read (peep js i "{}"))
                                     (pin b "input" (two? j && tablet? (j 1) ? (j 1) {}))))
                             (sort (keys calls)))
                   [(? (two? uses) "tool_use" stop) ((0 < #(txt "text") ? [txt] ()) + uses)])
               (tablet? (e "error")) [() (e "error")]
               (: ch (e "choices") c (? (two? ch) <ch) d (? (tablet? c) (c "delta"))
+                 rz (? (tablet? d) (: a (d "reasoning") (? (string? a) a (d "reasoning_content"))))
+                 _ (? (string? rz && 0 < #rz) (: _ (into 'think) ((f 'think) rz)) 0)
                  x (? (tablet? d) (d "content"))
                  _ (? (string? x && 0 < #x)
-                      (: _ (pin st 'open 1) _ ((f 'text) x) (pin txt "text" (txt "text" + x)))
+                      (: _ (into 'text) _ ((f 'text) x) (pin txt "text" (txt "text" + x)))
                       0)
                  tcs (? (tablet? d) (d "tool_calls"))
-                 _ (? (two? tcs) (map (\ tc (call (peep tc "index" 0) tc)) tcs) 0)
+                 _ (? (two? tcs) (: _ (into 0) (map (\ tc (call (peep tc "index" 0) tc)) tcs)) 0)
                  fr (? (tablet? c) (c "finish_reason"))
                  (go (? (string? fr)
                         (fr @ "tool_calls" "tool_use" "stop" "end_turn" "length" "max_tokens"
@@ -282,6 +295,7 @@
              "tools" crow-tools "messages" (rev msgs) "cache_control" {"type" "ephemeral"}})
        _ (? (crow-max != ()) (pin b (crow-oai? ? "max_tokens" "max_tokens") crow-max) 0)
        _ (? crow-fallbacks? (pin b "fallbacks" "default") 0)
+       _ (? crow-summarize? (pin b "thinking" {"type" "adaptive" "display" "summarized"}) 0)
        (json-show b))
 
    ; --- the tools ---
@@ -378,9 +392,12 @@
    (line _) (: (go acc) (see in @ -1 (? (two? acc) (string (rev acc))) 10 (string (rev acc)) c (go (c . acc)))
                (go ()))
    (ask q) (: _ (puts q) _ (flush out) l (line 0) (string? l && 0 < #l && (l 0 = 121 || l 0 = 89)))
+   ; thinking shows dim on a terminal and not at all down a pipe
+   crow-tty? (two? (tty 1))
    (plain yes)
     {'yes yes
      'text (\ x (puts x, flush out))
+     'think (\ x (? crow-tty? (: _ (puts (esc + "[2;3m" + x + esc + "[0m")) (flush out)) 0))
      'break (\ _ (puts "\n"))
      'note (\ s (puts ("\ncrow: " + s + "\n")))
      'wire (\ s 0)
@@ -472,6 +489,14 @@
               ls (two? md ? md [""])
               (((label "crow") + snip <ls (min 4 #<ls) #<ls) . >ls))
      'note [(sgr "2;3" ("      ⋯ " + b 'text))]
+     ; thinking streams dim while it runs, its last eight lines; done, it folds to one line
+     ; unless ^t has them all open
+     'think (: ls (catmap (\ l (wrap l (w - 8))) (lines (b 'text)))
+               n #(words (b 'text))
+               body (map (\ l (sgr "2;3" ("      " + l))) ls)
+               (? (b 'open) ((sgr "35" " ∴ thinking…") . (8 < #body ? (drop (#body - 8) body) body))
+                  (b 'x) ((sgr "2;35" (" ∴ thought · " + show n + " words")) . body)
+                  [(sgr "2;35" (" ∴ thought · " + show n + " words  ^t"))]))
      'tool (: st (b 'st)
               mark (st @ 'ask (sgr "1;33" "[y/n]") 'run (sgr "33" "running…")
                          'ok (sgr "32" "✓") 'err (sgr "31" "✗") 'cut (sgr "2" "stopped") "")
@@ -507,7 +532,7 @@
        sep (sgr "2" (edfit "" w "─"))
        stat (sgr "2" (? (tablet? (c 'asking)) " y run · n decline"
                         busy " esc interrupt · ↑↓ scroll"
-                        " enter send · alt-enter newline · ↑↓ ^b ^f scroll · ^d quit"))
+                        " enter send · alt-enter newline · ↑↓ ^b ^f scroll · ^t thoughts · ^d quit"))
        rows (map (\ l (edfit l w " ")) (head . (win + pad + [sep] + box)))
        cr (h - bh + #(e 'u) - top)
        cc (1 + 2 + edcol e)
@@ -521,7 +546,13 @@
                       (pins b 'text (b 'text + x) 'v (b 'v + 1))
                       (push c {'k 'crow 'text x 'v 1 'open 1}))
                    (soil c)))
-     'break (\ _ (: b (? (two? (c 'blocks)) <(c 'blocks)) (? (tablet? b) (pin b 'open 0) 0)))
+     'think (\ x (: b (? (two? (c 'blocks)) <(c 'blocks))
+                    _ (? (tablet? b && b 'k = 'think && b 'open)
+                         (pins b 'text (b 'text + x) 'v (b 'v + 1))
+                         (push c {'k 'think 'text x 'v 1 'open 1 'x (c 'thinkall)}))
+                    (soil c)))
+     'break (\ _ (: b (? (two? (c 'blocks)) <(c 'blocks))
+                    (? (tablet? b) (: _ (pins b 'open 0 'v (peep b 'v 0 + 1)) (soil c)) 0)))
      'note (\ s (push c {'k 'note 'text s}, soil c))
      'wire (\ s (pin c 'sock s))
      'tool (\ name in (: b {'k 'tool 'name name 'brief (brief name in) 'st 'run 'v 0
@@ -573,6 +604,10 @@
     (: a (c 'asking) e (c 'ed) busy (c 'busy != ())
        (? (tablet? a) (? (k = 121 || k = 89) (pin a 'ans 1) (k = 110 || k = 78 || k = 27) (pin a 'ans 0) 0)
           (busy && (k = 27 || k = 3)) (halt c)
+          (k = 20)                                             ; ^t: every thought open, or folded
+           (: x (!(c 'thinkall) ? 1 0)
+              _ (pin c 'thinkall x)
+              (map (\ b (? (b 'k = 'think) (pins b 'x x 'v (b 'v + 1)) 0)) (c 'blocks)))
           (k = 3 || k = -7) (pin c 'over 1)
           (k = 269) (ednl e)                                   ; alt-enter
           (: _ (edstep e k) v (e 'ev) page (c 'rows // 2)
