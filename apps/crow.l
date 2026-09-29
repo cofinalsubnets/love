@@ -10,6 +10,7 @@
 ;   (key-env VAR)         where the key is: ANTHROPIC_API_KEY, or OPENAI_API_KEY
 ;   (max-tokens N)        64000 on anthropic; openai leaves it to the server
 ;   (shell WORD ..)       the shell a command line runs in; lush -a, this binary's own
+;   (context N)           the window in tokens, for the screen's gauge; claude's are known
 ; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
 ; peer tls-open verified: its chain to a root the host trusts, and its name.
 (borrow 'posix)
@@ -52,6 +53,12 @@
                         || starts? crow-model "claude-mythos" || starts? crow-model "claude-sonnet-5"
                         || starts? crow-model "claude-opus-4-8" || starts? crow-model "claude-opus-4-7"))
    crow-cap 30000                                           ; a tool answer's bytes, at most
+   ; the context window in tokens; () when unknown, and the gauge counts tokens instead
+   crow-window (: c (peep crow-salt 'context ())
+                  (? (two? c && charm? <c) <c
+                     crow-oai? ()
+                     (starts? crow-model "claude-haiku") 200000
+                     1000000))
 
    (prop desc) {"type" "string" "description" desc}
    (tool name desc props req)
@@ -96,15 +103,87 @@
    crow-instr (filter two? (map instr-in crow-dirs))
    (clip0 s) (#s <= 40000 ? s (snip s 0 40000 + "\n[cut]"))
 
+   ; --- what the model is told ---
+   ; a line of this binary's own lush, run once at start -> its stdout, "" without a self
+   (lush-out cmd)
+    (? !(string? crow-self) ""
+       (: pp (pipe 0) nul (openfd "/dev/null" 0)
+          p (spawnio [crow-self "lush" "-a" "-c" cmd] nul >pp nul [<pp] -1 0)
+          _ (close >pp) _ (? (0 <= nul) (close nul) 0)
+          q (fdopen <pp)
+          (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
+          t (go "")
+          _ (close q)
+          _ (? (charm? p && 0 <= p) (wait p) 0)
+          t))
+   ; the date and platform from love's own verbs; the git summary only where the host has git
+   crow-env
+    (lush-out ("echo \"date: $(date '+%Y-%m-%d %A %H:%M %Z')\"\n"
+               + "echo \"platform: $(uname -s -r -m)\"\n"
+               + "if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n"
+               + " echo \"git branch: $(git branch --show-current)\"\n"
+               + " s=$(git status --short 2>/dev/null | head -n 20)\n"
+               + " echo \"git status, first 20 lines:\"; echo \"${s:-(clean)}\"\n"
+               + " echo \"recent commits:\"; git log --oneline -5 2>/dev/null | cut -c1-120\n"
+               + "fi\n"))
+
+   (paras ls) (foldl (\ a l (a + l + "\n")) "" ls)
+   crow-me (string? crow-self ? crow-self "love")
+   ; how a verb is reached: by bare name where lush puts love's verbs first, else through love
+   crow-run (crow-verbs-lead? ? "by bare name in your shell, where lush finds it inside love before PATH"
+                                ("as `" + crow-me + " VERB ARGS`"))
+   crow-brief
+    (paras
+     ["## love, the binary you run in"
+      ("crow, your shell and its commands all run inside one static binary, love, at `" + crow-me
+       + "` (version " + love-version + "). It carries a whole toolchain and userland, so the work "
+       + "needs nothing from the host: no system compiler, make, libc, coreutils or interpreter. "
+       + "Run each tool " + crow-run + ". A command love does not carry comes from the host's PATH "
+       + "and may be missing there, so prefer the built-in one.")
+      "- cc (mooncc): a C11 compiler written in love; static executables for linux and freebsd on x64, a64 and rv64 (-t, -os), linked against its own libc. `cc -o hello hello.c && ./hello` works with an empty PATH. with it: as, ld, ar, nm, objcopy, readelf, size, strip, strings."
+      "- make (cook): runs ordinary Makefiles, and Cookfiles written in love; -j works."
+      "- sh (lush), vi, ed, sed, awk, grep, diff, patch, find, xargs, sort and the rest of a posix userland (kore). Flags are POSIX: a GNU-only option may be refused with status 2, and `VERB --help` shows what a verb takes."
+      "- archives: tar, gzip, gunzip, xz, bzip2, cpio. network: nc, wget (with tls), ssh, scp, sshd, httpd, telnet, ping, nslookup, traceroute. also bc, dc, less, man, xxd, hexdump, ps, top, and sb, a patch-set vcs."
+      ("- every verb love carries:" + crow-verbs + ".")
+      ""
+      "## the love language"
+      "love is a curried lisp with infix sugar; source files end in .l."
+      "- three special forms: (\\ x y body) is a lambda; (: a 1 b 2 body) binds in order then answers body, and a (name args) body pair inside it defines a function; (? test then test2 then2 else) is cond."
+      "- every function takes one argument and currying does the rest: (f x y) is ((f x) y). there are no varargs: (+ 1 2 3) is ((+ 1 2) 3) = 3 3 = 27."
+      "- infix: (a + b * c), (x ? yes no), chained (1 < 2 <= 3). application binds tighter than infix, so f x + 1 is (f x) + 1; write an application inside a ternary in parens."
+      "- data: lists [1 2 3], tablets (hash maps) {'a 1 'b 2}, strings of utf-8 bytes. data indexes by application: [7 8 9] 1 = 8, \"abc\" 0 = 97, t 'a reads key 'a."
+      "- numbers: 3 / 2 = 1.5 while 3 // 2 = 1; a number applied is a power, 3 2 = 8."
+      "- glued prefixes: #x length, +x sum, <x first, >x rest, ^5 = (0 1 2 3 4)."
+      "- truth: a value is true when it sums positive, so 0, () and -1 are all false; predicates answer 0 or 1."
+      "- matching: (x @ pattern result pattern2 result2 default)."
+      "- io: (puts s) writes, (show x) renders any value as a string, argv holds a program's arguments."
+      ("- try an expression with `" + crow-me + " -e 'EXPR'` (it prints the answer), run a program with `"
+       + crow-me + " prog.l ARGS`, list the verbs with `" + crow-me + " verbs`.")
+      ""
+      "## how love is made"
+      "- love/: the virtual machine and runtime in C, and the boot .l files (evaluator, prelude)."
+      "- apps/moon/: moon, the C compiler written in love, and its libc, moonlibc."
+      "- apps/kore/ and apps/*.l: the userland in love: lush (apps/lush.l), cook (apps/cook.l), vi, nc, tar, the tls stack."
+      "- inle/: a bare-metal kernel that shares the same image."
+      "moon compiles the C runtime, the love programs are baked into an image inside the binary, and a compressed copy of the whole source tree rides along; from it the binary rebuilds itself byte for byte."
+      ""
+      "## the source, and working on it"
+      ("- `" + crow-me + " source DIR` lays the carried source at DIR/love-" + love-version + " (DIR defaults to .).")
+      ("- `" + crow-me + " seed [DIR]` lays it and rebuilds it with the built-in tools, checking the result is this binary byte for byte.")
+      ("- to develop there: cd into the tree and read its CLAUDE.md, then build with love's own tools, as seed does: `LUSHFLAGS=-a CC=\"" + crow-me
+       + " mooncc\" make -j dist` makes out/love, and `make test` is the fast gate. `" + crow-me
+       + " apps/libra/libra.l FILE` checks a .l file's parens.")
+      "- that build needs nothing from the host, PATH or not; two checks in make test spawn the host's sh and true by name, and fail where PATH has neither."])
+
    crow-system
     ("You are crow, a coding agent in a terminal. The working directory is " + crow-cwd
      + ". Use the tools to look before you change things, and keep replies short. Commands run in `"
      + crow-shname + "`."
      + (crow-ours? ? " That is lush, a POSIX shell, not bash: write POSIX sh." "")
-     + (crow-verbs-lead? ? (" These commands are love's own implementations, POSIX in their "
-        + "flags, so a GNU-only option may be refused:" + crow-verbs + ".") "")
+     + (0 < #crow-env ? ("\n\n## environment\n" + crow-env) "")
+     + "\n" + crow-brief
      + (two? crow-instr
-        ? ("\n\nThe project's instructions follow, from the root down; the nearer file wins.\n"
+        ? ("\nThe project's instructions follow, from the root down; the nearer file wins.\n"
            + foldl (\ a p (a + "\n--- " + <p + " ---\n" + clip0 (p 1))) "" crow-instr)
         ""))
 
@@ -190,11 +269,16 @@
    ;   'tool name in  a tool call begins -> a handle  'ask h      may it run? -> 1 | 0
    ;   'done h r      it ran, r [ok? text]            'yes        run without asking
    ;   'shell h cmd   run cmd in the shell for tool h -> its output and exit status
+   ;   'usage n       the tokens the context holds, as the server counts them
+
+   ; a usage field as a number, a null or a miss 0
+   (num u k) (: v (peep u k 0) (charm? v ? v 0))
 
    ; a streamed answer -> [stop blocks]; [() err] on an error event. a tool's input arrives
-   ; as json pieces in js, read whole at its block's stop
+   ; as json pieces in js, read whole at its block's stop. 'usage hears the tokens the
+   ; window holds: the whole input, cached or not, and the output so far
    (stream f r)
-    (: bs (tablet 8) js (tablet 8)
+    (: bs (tablet 8) js (tablet 8) tk {'in 0}
        (go stop)
         (: e (event r)
            (? !(tablet? e) [stop (map bs (sort (keys bs)))]
@@ -215,7 +299,17 @@
                     ("text" || "thinking") ((f 'break) 0, go stop)
                     "tool_use" (: j (json-read (peep js i "{}")) (pin b "input" (two? j ? (j 1) {}), go stop))
                     (go stop))
-                  "message_delta" (go (e "delta" "stop_reason"))
+                  "message_start"
+                   (: m (e "message") u (? (tablet? m) (m "usage"))
+                      _ (? (tablet? u)
+                           (: _ (pin tk 'in (num u "input_tokens" + num u "cache_creation_input_tokens"
+                                             + num u "cache_read_input_tokens"))
+                              ((f 'usage) (tk 'in + num u "output_tokens")))
+                           0)
+                      (go stop))
+                  "message_delta"
+                   (: u (e "usage") _ (? (tablet? u) ((f 'usage) (tk 'in + num u "output_tokens")) 0)
+                      (go (e "delta" "stop_reason")))
                   "message_stop" (go stop)
                   "error" [() (e "error")]
                   (go stop)))))
@@ -278,6 +372,8 @@
                       0)
                  tcs (? (tablet? d) (d "tool_calls"))
                  _ (? (two? tcs) (: _ (into 0) (map (\ tc (call (peep tc "index" 0) tc)) tcs)) 0)
+                 us (e "usage")                              ; the last chunk's, asked for by stream_options
+                 _ (? (tablet? us) ((f 'usage) (num us "prompt_tokens" + num us "completion_tokens")) 0)
                  fr (? (tablet? c) (c "finish_reason"))
                  (go (? (string? fr)
                         (fr @ "tool_calls" "tool_use" "stop" "end_turn" "length" "max_tokens"
@@ -288,7 +384,8 @@
    ; msgs newest first, as the loop keeps them
    (crow-body msgs)
     (: b (? crow-oai?
-            {"model" crow-model "stream" json-true "tools" (map oai-tool crow-tools)
+            {"model" crow-model "stream" json-true "stream_options" {"include_usage" json-true}
+             "tools" (map oai-tool crow-tools)
              "messages" ({"role" "system" "content" crow-system} . catmap oai-msg (rev msgs))}
             {"model" crow-model "system" crow-system "stream" json-true
              "tools" crow-tools "messages" (rev msgs) "cache_control" {"type" "ephemeral"}})
@@ -403,6 +500,7 @@
      'tool (\ name in (puts ("  " + shown name + " " + brief name in + "\n")))
      'ask (\ h (? (ask "  run? [y/N] ") 1 0))
      'done (\ h r 0)
+     'usage (\ n 0)
      'shell (\ h cmd (shell-out cmd))}
    (repl key f msgs)
     (: _ (puts "> ") _ (flush out) l (line 0)
@@ -436,7 +534,7 @@
        (paint l) (? (#l = 0) l
                     (l 0 = 43) (sgr "32" l) (l 0 = 45) (sgr "31" l) (l 0 = 64) (sgr "36" l)
                     (sgr "2" l))
-       (map (\ l ("   " + paint l)) (#body <= n ? body (take n body + [("… " + show (#body - n) + " more")]))))
+       (map (\ l ("     " + paint l)) (#body <= n ? body (take n body + [("… " + show (#body - n) + " more")]))))
 
    ; what a tool will do, shown while it asks: an edit or a write as its diff
    (preview name in)
@@ -474,67 +572,114 @@
    ; everything the command wrote, as text, for the model
    (scr-text s) (: w (gaze s 2) (copied s (0 - ((gaze s 9) * w)) (gaze s 0)))
 
+   ; --- the look ---
+   crow-ink "38;5;99"
+   ; the avatar, four rows of eight cells: body, eye, beak and feet
+   crow-face
+    (: k (\ s (sgr crow-ink s)) o (\ s (sgr "1;97" s)) y (\ s (sgr "38;5;214" s))
+       [(k "   ▄██▄ ")
+        (k " ▗▟█" + o "●" + k "██" + y "▶")
+        (k "▝▀▜███▛ ")
+        (y "   ▘ ▘  ")])
+   ; lines in a rounded box n wide, its border in pen
+   (boxed pen ls n)
+    (: d (\ s (sgr pen s)) rule (edfit "" (n - 2) "─")
+       ((d ("╭" + rule + "╮")) . (map (\ l (d "│" + " " + edfit l (n - 4) " " + " " + d "│")) ls
+                                  + [(d ("╰" + rule + "╯"))])))
+   ; the first line after ⎿, the rest under it
+   (hang ls) (? (atom? ls) () (((sgr "2" "  ⎿  ") + <ls) . map (\ l ("     " + l)) >ls))
+   ; lapiz sets a body at five columns; the gutter here is two
+   (unindent l) (: (go i) (? (i < 3 && i < #l && l i = 32) (go (i + 1)) i) (snip l (go 0) #l))
+   (trim l) (: (go i) (? (i < #l && l i = 32) (go (i + 1)) i) (snip l (go 0) #l))
+   ; a tool as the screen names it
+   (title name) (name @ "read_file" "Read" "write_file" "Write" "edit_file" "Update" "shell" <crow-shell name)
+
+   crow-spin ["·" "✢" "✳" "✶" "✻" "✽" "✻" "✶" "✳" "✢"]
+   crow-caws ["cawing" "pondering" "foraging" "scheming" "preening" "hopping" "perching"
+              "mulling" "gathering shinies" "croaking"]
+   (spinner c)
+    (: ms (clock 0 - c 't0) k (ms // 120)
+       (sgr crow-ink (crow-spin (k % #crow-spin) + " " + c 'caw + "…")
+        + sgr "2" (" (" + show (ms // 1000) + "s · esc to interrupt)")))
+   ; the gauge: the last request's tokens against the window, or a count when it is unknown
+   (kilo n) (n < 1000 ? (show n) (show (n // 100 / 10) + "k"))
+   (gauge c)
+    (: n (c 'used)
+       (? !(charm? n) ""
+          (crow-window = ()) (sgr "2" (kilo n + " tokens"))
+          (: p (n * 100 // crow-window)
+             (sgr (? (p < 70) "2" (p < 90) "33" "31") (show p + "% context")))))
+
    ; a block's lines at width w, cached on the block by [w its version]
-   (label s) (sgr "1;35" s)
    (blines b w)
     (: k [w (peep b 'v 0)]
        (? (peep b 'lk () = k) (b 'lines)
           (: ls (blines0 b w) _ (pins b 'lk k 'lines ls) ls)))
    (blines0 b w)
     (b 'k @
-     'you (: ls (catmap (\ l (wrap l (w - 6))) (lines (b 'text)))
-             (((sgr "1;36" "you") + "   " + <ls) . map (\ l ("      " + l)) >ls))
-     'crow (: md (lines ((cite 'lapiz 'md->tty) (b 'text) (w - 1)))
+     'hello (: t [(sgr ("1;" + crow-ink) "crow")
+                  (crow-model + sgr "2" (" · " + crow-api))
+                  (sgr "2" crow-cwd)
+                  (sgr "2" "enter send · ^t thoughts · ^d quit")]
+               (boxed crow-ink (map (\ i (crow-face i + "   " + t i)) ^4) (min w 72)))
+     'you (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
+             (map (\ l (sgr "2" l)) (("> " + <ls) . map (\ l ("  " + l)) >ls)))
+     'crow (: md (map unindent (lines ((cite 'lapiz 'md->tty) (b 'text) (w + 2))))
               ls (two? md ? md [""])
-              (((label "crow") + snip <ls (min 4 #<ls) #<ls) . >ls))
-     'note [(sgr "2;3" ("      ⋯ " + b 'text))]
+              (("⏺ " + trim <ls) . >ls))
+     'note (hang [(sgr "2;3" (b 'text))])
      ; thinking streams dim while it runs, its last eight lines; done, it folds to one line
      ; unless ^t has them all open
-     'think (: ls (catmap (\ l (wrap l (w - 8))) (lines (b 'text)))
+     'think (: ls (catmap (\ l (wrap l (w - 4))) (lines (b 'text)))
                n #(words (b 'text))
-               body (map (\ l (sgr "2;3" ("      " + l))) ls)
-               (? (b 'open) ((sgr "35" " ∴ thinking…") . (8 < #body ? (drop (#body - 8) body) body))
-                  (b 'x) ((sgr "2;35" (" ∴ thought · " + show n + " words")) . body)
-                  [(sgr "2;35" (" ∴ thought · " + show n + " words  ^t"))]))
+               body (map (\ l (sgr "2;3" ("  " + l))) ls)
+               (? (b 'open) ((sgr crow-ink "✻ thinking…") . (8 < #body ? (drop (#body - 8) body) body))
+                  (b 'x) ((sgr "2;3" ("✻ thought · " + show n + " words")) . body)
+                  [(sgr "2;3" ("✻ thought · " + show n + " words  ^t"))]))
      'tool (: st (b 'st)
-              mark (st @ 'ask (sgr "1;33" "[y/n]") 'run (sgr "33" "running…")
-                         'ok (sgr "32" "✓") 'err (sgr "31" "✗") 'cut (sgr "2" "stopped") "")
-              head (" " + (sgr "1" ("▸ " + shown (b 'name))) + " " + (sgr "2" (b 'brief)) + "  " + mark)
+              dot (sgr (st @ 'ask "1;33" 'ok "32" 'err "31" "2") "⏺")
+              head (dot + " " + sgr "1" (title (b 'name)) + sgr "2" ("(" + b 'brief + ")"))
               out (peep b 'out "")
-              tail (b 'name @
-                    "shell" (? (peep b 'scr () != ())
-                              (map (\ l ((sgr "2" "   ┆ ") + l)) (scr-rows (b 'scr) 12))
-                              (: ls (filter (\ l (0 < #l)) (lines out)) n #ls
-                                 (map (\ l (sgr "2" ("   ┆ " + l))) (8 < n ? (drop (n - 8) ls) ls))))
-                    "read_file" (? (st = 'ok) [(sgr "2" ("   " + show #(lines out) + " lines"))] ())
-                    (? (st = 'err) [(sgr "31" ("   " + out))] ()))
-              (head . (peep b 'pre () + tail)))
+              tail (? (st = 'ask) [(sgr "1;33" "run it?  y / n")]
+                      (st = 'cut) [(sgr "2" "interrupted")]
+                      (st = 'err) [(sgr "31" (: l (lines out) (two? l ? <l out)))]
+                      (b 'name @
+                       "shell" (? (peep b 'scr () != ()) (scr-rows (b 'scr) 12)
+                                  (: ls (filter (\ l (0 < #l)) (lines out)) n #ls
+                                     (map (sgr "2") (8 < n ? (drop (n - 8) ls) ls))))
+                       "read_file" (? (st = 'ok) [(sgr "2" ("read " + show #(lines out) + " lines"))] ())
+                       ()))
+              (head . (peep b 'pre () + hang tail)))
      [""])
 
    ; the transcript, oldest first, a blank line between blocks
    (tlines c w) (catmap (\ b ("" . blines b w)) (rev (c 'blocks)))
 
+   ; the transcript, a spinner row while a turn runs, the input boxed with the gauge
+   ; right-aligned on its first row, and the hints under it
    (frame c)
     (: w (c 'cols) h (c 'rows) e (c 'ed)
        il (lines (edtext e)) il2 (two? il ? il [""])
        bh (min 6 #il2)
        top (max 0 (#il2 - bh))
-       box (map (\ i ((i = 0 && top = 0 ? (sgr "1;36" "› ") "  ") + il2 (top + i))) ^bh)
-       th (h - 3 - bh)
+       iw (w - 6)                                           ; inside "│ > " and " │"
+       g (gauge c) gw (edwide g)
+       (row i) (: l (edcut (il2 (top + i)) iw)
+                  (? (i = 0 && 0 < gw && edwide l + gw + 2 <= iw) (edfit l (iw - gw) " " + g) l))
+       box (boxed "2" (map (\ i ((i = 0 && top = 0 ? (sgr "1" ">") " ") + " " + row i)) ^bh) w)
+       th (h - 4 - bh)
        all (tlines c w)
        end (max 0 (#all - c 'scroll))
        win (drop (max 0 (end - th)) (take end all))
        pad (map (\ _ "") ^(th - #win))
        busy (c 'busy != ())
-       head (sgr "7" (edfit (" crow · " + crow-model + " · " + getenv "PWD"
-                           + (busy ? "  · working…" "")) w " "))
-       sep (sgr "2" (edfit "" w "─"))
-       stat (sgr "2" (? (tablet? (c 'asking)) " y run · n decline"
-                        busy " esc interrupt · ↑↓ scroll"
-                        " enter send · alt-enter newline · ↑↓ ^b ^f scroll · ^t thoughts · ^d quit"))
-       rows (map (\ l (edfit l w " ")) (head . (win + pad + [sep] + box)))
-       cr (h - bh + #(e 'u) - top)
-       cc (1 + 2 + edcol e)
+       spin (busy && !(tablet? (c 'asking)) ? (spinner c) "")
+       stat (sgr "2" (? (tablet? (c 'asking)) "  y run · n decline"
+                        busy "  esc interrupt · ↑↓ scroll"
+                        "  enter send · alt-enter newline · ↑↓ ^b ^f scroll · ^t thoughts · ^d quit"))
+       rows (map (\ l (edfit l w " ")) (win + pad + [spin] + box))
+       cr (h - 1 - bh + #(e 'u) - top)
+       cc (5 + edcol e)
        ((cite 'tui 'tui-fresh) c h [w h] () rows (edfit stat w " ") cr cc))
 
    ; the tui face: the turn's reports become blocks
@@ -554,6 +699,7 @@
                     (? (tablet? b) (: _ (pins b 'open 0 'v (peep b 'v 0 + 1)) (soil c)) 0)))
      'note (\ s (push c {'k 'note 'text s}, soil c))
      'wire (\ s (pin c 'sock s))
+     'usage (\ n (pin c 'used n, soil c))
      'tool (\ name in (: b {'k 'tool 'name name 'brief (brief name in) 'st 'run 'v 0
                              'pre (? (name = "edit_file" || name = "write_file") (preview name in) ())}
                         (push c b, soil c, b)))
@@ -583,6 +729,7 @@
    (send c s)
     (: m0 (c 'msgs)
        _ (push c {'k 'you 'text s})
+       _ (pins c 't0 (clock 0) 'caw (crow-caws (clock 0 % #crow-caws)))
        t (twirl (\ _ (: m (turn (c 'key) (c 'face) ((user s) . m0))
                         _ (pins c 'msgs (two? m ? m m0) 'busy ())
                         (soil c))) 0)
@@ -626,6 +773,7 @@
     (: b (c 'dirt)
        _ (? (peep b () 0) (: _ (pin b () 0) _ (say out (frame c)) (flush out)) 0)
        _ (? (tick % 16 = 0) (tide c) 0)
+       _ (? (tick % 4 = 0 && c 'busy != ()) (soil c) 0)      ; the spinner turns
        _ (rest 33)
        (? (c 'over) 0 (swim c (tick + 1))))
 
@@ -633,6 +781,7 @@
     (: c {'blocks () 'ed (ednew 0) 'scroll 0 'dirt {() 1} 'busy () 'asking () 'msgs ()
           'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
        _ (pin c 'face (tface c))
+       _ (push c {'k 'hello})
        _ (tide c)
        _ (raw 1)
        _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?2004h"))
