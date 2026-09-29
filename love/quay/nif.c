@@ -44,7 +44,7 @@
 //                                newlines as returns, controls gone, bracketed when
 //                                the program asked (?2004); () misuse
 //   (picture scr slot k) -> n|s  a live picture's width (k 0), height (1), gen (2), or its
-//                                pixels as base64 rgba (3), unset ones clear; () for none
+//                                pixels as base64 rgba (3) or raw (4), unset ones clear; () for none
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
