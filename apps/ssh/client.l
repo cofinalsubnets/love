@@ -68,6 +68,31 @@
        (go i a) (n <= i ? a (go (i + 3) (a + grp i)))
        (go 0 ""))
 
+   ; a peer's text for our terminal: c0 but tab and newline, del, c1 (u+0080..u+009f) and
+   ; any byte outside well-formed utf-8 are dropped -- the reach of openssh's strnvis
+   (ssh-clean s)
+    (: n #s
+       (cont? i) (i < n && 127 < s i && s i < 192)
+       (seq i) (: b (s i)                                   ; a well-formed sequence's length at i, else 0
+                  (? (b < 194 || 244 < b) 0
+                     (: k (? (b < 224) 1 (b < 240) 2 3)
+                        lo (? (b = 224) 160 (b = 240) 144 128)
+                        hi (? (b = 237) 159 (b = 244) 143 191)
+                        s1 (i + 1 < n ? (s (i + 1)) 0)
+                        (? !(lo <= s1 && s1 <= hi) 0
+                           (k = 1 || (cont? (i + 2) && (k = 2 || cont? (i + 3)))) (k + 1)
+                           0))))
+       (go i a)
+        (? (n <= i) (string (rev a))
+           (: b (s i)
+              (? (b < 32) (go (i + 1) (b = 9 || b = 10 ? (b . a) a))
+                 (b < 127) (go (i + 1) (b . a))
+                 (: m (b = 127 ? 0 (seq i))
+                    (? (m = 0) (go (i + 1) a)
+                       (b = 194 && s (i + 1) < 160) (go (i + 2) a)
+                       (go (i + m) (foldl (a2 \ j \ (s (i + j) . a2)) a ^m)))))))
+       (go 0 ()))
+
    ; --- packets: (ssh-send t payload) and (ssh-recv t) -> payload | () ---
    (nonce seq) (zeros 4 + u64be seq)
    (polykey k n) (chacha20 k n 0 (zeros 32))
@@ -109,9 +134,9 @@
        (? !(string? p) ()
           (: ty (p 0) c (cur p) _ (g-skip c 1)
              (? (ty = 2 || ty = 4 || ty = 7) (ssh-next t)
-                (ty = 53) (say err (g-str c), ssh-next t)
+                (ty = 53) (say err (ssh-clean (g-str c)), ssh-next t)
                 (ty = 80) (g-str c, g-u8 c ? (ssh-send t (u8 82)) 0, ssh-next t)
-                (ty = 1) (: code (g-u32 c) (say err ("ssh: disconnected: " + g-str c + "\n"), ()))
+                (ty = 1) (: code (g-u32 c) (say err ("ssh: disconnected: " + ssh-clean (g-str c) + "\n"), ()))
                 p))))
    ; a payload of type ty, or ()
    (expect t ty) (: p (ssh-next t) (string? p && p 0 = ty ? p ()))

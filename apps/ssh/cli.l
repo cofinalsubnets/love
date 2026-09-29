@@ -5,7 +5,7 @@
 ;   ssh [-p port] [-i identity] [-l user] [-t | -T] [-o option=value] [user@]host [command ..]
 ;   sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]
 ;   scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target
-(module (ssh-cli ssh-main sshd-main scp-main)
+(module (ssh-cli ssh-main sshd-main scp-main kh-name kh-check)
 (borrow 'ssh)
 (borrow 'tls)
 (borrow 'posix)
@@ -27,17 +27,42 @@
        (? (k = "UserKnownHostsFile") (pin o 'kh v)
           (k = "StrictHostKeyChecking") (pin o 'strict (v != "no"))
           (cl-die prog ("unsupported option " + k))))
-   ; known_hosts: 'ok on a match, 'bad on a different ed25519 key, else 'new
-   (kh-name host port) (port = 22 ? host ("[" + host + "]:" + show port))
+   ; known_hosts as openssh reads it. a name list holds plain names, [host]:port and
+   ; |1|salt|hash (hmac-sha1 of the name keyed by the salt); wildcards and ! are not read
+   (kh-low s) (string (map (i \ (: c (s i) (64 < c && c < 91 ? (c + 32) c))) (jot #s)))
+   (kh-name host port) (: h (kh-low host) (port = 22 ? h ("[" + h + "]:" + show port)))
+   (kh-hmac1 k m)
+    (: kp (k + zeros (64 - #k))
+       (x p) (xors kp (bytes 64 (_ \ p)))
+       (unhex (sha1 (x 92 + unhex (sha1 (x 54 + m))))))
+   (kh-named? pats name)
+    (elem 1 (map (p \ (? (3 < #p && snip p 0 3 = "|1|")
+                         (: f (split p 124) (#f = 4 && kh-hmac1 (b64d (f 2)) name = b64d (f 3) ? 1 0))
+                         (kh-low p = name ? 1 0)))
+                 (split pats 44)))
+   ; -> [verdict line type ca]. verdicts by rank: 'revoked (the key is on an @revoked line,
+   ; whatever its names), 'ok, 'bad (another ed25519 key), 'other (known only under
+   ; another key type), 'new. ca is 1 when a @cert-authority line names the host: no
+   ; certificate is read here, so such a line is skipped, never trusted
    (kh-check path name key)
     (: q (open path "r")
        txt (hot? q ? (: s (slurp q) (close q, s)) "")
-       (look ls) (? (atom? ls) 'new
-                    (: f (split <ls 32)
-                       (? (3 <= #f && elem name (split <f 44) && f 1 = "ssh-ed25519")
-                          (b64d (f 2) = key ? 'ok 'bad)
-                          (look >ls))))
-       (look (split txt 10)))
+       (fields l) (filter (w \ 0 < #w) (split (string (map (i \ (: c (l i) (c = 9 ? 32 c))) (jot #l))) 32))
+       (cls l ln)
+        (: f (fields l) w (two? f ? <f "")
+           (? (0 = #w || w 0 = 35) ()
+              (w = "@revoked") (3 < #f && b64d (f 3) = key ? ['revoked ln (f 2)] ())
+              (w = "@cert-authority") (2 < #f && kh-named? (f 1) name ? ['ca ln (f 2)] ())
+              (w 0 = 64) ()
+              (3 <= #f && kh-named? w name)
+               (f 1 = "ssh-ed25519" ? [(b64d (f 2) = key ? 'ok 'bad) ln (f 1)] ['other ln (f 1)])
+              ()))
+       (go ls ln a) (? (atom? ls) a (go >ls (ln + 1) (: h (cls <ls ln) (two? h ? (h . a) a))))
+       hits (rev (go (split txt 10) 1 ()))
+       (first v) (: m (filter (h \ <h = v) hits) (two? m ? <m ()))
+       r (? (two? (first 'revoked)) (first 'revoked) (two? (first 'ok)) (first 'ok)
+            (two? (first 'bad)) (first 'bad) (two? (first 'other)) (first 'other) ['new 0 ""])
+       [<r (r 1) (r 2) (two? (first 'ca) ? 1 0)])
    (kh-add path name key)
     (: q (open path "a")
        (? (hot? q) (say q (name + " ssh-ed25519 " + b64e key 1 + "\n"), close q, 1) 0))
@@ -56,10 +81,19 @@
        name (kh-name host (o 'port))
        path (o 'kh) key (t 'hostkey)
        _ (? !(o 'strict) 0
-            (: v (kh-check path name key)
+            (: r (kh-check path name key) v <r at (path + ":" + show (r 1))
+               _ (r 3 = 1 ? (say err (prog + ": " + path + " has a @cert-authority line for " + name
+                                      + "; certificates are not read, so it is skipped\n")) 0)
                (? (v = 'ok) 0
-                  (v = 'bad) (cl-die prog ("the host key for " + name + " has CHANGED -- " + ssh-fingerprint t
-                                           + " does not match " + path))
+                  (v = 'revoked) (cl-die prog ("WARNING: REVOKED HOST KEY DETECTED! the ssh-ed25519 host key for "
+                                               + name + " is marked as revoked in " + at
+                                               + ". Host key verification failed."))
+                  (v = 'bad) (cl-die prog ("WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! the host key for "
+                                           + name + " is " + ssh-fingerprint t + ", which does not match "
+                                           + at + ". Host key verification failed."))
+                  (v = 'other) (cl-die prog ("WARNING: the host key for " + name + " is known as " + r 2
+                                             + " in " + at + ", and the host offered ssh-ed25519 "
+                                             + ssh-fingerprint t + ". Host key verification failed."))
                   (kh-add path name key,
                    say err (prog + ": added " + name + " (" + ssh-fingerprint t + ") to " + path + "\n")))))
        k (ssh-key (o 'key) askpass)
