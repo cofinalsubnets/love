@@ -39,8 +39,9 @@
 ;   kore html2text [-w N] [F..]      a page's prose, laid out (apps/kore/lens.l)
 ;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
 ;   kore www [-w N] URL|FILE         a web page, its links numbered (apps/kore/www.l)
-;   kore pic|pngcat|jpegcat|gifcat [-w N] [-h N] [F..]   pictures in cells (apps/kore/pic.l),
-;   kore picless|pngless|jpegless|gifless F..            and a viewer: zoom, pan, a gif played
+;   kore pic [cat|less|convert|pixelize] ..          pictures in cells, sixel or kitty's, a
+;                                                    viewer, and between formats (apps/kore/pic.l);
+;   kore pngcat|jpegcat|gifcat, picless|pngless|..   pic cat and pic less by their old names
 ;   kore telnet HOST [PORT]          a remote terminal (apps/kore/net.l), telnetd its server;
 ;                                    httpd, kiosko under busybox's flags, nslookup, ping, ping6
 ;   kore ssh|sshd|scp ..             the ssh client and server, and scp over them (apps/ssh/cli.l)
@@ -68,7 +69,7 @@
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         ww-art ww-splice ww-marks ww-pictures ww-hop? wg-plain
-        pic-main picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep lens-pics
+        pic-main pic-cat pic-convert pic-pixelize pic-blocky pic-sample pic-sixel pic-kitty pic-kits pic-near pic-ans pic-type pic-ask pic-heard picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep lens-pics
         pv-new pv-step pv-frame pv-tick pv-keys pv-view
         telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
@@ -598,7 +599,7 @@
    ; .gnu.version_d (what it defines): a tablet of index -> [name needed?]
    (re-vers ss b)
     (: t {}
-       (str sc o) (ld-cstr b ((ss (sc 6)) 4 + o))
+       (str sc o) (ld-cstr b (ss (sc 6) 4 + o))
        (need sc)
         (: (vn o k) (? (k < 1) 0
                        (: cnt (rdle b (o + 2) 2) aux (rdle b (o + 8) 4) nx (rdle b (o + 12) 4)
@@ -629,7 +630,7 @@
        (ndx x) (upad 4 (? (x = 0) "UND" (x = 65521) "ABS" (x = 65522) "COM" (65280 <= x) ("PRC[0x" + re-hex x 4 + "]") (show x)))
        (szs v) (? (v < 100000) (re-u v 5) (re-0x v))
        (map (st \
-                  (: n (st 5 // es) stro (? (st 6 < #ss) ((ss (st 6)) 4) 0)
+                  (: n (st 5 // es) stro (? (st 6 < #ss) (ss (st 6) 4) 0)
                      _ (say out ("\nSymbol table '" + st 1 + "' contains " + show n + " " + (? (n = 1) "entry" "entries") + ":\n"
                                  + (? e64 "   Num:    Value          Size Type    Bind   Vis      Ndx Name\n"
                                       "   Num:    Value  Size Type    Bind   Vis      Ndx Name\n")))
@@ -643,7 +644,7 @@
                                             (<e = nm0) ""
                                             (x & 32768) ("@" + <e) ("@@" + <e))))
                      (map (k \ (: y (sym (st 4) k) t (y 1 & 15)
-                                  nm0 (? (t = 3 && y 0 = 0 && y 3 < #ss) ((ss (y 3)) 1) (ld-cstr b (stro + y 0)))
+                                  nm0 (? (t = 3 && y 0 = 0 && y 3 < #ss) (ss (y 3) 1) (ld-cstr b (stro + y 0)))
                                   v (ver k y nm0)
                                   nm (? (w? || #nm0 + #v <= 21) (nm0 + v) (snip nm0 0 (max 0 (16 - #v)) + "[...]" + v))
                                   (say out (re-u k 6 + ": " + re-hex (y 4) (? e64 16 8) + " " + szs (y 5) + " "
@@ -768,7 +769,7 @@
             'html2text html2text-main   ; a page's prose (apps/kore/lens.l), the same lens
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'www www-main               ; a page to read, its links followed (apps/kore/www.l)
-            'pic pic-main 'pngcat pic-main 'jpegcat pic-main 'gifcat pic-main   ; pictures (apps/kore/pic.l)
+            'pic pic-main 'pngcat pic-cat 'jpegcat pic-cat 'gifcat pic-cat   ; pictures (apps/kore/pic.l)
             'picless picless-main 'pngless picless-main 'jpegless picless-main 'gifless picless-main
             'telnet telnet-main 'httpd httpd-main   ; a remote terminal, and kiosko (apps/kore/net.l)
             'telnetd telnetd-main                     ; ... and the terminal's server
@@ -1114,8 +1115,10 @@ every tool answers --help and --version, and -h where the letter is free
   html2text [-w COLS] [F..]               a page's prose, laid out (apps/kore/lens.l)
   markdown [-t html|roff|text|dvi] [F..]  markdown laid out the other way
   www [-w COLS] URL|FILE                  a web page, its links numbered (apps/kore/www.l)
-  pic [-w COLS] [-h ROWS] [F..]           png, jpeg, gif in cells (apps/kore/pic.l); pngcat ..
-  picless F..                             a picture viewer, a gif played; pngless gifless ..
+  pic [cat] [-g MODE] [-w COLS] [-h ROWS] [F..]   png, jpeg, gif in cells; -g sixel kitty auto
+  pic less [-g MODE] F..                  a picture viewer, a gif played; picless pngless ..
+  pic convert [-q Q] [-t TYPE] IN OUT     png gif jpeg sixel ans, by OUT's extension or TYPE
+  pic pixelize [-w C] [-s PX] [-c 256] IN OUT   pic's blocks as a picture, or as .ans text
   telnet HOST [PORT]                      a remote terminal; ^] closes (apps/kore/net.l)
   telnetd [-p PORT] [-b ADDR] [-l LOGIN]  its server: LOGIN (/bin/login) on a pty per client
   httpd [-fv] [-p PORT] [-h DIR]          kiosko under busybox's flags (apps/kore/net.l)
@@ -1209,7 +1212,7 @@ every tool answers --help and --version, and -h where the letter is free
         ; closure reads it through the registry at the call, when module 'kore holds
         ; it. a bare read compiled here would ride a missing cell against the
         ; caller's walk, where kore never walks.
-        _ (E 'kore (as \ ((cite 'kore 'kore-main) ("kore" . as))) ())
+        _ (E 'kore (as \ (cite 'kore 'kore-main ("kore" . as))) ())
         (go ks) (? (two? ks) (: f (applets <ks) _ (E <ks (koredoor <ks f) (koretraits <ks)) (go >ks)) 0)
         (go (keys applets)))
    ; kore-main is the dispatch door, and the in-image door too: it dispatches a
@@ -1220,16 +1223,16 @@ every tool answers --help and --version, and -h where the letter is free
    ; image runs a tool by handing it (. "kore" "ls" "-l") and reading the charm.
    ; two doors: a list handed in is scanned, () means "the line I was started with".
    (kore-main a)
-    (: s (? (two? a) ((cite 'verbs 'seatof) mynames a) ((cite 'verbs 'fire) mynames))
+    (: s (? (two? a) (cite 'verbs 'seatof mynames a) (cite 'verbs 'fire mynames))
        (? (atom? s) ()
           (: n0 (intern (bn <s))
              f0 (applets n0)
-             (? f0 ((koredoor n0 f0) >s)
+             (? f0 (koredoor n0 f0 >s)
                 (: t >s
                    n (? (two? t) (intern <t) ())
                    f (? n (applets n) ())
                    ; no tool named: kore's own two flags, then the listing
-                   (? f ((koredoor n f) >t)
+                   (? f (koredoor n f >t)
                       (uask t 1 1
                        @ 'help (puts kore-usage, flush out, 0)
                          'vers (puts ("kore (love " + love-version + ")\n"), flush out, 0)

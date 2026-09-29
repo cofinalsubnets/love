@@ -5,12 +5,13 @@
 ;   (gif-decode s)          -> (w h rgba), the first frame | a string saying why not
 ;   (gif-frames s most)     -> (w h ((rgba ms) ..)), each frame as shown and how long,
 ;                              at most most of them | why not
+;   (gif-palette px n room) -> (rgbs index-of key-fn), at most room colours (sixel's too)
 ;
 ; decoding is love/lib/gif.c's, frame by frame onto the screen; disposal 2 clears a
 ; frame's box to see-through (as browsers do) and 3 restores what was under it.
 ; a pixel under half alpha is the transparent index. up to 256 colours stay exact; past
 ; that each channel is cut to 5 bits and a median cut over what is left picks the palette.
-(module (gif gif-encode gif-decode gif-frames)
+(module (gif gif-encode gif-decode gif-frames gif-palette gif-key)
 (:
    ; --- the palette ----------------------------------------------------------------------
    ; a pixel's colour as one number, -1 when it is transparent
@@ -64,7 +65,7 @@
              (mean cs sh) (: w +(map (e \ e 1) cs)
                              (((+(map (e \ ((<e >> sh) & 31) * (e 1)) cs) * 8) + (4 * w)) // w))
              (rgb bx) (((mean (bx 2) 10) << 16) | ((mean (bx 2) 5) << 8) | mean (bx 2) 0)
-             ix (foldl (\ t i (foldl (\ t e (pin t <e i)) t ((boxes i) 2))) {} (jot #boxes))
+             ix (foldl (\ t i (foldl (\ t e (pin t <e i)) t (boxes i 2))) {} (jot #boxes))
              [(map rgb boxes) ix gif-coarse])))
 
    ; --- lzw --------------------------------------------------------------------------------
