@@ -29,7 +29,7 @@ The system prompt tells the model where it is:
 - a briefing on love: the toolchain the binary carries, a primer on the language, and how to lay love's source and build it;
 - its own session name, and how to reach other sessions;
 - every merge queue under **refs/queue/**, as it stood at start (see THE MERGE QUEUE);
-- the project's own instructions: from **/** down to the working directory, each directory's **AGENTS.md**, else its **CLAUDE.md**.
+- the project's own instructions: from **/** down to the working directory, each directory's **AGENTS.md** and then its **CLAUDE.md**, both where both exist.
 
 The settings are read from **~/.love/etc/crow.l** and then **./.crow.l**, one form per line: **(api anthropic)** or **(api openai)**, **(url** "...**)**, **(model** *name***)**, **(key-env** *var***)**, **(max-tokens** *n***)**, **(shell** *word* ...**)**, **(context** *n***)** and **(thinking off)**. A key goes out only over TLS, and only to a peer whose certificate this binary has verified. Plain HTTP reaches this machine alone.
 

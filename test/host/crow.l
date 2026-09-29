@@ -71,6 +71,7 @@
 ; this binary's lush, and its output goes back as a tool message on the call's id
 (: cr-a (cr-dir "oai" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
    _ (cr-put cr-a "AGENTS.md" "the frog rule: always croak twice\n")
+   _ (cr-put cr-a "CLAUDE.md" "the toad rule: hop once\n@AGENTS.md\n")
    call1 "{\"command\": \"printf hi > ma"
    call2 "de.txt; echo made\"}"
    _ (cr-serves
@@ -103,6 +104,7 @@
       (json-true = b1 "stream_options" "include_usage")       ; the gauge's count
       ("system" = m1 0 "role")
       (cr-in (m1 0 "content") "the frog rule")               ; the directory's AGENTS.md
+      (cr-in (m1 0 "content") "the toad rule")               ; ..and its CLAUDE.md beside it
       (cr-in (m1 0 "content") "platform: ")                  ; the environment, from love's own verbs
       (cr-in (m1 0 "content") "date: 20")
       (cr-in (m1 0 "content") " source DIR")                 ; the briefing: how to lay the source

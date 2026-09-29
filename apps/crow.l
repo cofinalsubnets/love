@@ -103,16 +103,16 @@
              ["to" "text"])]
 
      ; --- the project's own instructions ---
-     ; from / down to the working directory, each directory's AGENTS.md, else its CLAUDE.md:
-     ; the files other agents read, so one file instructs them all
+     ; from / down to the working directory, each directory's AGENTS.md and then its CLAUDE.md:
+     ; the files other agents read, so the same words instruct them all. both, not either: a
+     ; CLAUDE.md that imports its AGENTS.md (@AGENTS.md) still holds words of its own
      crow-cwd (: d (getenv "PWD") (? (string? d && 0 < #d) d "."))
      ; "" for the root, then "/home", "/home/gwen" .. the working directory
      crow-dirs (foldl (\ a p (a + [(a (#a - 1) + "/" + p)]))
                       [""] (filter (\ p (0 < #p)) ((cite 'kore 'usplit) 47 crow-cwd)))
-     (instr-in d) (: a (slurp-file (d + "/AGENTS.md"))
-                     (? (string? a) [(d + "/AGENTS.md") a]
-                        (: c (slurp-file (d + "/CLAUDE.md")) (? (string? c) [(d + "/CLAUDE.md") c]))))
-     crow-instr (filter two? (map instr-in crow-dirs))
+     (instr-in d) (filter two? (map (\ f (: p (d + "/" + f) s (slurp-file p) (? (string? s) [p s])))
+                                    ["AGENTS.md" "CLAUDE.md"]))
+     crow-instr (catmap instr-in crow-dirs)
      (clip0 s) (#s <= 40000 ? s (snip s 0 40000 + "\n[cut]"))
 
      ; --- the roost: the crow sessions on this machine, and the messages between them ---
