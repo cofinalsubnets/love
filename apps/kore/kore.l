@@ -100,19 +100,45 @@
 (borrow 'posix)
 (:
    ; diff: two files -> unified hunks on out, -u taken as that; -q only says whether they
-   ; differ; the classic exit triple
+   ; differ. two directories compare name by name in order, a file pair under GNU's
+   ; `diff FLAGS a b` row, a name on one side `Only in`, and -r goes down the common
+   ; subdirectories; -N reads a missing side as empty. a file and a directory compare
+   ; the file with its namesake inside. the classic exit triple, the worst one met
    (diff-main as)
-    (: fo (uflags "diff" as () "qu")
-       ops (fo 1)
-       (? !(two? ops && two? >ops && atom? >>ops) (udie 2 "usage: diff [-qu] OLD NEW")
-          (: fa <ops fb <>ops
-             ta (uread fa) tb (uread fb)
-             _ (? (two? ta) () (udie 2 ("diff: cannot open " + fa)))
-             _ (? (two? tb) () (udie 2 ("diff: cannot open " + fb)))
-             d (udiff fa fb <>ta <>tb)
-             (? !d 0
-                (<fo 113) (say out ("Files " + fa + " and " + fb + " differ\n"), flush out, 1)
-                (puts d, flush out, 1)))))
+    (: fo (uflags "diff" as () "Nqru")
+       t <fo ops (fo 1)
+       _ (? (two? ops && two? >ops && atom? >>ops) () (udie 2 "usage: diff [-Nqru] OLD NEW"))
+       fl (take (#as - #ops) as)
+       (say1 m) (say out (m + "\n"))
+       (text f) (: r (? (ukind f) (uread f) (t 78) [1 ""] ()) (? (two? r) <>r ()))
+       (files fa fb row?)
+        (: ta (text fa) tb (text fb)
+           (? !(string? ta) (usay-err ("diff: " + fa + ": No such file or directory"), 2)
+              !(string? tb) (usay-err ("diff: " + fb + ": No such file or directory"), 2)
+              (: d (udiff fa fb ta tb)
+                 (? !d 0
+                    (t 113) (say1 ("Files " + fa + " and " + fb + " differ"), 1)
+                    (: _ (? row? (say1 (ujoinc 32 ("diff" . fl + [fa fb]))) 0) (puts d, 1))))))
+       (names d) (? (udirp d) (readdir d) ())
+       (dirs da db)
+        (foldl (\ w nm
+                  (: pa (da + "/" + nm) pb (db + "/" + nm)
+                     ka (ukind pa) kb (ukind pb)
+                     da? (udirp pa) db? (udirp pb)
+                     r (? (da? && db?) (? (t 114) (dirs pa pb) (say1 ("Common subdirectories: " + pa + " and " + pb), 0))
+                          (!ka || !kb) (? (t 78) (? (da? || db?) (? (t 114) (dirs pa pb) 0) (files pa pb 1))
+                                          (say1 ("Only in " + (? ka da db) + ": " + nm), 1))
+                          (da? || db?) (say1 ("File " + pa + " is a " + (? da? "directory" "regular file") + " while file "
+                                              + pb + " is a " + (? db? "directory" "regular file")), 1)
+                          (files pa pb 1))
+                     (max w r)))
+               0 (sort (uniq (names da + names db))))
+       fa <ops fb <>ops
+       r (? (udirp fa && udirp fb) (dirs fa fb)
+            (udirp fa) (files (fa + "/" + ubase fb "") fb 0)
+            (udirp fb) (files fa (fb + "/" + ubase fa "") 0)
+            (files fa fb 0))
+       _ (flush out) r)
 
    ; as: IR forms -> a runnable ELF (love/holo/elf.l over the baked holo book)
    (as-main as)
@@ -832,7 +858,7 @@
     'cat "usage: cat [-AbeEnstTuv] [FILE..]"
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
-    'tail "usage: tail [-qv] [-n N] [-c N] [-N] [FILE..]"
+    'tail "usage: tail [-fFqv] [-s SECS] [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwmc] [FILE..]"
     'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
     'uniq "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"
@@ -926,12 +952,12 @@
     'mknod "usage: mknod [-m MODE] NAME TYPE [MAJOR MINOR]"
     'expr "usage: expr EXPRESSION"
     'patch "usage: patch [-pN] [-R] [-i F] [-o F] [-s] [--dry-run]"
-    'grep "usage: grep [-nvclqhaixwFEo] [-e PAT] [-m N] PATTERN [FILE..]"
+    'grep "usage: grep [-cEFhHiLlnoqrRsvwx] [-e PAT] [-f FILE] [-m N] [-A N] [-B N] [-C N] [--include=GLOB] [--exclude=GLOB] PATTERN [FILE..]"
     'egrep "usage: egrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -E)"
     'fgrep "usage: fgrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -F)"
-    'sed "usage: sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]"
+    'sed "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"
     'awk "usage: awk [-F FS] [-v var=val].. PROGRAM [FILE..]  |  awk .. -f PROGFILE.. [FILE..]"
-    'find "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
+    'find "usage: find [-L] [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
     'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
     'more "usage: more [-Nise] [+N|+/PAT] [FILE..]"
     'wget "usage: wget [-q] [--no-check-certificate] [-O FILE] URL"
@@ -977,7 +1003,7 @@
     'killall "usage: killall [-SIG] NAME.."
     'pwdx "usage: pwdx PID.."
     'kill "usage: kill [-SIG] PID.."
-    'xargs "usage: xargs [-n N] [CMD ARGS..]"
+    'xargs "usage: xargs [-0rt] [-d C] [-n N] [-L N] [-I S] [-P N] [CMD ARGS..]"
     'time "usage: time [-p] CMD [ARG..]"
     'date "usage: date [-u] [-d TIME] [-r FILE] [+FORMAT]"
     'id "usage: id [-u|-g|-G] [-n] [-r]"
@@ -1200,7 +1226,7 @@ every tool answers --help and --version, and -h where the letter is free
    korepreds {'head (as \ (: p (uclip-args "head" as) (kregs? <>p)))
               'tail (as \ (: p (uclip-args "tail" as) (kregs? <>p)))
               'cut (as \ (: p (cut-args as) (kregs? (p 5))))
-              'grep (as \ (: t (tablet 0) o (grep-opt as t) (two? o && kregs? (grep-fs o))))}
+              'grep (as \ (: t (tablet 0) o (grep-opt as t) (two? o && kregs? (grep-fs t o))))}
    (koretraits k) (? (elem k korebuiltin) ['builtin 'self] (elem k koreself) ['self]
                      (elem k korefiles) [('self . kfiles?)]
                      (lit? (peep korepreds k ())) [('self . peep korepreds k ())] ())

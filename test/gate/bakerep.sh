@@ -53,6 +53,15 @@ done
 cmp -s "$w/b3" "$w/b4" \
   || fail "the GC budget is in the image -- a bake must not care when collections fire"
 
+# ..and the hot-first bake the build runs (tools/hotbake.sh): its layout comes of a profile,
+# the chunks a few short runs of the tree woke, so the profile must be the tree's too
+for i in 5 6; do
+  sh tools/hotbake.sh "$w/seed" "$w/b$i" "$ho/.dist-cat.l" > "$w/hot.log" 2>&1 \
+    || { cat "$w/hot.log"; fail "hot bake $i failed"; }
+done
+cmp -s "$w/b5" "$w/b6" \
+  || fail "the hot-first bake is not reproducible -- its profile carries something of the machine"
+
 # ..and the thing still has to WAKE: a bake that is reproducible and dead passes everything
 # above. GREP, never a whole-output compare -- `-e` prints the form's value as well as
 # anything it said, so a probe that puts "x" answers `x"x"`.

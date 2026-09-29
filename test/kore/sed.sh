@@ -68,5 +68,20 @@ for t in "rev" "head -n 5" "tail -n 5" "head -n 1" "head -1" "tail -1" "head -2"
   same "$t on a source with no final newline"
 done
 rm -f "$ho/.nonl"
+# -f FILE in its place among -e (either order, and in a cluster), --file, -r, -s's
+# per-file streams, -i's suffix glued or long (and -in, which is a suffix of n), -f of no
+# file answering GNU's 4
+S=$ho/.sedf; rm -rf "$S"; mkdir "$S"; printf 's/a/X/\n2d\n' > "$S/sc"; printf 'abc\nbbb\nabab\n' > "$S/in"; printf 'a1\na2\n' > "$S/in2"
+for c in "-f $S/sc" "-n -f $S/sc -e p" "-e s/b/Q/ -f $S/sc" "-f $S/sc -e s/b/Q/" "-nf $S/sc" "--file=$S/sc" "-r s/(a)+/<\1>/" "-s 1d $S/in2" "-s \$d $S/in2"; do
+  # shellcheck disable=SC2086
+  sed $c "$S/in" > "$g" 2>&1; korerun sed $c "$S/in" > "$o" 2>&1; same "sed $c"
+done
+for i in -i.bak --in-place=.orig -i -ni; do
+  rm -f "$S"/w*; cp "$S/in" "$S/w"; sed $i 's/a/Z/p' "$S/w"; cp "$S/w" "$S/gw"; (cd "$S" && ls w*) > "$g"
+  rm -f "$S"/w*; cp "$S/in" "$S/w"; korerun sed $i 's/a/Z/p' "$S/w"; (cd "$S" && ls w*) > "$o"
+  same "sed $i leaves"; cmp -s "$S/w" "$S/gw" || fail "kore sed $i vs GNU"
+done
+korerun sed -f "$S/nosuch" "$S/in" > /dev/null 2>&1; r=$?; [ $r -eq 4 ] || fail "kore sed -f of no file (rc $r)"
+rm -rf "$S"
 echo "kore: sed (s///gp + d/p/q + addresses + -E/-e/-i, the per-file model, GNU-identical, exits 1/2) ok"
 echo "kore: the missing final newline is data (sed/rev/head/tail, and head -N) ok"

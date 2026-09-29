@@ -732,6 +732,18 @@
    (cvt ty r) (ty @ 'char [['sx1 r]] 'short [['sx2 r]] 'int [['sx4 r]]
                     'uchar [['zx1 r]] 'ushort [['zx2 r]] 'uint [['zx4 r]]
                     'bool [['cmp r 0] ['set 'ne r]])
+   ; a store narrows on its own: an int store needs no cvt before it (the value's cvt is for the
+   ; expression's answer), and an integer cast at least as wide as the stored type, over a plain
+   ; integer variable, truncates only what the store truncates
+   (stcvt? ty) (elem ty '(char uchar short ushort int uint))
+   ints9 '(char uchar short ushort int uint long ulong llong ullong)
+   (stnar g env ty e)
+    (e @ ('cast t ('var _))
+          (: vt (rotty g env <>>e)
+             (? (elem t ints9 && elem vt ints9 && elem ty ints9 &&
+                 !(pair? g t || pair? g vt) && tsz g ty <= tsz g t && !(abl? g 'stnar))
+                <>>e e))
+         e)
    ; the double lane: a 'double value lives in f0, always a 64-bit double in the register; only
    ; memory differs -- a float slot is 4 bytes, so a load widens and a store narrows (fldf/fstf)
    (flo? ty) (ty = 'double || ty = 'float)
@@ -2022,7 +2034,9 @@
         (: r (clval g env e)                  ; clval already walked the pointer
            (? (bad? r) 'bad (loadval g r wnt)))
        ('asn dst rhs)
-        (: rv (? (<dst = 'var) (vent g env <>dst) 'bad)
+        (: dq9 (peep g 'drop9 ())           ; a statement drops the answer: an asn on its right still wants its own
+           _ (pin g 'drop9 ())
+           rv (? (<dst = 'var) (vent g env <>dst) 'bad)
            fd (sfd g env dst)
            (? (two? rv && <rv = 'regv && fhomable? <>>rv)   ; store into an xmm home: off the protocol
                (: r (cgexpr g env rhs ())
@@ -2142,13 +2156,15 @@
               fdd
                (: b (vmb lv0) o (vmo lv0)
                   ty (vty lv0)
-                  r (cgexpr g env rhs ())
+                  r (cgexpr g env (stnar g env ty rhs) ())
                   (? (bad? r) (rfree g b, 'bad)
-                     (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                     (? (!(flo? (vty r)) && (!(two? (cvt ty 'r0)) || (stcvt? ty && !(abl? g 'stnar))) &&
                          vreg r != 'r0 && !(rpeq? g (vreg r) b))
                         (: fs (vfs lv0 + vfs r + [[(stop ty) b o (vreg r)]])
                            _ (rfree g b)
-                           (mkv ty (vreg r) fs))
+                           ; the answer takes its cvt after the store, and a statement drops it
+                           (? (two? (cvt ty 'r0) && !dq9) (mkv ty 'r0 (tor0 g (mkv ty (vreg r) fs) + cvt ty 'r0))
+                              (mkv ty (vreg r) fs)))
                         (: fs (vfs lv0 + asintt g r ty + cvt ty 'r0 +
                                [[(stop ty) b o 'r0]])
                            _ (rfree g b)
@@ -2156,19 +2172,20 @@
               ; the address parks in a pool register past a call-free rhs; a call on the right would clobber the park, so it keeps the shuttle
               (: lv (matv g lv0)
                  aR (? (callish? rhs) () (ralloc g))
-                 r (cgexpr g env rhs ())
+                 r (cgexpr g env (stnar g env (vty lv) rhs) ())
                  (? (bad? r) ((? aR (rfree g aR) ()), 'bad)
                     (: ty (vty lv)
                        (? aR
                           ; a register-riding value stores itself (no r0 bridge)
-                          (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                          (? (!(flo? (vty r)) && (!(two? (cvt ty 'r0)) || (stcvt? ty && !(abl? g 'stnar))) &&
                               vreg r != 'r0 && !(rpeq? g (vreg r) aR))
                              (: fs (vfs lv +
                                     [['mov aR 'r0]] +
                                     vfs r +
                                     [[(stop ty) aR 0 (vreg r)]])
                                 _ (rfree g aR)
-                                (mkv ty (vreg r) fs))
+                                (? (two? (cvt ty 'r0) && !dq9) (mkv ty 'r0 (tor0 g (mkv ty (vreg r) fs) + cvt ty 'r0))
+                                   (mkv ty (vreg r) fs)))
                              (: fs (vfs lv +
                                     [['mov aR 'r0]] +
                                     asintt g r ty +
@@ -2963,16 +2980,22 @@
                 (mkv rt (vreg xv) (vfs xv + [[iop (vreg xv) c]]))
                 (: rd (wnt || rdst g (vreg xv))
                    (mkv rt rd (vfs xv + [['mov rd (vreg xv)] [iop rd c]])))))))
-   (cgrvar g env x w ce ng)                         ; the register-count rotate: mirror of the variable shift
+   (cgrvar g env x w ce ng wnt)                     ; the register-count rotate: mirror of the variable shift
     (: xv (cgexpr g env x ())
        (? (bad? xv) 'bad
           (: cv (cgexpr g env ce ())
+             ra (vreg xv)
              (? (bad? cv) 'bad
                 (: rt (w @ 32 'uint 'ulong)
                    vop (w @ 32 'rorv4 'rorv)
-                   af (tor0 g xv)
-                   bf (tor0 g cv)
-                   (mkv rt 'r0 (af + cshut g bf + (ng ? '((neg r1))) + [[vop 'r0 'r1]])))))))
+                   (? (!(elem ra '(r0 r1 r2 r3)) && !(callish? ce) && !(abl? g 'shv2))
+                      (: bf (tor0 g cv)
+                         rd (? (wr? g ra) ra (: w9 (wnt || rdst g ra) (? (w9 = 'r1) (rdst g ra) w9)))
+                         (mkv rt rd (vfs xv + bf + ['(mov r1 r0)] + (ng ? '((neg r1))) +
+                                     (? (rd = ra) () [['mov rd ra]]) + [[vop rd 'r1]])))
+                      (: af (tor0 g xv)
+                         bf (tor0 g cv)
+                         (mkv rt 'r0 (af + cshut g bf + (ng ? '((neg r1))) + [[vop 'r0 'r1]])))))))))
    (cgror g env L R wnt)                            ; -> tuple | 'bad | 'no (the general lane stands)
     (? !(rot4? g) 'no
        (: a (two? L && <L = 'bin && elem <>L '(shl shr) ? L)
@@ -2990,8 +3013,8 @@
                                 (? (ks + kl = w && 0 < ks && ks < w)
                                    (cgrimm g env x w ks wnt) 'no)
                                (charm? ks || charm? kl) 'no
-                               (rotc? g w cl cs) (cgrvar g env x w cs ())   ; rotr: ror by the shr count
-                               (rotc? g w cs cl) (cgrvar g env x w cl 1)    ; rotl: ror by the negated shl count
+                               (rotc? g w cl cs) (cgrvar g env x w cs () wnt)   ; rotr: ror by the shr count
+                               (rotc? g w cs cl) (cgrvar g env x w cl 1 wnt)    ; rotl: ror by the negated shl count
                                'no)))))))))
    (cgbin g env e wnt)
     (: op <>e
@@ -3047,7 +3070,15 @@
                      (: rd (wnt || rdst g (vreg a))    ; a borrowed home shifts a copy (no 3-address shift)
                         (mkv rt rd (vfs a + [['mov rd (vreg a)] [iop rd <kc]] + nar rd))))
                  (: b (cgexpr g env rhs ())
+                    ra (vreg a)
                     (? (bad? b) 'bad
+                       ; a left already in a register that a call-free count leaves alone shifts there,
+                       ; two-address, as the constant lane does: only the count takes the protocol
+                       (!(elem ra '(r0 r1 r2 r3)) && !(callish? rhs) && !(abl? g 'shv2))
+                        (: bf (tor0 g b)
+                           rd (? (wr? g ra) ra (: w9 (wnt || rdst g ra) (? (w9 = 'r1) (rdst g ra) w9)))
+                           (mkv rt rd (vfs a + bf + ['(mov r1 r0)] + (? (rd = ra) () [['mov rd ra]]) +
+                                       [[vop rd 'r1]] + nar rd)))
                        (: af (tor0 g a)
                           bf (tor0 g b)
                           (mkv rt 'r0 (af + cshut g bf + [[vop 'r0 'r1]] + nar 'r0)))))))
@@ -6961,7 +6992,8 @@
                            <<>>pe = 'num && charm? <><>>pe)
                           (siop9 <>>sv <><>>pe) ())
                     (? sk (atstat sv 'r1 (b \ o \ [[sk b o <><>>pe]]))
-                       (: r (cgexpr g env pe ())
+                       (: _ (? (<pe = 'asn && !(abl? g 'stnar)) (pin g 'drop9 1) ())
+                          r (cgexpr g env pe ())
                           (? (bad? r) 'bad (vdrop g r)))))))
           ('nop . _) ()
           ('tdef . _) ()                            ; a block-scope _Static_assert (already checked at parse)
