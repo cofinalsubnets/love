@@ -14,6 +14,8 @@
 ;   (shell WORD ..)       the shell a command line runs in; lush -a, this binary's own
 ;   (context N)           the window in tokens, for the screen's gauge; claude's are known
 ;   (queue-watch N)       seconds between readings of the merge queues; 20, and 0 for never
+;   (backend claude-code) a `claude -p` child thinks and runs the tools, bee the harness; api else
+;   (claude-model NAME)   the model that child runs; claude's own default when unset
 ; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
 ; peer tls-open verified: its chain to a root the host trusts, and its name.
 (module (bee bee-main)
@@ -201,7 +203,9 @@
          _ (pins bee-cell 'state state)
          _ (spit-file (d + "/.card")
                       (paras [("pid " + show (getpid 0)) ("cwd " + bee-cwd) ("branch " + b)
-                              ("model " + bee-model) ("state " + state) ("since " + show (bee-cell 'since))]))
+                              ("model " + (bee-cc? ? (peep bee-cc 'model "claude") bee-model)) ("state " + state)
+                              ("since " + show (bee-cell 'since))]
+                             + (: s (peep bee-cell 'claude ()) (string? s ? ("claude " + s + "\n") ""))))
          (rename (d + "/.card") (d + "/card")))
      (settle branch)
       (: d (cell-of bee-name)
@@ -903,7 +907,7 @@
      ; a tool as the transcript names it: the shell by its own name
      (shown name) (name = "shell" ? <bee-shell name)
      (brief name in)
-      (? !(valid? name in) "(malformed input)"
+      (? !(valid? name in) (cc-brief in)                       ; claude's own tools, or a malformed input
          (name @ "shell" (in "command")
                  "edit_file" (in "path" + ": " + show #(in "old_text") + " bytes -> " + show #(in "new_text"))
                  "list_sessions" ""
@@ -939,7 +943,8 @@
                ({"role" "user" "content" (? (string? c) [{"type" "text" "text" c} t] (c + [t]))} . >msgs))))
      ; a user turn to its end -> the messages after it, or () when the wire failed. mail
      ; that arrived since the last request rides this one
-     (turn key f msgs0)
+     (turn key f msgs0) (? bee-cc? (cc-turn key f msgs0) (api-turn key f msgs0))
+     (api-turn key f msgs0)
       (: msgs (with-mail f msgs0)
          r (bee-open key (bee-body msgs))
          (? !(tablet? r) ((f 'note) "no answer", ())
@@ -984,6 +989,7 @@
        'ask (\ h (: _ (state! "asking") a (? (ask "  run? [y/N] ") 1 0) _ (state! "busy") a))
        'done (\ h r 0)
        'usage (\ n 0)
+       'cost (\ x 0)
        'shell (\ h cmd (shell-out cmd))}
      (repl key f msgs)
       (: _ (puts "> ") _ (flush out) l (line 0)
@@ -1093,11 +1099,16 @@
      ; the gauge: the last request's tokens against the window, or a count when it is unknown
      (kilo n) (n < 1000 ? (show n) (show (n // 100 / 10) + "k"))
      (gauge c)
-      (: n (c 'used)
-         (? !(charm? n) ""
-            (bee-window = ()) (sgr "2" (kilo n + " tokens"))
-            (: p (n * 100 // bee-window)
-               (sgr (? (p < 70) "2" (p < 90) "33" "31") (show p + "% context")))))
+      (: n (c 'used) x (peep c 'cost ())
+         ; under claude-code, the window of the model claude reports
+         win (? bee-cc? (: md (peep bee-cc 'model "") (starts? md "claude-haiku" ? 200000 1000000)) bee-window)
+         dollars (? (x = ()) ""
+                    (: k (int (x * 100 + 0.5))
+                       (sgr "2" ("$" + show (k // 100) + "." + (k % 100 < 10 ? "0" "") + show (k % 100) + " · "))))
+         (? !(charm? n) dollars
+            (win = ()) (dollars + sgr "2" (kilo n + " tokens"))
+            (: p (n * 100 // win)
+               (dollars + sgr (? (p < 70) "2" (p < 90) "33" "31") (show p + "% context")))))
 
      ; a block's lines at width w, cached on the block by [w its version]
      (blines b w)
@@ -1193,6 +1204,7 @@
        'mail (\ from t (push c {'k 'mail 'from from 'text t}, soil c))
        'wire (\ s (pin c 'sock s))
        'usage (\ n (pin c 'used n, soil c))
+       'cost (\ x (pin c 'cost (peep c 'cost 0 + x), soil c))       ; claude's own reckoning, summed
        'tool (\ name in (: b {'k 'tool 'name name 'brief (brief name in) 'st 'run 'v 0
                                'pre (? (name = "edit_file" || name = "write_file") (preview name in) ())}
                           (push c b, soil c, b)))
@@ -1249,6 +1261,7 @@
                 (c 'blocks))
          _ (? (t != ()) (freeze t) 0)
          _ (pins c 'busy () 'sock () 'asking ())
+         _ (? (bee-cc 'live) (cc-stop 0) 0)                        ; the next turn resumes the session
          _ (state! "idle")
          (push c {'k 'note 'text "interrupted"}))
 
@@ -1310,6 +1323,139 @@
      bee-branch (: k (find bee-env "git branch: " 0)
                     (? (k < 0) "" (: e (find bee-env "\n" k) (snip bee-env (k + 12) (e < 0 ? #bee-env e)))))
      (joinw ws) (foldl (\ a w (a + " " + w)) <ws >ws)
+     ; --- the claude-code backend, (backend claude-code): a long-lived `claude -p` child in
+     ; stream-json both ways does the thinking and runs its own tools, and bee is the harness --
+     ; it draws the child's events on the same doors, answers its permission asks from the screen
+     ; through `bee --mcp`, and keeps its session id on the card so an interrupted child resumes ---
+     bee-backend (setting 'backend "api")
+     bee-cc? (bee-backend = "claude-code")
+     bee-cc {'pid () 'w () 'q () 'sid () 'live 0 'yes 0}
+     (cc-uuid _)
+      (: s (slurp-file "/proc/sys/kernel/random/uuid")
+         (? (string? s && 36 <= #s) (snip s 0 36)
+            (: h (\ n (hex2 ((clock 0 + getpid 0 * n) % 256)))
+               (h 1 + h 2 + h 3 + h 4 + "-" + h 5 + h 6 + "-4" + snip (h 7) 1 2 + h 8 + "-a" + snip (h 9) 1 2
+                + h 10 + "-" + h 11 + h 12 + h 13 + h 14 + h 15 + h 16))))
+     ; what the child is told beyond Claude Code's own prompt: the hive and the merge queue
+     (cc-append _) (bee-talk + bee-merge)
+     (cc-start resume?)
+      (: sid (? (resume? && string? (bee-cc 'sid)) (bee-cc 'sid) (cc-uuid 0))
+         d (cell-of bee-name) cfg (d + "/mcp.json")
+         _ (spit-file cfg (json-show {"mcpServers" {"bee" {"command" bee-self "args" ["bee" "--mcp"]
+                                                           "env" {"BEE_AS" bee-name "BEE_HIVE" bee-hive
+                                                                  "BEE_YES" (bee-cc 'yes ? "1" "")}}}}))
+         m (setting 'claude-model "")
+         argv (["claude" "-p" "--input-format" "stream-json" "--output-format" "stream-json" "--verbose"
+                "--include-partial-messages" "--permission-prompt-tool" "mcp__bee__approve"
+                "--mcp-config" cfg "--append-system-prompt" (cc-append 0)]
+               + (resume? ? ["--resume" sid] ["--session-id" sid])
+               + (0 < #m ? ["--model" m] ()))
+         pi (pipe 0) po (pipe 0) ef (openfd (d + "/claude.err") 2)
+         p (spawnio argv <pi >po ef (open-fds 0) -1 0)
+         _ (close <pi) _ (close >po) _ (? (0 <= ef) (close ef) 0)
+         (? !(charm? p && 0 < p) (: _ (close >pi) (close <po) 0)
+            (: _ (pins bee-cc 'pid p 'w (fdopen >pi) 'q (fdopen <po) 'sid sid 'live 1)
+               _ (pins bee-cell 'claude sid)
+               _ (card! (bee-cell 'state))
+               1)))
+     ; the child ended or was stopped: the next turn resumes its session
+     (cc-stop _)
+      (: p (bee-cc 'pid)
+         _ (? (charm? p && 0 < p) (still p 2) 0)
+         _ (? (hot? (bee-cc 'w)) (close (bee-cc 'w)) 0)
+         (pins bee-cc 'live 0 'pid ()))
+     ; a tool call as the screen shows it, for claude's own tools: their usual field
+     (cc-brief in)
+      (? !(tablet? in) ""
+         (: f (filter (\ k (string? (peep in k ()))) ["command" "file_path" "path" "pattern" "url" "description" "prompt"])
+            (? (two? f) (: s (in <f) (#s <= 100 ? s (snip s 0 100 + "…"))) (: s (json-show in) (#s <= 100 ? s (snip s 0 100 + "…"))))))
+     ; a tool result's text, whether a string or a list of text blocks
+     (cc-text c) (? (string? c) c (two? c) (foldl (\ a b (? (tablet? b && string? (peep b "text" ())) (a + b "text") a)) "" c) "")
+     ; the screen's side of `approve`: each asks/ID.ask becomes the tool's block, asking; the key
+     ; writes asks/ID.answer. runs while a turn does
+     (cc-asks f blocks)
+      (: d (cell-of bee-name + "/asks") fs (readdir d)
+         _ (? (two? fs)
+              (map (\ fl (? !(ends? fl ".ask") 0
+                            (: p (d + "/" + fl) a (: s (slurp-file p) (? (string? s) (json-read s) ()))
+                               id (snip fl 0 (#fl - 4)) ans (d + "/" + id + ".answer")
+                               (? (two? (stat ans)) 0
+                                  (: j (? (two? a && tablet? (a 1)) (a 1) {})
+                                     tn (peep j "tool_name" "?") in (peep j "input" {})
+                                     tu (peep j "tool_use_id" ())
+                                     h (? (string? tu) (peep blocks tu ()) ())
+                                     h2 (? h h ((f 'tool) tn in))
+                                     r ((f 'ask) h2)
+                                     (spit-file ans (r = 1 ? "y" "n")))))))
+                   (sort fs))
+              0)
+         0)
+     ; the text of the newest user message, what the child is sent
+     (cc-said msgs) (: c (<msgs "content") (? (string? c) c (cc-text c)))
+     ; one user turn through the child -> the messages after it, or () when it failed
+     (cc-turn key f msgs0)
+      (: msgs (with-mail f msgs0)
+         ok (? (bee-cc 'live) 1 (cc-start (string? (bee-cc 'sid))))
+         (? !ok ((f 'note) "claude would not start: is it on PATH? its errors are in the cell's claude.err", ())
+            (: w (bee-cc 'w) q (bee-cc 'q)
+               _ (say w (json-show {"type" "user" "message" {"role" "user" "content" (cc-said msgs)}}))
+               _ (say w "\n") _ (flush w)
+               blocks {} kinds {} st {'done () 'text ""}
+               asker (twirl (\ _ (: (go _) (? (st 'done) 0 (: _ (cc-asks f blocks) _ (rest 200) (go 0))) (go 0))) 0)
+               (ev e)
+                (: ty (e "type") i (peep e "index" ())
+                   (ty @
+                    "content_block_start" (pin kinds i (peep (e "content_block") "type" ""))
+                    "content_block_delta"
+                     (: d (e "delta")
+                        (d "type" @
+                         "text_delta" (: x (d "text") _ (pin st 'text (st 'text + x)) ((f 'text) x))
+                         "thinking_delta" (: x (d "thinking") (? (0 < #x) ((f 'think) x) 0))
+                         0))
+                    "content_block_stop" (? (elem (peep kinds i "") ["text" "thinking"]) ((f 'break) 0) 0)
+                    "message_start" (: u (peep (e "message") "usage" ())
+                                       (? (tablet? u) ((f 'usage) (num u "input_tokens" + num u "cache_creation_input_tokens"
+                                                                   + num u "cache_read_input_tokens" + num u "output_tokens")) 0))
+                    0))
+               (go _)
+                (: l (line-of q)
+                   (? !(string? l) 'eof
+                      (: j (json-read l) m (? (two? j && tablet? (j 1)) (j 1) {})
+                         (m "type" @
+                          "stream_event" (: _ (ev (m "event")) (go 0))
+                          ; the model claude runs names the card and the gauge's window
+                          "system" (: md (peep m "model" ())
+                                      _ (? (string? md && md != peep bee-cc 'model "")
+                                           (: _ (pin bee-cc 'model md) (card! (bee-cell 'state))) 0)
+                                      (go 0))
+                          "assistant" (: _ (map (\ b (? (b "type" = "tool_use")
+                                                         (pin blocks (b "id") ((f 'tool) (b "name") (b "input")))
+                                                         0))
+                                                (: c (m "message" "content") (two? c ? c ())))
+                                         (go 0))
+                          "user" (: c (m "message" "content")
+                                    _ (? (two? c)
+                                         (map (\ b (? (tablet? b && b "type" = "tool_result")
+                                                      (: h (peep blocks (b "tool_use_id") ())
+                                                         (? h ((f 'done) h [(!(peep b "is_error" ()) || peep b "is_error" () = json-false ? 1 0)
+                                                                              (cc-text (b "content"))]) 0))
+                                                      0))
+                                              c)
+                                         0)
+                                    (go 0))
+                          "result" (: x (peep m "total_cost_usd" ())
+                                      _ (? (x = () || string? x) 0 ((f 'cost) x))
+                                      (? ((peep m "is_error" ()) = json-true)
+                                         (: _ ((f 'note) ("claude: " + (: r (peep m "result" "") (string? r ? r (show r))))) 'failed)
+                                         'ok))
+                          (go 0)))))
+               end (go 0)
+               _ (pin st 'done 1)
+               _ (? (end = 'eof) (: _ (cc-stop 0) ((f 'note) "the claude child ended; the next turn resumes its session")) 0)
+               (? (end = 'ok)
+                  (: t (st 'text) ({"role" "assistant" "content" (0 < #t ? t "(tools only)")} . msgs))
+                  ()))))
+
      ; --- the MCP server: `love bee --mcp`, JSON-RPC 2.0 one message a line, what a claude
      ; child runs to reach its bee and the hive. the ports are arguments, so a test drives a
      ; whole conversation without a child. an id is presence, not truth: requests count from 0 ---
@@ -1344,7 +1490,9 @@
             (getenv "BEE_YES" = "1") (allow 0)
             (: d (cell-of bee-name + "/asks") _ (mkdirs d)
                id (show (clock 0) + "-" + hex2 (clock 0 % 256))
-               _ (spit-file (d + "/." + id) (json-show {"tool_name" tn "input" (tablet? inp ? inp {})}))
+               tu (peep a "tool_use_id" ())                ; so the screen asks on the block it drew
+               _ (spit-file (d + "/." + id) (json-show (: j {"tool_name" tn "input" (tablet? inp ? inp {})}
+                                                           (? (string? tu) (pin j "tool_use_id" tu) j))))
                _ (rename (d + "/." + id) (d + "/" + id + ".ask"))
                ans (ask-wait (d + "/" + id + ".answer") (ask-limit * 5))
                _ (unlink (d + "/" + id + ".ask")) _ (unlink (d + "/" + id + ".answer"))
@@ -1419,17 +1567,20 @@
          words (filter (\ w !(elem w bee-flags)) as)
          (? (elem "--mcp" as) (: _ (mcp-serve in out) 0)             ; a claude child's own server
             (two? words && elem <words ["--list" "--send" "--spawn" "--stop"]) (bee-cli words yes)
-            (atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
-            (#bee-model = 0) (say err "bee: name the model, (model NAME) in ~/.love/etc/bee.l\n", 1)
-            (!bee-local? && !(string? key && 0 < #key)) (say err ("bee: set " + bee-key-env + "\n"), 1)
+            ; the api backend wants its endpoint, model and key; claude brings its own
+            (!bee-cc? && atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
+            (!bee-cc? && #bee-model = 0) (say err "bee: name the model, (model NAME) in ~/.love/etc/bee.l\n", 1)
+            (!bee-cc? && !bee-local? && !(string? key && 0 < #key)) (say err ("bee: set " + bee-key-env + "\n"), 1)
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
+               _ (pin bee-cc 'yes yes)
                _ (? sv (twirl (\ _ (watch 0)) 0) 0)
                r (? sv (serve-first key (plain yes) (: p (getenv "BEE_PROMPT")
                                                     (? (string? p && 0 < #p) p (two? words) (joinw words) "")))
                     (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)
                     (!pl && two? (tty 1)) (tui key yes)
                     (repl key (plain yes) ()))
+               _ (? (bee-cc 'live) (cc-stop 0) 0)
                _ (unsettle 0)
                r)))
       (bee-go as))
