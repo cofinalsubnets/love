@@ -718,6 +718,12 @@
       (pgwrap 4 "\x1b[1mabcd\x1b[0m" = '("\x1b[1mabcd\x1b[0m"))
       (pgwrap 4 "\x1b[1;4mab\x1b[0mcdef" = '("\x1b[1;4mab\x1b[0mcd" "ef"))
       (pgwrap 20 "\x1b[2Ja" = '("^[[2Ja"))
+      ; a c1 control never reaches the terminal: a raw byte as <9B>, an encoded one
+      ; as <U+009B>, each its own width
+      (pgwrap 20 "a\x9b2Jb" = '("a<9B>2Jb"))
+      (pgwrap 20 "a\xc2\x9b2J" = '("a<U+009B>2J"))
+      (pgwrap 4 "\x9b\x9b" = '("<9B>" "<9B>"))
+      (pgwrap 20 "\xc2\xa0\xce\xbb" = '("\xc2\xa0\xce\xbb"))
       ; ..and a wrap inside an attribute closes it and opens it again on the next row,
       ; so the colour never outlives the fragment that carried it
       (pgwrap 2 "\x1b[1mabcd\x1b[0m" = '("\x1b[1mab\x1b[0m" "\x1b[1mcd\x1b[0m"))

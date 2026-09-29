@@ -62,6 +62,14 @@
    ; the live draft survives an up/down round-trip:
    ([120] = <(edln (ed-keys [120 27 91 65 27 91 66 13]) "" [abc]))))      ; x, up, down -> "x"
 
+; a bracketed paste is text: a line break in it breaks the buffer's line and submits nothing,
+; a crlf is one break, a tab stays and every other control goes; the whole buffer is the line
+(: _ (test
+   ("ab\nc" = string (edraw (ed-keys [97 27 91 50 48 48 126 98 10 99 27 91 50 48 49 126 13]) ""))
+   ("x\ny\n\tz" = string (edraw (ed-keys [27 91 50 48 48 126 120 13 10 121 10 27 1 9 122 27 91 50 48 49 126 13]) ""))
+   ("ls" = string <(edln (ed-keys [27 91 50 48 48 126 108 115 27 91 50 48 49 126 13]) "" ()))
+   (0 = ((cite 'cli 'edkey) (ed-keys [27 91 50 48 49 126])))))   ; a stray close is a miss
+
 (test_fin ())
 (puts "baoedit: ok") (putc 10)
 
