@@ -289,6 +289,61 @@
         0)
    0)
 
+;; --- the chain: x509 path building over openssl's fixtures (test/host/tlschain, gen.sh) ----
+; two roots (rsa, p-384) and one of p-521, intermediates and leaves over rsa pkcs#1 with
+; sha-256/384/512 and ecdsa over each curve, all valid 2025..2035 and read at mid-2026. the
+; good chains verify leaf-first, out of order and with their root sent along; each broken
+; rule is refused, and the refusal names the certificate and the check
+(borrow 'cal)
+(: (tc-ld nm) (: r (uread ("test/host/tlschain/" + nm + ".pem")) (? (two? r) <(pem-ders <>r) ""))
+   tc-now (epoch-days 2026 6 1 * 86400)
+   tc-roots (map (n \ x509 (tc-ld n)) ["rootr" "roote" "rootw"])
+   (tc host l) (chain-ok? (map tc-ld l) tc-roots host tc-now)
+   (tc-flip d i) (snip d 0 i + string ((d i) ^ 1) + snip d (i + 1) #d)
+   (tc-has r s) (string? r && (0 <= str-at r s 0))
+   _ (test ((tc "good.test" ["leafr" "interr"]) = 1)
+           ((tc "good.test" ["leafe" "intere"]) = 1)                ; p-256 under p-384
+           ((tc "good.test" ["leafw"]) = 1)                          ; p-384 under p-521, sha-512
+           ((tc "good.test" ["leaf512" "interr"]) = 1)               ; pkcs#1 over sha-512
+           ((tc "GOOD.test." ["leafr" "interr"]) = 1)                ; case and a trailing dot
+           ((tc "a.wild.test" ["leafr" "interr"]) = 1)
+           ((tc "127.0.0.1" ["leafr" "interr"]) = 1)                 ; an address against iPAddress
+           ((tc "good.test" ["leafr" "rootr" "interr"]) = 1)         ; out of order, its root sent
+           ((tc "good.test" ["deep" "inter1" "inter0"]) != 1)
+           (tc-has (tc "good.test" ["expired" "interr"]) "\"expired\": it has expired")
+           (tc-has (tc "good.test" ["notyet" "interr"]) "\"notyet\": it is not valid yet")
+           (tc-has (tc "bad.test" ["leafr" "interr"]) "\"leafr\": it does not name bad.test")
+           (tc-has (tc "127.0.0.2" ["leafr" "interr"]) "does not name")
+           (tc-has (tc "a.b.wild.test" ["leafr" "interr"]) "does not name")   ; one label only
+           (tc-has (tc "wild.test" ["leafr" "interr"]) "does not name")        ; not the bare name
+           (tc-has (tc "foo.wild.test" ["partial" "interr"]) "does not name")  ; no f*.wild.test
+           (tc-has (tc "x.test" ["partial" "interr"]) "does not name")         ; no *.test
+           (tc-has (tc "good.test" ["undernoca" "noca" "interr"]) "\"noca\": it is not a certificate authority")
+           (tc-has (tc "good.test" ["deep" "inter1" "inter0"]) "\"inter0\": its pathLen is exceeded")
+           (tc-has (tc "good.test" ["crit" "interr"]) "\"crit\": a critical extension it does not know")
+           (tc-has (tc "good.test" ["client" "interr"]) "\"client\": it is not for serving tls")
+           (tc-has (tc "good.test" ["undernosign" "nosign"]) "\"nosign\": its keyUsage does not allow")
+           (tc-has (tc "good.test" ["nosan" "interr"]) "\"nosan\": it does not name good.test")
+           (tc-has (tc "good.test" ["leafr"]) "\"leafr\": no issuer for it is known")
+           (tc-has (chain-ok? [(tc-ld "leafr") (tc-ld "interr")] () "good.test" tc-now) "no issuer")
+           (tc-has (chain-ok? [] tc-roots "good.test" tc-now) "no certificate"))
+   ; a byte of a signature, or of what it signs, at each depth
+   lr (tc-ld "leafr") ir (tc-ld "interr")
+   _ (test (tc-has (chain-ok? [(tc-flip lr (#lr - 1)) ir] tc-roots "good.test" tc-now) "\"leafr\": its signature does not verify")
+           (tc-has (chain-ok? [lr (tc-flip ir (#ir - 1))] tc-roots "good.test" tc-now) "\"interr\": its signature does not verify")
+           (1 != chain-ok? [(tc-flip lr 200) ir] tc-roots "good.test" tc-now)
+           (1 != chain-ok? [(tc-ld "leafe") (tc-flip (tc-ld "intere") (#(tc-ld "intere") - 2))] tc-roots "good.test" tc-now))
+   ; the times, both encodings; the name rules alone
+   _ (test ((x509-time (string 23 + string 13 + "500101000000Z") [23 2 15 0]) = [(0 - 631152000)])
+           ((x509-time (string 24 + string 15 + "20260601000000Z") [24 2 17 0]) = [tc-now])
+           !(x509-time (string 23 + string 13 + "260601000000+") [23 2 15 0])
+           (dns-match? "*.a.test" "x.a.test") !(dns-match? "*.a.test" "a.test")
+           !(dns-match? "x*.a.test" "xy.a.test") !(dns-match? "*.*.test" "a.b.test")
+           !(dns-match? "*.test" "a.test") (dns-match? "A.Test" "a.TEST"))
+   ; every prefix of a certificate, and every one-byte change, reads without dying
+   _ (test (all (n \ !(tablet? (x509 (snip ir 0 n)))) ^#ir)
+           (all (i \ (: x (x509 (tc-flip ir i)) (atom? x || tablet? x))) ^#ir)))
+
 ; the harness greps for this line, and that is the point: a reader stop exits 0
 ; with the asserts above never read, so only reaching here proves the file ran.
 (test_fin (),

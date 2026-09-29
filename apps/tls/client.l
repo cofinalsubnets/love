@@ -5,7 +5,7 @@
 ; it is for (32 bytes chacha, 16 aes).
 ;
 ; what is verified: the handshake. the server's CertificateVerify must be its leaf key's
-; signature of the transcript (ed25519, ecdsa p-256 with sha-256, or rsa-pss with sha-256;
+; signature of the transcript (ed25519, ecdsa p-256/sha-256 or p-384/sha-384, rsa-pss/sha-256 or sha-384;
 ; apps/tls/verify.l), and its Finished the hmac of the transcript under the handshake
 ; secret, so the peer holds the private key of the certificate it sent and saw the same
 ; handshake we did. what is NOT verified: the certificate itself -- no chain to a trusted
@@ -172,9 +172,9 @@
    (client-hello host pub sid)
     (: sni (ext 0 (u16 (#host + 3) + u8 0 + u16 #host + host))
        groups (ext 10 (u16 2 + u16 29))
-       ; what a CertificateVerify may use is what verify.l checks: ecdsa p-256, rsa-pss, ed25519.
+       ; what a CertificateVerify may use is what verify.l checks: ecdsa p-256 and p-384, rsa-pss, ed25519.
        ; the chain's own signatures are named apart (50), so the server's pick of a leaf is not narrowed
-       sigs (ext 13 (u16 6 + u16 1027 + u16 2052 + u16 2055))
+       sigs (ext 13 (u16 10 + u16 1027 + u16 1283 + u16 2052 + u16 2053 + u16 2055))
        csigs (ext 50 (u16 12 + u16 1027 + u16 2052 + u16 1025 + u16 2055 + u16 2053 + u16 1281))
        vers (ext 43 (u8 2 + u16 772))
        modes (ext 45 (u8 1 + u8 1))
