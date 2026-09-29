@@ -89,7 +89,8 @@
        ic (string? vc ? (expect t 20) ())
        ok (? !(string? vc) "no version line" !(string? ic) "no kexinit" (sd-agree ic))
        (? (string? ok) ok
-          (: e (expect t 30)
+          (: _ (pin t 'strict ok)                          ; strict kex: noise before newkeys ends it (ssh-next)
+             e (expect t 30)
              (? !(string? e) "no key exchange"
                 (: c (cur e) _ (g-skip c 1) qc (g-str c)
                    priv (rnd 32) qs (x25519-pub priv)
@@ -109,6 +110,7 @@
                          nk (expect t 21)
                          _ (pin t 'sk (pair (kd "C")))
                          _ (ok ? (pin t 'rseq 0) 0)
+                         _ (pin t 'strict 0)
                          sr (string? nk ? (expect t 5) ())
                          sv (string? sr ? (: c2 (cur sr) (g-skip c2 1, g-str c2)) "")
                          (? !(string? nk) "no newkeys"

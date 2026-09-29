@@ -5,7 +5,7 @@
 ;   ssh [-p port] [-i identity] [-l user] [-t | -T] [-o option=value] [user@]host [command ..]
 ;   sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]
 ;   scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target
-(module (ssh-cli ssh-main sshd-main scp-main kh-name kh-check)
+(module (ssh-cli ssh-main sshd-main scp-main kh-name kh-check kh-verdict)
 (borrow 'ssh)
 (borrow 'tls)
 (borrow 'posix)
@@ -19,13 +19,13 @@
    (cl-opts _)
     (: home (cl-env "HOME" "") o (tablet 8)
        (pins o 'port 22 'user (cl-env "USER" "") 'key (home + "/.ssh/id_ed25519")
-               'kh (home + "/.ssh/known_hosts") 'strict 1 'pty -1,
+               'kh (home + "/.ssh/known_hosts") 'strict 1 'ask 1 'pty -1,
         o))
    (cl-opt prog o kv)
     (: i (: (go i) (? (#kv <= i) i (kv i = 61) i (go (i + 1))) (go 0))
        k (snip kv 0 i) v (snip kv (i + 1) #kv)
        (? (k = "UserKnownHostsFile") (pin o 'kh v)
-          (k = "StrictHostKeyChecking") (pin o 'strict (v != "no"))
+          (k = "StrictHostKeyChecking") (pins o 'strict (v != "no") 'ask (v != "yes"))   ; yes never asks
           (cl-die prog ("unsupported option " + k))))
    ; known_hosts as openssh reads it. a name list holds plain names, [host]:port and
    ; |1|salt|hash (hmac-sha1 of the name keyed by the salt); wildcards and ! are not read
@@ -66,36 +66,50 @@
    (kh-add path name key)
     (: q (open path "a")
        (? (hot? q) (say q (name + " ssh-ed25519 " + b64e key 1 + "\n"), close q, 1) 0))
-   ; a locked key's passphrase off the terminal, its echo off while it is typed
-   (askpass path)
+   ; a line off the controlling terminal after a prompt, echoed or not -> the line, or ()
+   ; when there is no terminal to ask on
+   (ttyask prompt echo)
     (: q (open "/dev/tty" "r")
        (? !(hot? q) ()
-          (: _ (say err ("Enter passphrase for key '" + path + "': ")) _ (flush err)
-             _ (ptyecho q 0) ch (see q) _ (unsee q ch) l (chug q) _ (ptyecho q 1) _ (close q)
-             _ (say err "\n") _ (flush err)
+          (: _ (say err prompt) _ (flush err)
+             _ (echo ? 0 (ptyecho q 0)) ch (see q) _ (unsee q ch) l (chug q) _ (echo ? 0 (ptyecho q 1)) _ (close q)
+             _ (echo ? 0 (say err "\n", flush err))
              n (string? l ? #l 0)
              (? !(string? l) () (0 < n && l (n - 1) = 10) (snip l 0 (n - 1)) l))))
+   ; a locked key's passphrase, its echo off while it is typed
+   (askpass path) (ttyask ("Enter passphrase for key '" + path + "': ") 0)
+   ; the offered host key against known_hosts -> 'go, 'add (a new host, or one known under
+   ; another type and confirmed on the terminal) | the refusal. (ask prompt) -> a line | ()
+   (kh-verdict prog o path name key fpr ask)
+    (? !(o 'strict) 'go
+       (: r (kh-check path name key) v <r at (path + ":" + show (r 1))
+          _ (r 3 = 1 ? (say err (prog + ": " + path + " has a @cert-authority line for " + name
+                                 + "; certificates are not read, so it is skipped\n")) 0)
+          (? (v = 'ok) 'go
+             (v = 'revoked) ("WARNING: REVOKED HOST KEY DETECTED! the ssh-ed25519 host key for "
+                             + name + " is marked as revoked in " + at + ". Host key verification failed.")
+             (v = 'bad) ("WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! the host key for "
+                         + name + " is " + fpr + ", which does not match " + at + ". Host key verification failed.")
+             (v = 'other)
+              (: a (o 'ask ? (ask ("The authenticity of host '" + name + "' can't be established.\n"
+                                   + "ED25519 key fingerprint is " + fpr + ".\n"
+                                   + "Warning: keys of a different type are already known for this host: "
+                                   + r 2 + " in " + at + ".\n"
+                                   + "Are you sure you want to continue connecting (yes/no)? ")) ())
+                 (a = "yes" ? 'add
+                    ("WARNING: the host key for " + name + " is known as " + r 2 + " in " + at
+                     + ", and the host offered ssh-ed25519 " + fpr + ". Host key verification failed.")))
+             'add)))
    (cl-login prog o host)
     (: t (ssh-dial host (o 'port))
        _ (? (string? t) (cl-die prog t) 0)
        name (kh-name host (o 'port))
        path (o 'kh) key (t 'hostkey)
-       _ (? !(o 'strict) 0
-            (: r (kh-check path name key) v <r at (path + ":" + show (r 1))
-               _ (r 3 = 1 ? (say err (prog + ": " + path + " has a @cert-authority line for " + name
-                                      + "; certificates are not read, so it is skipped\n")) 0)
-               (? (v = 'ok) 0
-                  (v = 'revoked) (cl-die prog ("WARNING: REVOKED HOST KEY DETECTED! the ssh-ed25519 host key for "
-                                               + name + " is marked as revoked in " + at
-                                               + ". Host key verification failed."))
-                  (v = 'bad) (cl-die prog ("WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! the host key for "
-                                           + name + " is " + ssh-fingerprint t + ", which does not match "
-                                           + at + ". Host key verification failed."))
-                  (v = 'other) (cl-die prog ("WARNING: the host key for " + name + " is known as " + r 2
-                                             + " in " + at + ", and the host offered ssh-ed25519 "
-                                             + ssh-fingerprint t + ". Host key verification failed."))
-                  (kh-add path name key,
-                   say err (prog + ": added " + name + " (" + ssh-fingerprint t + ") to " + path + "\n")))))
+       v (kh-verdict prog o path name key (ssh-fingerprint t) (m \ ttyask m 1))
+       _ (? (v = 'go) 0
+            (v = 'add) (kh-add path name key,
+                        say err (prog + ": added " + name + " (" + ssh-fingerprint t + ") to " + path + "\n"))
+            (cl-die prog v))
        k (ssh-key (o 'key) askpass)
        _ (? (string? k) (cl-die prog k) 0)
        a (ssh-auth t (o 'user) <k <>k)
