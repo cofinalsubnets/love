@@ -1,14 +1,16 @@
-; apps/png.l -- png decoding: every colour type and depth, palettes, transparency, adam7.
+; apps/png.l -- png decoding: every colour type and depth, palettes, transparency, adam7;
+; and encoding.
 ; `(borrow 'png)`, then:
 ;
 ;   (png-decode s)              -> (w h rgba) | a string saying why not
+;   (png-encode w h rgba)       -> the png's bytes: a palette to 256 colours, else rgba
 ;   (png-walk c o rows n bpp)   -> the unfilter in love, in place in a cask, which the
 ;                                  nif (png-unfilter s o rows n bpp) answers to
 ;
 ; rgba is w*h*4 bytes, 8 bits a sample: a 16-bit sample rounds to its nearest 8-bit one,
 ; a low-depth grey scales to the full range. ancillary chunks past tRNS are skipped, so
 ; gamma and colour space are the viewer's to ignore.
-(module (png png-decode png-walk)
+(module (png png-decode png-encode png-walk)
 (borrow 'bytes)
 (borrow 'gz)
 (:
@@ -146,6 +148,76 @@
                                  (col x) (x = pw ? 0 (png-pixel src d x hd out (at + 4 * x * dx), col (x + 1)))
                                  ((fast ? (png-row8 src d pw hd out at (4 * dx)) (col 0)), row (y + 1))))
                    (row 0))))))
+
+   ; --- encoding -------------------------------------------------------------------------
+   (png-chunk ty body) (wrbe #body 4 + ty + body + wrbe (gz-crc32 (ty + body)) 4)
+   ; zlib's checksum, the sums held under 2^32 by taking the modulus every 5552 bytes
+   (png-adler s)
+    (: n #s
+       (run i e a b) (? (i = e) [a b] (: a2 (a + s i) (run (i + 1) e a2 (b + a2))))
+       (go i a b) (? (n <= i) ((b << 16) | a)
+                     (: e (min n (i + 5552)) r (run i e a b)
+                        (go e (r 0 % 65521) (r 1 % 65521))))
+       (go 0 1 0))
+   ; a pixel's rgba as one number
+   (png-key px i) (((((((px i) << 8) | px (i + 1)) << 8) | px (i + 2)) << 8) | px (i + 3))
+   ; the row y as bytes, st of them
+   (png-row px st y) (snip px (y * st) ((y + 1) * st))
+   ; the colours while there are at most 256 -> [keys index-of] | (), first seen first. a
+   ; row that repeats the one above is not walked again
+   (png-census w h px)
+    (: t (tablet 0) st (4 * w)
+       (go y i ks m)
+        (? (256 < m) ()
+           (y = h) [(rev ks) t]
+           (i = st) (go (y + 1) 0 ks m)
+           ((i = 0) && (0 < y) && (png-row px st y = png-row px st (y - 1))) (go (y + 1) 0 ks m)
+           (: k (png-key px ((y * st) + i))
+              (? (0 <= peep t k -1) (go y (i + 4) ks m)
+                 (: _ (pin t k m) (go y (i + 4) (k . ks) (m + 1))))))
+       (go 0 0 () 0))
+   ; filtered rows: a row that repeats the one above is up, all zero; else sub over bpp
+   ; byte samples, or none when bpp is 0 (a palette's, where sub buys nothing)
+   (png-filter rows n bpp)
+    (: o (jug 0) zero (string (cask n))
+       (sub r) (: c (cask n) _ (pour c 0 r 0 (min n bpp))
+                  (go i) (? (n <= i) (string c) (: _ (pin c i (((r i) - (r (i - bpp))) & 255)) (go (i + 1))))
+                  (go bpp))
+       (go rs prev)
+        (? (atom? rs) (slurp o)
+           (: r <rs
+              _ (? (r = prev) (say o (string 2 + zero))
+                   (0 < bpp) (say o (string 1 + sub r))
+                   (say o (string 0 + r)))
+              (go >rs r)))
+       (go rows ()))
+   (png-file w h dep ty extra z)
+    (png-sig + png-chunk "IHDR" (wrbe w 4 + wrbe h 4 + string dep + string ty + string 0 + string 0 + string 0)
+     + extra
+     + png-chunk "IDAT" (string 120 + string 1 + gz-deflate z + wrbe (png-adler z) 4)
+     + png-chunk "IEND" "")
+   ; 8-bit rgba -> a png: a palette of 1 to 8 bits a pixel where there are at most 256
+   ; colours, else rgba
+   (png-encode w h px)
+    (: st (4 * w) pal (png-census w h px)
+       (? (pal = ())
+           (png-file w h 8 6 "" (png-filter (map (y \ png-row px st y) ^h) st 4))
+          (: ks (pal 0) ix (pal 1) m #ks
+             dep (? (m <= 2) 1 (m <= 4) 2 (m <= 16) 4 8) n (((w * dep) + 7) // 8)
+             (row y) (: r (png-row px st y) c (cask n)
+                        _ (map (x \ (: b (x * dep) v (ix (png-key r (4 * x)))
+                                       (pin c (b >> 3) ((peep c (b >> 3) 0) | (v << (8 - dep - (b & 7)))))))
+                               ^w)
+                        (string c))
+             ; a repeated row is packed again only to be seen equal
+             (rows y prev pr acc) (? (y = h) (rev acc)
+                                     (: r (png-row px st y)
+                                        p (? ((0 < y) && (r = prev)) pr (row y))
+                                        (rows (y + 1) r p (p . acc))))
+             plte (cats (map (k \ string ((k >> 24) & 255) + string ((k >> 16) & 255) + string ((k >> 8) & 255)) ks))
+             al (map (k \ k & 255) ks)
+             trns (? (foldl (\ a v (a && (v = 255))) 1 al) "" (png-chunk "tRNS" (cats (map string al))))
+             (png-file w h dep 3 (png-chunk "PLTE" plte + trns) (png-filter (rows 0 "" "" ()) n 0)))))
 
    (png-decode s)
     (: t (pin (tablet 0) 'idat (jug 0))
