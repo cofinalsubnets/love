@@ -11,7 +11,8 @@
 ;   (chain-ok? ders roots host now)   1, or the reason it is not, a string naming the
 ;                            check and the certificate; roots are x509s, now seconds
 ;   (pem-ders text)          the der of every CERTIFICATE block in a pem text
-;   (tls-roots _)            [bundle-path anchors], the host's roots read once a process
+;   (tls-roots _)            [bundle-path anchors], the roots read once a process: the host's
+;                            bundle, else the tree's own (apps/tls/roots.pem)
 ;
 ; CertificateVerify schemes: ed25519 (0x0807), ecdsa p-256/sha-256 (0x0403), ecdsa
 ; p-384/sha-384 (0x0503), rsa-pss/sha-256 (0x0804), rsa-pss/sha-384 (0x0805). a chain's own
@@ -383,25 +384,40 @@
           (any (d \ dns-match? d h) (x 'dns) ? 1 0)))
 
    ; --- the roots: the host's bundle, read once a process ---
-   ; SSL_CERT_FILE, else the first of the linux and bsd homes that reads; inle and wasm have
-   ; none of these, and there a dial finds no root and says so
+   ; SSL_CERT_FILE, else the first of the linux and bsd homes that reads, else the tree's own:
+   ; mozilla's roots for serving tls as curl extracts them, apps/tls/roots.pem, which inle and
+   ; the wasm seat read under /proc/src and a host with no bundle out of the source its binary
+   ; carries
+   tree-roots "apps/tls/roots.pem"
    root-homes ["/etc/ssl/certs/ca-certificates.crt" "/etc/ssl/cert.pem"
-               "/etc/pki/tls/certs/ca-bundle.crt" "/usr/local/share/certs/ca-root-nss.crt"]
+               "/etc/pki/tls/certs/ca-bundle.crt" "/usr/local/share/certs/ca-root-nss.crt"
+               ("/proc/src/" + tree-roots)]
    roots-box {}
    (root-file _)
     (: e (getenv "SSL_CERT_FILE")
        (? (string? e && 0 < #e) e
           (: l (filter (p \ two? (stat p)) root-homes) (? (two? l) <l ()))))
-   ; the anchors, x509s, for the bundle in force -> [path anchors] ; () anchors when none reads
+   ; the tree's roots out of the carried source, the archive's paths under one top word ->
+   ; the pem text | ()
+   (carried-roots _)
+    (: unzip (cite 'gz 'gz-unzip) unpack (cite 'tar 'tar-unpack) a (source-gz 0)
+       u (? (lit? unzip && string? a && 0 < #a) (unzip a) ())
+       es (? (lit? unpack && two? u) (unpack <>u) ())
+       (at? e) (: n (e 'nom) k (#n - #tree-roots)
+                  (string? n && 0 < k && n (k - 1) = 47 && snip n k #n = tree-roots))
+       hit (? (two? es) (filter at? <>es) ())
+       (? (two? hit) (<hit 'body) ()))
+   ; the anchors, x509s, for the bundle in force -> [path anchors] ; () anchors when none reads.
+   ; the carried copy answers the path "<carried>"
    (tls-roots _)
     (: p (root-file 0)
-       (? !(string? p) [() ()]
-          (: c (roots-box p)
-             (? (two? c) [p <c]
-                (: r (uread p)
-                   xs (? (two? r) (filter tablet? (map x509 (pem-ders <>r))) ())
-                   _ (pin roots-box p [xs])
-                   [p xs])))))
+       key (? (string? p) p "<carried>")
+       c (roots-box key)
+       (? (two? c) [key <c]
+          (: t (? (string? p) (: r (uread p) (? (two? r) <>r ())) (carried-roots 0))
+             xs (? (string? t) (filter tablet? (map x509 (pem-ders t))) ())
+             _ (pin roots-box key [xs])
+             [(? (string? p) p (two? xs) key ()) xs])))
 
    ; --- the path: leaf, issuers, an anchor ---
    chain-depth 8
