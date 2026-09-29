@@ -6,7 +6,7 @@ the one already under us.** On the host, love is already a Unix process — the 
 something to build, it's something to *surface*. And it is **host-agnostic**: the target is the
 POSIX standard, not a kernel, so the same nifs run on Linux and on the BSDs.
 
-This is the **`ain` pattern, generalized.** ain wraps the socket syscalls as host nifs; the
+This is the **`nc` pattern, generalized.** nc wraps the socket syscalls as host nifs; the
 POSIX layer is "do that for the rest of the syscall surface."
 
 ## Three strata
@@ -37,7 +37,7 @@ surface as nifs:
 The payoff: **lush is a real shell whose external commands are the host's programs** — love
 runs `ls`/`grep`/`git` and pipes between them.
 
-Gating mirrors ain: host-only `#ifdef`; the kernel (`kmain.c`) and wasm don't link `main.c` so
+Gating mirrors nc: host-only `#ifdef`; the kernel (`kmain.c`) and wasm don't link `main.c` so
 they auto-exclude; `prel.l` stays syscall-free; the smokes ride `test_hostnif`, not the portable
 corpus.
 
@@ -75,7 +75,7 @@ processes, this surface answered against a ramfs.
 | environment                    | `getenv` `setenv` `environ`; cli.l parses argv          |
 | ids — `getuid`/`getgid`        | `getuid` `getgid` (the REAL pair; no effective ids here) |
 | exit codes / std streams       | `in`/`out`/`err` ports; `quit`                          |
-| sockets (BSD)                  | **ain** — `connect`/`listen`/`accept`/`shutdown`/DNS (love/sock.c) |
+| sockets (BSD)                  | **nc** — `connect`/`listen`/`accept`/`shutdown`/DNS (love/sock.c) |
 | time — `clock_gettime`         | `ai_clock` / `(clock t)`                                |
 | `select`/`poll`                | `ai_wait_fds` / `ai_ready` (the scheduler's core)       |
 
@@ -88,7 +88,7 @@ Two mappings are the elegant ones:
   DATA, `(signo . pid)`, re-raisable through `help`.
 - **fds → ports, select → `ai_wait_fds`.** The cooperative scheduler already blocks
   tasks on fds and wakes the ready one. Two `spawn`ed pumps on two fds interleave with
-  no select loop (this is why ain's bidirectional pump is ~free).
+  no select loop (this is why nc's bidirectional pump is ~free).
 
 ## Conventions
 

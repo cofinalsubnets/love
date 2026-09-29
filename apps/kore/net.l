@@ -9,7 +9,7 @@
 ;   ping6 [-q] [-c N] [-i S] [-W S] [-s N] HOST   the same over ipv6 (ping -6)
 ;   traceroute [-46nI] [-f F] [-m M] [-q N] [-w S] HOST   the routers on the way (traceroute6)
 ;
-; telnet is nc (apps/ain.l) with the protocol's options answered (RFC 854, 855): it lets the
+; telnet is nc (apps/nc.l) with the protocol's options answered (RFC 854, 855): it lets the
 ; server echo and suppress go-ahead, offers to suppress go-ahead itself, refuses every other
 ; option either way, and skips subnegotiation. on a terminal it follows the server's echo:
 ; while the server echoes, the terminal is raw and each key goes as it is typed (character

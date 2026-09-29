@@ -27,7 +27,7 @@ try() {
 
 want='unclosed ('   ; try "libra (positional)"   apps/libra/libra.l $bad
 want='unclosed ('   ; try "libra (-l preload)"   -l apps/libra/libra.l $bad
-want='usage'        ; try "ain"                  apps/ain.l
+want='usage'        ; try "nc"                   apps/nc.l
 # a PATH it cannot use, not a flag: it refuses an unknown option, and this lane is
 # about the seat firing at all -- so the word has to reach the app's own walk
 want='no markdown'  ; try "papel"                apps/papel.l /nope

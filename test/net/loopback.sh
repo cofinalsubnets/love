@@ -1,10 +1,11 @@
 #!/bin/sh
-# test/net/loopback.sh -- the ain loopback gate (host-only, NOT in the portable
+# test/net/loopback.sh -- the nc loopback gate (host-only, NOT in the portable
 # corpus, so `make test` and the kernel/wasm builds stay socket-free). Drives the
 # real binary: a server task and a client over TCP 127.0.0.1, full-duplex, and
 # asserts each side received exactly what the other sent. This exercises every
 # Stage-1 socket nif (connect/listen/accept/shutdown) plus the two .l pump loops
-# and their teardown.
+# and their teardown. both sides pass -N; a second round checks that without it the
+# client does not half-close.
 #
 #   sh test/net/loopback.sh <love-binary> [port]
 #
@@ -14,16 +15,19 @@ set -u
 
 AI="${1:?usage: loopback.sh <love-binary> [port]}"
 PORT="${2:-7390}"
-AK="apps/ain.l"   # prel is baked into the egg -- no -l love/boot/prel.l preload
+AK="apps/nc.l"   # prel is baked into the egg -- no -l love/boot/prel.l preload
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/ain.XXXXXX")"
-trap 'kill "$srv" 2>/dev/null; rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/nc.XXXXXX")"
+cli=
+trap 'kill "$srv" $cli 2>/dev/null; rm -rf "$tmp"' EXIT
 
 printf 'CLIENT-SAYS-HI\nsecond line from the client\n' > "$tmp/cli_in"
 printf 'SERVER-SAYS-HELLO\nsecond line from the server\n' > "$tmp/srv_in"
+# past one read's worth, so the pump moves several chunks
+dd if=/dev/urandom bs=1024 count=300 2>/dev/null >> "$tmp/cli_in"
 
 # server: listen on PORT, pump srv_in -> socket and socket -> srv_got.
-"$AI" "$AK" -l "$PORT" < "$tmp/srv_in" > "$tmp/srv_got" 2> "$tmp/srv_err" &
+"$AI" "$AK" -N -l "$PORT" < "$tmp/srv_in" > "$tmp/srv_got" 2> "$tmp/srv_err" &
 srv=$!
 
 # wait until PORT is actually listening, WITHOUT consuming the single accept
@@ -43,7 +47,7 @@ while ! ready; do
 done
 
 # client: connect, pump cli_in -> socket and socket -> cli_got.
-"$AI" "$AK" 127.0.0.1 "$PORT" < "$tmp/cli_in" > "$tmp/cli_got" 2> "$tmp/cli_err"
+"$AI" "$AK" -N 127.0.0.1 "$PORT" < "$tmp/cli_in" > "$tmp/cli_got" 2> "$tmp/cli_err"
 crc=$?
 wait "$srv"; src=$?
 
@@ -57,6 +61,29 @@ fi
 if ! cmp -s "$tmp/srv_in" "$tmp/cli_got"; then
   echo "nettest: FAIL (client got != server sent)"; echo "--- expected ---"; cat "$tmp/srv_in"; echo "--- got ---"; cat "$tmp/cli_got"; fail=1
 fi
+
+# without -N neither side half-closes: the server has every byte yet no eof, so both are
+# still up after their stdins are spent
+PORT=$((PORT + 1))
+"$AI" "$AK" -l "$PORT" < "$tmp/srv_in" > "$tmp/srv_got2" 2> "$tmp/srv_err" &
+srv=$!
+i=0
+while ! ready; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (server never listened on $PORT)"; cat "$tmp/srv_err"; exit 1; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+"$AI" "$AK" 127.0.0.1 "$PORT" < "$tmp/cli_in" > "$tmp/cli_got2" 2> "$tmp/cli_err" &
+cli=$!
+i=0
+until cmp -s "$tmp/cli_in" "$tmp/srv_got2"; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (no -N: server never got the client's bytes)"; fail=1; break; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+sleep 0.3 2>/dev/null || sleep 1
+kill -0 "$srv" 2>/dev/null && kill -0 "$cli" 2>/dev/null || { echo "nettest: FAIL (no -N: a side half-closed)"; fail=1; }
+kill "$cli" "$srv" 2>/dev/null
 
 [ "$fail" -eq 0 ] && echo "nettest: PASS"
 exit "$fail"

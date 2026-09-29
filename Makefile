@@ -287,7 +287,7 @@ lushfiles = apps/lush.l
 kore_head = apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/fs.l apps/kore/sum.l apps/kore/re.l \
   apps/kore/sed.l apps/kore/awk.l apps/kore/expr.l apps/kore/bc.l apps/kore/proc.l apps/kore/top.l apps/kore/less.l \
   apps/libra/lint.l apps/tui.l apps/vi/config.l apps/vi/hue.l apps/vi/hues.l apps/vi/core.l apps/vi/vi.l apps/kore/ed.l \
-  apps/kore/diff.l apps/kore/patch.l apps/dns.l apps/ain.l $(lushfiles) \
+  apps/kore/diff.l apps/kore/patch.l apps/dns.l apps/nc.l $(lushfiles) \
   apps/kore/find.l apps/cook.l apps/kore/asbook.l apps/kore/man.l apps/kore/lens.l
 # the backends: one file per ISA, then the text faces they share
 holo_be = love/holo/x64.l love/holo/a64.l love/holo/thumb2.l love/holo/rv64.l \
@@ -500,7 +500,7 @@ $(distro_img): apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@cp apps/init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
 	@cp $(distro_love) $(distro_root)/bin/love && chmod 755 $(distro_root)/bin/love
 	@cat $(lushfiles) > $(distro_root)/lib/sh.l
-# apps/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: apps/ain.l, a korefiles member,
+# apps/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: apps/nc.l, a korefiles member,
 # probes for the `dial` nif at load and says (borrow 'dns) when it is absent -- which it is
 # in love-raw -- and an initramfs with no /apps/dns.l answers that with a scare that takes
 # the whole cat down. The symptom is every applet gone, not a quiet nc.
@@ -911,12 +911,12 @@ endif
 
 # ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore sb mooncc cook papel libra ain lux bao lush
+binnames = $(BIN) kore sb mooncc cook papel libra lux bao lush
 mannames = $(BIN) cook lush
 # the default nest lays itself: `love nest -y` (apps/source.l) copies the binary in, newer
 # builds only, and links the tools it serves by name. the rest keep their rules below, and
 # a real PREFIX, DESTDIR or BIN keeps them all
-nestnames = $(BIN) kore sb mooncc cook libra ain lush
+nestnames = $(BIN) kore sb mooncc cook libra lush
 ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love|.love/|$(HOME)/)
 nested = 1
 endif
@@ -977,15 +977,6 @@ $d/bin/cook $d/bin/papel $d/bin/libra:
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
 
-# ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
-# symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
-# an identity and the bytes are unchanged.
-$d/bin/ain: apps/ain.l $(ho)/love
-	@echo '$(t_cp)	'$(abspath $@)
-	@install -d $(@D)
-	@$(korecmd) sed '1s|env -S love|env -S $(BIN)|' $< > $@
-	@chmod 755 $@
-
 # kore, the multi-call toolbox: the util picked off the command line or off argv[0] through
 # a tool-named symlink. It shadows nothing here -- only `kore` lands on PATH, and the distro
 # symlinks the tool names where shadowing is the point.
@@ -1036,7 +1027,7 @@ $d/bin/lux: $(luxfiles)
 	@{ echo '#!/usr/bin/env -S $(BIN) -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
 
-# bao, the interactive shell. Unlike cook and ain, love/boot/post.l is DEFINE-ONLY -- main.c
+# bao, the interactive shell. Unlike cook, love/boot/post.l is DEFINE-ONLY -- main.c
 # fires `(shell 0)` on a tty -- so the bin is a tiny launcher that fires it. the module
 # rides the binary, so there is nothing to -l and no nest path to get wrong.
 $d/bin/bao: $(MAKEFILE_LIST)
