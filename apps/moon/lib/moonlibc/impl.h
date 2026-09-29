@@ -390,6 +390,7 @@ extern long __ai_osdetect(void);
  * member's lanes as linux does; os.c carries a weak refusal for links without
  * it. */
 extern long __ai_inle(long n, long a, long b, long c, long d, long e, long f);
+extern int __ai_efault(void);
 extern long __ai_nrfb(long n);
 extern long __ai_errfb(long e);
 extern long __ai_sigfb(long sig);
@@ -421,7 +422,11 @@ static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
     n = __ai_nrfb(n);
     if (n < 0) return -38; }                          /* ENOSYS, canonically */
   long r = __ai_sys(n, a, b, c, d, e, f);
-  return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
+  if (r < -4096L) r = -__ai_errfb(-r - 4096);
+  if (r == -14 && __ai_efault()) {                     /* EFAULT, and the address woke: again */
+    r = __ai_sys(n, a, b, c, d, e, f);
+    if (r < -4096L) r = -__ai_errfb(-r - 4096); }
+  return r; }
 static long __ai_fb(long n, long a, long b, long c, long d, long e, long f) {
   long r = __ai_sys(n, a, b, c, d, e, f);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }

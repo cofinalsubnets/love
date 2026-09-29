@@ -17,6 +17,11 @@ __attribute__((weak))
 long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   return -38; }
 
+/* a refused address the program can make good (love's lazy image wakes what sleeps
+ * there): 1 and the call goes once more. the default has nothing to wake */
+__attribute__((weak))
+int __ai_efault(void) { return 0; }
+
 long __ai_osdetect(void) {
 #ifndef LvOsTranslate
   /* no tables on this arch: the kernel is whichever one the build was compiled

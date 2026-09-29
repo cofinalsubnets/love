@@ -530,7 +530,9 @@ struct ai_image_bad { uintptr_t q[3 * 2]; int n, why; };
 // the running stack is ballast: its objects ride into the blob and the load side resets sp/ip
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_bad*);
 struct ai
- *ai_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session
+ *ai_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session; 2: and the image may wake lazily
+// a lazy image's pool given up (a major's copy done, a session's end): its pages open, its state gone
+void ai_image_drop(word const *pool);
 
 // the terminal scare face: ";; a b\n" (show forms) to the err port from the stashed
 // condition data; the bare oom prints ";; oom@len=N\n".

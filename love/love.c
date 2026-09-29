@@ -62,7 +62,7 @@ enum ai_status ai_fin(struct ai *g) {
    // the nursery -- a frontend that exits never misses them, one that fins to make room
    // for the next runtime gets nothing back without this.
    if (g->rem) ai_alloc(g->rem, 0);
-   if (g->major_base) ai_alloc(g->major_base, 0), ai_alloc(g->major_spare, 0);
+   if (g->major_base) ai_image_drop(g->major_base), ai_alloc(g->major_base, 0), ai_alloc(g->major_spare, 0);
    ai_alloc(g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
