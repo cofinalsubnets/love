@@ -1,5 +1,5 @@
 ; apps/crow.l -- a coding agent: claude over the messages api, and four tools it may
-; call here -- read_file, write_file, edit_file, lush. all but a read ask y/n first.
+; call here -- read_file, write_file, edit_file, shell. all but a read ask y/n first.
 ;
 ;   out/love apps/crow.l [-y] [prompt ..]     one prompt, or a > loop on stdin
 ;
@@ -30,6 +30,21 @@
    (tool name desc props req)
     {"name" name "description" desc "eager_input_streaming" json-true
      "input_schema" {"type" "object" "properties" props "required" req}}
+   ; --- the shell ---
+   ; the settings are salt's: ~/.love/etc/crow.l, then ./.crow.l over it. (shell WORD ..)
+   ; is the argv a command line follows after -c, (shell lush -a) when unset: lush first is
+   ; this binary's own, -a its verbs ahead of PATH; any other word runs as written
+   crow-salt ((cite 'salt 'salt) 'crow)
+   (word w) (string? w ? w (show w))
+   crow-shell (: s (peep crow-salt 'shell ()) (two? s ? (map word s) ["lush" "-a"]))
+   crow-ours? (<crow-shell = "lush")
+   ; lush's verbs lead only in its autonomous mode; gregarious (its default) puts PATH first
+   crow-verbs-lead? (crow-ours? && (elem "-a" crow-shell || elem "--autonomous" crow-shell))
+   crow-self ((cite 'posix 'selfpath) 0)
+   (shell-argv cmd) ((crow-ours? ? (crow-self . crow-shell) crow-shell) + ["-c" cmd])
+   crow-shname (foldl (\ a w (a + " " + w)) <crow-shell >crow-shell)
+   crow-verbs (foldl (\ a v (a + " " + v)) "" (sort (map show (keys (cite 'verbs 'tab)))))
+
    crow-tools
     [(tool "read_file" "Read a file and answer its text."
            {"path" (prop "the file's path")} ["path"])
@@ -38,21 +53,18 @@
      (tool "edit_file" "Replace old_text, which must occur exactly once, with new_text."
            {"path" (prop "the file's path") "old_text" (prop "the text now there")
             "new_text" (prop "its replacement")} ["path" "old_text" "new_text"])
-     (tool "lush" ("Run a command line in lush, love's POSIX shell. The commands the system prompt "
-                   + "names are love's own userland (kore) and win over PATH; anything else comes "
-                   + "from PATH. Answers stdout and stderr, then the exit status.")
+     (tool "shell" ("Run a command line in " + crow-shname + ". Answers stdout and stderr, then "
+                    + "the exit status." + (crow-verbs-lead? ? (" The commands the system prompt names "
+                    + "are love's own userland (kore); anything else comes from PATH.") ""))
            {"command" (prop "the command line")} ["command"])]
-
-   ; the shell is this binary's own, with its verbs ahead of PATH (lush -a)
-   crow-self ((cite 'posix 'selfpath) 0)
-   (lush-argv cmd) [crow-self "lush" "-a" "-c" cmd]
-   crow-verbs (foldl (\ a v (a + " " + v)) "" (sort (map show (keys (cite 'verbs 'tab)))))
 
    crow-system
     ("You are crow, a coding agent in a terminal. The working directory is " + getenv "PWD"
-     + ". Use the tools to look before you change things, and keep replies short. Commands run "
-     + "in lush, a POSIX shell, not bash: write POSIX sh. These commands are love's own "
-     + "implementations, POSIX in their flags, so a GNU-only option may be refused:" + crow-verbs + ".")
+     + ". Use the tools to look before you change things, and keep replies short. Commands run in `"
+     + crow-shname + "`."
+     + (crow-ours? ? " That is lush, a POSIX shell, not bash: write POSIX sh." "")
+     + (crow-verbs-lead? ? (" These commands are love's own implementations, POSIX in their "
+        + "flags, so a GNU-only option may be refused:" + crow-verbs + ".") ""))
 
    ; --- the wire ---
    ; a pull reader over the session: 'h holds bytes heard and not yet taken
@@ -115,7 +127,7 @@
    ;   'note s        something the user should know  'wire s     the socket, while it is open
    ;   'tool name in  a tool call begins -> a handle  'ask h      may it run? -> 1 | 0
    ;   'done h r      it ran, r [ok? text]            'yes        run without asking
-   ;   'shell h cmd   run cmd in lush for tool h -> its output and exit status
+   ;   'shell h cmd   run cmd in the shell for tool h -> its output and exit status
 
    ; a streamed answer -> [stop blocks]; [() err] on an error event. a tool's input arrives
    ; as json pieces in js, read whole at its block's stop
@@ -159,9 +171,9 @@
 
    ; the child's output read by see, which parks this task alone, and its exit by gather,
    ; which never blocks: the screen keeps painting while a command runs. stdin is /dev/null
-   (lush-out cmd)
+   (shell-out cmd)
     (: pp (pipe 0) nul (openfd "/dev/null" 0)
-       p (spawnio (lush-argv cmd) nul >pp >pp [<pp] -1 0)
+       p (spawnio (shell-argv cmd) nul >pp >pp [<pp] -1 0)
        _ (close >pp) _ (? (0 <= nul) (close nul) 0)
        q (fdopen <pp)
        (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
@@ -189,18 +201,20 @@
     (: t (filter (\ x (x "name" = name)) crow-tools)
        (two? t && tablet? in && !(two? (filter (\ k !(string? (in k))) (<t "input_schema" "required")))))
 
-   ; a tool call -> [ok? text]. the face runs lush, so the screen can show it running
+   ; a tool call -> [ok? text]. the face runs the shell, so the screen can show it running
    (run f h name in)
     (? !(valid? name in) [0 ("no such tool, or its input is missing a field: " + name)]
        (name @
         "read_file"  (: s (slurp-file (in "path")) (? (string? s) [1 (clip s)] [0 ("cannot read " + in "path")]))
         "write_file" (? (spit-file (in "path") (in "content")) [1 ("wrote " + in "path")] [0 ("cannot write " + in "path")])
         "edit_file"  (edit (in "path") (in "old_text") (in "new_text"))
-        "lush"       [1 (clip ((f 'shell) h (in "command")))]))
+        "shell"      [1 (clip ((f 'shell) h (in "command")))]))
 
+   ; a tool as the transcript names it: the shell by its own name
+   (shown name) (name = "shell" ? <crow-shell name)
    (brief name in)
     (? !(valid? name in) "(malformed input)"
-       (name @ "lush" (in "command")
+       (name @ "shell" (in "command")
                "edit_file" (in "path" + ": " + show #(in "old_text") + " bytes -> " + show #(in "new_text"))
                (in "path")))
 
@@ -252,10 +266,10 @@
      'break (\ _ (puts "\n"))
      'note (\ s (puts ("\ncrow: " + s + "\n")))
      'wire (\ s 0)
-     'tool (\ name in (puts ("  " + name + " " + brief name in + "\n")))
+     'tool (\ name in (puts ("  " + shown name + " " + brief name in + "\n")))
      'ask (\ h (? (ask "  run? [y/N] ") 1 0))
      'done (\ h r 0)
-     'shell (\ h cmd (lush-out cmd))}
+     'shell (\ h cmd (shell-out cmd))}
    (repl key f msgs)
     (: _ (puts "> ") _ (flush out) l (line 0)
        (? !(string? l) 0
@@ -343,10 +357,10 @@
      'tool (: st (b 'st)
               mark (st @ 'ask (sgr "1;33" "[y/n]") 'run (sgr "33" "running…")
                          'ok (sgr "32" "✓") 'err (sgr "31" "✗") 'cut (sgr "2" "stopped") "")
-              head (" " + (sgr "1" ("▸ " + b 'name)) + " " + (sgr "2" (b 'brief)) + "  " + mark)
+              head (" " + (sgr "1" ("▸ " + shown (b 'name))) + " " + (sgr "2" (b 'brief)) + "  " + mark)
               out (peep b 'out "")
               tail (b 'name @
-                    "lush" (? (peep b 'scr () != ())
+                    "shell" (? (peep b 'scr () != ())
                               (map (\ l ((sgr "2" "   ┆ ") + l)) (scr-rows (b 'scr) 12))
                               (: ls (filter (\ l (0 < #l)) (lines out)) n #ls
                                  (map (\ l (sgr "2" ("   ┆ " + l))) (8 < n ? (drop (n - 8) ls) ls))))
@@ -404,8 +418,8 @@
      ; on a pty of its own, its screen in the block as it runs; the pipe when no pty opens
      'shell (\ b cmd (: w (max 20 (c 'cols - 8)) r crow-pty-rows
                        _ (setenv "TERM" "xterm-256color")
-                       md (tether (lush-argv cmd))
-                       (? (atom? md) (lush-out cmd)
+                       md (tether (shell-argv cmd))
+                       (? (atom? md) (shell-out cmd)
                           (: pid <md m >md
                              s (screen (cask (screen () r w)) r w)
                              _ (settty m r w)
