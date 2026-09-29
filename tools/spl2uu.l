@@ -23,7 +23,7 @@
 (: ops '((pushk 0) (pusha 1) (pushl 2) (pushs 3) (setl 4) (sets 5) (add 6) (emit 7))
    (opc o) (: e (assoc o ops) (two? e ? <>e (scare 'spl2uu-op o)))
    (emit1 g)
-    (: nm (g 0) th ((g 1) ())
+    (: nm (g 0) th (g 1 ())
        _ (each th (f \ puts $ "\n ; " + string nm + "  " + show f))
        _ (puts $ "\n (defn " + string nm + " nlist")
        _ (each th (f \ puts $ "\n    (ncons " + show (opc (f 0)) + " (ncons " + show (f 1)))

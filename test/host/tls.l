@@ -181,7 +181,7 @@
    ked (leaf-key vder-ed) kec (leaf-key vder-ec) krsa (leaf-key vder-rsa)
    _ (test ((hex vsig-m) = "20202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020544c5320312e332c20736572766572204365727469666963617465566572696679003af65a7a89bdcfc5de8bc7d6ec78f66b56664c5e4c14686f96334567219f1d65")
            (<ked = 'ed25519) (<kec = 'p256) (<krsa = 'rsa)
-           (((krsa 1) 1) = 65537)
+           ((krsa 1 1) = 65537)
            ; the spki is the der of the key alone, inside the certificate
            (0 < #(ked 2)) (<(der (ked 2) 0 #(ked 2)) = 48)
            ((cv-ok? ked 2055 vsig-ed vsig-m) = 1)
@@ -234,7 +234,7 @@
        crt2 (? (mode = 'nocert) "" crt)
        tr1 (ch + sh + ee + crt2)
        seed (? (mode = 'otherkey) (bytes 32 (i \ i)) hs-seed)
-       sig0 ((cite 'ssh 'ed-sign) seed ((cite 'ssh 'ed-pub) seed) (cv-msg (sha tr1)))
+       sig0 (cite 'ssh 'ed-sign seed (cite 'ssh 'ed-pub seed) (cv-msg (sha tr1)))
        sig (? (mode = 'badsig) (vflip sig0 3) sig0)
        cv (? (mode = 'nocv) "" (hs-msg 15 (u16 2055 + u16 #sig + sig)))
        fv0 (hmac (hkdf-label shs "finished" "" 32) (sha (tr1 + cv)))
@@ -420,7 +420,7 @@
    _ (setenv "SSL_CERT_FILE" (? (string? e0) e0 ""))
    hb (filter (p \ two? (stat p)) root-homes)
    hn (? (two? hb) (: t (uread <hb) ds (pem-ders <>t) [#ds #(filter tablet? (map x509 ds))]) [1 1])
-   _ (test (<r1 = "test/host/tlschain/roote.pem") (#(r1 1) = 1) (((r1 1) 0) 'subject = (x509 (tc-ld "roote")) 'subject)
+   _ (test (<r1 = "test/host/tlschain/roote.pem") (#(r1 1) = 1) (r1 1 0 'subject = (x509 (tc-ld "roote")) 'subject)
            ((r2 1) = (r1 1))                                       ; the same list: read once
            ((r3 1) = ())
            (0 < <hn) (<hn = hn 1)))

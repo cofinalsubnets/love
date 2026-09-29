@@ -70,7 +70,7 @@
    fs (forms (open "test/proto/kinds.l" "r"))
    big <(filter (\ f (two? f && <f = ':)) fs)
    ps (k2-pairs >big)
-   km0 (k2-rankmap ((k2-find 'rank ps) 1))
+   km0 (k2-rankmap (k2-find 'rank ps 1))
    km  (['str (k2-max (k2-codes km0) + 1)] . km0)          ; str: the branch off rank
    ucodes (k2-upto (k2-max (k2-codes km) + 1))          ; the carrier, 0..str
    nump (k2-find 'num? ps) joinp (k2-find 'join ps)

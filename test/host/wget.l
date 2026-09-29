@@ -61,13 +61,13 @@
     (8 = rc404)                                                        ; a server's no is wget's 8
     (1 = rcbad)                                                        ; not a url
     ; the tls floor: RFC 7748 6.1's alice, RFC 4231's first case
-    ("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a" = hex ((T 'x25519-pub) (unhex "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")))
-    ("b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7" = hex ((T 'hmac) ((T 'bytes) 20 (\ i 11)) "Hi There"))
+    ("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a" = hex (T 'x25519-pub (unhex "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")))
+    ("b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7" = hex (T 'hmac (T 'bytes 20 (\ i 11)) "Hi There"))
     ; an aead round trip: what seal made, open takes back, and a flipped byte it refuses
-    (: k ((T 'bytes) 32 (\ i i)) iv ((T 'bytes) 12 (\ i (i + 7)))
-       ct ((T 'aead-seal) k iv 3 "aad" "the plaintext")
-       ok ((T 'aead-open) k iv 3 "aad" ct)
-       bad ((T 'aead-open) k iv 3 "aad" ((T 'bytes) #ct (\ i (i = 0 ? (ct 0 ^ 1) (ct i)))))
+    (: k (T 'bytes 32 (\ i i)) iv (T 'bytes 12 (\ i (i + 7)))
+       ct (T 'aead-seal k iv 3 "aad" "the plaintext")
+       ok (T 'aead-open k iv 3 "aad" ct)
+       bad (T 'aead-open k iv 3 "aad" (T 'bytes #ct (\ i (i = 0 ? (ct 0 ^ 1) (ct i)))))
        (&& (two? ok) ("the plaintext" = <>ok) (atom? bad)))))
 
 ;; https, where openssl is here: a leaf for 127.0.0.1 under a root laid here. named by

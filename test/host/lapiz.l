@@ -19,7 +19,7 @@
 (test
  (elem 'lapiz (cite ()))                   ; the registry lists it
  (elem 'md->ht (keys (cite 'lapiz)))        ; keys introspects the layer
- ("<h1>hi</h1>" = ((cite 'lapiz 'md->ht) "# hi"))   ; the opaque accessor reaches a face
+ ("<h1>hi</h1>" = (cite 'lapiz 'md->ht "# hi"))     ; the opaque accessor reaches a face
  (lit? (cite 'lapiz))                         ; presence: the accessor is a closure
  !(cite 'lapis))                           ; a missing module answers ()
 

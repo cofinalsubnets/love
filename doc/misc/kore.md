@@ -56,7 +56,8 @@ the door; cook and lush answer both flags themselves, each with more to say than
 ## the inventory (197 tools, 211 names)
 
 The `applets` tablet in kore.l; the aliases are make/cook, sh/lush, ls/dir/vdir,
-less/more, pic/pngcat/jpegcat/gifcat and picless/pngless/jpegless/gifless. love's own verbs
+less/more, pic/pngcat/jpegcat/gifcat and picless/pngless/jpegless/gifless (`pic cat` and
+`pic less`). love's own verbs
 carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md),
 `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 
@@ -86,7 +87,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | re.l, the matcher | grep (-nvclqhaixwFEo, -e stacking, -m) over the lawed regex engine, BRE or ERE; egrep and fgrep, grep -E and -F by their old names (kore.l) |
 | sed.l, the editor | sed (-n -E -i -e; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
-| find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
+| find.l, the walk | find (names, types, times, sizes, modes; -print0 -delete -exec ; and +; ( ) ! -a -o; the depths) |
 | proc.l, the processes and the world | env nohup nice renice setsid printenv sleep usleep kill xargs time ts date id whoami groups |
 | proc.l, the terminal | stty (GNU's three views and its settings, the combinations among them), microcom (a serial line and this terminal, byte for byte) |
 | proc.l, the host's utmp, read | who users pinky logname (glibc's, netbsd's utmpx and freebsd's utx.active; kore writes none) |
@@ -307,9 +308,11 @@ printf's `*` width and `#` flag.
 
 ## find (apps/kore/find.l)
 
-`find [PATH..] [EXPR]`, PATH defaulting to `.`. Primaries `-name` `-path` (fnmatch, via lush's
-`sh-match`) `-type f|d|l` `-print` `-prune` `-exec CMD.. ;` `-true` `-false`, the global
-`-maxdepth`/`-mindepth`, and the operators `( )` `!`/`-not` `-a`/`-and` (implicit between two
+`find [-L] [PATH..] [EXPR]`, PATH defaulting to `.`. Tests `-name` `-iname` `-path` `-ipath`
+(fnmatch, post.l's glob) `-type f|d|l` `-empty` `-newer FILE` `-mtime N` `-mmin N`
+`-size N[cwbkMG]` `-perm [-/]MODE` (octal or symbolic) `-true` `-false`, N as `+N` `-N` or `N`;
+actions `-print` `-print0` `-prune` `-delete` `-exec CMD.. ;` `-exec CMD.. {} +`; the global
+`-maxdepth`/`-mindepth` and `-depth` (which `-delete` implies), and the operators `( )` `!`/`-not` `-a`/`-and` (implicit between two
 primaries) `-o`/`-or`, both short-circuiting, `-a` binding tighter. An expression naming no
 action gets `-print`, exactly as GNU does.
 
@@ -635,25 +638,60 @@ verified as wget's is: its certificate to a root in the host's bundle, or its ke
 `~/.love/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.
 
-## pic and picless (apps/kore/pic.l)
+## pic (apps/kore/pic.l)
 
-`pic [-w COLS] [-h ROWS] [FILE..]` prints each picture, PNG, JPEG or GIF, as rows of text,
-two pixels to a cell: the upper pixel is the colour of a `▀` and the lower its background,
-24-bit where `COLORTERM` says `truecolor` or `24bit` and the 256-colour cube otherwise. A
-picture is as wide as the terminal (or `COLS`, or 80 when there is none) and no taller than
-`ROWS` cells, shrunk and never enlarged; each cell is the alpha-weighted mean of its pixels'
-boxes, and a mostly see-through pixel is left blank. With no FILE it reads stdin, and with
-several it names each above it. `pngcat`, `jpegcat` and `gifcat` are the same tool.
+`pic` is one command with four verbs; with none it is `pic cat`.
 
-`picless FILE..` shows one picture at a time, fitted to the screen. `+` and `-` zoom (past the
-fit into single pixels, and back out below it), `0` fits it again, `h` `j` `k` `l` or the arrows
-pan a quarter of the view, `n` and `p` move between files. A GIF plays at its own delays;
-`space` pauses it and `.` and `,` step a frame. The status line holds the name, the size, the
-zoom and the frame. `pngless`, `jpegless` and `gifless` are the same tool.
+`pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture, PNG, JPEG or GIF (a
+GIF's first frame), as wide as the terminal (or `COLS`, or 80 when there is none) and no
+taller than `ROWS` cells, shrunk and never enlarged. With no FILE it reads stdin, and with
+several it names each above it. `MODE` picks how:
+
+- `block`, the default: rows of text, two pixels to a cell. The upper pixel is the colour of a `▀` and
+  the lower its background, 24-bit where `COLORTERM` says `truecolor` or `24bit` and the
+  256-colour cube otherwise. Each cell is the alpha-weighted mean of its pixels' boxes, and a
+  mostly see-through pixel is left blank.
+- `sixel`: DEC's sixel graphics, up to 255 colours (exact up to that, a median cut past it),
+  a see-through pixel left to the ground.
+- `kitty`: kitty's graphics protocol, the pixels sent raw in 4096-byte chunks.
+- `auto`: on a terminal, pic asks it (kitty's query, the cell size `CSI 16 t`,
+  and DA1, whose answer ends the wait, a second at most) and takes kitty's, then sixel, then
+  blocks. Off a terminal it draws blocks without asking.
+
+For sixel and kitty's a picture is fitted to `COLS` times the cell's width in pixels (8 by 16
+when the terminal does not say). `pngcat`, `jpegcat` and `gifcat` are `pic cat`.
+
+`pic less [-g MODE] FILE..` shows one picture at a time, fitted to the screen, in blocks or
+as `-g` says (the modes are `pic cat`'s). In sixel and kitty's a view is sampled by nearest
+pixel, so a redraw stays quick, and 100% is a source pixel to a screen pixel. `+` and `-`
+zoom (past the fit into single pixels, and back out below it), `0` fits it again, `h` `j` `k`
+`l` or the arrows pan a quarter of the view, `n` and `p` move between files. A GIF plays at
+its own delays; `space` pauses it and `.` and `,` step a frame. The status line holds the
+name, the size, the zoom and the frame. `picless`, `pngless`, `jpegless` and `gifless` are
+the same tool.
+
+`pic convert [-q QUALITY] [-t TYPE] IN OUT` writes IN as OUT's type, from its extension
+(`.png`, `.gif`, `.jpg`/`.jpeg`, `.six`/`.sixel`, `.ans`) or `-t`. `ans` is the blocks
+`pic cat` prints, as text 80 cells wide, for `cat` to show again. `-` is stdin for IN and stdout for
+OUT. A GIF gives its first frame, except that a file already of the type goes across as it
+is (a GIF keeps its frames), unless `-q` asks for a JPEG to be written again. A JPEG has
+no alpha; its quality is 90 unless `-q` says otherwise.
+
+`pic pixelize [-w COLS] [-h ROWS] [-s PX] [-c 256] [-q QUALITY] [-t TYPE] IN OUT` writes
+the picture as `pic cat` draws it in blocks at `COLS` (80) by `ROWS`, as a picture: each
+half-cell becomes a square of `PX` pixels (by default the source's own scale, so the output
+is near the input's size), a pixel the terminal would leave blank is transparent, an odd last
+row's lower half is transparent as the cell's is, and `-c 256` takes each channel to the
+level the 256-colour cube shows (0, 95, 135, 175, 215, 255). OUT is a PNG unless its
+extension or `-t` says otherwise; to `.ans` it is the blocks' text itself, `-c 256` in the
+cube's codes.
 
 The decoders: apps/png.l (every colour type and depth, Adam7), love/lib/jpeg.c (baseline and
 progressive, any sampling), love/lib/gif.c (LZW, interlace, transparency, and the three
-disposals across frames). A GIF keeps at most 1000 frames and 128 MB of them.
+disposals across frames). A GIF keeps at most 1000 frames and 128 MB of them. The encoders:
+apps/png.l (a palette of 1 to 8 bits a pixel up to 256 colours, else RGBA; a row that
+repeats the one above filtered up, others sub), love/lib/jpeg.c (baseline), apps/gif.l (one
+frame, the palette also sixel's).
 
 ## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (apps/kore/net.l)
 

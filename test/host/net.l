@@ -17,14 +17,14 @@
    st (new 0)
    ; the server may echo and suppress go-ahead, and asking again answers nothing; any
    ; other offer is refused, and so is any request but go-ahead's
-   _ (test (feed st (iac 251 1) = ["" (iac 253 1)]) ((K 'tn-echo?) st)
+   _ (test (feed st (iac 251 1) = ["" (iac 253 1)]) (K 'tn-echo? st)
            (feed st (iac 251 1) = ["" ""])
            (feed st (iac 251 3) = ["" (iac 253 3)])
            (feed st (iac 251 5) = ["" (iac 254 5)])
            (feed st (iac 253 24) = ["" (iac 252 24)])
            (feed st (iac 253 3) = ["" (iac 251 3)]) (feed st (iac 253 3) = ["" ""])
            ; taking the echo back is acknowledged once; a refusal of what is off is not
-           (feed st (iac 252 1) = ["" (iac 254 1)]) !((K 'tn-echo?) st)
+           (feed st (iac 252 1) = ["" (iac 254 1)]) !(K 'tn-echo? st)
            (feed st (iac 252 1) = ["" ""]) (feed st (iac 254 24) = ["" ""])
            (feed st (iac 254 3) = ["" (iac 252 3)])
            ; subnegotiation is skipped whole, an IAC IAC inside it too; data around it shows
@@ -99,15 +99,15 @@
 ; will is refused and what was asked or offered answers nothing, a subnegotiation is kept
 ; out of the data. then kore's telnet against kore's telnetd running /bin/sh on loopback
 (: K (cite 'kore)
-   st ((K 'td-new) 0)
-   (ch s) ((K 'td-chunk) st s ())
+   st (K 'td-new 0)
+   (ch s) (K 'td-chunk st s ())
    (iac v x) (string 255 + string v + string x)
    _ (test (ch "ls\r\n" = ["ls\r" ""]) (ch "a\r\x00b" = ["a\rb" ""])
            (ch ("x" + string 255 + string 255 + "y") = [("x" + string 255 + "y") ""])
            (ch (iac 251 24) = ["" (iac 254 24)]) (ch (iac 253 5) = ["" (iac 252 5)])
            (ch (iac 251 31 + iac 253 1 + iac 253 3 + iac 252 1) = ["" ""])
            (ch ("a" + string 255 + string 250 + "\x1f\x00\x50\x00\x18" + string 255 + string 240 + "b") = ["ab" ""])
-           ((K 'td-esc) ("q" + string 255) = "q" + string 255 + string 255))
+           (K 'td-esc ("q" + string 255) = "q" + string 255 + string 255))
    love <cmdline
    port 7454
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
@@ -150,7 +150,7 @@
    _ (waitfor <dv)
    bad (: r (tether [love "kore" "microcom" "-d" "5" path]) t (slurp >r) [t <(waitfor <r)])
    (test (got = "ping") (shown = "pong") (<st = 0)
-         (0 <= ((cite 'kore 'wg-find) <bad "microcom: -d is not supported" 0)) (bad 1 = 1)))
+         (0 <= (cite 'kore 'wg-find <bad "microcom: -d is not supported" 0)) (bad 1 = 1)))
 
 ; -- nslookup and ping --------------------------------------------------------------------
 ; nslookup against a nameserver that is a process of its own (the pty read holds this one):
@@ -222,8 +222,8 @@
    h (run ["ping" "-c" "x" "127.0.0.1"])
    ; -i and -W read seconds with up to three places; a time prints as ms to three
    (test (has? <h "ping: bad -c x") (h 1 = 2)
-         ((K 'ping-ms) "1" = 1000) ((K 'ping-ms) "0.2" = 200) ((K 'ping-ms) "2.5" = 2500)
-         ((K 'ping-ms) "x" = ()) ((K 'ping-t) 84000 = "0.084") ((K 'ping-t) 11331000 = "11.331")))
+         (K 'ping-ms "1" = 1000) (K 'ping-ms "0.2" = 200) (K 'ping-ms "2.5" = 2500)
+         (K 'ping-ms "x" = ()) (K 'ping-t 84000 = "0.084") (K 'ping-t 11331000 = "11.331")))
 
 ; -- traceroute ---------------------------------------------------------------------------
 ; a small internet in namespaces, where unshare, ip and nsenter can make one: ours, a router
@@ -269,19 +269,19 @@ kill $R $D
         (close p))
    (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
    (has? t s) (0 <= (K 'wg-find) t s 0)
-   (count t s) ((: (g i k) (: j ((K 'wg-find) t s i) (? (j < 0) k (g (j + 1) (k + 1))))) 0 0)
+   (count t s) ((: (g i k) (: j (K 'wg-find t s i) (? (j < 0) k (g (j + 1) (k + 1))))) 0 0)
    r (tether ["/bin/sh" "-c" ("unshare -rn true 2>/dev/null || exit 99; exec unshare -rn sh " + sfile + " " + love)])
    txt (slurp >r)
    st <(waitfor <r)
-   k ((K 'wg-find) txt "== echo" 0)
+   k (K 'wg-find txt "== echo" 0)
    halves (? (0 <= k) [(snip txt 0 k) (snip txt k #txt)] ["" ""])
    _ (? (st = 99) 0
         (map (h \ test (has? h " 1  10.1.0.2  ") (has? h " 2  10.2.0.2  ") (has? h " 1  fd01::2  ")
                         (has? h " 2  fd02::2  ") (count h " ms !N" = 2))
              halves))
    ; the marks: v4's unreachable codes, v6's, and a time exceeded that marks nothing
-   _ (test ((K 'tr-mark) 0 3 1 = " !H") ((K 'tr-mark) 0 3 3 = "") ((K 'tr-mark) 0 11 0 = "")
-           ((K 'tr-mark) 1 1 0 = " !N") ((K 'tr-mark) 1 1 4 = "") ((K 'tr-mark) 1 3 0 = ""))
+   _ (test (K 'tr-mark 0 3 1 = " !H") (K 'tr-mark 0 3 3 = "") (K 'tr-mark 0 11 0 = "")
+           (K 'tr-mark 1 1 0 = " !N") (K 'tr-mark 1 1 4 = "") (K 'tr-mark 1 3 0 = ""))
    lo (: r (tether [love "kore" "traceroute" "-n" "-q" "1" "127.0.0.1"]) t (slurp >r) [t <(waitfor <r)])
    (? (has? <lo "no icmp echo socket") (test (lo 1 = 2))
       (test (has? <lo "traceroute to 127.0.0.1 (127.0.0.1), 30 hops max, 60 byte packets")
@@ -306,7 +306,7 @@ kill $R $D
            (0 <= (K 'wg-find) <d "usage: httpd" 0) (d 1 = 2))
    ; a page off -h on -p, fetched by wget's round trip; -f taken, 0.0.0.0: and :PORT too
    port 7437
-   (fetch _) ((K 'wg-once) 0 "127.0.0.1" port "/")
+   (fetch _) (K 'wg-once 0 "127.0.0.1" port "/")
    (try k) (: r (fetch 0) (? (two? r) r (k < 1) r (rest 50, try (k - 1))))
    srv (tether [love "kore" "httpd" "-f" "-p" ("0.0.0.0:" + show port) "-h" root])
    g (try 100)
@@ -316,9 +316,9 @@ kill $R $D
    ; a bare port is loopback's alone: 127.0.0.2 reaches every address on linux, not 127.0.0.1
    p2 7438
    srv2 (tether [love "kore" "httpd" "-f" "-p" (show p2) "-h" root])
-   (try2 k) (: r ((K 'wg-once) 0 "127.0.0.1" p2 "/") (? (two? r) r (k < 1) r (rest 50, try2 (k - 1))))
+   (try2 k) (: r (K 'wg-once 0 "127.0.0.1" p2 "/") (? (two? r) r (k < 1) r (rest 50, try2 (k - 1))))
    g2 (try2 100)
-   _ (test (two? g2) (<g2 = 200) (atom? ((K 'wg-once) 0 "127.0.0.2" p2 "/")))
+   _ (test (two? g2) (<g2 = 200) (atom? (K 'wg-once 0 "127.0.0.2" p2 "/")))
    _ (still <srv2 15)
    _ (waitfor <srv2)
    0)

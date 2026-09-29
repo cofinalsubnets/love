@@ -125,4 +125,28 @@ gi 'x|' -w 'x'
 gi 'naï|' '\<na.'
 gi 'S|' '\bS'
 gi '' 'T\>'
+# -r and -R over a tree (GNU walks in readdir order, so the rows compare sorted), a link
+# skipped under -r and followed under -R, --include/--exclude, -H -L -s -f, and the
+# context rows -A -B -C with their -- gaps, -C0's too, and -m's owed trailing context
+R=$ho/.grtree; rm -rf "$R"; mkdir -p "$R/t/a/b" "$R/t/c"
+printf 'foo\nbar\n' > "$R/t/a/x.c"; printf 'x\nfoo 2\n' > "$R/t/a/b/y.h"; printf 'nofoo\n' > "$R/t/c/z.txt"; ln -s ../a "$R/t/c/la"
+bsort() { n=$1; shift; "$@" 2>/dev/null | sort > "$g"; korerun "$@" 2>/dev/null | sort > "$o"; same "$n"; }
+for f in -r -R -rn -rl -rL -rh -rc "-r --include=*.c" "-r --exclude=*.c"; do
+  # shellcheck disable=SC2086
+  bsort "grep $f" grep $f foo "$R/t"
+done
+(cd "$R/t" && grep -r foo | sort > "$g" && korerun grep -r foo | sort > "$o"); same "grep -r with no operand"
+seq 1 30 | sed 's/^1[05]$/hit &/; s/^2$/hit 2/; s/^29$/hit 29/' > "$R/s"; printf 'hit\nfoo\n' > "$R/p"; : > "$R/e"
+for f in -A1 -B1 -C1 "-A2 -B1" -nC1 -C0 -A3 -cA1 -vC1 "-m2 -A1" "-C1 -H"; do
+  # shellcheck disable=SC2086
+  both "grep $f" grep $f hit "$R/s"
+done
+both "grep -A1 over two" grep -A1 hit "$R/s" "$R/t/a/x.c"
+both "grep -H" grep -H foo "$R/t/a/x.c"
+both "grep -L" grep -L foo "$R/t/a/x.c" "$R/t/c/z.txt" "$R/s"
+both "grep -f" grep -f "$R/p" "$R/s"
+both "grep -f empty" grep -f "$R/e" "$R/s"
+both "grep -e -f" grep -e foo -f "$R/p" "$R/s"
+korerun grep -s foo "$R/nosuch" > "$o" 2>&1; r=$?; [ $r -eq 2 ] && [ ! -s "$o" ] || fail "kore grep -s (rc $r)"
+rm -rf "$R"
 echo "kore: grep (BRE + ERE batteries + the clustered flag matrix GNU-identical, the exit triple, egrep/fgrep) ok"

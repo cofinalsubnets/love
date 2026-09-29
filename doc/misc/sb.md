@@ -21,6 +21,9 @@ this doc is the interface over it: *what you type*, not *what the objects are*.
 | **`undo ID [NOTE]`** | add the *inverse* patch — revert as growth, never deletion | revert | rollback-by-superset |
 | **`log`** | the patches, newest first (`*` marks a tip); each ref with its psid | inspect | inspect |
 | **`diff`** | working tree vs the recorded state (unified; exit 1 on change) | inspect | inspect |
+| **`ledger NAME ..`** | a named value that moves only by compare-and-swap, every entry kept | a ref moved by `update-ref NEW OLD` | the shared queue sessions coordinate by |
+
+`-C DIR` before any verb runs it in the nest at DIR.
 
 `sync` is the star. Making it the single verb for clone / pull / push /
 multi-machine-union is what realizes "distribution == cloning" at the CLI: whether the other
@@ -95,6 +98,26 @@ forever. Two or three tips is what ordinary parallel work looks like, not a fork
 the only way to collapse them would be to write a patch touching every path every tip touched,
 i.e. to edit files to appease the check. So a release freezes the head DAG state whatever its
 shape — which is exactly what `psid` hashes.
+
+### ledger
+
+`ledger NAME --was OLD FILE` moves the ledger NAME to FILE's text (`-` for stdin), but only
+if it still stands at OLD, the hash `ledger NAME --id` gave (`none` for a new one). When it has
+moved on it exits 1 and changes nothing. That compare-and-swap is the whole point: two sessions
+editing one shared text, a merge queue, cannot lose each other's write, because the second is
+refused and re-reads. `ledger NAME` prints what it holds, `--log` every entry with its time
+and writer, and `ledger` alone lists them.
+
+A banked name never moves; a ledger is the one thing in the store that does, and even it only
+grows. `.sb/ledger/NAME` is a line per entry, `hash time who`, with the last one standing. Each
+text is a blob like any other, so nothing is withdrawn: an entry is a new deposit on top of the
+old ones, which is the vault's rule kept. The writer is `SB_WHO`, else `USER`. A move takes a
+lock beside the ledger: a directory, made atomically, holding the holder's pid. A live holder is
+waited on for up to five seconds, and a dead one's lock is taken over.
+
+A ledger stays in its nest: `sync` carries patches, blobs and refs, never a ledger. A value that
+moves by compare-and-swap has no union to settle on, so sessions sharing one name the same nest,
+the hub, and reach it with `-C`.
 
 ## install is a composition, not a verb
 

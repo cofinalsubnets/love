@@ -177,12 +177,12 @@
       (: mw- (<<(lay-tile (lay-msg L1 'shrink z3) r z3) 3)
          mw+ (<<(lay-tile (lay-msg L1 'expand z3) r z3) 3)
          (mw- < 400 && mw- > 380 && mw+ > 400 && mw+ < 420))
-      ((lay-msg (lay-msg L1 'expand z3) 'shrink z3) 2 = 0.5)               ; expand then shrink is a round trip
+      (lay-msg (lay-msg L1 'expand z3) 'shrink z3 2 = 0.5)                 ; expand then shrink is a round trip
       ; IncMasterN grows the master column (2 masters left, 1 slave right)
       (: L2 (lay-msg L1 'inc-master z3) p <(lay-tile L2 r z3)
-         ((<p 1 = 0) && (<>p 1 = 0) && ((p 2) 1 = 400)))                   ; two masters at x=0, slave at x=400
-      ((lay-msg (lay-msg L1 'inc-master z3) 'dec-master z3) 1 = 1)          ; dec undoes inc; floored at 1
-      ((lay-msg L1 'dec-master z3) 1 = 1)
+         ((<p 1 = 0) && (<>p 1 = 0) && (p 2 1 = 400)))                     ; two masters at x=0, slave at x=400
+      (lay-msg (lay-msg L1 'inc-master z3) 'dec-master z3 1 = 1)            ; dec undoes inc; floored at 1
+      (lay-msg L1 'dec-master z3 1 = 1)
       ; Full places only the focus, whole rect
       (: f <(lay-tile full r z3) (#f = 1 && <f = '(10 0 0 800 600)))
       ; MirrorShrink shrinks the focused slave (focus 20, the first slave)
@@ -262,11 +262,11 @@
    (test
       (<(lay-tile Q r z3) = '((10 0 0 100 50)))                                  ; the closure places
       (<>(lay-tile Q r z3) = Q)                                                  ; ... and hands its record back
-      ((lay-msg Q 'grow z3) 1 = 60)                                         ; a message it takes rewrites its state
+      (lay-msg Q 'grow z3 1 = 60)                                           ; a message it takes rewrites its state
       !(lay-msg Q 'shrink z3)                                                    ; one it doesn't reads () -- modifiers fall through
       (: p <(lay-tile (smart-borders Q) r z3)                                    ; a modifier wraps the closure like any builtin
          ((#p = 1) && (#<p = 6)))
-      (((lay-msg (smart-borders Q) 'grow z3) 1) 1 = 60)))              ; ... and a delegated message threads the closure's new state
+      (lay-msg (smart-borders Q) 'grow z3 1 1 = 60)))                  ; ... and a delegated message threads the closure's new state
 
 ; --- the manageHook dsl (apps/lux/manage.l rung 5): combinators + float actions ---
 (: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
@@ -288,10 +288,10 @@
       ; the two bind so a rule needs no inner parens: `p <||> q -?> act`
       (((no <||> yes -?> (tag 'a)) c s0) = [('a . s0)])
       ; compose-one takes the first matching rule; none -> the sheaf unchanged
-      (((compose-one [(no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c)]) c s0) = ('b . s0))
-      (((compose-one [(no -?> tag 'a) (no -?> tag 'b)]) c s0) = s0)
+      ((compose-one [(no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c)] c s0) = ('b . s0))
+      ((compose-one [(no -?> tag 'a) (no -?> tag 'b)] c s0) = s0)
       ; compose-all threads every hook (a plain hook, so wrap or use identity)
-      (((compose-all [(\ c sh ('x . sh)) (\ c sh ('y . sh))]) c s0) = ('y . 'x . s0))
+      ((compose-all [(\ c sh ('x . sh)) (\ c sh ('y . sh))] c s0) = ('y . 'x . s0))
       ; manage-for is the assembled config hook -- a runnable closure (X-driven; not called here)
       (lit? manage-default) (lit? (manage-for '("a") '("b") '("c")))))
 
@@ -342,7 +342,7 @@
       ; struts clamp the rect off each edge; a swallowed axis floors at 0
       (strut-shrink (rct 0 0 800 600) (strut-parse '(0 0 30 0)) 800 600 = '(0 30 800 570))     ; a top-30 panel
       (strut-shrink (rct 0 0 800 600) (strut-parse '(0 50 0 20)) 800 600 = '(0 0 750 580))     ; right + bottom
-      ((strut-shrink (rct 0 0 100 100) (strut-parse '(700 0 0 0)) 800 600) 2 = 0)))
+      (strut-shrink (rct 0 0 100 100) (strut-parse '(700 0 0 0)) 800 600 2 = 0)))
 
 ; the desktop's shape for pagers: names as NUL-terminated strings, one row of values per desktop
 (: nul (string 0)
