@@ -3,8 +3,9 @@
 #
 # each test/gpic/*.pic runs through /usr/bin/pic and through `love pic` in three modes --
 # troff, -n and -t -- and stdout and the exit status must agree. test/gpic/open/*.pic are
-# the cases not yet climbed: counted and named, never failing the gate. with -v, the first
-# lines of each difference are shown.
+# the cases not yet climbed: counted and named, never failing the gate. the chem-* cases
+# are groff chem's output and copy groff's chem.pic, which the run finds beside groff; where
+# it is missing they are left out. with -v, the first lines of each difference are shown.
 #
 # skips where groff's pic is missing; takes the love binary as $1.
 love=${1:-out/love}
@@ -16,14 +17,20 @@ r=$(pwd)
 L=$r/$love
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT
+chem=
+for f in /usr/share/groff/*/tmac/chem.pic; do [ -f "$f" ] && { chem=$f; break; }; done
 
 # run DIR MODE: one line per case, "ok NAME" or "differs NAME"
 run() {
-  for f in "$1"/*.pic; do
+  rm -rf "$w/c"; mkdir "$w/c"
+  cp "$1"/*.pic "$w/c/" 2>/dev/null
+  if [ -n "$chem" ]; then cp "$chem" "$w/c/chem.pic"; else rm -f "$w/c"/chem-*.pic; fi
+  for f in "$w/c"/*.pic; do
     [ -f "$f" ] || continue
     n=$(basename "$f" .pic)
-    (cd "$1" && "$ref" $2 "$n.pic" > "$w/a" 2> /dev/null; echo "exit=$?" >> "$w/a")
-    (cd "$1" && "$L" pic $2 "$n.pic" > "$w/b" 2> /dev/null; echo "exit=$?" >> "$w/b")
+    [ "$n" = chem ] && continue
+    (cd "$w/c" && "$ref" $2 "$n.pic" > "$w/a" 2> /dev/null; echo "exit=$?" >> "$w/a")
+    (cd "$w/c" && "$L" pic $2 "$n.pic" > "$w/b" 2> /dev/null; echo "exit=$?" >> "$w/b")
     if cmp -s "$w/a" "$w/b"; then echo "ok $n"
     else
       echo "differs $n"
@@ -33,6 +40,7 @@ run() {
 }
 
 bad=0; total=0
+[ -n "$chem" ] || echo "gpic: no chem.pic beside groff, the chem cases left out"
 for m in "" -n -t; do
   run test/gpic "$m" > "$w/gate"
   k=$(grep -c . "$w/gate"); d=$(grep -c '^differs' "$w/gate")
