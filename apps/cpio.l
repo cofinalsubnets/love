@@ -3,6 +3,7 @@
 ;   (cpio-pack entries)      -> the archive bytes
 ;   (cpio-unpack s)          -> (1 entries) | ()
 ;   (cpio-scatter root es u) -> (1 count) | ()   write entries back out under root
+;   (cpio-scatter? warn root es u) -> (1 count refused)   the same, a refused member warned
 ;
 ; an entry is apps/tar.l's entry -- the same tablet, the same keys ('nom 'kind 'body 'to
 ; 'mode 'mtime 'uid 'gid) -- because the walk that fills them (`tar-gather`) and the
@@ -137,31 +138,40 @@
    ; the leading directories are always made. GNU wants -d before it will and refuses
    ; the member otherwise; refusing to write a file we can write is not a service, so
    ; -d is a flag we accept and were already honouring.
-   ; every parent of p and not p itself: the caller is about to make that
-   (cpio-mkp p) (each (pprefixes p) (\ d (mkdir d 493)))
-   (cpio-there? p) (two? (stat p))
+   ; the parents are laid by tar-lay: made where missing, never through a symlink
+   (cpio-there? p) (two? (lstat p))
    (cpio-newer? p ms)                       ; is what is already there at least as new
-    (: st (stat p) (two? st ? !(<>st // 1000 < ms) 0))
-   (cpio-scatter root es u)                 ; -> (1 count) | ()
-    (: (go xs k)
-        (? !(two? xs) [1 k]
+    (: st (lstat p) (two? st ? !(<>st // 1000 < ms) 0))
+   ; a name that climbs out of root, or a path through a symlink, is warned and skipped;
+   ; a link at the member's own name is unlinked before the member is laid
+   (cpio-scatter? warn root es u)           ; -> (1 count refused)
+    (: (go xs k r)
+        (? !(two? xs) [1 k r]
            (: e <xs
-              nom (tar-strip (peep e 'nom ""))
-              p (#nom ? (#root ? (root + "/" + nom) nom) root)
+              nom (peep e 'nom "")
+              sg (tar-segs nom)
+              lp (sg && tar-lay root <>sg)
+              p (lp && <>lp)
               kind (peep e 'kind 'file)
-              _ (cpio-mkp p)
-              skip (!u && kind != 'dir && cpio-newer? p (peep e 'mtime 0))
+              _ (? !sg (warn (nom + ": member name contains '..'"))
+                   !lp (warn (nom + ": will not extract through a symbolic link or a file")))
+              skip (!lp || atom? <>sg
+                    || (!u && kind != 'dir && cpio-newer? p (peep e 'mtime 0)))
+              _ (skip || (tar-link-at? p && unlink p))
               ok (? skip 1
-                    (kind = 'dir) (mkdir p (peep e 'mode 493), cpio-there? p)
-                    (kind = 'link) (cpio-there? p && unlink p,
-                                    symlink (peep e 'to "") p,
+                    (kind = 'dir) (mkdir p 493,
+                                   tar-dir-at? p && chmod p (tar-perm (peep e 'mode 493)),
+                                   tar-dir-at? p)
+                    (kind = 'link) (symlink (peep e 'to "") p,
                                     string? (readlink p))
                     (: q (open p "w")
                      (hot? q && (say q (peep e 'body ""), close q),
-                      cpio-there? p && chmod p (peep e 'mode 420),
+                      tar-at? p 32768 && chmod p (tar-perm (peep e 'mode 420)),
                       cpio-there? p)))
-              (ok && go >xs (skip ? k (k + 1)))))
-       (go es 0)))
+              (ok && go >xs (skip ? k (k + 1)) (lp ? r (r + 1)))))
+       (go es 0 0))
+   (cpio-scatter root es u)                 ; -> (1 count) | (), () on any refusal
+    (: w (cpio-scatter? (m \ 0) root es u) (w && w 2 = 0 ? [1 (w 1)] ())))
 
 ) ; module 'cpio
 
@@ -270,9 +280,11 @@
                                _ (cpioc-tell t (peep t2 'nom ""))
                                t2))
                        <>es)
-               w (cpio-scatter "" fs (peep t 'u 0))
+               w (cpio-scatter? cpioc-moan "" fs (peep t 'u 0))
                _ (cpioc-blocks t #<>b)
-               (w ? 0 (cpioc-moan "cannot write the tree", 1)))))))
+               (? !w (cpioc-moan "cannot write the tree", 1)
+                  (0 < w 2) 1
+                  0))))))
    (cpioc-t t)
     (cpioc-in t @- 1 [1 b] (cpio-unpack b @-
      (cpioc-moan "premature end of archive", 1)

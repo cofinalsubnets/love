@@ -4,6 +4,7 @@
 ;   (tar-unpack s)         -> (1 entries) | ()
 ;   (tar-gather root path) -> (1 entries) | ()    walk the filesystem into entries
 ;   (tar-scatter root es)  -> (1 count) | ()      write entries back out under root
+;   (tar-scatter? warn root es) -> (1 count refused)  the same, a refused member warned
 ;
 ; an entry is a tablet, because the header has fourteen fields and a positional list
 ; of them would be unreadable at every call site. the keys, and the only ones that
@@ -306,13 +307,48 @@
               'mtime stamp 'uid 0 'gid 0
               'uname "root" 'gname "root" 'mode (tar-canon e))
          es)
-   (tar-scatter root es)                    ; -> (1 count) | ()
-    (:- (go es 0) (go xs k)
-     (atom? xs ? [1 k]
+   ; a member's name as the segments it is laid at: a leading / off, "." and empty
+   ; segments dropped, and () for any ".." -- such a name climbs out of root
+   (tar-segs nom)                           ; -> (1 segs) | ()
+    (:- (go 0 0 ()) n #nom
+     (cut st k acc) (: s (snip nom st k) (? (#s = 0 || s = ".") acc (s . acc)))
+     (go k st acc) (? (n <= k) (: l (rev (cut st k acc)) (any (s \ s = "..") l ? () [1 l]))
+                      (nom k = 47) (go (k + 1) (k + 1) (cut st k acc))
+                      (go (k + 1) st acc)))
+   ; asked of the path itself, never what a link there names
+   (tar-at? p m) (: st (lstat p) (two? st && <>>st & 61440 = m))
+   (tar-link-at? p) (tar-at? p 40960)
+   (tar-dir-at? p) (tar-at? p 16384)
+   ; root/segs with every parent made, and never through a symlink or a non-directory:
+   ; a link the archive laid a member ago would carry the next write out of root
+   (tar-lay root segs)                      ; -> (1 path) | ()
+    (: (at q) (? #root (root + "/" + q) q)
+       (go ss q)
+        (: p (at q)
+           (? (atom? >ss) [1 p]
+              (tar-link-at? p) ()
+              (tar-dir-at? p) (go >ss (q + "/" + <>ss))
+              (two? (lstat p)) ()
+              (mkdir p 493, (tar-dir-at? p ? (go >ss (q + "/" + <>ss)) ()))))
+       (? (atom? segs) [1 root] (go segs <segs)))
+   ; the permission bits alone: a set-id or sticky bit off an archive is not ours to lay
+   (tar-perm m) (m & 511)
+   ; each member laid under root; one whose name climbs out or whose path runs through a
+   ; symlink is told to warn and skipped. a link at the member's own name is unlinked
+   ; first, so a write or a chmod lands on the member and not on what the link names
+   (tar-scatter? warn root es)              ; -> (1 count refused)
+    (:- (go es 0 0) (go xs k r)
+     (atom? xs ? [1 k r]
       (: e <xs
-         nom (tar-strip (tar-get e 'nom ""))
-         p (? #nom (? #root (root + "/" + nom) nom) root)
+         nom (tar-get e 'nom "")
+         sg (tar-segs nom)
+         lp (sg && tar-lay root <>sg)
+         p (lp && <>lp)
          kind (tar-get e 'kind 'file)
+         _ (? !sg (warn (nom + ": Member name contains '..'"))
+              !lp (warn (nom + ": Cannot extract through a symbolic link or a file"))
+              (atom? <>sg) 0
+              (tar-link-at? p && unlink p))
          ; the mode is content, and it must be laid back explicitly: `open`
          ; and `mkdir` both create at the umask's pleasure, so a file written
          ; here comes out 0644 whatever the header said, an extracted binary is
@@ -320,15 +356,18 @@
          ; carried the mode and we dropped it -- which `diff -r` cannot see,
          ; because it compares bytes and not modes. chmod is the only door: it
          ; is the one call the umask does not touch.
-         ok (? (kind == 'dir)  (mkdir p (tar-get e 'mode 493),
-                                tar-there? p && chmod p (tar-get e 'mode 493),
-                                tar-there? p)
+         ok (? !lp 1
+               (kind == 'dir)  (mkdir p 493,
+                                tar-dir-at? p && chmod p (tar-perm (tar-get e 'mode 493)),
+                                tar-dir-at? p)
                (kind == 'link) (symlink (tar-get e 'to "") p,
                                 string? (readlink p))
                (uwrite p (tar-get e 'body ""),
-                tar-there? p && chmod p (tar-get e 'mode 420),
+                tar-at? p 32768 && chmod p (tar-perm (tar-get e 'mode 420)),
                 tar-there? p))
-       (ok && go >xs (k + 1))))))) ; module 'tar
+       (ok && go >xs (? lp (k + 1) k) (? lp r (r + 1))))))
+   (tar-scatter root es)                    ; -> (1 count) | (), () on any refusal
+    (: w (tar-scatter? (m \ 0) root es) (w && w 2 = 0 ? [1 (w 1)] ())))) ; module 'tar
 
 ; --- the face -----------------------------------------------------------------------
 ; `love tar`, GNU tar's spelling over the module above: the bundled key (czf), dashed
@@ -514,15 +553,6 @@
        r (tar-unpack <>u)
        _ (!r && tarc-die (a + ": not a tar archive, or it is truncated"))
        <>r)
-   ; the directories a member lies under, laid first: an archive need not carry them
-   (tarc-parents root es)
-    (each es (e \ (: nom (tarc-nom e)
-                     (go k) (? (#nom <= k) 0
-                               (nom k = 47) (: d (root + "/" + snip nom 0 k)
-                                               _ (? (two? (stat d)) 0 (mkdir d 493))
-                                               (go (k + 1)))
-                               (go (k + 1)))
-                     (go 1))))
    (tarc-x t)
     (: es (tarc-pick t (tarc-open t))
        root (peep t 'C ".")
@@ -531,8 +561,7 @@
           (each es (e \ (? (tar-get e 'kind 'file = 'file) (say out (tar-get e 'body "")) 0)),
            flush out,
            peep t 'bad 0 ? 2 0)
-          (: _ (tarc-parents root es)
-             w (tar-scatter root es)
+          (: w (tar-scatter? (m \ (tarc-warn m, pin t 'bad 1)) root es)
              _ (!w && tarc-die ("cannot write under " + root))
              (peep t 'bad 0 ? 2 0))))
    (tarc-t t)
