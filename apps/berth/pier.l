@@ -10,7 +10,8 @@
 ; in PutImage bands over lux's wire. keys come back as KeyPress, keysym to terminal bytes,
 ; and the pointer as the reports a program turns on (?1000 and kin, the `mouse` nif); a
 ; paste asks the X selection for its text and sends it, bracketed when ?2004 asks; a
-; drag or a double or triple click selects (`select`), and pier holds the primary for it;
+; drag or a double or triple click selects (`select`) and a right click or a shift click
+; stretches it, pier holding the primary for it and the clipboard on ctrl+shift+C;
 ; a ConfigureNotify opens a fresh grid and tells the pty; WM_DELETE or the child's exit
 ; steps away.
 (module '(pier pier pier-keybytes pier-keysyms pier-main)
@@ -21,10 +22,10 @@
 (:
    ; --- the requests the wire does not carry: a window of ours, a GC, a title, the delete
    ;     protocol, and PutImage ---
-   (pier-mkwin s win parent w h)                      ; CreateWindow: back pixel, and keys + buttons + moves + expose + structure
+   (pier-mkwin s win parent w h)                      ; CreateWindow: back pixel, and keys + buttons + moves + expose + structure + property
     (x-w8 s 1, x-w8 s 0, x-w16 s 10, x-w32 s win, x-w32 s parent,
      x-w16 s 0, x-w16 s 0, x-w16 s w, x-w16 s h, x-w16 s 0, x-w16 s 1, x-w32 s 0,
-     x-w32 s 2050, x-w32 s 0, x-w32 s 163917)
+     x-w32 s 2050, x-w32 s 0, x-w32 s 4358221)
    (pier-gc s gc win) (x-w8 s 55, x-w8 s 0, x-w16 s 4, x-w32 s gc, x-w32 s win, x-w32 s 0)
    (pier-title s win t)
     (: n #t
@@ -148,12 +149,16 @@
     (: sc (peep bx () 0)
        _ (peer sc (max 0 ((gaze sc 8) + n)))
        (pin dirty () 1))
-   (pier-key s m km bx dirty kc st)
+   (pier-key s m km bx dirty kc st raw)
     (: sym (pier-sym km kc st) sc (peep bx () 0) half (max 1 ((gaze sc 1) // 2))
        (? (((st & 1) != 0) && (sym = 65365)) (pier-peer bx dirty half)
           (((st & 1) != 0) && (sym = 65366)) (pier-peer bx dirty (0 - half))
           (((st & 1) != 0) && (sym = 65379)) (pier-ask s dirty 1 (peep dirty 'utf8 0))           ; shift+Insert: the primary
           (((st & 5) = 5) && ((sym = 86) || (sym = 118))) (pier-ask s dirty (peep dirty 'clip 0) (peep dirty 'utf8 0))   ; ctrl+shift+V: the clipboard
+          (((st & 5) = 5) && ((sym = 67) || (sym = 99)))                               ; ctrl+shift+C: the selection onto it
+           (? ((gaze sc 10) < (gaze sc 11))
+              (: _ (pin dirty 'clipped (copied sc (gaze sc 10) (gaze sc 11))) (pier-own s dirty (peep dirty 'clip 0) (u32 raw 4)))
+              0)
           (: b (pier-keybytes km kc st)
              (? (0 < #b)
                 (: _ (? (0 < gaze sc 8) (pier-peer bx dirty (0 - gaze sc 8)) 0)
@@ -182,38 +187,50 @@
                  (? ((gaze sc 3) & 256) (say m (cats (map (\ _ (? (b = 64) "\e[A" "\e[B")) (jot 3))), flush m)
                     (pier-peer bx dirty (? (b = 64) 3 -3)))
                 ((code = 4) && (b = 1)) (pier-ask s dirty 1 (peep dirty 'utf8 0))
-                (mine && (b = 0)) (pier-choose s sc dirty code raw (((row - gaze sc 8) * gaze sc 2) + col))
+                (mine && ((b = 0) || (b = 2))) (pier-choose s sc dirty code raw (((row - gaze sc 8) * gaze sc 2) + col) b st)
                 0))))
 
-   ; --- the selection: a press anchors it (a second or third in quick succession on the
-   ;     same cell takes the word or the line), a drag stretches it, and a release with
-   ;     something chosen takes the primary, the text kept as it was then ---
-   (pier-choose s sc dirty code raw gi)
-    (: t (u32 raw 4)
-       (? (code = 4)
+   ; --- the selection: a left press anchors it (a second or third in quick succession on
+   ;     the same cell takes the word or the line), a drag stretches it, and a release with
+   ;     something chosen takes the primary, the text kept as it was then. a right press, or
+   ;     a shift one where no program asked for the mouse, moves the selection's nearer end
+   ;     there in its own unit, and the drag goes on from it ---
+   (pier-choose s sc dirty code raw gi b st)
+    (: t (u32 raw 4) s0 (gaze sc 10) s1 (gaze sc 11)
+       stretch ((s0 < s1) && ((b = 2) || (((st & 1) != 0) && !((gaze sc 3) & 7680))))
+       (? ((code = 4) && stretch)
+          (: a (? (gi < s0) (s1 - 1) (s1 <= gi) s0 ((gi - s0) < (s1 - gi)) (s1 - 1) s0)
+             _ (pins dirty 'anchor a 'drag 1)
+             _ (select sc a gi (peep dirty 'unit 0))
+             (pin dirty () 1))
+          ((code = 4) && (b = 0))
           (: n (? (((t - peep dirty 'tp 0) < 400) && (gi = peep dirty 'anchor ())) (min 3 ((peep dirty 'clicks 0) + 1)) 1)
-             _ (pins dirty 'tp t 'anchor gi 'clicks n 'unit (n - 1))
+             _ (pins dirty 'tp t 'anchor gi 'clicks n 'unit (n - 1) 'drag 1)
              _ (select sc gi gi (? (1 < n) (n - 1) -1))
              (pin dirty () 1))
+          !(peep dirty 'drag 0) 0
           (code = 6)
           (: _ (select sc (peep dirty 'anchor gi) gi (peep dirty 'unit 0)) (pin dirty () 1))
-          (? ((gaze sc 10) < (gaze sc 11))
-             (: _ (pin dirty 'held (copied sc (gaze sc 10) (gaze sc 11)))
-                _ (pier-hold dirty)
-                _ (x-w8 s 22, x-w8 s 0, x-w16 s 4, x-w32 s (peep dirty 'win 0), x-w32 s 1, x-w32 s t, x-flush s)
-                (pier-let dirty))
-             0)))
-   ; another client asks for the primary: as utf-8 or latin-1 text, or which targets there are.
-   ; the answer rides a property of the asker's and a SelectionNotify
+          (: _ (pin dirty 'drag 0)
+             (? (s0 < s1)
+                (: _ (pin dirty 'held (copied sc s0 s1)) (pier-own s dirty 1 t))
+                0))))
+   (pier-own s dirty sel t)                             ; SetSelectionOwner: sel is ours
+    (: _ (pier-hold dirty)
+       _ (x-w8 s 22, x-w8 s 0, x-w16 s 4, x-w32 s (peep dirty 'win 0), x-w32 s sel, x-w32 s t, x-flush s)
+       (pier-let dirty))
+   ; another client asks for the primary or the clipboard: as utf-8 or latin-1 text, or which
+   ; targets there are. the answer rides a property of the asker's and a SelectionNotify
    (pier-serve s dirty raw)
     (: rq (u32 raw 12) sel (u32 raw 16) ty (u32 raw 20) pr0 (u32 raw 24)
-       pr (? (pr0 = 0) ty pr0) tx (peep dirty 'held ()) ut (peep dirty 'utf8 0) tg (peep dirty 'targets 0)
+       tx (? (sel = 1) (peep dirty 'held ()) (sel = peep dirty 'clip 0) (peep dirty 'clipped ()) ())
+       pr (? (pr0 = 0) ty pr0) ut (peep dirty 'utf8 0) tg (peep dirty 'targets 0)
        (prop tp fmt n bs) (: nb #bs
                             (x-w8 s 18, x-w8 s 0, x-w16 s (6 + (nb + x-pad4 nb) // 4), x-w32 s rq, x-w32 s pr,
                              x-w32 s tp, x-w8 s fmt, x-w8 s 0, x-w16 s 0, x-w32 s n, x-wpad s bs))
        (le4 v) (cats (map (\ k (string ((v >> (8 * k)) & 255))) (jot 4)))
        _ (pier-hold dirty)
-       ok (? (sel != 1) 0
+       ok (? !(string? tx) 0
              (ty = tg) (: _ (prop 4 32 3 (le4 tg + le4 ut + le4 31)) 1)
              ((string? tx) && ((ty = ut) || (ty = 31)) && (#tx < 262000)) (: _ (prop ty 8 #tx tx) 1)
              0)
@@ -221,10 +238,11 @@
           x-w8 s 31, x-w8 s 0, x-w16 s 0, x-w32 s (u32 raw 4), x-w32 s rq, x-w32 s sel,
           x-w32 s ty, x-w32 s (? ok pr 0), x-w32 s 0, x-w32 s 0, x-flush s)
        (pier-let dirty))
-   ; another client took the primary: the highlight goes
+   ; another client took the primary: the highlight goes; the clipboard: its text
    (pier-lost bx dirty raw)
     (? ((u32 raw 12) = 1)
        (: _ (select (peep bx () 0) 0 0 -1) _ (pin dirty 'held ()) (pin dirty () 1))
+       ((u32 raw 12) = peep dirty 'clip 0) (pin dirty 'clipped ())
        0)
 
    ; --- the socket has two writers, the painter and the watch: a turn runs from a
@@ -244,18 +262,34 @@
     (: sc (peep bx () 0)
        _ (? (0 < gaze sc 8) (pier-peer bx dirty (0 - gaze sc 8)) 0)
        (say m (pasted sc t), flush m))
+   ; a paste past what one property carries comes INCR: the owner lays it in pieces on our
+   ; property, each after we take the last, and an empty piece ends it
+   (pier-take s dirty pr)                               ; GetProperty, deleting: [type format bytes] or ()
+    (: _ (pier-hold dirty)
+       _ (x-w8 s 20, x-w8 s 1, x-w16 s 6, x-w32 s (peep dirty 'win 0), x-w32 s pr,
+          x-w32 s 0, x-w32 s 0, x-w32 s 262144, x-flush s)
+       _ (pier-let dirty)
+       hdr (x-reply s)
+       (? !(<hdr = 1) () [(u32 hdr 8) (hdr 1) (take (u32 hdr 16) (x-rbytes s (4 * u32 hdr 4)))]))
+   (pier-text ty bs) (? (ty = 31) (cats (map utf8 bs)) (string bs))
    (pier-got s m bx dirty raw)
     (: sel (u32 raw 12) ty (u32 raw 16) pr (u32 raw 20)
        (? (pr = 0) (? (ty = peep dirty 'utf8 0) (pier-ask s dirty sel 31) 0)
-          (: _ (pier-hold dirty)
-             _ (x-w8 s 20, x-w8 s 1, x-w16 s 6, x-w32 s (peep dirty 'win 0), x-w32 s pr,   ; GetProperty, deleting
-                x-w32 s 0, x-w32 s 0, x-w32 s 262144, x-flush s)
-             _ (pier-let dirty)
-             hdr (x-reply s)
-             (? !(<hdr = 1) 0
-                (: bs (take (u32 hdr 16) (x-rbytes s (4 * u32 hdr 4)))
-                   (? (((hdr 1) != 8) || !(two? bs)) 0
-                      (pier-send m bx dirty (? (ty = 31) (cats (map utf8 bs)) (string bs)))))))))
+          (: v (pier-take s dirty pr)
+             (? !(two? v) 0
+                (<v = peep dirty 'incr 0) (pins dirty 'pieces () 'incrty ty 'incron 1)
+                (((v 1) != 8) || !(two? (v 2))) 0
+                (pier-send m bx dirty (pier-text ty (v 2)))))))
+   ; PropertyNotify: a new piece on our property while an INCR paste is open
+   (pier-piece s m bx dirty raw)
+    (? (((u32 raw 4) = peep dirty 'win 0) && ((u32 raw 8) = peep dirty 'prop 0) && ((raw 16) = 0) && (peep dirty 'incron 0))
+       (: v (pier-take s dirty (peep dirty 'prop 0))
+          bs (? (two? v) (v 2) ())
+          (? (two? bs) (pin dirty 'pieces (pier-text (peep dirty 'incrty 0) bs . peep dirty 'pieces ()))
+             (: t (cats (rev (peep dirty 'pieces ())))
+                _ (pins dirty 'incron 0 'pieces ())
+                (? (0 < #t) (pier-send m bx dirty t) 0))))
+       0)
 
    ; --- the watch: X events in the main task. the moor pumps the child in another and
    ;     seals the socket when the child hangs up, so x-next wakes with () and we leave ---
@@ -263,11 +297,12 @@
     (: e (x-next s)
        (? !(two? e) ()
           (: code (ev-code e)
-             _ (? (code = 2) (pier-key s m km bx dirty (ev-detail e) (ev-state e))
+             _ (? (code = 2) (pier-key s m km bx dirty (ev-detail e) (ev-state e) (ev-raw e))
                   (4 <= code <= 6) (pier-mouse s m bx dirty code (ev-raw e))
                   (code = 31) (pier-got s m bx dirty (ev-raw e))
                   (code = 30) (pier-serve s dirty (ev-raw e))
                   (code = 29) (pier-lost bx dirty (ev-raw e))
+                  (code = 28) (pier-piece s m bx dirty (ev-raw e))
                   (code = 12) (pin dirty () 2)
                   (code = 22) (: raw (ev-raw e) (pier-resize bx fx m dirty (u16 raw 20) (u16 raw 22)))
                   0)
@@ -287,7 +322,7 @@
                    _ (pier-title s win "pier")
                    dl (pier-protocols s win)
                    ut (x-intern s "UTF8_STRING") cb (x-intern s "CLIPBOARD") pp (x-intern s "PIER_PASTE")
-                   tg (x-intern s "TARGETS")
+                   tg (x-intern s "TARGETS") ic (x-intern s "INCR")
                    _ (x-map s win, x-flush s)
                    km (pier-keysyms s (scr-mink sc) (scr-maxk sc))
                    p (hopen argv r c)
@@ -295,7 +330,7 @@
                       (: bx (hbox p) m (hmas p) pid (hpid p)
                          fx {(cask (((c * 8) * (r * 16)) * 4))}
                          dirty {1}                   ; the painter's cue at (), and what the tasks share
-                         _ (pins dirty 'win win 'utf8 ut 'clip cb 'prop pp 'targets tg)
+                         _ (pins dirty 'win win 'utf8 ut 'clip cb 'prop pp 'targets tg 'incr ic)
                          up (twirl (\ _ (: _ (moor bx m dirty) (seal s 0))) 0)
                          pnt (twirl (\ _ (pier-paints s win gc depth bx fx face dirty -1)) 0)
                          _ (pier-watch s m km dl bx fx dirty)

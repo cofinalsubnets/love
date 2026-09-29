@@ -17,7 +17,7 @@
                    0)
    (mkscr r c) (screen (cask (screen () r c)) r c)
    (paint s r c row0 col0)                     ; limn one whole grid into a jug
-    (: j (jug 0) _ (limn-rows j s r c row0 col0 0 -1) (slurp j))
+    (: j (jug 0) _ (limn-rows j s r c row0 col0 0 -1 0) (slurp j))
 
 ; --- the address: 0-based in, 1-based out, row then col ---
    _ (test
@@ -104,7 +104,7 @@
    _ (: s (mkscr 1 6)
         _ (scribe s "aaaaaa")
         j (jug 0)
-        p (limn-rows j s 1 6 0 0 0 -1)
+        p (limn-rows j s 1 6 0 0 0 -1 0)
         f (slurp j)
         (cnt t sb i n) (? (#t <= i) n
                           (at? t sb i) (cnt t sb (i + 1) (n + 1))
@@ -131,6 +131,22 @@
         back (paint s 2 4 0 0)
         _ (test (sub? home "cd" 0) (sub? home "ef" 0) !(sub? home "ab" 0)
                 (sub? back "ab" 0) (sub? back "cd" 0) !(sub? back "ef" 0)))
+
+; --- a picture: a ▀ block to a plain outer terminal, bare ground under kitty's own
+;     picture (limn-pics) to one that takes them -- sent once, placed each time ---
+   _ (: s (mkscr 2 6)
+        _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (\ _ "/wAA") (jot 120)) + "\e\\"))
+        blocks (paint s 2 6 0 0)
+        j (jug 0)
+        _ (limn-rows j s 2 6 0 0 0 -1 1)
+        bare (slurp j)
+        sent {}
+        k (jug 0) _ (limn-pics k s 2 6 3 4 1 sent) one (slurp k)
+        k2 (jug 0) _ (limn-pics k2 s 2 6 3 4 1 sent) two (slurp k2)
+        _ (test (sub? blocks (utf8 9600) 0) !(sub? bare (utf8 9600) 0)
+                (sub? one "\e_Ga=t,f=32,s=10,v=12,i=1048577,q=2,m=0;" 0)   ; pane 1, gen 1
+                (sub? one "\e[4;5H\e_Ga=p,i=1048577,p=1,q=2,C=1,x=0,y=0,w=10,h=12,c=2,r=1\e\\" 0)
+                !(sub? two "a=t" 0) (sub? two "a=p,i=1048577" 0)))
 
 ; --- a selected cell wears the reverse face ---
    _ (: s (mkscr 1 4)
