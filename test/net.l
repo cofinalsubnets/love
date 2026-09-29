@@ -1,4 +1,4 @@
-; --- test/net.l: a runnable smoke test for ain's socket nifs (love/sock.c) ---
+; --- test/net.l: a runnable smoke test for nc's socket nifs (love/sock.c) ---
 ; the socket nifs (connect/listen/accept/seal) live in love/sock.c, which love0 links
 ; as surely as the final `love` does -- love0_o is the whole host glob -- so these are
 ; corpus laws. it still reads standalone (test comes from test/00-init.l):

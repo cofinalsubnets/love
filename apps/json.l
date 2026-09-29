@@ -1,7 +1,7 @@
 ; apps/json.l -- json, so love can speak to things that are not love. it is the wire
 ; format the outside world settled on (language servers, http apis, sway's ipc), and
 ; nothing about it is lovely; this file is the translation desk, nothing more.
-; `(borrow "apps/json.l")`, then json-read and json-show.
+; `(borrow 'json)`, then json-read and json-show.
 ;
 ; the mapping, a bijection in both directions:
 ;   null    <-> json-null       a coin, like the booleans -- see the notes below
@@ -11,6 +11,8 @@
 ;   string  <-> string
 ;   array   <-> list, and `[]` is plain ()
 ;   object  <-> tablet
+(module (json json-read json-show json-true json-false json-null
+               json-bool json-bool? json-null?)
 (: jbool      (coin 'json-bool ())
    json-true  (jbool 1)
    json-false (jbool 0)
@@ -198,3 +200,4 @@
          (two? v)       (("[" + (jjoin (map json-show v))) + "]")
          (constellation? v) (jnumshow v)
          (scare 'json "no json spelling for this" v)))
+) ; module json

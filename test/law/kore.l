@@ -622,13 +622,17 @@
       (usignum "-9" = 9) (usignum "-TERM" = 15) (usignum "-KILL" = 9)
       !(usignum "-nope") !(usignum "x") !(usignum "-")))
 
-; --- the process floor (apps/kore/proc.l): durations to milliseconds ---
+; --- the prel's readers (love/boot/post.l): durations to milliseconds, ports, errnos ---
 (: (test
       (udur "2" = 2000) (udur "0" = 0) (udur "1s" = 1000)
       (udur "1.5" = 1500) (udur ".5" = 500) (udur "1." = 1000)
       (udur "2m" = 120000) (udur "1h" = 3600000) (udur "1d" = 86400000)
       (udur "1.5m" = 90000)
-      !(udur "") !(udur "x") !(udur "5x") !(udur "1.2.3") !(udur ".")))
+      !(udur "") !(udur "x") !(udur "5x") !(udur "1.2.3") !(udur ".")
+      (uport "80" = 80) (uport "1" = 1) (uport "65535" = 65535)
+      !(uport "0") !(uport "65536") !(uport "8x") !(uport "") !(uport "-1")
+      (uerrno 'econnrefused = "Connection refused") (uerrno 'enoent = "No such file or directory")
+      (uerrno 'exdev = "exdev")))
 
 ; --- the find floor (apps/kore/find.l): the path join, the argument split and
 ; the expression grammar. the walk itself is smoked against the system find ---

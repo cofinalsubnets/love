@@ -70,7 +70,22 @@
        v)
 
    (clex src) (clexat src 1)
-   (clexat src ln0)
+   (clexat src ln0) (clexm src ln0 ())
+   ; ..and an assembly source's (a .S the preprocessor reads first): a digit-led label
+   ; reference (1b, 2f) is one word, $ @ \ ` are punctuators, and `#` past a line's first token
+   ; -- or opening a line with no directive after it -- starts gas's comment
+   ; a line of assembly opens with a ("\n") mark the preprocessor carries through like any
+   ; punctuator, so the text spelled back breaks where the source did even past an expansion
+   ; (whose tokens keep their definition's lines); a directive line takes none
+   (clexasm src ln0)
+    (: r (clexm src ln0 1)
+       (go l ln acc) (? (atom? l) (rev acc)
+                        (: t <l
+                           (? (<>>t = ln) (go >l ln (t . acc))
+                              (<t = 'p && <>t = "#") (go >l <>>t (t . acc))
+                              (go >l <>>t (t . (['p "\n" <>>t] . acc))))))
+       (? (okv? r) [1 (go <>r (ln0 - 1) ())] r))
+   (clexm src ln0 asm)
     (: n #src
        kws '(auto break case char const continue default do double else enum
              extern float for goto if inline int long register restrict return
@@ -238,6 +253,17 @@
                       (go 0))
        (firstat i (a . u)) (at? i a ? a (firstat i u))
        (in1? c) (ctbl c & 128)
+       (digend j) (? (j < n && dig? (src j)) (digend (j + 1)) j)
+       ; is the line being lexed a directive (its first token `#`)? there a `#` is # or ##
+       (dirline? acc ln) (: (go l f) (? (two? l && <>><l = ln) (go >l <l) f)
+                            f (go acc ())
+                            (two? f && <f = 'p && <>f = "#"))
+       ; does a directive name follow a line-opening `#` (past blanks)?
+       (asmdir? j) (: (sk k) (? (k < n && ws? (src k)) (sk (k + 1)) k)
+                      k (sk j)
+                      (idw e) (? (e < n && idc? (src e)) (idw (e + 1)) e)
+                      (elem (snip src k (idw k)) '("define" "undef" "if" "ifdef" "ifndef" "elif" "else" "endif"
+                                                   "include" "include_next" "error" "warning" "line" "pragma")))
        ; -- float literals: a run with a '.' or an exponent (12.5, .5, 2., 1e9,
        ; 3.14e-2, a trailing f/F/l/L consumed). digrun scans a decimal run ->
        ; (endj value ndigits); flolit -> (endj isflo? pieces-or-int), the pieces
@@ -313,6 +339,14 @@
                  (c = 92 && i + 2 < n && src (i + 1) = 13 && src (i + 2) = 10)          ; \<cr><nl>
                   (go (i + 3) line acc)
                  (ws? c) (go (i + 1) line acc)
+                 ; gas's comment: `#` after code, or opening a line that names no directive
+                 (asm && c = 35 && (? (two? acc && <>><acc = line) !(dirline? acc line) !(asmdir? (i + 1))))
+                  (: (eat j) (? (n <= j || src j = 10) j (eat (j + 1)))
+                     (go (eat i) line acc))
+                 ; a numeric label's reference: digits then b or f, one word
+                 (asm && dig? c && (: j (digend i) (j < n && elem (src j) '(98 102) && !(j + 1 < n && idc? (src (j + 1))))))
+                  (: j (1 + digend i) (go j line (['id (snip src i j) line] . acc)))
+                 (asm && elem c '(36 64 92 96)) (go (i + 1) line (['p (string c) line] . acc))
                  ; both comment probes sit behind one (= c 47) gate (two at? calls
                  ; per character otherwise)
                  (c = 47 && at? i "//")
@@ -420,6 +454,7 @@
                        (in1? c)                        ; a '(' GLUED to a preceding id (no space) carries a 4th field: the function-macro paren
                         (: gl (c = 40 && 0 < i && idc? (src (i - 1)))
                            (go (i + 1) line ((? gl ['p (string c) line 1] ['p (string c) line]) . acc)))
+                       asm (go (i + 1) line (['p (string c) line] . acc))     ; gas reads what C would not
                        ())))))
        (go 0 ln0 ())))
 ) ; module 'moon

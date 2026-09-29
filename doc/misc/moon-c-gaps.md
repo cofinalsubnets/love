@@ -853,6 +853,28 @@ linker-script reader, and a 32/16-bit x86 backend for arch/x86/boot and the 32-b
 
 ---
 
+## assembly sources
+
+**Landed 2026-09-28.** `mooncc x.s` and `mooncc x.S` lay an object, and link beside C. A `.s` is
+its text as one file-scope asm (`asmwrap`, moon.l); a `.S` is lexed on assembly's terms first
+(`clexasm`: `1b`/`2f` one word, `$ @ \` punctuators, `#` past a line's first token or opening a
+non-directive line is gas's comment, and each line opens with a mark cpp carries through), run
+through the C preprocessor as a C file is -- includes, macros, `#if`, `__ASSEMBLER__` defined --
+and spelled back into lines (`asmspell`). gas-top then reads it, and a file-scope run on x64 is
+encoded by **as.l, exactly**: the width the text says (a 32-bit op sets 32-bit flags), any
+addressing, `%fs:`/`%gs:`, a symbol as an immediate or a displacement, SSE by table, cmov/set,
+shifts, extends. What as.l has no row for lowers as a function's template does. gas-top reads
+`.local`/`.comm`/`.lcomm`, `.weak`, `.base64`, and a symbol `.set` as an alias; a data section
+pads its alignment with zeros.
+
+**Measured**: gcc `-S -O2` of every test/cc file, assembled by GNU as and by mooncc, both linked
+by mooncc -- **208 of 208** run alike. The linux sample's seven `.S` units each get further and
+stop at gas's tail: `.uleb128`, `.octa`, `.code32`/`.code64`, `lretq`, `\@` in a macro's label,
+a register named through `.set`. Three of them are not 64-bit code (the 32-bit vDSO, realmode,
+la57toggle's mode switch).
+
+---
+
 
 ## external corpora
 

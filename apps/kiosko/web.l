@@ -167,7 +167,7 @@ tree is served. this binary drives the page's build; no love is compiled for it.
       k (? (string? pt) ((: (g i) (? (i < 0) -1 (pt i = 58) i (g (i - 1)))) (#pt - 1)) -1)
       ip (? (k < 1) "127.0.0.1" (snip pt 0 k))
       pn (? (string? pt) (snip pt (k + 1) #pt) ())
-      port (: v (unum pn) (? !pn 8080 (charm? v && 0 < v < 65536) v (sv-die 2 ("not a port: " + pt))))
+      port (: v (uport pn) (? !pn 8080 v v (sv-die 2 ("not a port: " + pt))))
       dir0 (two? rest ? <rest ".")
       build? (peep t 110 0 ? 0 1)
       ; the tree: DIR itself, the nest laid under it before, or laid there now.

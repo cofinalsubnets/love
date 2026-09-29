@@ -923,9 +923,9 @@ test_elf32: host
 # gate skips where no objcopy exists -- see the script for what the fixtures are for.
 test_objcopy: host
 	@$(gsh) test/gate/objcopy.sh $(ho)
-# ain's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
+# nc's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
 # full-duplex, each asserting it got what the other sent. The only net gate driving the real
-# `love apps/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
+# `love apps/nc.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
 PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"

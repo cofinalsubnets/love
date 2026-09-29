@@ -162,6 +162,30 @@
    (unum s) (: n #s
                (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
                (? (string? s && n) (go 0 0) ()))
+   ; a port's text as its number, () for anything outside 1..65535
+   (uport s) (: n (unum s) (? (charm? n && 0 < n < 65536) n ()))
+   ; a duration text -> milliseconds | (): N or N.N, an optional s/m/h/d suffix
+   ; (seconds the default). 0 is a real duration -- callers test charm?, not truth
+   (udur s0)
+    (: n0 #s0
+       lc (? (0 < n0) (s0 (n0 - 1)) ())
+       sfx (lc = 115 || lc = 109 || lc = 104 || lc = 100)
+       mul (? (lc = 109) 60000 (lc = 104) 3600000 (lc = 100) 86400000 1000)
+       s (? sfx (snip s0 0 (n0 - 1)) s0)
+       n #s
+       (ip i acc) (? (i < n && digit? (s i)) (ip (i + 1) ((10 * acc) + (s i - 48))) [acc i])
+       r (ip 0 0)
+       whole <r i <>r
+       (? (i = n && 0 < n) (whole * mul)
+          (i < n && (s i = 46))
+           (: (fp j acc sc) (? (j < n && digit? (s j))
+                               (fp (j + 1) ((10 * acc) + (s j - 48)) (sc * 10))
+                               [acc sc j])
+              fr (fp (i + 1) 0 1)
+              (? (<>>fr = n && (0 < i || (i + 1) < n))
+                 ((whole * mul) + ((<fr * mul) // <>fr))
+                 ()))
+          ()))
    ; lowercase digits past 9. putbn reads a charm only, so a big is split down to one
    (radix n b)
     (? (charm? n) (: o (jug 0) _ (putbn o n b) (slurp o))
@@ -872,6 +896,19 @@
                      (a @ 'leave b
                         (say err ";; ", print err a, say err " ",
                          print err b, put err 10, flush err, 1))))))
+   ; a nom -> strerror's sentence, for the few a tool meets; another says its name
+   (uerrno e)
+    (e @ 'enoent "No such file or directory" 'eacces "Permission denied"
+         'eperm "Operation not permitted" 'esrch "No such process"
+         'enotty "Inappropriate ioctl for device" 'eisdir "Is a directory"
+         'enotdir "Not a directory" 'enametoolong "File name too long"
+         'eloop "Too many levels of symbolic links" 'einval "Invalid argument" 'erofs "Read-only file system"
+         'efbig "File too large" 'ebadf "Bad file descriptor" 'enxio "No such device or address"
+         'econnrefused "Connection refused" 'etimedout "Connection timed out"
+         'ehostunreach "No route to host" 'enetunreach "Network is unreachable"
+         'econnreset "Connection reset by peer" 'eaddrinuse "Address already in use"
+         'eaddrnotavail "Cannot assign requested address"
+         (show e))
    ; say m on err and leave with code c
    (udie c m) (say err m, put err 10, uleave c))
 
