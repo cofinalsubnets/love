@@ -243,8 +243,9 @@
         (udie 1 (who + ": invalid number of " + what + ": '" + w + "'"))))
    ; the leading words: -n N / -nN / --lines=N, -c N / -cN / --bytes=N (the last given
    ; wins, as GNU's), the obsolescent -N, -q or -v for never or always a header, and --
-   ; to end them. a word after them that still looks like a flag refuses
-   (uclip-args who as)                      ; -> (n files many? sign bytes?)
+   ; to end them; tail's -f, -F and -s SECS ride the header tablet. a word after them
+   ; that still looks like a flag refuses
+   (uclip-args who as)                      ; -> (n files many? sign bytes? hd)
     (: (val w a k) (? (k < #w) [(snip w k #w) >a]
                       (two? >a) [<>a >>a]
                       (udie 1 (who + ": option requires an argument -- '" + string (w 1) + "'")))
@@ -255,6 +256,11 @@
               (? (w = "--") [n >a sign b?]
                  (w = "-q" || w = "--quiet" || w = "--silent") (pin hd 'h 0, go >a n sign b?)
                  (w = "-v" || w = "--verbose") (pin hd 'h 1, go >a n sign b?)
+                 (who = "tail" && (w = "-f" || w = "--follow" || w = "--follow=descriptor")) (pin hd 'f 1, go >a n sign b?)
+                 (who = "tail" && (w = "-F" || w = "--follow=name")) (pin hd 'f 2, go >a n sign b?)
+                 (who = "tail" && w = "-s")
+                  (: r (val w a 2) v (udur <r)
+                     (? (charm? v) (pin hd 's v, go <>r n sign b?) (udie 1 ("tail: invalid number of seconds: '" + <r + "'"))))
                  (2 <= nw && w 0 = 45 && (w 1 = 110 || w 1 = 99))
                   (: r (val w a 2) b (w 1 = 99) q (uclip-n who (? b "bytes" "lines") <r)
                      (go <>r <q <>q b))
@@ -266,7 +272,7 @@
                  [n a sign b?])))
        r (go as 10 0 0)
        fs (ustray who as <>r)
-       [<r fs (peep hd 'h (? (two? fs && two? >fs) 1 0)) <>>r <>>>r])
+       [<r fs (peep hd 'h (? (two? fs && two? >fs) 1 0)) <>>r <>>>r hd])
    (uclip-hdr many first f)
     (? many (say out (uhdr first (f @ "-" "standard input" f))) 0)
    (uclip-say l) (say out <l, (? <>l (put out 10) 0))   ; a read line, its own ending
@@ -315,6 +321,7 @@
    ; whole answer. trimmed at 2n, so the trim costs n every n lines, not n a line.
    (tail-main as)
     (: p (uclip-args "tail" as) n <p fs <>p many <>>p sign <>>>p bytes? <>>>>p
+       fw (peep (p 5) 'f 0) iv (peep (p 5) 's 1000)
        ; -n +N opens at line N instead, counted from 1; +0 reads as +1, as GNU has it
        (from-n rd)
         (: st (? (n < 1) 1 n)
@@ -346,8 +353,46 @@
         (uclip-hdr many first f,
          (? bytes? (? (sign = 1) (from-b rd) (last-b rd, 1))
             (sign = 1) (from-n rd) (last-n rd)))
-       ; a count of 0 is GNU's early leave: nothing said, no file opened, 0
-       (? (n = 0 && !(sign = 1)) 0 (ureach "tail" body fs)))
+       ; -f: every file stays open past its tail, and what is added comes out as it
+       ; lands, polled every -s. a file cut shorter reads again from its start; under -F
+       ; the name is watched too, so a file replaced, or one not there yet, is opened anew.
+       ; stdin is read to its end and not followed
+       st {'ok 1 'last ()}
+       (note m) (say err ("tail: " + m + "\n"), flush err)
+       (size f) (: s (stat f) (? (two? s) [<s (s 8)] ()))
+       (lay w) (: q (open (w 'f) "r") s (size (w 'f))
+                  (? (hot? q) (pins w 'q q 'pos 0 'ino (? s (s 1) ())) (pin w 'q ())))
+       (drain w got)
+        (: q (w 'q) c (? q (see q) -1)
+           (? (c < 0) got
+              (: b (unsee q c, chug q)
+                 _ (? (many && !(st 'last = w 'f)) (say out ((? (st 'last) "\n" "") + "==> " + w 'f + " <==\n")) 0)
+                 _ (pins st 'last (w 'f)) _ (say out b) _ (flush out)
+                 _ (pin w 'pos (w 'pos + #b))
+                 (drain w 1))))
+       (check w)
+        (: f (w 'f) s (size f)
+           (? (!(w 'q) && s) (: _ (note ("'" + f + "' has appeared;  following new file")) (lay w))
+              !s (? (w 'q && fw = 2) (: _ (note ("'" + f + "' has become inaccessible")) _ (close (w 'q)) (pin w 'q ())) 0)
+              (<s < w 'pos) (: _ (note (f + ": file truncated")) _ (close (w 'q)) (lay w))
+              (fw = 2 && !(s 1 = w 'ino)) (: _ (note ("'" + f + "' has been replaced;  following new file")) _ (close (w 'q)) (lay w))
+              0))
+       (follow ws) (: got (foldl (\ a w (? (drain w 0) 1 a)) 0 ws)
+                      _ (each ws check)
+                      _ (? got 0 (rest iv))
+                      (follow ws))
+       (open1 f first)
+        (: p (? (f = "-") [in 0] (uin (umiss "tail") f))
+           (? !p (: _ (pin st 'ok 0) (? (fw = 2 && !(f = "-")) {'f f 'q () 'pos 0 'ino ()} ()))
+              (: _ (body f first (urd <p))
+                 _ (pins st 'last f)
+                 s (size f)
+                 (? (f = "-") () {'f f 'q <p 'pos (? s <s 0) 'ino (? s (s 1) ())}))))
+       (ws0 l first acc) (? (atom? l) (rev acc) (: w (open1 <l first) (ws0 >l 0 (? w (w . acc) acc))))
+       (? fw (: ws (ws0 (? (two? fs) fs ["-"]) 1 ()) _ (flush out) (? (two? ws) (follow ws) (? (st 'ok) 0 1)))
+          ; a count of 0 is GNU's early leave: nothing said, no file opened, 0
+          (n = 0 && !(sign = 1)) 0
+          (ureach "tail" body fs)))
 
    ; -- wc: lines, words, characters, bytes (flags pick; bare wc reads lines words bytes) --
    (wc-main as)
@@ -669,7 +714,7 @@
                       (ink (sp i)))
        (skipf l k i) (? (k = 0) i (skipf l (k - 1) (field l i)))
        (key l) (: i (min #l (skipf l nf 0 + ns)) s (snip l i #l)
-                  (? i? (string (map (c \ (? (65 <= c <= 90) (c + 32) c)) (chars s))) s))
+                  (? i? (lower s) s))
        plain? !(i? || 0 < nf || 0 < ns)
        (emit line cnt) (? ((d? && cnt < 2) || (u? && 1 < cnt)) ()
                           ((? c? (say o (upad 7 (show cnt) + " ")) ()),

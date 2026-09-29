@@ -1511,33 +1511,60 @@
        ok (foldl (\ a w (one w a)) 1 as)
        _ (flush out) (? ok 0 1))
 
-   ; -- xargs: stdin's words onto the command's tail (echo when none), -n N a
-   ; batch at a time. exits 0 clean, 123 when a run failed, 127 when one
-   ; could not exec. quote-blind: words split on whitespace alone --
-   ; -n takes its count spaced or glued (-n2 and -n 2 both); a glued one is how every
-   ; script writes it, and read as the command it used to spawn the word `-n2`
+   ; -- xargs: stdin's words onto the command's tail (echo when none). words split on
+   ; blanks and newlines, '..' "..." and \ quoting as GNU's; -0 and -d C split on a NUL or
+   ; C instead, quotes plain. -n N words a run, -L N lines a run, -I S one run a line
+   ; with S replaced in the command's words; -r runs nothing on no input, -t says each
+   ; run on stderr, -P N keeps N going at once (0 as many as there are). exits 0 clean,
+   ; 123 when a run failed, 127 when one could not exec. the command's own flags follow
+   ; it, so the walk stops at the command's name --
+   (xwords s)
+    (: n #s
+       (go i q w acc)
+        (? (n <= i) (rev (? (string? w) (w . acc) acc))
+           (: c (s i) w0 (? (string? w) w "")
+              (? (0 < q) (? (c = q) (go (i + 1) 0 w acc) (go (i + 1) q (w + string c) acc))
+                 (c = 39 || c = 34) (go (i + 1) c w0 acc)
+                 (c = 92 && i + 1 < n) (go (i + 2) 0 (w0 + string (s (i + 1))) acc)
+                 (c = 32 || c = 9 || c = 10) (go (i + 1) 0 () (? (string? w) (w . acc) acc))
+                 (go (i + 1) 0 (w0 + string c) acc))))
+       (go 0 0 () ()))
    (xargs-main as)
-    (: g1 (two? as && (2 < tally <as) && (snip <as 0 2 = "-n"))
-       nflag (g1 || (two? as && <as = "-n"))
-       _ (? ((nflag && !g1) && atom? >as) (udie 1 "usage: xargs [-n N] [CMD ARGS..]") ())
-       nn (? g1 (uatoi (snip <as 2 #<as)) nflag (uatoi <>as) ())
-       _ (? (nflag && nn < 1) (udie 1 "xargs: invalid -n") ())
-       rest (? g1 >as nflag >>as as)
-       cmd (? (two? rest) rest '("echo"))
-       ws (words (slurp in))
+    (: t (tablet 0)
+       o (uopt as t '(100 73 76 110 80) () ())
+       _ (? (two? o) () (udie 1 "xargs: an option wants a value"))
+       _ (: c (uoptun t "0dILnPrt") (? !c () (udie 1 ("xargs: unknown option -" + string c))))
+       (num c lo) (: v (uoptv t c) n (? v (unum v) ())
+                     (? (!v || (charm? n && lo <= n)) n (udie 1 ("xargs: invalid number for -" + string c + ": " + v))))
+       nn (num 110 1) ll (num 76 1) pp (: v (num 80 0) (? (charm? v) (? (v = 0) 1073741824 v) 1))
+       rs (uoptv t 73)
+       dl (: v (uoptv t 100)
+             (? !v () (v = "\\n") 10 (v = "\\t") 9 (v = "\\0") 0 (v = "\\\\") 92 (#v = 1) (v 0)
+                (udie 1 ("xargs: invalid delimiter: " + v))))
+       cmd (? (two? (o 2)) (o 2) '("echo"))
+       txt (slurp in)
+       (cut c) (: ps (usplit c txt) (? (two? ps && <(rev ps) = "") (rev >(rev ps)) ps))
+       (inked l) (filter (x \ 0 < #x) (map lstrip l))   ; -I and -L read lines, blanks led off
        (chunks k l) (? (atom? l) () (take k l . chunks k (drop k l)))
-       runs (? (atom? ws) [()]                       ; no input still runs once, like GNU
-               nn (chunks nn ws)
-               [ws])
-       (go rs bad)
-        (? (atom? rs)
-           (flush out, bad)
-           (: p (spawn (cmd + <rs))
-              w (? (nom? p) 127 (wait p))
-              (go >rs (? (w = 127) 127
-                              (w && !(bad = 127)) 123
-                              bad))))
-       (go runs 0))
+       (batch ws) (? (atom? ws) () (map (w \ cmd + w) (? nn (chunks nn ws) [ws])))
+       runs (? (t 48) (batch (cut 0))
+               dl (batch (cut dl))
+               rs (map (x \ map (a \ replace a rs x) cmd) (inked (lines txt)))
+               ll (map (ls \ cmd + cats (map xwords ls)) (chunks ll (inked (lines txt))))
+               (batch (xwords txt)))
+       ; no input still runs once, as GNU's, unless -r or -I
+       runs2 (? (two? runs) runs (t 114 || rs) () [cmd])
+       (upd bad w) (? (w = 127) 127 (w && !(bad = 127)) 123 bad)
+       (go rs live bad)
+        (? (atom? rs) (foldl (\ b p (upd b (wait p))) bad live)
+           (pp <= #live) (go rs >live (upd bad (wait <live)))
+           (: argv <rs
+              _ (? (t 116) (say err (ujoinc 32 argv + "\n"), flush err) 0)
+              _ (flush out)
+              p (spawn argv)
+              (? (nom? p) (: _ (say err ("xargs: failed to run command '" + <argv + "': No such file or directory\n")) (go >rs live 127))
+                 (go >rs (live + [p]) bad))))
+       (: r (go runs2 () 0) _ (flush out) r))
 
    ; -- time: what a command costs. real off the wall clock; user and sys out of the
    ; rusage the kernel keeps for reaped children, read on both sides of the spawn --

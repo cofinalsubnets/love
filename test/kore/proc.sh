@@ -18,6 +18,28 @@ pipe "xargs -n1" '1
 2
 3
 '                xargs -n1 echo
+# the quoting, -0 -d -I -L -r -t, -P's runs overlapping, and a command not there
+pipe "xargs quotes" "'a b' \"c d\" e\\ f
+" xargs -n 1
+pipe "xargs -0" "$(printf 'a b\001c d' | tr '\001' '\0')" xargs -0 -n 1
+pipe "xargs -d" 'a:b:c' xargs -d : -n 1
+pipe "xargs -d \\n" 'a b
+c
+' xargs -d '\n' echo Z
+pipe "xargs -I" '  x y
+z
+
+' xargs -I {} echo [{}] {}
+pipe "xargs -L 2" 'x y
+z w
+q
+' xargs -L 2
+pipe "xargs -r" '' xargs -r echo nothing
+pipe "xargs -I empty" '' xargs -I {} echo {}
+printf 'a b\n' | xargs -t echo T > "$g" 2>&1; printf 'a b\n' | korerun xargs -t echo T > "$o" 2>&1; same "xargs -t"
+t0=$(date +%s%N); printf '1\n1\n1\n' | korerun xargs -P 3 -n 1 sleep; t1=$(date +%s%N)
+[ $(( (t1 - t0) / 1000000 )) -lt 2500 ] || fail "kore xargs -P 3: three 1 s sleeps took $(( (t1 - t0) / 1000000 )) ms"
+printf 'a\n' | korerun xargs nosuchcmd_q > /dev/null 2>&1; r=$?; [ $r -eq 127 ] || fail "kore xargs of no command (rc $r)"
 pipe "xargs -n3" '1
 2
 3

@@ -35,9 +35,37 @@ static char *bake_scratch(struct ai *g, char const *path) {
 // dump: gen_major moves the string and sp[0] is a root, so it rides the move where a C local
 // would not. noinline keeps these buffers out of lvm_bake's frame, which would defeat the
 // lvm_ ap's tail-jump (make vmret). 0 ok, <0 refused.
+// the bake's choices off the environment: LOVE_BAKE_CHUNK the words of a stream chunk,
+// LOVE_BAKE_HOT a file of word ranges, "a b" a line, that a profile of this layout touched
+static void *image_save_env(struct ai *g, uintptr_t *len) {
+  struct ai_image_opt o = { 0, NULL, 0 };
+  char const *c = getenv("LOVE_BAKE_CHUNK"), *h = getenv("LOVE_BAKE_HOT");
+  uint64_t *r = NULL;
+  if (c && *c) o.chunk = (uintptr_t) strtoul(c, NULL, 10);
+  FILE *f = h && *h ? fopen(h, "r") : NULL;
+  if (f) {                                        // numbers by hand: moonlibc's scanf takes no %llu
+    uintptr_t cap = 0, n = 0;
+    uint64_t v = 0;
+    int c, in = 0;
+    while ((c = fgetc(f)) != EOF || in) {
+      if (c >= '0' && c <= '9') { v = 10 * v + (uint64_t) (c - '0'), in = 1; continue; }
+      if (!in) continue;
+      if (n + 1 > cap) {
+        uint64_t *t = ai_alloc(NULL, (cap = cap ? 2 * cap : 1024) * sizeof *t);
+        if (!t) break;
+        if (r) memcpy(t, r, n * sizeof *t), ai_alloc(r, 0);
+        r = t; }
+      r[n++] = v, v = 0, in = 0;
+      if (c == EOF) break; }
+    fclose(f);
+    o.hot = r, o.nhot = n / 2; }
+  void *buf = ai_image_save2(g, len, NULL, &o);
+  if (r) ai_alloc(r, 0);
+  return buf; }
+
 ai_noinline static int image_put(struct ai *g) {
   uintptr_t len = 0;
-  void *buf = ai_image_save(g, &len, NULL);
+  void *buf = image_save_env(g, &len);
   if (!buf) return -2;
   char const *path = txt(str(g->sp[0]));          // a love string ends in a NUL
   // land it beside the target, never on it: "wb" empties the file and only then writes the
@@ -199,7 +227,7 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
 int image_bake(struct ai *g, char const *out, int bare) {
   uint64_t stub[ReserveWords] = {1};
   uintptr_t len = sizeof stub;
-  void *buf = bare ? NULL : ai_image_save(g, &len, NULL);
+  void *buf = bare ? NULL : image_save_env(g, &len);
   // the natives ride: their code is a segment of the image, woken as a chunk of the
   // arena. only a refused bake (below) is worth a word.
   if (!bare && !buf) return -2;
@@ -259,8 +287,8 @@ struct ai *image_load(char const *path) {
       if (n > 2 && ((char*) buf)[0] == '#' && ((char*) buf)[1] == '!') {
         char *nl = memchr(buf, '\n', n);
         if (nl) off = (size_t)(nl - (char*) buf) + 1; }
-      // kept: a woken session keeps the map, so its code chunks seat as they first run
-      if (off < n) g = ai_image_load((char*) buf + off, (uintptr_t)(n - off), 1);
+      // kept: a woken session keeps the map, so its code and heap chunks wake as first touched
+      if (off < n) g = ai_image_load((char*) buf + off, (uintptr_t)(n - off), 2);
       if (!g) munmap(buf, n); } }
   close(fd);
   return g; }
