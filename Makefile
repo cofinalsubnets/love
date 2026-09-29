@@ -302,7 +302,7 @@ moon_mid = apps/moon/floor.l apps/moon/lex.l apps/moon/cpp.l apps/moon/parse.l \
 # a tarball is not one, and these are the tools that open every tarball there is.
 kore_arc = apps/gz.l apps/xz.l apps/bz2.l apps/tar.l apps/cpio.l
 # the tls stack and the multi-call door that ends kore's cat
-kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/client.l \
+kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/verify.l apps/tls/client.l \
   apps/ssh/sha512.l apps/ssh/ed25519.l apps/ssh/aes.l apps/ssh/bcrypt.l apps/ssh/client.l \
   apps/ssh/server.l apps/ssh/cli.l \
   apps/png.l apps/jpeg.l apps/gif.l apps/kore/wget.l apps/kore/pic.l apps/kore/www.l apps/kore/net.l apps/kore/kore.l

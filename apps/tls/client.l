@@ -2,15 +2,22 @@
 ; share, HKDF-SHA256 for the schedule, and the records under chacha20-poly1305 or, when the
 ; server picks it, aes-128-gcm (love/lib/tls.c's nifs) -- the one suite RFC 8446 makes every
 ; server speak. one group, one version, the two suites; a key's length says which cipher
-; it is for (32 bytes chacha, 16 aes). the peer is NOT verified: the certificate is read into the transcript and
-; believed. that is an integrity-and-privacy channel against a passive wire, not an
-; identity, and a caller that needs identity should say so before trusting a byte.
+; it is for (32 bytes chacha, 16 aes).
+;
+; what is verified: the handshake. the server's CertificateVerify must be its leaf key's
+; signature of the transcript (ed25519, ecdsa p-256 with sha-256, or rsa-pss with sha-256;
+; apps/tls/verify.l), and its Finished the hmac of the transcript under the handshake
+; secret, so the peer holds the private key of the certificate it sent and saw the same
+; handshake we did. what is NOT verified: the certificate itself -- no chain to a trusted
+; root, no check of the name against the host, no expiry. any key signs for any name here,
+; so this proves "the same key as before" (a pin) and never "the host we asked for".
 ;
 ;   (tls-dial host port)   resolve, connect, shake hands -> a session | ()
 ;   (tls-say t s)          send s as application data
 ;   (tls-slurp t)          every byte of application data the peer sends, to its close
 ;   (tls-close t)          a close_notify, and the socket shut
-;   (t 'cert)              the server's leaf certificate, its der, as it came -- unverified
+;   (t 'cert)              the server's leaf certificate, its der, as it came
+;   (t 'spki)              its SubjectPublicKeyInfo, the der of the key that signed
 ;
 ; the session is a tablet: the socket, a pending-bytes run, the two traffic keys and their
 ; sequence numbers, the transcript. x25519 rides the bignums (RFC 7748's ladder, the field
@@ -124,6 +131,8 @@
        ct (aead-seal (t 'ckey) (t 'civ) (t 'cseq) aad inner)
        _ (pin t 'cseq (t 'cseq + 1))
        (wr t (aad + ct)))
+   ; a fatal alert under the client's current key, and no session
+   (alert t d) (seal t 21 (u8 2 + u8 d), ())
    ; one record in: a plaintext CCS is skipped, an encrypted one opened under the server's
    ; key -> (inner-type body) | () at the end or on a bad tag
    (open-rec t)
@@ -160,11 +169,14 @@
    (client-hello host pub sid)
     (: sni (ext 0 (u16 (#host + 3) + u8 0 + u16 #host + host))
        groups (ext 10 (u16 2 + u16 29))
-       sigs (ext 13 (u16 12 + u16 1027 + u16 2052 + u16 1025 + u16 2055 + u16 2053 + u16 1281))
+       ; what a CertificateVerify may use is what verify.l checks: ecdsa p-256, rsa-pss, ed25519.
+       ; the chain's own signatures are named apart (50), so the server's pick of a leaf is not narrowed
+       sigs (ext 13 (u16 6 + u16 1027 + u16 2052 + u16 2055))
+       csigs (ext 50 (u16 12 + u16 1027 + u16 2052 + u16 1025 + u16 2055 + u16 2053 + u16 1281))
        vers (ext 43 (u8 2 + u16 772))
        modes (ext 45 (u8 1 + u8 1))
        share (ext 51 (u16 36 + u16 29 + u16 32 + pub))
-       exts (sni + groups + sigs + vers + modes + share)
+       exts (sni + groups + sigs + csigs + vers + modes + share)
        body (u16 771 + rnd 32 + u8 32 + sid + u16 4 + u16 4867 + u16 4865 + u8 1 + u8 0 + u16 #exts + exts)
        (u8 1 + u24 #body + body))
    ; the server hello's key share and the key length of its suite (32 chacha20, 16 aes-128),
@@ -208,19 +220,33 @@
                          shs (derive hs "s hs traffic" (t 'tr))
                          _ (pin t 'ckey (hkdf-label chs "key" "" kl)) _ (pin t 'civ (hkdf-label chs "iv" "" 12))
                          _ (pin t 'skey (hkdf-label shs "key" "" kl)) _ (pin t 'siv (hkdf-label shs "iv" "" 12))
-                         ; the server's flight: extensions, the certificate, its verify, finished
-                         ; the leaf certificate kept as 'cert, its der: unverified, but a
-                         ; caller may pin it (gemini's trust on first use)
-                         (flight _) (: m (hs-next t)
-                                      (? (atom? m) ()
-                                         (<m = 20) m
-                                         ((? (<m = 11 && 8 <= #<>m)
-                                                 (: b <>m i (1 + b 0)
-                                                    (pin t 'cert (snip b (i + 6) (i + 6 + rd24 b (i + 3)))))
-                                                 ; a request for our certificate: its context kept
-                                                 (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)))
-                                                 0),
-                                          flight 0)))
+                         ; the server's flight: extensions, the certificate, its verify, finished.
+                         ; the leaf is kept as 'cert (its der) and its key as 'spki; the verify
+                         ; must be the leaf key's signature of the transcript through the
+                         ; certificate, and the finished the hmac of the transcript through the
+                         ; verify under the server's finished key. anything else ends the dial
+                         (flight _)
+                          (: tb (t 'tr) m (hs-next t)
+                             (? (atom? m) ()
+                                (<m = 20)
+                                 (? (t 'cv = 1 && <>m = hmac (hkdf-label shs "finished" "" 32) (sha tb)) m
+                                    (alert t 51))
+                                (<m = 11)
+                                 (: b <>m i (? (8 <= #b) (1 + b 0) #b)
+                                    n (? (i + 6 <= #b) (rd24 b (i + 3)) 0)
+                                    k (leaf-key (snip b (i + 6) (i + 6 + n)))
+                                    (? (two? k && !(t 'key))
+                                       (pins t 'cert (snip b (i + 6) (i + 6 + n)) 'key k 'spki (k 2), flight 0)
+                                       (alert t 42)))
+                                (<m = 15)
+                                 (: b <>m n (? (4 <= #b) (rd16 b 2) -1) k (t 'key)
+                                    (? (two? k && #b = 4 + n && !(t 'cv)
+                                        && cv-ok? k (rd16 b 0) (snip b 4 #b) (cv-msg (sha tb)) = 1)
+                                       (pin t 'cv 1, flight 0)
+                                       (alert t 51)))
+                                ; a request for our certificate: its context kept
+                                (<m = 13) (pin t 'creq (snip <>m 1 (1 + <>m 0)), flight 0)
+                                (flight 0)))
                          fin (flight 0)
                          (? (atom? fin) (close s, ())
                             (: ; the client finished is over the transcript through the server's

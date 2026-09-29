@@ -125,9 +125,173 @@
     ; ..and it is a function: same inputs, same tag
     ((po-mac k0 m0) = (po-mac k0 m0))))
 
+;; --- verify: the leaf's key off its der, and the three signatures a CertificateVerify may be ---
+; the certificates are openssl's own (req -x509 over an ed25519, a p-256 and an rsa-2048 key)
+; and each signature python's cryptography made over the one message, the verify's shape
+; around the sha-256 of "a transcript". a flipped byte, a mismatched scheme and a truncated
+; certificate are refused; every prefix of a certificate, and every one-byte change of one,
+; reads without dying
+(: vsig-m (cv-msg (vsha "a transcript"))
+   vder-ed (unhex ("308201383081eba003020102021442be1c96660904283478f8b8e645b1ff2b11459d300506032b6570301231"
+           + "10300e06035504030c0765642e74657374301e170d3236303932393030333233345a170d3336303932363030"
+           + "333233345a30123110300e06035504030c0765642e74657374302a300506032b657003210021c9c2429e1d03"
+           + "2016fbd0527ea6a4acef97fc055ea8e171c415a9d24be668efa3533051301d0603551d0e04160414e0c18bd7"
+           + "0492ac4d5ce379e859e7ea80258dea6e301f0603551d23041830168014e0c18bd70492ac4d5ce379e859e7ea"
+           + "80258dea6e300f0603551d130101ff040530030101ff300506032b6570034100bac5a231a340e081865f9960"
+           + "f8655a18f96b8a375b97fe8aa966473b685c6428662143bbfd2115052a07edd3c6d8ec0397ac97dedb15af38"
+           + "b43cc682bb9cf104"))
+   vder-ec (unhex ("308201793082011fa003020102021409129e15d2663ef4a2d4ec8f244abbddc17f21be300a06082a8648ce3d"
+           + "04030230123110300e06035504030c0765632e74657374301e170d3236303932393030333233345a170d3336"
+           + "303932363030333233345a30123110300e06035504030c0765632e746573743059301306072a8648ce3d0201"
+           + "06082a8648ce3d030107034200044c550a5ae347cff135892e0a9e39e594ae7ce601abb715c3b4102b03c4f6"
+           + "121de94c232d18b08be7b9a089727d8e195fb2de14e4ed0ae38b489a588e57eaea89a3533051301d0603551d"
+           + "0e0416041408450e406a31134ef59c79e8316067898ba87075301f0603551d2304183016801408450e406a31"
+           + "134ef59c79e8316067898ba87075300f0603551d130101ff040530030101ff300a06082a8648ce3d04030203"
+           + "4800304502203f6272da1a98f77f6093d9d09688bea54d29be477018a0491c998fd182d19e9e022100a8fdbc"
+           + "c2e60c7c96fd4031176b677f0c8b890239141e1394e9a120095d682a9d"))
+   vder-rsa (unhex ("30820307308201efa003020102021423ca01f27b525eca9389e9e9d7cc424e207fe24d300d06092a864886f7"
+           + "0d01010b050030133111300f06035504030c087273612e74657374301e170d3236303932393030333233345a"
+           + "170d3336303932363030333233345a30133111300f06035504030c087273612e7465737430820122300d0609"
+           + "2a864886f70d01010105000382010f003082010a0282010100bc23e6e4118d84bb6e779e0a0fbc554eb6bd8d"
+           + "b8c4ce1891f6df17e3f9ba1dda3a92243d35d9984ecadfb3dddba2c93e81f67c23f6aec9d2f8cf2abebc37c3"
+           + "07662ec8f4bb79a991ea5afcd9b390b4431283686e4e47bf2b7020749ee74af213f0bb0a319ffe63ca1e0b6b"
+           + "c9688229e3743e525fe04dfe4e7e11fffbdf9bc0afdd55f97abca9d015294eb971ddb3e853c39c858c6ab2d4"
+           + "eb34e2459687aff2c6ab17fc7c7e83626e23b6e2ad461591fd49fc5b9981676f4a260a425fff7f306ae2b3fd"
+           + "f26d9b4fe9e681f72fdb500c3e4e2607e4ec9642703724ee6992a364bf62c53df484fc58dde32e22bac20a29"
+           + "0ef4f229c849ee13d86105da7308182ee10203010001a3533051301d0603551d0e041604147fb3b673ae2f91"
+           + "7a3417d8e15d11ff1b85076f0f301f0603551d230418301680147fb3b673ae2f917a3417d8e15d11ff1b8507"
+           + "6f0f300f0603551d130101ff040530030101ff300d06092a864886f70d01010b05000382010100430acba678"
+           + "d39d72ac5b6c15123178fbb47ef62d825c401a2a51216ad72c019e4dae07df103adfab7b287b37852ae7a45e"
+           + "c0b914b319aee3d7a23d416312b1875edf4dcd0a2c43317ce761623c2339bcd225de0227008c1ef578a39eb5"
+           + "fd2f0adba7d1b97631fd5c1c4f6e2e502df964b1a29eb03729373c9363baaf5a5eb5410459df7e4d9cac722f"
+           + "fbaaea196c765cee02e5699dc2e2b6d03783c30a94e6c45c120f785b12f2c78ef9d426fee485c4de06d26f32"
+           + "883e988c596bbf44619a20472ec1d822731b5093f746ca49ba3f436b6865b1c24df79ad08f494dba4c0efa77"
+           + "6745194aadb710d66525ca341d868d422e0e81288b5eb26d44d10493039be3"))
+   vsig-ed (unhex ("ca56818e180270586d086465948c12daae30322be7895095b37f580a5a6e126d5d989991eff40b10df7a5bbd"
+           + "5ed614e7606cb45595f26647991c8a847440f70e"))
+   vsig-ec (unhex ("3046022100d1fb6d0cac3f22130ae57db9628394e79c9090c10348096a6cb53bae86dbecef0221009e95516c"
+           + "5afe18cb99bbf7cacf35d9d97f004a9789952b40213a7d075e2e56ec"))
+   vsig-rsa (unhex ("8e874d8ae2133b636e109b20550703d6a36d6c7076eb9ae5f11ade12818b4af8c9323e0dc233163dcf119511"
+           + "58e4df9c56ed71c21f1033d41621e8c79c4b74743897584a54efcb80fbb34749176e2313717865af6bb8ab0b"
+           + "b1538b25eb9a67016079b2693188c093480560570d98a251091bb55f2295b84ce47d1f942c7a066024e336d8"
+           + "a93286a2747d070e5085de46b3d90c8174402f549c2e42be98f93fd03bd9cf0fae2ecc6ba59956b701e41ec5"
+           + "fd3a4c1efa3ce93d6f1e1ed0c72ac4c006d0b3a70b12030ab64daad42f2cd7144a38a11b6d74f421e3416ff3"
+           + "ca9b74a1e3e348cf2877f2d4162553cb1f097e2fe928ab1f22eb54a14314dd63c61b52bc"))
+   (vflip s i) (snip s 0 i + string ((s i) ^ 1) + snip s (i + 1) #s)
+   ked (leaf-key vder-ed) kec (leaf-key vder-ec) krsa (leaf-key vder-rsa)
+   _ (test ((hex vsig-m) = "20202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020544c5320312e332c20736572766572204365727469666963617465566572696679003af65a7a89bdcfc5de8bc7d6ec78f66b56664c5e4c14686f96334567219f1d65")
+           (<ked = 'ed25519) (<kec = 'p256) (<krsa = 'rsa)
+           (((krsa 1) 1) = 65537)
+           ; the spki is the der of the key alone, inside the certificate
+           (0 < #(ked 2)) (<(der (ked 2) 0 #(ked 2)) = 48)
+           ((cv-ok? ked 2055 vsig-ed vsig-m) = 1)
+           ((cv-ok? kec 1027 vsig-ec vsig-m) = 1)
+           ((cv-ok? krsa 2052 vsig-rsa vsig-m) = 1)
+           ; a byte of the signature, a byte of the message, the scheme, the key: each refuses
+           ((cv-ok? ked 2055 (vflip vsig-ed 9) vsig-m) = 0)
+           ((cv-ok? kec 1027 (vflip vsig-ec 12) vsig-m) = 0)
+           ((cv-ok? krsa 2052 (vflip vsig-rsa 100) vsig-m) = 0)
+           ((cv-ok? krsa 2052 vsig-rsa (vflip vsig-m 70)) = 0)
+           ((cv-ok? kec 2052 vsig-ec vsig-m) = 0)
+           ((cv-ok? krsa 1027 vsig-ec vsig-m) = 0)
+           ((cv-ok? kec 1027 vsig-ec (vflip vsig-m 90)) = 0)
+           ((cv-ok? kec 1027 "" vsig-m) = 0)
+           ((cv-ok? krsa 2052 (snip vsig-rsa 1 #vsig-rsa) vsig-m) = 0))
+   (every-prefix der) (all (n \ atom? (leaf-key (snip der 0 n))) ^#der)
+   (every-flip der) (all (i \ (: k (leaf-key (vflip der i)) (atom? k || two? k))) ^#der)
+   _ (test (every-prefix vder-ed) (every-prefix vder-ec) (every-flip vder-ed) (every-flip vder-ec)
+           !(leaf-key "") !(leaf-key (unhex "3080")) !(leaf-key (unhex "3084ffffffff"))))
+
+;; --- the handshake: a server of our own, honest or not -------------------------------
+; a tls 1.3 server in a task, built from the client's own parts over one ed25519 key and
+; the certificate above that carries it. honest, the dial holds and the data arrives; with
+; the verify's signature flipped, made by another key, left out, or the certificate left
+; out, or the finished flipped, the dial fails and the server reads the client's alert --
+; decrypt_error (51) -- under the client's handshake key
+(: hs-seed (unhex "893a665eebf62b9c0caf1f1de33129ee339d748b1e5f38327c4ad24e2052683d")
+   (hs-msg ty b) (u8 ty + u24 #b + b)
+   (hs-share ch)
+    (: b (snip ch 4 #ch) i (35 + b 34) i2 (i + 2 + rd16 b i) i3 (i2 + 1 + b i2) end (i3 + 2 + rd16 b i3)
+       (go j) (? (end <= j) () (rd16 b j = 51) (snip b (j + 10) (j + 42)) (go (j + 4 + rd16 b (j + 2))))
+       (go (i3 + 2)))
+   (hs-serve l mode)
+    (: c (accept l) sv (tablet 8) _ (pins sv 's c 'pend "" 'cseq 0 'sseq 0)
+       r (rdrec sv) ch <>r b (snip ch 4 #ch) sid (snip b 35 (35 + b 34))
+       priv (rnd 32) pub (x25519-pub priv)
+       exts (ext 43 (u16 772) + ext 51 (u16 29 + u16 32 + pub))
+       shb (u16 771 + rnd 32 + u8 #sid + sid + u16 4867 + u8 0 + u16 #exts + exts)
+       sh (hs-msg 2 shb)
+       _ (wr sv (u8 22 + u16 771 + u16 #sh + sh))
+       hs (hkdf-extract (derive (hkdf-extract (zeros 32) (zeros 32)) "derived" "") (x25519 priv (hs-share ch)))
+       shs (derive hs "s hs traffic" (ch + sh)) chs (derive hs "c hs traffic" (ch + sh))
+       _ (pins sv 'ckey (hkdf-label shs "key" "" 32) 'civ (hkdf-label shs "iv" "" 12)
+               'skey (hkdf-label chs "key" "" 32) 'siv (hkdf-label chs "iv" "" 12))
+       ee (hs-msg 8 (u16 0))
+       crt (hs-msg 11 (u8 0 + u24 (#vder-ed + 5) + u24 #vder-ed + vder-ed + u16 0))
+       crt2 (? (mode = 'nocert) "" crt)
+       tr1 (ch + sh + ee + crt2)
+       seed (? (mode = 'otherkey) (bytes 32 (i \ i)) hs-seed)
+       sig0 ((cite 'ssh 'ed-sign) seed ((cite 'ssh 'ed-pub) seed) (cv-msg (sha tr1)))
+       sig (? (mode = 'badsig) (vflip sig0 3) sig0)
+       cv (? (mode = 'nocv) "" (hs-msg 15 (u16 2055 + u16 #sig + sig)))
+       fv0 (hmac (hkdf-label shs "finished" "" 32) (sha (tr1 + cv)))
+       fin (hs-msg 20 (? (mode = 'badfin) (vflip fv0 0) fv0))
+       _ (map (m \ ? (0 < #m) (seal sv 22 m) 0) [ee crt2 cv fin])
+       master (hkdf-extract (derive hs "derived" "") (zeros 32))
+       sats (derive master "s ap traffic" (tr1 + cv + fin))
+       got (open-rec sv)
+       _ (? (mode = 'honest)
+            (: _ (pins sv 'ckey (hkdf-label sats "key" "" 32) 'civ (hkdf-label sats "iv" "" 12) 'cseq 0)
+               _ (seal sv 23 "the stub says hi")
+               (seal sv 21 (u8 1 + u8 0)))
+            0)
+       _ (close c)
+       got)
+   (hs-run port mode)
+    (: l (listen ['tcp "127.0.0.1" port])
+       s (twirl (_ \ hs-serve l mode) ())
+       t (tls-dial "127.0.0.1" port)
+       body (? (tablet? t) (: b (tls-slurp t) _ (close (t 's)) b) ())
+       got (catch s)
+       _ (close l)
+       [body got (? (tablet? t) (t 'spki) ())])
+   ok (hs-run 7481 'honest)
+   _ (test (<ok = "the stub says hi") (<(ok 1) = 22) ((ok 2) = (ked 2)))
+   _ (map (m \ (: r (hs-run (7482 + m 1) <m)
+                  (test !(<r) ((r 1) = [21 (u8 2 + u8 (m 2))]))))
+          [['badsig 0 51] ['otherkey 1 51] ['nocv 2 51] ['badfin 3 51] ['nocert 4 51]])
+   0)
+
+;; --- a real server: openssl's s_server over each kind of key, where openssl is here ----
+(: os? (two? (stat "/usr/bin/openssl"))
+   odir ((cwd 0) + "/out/.tlsv-" + show (getpid 0))
+   (okey nm arg) (hark ["sh" "-c" ("openssl req -x509 -newkey " + arg + " -nodes -keyout " + odir + "/" + nm
+                                  + ".key -out " + odir + "/" + nm + ".pem -days 2 -subj /CN=127.0.0.1 2>/dev/null")])
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (rest 2, waitfor pid)))
+   (orun nm arg port)
+    (: _ (okey nm arg)
+       p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
+                  "-key" (odir + "/" + nm + ".key") "-cert" (odir + "/" + nm + ".pem")])
+       _ (rest 500)
+       t (tls-dial "127.0.0.1" port)
+       b (? (tablet? t) (: _ (tls-say t "GET / HTTP/1.0\r\n\r\n") b (tls-slurp t) _ (close (t 's)) b) "")
+       _ (? (tablet? t) 0 (still <p 15))
+       _ (waitfor <p)
+       b)
+   _ (? os?
+        (: _ (hark ["mkdir" "-p" odir])
+           e (orun "ed" "ed25519" 7488)
+           p (orun "ec" "ec -pkeyopt ec_paramgen_curve:P-256" 7489)
+           r (orun "rsa" "rsa:2048" 7490)
+           _ (hark ["rm" "-rf" odir])
+           (has b) (0 <= (cite 'kore 'wg-find) b "TLSv1.3" 0)
+           (test (has e) (has p) (has r)))
+        0)
+   0)
+
 ; the harness greps for this line, and that is the point: a reader stop exits 0
 ; with the asserts above never read, so only reaching here proves the file ran.
 (test_fin (),
- puts "apps/tls: ok -- chacha20 + poly1305 (rfc 8439 block, stream, counter, cipher, mac)
+ puts "apps/tls: ok -- chacha20 + poly1305 (rfc 8439 block, stream, counter, cipher, mac); the handshake's verify
 ",
  0)
