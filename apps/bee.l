@@ -100,7 +100,24 @@
        (tool "send_message" ("Send a message to another bee session by name. It reaches that session "
                              + "before its next request, or starts a turn there when it is idle.")
              {"to" (prop "the session's name, as list_sessions gives it") "text" (prop "the message")}
-             ["to" "text"])]
+             ["to" "text"])
+       (tool "start_job" ("Start a command line in the background and answer its job id at once. When "
+                          + "it ends, a message from job-ID says so with its exit status and last lines, "
+                          + "waking this session if it is idle. For anything longer than a minute.")
+             {"command" (prop "the command line")} ["command"])
+       (tool "check_job" "A job's state (running, or its exit status) and the last lines of its output."
+             {"id" (prop "the job's id, as start_job gave it")} ["id"])
+       (tool "stop_job" "Stop a running job: its shell and everything it started."
+             {"id" (prop "the job's id")} ["id"])
+       (tool "spawn_bee" ("Start another bee, detached, in a directory -- best a worktree made for it -- "
+                          + "with a first prompt. It serves until stopped: after the prompt, each message "
+                          + "sent to it is a turn. It acts without asking only when this session was "
+                          + "started with -y; otherwise it can read but not change anything.")
+             {"name" (prop "its session name: letters, digits, - _ and .")
+              "dir" (prop "the directory it works in") "prompt" (prop "what it should do first")}
+             ["name" "dir" "prompt"])
+       (tool "stop_bee" "Stop a bee this machine is running, by name."
+             {"name" (prop "the session's name")} ["name"])]
 
      ; --- the project's own instructions ---
      ; from / down to the working directory, each directory's AGENTS.md and then its CLAUDE.md:
@@ -215,6 +232,86 @@
                              + "  " + peep c "cwd" "" + "\n")))
                    "" ps)))
 
+     ; --- jobs: a command line in the background, its group its own, its output to
+     ; HIVE/jobs/NAME/ID.log. a task here drains and reaps it and then mails this bee from
+     ; job-ID, so an idle screen wakes to the news and a turn reads it with its next request ---
+     ; every fd above 2 this process holds, for a child to close: spawnio shuts only the ones
+     ; it is told, and a leaked pipe end keeps a reader waiting on an EOF that never comes. a
+     ; seat with no /proc closes 3..63 blind, which costs nothing for the ones not open
+     (open-fds _)
+      (: ns (readdir "/proc/self/fd")
+         (? (two? ns) (filter (\ n (2 < n)) (map digits ns)) (map (\ i (i + 3)) ^61)))
+     bee-jobs {'n 0}
+     (job-dir _) (bee-hive + "/jobs/" + bee-name)
+     (tail-of p n) (: s (slurp-file p) ls (? (string? s) (lines s) ())
+                      (foldl (\ a l (a + l + "\n")) "" (#ls <= n ? ls (drop (#ls - n) ls))))
+     (job-start cmd)
+      (: n (bee-jobs 'n + 1) _ (pin bee-jobs 'n n) id ("j" + show n)
+         _ (mkdirs (job-dir 0)) log (job-dir 0 + "/" + id + ".log")
+         pp (pipe 0) nul (openfd "/dev/null" 0)
+         p (spawnio (shell-argv cmd) nul >pp >pp (open-fds 0) 0 0)
+         _ (close >pp) _ (? (0 <= nul) (close nul) 0)
+         (? !(charm? p && 0 < p) (: _ (close <pp) ())
+            (: j {'id id 'cmd cmd 'pid p 'log log 'code () 't0 (clock 0)}
+               _ (pin bee-jobs id j)
+               _ (twirl (\ _ (job-watch j <pp)) 0)
+               id)))
+     (job-watch j rfd)
+      (: q (fdopen rfd) o (open (j 'log) "w")
+         (go _) (: c (see q) (? (c < 0) 0 (: _ (unsee q c) _ (say o (chug q)) _ (flush o) (go 0))))
+         _ (go 0) _ (close q) _ (close o)
+         code (reap (j 'pid))
+         _ (pin j 'code code)
+         (post-as ("job-" + j 'id) bee-name
+                  ("job " + j 'id + " ended with exit " + show code + " after "
+                   + show ((clock 0 - j 't0) // 1000) + "s: " + j 'cmd + "\nits last lines:\n"
+                   + tail-of (j 'log) 20)))
+     (job-text id)
+      (: j (peep bee-jobs id ())
+         (? !(tablet? j) ("no job " + id)
+            ((? (charm? (j 'code)) ("exit " + show (j 'code))
+                ("running for " + show ((clock 0 - j 't0) // 1000) + "s"))
+             + ": " + j 'cmd + "\n" + tail-of (j 'log) 30)))
+     ; the whole group: the shell and whatever it started
+     (job-stop id)
+      (: j (peep bee-jobs id ())
+         (? !(tablet? j) ("no job " + id)
+            (charm? (j 'code)) (id + " has already ended")
+            (: _ (still (0 - j 'pid) 15) ("stopped " + id))))
+
+     ; --- spawning: a bee started detached in a directory, serving -- its first prompt,
+     ; then a turn per message until it is stopped -- its output to HIVE/logs/NAME.log ---
+     (sq s) ("'" + foldl (\ a i (a + (s i = 39 ? "'\\''" (string (s i))))) "" ^#s + "'")
+     (name-ok? nm)
+      (0 < #nm && #nm <= 64
+       && !(two? (filter (\ i (: c (nm i) !(48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122
+                                                || c = 45 || c = 95 || c = 46)))
+                         ^#nm)))
+     (settles? nm n) (? (tablet? (card-of nm)) 1 (n <= 0) 0 (: _ (rest 50) (settles? nm (n - 1))))
+     ; -> "" when it has settled, else why not
+     (spawn-bee nm dir0 prompt yes)
+      (: dir (? (0 < #dir0 && dir0 0 = 47) dir0 (bee-cwd + "/" + dir0))
+         c (card-of nm) lg (bee-hive + "/logs")
+         (? !(string? bee-self) "this bee cannot find its own binary"
+            !(name-ok? nm) ("a name is letters, digits, - _ and ., at most 64: " + nm)
+            (tablet? c && alive? (card-pid c)) ("a bee named " + nm + " is already running")
+            !(two? (stat dir)) ("no directory " + dir)
+            (: _ (mkdirs lg)
+               line ("cd " + sq dir + " && BEE_NAME=" + sq nm + " PWD=" + sq dir
+                     + " BEE_PROMPT=" + sq prompt + " exec " + sq bee-self + " bee --serve"
+                     + (yes ? " -y" "") + " >> " + sq (lg + "/" + nm + ".log") + " 2>&1")
+               nul (openfd "/dev/null" 0)
+               p (spawnio [bee-self "lush" "-c" line] nul nul nul (open-fds 0) 0 0)
+               _ (? (0 <= nul) (close nul) 0)
+               (? !(charm? p && 0 < p) ("could not start " + nm)
+                  (: _ (twirl (\ _ (reap p)) 0)                  ; reaped when it ends
+                     (? (settles? nm 100) ""
+                        (nm + " started but has not settled; its log is " + lg + "/" + nm + ".log")))))))
+     (stop-bee nm)
+      (: c (card-of nm)
+         (? !(tablet? c && alive? (card-pid c)) ("no bee named " + nm + " is running")
+            (: _ (still (card-pid c) 15) ("stopped " + nm))))
+
      ; --- what the model is told ---
      ; a line of this binary's own lush, run once at start -> its stdout, "" without a self
      (lush-out cmd)
@@ -310,7 +407,17 @@
          + "an answer is wanted.")
         ("The protocol is plain files under " + bee-hive + ", each session's card and inbox, written "
          + "down in doc/bee.md in love's source, so a shell or another kind of agent can speak it too: `"
-         + bee-me + " bee --list` and `" + bee-me + " bee --send NAME TEXT`.")])
+         + bee-me + " bee --list` and `" + bee-me + " bee --send NAME TEXT`.")
+        ""
+        "## jobs and workers"
+        ("A command longer than a minute -- a slow gate, a build -- goes to start_job, not shell: it "
+         + "answers at once, you keep working or end your turn, and a message from job-ID wakes you "
+         + "with its exit status and last lines. check_job and stop_job look at and end one.")
+        ("spawn_bee starts another bee, detached, in a directory with a first prompt; after that it "
+         + "serves messages until stop_bee. Give each worker its own worktree (git worktree add, or "
+         + "an sb nest synced from yours) so no two share a working tree, tell it in its prompt "
+         + "who to report to, and coordinate by message and through the merge queue. A worker acts "
+         + "without asking only when this session was started with -y; otherwise it only reads.")])
      bee-merge
       (? (#bee-queues = 0) ""
          (paras
@@ -580,7 +687,7 @@
      ; which never blocks: the screen keeps painting while a command runs. stdin is /dev/null
      (shell-out cmd)
       (: pp (pipe 0) nul (openfd "/dev/null" 0)
-         p (spawnio (shell-argv cmd) nul >pp >pp [<pp] -1 0)
+         p (spawnio (shell-argv cmd) nul >pp >pp (open-fds 0) -1 0)
          _ (close >pp) _ (? (0 <= nul) (close nul) 0)
          q (fdopen <pp)
          (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
@@ -618,7 +725,17 @@
           "shell"      [1 (clip ((f 'shell) h (in "command")))]
           "list_sessions" [1 (sessions-text 0)]
           "send_message" (: e (post (in "to") (in "text"))
-                            (? (#e = 0) [1 ("sent to " + in "to")] [0 e]))))
+                            (? (#e = 0) [1 ("sent to " + in "to")] [0 e]))
+          "start_job" (: id (job-start (in "command"))
+                         (? (string? id) [1 ("started " + id + "; a message from job-" + id + " comes when it ends")]
+                            [0 "the job did not start"]))
+          "check_job" [1 (job-text (in "id"))]
+          "stop_job" [1 (job-stop (in "id"))]
+          "spawn_bee" (: e (spawn-bee (in "name") (in "dir") (in "prompt") (f 'yes))
+                         (? (#e = 0) [1 (in "name" + " is running in " + in "dir"
+                                         + (f 'yes ? "" ", reading only") + "; send_message reaches it")]
+                            [0 e]))
+          "stop_bee" [1 (stop-bee (in "name"))]))
 
      ; a tool as the transcript names it: the shell by its own name
      (shown name) (name = "shell" ? <bee-shell name)
@@ -628,9 +745,14 @@
                  "edit_file" (in "path" + ": " + show #(in "old_text") + " bytes -> " + show #(in "new_text"))
                  "list_sessions" ""
                  "send_message" (in "to" + ": " + (: t (in "text") (#t <= 60 ? t (snip t 0 60 + "…"))))
+                 "start_job" (in "command")
+                 ("check_job" || "stop_job") (in "id")
+                 "spawn_bee" (in "name" + " in " + in "dir")
+                 "stop_bee" (in "name")
                  (in "path")))
-     ; the tools that run without asking: they read, or speak only to another bee
-     bee-free ["read_file" "list_sessions" "send_message"]
+     ; the tools that run without asking: they read, speak only to another bee, or look at
+     ; or stop a job this bee started
+     bee-free ["read_file" "list_sessions" "send_message" "check_job" "stop_job"]
 
      ; one tool_use block -> its tool_result, asking first unless yes or a read
      (answer f b)
@@ -791,7 +913,10 @@
      (unindent l) (: (go i) (? (i < 3 && i < #l && l i = 32) (go (i + 1)) i) (snip l (go 0) #l))
      (trim l) (: (go i) (? (i < #l && l i = 32) (go (i + 1)) i) (snip l (go 0) #l))
      ; a tool as the screen names it
-     (title name) (name @ "read_file" "Read" "write_file" "Write" "edit_file" "Update" "shell" <bee-shell name)
+     (title name) (name @ "read_file" "Read" "write_file" "Write" "edit_file" "Update" "shell" <bee-shell
+                          "list_sessions" "Hive" "send_message" "Message" "start_job" "Job"
+                          "check_job" "Check" "stop_job" "Stop" "spawn_bee" "Spawn" "stop_bee" "Stop"
+                          name)
 
      bee-spin ["·" "✢" "✳" "✶" "✻" "✽" "✻" "✶" "✳" "✢"]
      bee-hums ["buzzing" "foraging" "waggling" "humming" "pollinating" "hovering" "combing"
@@ -1019,33 +1144,59 @@
      bee-branch (: k (find bee-env "git branch: " 0)
                     (? (k < 0) "" (: e (find bee-env "\n" k) (snip bee-env (k + 12) (e < 0 ? #bee-env e)))))
      (joinw ws) (foldl (\ a w (a + " " + w)) <ws >ws)
-     ; --list and --send speak to the hive from a shell and settle nowhere; a sender there
-     ; is BEE_NAME, else cli- and the user
-     (bee-cli as)
-      (? (<as = "--list") (: s (sessions-text 0) (puts (s + (#s && s (#s - 1) = 10 ? "" "\n")), 0))
-         (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
-         (: e0 (getenv "BEE_NAME") u (getenv "USER")
-            from (? (string? e0 && 0 < #e0) e0 ("cli-" + (string? u ? u "someone")))
-            e (post-as from <>as (joinw >>as))
-            (? (#e = 0) 0 (say err ("bee: " + e + "\n"), 1))))
+     ; --list, --send, --spawn and --stop speak to the hive from a shell and settle nowhere;
+     ; a sender there is BEE_NAME, else cli- and the user
+     (bee-cli as yes)
+      (: say1 (\ e ok (? (#e = 0) (: _ (puts (ok + "\n")) 0) (say err ("bee: " + e + "\n"), 1)))
+         (<as @
+          "--list" (: s (sessions-text 0) (puts (s + (#s && s (#s - 1) = 10 ? "" "\n")), 0))
+          "--send" (? (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
+                      (: e0 (getenv "BEE_NAME") u (getenv "USER")
+                         from (? (string? e0 && 0 < #e0) e0 ("cli-" + (string? u ? u "someone")))
+                         (say1 (post-as from <>as (joinw >>as)) ("sent to " + <>as))))
+          "--spawn" (? (#as < 4) (say err "usage: love bee --spawn NAME DIR [-y] PROMPT ..\n", 2)
+                       (say1 (spawn-bee <>as <>>as (joinw >>>as) yes)
+                             (<>as + " is serving" + (yes ? "" ", reading only"))))
+          "--stop" (? (#as < 2) (say err "usage: love bee --stop NAME\n", 2)
+                      (: e (stop-bee <>as) (? (starts? e "stopped") (: _ (puts (e + "\n")) 0) (say err ("bee: " + e + "\n"), 1))))
+          2))
+     ; serving: the first prompt, if any, then a turn for each message as it comes. the idle
+     ; wait is a rest, so the jobs' tasks run beside it
+     (serve key f msgs)
+      (: ms (take-mail 0)
+         (? (two? ms)
+            (: _ (map (\ m ((f 'mail) <m (m 1))) ms) _ (state! "busy")
+               m (turn key f ((user (mail-text ms)) . msgs)) _ (state! "idle")
+               (serve key f (two? m ? m msgs)))
+            (: _ (rest 1000) (serve key f msgs))))
+     (serve-first key f p)
+      (? (0 < #p) (: _ (state! "busy") m (turn key f [(user p)]) _ (state! "idle") (serve key f (two? m ? m ())))
+         (serve key f ()))
+     bee-flags ["-y" "--plain" "--serve"]
      (bee-go as)
       (: key (getenv bee-key-env)
          yes (elem "-y" as)
          pl (elem "--plain" as)
-         words (filter (\ w (w != "-y" && w != "--plain")) as)
-         (? (two? as && (<as = "--list" || <as = "--send")) (bee-cli as)
+         sv (elem "--serve" as)
+         words (filter (\ w !(elem w bee-flags)) as)
+         (? (two? words && elem <words ["--list" "--send" "--spawn" "--stop"]) (bee-cli words yes)
             (atom? bee-at) (say err ("bee: cannot read the url " + bee-url + "\n"), 1)
             (#bee-model = 0) (say err "bee: name the model, (model NAME) in ~/.love/etc/bee.l\n", 1)
             (!bee-local? && !(string? key && 0 < #key)) (say err ("bee: set " + bee-key-env + "\n"), 1)
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
-               r (? (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)
+               r (? sv (serve-first key (plain yes) (: p (getenv "BEE_PROMPT")
+                                                    (? (string? p && 0 < #p) p (two? words) (joinw words) "")))
+                    (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)
                     (!pl && two? (tty 1)) (tui key yes)
                     (repl key (plain yes) ()))
                _ (unsettle 0)
                r)))
       (bee-go as))
-   bee-usage "usage: love bee [-y] [--plain] [--list] [--send NAME TEXT] [PROMPT ..]"
+   bee-usage "usage: love bee [-y] [--plain] [PROMPT ..]      one prompt, the screen, or a > loop
+       love bee --list | --send NAME TEXT ..           the sessions, from a shell
+       love bee --spawn NAME DIR [-y] PROMPT ..         a bee serving detached in DIR
+       love bee --stop NAME | --serve [-y] [PROMPT ..]"
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))
 
 ; the seat: run as a file, `love apps/bee.l ..`, bee starts itself; as the verb, the

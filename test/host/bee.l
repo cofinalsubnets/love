@@ -18,8 +18,12 @@
 
    ; --- the model: 'q the answers still to give, 'got the requests heard, newest first ---
    cr-box {'q () 'got ()}
-   cr-port 7487
-   cr-l (listen cr-port)
+   ; a port of this run's own: two gates at once must not share a mock, so start from the
+   ; pid and step past any port already taken
+   cr-pl (: (try p n) (: l (listen p) (? (!(nom? l) || n <= 0) [p l] (try (p + 1) (n - 1))))
+            (try (20000 + getpid 0 % 20000) 200))
+   cr-port <cr-pl
+   cr-l (cr-pl 1)
    cr-header (cite 'kore 'wg-header)
    cr-digits (cite 'kore 'wg-digits)
    cr-find (cite 'kore 'wg-find)
@@ -207,6 +211,45 @@
       (cr-in (res 1) "tester (you)")
       (cr-in txt "<message from=\"tester\">") (cr-in txt "hello from a shell")
       (cr-in (after 1) "no bee sessions are running"))
+   0)
+
+; --- jobs and workers -----------------------------------------------------------------------
+; a job starts at once and runs in its own group; check_job sees it running and stop_job ends
+; it. a worker spawned from a shell settles in its own directory, serves, and stops
+(: cr-j (cr-dir "jobs" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
+   (ev t x) (pin x "type" t)
+   (one id nm in)
+    (cr-ok (cr-sse [(ev "content_block_start" {"index" 0 "content_block" {"type" "tool_use" "id" id "name" nm "input" {}}})
+                    (ev "content_block_delta" {"index" 0 "delta" {"type" "input_json_delta" "partial_json" (json-show in)}})
+                    (ev "content_block_stop" {"index" 0})
+                    (ev "message_delta" {"delta" {"stop_reason" "tool_use"}})]))
+   (done _) (cr-ok (cr-sse [(ev "message_delta" {"delta" {"stop_reason" "end_turn"}})]))
+   _ (cr-serves [(one "a" "start_job" {"command" "sleep 30; echo never"})
+                 (one "b" "check_job" {"id" "j1"})
+                 (one "c" "stop_job" {"id" "j1"})
+                 (done 0)])
+   r (cr-run cr-j "BEE_NAME=jobber" "-y 'run and stop a job'")
+   h (cr-heard 0)
+   (res k) (: u (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h k) "messages"))
+              ((u (#u - 1)) "content" 0 "content"))
+   wt (cr-j + "/wt")
+   _ (mkdir wt 493)
+   _ (cr-put wt ".bee.l" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
+   _ (cr-serves [(done 0)])
+   sp (cr-run cr-j "" ("--spawn w1 '" + wt + "' 'look around'"))
+   ls (cr-run cr-j "" "--list")
+   st (cr-run cr-j "" "--stop w1")
+   _ (rest 300)
+   gone (cr-run cr-j "" "--list")
+   _ (test
+      (0 = <r) (4 = #h)
+      (cr-in (res 1) "started j1")
+      (cr-in (res 2) "running for") (cr-in (res 2) "sleep 30")
+      (cr-in (res 3) "stopped j1")
+      (0 = <sp) (cr-in (sp 1) "w1 is serving")
+      (cr-in (ls 1) "w1  idle") (cr-in (ls 1) "/wt")
+      (0 = <st) (cr-in (st 1) "stopped w1")
+      !(cr-in (gone 1) "w1"))
    0)
 
 ; --- what bee will not do ---------------------------------------------------------------

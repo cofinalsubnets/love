@@ -17,9 +17,22 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --send** *name* *text* ...
 
+**love bee --spawn** *name* *dir* \[**-y**\] *prompt* ...
+
+**love bee --stop** *name*
+
+**love bee --serve** \[**-y**\] \[*prompt* ...\]
+
 # DESCRIPTION
 
-**bee** puts a model to work in the current directory. The model has six tools: **read_file**, **write_file** and **edit_file**; **shell**, which runs a command line in **lush -a** (this binary's shell, with love's own verbs ahead of PATH); and **list_sessions** and **send_message**, described below. A write, an edit or a shell command asks y/n before it runs, unless **-y** is given. The others run without asking.
+**bee** puts a model to work in the current directory. The model's tools:
+
+- **read_file**, **write_file** and **edit_file**;
+- **shell**, which runs a command line in **lush -a** (this binary's shell, with love's own verbs ahead of PATH);
+- **list_sessions** and **send_message**, described under SESSIONS AND MESSAGES;
+- **start_job**, **check_job** and **stop_job**, and **spawn_bee** and **stop_bee**, described under JOBS AND WORKERS.
+
+A write, an edit, a shell command, a job's start, a spawn and a stop of another bee ask y/n before they run, unless **-y** is given. The rest run without asking.
 
 Given a *prompt*, bee runs one turn and exits, streaming the answer to standard output. With no prompt, it opens its full screen on a terminal and a **>** loop elsewhere, or on a terminal too with **--plain**.
 
@@ -55,6 +68,14 @@ A session is live while its card's **pid** is. Whoever lists the hive removes a 
 Messages are delivered at two points. While a turn runs, whatever has arrived joins the next request, beside that request's tool results. On the full screen, an idle session checks its inbox about once a second, and a message starts a turn of its own. The model reads each message as **\<message from="***name***"\>** ... **\</message\>** inside a user turn, and is told that it comes from another agent and not from the user.
 
 The model's **list_sessions** tool reads the cards, and **send_message** writes a message as described above. From a shell, **love bee --list** prints the same list and **love bee --send** *name* *text* sends; the sender is **BEE_NAME**, else **cli-***user*.
+
+# JOBS AND WORKERS
+
+A *job* is a command line run in the background. **start_job** answers its id (**j1**, **j2** ...) at once and the turn goes on. The job runs in a process group of its own, with its output in *hive***/jobs/***name***/***id***.log**. When it ends, a message from **job-***id* reaches the bee that started it, carrying the exit status and the output's last lines. Like any message, it wakes an idle full screen and joins the next request of a running turn. **check_job** shows a job's state and output so far. **stop_job** ends its whole group: the shell and whatever it started. A job belongs to its bee's process: a one-shot **love bee** *prompt* exits when its turn does, and a job still running then goes on unwatched.
+
+A *worker* is a bee started detached with **spawn_bee**, or **love bee --spawn** *name* *dir* *prompt*. It runs **love bee --serve** in *dir* under the session name *name*, with its output in *hive***/logs/***name***.log**. It takes *prompt* as its first turn, then settles and makes a turn of every message sent to it, until **stop_bee** or **love bee --stop** *name*. With no terminal it cannot answer an ask. It acts without asking only when it was spawned with **-y** (**spawn_bee** passes on the spawning session's **-y**); otherwise it can only read. Give each worker a working tree of its own, a git worktree or an sb nest, and tell it in its prompt whom to report to.
+
+A child never inherits the bee's own open files: every fd above 2 is closed in it, so a job or a worker cannot hold a pipe open behind its parent's back.
 
 # THE MERGE QUEUE
 
