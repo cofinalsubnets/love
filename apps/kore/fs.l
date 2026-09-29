@@ -44,8 +44,6 @@
           !(ucopy-bytes src dst) (usay-err (who + ": cannot create " + dst))
           (chmod dst (4095 & <>>st), 1)))
    (ucopy who src dst) (? (ucopy1 who src dst) 1 (uleave 1))
-   ; a path's own kind, a link not followed: 'dir, 'link or 'file, () when there is none
-   (ukind q) (: st (lstat q) (? (atom? st) () (: m (61440 & <>>st) (? (m = 16384) 'dir (m = 40960) 'link 'file))))
    ; m said on stderr and a line read back: 1 for a y or Y first, else 0 (eof too)
    (uyes m) (: _ (say err m, flush err)
                (line acc) (: c (see in) (? (c < 0 || c = 10) (rev acc) (line (c . acc))))

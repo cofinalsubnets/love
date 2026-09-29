@@ -251,6 +251,8 @@
    ; grep and sed each owe GNU a different sentence for the same failure.
    ; is the path a directory (stat follows links, like the tools want)
    (udirp q) (: st (stat q) (two? st && 16384 = 61440 & <>>st))
+   ; a path's own kind, a link not followed: 'dir, 'link or 'file, () when there is none
+   (ukind q) (: st (lstat q) (? (atom? st) () (: m (61440 & <>>st) (? (m = 16384) 'dir (m = 40960) 'link 'file))))
    (uin miss f)
     (? (f = "-") [in 0]
        ; a directory opens, and reading it hands back the raw getdents bytes: `cat DIR`

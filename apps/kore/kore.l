@@ -926,7 +926,7 @@
     'mknod "usage: mknod [-m MODE] NAME TYPE [MAJOR MINOR]"
     'expr "usage: expr EXPRESSION"
     'patch "usage: patch [-pN] [-R] [-i F] [-o F] [-s] [--dry-run]"
-    'grep "usage: grep [-nvclqhaixwFEo] [-e PAT] [-m N] PATTERN [FILE..]"
+    'grep "usage: grep [-cEFhHiLlnoqrRsvwx] [-e PAT] [-f FILE] [-m N] [-A N] [-B N] [-C N] [--include=GLOB] [--exclude=GLOB] PATTERN [FILE..]"
     'egrep "usage: egrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -E)"
     'fgrep "usage: fgrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -F)"
     'sed "usage: sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]"
