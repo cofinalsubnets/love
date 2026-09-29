@@ -9,7 +9,9 @@
 ;   (x509 der)               a certificate read for path building -> a tablet | ()
 ;   (host-ok? c host)        1 when the certificate names host (rfc 6125, subjectAltName only)
 ;   (chain-ok? ders roots host now)   1, or the reason it is not, a string naming the
-;                            check and the certificate; roots are x509s, now seconds
+;                            check and the certificate; roots are x509s, now seconds; a
+;                            host of () checks neither the name nor the purpose
+;   (chain-fail ders roots host now)  the same -> 1 | [x509 depth reason]
 ;   (pem-ders text)          the der of every CERTIFICATE block in a pem text
 ;   (tls-roots _)            [bundle-path anchors], the host's roots read once a process
 ;
@@ -413,10 +415,11 @@
        (now < x 'nb) "it is not valid yet"
        (x 'na < now) "it has expired"
        ())
-   ; a leaf's own checks: its dates, its purpose, the name
+   ; a leaf's own checks: its dates, and with a host its purpose and the name
    (leaf-sick x host now)
     (: s (x509-sick x now) eku (x 'eku)
        (? s s
+          !(string? host) ()
           (two? eku && !(elem oid-server-auth eku) && !(elem oid-any-eku eku)) "it is not for serving tls"
           !(host-ok? x host) ("it does not name " + host)
           ()))
@@ -430,17 +433,21 @@
           ()))
    ; -> 1, or why not, naming the certificate
    (chain-ok? ders roots host now)
+    (chain-fail ders roots host now @ [x _ s] (? (tablet? x) ("certificate " + x509-name x + ": " + s) s) r r)
+   ; -> 1, or [x depth why]: the certificate at fault and how far above the leaf it sits;
+   ; a leaf that does not read is x ()
+   (chain-fail ders roots host now)
     (: xs (map x509 ders)
        leaf (? (two? xs) <xs ())
        pool (? (two? xs) (filter tablet? >xs) ())
        work (tablet 1) _ (pin work 'n 0)
-       (why x s) ("certificate " + x509-name x + ": " + s)
+       (why x k s) [x k s]
        ; from certificate c at k issuers above the leaf: an anchor that signed it, else an
        ; issuer from the pool, walked on; the most telling reason is kept for the failure
        (up c k used)
-        (? (chain-depth < k) (why c "the chain is too long")
+        (? (chain-depth < k) (why c k "the chain is too long")
            (: n (work 'n)
-              (? (chain-work < n) (why c "too much work to find its issuer")
+              (? (chain-work < n) (why c k "too much work to find its issuer")
                  (: _ (pin work 'n (n + 1))
                     as (filter (r \ r 'subject = c 'issuer) roots)
                     ; an anchor needs no checks of its own but its key and its pathLen
@@ -451,14 +458,14 @@
                            (? (atom? l) best
                               (: i <l
                                  s (? (any (r \ r 'der = i 'der) roots) () (issuer-sick i k now))
-                                 r (? s (why i s)
-                                      (1 != sig-ok? (c 'alg) (i 'key) (c 'tbs) (c 'sig)) (why c "its signature does not verify")
+                                 r (? s (why i (k + 1) s)
+                                      (1 != sig-ok? (c 'alg) (i 'key) (c 'tbs) (c 'sig)) (why c k "its signature does not verify")
                                       (any (r \ r 'der = i 'der) roots) 1
                                       (up i (k + 1) (i 'der . used)))
                                  (? (r = 1) 1 (try >l r))))
-                          (try cs (? (two? as) (why c "its signature does not verify")
-                                     (why c "no issuer for it is known (a missing intermediate, or a root not trusted here)")))))))))
-       (? !(tablet? leaf) "the server sent no certificate that reads"
+                          (try cs (? (two? as) (why c k "its signature does not verify")
+                                     (why c k "no issuer for it is known (a missing intermediate, or a root not trusted here)")))))))))
+       (? !(tablet? leaf) [() 0 "the server sent no certificate that reads"]
           (: s (leaf-sick leaf host now)
-             (? s (why leaf s) (up leaf 0 [(leaf 'der)]))))))
+             (? s (why leaf 0 s) (up leaf 0 [(leaf 'der)]))))))
 ) ; module tls
