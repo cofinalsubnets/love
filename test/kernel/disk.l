@@ -1,10 +1,10 @@
 ; --- test/kernel/disk.l: the disk (rung 5) -- the virtio driver's raw door,
-; then apps/fat.l (off the ramfs, the module walk) mounted on the real device.
+; then src/apps/fat.l (off the ramfs, the module walk) mounted on the real device.
 ; guarded on (disk ()): a door whose bus hides the disk skips with a word and
 ; stays green -- the driver already said why at boot, on the serial console.
 ; the raw probe writes sector 16: inside FAT32's reserved region, which the
 ; fs below never touches -- the two halves share one disk across reboots, and
-; that is the point: tools/ktest.l boots this corpus twice on one image and
+; that is the point: src/tools/ktest.l boots this corpus twice on one image and
 ; greps the second log for "disk: fat kept" -- the reset-persistence gate.
 (: dn (disk ())
    (? !dn (puts "disk: none here, laws skipped", putc 10, ())
@@ -20,7 +20,7 @@
             !(disk-write 3 "abc")               ; not whole sectors: refused
             !(disk-read 0 0))
          ())))
-(borrow "apps/fat.l")
+(borrow "src/apps/fat.l")
 (: dev (fat-disk ())
    (? (atom? dev) ()
       (: f0 (fat-mount dev)

@@ -1,6 +1,6 @@
 ; --- test/host/xz.l: the .xz container read as it comes, held to the one read whole ---
 ; xz-pull walks a source a piece at a time and xz-unpack walks the whole string; both are
-; apps/xz.l's, and every cut of a container answers the same bytes, or the same word.
+; src/apps/xz.l's, and every cut of a container answers the same bytes, or the same word.
 ;   run:  cat test/00-init.l test/host/xz.l | out/love
 (borrow 'xz)
 (borrow 'bytes)

@@ -1,4 +1,4 @@
-; --- test/host/pom.l: the phase of the moon (apps/pom.l), against the perl pom's answers ---
+; --- test/host/pom.l: the phase of the moon (src/apps/pom.l), against the perl pom's answers ---
 ;   cat test/00-init.l test/host/pom.l | out/love
 (borrow 'pom)
 (: (said h m d y) ("The Moon is " + pom-name (pom-phase h m d y) + " (" + show (pom-percent (pom-phase h m d y)) + "% of Full)")

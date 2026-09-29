@@ -17,11 +17,11 @@
 ;   verdict  the host key under each StrictHostKeyChecking: ask, accept-new, yes, no.
 ;   strict   strict kex ends on an ignore before newkeys; sequence numbers never wrap.
 ;
-; the transport runs against a live sshd, which no gate stands up; see apps/ssh/ssh.l.
+; the transport runs against a live sshd, which no gate stands up; see src/apps/ssh/ssh.l.
 ;
 ; run:  cat test/00-init.l test/host/ssh.l | out/love
 
-(borrow "apps/ssh/ssh.l")
+(borrow "src/apps/ssh/ssh.l")
 (borrow 'posix)
 (borrow 'tls)
 (borrow 'ssh)
@@ -203,7 +203,7 @@ fW2MNFrwA/N0XZFA==
     (nil? a && nil? (ssh-recv (e 0)))))
 
 (test_fin (),
- puts "apps/ssh: ok -- sha512 (fips 180-4), ed25519 (rfc 8032 7.1), mpint + base64,
+ puts "src/apps/ssh: ok -- sha512 (fips 180-4), ed25519 (rfc 8032 7.1), mpint + base64,
 aes (fips 197, sp 800-38a), a locked key (bcrypt_pbkdf + aes256-ctr),
 known_hosts, banner text, the host key prompts, strict kex and sequence wrap
 ",

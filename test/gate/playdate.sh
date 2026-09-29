@@ -27,7 +27,7 @@ lv=$2
 fail() { echo "FAIL playdate: $*" >&2; exit 1; }
 
 echo "TEST out/playdate/main.o (the device main, no SDK)"
-$mk -C love/user/playdate probe || fail "the device main does not compile"
+$mk -C src/love/user/playdate probe || fail "the device main does not compile"
 
 echo "TEST out/playdate/love.pdx"
 if [ -z "${PLAYDATE_SDK_PATH:-}" ]; then
@@ -35,8 +35,8 @@ if [ -z "${PLAYDATE_SDK_PATH:-}" ]; then
   exit 0
 fi
 
-$mk -C love/user/playdate || fail "build"
-$mk -C love/user/playdate alt || fail "the second-base link"
+$mk -C src/love/user/playdate || fail "build"
+$mk -C src/love/user/playdate alt || fail "the second-base link"
 
 e=out/playdate/pdex.elf
 u=$(llvm-readelf -s $e | grep -c "UND [a-zA-Z_]")
@@ -50,7 +50,7 @@ case $ent in *[13579bdf]) ;; *) fail "entry $ent has no thumb bit" ;; esac
 
 # uread is kore's, so the reader rides in ahead of the check -- the same lay
 # test/gate/ld32.l takes to read an object back through our own linker's front half
-{ cat apps/kore/text.l apps/kore/u.l
+{ cat src/apps/kore/text.l src/apps/kore/u.l
   echo "(borrow 'kore)"
   cat test/gate/pdreloc.l
   echo '(pdbin-check "out/playdate/love.pdx/pdex.bin"'

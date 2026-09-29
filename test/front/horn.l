@@ -1,9 +1,9 @@
 ; test/front/horn.l -- the horn's sink, and what it takes.
 ;
-; these run under test/front/main.c with HORN=none, so love/horn.c opens its SINK: the ring
+; these run under test/front/main.c with HORN=none, so src/love/horn.c opens its SINK: the ring
 ; that keeps time and discards, which is the lane every box without a card runs and the
 ; only lane a gate can run anywhere. what the sink accepts it hands to ai_horn_tap, and
-; the weak default in love/horn.c takes nothing -- so on an ordinary love the PCM stops
+; the weak default in src/love/horn.c takes nothing -- so on an ordinary love the PCM stops
 ; there and nothing downstream of the port has ever been asserted. the frontend defines
 ; that hook and keeps what it is given, which is what lets these be laws:
 ;
@@ -31,7 +31,7 @@
    (assert (2 = tapchans ())))
 
 ; --- a mono port taps as MONO, which is the trap for whoever plays the tap --------
-; love/horn.c doubles a 1-channel port to stereo so that the device is always stereo --
+; src/love/horn.c doubles a 1-channel port to stereo so that the device is always stereo --
 ; but that is horn_land, on the DEVICE path, and the sink is not a device. the tap sits
 ; above it, so what arrives is the port's own bytes at the port's own channel count.
 ; the same 800 bytes are 400 frames here and 200 through a stereo port, and a seat that

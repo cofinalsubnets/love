@@ -41,10 +41,10 @@
    (16384 = 61440 & <>>(stat e))
    (readdir e = ())                         ; empty, told from absent by stat
    ('eexist = mkdir e 493)                  ; again
-   ('erofs = mkdir "apps" 493)              ; the tree under /proc/src is nobody's to write
-   ('erofs = unlink "apps/json.l")
-   ('erofs = rename "apps/json.l" (d + "/j"))
-   ('erofs = chmod "apps/json.l" 384)
+   ('erofs = mkdir "src" 493)              ; the tree under /proc/src is nobody's to write
+   ('erofs = unlink "src/apps/json.l")
+   ('erofs = rename "src/apps/json.l" (d + "/j"))
+   ('erofs = chmod "src/apps/json.l" 384)
    ('erofs = rename "/proc" (d + "/q"))       ; nor carried off by a move above it
    ('erofs = rename "/proc/vt" (d + "/vt"))   ; a special row stays where its name is
    ('erofs = rename "/dev" (d + "/dev"))
@@ -79,12 +79,12 @@
    ; -- chdir/cwd: the cwd is a kernel string; /home is the boot seat and the corpus
    ; stands at the tree's top --
    ("/proc/src" = cwd 0)
-   !(chdir "apps/kore")
-   ("/proc/src/apps/kore" = cwd 0)
+   !(chdir "src/apps/kore")
+   ("/proc/src/src/apps/kore" = cwd 0)
    (0 < #(rd "kore.l"))                       ; a relative path reads off the cwd
    (elem "kore.l" (readdir "."))
    !(chdir "..")
-   ("/proc/src/apps" = cwd 0)            ; .. unwinds ONE component
+   ("/proc/src/src/apps" = cwd 0)            ; .. unwinds ONE component
    ; the seat has to go back to the tree's top by hand. this file is one member of a
    ; corpus the runner loads by RELATIVE path, so a cwd left anywhere else takes every
    ; member after this one down with a no-corpus-member -- which reads as a missing

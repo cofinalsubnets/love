@@ -1,4 +1,4 @@
-; test/caja/boxes.l -- apps/caja/box.l held to TeX, a box at a time. a page is described
+; test/caja/boxes.l -- src/apps/caja/box.l held to TeX, a box at a time. a page is described
 ; once, as data, and said two ways: as plain -ini TeX input, and as caja's nodes. the
 ; shell (test/gate/caja.sh) runs TeX on the one and compares its DVI with the other's.
 ;
@@ -16,8 +16,8 @@
 ; characters stand apart (\relax and \noboundary about each), and each box in a vbox follows \prevdepth
 ; -1000pt, so TeX adds neither ligatures, kerns nor interline glue caja has not been told.
 (: _ (borrow 'posix)
-   _ (borrow "apps/tfm.l")
-   _ (borrow "apps/caja/box.l")
+   _ (borrow "src/apps/tfm.l")
+   _ (borrow "src/apps/caja/box.l")
    _ (borrow 'caja-box)
    (die m) (: _ (say err ("boxes: " + m + "\n")) _ (flush err) (quit 1))
    (slurpf p) (uread p @ [1 x] (x + "") (die ("cannot read " + p)))

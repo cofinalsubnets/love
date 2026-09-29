@@ -18,17 +18,17 @@ love0=$3
 fail() { echo "FAIL $*" >&2; exit 1; }
 # the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
-# ..and the BOOTSTRAP one, the lane that compiles love/love.c: love0 waking mooncc0.image
+# ..and the BOOTSTRAP one, the lane that compiles src/love/love.c: love0 waking mooncc0.image
 moon0() { "$love0" wake out/mooncc0.image mooncc "$@"; }
 
 # ---------------------------------------------------------------- the laws
-echo "CC apps/moon/{lex,cpp,parse,gen,val}.l test/law/moon.l"
+echo "CC src/apps/moon/{lex,cpp,parse,gen,val}.l test/law/moon.l"
 out=$ho/.test_moon.out
 { echo "(borrow 'holo)"
-  cat test/00-init.l apps/kore/text.l apps/kore/u.l   # the kore floors register module 'kore
+  cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l   # the kore floors register module 'kore
   echo "(borrow 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
-  cat apps/moon/floor.l apps/moon/lex.l apps/moon/cpp.l apps/moon/parse.l \
-      love/holo/text.l love/holo/dialect.l love/holo/gas.l apps/moon/val.l apps/moon/gen.l
+  cat src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
+      src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/apps/moon/val.l src/apps/moon/gen.l
   echo "(borrow 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
   cat test/law/moon.l
 } | "$m" > "$out" 2>&1
@@ -41,16 +41,16 @@ cat "$out"
 # frontend's boot binds to that module's accessor. a lane that leaves something else
 # there curries every combinator into a silent partial: no scare, no wrong answer,
 # just every template failing to parse. love0's build-tool lane is the one that
-# compiles love/love.c, and it is the only lane the laws above never walk.
-echo "CC love/holo/text.l (love0 lane)"
-"$love0" -l love/holo/text.l -e '(? (two? ((cite (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
+# compiles src/love/love.c, and it is the only lane the laws above never walk.
+echo "CC src/love/holo/text.l (love0 lane)"
+"$love0" -l src/love/holo/text.l -e '(? (two? ((cite (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
   || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"
 
 # ---------------------------------------------- the pipeline's stage types
-# gen.l read as DATA and typed against apps/moon/stage.l's sig table (the
+# gen.l read as DATA and typed against src/apps/moon/stage.l's sig table (the
 # overlay leg): the post-choice chain composes in exactly one order, and a
 # clash names its innermost seam. nothing from stage.l rides any image.
-"$m" apps/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
+"$m" src/apps/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
 
 arch=$(uname -m)
 if [ "$arch" != x64 ] && [ "$arch" != x86_64 ]; then
@@ -155,7 +155,7 @@ printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an integer reaches a pointer only as a NULL POINTER CONSTANT, so
-# `return 1` from a T* is a constraint violation -- love/main.c carried one for years,
+# `return 1` from a T* is a constraint violation -- src/love/main.c carried one for years,
 # clang named it, and we took it in silence and handed back address 1
 printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
@@ -671,9 +671,9 @@ done
 # gcc for the code gcc compiled rather than claiming the whole binary.
 # ours is the BASE half of love-version and never the whole id, and that is a law:
 # the VCS suffix names the commit that built the COMPILER, so it would make love1 and
-# love2 differ and name a broken fixpoint (love/holo/link.l says it at the door).
+# love2 differ and name a broken fixpoint (src/love/holo/link.l says it at the door).
 # read ./VERSION rather than writing 0.1 down -- a release bump must not fail here.
-cmt() { "$m" -l love/holo/elfsec.l \
+cmt() { "$m" -l src/love/holo/elfsec.l \
           -e "(: r (elfsec \"$1\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))"; }
 c=$(cmt "$ho/.fgnx" | tr '\0' ' ')
 case "$c" in
@@ -765,7 +765,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
 # member-compile lane fast too, so a warm cache passes this leg whether the archive was
 # read or refused, and a refusal can sit here green for as long as the cache lives. So ask
-# the BINARY what it carries -- love/src.c matches the arch word and its width, and a
+# the BINARY what it carries -- src/love/src.c matches the arch word and its width, and a
 # miss there is silent -- then take the cache away and let the clock mean something.
 for a in x64 a64 rv64; do
   n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + runtime-gz \"$a\")))) 0)" | head -1)

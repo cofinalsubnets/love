@@ -3,7 +3,7 @@
 . "$(dirname "$0")/common.sh"
 
 # THE GULP SEAMS, one property over every tool that reads. cat/head/tail/nl/rev pull
-# 4096-byte chugs (apps/kore/u.l's urd-line and urd-gulp), so a line that spans a gulp,
+# 4096-byte chugs (src/apps/kore/u.l's urd-line and urd-gulp), so a line that spans a gulp,
 # an input with no newline in it at all, and a file that ends exactly on the boundary
 # are each a place the reader can lose or double a byte -- and none of them shows on
 # the few-line fixtures the per-tool files use.

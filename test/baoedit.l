@@ -1,5 +1,5 @@
-; --- test/baoedit.l: a smoke test for cli's raw-line editor (love/boot/post.l `edraw`) ---
-; edraw lives in love/boot/post.l, now the baked shell core (in the host egg), so edraw is
+; --- test/baoedit.l: a smoke test for cli's raw-line editor (src/love/boot/post.l `edraw`) ---
+; edraw lives in src/love/boot/post.l, now the baked shell core (in the host egg), so edraw is
 ; a book global. it reads love forms, being the editor, so the thing to know is WHERE
 ; from: a port arg (here a (tap ..), never stdin). that is what keeps it clear of the
 ; corpus stream love0 reads, and why it can ride test/*.l at all.

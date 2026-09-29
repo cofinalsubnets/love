@@ -1,10 +1,10 @@
-; uu -- the UniMath theorem corpus over the uu kernel (love/boot/post.l, baked into
+; uu -- the UniMath theorem corpus over the uu kernel (src/love/boot/post.l, baked into
 ; every corpus target and swept into the `uu` book). the kernel: MLTT with the
 ; Preamble's seven inductives, bidirectional checking, NbE conversion,
-; type-in-type -- see love/boot/post.l for the term grammar and the machinery. this file
+; type-in-type -- see src/love/boot/post.l for the term grammar and the machinery. this file
 ; (and the test/uu*.l ladder above it in sort order) is the corpus half: every
 ; definition and theorem below is type-checked by the baked kernel at corpus
-; time, then re-certified by Rocq + Lean via tools/uu2coq.l / uu2lean.l.
+; time, then re-certified by Rocq + Lean via src/tools/uu2coq.l / uu2lean.l.
 ;
 ; a post-boot stream binds what it calls through the books at its head (the
 ; module-books law): the kernel surface the corpus reads bare re-leaks here --
@@ -2237,7 +2237,7 @@
              m))))
         n))))
 
-; --- the StackSet model: apps/lux/core.l's zipper, mirrored in uu. lists are
+; --- the StackSet model: src/apps/lux/core.l's zipper, mirrored in uu. lists are
 ; --- UniMath Combinatorics style (a vec by nat-recursion, a list = (Σ n, vec n),
 ; --- so length is literally pr1) but monomorphic at nat -- windows are nats,
 ; --- and a universe variable living only in a definition's body would strand
@@ -2339,7 +2339,7 @@
 ; --- the stack substrate: focus x up x down, a stk nonempty by construction;
 ; --- the representation vocabulary the translator targets (zmk/zfoc/zup/zdn,
 ; --- hd0/tl0, mstk). the moves themselves live in test/uuwm.l -- generated
-; --- from apps/lux/core.l by tools/wm2uu.l -- and their laws + computed
+; --- from src/apps/lux/core.l by src/tools/wm2uu.l -- and their laws + computed
 ; --- claims in test/uuwmlaw.l (the two load after this file by sort order) ---
 (test
  (defn stk UU (total2 f nat (total2 u nlist nlist)))

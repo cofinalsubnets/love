@@ -11,7 +11,7 @@
 ; and the linker reaches back into the backend to re-encode a relocated field.
 
 (borrow 'posix)
-(reads (open "love/holo/rv64.l" "r"))
+(reads (open "src/love/holo/rv64.l" "r"))
 (borrow 'holo)
 
 (: (rvg-die m) (: _ (say err ("rvboot: " + m + "\n")) (quit 1))

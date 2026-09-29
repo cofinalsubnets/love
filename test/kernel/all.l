@@ -3,7 +3,7 @@
 ; the initrd is the source blob, so every member is a file this machine can open:
 ; the driver spells the roster below and hands each member to `reads`, the same
 ; stream shell the host's stdin runner uses. the BOOT CMDLINE names this file --
-; tools/ktest.l's -append, or love.cmd beside love.elf where firmware carries no
+; src/tools/ktest.l's -append, or love.cmd beside love.elf where firmware carries no
 ; command line -- and naming another replaces it; an empty line drops to the console
 ; shell. that is the whole of the kernel's corpus wiring: no baked string, no
 ; second filesystem.
@@ -41,10 +41,10 @@
    roster (["test/00-init.l" "test/spec.l" "test/uu.l"] + host +
            ["test/kernel/ramfs.l" "test/kernel/fs.l" "test/kernel/wfs.l"
             "test/kernel/kore0.l"
-            "apps/kore/text.l" "apps/kore/u.l" "apps/kore/core.l" "apps/kore/fs.l"
+            "src/apps/kore/text.l" "src/apps/kore/u.l" "src/apps/kore/core.l" "src/apps/kore/fs.l"
             "test/kernel/kore.l" "test/kernel/pipe.l"
             "test/kernel/sh0.l"
-            "apps/lush.l"
+            "src/apps/lush.l"
             "test/kernel/sh.l"
             "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l"
             "test/zz-fin.l"])

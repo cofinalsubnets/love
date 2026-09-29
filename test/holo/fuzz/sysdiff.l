@@ -4,7 +4,7 @@
 ; small enumerable operand space, so the sharp oracle is assemble-side: write the
 ; instruction llvm-mc's way, assemble, demand the same bytes holo produced.
 ;
-; the a64 op tables and riscv's CSR table are read straight out of love/holo/a64.l
+; the a64 op tables and riscv's CSR table are read straight out of src/love/holo/a64.l
 ; and rv64.l, so a row added to holo is checked the next run with no edit here -- the
 ; uncovered row is the one that ships wrong. the x86 side has no name tables (the operand
 ; space IS the register file), so it enumerates. SYSDIFF_ARCH=x64|a64|rv64 narrows;
@@ -13,10 +13,10 @@
 ;   out/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
 (borrow 'posix)
-(reads (open "love/holo/holo.l" "r"))
-(reads (open "love/holo/x64.l" "r"))
-(reads (open "love/holo/a64.l" "r"))
-(reads (open "love/holo/rv64.l" "r"))
+(reads (open "src/love/holo/holo.l" "r"))
+(reads (open "src/love/holo/x64.l" "r"))
+(reads (open "src/love/holo/a64.l" "r"))
+(reads (open "src/love/holo/rv64.l" "r"))
 ; holo rides module 'holo: reading the source registers it, and the names come
 ; through the door rather than off this file's layer.
 (borrow 'holo)
@@ -48,8 +48,8 @@
  tmpd "out"
 
  ; --- the 'key names of a `name {..}` tablet literal in a64.l, source order ---
- a64src (rdf "love/holo/a64.l")
- rv64src (rdf "love/holo/rv64.l")
+ a64src (rdf "src/love/holo/a64.l")
+ rv64src (rdf "src/love/holo/rv64.l")
  (table-in src nm)
   (: i (idx-of src ("\n   " + nm + " {"))
      _ (? (charm? i) 0 (puts ("sysdiff: no table " + nm + "\n"), quit 1))

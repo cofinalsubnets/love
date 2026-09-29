@@ -362,7 +362,7 @@
 
 ; the dial itself: play.l's i-sin at one end, its i-sqr at the other, and the triangle
 ; between them -- in three steps, not a slide, because a crossfade builds both of its
-; shapes and a voice is paid for by the operation (apps/rove/slop.l says the numbers). the
+; shapes and a voice is paid for by the operation (src/apps/rove/slop.l says the numbers). the
 ; three share a phase -- a square built on the half of the period has the sine's sign --
 ; so a step lands on the same side of zero as the one before it rather than against it,
 ; which is the law worth holding here whether they cross or jump.

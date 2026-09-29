@@ -2,7 +2,7 @@
 # test/kore/door.sh -- --help and --version at the door
 . "$(dirname "$0")/common.sh"
 
-# apps/kore/kore.l's koredoor answers the two flags for every applet, on BOTH dispatch
+# src/apps/kore/kore.l's koredoor answers the two flags for every applet, on BOTH dispatch
 # lanes -- `hv` is common.sh's, the archives use it too.
 # the nested lane (`kore TOOL`) and the verb lane (`love TOOL`) must agree
 hv "awk -h"          '^usage: awk'   korerun awk -h

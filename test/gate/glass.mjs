@@ -1,5 +1,5 @@
 // test/gate/glass.mjs -- the page's half of the console's grid, asked without a page.
-// inle/wasm/machine.js's glass turns a canvas box into real pixels and the zoom a glyph pixel gets,
+// src/inle/wasm/machine.js's glass turns a canvas box into real pixels and the zoom a glyph pixel gets,
 // and no lane here has a browser, so the three globals it reads are stubbed and the law
 // is checked as arithmetic: the machine divides the pixels it is handed by the face times
 // the zoom (kmain's cbinit), so the columns are settled HERE and read back the same way.
@@ -7,7 +7,7 @@
 // to carry twice the columns at half the size.
 // ..and the bytes a hardware key sends, the same way: keybytes on a made-up event.
 // usage: node test/gate/glass.mjs
-import { glass, keybytes } from '../../inle/wasm/machine.js';
+import { glass, keybytes } from '../../src/inle/wasm/machine.js';
 
 const face = 8;                                  // cga_8x8's width, what cbinit divides by
 globalThis.screen = { width: 2560, height: 1440 };
@@ -61,5 +61,5 @@ law(keybytes(key('1', { metaKey: true })) === null, 'meta is nothing');
 law(same(keybytes(key('ArrowUp', { altKey: true })), [27, 91, 65]), 'an arrow is its sequence under alt too');
 law(keybytes(key('Shift')) === null, 'a modifier alone is nothing');
 
-console.log(bad ? `FAIL glass: ${bad} of the grid's laws` : '  glass: ok -- the glass of inle/wasm/machine.js without a page');
+console.log(bad ? `FAIL glass: ${bad} of the grid's laws` : '  glass: ok -- the glass of src/inle/wasm/machine.js without a page');
 process.exitCode = bad ? 1 : 0;

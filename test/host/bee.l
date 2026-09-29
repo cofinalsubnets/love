@@ -8,7 +8,7 @@
 
 (: cr-home (cwd 0)
    cr-love (: l <cmdline (l 0 = 47 ? l (cr-home + "/" + l)))
-   cr-app (cr-home + "/apps/bee.l")
+   cr-app (cr-home + "/src/apps/bee.l")
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
    cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
@@ -349,6 +349,122 @@
       (0 = <sp) (2 = #h)
       (cr-in said "row 1 joined: 1 (ant, ant) at h1, gating")
       (0 = <st))
+   0)
+
+; --- bee --mcp: the server a claude child runs, one JSON-RPC message a line -----------------
+; initialize answers request 0 (an id is presence, not truth); the initialized notification
+; gets no answer; tools/list names approve and the hive tools; approve allows under BEE_YES and
+; denies when no screen answers; a bad line is dropped, an unknown method and a nameless call
+; are JSON-RPC errors
+(: cr-m2 (cr-dir "mcp" "")
+   (msgs ls) (foldl (\ a m (a + (string? m ? m (json-show m)) + "\n")) "" ls)
+   _ (cr-put cr-m2 "in" (msgs [{"jsonrpc" "2.0" "id" 0 "method" "initialize"
+                                "params" {"protocolVersion" "2025-06-18" "capabilities" {} "clientInfo" {"name" "t"}}}
+                               {"jsonrpc" "2.0" "method" "notifications/initialized"}
+                               {"jsonrpc" "2.0" "id" 1 "method" "tools/list"}
+                               {"jsonrpc" "2.0" "id" 2 "method" "tools/call"
+                                "params" {"name" "approve" "arguments" {"tool_name" "Bash" "input" {"command" "ls"}}}}
+                               {"jsonrpc" "2.0" "id" 3 "method" "tools/call" "params" {"name" "list_sessions" "arguments" {}}}
+                               "{this is not json"
+                               {"jsonrpc" "2.0" "id" 4 "method" "resources/list"}
+                               {"jsonrpc" "2.0" "id" 5 "method" "tools/call" "params" {}}]))
+   r (cr-run cr-m2 "BEE_AS=hub-bee BEE_YES=1" ("--mcp < '" + cr-m2 + "/in'"))
+   out (filter (\ l (0 < #l)) (lines (r 1)))
+   byid (foldl (\ t l (: j (json-read l) (? (two? j && tablet? (j 1)) (pin t (show ((j 1) "id")) (j 1)) t))) {} out)
+   (res k) ((byid k) "result")
+   (text k) ((res k) "content" 0 "text")
+   _ (cr-put cr-m2 "in2" (msgs [{"jsonrpc" "2.0" "id" 7 "method" "tools/call"
+                                 "params" {"name" "approve" "arguments" {"tool_name" "Write" "input" {}}}}]))
+   r2 (cr-run cr-m2 "BEE_AS=hub-bee BEE_ASK_WAIT=1" ("--mcp < '" + cr-m2 + "/in2'"))
+   _ (test
+      (0 = <r) (6 = #out)                                      ; 7 lines in, the notification and the bad line unanswered
+      ("2025-06-18" = (res "0") "protocolVersion") ("bee" = (res "0") "serverInfo" "name")
+      (tablet? ((res "0") "capabilities" "tools"))
+      (: ns (map (\ t (t "name")) ((res "1") "tools")) (elem "approve" ns && elem "send_message" ns && elem "queue_row" ns))
+      (cr-in (text "2") "\"behavior\":\"allow\"") (cr-in (text "2") "\"command\":\"ls\"")
+      (json-false = (res "2") "isError")
+      (cr-in (text "3") "no bee sessions are running")
+      (-32601 = (byid "4") "error" "code") (-32602 = (byid "5") "error" "code")
+      (cr-in (r2 1) "behavior") (cr-in (r2 1) "deny") (cr-in (r2 1) "no answer came"))  ; raw, so escaped
+   0)
+
+; --- locks through bee, on src/apps/locks.l ------------------------------------------------------
+; the test holds the one heavy ticket (heavy-max 1) under its own pid, so bee's ask queues behind
+; a live holder; an exclusive lock is granted, listed and released; releasing what it does not
+; hold is refused; --lock runs a command once the ticket is free and answers its status. the
+; locks live in a scratch root (BEE_LOCKS), so no one's real locks are touched
+(: cr-l2 (cr-dir "locks" "(mem-floor 1)\n(heavy-max 1)\n")
+   lroot (cr-l2 + "/locks")
+   (L nm) (cite 'locks nm)
+   mine ((L 'locks-acquire) lroot "heavy" 'heavy (getpid 0) "the test holds heavy" 1 1)
+   (msgs ls) (foldl (\ a m (a + json-show m + "\n")) "" ls)
+   (call id nm a) {"jsonrpc" "2.0" "id" id "method" "tools/call" "params" {"name" nm "arguments" a}}
+   _ (cr-put cr-l2 "in" (msgs [(call 1 "lock_acquire" {"name" "out-x" "note" "make"})
+                               (call 2 "lock_acquire" {"name" "heavy" "kind" "heavy" "note" "slow gate"})
+                               (call 3 "lock_list" {})
+                               (call 4 "lock_release" {"name" "nothing"})
+                               (call 5 "lock_release" {"name" "out-x"})]))
+   (run-with args)
+    (: pp (pipe 0) nul (openfd "/dev/null" 0)
+       cmd ("cd '" + cr-l2 + "' && exec env HOME='" + cr-l2 + "' BEE_AS=locker BEE_LOCKS='" + lroot + "' '"
+            + cr-love + "' '" + cr-app + "' " + args)
+       p (spawnio ["sh" "-c" cmd] nul >pp >pp [<pp] -1 0)
+       _ (close >pp) _ (close nul)
+       q (fdopen <pp) (go a) (: c (see q) (? (c < 0) a (: _ (unsee q c) (go (a + chug q)))))
+       o (go "") _ (close q)
+       [(cr-reap p) o])
+   r (run-with ("--mcp < '" + cr-l2 + "/in'"))
+   byid (foldl (\ t l (: j (json-read l) (? (two? j && tablet? (j 1)) (pin t (show ((j 1) "id")) (j 1)) t)))
+               {} (filter (\ l (0 < #l)) (lines (r 1))))
+   (text k) ((byid k) "result" "content" 0 "text")
+   (err? k) ((byid k) "result" "isError" = json-true)
+   _ ((L 'locks-release) lroot "heavy" 'heavy (getpid 0))
+   lr (run-with "--lock --heavy -- sh -c 'exit 3'")
+   _ (test
+      ((mine "granted") = 1)
+      (cr-in (text "1") "granted out-x")
+      (cr-in (text "2") "queued for heavy: position ") (cr-in (text "2") "the test holds heavy")
+      (cr-in (text "2") "GB available")
+      (cr-in (text "3") "the test holds heavy") (cr-in (text "3") "memory ")
+      (err? "4") (cr-in (text "4") "holds nothing named nothing")
+      (cr-in (text "5") "released out-x")
+      (3 = <lr))                                                   ; --lock answers the command's status
+   0)
+
+; --- the claude-code backend, against a claude played here ---------------------------------
+; a fake claude on PATH records its argv and each line it is sent, and answers every line with
+; one turn of stream-json: text in pieces, a Bash call and its result, a result with a cost
+(: cr-c2 (cr-dir "cc" "(backend claude-code)\n")
+   fk (cr-c2 + "/fake")
+   _ (mkdir fk 493)
+   (se e) (json-show {"type" "stream_event" "event" e})
+   turn1 (foldl (\ a l (a + l + "\n")) ""
+               [(json-show {"type" "system" "subtype" "init" "session_id" "s-1" "tools" ["Bash"]})
+                (se {"type" "message_start" "message" {"usage" {"input_tokens" 7 "cache_read_input_tokens" 5000 "output_tokens" 1}}})
+                (se {"type" "content_block_start" "index" 0 "content_block" {"type" "text" "text" ""}})
+                (se {"type" "content_block_delta" "index" 0 "delta" {"type" "text_delta" "text" "hi from "}})
+                (se {"type" "content_block_delta" "index" 0 "delta" {"type" "text_delta" "text" "the pipe"}})
+                (se {"type" "content_block_stop" "index" 0})
+                (json-show {"type" "assistant" "message" {"content" [{"type" "tool_use" "id" "tu1" "name" "Bash" "input" {"command" "ls -la"}}]}})
+                (json-show {"type" "user" "message" {"content" [{"type" "tool_result" "tool_use_id" "tu1" "content" "two files"}]}})
+                (json-show {"type" "result" "subtype" "success" "is_error" json-false "result" "hi from the pipe" "total_cost_usd" 0.0142})])
+   _ (cr-put fk "turn.ndjson" turn1)
+   _ (cr-put fk "claude" ("#!/bin/sh\necho \"$@\" > '" + fk + "/argv'\nwhile IFS= read -r l; do printf '%s\\n' \"$l\" >> '"
+                          + fk + "/said'; cat '" + fk + "/turn.ndjson'; done\n"))
+   _ (hark ["chmod" "755" (fk + "/claude")])
+   r (cr-run cr-c2 ("BEE_NAME=piper PATH='" + fk + "':\"$PATH\"") "'say hello'")
+   argv (: s (cr-get (fk + "/argv")) (string? s ? s ""))
+   said (: s (cr-get (fk + "/said")) (string? s ? s ""))
+   cfg (: s (cr-get (cr-c2 + "/.love/run/hive/piper/mcp.json")) (string? s ? s ""))
+   _ (test
+      (0 = <r)
+      (cr-in (r 1) "hi from the pipe")
+      (cr-in (r 1) "Bash ls -la")                                ; the child's own tool, as a line
+      (cr-in argv "--input-format stream-json") (cr-in argv "--output-format stream-json")
+      (cr-in argv "--permission-prompt-tool mcp__bee__approve") (cr-in argv "--session-id ")
+      (cr-in argv "--mcp-config ") (cr-in cfg "\"BEE_AS\":\"piper\"")
+      (cr-in said "\"type\":\"user\"") (cr-in said "say hello")
+      !(cr-in (r 1) "set ANTHROPIC_API_KEY"))                    ; claude brings its own key
    0)
 
 ; --- what bee will not do ---------------------------------------------------------------

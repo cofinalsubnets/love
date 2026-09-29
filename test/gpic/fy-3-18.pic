@@ -1,0 +1,11 @@
+.PS
+x = 0.3
+y = 0.7
+z = 1
+define m18 { line dashed thick 2 cw }
+command "text " x
+arrow cw <->
+move
+for i = 1 to 2 by 0.5 do { arrow; arc }
+m18
+.PE

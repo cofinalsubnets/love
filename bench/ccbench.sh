@@ -39,12 +39,12 @@ CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*
 [ -n "${LOVE_CFLAGS:-}" ] || { echo "ccbench: no LOVE_CFLAGS -- run \`make ccbench\`" >&2; exit 2; }
 # a caller's -Werror comes back out: a warning set is not throughput
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/love -I$R/inle -I$R/out/lib"
-# the hosted roster, common.mk's spelling: love/ plus inle/ less the kernel's own six
+# the hosted roster, common.mk's spelling: src/love/ plus src/inle/ less the kernel's own six
 love_tu="love gc ev task io map snap num arr gz"
 host_cs=$(ls "$R"/love/*.c "$R"/love/lib/*.c | grep -v '/\(love\|gc\|ev\|task\|io\|map\|snap\|num\|arr\|gz\|bare\|nohorn\|noblob\)\.c$')
 # common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's ai_typ, and
 # ld left alone orders love.data.N as emitted -- lvm_str under lvm_sym, strings as closures
-LDFLAGS="-Wl,-T,$R/love/love_data.ld"
+LDFLAGS="-Wl,-T,$R/src/love/love_data.ld"
 
 # wall-clock ms of a command, in a subshell so a cd cannot leak
 wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
@@ -57,8 +57,8 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      $cc $CFLAGS $xf -c "love/$b.c" -o "$od/$b.o" || exit 1; done
-    $cc $CFLAGS $xf -c apps/moon/lib/moonlibc/math/am.c -o "$od/am.o" || exit 1
+      $cc $CFLAGS $xf -c "src/love/$b.c" -o "$od/$b.o" || exit 1; done
+    $cc $CFLAGS $xf -c src/apps/moon/lib/moonlibc/math/am.c -o "$od/am.o" || exit 1
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
     $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/*.o "$od"/host/*.o ) || return 1
@@ -76,20 +76,20 @@ build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Ilove -Iinle -Iout/lib -c "love/$b.c" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "src/love/$b.c" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Ilove -Iinle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no moonlibc object: the link pulls members by need, so ccsize and ccdead read
     # mooncc's libc off the binary's complement instead
-    for f in apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
-      mc -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
-    { cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l \
-          love/holo/elf.l love/holo/obj.l apps/moon/lib/mksys.l
+    for f in src/apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
+      mc -Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
+    { cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
+          src/love/holo/elf.l src/love/holo/obj.l src/apps/moon/lib/mksys.l
       echo "((cite 'moon 'mksys-x64) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
     mc "$od"/*.o -o "$bin" ) || return 1
 }
 
-# one file by redirect, not a pipe: only a seekable fd 0 gets a read run (love/main.c),
+# one file by redirect, not a pipe: only a seekable fd 0 gets a read run (src/love/main.c),
 # and a pipe's read-per-byte is kernel time in every lane alike, diluting the reading
 CORPUS1=$WORK/corpus.l
 cat $CORPUS > "$CORPUS1"
@@ -122,10 +122,10 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# the inflate row's input, laid by the host love: apps/gz.l is a module and the lane
+# the inflate row's input, laid by the host love: src/apps/gz.l is a module and the lane
 # binaries have no module path. INFN is the inflated size; 0 leaves that one row dnf.
 INF=$WORK/bench.deflate
-INFN=$(cd "$R" && out/love bench/ccgen.l love/love.c "$INF" 2>/dev/null)
+INFN=$(cd "$R" && out/love bench/ccgen.l src/love/love.c "$INF" 2>/dev/null)
 case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
 # one lane: build timed once, verified, then every row with boot subtracted

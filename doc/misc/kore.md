@@ -1,6 +1,6 @@
 # kore — the multi-call toolbox
 
-apps/kore/ orients here; the laws live in test/law/kore.l, the GNU-identical smokes in
+src/apps/kore/ orients here; the laws live in test/law/kore.l, the GNU-identical smokes in
 `make test_kore`, and every doubt settles by probing the built `kore`.
 Speed and adversarial inputs are a different page, filled by
 `make -C bench korebench` (kore against busybox, uutils and GNU).
@@ -19,21 +19,21 @@ compares to busybox, toybox, GNU and uutils, name by name, is the census at the 
 
 ## the shape
 
-ONE roster — `$(korefiles)` in the Makefile: kore_head (kore's own toolboxes, apps/libra/lint.l,
-apps/vi/, apps/tui.l, apps/dns.l, apps/nc.l, the lush files, apps/cook.l), the holo linker
+ONE roster — `$(korefiles)` in the Makefile: kore_head (kore's own toolboxes, src/apps/libra/lint.l,
+src/apps/vi/, src/apps/tui.l, src/apps/dns.l, src/apps/nc.l, the lush files, src/apps/cook.l), the holo linker
 files, kore_arc (gz.l tar.l cpio.l) and kore_net (the tls stack, wget.l, www.l and net.l). The
 crew rides IN the default binary's own image, so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a four-line sh
 shim — re-evaling the cat per spawn costs ~1.3s, so only the distro, which has no image
 to ship, still runs it as a `#!/bin/love` script.
-`apps/kore/kore.l` loads LAST and dispatches off the program seat of `cmdline`: `kore TOOL
+`src/apps/kore/kore.l` loads LAST and dispatches off the program seat of `cmdline`: `kore TOOL
 ARGS..`, or symlink a tool's name to kore and argv[0] picks it (how the distro shadows at
 will). The registry is a tablet, so tool names never collide with the globals they call (the
 `mkdir` applet CALLS the `mkdir` nif; different namespaces).
 
 The file discipline, two shapes:
 
-* **a tool with a seat** (apps/nc.l, apps/cook.l): define-only, leaking
+* **a tool with a seat** (src/apps/nc.l, src/apps/cook.l): define-only, leaking
   one `<tool>-main`; a body-having tail fires it iff the file's own basename
   sits in the program seat — so the same file is a standalone tool AND a quiet
   cat member.
@@ -64,8 +64,8 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | where | tools |
 | --- | --- |
 | kore.l (thin mains) | readelf (binutils' -h -l -S -s -e, at 80 columns or -W, the dynamic symbols' versions with them), diff (diff-main; the patience/myers engines are diff.l), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both), nm, size (binutils' berkeley sums), strip (the symbol table and debugging out of an exe or shared object; `-g` the debugging alone, which is all an object may lose), ranlib (an archive rewritten with its index) |
-| apps/nc.l | nc |
-| apps/cook.l | make / cook |
+| src/apps/nc.l | nc |
+| src/apps/cook.l | make / cook |
 | core.l, the line tools | cat tac shuf echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop), column (lines laid in columns, or `-t` a table) |
@@ -96,20 +96,20 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | top.l | top (the process table, repainted; `-b` batch) |
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
-| apps/vi/ | vi |
+| src/apps/vi/ | vi |
 | ed.l | ed (the line editor), ex (the same buffer by word; its `vi` hands the buffer to vi) |
 | less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
 | openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
-| apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
-| apps/gz.l, apps/xz.l, apps/bz2.l, apps/tar.l, apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (love/lib/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (love/lib/bz2.c), tar, cpio |
+| src/apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either) |
+| src/apps/gz.l, src/apps/xz.l, src/apps/bz2.l, src/apps/tar.l, src/apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (src/love/lib/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (src/love/lib/bz2.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
 | pic.l, over png.l, jpeg.l and gif.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, a gif played) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
-| apps/lush.l | sh / lush |
+| src/apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
 
@@ -121,7 +121,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
   two forms and the boundary is 31556952/2 seconds, coreutils' own half-year. Effects
   (cp/mv/rm/..) are smoked by acting and then verifying with the shell, and the encodings are
   smoked over a BINARY file, which is the only input that says anything.
-* **the u-floor.** The shared helpers leak u-prefixed from apps/kore/u.l and are lawed pure in
+* **the u-floor.** The shared helpers leak u-prefixed from src/apps/kore/u.l and are lawed pure in
   test/law/kore.l: uatoi uread udie upad/urpad ujoin uhdr uhead/utail ucount ubase/udir usplit
   ujoinc uspec/upick uset urev udirp, core.l's ucol/utac/ufold/uexpand/uunexpand, the coder
   trio ubenc/ubdec/ubwrap and ucivil/udays, fs.l's uoct/udest/ucopy/rp-parts, and proc.l's
@@ -139,9 +139,9 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
   quits with what it answers (doc/misc/moon.md). nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
   test/kore/prop-status.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
-* **the nif lane.** fs effects ride love/posix.c (app-glob LvNif, no core edit) and its
+* **the nif lane.** fs effects ride src/love/posix.c (app-glob LvNif, no core edit) and its
   `posix_` conventions: an effect op answers () ok | an errno nom | 'badarg misuse; a
-  value op answers the value | () absence | a nom. love/posix.c holds rename symlink readlink chmod chown utime
+  value op answers the value | () absence | a nom. src/love/posix.c holds rename symlink readlink chmod chown utime
   umask rmdir hardlink (`link` the word belongs to the chain ctor). test/fs.l smokes them
   under test_hostnif. `!e` is the success test, `nom? e` the failure test, and a
   specific errno matches by name (mv's `(= e 'exdev)` lane). test/kore/fs.sh
@@ -163,7 +163,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
   it uread's (1 ..) success shape. And never name a local `err` or `out`; they are the PORTS,
   and the shadow says into a charm.
 
-## the column tools, the encodings, tsort and factor (apps/kore/core.l)
+## the column tools, the encodings, tsort and factor (src/apps/kore/core.l)
 
 `fold`, `expand` and `unexpand` are one section because they share `ucol`: all three count
 COLUMNS, so a tab steps to the next stop, `\b` steps back one and `\r` starts the line over.
@@ -201,13 +201,13 @@ is named on err, broken at the first node still standing, and leaves 1. `factor`
 division by 2 and the odd numbers — exact for anything this tree spends, and a twenty-digit
 semiprime will simply sit there, which is what GNU keeps a Pollard rho for.
 
-## the regex engine (love/boot/post.l, module 're)
+## the regex engine (src/love/boot/post.l, module 're)
 
 BRE and ERE, one parser: the dialects differ only in which sigils wear a backslash. Literals,
 `.`, `*`, `+`, `?`, `{n,m}` intervals, `|` alternation, `^`/`$`, ( ) groups, [..] classes with
 ranges, negation and the twelve POSIX [:name:] classes (first-] and edge-- literal) — with
 GNU's leniency (a repeat with no atom is ink) and one refusal, backrefs, as a parse error.
-It left kore because it is pure; apps/kore/re.l is grep over it. `(rebre p)` answers `(1 nodes ngroups)` | `()`; `(rehas
+It left kore because it is pure; src/apps/kore/re.l is grep over it. `(rebre p)` answers `(1 nodes ngroups)` | `()`; `(rehas
 nodes s)` the boolean; `(refind nodes s i)` the leftmost greedy span as `(1 start end)` — the
 `(1 ..)` shapes because a match ending at 0 is blue by measure. The matcher is greedy
 backtracking in continuation style; the laws hold the dialect by hand AND by a seeded
@@ -216,7 +216,7 @@ GNU-byte-identical smokes + the 0/1/2 exit triple (an unreadable file beats a ma
 `refind` carries group SPANS (numbered in \( order, a repeated group reading as its LAST
 iteration, GNU's \1) — sed's food.
 
-## sed-lite (apps/kore/sed.l)
+## sed-lite (src/apps/kore/sed.l)
 
 Over the regex engine. `sed [-nEi] [-e SCRIPT].. SCRIPT [FILE..]`: ;/newline-separated commands, each [ADDR[,ADDR]] VERB;
 addresses number/$/(BRE)/re/, ranges open-at-first close-at-later (numeric end at-or-before
@@ -229,9 +229,9 @@ lawed; the whole face is smoked byte-identical vs GNU (a 12-script battery + -n 
 error faces). Out of dialect, deliberately: GNU's empty-pattern reuse, \n in replacements, hold
 space.
 
-## the process tools (apps/kore/proc.l)
+## the process tools (src/apps/kore/proc.l)
 
-One nif of their own — `rusage` (love/posix.c: `(rusage who)` -> the user and sys microseconds
+One nif of their own — `rusage` (src/love/posix.c: `(rusage who)` -> the user and sys microseconds
 of this process or of the children it has reaped) — and otherwise environ/getenv/setenv,
 spawn (pid | the failure's nom; a child that cannot exec
 _exit(127)s) + wait, still (posix.c's kill), rest (core sleep, ms). env prints the world or
@@ -253,9 +253,9 @@ seconds to two places; the status answered is the command's. `-p` is the spellin
 face, not a switch between two. A kernel with no `rusage` row (netbsd, and inle) reports real
 and dashes the other two rather than call two zeroes a measurement.
 
-## the niceness, the terminal, the utmp (apps/kore/proc.l)
+## the niceness, the terminal, the utmp (src/apps/kore/proc.l)
 
-Four nifs in love/posix.c: `(prio which who)` and `(setprio which who n)` over get/setpriority
+Four nifs in src/love/posix.c: `(prio which who)` and `(setprio which who n)` over get/setpriority
 (moonlibc answers linux's `20 - nice` and a BSD's raw nice as one face), and `(termios fd)` /
 `(settermios fd l)`, the line discipline as a flat list in linux's canonical bits, which
 moonlibc respells for a BSD (a BSD's 0xff "disabled" reads as 0, and the characters linux has
@@ -273,7 +273,7 @@ no name for are kept as the terminal has them).
   loginuid where there is one, else the record holding stdin's terminal (matched by device, so
   no ttyname). kore writes no utmp; on a system with none these say so.
 
-## awk (apps/kore/awk.l)
+## awk (src/apps/kore/awk.l)
 
 A POSIX awk: BEGIN/END, `pattern { action }` items, `expr, expr` ranges, fields with `$0`
 rebuilding on either side, the special variables (NR NF FS OFS ORS FILENAME FNR SUBSEP RSTART
@@ -306,7 +306,7 @@ than none); **output pipes** (`print | "cmd"` — plain `>` and `>>` to a file a
 **RS** other than newline; **ARGV/ARGC and ENVIRON** (the arguments are walked, not published);
 printf's `*` width and `#` flag.
 
-## find (apps/kore/find.l)
+## find (src/apps/kore/find.l)
 
 `find [-L] [PATH..] [EXPR]`, PATH defaulting to `.`. Tests `-name` `-iname` `-path` `-ipath`
 (fnmatch, post.l's glob) `-type f|d|l` `-empty` `-newer FILE` `-mtime N` `-mmin N`
@@ -325,7 +325,7 @@ action gets `-print`, exactly as GNU does.
   descend through it. A dangling link is still visited.
 * it loads late in the cat because it captures `sh-match` at its define; find.l's head says so.
 
-## expr, and the record tools (apps/kore/expr.l, apps/kore/core.l)
+## expr, and the record tools (src/apps/kore/expr.l, src/apps/kore/core.l)
 
 `expr` is the one applet with a grammar: `|`, `&`, the six comparisons, `+ -`, `* / %`, `:`,
 then the primaries (`( )`, `length`, `substr`, `index`, `match`, `+ TOKEN`, a bare word). Its
@@ -350,7 +350,7 @@ walks several at once. Three things are worth knowing:
 * **od takes ONE -t per run**, the last given winning. GNU's several-at-once lane re-widens every
   column to the widest type in the set, which is a whole layout of its own and not another row.
 
-## the checksums (apps/kore/sum.l)
+## the checksums (src/apps/kore/sum.l)
 
 `cksum`, `sum`, `crc32`, `md5sum`, `sha1sum`, `sha224sum`, `sha256sum`, `sha384sum`,
 `sha512sum`, `b2sum`, `sha3sum` — the file streamed a gulp at a time through its digest, one line said. The faces are
@@ -363,17 +363,17 @@ toybox's (`-a` any length 128..512, 224 by default, `-S` shake's pad) with busyb
 of any length it could have written); the gate holds both directions, GNU reading ours and
 ours reading GNU's.
 
-The digests themselves are **love/lib/hash.c** (`md5`, `sha1`, the four sha-2s, `sha3`,
+The digests themselves are **src/love/lib/hash.c** (`md5`, `sha1`, the four sha-2s, `sha3`,
 `blake2b`, `bsdsum`, `crc32` and `cksum` — the last being POSIX's own crc, a different polynomial from `crc32`'s
 and with the byte count folded in, which is why an empty file is `4294967295 0`). md5, sha-1
 and the sha-2s share one buffering and one state layout; sha-512 keeps its 64-bit words as
 32-bit halves to ride it, and blake2b, which pads nothing and flags its last block, has its
 own. There is no love statement of the digests, so an image
-that carries no host nif — the kernel's, which compiles no `love/*.c` — answers 2 and names the
+that carries no host nif — the kernel's, which compiles no `src/love/*.c` — answers 2 and names the
 digest it is missing rather than saying a wrong number. The probe is asked at first call and
 kept, never at load: this file is baked by a love that HAS the nifs.
 
-## what the fs tools report (apps/kore/fs.l)
+## what the fs tools report (src/apps/kore/fs.l)
 
 `realpath` walks a path COMPONENT BY COMPONENT — resolving each symlink as it arrives — so a
 last name that does not exist yet still answers, which is GNU's default face and the case a
@@ -383,10 +383,10 @@ STRICTER than GNU's (it wants the path to exist), which is GNU's `readlink -e`; 
 the GNU-shaped door. `link` and `unlink` are the two syscalls said plainly, no face on them.
 
 `stat` (bare, or `-c FORMAT` / `--printf=`, which reads the escapes and adds no newline where
-`-c` does neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: love/posix.c's `stat`
+`-c` does neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: src/love/posix.c's `stat`
 answers `(size mtime mode ns uid gid nlink blocks ino atime ctime dev rdev blksize)` and `lstat`
 the same of the link itself. The tail
-is append-only and the KERNEL's own stat (inle/kmain.c) answers the first four alone — an image
+is append-only and the KERNEL's own stat (src/inle/kmain.c) answers the first four alone — an image
 tree has no ownership to tell about — so it is asked by `tally` and a world without it says so.
 
 * **the default `stat` face is GNU's block, line for line.** It was refused once, and the
@@ -422,7 +422,7 @@ tree has no ownership to tell about — so it is asked by `tally` and a world wi
   no NSS anywhere. The primary comes first, then the rest ascending, which is the order the
   kernel keeps its credential list in and so the order GNU prints.
 
-## the /proc family (apps/kore/proc.l)
+## the /proc family (src/apps/kore/proc.l)
 
 `ps`, `free`, `uptime`, `pidof`, `pgrep`, `pkill`, `killall` and `pwdx`. **No nif grew for
 any of them** — /proc is a filesystem, so the whole family is `uread` and a parser, and a
@@ -454,7 +454,7 @@ rather than as an error.
   under its own name, because `killall sleep` on a shared box reaches into other people's
   work.
 
-## the clock (apps/kore/proc.l)
+## the clock (src/apps/kore/proc.l)
 
 **UTC and only UTC.** There is no tz database in this tree, so localtime IS gmtime — the same
 call moonlibc made, for the same reason. `date -u` is taken and changes nothing. `-d @SECONDS` and
@@ -463,7 +463,7 @@ against GNU at all; the gate runs the oracle under `TZ=UTC`. The calendar itself
 exact integer civil-from-days in core.l (`ucivil`/`udays`, lawed by the round trip), which stat's
 `%y` reads too.
 
-## patch (apps/kore/patch.l)
+## patch (src/apps/kore/patch.l)
 
 The other half of diff.l: that file WRITES unified hunks, this reads them back and lays them on
 a tree. `-pN` (unsaid drops every leading directory, patch's own default), `-R`, `-i`, `-o`,
@@ -485,7 +485,7 @@ parsers for a shape nothing in this decade emits.
 * the gate's oracle is **the tree, not the message**: GNU patch's chatter has moved between
   releases; what it leaves on disk has not.
 
-## the line endings (apps/kore/core.l)
+## the line endings (src/apps/kore/core.l)
 
 `dos2unix`, `unix2dos` and `mac2unix` are one walk under three names; what separates them is
 which break goes in and which comes out. The transform is the easy half — `tr -d '\r'` is most
@@ -508,7 +508,7 @@ of `dos2unix` — and it is not why these are tools.
 Not built: `-c` conversion modes (ascii/7bit/iso), BOM handling, `-b` backups, and the
 `--info` report.
 
-## html2text (apps/kore/lens.l)
+## html2text (src/apps/kore/lens.l)
 
 `html2text [-w COLS] [FILE..]`, and the same three-part path `man` takes with the first part
 swapped: lapiz's html reader takes the page to the document AST, `ttyshow` lays it out at a
@@ -538,12 +538,12 @@ inline spans. `<b>` is `<strong>` and `<tt>` is `<code>` to a reader with one fo
 None of this is law 1 — that says `htread` reads what `htshow` writes, and reading a page
 *nobody* wrote with `htshow` is a different promise. It is stated in `test/host/lapiz.l` instead.
 
-## markdown (apps/kore/lens.l)
+## markdown (src/apps/kore/lens.l)
 
 `markdown [-t html|roff|text|dvi] [-w COLS] [FILE..]` — the same lens, driven the direction papel
 drives it. `-t html` (the default) is `md->ht`, `-t roff` is `md->rf`, `-t text` is `md->tty`
 at a width. `-t dvi` sets one document (a file or stdin; a man page is read as roff) in pages
-with caja, TeX's engine in love (apps/caja/), from Computer Modern's metrics and plain TeX's
+with caja, TeX's engine in love (src/apps/caja/), from Computer Modern's metrics and plain TeX's
 hyphenation patterns in a TeX tree -- `$CAJA_TEXMF`, else TeX Live's usual places. The roff lane is the build's own page path a command away: `markdown -t roff
 doc/love.md` writes what `doc/love.1` is made of, `.TH` and all, because the `.TH` comes from
 the document's front matter and lapiz reads front matter as the meta block.
@@ -558,12 +558,12 @@ the document's front matter and lapiz reads front matter as the meta block.
   is dropped, a rule vanishes, a link flattens to its text with the url trailing. That is
   lapiz's stated rf behaviour, not this tool's.
 
-## man (apps/kore/man.l)
+## man (src/apps/kore/man.l)
 
 `man [-w] [SECTION] NAME..`. The tree writes its pages in `doc/*.md` and the build shows them
-as roff (`tools/mkman.l`, through `apps/lapiz.l`); reading one back is the same lens run the other
+as roff (`src/tools/mkman.l`, through `src/apps/lapiz.l`); reading one back is the same lens run the other
 way. So man owns none of the three hard parts — lapiz's roff reader takes the page to the
-document AST, its `ttyshow` lays that out at a width, and `apps/kore/less.l` pages the result.
+document AST, its `ttyshow` lays that out at a width, and `src/apps/kore/less.l` pages the result.
 What is man's own is the search path, the decompression, and the handing over.
 
 * **The search** is MANPATH if it is set, else `/usr/local/share/man`, `/usr/share/man`,
@@ -582,7 +582,7 @@ here) is a different macro set, and rendering it through the man-macro reader pr
 of macro names rather than prose. So it is named as unsupported instead of rendered wrong.
 Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one.
 
-## www (apps/kore/www.l)
+## www (src/apps/kore/www.l)
 
 `www [-w COLS] URL|FILE`. A text browser that owns none of the hard parts. wget's round trip
 fetches, lapiz's `ttpage` lays the page out with every link as `[n]`, and less's engine pages
@@ -606,7 +606,7 @@ keys over less's:
   one asks for the text, prefilled with what the field holds, and `RETURN` sends the form.
   lapiz writes the form's other controls into the link as they stand: hidden fields, checked
   boxes, the chosen option and the first submit button. A form that POSTs shows no field.
-* **Pages come gzipped** when the server will send them that way (apps/gz.l unzips them). A
+* **Pages come gzipped** when the server will send them that way (src/apps/gz.l unzips them). A
   page in latin-1 or windows-1252, by its header or else its own `<meta>`, is converted to
   utf-8. A `<base href>` is what the page's links resolve against, and an image shows as its
   alt text.
@@ -638,9 +638,11 @@ verified as wget's is: its certificate to a root in the host's bundle, or its ke
 `~/.love/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.
 
-## pic (apps/kore/pic.l)
+## pic (src/apps/kore/pic.l)
 
-`pic` is one command with four verbs; with none it is `pic cat`.
+`pic` is one command with four verbs. With none, it is `pic cat` when its first input is a
+PNG, JPEG or GIF (or a flag is one of cat's, `-g`, `-w`, `-h`) and classic pic otherwise
+(below).
 
 `pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture, PNG, JPEG or GIF (a
 GIF's first frame), as wide as the terminal (or `COLS`, or 80 when there is none) and no
@@ -686,16 +688,29 @@ level the 256-colour cube shows (0, 95, 135, 175, 215, 255). OUT is a PNG unless
 extension or `-t` says otherwise; to `.ans` it is the blocks' text itself, `-c 256` in the
 cube's codes.
 
-The decoders: apps/png.l (every colour type and depth, Adam7), love/lib/jpeg.c (baseline and
-progressive, any sampling), love/lib/gif.c (LZW, interlace, transparency, and the three
+`pic [-nCSU] [FILE..]` and `pic -t [-cCSUz] [FILE..]` are classic pic (src/apps/kore/gpic.l),
+Kernighan's picture language as GNU pic speaks it: a troff preprocessor that copies a
+document through and turns each picture between `.PS` and `.PE` (or `.PF`, `.PY`) into
+troff's `\D` drawing commands, or with `-t` into tpic `\special`s in a TeX box `\graph`. A
+flag of GNU pic's (`-n -t -c -C -S -U -z`, `-D`, `-T dev`) always means classic pic. Its
+output is held byte for byte to groff's own `pic` (`make test_gpic`, the corpus in
+test/gpic): boxes, circles, ellipses, arcs, lines, arrows, splines, moves and text with
+their attributes, places and corners, expressions and variables, blocks, `define`, `for`,
+`if`, `copy` and `copy thru`, `sprintf`, `print` and `command`, colours, polygons, slanted
+boxes and `aligned` text; `-c` and `-z` for TeX. `sh` runs only under `-U`. Not yet: dashed
+or dotted ellipses and rounded boxes, `.PS <file`, groff's `rand`, and its error messages
+(the exit status and what is drawn before an error agree, the words on stderr do not).
+
+The decoders: src/apps/png.l (every colour type and depth, Adam7), src/love/lib/jpeg.c (baseline and
+progressive, any sampling), src/love/lib/gif.c (LZW, interlace, transparency, and the three
 disposals across frames). A GIF keeps at most 1000 frames and 128 MB of them. The encoders:
-apps/png.l (a palette of 1 to 8 bits a pixel up to 256 colours, else RGBA; a row that
-repeats the one above filtered up, others sub), love/lib/jpeg.c (baseline), apps/gif.l (one
+src/apps/png.l (a palette of 1 to 8 bits a pixel up to 256 colours, else RGBA; a row that
+repeats the one above filtered up, others sub), src/love/lib/jpeg.c (baseline), src/apps/gif.l (one
 frame, the palette also sixel's).
 
-## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (apps/kore/net.l)
+## telnet, telnetd, httpd, nslookup, ping, ping6 and traceroute (src/apps/kore/net.l)
 
-`telnet HOST [PORT]` is nc (apps/nc.l) with the telnet protocol's options answered
+`telnet HOST [PORT]` is nc (src/apps/nc.l) with the telnet protocol's options answered
 (RFC 854 and 855). It lets the server echo and suppress go-ahead, offers to suppress
 go-ahead itself, and refuses every other option either way. On a terminal it follows the
 server's echo. While the server echoes, the terminal is raw and each key is sent as typed
@@ -715,7 +730,7 @@ closes the connection and the client's going hangs the program up. `/etc/issue.n
 `-f`'s file, is shown first. `-F` and `-K` are what it always does; `-i`, `-w` and `-S` are
 refused by name.
 
-`microcom [-X] [-s SPEED] [-t TIMEOUT] TTY` (apps/kore/proc.l) is busybox's serial terminal,
+`microcom [-X] [-s SPEED] [-t TIMEOUT] TTY` (src/apps/kore/proc.l) is busybox's serial terminal,
 the other way onto a board: the line is opened read-write, never as the controlling terminal
 and without waiting on its carrier, then set raw 8N1 with no flow control at `-s`'s speed or
 its own. Bytes pass as they are both ways; ^X leaves unless `-X`, `-t` milliseconds of quiet
@@ -734,7 +749,7 @@ are read. With no `-type` it asks A and AAAA, and a dotted quad asks its PTR. Th
 A, AAAA, CNAME, MX, NS, PTR, SOA and TXT. The query offers EDNS0's 1232 bytes, so a long
 answer such as a TXT set arrives whole; one that still does not fit is said to be cut, as
 there is no TCP retry. A name that does not exist exits 1. The protocol pieces live in
-apps/dns.l (`dns-qedns`, `dns-raw`, `dns-records`), beside the resolver.
+src/apps/dns.l (`dns-qedns`, `dns-raw`, `dns-records`), beside the resolver.
 
 `ping [-46q] [-c COUNT] [-i SECS] [-W SECS] [-s SIZE] HOST` sends an ICMP echo every `-i`
 seconds (1 by default, fractions allowed), `-c` times or until ^C, and prints each reply's
@@ -756,10 +771,10 @@ that socket brings the routers' errors back on its error queue (`IP_RECVERR`). A
 
 `ping6`, or `ping -6`, or `ping` given an address with a colon in it, does the same over
 ICMPv6, and its TTL is the reply's hop limit. A name is looked up by `resolve6` in
-apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
+src/apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` is at most
 1452 here, one datagram on a 1500-byte link.
 
-## ssh, sshd and scp (apps/ssh/)
+## ssh, sshd and scp (src/apps/ssh/)
 
 One of everything, OpenSSH's first choices: curve25519-sha256 for the exchange, ssh-ed25519
 keys, chacha20-poly1305@openssh.com both ways, public-key authentication. The client came first
@@ -793,7 +808,7 @@ kore's answers both, so kore to kore, OpenSSH's `scp -O` to kore and kore to Ope
 work. A received name with a slash, or `.` or `..`, is refused. Two remote hosts, or none,
 are refused by name.
 
-## ed and ex (apps/kore/ed.l)
+## ed and ex (src/apps/kore/ed.l)
 
 One buffer and two dialects over it. The addresses are POSIX's in both: `N . $ 'x /re/
 ?re?` with `+ - ^` offsets (a bare number after an address adds too), joined by `,` and `;`,
@@ -817,7 +832,7 @@ the word taking that many lines from the range's last. Beyond ed's: named regist
 for `d`, `ya` and `pu` (an upper-case name appends), `> <` by `shiftwidth`, `&` and `~`, a
 range filtered through `!cmd`, `j` joining at the blanks, `set` (`number list autoprint
 ignorecase shiftwidth report window`), and `vi`, which hands the buffer to the vi engine
-(apps/vi/vi.l's `vi-buffer`) and ends with it; `-v` starts there. Its messages are vim's
+(src/apps/vi/vi.l's `vi-buffer`) and ends with it; `-v` starts there. Its messages are vim's
 shapes (`"f" 5L, 31B`), and errors are words on stderr.
 
 Standard input that is not a terminal is a script, and an error in one ends the edit with
