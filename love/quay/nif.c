@@ -323,7 +323,8 @@ static lvm(lvm_mouse) {
   Sp[4] = word(s); }
  Sp += 4; Ip += 1; ai_musttail return Continue(); }
 
-// (picture scr slot k): the base64 is laid straight from the store, counted first for Have
+// (picture scr slot k): the base64 (k 3) or the raw rgba (k 4) is laid straight from the
+// store, counted first for Have
 static lvm(lvm_picture) {
  struct cb *c = scr_ok(Sp[0]);
  struct cb_img const *im = c && (Sp[1] & Sp[2] & 1) && getcharm(Sp[1]) > 0 && getcharm(Sp[1]) < cb_nimg
@@ -349,6 +350,15 @@ static lvm(lvm_picture) {
    acc <<= 8 * (3 - got);
    *o++ = (uint8_t) abc[acc >> 18 & 63], *o++ = (uint8_t) abc[acc >> 12 & 63];
    *o++ = got == 2 ? (uint8_t) abc[acc >> 6 & 63] : '=', *o++ = '='; }
+  out = word(s); }
+ else if (im && k == 4 && (uint64_t) im->off + (uint64_t) im->w * im->h <= (c->sn - cb_shead) / 4u) {
+  uintptr_t const n = (uintptr_t) im->w * im->h;
+  Have(str_width(n * 4));
+  struct ai_str *s = ini_str(str(Hp), n * 4); Hp += str_width(n * 4);
+  uint32_t const *px = cb_ipx(c) + im->off;
+  uint8_t *o = (uint8_t*) txt(s);
+  for (uintptr_t i = 0; i < n; i++, o += 4)
+   o[0] = (uint8_t) (px[i] >> 16), o[1] = (uint8_t) (px[i] >> 8), o[2] = (uint8_t) px[i], o[3] = px[i] >> 24 ? 255u : 0u;
   out = word(s); }
  Sp[2] = out;
  Sp += 2; Ip += 1; ai_musttail return Continue(); }
