@@ -149,8 +149,8 @@
    (us3 a b c) (a + b + c)
    (ustw f x) (f (f x))
    (test
-    (15 = (: (g i) ((ustw (usadd i)) i) (g 5)))          ; the doc's promise: collapses to first-order
-    (7 = ((ustw (us3 1 2)) 1))                           ; two params short, then cascaded
+    (15 = (: (g i) (ustw (usadd i) i) (g 5)))            ; the doc's promise: collapses to first-order
+    (7 = (ustw (us3 1 2) 1))                             ; two params short, then cascaded
     (9 = (: h (usadd 4) (h (h 1))))))                    ; value position: the partial reverts, still right
 
 ; --- the body-position `:` splices into its parent (lflat) --- one frame where the source
@@ -172,7 +172,7 @@
    (oan x) (x = 0 ? 3 (oan (x - 1)))                ; an operand no fold knows -- 3
    (test
     (7 = (oa2 1 3 4))                               ; arity 2, three args
-    (7 = ((oa2 1 3) 4))                             ; ... the same, spelled split
+    (7 = (oa2 1 3 4))                               ; ... the same, spelled split
     (8 = (oa3 1 9 8 1))                             ; arity 3, four args -- [9 8] indexed at 1
     ; a curried nif splits the same way -- the tower is the surplus applied to its answer
     (4096 = (* (oan 0) 2 4)) (1024 = (+ (oan 0) 2 4)) (4 = (- (oan 0) 1 2))))

@@ -29,11 +29,11 @@
    xs (sort (keys (d 'shelves)))
    sy (: (row y) (? (5 = peep (d 't) (xs 1 + d 'w * y) 0) y (row (y + 1))) (row 0))
    _ (bump (xs 1) sy 107)
-   _ (test ((pl 'tools) 1 'act = 'keep))                   ; cook's link turned off
+   _ (test (pl 'tools 1 'act = 'keep))                     ; cook's link turned off
    _ (bump (xs 2) sy 107)
-   _ (test ((pl 'tools) 2 'act = 'keep))                   ; kore is love's already: no change
+   _ (test (pl 'tools 2 'act = 'keep))                     ; kore is love's already: no change
    _ (bump (xs 1) sy 107)
-   _ (test ((pl 'tools) 1 'act = 'link))                   ; ..and cook's back on
+   _ (test (pl 'tools 1 'act = 'link))                     ; ..and cook's back on
    dr (d 'door)
    _ (pins p 'x <dr 'y (<>dr - 1))
    _ (roost-turn g 106)

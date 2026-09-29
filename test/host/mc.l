@@ -68,32 +68,32 @@
    s (mc-new R R)
    _ (test (0 = (s 'act)) (0 = (s 'over)))
    _ (test (s = (mc-key s 122)))                    ; an idle key answers the state
-   _ (mc-key s 106) _ (test (1 = ((s 'l) 'cur)))
-   _ (mc-key s -9)  _ (test (2 = ((s 'l) 'cur)))
-   _ (mc-key s 107) _ (test (1 = ((s 'l) 'cur)))
-   _ (mc-key s 71)  _ (test (5 = ((s 'l) 'cur)))    ; G
-   _ (mc-key s 103) _ (test (0 = ((s 'l) 'cur)))    ; g
+   _ (mc-key s 106) _ (test (1 = (s 'l 'cur)))
+   _ (mc-key s -9)  _ (test (2 = (s 'l 'cur)))
+   _ (mc-key s 107) _ (test (1 = (s 'l 'cur)))
+   _ (mc-key s 71)  _ (test (5 = (s 'l 'cur)))      ; G
+   _ (mc-key s 103) _ (test (0 = (s 'l 'cur)))      ; g
    _ (mc-key s 9)   _ (test (1 = (s 'act)))         ; tab crosses
    _ (mc-key s 9)   _ (test (0 = (s 'act)))
    ; enter: into a directory, and into the one a link resolves to
    _ (mc-key s 106) _ (test ("sub" = <(mc-at (s 'l))))
-   _ (mc-key s 10)  _ (test ((R + "/sub") = ((s 'l) 'dir)) (0 = ((s 'l) 'cur)))
-   _ (mc-key s 117) _ (test (R = ((s 'l) 'dir)))    ; u climbs back
+   _ (mc-key s 10)  _ (test ((R + "/sub") = (s 'l 'dir)) (0 = (s 'l 'cur)))
+   _ (mc-key s 117) _ (test (R = (s 'l 'dir)))      ; u climbs back
    _ (mc-key s 103) _ (mc-key s 106) _ (mc-key s 106) _ (mc-key s 106)
    _ (test ("good" = <(mc-at (s 'l))))
-   _ (mc-key s 10)  _ (test ((R + "/good") = ((s 'l) 'dir)))
-   _ (mc-key s 117) _ (test (R = ((s 'l) 'dir)))
+   _ (mc-key s 10)  _ (test ((R + "/good") = (s 'l 'dir)))
+   _ (mc-key s 117) _ (test (R = (s 'l 'dir)))
    ; ..and the two it refuses: a broken link and a plain file leave the pane alone
    _ (mc-key s 103) _ (mc-key s 106) _ (mc-key s 106)
    _ (test ("bad" = <(mc-at (s 'l))))
-   _ (mc-key s 10)  _ (test (R = ((s 'l) 'dir)))
+   _ (mc-key s 10)  _ (test (R = (s 'l 'dir)))
    _ (mc-key s 71)  _ (test ("run.sh" = <(mc-at (s 'l))))
-   _ (mc-key s 10)  _ (test (R = ((s 'l) 'dir)))
+   _ (mc-key s 10)  _ (test (R = (s 'l 'dir)))
    ; r re-reads: a file made behind mc's back shows on the next read and not before
    _ (blurt (R + "/zeta.txt") "z\n")
-   _ (test (6 = #((s 'l) 'es)))
-   _ (mc-key s 114) _ (test (7 = #((s 'l) 'es)))
-   _ (unlink (R + "/zeta.txt")) _ (mc-key s 114) _ (test (6 = #((s 'l) 'es)))
+   _ (test (6 = #(s 'l 'es)))
+   _ (mc-key s 114) _ (test (7 = #(s 'l 'es)))
+   _ (unlink (R + "/zeta.txt")) _ (mc-key s 114) _ (test (6 = #(s 'l 'es)))
    ; q and ^D set over, and nothing else does
    _ (test (0 = (s 'over)))
    s2 (mc-new R R) _ (mc-key s2 113) _ (test (1 = (s2 'over)))

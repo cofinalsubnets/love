@@ -228,8 +228,8 @@
  ; name (or the binder carrying it) and is never a pattern, which is why the two cannot clash.
  (7 = (: (f [a b]) (a + b) (f '(3 4))))
  (11 = (: (g x [a b]) (x + a) (g 10 '(1 2))))
- ('(1 2 3 4) = (: ((k [a b]) [c d]) [a b c d] ((k '(1 2)) '(3 4))))
- (7 = (: ((k a) b) (a + b) ((k 3) 4))))                  ; ..and an all-nom binder is untouched
+ ('(1 2 3 4) = (: ((k [a b]) [c d]) [a b c d] (k '(1 2) '(3 4))))
+ (7 = (: ((k a) b) (a + b) (k 3 4))))                    ; ..and an all-nom binder is untouched
 
 ; there is nothing ungated here any more, because `@` no longer scares at all: every
 ; pattern is read. a head that names no tag, or names one and misses its shape, is the

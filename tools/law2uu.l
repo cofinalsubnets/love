@@ -76,7 +76,7 @@
    to-val   '((msr vnum) (rea rval) (zed zval) (nat nval) (bool bval))
    (co t f g)
     (? (f = g) t
-       (g = 'val) [((look f to-val) 1) t]
+       (g = 'val) [(look f to-val 1) t]
        ((ht f) < (ht g)) (: r (look f up-rungs) (co [(r 1) t] (r 2) g))
        (: r (look f dn-rungs) (co [(r 1) t] (r 2) g)))
 
@@ -151,7 +151,7 @@
    (guard1? b) (hd? b "?" && #b = 4 && (one? (b 2) || one? (b 3)))
    ; only a guard the tower cannot read erases; one it can becomes an orb above
    (peel b env) (? (guard1? b && ! (won? (tx (b 1) env)))
-                   [((peel (? (one? (b 2)) (b 3) (b 2)) env) 0) (show (b 1))]
+                   [(peel (? (one? (b 2)) (b 3) (b 2)) env 0) (show (b 1))]
                    [b ()])
    (letish? b) (hd? b ":" && #b = 4 && nom? (b 1))
 
@@ -193,11 +193,11 @@
                    && (: c (e 1) (hd? c "<=" && zero? (c 1)))
                    && (hd? (e 2) "charm?"))
    (range? b env)
-    (: c (unlet ((peel b env) 0) env)
+    (: c (unlet (peel b env 0) env)
        (? (! (two? c)) ()
           (: e (c 0) en (c 1)
              (? (! (bool-range? e) && ! (nat-range? e)) ()
-                (: inner (? (bool-range? e) ((e 1) 1) ((e 1) 2))
+                (: inner (? (bool-range? e) (e 1 1) (e 1 2))
                    r (tx inner en)
                    (? (won? r) (r 2) ()))))))
 
@@ -259,7 +259,7 @@
    ranged (filter rng? done)
    missed (filter (\ d (!(two? (d 1)) && !(rng? d))) done)
    (pad s n) (? (#s < n) (pad (s + " ") n) s)
-   (srcof d) (show ((unglue (opfix (d 1))) 2))
+   (srcof d) (show (unglue (opfix (d 1)) 2))
 
    ; --- emit ---
    _ (pl "; test/uuvallaw.l -- generated from test/law.l by tools/law2uu.l. Do not edit;")
@@ -305,7 +305,7 @@
         && (: q (c 2) (two? q && #q = 3 && q 0 = 'veq))))
    (twinof d)
     (? !(veqclaim? (d 2)) 0
-       (: q (((d 2) 3) 2) ta (q 1) tb (q 2)
+       (: q (d 2 3 2) ta (q 1) tb (q 2)
           g (intern ("law-" + (qstrip (show (d 0)))))
           (pl " ; ..and the same law over the pinned carrier, by the bridge",
            pl (" (defq law-" + qstrip (show (d 0)) + "-p"),

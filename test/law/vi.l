@@ -48,7 +48,7 @@
       (at (vgob '("abc" "def" "ghi") (bytes "2" + [366])) = '(2 2))        ; the count rides both halves
       (at (vgob '("abc" "def" "ghi") [377]) = '(0 0))                      ; the fences hold
       (at (vgob '("abcdef" "ab") [366]) = '(1 1))                          ; the short line clamps
-      (((vgob '("abc" "def") (bytes "d" + [366])) 'lines) = '("abc" "def"))  ; d then a diagonal: nothing cut
+      ((vgob '("abc" "def") (bytes "d" + [366]) 'lines) = '("abc" "def"))    ; d then a diagonal: nothing cut
       (at (vgob '("abc" "def") (bytes "d" + [366])) = '(0 0)))             ; ..and nothing moves either
 
 ; --- words: w e b across lines ---
@@ -197,7 +197,7 @@
       ; the bracket objects cross rows, which is the whole point in a .l file
       (lns (vgo '("(a" " b" " c)") "di(") = '("()"))
       (lns (vgo '("x(a" " b" " c)y") "lda(") = '("xy"))
-      (((vgo '("(a" " b)" "z") "yi(") 'reg) = '(chr "a\n b"))
+      ((vgo '("(a" " b)" "z") "yi(" 'reg) = '(chr "a\n b"))
       ; ..and the register they fill is one p away from being lines again
       (lns (vgo '("(a" " b)" "z") "yi(jjp") = '("(a" " b)" "za" " b")))
    _ (test
@@ -246,7 +246,7 @@
       (lns (vgo '("" "ab") ">j") = '("" "  ab"))              ; an empty line stays empty
       (lns (vgo '("ab" "cd") ">>u") = '("ab" "cd"))
       ; a shift is not a cut: it leaves the register alone
-      (((vgo '("ab" "cd") "yy>>") 'reg) = '(lin ("ab")))
+      ((vgo '("ab" "cd") "yy>>" 'reg) = '(lin ("ab")))
       (lns (vgob '("ab") ((bytes ":set sw=4") + [CR] + (bytes ">>"))) = '("    ab"))
       (st? (vgob '("ab") ((bytes ":set sw") + [CR])) 'msg = "shiftwidth=2")
       (st? (vgob '("ab") ((bytes ":set nu") + [CR])) 'msg = "not an option: nu"))
@@ -270,8 +270,8 @@
       (at (vfeed (view '("a" "b" "c" "d") "G" 4) (bytes "H")) = '(1 0))
       (at (vfeed (view '("a" "b" "c" "d") "gg" 4) (bytes "L")) = '(2 0))
       (at (vfeed (view '("a" "b" "c" "d") "gg" 4) (bytes "M")) = '(1 0))
-      (((vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zt")) 'top) = 2)
-      (((vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zb")) 'top) = 0)
+      ((vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zt") 'top) = 2)
+      ((vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zb") 'top) = 0)
       ; the view slides, the cursor does not
       (at (vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zt")) = '(2 0)))
    _ (test
@@ -371,8 +371,8 @@
       (st? (vgo '("abc" "abc") "v/b\r") 'mode = 'v)               ; a search comes back to it
       (st? (vgo '("abc" "abc") "v/b\ry") 'reg = '(chr "ab"))
       (: f (vmini '("abc") "vl") (has? f "\e[7mab\e[0m"))
-      (: q (vgo '("abc") "vl") _ (pins q 'w 40 'h 4) (has? ((vlay q) 1) "-- VISUAL --"))
-      (: q (vgo '("abc") "Vl") _ (pins q 'w 40 'h 4) (has? ((vlay q) 1) "-- VISUAL LINE --"))
+      (: q (vgo '("abc") "vl") _ (pins q 'w 40 'h 4) (has? (vlay q 1) "-- VISUAL --"))
+      (: q (vgo '("abc") "Vl") _ (pins q 'w 40 'h 4) (has? (vlay q 1) "-- VISUAL LINE --"))
       (: f (vmini '("abc" "") "Vj") (has? f "\e[7m \e[0m"))     ; an empty line still shows
       (: f (vmini '("abc") "vl\e") (!(has? f "\e[7m"))))
 
@@ -429,7 +429,7 @@
 ;     that only moves the cursor re-lexes nothing -----------------------------
    _ (test
       (: st (hlon (small '("(map f)" "(g 1)") "")) _ (vfresh st)
-         r0 ((st 'hlrow) 0)
+         r0 (st 'hlrow 0)
          ; [[text carry from to] painted]: the key is what it was painted from
          ((<r0 = ["(map f)" 0 0 7 'l]) && (0 < #<>r0)))
       ; the cache is keyed by SCREEN row, so it is the height of the view and
@@ -475,7 +475,7 @@
       (at (see (box '("abcdefgh" "b" "c" "d") 4 5) [6]) = '(3 0))
       (at (see (box '("abcdefgh" "b" "c" "d") 4 5) ((bytes ":set wrap\r") + [6])) = '(2 0))
       ; and zb cannot walk the view off the top of the file
-      (((see (box '("a" "b" "c") 4 5) "2Gzb") 'top) = 0))
+      ((see (box '("a" "b" "c") 4 5) "2Gzb" 'top) = 0))
 
 ; --- :e and :o -- the request the face performs, and the buffer swap it calls -
    _ (test
@@ -742,7 +742,7 @@
 
 ; --- the other languages (apps/vi/hues.l): the name picks the lexer, else a #!
 ;     naming a shell, and each answers hue-lex's shape, the carry included ----
-   (hk g s in) (map (\ r <r) <((hues-lexer g) s in 1))
+   (hk g s in) (map (\ r <r) <(hues-lexer g s in 1))
    (hc g ls) (hue-carry (hues-lexer g) ls)
    _ (test
       (hues-lang "a/b.c" "" = 'c)
@@ -788,7 +788,7 @@
       (hk 'make "$(ho)/love: a.o $(b)" 0 = '(func var))
       (hk 'make "ifeq ($(A),1)" 0 = '(pre var))
       (hk 'make "\techo $@ $(X) 'q'" 0 = '(func var var string))   ; a recipe is sh
-      (<((hues-lexer 'make) "\ttest -s $$t" 0 1) = '((func 1 5) (var 9 12)))
+      (<(hues-lexer 'make "\ttest -s $$t" 0 1) = '((func 1 5) (var 9 12)))
       (hk 'make "x.o: CFLAGS=1" 0 = '(func)))
    _ (test
       (map (\ f (hues-lang f "")) ["x.md" "x.json" "x.s" "x.S" "x.asm" "x.diff" "x.patch" "x.awk"
@@ -799,7 +799,7 @@
       (hk 'json "{\"a\": [1, -2.5e3, true], \"b\": \"x\\\"y\"} // c" 0
           = '(type number number const type string comment))
       (hk 'diff "--- a/x" 0 = '(type))
-      (<((hues-lexer 'diff) "@@ -1 +1 @@ fn" 0 1) = '((ent 0 11)))
+      (<(hues-lexer 'diff "@@ -1 +1 @@ fn" 0 1) = '((ent 0 11)))
       (hk 'diff "+new" 0 = '(added))
       (hk 'diff "-old" 0 = '(removed))
       (hk 'diff " ctx" 0 = ())

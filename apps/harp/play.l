@@ -297,4 +297,4 @@
 
 ; the seat: fire only when this file is the program on the real command line.
 (: s (cite 'verbs 'fire ["harp" "play.l"])
-   (two? s ? (quit ((cite 'play 'harp-main) >s))))
+   (two? s ? (quit (cite 'play 'harp-main >s))))

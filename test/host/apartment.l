@@ -171,7 +171,7 @@
    loud (slurp j2)
  (test (#quiet = 5 * 4 * song-chunk) (any (i \ 0 != quiet (i * 89)) ^(#quiet // 89)) (k0 = 0)   ; the drone, before any phrase
        (n0 = 1)
-       (: y ((drone-voice ()) 1 (iota 4800)) (1.0 < amax y - amin y))   ; ..and it is a wave, not a level
+       (: y (drone-voice () 1 (iota 4800)) (1.0 < amax y - amin y))     ; ..and it is a wave, not a level
        (k1 = 1) (any (i \ 0 != heard (i * 89)) ^(#heard // 89))          ; the phrase, once, and heard
        ; a phrase is its notes and each note's echoes, every echo behind its note and softer
        (: s3 (apartment-song-new (jug 0) (wheel 7)) _ (apartment-song-feed s3) _ (pin s3 'next 0) _ (apartment-song-feed s3)

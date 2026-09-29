@@ -113,7 +113,7 @@
         nfcap 1024
         ; an open star: a coin whose kind pins star is numeric by declaration, so a numeral powers
         ; it through its own * (ipow is generic). no size to read, so this lane keeps the count cap.
-        (starred? x) (? (coin? x) (: e (kreg 0 (kind x)) (? (two? e) (= 1 ((cup e) 'star)) 0)) 0)
+        (starred? x) (? (coin? x) (: e (kreg 0 (kind x)) (? (two? e) (= 1 (cup e 'star)) 0)) 0)
         (num-ap n x) (? (constellation? x) (powg x n)
                         (starred? x)
                         (? (whole? n) (: m (abs n)
@@ -161,7 +161,7 @@
                               (lit? f) (f x)                    ; the kind's own measure
                               (net (load x))))
               (saturate x))
-   (measure x) (? (coin? x) (: f ((ktab x) 'net) (? (lit? f) (f x) (net x)))
+   (measure x) (? (coin? x) (: f (ktab x 'net) (? (lit? f) (f x) (net x)))
                   (net x))
    _ (seal-hook 8 measure)
    (prod x) (? (tray? x) (aprod x)

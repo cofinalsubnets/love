@@ -143,7 +143,7 @@
                         + " of " + show npair + " compressed words -- an unencodable C form?\n"), quit 1))
 
    bad (foldl (\ a i (: x (demv (d32 i)) y (norm (d16 i))
-                         (? (x = y) a ([((pairs i) 0) x y] . a)))) () (jot npair))
+                         (? (x = y) a ([(pairs i 0) x y] . a)))) () (jot npair))
    _ (foldl (\ _ b (say err ("  word " + show (b 0) + ": 32-bit `" + (b 1)
                                    + "` vs C `" + (b 2) + "`\n"), 0)) 0 (firstn 12 bad))
    _ (? (atom? bad) 0
