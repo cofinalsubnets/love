@@ -1,11 +1,17 @@
-; apps/crow.l -- a coding agent: claude over the messages api, and four tools it may
-; call here -- read_file, write_file, edit_file, shell. all but a read ask y/n first.
+; apps/crow.l -- a coding agent: a model over its api, and four tools it may call here --
+; read_file, write_file, edit_file, shell. all but a read ask y/n first.
 ;
-;   out/love apps/crow.l [-y] [prompt ..]     one prompt, or a > loop on stdin
+;   out/love apps/crow.l [-y] [--plain] [prompt ..]     one prompt, the screen, or a > loop
 ;
-; wants ANTHROPIC_API_KEY. the answer streams: text prints as it comes. the key goes out
-; only once tls-vouch has the host's certificate naming it, in date, and signed by a
-; pinned issuer (crow-pins).
+; the settings are salt's: ~/.love/etc/crow.l, then ./.crow.l over it, each a form per line:
+;   (api anthropic)       or openai: chat completions, what ollama, llama-server and most hosts speak
+;   (url "https://..")    the endpoint, http only to this machine
+;   (model NAME)          claude-opus-5 on anthropic; openai has no default
+;   (key-env VAR)         where the key is: ANTHROPIC_API_KEY, or OPENAI_API_KEY
+;   (max-tokens N)        64000 on anthropic; openai leaves it to the server
+;   (shell WORD ..)       the shell a command line runs in; lush -a, this binary's own
+; the answer streams: text prints as it comes. a key goes out only over tls, and only once
+; tls-vouch has the host's certificate naming it, in date, and signed by a pinned issuer.
 (borrow 'posix)
 (borrow 'json)
 
@@ -18,8 +24,27 @@
    header (cite 'kore 'wg-header)
    digits (cite 'kore 'wg-digits)
 
-   crow-model "claude-opus-5"
-   crow-host "api.anthropic.com"
+   crow-salt ((cite 'salt 'salt) 'crow)
+   (word w) (string? w ? w (show w))
+   (setting k d) (: v (peep crow-salt k ()) (two? v ? (word <v) d))
+   (slurp-file p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) s)))
+   (spit-file p s) (: f (open p "w") (? (hot? f) (: _ (say f s) _ (close f) 1)))
+
+   ; --- where the model is ---
+   crow-api (setting 'api "anthropic")
+   crow-oai? (crow-api = "openai")
+   crow-model (setting 'model (crow-oai? ? "" "claude-opus-5"))
+   crow-url (setting 'url (crow-oai? ? "https://api.openai.com/v1/chat/completions"
+                                       "https://api.anthropic.com/v1/messages"))
+   crow-at ((cite 'kore 'wg-url) crow-url)                   ; [tls? host port path] | ()
+   crow-host (? (two? crow-at) (crow-at 1) "")
+   crow-key-env (setting 'key-env (crow-oai? ? "OPENAI_API_KEY" "ANTHROPIC_API_KEY"))
+   crow-max (: m (peep crow-salt 'max-tokens ()) (? (two? m) <m (crow-oai? ? () 64000)))
+   ; this machine, where plain http is allowed and no key is wanted
+   crow-local? (elem crow-host ["localhost" "127.0.0.1" "::1"])
+   ; claude's newest take the server-side fallback on a refusal
+   crow-fallbacks? (!crow-oai? && (starts? crow-model "claude-opus-5" || starts? crow-model "claude-fable"
+                                   || starts? crow-model "claude-mythos"))
    crow-cap 30000                                           ; a tool answer's bytes, at most
    ; the issuers whose signature on the host's certificate lets the key go: google trust
    ; services' WE1, by its spki's sha-256. CROW_PINS adds more, space-separated
@@ -31,11 +56,9 @@
     {"name" name "description" desc "eager_input_streaming" json-true
      "input_schema" {"type" "object" "properties" props "required" req}}
    ; --- the shell ---
-   ; the settings are salt's: ~/.love/etc/crow.l, then ./.crow.l over it. (shell WORD ..)
-   ; is the argv a command line follows after -c, (shell lush -a) when unset: lush first is
-   ; this binary's own, -a its verbs ahead of PATH; any other word runs as written
-   crow-salt ((cite 'salt 'salt) 'crow)
-   (word w) (string? w ? w (show w))
+   ; (shell WORD ..) is the argv a command line follows after -c, (shell lush -a) when
+   ; unset: lush first is this binary's own, -a its verbs ahead of PATH; any other word
+   ; runs as written
    crow-shell (: s (peep crow-salt 'shell ()) (two? s ? (map word s) ["lush" "-a"]))
    crow-ours? (<crow-shell = "lush")
    ; lush's verbs lead only in its autonomous mode; gregarious (its default) puts PATH first
@@ -58,17 +81,38 @@
                     + "are love's own userland (kore); anything else comes from PATH.") ""))
            {"command" (prop "the command line")} ["command"])]
 
+   ; --- the project's own instructions ---
+   ; from / down to the working directory, each directory's AGENTS.md, else its CLAUDE.md:
+   ; the files other agents read, so one file instructs them all
+   crow-cwd (: d (getenv "PWD") (? (string? d && 0 < #d) d "."))
+   ; "" for the root, then "/home", "/home/gwen" .. the working directory
+   crow-dirs (foldl (\ a p (a + [(a (#a - 1) + "/" + p)]))
+                    [""] (filter (\ p (0 < #p)) ((cite 'kore 'usplit) 47 crow-cwd)))
+   (instr-in d) (: a (slurp-file (d + "/AGENTS.md"))
+                   (? (string? a) [(d + "/AGENTS.md") a]
+                      (: c (slurp-file (d + "/CLAUDE.md")) (? (string? c) [(d + "/CLAUDE.md") c]))))
+   crow-instr (filter two? (map instr-in crow-dirs))
+   (clip0 s) (#s <= 40000 ? s (snip s 0 40000 + "\n[cut]"))
+
    crow-system
-    ("You are crow, a coding agent in a terminal. The working directory is " + getenv "PWD"
+    ("You are crow, a coding agent in a terminal. The working directory is " + crow-cwd
      + ". Use the tools to look before you change things, and keep replies short. Commands run in `"
      + crow-shname + "`."
      + (crow-ours? ? " That is lush, a POSIX shell, not bash: write POSIX sh." "")
      + (crow-verbs-lead? ? (" These commands are love's own implementations, POSIX in their "
-        + "flags, so a GNU-only option may be refused:" + crow-verbs + ".") ""))
+        + "flags, so a GNU-only option may be refused:" + crow-verbs + ".") "")
+     + (two? crow-instr
+        ? ("\n\nThe project's instructions follow, from the root down; the nearer file wins.\n"
+           + foldl (\ a p (a + "\n--- " + <p + " ---\n" + clip0 (p 1))) "" crow-instr)
+        ""))
 
    ; --- the wire ---
-   ; a pull reader over the session: 'h holds bytes heard and not yet taken
-   (feed r) (: s (hear (r 't)) (? (string? s) (pin r 'h (r 'h + s), 1) 0))
+   ; a pull reader over the connection: 'h holds bytes heard and not yet taken. over tls
+   ; it hears records, over plain http the socket's own gulps
+   (feed r) (: s (? (r 'tls) (hear (r 't))
+                    (: q (r 't) c (see q) (? (c < 0) () (: _ (unsee q c) (chug q)))))
+               (? (string? s) (pin r 'h (r 'h + s), 1) 0))
+   (sock r) (? (r 'tls) (r 't 's) (r 't))
    (upto r sep)                                             ; the bytes before sep, both taken; () at the end
     (: h (r 'h) k (find h sep 0)
        (? (k < 0) (? (feed r) (upto r sep))
@@ -87,29 +131,42 @@
        (: h (r 'h) (? (0 < #h) (pin r 'h "", h) (feed r) (piece r))))
    (drain r) (: (go a) (: p (piece r) (? (string? p) (go (a + p)) a)) (go ""))
 
-   ; one POST, its head read -> a reader carrying 'code, or () for a dead wire. the key goes
-   ; only to a peer tls-vouch answers 1 for; else 'code is its reason
-   (crow-open key body)
-    (: t (dial crow-host 443)
-       v (? (tablet? t) (vouch t crow-host crow-pins))
-       (? (tablet? t && v != 1) (close (t 's), {'code v})
-          (tablet? t)
-          (: _ (tsay t ("POST /v1/messages HTTP/1.1\r\nHost: " + crow-host
-                        + "\r\nx-api-key: " + key
-                        + "\r\nanthropic-version: 2023-06-01"
-                        + "\r\nanthropic-beta: server-side-fallback-2026-07-01"
-                        + "\r\ncontent-type: application/json"
-                        + "\r\ncontent-length: " + show #body
-                        + "\r\nConnection: close\r\n\r\n" + body))
-             r {'t t 'h ""}
-             hd (upto r "\r\n\r\n")
-             (? (string? hd)
-                (: sp (find hd " " 0)
-                   te (header hd "transfer-encoding")
-                   (pins r 'code (digits (snip hd (sp + 1) (sp + 4)))
-                           'ch (string? te && te = "chunked")))))))
+   (request key body)
+    (: tls? <crow-at port (crow-at 2)
+       keyed (tls? && string? key && 0 < #key)
+       ("POST " + crow-at 3 + " HTTP/1.1\r\nHost: " + crow-host
+        + (port = (tls? ? 443 80) ? "" (":" + show port))
+        + (? crow-oai? (keyed ? ("\r\nauthorization: Bearer " + key) "")
+             ((keyed ? ("\r\nx-api-key: " + key) "")
+              + "\r\nanthropic-version: 2023-06-01"
+              + (crow-fallbacks? ? "\r\nanthropic-beta: server-side-fallback-2026-07-01" "")))
+        + "\r\ncontent-type: application/json"
+        + "\r\ncontent-length: " + show #body
+        + "\r\nConnection: close\r\n\r\n" + body))
 
-   ; the next server-sent event's data -> a tablet, () at the end
+   ; one POST, its head read -> a reader carrying 'code, or () for a dead wire. plain http
+   ; reaches this machine alone and carries no key; a key goes over tls only to a peer
+   ; tls-vouch answers 1 for. a refusal is a reader whose 'code is the reason
+   (crow-open key body)
+    (: tls? <crow-at keyed (string? key && 0 < #key)
+       (? (!tls? && !crow-local?) {'code 'plain-http-off-this-machine}
+          (: t (? tls? (dial crow-host (crow-at 2)) ((cite 'dns 'dial) crow-host (crow-at 2)))
+             up (? tls? (tablet? t) (hot? t))
+             v (? (up && tls? && keyed) (vouch t crow-host crow-pins) 1)
+             (? (up && v != 1) (close (t 's), {'code v})
+                up
+                (: q (request key body)
+                   _ (? tls? (tsay t q) (: _ (say t q) (flush t)))
+                   r {'t t 'h "" 'tls tls?}
+                   hd (upto r "\r\n\r\n")
+                   (? (string? hd)
+                      (: sp (find hd " " 0)
+                         te (header hd "transfer-encoding")
+                         (pins r 'code (digits (snip hd (sp + 1) (sp + 4)))
+                                 'ch (string? te && te = "chunked")))))))))
+
+   ; the next server-sent event's data -> a tablet, () at the end. a data line that is not
+   ; json ([DONE]) is passed over
    (event r)
     (: s (peep r 'sse "") k (find s "\n\n" 0)
        (? (k < 0) (: p (piece r) (? (string? p) (pin r 'sse (s + p), event r)))
@@ -158,15 +215,76 @@
                   (go stop)))))
        (go ()))
 
+   ; --- chat completions, the other dialect ---
+   ; the conversation stays in claude's shape and is said in this one at the edge: the
+   ; system prompt a first message, a tool_use a tool_call, each tool_result a tool message
+   (oai-tool t) {"type" "function"
+                 "function" {"name" (t "name") "description" (t "description")
+                             "parameters" (t "input_schema")}}
+   (oai-msg m)
+    (: c (m "content") role (m "role")
+       (? (string? c) [{"role" role "content" c}]
+          (role = "assistant")
+           (: txt (foldl (\ a b (b "type" = "text" ? (a + b "text") a)) "" c)
+              uses (filter (\ b (b "type" = "tool_use")) c)
+              m2 {"role" "assistant" "content" (? (#txt = 0 && two? uses) json-null txt)}
+              _ (? (two? uses)
+                   (pin m2 "tool_calls"
+                        (map (\ b {"id" (b "id") "type" "function"
+                                   "function" {"name" (b "name") "arguments" (json-show (b "input"))}})
+                             uses))
+                   0)
+              [m2])
+          (map (\ b {"role" "tool" "tool_call_id" (b "tool_use_id") "content" (b "content")})
+               (filter (\ b (b "type" = "tool_result")) c))))
+
+   ; its stream as the same [stop blocks]: the content pieces one text block, each tool
+   ; call a tool_use block gathered by its index, the finish said as claude says it
+   (stream-oai f r)
+    (: txt {"type" "text" "text" ""} calls (tablet 4) js (tablet 4) st {'open 0}
+       (call i tc)
+        (: b (: b0 (peep calls i ())
+                (? (tablet? b0) b0
+                   (: nb {"type" "tool_use" "id" (peep tc "id" ("call_" + show i)) "name" "" "input" {}}
+                      _ (pin calls i nb) nb)))
+           fn (tc "function")
+           _ (? (tablet? fn && string? (fn "name")) (pin b "name" (b "name" + fn "name")) 0)
+           (? (tablet? fn && string? (fn "arguments")) (pin js i (peep js i "" + fn "arguments")) 0))
+       (go stop)
+        (: e (event r)
+           (? !(tablet? e)
+               (: _ (? (st 'open) ((f 'break) 0) 0)
+                  uses (map (\ i (: b (calls i) j (json-read (peep js i "{}"))
+                                    (pin b "input" (two? j && tablet? (j 1) ? (j 1) {}))))
+                            (sort (keys calls)))
+                  [(? (two? uses) "tool_use" stop) ((0 < #(txt "text") ? [txt] ()) + uses)])
+              (tablet? (e "error")) [() (e "error")]
+              (: ch (e "choices") c (? (two? ch) <ch) d (? (tablet? c) (c "delta"))
+                 x (? (tablet? d) (d "content"))
+                 _ (? (string? x && 0 < #x)
+                      (: _ (pin st 'open 1) _ ((f 'text) x) (pin txt "text" (txt "text" + x)))
+                      0)
+                 tcs (? (tablet? d) (d "tool_calls"))
+                 _ (? (two? tcs) (map (\ tc (call (peep tc "index" 0) tc)) tcs) 0)
+                 fr (? (tablet? c) (c "finish_reason"))
+                 (go (? (string? fr)
+                        (fr @ "tool_calls" "tool_use" "stop" "end_turn" "length" "max_tokens"
+                              "content_filter" "refusal" fr)
+                        stop)))))
+       (go ()))
+
    ; msgs newest first, as the loop keeps them
    (crow-body msgs)
-    (json-show {"model" crow-model "max_tokens" 64000 "system" crow-system "stream" json-true
-                "tools" crow-tools "messages" (rev msgs) "fallbacks" "default"
-                "cache_control" {"type" "ephemeral"}})
+    (: b (? crow-oai?
+            {"model" crow-model "stream" json-true "tools" (map oai-tool crow-tools)
+             "messages" ({"role" "system" "content" crow-system} . catmap oai-msg (rev msgs))}
+            {"model" crow-model "system" crow-system "stream" json-true
+             "tools" crow-tools "messages" (rev msgs) "cache_control" {"type" "ephemeral"}})
+       _ (? (crow-max != ()) (pin b (crow-oai? ? "max_tokens" "max_tokens") crow-max) 0)
+       _ (? crow-fallbacks? (pin b "fallbacks" "default") 0)
+       (json-show b))
 
    ; --- the tools ---
-   (slurp-file p) (: f (open p "r") (? (hot? f) (: s (slurp f) _ (close f) s)))
-   (spit-file p s) (: f (open p "w") (? (hot? f) (: _ (say f s) _ (close f) 1)))
    (clip s) (#s <= crow-cap ? s (snip s 0 crow-cap + "\n[cut at " + show crow-cap + " bytes]"))
 
    ; the child's output read by see, which parks this task alone, and its exit by gather,
@@ -236,10 +354,10 @@
           !(charm? (r 'code))
            ((f 'note) (crow-host + " is not vouched for (" + show (r 'code) + "); the key stays here"), ())
           !(r 'code = 200)
-           (: j (json-read (drain r)) _ (close (r 't 's))
+           (: j (json-read (drain r)) _ (close (sock r))
               ((f 'note) (show (r 'code) + " " + (two? j ? (json-show (j 1 "error")) "")), ()))
-          (: _ ((f 'wire) (r 't 's))
-             s (stream f r) _ (close (r 't 's)) _ ((f 'wire) ())
+          (: _ ((f 'wire) (sock r))
+             s (? crow-oai? (stream-oai f r) (stream f r)) _ (close (sock r)) _ ((f 'wire) ())
              stop <s blocks (s 1)
              (? !(string? stop)
                  ((f 'note) (tablet? blocks ? (json-show blocks) "the stream broke off"), ())
@@ -498,11 +616,13 @@
    ; a prompt on the command line runs once, plainly; with none, a terminal gets the full
    ; screen and anything else the > loop. --plain asks for the loop on a terminal too
    (crow-main as)
-    (: key (getenv "ANTHROPIC_API_KEY")
+    (: key (getenv crow-key-env)
        yes (elem "-y" as)
        pl (elem "--plain" as)
        words (filter (\ w (w != "-y" && w != "--plain")) as)
-       (? !(string? key && 0 < #key) (say err "crow: set ANTHROPIC_API_KEY\n", 1)
+       (? (atom? crow-at) (say err ("crow: cannot read the url " + crow-url + "\n"), 1)
+          (#crow-model = 0) (say err "crow: name the model, (model NAME) in ~/.love/etc/crow.l\n", 1)
+          (!crow-local? && !(string? key && 0 < #key)) (say err ("crow: set " + crow-key-env + "\n"), 1)
           (two? words) (: p (foldl (\ a w (a + " " + w)) <words >words)
                           _ (turn key (plain yes) [(user p)])
                           0)
