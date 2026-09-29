@@ -622,14 +622,16 @@ keys over less's:
   preformatted blocks kept as written, and each `=>` line a link resolved against the page;
   other text shows as it is. A request for input (1x) is a field whose answer goes back as
   the query, a redirect (3x) is followed, and the rest of the statuses are said. The server's
-  certificate is pinned the first time it is seen, host:port and its SHA-256 a line in
-  `~/.love/gemini_hosts`, and held to after: gemini's own trust on first use. A changed one
+  key is pinned the first time it is seen, host:port and the SHA-256 of its
+  SubjectPublicKeyInfo a line in `~/.love/gemini_hosts`, and held to after: gemini's own trust
+  on first use. A changed one
   is refused with the line to delete to accept it. When a server asks for a client
   certificate, an empty one goes back.
 
 Absent: forms that POST, scripts, cookies, pictures other than PNG, JPEG and GIF, charsets other than
-utf-8, latin-1 and windows-1252, and gemini's client certificates. An https peer is not
-verified (wget's client). The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
+utf-8, latin-1 and windows-1252, and gemini's client certificates. An https server is
+verified as wget's is: its certificate to a root in the host's bundle, or its key to a pin in
+`~/.love/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.
 
 ## pic and picless (apps/kore/pic.l)

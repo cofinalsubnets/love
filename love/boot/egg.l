@@ -9,9 +9,10 @@
  _ (sit ev () post)
  _ (pin book 'born (clock now))
  ; the internals move off the book and into a module: the same names, invisible to a
- ; global read, and `(cite 'guts 'opof)` or `(borrow 'guts)` reaches one from a test or a
- ; debug session -- on the baked image too, which is the whole gain over nomop (that
- ; flag can only answer from an unbaked boot). nomop now leaves them on the book as well.
+ ; global read. compiled code holds its own references, so once the boot has compiled
+ ; the module keeps only the doors a run still asks for by name; the rest -- the cell
+ ; doors, the stack and hook doors, the compiler's walkers over them -- leave for good.
+ ; nomop leaves every one of them on the book and in the module.
  (ev '(:
    ; keep this list up to date
    m '(cellread seal-hook stack setstack lib enter leave gv trim peek poke pick place seek stem span
@@ -28,5 +29,11 @@
                (: _ (pin F k v) (? keep 0 (pull book k k)))))
    _ (each m p)
    _ (each n p)
+   ; what a baked run may still cite: the bounded byte doors (love/mem.c) and the glaze's
+   ; reads of ev.l -- none reaches a word by address or writes a cell
+   kept '(peepw pinw peepv pinv gv nifop letc opfixed)
+   _ (? keep 0 (each (filter (\ k (? (elem k kept) 0 1)) (keys F)) (\ k (pull F k k))))
+   ; raw code addresses: the natives read them through g->reach, not these
+   _ (? keep 0 (each '(calloutdrive calloutresume) (\ k (pull book k k))))
    _ (pin M 'guts F)
    ()))))

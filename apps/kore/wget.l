@@ -1,13 +1,15 @@
 ; apps/kore/wget.l -- wget: one url to one file, over http or https.
 ;
-;   wget [-q] [-O FILE] URL
+;   wget [-q] [--no-check-certificate] [-O FILE] URL
 ;
 ; a GET with Connection: close, redirects followed (eight, then it stops), a chunked
 ; body unchunked, the rest read to the peer's close. https rides the tls module's
-; client (apps/tls/client.l) -- which does not verify the peer, and says so once
-; per fetch unless -q. the file is -O, else the url's last path word, else index.html.
-; the exit codes are wget's own: 0, 1 a bad url or a dead wire, 3 the file, 8 a server
-; that answered with an error status.
+; client (apps/tls/client.l), which verifies the server's certificate to a root in the
+; host's bundle (SSL_CERT_FILE names another) or to a pin in ~/.love/tls_pins, and a
+; refusal says which check failed on which certificate. --no-check-certificate, as GNU's,
+; skips that and says so unless -q. the file is -O, else the url's last path word, else
+; index.html. the exit codes are wget's own: 0, 1 a bad url or a dead wire, 3 the file, 5
+; a certificate not believed, 8 a server that answered with an error status.
 (module 'kore
 (borrow 'path)
 (borrow 'posix)
@@ -69,14 +71,16 @@
                           (say j (snip b (e + 2) (e + 2 + n)), go (e + 4 + n))))))
        _ (go 0)
        (slurp j))
-   ; one round trip -> (status headers body) | (); more is header lines to add, each
-   ; ending \r\n (www asks for gzip)
+   ; one round trip -> (status headers body) | () | why a tls peer was not believed; more is
+   ; header lines to add, each ending \r\n (www asks for gzip); how is tls-open's
    (wg-once tls? host port path) (wg-ask tls? host port path "")
-   (wg-ask tls? host port path more)
+   (wg-ask tls? host port path more) (wg-ask-how tls? host port path more 'verify)
+   (wg-ask-how tls? host port path more how)
     (: req ("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: love-wget\r\nAccept: */*\r\n" + more + "Connection: close\r\n\r\n")
        raw (? tls?
-              (: t ((cite 'tls 'tls-dial) host port)
-                 (? !(tablet? t) ()
+              (: t ((cite 'tls 'tls-open) host port how)
+                 (? (string? t) ['why t]
+                    !(tablet? t) ()
                     (: _ ((cite 'tls 'tls-say) t req)
                        r ((cite 'tls 'tls-slurp) t)
                        _ (close (t 's))
@@ -84,7 +88,8 @@
               (: s ((cite 'dns 'dial) host port)
                  (? !(hot? s) ()
                     (: _ (say s req) _ (flush s) r (slurp s) _ (close s) r))))
-       (? !(string? raw) ()
+       (? (two? raw) (raw 1)                                   ; the tls refusal, said
+          !(string? raw) ()
           (: k (wg-find raw "\r\n\r\n" 0)
              (? (k < 0) ()
                 (: head (snip raw 0 k)
@@ -93,17 +98,18 @@
                    code (? (sp < 0) 0 (wg-digits (snip head (sp + 1) (sp + 4))))
                    te (wg-header head "transfer-encoding")
                    [code head (? (string? te && (wg-lower te) = "chunked") (wg-unchunk body) body)])))))
-   (wg-fetch url hops quiet)
+   (wg-fetch url hops quiet how)
     (: u (wg-url url)
        (? (atom? u) [1 ("wget: not a url: " + url)]
-          (: _ (? (<u && !quiet) (say err "wget: the peer is not verified\n") 0)
-             r (wg-once <u (u 1) (u 2) (u 3))
-             (? (atom? r) [1 ("wget: no answer from " + (u 1))]
+          (: _ (? (<u && how = 'none && !quiet) (say err ("wget: not checking the certificate of " + (u 1) + "\n")) 0)
+             r (wg-ask-how <u (u 1) (u 2) (u 3) "" how)
+             (? (string? r) [(? (0 = wg-find r "cannot connect" 0) 1 5) ("wget: " + r)]
+                (atom? r) [1 ("wget: no answer from " + (u 1))]
                 (: code <r
                    loc (wg-header (r 1) "location")
                    (? (300 <= code && code < 400 && string? loc)
                       (? (hops < 1) [1 "wget: too many redirects"]
-                         ((? quiet 0 (say err ("wget: -> " + wg-plain loc + "\n"))), wg-fetch (wg-resolve url loc) (hops - 1) quiet))
+                         ((? quiet 0 (say err ("wget: -> " + wg-plain loc + "\n"))), wg-fetch (wg-resolve url loc) (hops - 1) quiet how))
                       (200 <= code && code < 300) [0 (r 2)]
                       [8 ("wget: " + (u 1) + " answered " + show code)]))))))
    (wg-name url)
@@ -114,23 +120,24 @@
        nm2 (? (q < 0) nm (snip nm 0 q))
        (? (0 < #nm2) nm2 "index.html"))
    (wget-main as)
-    (: (go a q o u) (? (atom? a) [q o u]
-                       (<a = "-q") (go >a 1 o u)
-                       (<a = "-O" && two? >a) (go >>a q <>a u)
-                       (<a = "-h" || <a = "--help") [q o ()]
-                       (go >a q o <a))
-       r (go as () () ())
-       quiet <r dest <>r url (r 2)
+    (: (go a q o u k) (? (atom? a) [q o u k]
+                         (<a = "-q") (go >a 1 o u k)
+                         (<a = "--no-check-certificate") (go >a q o u 'none)
+                         (<a = "-O" && two? >a) (go >>a q <>a u k)
+                         (<a = "-h" || <a = "--help") [q o () k]
+                         (go >a q o <a k))
+       r (go as () () () 'verify)
+       quiet <r dest <>r url (r 2) how (r 3)
        ; a seat with a page's network and no socket (inle under a browser, inle/wasm): the
        ; kernel's fetch door lays the file itself, whole, and -O - has no door there
-       (? !(string? url) (say err "usage: wget [-q] [-O FILE] URL\n", 1)
+       (? !(string? url) (say err "usage: wget [-q] [--no-check-certificate] [-O FILE] URL\n", 1)
           (elem 'fetch (names ()))
            (: nm (? (string? dest) dest (wg-name url))
               (? (nm = "-") (say err "wget: -O - is not a door on this machine\n", 3)
                  (: c ((ev 'fetch) url nm)
                     (? (charm? c && c = 0) (? quiet 0 (say err ("wget: fetched -> " + nm + "\n")), 0)
                        (say err ("wget: cannot fetch " + url + (charm? c ? (" (errno " + show (0 - c) + ")") "") + "\n"), 4)))))
-          (: f (wg-fetch url 8 quiet)
+          (: f (wg-fetch url 8 quiet how)
              (? !(<f = 0) (say err (<>f + "\n"), <f)
                 (: nm (? (string? dest) dest (wg-name url))
                    body <>f

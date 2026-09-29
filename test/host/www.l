@@ -255,4 +255,36 @@
    _ (hark ["rm" "-rf" root])
    0)
 
+;; https, where openssl is here: a page off openssl's s_server, its leaf under a root laid
+; here -- taken with that root named by SSL_CERT_FILE, refused under the host's own bundle
+; with the reason said
+(: G (cite 'kore 'ww-get)
+   os? (two? (stat "/usr/bin/openssl"))
+   odir ((cwd 0) + "/out/.wwwt-" + show (getpid 0))
+   (osh c) (hark ["sh" "-c" ("exec 2>/dev/null; cd " + odir + " && " + c)])
+   (srv port) (: p (tether ["openssl" "s_server" "-quiet" "-tls1_3" "-naccept" "1" "-www" "-accept" ("127.0.0.1:" + show port)
+                            "-key" (odir + "/leaf.key") "-cert" (odir + "/leaf.pem")])
+                 _ (rest 500) p)
+   (reap p) (: _ (still <p 15) (: g (gather <p) (? (two? g || nom? g) g (rest 2, reap p))))
+   cf0 (getenv "SSL_CERT_FILE") home0 (getenv "HOME")
+   _ (? os? (: _ (hark ["mkdir" "-p" (odir + "/.love")])
+               _ (osh ("openssl req -x509 -newkey rsa:2048 -nodes -keyout root.key -out root.pem -days 2 -subj /CN=t-root"
+                       + " -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign"))
+               (osh ("printf 'basicConstraints=critical,CA:FALSE\\nsubjectAltName=IP:127.0.0.1\\n' > l.cnf"
+                     + " && openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout leaf.key -subj /CN=t-leaf -out leaf.csr"
+                     + " && openssl x509 -req -in leaf.csr -CA root.pem -CAkey root.key -days 2 -extfile l.cnf -out leaf.pem")))
+          0)
+   (page port) (: p (srv port) g (G ("https://127.0.0.1:" + show port + "/") 1) _ (reap p) g)
+   (has s x) (string? s && 0 <= (cite 'kore 'wg-find) s x 0)
+   _ (? os?
+        (: _ (setenv "SSL_CERT_FILE" (odir + "/root.pem"))
+           a (page 7441)
+           _ (setenv "SSL_CERT_FILE" "/nonexistent/bundle.pem")
+           b (page 7442)
+           _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
+           _ (hark ["rm" "-rf" odir])
+           (test (<a = 0) (has (a 3) "TLSv1.3") (<b = 1) (has (b 1) "no root certificates") (has (b 1) "tls_pins")))
+        0)
+   0)
+
 (test_fin (), puts "www: ok", putc 10, 0)

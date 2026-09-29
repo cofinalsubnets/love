@@ -930,7 +930,7 @@
     'find "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
     'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
     'more "usage: more [-Nise] [+N|+/PAT] [FILE..]"
-    'wget "usage: wget [-q] [-O FILE] URL"
+    'wget "usage: wget [-q] [--no-check-certificate] [-O FILE] URL"
     'bc "usage: bc [-l] [-q] [FILE..]
   -l  the math library (e l a s c j), and scale = 20
   -q  accepted: nothing is printed at start with or without it"
