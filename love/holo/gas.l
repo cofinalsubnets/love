@@ -308,6 +308,14 @@
                              (gx-ins (it 1) (it 2) (it 3)))
                       (scare 'gas-x64-line it))                    ; a directive has no place in a template
    (gx-text src) (catmap gx-item (gx-locals (att-read src)))
+   ;; ..and a file-scope run (an assembly source's): encoded exactly by as.l -- the width it says,
+   ;; any addressing, the flags a 32-bit op sets -- and lowered as a template only where as.l
+   ;; has no row (the system lane)
+   (gx-exact src)
+    ; both refusing, as.l's word stands: it names the instruction, the template lane an operand
+    (catmap (it \ (? (<it = 'op) (trap (i \ [['raw (as-instr i)]]) it (\ a b (trap gx-item it (\ _ _ (scare a b)))))
+                     (gx-item it)))
+            (gx-locals (att-read src)))
 
    ;; -- a64, the ARM dialect: dst first, xN/wN/sp/xzr, #imm, [base, #off], b.cond. --
    ;; operands: (reg rN w) | zr | (imm n) | (mem base off) | (sym s) -- a sysreg, an option, a label
@@ -666,7 +674,11 @@
                      (go <>b acc))
                  (w = ".purgem") (go >l acc)
                  (elem w '(".set" ".equ"))
-                  (: xs (xa-oplist r) _ (pin sv <xs (val <>xs)) (go >l acc))
+                  (: xs (xa-oplist r) v (xa-trim (? (two? >xs) <>xs ""))
+                     (? (gf-ident? v && !(charm? (peep sv v ()))) (go >l (s . acc))   ; an alias: gas-top lays it
+                        ; a value over labels (`.set .L__sym_size_f, .-f`) is layout's, not a constant here
+                        (: k (trap val <>xs (\ _ _ 'label))
+                           (? (k = 'label) (go >l (s . acc)) (: _ (pin sv <xs k) (go >l acc))))))
                  (w = ".irp")
                   (: b (grab >l '(".irp" ".rept") ".endr") xs (xa-oplist r)
                      (go <>b (foldl (\ a v (go (map (x \ psub x [[<xs v]]) <b) a)) acc >xs)))
@@ -686,6 +698,23 @@
                  (go >l (ssub s . acc)))))
        (rev (go ls ())))
    ; does gas-text read it whole: instructions, and labels on lines of their own
+   ; .base64's text -> its bytes: six bits a character accumulate, a byte out per eight; padding
+   ; and anything else outside the alphabet carries no bits
+   (gf-b64v c) (? (65 <= c <= 90) (c - 65) (97 <= c <= 122) (c - 71) (48 <= c <= 57) (c + 4)
+                  (c = 43) 62 (c = 47) 63 -1)
+   (gf-b64 bs)
+    (: (go l a n acc)
+        (? (atom? l) (rev acc)
+           (: v (gf-b64v <l)
+              (? (v < 0) (go >l a n acc)
+                 (: a2 ((a << 6) | v) n2 (n + 6)
+                    (? (8 <= n2) (go >l (a2 & ((1 << (n2 - 8)) - 1)) (n2 - 8) (((a2 >> (n2 - 8)) & 255) . acc))
+                       (go >l a2 n2 acc))))))
+       (go bs 0 0 ()))
+   ; a bare symbol name, the right side of an alias `.set`
+   (gf-alpha? c) (65 <= c <= 90 || 97 <= c <= 122)
+   (gf-ident? t) (0 < #t && (gf-alpha? (t 0) || t 0 = 95 || t 0 = 46)
+                  && all (c \ gf-alpha? c || digit? c || c = 95 || c = 46 || c = 36) (chars t))
    (gas-plain? tgt src)
     (all (l \ (: s (xa-trim l) c (gf-labat s)
                  (? (0 = #s) 1 (0 <= c) (0 = #(xa-trim (snip s (c + 1) #s))) (s 0 != 46))))
@@ -719,7 +748,9 @@
        (emit fs) (: nm (st 'cur) _ (row nm (? (nm = home) htd (gf-dflt nm))) r (secs nm)
                     (pin secs nm [<r <>r (revcat fs <>>r)]))
        (flush _) (: r (st 'run)
-                    (? (two? r) (pin st 'run (), emit (gas-text tgt (xa-join "\n" (rev r)))) 0))
+                    (? (two? r) (: t (xa-join "\n" (rev r))
+                                   (pin st 'run (), emit (tgt = 'x64 ? (gx-exact t) (gas-text tgt t))))
+                       0))
        (goto nm td) (row nm td, pin st 'prev (st 'cur), pin st 'cur nm)
        (raw bs) (? (two? bs) (emit [['raw bs]]) 0)
        (num e) (gimm (gtoks e))
@@ -756,6 +787,22 @@
                       (emit [['skipx (map (t \ (<t = 'lref ? ['sym (rl <>t <>>t)] t)) ts) f 0]])
                      (raw (map (i \ f & 255) ^(num <xs)))))
               (mn = ".org") (org rest)
+              (mn = ".base64") (raw (catmap gf-b64 (gf-strs rest)))
+              ; what the pre-pass left: an alias, or a value over labels only .size reads
+              (elem mn '(".set" ".equ"))
+               (? (gf-ident? (xa-trim <>xs)) (pin st 'alias ([(xa-unquote <xs) (xa-unquote <>xs)] . peep st 'alias ())) 0)
+              (mn = ".weak") (pin st 'globl (rev (map xa-unquote xs) + st 'globl))   ; a static link: a definition
+              (mn = ".local") (pin st 'local (map xa-unquote xs + peep st 'local ()))
+              ; a common symbol: its zeros in .bss at its alignment, and exported unless .local said
+              (elem mn '(".comm" ".lcomm"))
+               (: nm (xa-unquote <xs) sz (num <>xs)
+                  al (? (two? >>xs) (num <>>xs) (: (p2 k) (? (k < 16 && k * 2 <= sz) (p2 (k * 2)) k) (p2 1)))
+                  c (st 'cur) pv (st 'prev)
+                  _ (goto ".bss" (gf-dflt ".bss"))
+                  _ (emit [['align al]]) _ (pin labs nm ".bss") _ (emit [['label (name nm)]])
+                  _ (raw (map (i \ 0) ^sz))
+                  _ (pins st 'cur c 'prev pv)
+                  (? (mn = ".comm" && !(elem nm (peep st 'local ()))) (pin st 'globl (nm . st 'globl)) 0))
               (mn = ".balign") (emit [['align (num <xs)]])
               (mn = ".p2align") (emit [['align (1 << num <xs)]])
               (mn = ".align") (emit [['align (? (tgt = 'x64) (num <xs) (1 << num <xs))]])   ; bytes on x86, a power elsewhere
@@ -773,7 +820,7 @@
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
               ; what a static link never reads: symbol types and sizes, visibility, unwind rows
-              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal") || starts? mn ".cfi_") 0
+              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal" ".file" ".ident") || starts? mn ".cfi_") 0
               (scare 'gas-directive mn)))
        (line s0)
         (: s (xa-trim s0)
@@ -835,6 +882,13 @@
                                                               (map (f \ (? (later? f) (lay f) f)) <>>r))])))
                       0 (st 'order)))
             0)
+       ; an alias lays its label beside its target's, in the target's section
+       _ (foldl (\ _ al (: a <al s <>al nm (labs s)
+                          (? !(string? nm) (scare 'gas-alias s)
+                             (: r (secs nm)
+                                _ (pin labs a nm)
+                                (pin secs nm [<r <>r (catmap (f \ (? (f = ['label (name s)]) [['label (name a)] f] [f])) <>>r)])))))
+                0 (peep st 'alias ()))
        (sec nm) (: r (secs nm) [nm <r <>r (rev <>>r)])
        (exec? l) (0 < (<>(secs (labs l)) & 4))
        def (filter (l \ string? (labs l)) (rev (st 'globl)))

@@ -197,7 +197,7 @@ taref() {
   printf "$1" > "$ho/.feat.c"
   moonrun -c -t "$2" -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "$3" || fail "file-scope asm: $4"
 }
-taref 'asm(".weak x");\n' x64 "gas-directive" "an unread directive was not refused"
+taref 'asm(".uleb128 5");\n' x64 "gas-directive" "an unread directive was not refused"
 taref 'asm(".data\\na: .long a - b\\n.text\\nb:");\n' x64 "gas-data" "a label difference across sections was not refused"
 taref 'int f(void){return 0;}\nasm(".data\\n.long f - .");\n' thumb2 "gas-data-pcrel" "a pc-relative word on arm32 was not refused"
 taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file-scope asm"
@@ -215,6 +215,43 @@ taref 'void f(long x){asm volatile("movq %%0, %%%%gs:40" : : "r"(x));}\n' x64 "g
 # what the 64-bit opcode map dropped refuses by name: a far call to an immediate, pusha
 taref 'void f(void){asm volatile("lcallw $0xc000,$3");}\n' x64 "\"lcallw\", which 64-bit mode has no encoding for" "a direct far call was not refused by name"
 taref 'void f(void){asm volatile("pusha");}\n' x64 "\"pusha\", which 64-bit mode" "pusha was not refused by name"
+
+# an assembly source: a .s is its own file-scope asm, encoded exactly by as.l; a .S reads the
+# preprocessor first -- an include, a macro as an immediate and as a label, #if, numeric labels
+if [ "$(uname -m)" = x86_64 ]; then
+cat > "$ho/.as1.s" <<'EOF'
+	.text
+	.globl	ans
+ans:	movl	$40, %eax
+	addl	two(%rip), %eax
+	ret
+	.data
+two:	.long	2
+EOF
+cat > "$ho/.as2.h" <<'EOF'
+#define TWO 2
+#define GLOBAL(n) .globl n ; n:
+EOF
+cat > "$ho/.as2.S" <<'EOF'
+#include ".as2.h"
+	.text
+GLOBAL(sum)		// 1..n doubled, n in %rdi
+	xorl	%eax, %eax
+1:	testq	%rdi, %rdi	# a gas comment
+	je	2f
+	addq	%rdi, %rax
+	decq	%rdi
+	jmp	1b
+2:
+#if TWO > 1
+	imulq	$TWO, %rax, %rax
+#endif
+	ret
+EOF
+printf 'int ans(void); long sum(long);\nint main(void){ return ans() == 42 && sum(5) == 30 ? 0 : 1; }\n' > "$ho/.asm.c"
+moonrun -o "$ho/.asm" "$ho/.asm.c" "$ho/.as1.s" "$ho/.as2.S" > /dev/null 2>&1 || fail "a .s and a .S did not build"
+"$ho/.asm" || fail "a .s and a .S built, and answered wrong"
+fi
 
 # the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
 # would rename the object, and dropping it renames it in silence. test/cc/145 holds the

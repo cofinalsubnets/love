@@ -318,8 +318,8 @@ korefiles = $(kore_head) $(holo_obj) love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
 # `cc` on inle are this line. the backends ride because the baked set is x64/a64/rv64.
-kcrewfiles = $(holo_be) love/holo/gas.l $(moon_mid) $(crewfiles)
-moonfiles = apps/kore/text.l apps/kore/u.l apps/kore/asbook.l $(holo_be) love/holo/gas.l $(holo_obj) $(moon_mid)
+kcrewfiles = $(holo_be) love/holo/as.l love/holo/gas.l $(moon_mid) $(crewfiles)
+moonfiles = apps/kore/text.l apps/kore/u.l apps/kore/asbook.l $(holo_be) love/holo/as.l love/holo/gas.l $(holo_obj) $(moon_mid)
 $(ho)/.mooncc-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(moonfiles)' > $$tf; \
@@ -344,7 +344,7 @@ out/mooncc0.image: out/.mooncc-cat.l $(love0)
 	@echo 'BAKE	'$@
 	@$(love0) -l out/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
-distfiles = $(kore_head) $(holo_be) love/holo/decode.l love/holo/gas.l \
+distfiles = $(kore_head) $(holo_be) love/holo/decode.l love/holo/as.l love/holo/gas.l \
             $(holo_obj) love/holo/copy.l $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)

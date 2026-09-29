@@ -338,6 +338,37 @@
           loc (file + (ln ? (":" + show ln) "") + (col ? (":" + show col) ""))
           (udie 1 ("cc: " + loc + ": " + msg)))
        (udie 1 plain))
+   ; an assembly source as C: one file-scope asm holding its text, which gen hands gas-top
+   (asmwrap s) ("__asm__(\"" + string (catmap (c \ (c @ 92 [92 92] 34 [92 34] 10 [92 110] 9 [92 116] 13 () [c])) (chars s))
+                + "\");\n")
+   ; a .S: the assembly lexed on its own terms, preprocessed as C is (includes, macros, #if),
+   ; spelled back into lines, and taken as a .s is
+   (asmcpp src s ds is vb)
+    (: d2 ("__ASSEMBLER__=1" . ds)
+       lx (clexasm (deftext d2 + s) (1 - #d2))
+       _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
+       pp (cpp <>lx (\ name sys? (incload vb is (cdir src) name sys?)) src)
+       _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
+       (asmwrap (asmspell <>pp)))
+   ; tokens back to assembly text: an unexpanded token from a later line opens a new one (an
+   ; expansion stays where it was invoked); a space between two words, and after a word unless
+   ; a closer follows, so `movl $1,%eax`, `0x10(%rsp)` and `foo:` come back as written
+   (asmspell ts)
+    (: (word? t) (<t != 'p && <t != 'str)
+       (closer? t) (<t = 'p && elem <>t '("," ")" ":" "(" "]" ";"))
+       (qesc s) ("\"" + string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
+                                                   (? (c < 32 || 126 < c) (: o (c & 255) [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
+                                        (chars s)) + "\"")
+       (spell t) (: sp (? (4 < #t && string? (t 4)) (t 4) ())
+                    (<t @ 'id <>t 'kw (show <>t) 'p <>t 'str (? sp sp (qesc <>t)) (? sp sp (show <>t))))
+       (go l prev acc)
+        (? (atom? l) (string (catall (rev acc)))
+           (: t <l
+              (? (<t = 'fspans) (go >l prev acc)                  ; cpp's file-span record, not text
+                 (<t = 'p && <>t = "\n") (go >l () ([10] . acc))
+                 (: sep (? (atom? prev) () (word? prev && !(closer? t)) [32] ())
+                    (go >l t ((chars (spell t)) . (sep . acc)))))))
+       (go ts () ()))
    ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag sigs ..) | a
    ; fatal exit. the -D lines prepend to the source text before the one lex, so a define body
    ; runs to its line's end and the numbering stays whole -- clexat stamps them 1-k..0 and
@@ -360,7 +391,8 @@
                   !vb ()
                   (: h (vb src) (string? h && [1 h])))))
        _ (two? r || udie 1 ("cc: cannot open " + src))
-       lx (clexat (deftext ds9 + <>r) (1 - #ds9))
+       txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap <>r) <>r)
+       lx (clexat (deftext ds9 + txt) (1 - #ds9))
        _ (okv? lx || ccdie lx src ("cc: lex error in " + src))
        pp (cpp <>lx (\ name sys? (incload vb is (cdir src) name sys?)) src)
        _ (okv? pp || ccdie pp src ("cc: preprocessor error in " + src))
@@ -534,6 +566,9 @@
    ; the input-name predicates, ahead of every reader of them.
    (dota? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 97))
    (dotc? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 99))
+   (dots? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 115))   ; assembly
+   (dotS? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 83))    ; ..that the preprocessor reads first
+   (dotsrc? p) (dotc? p || dots? p || dotS? p)                         ; a source this compiler lays an object from
    (doto? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 111))
    (dotim? p) (: n #p (6 < n && snip p (n - 6) n = ".image"))
    (dotcid? p) (: n #p (4 < n && snip p (n - 4) n = ".cid"))
@@ -845,7 +880,7 @@
    (cc-wasm ins dst (t @ {'tgt tgt 'os os 'nostd nostd 'vb vb}))
     (: os9 (!os ? 'linux os)                          ; the loader speaks linux's numbers
        t9 (pin t 'os os9)
-       texts (map (f \ (? (dotc? f) (cc-objbytes f t9)
+       texts (map (f \ (? (dotsrc? f) (cc-objbytes f t9)
                           (doto? f) (: r (uread f) (two? r ? <>r (udie 1 ("cc: cannot open " + f))))
                           (udie 2 ("cc: not a .c/.o input for wasm: " + f))))
                   ins)
@@ -887,11 +922,11 @@
     (: _ (os = 'freebsd && tgt != 'x64
           && udie 1 "cc: -os freebsd links x64 only for now")
        ars (filter dota? ins)
-       srcs (map (f \ (? (dotc? f) [f (string (cc-objbytes f t))]
+       srcs (map (f \ (? (dotsrc? f) [f (string (cc-objbytes f t))]
                          (doto? f) (: r (uread f)
                                       (two? r ? [f <>r]
                                                 (udie 1 ("cc: cannot open " + f))))
-                         (udie 2 ("cc: not a .c/.o/.a input: " + f))))
+                         (udie 2 ("cc: not a .c/.s/.o/.a input: " + f))))
                  (filter (f \ !(dota? f)) ins))
        ; an arm32 target has no hosted lane -- nothing on this side of the toolchain runs a
        ; thumb exe -- so every thumb link is a board's: the image lays at the address the
@@ -1145,14 +1180,14 @@
         ; the legacy pair: exactly two bare args, the second no .c -- in out. a .c/.o mix is
         ; a link, never a pair (-c keeps its .o out), and a .a is never an out: `mooncc a.o
         ; libgcc.a` as a pair would write the library it was asked to read from.
-        (? (!(dotc? b) && !(dota? a) && !(dota? b)
+        (? (!(dotsrc? b) && !(dota? a) && !(dota? b)
             && (c || (!(doto? a) && !(doto? b)))) [a b])
                 (c ? (cc-obj a b f) (cc-link [a] b f), 0)
         (? c)   (: (go l) (? !(two? l) 0
                              ; stdin has no name to derive an .o from -- obase would
                              ; answer the bare suffix and write a file called `o`.
                              (<l = "-") (udie 2 "cc: a source on stdin needs -o")
-                             !(dotc? <l) (udie 2 ("cc: not a .c input: " + <l))
+                             !(dotsrc? <l) (udie 2 ("cc: not a .c or .s input: " + <l))
                              (cc-obj <l (obase <l) f, go >l))
                    (go ins))
                 (cc-link ins "a.out" f, 0))))
