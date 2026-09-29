@@ -988,7 +988,7 @@
     'strip "usage: strip [-s|-g] [-p] [-o OUT] FILE.."
     'ranlib "usage: ranlib ARCHIVE.."
     'groups "usage: groups"
-    'ps "usage: ps [-e|-A|-a|-x|ax]"
+    'ps "usage: ps [-Aef] [-o KEY[=HDR],..] [-p PID,..] [-u USER,..] | ps [a][u][x]"
     'top "usage: top [-b] [-n FRAMES] [-d SECS] [-p PID]..
   -b  batch: no terminal wanted, every process, a frame per iteration
   -n  stop after N frames (-b alone is one frame)
@@ -1058,8 +1058,8 @@
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
    ; is the leading words only, which leaves `ps aux` (no dash) exactly as it was.
-   korebare '(arch nproc whoami groups uptime pwd ps free tty clear hostname)
-   korebareok {'ps '("-e" "-A" "-a" "-ax" "-x") 'free '("-g" "-m" "-h") 'pwd '("-L" "-P")}
+   korebare '(arch nproc whoami groups uptime pwd free tty clear hostname)
+   korebareok {'free '("-g" "-m" "-h") 'pwd '("-L" "-P")}
    (kobare nm as)
     (: ok (peep korebareok nm ())
        (<(filter (w \ 1 < #w && w 0 = 45 && (nelem w ok)) as)))

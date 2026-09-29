@@ -51,4 +51,19 @@ if [ -n "$nu" ]; then
 else
   korerun uptime | grep -q users && fail "kore uptime invented a user count"
 fi
+# ps's faces byte for byte on pid 1's row and every header, under TZ=UTC0 (START and
+# STIME are UTC here): -o with its headers renamed and blanked, -p, -f, BSD's aux, -e;
+# -u, an unknown key and a pid not there
+for c in "-o pid,ppid,user,comm,stat,rss,tty -p 1" "-o pid=,ppid=,comm= -p 1" "-o pid,user,vsz,rss,stat,ni -p 1" "-f -p 1"; do
+  # shellcheck disable=SC2086
+  TZ=UTC0 ps $c > "$g"; TZ=UTC0 korerun ps $c > "$o"; same "ps $c"
+done
+for c in -e -ef aux; do
+  # shellcheck disable=SC2086
+  TZ=UTC0 ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' > "$g"; TZ=UTC0 korerun ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' > "$o"; same "ps $c"
+done
+[ "$(korerun ps -o pid=P,comm -p 1 | head -1)" = "      P COMMAND" ] || fail "kore ps -o, a header renamed"
+korerun ps -u root | awk '{ print $1 }' | grep -qx 1 || fail "kore ps -u root"
+korerun ps -o bogus > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ps -o bogus ($r)"
+korerun ps -p 999999999 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ps -p of no pid ($r)"
 echo "kore: the /proc family (ps/free/uptime/pidof/pgrep/pkill/killall/pwdx vs procps) ok"

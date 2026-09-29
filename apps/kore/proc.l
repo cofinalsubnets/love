@@ -1042,22 +1042,103 @@
    ; the owner comes off /proc/PID itself, whose directory is owned by the process:
    ; one stat where /proc/PID/status would be a second read and a second parser.
    (upuid p) (: st (stat ("/proc/" + (show p))) (? (5 < #st) (st 4) -1))
+   ; the columns: [header right-aligned? cell-of]. a cell reads the stat fields f, the pid
+   ; and a box of the clock readings, and answers text
+   (ups-cols b)
+    (: HZ 100
+       (tk f) (uatoi (f 13) + uatoi (f 14))
+       (age f) (max 1 (b 'up * HZ - uatoi (f 21)))
+       (pct n) (show (n // 10) + "." + show (n % 10))
+       (start f) (: s (b 'boot + (uatoi (f 21) // HZ)) ymd (civil (s // 86400)) now (civil (b 'now // 86400))
+                    (? (ymd = now) (zpad 2 (show (s % 86400 // 3600)) + ":" + zpad 2 (show (s % 3600 // 60)))
+                       (mon3 (ymd 1 - 1) + zpad 2 (show (ymd 2)))))
+       (args p f) (: c (upcmd p) (? (string? c) c ("[" + f 1 + "]")))
+       ; statm's resident pages, which the kernel keeps exact where stat's may lag
+       (rss p f) (: r (uread ("/proc/" + show p + "/statm")) w (? (two? r) (words <>r) ())
+                    (show (4 * (? (two? >w) (uatoi <>w) (uatoi (f 23))))))
+       ; the state and procps' marks after it: < or N for the nice, s a session leader,
+       ; l threaded, + in the terminal's foreground group
+       (st p f) (: ni (uatoi (f 18))
+                   (f 2 + (? (ni < 0) "<" (0 < ni) "N" "") + (? (show p = f 5) "s" "")
+                    + (? (1 < uatoi (f 19)) "l" "") + (? (!(f 7 = "-1") && f 4 = f 7) "+" "")))
+       ; procps' least widths, the last column unpadded
+       {'pid ["PID" 1 (\ p f (show p)) 7]
+        'ppid ["PPID" 1 (\ p f (f 3)) 7]
+        'uid ["UID" 1 (\ p f (show (upuid p))) 5]
+        'user ["USER" 0 (\ p f (uidname "/etc/passwd" (upuid p))) 8]
+        'tty ["TT" 0 (\ p f (utty (uatoi (f 6)))) 8]
+        'tty8 ["TTY" 0 (\ p f (utty (uatoi (f 6)))) 8]
+        'time ["TIME" 1 (\ p f (uhms (tk f))) 8]
+        'bsdtime ["TIME" 1 (\ p f (: s (tk f // HZ) (show (s // 60) + ":" + zpad 2 (show (s % 60))))) 6]
+        'stat ["STAT" 0 st 4]
+        'ni ["NI" 1 (\ p f (f 18)) 3]
+        'rss ["RSS" 1 rss 5]
+        'vsz ["VSZ" 1 (\ p f (show (uatoi (f 22) // 1024))) 6]
+        'pcpu ["%CPU" 1 (\ p f (pct (1000 * tk f // age f))) 4]
+        'pmem ["%MEM" 1 (\ p f (pct (1000 * uatoi (rss p f) // max 1 (b 'mem)))) 4]
+        'c ["C" 1 (\ p f (show (min 99 (100 * tk f // age f)))) 2]
+        'start ["START" 0 (\ p f (start f)) 5]
+        'stime ["STIME" 0 (\ p f (start f)) 5]
+        'comm ["COMMAND" 0 (\ p f (f 1)) 15]
+        'cmd ["CMD" 0 args 0]
+        'ucmd ["CMD" 0 (\ p f (f 1)) 0]
+        'args ["COMMAND" 0 args 0]})
+   ; -- ps: bare ps takes the ones that are ours and share this terminal, procps' rule
+   ; (same euid, same tty); -e -A and a x ax take every one, -p PID,.. and -u USER,..
+   ; those. the face is PID TTY TIME CMD; -f is the full one, BSD's u the user one (so
+   ; `ps aux`), and -o KEY[=HEADER],.. names its own, from pid ppid uid user tty time
+   ; stat ni rss vsz pcpu pmem c start stime comm cmd args. times are UTC.
+   ; the owner comes off /proc/PID itself, whose directory is owned by the process:
+   ; one stat where /proc/PID/status would be a second read and a second parser.
+   (upuid p) (: st (stat ("/proc/" + (show p))) (? (5 < #st) (st 4) -1))
    (ps-main as)
-    (: all (: (go l) (? (atom? l) 0
-                        (: w <l
-                           (? (elem w '("-e" "-A" "-ax" "ax" "a" "x" "-a")) 1 (go >l))))
-              (go as))
+    (: bsd (filter (w \ 0 < #w && !(w 0 = 45) && all (c \ elem c "aux") (chars w)) as)
+       fo (uflags "ps" (filter (w \ !(elem w bsd)) as) '(111 112 117) "Aaefopux")
+       t <fo
+       _ (? (two? (fo 1)) (udie 1 ("ps: unknown operand " + <(fo 1))) 0)
+       bl (cats (map chars bsd))
+       every? (? (t 101 || t 65 || elem 97 bl || elem 120 bl) 1 0)
+       ; not `list`: [a b] is (list a b), and a local of that name would take every one
+       (csv c) (: v (uoptv t c) (? v (filter (w \ 0 < #w) (usplit 44 (replace v " " ","))) ()))
+       pids (map uatoi (csv 112))
+       users (csv 117)
        self (upself 0)
        mine (? self (uatoi (self 6)) 0)
        myuid (getuid 0)
-       _ (say out "    PID TTY          TIME CMD") _ (put out 10)
-       (one p) (: f (upstat p)
-                  (? !f 0
-                     (: tty (uatoi (f 6))
-                        (? !(all || (tty = mine && (upuid p) = myuid)) 0
-                           (say out (upad 7 (show p)), say out (" " + (urpad 8 (utty tty))), say out (" " + (uhms ((uatoi (f 13)) + (uatoi (f 14))))), say out (" " + (f 1)), put out 10)))))
-       _ (foldl (\ _ p (one p)) 0 (uprocs 0))
-       _ (flush out) 0)
+       up (: r (uread "/proc/uptime") w (? (two? r) <(words <>r) "0") k (findsub w ".") (uatoi (? (k < 0) w (snip w 0 k))))
+       now ((clock 0) // 1000)
+       b {'up up 'now now 'boot (now - up) 'mem (peep (umeminfo 0) 'MemTotal 1)}
+       cols (ups-cols b)
+       spec (? (t 111) (map (w \ (: k (findsub w "=") nm (? (k < 0) w (snip w 0 k))
+                                    c (cols (intern nm))
+                                    (? !c (udie 1 ("ps: unknown key " + nm))
+                                       (k < 0) c [(snip w (k + 1) #w) (c 1) (c 2) (c 3)])))
+                             (csv 111))
+               (t 102) ([(: c (cols 'user) ["UID" (c 1) (c 2) (c 3)])] + map cols '(pid ppid c stime tty8 time cmd))
+               (elem 117 bl) (map cols '(user pid pcpu pmem vsz rss tty8 stat start bsdtime args))
+               (map cols '(pid tty8 time ucmd)))
+       (want p f) (: u (upuid p)
+                     (? (two? pids) (elem p pids)
+                        (two? users) (any (w \ w = show u || w = uidname "/etc/passwd" u) users)
+                        (? (every? || (uatoi (f 6) = mine && u = myuid)) 1 0)))
+       rows (filter two? (map (p \ (: f (upstat p) (? (two? f && want p f) (map (c \ (c 2) p f) spec) ()))) (uprocs 0)))
+       n #spec
+       ; procps' widths hold: a longer number runs over, a longer name is cut to a +
+       ws (map (k \ max ((spec k) 3) #(<(spec k))) (jot n))
+       ; a cell past its width is paid back out of the padding after it, as procps pays
+       ; it, so the row comes back into line; a name that runs over is cut to a + instead,
+       ; and a left-aligned last column is not padded at all
+       (line cells) (: (go k over) (? (n <= k) ""
+                                      (: c (cells k) R ((spec k) 1) last (k = n - 1)
+                                         w (max 0 (ws k - over))
+                                         c2 (? (!R && !last && ws k < #c) (snip c 0 (ws k - 1) + "+") c)
+                                         s (? (last && !R) c2 R (upad w c2) (urpad w c2))
+                                         (s + (? last "" " ") + go (k + 1) (max 0 (#s - w)))))
+                       (go 0 0))
+       _ (? (any (c \ 0 < #<c) spec) (say out (line (map (c \ <c) spec) + "\n")) 0)
+       _ (each rows (r \ say out (line r + "\n")))
+       _ (flush out)
+       (? (two? rows) 0 1))
 
    ; -- free: /proc/meminfo, procps' six columns. used is total minus available and
    ; not total minus free: the kernel's own estimate of what a new program could have
