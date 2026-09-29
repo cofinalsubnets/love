@@ -23,8 +23,6 @@
 ; posix is optional -- the page's seat (inle/wasm) links none of it and this file runs
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
-; and ink, which the last floor paints with: the shader the walk runs, stopped
-(borrow 'ink)
 (borrow 'x11)
 (borrow 'rove)
 (:
@@ -435,12 +433,14 @@
    ; front is () until there is pink anywhere, so the walk never pays for this
    fr (peep d 'front ()) fc (peep d 'fire '(0 0)) fcx <fc fcy <>fc
    (pinkish? x y) (fr && (: dx (x - fcx) dy (y - fcy) (fr < dx * dx + 4 * dy * dy)))
+   ; slop's skin in its glyph mode: the tile's glyph in the pen of its cell's lower half
+   (skinned rp x y gl) (cite 'slop 'slop-face (skin 'ground) (ramp-pen rp) x y gl)
    (shade gh x y) ((tablet? skin ? (skin-kinds <>gh)) @- gh
-                   'hedge [<gh (ramp-pen hedge-ramp (peep (skin 'ground) [y x] 0.0))]
-                   'lawn [<gh (ramp-pen (pinkish? x y ? pink-ramp lawn-ramp) (peep (skin 'ground) [y x] 0.0))]
-                   'dirt [<gh (ramp-pen dirt-ramp (peep (skin 'ground) [y x] 0.0))]
-                   'stone [<gh (ramp-pen stone-ramp (peep (skin 'ground) [y x] 0.0))]
-                   'flag [<gh (ramp-pen flag-ramp (peep (skin 'ground) [y x] 0.0))])
+                   'hedge (skinned hedge-ramp x y <gh)
+                   'lawn (skinned (pinkish? x y ? pink-ramp lawn-ramp) x y <gh)
+                   'dirt (skinned dirt-ramp x y <gh)
+                   'stone (skinned stone-ramp x y <gh)
+                   'flag (skinned flag-ramp x y <gh))
    ; a lit cell that moves: the count's pen, or a star's dice
    (fmod a m) (: r (a % m) (r < 0 ? (r + m) r))
    (flow gh y) [<gh (water-flow (fmod (y - ft) 3))]
@@ -1020,7 +1020,7 @@
  ; from -- one draw, so the same seed strews the same floor
  (dress d lvl sb) (: _ (pins d 'th (peep themes (lvl - 1) th-heaven) 'sd (roll sb 1000000))
                      ; the garden and the middle each wear one still frame of the shimmer
-                     (skin _) (pin d 'skin {'ground (ink-drift (d 'h) (d 'w) (roll sb 1000 / 10.0) 0.0)})
+                     (skin _) (pin d 'skin {'ground (cite 'slop 'slop-drift (d 'h) (d 'w) (roll sb 1000 / 10.0) 0.0)})
                      (lvl @- d 1 (wear-thin d sb, stream d sb, skin ())
                                2 (skin ())))
 
@@ -1240,14 +1240,11 @@
  ; in to a little under half the board by the time the ring is a point
  (pink-front g) (circle-r g @ r (r < 0 || pink-start <= r ? 1.0
                  (pink-floor + (((1.0 - pink-floor) * r) / pink-start))))
- (ramp-pen rp v) (: m (#rp - 1)
-                    n (int (((v + pink-span) * #rp) / (2.0 * pink-span)))
-                    (rp (? (n < 0) 0 (m < n) m n)))
- (skin-pen g x y) (: v (peep (g 'sk) [y x] 0.0)
-                     f (pink-front g)
-                     (ramp-pen (circle-q g x y > f * f * circle-far g
-                                ? pink-ramp grass-ramp)
-                               v))
+ (ramp-pen rp v) (cite 'slop 'slop-ramp-pen rp pink-span v)
+ (skin-pen g x y) (: f (pink-front g)
+                     (cite 'slop 'slop-under (g 'sk)
+                           (ramp-pen (circle-q g x y > f * f * circle-far g ? pink-ramp grass-ramp))
+                           x y))
 
 
  ; a cell is on the ring when its measure falls in the radius's own band -- a circle of
@@ -1420,7 +1417,7 @@
    d (vale w h rows)
    fx <(d 'fire) fy <>(d 'fire)
    ph (roll sb 1000 / 10.0)                            ; where in the drift it stopped
-   sk (ink-drift h w ph 0.0)
+   sk (cite 'slop 'slop-drift h w ph 0.0)
    _ (pin d 'skin {'ground sk})
    loot {}
    _ (pin loot (fx + w * fy) '(fire))
@@ -1458,7 +1455,7 @@
    ; floor's own shimmer -- the ocean at the tower's foot, arriving early. the sample walks
    ; with the radius, so the colour crawls across the ring as it closes
    _ (pin d 'over (\ x y (? ('ring = g 'phase && on-ring? g x y)
-                            [ring-glyph (ramp-pen pink-ramp (peep sk [((y + g 'r) % h) x] 0.0))]
+                            (cite 'slop 'slop-face sk (ramp-pen pink-ramp) x ((y + g 'r) % h) ring-glyph)
                             ())))
    (note g (fill w-floor [(here g)])))
 

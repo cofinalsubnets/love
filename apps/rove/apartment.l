@@ -34,7 +34,6 @@
 ; there, so ask before splicing: an absent module is a scare.
 (? (cite 'posix) (borrow 'posix) ())
 (borrow 'rove)
-(borrow 'ink)                           ; the shimmer, one frame of it held still, for the ground's grain
 (borrow 'play)                          ; the voices, the mix; harp is cited, never borrowed
 (:
  esc (string 27)
@@ -46,12 +45,11 @@
  river-h 3                              ; rows the river takes
  river-gap 1                            ; grass rows between a pair's pane and the river when it runs straight
  river-sway 2                           ; rows the river wanders either side of its middle
- ; the ground is solid blocks, each in a pen off its ramp by one still frame of the
- ; walk's shimmer (ink-drift), so the colour runs in smooth bands and not a mottle. the
+ ; the ground is half blocks, each half in a pen off its ramp by one still frame of the
+ ; walk's shimmer (slop-drift), so the colour runs in smooth bands and not a mottle. the
  ; river alone reads the shimmer at the clock, so it runs while everything else stands;
  ; dry, its bed reads the still frame with the rest. the ramps run pale to deep; span is
  ; the band of the field they cover, its four sines seldom leaving +-3
- ground-glyph "█"
  grass-ramp [118 112 76 70 40 34 28 22]
  sand-ramp [187 180 179 178 172 136 137 101]
  water-ramp [45 39 38 32 33 27 26 25]
@@ -185,7 +183,7 @@
    ; the stone in the bed near the west edge, midstream, under the water until it is dry
    stone [2 (river-y 2 + river-h // 2)]
    _ (dput d <stone <>stone 8)
-   flow (ink-drift h w) phase (roll sb 1000 / 10.0)           ; where in the drift it stopped
+   flow (cite 'slop 'slop-drift h w) phase (roll sb 1000 / 10.0)           ; where in the drift it stopped
    (pins d 'cubes cubes 'cube c 'hub [cx cy] 'east east 'stone stone 'sd (roll sb 1000000)
            'flow flow 'phase phase 'skin (flow phase 0.0)
            'in [(c 0 + cube-w // 2) (c 1 + cube-h // 2)]))
@@ -281,22 +279,22 @@
  ; a ground cell is a block in its ramp's pen at the skin's value there, so grass and
  ; the sand it turns to share one grain and the road runs through the same bands; the
  ; water reads the skin further along, by the clock (wt, seconds), until it is off
- (ramp-pen rp v) (: m (#rp - 1)
-                    n (int (((v + ramp-span) * #rp) / (2.0 * ramp-span)))
-                    (rp (? (n < 0) 0 (m < n) m n)))
+ (ramp-pen rp v) (cite 'slop 'slop-ramp-pen rp ramp-span v)
  (apartment-face g) (: d (g 'd) w (d 'w) sk (d 'skin)
    wet (g 'desert ? sk ((d 'flow) (d 'phase + water-rate * g 'wt) 0.0))
    ents (filter tablet? ((g 'p) . (g 'npc) . g 'ms))
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
    (ramp-of t) (t @ 1 grass-ramp 2 sand-ramp 3 path-ramp 4 water-ramp 5 bed-ramp 8 (g 'desert ? bed-ramp water-ramp) ())
-   (ground-pen rp x y) (ramp-pen rp (peep (rp = water-ramp ? wet sk) [y x] 0.0))
+   ; the ground is slop's skin as half blocks; what stands on it stands on the lower half
+   (skin-of rp) (? (rp = water-ramp) wet sk)
+   (ground-pen rp x y) (cite 'slop 'slop-under (skin-of rp) (ramp-pen rp) x y)
    ; a mob on a block wears the block's colour under it, its own over -- or its inverse
    ; where the two would not tell apart; on glass it stands on nothing
    (\ i (: e (spot i) x (i % w) y (i // w) t (peep (d 't) i 0) rp (ramp-of t)
            (? (e && rp) (: bg (ground-pen rp x y) [(e 'gl) [(legible (e 'hue) bg) bg]])
               e [(e 'gl) (e 'hue)]
               (t = 8 && g 'desert) [stone-glyph [stone-pen (ground-pen rp x y)]]   ; the stone, once the water is off it
-              rp [ground-glyph (ground-pen rp x y)]
+              rp (cite 'slop 'slop-face (skin-of rp) (ramp-pen rp) x y ())
               (t = 7) [shard-glyph [glass-pen (ground-pen road-ramp x y)]]
               (t @ 6 glass-face '(32 0))))))
  (apartment-bar g) (fill w-bar [(g 'desert ? "the desert" "the plain") (g 'tn)])
