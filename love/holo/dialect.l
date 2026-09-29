@@ -293,10 +293,11 @@
                                     (xa-num? disp) ['rip () (xa-num disp)]
                                     (: so (xa-symoff disp) ['rip <so >so]))
                (: fs (xa-split inner 44) k #fs
-                  d (? (0 = #disp) 0 (xa-num? disp) (xa-num disp) (scare 'as-symdisp t))
+                  so (? (0 = #disp || xa-num? disp) () (xa-symoff disp))   ; `table(,%rbx,8)`: an absolute symbol
+                  d (? (0 = #disp) 0 (xa-num? disp) (xa-num disp) >so)
                   (? (k > 3) (scare 'as-memform t)
-                     ['mem (at-mreg <fs) (k < 2 ? -1 (at-mreg (fs 1)))
-                           (k < 3 ? 1 (xa-imm (fs 2))) d]))))
+                     (['mem (at-mreg <fs) (k < 2 ? -1 (at-mreg (fs 1)))
+                            (k < 3 ? 1 (xa-imm (fs 2))) d] + (? (two? so) [<so] ()))))))
          (xa-num? t) ['abs (xa-num t)]
          ['lbl (name (xa-unquote t))])
    ;; ..which the instruction settles: a branch's target, else memory at that address

@@ -1176,7 +1176,7 @@
       (() = gas-nolong 'x64 "lcall *(%rax)\nrep movsb")
       (() = gas-nolong 'a64 "pusha")
       ((gas-top-in 'x64 "671: dec %rax\n.pushsection .smp_locks,\"a\"\n.long 671b - .\n.popsection" "" [1 6] "f.asm.3.") =
-         '((("" 1 6 ((label f.asm.3.l671.1) (dec r0)))
+         '((("" 1 6 ((label f.asm.3.l671.1) (raw (72 255 200))))   ; dec %rax, laid exactly
             (".smp_locks" 1 2 ((raw ((fix 4 rel32 f.asm.3.l671.1 4))))))
            () ()))
       ; ..and gen keeps that label in the function, where the pushed section's word names it
