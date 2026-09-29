@@ -955,7 +955,7 @@
     'grep "usage: grep [-cEFhHiLlnoqrRsvwx] [-e PAT] [-f FILE] [-m N] [-A N] [-B N] [-C N] [--include=GLOB] [--exclude=GLOB] PATTERN [FILE..]"
     'egrep "usage: egrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -E)"
     'fgrep "usage: fgrep [-nvclqhaixwo] [-e PAT] [-m N] PATTERN [FILE..]   (grep -F)"
-    'sed "usage: sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]"
+    'sed "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"
     'awk "usage: awk [-F FS] [-v var=val].. PROGRAM [FILE..]  |  awk .. -f PROGFILE.. [FILE..]"
     'find "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
     'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
