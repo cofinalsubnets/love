@@ -63,4 +63,15 @@ de
   || fail "kore tr: sets are characters, and a stray byte passes as itself"
 [ "$(printf 'a日\xffb\n' | korerun tr -cd a-z)" = "ab" ] \
   || fail "kore tr -c: the complement takes a whole character, and a stray byte"
+# cut's --complement, --output-delimiter (between fields, and between -c/-b's runs), -z,
+# -n, --only-delimited and the long names
+C=$ho/.cutf; printf 'a:b:c:d\ne:f:g:h\nnodelim\n' > "$C"; printf 'a:b\0c:d\0' > "$C.z"
+for c in "-d: -f2 --complement" "-d: -f1,3 --output-delimiter=-" "-d: -f2- --complement --output-delimiter=::" "-c2-3 --complement" \
+         "-c1,3-4 --output-delimiter=." "-b1-2,4 --output-delimiter=," "--delimiter=: --fields=2" "--characters=1-2" "--bytes=3" \
+         "-d: -f2 --only-delimited" "-n -c1"; do
+  # shellcheck disable=SC2086
+  cut $c "$C" > "$g"; korerun cut $c "$C" > "$o"; same "cut $c"
+done
+cut -z -d: -f2 "$C.z" > "$g"; korerun cut -z -d: -f2 "$C.z" > "$o"; same "cut -z"
+rm -f "$C" "$C.z"
 echo "kore: field tools (cut/tr/nl/rev GNU-identical) ok"

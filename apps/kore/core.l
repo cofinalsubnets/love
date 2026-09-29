@@ -1018,12 +1018,25 @@
         (ubn-say t ops udir)))
 
    ; -- cut: -f list [-d C] [-s] over fields, -c list over characters, -b list over
-   ; bytes (flags glue or not) --
-   (cut-args as)                       ; -> (delim fields chars b? s? files)
-    (: (fl a d f c b? s?)
+   ; bytes (flags glue or not, and GNU's long names); --complement the seats not listed,
+   ; --output-delimiter=S between fields, or between the runs of -c and -b; -z records
+   ; end with a NUL; -n is taken, the characters being whole already --
+   (cut-args as)                       ; -> (delim fields chars b? s? files comp od z)
+    (: st {'comp 0 'od () 'z 0}
+       (long? h p) (: n #p (n < #h && snip h 0 n = p))
+       (fl a d f c b? s?)
         (? (atom? a) [d f c b? s? a]
            (: h <a
-              (? (h = "-s") (fl >a d f c b? 1)
+              (? (h = "--") [d f c b? s? >a]
+                 (h = "-s" || h = "--only-delimited") (fl >a d f c b? 1)
+                 (h = "--complement") (: _ (pin st 'comp 1) (fl >a d f c b? s?))
+                 (h = "-z" || h = "--zero-terminated") (: _ (pin st 'z 1) (fl >a d f c b? s?))
+                 (h = "-n") (fl >a d f c b? s?)
+                 (long? h "--output-delimiter=") (: _ (pin st 'od (snip h 19 #h)) (fl >a d f c b? s?))
+                 (long? h "--delimiter=") (fl >a (h 12) f c b? s?)
+                 (long? h "--fields=") (fl >a d (snip h 9 #h) c b? s?)
+                 (long? h "--characters=") (fl >a d f (snip h 13 #h) 0 s?)
+                 (long? h "--bytes=") (fl >a d f (snip h 8 #h) 1 s?)
                  (h = "-d") (? (two? >a) (fl >>a (<>a 0) f c b? s?)
                                (udie 2 "cut: -d wants a delimiter"))
                  (h = "-f") (? (two? >a) (fl >>a d <>a c b? s?)
@@ -1037,32 +1050,44 @@
                  (2 < #h && snip h 0 2 = "-c") (fl >a d f (snip h 2 #h) 0 s?)
                  (2 < #h && snip h 0 2 = "-b") (fl >a d f (snip h 2 #h) 1 s?)
                  [d f c b? s? a])))
-       (fl as 9 () () 0 0))
+       r (fl as 9 () () 0 0)
+       (r + [(st 'comp) (st 'od) (st 'z)]))
    (cut-main as)
     (: p (cut-args as)
        d <p fspec <>p cspec <>>p b? <>>>p s? <>>>>p
-       fs (ustray "cut" as <>>>>>p)
+       fs (ustray "cut" as (p 5))
+       comp (p 6) od (p 7) z? (p 8)
+       end (? z? 0 10)
        _ (? (fspec || cspec) () (udie 2 "usage: cut -f LIST [-d C] [-s] | cut -c LIST | cut -b LIST"))
        spec (uspec (? fspec fspec cspec))
+       (pick? k) (? comp !(upick spec k) (upick spec k))
        (fieldline ln)
         (: ps (usplit d ln)
-           (? (atom? >ps) (? s? () (say out ln, put out 10))
+           (? (atom? >ps) (? s? () (say out ln, put out end))
               (: (go m k acc) (? (atom? m) (rev acc)
-                                 (go >m (k + 1) (? (upick spec k) (<m . acc) acc)))
-                 _ (say out (ujoinc d (go ps 1 ())))
-                 (put out 10))))
+                                 (go >m (k + 1) (? (pick? k) (<m . acc) acc)))
+                 sel (go ps 1 ())
+                 _ (say out (? od (join od sel) (ujoinc d sel)))
+                 (put out end))))
        ; seat k is the k-th character from byte i on, or the k-th byte under -b; a
-       ; byte that begins no valid character is a character of its own
+       ; byte that begins no valid character is a character of its own. --output-
+       ; delimiter goes between two runs of seats, not between two seats
        (charline ln)
         (: n #ln o (jug 0)
            (step i) (? (b? || ln i < 128) (i + 1) (cpnext ln i))
-           (go i k) (? (n <= i) ()
-                       (: j (step i) _ (? (upick spec k) (say o (snip ln i j)) ()) (go j (k + 1))))
-           _ (go 0 1)
-           _ (say out (slurp o)) (put out 10))
+           (go i k prev any) (? (n <= i) ()
+                                (: j (step i) on (pick? k)
+                                   _ (? (on && od && any && !prev) (say o od) ())
+                                   _ (? on (say o (snip ln i j)) ())
+                                   (go j (k + 1) on (any || on))))
+           _ (go 0 1 0 0)
+           _ (say out (slurp o)) (put out end))
        ; cut terminates every line it writes, so the source's own end says nothing
        (dot ln term?) (((? fspec fieldline charline) ln), 1)
-       (ulines "cut" dot fs))
+       (? z? (: t (cats (map (f \ (? (f = "-") (slurp in) (: r (uread f) (? (two? r) <>r (udie 1 ("cut: " + f + ": No such file or directory")))))) (? (two? fs) fs ["-"])))
+                ps (usplit 0 t)
+                (: _ (each (? (two? ps && <(rev ps) = "") (rev >(rev ps)) ps) (r \ dot r 1)) _ (flush out) 0))
+          (ulines "cut" dot fs)))
 
    ; ---- the byte loops, natively -------------------------------------------------
    ; the interpreter's byte loop is ~700 instructions a byte (love/boot/scan.l
