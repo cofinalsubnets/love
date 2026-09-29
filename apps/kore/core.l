@@ -176,7 +176,7 @@
                {"echo" 101 "input-range" 105 "head-count" 110 "output" 111
                 "repeat" 114 "zero-terminated" 122})
        _ (? (two? o) () (sdie "an option wants a value"))
-       _ (: c (uoptun t "einorz") (? !c () (sdie ("unknown option -" + string c))))
+       _ (: c (uoptbad as t "einorz") (? !c () (sdie ("unknown option -" + string c))))
        rest <>>o e? (peep t 101 0) r? (peep t 114 0)
        d (? (peep t 122 0) 0 10)
        ir (uoptv t 105) nv (uoptv t 110) of (uoptv t 111)
@@ -737,7 +737,7 @@
    (tee-main as)
     (: t (tablet 0)
        o (uopt as t () '(101) ())
-       _ (uoptun t "a" @ c (c ? (udie 2 ("tee: unknown option -" + string c))))
+       _ (uoptbad as t "a" @ c (c ? (udie 2 ("tee: unknown option -" + string c))))
        a? (peep t 97 0)
        fs <>>o
        _ (uoptstray as fs @ w (w ? (udie 2 ("tee: unknown option " + w))))
@@ -1261,7 +1261,7 @@
        p (pre as () ())
        o (uopt <>p t '(119) '(101) ())
        _ (? (two? o) () (udie 2 "fold: -w wants a width"))
-       _ (: c (uoptun t "wsb") (? !c () (udie 2 ("fold: unknown option -" + string c))))
+       _ (: c (uoptbad as t "wsb") (? !c () (udie 2 ("fold: unknown option -" + string c))))
        v (uoptv t 119)
        w (? (string? v) (uatoi v) (? (charm? <p) <p 80))
        _ (? (0 < w) () (udie 2 "fold: width must be positive"))
@@ -1330,7 +1330,7 @@
     (: t (tablet 0)
        o (uopt as t '(99 115 111) () ())
        _ (? (two? o) 0 (udie 1 "usage: column [-tx] [-c COLUMNS] [-s SEP] [-o SEP] [FILE..]"))
-       _ (: c (uoptun t "csotx") (? !c 0 (udie 1 ("column: unknown option -" + string c))))
+       _ (: c (uoptbad as t "csotx") (? !c 0 (udie 1 ("column: unknown option -" + string c))))
        wv (uoptv t 99)
        w (? (string? wv)
             (: n (unum wv) (? (charm? n && 0 < n) n (udie 1 ("column: invalid columns argument: '" + wv + "'"))))
@@ -1359,7 +1359,7 @@
     (: t (tablet 0)
        o (uopt as t '(116) '(101) ())
        _ (? (two? o) () (udie 2 "expand: -t wants a tab size"))
-       _ (: c (uoptun t "ti") (? !c () (udie 2 ("expand: unknown option -" + string c))))
+       _ (: c (uoptbad as t "ti") (? !c () (udie 2 ("expand: unknown option -" + string c))))
        v (uoptv t 116)
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "expand: tab size must be positive"))
@@ -1391,7 +1391,7 @@
     (: t (tablet 0)
        o (uopt as t '(116) '(101) ())
        _ (? (two? o) () (udie 2 "unexpand: -t wants a tab size"))
-       _ (: c (uoptun t "ta") (? !c () (udie 2 ("unexpand: unknown option -" + string c))))
+       _ (: c (uoptbad as t "ta") (? !c () (udie 2 ("unexpand: unknown option -" + string c))))
        v (uoptv t 116)
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "unexpand: tab size must be positive"))
@@ -1432,7 +1432,7 @@
     (: t {}
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 d2u-usage))
-       _ (uoptun t '(102 107 113 110) @ c
+       _ (uoptbad as t '(102 107 113 110) @ c
           (c ? (udie 2 (nm + ": unknown option -" + string c))))
        fs <>>o
        q? (peep t 113 0) f? (peep t 102 0) k? (peep t 107 0) n? (peep t 110 0)
@@ -1544,7 +1544,7 @@
     (: t {}
        o (uopt as t '(119) '(101) ())
        _ (atom? o ? (udie 1 (who + ": -w wants a width")))
-       _ (: c (uoptun t "wd") (? !c () (udie 1 (who + ": unknown option -" + string c))))
+       _ (: c (uoptbad as t "wd") (? !c () (udie 1 (who + ": unknown option -" + string c))))
        v (uoptv t 119)
        w (string? v ? (uatoi v) 76)
        d? (peep t 100 0)
@@ -2219,7 +2219,7 @@
     (: t {}
        o (uopt as t '(110 115) () ())
        _ (? (two? o) () (udie 1 (who + ": option requires an argument")))
-       _ (: c (uoptun t "Cvns") (? !c () (udie 1 (who + ": unknown option -" + string c))))
+       _ (: c (uoptbad as t "Cvns") (? !c () (udie 1 (who + ": unknown option -" + string c))))
        (num k) (: v (uoptv t k)
                   (? !(string? v) ()
                      (: x (unum v) (? (charm? x) x (udie 1 (who + ": bad number " + v))))))
@@ -2261,7 +2261,7 @@
                   {"options" 111 "longoptions" 108 "long" 108 "name" 110 "quiet" 113
                    "quiet-output" 81 "alternative" 97 "shell" 115 "test" 84 "unquoted" 117}))
        _ (? (two? o) () (udie 2 "getopt: option requires an argument"))
-       _ (: c (uoptun t "olnqQasTu") (? !c () (udie 2 ("getopt: invalid option -- '" + string c + "'"))))
+       _ (: c (uoptbad as t "olnqQasTu") (? !c () (udie 2 ("getopt: invalid option -- '" + string c + "'"))))
        _ (? (peep t 84 0) (uleave 4) 0)
        _ (: s (uoptv t 115) (? (!(string? s) || elem s '("sh" "bash")) 0
                                (udie 2 "getopt: unknown shell after -s or --shell argument")))

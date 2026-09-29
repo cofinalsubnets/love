@@ -568,7 +568,7 @@
     (: t (tablet 0)
        o (uopt as t '(119) '(101) ())                       ; -w takes a value
        _ (? (two? o) () (udie 2 ww-usage))
-       _ (: c (uoptun t '(119)) (? !c () (udie 2 ("www: unknown option -" + string c))))
+       _ (: c (uoptbad as t '(119)) (? !c () (udie 2 ("www: unknown option -" + string c))))
        us <>>o
        _ (? (two? us && atom? >us) () (udie 2 ww-usage))
        ws (tty 1)

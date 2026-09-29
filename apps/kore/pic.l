@@ -95,7 +95,7 @@
     (: t (tablet 0)
        o (uopt as t '(104 119) () ())                   ; -h and -w take values
        _ (? (two? o) () (udie 2 pic-usage))
-       _ (: c (uoptun t '(104 119)) (? !c () (udie 2 ("pic: unknown option -" + string c))))
+       _ (: c (uoptbad as t '(104 119)) (? !c () (udie 2 ("pic: unknown option -" + string c))))
        (num k d) (: v (uoptv t k) (? (string? v) (: n (uatoi v) (? (0 < n) n d)) d))
        ws (tty 1)
        cols (num 119 (? (two? ws && 0 < >ws) >ws 80))

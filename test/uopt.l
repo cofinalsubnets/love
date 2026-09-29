@@ -67,6 +67,13 @@
  !(uoptun <(walk ["-w" "4" "f"]) '(119 116 112))
  !(uoptun <(walk ["f"]) '(119))                         ; nothing pinned is nothing unknown
  ('nb = (uoptun <(walk ["--no-build" "f"]) '(119)))     ; a long name's key, likewise
+ ; uoptbad names uoptun's stranger as typed: -ba is b where the tablet says a, a value's
+ ; text is never a letter it names, and a long key comes back as uoptun's
+ (98 = (: as ["-ba" "f"] (uoptbad as <(walk as) "w")))
+ (97 = (uoptun <(walk ["-ba" "f"]) "w"))
+ (122 = (: as ["-w3" "-z" "f"] (uoptbad as <(walk as) "w")))
+ !(: as ["-w3" "f"] (uoptbad as <(walk as) "w"))
+ ('nb = (: as ["--no-build" "f"] (uoptbad as <(walk as) '(119))))
  ; an operand that still looks like a flag, the walk having stopped at the first that is
  ; not one -- and nothing at all once `--` has been spelled
  ("-q" = (uoptstray ["f" "-q"] <>>(walk ["f" "-q"])))

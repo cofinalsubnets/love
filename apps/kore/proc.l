@@ -727,7 +727,7 @@
        t (tablet 0)
        o (uopt as t '(115 116 100) () ())
        _ (? (two? o) 0 (udie 1 usage))
-       _ (: u (uoptun t '(115 116 88)) (? !u 0 (udie 1 ("microcom: -" + string u + " is not supported\n" + usage))))
+       _ (: u (uoptbad as t '(115 116 88)) (? !u 0 (udie 1 ("microcom: -" + string u + " is not supported\n" + usage))))
        ops (o 2)
        _ (? (two? ops && atom? >ops) 0 (udie 1 usage))
        dev <ops
@@ -907,7 +907,7 @@
        (: t (tablet 0)
           o (uopt as t '(116 111) '(101) ())
           _ (? (two? o) () (udie 1 "mount: -t and -o each want a value"))
-          _ (: c (uoptun t "to") (? !c () (udie 1 ("mount: unknown option -" + string c))))
+          _ (: c (uoptbad as t "to") (? !c () (udie 1 ("mount: unknown option -" + string c))))
           ty (: v (uoptv t 116) (? (string? v) v "auto"))
           ob (: v (uoptv t 111) (? (string? v) (umnt-bits (usplit 44 v) 0) 0))
           fs <>>o
@@ -1368,7 +1368,7 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
-       _ (: c (uoptun t "fx") (? !c () (udie 2 ("pgrep: unknown option -" + string c))))
+       _ (: c (uoptbad as t "fx") (? !c () (udie 2 ("pgrep: unknown option -" + string c))))
        rest <>>o
        _ (? (two? rest) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
        ps (upfind (peep t 102 0) (peep t 120 0) <rest)
@@ -1381,7 +1381,7 @@
        t (tablet 0)
        o (uopt rest t () '(101) ())
        _ (? (two? o) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
-       _ (: c (uoptun t "fx") (? !c () (udie 2 ("pkill: unknown option -" + string c))))
+       _ (: c (uoptbad as t "fx") (? !c () (udie 2 ("pkill: unknown option -" + string c))))
        ws <>>o
        _ (? (two? ws) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
        ps (upfind (peep t 102 0) (peep t 120 0) <ws)
@@ -1432,7 +1432,7 @@
     (: t (tablet 0)
        o (uopt as t '(100 73 76 110 80) () ())
        _ (? (two? o) () (udie 1 "xargs: an option wants a value"))
-       _ (: c (uoptun t "0dILnPrt") (? !c () (udie 1 ("xargs: unknown option -" + string c))))
+       _ (: c (uoptbad as t "0dILnPrt") (? !c () (udie 1 ("xargs: unknown option -" + string c))))
        (num c lo) (: v (uoptv t c) n (? v (unum v) ())
                      (? (!v || (charm? n && lo <= n)) n (udie 1 ("xargs: invalid number for -" + string c + ": " + v))))
        nn (num 110 1) ll (num 76 1) pp (: v (num 80 0) (? (charm? v) (? (v = 0) 1073741824 v) 1))

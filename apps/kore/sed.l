@@ -234,7 +234,7 @@
        t (tablet 0)
        o (uopt as t '(101) '(101) ())                      ; -e script, stacking
        _ (? (two? o) () (udie 1 "sed: bad option"))
-       _ (: c (uoptun t "nEeirs") (? !c () (udie 1 ("sed: unknown option -" + string c))))
+       _ (: c (uoptbad as t "nEeirs") (? !c () (udie 1 ("sed: unknown option -" + string c))))
        eps <>o rest <>>o
        _ (? (two? eps || two? rest) ()
             (udie 1 "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"))

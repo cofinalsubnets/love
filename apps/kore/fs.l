@@ -71,7 +71,7 @@
     (: t (tablet 0)
        o (uopt as t '(109) '(101) ())
        _ (? (two? o) () (udie 1 "mkfifo: -m wants a mode"))
-       _ (: c (uoptun t "m") (? !c () (udie 1 ("mkfifo: unknown option -" + string c))))
+       _ (: c (uoptbad as t "m") (? !c () (udie 1 ("mkfifo: unknown option -" + string c))))
        v (uoptv t 109)
        md (? (string? v) (uoct v) 438)          ; 0666, the mode mkfifo(1) defaults to
        fs <>>o
@@ -88,7 +88,7 @@
     (: t (tablet 0)
        o (uopt as t '(109) '(101) ())
        _ (? (two? o) () (udie 1 "mknod: -m wants a mode"))
-       _ (: c (uoptun t "m") (? !c () (udie 1 ("mknod: unknown option -" + string c))))
+       _ (: c (uoptbad as t "m") (? !c () (udie 1 ("mknod: unknown option -" + string c))))
        v (uoptv t 109)
        md (? (string? v) (uoct v) 438)
        fs <>>o
@@ -202,7 +202,7 @@
        o (uopt as t '() '(101) ())
        _ (? (two? o) () (udie 2 "ls: an option wants a value"))
        ops <>>o
-       _ (: k (uoptun t uls-opts) (? !k () (udie 2 ("ls: unknown option -- " + (string k)))))
+       _ (: k (uoptbad as t uls-opts) (? !k () (udie 2 ("ls: unknown option -- " + (string k)))))
        a? (peep t 97 0) aa? (peep t 65 0) l? (peep t 108 0) d? (peep t 100 0)
        r? (peep t 114 0) tm? (peep t 116 0)
        c? (peep t 67 0) x? (peep t 120 0) o1? (peep t 49 0)
@@ -570,7 +570,7 @@
    (realpath-main as)
     (: t (tablet 0)
        o (uopt as t () '(101) ())
-       _ (: c (uoptun t "ems") (? !c () (udie 1 ("realpath: unknown option -" + string c))))
+       _ (: c (uoptbad as t "ems") (? !c () (udie 1 ("realpath: unknown option -" + string c))))
        fs <>>o
        _ (? (two? fs) () (udie 1 "usage: realpath [-e|-m|-s] PATH.."))
        e? (peep t 101 0) m? (peep t 109 0) s? (peep t 115 0)

@@ -112,7 +112,7 @@
     (: t (tablet 0)
        o (uopt as t vals () ())
        _ (? (two? o) () (udie 2 (who + ": an option wants a value")))
-       _ (: c (uoptun t ok) (? !c () (udie 2 (who + ": unknown option -" + string c))))
+       _ (: c (uoptbad as t ok) (? !c () (udie 2 (who + ": unknown option -" + string c))))
        _ (: w (uoptstray as <>>o) (? !w () (udie 2 (who + ": unknown option " + w))))
        [t <>>o])
    ; a hand-walked tool's operands, refused with 2 when one still looks like a flag: its

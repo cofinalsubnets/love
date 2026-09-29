@@ -204,7 +204,7 @@
                    (: lo (portof (snip a 0 k)) hi (portof (snip a (k + 1) #a))
                       (? (hi < lo) (die ("not a range: " + a)) (map (+ lo) (jot (hi - lo + 1)))))))
 
-    (? (uoptun t "CdiklNnopqsUuwvz") (die usage)
+    (? (uoptbad as t "CdiklNnopqsUuwvz") (die usage)
        (t 117 && (t 107 || t 122)) (die "-u takes neither -k nor -z")
        (t 85) (? (t 117 || t 112 || t 115) (die "-U takes none of -u, -p, -s")
                  !(#ops = 1) (die usage)
