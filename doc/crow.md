@@ -58,7 +58,15 @@ The model's **list_sessions** tool reads the cards, and **send_message** writes 
 
 # THE MERGE QUEUE
 
-Sessions working in parallel often share one branch, and merge into it one at a time. crow does not impose a protocol for this: it reads one out of the repository. Every ref under **refs/queue/** is a queue, a blob whose header states its rules, names its leader, and holds a row per merge. crow quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules, to read the queue fresh before acting on it, and to write only its own row. Writes are compare-and-swap: **git hash-object -w** *file*, then **git update-ref refs/queue/***name* *new* *old*. When that fails, someone wrote first: re-read and redo. A row names its session. The model reaches a crow session with **send_message**, and asks the user to relay to any other.
+Sessions working in parallel often share one branch, and merge into it one at a time. crow does not impose a protocol for this: it reads one out of the version control. A *queue* is a text whose header states its rules, names its leader, and holds a row per merge, kept where it can move only by compare-and-swap. Either store will do:
+
+**git**
+:   Every ref under **refs/queue/**. Read it with **git cat-file -p refs/queue/***name*, and take the ref's sha as *old*. Write **git hash-object -w** *file*, then **git update-ref refs/queue/***name* *new* *old*.
+
+**sb**
+:   Every ledger under **queue/** in the *hub*: the nest named by **SB_HUB**, else the working directory when it holds a **.sb/**. Read it with **sb -C** *hub* **ledger queue/***name*, and take **--id** as *old*. Write **sb -C** *hub* **ledger queue/***name* **--was** *old* *file*. A ledger keeps every entry it ever held, with its writer, under **--log**, and it never travels in **sync**: sessions that share a queue name one hub.
+
+crow quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules, to read the queue fresh before acting on it, and to write only its own row. When a write fails, someone wrote first: re-read and redo. A row names its session. The model reaches a crow session with **send_message**, and asks the user to relay to any other.
 
 # EXAMPLES
 
@@ -89,6 +97,9 @@ Send the same note with nothing but a shell:
 
 **CROW_ROOST**
 :   The roost's directory, **~/.love/run/crow** when unset.
+
+**SB_HUB**
+:   The sb nest whose **queue/** ledgers are the merge queues.
 
 **ANTHROPIC_API_KEY**, **OPENAI_API_KEY**
 :   The key, by default; **(key-env** *var***)** names another.

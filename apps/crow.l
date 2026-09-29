@@ -287,11 +287,18 @@
          + " apps/libra/libra.l FILE` checks a .l file's parens.")
         "- that build needs nothing from the host, PATH or not; two checks in make test spawn the host's sh and true by name, and fail where PATH has neither."])
 
-     ; every merge queue the repository keeps, as it stands at start
+     ; every merge queue there is, as it stands at start: git's refs/queue/*, and the queue/*
+     ; ledgers of sb's hub nest -- SB_HUB, else this directory when it holds a .sb
      crow-queues
       (lush-out ("for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do\n"
-                 + " echo \"--- $r ---\"; git cat-file -p \"$r\"\n"
-                 + "done\n"))
+                 + " echo \"--- git $r ---\"; git cat-file -p \"$r\"\n"
+                 + "done\n"
+                 + "hub=${SB_HUB:-}; [ -z \"$hub\" ] && [ -d .sb ] && hub=.\n"
+                 + "if [ -n \"$hub\" ]; then\n"
+                 + " for n in $(sb -C \"$hub\" ledger 2>/dev/null | cut -d' ' -f1); do\n"
+                 + "  case $n in queue/*) echo \"--- sb ledger $n, in the nest at $hub ---\"; sb -C \"$hub\" ledger \"$n\";; esac\n"
+                 + " done\n"
+                 + "fi\n"))
      crow-talk
       (paras
        ["## other sessions"
@@ -310,12 +317,15 @@
           [""
            "## the merge queue"
            ("Sessions working in parallel share a branch, and merges into it go one at a time through a "
-            + "queue kept in a git ref under refs/queue/. Its header holds the rules, the leader and a row "
-            + "per merge; follow them. Read it fresh before acting on it: `git cat-file -p refs/queue/NAME`.")
-           ("Write only your own row, unless you are the leader and its rules let you, and write by "
-            + "compare-and-swap: copy the blob to a file and edit it, `git hash-object -w FILE`, then "
-            + "`git update-ref refs/queue/NAME NEW OLD` with OLD the sha you read. If that fails someone "
-            + "wrote first: re-read and redo.")
+            + "queue that moves only by compare-and-swap: a git ref under refs/queue/, or an sb ledger "
+            + "under queue/ in a shared nest. Its header holds the rules, the leader and a row per merge; "
+            + "follow them. Write only your own row, unless you are the leader and its rules let you. Read "
+            + "it fresh before acting on it, and when a write fails someone wrote first: re-read and redo.")
+           ("- git: read `git cat-file -p refs/queue/NAME` and note `git rev-parse refs/queue/NAME` as OLD; "
+            + "write the edited copy with `git hash-object -w FILE`, then `git update-ref refs/queue/NAME NEW OLD`.")
+           ("- sb: read `sb -C HUB ledger queue/NAME` and note `sb -C HUB ledger queue/NAME --id` as OLD; "
+            + "write with `sb -C HUB ledger queue/NAME --was OLD FILE`, which exits 1 when it has moved on. "
+            + "HUB is the nest named below. `--log` shows every entry and who wrote it.")
            ("A row names its session. Reach a crow session with send_message; a name list_sessions does "
             + "not show belongs to another kind of agent, so tell the user what to relay. After a change "
             + "that moves other rows, message their owners with what moved.")

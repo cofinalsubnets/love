@@ -180,7 +180,12 @@
                        (ev "content_block_stop" {"index" 0})
                        (ev "message_delta" {"delta" {"stop_reason" "end_turn"}})
                        (ev "message_stop" {})]))])
-   r (cr-run cr-m "CROW_NAME=tester" "-y 'talk to yourself'")
+   ; an sb hub whose queue/ ledger the prompt should quote
+   hub (cr-root + "/hub")
+   _ (mkdir hub 493)
+   _ (cr-put hub "q" "leader tester\n66 tester crow green\n")
+   _ (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--was" "none" (hub + "/q")])
+   r (cr-run cr-m ("CROW_NAME=tester SB_HUB='" + hub + "'") "-y 'talk to yourself'")
    h (cr-heard 0)
    b1 (cr-body (h 0))
    u2 (: us (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h 1) "messages"))
@@ -193,6 +198,8 @@
       (0 = <r)
       (2 = #h)
       (cr-in (b1 "system") "session named tester")            ; the prompt names the session
+      (cr-in (b1 "system") "--- sb ledger queue/main")        ; and quotes the hub's queue
+      (cr-in (b1 "system") "66 tester crow green")
       (elem "send_message" (map (\ t (t "name")) (b1 "tools")))
       (cr-in (res 0) "[exit 0]")
       (cr-in (res 1) "tester (you)")
