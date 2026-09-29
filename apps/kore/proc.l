@@ -1471,28 +1471,44 @@
        _ (? (two? ps) (say out (ujoin (map show (? one? [<ps] ps))), put out 10) 0)
        _ (flush out)
        (? (two? ps) 0 1))
+   ; pgrep's and pkill's choosing, off their shared flags: the pattern over the name (or
+   ; with -f the command line, -x the whole of it), -v the others, -u USER,.. by owner,
+   ; and of what is left -n the newest or -o the oldest. no pattern takes every one
+   (upsel t pat)
+    (: me (: s (upself 0) (? s <s -1))
+       users (: v (uoptv t 117) (? v (filter (w \ 0 < #w) (usplit 44 v)) ()))
+       (own? p) (: u (upuid p) (any (w \ w = show u || w = uidname "/etc/passwd" u) users))
+       (hit p) (? (p = me) 0
+                  (: m (? pat (upmatch (t 102) (t 120) pat p) 1)
+                     (? ((? (t 118) !m m) && (atom? users || own? p)) 1 0)))
+       ps (filter hit (uprocs 0))
+       (start p) (: f (upstat p) (? (two? f) (uatoi (f 21)) 0))
+       (? (atom? ps) ()
+          (t 110) [(foldl (\ b p (? (start b <= start p) p b)) <ps >ps)]
+          (t 111) [(foldl (\ b p (? (start p < start b) p b)) <ps >ps)]
+          ps))
+   ; -l the name beside each pid, -a the whole command line, -c the count alone, -d the
+   ; delimiter between them
    (pgrep-main as)
-    (: t (tablet 0)
-       o (uopt as t () '(101) ())
-       _ (? (two? o) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
-       _ (: c (uoptbad as t "fx") (? !c () (udie 2 ("pgrep: unknown option -" + string c))))
-       rest <>>o
-       _ (? (two? rest) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
-       ps (upfind (peep t 102 0) (peep t 120 0) <rest)
-       _ (foldl (\ _ p (say out (show p), put out 10)) 0 ps)
+    (: fo (uflags "pgrep" as '(117 100) "acdflnouvx")
+       t <fo rest (fo 1)
+       _ (? (two? rest || t 117) () (udie 2 "usage: pgrep [-acflnovx] [-d DELIM] [-u USER,..] [PATTERN]"))
+       ps (upsel t (? (two? rest) <rest ()))
+       (row p) (show p + (? (t 97) (" " + (: c (upcmd p) (? (string? c) c (: f (upstat p) (? f (f 1) ""))))) (t 108) (" " + (: f (upstat p) (? f (f 1) ""))) ""))
+       _ (? (t 99) (say out (show #ps + "\n")) (two? ps) (say out (join (? (t 100) (uoptv t 100) "\n") (map row ps) + "\n")) 0)
        _ (flush out)
        (? (two? ps) 0 1))
+   ; -e says what each signal went to
    (pkill-main as)
     (: sig (? (two? as) (usignum <as) ())
-       rest (? (charm? sig) >as as)
-       t (tablet 0)
-       o (uopt rest t () '(101) ())
-       _ (? (two? o) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
-       _ (: c (uoptbad as t "fx") (? !c () (udie 2 ("pkill: unknown option -" + string c))))
-       ws <>>o
-       _ (? (two? ws) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
-       ps (upfind (peep t 102 0) (peep t 120 0) <ws)
-       _ (foldl (\ _ p (still p (? (charm? sig) sig 15))) 0 ps)
+       fo (uflags "pkill" (? (charm? sig) >as as) '(117) "efnouvx")
+       t <fo ws (fo 1)
+       _ (? (two? ws || t 117) () (udie 2 "usage: pkill [-SIG] [-efnovx] [-u USER,..] [PATTERN]"))
+       ps (upsel t (? (two? ws) <ws ()))
+       _ (each ps (p \ (: nm (: f (upstat p) (? f (f 1) "?"))
+                          r (still p (? (charm? sig) sig 15))
+                          (? (t 101 && !r) (say out (nm + " killed (pid " + show p + ")\n")) 0))))
+       _ (flush out)
        (? (two? ps) 0 1))
    (killall-main as)
     (: sig (? (two? as) (usignum <as) ())

@@ -54,16 +54,30 @@ fi
 # ps's faces byte for byte on pid 1's row and every header, under TZ=UTC0 (START and
 # STIME are UTC here): -o with its headers renamed and blanked, -p, -f, BSD's aux, -e;
 # -u, an unknown key and a pid not there
+# a TIME may tick between the two reads, so its digits are blanked, its width kept
+pstm() { sed -E 's/[0-9]{2}:[0-9]{2}:[0-9]{2}/HH:MM:SS/; s/ [0-9]+:[0-9]{2} / M:SS /'; }
 for c in "-o pid,ppid,user,comm,stat,rss,tty -p 1" "-o pid=,ppid=,comm= -p 1" "-o pid,user,vsz,rss,stat,ni -p 1" "-f -p 1"; do
   # shellcheck disable=SC2086
-  TZ=UTC0 ps $c > "$g"; TZ=UTC0 korerun ps $c > "$o"; same "ps $c"
+  TZ=UTC0 ps $c | pstm > "$g"; TZ=UTC0 korerun ps $c | pstm > "$o"; same "ps $c"
 done
 for c in -e -ef aux; do
   # shellcheck disable=SC2086
-  TZ=UTC0 ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' > "$g"; TZ=UTC0 korerun ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' > "$o"; same "ps $c"
+  TZ=UTC0 ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm > "$g"; TZ=UTC0 korerun ps $c | awk 'NR == 1 || $2 == 1 || $1 == 1' | pstm > "$o"; same "ps $c"
 done
 [ "$(korerun ps -o pid=P,comm -p 1 | head -1)" = "      P COMMAND" ] || fail "kore ps -o, a header renamed"
 korerun ps -u root | awk '{ print $1 }' | grep -qx 1 || fail "kore ps -u root"
 korerun ps -o bogus > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ps -o bogus ($r)"
 korerun ps -p 999999999 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ps -p of no pid ($r)"
+# pgrep's -l -a -c -d -n -o -f -x -u and a miss against procps over two naps of our own;
+# pkill -e -n takes the newest alone and says so
+PN=$PWD/$ho/.kore-pgnap; cp "$(command -v sleep)" "$PN"; chmod 755 "$PN"
+"$PN" 30 & pa=$!; sleep 0.3; "$PN" 31 & pb=$!; sleep 0.3
+for c in ".kore-pgnap" "-l .kore-pgnap" "-a .kore-pgnap" "-c .kore-pgnap" "-d , .kore-pgnap" "-n .kore-pgnap" "-o .kore-pgnap" \
+         "-x .kore-pgnap" "-c -u root .kore-pgnap" "nosuchthing_q"; do
+  # shellcheck disable=SC2086
+  { pgrep $c; echo "rc=$?"; } > "$g" 2>&1; { korerun pgrep $c; echo "rc=$?"; } > "$o" 2>&1; same "pgrep $c"
+done
+[ "$(korerun pkill -e -n .kore-pgnap)" = ".kore-pgnap killed (pid $pb)" ] || fail "kore pkill -e -n"
+wait $pb; kill -0 $pa || fail "kore pkill -n took the oldest too"
+kill $pa; wait $pa 2> /dev/null; rm -f "$PN"
 echo "kore: the /proc family (ps/free/uptime/pidof/pgrep/pkill/killall/pwdx vs procps) ok"
