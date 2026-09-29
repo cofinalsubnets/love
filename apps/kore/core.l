@@ -766,13 +766,12 @@
        _ (flush o) _ (? (two? >fs) (close o) 0) 0)
 
    ; -- tee: stdin onto out and every file (-a appends) --
+   ; -i ignores an interrupt, as GNU's; -p is taken -- love ignores SIGPIPE from the
+   ; start, so a pipe that closes never ends tee and the rest still take what comes
    (tee-main as)
-    (: t (tablet 0)
-       o (uopt as t () '(101) ())
-       _ (uoptbad as t "a" @ c (c ? (udie 2 ("tee: unknown option -" + string c))))
-       a? (peep t 97 0)
-       fs <>>o
-       _ (uoptstray as fs @ w (w ? (udie 2 ("tee: unknown option " + w))))
+    (: fo (uflagsl "tee" as () "aip" {"append" 97 "ignore-interrupts" 105 "output-error" 112})
+       t <fo a? (peep t 97 0) fs (fo 1)
+       _ (? (t 105) (signal 2 1) 0)
        ; every destination opens up front. tee is a pipe, and a pipe cannot wait
        ; for the end of its input to start writing -- it used to slurp stdin whole.
        (opn l acc ok)

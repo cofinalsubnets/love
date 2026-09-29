@@ -133,6 +133,15 @@ for c in "-L $W" "-L $W.j" "-L $W.t" "-lL $W" "-L $W $W.j" "-clwmL $W" "-Lc $W.j
   LC_ALL=C.UTF-8 wc $c > "$g"; korerun wc $c > "$o"; same "wc $c"
 done
 rm -f "$W" "$W.j" "$W.t"
+# tee -i ignores SIGINT: read off its /proc mask while it runs in the foreground (a
+# background job has SIGINT ignored already, so killing one proves nothing); -p is taken
+TI=$ho/.teei; M2=$PWD/$m
+( sleep 0.4; for p in $(pgrep -x love); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q "kore tee -i $TI" && grep SigIgn /proc/$p/status; done ) > "$TI.m" &
+# a real process of its own: the tool shell runs kore's tools aboard
+sleep 1 | LOVE_NO_IMAGE= /bin/sh -c 'exec "$0" kore tee -i "$1" > /dev/null' "$M2" "$TI"; wait
+sgm=$(awk '{ print $2 }' "$TI.m"); [ $(( 0x$sgm & 2 )) -eq 2 ] || fail "kore tee -i: SigIgn $sgm"
+printf 'a\nb\n' | korerun tee -p "$TI" > /dev/null && [ "$(cat "$TI")" = "$(printf 'a\nb')" ] || fail "kore tee -p"
+rm -f "$TI" "$TI.m"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/shuf/seq/echo/basename/tee GNU-identical) ok"
 
 # sort's and ls's own flag matrices are subjects of their own (sort.sh, ls.sh): each
