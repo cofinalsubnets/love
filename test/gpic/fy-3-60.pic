@@ -1,0 +1,14 @@
+.PS
+x = 0.3
+y = 0.125
+z = 1
+define m60 { arc dotted 0.05 cw }
+x = z
+if exp(0.3) != 0.2 then { line up dashed 0.1 up }
+polygon
+arc <-> then right sprintf("%.3g", exp(y)) ljust
+spline thick 2 dashed <-
+line dashed then down x/2
+for i = 1 to 2 by *2 do { if max(1.5 % 0.3, 0.1 % 0.3) > 2 then { arrow then up x/2 sprintf("%-6.2f|", z / 0.3) ljust } else { down } }
+m60
+.PE

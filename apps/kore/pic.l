@@ -18,6 +18,10 @@
 ;         each half-cell PX pixels square (the source's size by default), clear where the
 ;         terminal's ground shows, and in the cube's own levels with -c 256; or, to .ans,
 ;         the blocks' text itself
+;   pic [-nCSU] [-t [-cz]] [FILE..]
+;         classic pic, the troff preprocessor (apps/kore/gpic.l): a bare pic with one of
+;         GNU pic's flags, or whose first input is not a png, jpeg or gif. -g -w -h are
+;         pic cat's
 ;
 ; www draws a page's pictures through pic-art too.
 (module 'kore
@@ -242,19 +246,34 @@
 
    ; -- the verbs ---------------------------------------------------------------
    (pic-main as)
-    (? (atom? as) (pic-cat as)
-       (<as @ "cat" (pic-cat >as)
-              "less" (picless-main >as)
-              "convert" (pic-convert >as)
-              "pixelize" (pic-pixelize >as)
-              "help" (say out (pic-usage + "\n"), 0)
-              (pic-cat as)))
+    (<as @ "cat" (pic-cat >as)
+           "less" (picless-main >as)
+           "convert" (pic-convert >as)
+           "pixelize" (pic-pixelize >as)
+           "help" (say out (pic-usage + "\n"), 0)
+           (pic-route as))
+   ; a bare pic: a flag of cat's (-g -w -h) is pictures, one of GNU pic's is classic pic
+   ; (apps/kore/gpic.l); with neither the first input decides, a png, jpeg or gif being
+   ; a picture and anything else a document with .PS/.PE in it. stdin is read once
+   (pic-route as)
+    (: (flags l) (? (atom? l || <l = "--" || <l = "-" || !(0 < #<l && <l 0 = 45)) () (<l . flags >l))
+       fs (flags as)
+       (has cs) (0 < #(filter (w \ 1 < #w && elem (w 1) cs) fs))
+       (? (has [103 104 119]) (pic-cat as)
+          (has [110 116 99 67 83 85 122 68 84]) (gpic-main as)
+          (: ops (: (go l) (? (atom? l) () (<l = "--") >l (0 < #<l && <l 0 = 45 && <l != "-") (go >l) l) (go as))
+             f (? (two? ops) <ops "-")
+             b (? (f = "-") (slurp in) (: r (uread f) (? (two? r) <>r "")))
+             sin (? (f = "-") b ())
+             (? (pic-kind b != ()) (pic-cat-in as sin) (gpic-run as sin)))))
    ; -g's mode, block when unsaid; auto taken by what the terminal answered
    (pic-mode who t)
     (: v (uoptv t 103) g (? (string? v) v "block")
        (? (elem g ["auto" "block" "sixel" "kitty"]) g (udie 2 (who + ": no mode " + g + "; block sixel kitty or auto"))))
    (pic-pick g pr) (? (g != "auto") g (pr 'kitty) "kitty" (pr 'sixel) "sixel" "block")
-   (pic-cat as)
+   (pic-cat as) (pic-cat-in as ())
+   ; ..stdin already read as sin, when it was
+   (pic-cat-in as sin)
     (: fo (uflags "pic" as [103 104 119] "ghw")
        t (fo 0) fs (fo 1)
        ws (tty 1)
@@ -279,7 +298,7 @@
                                  (say err ("pic: cannot open " + f), put err 10, 1))
                             (? (a || x) 1 0)))
                   0 fs)
-          (one "stdin" (slurp in))))
+          (one "stdin" (? (string? sin) sin (slurp in)))))
    (pic-convert as)
     (: who "pic convert"
        fo (uflags who as [113 116] "qt")

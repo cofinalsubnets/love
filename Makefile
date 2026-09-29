@@ -114,11 +114,16 @@ love0: $(love0)
 # the two states of one binary, as two files: the link lays the raw one, and the bake
 # writes the artifact beside it. `bake -o` is what lets these be separate targets at all --
 # an in-place bake leaves make no file to name, which is what the old .baked stamp stood in for.
-# the bake is hot-first: tools/hotbake.sh profiles a page-chunked bake and lays what short runs
-# touch ahead, so a lazy wake decodes little of the image.
-$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l tools/hotbake.sh
+# the bake is hot-first: tools/hotbake.sh lays what short runs touch ahead, by the tree's
+# profile, so a lazy wake decodes little of the image. `make hotprof` writes the profile again
+# after a change to anything baked (test_bakerep says when).
+$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l tools/hotbake.sh tools/hot.prof
 	@echo 'BAKE	'$@
 	@sh tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
+
+.PHONY: hotprof
+hotprof: $(ho)/love.raw $(ho)/.dist-cat.l
+	@sh tools/hotbake.sh -p $(ho)/love.raw tools/hot.prof $(ho)/.dist-cat.l
 
 .PHONY: candidate
 candidate: $(ho)/love.cand
@@ -308,7 +313,7 @@ kore_arc = apps/gz.l apps/tar.l apps/xz.l apps/bz2.l apps/cpio.l
 kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/verify.l apps/tls/client.l \
   apps/ssh/sha512.l apps/ssh/ed25519.l apps/ssh/aes.l apps/ssh/bcrypt.l apps/ssh/client.l \
   apps/ssh/server.l apps/ssh/cli.l \
-  apps/png.l apps/jpeg.l apps/gif.l apps/kore/wget.l apps/kore/openssl.l apps/kore/pic.l apps/kore/www.l apps/kore/net.l apps/kore/kore.l
+  apps/png.l apps/jpeg.l apps/gif.l apps/kore/wget.l apps/kore/openssl.l apps/kore/gpic.l apps/kore/pic.l apps/kore/www.l apps/kore/net.l apps/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = apps/json.l apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/fat.l \
