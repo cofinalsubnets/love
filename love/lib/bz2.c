@@ -3,6 +3,10 @@
 //   (bz2e s level)   bytes -> a .bz2 stream, level 1..9 the block in 100k | ()
 //   (bz2d s)         every .bz2 stream in s -> their bytes | 1 format, 2 corrupt, 3 end, 4 check,
 //                    5 past BZ_OUTMAX
+//   (bz2-new 0)      a state for reading a block at a time
+//   (bz2-step st b eof)  the next block (or a stream's head or end) off b at st's bit ->
+//                    (bytes . k), k whole bytes of b now behind it | -1 more of b wanted |
+//                    0 every stream read | bz2d's codes. eof: b is all there is
 // the coder is bzip2's pipeline: runs of four, the rotations sorted by prefix doubling,
 // move-to-front with the zero runs in RUNA/RUNB, and 2..6 huffman tables refined four times.
 #ifndef BZ_STANDALONE
@@ -417,6 +421,42 @@ static int bz_dec(const uint8_t *s, uintptr_t n, struct bz_w *w) {
  ai_alloc(d, 0);
  return w->bad ? -1 : rc; }
 
+// --- a block at a time --------------------------------------------------------------------
+// bz_dec's walk cut at its blocks: the state is where in the input the next one starts and
+// what the stream has said so far. a block that runs past what the caller holds is left
+// unread for a longer try -- the caller holds more than any block can take
+#define BZ_MAGIC 0x627a3273u
+struct bz_st { uint64_t magic, bit; uint32_t mode, level, all, nstream; };
+enum { BZ_MORE = 10, BZ_DONE = 11 };
+static int bz_step(struct bz_st *S, struct bz_d *d, const uint8_t *s, uintptr_t n, int eof, struct bz_w *w) {
+ uintptr_t at = S->bit / 8;
+ if (!S->mode) {                                 // a stream's head, on a byte
+  if (n - at < 4 && !eof) return BZ_MORE;
+  if (n - at < 4 || s[at] != 'B' || s[at + 1] != 'Z' || s[at + 2] != 'h' || s[at + 3] < '1' || s[at + 3] > '9')
+   return S->nstream ? BZ_DONE : n - at < 4 && !memcmp(s + at, "BZh", n - at < 3 ? n - at : 3) ? 3 : 1;
+  S->level = s[at + 3] - '0', S->all = 0, S->mode = 1, S->bit = (at + 4) * 8;
+  return 0; }
+ struct bz_r r = { s, at, n, 0, 0 };
+ if (S->bit % 8) br_get(&r, S->bit % 8);
+ uint32_t m1 = br_get(&r, 24), m2 = br_get(&r, 24);
+ int rc;
+ if (br_used(&r) > n * 8) return eof ? 3 : BZ_MORE;
+ if (m1 == 0x314159 && m2 == 0x265359) {
+  uint32_t b;
+  rc = bz_dblock(d, &r, S->level, w, &b);
+  if (rc && br_used(&r) > n * 8) return eof ? 3 : BZ_MORE;
+  if (rc) return rc < 0 ? (w->big ? 5 : -1) : rc;
+  S->all = (S->all << 1 | S->all >> 31) ^ b, S->bit = br_used(&r);
+  return 0; }
+ if (m1 == 0x177245 && m2 == 0x385090) {
+  uint32_t c = br_get(&r, 32);
+  if (br_used(&r) > n * 8) return eof ? 3 : BZ_MORE;
+  if (c != S->all) return 4;
+  r.k -= r.k % 8;                                // the stream ends on a byte
+  S->bit = br_used(&r), S->mode = 0, S->nstream++;
+  return 0; }
+ return 2; }
+
 #ifndef BZ_STANDALONE
 // ===== the nifs: str0 may collect, so a string is re-read off the stack after it =====
 ai_noinline static struct ai *host_bz2e(struct ai *g) {
@@ -446,12 +486,55 @@ ai_noinline static struct ai *host_bz2d(struct ai *g) {
  if (w.p) ai_alloc(w.p, 0);
  return g; }
 
+static struct ai_str *bz_cask(word x) {
+ if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
+ struct ai_str *s = cask(x)->str;
+ return s && s->len == sizeof(struct bz_st) && ((struct bz_st*) s->bytes)->magic == BZ_MAGIC ? s : NULL; }
+ai_noinline static struct ai *host_bz2_new(struct ai *g) {
+ uintptr_t sreq = str_width(sizeof(struct bz_st)), breq = Width(struct ai_cask) + Width(struct ai_tag);
+ if (!ai_ok(g = ai_have(g, sreq + breq))) return g;
+ struct ai_str *s = ini_str(bump(g, sreq), sizeof(struct bz_st));
+ memset(s->bytes, 0, sizeof(struct bz_st));
+ ((struct bz_st*) s->bytes)->magic = BZ_MAGIC;
+ union u *k = bump(g, breq);
+ cask(k)->ap = lvm_cask, cask(k)->str = s;
+ tagthread(k, Width(struct ai_cask));
+ return g->sp[0] = word(k), g; }
+ai_noinline static struct ai *host_bz2_step(struct ai *g) {
+ struct ai_str *cs = bz_cask(g->sp[0]);
+ if (!cs || !strp(g->sp[1])) return g->sp[2] = ZeroPoint, g->sp += 2, g;
+ struct bz_st *S = (struct bz_st*) cs->bytes;
+ struct bz_d *d = S->mode ? ai_alloc(NULL, sizeof *d) : NULL;
+ if (S->mode && !d) return g->sp[2] = ZeroPoint, g->sp += 2, g;
+ if (d) bz_crcs(d->crct);
+ struct bz_w w = {0};
+ int rc = bz_step(S, d, (const uint8_t*) txt(g->sp[1]), len(g->sp[1]), oddp(g->sp[2]) && getcharm(g->sp[2]), &w);
+ if (d) ai_alloc(d, 0);
+ if (rc) {
+  if (w.p) ai_alloc(w.p, 0);
+  return g->sp[2] = rc == BZ_MORE ? putcharm(-1) : rc == BZ_DONE ? putcharm(0) : rc < 0 ? ZeroPoint : putcharm(rc),
+         g->sp += 2, g; }
+ uintptr_t k = S->bit / 8;                       // the bytes behind it, for the caller to drop
+ S->bit -= 8 * k;
+ if (!ai_ok(g = ai_have(g, str_width(w.n) + Width(struct ai_chain)))) { if (w.p) ai_alloc(w.p, 0); return g; }
+ struct ai_str *o = ini_str(bump(g, str_width(w.n)), w.n);
+ if (w.n) memcpy(o->bytes, w.p, w.n);
+ if (w.p) ai_alloc(w.p, 0);
+ struct ai_chain *c = ini_chain(bump(g, Width(struct ai_chain)), (intptr_t) o, putcharm((intptr_t) k));
+ return g->sp[2] = word(c), g->sp += 2, g; }
+
 static LvmWrap(lvm_bz2e, host_bz2e)
 static LvmWrap(lvm_bz2d, host_bz2d)
+static LvmWrap(lvm_bz2_new, host_bz2_new)
+static LvmWrap(lvm_bz2_step, host_bz2_step)
 
 static union u const
  nif_bz2e[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_bz2e}, {lvm_ret0}},
- nif_bz2d[] = {{lvm_bz2d}, {lvm_ret0}};
+ nif_bz2d[] = {{lvm_bz2d}, {lvm_ret0}},
+ nif_bz2_new[] = {{lvm_bz2_new}, {lvm_ret0}},
+ nif_bz2_step[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_bz2_step}, {lvm_ret0}};
 LvNif("bz2e", nif_bz2e, NULL);
 LvNif("bz2d", nif_bz2d, NULL);
+LvNif("bz2-new", nif_bz2_new, NULL);
+LvNif("bz2-step", nif_bz2_step, NULL);
 #endif
