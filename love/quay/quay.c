@@ -1,6 +1,7 @@
 #include "quay.h"
 #include "cp437.h"
 #include "cpwidth.h"
+#include "cpvs16.h"
 
 // *e <- a cell of codepoint cp in the current pen. the blank a clear or scroll
 // leaves behind is cp 0 in the current pen,
@@ -334,9 +335,39 @@ static uint32_t cb_slot(struct cb *c, uint32_t const *v, uint32_t skip) {
   if (k < cb_nclu) for (j = 0; j < cb_clun; j++) c->clu[k][j] = v[j];
   return k; }
 
+// does VS16 give cp an emoji style? (cpvs16.h, ascending)
+static int cb_vs16(uint32_t cp) {
+  uintptr_t lo = 0, hi = sizeof cpvs16 / sizeof *cpvs16;
+  while (lo < hi) {
+    uintptr_t const m = (lo + hi) / 2;
+    if (cpvs16[m] < cp) lo = m + 1; else hi = m; }
+  return lo < sizeof cpvs16 / sizeof *cpvs16 && cpvs16[lo] == cp; }
+
+// under ?2027, VS16 after a narrow character with an emoji style makes its cell a wide
+// char's lead and the next its tail. on the last column, the pair wraps to the next line
+// as a wide char would there; with autowrap off it stays narrow
+static void cb_emoji(struct cb *c, uint32_t p) {
+  uint32_t const cs = c->cols;
+  struct cb_cell e = c->cb[p];
+  if (cs < 2 || e.g & cb_pic || cb_wide(e.g) || !cb_vs16(cb_base(c, e.g))) return;
+  e.fg &= ~cb_soft;
+  if (p % cs == cs - 1u) {
+    if (!(c->flag & cb_pend)) return;
+    c->cb[p].g &= 0xff000000u, c->cb[p].fg |= cb_soft, cb_dirt(c, p / cs, p / cs);
+    c->flag &= (uint16_t) ~cb_pend, c->wpos -= c->wpos % cs, cb_ind(c);
+    p = c->wpos;
+    cb_unpair(c, p); }
+  cb_unpair(c, p + 1u);
+  c->cb[p] = e, c->cb[p].g |= (uint32_t) cb_lead << 21;
+  c->cb[p + 1u] = e, c->cb[p + 1u].g = (e.g & 0xff000000u) | (uint32_t) cb_tail << 21;
+  cb_dirt(c, p / cs, p / cs);
+  c->flag &= (uint16_t) ~cb_pend;
+  if ((p + 1u) % cs == cs - 1u) { c->wpos = p + 1u; if (c->flag & cb_wrap) c->flag |= cb_pend; }
+  else c->wpos = p + 2u; }
+
 // a mark joins the cell before the cursor -- the one a pending wrap sits on, a wide
 // char's lead for its tail -- keeping its pen. none there, a picture, or a full
-// cluster: the mark is dropped
+// cluster: the mark is dropped (though a VS16 still widens, cb_emoji)
 static void cb_mark(struct cb *c, uint32_t m) {
   uint32_t const cs = c->cols;
   uint32_t p = c->wpos;
@@ -346,12 +377,11 @@ static void cb_mark(struct cb *c, uint32_t m) {
   if (g & cb_pic || !cb_cp(g) || cb_wide(g) == cb_tail) return;
   uint32_t v[cb_clun] = { cb_cp(g) }, n = 1;
   if (o) for (n = 0; n < cb_clun && o[n]; n++) v[n] = o[n];
-  if (n == cb_clun) return;
-  v[n] = m;
-  uint32_t const k = cb_slot(c, v, p);
-  if (k == cb_nclu) return;
-  c->cb[p].g = (g & 0xffe00000u) | (cb_clu0 + k);
-  cb_dirt(c, p / cs, p / cs); }
+  if (n < cb_clun) {
+    v[n] = m;
+    uint32_t const k = cb_slot(c, v, p);
+    if (k < cb_nclu) c->cb[p].g = (g & 0xffe00000u) | (cb_clu0 + k), cb_dirt(c, p / cs, p / cs); }
+  if (m == 0xfe0fu && c->flag & cb_gc) cb_emoji(c, p); }
 
 static void cb_glyph(struct cb *c, uint32_t cp) {
   uint32_t cs = c->cols, w = cb_width(cp);
@@ -886,6 +916,23 @@ static void cb_sgr(struct cb *c) {
       if (p == 38) c->cur_fg = v; else c->cur_bg = v;
       k += 4; } } }
 
+// DECRQM (CSI ? Ps $ p, CSI Ps $ p): a mode's state as CSI ? Ps ; s $ y -- 1 set, 2 reset,
+// 0 one quay does not know
+static void cb_rqm(struct cb *c, int priv) {
+  uint16_t const p = c->pv[0], f = c->flag;
+  int s = 0;
+  if (!priv) s = p == 20 ? (f & cb_lnm ? 1 : 2) : 0;
+  else if (p == 7) s = f & cb_wrap ? 1 : 2;
+  else if (p == 25) s = f & cb_show ? 1 : 2;
+  else if (p == 6) s = f & cb_origin ? 1 : 2;
+  else if (p == 9 || p == 1000 || p == 1002 || p == 1003)
+    s = (f & cb_mice) == (p == 9 ? cb_mx10 : p == 1000 ? cb_mbtn : p == 1002 ? cb_mdrag : cb_many) ? 1 : 2;
+  else if (p == 1006) s = f & cb_msgr ? 1 : 2;
+  else if (p == 2004) s = f & cb_paste ? 1 : 2;
+  else if (p == 2027) s = f & cb_gc ? 1 : 2;
+  else if (p == 47 || p == 1047 || p == 1049) s = f & cb_alt ? 1 : 2;
+  cb_say(c, priv ? "\033[?" : "\033["), cb_sayn(c, p), cb_say(c, ";"), cb_sayn(c, (uint32_t) s), cb_say(c, "$y"); }
+
 // DEC private / ANSI modes (CSI ? .. h/l and CSI .. h/l). the alternate screen
 // (47/1047/1049): the main grid waits in the twin and a cleared grid takes its place,
 // then comes back whole on the way out. a screen laid with no twin clears instead.
@@ -901,6 +948,7 @@ static void cb_mode(struct cb *c, int priv, int on) {
       c->flag = (uint16_t) ((c->flag & ~cb_mice) | (on ? m : 0)); }
     else if (p == 1006) c->flag = on ? c->flag | cb_msgr : c->flag & (uint16_t) ~cb_msgr;
     else if (p == 2004) c->flag = on ? c->flag | cb_paste : c->flag & (uint16_t) ~cb_paste;
+    else if (p == 2027) c->flag = on ? c->flag | cb_gc : c->flag & (uint16_t) ~cb_gc;
     else if (p == 6) {
       c->flag = on ? c->flag | cb_origin : c->flag & (uint16_t) ~cb_origin;
       cb_goto(c, 0, 0); }
@@ -1020,7 +1068,7 @@ static void cb_put1(struct cb *c, uint8_t i) {
    case 1:                                  // after ESC
     c->esc = 0;
     switch (i) {
-     case '[': c->esc = 2, c->arg = 0, c->pn = 0;
+     case '[': c->esc = 2, c->arg = 0, c->pn = 0, c->ci = 0;
       c->flag &= (uint16_t) ~(cb_priv | cb_junk | cb_gt); return;
      case ']': c->esc = 7, c->ol = 0; return;       // OSC: capture the head (colour asks answer)
      case 'P': c->esc = 9, c->pn = 0, c->arg = 0; return;  // DCS: its parameters, then its final
@@ -1049,10 +1097,14 @@ static void cb_put1(struct cb *c, uint8_t i) {
       return; }
     if (i == '>') { c->flag |= cb_gt; return; }     // the secondary-DA marker
     if (i == '?' || i == '=' || i == '<') { c->flag |= cb_priv; return; }
-    if (i <= '/') { c->flag |= cb_junk; return; }  // intermediates we don't speak
+    if (i <= '/') { c->flag |= cb_junk, c->ci = i; return; }  // an intermediate: kept for DECRQM
     if (c->pn < 8) c->pv[c->pn++] = c->arg;        // the final parameter
     c->esc = 0;
-    if (c->flag & cb_junk) { c->flag &= (uint16_t) ~(cb_junk | cb_priv | cb_gt); return; }
+    if (c->flag & cb_junk) {
+      int const priv = !!(c->flag & cb_priv);
+      c->flag &= (uint16_t) ~(cb_junk | cb_priv | cb_gt);
+      if (c->ci == '$' && i == 'p') cb_rqm(c, priv);
+      return; }
     return cb_csi(c, i);
    case 3:                                  // a DCS/PM/APC body on its way to ST
     if (i == 7) c->esc = 0;

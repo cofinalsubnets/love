@@ -711,6 +711,31 @@
    t (regrid s (cask (screen () 4 12)) 4 12)             ; a regrid keeps the gen
    _ (test (1 = picture t (slot t 0) 2)))
 
+; --- 29. ?2027: VS16 gives a character with an emoji style two cells; DECRQM says so ---
+(: (cwide s i) (glass s i 0 >> 21 & 3)
+   (rqm s m) (: _ (scribe s m) (string (reply s)))
+   s (mkscr 3 6)
+   _ (scribe s "\u{2764}\u{fe0f}x")                    ; off: ❤ keeps one cell
+   _ (test (10084 = chat s 0) (0 = cwide s 0) (120 = chat s 1)
+           ("\e[?2027;2$y" = rqm s "\e[?2027$p"))
+   _ (scribe s "\e[?2027h\e[2;1H\u{2764}\u{fe0f}x")    ; on: a lead and a tail
+   _ (test ("\e[?2027;1$y" = rqm s "\e[?2027$p")
+           (10084 = chat s 6) (1 = cwide s 6) (2 = cwide s 7) (120 = chat s 8)
+           ("\u{2764}\u{fe0f}x" = copied s 6 9))            ; the VS16 rides along
+   _ (scribe s "\e[3;1Ha\u{fe0f}y\u{231a}\u{fe0f}z")     ; a has no emoji style; ⌚ is wide already
+   _ (test (97 = chat s 12) (0 = cwide s 12) (121 = chat s 13)
+           (1 = cwide s 14) (2 = cwide s 15) (122 = chat s 16))
+   _ (scribe s "\e[1;6H\u{2764}\u{fe0f}")              ; on the last column: the pair wraps
+   _ (test (0 = chat s 5) (10084 = chat s 6) (1 = cwide s 6) (8 = cur s)
+           ("\u{2764}\u{fe0f}x    \u{2764}\u{fe0f}x" = copied s 0 12))   ; ..the row it left wrapped: no newline
+   t (mkscr 1 8)
+   _ (scribe t "\e[?2027h1\u{fe0f}\u{20e3}q")          ; a keycap
+   _ (test (49 = chat t 0) (1 = cwide t 0) (113 = chat t 2)
+           ("\e[?12345;0$y" = rqm t "\e[?12345$p")      ; a mode quay does not know
+           ("\e[?2004;2$y" = rqm t "\e[?2004$p") ("\e[?7;1$y" = rqm t "\e[?7$p")
+           ("\e[20;2$y" = rqm t "\e[20$p")              ; an ansi one
+           ("\e[?2027;2$y" = rqm t "\ec\e[?2027$p")))   ; ris resets it
+
 ; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")

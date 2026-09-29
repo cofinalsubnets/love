@@ -148,6 +148,14 @@
                 (sub? one "\e[4;5H\e_Ga=p,i=1048577,p=1,q=2,C=1,x=0,y=0,w=10,h=12,c=2,r=1\e\\" 0)
                 !(sub? two "a=t" 0) (sub? two "a=p,i=1048577" 0)))
 
+; --- a VS16-widened lead (?2027): its two cells erased, and the cursor stepped two past
+;     it whatever width the outer terminal draws it ---
+   _ (: s (mkscr 1 6)
+        _ (scribe s "\e[?2027h\u{2764}\u{fe0f}x\u{4e16}")
+        f (paint s 1 6 0 0)
+        _ (test (sub? f "\e[2X\e7\u{2764}\u{fe0f}\e8\e[2Cx" 0)
+                (sub? f "x\u{4e16}" 0)))                  ; a plain wide char as before
+
 ; --- a selected cell wears the reverse face ---
    _ (: s (mkscr 1 4)
         _ (scribe s "abcd")
