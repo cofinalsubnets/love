@@ -1072,6 +1072,22 @@
        'usage (\ n 0)
        'cost (\ x 0)
        'shell (\ h cmd (shell-out cmd))}
+     ; who this session is: the name others address it by, where it works, and under claude-code the
+     ; claude session --resume wants
+     (whoami _)
+      ("session " + bee-name + " · " + bee-cwd + (0 < #bee-branch ? (" · " + bee-branch) "")
+       + (: s (peep bee-cell 'claude ()) (string? s ? (" · claude " + s + " (--resume " + s + ")") "")))
+     ; the terminal's title names the session (OSC 2), the old title pushed first and popped at the
+     ; end (xterm's CSI 22/23 t), so tmux's window list and the tabs say which bee is which
+     (title-on _) (esc + "[22;0t" + esc + "]2;bee: " + bee-name + string 7)
+     (title-off _) (esc + "[23;0t")
+     ; the > loop: the name once, and the title while on a terminal
+     (repl-go key f)
+      (: tty? (two? (tty 1))
+         _ (puts ("bee " + bee-name + (tty? ? (title-on 0) "") + "\n"))
+         r (repl key f ())
+         _ (? tty? (puts (title-off 0)) 0)
+         r)
      (repl key f msgs)
       (: _ (puts "> ") _ (flush out) l (line 0)
          (? !(string? l) 0
@@ -1258,9 +1274,10 @@
          pad (map (\ _ "") ^(th - #win))
          busy (c 'busy != ())
          spin (busy && !(tablet? (c 'asking)) ? (spinner c) "")
-         stat (sgr "2" (? (tablet? (c 'asking)) "  y run · n decline"
-                          busy "  esc interrupt · ↑↓ scroll"
-                          "  enter send · alt-enter newline · ↑↓ ^b ^f scroll · ^t thoughts · ^d quit"))
+         ; the session's name leads the hints, always: it is how other sessions address this one
+         stat (sgr bee-ink ("  " + bee-name) + sgr "2" (? (tablet? (c 'asking)) " · y run · n decline"
+                                                         busy " · esc interrupt · ↑↓ scroll"
+                                                         " · enter send · alt-enter newline · ↑↓ scroll · ^t thoughts · /whoami · ^d quit"))
          rows (map (\ l (edfit l w " ")) (win + pad + [spin] + box))
          cr (h - 1 - bh + #(e 'u) - top)
          cc (5 + edcol e)
@@ -1358,7 +1375,9 @@
             (k = 269) (ednl e)                                   ; alt-enter
             (: _ (edstep e k) v (e 'ev) page (c 'rows // 2)
                (v @ 10 (: s (edtext e)
-                          (? (busy || #s = 0) 0 (: _ (edclear e) (send c s))))
+                          (? (busy || #s = 0) 0
+                            (s = "/whoami") (: _ (edclear e) (push c {'k 'note 'text (whoami 0)}))
+                            (: _ (edclear e) (send c s))))
                     4 (? (#(edtext e) = 0) (pin c 'over 1) 0)
                     -8 (pin c 'scroll (c 'scroll + 1))
                     -9 (pin c 'scroll (max 0 (c 'scroll - 1)))
@@ -1387,13 +1406,13 @@
          _ (push c {'k 'hello})
          _ (tide c)
          _ (raw 1)
-         _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?2004h"))
+         _ (say out (esc + "[?1049h" + esc + "[2J" + esc + "[?2004h" + title-on 0))
          _ (flush out)
          up (twirl (\ _ (keyloop c)) 0)
          _ (swim c 1)
          _ (? (c 'busy != ()) (halt c) 0)
          _ (? (landed? up) 0 (freeze up))
-         _ (say out (esc + "[0m" + esc + "[?2004l" + esc + "[?1049l"))
+         _ (say out (esc + "[0m" + esc + "[?2004l" + esc + "[?1049l" + title-off 0))
          _ (flush out)
          _ (raw 0)
          0)
@@ -1676,7 +1695,7 @@
                                                     (? (string? p && 0 < #p) p (two? words) (joinw words) "")))
                     (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)
                     (!pl && two? (tty 1)) (tui key yes)
-                    (repl key (plain yes) ()))
+                    (repl-go key (plain yes)))
                _ (? (bee-cc 'live) (cc-stop 0) 0)
                _ (unsettle 0)
                r)))
