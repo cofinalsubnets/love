@@ -832,7 +832,7 @@
     'cat "usage: cat [-AbeEnstTuv] [FILE..]"
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
-    'tail "usage: tail [-qv] [-n N] [-c N] [-N] [FILE..]"
+    'tail "usage: tail [-fFqv] [-s SECS] [-n N] [-c N] [-N] [FILE..]"
     'wc "usage: wc [-lwmc] [FILE..]"
     'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
     'uniq "usage: uniq [-cdiu] [-f N] [-s N] [INPUT [OUTPUT]]"
