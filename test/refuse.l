@@ -47,6 +47,11 @@
  ('refused = rf-try (\ k (1 << k)) 17179869184)
  (1024 = 1 << 10)
 
- ; the bootstrap reader bounds its nesting
- ('refused = rf-try sound0 (map (\ _ 40) (jot 5000)))
+ ; the bootstrap reader keeps its nesting on the heap: any depth reads, as sound reads it,
+ ; and an unclosed one is torn
+ ('torn = sound0 (map (\ _ 40) (jot 5000)))
+ (: s (map (i \ i < 2000 ? 40 41) (jot 4000)) (<(sound0 s) = <(sound s)))
+ (: n 100000 s (map (i \ i < n ? 40 41) (jot (2 * n)))
+    (go x k) (two? x ? (go <x (k + 1)) k)
+    (n - 1 = go <(sound0 s) 0))
  ([1 [2]] = <(sound0 (map "(1 (2))" (jot 7)))))
