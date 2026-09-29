@@ -1178,13 +1178,12 @@ static int img_chunk(struct img_lazy *L, uintptr_t k) {
      || !img_walk(L->base, (uintptr_t) t[0], (uintptr_t) t[3], L->code, L->clazy)) return 0;
  return L->st[k] = 1, L->left--, 1; }
 
+#if ImageLazy
 // the chunk holding word w
 static uintptr_t img_chunk_of(struct img_lazy const *L, uintptr_t w) {
  uintptr_t lo = 0, hi = L->nch;
  while (hi - lo > 1) { uintptr_t m = (lo + hi) / 2; if (L->t[3 * m] <= w) lo = m; else hi = m; }
  return lo; }
-
-#if ImageLazy
 int mprotect(void*, size_t, int);
 unsigned long getauxval(unsigned long);
 // the one mutable static: a fault handler is handed no g. it names the lazy image of
