@@ -923,7 +923,7 @@
     'dc "usage: dc [-e EXPR] [-f FILE] [FILE..]"
     'readelf "usage: readelf -h|-l|-S|-s|-e [-W] FILE.."
     'hexedit "usage: hexedit [-r] FILE"
-    'ls "usage: ls [-aACdlrtx1] [FILE..]"
+    'ls "usage: ls [-aACcdFghiLlnoprRsStux1] [--color[=WHEN]] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-afinpPLrRuv] [-t DIR] SRC.. DST"
     'mv "usage: mv [-finuv] [-t DIR] SRC.. DST"

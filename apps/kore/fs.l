@@ -120,9 +120,12 @@
    ; the gate that compares it to GNU sets TZ for that reason.
    ; colour is automatic and goes only onto a terminal -- (tty 1) answers a pair for
    ; one and 'enotty for anything else, so a pipe keeps the plain name and `ls | grep`
-   ; reads what it always read. there is no --color to ask for it or refuse it.
-   ; absent and said so: -R, -S, -h, -i and -F.
-   uls-opts "aACldrtx1"
+   ; reads what it always read; --color=always|never|auto says otherwise, bare always.
+   ;   -h sizes as du -h's   -S by size   -u -c atime or ctime for -t and the row
+   ;   -R down every directory, a link never followed   -L the thing a link names
+   ;   -F / * @ | = after a name, -p the / alone   -i inode, -s 1K blocks, ahead of it
+   ;   -n numeric owners, -g no owner, -o no group -- each of the three a long row
+   uls-opts (chars "aACcdFghiLlnoprRsStux1" + [1001])
    ; GNU shows the clock for the last six months and the year outside them. six
    ; months is 31556952/2 -- the average Gregorian year halved, coreutils' own
    ; constant, not 180 days.
@@ -153,18 +156,28 @@
        (? (40960 = (md & 61440))
           (: t (readlink p) (? (string? t) (n + " -> " + t) n))
           n))
-   (uls-row p nm st now tty?)           ; the six columns, as strings
-    [(ust-perm (st 2))
-     (? (charm? (ust-at st 6)) (show (st 6)) "?")
-     (? (charm? (ust-at st 4)) (uidname "/etc/passwd" (st 4)) "?")
-     (? (charm? (ust-at st 5)) (uidname "/etc/group" (st 5)) "?")
-     (show <st)
-     (uls-when ((st 3) // 1000000000) now)
-     (uls-nom p nm (st 2) (? tty? (uls-hue p (st 2)) ""))]
+   ; the long row's columns as strings, an owner or group column () when -g or -o drops
+   ; it. o: the tablet of flags ls-main read, 'n 'g 'o 'h 'tf 'ind
+   (uls-row p nm st now col? o)
+    (: (id k f) (? (charm? (ust-at st k)) (? (o 'n) (show (st k)) (uidname f (st k))) "?")
+       [(ust-perm (st 2))
+        (? (charm? (ust-at st 6)) (show (st 6)) "?")
+        (? (o 'g) () (id 4 "/etc/passwd"))
+        (? (o 'o) () (id 5 "/etc/group"))
+        (? (o 'h) (uhuman <st) (show <st))
+        (uls-when (((o 'tf) st) // 1000000000) now)
+        (uls-nom p nm (st 2) (? col? (uls-hue p (st 2)) "") + ((o 'ind) st p))])
+   ; -F's mark after a name (-p's the / alone), "" for none; a long row's link wears its
+   ; target and not an @
+   (uls-mark F? st long?)
+    (: k (61440 & st 2)
+       (? (k = 16384) "/" !F? ""
+          (k = 40960) (? long? "" "@") (k = 4096) "|" (k = 49152) "="
+          (k = 32768 && 0 < (st 2 & 73)) "*" ""))
    ; the names as a grid. a cell's width is the NAME's and not the coloured text's:
    ; the sgr bytes ride along and take up no screen, and a wide character takes two.
-   (uls-grid es tty? w down?)
-    (: cs (map (\ e ((uls-name e tty?) . swidth <e)) es)
+   (uls-grid es tty? w down? pre)
+    (: cs (map (\ e ((pre e + uls-name e tty?) . (#(pre e) + swidth <e))) es)
        (go l) (? (atom? l) () (say out <l, put out 10, go >l))
        (go ((cite 'grid 'lay) cs w down?)))
    (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)
@@ -173,53 +186,80 @@
    ; operand is listed further down as a block of its own and its row is never
    ; printed here. `ls -l file dir` pads file's size to the width of dir's, and a
    ; block sizing itself off its own rows silently loses that space.
-   (uls-emit rs ws0)                    ; the rows, columns aligned the way GNU aligns
+   (uls-emit rs ws0 pres)               ; the rows, columns aligned the way GNU aligns
     (: wl (uls-wide ws0 1) wu (uls-wide ws0 2) wg (uls-wide ws0 3) ws (uls-wide ws0 4)
-       (go l) (? (atom? l) ()
-                 (: r <l
-                    _ (say out (<r + " " + (upad wl (r 1)) + " " + (urpad wu (r 2))
-                                   + " " + (urpad wg (r 3)) + " " + (upad ws (r 4))
-                                   + " " + (r 5) + " " + (r 6)))
-                    _ (put out 10)
-                    (go >l)))
-       (go rs))
+       (cell s pad w) (? (string? s) (" " + pad w s) "")
+       (go l ps) (? (atom? l) ()
+                    (: r <l
+                       _ (say out (<ps + <r + (cell (r 1) upad wl) + (cell (r 2) urpad wu)
+                                      + (cell (r 3) urpad wg) + (cell (r 4) upad ws)
+                                      + " " + (r 5) + " " + (r 6)))
+                       _ (put out 10)
+                       (go >l >ps)))
+       (go rs pres))
    ; the order: by name, or by mtime newest-first under -t with the name breaking a
    ; tie. -r turns whichever of those around, which is why it is applied last and not
    ; folded into the comparison.
-   (uls-sort es t? r?)
-    (: le (? t? (\ x y (: a (<>x 3) b (<>y 3) (? (a = b) (<x <= <y) (b < a))))
+   (uls-sort es key r?)                 ; key: () by name, else a number, biggest first
+    (: le (? key (\ x y (: a (key <>x) b (key <>y) (? (a = b) (<x <= <y) (b < a))))
               (\ x y (<x <= <y)))
        s (sortby le es)
        (? r? (rev s) s))
    ; one entry: [name lstat] | () when it cannot be stat'd
-   (uls-ent dir nm)
+   ; one entry: [name stat path] | () when it cannot be stat'd; -L's stat reads through a
+   ; link, and a broken one keeps its own
+   (uls-ent dir nm L?)
     (: p (? #dir (dir + "/" + nm) nm)
-       st (lstat p)
+       st (? L? (: s (stat p) (? (two? s) s (lstat p))) (lstat p))
        (? (two? st) [nm st p] ()))
    (vdir-main as) (ls-main ("-l" . as))           ; coreutils' long one
-   (ls-main as)
-    (: t (tablet 0)
-       o (uopt as t '() '(101) ())
+   (ls-main as0)
+    (: as (map (w \ (? (w = "--color") "--color=always" w)) as0)
+       t (tablet 0)
+       o (uopt as t '(1001) '(101) {"color" 1001})
        _ (? (two? o) () (udie 2 "ls: an option wants a value"))
        ops (ustray "ls" as <>>o)
        _ (: k (uoptbad as t uls-opts) (? !k () (udie 2 ("ls: unknown option -- " + (string k)))))
-       a? (peep t 97 0) aa? (peep t 65 0) l? (peep t 108 0) d? (peep t 100 0)
-       r? (peep t 114 0) tm? (peep t 116 0)
+       a? (peep t 97 0) aa? (peep t 65 0) d? (peep t 100 0)
+       r? (peep t 114 0) tm? (peep t 116 0) R? (peep t 82 0) L? (peep t 76 0)
+       l? (peep t 108 0 || peep t 110 0 || peep t 103 0 || peep t 111 0)
        c? (peep t 67 0) x? (peep t 120 0) o1? (peep t 49 0)
+       i? (peep t 105 0) s? (peep t 115 0) h? (peep t 104 0)
        now ((clock 0) // 1000)
-       tty? (two? (tty 1))                  ; colour only onto a terminal
+       tty? (two? (tty 1))
+       cw (uoptv t 1001)
+       col? (? (!cw || cw = "auto" || cw = "tty" || cw = "if-tty") tty?
+               (cw = "always" || cw = "yes" || cw = "force") 1
+               (cw = "never" || cw = "no" || cw = "none") 0
+               (udie 2 ("ls: invalid argument '" + cw + "' for '--color'")))
        w ((cite 'grid 'screen) 1)
        grid? (? l? 0 o1? 0 (x? || c? || tty?) 1 0)
        down? !x?
+       (tf st) (? (peep t 117 0) (ust-at st 9) (peep t 99 0) (ust-at st 10) (st 3))
+       key (? (peep t 83 0) (st \ <st) tm? tf ())
+       F? (peep t 70 0) p? (peep t 112 0)
+       o {'n (peep t 110 0) 'g (peep t 103 0) 'o (peep t 111 0) 'h h? 'tf tf
+          ; a long row's link wears, under -F, the mark of what it names
+          'ind (st \ p \ (? (F? || p?) (? (40960 = 61440 & st 2) (: q (stat p) (? (F? && two? q) (uls-mark F? q 0) ""))
+                                             (uls-mark F? st 1)) ""))}
        fs (? (two? ops) ops '("."))
-       hdr? (two? >fs)
-       (rows es) (map (\ e (uls-row (e 2) <e <>e now tty?)) es)
+       hdr? (two? >fs || R?)
+       (blocks st) (: b (ust-at st 7) (? (charm? b) b 0))
+       (kb st) (? h? (uhuman (512 * blocks st)) (show ((blocks st + 1) // 2)))
+       ; -i and -s ride ahead of a name in every face, padded across the run
+       (pres es) (: ws (foldl (\ m e (max m #(show (ust-at <>e 8)))) 0 es)
+                    wb (foldl (\ m e (max m #(kb <>e))) 0 es)
+                    (map (e \ ((? i? ((upad ws (show (ust-at <>e 8))) + " ") "") + (? s? ((upad wb (kb <>e)) + " ") ""))) es))
+       (rows es) (map (\ e (uls-row (e 2) <e <>e now col? o)) es)
+       (name e) (uls-name e col? + (? (F? || p?) (uls-mark F? <>e 0) ""))
        (show1 es ws0)                    ; a run of entries: long, gridded, or a name a line
-        (? l? (uls-emit (rows es) ws0)
-           grid? (uls-grid es tty? w down?)
-           (: (go l) (? (atom? l) ()
-                        (: e <l _ (say out (uls-name e tty?)) _ (put out 10) (go >l)))
-              (go es)))
+        (: ps (pres es) pt (tablet 0) _ (each (zip es ps) (q \ pin pt (<q 2) >q))
+           (pre e) (peep pt (e 2) "")
+           (? l? (uls-emit (rows es) ws0 ps)
+              grid? (uls-grid es col? w down? pre)
+              (: (go l) (? (atom? l) ()
+                           (: e <l _ (say out (pre e + name e)) _ (put out 10) (go >l)))
+                 (go es))))
        ; a directory's own listing: the entries, with `total` ahead of a long one.
        ; an EMPTY directory still owes its header and its `total 0`, so nothing here
        ; returns early on the empty readdir.
@@ -231,14 +271,16 @@
            keep (? a? ("." . (".." . ns))
                    aa? ns
                    (filter (\ n !(n 0 = 46)) ns))
-           es (filter two? (map (\ n (uls-ent p n)) keep))
-           srt (uls-sort es tm? r?)
+           es (filter two? (map (\ n (uls-ent p n L?)) keep))
+           srt (uls-sort es key r?)
            rs (? l? (rows srt) ())
            _ (? hdr? ((? first () (put out 10)), say out (p + ":"), put out 10) ())
-           _ (? l? (: blk (foldl (\ a e (: b (ust-at <>e 7) (? (charm? b) (a + b) a))) 0 es)
-                      _ (say out ("total " + (show (blk // 2)))) (put out 10)) ())
+           _ (? (l? || s?) (: blk (foldl (\ a e (a + blocks <>e)) 0 es)
+                              _ (say out ("total " + (? h? (uhuman (512 * blk)) (show ((blk + 1) // 2))))) (put out 10)) ())
            _ (show1 srt rs)
-           ok)
+           ; -R: each directory in the listing, in its order, a link to one not followed
+           sub (? R? (filter (e \ !(<e = "." || <e = "..") && 16384 = 61440 & (<>e 2)) srt) ())
+           (foldl (\ k e (dirlist (e 2) 0 k)) ok sub))
        ; the operands, GNU's way round: the non-directories first as one listing,
        ; then a listing per directory. -d makes every operand a non-directory.
        (miss p) (say err ("ls: cannot access " + p), put err 10, 0)
@@ -247,9 +289,9 @@
        _ (map miss bad)
        plain (? d? good (filter (\ p !(udirp p)) good))
        dirs (? d? () (filter udirp good))
-       pes (filter two? (map (\ p (uls-ent "" p)) plain))
-       aes (filter two? (map (\ p (uls-ent "" p)) good))
-       _ (? (two? pes) (show1 (uls-sort pes tm? r?) (rows aes)) ())
+       pes (filter two? (map (\ p (uls-ent "" p L?)) plain))
+       aes (filter two? (map (\ p (uls-ent "" p L?)) good))
+       _ (? (two? pes) (show1 (uls-sort pes key r?) (rows aes)) ())
        ; the directory operands go in name order (-r turns them around); -t orders
        ; what is INSIDE a directory and is not claimed over the operands themselves.
        dps (: s (sort dirs) (? r? (rev s) s))
