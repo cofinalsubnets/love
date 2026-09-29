@@ -6,7 +6,7 @@
 # Stage-1 socket nif (connect/listen/accept/shutdown) plus the two .l pump loops
 # and their teardown. both sides pass -N; the rounds after check that without it neither
 # side half-closes, that -q quits anyway, that -w quits when idle,
-# and what -z and -v say.
+# what -z and -v say, and that -k serves client after client.
 #
 #   sh test/net/loopback.sh <love-binary> [port]
 #
@@ -169,6 +169,26 @@ grep -q "^Listening on 0.0.0.0 $PORT$" "$tmp/srv_err5" &&
   { echo "nettest: FAIL (-lv said:)"; cat "$tmp/srv_err5"; fail=1; }
 "$AI" "$AK" -z 127.0.0.1 "$((PORT + 1))" > "$tmp/z_out" 2> "$tmp/z_err"; crc=$?
 [ "$crc" -eq 1 ] && ! [ -s "$tmp/z_err" ] || { echo "nettest: FAIL (-z on a closed port: exit $crc)"; cat "$tmp/z_err"; fail=1; }
+
+# -k -s -p: one listener on 127.0.0.1 serves two clients in turn and is still up after
+PORT=$((PORT + 2))
+"$AI" "$AK" -klv -s 127.0.0.1 -p "$PORT" < /dev/null > "$tmp/srv_got6" 2> "$tmp/srv_err6" &
+srv=$!
+i=0
+while ! ready; do
+  i=$((i + 1))
+  if [ "$i" -gt 200 ]; then echo "nettest: FAIL (server never listened on $PORT)"; cat "$tmp/srv_err6"; exit 1; fi
+  sleep 0.05 2>/dev/null || sleep 1
+done
+echo one | "$AI" "$AK" -N 127.0.0.1 "$PORT" > /dev/null 2> "$tmp/cli_err" || { echo "nettest: FAIL (-k: first client)"; cat "$tmp/cli_err"; fail=1; }
+echo two | "$AI" "$AK" -N 127.0.0.1 "$PORT" > /dev/null 2> "$tmp/cli_err" || { echo "nettest: FAIL (-k: second client)"; cat "$tmp/cli_err"; fail=1; }
+sleep 0.2 2>/dev/null || sleep 1
+kill -0 "$srv" 2>/dev/null || { echo "nettest: FAIL (-k: the listener left)"; fail=1; }
+kill "$srv" 2>/dev/null
+printf 'one\ntwo\n' > "$tmp/k_want"
+cmp -s "$tmp/k_want" "$tmp/srv_got6" || { echo "nettest: FAIL (-k: server got $(tr '\n' ' ' < "$tmp/srv_got6"))"; fail=1; }
+grep -q "^Listening on 127.0.0.1 $PORT$" "$tmp/srv_err6" && [ "$(grep -c '^Connection received on ' "$tmp/srv_err6")" -eq 2 ] ||
+  { echo "nettest: FAIL (-klv said:)"; cat "$tmp/srv_err6"; fail=1; }
 
 [ "$fail" -eq 0 ] && echo "nettest: PASS"
 exit "$fail"

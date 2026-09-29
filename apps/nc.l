@@ -2,7 +2,11 @@
 ; nc -- netcat in love.
 ;
 ;   nc [-Nvz] [-q secs] [-w secs] host port..   tcp client: connect to host:port
-;   nc [-Nv] [-q secs] [-w secs] -l port        tcp server: listen on port, accept one client
+;   nc [-kNv] [-q secs] [-w secs] -l [addr] port
+;   nc [-kNv] [-q secs] [-w secs] -l [-s addr] -p port
+;                                              tcp server: listen, accept one client
+;   -k        with -l, accept the next client when one leaves
+;   -s addr   with -l, listen on addr alone; -p port names the port
 ;   -N        shut down the write half at stdin's end
 ;   -q secs   quit secs after stdin's end; a negative wait is forever, the default
 ;   -w secs   give up a connect, or quit when neither way moves, after secs; not the accept
@@ -27,8 +31,8 @@
 (: (nc-main as)
  (: (die m) (udie 1 ("nc: " + m))
     t (tablet 0)
-    ops ((uopt as t '(113 119) () ()) 2)
-    usage "usage: nc [-Nvz] [-q SECS] [-w SECS] {HOST PORT.. | -l PORT}"
+    ops ((uopt as t '(112 113 115 119) () ()) 2)
+    usage "usage: nc [-kNvz] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT}"
     (portof s) (: n (uport s) (? n n (die ("not a port: " + s))))
     ; a flag's duration in ms, -1 when absent or negative
     (dur c) (: v (uoptv t c)
@@ -45,9 +49,9 @@
     (pump src dst) (: c (see src)
                       (? (c = -1) 0 (unsee src c, say dst (chug src), flush dst, pin seen 0 (clock 0), pump src dst)))
 
-    ; with -w: quit once neither way has moved for w ms
+    ; with -w: answer once neither way has moved for w ms
     (idle _) (: gap (clock 0 - seen 0)
-                (? (w <= gap) (flush out, quit 0) (rest (w - gap), idle 0)))
+                (? (w <= gap) 0 (rest (w - gap), idle 0)))
 
     ; wait out the inbound pump: to the peer's eof, or with -q at most q ms, when a
     ; watchdog task freezes it
@@ -56,29 +60,41 @@
                      _ (catch d)
                      (freeze g)))
 
-    ; the conversation: stdin -> socket here, socket -> stdout in `down`. all of stdin goes
-    ; before teardown, then -N half-closes so the peer sees our eof; without it the peer
-    ; must close first, or -q runs out
+    ; the conversation: stdin -> socket in `up`, socket -> stdout in `down`. all of stdin
+    ; goes before teardown, then -N half-closes so the peer sees our eof; without it the
+    ; peer must close first, or -q runs out. with -w, `dog` ends both when idle
     (talk s) (: _ (pin seen 0 (clock 0))
-                dog (? (w < 0) () (twirl idle ()))
                 down (twirl (_ \ pump s out) 0)
-              (pump in s,
-               (? (t 78) (seal s 1) 0),
+                up (twirl (_ \ (pump in s, (? (t 78) (seal s 1) 0))) 0)
+                dog (? (w < 0) () (twirl (_ \ (idle 0, freeze up, freeze down)) ()))
+              (catch up,
                linger down,
                (? (w < 0) 0 (freeze dog)),
                flush out,
                close s,
                0))
 
-    ; server: listen, accept one client, talk, close the listener
-    (serve port) (: l (listen port)
-                    (? (hot? l) (: _ (note ("Listening on 0.0.0.0 " + show port))
-                                   c (accept l)
-                                   (? (hot? c) (: f (farend c)
-                                                  _ (? (two? f) (note ("Connection received on " + <f + " " + show (f 1))) 0)
-                                                  (talk c, close l, 0))
-                                      (close l, die "accept failed")))
-                       (die ("cannot listen on port " + show port + ": " + uerrno l))))
+    ; server: listen on addr (every address when ()), accept a client and talk; with -k
+    ; the next, until killed
+    (serve addr port)
+     (: l (? addr (listen ['tcp addr port]) (listen port))
+        (go _) (: c (accept l)
+                  (? (hot? c) (: f (farend c)
+                                 _ (? (two? f) (note ("Connection received on " + <f + " " + show (f 1))) 0)
+                                 _ (talk c)
+                                 (? (t 107) (go 0) (close l, 0)))
+                     (close l, die ("accept failed: " + uerrno c))))
+        (? (hot? l) (note ("Listening on " + (? addr addr "0.0.0.0") + " " + show port), go 0)
+           (die ("cannot listen on " + (? addr addr "port") + " " + show port + ": " + uerrno l))))
+    ; a listen address as the dotted quad listen takes, names resolved
+    (quad a) (: r (resolve a) (? (two? r) (dns-show <r) (die ("cannot resolve " + a))))
+    ; -l's operands: [addr] port, or -s addr and -p port in their place
+    (listener _)
+     (: sv (uoptv t 115) pv (uoptv t 112) n #ops
+        (? (n = 2 && !sv && !pv) (serve (quad <ops) (portof <>ops))
+           (n = 1 && !pv) (serve (? sv (quad sv) ()) (portof <ops))
+           (n = 0 && pv) (serve (? sv (quad sv) ()) (portof pv))
+           (die usage)))
 
     ; one connect, given up after w ms with -w: the port, or the refusal's nom. a frozen
     ; catch answers 0, so the answer rides wrapped
@@ -108,8 +124,9 @@
                    (: lo (portof (snip a 0 k)) hi (portof (snip a (k + 1) #a))
                       (? (hi < lo) (die ("not a range: " + a)) (map (+ lo) (jot (hi - lo + 1)))))))
 
-    (? (uoptun t "lNqwvz") (die usage)
-       (t 108) (#ops = 1 && !(t 122) ? (serve (portof <ops)) (die usage))
+    (? (uoptun t "klNpqswvz") (die usage)
+       (t 108) (!(t 122) ? (listener 0) (die usage))
+       (t 107 || t 112 || t 115) (die "-k, -p and -s go with -l")
        (t 122) (two? >ops ? (scan <ops (foldl (\ l a (l + span a)) () >ops)) (die usage))
        (#ops = 2) (client <ops (portof <>ops))
        (die usage))))
