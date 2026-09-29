@@ -1031,6 +1031,7 @@ LvNif("environ", nif_posix_environ, NULL);
 //   (readlink path)       -> the target string | a nom | 'badarg
 //   (chmod path mode)     -> () | a nom | 'badarg  (mode the raw permission charm)
 //   (chown path uid gid)  -> () | a nom | 'badarg  (-1 leaves that id alone)
+//   (lchown path uid gid) -> the same, of a link itself and not what it names
 //   (utime path ms)       -> () | a nom | 'badarg  (mtime and atime on the stat
 //                            scale, milliseconds; a non-charm ms reads "now")
 //   (umask mask)          -> the previous mask | 'badarg misuse (always succeeds)
@@ -1079,6 +1080,13 @@ static ai_inline word host_posix_chown(struct ai *g, word pw, word uw, word gw) 
  return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_chown) {
  Sp[2] = host_posix_chown(g, Sp[0], Sp[1], Sp[2]);
+ ai_musttail return Nextp(1, 2); }
+static ai_inline word host_posix_lchown(struct ai *g, word pw, word uw, word gw) {
+ char const *p = str_c(pw);
+ if (!p || !charmp(uw) || !charmp(gw)) return ai_badarg(g);
+ return lchown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_posix_lchown) {
+ Sp[2] = host_posix_lchown(g, Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
 
 ai_noinline static word host_posix_utime(struct ai *g, word pw, word msw) {
@@ -1239,6 +1247,7 @@ static union u const
   nif_posix_readlink[] = {{lvm_posix_readlink}, {lvm_ret0}},
   nif_posix_chmod[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_chmod}, {lvm_ret0}},
   nif_posix_chown[]    = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_chown}, {lvm_ret0}},
+  nif_posix_lchown[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lchown}, {lvm_ret0}},
   nif_posix_utime[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_utime}, {lvm_ret0}},
   nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}},
   nif_posix_rlimit[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_rlimit}, {lvm_ret0}},
@@ -1256,6 +1265,7 @@ LvNif("symlink", nif_posix_symlink, "posix");
 LvNif("readlink", nif_posix_readlink, "posix");
 LvNif("chmod", nif_posix_chmod, "posix");
 LvNif("chown", nif_posix_chown, "posix");
+LvNif("lchown", nif_posix_lchown, "posix");
 LvNif("utime", nif_posix_utime, "posix");
 LvNif("umask", nif_posix_umask, "posix");
 LvNif("rlimit", nif_posix_rlimit, "posix");

@@ -215,4 +215,22 @@ for d in / /tmp; do
   stat -f "$d" | head -3 > "$g"; korerun stat -f "$d" | head -3 > "$o"; same "stat -f $d"
   stat -f -c '%n %i %l %t %T %s %S %b %c' "$d" > "$g"; korerun stat -f -c '%n %i %l %t %T %s %S %b %c' "$d" > "$o"; same "stat -f -c $d"
 done
+# chown/chgrp -v -c -R (a directory after its contents, a link met on the way changed
+# itself and never what it names) -h and --reference, against GNU's: what is said and
+# the groups the tree is left with. needs a second group of our own to move between
+G1=$(id -gn); G2=$(id -Gn | tr ' ' '\n' | grep -v "^$G1\$" | head -1)
+if [ -n "$G2" ]; then
+  CH=$PWD/$ho/.chg
+  chreset() { rm -rf "$CH"; mkdir -p "$CH/t/d" "$CH/out"; : > "$CH/t/f"; : > "$CH/t/d/g"; : > "$CH/out/o"; ln -s ../out "$CH/t/lo"; ln -s f "$CH/t/lf"; chgrp -R -h "$G1" "$CH/t" "$CH/out"; }
+  chlay() { (cd "$CH" && find t out -printf '%p %g\n' | sort); }
+  for c in "chgrp -v $G2 t/f" "chgrp -c $G2 t/f" "chgrp -v $G1 t/f" "chgrp -R $G2 t" "chgrp -h $G2 t/lf" "chgrp $G2 t/lf" \
+           "chown -v $(id -un):$G2 t/f" "chgrp --reference=out/o t/f" "chgrp -Rv $G2 t/d"; do
+    # shellcheck disable=SC2086
+    chreset; { (cd "$CH" && $c; echo "rc=$?"); chlay; } > "$g" 2>&1
+    # shellcheck disable=SC2086
+    chreset; { (cd "$CH" && LOVE_NO_IMAGE= "$PWD/../../$m" kore $c; echo "rc=$?"); chlay; } > "$o" 2>&1
+    same "$c"
+  done
+  rm -rf "$CH"
+fi
 echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"

@@ -180,7 +180,7 @@ fi
 # every tool refuses a flag it does not know with 2 (env with GNU's 125), before it does
 # anything -- these read one as a file, a user, a name to kill, or said nothing at all
 : > "$ho/.rfq"
-for c in "stat -Q" "cmp -l" "install -v" "chown -v gwen" "chgrp -v gwen" "readlink -Q" "md5sum -Q" "sha256sum -c --nosuch" \
+for c in "stat -Q" "cmp -l" "install -v" "chown -Q gwen" "chgrp -Q gwen" "readlink -Q" "md5sum -Q" "sha256sum -c --nosuch" \
          "cksum -Q" "killall -q" "which -Q" "time -v" "printenv -Q" "pidof -x" "basename -Q" "dirname -Q" "ls --nosuch" \
          "realpath --foo" "users -Q" "fsync -Q" "umount -Q" "chroot -Q" "tsort -Q" "rev -Q" "link -Q" "unlink -Q" "yes -Q" \
          "hostid -Q" "reset -Q" "dnsdomainname -Q" "du --foo" "comm --foo"; do

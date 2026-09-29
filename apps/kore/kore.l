@@ -944,8 +944,8 @@
     'stat "usage: stat [-fL] [-c FORMAT | --printf=FORMAT] FILE.."
     'du "usage: du [-abchLsx0] [-d N] [--max-depth=N] [--exclude=GLOB] [--apparent-size] [FILE..]"
     'df "usage: df [-ahHikPT] [-t TYPE].. [-x TYPE].. [FILE..]"
-    'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
-    'chgrp "usage: chgrp [-R] GROUP FILE.."
+    'chown "usage: chown [-chRv] OWNER[:GROUP] FILE.. | chown --reference=RFILE FILE.."
+    'chgrp "usage: chgrp [-chRv] GROUP FILE.. | chgrp --reference=RFILE FILE.."
     'mktemp "usage: mktemp [-dqtu] [-p DIR] [--tmpdir[=DIR]] [--suffix=S] [TEMPLATE]"
     'sync "usage: sync   (the bare call; no operands here)"
     'mkfifo "usage: mkfifo [-m MODE] NAME.."
@@ -1053,7 +1053,7 @@
    ; -v is never the door's: gnu gives --version no short spelling, and the letter is the
    ; tool's wherever it wants one (cpio -v names members, grep -v inverts, nl -v numbers).
    ; -h is the door's where it is free -- these spell it themselves, or posix and gnu do.
-   korenoh '(grep du df ls sort touch chown ln free readelf pinky httpd)
+   korenoh '(grep du df ls sort touch chown chgrp ln free readelf pinky httpd)
    ; the tools that read no options at all, and the few dash words the two of them
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
