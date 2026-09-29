@@ -1030,7 +1030,7 @@
     'hd "usage: hd [-v] [-n LEN] [-s SKIP] [FILE..]   (hexdump -C)"
     'strings "usage: strings [-n LEN] [FILE..]"
     'cal "usage: cal [[MONTH] YEAR]"
-    'timeout "usage: timeout [-s SIG] [-k DURATION] DURATION CMD [ARG..]"
+    'timeout "usage: timeout [-v] [-s SIG] [-k DUR] [--preserve-status] DURATION CMD [ARG..]"
     'which "usage: which [-a] NAME.."
     'tty "usage: tty"
     'clear "usage: clear"

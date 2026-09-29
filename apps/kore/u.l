@@ -121,9 +121,10 @@
        [t <>>o])
    ; a tool that runs a command: its flags, then the command and the command's own flags,
    ; which are not its to judge -> [t cmd..]. a stranger before the command refuses with 2
-   (ucmdflags who as vals ok)
+   (ucmdflags who as vals ok) (ucmdflagsl who as vals ok ())
+   (ucmdflagsl who as vals ok longs)
     (: t (tablet 0)
-       o (uopt as t vals () ())
+       o (uopt as t vals () longs)
        _ (? (two? o) () (udie 2 (who + ": an option wants a value")))
        _ (: c (uoptbad as t ok) (? !c () (udie 2 (who + ": unknown option -" + string c))))
        [t <>>o])

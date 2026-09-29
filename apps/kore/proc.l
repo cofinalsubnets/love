@@ -823,36 +823,37 @@
    ; TERM unless -s names another, and -k arms a KILL that far past it. GNU's status:
    ; 124 for a command the clock ended, 125 for our own trouble, 126/127 for one that
    ; would not start, and otherwise the command's own --
-   ; usignum wants the dash the command line writes; -s spells the bare name
-   (utmo-flags a sig kill)
-    (? (atom? a) [sig kill a]
-       (<a = "-s") (? (two? >a) (utmo-flags >>a (usignum ("-" + <>a)) kill)
-                      (udie 125 "timeout: -s wants a signal"))
-       (<a = "-k") (? (two? >a) (utmo-flags >>a sig (udur <>a))
-                      (udie 125 "timeout: -k wants a duration"))
-       [sig kill a])
    ; the deadline and the wait are ONE loop: gather polls without blocking, so there
    ; is no alarm to arm and no handler to run. `sent` is the elapsed reading the signal
-   ; went out at and () while the command still has its time; k? says the KILL followed
-   (utmo-wait p t0 lim sig kill)
-    (: (go sent k?)
+   ; went out at and () while the command still has its time; k? says the KILL followed.
+   ; o: 'v says each signal sent, 'keep answers the command's own status where 124 would
+   (utmo-wait p t0 lim sig kill o)
+    (: (name n) (: e (filter (x \ <>x = n) usignames) (? (two? e) <<e (show n)))
+       (send s) (: _ (? (o 'v) (say err ("timeout: sending signal " + name s + " to command '" + o 'cmd + "'\n")) 0) (still p s))
+       (go sent k?)
         (: r (gather p)
-           (? (two? r) (? (charm? sent) 124 <r)  ; a child we ended reads 124, not its own
+           ; a child we ended reads 124, not its own -- save one KILL ended, which reads
+           ; 137 as GNU's does, a KILL being no signal a command could have chosen to obey
+           (? (two? r) (? (charm? sent && !(o 'keep)) (? (sig = 9 || k?) 137 124) <r)
               (nom? r) 125
               (: el (clock t0)
                  fire (? (!(charm? sent) && lim <= el) el sent)
-                 _ (? (fire = sent) 0 (still p sig))
+                 _ (? (fire = sent) 0 (send sig))
                  k2 (? ((!k? && charm? fire) && (charm? kill && (fire + kill) <= el))
-                       (still p 9, 1)
+                       (send 9, 1)
                        k?)
                  _ (rest 20)
                  (go fire k2))))
        (go () 0))
+   ; -s SIG the signal, -k DUR the KILL after it, -v says each, --preserve-status the
+   ; command's own status where the clock ended it
    (timeout-main as)
-    (: fp (utmo-flags as 15 ())
-       sig <fp kill <>fp ops <>>fp
+    (: fo (ucmdflagsl "timeout" as '(115 107) (chars "ksv" + [1001]) {"signal" 115 "kill-after" 107 "verbose" 118 "preserve-status" 1001})
+       t <fo ops (fo 1)
+       sig (? (t 115) (usignum ("-" + uoptv t 115)) 15)
+       kill (? (t 107) (: v (udur (uoptv t 107)) (? (charm? v) v (udie 125 "timeout: -k wants a duration"))) ())
        _ (? (two? ops && two? >ops) ()
-            (udie 125 "usage: timeout [-s SIG] [-k DUR] DURATION CMD [ARG..]"))
+            (udie 125 "usage: timeout [-v] [-s SIG] [-k DUR] [--preserve-status] DURATION CMD [ARG..]"))
        _ (? (charm? sig) () (udie 125 "timeout: unknown signal"))
        lim (udur <ops)
        _ (? (charm? lim) () (udie 125 ("timeout: invalid duration '" + <ops + "'")))
@@ -861,7 +862,7 @@
        p (spawn cmd)
        (? (nom? p) (say err ("timeout: cannot run " + <cmd), put err 10, uleave 127)
           (lim = 0) (wait p)                    ; a zero duration is no limit, as GNU has it
-          (utmo-wait p t0 lim sig kill)))
+          (utmo-wait p t0 lim sig kill {'v (t 118) 'keep (t 1001) 'cmd <cmd})))
 
 
    ; ---- chroot, mount and umount: the three the distro's own boot asks for -------

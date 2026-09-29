@@ -79,7 +79,7 @@ korerun timeout 9 sh -c 'exit 7' > /dev/null 2>&1; r=$?
 [ "$(korerun timeout 9 echo hi 2>/dev/null)" = hi ] || fail "kore timeout: the output passes"
 [ "$(korerun timeout 0 echo hi 2>/dev/null)" = hi ] || fail "kore timeout 0 is no limit"
 korerun timeout -s KILL 1 sleep 20 > /dev/null 2>&1; r=$?
-[ $r -eq 124 ] || fail "kore timeout -s KILL (got $r)"
+[ $r -eq 137 ] || fail "kore timeout -s KILL is 137, as GNU's (got $r)"
 korerun timeout -k 1 1 sleep 20 > /dev/null 2>&1; r=$?
 [ $r -eq 124 ] || fail "kore timeout -k (got $r)"
 korerun timeout 9 /nonexistent-xyzzy > /dev/null 2>&1; r=$?
@@ -213,4 +213,12 @@ done
 xxd -i < "$X2" > "$g"; korerun xxd -i < "$X2" > "$o"; same "xxd -i from stdin"
 korerun xxd -p "$X2" | korerun xxd -r -p > "$o"; cmp -s "$X2" "$o" || fail "kore xxd -p | xxd -r -p"
 rm -f "$X2"
+# timeout -v's words for each signal, --preserve-status, and 137 where a KILL ended it
+# (-s KILL, and -k after a TERM the command ignores); GNU's under LC_ALL=C
+for c in "-v 0.3 sleep 2" "--preserve-status 0.3 sleep 2" "-s KILL -v 0.3 sleep 2" "--signal=INT --verbose 0.3 sleep 2"; do
+  # shellcheck disable=SC2086
+  { LC_ALL=C timeout $c; echo "rc=$?"; } > "$g" 2>&1; { korerun timeout $c; echo "rc=$?"; } > "$o" 2>&1; same "timeout $c"
+done
+{ LC_ALL=C timeout -v -k 0.2 0.3 sh -c 'trap "" TERM; sleep 3'; echo "rc=$?"; } > "$g" 2>&1
+{ korerun timeout -v -k 0.2 0.3 sh -c 'trap "" TERM; sleep 3'; echo "rc=$?"; } > "$o" 2>&1; same "timeout -k after an ignored TERM"
 echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt ok"
