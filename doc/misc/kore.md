@@ -693,9 +693,10 @@ flag of GNU pic's (`-n -t -c -C -S -U -z`, `-D`, `-T dev`) always means classic 
 output is held byte for byte to groff's own `pic` (`make test_gpic`, the corpus in
 test/gpic): boxes, circles, ellipses, arcs, lines, arrows, splines, moves and text with
 their attributes, places and corners, expressions and variables, blocks, `define`, `for`,
-`if`, `copy` and `copy thru`, `sprintf`, `print` and `command`. `sh` runs only under `-U`.
-Not yet: colours, polygons, slanted boxes, `aligned`, and dashed or dotted circles,
-ellipses, arcs and rounded boxes.
+`if`, `copy` and `copy thru`, `sprintf`, `print` and `command`, colours, polygons, slanted
+boxes and `aligned` text; `-c` and `-z` for TeX. `sh` runs only under `-U`. Not yet: dashed
+or dotted ellipses and rounded boxes, `.PS <file`, groff's `rand`, and its error messages
+(the exit status and what is drawn before an error agree, the words on stderr do not).
 
 The decoders: apps/png.l (every colour type and depth, Adam7), love/lib/jpeg.c (baseline and
 progressive, any sampling), love/lib/gif.c (LZW, interlace, transparency, and the three
