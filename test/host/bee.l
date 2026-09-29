@@ -308,7 +308,7 @@
    ra (cr-run cr-q "BEE_NAME=ant" "-y 'join the queue'")
    ha (cr-heard 0)
    (res h k) (: u (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h k) "messages"))
-                ((u (#u - 1)) "content" 0 "content"))
+                (u (#u - 1) "content" 0 "content"))
    qa (: r (g ["cat-file" "-p" "refs/queue/main"]) >r)
    _ (cr-serves [(one "d" {"queue" "refs/queue/main" "state" "left" "session" "ant" "base" "c0ffee1"}) (done 0)])
    rq (cr-run cr-q "BEE_NAME=queen" "-y 'land it'")

@@ -151,7 +151,7 @@
  (car-cells c w) (: x (c 'x) y (c 'y) hue (c 'hue) ds (c 'dents)
                     (map (k \ (: i (k % (bay-w - 1)) j (k // (bay-w - 1))
                                  [(x + i + w * (y + j))
-                                  (elem k ds ? wreck-glyph ((car-shape j) i))
+                                  (elem k ds ? wreck-glyph (car-shape j i))
                                   (elem k ds ? wreck-pen hue)]))
                          ^(bay-d * (bay-w - 1))))
 

@@ -477,7 +477,7 @@
           (map (\ x (: at (st + (int (spc * qnum (evwb x - qi c))))
                        v (song-voice at (evv x) song-rate m vol)
                      (two? v ? [at v])))
-               (filter onset? ((s 'tune) (qi c) (qi (c + 1))))))
+               (filter onset? (s 'tune (qi c) (qi (c + 1))))))
  ; one chunk out the horn. whole cycles are scheduled ahead of the write head at the
  ; speed in force when their turn comes, so a tempo change lands on a bar line and no
  ; note's pitch bends with it -- the onsets move, the oscillators do not.

@@ -69,7 +69,7 @@
    hue-quo  (hue-arg (hue-one 'mark))
    hue-sep  (hue-arg (hue-one 'sep))                       ; the byte the grammar splits at
    hue-str  (hue-arg (hue-one 'span))                      ; the quote byte
-   hue-esc  ((hue-rule (hue-one 'span)) 2)         ; the escape byte
+   hue-esc  (hue-rule (hue-one 'span) 2)         ; the escape byte
    ; a token ends only on whitespace, a bracket, or a reader operator
    hue-stop (hue-brk + "\"';,")
 
