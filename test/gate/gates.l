@@ -37,7 +37,8 @@
          ; rd-forms with (rev acc) and answered 0 forms instead of 1929: not an error, a
          ; WRONG ANSWER, which a process apiece is what kept anyone from seeing. ordering
          ; is containment, not a fix -- the fix is a scope door the harness can close.
-         ['harp "src/apps/harp/harp.l" "src/apps/harp/play.l" "test/law/harp.l"]]
+         ['harp "src/apps/harp/harp.l" "src/apps/harp/play.l" "test/law/harp.l"
+                "src/apps/harp/just.l" "src/apps/harp/drift.l" "src/apps/harp/tonnetz.l" "test/law/drift.l"]]
 
    ; the host-nif smokes are NOT rows yet, and the blocking law is `quit`: a row that
    ; calls it ends the SHARED process, so a (quit 0) skip -- luxui's, when the box has no
