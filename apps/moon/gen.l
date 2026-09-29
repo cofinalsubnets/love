@@ -3025,7 +3025,36 @@
                                (rotc? g w cl cs) (cgrvar g env x w cs () wnt)   ; rotr: ror by the shr count
                                (rotc? g w cs cl) (cgrvar g env x w cl 1 wnt)    ; rotl: ror by the negated shl count
                                'no)))))))))
+   ; a little-endian byte gather -- (T)p[0] | (T)p[1] << 8 | .. over consecutive bytes of one
+   ; unsigned char pointer -- is one unaligned load where the machine takes one (x64, a64)
+   (gather g env e)
+    (? (!(x64? g || a64? g) || abl? g 'gath) ()
+       (: (orl x) (x @ ('bin '| a b) (orl a + orl b) [x])
+          (unc x) (x @ ('cast _ y) (unc y) x)
+          (kn x) (: k (knum g x) (? (two? k && charm? <k) <k ()))
+          ; a term -> [base byte shift type] | ()
+          (trm x)
+           (: sy (x @ ('bin 'shl y2 kx) (: s (kn kx) (? (charm? s) [y2 s] ())) [x 0])
+              (? !(two? sy) ()
+                 (: y <sy ct (y @ ('cast t _) t ()) d (unc y)
+                    (? !(two? d && <d = 'deref && rotty g env d = 'uchar) ()
+                       (: A <>d
+                          bk (A @ ('bin '+ b9 kx) (: k (kn kx) (? (charm? k) [b9 k] ()))
+                                  ('bin '+ kx b9) (: k (kn kx) (? (charm? k) [b9 k] ()))
+                                  [A 0])
+                          (? (two? bk) [<bk <>bk <>sy ct] ()))))))
+          ts (map trm (orl e))
+          n #ts
+          (? (!(elem n '(2 4 8)) || !(foldl (\ a t (a && two? t)) 1 ts)) ()
+             (: B <<ts T (ts 0 3)
+                (fit t) (<t = B && <<t = 'var && t 2 = 8 * <>t && t 3 = T)
+                (? (!(foldl (\ a t (a && fit t)) 1 ts) || !(elem T ints9) || pair? g T ||
+                    tsz g T < n || !(sort (map (t \ <>t) ts) = jot n)) ()
+                   ['cast T ['deref ['cast ['ptr (n @ 2 'ushort 4 'uint 'ulong)] B]]])))))
    (cgbin g env e wnt)
+    (: gz9 (? (<>e = '|) (gather g env e) ())
+       (? gz9 (cgexpr g env gz9 wnt) (cgbin0 g env e wnt)))
+   (cgbin0 g env e wnt)
     (: op <>e
        lhs <>>e rhs <>>>e
        ; lazy left-then-right: the left parks before the right evaluates. the destination die aims a load-shaped left
