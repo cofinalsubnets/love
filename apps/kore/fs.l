@@ -584,20 +584,23 @@
                        (<l = "..") (fold >l (? (two? acc) >acc acc))
                        (fold >l (<l . acc)))
        ("/" + ujoinc 47 (fold (seg 0 0 ()) ())))
-   (rl-chase q n)                  ; follow link upon link (n bounds a cycle)
-    (: t (readlink q)
-       (? (atom? (stat q)) ()
-          !(string? t) q
-          (0 = n) ()
-          (rl-chase (? (t 0 = 47) t (rl-clean (rl-abs q + "/../" + t))) (n - 1))))
+   ; -- readlink: a link's target, or with -f -e -m the whole path canonical by
+   ; realpath's walk -- -f all but the last name there, -e all of it, -m none; -n no
+   ; newline, -z a NUL after each; a failure says nothing and costs the status --
    (readlink-main as)
-    (: fo (uflags "readlink" as () "f")
-       f? (<fo 102) fs (fo 1)
-       _ (? (two? fs) () (udie 2 "usage: readlink [-f] PATH"))
-       q <fs
-       r (? f? (: c (rl-chase (rl-clean (rl-abs q)) 40) (? (string? c) c ()))
-            (: t (readlink q) (? (string? t) t ())))
-       (? (string? r) (say out r, put out 10, flush out, 0) 1))
+    (: fo (uflagsl "readlink" as () "efmnqsvz" {"canonicalize" 102 "canonicalize-existing" 101 "canonicalize-missing" 109
+                                                 "no-newline" 110 "zero" 122 "quiet" 113 "silent" 115 "verbose" 118})
+       t <fo fs (fo 1)
+       _ (? (two? fs) () (udie 2 "usage: readlink [-efmnz] PATH.."))
+       mode (? (t 101) 'e (t 109) 'm (t 102) 'f ())
+       end (? (t 122) (string 0) (t 110 && atom? >fs) "" "\n")
+       (one q) (? !mode (: r (readlink q) (? (string? r) r ()))
+                  (: r (rp-canon q 40)
+                     (? (atom? r) (? (mode = 'm) (rl-clean (rl-abs q)) ())   ; a loop: -m keeps the path
+                        (: p <>r want (? (mode = 'm) () (mode = 'e) p (udir p))
+                           (? (!want || two? (stat want)) p ())))))
+       ok (foldl (\ ok q (: r (one q) (? (string? r) (say out (r + end), ok) 0))) 1 fs)
+       _ (flush out) (? ok 0 1))
 
    ; -- realpath: a path with every symlink, every . and every .. taken out of it.
    ; the walk resolves component by component, so a last name that does not exist yet

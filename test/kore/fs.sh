@@ -254,4 +254,15 @@ for c in "$Q.a $Q.b" "$Q.a $Q.d" "-s $Q.a $Q.b" "-l $Q.a $Q.b" "-b $Q.a $Q.b" "$
   (LC_ALL=C cmp $c > "$g" 2>&1; echo "rc=$?" >> "$g"); (korerun cmp $c > "$o" 2>&1; echo "rc=$?" >> "$o"); same "cmp $c"
 done
 rm -f "$Q".?
+# readlink's -f -e -m (all but the last there, all, none), a link to a link, a dangling
+# one, a loop, -n and -z, many operands; every row against GNU with its status
+R2=$PWD/$ho/.rlk; rm -rf "$R2"; mkdir -p "$R2/d/e"; : > "$R2/d/f"
+(cd "$R2" && ln -s d/f l1 && ln -s l1 l2 && ln -s nowhere dang && ln -s ../d d/up && ln -s cyc2 cyc1 && ln -s cyc1 cyc2)
+for c in "l2" "l1 l2" "d/f" "-f l2" "-f dang" "-e dang" "-m dang" "-f d/nope" "-e d/nope" "-m d/nope/x" "-f d/up/e" "-n l1" "-z l1 l2" "-f cyc1" "-m cyc1" "-e l2 dang"; do
+  # shellcheck disable=SC2086
+  (cd "$R2" && { readlink $c; echo "rc=$?"; }) > "$g" 2>&1
+  (cd "$R2" && { LOVE_NO_IMAGE= "$PWD/../../$m" kore readlink $c; echo "rc=$?"; }) > "$o" 2>&1
+  same "readlink $c"
+done
+rm -rf "$R2"
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"

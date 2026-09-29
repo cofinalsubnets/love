@@ -936,7 +936,7 @@
     'pwd "usage: pwd [-L|-P]"
     'chmod "usage: chmod [-Rf] MODE FILE.."
     'install "usage: install [-D] [-m OCTAL] [-s] SRC DST  |  install -d DIR.."
-    'readlink "usage: readlink [-f] PATH"
+    'readlink "usage: readlink [-efmnz] PATH.."
     'realpath "usage: realpath [-e|-m|-s] PATH.."
     'link "usage: link FILE NEW"
     'unlink "usage: unlink FILE"
