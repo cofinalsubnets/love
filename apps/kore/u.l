@@ -15,6 +15,8 @@
 (borrow 'path)
 ; cpat/cpnext/cpn, for tr's sets and wc -m (love/boot/post.l)
 (borrow 'text)
+; civil, epoch-days, monl, for udate (love/boot/post.l)
+(borrow 'cal)
 
 (:
    ; -- the u-floor --
@@ -174,6 +176,85 @@
               (n <= r 0) (r 1)
               (clauses (r 0 + 1) (r 1))))
        (? (0 < n && n <= 4 && oct? 0) (uoct m | (? dir? (cur & 3072) 0)) (0 < n) (clauses 0 cur) ()))
+   ; -- a date as GNU's -d reads the common spellings -> ms since the epoch, or () --
+   ; absolute: @N, YYYY-MM-DD (a T or a space, then its time), MM/DD/YYYY, a month's name
+   ; with its day and year in either order, HH:MM[:SS] alone for today's; a Z, UTC or
+   ; +HH[:]MM after a time. now, today, yesterday, tomorrow. relative: [+-]N UNIT, `ago`
+   ; turning the item before it back, next and last as 1 and -1, stacking. a date without
+   ; a time is its midnight, a time without a date today's. UTC, as every clock here is
+   (uint w) (: n #w sg (? (0 < n && (w 0 = 43 || w 0 = 45)) 1 0) d (snip w sg n)
+               (? (0 < #d && all digit? (chars d)) (? (sg && w 0 = 45) (0 - unum d) (unum d)) ()))
+   (udate s now)
+    (: day 86400000
+       units {"sec" 1000 "second" 1000 "min" 60000 "minute" 60000 "hour" 3600000 "day" day
+              "week" (7 * day) "fortnight" (14 * day) "month" 'm "year" 'y}
+       (unit w) (: v (units w) (? v v (ends? w "s") (units (snip w 0 (#w - 1))) ()))
+       (mon w) (: k (? (3 <= #w) (findsub "janfebmaraprmayjunjulaugsepoctnovdec" (snip w 0 3)) -1)
+                  (? (0 <= k && k % 3 = 0 && (#w = 3 || starts? (lower (monl (k // 3))) w)) (k // 3 + 1) ()))
+       (ymd a b c) (? (uint a && uint b && uint c) [(uint a) (uint b) (uint c)] ())
+       (isod w) (: p (usplit 45 w) (? (#p = 3 && #(<p) = 4) (ymd <p <>p <>>p) ()))
+       (usd w) (: p (usplit 47 w) (? (#p = 3) (: v (ymd <p <>p <>>p) (? v [(v 2) <v (v 1)] ())) ()))
+       ; HH:MM[:SS] with a zone glued on (Z, +HHMM) -> [h m s off-ms] | ()
+       (zone w) (? (w = "z" || w = "utc" || w = "gmt") 0
+                   (: n #w (? ((n = 5 || n = 6) && (w 0 = 43 || w 0 = 45))
+                              (: d (replace (snip w 1 n) ":" "") (? (#d = 4 && uint d) (: v (60000 * (60 * uint (snip d 0 2) + uint (snip d 2 4)))
+                                                                                          (? (w 0 = 45) (0 - v) v)) ()))
+                              ())))
+       (hms w) (: k (? (ends? w "z") (#w - 1) ((: (g i) (? (#w <= i) -1 (w i = 43 || w i = 45) i (g (i + 1)))) 0))
+                  t (? (0 < k) (snip w 0 k) w) z (? (0 < k) (zone (snip w k #w)) 0)
+                  p (usplit 58 t)
+                  (? (!(charm? z) || #p < 2 || 3 < #p) ()
+                     (: h (uint <p) m (uint <>p) sc (? (#p = 3) (uint (p 2)) 0)
+                        (? (charm? h && charm? m && charm? sc && 0 <= h < 24 && 0 <= m < 60 && 0 <= sc < 61) [h m sc z] ()))))
+       ; the words, a date and its time split at a T
+       ws (foldl (\ l w (: k (findsub w "t") (? (0 < k && isod (snip w 0 k)) (l + [(snip w 0 k) (snip w (k + 1) #w)]) (l + [w]))))
+                 () (words (lower (replace s "," " "))))
+       st {'d () 't () 'tz () 'at () 'ms 0 'mo 0 'last () 'ok 1}
+       (rel q k) (: v (? (k = 'm) (pin st 'mo (st 'mo + q)) (k = 'y) (pin st 'mo (st 'mo + 12 * q)) (pin st 'ms (st 'ms + q * k)))
+                    (pin st 'last [q k]))
+       (go l)
+        (? (atom? l) 0
+           (: w <l n2 (? (two? >l) <>l ()) iv (uint w) u (? n2 (unit n2) ())
+              (? (w 0 = 64 && charm? (uint (snip w 1 #w))) (pin st 'at (1000 * uint (snip w 1 #w)), go >l)
+                 (w = "now" || w = "today") (go >l)
+                 (w = "yesterday") (rel -1 day, go >l)
+                 (w = "tomorrow") (rel 1 day, go >l)
+                 (w = "ago") (: q (st 'last) _ (? q (rel (-2 * <q) <>q) 0) _ (pin st 'last ()) (go >l))
+                 ; a signed number just after a time is its zone, as GNU reads it: +1 an hour,
+                 ; +0130 an hour and a half, +90 no zone at all
+                 (st 't && !(st 'tz) && (w 0 = 43 || w 0 = 45) && charm? iv)
+                  (: dg (#w - 1) a (? (iv < 0) (0 - iv) iv)
+                     hm (? (dg <= 2) [a 0] (dg <= 4) [(a // 100) (a % 100)] ())
+                     (? (hm && <hm <= 24 && <>hm < 60)
+                        (: t (st 't) off (60000 * (60 * <hm + <>hm))
+                           _ (pins st 't [<t <>t (t 2) (? (iv < 0) (0 - off) off)] 'tz 1) (go >l))
+                        (pin st 'ok 0)))
+                 ((w = "next" || w = "last") && u) (rel (? (w = "next") 1 -1) u, go >>l)
+                 (unit w) (rel 1 (unit w), go >l)
+                 (charm? iv && u) (rel iv u, go >>l)
+                 (isod w) (pin st 'd (isod w), go >l)
+                 (usd w) (pin st 'd (usd w), go >l)
+                 (hms w) (pin st 't (hms w), go >l)
+                 (st 't && charm? (zone w)) (: t (st 't) _ (pins st 't [<t <>t (t 2) (zone w)] 'tz 1) (go >l))
+                 (mon w)
+                  (: a (? n2 (uint n2) ()) b (? (two? >>l) (uint <>>l) ())
+                     (? (charm? a && charm? b) (: _ (pin st 'd [(? (31 < a) a b) (mon w) (? (31 < a) b a)]) (go >>>l))
+                        (charm? a) (: y <(civil (now // day)) _ (pin st 'd [y (mon w) a]) (go >>l))
+                        (pin st 'ok 0)))
+                 (charm? iv && two? l && mon n2)
+                  (: y (? (two? >>l) (uint <>>l) ()) _ (pin st 'd [(? (charm? y) y <(civil (now // day))) (mon n2) iv]) (go (? (charm? y) >>>l >>l)))
+                 (: _ (pin st 'ok 0) 0))))
+       _ (go ws)
+       t (st 't) d (st 'd)
+       (? (!(st 'ok) || atom? ws) ()
+          (: base (? (charm? (st 'at)) (st 'at)
+                     (: c (civil (now // day))
+                        dd (? d d c)
+                        mo (st 'mo) m0 (dd 1 - 1 + mo) y (<dd + m0 // 12 - (? (m0 < 0 && !(m0 % 12 = 0)) 1 0))
+                        m (((m0 % 12) + 12) % 12 + 1)
+                        tod (? t (1000 * (3600 * <t + 60 * t 1 + t 2) - (t 3)) d 0 (now % day))
+                        (day * epoch-days y m (dd 2) + tod)))
+             (? (charm? base) (base + st 'ms) ()))))
    (udir p)
     (uchop p @
      0 (0 < #p ? "/" ".")

@@ -431,8 +431,8 @@
           (2 < n) (udie 1 ("ln: target " + last + " is not a directory"))
           (? (mk <ops last) 0 1)))
 
-   ; -- touch: be there, and be now; -c makes nothing, -r takes a file's time, -d @SECONDS
-   ; a given one --
+   ; -- touch: be there, and be now; -c makes nothing, -r takes a file's time, -d DATE
+   ; a given one, as date -d reads it --
    (touch-main as)
     (: fo (uflags "touch" as '(100 114) "cdr")
        t <fo fs (fo 1)
@@ -441,8 +441,7 @@
        rs (? rf (stat rf) ())
        _ (? (!rf || two? rs) () (udie 1 ("touch: cannot stat " + rf)))
        ms (? rf <>rs
-             dw (? (1 < #dw && dw 0 = 64 && all digit? (chars (snip dw 1 #dw))) (1000 * unum (snip dw 1 #dw))
-                   (udie 1 ("touch: cannot read the date '" + dw + "' (only @SECONDS here)")))
+             dw (: v (udate dw (clock 0)) (? (charm? v) v (udie 1 ("touch: invalid date format '" + dw + "'"))))
              ())
        (one q ok)
         (: there (two? (stat q))

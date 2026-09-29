@@ -141,9 +141,8 @@
                          (put o 37, put o d))
                     (go (k + 2))))))
        (go 0))
-   (udt-when w)                        ; -d's @seconds, the one spelling this date parses
-    (? ((0 < tally w) && (w 0 = 64)) (1000 * (uatoi (snip w 1 #w)))
-       (udie 1 ("date: cannot read the date '" + w + "' (only @SECONDS here)")))
+   (udt-when w)                        ; -d's date, through u.l's udate
+    (: v (udate w (clock 0)) (? (charm? v) v (udie 1 ("date: invalid date '" + w + "'"))))
    (date-main as)
     (: (fl a when fmt)
         (? (atom? a) [when fmt]

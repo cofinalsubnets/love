@@ -171,4 +171,16 @@ t=$(korerun mktemp -u); [ -e "$t" ] && fail "kore mktemp -u left the file behind
 korerun chown "$(id -un):$(id -gn)" "$dt/f1" || fail "kore chown to our own ids"
 korerun chown nosuchuser000 "$dt/f1" 2>/dev/null; r=$?
 [ $r -eq 1 ] || fail "kore chown unknown user (exit $r)"
+# date -d reads GNU's common spellings: ISO with a T or a space and a zone, US slashes, a
+# month's name either way round, @N, relative items stacked and turned back by ago, a
+# signed number after a time as its zone -- and touch -d the same way. under TZ=UTC0
+for d in "2024-01-02" "2024-01-02 10:30" "2024-01-02T10:30:15Z" "2024-01-02 10:30:00 +0200" "2024-01-02T10:30:00+02:00" \
+         "01/02/2024" "Jan 2 2024" "2 Jan 2024" "January 2, 2024" "@1700000000" "2024-01-31 +1 month" "2024-03-31 -1 month" \
+         "2024-01-02 2 weeks ago" "2024-02-29 +1 year" "2024-01-02 next month" "2024-01-02 -2 hours" "2023-12-31 23:59:59 +1 sec" \
+         "2024-01-02 3 days ago 2 hours ago"; do
+  [ "$(TZ=UTC0 date -d "$d" +%s)" = "$(TZ=UTC0 korerun date -d "$d" +%s)" ] || fail "kore date -d '$d': $(TZ=UTC0 korerun date -d "$d" +%s 2>&1)"
+done
+g1=$(TZ=UTC0 date -d yesterday +%s); k1=$(TZ=UTC0 korerun date -d yesterday +%s); [ $((g1 - k1)) -le 2 ] && [ $((k1 - g1)) -le 2 ] || fail "kore date -d yesterday"
+TZ=UTC0 korerun date -d 'no such date' +%s > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore date -d of no date (rc $r)"
+TZ=UTC0 korerun touch -d "2024-01-02 10:30" "$ho/.tdd" && [ "$(stat -c %Y "$ho/.tdd")" = 1704191400 ] || fail "kore touch -d DATE"; rm -f "$ho/.tdd"
 echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"
