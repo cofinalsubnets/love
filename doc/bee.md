@@ -25,6 +25,8 @@ bee - a coding agent in the terminal, and the protocol its sessions talk by
 
 **love bee --mcp**
 
+**love bee --lock** \[**--heavy**\] \[**--out** *dir*\] **--** *command* ...
+
 # DESCRIPTION
 
 **bee** puts a model to work in the current directory. The model's tools:
