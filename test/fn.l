@@ -47,7 +47,10 @@
   (has? (show (: t (foldl (\ t i (pin t i i)) {} (jot 40)) (\ x (peep t (x + 1) 0)))) "{..40}")
   (#(show ev) < 200000)
   !(has? (show ev) "((mint ")                        ; every name it calls is bound
-  (3 = (ev <(sound (show ev))) '(+ 1 2))           ; ..and ev read back off its own show is an ev
+  ; ..and ev read back off its own show is an ev -- where its doors are nameable: an ev
+  ; closing over a door the mop dropped (love/boot/egg.l) reads back as a miss of that name
+  (trap (\ _ (3 = (ev <(sound (show ev))) '(+ 1 2))) ()
+        (\ a b (a = 'missing && !(cite 'guts 'place) && !(elem b (names ())))))
   ; --- functions compare by their threads ---
   ((\ p q (p + q)) = (\ a b (a + b)))                   ; names never reach the thread
   !((\ a b (a + b)) = (\ a b (a - b)))                 ; a different body is different code

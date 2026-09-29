@@ -83,16 +83,66 @@ static void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
     if (!tab[j]) tab[j] = (uint16_t) ((s << 4) | l); }
   code <<= 1; } }
 
-// the twin's own decode, for the codes the table does not hold. -1 where gz-dec answers ().
-static int inf_walk(const struct inf_code *c, uint64_t bb, unsigned *used) {
+// the twin's own decode, for the codes the table does not hold: a table entry, (symbol << 4) |
+// length, or -1 where gz-dec answers ()
+static int inf_walk(const struct inf_code *c, uint64_t bb) {
  int code = 0, first = 0, index = 0, cnt;
  unsigned l;
  for (l = 1; l < 16; l++) {
   code |= (int) ((bb >> (l - 1)) & 1);
   cnt = c->cnt[l];
-  if (code - cnt < first) { *used = l; return c->sym[index + (code - first)]; }
+  if (code - cnt < first) return (int) c->sym[index + (code - first)] << 4 | (int) l;
   index += cnt; first = (first + cnt) << 1; code <<= 1; }
  return -1; }
+
+// inf_run's fast lane. a literal is 15 bits at most, so the buffer is topped only when it
+// holds fewer, and a length, before it is taken, to the 48 a whole pair may take: one wide
+// load then serves several literals. the load wants eight bytes on; while 266 bytes of room
+// remain a match never nears cap, so the copy moves whole words and lets the last run over
+// into room a later byte takes. a code past its table's root leaves the lane untaken, the
+// distance's looked at before its length goes, so the loop makes no call and mooncc keeps
+// its state in registers. 1 at the block's end, 0 short of margin or table, -1 malformed.
+static int inf_fast_run(const uint8_t *in, uintptr_t n, uintptr_t *ipp, uint64_t *bbp,
+                        unsigned *bcp, uint8_t *out, uintptr_t *opp, uintptr_t cap,
+                        struct inf_tabs *t) {
+ const uint8_t *ie = in + n - 8, *ip = in + *ipp;
+ uint8_t *op = out + *opp, *oe = out + cap - 266;
+ const uint16_t *lt = t->ltab, *dt = t->dtab;
+ uint64_t bb = *bbp;                            // word-wide throughout: a narrow one is
+ uintptr_t bc = *bcp, e, f, sy, x, l, d;        // a zero-extend after every step
+ int r = 0;
+ while (op <= oe) {
+  if (bc < 15) {
+   if (ip > ie) break;
+   bb |= LD64(ip) << bc, ip += 7 - (bc >> 3), bc |= 56; }
+  if (!(e = lt[bb & ((1u << LROOT) - 1)])) break;
+  sy = e >> 4;
+  if (sy < 256) { bb >>= e & 15, bc -= e & 15, *op++ = (uint8_t) sy; continue; }
+  if (sy == 256) { bb >>= e & 15, bc -= e & 15, r = 1; break; }
+  if (sy > 285) { r = -1; break; }
+  if (bc < 48) {                                // the pair, still unread, to top up for
+   if (ip > ie) break;
+   bb |= LD64(ip) << bc, ip += 7 - (bc >> 3), bc |= 56; }
+  x = gz_lext[sy - 257];
+  if (!(f = dt[(bb >> ((e & 15) + x)) & ((1u << DROOT) - 1)])) break;
+  bb >>= e & 15, bc -= e & 15;
+  l = gz_lbase[sy - 257] + (uintptr_t) (bb & (((uint64_t) 1 << x) - 1)), bb >>= x, bc -= x;
+  bb >>= f & 15, bc -= f & 15, sy = f >> 4;
+  if (sy > 29) { r = -1; break; }
+  x = gz_dext[sy];
+  d = gz_dbase[sy] + (uintptr_t) (bb & (((uint64_t) 1 << x) - 1)), bb >>= x, bc -= x;
+  if (d > (uintptr_t) (op - out)) { r = -1; break; }   // a reach before the start
+  { uint8_t *dp = op, *sp = op - d, *de = op + l;
+#if ai_wideld
+    if (d >= 8) for (; dp < de; dp += 8, sp += 8) ai_st64(dp, ai_ld64(sp));
+    else if (d == 1) { uint64_t v = 0x0101010101010101ull * *sp;   // a run of one byte
+     for (; dp < de; dp += 8) ai_st64(dp, v); }
+    else
+#endif
+    for (; dp < de; dp++, sp++) *dp = *sp; }
+  op += l; }
+ *ipp = (uintptr_t) (ip - in), *opp = (uintptr_t) (op - out), *bbp = bb, *bcp = (unsigned) bc;
+ return r; }
 
 // -1 where the twin answers (), -2 where the output outruns cap. out may be NULL, and
 // then nothing is stored and the answer is only how long the stream inflates to --
@@ -118,7 +168,7 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 #define SYM(c, t, root, sy) do { unsigned u_; uint16_t e_; \
    FILL(); e_ = (t)[bb & ((1u << (root)) - 1)]; \
    if (e_) { (sy) = e_ >> 4; u_ = e_ & 15; } \
-   else { int w_ = inf_walk(&(c), bb, &u_); if (w_ < 0) return -1; (sy) = (unsigned) w_; } \
+   else { int w_ = inf_walk(&(c), bb); if (w_ < 0) return -1; (sy) = (unsigned) w_ >> 4; u_ = w_ & 15; } \
    if (bc < u_) return -1; \
    bb >>= u_; bc -= u_; } while (0)
 
@@ -171,6 +221,10 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 
   for (;;) {                                     // the symbol loop, fixed or dynamic
    unsigned sy, l, d, x;
+   if (out && ip + 8 <= n && op + 266 <= cap) {
+    int f = inf_fast_run(in, n, &ip, &bb, &bc, out, &op, cap, &t);
+    if (f < 0) return -1;
+    if (f) break; }
    SYM(t.lit, t.ltab, LROOT, sy);
    if (sy < 256) {
     if (op >= cap) return -2;
@@ -295,7 +349,7 @@ static int inf_sym1(const struct inf_code *c, unsigned root, uint64_t *bb, uint3
  if (*bc < 15 && !eof) return 0;
  uint16_t e = c->tab[*bb & ((1u << root) - 1)];
  if (e) *sy = e >> 4, u = e & 15;
- else { int w = inf_walk(c, *bb, &u); if (w < 0) return -1; *sy = (unsigned) w; }
+ else { int w = inf_walk(c, *bb); if (w < 0) return -1; *sy = (unsigned) w >> 4, u = w & 15; }
  if (*bc < u) return -1;                         // eof, and the code runs past it
  return *bb >>= u, *bc -= u, 1; }
 
@@ -312,7 +366,7 @@ static int inf_fast(struct inf_st *S, const uint8_t *in, uintptr_t n, uintptr_t 
  const struct inf_code *lc = &S->t.lit, *dc = &S->t.dst;
 #define FSYM(c, root, sy) do { unsigned u_; uint16_t e_ = (c)->tab[bb & ((1u << (root)) - 1)]; \
    if (e_) (sy) = e_ >> 4, u_ = e_ & 15; \
-   else { int w_ = inf_walk(c, bb, &u_); if (w_ < 0) { r = -1; goto out; } (sy) = (unsigned) w_; } \
+   else { int w_ = inf_walk(c, bb); if (w_ < 0) { r = -1; goto out; } (sy) = (unsigned) w_ >> 4, u_ = w_ & 15; } \
    bb >>= u_, bc -= u_; } while (0)
  while (ip + 8 <= n) {
   unsigned sy, l, d, x;

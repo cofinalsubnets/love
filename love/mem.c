@@ -24,7 +24,7 @@ static lvm(lvm_peepw) {
  if (!charmp(c) && cell(c)->ap == lvm_cask && charmp(Sp[1])) {
   intptr_t i = getcharm(Sp[1]);
   struct ai_str *s = cask(c)->str;
-  if (i >= 0 && (uintptr_t) (i + 1) * 8 <= s->len) {
+  if (i >= 0 && (uintptr_t) i < s->len / 8) {
    uint64_t w;
    memcpy(&w, s->bytes + 8 * i, 8);
    out = putcharm((intptr_t) (w & 0xffffffffu)); } }
@@ -37,7 +37,7 @@ static lvm(lvm_pinw) {
   intptr_t i = getcharm(Sp[1]);
   uint64_t v = (uint64_t) getcharm(Sp[2]) & 0xffffffffu;
   struct ai_str *s = cask(c)->str;
-  if (i >= 0 && (uintptr_t) (i + 1) * 8 <= s->len) {
+  if (i >= 0 && (uintptr_t) i < s->len / 8) {
    memcpy(s->bytes + 8 * i, &v, 8);
    out = c; } }
  Sp[2] = out;

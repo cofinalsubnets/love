@@ -4,7 +4,8 @@
 ; glaze around it. its show, read and evaluated, is an ev again, and that ev's show is one
 ; too: each generation answers every form below as ev does. the bare interpreter under the
 ; glaze reads back the same way, twice over.
-;   cat test/00-init.l test/host/evback.l | out/love
+; ev closes over the cell doors the mop drops, so its show names them: this runs unmopped,
+;   cat test/00-init.l test/host/evback.l | LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 out/love
 
 (: forms ['5 '(+ 1 2) '(* 3 4) '(cap [7 8]) '((\ x (x + 1)) 4) '(map (+ 1) [1 2])
           '(: x 0 (? x 1 2)) '(: f (\ n (? n 1 2)) (f 0)) '(: (f n) (g n) (g n) (n + 1) (f 1))

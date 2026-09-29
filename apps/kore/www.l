@@ -39,7 +39,8 @@
 ; to delete to take it.
 ;
 ; out of scope, and said: forms that POST, scripts, cookies, pictures other than png, jpeg
-; and gif, and a gif's motion. an https peer is not verified (wget's client).
+; and gif, and a gif's motion. an https server is verified as wget's is (its
+; client: a root in the host's bundle, or a pin in ~/.love/tls_pins), and a refusal says why.
 (module 'kore
 (borrow 'cli)
 (borrow 'posix)
@@ -136,7 +137,8 @@
           !(sc = "http:" || sc = "https:") [1 ("www: no door for " + sc + " urls")]
           (: w (wg-url u0)
              r (? (two? w) (wg-ask <w (w 1) (w 2) (w 3) "Accept-Encoding: gzip\r\n") ())
-             (? (atom? r) [1 ("www: no answer from " + url)]
+             (? (string? r) [1 ("www: " + r)]                      ; the certificate refused, and why
+                (atom? r) [1 ("www: no answer from " + url)]
                 (: code <r hd (r 1)
                    loc (wg-header hd "location")
                    (? (300 <= code < 400 && string? loc)
@@ -225,12 +227,10 @@
    ; of its SubjectPublicKeyInfo a line in ~/.love/gemini_hosts -- the key, so a renewed
    ; certificate over it still holds; an older line without the prefix is a whole
    ; certificate's hash, and holds as that. a changed one is refused and says how to take it
-   (ww-pinfile _) (: h (getenv "HOME") ((? (string? h) h ".") + "/.love/gemini_hosts"))
+   (ww-pinfile _) ((cite 'tls 'pin-path) "gemini_hosts")
    (ww-pin key fp cfp)
     (: path (ww-pinfile 0)
-       txt (uread path @ [1 s] s "")
-       (find l) (? (atom? l) () (: f (usplit 32 <l) (? (1 < #f && <f = key) (f 1) (find >l))))
-       old (find (ww-lns txt))
+       old ((cite 'tls 'pin-of) path key)
        (? (string? old) (? (old = fp || old = cfp) ()
                            ("the key of " + key + " has changed: it was " + old + ", now " + fp
                             + "; delete its line in " + path + " to take the new one"))
@@ -268,8 +268,8 @@
     (: p (ww-split url) hp (ww-hostport url 1965) q (p 3)
        a (ww-answer q "input")
        u (? (string? a) (ww-join [(p 0) (p 1) (p 2) ("?" + ww-penc a '(45 46 95 126)) ""]) (ww-nofrag url))
-       t ((cite 'tls 'tls-dial) <hp (hp 1))
-       (? !t [1 ("www: no answer from " + url)]
+       t ((cite 'tls 'tls-open) <hp (hp 1) 'pin-only)
+       (? (string? t) [1 ("www: " + t)]
           (: bad (ww-pin (<hp + ":" + show (hp 1)) ("spki:" + sha256 (t 'spki)) (sha256 (t 'cert)))
              (? (string? bad) (((cite 'tls 'tls-close) t), [1 ("www: " + bad)])
                 (: _ ((cite 'tls 'tls-say) t (u + "\r\n"))

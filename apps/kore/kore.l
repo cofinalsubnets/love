@@ -817,7 +817,7 @@
    korehelp
    {'diff "usage: diff OLD NEW   (0 same / 1 differ / 2 trouble)"
     'nm "usage: nm [-g] [-u] [-p] FILE.."
-    'nc "usage: nc [-kNnuvz] [-i SECS] [-o FILE] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT}"
+    'nc "usage: nc [-CdkNnUuvz] [-i SECS] [-o FILE] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT | -U [-l] PATH}"
     'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
     'sshd "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
     'scp "usage: scp [-pqrO] [-P port] [-i identity] [-o option=value] source .. target"
@@ -930,7 +930,7 @@
     'find "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
     'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
     'more "usage: more [-Nise] [+N|+/PAT] [FILE..]"
-    'wget "usage: wget [-q] [-O FILE] URL"
+    'wget "usage: wget [-q] [--no-check-certificate] [-O FILE] URL"
     'bc "usage: bc [-l] [-q] [FILE..]
   -l  the math library (e l a s c j), and scale = 20
   -q  accepted: nothing is printed at start with or without it"
