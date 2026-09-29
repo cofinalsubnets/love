@@ -10,8 +10,8 @@
 ;   (key-env VAR)         where the key is: ANTHROPIC_API_KEY, or OPENAI_API_KEY
 ;   (max-tokens N)        64000 on anthropic; openai leaves it to the server
 ;   (shell WORD ..)       the shell a command line runs in; lush -a, this binary's own
-; the answer streams: text prints as it comes. a key goes out only over tls, and only once
-; tls-vouch has the host's certificate naming it, in date, and signed by a pinned issuer.
+; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
+; peer tls-open verified: its chain to a root the host trusts, and its name.
 (borrow 'posix)
 (borrow 'json)
 
@@ -19,7 +19,7 @@
    dial (cite 'tls 'tls-dial)
    tsay (cite 'tls 'tls-say)
    hear (cite 'tls 'tls-hear)
-   vouch (cite 'tls 'tls-vouch)
+   topen (cite 'tls 'tls-open)                             ; () on a binary that cannot verify
    find (cite 'kore 'wg-find)
    header (cite 'kore 'wg-header)
    digits (cite 'kore 'wg-digits)
@@ -52,10 +52,6 @@
                         || starts? crow-model "claude-mythos" || starts? crow-model "claude-sonnet-5"
                         || starts? crow-model "claude-opus-4-8" || starts? crow-model "claude-opus-4-7"))
    crow-cap 30000                                           ; a tool answer's bytes, at most
-   ; the issuers whose signature on the host's certificate lets the key go: google trust
-   ; services' WE1, by its spki's sha-256. CROW_PINS adds more, space-separated
-   crow-pins ("908769e8d34477cc2cba0632c88605b22d7294c0840f78596d247c645b1afc0e"
-              . (: e (getenv "CROW_PINS") (? (string? e) (words e))))
 
    (prop desc) {"type" "string" "description" desc}
    (tool name desc props req)
@@ -152,14 +148,17 @@
 
    ; one POST, its head read -> a reader carrying 'code, or () for a dead wire. plain http
    ; reaches this machine alone and carries no key; a key goes over tls only to a peer
-   ; tls-vouch answers 1 for. a refusal is a reader whose 'code is the reason
+   ; tls-open verified, and not at all from a binary without it. a refusal is a reader
+   ; whose 'code is the reason
    (crow-open key body)
-    (: tls? <crow-at keyed (string? key && 0 < #key)
-       (? (!tls? && !crow-local?) {'code 'plain-http-off-this-machine}
-          (: t (? tls? (dial crow-host (crow-at 2)) ((cite 'dns 'dial) crow-host (crow-at 2)))
+    (: tls? <crow-at keyed (string? key && 0 < #key) port (crow-at 2)
+       (? (!tls? && !crow-local?) {'code "plain http reaches this machine alone"}
+          (tls? && keyed && !(lit? topen)) {'code "this binary's tls cannot verify a certificate"}
+          (: t (? !tls? ((cite 'dns 'dial) crow-host port)
+                  (lit? topen) (topen crow-host port 'verify)
+                  (dial crow-host port))
              up (? tls? (tablet? t) (hot? t))
-             v (? (up && tls? && keyed) (vouch t crow-host crow-pins) 1)
-             (? (up && v != 1) (close (t 's), {'code v})
+             (? (string? t) {'code t}                       ; tls-open's why not
                 up
                 (: q (request key body)
                    _ (? tls? (tsay t q) (: _ (say t q) (flush t)))
@@ -366,7 +365,7 @@
     (: r (crow-open key (crow-body msgs))
        (? !(tablet? r) ((f 'note) "no answer", ())
           !(charm? (r 'code))
-           ((f 'note) (crow-host + " is not vouched for (" + show (r 'code) + "); the key stays here"), ())
+           ((f 'note) (crow-host + " refused: " + (r 'code) + "; the key stays here"), ())
           !(r 'code = 200)
            (: j (json-read (drain r)) _ (close (sock r))
               ((f 'note) (show (r 'code) + " " + (two? j ? (json-show (j 1 "error")) "")), ()))
