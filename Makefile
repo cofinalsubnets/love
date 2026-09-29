@@ -310,7 +310,7 @@ moon_mid = src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/app
 # tar before xz: xz reads a stream through tar's source
 kore_arc = src/apps/gz.l src/apps/tar.l src/apps/xz.l src/apps/bz2.l src/apps/cpio.l
 # the tls stack and the multi-call door that ends kore's cat
-kore_net = src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/verify.l src/apps/tls/client.l \
+kore_net = src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/verify.l src/apps/tls/client.l src/apps/tls/p256.l src/apps/tls/cert.l \
   src/apps/ssh/sha512.l src/apps/ssh/ed25519.l src/apps/ssh/aes.l src/apps/ssh/bcrypt.l src/apps/ssh/client.l \
   src/apps/ssh/server.l src/apps/ssh/cli.l \
   src/apps/png.l src/apps/jpeg.l src/apps/gif.l src/apps/kore/wget.l src/apps/kore/openssl.l src/apps/kore/gpic.l src/apps/kore/pic.l src/apps/kore/www.l src/apps/kore/net.l src/apps/kore/kore.l
