@@ -404,7 +404,7 @@ struct ai *ai_big_shift(struct ai *g, int vop) {
  int na = bigp(a) ? big_nlimbs(a) : wlimbs;
  int ls = khuge ? 0 : k / limb_bits, bs = khuge ? 0 : k % limb_bits;
  int w = left ? na + ls + 2 : na + 2;
- if (left && khuge) return ai_have(g, (uintptr_t) -1);   // 2^huge: ask honestly, fail honestly
+ if (left && khuge) return encode(g, ai_status_scare);   // 2^huge: no heap holds it
  uintptr_t res_area = Width(struct ai_big) + b2w((size_t) w * sizeof(ai_limb)),
            ws_words = b2w((size_t) w * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, res_area + ws_words))) return g;
@@ -789,7 +789,7 @@ lvm(lvm_trayctor) {
  for (word l = shp; chainp(l); l = B(l)) {
   word d = A(l);
   if (!charmp(d) || getcharm(d) < 0) ai_musttail return Answerp(2, zero);
-  rank++, nelem *= (uintptr_t) getcharm(d); }
+  rank++, nelem = ai_mulsat(nelem, (uintptr_t) getcharm(d)); }   // saturates: tray_bytes refuses it
  if (rank > maxrank) ai_musttail return Answerp(2, zero);
  uintptr_t bytes = tray_bytes(ty, rank, nelem);
  Have(b2w(bytes));
@@ -1057,7 +1057,7 @@ lvm(lvm_outer) {
  if (!(trayp(a) && trayp(b))) ai_musttail return Push(ZeroPoint);
  struct ai_tray *va = tray(a), *vb = tray(b);
  if (va->type > ai_R || vb->type > ai_R) ai_musttail return Push(ZeroPoint);
- uintptr_t M = tray_nelem(va), N = tray_nelem(vb), n = M * N, rank = va->rank + vb->rank;
+ uintptr_t M = tray_nelem(va), N = tray_nelem(vb), n = ai_mulsat(M, N), rank = va->rank + vb->rank;
  if (rank > maxrank) ai_musttail return Push(ZeroPoint);
  bool fdom = va->type == ai_R || vb->type == ai_R;
  enum ai_tray_type rt = fdom ? ai_R : ai_Z;
@@ -1090,7 +1090,7 @@ lvm(lvm_inner) {
  uintptr_t M = 1, N = 1;
  for (uintptr_t i = 0; i + 1 < va->rank; i++) M *= va->shape[i];
  for (uintptr_t i = 1; i < vb->rank; i++) N *= vb->shape[i];
- uintptr_t rank = (va->rank - 1) + (vb->rank - 1), n = M * N;
+ uintptr_t rank = (va->rank - 1) + (vb->rank - 1), n = ai_mulsat(M, N);
  if (rank > maxrank) ai_musttail return Push(ZeroPoint);
  bool fdom = va->type == ai_R || vb->type == ai_R, ar = va->type == ai_R, br = vb->type == ai_R;
  if (n == 1) {                                  // 1D·1D dot, or any 1-cell contraction -> scalar (invariant)
@@ -1363,8 +1363,12 @@ static word kind_serial(struct ai *g, word x) {
  word e = ai_mapget(g, zero, kind_get(g, coin_kind(x), KnName), ai_core_of(g)->kreg);
  return chainp(e) ? A(e) : zero; }
 // the total order sort and < share. a coin sits in its own band by payload: a kind's own
-// order ('<) lives in love, and the lanes that can ask it (lvm_cmp_ord, sortby) do
-static intptr_t cmp3(struct ai *g, word a, word b) {
+// order ('<) lives in love, and the lanes that can ask it (lvm_cmp_ord, sortby) do.
+// a car descent is a C frame, so d counts them: past cmp_deep the walk answers
+// cmp_torn, which every nonzero test carries up and each caller turns into a scare
+#define cmp_deep 1024
+#define cmp_torn INTPTR_MIN
+static intptr_t cmp3d(struct ai *g, word a, word b, uintptr_t d) {
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) return ra < rb ? -1 : 1;                    // cross-kind: the true-blue lattice (cmp_rank)
  // same band -- dispatch by the actual kind (not the synthetic cmp_rank, which remaps mint/
@@ -1388,9 +1392,11 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
   if (gemp(a) || gemp(b)) { ai_flo_t av = toflo(a), bv = toflo(b); return av < bv ? -1 : av > bv ? 1 : 0; }
   return ai_big_cmp(a, b); }                                // exact fix/box/big tower
  if (strp(a)) return bytes_cmp(txt(a), len(a), txt(b), len(b));
- if (chainp(a)) { intptr_t c = cmp3(g, A(a), A(b)); return c ? c : cmp3(g, B(a), B(b)); }  // chain: car, then cdr
+ if (chainp(a)) {                                          // chain: car, then cdr
+  if (d >= cmp_deep) return cmp_torn;
+  intptr_t c = cmp3d(g, A(a), A(b), d + 1); return c ? c : cmp3d(g, B(a), B(b), d); }
  if (coinp(a) && coinp(b)) {
-  if (coin_kind(a) == coin_kind(b)) return cmp3(g, coin_load(a), coin_load(b));   // one kind: by payload
+  if (coin_kind(a) == coin_kind(b)) return cmp3d(g, coin_load(a), coin_load(b), d);   // one kind: by payload
   word sa = kind_serial(g, a), sb = kind_serial(g, b);                             // two: by registration
   if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
  if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // tablet: by serial -- mutable, so
@@ -1400,6 +1406,7 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
 
 // the two arr.c's equality lane needs: whether a value orders as a number, and the order itself
 bool ai_numband(struct ai *g, word x) { return cmp_rank(g, x) == 2; }
+static ai_inline intptr_t cmp3(struct ai *g, word a, word b) { return cmp3d(g, a, b, 0); }
 intptr_t ai_cmp3(struct ai *g, word a, word b) { return cmp3(g, a, b); }
 
 // (sort l): stable ascending merge by cmp3 -- one reservation up front (n result
@@ -1466,7 +1473,10 @@ lvm(lvm_sort) {
   for (uintptr_t lo = 0; lo < n; lo += 2 * w) {
    uintptr_t m = min(lo + w, n), hi = min(lo + 2 * w, n), x = lo, y = m, o = lo;
    if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];   // branch once per segment, not per compare
-   else        while (x < m && y < hi) b[o++] = cmp3(g, a[y], a[x]) < 0 ? a[y++] : a[x++];
+   else        while (x < m && y < hi) {
+    intptr_t c = cmp3(g, a[y], a[x]);
+    if (c == cmp_torn) { Hp = (word*) spine; Pack(g); ai_musttail return Ap(_lvm_ghelp, g); }   // the spine unlaid first
+    b[o++] = c < 0 ? a[y++] : a[x++]; }
    while (x < m) b[o++] = a[x++];
    while (y < hi) b[o++] = a[y++]; }
   word *t = a; a = b; b = t; }
@@ -1514,7 +1524,10 @@ static lvm(lvm_cmp_ord) {
   ai_musttail return Ap(lvm_coin_cmp, g); }
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: the true-blue lattice (cmp_rank)
- else if (!(isnum(a) || twinp(a))) r = vcmp_int(op, cmp3(g, a, b), 0);   // same non-number band: via cmp3
+ else if (!(isnum(a) || twinp(a))) {                       // same non-number band: via cmp3
+  intptr_t c = cmp3(g, a, b);
+  if (c == cmp_torn) { Pack(g); ai_musttail return Ap(_lvm_ghelp, g); }
+  r = vcmp_int(op, c, 0); }
  else if (twinp(a) || twinp(b)) {                          // complex: lexicographic, per op
   ai_flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
   r = ar != br ? vcmp_flo(op, ar, br)
@@ -1545,6 +1558,7 @@ static lvm(lvm_extreme2) {
  if (trayp(a) || trayp(b)) { g->b = (word) (ismax ? vop_max : vop_min); ai_musttail return Ap(lvm_vbin, g); }
  if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) { g->b = (word) (4 | ismax); ai_musttail return Ap(lvm_coin_cmp, g); }   // max asks b < a, min a < b
  intptr_t c = cmp3(g, a, b);
+ if (c == cmp_torn) { Pack(g); ai_musttail return Ap(_lvm_ghelp, g); }
  ai_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
 lvm(lvm_max2) { g->b = (word) 1; ai_musttail return Ap(lvm_extreme2, g); }
 lvm(lvm_min2) { g->b = (word) 0; ai_musttail return Ap(lvm_extreme2, g); }
@@ -1574,7 +1588,7 @@ uintptr_t bshape(word a, word b, uintptr_t *R) {
   uintptr_t da = (atray && k < ra) ? tray(a)->shape[ra - 1 - k] : 1,
             db = (btray && k < rb) ? tray(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) return (uintptr_t) -1;
-  n *= bdim(da, db); }
+  n = ai_mulsat(n, bdim(da, db)); }
  return n; }
 
 // fill shape[0..R) with the broadcast shape of a and b (conformance already
