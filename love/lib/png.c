@@ -29,7 +29,7 @@ static int unfilter_args(struct ai *g) {
            n = (uintptr_t) getcharm(g->sp[3]), bpp = (uintptr_t) getcharm(g->sp[4]);
  return strp(g->sp[0]) && bpp >= 1 && bpp <= 8 && n < ((uintptr_t) 1 << 31)
      && rows < ((uintptr_t) 1 << 31) && o <= len(g->sp[0])
-     && rows * (n + 1) <= len(g->sp[0]) - o; }
+     && (uint64_t) rows * (n + 1) <= len(g->sp[0]) - o; }
 
 ai_noinline static struct ai *host_unfilter(struct ai *g) {
  if (!unfilter_args(g)) return g->sp[4] = ZeroPoint, g->sp += 4, g;
