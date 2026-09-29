@@ -722,8 +722,13 @@ apps/dns.l: `/etc/hosts`' v6 lines first, then AAAA from the nameservers. `-s` i
 
 One of everything, OpenSSH's first choices: curve25519-sha256 for the exchange, ssh-ed25519
 keys, chacha20-poly1305@openssh.com both ways, public-key authentication. The client came first
-(`ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]`,
-known_hosts held as OpenSSH's accept-new holds it); the server is its other half.
+(`ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]`);
+the server is its other half. The host key is held to known_hosts as OpenSSH holds it, plain
+and hashed names alike: a match goes on, a changed or revoked key stops, and an unknown host,
+or one known only under another key type, is asked about on the terminal, where `yes` adds the
+key and anything else, or no terminal, stops. `-o StrictHostKeyChecking=` takes `ask` (the
+default), `accept-new` (an unknown host is added unasked, for scripts), `yes` (never ask:
+unknown hosts are refused) and `no` (no check at all); `-o UserKnownHostsFile=` names the file.
 
 `sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]` serves the user it runs
 as and only that user: there is no setuid here, so a login naming anyone else is refused. It
