@@ -137,14 +137,16 @@
 
   ; --- the other families: unix streams, udp's peer, an icmp echo -----------------
   ; one listen and one connect for every stream family: a unix one echoes the same way
-  (: path (cwd 0 + "/out/.net-unix.sock")
+  (: path ("/tmp/.love-net-unix-" + show (getpid 0) + ".sock")   ; short: a deep cwd runs past sun_path's 108
    l (listen ['unix path])
    srv (twirl (\ _ (: c (accept l) ln (rdline c) _ (say c (ln + "!\n")) _ (close c) 1)) 0)
    c (connect ['unix path])
    _ (say c "neko\n")
    echo (rdline c)
    _ (close c) _ (catch srv) _ (close l)
-   (test (hot? l) (echo = "neko!") ('enoent = connect ['unix (path + ".none")])))
+   miss (connect ['unix (path + ".none")])
+   _ (unlink path)
+   (test (hot? l) (echo = "neko!") ('enoent = miss)))
   ; a listen clears a stale socket at its path and nothing else: a file there stays whole
   ; and the bind says the name is taken. short and under /tmp, clear of sun_path's 108
   (: path ("/tmp/.love-net-" + show (getpid 0) + ".sock")
