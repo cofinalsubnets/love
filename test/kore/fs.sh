@@ -281,4 +281,13 @@ for c in "../s1 x" "-m 640 ../s1 x" "-m u=rw,go=r ../s1 x" "-v ../s1 x" "-d a/b 
 done
 rm -rf "$I2/G"; mkdir "$I2/G"; (cd "$I2/G" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore install -p ../s1 x) && [ "$(stat -c %Y "$I2/G/x")" = 1000000000 ] || fail "kore install -p"
 rm -rf "$I2"
+# realpath's --relative-to and --relative-base (together too), -L and -P through a link's
+# .., -q over misses, -z, -s; each against GNU with its status
+R3=$PWD/$ho/.rpt; rm -rf "$R3"; mkdir -p "$R3/a/b/c" "$R3/x"; ln -s a/b "$R3/lb"; : > "$R3/a/b/c/f"
+for c in "--relative-to=x a/b/c/f" "--relative-to=a a/b/c/f" "--relative-to=a/b/c/f a" "--relative-base=a a/b/c/f x" \
+         "--relative-base=a --relative-to=a/b a/b/c/f" "-L lb/.." "-P lb/.." "lb/.." "-q nosuch/x" "-e -q nope" "-z a x" "--relative-to=. ." "-s lb"; do
+  # shellcheck disable=SC2086
+  (cd "$R3" && { realpath $c; echo "rc=$?"; }) > "$g" 2>&1; (cd "$R3" && { LOVE_NO_IMAGE= "$PWD/../../$m" kore realpath $c; echo "rc=$?"; }) > "$o" 2>&1; same "realpath $c"
+done
+rm -rf "$R3"
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link/test/chgrp/truncate/pathchk/mountpoint/shred/dircolors) ok"

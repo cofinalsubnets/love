@@ -937,7 +937,7 @@
     'chmod "usage: chmod [-Rf] MODE FILE.."
     'install "usage: install [-CDpsTv] [-m MODE] [-o USER] [-g GROUP] [-t DIR] SRC.. DST | install -d [-m MODE] [-v] DIR.."
     'readlink "usage: readlink [-efmnz] PATH.."
-    'realpath "usage: realpath [-e|-m|-s] PATH.."
+    'realpath "usage: realpath [-emqszLP] [--relative-to=DIR] [--relative-base=DIR] PATH.."
     'link "usage: link FILE NEW"
     'unlink "usage: unlink FILE"
     'cmp "usage: cmp [-bls] [-n N] [-i SKIP[:SKIP]] A B [SKIP1 [SKIP2]]"
