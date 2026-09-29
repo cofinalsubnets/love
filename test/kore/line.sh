@@ -100,7 +100,7 @@ korerun uniq "$L/u" "$L/uo" && uniq "$L/u" > "$g" && cmp -s "$g" "$L/uo" || fail
 head -v "$L/i2" > "$g"; korerun head -v "$L/i2" > "$o"; same "head -v"
 tail -q -n1 "$L/i1" "$L/i2" > "$g"; korerun tail -q -n1 "$L/i1" "$L/i2" > "$o"; same "tail -q"
 # a stranger or a trailing flag refuses with 2 -- they were opened as files
-for c in "cat -x" "head -x" "tail -x" "wc -x" "uniq -x" "nl -x" "cut -f1 -x" "paste -x" "split -x" "join -x $L/i2" "cat $L/i2 -n"; do
+for c in "cat -x" "head -x" "tail -x" "wc -x" "uniq -x" "nl -x" "cut -f1 -x" "paste -x" "split -Q" "join -x $L/i2" "cat $L/i2 -n"; do
   # shellcheck disable=SC2086
   korerun $c "$L/i1" > /dev/null 2>&1; r=$?; [ $r -eq 2 ] || fail "kore $c must refuse (rc $r)"
 done

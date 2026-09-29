@@ -2016,10 +2016,11 @@
    ; -- split: a file cut into pieces named prefix + a rolling suffix. -l N lines (1000
    ; unsaid), -b N bytes (a K/M/G suffix multiplies), -a N the suffix width, -d digits
    ; for letters. an empty input writes no file, like GNU --
-   (usfx n w d?)                       ; the n'th suffix, w wide: aa ab .. or 00 01 ..
-    (: b (? d? 10 26)
+   (usfx n w d?)                       ; the n'th suffix, w wide: aa ab .., 00 01 .. or (d? 'x) 00 .. 0f
+    (: b (? (d? = 'x) 16 d? 10 26)
+       (dig v) (? (b = 26) (97 + v) (v < 10) (48 + v) (87 + v))
        (go k v acc) (k < 1 ? acc
-                       (go (k - 1) (v // b) (string ((? d? 48 97) + (v % b)) + acc)))
+                       (go (k - 1) (v // b) (string (dig (v % b)) + acc)))
        (go w n ""))
    (usize s)                           ; a byte count, an optional K/M/G multiplying
     (: n #s
@@ -2027,31 +2028,29 @@
        m (? (c = 107 || c = 75) 1024 (c = 109 || c = 77) 1048576
             (c = 103 || c = 71) 1073741824 0)
        (? m (m * uatoi (snip s 0 (n - 1))) (uatoi s)))
+   ; -n N makes N files of equal bytes, the last taking the rest (l/N the same, a line
+   ; never broken); -C SIZE fills each with whole lines up to SIZE, a longer line cut;
+   ; -x hex suffixes, --additional-suffix=S after each
    (split-main as)
-    (: (fl a ln by sw d? fs)
-        (: (val w) (snip w 2 #w)
-           (long? w) (2 < #w && snip w 0 2 = "-l")
-           (? (atom? a) [ln by sw d? (rev fs)]
-              (<a = "-l") (? (two? >a) (fl >>a (uatoi <>a) () sw d? fs)
-                             (udie 2 "split: -l wants a count"))
-              (<a = "-b") (? (two? >a) (fl >>a () (usize <>a) sw d? fs)
-                             (udie 2 "split: -b wants a size"))
-              (<a = "-a") (? (two? >a) (fl >>a ln by (uatoi <>a) d? fs)
-                             (udie 2 "split: -a wants a width"))
-              (<a = "-d") (fl >a ln by sw 1 fs)
-              (long? <a) (fl >a (uatoi (val <a)) () sw d? fs)
-              (2 < #<a && snip <a 0 2 = "-b") (fl >a () (usize (val <a)) sw d? fs)
-              (2 < #<a && snip <a 0 2 = "-a") (fl >a ln by (uatoi (val <a)) d? fs)
-              (fl >a ln by sw d? (<a . fs))))
-       p (fl as () () 2 0 ())
-       ln <p by <>p sw <>>p d? (p 3) fs (ustray "split" as (p 4))
+    (: fo (uflagsl "split" as '(108 98 97 110 67 1001) (chars "abCdlnx" + [1001])
+                   {"lines" 108 "bytes" 98 "suffix-length" 97 "number" 110 "line-bytes" 67 "numeric-suffixes" 100
+                    "hex-suffixes" 120 "additional-suffix" 1001})
+       tf <fo fs (fo 1)
+       (need c what) (: v (uoptv tf c) (? (string? v) v (udie 2 ("split: -" + string c + " wants " + what))))
+       ln (? (tf 108) (uatoi (need 108 "a count")) ())
+       by (? (tf 98) (usize (need 98 "a size")) ())
+       sw (? (tf 97) (uatoi (need 97 "a width")) 2)
+       d? (? (tf 120) 'x (tf 100) 1 0)
+       sfx2 (? (tf 1001) (uoptv tf 1001) "")
+       nw (: v (uoptv tf 110) (? !v () (starts? v "l/") ['l (uatoi (snip v 2 #v))] ['b (uatoi v)]))
+       cb (? (tf 67) (usize (need 67 "a size")) ())
        nl (charm? ln ? ln 1000)
        src (two? fs ? <fs "-")
        pre (two? fs && two? >fs ? <>fs "x")
        t (src @ "-" (slurp in)
           (: r (uread src) (? (two? r) <>r (udie 1 ("split: cannot open " + src)))))
        end? (nl-end? t)
-       (wr i txt) (: nm (pre + usfx i sw d?)
+       (wr i txt) (: nm (pre + usfx i sw d? + sfx2)
                      (? (uwrite nm txt) () (udie 1 ("split: cannot write " + nm))))
        (bygo i k) (? (#t <= k) 0
                      (: e (? (k + by < #t) (k + by) #t)
@@ -2065,7 +2064,27 @@
                          txt (unlines (take nl ls))
                          _ (wr i (? (two? rest || end?) txt (chomp txt)))
                          (lngo (i + 1) rest)))
-       _ (? (charm? by) (bygo 0 0) (lngo 0 (lines t)))
+       ; the end of the line holding byte k, one past its newline, or the end
+       (eol k) (: j (? (k < #t) (findsub (snip t k #t) "\n") -1) (? (j < 0) #t (k + j + 1)))
+       ; -n: N pieces of size/N rounded up, the last the rest; under l/ each boundary
+       ; moves to its line's end
+       (ngo i k n lines?) (? (n <= i) 0
+                             (: e0 (? (i = n - 1) #t (min #t ((i + 1) * ((#t + n - 1) // n))))
+                                e (? (lines? && k < e0 && e0 < #t) (eol (e0 - 1)) e0)
+                                e2 (max k e)
+                                _ (wr i (snip t k e2))
+                                (ngo (i + 1) e2 n lines?)))
+       ; -C: as many whole lines as fit in cb; a line longer than cb alone is cut
+       (cgo i k) (? (#t <= k) 0
+                    (: (fill e) (: e2 (eol e) (? (e2 - k <= cb && e < #t) (fill e2) e))
+                       e (fill k)
+                       e2 (? (e = k) (min #t (k + cb)) e)
+                       _ (wr i (snip t k e2))
+                       (cgo (i + 1) e2)))
+       _ (? nw (ngo 0 0 (nw 1) (<nw = 'l))
+            (charm? cb) (cgo 0 0)
+            (charm? by) (bygo 0 0)
+            (lngo 0 (lines t)))
        0)
 
    ; the shape every option walk past this point rides: a word is -X and the value is

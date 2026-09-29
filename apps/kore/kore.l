@@ -888,7 +888,7 @@
     'factor "usage: factor [N..]"
     'paste "usage: paste [-s] [-d LIST] [FILE..]"
     'comm "usage: comm [-123] FILE1 FILE2"
-    'split "usage: split [-l N] [-b SIZE] [-a N] [-d] [FILE [PREFIX]]"
+    'split "usage: split [-l N | -b SIZE | -C SIZE | -n [l/]N] [-a N] [-d | -x] [--additional-suffix=S] [FILE [PREFIX]]"
     'join "usage: join [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] FILE1 FILE2"
     'od "usage: od [-A C] [-t TYPE] [-N N] [-j N] [-v] [-abcdiosx] [FILE..]"
     'cksum "usage: cksum [FILE..]"

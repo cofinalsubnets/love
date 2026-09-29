@@ -81,4 +81,16 @@ both "od join three" od -tx1 "$rt/o1" "$rt/orand" "$rt/oesc"
 korerun od -j 999999 -c "$rt/o1" >/dev/null 2>&1 && fail "kore od: -j past the end must fail"
 both "od -j at end" od -j 14 -c "$rt/o1"
 echo "kore: record tools (paste/comm/join/split/od GNU-identical -- od over 4 files x 24 readings) ok"
+# split's -n N and l/N, -C, -x, -d, --additional-suffix, --numeric-suffixes with -a: the
+# pieces made, byte for byte, against GNU's
+SP=$PWD/$ho/.spl; rm -rf "$SP"; mkdir -p "$SP/g" "$SP/k"
+printf 'one\ntwo\nthree\nfour line here\nfive\nsix\nseven is longer than eight\neight\n' > "$SP/in"
+for c in "-n 3" "-n 4" "-n l/3" "-n l/2" "-C 12" "-C 20" "-x -l 2" "-d -l 3" "--additional-suffix=.txt -l 4" "--numeric-suffixes -a 3 -l 5"; do
+  rm -f "$SP"/g/* "$SP"/k/*
+  # shellcheck disable=SC2086
+  (cd "$SP/g" && split $c ../in); (cd "$SP/k" && LOVE_NO_IMAGE= "$PWD/../../../$m" kore split $c ../in)
+  (cd "$SP/g" && for f in *; do echo "== $f"; cat "$f"; done) > "$g"; (cd "$SP/k" && for f in *; do echo "== $f"; cat "$f"; done) > "$o"
+  same "split $c"
+done
+rm -rf "$SP"
 echo "kore: od across the gulps (rows, -j, -N and the * run over 4096) ok"
