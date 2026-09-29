@@ -2253,15 +2253,18 @@
    ; -- xxd: the canonical dump, and -r to read one back. 16 bytes a row, the offset
    ; in 8 hex digits, the bytes in pairs of two, then the ascii gutter --
    (uxx-esc c) (? (32 <= c && c < 127) c 46)     ; a dot for anything unprintable
-   (uxx-row off blk)
+   (uxx-row off blk) (uxx-rowf off blk 16 2 0)
+   ; c bytes a row in groups of g, upper? the hex in capitals
+   (uxx-rowf off blk c g upper?)
     (: n #blk o (jug 0)
-       _ (say o (zpad 8 (radix off 16))) _ (say o ": ")
-       (hex i) (? (16 <= i) 0
-                  ((i < n ? (say o (zpad 2 (radix (blk i) 16))) (say o "  ")),
-                   (1 = i % 2 ? (put o 32) 0),
+       (hx v w) (: h (zpad w (radix v 16)) (? upper? (upper h) h))
+       _ (say o (hx off 8)) _ (say o ": ")
+       (hex i) (? (c <= i) 0
+                  ((i < n ? (say o (hx (blk i) 2)) (say o "  ")),
+                   (0 = (i + 1) % g ? (put o 32) 0),
                    hex (i + 1)))
-       _ (hex 0) _ (put o 32)
-       (asc i) (16 <= i || n <= i ? 0 (put o (uxx-esc (blk i)), asc (i + 1)))
+       _ (hex 0) _ (? (0 = c % g) 0 (put o 32)) _ (put o 32)
+       (asc i) (c <= i || n <= i ? 0 (put o (uxx-esc (blk i)), asc (i + 1)))
        _ (asc 0)
        (slurp o))
    ; -r reads the dump back: the offset up to the colon is skipped, the gutter past
@@ -2282,19 +2285,39 @@
                  (charm? hi) (go (k + 1) (((16 * hi) + v) . acc) ())
                  (go (k + 1) acc v))))
        (go s () ()))
+   ; -p the plain hex, 30 bytes a line; -i a C array named for the file; -c the bytes a
+   ; row, -g a group, -u capitals; -l stops after so many bytes and -s starts past so
+   ; many, the offsets counting from there. a count may be 0x hex
    (xxd-main as)
-    (: r? (two? as && <as = "-r")
-       fs (? r? >as as)
-       _ (? (two? fs && (<fs 0) = 45) (udie 2 "usage: xxd [-r] [FILE..]") ())
-       (? r?
+    (: fo (uflags "xxd" as '(99 103 108 115) "cgilprsu")
+       t <fo fs (fo 1)
+       (num c d) (: v (uoptv t c)
+                    (? !v d
+                       (: h (starts? v "0x") w (? h (snip v 2 #v) v)
+                          n (? h (foldl (\ a ch (a * 16 + hexv ch)) 0 (chars w)) (unum w))
+                          (? (charm? n && (!h || all (ch \ 0 <= hexv ch) (chars w))) n (udie 1 ("xxd: invalid number: " + v))))))
+       p? (t 112) i? (t 105)
+       c (num 99 (? p? 30 i? 12 16)) g (num 103 2) lim (num 108 ()) sk (num 115 0)
+       _ (? (0 < c) 0 (udie 1 "xxd: invalid number of columns"))
+       (? (t 114)
           (: (dot ln term?) (map (put out) (uxx-unrow ln), 1)
              _ (ulines "xxd" dot fs) _ (flush out) 0)
           (: rd (urdb (f \ (udie 1 ("xxd: cannot open " + f))) fs)
-             (go off) (: blk (urdj-take rd 16)
-                         (? !#blk 0
-                            (say out (uxx-row off blk), put out 10,
-                               go (off + #blk))))
-             _ (go 0) _ (flush out) 0)))
+             (drop k) (? (k <= 0) 0 (: b (urdj-take rd (min k 4096)) (? #b (drop (k - #b)) 0)))
+             _ (drop sk)
+             nm (? (two? fs) (string (map (ch \ (? (48 <= ch <= 57 || 65 <= ch <= 90 || 97 <= ch <= 122) ch 95)) (chars <fs))) ())
+             _ (? (i? && nm) (say out ("unsigned char " + nm + "[] = {\n")) 0)
+             (go off first)
+              (: want (? (charm? lim) (min c (lim - (off - sk))) c)
+                 blk (? (0 < want) (urdj-take rd want) "")
+                 (? !#blk off
+                    (: _ (? p? (say out (cats (map (b \ zpad 2 (radix b 16)) (chars blk)) + "\n"))
+                            i? (say out ((? first "" ",\n") + "  " + join ", " (map (b \ "0x" + zpad 2 (radix b 16)) (chars blk))))
+                            (say out (uxx-rowf off blk c g (t 117) + "\n")))
+                       (go (off + #blk) 0))))
+             end (go sk 1)
+             _ (? i? (say out ((? (end = sk) "" "\n") + (? nm ("};\nunsigned int " + nm + "_len = " + show (end - sk) + ";\n") ""))) 0)
+             _ (flush out) 0)))
 
    ; -- hexdump: the BSD dump, two faces. bare: a 7-digit hex offset and eight
    ; little-endian 16-bit words a row; -C (and hd): an 8-digit offset, sixteen bytes

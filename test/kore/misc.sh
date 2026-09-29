@@ -204,4 +204,13 @@ for c in "bs=4 count=2" "bs=4 skip=1 count=2" "conv=ucase" "conv=lcase" "conv=sw
 done
 korerun dd conv=block < /dev/null > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore dd conv=block must refuse ($r)"
 rm -f "$ho"/.dd?
+# xxd's -p -i (from a file and from stdin) -c -g -u -l -s (0x too), and -p back through -r -p
+X2=$PWD/$ho/.xxq; printf 'Hello World 0123456789abcdef\n' > "$X2"
+for c in "-p" "-i" "-c 8" "-g 1" "-g 4" "-u" "-l 20" "-s 3" "-s 3 -l 10 -c 8" "-s 0x10" "-c 5" "-c 8 -g 3"; do
+  # shellcheck disable=SC2086
+  (cd "$ho" && xxd $c .xxq) > "$g"; (cd "$ho" && LOVE_NO_IMAGE= "$PWD/../$m" kore xxd $c .xxq) > "$o"; same "xxd $c"
+done
+xxd -i < "$X2" > "$g"; korerun xxd -i < "$X2" > "$o"; same "xxd -i from stdin"
+korerun xxd -p "$X2" | korerun xxd -r -p > "$o"; cmp -s "$X2" "$o" || fail "kore xxd -p | xxd -r -p"
+rm -f "$X2"
 echo "kore: dd, xxd, strings, cal, timeout, which, tty, clear, hostname, hexdump, getopt ok"

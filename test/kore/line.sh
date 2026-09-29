@@ -134,14 +134,19 @@ for c in "-L $W" "-L $W.j" "-L $W.t" "-lL $W" "-L $W $W.j" "-clwmL $W" "-Lc $W.j
 done
 rm -f "$W" "$W.j" "$W.t"
 # tee -i ignores SIGINT: read off its /proc mask while it runs in the foreground (a
-# background job has SIGINT ignored already, so killing one proves nothing); -p is taken
-TI=$ho/.teei; M2=$PWD/$m
-( sleep 1; for p in $(pgrep -x love); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q "kore tee -i $TI" && grep SigIgn /proc/$p/status; done ) > "$TI.m" &
+# background job has SIGINT ignored already, so killing one proves nothing); it waits
+# on a fifo held open both ways until the reader has looked, then is ended; -p is taken
+TI=$ho/.teei; M2=$PWD/$m; rm -f "$TI.f"; mkfifo "$TI.f"
+( k=0; while [ $k -lt 50 ]; do
+    for p in $(pgrep -x love); do
+      tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q "kore tee -i $TI" && { grep SigIgn /proc/$p/status; kill $p; exit 0; }
+    done; k=$((k + 1)); sleep 0.1
+  done ) > "$TI.m" &
 # a real process of its own: the tool shell runs kore's tools aboard
-sleep 3 | LOVE_NO_IMAGE= /bin/sh -c 'exec "$0" kore tee -i "$1" > /dev/null' "$M2" "$TI"; wait
-sgm=$(awk '{ print $2 }' "$TI.m"); [ $(( 0x$sgm & 2 )) -eq 2 ] || fail "kore tee -i: SigIgn $sgm"
+LOVE_NO_IMAGE= /bin/sh -c 'exec "$0" kore tee -i "$1" <> "$2" > /dev/null' "$M2" "$TI" "$TI.f"; wait
+sgm=$(awk '{ print $2 }' "$TI.m"); [ $(( 0x${sgm:-0} & 2 )) -eq 2 ] || fail "kore tee -i: SigIgn $sgm"
 printf 'a\nb\n' | korerun tee -p "$TI" > /dev/null && [ "$(cat "$TI")" = "$(printf 'a\nb')" ] || fail "kore tee -p"
-rm -f "$TI" "$TI.m"
+rm -f "$TI" "$TI.m" "$TI.f"
 # echo's -e and -E, the later winning, clustered with -n; \c, octal, hex, \u; a word
 # that is not all of n e E is text; against GNU's /usr/bin/echo, not the shell's
 if [ -x /usr/bin/echo ]; then
