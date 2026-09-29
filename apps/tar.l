@@ -233,12 +233,14 @@
    ;   (tar-pour s n wr) n bytes through wr a piece at a time -> how many went
    ;   (tar-rd s)        the source a reader again, what it holds first
    (tar-src rd) {'rd rd 'b "" 'o 0}
-   (tar-take s n)
+   (tar-take s n)                           ; the pieces gathered, then joined once
     (: b (peep s 'b "")   o (peep s 'o 0)
        (? (n <= #b - o) (: _ (pin s 'o (o + n)) (snip b o (o + n)))
-          (: p ((peep s 'rd ()) 0)
-             (? (#p = 0) (: _ (pins s 'b "" 'o 0) (snip b o #b))
-                (: _ (pins s 'b (snip b o #b + p) 'o 0) (tar-take s n))))))
+          (: (fill acc have) (? (n <= have) acc
+                                (: p ((peep s 'rd ()) 0) (? (#p = 0) acc (fill (p . acc) (have + #p)))))
+             all (cats (snip b o #b . rev (fill () (#b - o))))
+             (? (#all <= n) (: _ (pins s 'b "" 'o 0) all)
+                (: _ (pins s 'b all 'o n) (snip all 0 n))))))
    (tar-peek s n)
     (: h (tar-take s n)   b (peep s 'b "")
        _ (pins s 'b (h + snip b (peep s 'o 0) #b) 'o 0)
@@ -601,8 +603,8 @@
        (peep t 'bad 0 ? 2 0))
 
    ; the archive as a source, read a piece at a time off the file or stdin, its codec
-   ; sniffed off the first bytes: gzip streams through gz-pull, and bzip2, xz and a build
-   ; without inflate-feed read the whole archive and walk it. -> (src fin z), fin _ reading
+   ; sniffed off the first bytes: gzip, xz and bzip2 stream through their pulls, and a build
+   ; without inflate-feed reads the whole archive and walks it. -> (src fin z), fin _ reading
    ; what the walk left and answering whether the codec's check held
    (tarc-src t)
     (: a (tarc-arch t)
@@ -612,9 +614,16 @@
        raw (tar-src (\ _ (: c (see q) (? (c < 0) "" (: _ (unsee q c) (chug q))))))
        z (: w (peep t 'z ()) (? w w (tarc-sniff (tar-peek raw 6))))
        (all r a) (: p (r 0) (? (#p = 0) (cats (rev a)) (all r (p . a))))
+       (drain src) (: (dr r) (? (#(r 0) = 0) 0 (dr r)) (dr (tar-rd src)))
        (? (z = 'z && gz-nif 3 gz-feedprobe)
           (: g (gz-pull (tar-rd raw))   src (tar-src (\ _ (gz-next g)))
-             [src (\ _ (: (dr r) (? (#(r 0) = 0) 0 (dr r)) _ (dr (tar-rd src)) (two? (peep g 'ans ())))) z])
+             [src (\ _ (: _ (drain src) (two? (peep g 'ans ())))) z])
+          (z = 'J || z = 'j)
+          (: m (? (z = 'J) 'xz 'bz2)
+             g ((tarc-lazy m (? (z = 'J) 'xz-pull 'bz2-pull) (tarc-zname z)) (tar-rd raw))
+             next (cite m (? (z = 'J) 'xz-next 'bz2-next))
+             src (tar-src (\ _ (next g)))
+             [src (\ _ (: _ (drain src) (two? (peep g 'ans ())))) z])
           (: u (? z (tarc-unzip z (all (tar-rd raw) ())) [1 raw])
              _ (!u && tarc-die (a + ": not a " + tarc-zname z + " stream, or its check disagrees"))
              [(? z (tar-src (: t1 {0 <>u} (\ _ (: v (peep t1 0 "") _ (pin t1 0 "") v)))) raw) (\ _ 1) z])))

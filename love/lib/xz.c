@@ -6,6 +6,10 @@
 //   (lzmad s props dict n)   a .lzma body (after its 13-byte head) -> its bytes | () | 1 past
 //                            XZ_MAX; n -1 unknown
 //   (crc64 s)                CRC-64/XZ as the 8 little-endian bytes a check field holds
+//   (crc64-on c s)           the same carried on: c what crc64 said of the bytes before s
+//   (lzma2-new dict)         a state for LZMA2 a chunk at a time: the model, and a window of
+//                            dict bytes (and a chunk's room) in place of the whole output
+//   (lzma2-chunk st c)       one whole chunk (control byte, header, data) -> its bytes | ()
 // the decoders read the output as their dictionary, so the window is everything said so far.
 // the coder's parse is a fast one: reps first, the longest chain match, one lazy look.
 #ifndef XZ_STANDALONE
@@ -465,14 +469,59 @@ static int64_t xe_go(const uint8_t *s, uintptr_t n, uint32_t dict, uint8_t *out,
 static uintptr_t xe_cap(uintptr_t n) { return n + 16 * (n / 65536 + 2); }
 
 // --- crc64 ----------------------------------------------------------------------------------
-static uint64_t xz_crc64(const uint8_t *p, uintptr_t n) {
- uint64_t t[256], c = ~(uint64_t) 0;
+static uint64_t xz_crc64_on(uint64_t c0, const uint8_t *p, uintptr_t n) {
+ uint64_t t[256], c = ~c0;
  for (unsigned i = 0; i < 256; i++) {
   uint64_t v = i;
   for (int k = 0; k < 8; k++) v = v & 1 ? v >> 1 ^ 0xc96c5795d7870f42ull : v >> 1;
   t[i] = v; }
  while (n--) c = t[(c ^ *p++) & 255] ^ c >> 8;
  return ~c; }
+static uint64_t xz_crc64(const uint8_t *p, uintptr_t n) { return xz_crc64_on(0, p, n); }
+
+// --- LZMA2 a chunk at a time ---------------------------------------------------------------
+// the window holds the last dict bytes out and room for one chunk's (2 MiB at most); a chunk
+// that would not fit slides it down first. a match reaches no further back than the window
+// holds, which is every distance the dictionary allows. the reset rules are l2_dec's.
+#define L2_ROOM ((uintptr_t) 1 << 21)
+#define L2_MAGIC 0x6c7a6d6132u
+struct l2_st { uint64_t magic, n, base, cap, dict; uint32_t needdict, needprops;
+               struct lz_model m; lzp lit[0x300 << 4]; };
+static void l2_slide(struct l2_st *S, uint8_t *win, uintptr_t need) {
+ if (S->n + need <= S->cap) return;
+ uintptr_t keep = S->n < S->dict ? S->n : S->dict, shift = S->n - keep;
+ memmove(win, win + shift, keep);
+ S->n = keep, S->base = S->base > shift ? S->base - shift : 0; }
+// one chunk -> how many bytes it put out, from *o0 in the window; -1 malformed
+static intptr_t l2_step(struct l2_st *S, uint8_t *win, const uint8_t *s, uintptr_t n, uintptr_t *o0) {
+ if (!n || !s[0]) return -1;                    // the end byte is the caller's
+ unsigned c = s[0];
+ if (c >= 0xe0 || c == 1) S->needprops = 1, S->needdict = 0, S->base = S->n;
+ else if (S->needdict) return -1;
+ if (c < 0x80) {
+  if (c > 2 || n < 3) return -1;
+  uintptr_t k = ((uintptr_t) s[1] << 8 | s[2]) + 1;
+  if (n != 3 + k) return -1;
+  l2_slide(S, win, k);
+  *o0 = S->n, memcpy(win + S->n, s + 3, k), S->n += k;
+  return (intptr_t) k; }
+ if (n < 5) return -1;
+ uintptr_t u = ((uintptr_t) (c & 31) << 16 | (uintptr_t) s[1] << 8 | s[2]) + 1,
+           k = ((uintptr_t) s[3] << 8 | s[4]) + 1, h = 5;
+ if (c >= 0xc0) {
+  if (n < 6 || !lz_props(&S->m, s[5], 4)) return -1;
+  S->needprops = 0, h = 6; }
+ else if (S->needprops) return -1;
+ if (n != h + k) return -1;
+ if (c >= 0xa0) lz_reset(&S->m);
+ l2_slide(S, win, u);
+ struct lz_out o = { win, S->n, S->cap, S->base, 0, 0 };
+ struct lz_rd r;
+ if (!rd_init(&r, s + h, s + h + k) || lz_run(&S->m, &r, &o, o.n + u, 0) != 1) return -1;
+ rd_norm(&r);
+ if (r.bad || r.p != r.e || r.code) return -1;
+ *o0 = S->n, S->n = o.n;
+ return (intptr_t) u; }
 
 // the lzma model with room for lc + lp up to lim, from ai_alloc -> or NULL
 static struct lz_model *lz_new(unsigned lclp) {
@@ -566,6 +615,51 @@ ai_noinline static struct ai *host_crc64(struct ai *g) {
  g->sp[1] = g->sp[0];
  return g->sp++, g; }
 
+ai_noinline static struct ai *host_crc64_on(struct ai *g) {
+ word cw = g->sp[0], sw = g->sp[1];
+ if (!strp(cw) || len(cw) != 8 || !strp(sw)) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+ if (!ai_ok(g = str0(g, 8))) return g;              // pushes: out over c and s
+ uint64_t c = 0;
+ for (int i = 0; i < 8; i++) c |= (uint64_t) ((const uint8_t*) txt(g->sp[1]))[i] << 8 * i;
+ c = xz_crc64_on(c, (const uint8_t*) txt(g->sp[2]), len(g->sp[2]));
+ for (int i = 0; i < 8; i++) ((uint8_t*) txt(g->sp[0]))[i] = (uint8_t) (c >> 8 * i);
+ return g->sp[2] = g->sp[0], g->sp += 2, g; }
+
+#define L2_HEAD ((sizeof(struct l2_st) + 7) & ~(uintptr_t) 7)
+static struct ai_str *l2_cask(word x) {
+ if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
+ struct ai_str *s = cask(x)->str;
+ struct l2_st *S = s && s->len > L2_HEAD ? (struct l2_st*) s->bytes : NULL;
+ return S && S->magic == L2_MAGIC && S->cap == s->len - L2_HEAD ? s : NULL; }
+ai_noinline static struct ai *host_lzma2_new(struct ai *g) {
+ word dw = g->sp[0];
+ if (!oddp(dw) || getcharm(dw) < 4096 || (uintptr_t) getcharm(dw) > XZ_MAX) return g->sp[0] = ZeroPoint, g;
+ uintptr_t dict = (uintptr_t) getcharm(dw), n = L2_HEAD + dict + L2_ROOM,
+           sreq = str_width(n), breq = Width(struct ai_cask) + Width(struct ai_tag);
+ if (!ai_ok(g = ai_have(g, sreq + breq))) return g;
+ struct ai_str *s = ini_str(bump(g, sreq), n);
+ memset(s->bytes, 0, L2_HEAD);
+ struct l2_st *S = (struct l2_st*) s->bytes;
+ S->magic = L2_MAGIC, S->cap = dict + L2_ROOM, S->dict = dict, S->needdict = S->needprops = 1;
+ union u *k = bump(g, breq);
+ cask(k)->ap = lvm_cask, cask(k)->str = s;
+ tagthread(k, Width(struct ai_cask));
+ return g->sp[0] = word(k), g; }
+ai_noinline static struct ai *host_lzma2_chunk(struct ai *g) {
+ struct ai_str *cs = l2_cask(g->sp[0]);
+ if (!cs || !strp(g->sp[1])) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+ struct l2_st *S = (struct l2_st*) cs->bytes;
+ S->m.lit = S->lit;                                 // the cask moves: the pointer is laid again
+ uintptr_t o0 = 0;
+ intptr_t got = l2_step(S, (uint8_t*) cs->bytes + L2_HEAD, (const uint8_t*) txt(g->sp[1]), len(g->sp[1]), &o0);
+ if (got < 0) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+ if (!ai_ok(g = str0(g, (uintptr_t) got))) return g;   // pushes: out over st and c
+ memcpy(txt(g->sp[0]), l2_cask(g->sp[1])->bytes + L2_HEAD + o0, (uintptr_t) got);
+ return g->sp[2] = g->sp[0], g->sp += 2, g; }
+
+static LvmWrap(lvm_crc64_on, host_crc64_on)
+static LvmWrap(lvm_lzma2_new, host_lzma2_new)
+static LvmWrap(lvm_lzma2_chunk, host_lzma2_chunk)
 static LvmWrap(lvm_lzma2len, host_lzma2len)
 static LvmWrap(lvm_lzma2d, host_lzma2d)
 static LvmWrap(lvm_lzma2e, host_lzma2e)
@@ -577,10 +671,16 @@ static union u const
  nif_lzma2d[]   = {{lvm_lzma2d}, {lvm_ret0}},
  nif_lzma2e[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2e}, {lvm_ret0}},
  nif_lzmad[]    = {{lvm_cur}, {.x = putcharm(4)}, {lvm_lzmad}, {lvm_ret0}},
- nif_crc64[]    = {{lvm_crc64}, {lvm_ret0}};
+ nif_crc64[]    = {{lvm_crc64}, {lvm_ret0}},
+ nif_crc64_on[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_crc64_on}, {lvm_ret0}},
+ nif_lzma2_new[] = {{lvm_lzma2_new}, {lvm_ret0}},
+ nif_lzma2_chunk[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_lzma2_chunk}, {lvm_ret0}};
 LvNif("lzma2len", nif_lzma2len, NULL);
 LvNif("lzma2d", nif_lzma2d, NULL);
 LvNif("lzma2e", nif_lzma2e, NULL);
 LvNif("lzmad", nif_lzmad, NULL);
 LvNif("crc64", nif_crc64, NULL);
+LvNif("crc64-on", nif_crc64_on, NULL);
+LvNif("lzma2-new", nif_lzma2_new, NULL);
+LvNif("lzma2-chunk", nif_lzma2_chunk, NULL);
 #endif
