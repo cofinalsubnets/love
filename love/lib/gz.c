@@ -915,9 +915,27 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
  g->sp[1] = got != want ? ZeroPoint : g->sp[0];
  return g->sp++, g; }
 
+// (deflate-best s) -> the raw stream | (): the image lane's coder, no twin of the love one --
+// a lazy parse down a 4096 chain, zlib -9's, for bytes that are written once and read often
+// (the dist tarball, gzip -9). the parse is dear, so it runs once, into a buffer at
+// deflate's own bound (stored blocks: five bytes a block over the input), then the string
+ai_noinline static struct ai *host_deflate_best(struct ai *g) {
+ word sw = g->sp[0];
+ if (!strp(sw)) return g->sp[0] = ZeroPoint, g;
+ uintptr_t n = len(sw), cap = n + n / 1024 + 64;
+ uint8_t *out = ai_alloc(NULL, cap);
+ intptr_t got = out ? ai_deflate_raw(g, (const uint8_t*) txt(sw), n, out, cap) : -1;
+ if (got < 0) { if (out) ai_alloc(out, 0); return g->sp[0] = ZeroPoint, g; }
+ if (ai_ok(g = str0(g, (uintptr_t) got))) memcpy(txt(g->sp[0]), out, (uintptr_t) got), g->sp[1] = g->sp[0], g->sp++;
+ ai_alloc(out, 0);
+ return g; }
+
 static LvmWrap(lvm_deflate, host_deflate)
+static LvmWrap(lvm_deflate_best, host_deflate_best)
 
 // one operand, so the run is {impl, ret0} -- love/nifs.l states the law and lvm_cur
 // curries once unconditionally, which at arity one hands the body an operand too many.
-static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}};
+static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}},
+                     nif_deflate_best[] = {{lvm_deflate_best}, {lvm_ret0}};
 LvNif("deflate", nif_deflate, NULL);
+LvNif("deflate-best", nif_deflate_best, NULL);

@@ -78,7 +78,7 @@
                 (: u (gz-unzip <>have) (two? u && <>u = a)))
        (? fresh 0
           adopt (sp-write side h)
-          (: z (gz-zip a "" 0)
+          (: z (gz-zip9 a "" 0)                ; written once, carried in every artifact: the harder coder
              (puts ("LOVE\t" + arch), putc 10, sp-write arch z, sp-write side h, 0))))
 
    (sp-main av)
