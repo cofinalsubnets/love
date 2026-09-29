@@ -292,34 +292,9 @@
    ; and the status left 1. the format is reused while arguments remain. \c ends it all.
    ; no %a: a hex float is the one conversion nothing here spells.
    (pf-die m) (flush out, udie 1 ("printf: " + m))
-   ; the escape whose letter is at s k -> (text next) | 'stop for \c. %b's octal may lead
-   ; with a 0 (\0NNN); the format's is \NNN alone
-   (pf-esc s k b?)
-    (: n #s c (s k)
-       (dig j lim base acc cnt)
-        (: d (? (j < n) (hexv (s j)) -1)
-           (? (cnt < lim && 0 <= d && d < base) (dig (j + 1) lim base (acc * base + d) (cnt + 1))
-              [acc j cnt]))
-       (? (c = 99) 'stop
-          (48 <= c && c <= 55)
-           (: r (dig (? (b? && c = 48) (k + 1) k) 3 8 0 0) [(string (<r & 255)) <>r])
-          (c = 120)
-           (: r (dig (k + 1) 2 16 0 0)
-              (? (<>>r = 0) (pf-die "missing hexadecimal number in escape") [(string <r) <>r]))
-          (c = 117 || c = 85)
-           (: r (dig (k + 1) (? (c = 117) 4 8) 16 0 0)
-              (? (<>>r = 0) (pf-die "missing hexadecimal number in escape") [(utf8 <r) <>r]))
-          (: m (c @ 34 34 92 92 97 7 98 8 101 27 102 12 110 10 114 13 116 9 118 11 -1)
-             (? (m < 0) [("\\" + string c) (k + 1)] [(string m) (k + 1)]))))
-   ; %b's argument, its escapes laid -> (text stop?)
-   (pf-bexp s)
-    (: n #s
-       (go k acc)
-        (? (n <= k) [acc 0]
-           (!(s k = 92) || n <= k + 1) (go (k + 1) (acc + string (s k)))
-           (: e (pf-esc s (k + 1) 1)
-              (? (e = 'stop) [acc 1] (go <>e (acc + <e)))))
-       (go 0 ""))
+   ; the escapes are u.l's, which echo -e shares
+   (pf-esc s k b?) (uesc s k b? "printf")
+   (pf-bexp s) (ubexp s "printf")
    (pf-bad st w m) (say err ("printf: '" + w + "': " + m + "\n"), pin st 'bad 1)
    (pf-cchar st w)                     ; 'c and "c: the character's code
     (: n #w

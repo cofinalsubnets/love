@@ -142,6 +142,14 @@ sleep 1 | LOVE_NO_IMAGE= /bin/sh -c 'exec "$0" kore tee -i "$1" > /dev/null' "$M
 sgm=$(awk '{ print $2 }' "$TI.m"); [ $(( 0x$sgm & 2 )) -eq 2 ] || fail "kore tee -i: SigIgn $sgm"
 printf 'a\nb\n' | korerun tee -p "$TI" > /dev/null && [ "$(cat "$TI")" = "$(printf 'a\nb')" ] || fail "kore tee -p"
 rm -f "$TI" "$TI.m"
+# echo's -e and -E, the later winning, clustered with -n; \c, octal, hex, \u; a word
+# that is not all of n e E is text; against GNU's /usr/bin/echo, not the shell's
+if [ -x /usr/bin/echo ]; then
+  for c in "-e a\tb\nc" "-E a\tb" "a\tb" "-ne a\n" "-en x\cy" "-e \0101\x42\e" "-eE a\tb" "-e -E a\tb" "-E -e a\tb" "-x hi" "-nx y" "-e é \\\\ \q"; do
+    # shellcheck disable=SC2086
+    /usr/bin/echo $c > "$g"; korerun echo $c > "$o"; same "echo $c"
+  done
+fi
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/shuf/seq/echo/basename/tee GNU-identical) ok"
 
 # sort's and ls's own flag matrices are subjects of their own (sort.sh, ls.sh): each

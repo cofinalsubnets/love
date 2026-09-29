@@ -212,10 +212,21 @@
        _ (flush q) _ (? (string? of) (close q) 0)
        0)
 
-   ; -- echo: the args back; -n holds the newline --
+   ; -- echo: the args back; -n holds the newline, -e lays the escapes (u.l's, printf's
+   ; %b's: \c ends it all), -E leaves them, the later winning; the letters cluster, and
+   ; the first word that is not all of them is text, as GNU's reads it --
    (echo-main as)
-    (as @ ("-n" . u) (say out (ujoin u), flush out, 0)
-     (say out (ujoin as), put out 10, flush out, 0))
+    (: (flag? w) (1 < #w && w 0 = 45 && all (c \ elem c "neE") >(chars w))
+       (go a n e) (? (two? a && flag? <a)
+                     (: w <a (go >a (n || has? w "n") (: k (max (findsub w "e") -1) K (max (findsub w "E") -1) (? (k < 0 && K < 0) e (K < k) 1 0))))
+                     [n e a])
+       r (go as 0 0)
+       n? <r e? <>r ws <>>r
+       t (ujoin ws)
+       x (? e? (ubexp t "echo") [t 0])
+       _ (say out <x)
+       _ (? (n? || <>x) 0 (put out 10))
+       _ (flush out) 0)
 
    ; -- head and tail: one driver, two clips; -n N (10 the default) --
    ; `-5` is the obsolescent spelling and every script still writes it, so it is not
