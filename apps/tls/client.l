@@ -14,6 +14,7 @@
 ;
 ;   (tls-dial host port)   resolve, connect, shake hands -> a session | ()
 ;   (tls-say t s)          send s as application data
+;   (tls-hear t)           the next run of application data as it arrives, () at the close
 ;   (tls-slurp t)          every byte of application data the peer sends, to its close
 ;   (tls-close t)          a close_notify, and the socket shut
 ;   (t 'cert)              the server's leaf certificate, its der, as it came
@@ -280,13 +281,15 @@
                     _ (seal t 23 (snip s i (i + k)))
                     (go (i + k))))
        (go 0))
+   (tls-hear t)
+    (: r (open-rec t)
+       (? (atom? r) ()
+          (<r = 23) <>r
+          (<r = 21) ()                                                 ; an alert: close_notify or worse, the end either way
+          (tls-hear t)))                                               ; a ticket, a key update: not ours
    (tls-slurp t)
     (: j (jug 0)
-       (go _) (: r (open-rec t)
-                 (? (atom? r) 0
-                    (<r = 23) (say j <>r, go 0)
-                    (<r = 21) 0                                        ; an alert: close_notify or worse, the end either way
-                    (go 0)))                                            ; a ticket, a key update: not ours
+       (go _) (: s (tls-hear t) (? (string? s) (say j s, go 0) 0))
        _ (go 0)
        (slurp j))
    (tls-close t) (seal t 21 (u8 1 + u8 0), close (t 's)))

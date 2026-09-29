@@ -18,8 +18,8 @@ try() {   # try NAME SOURCE  -- SOURCE must RAISE
     { echo "FAIL asrefuse: $1 -- assembled, should have raised"; leaked=$((leaked + 1)); }
 }
 
-# a number is required and a symbol is not one: the front cannot relocate an immediate, so
-# every door that reads one has to say so rather than read a prefix and stop.
+# a symbol the snippet never defines: its fix has nothing to resolve against, so it raises
+# there, and a malformed number must say so rather than read a prefix and stop.
 try "symbolic immediate"     'movq $N, %rax'
 try "symbolic displacement"  'movq sym(%rbx), %rax'
 try "immediate with a tail"  'movq $4x, %rax'
@@ -33,9 +33,6 @@ try "width clash"            'movq %eax, (%rbx)'
 try "immediate destination"  'movq %rax, $1'
 try "bad scale"              'movq %rax, (%rbx,%rcx,3)'
 try "too many mem fields"    'movq %rax, (%rbx,%rcx,4,8)'
-# rel32 is measured from the end of its own field and the fixup carries no addend, so a
-# rip-relative operand with an immediate tail cannot be spelled -- it must not be guessed.
-try "rip with an imm tail"   'movq $1, t(%rip)\nt:\n ret'
 # and the plain unknowns
 try "unknown mnemonic"       'frobq %rax, %rbx'
 try "unknown register"       'movq %rzz, %rbx'

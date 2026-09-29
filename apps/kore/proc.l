@@ -14,30 +14,6 @@
 (borrow 'posix)
 
 (:
-   ; a duration text -> milliseconds | (): N or N.N, an optional s/m/h/d suffix
-   ; (seconds the default). 0 is a real duration -- callers test charm?, not truth
-   (udur s0)
-    (: n0 #s0
-       lc (? (0 < n0) (s0 (n0 - 1)) ())
-       sfx (lc = 115 || lc = 109 || lc = 104 || lc = 100)
-       mul (? (lc = 109) 60000 (lc = 104) 3600000 (lc = 100) 86400000 1000)
-       s (? sfx (snip s0 0 (n0 - 1)) s0)
-       n #s
-       (dig? c) (48 <= c && c <= 57)
-       (ip i acc) (? (i < n && dig? (s i)) (ip (i + 1) ((10 * acc) + (s i - 48))) [acc i])
-       r (ip 0 0)
-       whole <r i <>r
-       (? (i = n && 0 < n) (whole * mul)
-          (i < n && (s i = 46))
-           (: (fp j acc sc) (? (j < n && dig? (s j))
-                               (fp (j + 1) ((10 * acc) + (s j - 48)) (sc * 10))
-                               [acc sc j])
-              fr (fp (i + 1) 0 1)
-              (? (<>>fr = n && (0 < i || (i + 1) < n))
-                 ((whole * mul) + ((<fr * mul) // <>fr))
-                 ()))
-          ()))
-
    ; -- env: assignments, then print the world or run a command inside it --
    (env-main as)
     (: (eqat s) (: n #s                    ; the first = past position 0, or ()

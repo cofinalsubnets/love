@@ -4,6 +4,8 @@
 ;   (cpio-unpack s)          -> (1 entries) | ()
 ;   (cpio-scatter root es u) -> (1 count) | ()   write entries back out under root
 ;   (cpio-scatter? warn root es u) -> (1 count refused)   the same, a refused member warned
+;   (cpio-walk s f)          -> (1 count) | () | 'stop   the members off a stream, (tar-src rd)
+;   (cpio-put warn root e u fill) -> 'laid | 'skip | 'refused | 'fail   one member laid
 ;
 ; an entry is apps/tar.l's entry -- the same tablet, the same keys ('nom 'kind 'body 'to
 ; 'mode 'mtime 'uid 'gid) -- because the walk that fills them (`tar-gather`) and the
@@ -107,32 +109,55 @@
        (s + zbytes (padk #s 512)))
 
    ; --- reading ---------------------------------------------------------------
-   (cpio-read1 s n o)                       ; -> (1 entry next) | 'end | ()
-    (? (n < o + 110) ()
-       !(snip s o (o + 6) = cpio-mag) ()
-       (: mode (cpio-hex s (o + 14))
-          mtime (cpio-hex s (o + 46))
-          nb (cpio-hex s (o + 54))
-          uid (cpio-hex s (o + 22)) gid (cpio-hex s (o + 30))
-          nz (cpio-hex s (o + 94))
+   ; one header's fields off h, its 110 bytes -> (mode mtime nb uid gid nz) | ()
+   (cpio-fields h)
+    (? (#h < 110 || !(snip h 0 6 = cpio-mag)) ()
+       (: mode (cpio-hex h 14)   nb (cpio-hex h 54)   nz (cpio-hex h 94)
           (? (mode = () || nb = () || nz = ()) ()
-             (n < o + 110 + nz) ()
-             (: nom (snip s (o + 110) (o + 110 + nz - 1))
-                b0 (o + 110 + nz + padk (110 + nz) 4)
-                (? (nom = cpio-trail) 'end
-                   (n < b0 + nb) ()
-                   (: kind (cpio-kind mode)
-                      body (snip s b0 (b0 + nb))
-                      e (tar-entry nom kind (kind = 'link ? "" body))
-                      _ (pins e 'mode (mode & 4095) 'mtime mtime 'uid uid 'gid gid)
-                      _ (kind = 'link && pin e 'to body)
-                      [1 e (b0 + nb + padk nb 4)]))))))
+             [mode (cpio-hex h 46) nb (cpio-hex h 22) (cpio-hex h 30) nz])))
+   (cpio-read1 s n o)                       ; -> (1 entry next) | 'end | ()
+    (: f (? (n < o + 110) () (cpio-fields (snip s o (o + 110))))
+       (? !f ()
+          (: mode (f 0)   mtime (f 1)   nb (f 2)   uid (f 3)   gid (f 4)   nz (f 5)
+             (? (n < o + 110 + nz) ()
+                (: nom (snip s (o + 110) (o + 110 + nz - 1))
+                   b0 (o + 110 + nz + padk (110 + nz) 4)
+                   (? (nom = cpio-trail) 'end
+                      (n < b0 + nb) ()
+                      (: kind (cpio-kind mode)
+                         body (snip s b0 (b0 + nb))
+                         e (tar-entry nom kind (kind = 'link ? "" body))
+                         _ (pins e 'mode (mode & 4095) 'mtime mtime 'uid uid 'gid gid)
+                         _ (kind = 'link && pin e 'to body)
+                         [1 e (b0 + nb + padk nb 4)])))))))
    (cpio-unpack s)
     (:- (go 0 ()) n #s
      (go o acc) (: r (cpio-read1 s n o)
                    (? (r = 'end) [1 (rev acc)]
                       !r ()
                       (go <>>r (<>r . acc)))))
+   ; the members as they come off a stream, (tar-src rd): (f e b) for each, e with its 'size
+   ; and no 'body, b the body for (tar-body s b wr) -- a link's target is read into 'to.
+   ; f answers 1 to go on. -> (1 count) | () torn or not newc | 'stop f stopped it
+   (cpio-walk s f)
+    (: (go k)
+        (: fs (cpio-fields (tar-take s 110))
+           (? !fs ()
+              (: mode (fs 0)   nb (fs 2)   nz (fs 5)   hn (nz + padk (110 + nz) 4)
+                 nm (tar-take s hn)
+                 nom (snip nm 0 (nz < 1 ? 0 (nz - 1)))
+                 kind (cpio-kind mode)
+                 to (? (kind = 'link) (tar-take s nb) "")
+                 (? (#nm < hn || #to < (kind = 'link ? nb 0)) ()
+                    (nom = cpio-trail) [1 k]
+                    (: e (tar-entry nom kind "")
+                       _ (pins e 'mode (mode & 4095) 'mtime (fs 1) 'uid (fs 3) 'gid (fs 4) 'size nb)
+                       _ (kind = 'link && pin e 'to to)
+                       b {'left (? (kind = 'link) 0 nb)}
+                       (? ((f e b) != 1) 'stop
+                          (: n ((peep b 'left 0) + padk nb 4)
+                             (? (tar-pour s n (x \ 0) < n) () (go (k + 1))))))))))
+       (go 0))
 
    ; --- writing the tree back out ---------------------------------------------
    ; the leading directories are always made. GNU wants -d before it will and refuses
@@ -143,32 +168,36 @@
    (cpio-newer? p ms)                       ; is what is already there at least as new
     (: st (lstat p) (two? st ? !(<>st // 1000 < ms) 0))
    ; a name that climbs out of root, or a path through a symlink, is warned and skipped;
-   ; a link at the member's own name is unlinked before the member is laid
+   ; a link at the member's own name is unlinked before the member is laid. the body goes
+   ; through fill into the file opened for it. -> 'laid | 'skip | 'refused | 'fail
+   (cpio-put warn root e u fill)
+    (: nom (peep e 'nom "")
+       sg (tar-segs nom)
+       lp (sg && tar-lay root <>sg)
+       p (lp && <>lp)
+       kind (peep e 'kind 'file)
+       _ (? !sg (warn (nom + ": member name contains '..'"))
+            !lp (warn (nom + ": will not extract through a symbolic link or a file")))
+       skip (!lp || atom? <>sg
+             || (!u && kind != 'dir && cpio-newer? p (peep e 'mtime 0)))
+       _ (skip || (tar-link-at? p && unlink p))
+       ok (? skip 1
+             (kind = 'dir) (mkdir p 493,
+                            tar-dir-at? p && chmod p (tar-perm (peep e 'mode 493)),
+                            tar-dir-at? p)
+             (kind = 'link) (symlink (peep e 'to "") p,
+                             string? (readlink p))
+             (: q (open p "w")
+              (hot? q && (fill q, close q),
+               tar-at? p 32768 && chmod p (tar-perm (peep e 'mode 420)),
+               cpio-there? p)))
+       (? !ok 'fail !lp 'refused skip 'skip 'laid))
    (cpio-scatter? warn root es u)           ; -> (1 count refused)
     (: (go xs k r)
         (? !(two? xs) [1 k r]
-           (: e <xs
-              nom (peep e 'nom "")
-              sg (tar-segs nom)
-              lp (sg && tar-lay root <>sg)
-              p (lp && <>lp)
-              kind (peep e 'kind 'file)
-              _ (? !sg (warn (nom + ": member name contains '..'"))
-                   !lp (warn (nom + ": will not extract through a symbolic link or a file")))
-              skip (!lp || atom? <>sg
-                    || (!u && kind != 'dir && cpio-newer? p (peep e 'mtime 0)))
-              _ (skip || (tar-link-at? p && unlink p))
-              ok (? skip 1
-                    (kind = 'dir) (mkdir p 493,
-                                   tar-dir-at? p && chmod p (tar-perm (peep e 'mode 493)),
-                                   tar-dir-at? p)
-                    (kind = 'link) (symlink (peep e 'to "") p,
-                                    string? (readlink p))
-                    (: q (open p "w")
-                     (hot? q && (say q (peep e 'body ""), close q),
-                      tar-at? p 32768 && chmod p (tar-perm (peep e 'mode 420)),
-                      cpio-there? p)))
-              (ok && go >xs (skip ? k (k + 1)) (lp ? r (r + 1)))))
+           (: e <xs   w (cpio-put warn root e u (q \ say q (peep e 'body "")))
+              (? (w = 'fail) ()
+                 (go >xs (? (w = 'laid) (k + 1) k) (? (w = 'refused) (r + 1) r)))))
        (go es 0 0))
    (cpio-scatter root es u)                 ; -> (1 count) | (), () on any refusal
     (: w (cpio-scatter? (m \ 0) root es u) (w && w 2 = 0 ? [1 (w 1)] ())))
@@ -261,37 +290,46 @@
           (say out s, flush out))
        _ (cpioc-blocks t #s)
        (<>g ? 0 1))
-   (cpioc-in t)                             ; -> (1 bytes) | ()
-    (: src (t 'in)
-       (string? src ? (uread src || (cpioc-moan ("cannot read " + src), ()))
-                      [1 (slurp in + "")]))
+   ; the archive a piece at a time off -I FILE or stdin, the bytes counted for the blocks
+   ; line -> (src count) | ()
+   (cpioc-src t)
+    (: src (t 'in)   q (? (string? src) (open src "r") in)
+       (? !(hot? q) (cpioc-moan ("cannot read " + src), ())
+          (: c {0 0}
+             [(tar-src (\ _ (: ch (see q)
+                               (? (ch < 0) ""
+                                  (: _ (unsee q ch)   p (chug q)   _ (pin c 0 (peep c 0 0 + #p)) p)))))
+              c])))
+   (cpioc-drain src) (: (dr r) (? (#(r 0) = 0) 0 (dr r)) (dr (tar-rd src)))
    (cpioc-strip nom)                        ; no leading /, ever
     (: n #nom
        (go k) (k < n && nom k = 47 ? (go (k + 1)) k)
      (go 0 @ 0 nom k (snip nom k n)))
+   ; -i and -t walk the members as they come, a body poured to its file and never held;
+   ; a member laid before a later one turns out torn stays laid, as GNU's does
    (cpioc-i t)
-    (: b (cpioc-in t)
-     (? !b 1
-      (: es (cpio-unpack <>b)
-         (? !es (cpioc-moan "premature end of archive", 1)
-            (: fs (map (e \ (: t2 {}
-                               _ (map (k \ pin t2 k (e k)) (keys e))
-                               _ (pin t2 'nom (cpioc-strip (peep e 'nom "")))
-                               _ (cpioc-tell t (peep t2 'nom ""))
-                               t2))
-                       <>es)
-               w (cpio-scatter? cpioc-moan "" fs (peep t 'u 0))
-               _ (cpioc-blocks t #<>b)
-               (? !w (cpioc-moan "cannot write the tree", 1)
-                  (0 < w 2) 1
+    (: sc (cpioc-src t)
+     (? !sc 1
+      (: src <sc   bad {0 0}
+         w (cpio-walk src (\ e b (: _ (pin e 'nom (cpioc-strip (peep e 'nom "")))
+                                   _ (cpioc-tell t (peep e 'nom ""))
+                                   r (cpio-put cpioc-moan "" e (peep t 'u 0) (q \ tar-body src b (x \ say q x)))
+                                   _ (r = 'refused && pin bad 0 1)
+                                   (? (r = 'fail) 'stop 1))))
+         (? !(two? w || w = 'stop) (cpioc-moan "premature end of archive", 1)
+            (: _ (cpioc-drain src)
+               _ (cpioc-blocks t (peep (sc 1) 0 0))
+               (? (w = 'stop) (cpioc-moan "cannot write the tree", 1)
+                  (peep bad 0 0) 1
                   0))))))
    (cpioc-t t)
-    (cpioc-in t @- 1 [1 b] (cpio-unpack b @-
-     (cpioc-moan "premature end of archive", 1)
-     [1 es] (foldl (\ _ e (say out (peep e 'nom ""), put out 10)) 0 es,
-             flush out,
-             cpioc-blocks t #b,
-             0)))
+    (: sc (cpioc-src t)
+     (? !sc 1
+      (: src <sc
+         w (cpio-walk src (\ e b (: _ (say out (peep e 'nom ""), put out 10) 1)))
+         _ (flush out)
+         (? !(two? w) (cpioc-moan "premature end of archive", 1)
+            (: _ (cpioc-drain src) _ (cpioc-blocks t (peep (sc 1) 0 0)) 0)))))
 
    ; --- the options -----------------------------------------------------------
    ; the cli walker in posix order: the flags lead, the first operand ends them. a long flag

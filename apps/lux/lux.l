@@ -13,7 +13,7 @@
 ; lays is the layout book, one layout per tag (xmonad's per-workspace layout).
 
 ; --- the lux repl: a unix-socket moor into the running wm (the dock's shape,
-; crew-side; `ain <sock>` is the client). Forms eval in the book, so every
+; crew-side; `nc <sock>` is the client). Forms eval in the book, so every
 ; global is a verb; the live (sh lays hist) state rides lux-cell -- reads
 ; take the snapshot ((lux-st ())), changes queue a state function through
 ; (lux! f), and the driver's loop drains the queue at its next X event,

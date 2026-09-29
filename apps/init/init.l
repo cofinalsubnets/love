@@ -20,7 +20,7 @@
 ; global scope so the -e call finds `demos`/`real`.)
 ;
 ; what an actual pid1 still needs is small and core-clean (love/posix.c via the LvNif
-; glob, no love.c/love.h edit -- the same discipline as ain/bao). done: fork/execve +
+; glob, no love.c/love.h edit -- the same discipline as nc/bao). done: fork/execve +
 ; the non-blocking waitpid reaper (spawn/glean). remaining: signalfd (SIGCHLD/SIGTERM
 ; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),
 ; mount (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything below that

@@ -1318,7 +1318,7 @@
 
    cook-main _)
 
-; the seat (apps/ain.l's shape): fire cook-main iff this file -- or the installed `cook` symlink
+; the seat (apps/nc.l's shape): fire cook-main iff this file -- or the installed `cook` symlink
 ; -- sits in the program seat of the real command line, taking the args after the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load orders; inside the
 ; multi-call `kore` nothing matches and kore's dispatcher calls cook-main itself.

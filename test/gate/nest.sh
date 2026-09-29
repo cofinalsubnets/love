@@ -28,7 +28,7 @@ case $out in *"nothing is there yet"*"lush     absent -> love"*) ;; *) fail "-n 
 out=$(nest -y); st=$?
 [ $st = 0 ] || fail "a fresh nest exits $st: $out"
 cmp -s "$love" "$H/.love/bin/love" || fail "a fresh nest did not lay this binary"
-for t in lush kore sb cook libra mooncc ain; do
+for t in lush kore sb cook libra mooncc; do
   [ "$(readlink "$H/.love/bin/$t")" = love ] || fail "$t is not linked to love"
 done
 [ "$(readlink "$H/.local/bin/lush")" = "$H/.love/bin/lush" ] || fail "no ~/.local/bin compat link"

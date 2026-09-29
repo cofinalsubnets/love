@@ -376,7 +376,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       _ (: v (uoptv t 116) (!v ? 0 (pin c 'title v)))
       _ (peep t 113 0 ? (pin c 'quiet 1) 0)
       sp (uoptv t 115)
-      _ (!sp ? 0 (: v (unum sp) (charm? v ? (pin c 'serve v) (pdie 2 ("not a port: " + sp)))))
+      _ (!sp ? 0 (: v (uport sp) (v ? (pin c 'serve v) (pdie 2 ("not a port: " + sp)))))
       _ (pin c 'src (two? src ? src '("README.md" "doc")))
       _ (build c)
       ; --serve: hand the finished directory to kiosko, which is a separate crew member and

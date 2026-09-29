@@ -250,6 +250,267 @@ static lvm(lvm_inflate) {
 static union u const nif_inflate[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_inflate}, {lvm_ret0}};
 LvNif("inflate", nif_inflate, NULL);
 
+// ===== inflate, resumable: the stream fed a piece at a time =====
+// (inflate-new 0) -> a state cask. (inflate-feed st s) -> what s inflated to while the stream
+// wants more; (out . rest) once it ends inside s, rest the bytes behind it; () malformed; 1 past
+// INF_MAX in one feed. an empty s says the input is over: a symbol near the end is read against
+// zeros then, as inf_run reads one past its last byte, and a stream still open is torn, ().
+// the codes, tables and walk are inf_run's, so the two answer alike for every cut of a stream.
+// a symbol waits for 15 bits while more may come: an over-subscribed table answers by its
+// first writer, and a short read could land on a slot the full one would not.
+#define IS_HIST 32768u
+#define IS_MAGIC 0x6c6f76656966u
+enum { IM_HEAD, IM_STLEN, IM_STORED, IM_TABLE, IM_CLENS, IM_LENS, IM_SYM, IM_DONE };
+struct inf_st {
+ uint64_t magic, bb, tot;                       // tot: every byte out since the stream began
+ uint32_t bc, mode, last, rem, hlit, hdist, hclen, i, prev, stage, sy, len, hp;   // hp: the ring's next seat
+ uint8_t lens[320], cl[19];
+ struct inf_tabs t;                              // its three tab pointers go stale when the cask moves:
+ uint8_t hist[IS_HIST]; };                       // inf_st_fix lays them again each feed. hist: the last
+                                                 // 32 KiB out, a ring
+
+static void inf_st_fix(struct inf_st *S) {
+ S->t.lit.tab = S->t.ltab, S->t.dst.tab = S->t.dtab, S->t.cl.tab = S->t.ctab; }
+
+// one feed's output, grown by doubling
+struct inf_acc { uint8_t *b; uintptr_t n, cap; };
+static int inf_room(struct inf_acc *A, uintptr_t k) {
+ if (A->n + k <= A->cap) return 1;
+ if (A->n + k > INF_MAX) return 0;
+ uintptr_t c = A->cap;
+ while (c < A->n + k) c *= 2;
+ uint8_t *b = ai_alloc(NULL, c);
+ if (!b) return 0;
+ memcpy(b, A->b, A->n), ai_alloc(A->b, 0);
+ return A->b = b, A->cap = c, 1; }
+
+static void inf_pull(uint64_t *bb, uint32_t *bc, const uint8_t *in, uintptr_t n, uintptr_t *ip) {
+ while (*bc <= 56 && *ip < n) *bb |= (uint64_t) in[(*ip)++] << *bc, *bc += 8; }
+
+// 1 a symbol, 0 wait for input, -1 malformed
+static int inf_sym1(const struct inf_code *c, unsigned root, uint64_t *bb, uint32_t *bc,
+                    const uint8_t *in, uintptr_t n, uintptr_t *ip, int eof, unsigned *sy) {
+ unsigned u;
+ if (*bc < 15) inf_pull(bb, bc, in, n, ip);
+ if (*bc < 15 && !eof) return 0;
+ uint16_t e = c->tab[*bb & ((1u << root) - 1)];
+ if (e) *sy = e >> 4, u = e & 15;
+ else { int w = inf_walk(c, *bb, &u); if (w < 0) return -1; *sy = (unsigned) w; }
+ if (*bc < u) return -1;                         // eof, and the code runs past it
+ return *bb >>= u, *bc -= u, 1; }
+
+// the fast lane of IM_SYM: while eight input bytes remain, one wide load tops the buffer to 56
+// bits, and a literal/length, its extra, a distance and its extra are 48 at most, so no pair
+// waits. inf_run's shape. 1 at the block's end, 0 short of input, -1 malformed, -2 too big.
+// the load leaves bits above bc from a byte ip has not passed; they go before a feed returns
+static int inf_fast(struct inf_st *S, const uint8_t *in, uintptr_t n, uintptr_t *ipp,
+                    uint64_t *bbp, uint32_t *bcp, struct inf_acc *A) {
+ uint64_t bb = *bbp;
+ uint32_t bc = *bcp;
+ uintptr_t ip = *ipp;
+ int r = 0;
+ const struct inf_code *lc = &S->t.lit, *dc = &S->t.dst;
+#define FSYM(c, root, sy) do { unsigned u_; uint16_t e_ = (c)->tab[bb & ((1u << (root)) - 1)]; \
+   if (e_) (sy) = e_ >> 4, u_ = e_ & 15; \
+   else { int w_ = inf_walk(c, bb, &u_); if (w_ < 0) { r = -1; goto out; } (sy) = (unsigned) w_; } \
+   bb >>= u_, bc -= u_; } while (0)
+ while (ip + 8 <= n) {
+  unsigned sy, l, d, x;
+  bb |= LD64(in + ip) << bc, ip += 7 - (bc >> 3), bc |= 56;
+  FSYM(lc, LROOT, sy);
+  if (sy < 256) {
+   if (A->n >= A->cap && !inf_room(A, 1)) { r = -2; goto out; }
+   A->b[A->n++] = (uint8_t) sy, S->tot++; continue; }
+  if (sy == 256) { r = 1; break; }
+  if (sy > 285) { r = -1; goto out; }
+  sy -= 257, x = gz_lext[sy];
+  l = gz_lbase[sy] + (unsigned) (bb & ((1u << x) - 1)), bb >>= x, bc -= x;
+  FSYM(dc, DROOT, sy);
+  if (sy > 29) { r = -1; goto out; }
+  x = gz_dext[sy];
+  d = gz_dbase[sy] + (unsigned) (bb & ((1u << x) - 1)), bb >>= x, bc -= x;
+  if (d > S->tot) { r = -1; goto out; }
+  if (A->n + l > A->cap && !inf_room(A, l)) { r = -2; goto out; }
+  uint8_t *dp = A->b + A->n;
+  uintptr_t k = 0;
+  if (d <= A->n) {
+#if ai_wideld
+   if (d >= 8) for (; k + 8 <= l; k += 8) ai_st64(dp + k, ai_ld64(dp + k - d));
+#endif
+   for (; k < l; k++) dp[k] = dp[k - d]; }
+  else for (uintptr_t j = A->n; k < l; k++, j++)
+   dp[k] = d <= j ? A->b[j - d] : S->hist[(S->hp - (d - j)) & (IS_HIST - 1)];
+  A->n += l, S->tot += l; }
+out:
+ if (bc < 64) bb &= ((uint64_t) 1 << bc) - 1;   // what is past bc is ip's byte, read again next
+ *bbp = bb, *bcp = bc, *ipp = ip;
+ return r;
+#undef FSYM
+}
+
+// the machine: 1 the stream ended, 0 it wants more, -1 malformed, -2 past INF_MAX
+static int inf_step(struct inf_st *S, const uint8_t *in, uintptr_t n, int eof, uintptr_t *ipp, struct inf_acc *A) {
+ uint64_t bb = S->bb;
+ uint32_t bc = S->bc;
+ uintptr_t ip = 0;
+ int r = 0;
+#define NEED(k) do { if (bc < (k)) { inf_pull(&bb, &bc, in, n, &ip); if (bc < (k)) goto wait; } } while (0)
+#define BITS(k) ((unsigned) (bb & ((1ull << (k)) - 1)))
+#define DROP(k) (bb >>= (k), bc -= (k))
+#define SYM1(c, root) do { int s_ = inf_sym1(&(c), root, &bb, &bc, in, n, &ip, eof, &S->sy); \
+   if (s_ <= 0) { if (s_) goto bad; goto wait; } } while (0)
+#define EMIT(k) do { if (!inf_room(A, k)) goto big; } while (0)
+ for (;;) switch (S->mode) {
+ case IM_HEAD:
+  NEED(3);
+  S->last = BITS(1); { unsigned typ = (bb >> 1) & 3; DROP(3);
+  if (typ == 0) { DROP(bc & 7); S->mode = IM_STLEN; }
+  else if (typ == 3) goto bad;
+  else if (typ == 1) {                           // the fixed code, RFC 1951 §3.2.6
+   unsigned i;
+   for (i = 0; i < 288; i++) S->lens[i] = i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8;
+   inf_build(&S->t.lit, S->lens, 288, S->t.ltab, LROOT);
+   for (i = 0; i < 30; i++) S->lens[i] = 5;
+   inf_build(&S->t.dst, S->lens, 30, S->t.dtab, DROOT);
+   S->mode = IM_SYM, S->stage = 0; }
+  else S->mode = IM_TABLE; }
+  break;
+ case IM_STLEN:
+  NEED(32);
+  { unsigned ln = BITS(16), nl = (unsigned) (bb >> 16) & 0xffff;
+    if (((ln ^ 0xffff) & 0xffff) != nl) goto bad;
+    DROP(32); S->rem = ln; S->mode = IM_STORED; }
+  break;
+ case IM_STORED:                                 // what the bit buffer holds is whole bytes now
+  while (S->rem && bc >= 8) { EMIT(1); A->b[A->n++] = (uint8_t) BITS(8); DROP(8); S->rem--; S->tot++; }
+  if (S->rem) {
+   uintptr_t k = n - ip < S->rem ? n - ip : S->rem;
+   EMIT(k); memcpy(A->b + A->n, in + ip, k); A->n += k, ip += k, S->rem -= (uint32_t) k, S->tot += k;
+   if (S->rem) goto wait; }
+  S->mode = S->last ? IM_DONE : IM_HEAD;
+  break;
+ case IM_TABLE:
+  NEED(14);
+  S->hlit = BITS(5) + 257, S->hdist = ((bb >> 5) & 31) + 1, S->hclen = ((bb >> 10) & 15) + 4;
+  DROP(14);
+  memset(S->cl, 0, sizeof S->cl), S->i = 0, S->mode = IM_CLENS;
+  break;
+ case IM_CLENS:
+  while (S->i < S->hclen) { NEED(3); S->cl[gz_clord[S->i++]] = (uint8_t) BITS(3); DROP(3); }
+  inf_build(&S->t.cl, S->cl, 19, S->t.ctab, CROOT);
+  memset(S->lens, 0, sizeof S->lens), S->i = 0, S->prev = 0, S->stage = 0, S->mode = IM_LENS;
+  break;
+ case IM_LENS:
+  // a run may overshoot hlit + hdist, and the twin lets it: the write is clamped, the cursor not
+  while (S->i < S->hlit + S->hdist) {
+   unsigned r_, v, k;
+   if (!S->stage) { SYM1(S->t.cl, CROOT); S->stage = 1; }
+   if (S->sy < 16)       { r_ = 1; v = S->sy; }
+   else if (S->sy == 16) { NEED(2); r_ = BITS(2) + 3; DROP(2); v = S->prev; }
+   else if (S->sy == 17) { NEED(3); r_ = BITS(3) + 3; DROP(3); v = 0; }
+   else if (S->sy == 18) { NEED(7); r_ = BITS(7) + 11; DROP(7); v = 0; }
+   else goto bad;
+   for (k = 0; k < r_; k++) if (S->i + k < sizeof S->lens) S->lens[S->i + k] = (uint8_t) v;
+   S->i += r_, S->prev = v, S->stage = 0; }
+  inf_build(&S->t.lit, S->lens, S->hlit, S->t.ltab, LROOT);
+  inf_build(&S->t.dst, S->lens + S->hlit, S->hdist, S->t.dtab, DROOT);
+  S->mode = IM_SYM, S->stage = 0;
+  break;
+ case IM_SYM:                                    // stage: 0 a symbol, 1 its length's extra, 2 the
+  for (;;) {                                     // distance's symbol, 3 its extra
+   if (S->stage == 0 && ip + 8 <= n) {          // the fast lane: eight bytes on, a whole pair fits
+    int e_ = inf_fast(S, in, n, &ip, &bb, &bc, A);
+    if (e_ < 0) { if (e_ == -2) goto big; goto bad; }
+    if (e_) { S->mode = S->last ? IM_DONE : IM_HEAD; break; } }
+   if (S->stage == 0) {
+    SYM1(S->t.lit, LROOT);
+    if (S->sy < 256) { EMIT(1); A->b[A->n++] = (uint8_t) S->sy; S->tot++; continue; }
+    if (S->sy == 256) { S->mode = S->last ? IM_DONE : IM_HEAD; break; }
+    if (S->sy > 285) goto bad;
+    S->sy -= 257, S->stage = 1; }
+   if (S->stage == 1) {
+    unsigned x = gz_lext[S->sy];
+    NEED(x); S->len = gz_lbase[S->sy] + BITS(x); DROP(x); S->stage = 2; }
+   if (S->stage == 2) { SYM1(S->t.dst, DROOT); if (S->sy > 29) goto bad; S->stage = 3; }
+   { unsigned x = gz_dext[S->sy], d, l = S->len;
+     NEED(x); d = gz_dbase[S->sy] + BITS(x);
+     if (d > S->tot) goto bad;                   // a reach before the start
+     DROP(x); EMIT(l);
+     uint8_t *b = A->b;                          // behind this feed's output, the ring
+     for (uintptr_t k = A->n, e = A->n + l; k < e; k++)
+      b[k] = d <= k ? b[k - d] : S->hist[(S->hp - (d - k)) & (IS_HIST - 1)];
+     A->n += l, S->tot += l, S->stage = 0; } }
+  break;
+ case IM_DONE: r = 1; goto wait;
+ default: goto bad; }
+bad: r = -1; goto wait;
+big: r = -2;
+wait:
+ S->bb = bb, S->bc = bc, *ipp = ip;
+ return r;
+#undef NEED
+#undef BITS
+#undef DROP
+#undef SYM1
+#undef EMIT
+}
+
+static struct ai_str *inf_cask(word x) {
+ if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
+ struct ai_str *s = cask(x)->str;
+ return s && s->len == sizeof(struct inf_st) && ((struct inf_st*) s->bytes)->magic == IS_MAGIC ? s : NULL; }
+
+static ai_noinline struct ai *host_inflate_new(struct ai *g) {
+ uintptr_t sreq = str_width(sizeof(struct inf_st)), breq = Width(struct ai_cask) + Width(struct ai_tag);
+ if (!ai_ok(g = ai_have(g, sreq + breq))) return g;
+ struct ai_str *s = ini_str(bump(g, sreq), sizeof(struct inf_st));
+ memset(s->bytes, 0, sizeof(struct inf_st));
+ ((struct inf_st*) s->bytes)->magic = IS_MAGIC;
+ union u *k = bump(g, breq);
+ cask(k)->ap = lvm_cask, cask(k)->str = s;
+ tagthread(k, Width(struct ai_cask));
+ return g->sp[0] = word(k), g; }
+
+static ai_noinline struct ai *host_inflate_feed(struct ai *g) {
+ struct ai_str *cs = inf_cask(g->sp[0]);
+ if (!cs || !strp(g->sp[1])) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+ struct inf_st *S = (struct inf_st*) cs->bytes;
+ const uint8_t *in = (const uint8_t*) txt(g->sp[1]);
+ uintptr_t n = len(g->sp[1]), ip = 0, cap = 4 * n + 4096;
+ struct inf_acc A = { ai_alloc(NULL, cap), 0, cap };
+ if (!A.b) return g->sp[1] = putcharm(1), g->sp += 1, g;
+ inf_st_fix(S);
+ int r = inf_step(S, in, n, !n, &ip, &A);
+ if (!r && !n) r = -1;                           // the input is over and the stream is not
+ uintptr_t on = A.n, rn = 0;
+ uint8_t tail[8];
+ for (uintptr_t k = on < IS_HIST ? 0 : on - IS_HIST; k < on; ) {   // the output's last 32 KiB into the ring
+  uintptr_t h = S->hp, m = IS_HIST - h < on - k ? IS_HIST - h : on - k;
+  memcpy(S->hist + h, A.b + k, m), k += m, S->hp = (uint32_t) ((h + m) & (IS_HIST - 1)); }
+ if (r == 1) {                                   // the rest: whole bytes still buffered, then the feed's tail
+  S->bb >>= S->bc & 7, S->bc -= S->bc & 7;
+  for (; S->bc; S->bb >>= 8, S->bc -= 8) tail[rn++] = (uint8_t) S->bb;
+  S->mode = IM_DONE; }
+ if (r < 0) { ai_alloc(A.b, 0); return g->sp[1] = r == -2 ? putcharm(1) : ZeroPoint, g->sp += 1, g; }
+ uintptr_t tn = r == 1 ? rn + (n - ip) : 0,
+           need = str_width(on) + (r == 1 ? str_width(tn) + Width(struct ai_chain) : 0);
+ if (!ai_ok(g = ai_have(g, need))) { ai_alloc(A.b, 0); return g; }
+ struct ai_str *o = ini_str(bump(g, str_width(on)), on);
+ memcpy(o->bytes, A.b, on);
+ ai_alloc(A.b, 0);
+ if (r != 1) return g->sp[1] = word(o), g->sp += 1, g;
+ struct ai_str *t = ini_str(bump(g, str_width(tn)), tn);
+ memcpy(t->bytes, tail, rn), memcpy(t->bytes + rn, txt(g->sp[1]) + ip, n - ip);   // re-read: ai_have may move it
+ struct ai_chain *c = ini_chain(bump(g, Width(struct ai_chain)), (intptr_t) o, (intptr_t) t);
+ return g->sp[1] = word(c), g->sp += 1, g; }
+
+static LvmWrap(lvm_inflate_new, host_inflate_new)
+static LvmWrap(lvm_inflate_feed, host_inflate_feed)
+static union u const nif_inflate_new[] = {{lvm_inflate_new}, {lvm_ret0}};
+static union u const nif_inflate_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_inflate_feed}, {lvm_ret0}};
+LvNif("inflate-new", nif_inflate_new, NULL);
+LvNif("inflate-feed", nif_inflate_feed, NULL);
+
 // ===== deflate -- the C twin of apps/gz.l's DEFLATE coder, LvNif-registered =====
 // the same discipline as inflate above: (deflate s) -> the raw stream | ().
 // a twin held to the bytes: same greedy parse (chain 32, min match 3, the far-3
