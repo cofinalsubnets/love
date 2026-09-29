@@ -179,6 +179,14 @@ static intptr_t image_imm_index(word v) {
 // nch chunks' [raw offset, deflated offset] pairs and their bytes, or with none the raw blobs.
 #define CodeSegHead (2 * sizeof(uint64_t))
 #define CodeZChunk ((uintptr_t) 64 << 10)
+// the token stream likewise: [raw length, chunks], then per chunk [first word, raw offset,
+// deflated offset] and the deflated bytes, or with none the raw stream. a chunk is a run of
+// heap words, so each inflates and expands on its own
+#define StreamSegHead (2 * sizeof(uint64_t))
+#define StreamZWords ((uintptr_t) 8 << 10)
+#ifndef ImageZStream
+#define ImageZStream 1
+#endif
 // the root table is sized from the core itself: symbols, tasks, then every WORD of v0..end,
 // in this target's word. the enc and dec loops take their bound from here too, so the table's
 // length and the count written into it cannot be spelled in two units and disagree.
@@ -906,7 +914,36 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  H.nroot = nr;
  return Why(0), *Ho = H, *outnw = nw, blob; }
 
-// ..and the wire: {header, dictionary, token stream}, ai_alloc'd. fills H.nstream.
+// the stream segment, ai_alloc'd, its length in *outn: the raw stream in chunks of StreamZWords
+// words deflated apart, or raw with nch 0 when that would not shrink it
+static unsigned char *img_zstream(struct ai *g, word const *blob, uintptr_t nw, struct img_dic const *d, uintptr_t *outn) {
+ uintptr_t rn = img_stream(NULL, blob, nw, d->key, d->tk), ncap = nw / StreamZWords + 1, nch = 0, zn = 0;
+ unsigned char *raw = ai_alloc(NULL, rn + 1), *z = ImageZStream ? ai_alloc(NULL, rn + 1) : NULL, *seg = NULL;
+ uint64_t *tab = z ? ai_alloc(NULL, 3 * ncap * sizeof(uint64_t)) : NULL;
+ if (!raw) goto out;
+ img_stream(raw, blob, nw, d->key, d->tk);
+ if (tab)
+  for (uintptr_t a = 0, ra = 0; a < nw; ) {
+   uintptr_t b = nw - a < StreamZWords ? nw : a + StreamZWords,
+             rb = ra + img_stream(NULL, blob + a, b - a, d->key, d->tk);
+   intptr_t got = nch < ncap ? ai_deflate_raw(g, raw + ra, rb - ra, z + zn, rn - zn) : -1;
+   if (got <= 0) { nch = 0; break; }
+   tab[3 * nch] = a, tab[3 * nch + 1] = ra, tab[3 * nch + 2] = zn, nch++, zn += (uintptr_t) got;
+   a = b, ra = rb; }
+ if (nch && 24 * nch + zn >= rn) nch = 0;
+ uintptr_t body = nch ? 24 * nch + zn : rn;
+ if ((seg = ai_alloc(NULL, StreamSegHead + body))) {
+  ((uint64_t*) seg)[0] = rn, ((uint64_t*) seg)[1] = nch;
+  if (nch) memcpy(seg + StreamSegHead, tab, 24 * nch), memcpy(seg + StreamSegHead + 24 * nch, z, zn);
+  else memcpy(seg + StreamSegHead, raw, rn);
+  *outn = StreamSegHead + body; }
+out:
+ if (tab) ai_alloc(tab, 0);
+ if (z) ai_alloc(z, 0);
+ if (raw) ai_alloc(raw, 0);
+ return seg; }
+
+// ..and the wire: {header, dictionary, stream segment}, ai_alloc'd. fills H.nstream.
 static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, char const *cseg, uintptr_t *outlen) {
  uintptr_t bytes = nw * sizeof(word);
  // the dictionary wants a sorted copy and the copy is the blob's size again -- transient,
@@ -924,7 +961,9 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
   while (d->tk[h] != 0xffff) h = (h + 1) & (ImageDHash - 1);
   d->key[h] = d->dict[i], d->tk[h] = (uint16_t) i; }
  for (uintptr_t i = nd; i < ImageNAll; i++) d->dict[i] = nd ? d->dict[0] : 0;    // the spare seats
- uintptr_t ns = img_stream(NULL, blob, nw, d->key, d->tk), db = ImageNAll * sizeof(word);
+ uintptr_t ns = 0, db = ImageNAll * sizeof(word);
+ unsigned char *sseg = img_zstream(g, blob, nw, d, &ns);
+ if (!sseg) { ai_alloc(d, 0); return NULL; }
  H->nstream = ns;
  // the code segment ships as chunks deflated apart, whole blobs and about CodeZChunk raw
  // apiece, so a wake inflates only the chunks whose natives run. thousands of blobs share
@@ -952,10 +991,11 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
   H->ncode = cstore; }
  uintptr_t total = sizeof *H + db + ns + cstore;
  char *buf = ai_alloc(NULL, total);
- if (!buf) { if (cz) ai_alloc(cz, 0); ai_alloc(d, 0); return NULL; }
+ if (!buf) { if (cz) ai_alloc(cz, 0); ai_alloc(sseg, 0); ai_alloc(d, 0); return NULL; }
  memcpy(buf, H, sizeof *H);
  memcpy(buf + sizeof *H, d->dict, db);
- img_stream((unsigned char*)(buf + sizeof *H + db), blob, nw, d->key, d->tk);
+ memcpy(buf + sizeof *H + db, sseg, ns);
+ ai_alloc(sseg, 0);
  if (craw) {
   char *p = buf + sizeof *H + db + ns;
   ((uint64_t*) p)[0] = craw, ((uint64_t*) p)[1] = nch;
@@ -1022,6 +1062,39 @@ static int img_walk(word *base, uintptr_t nw, char *code, int lazy) {
   off += sz; }
  return 1; }
 
+// the stream segment into the pool: raw, or each chunk inflated into a scratch run and
+// expanded into its own words. every chunk consumes its bytes exactly, and the words
+// tile the image from 0 to nw; 0 refuses
+static ai_noinline int img_unstream(word *base, uintptr_t nw, unsigned char const *p, uintptr_t ns, word const *dict) {
+ uint64_t rn, nch;
+ if (ns < StreamSegHead) return 0;
+ memcpy(&rn, p, 8), memcpy(&nch, p + 8, 8);
+ p += StreamSegHead, ns -= StreamSegHead;
+ if (!nch) return rn == ns && img_expand(base, nw, p, p + ns, dict) == p + ns;
+ if (nch > ns / 24) return 0;
+ unsigned char const *z = p + 24 * nch;
+ uintptr_t zn = ns - 24 * nch, most = 0;
+ uint64_t t[6];
+ for (uint64_t k = 0; k < nch; k++) {                 // the table first: it must tile
+  memcpy(t, p + 24 * k, 24);
+  if (k + 1 < nch) memcpy(t + 3, p + 24 * (k + 1), 24);
+  else t[3] = nw, t[4] = rn, t[5] = zn;
+  if ((k == 0 && (t[0] || t[1] || t[2])) || t[0] >= t[3] || t[1] >= t[4] || t[2] >= t[5]
+      || t[3] > nw || t[4] > rn || t[5] > zn) return 0;
+  if (t[4] - t[1] > most) most = (uintptr_t) (t[4] - t[1]); }
+ unsigned char *run = ai_alloc(NULL, most);
+ if (!run) return 0;
+ int ok = 1;
+ for (uint64_t k = 0; ok && k < nch; k++) {
+  memcpy(t, p + 24 * k, 24);
+  if (k + 1 < nch) memcpy(t + 3, p + 24 * (k + 1), 24);
+  else t[3] = nw, t[4] = rn, t[5] = zn;
+  uintptr_t rl = (uintptr_t) (t[4] - t[1]);
+  ok = ai_inflate_raw(z + t[2], (uintptr_t) (t[5] - t[2]), run, rl) == (intptr_t) rl
+       && img_expand(base + t[0], (uintptr_t) (t[3] - t[0]), run, run + rl, dict) == run + rl; }
+ ai_alloc(run, 0);
+ return ok; }
+
 // the wake: `buf` holds the header, dictionary and token stream to read.
 static struct ai *img_wake(void const *buf, uintptr_t len, int kept) {
  struct image_hdr H;
@@ -1062,9 +1135,8 @@ static struct ai *img_wake(void const *buf, uintptr_t len, int kept) {
  // expand the token stream into the pool, then decode it there in place. the two passes
  // read and write one word at a time at the same index, so src and base are the same array
  // -- and a payload word arrives already seated, which is why the flat-leaf memcpys are gone.
- unsigned char const *p0 = (unsigned char const*) buf + sizeof H + db,
-                     *q = img_expand(base, nw, p0, p0 + ns, (word const*)((char const*) buf + sizeof H));
- if (!q || q != p0 + ns) goto no;                              // an image consumes its stream exactly
+ if (!img_unstream(base, nw, (unsigned char const*) buf + sizeof H + db, ns,
+                   (word const*)((char const*) buf + sizeof H))) goto no;                              // an image consumes its stream exactly
  // the natives' code: a chunk of the arena the walk names, seated a chunk at a time as its
  // natives first run when buf stays, else here and now
  char *code = NULL;
