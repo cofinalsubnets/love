@@ -155,4 +155,49 @@ hv "bzip2 -V" '^bzip2 (love' korerun bzip2 -V
 korerun cpio -t --file="$F/c.cpio" > "$o" 2>/dev/null; grep -q '\.arc1' "$o" || fail "kore cpio --file=F"
 korerun cpio --format=odc -t < "$F/c.cpio" 2> "$o" && fail "kore cpio --format=odc was taken"
 grep -q 'format odc is not here' "$o" || fail "kore cpio --format=odc: the refusal"
+# a hostile archive stays under the root: a ".." member is refused, a leading / comes
+# off, a symlink laid a member ago is neither written through nor chmod'ed through nor
+# walked through, and a set-id bit is not laid. both wires, the same members.
+E=$HO/.arcevil; rm -rf "$E"; mkdir -p "$E/tx" "$E/cx" "$E/out" "$E/tdir"
+printf 'orig\n' > "$E/target"; chmod 600 "$E/target"; chmod 700 "$E/tdir"
+cat > "$E/mk.l" <<EOF
+(borrow 'posix)
+(borrow 'tar)
+(borrow 'cpio)
+(: (en nom kind body to mode) (: t (tar-entry nom kind body) (pins t 'to to 'mode mode))
+   es [(en "../up.txt" 'file "up\n" "" 420)
+       (en "a/../../up2.txt" 'file "up\n" "" 420)
+       (en "/abs.txt" 'file "abs\n" "" 420)
+       (en "l" 'link "" "../target" 511)
+       (en "l" 'file "pwn\n" "" 511)
+       (en "d" 'link "" "../out" 511)
+       (en "d/x" 'file "pwn\n" "" 420)
+       (en "c" 'link "" "../tdir" 511)
+       (en "c" 'dir "" "" 511)
+       (en "s" 'file "suid\n" "" 2541)
+       (en "ok/f.txt" 'file "fine\n" "" 420)]
+   (wr p s) (: q (open p "w") _ (say q s) (close q))
+   _ (wr "$E/evil.tar" (tar-pack es))
+   _ (wr "$E/evil.cpio" (cpio-pack es))
+   0)
+EOF
+LOVE_NO_IMAGE= "$m" "$E/mk.l" || fail "kore tar: the hostile archives were not made"
+evil() { w=$1; x=$2
+  [ ! -e "$E/up.txt" ] && [ ! -e "$E/up2.txt" ] || fail "kore $w: a '..' member climbed out"
+  [ -f "$x/abs.txt" ] || fail "kore $w: a leading / was not taken off"
+  [ "$(cat "$E/target")" = orig ] || fail "kore $w: wrote through a symlink"
+  [ -f "$x/l" ] && [ ! -L "$x/l" ] || fail "kore $w: the member did not replace its link"
+  [ "$(stat -c %a "$E/target")" = 600 ] || fail "kore $w: chmod'ed through a symlink"
+  [ "$(stat -c %a "$E/tdir")" = 700 ] || fail "kore $w: chmod'ed a directory through a symlink"
+  [ ! -e "$E/out/x" ] || fail "kore $w: walked through a symlinked directory"
+  [ "$(stat -c %a "$x/s")" = 755 ] || fail "kore $w: laid a set-id bit"
+  [ "$(cat "$x/ok/f.txt")" = fine ] || fail "kore $w: an ordinary member was lost"; }
+korerun tar xf "$E/evil.tar" -C "$E/tx" 2> "$o"; r=$?
+[ $r -eq 2 ] || fail "kore tar: a hostile archive (rc $r)"
+grep -q "Member name contains '..'" "$o" || fail "kore tar: a '..' member not named"
+evil tar "$E/tx"
+( cd "$E/cx" && "$K" kore cpio -i -u --quiet < "$E/evil.cpio" ) 2> "$o"; r=$?
+[ $r -eq 1 ] || fail "kore cpio: a hostile archive (rc $r)"
+grep -q "contains '..'" "$o" || fail "kore cpio: a '..' member not named"
+evil cpio "$E/cx"
 echo "kore: gzip/gunzip/zcat/xz/unxz/bzip2/bunzip2/tar/cpio under kore's door ok"
