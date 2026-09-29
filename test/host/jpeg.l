@@ -34,7 +34,7 @@
    _ (test (jpeg-size j = [64 48]) (jpeg-size (enc odd 50) = [13 7])
            (two? g95) (g95 0 = 64) (g95 1 = 48) (#(g95 2) = #(grad 2)) (mse (g95 2) (grad 2) < 4)
            (two? o90) (#(o90 2) = 13 * 7 * 4) (mse (o90 2) (odd 2) < 40)
-           ((g95 2) 3 = 255)
+           (g95 2 3 = 255)
            (jpeg-decode "hello" = "not a jpeg") (jpeg-size "hello" = "not a jpeg")
            (jpeg-decode (snip j 0 300) = "cut short")
            (jpeg-pixels (snip j 0 300) = 2) (jpeg-pixels 7 = 1)

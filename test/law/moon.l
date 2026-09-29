@@ -715,19 +715,19 @@
       !(elem '(label e) (ob 2))
       (elem '(label plain) (ob 2))                  ; an unattributed global still does
       ; the underscored spelling is the same attribute
-      ((<<((cobx "__attribute__((__section__(\".u\"))) long u = 1; int main() { return 0; }") 8)) = ".u")
+      ((<<(cobx "__attribute__((__section__(\".u\"))) long u = 1; int main() { return 0; }" 8)) = ".u")
       ; a braced bitfield images its unit's bits, not a placement apiece: {0,1} is bit 1
       ; alone, and 5 with 21 above it is 5 + 21*8
-      (((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}") 2) =
-         '((label g) (raw (2 0 0 0 0 0 0 0))))
-      (((cobx "struct C { unsigned a:3; unsigned b:5; } h = {5,21}; int main(){return 0;}") 2) =
-         '((label h) (raw (173 0 0 0 0 0 0 0))))
+      ((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}" 2) =
+        '((label g) (raw (2 0 0 0 0 0 0 0))))
+      ((cobx "struct C { unsigned a:3; unsigned b:5; } h = {5,21}; int main(){return 0;}" 2) =
+        '((label h) (raw (173 0 0 0 0 0 0 0))))
       ; the unit overlays what shares its bytes -- pre lives in byte 0 of the same word
-      (((cobx "struct E { unsigned char pre; unsigned a:3; unsigned b:5; } e = {200,5,21}; int main(){return 0;}") 2) =
-         '((label e) (raw (200 173 0 0 0 0 0 0))))
+      ((cobx "struct E { unsigned char pre; unsigned a:3; unsigned b:5; } e = {200,5,21}; int main(){return 0;}" 2) =
+        '((label e) (raw (200 173 0 0 0 0 0 0))))
       ; the two special names keep their own streams and stay out of the extras
-      (((cobx "__attribute__((section(\"love_nifs\"))) static long n = 1; int main() { return 0; }") 8) = ())
-      (((cobx "__attribute__((section(\".love.image\"))) static long i = 1; int main() { return 0; }") 8) = ())))
+      ((cobx "__attribute__((section(\"love_nifs\"))) static long n = 1; int main() { return 0; }" 8) = ())
+      ((cobx "__attribute__((section(\".love.image\"))) static long i = 1; int main() { return 0; }" 8) = ())))
 
 ; --- the preprocessor (stage 5). pps runs cpp (no includes) and joins the output
 ; tokens' spellings to a string. --

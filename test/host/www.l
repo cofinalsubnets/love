@@ -35,10 +35,10 @@
               !(hop "https://a/" "gopher://b/") !(hop "gemini://a/" "https://b/")
               !(hop "http://a/" "gemini://b/") !(hop "http://a/" "ftp://b/")))
    ; ..and what a peer said is echoed without its controls
-   _ (test ((K 'wg-plain) ("a" + string 27 + "]0;x" + string 7 + "b\tc\n" + string 127 + string 0) = "a]0;xb\tc\n"))
+   _ (test (K 'wg-plain ("a" + string 27 + "]0;x" + string 7 + "b\tc\n" + string 127 + string 0) = "a]0;xb\tc\n"))
    ; what a person types
-   _ (test ((K 'ww-arg) "example.com/a" = "https://example.com/a")
-           ((K 'ww-arg) "http://x" = "http://x"))
+   _ (test (K 'ww-arg "example.com/a" = "https://example.com/a")
+           (K 'ww-arg "http://x" = "http://x"))
 
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
    root ("out/.www-" + show (getpid 0))
@@ -92,7 +92,7 @@
         (test (0 <= (K 'wg-find) d "go [1]down, [2]here or [3]mail" 0)
               (0 <= (K 'wg-find) d "References\n\n  1. " 0)
               (0 <= (K 'wg-find) d ("  1. " + at + "/sub\n  2. " + at + "/a.html#here\n  3. mailto:x@y\n") 0)
-              ((K 'wg-find) d (string 27) 0 < 0)))
+              (K 'wg-find d (string 27) 0 < 0)))
    ; the keys: a count and return follows, U names, B goes back, o opens, h and q are the help
    wkeys (\ st s (map (i \ wstep st (s i)) ^#s))
    ; the face's half of a request: take 'go, land the page it fetched
@@ -134,7 +134,7 @@
    ; a page opened fresh opens at its <main>, past the menu; g is the top and m goes back.
    ; one with no main says so, and a reload keeps where the reader was
    _ (: s3 (wnew 60 20) _ (wland s3 (get (at + "/m.html") 8)) t0 (s3 'top)
-        _ (test (0 < t0) (0 <= (K 'wg-find) ((s3 'ls) (s3 'top)) "Body" 0))
+        _ (test (0 < t0) (0 <= (K 'wg-find) (s3 'ls (s3 'top)) "Body" 0))
         _ (wkeys s3 "g") _ (test (s3 'top = 0))
         _ (wkeys s3 "m") _ (test (s3 'top = t0))
         _ (wkeys s3 "gr") _ (test (s3 'go = [(at + "/m.html") 0 0]))
@@ -174,13 +174,13 @@
    _ (: s6 (wnew 60 3) _ (wland s6 (get (at + "/a.html#here") 8))
         ; link 5 sits on the page's last line, which a screen of two rows shows
         (seen? l) (s6 'top <= l < s6 'top + 2)
-        _ (test (seen? (s6 'links 4)) (0 <= (K 'wg-find) ((s6 'ls) (s6 'links 4)) "here it is" 0))
+        _ (test (seen? (s6 'links 4)) (0 <= (K 'wg-find) (s6 'ls (s6 'links 4)) "here it is" 0))
         n0 (s6 'nl)
-        _ (pin s6 'w 30) _ ((K 'ww-fit) s6)
+        _ (pin s6 'w 30) _ (K 'ww-fit s6)
         _ (test (s6 'lw = 30) (n0 < s6 'nl) (seen? (s6 'links 4))
-                (0 <= (K 'wg-find) ((s6 'ls) (s6 'links 4)) "here it is" 0)
+                (0 <= (K 'wg-find) (s6 'ls (s6 'links 4)) "here it is" 0)
                 (aall (map (l \ #l <= 30) (s6 'ls))))
-        (test ((K 'ww-fit) s6 = 0)))
+        (test (K 'ww-fit s6 = 0)))
    ; a latin-1 file by its own <meta> reads as utf-8 (kiosko's header says utf-8, and a
    ; header wins), and a body by its header; a gzip body unzips, and a torn one is no page;
    ; a <base> is what links resolve against
@@ -188,7 +188,7 @@
         (test (0 <= (K 'wg-find) (gl 3) "caf\xc3\xa9 \xe2\x80\x9cq\xe2\x80\x9d" 0)
               (body "text/html; charset=\"windows-1252\"" () (string 128) = "\xe2\x82\xac")
               (body "text/html; charset=utf-8" () "caf\xc3\xa9" = "caf\xc3\xa9")
-              (body "text/html" "gzip" ((cite 'gz 'gz-zip) "<p>hi</p>" "" 0) = "<p>hi</p>")
+              (body "text/html" "gzip" (cite 'gz 'gz-zip "<p>hi</p>" "" 0) = "<p>hi</p>")
               (body "text/html" "gzip" "<p>hi</p>" = ())
               (lay (get (at + "/b.html") 8) 60 1 = [(at + "/sub/t.txt")])))
    ; a page fetched with a fragment opens at its place
@@ -197,7 +197,7 @@
    ; line, the link below moved down by them, a missing picture drawn as nothing, and the
    ; rows kept through a re-lay at a narrower width
    _ (: (be4 v) (foldl (\ a k (a + string ((v >> k) & 255))) "" [24 16 8 0])
-        (chunk ty d) (be4 #d + ty + d + be4 ((cite 'gz 'gz-crc32) (ty + d)))
+        (chunk ty d) (be4 #d + ty + d + be4 (cite 'gz 'gz-crc32 (ty + d)))
         (adler s) (: (go i a b) (? (#s <= i) ((b << 16) | a)
                                    (: a2 ((a + s i) % 65521) (go (i + 1) a2 ((b + a2) % 65521))))
                      (go 0 1 0))
@@ -218,15 +218,15 @@
         l0 (s7 'links 0) n0 (s7 'nl)
         (cells? l) (0 <= (K 'wg-find) l "\xe2\x96\x80" 0)
         m (<>(<(filter (a \ (K 'wg-find) <a " img " 0 = 0) (s7 'anchors))))
-        _ ((K 'ww-pictures) s7)
+        _ (K 'ww-pictures s7)
         ls (s7 'ls)
         _ (test (s7 'links 0 = l0 + 3) (s7 'nl = n0 + 3)
                 (0 <= (K 'wg-find) (ls m) "[dot]" 0) !(cells? (ls m))
                 (cells? (ls (m + 1))) (cells? (ls (m + 3))) !(cells? (ls (m + 4)))
                 (0 <= (K 'wg-find) (ls (m + 1)) "\e[38;2;0;0;200m\e[48;2;0;40;200m" 0)
                 (0 <= (K 'wg-find) (ls (s7 'links 0)) "after" 0)
-                ((s7 'imgs) ("file://" + sroot + "/nope.png") = 'none))
-        _ (pin s7 'w 30) _ ((K 'ww-fit) s7)
+                (s7 'imgs ("file://" + sroot + "/nope.png") = 'none))
+        _ (pin s7 'w 30) _ (K 'ww-fit s7)
         _ (test (#(filter cells? (s7 'ls)) = 3))
         ; a jpeg the same, its pixels the size its header says
         jp (: c (cask (8 * 6 * 4)) _ (map (i \ (pins c i (? (i % 4 = 3) 255 (i % 4 * 100)))) ^(8 * 6 * 4))
@@ -236,14 +236,14 @@
         s8 (wnew 60 20)
         _ (wland s8 (get ("file://" + sroot + "/q.html") 8))
         l8 (s8 'links 0)
-        _ ((K 'ww-pictures) s8)
-        pic ((s8 'imgs) ("file://" + sroot + "/dot.jpg"))
+        _ (K 'ww-pictures s8)
+        pic (s8 'imgs ("file://" + sroot + "/dot.jpg"))
         ; ..and a file: picture on an http page is not read
         _ (wput "/r.html" ("<p>see <img src=\"file://" + sroot + "/dot.png\" alt=\"dot\"></p>"))
         s9 (wnew 60 20)
         _ (wland s9 (get (at + "/r.html") 8))
-        _ ((K 'ww-pictures) s9)
-        rp ((s9 'imgs) ("file://" + sroot + "/dot.png"))
+        _ (K 'ww-pictures s9)
+        rp (s9 'imgs ("file://" + sroot + "/dot.png"))
         (test (two? pic) (pic 0 = 8) (pic 1 = 6) (#(pic 2) = 8 * 6 * 4)
               (s8 'links 0 = l8 + 3) (#(filter cells? (s8 'ls)) = 3)
               (rp = 'none)))

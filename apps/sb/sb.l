@@ -538,6 +538,68 @@
                     (: r (sb-record ((? (two? >args) <>args "undo ") + sh id))
                        (? r 1 (puts "sb: nothing to undo -- that patch is already lifted\n", 0))))))))))
 
+; --- ledgers: a named value that moves only by compare-and-swap. a banked name never moves;
+;     a ledger is the one thing here that does, and even it only grows: .sb/ledger/NAME is
+;     a line per entry, `hash time who`, the last one standing, each hash a blob in the store.
+;     a ledger stays in its nest -- sync carries patches, blobs and refs, never a ledger --
+;     so sessions that share one name the same nest (sb -C DIR). ---
+(:
+   (lg-path nm) (".sb/ledger/" + nm)
+   (lg-lock? nm) (: n #nm (4 < n && snip nm (n - 5) n = ".lock"))
+   (lg-name? nm) (sb-rel? nm && !(lg-lock? nm))
+   (lg-lines nm) (: t (look (lg-path nm)) (two? t ? (filter (\ l (0 < #l)) (lines <>t)) ()))
+   (lg-now nm) (: l (lg-lines nm) (? (two? l) <(words (l (#l - 1))) "none"))
+   ; the lock is a directory beside the ledger, made atomically, holding its holder's pid.
+   ; a dead holder's is taken; a live one is waited on, tries times 20 ms
+   (lg-lock nm tries)
+    (: d (lg-path nm + ".lock")
+       (? ((mkdir d 448) = ()) (lay (d + "/pid") (show (getpid 0)))
+          (: t (look (d + "/pid")) p (? (two? t) (lg-num <>t) 0)
+             (? (0 < p && nom? (still p 0)) (: _ (unlink (d + "/pid")) _ (rmdir d) (lg-lock nm tries))
+                (tries <= 0) 0
+                (: _ (rest 20) (lg-lock nm (tries - 1)))))))
+   (lg-num s) (: (go i a) (? (i < #s && 48 <= s i <= 57) (go (i + 1) (a * 10 + s i - 48)) a) (go 0 0))
+   (lg-unlock nm) (: d (lg-path nm + ".lock") _ (unlink (d + "/pid")) (rmdir d))
+   (lg-who _) (: w (getenv "SB_WHO") u (getenv "USER") (? (string? w && 0 < #w) w (string? u) u "?"))
+   ; NAME moves to FILE's text iff it stands at WAS ("none" for a new ledger) -> 1, else 0.
+   ; the new hash is printed either way it lands, even when the text was already there
+   (lg-swap nm was file)
+    (: t (? (file = "-") [1 (slurp in + "")] (look file))
+       (? !(two? t) (say err ("sb: cannot read " + file + "\n"), 0)
+          (: _ (mk ()) _ (mkparents (lg-path nm))
+             (? !(lg-lock nm 250) (say err ("sb: ledger " + nm + " is held by another writer\n"), 0)
+                (: cur (lg-now nm)
+                   r (? (cur != was) (say err ("sb: ledger " + nm + " stands at " + cur + ", not " + was + "\n"), 0)
+                        (: h (keep <>t)
+                           _ (? (h = cur) 0
+                                (lay (lg-path nm)
+                                     (foldl (\ a l (a + l + "\n")) "" (lg-lines nm)
+                                      + h + " " + show (clock 0 // 1000) + " " + lg-who () + "\n")))
+                           (puts (h + "\n"), 1)))
+                   _ (lg-unlock nm)
+                   r)))))
+   ; every ledger under dir, by name
+   (lg-names dir pre)
+    (: es (readdir dir)
+       (? !(two? es) ()
+          (catmap (\ e (: p (dir + "/" + e) st (stat p)
+                          (? (lg-lock? e) ()
+                             (two? st && (61440 & <>>st) = 16384) (lg-names p (pre + e + "/"))
+                             [(pre + e)])))
+                  (sort es))))
+   ; the verb: no NAME lists them; NAME says what it holds; --id its hash (or none); --log
+   ; every entry; --was OLD FILE moves it. 1 when it took, 0 when not, 2 when malformed
+   (sb-ledger args)
+    (: nm (? (two? args) <args "") r (? (two? args) >args ())
+       (? (#nm = 0) (: _ (map (\ n (puts (n + " " + lg-now n + "\n"))) (lg-names ".sb/ledger" "")) 1)
+          !(lg-name? nm) (say err ("sb: a ledger's name is a relative path: " + nm + "\n"), 0)
+          (atom? r) (: c (lg-now nm) b (? (c = "none") () (blob c))
+                       (? (string? b) (: _ (say out b) 1) (say err ("sb: no ledger " + nm + "\n"), 0)))
+          (<r = "--id") (: _ (puts (lg-now nm + "\n")) 1)
+          (<r = "--log") (: _ (map (\ l (puts (l + "\n"))) (lg-lines nm)) 1)
+          (<r = "--was" && #r = 3) (lg-swap nm <>r <>>r)
+          2)))                                             ; malformed: the dispatcher says the usage
+
 ; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
    sb-usage "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
@@ -560,12 +622,23 @@ usage: sb VERB ..
                   clobbered: P's write is lifted OUT, later edits stay
   log             the patches, newest first (* marks a tip)
   diff            working tree vs the recorded state (unified; exit 1 on change)
+  ledger [NAME]   a named value that moves only by compare-and-swap, its every
+                  entry kept. no NAME lists them; NAME prints what it holds
+  ledger NAME --id | --log      its hash (none when new) | every entry
+  ledger NAME --was OLD FILE    move it to FILE's text (- is stdin) iff it
+                  stands at OLD (none for a new one); exit 1 when it has moved on.
+                  ledgers stay in their nest: sync never carries one
+  -C DIR VERB ..  the verb in the nest at DIR
 "
    ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
    (usage _) (say err sb-usage, uleave 2)
    ; a verb answers its status: 0, or 1 when it did not take
    (sb-main as) (atom? as ? (usage ())
-    (<as @ "record" (sb-record (two? >as ? <>as ""), 0)
+    (<as @ "-C" (? (atom? >as) (usage ())
+                   ((chdir <>as) = ()) (sb-main >>as)
+                   (say err ("sb: cannot enter " + <>as + "\n"), 1))
+           "record" (sb-record (two? >as ? <>as ""), 0)
+           "ledger" (: r (sb-ledger >as) (? (r = 2) (usage ()) !r))
            "sync" (atom? >as ? (usage ()) !(sb-sync <>as))
            "apply" !(sb-apply >as)
            "bank" (atom? >as ? (usage ()) !(sb-bank >as))

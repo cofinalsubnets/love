@@ -37,6 +37,14 @@ rm -f "$ho/.arcx"; korerun gunzip "$ho/.arcx.gz" 2> "$g"; r=$?
 korerun gunzip -t "$ho/.arc1.gz" > "$o" || fail "kore gunzip -t"
 [ ! -s "$o" ] && [ -e "$ho/.arc1.gz" ] || fail "kore gunzip -t wrote or removed"
 korerun gunzip -t "$ho/.arcx.gz" 2> /dev/null && fail "kore gunzip -t passed a wrong crc"
+# -9 is the harder coder: never longer than the default, and gzip's own gunzip reads it
+dd if="$K" of="$ho/.arc9" bs=1024 count=300 2>/dev/null
+korerun gzip -c "$ho/.arc9" > "$ho/.arc96.gz"; korerun gzip -9 -c "$ho/.arc9" > "$ho/.arc99.gz"
+[ "$(wc -c < "$ho/.arc99.gz")" -le "$(wc -c < "$ho/.arc96.gz")" ] || fail "kore gzip -9 is longer than the default"
+korerun gunzip -c "$ho/.arc99.gz" | cmp -s - "$ho/.arc9" || fail "kore gzip -9 | gunzip round trip"
+if command -v gzip >/dev/null 2>&1; then
+  gzip -dc "$ho/.arc99.gz" | cmp -s - "$ho/.arc9" || fail "GNU gunzip of kore's gzip -9"
+fi
 hv "gzip --version" '^gzip (love' korerun gzip --version
 hv "gzip --help"    '^gzip -- the' korerun gzip --help
 hv "cpio --help"    '^usage: cpio {' korerun cpio --help

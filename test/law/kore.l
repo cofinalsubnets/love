@@ -346,7 +346,7 @@
 ; ABI register roles differ (r1 is Sp on x64 and Ip on a64), so a port that
 ; reads right and disassembles right can still be wrong. a bad one fails here
 ; loudly rather than corrupting a line split somewhere quiet.
-(: sc ((cite 'scan 'scanner) ())
+(: sc (cite 'scan 'scanner ())
    tw (cite 'scan 'walk)
    (mk o n k) (? (n <= 0) (slurp o) (put o (97 + (k % 5)), mk o (n - 1) (k * 7 + 3)))
    (agree s c i) (sc s c i = (tw s c i))
@@ -509,7 +509,7 @@
                    (t = 'rep) (<>>nd < 1 || dnul <>nd)
                    ()))
    (dnulq ns) (? (two? ns) (dnul <ns && dnulq >ns) 1)
-   (dhit nd c) (: h (any (r \ (? (string? r) ((cite 'text 'cpis) r c) (<r <= c <= <>r))) <>>nd)
+   (dhit nd c) (: h (any (r \ (? (string? r) (cite 'text 'cpis r c) (<r <= c <= <>r))) <>>nd)
                   (? <>nd !h h))
    ; one node's derivative by charm c -> a list of alternative node lists
    (dn nd c) (: t <nd
@@ -705,7 +705,7 @@
        st)
    (pg-run ls w h fl keys)                      ; the state after the keys
     (: st (pg-mk ls w h fl) _ (foldl (\ a c (pgstep st c)) 0 (pg-bytes keys)) st)
-   (pg-top ls w h fl keys) ((pg-run ls w h fl keys) 'top)
+   (pg-top ls w h fl keys) (pg-run ls w h fl keys 'top)
    ten '("l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8" "l9" "l10")
    caps '("a" "b" "c" "d" "e" "f" "ALPHA" "h" "i" "j")
    (test
@@ -754,26 +754,26 @@
       (pg-top ten 20 5 "" "/l[0-9]\n" = 1)
       (pg-top ten 20 5 "" "/l[0-9]\nn" = 2)
       (pg-top ten 20 5 "" "/l[0-9]\nnN" = 1)
-      ((pg-run ten 20 5 "" "/zz\n") 'msg = "pattern not found: zz")
-      ((pg-run ten 20 5 "" "n") 'msg = "no previous pattern")
+      (pg-run ten 20 5 "" "/zz\n" 'msg = "pattern not found: zz")
+      (pg-run ten 20 5 "" "n" 'msg = "no previous pattern")
       ; -i folds the pattern, and without it the case counts
       (pg-top caps 20 5 "i" "/alpha\n" = 6)
       (pg-top caps 20 5 "" "/alpha\n" = 0)
       ; -s squeezes a run of blank lines to one, and -e is the door out at the end
-      ((pg-mk '("a" "" "" "" "b") 20 5 "s") 'ls = '("a" "" "b"))
-      ((pg-mk '("a" "" "" "" "b") 20 5 "") 'ls = '("a" "" "" "" "b"))
-      !((pg-run ten 20 5 "e" " ") 'quit)
-      ((pg-run ten 20 5 "e" "G ") 'quit)
-      !((pg-run ten 20 5 "" "G  ") 'quit)
-      ((pg-run ten 20 5 "" "q") 'quit)
-      ((pg-run ten 20 5 "" "ZZ") 'quit) !((pg-run ten 20 5 "" "Z") 'quit)
+      (pg-mk '("a" "" "" "" "b") 20 5 "s" 'ls = '("a" "" "b"))
+      (pg-mk '("a" "" "" "" "b") 20 5 "" 'ls = '("a" "" "" "" "b"))
+      !(pg-run ten 20 5 "e" " " 'quit)
+      (pg-run ten 20 5 "e" "G " 'quit)
+      !(pg-run ten 20 5 "" "G  " 'quit)
+      (pg-run ten 20 5 "" "q" 'quit)
+      (pg-run ten 20 5 "" "ZZ" 'quit) !(pg-run ten 20 5 "" "Z" 'quit)
       ; h swaps the help page in, and q comes back out of it before it quits
-      ((pg-run ten 20 5 "" "h") 'file = "HELP")
-      ((pg-run ten 20 5 "" "hq") 'file = "t")
-      ((pg-run ten 20 5 "" "hqq") 'quit)
+      (pg-run ten 20 5 "" "h" 'file = "HELP")
+      (pg-run ten 20 5 "" "hq" 'file = "t")
+      (pg-run ten 20 5 "" "hqq" 'quit)
       ; a typed line takes a rubout, and ESC drops the whole thing
-      ((pg-run ten 20 5 "" "/l9\x7f") 'cmd = "l")
-      ((pg-run ten 20 5 "" "/l9\x1b") 'mode = 'n)
+      (pg-run ten 20 5 "" "/l9\x7f" 'cmd = "l")
+      (pg-run ten 20 5 "" "/l9\x1b" 'mode = 'n)
       ; the frame: the body, the status in standout, then the cursor on it --
       ; and a row past the end of the buffer is a tilde
       (pgframe (pg-mk '("ab" "cd" "ef") 20 3 "") = "\e[Hab\e[K\r\ncd\e[K\r\n\e[7mt  1-2/3  66%\e[0m\e[K\e[3;14H")

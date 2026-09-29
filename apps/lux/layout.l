@@ -159,11 +159,11 @@
           (: fx (pcx fp) fy (pcy fp)
              cands (filter (p \ p 0 != focus && in-dir dir fx fy (pcx p) (pcy p)) pls)
              (? !(two? cands) ()
-                ((foldl (\ b p (!(two? b) ? p (dist2 fx fy (pcx p) (pcy p) < dist2 fx fy (pcx b) (pcy b) ? p b))) () cands) 0)))))
+                (foldl (\ b p (!(two? b) ? p (dist2 fx fy (pcx p) (pcy p) < dist2 fx fy (pcx b) (pcy b) ? p b))) () cands 0)))))
 
    ; --- ||| : a list of layouts + an index; NextLayout bumps it ---
    (choice subs) ['choice 0 subs]
-   (ch-cur lay) ((lay 2) (lay 1))
+   (ch-cur lay) (lay 2 (lay 1))
    (ch-put lay cur2) (: idx (lay 1) subs (lay 2)                       ; replace the active sublayout
                       ['choice idx (map2 (\ i s (i = idx ? cur2 s)) (jot #subs) subs)])
    (ch-tile lay rect z) (: res (lay-tile (ch-cur lay) rect z)

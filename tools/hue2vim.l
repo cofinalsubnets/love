@@ -85,7 +85,7 @@
        (? (tag = 'eol)
            (each a (o \ line ("syn match " + g + " \"" + o + ".*$\" contains=LoveTodo")))
           (tag = 'span)
-           (: q (string a) e (string ((hue-rule r) 2))
+           (: q (string a) e (string (hue-rule r 2))
               (line ("syn region " + g + " start='" + q + "' skip='" + e + e + e + e
                      + "\\|" + e + e + q + "' end='" + q + "'")))
           (tag = 'mark)

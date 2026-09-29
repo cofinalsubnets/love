@@ -28,7 +28,7 @@
    ; floor a floor; a character the palette lacks is a floor drawn as itself
    _ (test (4 = #(keys (L 'tiles))) (wall? L 0 0) (" " = (kind-of L 32) 'gl) (wall? L 0 12) (27 = (kind-of L 126) 'fg)
              !(wall? L 3 1) (wall? L 2 0) (wall? L -1 5) (wall? L 4 99)      ; off the map is wall
-             !((kind-of L 120) 'solid) ("x" = (kind-of L 120) 'gl))
+             !(kind-of L 120 'solid) ("x" = (kind-of L 120) 'gl))
 
    ; --- the map: moves, walls, a thing ---
    g (story-new L)

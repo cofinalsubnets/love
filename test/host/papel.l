@@ -185,14 +185,14 @@ Only a paragraph, so the title has to come from the meta block.
    _ (test
       (0 < #(finds one "<h1 id=\""))             ; from the head-1
       (has? (finds two "content=\"") "Two From Meta")
-      ((cite 'papel 'ptitle) ((cite 'lapiz 'mdread) (get-file "src/two.md")) "x") = "Two From Meta"
-      ((cite 'papel 'ptitle) ((cite 'lapiz 'mdread) (get-file "src/three.md")) "three.md") = "three.md")
+      (cite 'papel 'ptitle (cite 'lapiz 'mdread (get-file "src/two.md")) "x") = "Two From Meta"
+      (cite 'papel 'ptitle (cite 'lapiz 'mdread (get-file "src/three.md")) "three.md") = "three.md")
 
    ; --- the index lists every page, each with its blurb ------------------------------
    _ (: ih (finds idx "href=\"")
         _ (test (has? ih "one.html") (has? ih "two.html") (has? ih "three.html")
                   ; the blurb is the first paragraph, clipped on a word boundary
-                  (0 < #((cite 'papel 'blurb) ((cite 'lapiz 'mdread) (get-file "src/one.md"))))))
+                  (0 < #(cite 'papel 'blurb (cite 'lapiz 'mdread (get-file "src/one.md"))))))
 
    ; --- the slug is a function of the text, and nothing else -------------------------
    _ (: slug (cite 'papel 'slug)
@@ -216,10 +216,10 @@ Only a paragraph, so the title has to come from the meta block.
       (10 < rn)                                   ; it built a real site
       (0 = (build rconf)))                        ; ..and is at once up to date
    _ (: (page f) (: q (open (dir + "/love/" + f) "r") (hot? q ? (slurp q) ""))
-        _ (each (filter (\ f ((cite 'papel 'ends?) f ".html")) (readdir (dir + "/love")))
+        _ (each (filter (\ f (cite 'papel 'ends? f ".html")) (readdir (dir + "/love")))
                 (\ f (: h (page f)
                         (test (0 < #h)
-                                ((cite 'papel 'ends?) h "</html>\n")
+                                (cite 'papel 'ends? h "</html>\n")
                                 (anchored? h)))))
         0)
 

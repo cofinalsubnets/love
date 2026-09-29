@@ -62,8 +62,8 @@
                  !(ed-verify pub m (snip sig 0 63)))
          0)))
 ; an S at or past the group order is refused, not reduced
-(: ssht-s (le-bytes (le-num (snip (unhex ((ssht-ed 0) 3)) 32 64) + ed-l)))
-(test !(ed-verify (unhex ((ssht-ed 0) 1)) "" (snip (unhex ((ssht-ed 0) 3)) 0 32 + ssht-s)))
+(: ssht-s (le-bytes (le-num (snip (unhex (ssht-ed 0 3)) 32 64) + ed-l)))
+(test !(ed-verify (unhex (ssht-ed 0 1)) "" (snip (unhex (ssht-ed 0 3)) 0 32 + ssht-s)))
 
 ; --- wire -------------------------------------------------------------------------
 (test
@@ -118,7 +118,7 @@ fW2MNFrwA/N0XZFA==
    ssht-khp ((cwd 0) + "/out/.ssht-kh")
    ssht-nm (cite 'ssh-cli 'kh-name)
    ssht-kh (\ txt nm key (: q (open ssht-khp "w") _ (say q txt) _ (close q)
-                            ((cite 'ssh-cli 'kh-check) ssht-khp nm (b64d key)))))
+                            (cite 'ssh-cli 'kh-check ssht-khp nm (b64d key)))))
 (test
  ((ssht-nm "Host.Example" 22) = "host.example")
  ((ssht-nm "Host.Example" 2222) = "[host.example]:2222")
@@ -193,7 +193,7 @@ fW2MNFrwA/N0XZFA==
                       (pins r 's (fdopen <p) 'pend "" 'rseq 0 'sseq 0 'busy 0,
                        pins w 's (fdopen >p) 'pend "" 'rseq 0 'sseq 0 'busy 0,
                        [r w])))
-   ssht-fed (\ ps (: e (ssht-ends 0) _ (each ps (p \ ssh-send (e 1) p)) _ (close ((e 1) 's)) e)))
+   ssht-fed (\ ps (: e (ssht-ends 0) _ (each ps (p \ ssh-send (e 1) p)) _ (close (e 1 's)) e)))
 (test
  (: e (ssht-fed [(u8 2 + sstr "") (u8 20 + "x")]) _ (pin (e 0) 'strict 1) (nil? (ssh-next (e 0))))
  (: e (ssht-fed [(u8 2 + sstr "") (u8 20 + "x")]) ((ssh-next (e 0)) = u8 20 + "x"))

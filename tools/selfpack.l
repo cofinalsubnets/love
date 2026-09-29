@@ -41,7 +41,7 @@
    sp-ign? (cite 'sb 'ign?)
    ; sb's directory-only built-ins ride as plain rules here: this walk has no stat to
    ; ask, and the cut knows its own tree holds no file by those names
-   (sp-rules drops) (((cite 'sb 'igs) 0) + (cite 'sb 'igsdir) + sp-own + drops)
+   (sp-rules drops) ((cite 'sb 'igs 0) + (cite 'sb 'igsdir) + sp-own + drops)
    ; handed to the walk, not run after it, so a rejected directory is never descended
    ; into. .sbignore itself has to ride: a seeded tree cuts itself with the same law.
    (sp-keep? rules nom) ((nom = ".sbignore") || !(sp-ign? nom rules))
@@ -52,14 +52,20 @@
           _ (pin e 'nom (top + "/" + tar-get e 'nom ""))
           (sp-take >es top (e . acc))))
 
-   ; the root leads, top follows wearing its mode, then STAMP, then the rest re-homes
-   ; under top. shared by both passes, so their digests are comparable.
+   ; the root leads, top follows wearing its mode, then STAMP, then moon's toolchain slice
+   ; (include/ and lib/, what apps/moon/moon.l's mblob reads when there is no nest), then
+   ; the rest, each re-homed under top: a nestless compile stops reading past the slice
+   ; instead of inflating the tree for it. shared by both passes, so their digests compare.
+   (sp-slice? e) (: n (tar-get e 'nom "")
+                    (starts? n "apps/moon/include/" || starts? n "apps/moon/lib/"
+                     || n = "apps/moon/include" || n = "apps/moon/lib"))
    (sp-lev es top stamp build)
     (: root <es
        te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
        se (tar-entry "STAMP" 'file (build + "\n"))
-       (tar-level (root . te . sp-take (se . >es) top ()) stamp))
+       rest (filter sp-slice? >es + filter (e \ !(sp-slice? e)) >es)
+       (tar-level (root . te . sp-take (se . rest) top ()) stamp))
 
    ; the cut that reads: pack, hash, and write when the content actually moved.
    (sp-cut arch side top stamp build rules)
@@ -78,7 +84,7 @@
                 (: u (gz-unzip <>have) (two? u && <>u = a)))
        (? fresh 0
           adopt (sp-write side h)
-          (: z (gz-zip a "" 0)
+          (: z (gz-zip9 a "" 0)                ; written once, carried in every artifact: the harder coder
              (puts ("LOVE\t" + arch), putc 10, sp-write arch z, sp-write side h, 0))))
 
    (sp-main av)

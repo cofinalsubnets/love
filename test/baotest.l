@@ -72,10 +72,10 @@
   ("abc" = (edtext (typed (ednew ()) [98 99 -5 97])))              ; home, a
   ("abc" = (edtext (typed (ednew ()) [97 -5 -6 98 99])))           ; home, end
   ("ac" = (edtext (typed (ednew ()) [97 98 99 -1 -1 -4])))         ; left left del
-  (0 = ((typed (ednew ()) [97]) 'ev))                              ; a key taken
-  (10 = ((typed (ednew ()) [97 13]) 'ev))                          ; enter is 10
-  (27 = ((typed (ednew ()) [97 27]) 'ev))                          ; escape is the caller's
-  (-8 = ((typed (ednew ()) [97 -8]) 'ev))                          ; up with no line above
+  (0 = (typed (ednew ()) [97] 'ev))                                ; a key taken
+  (10 = (typed (ednew ()) [97 13] 'ev))                            ; enter is 10
+  (27 = (typed (ednew ()) [97 27] 'ev))                            ; escape is the caller's
+  (-8 = (typed (ednew ()) [97 -8] 'ev))                            ; up with no line above
   ("a" = (edtext (typed (ednew ()) [97 -8 -9])))                  ; ..and the text stands
   (: t (typed (ed ['(1 2)] () () ()) [-8]) (0 = (t 'ev) && '(1 2 10) = (edchars t)))  ; up with a line above is a motion
    ; --- utf-8: the keys arrive a byte at a time and the cursor moves by character.
@@ -102,8 +102,8 @@
    ; --- edframe / eddetach / edempty? / edparses? ---
   ([() '(1) ()] = (fr () '(1) () ()))
   ('(((1)) (2 3) (4) (5)) = (fr ['(1)] '(2 3) '(4) ['(5)]))
-  (() = ((eddetach (edh () () () () () () ())) 'hu))
-  (: cur (fr () '(1) () ()) ([cur] = ((eddetach (edh () () () () () () cur)) 'hu)))
+  (() = (eddetach (edh () () () () () () ()) 'hu))
+  (: cur (fr () '(1) () ()) ([cur] = (eddetach (edh () () () () () () cur) 'hu)))
   (: cur (fr () '(1) () ()) old (fr () '(9) () ())
      (: t (eddetach (edh () () () () [old] () cur)) ([cur old] = (t 'hu) && () = (t 'cur))))
   (edempty? (ed () () () ()))

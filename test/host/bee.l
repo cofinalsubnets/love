@@ -1,25 +1,29 @@
-; --- test/host/crow.l: crow, the coding agent, against a model played here -----------
+; --- test/host/bee.l: bee, the coding agent, against a model played here -----------
 ; a twirled listener plays the model on loopback, each connection answered by the next
-; canned stream, and crow runs as a child of its own in a scratch directory with HOME
-; there too, so no one's ~/.love/etc/crow.l speaks. the wire is plain http to this
-; machine, which crow allows and carries no key over.
-;   cat test/00-init.l test/host/crow.l | out/love
+; canned stream, and bee runs as a child of its own in a scratch directory with HOME
+; there too, so no one's ~/.love/etc/bee.l speaks. the wire is plain http to this
+; machine, which bee allows and carries no key over.
+;   cat test/00-init.l test/host/bee.l | out/love
 (borrow 'json)
 
 (: cr-home (cwd 0)
    cr-love (: l <cmdline (l 0 = 47 ? l (cr-home + "/" + l)))
-   cr-app (cr-home + "/apps/crow.l")
+   cr-app (cr-home + "/apps/bee.l")
    ; every path this lays is the pid's own, so two runs over one out/ keep apart
-   cr-root (cr-home + "/out/.crow-" + show (getpid 0))
+   cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
    (cr-put d nm s) (: p (open (d + "/" + nm) "w") _ (say p s) (close p))
    (cr-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
-   (cr-dir nm cfg) (: d (cr-root + "/" + nm) _ (mkdir d 493) _ (cr-put d ".crow.l" cfg) d)
+   (cr-dir nm cfg) (: d (cr-root + "/" + nm) _ (mkdir d 493) _ (cr-put d ".bee.l" cfg) d)
 
    ; --- the model: 'q the answers still to give, 'got the requests heard, newest first ---
    cr-box {'q () 'got ()}
-   cr-port 7487
-   cr-l (listen cr-port)
+   ; a port of this run's own: two gates at once must not share a mock, so start from the
+   ; pid and step past any port already taken
+   cr-pl (: (try p n) (: l (listen p) (? (!(nom? l) || n <= 0) [p l] (try (p + 1) (n - 1))))
+            (try (20000 + getpid 0 % 20000) 200))
+   cr-port <cr-pl
+   cr-l (cr-pl 1)
    cr-header (cite 'kore 'wg-header)
    cr-digits (cite 'kore 'wg-digits)
    cr-find (cite 'kore 'wg-find)
@@ -37,7 +41,7 @@
        _ (flush c)
        (close c))
    cr-srv (twirl (\ _ ((: (g k) (: _ (await cr-l) c (accept cr-l) _ (cr-serve c) (g k))) 0)) 0)
-   (cr-body req) (: k (cr-find req "\r\n\r\n" 0) ((json-read (snip req (k + 4) #req)) 1))
+   (cr-body req) (: k (cr-find req "\r\n\r\n" 0) (json-read (snip req (k + 4) #req) 1))
 
    ; a stream said as server-sent events, whole or chunked
    (cr-sse evs) (foldl (\ a e (a + "data: " + (string? e ? e (json-show e)) + "\n\n")) "" evs)
@@ -49,7 +53,7 @@
                          (go (i + 29) (a + (cr-hex #d) + "\r\n" + d + "\r\n"))))
           (go 0 "")))
 
-   ; crow in its directory -> [exit output], its stdout and err one pipe. the model is
+   ; bee in its directory -> [exit output], its stdout and err one pipe. the model is
    ; served meanwhile: see parks only this task, gather never blocks
    (cr-reap p) (: s (gather p) (? (two? s) <s (nom? s) -1 (: _ (rest 5) (cr-reap p))))
    (cr-run d env args)
@@ -71,6 +75,7 @@
 ; this binary's lush, and its output goes back as a tool message on the call's id
 (: cr-a (cr-dir "oai" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model mock-model)\n"))
    _ (cr-put cr-a "AGENTS.md" "the frog rule: always croak twice\n")
+   _ (cr-put cr-a "CLAUDE.md" "the toad rule: hop once\n@AGENTS.md\n")
    call1 "{\"command\": \"printf hi > ma"
    call2 "de.txt; echo made\"}"
    _ (cr-serves
@@ -103,6 +108,7 @@
       (json-true = b1 "stream_options" "include_usage")       ; the gauge's count
       ("system" = m1 0 "role")
       (cr-in (m1 0 "content") "the frog rule")               ; the directory's AGENTS.md
+      (cr-in (m1 0 "content") "the toad rule")               ; ..and its CLAUDE.md beside it
       (cr-in (m1 0 "content") "platform: ")                  ; the environment, from love's own verbs
       (cr-in (m1 0 "content") "date: 20")
       (cr-in (m1 0 "content") " source DIR")                 ; the briefing: how to lay the source
@@ -160,7 +166,124 @@
       !(cr-in (h 0) "sk-never-sent") !(cr-in (h 1) "sk-never-sent"))
    0)
 
-; --- what crow will not do ---------------------------------------------------------------
+; --- sessions and messages -----------------------------------------------------------------
+; a session named by BEE_NAME settles in HOME's hive for its run. its shell sends it a
+; message through the verb, and list_sessions finds it; the message rides the next request
+; beside the tool results, and the cell is gone once the run ends
+(: cr-m (cr-dir "talk" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
+   (ev t x) (pin x "type" t)
+   (use i id nm in)
+    [(ev "content_block_start" {"index" i "content_block" {"type" "tool_use" "id" id "name" nm "input" {}}})
+     (ev "content_block_delta" {"index" i "delta" {"type" "input_json_delta" "partial_json" (json-show in)}})
+     (ev "content_block_stop" {"index" i})]
+   _ (cr-serves
+      [(cr-ok (cr-sse ([(ev "message_start" {"message" {"id" "m1" "content" []}})]
+                       + use 0 "s1" "shell" {"command" "love bee --send tester 'hello from a shell'"}
+                       + use 1 "s2" "list_sessions" {}
+                       + [(ev "message_delta" {"delta" {"stop_reason" "tool_use"}}) (ev "message_stop" {})])))
+       (cr-ok (cr-sse [(ev "content_block_start" {"index" 0 "content_block" {"type" "text" "text" ""}})
+                       (ev "content_block_delta" {"index" 0 "delta" {"type" "text_delta" "text" "Heard."}})
+                       (ev "content_block_stop" {"index" 0})
+                       (ev "message_delta" {"delta" {"stop_reason" "end_turn"}})
+                       (ev "message_stop" {})]))])
+   ; an sb hub whose queue/ ledger the prompt should quote
+   hub (cr-root + "/hub")
+   _ (mkdir hub 493)
+   _ (cr-put hub "q" "leader tester\n66 tester bee green\n")
+   _ (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--was" "none" (hub + "/q")])
+   r (cr-run cr-m ("BEE_NAME=tester SB_HUB='" + hub + "'") "-y 'talk to yourself'")
+   h (cr-heard 0)
+   b1 (cr-body (h 0))
+   u2 (: us (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h 1) "messages"))
+         (<us "content"))
+   (block ty) (filter (\ b (b "type" = ty)) u2)
+   res (map (\ b (b "content")) (block "tool_result"))
+   txt (foldl (\ a b (a + b "text")) "" (block "text"))
+   after (cr-run cr-m "" "--list")
+   _ (test
+      (0 = <r)
+      (2 = #h)
+      (cr-in (b1 "system") "session named tester")            ; the prompt names the session
+      (cr-in (b1 "system") "--- sb ledger queue/main")        ; and quotes the hub's queue
+      (cr-in (b1 "system") "66 tester bee green")
+      (elem "send_message" (map (\ t (t "name")) (b1 "tools")))
+      (cr-in (res 0) "[exit 0]")
+      (cr-in (res 1) "tester (you)")
+      (cr-in txt "<message from=\"tester\">") (cr-in txt "hello from a shell")
+      (cr-in (after 1) "no bee sessions are running"))
+   0)
+
+; --- jobs and workers -----------------------------------------------------------------------
+; a job starts at once and runs in its own group; check_job sees it running and stop_job ends
+; it. a worker spawned from a shell settles in its own directory, serves, and stops
+(: cr-j (cr-dir "jobs" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
+   (ev t x) (pin x "type" t)
+   (one id nm in)
+    (cr-ok (cr-sse [(ev "content_block_start" {"index" 0 "content_block" {"type" "tool_use" "id" id "name" nm "input" {}}})
+                    (ev "content_block_delta" {"index" 0 "delta" {"type" "input_json_delta" "partial_json" (json-show in)}})
+                    (ev "content_block_stop" {"index" 0})
+                    (ev "message_delta" {"delta" {"stop_reason" "tool_use"}})]))
+   (done _) (cr-ok (cr-sse [(ev "message_delta" {"delta" {"stop_reason" "end_turn"}})]))
+   _ (cr-serves [(one "a" "start_job" {"command" "sleep 30; echo never"})
+                 (one "b" "check_job" {"id" "j1"})
+                 (one "c" "stop_job" {"id" "j1"})
+                 (done 0)])
+   r (cr-run cr-j "BEE_NAME=jobber" "-y 'run and stop a job'")
+   h (cr-heard 0)
+   (res k) (: u (filter (\ m (m "role" = "user" && !(string? (m "content")))) (cr-body (h k) "messages"))
+              ((u (#u - 1)) "content" 0 "content"))
+   wt (cr-j + "/wt")
+   _ (mkdir wt 493)
+   _ (cr-put wt ".bee.l" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n"))
+   _ (cr-serves [(done 0)])
+   sp (cr-run cr-j "" ("--spawn w1 '" + wt + "' 'look around'"))
+   ls (cr-run cr-j "" "--list")
+   st (cr-run cr-j "" "--stop w1")
+   _ (rest 300)
+   gone (cr-run cr-j "" "--list")
+   _ (test
+      (0 = <r) (4 = #h)
+      (cr-in (res 1) "started j1")
+      (cr-in (res 2) "running for") (cr-in (res 2) "sleep 30")
+      (cr-in (res 3) "stopped j1")
+      (0 = <sp) (cr-in (sp 1) "w1 is serving")
+      (cr-in (ls 1) "w1  idle") (cr-in (ls 1) "/wt")
+      (0 = <st) (cr-in (st 1) "stopped w1")
+      !(cr-in (gone 1) "w1"))
+   0)
+
+; --- queue watching ---------------------------------------------------------------------------
+; a serving bee with a row in its hub's queue hears the row it stacks on move and the leader
+; change, and hears nothing of its own edits
+(: cr-w (cr-dir "watch" "")
+   hub (cr-w + "/hub") wt (cr-w + "/wt")
+   _ (mkdir hub 493) _ (mkdir wt 493)
+   _ (cr-put wt ".bee.l" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n(queue-watch 1)\n"))
+   (ok0 _) (cr-ok (cr-sse [{"type" "message_delta" "delta" {"stop_reason" "end_turn"}}]))
+   (queue ls) (: _ (cr-put cr-w "q" (foldl (\ a l (a + l + "\n")) "" ls))
+                 id (: r (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--id"]) (? (two? r) (: s >r (snip s 0 (#s - 1))) "none"))
+                 (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--was" id (cr-w + "/q")]))
+   _ (queue ["leader bob" "4 bob b1 aaa h1 gating" "5 alice b2 h1 h2 waiting"])
+   _ (cr-serves [(ok0 0) (ok0 0) (ok0 0)])
+   sp (cr-run cr-w ("SB_HUB='" + hub + "'") ("--spawn alice '" + wt + "' 'wait for the queue'"))
+   _ (rest 2500)
+   _ (queue ["leader carol" "4 bob b1 aaa h9 green" "5 alice b2 h1 h2 waiting"])
+   _ (rest 3500)
+   _ (queue ["leader carol" "4 bob b1 aaa h9 green" "5 alice b2 h9 h4 gating"])  ; her own edit
+   _ (rest 3500)
+   h (cr-heard 0)
+   st (cr-run cr-w "" "--stop alice")
+   said (foldl (\ a r (a + r)) "" h)
+   _ (test
+      (0 = <sp)
+      (2 = #h)                                                  ; the prompt, then one wake
+      (cr-in said "from=\\\"queue-watch\\\"")
+      (cr-in said "the row yours stacks on moved: 4 (bob, b1) at h9, green (was h1, gating)")
+      (cr-in said "the leader is now carol")
+      (0 = <st))
+   0)
+
+; --- what bee will not do ---------------------------------------------------------------
 ; plain http off this machine is refused before any dial; a model that says no is told;
 ; a remote endpoint wants its key before anything is sent
 (: cr-c (cr-dir "far" "(api openai)\n(url \"http://192.0.2.1:9/v1/chat/completions\")\n(model m)\n")
@@ -168,13 +291,13 @@
    cr-d (cr-dir "no" ("(api openai)\n(url \"" + cr-url + "/v1/chat/completions\")\n(model m)\n"))
    _ (cr-serves ["HTTP/1.1 400 Bad Request\r\ncontent-type: application/json\r\n\r\n{\"error\": {\"message\": \"no such model\"}}"])
    rn (cr-run cr-d "" "'hello'")
-   cr-e (cr-dir "key" "(key-env CROW_TEST_NO_KEY)\n")
+   cr-e (cr-dir "key" "(key-env BEE_TEST_NO_KEY)\n")
    rk (cr-run cr-e "" "'hello'")
    _ (test
       (cr-in (rf 1) "plain http reaches this machine alone")
       (cr-in (rn 1) "400") (cr-in (rn 1) "no such model")
-      (1 = <rk) (cr-in (rk 1) "set CROW_TEST_NO_KEY"))
+      (1 = <rk) (cr-in (rk 1) "set BEE_TEST_NO_KEY"))
    0)
 
 (hark ["rm" "-rf" cr-root])
-(test_fin (), puts "crow: ok", putc 10, 0)
+(test_fin (), puts "bee: ok", putc 10, 0)
