@@ -1226,7 +1226,7 @@ every tool answers --help and --version, and -h where the letter is free
    korepreds {'head (as \ (: p (uclip-args "head" as) (kregs? <>p)))
               'tail (as \ (: p (uclip-args "tail" as) (kregs? <>p)))
               'cut (as \ (: p (cut-args as) (kregs? (p 5))))
-              'grep (as \ (: t (tablet 0) o (grep-opt as t) (two? o && kregs? (grep-fs o))))}
+              'grep (as \ (: t (tablet 0) o (grep-opt as t) (two? o && kregs? (grep-fs t o))))}
    (koretraits k) (? (elem k korebuiltin) ['builtin 'self] (elem k koreself) ['self]
                      (elem k korefiles) [('self . kfiles?)]
                      (lit? (peep korepreds k ())) [('self . peep korepreds k ())] ())
