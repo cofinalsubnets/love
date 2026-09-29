@@ -66,7 +66,7 @@
    f2 (echofoo ())
    _ (test (has? <f1 "<bar>") (f1 1 = 0) (has? <f2 "<parent>") ((getenv "FOO") = "parent")
            ('badarg = tetherenv ["true"] ["NOEQ"]) ('badarg = tetherenv ["true"] ["=x"])
-           ('badarg = tetherenv ["true"] "FOO=bar"))
+           ('badarg = tetherenv ["true"] "FOO=bar") ('badarg = tetherenv ["true"] ["FOO=b\0ar"]))
    ; the refusals
    d (run "bad" ["-T" (user + "@127.0.0.1") "true"])
    e (run "id" ["-T" "nobody-here@127.0.0.1" "true"])

@@ -107,7 +107,7 @@ static struct ai *argv_env_marshal(struct ai *g, char ***cavp, int envat, char *
  if (env != ZeroPoint && !chainp(env)) return g;             // misuse: env not a list
  for (word p = env; chainp(p); p = B(p)) {
   word e = A(p);
-  if (!strp(e) || !len(e) || txt(e)[0] == '=' || !memchr(txt(e), '=', len(e))) return g;
+  if (!cstrp(e) || !len(e) || txt(e)[0] == '=' || !memchr(txt(e), '=', len(e))) return g;   // K=V, no NUL inside
   envc++, etotal += len(e) + 1; }
  uintptr_t aw = argc + 2 + b2w(total), ew = envc ? envc + 1 + b2w(etotal) : 0;
  if (!ai_ok(g = ai_have(g, aw + ew))) return g;
