@@ -17,9 +17,8 @@
 // again when it exits, so `sh -c "tower; sh"` is a game and then a shell), data-ram the
 // RAM in MiB, data-cols the most columns worth reading, which is what settles how large a
 // glyph is drawn. a query string names the same four (?boot=tower) and wins where it
-// does: the attributes are the page's and the link is the reader's. a link is anyone's, so
-// what it may name is held short: a module or image off this page's own origin, and a boot
-// line that is one program's bare name -- any other line is shown and waits for a click.
+// does: the attributes are the page's and the link is the reader's. a link's module or
+// image is taken only off this page's own origin; its boot line runs aboard as it stands.
 //
 // the machine takes its RAM at boot and never gives it back, so a default is a promise
 // about what runs on it. 1024 is what the tower wants, measured: at 256 the walk answers a
@@ -28,13 +27,6 @@
 import { ctl_n, ring_n, ring_at, shared_n, scan_at, scan_n, c_sh, c_st,
          point_at, point_n, c_ph, c_pt, paste_at, paste_n, c_xh, c_xt,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live, pageurl } from './cpu.mjs';
-
-// --- what a link may ask ----------------------------------------------------------------
-// a link's boot line against the page's own: -> [line, ask]. one program's bare name, or
-// the page's own line, boots as it stands; anything else boots only once the reader agrees
-export function linkboot(asks, own) {
-  if (asks === null || asks === own || /^[a-z][a-z0-9_-]{0,31}$/.test(asks)) return [asks ?? own, false];
-  return [asks, true]; }
 
 // --- the glass: a canvas as REAL pixels ------------------------------------------------
 // the backing store is the element's own box times a ratio settled here, and
@@ -250,13 +242,12 @@ export async function loveMachine(root) {
   // rendering can only disagree with the first. what is left for the page to say is the
   // machine failing to start or stopping, which the canvas cannot show.
   const halt = t => { status.textContent = t; status.hidden = false; canvas.hidden = true; };
-  // a question for the reader, answered by a click: the text, a line shown whole, two
-  // buttons. -> true for the first. one at a time; a later one waits its turn.
+  // a question for the reader, answered by a click: the text, two buttons. -> true for
+  // the first. one at a time; a later one waits its turn.
   let asked = Promise.resolve();
-  const offer = (text, line, yes, no) => asked = asked.then(() => new Promise(done => {
+  const offer = (text, yes, no) => asked = asked.then(() => new Promise(done => {
     const box = document.createElement('div'), p = document.createElement('p');
     box.className = 'ask'; p.textContent = text; box.append(p);
-    if (line !== null) { const c = document.createElement('code'); c.textContent = line; box.append(c); }
     const row = document.createElement('p');
     for (const [label, v] of [[yes, true], [no, false]]) {
       const b = document.createElement('button');
@@ -264,13 +255,6 @@ export async function loveMachine(root) {
       b.addEventListener('click', () => { box.remove(); done(v); });
       row.append(b); }
     box.append(row); root.append(box); }));
-  // the boot line: the page's own, or a link's when it is one program's bare name; a link
-  // naming anything more runs only once the reader has read it and said so
-  const bootline = async () => {
-    const own = root.dataset.boot ?? 'sh --login', [line, ask] = linkboot(link.get('boot'), own);
-    if (!ask) return line;
-    status.textContent = 'the link asks for a boot line.';
-    return await offer('this link asks the machine to run:', line, 'run it', 'the plain shell') ? line : own; };
 
   if (!memory64()) return halt('this browser has no wasm memory64; the machine cannot boot here.');
   // a browser hands a page the memory the machine runs on only from a SECURE origin --
@@ -417,7 +401,7 @@ export async function loveMachine(root) {
   const lifted = (m) => {
     if (m.error) { console.warn('lift ' + m.lift + ': errno ' + m.error); return; }
     const name = m.lift.split('/').pop() || 'lift';
-    offer(`the machine offers a file: ${name}, ${m.bytes.length} bytes.`, null, 'save', 'dismiss').then(yes => {
+    offer(`the machine offers a file: ${name}, ${m.bytes.length} bytes.`, 'save', 'dismiss').then(yes => {
       if (!yes) return;
       const a = document.createElement('a'), url = URL.createObjectURL(new Blob([m.bytes], { type: 'application/octet-stream' }));
       a.href = url; a.download = name;
@@ -485,7 +469,7 @@ export async function loveMachine(root) {
     spun += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
     for (; Math.abs(spun) >= 48; spun -= Math.sign(spun) * 48) send(0, spun < 0 ? 64 : 65, e); },
     { passive: false });
-  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: await bootline(), fb, image },
+  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 1024)), cmd: at('boot', 'sh --login'), fb, image },
                   image ? [wasm, image] : [wasm]);
   // the box reflowed -- the window resized, or the island's column did. the new size goes
   // into the ring and the kernel re-makes its console at it; the canvas itself is left

@@ -112,7 +112,6 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
 .machine .ask { background: var(--pre); border: 1px solid var(--rule); border-radius: 4px;
                 padding: .5em .7em; margin-top: .6em; color: var(--fg); }
 .machine .ask p { margin: 0; }
-.machine .ask code { display: block; margin: .4em 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 
 /* --- chips (runnable examples) + the crew roster + the glossary --- */
 .chip { display: inline-block; background: var(--pre); border: 1px solid var(--rule);

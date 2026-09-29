@@ -63,15 +63,20 @@ export const shared_n = horn_at + horn_n * 4;
 let ex = null, top = 0;                                   // the module's exports; the scratch page
 // the page's network, one body at a time (kmain's k_fetch through inle/wasm/arch.c): the
 // worker fetches a URL whole -- a synchronous XMLHttpRequest, which a worker may make, so
-// the guest's blocking read is the browser's own -- and hands it over in pieces. the page's
-// own origin only: anything else is EACCES. under node there is no synchronous fetch, so a
-// URL is a path under `origin` (inle.mjs --origin), links resolved, and one that leaves it
-// is refused the same way
+// the guest's blocking read is the browser's own -- and hands it over in pieces. any http(s)
+// url, as the page's own script could ask, cors deciding what comes back. under node there
+// is no synchronous fetch, so a URL is a path under `origin` (inle.mjs --origin), links
+// resolved, and one that leaves it is EACCES
 let body = null, bodyAt = 0, origin = null, readFileSync = null, nodePath = null, realpathSync = null;
-// a guest's URL against the page it runs under: the absolute href when it is that page's
-// origin, else null. the pages import it too, and test/gate/wall.mjs asks it directly
+// a URL against the page it runs under: the absolute href when it is that page's origin,
+// else null -- what a link's module or image must be. machine.js imports it, and
+// test/gate/wall.mjs asks it directly
 export const pageurl = (url, here) => {
   try { const u = new URL(url, here); return u.origin === new URL(here).origin ? u.href : null; }
+  catch (e) { return null; } };
+// ..and the guest's own fetch: any http(s) url, a relative one against the page, else null
+export const neturl = (url, here) => {
+  try { const u = new URL(url, here); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null; }
   catch (e) { return null; } };
 const under = (root, p) => p === root || p.startsWith(root.endsWith(nodePath.sep) ? root : root + nodePath.sep);
 const fetchOpen = (url) => {
@@ -86,7 +91,7 @@ const fetchOpen = (url) => {
       if (!under(root, real)) return -EACCES;
       body = new Uint8Array(readFileSync(real)); }
     else {
-      const u = pageurl(url, self.location.href);
+      const u = neturl(url, self.location.href);
       if (!u) return -EACCES;
       const x = new XMLHttpRequest();
       x.open('GET', u, false);
