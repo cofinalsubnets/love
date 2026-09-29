@@ -148,6 +148,34 @@
                 (sub? one "\e[4;5H\e_Ga=p,i=1048577,p=1,q=2,C=1,x=0,y=0,w=10,h=12,c=2,r=1\e\\" 0)
                 !(sub? two "a=t" 0) (sub? two "a=p,i=1048577" 0)))
 
+; --- sixels: a picture's part in the cube's registers (greys past them), a band six
+;     pixels high, a run as !n, a pixel the picture left as '?', scaled nearest ---
+   _ (: (px r g b a) (cats [(string r) (string g) (string b) (string a)])
+        red (px 255 0 0 255) blue (px 0 0 255 255) clear (px 0 0 0 0)
+        six "\eP0;0;0q\"1;1;"
+        _ (test ((six + "2;2#180;2;100;0;0BB$-\e\\") = limn-sixel (cats [red red red red]) 2 0 0 2 2 2 2)
+                ((six + "4;4#180;2;100;0;0!4N$-\e\\") = limn-sixel (cats [red red red red]) 2 0 0 2 2 4 4)
+                ((six + "2;1#180;2;100;0;0?@$-\e\\") = limn-sixel (cats [clear red]) 2 0 0 2 1 2 1)
+                ((six + "1;2#5;2;0;0;100A$#180;2;100;0;0@$-\e\\") = limn-sixel (cats [red blue]) 1 0 0 1 2 1 2)
+                ((six + "1;7#180;2;100;0;0~$-#180@$-\e\\") = limn-sixel (cats (map (\ _ red) (jot 7))) 1 0 0 1 7 1 7)
+                ((six + "1;1#228;2;52;52;52@$-\e\\") = limn-sixel (px 128 128 128 255) 1 0 0 1 1 1 1)
+                ((six + "1;1#216;2;0;0;0@$-\e\\") = limn-sixel (cats [red (px 0 0 0 255)]) 2 1 0 1 1 1 1)))
+
+; --- ..and in a pane: its tiles stepped over, each picture's part laid at its top-left
+;     tile, the same part laid again from what was laid, and the cells it took erased ---
+   _ (: s (mkscr 2 6)
+        _ (scribe s ("\e_Ga=T,f=24,s=10,v=12,q=2;" + cats (map (\ _ "/wAA") (jot 120)) + "\e\\"))
+        ps (limn-placed s 2 6)
+        j (jug 0) _ (limn-rows j s 2 6 0 0 0 -1 2) stepped (slurp j)
+        laid {} k (jug 0) _ (limn-sixes k s ps 3 4 (gaze s 6) (gaze s 7) {} laid) one (slurp k)
+        laid2 {} k2 (jug 0) _ (limn-sixes k2 s ps 3 4 (gaze s 6) (gaze s 7) laid laid2) two (slurp k2)
+        u (jug 0) _ (limn-unsix u ps 3 4) gone (slurp u)
+        _ (test (1 = tally ps) ([0 0 0 0 10 12 2 1] = drop 2 <ps)
+                (sub? stepped "\e[C\e[C" 0) !(sub? stepped (utf8 9600) 0)
+                (sub? one "\e[4;5H\eP0;0;0q\"1;1;10;12#180;2;100;0;0" 0)
+                (one = two) (1 = tally (keys laid2))
+                (gone = "\e[4;5H\e[2X")))
+
 ; --- a selected cell wears the reverse face ---
    _ (: s (mkscr 1 4)
         _ (scribe s "abcd")
