@@ -324,6 +324,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
  g->symbols = major_symbols_rebuild(g, &X, om);
  major_run_finalizers(g, &X);
+ ai_image_drop(X.p0);                                         // the from-space is done with: a lazy image in it sleeps no more
  if (resized) {
   g->major_spare = major_spare_after(g, to, to_len, req0);
   if (tight && g->major_len < to_len) *tight = true; }         // denied: the spare it got is smaller
