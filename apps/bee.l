@@ -13,6 +13,7 @@
 ;   (max-tokens N)        64000 on anthropic; openai leaves it to the server
 ;   (shell WORD ..)       the shell a command line runs in; lush -a, this binary's own
 ;   (context N)           the window in tokens, for the screen's gauge; claude's are known
+;   (queue-watch N)       seconds between readings of the merge queues; 20, and 0 for never
 ; the answer streams: text prints as it comes. a key goes out only over tls, and only to a
 ; peer tls-open verified: its chain to a root the host trusts, and its name.
 (module (bee bee-main)
@@ -386,16 +387,81 @@
 
      ; every merge queue there is, as it stands at start: git's refs/queue/*, and the queue/*
      ; ledgers of sb's hub nest -- SB_HUB, else this directory when it holds a .sb
-     bee-queues
-      (lush-out ("for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do\n"
-                 + " echo \"--- git $r ---\"; git cat-file -p \"$r\"\n"
-                 + "done\n"
-                 + "hub=${SB_HUB:-}; [ -z \"$hub\" ] && [ -d .sb ] && hub=.\n"
-                 + "if [ -n \"$hub\" ]; then\n"
-                 + " for n in $(sb -C \"$hub\" ledger 2>/dev/null | cut -d' ' -f1); do\n"
-                 + "  case $n in queue/*) echo \"--- sb ledger $n, in the nest at $hub ---\"; sb -C \"$hub\" ledger \"$n\";; esac\n"
-                 + " done\n"
-                 + "fi\n"))
+     bee-qcmd
+      ("for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do\n"
+       + " echo \"--- git $r ---\"; git cat-file -p \"$r\"\n"
+       + "done\n"
+       + "hub=${SB_HUB:-}; [ -z \"$hub\" ] && [ -d .sb ] && hub=.\n"
+       + "if [ -n \"$hub\" ]; then\n"
+       + " for n in $(sb -C \"$hub\" ledger 2>/dev/null | cut -d' ' -f1); do\n"
+       + "  case $n in queue/*) echo \"--- sb ledger $n, in the nest at $hub ---\"; sb -C \"$hub\" ledger \"$n\";; esac\n"
+       + " done\n"
+       + "fi\n")
+     bee-queues (lush-out bee-qcmd)
+
+     ; --- queue watching: every (queue-watch N) seconds, 20 unless set and 0 for never, the
+     ; queues are read again, and a change that concerns this bee's rows -- one leaving, the
+     ; row it stacks on moving, a row folding into it, a new leader -- is mailed to it from
+     ; queue-watch. rows are the header's `<position> <session> <branch> <gated-on>
+     ; <gated-head> <state>`; its own edits to its own rows say nothing ---
+     bee-qwatch (: w (peep bee-salt 'queue-watch ()) (? (two? w && charm? <w) <w 20))
+     ; the queues as [name text] pairs, split at their "--- NAME ---" lines
+     (q-sections s)
+      (: (go ls cur acc)
+          (? (atom? ls) (rev (? (two? cur) (cur . acc) acc))
+             (: l <ls n #l
+                (? (8 < n && starts? l "--- " && snip l (n - 4) n = " ---")
+                   (go >ls [(snip l 4 (n - 4)) ""] (? (two? cur) (cur . acc) acc))
+                   (two? cur) (go >ls [<cur (cur 1 + l + "\n")] acc)
+                   (go >ls cur acc))))
+         (go (lines s) () ()))
+     ; a queue's rows, position -> its first six words
+     (q-rows text)
+      (foldl (\ t l (: w (words l)
+                       (? (5 < #w && 0 < #<w && 48 <= <w 0 <= 57) (pin t <w (take 6 w)) t)))
+             {} (lines text))
+     (q-line text k) (: ls (filter (\ l (starts? l (k + " "))) (lines text)) (? (two? ls) <ls ""))
+     (q-num p) (digits p)
+     (q-folded? r) (starts? (r 5) "folded-into-")
+     ; the nearest row above position p that is not folded into another
+     (q-under rows p)
+      (: ps (filter (\ q (q-num q < q-num p && !(q-folded? (rows q)))) (keys rows))
+         (? (two? ps) (foldl (\ a q (q-num q > q-num a ? q a)) <ps >ps) ()))
+     (q-say r) (r 0 + " (" + r 1 + ", " + r 2 + ") at " + r 4 + ", " + r 5)
+     ; what moved between two texts of one queue that this bee should hear
+     (q-news old new)
+      (: ro (q-rows old) rn (q-rows new)
+         mine (filter (\ p (: r (peep rn p (peep ro p ())) (two? r && r 1 = bee-name)))
+                      (keys (foldl (\ t k (pin t k 1)) (foldl (\ t k (pin t k 1)) {} (keys ro)) (keys rn))))
+         (one p)
+          (? !(two? (peep rn p ())) [("your row " + p + " has left the queue: landed, or dropped")]
+             (: uo (q-under ro p) un (q-under rn p)
+                a (? (uo = ()) ()
+                     !(two? (peep rn uo ())) [("row " + uo + ", which yours stacked on, has left the queue")]
+                     (uo = un && (show (take 5 >(ro uo)) != show (take 5 >(rn un))))
+                      [("the row yours stacks on moved: " + q-say (rn un) + " (was " + (ro uo) 4 + ", " + (ro uo) 5 + ")")]
+                     ())
+                b (catmap (\ f (: r (rn f) o (peep ro f ())
+                                 (? (r 5 = ("folded-into-" + p) && !(two? o && show o = show r))
+                                    [("row " + f + " folds into yours: " + r 1 + "'s " + r 2 + " at " + r 4)] ())))
+                          (keys rn))
+                (a + b)))
+         ln (? (q-line old "leader" != q-line new "leader")
+               [("the leader is now " + (: l (q-line new "leader") (snip l 7 #l)))] ())
+         (? (two? mine) (catmap one (sort mine) + ln) ()))
+     bee-qseen (foldl (\ t s (pin t <s (s 1))) {} (q-sections bee-queues))
+     (watch-tick _)
+      (: now (q-sections (lush-out bee-qcmd))
+         news (catmap (\ s (: nm <s old (peep bee-qseen nm ()) new (s 1)
+                              _ (pin bee-qseen nm new)
+                              ns (? (string? old && old != new) (q-news old new) ())
+                              (? (two? ns) [(nm + " changed:\n" + foldl (\ a l (a + "- " + l + "\n")) "" ns)] ())))
+                      now)
+         (? (two? news)
+            (post-as "queue-watch" bee-name
+                     (foldl (\ a t (a + t)) "" news + "read it fresh before acting on it."))
+            0))
+     (watch _) (? (0 < bee-qwatch) (: _ (rest (bee-qwatch * 1000)) _ (watch-tick 0) (watch 0)) 0)
      bee-talk
       (paras
        ["## other sessions"
@@ -436,6 +502,9 @@
            ("A row names its session. Reach a bee session with send_message; a name list_sessions does "
             + "not show belongs to another kind of agent, so tell the user what to relay. After a change "
             + "that moves other rows, message their owners with what moved.")
+           ("While you have a row, a message from queue-watch says when the row yours stacks on "
+            + "moves or leaves, a row folds into yours, or the leader changes. Read the queue fresh, "
+            + "then act: re-merge onto the new head and re-gate, add a fold's lanes to your union.")
            "Operating it -- check each of these, don't just state it:"
            ("- the landed tree is the gated tree. before a landing, `git merge-tree --write-tree BRANCH HEAD` "
             + "must print the gated head's own tree; after it, BRANCH^{tree} must equal that. on sb, the "
@@ -1123,6 +1192,7 @@
       (: c {'blocks () 'ed (ednew 0) 'scroll 0 'dirt {() 1} 'busy () 'asking () 'msgs ()
             'sock () 'over 0 'key key 'yes yes 'rows 24 'cols 80}
          _ (pin c 'face (tface c))
+         _ (twirl (\ _ (watch 0)) 0)                       ; the queues, mailed here when they move
          _ (push c {'k 'hello})
          _ (tide c)
          _ (raw 1)
@@ -1185,6 +1255,7 @@
             (!bee-local? && !(string? key && 0 < #key)) (say err ("bee: set " + bee-key-env + "\n"), 1)
             ; settled for the run, so other sessions can find it and write to it
             (: _ (settle bee-branch)
+               _ (? sv (twirl (\ _ (watch 0)) 0) 0)
                r (? sv (serve-first key (plain yes) (: p (getenv "BEE_PROMPT")
                                                     (? (string? p && 0 < #p) p (two? words) (joinw words) "")))
                     (two? words) (: _ (state! "busy") _ (turn key (plain yes) [(user (joinw words))]) 0)

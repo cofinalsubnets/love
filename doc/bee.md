@@ -89,6 +89,15 @@ Sessions working in parallel often share one branch, and merge into it one at a 
 
 bee quotes each queue in the system prompt as it stood at start, and tells the model to follow the rules, to read the queue fresh before acting on it, and to write only its own row. When a write fails, someone wrote first: re-read and redo. A row names its session. The model reaches a bee session with **send_message**, and asks the user to relay to any other.
 
+A bee watches the queues for its rows. On the full screen and when serving, it reads every queue again every **(queue-watch** *n***)** seconds (20 unless set, 0 for never). A change that concerns its rows comes to it as a message from **queue-watch**:
+
+- its own row leaving the queue;
+- the row it stacks on (the nearest unfolded row above it) moving head or state, or leaving;
+- a row folding into it, or a folded row moving;
+- a new leader.
+
+Its own edits to its own rows say nothing.
+
 The model is also given the queue's operating checks, learned running one. Each is meant to be checked mechanically, not just stated:
 
 - **The landed tree is the gated tree.** Before a landing, **git merge-tree --write-tree** *branch* *head* must print the gated head's own tree, and afterwards *branch***^{tree}** must equal it. On sb, the patch set that lands is exactly the set that was gated.

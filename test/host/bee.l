@@ -252,6 +252,37 @@
       !(cr-in (gone 1) "w1"))
    0)
 
+; --- queue watching ---------------------------------------------------------------------------
+; a serving bee with a row in its hub's queue hears the row it stacks on move and the leader
+; change, and hears nothing of its own edits
+(: cr-w (cr-dir "watch" "")
+   hub (cr-w + "/hub") wt (cr-w + "/wt")
+   _ (mkdir hub 493) _ (mkdir wt 493)
+   _ (cr-put wt ".bee.l" ("(api anthropic)\n(url \"" + cr-url + "/v1/messages\")\n(model claude-mock)\n(queue-watch 1)\n"))
+   (ok0 _) (cr-ok (cr-sse [{"type" "message_delta" "delta" {"stop_reason" "end_turn"}}]))
+   (queue ls) (: _ (cr-put cr-w "q" (foldl (\ a l (a + l + "\n")) "" ls))
+                 id (: r (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--id"]) (? (two? r) (: s >r (snip s 0 (#s - 1))) "none"))
+                 (hark [cr-love "sb" "-C" hub "ledger" "queue/main" "--was" id (cr-w + "/q")]))
+   _ (queue ["leader bob" "4 bob b1 aaa h1 gating" "5 alice b2 h1 h2 waiting"])
+   _ (cr-serves [(ok0 0) (ok0 0) (ok0 0)])
+   sp (cr-run cr-w ("SB_HUB='" + hub + "'") ("--spawn alice '" + wt + "' 'wait for the queue'"))
+   _ (rest 2500)
+   _ (queue ["leader carol" "4 bob b1 aaa h9 green" "5 alice b2 h1 h2 waiting"])
+   _ (rest 3500)
+   _ (queue ["leader carol" "4 bob b1 aaa h9 green" "5 alice b2 h9 h4 gating"])  ; her own edit
+   _ (rest 3500)
+   h (cr-heard 0)
+   st (cr-run cr-w "" "--stop alice")
+   said (foldl (\ a r (a + r)) "" h)
+   _ (test
+      (0 = <sp)
+      (2 = #h)                                                  ; the prompt, then one wake
+      (cr-in said "from=\\\"queue-watch\\\"")
+      (cr-in said "the row yours stacks on moved: 4 (bob, b1) at h9, green (was h1, gating)")
+      (cr-in said "the leader is now carol")
+      (0 = <st))
+   0)
+
 ; --- what bee will not do ---------------------------------------------------------------
 ; plain http off this machine is refused before any dial; a model that says no is told;
 ; a remote endpoint wants its key before anything is sent
