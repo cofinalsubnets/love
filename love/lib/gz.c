@@ -60,7 +60,8 @@ struct inf_code { uint16_t cnt[16], sym[288], *tab; unsigned root; };
 // the kernel's 64 KiB boot one, where kmain inflates the source blob into its initrd.
 struct inf_tabs {
  uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT];
- struct inf_code lit, dst, cl; };
+ struct inf_code lit, dst, cl;
+ const uint8_t *dic; uintptr_t nd; };            // the preset dictionary behind the output, nd 0 for none
 
 static void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
                       uint16_t *tab, unsigned root) {
@@ -131,7 +132,12 @@ static int inf_fast_run(const uint8_t *in, uintptr_t n, uintptr_t *ipp, uint64_t
   if (sy > 29) { r = -1; break; }
   x = gz_dext[sy];
   d = gz_dbase[sy] + (uintptr_t) (bb & (((uint64_t) 1 << x) - 1)), bb >>= x, bc -= x;
-  if (d > (uintptr_t) (op - out)) { r = -1; break; }   // a reach before the start
+  if (d > (uintptr_t) (op - out)) {             // a reach before the start: the dictionary's, or none
+   uintptr_t o = (uintptr_t) (op - out), h = d - o < l ? d - o : l, k;
+   if (d > o + t->nd) { r = -1; break; }
+   memcpy(op, t->dic + t->nd - (d - o), h);
+   for (k = h; k < l; k++) op[k] = op[k - d];
+   op += l; continue; }
   { uint8_t *dp = op, *sp = op - d, *de = op + l;
 #if ai_wideld
     if (d >= 8) for (; dp < de; dp += 8, sp += 8) ai_st64(dp, ai_ld64(sp));
@@ -155,6 +161,7 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
  unsigned bc = 0, last, typ, i;
  uint8_t lens[320];
  struct inf_tabs t;
+ t.dic = dic, t.nd = nd;
 
 // one unaligned load where there is room. the byte loop below is the same act and
 // eight times the work; the arithmetic is libdeflate's -- absorb what fits, step by the
