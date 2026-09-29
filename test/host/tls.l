@@ -382,6 +382,22 @@
    _ (test (all (n \ !(tablet? (x509 (snip ir 0 n)))) ^#ir)
            (all (i \ (: x (x509 (tc-flip ir i)) (atom? x || tablet? x))) ^#ir)))
 
+;; --- name constraints: a root, or an issuer, vouches only for its own names ----------------
+(: nc-roots (map (n \ x509 (tc-ld n)) ["rootn" "rootp" "rootm" "rootd"])
+   (nc host l) (chain-ok? (map tc-ld l) nc-roots host tc-now)
+   rn (x509 (tc-ld "rootn"))
+   _ (test (#(rn 'ncp) = 2) (#(rn 'nce) = 1)                      ; sb.test and 10/8; not bad.sb.test
+           ((nc "a.sb.test" ["leafn"]) = 1) ((nc "10.1.2.3" ["leafn"]) = 1)
+           (tc-has (nc "a.sb.test" ["leafno"]) "\"rootn\": the name evil.test is outside the names it may vouch for")
+           (tc-has (nc "x.bad.sb.test" ["leafnx"]) "the name x.bad.sb.test is among the names it may not vouch for")
+           (tc-has (nc "a.sb.test" ["leafnw"]) "the name *.sb.test is among")    ; the wildcard reaches bad.sb.test
+           ((nc "a.ok.sb.test" ["leafnw2"]) = 1)
+           (tc-has (nc "a.sb.test" ["leafni"]) "the name 192.168.1.1 is outside")
+           ((nc "a.in.test" ["leafin" "intern"]) = 1)                        ; an issuer's own constraint
+           (tc-has (nc "in.test" ["leafia" "intern"]) "\"intern\": the name in.test is outside")
+           ((nc "good.test" ["leafm"]) = 1)                                  ; email bears on no server name
+           (tc-has (nc "good.test" ["leafd"]) "a kind of name not checked here")))
+
 ;; --- the tree's roots: mozilla's, the last home, and carried in the binary for a host with none --
 (: t (carried-roots 0) f (uread tree-roots)
    ds (? (string? t) (pem-ders t) ()) xs (filter tablet? (map x509 ds))

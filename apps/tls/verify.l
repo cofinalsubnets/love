@@ -17,8 +17,9 @@
 ; CertificateVerify schemes: ed25519 (0x0807), ecdsa p-256/sha-256 (0x0403), ecdsa
 ; p-384/sha-384 (0x0503), rsa-pss/sha-256 (0x0804), rsa-pss/sha-384 (0x0805). a chain's own
 ; signatures: those, and rsa pkcs#1 v1.5 over sha-256/384/512; sha-1 and rsassa-pss certificate
-; signatures are refused. no revocation is checked -- no crl, no ocsp -- and no name
-; constraints (a critical one is refused as unknown). the key is public and so are the
+; signatures are refused. no revocation is checked -- no crl, no ocsp. name constraints hold
+; over dns and ip names, a root's as well as an issuer's; one on a kind of name not read here
+; that could bear on a server (a directory name, say) refuses the chain. the key is public and so are the
 ; signatures, so the arithmetic is the plain bignums, no constant time owed. every reader
 ; here is total: a short or lying length answers (), never an index past the end.
 (module 'tls
@@ -295,7 +296,7 @@
    ; the extensions this reader answers to; a critical one outside them refuses the certificate
    oid-bc (unhex "551d13") oid-ku (unhex "551d0f") oid-eku (unhex "551d25") oid-san (unhex "551d11")
    oid-server-auth (unhex "2b06010505070301") oid-any-eku (unhex "551d2500")
-   oid-cn (unhex "550403")
+   oid-cn (unhex "550403") oid-nc (unhex "551d1e")
    (x509 c)
     (: f (tbs-fields c)
        tk (? (two? f) <f ()) fs (? (two? f) (f 1) ())
@@ -312,7 +313,7 @@
                      'inner (der-body c (fs 1)) 'sig (snip c (sigb 1 + 1) (sigb 2))
                      'issuer (der-all c (fs 2)) 'subject (der-all c (fs 4))
                      'nb (? (two? nb) <nb ()) 'na (? (two? na) <na ()) 'key key
-                     'ca 0 'plen () 'ku () 'eku () 'dns () 'ips () 'bad ())
+                     'ca 0 'plen () 'ku () 'eku () 'dns () 'ips () 'ncp () 'nce () 'bad ())
              ; the inner and outer signature algorithms must agree (their oids, what we check by)
              ino (der-seq c (fs 1) 48)
              _ (? (two? ino && <<ino = 6 && der-body c <ino = x 'alg) 0 (pin x 'bad "its two signature algorithms differ"))
@@ -353,6 +354,16 @@
                             (pins x 'dns (map (t \ der-body c t) (filter (t \ <t = 130) s))
                                     'ips (map (t \ der-body c t) (filter (t \ <t = 135) s)))
                            (pin x 'bad "its subjectAltName does not read")))
+                    (oid = oid-nc)                 ; [0] permitted, [1] excluded: subtrees of [tag base]
+                     (: s (der-seq c v 48)
+                        (sub t) (: g (der-seq c t 48) (? (two? g && #g = 1) [(<g 0) (der-body c <g)] ()))
+                        (part tag) (: p (filter (t \ <t = tag) s)
+                                      (? (atom? p) ()
+                                         (: ts (der-kids c (<p 1) (<p 2)) gs (? (two? ts) (map sub ts) ())
+                                            (? (#p = 1 && two? gs && all two? gs) gs 'no))))
+                        pm (? (two? s) (part 160) 'no) ex (? (two? s) (part 161) 'no)
+                        (? (pm = 'no || ex = 'no || (atom? pm && atom? ex)) (pin x 'bad "its nameConstraints does not read")
+                           (pins x 'ncp pm 'nce ex)))
                     crit (pin x 'bad "a critical extension it does not know")
                     0))))
        (each es one))
@@ -382,6 +393,39 @@
        q (quad-bytes h)
        (? (string? q) (? (elem q (x 'ips)) 1 0)
           (any (d \ dns-match? d h) (x 'dns) ? 1 0)))
+
+   ; --- name constraints (rfc 5280 4.2.1.10): the names a ca may vouch for, dns and ip ---
+   ; n within subtree b: "sb.test" holds itself and every name under it, ".sb.test" only
+   ; those under it, "" every name
+   (dns-in? b n)
+    (: b (lower b) n (lower n)
+       (? (b = "" || b = n && b 0 != 46) 1
+          (b 0 = 46) (#b < #n && snip n (#n - #b) #n = b)
+          (#b < #n && snip n (#n - #b - 1) #n = ("." + b))))
+   ; address a within base b, an address and its mask of the same family
+   (ip-in? b a) (: k #a (? (#b != 2 * k) 0 (all (i \ (a i & b (k + i)) = (b i & b (k + i))) ^k)))
+   (nm-of x) ((map (d \ [130 d]) (x 'dns)) + (map (a \ [135 a]) (x 'ips)))
+   (nm-show n) (? (<n = 130) (n 1) (#(n 1) = 4) (join "." (map (i \ show ((n 1) i)) ^4)) "an ipv6 address")
+   ; one name against x's constraints -> () when x may vouch for it, else why not. a wildcard
+   ; reaches every name one label down, so an excluded name there is reached
+   (nc-why x nm)
+    (: t <nm v (nm 1)
+       p (filter (g \ <g = t) (x 'ncp)) e (filter (g \ <g = t) (x 'nce))
+       (in? g) (? (t = 130) (dns-in? (g 1) v) (ip-in? (g 1) v))
+       (reach? g) (? (t = 130 && 2 < #v && snip v 0 2 = "*.")
+                     (: b (lower (g 1)) k (str-at b "." 0) (0 < k && snip b (k + 1) #b = lower (snip v 2 #v)))
+                     0)
+       (? (two? p && !(any in? p)) "is outside the names it may vouch for"
+          (any (g \ in? g || reach? g) e) "is among the names it may not vouch for"
+          ()))
+   ; x's constraints over the names below it -> () or why not. email and uri subtrees bear on
+   ; no name a server is checked by; any other kind is one this cannot check, and refuses
+   (nc-sick x nms)
+    (: gs ((x 'ncp) + (x 'nce))
+       (? (atom? gs) ()
+          (any (g \ !(elem <g [129 130 134 135])) gs) "it constrains a kind of name not checked here"
+          (: bad (filter (n \ nc-why x n) nms)
+             (? (two? bad) ("the name " + nm-show <bad + " " + nc-why x <bad) ()))))
 
    ; --- the roots: the host's bundle, read once a process ---
    ; SSL_CERT_FILE, else the first of the linux and bsd homes that reads, else the tree's own:
@@ -451,30 +495,35 @@
        pool (? (two? xs) (filter tablet? >xs) ())
        work (tablet 1) _ (pin work 'n 0)
        (why x s) ("certificate " + x509-name x + ": " + s)
-       ; from certificate c at k issuers above the leaf: an anchor that signed it, else an
-       ; issuer from the pool, walked on; the most telling reason is kept for the failure
-       (up c k used)
+       ; from certificate c at k issuers above the leaf, nms the names of c and all below it: an
+       ; anchor that signed it and may vouch for them, else an issuer from the pool, walked on;
+       ; the most telling reason is kept for the failure
+       (up c k used nms)
         (? (chain-depth < k) (why c "the chain is too long")
            (: n (work 'n)
               (? (chain-work < n) (why c "too much work to find its issuer")
                  (: _ (pin work 'n (n + 1))
                     as (filter (r \ r 'subject = c 'issuer) roots)
                     ; an anchor needs no checks of its own but its key and its pathLen
-                    hit (any (r \ !(charm? (r 'plen) && r 'plen < k) && 1 = sig-ok? (c 'alg) (r 'key) (c 'tbs) (c 'sig)) as)
+                    signed (filter (r \ !(charm? (r 'plen) && r 'plen < k) && 1 = sig-ok? (c 'alg) (r 'key) (c 'tbs) (c 'sig)) as)
+                    hit (any (r \ !(nc-sick r nms)) signed)
                     (? hit 1
+                       (two? signed) (why <signed (nc-sick <signed nms))
                        (: cs (filter (i \ i 'subject = c 'issuer && !(elem (i 'der) used)) pool)
                           (try l best)
                            (? (atom? l) best
                               (: i <l
-                                 s (? (any (r \ r 'der = i 'der) roots) () (issuer-sick i k now))
+                                 root? (any (r \ r 'der = i 'der) roots)
+                                 s0 (? root? () (issuer-sick i k now))
+                                 s (? s0 s0 (nc-sick i nms))
                                  r (? s (why i s)
                                       (1 != sig-ok? (c 'alg) (i 'key) (c 'tbs) (c 'sig)) (why c "its signature does not verify")
-                                      (any (r \ r 'der = i 'der) roots) 1
-                                      (up i (k + 1) (i 'der . used)))
+                                      root? 1
+                                      (up i (k + 1) (i 'der . used) (nms + nm-of i)))
                                  (? (r = 1) 1 (try >l r))))
                           (try cs (? (two? as) (why c "its signature does not verify")
                                      (why c "no issuer for it is known (a missing intermediate, or a root not trusted here)")))))))))
        (? !(tablet? leaf) "the server sent no certificate that reads"
           (: s (leaf-sick leaf host now)
-             (? s (why leaf s) (up leaf 0 [(leaf 'der)]))))))
+             (? s (why leaf s) (up leaf 0 [(leaf 'der)] (nm-of leaf)))))))
 ) ; module tls
