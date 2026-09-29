@@ -21,8 +21,8 @@ static const uint8_t gz_clord[19] = {
  16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
 // ===== inflate -- the C twin of apps/gz.l's inflate, LvNif-registered =====
-// the tls.c discipline: (inflate s n) -> the bytes | (), s a raw DEFLATE stream and n its
-// inflated size or 0. `gz-inflate` reaches for this and falls back to gz-puff.
+// the tls.c discipline: (inflate s n) -> the bytes | () | 1 past INF_MAX, s a raw DEFLATE
+// stream and n its inflated size or 0. `gz-inflate` reaches for this and falls back to gz-puff.
 // a twin, not a replacement: gz-puff stays the readable statement of RFC 1951 and the
 // differential oracle (test/host/gzc.l holds the two to the same bytes over corpora and
 // over torn and doctored streams). the algorithms differ on purpose -- gz-puff walks the
@@ -215,6 +215,10 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 intptr_t ai_inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap) {
  return (intptr_t) inf_run(in, n, out, cap); }
 
+// the output is one string in the heap, so a stream inflating past this answers 1 and
+// is not grown into
+#define INF_MAX ((uintptr_t) 1 << 30)
+
 static ai_inline struct ai *host_inflate(struct ai *g) {
  word sw = g->sp[0], nw = g->sp[1];
  intptr_t hint;
@@ -222,9 +226,9 @@ static ai_inline struct ai *host_inflate(struct ai *g) {
  int guessed;
  if (!strp(sw) || !oddp(nw)) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
  hint = getcharm(nw);
- guessed = hint > 0;
+ guessed = hint > 0 && (uintptr_t) hint <= INF_MAX;
  want = guessed ? (int64_t) hint
-                : inf_run((const uint8_t*) txt(sw), len(sw), 0, (uintptr_t) -1);
+                : inf_run((const uint8_t*) txt(sw), len(sw), 0, INF_MAX);
  for (;;) {
   if (want < 0) break;
   if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;
@@ -236,8 +240,8 @@ static ai_inline struct ai *host_inflate(struct ai *g) {
   g->sp += 1;                                    // the wrong-sized string, dropped
   if (!guessed) break;
   guessed = 0;                                   // the hint lied: count, then once more
-  want = inf_run((const uint8_t*) txt(g->sp[0]), len(g->sp[0]), 0, (uintptr_t) -1); }
- g->sp[1] = ZeroPoint, g->sp += 1;
+  want = inf_run((const uint8_t*) txt(g->sp[0]), len(g->sp[0]), 0, INF_MAX); }
+ g->sp[1] = want == -2 ? putcharm(1) : ZeroPoint, g->sp += 1;
  return g; }
 
 static lvm(lvm_inflate) {

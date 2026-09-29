@@ -103,6 +103,15 @@
                      (: (g i) (? (i < 0) "" (bp i = 47) (snip bp 0 (i + 1)) (g (i - 1))) (g (#bp - 1))))
               [(b 0) (b 1) (ww-dots (dir + pa)) qu fr]))))
    (ww-nofrag u) (: p (ww-split u) (ww-join [(p 0) (p 1) (p 2) (p 3) ""]))
+   ; where a server may send us: http or https to https, http to http, gemini to gemini.
+   ; never file: or gopher:, never down from https. a url typed or clicked is not asked
+   (ww-hop? from to)
+    (: a <(ww-split from) b <(ww-split to)
+       (? (a = "gemini:") (b = "gemini:")
+          !(a = "http:" || a = "https:") 0
+          (b = "https:") 1
+          (b = "http:" && a = "http:")))
+   (ww-nohop url to) [1 ("www: " + wg-plain url + " sends us to " + wg-plain to + ", which is not followed")]
    ; what a person typed -> a url: a scheme stays, a file here opens as file:, the rest is https
    (ww-arg s)
     (? (0 <= wg-find s "://" 0) s
@@ -131,7 +140,10 @@
                 (: code <r hd (r 1)
                    loc (wg-header hd "location")
                    (? (300 <= code < 400 && string? loc)
-                       (? (hops < 1) [1 "www: too many redirects"] (ww-get (ww-resolve url loc) (hops - 1)))
+                       (: to (ww-resolve url loc)
+                          (? (hops < 1) [1 "www: too many redirects"]
+                             !(ww-hop? url to) (ww-nohop url to)
+                             (ww-get to (hops - 1))))
                       (: ct (wg-header hd "content-type")
                          k (ww-kind (? (string? ct) ct ""))
                          b (? k (ww-body (? (string? ct) ct "") (wg-header hd "content-encoding") (r 2)) ())
@@ -275,8 +287,10 @@
                                      (? (starts? mime "text/gemini") [0 u 'html (ww-gtext body) 200]
                                         (starts? mime "text/") [0 u 'text body 200]
                                         [1 ("www: " + url + " is " + meta + ", not a page")]))
-                      (code < 40) (? (hops < 1) [1 "www: too many redirects"]
-                                     (ww-get (ww-resolve url meta) (hops - 1)))
+                      (code < 40) (: to (ww-resolve url meta)
+                                     (? (hops < 1) [1 "www: too many redirects"]
+                                        !(ww-hop? url to) (ww-nohop url to)
+                                        (ww-get to (hops - 1))))
                       (code < 60) [1 ("www: " + url + " -- " + hd)]
                       [1 ("www: " + url + " wants a client certificate (" + hd + ")")]))))))
 
@@ -346,7 +360,7 @@
    (ww-dump ls urls)
     (: n #urls
        (ref i) ((upad (#(show n) + 4) (show (i + 1) + ". ")) + urls i + "\n")
-       (usgr (unlines ls) + (? n ("\nReferences\n\n" + foldl (\ a i (a + ref i)) "" ^n) "")))
+       (wg-plain (usgr (unlines ls) + (? n ("\nReferences\n\n" + foldl (\ a i (a + ref i)) "" ^n) ""))))
 
    ; -- pictures -----------------------------------------------------------------
    ; on a terminal a picture is drawn under the line lapiz laid its mark on (" img SRC"),
@@ -354,17 +368,17 @@
    ; fetched when it comes near the screen, and kept by url for the session
    (ww-marks p)
     (foldl (\ acc a (? (starts? <a " img ") ([(a 1) (snip <a 5 #<a)] . acc) acc)) () (rev (p 2)))
-   ; an image's bytes, redirects followed, or ()
-   (ww-fetch url hops)
+   ; an image's bytes, redirects followed, or (). a file: picture only on a file: page
+   (ww-fetch from url hops)
     (: p (ww-split url) sc <p
-       (? (sc = "file:") (: r (uread (p 2)) (? (two? r) <>r ()))
+       (? (sc = "file:") (? (<(ww-split from) = "file:") (: r (uread (p 2)) (? (two? r) <>r ())) ())
           !(sc = "http:" || sc = "https:") ()
           (: w (wg-url (ww-nofrag url))
              r (? (two? w) (wg-ask <w (w 1) (w 2) (w 3) "") ())
              (? (atom? r) ()
                 (: code <r loc (wg-header (r 1) "location")
                    (? ((300 <= code < 400) && string? loc && 0 < hops)
-                       (ww-fetch (ww-resolve url loc) (hops - 1))
+                       (: to (ww-resolve url loc) (? (ww-hop? url to) (ww-fetch url to (hops - 1)) ()))
                       (200 <= code < 300) (r 2)
                       ()))))))
    ; bytes -> [w h rgba], or 'none for what cannot be drawn: a png, jpeg or gif (its first
@@ -416,7 +430,7 @@
                    _ (map (i \ (: u (ww-resolve base ((due i) 1))
                                   _ (pgmsg st ("fetching picture " + show (i + 1) + " of " + show n + " ..."))
                                   _ (puts (pgframe st)) _ (flush out)
-                                  (pin c u (ww-picture (ww-fetch u 4)))))
+                                  (pin c u (ww-picture (ww-fetch (g 1) u 4)))))
                           ^n)
                    _ (pgmsg st "")
                    (ww-load st p))))))

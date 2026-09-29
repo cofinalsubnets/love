@@ -1,11 +1,11 @@
 ; apps/bz2.l -- bzip2 over love/lib/bz2.c, which holds the whole stream: its blocks lie on bit
 ; boundaries, so there is no container to read here. `(borrow 'bz2)`, then:
 ;   (bz2-pack s level)  -> the .bz2 bytes of s, level 1..9 the block in 100k
-;   (bz2-unpack s)      -> (1 bytes) | a word saying why not ('format 'corrupt 'end 'check):
+;   (bz2-unpack s)      -> (1 bytes) | a word saying why not ('format 'corrupt 'end 'check 'big):
 ;                          every stream in s, each block's crc and each stream's held
 (module 'bz2
 (: (bz2-pack s level) (bz2e s level)
-   (bz2-unpack s) (: u (bz2d s) (? (string? u) [1 u] (u @ 1 'format 3 'end 4 'check 'corrupt)))
+   (bz2-unpack s) (: u (bz2d s) (? (string? u) [1 u] (u @ 1 'format 3 'end 4 'check 5 'big 'corrupt)))
 )
 ) ; module 'bz2
 
@@ -42,6 +42,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (bzc-lpad w " " s))
    (bzc-why t p w) (w @ 'format (p + " is not a bzip2 file.")
                         'end (p + ": Compressed file ends unexpectedly")
+                        'big (p + ": decompresses past 1 GiB, more than is held in memory")
                         (p + ": data integrity (CRC) error in data"))
    (bzc-tell t p m)                    ; -v's line: the name, padded as bzip2 pads it
     (say err ("  " + p + ": " + bzc-lpad (peep t 'w 7 - #p) " " "" + m + "\n"), flush err)

@@ -3,10 +3,10 @@
 ;
 ;   (gz-crc32 s)           -> the IEEE crc32 of a string, a charm
 ;   (gz-deflate s)         -> raw deflate bytes
-;   (gz-inflate s n)       -> (1 bytes) | ()    n a size hint, 0 when unknown
+;   (gz-inflate s n)       -> (1 bytes) | () | 'big    n a size hint, 0 when unknown
 ;   (gz-puff s n)          -> the same, in love, and the oracle the C twin answers to
 ;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
-;   (gz-unzip s)           -> (1 bytes) | ()
+;   (gz-unzip s)           -> (1 bytes) | () | 'big
 ;   (gz-head s)            -> (1 stamp name body-seat) | (), the header walked
 ;
 ; presence rides the (1 _) wrapper on every decode, and it has to: the empty string is a
@@ -719,7 +719,7 @@
    ; would read as absent. The presence probe is gz-nif's, and why is written there.
    (gz-inflate s hint)
     (? (gz-nif 1 gz-infprobe)
-       (: r (inflate s hint) (? (string? r) [1 r] (gz-puff s hint)))
+       (: r (inflate s hint) (? (string? r) [1 r] (r = 1) 'big (gz-puff s hint)))
        (gz-puff s hint))
 
    ; --- the container (RFC 1952) --------------------------------------------
@@ -765,7 +765,8 @@
              ; the trailer is the whole point of the container: a stream
              ; that inflated cleanly and hashes wrong is a corrupt one,
              ; and saying so is the only thing the crc is for.
-             (? r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out]))))))
+             (? (r = 'big) 'big
+                r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out]))))))
 
 ) ; module 'gz
 
@@ -802,6 +803,7 @@
 (borrow 'path)
 (borrow 'posix)
 (: gzc-usage "usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]   (gunzip = -d, zcat = -dc)"
+   gzc-big ": inflates past 1 GiB, more than is held in memory -- refused"
    gzc-help "gzip -- the RFC 1952 container in love (module 'gz is the codec)
 usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]
   -c  write on stdout, keep the files      -d  decompress (gunzip)
@@ -910,6 +912,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
              h (gz-head s)
              u (h && gz-unzip s)
              (? !h (gzc-moan t (p + ": not in gzip format"), 1)
+                (u = 'big) (gzc-moan t (p + gzc-big), 1)
                 !u (gzc-moan t (p + ": invalid compressed data--crc error"), 1)
                 (peep t 't 0) (gzc-tell t (p + ":\t OK"), 0)
                 (peep t 'c 0) (say out <>u, flush out, 0)
@@ -950,7 +953,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: s (slurp in)
        (? (peep t 'd 0)
           (: u (gz-unzip (s + ""))
-             (? !u (gzc-moan t "stdin: not in gzip format", 1)
+             (? (u = 'big) (gzc-moan t ("stdin" + gzc-big), 1)
+                !u (gzc-moan t "stdin: not in gzip format", 1)
                 (peep t 't 0) 0
                 (say out <>u, flush out, 0)))
           (say out (gz-zip (s + "") "" 0), flush out, 0)))

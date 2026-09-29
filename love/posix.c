@@ -97,10 +97,10 @@ static struct ai *argv_env_marshal(struct ai *g, char ***cavp, int envat, char *
  // past argv's NULL where ai_argv_file finds it -- a shell that searched PATH once
  // says where it landed, and the exec does not walk PATH a second time
  word h = chainp(argv) ? A(argv) : ZeroPoint;
- int alt = chainp(h) && strp(A(h)) && strp(B(h));
+ int alt = chainp(h) && cstrp(A(h)) && strp(B(h));
  for (word p = argv; chainp(p); p = B(p)) {
   word e = !argc && alt ? B(h) : A(p);
-  if (!strp(e)) return g;                                 // misuse: non-string argv
+  if (!cstrp(e)) return g;                                // misuse: non-string, or a NUL inside
   argc++, total += len(e) + 1; }                             // +1 for the NUL
  if (!argc) return g;                                        // empty argv
  if (alt) total += len(A(h)) + 1;
@@ -154,9 +154,9 @@ static ai_inline int proc_status(int st) {
 // ai_port_fd: the live fd of a port arg, or -1 for a non-port. a closed port carries the
 // -3 sentinel, handed straight to the syscall, which fails with EBADF.
 
-// a love string as a C string, NULL for a non-string: bytes[len] is always a NUL
-// (love/love.h), so the bytes go to the syscall where they lie; no length cap of ours.
-static ai_inline char const *str_c(word x) { return strp(x) ? txt(x) : NULL; }
+// a love string as a C string, NULL for a non-string or one with a NUL inside: bytes[len]
+// is always a NUL (love/love.h), so the bytes go to the syscall where they lie.
+static ai_inline char const *str_c(word x) { return cstrp(x) ? txt(x) : NULL; }
 
 // ai_argv_marshal with the misuse answer added: called with g Packed, a misuse pushes
 // 'badarg and leaves *cavp NULL, oom returns !ok g with *cavp NULL too, so
@@ -892,7 +892,7 @@ static lvm(lvm_posix_unlink) {
 //                      shape -- split at the first '=' in love; no order promised).
 static ai_inline word host_posix_setenv(struct ai *g, word nw, word vw) {
  char const *n = str_c(nw), *v = str_c(vw);
- if (!n) return ai_badarg(g);
+ if (!n || (!v && strp(vw))) return ai_badarg(g);
  if (!v) return unsetenv(n) ? ai_err(g, errno) : ZeroPoint;
  return setenv(n, v, 1) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_setenv) {
@@ -1558,7 +1558,7 @@ ai_noinline static struct ai *host_open(struct ai *g) {
   struct ai *r = ai_io_alloc(g, fd);
   return ai_ok(r) ? r : (close(fd), ai_push(g, 1, ai_err(g, ENOMEM))); }
 static lvm(lvm_open) {
-  if (!strp(Sp[0]) || !strp(Sp[1])) { Sp[1] = ai_badarg(g); ai_musttail return Nextp(1, 1); }
+  if (!cstrp(Sp[0]) || !strp(Sp[1])) { Sp[1] = ai_badarg(g); ai_musttail return Nextp(1, 1); }
   LvmCallp(g, 2, host_open) }                   // [path, mode] -> [port]
 
 // (close x) -- a port, or a raw fd from openfd/pipe/dup. on a port: flush, close, and hand

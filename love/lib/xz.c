@@ -1,9 +1,10 @@
 // love/lib/xz.c -- LZMA and LZMA2, both directions, and xz's crc64. the codec only: apps/xz.l
 // holds the .xz container, the block headers and the index, and says which door to take.
-//   (lzma2d s)               a raw LZMA2 chunk stream -> its bytes | ()
+//   (lzma2d s)               a raw LZMA2 chunk stream -> its bytes | () | 1 past XZ_MAX
 //   (lzma2len s)             the stream's length through its 0x00 end byte | ()
 //   (lzma2e s dict)          bytes -> a raw LZMA2 stream, dict the match window | ()
-//   (lzmad s props dict n)   a .lzma body (after its 13-byte head) -> its bytes | (); n -1 unknown
+//   (lzmad s props dict n)   a .lzma body (after its 13-byte head) -> its bytes | () | 1 past
+//                            XZ_MAX; n -1 unknown
 //   (crc64 s)                CRC-64/XZ as the 8 little-endian bytes a check field holds
 // the decoders read the output as their dictionary, so the window is everything said so far.
 // the coder's parse is a fast one: reps first, the longest chain match, one lazy look.
@@ -19,6 +20,8 @@
 #define LZ_TOP (1u << 24)
 #define LZ_MINLEN 2
 #define LZ_MAXLEN 273
+// the output is one string in the heap: past this a stream is refused, not grown into
+#define XZ_MAX ((uintptr_t) 1 << 30)
 
 typedef uint16_t lzp;
 
@@ -90,11 +93,12 @@ static unsigned rd_len(struct lz_rd *r, struct lz_len *l, unsigned ps) {
  return 16 + rd_tree(r, l->high, 8); }
 
 // the output, which is the dictionary. `grow` lets a sizeless .lzma double it as it goes.
-struct lz_out { uint8_t *b; uintptr_t n, cap, base; int grow; };
+struct lz_out { uint8_t *b; uintptr_t n, cap, base; int grow, big; };
 
 static int out_room(struct lz_out *o, uintptr_t k) {
  if (o->n + k <= o->cap) return 1;
  if (!o->grow) return 0;
+ if (o->n + k > XZ_MAX) return o->big = 1, 0;
  uintptr_t c = o->cap < 65536 ? 65536 : o->cap;
  while (c < o->n + k) c *= 2;
  uint8_t *nb = ai_alloc(NULL, c);
@@ -195,7 +199,7 @@ static int64_t l2_walk(const uint8_t *s, uintptr_t n, uintptr_t *end) {
 // decode the chunks into out (cap its exact size). -> 0 ok, -1 corrupt. the reset rules:
 // a dict reset first, props before the first LZMA chunk and after a 0x01.
 static int l2_dec(const uint8_t *s, uint8_t *out, uintptr_t cap, struct lz_model *m) {
- struct lz_out o = { out, 0, cap, 0, 0 };
+ struct lz_out o = { out, 0, cap, 0, 0, 0 };
  struct lz_rd r;
  uintptr_t i = 0;
  int needdict = 1, needprops = 1;
@@ -490,6 +494,7 @@ ai_noinline static struct ai *host_lzma2d(struct ai *g) {
  uintptr_t end;
  int64_t want = strp(sw) ? l2_walk((const uint8_t*) txt(sw), len(sw), &end) : -1;
  if (want < 0) { g->sp[0] = ZeroPoint; return g; }
+ if ((uint64_t) want > XZ_MAX) { g->sp[0] = putcharm(1); return g; }
  if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;   // pushes: out over s
  struct lz_model *m = lz_new(4);
  int ok = m && !l2_dec((const uint8_t*) txt(g->sp[1]), (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m);
@@ -531,22 +536,25 @@ ai_noinline static struct ai *host_lzmad(struct ai *g) {
  intptr_t want = getcharm(nw);
  struct lz_rd r;
  int rc = 0;
+ if (want >= 0 && (uintptr_t) want > XZ_MAX) {
+  ai_alloc(m, 0);
+  g->sp[3] = putcharm(1), g->sp += 3; return g; }
  if (want >= 0) {                                   // the size is known: straight into the string
   if (!ai_ok(g = str0(g, (uintptr_t) want))) { ai_alloc(m, 0); return g; }
-  struct lz_out o = { (uint8_t*) txt(g->sp[0]), 0, (uintptr_t) want, 0, 0 };
+  struct lz_out o = { (uint8_t*) txt(g->sp[0]), 0, (uintptr_t) want, 0, 0, 0 };
   const uint8_t *s = (const uint8_t*) txt(g->sp[1]);
   rc = rd_init(&r, s, s + len(g->sp[1])) && lz_run(m, &r, &o, (uintptr_t) want, 0) && !r.bad;
   ai_alloc(m, 0);
   g->sp[4] = rc ? g->sp[0] : ZeroPoint, g->sp += 4;
   return g; }
- struct lz_out o = { NULL, 0, 0, 0, 1 };
+ struct lz_out o = { NULL, 0, 0, 0, 1, 0 };
  const uint8_t *s = (const uint8_t*) txt(sw);
  rc = rd_init(&r, s, s + len(sw)) && lz_run(m, &r, &o, 0, 1) == 2;
  ai_alloc(m, 0);
  if (rc && ai_ok(g = str0(g, o.n))) {
   if (o.n) memcpy(txt(g->sp[0]), o.b, o.n);
   g->sp[4] = g->sp[0], g->sp += 4; }
- else if (ai_ok(g)) g->sp[3] = ZeroPoint, g->sp += 3;
+ else if (ai_ok(g)) g->sp[3] = o.big ? putcharm(1) : ZeroPoint, g->sp += 3;
  if (o.b) ai_alloc(o.b, 0);
  return g; }
 

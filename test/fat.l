@@ -109,5 +109,23 @@
             (unlink ip, unlink lp, 1)))
         (puts "  (mtools interop skipped: no mdir here)")))
 
+; a chain that loops back on itself -- a corrupt or hostile image -- ends where it loops:
+; a file's clusters 3 4 5 6 with 4 pointed back at 3, then the root's own cluster at itself
+(: lp-im (cask (70000 * 512))
+   lp-dev (mkdev lp-im)
+   rdle (cite 'bytes 'rdle) wrle (cite 'bytes 'wrle)
+   _ (fat-mkfs lp-dev)
+   s0 (string lp-im)
+   rsvd (rdle s0 14 2) fatsz (rdle s0 36 4) cb (512 * s0 13)
+   body ((: (go i acc) (? (i < 4 * cb) (go (i + 1) (acc + "x")) acc)) 0 "")
+   _ (fat-write (fat-mount lp-dev) "loop.txt" body)
+   (set cl v) (each [rsvd (rsvd + fatsz)] (\ sec (pour lp-im (sec * 512 + 4 * cl) (wrle v 4) 0 4)))
+   _ (set 4 3)
+   r1 (fat-read (fat-mount lp-dev) "loop.txt")
+   _ (set 2 2)
+   r2 (fat-ls (fat-mount lp-dev) "")
+   (test (two? r1) (#<>r1 = 2 * cb)
+         ('("loop.txt") = <>r2)))
+
 (test_fin ())
 (puts "fat: ok") (putc 10)

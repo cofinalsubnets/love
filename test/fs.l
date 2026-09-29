@@ -108,6 +108,17 @@
    _ (: e (mount "" "/" "no-such-fs")
         (test (nom? e) !(e = 'enosys)))
 
+   ; a NUL inside a path is misuse: the kernel would stop at it, and open a shorter path
+   ; than the one love was asked about (d + NUL + "x" would be d)
+   _ (: z (d + string 0 + "x")
+        (test ('badarg = (open z "r")) ('badarg = (stat z)) ('badarg = (lstat z))
+              ('badarg = (openfd z 0)) ('badarg = (readdir z)) ('badarg = (unlink z))
+              ('badarg = (chdir z)) ('badarg = (mkdir z 493)) ('badarg = (copyfile z (d + "/c4")))
+              ('badarg = (setenv ("LOVE_FS" + string 0 + "X") "v"))
+              ('badarg = (setenv "LOVE_FS" ("v" + string 0)))
+              ('badarg = (spawn ["true" ("a" + string 0)]))
+              (two? (stat d))))
+
    _ (unlink l) _ (unlink b)
    _ (test_fin ())
    _ (say out "fs: ok") (put out 10)))

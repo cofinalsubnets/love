@@ -10,7 +10,10 @@
 ; bracketed paste, the test takes the primary selection, and a middle click has pier ask
 ; for it: "p\nq" arrives bracketed, the newline a return, and the child paints magenta.
 ; then it prints "hello world": a drag over hello selects it and pier takes the primary,
-; which the test asks for and reads back; a double click on world takes the word.
+; which the test asks for and reads back; a double click on world takes the word. then
+; ctrl+shift+C puts it on the clipboard, a shift click stretches the primary back over
+; hello, and last the test owns the clipboard and hands pier a paste INCR, in pieces --
+; "p1", "\nq2", and the empty one that ends it: the child reads it whole and paints yellow.
 ; the child's exit takes pier with it, status 0. no Xvfb on the box -> a polite skip.
 ;   cat test/00-init.l test/host/pier.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
@@ -26,7 +29,7 @@
               0 0)
    dn (rdnum >xv)
    _ (test (charm? dn))
-   kid "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; read l; i=0; while [ $i -lt 80 ]; do echo; i=$((i+1)); done; stty raw -echo; printf '\\033[?1000h\\033[?1006h'; r=$(dd bs=1 count=19 2>/dev/null); [ \"$r\" = \"$(printf 'a\\033[<0;3;2M\\033[<0;3;2m')\" ] && printf '\\033[H\\033[44m  \\033[m'; printf '\\033[?1000l\\033[?1006l\\033[?2004h'; r=$(dd bs=1 count=15 2>/dev/null); [ \"$r\" = \"$(printf '\\033[200~p\\rq\\033[201~')\" ] && printf '\\033[H\\033[45m  \\033[m'; printf '\\033[3;1Hhello world'; sleep 5"
+   kid "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; read l; i=0; while [ $i -lt 80 ]; do echo; i=$((i+1)); done; stty raw -echo; printf '\\033[?1000h\\033[?1006h'; r=$(dd bs=1 count=19 2>/dev/null); [ \"$r\" = \"$(printf 'a\\033[<0;3;2M\\033[<0;3;2m')\" ] && printf '\\033[H\\033[44m  \\033[m'; printf '\\033[?1000l\\033[?1006l\\033[?2004h'; r=$(dd bs=1 count=15 2>/dev/null); [ \"$r\" = \"$(printf '\\033[200~p\\rq\\033[201~')\" ] && printf '\\033[H\\033[45m  \\033[m'; printf '\\033[3;1Hhello world'; r=$(dd bs=1 count=17 2>/dev/null); [ \"$r\" = \"$(printf '\\033[200~p1\\rq2\\033[201~')\" ] && printf '\\033[H\\033[43m  \\033[m'; sleep 2"
    ph (tether ["out/love" "pier" "-display" (":" + show dn) "sh" "-c" kid])
    _ (rest 2500)
    XW (cite 'xwire)
@@ -103,25 +106,63 @@
    _ (test ([128 0 128] = px 0 0))                     ; the child read the paste, bracketed
    ; the primary as the test's window reads it: ConvertSelection, then the property
    ut ((XW 'x-intern) s "UTF8_STRING") tp ((XW 'x-intern) s "TSEL")
-   (ask _) (: _ (w8 s 24) _ (w8 s 0) _ (w16 s 6) _ (w32 s ow) _ (w32 s 1) _ (w32 s ut) _ (w32 s tp) _ (w32 s 0)
+   cb ((XW 'x-intern) s "CLIPBOARD") ic ((XW 'x-intern) s "INCR")
+   (ask sel) (: _ (w8 s 24) _ (w8 s 0) _ (w16 s 6) _ (w32 s ow) _ (w32 s sel) _ (w32 s ut) _ (w32 s tp) _ (w32 s 0)
               _ ((XW 'x-flush) s)
               (wait _) (: e ((XW 'x-next) s)
                           (? !(two? e) ""
                              (((XW 'ev-code) e) = 31) (string (((XW 'x-getprop) s ow tp) 2))
                              (wait 0)))
               (wait 0))
-   (primary _) (: got {} t (twirl (\ _ (pin got () (ask 0))) 0)
+   (primary sel) (: got {} t (twirl (\ _ (pin got () (ask sel))) 0)
                   _ (rest 1000)
                   _ (? (landed? t) 0 (freeze t))
                   (peep got () ""))
    _ (fakeat 6 0 4 40) _ (fake 4 1) _ (fakeat 6 0 36 40) _ (fake 5 1)   ; a drag across hello, row 2
    _ (rest 500)
-   _ (test ("hello" = primary 0))
+   _ (test ("hello" = primary 1))
    _ (fakeat 6 0 60 40) _ (fake 4 1) _ (fake 5 1) _ (fake 4 1) _ (fake 5 1)   ; a double click on world
    _ (rest 500)
-   _ (test ("world" = primary 0))
+   _ (test ("world" = primary 1))
+   (presses l) (? (two? l) (: _ (fake <l <>l) (presses >>l)) 0)   ; (type keycode) pairs, in turn
+   (chord kc) (presses [2 37 2 50 2 kc 3 kc 3 50 3 37])    ; with ctrl and shift held
+   _ (chord 54)                                        ; ctrl+shift+C
+   _ (rest 300)
+   _ (test ("world" = primary cb))                      ; on the clipboard now
+   _ (presses [2 50]) _ (fakeat 6 0 4 40) _ (fake 4 1) _ (fake 5 1) _ (presses [3 50])   ; a shift click on hello
+   _ (rest 500)
+   _ (test ("hello world" = primary 1))                 ; the word stretched back to it
+   ; the clipboard, the test's again, and a paste of it INCR: the pieces go on pier's
+   ; property each time pier deletes the last, the empty one closing it
+   (prop w pr ty fmt n bs) (: _ (w8 s 18) _ (w8 s 0) _ (w16 s (6 + (#bs + 3) // 4)) _ (w32 s w) _ (w32 s pr)
+                             _ (w32 s ty) _ (w8 s fmt) _ (w8 s 0) _ (w16 s 0) _ (w32 s n) ((XW 'x-wpad) s bs))
+   (next code f) (: e ((XW 'x-next) s) (? !(two? e) () ((((XW 'ev-code) e) = code) && f ((XW 'ev-raw) e)) ((XW 'ev-raw) e) (next code f)))
+   (serve _) (: u32 (XW 'u32)
+                raw (next 30 (\ r 1))
+                rq (u32 raw 12) sel (u32 raw 16) ty (u32 raw 20) pr (u32 raw 24)
+                _ (w8 s 2) _ (w8 s 0) _ (w16 s 4) _ (w32 s rq) _ (w32 s 2048) _ (w32 s 4194304)   ; its property changes, to us
+                _ (prop rq pr ic 32 1 (string 5 + string 0 + string 0 + string 0))
+                _ (w8 s 25) _ (w8 s 0) _ (w16 s 11) _ (w32 s rq) _ (w32 s 0)
+                _ (w8 s 31) _ (w8 s 0) _ (w16 s 0) _ (w32 s 0) _ (w32 s rq) _ (w32 s sel)
+                _ (w32 s ty) _ (w32 s pr) _ (w32 s 0) _ (w32 s 0)
+                _ ((XW 'x-flush) s)
+                (feed l) (? (two? l)
+                            (: _ (next 28 (\ r (((u32 r 4) = rq) && ((u32 r 8) = pr) && ((r 16) = 1))))
+                               _ (prop rq pr ty 8 #<l <l)
+                               _ ((XW 'x-flush) s)
+                               (feed >l))
+                            0)
+                (feed ["p1" "\nq2" ""]))
+   _ (w8 s 22) _ (w8 s 0) _ (w16 s 4) _ (w32 s ow) _ (w32 s cb) _ (w32 s 0) _ ((XW 'x-flush) s)
+   it (twirl (\ _ (serve 0)) 0)
+   _ (chord 55)                                        ; ctrl+shift+V
+   _ (rest 1500)
+   _ (? (landed? it) 0 (freeze it))
+   _ (test ([128 128 0] = px 0 0))                     ; the child read the pieces as one paste
    _ (close s)
-   st (wfx <ph)
+   (wfn p n) (: g2 (gather p) (two? g2 ? g2 (n < 1 ? () (rest 2, wfn p (n - 1)))))
+   st (wfn <ph 3000)                                   ; a child still waiting on a paste: a fail, not a hang
+   _ (? (two? st) 0 (: _ (still <ph 15) (wfx <ph)))
    _ (test (two? st) (0 = <st))                        ; the child's exit took pier with it
    _ (still <xv 15)
    _ (wfx <xv)

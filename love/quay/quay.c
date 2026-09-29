@@ -59,7 +59,7 @@ void cb_stamp(struct cb *c, uint8_t i) {
 
 void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   c->wpos = c->spos = 0;
-  c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16;
+  c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16, c->pgen = 0;
   cb_store(c, sn);
   cb_hist(c, 0), c->twin = 0;
   c->flag = cb_show | cb_wrap;
@@ -396,6 +396,7 @@ uint32_t const *cb_ipx(struct cb const *c) { return (uint32_t const*) (cb_sbase(
 static uint32_t *cb_spx(struct cb *c) { return (uint32_t*) (cb_sbase(c) + cb_shead); }
 // the arena's words, 0 for a screen with no store
 static uint32_t cb_words(struct cb const *c) { return c->sn > cb_shead ? (c->sn - cb_shead) / 4u : 0; }
+static uint32_t cb_gen(struct cb *c) { return ++c->pgen ? c->pgen : ++c->pgen; }   // never 0
 
 // an empty store of sn bytes: no pictures, the registers black, nothing decoding
 void cb_store(struct cb *c, uint32_t sn) {
@@ -680,7 +681,7 @@ static void cb_six_close(struct cb *c) {
   uint32_t *px = cb_spx(c);
   for (uint32_t y = 1; y < h; y++)
     for (uint32_t x = 0; x < w; x++) px[im->off + y * w + x] = px[im->off + y * stride + x];
-  im->w = w, im->h = h, im->live = 1;
+  im->w = w, im->h = h, im->live = 1, im->gen = cb_gen(c);
   c->stop = im->off + w * h;
   cb_place(c, k, 0); }
 
@@ -744,7 +745,7 @@ static uint32_t cb_kit_scale(struct cb *c, uint32_t k) {
   for (uint32_t y = 0; y < H; y++)
     for (uint32_t x = 0; x < W; x++)
       px[off + y * W + x] = px[im->off + (uint64_t) y * im->h / H * im->w + (uint64_t) x * im->w / W];
-  cb_imgs(c)[k2] = (struct cb_img) { off, W, H, 1, 0 };
+  cb_imgs(c)[k2] = (struct cb_img) { off, W, H, 1, 0, cb_gen(c) };
   c->stop = off + W * H;
   return k2; }
 
@@ -834,7 +835,7 @@ static void cb_kit_end(struct cb *c) {
   else if (c->kpix < im->w * im->h) return cb_kit_reply(c, 0, "EINVAL:short");
   if (c->ka == 'q') return cb_kit_reply(c, 1, 0);          // asked, not kept
   if (c->ki) for (uint32_t j = 1; j < cb_nimg; j++) if (j != k && cb_imgs(c)[j].id == c->ki) cb_imgs(c)[j].id = 0;
-  im->live = 1, c->stop = im->off + im->w * im->h;
+  im->live = 1, im->gen = cb_gen(c), c->stop = im->off + im->w * im->h;
   if (c->ka == 'T') cb_kit_show(c, k);
   cb_kit_reply(c, 1, 0); }
 
@@ -1144,7 +1145,7 @@ int cb_face_ok(uint8_t const *b, uintptr_t n) {
   if (b[0] != 'q' || b[1] != 'f' || b[2] != '1' || b[3] || b[4] != 8 || b[5] != 16) return 0;
   uint32_t const np = cb_rd16(b, 6), ng = cb_rd16(b, 8) | cb_rd16(b, 10) << 16;
   uintptr_t const pg0 = cb_qf_head + 2u * cb_qf_dir, gl0 = pg0 + (uintptr_t) np * 512u;
-  if (np > cb_qf_dir || n != gl0 + (uintptr_t) ng * 32u) return 0;
+  if (np > cb_qf_dir || (uint64_t) n != gl0 + (uint64_t) ng * 32u) return 0;
   for (uint32_t d = 0; d < cb_qf_dir; d++) {
     uint32_t const p = cb_rd16(b, cb_qf_head + 2u * d);
     if (p != 0xffff && p >= np) return 0; }

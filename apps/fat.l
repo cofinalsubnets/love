@@ -66,11 +66,19 @@
         wr1 f (lba + f 5) t,                          ; the mirror
         pin f 9 lba, pin f 10 t, ()))
    (fat-end? v) (0x0FFFFFF8 <= v)
-   ; a file's clusters first to last; freeing walks the same spine
-   (chain-of f cl) (cl < 2 || fat-end? cl ? ()
-                    (cl . chain-of f (fat@ f cl)))
-   (chain-zap f cl) (cl < 2 || fat-end? cl ? ()
-                     (: nx (fat@ f cl) (fat! f cl 0, chain-zap f nx)))
+   ; a file's clusters first to last, at most `most` of them; freeing walks the same
+   ; spine. a chain holds a cluster once, so the walk stops at one it has seen: a loop
+   (fat-cl? f cl) (1 < cl && cl <= f 8 + 1)
+   (chain-upto f cl most)
+    (: seen (tablet 0)
+       (go c k acc) (? (fat-cl? f c && 0 < k && !(peep seen c 0))
+                       (: _ (pin seen c 1) (go (fat@ f c) (k - 1) (c . acc)))
+                       (rev acc))
+       (go cl most ()))
+   (chain-of f cl) (chain-upto f cl (f 8))
+   (chain-zap f cl)
+    (: (go c k) (? (fat-cl? f c && 0 < k) (: nx (fat@ f c) (fat! f c 0, go nx (k - 1))) ())
+       (go cl (f 8)))
    ; one free cluster, marked end -- () when the disk is full
    (fat-take f)
     (:- (go (f 11) n) n (f 8) (go cl left)
@@ -92,8 +100,7 @@
    (clu-wr f c s) (wr1 f (clu-lba f c) s)
    (clu-bytes f) (f 2 * 512)
    ; a whole chain's bytes, and bytes laid over a chain (the tail zero-padded)
-   (chain-rd f cl) (: (go c acc) (two? c ? (go >c (acc + clu-rd f <c)) acc)
-                      (go (chain-of f cl) ""))
+   (chain-rd f cl most) (: l (map (clu-rd f) (chain-upto f cl most)) (atom? l ? "" (cats l)))
    (chain-wr f cls s)
     (: cb (clu-bytes f)
        n #s
@@ -201,7 +208,7 @@
    ; --- a directory as a whole: its groups, and writing them back (growing the
    ;     chain when they outgrow it; a shrunk dir keeps its clusters -- the pad
    ;     zeros read as the end marker, and simple beats clever) ---
-   (dir-load f cl) (dir-scan (chain-rd f cl))
+   (dir-load f cl) (dir-scan (chain-rd f cl (f 8)))
    (dir-save f cl gs)
     (: s (dir-bytes gs)
        cb (clu-bytes f)
@@ -321,7 +328,8 @@
     (fat-walk f path @ [_ _ g]
      (? (!(tablet? g) || (peep g 1 () & 16)) ()
         (: sz (peep g 3 ())
-         (sz ? [1 (snip (chain-rd f (peep g 2 ())) 0 sz)] [1 ""]))))
+         (sz ? [1 (snip (chain-rd f (peep g 2 ()) ((sz + clu-bytes f - 1) // clu-bytes f)) 0 sz)]
+               [1 ""]))))
    ; the order is the safety: new chain laid, entry swapped in, and only then the old
    ; chain freed -- a refusal mid-way leaves the old file whole.
    (fat-write f path s)

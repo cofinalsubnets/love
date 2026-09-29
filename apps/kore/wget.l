@@ -23,6 +23,8 @@
        (go i) (? ((n - m) < i) -1 ((snip s i (i + m)) = sub) i (go (i + 1)))
        (go cite))
    (wg-lower s) (string (map (i \ (: c (s i) (? (64 < c && c < 91) (c + 32) c))) (jot #s)))
+   ; what a peer said, fit for a terminal: the C0 controls but tab and newline, and DEL, out
+   (wg-plain s) (string (filter (c \ !((c < 32 && c != 9 && c != 10) || c = 127)) (map (i \ s i) ^#s)))
    ; "https://host[:port]/path" -> (tls? host port path) | ()
    (wg-url u)
     (: tls? (8 <= #u && (snip u 0 8) = "https://")
@@ -101,7 +103,7 @@
                    loc (wg-header (r 1) "location")
                    (? (300 <= code && code < 400 && string? loc)
                       (? (hops < 1) [1 "wget: too many redirects"]
-                         ((? quiet 0 (say err ("wget: -> " + loc + "\n"))), wg-fetch (wg-resolve url loc) (hops - 1) quiet))
+                         ((? quiet 0 (say err ("wget: -> " + wg-plain loc + "\n"))), wg-fetch (wg-resolve url loc) (hops - 1) quiet))
                       (200 <= code && code < 300) [0 (r 2)]
                       [8 ("wget: " + (u 1) + " answered " + show code)]))))))
    (wg-name url)

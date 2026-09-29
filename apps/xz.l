@@ -3,7 +3,7 @@
 ;   (xz-pack s dict check)  -> the .xz bytes of s: one block, one LZMA2 filter, the check
 ;                              one of 'none 'crc32 'crc64 'sha256
 ;   (xz-unpack s)           -> (1 bytes) | a word saying why not ('format 'corrupt 'end
-;                              'filter 'check): every stream in s, the padding between them
+;                              'filter 'check 'big): every stream in s, the padding between them
 ;                              skipped, each block's check and each index held to its blocks
 ; the codec is C (lzma2e lzma2d lzma2len lzmad crc64); the container is here, where
 ; its fields are plain to read. the xz spec is tukaani's .xz file format 1.2.
@@ -70,6 +70,7 @@
                          cz (xz-csize cid)
                          e (d0 + cl + padk cl 4)
                          (? (cl < 0 || #s < d0 + cl) 'end
+                            (u = 1) 'big
                             (!(string? u) || charm? <r2 && #u != <r2) 'corrupt
                             (#s < e + cz) 'end
                             (0 < cz && snip s e (e + cz) != xz-check cid u ? 'check
@@ -136,7 +137,7 @@
    (xz-unlzma s)
     (: us (rdle s 5 8)
        u (lzmad (snip s 13 #s) (s 0) (rdle s 1 4) (us = 18446744073709551615 ? -1 us))
-       (string? u ? [1 u] 'corrupt))
+       (? (string? u) [1 u] (u = 1) 'big 'corrupt))
 )
 ) ; module 'xz
 
@@ -173,6 +174,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (: d (xzc-dicts (peep t 'lvl 6)) (go v) (d <= v || n <= v ? v (go (v * 2))) (go 4096))
    (xzc-why w) (w @ 'format "File format not recognized" 'end "Unexpected end of input"
                     'filter "Unsupported filters" 'check "Compressed data is corrupt"
+                    'big "Memory usage limit reached (the output passes 1 GiB)"
                     "Compressed data is corrupt")
    (xzc-un s) (xz-lzma? s && snip s 0 6 != xz-magic ? (xz-unlzma s) (xz-unpack s))
    ; .xz and .lzma come off; .txz and .tlz answer .tar

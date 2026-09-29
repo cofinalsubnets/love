@@ -200,4 +200,28 @@ evil tar "$E/tx"
 [ $r -eq 1 ] || fail "kore cpio: a hostile archive (rc $r)"
 grep -q "contains '..'" "$o" || fail "kore cpio: a '..' member not named"
 evil cpio "$E/cx"
+# an output past 1 GiB is refused with a word, not grown into the heap: 1100 MiB of zeros,
+# a few MiB packed, through each decoder where the system coder is here to pack it
+B=$HO/.arcbig; rm -rf "$B"; mkdir -p "$B"
+big() { dd if=/dev/zero bs=1048576 count=1100 2>/dev/null | "$@"; }
+if command -v gzip >/dev/null 2>&1; then
+  big gzip -1 > "$B/z.gz"
+  korerun gunzip -c "$B/z.gz" > /dev/null 2> "$o"; r=$?
+  [ $r -eq 1 ] && grep -q 'past 1 GiB' "$o" || fail "kore gunzip of 1100 MiB (rc $r)"
+  korerun tar tzf "$B/z.gz" > /dev/null 2>&1 && fail "kore tar z of 1100 MiB was taken"
+fi
+if command -v xz >/dev/null 2>&1; then
+  big xz --format=lzma -0 > "$B/z.lzma"
+  korerun unlzma -c "$B/z.lzma" > /dev/null 2> "$o"; r=$?
+  [ $r -eq 1 ] && grep -q 'Memory usage limit' "$o" || fail "kore unlzma of a sizeless 1100 MiB (rc $r)"
+  big xz -0 -T1 > "$B/z.xz"
+  korerun unxz -c "$B/z.xz" > /dev/null 2> "$o"; r=$?
+  [ $r -eq 1 ] && grep -q 'Memory usage limit' "$o" || fail "kore unxz of 1100 MiB (rc $r)"
+fi
+if command -v bzip2 >/dev/null 2>&1; then
+  big bzip2 -1 > "$B/z.bz2"
+  korerun bunzip2 -c "$B/z.bz2" > /dev/null 2> "$o"; r=$?
+  [ $r -eq 2 ] && grep -q 'past 1 GiB' "$o" || fail "kore bunzip2 of 1100 MiB (rc $r)"
+fi
+rm -rf "$B"
 echo "kore: gzip/gunzip/zcat/xz/unxz/bzip2/bunzip2/tar/cpio under kore's door ok"

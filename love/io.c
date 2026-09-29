@@ -34,8 +34,7 @@ static struct ai
  *noop_flush(struct ai *g),
  *p0chars(struct ai *g, char const *s),
  *p0onto(struct ai *g, char const *s),
- *p0read1(struct ai *g, uintptr_t d, uintptr_t n),
- *p0reads(struct ai *g, uintptr_t d, uintptr_t n),
+ *p0read1(struct ai *g, uintptr_t d),
  *p1text(struct ai *g, char const *s),
  *qtop(struct ai *g),
  *readtext(struct ai *g, char const *s),
@@ -757,7 +756,7 @@ lvm(lvm_string) {
 //
 // p0's input is a charlist and its position is the list: the cursor is one love
 // value on the l stack, named by its depth (a collection moves the stack, never
-// a depth); p0reads piles datums above it. a lookahead needs no pushback --
+// a depth); p0read1 piles datums and frames above it. a lookahead needs no pushback --
 // `unget` is simply not advancing.
 static ai_inline word *p0cur(struct ai *g, uintptr_t d) {
  return topof(ai_core_of(g)) - d; }
@@ -857,44 +856,43 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
 //
 // the pure lisp subset and nothing else: delimiters, comments, strings, atoms, ' quote --
 // the sigil surface is p1's, and p1.l + egg.l are held to this subset so p0 can read them.
-// control flow on the C stack, values on g->sp, so no love value sits in a C local across
-// an allocation. a reader of a subset, not a validator: enforcement is the differential
-// (test/host/rdiff.l). nesting rides the C stack, so n counts it and past p0_deep
-// the read scares rather than running the stack out.
-#define p0_deep 1024
-static struct ai *p0read1(struct ai *g, uintptr_t d, uintptr_t n);
-
-// a list: read datums until `)`, then fold n of them off the stack. the tail is
-// ZeroPoint, not zero -- reader lists are ()-terminated (the zero-ontology), and
+// values on g->sp, and the nesting there too, so no love value sits in a C local across
+// an allocation and a deep form costs heap, never C stack. a reader of a subset, not a
+// validator: enforcement is the differential (test/host/rdiff.l).
+//
+// one datum, read as a loop over open frames. each frame is a charm under its datums:
+// the enclosing frame's count, put by when this one opened. n is the open frame's own --
+// a list's elements so far, or -1 for a quote, which takes exactly one. a list folds
+// with a () tail, not zero -- reader lists are ()-terminated (the zero-ontology), and
 // zero is the fixnum 0, which the printer shows the same way.
-static struct ai *p0reads(struct ai *g, uintptr_t d, uintptr_t deep) {
- if (deep >= p0_deep) return encode(g, ai_status_scare);
- uintptr_t n = 0;
- for (int c; ai_ok(g); n++) {
-  if ((c = p0skip(g, d)) == ')') { p0pop(g, d); break; }
-  if (c == EOF) return encode(g, ai_status_more);               // unclosed list
-  g = p0read1(g, d, deep + 1); }
- if (!ai_ok(g)) return g;
- for (g = ai_push(g, 1, ZeroPoint); ai_ok(g) && n--; g = gxr(g));
- return g; }                                            // () folds zero times -> ZeroPoint
-
-static struct ai *p0read1(struct ai *g, uintptr_t d, uintptr_t n) {
- int c = p0skip(g, d);
- p0pop(g, d);
- switch (c) {
-  case '(': return p0reads(g, d, n);
-  case ')': case EOF: return encode(ai_core_of(g), ai_status_eof);  // stray ) / no datum
-  case '"': return ioread1str(g, d);
-  case '\'':                                            // quote: 'x = (\ x)
-   if (n >= p0_deep) return encode(g, ai_status_scare);
-   g = p0read1(g, d, n + 1);
-   if (ai_code_of(g) == ai_status_eof)                  // quote with no operand
-    g = encode(ai_core_of(g), ai_status_more);
-   g = gxr(ai_push(g, 1, ZeroPoint));                   // (d . ())
-   g = intern(ai_strof(g, "\\"));
-   return gxl(g);                                       // (\ . (d))
-  case '\\': return intern(ai_strof(g, "\\"));          // lambda/quote: never fuses (form space)
-  default: return ioread1sym(g, d, c); } }              // name / number
+static struct ai *p0read1(struct ai *g, uintptr_t d) {
+ intptr_t n = 0;
+ uintptr_t depth = 0;
+ for (;;) {
+  int c = p0skip(g, d);
+  p0pop(g, d);
+  if (c == ')' && depth && n >= 0) {                   // the open list closes
+   for (g = ai_push(g, 1, ZeroPoint); ai_ok(g) && n--; g = gxr(g));
+   if (!ai_ok(g)) return g;
+   n = getcharm(g->sp[1]), g->sp[1] = g->sp[0], g->sp++, depth--; }
+  else switch (c) {
+   case '(': case '\'':                               // a frame opens: list, or quote 'x = (\ x)
+    if (!ai_ok(g = ai_push(g, 1, putcharm(n)))) return g;
+    n = c == '(' ? 0 : -1, depth++;
+    continue;
+   case ')': case EOF:                                 // stray ) / no datum; inside a frame, unfinished
+    return encode(ai_core_of(g), depth ? ai_status_more : ai_status_eof);
+   case '"': g = ioread1str(g, d); break;
+   case '\\': g = intern(ai_strof(g, "\\")); break;  // lambda/quote: never fuses (form space)
+   default: g = ioread1sym(g, d, c); }                 // name / number
+  // a datum is on top: an element of the open list, or the operand that closes a quote
+  for (;;) {
+   if (!ai_ok(g) || !depth) return g;
+   if (n >= 0) { n++; break; }
+   g = gxr(ai_push(g, 1, ZeroPoint));                  // (d . ())
+   g = gxl(intern(ai_strof(g, "\\")));                // (\ . (d))
+   if (!ai_ok(g)) return g;
+   n = getcharm(g->sp[1]), g->sp[1] = g->sp[0], g->sp++, depth--; } } }
 
 // (sound0 text): sound's bootstrap twin over p0's grammar, for the differential.
 // the text slot is the cursor: sp[0] comes in as the charlist and goes out as the
@@ -903,11 +901,11 @@ static struct ai *p0read1(struct ai *g, uintptr_t d, uintptr_t n) {
 // ret (make vmret).
 ai_noinline static struct ai *p0text(struct ai *g) {
  uintptr_t const d = topof(g) - g->sp;                // the cursor's depth, and the rollback point
- g = p0read1(g, d, 0);
+ g = p0read1(g, d);
  if (ai_ok(g)) return gxl(g);                         // (datum . residue), over the text slot
  enum ai_status const st = ai_code_of(g);             // no datum: which nothing?
  if (st != ai_status_eof && st != ai_status_more) return g;   // a real failure (oom) propagates
- // the rollback is not optional: a torn parse leaves p0reads's pile behind and
+ // the rollback is not optional: a torn parse leaves p0read1's pile behind and
  // the text slot is no longer sp[0] -- drop back to the entry depth
  g = ai_core_of(g), g->sp = topof(g) - d;
  if (st == ai_status_eof) return g->sp[0] = ZeroPoint, g;     // a clean end, over the text slot
@@ -948,7 +946,7 @@ static struct ai *p0onto(struct ai *g, char const *s) {
  uintptr_t const d = topof(g) - g->sp;               // the cursor, pushed under the datums
  uintptr_t n = 0;
  for (;; n++) {
-  g = p0read1(g, d, 0);
+  g = p0read1(g, d);
   if (ai_ok(g)) continue;
   if (ai_code_of(g) != ai_status_eof) return g;      // more: an unfinished shape
   g = ai_core_of(g);
