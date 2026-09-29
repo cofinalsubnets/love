@@ -1605,7 +1605,16 @@
        ('deref X)
         ; frame-direct: a constant-indexed element is a static (r4, off) face
         (: fdc (afd g env e)
+           ; *p++ on a register-homed pointer: the home steps first and the face reads one step
+           ; back, so the old value needs no copy (p's step and any other read of p are unsequenced)
+           pp9 (X @ ('post ('var nm) k)
+                     (: en (vent g env nm)
+                        (? (two? en && <en = 'regv && ptr? <>>en && !(gvarr? <>(<>>en)) &&
+                            !(abl? g 'pinc))
+                           (: d (k * tsz g <>(<>>en)) (? (fits32 d) [<>en <>(<>>en) d]))))
+                     ())
            (? (two? fdc) (mkm <>fdc 'r4 <fdc ())
+              (two? pp9) (mkm <>pp9 <pp9 (0 - pp9 2) [['add <pp9 <pp9 (pp9 2)]])
               ; ptr ± const folds the scaled constant into the face's offset (p[1] is one load).
               ; static only: a var whose vent type is a plain pointer (a VLA pointee scales at runtime)
               (: pv (X @ ('bin op a b && elem op '(+ -))
