@@ -5,10 +5,10 @@
 (: nest ("/home/love-" + love-version)
    mod (nest + "/out/love.wasm")
    _ (puts "nest: laying the source\n")
-   _ ((cite 'source 'src-nest) "/home")
+   _ (cite 'source 'src-nest "/home")
    _ (puts "nest: cook wasm LOVE=love\n")
    _ (flush out)
-   st ((cite 'doom 'run-in) nest ["cook" "wasm" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])
+   st (cite 'doom 'run-in nest ["cook" "wasm" "LOVE=love" "LUSHFLAGS=-a" "LOVE_ARMED=1"])
    q (two? (stat mod) && open mod "r")
    n (hot? q ? (: s (slurp q) (close q, #s)) 0)
    _ (puts ("nest: cook wasm answered " + show st + ", "

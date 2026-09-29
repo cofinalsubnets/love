@@ -28,8 +28,8 @@
      = show (\ q1 q2 q3 q4 q5 q6 q7 q8 q9 q10 q11 q12 q13 q14 q15 q16 q17 q18 q19 q20
               q21 q22 q23 q24 q25 q26 q27 q28 (q27 + q28))) ; past z, shortlex rolls to aa
   ("(+ 1)" = show (+ 1))                                     ; partial app of a builtin: stable form
-  (3 = ((rt ((\ a b (a + b)) 1)) 2))                         ; partial-applied lambda round-trips (capture rendering free to vary)
-  (9 = (: y (2 + 3) ((rt (\ x (x + y))) 4)))                 ; closure with a captured var round-trips to a working fn
+  (3 = (rt ((\ a b (a + b)) 1) 2))                           ; partial-applied lambda round-trips (capture rendering free to vary)
+  (9 = (: y (2 + 3) (rt (\ x (x + y)) 4)))                   ; closure with a captured var round-trips to a working fn
   ; --- the read-back is the thread: show -> read -> eval compiles to the same words ---
   (rt= (\ x (? x 1 2)))
   (rt= (\ x (+ 1 (? (two? x) (cap x) 7))))                     ; a cond joined in the middle of a call

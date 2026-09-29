@@ -783,7 +783,7 @@
   !(cite 'spec-nope)                                            ; the presence guard
   (tablet? (cite 'kanren))                                      ; a module is its tablet
   (elem 'walk (keys (cite 'kanren)))                         ; so `keys` introspects it
-  (8 = ((cite 'kanren 'subst) '(()) 8))                         ; curried member reach
+  (8 = (cite 'kanren 'subst '(()) 8))                           ; curried member reach
   !(cite 'kanren 'spec-missing)                                 ; a member miss reads the zero point
   (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names
 
@@ -800,7 +800,7 @@
  (test
   (tablet? m1) (m1 = m2) (m1 = cite 'spec-mod)           ; one tablet, registered, answered
   (42 = cite 'spec-mod 'smv) (100 = cite 'spec-mod 'smw) ; the reopen read 41 and extended
-  (42 = ((cite 'spec-mod 'smf) 1))                       ; smf folded smv at its compile: 41
+  (42 = (cite 'spec-mod 'smf 1))                         ; smf folded smv at its compile: 41
   (smv-out = elem 'smv (names ()))                    ; no leak: the walk is as it was
   !(elem 'sma (names ()))                             ; the anonymous layer leaks nothing
   (tablet? ma)))                                         ; the scratch layer answers its tablet
@@ -819,4 +819,4 @@
 ; --- odds & ends --- show renders a value as its reparsable printed form; an opaque handle acts
 ; as a constant function. the VM's own instruments -- clock/nclock/gauge/please and gauge's write
 ; twin `tune` -- are not the language: test/gauge.l.
-(test (string? (show @(1 2 3))) !((cask 4) 'x))
+(test (string? (show @(1 2 3))) !(cask 4 'x))

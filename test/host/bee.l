@@ -41,7 +41,7 @@
        _ (flush c)
        (close c))
    cr-srv (twirl (\ _ ((: (g k) (: _ (await cr-l) c (accept cr-l) _ (cr-serve c) (g k))) 0)) 0)
-   (cr-body req) (: k (cr-find req "\r\n\r\n" 0) ((json-read (snip req (k + 4) #req)) 1))
+   (cr-body req) (: k (cr-find req "\r\n\r\n" 0) (json-read (snip req (k + 4) #req) 1))
 
    ; a stream said as server-sent events, whole or chunked
    (cr-sse evs) (foldl (\ a e (a + "data: " + (string? e ? e (json-show e)) + "\n\n")) "" evs)

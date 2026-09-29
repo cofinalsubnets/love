@@ -38,7 +38,7 @@
  (opt p y _) (p y (\ s (y s ())))
  (cats a b y n) (a (\ s l (b (\ s m (y s (cat l m))) n s)) n)
  (alt a b y n) (a y (b y n))
- (rep a y n s) ((opt (cats a (rep a))) y n s)
+ (rep a y n s) (opt (cats a (rep a)) y n s)
  (test
   ("xx" = "xx" + "")
   ("xx" = "x" + "x")

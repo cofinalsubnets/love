@@ -319,7 +319,7 @@
           (: mk (ev '(\ b (: (addb x) (+ x b)
                              (suml l) ((: (go l a) (? (two? l) (go (cup l) (+ a (addb (cap l)))) a)) l 0)
                              suml)))
-             (306 = ((mk 100) '(1 2 3))))                                         ; a sibling with an import: entry curried through the frame
+             (306 = (mk 100 '(1 2 3))))                                           ; a sibling with an import: entry curried through the frame
           (: eo (ev '(: (ev? n) (? (< n 1) 1 (od? (- n 1)))
                         (od? n) (? (< n 1) 0 (ev? (- n 1)))
                         (cnt l) ((: (go l a) (? (two? l) (go (cup l) (+ a (od? (cap l)))) a)) l 0)
@@ -893,7 +893,7 @@
    ; declined form keeps the quoted body list in the binding slot; an admitted one splices
    ; the native closure (not two?). If this fires, the point-= grammar regressed and the
    ; baked elem silently fell back to interp.
-   adm ((G 'autogroup) '(: (pm1 x l) (? (two? l) (? (= x (cap l)) 1 (pm1 x (cup l))) 0) (pm1 'b '(a b))))
+   adm (G 'autogroup '(: (pm1 x l) (? (two? l) (? (= x (cap l)) 1 (pm1 x (cup l))) 0) (pm1 'b '(a b))))
    _ (assert
       (! (two? (caup >adm))) (1 = (ev adm))                  ; admitted: native spliced, and it answers
       (1 = (elem 'b '(a b c))) (0 = (elem 'z '(a b c)))      ; nom key, native walk

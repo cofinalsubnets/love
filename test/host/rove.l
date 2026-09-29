@@ -391,7 +391,7 @@
    _ (pins (g 'd) 'cols 40)
    _ (pin (g 'loot) (2 + 9 * 1) '(bells))
    _ (crawl-turn g [1 0])
-   (line _) ((g 'sign) 2)
+   (line _) (g 'sign 2)
    _ (test (1 = g 'p 'x) ("OEIS A000110" = <(g 'sign)) ("B(0) = 1" = line ()) ('(0 (1)) = g 'bell)
            (find (g 'msg) "shelf" 0) (any (l \ find l "put it back" 0) (g 'sign)))
    _ (crawl-turn g 49)
@@ -565,10 +565,10 @@
   !((marks (themes 0)) = (marks (themes 1)))     ; and no two tiers wear the same face
   (35 = <(tile-face (themes 1) 0 1 0 0 0))
   (35 = <(tile-face (themes 2) 0 1 0 0 0))
-  (28 = ((tile-face (themes 0) 0 1 0 0 0) 1))    ; lit and remembered are two pens
-  (22 = ((tile-face (themes 0) 0 0 0 0 0) 1))
+  (28 = (tile-face (themes 0) 0 1 0 0 0 1))      ; lit and remembered are two pens
+  (22 = (tile-face (themes 0) 0 0 0 0 0 1))
   (60 = <(tile-face (themes 0) 2 1 0 0 0))       ; and the stair is gold on every floor
-  (220 = ((tile-face (themes 2) 2 1 0 0 0) 1))))
+  (220 = (tile-face (themes 2) 2 1 0 0 0 1))))
 
 ; --- the flavour: nothing on a floor is silent, and nothing says one thing only
 (: (says? nm) (0 < #(mutter 0 nm))
@@ -578,7 +578,7 @@
   (all-say? (strewings (themes 0)))                ; every strewing of every tier
   (all-say? (strewings (themes 1)))
   (all-say? (strewings (themes 2)))
-  (all-say? (map (k \ ((mob-new k 0 0) 'nm)) ^13)) ; ..and every mob in the book
+  (all-say? (map (k \ (mob-new k 0 0 'nm)) ^13))   ; ..and every mob in the book
   !(says? "the man in the moon")                   ; a name with no row is silent
   (: t (foldl (\ t k (pin t (mutter k "tuft") 1)) {} ^9)
      (1 < #(keys t)))))                            ; and one thing says several
@@ -776,9 +776,9 @@
    _ (pins (g 'p) 'x (h 'x + 1) 'y (h 'y))
    _ (crawl-turn g [-1 0])                             ; bump her
    root (talk-node 'start)
-   c1 ((root 2) 0)
+   c1 (root 2 0)
    _ (test (two? (g 'sign)) ('start = g 'talk) (g 'talked) (tablet? (g 'her))
-           (find ((g 'sign) 1) ((root 1) 0) 0)         ; the root's first line
+           (find (g 'sign 1) (root 1 0) 0)             ; the root's first line
            (any (l \ find l (show <c1 + "  ") 0) (g 'sign)))   ; ..and its choices numbered
    _ (crawl-turn g (48 + <c1))                         ; the first branch
    _ (test (c1 2 = g 'talk) (two? (g 'sign)))
@@ -932,7 +932,7 @@
   ((garden-bars 0) != (garden-bars 1))
   ; the middle: two bars to a horn, struck in the same slots -- one horn, two notes
   (: bs (middle-bars 4)
-     ((2 = #bs) && foldl (\ a i (a && ((tablet? (<bs i)) = (tablet? ((bs 1) i))))) 1 ^12))
+     ((2 = #bs) && foldl (\ a i (a && ((tablet? (<bs i)) = (tablet? (bs 1 i))))) 1 ^12))
   ; ..and now and then it is a tune instead, which holds for a whole run of bars
   (0 < over 200 (c \ (tune? c) ? 1 0))
   (0 < over 200 (c \ (tune? c) ? 0 1))

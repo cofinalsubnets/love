@@ -679,7 +679,7 @@
    ; one door left.
    nifseam (cite 'glaze 'nif)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
-    (: bs (peep ((cite 'holo 'assemble) 'x64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
+    (: bs (peep (cite 'holo 'assemble 'x64 ir) 'bytes 0)     ; through the registry accessor -- holo's whole public surface
        c (cask bs)                                           ; the charlist lane fills in C
        (nifseam c fb ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
@@ -848,14 +848,14 @@
    (fsearch s)                                              ; -> 'sat or 'unsat (s holds the model on SAT)
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0)
        ((: (loop st)                                                ; st threads the rephase RNG (seeded: reproducible)
-           (: confl ((peep s 'bcp ()) fx (peep s 'ar ()) (peep s 'wn ()))
+           (: confl (peep s 'bcp () fx (peep s 'ar ()) (peep s 'wn ()))
               (? (confl > -1)
                  (: _ (? (getw fx 0 > peep s 'btop 0)               ; a new deepest trail: snapshot its
                          (pin s 'btop (getw fx 0), fsnap s)  ; polarities (the wheel's best spoke)
                          0)
                     _ (fens s 'ar (8 * (getw fx 4 + (nv + 3))))     ; room for the learnt clause
                     _ (fens s 'wn (8 * (getw fx 5 + 4)))            ; ... and its two watch nodes
-                    r ((peep s 'conf ()) fx (peep s 'ar ()) (peep s 'wn ()) confl)
+                    r (peep s 'conf () fx (peep s 'ar ()) (peep s 'wn ()) confl)
                     (? (r = -1) 'unsat
                        (: cid (r >> 6) glue (r & 63)
                           _ (: j (peep fdrat0 () 0)              ; the learnt is rup: log it

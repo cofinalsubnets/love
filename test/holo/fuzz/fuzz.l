@@ -253,10 +253,10 @@
 
  ; ---- the arch in force (a tablet of closures, rebound per lane) ----
  AR (tablet 0)
- (a-ops s) ((peep AR 'ops 0) s)
- (a-mem s) ((peep AR 'mem 0) s)
- (a-abs s) ((peep AR 'abs 0) s)
- (a-imm s) ((peep AR 'imm 0) s)
+ (a-ops s) (peep AR 'ops 0 s)
+ (a-mem s) (peep AR 'mem 0 s)
+ (a-abs s) (peep AR 'abs 0 s)
+ (a-imm s) (peep AR 'imm 0 s)
 
  ; ---- the spec interpreter: one description checks one decode ----
  ; spec = ([mnems checks] ..); a check is [r abs] [rw abs W] [i VAL] [m base disp]
@@ -440,7 +440,7 @@
    ["st_sized" (\ _ (: row (pick '(("st1" ("strb" "sturb")) ("st2" ("strh" "sturh")) ("st4" ("str" "stur"))))
                        b (rrand 0) o (arm-disp 0) s (nrand 0)
                        [[[(intern <row) b o s]] (spec1 (row 1) [['rw s 'w] ['m b o]])]))]
-   ["pushpop" (\ _ (: base-sp? (\ ins (: m (mem-arm ((ops-arm (i-ops <ins)) 1))
+   ["pushpop" (\ _ (: base-sp? (\ ins (: m (mem-arm (ops-arm (i-ops <ins) 1))
                                           (? ((atom? m) || !((abs-arm <m) = 'sp)) "base != sp" ())))
                       (? (coin 0)
                          (: s (nrand 0)
@@ -668,7 +668,7 @@
                        (: s (gen 0) ir <s chk (s 1)
                           hx (holo-hex tgt ir)
                           r (? !(string? hx) "holo produced no output"
-                               (: ins ((row 3) hx)
+                               (: ins (row 3 hx)
                                   r1 (chk ins)
                                   (? (string? r1) r1
                                      (llvm2 && !(llvm-ok? hx)) "llvm-mc reject"
