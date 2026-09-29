@@ -369,8 +369,12 @@
 
    ; -- hostname: the name the kernel keeps. uname -n reads the same line, and this is
    ; the spelling a script asks by; no setting, which wants privilege and a syscall --
-   (hostname-main _)
-    (say out (u-1line "/proc/sys/kernel/hostname" "unknown"), put out 10, flush out, 0)
+   ; -s the name up to its first dot, -f the canonical name the host resolves itself to
+   (hostname-main as)
+    (: fo (uflagsl "hostname" as () "fs" {"short" 115 "fqdn" 102 "long" 102})
+       h (u-1line "/proc/sys/kernel/hostname" "unknown")
+       n (? (<fo 102) <>(uhw-self 0) (<fo 115) (: k (findsub h ".") (? (k < 0) h (snip h 0 k))) h)
+       (say out n, put out 10, flush out, 0))
 
    ; -- hostid and dnsdomainname: what the resolver says of this host's own name, read
    ; the way glibc's lookup reaches it here -- /etc/hosts, then the addresses the host
@@ -1184,8 +1188,24 @@
        ws (? (two? l) (words <>l) ())
        (? (2 < #ws) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
           "0.00, 0.00, 0.00"))
+   ; -p says the time up alone, in weeks days hours minutes as procps says it; -s the
+   ; moment the host came up
    (uptime-main as)
-    (: secs (uupsecs 0)
+    (: fo (uflags "uptime" as () "ps")
+       secs (uupsecs 0)
+       (unit n w) (? (n = 0) () (show n + " " + w + (? (n = 1) "" "s")))
+       _ (? (<fo 112) (: ps (filter string? [(unit (secs // 604800) "week") (unit (secs % 604800 // 86400) "day")
+                                             (unit (secs % 86400 // 3600) "hour") (unit (secs % 3600 // 60) "minute")])
+                         _ (say out ("up " + (? (two? ps) (join ", " ps) "0 minutes") + "\n"))
+                         _ (flush out) (uleave 0)) 0)
+       ; the boot is /proc/stat's btime, the kernel's own record of it, where now less the
+       ; uptime would fall either side of a second
+       _ (? (<fo 115) (: st (uread "/proc/stat")
+                         bl (? (two? st) (filter (l \ starts? l "btime ") (lines <>st)) ())
+                         b (? (two? bl) (uatoi (snip <bl 6 #<bl)) ((clock 0) // 1000 - secs))
+                         ymd (civil (b // 86400)) tod (uclk (b % 86400))
+                         _ (say out (show <ymd + "-" + zpad 2 (show (ymd 1)) + "-" + zpad 2 (show (ymd 2)) + " " + tod + "\n"))
+                         _ (flush out) (uleave 0)) 0)
        ld (uloadav 0)
        tod (uclk (((clock 0) // 1000) % 86400))
        r (uut-read (uut-file 0))

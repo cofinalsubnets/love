@@ -996,7 +996,7 @@
   -p  one process, spelled again for each
   keys: q quit, space or r repaint, c the command line, P M T N the orders"
     'free "usage: free [-b|-k|-m|-g|-h] [-tw]"
-    'uptime "usage: uptime"
+    'uptime "usage: uptime [-p|-s]"
     'pidof "usage: pidof [-s] NAME.."
     'pgrep "usage: pgrep [-acflnovx] [-d DELIM] [-u USER,..] [PATTERN]"
     'pkill "usage: pkill [-SIG] [-efnovx] [-u USER,..] [PATTERN]"
@@ -1034,7 +1034,7 @@
     'which "usage: which [-a] NAME.."
     'tty "usage: tty"
     'clear "usage: clear"
-    'hostname "usage: hostname"
+    'hostname "usage: hostname [-s|-f]"
     ; the archives keep their own screens: the cmd modules leak them off the same
     ; bodyless letrec the mains come through, so the door shows what the tool would
     'cpio (cite 'cpiocmd 'cpioc-usage)
@@ -1058,7 +1058,7 @@
    ; that do read still answer. each of these ignored every argument it was handed,
    ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
    ; is the leading words only, which leaves `ps aux` (no dash) exactly as it was.
-   korebare '(arch nproc whoami groups uptime pwd tty clear hostname)
+   korebare '(arch nproc whoami groups pwd tty clear)
    korebareok {'pwd '("-L" "-P")}
    (kobare nm as)
     (: ok (peep korebareok nm ())
