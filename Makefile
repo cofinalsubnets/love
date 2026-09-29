@@ -320,6 +320,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/source.l src/apps/lapiz.l src/apps/tfm.l src/apps/caja/box.l src/apps/caja/par.l src/apps/caja/page.l src/apps/caja/doc.l src/apps/caja/cell.l \
   src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
   src/apps/harp/harp.l src/apps/harp/play.l src/apps/harp/score.l \
+  src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
   src/apps/x11.l src/apps/manifest/manifest.l src/apps/rove/rove.l src/apps/rove/view.l src/apps/rove/tower.l src/apps/rove/story.l src/apps/rove/design.l src/apps/rove/slop.l src/apps/rove/grass.l src/apps/rove/wade.l src/apps/rove/apartment.l src/apps/rove/dusk.l src/apps/rove/garage.l src/apps/rove/shaft.l src/apps/rove/roost.l src/apps/harp/synth.l \
   src/apps/berth/wharf.l src/apps/berth/limn.l src/apps/berth/berth.l src/apps/face.l src/apps/lux/wire.l src/apps/berth/pier.l src/apps/doom.l src/apps/lupa.l src/apps/mc.l src/apps/pom.l src/apps/locks.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)

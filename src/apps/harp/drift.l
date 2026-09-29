@@ -13,7 +13,7 @@
 ; and 'cost prices a move by its own distance, so small moves win a close call.
 
 (module '(drift dmoves dkernel dopts dopt minby dflat tension ptones drift-new drift-step
-          drift-walk drift-cents drift-compose tune phrase-pat drift-song compose-song)
+          drift-walk drift-cents drift-pick drift-compose tune phrase-pat drift-song compose-song)
 (borrow (: m (cite 'just) (? m m "src/apps/harp/just.l")))
 (borrow (: m (cite 'harp) (? m m "src/apps/harp/harp.l")))
 (:
@@ -72,16 +72,19 @@
    ;           owes (above 0, momentum) or against it (below 0, the walk turns)
    ;   'fresh  what repeating the last phrase costs
    ; answers [state phrase] per step
+   ; one choice: the phrase to play over st's center after prev, [phrase its-points]
+   ; or [() ()] at the start; answers the same pair for the phrase chosen
+   (drift-pick o st prev vocab)
+    (: owed (vsub <(st 'queue) (vscale (dopt o 'home) (st 'pos)))
+       (score ph) (dopt o 'wc * #(filter (p \ elem p (prev 1)) (ptones (st 'pos) ph))
+                   + dopt o 'steer * vdot (tension ph) owed
+                   - (ph = prev 0 ? (dopt o 'fresh) 0.0))
+       best (minby (ph \ 0.0 - score ph) vocab)
+       [best (ptones (st 'pos) best)])
    (drift-compose o vocab n)
-    (: (score st prev ph)
-        (: owed (vsub <(st 'queue) (vscale (dopt o 'home) (st 'pos)))
-           (dopt o 'wc * #(filter (p \ elem p (prev 1)) (ptones (st 'pos) ph))
-            + dopt o 'steer * vdot (tension ph) owed
-            - (ph = prev 0 ? (dopt o 'fresh) 0.0)))
-       (go st prev i)
-        (? (i >= n) ()
-           (: ph (minby (ph \ 0.0 - score st prev ph) vocab)
-              ([st ph] . go (drift-step o st ph) [ph (ptones (st 'pos) ph)] (i + 1))))
+    (: (go st prev i) (? (i >= n) ()
+                         (: pk (drift-pick o st prev vocab)
+                            ([st (pk 0)] . go (drift-step o st (pk 0)) pk (i + 1))))
        (go (drift-new o) [() ()] 0))
 
    ; --- into harp ------------------------------------------------------------------
