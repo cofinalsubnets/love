@@ -24,5 +24,8 @@ run kore grep -c lvm love/love.c
 run kore wc love/love.c
 run kore head -3 love/love.c
 run lush -c true
-[ -s "$d/touch" ] || { echo "hotbake: the workloads touched nothing" >&2; exit 1; }
-env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT="$d/touch" "$raw" bake -o "$out" -l "$cat"
+# a build whose wake is eager (not moonlibc's: HCC, the gcc lanes) records no touch, and
+# bakes plain
+hot=
+[ -s "$d/touch" ] && hot="$d/touch"
+env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT="$hot" "$raw" bake -o "$out" -l "$cat"
