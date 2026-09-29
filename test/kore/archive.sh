@@ -20,6 +20,23 @@ korerun gzip -v "$ho/.arcv" 2> "$ho/.arcv.say" || fail "kore gzip -v"
 grep -q 'replaced with' "$ho/.arcv.say" || fail "gzip -v was answered as --version"
 korerun gunzip "$ho/.arcv.gz" || fail "kore gunzip of gzip -v"
 cmp -s "$ho/.arc1" "$ho/.arcv" || fail "gzip -v did not compress"
+# gunzip streams: members that follow are read on, bytes behind the last that are no member
+# are a warning with the output whole, a wrong crc is an error that takes a file's partial
+# output away and keeps the .gz, and -t reads it all and writes nothing
+printf 'delta\n' > "$ho/.arc2"; korerun gzip -c < "$ho/.arc2" > "$ho/.arc2.gz"
+cat "$ho/.arc1.gz" "$ho/.arc2.gz" | korerun gunzip > "$o" || fail "kore gunzip of two members"
+cat "$ho/.arc1" "$ho/.arc2" | cmp -s - "$o" || fail "kore gunzip of two members: not both"
+{ cat "$ho/.arc1.gz"; printf 'junk'; } | korerun gunzip > "$o" 2> "$g"; r=$?
+[ $r -eq 2 ] && grep -q 'trailing garbage ignored' "$g" || fail "kore gunzip of trailing junk (rc $r)"
+cmp -s "$ho/.arc1" "$o" || fail "kore gunzip of trailing junk: the member did not come out"
+n=$(wc -c < "$ho/.arc1.gz"); head -c $((n - 8)) "$ho/.arc1.gz" > "$ho/.arcx.gz"
+printf '\001\002\003\004' >> "$ho/.arcx.gz"; tail -c 4 "$ho/.arc1.gz" >> "$ho/.arcx.gz"
+rm -f "$ho/.arcx"; korerun gunzip "$ho/.arcx.gz" 2> "$g"; r=$?
+[ $r -eq 1 ] && grep -q 'crc error' "$g" || fail "kore gunzip of a wrong crc (rc $r)"
+[ ! -e "$ho/.arcx" ] && [ -e "$ho/.arcx.gz" ] || fail "kore gunzip of a wrong crc left its output"
+korerun gunzip -t "$ho/.arc1.gz" > "$o" || fail "kore gunzip -t"
+[ ! -s "$o" ] && [ -e "$ho/.arc1.gz" ] || fail "kore gunzip -t wrote or removed"
+korerun gunzip -t "$ho/.arcx.gz" 2> /dev/null && fail "kore gunzip -t passed a wrong crc"
 hv "gzip --version" '^gzip (love' korerun gzip --version
 hv "gzip --help"    '^gzip -- the' korerun gzip --help
 hv "cpio --help"    '^usage: cpio {' korerun cpio --help
@@ -200,14 +217,15 @@ evil tar "$E/tx"
 [ $r -eq 1 ] || fail "kore cpio: a hostile archive (rc $r)"
 grep -q "contains '..'" "$o" || fail "kore cpio: a '..' member not named"
 evil cpio "$E/cx"
-# an output past 1 GiB is refused with a word, not grown into the heap: 1100 MiB of zeros,
-# a few MiB packed, through each decoder where the system coder is here to pack it
+# an output past 1 GiB is refused with a word where it would land in memory, not grown into
+# the heap: 1100 MiB of zeros, a few MiB packed, through each decoder where the system coder
+# is here to pack it. gunzip streams to its port instead, all of it, under a 64 MiB heap
 B=$HO/.arcbig; rm -rf "$B"; mkdir -p "$B"
 big() { dd if=/dev/zero bs=1048576 count=1100 2>/dev/null | "$@"; }
 if command -v gzip >/dev/null 2>&1; then
   big gzip -1 > "$B/z.gz"
-  korerun gunzip -c "$B/z.gz" > /dev/null 2> "$o"; r=$?
-  [ $r -eq 1 ] && grep -q 'past 1 GiB' "$o" || fail "kore gunzip of 1100 MiB (rc $r)"
+  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" kore gunzip -c "$B/z.gz" 2> "$o" | wc -c > "$g"
+  [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore gunzip of 1100 MiB did not stream: $(cat "$g") bytes"; }
   korerun tar tzf "$B/z.gz" > /dev/null 2>&1 && fail "kore tar z of 1100 MiB was taken"
 fi
 if command -v xz >/dev/null 2>&1; then

@@ -8,6 +8,9 @@
 ;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
 ;   (gz-unzip s)           -> (1 bytes) | () | 'big
 ;   (gz-head s)            -> (1 stamp name body-seat) | (), the header walked
+;   (gz-unzipf rd mk)      -> (1 stamp name n seat) | ('trail ..) | 'nogz | 'no | () | 'big
+;                             the members streamed: rd _ is the next piece ("" the end), mk
+;                             (stamp name) -> (1 w), w the writer the bytes go through, or ()
 ;
 ; presence rides the (1 _) wrapper on every decode, and it has to: the empty string is a
 ; legitimate member and a torn one answers nothing too, so a bare value could never say
@@ -62,6 +65,7 @@
    gz-door (tablet 0)
    gz-crcprobe (\ _ (crc32 ""))              ; making the lambda references nothing
    gz-infprobe (\ _ (inflate "" 0))
+   gz-feedprobe (\ _ (inflate-feed 0 ""))
    gz-defprobe (\ _ (deflate ""))
    (gz-nif k f)
     (: v (peep gz-door k ())
@@ -766,7 +770,50 @@
              ; that inflated cleanly and hashes wrong is a corrupt one,
              ; and saying so is the only thing the crc is for.
              (? (r = 'big) 'big
-                r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out]))))))
+                r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out])))))
+
+   ; --- the container, streamed ---------------------------------------------
+   ; a member at a time off rd, out through the writer mk hands back for the first header,
+   ; so nothing holds a whole member: the header is read as far as it runs, the body fed
+   ; as it comes with the crc carried on, and the trailer checked where the stream ends.
+   ; members that follow are read on, as gzip reads `cat a.gz b.gz`; bytes behind the last
+   ; that are no member answer 'trail with the rest. 'nogz is a first header that is not
+   ; one, 'no a writer mk declined, () torn or a crc wrong -- what came out before came
+   ; out. a build without inflate-feed reads the whole input and answers through gz-unzip.
+   (gz-unzipf rd mk)
+    (? !(gz-nif 3 gz-feedprobe) (gz-unzipw rd mk)
+       (: (head b)                               ; -> (b h), h () where no header can be
+           (: h (gz-head b)
+              (? h [b h]
+                 (3 <= #b && !(b 0 = 31 && b 1 = 139 && b 2 = 8)) [b ()]
+                 (: p (rd 0) (? (#p = 0) [b ()] (head (b + p))))))
+          (more b k) (? (k <= #b) b (: p (rd 0) (? (#p = 0) b (more (b + p) k))))
+          (body st wr p crc n)                   ; -> (crc n rest) | () | 'big
+           (: r (inflate-feed st (? (#p = 0) (rd 0) p))
+              (? (two? r) (: o <r _ (wr o) [(crc32-on crc o) (n + #o) >r])
+                 (string? r) (: _ (wr r) (body st wr "" (crc32-on crc r) (n + #r)))
+                 (r = 1) 'big
+                 ()))
+          (member b first w hd tot)                ; w the writer, hd the first header's (stamp name)
+           (: hb (head b)   h (hb 1)
+              (? !h (? first 'nogz (#(more <hb 1) = 0) [1 (hd 0) (hd 1) tot (hd 2)] ['trail (hd 0) (hd 1) tot (hd 2)])
+                 (: hd2 (? first [(h 1) (h 2) (h 3)] hd)
+                    m (? first (mk (h 1) (h 2)) [1 w])
+                    (? !(two? m) 'no
+                       (: r (body (inflate-new 0) <>m (snip <hb (h 3) #<hb) 0 0)
+                          (? (r = 'big) 'big
+                             !r ()
+                             (: t (more (r 2) 8)
+                                (? (#t < 8 || !(rdle t 0 4 = <r) || !(rdle t 4 4 = (r 1) & 4294967295)) ()
+                                   (member (snip t 8 #t) 0 <>m hd2 (tot + r 1))))))))))
+          (member "" 1 () () 0)))
+   (gz-unzipw rd mk)
+    (: (all a) (: p (rd 0) (? (#p = 0) a (all (p . a))))
+       s (cats (rev (all ())))   h (gz-head s)   u (h && gz-unzip s)
+       (? !h 'nogz
+          (u = 'big) 'big
+          !u ()
+          (: m (mk (h 1) (h 2)) (? !(two? m) 'no (: _ (<>m <>u) [1 (h 1) (h 2) #<>u (h 3)]))))))
 
 ) ; module 'gz
 
@@ -784,10 +831,11 @@
 ; no file (or a bare `-`) is the filter: stdin -> stdout, which is what a pipe wants.
 ; a status like GNU's: 0 clean, 1 something failed, 2 a warning (a name refused).
 ;
-; one member per file. gz-unzip reads the trailer off the tail, so a legal concatenation
-; (`cat a.gz b.gz`) is refused whole rather than half-read; when something needs that it
-; belongs in the codec, not in a face. the levels are taken and change nothing -- the coder
-; costs every block three ways and writes the cheapest, which is one level.
+; decompressing streams through gz-unzipf: a piece of the file at a time, out as it inflates,
+; so no member is held whole. members that follow are read on (`cat a.gz b.gz`), a tail that
+; is no member is GNU's warning and a 2, and a file whose crc fails loses its partial output.
+; compressing still reads the file whole. the levels are taken and change nothing -- the
+; coder costs every block three ways and writes the cheapest, which is one level.
 ;
 ; -l's ratio is the deflate payload's and not the file's, GNU taking the header and the
 ; trailer out before it divides, which is why a small file lists a ratio its bytes on
@@ -898,6 +946,17 @@ no file, or a bare -, is the filter: stdin -> stdout"
                        0)))))))
 
    ; --- one file, decompressed (and -t, which is the same read and no write) --
+   ; the members stream from the file to the output a piece at a time, so a member's size is
+   ; no one's memory. the output is named, and opened, once the header says what it is (-N
+   ; takes its name from there); a stream that fails partway takes the partial output away.
+   (gzc-rd q) (\ _ (: c (see q) (? (c < 0) "" (: _ (unsee q c) (chug q)))))
+   (gzc-dstat t nm u)                  ; the answer of gz-unzipf, said
+    (? (u = 'big) (gzc-moan t (nm + gzc-big), 1)
+       (u = 'nogz) (gzc-moan t (nm + ": not in gzip format"), 1)
+       (u = 'no) (peep t 'why 1)
+       (two? u && <u = 'trail) (gzc-moan t (nm + ": decompression OK, trailing garbage ignored"), 2)
+       (two? u) 0
+       (gzc-moan t (nm + ": invalid compressed data--crc error"), 1))
    (gzc-unzip1 t p)
     (: suf (peep t 'suf ".gz")
        stem0 (gzc-stem p suf)
@@ -906,39 +965,44 @@ no file, or a bare -, is the filter: stdin -> stdout"
        ; reading first would call every plain file "not in gzip format" instead
        (? (!(peep t 'c 0) && !(peep t 't 0) && !stem0 && !(peep t 'N 0))
           (gzc-moan t (p + ": unknown suffix -- ignored"), 2)
-       (: r (uread p)
-       (? !r (gzc-moan t (p + ": No such file or directory"), 1)
-          (: s <>r
-             h (gz-head s)
-             u (h && gz-unzip s)
-             (? !h (gzc-moan t (p + ": not in gzip format"), 1)
-                (u = 'big) (gzc-moan t (p + gzc-big), 1)
-                !u (gzc-moan t (p + ": invalid compressed data--crc error"), 1)
-                (peep t 't 0) (gzc-tell t (p + ":\t OK"), 0)
-                (peep t 'c 0) (say out <>u, flush out, 0)
-                (: stem stem0
-                   N? (peep t 'N 0 && 0 < #<>>h)
-                   (? (!stem && !N?)
-                      (gzc-moan t (p + ": unknown suffix -- ignored"), 2)
-                      (: dst (N? ? (phead p + pbase <>>h) <>stem)
-                         st (stat p)
-                         (? (two? (lstat dst) && !(peep t 'f 0))
-                            (gzc-moan t (dst + " already exists;\tnot overwritten"), 2)
-                            !(uwrite dst <>u)
-                             (gzc-moan t ("cannot write " + dst), 1)
-                            (two? st && chmod dst (<>>st & 4095),
-                             ; without -N the output keeps the .gz's own mtime and not
-                             ; the one in the header: gzip restores the stored stamp
-                             ; only when asked, which is what -N means on this side
-                             (? N? (utime dst (<>h * 1000))
-                                (two? st) (utime dst <>st)
-                                0),
-                             peep t 'k 0 ? 0 (unlink p),
-                             gzc-tell t (p + ":\t" + gzc-ratio (#<>u - gzc-pay s) #<>u
-                                           + (peep t 'k 0 ? " -- created "
-                                                " -- replaced with ")
-                                           + dst),
-                             0)))))))))))
+       (: q (open p "r")
+       (? !(hot? q) (gzc-moan t (p + ": No such file or directory"), 1)
+          (: k (tablet 0)
+             (no w m) (pin k 'why w, gzc-moan t m, ())
+             (mk stamp nom)
+              (? (peep t 't 0) [1 (\ s 0)]
+                 (peep t 'c 0) [1 (\ s (say out s))]
+                 (: N? (peep t 'N 0 && 0 < #nom)
+                    (? (!stem0 && !N?) (no 2 (p + ": unknown suffix -- ignored"))
+                       (: dst (N? ? (phead p + pbase nom) <>stem0)
+                          (? (two? (lstat dst) && !(peep t 'f 0))
+                             (no 2 (dst + " already exists;\tnot overwritten"))
+                             (: o (open dst "w")
+                                (? !(hot? o) (no 1 ("cannot write " + dst))
+                                   (: _ (pins k 'dst dst 'o o 'N N? 'stamp stamp)
+                                      [1 (\ s (say o s))]))))))))
+             u (gz-unzipf (gzc-rd q) mk)
+             _ (close q)
+             o (peep k 'o ())
+             _ (? (hot? o) (close o) (peep t 'c 0) (flush out) 0)
+             r (gzc-dstat t p u)
+             (? (1 = r)
+                (: _ (? (hot? o) (unlink (peep k 'dst ""))) r)   ; the partial output goes
+                !(hot? o) r
+                (: dst (peep k 'dst "")
+                   st (stat p)
+                   _ (two? st && chmod dst (<>>st & 4095))
+                   ; without -N the output keeps the .gz's own mtime and not the one in
+                   ; the header: gzip restores the stored stamp only when asked, which is
+                   ; what -N means on this side
+                   _ (? (peep k 'N 0) (utime dst (peep k 'stamp 0 * 1000))
+                        (two? st) (utime dst <>st)
+                        0)
+                   _ (peep t 'k 0 || unlink p)
+                   _ (gzc-tell t (p + ":\t" + gzc-ratio (u 3 - (<st - u 4 - 8)) (u 3)
+                                   + (peep t 'k 0 ? " -- created " " -- replaced with ")
+                                   + dst))
+                   r)))))))
 
    ; --- the walk -------------------------------------------------------------
    (gzc-one t p) (peep t 'd 0 ? (gzc-unzip1 t p) (gzc-zip1 t p))
@@ -950,14 +1014,11 @@ no file, or a bare -, is the filter: stdin -> stdout"
 
    ; --- the filter: no file named, so stdin -> stdout -------------------------
    (gzc-filter t)
-    (: s (slurp in)
-       (? (peep t 'd 0)
-          (: u (gz-unzip (s + ""))
-             (? (u = 'big) (gzc-moan t ("stdin" + gzc-big), 1)
-                !u (gzc-moan t "stdin: not in gzip format", 1)
-                (peep t 't 0) 0
-                (say out <>u, flush out, 0)))
-          (say out (gz-zip (s + "") "" 0), flush out, 0)))
+    (? (peep t 'd 0)
+       (: u (gz-unzipf (gzc-rd in) (\ a b [1 (? (peep t 't 0) (\ s 0) (\ s (say out s)))]))
+          _ (flush out)
+          (gzc-dstat t "stdin" u))
+       (: s (slurp in) (say out (gz-zip (s + "") "" 0), flush out, 0)))
 
    ; --- the options ----------------------------------------------------------
    ; the cli walker in gnu order: clustered shorts, the long names beside them, and -S's
