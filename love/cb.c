@@ -29,3 +29,4 @@ LvNif("mouse", nif_mouse, NULL);
 LvNif("pasted", nif_pasted, NULL);
 LvNif("select", nif_select, NULL);
 LvNif("copied", nif_copied, NULL);
+LvNif("picture", nif_picture, NULL);

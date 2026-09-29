@@ -346,5 +346,24 @@
  _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (close m))
 
+; --- the pictures themselves: the test answers berth's kitty query as a kitty terminal
+; would, and a sixel the child draws goes out as kitty's own a=t and a=p ---
+(: (sub? h n i) ((i + #n) < (#h + 1) ? (n = snip h i (i + #n) ? 1 (sub? h n (i + 1))) 0)
+ _ (setenv "BK" "sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 2")
+ md (tether ["out/love" "-l" "apps/berth/berth.l"
+             "-e" "(: _ (borrow 'berth) (berth [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
+ _ (test (two? md))
+ m >md
+ _ (rest 500)
+ _ (say m "\e_Gi=31;OK\e\\") _ (flush m)             ; yes, kitty
+ outb (slurp m)
+ _ (test
+    (sub? outb "\e_Gi=31,s=1,v=1,a=q" 0)                ; berth asked
+    (sub? outb "\e_Ga=t,f=32,s=10,v=12," 0)             ; the picture, sent
+    (sub? outb "\e_Ga=p,i=" 0)                          ; and placed
+    (sub? outb "\e_Ga=d,d=A" 0))                        ; and freed on the way out
+ _ (: (wf p) (: g2 (gather p) (two? g2 ? g2 (rest 2, wf p))) (wf <md))
+ (close m))
+
 (test_fin ())
 (puts "berth: ok")
