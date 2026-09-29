@@ -624,6 +624,7 @@
    _ (scribe s "\e[?1006h")
    _ (test ("\e[<0;4;3M" = mouse s 0 2 3 0) ("\e[<2;4;3m" = mouse s 2 2 3 1)
            ("\e[<35;10;5M" = mouse s 3 4 9 2) ("\e[<80;1;1M" = mouse s 80 0 0 0))
+   _ (test ("\e[<4294967232;4294967295;4294967295M" = mouse s 4294967232 4294967294 4294967294 0))   ; the widest
    _ (scribe s "\e[?1000l")
    _ (test ("" = mouse s 0 2 3 0))                        ; one tracking off is all of it
    _ (scribe s "\e[?1006l\e[?9h")
