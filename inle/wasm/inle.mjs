@@ -8,7 +8,8 @@
 // and the console settles its own rows and columns inside it. --scale is how many of those
 // pixels a glyph pixel gets, and without one the console picks from the size. --lift names
 // a ramfs file the machine's program leaves behind, and where to put it on this side, once
-// the program has quit (the reset). --image hands the machine a heap image to wake (the one
+// the program has quit (the reset). a lift the program asks for itself (/proc/lift) lands
+// only under --lifts DIR, by its last name, never over a file already there. --image hands the machine a heap image to wake (the one
 // `bake PATH` on the boot line writes, lifted out: `make out/wasm/love.image`).
 // --horn names a file to lay what the machine PLAYS in, as raw 16-bit stereo at the
 // horn's own rate: the AudioWorklet a page has, headless. --press names keys (machine.js's
@@ -25,17 +26,18 @@
 // of its pixels. what a gate needs to see is not that a frame came but that it CARRIES what
 // just happened, and only the signature says so (test/gate/echo.mjs).
 //   usage: node inle/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log]
-//                                  [--lift /in/machine:b/here] [--horn sound.raw]
+//                                  [--lift /in/machine:b/here] [--lifts DIR] [--horn sound.raw]
 //                                  [--press "Escape Enter" --after S] [--for S]
 //                                  [--origin DIR] [--image love.image] love.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
 import { openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
+import { join } from 'node:path';
 import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n, scan_at, scan_n, c_sh, c_st,
          horn_at, horn_n, c_rate, c_wrote, c_played, c_live } from './cpu.mjs';
 import { scanlane, codes } from './machine.js';
 
 const args = process.argv.slice(2);
-let fb = null, dump = null, scale = 0, liftReq = null, image = null, hornFile = null, deaf = false;
+let fb = null, dump = null, scale = 0, liftReq = null, liftDir = null, image = null, hornFile = null, deaf = false;
 let framesFile = null;
 let press = [], after = 0, forS = 0, origin = null;
 while (args[0]?.startsWith('--')) {
@@ -45,6 +47,7 @@ while (args[0]?.startsWith('--')) {
   else if (o === '--dump') dump = args.shift();
   else if (o === '--frames') framesFile = args.shift();
   else if (o === '--lift') { const [from, to] = args.shift().split(':'); liftReq = { from, to: to ?? from.split('/').pop() }; }
+  else if (o === '--lifts') liftDir = args.shift();
   else if (o === '--horn') hornFile = args.shift();
   else if (o === '--deaf') deaf = true;
   else if (o === '--press') press = args.shift().split(/\s+/).filter(Boolean);
@@ -55,7 +58,7 @@ while (args[0]?.startsWith('--')) {
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump, fb.scale = scale, fb.post = !!framesFile;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log] [--lift IN:OUT] [--horn RAW] [--press KEYS --after S] [--for S] [--origin DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm --frames f.log] [--lift IN:OUT] [--lifts DIR] [--horn RAW] [--press KEYS --after S] [--for S] [--origin DIR] [--deaf] [--image IMG] love.wasm [boot line ..]'); process.exit(2); }
 
 const framesOut = framesFile ? openSync(framesFile, 'w') : 0;
 const ring = new SharedArrayBuffer(shared_n);
@@ -124,9 +127,14 @@ cpu.on('message', (m) => {
   else if (m.lift !== undefined) {
     if (m.error) { process.stderr.write(`inle: lift ${m.lift}: errno ${m.error}\n`); process.exitCode = 1; }
     else {
-      // asked for by --lift it goes where that said; asked for aboard, beside the runner
-      const to = liftReq ? liftReq.to : (m.lift.split('/').pop() || 'lift');
-      writeFileSync(to, m.bytes); process.stderr.write(`inle: ${m.lift} -> ${to} (${m.bytes.length} bytes)\n`); } }
+      // asked for by --lift it goes where that said; asked for aboard, into --lifts or nowhere
+      const name = m.lift.split('/').pop(), mine = liftReq && m.lift === liftReq.from;
+      const to = mine ? liftReq.to : liftDir && join(liftDir, name && name !== '.' && name !== '..' ? name : 'lift');
+      if (!to) process.stderr.write(`inle: lift ${m.lift} refused (no --lifts)\n`);
+      else {
+        try { writeFileSync(to, m.bytes, mine ? {} : { flag: 'wx' });
+              process.stderr.write(`inle: ${m.lift} -> ${to} (${m.bytes.length} bytes)\n`); }
+        catch (e) { process.stderr.write(`inle: lift ${m.lift}: ${e.code ?? e.message}\n`); process.exitCode = 1; } } } }
   else if (m.reset) { if (!m.into) leave(process.exitCode ?? 0); }   // a kexec's reset boots on
   else if (m.fault) { process.stderr.write('\ninle: ' + m.fault + '\n'); leave(1); } });
 cpu.on('error', (e) => { process.stderr.write('\ninle: ' + e + '\n'); leave(1); });

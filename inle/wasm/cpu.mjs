@@ -26,7 +26,7 @@ const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              lift: 0x4010, scan: 0x4011, drew: 0x4012, kexec: 0x4013,
              point: 0x4014, paste: 0x4015, copy: 0x4016,
              fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022 };
-const ENOENT = 2, EBADF = 9, ENOSYS = 38, ENAMETOOLONG = 36;
+const ENOENT = 2, EBADF = 9, EACCES = 13, ENOSYS = 38, ENAMETOOLONG = 36;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
 // lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
 // asks for, [8] the horn's rate (0 closed) with [9] frames written and [10] played, and
@@ -63,19 +63,33 @@ export const shared_n = horn_at + horn_n * 4;
 let ex = null, top = 0;                                   // the module's exports; the scratch page
 // the page's network, one body at a time (kmain's k_fetch through inle/wasm/arch.c): the
 // worker fetches a URL whole -- a synchronous XMLHttpRequest, which a worker may make, so
-// the guest's blocking read is the browser's own -- and hands it over in pieces. under
-// node there is no synchronous fetch, so a URL is a path under `origin` (inle.mjs
-// --origin), which is what a gate wants of it anyway
-let body = null, bodyAt = 0, origin = null, readFileSync = null;
+// the guest's blocking read is the browser's own -- and hands it over in pieces. the page's
+// own origin only: anything else is EACCES. under node there is no synchronous fetch, so a
+// URL is a path under `origin` (inle.mjs --origin), links resolved, and one that leaves it
+// is refused the same way
+let body = null, bodyAt = 0, origin = null, readFileSync = null, nodePath = null, realpathSync = null;
+// a guest's URL against the page it runs under: the absolute href when it is that page's
+// origin, else null. the pages import it too, and test/gate/wall.mjs asks it directly
+export const pageurl = (url, here) => {
+  try { const u = new URL(url, here); return u.origin === new URL(here).origin ? u.href : null; }
+  catch (e) { return null; } };
+const under = (root, p) => p === root || p.startsWith(root.endsWith(nodePath.sep) ? root : root + nodePath.sep);
 const fetchOpen = (url) => {
   body = null, bodyAt = 0;
   try {
     if (isNode) {
       if (!origin || /^[a-z][a-z0-9+.-]*:/i.test(url)) return -ENOSYS;
-      body = new Uint8Array(readFileSync(origin + '/' + url.replace(/^\/+/, ''))); }
+      const root = realpathSync(origin),
+            p = nodePath.resolve(root, url.replace(/^\/+/, ''));
+      if (!under(root, p)) return -EACCES;
+      const real = realpathSync(p);
+      if (!under(root, real)) return -EACCES;
+      body = new Uint8Array(readFileSync(real)); }
     else {
+      const u = pageurl(url, self.location.href);
+      if (!u) return -EACCES;
       const x = new XMLHttpRequest();
-      x.open('GET', url, false);
+      x.open('GET', u, false);
       x.responseType = 'arraybuffer';
       x.send();
       if (x.status < 200 || x.status >= 300) return -ENOENT;
@@ -379,7 +393,9 @@ async function boot(msg) {
   if (imgn) { u8().set(new Uint8Array(msg.image), img); hi = down(img, 4096); }
   fb = msg.fb;
   origin = msg.origin ?? null;
-  if (isNode && origin) readFileSync = (await import('node:fs')).readFileSync;
+  if (isNode && origin) {
+    ({ readFileSync, realpathSync } = await import('node:fs'));
+    nodePath = await import('node:path'); }
   let cap = 0;
   if (fb) {
     // the RESERVATION, in pixels: the most this canvas will ever be, which is the screen
