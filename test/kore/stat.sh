@@ -183,4 +183,15 @@ done
 g1=$(TZ=UTC0 date -d yesterday +%s); k1=$(TZ=UTC0 korerun date -d yesterday +%s); [ $((g1 - k1)) -le 2 ] && [ $((k1 - g1)) -le 2 ] || fail "kore date -d yesterday"
 TZ=UTC0 korerun date -d 'no such date' +%s > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore date -d of no date (rc $r)"
 TZ=UTC0 korerun touch -d "2024-01-02 10:30" "$ho/.tdd" && [ "$(stat -c %Y "$ho/.tdd")" = 1704191400 ] || fail "kore touch -d DATE"; rm -f "$ho/.tdd"
+# du's long names, --max-depth, --exclude, -L through a link out of the tree, -x,
+# --apparent-size, -0; rows sorted (the walk is sorted, GNU's is readdir's)
+U=$PWD/$ho/.duf; rm -rf "$U"; mkdir -p "$U/t/a/b" "$U/t/c" "$U/outside"
+head -c 5000 /dev/zero > "$U/t/a/f.log"; head -c 9000 /dev/zero > "$U/t/a/b/g.txt"; echo x > "$U/t/c/h.log"; head -c 7000 /dev/zero > "$U/outside/z"
+ln -s ../../outside "$U/t/c/lo"
+for c in "t" "--max-depth=1 t" "-d 0 t" "--exclude=*.log t" "-a --exclude=*.log t" "-L t/c" "-x t" "--apparent-size t" "-b t" "--summarize --total t" "-ah --all t"; do
+  # shellcheck disable=SC2086
+  (cd "$U" && du $c | sort) > "$g"; (cd "$U" && LOVE_NO_IMAGE= "$PWD/../../$m" kore du $c | sort) > "$o"; same "du $c"
+done
+(cd "$U" && du -0 t | tr '\0' '\n' | sort) > "$g"; (cd "$U" && LOVE_NO_IMAGE= "$PWD/../../$m" kore du -0 t | tr '\0' '\n' | sort) > "$o"; same "du -0"
+rm -rf "$U"
 echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"

@@ -11,6 +11,7 @@
 (borrow 'cal)
 (borrow 'posix)
 (borrow 'text)
+(borrow 'glob) ; du --exclude
 
 (:
    ; a file destination: into a directory the source's basename lands beside
@@ -892,7 +893,22 @@
                      (udie 2 "du: -d wants a depth"))
         (#<a < 2 || <a 0 != 45) (fl >a t (<a . fs))
         (<a = "--") [t (rev fs + >a)]
-        (<a 1 = 45) (udie 2 ("du: unknown option " + <a))
+        ; GNU's long names, onto the same keys the letters take
+        (<a 1 = 45)
+         (: w <a
+            (long p) (: n #p (n < #w && snip w 0 n = p))
+            (? (long "--max-depth=") (pin t 'd (uatoi (snip w 12 #w)), fl >a t fs)
+               (long "--exclude=") (pin t 'ex (snip w 10 #w), fl >a t fs)
+               (w = "--all") (pin t 'a 1, fl >a t fs)
+               (w = "--summarize") (pin t 's 1, fl >a t fs)
+               (w = "--total") (pin t 'c 1, fl >a t fs)
+               (w = "--bytes") (pin t 'b 1, fl >a t fs)
+               (w = "--apparent-size") (pin t 'ap 1, fl >a t fs)
+               (w = "--human-readable") (pin t 'h 1, fl >a t fs)
+               (w = "--one-file-system") (pin t 'x 1, fl >a t fs)
+               (w = "--dereference") (pin t 'L 1, fl >a t fs)
+               (w = "--null") (pin t 'z 1, fl >a t fs)
+               (udie 2 ("du: unknown option " + w))))
         (:- (cl 1) w <a (cl k) (#w <= k ? (fl >a t fs) (w k @
          97 (pin t 'a 1, cl (k + 1))
          115 (pin t 's 1, cl (k + 1))
@@ -900,6 +916,9 @@
          98 (pin t 'b 1, cl (k + 1))
          104 (pin t 'h 1, cl (k + 1))
          107 (cl (k + 1))       ; -k is the default
+         120 (pin t 'x 1, cl (k + 1))
+         76 (pin t 'L 1, cl (k + 1))
+         48 (pin t 'z 1, cl (k + 1))
          100 (pin t 'd (uatoi (snip w (k + 1) #w)), fl >a t fs)
          c (udie 2 $ "du: unknown option -" + string c)))))
        t {}
@@ -907,26 +926,35 @@
        fs (? (two? <>p) <>p '("."))
        a? (t 'a) s? (t 's) c? (t 'c)
        b? (t 'b) h? (t 'h) maxd (t 'd)
+       ; --apparent-size counts as -b does and still says K; -x keeps to the first
+       ; operand's device, -L stats through links, --exclude drops a name by its glob
+       ap? (b? || t 'ap) x? (t 'x) L? (t 'L) ex (t 'ex)
        seen (tablet 0)
        (fmt n) (? h? (uhuman n) (b? ? (show n) (show $ (n + 1023) // 1024)))
-       (emit n q) (say out (fmt n), put out 9, say out q, put out 10)
+       (emit n q) (say out (fmt n), put out 9, say out q, put out (? (t 'z) 0 10))
        ; -b's apparent size counts a file's st_size and a directory's not at all --
        ; GNU's rule, and not a guess: an empty directory whose st_size is 40 reports 0.
        (own st dir?)
         (: nlk (ust-at st 6) ino (ust-at st 8)
-           ct (? b? (? dir? 0 <st) (512 * (? (charm? (ust-at st 7)) (ust-at st 7) 0)))
-           (? ((charm? nlk) && (1 < nlk))
+           ct (? ap? (? dir? 0 <st) (512 * (? (charm? (ust-at st 7)) (ust-at st 7) 0)))
+           (? ((charm? nlk) && (1 < nlk) || L?)
               (? (peep seen ino 0) 0 (pin seen ino 1, ct))
               ct))
+       ; a directory is counted once however it is reached -- under -L a link can reach
+       ; one twice, and GNU's says it where it met it first
+       (again? st) (: k [(ust-at st 11) (ust-at st 8)] (? (peep seen k 0) 1 (pin seen k 1, 0)))
        (walk q depth top?)
-        (: st (lstat q)
+        (: st (? L? (: s (stat q) (? (two? s) s (lstat q))) (lstat q))
+           _ (? top? (pin t 'dev (ust-at st 11)) 0)
            (atom? st ?  (say err ("du: cannot access '" + q + "'\n"), pin t 'bad 1, 0)
             (: dir? (16384 = (61440 & <>>st))
-               kids (?- 0 dir?
-                     (foldl (acc \ c \ acc + walk (q + "/" + c) (depth + 1) 0) 0 (sort (readdir q))))
-               tot (own st dir? + kids)
+               in? (!x? || ust-at st 11 = t 'dev)
+               dup? (dir? && again? st)
+               kids (?- 0 (dir? && in? && !dup?)
+                     (foldl (acc \ c \ (? (ex && match ex c) acc (acc + walk (q + "/" + c) (depth + 1) 0))) 0 (sort (readdir q))))
+               tot (? dup? 0 (own st dir? + kids))
                deep? (charm? maxd && maxd < depth)
-               _ ((dir? || a? || top?) && !s? && !deep? && emit tot q)
+               _ ((dir? || a? || top?) && !s? && !deep? && !dup? && emit tot q)
                tot)))
        (go a acc) (atom? a ? acc (walk <a 0 1 @ n (s? && emit n <a, go >a (acc + n))))
        total (go fs 0)
