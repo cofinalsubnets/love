@@ -16,7 +16,8 @@
 ;   the request line is percent-decoded and then normalized by 'glob's pclean, before
 ;     any path is built: `.` and an inward `..` resolve, and a `..` that would leave the
 ;     root is 403. (a segment, not a substring: a file honestly named `a..b` is not an
-;     escape attempt and is served.)
+;     escape attempt and is served.) a control byte, decoded or not, is 400, and a
+;     segment that starts with a dot is 404: dotfiles are not served or listed.
 ;   a query string is cut and ignored; a static file has no use for one.
 ;   a directory answers its index.html, and a listing when it has none.
 ;   Content-Type comes off the extension, Content-Length off the body, and every response
@@ -26,8 +27,8 @@
 ;
 ; its command line is kore's httpd (apps/kore/net.l), busybox's flags onto `serve`.
 ; gulp is exported for test/host/kiosko.l alone: it drives the cask/string lane
-; boundary directly, which nothing else reaches
-(module (kiosko serve serve5 serve1 gulp)
+; boundary directly, which nothing else reaches. hesc and penc are for a make hook's pages
+(module (kiosko serve serve5 serve1 gulp hesc penc)
 
 ; --- little utils -------------------------------------------------------------------
 (borrow 'posix)
@@ -148,17 +149,31 @@
 
 ; --- the request line ----------------------------------------------------------------
 (: ; percent-decoding, and `+` left alone: it means a space in a query string, never in a
-   ; path, and the query is cut before we ever get here.
+   ; path, and the query is cut before we ever get here. () for a control byte, raw or
+   ; decoded: a NUL or a CR LF has no business in a path, and would reach a header.
    (pdecode s) (: n #s
-                  (:- (g 0 "")
-                      (g i acc)
-                      (!(i < n) ? acc
-                         (: c (s i)
-                            (c = 37 && i + 2 < n
-                             ? (: h (hexv (s (i + 1))) l (hexv (s (i + 2)))
-                                  (-1 < h && -1 < l ? (g (i + 3) (acc + string (16 * h + l)))
-                                                      (g (i + 1) (acc + string c))))
-                               (g (i + 1) (acc + string c)))))))
+                  (step i acc c) (c < 32 || c = 127 ? () (g i (acc + string c)))
+                  (g i acc)
+                  (!(i < n) ? acc
+                     (: c (s i)
+                        (c = 37 && i + 2 < n
+                         ? (: h (hexv (s (i + 1))) l (hexv (s (i + 2)))
+                              (-1 < h && -1 < l ? (step (i + 3) acc (16 * h + l))
+                                                  (step (i + 1) acc c)))
+                           (step (i + 1) acc c))))
+                  (g 0 ""))
+   ; a path going back out, in a Location or an href: unreserved bytes and / as they are
+   hexd "0123456789ABCDEF"
+   (penc s) (catmap (c \ (48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122 || c = 45
+                          || c = 46 || c = 95 || c = 126 || c = 47) ? (string c)
+                         ("%" + string (hexd (c // 16)) + string (hexd (c % 16))))
+                    (map (i \ s i) ^#s))
+   ; ..and text going into html
+   (hesc s) (catmap (c \ c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" 34 "&quot;" 39 "&#39;" (string c))
+                    (map (i \ s i) ^#s))
+   ; a segment that starts with a dot: .git, .env, .ssh
+   (dotted? p) (: n #p (g i) (? (n - 1 <= i) 0 (p i = 47 && p (i + 1) = 46) 1 (g (i + 1)))
+                  (g 0))
    (cutq s)    (: n #s (g i) (? (i >= n) s
                                 (s i = 63 || s i = 35) (snip s 0 i)
                                 (g (i + 1)))
@@ -223,12 +238,12 @@
    ; enough that no stylesheet is needed and no page of the site is shadowed by it.
    (listing c root p head?)
    (: full (root + p)
-      names (sort (readdir full))
+      names (sort (filter (f \ !(0 < #f && f 0 = 46)) (readdir full)))
       (row f) (: sub (dir? (full + f) ? (f + "/") f)
-                 ("<li><a href=\"" + sub + "\">" + sub + "</a></li>"))
-      body ("<!doctype html><meta charset=\"utf-8\"><title>" + p + "</title>"
+                 ("<li><a href=\"" + hesc (penc sub) + "\">" + hesc sub + "</a></li>"))
+      body ("<!doctype html><meta charset=\"utf-8\"><title>" + hesc p + "</title>"
             + "<body style=\"font:16px ui-serif,Georgia,serif;padding:2rem\">"
-            + "<h1>" + p + "</h1><ul>"
+            + "<h1>" + hesc p + "</h1><ul>"
             + (p = "/" ? "" "<li><a href=\"..\">../</a></li>")
             + catmap row names + "</ul>")
       (reply c 200 "OK" "text/html; charset=utf-8" body head?)))
@@ -252,8 +267,11 @@
             raw (word1 (after1 line))
             head? (meth = "HEAD")
             (? !(meth = "GET" || head?) (oops c 405 "Method Not Allowed" 0, [405 meth raw])
-               (: p (rooted (pdecode (cutq raw)))
-                  (? !(string? p) (oops c 403 "Forbidden" head?, [403 meth raw])
+               (: d (pdecode (cutq raw))
+                  p (rooted d)
+                  (? !(string? d) (oops c 400 "Bad Request" head?, [400 meth raw])
+                     !(string? p) (oops c 403 "Forbidden" head?, [403 meth raw])
+                     (dotted? p) (oops c 404 "Not Found" head?, [404 meth raw])
                      (: m (? make (make p blk))
                         (? (two? m)
                            (reply c 200 "OK" <m <>m head?, [200 meth raw])
@@ -263,7 +281,7 @@
                            ; relative links inside its index resolve against the right
                            ; base; then index.html; then a listing.
                            (? !(ends? p "/")
-                              (say c ("HTTP/1.1 301 Moved Permanently\r\nLocation: " + p
+                              (say c ("HTTP/1.1 301 Moved Permanently\r\nLocation: " + penc p
                                       + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
                                flush c, [301 meth raw])
                               (fhere? (full + "index.html"))
@@ -312,8 +330,9 @@
                                        (\ a b (oops c 500 "Internal Server Error" 0, [500 "-" (show a)])))
                                   ((r ? (note quiet r)), seal c 1, close c))) ())),
        accept-loop root l quiet before make))
-   ; the entry. `root` is a directory (no trailing slash), `port` a fixnum, `before` a thunk
-   ; or (). answers the failure's nom when the port cannot be taken, so a caller can say
+   ; the entry. `root` is a directory (no trailing slash), `port` a fixnum for loopback or
+   ; [host port] for another address ("0.0.0.0" every one), `before` a thunk or ().
+   ; answers the failure's nom when the port cannot be taken, so a caller can say
    ; WHY ('eacces is not 'eaddrinuse). all four operands, always -- three would hand back
    ; a closure, and the caller's nom? test wants the real answer.
    ; four operands, always -- three hands back a closure, which is truthy, and the
@@ -323,9 +342,11 @@
    (serve root port quiet before) (serve5 root port quiet before ())
    (serve5 root port quiet before make)
    (: r (? (ends? root "/") (snip root 0 (#root - 1)) root)
-      l (listen port)
+      a (charm? port ? ["127.0.0.1" port] port)
+      l (listen ['tcp <a <>a])
     (? (hot? l)
-       (!quiet ? (say err $ "kiosko: serving " + r + " on http://127.0.0.1:" + show port + "/\n"),
+       (!quiet ? (say err $ "kiosko: serving " + r + " on http://" + <a + ":" + show <>a + "/"
+                   + (<a = "0.0.0.0" ? " (every address)" "") + "\n"),
         accept-loop r l quiet before make,
         close l,
         1)

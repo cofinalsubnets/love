@@ -663,6 +663,9 @@ static ai_inline enum d ai_typ(union u *o) {
 #define zerop(_) (word(_)==zero)
 static ai_inline bool chainp(word _) { return evenp(_) && cell(_)->ap == lvm_chain; }
 static ai_inline bool strp(word _) { return evenp(_) && cell(_)->ap == lvm_str; }
+// a string the kernel reads whole: no NUL inside, or it would stop short of what love
+// checked. bytes[len] is always a NUL, so strlen reaches len exactly when none comes first
+static ai_inline bool cstrp(word _) { return strp(_) && strlen(txt(_)) == len(_); }
 static ai_inline bool mintp(word _) { return evenp(_) && cell(_)->ap == lvm_sym; }
 static ai_inline bool namep(word _) { return evenp(_) && cell(_)->ap == lvm_nom; }
 static ai_inline bool packp(word _) { return evenp(_) && cell(_)->ap == lvm_tray; }

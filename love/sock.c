@@ -103,7 +103,7 @@ static int parse_addr(word x, int how, struct saddr *a) {
  if (how == HowListen && oddp(x)) return a->fam = FamTcp, (a->port = port_of(x)) < 0 ? -1 : 0;
  word f = nth_take(&x), v;
  if (nom_is(f, "unix")) {
-  if (how == HowBind || !(v = nth_take(&x)) || !strp(v)) return -1;
+  if (how == HowBind || !(v = nth_take(&x)) || !cstrp(v)) return -1;
   struct sockaddr_un un;
   a->fam = FamUnix, a->path = str(v);
   if (a->path->len == 0 || a->path->len >= sizeof un.sun_path) return -1; }
@@ -468,7 +468,7 @@ ai_noinline static int peer_of(struct ai_str *h, int port, struct peer *pe) {
  char t[INET6_ADDRSTRLEN];
  uint32_t ip;
  memset(pe, 0, sizeof *pe);
- if (port < 0 || h->len >= sizeof t) return -1;
+ if (port < 0 || h->len >= sizeof t || memchr(h->bytes, 0, h->len)) return -1;
  memcpy(t, h->bytes, h->len), t[h->len] = 0;
  if ((pe->v6 = memchr(t, ':', h->len) != 0)) {
   pe->a.in6.sin6_family = AF_INET6, pe->a.in6.sin6_port = htons((uint16_t) port);
