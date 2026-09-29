@@ -93,7 +93,8 @@
        _ (pin t 'rseq (seq + 1 & m32))
        h (rd t 4)
        (? (atom? h) ()
-          (atom? k) (: r (rd t (be32 <>h 0)) (two? r ? (unpad <>r) ()))
+          (atom? k) (: len (be32 <>h 0)                          ; pre-newkeys: rfc 4253 6.1 caps a packet at 35000
+                       (35000 < len ? () (: r (rd t len) (two? r ? (unpad <>r) ()))))
           (: n (nonce seq) el <>h
              len (be32 (chacha20 <>k n 0 el) 0)
              r (len < 262144 ? (rd t (len + 16)) ())
@@ -117,14 +118,20 @@
    (expect t ty) (: p (ssh-next t) (string? p && p 0 = ty ? p ()))
 
    ; --- the version lines ---
+   ; a crlf-terminated line, bytes gathered in a list and capped at 255 (rfc 4253 4.2);
+   ; overlong or eof ends the session
    (rdline t)
-    (: (go a) (: r (rd t 1)
-                 (? (atom? r) () (<>r = "\n") a (go (a + <>r))))
-       l (go "")
+    (: (go acc n) (? (255 < n) ()
+                     (: r (rd t 1)
+                        (? (atom? r) () (<>r = "\n") (string (rev acc)) (go (<>r 0 . acc) (n + 1)))))
+       l (go () 0)
        (string? l ? (0 < #l && l (#l - 1) = 13 ? (snip l 0 (#l - 1)) l) ()))
+   ; the peer's version line, skipping at most 1024 lines of banner ahead of it
    (server-version t)
-    (: l (rdline t)
-       (? !(string? l) () (4 <= #l && snip l 0 4 = "SSH-") l (server-version t)))
+    (: (go j) (? (1024 < j) ()
+                 (: l (rdline t)
+                    (? !(string? l) () (4 <= #l && snip l 0 4 = "SSH-") l (go (j + 1)))))
+       (go 0))
 
    ; --- the exchange: curve25519-sha256 (RFC 8731) ---
    vc "SSH-2.0-love_ssh"

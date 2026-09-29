@@ -22,6 +22,7 @@
 (:
    vsd "SSH-2.0-love_sshd"
    sd-win (1 << 21)
+   sd-grace 120000                        ; login grace: a connection unauthed by 120 s is shut
 
    ; --- keys ---
    (ssh-publine pub comment)
@@ -255,9 +256,11 @@
    ; one connection, start to end; a program still running when the client goes is hung up on
    (sd-session c hk keys me quiet)
     (: t (tablet 16)
-       _ (pins t 's c 'pend "" 'sseq 0 'rseq 0 'busy 0)
+       _ (pins t 's c 'pend "" 'sseq 0 'rseq 0 'busy 0 'authed 0)
+       _ (sd-spawn (_ \ (rest sd-grace, t 'authed ? 0 (close c))))   ; drop a still-unauthed connection (wakes its parked read; sd-loop's later close is a no-op)
        h (sd-hello t hk)
        a (h = 1 ? (sd-auth t (me 0) keys 10) h)
+       _ (string? a ? 0 (pin t 'authed 1))
        (? (string? a) (sd-log quiet ("connection closed: " + a))
           (: _ (sd-log quiet ("accepted publickey for " + me 0 + " " + sd-fpr <a))
              _ (sd-conn t me quiet)
