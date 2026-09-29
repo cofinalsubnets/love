@@ -256,7 +256,7 @@ lvm(lvm_yield_sw) {
        *end = (union u*) ttag(g, next_stack);
  uintptr_t restore_h = end - next_stack,
            need = my_height + restore_h + 9;
- if (Sp < Hp + need) {
+ if (ai_room(Hp, Sp) < need) {
   Pack(g);
   if (!ai_ok(g = ai_please(ai_push(g, 1, next), need))) ai_musttail return Ap(_lvm_ghelp, g);
   next = cell(pop1(g));

@@ -171,8 +171,15 @@ union u {
 #define LvmWrap(n, f) lvm(n) LvmCall(g, f)
 // the GC tail is ai_musttail like every other, which is why lvm_gc takes its word count in
 // g->b and not a fifth parameter: musttail wants matching prototypes.
-#define Have(n) do { if (Sp < Hp + (n) + ai_avail_floor) { \
-   g->b = (n) + ai_avail_floor; ai_musttail return Ap(lvm_gc, g); } } while (0)
+// a variable ask is held to the room, the distance Sp - Hp in words, which no n can
+// wrap: a heap in the address space's top half sits within an ask of wrapping Hp + n.
+// a small constant ask keeps the one-instruction Hp + n form, which wraps only on a pool
+// within 32 KB of the top of the address space -- where no allocator lays one
+#define ai_room(Hp, Sp) (((uintptr_t) (Sp) - (uintptr_t) (Hp)) / sizeof(word))
+#define ai_have_gc(n) { g->b = (n) + ai_avail_floor; ai_musttail return Ap(lvm_gc, g); }
+#define Have(n) do { \
+  if (__builtin_constant_p(n) && (n) <= 4096) { if (Sp < Hp + (n) + ai_avail_floor) ai_have_gc(n) } \
+  else if (ai_room(Hp, Sp) < (uintptr_t) (n) + ai_avail_floor) ai_have_gc(n) } while (0)
 #define Have1() Have(1)
 #define ai_pop1(g) (*(g)->sp++)
 #define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; ai_musttail return Continue(); }
