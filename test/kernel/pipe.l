@@ -72,6 +72,9 @@
    sa (slurp (fdopen <pa))
  (test !e (sb = "") (sa = "crossed")))
 
+; a slot past the table's ceiling is refused, however far past
+(test ('ebadf = dup2 0 70000) ('ebadf = dup2 0 2000000000))
+
 ; spawn maps argv onto a love main, the pid is the task pid, wait is catch;
 ; the corpus itself runs unseated in the main task
 (: p (spawn ["kore" "echo" "rung4"])

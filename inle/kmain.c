@@ -119,7 +119,7 @@ struct k_boot kboot;
 // k_sources[] holds per-fd vtables and ai_fd_port_vt routes each call through k_sources[fd].
 // a NULL slot is "no method" and the dispatcher skips it: writes discard, reads answer the
 // end, ready answers false. `state` is per-instance scratch, a ramfs fd's handle. the table
-// grows in the kernel's own heap through k_source_open, so nothing is refused at a ceiling.
+// grows in the kernel's own heap through k_source_open, up to k_fd_most rows.
 void *kmallocw(uintptr_t n);
 void kfree(void *p);
 
@@ -240,12 +240,15 @@ static ai_inline bool k_row_live(int fd) {
  return s && (s->readn || s->writen || s->putc || s->flush || s->ready || s->close); }
 
 // answer fd's row, doubling the table first if need be (no realloc down here, and the
-// static boot table is never freed). NULL is no memory, a refusal the caller must read.
+// static boot table is never freed). NULL is no memory or no such row, a refusal the
+// caller must read. the ceiling keeps the doubling inside an int.
+#define k_fd_most (1 << 16)
 static struct k_source *k_source_open(int fd) {
- if (fd < 0) return NULL;
+ if (fd < 0 || fd >= k_fd_most) return NULL;
  if (fd >= k_sources_n) {
   int m = k_sources_n;
   while (m <= fd) m *= 2;
+  if (m > k_fd_most) m = k_fd_most;
   struct k_source *t = kmallocw(b2w((uintptr_t) m * sizeof *t));
   if (!t) return NULL;
   for (int i = 0; i < m; i++)
@@ -715,6 +718,17 @@ static bool k_ro(char const *cp, uintptr_t cn) {
   return cn >= k_tree_n && !memcmp(cp, k_tree, k_tree_n)
       && (cn == k_tree_n || cp[k_tree_n] == '/'); }
 
+// ..and a move or a removal leaves these be besides: a special row, and every directory
+// above one or above the tree, whose rename would carry them out from under their names
+static char const *const k_pins[] = { k_tree, k_vtfg, k_vtbg, k_vtscale, k_vtface, k_plift,
+                                      k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero };
+static bool k_pinned(char const *cp, uintptr_t cn) {
+  if (k_ro(cp, cn)) return true;
+  for (uintptr_t i = 0; cn && i < countof(k_pins); i++) {
+    uintptr_t const n = strlen(k_pins[i]);
+    if (cn <= n && !memcmp(cp, k_pins[i], cn) && (cn == n || k_pins[i][cn] == '/')) return true; }
+  return false; }
+
 // one open file: which entry, where in it, whether writes are allowed. rides the row's
 // `state`, which the close door frees.
 struct k_fh { int i, vt; uintptr_t pos; bool w; };
@@ -887,6 +901,7 @@ static int k_parent_ok(char const *p, uintptr_t n) {
 // first write. false is a refusal the caller must read and say; nothing is dropped quietly.
 static bool k_fit(int i, uintptr_t need) {
   struct k_ent *e = &k_ents[i];
+  if (need > (uintptr_t) INTPTR_MAX) return false;   // the doubling below stays in range
   if (!e->own) {
     struct k_file const *f = k_bake_row(e->bake);
     uintptr_t n = f->len, cap = n > need ? n : need;
@@ -1044,6 +1059,7 @@ static intptr_t ram_writen(int fd, unsigned char const *src, uintptr_t n) {
   struct k_fh *h = k_fh(fd);
   if (!h || !h->w) return -1;                  // read-only: gone, not silently taken
   if (!n) return 0;
+  if (n > (uintptr_t) INTPTR_MAX - h->pos) return -1;
   if (!k_fit(h->i, h->pos + n)) return -1;
   struct k_ent *e = &k_ents[h->i];
   // a gap (a truncate under an append fd) reads as zeros, never the last tenant's bytes
@@ -1205,6 +1221,7 @@ static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
   // no readers is gone, not busy; with no SIGPIPE the writer only learns if it looks, so
   // the run is dropped as the host drops one on EPIPE and a `yes` into a dead pipe spins.
   if (!p || !p->rrefs) return -1;
+  if (n > (uintptr_t) INTPTR_MAX - p->wp) return -1;   // the doubling below stays in range
   if (p->wp + n > p->cap) {
     if (p->rp) {                                // compact before growing
       memmove(p->buf, p->buf + p->rp, p->wp - p->rp);
@@ -1272,11 +1289,12 @@ ai_noinline static int k_dup_row(int src, int at) {
 // inle/sys.c's doors over the same motions: fcntl's F_DUPFD (at = the floor)
 // and dup3. src == dst is dup3's own refusal; the love face answers () there.
 long k_fd_dup(int src, int at) {
-  if (at < 0) return -EINVAL;
+  if (at < 0 || at >= k_fd_most) return -EINVAL;
   int fd = k_dup_row(src, at);
   return fd < 0 ? -EBADF : fd; }
 long k_fd_dup3(int src, int dst) {
   if (src == dst || dst < 0) return -EINVAL;
+  if (dst >= k_fd_most) return -EBADF;           // past the table's ceiling, as dup2(2) says
   int nfd = k_dup_row(src, 0);
   if (nfd < 0) return -EBADF;
   struct k_source *d = k_source_open(dst);
@@ -1559,7 +1577,7 @@ ai_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
-  if (k_ro(cp, (uintptr_t) cn)) return -EROFS;
+  if (k_pinned(cp, (uintptr_t) cn)) return -EROFS;
   if (!cn) return -EBUSY;                         // the root stays
   int i = k_find(cp, (uintptr_t) cn);
   if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
@@ -1630,7 +1648,7 @@ ai_noinline int k_fs_rename(char const *o, uintptr_t olen,
   if (!k_fs_init()) return -ENOMEM;
   if ((on = k_walk(o, olen, op, false)) < 0) return (int) on;
   if ((nn = k_walk(n, nlen, np, false)) < 0) return (int) nn;
-  if (k_ro(op, (uintptr_t) on) || k_ro(np, (uintptr_t) nn)) return -EROFS;
+  if (k_pinned(op, (uintptr_t) on) || k_pinned(np, (uintptr_t) nn)) return -EROFS;
   if (!on) return -EBUSY;                         // the root does not move
   if (on == nn && !memcmp(op, np, (uintptr_t) on)) return 0;           // itself: done
   if (!nn) return -EEXIST;                        // onto the root
