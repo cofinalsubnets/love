@@ -113,6 +113,50 @@
  (gzc-all (\ s (gzc-fuzz s 1)) gzc-fz)
  (gzc-fuzz gzc-noise 29))
 
+;; --- inflate-feed, the resumable inflate: every cut of a stream answers what the whole did ---
+; a stream is fed in pieces whose sizes cycle through a cut, then the empty piece that says
+; the input is over. the one-shot `inflate` is the oracle here, and it is already held to
+; gz-puff above: shapes, every torn prefix, every flipped bit, at a byte at a time, at 7,
+; at 4096 and at a ragged cycle. a stream that ends early hands back what lay behind it.
+(: (gzs-run z ks)
+    (: st (inflate-new 0)   nz #z
+       (go i ks acc)
+        (: k <ks
+           r (inflate-feed st (? (i < nz) (snip z i (min nz (i + k))) ""))
+           (? (two? r) [(cats (rev (<r . acc))) (>r + (? (i + k < nz) (snip z (i + k) nz) ""))]
+              (string? r) (? (nz <= i) 'nil (go (i + k) (>ks + [k]) (r . acc)))
+              'nil))
+       (go 0 ks ()))
+   (gzs-out z ks) (: r (gzs-run z ks) (two? r ? <r 'nil))
+   gzs-cuts [[1] [7] [4096] [3 1 250 2 17 64 5]]
+   (gzs-same d) (gzc-all (\ ks (gzc-c d 0 = gzs-out d ks)) gzs-cuts)
+   (gzs-shape s) (gzs-same (gz-deflate s))
+   (gzs-torn d step) (: (go i) (? (#d < i) 1 !(gzs-same (gzc-cut d i)) 0 (go (i + step))) (go 0))
+   (gzs-fuzz s step)
+    (: d (gz-deflate s)   nb (8 * #d)
+       (go k) (? (nb <= k) 1 !(gzs-same (gzc-flip d k)) 0 (go (k + step)))
+       (go 0))
+   (gzs-rest s) (: d (gz-deflate s)
+                   (gzc-all (\ ks (gzs-run (d + "TRAILER!") ks = [s "TRAILER!"])) gzs-cuts))
+   _ (test
+      (lit? inflate-feed)
+      (gzc-all gzs-shape gzc-shapes)
+      (gzc-all gzs-rest [gzc-empty gzc-one gzc-text gzc-noise gzc-long])
+      (gzs-torn gzc-td 7)
+      (gzc-all (\ s (gzs-fuzz s 1)) gzc-fz)
+      (gzs-fuzz gzc-noise 29)
+      ; a stream's end hands back what lay behind it, and every piece after is all behind
+      (: st (inflate-new 0)   r (inflate-feed st (gz-deflate gzc-text + "abc"))
+         r2 (inflate-feed st "de")
+         ((two? r) & (<r = gzc-text) & (>r = "abc") & (two? r2) & (<r2 = "") & (>r2 = "de") ? 1 0))
+      ; misuse: a state that is not one, or a piece that is not a string, answers ()
+      !(inflate-feed (cask 8) "abc")
+      !(inflate-feed 7 "abc")
+      !(string? (inflate-feed (inflate-new 0) 7))
+      ; the input over before a stream began is a torn stream
+      !(inflate-feed (inflate-new 0) ""))
+   (puts "gzc: inflate-feed ok -- every cut of a stream answers the one-shot inflate\n"))
+
 ; --- crc32, the other twin in love/lib/hash.c, against gz-crcwalk ---
 ; every length 0 through 129, because the C reads eight bytes at a time where the walk
 ; reads one: the tail is the only place the two can part and it is a different tail at
