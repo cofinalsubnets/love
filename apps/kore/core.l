@@ -1605,7 +1605,6 @@
        _ (go 0)
        _ (say out (? m? "====\n" "`\nend\n"))
        _ (flush out) 0)
-   (umask-now _) (: o (umask 18) _ (umask o) o)
    (uudecode-main as)
     (: (go a o) (? (atom? a) o
                    (<a = "-o") (? (two? >a) (pin o 'o <>a, go >>a o) (udie 1 "uudecode: option requires an argument -- 'o'"))
