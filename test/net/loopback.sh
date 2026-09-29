@@ -6,8 +6,8 @@
 # Stage-1 socket nif (connect/listen/accept/shutdown) plus the two .l pump loops
 # and their teardown. both sides pass -N; the rounds after check that without it neither
 # side half-closes, that -q quits anyway, that -w quits when idle,
-# what -z and -v say, that -k serves client after client, a -u round trip, and what
-# -o writes and -i spaces.
+# what -z and -v say, that -k serves client after client, a -u round trip, what
+# -o writes and -i spaces, and -U over a unix socket with -C and -d.
 #
 #   sh test/net/loopback.sh <love-binary> [port]
 #
@@ -246,6 +246,22 @@ t1=$(ms)
 wait "$srv"
 [ "$(tr '\n' ' ' < "$tmp/srv_got8")" = "a b c " ] || { echo "nettest: FAIL (-i: server got $(tr '\n' ' ' < "$tmp/srv_got8"))"; fail=1; }
 [ $((t1 - t0)) -ge 900 ] || { echo "nettest: FAIL (-i 0.3: three lines in $((t1 - t0)) ms)"; fail=1; }
+
+# -U: a unix socket, unlinked when the server goes; -C sends crlf, and -d reads no stdin, so
+# the server's -N eof is all the client sees of its side. -zU of a gone socket is 1
+us="$tmp/u.sock"
+printf 'from the server\n' | "$AI" "$AK" -Nd -lU "$us" > "$tmp/srv_got9" 2> "$tmp/srv_err" &
+srv=$!
+i=0
+until [ -S "$us" ] || [ "$i" -gt 200 ]; do i=$((i + 1)); sleep 0.05 2>/dev/null || sleep 1; done
+printf 'a\nb\n' | "$AI" "$AK" -NC -U "$us" > "$tmp/cli_got9" 2> "$tmp/cli_err"
+crc=$?
+wait "$srv"; src=$?
+[ "$crc" -eq 0 ] && [ "$src" -eq 0 ] || { echo "nettest: FAIL (-U: client exit $crc, server exit $src)"; cat "$tmp/cli_err" "$tmp/srv_err"; fail=1; }
+[ "$(od -An -c "$tmp/srv_got9" | tr -d ' ')" = 'a\r\nb\r\n' ] || { echo "nettest: FAIL (-C: server got $(od -An -c "$tmp/srv_got9"))"; fail=1; }
+[ -s "$tmp/cli_got9" ] && { echo "nettest: FAIL (-d: client got $(cat "$tmp/cli_got9"))"; fail=1; }
+[ -e "$us" ] && { echo "nettest: FAIL (-lU left $us behind)"; fail=1; }
+"$AI" "$AK" -zU "$us" 2> /dev/null && { echo "nettest: FAIL (-zU of a gone socket took)"; fail=1; }
 
 [ "$fail" -eq 0 ] && echo "nettest: PASS"
 exit "$fail"
