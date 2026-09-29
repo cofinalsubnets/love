@@ -34,7 +34,7 @@
 ; items as links with their kind, (DIR) (TXT) (?) ..; a search item is a field, sent after a
 ; tab. gemini's text/gemini is laid as a page, headings, lists, quotes and preformatted
 ; blocks; its ask for input is a field, the answer sent back as the query. a gemini
-; server's certificate is pinned the first time and held to after -- the protocol's trust
+; server's key is pinned the first time and held to after -- the protocol's trust
 ; on first use -- in ~/.love/gemini_hosts; a changed one is refused, and says which line
 ; to delete to take it.
 ;
@@ -208,17 +208,19 @@
    ; gemini: the url alone on a line, over tls on 1965; the answer's first line a status and
    ; a meta, then the body. 1x asks for input, a field that sends it back as the query; 2x
    ; is the page, text/gemini laid as html and other text as it is; 3x goes elsewhere; the
-   ; rest are the server's refusals, said. the certificate is pinned the first time and held
-   ; to after (trust on first use, the protocol's own), host:port and its sha-256 a line in
-   ; ~/.love/gemini_hosts; a changed one is refused and says how to take it
+   ; rest are the server's refusals, said. the server's key is pinned the first time and held
+   ; to after (trust on first use, the protocol's own), host:port and "spki:" and the sha-256
+   ; of its SubjectPublicKeyInfo a line in ~/.love/gemini_hosts -- the key, so a renewed
+   ; certificate over it still holds; an older line without the prefix is a whole
+   ; certificate's hash, and holds as that. a changed one is refused and says how to take it
    (ww-pinfile _) (: h (getenv "HOME") ((? (string? h) h ".") + "/.love/gemini_hosts"))
-   (ww-pin key fp)
+   (ww-pin key fp cfp)
     (: path (ww-pinfile 0)
        txt (uread path @ [1 s] s "")
        (find l) (? (atom? l) () (: f (usplit 32 <l) (? (1 < #f && <f = key) (f 1) (find >l))))
        old (find (ww-lns txt))
-       (? (string? old) (? (old = fp) ()
-                           ("the certificate of " + key + " has changed: it was " + old + ", now " + fp
+       (? (string? old) (? (old = fp || old = cfp) ()
+                           ("the key of " + key + " has changed: it was " + old + ", now " + fp
                             + "; delete its line in " + path + " to take the new one"))
           (: _ (mkdir (snip path 0 (#path - 13)) 448)
              a (open path "a")
@@ -256,7 +258,7 @@
        u (? (string? a) (ww-join [(p 0) (p 1) (p 2) ("?" + ww-penc a '(45 46 95 126)) ""]) (ww-nofrag url))
        t ((cite 'tls 'tls-dial) <hp (hp 1))
        (? !t [1 ("www: no answer from " + url)]
-          (: bad (ww-pin (<hp + ":" + show (hp 1)) (: c (t 'cert) (sha256 (? (string? c) c ""))))
+          (: bad (ww-pin (<hp + ":" + show (hp 1)) ("spki:" + sha256 (t 'spki)) (sha256 (t 'cert)))
              (? (string? bad) (((cite 'tls 'tls-close) t), [1 ("www: " + bad)])
                 (: _ ((cite 'tls 'tls-say) t (u + "\r\n"))
                    b ((cite 'tls 'tls-slurp) t) _ (close (t 's))
