@@ -1804,12 +1804,19 @@ EXEC 01;32
        (go k) (n > k ? (put o (umtchars (rand 62)), go (k + 1)))
        _ (go en)
        (slurp o))
+   ; GNU's long names too: --suffix=S after the random run, --tmpdir[=DIR] as -p (bare,
+   ; $TMPDIR or /tmp), --directory --dry-run --quiet
    (mktemp-main as)
-    (: (fl a d u q dir fs)
+    (: sf {'s ""}
+       (fl a d u q dir fs)
         (? (atom? a) [d u q dir (rev fs)]
-           (<a = "-d") (fl >a 1 u q dir fs)
-           (<a = "-u") (fl >a d 1 q dir fs)
-           (<a = "-q") (fl >a d u 1 dir fs)
+           (<a = "-d" || <a = "--directory") (fl >a 1 u q dir fs)
+           (<a = "-u" || <a = "--dry-run") (fl >a d 1 q dir fs)
+           (<a = "-q" || <a = "--quiet") (fl >a d u 1 dir fs)
+           (<a = "--tmpdir") (fl >a d u q (: e (getenv "TMPDIR") (? (string? e) e "/tmp")) fs)
+           (9 < #<a && snip <a 0 9 = "--tmpdir=") (fl >a d u q (snip <a 9 #<a) fs)
+           (9 < #<a && snip <a 0 9 = "--suffix=") (: _ (pin sf 's (snip <a 9 #<a)) (fl >a d u q dir fs))
+           (<a = "--suffix") (? (two? >a) (: _ (pin sf 's <>a) (fl >>a d u q dir fs)) (udie 1 "mktemp: --suffix wants a suffix"))
            (<a = "-t") (fl >a d u q (? dir dir (getenv "TMPDIR")) fs)
            (<a = "-p") (? (two? >a) (fl >>a d u q <>a fs) (udie 1 "mktemp: -p wants a directory"))
            (2 < #<a && snip <a 0 2 = "-p") (fl >a d u q (snip <a 2 #<a) fs)
@@ -1825,7 +1832,7 @@ EXEC 01;32
        base (named && !(string? pdir) ? tmpl ((0 < #tm ? tm ".") + "/" + tmpl))
        (try n)
         (? (n < 1) (? q? 1 (udie 1 "mktemp: could not make a name nobody had"))
-           (: nm (umtname base)
+           (: nm (umtname base + sf 's)
               fd (? d? -1 (openfd nm 3))
               got (? d? !(mkdir nm 448) (charm? fd && 0 <= fd))
               _ (? (charm? fd && 0 <= fd) (close fd) ())

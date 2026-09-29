@@ -200,4 +200,10 @@ for c in "-T /" "-H /" "-hT /" "-t tmpfs" "-x tmpfs -x btrfs" "--print-type /" "
   # shellcheck disable=SC2086
   df $c > "$g" 2>&1; korerun df $c > "$o" 2>&1; same "df $c"
 done
+# mktemp's --suffix (after the random run), --tmpdir= and bare, --dry-run: by the name's shape
+MT=$PWD/$ho/.mkt; rm -rf "$MT"; mkdir "$MT"
+n1=$(korerun mktemp --tmpdir="$MT" --suffix=.txt); case "$n1" in "$MT"/tmp.??????????.txt) [ -f "$n1" ] || fail "kore mktemp --suffix made nothing";; *) fail "kore mktemp --suffix: $n1";; esac
+n2=$(TMPDIR="$MT" korerun mktemp --tmpdir -u); case "$n2" in "$MT"/tmp.??????????) [ ! -e "$n2" ] || fail "kore mktemp --dry-run made one";; *) fail "kore mktemp --tmpdir: $n2";; esac
+n3=$(cd "$MT" && LOVE_NO_IMAGE= "$PWD/../../$m" kore mktemp --suffix .c fooXXXXXX); case "$n3" in foo??????.c) ;; *) fail "kore mktemp TEMPLATE --suffix: $n3";; esac
+rm -rf "$MT"
 echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"

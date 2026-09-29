@@ -946,7 +946,7 @@
     'df "usage: df [-ahHikPT] [-t TYPE].. [-x TYPE].. [FILE..]"
     'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
     'chgrp "usage: chgrp [-R] GROUP FILE.."
-    'mktemp "usage: mktemp [-dqtu] [-p DIR] [TEMPLATE]"
+    'mktemp "usage: mktemp [-dqtu] [-p DIR] [--tmpdir[=DIR]] [--suffix=S] [TEMPLATE]"
     'sync "usage: sync   (the bare call; no operands here)"
     'mkfifo "usage: mkfifo [-m MODE] NAME.."
     'mknod "usage: mknod [-m MODE] NAME TYPE [MAJOR MINOR]"
